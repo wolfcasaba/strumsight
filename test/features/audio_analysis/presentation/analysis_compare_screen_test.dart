@@ -74,44 +74,46 @@ void main() {
       );
     });
 
-    testWidgets('renders before/after/delta/confidence/sampleCount for an improved metric', (
-      tester,
-    ) async {
-      final comparison = AnalysisComparison(
-        beforeAnalysisId: 'before',
-        afterAnalysisId: 'after',
-        metrics: <MetricComparison>[_improved()],
-      );
+    testWidgets(
+      'renders before/after/delta/confidence/sampleCount for an improved metric',
+      (tester) async {
+        final comparison = AnalysisComparison(
+          beforeAnalysisId: 'before',
+          afterAnalysisId: 'after',
+          metrics: <MetricComparison>[_improved()],
+        );
 
-      await _pumpAt(tester, _harness(comparison), size: const Size(400, 800));
+        await _pumpAt(tester, _harness(comparison), size: const Size(400, 800));
 
-      expect(find.textContaining('40.00'), findsOneWidget);
-      expect(find.textContaining('30.00'), findsOneWidget);
-      expect(find.textContaining('-10.00'), findsOneWidget);
-      expect(find.text('Improved'), findsOneWidget);
-      expect(find.textContaining('80%'), findsOneWidget);
-      expect(find.textContaining('12'), findsOneWidget);
-    });
+        expect(find.textContaining('40.00'), findsOneWidget);
+        expect(find.textContaining('30.00'), findsOneWidget);
+        expect(find.textContaining('-10.00'), findsOneWidget);
+        expect(find.text('Improved'), findsOneWidget);
+        expect(find.textContaining('80%'), findsOneWidget);
+        expect(find.textContaining('12'), findsOneWidget);
+      },
+    );
 
-    testWidgets('renders the inconclusive reason instead of a fabricated delta', (
-      tester,
-    ) async {
-      final comparison = AnalysisComparison(
-        beforeAnalysisId: 'before',
-        afterAnalysisId: 'after',
-        metrics: <MetricComparison>[_inconclusive()],
-      );
+    testWidgets(
+      'renders the inconclusive reason instead of a fabricated delta',
+      (tester) async {
+        final comparison = AnalysisComparison(
+          beforeAnalysisId: 'before',
+          afterAnalysisId: 'after',
+          metrics: <MetricComparison>[_inconclusive()],
+        );
 
-      await _pumpAt(tester, _harness(comparison), size: const Size(400, 800));
+        await _pumpAt(tester, _harness(comparison), size: const Size(400, 800));
 
-      expect(find.text('Inconclusive'), findsOneWidget);
-      expect(
-        find.text(
-          'The recording quality differs too much between the two sessions.',
-        ),
-        findsOneWidget,
-      );
-    });
+        expect(find.text('Inconclusive'), findsOneWidget);
+        expect(
+          find.text(
+            'The recording quality differs too much between the two sessions.',
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('hu/en parity — title translates', (tester) async {
       final comparison = AnalysisComparison(
@@ -131,42 +133,44 @@ void main() {
       expect(find.text('Sessionök összehasonlítása'), findsOneWidget);
     });
 
-    testWidgets('overflow matrix — 320px / 2.0 scale renders without overflow', (
-      tester,
-    ) async {
-      final comparison = AnalysisComparison(
-        beforeAnalysisId: 'before',
-        afterAnalysisId: 'after',
-        metrics: <MetricComparison>[_improved(), _inconclusive()],
-      );
+    testWidgets(
+      'overflow matrix — 320px / 2.0 scale renders without overflow',
+      (tester) async {
+        final comparison = AnalysisComparison(
+          beforeAnalysisId: 'before',
+          afterAnalysisId: 'after',
+          metrics: <MetricComparison>[_improved(), _inconclusive()],
+        );
 
-      await _pumpAt(
-        tester,
-        _harness(comparison),
-        size: const Size(320, 800),
-        textScale: 2.0,
-      );
+        await _pumpAt(
+          tester,
+          _harness(comparison),
+          size: const Size(320, 800),
+          textScale: 2.0,
+        );
 
-      expect(tester.takeException(), isNull);
-    });
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('overflow matrix — 320px / 1.0 scale renders without overflow', (
-      tester,
-    ) async {
-      final comparison = AnalysisComparison(
-        beforeAnalysisId: 'before',
-        afterAnalysisId: 'after',
-        metrics: <MetricComparison>[_improved(), _inconclusive()],
-      );
+    testWidgets(
+      'overflow matrix — 320px / 1.0 scale renders without overflow',
+      (tester) async {
+        final comparison = AnalysisComparison(
+          beforeAnalysisId: 'before',
+          afterAnalysisId: 'after',
+          metrics: <MetricComparison>[_improved(), _inconclusive()],
+        );
 
-      await _pumpAt(
-        tester,
-        _harness(comparison),
-        size: const Size(320, 800),
-        textScale: 1.0,
-      );
+        await _pumpAt(
+          tester,
+          _harness(comparison),
+          size: const Size(320, 800),
+          textScale: 1.0,
+        );
 
-      expect(tester.takeException(), isNull);
-    });
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }

@@ -18,74 +18,68 @@ void main() {
 
   final metricIds = AnalysisMetricId.known.toList(growable: false);
 
-  test(
-    'descriptive metrics never resolve to improved or regressed, for any '
-    'randomized before/after pair',
-    () {
-      final rng = math.Random(seed);
-      for (var trial = 0; trial < 500; trial++) {
-        final id = metricIds[rng.nextInt(metricIds.length)];
-        final metadata = MetricMetadataCatalog.forId(id)!;
-        if (metadata.direction != MetricDirection.descriptive) continue;
+  test('descriptive metrics never resolve to improved or regressed, for any '
+      'randomized before/after pair', () {
+    final rng = math.Random(seed);
+    for (var trial = 0; trial < 500; trial++) {
+      final id = metricIds[rng.nextInt(metricIds.length)];
+      final metadata = MetricMetadataCatalog.forId(id)!;
+      if (metadata.direction != MetricDirection.descriptive) continue;
 
-        final before = (rng.nextDouble() - 0.5) * 200;
-        final after = (rng.nextDouble() - 0.5) * 200;
-        final direction = CompatibilityEvaluator.resolveDirection(
-          metadata,
-          before: before,
-          after: after,
-        );
+      final before = (rng.nextDouble() - 0.5) * 200;
+      final after = (rng.nextDouble() - 0.5) * 200;
+      final direction = CompatibilityEvaluator.resolveDirection(
+        metadata,
+        before: before,
+        after: after,
+      );
 
-        expect(
-          direction,
-          isNot(MetricComparisonDirection.improved),
-          reason: 'seed=$seed trial=$trial id=$id before=$before after=$after',
-        );
-        expect(
-          direction,
-          isNot(MetricComparisonDirection.regressed),
-          reason: 'seed=$seed trial=$trial id=$id before=$before after=$after',
-        );
+      expect(
+        direction,
+        isNot(MetricComparisonDirection.improved),
+        reason: 'seed=$seed trial=$trial id=$id before=$before after=$after',
+      );
+      expect(
+        direction,
+        isNot(MetricComparisonDirection.regressed),
+        reason: 'seed=$seed trial=$trial id=$id before=$before after=$after',
+      );
+    }
+  });
+
+  test('below the meaningful-delta threshold, direction is always unchanged '
+      '(lowerIsBetter/higherIsBetter metrics)', () {
+    final rng = math.Random(seed + 1);
+    for (var trial = 0; trial < 500; trial++) {
+      final id = metricIds[rng.nextInt(metricIds.length)];
+      final metadata = MetricMetadataCatalog.forId(id)!;
+      if (metadata.direction == MetricDirection.descriptive ||
+          metadata.direction == MetricDirection.targetRange) {
+        continue;
       }
-    },
-  );
 
-  test(
-    'below the meaningful-delta threshold, direction is always unchanged '
-    '(lowerIsBetter/higherIsBetter metrics)',
-    () {
-      final rng = math.Random(seed + 1);
-      for (var trial = 0; trial < 500; trial++) {
-        final id = metricIds[rng.nextInt(metricIds.length)];
-        final metadata = MetricMetadataCatalog.forId(id)!;
-        if (metadata.direction == MetricDirection.descriptive ||
-            metadata.direction == MetricDirection.targetRange) {
-          continue;
-        }
+      final before = rng.nextDouble() * 100;
+      final threshold = metadata.minimumMeaningfulDelta;
+      final noise = threshold <= 0
+          ? 0.0
+          : (rng.nextDouble() * threshold * 0.99);
+      final after = before + (rng.nextBool() ? noise : -noise);
 
-        final before = rng.nextDouble() * 100;
-        final threshold = metadata.minimumMeaningfulDelta;
-        final noise = threshold <= 0
-            ? 0.0
-            : (rng.nextDouble() * threshold * 0.99);
-        final after = before + (rng.nextBool() ? noise : -noise);
+      final direction = CompatibilityEvaluator.resolveDirection(
+        metadata,
+        before: before,
+        after: after,
+      );
 
-        final direction = CompatibilityEvaluator.resolveDirection(
-          metadata,
-          before: before,
-          after: after,
-        );
-
-        expect(
-          direction,
-          MetricComparisonDirection.unchanged,
-          reason:
-              'seed=$seed trial=$trial id=$id before=$before after=$after '
-              'threshold=$threshold',
-        );
-      }
-    },
-  );
+      expect(
+        direction,
+        MetricComparisonDirection.unchanged,
+        reason:
+            'seed=$seed trial=$trial id=$id before=$before after=$after '
+            'threshold=$threshold',
+      );
+    }
+  });
 
   test(
     'at or beyond the meaningful-delta threshold, lowerIsBetter/higherIsBetter '
@@ -123,52 +117,43 @@ void main() {
     },
   );
 
-  test(
-    'noise-floor compatibility is exactly the 10 dB inclusive boundary, for '
-    'any randomized quality pair with everything else held constant',
-    () {
-      final rng = math.Random(seed + 3);
-      final provenance = AnalysisProvenance(
-        appVersion: '1.0',
-        analyzerVersion: '1.0',
-        pipelineVersion: '1.0',
-        stageVersions: <String, String>{},
-        dspConfigHash: 'hash',
-        modelManifestIds: <String>[],
-        inputFingerprint: 'fp',
-        platform: 'test',
-        featureFlagSnapshot: <String, bool>{},
+  test('noise-floor compatibility is exactly the 10 dB inclusive boundary, for '
+      'any randomized quality pair with everything else held constant', () {
+    final rng = math.Random(seed + 3);
+    final provenance = AnalysisProvenance(
+      appVersion: '1.0',
+      analyzerVersion: '1.0',
+      pipelineVersion: '1.0',
+      stageVersions: <String, String>{},
+      dspConfigHash: 'hash',
+      modelManifestIds: <String>[],
+      inputFingerprint: 'fp',
+      platform: 'test',
+      featureFlagSnapshot: <String, bool>{},
+    );
+    for (var trial = 0; trial < 500; trial++) {
+      final beforeNoiseFloor = -60 + rng.nextDouble() * 40;
+      final deltaDbfs = rng.nextDouble() * 30;
+      final afterNoiseFloor = beforeNoiseFloor - deltaDbfs;
+
+      final reason = CompatibilityEvaluator.evaluateCompatibility(
+        before: _metric(AnalysisMetricId.timingTargetMeanAbsoluteError, 40),
+        after: _metric(AnalysisMetricId.timingTargetMeanAbsoluteError, 30),
+        beforeQuality: _quality(noiseFloorDbfs: beforeNoiseFloor),
+        afterQuality: _quality(noiseFloorDbfs: afterNoiseFloor),
+        beforeProvenance: provenance,
+        afterProvenance: provenance,
       );
-      for (var trial = 0; trial < 500; trial++) {
-        final beforeNoiseFloor = -60 + rng.nextDouble() * 40;
-        final deltaDbfs = rng.nextDouble() * 30;
-        final afterNoiseFloor = beforeNoiseFloor - deltaDbfs;
 
-        final reason = CompatibilityEvaluator.evaluateCompatibility(
-          before: _metric(
-            AnalysisMetricId.timingTargetMeanAbsoluteError,
-            40,
-          ),
-          after: _metric(
-            AnalysisMetricId.timingTargetMeanAbsoluteError,
-            30,
-          ),
-          beforeQuality: _quality(noiseFloorDbfs: beforeNoiseFloor),
-          afterQuality: _quality(noiseFloorDbfs: afterNoiseFloor),
-          beforeProvenance: provenance,
-          afterProvenance: provenance,
-        );
-
-        final expectIncompatible =
-            deltaDbfs > noiseFloorCompatibilityThresholdDbfs;
-        expect(
-          reason == ComparisonInconclusiveReason.inputQualityDiverged,
-          expectIncompatible,
-          reason: 'seed=$seed trial=$trial deltaDbfs=$deltaDbfs',
-        );
-      }
-    },
-  );
+      final expectIncompatible =
+          deltaDbfs > noiseFloorCompatibilityThresholdDbfs;
+      expect(
+        reason == ComparisonInconclusiveReason.inputQualityDiverged,
+        expectIncompatible,
+        reason: 'seed=$seed trial=$trial deltaDbfs=$deltaDbfs',
+      );
+    }
+  });
 
   test(
     'compare() confidence and sampleCount never exceed either input session',

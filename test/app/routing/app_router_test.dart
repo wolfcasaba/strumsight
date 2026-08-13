@@ -263,22 +263,21 @@ void main() {
     },
   );
 
-  testWidgets(
-    'analysisComparisonEnabled ON: missing extra redirects to live',
-    (tester) async {
-      final harness = await _pumpRouter(
-        tester,
-        seen: true,
-        analysisComparisonEnabled: true,
-      );
+  testWidgets('analysisComparisonEnabled ON: missing extra redirects to live', (
+    tester,
+  ) async {
+    final harness = await _pumpRouter(
+      tester,
+      seen: true,
+      analysisComparisonEnabled: true,
+    );
 
-      harness.router.go(AppRoutes.analysisCompare);
-      await tester.pumpAndSettle();
+    harness.router.go(AppRoutes.analysisCompare);
+    await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull);
-      expect(harness.router.state.uri.path, AppRoutes.live);
-    },
-  );
+    expect(tester.takeException(), isNull);
+    expect(harness.router.state.uri.path, AppRoutes.live);
+  });
 
   testWidgets('flagged Song Trainer library route is registered', (
     tester,

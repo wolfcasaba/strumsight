@@ -24,7 +24,10 @@ void main() {
         sessions: _sessions(<double>[40, 38]),
       );
       expect(trend.versionGroups, hasLength(1));
-      expect(trend.versionGroups.single.availability, TrendAvailability.unavailable);
+      expect(
+        trend.versionGroups.single.availability,
+        TrendAvailability.unavailable,
+      );
     });
 
     test('exactly 3 compatible sessions -> available (inclusive)', () {
@@ -32,7 +35,10 @@ void main() {
         metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
         sessions: _sessions(<double>[40, 38, 36]),
       );
-      expect(trend.versionGroups.single.availability, TrendAvailability.available);
+      expect(
+        trend.versionGroups.single.availability,
+        TrendAvailability.available,
+      );
     });
 
     test('4 compatible sessions -> available', () {
@@ -40,7 +46,10 @@ void main() {
         metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
         sessions: _sessions(<double>[40, 38, 36, 34]),
       );
-      expect(trend.versionGroups.single.availability, TrendAvailability.available);
+      expect(
+        trend.versionGroups.single.availability,
+        TrendAvailability.available,
+      );
     });
   });
 
@@ -58,44 +67,62 @@ void main() {
       expect(group.includedPoints, hasLength(4));
     });
 
-    test('MAD threshold triple — 2.99x / 3.0x / 3.01x are exclusive above 3.0x', () {
-      // median=40, MAD computed from [40,40,40,40,x]; construct x so the
-      // deviation is exactly at the 2.99/3.0/3.01 * MAD boundary using a
-      // fixed base MAD of 2 (values 38,40,40,40,42 -> median 40, MAD 0... )
-      // Use a base set with a clean, non-zero MAD instead.
-      final base = <double>[36, 38, 40, 42, 44]; // median 40, MAD 2
-      double atMultiple(double multiple) => 40 + (multiple * 2);
+    test(
+      'MAD threshold triple — 2.99x / 3.0x / 3.01x are exclusive above 3.0x',
+      () {
+        // median=40, MAD computed from [40,40,40,40,x]; construct x so the
+        // deviation is exactly at the 2.99/3.0/3.01 * MAD boundary using a
+        // fixed base MAD of 2 (values 38,40,40,40,42 -> median 40, MAD 0... )
+        // Use a base set with a clean, non-zero MAD instead.
+        final base = <double>[36, 38, 40, 42, 44]; // median 40, MAD 2
+        double atMultiple(double multiple) => 40 + (multiple * 2);
 
-      final justUnder = TrendBuilder.build(
-        metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
-        sessions: _sessions(<double>[...base.take(4), atMultiple(2.99)]),
-      ).versionGroups.single;
-      final exactly = TrendBuilder.build(
-        metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
-        sessions: _sessions(<double>[...base.take(4), atMultiple(3.0)]),
-      ).versionGroups.single;
-      final justOver = TrendBuilder.build(
-        metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
-        sessions: _sessions(<double>[...base.take(4), atMultiple(3.01)]),
-      ).versionGroups.single;
+        final justUnder = TrendBuilder.build(
+          metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
+          sessions: _sessions(<double>[...base.take(4), atMultiple(2.99)]),
+        ).versionGroups.single;
+        final exactly = TrendBuilder.build(
+          metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
+          sessions: _sessions(<double>[...base.take(4), atMultiple(3.0)]),
+        ).versionGroups.single;
+        final justOver = TrendBuilder.build(
+          metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
+          sessions: _sessions(<double>[...base.take(4), atMultiple(3.01)]),
+        ).versionGroups.single;
 
-      expect(justUnder.points.last.excluded, isFalse);
-      expect(exactly.points.last.excluded, isFalse, reason: '3.0x MAD is still in (inclusive)');
-      expect(justOver.points.last.excluded, isTrue);
-    });
+        expect(justUnder.points.last.excluded, isFalse);
+        expect(
+          exactly.points.last.excluded,
+          isFalse,
+          reason: '3.0x MAD is still in (inclusive)',
+        );
+        expect(justOver.points.last.excluded, isTrue);
+      },
+    );
   });
 
   group('TrendBuilder — version grouping', () {
-    test('sessions publishing the same metric version share one trend group', () {
-      final documentA = _session(id: 's1', createdAt: DateTime(2026, 1, 1), value: 40);
-      final documentB = _session(id: 's2', createdAt: DateTime(2026, 1, 2), value: 30);
-      final trend = TrendBuilder.build(
-        metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
-        sessions: <AnalysisDocument>[documentA, documentB],
-      );
-      expect(trend.versionGroups, hasLength(1));
-      expect(trend.versionGroups.single.metricVersion, 1);
-    });
+    test(
+      'sessions publishing the same metric version share one trend group',
+      () {
+        final documentA = _session(
+          id: 's1',
+          createdAt: DateTime(2026, 1, 1),
+          value: 40,
+        );
+        final documentB = _session(
+          id: 's2',
+          createdAt: DateTime(2026, 1, 2),
+          value: 30,
+        );
+        final trend = TrendBuilder.build(
+          metricId: AnalysisMetricId.timingTargetMeanAbsoluteError,
+          sessions: <AnalysisDocument>[documentA, documentB],
+        );
+        expect(trend.versionGroups, hasLength(1));
+        expect(trend.versionGroups.single.metricVersion, 1);
+      },
+    );
   });
 
   group('TrendBuilder — no extrapolation (source + last-point checks)', () {

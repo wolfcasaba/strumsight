@@ -49,11 +49,10 @@ abstract final class TrendBuilder {
           );
     }
 
-    final versionGroups =
-        <MetricTrend>[
-          for (final entry in pointsByVersion.entries)
-            _buildVersionGroup(version: entry.key, rawPoints: entry.value),
-        ]..sort((a, b) => a.metricVersion.compareTo(b.metricVersion));
+    final versionGroups = <MetricTrend>[
+      for (final entry in pointsByVersion.entries)
+        _buildVersionGroup(version: entry.key, rawPoints: entry.value),
+    ]..sort((a, b) => a.metricVersion.compareTo(b.metricVersion));
 
     return AnalysisTrend(metricId: metricId, versionGroups: versionGroups);
   }

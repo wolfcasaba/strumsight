@@ -280,37 +280,31 @@ void main() {
           flags.toString(),
           contains('analysisExperimentalFusionEnabled: false'),
         );
-        expect(
-          flags.toString(),
-          contains('analysisComparisonEnabled: false'),
-        );
+        expect(flags.toString(), contains('analysisComparisonEnabled: false'));
       }
     });
 
-    test(
-      'analysisComparisonEnabled defaults to false and remains off for '
-      'every environment',
-      () {
-        const constructorDefaults = FeatureFlags(
-          accountEnabled: false,
-          diagnosticsEnabled: false,
-          labModeAvailable: false,
-        );
-        expect(constructorDefaults.analysisComparisonEnabled, isFalse);
+    test('analysisComparisonEnabled defaults to false and remains off for '
+        'every environment', () {
+      const constructorDefaults = FeatureFlags(
+        accountEnabled: false,
+        diagnosticsEnabled: false,
+        labModeAvailable: false,
+      );
+      expect(constructorDefaults.analysisComparisonEnabled, isFalse);
 
-        for (final environment in AppEnvironment.values) {
-          final flags = FeatureFlags.forEnvironment(
-            environment,
-            accountEnabled: false,
-          );
-          expect(
-            flags.analysisComparisonEnabled,
-            isFalse,
-            reason: '$environment must not implicitly enable comparison.',
-          );
-        }
-      },
-    );
+      for (final environment in AppEnvironment.values) {
+        final flags = FeatureFlags.forEnvironment(
+          environment,
+          accountEnabled: false,
+        );
+        expect(
+          flags.analysisComparisonEnabled,
+          isFalse,
+          reason: '$environment must not implicitly enable comparison.',
+        );
+      }
+    });
 
     test(
       'audio analysis flags participate in value semantics and remain offline',

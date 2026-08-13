@@ -220,7 +220,8 @@ final class FeatureFlags {
           analysisPreprocessingExperimentalEnabled &&
       other.analysisExperimentalFusionEnabled ==
           analysisExperimentalFusionEnabled &&
-      other.analysisTechniqueProxiesEnabled == analysisTechniqueProxiesEnabled &&
+      other.analysisTechniqueProxiesEnabled ==
+          analysisTechniqueProxiesEnabled &&
       other.analysisComparisonEnabled == analysisComparisonEnabled;
 
   @override

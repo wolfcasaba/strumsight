@@ -125,19 +125,22 @@ void main() {
       );
     });
 
-    test('noise floor delta exactly 10.0 dB is still compatible (inclusive)', () {
-      expect(
-        CompatibilityEvaluator.evaluateCompatibility(
-          before: _metric(AnalysisMetricId.timingTargetMeanAbsoluteError, 40),
-          after: _metric(AnalysisMetricId.timingTargetMeanAbsoluteError, 30),
-          beforeQuality: _quality(noiseFloorDbfs: -40),
-          afterQuality: _quality(noiseFloorDbfs: -50.0),
-          beforeProvenance: _provenance(),
-          afterProvenance: _provenance(),
-        ),
-        isNull,
-      );
-    });
+    test(
+      'noise floor delta exactly 10.0 dB is still compatible (inclusive)',
+      () {
+        expect(
+          CompatibilityEvaluator.evaluateCompatibility(
+            before: _metric(AnalysisMetricId.timingTargetMeanAbsoluteError, 40),
+            after: _metric(AnalysisMetricId.timingTargetMeanAbsoluteError, 30),
+            beforeQuality: _quality(noiseFloorDbfs: -40),
+            afterQuality: _quality(noiseFloorDbfs: -50.0),
+            beforeProvenance: _provenance(),
+            afterProvenance: _provenance(),
+          ),
+          isNull,
+        );
+      },
+    );
 
     test('noise floor delta 10.1 dB -> inputQualityDiverged', () {
       expect(
@@ -153,19 +156,22 @@ void main() {
       );
     });
 
-    test('dynamics metric with mismatched DSP config -> inputQualityDiverged', () {
-      expect(
-        CompatibilityEvaluator.evaluateCompatibility(
-          before: _metric(AnalysisMetricId.dynamicsStrokeStrengthCv, 0.2),
-          after: _metric(AnalysisMetricId.dynamicsStrokeStrengthCv, 0.25),
-          beforeQuality: _quality(),
-          afterQuality: _quality(),
-          beforeProvenance: _provenance(dspConfigHash: 'hash-a'),
-          afterProvenance: _provenance(dspConfigHash: 'hash-b'),
-        ),
-        ComparisonInconclusiveReason.inputQualityDiverged,
-      );
-    });
+    test(
+      'dynamics metric with mismatched DSP config -> inputQualityDiverged',
+      () {
+        expect(
+          CompatibilityEvaluator.evaluateCompatibility(
+            before: _metric(AnalysisMetricId.dynamicsStrokeStrengthCv, 0.2),
+            after: _metric(AnalysisMetricId.dynamicsStrokeStrengthCv, 0.25),
+            beforeQuality: _quality(),
+            afterQuality: _quality(),
+            beforeProvenance: _provenance(dspConfigHash: 'hash-a'),
+            afterProvenance: _provenance(dspConfigHash: 'hash-b'),
+          ),
+          ComparisonInconclusiveReason.inputQualityDiverged,
+        );
+      },
+    );
 
     test('dynamics metric with matching DSP config is compatible', () {
       expect(
@@ -350,7 +356,10 @@ void main() {
       );
       // techniqueChordChangeGap has metadata, so this exercises the happy
       // path; the metadata table itself is exhaustively checked above.
-      expect(comparison.direction, isNot(MetricComparisonDirection.inconclusive));
+      expect(
+        comparison.direction,
+        isNot(MetricComparisonDirection.inconclusive),
+      );
     });
   });
 }

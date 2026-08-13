@@ -59,8 +59,10 @@ final class MetricTrend {
 /// trend line — a version bump is a new metric definition, not a
 /// continuation of the old one.
 final class AnalysisTrend {
-  AnalysisTrend({required this.metricId, required List<MetricTrend> versionGroups})
-    : versionGroups = List<MetricTrend>.unmodifiable(versionGroups);
+  AnalysisTrend({
+    required this.metricId,
+    required List<MetricTrend> versionGroups,
+  }) : versionGroups = List<MetricTrend>.unmodifiable(versionGroups);
 
   final String metricId;
   final List<MetricTrend> versionGroups;

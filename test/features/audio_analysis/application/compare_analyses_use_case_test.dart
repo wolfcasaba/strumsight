@@ -50,7 +50,10 @@ void main() {
   });
 
   test('a metric present in only one session produces no comparison row', () {
-    final before = _document(id: 'before', metrics: const <AnalysisMetricResult>[]);
+    final before = _document(
+      id: 'before',
+      metrics: const <AnalysisMetricResult>[],
+    );
     final after = _document(
       id: 'after',
       metrics: <AnalysisMetricResult>[
