@@ -1,8 +1,8 @@
 # E06-R23 — Review
 
-Brief: `docs/rounds/e06-r23-analysis-overview-and-metric-cards.md`  
-Diff: `origin/main...sonnet-impl/e06-r23-analysis-overview-and-metric-cards`  
-Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-13  
+Brief: `docs/rounds/e06-r23-analysis-overview-and-metric-cards.md`
+Diff: `origin/main...sonnet-impl/e06-r23-analysis-overview-and-metric-cards`
+Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-13
 Verdikt: CHANGES REQUIRED
 
 ## Összegzés
