@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider/path_provider.dart';
 
+import '../data/cache/analysis_cache.dart';
 import '../data/local/file_analysis_repository.dart';
 import '../data/migration/analysis_migration_version_store.dart';
 import '../data/migration/legacy_library_migrator.dart';
@@ -42,6 +43,10 @@ import 'save_analysis_use_case.dart';
 /// below create it lazily.
 const String analysisRepositoryRootDirectoryName = 'analysis';
 
+/// Separate app-support subtree for derived entries. It is deliberately not a
+/// child of the durable analysis-document repository.
+const String analysisCacheRootDirectoryName = 'analysis_cache';
+
 /// Factory that resolves the production `analysis/` directory by
 /// asking `path_provider` for the app-support directory. Test code
 /// overrides the provider with a `Directory Function()` returning a
@@ -57,6 +62,43 @@ Future<Directory> _defaultRootResolver() async {
   final appSupport = await getApplicationSupportDirectory();
   return Directory('${appSupport.path}/$analysisRepositoryRootDirectoryName');
 }
+
+/// Factory for the separate derived-cache directory. Tests override this
+/// boundary rather than importing `path_provider`.
+typedef AnalysisCacheRootResolver = Future<Directory> Function();
+
+final analysisCacheProductionRootResolverProvider =
+    Provider<AnalysisCacheRootResolver>((_) => _defaultCacheRootResolver);
+
+Future<Directory> _defaultCacheRootResolver() async {
+  final appSupport = await getApplicationSupportDirectory();
+  return Directory('${appSupport.path}/$analysisCacheRootDirectoryName');
+}
+
+/// Override point for callers that require an already-open derived cache.
+final analysisCacheProvider = Provider<AnalysisCache>((_) {
+  throw StateError(
+    'analysisCacheProvider must be overridden by the bootstrap layer before '
+    'the rest of the app reads it. Production wires via '
+    'analysisCacheBootProvider.',
+  );
+});
+
+/// Opens the derived cache in its own app-support subtree. This does not read,
+/// write, or purge saved analysis sessions.
+final analysisCacheBootProvider = FutureProvider<AnalysisCache>((ref) async {
+  final rootResolver = ref.watch(analysisCacheProductionRootResolverProvider);
+  final root = await rootResolver();
+  return AnalysisCache.openAtDirectory(
+    directory: root,
+    clock: ref.watch(analysisCacheClockProvider),
+  );
+});
+
+/// Production clock supplied to the cache. Tests override it for LRU order.
+final analysisCacheClockProvider = Provider<DateTime Function()>(
+  (_) => DateTime.now,
+);
 
 /// Override point for the [AnalysisRepository]. Tests provide an
 /// `InMemoryAnalysisRepository` or a `FileAnalysisRepository` whose
@@ -161,6 +203,9 @@ final analysisRepositoryClockProvider = Provider<DateTime Function()>(
 /// Re-export the StorageKeys migration constant so callers do not
 /// need to import the storage layer.
 const String analysisMigrationStorageKey = StorageKeys.analysisMigrationState;
+
+/// Re-export the cache storage key so callers do not import core storage.
+const String analysisCacheStorageKey = StorageKeys.analysisCache;
 
 /// Composition seam for the first concrete V2 pipeline. It intentionally
 /// fails closed until a future round designs the shared DSP work-state and

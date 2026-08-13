@@ -334,7 +334,58 @@ gate bevezetése helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+**Implementáció:** Codex Terra, 2026-08-13.
+
+**Módosítások:**
+- `domain/cache/analysis_cache_key.dart` — a hatkomponensű, SHA-256-alapú
+  kulcs és a teljes `AnalysisTarget`-snapshot kanonikus target-hash-e; target
+  hiányában stabil sentinel.
+- `data/cache/audio_fingerprint.dart` — metaadat + kvantált 16-bit PCM
+  SHA-256 fingerprint, fájlnév/path/device-ID nélkül.
+- `data/cache/analysis_cache.dart` — külön `analysis_cache/` könyvtárban élő
+  lemez-LRU (20 bejegyzés / 52 428 800 payload byte, inkluzív), sérült
+  entry→miss, dokumentum-ID szerinti invalidálás, purge és single-flight.
+- `data/cache/model_byte_cache.dart` — futásonkénti parsed-model single-flight;
+  három szimulált stage ugyanazt a read+parse Future-t kapja.
+- `application/analysis_providers.dart`, `public.dart`, `storage_keys.dart` —
+  additív root-resolver/boot provider, barrel-exportok és cache-katalóguskulcs.
+- Új tesztek fedik a hétkulcsos hit/miss mátrixot, fingerprint-tulajdonságokat,
+  LRU darab- és byte-capeket, korrupciót, mentett R21-session függetlenségét,
+  single-flightot, modell-lifecycle-t és a wall-clock assertion tilalmát.
+- `tool/audio_analysis_benchmark.dart` újrafuttatja a R01 három fixture-ét,
+  külön méri a cache hit/misst; a futtatott kimenet
+  `docs/baseline/epic-06-analysis-performance.md`-ben van. Az eval-mátrix
+  EVAL-27 PENDING Android-mérést rögzít.
+
+**Acceptance evidence:**
+- Kulcs hat komponense: `analysis_cache_key_test.dart`, 7 zöld cella; a
+  valódi-sértés próbában az `analyzerVersion` ideiglenes kivétele pontosan az
+  analyzer-version miss-assertiont buktatta, majd a komponens visszakerült.
+- Fingerprint: `audio_fingerprint_test.dart`, 100 azonos futás, egymintás
+  eltérés, névfüggetlenség, fix 64 hex-karakter.
+- LRU/cap/korrupció/session/single-flight/model: `analysis_cache_test.dart`
+  (16 zöld teszt a célzott futásban); a default byte cap 52 428 800 és a
+  52 428 799 / 52 428 800 / 52 428 801 határérték is explicit ellenőrzött.
+- Benchmark: `flutter test --reporter expanded tool/audio_analysis_benchmark.dart`
+  zöld; cache miss 30 589 µs, hit 5 317 µs, V1 determinism SHA-256
+  `071925bcc69f53579dddbeb505375ef897760c84efd1f7255db90f4465f1d7b6`.
+  A V2 cancel latency `not available`, mert a V2 runner ezen körben szándékosan
+  nincs összeállítva.
+- Wall-clock assertion őr: `analysis_cache_property_test.dart` zöld; nincs új
+  `Stopwatch` + `lessThan` assertion tesztben.
+- ADR 0248 már a pre-flightban rögzítette a hat komponenst, capet és a
+  halasztott Float32List/TransferableTypedData feltételét; implementációs
+  eltérés nem volt, ezért nem módosult.
+
+**Futtatott ellenőrzések:**
+- `flutter test test/features/audio_analysis/data/audio_fingerprint_test.dart test/features/audio_analysis/domain/analysis_cache_key_test.dart test/features/audio_analysis/data/analysis_cache_test.dart test/property/analysis_cache_property_test.dart` → 16 passed.
+- `flutter test --reporter expanded tool/audio_analysis_benchmark.dart` → 1 passed (fenti mért kimenet).
+- `tools/round-gate.sh test/features/audio_analysis test/property test/core` → eredmény-artefaktum: `{ "outcome": "pass", "exit_code": 0, "failed_step": null }`.
+
+**Eltérés / nem futtatott:** Android release APK és CI teljes suite nem helyi
+implementer-feladat; a kör nem érint natív fájlt. Valós Android 30 másodperces
+cache/peak-RSS/cancel mérés EVAL-27 PENDING marad. V2 runner-bekötés és a
+`AnalysisCachePort` éles adaptere szándékosan következő kompozíciós körre marad.
 
 ## 11. Review — a független reviewer tölti ki
 

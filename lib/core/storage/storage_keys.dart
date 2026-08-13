@@ -84,6 +84,12 @@ abstract final class StorageKeys {
   /// migration-supplier guard.
   static const String analysisMigrationState = 'ss.analysis.migration_state';
 
+  /// Directory-key shadow for derived Audio Analysis V2 cache entries.
+  ///
+  /// The actual payload lives in app support under `analysis_cache/`; this
+  /// catalogue entry keeps support tooling and privacy inventory explicit.
+  static const String analysisCache = 'ss.analysis.cache';
+
   // --- AI tutor ------------------------------------------------------------
   /// Versioned documents, recovery index, and inspectable memory facts.
   static const String tutorConversationDocuments =
@@ -148,6 +154,7 @@ abstract final class StorageKeys {
     tutorConversationIndex,
     tutorMemoryFacts,
     analysisMigrationState,
+    analysisCache,
   ];
 }
 
