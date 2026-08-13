@@ -14,6 +14,25 @@ ha nincs, **jelezz**. A bejelentés nem munka.
 Mérve: E04-R13, E04-R14 és az E04-R16 mindkét kísérlete pontosan így ért véget
 — félkész fákkal, jelzés nélkül. Ez körönként egy teljes újraindítás ára volt.
 
+**A Bash-eszköz saját `run_in_background: true` kapcsolója UGYANEZ a hiba,
+csak eszköz-szinten.** Ez a session EGYETLEN fordulóban fut (`claude -p`): ha
+a kötelező gate-parancsot (`round-gate.sh`, `pytest`) háttérbe küldöd, és a
+válaszod azzal zárod, hogy majd jelentkezel / megvárod, amíg befejeződik —
+nincs „majd". A folyamat a forduló végén (`end_turn`) kilép, és ezzel a
+háttér-feladatot IS megöli, mielőtt bármi eredmény visszajutna hozzád; az a
+`task_notification`, amit erre normál, interaktív munkamenetben kapnál, ebben
+az egy-fordulós harnessben SOSEM érkezik meg. Kötelező gate-parancsot ezért
+MINDIG előtérben (a `run_in_background` paraméter NÉLKÜL) futtass, és a
+válaszát blokkolva várd meg, mielőtt a fordulót lezárod. Ugyanez az elv más
+hívó eszköz kontextusában már bizonyítva: `docs/LESSONS.md` L183.
+
+Mérve: E99-R08 — két egymást követő `sonnet-impl` javító kör (session
+3f71b1fb-ee86-4206-b9a6-6f802768f679, majd a második, folytató futás
+665d8491-3352-416f-9ac8-f420c4936468) a kötelező `python3 -m pytest
+tools/tests -q` gate-et küldte háttérbe, majd „I'll report back once it
+completes" bejelentéssel zárt jelzés és commit nélkül. Mindkettő exit 0-val
+`status=unknown`-ba halt, és a lánc emiatt H6 halt-ot jelzett (ADR 0087 §2).
+
 ## 2. Commitolj lépésenként, ne a végén egyszer
 
 Minden elkészült fájl után:
