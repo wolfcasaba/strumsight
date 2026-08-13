@@ -9168,3 +9168,20 @@ regressziós védelem: `tools/tests/
 test_orchestrator_legacy_worktree_discovery.py` (a sablonból kinyert
 tényleges parancssort futtatja, nem másolatot). Mindkét javítás: PR
 [#240](https://github.com/wolfcasaba/strumsight/pull/240).
+
+---
+
+## L248 — A post-merge gate csak a fő klón fast-forwardja UTÁN bizonyíték
+
+**Mit mértem.** E06-R23 squash-merge-e után a merge-zár a kör külön klónját
+frissítette `d5a95e44`-re, miközben a fő `/home/ubuntu/music-theory` klón
+lokális `main`-je még `b72c38b5`-ön állt. Az első post-merge
+`tools/round-gate.sh test/features/audio_analysis test/app` futás így zöld
+volt, de a merge előtti kódot mérte. A `git fetch origin main && git pull
+--ff-only origin main` után a fő klón `d5a95e44`-re lépett, majd az
+előkészítés és a gate ismét zölden futott (`audio_analysis=465`, `app=69`).
+
+**Hogyan alkalmazd.** Merge után mindig írd ki a fő klón `HEAD`-jét, és csak
+akkor fogadd el a post-merge gate-et, ha az megegyezik a PR squash commitjával.
+Ha eltér, fast-forwardold a fő klónt, futtasd újra a
+`tools/prepare-flutter-generated.sh`-t, és csak azután a gate-artefaktumot.

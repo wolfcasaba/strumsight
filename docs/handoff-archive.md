@@ -6,6 +6,21 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R23 KÉSZ — Overview screen és metric cardok (2026-08-13)
+
+Flag-gated V2 overview és metric-detail route, ötállapotú metric card,
+insight- és signal-quality card, explicit confidence/semantics jelzés,
+angol–magyar lokalizáció és route/overflow regressziós mátrix készült.
+Az első független review két MAJOR leletét (négy insight-slot + Részletek,
+valamint route/overflow cellák) egy javító kör regressziós tesztekkel zárta;
+a végső normál és dedikált security review APPROVED, 0 nyitott
+BLOCKER/MAJOR. [ADR 0241](adr/0241-analysis-overview-presentation-boundary.md),
+PR [#241](https://github.com/wolfcasaba/strumsight/pull/241), squash
+`d5a95e44`; Full Gate [31668356756](https://github.com/wolfcasaba/strumsight/actions/runs/31668356756)
+és Router CI [31667973664](https://github.com/wolfcasaba/strumsight/actions/runs/31667973664)
+success a végleges branch SHA `3903391`-en. A friss merge-elt `main`-en
+megismételt gate is zöld (`audio_analysis=465`, `app=69`).
+
 
 ## ✅ E06-R20 KÉSZ — Determinisztikus insightok és hotspot ranking (2026-08-12)
 
