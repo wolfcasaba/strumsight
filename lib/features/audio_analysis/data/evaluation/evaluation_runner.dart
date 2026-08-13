@@ -324,8 +324,9 @@ final class EvaluationRunner {
     return matchOfRight;
   }
 
-  /// Same greedy nearest-neighbour matching as [matchEvents], for plain
-  /// timestamp lists (beat grids). Returns `(matchedCount, unmatchedDetected)`.
+  /// Same maximum-cardinality one-to-one matching as [matchEvents], for
+  /// plain timestamp lists (beat grids). Returns
+  /// `(matchedCount, unmatchedDetected)`.
   (int, int) matchTimes(
     List<int> expected,
     List<int> detected,
@@ -333,24 +334,31 @@ final class EvaluationRunner {
   ) {
     final sortedExpected = [...expected]..sort();
     final sortedDetected = [...detected]..sort();
-    final claimed = List<bool>.filled(sortedDetected.length, false);
-    var matched = 0;
-    for (final expectedTime in sortedExpected) {
-      var bestIndex = -1;
-      var bestGap = toleranceMs + 1;
-      for (var i = 0; i < sortedDetected.length; i++) {
-        if (claimed[i]) continue;
-        final gap = (sortedDetected[i] - expectedTime).abs();
-        if (gap <= toleranceMs && gap < bestGap) {
-          bestGap = gap;
-          bestIndex = i;
-        }
-      }
-      if (bestIndex != -1) {
-        claimed[bestIndex] = true;
-        matched++;
-      }
-    }
+
+    final candidatesByExpected = List<List<int>>.generate(
+      sortedExpected.length,
+      (i) {
+        final expectedTime = sortedExpected[i];
+        final withGap =
+            <MapEntry<int, int>>[
+              for (var j = 0; j < sortedDetected.length; j++)
+                if ((sortedDetected[j] - expectedTime).abs() <= toleranceMs)
+                  MapEntry(j, (sortedDetected[j] - expectedTime).abs()),
+            ]..sort((a, b) {
+              final byGap = a.value.compareTo(b.value);
+              return byGap != 0 ? byGap : a.key.compareTo(b.key);
+            });
+        return [for (final entry in withGap) entry.key];
+      },
+    );
+
+    final matchOfDetected = _maxBipartiteMatching(
+      leftCount: sortedExpected.length,
+      candidatesByLeft: candidatesByExpected,
+      rightCount: sortedDetected.length,
+    );
+
+    final matched = matchOfDetected.where((i) => i != -1).length;
     return (matched, sortedDetected.length - matched);
   }
 
@@ -451,28 +459,51 @@ final class EvaluationRunner {
     return (matched, expected.length);
   }
 
+  /// Same maximum-cardinality one-to-one matching as [matchEvents], on
+  /// timestamps only; a matched pair's cents error is the absolute pitch
+  /// distance between its expected and detected frequency.
   List<double> _pitchCentsErrors(
     List<PitchPoint> expected,
     List<PitchPoint> detected,
   ) {
+    final sortedExpected = [...expected]
+      ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
     final sortedDetected = [...detected]
       ..sort((a, b) => a.timeMs.compareTo(b.timeMs));
-    final claimed = List<bool>.filled(sortedDetected.length, false);
+
+    final candidatesByExpected = List<List<int>>.generate(
+      sortedExpected.length,
+      (i) {
+        final expectedPoint = sortedExpected[i];
+        final withGap =
+            <MapEntry<int, int>>[
+              for (var j = 0; j < sortedDetected.length; j++)
+                if ((sortedDetected[j].timeMs - expectedPoint.timeMs).abs() <=
+                    pitchToleranceMs)
+                  MapEntry(
+                    j,
+                    (sortedDetected[j].timeMs - expectedPoint.timeMs).abs(),
+                  ),
+            ]..sort((a, b) {
+              final byGap = a.value.compareTo(b.value);
+              return byGap != 0 ? byGap : a.key.compareTo(b.key);
+            });
+        return [for (final entry in withGap) entry.key];
+      },
+    );
+
+    final matchOfDetected = _maxBipartiteMatching(
+      leftCount: sortedExpected.length,
+      candidatesByLeft: candidatesByExpected,
+      rightCount: sortedDetected.length,
+    );
+
     final errors = <double>[];
-    for (final expectedPoint in expected) {
-      var bestIndex = -1;
-      var bestGap = pitchToleranceMs + 1;
-      for (var i = 0; i < sortedDetected.length; i++) {
-        if (claimed[i]) continue;
-        final gap = (sortedDetected[i].timeMs - expectedPoint.timeMs).abs();
-        if (gap <= pitchToleranceMs && gap < bestGap) {
-          bestGap = gap;
-          bestIndex = i;
-        }
-      }
-      if (bestIndex != -1) {
-        claimed[bestIndex] = true;
-        final detectedPoint = sortedDetected[bestIndex];
+    for (var j = 0; j < sortedDetected.length; j++) {
+      final i = matchOfDetected[j];
+      if (i != -1) {
+        final expectedPoint = sortedExpected[i];
+        final detectedPoint = sortedDetected[j];
         final cents =
             1200 * (math.log(detectedPoint.hz / expectedPoint.hz) / math.ln2);
         errors.add(cents.abs());

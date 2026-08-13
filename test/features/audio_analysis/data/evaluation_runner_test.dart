@@ -292,5 +292,67 @@ void main() {
 
       expect(report.overall.chordSegmentAccuracy, 0.5);
     });
+
+    // Review F3 counterexample (docs/reviews/
+    // e06-r29-evaluation-harness-and-calibration-review.md): matchTimes used
+    // to keep the same greedy nearest-neighbour bug as F1's matchEvents, so
+    // expected=90 would lose its only candidate (55) to expected=50's greedy
+    // grab of the closer timestamp, leaving expected=50 unmatched -> matched
+    // count 1. matchTimes now shares matchEvents' maximum-cardinality
+    // one-to-one matcher, so both expected beats find a candidate: 50<->0
+    // and 90<->55 -> matched count 2.
+    test('matchTimes: maximum-cardinality matching finds both beats '
+        '(matched == 2, not 1)', () {
+      final result = runner.matchTimes(const [50, 90], const [0, 55], 50);
+      expect(result.$1, 2);
+    });
+
+    // Same counterexample timestamps as above, carried by pitch points
+    // instead of a bare beat grid. The forced one-to-one pairing is
+    // 50ms<->0ms and 90ms<->55ms — both pairs happen to carry matching
+    // frequencies (220Hz<->220Hz and 440Hz<->440Hz), so both cents errors
+    // are 0 and the mean is 0.0. The pre-fix greedy matcher instead let
+    // expected=50ms steal detected=55ms (the closer timestamp, but the
+    // wrong pitch: 220Hz vs 440Hz, a full octave = 1200 cents) and left
+    // expected=90ms unmatched, reporting a single 1200-cents error as the
+    // mean.
+    test('pitchCentsErrorMean: maximum-cardinality time matching pairs '
+        'each point with its correct-frequency counterpart (mean == 0.0, '
+        'not 1200.0)', () {
+      final ground = GroundTruthCase(
+        id: 'case-3',
+        tempoBand: TempoBand.medium,
+        signalQualityTier: SignalQualityTier.clean,
+        mode: EvalMode.chord,
+        expected: AnnotationSet(
+          events: const [],
+          chordSegments: const [],
+          tempoBpm: null,
+          beatsMs: const [],
+          pitchPoints: [
+            PitchPoint(timeMs: 50, hz: 220),
+            PitchPoint(timeMs: 90, hz: 440),
+          ],
+        ),
+        detected: AnnotationSet(
+          events: const [],
+          chordSegments: const [],
+          tempoBpm: null,
+          beatsMs: const [],
+          pitchPoints: [
+            PitchPoint(timeMs: 0, hz: 220),
+            PitchPoint(timeMs: 55, hz: 440),
+          ],
+        ),
+      );
+      final manifest = GroundTruthManifest(
+        schemaVersion: '1.0',
+        cases: [ground],
+      );
+
+      final report = runner.run(manifest);
+
+      expect(report.overall.pitchCentsErrorMean, closeTo(0.0, 1e-9));
+    });
   });
 }
