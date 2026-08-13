@@ -95,16 +95,18 @@ final class MetricCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              Row(
+              // Wrap, not Row: at narrow widths the badge and the detail
+              // button together can exceed the card width, and a Row
+              // overflows there even with a Flexible badge (the button's
+              // fixed width still leaves the badge less room than its own
+              // minimum). Wrap drops the button to its own line instead.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
                 children: <Widget>[
-                  Flexible(
-                    child: ConfidenceBadge(
-                      level: confidenceLevel,
-                      label: statusLabel,
-                    ),
-                  ),
-                  if (onOpenDetail != null && detailLabel != null) ...<Widget>[
-                    const SizedBox(width: 8),
+                  ConfidenceBadge(level: confidenceLevel, label: statusLabel),
+                  if (onOpenDetail != null && detailLabel != null)
                     TextButton(
                       onPressed: onOpenDetail,
                       child: Text(
@@ -112,7 +114,6 @@ final class MetricCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ],
                 ],
               ),
               if (card.state == OverviewMetricCardState.unavailable ||

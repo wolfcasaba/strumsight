@@ -78,7 +78,7 @@ final class OverviewMetricCard {
 
 /// One primary insight slot, mapped from the insight list. At most four
 /// slots render (improvement, strength, nextAction, qualityWarning); the
-/// rest are accessible via [OverviewViewModel.details].
+/// rest are accessible via [OverviewViewModel.remainingInsights].
 @immutable
 final class OverviewInsightCard {
   const OverviewInsightCard({
@@ -99,6 +99,20 @@ final class OverviewInsightCard {
   /// coarse [AnalysisRecommendedAction] enum and not the full
   /// [RecommendedAnalysisAction] payload the rule produced.
   final String actionTooltip;
+}
+
+/// Navigation payload for the "Részletek" entry point: every metric card
+/// plus every insight the four-slot maximum-policy did not show. Bundled so
+/// the detail route can render both without a second screen file.
+@immutable
+final class OverviewDetailsPayload {
+  const OverviewDetailsPayload({
+    required this.metrics,
+    required this.remainingInsights,
+  });
+
+  final List<OverviewMetricCard> metrics;
+  final List<OverviewInsightCard> remainingInsights;
 }
 
 /// Aggregated signal-quality card content. The values are formatted from
@@ -156,13 +170,24 @@ final class OverviewViewModel {
     required this.signalQuality,
     required this.primaryMetrics,
     required this.insights,
+    required this.remainingInsights,
     required this.details,
   });
 
   final OverviewHeader header;
   final OverviewSignalQualityCard signalQuality;
   final List<OverviewMetricCard> primaryMetrics;
+
+  /// The maximum-policy slots (SDD §25.6): at most one card per
+  /// [AnalysisInsightKind] plus one alternate of the same kind as the first
+  /// slot — never more than four. Every card carries the exact kind of the
+  /// insight it renders.
   final List<OverviewInsightCard> insights;
+
+  /// Every published insight NOT rendered in [insights] — reachable from the
+  /// "Részletek" entry point so the maximum-policy never drops information,
+  /// only defers it.
+  final List<OverviewInsightCard> remainingInsights;
 
   /// All metric cards (every published metric, not just the four primary
   /// ones). The detail screen reads this verbatim.
@@ -211,13 +236,14 @@ final class OverviewViewModel {
           allCards.firstWhere((card) => card.metricId == id),
     ];
 
-    final insights = _formatInsights(document, labels);
+    final (insights, remainingInsights) = _formatInsights(document, labels);
 
     return OverviewViewModel._(
       header: header,
       signalQuality: signalQuality,
       primaryMetrics: primaryMetrics,
       insights: insights,
+      remainingInsights: remainingInsights,
       details: allCards,
     );
   }
@@ -303,52 +329,62 @@ final class OverviewViewModel {
     };
   }
 
-  static List<OverviewInsightCard> _formatInsights(
+  static (List<OverviewInsightCard>, List<OverviewInsightCard>) _formatInsights(
     AnalysisDocument document,
     OverviewLabels labels,
   ) {
     // Maximum-policy slot allocation (SDD §25.6): improvement, strength,
-    // nextAction, qualityWarning — one per slot. The first item of each
-    // kind wins; ties resolve by ruleId ascending.
-    final byKind = <AnalysisInsightKind, AnalysisInsight?>{
-      AnalysisInsightKind.observation: null,
-      AnalysisInsightKind.recommendation: null,
-      AnalysisInsightKind.caution: null,
-    };
-    for (final insight in document.insights) {
-      byKind.putIfAbsent(insight.kind, () => null);
-      if (byKind[insight.kind] == null) {
-        byKind[insight.kind] = insight;
+    // nextAction, qualityWarning — at most four slots, never more. The
+    // first item of each kind wins the first three slots; the fourth slot
+    // is a second insight of the SAME kind as the first slot (never a
+    // different kind mislabelled as the first slot's kind). Ties resolve
+    // by document order.
+    AnalysisInsight? firstOfKind(AnalysisInsightKind kind) {
+      for (final insight in document.insights) {
+        if (insight.kind == kind) return insight;
       }
+      return null;
     }
-    final slots = <(AnalysisInsightKind, AnalysisInsight?)>[
-      (
-        AnalysisInsightKind.recommendation,
-        byKind[AnalysisInsightKind.recommendation],
-      ),
-      (
-        AnalysisInsightKind.observation,
-        byKind[AnalysisInsightKind.observation],
-      ),
-      (
-        AnalysisInsightKind.recommendation,
-        _nextAlternate(byKind[AnalysisInsightKind.recommendation], document),
-      ),
-      (AnalysisInsightKind.caution, byKind[AnalysisInsightKind.caution]),
+
+    final firstRecommendation = firstOfKind(AnalysisInsightKind.recommendation);
+    final firstObservation = firstOfKind(AnalysisInsightKind.observation);
+    final firstCaution = firstOfKind(AnalysisInsightKind.caution);
+    final alternateRecommendation = _nextOfKind(firstRecommendation, document);
+
+    final shown = <(AnalysisInsightKind, AnalysisInsight?)>[
+      (AnalysisInsightKind.recommendation, firstRecommendation),
+      (AnalysisInsightKind.observation, firstObservation),
+      (AnalysisInsightKind.recommendation, alternateRecommendation),
+      (AnalysisInsightKind.caution, firstCaution),
     ];
-    return <OverviewInsightCard>[
-      for (final (kind, insight) in slots)
+    final shownIds = <String>{
+      for (final (_, insight) in shown)
+        if (insight != null) insight.id,
+    };
+    final insights = <OverviewInsightCard>[
+      for (final (kind, insight) in shown)
         if (insight != null) _formatInsight(insight, kind, labels),
     ];
+    final remainingInsights = <OverviewInsightCard>[
+      for (final insight in document.insights)
+        if (!shownIds.contains(insight.id))
+          _formatInsight(insight, insight.kind, labels),
+    ];
+    return (insights, remainingInsights);
   }
 
-  static AnalysisInsight? _nextAlternate(
+  /// The next insight of the same [kind] as [first] (excluding [first]
+  /// itself) in document order — never a different kind, so the label the
+  /// UI shows always matches the insight it renders.
+  static AnalysisInsight? _nextOfKind(
     AnalysisInsight? first,
     AnalysisDocument document,
   ) {
     if (first == null) return null;
     for (final insight in document.insights) {
-      if (insight.id != first.id) return insight;
+      if (insight.id != first.id && insight.kind == first.kind) {
+        return insight;
+      }
     }
     return null;
   }

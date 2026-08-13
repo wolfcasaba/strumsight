@@ -65,7 +65,10 @@ class _AnalysisOverviewBody extends StatelessWidget {
             tooltip: l10n.analysisOverviewSeeAllInsights,
             onPressed: () => context.go(
               AppRoutes.analysisMetricDetail,
-              extra: viewModel.details,
+              extra: OverviewDetailsPayload(
+                metrics: viewModel.details,
+                remainingInsights: viewModel.remainingInsights,
+              ),
             ),
           ),
         ],
@@ -114,7 +117,10 @@ class _AnalysisOverviewBody extends StatelessWidget {
                 icon: const Icon(Icons.tune),
                 onPressed: () => context.go(
                   AppRoutes.analysisMetricDetail,
-                  extra: viewModel.details,
+                  extra: OverviewDetailsPayload(
+                    metrics: viewModel.details,
+                    remainingInsights: viewModel.remainingInsights,
+                  ),
                 ),
                 label: Text(l10n.analysisOverviewSeeDetails),
               ),

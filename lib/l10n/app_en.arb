@@ -1474,6 +1474,8 @@
   "@analysisOverviewSeeDetails": {},
   "analysisOverviewSeeAllInsights": "See all insights",
   "@analysisOverviewSeeAllInsights": {},
+  "analysisOverviewRemainingInsights": "More insights",
+  "@analysisOverviewRemainingInsights": {},
   "analysisOverviewInputMicrophone": "Microphone recording",
   "@analysisOverviewInputMicrophone": {},
   "analysisOverviewInputImportedFile": "Imported recording",

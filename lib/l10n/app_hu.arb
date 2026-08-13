@@ -1397,6 +1397,8 @@
   "@analysisOverviewSeeDetails": {},
   "analysisOverviewSeeAllInsights": "Összes insight",
   "@analysisOverviewSeeAllInsights": {},
+  "analysisOverviewRemainingInsights": "További insightok",
+  "@analysisOverviewRemainingInsights": {},
   "analysisOverviewInputMicrophone": "Mikrofonos felvétel",
   "@analysisOverviewInputMicrophone": {},
   "analysisOverviewInputImportedFile": "Importált felvétel",

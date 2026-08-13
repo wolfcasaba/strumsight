@@ -272,9 +272,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: AppRoutes.analysisMetricDetail,
           redirect: (_, state) {
             final extra = state.extra;
-            // Accept a card list (primary navigation source) or a document
-            // (the overview header's "See all details" entry point).
+            // Accept a card list (single-metric navigation source), the
+            // combined metrics+insights payload (the "Részletek" entry
+            // point), or a document (the overview header's legacy entry).
             if (extra is List<OverviewMetricCard> ||
+                extra is OverviewDetailsPayload ||
                 extra is AnalysisDocument) {
               return null;
             }
@@ -282,6 +284,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           },
           builder: (_, state) {
             final extra = state.extra;
+            if (extra is OverviewDetailsPayload) {
+              return AnalysisMetricDetailScreen(
+                metrics: extra.metrics,
+                remainingInsights: extra.remainingInsights,
+              );
+            }
             if (extra is List<OverviewMetricCard>) {
               return AnalysisMetricDetailScreen(metrics: extra);
             }

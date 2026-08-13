@@ -2,7 +2,14 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_capability.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_input_summary.dart';
@@ -14,7 +21,9 @@ import 'package:strumsight/features/audio_analysis/domain/analysis_provenance.da
 import 'package:strumsight/features/audio_analysis/domain/analysis_timeline.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_warning.dart';
 import 'package:strumsight/features/audio_analysis/domain/signal_quality_report.dart';
+import 'package:strumsight/features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
 import 'package:strumsight/features/audio_analysis/presentation/analysis_overview_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 AnalysisDocument _document({
@@ -99,6 +108,53 @@ Widget _harness(
     ],
     supportedLocales: AppLocalizations.supportedLocales,
     home: AnalysisOverviewScreen(document: document),
+  );
+}
+
+/// Harness with a real (but minimal) [GoRouter] wiring exactly the two
+/// analysis routes' `builder`s the production app router uses, so
+/// "Részletek" navigation exercises the same [OverviewDetailsPayload]
+/// contract as `lib/app/routing/app_router.dart` without pulling in the
+/// rest of the app's routes/providers.
+Widget _routedHarness(
+  AnalysisDocument document, {
+  Locale locale = const Locale('en'),
+}) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.analysisOverview,
+    routes: <RouteBase>[
+      GoRoute(
+        path: AppRoutes.analysisOverview,
+        builder: (_, _) => AnalysisOverviewScreen(document: document),
+      ),
+      GoRoute(
+        path: AppRoutes.analysisMetricDetail,
+        builder: (_, state) {
+          final extra = state.extra;
+          if (extra is OverviewDetailsPayload) {
+            return AnalysisMetricDetailScreen(
+              metrics: extra.metrics,
+              remainingInsights: extra.remainingInsights,
+            );
+          }
+          if (extra is List<OverviewMetricCard>) {
+            return AnalysisMetricDetailScreen(metrics: extra);
+          }
+          return const AnalysisMetricDetailScreen();
+        },
+      ),
+    ],
+  );
+  return MaterialApp.router(
+    routerConfig: router,
+    locale: locale,
+    localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+      AppLocalizations.delegate,
+      GlobalMaterialLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+    ],
+    supportedLocales: AppLocalizations.supportedLocales,
   );
 }
 
@@ -293,6 +349,72 @@ void main() {
     );
 
     testWidgets(
+      'overflow matrix — 320px / 1.0 scale renders without overflow',
+      (tester) async {
+        final document = _document(
+          metrics: <AnalysisMetricResult>[
+            _metric(
+              AnalysisMetricId.timingMeanAbsoluteError,
+              CapabilityStatus.available,
+              value: ScalarMetricValue(0.05),
+              unit: 's',
+            ),
+            _metric(
+              AnalysisMetricId.rhythmRushDragBias,
+              CapabilityStatus.degraded,
+              value: ScalarMetricValue(-0.015),
+              unit: 's',
+            ),
+            _metric(
+              AnalysisMetricId.dynamicsStrokeStrengthCv,
+              CapabilityStatus.unavailable,
+              unavailableReason: CapabilityUnavailableReason.inputTooNoisy,
+            ),
+            _metric(
+              AnalysisMetricId.harmonyChordCoverage,
+              CapabilityStatus.unavailable,
+              unavailableReason: CapabilityUnavailableReason.confidenceTooLow,
+            ),
+          ],
+        );
+
+        await _pumpAt(
+          tester,
+          _harness(document),
+          size: const Size(320, 800),
+          textScale: 1.0,
+        );
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'overflow matrix — 600px / 2.0 scale renders without overflow',
+      (tester) async {
+        final document = _document(
+          metrics: <AnalysisMetricResult>[
+            _metric(
+              AnalysisMetricId.timingMeanAbsoluteError,
+              CapabilityStatus.available,
+              value: ScalarMetricValue(0.05),
+              unit: 's',
+            ),
+          ],
+        );
+
+        await _pumpAt(
+          tester,
+          _harness(document),
+          size: const Size(600, 1200),
+          textScale: 2.0,
+        );
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
       'four-document matrix — full, degraded, all-unavailable, silent '
       '— renders without overflow',
       (tester) async {
@@ -357,7 +479,8 @@ void main() {
     );
 
     testWidgets(
-      'maximum-policy — 9 insights still show only the four primary slots',
+      'maximum-policy — 9 insights show exactly four primary slots, and the '
+      'remaining five are visible after "Részletek"',
       (tester) async {
         final many = <AnalysisInsight>[];
         for (var i = 0; i < 9; i++) {
@@ -383,16 +506,89 @@ void main() {
         }
         await _pumpAt(
           tester,
-          _harness(_document(insights: many)),
+          _routedHarness(_document(insights: many)),
           size: const Size(400, 2400),
         );
-        // The screen renders at most four insight cards (one per kind slot).
+        // Exactly four insight cards render on the overview — one per
+        // maximum-policy slot, never all nine.
         final insightCardMatches = find.byWidgetPredicate(
           (w) => w.runtimeType.toString() == 'InsightCard',
         );
-        expect(insightCardMatches.evaluate().length, lessThanOrEqualTo(4));
+        expect(insightCardMatches.evaluate().length, 4);
+
+        // The remaining five insights are reachable via "Részletek", not
+        // dropped.
+        await tester.tap(find.byKey(const Key('overview-see-details')));
+        await tester.pumpAndSettle();
+        final detailInsightMatches = find.byWidgetPredicate(
+          (w) => w.runtimeType.toString() == 'InsightCard',
+        );
+        expect(detailInsightMatches.evaluate().length, 5);
       },
     );
+  });
+
+  group('flag-gated route (F2)', () {
+    GoRouter buildAppRouter({required bool audioAnalysisV2Enabled}) {
+      final container = ProviderContainer(
+        overrides: [
+          appConfigProvider.overrideWithValue(
+            AppConfig(
+              environment: AppEnvironment.development,
+              apiBaseUrl: AppConfig.devApiBaseUrl,
+              flags: FeatureFlags(
+                accountEnabled: false,
+                diagnosticsEnabled: false,
+                labModeAvailable: false,
+                audioAnalysisV2Enabled: audioAnalysisV2Enabled,
+              ),
+              diagnosticsToken: AppConfig.devDiagnosticsToken,
+              buildMode: 'test',
+              appVersion: 'test',
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Route registration is data assembled once at construction time
+      // (`if (audioAnalysisV2Enabled) [...]` in app_router.dart); resolving
+      // it here never builds a screen, so this needs no screen-level
+      // provider overrides.
+      return container.read(routerProvider);
+    }
+
+    test(
+      'flag off — /analysis/overview does not resolve (route not registered)',
+      () {
+        final router = buildAppRouter(audioAnalysisV2Enabled: false);
+        final match = router.configuration.findMatch(
+          Uri.parse(AppRoutes.analysisOverview),
+        );
+        expect(match.isError, isTrue);
+      },
+    );
+
+    test(
+      'flag on + valid AnalysisDocument extra — /analysis/overview resolves',
+      () {
+        final router = buildAppRouter(audioAnalysisV2Enabled: true);
+        final match = router.configuration.findMatch(
+          Uri.parse(AppRoutes.analysisOverview),
+          extra: _document(),
+        );
+        expect(match.isError, isFalse);
+      },
+    );
+
+    test('V1 /analyze route is unaffected by the flag, on or off', () {
+      for (final flag in <bool>[false, true]) {
+        final router = buildAppRouter(audioAnalysisV2Enabled: flag);
+        final match = router.configuration.findMatch(
+          Uri.parse(AppRoutes.analyze),
+        );
+        expect(match.isError, isFalse, reason: 'flag=$flag');
+      }
+    });
   });
 
   test('no UI threshold comparison — presentation never compares confidence '
