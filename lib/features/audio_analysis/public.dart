@@ -11,6 +11,8 @@ export 'application/save_analysis_use_case.dart';
 export 'presentation/analysis_metric_detail_screen.dart';
 export 'presentation/analysis_overview_screen.dart';
 export 'presentation/analysis_progress_view.dart';
+export 'presentation/analysis_timeline_screen.dart';
+export 'presentation/controllers/timeline_viewport.dart';
 export 'presentation/controllers/overview_view_model.dart';
 export 'data/analysis_document_codec.dart';
 export 'data/capture/analysis_recorder.dart';

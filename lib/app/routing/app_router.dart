@@ -6,6 +6,7 @@ import '../../features/analyze/screens/analyze_screen.dart';
 import '../../features/audio_analysis/domain/analysis_document.dart';
 import '../../features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
 import '../../features/audio_analysis/presentation/analysis_overview_screen.dart';
+import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart';
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
@@ -295,6 +296,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             }
             return const AnalysisMetricDetailScreen();
           },
+        ),
+        GoRoute(
+          path: AppRoutes.analysisTimeline,
+          redirect: (_, state) =>
+              state.extra is AnalysisDocument ? null : AppRoutes.live,
+          builder: (_, state) => AnalysisTimelineScreen(
+            document: state.extra! as AnalysisDocument,
+          ),
         ),
       ],
     ],

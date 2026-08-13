@@ -1,10 +1,10 @@
 # E06-R24 — Többrétegű, zoomolható timeline
 
-- **Státusz:** PREPARED (előre megírva 2026-08-07, kód olvasva: main @ `a6e6f3d`)
+- **Státusz:** PLANNING (pre-flight felülvizsgálva 2026-08-13, main @ `4d2ff97`)
 - **SDD-kör:** [`docs/sdd/07-epic-06-audio-analysis-2.md`](../sdd/07-epic-06-audio-analysis-2.md) Kör 24; §25.6–25.8
-- **Branch:** `minimax/e06-r24-layered-zoomable-timeline`
-- **Előfeltétel:** **E06-R23 merge**
-- **Brief szerzője:** Claude (batch) · **Implementáció:** MiniMax M3 (UI-dominált kör, ADR 0069)
+- **Branch:** `terra/e06-r24-layered-zoomable-timeline`
+- **Előfeltétel:** **E06-R23 merge** — teljesítve (PR #241, squash `d5a95e44`)
+- **Brief szerzője:** Claude (batch) · **Implementáció:** Terra (`.pipeline/engine-override`, 2026-08-08 motor-felállás — AGENTS.md §15.6.1)
 
 ```ai-router
 schema_version = 1
@@ -18,13 +18,15 @@ allowed_paths = [
   "lib/features/audio_analysis/presentation/controllers/timeline_view_state.dart",
   "lib/features/audio_analysis/presentation/controllers/timeline_viewport.dart",
   "lib/features/audio_analysis/public.dart",
-  "lib/app/router/app_router.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/app/routing/app_route.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/audio_analysis/presentation/analysis_timeline_screen_test.dart",
   "test/features/audio_analysis/presentation/timeline_viewport_test.dart",
   "test/features/audio_analysis/presentation/hotspot_navigator_test.dart",
   "docs/rounds/e06-r24-layered-zoomable-timeline.md",
+  "docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -33,12 +35,22 @@ gate_tests = [
 native_gate = false
 ```
 
-> ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R23 merge. Olvasd újra
-> a `lib/features/analyze/widgets/timeline_view.dart`-ot (170 sor) — az a
-> **kompatibilitási** nézet, ami **változatlan** marad, és a
-> `test/features/analyze/timeline_view_test.dart` az őre. Ellenőrizd az R23
-> `OverviewViewModel` formázási helpereit: a timeline **ugyanazokat**
-> használja, nem duplikál. PREPARED→PLANNING, brief commit előbb.
+> ⚠ **Pre-flight (KÖTELEZŐ):** friss `origin/main` + E06-R23 merge — teljesítve.
+> Olvasd újra a `lib/features/analyze/widgets/timeline_view.dart`-ot (170 sor)
+> — az a **kompatibilitási** nézet, ami **változatlan** marad, és a
+> `test/features/analyze/timeline_view_test.dart` az őre. **A tényleges router
+> fájl `lib/app/routing/app_router.dart` és a route-katalógus
+> `lib/app/routing/app_route.dart`** — a `lib/app/router/` **NEM létezik**
+> (ld. §0.0 2. javító pre-flight, ez a header-korrekció ELŐZŐ verziója
+> tévesen „mérve, létezik"-nek jelölte).
+> Az R23 `OverviewViewModel` (`presentation/controllers/overview_view_model.dart`)
+> a formázást az `OverviewLabels` portra delegálja; a konkrét megvalósítás
+> `AppLocalizationsOverviewLabels`
+> (`presentation/widgets/labels_adapter.dart`) — a timeline
+> `formatDuration`/`formatDbfs`/`formatRatio`/`formatMetricValue` hívásokhoz
+> **ezt** használja újra (import, nem duplikálás); egyik fájl sincs a kör
+> engedélyezett listáján, csak OLVASva/importálva. PREPARED→PLANNING kész,
+> lásd §0.0 a mért eltérésekért és a döntésekért.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -52,7 +64,62 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs.
+**2026-08-13 pre-flight, main @ `4d2ff97`.** A batch-brief nem nevezett meg
+konkrét `AnalysisDocument`-mezőt egyik lane-hez sem, és három tényleges
+eltérést tartalmazott, amelyeket ez a revízió a dispatch előtt felold:
+
+1. **`fl_chart` NEM függősége a projektnek** (mérve: nulla találat a
+   `pubspec.yaml`-ben és a `lib/`-ben) — a §2 „A `fl_chart` a projekt
+   függősége" állítás téves. A `pubspec.yaml` amúgy sincs az engedélyezett
+   fájllistán, tehát hozzáadása scope-sértés lenne. Minden lane natív Flutter
+   widget/`CustomPainter` rajzolással készül, harmadik féltől függő
+   chart-csomag nélkül.
+2. **OD-01 „ADR 0202" hivatkozása elavult sorszám** — a 0200–0205 blokk
+   0215–0220-ra tolódott (ld. [ADR 0217](../adr/0217-analysis-raw-audio-retention.md)
+   fejléce, „Sorszám-jegyzet"). A helyes hivatkozás **ADR 0217**
+   (raw audio retention); az OD-01 döntése (nyers PCM UI-ba töltése tilos)
+   változatlan, csak a sorszám javult.
+3. **Branch- és implementer-mező frissítve** a 2026-08-08 motor-felállásra
+   (`terra`, ld. fejléc) — a batch-brief a korábbi `minimax` queue-értéket
+   örökölte, a tényleges implementer a `.pipeline/engine-override` szerint
+   Terra.
+
+**2026-08-13, 2. javító pre-flight (implementer STOP, 0 munka végezve).** Az
+első dispatch (Terra) a brief `lib/app/router/app_router.dart`
+`allowed_paths`-bejegyzését ellenőrizve azonnal, helyesen `stopped`-ot
+jelzett: ez az útvonal **nem létezik** — a tényleges, flag-gate-elt router
+`lib/app/routing/app_router.dart` (ugyanaz a hiba, amit az R23 testvérkör
+saját pre-flightja már egyszer kimért és javított — ld. R23 §0.0 1. pont —,
+de ez a brief batch-authoring idején örökölte, és a jelen kör ELSŐ
+pre-flightja tévesen „mérve, létezik"-nek jelölte a fejlécben ahelyett, hogy
+ténylegesen futtatott volna egy `test -e` ellenőrzést). Az implementer NULLA
+fájlt módosított, csak jelzett — a branch a pre-flight commit óta
+változatlan (`1348c3f6`).
+
+**Feloldás:** `allowed_paths` és §4 javítva
+`lib/app/routing/app_router.dart`-ra; hozzáadva
+`lib/app/routing/app_route.dart` (a route-katalógus — a timeline útvonalnak
+**új konstansra** van szüksége, ugyanúgy, ahogy az R23 `analysisOverview`/
+`analysisMetricDetail` konstansai is ebben a fájlban élnek, nem a
+router-fájlban). **Flag-döntés (nincs új flag):** a `lib/app/config/
+feature_flags.dart` NINCS az engedélyezett listán, tehát a timeline route a
+MEGLÉVŐ `audioAnalysisV2Enabled` flaget használja — ugyanazt, mint az R23
+`analysisOverview`/`analysisMetricDetail` route párja —, nem vezet be külön
+`analysisTimelineEnabled` sub-flaget.
+
+**ADR:** [0243](../adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md)
+— nyolc lane → konkrét, mért `AnalysisDocument`-mező leképezés (chord=
+`timeline.chordSegments`, beat/bar=`timeline.beats`+`.bars`+`.tempoPoints`,
+strum/onset=`timeline.events` szűrve `OnsetEvent`/`StrumEvent`-re,
+dynamics=`timeline.dynamicPoints`, pitch=`timeline.pitchSegments`,
+hotspot overlay=`document.hotspots`, timing error=`document.hotspots.where(kind
+== timing)`, waveform=mindig `unavailable`); a gazdagabb, csak
+engine-belüli R12/R17 típusok (`BeatGrid`, `TempoCurvePoint`,
+`MonophonicPitchSegment`) NEM lane-bemenetek; a `CapabilityStatus.degraded`
+**látható marad** figyelmeztető jelzéssel (nem esik egy kategóriába a
+rejtett `unavailable`/`notApplicable`-lel — ld. a kilencedik mátrix-cellát
+§6-ban); hiányzó `CapabilityReport`-bejegyzés fail-closed `unavailable`. A
+kód-ellenőrzés részletei és a citációk az ADR-ben.
 
 ## 1. Cél
 
@@ -71,7 +138,11 @@ alternatívával.
   sessionre.
 - Az R10/R11/R12/R14/R16/R17 adják az event-, szegmens-, beat-, timing-,
   dinamika- és pitch-adatokat; az R20 a hotspotokat.
-- A `fl_chart` a projekt függősége, de a timeline-hoz **nem** kötelező.
+- A `fl_chart` **NEM** függősége a projektnek (mérve, 2026-08-13 — §0.0/ADR
+  0243): nulla találat a `pubspec.yaml`-ben és a `lib/`-ben. A `pubspec.yaml`
+  nincs a kör engedélyezett fájllistáján, tehát hozzáadása scope-sértés
+  lenne — minden lane natív Flutter widget/`CustomPainter` rajzolással
+  készül.
 
 ## 3. Scope
 
@@ -98,9 +169,11 @@ accessibility-összefoglaló minden sávhoz; ARB.
 | `.../presentation/controllers/timeline_view_state.dart` | ÚJ | nézetállapot |
 | `.../presentation/controllers/timeline_viewport.dart` | ÚJ | zoom/pan matek (tiszta) |
 | `.../public.dart` | meglévő | export |
-| `lib/app/router/app_router.dart` | meglévő | **additív** route, flag mögött |
+| `lib/app/routing/app_router.dart` | meglévő | **additív** route, flag mögött |
+| `lib/app/routing/app_route.dart` | meglévő | **additív** route-konstans (`AppRoutes.analysisTimeline`) |
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
 | `test/**` | ÚJ | viewport + widget + navigátor teszt |
+| `docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md` | ÚJ (pre-flight) | lane-adatforrás + degraded döntés |
 
 **Tilos zóna:** `lib/features/analyze/**`, `lib/features/audio_analysis/engine/**`,
 `lib/features/audio_analysis/domain/**`. Listán kívül → `stopped`.
@@ -116,7 +189,10 @@ accessibility-összefoglaló minden sávhoz; ARB.
    **eszköze**. **NEM elfogadható:** 5 000 event → 5 000 widget.
 3. **A sáv capability szerint jelenik meg:** `unavailable`/`notApplicable`
    capability esetén a sáv **magyarázattal** rejtve van, nem üresen kirajzolva.
-   **NEM elfogadható:** üres pitch-sáv indoklás nélkül.
+   **NEM elfogadható:** üres pitch-sáv indoklás nélkül. **`degraded`
+   (ADR 0243):** a sáv **látható marad**, explicit figyelmeztető jelzéssel
+   (pl. `ConfidenceBadge`-mintájú ikon+szöveg) — **NEM** esik egy kategóriába
+   a rejtett `unavailable`/`notApplicable` ágakkal.
 4. **Minden sávhoz szöveges összefoglaló** (SDD §25.8): a grafikon
    információja `Semantics`-en keresztül **szövegként** is elérhető.
    **NEM elfogadható:** kizárólag vizuális információ.
@@ -141,7 +217,8 @@ open_decisions:
       legfeljebb 2000 pont) — ha az R21 dokumentuma NEM tartalmaz ilyet, a
       waveform sáv `unavailable` (`modelUnavailable` helyett a
       dokumentált "nincs preview adat" ok), és a többi sáv fut. NYERS PCM
-      betöltése a UI-ba TILOS (ADR 0202).
+      betöltése a UI-ba TILOS (ADR 0217 — a brief eredeti "ADR 0202"
+      hivatkozása elavult sorszám volt, ld. §0.0).
   - id: OD-02
     question: Mekkora a maxZoom?
     blocking: true
@@ -181,6 +258,11 @@ open_decisions:
       capability `available`; és **rejtve, magyarázattal**, ha `unavailable`
       vagy `notApplicable`. A pitch- és a timing-sávra külön cella
       (ezek a leggyakrabban hiányzók).
+- [ ] **Degraded-cella (kilencedik, ADR 0243):** `CapabilityStatus.degraded`
+      esetén a sáv **látható marad**, explicit figyelmeztető jelzéssel — ez a
+      cella külön a nyolc fő cellától, mert egy `available`-re és
+      `unavailable`-re helyesen reagáló implementáció is hibásan kezelheti a
+      `degraded`-et (pl. az `unavailable` ághoz sorolva elrejtheti).
 - [ ] **Hotspot-navigáció:** 3 hotspot esetén a „következő" háromszor lépve
       körbeér vagy megáll (a szerződés szerint, dokumentáltan), és a viewport
       **tartalmazza** a hotspot tartományát minden lépés után.
@@ -218,6 +300,8 @@ open_decisions:
 | Hiányzó `Semantics` a sávon | az accessibility cella |
 | Nyers PCM-et tölt be a waveformhoz | a „nincs PCM a UI-ban" forrásolvasó cella |
 | A hotspot ugrás nem hozza be a tartományt | a hotspot-navigáció viewport-cellája |
+| A `degraded` capability-t úgy kezeli, mint az `unavailable`-t (elrejti a sávot) | a degraded-cella (kilencedik, ADR 0243) |
+| Timing-error lane szkalár `timing.*` metrikából "számol" idősort a UI-ban | az 5.7 „nincs számítás a UI-ban" elv + forrásolvasó cella (a lane csak `document.hotspots.where(kind==timing)`-ot rajzol, ADR 0243) |
 | **Valódi-sértés próba (§10):** a viewport `clamp` hívásának ideiglenes törlése → a pan-széllel-ütközés cella **PIROS** → visszaállítás |
 
 ## 7. Kötelező ellenőrzések
@@ -253,9 +337,49 @@ elhagyása helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- `controllers/timeline_viewport.dart` + teszt: tiszta, bounded zoom/pan/
+  reveal-range matematikát és az inkluzív 399/400/401 ms küszöböt fed.
+- `analysis_timeline_screen.dart`, lane/ruler/navigator widgetek: nyolc
+  capability-vezérelt lane, fail-closed hiányzó capability, látható degraded
+  jelzés, Canvas-virtualizáció, hotspot körbejárás, range-selection és
+  szöveges semantics; a waveform mindig magyarázattal unavailable.
+- Route/public export/ARB: az új route ugyanazon `audioAnalysisV2Enabled`
+  flag mögött van, angol és magyar szövegekkel. A ruler és a selection az
+  R23 `AppLocalizationsOverviewLabels.formatDuration` helperét használja.
+- Javító kör #1: a hotspot overlay lane immár kizárólag
+  `document.hotspots.isNotEmpty` alapján jelenik meg (a `targetAlignment`
+  capability-től függetlenül), az üres lista pedig a lokalizált „nincs
+  problémás pont” indoklást kapja. A capability-ág explicit
+  `available`/`degraded` allowlist lett, ezért jövőbeli státusz nem jelenhet
+  meg mérésként.
+- Javító kör #1: a hotspot-lista minden eleméhez külön, lokalizált
+  index/típus/súlyosság `Semantics` node tartozik. A navigációs gombok teljes
+  szélességben tördelnek; a lane-címek is rugalmasak, mert a hu × 320 px × 2×
+  regressziós mátrix tényleges `RenderFlex` overflow-t talált.
+- Javító kör #1: a widget-teszt lefedi az en/hu × 320/600 px × 1.0/2.0
+  kombinációt, a hotspot adatvezérelt kapuját és az elem-szemantikát; a
+  forrásolvasó PCM-őr a valódi `PcmAnalysisInput` típusnevet és
+  `domain/analysis_input.dart` importot tiltja. A `TimelineViewState` most a
+  screen viewport- és selection-állapotát tartja, explicit `clearSelection`
+  metódussal és teszttel. A zoom-ki és a `HotspotNavigator.previous()` is
+  kapott tükör regressziós tesztet. Mindkét ARB-ból eltűntek a duplikált
+  timeline title/description kulcsok.
+- Futott: `flutter gen-l10n`; célzott screen teszt (9/9 PASS); viewport +
+  hotspot-navigátor tesztek (9/9 PASS); majd `tools/round-gate.sh
+  test/features/audio_analysis test/app` — format zöld, analyze zöld,
+  `audio_analysis` 483 teszt PASS, `app` 69 teszt PASS, architecture/secrets/
+  l10n zöld (`1244` üzenet).
+- Eltérés: a V2 dokumentum nem tartalmaz decimált waveform-previewt, ezért
+  a rögzített OD-01/ADR 0243 szerint a waveform lane unavailable marad.
+  Nyers audio/PCM nem lett importálva vagy olvasva.
 
 ## 11. Review — a független reviewer tölti ki
 
-Tervezett review: `docs/reviews/e06-r24-layered-zoomable-timeline-review.md`.
-Merge csak exact-SHA zöld CI, §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után.
+Review: [`docs/reviews/e06-r24-layered-zoomable-timeline-review.md`](../reviews/e06-r24-layered-zoomable-timeline-review.md)
+— **APPROVED** javító kör #1 után (`4b895474`): 0 nyitott BLOCKER/MAJOR/MINOR
+(3 MAJOR + 4 MINOR zárva, 2 NOTE tájékoztató). Security review (`risk =
+"high"` kötelező): [`docs/reviews/e06-r24-layered-zoomable-timeline-security.md`](../reviews/e06-r24-layered-zoomable-timeline-security.md)
+— **PASS** (0 CRITICAL/BLOCKER/MAJOR/MINOR, 1 MINOR javítva ugyanabban a
+fordulóban, 4 NOTE). Merge csak exact-SHA zöld CI (`full-gate.yml` +
+`router-ci.yml`), §4-en belüli diff és nulla OPEN BLOCKER/MAJOR után —
+mindkét feltétel teljesült.

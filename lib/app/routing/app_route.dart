@@ -42,6 +42,7 @@ abstract final class AppRoutes {
   // unreachable while `audioAnalysisV2Enabled == false`.
   static const String analysisOverview = '/analysis/overview';
   static const String analysisMetricDetail = '/analysis/metric-detail';
+  static const String analysisTimeline = '/analysis/timeline';
 
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[
