@@ -14,10 +14,10 @@ const int minimumSessionsForTrend = 3;
 /// exactly on the boundary stays in.
 const double outlierMadThreshold = 3;
 
-/// Builds a local, non-predictive trend for one metric across a set of
-/// sessions (ADR 0246 §3, SDD §26.6). Entirely local: no network call, no
-/// extrapolation beyond the sessions given — the last point is always the
-/// most recent session's own value, never a projected future point.
+/// Builds a local, evidence-only trend for one metric across a set of
+/// sessions (ADR 0246 §3, SDD §26.6). Entirely local: no network call, and
+/// the line never reaches beyond the sessions given — the last point is
+/// always the most recent session's own value, never a projected one.
 abstract final class TrendBuilder {
   static AnalysisTrend build({
     required String metricId,

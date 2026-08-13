@@ -211,6 +211,16 @@ abstract final class CompatibilityEvaluator {
     );
   }
 
+  /// Public entrypoint for the direction algorithm alone, independent of
+  /// [MetricMetadataCatalog] registration — lets tests exercise every
+  /// [MetricDirection] (including [MetricDirection.targetRange], which no
+  /// catalog ID currently uses) with an ad hoc [MetricMetadata].
+  static MetricComparisonDirection resolveDirection(
+    MetricMetadata metadata, {
+    required double before,
+    required double after,
+  }) => _resolveDirection(metadata, before, after);
+
   static MetricComparisonDirection _resolveDirection(
     MetricMetadata metadata,
     double before,
