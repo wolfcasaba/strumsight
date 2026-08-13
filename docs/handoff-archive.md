@@ -22,6 +22,167 @@ success a végleges branch SHA `3903391`-en. A friss merge-elt `main`-en
 megismételt gate is zöld (`audio_analysis=465`, `app=69`).
 
 
+## ✅ E06-R22 KÉSZ — Analysis runner, progress UI és cancellation (2026-08-12)
+
+Elkészült a V2 elemzés-futtató réteg: tizenegy-állapotos sealed
+`AnalysisState` (SDD §21.1: idle/acquiringInput/recording/validating/
+analyzing/completed/degradedCompleted/cancelled/permissionDenied/
+inputError/analysisError), `AnalysisController` (a run ID EGYETLEN
+igazságforrása a SAJÁT `_activeRunId` mezője — nem a pipeline/isolate
+belső számlálója —, eseményszám-alapú inkluzív 5-ös progress-throttle,
+V1-bitre-azonos, futásonként egyszeri practice/streak kredit KIZÁRÓLAG
+`complete`-en), `AnalysisIsolateRunner` (futásonként FRISS `Isolate.spawn`
++ kill, JSON codec-határ), három szűk use case
+(`AnalyzeAudioUseCase`/`CancelAnalysisUseCase`/`SaveAnalysisUseCase`),
+`AnalysisProgressView` + additív ARB. [ADR
+0240](docs/adr/0240-analysis-runner-and-pipeline-boundary.md).
+Bekötetlen (`audioAnalysisV2Enabled` `false` marad), V1
+`AnalyzeController`/`analyze_screen` érintetlen.
+
+**Mért architekturális rés, ADR-rel feloldva:** a brief `main@a6e6f3d`-n,
+Epic 6 kezdete ELŐTT íródott — a „pipeline már kész" feltételezése
+előrejelzés volt, nem mérés. A pre-flight megmérte: nulla konkrét,
+összefűzhető `AnalysisPipeline<T>`-lánc létezik a `lib/`-ben (a három
+meglévő konkrét stage — `SignalQualityStage`, `PreprocessingStage`,
+`ClipAnalyzerStage` — egymással össze nem fűzhető I/O-jú), és a kör
+OWN acceptance criteriája mind fake/minimális pipeline-t ír elő. Az ADR
+0240 ezért a kört tudatosan **pipeline-agnosztikusra** rögzítette
+(`T = AnalysisDocument`, `analysisV2RunnerProvider` fail-closed
+`StateError`-ral — ugyanaz a minta, mint az E06-R21
+`analysisRepositoryProvider`) — a valódi, több-stage DSP-lánc
+összeszerelése egy önálló, MÉG NEM ÜTEMEZETT jövőbeli kör feladata marad.
+
+**A független review APPROVED-del zárt (0 BLOCKER/MAJOR, 1 MINOR
+follow-up, 2 NOTE), de a kötelező dedikált biztonsági review (risk=high)
+egy valódi, reprodukálható MAJOR-t talált, amit a review NEM fogott
+meg** — ez a kör legfontosabb mért tanulsága. **MAJOR-1** (cancel-during-
+spawn isolate leak): ha `cancel()` PONTOSAN a `_isolate = await
+Isolate.spawn(...)` feloldása ELŐTT fut, a `_dispose()` once-guardja
+null `_isolate`-tel használódik el, és a KÉSŐBB hozzárendelt, élő
+isolate soha nem kap killt — a teljes `operation()` lefut a cancel után
+is. A kör SAJÁT tesztkészlete ezt nem látta: minden cancel-takarítás
+teszt FAKE runnert használt, az egyetlen valódi-isolate teszt (a
+szerializálhatósági smoke) sosem hívott cancel-t. A security review
+pure-Dart `dart:isolate` reprodukcióval (marker-fájlos A/B/C
+forgatókönyv) 3/3 determinisztikusan igazolta; az orchesztrátor a fix
+ELŐTT és UTÁN is függetlenül újrafuttatta ugyanazt a reprodukciót, majd
+egy valódi-sértés próbával (a `_dispose()` sorrendjét ideiglenesen
+visszaállítva a hibás alakra) igazolta, hogy az ÚJ, VALÓDI isolate-ot
+indító teszt ténylegesen PIROSRA vált a hiba jelenlétében. Javítás egy
+körön belüli javító körben (`63f39515`): a kill immár a `_isolate` mező
+atomikus átvétele+nullázása UTÁN, de a `_disposed` once-guard ELLENŐRZÉSE
+ELŐTT fut — minden `_dispose()`-hívás garantáltan megöli, ami éppen
+`_isolate`-ben van, függetlenül a hívási sorrendtől. Ugyanabban a
+javító körben zárva: `AnalysisController.analyze()` mostantól explicit
+megszakítja a korábbi aktív futást újraindításkor (a review saját F2-je
+és a security review NOTE-2-je egymástól függetlenül ugyanezt találta),
+és a progress-sáv nulla-nevezős osztása (`totalUnits: 0` → hamis
+determinisztikus sáv). Review:
+[docs/reviews/e06-r22-analysis-runner-progress-cancellation-review.md](docs/reviews/e06-r22-analysis-runner-progress-cancellation-review.md),
+security:
+[docs/reviews/e06-r22-analysis-runner-progress-cancellation-security.md](docs/reviews/e06-r22-analysis-runner-progress-cancellation-security.md)
+(FAIL → PASS javítás után, 1 MAJOR FIXED, 4 NOTE). Tanulság:
+`docs/LESSONS.md` **L244** (fake-only cancel-teszt vakfoltja), **L245**
+(`gate_shape=VIOLATION` hamis pozitív forrás-olvasásra).
+
+Implementer **Terra (Codex)**: 1 dispatch `done` + 1 javító kör `done`,
+mindkettő `continuations=0`.
+
+**Zöld kapu (exact-SHA `ae22ff50`, PR
+[#239](https://github.com/wolfcasaba/strumsight/pull/239), squash
+`6abdd408`):** Full Gate
+[31642984516](https://github.com/wolfcasaba/strumsight/actions/runs/31642984516)
++ Router CI
+[31642980491](https://github.com/wolfcasaba/strumsight/actions/runs/31642980491)
+mindkettő success a végleges (javítás utáni) HEAD-en. A CI-terv
+`full-gate.yml`-t adott (`apk_required=false`); az `origin/main` nem
+mozdult a dispatch és a merge között. A post-merge gate friss `main`-en
+(`6abdd408`) mind a nyolc lépésben zöld (`audio_analysis=438`,
+`app=69`, `analyze=64`). A reviewer a gate-et SAJÁT izolált klónban
+kétszer, függetlenül is lefuttatta (implementáció után és a fix után is)
+— mindkétszer zöld.
+
+**Következő kör: E06-R23** (Overview screen és metric cardok,
+`docs/execution/pipeline-queue.tsv` szerint).
+
+## ✅ E06-R21 KÉSZ — AnalysisRepository V2 és legacy Library migráció (2026-08-12)
+
+Elkészült a verziózott, fájl-alapú V2 elemzés-repository: `AnalysisRepository`
+(`list`/`getById`/`save`/`replace`/`rename`/`delete`, hat metódus, a
+jövőbeli Library V2 EGYETLEN belépője), `FileAnalysisRepository`
+(egy-dokumentum-egy-fájl az app-support `analysis/` alatt, bizonyított
+temp→flush/verify→rename atomikus írás — a Song Trainer `AtomicFileWriter`-e
+cross-feature tiltott zóna, ezért a réteg saját, portja mögé rejtett
+writer-ben ismétli meg ugyanazt a mintát —, rekord-szintű korrupció-
+karantén `.corrupt` jelöléssel, `AnalysisIndexStore` újraépíthető
+summary-indexszel — a `list()` SOSEM dekódol teljes dokumentumot, csak az
+indexet olvassa), `LegacyLibraryMigrator` + `AnalysisMigrationVersionStore`
+(nem-destruktív, idempotens, checkpontos V1→V2 migráció a
+`LibraryRepository.load()` publikus szerződésén át, a régi
+`ss.library.sessions` kulcsot NEM törli), `AudioRetentionPolicy`
+(`keepOriginal=false` alapértelmezés — nyers audio SOSEM perzisztálódik),
+100-dokumentumos cap (legrégebbi `createdAt` esik ki). [ADR
+0239](docs/adr/0239-analysis-document-storage.md) — a batch-brief `0209`
+csak szöveges előfoglalás volt, a pre-flight `round-slots.py reserve-adr`
+mérése foglalta le a tényleges `0239`-et. Bekötetlen (0 production
+hívó — a `analysisRepositoryProvider` a jövőbeli boot-wiringra vár,
+ugyanazt a fail-closed mintát követi, mint az E06-R22
+`analysisV2RunnerProvider`-je, ami már erre a repository-ra épül).
+
+**Mért helyreállítás egy elkülönített worktree-ben ("Sonnet-recovery",
+§10.5):** az eredeti implementáció (`1a8006f6`) formálisan zöld gate-tel
+zárt, de egy célzott PROBE-teszt kimutatta, hogy a `getById()`
+checksum-ellenőrzése **tautologikus önösszehasonlítás** volt — a
+lemezről olvasott bájtok SHA-256-ját ÖNMAGÁVAL hasonlította
+(`sha256(bytes) != sha256(bytes)` sosem igaz), ezért egy szintaktikailag
+érvényes, de szemantikailag meghamisított JSON dokumentum csendben
+`Success`-ként tért volna vissza a hamisított tartalommal — sértve az
+ADR 0239 checksum-kontraktusát. Javítás (`33db3aee`): a checksum-
+ellenőrzés az INDEXBEN íráskor rögzített hash-hez hasonlít, nem a
+frissen újraszámolthoz; a halott `_expectedHashForBytes` helper törölve;
+új regressziós teszt a hamisított-de-érvényes-JSON esetre.
+
+A független review első köre **CHANGES REQUESTED** (2 MAJOR): **F1** a
+`save()`/`replace()` egy nem támogatott schema-verzióra kezeletlen
+kivétellel bukott a dokumentált typed failure helyett; **F2** a
+`rename()` egy újraépített (indexből korábban hiányzó) bejegyzést
+elveszített, mert a mentéshez használt lista a RÉGI, hiányos
+`summaries`-ből épült, nem az újraépített `baseline`-ból. Mindkettő
+javítva egy fordulós javító körben (`bb817775`), dedikált regressziós
+teszttel. Végső verdikt **APPROVED**, 0 nyitott BLOCKER/MAJOR/MINOR, 1
+NOTE. Review:
+[docs/reviews/e06-r21-analysis-repository-v2-and-migration-review.md](docs/reviews/e06-r21-analysis-repository-v2-and-migration-review.md).
+
+**Mért folyamat-hiány (utólag azonosítva, E06-R22 zárásakor):** a brief
+`risk = "high"`-at jelölt és §11-ben KIFEJEZETTEN kötelezővé tette a
+dedikált `security-reviewer`-t ("tárolás/migráció/adatvesztés") — ez
+SOSEM történt meg (minden más E06 kör, R02–R20 és R22, párosan
+rendelkezik `-review.md` + `-security.md` jelentéssel; R21-nek csak az
+előbbije van). Az E06-R22 orchesztrátora ezt a kör lezárásakor mérte és
+egy UTÓLAGOS, retroaktív biztonsági review-t dispatch-elt a már
+merge-elt kódra (read-only, nem blokkol semmilyen már megtörtént
+merge-et) — az eredmény egy külön §3 bejegyzésben, amint elkészül.
+
+Implementer **sonnet-impl** (Claude-harness, reviewer-függetlenségi
+routing), több forduló (kezdeti implementáció + elkülönített worktree-s
+recovery-javítás + review-javító kör).
+
+**Zöld kapu (exact-SHA `fa736e39`, PR
+[#238](https://github.com/wolfcasaba/strumsight/pull/238), squash
+`98f4c1e1`):** Full Gate
+[31636632388](https://github.com/wolfcasaba/strumsight/actions/runs/31636632388)
++ Router CI
+[31636633676](https://github.com/wolfcasaba/strumsight/actions/runs/31636633676)
+mindkettő success a végleges, review-jóváhagyott SHA-n; `origin/main` a
+dispatch és a merge között nem mozdult.
+
+**Ismert korlát / follow-up:** önálló boot-time recovery-scanner (a Song
+Trainer `SongRepositoryRecovery.scan()` mintájára) még nincs — ma a
+`list()`-indukált `_rebuildFromDisk()` a garancia hiányzó/korrupt
+indexre; a migrátor szándékosan NEM törli a V1 `ss.library.sessions`
+kulcsot (rollback-biztonság, külön kör dönt a törlésről); a fenti
+retroaktív security review eredménye.
+
 ## ✅ E06-R20 KÉSZ — Determinisztikus insightok és hotspot ranking (2026-08-12)
 
 Elkészült a determinisztikus, evidence-backed coaching-insight motor:
