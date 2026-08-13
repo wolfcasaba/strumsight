@@ -57,7 +57,10 @@ ugyanez a minta, de a router SAJÁT jelzés-szótárát értő
 `tools/wait-for-router.sh`-sal (1.1. szakasz, pontos parancs ott) — a
 `wait-for-round.sh` a router `progress`/`blocked` jelzéseit NEM ismeri fel
 terminálisnak, tehát azokra üresen pörögne a `max_wait` leteltéig. A
-`gh run watch` is mindig előtérben fusson.
+CI-várakozás is mindig előtérben fusson — `tools/wait-for-ci.sh <run-id>`,
+SOSE csupasz `gh run watch`/`gh run list`-ciklus (2026-08-13, E06-R25
+H-NOSIGNAL: egy timeout nélküli `gh` hívás a teljes sessiont lefagyasztotta,
+lásd az 5. szakaszt).
 
 **SOHA ne futtass `pgrep -f` / `pkill -f` hívást olyan mintával, amely a saját
 promptodban előfordul** (pl. `round-gate.sh`, `flutter analyze`). Ha processzt

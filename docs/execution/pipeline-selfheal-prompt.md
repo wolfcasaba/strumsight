@@ -81,9 +81,17 @@ protokoll helyes használata.
    ```bash
    gh pr create --title "[HEAL {{ROUND}}] <egy sor>" --body "..."
    gh workflow run build-apk.yml --ref heal/{{ROUND}}-{{HALT_CODE}}-{{ATTEMPT}}   # ha Dart változott
-   gh run watch <id>                                                             # előtérben!
+   run_id=$(gh run list --workflow=build-apk.yml --branch heal/{{ROUND}}-{{HALT_CODE}}-{{ATTEMPT}} --limit 1 --json databaseId --jq '.[0].databaseId')
+   tools/wait-for-ci.sh "$run_id"   # előtérben! SOSE csupasz `gh run watch`/`gh run list`-ciklus
    gh pr merge --squash --delete-branch
    ```
+   **SOSE csupasz `gh run watch`/`gh run list`-ciklus** — egyik hívást sem
+   védi timeout. Ez pontosan az a hibaosztály, amit EZ a self-heal (E06-R25,
+   H-NOSIGNAL, 2026-08-13) javít: egy védtelen `gh` hívás a session BELSEJÉBEN
+   fagyott le, miközben a várt futás már zölden lezárult, és a driver csak a
+   20 perces elakadás-őrrel, a teljes sessiont ölve vette észre. A
+   `tools/wait-for-ci.sh` minden hívást `timeout`-tal véd (0=success 1=failure
+   4=lejárt(még futhat) 6=gh maga akadt el).
    A dispatch után vesd össze a run `headSha`-ját a lokális HEAD-del — a run
    csak egyező SHA-n bizonyíték.
    **A Router CI is a kapu része.** Ha a fix bármelyik `router-ci.yml`
