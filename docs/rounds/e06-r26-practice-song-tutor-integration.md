@@ -347,7 +347,63 @@ Tutorhoz küldése helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+### Megvalósítás
+
+- `practice_analysis_adapter.dart`: a publikus `CompiledPracticeTarget`
+  snapshotot `AnalysisTarget`-té alakítja típus-inferenciával; a
+  `definitionSnapshotVersion` a `targetVersion`, a retry-tempo névvel jelölt,
+  inkluzív lépcsőkből és 60%-os alsó korlátból készül. A visszaadott evidence
+  kizárólag facts/hotspots/retry-tempo/completion-eligibility, session score
+  nincs.
+- `song_analysis_adapter.dart`: OD-01 szerinti saját `SongReferenceSnapshot`
+  contract. A transzpozíció utáni display MIDI és a capo-val módosított concert
+  MIDI külön marad; a média-idő a lejátszási sebességgel skálázódik, majd kapja
+  a backing offsetet. Song-oldali snapshot-feltöltés jövőbeli Song Trainer kör.
+- `tutor_analysis_snapshot.dart`: OD-02 szerinti immutable, legfeljebb 50
+  eventes, JSON-szinten redaktált snapshot. Tutor-oldali fogyasztása jövőbeli
+  Tutor kör.
+- `progress_evidence_adapter.dart`: `documentId`-kulcsos, egyszeri,
+  `analysis-document.v<schema>` forrású skill-evidence; nem használ
+  `PracticeEntry`-t.
+- `public.dart`: a négy Analysis-oldali adaptercontract exportja.
+- `feature_flags.dart`: `analysisPracticeIntegrationEnabled` és
+  `analysisTutorIntegrationEnabled`, mindkettő minden environmentben OFF és
+  része az értéksemantikának. OFF esetén a provider-factory nem példányosul.
+- Az új adaptertesztek és boundary-őr a barrel-only importot és a változatlan
+  12 elemű architecture allowlistet mérik.
+
+### Mért numerikus értékek
+
+`python3 -c` eredmény: retry lépcsők 100 BPM-nél `100/95/90/85`, alsó korlát
+`60`; a concert/display MIDI mátrix `(capo, transpose) -> (display, concert)`:
+`(0,0)->(60,60)`, `(0,-2)->(58,58)`, `(2,0)->(60,62)`,
+`(2,-2)->(58,60)`, `(5,0)->(60,65)`, `(5,-2)->(58,63)`; a media-time cellák
+mikroszekundumban `1000000/1250000/1583333` (alap / +250ms / +250ms 0.75x).
+
+### Valódi-sértés próba
+
+A `TutorAnalysisSnapshot.toJson()`-ba ideiglenesen visszahelyezett
+`fileName` kulcsra a
+`flutter test test/features/audio_analysis/application/tutor_analysis_snapshot_test.dart`
+szándékosan piros lett: `Expected: not contains '"fileName"'`; a kulcsot
+azonnal eltávolítottam, majd a célzott adaptertesztek 11/11 zöldek lettek.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/tooling/analysis_cross_feature_boundary_test.dart`:
+  kezdeti RED (hiányzó adapter-export), később zöld, 3/3.
+- `flutter test test/features/audio_analysis/application/practice_analysis_adapter_test.dart test/features/audio_analysis/application/song_analysis_adapter_test.dart test/features/audio_analysis/application/tutor_analysis_snapshot_test.dart test/features/audio_analysis/application/progress_evidence_adapter_test.dart test/tooling/analysis_cross_feature_boundary_test.dart`:
+  zöld, 12/12.
+- A kötelező `tools/round-gate.sh test/features/audio_analysis test/tooling test/app`
+  handoff után zöld: format, analyze, `audio_analysis` (533), tooling (64),
+  app (73), architecture, secrets és l10n minden lépése sikeres. A teljes
+  suite/property/APK csak CI-orchestrátor evidence, lokálisan nem futott.
+
+### Eltérés / következő bekötés
+
+`tool/check_architecture.dart` nem változott: az új barrel-only őr a meglévő
+12 allowlist-bejegyzés változatlanságát méri. Sem Practice/Song/Tutor/Progress
+feature-fájl, sem scoring API nem módosult.
 
 ## 11. Review — a független reviewer tölti ki
 
