@@ -3,9 +3,8 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E99-R08 H3 self-heal — reviewer's own docs/reviews/** report false-flagged
-> as a scope violation, PR #243 merged; E99-R08 itself NOT merged, see
-> below).**
+> (E99-R08 H8 self-heal — round branch rebase conflict resolved and pushed;
+> E99-R08 itself still NOT merged, see below).**
 >
 > ## 🔧 E99-R08 H3 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed`, PR
 > [#243](https://github.com/wolfcasaba/strumsight/pull/243), squash
@@ -49,6 +48,49 @@
 > Mindkettő regressziós teszttel védve, Router CI zöld exact-SHA
 > `86c4719f`-en (PR-ág) és a merge-elt `7a594db6`-on (post-merge `main`).
 > Nulla Dart sor a diffben — `build-apk.yml` nem indult.
+>
+> ## 🔧 E99-R08 H8 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed` (2026-08-13, ág pusholva, PR NINCS)
+>
+> **A H3 self-heal lezárása UTÁN a lánc ugyanezen a körön H8-cal állt meg
+> ismét:** a kör saját, addig sosem pusholt implementer-ága
+> (`sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`, akkor HEAD
+> `bf413355`) `origin/main`-re rebase-elve valódi `CONFLICT (content)`-et
+> adott a `tools/round-pipeline.sh`-ban. Gyökérok: a H3 self-heal (PR #243)
+> ÉS a kör saját review-fixje (F1 lelet, commit `b9e72ec6`) egymástól
+> függetlenül, egymásról nem tudva ugyanazt a hibát javította ugyanazon a
+> soron, bájtra azonos guard-logikával — csak a megelőző magyarázó komment
+> szövege ütközött szóról szóra. Részletek: `docs/LESSONS.md` **L253**,
+> normatív általánosítás: [ADR 0112](docs/adr/0112-self-healing-pipeline.md)
+> „H8 megosztott eszközfájl-konfliktus" módosítás.
+>
+> **A javítás:** a `main` oldal kommentjét/hunkját megtartva, a kör branch
+> nem redundáns tartalmát (egy új regressziós tesztfájl,
+> `tools/tests/test_round_resume_independence.py`) megőrizve a rebase
+> `git rebase --continue`-val tisztán befejeződött — a korábban „nem
+> érintett, ellenőrizetlen" 2 commit (`92433313`, `bf413355`) is konfliktus
+> nélkül alkalmazódott. Frissesség-bizonyíték: `git merge-base
+> --is-ancestor origin/main HEAD` 0-s kilépéssel. Teljes `python3 -m pytest
+> tools/tests -q`: **406 passed, 394 subtests, 0 failed** (a korábban
+> dokumentált, független `test_claude_harness_engines.py` piros azóta egy
+> másik körtől zölddé vált). `tools/round-gate.sh
+> test/tooling/architecture_allowlist_guard_test.dart`: mind a hat lépés
+> zöld. A branch NORMÁL (nem force) push-sal publikálva, mert
+> `git ls-remote --heads origin <branch>` a fix előtt bizonyítottan üres
+> volt — nem volt mit force-push-al felülírni.
+>
+> **E99-R08 állapota — FONTOS a következő sessionnek:** az implementáció
+> teljes, review-zárt (F1/F2) ÉS most már a friss `main`-re (`37d5024a`)
+> rebase-elve, teljes suite-tal és Dart-gate-tel újra-ellenőrizve, pusholva
+> — de **NINCS nyitva PR**, **nincs CI-dispatch**, és a brief **§11
+> Review szakasza még mindig üres sablon-fejléc** (§10.6/10.7 dokumentálja a
+> rotált Terra orchestrátor már elvégzett független review-ját, F1/F2
+> zárva). A következő lépés: PR nyitása a friss branchről, a §11
+> transzkribálása/tanúsítása (Terra már meglévő review-ja + saját mechanikus
+> gate-újrafuttatás alapján — AGENTS.md §15.7 szerint egy friss Claude/
+> Sonnet-5 session ne végezzen SAJÁT független review-t ugyanerre a
+> munkára), majd CI-dispatch és zöld kapus merge. Ez a self-heal
+> SZÁNDÉKOSAN nem végezte el ezt — a self-heal dolga az akadály (a
+> rebase-konfliktus) megszüntetése, nem a kör levezénylése.
 >
 > ## ✅ E06-R24 KÉSZ — Többrétegű, zoomolható timeline (2026-08-13)
 >

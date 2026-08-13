@@ -160,6 +160,53 @@ attempt/ledger után futtatható újra a review-findings `resume`; kézi state
 szerkesztés vagy reset nem megengedett. A scope-hibás recovery változatlanul
 fail-closed.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-13) — H8 megosztott eszközfájl-konfliktus, push-inatlan kör-ágon
+
+Mérés: E99-R08/H8-nál (a H3 self-heal, PR #243/`7a594db6`, LEZÁRÁSA UTÁN) a
+megállt kör SAJÁT, még sosem pusholt implementer-ága
+(`sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`) `git rebase
+origin/main`-je `CONFLICT (content)`-et adott a `tools/round-pipeline.sh`-ban
+— NEM egy `docs/rounds/*.md` briefben, mint a 2026-08-03-i H8-módosítások
+egyetlen addig mért esete. Anchor-alapú diffel (a guard-blokk elejétől a
+záró `fi`-ig, mindkét oldalon) bizonyítva: a `main` oldal (H3 self-heal) és a
+kör saját branchje (saját review-lelet, F1) egymástól függetlenül, egymásról
+nem tudva ugyanazt a hibát javította ugyanott, bájtra azonos guard-logikával
+— git ezt konfliktus nélkül auto-mergelte —, kizárólag a megelőző magyarázó
+komment szövege ütközött. A kör branchjének commitja emellett egy genuinely
+új, nem redundáns tesztfájlt is hordozott (más néven, más fixture-stílusban,
+mint a `main` saját regressziós tesztje ugyanarra a guardra).
+
+A meglévő H8-elv (114. sor: tartsd meg a `main` oldalát, ha bizonyíthatóan
+ugyanazt a hibát javítja) szó szerint alkalmazható eszközfájl-konfliktusra
+is, nem csak brief-only esetre: a self-heal a `main` oldal kommentjét/hunkját
+tartja meg, és a nem redundáns tartalmat (itt: az új tesztfájl) megőrzi.
+
+**Finomítás a rebase-vs-merge döntéshez.** A 2026-08-03-i módosítások
+`git rebase --abort` + `git merge --no-ff origin/main`-t írnak elő — ennek
+oka a vizsgált eset szerint az volt, hogy az érintett ág MÁR publikus volt,
+és a rebase által átírt SHA-k publikálása force-push-t igényelt volna, ami
+tiltott. Ha `git ls-remote --heads origin <branch>` üres eredményt ad (az ág
+SOHA nem lett még pusholva), ez a korlát nem áll fenn: a rebase befejezése
+(`git rebase --continue`) majd egy sima, nem force `git push -u origin
+<branch>` ugyanúgy biztonságos, és egyszerűbb, mint egy felesleges
+merge-commit beszúrása egy még publikálatlan ág történetébe. A döntést tehát
+NEM a H8 kód önmagában, hanem az ág publikációs állapota (`git ls-remote`
+mért eredménye) határozza meg. A kötelező
+`git merge-base --is-ancestor origin/main HEAD` frissesség-bizonyítás
+(2026-08-03-i módosítás) rebase-zárás után is változatlanul kötelező, a
+push előtt.
+
+Ez a self-heal a kör saját branchjét rebase-elte, a teljes `python3 -m
+pytest tools/tests -q` suite-ot (406 passed, 394 subtests, 0 failed) és a
+brief `gate_tests` Dart-gate-jét (`tools/round-gate.sh
+test/tooling/architecture_allowlist_guard_test.dart`, mind a hat lépés
+zöld) újra lefuttatta a rebase-elt HEAD-en, majd a branchet normál push-sal
+publikálta — de NEM nyitott PR-t és NEM merge-elt a kör tartalma helyett: a
+PR, a CI-dispatch és a brief §10 névvel nevezett, még lezáratlan §11
+review-jelentés a következő orchestrátor-session dolga marad (ADR 0112 §1:
+„az önjavító kör dolga nem a megállt kör levezénylése"). Lecke:
+`docs/LESSONS.md` **L253**.
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör

@@ -9345,3 +9345,53 @@ nem a `refs/remotes/origin/*`-ját — egy klón klónja, vagy egy CI sekély,
 egyágú checkoutja emiatt NEM biztos, hogy lát `main`-t); építs helyette
 önálló, `origin`-ját önmagára mutató throwaway repót, amiben a szkript saját
 `git fetch -q origin main` lépése mindig helyi, hálózat nélküli művelet.
+
+## L253 — Két függetlenül írt, funkcionálisan azonos javítás ugyanarra a sorra rebase-konfliktust ad — a guard-logika automatikusan összefésülődik, csak a komment szövege ütközik, és ez soha nem push-olt ágon force nélkül, `rebase --continue`-val is feloldható (E99-R08, 2026-08-13)
+
+**Mit mértem.** Az E99-R08/H3 self-heal (PR #243, squash `7a594db6`) a
+`tools/round-pipeline.sh` munkafa-helyreállító lépését közvetlenül a `main`-en
+javította (L252). Eközben a megállt kör SAJÁT, még pusholatlan branchje
+(`sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`, ekkor HEAD
+`bf413355`) a saját független review-ja (F1 lelet) alapján UGYANAZT a hibát,
+UGYANOTT, gyakorlatilag szóról szóra ugyanazzal a megoldással javította
+(`b9e72ec6`). A H8-cal megállt driver `git rebase origin/main`-je emiatt
+`CONFLICT (content)`-et adott a fájlban. Anchor-alapú diffel (`awk` a guard
+blokk elejétől a záró `fi`-ig, mindkét oldalon) bizonyítottam, hogy maga a
+`if [ -n "${PIPELINE_STATE_DIR:-}" ]; then die ...; fi` guard bájtra
+egyezik — git ezt konfliktus nélkül auto-mergeli —, kizárólag a
+megelőző magyarázó komment szövege tér el szóról szóra, ez adja a
+konfliktust. A commit ÚJ tesztfájlja (`tools/tests/test_round_resume_independence.py`,
+64 sor) nem ütközött és nem is redundáns a `main` saját
+`test_workspace_restoration_test_mode_guard.py`-jával (más fájlnév, más
+fixture-stílus) — mindkettő megtartandó.
+
+**Miért.** Két, egymástól függetlenül dolgozó ágens (a rotált Terra
+orchestrátor review-ja + a sonnet-impl implementer a saját branchjén, ÉS a
+H3 self-heal session a main-en) ugyanazt a valódi hibát fedezte fel
+egymással párhuzamosan, egymásról nem tudva — mindkettő helyesen javította,
+de a szöveges kommentjük eltért. Ez strukturálisan más eset, mint a
+2026-08-03-i ADR 0112 H8-módosítások brief-only konfliktusa (ott a
+`main` oldal explicit tartalmazta a MÁR MERGE-ELT scope-revíziót, itt egy
+ESZKÖZFÁJL kapott két, egymástól független, egyenrangú javítást). A meglévő
+H8-elv (tartsd meg a `main` oldalát, ha bizonyíthatóan ugyanazt a hibát
+javítja) ennek ellenére szó szerint alkalmazható: NEM ki kellett találni egy
+harmadik megoldást, csak választani a két, már bizonyítottan helyes között,
+és megőrizni ami nem redundáns.
+
+**Hogyan alkalmazd.** (1) Konfliktusnál MINDIG anchor/tartalom-alapú diffet
+futtass a két oldal között (nem csak a konfliktusjelölők közti szöveget
+olvasd) — ez különbözteti meg a „véletlenül egyforma logika, más komment"
+esetet egy VALÓDI tartalmi eltéréstől. (2) A 2026-08-03-i H8-módosítások
+`git rebase --abort` + `git merge --no-ff origin/main`-t írnak elő
+KIFEJEZETTEN azért, mert az akkor vizsgált ág MÁR publikus volt, és a
+rebase átírt SHA-inak publikálása force-push-t igényelt volna — ha
+`git ls-remote --heads origin <branch>` bizonyítja, hogy az ág MÉG SOHA nem
+lett pusholva, ez a kényszer nem áll fenn: a `git rebase --continue`
+befejezése, majd egy sima (nem force) `git push -u origin <branch>` ugyanúgy
+biztonságos és egyszerűbb. A merge-vs-rebase döntés tehát nem a H8 kódtól,
+hanem az ág publikációs állapotától függ. (3) A kötelező
+`git merge-base --is-ancestor origin/main HEAD` frissesség-bizonyítás
+(2026-08-03-i módosítás) rebase után is ugyanúgy kötelező és ugyanúgy
+lefuttatható. (4) A branch rebase+push-a NEM jelenti a kör levezénylését —
+a PR nyitása, a CI-dispatch és a brief §11 review-jelentés lezárása
+továbbra is a következő orchestrátor-session dolga (ADR 0112 §1).
