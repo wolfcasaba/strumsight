@@ -100,4 +100,34 @@ class ShareService {
     await file.writeAsBytes(bytes, flush: true);
     return file;
   }
+
+  /// Share an arbitrary caller-produced [file] with [caption] (ADR 0247
+  /// §Döntés 2, E06-R27 brief §5.8 — the export/share H3 self-heal
+  /// contract). The caller (e.g. `ExportAnalysisUseCase`) owns building the
+  /// file's contents; this method owns its post-share lifecycle: [file] is
+  /// deleted whether the share succeeds or throws, so a hard failure never
+  /// strands a redacted export on disk. This is the ONLY way a non-image,
+  /// non-text payload leaves the app through [ShareService] — the existing
+  /// [shareCard] / [shareImage] / [shareText] are unchanged by this method.
+  Future<void> shareExportFile({
+    required File file,
+    required String caption,
+    String? subject,
+    Rect? sharePositionOrigin,
+  }) async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'application/json')],
+          text: caption,
+          subject: subject ?? 'StrumSight',
+          sharePositionOrigin: sharePositionOrigin,
+        ),
+      );
+    } finally {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+  }
 }
