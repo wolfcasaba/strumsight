@@ -46,8 +46,8 @@ final class EvalEvent {
 
 /// One labelled chord interval; `endMs >= startMs` is enforced at
 /// construction so an invalid-chronology manifest never reaches the runner.
-final class ChordSegment {
-  ChordSegment({
+final class EvalChordSegment {
+  EvalChordSegment({
     required this.label,
     required this.startMs,
     required this.endMs,
@@ -91,12 +91,12 @@ final class PitchPoint {
 final class AnnotationSet {
   AnnotationSet({
     List<EvalEvent> events = const <EvalEvent>[],
-    List<ChordSegment> chordSegments = const <ChordSegment>[],
+    List<EvalChordSegment> chordSegments = const <EvalChordSegment>[],
     this.tempoBpm,
     List<int> beatsMs = const <int>[],
     List<PitchPoint> pitchPoints = const <PitchPoint>[],
   }) : events = List<EvalEvent>.unmodifiable(events),
-       chordSegments = List<ChordSegment>.unmodifiable(chordSegments),
+       chordSegments = List<EvalChordSegment>.unmodifiable(chordSegments),
        beatsMs = List<int>.unmodifiable(beatsMs),
        pitchPoints = List<PitchPoint>.unmodifiable(pitchPoints) {
     if (tempoBpm != null && (!tempoBpm!.isFinite || tempoBpm! <= 0)) {
@@ -109,7 +109,7 @@ final class AnnotationSet {
   }
 
   final List<EvalEvent> events;
-  final List<ChordSegment> chordSegments;
+  final List<EvalChordSegment> chordSegments;
   final double? tempoBpm;
   final List<int> beatsMs;
   final List<PitchPoint> pitchPoints;

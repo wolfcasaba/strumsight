@@ -301,8 +301,8 @@ final class EvaluationRunner {
   /// the expected timeline; a frame is correct if the expected and detected
   /// labels covering it match (including both being unlabelled).
   (int, int) _chordFrameCounts(
-    List<ChordSegment> expected,
-    List<ChordSegment> detected,
+    List<EvalChordSegment> expected,
+    List<EvalChordSegment> detected,
   ) {
     if (expected.isEmpty) return (0, 0);
     final maxEndMs = expected
@@ -319,7 +319,7 @@ final class EvaluationRunner {
     return (correct, total);
   }
 
-  String? _labelAt(List<ChordSegment> segments, int timeMs) {
+  String? _labelAt(List<EvalChordSegment> segments, int timeMs) {
     for (final segment in segments) {
       if (timeMs >= segment.startMs && timeMs < segment.endMs) {
         return segment.label;
@@ -332,8 +332,8 @@ final class EvaluationRunner {
   /// a detected one when they share a label and their overlap covers at
   /// least [chordSegmentMinOverlapRatio] of the expected segment's duration.
   (int, int) _chordSegmentCounts(
-    List<ChordSegment> expected,
-    List<ChordSegment> detected,
+    List<EvalChordSegment> expected,
+    List<EvalChordSegment> detected,
   ) {
     var matched = 0;
     for (final expectedSegment in expected) {

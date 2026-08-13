@@ -184,7 +184,7 @@ void main() {
             ),
           ],
           chordSegments: [
-            ChordSegment(label: 'C', startMs: 0, endMs: 1000),
+            EvalChordSegment(label: 'C', startMs: 0, endMs: 1000),
           ],
           tempoBpm: 120,
           beatsMs: const [0, 500],
@@ -206,7 +206,7 @@ void main() {
             ),
           ],
           chordSegments: [
-            ChordSegment(label: 'C', startMs: 0, endMs: 1000),
+            EvalChordSegment(label: 'C', startMs: 0, endMs: 1000),
           ],
           tempoBpm: 121,
           beatsMs: const [0, 500],

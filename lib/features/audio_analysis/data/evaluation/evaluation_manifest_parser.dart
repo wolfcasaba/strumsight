@@ -179,7 +179,7 @@ final class EvaluationManifestParser {
         );
       }
     }
-    final chordSegments = <ChordSegment>[];
+    final chordSegments = <EvalChordSegment>[];
     final rawSegments = json['chordSegments'];
     if (rawSegments != null) {
       final list = _asList(rawSegments, '$path.chordSegments');
@@ -259,7 +259,7 @@ final class EvaluationManifestParser {
     );
   }
 
-  ChordSegment _parseChordSegment(Map<String, Object?> json, String path) {
+  EvalChordSegment _parseChordSegment(Map<String, Object?> json, String path) {
     _checkKeys(json, _chordSegmentKeys, path);
     final label = _requireString(json, 'label', path);
     final startMs = _requireInt(json, 'startMs', path);
@@ -272,7 +272,7 @@ final class EvaluationManifestParser {
       );
     }
     return _guard(
-      () => ChordSegment(label: label, startMs: startMs, endMs: endMs),
+      () => EvalChordSegment(label: label, startMs: startMs, endMs: endMs),
       path,
     );
   }
