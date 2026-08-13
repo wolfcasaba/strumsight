@@ -587,4 +587,90 @@ azt a §0.0 szerint az orchestrátor futtatja a kör-ágon dispatch/merge előtt
   `.dart`/`lib/`/`test/` útvonalat mutat).
 - `H-INDEP` önjavíthatóvá tétele — nem történt meg (ADR 0138 S4 marad).
 
+### 10.6 Javító kör — F1 (független review, 2026-08-13)
+
+A független review a `0cf02cf5` commitot egy friss izolált klónban
+`/tmp/rvenv/bin/python -m pytest tools/tests -q` alatt futtatta, és
+`12 failed, 386 passed`-et mért. A gyökérok: `tools/round-pipeline.sh`
+"3. Előfeltételek" szakasza (a D1/D2-től független, MEGLÉVŐ kód) a
+munkafa-helyreállítás lépésben (`current_branch != main` és tiszta fa esetén)
+**valódi** `git checkout -q main`-t futtat a hívó folyamat `cwd`-jén. A
+`tools/tests/test_pipeline_integration.py` egy MEGLÉVŐ, `E99-R08`-tól
+független teljes-firing tesztje (`test_a_full_firing_retries_the_round_
+instead_of_healing_a_resolved_terra_wall`) ezt az utat éri el `cwd=ROOT`-tal
+(nincs izolált worktree, csak `PIPELINE_STATE_DIR` van injektálva) — a
+review klónjában ez a valódi klónt `main`-re kapcsolta át, mielőtt a nála
+ABC-sorrendben KÉSŐBB következő `test_round_resume_independence.py` és
+`test_safe_force_push.py` lefutott volna. Ezért azok a `main`-ág tartalmát
+mérték (a `tools/safe-force-push.sh` ott nem is létezik), nem a review-zott
+commitot.
+
+**Javítás** (`tools/round-pipeline.sh`, a step-3 munkafa-helyreállítási ág):
+a valódi `git checkout -q main` mostantól csak akkor fut, ha
+`PIPELINE_STATE_DIR` **nincs beállítva** — ez a kódbázisban MÁR bevett
+egyezmény jele arra, hogy a hívás valódi production cron-futás (a
+`crontab` sosem állítja ezt a változót), NEM `tools/tests` alatti
+teszt-/review-hívás (a `tools/tests` MINDEN esete injektál egy izolált
+`PIPELINE_STATE_DIR`-t, lásd a brief §9 kockázat-jegyzetét és
+`tools/round-pipeline.sh:64` alapértelmezését). Teszt-módban a driver ezért
+**fail-closed** `die()`-zik ("teszt-módban (PIPELINE_STATE_DIR) a driver nem
+mozdítja a megosztott munkafa ágát"), és nem nyúl a hívó folyamat `cwd`-jének
+git-ágához. A production szemantika bitre változatlan (a crontab-hívás soha
+nem állítja be `PIPELINE_STATE_DIR`-t — mérve: `crontab -l` a `/home/ubuntu/
+music-theory` productionön). A `docs/execution/pipeline-orchestrator-prompt.md`
+és a `tools/safe-force-push.sh` D3-logikája nem változott.
+
+**Regressziós próba** (`tools/tests/test_round_resume_independence.py`,
+`WorkspaceRestorationHermeticityTest`): egy hermetikus fixture-repót épít
+(lokális bare "origin" + egy `sonnet-impl/e00-r00-fixture` nevű, main-től
+eltérő, tiszta ágra checkoutolt work-klón), a drivert `cwd=`erre a
+fixture-re futtatja argumentum nélkül, `PIPELINE_STATE_DIR`-rel, és
+megméri, hogy (a) a driver nemnulla kóddal, a `PIPELINE_STATE_DIR` szót
+tartalmazó üzenettel áll meg, ÉS (b) a fixture git-ága a hívás UTÁN is a
+`sonnet-impl/e00-r00-fixture` marad — nem `main`. Ez a régi kódon PIROS lett
+volna (a fixture ága ténylegesen `main`-re váltott volna).
+
+**Ellenőrzések a javítás után** (mind csonkítatlan, külön processz):
+
+```
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_round_resume_independence.py -q
+...........
+11 passed in 0.80s
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_safe_force_push.py -q
+.....
+5 passed in 0.54s
+$ /tmp/rvenv/bin/python -m pytest tools/tests/test_orchestrator_rotation.py -q
+......
+6 passed, 4 subtests passed in ...s
+```
+
+Teljes suite a JELENLEGI munkafán:
+
+```
+$ /tmp/rvenv/bin/python -m pytest tools/tests -q
+1 failed, 398 passed, 394 subtests passed in 192.49s (0:03:12)
+FAILED tools/tests/test_claude_harness_engines.py::WrapperModeTest::test_the_legacy_call_without_round_engine_stays_minimax
+```
+
+Ugyanez az egy piros (pre-existing, `tools/mm-round.sh` wrapper-viselkedést
+mér, e kör diffjén kívül esik — lásd §10.4) — a review 12 pirosa mind zöld.
+
+**Teljes suite egy FRISS, izolált klónban, a javított commit-on**
+(`git clone` → `git checkout sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`
+a `b9e72ec6` commitra), pontosan a review reprodukciójának megfelelően:
+
+```
+$ cd /tmp/e99r08-hermetic-check && /tmp/rvenv/bin/python -m pytest tools/tests -q
+1 failed, 398 passed, 394 subtests passed in 191.79s (0:03:11)
+FAILED tools/tests/test_claude_harness_engines.py::WrapperModeTest::test_the_legacy_call_without_round_engine_stays_minimax
+```
+
+A futás UTÁN a klón mérve: `git branch --show-current` →
+`sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`, `git status
+--porcelain` → üres, `tools/safe-force-push.sh` a lemezen jelen van a suite
+teljes futása alatt és után is. A klón NEM váltott `main`-re — F1 zárva.
+
+`tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` a
+jelen munkafán újra lefuttatva: mind a hat lépés ZÖLD ("MINDEN GATE ZÖLD").
+
 ## 11. Review — a Claude tölti ki
