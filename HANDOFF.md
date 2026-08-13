@@ -3,81 +3,80 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R27 H6 self-heal closed, PR #252 — main healthy, chain unblocked;
-> E06-R27's OWN implementer work is already complete and gate-green, see
-> below — next session should verify + move to review, not re-implement.)**
+> (E06-R27 done — export/share/delete + privacy controls, PR #254 merged;
+> both the content review and the mandatory security review are APPROVED;
+> main healthy, chain unblocked, next pending round is E06-R28.)**
 >
-> ## ✅ [HEAL E06-R27/H6] KÉSZ — a `verify_claim` anti-hallucináció őr egy jogos, diff nélküli megerősítő `done`-t is hallucinációnak nézett (2026-08-13)
+> ## ✅ E06-R27 KÉSZ — Export, share és privacy controls (2026-08-13)
 >
-> E06-R27 H6-tal állt meg: egy review-javító forduló (`sonnet-impl`,
-> `tools/mm-round.sh`, session `d96a4889`) valódi munkát commitolt
-> (`524397de` — mindhárom independent-review lelet javítva: a redakciós
-> BLOCKER + 2 MAJOR, zöld `tools/round-gate.sh test/features/audio_analysis
-> test/property test/app test/features/share`), de a fordulót prózai
-> összegzéssel zárta a kötelező `tools/codex-signal.sh` hívás NÉLKÜL (0
-> találat a nyers naplóban) — a burkoló emiatt `status=unknown`-t írt. Az
-> ezt észlelő orchestrátor (Terra) egy MÁSODIK, kizárólag megerősítésre/
-> újra-jelzésre utasított fordulót dispatch-elt, ami helyesen ellenőrizte a
-> meglévő commitot és a gate-naplót, majd hívta a `done` jelzést — ÚJ
-> commit/diff NÉLKÜL, mert a dolga pontosan ez volt. A `verify_claim`
-> (mindkét burkolóban) ezt is `unknown`-ra fokozta le, mert a MÁSODIK
-> invokáció saját `scope_base`-e (az invokáció-kezdő HEAD) már `524397de`
-> volt — a régi logika ezt megkülönböztethetetlennek látta egy valódi,
-> semmit-nem-csináló hallucinációtól. Javítás: mindkét burkoló
-> `verify_claim`-je mostantól tiszteletben tartja a hívó (a DISPATCHER,
-> sosem az implementer önbevallása) explicit `ROUND_VERIFY_NOOP_OK=1`
-> jelzését — a jelzésfájl ilyenkor látható/auditálható `verify_noop_ok=1`
-> sort kap; a flag hiányában (alapértelmezés) a régi szigorú viselkedés
-> változatlan. Regressziós teszt (`ClaimGuardTest` +
-> `WrapperModeTest`, mindkét tesztfájlban, javítás előtt PIROS — egy
-> ideiglenesen visszaállított burkolóval megmérve —, utána ZÖLD) → PR
-> [#252](https://github.com/wolfcasaba/strumsight/pull/252), exact-SHA
-> Router CI zöld mind a dispatch (`082c0e43`), mind a post-merge (`175b582a`)
-> SHA-n, squash-merge `175b582a`. Teljes `python3 -m pytest tools/tests -q`
-> az önjavítás izolált worktree-jében: 421 passed, 392 subtests, 0 failed.
-> Lecke: `docs/LESSONS.md` **L263**.
+> Adatvédelem-biztos export/megosztás előnézettel + teljes, bizonyított
+> törlés. `RedactionPolicy` (allowlist-alapú, NEM denylist) + `AnalysisExport`/
+> `AnalysisExportCodec` (determinisztikus, verziózott JSON), `ShareCardBuilder`
+> (confidence-jelöléssel — `unavailable` sosem érték, alacsony confidence
+> `isDegraded`-del jelölve), `ExportAnalysisUseCase` (előnézet-kapu, temp+
+> share+takarítás mindkét kimenetelre), `DeleteAnalysisUseCase` (öt cellás
+> teljesség: dokumentum+index+cache+opcionális audio), export-előnézet UI +
+> ARB. `ShareService` PONTOSAN EGY additív `shareExportFile` metódussal bővült
+> (H3 self-heal szerződése, §5.8) — a meglévő három metódus változatlan. [ADR
+> 0247](docs/adr/0247-analysis-export-share-and-delete-contract.md).
 >
-> **E06-R27 SAJÁT tartalmi munkája (`524397de`, branch
-> `codex/e06-r27-export-share-and-privacy-controls`,
-> `/home/ubuntu/ss-sonnet-impl-e06-r27`) MÁR KÉSZ és gate-zöld** — ez az
-> önjavítás kizárólag a jelzés-eszközt javította, a round tartalmát nem
-> vitte előre (ADR 0112 §1). A `.codex-round-status` a worktree-ben
-> jelenleg még `status=unknown`-t mutat (a fenti mért állapot, a fix ELŐTTI
-> pillanatból befagyva) — ez NEM azt jelenti, hogy a munka hiányos. A
-> következő orchestrátor-session dolga: nézze meg a worktree-t (HEAD,
-> `git log`, a `/tmp/mm-e06-r27-correction.log` gate-eredménye), és vigye
-> tovább review/CI-re — ne indítson újabb implementer-fordulót a már kész
-> munkára. Ha mégis szükséges egy tiszta megerősítő jelzés, az immár
-> `ROUND_VERIFY_NOOP_OK=1`-gyel biztonságosan újra-dispatch-elhető.
+> **Két self-heal vitte a dispatchig:** H3 ([#251](https://github.com/wolfcasaba/strumsight/pull/251),
+> `docs/LESSONS.md` **L261/L262**) — a brief „Kívül — TILOS" zónája
+> ellentmondott a saját §5.1 OD-01 alapértelmezésének, ami a meglévő
+> `ShareService`-en át kötelezte a kitakarított megosztást; a javítás egy
+> kötött, PONTOSAN EGY additív metódusra szűkített kivétellel oldotta fel. H6
+> ([#252](https://github.com/wolfcasaba/strumsight/pull/252), **L263**) — a
+> `verify_claim` anti-hallucináció őr egy jogos, diff nélküli megerősítő
+> `done`-t is hallucinációnak nézett; a javítás egy explicit, auditálható
+> `ROUND_VERIFY_NOOP_OK=1` jelzést vezetett be.
 >
-> ## ✅ [HEAL E06-R27/H3] KÉSZ — brief „Kívül — TILOS" zóna ellentmondott a §5.1 OD-01 saját alapértelmezésének (2026-08-13)
+> **A tartalmi implementáció** (`sonnet-impl`) egy korábbi session alatt
+> készült el, és a saját független review-ja 1 BLOCKER-t (export allowlist
+> nyitva a message-argumentumokon át — egy filename/device-id/nyers-audio
+> tetszőleges kulcs alatt átcsúszhatott) + 2 MAJOR-t (elérhető, de alacsony
+> confidence-ű metrika sima tényként a kártyán; írási hiba a takarítás előtt
+> elveszíthette a redaktált temp fájlt) talált, amit egy javító kör már
+> lezárt — ez a session ezt a lezárt állapotot vette át, és a javításokat
+> SAJÁT kézzel, függetlenül igazolta vissza, nem a korábbi session
+> bemondására: izolált `/tmp` klónban újrafuttatott teljes gate (mind a 9
+> lépés zöld), `tools/scope-audit.py` OK (22 fájl, mind engedélyezett), és
+> egy valódi-sértés próba a BLOCKER-javításon (a message-arg szűrés
+> ideiglenes visszaállítása egyszerű passthrough-ra → pontosan a 9
+> message-arg-boundary teszt PIROSRA váltott, semmi más → visszaállítva).
 >
-> E06-R27 (export/share/privacy) H3-mal állt meg: a brief saját §5.1 OD-01
-> alapértelmezése kötelezővé teszi, hogy a redaktált JSON export a MEGLÉVŐ
-> `ShareService`-en át menjen, mindkét úton (siker/hiba) kitakarítva — de a
-> §3/§4 „Kívül — TILOS" sora a TELJES `lib/features/share/**`-ot tiltott
-> zónának jelölte, `allowed_paths` egyetlen fájlját sem sorolva fel. Mérve
-> (`share_service.dart`, 103 sor): csak `shareCard`/`shareImage`/`shareText`
-> publikus, mind képernyő-PNG/szöveg megosztására épül, takarítás nélkül —
-> az implementer (Terra, sonnet-impl) helyesen `stopped`-ot jelzett, 0 fájlt
-> módosítva. Eltérően az E06-R25/H3 puszta lista-hiányától (**L257**), itt a
-> hiányzó fájl EXPLICITEN tiltott zónában volt, ezért a javítás nem csupán
-> `allowed_paths`-bővítés: új, BOUND §5.8 architekturális döntés pontosan
-> körülhatárolja az additív felületet (PONTOSAN EGY új `ShareService`
-> metódus, tetszőleges fájl + felirat, `try`/`finally` takarítás, a három
-> meglévő metódus változatlan), és a „Kívül — TILOS"/„Tilos zóna" szövege a
-> kivétel pontos hivatkozásával pontosult, nem törléssel. Regressziós teszt
-> (`tools/tests/test_e06_r27_share_service_scope.py`, javítás előtt PIROS,
-> utána ZÖLD) → PR [#251](https://github.com/wolfcasaba/strumsight/pull/251),
-> exact-SHA Router CI zöld (dispatch + post-merge is), squash-merge
-> `4a7e1fa0`. Lecke: `docs/LESSONS.md` **L261** (a self-heal mintája tiltott
-> zónás gyökérokra) és **L262** (egy pipeline-integrációs teszt hamis pirosa
-> a megosztott main fában egy éles self-heal alatt — friss klónnal és a
-> router-ci-vel igazolva, hogy nem regresszió; validálj a self-heal saját
-> izolált worktree-jében). E06-R27 saját tartalmi munkája (az export/share
-> feature implementációja) még **nem** történt meg — ez az önjavítás
-> kizárólag a brief scope-ját javította; a pipeline a HALTED feloldása után
-> automatikusan újra dispatch-eli a kört.
+> **A kötelező dedikált security-reviewer pass (risk=high)** egy második,
+> tartalmilag önálló nézőpontból futott (nem a content review-t ismételte
+> meg): minden `messageKey`/`messageArgs`-termelőt kigrepelt `lib/`-ben (nem
+> csak az engine-t) és igazolta, hogy az allowlist mind a 16-ot pontosan
+> fedi; végigkövette az export minden String mezőjét a forrásig (mind enum,
+> katalógus-id, gépi kód vagy időbélyeg — user-vezérelt szabad szöveg
+> egyik sem); igazolta a törlés őszinteségét (a no-op cache/audio portok
+> nyíltan dokumentáltak, nem hamis perzisztencia-állítás) és a
+> `ShareService`-bővítés hatósugarát. Verdikt: 0 BLOCKER/MAJOR, 5
+> előretekintő NOTE (egyik sem él ma — pl. egy nem-használt figyelmeztetés-
+> kulcs hiányzik az allowlist-térképből, ami fail-safe, mert üres
+> argumentum-halmazt eredményez; a share-kártya insight-ja megkerüli a
+> redakciót, de nincs ma production fogyasztója) — mind dokumentálva
+> follow-up köröknek (R28 cache, jövőbeli kártya-renderelő).
+>
+> **Rebase a H6-self-heal és a codex-engine-registry-fix UTÁNI `main`-re**
+> (`e12c3ab3`) konfliktusmentesen (`git merge-tree` előre igazolta),
+> `tools/safe-force-push.sh`-sal pusholva (ADR 0242 H8 protokoll). Exact-SHA
+> `c41b8ca7`: Full Gate [31736632560](https://github.com/wolfcasaba/strumsight/actions/runs/31736632560)
+> + Router CI [31736635127](https://github.com/wolfcasaba/strumsight/actions/runs/31736635127)
+> mindkettő success. Squash-merge PR [#254](https://github.com/wolfcasaba/strumsight/pull/254),
+> `63da8ddc`. Post-merge gate egy REMOTE-ról (nem a megosztott helyi
+> klónból — az elavult lett volna, lásd L264) friss klónon önállóan
+> újrafuttatva: mind a 9 lépés zöld. `audioAnalysisV2Enabled` változatlanul
+> `false` mindenhol — production viselkedés bitre azonos.
+>
+> Lecke: `docs/LESSONS.md` **L264** (post-merge/független klónt remote-ról
+> hozz létre, ne a megosztott helyi útvonalról — az utóbbi lokális `main`-je
+> hallgatólagosan elavult lehet), **L265** (egy subagent Write-tool-listája
+> nem garancia a tényleges írási képességre — a fájl LÉTREJÖTTÉT ellenőrizd,
+> ne az ágens szavait), **L266** (a review-jelentéseket a kód-commit UTÁN,
+> de az ELSŐ CI-dispatch ELŐTT commitold a branch-re — egy utólagos
+> review-commit minden alkalommal érvényteleníti az exact-SHA gate-et).
 >
 > ## ✅ E06-R26 KÉSZ — Practice, Song és Tutor integráció (2026-08-13)
 >
@@ -165,34 +164,6 @@
 > E06-R26 mostanra **done** (fent); a pipeline a következő `pending` sort
 > dispatch-eli.
 >
-> ## ✅ E06-R25 KÉSZ — Session comparison és fejlődési trend (2026-08-13)
->
-> Két mentett analízis-session összehasonlítása és lokális fejlődési trend:
-> `CompatibilityEvaluator` (fail-closed metric-azonosság + verzió-egyezés),
-> `TrendBuilder`, `CompareAnalysesUseCase`, `analysis_compare_screen.dart` +
-> `metric_delta_row.dart`, additív route (`AppRoutes.analysisCompare`) az
-> `analysisComparisonEnabled` flag mögött (OFF), en/hu ARB kulcsok. [ADR
-> 0246](docs/adr/0246-analysis-session-comparison-and-trend-contract.md) —
-> ADR 0218-ra építve rögzíti az összehasonlítás saját fail-closed
-> kompatibilitási/delta/trend szerződését (a brief örökölt `ADR 0203`
-> hivatkozása batchből örökölt hibás sorszám volt, §0.0-ban javítva).
-> **A független review 1 MAJOR-t talált, javító körben zárva:** azonos
-> metric ID, eltérő version esetén a compatibility check tévesen `null`-t
-> (összehasonlítható) adott ahelyett, hogy `differentMetricVersion`-t jelezne
-> — eldobható review-probe reprodukálta, a javítás (`61bc887`) fail-closeddá
-> tette + saját regressziós tesztet kapott. Zöld kapu (exact-SHA `d4a73b9d`):
-> Router CI + Full Gate success. Négy dispatch/self-heal lépésen át jutott
-> el a mergig — H3 (routing-fájlok hiányoztak az `allowed_paths`-ból, PR
-> #247, `docs/LESSONS.md` L257) → tartalmi implementáció + review-javítás →
-> H-NOSIGNAL ([archívum](docs/handoff-archive.md#-heal-e06-r25h-nosignal-kész--védtelen-gh-hívás-fagyasztotta-le-a-ci-váró-orchestrátort-2026-08-13)) — squash-merge PR
-> [#248](https://github.com/wolfcasaba/strumsight/pull/248), `b5ec8a1f`.
->
-> **Előretekintő jegyzet R27-nek (batch-audit, `docs/LESSONS.md` L257):**
-> amikor R27 (export/share) pre-flightja lefut, mérje meg explicit módon,
-> hogy az új `analysis_export_screen.dart` igényel-e központi
-> route-regisztrációt, vagy feature-belüli `Navigator.push` — ne ismételje
-> meg ezt a haltot feltételezésből.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -214,6 +185,11 @@
 > (a H-NOSIGNAL banner szó szerint, mert korábban sosem került archívumba),
 > és csak az E06-R25 KÉSZ bannert tartotta meg a fejlécben. A két legutóbbi
 > banner most: E06-R26, E06-R25.
+> Ismételt diéta: 2026-08-13 (E06-R27 zárása): a két E06-R27 self-heal banner
+> (H6, H3) EGYETLEN konszolidált „E06-R27 KÉSZ" bannerré vonódott össze (a
+> kör a self-healek után ténylegesen le is zárult, nem csak a scope-ját
+> javították), és az E06-R25 KÉSZ banner archiválásra került. A két legutóbbi
+> banner most: E06-R27, E06-R26.
 
 ## 1. Current release state
 

@@ -9908,3 +9908,100 @@ orchestrátornak, amikor `status=unknown`-t lát VALÓDI commit-bizonyítékkal
 munkapéldányon, ez a támogatott újra-dispatch út egy tisztán
 megerősítő fordulóhoz — nem egy kézzel írt, ellenőrizetlen
 `codex-signal.sh done` hívás a munkapéldányban, és nem is azonnali halt.
+
+## L264 — Post-merge (vagy bármilyen független) klónt a REMOTE-ról hozz létre, ne a megosztott helyi klónból — annak lokális `main`-je hallgatólagosan elavult lehet (E06-R27, 2026-08-13)
+
+**Mit mértem.** A squash-merge (`63da8ddc`) után a post-merge gate-hez
+`git clone /home/ubuntu/music-theory /tmp/postmerge-e06-r27`-t futtattam — a
+kapott klón HEAD-je `e12c3ab3` volt, EGY committal a merge ELŐTTRŐL, holott
+a session korábban már lefuttatott egy `git -C /home/ubuntu/music-theory
+fetch origin main`-t. A `git clone <helyi útvonal>` ugyanis a forrás repó
+**checked-out branchének tényleges tip-jét** klónozza, nem a
+remote-tracking refjét — a `fetch` csak az `origin/main` REF-et frissíti a
+megosztott klónban, a klón SAJÁT lokális `main` branch-ét (amire ki van
+checkoutolva) nem mozdítja. Egy `git clone https://github.com/…` közvetlenül
+a GitHub remote-ról viszont a valódi, friss `63da8ddc`-t adta.
+
+**Miért.** Ez ugyanaz az alap-jelenség, mint [L248](#l248), de más
+fixet igényel. L248 a MEGOSZTOTT klón lokális `main`-jének
+`git pull --ff-only`-jal való fast-forwardolását írja elő — ez működik, de
+a megosztott fát mozdítja, miközben más session-ök is használhatják
+egyszerre ([[shared-tree-coordination]] memória). Amikor a cél KIZÁRÓLAG
+egy független, eldobható ellenőrző klón (post-merge gate, review-klón,
+próbateszt), a `fetch`+`pull` a megosztott fán szükségtelen lépés — a
+remote URL-ről közvetlen klónozás ugyanazt az eredményt adja ANÉLKÜL, hogy
+bármit mozdítana a megosztott állapotban.
+
+**Hogyan alkalmazd.** Ha egy önálló, eldobható klónt egy MÉRT friss
+állapotról (pl. a merge SHA-járól) kell létrehozni, és nincs szükség a
+megosztott klón saját lokális branch-ének mozdítására: `git remote get-url
+origin`-nal olvasd ki a valódi remote URL-t, és onnan klónozz — SOHA ne
+tételezd fel, hogy egy korábbi `fetch` a megosztott klón helyi
+`<branch>`-ét is mozdította. Klónozás UTÁN mindig `git log --oneline -1`-gyel
+ellenőrizd, hogy a kapott HEAD tényleg a várt SHA — ha nem, a klón forrása
+volt elavult, nem a mérés hibás.
+
+## L265 — Egy dedikált review-ágens Write/Edit tool-listája NEM garancia arra, hogy az adott futásban ténylegesen tud fájlt írni; a review-jelentés commitolását ELLENŐRIZD, ne feltételezd (E06-R27, 2026-08-13)
+
+**Mit mértem.** A kötelező (risk=high) független security-reviewer ágenst
+az Agent tool-lal indítottam, explicit utasítással: írja/frissítse a
+`docs/reviews/e06-r27-export-share-and-privacy-controls-security.md`
+fájlt. Az ágens definíciója (`security-reviewer` agent) Write és Edit
+tool-t is felsorol. A futás mégis így zárt: „Per the active harness
+constraint (return findings directly, do not write report .md files) I am
+delivering the report inline rather than overwriting
+docs/reviews/…-security.md — flagging that deviation explicitly". A
+placeholder fájl a futás UTÁN is a régi (első review-előtti, tartalmatlan)
+állapotában maradt — a teljes, bizonyítékkal alátámasztott jelentés
+KIZÁRÓLAG az ágens szöveges válaszában létezett, fájlban nem.
+
+**Miért.** Az ágens-definíció tool-listája a NÉVLEGES jogosultságot írja
+le; egy adott futtatási környezet (session-szintű harness-korlátozás,
+sandbox-mód, vagy egy adott dispatch-mechanizmus) ezt szűkítheti anélkül,
+hogy ez a hívó (orchestrátor) oldalán bármilyen hiba- vagy figyelmeztető
+jelzésként megjelenne — az ágens saját maga észlelte és jelentette a
+korlátozást a válasza szövegében, nem egy sikertelen tool-hívás
+kivételeként. Ha az orchesztrátor a diszpécselés UTÁN nem ELLENŐRZI a várt
+fájl tényleges létrejöttét/módosulását, a review NÉMÁN elmarad — pontosan
+az a fajta „a jelentett `done` bizonyítatlan" hiba, amit ez a projekt más
+kontextusokban ([[verify-before-done]], L157, L263) már kimért.
+
+**Hogyan alkalmazd.** Egy fájlt-író subagent (review, brief-javítás, bármi)
+dispatch-elése UTÁN mindig `git status --short` / `git diff --stat`-tal
+ellenőrizd, hogy a várt fájl TÉNYLEG változott — ne az ágens szöveges
+zárónyilatkozatára hagyatkozz, még akkor sem, ha az explicit „megírtam a
+fájlt” állítást tartalmaz. Ha a fájl nem változott, de az ágens érdemi
+(bizonyítékkal alátámasztott) tartalmat adott vissza szövegben, az
+orchesztrátor a saját Write tool-jával írja meg a fájlt az ágens
+válaszából — ez NEM az ágens munkájának megkérdőjelezése, csak a
+„jelentés mint futtatható artefaktum, nem prompt-szöveg” elv (AGENTS.md
+§12, `docs/LESSONS.md` L09) kiterjesztése a subagent-kimenetekre is.
+
+## L266 — A review-jelentés fájlokat a KÖR-BRANCH-EN, az ELSŐ CI-dispatch ELŐTT commitold — utólagos review-commit minden alkalommal érvényteleníti az exact-SHA gate-et és újra-dispatch-ot kényszerít (E06-R27, 2026-08-13)
+
+**Mit mértem.** E06-R27-en a sorrend hibás volt: (1) `full-gate.yml` +
+`router-ci.yml` dispatch a kód-HEAD-en (`15363b51`), (2) a review-jelentés
+megírása és commitolása (`587d68d1`) — ez érvénytelenítette az (1) zöld
+futásait az exact-SHA szabály szerint (ADR 0086 §2), újra-dispatch
+kellett, (3) a security-review jelentés commitolása (`c41b8ca7`) —
+ugyanez megismétlődött. Végeredményben 3 teljes CI-kör (full-gate +
+router-ci mindegyike) futott le, ahol 1 is elég lett volna, ha a review-
+és security-jelentés a KÓD-commit UTÁN, de a dispatch ELŐTT elkészül.
+
+**Miért.** A review-jelentés fájl maga is a kör-branch RÉSZE (a
+`sdd-round-review` skill explicit előírása: „Commitolva a merge ELŐTT"),
+és a `tools/scope-audit.py` állandó kivétele alá esik — tehát semmi nem
+indokolja, hogy a dispatch előtt vagy után kerüljön a branch-re, csak a
+MUNKA sorrendje (verifikáció → jelentésírás → dispatch, vs. a kényelmesebb
+„dispatch amint a kód kész, írjam a jelentést közben" minta, amit ez a kör
+követett).
+
+**Hogyan alkalmazd.** Ha egy kör lezárásakor mind a tartalmi review, mind
+egy kötelező dedikált (pl. security) review is készül, és mindkettő
+jelentésfájlt commitol a kör-branch-re: fejezd be és commitold MINDKÉT
+jelentést, MIELŐTT az első CI-dispatch elindul — a `sdd-round-driver` skill
+5.3 pontja ("A dispatch mehet, amint az implementer «kész»-t jelez — nem
+kell megvárni a review-t") arra a helyzetre vonatkozik, amikor a review a
+KÓDOT nem módosítja vissza a branch-re; ha a review-jelentés MAGA is
+branch-re kerülő tartalom, ez a szabály nem ment fel a „commit előbb,
+dispatch utána" sorrend alól.
