@@ -27,6 +27,35 @@ allowed_paths = [
   "docs/manual-testing/analysis-eval-matrix.md",
   "docs/execution/06-requirements-traceability-matrix.md",
   "docs/rounds/e06-r30-shadow-rollout-migration-and-epic-closure.md",
+  "docs/adr/0215-analysis-document-versioning.md",
+  "docs/adr/0216-analysis-confidence-calibration-and-abstention.md",
+  "docs/adr/0217-analysis-raw-audio-retention.md",
+  "docs/adr/0218-analysis-metric-id-and-version-governance.md",
+  "docs/adr/0219-analysis-capability-aware-publication.md",
+  "docs/adr/0220-audio-analysis-v2-parallel-rollout-boundary.md",
+  "docs/adr/0221-legacy-analysis-v2-migration-mapping.md",
+  "docs/adr/0224-signal-quality-stage-measurement-boundary.md",
+  "docs/adr/0225-analysis-preprocessing-and-resampling-policy.md",
+  "docs/adr/0226-clip-analyzer-stage-boundary-and-fallback-provenance.md",
+  "docs/adr/0228-event-evidence-model-and-timeline-builder-contract.md",
+  "docs/adr/0229-analysis-chord-decoder-fusion-strategy.md",
+  "docs/adr/0230-beat-grid-tempo-curve-boundary.md",
+  "docs/adr/0231-target-alignment-engine-boundary.md",
+  "docs/adr/0232-timing-metric-identity-and-publication-boundary.md",
+  "docs/adr/0233-rhythm-consistency-and-groove-proxy-boundary.md",
+  "docs/adr/0234-dynamics-evidence-and-gating-boundary.md",
+  "docs/adr/0235-monophonic-pitch-capability-boundary.md",
+  "docs/adr/0236-analysis-technique-proxy-safety-and-naming.md",
+  "docs/adr/0237-analysis-confidence-combiner-and-capability-resolver.md",
+  "docs/adr/0238-analysis-insight-evidence-and-ranking-boundary.md",
+  "docs/adr/0239-analysis-document-storage.md",
+  "docs/adr/0240-analysis-runner-and-pipeline-boundary.md",
+  "docs/adr/0241-analysis-overview-presentation-boundary.md",
+  "docs/adr/0243-analysis-timeline-lane-data-source-and-degraded-boundary.md",
+  "docs/adr/0246-analysis-session-comparison-and-trend-contract.md",
+  "docs/adr/0247-analysis-export-share-and-delete-contract.md",
+  "docs/adr/0248-analysis-cache-key-and-performance-budget.md",
+  "docs/adr/0249-analysis-evaluation-dataset-governance.md",
 ]
 gate_tests = [
   "test/features/audio_analysis",
@@ -259,6 +288,26 @@ implementer a `learn_rollback_test.dart` `_flagsOff()`/`_config()`/
 a tényleges ON→OFF→ON szekvenciát a `FileAnalysisRepository`/
 `AnalysisMigrationVersionStore` (R21) API-jára építve kell megírnia, kész
 sablon erre nincs.
+
+### R9 — `allowed_paths` nem tartalmazott EGYETLEN `docs/adr/` bejegyzést sem — a §6 „ADR-státuszok" pont gépi VIOLATION-t adott volna
+
+**MÉRVE:** a `tools/ai_router/security.py:183-184` `_matches()` az
+`allowed_paths` bejegyzéseit **prefix-alapon** ellenőrzi (`path == prefix`
+vagy `path.startswith(prefix + "/")`) — a brief eredeti `allowed_paths`
+tömbje **egyetlen** `docs/adr/` elemet sem tartalmazott, miközben a §6
+„ADR-státuszok" pont (R1 szerint javítva) 29 ADR fájl szerkesztését írja
+elő. Ez önmagában egy **B-osztályú (base-lelet): a kör nem tudta volna
+teljesíteni a saját acceptance criteria-ját anélkül, hogy a gépi
+scope-audit (`tools/scope-audit.py`) `VIOLATION`-t (H3) ne adjon az első
+ADR-fájl érintésekor. **Javítva:** a fenti `allowed_paths` tömb kiegészítve
+a 29 konkrét, R1-ben felsorolt ADR fájl EXPLICIT útvonalával (nem egy
+könyvtár-szintű `docs/adr` prefixszel — az illesztő prefix-alapú, egy bare
+`docs/adr` bejegyzés bármely, akár ÚJ ADR-fájlt is engedne, ami ellentmond a
+§4 „Tilos zóna: `docs/adr/*.md` **új** fájl" sornak; a tételes lista
+egyszerre elégíti ki a §6 acceptance-t ÉS tartja fenn az „új ADR tilos"
+mechanikus határt). Ha implementáció közben egy 30. ADR-fájl is szükségesnek
+tűnne (nem valószínű, de mérd), az a listán kívüli fájl → `stopped`, nem
+saját döntés.
 
 ## 1. Cél
 
