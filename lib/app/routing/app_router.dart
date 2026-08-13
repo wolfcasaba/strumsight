@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/analyze/screens/analyze_screen.dart';
+import '../../features/audio_analysis/domain/analysis_document.dart';
+import '../../features/audio_analysis/presentation/analysis_metric_detail_screen.dart';
+import '../../features/audio_analysis/presentation/analysis_overview_screen.dart';
+import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
 import '../../features/learn/screens/latency_calibration_screen.dart';
@@ -75,6 +79,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .visionGuitarGeometryEnabled;
+  final audioAnalysisV2Enabled = ref
+      .read(appConfigProvider)
+      .flags
+      .audioAnalysisV2Enabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
@@ -245,6 +253,48 @@ final routerProvider = Provider<GoRouter>((ref) {
         GoRoute(
           path: AppRoutes.visionSession,
           builder: (_, _) => const VisionSessionScreen(),
+        ),
+      ],
+      if (audioAnalysisV2Enabled) ...[
+        GoRoute(
+          path: AppRoutes.analysisOverview,
+          redirect: (_, state) =>
+              state.extra is AnalysisDocument ? null : AppRoutes.live,
+          builder: (_, state) {
+            final extra = state.extra;
+            if (extra is AnalysisDocument) {
+              return AnalysisOverviewScreen(document: extra);
+            }
+            return const AnalysisOverviewScreen();
+          },
+        ),
+        GoRoute(
+          path: AppRoutes.analysisMetricDetail,
+          redirect: (_, state) {
+            final extra = state.extra;
+            // Accept a card list (single-metric navigation source), the
+            // combined metrics+insights payload (the "Részletek" entry
+            // point), or a document (the overview header's legacy entry).
+            if (extra is List<OverviewMetricCard> ||
+                extra is OverviewDetailsPayload ||
+                extra is AnalysisDocument) {
+              return null;
+            }
+            return AppRoutes.live;
+          },
+          builder: (_, state) {
+            final extra = state.extra;
+            if (extra is OverviewDetailsPayload) {
+              return AnalysisMetricDetailScreen(
+                metrics: extra.metrics,
+                remainingInsights: extra.remainingInsights,
+              );
+            }
+            if (extra is List<OverviewMetricCard>) {
+              return AnalysisMetricDetailScreen(metrics: extra);
+            }
+            return const AnalysisMetricDetailScreen();
+          },
         ),
       ],
     ],

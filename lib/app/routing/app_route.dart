@@ -37,6 +37,12 @@ abstract final class AppRoutes {
   static const String visionGuitarGeometry = '/vision/guitar-geometry';
   static const String visionSession = '/vision/session';
 
+  // Audio Analysis V2 (E06-R23) — overview and metric detail screens.
+  // Both routes are flag-gated in app_router.dart and are intentionally
+  // unreachable while `audioAnalysisV2Enabled == false`.
+  static const String analysisOverview = '/analysis/overview';
+  static const String analysisMetricDetail = '/analysis/metric-detail';
+
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[
     live,
