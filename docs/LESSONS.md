@@ -10079,3 +10079,20 @@ friss ágenst nulláról** — a már elvégzett mérés/próba értékes. Ehely
 KIFEJEZETTEN mondd ki, hogy a további felderítés helyett a MEGLÉVŐ
 eredmények szintézise és a fájl megírása a következő lépés — ez tipikusan
 percek alatt lezárja a feladatot a már elvégzett munka elvesztése nélkül.
+
+## L269 — Egy-egyhez időbeli értékelésben a lokálisan legközelebbi mohó párosítás nem bizonyít maximális egyezést (E06-R29, 2026-08-13)
+
+**Mit mértünk.** Az E06-R29 független review-ja két rövid ellenpéldával
+reprodukálta, hogy a „válaszd a legközelebbi még elérhető párt” stratégia nem
+maximalizálja a találatok számát: várt `50, 90`, detektált `0, 55`, 50 ms-es
+toleranciával a mohó event/beat út 1 TP-t adott, noha a `50↔0`, `90↔55`
+párosítás 2 TP. Ugyanez a hiba a pitch-cents átlagot is torzíthatta; chord
+szegmenseknél pedig egyetlen detektált intervallum két várt szegmenst is
+igazolhatott, mert a fogyasztását nem tartotta számon.
+
+**Hogyan alkalmazd.** Minden alternatív, időablakos one-to-one metric ugyanazt
+a maximum-cardinality bipartite matching segédet használja, és a tesztnek
+tartalmaznia kell legalább egy olyan ellenpéldát, ahol a lokális optimum és a
+globális találatszám eltér. Ne külön-külön „javítsd meg” az event-, beat- és
+pitch-utakat: a közös matcher a szerződés része. Lásd
+`docs/reviews/e06-r29-evaluation-harness-and-calibration-review.md` F1–F3.

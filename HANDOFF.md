@@ -3,10 +3,36 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R28 done — cache, performance and model-lifecycle infrastructure,
-> PR #255 merged; both the content review and the mandatory security review
-> are APPROVED; main healthy, chain unblocked, next pending round is
-> E06-R29.)**
+> (E06-R29 done — evaluation harness and truthful confidence-calibration
+> contract, PR #256 merged; independent review closed three MAJOR matching
+> defects; main healthy, next pending round is E06-R30.)**
+>
+> ## ✅ E06-R29 KÉSZ — Evaluation harness és confidence calibration (2026-08-13)
+>
+> Elkészült a verziózott, determinisztikus offline evaluation-harness az
+> esemény-, szegmens-, beat- és pitch-metrikákhoz, küszöb-közeli
+> falszifikációs fixture-ökkel. A párosítás minden metrikán egy-egyhez és
+> maximális kardinálissal történik; a confidence-calibration táblázat a ma
+> ténylegesen elérhető capability-adatokra őszintén az `identity.v1` görbét
+> használja, szintetikus bizonyítékból nem gyárt valótlan kalibrációt.
+> [ADR 0249](docs/adr/0249-analysis-evaluation-dataset-governance.md).
+>
+> **Független review:** három reprodukált MAJOR lelet zárva két javító
+> dispatchban: a mohó event-párosítás elveszíthetett érvényes találatot; egy
+> detected chord két expected szegmenst is igazolhatott; a beat- és
+> pitch-értékelés külön, hibás mohó utat használt. Az izolált re-review 0
+> nyitott BLOCKER/MAJOR mellett APPROVED; a saját negatív próbák a javított
+> regressziós teszteket pirosra vitték volna. Scope audit: OK.
+>
+> Exact-SHA `31cfa5d6`: Full Gate
+> [31750082206](https://github.com/wolfcasaba/strumsight/actions/runs/31750082206)
+> + Router CI [31750073152](https://github.com/wolfcasaba/strumsight/actions/runs/31750073152)
+> mindkettő success. Squash-merge PR [#256](https://github.com/wolfcasaba/strumsight/pull/256),
+> `1c2f3d2f`; a post-merge gate friss remote-klónban is zöld. Implementer:
+> **sonnet-impl**, két javító dispatch.
+>
+> Lecke: `docs/LESSONS.md` **L269** (egy-egyhez időbeli értékelésben a
+> lokálisan legközelebbi mohó párosítás nem bizonyít maximális egyezést).
 >
 > ## ✅ E06-R28 KÉSZ — Cache, performance és model lifecycle (2026-08-13)
 >
@@ -66,77 +92,6 @@
 > elavulhat, ha sosem ment át a `reserve-adr` foglalón — mindig a foglaló
 > friss kimenetét használd, ne a brief fejlécét).
 >
-> ## ✅ E06-R27 KÉSZ — Export, share és privacy controls (2026-08-13)
->
-> Adatvédelem-biztos export/megosztás előnézettel + teljes, bizonyított
-> törlés. `RedactionPolicy` (allowlist-alapú, NEM denylist) + `AnalysisExport`/
-> `AnalysisExportCodec` (determinisztikus, verziózott JSON), `ShareCardBuilder`
-> (confidence-jelöléssel — `unavailable` sosem érték, alacsony confidence
-> `isDegraded`-del jelölve), `ExportAnalysisUseCase` (előnézet-kapu, temp+
-> share+takarítás mindkét kimenetelre), `DeleteAnalysisUseCase` (öt cellás
-> teljesség: dokumentum+index+cache+opcionális audio), export-előnézet UI +
-> ARB. `ShareService` PONTOSAN EGY additív `shareExportFile` metódussal bővült
-> (H3 self-heal szerződése, §5.8) — a meglévő három metódus változatlan. [ADR
-> 0247](docs/adr/0247-analysis-export-share-and-delete-contract.md).
->
-> **Két self-heal vitte a dispatchig:** H3 ([#251](https://github.com/wolfcasaba/strumsight/pull/251),
-> `docs/LESSONS.md` **L261/L262**) — a brief „Kívül — TILOS" zónája
-> ellentmondott a saját §5.1 OD-01 alapértelmezésének, ami a meglévő
-> `ShareService`-en át kötelezte a kitakarított megosztást; a javítás egy
-> kötött, PONTOSAN EGY additív metódusra szűkített kivétellel oldotta fel. H6
-> ([#252](https://github.com/wolfcasaba/strumsight/pull/252), **L263**) — a
-> `verify_claim` anti-hallucináció őr egy jogos, diff nélküli megerősítő
-> `done`-t is hallucinációnak nézett; a javítás egy explicit, auditálható
-> `ROUND_VERIFY_NOOP_OK=1` jelzést vezetett be.
->
-> **A tartalmi implementáció** (`sonnet-impl`) egy korábbi session alatt
-> készült el, és a saját független review-ja 1 BLOCKER-t (export allowlist
-> nyitva a message-argumentumokon át — egy filename/device-id/nyers-audio
-> tetszőleges kulcs alatt átcsúszhatott) + 2 MAJOR-t (elérhető, de alacsony
-> confidence-ű metrika sima tényként a kártyán; írási hiba a takarítás előtt
-> elveszíthette a redaktált temp fájlt) talált, amit egy javító kör már
-> lezárt — ez a session ezt a lezárt állapotot vette át, és a javításokat
-> SAJÁT kézzel, függetlenül igazolta vissza, nem a korábbi session
-> bemondására: izolált `/tmp` klónban újrafuttatott teljes gate (mind a 9
-> lépés zöld), `tools/scope-audit.py` OK (22 fájl, mind engedélyezett), és
-> egy valódi-sértés próba a BLOCKER-javításon (a message-arg szűrés
-> ideiglenes visszaállítása egyszerű passthrough-ra → pontosan a 9
-> message-arg-boundary teszt PIROSRA váltott, semmi más → visszaállítva).
->
-> **A kötelező dedikált security-reviewer pass (risk=high)** egy második,
-> tartalmilag önálló nézőpontból futott (nem a content review-t ismételte
-> meg): minden `messageKey`/`messageArgs`-termelőt kigrepelt `lib/`-ben (nem
-> csak az engine-t) és igazolta, hogy az allowlist mind a 16-ot pontosan
-> fedi; végigkövette az export minden String mezőjét a forrásig (mind enum,
-> katalógus-id, gépi kód vagy időbélyeg — user-vezérelt szabad szöveg
-> egyik sem); igazolta a törlés őszinteségét (a no-op cache/audio portok
-> nyíltan dokumentáltak, nem hamis perzisztencia-állítás) és a
-> `ShareService`-bővítés hatósugarát. Verdikt: 0 BLOCKER/MAJOR, 5
-> előretekintő NOTE (egyik sem él ma — pl. egy nem-használt figyelmeztetés-
-> kulcs hiányzik az allowlist-térképből, ami fail-safe, mert üres
-> argumentum-halmazt eredményez; a share-kártya insight-ja megkerüli a
-> redakciót, de nincs ma production fogyasztója) — mind dokumentálva
-> follow-up köröknek (R28 cache, jövőbeli kártya-renderelő).
->
-> **Rebase a H6-self-heal és a codex-engine-registry-fix UTÁNI `main`-re**
-> (`e12c3ab3`) konfliktusmentesen (`git merge-tree` előre igazolta),
-> `tools/safe-force-push.sh`-sal pusholva (ADR 0242 H8 protokoll). Exact-SHA
-> `c41b8ca7`: Full Gate [31736632560](https://github.com/wolfcasaba/strumsight/actions/runs/31736632560)
-> + Router CI [31736635127](https://github.com/wolfcasaba/strumsight/actions/runs/31736635127)
-> mindkettő success. Squash-merge PR [#254](https://github.com/wolfcasaba/strumsight/pull/254),
-> `63da8ddc`. Post-merge gate egy REMOTE-ról (nem a megosztott helyi
-> klónból — az elavult lett volna, lásd L264) friss klónon önállóan
-> újrafuttatva: mind a 9 lépés zöld. `audioAnalysisV2Enabled` változatlanul
-> `false` mindenhol — production viselkedés bitre azonos.
->
-> Lecke: `docs/LESSONS.md` **L264** (post-merge/független klónt remote-ról
-> hozz létre, ne a megosztott helyi útvonalról — az utóbbi lokális `main`-je
-> hallgatólagosan elavult lehet), **L265** (egy subagent Write-tool-listája
-> nem garancia a tényleges írási képességre — a fájl LÉTREJÖTTÉT ellenőrizd,
-> ne az ágens szavait), **L266** (a review-jelentéseket a kód-commit UTÁN,
-> de az ELSŐ CI-dispatch ELŐTT commitold a branch-re — egy utólagos
-> review-commit minden alkalommal érvényteleníti az exact-SHA gate-et).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -146,10 +101,9 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Ismételt diéta: 2026-08-13 (E06-R28 zárása): az E06-R26 KÉSZ banner
-> archiválásra került, a fejlécben most az E06-R28 és az E06-R27 banner él.
-> A korábbi diéta-bejegyzések (E99-R08, E06-R26, E06-R27 zárása) teljes
-> szövege: `docs/handoff-archive.md`.
+> Ismételt diéta: 2026-08-13 (E06-R29 zárása): az E06-R27 KÉSZ banner
+> archiválásra került, a fejlécben most az E06-R29 és az E06-R28 banner él.
+> A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
 
@@ -1557,15 +1511,12 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Következő kijelölt SDD-kör: E06-R29 — Evaluation harness és confidence
-calibration** (`docs/rounds/e06-r29-evaluation-harness-and-calibration.md`,
-queue: `pending`, ADR pre-assigned `0211` — **valószínűleg elavult, a
-pre-flightban kötelező `tools/round-slots.py reserve-adr --round E06-R29`-cel
-frissíteni, ld. `docs/LESSONS.md` L267**). Új sessionben induljon; E06-R28
-lezárult (lásd fejléc ✅-blokk). Utána **E06-R30 — Shadow rollout, migration
-és Epic 6 lezárás** az utolsó tervezett E06-sor. Pre-flightban olvassa újra
-az E06-R28 cache-kontraktust és a security review §6 „bekötő körnek"
-listáját, ha az evaluation harness bármelyik előfeltételt érinti.
+**Következő kijelölt SDD-kör: E06-R30 — Shadow rollout, migráció és Epic 6
+lezárás.** Új sessionben induljon; E06-R29 lezárult (lásd fejléc ✅-blokk).
+Pre-flightban a `tools/round-slots.py reserve-adr --round E06-R30` kimenete
+az egyetlen hiteles ADR-szám; a valós audio-evidence hiányát ne pótolja
+szintetikus evaluation adattal. Az R28 cache security review §6 szerinti
+bekötés-előtti tételeit is ellenőrizze, ha a shadow wiring érinti őket.
 
 > (A lenti, E06-R19-cel kezdődő szakasz a 2026-08-12 előtti GOV-05/06
 > governance-sagát rögzíti — történeti kontextusként hagyva.)

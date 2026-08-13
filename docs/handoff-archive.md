@@ -6,6 +6,20 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R27 KÉSZ — Export, share és privacy controls (2026-08-13)
+
+Az R27 adatvédelmi export- és megosztási szerződését az
+[ADR 0247](adr/0247-analysis-export-share-and-delete-contract.md) rögzíti:
+allowlist-alapú redakció, determinisztikus export-codec, confidence-jelölt
+share-kártya, előnézet-kapu és teljes cleanup/törlés. A tartalmi review a
+korábbi állapotban 1 BLOCKER-t és 2 MAJOR-t talált (message-argumentum
+allowlist, alacsony confidence megjelenítése, takarítás írási hiba után); egy
+javító kör mindet lezárta. A független gate/scope-audit és a dedikált security
+review zöld, az exact-SHA Full Gate és Router CI evidence a PR
+[#254](https://github.com/wolfcasaba/strumsight/pull/254) leírásában van.
+Részletes eredeti zárónarratíva: a `HANDOFF.md` merge előtti
+`ac51cd65` commitjában; tanulságok: L261–L266.
+
 ## ✅ E06-R26 KÉSZ — Practice, Song és Tutor integráció (2026-08-13)
 
 A V2 elemzés bekötése a Practice Engine, a Song Trainer, az AI Tutor és a
