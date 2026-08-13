@@ -23,6 +23,31 @@ void main() {
       expect(zoomed.isWithinDuration, isTrue);
     });
 
+    test(
+      'zooms out around the focal time and clamps near either clip edge',
+      () {
+        final centered = TimelineViewport(
+          duration: duration,
+          logicalWidth: width,
+          start: const Duration(seconds: 4),
+          end: const Duration(seconds: 6),
+        ).zoomBy(scale: .5, focalTime: const Duration(seconds: 5));
+        final nearEdge = TimelineViewport(
+          duration: duration,
+          logicalWidth: width,
+          start: const Duration(milliseconds: 100),
+          end: const Duration(seconds: 2),
+        ).zoomBy(scale: .1, focalTime: const Duration(seconds: 1));
+
+        expect(centered.start, const Duration(seconds: 3));
+        expect(centered.end, const Duration(seconds: 7));
+        expect(centered.isWithinDuration, isTrue);
+        expect(nearEdge.start, greaterThanOrEqualTo(Duration.zero));
+        expect(nearEdge.end, lessThanOrEqualTo(duration));
+        expect(nearEdge.isWithinDuration, isTrue);
+      },
+    );
+
     test('pans in both directions and clamps against both clip edges', () {
       final viewport = TimelineViewport(
         duration: duration,

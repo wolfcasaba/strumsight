@@ -346,9 +346,29 @@ elhagyása helyett `stopped` + brief-revízió.
 - Route/public export/ARB: az új route ugyanazon `audioAnalysisV2Enabled`
   flag mögött van, angol és magyar szövegekkel. A ruler és a selection az
   R23 `AppLocalizationsOverviewLabels.formatDuration` helperét használja.
-- Futott: `flutter gen-l10n`; célzott `flutter test` (12 teszt, PASS) és
-  `flutter analyze` (PASS). A kötelező `tools/round-gate.sh
-  test/features/audio_analysis test/app` a záró diff-audit után fut.
+- Javító kör #1: a hotspot overlay lane immár kizárólag
+  `document.hotspots.isNotEmpty` alapján jelenik meg (a `targetAlignment`
+  capability-től függetlenül), az üres lista pedig a lokalizált „nincs
+  problémás pont” indoklást kapja. A capability-ág explicit
+  `available`/`degraded` allowlist lett, ezért jövőbeli státusz nem jelenhet
+  meg mérésként.
+- Javító kör #1: a hotspot-lista minden eleméhez külön, lokalizált
+  index/típus/súlyosság `Semantics` node tartozik. A navigációs gombok teljes
+  szélességben tördelnek; a lane-címek is rugalmasak, mert a hu × 320 px × 2×
+  regressziós mátrix tényleges `RenderFlex` overflow-t talált.
+- Javító kör #1: a widget-teszt lefedi az en/hu × 320/600 px × 1.0/2.0
+  kombinációt, a hotspot adatvezérelt kapuját és az elem-szemantikát; a
+  forrásolvasó PCM-őr a valódi `PcmAnalysisInput` típusnevet és
+  `domain/analysis_input.dart` importot tiltja. A `TimelineViewState` most a
+  screen viewport- és selection-állapotát tartja, explicit `clearSelection`
+  metódussal és teszttel. A zoom-ki és a `HotspotNavigator.previous()` is
+  kapott tükör regressziós tesztet. Mindkét ARB-ból eltűntek a duplikált
+  timeline title/description kulcsok.
+- Futott: `flutter gen-l10n`; célzott screen teszt (9/9 PASS); viewport +
+  hotspot-navigátor tesztek (9/9 PASS); majd `tools/round-gate.sh
+  test/features/audio_analysis test/app` — format zöld, analyze zöld,
+  `audio_analysis` 483 teszt PASS, `app` 69 teszt PASS, architecture/secrets/
+  l10n zöld (`1244` üzenet).
 - Eltérés: a V2 dokumentum nem tartalmaz decimált waveform-previewt, ezért
   a rögzített OD-01/ADR 0243 szerint a waveform lane unavailable marad.
   Nyers audio/PCM nem lett importálva vagy olvasva.

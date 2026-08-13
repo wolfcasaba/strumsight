@@ -20,4 +20,7 @@ final class TimelineViewState {
     selectionStart: selectionStart ?? this.selectionStart,
     selectionEnd: selectionEnd ?? this.selectionEnd,
   );
+
+  /// Removes the selected range without relying on nullable [copyWith] input.
+  TimelineViewState clearSelection() => TimelineViewState(viewport: viewport);
 }

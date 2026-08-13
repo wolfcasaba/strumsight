@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../domain/analysis_document.dart';
+import '../domain/analysis_hotspot.dart';
+import 'controllers/timeline_view_state.dart';
 import 'controllers/timeline_viewport.dart';
 import 'widgets/hotspot_navigator.dart';
 import 'widgets/labels_adapter.dart';
@@ -18,11 +20,9 @@ final class AnalysisTimelineScreen extends StatefulWidget {
 }
 
 final class _AnalysisTimelineScreenState extends State<AnalysisTimelineScreen> {
-  TimelineViewport? _viewport;
+  TimelineViewState? _viewState;
   TimelineViewport? _scaleStartViewport;
   int? _selectedHotspotIndex;
-  Duration? _selectionStart;
-  Duration? _selectionEnd;
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -32,45 +32,54 @@ final class _AnalysisTimelineScreenState extends State<AnalysisTimelineScreen> {
         final width = constraints.maxWidth.isFinite && constraints.maxWidth > 0
             ? constraints.maxWidth
             : 320.0;
-        final current = _viewport;
-        final viewport = current == null || current.logicalWidth != width
+        final state = _viewState;
+        final viewport = state == null || state.viewport.logicalWidth != width
             ? TimelineViewport.full(
                 duration: widget.document.timeline.duration,
                 logicalWidth: width,
               )
-            : current;
+            : state.viewport;
         return Scaffold(
           appBar: AppBar(title: Text(l10n.analysisTimelineTitle)),
           body: SafeArea(
             child: GestureDetector(
               onScaleUpdate: (details) => setState(() {
                 final source = _scaleStartViewport ?? viewport;
-                _viewport = source.zoomBy(
-                  scale: details.scale,
-                  focalTime: source.timeForPixel(details.localFocalPoint.dx),
+                _viewState = _stateFor(viewport).copyWith(
+                  viewport: source.zoomBy(
+                    scale: details.scale,
+                    focalTime: source.timeForPixel(details.localFocalPoint.dx),
+                  ),
                 );
               }),
               onScaleStart: (_) => _scaleStartViewport = viewport,
               onScaleEnd: (_) => _scaleStartViewport = null,
               onHorizontalDragUpdate: (details) => setState(() {
-                _viewport = viewport.panBy(
-                  Duration(
-                    microseconds:
-                        (-details.delta.dx /
-                                width *
-                                viewport.visibleDuration.inMicroseconds)
-                            .round(),
+                _viewState = _stateFor(viewport).copyWith(
+                  viewport: viewport.panBy(
+                    Duration(
+                      microseconds:
+                          (-details.delta.dx /
+                                  width *
+                                  viewport.visibleDuration.inMicroseconds)
+                              .round(),
+                    ),
                   ),
                 );
               }),
               onLongPressStart: (details) => setState(() {
-                _selectionStart = viewport.timeForPixel(
+                final selectionStart = viewport.timeForPixel(
                   details.localPosition.dx,
                 );
-                _selectionEnd = _selectionStart;
+                _viewState = _stateFor(viewport).clearSelection().copyWith(
+                  selectionStart: selectionStart,
+                  selectionEnd: selectionStart,
+                );
               }),
               onLongPressMoveUpdate: (details) => setState(() {
-                _selectionEnd = viewport.timeForPixel(details.localPosition.dx);
+                _viewState = _stateFor(viewport).copyWith(
+                  selectionEnd: viewport.timeForPixel(details.localPosition.dx),
+                );
               }),
               child: ListView(
                 padding: const EdgeInsets.all(16),
@@ -78,38 +87,77 @@ final class _AnalysisTimelineScreenState extends State<AnalysisTimelineScreen> {
                   Text(l10n.analysisTimelineDescription),
                   const SizedBox(height: 8),
                   TimelineRuler(viewport: viewport),
-                  if (_selectionStart != null && _selectionEnd != null)
+                  if (state?.selectionStart != null &&
+                      state?.selectionEnd != null)
                     Semantics(
                       label: l10n.analysisTimelineSelection(
-                        labels.formatDuration(_selectionStart!),
-                        labels.formatDuration(_selectionEnd!),
+                        labels.formatDuration(state!.selectionStart!),
+                        labels.formatDuration(state.selectionEnd!),
                       ),
                       child: Text(
                         l10n.analysisTimelineSelection(
-                          labels.formatDuration(_selectionStart!),
-                          labels.formatDuration(_selectionEnd!),
+                          labels.formatDuration(state.selectionStart!),
+                          labels.formatDuration(state.selectionEnd!),
                         ),
                       ),
                     ),
                   if (widget.document.hotspots.isNotEmpty)
                     Semantics(
                       container: true,
+                      explicitChildNodes: true,
                       label: l10n.analysisTimelineHotspotList(
                         widget.document.hotspots.length,
                       ),
-                      child: Wrap(
-                        spacing: 8,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          OutlinedButton.icon(
-                            onPressed: () =>
-                                _navigateHotspot(viewport, previous: true),
-                            icon: const Icon(Icons.chevron_left),
-                            label: Text(l10n.analysisTimelinePreviousHotspot),
+                          for (final (index, hotspot)
+                              in widget.document.hotspots.indexed)
+                            Semantics(
+                              container: true,
+                              label: _hotspotSemanticsLabel(
+                                l10n,
+                                index: index + 1,
+                                count: widget.document.hotspots.length,
+                                hotspot: hotspot,
+                              ),
+                              child: const SizedBox.shrink(),
+                            ),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () =>
+                                  _navigateHotspot(viewport, previous: true),
+                              child: Row(
+                                children: <Widget>[
+                                  const Icon(Icons.chevron_left),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      l10n.analysisTimelinePreviousHotspot,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          OutlinedButton.icon(
-                            onPressed: () => _navigateHotspot(viewport),
-                            icon: const Icon(Icons.chevron_right),
-                            label: Text(l10n.analysisTimelineNextHotspot),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () => _navigateHotspot(viewport),
+                              child: Row(
+                                children: <Widget>[
+                                  const Icon(Icons.chevron_right),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      l10n.analysisTimelineNextHotspot,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -137,7 +185,42 @@ final class _AnalysisTimelineScreenState extends State<AnalysisTimelineScreen> {
           );
     setState(() {
       _selectedHotspotIndex = result.index;
-      _viewport = result.viewport;
+      _viewState = _stateFor(viewport).copyWith(viewport: result.viewport);
     });
   }
+
+  TimelineViewState _stateFor(TimelineViewport viewport) =>
+      _viewState ?? TimelineViewState(viewport: viewport);
+
+  String _hotspotSemanticsLabel(
+    AppLocalizations l10n, {
+    required int index,
+    required int count,
+    required AnalysisHotspot hotspot,
+  }) => l10n.analysisTimelineHotspotItem(
+    index,
+    count,
+    _hotspotKindLabel(l10n, hotspot.kind),
+    _hotspotSeverityLabel(l10n, hotspot.severity),
+  );
+
+  String _hotspotKindLabel(AppLocalizations l10n, AnalysisHotspotKind kind) =>
+      switch (kind) {
+        AnalysisHotspotKind.timing => l10n.analysisTimelineHotspotKindTiming,
+        AnalysisHotspotKind.rhythm => l10n.analysisTimelineHotspotKindRhythm,
+        AnalysisHotspotKind.dynamics =>
+          l10n.analysisTimelineHotspotKindDynamics,
+        AnalysisHotspotKind.harmony => l10n.analysisTimelineHotspotKindHarmony,
+        AnalysisHotspotKind.pitch => l10n.analysisTimelineHotspotKindPitch,
+      };
+
+  String _hotspotSeverityLabel(
+    AppLocalizations l10n,
+    AnalysisHotspotSeverity severity,
+  ) => switch (severity) {
+    AnalysisHotspotSeverity.low => l10n.analysisTimelineHotspotSeverityLow,
+    AnalysisHotspotSeverity.medium =>
+      l10n.analysisTimelineHotspotSeverityMedium,
+    AnalysisHotspotSeverity.high => l10n.analysisTimelineHotspotSeverityHigh,
+  };
 }

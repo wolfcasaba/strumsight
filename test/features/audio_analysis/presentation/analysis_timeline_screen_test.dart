@@ -13,6 +13,7 @@ import 'package:strumsight/features/audio_analysis/domain/analysis_timeline.dart
 import 'package:strumsight/features/audio_analysis/domain/analysis_warning.dart';
 import 'package:strumsight/features/audio_analysis/domain/signal_quality_report.dart';
 import 'package:strumsight/features/audio_analysis/presentation/analysis_timeline_screen.dart';
+import 'package:strumsight/features/audio_analysis/presentation/controllers/timeline_view_state.dart';
 import 'package:strumsight/features/audio_analysis/presentation/controllers/timeline_viewport.dart';
 import 'package:strumsight/features/audio_analysis/presentation/widgets/timeline_lane.dart';
 import 'package:strumsight/features/audio_analysis/presentation/widgets/timeline_ruler.dart';
@@ -83,36 +84,35 @@ void main() {
     (tester) async {
       await tester.pumpWidget(
         _harness(
-          _document(<CapabilityReport>[
-            _capability(
-              AnalysisCapability.chordTimeline,
-              CapabilityStatus.available,
-            ),
-            _capability(
-              AnalysisCapability.beatGrid,
-              CapabilityStatus.available,
-            ),
-            _capability(
-              AnalysisCapability.onsetTimeline,
-              CapabilityStatus.available,
-            ),
-            _capability(
-              AnalysisCapability.timingAccuracy,
-              CapabilityStatus.available,
-            ),
-            _capability(
-              AnalysisCapability.dynamicConsistency,
-              CapabilityStatus.available,
-            ),
-            _capability(
-              AnalysisCapability.monophonicPitch,
-              CapabilityStatus.available,
-            ),
-            _capability(
-              AnalysisCapability.targetAlignment,
-              CapabilityStatus.available,
-            ),
-          ]),
+          _document(
+            <CapabilityReport>[
+              _capability(
+                AnalysisCapability.chordTimeline,
+                CapabilityStatus.available,
+              ),
+              _capability(
+                AnalysisCapability.beatGrid,
+                CapabilityStatus.available,
+              ),
+              _capability(
+                AnalysisCapability.onsetTimeline,
+                CapabilityStatus.available,
+              ),
+              _capability(
+                AnalysisCapability.timingAccuracy,
+                CapabilityStatus.available,
+              ),
+              _capability(
+                AnalysisCapability.dynamicConsistency,
+                CapabilityStatus.available,
+              ),
+              _capability(
+                AnalysisCapability.monophonicPitch,
+                CapabilityStatus.available,
+              ),
+            ],
+            hotspots: <AnalysisHotspot>[_hotspot('rhythm', 1)],
+          ),
         ),
       );
 
@@ -133,6 +133,106 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'shows the hotspot lane from hotspot data without target alignment',
+    (tester) async {
+      await tester.pumpWidget(
+        _harness(
+          _document(
+            const <CapabilityReport>[],
+            hotspots: <AnalysisHotspot>[_hotspot('rhythm', 1)],
+          ),
+        ),
+      );
+
+      expect(find.byKey(const Key('timeline-lane-hotspot')), findsOneWidget);
+      expect(
+        find.byKey(const Key('timeline-unavailable-hotspot')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('exposes every hotspot as a distinct semantics item', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _harness(
+        _document(
+          const <CapabilityReport>[],
+          hotspots: <AnalysisHotspot>[
+            _hotspot('timing', 1, kind: AnalysisHotspotKind.timing),
+            _hotspot('rhythm', 4, kind: AnalysisHotspotKind.rhythm),
+            _hotspot('pitch', 8, kind: AnalysisHotspotKind.pitch),
+          ],
+        ),
+      ),
+    );
+
+    for (final label in <String>[
+      'Hotspot 1 of 3: timing, medium',
+      'Hotspot 2 of 3: rhythm, medium',
+      'Hotspot 3 of 3: pitch, medium',
+    ]) {
+      final semantics = tester.getSemantics(find.bySemanticsLabel(label));
+      expect(semantics.label, label);
+    }
+  });
+
+  testWidgets('has no localized overflow or raw localization keys', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final locale in <Locale>[const Locale('en'), const Locale('hu')]) {
+      for (final width in <double>[320, 600]) {
+        for (final textScale in <double>[1, 2]) {
+          tester.view.physicalSize = Size(width, 800);
+          tester.view.devicePixelRatio = 1;
+          await tester.pumpWidget(
+            _harness(
+              _document(
+                const <CapabilityReport>[],
+                hotspots: <AnalysisHotspot>[
+                  _hotspot('timing', 1),
+                  _hotspot('rhythm', 4, kind: AnalysisHotspotKind.rhythm),
+                  _hotspot('pitch', 8, kind: AnalysisHotspotKind.pitch),
+                ],
+              ),
+              locale: locale,
+              textScaler: TextScaler.linear(textScale),
+            ),
+          );
+
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$locale at ${width}px and $textScale text scale',
+          );
+          expect(find.textContaining('analysisTimeline'), findsNothing);
+        }
+      }
+    }
+  });
+
+  test('clears TimelineViewState selection explicitly', () {
+    final state = TimelineViewState(
+      viewport: TimelineViewport.full(
+        duration: const Duration(seconds: 10),
+        logicalWidth: 320,
+      ),
+      selectionStart: const Duration(seconds: 2),
+      selectionEnd: const Duration(seconds: 5),
+    );
+
+    final cleared = state.clearSelection();
+
+    expect(cleared.selectionStart, isNull);
+    expect(cleared.selectionEnd, isNull);
+    expect(cleared.viewport, state.viewport);
+  });
 
   test('ruler uses a wider interval for long clips', () {
     final short = TimelineRuler.labelsFor(
@@ -159,12 +259,17 @@ void main() {
         .map((file) => file.readAsStringSync())
         .join('\n');
 
-    expect(sources, isNot(contains('data/input/')));
-    expect(sources, isNot(contains('pcmSamples')));
+    expect(sources, isNot(contains('PcmAnalysisInput')));
+    expect(sources, isNot(contains('domain/analysis_input.dart')));
   });
 }
 
-Widget _harness(AnalysisDocument document) => MaterialApp(
+Widget _harness(
+  AnalysisDocument document, {
+  Locale? locale,
+  TextScaler? textScaler,
+}) => MaterialApp(
+  locale: locale,
   localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
     AppLocalizations.delegate,
     GlobalMaterialLocalizations.delegate,
@@ -172,50 +277,57 @@ Widget _harness(AnalysisDocument document) => MaterialApp(
     GlobalWidgetsLocalizations.delegate,
   ],
   supportedLocales: AppLocalizations.supportedLocales,
-  home: AnalysisTimelineScreen(document: document),
+  home: Builder(
+    builder: (context) => MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+      child: AnalysisTimelineScreen(document: document),
+    ),
+  ),
 );
 
-AnalysisDocument _document(List<CapabilityReport> capabilities) =>
-    AnalysisDocument(
-      id: 'timeline',
-      schemaVersion: analysisDocumentSchemaVersion,
-      createdAt: DateTime.utc(2026),
-      mode: AnalysisMode.freePlay,
-      input: AnalysisInputSummary(
-        source: AnalysisInputSource.microphone,
-        duration: const Duration(seconds: 50),
-        sampleRate: 48000,
-        channelCount: 1,
-        fingerprint: 'f',
-      ),
-      provenance: AnalysisProvenance(
-        appVersion: '1',
-        analyzerVersion: '1',
-        pipelineVersion: '1',
-        stageVersions: const {},
-        dspConfigHash: 'x',
-        modelManifestIds: const [],
-        inputFingerprint: 'f',
-        platform: 'test',
-        featureFlagSnapshot: const {},
-      ),
-      signalQuality: SignalQualityReport(
-        overall: 0,
-        peakDbfs: -3,
-        rmsDbfs: -18,
-        noiseFloorDbfs: -60,
-        clippedSampleRatio: 0,
-        silentRatio: 0,
-        tonalness: 0,
-      ),
-      capabilities: capabilities,
-      timeline: AnalysisTimeline(duration: const Duration(seconds: 50)),
-      metrics: const [],
-      hotspots: <AnalysisHotspot>[],
-      insights: const [],
-      warnings: const <AnalysisWarning>[],
-      completion: AnalysisCompletion(status: AnalysisCompletionStatus.complete),
-    );
+AnalysisDocument _document(
+  List<CapabilityReport> capabilities, {
+  List<AnalysisHotspot> hotspots = const <AnalysisHotspot>[],
+}) => AnalysisDocument(
+  id: 'timeline',
+  schemaVersion: analysisDocumentSchemaVersion,
+  createdAt: DateTime.utc(2026),
+  mode: AnalysisMode.freePlay,
+  input: AnalysisInputSummary(
+    source: AnalysisInputSource.microphone,
+    duration: const Duration(seconds: 50),
+    sampleRate: 48000,
+    channelCount: 1,
+    fingerprint: 'f',
+  ),
+  provenance: AnalysisProvenance(
+    appVersion: '1',
+    analyzerVersion: '1',
+    pipelineVersion: '1',
+    stageVersions: const {},
+    dspConfigHash: 'x',
+    modelManifestIds: const [],
+    inputFingerprint: 'f',
+    platform: 'test',
+    featureFlagSnapshot: const {},
+  ),
+  signalQuality: SignalQualityReport(
+    overall: 0,
+    peakDbfs: -3,
+    rmsDbfs: -18,
+    noiseFloorDbfs: -60,
+    clippedSampleRatio: 0,
+    silentRatio: 0,
+    tonalness: 0,
+  ),
+  capabilities: capabilities,
+  timeline: AnalysisTimeline(duration: const Duration(seconds: 50)),
+  metrics: const [],
+  hotspots: hotspots,
+  insights: const [],
+  warnings: const <AnalysisWarning>[],
+  completion: AnalysisCompletion(status: AnalysisCompletionStatus.complete),
+);
 
 CapabilityReport _capability(
   AnalysisCapability capability,
@@ -227,4 +339,19 @@ CapabilityReport _capability(
   reason: status == CapabilityStatus.unavailable
       ? CapabilityUnavailableReason.insufficientEvents
       : null,
+);
+
+AnalysisHotspot _hotspot(
+  String id,
+  int second, {
+  AnalysisHotspotKind kind = AnalysisHotspotKind.timing,
+}) => AnalysisHotspot(
+  id: id,
+  kind: kind,
+  start: Duration(seconds: second),
+  end: Duration(seconds: second + 1),
+  severity: AnalysisHotspotSeverity.medium,
+  confidence: .8,
+  metricIds: const <String>[],
+  evidenceIds: const <String>[],
 );

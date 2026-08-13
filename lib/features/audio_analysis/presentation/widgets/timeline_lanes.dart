@@ -118,16 +118,7 @@ final class TimelineLanes extends StatelessWidget {
             document.timeline.pitchSegments.length,
           ),
         ),
-        _lane(
-          context,
-          TimelineLaneKind.hotspot,
-          l10n.analysisTimelineLaneHotspots,
-          AnalysisCapability.targetAlignment,
-          document.hotspots
-              .map((e) => TimelineLaneItem(start: e.start, end: e.end))
-              .toList(),
-          l10n.analysisTimelineItemCount(document.hotspots.length),
-        ),
+        _hotspotLane(context, l10n),
       ],
     );
   }
@@ -147,9 +138,9 @@ final class TimelineLanes extends StatelessWidget {
         break;
       }
     }
-    if (report == null ||
-        report.status == CapabilityStatus.unavailable ||
-        report.status == CapabilityStatus.notApplicable) {
+    final isAvailable = report?.status == CapabilityStatus.available;
+    final isDegraded = report?.status == CapabilityStatus.degraded;
+    if (!isAvailable && !isDegraded) {
       return _unavailable(
         context,
         kind,
@@ -163,7 +154,27 @@ final class TimelineLanes extends StatelessWidget {
       summary: summary,
       viewport: viewport,
       items: items,
-      degraded: report.status == CapabilityStatus.degraded,
+      degraded: isDegraded,
+    );
+  }
+
+  Widget _hotspotLane(BuildContext context, AppLocalizations l10n) {
+    if (document.hotspots.isEmpty) {
+      return _unavailable(
+        context,
+        TimelineLaneKind.hotspot,
+        l10n.analysisTimelineLaneHotspots,
+        l10n.analysisTimelineNoHotspots,
+      );
+    }
+    return TimelineLane(
+      kind: TimelineLaneKind.hotspot,
+      title: l10n.analysisTimelineLaneHotspots,
+      summary: l10n.analysisTimelineItemCount(document.hotspots.length),
+      viewport: viewport,
+      items: document.hotspots
+          .map((e) => TimelineLaneItem(start: e.start, end: e.end))
+          .toList(),
     );
   }
 

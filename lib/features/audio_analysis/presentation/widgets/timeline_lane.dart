@@ -75,7 +75,12 @@ final class TimelineLane extends StatelessWidget {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
                   if (degraded)
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
