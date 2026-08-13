@@ -9395,3 +9395,67 @@ hanem az ág publikációs állapotától függ. (3) A kötelező
 lefuttatható. (4) A branch rebase+push-a NEM jelenti a kör levezénylését —
 a PR nyitása, a CI-dispatch és a brief §11 review-jelentés lezárása
 továbbra is a következő orchestrátor-session dolga (ADR 0112 §1).
+
+## L254 — A Bash-eszköz `run_in_background: true` kapcsolója egy egy-fordulós (`claude -p`) implementer-harnessben a háttér-task HALÁLÁT jelenti, nem egy visszatérő jelentést — a kötelező gate ezen NEM küldhető háttérbe (E99-R08, H6 self-heal, 2026-08-13)
+
+**Mit mértem.** Az E99-R08 F3 review-leletét záró javító körön két egymást
+követő `sonnet-impl` futás (session `3f71b1fb-ee86-4206-b9a6-6f802768f679`,
+majd `665d8491-3352-416f-9ac8-f420c4936468`) a kötelező `python3 -m pytest
+tools/tests -q` gate-et a Bash-eszköz saját `run_in_background: true`
+paraméterével indította, majd a fordulót „Running the full pytest suite ...
+in the background ... I'll report back once it completes" / „I'll pick this
+up when it completes" szövegű BEJELENTÉSSEL zárta — `stop_reason: end_turn`,
+jelzés és commit nélkül. A nyers stream-json napló (`/tmp/mm-e99-r08-f3.log`,
+`/tmp/mm-e99-r08-f3-resume.log`) az `end_turn` `result` esemény UTÁN
+közvetlenül `task_notification status:"killed"` eseményeket mutat a
+háttérbe küldött pytest-taskra: a `claude -p` folyamat SAJÁT maga öli meg a
+háttér-gyerekfolyamatait, amint a forduló véget ér. Mindkét futás exit
+0-val `status=unknown`-ba halt — `tools/mm-round.sh` ezt helyesen jelezte
+(nincs terminális `.codex-round-status`) —, és ez okozta a harmadik H6
+haltot ugyanazon a körön (ADR 0087 §2).
+
+**Miért.** A `run_in_background: true` egy INTERAKTÍV, több-fordulós
+munkamenetben helyes minta — a hívó a KÖVETKEZŐ fordulóban kapja meg a
+`task_notification`-t. A pipeline implementer-harness (`tools/mm-round.sh`,
+`tools/codex-round.sh`) viszont EGY fordulóban fut: nincs „következő
+forduló", ami a jelentést fogadná. A megosztott
+`docs/execution/implementer-preamble.md` §1 már ELVILEG tiltotta a „bejelent
+és kilép" mintát (E04-R13, E04-R14, E04-R16 alapján), de kizárólag a
+SZÖVEGES bejelentésre koncentrált (pl. „First Flutter compile is slow —
+waiting for the run to finish"), és sosem nevezte meg a Bash-eszköz konkrét
+`run_in_background` paraméterét mint UGYANANNAK a mintának egy eszköz-szintű
+változatát. Ugyanez az elv MÁS hívó eszköz kontextusában (egy orchestrátor
+saját `gh run watch` hívása) már bizonyítva: `docs/LESSONS.md` L183 — „a
+»X mindig előtérben fusson« szabály a HÍVÓ ESZKÖZ paraméterére vonatkozik,
+nem csak a shell-szintű mintára."
+
+**Hogyan alkalmazd.** (1) Egy-fordulós/`-p` harnessben (bármelyik motor:
+Claude, Codex, MiniMax) kötelező gate-parancsot SOSEM szabad a hívó eszköz
+saját háttér-mechanizmusával indítani. Csak szöveges tiltás nem elég, mert a
+minta ÚJ (a preambulum korábbi példái mind szinkron várakozásról szóltak,
+nem egy névvel ellátott tool-paraméterről) — a preambulumnak a KONKRÉT
+tool-paramétert kell megneveznie, nem csak a mögöttes elvet. (2)
+Regressziós teszthez: mivel a tényleges hatás (küld-e a modell tényleg
+háttérbe egy gate-et) csak élő LLM-hívással mérhető, a bevett minta ebben a
+fájlban (lásd `test_the_implementer_preamble_is_prepended`) a PROMPT
+SZÖVEGÉNEK jelenlétét ellenőrzi — ez nem a modell viselkedését bizonyítja,
+csak azt, hogy a figyelmeztetés nem veszik el egy jövőbeli szerkesztésben.
+(3) FIGYELEM a megosztott preambulum-fájl MINDEN hívójára: egy újonnan
+idézett szövegrészlet (pl. egy session-ID vagy egy hétköznapi szó, itt:
+„resume") VÉLETLEN ütközésbe kerülhet egy MÁSIK motor (itt: Codex/Qwen)
+saját, load-bearing substring-alapú tesztjével, mert a teljes prompt-szöveg
+az argv részeként kerül vizsgálatra. A teljes `python3 -m pytest tools/tests
+-q` (NEM csak a ténylegesen szerkesztett tesztfájl) az EGYETLEN bizonyíték
+erre — ez a self-heal maga is belefutott egy ilyen kollízióba (4 piros teszt
+`test_qwen_implementer_hardening.py`-ban egy idézőjeles „resume" szó miatt,
+mert a `codex-round.sh` auto-folytatás-felismerése ugyanezt a substringet
+keresi az argv-ben) és a szöveg átfogalmazásával oldotta fel. (4) Mechanikus
+védelem különbség: `tools/codex-round.sh`-nak MÁR VAN gépi auto-folytatás
+védelme erre a hibaosztályra (ugyanabban a session-ben újraindítja a
+fordulót, ha jelzés nélkül ért véget, korlátos számban) —
+`tools/mm-round.sh`-nak (a `sonnet-impl`/`minimax` út) NINCS ilyen
+mechanikus védelme, csak utólagos `status=unknown` észlelése. A
+preambulum-szöveg a gyökérokot szünteti meg (a modell nem tudta, hogy a
+minta tilos); a mechanikus auto-folytatás portolása `tools/mm-round.sh`-ba
+külön, nagyobb változtatás — jövőbeli körnek hagyva, NEM ennek a self-healnek
+a scope-ja.

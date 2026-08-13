@@ -3,8 +3,61 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E99-R08 H8 self-heal — round branch rebase conflict resolved and pushed;
-> E99-R08 itself still NOT merged, see below).**
+> (E99-R08 H6 self-heal — implementer preamble now forbids backgrounding the
+> mandatory gate; E99-R08 itself still NOT merged, see below).**
+>
+> ## 🔧 E99-R08 H6 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed`, PR
+> [#244](https://github.com/wolfcasaba/strumsight/pull/244), squash
+> `f14196ca` (2026-08-13)
+>
+> **A H8 self-heal lezárása UTÁN a lánc ugyanezen a körön H6-tal állt meg
+> harmadszor:** a Terra-orchestrátor a nyitva maradt F3 review-leletet
+> (`tools/tests/test_round_resume_independence.py` nem hermetikus a CI-ban)
+> `sonnet-impl` javító körrel próbálta zárni — de két EGYMÁST KÖVETŐ futás
+> (session `3f71b1fb-…`, majd `665d8491-…`) is a kötelező `python3 -m pytest
+> tools/tests -q` gate-et a Bash-eszköz saját `run_in_background: true`
+> paraméterével indította, majd „I'll report back once it completes" jellegű
+> BEJELENTÉSSEL zárta a fordulót — jelzés és commit nélkül. Nyers bizonyíték
+> (`/tmp/mm-e99-r08-f3*.log`, stream-json): az `end_turn` `result` esemény
+> UTÁN közvetlenül `task_notification status:"killed"` a háttér-taskra — a
+> `claude -p` EGY-fordulós folyamat a forduló végén megöli a saját háttérbe
+> küldött gyerekfolyamatait is, így SOSEM érkezik meg az a `task_notification`,
+> amit egy normál, interaktív munkamenetben kapna. Mindkét futás exit 0-val
+> `status=unknown`-ba halt (`tools/mm-round.sh` ezt helyesen jelezte), ami a
+> harmadik H6 haltot okozta (ADR 0087 §2). A megállt kör saját munkapéldánya
+> (`/home/ubuntu/ss-sonnet-impl-e99-r08`) a már megírt, de nem commitolt F3
+> javítást (`test_round_resume_independence.py`) ÉRINTETLENÜL tartalmazza —
+> ezt a self-heal SZÁNDÉKOSAN nem vitte tovább.
+>
+> **A javítás:** a megosztott `docs/execution/implementer-preamble.md` §1 már
+> ELVILEG tiltotta a „bejelent és kilép" mintát (E04-R13/14/16 alapján), de
+> csak szöveges bejelentésre koncentrált, sosem nevezte meg a Bash-eszköz
+> konkrét `run_in_background` paraméterét mint UGYANANNAK a mintának egy
+> eszköz-szintű változatát — ugyanez az elv máshol (egy orchestrátor saját
+> `gh run watch` hívása) már bizonyítva: `docs/LESSONS.md` L183. A preambulum
+> most explicit módon kimondja: kötelező gate-et TILOS háttérbe küldeni, mert
+> nincs „majd" — és idézi a mért E99-R08 bizonyítékot. Ez a megosztott
+> preambulum MINDEN claude-harness motort érint (`sonnet-impl` ÉS `minimax`,
+> `tools/mm-round.sh`-on keresztül). Regressziós teszt:
+> `test_the_preamble_forbids_backgrounding_the_mandatory_gate`
+> (`tools/tests/test_claude_harness_engines.py`) — piros a javítás előtt
+> (mérve), zöld utána. Teljes `python3 -m pytest tools/tests -q`: **388
+> passed, 394 subtests, 0 failed** — ez fogott meg egy VALÓS mellékhatást is:
+> az idézett szöveg első fogalmazásában szerepelt a „resume" szó, ami 4
+> független `test_qwen_implementer_hardening.py`-tesztet piros-ra váltott (a
+> Codex/Qwen-ág saját auto-folytatás-felismerése egy load-bearing substring
+> keresést futtat a TELJES prompt-szövegen) — átfogalmazva zöld. Router CI
+> zöld exact-SHA `85461031`-en. Nulla Dart sor a diffben —  `build-apk.yml`
+> nem indult. Lecke: `docs/LESSONS.md` **L254**.
+>
+> **Nem-javított, feljegyzett megfigyelés:** `tools/codex-round.sh`-nak MÁR
+> VAN gépi auto-folytatás védelme pontosan erre a hibaosztályra (ugyanabban a
+> session-ben újraindítja a fordulót, ha jelzés nélkül ért véget, korlátos
+> számban) — `tools/mm-round.sh`-nak (a `sonnet-impl`/`minimax` út) NINCS
+> ilyen mechanikus védelme, csak utólagos `status=unknown` észlelése. A
+> preambulum-javítás a gyökérokot (a modell nem tudta, hogy a minta tilos)
+> szünteti meg; a mechanikus auto-folytatás portolása `tools/mm-round.sh`-ba
+> egy külön, nagyobb változtatás lenne — jövőbeli körnek hagyva.
 >
 > ## 🔧 E99-R08 H3 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed`, PR
 > [#243](https://github.com/wolfcasaba/strumsight/pull/243), squash
