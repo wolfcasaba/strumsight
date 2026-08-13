@@ -55,6 +55,15 @@ final class ShareCardContent {
 final class ShareCardBuilder {
   const ShareCardBuilder();
 
+  /// Below this confidence, a metric is never shown as an unqualified fact
+  /// (ADR 0201, review MAJOR — [AnalysisMetricResult] permits
+  /// [CapabilityStatus.available] at any confidence, including zero, so this
+  /// builder cannot trust `status` alone). Matches the engine's own
+  /// `minimumDegradedConfidence` floor (`capability_thresholds.dart`) — a
+  /// metric this uncertain is marked exactly like a [CapabilityStatus
+  /// .degraded] one, never presented plainly.
+  static const double _minPlainFactConfidence = 0.4;
+
   ShareCardContent build(AnalysisDocument document) {
     final metrics = <ShareCardMetric>[
       for (final metric in document.metrics)
@@ -63,7 +72,9 @@ final class ShareCardBuilder {
             metricId: metric.id,
             value: metric.value!,
             unit: metric.unit,
-            isDegraded: metric.status == CapabilityStatus.degraded,
+            isDegraded:
+                metric.status == CapabilityStatus.degraded ||
+                metric.confidence < _minPlainFactConfidence,
           ),
     ];
 

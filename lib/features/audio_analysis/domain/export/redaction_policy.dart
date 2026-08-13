@@ -1,6 +1,35 @@
 import '../analysis_document.dart';
 import 'analysis_export.dart';
 
+/// Every `messageKey` this build's insight/warning rules are known to emit,
+/// mapped to the finite set of argument names that key's localised template
+/// interpolates (E06-R27 review BLOCKER — `messageArgs` is an unrestricted
+/// `Map<String, String>` on the source model, so without this allowlist an
+/// attacker- or bug-controlled key could ride through the export unredacted
+/// under any name). A `messageKey`/argument-name pair absent from this map
+/// is dropped, not forwarded — closed, not open, by construction.
+const Map<String, Set<String>> _allowedMessageArgKeys = <String, Set<String>>{
+  'analysisInsightRushBias': <String>{'milliseconds'},
+  'analysisInsightDragBias': <String>{'milliseconds'},
+  'analysisInsightLargeTimingOutliers': <String>{'p90Milliseconds'},
+  'analysisInsightSecondHalfDrift': <String>{'milliseconds'},
+  'analysisInsightWeakUpstroke': <String>{'ratio'},
+  'analysisInsightChordTransitionHotspot': <String>{'hotspotId'},
+  'analysisInsightLowSignalQuality': <String>{'ratio'},
+  'analysisInsightCompatibleImprovement': <String>{'metricId', 'delta'},
+  'analysisInsightInsufficientData': <String>{},
+  'analysis.stage_unavailable': <String>{'stageId', 'failureCode'},
+  'analysis.migration.legacy_v1': <String>{'beatsPerBar'},
+  'analysis.migration.legacy_v1.dropped_timeline_entries': <String>{
+    'droppedChords',
+    'droppedStrums',
+  },
+  'quality.recording_silent': <String>{},
+  'quality.recording_low_level': <String>{},
+  'quality.recording_clipped': <String>{},
+  'quality.recording_short_clip': <String>{},
+};
+
 /// Allowlist-based export redaction (ADR 0247, brief §5 Döntés 1).
 ///
 /// [apply] only ever *reads* the fields it explicitly copies below — it
@@ -12,6 +41,23 @@ import 'analysis_export.dart';
 /// explicitly name.
 final class RedactionPolicy {
   const RedactionPolicy();
+
+  /// Filters [args] down to the finite set [_allowedMessageArgKeys] declares
+  /// for [messageKey]. An unrecognised `messageKey` — or an unrecognised
+  /// argument name under a known one — yields no argument at all, never a
+  /// forwarded value. This is what stops a filename, a device id, or any
+  /// other unreviewed string from riding through `messageArgs`.
+  static Map<String, String> _redactedMessageArgs(
+    String messageKey,
+    Map<String, String> args,
+  ) {
+    final allowed = _allowedMessageArgKeys[messageKey];
+    if (allowed == null || allowed.isEmpty) return const <String, String>{};
+    return <String, String>{
+      for (final entry in args.entries)
+        if (allowed.contains(entry.key)) entry.key: entry.value,
+    };
+  }
 
   AnalysisExport apply(AnalysisDocument document) => AnalysisExport(
     exportSchemaVersion: analysisExportSchemaVersion,
@@ -75,7 +121,10 @@ final class RedactionPolicy {
           priority: insight.priority,
           kind: insight.kind,
           messageKey: insight.messageKey,
-          messageArgs: insight.messageArgs,
+          messageArgs: _redactedMessageArgs(
+            insight.messageKey,
+            insight.messageArgs,
+          ),
           recommendedAction: insight.recommendedAction,
         ),
     ],
@@ -85,7 +134,10 @@ final class RedactionPolicy {
           kind: warning.kind,
           severity: warning.severity,
           messageKey: warning.messageKey,
-          messageArgs: warning.messageArgs,
+          messageArgs: _redactedMessageArgs(
+            warning.messageKey,
+            warning.messageArgs,
+          ),
         ),
     ],
     completion: AnalysisExportCompletion(

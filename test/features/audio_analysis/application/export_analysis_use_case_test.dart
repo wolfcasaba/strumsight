@@ -133,4 +133,41 @@ void main() {
     final contents = File(fake.lastFilePath!).readAsStringSync();
     expect(contents.contains('secret_filename'), isFalse);
   });
+
+  test('a forced write failure never strands the temp file and never '
+      'reaches the ShareService', () async {
+    final fake = _FakeShareService();
+    final useCase = ExportAnalysisUseCase(
+      shareService: fake,
+      tempDirectory: tempRoot,
+      fileWriter: (file, bytes) => Future<void>.error(
+        const FileSystemException('forced write failure for test'),
+      ),
+    );
+
+    final result = await useCase.share(document: _document(), caption: 'c');
+
+    expect(result.isFailure, isTrue);
+    expect(fake.shareExportFileCallCount, 0);
+    expect(tempRoot.listSync(), isEmpty);
+  });
+
+  test('a write failure that leaves a partial file on disk still leaves '
+      'the temp directory empty afterwards', () async {
+    final fake = _FakeShareService();
+    final useCase = ExportAnalysisUseCase(
+      shareService: fake,
+      tempDirectory: tempRoot,
+      fileWriter: (file, bytes) async {
+        await file.writeAsBytes(<int>[1, 2, 3], flush: true);
+        throw const FileSystemException('forced partial-write failure');
+      },
+    );
+
+    final result = await useCase.share(document: _document(), caption: 'c');
+
+    expect(result.isFailure, isTrue);
+    expect(fake.shareExportFileCallCount, 0);
+    expect(tempRoot.listSync(), isEmpty);
+  });
 }

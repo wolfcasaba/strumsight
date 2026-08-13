@@ -230,5 +230,44 @@ void main() {
       final card = builder.build(document);
       expect(card.insight, isNull);
     });
+
+    group('low-confidence available metric — boundary at 0.4', () {
+      AnalysisMetricResult availableMetric(double confidence) =>
+          AnalysisMetricResult(
+            id: AnalysisMetricId.timingMeanAbsoluteError,
+            version: 1,
+            status: CapabilityStatus.available,
+            confidence: confidence,
+            unit: 's',
+            sampleCount: 5,
+            evidence: const <String>[],
+            value: ScalarMetricValue(0.05),
+          );
+
+      test('strictly below the threshold (0.39) is marked, never a plain '
+          'fact', () {
+        final document = documentWithMetrics(<AnalysisMetricResult>[
+          availableMetric(0.39),
+        ]);
+        final card = builder.build(document);
+        expect(card.metrics.single.isDegraded, isTrue);
+      });
+
+      test('exactly on the threshold (0.4) is treated as a plain fact', () {
+        final document = documentWithMetrics(<AnalysisMetricResult>[
+          availableMetric(0.4),
+        ]);
+        final card = builder.build(document);
+        expect(card.metrics.single.isDegraded, isFalse);
+      });
+
+      test('strictly above the threshold (0.41) is a plain fact', () {
+        final document = documentWithMetrics(<AnalysisMetricResult>[
+          availableMetric(0.41),
+        ]);
+        final card = builder.build(document);
+        expect(card.metrics.single.isDegraded, isFalse);
+      });
+    });
   });
 }

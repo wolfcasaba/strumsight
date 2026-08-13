@@ -96,6 +96,8 @@ AnalysisDocument _document({
   String? sourceName,
   String fingerprint = 'fp',
   Map<String, Object?> capabilityDetails = const <String, Object?>{},
+  Map<String, String> insightMessageArgs = const <String, String>{},
+  Map<String, String> warningMessageArgs = const <String, String>{},
 }) {
   final metricStatuses = <CapabilityStatus>[
     CapabilityStatus.available,
@@ -177,7 +179,10 @@ AnalysisDocument _document({
         kind: AnalysisInsightKind.observation,
         factIds: const <String>['internal-fact-id'],
         messageKey: 'analysisInsightRushBias',
-        messageArgs: <String, String>{'milliseconds': '${random.nextInt(50)}'},
+        messageArgs: <String, String>{
+          'milliseconds': '${random.nextInt(50)}',
+          ...insightMessageArgs,
+        },
         recommendedAction: AnalysisRecommendedAction.slowDown,
       ),
     ],
@@ -186,7 +191,7 @@ AnalysisDocument _document({
         kind: AnalysisWarningKind.inputQuality,
         severity: AnalysisWarningSeverity.info,
         messageKey: 'analysisInsightLowSignalQuality',
-        messageArgs: <String, String>{'ratio': '0.1'},
+        messageArgs: <String, String>{'ratio': '0.1', ...warningMessageArgs},
       ),
     ],
     completion: AnalysisCompletion(status: AnalysisCompletionStatus.complete),
@@ -299,6 +304,104 @@ void main() {
       );
       expect(encodeOf(document).contains('labDecoderDiagnostics'), isFalse);
       expect(encodeOf(document).contains('lab-trace-secret'), isFalse);
+    });
+  });
+
+  group('message-argument allowlist boundary (review BLOCKER)', () {
+    // messageArgs is an unrestricted Map<String, String> on the source
+    // model — RedactionPolicy must drop any key it does not name for the
+    // given messageKey, not forward it because "it's just a string value".
+    // Each forbidden payload is injected under an unknown key through BOTH
+    // the insight and the warning branch.
+    const forbiddenPayloads = <String, String>{
+      'importedFileName': 'private-family-recording-do-not-share.wav',
+      'rawAudioLike': 'RIFF....WAVEfmt sneaky-pcm-payload-bytes',
+      'deviceId': 'unique-hardware-serial-9f8e7d',
+      'diagnosticString': 'lab-trace-secret-decoder-residual-0.42',
+    };
+
+    for (final entry in forbiddenPayloads.entries) {
+      test('insight messageArgs: an unknown key carrying a ${entry.key} '
+          'payload never appears in the export', () {
+        final random = math.Random(seed);
+        final document = _document(
+          random: random,
+          insightMessageArgs: <String, String>{entry.key: entry.value},
+        );
+        final encoded = encodeOf(document);
+        expect(encoded.contains(entry.key), isFalse);
+        expect(encoded.contains(entry.value), isFalse);
+      });
+
+      test('warning messageArgs: an unknown key carrying a ${entry.key} '
+          'payload never appears in the export', () {
+        final random = math.Random(seed);
+        final document = _document(
+          random: random,
+          warningMessageArgs: <String, String>{entry.key: entry.value},
+        );
+        final encoded = encodeOf(document);
+        expect(encoded.contains(entry.key), isFalse);
+        expect(encoded.contains(entry.value), isFalse);
+      });
+    }
+
+    test('a known argument key on an unrecognised messageKey is still '
+        'dropped — the allowlist is per-messageKey, not global', () {
+      const policy = RedactionPolicy();
+      final document = AnalysisDocument(
+        id: 'doc-unknown-key',
+        schemaVersion: analysisDocumentSchemaVersion,
+        createdAt: DateTime.utc(2026, 8, 13),
+        mode: AnalysisMode.freePlay,
+        input: AnalysisInputSummary(
+          source: AnalysisInputSource.microphone,
+          duration: const Duration(seconds: 10),
+          sampleRate: 44100,
+          channelCount: 1,
+          fingerprint: 'fp-unknown',
+        ),
+        provenance: AnalysisProvenance(
+          appVersion: '1.0.0',
+          analyzerVersion: '1',
+          pipelineVersion: '1',
+          stageVersions: const <String, String>{},
+          dspConfigHash: 'cfg',
+          modelManifestIds: const <String>[],
+          inputFingerprint: 'fp-unknown',
+          platform: 'android',
+          featureFlagSnapshot: const <String, bool>{},
+        ),
+        signalQuality: SignalQualityReport(
+          overall: 0.5,
+          peakDbfs: -3,
+          rmsDbfs: -18,
+          noiseFloorDbfs: -60,
+          clippedSampleRatio: 0,
+          silentRatio: 0,
+          tonalness: 0.5,
+        ),
+        capabilities: const <CapabilityReport>[],
+        timeline: AnalysisTimeline(duration: const Duration(seconds: 10)),
+        metrics: const <AnalysisMetricResult>[],
+        hotspots: const <AnalysisHotspot>[],
+        insights: const <AnalysisInsight>[],
+        warnings: <AnalysisWarning>[
+          AnalysisWarning(
+            kind: AnalysisWarningKind.inputQuality,
+            severity: AnalysisWarningSeverity.info,
+            messageKey: 'some.future.unreviewed.messageKey',
+            messageArgs: const <String, String>{
+              'stageId': 'sneaky-value-should-never-leak',
+            },
+          ),
+        ],
+        completion: AnalysisCompletion(
+          status: AnalysisCompletionStatus.complete,
+        ),
+      );
+      final export = policy.apply(document);
+      expect(export.warnings.single.messageArgs, isEmpty);
     });
   });
 }
