@@ -9261,3 +9261,87 @@ testvérkör brief-je (ugyanabból a batch-ből) MÁR dokumentált egy útvonal-
 javítást, az egy ERŐS jel, hogy a TÖBBI, még nem futtatott testvér-brief
 ugyanazt a hibát hordozza — pre-flightban grep-eld át a batch összes még
 függőben lévő brief-jét ugyanarra a mintára, ne csak a sajátodat javítsd.
+
+## L251 — A reviewer SAJÁT kötelező `docs/reviews/**` jelentése SOHA nem H3-alap, még ha a brief `allowed_paths`-a nem is sorolja fel — a brief szövegéből következtetni scope-kérdésben eszköz-futtatás nélkül hamis halthoz vezet (E99-R08, 2026-08-13)
+
+**Mit mértem.** A rotált (Terra, ADR 0222/0242) orchestrátor E99-R08-at H3-cal
+állította meg: a mandatory `docs/reviews/e99-r08-*-review.md` jelentés
+commitolását tilos-zóna-sértésnek minősítette, mert a brief `allowed_paths`-a
+nem nevezi meg — miközben az implementáció (`bf413355`) TELJES, scope-tiszta
+és mindkét review-lelet (F1, F2) zárva volt. A halt hamis volt: a halt saját
+mért koordinátáin (branch
+`sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`, bázis
+`ba9b65eace338b1fbf4254dba0bb2175f5b575ec`) egy `docs/reviews/e99-r08-gov-07-per-round-orchestrator-rotation-review.md`
+fájl hozzáadása után — akár trackeletlenül, akár commitolva — a
+`tools/scope-audit.py --repo <klón> --brief <brief> --base ba9b65ea` továbbra
+is `OK`-t ad, `1 generated/ignored` számlálóval: a `docs/reviews` előtag
+feltétel nélküli bejegyzés a
+`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`-ben, amit
+`tools/tests/test_legacy_scope.py` már bizonyít. 145/149 aktuális kör-brief
+(a bevett gyakorlat) SOHA nem sorolja fel a `docs/reviews/**`-et az
+`allowed_paths`-ban — négy, 2026-08-01 előtti brief (E03-R14/15/16, E06-R14)
+még explicit felsorolta, ami az akkor még feltételes mentesség után vált
+feleslegessé, nem tiltottá.
+
+**Miért.** Terra a `.claude/skills/sdd-round-review/SKILL.md` §3
+Scope-audit lépését szó szerint követte: az korábban `git diff --stat
+main...<branch>` kézi átfutást írt elő a brief listája ellen, „bármi a
+listán kívül automatikusan legalább MAJOR" — a hiteles
+`tools/scope-audit.py` eszközre és a kód szintű generated/ignored
+mentességre való hivatkozás nélkül. Mivel a reviewer SAJÁT jelentése
+(pontosan a skill saját 8. sora szerint) mindig a review UTÁN, a brief
+`allowed_paths`-ától FÜGGETLENÜL kerül a branch-re, ez az utasítás
+szó szerint értelmezve azt jelentette, hogy a reviewer a SAJÁT kötelező
+munkája elvégzésekor mindig scope-sértést produkál. Claude ezt a mintát
+implicit, felhalmozott tapasztalatból nem futtatja bele hibába (több száz
+review-jelentést írt már ütközés nélkül); egy rotált, más motorral induló
+orchestrátornak ez a tapasztalat nincs meg, és a szöveget a betű szerint
+követi.
+
+**Hogyan alkalmazd.** Scope-kérdésben SOHA ne a brief `allowed_paths`
+szövegéből következtess — futtasd a `tools/scope-audit.py`-t a kérdéses
+útvonallal (akár egy próba-fájllal), és a TÉNYLEGES `OK`/`VIOLATION`
+kimenetet fogadd el bizonyítéknak. Ha egy útvonal a reviewer/orchestrátor
+SAJÁT, dokumentáltan kötelező mellékterméke (review-jelentés, biztonsági
+jelentés, kör-jelzőfájl), az nagy eséllyel már szerepel a
+`GENERATED_IGNORED_PREFIXES`-ben — ellenőrizd ott, mielőtt H3-at jelzel.
+A `.claude/skills/sdd-round-review/SKILL.md` §3 és a
+`docs/adr/0138-factory-hardening-scope-guard-and-independence.md` §1
+„Módosítás" blokkja ezt mostantól explicit rögzíti.
+
+## L252 — A `tools/round-pipeline.sh` munkafa-helyreállító `git checkout -q main`-je feltétel nélkül, VALÓDI git branch-et mozdít a process cwd-jén — teszt-módban ez csendben aláássa a saját maga mérte régiót (E99-R08, 2026-08-13)
+
+**Mit mértem.** Az E99-R08/H3 javítás ELLENŐRZÉSE közben — egy friss,
+izolált `git clone --local` másolaton `python3 -m pytest tools/tests -q`
+futtatva, pontosan a review-protokoll és e gate saját előírása szerint — a
+klón a suite VÉGÉRE csendben `main`-re váltott, eldobva a vizsgált
+`heal/E99-R08-H3-1` ágat. Ugyanaz az alak, mint az E99-R08 saját, review
+alatt talált F1 lelete. Gyökérok: `tools/round-pipeline.sh` 3. lépése
+(`current_branch != main` ÉS tiszta fa esetén) egy VALÓDI `git checkout -q
+main`-t futtat a process **cwd-je** ellen — feltétel nélkül, akár production
+cron-firing, akár `PIPELINE_STATE_DIR`-t injektáló tesztfutás hívta. A
+`tools/tests`-ben futó legtöbb teszt izolált állapotot kap, de a szkript
+FUTTATÓ munkafájának valódi git ága nem izolált — a scope-audit tesztek
+`cwd=ROOT`-tal hívják a szkriptet, és a szkript maga a SAJÁT `BASH_SOURCE`
+helyére `cd`-l (`tools/round-pipeline.sh:58-59`), tehát minden bare `git`
+hívás oda operál, függetlenül a hívó `cwd` paraméterétől.
+
+**Miért.** A workspace-restoration blokk (2026-08-05, egy másik session
+KÖZÖS munkafán hagyott ágának helyreállítására írva) sosem különböztette meg
+a „production driver talál egy elhagyott ágat" esetet a „teszt/review
+izolált klónt futtat, de a HÍVÓ (a driver saját maga) munkafája épp nem
+`main`-en van" esettől. `PIPELINE_STATE_DIR` a production cronban SOSEM
+állítódik be, minden teszt/review-futás viszont beállítja — pontos, már
+létező jel a két eset szétválasztására, amit a kód addig nem használt ki
+ezen a ponton.
+
+**Hogyan alkalmazd.** Bármely `tools/round-pipeline.sh` bővítés, amely a
+process cwd-jén VALÓDI git mutációt végez (checkout, reset, commit), előbb
+ellenőrizze `${PIPELINE_STATE_DIR:-}`-t: ha be van állítva, fail-closed
+(`die`), ne hajtsa végre a mutációt. Regressziós tesztnél NE `ROOT`
+klónjára/klónjának klónjára hagyatkozz „main" elérhetőségéhez (egy sima
+`git clone` csak a forrás SAJÁT `refs/heads/*`-át adja tovább klónozhatóként,
+nem a `refs/remotes/origin/*`-ját — egy klón klónja, vagy egy CI sekély,
+egyágú checkoutja emiatt NEM biztos, hogy lát `main`-t); építs helyette
+önálló, `origin`-ját önmagára mutató throwaway repót, amiben a szkript saját
+`git fetch -q origin main` lépése mindig helyi, hálózat nélküli művelet.

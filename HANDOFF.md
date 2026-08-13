@@ -3,7 +3,52 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R24 merged, PR #242).**
+> (E99-R08 H3 self-heal — reviewer's own docs/reviews/** report false-flagged
+> as a scope violation, PR #243 merged; E99-R08 itself NOT merged, see
+> below).**
+>
+> ## 🔧 E99-R08 H3 önjavító kör (ADR 0112) — KÉSZ, `outcome=fixed`, PR
+> [#243](https://github.com/wolfcasaba/strumsight/pull/243), squash
+> `7a594db6` (2026-08-13)
+>
+> **E99-R08 (GOV-07, körönként kulcsolt orchestrátor-rotáció) állapota —
+> FONTOS a következő sessionnek:** az implementáció **TELJES és pusholva** a
+> `sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation` branchen (HEAD
+> `bf413355`); a rotált Terra-orchestrátor saját független review-ja már
+> mindkét MAJOR leletet (F1, F2) zárta 18 célzott teszttel. A kör **NEM lett
+> merge-elve** — a következő lépés a **committolt review-jelentés írása és a
+> CI-dispatch**, NEM egy friss dispatch.
+>
+> **A halt gyökéroka:** Terra a mandatory `docs/reviews/e99-r08-*-review.md`
+> jelentés commitolását H3-nak (tilos zóna) minősítette, mert a brief
+> `allowed_paths`-a — a bevett gyakorlat szerint, 145/149 kör-briefen — nem
+> sorolja fel. A halt **téves** volt: `tools/scope-audit.py` a review-fájllal
+> (a halt saját mért koordinátáin, `ba9b65ea` bázison) is `OK`-t ad —
+> `docs/reviews` feltétel nélküli mentesség
+> (`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`), amit
+> `tools/tests/test_legacy_scope.py` már bizonyít. Terra a brief szövegéből
+> következtetett, az eszközt nem futtatta le a leletre. Javítva:
+> `.claude/skills/sdd-round-review/SKILL.md` §3 immár a hiteles eszközre
+> mutat és nevesíti a mentességet; `docs/adr/0138-*.md` normatív
+> „Módosítás"-blokkot kapott. Lecke: `docs/LESSONS.md` **L251**.
+>
+> **Mért, ennél fontosabb mellékfelfedezés (ugyanaz a hibaosztály, a javítás
+> ELLENŐRZÉSE közben):** a friss, izolált klónos `pytest tools/tests -q` futás
+> — pontosan az, amit a review-protokoll ÉS ez a gate is előír — a suite
+> végére csendben `main`-re váltotta a klónt: `tools/round-pipeline.sh`
+> 3. lépése (munkafa-helyreállítás) egy VALÓDI `git checkout -q main`-t futtat
+> a process cwd-je ellen, valahányszor az ág nem `main` és a fa tiszta —
+> feltétel nélkül, teszt- és éles módban egyaránt. Ugyanaz az alak, mint az
+> E99-R08 saját F1 review-lelete. Javítva: a mutáció `PIPELINE_STATE_DIR`
+> hiányára kötve (az éles cron sosem állítja, minden teszt/review-futás
+> igen), így teszt-módban fail-closed. Regressziós teszt: önálló, hálózat
+> nélküli, CI sekély checkoutjára is hordozható throwaway-repóban, piros a
+> javítás előtt (a saját `munkafa-helyreállítás: ... -> main` log-sorát
+> mérve), zöld utána. Lecke: `docs/LESSONS.md` **L252**.
+>
+> Mindkettő regressziós teszttel védve, Router CI zöld exact-SHA
+> `86c4719f`-en (PR-ág) és a merge-elt `7a594db6`-on (post-merge `main`).
+> Nulla Dart sor a diffben — `build-apk.yml` nem indult.
 >
 > ## ✅ E06-R24 KÉSZ — Többrétegű, zoomolható timeline (2026-08-13)
 >
@@ -823,7 +868,20 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-12):** `main` @ `6be36efa` — E06-R23 H3
+**Aktuális állapot (2026-08-13):** `main` @ `7a594db6` — E99-R08 H3
+self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra fix), PR
+[#243](https://github.com/wolfcasaba/strumsight/pull/243), squash-merge.
+Router CI [31682955616](https://github.com/wolfcasaba/strumsight/actions/runs/31682955616)
+success az exact-SHA `86c4719f`-en (PR-ág), majd
+[31683234986](https://github.com/wolfcasaba/strumsight/actions/runs/31683234986)
+success a merge-elt `7a594db6`-on (post-merge `main`). `main`-t NEM
+érintette Dart-kód, `build-apk.yml` nem indult. Az E99-R08 SDD-kör saját
+commitjai (`ba9b65ea`…`bf413355`) a **round saját branchén**
+(`sonnet-impl/e99-r08-gov-07-per-round-orchestrator-rotation`) landoltak,
+nem itt — a kör review-jelentése és a merge még hátravan, lásd a fejléc 🔧
+blokkját. `origin/main` nem mozdult dispatch és merge között.
+
+**Előző állapot (2026-08-12):** `main` @ `6be36efa` — E06-R23 H3
 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra fix), PR
 [#240](https://github.com/wolfcasaba/strumsight/pull/240), squash-merge.
 Router CI [31649793492→31650104969](https://github.com/wolfcasaba/strumsight/actions/runs/31650104969)
@@ -834,7 +892,7 @@ E06-R23 SDD-kör saját commitjai (`12bb66d`, `3d4ace8`) a **round saját
 branchén** landoltak, nem itt — lásd a fejléc 🔧 blokkját. `origin/main` nem
 mozdult dispatch és merge között.
 
-**Előző állapot (2026-08-12):** `main` @ `6abdd408` — E06-R22, PR
+**Korábbi állapot (2026-08-12):** `main` @ `6abdd408` — E06-R22, PR
 [#239](https://github.com/wolfcasaba/strumsight/pull/239), squash-merge.
 Exact-SHA `ae22ff50`: Full Gate
 [31642984516](https://github.com/wolfcasaba/strumsight/actions/runs/31642984516)
