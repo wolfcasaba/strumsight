@@ -290,12 +290,27 @@ A jelzésfájl `scope_audit=` kulcsát a review ELŐTT olvasd el:
 | **H5** | a **CI kétszer piros** ezen a körön |
 | **H6** | az implementer **`blocked`**-ot jelez, vagy kétszer hal meg `unknown`/`stalled` állapotban |
 | **H7** | a `tools/round-gate.sh` nem hozható zöldre |
-| **H8** | a `main` a dispatch óta mozdult, és a rebase konfliktust ad |
+| **H8** | a `main` a dispatch óta mozdult, ÉS a rebase **konfliktust ad** — a remote-only commitok (lásd alább) beépítése ütközik |
 
 **A javító kör a lánc NORMÁL útja, nem megállási ok** (user-döntés
 2026-07-31): ha a review BLOCKER/MAJOR leletet talál, indítsd a javító kört a
 leletlistával a promptban, és a review-t frissítsd utána. Számold a javító
 köröket a kör-branch commitjaiból.
+
+**H8 pontosítása (ADR 0242, felülírja az ADR 0087 §2 H8-sorát, 2026-08-13):**
+a `--force-with-lease` **elutasítása önmagában NEM H8** — az a rebase utáni
+push protokoll ELSŐ lépése, nem a vége. Rebase után **mindig**
+`tools/safe-force-push.sh <branch>`-sel pusholj, sosem sima `--force`-szal
+vagy argumentum nélküli `--force-with-lease`-szel (az a lokális, esetleg
+ELAVULT remote-tracking refre támaszkodna — ez volt a 2026-08-13-i E06-R23
+majdnem-adatvesztés oka). A script:
+1. lefetcheli a PONTOS remote refet;
+2. patch-id alapon felsorolja a remote-only commitokat (a rebaseelt
+   ekvivalensek NEM azok);
+3. ha van ilyen → **exit 3**, a lista kiírásával, push NÉLKÜL — építsd be őket
+   (pl. cherry-pick), és futtasd újra;
+4. ha nincs → push a MÉRT remote SHA-ra vett explicit lease-szel.
+Csak a **3. lépés utáni, a beépítés közben keletkező** konfliktus H8.
 
 **Motor-eszkaláció — MiniMax-first router (user-döntés 2026-08-01, a küszöb
 3-ról 1-re szigorítva):** a MiniMax **EGY** javító kört kap. Ha az ELSŐ javító

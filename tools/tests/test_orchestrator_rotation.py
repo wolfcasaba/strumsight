@@ -130,6 +130,20 @@ class RotationTest(unittest.TestCase):
             )
             self.assertEqual(result.stdout.strip(), "claude")
 
+    def test_a_new_round_still_steps_even_when_another_round_is_pinned(self) -> None:
+        """ADR 0242 D1 (A2): a körönkénti rögzítés csak az ADOTT kört
+        védi -- egy MÁSIK, még nem rögzített kör első dispatchje továbbra is
+        lép (`alternate`), nem ragad be a korábban rögzített kör értékén."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-last").write_text("claude\n", encoding="utf-8")
+            pinned = driver("--next-orchestrator", "E06-R23", state=state)
+            self.assertEqual(pinned.stdout.strip(), "terra")
+            # E06-R23 most már rögzítve van 'terra'-ra -- egy ÚJ kör
+            # (E06-R24) mégis a globális léptetőt olvassa, nem E06-R23 pin-jét.
+            fresh = driver("--next-orchestrator", "E06-R24", state=state)
+            self.assertEqual(fresh.stdout.strip(), "claude")
+
 
 class PreemptionTest(unittest.TestCase):
     """Egy ~85 perces kört nem indítunk a keret maradék néhány százalékán."""
