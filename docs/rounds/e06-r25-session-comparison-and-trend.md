@@ -19,6 +19,8 @@ allowed_paths = [
   "lib/features/audio_analysis/presentation/analysis_compare_screen.dart",
   "lib/features/audio_analysis/presentation/widgets/metric_delta_row.dart",
   "lib/features/audio_analysis/public.dart",
+  "lib/app/routing/app_router.dart",
+  "lib/app/routing/app_route.dart",
   "lib/app/config/feature_flags.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
@@ -58,6 +60,45 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 **PREPARED.** Új ADR nincs — az ADR 0203 (metric verzió-kompatibilitás)
 végrehajtása.
+
+**2026-08-13, H3 self-heal (ADR 0112 önjavító kör, 2. kísérlet).** Az első
+dispatch (sonnet-impl) a §6 utolsó („Flag-őr") acceptance criteriáját —
+„flag OFF esetén a route NEM oldható fel" — a §4 engedélyezett-fájllistával
+összevetve helyesen `stopped`-ot jelzett: egy flag-mögötti route tényleges
+regisztrációjához kell a router, de sem `lib/app/routing/app_router.dart`,
+sem a route-katalógus `lib/app/routing/app_route.dart` nem szerepelt a
+listán. Mérve (`/home/ubuntu/ss-sonnet-impl-e06-r25`, és újra-mérve ezen az
+önjavító körön): `lib/app/routing/app_router.dart:259–308` az EGYETLEN hely,
+ahol Audio Analysis V2 `GoRoute`-ok regisztrálódnak; `lib/app/routing/
+app_route.dart:40–45` a route-konstansok katalógusa. Az implementer NULLA
+fájlt módosított a halt előtt.
+
+Ez a PONTOSAN ugyanaz a batch-authoring hiba, amit ugyanennek a batchnek
+(2026-08-07) két testvérkörén már kimértek: az **E06-R23 saját, dispatch
+előtti pre-flightja** (annak §0.0 1. pontja — ott még halt nélkül, mert a
+pre-flight a dispatch ELŐTT elkapta) és az **E06-R24 második, halt-vezérelt
+pre-flightja** ([`docs/LESSONS.md`](../LESSONS.md) **L250**) — mindkettő
+ugyanerre a két fájlra bővítette a saját `allowed_paths`-át. L250
+kifejezetten javasolta a batch TÖBBI, még függőben lévő brief-jének
+átvizsgálását ugyanerre a mintára; ez az audit elmaradt, és a minta most
+harmadszor, R25-ön jelentkezett — ezúttal élő dispatch-halt formájában, nem
+pre-flightban elkapva. Ez az önjavítás ezt a konkrét, most kimért esetet
+oldja fel; a batch fennmaradó, még nem dispatch-elt brief-jeinek átvizsgálása
+ugyanerre a mintára külön, dedikált feladat (nem ennek az önjavításnak a
+hatóköre — l. `docs/LESSONS.md` új bejegyzése).
+
+**Feloldás:** `allowed_paths` és §4 bővítve `lib/app/routing/app_router.dart`
+és `lib/app/routing/app_route.dart` fájlokkal (a route-konstans:
+`AppRoutes.analysisCompare`, a meglévő `analysisOverview`/
+`analysisMetricDetail`/`analysisTimeline` konstansok mellé, ugyanabban a
+fájlban). **Flag-döntés:** a route a jelen kör SAJÁT, ÚJ
+`analysisComparisonEnabled` flagje mögé kerül (§3 Scope már ezt írta elő —
+ez NEM változik), a meglévő `if (audioAnalysisV2Enabled) [...]` blokk
+mintáját követve, attól függetlenül (külön `if (analysisComparisonEnabled)
+[...]` ág, NEM azon belül) — a §6 Flag-őr kritérium kifejezetten a SAJÁT
+flagre vonatkozik. Regressziós teszt:
+`tools/tests/test_e06_r25_router_scope.py` (a javítás előtt PIROS: az
+`allowed_paths` nem tartalmazta a két fájlt).
 
 ## 1. Cél
 
@@ -102,6 +143,8 @@ metrika, extrapoláció/predikció.
 | `.../presentation/analysis_compare_screen.dart` | ÚJ | képernyő |
 | `.../presentation/widgets/metric_delta_row.dart` | ÚJ | delta-sor |
 | `.../public.dart` | meglévő | export |
+| `lib/app/routing/app_router.dart` | meglévő | **additív** route, `analysisComparisonEnabled` flag mögött |
+| `lib/app/routing/app_route.dart` | meglévő | **additív** route-konstans (`AppRoutes.analysisCompare`) |
 | `lib/app/config/feature_flags.dart` | meglévő | **additív** 1 flag, OFF |
 | `lib/l10n/*.arb` | meglévő | **additív** kulcsok |
 | `test/**` | ÚJ | kompatibilitás + trend + widget + property |
