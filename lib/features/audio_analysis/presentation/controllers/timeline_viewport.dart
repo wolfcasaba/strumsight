@@ -18,13 +18,11 @@ final class TimelineViewport {
        assert(end >= start),
        assert(end <= duration);
 
-  TimelineViewport.full({
-    required this.duration,
-    required this.logicalWidth,
-  }) : start = Duration.zero,
-       end = duration,
-       assert(!duration.isNegative),
-       assert(logicalWidth > 0);
+  TimelineViewport.full({required this.duration, required this.logicalWidth})
+    : start = Duration.zero,
+      end = duration,
+      assert(!duration.isNegative),
+      assert(logicalWidth > 0);
 
   /// The named maximum-zoom resolution from the round brief: 1 px = 1 ms.
   static const double millisecondsPerLogicalPixel = 1;
@@ -68,7 +66,10 @@ final class TimelineViewport {
     );
   }
 
-  TimelineViewport zoomBy({required double scale, required Duration focalTime}) {
+  TimelineViewport zoomBy({
+    required double scale,
+    required Duration focalTime,
+  }) {
     if (!scale.isFinite || scale <= 0) {
       throw ArgumentError.value(scale, 'scale', 'must be finite and positive');
     }
@@ -95,7 +96,8 @@ final class TimelineViewport {
   double pixelForTime(Duration time) {
     if (visibleDuration == Duration.zero) return 0;
     final bounded = _clampDuration(time, start, end);
-    return (bounded - start).inMicroseconds / visibleDuration.inMicroseconds *
+    return (bounded - start).inMicroseconds /
+        visibleDuration.inMicroseconds *
         logicalWidth;
   }
 
@@ -111,7 +113,10 @@ final class TimelineViewport {
     if (boundedStart < start) {
       return _withClampedStart(boundedStart, window: visibleDuration);
     }
-    return _withClampedStart(boundedEnd - visibleDuration, window: visibleDuration);
+    return _withClampedStart(
+      boundedEnd - visibleDuration,
+      window: visibleDuration,
+    );
   }
 
   Duration _clampWindow(Duration requested) {
@@ -119,10 +124,17 @@ final class TimelineViewport {
     return _clampDuration(requested, minimum, duration);
   }
 
-  TimelineViewport _withClampedStart(Duration requestedStart, {Duration? window}) {
+  TimelineViewport _withClampedStart(
+    Duration requestedStart, {
+    Duration? window,
+  }) {
     final selectedWindow = window ?? _clampWindow(visibleDuration);
     final maxStart = duration - selectedWindow;
-    final clampedStart = _clampDuration(requestedStart, Duration.zero, maxStart);
+    final clampedStart = _clampDuration(
+      requestedStart,
+      Duration.zero,
+      maxStart,
+    );
     return TimelineViewport(
       duration: duration,
       logicalWidth: logicalWidth,
@@ -131,7 +143,11 @@ final class TimelineViewport {
     );
   }
 
-  static Duration _clampDuration(Duration value, Duration lower, Duration upper) {
+  static Duration _clampDuration(
+    Duration value,
+    Duration lower,
+    Duration upper,
+  ) {
     final clamped = value.inMicroseconds.clamp(
       lower.inMicroseconds,
       upper.inMicroseconds,

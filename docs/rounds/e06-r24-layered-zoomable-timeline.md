@@ -337,7 +337,21 @@ elhagyása helyett `stopped` + brief-revízió.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-_(üres)_
+- `controllers/timeline_viewport.dart` + teszt: tiszta, bounded zoom/pan/
+  reveal-range matematikát és az inkluzív 399/400/401 ms küszöböt fed.
+- `analysis_timeline_screen.dart`, lane/ruler/navigator widgetek: nyolc
+  capability-vezérelt lane, fail-closed hiányzó capability, látható degraded
+  jelzés, Canvas-virtualizáció, hotspot körbejárás, range-selection és
+  szöveges semantics; a waveform mindig magyarázattal unavailable.
+- Route/public export/ARB: az új route ugyanazon `audioAnalysisV2Enabled`
+  flag mögött van, angol és magyar szövegekkel. A ruler és a selection az
+  R23 `AppLocalizationsOverviewLabels.formatDuration` helperét használja.
+- Futott: `flutter gen-l10n`; célzott `flutter test` (12 teszt, PASS) és
+  `flutter analyze` (PASS). A kötelező `tools/round-gate.sh
+  test/features/audio_analysis test/app` a záró diff-audit után fut.
+- Eltérés: a V2 dokumentum nem tartalmaz decimált waveform-previewt, ezért
+  a rögzített OD-01/ADR 0243 szerint a waveform lane unavailable marad.
+  Nyers audio/PCM nem lett importálva vagy olvasva.
 
 ## 11. Review — a független reviewer tölti ki
 
