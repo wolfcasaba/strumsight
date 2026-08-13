@@ -56,12 +56,209 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
 ## 0.0 Tervezési baseline és pre-flight revízió
 
-**PREPARED.** Új ADR nincs — a kör a meglévő ADR 0200–0211-et **frissíti**
-(állapot/következmény szakaszok), nem hoz újat. **Záró-kör waiver:** az
-Epic 4 (E04-R24) és az Epic 5 (E05-R30) precedense szerint ez a kör **nem**
-kap ADR 0087 §7 szerinti kézi indítást; a rollout/flag/ADR kérdések a
-briefben **pre-decidáltak**. Változatlan marad az automata független
-review (ADR 0055) és az exact-SHA zöld CI.
+**PREPARED.** Új ADR nincs — a kör a meglévő Epic 6 ADR-eket **frissíti**
+(állapot/következmény szakaszok), nem hoz újat — a valós készlet 0215–0249,
+lásd R1 lent. **Záró-kör waiver:** az Epic 4 (E04-R24) és az Epic 5
+(E05-R30) precedense szerint ez a kör **nem** kap ADR 0087 §7 szerinti kézi
+indítást; a rollout/flag/ADR kérdések a briefben **pre-decidáltak**.
+Változatlan marad az automata független review (ADR 0055) és az exact-SHA
+zöld CI.
+
+### R1 — ADR-tartomány javítva: 0200–0211 nem létezik, a valós készlet 0215–0249
+
+**MÉRVE (orchestrátor pre-flight, 2026-08-13, `main @ 8341f600`):** a brief
+2026-08-07-i batch-fejléce sorszám-extrapolációval írta a „0200–0211"
+tartományt (ugyanaz a mintázat, mint E06-R01/E06-R28 korábbi mért driftje,
+`docs/LESSONS.md` L194/L267) — `ls docs/adr/` **nulla** találatot ad erre a
+tartományra. A `reserve-adr` foglaló-lánc a valós Epic 6 ADR-készletet
+**0215–0221, 0224–0241, 0243, 0246–0249**-ként adta (29 ADR — E06-R01 hat
+kötött ADR-t foglalt egyszerre, a többi kör egyet-egyet, E06-R26 nullát). A
+§6 „ADR-státuszok" acceptance criterion **javított** olvasata:
+
+| Brief eredeti hivatkozása | Valós ADR | Cím | Kör |
+|---|---|---|---|
+| „0201 kalibráció" | **0216** | analysis-confidence-calibration-and-abstention | E06-R01 |
+| „0205 rollout" | **0220** | audio-analysis-v2-parallel-rollout-boundary | E06-R01 |
+| „0207 fusion" | **0229** | analysis-chord-decoder-fusion-strategy | E06-R11 |
+| „0209 storage" | **0239** | analysis-document-storage | E06-R21 |
+
+A **teljes** frissítendő készlet: 0215–0220 (E06-R01, hat kötött ADR), 0221
+(E06-R03), 0224 (E06-R07), 0225 (E06-R08), 0226 (E06-R09), 0228 (E06-R10),
+0229 (E06-R11), 0230 (E06-R12), 0231 (E06-R13), 0232 (E06-R14), 0233
+(E06-R15), 0234 (E06-R16), 0235 (E06-R17), 0236 (E06-R18), 0237 (E06-R19),
+0238 (E06-R20), 0239 (E06-R21), 0240 (E06-R22), 0241 (E06-R23), 0243
+(E06-R24), 0246 (E06-R25), 0247 (E06-R27), 0248 (E06-R28), 0249 (E06-R29).
+E06-R26-nak nincs saját ADR-je (0176/0132/0141/0202 végrehajtása — MÁS epic
+ADR-jei, ezt a kört NEM ez a round frissíti).
+
+**Szekció-konvenció javítva:** egyik ADR-nek sincs „Állapot"/„Következmény"
+(egyes szám) című szakasza — a valós minta egy `- **Státusz:** …`
+fejléc-sor (mindegyik már „Elfogadva"-ra áll) + egy `## Következmények`
+(többes szám) szakasz. A frissítés: a `## Következmények` szakasz
+kiegészítése egy mért záró bekezdéssel ott, ahol a szöveg még jövő időben
+ír egy azóta lezárult körről (pl. 0216 „a
+`ConfidenceCalibrationCapabilityResolver`-t egy jövőbeli E06-R19
+implementálja" → E06-R19 **megtörtént**, és
+`docs/manual-testing/analysis-eval-matrix.md` szerint a kalibráció ma is
+`identity.v1`-en áll, valódi dataset nélkül — ezt kell rögzíteni). Ahol az
+ADR már mérve/múlt időben ír (pl. 0220, 0239, 0229), elég egy rövid „R30-nál
+is érvényes, változatlan" megerősítés dátummal — **nem kell mind a 29 ADR-t
+tartalmilag átírni**, csak azokat, ahol a szöveg egy azóta megtörtént/mért
+eseményt jövő időben ír le.
+
+### R2 — „§30.1–30.4" és „Kör 30 / §33" két KÜLÖNBÖZŐ SDD-szakasz
+
+A brief fejléce („Kör 30; §30.1–30.4, §33") két, egymástól független
+szakaszt fűz össze: a `docs/sdd/07-epic-06-audio-analysis-2.md` **`# 30.
+Feature flagek és rollout`** fejezete (2579. sor, alszakaszai `30.1`–`30.4`,
+2581–2626. sor) egy **általános, epic-szintű** rollout-tervezési fejezet —
+NEM ennek a körnek a tartalmi specifikációja. A **kör saját tartalma** a
+külön **`# Kör 30 — Shadow rollout, migráció és Epic lezárás`** szakasz
+(4229–4320. sor: Cél/Feladatok/Kötelező ellenőrzések/Valódi eszköz
+ellenőrzés/Elfogadási feltételek/Javasolt commit), a DoD-lista pedig a
+**`# 33. Epic 6 végső Definition of Done`** szakaszban él (4322–4430,
+**74 `- [ ]` tétel 11 `##` kategóriában**, NEM táblázat). Mindhárom releváns,
+csak nem egymás alszakaszai — a `30.1 Rollout szintek` (2593. sor, hét
+lépcső: unit/fixture teszt → developer-only → Lab mode → internal dogfood →
+opt-in beta → default-on → legacy Analyze eltávolítása) hasznos bemenet az
+`AnalysisRolloutStage` enum tervezéséhez, de a kör konkrét elfogadási
+feltétele a „Kör 30" szakasz + a §6 (ez a fájl) + a §33 DoD.
+
+A „Valódi eszköz ellenőrzés" **14 pontja mérve egyezik** a §6 utolsó
+acceptance-cellájával (record, cancel, background, import, 30s klip,
+hosszabb klip, overview, timeline zoom, save/reopen, compare, Practice
+action, Tutor action, offline mode, audio deletion) — nincs revízió, csak
+megerősítés.
+
+### R3 — Completion report: nincs „teljesült/NEM BIZONYÍTOTT/follow-up" precedens — az Epic 1/4 checkbox-mintát kövesd
+
+**MÉRVE:** a meglévő öt completion report (`docs/sdd/epic-0[1-5]-completion-report.md`)
+egyikében sincs „teljesült" vagy „NEM BIZONYÍTOTT" szó szerinti string — a §6
+„Completion report" acceptance criterion ezt a konvenciót **új**, nem
+meglévő mintaként írja elő. A brief saját fejléce viszont explicit kimondja:
+„az Epic 1–4 zárójelentései a minta" — kövesd a ténylegesen meglévő
+Epic 1/Epic 4 mintát a kitalált három-állapotú prózajelölés helyett:
+
+```
+- [x] **<SDD DoD-tétel szó szerint>.** <bizonyíték: fájl:sor/kör/mérés>.
+- [ ] **<SDD DoD-tétel szó szerint>.** <ok: miért nem bizonyított/PENDING sor hivatkozás>.
+```
+
+(Epic 4 minta: `docs/sdd/epic-04-completion-report.md:11-262`, `##`
+alszakaszok az SDD DoD-kategóriák szerint — a §33 saját 11 kategóriája
+pontosan erre a mintára illeszkedik —, a végén egy külön `## Nyitott
+tételek` táblázat `| Tétel | Felelősség | Határidő |` oszlopokkal; Epic 1
+minta: `docs/sdd/epic-01-completion-report.md:165-267`, záró összegző sorral
+„N/M tétel evidenciával kipipálva"). A §6 „teljesült / NEM BIZONYÍTOTT (ok) /
+follow-up" hármas felsorolása **tartalmilag** helyes elvárás (minden tételt
+kategorizálni kell), csak a **formátumát** kell a fenti, már bevett
+checkbox+indoklás mintára fordítani — a `[ ]` sor indoklása maga jelöli, hogy
+NEM BIZONYÍTOTT (mérési okkal) vagy follow-up (kör-javaslattal). (Epic 5
+riportja **nem** ez a minta — angol prózariport, a brief kifejezetten az
+1–4 köröket nevezi meg forrásként.)
+
+### R4 — Eval-mátrix: a 14 új sor azonosítója EVAL-28…EVAL-41, az ELSŐ táblázat-blokkba
+
+`docs/manual-testing/analysis-eval-matrix.md` ma **27** sort tartalmaz
+(`EVAL-01`…`EVAL-27`, két táblázat-blokkban; a második blokk, `EVAL-22`–`26`,
+hiányzó fejléc-sorral rendelkezik — meglévő, ezen körön KÍVÜLI hiba, ne
+javítsd, ne bővítsd azt a blokkot). A 14 új, „Valódi eszközös lista"
+acceptance criterion által kért sor kapja a **EVAL-28…EVAL-41** azonosítót,
+az ELSŐ (helyesen fejlécelt, 7–30. sor) blokkba fűzve, a meglévő oszlopséma
+szerint (`| ID | Állapot | Felelős | Reprodukálható bemenet | Mérendő szám |`).
+
+### R5 — A kilenc „R09-fixture" privát teszt-adat, nem megosztott fixture-könyvtár
+
+A §6 „Shadow-invariancia" pont „a kilenc R09-fixture mindegyikére" szövege
+egy **importálható** fixture-készletet sugall — a valóság: a kilenc eset
+(silence, two chords, four chords C·G·Am·F, ring-out overlap, single strum,
+known BPM strum sequence, throwing refiner fallback, empty input, sample
+rate zero) egy **fájl-privát** `_fixtures` lista
+(`test/features/audio_analysis/engine/clip_analyzer_parity_test.dart:47-87`),
+máshonnan nem importálható. Az új shadow-teszt ugyanezt a kilenc forgatókönyvet
+**újra felépíti** a már meglévő `test/support/synth.dart` helperekkel
+(`chordSignal`/`strumSignal`/`strumPattern`/`overlappingStrums`) — ugyanazok
+a segédfüggvények, amiket az R09-teszt is importál. Nem hiba, csak pontosítás:
+„a kilenc R09-fixture" = „az R09 kilenc forgatókönyve, újraépítve", nem egy
+megosztott adatfájl.
+
+### R6 — A V2 oldal: melyik hívást fogja a shadow runner meghívni, és mit jelent, hogy `analysisV2RunnerProvider` fail-closed
+
+**V1 hívás** (a shadow runner ezt hívja meg, VÁLTOZATLANUL — az
+`allowed_paths` ki is zárja a módosítását): a top-level
+`runClipAnalysis`/`computeClipAnalysis`
+(`lib/features/analyze/providers/analyze_providers.dart:41-79,108-121`) —
+NEM az `AnalyzeController`, NEM a screen.
+
+**V2 hívás:** a szerződés `AnalysisRunner.start(AnalysisDocument) →
+AnalysisRunHandle` (`.result` egy `Future<AnalysisRunResult>`,
+`domain/analysis_document.dart` + `application/analysis_isolate_runner.dart`).
+**MÉRVE: `analysisV2RunnerProvider` ma feltétel nélkül `StateError`-t dob**
+(`application/analysis_providers.dart:210-218`, ADR 0240 Döntés 4 szándékos
+fail-closed csonkja — nincs összeszerelt V2 DSP-lánc). Ez a fájl **nincs**
+az `allowed_paths`-on, tehát ez a kör **nem** teheti nem-dobóvá. Ebből
+KÖVETKEZIK a helyes tervezési döntés (a §5 Döntés 2/3 és a §6
+„Shadow-hibaizoláció"/„Diff-riport" pontok így teljesíthetők):
+
+1. `ShadowAnalysisRunner` az `AnalysisRunner`-t (a V2 szerződést) **konstruktor-
+   paraméterként** kapja — NEM Riverpod-providerből olvassa saját maga
+   (a `buildTechniqueProxyReport` mintáját követve,
+   `lib/features/audio_analysis/engine/metrics/technique_proxies.dart:139-154`,
+   amely a flag+Lab két tengelyét is független bool-paraméterként kapja, nem
+   beágyazott olvasással).
+2. A **teszteket** (`shadow_analysis_runner_test.dart`) egy test-double
+   `AnalysisRunner`-rel írd (sikeres/dobó/cancel-elő változat mindhárom
+   cellához) — a valós `analysisV2RunnerProvider` bekötése (és ezzel egy
+   ÉLES V1↔V2 diff) egy JÖVŐBELI, pipeline-összeszerelő kör dolga (lásd a
+   HANDOFF.md §3 „A valódi, több-stage V2 DSP pipeline összeszerelése MÉG
+   NEM ÜTEMEZETT kör" tételét).
+3. Ez a kör — az Epic 6 minden korábbi köréhez hasonlóan — **hívó nélkül**
+   marad: a `ShadowAnalysisRunner` NEM kerül be az `analysis_providers.dart`
+   Riverpod-gráfjába és NEM hívja az Analyze screen (egyik fájl sincs az
+   `allowed_paths`-on). A completion reportban ezt **explicit NEM
+   BIZONYÍTOTT**-ként kell rögzíteni: „a shadow-mechanizmus (izoláció,
+   diff-riport alak, hiba/cancel-kezelés) tesztekkel bizonyított, de éles
+   V1-vs-V2 futás nulla — a `analysisV2RunnerProvider` fail-closed marad, a
+   bekötés egy jövőbeli pipeline-összeszerelő kör előfeltétele".
+
+### R7 — Legacy migrációs teszt: „bitre változatlan" → mezőnkénti egyezés (R21 már mérte, hogy a szó szerinti értelmezés hibás)
+
+A §6 „Teljes migrációs teszt" pont „a legacy kulcs **bitre változatlan**"
+szövege szó szerint véve `jsonEncode(...) == jsonEncode(legacyPayload)`
+egyezést jelentene. **Az E06-R21 saját brief-je pontosan ezt a
+megfogalmazást kapta, és a kör kénytelen volt lazítani rá** (E06-R21 §10.4
+pont 3): az `AnalyzedSession.toJson()` kulcssorrendje eltér a nyers legacy
+JSON-étól, ezért a valódi, tesztelt garancia **mezőnkénti egyezés**
+(`test/features/audio_analysis/data/legacy_library_migrator_test.dart:399-409`,
+minden legacy mező értéke egyezik, sorrend nem). **R30 ugyanazt a mezőnkénti
+egyezés-szabványt kövesse**, ne ismételje meg ugyanazt a menet közbeni
+visszavonást: az 50-sessionös migrációs teszt assertion-je mezőnkénti
+(`for (final entry in legacyPayload.entries) expect(reencoded[entry.key],
+entry.value)` minta), nem `jsonEncode` string-egyenlőség.
+
+A `LegacyLibraryMigrator` (`lib/features/audio_analysis/data/migration/
+legacy_library_migrator.dart`, E06-R21, **nincs** az `allowed_paths`-on — ne
+módosítsd) `run()`-ja már ma is soha nem törli/írja át a legacy kulcsot
+(dokumentált invariáns, ADR 0239 Döntés 5) — az 50-sessionös teszt ezt az
+invariánst **méri**, nem egy új mechanizmust épít. Megjegyzés: a
+`LegacyMigrationOutcome.failedLegacyIds` mező ma kódolt üres listát ad
+vissza (`legacy_library_migrator.dart:72`, sosem töltődik fel) — ne építs
+erre assertion-t, csak `attempted`/`migrated`/`skipped`/`failed` számokra és
+az `AnalysisRepository.list()` végeredményre.
+
+### R8 — Rollback teszt: nincs kész sablon, csak szerkezeti referencia
+
+Az egyetlen `*rollback_test.dart` a repóban (`test/features/learn/
+learn_rollback_test.dart`) **kizárólag** „flag OFF ugyanazt renderli, mint a
+legacy build" típusú eseteket fed le — nincs benne ON→migrál→OFF→ellenőriz→
+ON-újra kör. A §6 „Rollback-teszt" pontja ennél erősebb: migráció UTÁN
+flag OFF-fal a Library V1 útja működjön, a V2 dokumentumok sértetlenek
+legyenek lemezen, és flag-visszakapcsolással újra olvashatók legyenek. Az
+implementer a `learn_rollback_test.dart` `_flagsOff()`/`_config()`/
+`AppConfig`-override-mintáját **csak szerkezeti referenciaként** használja —
+a tényleges ON→OFF→ON szekvenciát a `FileAnalysisRepository`/
+`AnalysisMigrationVersionStore` (R21) API-jára építve kell megírnia, kész
+sablon erre nincs.
 
 ## 1. Cél
 
@@ -222,9 +419,12 @@ open_decisions:
 - [ ] **Dokumentáció:** README + HANDOFF + `docs/sdd/00-index.md` Chapter 7
       sora frissítve az OD-03 szerint; a traceability mátrix az Epic 6
       köreire kitöltve.
-- [ ] **ADR-státuszok:** a 0200–0211 ADR-ek „Állapot"/"Következmény"
-      szakasza frissítve a **mért** kimenettel (különösen 0201 kalibráció,
-      0205 rollout, 0207 fusion, 0209 storage).
+- [ ] **ADR-státuszok:** a §0.0 R1-ben felsorolt, valós Epic 6 ADR-készlet
+      (0215–0221, 0224–0241, 0243, 0246–0249 — **nem** 0200–0211, az a
+      tartomány nem létezik) `## Következmények` szakasza frissítve a
+      **mért** kimenettel ott, ahol a szöveg jövő időben ír egy azóta
+      lezárult körről (különösen 0216 kalibráció, 0220 rollout, 0229
+      fusion, 0239 storage — lásd R1 a pontos leképezésért).
 
 > **Küszöb-konvenció:** minden numerikus küszöbhöz a mátrix **három** cellát
 > ad — szigorúan **alatta**, pontosan **rajta**, szigorúan **fölötte** —, és a
