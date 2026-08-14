@@ -406,4 +406,25 @@ kör `unknown`-ba fut (L254).
 
 ## 10. Implementation handoff — a Codex tölti ki
 
+- `AnalysisWorkState` now seeds an explicit nullable target and carries the
+  evaluation artifacts, while retaining an explicit run mode so capability
+  resolution measures the real reference input rather than inferring one.
+- `evaluation_stages.dart` adds the eleven granular adapters, their
+  composition-owned classifier, and no production `AnalysisPipeline` wiring.
+  Empty expected events bypass the injected aligner; target timing is the only
+  metric-set delta between the three reference cells.
+- The composition test executes `stage.run(state, context)` sequentially as
+  required by §0.0, collecting degradable classifications and stopping on a
+  fatal capability failure. The A6 call-counter test covers the empty-target
+  boundary.
+- TDD evidence: the new work-state test first failed to compile because the
+  target/evaluation contract did not exist; it passed after the minimal state
+  implementation. The required A6 real-violation trial temporarily removed
+  the empty-expected guard; `evaluation_stages_test.dart` failed with a
+  `Failure<AnalysisWorkState>`, then the guard was restored.
+- Formatted with `dart format` on all five changed Dart files. The prescribed
+  `tools/round-gate.sh` passed: format, analyze, all three targeted test
+  paths, architecture and `git diff --check` were green. Scope audit against
+  `8c41612d` reported six allowed changed paths.
+
 ## 11. Review — a Claude tölti ki

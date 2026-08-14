@@ -3,12 +3,16 @@ import 'package:meta/meta.dart';
 import '../domain/analysis_capability.dart';
 import '../domain/analysis_event.dart';
 import '../domain/analysis_input.dart';
+import '../domain/analysis_metric.dart';
+import '../domain/analysis_mode.dart';
 import '../domain/analysis_segment.dart';
 import '../domain/analysis_warning.dart';
 import '../domain/pitch/monophonic_pitch_segment.dart';
 import '../domain/pitch/pitch_frame.dart';
 import '../domain/preprocessed_audio.dart';
 import '../domain/rhythm/beat_grid.dart';
+import '../domain/target/alignment_result.dart';
+import '../domain/target/analysis_target.dart';
 import 'events/event_timeline_builder.dart' show SuppressedEvent;
 import 'legacy/legacy_evidence.dart' show LegacyEvidence;
 import 'quality/signal_quality_stage.dart' show SignalQualityStageResult;
@@ -25,6 +29,8 @@ import 'rhythm/tempo_curve_builder.dart' show TempoCurve;
 final class AnalysisWorkState {
   AnalysisWorkState({
     required this.input,
+    this.mode = AnalysisMode.freePlay,
+    this.target,
     this.legacyEvidence,
     this.preprocessedAudio,
     this.signalQuality,
@@ -39,6 +45,11 @@ final class AnalysisWorkState {
     List<AnalysisWarning> warnings = const <AnalysisWarning>[],
     Set<AnalysisCapability> unavailableCapabilities =
         const <AnalysisCapability>{},
+    this.alignment,
+    List<AnalysisMetricResult> metrics = const <AnalysisMetricResult>[],
+    Map<AnalysisCapability, CapabilityReport> capabilityReports =
+        const <AnalysisCapability, CapabilityReport>{},
+    this.overallConfidence,
   }) : pitchFrames = List<PitchFrame>.unmodifiable(pitchFrames),
        pitchSegments = List<MonophonicPitchSegment>.unmodifiable(pitchSegments),
        chordSegments = List<ChordSegment>.unmodifiable(chordSegments),
@@ -47,10 +58,23 @@ final class AnalysisWorkState {
        warnings = List<AnalysisWarning>.unmodifiable(warnings),
        unavailableCapabilities = Set<AnalysisCapability>.unmodifiable(
          unavailableCapabilities,
-       );
+       ),
+       metrics = List<AnalysisMetricResult>.unmodifiable(metrics),
+       capabilityReports =
+           Map<AnalysisCapability, CapabilityReport>.unmodifiable(
+             capabilityReports,
+           );
 
   /// The boundary input plus any input-quality warnings it already carries.
   final ValidatedPcmAnalysisInput input;
+
+  /// The caller's run intent. It stays explicit because a practice-mode run
+  /// can still lack a usable target (ADR 0251 §3).
+  final AnalysisMode mode;
+
+  /// Optional caller-supplied snapshot of the performance reference. Stages
+  /// consume it but never infer or construct one from observed audio.
+  final AnalysisTarget? target;
 
   /// V1 evidence the ingest chain adapts (ADR 0250 problem table, row 3):
   /// harmony derives `ChordFrameEvidence` from `legacyEvidence.chords`
@@ -82,15 +106,39 @@ final class AnalysisWorkState {
   /// availability yet (GOV-30c-2).
   final Set<AnalysisCapability> unavailableCapabilities;
 
+  /// Target alignment is absent, rather than fabricated, when [target] is
+  /// null or has no expected events (ADR 0251 §2).
+  final AlignmentResult? alignment;
+
+  /// Published metric artifacts accumulated by the evaluation stages.
+  final List<AnalysisMetricResult> metrics;
+
+  /// The resolver's per-capability evidence, kept separately from the
+  /// pipeline-level degradation set.
+  final Map<AnalysisCapability, CapabilityReport> capabilityReports;
+
+  /// Resolver-combined confidence, unavailable until its fatal stage runs.
+  final double? overallConfidence;
+
   /// The initial state for one ingest run: only the boundary PCM input,
   /// seeded with its own warnings. `legacyEvidence` is not a seed input —
   /// the `legacy-evidence` ingest stage derives it from the preprocessed
   /// audio partway through the chain.
-  factory AnalysisWorkState.seed({required ValidatedPcmAnalysisInput input}) =>
-      AnalysisWorkState(input: input, warnings: input.warnings);
+  factory AnalysisWorkState.seed({
+    required ValidatedPcmAnalysisInput input,
+    AnalysisMode mode = AnalysisMode.freePlay,
+    AnalysisTarget? target,
+  }) => AnalysisWorkState(
+    input: input,
+    mode: mode,
+    target: target,
+    warnings: input.warnings,
+  );
 
   AnalysisWorkState copyWith({
     ValidatedPcmAnalysisInput? input,
+    AnalysisMode? mode,
+    AnalysisTarget? target,
     LegacyEvidence? legacyEvidence,
     PreprocessedAudio? preprocessedAudio,
     SignalQualityStageResult? signalQuality,
@@ -103,8 +151,14 @@ final class AnalysisWorkState {
     List<SuppressedEvent>? suppressedEvents,
     List<AnalysisWarning>? warnings,
     Set<AnalysisCapability>? unavailableCapabilities,
+    AlignmentResult? alignment,
+    List<AnalysisMetricResult>? metrics,
+    Map<AnalysisCapability, CapabilityReport>? capabilityReports,
+    double? overallConfidence,
   }) => AnalysisWorkState(
     input: input ?? this.input,
+    mode: mode ?? this.mode,
+    target: target ?? this.target,
     legacyEvidence: legacyEvidence ?? this.legacyEvidence,
     preprocessedAudio: preprocessedAudio ?? this.preprocessedAudio,
     signalQuality: signalQuality ?? this.signalQuality,
@@ -118,5 +172,9 @@ final class AnalysisWorkState {
     warnings: warnings ?? this.warnings,
     unavailableCapabilities:
         unavailableCapabilities ?? this.unavailableCapabilities,
+    alignment: alignment ?? this.alignment,
+    metrics: metrics ?? this.metrics,
+    capabilityReports: capabilityReports ?? this.capabilityReports,
+    overallConfidence: overallConfidence ?? this.overallConfidence,
   );
 }

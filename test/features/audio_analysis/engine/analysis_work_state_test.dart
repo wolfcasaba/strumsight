@@ -5,6 +5,7 @@ import 'package:strumsight/features/audio_analysis/domain/analysis_input.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_mode.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_warning.dart';
 import 'package:strumsight/features/audio_analysis/domain/preprocessed_audio.dart';
+import 'package:strumsight/features/audio_analysis/domain/target/analysis_target.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_provenance_builder.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_work_state.dart';
 import 'package:strumsight/features/audio_analysis/engine/legacy/legacy_evidence.dart';
@@ -34,10 +35,30 @@ void main() {
       expect(state.chordSegments, isEmpty);
       expect(state.beatGrid, isNull);
       expect(state.tempoCurve, isNull);
+      expect(state.target, isNull);
+      expect(state.alignment, isNull);
+      expect(state.metrics, isEmpty);
+      expect(state.capabilityReports, isEmpty);
+      expect(state.overallConfidence, isNull);
       expect(state.events, isEmpty);
       expect(state.suppressedEvents, isEmpty);
       expect(state.unavailableCapabilities, isEmpty);
     });
+
+    test(
+      'seed retains an explicitly supplied target without inferring one',
+      () {
+        final target = AnalysisTarget(
+          id: 'practice-target',
+          kind: AnalysisTargetKind.practice,
+          timebase: AnalysisTargetTimebase.session,
+        );
+
+        final state = AnalysisWorkState.seed(input: _input(), target: target);
+
+        expect(state.target, same(target));
+      },
+    );
 
     test('copyWith returns a new instance and never mutates the original', () {
       final original = AnalysisWorkState.seed(input: _input());
