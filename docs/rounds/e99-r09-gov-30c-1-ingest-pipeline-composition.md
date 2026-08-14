@@ -307,4 +307,75 @@ kör `unknown`-ba fut (L254).
 
 ## 10. Implementation handoff — a Codex tölti ki
 
+**Új fájlok** (mind az engedélyezett listán):
+
+- `lib/features/audio_analysis/engine/analysis_work_state.dart` — az
+  `AnalysisWorkState` immutable munkaállapot (`copyWith` bővítés) +
+  `AnalysisWorkState.seed(...)` a lánc kezdő állapotához.
+- `lib/features/audio_analysis/engine/stages/ingest_stages.dart` — a hat
+  adapter (`PreprocessingIngestStage`, `SignalQualityIngestStage`,
+  `PitchIngestStage`, `HarmonyIngestStage`, `RhythmIngestStage`,
+  `EventsIngestStage`), a kompozíció-owned `classifyIngestStageFailure`
+  (`AnalysisStageFailureClassifier`) és a `buildIngestStages()` segédfüggvény.
+- 3 új tesztfájl a gate-listán, plusz a `docs/rounds/…` jelen handoffja.
+
+**Kulcs-döntés a `LegacyEvidence`-ről (nincs kifejezetten a brief §2.3
+táblájában, de a harmony/rhythm/events modulok szerződése megköveteli):** a
+`ChordSegmentAssembler` bemenete `ChordFrameEvidence`, az `EventTimelineBuilder`
+bemenete pedig közvetlenül `LegacyEvidence` — és egyik típust sem termeli más,
+e körben csomagolt modul (a `ClipAnalyzerStage`, ami `LegacyEvidence`-t termel,
+NEM szerepel a 2.3 táblázat hat moduljában, és a brief kifejezetten hat
+adaptert kér). Ezért az `AnalysisWorkState` egy opcionális `legacyEvidence`
+mezőt kapott — ugyanolyan "bemenet" jellegű, mint a `ValidatedPcmAnalysisInput`
+— amit a hívó ad át a lánc indításakor (`AnalysisWorkState.seed(...,
+legacyEvidence: ...)`), nem ez a kör termeli. A `harmony` adapter a
+`legacyEvidence.chords` listát a `ChordFrameEvidence.derived(...)` gyárral
+alakítja `ChordFrameEvidence`-listává (a domain fájl saját kommentje szerint
+pontosan erre való: *"R11 can only obtain it from finished V1 spans"*), a
+`rhythm` adapter a `legacyEvidence.strums` időpontjait olvassa onset-időként,
+az `events` adapter pedig közvetlenül átadja a `legacyEvidence`-t a meglévő
+`EventTimelineBuilder`-nek. Mindhárom adapter egyetlen preconditionje "van-e
+`legacyEvidence`" — hiánya a saját osztályozásuk szerinti hiba (harmony/rhythm
+degradálható, events fatális). Ez a döntés a GOV-30c-2-t köti: az a kör fogja
+eldönteni, HOGYAN jut `legacyEvidence` a lánc elejére (pl. a
+`ClipAnalyzerStage` külön futtatásával a runner-ben).
+
+**A `DecoderSource` mezőhöz** a legközelebbi meglévő érték a `DecoderSource.dsp`
+lett (a `derived` V1-kiértékelés maga is DSP-alapú volt) — nincs `legacy`
+enum-érték, és a domain fájl bővítése tiltott zóna.
+
+**§6.1 valódi-sértés próba — elvégezve, dokumentálva:**
+
+1. A `classifyIngestStageFailure` `preprocessing` ágát ideiglenesen
+   `StageFailure.degradable(failure)`-re állítottam.
+2. Első próbálkozásra az A6 teszt (a `calledStageIds` log-alapú assert)
+   **nem** vált pirosra — a lánc a degradált preprocessing után a
+   signal-quality/pitch/harmony/rhythm stage-eken is végigfutott, majd az
+   `events` (ami szintén fatális és `legacyEvidence` nélkül hibázik ebben a
+   tesztben) állította meg, ugyanazzal a végkimenettel
+   (`completion=failed, value=null`) mint a helyes preprocessing-fatális eset
+   — a teszt véletlenül átment egy hibás osztályozással is.
+3. Ez saját magában egy mért bizonyíték arra, hogy a `calledStageIds` log
+   önmagában nem elég szigorú mérce. A tesztet kicseréltem: a
+   `provenance.stageTimings.map((t) => t.id)`-t vizsgálja, ami PONTOSAN
+   felsorolja, mely stage-ek futottak le (siker VAGY hiba esetén is, a
+   pipeline `finally`-ben rögzíti) — ez már ténylegesen csak
+   `['preprocessing']`-t várhat el fatális osztályozásnál.
+4. Az újrafuttatott A6 teszt a degradálva állított osztályozással **PIROS**
+   lett (a lánc mind a hat stage-en végigfutott, a `stageTimings` 6 elemű
+   listát adott vissza a várt 1 elemű helyett).
+5. Visszaállítottam a `classifyIngestStageFailure`-t az eredeti (fatális)
+   besorolásra, és a teljes `tools/round-gate.sh` újra teljes egészében
+   ZÖLD.
+
+**Gate-eredmény:** `tools/round-gate.sh` mindhárom kör-tesztfájlra +
+`architecture` + `secrets` + `l10n` — **MINDEN GATE ZÖLD** (a preprocessing
+valódi-sértés próba lezajlása és visszaállítása után futtatva).
+
+**A7 — érintetlen provider:** `git status`/`git diff --stat` szerint
+kizárólag a fenti öt új fájl jött létre; az
+`application/analysis_providers.dart` és minden meglévő `engine/**` fájl
+tartalma változatlan. Az `analysisV2RunnerProvider` a kör végén is
+`StateError`-t dob.
+
 ## 11. Review — a Claude tölti ki
