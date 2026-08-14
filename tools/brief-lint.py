@@ -381,6 +381,22 @@ def main(argv: list[str] | None = None) -> int:
         # méri — ott van értelme, mert ott még olcsó javítani.
         paths.extend(repo / brief for _round, brief, status in queue_rows(repo) if status != "done")
     if not paths:
+        if arguments.open:
+            # MÉRT eset (2026-08-14, az Epic 6 lezárása): ha a sor minden köre
+            # `done`, az `--open` nulla briefet old fel — de ez NEM hiányzó
+            # kapcsoló, hanem LEGITIM epic-határ. A régi ág usage-hibának
+            # vette (exit 3), amitől a router-ci.yml „Round brief lint gate
+            # (open rounds)" lépése pirosra állította a main-t, a
+            # `round-pipeline.sh:1584` main-health kapuja pedig nem indít
+            # munkát piros main fölé — a lánc magára zárta az ajtót.
+            #
+            # Ez a HARMADIK fogyasztója ugyanannak az „üres sor" állapotnak
+            # (a másik kettő a tools/tests két kapuja, PR #258). A mérce nem
+            # gyengül: nulla nyitott briefen nincs mit linteni, és minden
+            # MÁSIK hívási alak (`--brief`, `--all`) változatlanul usage-hibát
+            # ad, ha nem old fel útvonalat.
+            print("brief-lint: nincs nyitott kör — a sor kiürült (epic-határ)")
+            return 0
         print("brief-lint: adj meg --brief-et, --open-t vagy --all-t", file=sys.stderr)
         return 3
 
