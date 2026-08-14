@@ -99,6 +99,44 @@ domain-típus, a codec és a legacy adapter), tehát a GOV-30c-3 önálló,
 Az ADR 0250 §4 minden más döntése változatlan; ez az ADR **kizárólag a
 lépcsők számát** írja felül.
 
+### 5. A kompozíció bizonyítása szekvenciális teszt-harnessel, nem `AnalysisPipeline`-példánnyal (2026-08-14 revízió, E99-R10 első Terra-dispatch STOP)
+
+Mérve: `engine/analysis_pipeline.dart:68-74` — az `AnalysisPipeline<T>`
+konstruktora `ArgumentError`-t dob, ha `stages.length >
+AnalysisProgressPhase.values.length` (jelenleg **9**,
+`domain/analysis_progress.dart:4-14`). A GOV-30c-2 tizenegy önálló stage-et
+(1 illesztés + 9 metrika + 1 capability/confidence) ír elő — ennyi stage-re
+az `AnalysisPipeline<AnalysisWorkState>` konstruktora azonnal elszáll.
+
+Ez a decision NEM oldja ezt fel az `AnalysisPipeline`/`AnalysisProgressPhase`
+módosításával — mindkettő ezen kör (E99-R10) engedélyezett-fájllistáján
+kívül esik, és [ADR 0240](0240-analysis-runner-and-pipeline-boundary.md)
+már mérve rögzítette, hogy ma egyetlen konkrét, összeszerelt V2-lánc sem
+létezik production kódban (`grep -rln "AnalysisPipeline(" lib/` → nulla
+találat) — az ingest-lánc (E99-R09) is csak a `buildIngestStages()`
+LISTÁJÁIG jutott, a tényleges `AnalysisPipeline`-példányosítás kizárólag a
+TESZT bizonyítási eszköze, sosem production wiring.
+
+**Döntés:** a GOV-30c-2 production kódja (`evaluation_stages.dart`)
+tizenegy granular `AnalysisStage<AnalysisWorkState, AnalysisWorkState>`
+osztályt épít, ugyanabban a `buildEvaluationStages()` +
+`classifyEvaluationStageFailure` alakban, mint az ingest-lánc. A
+composition-teszt viszont **közvetlen, szekvenciális `stage.run(...)`
+hívásokkal** bizonyítja a láncot (fatálisnál megáll, degradálhatónál
+gyűjt), NEM `AnalysisPipeline<AnalysisWorkState>` példányosítással — az
+`AnalysisPipeline` motor generikus végrehajtási logikáját (progress-
+monotonitás, fatális/degradálható elágazás) már önállóan fedi
+`analysis_pipeline_test.dart` (E06-R04), ezért ennek újra-bizonyítása nélkül
+sem gyengül a mérce.
+
+**Halasztott, névvel ellátott follow-up:** a teljes, 18 stage-es (7 ingest +
+11 evaluation) lánc egyetlen élő `AnalysisPipeline`-példányba drótozása — és
+ezzel a 9-es progress-fázis-cap valódi feloldása, pl. a progress-fázis-modell
+és a DSP-stage-granularitás szétválasztásával — a **GOV-30c-3** pre-flightjának
+mért feladata. A GOV-30c-3 brief-je ezt kötelezően grep-elje ki újra a saját
+indulásakor (mennyi stage lesz ekkor ténylegesen, változott-e a cap), ne
+ezt az ADR-t idézze bemondásra.
+
 ## Következmények
 
 - A `freePlay` és `importedRecording` módú elemzés **teljes értékű marad** —

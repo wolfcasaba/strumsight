@@ -31,6 +31,84 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Brief-revízió — 2026-08-14, implementer STOP a kompozíció bizonyítási módján
+
+Az első Terra-dispatch `stopped`-ot jelzett (session `019fffcc-c11d-7502-af03-edeaed6f085c`):
+„E99-R10 brief 11 evaluation stage-et kér, de AnalysisPipeline legfeljebb
+9-et enged; a szükséges pipeline/progress scope tiltott." Mérve, pontosan:
+
+`engine/analysis_pipeline.dart:68-74` — az `AnalysisPipeline<T>` konstruktora
+`ArgumentError`-t dob, ha `stages.length > AnalysisProgressPhase.values.length`
+(jelenleg **9**, `domain/analysis_progress.dart:4-14`). A brief 11 önálló
+stage-et ír elő (1 illesztés + 9 metrika + 1 capability/confidence, §2.5/§8).
+A GOV-30c-1 (E99-R09) precedens composition-tesztje **pontosan ezt a
+konstruktort hívja** hét stage-re (`ingest_pipeline_composition_test.dart:33-36`,
+`AnalysisPipeline<AnalysisWorkState>(stages: buildIngestStages(),
+failureClassifier: classifyIngestStageFailure)`), ami jogosan sugallta a
+Terra felé, hogy a GOV-30c-2-nek is így kell bizonyítania a láncot — de
+tizenegy stage-re ez a hívás a konstruktorban azonnal elszáll, mielőtt
+bármilyen üzleti logika futna.
+
+**Ez nem az `AnalysisPipeline` hibája, és nem is ennek a körnek kell
+javítania.** [ADR 0240](../adr/0240-analysis-runner-and-pipeline-boundary.md)
+(E06-R22 pre-flight) már mérve rögzítette: „`grep -rln "AnalysisPipeline("
+lib/` **nulla** találatot ad — ma egyetlen konkrét, összeszerelt V2-lánc sem
+létezik" production kódban. Az ingest-lánc (E99-R09) is csak a
+`buildIngestStages()` **LISTÁIG** jutott production oldalon — magát az
+`AnalysisPipeline`-példányt kizárólag a TESZT építi fel, bizonyítás céljából
+(`ingest_stages.dart` doksi-komment: „Not wired into any provider in this
+round"). A `AnalysisProgressPhase` 9 értéke egy UI-fókuszú progress-fázis-enum
+(`preparing … finalizing`), a `domain/` alatt él — NEM az `engine/` alatt —,
+és NEM szerepel ennek a körnek az engedélyezett fájllistáján. A bővítése
+(vagy az `AnalysisPipeline` cap-jének enyhítése) ezért ezen a körön kívül
+esik, és pontosan az a fajta lánc-összeszerelési döntés, amit ADR 0240 és az
+ADR 0251 §4 szándékosan a GOV-30c-3 (bekötő) körre halaszt.
+
+**A feloldás:** ez a kör TOVÁBBRA IS tizenegy önálló, granular
+`AnalysisStage<AnalysisWorkState, AnalysisWorkState>` osztályt épít — a brief
+§8 sorrendje és a §3/§6 acceptance criteria (A1–A10) változatlanok, egy
+osztály per wrapolt modul, ugyanaz a mintázat, mint az ingest-láncon. A
+production `evaluation_stages.dart` ugyanabban a formában zár, mint az
+ingest: `buildEvaluationStages()` →
+`List<AnalysisStage<AnalysisWorkState, AnalysisWorkState>>` +
+`classifyEvaluationStageFailure(stageId, failure)` → `StageFailure`.
+
+Az EGYETLEN különbség az ingest-precedenshez képest a **teszt bizonyítási
+módja**: az `evaluation_pipeline_composition_test.dart` a listát és a
+classifiert **közvetlen, szekvenciális `stage.run(state, context)`
+hívásokkal** futtatja végig — minden stage kimenete a következő bemenete,
+fatális hibánál a lánc megáll, degradálhatónál a `warnings`/
+`unavailableCapabilities` gyűlik (ugyanazt a sorrendet/logikát reprodukálva,
+amit az `AnalysisPipeline._execute` belül csinál,
+`analysis_pipeline.dart:170-224` — MINTAKÉNT, másolás nélkül, csak a
+végrehajtási sorrend és a hiba-osztályozás reprodukálásával) —, **NEM**
+`AnalysisPipeline<AnalysisWorkState>` példányosítással. Az
+`AnalysisStageContext` a teszt-harnessben stage-enként épül (`runId`,
+tetszőleges érvényes `AnalysisProgressPhase` — a monotonitás-ellenőrzés az
+`AnalysisPipeline.publish()`-ban él, amit ez a harness nem hív —,
+egy no-op vagy gyűjtő `eventSink`).
+
+Ez a döntés nem gyengíti a mércét: az `AnalysisPipeline` motor generikus
+végrehajtási logikáját (progress-monotonitás, fatális/degradálható
+elágazás, cancellation) már önállóan fedi az `analysis_pipeline_test.dart`
+(E06-R04) — ennek a körnek a dolga a tizenegy stage ÜZLETI viselkedésének
+bizonyítása (referencia-mátrix, A6 hívás-számláló, A5 metrika-halmaz-
+különbség), ami a hand-rolled harnessszel ugyanúgy, ugyanolyan erővel
+mérhető.
+
+A két, ténylegesen `AnalysisPipeline`-példányba drótozott lánc (ingest 7 +
+evaluation 11 = 18 stage) összefésülése — és ezzel a 9-es progress-fázis-cap
+valódi feloldása (pl. a progress-fázis-modell és a DSP-stage-granularitás
+szétválasztásával) — a GOV-30c-3 pre-flightjának mért feladata. Ezt a
+briefet és az ADR 0251-et ez a revízió egy új, 5. döntési ponttal egészíti
+ki (ADR 0251 §5), hogy a GOV-30c-3 pre-flight ne mérje újra ugyanezt.
+
+Ennek megfelelően a §3 pont 4 („Az értékelő lánc kompozíciója +
+failure-classifier") és a §8 pont 6 („Kompozíció + failure-classifier") a
+`buildEvaluationStages()` + `classifyEvaluationStageFailure` production-párost
+jelenti, a fenti teszt-stratégiával bizonyítva. Az allowed_paths, a §7
+gate-parancs és az acceptance criteria egyébként változatlanok.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
