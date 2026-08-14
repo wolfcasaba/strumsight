@@ -100,8 +100,23 @@ class PipelineIntegrationTest(unittest.TestCase):
             for line in queue_path.read_text().splitlines()
             if line and not line.startswith("#")
         ]
+        self.assertTrue(rows, "a sor-fájl üres vagy nem parse-olható — ez VALÓDI hiba")
         open_rounds = [row for row in rows if row[4] != "done"]
-        self.assertTrue(open_rounds, "nincs egyetlen nyitott sor sem — a szabály mérhetetlen")
+        if not open_rounds:
+            # MÉRT hiba (2026-08-14, az Epic 6 lezárása; másodszor — először
+            # 2026-08-05, E04-R07 után nyolc körön át): a kiürült sor NEM
+            # defekt, hanem LEGITIM állapot — épp befejeztünk egy epicet, és a
+            # következő irány emberi döntés (ADR 0087 §7). A korábbi
+            # `assertTrue(open_rounds)` viszont ilyenkor pirosra állította a
+            # main-t, a `round-pipeline.sh:1584` main-health kapuja pedig nem
+            # indít munkát piros main fölé -> a lánc MAGÁRA ZÁRTA az ajtót, és
+            # csak emberi észrevétel oldotta fel (6 óra állás).
+            #
+            # A mérce NEM gyengül: minden NYITOTT kört ugyanúgy mér a lenti
+            # ciklus; csak azt ismerjük el, hogy nulla nyitott körön nincs mit
+            # mérni. A fenti `rows` assert megkülönbözteti a legitim üres sort
+            # (minden sor `done`) a sérült/üres fájltól.
+            self.skipTest("a sor kiürült (minden kör `done`) — epic-határ, emberi döntésre vár")
 
         for round_id, brief, engine, _adr, _status in open_rounds:
             with self.subTest(round=round_id):
