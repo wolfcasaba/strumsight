@@ -10096,3 +10096,93 @@ tartalmaznia kell legalább egy olyan ellenpéldát, ahol a lokális optimum és
 globális találatszám eltér. Ne külön-külön „javítsd meg” az event-, beat- és
 pitch-utakat: a közös matcher a szerződés része. Lásd
 `docs/reviews/e06-r29-evaluation-harness-and-calibration-review.md` F1–F3.
+
+## L270 — Az `allowed_paths` és az acceptance criteria belső ellentmondását a brief-lint NEM fogja meg — a pre-flight keresztellenőrizze, hogy minden előírt módosítás egyáltalán engedélyezve van-e (E06-R30, 2026-08-14)
+
+**Mit mértünk.** Az E06-R30 (Epic 6 záró köre) brief-je §6 „ADR-státuszok"
+acceptance criterionja 29 `docs/adr/*.md` fájl `## Következmények`
+szakaszának frissítését írta elő — de az `allowed_paths` TOML tömb
+EGYETLEN `docs/adr/` bejegyzést sem tartalmazott. A `tools/ai_router/
+security.py:183-184` `_matches()` prefix-alapú illesztése miatt ez nem egy
+elméleti rés: az implementer első ADR-fájl-érintésénél a gépi scope-audit
+(`tools/scope-audit.py`) `VIOLATION`-t adott volna, ami H3 haltot
+eredményezett volna — miközben a brief saját maga írta elő pontosan azt a
+munkát, amit a scope-audit letiltott volna. A `brief-lint.py` (ADR 0171 §4)
+ezt NEM jelezte („nincs lelet") — a linter szintaktikus, nem keresztellenőriz
+acceptance criteria szöveget az `allowed_paths` tömb ellen.
+
+**Hogyan alkalmazd.** A pre-flight §1 mérési kötelezettsége (org-szintű
+szabály: „minden briefben hivatkozott enum-értéket, mezőt, sorszámot
+grep-elj ki") bővül eggyel: **minden acceptance criterion által előírt
+fájl-módosítást vess össze az `allowed_paths` tömbbel**, nem csak azt
+ellenőrizd, hogy az egyes útvonalak léteznek-e. Ha az összevetés rést talál
+(mint itt: 29 kötelező fájl, 0 engedélyezve), a javítás dokumentált §0.0
+revízió + az `allowed_paths` tömb explicit, tételes kiegészítése — **ne**
+egy könyvtár-szintű bare prefixet (pl. `docs/adr`) adj hozzá, mert az a
+`_matches()` prefix-illesztés miatt bármely, akár ÚJ fájlt is engedélyezne,
+ellentmondva egy esetleges „új X tilos” tilos-zóna sornak. A tételes lista
+egyszerre elégíti ki az acceptance criteria-t ÉS tartja a mechanikus
+határt. `python3 -c "from tools.ai_router.brief import load_brief; ..."`-lal
+a brief TOML-ja a commit előtt validálható (helyes szintaxis, a hozzáadott
+útvonalak léteznek a lemezen) — ld.
+`docs/rounds/e06-r30-shadow-rollout-migration-and-epic-closure.md` §0.0 R9.
+
+## L271 — Egy „előtte/utána" teszt, ami ugyanarra az élő objektumra vagy egy semmilyen valós állapothoz nem kötött helperre hivatkozik, tautologikus — sosem bukhat el, bármit tesz az implementáció (E06-R30, 2026-08-14)
+
+**Mit mértünk.** Az E06-R30 független review-ja két, EGYMÁSTÓL FÜGGETLEN
+tesztfájlban ugyanazt a hibaosztályt találta. (1) `rollback_test.dart`
+`_flagsOff()` helperje minden híváskor egy ÚJ, kizárólag a `FeatureFlags`
+konstruktor alapértelmezéseit visszaadó objektumot épített — nem olvasott
+semmilyen mutálható állapotot, és a fájlban egyetlen `true` literál sem
+szerepelt egyetlen analysis-flaghez sem, így a teszt neve („OFF → migrate →
+OFF → ON…”) egy ON-állapotot ígért, amit a kód sosem hozott létre. (2)
+`full_migration_test.dart` a migráció ELŐTTI és UTÁNI „pillanatképet”
+ugyanarról az élő, immutable `AnalyzedSession` objektumról vette
+(`session.toJson()` mindkétszer), így az összehasonlítás önmagával
+történt — a migrátor bármilyen (akár hibás) viselkedése mellett zöld
+maradt volna. Mindkét eset ZÖLD gate-tel csúszott át az implementáción, és
+csak egy explicit, a brief §0.0-jában előre megnevezett kockázati minta
+(„ne legyen ez is csak egy `_flagsOff()`-koppintás”) + egy tényleges
+real-violation próba buktatta meg őket a review-ban.
+
+**Hogyan alkalmazd.** Amikor egy teszt „A állapot → B állapot” vagy
+„előtte → utána” védelmet állít, MINDIG kérdezd meg: (a) a két állapotot
+tényleg KÉT, egymástól bizonyítottan ELTÉRŐ objektum/érték képviseli-e
+(adj hozzá egy explicit `expect(a == b, isFalse)`-szerű egyenlőtlenség-őrt,
+ha a különbség a teszt lényege), és (b) az „utána” mérés egy FÜGGETLEN
+forrásból származik-e (pl. újra-beolvasott/deep-copy-zott állapot), nem
+ugyanarra az élő referenciára mutat, mint az „előtte” mérés. Ha egyik
+kérdésre sem tudsz igennel felelni, a teszt tautologikus — egy ideiglenes,
+szándékos rontással (real-violation próba) ellenőrizd, hogy tényleg
+PIROSRA fordul-e a védeni kívánt hiba mellett, mielőtt zöldnek fogadod el.
+Lásd `docs/reviews/e06-r30-shadow-rollout-migration-and-epic-closure-review.md`
+F1 + a javító kör `b3362404` commitja (`_deepCopyJsonObject` + a két
+ténylegesen eltérő `FeatureFlags` példány).
+
+## L272 — Review-újraellenőrzéskor `git clone <lokális hub-útvonal>` némán elavult állapotot adhat vissza, ha a hub saját branch-e közben mozgott — mindig `origin`-ról klónozz (E06-R30, 2026-08-14)
+
+**Mit mértünk.** A javító kör #1 után az orchestrátor a `sdd-round-review`
+skill mintaparancsát követve `git clone --branch <kör-branch>
+/home/ubuntu/music-theory /tmp/review-…`-t futtatott az újraellenőrzéshez —
+de a hub lokális branch-e (`/home/ubuntu/music-theory`, a saját munkafa) a
+javító kör commitjánál (`b3362404`) korábbi állapotban állt, mert az
+implementer a KÜLÖN munkapéldányból (`ss-terra-e06-r30`) közvetlenül
+`origin`-ra pusholt, a hubot sosem frissítette. A klónozás **hibaüzenet
+nélkül** sikerült, csak egy régebbi commitot (`79c9d76e`) adott — a gate,
+a scope-audit és a célzott tesztfuttatás mind lefutott, mind zöld volt, de
+a TÉNYLEGESEN javított fájlokat sosem látta. A hibát csak a `git -C <klón>
+rev-parse HEAD` és a várt SHA kézi összevetése fedte fel — enélkül a
+review hamis „megerősítést” adott volna egy nem-létező állapotra.
+
+**Hogyan alkalmazd.** Amikor egy review-újraellenőrzés (vagy bármely más,
+a megosztott munkafától független, friss bizonyítékot igénylő klónozás) a
+saját hubot (`/home/ubuntu/music-theory`) használja forrásként, MINDIG (a)
+klónozás UTÁN `git -C <klón> rev-parse HEAD`-del ellenőrizd, hogy a kapott
+SHA egyezik a várt (pusholt) commit SHA-jával, VAGY (b) egyszerűen az
+`origin` GitHub URL-jéből klónozz (`git clone --branch <ág>
+https://github.com/<org>/<repo>.git <cél>`) — ez utóbbi strukturálisan
+kizárja a hub-lokális-staleness hibaosztályt, mert nem függ attól, hogy a
+hub saját munkafája mikor lett utoljára fetch-elve/resetelve. A
+`sdd-round-review` skill mintaparancsa (lokális hub-útvonal) csak akkor
+biztonságos, ha közvetlenül a hub saját push-a UTÁN, ugyanabban a
+sessionben fut — egy másik munkapéldányból történő push esetén NEM.

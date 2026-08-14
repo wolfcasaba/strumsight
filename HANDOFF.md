@@ -2,17 +2,77 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-13
-> (E06-R30 implementation complete locally — shadow/migration/closure evidence;
-> independent review and exact-SHA CI remain before merge.)**
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-14
+> (E06-R30 done — shadow rollout, migration and Epic 6 closure, PR #257
+> merged; Epic 6 (Audio Analysis 2.0) implementation is now complete across
+> all 30 rounds, still shadow-only. Next pending round: TBD, see §6.)**
 >
-> ## 🟡 E06-R30 — Shadow rollout, migráció és Epic 6 lezárás
+> ## ✅ E06-R30 KÉSZ — Shadow rollout, migráció és Epic 6 lezárás (2026-08-14, ZÁRÓ KÖR)
 >
 > A V1 shipping út változatlan. A kilenc Epic 6 flag minden környezetben OFF;
-> a konstruktor-injektált `ShadowAnalysisRunner` csak Lab+flag kapun indít V2
-> diagnosztikát és V2 hiba/cancel esetén is V1 eredményt ad. Az 50-session
-> migráció idempotens, a legacy mezők megmaradnak. Epic 6 implementation
-> evidence: [`docs/sdd/epic-06-completion-report.md`](docs/sdd/epic-06-completion-report.md).
+> a konstruktor-injektált `ShadowAnalysisRunner` csak Lab+flag kapun (négy
+> cellás mátrix, hívásszámlálóval bizonyítva) indít V2 diagnosztikát, és V2
+> hiba/cancel esetén is bitre azonos V1 eredményt ad (`ShadowDiffReport`:
+> event/chord/BPM/hossz/futásidő + hibajelzés, nyers audio és timestamp
+> nélkül). Az 50-session teljes migrációs teszt idempotens (2. futás 0
+> migrált/50 skip), a legacy mezők mezőnkénti egyezéssel megmaradnak. A
+> rollback teszt két ténylegesen eltérő `FeatureFlags` állapotban (OFF/ON)
+> bizonyítja a migrált V2 dokumentum olvashatóságát. 29 meglévő Epic 6 ADR
+> `## Következmények` szakasza frissítve a mért kimenettel.
+> [`docs/sdd/epic-06-completion-report.md`](docs/sdd/epic-06-completion-report.md):
+> a §33 mind a 74 DoD-pontja végigmenve (70 teljesült, 4 őszintén NEM
+> BIZONYÍTOTT, névvel ellátott follow-up-pal). A 14 pontos valós eszközös
+> ellenőrzési lista `EVAL-28…41` PENDING sorként az eval-mátrixban,
+> felelőssel — egyik sem merge-kapu.
+>
+> **Pre-flight (§0.0, R1–R9):** a batch-írt brief „ADR 0200–0211" tartománya
+> nem létezett (`ls docs/adr/` nulla találat) — a valós Epic 6 ADR-készlet
+> 0215–0221/0224–0241/0243/0246–0249 (29 fájl). Az `allowed_paths` eredetileg
+> egyetlen `docs/adr/` bejegyzést sem tartalmazott, miközben a §6 „ADR-státuszok"
+> pont mind a 29 fájl szerkesztését előírta — a gépi scope-audit az első
+> ADR-érintésnél `VIOLATION`-t adott volna. Mindkettő dokumentált §0.0
+> revízióval javítva dispatch előtt.
+>
+> **Független review** (`docs/reviews/e06-r30-…-review.md`) első köre
+> CHANGES REQUESTED: 1 MAJOR — a `rollback_test.dart` `_flagsOff()` helperje
+> egy semmilyen valós állapothoz nem kötött tautológia volt, sosem épített
+> fel ténylegesen „ON" flag-állapotot, miközben a completion report a
+> kapcsolódó DoD-tételt bizonyítottként (`[x]`) jelölte — 1 MINOR (a
+> completion report záró összegzése 69/74-et írt a tényleges 70/74 helyett).
+> **A kötelező dedikált security review** (`risk = "high"`) párhuzamosan
+> **PASS**-t adott (0 CRITICAL/BLOCKER/MAJOR/MINOR, 4 NOTE) — ugyanazokat a
+> mögöttes tényeket alacsonyabb súllyal minősítette, mert a termék-tulajdonság
+> (a migrátor konstrukcióból nem tudja törölni a legacy kulcsot) bizonyított
+> maradt a teszt gyengesége ellenére; a két jelentés nem mond ellent
+> egymásnak. Egy javító dispatch zárta mindkettőt: a rollback teszt most két
+> ténylegesen eltérő `FeatureFlags` példányt épít explicit egyenlőtlenség-őrrel
+> és mindkét állapotban bizonyítja a V2-olvasást; a completion report
+> aritmetikája javítva. Az orchestrátor SAJÁT, közvetlenül `origin`-ról
+> (nem a megosztott munkafáról) klónozott újraellenőrzése: gate 9/9 zöld,
+> scope-audit OK, és egy real-violation próba (a javított `_flagsOn()`
+> ideiglenes visszaállítása a régi tautologikus alakra) pontosan a várt
+> assertion-t vitte pirosra, majd SHA-256-tal igazoltan visszaállítva. Végső
+> verdikt: **APPROVED**.
+>
+> Exact-SHA `719c534c`: Full Gate
+> [31758004379](https://github.com/wolfcasaba/strumsight/actions/runs/31758004379)
+> + Router CI [31758041194](https://github.com/wolfcasaba/strumsight/actions/runs/31758041194)
+> (utóbbi kézzel dispatch-elve, mert a záró, csak review-dokumentumot érintő
+> commit nem érintette a Router CI push-path-szűrőjét) mindkettő success.
+> `origin/main` nem mozdult a dispatch és a merge között. Squash-merge PR
+> [#257](https://github.com/wolfcasaba/strumsight/pull/257), `f257afa7`; a
+> post-merge gate friss, helyben fetch-elt `main`-en is zöld (9/9).
+> Implementer **Terra (Codex)**, egy javító dispatch.
+>
+> Lecke: `docs/LESSONS.md` **L270** (allowed_paths és az acceptance criteria
+> belső ellentmondása — a brief-lint ezt nem fogja meg, csak a pre-flight
+> keresztellenőrzés), **L271** (tautologikus előtte/utána-teszt: ugyanarra az
+> élő objektumra hivatkozó „snapshot" semmit sem bizonyít — sem a
+> `rollback_test.dart` `_flagsOff()`-ja, sem a `full_migration_test.dart`
+> önmagával összevetett `toJson()`-je nem bukott volna el egy valódi
+> regresszión), **L272** (a review-újraellenőrzés `git clone <hub-útvonal>`
+> mintája egy elavult lokális hub-branch-et adhat vissza némán — mindig
+> `origin`-ról klónozz, ha a hub saját branch-e közben mozoghatott).
 >
 > ## ✅ E06-R29 KÉSZ — Evaluation harness és confidence calibration (2026-08-13)
 >
@@ -41,64 +101,6 @@
 > Lecke: `docs/LESSONS.md` **L269** (egy-egyhez időbeli értékelésben a
 > lokálisan legközelebbi mohó párosítás nem bizonyít maximális egyezést).
 >
-> ## ✅ E06-R28 KÉSZ — Cache, performance és model lifecycle (2026-08-13)
->
-> Determinisztikus V2 elemzési cache-infrastruktúra, teljes egészében
-> bekötetlen (`audioAnalysisV2Enabled` és minden al-flag `false` marad).
-> `AnalysisCacheKey` (hatkomponensű reprodukálhatósági kulcs — input
-> fingerprint, analyzer version, model manifest ID-k, DSP config hash, target
-> hash, feature flag snapshot; bármelyik változása miss), `AudioFingerprint`
-> (adatvédelmi SHA-256 a 16-bitre kvantált PCM-en + formátum-fejlécen,
-> fájlnév/path/eszköz-ID nélkül), `AnalysisCache` (lemez-LRU, 20 bejegyzés
-> VAGY 50 MiB — inkluzív cap, sérült bejegyzés miss nem hiba, single-flight
-> coalescing, a mentett R21-session-től fájlrendszerileg elkülönítve),
-> `ModelByteCache` (modellbájtok futásonkénti egyszeri betöltése, parse-olt
-> modell újrahasználata). [ADR 0248](docs/adr/0248-analysis-cache-key-and-performance-budget.md)
-> (a pre-flight írta; a batch-tervezéskori „0210" placeholder elavultnak
-> bizonyult — a `reserve-adr` foglaló 0248-at adott, mert a köztes ~35 ADR
-> már elhasználta a tartományt — brief §0.0).
->
-> **A benchmark (`tool/audio_analysis_benchmark.dart`) az R01 három
-> fixture-ét futtatja újra a MEGLÉVŐ V1 harnesszel** — a kapott
-> `DETERMINISM_SHA256` bitre egyezik az R01
-> (`docs/baseline/epic-06-audio-analysis-start.md`) saját hash-ével, ami
-> független, közvetlen bizonyíték arra, hogy a V1 út 2026-08-11 óta (R21…R27
-> alatt) bitre változatlan maradt.
->
-> **A független tartalmi review** (`docs/reviews/e06-r28-…-review.md`)
-> **APPROVED, 0 BLOCKER/MAJOR, 2 MINOR** — saját, izolált `/tmp` klónban
-> újrafuttatott 8-lépéses gate (mind zöld), `tools/scope-audit.py` OK (15
-> fájl, mind engedélyezett), és egy saját valódi-sértés próba (az
-> `analyzerVersion` komponens ideiglenes kivétele a kulcsból → pontosan a
-> megfelelő miss-cella PIROS → visszaállítva).
->
-> **A kötelező dedikált security review** (`risk = "high"`) **APPROVED, 0
-> BLOCKER/MAJOR, 5 MINOR + 5 NOTE** — öt önálló, futtatott Dart próbaszkript
-> (path-traversal fuzzing 1000 ellenséges kulccsal, symlink-támadás,
-> `chmod 500`-alapú hibainjektálás, memória/költség-profilozás az ADR saját
-> 50 MiB cap-jén). Minden lelet **latens**: a cache-nek ma nulla hívója van a
-> teljes fában (mérve). Élesen legfontosabb: a „50 MiB cap" ténylegesen 66,7
-> MiB lemezt jelent (base64 1,33×-os overhead, a mért baseline-számok 4
-> bájtos payloadról származnak — a cap közelében ~20×-esen optimistábbak a
-> valóságnál); a tartományon kívüli ([-1,1]-en kívüli) PCM-minta némán
-> clamp-elődik, ami két KÜLÖNBÖZŐ bemenetet azonos fingerprintre képezhet; a
-> cache minden `*.json` fájlt sajátjának tekint a könyvtárában (mérve: egy
-> idegen `index.json`-t is törölt) — az elkülönülést ma KIZÁRÓLAG a wiring
-> garantálja. A jelentés §6 pontja tételesen felsorolja, mit KELL lezárni a
-> **bekötő** (wiring) kör előtt — ez a kör explicit NEM az.
->
-> Exact-SHA `59810b4`: Full Gate
-> [31744318906](https://github.com/wolfcasaba/strumsight/actions/runs/31744318906)
-> + Router CI [31744374712](https://github.com/wolfcasaba/strumsight/actions/runs/31744374712)
-> mindkettő success. `origin/main` nem mozdult a dispatch és a merge között.
-> Squash-merge PR [#255](https://github.com/wolfcasaba/strumsight/pull/255),
-> `d325d601`. Implementer **Terra (Codex)**: 1 dispatch `done`, javító kör
-> nélkül (0 BLOCKER/MAJOR).
->
-> Lecke: `docs/LESSONS.md` **L267** (batch-pre-authored briefek ADR-száma
-> elavulhat, ha sosem ment át a `reserve-adr` foglalón — mindig a foglaló
-> friss kimenetét használd, ne a brief fejlécét).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -108,8 +110,9 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Ismételt diéta: 2026-08-13 (E06-R29 zárása): az E06-R27 KÉSZ banner
-> archiválásra került, a fejlécben most az E06-R29 és az E06-R28 banner él.
+> Ismételt diéta: 2026-08-14 (E06-R30 zárása, az Epic 6 ZÁRÓ köre): az
+> E06-R28 KÉSZ banner archiválásra került, a fejlécben most az E06-R30 és az
+> E06-R29 banner él.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -240,11 +243,18 @@
   **E06-R27** (export/share/privacy: allowlist-alapú `RedactionPolicy`,
   `AnalysisExportCodec`, `ShareCardBuilder`, `ExportAnalysisUseCase`,
   `DeleteAnalysisUseCase`, [ADR 0247](docs/adr/0247-analysis-export-share-and-delete-contract.md))
-  és **E06-R28** (cache, performance és model-lifecycle infrastruktúra —
+  **E06-R28** (cache, performance és model-lifecycle infrastruktúra —
   `AnalysisCacheKey`/`AudioFingerprint`/`AnalysisCache`/`ModelByteCache`,
   bekötetlen, [ADR 0248](docs/adr/0248-analysis-cache-key-and-performance-budget.md))
-  kész, 2 további kör tervezve (`docs/execution/pipeline-queue.tsv`,
-  `pending`). **`audioAnalysisV2Enabled`
+  és **E06-R30** (shadow rollout, migráció, Epic-lezárás — ZÁRÓ KÖR:
+  `AnalysisRolloutStage`/`ShadowAnalysisRunner`/`ShadowDiffReport`, teljes
+  50-session migrációs+rollback teszt, 29 ADR státusz-frissítés,
+  [`docs/sdd/epic-06-completion-report.md`](docs/sdd/epic-06-completion-report.md))
+  **kész — az Epic 6 mind a 30 köre lezárult.** A `docs/execution/pipeline-queue.tsv`
+  minden sora `done`, a rollout shadow szinten marad, a folytatás
+  (valódi kalibráció/GOV-30a, CI evaluation wiring/GOV-30b, V2 pipeline
+  összeszerelés/GOV-30c, opt-in/V1-kivezetés) emberi döntést igényel, lásd
+  §6. **`audioAnalysisV2Enabled`
   (+ al-flagek) `false` marad minden környezetben a teljes Epic alatt** (ADR
   0220) — a V1 Analyze marad a shipping út, production viselkedés bitre
   változatlan (a V2 domain + a codec/adapter/input-gateway/recorder teljesen
@@ -848,7 +858,23 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-13):** `main` @ `d325d601` — E06-R28 (cache,
+**Aktuális állapot (2026-08-14):** `main` @ `f257afa7` — E06-R30 (shadow
+rollout, migráció és Epic 6 lezárás, ZÁRÓ KÖR), PR
+[#257](https://github.com/wolfcasaba/strumsight/pull/257), squash-merge.
+Exact-SHA `719c534c`: Full Gate
+[31758004379](https://github.com/wolfcasaba/strumsight/actions/runs/31758004379)
++ Router CI [31758041194](https://github.com/wolfcasaba/strumsight/actions/runs/31758041194)
+mindkettő success. `origin/main` nem mozdult dispatch és merge között.
+Post-merge `tools/round-gate.sh test/features/audio_analysis test/app
+test/features/analyze test/features/library` a lokálisan fast-forwardolt,
+friss `main`-en 9/9 zöld — lásd a fejléc ✅-blokk a teljes
+pre-flight/review/security/javító-kör történetért. **Epic 6 (Audio
+Analysis 2.0) mind a 30 köre kész** — a V2 shadow-szinten marad, a V1 a
+shipping út, opt-in/default-on rollout és V1-kivezetés külön, jövőbeli,
+ember által jóváhagyott GOV-kör dolga (a completion report `GOV-30a/b/c`
+néven nevesíti).
+
+**Korábbi állapot (2026-08-13):** `main` @ `d325d601` — E06-R28 (cache,
 performance és model lifecycle), PR
 [#255](https://github.com/wolfcasaba/strumsight/pull/255), squash-merge.
 Exact-SHA `59810b4`: Full Gate
@@ -856,8 +882,8 @@ Exact-SHA `59810b4`: Full Gate
 + Router CI [31744374712](https://github.com/wolfcasaba/strumsight/actions/runs/31744374712)
 mindkettő success. `origin/main` nem mozdult dispatch és merge között. Post-merge
 `tools/round-gate.sh test/features/audio_analysis test/property test/core`
-egy REMOTE-ról klónozott, friss munkapéldányon (L264) — lásd a fejléc
-✅-blokk a teljes pre-flight/review/security történetért.
+egy REMOTE-ról klónozott, friss munkapéldányon (L264) — lásd
+`docs/handoff-archive.md` a teljes pre-flight/review/security történetért.
 
 > Ez a §4 log ITT nem lett folyamatosan karbantartva E06-R19…R27 között — a
 > fejléc ✅-blokkja (mindig a két legutóbbi kör) és `docs/handoff-archive.md`
@@ -1518,10 +1544,45 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Következő kör:** E07-R01 csak az E06-R30 független review-ja, exact-SHA CI-je
-és merge-e után indulhat. Az Epic 6 nyitott termék/gov tételei: EVAL-28–41
-valós eszköz, kalibráció, CI evaluation wiring, V2 pipeline wiring és bármely
-flag-flip — ezek nem E07-R01 scope-ja.
+**E06-R30 KÉSZ, MERGE-ELVE (2026-08-14, PR #257, `f257afa7`) — az Epic 6
+(Audio Analysis 2.0) mind a 30 köre lezárult.** A
+`docs/execution/pipeline-queue.tsv` minden sora `done` — **a queue
+kiürült, nincs automatikusan dispatch-elhető következő kör.** A lánc a
+korábbi Epic 5→6 átmenethez hasonló emberi döntési ponton áll (lásd a
+lenti „🔒 Kötelező sorrend az Epic 5 után" történeti precedenst — ugyanez
+a mintázat ismétlődik itt).
+
+**Nyitott, EMBERI döntést igénylő irányok (a completion report
+`docs/sdd/epic-06-completion-report.md` „Nyitott tételek" táblája
+nevezi meg):**
+
+1. **Valódi eszközös elfogadás** — a 14 pontos Kör 30 lista + a teljes
+   `docs/manual-testing/analysis-eval-matrix.md` PENDING sorai (EVAL-01…41,
+   Epic 5 device-mátrix is még nyitott) — user-feladat, real gitáros
+   teszt.
+2. **GOV-30a** — valódi kalibrációs dataset/riport (ma `identity.v1`,
+   szintetikus).
+3. **GOV-30b** — az R29 evaluation CI-lépés bekötése (`.github/workflows/**`,
+   `tool/ci/**` — ez a fájlkör EZEN A KÖRÖN kívül maradt szándékosan,
+   H-GATEGUARD).
+4. **GOV-30c** — a valódi, több-stage V2 DSP pipeline összeszerelése
+   (`analysisV2RunnerProvider` ma fail-closed `StateError`, nincs konkrét
+   lánc — mérve E06-R22 óta, HANDOFF §3).
+5. **Opt-in/default-on rollout és a V1 kivezetése** — külön, jóváhagyott
+   GOV-kör, Product/User döntés (§5 Döntés 1 szerint EBBEN a körben sem
+   volt elfogadható semmilyen flag `true`-ra állítása).
+6. **GOV-05b bekötő köre** (AI Tutor `main.py` OpenAI-adapter bekötés) —
+   ettől FÜGGETLEN, régóta nyitott track, brief-je még nincs megírva (ld.
+   lent, változatlan).
+7. **Epic 7 (AI Practice Generator) kickoff** — ha a user új epicre akar
+   lépni Epic 6 shadow-only lezárása után; a Kör 1 briefje **még nincs
+   megírva** (`docs/sdd/08-epic-07-ai-practice-generator.md` létezik, de
+   `docs/rounds/e07-r01-*.md` nem).
+
+Egyik irány sem automatikusan folytatható a queue-ból — mindegyik vagy
+emberi döntést, vagy egy még meg nem írt briefet igényel. **A pipeline a
+következő session-ben NE találjon ki magától egy irányt** — kérdezze meg a
+usert, melyik legyen a következő SDD-kör vagy GOV-kör.
 
 > (A lenti, E06-R19-cel kezdődő szakasz a 2026-08-12 előtti GOV-05/06
 > governance-sagát rögzíti — történeti kontextusként hagyva.)

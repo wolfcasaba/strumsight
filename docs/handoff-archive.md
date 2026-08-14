@@ -6,6 +6,64 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R28 KÉSZ — Cache, performance és model lifecycle (2026-08-13)
+
+Determinisztikus V2 elemzési cache-infrastruktúra, teljes egészében
+bekötetlen (`audioAnalysisV2Enabled` és minden al-flag `false` marad).
+`AnalysisCacheKey` (hatkomponensű reprodukálhatósági kulcs — input
+fingerprint, analyzer version, model manifest ID-k, DSP config hash, target
+hash, feature flag snapshot; bármelyik változása miss), `AudioFingerprint`
+(adatvédelmi SHA-256 a 16-bitre kvantált PCM-en + formátum-fejlécen,
+fájlnév/path/eszköz-ID nélkül), `AnalysisCache` (lemez-LRU, 20 bejegyzés
+VAGY 50 MiB — inkluzív cap, sérült bejegyzés miss nem hiba, single-flight
+coalescing, a mentett R21-session-től fájlrendszerileg elkülönítve),
+`ModelByteCache` (modellbájtok futásonkénti egyszeri betöltése, parse-olt
+modell újrahasználata). [ADR 0248](adr/0248-analysis-cache-key-and-performance-budget.md)
+(a pre-flight írta; a batch-tervezéskori „0210" placeholder elavultnak
+bizonyult — a `reserve-adr` foglaló 0248-at adott, mert a köztes ~35 ADR
+már elhasználta a tartományt — brief §0.0).
+
+**A benchmark (`tool/audio_analysis_benchmark.dart`) az R01 három
+fixture-ét futtatja újra a MEGLÉVŐ V1 harnesszel** — a kapott
+`DETERMINISM_SHA256` bitre egyezik az R01
+(`docs/baseline/epic-06-audio-analysis-start.md`) saját hash-ével, ami
+független, közvetlen bizonyíték arra, hogy a V1 út 2026-08-11 óta (R21…R27
+alatt) bitre változatlan maradt.
+
+**A független tartalmi review** (`docs/reviews/e06-r28-…-review.md`)
+**APPROVED, 0 BLOCKER/MAJOR, 2 MINOR** — saját, izolált `/tmp` klónban
+újrafuttatott 8-lépéses gate (mind zöld), `tools/scope-audit.py` OK (15
+fájl, mind engedélyezett), és egy saját valódi-sértés próba (az
+`analyzerVersion` komponens ideiglenes kivétele a kulcsból → pontosan a
+megfelelő miss-cella PIROS → visszaállítva).
+
+**A kötelező dedikált security review** (`risk = "high"`) **APPROVED, 0
+BLOCKER/MAJOR, 5 MINOR + 5 NOTE** — öt önálló, futtatott Dart próbaszkript
+(path-traversal fuzzing 1000 ellenséges kulccsal, symlink-támadás,
+`chmod 500`-alapú hibainjektálás, memória/költség-profilozás az ADR saját
+50 MiB cap-jén). Minden lelet **latens**: a cache-nek ma nulla hívója van a
+teljes fában (mérve). Élesen legfontosabb: a „50 MiB cap" ténylegesen 66,7
+MiB lemezt jelent (base64 1,33×-os overhead, a mért baseline-számok 4
+bájtos payloadról származnak — a cap közelében ~20×-esen optimistábbak a
+valóságnál); a tartományon kívüli ([-1,1]-en kívüli) PCM-minta némán
+clamp-elődik, ami két KÜLÖNBÖZŐ bemenetet azonos fingerprintre képezhet; a
+cache minden `*.json` fájlt sajátjának tekint a könyvtárában (mérve: egy
+idegen `index.json`-t is törölt) — az elkülönülést ma KIZÁRÓLAG a wiring
+garantálja. A jelentés §6 pontja tételesen felsorolja, mit KELL lezárni a
+**bekötő** (wiring) kör előtt — ez a kör explicit NEM az.
+
+Exact-SHA `59810b4`: Full Gate
+[31744318906](https://github.com/wolfcasaba/strumsight/actions/runs/31744318906)
++ Router CI [31744374712](https://github.com/wolfcasaba/strumsight/actions/runs/31744374712)
+mindkettő success. `origin/main` nem mozdult a dispatch és a merge között.
+Squash-merge PR [#255](https://github.com/wolfcasaba/strumsight/pull/255),
+`d325d601`. Implementer **Terra (Codex)**: 1 dispatch `done`, javító kör
+nélkül (0 BLOCKER/MAJOR).
+
+Lecke: `docs/LESSONS.md` **L267** (batch-pre-authored briefek ADR-száma
+elavulhat, ha sosem ment át a `reserve-adr` foglalón — mindig a foglaló
+friss kimenetét használd, ne a brief fejlécét).
+
 ## ✅ E06-R27 KÉSZ — Export, share és privacy controls (2026-08-13)
 
 Az R27 adatvédelmi export- és megosztási szerződését az
