@@ -123,6 +123,59 @@ class TheTwoGatesSkipInsteadOfFailingTest(unittest.TestCase):
         )
 
 
+class TheBriefLintCliAcceptsAnEmptyOpenSetTest(unittest.TestCase):
+    """A HARMADIK fogyasztó (2026-08-14, PR #258 UTÁN mérve).
+
+    A PR #258 a `tools/tests` két kapuját javította, de a `router-ci.yml`-nek
+    NÉGY `run:` lépése van, és a negyedik — „Round brief lint gate (open
+    rounds)", `python3 tools/brief-lint.py --open --level base` — ugyanezen az
+    üres soron `exit 3`-mal elhasalt („adj meg --brief-et, --open-t vagy
+    --all-t"), mert a CLI a nulla feloldott útvonalat HIÁNYZÓ KAPCSOLÓNAK
+    vette. A main így a javítás UTÁN is piros maradt.
+
+    Tanulság, amit ez a cella pinnel: az „üres sor" állapotnak több fogyasztója
+    van; rétegenkénti javítás helyett mindet fel kell sorolni. A `router-ci.yml`
+    négy `run:` lépése az EGYETLEN sor-függő CI (mérve: más workflow nem
+    hivatkozik a queue-ra).
+    """
+
+    CLI = ROOT / "tools" / "brief-lint.py"
+
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(self.CLI), *args],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+    def test_open_on_an_all_done_queue_exits_zero(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            _queue(root, "# fejléc\nE06-R30\tdocs/rounds/b.md\tcodex\tnincs\tdone\n")
+            result = self._run("--repo", str(root), "--open", "--level", "base")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("nincs nyitott kör", result.stdout)
+
+    def test_a_missing_selector_is_still_a_usage_error(self) -> None:
+        """A kivétel SZŰK: csak az `--open` üres halmaza legitim. Kapcsoló
+        nélkül továbbra is usage-hiba, különben a néma no-op zöldnek látszana."""
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            _queue(root, "# fejléc\nE06-R30\tdocs/rounds/b.md\tcodex\tnincs\tdone\n")
+            result = self._run("--repo", str(root), "--level", "base")
+            self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+
+    def test_open_with_a_real_open_round_does_not_take_the_empty_branch(self) -> None:
+        """A kivétel nem tehet vakká: nyitott kör mellett a lint TÉNYLEGESEN
+        fut, nem az üres ágon megy ki."""
+        live_open = [r for r in brief_lint.queue_rows(ROOT) if r[2] != "done"]
+        if not live_open:
+            self.skipTest("az éles sor épp üres — ezt a cellát a fenti kettő fedi")
+        result = self._run("--repo", str(ROOT), "--open", "--level", "base")
+        self.assertNotIn("nincs nyitott kör", result.stdout)
+
+
 class TheGatesStillMeasureEveryOpenRoundTest(unittest.TestCase):
     """A skip nem tehet vakká: a JELENLEGI (nem üres) sorral mindkét kapunak
     ténylegesen FUTNIA kell, nem skipelnie."""
