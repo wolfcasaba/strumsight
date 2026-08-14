@@ -3,9 +3,57 @@
 Brief: `docs/rounds/e06-r30-shadow-rollout-migration-and-epic-closure.md` (incl. §0.0 R1–R9 pre-flight revision)
 Diff: `git diff d54821ae..caceaae4` (pre-flight base → implementer commit); equivalently `origin/main (8341f600)...caceaae4` for the forbidden-zone check (identical result)
 Reviewer: Claude (independent reviewer role, sdd-round-review protocol) · Dátum: 2026-08-13/14
-Verdikt: **CHANGES REQUESTED**
+Verdikt (első kör): CHANGES REQUESTED → **javító kör #1 (`b3362404`) után: APPROVED**
 
-## Összegzés
+## Javító kör #1 utáni zárás (orchestrátor, 2026-08-14, commit `b3362404`)
+
+Mindkét nyitott lelet zárva, saját (a megosztott munkafától független, közvetlenül
+`origin`-ról klónozott) `/tmp/review-e06-r30-fix1` klónban újra ellenőrizve:
+
+- **F1 (MAJOR) → ZÁRVA.** `test/features/audio_analysis/data/rollback_test.dart`
+  most két, ténylegesen ELTÉRŐ `FeatureFlags` példányt épít (`_flagsOff()` /
+  `_flagsOn()` — utóbbi `audioAnalysisV2Enabled: true`), explicit
+  `expect(flagsOff == flagsOn, isFalse)` egyenlőtlenség-őrrel, és mindkét
+  állapotban bizonyítja a migrált V2-dokumentum sikeres olvasását
+  (`_expectV2ReadSucceeds`). **Real-violation próbával megerősítve:** a
+  `_flagsOn()` ideiglenes visszaállítása a régi, tautologikus alakra (a
+  fixet pontosan visszavonva) a 31. sori `expect(flagsOff == flagsOn,
+  isFalse)`-t PIROSRA fogta (`Expected: false / Actual: <true>`); a fájl
+  ezután SHA-256-tal igazoltan bájtra visszaállítva a commitolt tartalomra.
+  A completion report a kapcsolódó DoD-sort változatlanul `[x]`-nek
+  jelöli, de a szövege immár PONTOSAN azt írja le, amit a teszt bizonyít
+  (`epic-06-completion-report.md:113`: „R30 két külön `FeatureFlags`
+  állapotban… olvassa vissza”) — nincs túlállítás.
+- **F2 (MINOR) → ZÁRVA.** `docs/sdd/epic-06-completion-report.md` záró
+  mondata most „70/74” + „négy nyitott DoD-tétel”, egy tisztázó
+  mondattal a Nyitott tételek tábla 5 sorának tágabb kategorizálásáról.
+  Ellenőrizve: `grep -c '^\- \[x\]'` → 70, `grep -c '^\- \[ \]'` → 4,
+  egyezik a szöveggel.
+- **Bónusz (a security-review NOTE-1 alapján, nem kötelező, de elvégezve):**
+  `test/features/audio_analysis/data/full_migration_test.dart` már egy
+  `jsonDecode(jsonEncode(...))` mély másolatból építi az
+  `originalPayloads`-ot az élő `AnalyzedSession` objektum újra-szerializálása
+  helyett — a testvér-tautológia is zárva.
+- **Gate újrafuttatva, FRISS, közvetlenül `origin`-ról (nem a megosztott
+  munkafáról vagy a hubról) klónozott példányban** (az első ellenőrzési
+  kísérletem tévedésből a hub egy elavult lokális branch-állapotát
+  klónozta — ezt észlelve azonnal újra klónoztam közvetlenül `origin`-ról,
+  és csak az így kapott, HEAD=`b3362404` állapotot fogadtam el
+  bizonyítéknak): mind a 9 lépés zöld, exit 0.
+- **Scope-audit újra:** `Legacy scope audit OK (d54821ae..b336240410a5, 48
+  changed path(s), 2 generated/ignored)` — a 48 = az eredeti 46 implementációs
+  fájl + a két review-jelentés (amiket a review-protokoll szerint a
+  scope-audit nem is nézett, mert a mérési pillanatban már léteztek és a
+  saját review-artefaktumként mentesek); a fix maga egyetlen ÚJ fájlt sem
+  adott a diffhez, csak a már engedélyezett 3 fájlt módosította.
+- CI: Router CI zöld a `b3362404` SHA-n (run 31757447449); Full Gate
+  dispatch-elve, az orchestrátor a merge előtt megvárja.
+
+Nyitva marad (nem blokkoló): N1–N4 a fenti szakaszban, follow-up-ként.
+
+**Végső verdikt: APPROVED.**
+
+## Összegzés (első kör, történeti)
 
 BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 4
 

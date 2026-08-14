@@ -7,6 +7,17 @@
 - **Kockázat:** high (migráció + adatvédelem + rollout) — a review a merge kötelező előfeltétele
 - **Verdikt:** **PASS / APPROVED — 0 CRITICAL, 0 BLOCKER, 0 MAJOR, 0 MINOR, 4 NOTE**
 
+## 0. Javító kör #1 utáni kiegészítés (orchestrátor, 2026-08-14, commit `b3362404`)
+
+A verdikt változatlan (PASS) — a security-review eredetileg is NOTE-nak, nem
+határsértésnek minősítette a NOTE-1/NOTE-2 tényeket. A párhuzamos content-review
+MAJOR-ja (F1) a javító körben zárult: `rollback_test.dart` most két ténylegesen
+eltérő `FeatureFlags` állapotot épít és mindkettőben bizonyítja a V2-dokumentum
+olvashatóságát, `full_migration_test.dart` pedig NOTE-1 szerint mély JSON-másolatot
+használ önhasonlítás helyett. Lásd a részletes zárást:
+`docs/reviews/e06-r30-shadow-rollout-migration-and-epic-closure-review.md`
+„Javító kör #1 utáni zárás” szakasz.
+
 ## 1. Verdikt
 
 A kör egy **bekötetlen** (production-hívó nélküli) shadow/rollout/migráció-tesztelő és Epic-lezáró kör. A három nem tárgyalható termékhatár — (a) nyers audio nem hagyja el az eszközt / nem kerül logba, (b) egyetlen flag sem `true` semmilyen környezetben, (c) a migráció nem törli/sérti a legacy adatot — **mind teljesül**, futtatott bizonyítékkal. A dokumentáció (completion report, 29 ADR, README, HANDOFF, SDD index) **őszinte**: explicit rögzíti, hogy a shadow mechanizmus „hívó nélkül, csak contract-teszt", és hogy a rollout shadow szinten marad. Nincs merge-blokkoló lelet.
