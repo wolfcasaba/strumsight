@@ -221,3 +221,12 @@ E99-R03	docs/rounds/e99-r03-gov-05c-learn-migration-rollout.md	codex	0198	done
 E99-R04	docs/rounds/e99-r04-gov-06-real-audio-dsp-baseline.md	codex	0199	done
 E99-R05	docs/rounds/e99-r05-gov-06b-bpm-metric-fix.md	codex	0212	done
 E99-R07	docs/rounds/e99-r07-gov-05b-2-openai-provider-adapter.md	codex	0214	done
+#
+# E99-R09 (GOV-30c-1) — user-döntés 2026-08-14, az Epic 6 lezárása utáni hét
+# nyitott irányból ez az első. Indok: az Epic 6 mind a 30 köre shadow-only, és
+# az `analysisV2RunnerProvider` StateError-t dob — nincs összeszerelt V2
+# DSP-lánc. A completion report 1. (valódi eszközös elfogadás) és 5. (rollout)
+# tétele FIZIKAILAG BLOKKOLT, amíg ez el nem készül. A lánc két lépcsőben épül
+# (ADR 0250 §4): ez az ingest fele, a GOV-30c-2 briefje szándékosan még nincs
+# megírva (egy session = egy kör).
+E99-R09	docs/rounds/e99-r09-gov-30c-1-ingest-pipeline-composition.md	codex	0250	pending
