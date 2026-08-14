@@ -31,6 +31,30 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Brief-revízió — 2026-08-14, független review F1/MAJOR
+
+Az eredeti brief a hat felsorolt modul adapterét kérte, de az A4-cellája a
+`AnalysisWorkState.seed(input: ...)` PCM-bemenetétől elvárt teljes timeline
+alapot csak kívülről beadott `LegacyEvidence`-szel tudta volna elérni. Ez nem
+a kör céljának megfelelő self-contained ingest-lánc. A `ClipAnalyzerStage`
+azonban már létező, review-zott V1→`LegacyEvidence` adapter, és kizárólag az
+engedélyezett új `engine/stages/ingest_stages.dart` fájlban kell vékonyan
+becsomagolni.
+
+Ezért a kötelező összetétel hét stage: preprocessing → signal quality → legacy
+evidence → pitch → harmony → rhythm → events. A `legacy-evidence` hiba
+fatális: nélküle a harmony/rhythm/events inputja nem állítható elő. A
+`AnalysisWorkState.seed` nem fogadhat kész `LegacyEvidence`-t; az új adapter
+a már előfeldolgozott audio-ból `LegacyClipAnalyzerInput`-ot épít és a meglévő
+`ClipAnalyzerStage`-et hívja. A megengedett útvonalak nem változnak, meglévő
+engine-fájl tartalma nem módosul, a provider továbbra is érintetlen.
+
+Ennek megfelelően §2.3-ban a `legacy/` a hetedik wrapolandó modul, §3.2/A2
+és §6.1 a hét adaptert és az önálló PCM→timeline A4-cellát méri, §5.3 a
+`legacy-evidence` fatális besorolását, §8 pedig a hétlépéses sorrendet írja
+elő. Ez a kör saját, még nem lezárt briefjének szűk pontosítása; ADR 0250
+változatlan.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
