@@ -113,6 +113,8 @@ A pre-flight ezt újramérte:
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a `ShadowAnalysisRunner` konstruktor-injektált `AnalysisRunner`rel tesztelt, production provider/hívó nélkül; a fail-closed V2 provider változatlan.
+
 - A valódi, több-stage DSP pipeline összeszerelése (közös munka-kontextus
   típus + konkrét stage-lánc) egy önálló, MÉG NEM ÜTEMEZETT jövőbeli kör
   feladata marad — a HANDOFF §3-ban nyíltan megnevezendő nyitott rés, nem

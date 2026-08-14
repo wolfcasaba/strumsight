@@ -80,6 +80,8 @@ változatlan marad, [ADR 0220](0220-audio-analysis-v2-parallel-rollout-boundary.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; az Epic 6 implementation evidence rögzítve, a rollout shadow szinten marad.
+
 - A V2 `AnalysisDocument` domainmodellje (E06-R02) a `schemaVersion`
   mezővel és a fail-closed konstruktor-validációval indul — ez a kör csak a
   szerződést rögzíti dokumentumban, kódot nem ír.

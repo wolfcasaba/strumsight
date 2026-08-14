@@ -1,4 +1,5 @@
 import 'app_environment.dart';
+import '../../features/audio_analysis/domain/rollout/analysis_rollout_stage.dart';
 
 /// Compile-time feature availability (E01-R03, SDD Ch2 Kör 3 §3.2).
 ///
@@ -195,6 +196,12 @@ final class FeatureFlags {
   /// Whether the redacted Analysis-to-Tutor adapter may instantiate.
   /// This remains OFF in every environment until Tutor wiring ships.
   final bool analysisTutorIntegrationEnabled;
+
+  /// The build-time rollout level. Shadow execution has an additional
+  /// runtime Lab-mode gate, so it is intentionally not inferred here.
+  AnalysisRolloutStage get analysisRolloutStage => audioAnalysisV2Enabled
+      ? AnalysisRolloutStage.v2OptIn
+      : AnalysisRolloutStage.v1Default;
 
   /// True when any flag implies network use (drives URL validation).
   bool get usesNetwork => accountEnabled || diagnosticsEnabled;

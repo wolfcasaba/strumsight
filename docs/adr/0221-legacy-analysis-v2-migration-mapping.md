@@ -185,6 +185,8 @@
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; az 50-session migrációs teszt megőrizte az ID/createdAt/title/customTitle mezőket és az idempotenciát.
+
 - Az E06-R03 `allowed_paths`-a **egyetlen** R02 domain-fájllal bővül
   (`signal_quality_report.dart` + a hozzá tartozó ÚJ teszt) — minden más
   legacy adat a meglévő timeline/warning szerkezeteken él, nincs más

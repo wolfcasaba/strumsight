@@ -33,6 +33,8 @@ stabil-azonosító szabályát.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; mért rollout-bizonyíték shadow szinten áll.
+
 - A későbbi session-összehasonlítás az ID-ből is látja, hogy target vagy
   free-play mérésről van szó; az eredmények nem keverhetők össze.
 - A free-play confidence legfeljebb az azt alátámasztó beat-grid confidence,

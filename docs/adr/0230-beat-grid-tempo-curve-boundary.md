@@ -50,6 +50,8 @@ publikálni a katalogus módosítása nélkül.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; valós-audio eval PENDING.
+
 - A beat grid és a tempo curve már tesztelhető, offline domain/engine
   eredmény, de nem módosítja a ma használt V1 Analyze eredményt vagy a tárolt
   V2 dokumentumot.

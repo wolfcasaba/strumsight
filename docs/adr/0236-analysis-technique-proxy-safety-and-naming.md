@@ -37,6 +37,8 @@ top-k vagy no-chord valószínűség, ezért confidence collapse sem becsülhet�
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; a Lab+flag kettős gate és az EVAL-22–26 nyitott marad.
+
 - A V1 shipping út és a V2 document-szerződés változatlan marad.
 - Egy későbbi, külön kör dönthet a Lab-panel vagy a diagnosztikai export
   bekötéséről; az nem emelheti a proxykat a normál UX-be eval nélkül.

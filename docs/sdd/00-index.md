@@ -18,7 +18,7 @@ A SDD-t nem egyetlen óriási feladatként kell átadni a Codexnek. Mindig ponto
 | 4 | Epic 3: Song Trainer | 22 — implementation evidence recorded; release blockers remain | Chapter 2; Chapter 3 contractjai | [`04-epic-03-song-trainer.md`](04-epic-03-song-trainer.md) | [`epic-03-completion-report.md`](epic-03-completion-report.md) |
 | 5 | Epic 4: AI Guitar Teacher | 24 | Chapter 2; Chapter 3 és 7 evidenciakontraktusai | [`05-epic-04-ai-guitar-teacher.md`](05-epic-04-ai-guitar-teacher.md) |
 | 6 | Epic 5: Computer Vision | 30 | Chapter 2; kamera spike | [`06-epic-05-computer-vision.md`](06-epic-05-computer-vision.md) |
-| 7 | Epic 6: Audio Analysis 2.0 | 30 | Chapter 2; meglévő Analyze/DSP baseline | [`07-epic-06-audio-analysis-2.md`](07-epic-06-audio-analysis-2.md) |
+| 7 | Epic 6: Audio Analysis 2.0 | 30 — implementation evidence recorded; rollout stays at shadow, release blockers remain | Chapter 2; meglévő Analyze/DSP baseline | [`07-epic-06-audio-analysis-2.md`](07-epic-06-audio-analysis-2.md) | [`epic-06-completion-report.md`](epic-06-completion-report.md) |
 | 8 | Epic 7: AI Practice Generator | 30 | Chapter 3, 5 és 7 | [`08-epic-07-ai-practice-generator.md`](08-epic-07-ai-practice-generator.md) |
 | 9 | Epic 8: Gamification | 30 | Chapter 3 és 8 eseményei | [`09-epic-08-gamification.md`](09-epic-08-gamification.md) |
 | 10 | Epic 9: Community Platform | 32 | Chapter 2 és 9; backend migráció | [`10-epic-09-community-platform.md`](10-epic-09-community-platform.md) |

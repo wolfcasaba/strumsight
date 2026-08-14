@@ -30,6 +30,8 @@ tárol, nyers audio-byte-ot és R28 cache-t még nem.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; device deletion check EVAL-41 PENDING.
+
 - Az export és a share offline marad, nyers audio nem hagyja el az eszközt.
 - A takarítás siker- és hibautas viselkedése fake share/cache/audio portokkal
   tesztelhető.

@@ -114,6 +114,8 @@ dokumentált mérés — nem az implementer hibája. Az 5. döntés ezeket oldja
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; pitch flag OFF és eval PENDING.
+
 - A `public.dart` barrel két, névben hasonló, de funkcionálisan független
   típust exportál: `PitchSegment` (bekötetlen stub, E06-R02) és
   `MonophonicPitchSegment` (E06-R17, capability-gate mögötti pipeline

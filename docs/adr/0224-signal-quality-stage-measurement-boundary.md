@@ -39,6 +39,8 @@ szerződése megenged eltérő bemenetet és kimenetet, de a jelenlegi
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; valós eszközös mérés EVAL-sorokon PENDING.
+
 - Az R07 teljesíti a részmetrikák hozzáférhetőségét domain-redesign nélkül.
 - A stage a rövid klipből továbbra is peak/RMS/clipping értéket szolgáltat;
   csak a nem elég megfigyelhető zaj-/tonalness-metrikákat jelöli degradednek.

@@ -104,6 +104,8 @@ migráció egyetlen körben.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** megerősítve: mind a kilenc Epic 6 flag OFF minden környezetben, a V1 shipping út változatlan; a V2 shadow szerződés hívó nélkül tesztelt.
+
 - Minden Epic 6 építő-kör (E06-R02…R30) a `lib/app/config/feature_flags.dart`-ot
   **tilos zónaként** kezeli, hacsak a brief kifejezetten nem sorolja fel az
   `allowed_paths`-on — a flag hozzáadása/bekapcsolása explicit, dedikált

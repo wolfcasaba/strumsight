@@ -111,6 +111,8 @@ brief minden konkrét állítását a kódban, nem csak elfogadta őket):
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; kalibráció `identity.v1`, EVAL-06 PENDING.
+
 - `lib/features/audio_analysis/engine/confidence/` négy új fájlja + a
   `domain/analysis_capability.dart` additív bővítése (ha az implementáció
   új `details`-kulcsot vagy hasonlót igényel) + `public.dart` export +

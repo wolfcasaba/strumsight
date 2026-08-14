@@ -28,6 +28,20 @@ Minden sor **PENDING**: a V1 szintetikus baseline nem helyettesíti a valós esz
 | EVAL-19 | PENDING | Capability owner | `noReferenceTarget` fixture | `capability.unavailable_reason.no_reference_target.v1` eseményszám |
 | EVAL-20 | PENDING | Capability owner | Felhasználói cancel lifecycle | `capability.unavailable_reason.cancelled.v1` eseményszám |
 | EVAL-21 | PENDING | Capability owner | Kontrollált pipeline-hiba | `capability.unavailable_reason.internal_failure.v1` eseményszám |
+| EVAL-28 | PENDING | Device-lab owner | Record: telefonmikrofon, 10 s akkordklip | rekord indul/áll, `privacy.raw_audio_egress_count.v1` |
+| EVAL-29 | PENDING | Device-lab owner | Cancel: aktív elemzés közben cancel | cancel-latencia, késői result száma |
+| EVAL-30 | PENDING | Device-lab owner | Background: aktív record/elemzés, app háttérbe | hot-mic és árva isolate száma (elvárt 0) |
+| EVAL-31 | PENDING | Device-lab owner | Import: ismert WAV klip | import success/failure és capability-ok |
+| EVAL-32 | PENDING | Performance owner | 30 s telefonmikrofonos klip | `analysis.wall_clock_ms.v1`, peak RSS |
+| EVAL-33 | PENDING | Performance owner | 5 perces importált klip | wall-clock, peak RSS, cancel-latencia |
+| EVAL-34 | PENDING | Device-lab owner | Analysis overview valós V2 documenttel | unavailable/available állapotok helyessége |
+| EVAL-35 | PENDING | Device-lab owner | Timeline zoom hosszú sessionnel | zoom/pan frame-idő, overlay olvashatóság |
+| EVAL-36 | PENDING | Device-lab owner | Save, app restart, reopen | reopen success és checksum hiba száma |
+| EVAL-37 | PENDING | Device-lab owner | Két kompatibilis session összehasonlítása | comparison/trend state helyessége |
+| EVAL-38 | PENDING | Practice integration owner | Analysis hotspot → Practice action | létrejött feladat és egyszeri credit |
+| EVAL-39 | PENDING | Tutor integration owner | Redaktált analysis snapshot → Tutor action | redaction audit és action siker |
+| EVAL-40 | PENDING | Privacy owner | Offline normál és Lab Analyze | hálózati kérés száma (elvárt 0) |
+| EVAL-41 | PENDING | Privacy owner | Session és audio deletion | document/audio maradvány száma (elvárt 0) |
 
 | EVAL-22 | PENDING | Technique-proxy eval owner | Címkézett akkordváltás-klip, ismert váltás-pár ≥4 ismétléssel | `technique.chord_change_gap.v1` korrelációja a felvétel emberi értékelésével (Pearson r, n≥20 klip) |
 | EVAL-23 | PENDING | Technique-proxy eval owner | Címkézett klip `complete` chord-evidence-szel (nem `derived`) | `technique.confidence_collapse_duration.v1` és a modell top-k bizonytalanságának korrelációja |

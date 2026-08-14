@@ -108,6 +108,8 @@ kifejezetten ennek a körnek szánva.
 
 ## Következmények
 
+**E06-R30 (2026-08-13):** a döntés változatlan; performance device budget evidence EVAL-07/27/32/33 PENDING.
+
 - A cache teljes egészében on-device és offline; hálózati hívást nem végez.
 - `audioAnalysisV2Enabled` és minden al-flag változatlanul `false` — ez a kör
   infrastruktúra, a production elemzési útvonalakba bekötetlen.
