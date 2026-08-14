@@ -54,8 +54,7 @@ void main() {
       final legacyEvidence = _legacyEvidence();
       final withEvidence = AnalysisWorkState.seed(
         input: _input(),
-        legacyEvidence: legacyEvidence,
-      );
+      ).copyWith(legacyEvidence: legacyEvidence);
 
       final withAudio = withEvidence.copyWith(preprocessedAudio: _audio());
 

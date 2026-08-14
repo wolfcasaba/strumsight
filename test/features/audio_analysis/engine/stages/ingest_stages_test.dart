@@ -13,11 +13,14 @@ import 'package:strumsight/features/audio_analysis/domain/preprocessed_audio.dar
 import 'package:strumsight/features/audio_analysis/engine/analysis_cancellation.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_context.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_provenance_builder.dart';
+import 'package:strumsight/features/audio_analysis/engine/analysis_stage.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_work_state.dart';
 import 'package:strumsight/features/audio_analysis/engine/legacy/legacy_evidence.dart';
 import 'package:strumsight/features/audio_analysis/engine/preprocessing/preprocessing_config.dart';
 import 'package:strumsight/features/audio_analysis/engine/preprocessing/preprocessing_stage.dart';
 import 'package:strumsight/features/audio_analysis/engine/stages/ingest_stages.dart';
+
+import '../../../../support/synth.dart';
 
 const _sampleRate = 44100;
 
@@ -98,6 +101,57 @@ void main() {
     });
   });
 
+  group('LegacyEvidenceIngestStage', () {
+    test('delegates to the injected stage and stores its output', () async {
+      final samples = strumPattern(lowFirstPerStrum: [true, false]);
+      final state = AnalysisWorkState.seed(
+        input: _input(samples: samples),
+      ).copyWith(preprocessedAudio: _preprocessedAudio(samples));
+
+      final next = _requireSuccess(
+        await const LegacyEvidenceIngestStage().run(
+          state,
+          _context(phase: AnalysisProgressPhase.extractingEvents),
+        ),
+      );
+
+      expect(next.legacyEvidence, isNotNull);
+      expect(next.legacyEvidence!.strums, isNotEmpty);
+    });
+
+    test(
+      // A3-equivalent: swapping the injected ClipAnalyzerStage changes the
+      // adapter's output — proof the adapter calls the real stage rather
+      // than copying its body.
+      'swapping the injected stage changes the output',
+      () async {
+        final samples = strumPattern(lowFirstPerStrum: [true, false]);
+        final state = AnalysisWorkState.seed(
+          input: _input(samples: samples),
+        ).copyWith(preprocessedAudio: _preprocessedAudio(samples));
+
+        final stubbedResult = _requireSuccess(
+          await LegacyEvidenceIngestStage(
+            stage: const _StubClipAnalyzerStage(),
+          ).run(state, _context(phase: AnalysisProgressPhase.extractingEvents)),
+        );
+
+        expect(stubbedResult.legacyEvidence, same(_stubEvidence));
+      },
+    );
+
+    test('fails without preprocessed audio', () async {
+      final state = AnalysisWorkState.seed(input: _input());
+
+      final result = await const LegacyEvidenceIngestStage().run(
+        state,
+        _context(phase: AnalysisProgressPhase.extractingEvents),
+      );
+
+      expect(result.isFailure, isTrue);
+    });
+  });
+
   group('PitchIngestStage', () {
     test('extracts voiced frames and segments from real audio', () async {
       final samples = _sine(220, seconds: 0.4);
@@ -131,8 +185,7 @@ void main() {
 
   group('HarmonyIngestStage', () {
     test('assembles chord segments from derived V1 chord evidence', () async {
-      final state = AnalysisWorkState.seed(
-        input: _input(),
+      final state = AnalysisWorkState.seed(input: _input()).copyWith(
         legacyEvidence: _legacyEvidence(
           chords: const <LegacyChordEvidence>[
             LegacyChordEvidence(
@@ -185,8 +238,7 @@ void main() {
             confidence: .8,
           ),
       ];
-      final state = AnalysisWorkState.seed(
-        input: _input(),
+      final state = AnalysisWorkState.seed(input: _input()).copyWith(
         legacyEvidence: _legacyEvidence(
           strums: strums,
           duration: const Duration(milliseconds: 5000),
@@ -219,23 +271,20 @@ void main() {
 
   group('EventsIngestStage', () {
     test('builds the onset/strum event track from legacy evidence', () async {
-      final state =
-          AnalysisWorkState.seed(
-            input: _input(),
-            legacyEvidence: _legacyEvidence(
-              strums: const <LegacyStrumEvidence>[
-                LegacyStrumEvidence(
-                  direction: legacy_core.StrumDirection.down,
-                  time: Duration(milliseconds: 50),
-                  confidence: .8,
-                ),
-              ],
+      final state = AnalysisWorkState.seed(input: _input()).copyWith(
+        legacyEvidence: _legacyEvidence(
+          strums: const <LegacyStrumEvidence>[
+            LegacyStrumEvidence(
+              direction: legacy_core.StrumDirection.down,
+              time: Duration(milliseconds: 50),
+              confidence: .8,
             ),
-          ).copyWith(
-            preprocessedAudio: _preprocessedAudio(
-              List<double>.filled(_sampleRate, .25),
-            ),
-          );
+          ],
+        ),
+        preprocessedAudio: _preprocessedAudio(
+          List<double>.filled(_sampleRate, .25),
+        ),
+      );
 
       final next = _requireSuccess(
         await const EventsIngestStage().run(
@@ -264,10 +313,12 @@ void main() {
   group('classifyIngestStageFailure', () {
     const failure = ValidationFailure();
 
-    test('preprocessing, signal-quality and events are fatal', () {
+    test('preprocessing, signal-quality, legacy-evidence and events are '
+        'fatal', () {
       for (final id in <String>[
         IngestStageIds.preprocessing,
         IngestStageIds.signalQuality,
+        IngestStageIds.legacyEvidence,
         IngestStageIds.events,
       ]) {
         final verdict = classifyIngestStageFailure(id, failure);
@@ -309,12 +360,13 @@ void main() {
   });
 
   group('buildIngestStages', () {
-    test('composes exactly the six ingest stages in ADR 0250 order', () {
+    test('composes exactly the seven ingest stages in ADR 0250 order', () {
       final stages = buildIngestStages();
 
       expect(stages.map((stage) => stage.id), <String>[
         IngestStageIds.preprocessing,
         IngestStageIds.signalQuality,
+        IngestStageIds.legacyEvidence,
         IngestStageIds.pitch,
         IngestStageIds.harmony,
         IngestStageIds.rhythm,
@@ -322,6 +374,39 @@ void main() {
       ]);
     });
   });
+}
+
+final _stubEvidence = LegacyEvidence(
+  duration: const Duration(seconds: 1),
+  bpm: 120,
+  chords: const <LegacyChordEvidence>[],
+  strums: const <LegacyStrumEvidence>[],
+  call: LegacyClipAnalyzerCall(
+    sampleRate: _sampleRate,
+    sampleCount: _sampleRate,
+    labMode: false,
+    hasCandidateStrumRefiner: false,
+  ),
+  provenance: AnalysisProvenanceBuilder().build(
+    strumRefinerSource: StrumRefinerSource.none,
+  ),
+);
+
+final class _StubClipAnalyzerStage
+    implements AnalysisStage<LegacyClipAnalyzerInput, LegacyEvidence> {
+  const _StubClipAnalyzerStage();
+
+  @override
+  String get id => 'stub-clip-analyzer';
+
+  @override
+  int get version => 1;
+
+  @override
+  Future<AppResult<LegacyEvidence>> run(
+    LegacyClipAnalyzerInput input,
+    AnalysisStageContext context,
+  ) async => Success<LegacyEvidence>(_stubEvidence);
 }
 
 AnalysisWorkState _requireSuccess(AppResult<AnalysisWorkState> result) =>

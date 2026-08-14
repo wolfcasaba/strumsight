@@ -56,7 +56,9 @@ final class AnalysisWorkState {
   /// harmony derives `ChordFrameEvidence` from `legacyEvidence.chords`
   /// (`EvidenceCompleteness.derived`), rhythm reads `legacyEvidence.strums`
   /// as onset times, and events wraps `EventTimelineBuilder` directly with
-  /// it. Not produced inside this round's chain — supplied by the caller.
+  /// it. Produced mid-chain by the `legacy-evidence` ingest stage (which
+  /// wraps the reviewed `ClipAnalyzerStage` over the preprocessed audio) —
+  /// never supplied by the caller.
   final LegacyEvidence? legacyEvidence;
 
   final PreprocessedAudio? preprocessedAudio;
@@ -80,16 +82,12 @@ final class AnalysisWorkState {
   /// availability yet (GOV-30c-2).
   final Set<AnalysisCapability> unavailableCapabilities;
 
-  /// The initial state for one ingest run: the boundary PCM input plus any
-  /// externally supplied V1 evidence, seeded with the input's own warnings.
-  factory AnalysisWorkState.seed({
-    required ValidatedPcmAnalysisInput input,
-    LegacyEvidence? legacyEvidence,
-  }) => AnalysisWorkState(
-    input: input,
-    legacyEvidence: legacyEvidence,
-    warnings: input.warnings,
-  );
+  /// The initial state for one ingest run: only the boundary PCM input,
+  /// seeded with its own warnings. `legacyEvidence` is not a seed input —
+  /// the `legacy-evidence` ingest stage derives it from the preprocessed
+  /// audio partway through the chain.
+  factory AnalysisWorkState.seed({required ValidatedPcmAnalysisInput input}) =>
+      AnalysisWorkState(input: input, warnings: input.warnings);
 
   AnalysisWorkState copyWith({
     ValidatedPcmAnalysisInput? input,

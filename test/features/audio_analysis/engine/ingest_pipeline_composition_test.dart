@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
-import 'package:strumsight/core/music/strum.dart' as legacy_core;
 import 'package:strumsight/features/audio_analysis/domain/analysis_capability.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_input.dart';
@@ -13,45 +12,30 @@ import 'package:strumsight/features/audio_analysis/domain/analysis_mode.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_cancellation.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_context.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_pipeline.dart';
-import 'package:strumsight/features/audio_analysis/engine/analysis_provenance_builder.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_stage.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_work_state.dart';
-import 'package:strumsight/features/audio_analysis/engine/legacy/legacy_evidence.dart';
 import 'package:strumsight/features/audio_analysis/engine/stages/ingest_stages.dart';
+
+import '../../../support/synth.dart';
 
 const _sampleRate = 44100;
 
 void main() {
   group('ingest pipeline composition (ADR 0250)', () {
     test(
-      // A4: the full six-stage chain runs on valid input and reaches a
-      // timeline base — pitch, chord, beat/tempo and event artifacts.
-      'A4 — the full chain runs on valid input and produces a timeline base',
+      // A4: the full seven-stage chain runs on PCM-only input — no
+      // externally supplied LegacyEvidence — and reaches a timeline base:
+      // pitch, chord, beat/tempo and event artifacts, all derived by the
+      // chain itself via the legacy-evidence adapter.
+      'A4 — the full chain runs on PCM-only input and produces a timeline '
+      'base',
       () async {
         final pipeline = AnalysisPipeline<AnalysisWorkState>(
           stages: buildIngestStages(),
           failureClassifier: classifyIngestStageFailure,
         );
         final initial = AnalysisWorkState.seed(
-          input: _input(samples: _sine(220, seconds: 0.4)),
-          legacyEvidence: _legacyEvidence(
-            chords: const <LegacyChordEvidence>[
-              LegacyChordEvidence(
-                label: 'Am',
-                start: Duration.zero,
-                end: Duration(seconds: 1),
-              ),
-            ],
-            strums: <LegacyStrumEvidence>[
-              for (var i = 0; i < 10; i++)
-                LegacyStrumEvidence(
-                  direction: legacy_core.StrumDirection.down,
-                  time: Duration(milliseconds: 500 * i),
-                  confidence: .8,
-                ),
-            ],
-            duration: const Duration(seconds: 5),
-          ),
+          input: _input(samples: _fullClip()),
         );
 
         final observation = await _run(pipeline, initial);
@@ -61,6 +45,7 @@ void main() {
         expect(value, isNotNull);
         expect(value!.preprocessedAudio, isNotNull);
         expect(value.signalQuality, isNotNull);
+        expect(value.legacyEvidence, isNotNull);
         expect(value.pitchFrames, isNotEmpty);
         expect(value.pitchSegments, isNotEmpty);
         expect(value.chordSegments, isNotEmpty);
@@ -68,6 +53,18 @@ void main() {
         expect(value.tempoCurve, isNotNull);
         expect(value.events, isNotEmpty);
         expect(observation.unavailableCapabilities, isEmpty);
+        expect(
+          observation.provenance.stageTimings.map((timing) => timing.id),
+          <String>[
+            IngestStageIds.preprocessing,
+            IngestStageIds.signalQuality,
+            IngestStageIds.legacyEvidence,
+            IngestStageIds.pitch,
+            IngestStageIds.harmony,
+            IngestStageIds.rhythm,
+            IngestStageIds.events,
+          ],
+        );
       },
     );
 
@@ -84,6 +81,7 @@ void main() {
               log: calledStageIds,
             ),
             SignalQualityIngestStage(),
+            const LegacyEvidenceIngestStage(),
             PitchIngestStage(),
             HarmonyIngestStage(),
             RhythmIngestStage(),
@@ -106,8 +104,8 @@ void main() {
         // also fail fatally. This is what the §6.1 real-violation check
         // exercises: temporarily flipping `preprocessing` to degradable in
         // classifyIngestStageFailure makes this assertion fail, because the
-        // chain would then keep running through signal-quality, pitch,
-        // harmony and rhythm before events finally stops it.
+        // chain would then keep running through the remaining six stages
+        // before events finally stops it.
         expect(
           observation.provenance.stageTimings.map((timing) => timing.id),
           <String>[IngestStageIds.preprocessing],
@@ -116,15 +114,62 @@ void main() {
     );
 
     test(
+      // F1: the legacy-evidence stage is fatal — its failure halts the
+      // chain immediately, matching the events/preprocessing/signal-quality
+      // fatal trio, before pitch/harmony/rhythm/events ever run.
+      'legacy-evidence — a fatal legacy-evidence failure stops the chain '
+      'with no partial value',
+      () async {
+        final calledStageIds = <String>[];
+        final pipeline = AnalysisPipeline<AnalysisWorkState>(
+          stages: <AnalysisStage<AnalysisWorkState, AnalysisWorkState>>[
+            const PreprocessingIngestStage(),
+            SignalQualityIngestStage(),
+            _RecordingFailingStage(
+              id: IngestStageIds.legacyEvidence,
+              log: calledStageIds,
+            ),
+            PitchIngestStage(),
+            HarmonyIngestStage(),
+            RhythmIngestStage(),
+            const EventsIngestStage(),
+          ],
+          failureClassifier: classifyIngestStageFailure,
+        );
+
+        final observation = await _run(
+          pipeline,
+          AnalysisWorkState.seed(
+            input: _input(samples: _sine(220, seconds: 0.4)),
+          ),
+        );
+
+        expect(observation.completion, AnalysisCompletionStatus.failed);
+        expect(observation.value, isNull);
+        expect(calledStageIds, <String>[IngestStageIds.legacyEvidence]);
+        expect(
+          observation.provenance.stageTimings.map((timing) => timing.id),
+          <String>[
+            IngestStageIds.preprocessing,
+            IngestStageIds.signalQuality,
+            IngestStageIds.legacyEvidence,
+          ],
+        );
+      },
+    );
+
+    test(
       // A5, "fatális fölött": a degradable pitch failure does not stop the
-      // chain — harmony/rhythm/events still run and produce a value, while
-      // the lost capabilities are recorded.
+      // chain — harmony/rhythm/events still run and produce a value (using
+      // legacy evidence the chain itself derived), while the lost
+      // capability is recorded.
       'A5 — a degradable pitch failure keeps the chain running',
       () async {
         final pipeline = AnalysisPipeline<AnalysisWorkState>(
           stages: <AnalysisStage<AnalysisWorkState, AnalysisWorkState>>[
             const PreprocessingIngestStage(),
             SignalQualityIngestStage(),
+            const LegacyEvidenceIngestStage(),
             _RecordingFailingStage(id: IngestStageIds.pitch, log: <String>[]),
             HarmonyIngestStage(),
             RhythmIngestStage(),
@@ -133,25 +178,7 @@ void main() {
           failureClassifier: classifyIngestStageFailure,
         );
         final initial = AnalysisWorkState.seed(
-          input: _input(samples: _sine(220, seconds: 0.4)),
-          legacyEvidence: _legacyEvidence(
-            chords: const <LegacyChordEvidence>[
-              LegacyChordEvidence(
-                label: 'C',
-                start: Duration.zero,
-                end: Duration(seconds: 1),
-              ),
-            ],
-            strums: <LegacyStrumEvidence>[
-              for (var i = 0; i < 10; i++)
-                LegacyStrumEvidence(
-                  direction: legacy_core.StrumDirection.down,
-                  time: Duration(milliseconds: 500 * i),
-                  confidence: .8,
-                ),
-            ],
-            duration: const Duration(seconds: 5),
-          ),
+          input: _input(samples: _fullClip()),
         );
 
         final observation = await _run(pipeline, initial);
@@ -159,6 +186,7 @@ void main() {
         expect(observation.completion, AnalysisCompletionStatus.degraded);
         expect(observation.value, isNotNull);
         expect(observation.value!.pitchFrames, isEmpty);
+        expect(observation.value!.legacyEvidence, isNotNull);
         expect(observation.value!.chordSegments, isNotEmpty);
         expect(observation.value!.events, isNotEmpty);
         expect(
@@ -173,32 +201,33 @@ void main() {
     );
 
     test(
-      // A5 + A6 together, "a határon": missing V1 evidence degrades harmony
-      // and rhythm (their lost capabilities are still recorded) but then
-      // fatally stops the chain at events — the last fatal stage — with no
-      // partial value.
-      'A5/A6 — harmony and rhythm degrade, then events halts the chain fatally',
+      // A6, "a határon": a fatal events failure — the last fatal stage —
+      // halts the chain with no partial value, even though every stage
+      // before it (including the degradable pitch/harmony/rhythm trio)
+      // succeeded.
+      'A6 — a fatal events failure stops the chain at the boundary with no '
+      'partial value',
       () async {
         final pipeline = AnalysisPipeline<AnalysisWorkState>(
-          stages: buildIngestStages(),
+          stages: <AnalysisStage<AnalysisWorkState, AnalysisWorkState>>[
+            const PreprocessingIngestStage(),
+            SignalQualityIngestStage(),
+            const LegacyEvidenceIngestStage(),
+            PitchIngestStage(),
+            HarmonyIngestStage(),
+            RhythmIngestStage(),
+            _RecordingFailingStage(id: IngestStageIds.events, log: <String>[]),
+          ],
           failureClassifier: classifyIngestStageFailure,
         );
         final initial = AnalysisWorkState.seed(
-          input: _input(samples: _sine(220, seconds: 0.4)),
+          input: _input(samples: _fullClip()),
         );
 
         final observation = await _run(pipeline, initial);
 
         expect(observation.completion, AnalysisCompletionStatus.failed);
         expect(observation.value, isNull);
-        expect(
-          observation.unavailableCapabilities,
-          containsAll(<AnalysisCapability>[
-            AnalysisCapability.chordTimeline,
-            AnalysisCapability.beatGrid,
-            AnalysisCapability.tempoCurve,
-          ]),
-        );
       },
     );
   });
@@ -256,28 +285,22 @@ ValidatedPcmAnalysisInput _input({
   ),
 );
 
-LegacyEvidence _legacyEvidence({
-  List<LegacyChordEvidence> chords = const <LegacyChordEvidence>[],
-  List<LegacyStrumEvidence> strums = const <LegacyStrumEvidence>[],
-  Duration duration = const Duration(seconds: 1),
-}) => LegacyEvidence(
-  duration: duration,
-  bpm: 120,
-  chords: chords,
-  strums: strums,
-  call: LegacyClipAnalyzerCall(
-    sampleRate: _sampleRate,
-    sampleCount: _sampleRate,
-    labMode: false,
-    hasCandidateStrumRefiner: false,
-  ),
-  provenance: AnalysisProvenanceBuilder().build(
-    strumRefinerSource: StrumRefinerSource.none,
-  ),
-);
-
 List<double> _sine(double frequency, {required double seconds}) =>
     List<double>.generate(
       (seconds * _sampleRate).round(),
       (index) => 0.4 * math.sin(2 * math.pi * frequency * index / _sampleRate),
     );
+
+/// A single real clip combining a clean monophonic passage (so the pitch
+/// stage extracts voiced frames/segments) with a polyphonic chord-plus-strum
+/// passage (so the legacy-evidence stage's wrapped V1 analyzer derives
+/// non-empty chords and strums, in turn feeding harmony/rhythm/events).
+List<double> _fullClip() => <double>[
+  ..._sine(220, seconds: 0.4),
+  ...chordSignal(cMajorFreqs, seconds: 0.8),
+  ...chordSignal(gMajorFreqs, seconds: 0.8),
+  ...strumPattern(
+    lowFirstPerStrum: <bool>[true, false, true, false],
+    gapSeconds: 0.5,
+  ),
+];

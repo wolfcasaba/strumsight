@@ -12,6 +12,8 @@ import '../analysis_work_state.dart';
 import '../events/event_timeline_builder.dart';
 import '../harmony/chord_segment_assembler.dart';
 import '../harmony/decoder_source.dart';
+import '../legacy/clip_analyzer_stage.dart';
+import '../legacy/legacy_evidence.dart';
 import '../pitch/monophonic_pitch_segment_builder.dart';
 import '../pitch/pitch_frame_extractor.dart';
 import '../preprocessing/preprocessing_stage.dart';
@@ -25,6 +27,7 @@ import '../rhythm/tempo_curve_builder.dart';
 abstract final class IngestStageIds {
   static const String preprocessing = 'preprocessing';
   static const String signalQuality = 'signal-quality';
+  static const String legacyEvidence = 'legacy-evidence';
   static const String pitch = 'pitch';
   static const String harmony = 'harmony';
   static const String rhythm = 'rhythm';
@@ -32,8 +35,9 @@ abstract final class IngestStageIds {
 }
 
 /// Composition-owned degradation policy (ADR 0250 §3): preprocessing, signal
-/// quality and events are fatal; pitch, harmony and rhythm are degradable and
-/// record the capabilities their failure makes unavailable.
+/// quality, legacy-evidence and events are fatal; pitch, harmony and rhythm
+/// are degradable and record the capabilities their failure makes
+/// unavailable.
 ///
 /// NOTE for the §6.1 real-violation test: temporarily changing the
 /// `preprocessing` case below to `StageFailure.degradable(...)` must turn the
@@ -42,6 +46,7 @@ StageFailure classifyIngestStageFailure(String stageId, AppFailure failure) {
   switch (stageId) {
     case IngestStageIds.preprocessing:
     case IngestStageIds.signalQuality:
+    case IngestStageIds.legacyEvidence:
     case IngestStageIds.events:
       return StageFailure.fatal(failure);
     case IngestStageIds.pitch:
@@ -131,6 +136,45 @@ final class SignalQualityIngestStage
         ],
       ),
     );
+  }
+}
+
+/// Wraps the reviewed [ClipAnalyzerStage] (the unchanged V1 clip-analysis
+/// entrypoint) to produce the [LegacyEvidence] the harmony, rhythm and
+/// events adapters require. Requires [AnalysisWorkState.preprocessedAudio];
+/// its absence is this stage's only failure path, since the wrapped V1
+/// analyzer itself never fails on well-formed audio. Fatal (ADR 0250 §5.3):
+/// without legacy evidence, harmony, rhythm and events cannot run at all.
+final class LegacyEvidenceIngestStage
+    implements AnalysisStage<AnalysisWorkState, AnalysisWorkState> {
+  const LegacyEvidenceIngestStage({this.stage = const ClipAnalyzerStage()});
+
+  final AnalysisStage<LegacyClipAnalyzerInput, LegacyEvidence> stage;
+
+  @override
+  String get id => IngestStageIds.legacyEvidence;
+
+  @override
+  int get version => 1;
+
+  @override
+  Future<AppResult<AnalysisWorkState>> run(
+    AnalysisWorkState input,
+    AnalysisStageContext context,
+  ) async {
+    final audio = input.preprocessedAudio;
+    if (audio == null) {
+      return const Failure<AnalysisWorkState>(
+        ValidationFailure(
+          cause: 'legacy-evidence stage requires preprocessed audio',
+        ),
+      );
+    }
+    final result = await stage.run(
+      LegacyClipAnalyzerInput.fromPreprocessedAudio(audio),
+      context,
+    );
+    return result.map((evidence) => input.copyWith(legacyEvidence: evidence));
   }
 }
 
@@ -324,13 +368,14 @@ final class EventsIngestStage
 }
 
 /// The full ingest chain in ADR 0250's fixed order: preprocessing → signal
-/// quality → pitch → harmony → rhythm → events. Pairs with
+/// quality → legacy evidence → pitch → harmony → rhythm → events. Pairs with
 /// [classifyIngestStageFailure] when composed into an `AnalysisPipeline`.
 /// Not wired into any provider in this round (ADR 0250 §4).
 List<AnalysisStage<AnalysisWorkState, AnalysisWorkState>> buildIngestStages() =>
     <AnalysisStage<AnalysisWorkState, AnalysisWorkState>>[
       const PreprocessingIngestStage(),
       SignalQualityIngestStage(),
+      const LegacyEvidenceIngestStage(),
       PitchIngestStage(),
       HarmonyIngestStage(),
       RhythmIngestStage(),
