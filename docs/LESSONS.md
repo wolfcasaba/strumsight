@@ -10206,3 +10206,53 @@ hogy az előző stage valóban megtermeli — vagy a „teljes lánc” állít�
 ki. A javítás itt egy vékony, meglévő `ClipAnalyzerStage`-et hívó,
 fatális `legacy-evidence` adapter volt; a PCM-only A4 hét futott stage
 provenance-listáját assertálja.
+
+## L274 — A stage-lánc kompozíciós BIZONYÍTÁSA (teszt) és a lánc TÉNYLEGES ÖSSZESZERELÉSE (production wiring) két külön döntés — a másodikat egy szűk enum-cap ütheti, az elsőt nem kell (E99-R10, 2026-08-14)
+
+**Mit mértünk.** Az E99-R10 brief 11 granular értékelő stage-et írt elő
+(illesztés + 9 metrika-modul + capability/confidence), a GOV-30c-1 precedens
+mintáját követve, amely a composition-tesztjében LITERÁLISAN
+`AnalysisPipeline<AnalysisWorkState>(stages: buildIngestStages(), …)`-t
+példányosított hét stage-re. Az `AnalysisPipeline<T>` konstruktora viszont
+`stages.length > AnalysisProgressPhase.values.length` (jelenleg **9**) esetén
+`ArgumentError`-t dob (`engine/analysis_pipeline.dart:68-74`) — egy
+UI-progress-fázis-enumhoz (`domain/analysis_progress.dart`) kötött, korábban
+sosem stressz-tesztelt korlát. Az implementer (Terra) ELSŐRE helyesen állt
+meg ezen (`stopped`, mért gyökérokkal) ahelyett, hogy scope-ot tágított vagy
+a korlátot megkerülte volna. [ADR 0240](../adr/0240-analysis-runner-and-pipeline-boundary.md)
+már korábban rögzítette (E06-R22 pre-flight), hogy ÉGYETLEN konkrét,
+összeszerelt `AnalysisPipeline(` sem létezik production kódban — az ingest
+kompozíciós teszt IS csak a teszt-oldalon példányosít.
+
+**Hogyan alkalmazd.** Ha egy jövőbeli kör egy meglévő `buildXStages()` +
+`classifyXFailure()` mintát granular stage-számmal bővít, és a stage-szám
+közelít/meghaladja egy megosztott motor rejtett kapacitás-korlátját (itt: a
+progress-fázis-enum mérete), NE a korlátot feszegető motort módosítsd (az
+tipikusan forbidden zone / korábbi kör lezárt döntése), és NE a stage-
+granularitást silányítsd a brief explicit szándéka ellen. Válaszd külön a két
+kérdést: (1) a PRODUCTION kompozíció maradjon granular (`buildXStages()` +
+`classifyXFailure()`, egy osztály per wrapolt modul — ez maga sosem ütközik a
+cap-be, csak egy `List`), (2) a TESZT-oldali BIZONYÍTÁS ne kösse magát a
+megosztott motor (itt: `AnalysisPipeline<T>`) egy adott korlátjához — egy
+kézzel írt szekvenciális `stage.run(...)` harness (a motor
+`_execute`-jának LOGIKÁJÁT reprodukálva, kódját NEM importálva) ugyanazt a
+viselkedést bizonyítja, mert a motor GENERIKUS végrehajtási logikája
+(progress-monotonitás, fatális/degradálható elágazás) jellemzően már
+KÜLÖN, saját tesztkészlettel fedett (itt: `analysis_pipeline_test.dart`,
+E06-R04) — nem kell újra bizonyítani minden hívó oldalon. A TÉNYLEGES,
+élesben futó összeszerelés (és ezzel a kapacitás-korlát valódi feloldása)
+maradjon annak a körnek a feladata, amelyik ténylegesen `AnalysisPipeline(`-t
+hív production kódban (itt: a még meg sem írt GOV-30c-3) — ezt a briefben és
+az ADR-ben névvel, mérve rögzítsd, hogy a következő pre-flight ne fedezze fel
+újra ugyanazt.
+
+**Másodlagos, ismételt mérés — L266 megismétlődése.** Ez a session az első
+CI-dispatchot a correctness-review commit UTÁN, de a security-review commit
+ELŐTT indította, majd a security-review külön commitja miatt újra kellett
+dispatch-elnie mindkét workflow-t (L266 pontosan ezt írja elő: mindkét
+review-jelentést az ELSŐ CI-dispatch ELŐTT commitold). A `docs/LESSONS.md`
+NINCS az `AGENTS.md` §3 „Kötelező olvasás minden kör előtt” listáján — csak
+a `HANDOFF.md`, az SDD-fejezet és a releváns ADR olvasása kötelező explicit.
+Ha egy jövőbeli önjavító kör ezt a mintát harmadszor is méri, érdemes
+megfontolni a §3 lista bővítését (ez NEM ennek a sessionnek a hatásköre,
+`tools/`/`AGENTS.md` módosítása forbidden zone).

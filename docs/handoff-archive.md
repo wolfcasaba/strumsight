@@ -6,6 +6,100 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E06-R30 KÉSZ — Shadow rollout, migráció és Epic 6 lezárás (2026-08-14, ZÁRÓ KÖR)
+
+A V1 shipping út változatlan. A kilenc Epic 6 flag minden környezetben OFF;
+a konstruktor-injektált `ShadowAnalysisRunner` csak Lab+flag kapun (négy
+cellás mátrix, hívásszámlálóval bizonyítva) indít V2 diagnosztikát, és V2
+hiba/cancel esetén is bitre azonos V1 eredményt ad (`ShadowDiffReport`:
+event/chord/BPM/hossz/futásidő + hibajelzés, nyers audio és timestamp
+nélkül). Az 50-session teljes migrációs teszt idempotens (2. futás 0
+migrált/50 skip), a legacy mezők mezőnkénti egyezéssel megmaradnak. A
+rollback teszt két ténylegesen eltérő `FeatureFlags` állapotban (OFF/ON)
+bizonyítja a migrált V2 dokumentum olvashatóságát. 29 meglévő Epic 6 ADR
+`## Következmények` szakasza frissítve a mért kimenettel.
+[`docs/sdd/epic-06-completion-report.md`](docs/sdd/epic-06-completion-report.md):
+a §33 mind a 74 DoD-pontja végigmenve (70 teljesült, 4 őszintén NEM
+BIZONYÍTOTT, névvel ellátott follow-up-pal). A 14 pontos valós eszközös
+ellenőrzési lista `EVAL-28…41` PENDING sorként az eval-mátrixban,
+felelőssel — egyik sem merge-kapu.
+
+**Pre-flight (§0.0, R1–R9):** a batch-írt brief „ADR 0200–0211" tartománya
+nem létezett (`ls docs/adr/` nulla találat) — a valós Epic 6 ADR-készlet
+0215–0221/0224–0241/0243/0246–0249 (29 fájl). Az `allowed_paths` eredetileg
+egyetlen `docs/adr/` bejegyzést sem tartalmazott, miközben a §6 „ADR-státuszok"
+pont mind a 29 fájl szerkesztését előírta — a gépi scope-audit az első
+ADR-érintésnél `VIOLATION`-t adott volna. Mindkettő dokumentált §0.0
+revízióval javítva dispatch előtt.
+
+**Független review** (`docs/reviews/e06-r30-…-review.md`) első köre
+CHANGES REQUESTED: 1 MAJOR — a `rollback_test.dart` `_flagsOff()` helperje
+egy semmilyen valós állapothoz nem kötött tautológia volt, sosem épített
+fel ténylegesen „ON" flag-állapotot, miközben a completion report a
+kapcsolódó DoD-tételt bizonyítottként (`[x]`) jelölte — 1 MINOR (a
+completion report záró összegzése 69/74-et írt a tényleges 70/74 helyett).
+**A kötelező dedikált security review** (`risk = "high"`) párhuzamosan
+**PASS**-t adott (0 CRITICAL/BLOCKER/MAJOR/MINOR, 4 NOTE) — ugyanazokat a
+mögöttes tényeket alacsonyabb súllyal minősítette, mert a termék-tulajdonság
+(a migrátor konstrukcióból nem tudja törölni a legacy kulcsot) bizonyított
+maradt a teszt gyengesége ellenére; a két jelentés nem mond ellent
+egymásnak. Egy javító dispatch zárta mindkettőt: a rollback teszt most két
+ténylegesen eltérő `FeatureFlags` példányt épít explicit egyenlőtlenség-őrrel
+és mindkét állapotban bizonyítja a V2-olvasást; a completion report
+aritmetikája javítva. Az orchestrátor SAJÁT, közvetlenül `origin`-ról
+(nem a megosztott munkafáról) klónozott újraellenőrzése: gate 9/9 zöld,
+scope-audit OK, és egy real-violation próba (a javított `_flagsOn()`
+ideiglenes visszaállítása a régi tautologikus alakra) pontosan a várt
+assertion-t vitte pirosra, majd SHA-256-tal igazoltan visszaállítva. Végső
+verdikt: **APPROVED**.
+
+Exact-SHA `719c534c`: Full Gate
+[31758004379](https://github.com/wolfcasaba/strumsight/actions/runs/31758004379)
++ Router CI [31758041194](https://github.com/wolfcasaba/strumsight/actions/runs/31758041194)
+(utóbbi kézzel dispatch-elve, mert a záró, csak review-dokumentumot érintő
+commit nem érintette a Router CI push-path-szűrőjét) mindkettő success.
+`origin/main` nem mozdult a dispatch és a merge között. Squash-merge PR
+[#257](https://github.com/wolfcasaba/strumsight/pull/257), `f257afa7`; a
+post-merge gate friss, helyben fetch-elt `main`-en is zöld (9/9).
+Implementer **Terra (Codex)**, egy javító dispatch.
+
+Lecke: `docs/LESSONS.md` **L270** (allowed_paths és az acceptance criteria
+belső ellentmondása — a brief-lint ezt nem fogja meg, csak a pre-flight
+keresztellenőrzés), **L271** (tautologikus előtte/utána-teszt: ugyanarra az
+élő objektumra hivatkozó „snapshot" semmit sem bizonyít — sem a
+`rollback_test.dart` `_flagsOff()`-ja, sem a `full_migration_test.dart`
+önmagával összevetett `toJson()`-je nem bukott volna el egy valódi
+regresszión), **L272** (a review-újraellenőrzés `git clone <hub-útvonal>`
+mintája egy elavult lokális hub-branch-et adhat vissza némán — mindig
+`origin`-ról klónozz, ha a hub saját branch-e közben mozoghatott).
+
+## ✅ E06-R29 KÉSZ — Evaluation harness és confidence calibration (2026-08-13)
+
+Elkészült a verziózott, determinisztikus offline evaluation-harness az
+esemény-, szegmens-, beat- és pitch-metrikákhoz, küszöb-közeli
+falszifikációs fixture-ökkel. A párosítás minden metrikán egy-egyhez és
+maximális kardinálissal történik; a confidence-calibration táblázat a ma
+ténylegesen elérhető capability-adatokra őszintén az `identity.v1` görbét
+használja, szintetikus bizonyítékból nem gyárt valótlan kalibrációt.
+[ADR 0249](docs/adr/0249-analysis-evaluation-dataset-governance.md).
+
+**Független review:** három reprodukált MAJOR lelet zárva két javító
+dispatchban: a mohó event-párosítás elveszíthetett érvényes találatot; egy
+detected chord két expected szegmenst is igazolhatott; a beat- és
+pitch-értékelés külön, hibás mohó utat használt. Az izolált re-review 0
+nyitott BLOCKER/MAJOR mellett APPROVED; a saját negatív próbák a javított
+regressziós teszteket pirosra vitték volna. Scope audit: OK.
+
+Exact-SHA `31cfa5d6`: Full Gate
+[31750082206](https://github.com/wolfcasaba/strumsight/actions/runs/31750082206)
++ Router CI [31750073152](https://github.com/wolfcasaba/strumsight/actions/runs/31750073152)
+mindkettő success. Squash-merge PR [#256](https://github.com/wolfcasaba/strumsight/pull/256),
+`1c2f3d2f`; a post-merge gate friss remote-klónban is zöld. Implementer:
+**sonnet-impl**, két javító dispatch.
+
+Lecke: `docs/LESSONS.md` **L269** (egy-egyhez időbeli értékelésben a
+lokálisan legközelebbi mohó párosítás nem bizonyít maximális egyezést).
+
 ## ✅ E06-R28 KÉSZ — Cache, performance és model lifecycle (2026-08-13)
 
 Determinisztikus V2 elemzési cache-infrastruktúra, teljes egészében

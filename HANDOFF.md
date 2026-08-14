@@ -3,9 +3,63 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-14
-> (E99-R09 GOV-30c-1 merged, PR #259; the self-contained PCM ingest chain
-> now exists but the runner remains intentionally fail-closed. Next pending
-> round: GOV-30c-2, see §6.)**
+> (E99-R10 GOV-30c-2 merged, PR #261; the evaluation half of the V2 chain —
+> reference seeding, alignment, nine metric adapters, capability/confidence —
+> now exists alongside the ingest half, both still unwired. Next pending
+> round: GOV-30c-3, see §6.)**
+>
+> ## ✅ E99-R10 KÉSZ — GOV-30c-2 evaluation stage composition (2026-08-14)
+>
+> A V2 engine most az **értékelő** felet is hordozza: `AnalysisWorkState`
+> bővítve `target`/`alignment`/`metrics`/`capabilityReports`/
+> `overallConfidence`/`mode` mezőkkel, tizenegy granular
+> `AnalysisStage`-szel (illesztés + kilenc metrika-adapter +
+> capability/confidence resolver) `buildEvaluationStages()` +
+> `classifyEvaluationStageFailure()` alakban — ugyanaz a minta, mint az
+> ingest-láncon. A legveszélyesebb hibamód (üres/hiányzó referenciával
+> hamis illesztés publikálása) egy hívás-számlálós teszttel ÉS egy
+> önállóan megismételt valódi-sértés próbával zárva: nincs referencia esetén
+> az illesztés `null` marad, a timing-capability `noReferenceTarget` okkal
+> `unavailable`, a referencia-független metrikák (rhythm, pitch, dynamics
+> stb.) ugyanúgy kiszámolódnak. A provider és mind a flag változatlanul
+> OFF/fail-closed — a kör nulla production hívóval rendelkezik.
+>
+> **Első Terra-dispatch helyesen állt meg** (`stopped`) egy valós, mért
+> ütközésen: a brief tizenegy stage-et kért, de a meglévő
+> `AnalysisPipeline<T>` konstruktora legfeljebb `AnalysisProgressPhase.
+> values.length` (9) stage-et enged. Az orchesztrátor egy dokumentált §0.0
+> brief-revízióval + ADR 0251 §5 kiegészítéssel oldotta fel — a forbidden
+> `analysis_pipeline.dart` érintése NÉLKÜL: a production kód továbbra is
+> tizenegy granular stage-et épít, de a composition-teszt közvetlen,
+> szekvenciális `stage.run(...)` hívásokkal bizonyítja a láncot
+> `AnalysisPipeline` példányosítás helyett — a teljes 18 stage-es (7 ingest +
+> 11 evaluation) lánc tényleges összeszerelése és a cap valódi feloldása
+> GOV-30c-3 feladata marad.
+>
+> Független correctness review **APPROVED** (0 BLOCKER/MAJOR/MINOR, 4 NOTE —
+> mind névvel ellátott GOV-30c-3 follow-up: technique-proxy metrikák
+> csendben eldobva, de ma hatástalanok; accent/subdivision/transition
+> eredménye szerkezetileg nem fér a `metrics` listába; `modelConfidence`
+> számítási módja új, brief-ben nem specifikált döntés). Kötelező dedikált
+> security review (`risk = "high"`) **PASS** (0 CRITICAL/BLOCKER/MAJOR/MINOR,
+> 2 NOTE). A reviewer mindkét review-t SAJÁT, izolált `/tmp` klónban
+> újrafuttatott gate-tel és egy önállóan megismételt A6 valódi-sértés
+> próbával (guard eltávolítva → mindkét érintett teszt PIROS → visszaállítva)
+> igazolta vissza.
+>
+> Exact-SHA `e3c681b6`: Full Gate
+> [31795147660](https://github.com/wolfcasaba/strumsight/actions/runs/31795147660)
+> + Router CI [31795149311](https://github.com/wolfcasaba/strumsight/actions/runs/31795149311)
+> mindkettő success. `origin/main` nem mozdult a dispatch és a merge között.
+> Squash-merge PR [#261](https://github.com/wolfcasaba/strumsight/pull/261),
+> `82cfa588`; post-merge gate friss, helyben fetch-elt `main`-en is zöld (8/8).
+> Implementer **Terra (Codex)**, javító kör nélkül (1 `stopped` + 1 `done`
+> dispatch).
+>
+> Lecke: `docs/LESSONS.md` **L274** (a stage-lánc kompozíciós BIZONYÍTÁSA és a
+> lánc TÉNYLEGES ÖSSZESZERELÉSE két külön döntés — az elsőt egy megosztott
+> motor rejtett kapacitás-korlátja nem kell hogy megkösse, ha a motor
+> generikus végrehajtási logikáját már külön teszt fedi).
 >
 > ## ✅ E99-R09 KÉSZ — GOV-30c-1 PCM ingest pipeline composition (2026-08-14)
 >
@@ -24,100 +78,6 @@
 > success; squash PR [#259](https://github.com/wolfcasaba/strumsight/pull/259),
 > `cb76db0f`. Implementer `sonnet-impl`, 1 javító dispatch.
 >
-> ## ✅ E06-R30 KÉSZ — Shadow rollout, migráció és Epic 6 lezárás (2026-08-14, ZÁRÓ KÖR)
->
-> A V1 shipping út változatlan. A kilenc Epic 6 flag minden környezetben OFF;
-> a konstruktor-injektált `ShadowAnalysisRunner` csak Lab+flag kapun (négy
-> cellás mátrix, hívásszámlálóval bizonyítva) indít V2 diagnosztikát, és V2
-> hiba/cancel esetén is bitre azonos V1 eredményt ad (`ShadowDiffReport`:
-> event/chord/BPM/hossz/futásidő + hibajelzés, nyers audio és timestamp
-> nélkül). Az 50-session teljes migrációs teszt idempotens (2. futás 0
-> migrált/50 skip), a legacy mezők mezőnkénti egyezéssel megmaradnak. A
-> rollback teszt két ténylegesen eltérő `FeatureFlags` állapotban (OFF/ON)
-> bizonyítja a migrált V2 dokumentum olvashatóságát. 29 meglévő Epic 6 ADR
-> `## Következmények` szakasza frissítve a mért kimenettel.
-> [`docs/sdd/epic-06-completion-report.md`](docs/sdd/epic-06-completion-report.md):
-> a §33 mind a 74 DoD-pontja végigmenve (70 teljesült, 4 őszintén NEM
-> BIZONYÍTOTT, névvel ellátott follow-up-pal). A 14 pontos valós eszközös
-> ellenőrzési lista `EVAL-28…41` PENDING sorként az eval-mátrixban,
-> felelőssel — egyik sem merge-kapu.
->
-> **Pre-flight (§0.0, R1–R9):** a batch-írt brief „ADR 0200–0211" tartománya
-> nem létezett (`ls docs/adr/` nulla találat) — a valós Epic 6 ADR-készlet
-> 0215–0221/0224–0241/0243/0246–0249 (29 fájl). Az `allowed_paths` eredetileg
-> egyetlen `docs/adr/` bejegyzést sem tartalmazott, miközben a §6 „ADR-státuszok"
-> pont mind a 29 fájl szerkesztését előírta — a gépi scope-audit az első
-> ADR-érintésnél `VIOLATION`-t adott volna. Mindkettő dokumentált §0.0
-> revízióval javítva dispatch előtt.
->
-> **Független review** (`docs/reviews/e06-r30-…-review.md`) első köre
-> CHANGES REQUESTED: 1 MAJOR — a `rollback_test.dart` `_flagsOff()` helperje
-> egy semmilyen valós állapothoz nem kötött tautológia volt, sosem épített
-> fel ténylegesen „ON" flag-állapotot, miközben a completion report a
-> kapcsolódó DoD-tételt bizonyítottként (`[x]`) jelölte — 1 MINOR (a
-> completion report záró összegzése 69/74-et írt a tényleges 70/74 helyett).
-> **A kötelező dedikált security review** (`risk = "high"`) párhuzamosan
-> **PASS**-t adott (0 CRITICAL/BLOCKER/MAJOR/MINOR, 4 NOTE) — ugyanazokat a
-> mögöttes tényeket alacsonyabb súllyal minősítette, mert a termék-tulajdonság
-> (a migrátor konstrukcióból nem tudja törölni a legacy kulcsot) bizonyított
-> maradt a teszt gyengesége ellenére; a két jelentés nem mond ellent
-> egymásnak. Egy javító dispatch zárta mindkettőt: a rollback teszt most két
-> ténylegesen eltérő `FeatureFlags` példányt épít explicit egyenlőtlenség-őrrel
-> és mindkét állapotban bizonyítja a V2-olvasást; a completion report
-> aritmetikája javítva. Az orchestrátor SAJÁT, közvetlenül `origin`-ról
-> (nem a megosztott munkafáról) klónozott újraellenőrzése: gate 9/9 zöld,
-> scope-audit OK, és egy real-violation próba (a javított `_flagsOn()`
-> ideiglenes visszaállítása a régi tautologikus alakra) pontosan a várt
-> assertion-t vitte pirosra, majd SHA-256-tal igazoltan visszaállítva. Végső
-> verdikt: **APPROVED**.
->
-> Exact-SHA `719c534c`: Full Gate
-> [31758004379](https://github.com/wolfcasaba/strumsight/actions/runs/31758004379)
-> + Router CI [31758041194](https://github.com/wolfcasaba/strumsight/actions/runs/31758041194)
-> (utóbbi kézzel dispatch-elve, mert a záró, csak review-dokumentumot érintő
-> commit nem érintette a Router CI push-path-szűrőjét) mindkettő success.
-> `origin/main` nem mozdult a dispatch és a merge között. Squash-merge PR
-> [#257](https://github.com/wolfcasaba/strumsight/pull/257), `f257afa7`; a
-> post-merge gate friss, helyben fetch-elt `main`-en is zöld (9/9).
-> Implementer **Terra (Codex)**, egy javító dispatch.
->
-> Lecke: `docs/LESSONS.md` **L270** (allowed_paths és az acceptance criteria
-> belső ellentmondása — a brief-lint ezt nem fogja meg, csak a pre-flight
-> keresztellenőrzés), **L271** (tautologikus előtte/utána-teszt: ugyanarra az
-> élő objektumra hivatkozó „snapshot" semmit sem bizonyít — sem a
-> `rollback_test.dart` `_flagsOff()`-ja, sem a `full_migration_test.dart`
-> önmagával összevetett `toJson()`-je nem bukott volna el egy valódi
-> regresszión), **L272** (a review-újraellenőrzés `git clone <hub-útvonal>`
-> mintája egy elavult lokális hub-branch-et adhat vissza némán — mindig
-> `origin`-ról klónozz, ha a hub saját branch-e közben mozoghatott).
->
-> ## ✅ E06-R29 KÉSZ — Evaluation harness és confidence calibration (2026-08-13)
->
-> Elkészült a verziózott, determinisztikus offline evaluation-harness az
-> esemény-, szegmens-, beat- és pitch-metrikákhoz, küszöb-közeli
-> falszifikációs fixture-ökkel. A párosítás minden metrikán egy-egyhez és
-> maximális kardinálissal történik; a confidence-calibration táblázat a ma
-> ténylegesen elérhető capability-adatokra őszintén az `identity.v1` görbét
-> használja, szintetikus bizonyítékból nem gyárt valótlan kalibrációt.
-> [ADR 0249](docs/adr/0249-analysis-evaluation-dataset-governance.md).
->
-> **Független review:** három reprodukált MAJOR lelet zárva két javító
-> dispatchban: a mohó event-párosítás elveszíthetett érvényes találatot; egy
-> detected chord két expected szegmenst is igazolhatott; a beat- és
-> pitch-értékelés külön, hibás mohó utat használt. Az izolált re-review 0
-> nyitott BLOCKER/MAJOR mellett APPROVED; a saját negatív próbák a javított
-> regressziós teszteket pirosra vitték volna. Scope audit: OK.
->
-> Exact-SHA `31cfa5d6`: Full Gate
-> [31750082206](https://github.com/wolfcasaba/strumsight/actions/runs/31750082206)
-> + Router CI [31750073152](https://github.com/wolfcasaba/strumsight/actions/runs/31750073152)
-> mindkettő success. Squash-merge PR [#256](https://github.com/wolfcasaba/strumsight/pull/256),
-> `1c2f3d2f`; a post-merge gate friss remote-klónban is zöld. Implementer:
-> **sonnet-impl**, két javító dispatch.
->
-> Lecke: `docs/LESSONS.md` **L269** (egy-egyhez időbeli értékelésben a
-> lokálisan legközelebbi mohó párosítás nem bizonyít maximális egyezést).
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -127,9 +87,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Ismételt diéta: 2026-08-14 (E06-R30 zárása, az Epic 6 ZÁRÓ köre): az
-> E06-R28 KÉSZ banner archiválásra került, a fejlécben most az E06-R30 és az
-> E06-R29 banner él.
+> Ismételt diéta: 2026-08-14 (E99-R10 zárása): az E06-R30 és az E06-R29 KÉSZ
+> banner archiválásra került (az előző, E99-R09-et záró session ezt még nem
+> végezte el, ezért ideiglenesen három banner élt a fejlécben — most kettőre
+> igazítva), a fejlécben most az E99-R10 és az E99-R09 banner él.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -875,6 +836,14 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-14):** `main` @ `82cfa588` — E99-R10
+GOV-30c-2 evaluation stage composition, PR
+[#261](https://github.com/wolfcasaba/strumsight/pull/261), squash-merge.
+Exact-SHA `e3c681b6`: Full Gate
+[31795147660](https://github.com/wolfcasaba/strumsight/actions/runs/31795147660)
++ Router CI [31795149311](https://github.com/wolfcasaba/strumsight/actions/runs/31795149311)
+mindkettő success. `origin/main` nem mozdult a dispatch és merge között.
+
 **Aktuális állapot (2026-08-14):** `main` @ `cb76db0f` — E99-R09
 GOV-30c-1 PCM ingest pipeline composition, PR
 [#259](https://github.com/wolfcasaba/strumsight/pull/259), squash-merge.
@@ -1164,6 +1133,22 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E99-R10 — GOV-30c-2 evaluation stage composition** (PR
+[#261](https://github.com/wolfcasaba/strumsight/pull/261), squash `82cfa588`,
+[ADR 0251](docs/adr/0251-analysis-target-seeding-and-evaluation-stage-composition.md)).
+`AnalysisWorkState` bővítve referencia/illesztés/metrika/capability
+mezőkkel; tizenegy granular evaluation-stage vékony adaptere a meglévő,
+review-zott alignment/metrics/confidence modulok fölött; üres/hiányzó
+referencia degradál, nem fabrikál hamis illesztést (mérve, önállóan
+megismételt valódi-sértés próbával). Első dispatch `stopped` egy valós
+`AnalysisPipeline<T>` stage-count-cap ütközésen, dokumentált §0.0
+brief-revízióval + ADR 0251 §5-tel feloldva (composition-teszt szekvenciális
+`stage.run(...)`-nal, nem `AnalysisPipeline` példányosítással); második
+dispatch `done`, javító kör nélkül. Correctness review APPROVED (0
+BLOCKER/MAJOR/MINOR, 4 NOTE) és dedikált security review PASS (0
+CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE), mindkettő exact-SHA CI zöld.
+Implementer Terra (Codex).
 
 **E99-R09 — GOV-30c-1 PCM ingest pipeline composition** (PR
 [#259](https://github.com/wolfcasaba/strumsight/pull/259), squash `cb76db0f`,
@@ -1578,17 +1563,41 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**E06-R30 KÉSZ, MERGE-ELVE (2026-08-14, PR #257, `f257afa7`) — az Epic 6
-(Audio Analysis 2.0) mind a 30 köre lezárult.** A
-`docs/execution/pipeline-queue.tsv` minden sora `done` — **a queue
-kiürült, nincs automatikusan dispatch-elhető következő kör.** A lánc a
-korábbi Epic 5→6 átmenethez hasonló emberi döntési ponton áll (lásd a
-lenti „🔒 Kötelező sorrend az Epic 5 után" történeti precedenst — ugyanez
-a mintázat ismétlődik itt).
+**E99-R10 (GOV-30c-2) KÉSZ, MERGE-ELVE (2026-08-14, PR #261, `82cfa588`).**
+A V2 lánc most a hét ingest-stage (GOV-30c-1, E99-R09) ÉS a tizenegy
+evaluation-stage (GOV-30c-2, ez a kör) modelljét is hordozza — mindkettő
+egyelőre kizárólag `buildXStages()` + `classifyXFailure()` LISTA-alakban,
+`AnalysisPipeline`-példányba nem drótozva. A `docs/execution/pipeline-queue.tsv`
+E99-sora ezzel a körrel is `done` — a queue-ban **nincs automatikusan
+dispatch-elhető következő GOV-30c sor**, mert a GOV-30c-3 briefje szándékosan
+még nincs megírva (ADR 0251 §4).
 
-**Nyitott, EMBERI döntést igénylő irányok (a completion report
-`docs/sdd/epic-06-completion-report.md` „Nyitott tételek" táblája
-nevezi meg):**
+**A soron következő, névvel ellátott lépés: GOV-30c-3.** Az ADR 0251 §4 és
+§5 (ez a kör) szerint a scope-ja:
+
+1. **Insights/hotspots** — a meglévő determinisztikus insight-engine
+   (E06-R20) és a timing-hotspot builder (amit ez a kör csak FUTTAT, de
+   eldob — `TimingHotspotsEvaluationStage`) becsatolása.
+2. **`AnalysisDocument` összeállítás** — MA ez a réteg **nem létezik** az
+   engine-ben (mérve mindkét megelőző körben: `grep -rln "AnalysisDocument("
+   lib/features/audio_analysis/` → csak domain-típus, codec, legacy-adapter).
+3. **`analysisV2RunnerProvider` felülírása** — **csak ebben a körben**
+   szabad hozzányúlni; GOV-30c-1/2 mindkettő szándékosan érintetlenül
+   hagyta (`StateError`).
+4. **A 9-es progress-fázis-cap valódi feloldása** — a GOV-30c-2 (§0.0
+   revízió, `docs/LESSONS.md` L274) mérve dokumentálta: a 18 stage-es (7
+   ingest + 11 evaluation) teljes lánc éles `AnalysisPipeline<AnalysisWorkState>`-
+   példányba drótozásához a `AnalysisProgressPhase` 9 UI-fázisa és a
+   DSP-stage-granularitás szétválasztása (vagy más feloldás) szükséges — a
+   GOV-30c-3 pre-flightja ezt ÚJRA mérje meg (lehet, hogy a stage-szám vagy
+   a cap időközben változott), ne a L274 lecke bemondására hagyatkozzon.
+
+**A GOV-30c-3 briefje még nincs megírva** — a `round-brief-prep` skillel
+kell elkészíteni, mielőtt bármelyik implementer motor elindulhatna rajta.
+
+**Egyéb, GOV-30c-3-tól FÜGGETLEN, EMBERI döntést igénylő irányok**
+(a completion report `docs/sdd/epic-06-completion-report.md` „Nyitott
+tételek" táblája nevezi meg, változatlan az E06-R30 óta):
 
 1. **Valódi eszközös elfogadás** — a 14 pontos Kör 30 lista + a teljes
    `docs/manual-testing/analysis-eval-matrix.md` PENDING sorai (EVAL-01…41,
@@ -1597,21 +1606,16 @@ nevezi meg):**
 2. **GOV-30a** — valódi kalibrációs dataset/riport (ma `identity.v1`,
    szintetikus).
 3. **GOV-30b** — az R29 evaluation CI-lépés bekötése (`.github/workflows/**`,
-   `tool/ci/**` — ez a fájlkör EZEN A KÖRÖN kívül maradt szándékosan,
-   H-GATEGUARD).
-4. **GOV-30c-2** — metrikák, confidence/capability, insights/hotspots,
-   `AnalysisDocument`-összeállítás és csak ott az `analysisV2RunnerProvider`
-   felülírása. A GOV-30c-1 PCM ingest lánc kész, de szándékosan nincs
-   production hívója.
-5. **Opt-in/default-on rollout és a V1 kivezetése** — külön, jóváhagyott
-   GOV-kör, Product/User döntés (§5 Döntés 1 szerint EBBEN a körben sem
-   volt elfogadható semmilyen flag `true`-ra állítása).
-6. **GOV-05b bekötő köre** (AI Tutor `main.py` OpenAI-adapter bekötés) —
-   ettől FÜGGETLEN, régóta nyitott track, brief-je még nincs megírva (ld.
-   lent, változatlan).
-7. **Epic 7 (AI Practice Generator) kickoff** — ha a user új epicre akar
-   lépni Epic 6 shadow-only lezárása után; a Kör 1 briefje **még nincs
-   megírva** (`docs/sdd/08-epic-07-ai-practice-generator.md` létezik, de
+   `tool/ci/**` — ez a fájlkör szándékosan tilos zóna minden eddigi GOV-30c
+   körben, H-GATEGUARD).
+4. **Opt-in/default-on rollout és a V1 kivezetése** — külön, jóváhagyott
+   GOV-kör, Product/User döntés (egyik GOV-30c körben sem volt elfogadható
+   semmilyen flag `true`-ra állítása).
+5. **GOV-05b bekötő köre** (AI Tutor `main.py` OpenAI-adapter bekötés) —
+   régóta nyitott track, brief-je még nincs megírva (ld. lent, változatlan).
+6. **Epic 7 (AI Practice Generator) kickoff** — ha a user új epicre akar
+   lépni; a Kör 1 briefje **még nincs megírva**
+   (`docs/sdd/08-epic-07-ai-practice-generator.md` létezik, de
    `docs/rounds/e07-r01-*.md` nem).
 
 Egyik irány sem automatikusan folytatható a queue-ból — mindegyik vagy
