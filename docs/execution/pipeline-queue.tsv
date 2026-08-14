@@ -239,4 +239,4 @@ E99-R09	docs/rounds/e99-r09-gov-30c-1-ingest-pipeline-composition.md	codex	0250	
 # dokumentum-összeállítást és a provider bekötését — annak briefje szándékosan
 # még nincs megírva. Ez a kör sem kapcsol be semmit: a provider a végén is
 # StateError-t dob (A9 acceptance-cella).
-E99-R10	docs/rounds/e99-r10-gov-30c-2-evaluation-stage-composition.md	codex	0251	pending
+E99-R10	docs/rounds/e99-r10-gov-30c-2-evaluation-stage-composition.md	codex	0251	done
