@@ -31,6 +31,30 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Brief-revízió — 2026-08-14, független review F1/MAJOR
+
+Az eredeti brief a hat felsorolt modul adapterét kérte, de az A4-cellája a
+`AnalysisWorkState.seed(input: ...)` PCM-bemenetétől elvárt teljes timeline
+alapot csak kívülről beadott `LegacyEvidence`-szel tudta volna elérni. Ez nem
+a kör céljának megfelelő self-contained ingest-lánc. A `ClipAnalyzerStage`
+azonban már létező, review-zott V1→`LegacyEvidence` adapter, és kizárólag az
+engedélyezett új `engine/stages/ingest_stages.dart` fájlban kell vékonyan
+becsomagolni.
+
+Ezért a kötelező összetétel hét stage: preprocessing → signal quality → legacy
+evidence → pitch → harmony → rhythm → events. A `legacy-evidence` hiba
+fatális: nélküle a harmony/rhythm/events inputja nem állítható elő. A
+`AnalysisWorkState.seed` nem fogadhat kész `LegacyEvidence`-t; az új adapter
+a már előfeldolgozott audio-ból `LegacyClipAnalyzerInput`-ot épít és a meglévő
+`ClipAnalyzerStage`-et hívja. A megengedett útvonalak nem változnak, meglévő
+engine-fájl tartalma nem módosul, a provider továbbra is érintetlen.
+
+Ennek megfelelően §2.3-ban a `legacy/` a hetedik wrapolandó modul, §3.2/A2
+és §6.1 a hét adaptert és az önálló PCM→timeline A4-cellát méri, §5.3 a
+`legacy-evidence` fatális besorolását, §8 pedig a hétlépéses sorrendet írja
+elő. Ez a kör saját, még nem lezárt briefjének szűk pontosítása; ADR 0250
+változatlan.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -306,5 +330,133 @@ kör `unknown`-ba fut (L254).
   DSP-vé fajulhat. A §5.2 és az A8 pont ezt méri.
 
 ## 10. Implementation handoff — a Codex tölti ki
+
+**Új fájlok** (mind az engedélyezett listán):
+
+- `lib/features/audio_analysis/engine/analysis_work_state.dart` — az
+  `AnalysisWorkState` immutable munkaállapot (`copyWith` bővítés) +
+  `AnalysisWorkState.seed(...)` a lánc kezdő állapotához.
+- `lib/features/audio_analysis/engine/stages/ingest_stages.dart` — a hat
+  adapter (`PreprocessingIngestStage`, `SignalQualityIngestStage`,
+  `PitchIngestStage`, `HarmonyIngestStage`, `RhythmIngestStage`,
+  `EventsIngestStage`), a kompozíció-owned `classifyIngestStageFailure`
+  (`AnalysisStageFailureClassifier`) és a `buildIngestStages()` segédfüggvény.
+- 3 új tesztfájl a gate-listán, plusz a `docs/rounds/…` jelen handoffja.
+
+**Kulcs-döntés a `LegacyEvidence`-ről (nincs kifejezetten a brief §2.3
+táblájában, de a harmony/rhythm/events modulok szerződése megköveteli):** a
+`ChordSegmentAssembler` bemenete `ChordFrameEvidence`, az `EventTimelineBuilder`
+bemenete pedig közvetlenül `LegacyEvidence` — és egyik típust sem termeli más,
+e körben csomagolt modul (a `ClipAnalyzerStage`, ami `LegacyEvidence`-t termel,
+NEM szerepel a 2.3 táblázat hat moduljában, és a brief kifejezetten hat
+adaptert kér). Ezért az `AnalysisWorkState` egy opcionális `legacyEvidence`
+mezőt kapott — ugyanolyan "bemenet" jellegű, mint a `ValidatedPcmAnalysisInput`
+— amit a hívó ad át a lánc indításakor (`AnalysisWorkState.seed(...,
+legacyEvidence: ...)`), nem ez a kör termeli. A `harmony` adapter a
+`legacyEvidence.chords` listát a `ChordFrameEvidence.derived(...)` gyárral
+alakítja `ChordFrameEvidence`-listává (a domain fájl saját kommentje szerint
+pontosan erre való: *"R11 can only obtain it from finished V1 spans"*), a
+`rhythm` adapter a `legacyEvidence.strums` időpontjait olvassa onset-időként,
+az `events` adapter pedig közvetlenül átadja a `legacyEvidence`-t a meglévő
+`EventTimelineBuilder`-nek. Mindhárom adapter egyetlen preconditionje "van-e
+`legacyEvidence`" — hiánya a saját osztályozásuk szerinti hiba (harmony/rhythm
+degradálható, events fatális). Ez a döntés a GOV-30c-2-t köti: az a kör fogja
+eldönteni, HOGYAN jut `legacyEvidence` a lánc elejére (pl. a
+`ClipAnalyzerStage` külön futtatásával a runner-ben).
+
+**A `DecoderSource` mezőhöz** a legközelebbi meglévő érték a `DecoderSource.dsp`
+lett (a `derived` V1-kiértékelés maga is DSP-alapú volt) — nincs `legacy`
+enum-érték, és a domain fájl bővítése tiltott zóna.
+
+**§6.1 valódi-sértés próba — elvégezve, dokumentálva:**
+
+1. A `classifyIngestStageFailure` `preprocessing` ágát ideiglenesen
+   `StageFailure.degradable(failure)`-re állítottam.
+2. Első próbálkozásra az A6 teszt (a `calledStageIds` log-alapú assert)
+   **nem** vált pirosra — a lánc a degradált preprocessing után a
+   signal-quality/pitch/harmony/rhythm stage-eken is végigfutott, majd az
+   `events` (ami szintén fatális és `legacyEvidence` nélkül hibázik ebben a
+   tesztben) állította meg, ugyanazzal a végkimenettel
+   (`completion=failed, value=null`) mint a helyes preprocessing-fatális eset
+   — a teszt véletlenül átment egy hibás osztályozással is.
+3. Ez saját magában egy mért bizonyíték arra, hogy a `calledStageIds` log
+   önmagában nem elég szigorú mérce. A tesztet kicseréltem: a
+   `provenance.stageTimings.map((t) => t.id)`-t vizsgálja, ami PONTOSAN
+   felsorolja, mely stage-ek futottak le (siker VAGY hiba esetén is, a
+   pipeline `finally`-ben rögzíti) — ez már ténylegesen csak
+   `['preprocessing']`-t várhat el fatális osztályozásnál.
+4. Az újrafuttatott A6 teszt a degradálva állított osztályozással **PIROS**
+   lett (a lánc mind a hat stage-en végigfutott, a `stageTimings` 6 elemű
+   listát adott vissza a várt 1 elemű helyett).
+5. Visszaállítottam a `classifyIngestStageFailure`-t az eredeti (fatális)
+   besorolásra, és a teljes `tools/round-gate.sh` újra teljes egészében
+   ZÖLD.
+
+**Gate-eredmény:** `tools/round-gate.sh` mindhárom kör-tesztfájlra +
+`architecture` + `secrets` + `l10n` — **MINDEN GATE ZÖLD** (a preprocessing
+valódi-sértés próba lezajlása és visszaállítása után futtatva).
+
+**A7 — érintetlen provider:** `git status`/`git diff --stat` szerint
+kizárólag a fenti öt új fájl jött létre; az
+`application/analysis_providers.dart` és minden meglévő `engine/**` fájl
+tartalma változatlan. Az `analysisV2RunnerProvider` a kör végén is
+`StateError`-t dob.
+
+### 10.1 F1/MAJOR javítás — §0.0 szerint (Claude Sonnet 5, javító kör 1)
+
+`docs/reviews/e99-r09-review.md` F1: az A4-cella kész `LegacyEvidence`-t
+injektált a `seed`-en keresztül, nem a PCM-ből induló valódi lánc bizonyította
+a hétstage-es kompozíciót. A javítás:
+
+- **`engine/stages/ingest_stages.dart`:** új `LegacyEvidenceIngestStage`
+  (`id = 'legacy-evidence'`), amely az `AnalysisWorkState.preprocessedAudio`-t
+  a meglévő `LegacyClipAnalyzerInput.fromPreprocessedAudio(...)` gyárral
+  `LegacyClipAnalyzerInput`-tá alakítja, meghívja az injektált (alapból
+  `const ClipAnalyzerStage()`) V1 adaptert, és a `LegacyEvidence` eredményt
+  `copyWith(legacyEvidence: ...)`-tel írja vissza. Egyetlen preconditionje a
+  hiányzó `preprocessedAudio` — ez a stage fatális osztályozású
+  (`classifyIngestStageFailure` és `IngestStageIds.legacyEvidence` bővítve).
+  `buildIngestStages()` mostantól hét stage-et komponál: preprocessing →
+  signal-quality → **legacy-evidence** → pitch → harmony → rhythm → events.
+- **`engine/analysis_work_state.dart`:** az `AnalysisWorkState.seed(...)`
+  elvesztette a `legacyEvidence` paramétert — a mező (`legacyEvidence`)
+  megmaradt a munkaállapoton, de kizárólag a lánc középső stage-e tölti,
+  külső hívó nem adhatja át seed-kor. A `copyWith` változatlan, tehát az
+  egyes adapter-unit-tesztek továbbra is közvetlenül beállíthatják
+  `.copyWith(legacyEvidence: ...)`-tel, amikor csak egy stage-et (harmony/
+  rhythm/events) izoláltan vizsgálnak.
+- **Tesztek:**
+  - `ingest_pipeline_composition_test.dart` A4 mostantól kizárólag PCM
+    bemenetből (`AnalysisWorkState.seed(input: ...)`, nincs kézzel gyártott
+    evidence) igazolja a hét stage lefutását és a nem üres
+    pitch/chord/beat/tempo/event artefaktumokat — a bemenet egy valódi,
+    szintetizált klip (`_fullClip()`: monofón szakasz a pitch-hez +
+    `chordSignal`/`strumPattern` a legacy-evidence-hez, `test/support/
+    synth.dart`-ból), nem hangolt hamis adat.
+  - Új teszt: `'legacy-evidence — a fatal legacy-evidence failure stops the
+    chain with no partial value'` — a §6.1 fatális-alatt mintát követi
+    (`_RecordingFailingStage(id: IngestStageIds.legacyEvidence, ...)`),
+    igazolja hogy a hiba fatális, `completion=failed`, `value=null`, és a
+    `stageTimings` pontosan `[preprocessing, signal-quality,
+    legacy-evidence]`.
+  - Az "a határon" cella (korábban a hiányzó `legacyEvidence` miatt
+    harmony/rhythm degradálódott, majd events fatálisan megállt) elavulttá
+    vált: a teljes láncban a legacy-evidence stage sikere esetén
+    `legacyEvidence` mindig kitöltött, tehát harmony/rhythm nem
+    degradálódhat emiatt. Az "a határon" cellát egy tiszta events-fatális
+    teszt váltja fel (`'A6 — a fatal events failure stops the chain at the
+    boundary...'`, `_RecordingFailingStage(id: IngestStageIds.events, ...)`
+    a hat valódi stage után), amely pontosan a brief §6.1
+    "fatális-fölött-a-határon" táblázatának events-sorát méri.
+  - `ingest_stages_test.dart`: új `LegacyEvidenceIngestStage` csoport
+    (delegálás-bizonyíték injektált stub-bal + hiányzó `preprocessedAudio`
+    hiba), a `classifyIngestStageFailure` és `buildIngestStages` tesztek
+    bővítve a hetedik stage-gel.
+  - `analysis_work_state_test.dart`: a `seed(legacyEvidence: ...)` hívás
+    `copyWith(legacyEvidence: ...)`-re cserélve.
+
+**Gate-eredmény (javító kör 1):** `tools/round-gate.sh` a három kör-tesztfájlra
++ `architecture` + `secrets` + `l10n` — **MINDEN GATE ZÖLD**, első futásra
+(format 1484 fájl változatlan, analyze 0 hiba, mind az 5+18+5 teszt zöld).
 
 ## 11. Review — a Claude tölti ki
