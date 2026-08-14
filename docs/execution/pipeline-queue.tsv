@@ -229,4 +229,4 @@ E99-R07	docs/rounds/e99-r07-gov-05b-2-openai-provider-adapter.md	codex	0214	done
 # tétele FIZIKAILAG BLOKKOLT, amíg ez el nem készül. A lánc két lépcsőben épül
 # (ADR 0250 §4): ez az ingest fele, a GOV-30c-2 briefje szándékosan még nincs
 # megírva (egy session = egy kör).
-E99-R09	docs/rounds/e99-r09-gov-30c-1-ingest-pipeline-composition.md	codex	0250	pending
+E99-R09	docs/rounds/e99-r09-gov-30c-1-ingest-pipeline-composition.md	codex	0250	done
