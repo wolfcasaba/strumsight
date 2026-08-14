@@ -3,9 +3,26 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-14
-> (E06-R30 done — shadow rollout, migration and Epic 6 closure, PR #257
-> merged; Epic 6 (Audio Analysis 2.0) implementation is now complete across
-> all 30 rounds, still shadow-only. Next pending round: TBD, see §6.)**
+> (E99-R09 GOV-30c-1 merged, PR #259; the self-contained PCM ingest chain
+> now exists but the runner remains intentionally fail-closed. Next pending
+> round: GOV-30c-2, see §6.)**
+>
+> ## ✅ E99-R09 KÉSZ — GOV-30c-1 PCM ingest pipeline composition (2026-08-14)
+>
+> A V2 engine most egy immutable `AnalysisWorkState`-et visz a hét typed
+> stage-en: preprocessing → signal quality → legacy evidence → pitch →
+> harmony → rhythm → events. A `LegacyEvidenceIngestStage` a már review-zott
+> V1 `ClipAnalyzerStage` vékony wrapperje, ezért a lánc kizárólag validált
+> PCM-ből is előállítja a timeline-alapot; a provider és mind a kilenc flag
+> változatlanul OFF/fail-closed. Az első review 1 MAJOR-t talált (A4 csak
+> kézzel beadott V1 evidence-szel futott); a brief §0.0 pontosítása és egy
+> javító dispatch zárta: PCM-only A4 és legacy-evidence fatális teszt készült.
+> Független correctness + security review APPROVED. Exact-SHA `5d2e0da0`:
+> Full Gate [31780988606](https://github.com/wolfcasaba/strumsight/actions/runs/31780988606)
+> és kézzel dispatch-elt Router CI
+> [31781917615](https://github.com/wolfcasaba/strumsight/actions/runs/31781917615)
+> success; squash PR [#259](https://github.com/wolfcasaba/strumsight/pull/259),
+> `cb76db0f`. Implementer `sonnet-impl`, 1 javító dispatch.
 >
 > ## ✅ E06-R30 KÉSZ — Shadow rollout, migráció és Epic 6 lezárás (2026-08-14, ZÁRÓ KÖR)
 >
@@ -858,6 +875,14 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-14):** `main` @ `cb76db0f` — E99-R09
+GOV-30c-1 PCM ingest pipeline composition, PR
+[#259](https://github.com/wolfcasaba/strumsight/pull/259), squash-merge.
+Exact-SHA `5d2e0da0`: Full Gate
+[31780988606](https://github.com/wolfcasaba/strumsight/actions/runs/31780988606)
++ Router CI [31781917615](https://github.com/wolfcasaba/strumsight/actions/runs/31781917615)
+mindkettő success. `origin/main` nem mozdult a dispatch és merge között.
+
 **Aktuális állapot (2026-08-14):** `main` @ `f257afa7` — E06-R30 (shadow
 rollout, migráció és Epic 6 lezárás, ZÁRÓ KÖR), PR
 [#257](https://github.com/wolfcasaba/strumsight/pull/257), squash-merge.
@@ -1139,6 +1164,15 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E99-R09 — GOV-30c-1 PCM ingest pipeline composition** (PR
+[#259](https://github.com/wolfcasaba/strumsight/pull/259), squash `cb76db0f`,
+[ADR 0250](docs/adr/0250-v2-analysis-work-state-and-ingest-stage-composition.md)).
+Immutable V2 work state + hét meglévő lokális engine-modul vékony adaptere;
+PCM-only lánc a timeline-alapig, provider/flag érintetlen. 1 MAJOR javítva
+(külső legacy evidence helyett `ClipAnalyzerStage`-ből származó evidence);
+correctness és security review APPROVED, exact-SHA CI zöld. Implementer
+`sonnet-impl`, 1 javító dispatch.
 
 **E06-R28 — Cache, performance és model lifecycle** (PR
 [#255](https://github.com/wolfcasaba/strumsight/pull/255), squash `d325d601`,
@@ -1565,9 +1599,10 @@ nevezi meg):**
 3. **GOV-30b** — az R29 evaluation CI-lépés bekötése (`.github/workflows/**`,
    `tool/ci/**` — ez a fájlkör EZEN A KÖRÖN kívül maradt szándékosan,
    H-GATEGUARD).
-4. **GOV-30c** — a valódi, több-stage V2 DSP pipeline összeszerelése
-   (`analysisV2RunnerProvider` ma fail-closed `StateError`, nincs konkrét
-   lánc — mérve E06-R22 óta, HANDOFF §3).
+4. **GOV-30c-2** — metrikák, confidence/capability, insights/hotspots,
+   `AnalysisDocument`-összeállítás és csak ott az `analysisV2RunnerProvider`
+   felülírása. A GOV-30c-1 PCM ingest lánc kész, de szándékosan nincs
+   production hívója.
 5. **Opt-in/default-on rollout és a V1 kivezetése** — külön, jóváhagyott
    GOV-kör, Product/User döntés (§5 Döntés 1 szerint EBBEN a körben sem
    volt elfogadható semmilyen flag `true`-ra állítása).

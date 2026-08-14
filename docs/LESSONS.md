@@ -10186,3 +10186,23 @@ hub saját munkafája mikor lett utoljára fetch-elve/resetelve. A
 `sdd-round-review` skill mintaparancsa (lokális hub-útvonal) csak akkor
 biztonságos, ha közvetlenül a hub saját push-a UTÁN, ugyanabban a
 sessionben fut — egy másik munkapéldányból történő push esetén NEM.
+
+## L273 — A „teljes lánc” acceptance cella nem bizonyított, ha a teszt egy olyan köztes artefaktumot injectál, amit a lánc maga nem termel meg (E99-R09, 2026-08-14)
+
+**Mit mértünk.** Az E99-R09 első A4 kompozíciós tesztje „teljes ingest
+lánc”-nak nevezte magát, de kézzel készített `LegacyEvidence`-et adott be a
+seed state-be. A production adapterek közül harmony, rhythm és events ezt az
+artefaktumot fogyasztották, egyik sem állította elő, ezért a tényleges
+`AnalysisWorkState.seed(input: pcm)` futás degradált ágakon át az events
+fatális hibájával zárult. A zöld gate nem fogta meg: a teszt eleve megkerülte
+a hiányzó kapcsolatot. A független review F1/MAJOR-ja a preconditionök és a
+tesztbemenet összevetésével reprodukálta.
+
+**Hogyan alkalmazd.** Minden end-to-end/kompozíciós acceptance tesztnél írd
+fel a stage-ek input-output gráfját, és bizonyítsd, hogy az initial state-ben
+csak a nyilvános boundary input szerepel. Ha a teszt bármely köztes típust
+(`*Evidence`, frame-lista, cache-eredmény) injectál, legyen külön teszt arra,
+hogy az előző stage valóban megtermeli — vagy a „teljes lánc” állítást vedd
+ki. A javítás itt egy vékony, meglévő `ClipAnalyzerStage`-et hívó,
+fatális `legacy-evidence` adapter volt; a PCM-only A4 hét futott stage
+provenance-listáját assertálja.
