@@ -110,7 +110,7 @@
 - [ ] **Performance baseline és budget dokumentált.** PENDING: EVAL-07/27 és EVAL-32–33, device mérés kell.
 - [x] **Cache verzióhelyes.** E06-R28.
 - [x] **V2 shadow/opt-in rollout lehetséges.** R30 `ShadowAnalysisRunner`, de hívó nélkül, csak contract-teszt.
-- [x] **V1 rollback működik.** R30 OFF→migrál→OFF→olvas→OFF teszt; V1 marad shipping.
+- [x] **V1 rollback működik.** R30 két külön `FeatureFlags` állapotban (V2 OFF és ON) olvassa vissza a migrált V2 dokumentumot; V1 marad shipping.
 - [x] **Privacy dokumentáció frissült.** E06-R27/R30, raw audio nincs a shadow reportban.
 
 ## Nyitott tételek
@@ -123,4 +123,4 @@
 | V2 pipeline összeszerelés és éles shadow hívó | Audio platform owner | GOV-30c |
 | Opt-in/default-on és V1 kivezetés | Product/User | Külön jóváhagyott GOV-kör |
 
-**Összegzés:** 69/74 tétel evidenciával kipipálva; az öt nyitott tétel valódi eszközös vagy governance-bizonyítékot igényel.
+**Összegzés:** 70/74 tétel evidenciával kipipálva; a négy nyitott DoD-tétel valódi eszközös vagy governance-bizonyítékot igényel. A fenti öt soros „Nyitott tételek” tábla tágabb, nem 1:1 DoD-kategorizálás: az utolsó két sor ugyanahhoz a rollout-folytatási területhez tartozik.

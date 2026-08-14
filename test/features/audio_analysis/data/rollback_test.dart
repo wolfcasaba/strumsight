@@ -25,41 +25,73 @@ void main() {
       versionStore: AnalysisMigrationVersionStore.open(analysisRoot: root),
       supplier: () async => <AnalyzedSession>[legacy],
     );
+    final flagsOff = _flagsOff();
+    final flagsOn = _flagsOn();
 
-    expect(_flagsOff(), isTrue);
+    expect(flagsOff == flagsOn, isFalse);
+    expect(_allAnalysisFlagsAreOff(flagsOff), isTrue);
+    expect(_allAnalysisFlagsAreOff(flagsOn), isFalse);
+    expect(flagsOff.audioAnalysisV2Enabled, isFalse);
+    expect(flagsOn.audioAnalysisV2Enabled, isTrue);
     await migrator.run();
     expect(
-      _flagsOff(),
+      _allAnalysisFlagsAreOff(flagsOff),
       isTrue,
-      reason: 'migration never changes rollout flags',
+      reason: 'migration leaves the V1 shipping configuration unchanged',
     );
     expect(legacy.toJson(), containsPair('id', 'rollback'));
-    expect((await repository.getById('rollback')).valueOrNull!.id, 'rollback');
-    expect(
-      _flagsOff(),
-      isTrue,
-      reason: 'rollback keeps V1 as the shipping path',
+
+    await _expectV2ReadSucceeds(
+      repository: repository,
+      flags: flagsOff,
+      expectedV2Enabled: false,
     );
-    expect((await repository.getById('rollback')).valueOrNull!.id, 'rollback');
+    await _expectV2ReadSucceeds(
+      repository: repository,
+      flags: flagsOn,
+      expectedV2Enabled: true,
+    );
   });
 }
 
-bool _flagsOff() {
-  const flags = FeatureFlags(
-    accountEnabled: false,
-    diagnosticsEnabled: false,
-    labModeAvailable: false,
+FeatureFlags _flagsOff() => const FeatureFlags(
+  accountEnabled: false,
+  diagnosticsEnabled: false,
+  labModeAvailable: false,
+);
+
+FeatureFlags _flagsOn() => const FeatureFlags(
+  accountEnabled: false,
+  diagnosticsEnabled: false,
+  labModeAvailable: false,
+  audioAnalysisV2Enabled: true,
+);
+
+Future<void> _expectV2ReadSucceeds({
+  required FileAnalysisRepository repository,
+  required FeatureFlags flags,
+  required bool expectedV2Enabled,
+}) async {
+  expect(
+    flags.audioAnalysisV2Enabled,
+    expectedV2Enabled,
+    reason: 'the test must exercise the requested rollout state',
   );
-  return !flags.audioAnalysisV2Enabled &&
-      !flags.analysisBeatGridEnabled &&
-      !flags.analysisPitchEnabled &&
-      !flags.analysisPreprocessingExperimentalEnabled &&
-      !flags.analysisExperimentalFusionEnabled &&
-      !flags.analysisTechniqueProxiesEnabled &&
-      !flags.analysisComparisonEnabled &&
-      !flags.analysisPracticeIntegrationEnabled &&
-      !flags.analysisTutorIntegrationEnabled;
+  final document = (await repository.getById('rollback')).valueOrNull;
+  expect(document, isNotNull);
+  expect(document!.id, 'rollback');
 }
+
+bool _allAnalysisFlagsAreOff(FeatureFlags flags) =>
+    !flags.audioAnalysisV2Enabled &&
+    !flags.analysisBeatGridEnabled &&
+    !flags.analysisPitchEnabled &&
+    !flags.analysisPreprocessingExperimentalEnabled &&
+    !flags.analysisExperimentalFusionEnabled &&
+    !flags.analysisTechniqueProxiesEnabled &&
+    !flags.analysisComparisonEnabled &&
+    !flags.analysisPracticeIntegrationEnabled &&
+    !flags.analysisTutorIntegrationEnabled;
 
 AnalyzeResult _result() => const AnalyzeResult(
   durationSec: 1,

@@ -543,10 +543,17 @@ bizonyítatlan „kész" állítás helyett `stopped` + brief-revízió.
   és provider-wiring szándékosan nincs.
 - `ShadowDiffReport`: event/chord/BPM/duration/runtime V1/V2 párjai + hiba-jelzés,
   timestamp és nyers audio nélkül.
-- 50-session, mezőnkénti legacy-megőrzés + második futás 50 skip; OFF→migrál→OFF
-  rollback teszt. A legacy migrátor és V1 Library kód változatlan.
-- `epic-06-completion-report.md`: 69/74 §33 tétel kipipálva, öt őszinte nyitott
-  real-device/governance tétel; EVAL-28…41 mind PENDING, felelőssel.
+- 50-session, mezőnkénti legacy-megőrzés + második futás 50 skip; a pillanatkép
+  független JSON deep-copy, nem az élő `AnalyzedSession` önhasonlítása.
+- **Javító kör #1 (2026-08-14): F1 (a) irány.** A rollback teszt két ténylegesen
+  eltérő `FeatureFlags` példányt épít (minden analysis flag OFF, illetve
+  `audioAnalysisV2Enabled: true`), explicit egyenlőtlenséggel és állapot-assertionnel;
+  a migrált V2 dokumentum olvasása mindkét állapotban sikeres. Ez a választott irány,
+  mert a `FileAnalysisRepository` ma flag-független, de a teszt így ténylegesen bejárja
+  a nevében ígért OFF/ON állapotteret. A V1/legacy assertion és kód változatlan.
+- **Javító kör #1: F2.** `epic-06-completion-report.md` most a tényleges 70/74
+  checkbox-számot és négy nyitott DoD-tételt közöl; a táblázat öt sora tágabb,
+  nem 1:1 kategorizálásként jelölt. EVAL-mátrix módosítása nem kellett.
 
 **RED→GREEN bizonyíték:** a hiányzó shadow/rollout contractokra írt tesztek
 először fordítási hibával PIROSak voltak; a kód után célzottan zöldek

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -29,8 +30,9 @@ void main() {
             result: _result(),
           ),
       ];
-      final originalPayloads = <String, Map<String, dynamic>>{
-        for (final session in sessions) session.id: session.toJson(),
+      final originalPayloads = <String, Map<String, Object?>>{
+        for (final session in sessions)
+          session.id: _deepCopyJsonObject(session.toJson()),
       };
       final migrator = LegacyLibraryMigrator(
         repository: repository,
@@ -70,6 +72,11 @@ void main() {
       }
     },
   );
+}
+
+Map<String, Object?> _deepCopyJsonObject(Map<String, Object?> payload) {
+  final decoded = jsonDecode(jsonEncode(payload));
+  return Map<String, Object?>.from(decoded as Map<String, Object?>);
 }
 
 AnalyzeResult _result() => const AnalyzeResult(
