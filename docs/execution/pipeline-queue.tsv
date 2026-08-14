@@ -230,3 +230,13 @@ E99-R07	docs/rounds/e99-r07-gov-05b-2-openai-provider-adapter.md	codex	0214	done
 # (ADR 0250 §4): ez az ingest fele, a GOV-30c-2 briefje szándékosan még nincs
 # megírva (egy session = egy kör).
 E99-R09	docs/rounds/e99-r09-gov-30c-1-ingest-pipeline-composition.md	codex	0250	done
+#
+# E99-R10 (GOV-30c-2) — a GOV-30c MÁSODIK lépcsője. Az ADR 0250 §4 eredetileg
+# KÉT lépcsőt írt elő; a GOV-30c-1 lezárása után mérve a maradék hét terület
+# egyetlen review-ba túl sok, ezért az ADR 0251 §4 HÁROM lépcsőre írja felül.
+# Ez a kör: referencia (AnalysisTarget) beemelése + illesztés + kilenc
+# metrika-modul + capability/confidence. A GOV-30c-3 hozza az insightokat, a
+# dokumentum-összeállítást és a provider bekötését — annak briefje szándékosan
+# még nincs megírva. Ez a kör sem kapcsol be semmit: a provider a végén is
+# StateError-t dob (A9 acceptance-cella).
+E99-R10	docs/rounds/e99-r10-gov-30c-2-evaluation-stage-composition.md	codex	0251	pending
