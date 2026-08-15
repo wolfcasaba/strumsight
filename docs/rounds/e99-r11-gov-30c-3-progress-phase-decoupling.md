@@ -1,11 +1,11 @@
 # E99-R11 (GOV-30c-3) — A progress-fázis leválasztása a stage-granularitásról
 
-- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, `main @ 0d4dbfa5`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, `main @ eb7ecc0c`)
 - **Típus:** **governance-kör** — a GOV-30c harmadik lépcsője (ADR 0251 §4–5)
 - **Kör-azonosító:** `E99-R11`. Emberi neve **GOV-30c-3**.
-- **Branch:** `codex/e99-r11-gov-30c-3-progress-phase-decoupling`
+- **Branch:** `sonnet-impl/e99-r11-gov-30c-3-progress-phase-decoupling`
 - **Előfeltétel:** `E99-R10` (GOV-30c-2) merge-elve (PR #261, `82cfa588`)
-- **Brief szerzője:** Claude (Opus 5) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (Opus 5) · **Implementáció:** Sonnet 5 (`sonnet-impl`)
 - **Előre kiosztott ADR:** [`0252`](../adr/0252-progress-phase-decoupled-from-stage-granularity.md)
   — **MÁR MEGÍRVA az orchesztrátor által, a `docs/adr/` a TILOS zónában van.**
   Az ADR 0252 **felülírja** az E06-R04 szigorú-monotonitás invariánsát (lásd §5.2).
@@ -30,6 +30,16 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+### §0.0 Pre-flight revízió — a tényleges implementer-azonosság (2026-08-15)
+
+Az eredeti, előre elkészített brief `codex` / Terra implementert és az ennek
+megfelelő branch-prefixet jelölt. Ennek a firingnek a driver által feloldott,
+explicit motorja **`sonnet-impl`**; a registry szerint ez `claude` harnesses
+Sonnet 5. A branch-prefix ezért `sonnet-impl/…`, hogy az ADR 0242 szerinti
+reviewer-függetlenség a valós implementer-azonosságból mérhető legyen. A
+váltás csak orchesztrációs metadata: az `allowed_paths`, az ADR 0252 és az
+összes acceptance-kritérium változatlan.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
