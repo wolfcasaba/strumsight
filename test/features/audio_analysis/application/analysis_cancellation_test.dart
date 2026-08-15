@@ -51,6 +51,45 @@ void main() {
     },
   );
 
+  test('a completed run releases the raw-PCM request (F4: no reachable audio '
+      'after the run finishes)', () async {
+    final runner = AnalysisIsolateRunner(operation: _echoDocumentJson);
+    final handle = runner.start(_request());
+
+    await handle.result;
+
+    expect(debugAnalysisRunHandleHoldsRequest(handle), isFalse);
+  });
+
+  test('a cancelled run releases the raw-PCM request (F4: no reachable audio '
+      'after cancel)', () async {
+    final isolateSpawned = Completer<void>();
+    final allowAssignment = Completer<void>();
+    final runner = AnalysisIsolateRunner(
+      operation: _echoDocumentJson,
+      isolateSpawner: (replyTo, documentJson, audio, target, operation) async {
+        final isolate = await spawnAnalysisIsolate(
+          replyTo,
+          documentJson,
+          audio,
+          target,
+          operation,
+        );
+        isolateSpawned.complete();
+        await allowAssignment.future;
+        return isolate;
+      },
+    );
+
+    final handle = runner.start(_request());
+    await isolateSpawned.future;
+    await handle.cancel();
+    allowAssignment.complete();
+    await handle.result;
+
+    expect(debugAnalysisRunHandleHoldsRequest(handle), isFalse);
+  });
+
   test(
     'cancellation during spawn kills the later-assigned isolate before it finishes work',
     () async {

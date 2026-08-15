@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:meta/meta.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/data/analysis_document_codec.dart';
@@ -125,16 +126,23 @@ final class AnalysisIsolateRunner implements AnalysisRunner {
 final class _IsolateAnalysisRun implements AnalysisRunHandle {
   _IsolateAnalysisRun({
     required this.runId,
-    required this.request,
+    required AnalysisRunRequest request,
     required this.operation,
     required this.isolateSpawner,
   }) : _result = Completer<AnalysisRunResult>() {
+    _request = request;
     unawaited(_start());
   }
 
   @override
   final String runId;
-  final AnalysisRunRequest request;
+
+  /// The raw-PCM-carrying request. Nulled out as soon as the spawn call has
+  /// handed the audio off to the isolate boundary (or on any terminal/cancel
+  /// path that never reaches spawn), so a caller holding a closed
+  /// [AnalysisRunHandle] cannot keep the sample buffer reachable (ADR 0254
+  /// §2, brief §5.2).
+  AnalysisRunRequest? _request;
   final AnalysisDocumentIsolateOperation operation;
   final AnalysisIsolateSpawner isolateSpawner;
   final StreamController<AnalysisProgressEvent> _progress =
@@ -153,6 +161,8 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
 
   Future<void> _start() async {
     try {
+      final request = _request;
+      if (request == null) return;
       final encodedSeed = const AnalysisDocumentCodec().encode(request.seed);
       final messages = ReceivePort();
       _messages = messages;
@@ -163,6 +173,7 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
         request.target,
         operation,
       );
+      _request = null;
       if (_cancelled) {
         await _dispose();
         return;
@@ -208,6 +219,7 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
   Future<void> cancel() async {
     if (_disposed || _cancelled) return;
     _cancelled = true;
+    _request = null;
     await _dispose();
     if (!_result.isCompleted) {
       _result.complete(
@@ -263,12 +275,20 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
     final isolate = _isolate;
     _isolate = null;
     isolate?.kill(priority: Isolate.immediate);
+    _request = null;
     if (_disposed) return;
     _disposed = true;
     _messages?.close();
     await _progress.close();
   }
 }
+
+/// Test-only introspection of whether [handle] still holds the raw-PCM
+/// request (ADR 0254 §2, brief §5.2: a run releases its sample buffer once
+/// terminal or cancelled). Not part of [AnalysisRunHandle]'s contract.
+@visibleForTesting
+bool debugAnalysisRunHandleHoldsRequest(AnalysisRunHandle handle) =>
+    handle is _IsolateAnalysisRun && handle._request != null;
 
 final class _IsolateRequest {
   const _IsolateRequest({
