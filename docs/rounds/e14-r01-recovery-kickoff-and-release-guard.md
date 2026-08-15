@@ -1,6 +1,7 @@
 # E14-R01 — Recovery kickoff, scope freeze és release guard
 
-- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, `main @ e90edaa2`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, `main @ e90edaa2`;
+  pre-flight revideálva 2026-08-15, `main @ 344c2fdc` — §0.0 hozzáadva)
 - **Típus:** **Chapter 14 program-nyitó kör** (Recognition Accuracy & Useful UI Recovery)
 - **Kör-azonosító:** `E14-R01`. Az `E14` a **FEJEZETET** jelöli, nem epicet
   (az epicek E01–E10) — ugyanaz a minta, mint az `E99` governance-pszeudoepic.
@@ -33,6 +34,39 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight mérési kiegészítés (Claude orchestrátor, 2026-08-15, `main @ 344c2fdc`)
+
+A pre-flight a §1 mérési szabálya szerint kigrepelte a brief két állítását a
+tényleges kódból. Mindkettő pontosítást igényel — az alábbi két pont a brief
+§2.2/§6.1-ét egészíti ki, nem írja felül:
+
+1. **A `FeatureFlags` bővítésének valójában ÖT helye van, nem négy.** A §2.2
+   három helyet nevez (konstruktor, `forEnvironment`, `toString`) + „az `==`
+   operátor is" — mérve (`lib/app/config/feature_flags.dart:222-304`): az
+   `operator ==` UTÁN van egy ötödik hely, a `hashCode` gettere. Ez egy hat
+   mezős `legacyHash`-ből (az eredeti hat flag) és egy `additionalBits`
+   `List<bool>`-ból épül, amibe MINDEN `songTrainerV2Enabled` óta felvett flag
+   bekerült (lásd a lista utolsó eleme: `analysisTutorIntegrationEnabled`). A
+   három új flaget ugyanoda, a lista VÉGÉRE kell felvenni, ugyanabban a
+   sorrendben, mint a konstruktorban/`toString`-ben. Ez a Dart
+   equals/hashCode-szerződést önmagában nem sérti (két különböző objektum
+   ugyanazon hash-sel technikailag megengedett), de megtöri a kódbázis
+   következetes mintáját, amit a review MINOR-ként jelezne — olcsóbb most
+   felvenni, mint egy javító körben.
+2. **A §6.1 „rajta (a küszöbön)" cellája konkrétan: `AppEnvironment.lab`.**
+   Az `AppEnvironment` enum (`lib/app/config/app_environment.dart:13-23`)
+   pontosan három értéket vesz fel: `development`, `lab`, `production`. A
+   §6.1 másik két cellája explicit `production`-t és `development`-et nevez
+   meg; az egyetlen fennmaradó, egyik cellában sem szereplő érték a `lab` —
+   ez adja a három enumérték teljes lefedettségét. A cella tehát:
+   `FeatureFlags.forEnvironment(AppEnvironment.lab, accountEnabled: false)`
+   → mindhárom új flag `false`.
+
+Mindkét pont a meglévő teszt-mintát követi
+(`test/app/config/feature_flags_test.dart` `group('Practice Generator
+feature flags', ...)`) — a három új flagre írj hasonló, önálló csoportot
+(pl. `group('Recognition recovery feature flags', ...)`).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
