@@ -1,6 +1,6 @@
 # E07-R05 — SkillEvidence normalizálás és evidence repository
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 46338f48`)
+- **Státusz:** PLANNING (pre-flight rev. 2026-08-15, `main @ c4497773`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 5
 - **Kör-azonosító:** `E07-R05`
 - **Branch:** `<motor>/e07-r05-skill-evidence-normalisation`
@@ -13,6 +13,22 @@
 > kimenetét. Mérd meg a projekt **naplózási mintáját**
 > (`grep -rln "AppLogger\|debugPrint\|logger" lib/core/`), mert a §5.4
 > redakciós szabály erre épül. Eltérésnél §0.0 revízió, Státusz → PLANNING.
+
+### 0.0 Pre-flight revízió (2026-08-15)
+
+- A mért `main @ c4497773`-en a naplózási standard `lib/core/logging/app_logger.dart`
+  `AppLogger`: strukturált `event + fields`, a hívóoldal nem megbízható a
+  redakcióra, és a release-default `NoopAppLogger`. `LogRedactor` a `pcm`,
+  `audio`, `wav`, `clip` és más érzékeny kulcsokat is teljesen redaktálja.
+- Az A5-öt ezért az `EvidenceAggregator`-hoz adott, tesztben gyűjthető
+  `AppLogger`-rel kell mérni. Az aggregátor csak stabil outcome-azonosítót és
+  discomfort-kategóriát adhat mezőként; a self-report szabad szövege sem
+  eseményben, sem mezőben, sem kivételben nem szerepelhet. A default logger
+  `const NoopAppLogger()`; a domain továbbra is Flutter-, clock- és logolás-
+  független.
+- A `docs/adr/0260-…` már elfogadott és a tilos zónában van; ez a kör nem
+  ír új ADR-t és nem módosítja a meglévőt. Az eredetileg kimért `46338f48`
+  baseline helyett a jelen revízió célbázisa `c4497773`.
 
 ```ai-router
 schema_version = 1
