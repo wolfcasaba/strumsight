@@ -63,7 +63,9 @@ final class AnalysisPipeline<T> {
   }) : _stages = List<AnalysisStage<T, T>>.unmodifiable(stages),
        _failureClassifier = failureClassifier ?? _fatalFailure,
        _stopwatchFactory = stopwatchFactory ?? Stopwatch.new,
-       _stagePhases = stagePhases {
+       _stagePhases = stagePhases == null
+           ? null
+           : Map<String, AnalysisProgressPhase>.unmodifiable(stagePhases) {
     if (_stages.isEmpty) {
       throw ArgumentError.value(stages, 'stages', 'must not be empty');
     }

@@ -299,6 +299,42 @@ void main() {
       },
     );
 
+    test('F1 — mutating the caller-owned stagePhases map after construction '
+        'does not affect a previously validated pipeline', () async {
+      final callerOwnedPhases = <String, AnalysisProgressPhase>{
+        'first': AnalysisProgressPhase.computingMetrics,
+        'second': AnalysisProgressPhase.computingMetrics,
+      };
+      final pipeline = AnalysisPipeline<int>(
+        stages: <AnalysisStage<int, int>>[
+          FakeAnalysisStage(id: 'first'),
+          FakeAnalysisStage(id: 'second'),
+        ],
+        stagePhases: callerOwnedPhases,
+      );
+
+      // Corrupt the caller's map after construction: this would regress
+      // the second stage's phase and, were the pipeline holding the same
+      // reference, would trip the runtime regression guard.
+      callerOwnedPhases['second'] = AnalysisProgressPhase.preprocessing;
+
+      final observation = await _observe(
+        pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
+      );
+
+      expect(observation.result.completion, AnalysisCompletionStatus.complete);
+      final phaseEvents = observation.events
+          .whereType<AnalysisPhaseProgressEvent>()
+          .toList();
+      expect(phaseEvents, hasLength(2));
+      expect(
+        phaseEvents.every(
+          (event) => event.phase == AnalysisProgressPhase.computingMetrics,
+        ),
+        isTrue,
+      );
+    });
+
     test('rejects a stagePhases map missing a mapping for a stage ID', () {
       expect(
         () => AnalysisPipeline<int>(
