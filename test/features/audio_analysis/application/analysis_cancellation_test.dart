@@ -94,12 +94,14 @@ String _echoDocumentJson(
   String documentJson,
   ValidatedPcmAnalysisInput audio,
   AnalysisTarget? target,
+  void Function(AnalysisProgressEvent event) reportProgress,
 ) => documentJson;
 
 Future<String> _writeCompletionMarkerAfterDelay(
   String documentJson,
   ValidatedPcmAnalysisInput audio,
   AnalysisTarget? target,
+  void Function(AnalysisProgressEvent event) reportProgress,
 ) async {
   final json = jsonDecode(documentJson) as Map<String, Object?>;
   await Future<void>.delayed(const Duration(milliseconds: 150));

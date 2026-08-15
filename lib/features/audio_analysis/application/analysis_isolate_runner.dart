@@ -56,12 +56,15 @@ final class AnalysisRunRequest {
 /// Top-level, isolate-sendable analysis operation. [documentJson] carries the
 /// codec-encoded run seed; [audio] and [target] cross the isolate boundary as
 /// native Dart objects so the raw PCM never round-trips through the document
-/// codec (ADR 0254 §2).
+/// codec (ADR 0254 §2). [reportProgress] lets a long-running operation (e.g.
+/// the V2 stage chain) publish [AnalysisProgressEvent]s back to the spawning
+/// isolate as they occur, ahead of the final return value.
 typedef AnalysisDocumentIsolateOperation =
     FutureOr<String> Function(
       String documentJson,
       ValidatedPcmAnalysisInput audio,
       AnalysisTarget? target,
+      void Function(AnalysisProgressEvent event) reportProgress,
     );
 
 /// Spawns the isolate used for one analysis run.
@@ -164,30 +167,30 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
         await _dispose();
         return;
       }
-      _progress.add(
-        AnalysisPhaseProgressEvent(
-          runId: runId,
-          phase: AnalysisProgressPhase.finalizing,
-        ),
-      );
-      final message = await messages.first;
-      if (_cancelled) return;
-      if (message is String) {
-        final decoded = const AnalysisDocumentCodec().decode(message);
-        switch (decoded) {
-          case Success<AnalysisDocument>(:final value):
-            _complete(completion: value.completion.status, value: value);
-          case Failure<AnalysisDocument>(:final error):
-            _complete(
-              completion: AnalysisCompletionStatus.failed,
-              failure: error,
-            );
+      await for (final message in messages) {
+        if (_cancelled) break;
+        if (message is AnalysisProgressEvent) {
+          _progress.add(message);
+          continue;
         }
-      } else {
-        _complete(
-          completion: AnalysisCompletionStatus.failed,
-          failure: UnknownFailure(cause: message),
-        );
+        if (message is String) {
+          final decoded = const AnalysisDocumentCodec().decode(message);
+          switch (decoded) {
+            case Success<AnalysisDocument>(:final value):
+              _complete(completion: value.completion.status, value: value);
+            case Failure<AnalysisDocument>(:final error):
+              _complete(
+                completion: AnalysisCompletionStatus.failed,
+                failure: error,
+              );
+          }
+        } else {
+          _complete(
+            completion: AnalysisCompletionStatus.failed,
+            failure: UnknownFailure(cause: message),
+          );
+        }
+        break;
       }
     } on Object catch (error, stackTrace) {
       if (!_cancelled) {
@@ -260,13 +263,13 @@ final class _IsolateRequest {
 
 void _isolateEntry(_IsolateRequest request) async {
   try {
-    request.replyTo.send(
-      await request.operation(
-        request.documentJson,
-        request.audio,
-        request.target,
-      ),
+    final result = await request.operation(
+      request.documentJson,
+      request.audio,
+      request.target,
+      request.replyTo.send,
     );
+    request.replyTo.send(result);
   } on Object catch (error) {
     request.replyTo.send(error.toString());
   }

@@ -1,4 +1,5 @@
 // ignore_for_file: depend_on_referenced_packages
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -39,6 +40,28 @@ void main() {
 
       expect(runner, isA<V2AnalysisRunner>());
     });
+
+    test(
+      'F1 — the 20-stage chain runs off the calling isolate, not blocking it '
+      '(ADR 0254 §5.4)',
+      () async {
+        final runner = V2AnalysisRunner();
+        final events = <String>[];
+        final handle = runner.start(_request(samples: _fullClip()));
+        Timer(Duration.zero, () => events.add('timer'));
+        await handle.result;
+        events.add('result');
+
+        // A same-isolate pipeline schedules its whole 20-stage run as a
+        // microtask chain, which the Dart event loop always drains before
+        // it services a pending timer — so a same-isolate run would
+        // observe 'result' before 'timer'. Spawning a real isolate and
+        // round-tripping the message ports takes real wall time, so the
+        // zero-duration timer on THIS isolate always fires first while
+        // that isolate does the DSP work.
+        expect(events, <String>['timer', 'result']);
+      },
+    );
 
     test('A2/A3 — PCM in produces an AnalysisDocument out through the full '
         '20-stage chain composed from buildFullAnalysisStages()', () async {
