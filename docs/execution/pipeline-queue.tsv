@@ -251,3 +251,17 @@ E99-R10	docs/rounds/e99-r10-gov-30c-2-evaluation-stage-composition.md	codex	0251
 # felülírása; az engedély az ADR 0252-ben és a brief §5.2-ben EXPLICIT, ezért
 # a kör nem áll meg H2-vel. A provider továbbra sem mozdul (A9).
 E99-R11	docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md	codex	0252	done
+#
+# E99-R12 (GOV-30c-4) — dokumentum-összeállítás + insights. A sorrend
+# TÍPUS-KÉNYSZER, nem ízlés: az AnalysisInsightContext kötelező mezője egy kész
+# AnalysisDocument (domain/insights/insight_rule.dart:53-73), tehát előbb
+# előzetes dokumentum, aztán szabályok, aztán végleges.
+#
+# A pre-flight MÉRT egy rést, amit az Epic 6 harminc köre nem érintett: az
+# AnalysisRunner.start bemenete DOKUMENTUM, a dokumentum input-mezője pedig
+# szándékosan „never PCM" (AnalysisInputSummary), a lánc viszont
+# ValidatedPcmAnalysisInput-ból indul — az audiónak ma NINCS útja a V2 láncba a
+# runner-határon keresztül. Ez önálló architekturális döntés (ADR 0253 §4), a
+# GOV-30c-5 dolga; ebben a körben TILOS hozzányúlni. A V2 elemzés ezért egy
+# lépcsővel később lesz futtatható, mint az ADR 0251 §4 becsülte.
+E99-R12	docs/rounds/e99-r12-gov-30c-4-document-assembly-and-insights.md	codex	0253	pending
