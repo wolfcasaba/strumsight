@@ -102,7 +102,7 @@ void main() {
 
         expect(forward.evidence, hasLength(2));
         expect(reversed.evidence, hasLength(2));
-        expect(forwardBySkill.keys, reversedBySkill.keys);
+        expect(forwardBySkill.keys.toSet(), reversedBySkill.keys.toSet());
         for (final skillId in forwardBySkill.keys) {
           expect(
             forwardBySkill[skillId]!.sourceOutcomeId,
