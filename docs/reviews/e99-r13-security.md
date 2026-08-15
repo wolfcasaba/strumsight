@@ -1,7 +1,7 @@
 # E99-R13 — Security review
 
-Brief: `docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md`  
-Reviewer: Codex (gpt-5.6-terra) · Dátum: 2026-08-15  
+Brief: `docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md`
+Reviewer: Codex (gpt-5.6-terra) · Dátum: 2026-08-15
 Verdikt: CHANGES REQUIRED (a funkcionális review F1 MAJOR megállapításával együtt)
 
 ## Ellenőrzés

@@ -1,8 +1,8 @@
 # E99-R13 — Review
 
-Brief: `docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md`  
-Diff: `1636b40d..7c6b762e`  
-Reviewer: Codex (gpt-5.6-terra) · Dátum: 2026-08-15  
+Brief: `docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md`
+Diff: `1636b40d..7c6b762e`
+Reviewer: Codex (gpt-5.6-terra) · Dátum: 2026-08-15
 Verdikt: CHANGES REQUIRED
 
 ## Összegzés
@@ -40,6 +40,15 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
 - **Megfigyelés:** a `AnalysisController` még csak dokumentumot ad át, ezért ez a use case szándékosan üres PCM-et képez. A brief §10.5 ezt ismert, későbbi körre halasztott korlátként rögzíti; a flag-ek továbbra is OFF-on vannak.
 - **Státusz:** NOTE — nem ennek a körnek a scope-ja, de rollout előtt valódi capture/import út szükséges.
 
+### F3 — MAJOR — Az izolátumból jövő progress runId-ja nem a külső handle-é
+
+- **Fájl:** `lib/features/audio_analysis/application/analysis_isolate_runner.dart:171-177`, `lib/features/audio_analysis/application/v2_analysis_runner.dart:58-75`
+- **Probléma:** a V2 pipeline az izolátumban `analysis-run-1` azonosítójú progress-eventeket küld, míg az `AnalysisIsolateRunner` által visszaadott handle azonosítója `analysis-isolate-1`. A szülő változtatás nélkül továbbítja az eseményt.
+- **Hatás:** `AnalysisController._onProgress` kizárólag az aktív handle `runId`-jával egyező eseményt fogad el (`analysis_controller.dart:109-120`); ezért minden valódi V2 progress-event eldobódik késői eredményként. Ez megsérti a változatlan `AnalysisRunHandle.progress` contractot.
+- **Kötelező javítás:** a szülő isolate runnerben a bejövő progress-eventeket a külső `runId`-ra kell újracsomagolni/térképezni, a phase és számláló-adatok változatlan megőrzésével. Adj regressziós tesztet, amely a handle és minden továbbított phase-event `runId` egyezését ellenőrzi.
+- **Ellenőrzés:** a brief teljes `tools/round-gate.sh` parancsa és az új regressziós teszt.
+- **Státusz:** OPEN
+
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Állított eredmény | Ellenőrizve |
@@ -51,4 +60,4 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
 
 ## Merge-döntés
 
-Az F1 nyitott MAJOR, ezért ADR 0052 szerint merge tilos. Javító implementer-kör szükséges ugyanazon branchen.
+Az F3 nyitott MAJOR, ezért ADR 0052 szerint merge tilos. Javító implementer-kör szükséges ugyanazon branchen.
