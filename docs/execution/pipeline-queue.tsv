@@ -279,3 +279,16 @@ E99-R12	docs/rounds/e99-r12-gov-30c-4-document-assembly-and-insights.md	codex	02
 # (seed + audio + opcionális target); a PCM soha nem lesz dokumentum (A4 a
 # KÓDOLT JSON-t vizsgálja, mert típusszinten nem látszik a szivárgás).
 E99-R13	docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md	codex	0254	done
+#
+# Epic 7 (AI Practice Generator) — user-döntés 2026-08-15: „folytassuk a
+# fejlesztést … indítsd az Epic 7-et". Előfeltétel-ellenőrzés MÉRVE: a SDD Ch8
+# §4.3 szerint a függőségek „előnyösek, de nem minden körhöz kötelezők", és
+# hiányzó előfeltételhez fake/legacy adapter kell — az Epic 6 shadow-only
+# állapota tehát NEM blokkolja az indulást. Fontos korlát ugyanonnan: „A
+# generátor domainjét nem szabad az ideiglenes adapterhez igazítani."
+#
+# A briefeket KÖRÖNKÉNT írjuk, nem batch-ben (egy session = egy kör). Indok:
+# az előre írt briefek mért hézagokat termeltek (E99-R09..R13: hiányzó
+# termelő, stage-sapka, teszt-fake-ek, implementor-őr), és a hétnapos kvóta
+# 2026-08-15-én 77%-on állt.
+E07-R01	docs/rounds/e07-r01-planner-baseline-adrs-and-flags.md	minimax	0255-0256	pending
