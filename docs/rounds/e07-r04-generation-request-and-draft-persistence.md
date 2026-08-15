@@ -1,6 +1,6 @@
 # E07-R04 — PracticeGenerationRequest és draft persistence
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 46338f48`)
+- **Státusz:** PLANNING (pre-flight felülvizsgálva 2026-08-15, `main @ 2d65f862`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 4
 - **Kör-azonosító:** `E07-R04`
 - **Branch:** `<motor>/e07-r04-generation-request-and-draft-persistence`
@@ -45,6 +45,22 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+### 0.0 Pre-flight revízió (2026-08-15, `main @ 2d65f862`)
+
+- A brief-lint jelentés `nincs lelet`; nincs B*/S* feloldandó pont.
+- Az R02/R03 tényleges contractjai: `GenerationMode` a
+  `plan_enums.dart`-ban; `PracticeGoal`, `WeeklyAvailability` és
+  `LearnerConstraints` immutable, értékegyenlőséget adó domain modellek.
+  Ezeket a request közvetlenül hordozhatja; a kör nem ír producer- vagy UI
+  réteget.
+- A meglévő lokális persistence-minta a `KeyValueStore` +
+  `AppResult`/`StorageFailure`: a `LocalPracticeHistoryRepository` külön,
+  namespaced kulcsra ír, és tárolóhiba esetén failure-t ad vissza. A draft
+  repository ezt a mintát követi, saját, az aktív terv tárolóhelyétől eltérő
+  kulccsal; közvetlen `SharedPreferences`-import nem megengedett.
+- Az előre kiosztott ADR 0259 már a `ed2ae399` commitban elfogadott,
+  változatlan artefaktum. A pre-flight nem ír új vagy versengő ADR-t.
 
 ## 1. Cél
 
@@ -207,5 +223,136 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   segítőkésznek hat; csendes adatromlás (A5).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Megvalósítás
+
+- `practice_generation_request.dart`: `GenerationRequestId` (ADR 0257
+  mintájú typed id, saját fájlban, mivel `planner_ids.dart` tiltott zóna).
+  `PracticeGenerationRequest` immutable; kötelező mezők: `id`, `createdAt`
+  (kívülről kapott, UTC-re normalizált), `locale`, `generationMode`,
+  `planHorizonDays` (≥1), `availability`, `constraints`, opcionális `goals`.
+  `seed` (int, `[0, 2^32)`) és `contentHash` (hex SHA-256) **számított
+  getter**, nem konstruktor-paraméter — az ADR 0259 §1 kifejezett döntése
+  szerint a seed nem injektálható. A hash bemenete (`_contentSnapshot`)
+  szándékosan **kizárja** `id`-t és minden `DateTime`-ot (a request saját
+  `createdAt`-ját és minden goal saját `createdAt`-ját is) — ezek
+  provenance, nem tartalom. A `_canonicalize` rekurzívan rendezett kulcsú
+  Map-re alakítja a snapshotot a hash-elés előtt (ADR 0259 §2 — a mezősorrend
+  nem befolyásolhatja a hash-t).
+- `generation_request_serializer.dart`: `GenerationRequestSerializer`
+  (`currentSchemaVersion = 2`, `oldestSupportedSchemaVersion = 1`).
+  `toJson`/`fromJson` teljes round-trip a goal/availability/constraint
+  hármasra. A v1→v2 migráció valódi tartalom-transzformáció: v1 a módot
+  `mode` kulcs alatt, a horizontot egész `horizonWeeks`-ben tárolta;
+  migráláskor `generationMode = mode`, `planHorizonDays = horizonWeeks * 7`.
+  `schemaVersion > current` VAGY `< oldest` → kontrollált
+  `GenerationRequestSerializerException` (soha best-effort olvasás).
+- `generation_draft_repository.dart`: `GenerationDraftRepository` a
+  `KeyValueStore` + `AppResult`/`StorageFailure` mintát követi (mint
+  `LocalPracticeHistoryRepository`), egyetlen draftot tart
+  `draftStorageKey = 'ss.practice_generator.generation_draft'` alatt — ez a
+  kulcs deliberately elkülönül minden jövőbeli aktív-terv kulcstól (nem
+  közös kulcs + státusz mező). `loadDraft()` minden dekódolási hibát
+  (JSON-parse, séma-sértés, jövőbeli schemaVersion) `Failure(StorageFailure)`
+  -ként ad vissza, sosem dob kivételt a hívó felé. `clearDraft()` a
+  `KeyValueStore.remove`-ra épül, ami hiányzó kulcsra is sikerrel tér vissza
+  → idempotens.
+- `public.dart`: `practice_generation_request.dart` exportálva (csak a
+  domain modell — a serializer és a repository szándékosan NEM export, SDD
+  Ch8 §8.2 szerint).
+- A két célzott tesztfájl lefedi az A1–A8 cellákat, köztük a három
+  schema-cellát (v1 migrál, v2 határeset változatlan, v3 kontrollált hiba)
+  és a mezősorrend-independence cellát (a perzisztált JSON kulcssorrendjét
+  megfordítva dekódolva ugyanaz a hash/seed).
+
+### Valódi-sértés próba
+
+Ideiglenesen a `_contentSnapshot()`-ba bekerült a `'createdAt':
+createdAt.toIso8601String()` bejegyzés (a request saját létrehozási
+időbélyege belekeverve a hash bemenetébe). A
+`flutter test test/features/practice_generator/data/generation_request_serializer_test.dart`
+futásban az A2 cella (`id and createdAt do not affect the hash/seed`)
+elvárt módon PIROS lett:
+
+```text
+Expected: <1600702440>
+  Actual: <681666119>
+```
+
+(a másik hat A2/A3/A4/A5 teszt is elbukott ugyanebben a futásban, mert
+azok is a `buildRequest()` segédfüggvényen és a hash-stabilitáson múlnak —
+ez megerősíti, hogy a teszt valóban a determinizmust méri, nem egy
+mellékes állítást). A módosítás visszaállítva, a gate előtt zöldre futtatva.
+
+### Futtatott ellenőrzések
+
+```text
+tools/round-gate.sh test/features/practice_generator/data/generation_request_serializer_test.dart test/features/practice_generator/data/generation_draft_repository_test.dart
+  format: 1513 fájl, 0 módosítás
+  analyze: No issues found
+  generation_request_serializer_test.dart: 9 passed
+  generation_draft_repository_test.dart: 8 passed
+  architecture: Architecture dependencies OK (12 allowlisted deviation(s))
+  secrets: Secret scan OK (2568 file(s), 0 finding(s))
+  l10n: L10n parity OK (en → hu, 1276 message(s))
+```
+
+`grep -n "Random\|DateTime.now()\|package:flutter"
+lib/features/practice_generator/domain/model/practice_generation_request.dart`
+→ nincs találat (A9).
+
+Nincs eltérés és nincs ki nem futtatott helyi ellenőrzés. CI-dispatch, review
+és merge az orchestrátor feladata.
+
+### Javító kör 1 — F1 (`b9afd6c7` review, MAJOR)
+
+- **Hiba:** `_goalFromJson` a `targetDate` mezőt `targetDateRaw is String ?
+  _dateFromJson(targetDateRaw) : null` mintával dekódolta — egy hiányzó
+  (`null`) és egy hibás típusú, nem-`null` érték (pl. `42`) egyaránt csendes
+  `null`-ra képződött le, ahelyett hogy az utóbbi kontrollált
+  `GenerationRequestSerializerException`-t dobott volna. Ugyanez a minta
+  volt jelen a `metricTarget` (`is Map ? … : null`) és a beágyazott
+  `MetricTarget.targetDate` mezőknél is.
+- **Javítás:** két megosztott helper, `_optionalDateFromJson` és
+  `_optionalMetricTargetFromJson`, amely explicit módon különbözteti meg a
+  `null` (hiányzó, engedélyezett) esetet a nem-`null`, hibás típusú esettől
+  (kontrollált `GenerationRequestSerializerException`,
+  `goalsInvalid` kóddal, mezőnkénti `field` útvonallal:
+  `goals.targetDate`, `goals.metricTarget`,
+  `goals.metricTarget.targetDate`). Mindhárom hívási hely (`_goalFromJson`
+  kétszer, `_metricTargetFromJson` egyszer) erre a két helperre lett
+  átállítva. `GenerationDraftRepository.loadDraft` változatlanul
+  `Failure(StorageFailure)`-ré képezi le a kivételt (nem módosult).
+- **Tartós regressziós tesztek:** `generation_request_serializer_test.dart`
+  új `GenerationRequestSerializer malformed optional fields (A6, review F1)`
+  csoport — `goal.targetDate = 42` (kontrollált kivétel),
+  `goal.targetDate = null` (változatlanul elfogadott hiányzó érték),
+  `goal.metricTarget = 'not-a-map'` (kontrollált kivétel),
+  `metricTarget.targetDate = 42` (kontrollált kivétel).
+  `generation_draft_repository_test.dart` új teszt: egy `goal.targetDate =
+  42`-t tartalmazó, közvetlenül a store-ba írt (a szerializeren megkerülve
+  konstruált) JSON draft `loadDraft()`-ja `Failure(StorageFailure)`-t ad.
+  Mind a négy új serializer-teszt és az új repository-teszt a javítás előtt
+  a régi `is String ? … : null` / `is Map ? … : null` mintával elbukott
+  volna (a hibás típusú érték csendben `null`-ra képződött volna le, a
+  `expect(..., throwsA(...))` / `Failure(StorageFailure)` elvárás nem
+  teljesült volna) — ez a javító kör szándéka szerinti RED→GREEN bizonyíték.
+
+### Futtatott ellenőrzések — javító kör 1
+
+```text
+tools/round-gate.sh test/features/practice_generator/data/generation_request_serializer_test.dart test/features/practice_generator/data/generation_draft_repository_test.dart
+  format: 1513 fájl, 0 módosítás
+  analyze: No issues found
+  generation_request_serializer_test.dart: 13 passed (9 + 4 új F1-regresszió)
+  generation_draft_repository_test.dart: 9 passed (8 + 1 új F1-regresszió)
+  architecture: Architecture dependencies OK (12 allowlisted deviation(s))
+  secrets: Secret scan OK (2574 file(s), 0 finding(s))
+  l10n: L10n parity OK (en → hu, 1276 message(s))
+```
+
+Csak az engedélyezett négy fájl változott
+(`generation_request_serializer.dart`, a két célzott tesztfájl, ez a
+brief). Nincs eltérés a briefhez képest.
 
 ## 11. Review — a Claude tölti ki
