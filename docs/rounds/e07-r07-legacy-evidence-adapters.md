@@ -1,12 +1,12 @@
 # E07-R07 — Legacy Learn és Progress evidence adapterek
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ a31bb2b1`)
+- **Státusz:** PLANNING (pre-flight revízió alatt 2026-08-15; kiinduló `main @ 4c770e03`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 7
 - **Kör-azonosító:** `E07-R07`
 - **Branch:** `<motor>/e07-r07-legacy-evidence-adapters`
 - **Előfeltétel:** `E07-R06` merge-elve (SkillEstimate reducer)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs (a határt az ADR 0260 már rögzíti)
+- **Előre kiosztott ADR:** [`0293`](../adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md)
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd meg a TÉNYLEGES legacy
 > forrásokat indítás előtt — `lib/features/learn/` lecke-modellje (difficulty,
@@ -25,6 +25,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/adapter/legacy_lesson_catalog_adapter_test.dart",
   "test/features/practice_generator/adapter/legacy_progress_evidence_adapter_test.dart",
+  "docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md",
   "docs/rounds/e07-r07-legacy-evidence-adapters.md",
 ]
 gate_tests = [
@@ -45,6 +46,38 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
+### 0.0 Pre-flight revízió (2026-08-15, `main @ 4c770e03`)
+
+- A brief-lint jelentésben nincs B*/S* lelet. A `learn/public.dart` ténylegesen
+  exportálja a `model/lesson.dart`-ot: a publikus `Lesson` `id`, `name`, `bpm`,
+  `difficulty`, `beatsPerBar`, `events` és `totalBeats` mezőket adja. **Nincs
+  skill-tag és nincs best-accuracy mező.** A skill-besorolás ezért kizárólag a
+  kör saját, explicit `LegacySkillMappingTable`-jából jöhet; név-, akkord-,
+  kategória- vagy difficulty-heurisztika tilos. A best accuracyt csak a hívó
+  adhatja át explicit `LegacyLessonOutcome` bemenetként, saját stabil outcome
+  ID-val és explicit időpontokkal; a belső Learn provider olvasása tilos.
+- A `progress/public.dart` a `PracticeEntry`-t exportálja. Annak tényleges
+  mezői `day`, `source`, `seconds`, `strokes`, `chords`, `directionAccuracy`;
+  a „session-típus” a stabil `PracticeSource source`, az aktív idő a `seconds`.
+  A rekordnak nincs stabil outcome-ID-ja, időbélyege (csak epoch napja), vagy
+  skill-kapcsolata. Ezért a progress adapter csak egy hívó által adott
+  `LegacyProgressOutcome` wrapperből állíthat elő evidence-et: benne kötelező
+  a `PracticeEntry`, a cél skill ID, a stabil source outcome ID, valamint a
+  `measuredAt` és `capturedAt`. Magából a `PracticeEntry`-ből ilyen adatot
+  kitalálni (időből, sorrendből vagy tartalom-hashből) tilos.
+- A `SkillEvidence` provenance-ja jelenleg az `EvidenceSource`,
+  `sourceOutcomeId` és `measurementVersion` mezőkből áll; külön
+  mapping-version mező nincs. A mapping-tábla verziója ezért az adapter által
+  átadott **pozitív `measurementVersion`** lesz. A kimenet `source` értéke
+  `learn`, illetve `progress`; a Progress `seconds` értéke normalizálás nélkül
+  nem lehet teljesítményérték, mert az R06 reducer a performance-ot `[0,1]`-re
+  clampeli. A progress adapter csak a hívó explicit, `[0,1]`-es normalizált
+  performance-értékét fogadja el.
+- Az új `ADR 0293` e nyilvános, explicit identity/mapping szerződést rögzíti.
+  A brief `allowed_paths` listája kizárólag e kör saját ADR-artefaktumával
+  bővült; a Learn/Progress feature tartalma, a domain és minden védett zóna
+  változatlanul tilos.
+
 ## 1. Cél
 
 A meglévő Learn és Progress adatokból használható skill evidence — **a
@@ -61,14 +94,15 @@ generátor domainjének szennyezése nélkül** (SDD Ch8 Kör 7).
 
 ## 3. Scope
 
-**Benne van:** `SkillSnapshotReader` port · lecke-katalógus adapter
-(difficulty, skill-tagek, legjobb pontosság) · gyakorlási napló adapter
-(aktív idő, session-típus) · **verziózott mapping tábla** · fixture a beépített
-lecke-katalógushoz.
+**Benne van:** `SkillSnapshotReader` port · lecke-katalógus adapter a publikus
+`Lesson` és hívó által adott, identity-val ellátott outcome alapján · gyakorlási
+napló adapter hívó által adott, identity- és skill-kapcsolattal ellátott wrapper
+alapján · **verziózott mapping tábla** · fixture a beépített lecke-katalógushoz
+· a saját ADR 0293.
 
 **NINCS benne (tilos):** a Practice Engine katalógusa (Kör 8) · Analyze/Vision
 evidence (Kör 25) · a domain módosítása az adapter kedvéért · más feature
-**belső** fájljának importja · `docs/adr/**`, `tools/**`, `.github/**`.
+**belső** fájljának importja · más ADR módosítása · `tools/**`, `.github/**`.
 
 ## 4. Engedélyezett fájlok
 
@@ -80,11 +114,13 @@ evidence (Kör 25) · a domain módosítása az adapter kedvéért · más featu
 | `data/adapter/legacy_mapping_table.dart` | **ÚJ** — verziózott mapping |
 | `public.dart` | a barrel bővítése |
 | `test/…/adapter/*_test.dart` (2 db) | a §6 cellái |
+| `docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md` | **ÚJ** — explicit legacy identity/mapping határ |
 | `docs/rounds/e07-r07-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/features/learn/**`, `lib/features/progress/**` és minden
 más feature **tartalma** (olvasni a `public.dart`-jukon át igen, írni nem) ·
-`lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`.
+`lib/app/**` · `docs/adr/**` (kivéve a saját, új ADR 0293) · `docs/sdd/**` ·
+`tools/**` · `.github/**`.
 
 ## 5. Kötött architekturális döntések
 
@@ -99,8 +135,9 @@ akkordváltás-evidence". Az kitalált adat, az ADR 0253 §3 tiltásának megfel
 
 ### 5.2 A mapping tábla VERZIÓZOTT
 
-A tábla verziója az evidence provenance-ébe kerül. Egy későbbi mapping-változás
-így megkülönböztethető a tanuló tényleges változásától.
+A tábla pozitív verziója az evidence `measurementVersion` provenance mezője.
+Egy későbbi mapping-változás így megkülönböztethető a tanuló tényleges
+változásától.
 
 ### 5.3 A legacy evidence FORRÁSKÉNT jelölt és GYENGÉBB
 
@@ -114,8 +151,9 @@ Az adapter kihagyja, és **jelzi** (figyelmeztetés), de nem dob kivételt.
 ### 5.5 A mapping DETERMINISZTIKUS
 
 Ugyanaz a legacy bemenet ugyanazt az evidence-halmazt adja, sorrendtől
-függetlenül. Duplikált legacy bejegyzés az R05 dedup-kulcsán (forrás outcome
-ID) egyszer kerül be.
+függetlenül. Duplikált legacy bejegyzés az R05 dedup-kulcsán (hívó által adott
+forrás outcome ID) egyszer kerül be. Egy azonosító vagy skill-kapcsolat nélküli
+`PracticeEntry` figyelmeztetéssel kimarad; adapter nem szintetizál kulcsot.
 
 ## 6. Acceptance criteria
 
@@ -123,11 +161,12 @@ ID) egyszer kerül be.
 |---|---|---|
 | A1 | Explicit mapping nélküli leckéhez NEM keletkezik evidence | `legacy_lesson_catalog_adapter_test.dart` |
 | A2 | Ismeretlen lecke nem dob kivételt, csak figyelmeztetést | ugyanott |
-| A3 | A mapping tábla verziója az evidence provenance-ében van | mindkét adapter-teszt |
+| A3 | A mapping tábla pozitív verziója az evidence `measurementVersion` provenance-ében van | mindkét adapter-teszt |
 | A4 | A legacy evidence `source`-a legacy-ként jelölt | ugyanott |
 | A5 | Ugyanaz a bemenet → ugyanaz a kimenet, sorrendtől függetlenül | `legacy_progress_evidence_adapter_test.dart` |
 | A6 | Duplikált legacy bejegyzés EGYSZER kerül be | ugyanott |
 | A7 | Az adapter csak `public.dart`-on át ér el más feature-t | architektúra-őr + diff |
+| A8 | Outcome-ID, skill-kapcsolat vagy explicit normalizált érték nélküli Progress rekord nem ad evidence-et | `legacy_progress_evidence_adapter_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -140,6 +179,7 @@ ID) egyszer kerül be.
 | A bemenet sorrendje számít | A5 |
 | A dedup az időbélyegre épül | A6 |
 | Belső import a `learn`/`progress` feature-ből | A7 |
+| A Progress adapter `PracticeEntry`-ből szintetizál outcome ID-t vagy skillt | A8 |
 
 **A mapping három kötelező cellája** (a határ: a mapping megléte):
 
@@ -182,6 +222,8 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   átszabni. A SDD Ch8 §4.3 ezt tiltja; ilyenkor `stopped` és brief-revízió.
 - **A legacy adat túlsúlyozása.** Sok régi adat elnyomhatná a keveset, de
   pontosat — a forrás-megbízhatóság (ADR 0261) ezt kezeli, ne az adapter.
+- **Hiányzó legacy identitás.** A `PracticeEntry` önmagában nem outcome;
+  az adapter nem gyárthat stabilnak látszó azonosítót vagy skill-kapcsolatot.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
