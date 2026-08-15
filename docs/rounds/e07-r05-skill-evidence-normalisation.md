@@ -1,6 +1,6 @@
 # E07-R05 — SkillEvidence normalizálás és evidence repository
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 46338f48`)
+- **Státusz:** PLANNING (pre-flight rev. 2026-08-15, `main @ c4497773`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 5
 - **Kör-azonosító:** `E07-R05`
 - **Branch:** `<motor>/e07-r05-skill-evidence-normalisation`
@@ -13,6 +13,22 @@
 > kimenetét. Mérd meg a projekt **naplózási mintáját**
 > (`grep -rln "AppLogger\|debugPrint\|logger" lib/core/`), mert a §5.4
 > redakciós szabály erre épül. Eltérésnél §0.0 revízió, Státusz → PLANNING.
+
+### 0.0 Pre-flight revízió (2026-08-15)
+
+- A mért `main @ c4497773`-en a naplózási standard `lib/core/logging/app_logger.dart`
+  `AppLogger`: strukturált `event + fields`, a hívóoldal nem megbízható a
+  redakcióra, és a release-default `NoopAppLogger`. `LogRedactor` a `pcm`,
+  `audio`, `wav`, `clip` és más érzékeny kulcsokat is teljesen redaktálja.
+- Az A5-öt ezért az `EvidenceAggregator`-hoz adott, tesztben gyűjthető
+  `AppLogger`-rel kell mérni. Az aggregátor csak stabil outcome-azonosítót és
+  discomfort-kategóriát adhat mezőként; a self-report szabad szövege sem
+  eseményben, sem mezőben, sem kivételben nem szerepelhet. A default logger
+  `const NoopAppLogger()`; a domain továbbra is Flutter-, clock- és logolás-
+  független.
+- A `docs/adr/0260-…` már elfogadott és a tilos zónában van; ez a kör nem
+  ír új ADR-t és nem módosítja a meglévőt. Az eredetileg kimért `46338f48`
+  baseline helyett a jelen revízió célbázisa `c4497773`.
 
 ```ai-router
 schema_version = 1
@@ -214,5 +230,140 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   lehetőségét, hogy lássa: volt régi mérés (A8).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**Új fájlok:**
+
+- `lib/features/practice_generator/domain/model/skill_evidence.dart` —
+  `SkillEvidence`, `PerformanceEvidence`, `DiscomfortReport`,
+  `EvidenceSource`, `DiscomfortCategory`. `measuredAt` sosem lehet
+  `capturedAt` után (jövőbeli mérés → `ArgumentError`), `validUntil` sosem
+  `measuredAt` előtt, `confidence` a `[0,1]` zárt tartományban, és a
+  konstruktor legalább egy `performance`/`discomfort` mezőt megkövetel.
+  A domain nem hív `DateTime.now()`-t vagy `Random`-ot — mindkét időbélyeget
+  a hívó adja át.
+- `lib/features/practice_generator/domain/repository/practice_evidence_repository.dart`
+  — `PracticeEvidenceRepository` port +
+  `InMemoryPracticeEvidenceRepository` fake. `save` a `sourceOutcomeId`
+  szerint kulcsol, nincs törlés/expire metódus; `query` szűr `skillId`,
+  `asOf` (a `validUntil` határ inkluzív) és opcionális `measuredFrom`/
+  `measuredTo` szerint.
+- `lib/features/practice_generator/application/service/evidence_aggregator.dart`
+  — `EvidenceAggregator.ingest`: dedup a `sourceOutcomeId` alapján
+  (első beérkezés nyer, idempotens újrajátszásnál), és a logger csak
+  `skillId` / `source` / `sourceOutcomeId` / `discomfortCategory` mezőket
+  kap.
+- `lib/features/practice_generator/public.dart` bővítve a négy új
+  exporttal.
+
+**Gate (a brief §7 szerint, csonkítatlan, három külön teszt-processz):**
+
+```
+tools/round-gate.sh test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/evidence/skill_evidence_test.dart test/features/practice_generator/evidence/evidence_repository_fake_test.dart
+```
+
+Eredmény: `format` zöld, `analyze` zöld (0 issue), mindhárom célzott teszt
+zöld (6 + 13 + 9 = 28 cella), `architecture` zöld, `secrets` zöld, `l10n`
+zöld → **MINDEN GATE ZÖLD**.
+
+**Valódi-sértés próba (§6.1, kötelező):** `evidence_aggregator.dart`
+`ingest`-jébe ideiglenesen bekerült egy `'discomfortNote':
+evidence.discomfort!.note` mező a log `fields`-be. Ennek hatására az **A5**
+cella mindhárom tesztje ([`a discomfort free-text note never reaches the
+logger`], [`logging only carries the stable outcome id and discomfort
+category`], [`duplicate ingestion also never logs the note (dedup path)`])
+pirosra váltott (`Expected: false, Actual: <true>`, a szabad szöveg
+megjelent a naplórekordban) — a `evidence_aggregator_test.dart` külön
+futtatásával igazolva. A módosítást ezután visszaállítottam, és a teszt újra
+zöld (6/6).
+
+**Formázás:** `dart format` lefutott az összes érintett `lib/`/`test/`
+fájlon (a gate `format` lépése is ezt ellenőrizte, változás nélkül).
+
+### 10.1 Javító kör — F1 MAJOR (2026-08-15)
+
+**Talált hiba (review F1):** `DiscomfortReport.note` egy publikus,
+korlátozás nélküli `String?` mező volt magán a `SkillEvidence` modellen. Az
+in-memory repository a teljes evidence-t megőrizte, így a szabad szöveg
+(akár egy data-URI-szerű, base64-kódolt hangfelvétel) bekerülhetett a
+perzisztált/exportálható evidence-be — az ADR 0260 §1 és a brief A1
+kritériuma ellen.
+
+**Javítás:** `DiscomfortReport`-ról teljesen eltávolítva a `note` mező (és a
+csak ezt kiszolgáló `_normalizeOptionalText` segédfüggvény) — a típus mostantól
+kizárólag a strukturált `category`-t hordozza, szabad szöveg számára nincs
+hely a modellen. A tanuló önjelentésének nyers szövege az
+`EvidenceAggregator.ingest` egy új, tranziens `discomfortNote` opcionális
+paraméterén léphet be a rendszerbe (a Kör 7-8 önjelentés-adapterének szánva),
+de az `ingest` testében ezt SOHA nem olvassa ki: nem kerül az `evidence`-be,
+nem kerül a repository-ba, nem kerül a logger `fields` map-jébe, eseménynévbe
+vagy kivételbe.
+
+**Regressziós teszt:** `evidence_aggregator_test.dart` egy új cellája
+(`a data-URI/base64-like discomfort note is discarded at the ingestion
+boundary — never stored, serialized, logged, or in an exception (regression,
+F1)`) egy `data:audio/wav;base64,…` alakú szöveget ad át `discomfortNote`-ként,
+majd bizonyítja: (1) a visszaadott/tárolt `SkillEvidence` `toString()`-je és a
+`repository.allForSkill(...)` eredményének `toString()`-je nem tartalmazza a
+payloadot (nincs hova tárolni/szerializálni — a `DiscomfortReport`-on
+típusszinten nincs mező hozzá); (2) a `CollectingAppLogger` egyetlen
+rekordja sem tartalmazza; (3) az `ingest` nem dob kivételt, és ha mégis
+dobna, annak `toString()`-je sem tartalmazná. A meglévő három A5-cella
+(`a discomfort free-text note never reaches the logger`,
+`logging only carries the stable outcome id and discomfort category`,
+`duplicate ingestion also never logs the note (dedup path)`) most a
+`discomfortNote` paraméteren keresztül adja át a titkos szöveget (a
+`DiscomfortReport` konstruktorán már nem lehetne). Az A1/A4 cellák a
+`skill_evidence_test.dart`-ban a `DiscomfortReport(category: …)` alakra
+frissültek — az A1–A9 viselkedés máskülönben változatlan.
+
+**Új valódi-sértés próba (F1-re célzottan):** `evidence_aggregator.dart`
+`ingest`-jébe ideiglenesen visszakerült egy `'discomfortNote': discomfortNote`
+mező a log `fields`-be. Ennek hatására mind a négy A5-cella pirosra váltott
+(`Expected: false, Actual: <true>`, a data-URI szöveg megjelent a
+naplórekordban) — `flutter test
+test/features/practice_generator/evidence/evidence_aggregator_test.dart`
+külön futtatásával igazolva (+3 -4). A módosítást ezután visszaállítottam.
+
+**Javító gate (csonkítatlan, teljes brief §7 parancs):**
+
+```
+tools/round-gate.sh test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/evidence/skill_evidence_test.dart test/features/practice_generator/evidence/evidence_repository_fake_test.dart
+```
+
+Eredmény: `format` zöld (a `evidence_aggregator_test.dart` egy `dart format`
+futással), `analyze` zöld (0 issue), mindhárom célzott teszt zöld — most
+7 + 13 + 9 = 29 cella (az új F1-regresszióval eggyel több, mint korábban) —,
+`architecture` zöld, `secrets` zöld, `l10n` zöld → **MINDEN GATE ZÖLD**.
+
+**Érintett fájlok a javító körben:** `skill_evidence.dart` (a `note` mező és
+segédfüggvénye eltávolítva), `evidence_aggregator.dart` (`ingest` új
+`discomfortNote` paramétere), `skill_evidence_test.dart` és
+`evidence_aggregator_test.dart` (a fentiek szerint frissítve/bővítve), jelen
+handoff (§10.1). A `practice_evidence_repository.dart` és a `public.dart`
+nem változott — a repository már eleve azt tárolta, amit a modell átadott
+neki, a hiba forrása kizárólag a modellben volt.
+
+### 10.2 CI javítás — architecture gate (2026-08-15)
+
+**Talált hiba (Full Gate `31907084609`):** `test/core/architecture_dependency_test.dart`
+pirosra váltott, mert `skill_evidence.dart` egy dokumentációs kommentje
+tartalmazta a tiltott szó szerinti `DateTime.now(` mintát (a `capturedAt`
+mezőt magyarázó sor: „supplied by the caller (never `DateTime.now()`)").
+
+**Javítás:** a komment átfogalmazva ugyanarra a szabályra — a `caller`
+egy explicit, determinisztikus óraértéket ad át, nem belül olvasódik ki —,
+a tiltott literál nélkül. Viselkedés, más fájl, vagy a gate nem változott.
+
+**Javító gate (csonkítatlan, teljes brief §7 parancs):**
+
+```
+tools/round-gate.sh test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/evidence/skill_evidence_test.dart test/features/practice_generator/evidence/evidence_repository_fake_test.dart
+```
+
+Eredmény: mind a 8 lépés (`format`, `analyze`, 3× `test`, `architecture`,
+`secrets`, `l10n`) zöld → **MINDEN GATE ZÖLD**.
+
+**Érintett fájl:** `skill_evidence.dart` (csak a `capturedAt` doc-komment
+átfogalmazva), jelen handoff (§10.2).
 
 ## 11. Review — a Claude tölti ki
