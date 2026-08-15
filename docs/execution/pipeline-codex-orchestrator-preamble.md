@@ -42,6 +42,29 @@ Doksi-elsőbbség ütközéskor: `AGENTS.md` → `docs/sdd/00-index.md` →
   (`tools/ai-router-round.sh run`) órákig futhat — ez a MÉRT ok, ami miatt a
   Claude-oldali orchestrátor az E03-R05-ön haltba futott (L42). Te futtathatod
   előtérben, végig. Ne darabold, ne indítsd háttérbe.
+- **DE: az `exec_command`/`write_stdin` eszközöd saját magától is „yield"-elhet
+  hosszú vagy csendes parancsnál — ez NEM a fenti plafon, és a teendő NEM az
+  újraindítás.** Mérve (E07-R04, H-NOSIGNAL önjavítás, 2026-08-15, session
+  `01a006b4-bf64-7bd3-a25b-789fcc8d7e16`): a kötelező
+  `tools/wait-for-ci.sh 31902706136` CI-várakozó hívás HÁROMSZOR egymás után
+  `"Script running with cell ID 94"` / `"...96"` / `"...98"` választ kapott,
+  mindig kb. 11 másodpercnél — a kért `yield_time_ms` (30000, majd 60000) NEM
+  szabja meg ezt az időt, korábban is jöhet a yield. A ténylegesen várt Full
+  Gate futás eközben 13 percig futott (19:00:39→19:13:30Z), és zölden zárt —
+  de az orchestrátor mindhárom alkalommal ÚJRA `exec_command`-ot hívott
+  UGYANAZZAL a paranccsal ahelyett, hogy a kapott cellát/session-t folytatta
+  volna, ezért sosem olvasta el a valódi végeredményt; a turn jelzés nélkül
+  véget ért, három elárvult `wait-for-ci.sh` példány maradt futva, amíg a
+  session halálával azok is kilőve nem lettek. **A helyes folytatás: egy
+  „Script running with cell ID N" válasz UTÁN UGYANAZT a sessiont/cellát
+  kérdezd le újra** (a mért példában `tools.write_stdin({"session_id": N,
+  "chars": "", "yield_time_ms": …})`, a végén egy natív `wait({"cell_id": N,
+  …})` hívás hozta meg a valódi `"Script completed"` eredményt) —
+  ismételd, amíg tényleges kimenetet és kilépési kódot nem kapsz.
+  **SOSE indítsd újra magát a parancsot** — az elárvulja az előző, még futó
+  példányt, és minden ismétlés eggyel többet hagy futva a turn haláláig. Ez
+  kritikus a `tools/wait-for-ci.sh`-ra: a CI rutinszerűen 10+ percig fut, ez
+  jóval túl van egyetlen yield-ablakon.
 - **Nincs `run_in_background` / háttér-task fogalmad**, és nem is kell: a
   hosszú hívásokat előtérben futtatod.
 - **Te magad, mint orchestrátor, NE válts vissza Claude-ra.** Kvóta-fallback
