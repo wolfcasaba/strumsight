@@ -250,4 +250,4 @@ E99-R10	docs/rounds/e99-r10-gov-30c-2-evaluation-stage-composition.md	codex	0251
 # tiltása MARAD. Ez egy LEZÁRT kör (E06-R04) invariánsának szándékos
 # felülírása; az engedély az ADR 0252-ben és a brief §5.2-ben EXPLICIT, ezért
 # a kör nem áll meg H2-vel. A provider továbbra sem mozdul (A9).
-E99-R11	docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md	codex	0252	pending
+E99-R11	docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md	codex	0252	done
