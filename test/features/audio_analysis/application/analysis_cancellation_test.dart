@@ -63,18 +63,19 @@ void main() {
       final allowAssignment = Completer<void>();
       final runner = AnalysisIsolateRunner(
         operation: _writeCompletionMarkerAfterDelay,
-        isolateSpawner: (replyTo, documentJson, audio, target, operation) async {
-          final isolate = await spawnAnalysisIsolate(
-            replyTo,
-            documentJson,
-            audio,
-            target,
-            operation,
-          );
-          isolateSpawned.complete();
-          await allowAssignment.future;
-          return isolate;
-        },
+        isolateSpawner:
+            (replyTo, documentJson, audio, target, operation) async {
+              final isolate = await spawnAnalysisIsolate(
+                replyTo,
+                documentJson,
+                audio,
+                target,
+                operation,
+              );
+              isolateSpawned.complete();
+              await allowAssignment.future;
+              return isolate;
+            },
       );
 
       final run = runner.start(_request(document: _document(id: marker.path)));

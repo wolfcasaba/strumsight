@@ -261,7 +261,11 @@ final class _IsolateRequest {
 void _isolateEntry(_IsolateRequest request) async {
   try {
     request.replyTo.send(
-      await request.operation(request.documentJson, request.audio, request.target),
+      await request.operation(
+        request.documentJson,
+        request.audio,
+        request.target,
+      ),
     );
   } on Object catch (error) {
     request.replyTo.send(error.toString());
