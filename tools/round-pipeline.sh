@@ -62,7 +62,7 @@ dry_run=0
 [ "${1:-}" = "--dry-run" ] && dry_run=1
 
 state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
-queue_file="$repo_root/docs/execution/pipeline-queue.tsv"
+queue_file=${PIPELINE_QUEUE_FILE:-"$repo_root/docs/execution/pipeline-queue.tsv"}
 prompt_template="$repo_root/docs/execution/pipeline-orchestrator-prompt.md"
 heal_template="$repo_root/docs/execution/pipeline-selfheal-prompt.md"
 codex_preamble="$repo_root/docs/execution/pipeline-codex-orchestrator-preamble.md"
@@ -1520,7 +1520,30 @@ inflight_branch_pattern() {   # regex a futó körök kisbetűs azonosítóiból
   done
   printf '%s\n' "$pattern"
 }
+
+# MÉRVE 2026-08-15 (E99-R13 H3 2. önjavítás): egy megállt kör NYITOTT PR-t
+# hagyhat maga után — push + PR + review UTÁN, de merge ELŐTT halt (pontosan
+# ez történt: PR #266). Az `inflight_rounds()` viszont csak AMÍG egy session
+# fut van kitöltve; minden script-kilépéskor törlődik (trap, lásd lentebb).
+# A KÖVETKEZŐ firing tehát üres `own_branches`-szel indul, és a SAJÁT, még
+# nyitott kör-PR-jét idegennek látja: `die "nyitott PR van"` minden firingen,
+# örökre — az önjavítás UTÁN sem halad a lánc, jelzés és értesítés nélkül
+# (exit 4, nem HALT). A sor-fájl NEM 'done' sora perzisztens „ez a miénk" jel,
+# túlél egy session-határt — ellentétben az `inflight_dir`-rel.
+queue_active_branch_pattern() {   # regex a sor-fájl NEM 'done' körazonosítóiból (üres, ha nincs)
+  local pattern="" round _brief _engine _adr status lower
+  [ -f "$queue_file" ] || { printf '%s\n' ""; return; }
+  while IFS=$'\t' read -r round _brief _engine _adr status; do
+    case "$round" in ''|'#'*) continue ;; esac
+    [ "$status" = "done" ] && continue
+    lower=$(printf '%s' "$round" | tr 'A-Z' 'a-z')
+    pattern="${pattern:+$pattern|}$lower"
+  done < <(grep -v '^[[:space:]]*#' "$queue_file")
+  printf '%s\n' "$pattern"
+}
 own_branches=$(inflight_branch_pattern)
+queue_branches=$(queue_active_branch_pattern)
+[ -n "$queue_branches" ] && own_branches="${own_branches:+$own_branches|}$queue_branches"
 
 # Egy branch akkor tartozik KÖRHÖZ, ha a nevében ott a kör-azonosító
 # (`codex/e04-r15-…`, `heal/E04-R15-H3-1`, `minimax/e02-r18-…`). MÉRVE: minden
