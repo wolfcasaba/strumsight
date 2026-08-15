@@ -227,4 +227,50 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementáció:** `application/port/skill_snapshot_reader.dart` — közös
+`SkillSnapshotReader<TSnapshot>` port, `SkillSnapshotResult` (evidence +
+warnings, sosem kivétel). `data/adapter/legacy_mapping_table.dart` —
+`LegacyMappingTable` (pozitív `version`, explicit `entries` lista,
+`skillIdsFor` `null`-t ad ismeretlen lecke-azonosítóra, üres listát ad ismert,
+de skill nélküli mappingre) + a beépített `LegacyMappingTable.builtIn`.
+`data/adapter/legacy_lesson_catalog_adapter.dart` — `LegacyLessonOutcome`
+(hívó által adott `lesson: Lesson`, `sourceOutcomeId`, `measuredAt`,
+`capturedAt`, `performance`) + `LegacyLessonCatalogAdapter`, mindig
+`EvidenceSource.learn` forrással, `measurementVersion` = a mapping tábla
+verziója. `data/adapter/legacy_progress_evidence_adapter.dart` —
+`LegacyProgressOutcome` (a `skillId`, `sourceOutcomeId`,
+`normalizedPerformance` mind nullable — a hiányos hívói bemenet
+figyelmeztetéssel kimarad, sosem dob) + `LegacyProgressEvidenceAdapter`,
+`EvidenceSource.progress` forrással. A `public.dart` bővítve mind a négy új
+fájllal.
+
+**Valódi-sértés próba (§6.1, A1) — ténylegesen lefuttatva:** a
+`legacy_lesson_catalog_adapter.dart`-ba ideiglenesen behuzaloztam egy
+név-heurisztikus fallbacket (`if (skillIds == null && outcome.lesson.name
+.contains('G Major')) skillIds = ['chord.gMajor'];`) egy `'G Major Warm-Up'`
+nevű, a mapping táblában NEM szereplő leckére. `flutter test
+test/.../legacy_lesson_catalog_adapter_test.dart` ekkor ténylegesen PIROSAT
+adott a "real-violation probe" cellára:
+`Expected: empty / Actual: [Instance of 'SkillEvidence']` — a fallback
+evidence-et gyártott ott, ahol nincs explicit mapping (A1 megsértve). A
+fallbacket ezután eltávolítottam; `git diff` a fájlra üres (bájtra pontosan a
+commitolt változat), és a teljes gate újra lezöldült (lásd alább). Ez
+megerősíti, hogy a jelenlegi kódban kizárólag az explicit mapping hiánya
+tartja pirosra válthatóvá az A1 cellát — nincs rejtett heurisztika.
+
+**Gate — tényleges futás (2026-08-15, ezen a branchen):**
+
+```
+tools/round-gate.sh test/features/practice_generator/adapter/legacy_lesson_catalog_adapter_test.dart test/features/practice_generator/adapter/legacy_progress_evidence_adapter_test.dart
+```
+
+`format` ZÖLD · `analyze` ZÖLD (`No issues found!`) ·
+`test .../legacy_lesson_catalog_adapter_test.dart` ZÖLD (7 teszt, `+7 All
+tests passed!`) · `test .../legacy_progress_evidence_adapter_test.dart` ZÖLD
+(11 teszt, `+11 All tests passed!`) · `architecture` ZÖLD (12 engedélyezett
+eltérés, új nem került hozzá) · `secrets` ZÖLD · `l10n` ZÖLD.
+**MINDEN GATE ZÖLD.**
+
+`git status --short` a jelzés előtt tiszta (minden módosítás commitolva).
+
 ## 11. Review — a Claude tölti ki
