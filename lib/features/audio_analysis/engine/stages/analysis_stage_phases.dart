@@ -3,6 +3,7 @@ import 'package:strumsight/core/foundation/app_failure.dart';
 import '../../domain/analysis_progress.dart';
 import '../analysis_stage.dart';
 import '../analysis_work_state.dart';
+import 'document_stages.dart';
 import 'evaluation_stages.dart';
 import 'ingest_stages.dart';
 
@@ -19,7 +20,7 @@ const Set<String> _ingestStageIds = <String>{
   IngestStageIds.events,
 };
 
-/// Stage-id → user-facing progress phase for the full 18-stage analysis
+/// Stage-id → user-facing progress phase for the full 20-stage analysis
 /// chain (ADR 0252). The phase is a composition property, not a stage
 /// position: several stages intentionally share one phase, and the mapping
 /// is data-driven off the stage-id constants — never string literals — so a
@@ -45,18 +46,22 @@ const Map<String, AnalysisProgressPhase> analysisStagePhases =
       EvaluationStageIds.transitions: AnalysisProgressPhase.computingMetrics,
       EvaluationStageIds.technique: AnalysisProgressPhase.computingMetrics,
       EvaluationStageIds.capability: AnalysisProgressPhase.buildingInsights,
+      DocumentStageIds.assembly: AnalysisProgressPhase.buildingInsights,
+      DocumentStageIds.insights: AnalysisProgressPhase.finalizing,
     };
 
-/// The full 18-stage chain in fixed order: the seven ingest stages (ADR
-/// 0250) followed by the eleven evaluation stages (ADR 0251). Pairs with
-/// [analysisStagePhases] and [classifyAnalysisStageFailure] when composed
-/// into a live `AnalysisPipeline`. Not wired into any provider in this round
-/// (ADR 0252 §5.4).
+/// The full 20-stage chain in fixed order: seven ingest stages (ADR 0250),
+/// eleven evaluation stages (ADR 0251), then document assembly and insights
+/// (ADR 0253). Pairs with [analysisStagePhases] and
+/// [classifyAnalysisStageFailure] when composed into a live
+/// `AnalysisPipeline`. Not wired into any provider in this round.
 List<AnalysisStage<AnalysisWorkState, AnalysisWorkState>>
 buildFullAnalysisStages() =>
     <AnalysisStage<AnalysisWorkState, AnalysisWorkState>>[
       ...buildIngestStages(),
       ...buildEvaluationStages(),
+      DocumentAssemblyStage(),
+      InsightsStage(),
     ];
 
 /// Dispatches to the ingest or evaluation composition-owned classifier by

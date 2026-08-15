@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 
 import '../domain/analysis_capability.dart';
+import '../domain/analysis_document.dart';
 import '../domain/analysis_event.dart';
 import '../domain/analysis_input.dart';
 import '../domain/analysis_metric.dart';
@@ -50,6 +51,7 @@ final class AnalysisWorkState {
     Map<AnalysisCapability, CapabilityReport> capabilityReports =
         const <AnalysisCapability, CapabilityReport>{},
     this.overallConfidence,
+    this.document,
   }) : pitchFrames = List<PitchFrame>.unmodifiable(pitchFrames),
        pitchSegments = List<MonophonicPitchSegment>.unmodifiable(pitchSegments),
        chordSegments = List<ChordSegment>.unmodifiable(chordSegments),
@@ -120,6 +122,10 @@ final class AnalysisWorkState {
   /// Resolver-combined confidence, unavailable until its fatal stage runs.
   final double? overallConfidence;
 
+  /// The publishable V2 document assembled after the evidence and evaluation
+  /// stages complete. It remains absent until document assembly succeeds.
+  final AnalysisDocument? document;
+
   /// The initial state for one ingest run: only the boundary PCM input,
   /// seeded with its own warnings. `legacyEvidence` is not a seed input —
   /// the `legacy-evidence` ingest stage derives it from the preprocessed
@@ -155,6 +161,7 @@ final class AnalysisWorkState {
     List<AnalysisMetricResult>? metrics,
     Map<AnalysisCapability, CapabilityReport>? capabilityReports,
     double? overallConfidence,
+    AnalysisDocument? document,
   }) => AnalysisWorkState(
     input: input ?? this.input,
     mode: mode ?? this.mode,
@@ -176,5 +183,6 @@ final class AnalysisWorkState {
     metrics: metrics ?? this.metrics,
     capabilityReports: capabilityReports ?? this.capabilityReports,
     overallConfidence: overallConfidence ?? this.overallConfidence,
+    document: document ?? this.document,
   );
 }

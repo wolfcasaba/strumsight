@@ -11,6 +11,7 @@ import 'package:strumsight/features/audio_analysis/engine/analysis_cancellation.
 import 'package:strumsight/features/audio_analysis/engine/analysis_pipeline.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_work_state.dart';
 import 'package:strumsight/features/audio_analysis/engine/stages/analysis_stage_phases.dart';
+import 'package:strumsight/features/audio_analysis/engine/stages/document_stages.dart';
 import 'package:strumsight/features/audio_analysis/engine/stages/evaluation_stages.dart';
 import 'package:strumsight/features/audio_analysis/engine/stages/ingest_stages.dart';
 
@@ -20,7 +21,7 @@ const _sampleRate = 44100;
 
 void main() {
   group('full analysis pipeline composition (ADR 0252)', () {
-    test('A2/A8 — all 18 stages run in a single live AnalysisPipeline with '
+    test('A1/A7/A8 — all 20 stages run in a single live AnalysisPipeline with '
         'non-decreasing published phases', () async {
       final pipeline = AnalysisPipeline<AnalysisWorkState>(
         stages: buildFullAnalysisStages(),
@@ -70,6 +71,8 @@ void main() {
           EvaluationStageIds.transitions,
           EvaluationStageIds.technique,
           EvaluationStageIds.capability,
+          DocumentStageIds.assembly,
+          DocumentStageIds.insights,
         ],
       );
 
@@ -77,7 +80,7 @@ void main() {
           .whereType<AnalysisPhaseProgressEvent>()
           .map((event) => event.phase)
           .toList();
-      expect(publishedPhases, hasLength(18));
+      expect(publishedPhases, hasLength(20));
       expect(publishedPhases, <AnalysisProgressPhase>[
         for (final stage in buildFullAnalysisStages())
           analysisStagePhases[stage.id]!,
@@ -99,6 +102,7 @@ void main() {
       );
       expect(value!.capabilityReports, isNotEmpty);
       expect(value.overallConfidence, isNotNull);
+      expect(value.document, isNotNull);
     });
   });
 }
