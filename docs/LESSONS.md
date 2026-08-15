@@ -10594,3 +10594,15 @@ ott minden `custom_tool_call`/`function_call` és a párja
 `*_output` pontosan, redraw nélkül megvan. Ha egy hosszú előtérbeli hívás
 (CI-várakozás, gate-futtatás) `"Script running with cell ID N"`-t ad vissza,
 az NEM hiba: a session-t/cellát kell tovább lekérdezni, nem újraindítani.
+
+## L283 — A domain-purity guard a tiltott API-literal dokumentációs előfordulását is hibának tekinti (E07-R05, 2026-08-15)
+
+**Mit mértünk.** A helyi architecture gate zöld volt, de a teljes CI
+`31907084609` egyetlen tesztje bukott: a `skill_evidence.dart` commentjében
+szereplő tiltott wall-clock API-szöveget a `architecture_dependency_test` a
+domainben található API-használatként jelezte.
+
+**Hogyan alkalmazd.** Domain-purity tiltólistás API-nevet kommentben vagy
+stringben se írj le a guard hatókörén belül; a round-gate után a teljes CI az
+egyetlen teljes bizonyíték. A javításkor csak a kommentet kellett átírni,
+viselkedés nem változott.

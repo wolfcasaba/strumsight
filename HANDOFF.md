@@ -3,8 +3,21 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (E07-R04 merged as PR #272 after the H-NOSIGNAL self-heal: versioned,
-> deterministic generation requests and isolated drafts are now on `main`.)**
+> (E07-R05 merged as PR #274: privacy-safe SkillEvidence normalisation and
+> in-memory evidence repository are now on `main`.)**
+
+> ## ✅ E07-R05 KÉSZ — SkillEvidence normalizálás és evidence repository
+>
+> PR [#274](https://github.com/wolfcasaba/strumsight/pull/274), squash
+> `36298ac5`. A `SkillEvidence` csak származtatott mérőszámot, provenance-t és
+> strukturált discomfort-kategóriát tartalmaz; a self-report szabad szövege
+> tranzitív bemenet, a repository, a log és az exportolható modell előtt
+> eldobódik. Outcome-ID deduplikáció, inkluzív expiry és bounded query kész.
+> Review + security review APPROVED; a valódi A5-sértés próba négy cellát
+> pirosra váltott. Exact-SHA `7e127217`: Full Gate
+> [31907935245](https://github.com/wolfcasaba/strumsight/actions/runs/31907935245)
+> + Router CI [31908569509](https://github.com/wolfcasaba/strumsight/actions/runs/31908569509)
+> success. Egy CI-javítás csak a guard által tiltott komment-literált rewordolta.
 >
 > ## ✅ [HEAL E07-R04/H-NOSIGNAL] KÉSZ — a Codex `exec_command` korai „yield"-je után az orchestrátor újraindította a CI-várakozást ahelyett, hogy folytatta volna (2026-08-15)
 >
@@ -1657,14 +1670,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R05** (Chapter 8, Kör 5 — SkillEvidence
-normalizálás és evidence repository,
-[`e07-r05-skill-evidence-normalisation.md`](docs/rounds/e07-r05-skill-evidence-normalisation.md)).
-A brief és a queue-sor már előkészített, de a kör saját pre-flightja kötelező:
-R02–R04 tényleges contractjai és a logger-redakciós minta újramérendő. A brief
-`risk = "high"`, ezért független security review kötelező; nyers audio/video
-nem kerülhet evidence-be, és minden practice-generator flag változatlanul
-`false` marad.
+**A soron következő SDD-lépés: E07-R06** (Chapter 8, Kör 6 — SkillEstimate
+reducer és konfliktuskezelés,
+[`e07-r06-skill-estimate-reducer.md`](docs/rounds/e07-r06-skill-estimate-reducer.md)).
+Az E07-R05 evidence-contractjaihoz kell mérni; a practice-generator flagek
+változatlanul `false` maradnak.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"
