@@ -226,4 +226,54 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `practice_goal.dart`: stabil kódú goal type, priority, lifecycle és metric
+  enumok; immutable `MetricTarget` és `PracticeGoal`; az egyetlen engedélyezett
+  lifecycle transition graph; normalizálatlan custom goal `isExecutable ==
+  false`. A `createdAt` kívülről kapott, UTC-re normalizált időpont; a deadline
+  timezone-semleges `LocalDate`.
+- `weekly_availability.dart`: `LocalDate` (nincs `DateTime`) és naponta változó
+  `DailyAvailability`; perc-alapú preferált kezdés, minimum/target/maximum,
+  hard/soft maximum és DST-semleges helyi dátumok.
+- `learner_constraints.dart`: equipment, tuning, capability, comfort,
+  accessibility, preference és avoid kategóriák; a hard/soft keménység külön
+  mező. Hard constrainthez költség nem rendelhető, soft constrainthez pozitív
+  költség kötelező.
+- `request_validator.dart`: determinisztikus conflict findingok, amelyek hard
+  sértésnél error-t, soft sértésnél költséges warningot adnak; nincs javítás,
+  schedule-generálás vagy constraint-relaxáció. A napi hard maximum inkluzív.
+- `public.dart`: az új domain contractok exportálva.
+- A négy célzott tesztfájl lefedi az A1–A8 cellákat, köztük az inkluzív
+  19/20/21 perces maximum-hármast és a 2026-03-29 DST-váltó local-date
+  fixture-t.
+
+### Valódi-sértés próba
+
+Ideiglenesen a `RequestValidator` hard-constraint ága error helyett warningot
+és `softViolationCost: 1`-et adott. A
+`flutter test test/features/practice_generator/domain/request_validator_test.dart`
+futásban az A1 cella elvárt módon PIROS lett: `Expected: true, Actual: <false>`
+(`result.hasErrors`), ezért a teszt valóban a hard kizárást méri. A helyes,
+költség nélküli error-ág vissza lett állítva a gate előtt.
+
+### Futtatott ellenőrzések
+
+```text
+tools/round-gate.sh test/features/practice_generator/domain/request_validator_test.dart test/features/practice_generator/domain/weekly_availability_test.dart test/features/practice_generator/domain/practice_goal_test.dart test/features/practice_generator/domain/learner_constraints_test.dart
+  format: 1508 fájl, 0 módosítás
+  analyze: No issues found
+  request_validator_test.dart: 2 passed
+  weekly_availability_test.dart: 4 passed
+  practice_goal_test.dart: 5 passed
+  learner_constraints_test.dart: 5 passed
+  architecture: Architecture dependencies OK (12 allowlisted deviation(s))
+  secrets: Secret scan OK (2562 file(s), 0 finding(s))
+  l10n: L10n parity OK (en → hu, 1276 message(s))
+```
+
+Nincs eltérés és nincs ki nem futtatott helyi ellenőrzés. CI-dispatch, review
+és merge az orchestrátor feladata. Implementációs commit:
+`5c42986d feat(planner): model goals availability and constraints`.
+
 ## 11. Review — a Claude tölti ki
