@@ -103,7 +103,7 @@ megismételtem**, nem fogadtam el bemondásra:
   csendben lemarad. Ma nincs funkcionális eltérés (mindkettő SHA-256 fölött
   16 bites kvantált PCM-en). **A független security review ugyanezt a
   duplikációt önállóan is megtalálta** (NOTE-2,
-  `e99-r12-gov-30c-4-document-assembly-and-insights-security.md`) — a két
+  `e99-r12-security.md`) — a két
   review egymástól függetlenül konvergált ugyanarra a megfigyelésre, ami
   megerősíti, hogy valódi, follow-up-ra érdemes tétel, plusz egy precíz
   correctness-részletet is hozzátesz: a header-kódolás (string-join vs.
@@ -150,7 +150,7 @@ megismételtem**, nem fogadtam el bemondásra:
 
 Biztonsági/adatvédelmi review (kötelező, `risk = "high"`): külön, izolált
 klónban futtatott dedikált pass — lásd
-`e99-r12-gov-30c-4-document-assembly-and-insights-security.md` — **PASS**,
+`e99-r12-security.md` — **PASS**,
 0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE (előretekintő, egyik a fenti N2-vel
 konvergál).
 

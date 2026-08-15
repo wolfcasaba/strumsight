@@ -10271,3 +10271,29 @@ az API-határon másolj és tedd immutable-vé (`Map.unmodifiable`, illetve a
 megfelelő list/set snapshot). A regressziós teszt a konstrukció UTÁN módosítsa
 az eredeti gyűjteményt, és bizonyítsa, hogy a már létrejött objektum viselkedése
 változatlan marad.
+
+## L276 — A review-fájlnév konvenció sorozatonként eltér: a HELYI (azonos sorozatbeli) precedenst nézd, ne az elsőt találót (E99-R12, 2026-08-15)
+
+**Mit mértünk.** A review-jelentést először a brief saját slugjával
+nevezve írtam meg (`docs/reviews/e99-r12-gov-30c-4-document-assembly-and-
+insights-review.md`), mert korábbi (E06-Rxx) körökben ez a hosszú, brief-
+slugot tükröző alak a bevett minta (pl. `e06-r20-deterministic-insights-and-
+hotspots-review.md`). A záró rituálék közben, az RTM-sor felírásakor derült
+ki: a KÖZVETLEN elődök, ugyanabban a GOV-30c-N sorozatban (E99-R09, E99-R10,
+E99-R11), mind a RÖVID `eXX-rYY-review.md` / `eXX-rYY-security.md` alakot
+használják (`ls docs/reviews/ | grep e99-r`), és az RTM ILYEN linkeket
+tartalmaz mindhárom korábbi sorra. A hosszú alak nem hibás formátum, csak
+inkonzisztens a saját sorozatával — más körsorozat más konvenciót visel. A
+fájlokat és a bennük lévő kereszthivatkozásokat a merge UTÁN kellett
+átnevezni (`git mv` + `sed` a belső linkekre) egy külön docs-only commitban.
+
+**Hogyan alkalmazd.** Mielőtt egy review-jelentés (vagy bármilyen, körhöz
+kötött doksi) fájlnevét választod, `ls docs/reviews/ | grep <epic-prefix>-`
+(vagy a releváns könyvtár egyenértékű listázása) a LEGUTÓBBI, AZONOS
+sorozatbeli (nem csak azonos epic, hanem azonos al-sorozat, pl. GOV-30c-N)
+körökre — ne a brief saját slugjából vagy egy másik sorozat precedenséből
+következtess. Ha a review-jelentés ELKÉSZÜLTE UTÁN derül ki az eltérés, a
+javítás olcsó (rename + belső linkek), de csak akkor, ha MERGE ELŐTT
+történik — merge UTÁN egy extra docs-only commitot igényel, ami (L266/L274
+szerint) újabb CI-redispatch-et is kényszeríthet, ha a review-fájl-rename a
+CI-dispatch UTÁN történik.
