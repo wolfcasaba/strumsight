@@ -265,3 +265,17 @@ E99-R11	docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md	codex	0252	do
 # GOV-30c-5 dolga; ebben a körben TILOS hozzányúlni. A V2 elemzés ezért egy
 # lépcsővel később lesz futtatható, mint az ADR 0251 §4 becsülte.
 E99-R12	docs/rounds/e99-r12-gov-30c-4-document-assembly-and-insights.md	codex	0253	done
+#
+# E99-R13 (GOV-30c-5) — a GOV-30c ÖTÖDIK és ZÁRÓ lépcsője. Ez a kör teszi
+# FUTTATHATÓVÁ a V2 elemzést (PCM be → AnalysisDocument ki, 20 stage,
+# izolátumban), de NEM kapcsolja be: mind a kilenc flag OFF marad, a
+# lib/core/flags/** tilos zóna, a rollout külön EMBERI döntés (ADR 0254 §4).
+#
+# Az ADR 0253 §4 rését újramérve: a runner bemenete dokumentum, a dokumentum
+# „never PCM", a lánc viszont ValidatedPcmAnalysisInput-ból indul. A hívói
+# felület viszont KICSI (AnalyzeAudioUseCase + ShadowAnalysisRunner), és a
+# shadow runner MÁR megkapja a samples/sampleRate párost a V1-hez — a hiányzó
+# lépés nem adatgyűjtés, hanem továbbadás. Feloldás: önálló AnalysisRunRequest
+# (seed + audio + opcionális target); a PCM soha nem lesz dokumentum (A4 a
+# KÓDOLT JSON-t vizsgálja, mert típusszinten nem látszik a szivárgás).
+E99-R13	docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md	codex	0254	pending
