@@ -68,11 +68,16 @@ heal_template="$repo_root/docs/execution/pipeline-selfheal-prompt.md"
 codex_preamble="$repo_root/docs/execution/pipeline-codex-orchestrator-preamble.md"
 lock_file="$state_dir/lock"
 halt_file="$state_dir/HALTED"
-status_file="$state_dir/round-status"
+status_file="$state_dir/round-status"   # csak a default; a kör kiválasztása után kör-kulcsolt lesz
 heal_status_file="$state_dir/heal-status"
 heal_count_file="$state_dir/selfheal.count"
 router_status_file="$state_dir/router-status"
 chain_log="$state_dir/chain.log"
+
+# A kör-állapotfájl KÖR-KULCSOLT útvonala. Egyetlen helyen dől el, hogy a
+# driver, a teszthorog és a `tools/pipeline-status.sh --mark-halt` ugyanazt
+# számolja — különben a router halt-átadása és a driver olvasása elcsúszna.
+round_status_file_for() { printf '%s\n' "$state_dir/round-status-$1"; }
 inflight_dir="$state_dir/inflight"
 
 # --- Áteresztő-képesség (ADR 0171) ---------------------------------------
@@ -1278,6 +1283,10 @@ resolve_resume_orchestrator() {   # $1=kör $2=ág-mért implementer → orchest
 # A mérce futtatható artefaktum legyen, ne prompt-szöveg (docs/LESSONS.md):
 # az önjavítás két gépi döntése kívülről is lekérdezhető, ezért tesztelhető.
 case "${1:-}" in
+  --status-file-for)   # $2=kör → a kör-kulcsolt állapotfájl útvonala (ADR 0272)
+    round_status_file_for "${2:?}"
+    exit 0
+    ;;
   --heal-attempts)   # $2=kör $3=halt-kód → eddigi kísérletek száma
     heal_attempts "${2:-}" "${3:-}"
     exit 0
@@ -1666,6 +1675,16 @@ if [ -z "$next_line" ]; then
 fi
 
 round=$(printf '%s' "$next_line" | cut -f1)
+
+# MÉRT hiba (2026-08-15, az ELSŐ PIPELINE_SLOTS=2 firing): a kör-állapotfájl
+# GLOBÁLIS volt (`$state_dir/round-status`), ezért két párhuzamos driver
+# ugyanazt a fájlt törölte, írta és olvasta. Az E14-R01 így az E07-R04
+# `outcome=merged` sorát olvasta ki, és MUNKA NÉLKÜL lett `done` — az
+# értesítése szó szerint a másik kör összefoglalója volt (0 recognition flag,
+# nincs release-guard doksi, nincs PR). A slot-VÁLASZTÁS helyes volt
+# (`tools/round-slots.py` mérve diszjunktot adott); a hiba a kör-ÁLLAPOT
+# megosztásában. Kör-kulcsolt fájl, hogy két slot ne lássa egymás eredményét.
+status_file=$(round_status_file_for "$round")
 brief=$(printf '%s' "$next_line" | cut -f2)
 engine=$(printf '%s' "$next_line" | cut -f3)
 adr=$(printf '%s' "$next_line" | cut -f4)
