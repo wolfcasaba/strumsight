@@ -1,6 +1,10 @@
 # E07-R06 — SkillEstimate reducer és konfliktuskezelés
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ a31bb2b1`)
+- **Státusz:** **PLANNING** (pre-flight lezárva 2026-08-15, kód újramérve:
+  `main @ 17670d4f` — a §2 mért állítások [`SkillEvidence` mezői: `source`,
+  `confidence`, `validUntil`, külön `discomfort` mező; a
+  `PracticeEvidenceRepository` port aláírása] a jelen kódban egyeznek, nincs
+  §0.0 revízió; előre megírva 2026-08-15, kód olvasva: `main @ a31bb2b1`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 6
 - **Kör-azonosító:** `E07-R06`
 - **Branch:** `<motor>/e07-r06-skill-estimate-reducer`
