@@ -91,7 +91,13 @@ print(" ".join(value.split())[:500])
     mkdir -p "$state_dir"
     write_router_halt "$state_dir/router-halt"
     write_router_halt "$halt_file"
-    round_status="$state_dir/round-status"
+    # KÖR-KULCSOLT (ADR 0272): a driver ezt az utat olvassa
+    # (`round-pipeline.sh::round_status_file_for`). Globális fájl mellett két
+    # párhuzamos slot egymás halt-átadását olvasta volna — mérve 2026-08-15.
+    # A legacy `round-status` KETTŐS írással megmarad: több eszköz és teszt
+    # olvassa „az utolsó kör állapota" jelentéssel, és azt nem törjük el.
+    round_status="$state_dir/round-status-$PIPELINE_ROUND"
+    legacy_round_status="$state_dir/round-status"
     temporary="$round_status.tmp.$$"
     {
       echo "outcome=halted"
@@ -100,6 +106,7 @@ print(" ".join(value.split())[:500])
       echo "summary=$halt_summary"
     } > "$temporary"
     chmod 600 "$temporary"
+    cp -f "$temporary" "$legacy_round_status"
     mv -f "$temporary" "$round_status"
     printf '%s  router halt átvéve (%s)\n' "$(date -Is)" "$halt_summary" >> "$chain_log"
     echo "Router halt átadva: $halt_code — $halt_summary"
