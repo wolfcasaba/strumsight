@@ -6,6 +6,113 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## 🔧 E99-R13 self-heal jegyzetek (ADR 0112, pipeline-infra, 2026-08-15)
+
+**E99-R13 second H3 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra
+fix, 3. önjavítás ugyanezen a körön, 2026-08-15).** A push-olt,
+review-APPROVED implementer-branch (PR #266) Router CI-n H3-mal állt meg:
+`tools/tests/test_e99_r13_runner_scope.py` — az ELSŐ H3-heal (1636b40d)
+pinnelt `KNOWN_IMPLEMENTORS`-a nem ismerte a round SAJÁT, brief-szentesített
+új implementorát (`v2_analysis_runner.dart`). A HALTED `detail=` mezőjének
+szó szerinti javaslata (a pinnelt lista bővítése) VÉGREHAJTVA `main` SAJÁT
+Router CI-ját törte volna el (mérve: `main`-en ténylegesen csak 4
+implementor létezik, az 5. csak a még nyílt round-branch-en) — a helyes
+javítás a pinnelt teszt egyirányúra (csak zsugorodás-tiltás) korrekciója
+volt; a redundáns bővülés-irányt a szomszéd
+`test_brief_allows_every_analysisrunner_implementor` már branch-biztosan
+lefedte. **Egy második, független gyökérokot is találtam és javítottam
+ugyanebben a self-healben, miközben azt mértem, hogy az első fix UTÁN a
+lánc ténylegesen tovább tud-e menni:** a driver „nyitott PR van"
+előfeltétele (`tools/round-pipeline.sh`, `count_foreign`) csak az ephemer
+`inflight_rounds()`-ot ismerte sajátnak — egy push+PR+review UTÁN, de
+merge ELŐTT halt kör (pontosan ez) a KÖVETKEZŐ firingen örökre idegennek
+látszott volna a SAJÁT nyitott PR-jén, `die "nyitott PR van"`
+(HALTED-írás és értesítés NÉLKÜL) minden jövőbeli firingen. Javítás:
+`docs/execution/pipeline-queue.tsv` nem-`done` sorai is „sajátnak"
+számítanak mostantól (`queue_active_branch_pattern()`, +
+`PIPELINE_QUEUE_FILE` teszt-override). Mindkét javítás mérve reprodukálva
+(piros a fixek előtt, zöld utána, negatív kontrollokkal a valódi kör-branch
+nevével és sor-fájl sorával). Teljes `python3 -m pytest tools/tests -q`:
+438 passed, 0 failed. PR [#267](https://github.com/wolfcasaba/strumsight/pull/267),
+squash-merge `936b25e4` — Router CI zöld mindkét fán (a heal-branch-en ÉS
+a post-merge `main`-en, exact-SHA, `tools/wait-for-ci.sh`-val várva).
+Leckék: `docs/LESSONS.md` **L279**, **L280**. ADR 0112 Módosítás-blokk
+(2026-08-15).
+
+**E99-R13 H-NOSIGNAL self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra
+fix, 2. önjavítás ugyanezen a körön).** A 10:20:06-kor indult Terra
+orchesztrátor-session (`codex exec`) 11:03:26-kor jelzésfájl nélkül kilépett
+(a pane visszaesett az üres bash-promptra); a driver csak a 20 perces
+log-elakadás-őrnél, 11:23:38-kor ismerte fel — a Codex/Terra fallback-ágnak
+nem volt pane-process-halál-ellenőrzése (a Claude-ágnak, kvóta-célra, már
+van). Javítás: `tools/round-pipeline.sh` `run_tmux_session`-je motorfüggetlen
+gyors-kilépést kap, ha a hívó megadja a várt process-comm-mintát (8.
+paraméter); a Codex/Terra fallback-ág mostantól `CODEX_PROCESS_COMM_PATTERN`
+ellen figyel. Regressziós teszt:
+`tools/tests/test_round_pipeline_fallback_engine_exit.py` (RED a fix előtt —
+`unbound variable` a hiányzó mintára —, GREEN utána; 2. eset negatív
+kontroll az élő process ellen). Lecke: `docs/LESSONS.md` **L278**.
+
+## ✅ E99-R12 KÉSZ — GOV-30c-4 document assembly and insights (2026-08-15)
+
+A `DocumentAssemblyStage` a munkaállapot nyersanyagából előzetes,
+insights/hotspots nélküli `AnalysisDocument`-et állít össze; az
+`InsightsStage` PONTOSAN ezen a példányon futtatja a determinisztikus
+insight-registryt (`InsightRanker`/`HotspotRanker`), majd rangsorolt
+insightokkal és hotspotokkal véglegesíti. A lánc 18→20 stage-re bővült, az
+eddig alig kihasznált `buildingInsights`/`finalizing` fázisokba kötve. A
+kör semmit nem kapcsolt be: `analysisV2RunnerProvider` a kör után is
+`StateError`-t dob, `application/**` és `domain/**` byte-azonos a
+baseline-nal.
+
+**A pre-flight kimért egy önálló architekturális rést a KÖVETKEZŐ körnek**
+(ADR 0253 §4): a runner bemenete dokumentum, a dokumentum input-mezője
+szándékosan sosem hordoz PCM-et, a 20 stage-es lánc viszont
+`ValidatedPcmAnalysisInput`-ból indul — az audiónak ma nincs útja a V2
+láncba a runner-határon keresztül. Ez a GOV-30c-5 dolga; ebben a körben
+tilos volt hozzányúlni.
+
+Correctness review **APPROVED** (0 BLOCKER/MAJOR, 1 MINOR + 2 NOTE) — a
+reviewer SAJÁT izolált `/tmp` klónban újrafuttatta a gate-et és a
+scope-auditot, és egy **saját, ideiglenes rontással** (az insight-kontextus
+dokumentumát másik példányra cserélve) függetlenül megismételte az A3
+valódi-sértés próbát — a célzott teszt pontosan a várt módon pirosra
+váltott, majd visszaállítva. Kötelező dedikált security review
+(`risk = "high"`) **PASS** (0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE) — a két
+review EGYMÁSTÓL FÜGGETLENÜL ugyanarra a megfigyelésre konvergált: a
+dokumentum-fingerprint duplikálja, és bájt-elrendezésben el is tér a
+meglévő `AudioFingerprint.compute`-tól (MINOR/NOTE, follow-up — adatvédelmi
+hatás nincs, mindkettő egyirányú hash kvantált PCM fölött).
+
+Exact-SHA `cd2bb2d9`: Full Gate
+[31875791568](https://github.com/wolfcasaba/strumsight/actions/runs/31875791568)
++ Router CI [31875803248](https://github.com/wolfcasaba/strumsight/actions/runs/31875803248)
+mindkettő success; squash-merge PR [#263](https://github.com/wolfcasaba/strumsight/pull/263),
+`1acda678`. `origin/main` nem mozdult a dispatch és a merge között; a
+post-merge gate a friss, fast-forwardolt `main`-en önállóan újrafuttatva
+szintén zöld (8/8). Implementer **Terra (Codex)**, egy `done` dispatch,
+javító kör nélkül (`continuations=0`).
+
+## ✅ E99-R11 KÉSZ — GOV-30c-3 progress-phase decoupling (2026-08-15)
+
+Az `AnalysisPipeline<AnalysisWorkState>` már egyetlen élő példányban futtatja
+a hét ingest és tizenegy evaluation stage-et. Az új explicit stage-ID →
+`AnalysisProgressPhase` térkép leválasztja a 9 UI-fázist a 18 DSP-stage
+granularitásától: egy fázis több stage-hez tartozhat, de visszalépés
+konstrukciókor és futáskor is tiltott. Map nélküli legacy hívók a korábbi
+sorszám-alapú 9-stage capet őrzik. A kör nem drótozta be a runner providert,
+és egy flag sem változott.
+
+Correctness review **APPROVED**; a kötelező, dedikált security review
+először 1 MAJOR-t talált (a hívó módosíthatta a már validált térképet), amit
+unmodifiable defensive snapshot és regressziós teszt zárt le, majd **PASS**.
+Az exact-SHA `211b53c2` Full Gate
+[31872874525](https://github.com/wolfcasaba/strumsight/actions/runs/31872874525)
++ Router CI [31873455184](https://github.com/wolfcasaba/strumsight/actions/runs/31873455184)
+mindkettő success; squash-merge PR [#262](https://github.com/wolfcasaba/strumsight/pull/262),
+`e5cae94d`. A post-merge gate a friss `main`-en is zöld. Implementer
+`sonnet-impl`, egy javító dispatch.
+
 ## ✅ E99-R09 KÉSZ — GOV-30c-1 PCM ingest pipeline composition (2026-08-14)
 
 A V2 engine immutable `AnalysisWorkState`-et visz a hét typed stage-en:
