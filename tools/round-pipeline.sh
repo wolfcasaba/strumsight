@@ -393,6 +393,13 @@ CLAUDE_SESSION_RESET_PATTERN='resets [0-9]{1,2}(:[0-9]{2})?(am|pm)? \(UTC\)'
 # neveket fedi, a régi `claude-code` alakot is megtartva.
 CLAUDE_PROCESS_COMM_PATTERN='^claude([.-][A-Za-z0-9_-]+)?$'
 
+# A Codex/Terra fallback-ágon futó `codex exec` process MÉRT neve: `codex`
+# (mérve `/proc/<pid>/comm` mintavétellel, 2026-08-15, E99-R13 H-NOSIGNAL
+# önjavítás). Natív (Rust) ELF bináris ezen a boxon
+# (~/.codex/packages/standalone/…/bin/codex), nem node-wrapper — a Claude-nál
+# mért `.exe`/launcher-alakváltozatok itt nem alkalmazhatók.
+CODEX_PROCESS_COMM_PATTERN='^codex$'
+
 claude_unavailable_until() {   # kiírja a lejárati epoch-ot, ha érvényes zárlat van
   local until
   [ -f "$claude_block_file" ] || return 1
@@ -526,6 +533,7 @@ next_orchestrator() {   # [$1=kör-azonosító] → claude | terra
 run_tmux_session() {
   local tmux_session="$1" shell_command="$2" session_log="$3" signal_file="$4"
   local timeout_s="$5" label="$6" watch_claude_limit="${7:-0}"
+  local fallback_process_pattern="${8:-}"
   local deadline pinger_pid claude_started_at claude_limit_seen=0 pane_tty
   local stall_seconds log_age
 
@@ -592,6 +600,30 @@ run_tmux_session() {
         printf '%s\n' "$(( $(date +%s) + claude_block_seconds ))" > "$claude_block_file"
         log "KVÓTA: a Claude process már nem él a tmux pane-on — a fallback veszi át"
         claude_limit_seen=1
+        break
+      fi
+    fi
+    # ELAKADÁS-GYORSÍTÓ, motorfüggetlen (mérve E99-R13 H-NOSIGNAL önjavítás,
+    # 2026-08-15): a Codex/Terra fallback-ágon a pane EGYETLEN előtér-parancsot
+    # kap (`codex exec …`). Ha az a folyamat magától, jelzésfájl nélkül kilép,
+    # a tmux-session — a mögötte élő üres shell miatt — ÉLETBEN marad, tehát a
+    # fenti `has-session` ág sosem kapja el, és a fenti Claude-ellenőrzés sem
+    # vonatkozik rá (kvóta-specifikus, `watch_claude_limit=1`-hez kötött).
+    # Mérve: a `codex exec` process 11:03:26-kor lépett ki (a session-napló
+    # utolsó írása), a driver csak 11:23:38-kor, a lenti 20 perces
+    # log-elakadás-őrnél ismerte fel — 20 perc tétlen várakozás egy már holt
+    # folyamatra, a láncot közben 5 percenként lezáró cron-firing mellett.
+    # Ugyanaz a `ps -t <pane_tty>` mérés, mint a Claude-ágon, csak
+    # motorfüggetlenül: a hívó adja meg, milyen process-nevet vár — üres minta
+    # (a Claude-hívás nem ad 8. argumentumot) = nincs ellenőrzés, a Claude-ág
+    # viselkedése változatlan.
+    if [ -n "$fallback_process_pattern" ] \
+      && [ "$(( $(date +%s) - claude_started_at ))" -ge "${PIPELINE_CLAUDE_PROCESS_GRACE_SECONDS:-10}" ]; then
+      pane_tty=$(tmux list-panes -t "$tmux_session" -F '#{pane_tty}' 2>/dev/null | head -n 1)
+      if [ -n "$pane_tty" ] \
+        && ! ps -t "${pane_tty#/dev/pts/}" -o comm= 2>/dev/null \
+          | grep -qE "$fallback_process_pattern"; then
+        log "ELAKADÁS-GYORSÍTÓ: a(z) $label motor-folyamata jelzésfájl nélkül kilépett a tmux pane-en — nem várjuk ki a $(( stall_seconds / 60 ))-perces elakadás-őrt"
         break
       fi
     fi
@@ -686,7 +718,8 @@ run_orchestrator_session() {
   codex_prompt=$(codex_prompt_file "$prompt_file")
   run_tmux_session "${tmux_session}-fallback" \
     "CODEX_HOME=$codex_home $codex_bin exec -C $repo_root -s danger-full-access \"\$(cat $codex_prompt)\" < /dev/null" \
-    "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($fallback_label)" 0
+    "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($fallback_label)" 0 \
+    "$CODEX_PROCESS_COMM_PATTERN"
 }
 
 # --- Önjavítás (ADR 0112) --------------------------------------------------
