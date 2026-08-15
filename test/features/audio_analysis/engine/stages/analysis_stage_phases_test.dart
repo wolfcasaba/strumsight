@@ -11,11 +11,11 @@ import 'package:strumsight/features/audio_analysis/engine/stages/ingest_stages.d
 void main() {
   group('analysisStagePhases (ADR 0252)', () {
     test(
-      'A5 — every one of the 18 built stages has exactly one phase mapping',
+      'A5 — every one of the 20 built stages has exactly one phase mapping',
       () {
         final stages = buildFullAnalysisStages();
 
-        expect(stages, hasLength(18));
+        expect(stages, hasLength(20));
         expect(
           stages.map((stage) => stage.id).toSet(),
           analysisStagePhases.keys.toSet(),

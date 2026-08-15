@@ -283,4 +283,36 @@ kör `unknown`-ba fut (L254).
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `analysis_work_state.dart`: opcionális, immutable `AnalysisDocument`
+  artefaktum került a lánc munkaállapotába.
+- `document_stages.dart`: az új `DocumentAssemblyStage` a rendelkezésre álló
+  mérési artefaktumokból előzetes, insights/hotspots nélküli dokumentumot
+  készít; az `InsightsStage` ezen a pontos példányon értékeli a registryt,
+  majd rangsorolt insightokkal és hotspotokkal véglegesíti a dokumentumot.
+  Hiányzó pitch-nyersanyag esetén a pitch-capability-k explicit
+  `unavailable` státuszt kapnak, pitch-metrika nem készül.
+- `analysis_stage_phases.dart`: a teljes lánc 20 stage-es; az új stage-ek a
+  `buildingInsights`, illetve `finalizing` fázisban futnak. Provider- és
+  flag-fájl nem változott.
+- A kompozíciós, fázistérkép- és új dokumentum-stage tesztek A1–A8
+  bizonyítékát frissítettem.
+
+### Futott ellenőrzések
+
+- RED: `flutter test test/features/audio_analysis/engine/stages/document_stages_test.dart`
+  — várt fordítási hiba a még nem létező `document_stages.dart`, stage-osztályok
+  és `AnalysisWorkState.document` miatt.
+- Valódi-sértés: az insight-kontextus dokumentumát külön példányra cserélve
+  ugyanez a teszt A3-nál piros lett (`Expected: same instance`); a módosítás
+  visszaállítva.
+- `tools/round-gate.sh test/features/audio_analysis/engine/full_pipeline_composition_test.dart test/features/audio_analysis/engine/stages/document_stages_test.dart test/features/audio_analysis/engine/stages/analysis_stage_phases_test.dart`
+  — zöld: format, analyze, mindhárom célzott teszt és architecture lépés.
+
+### Eltérés és hátralévő ellenőrzés
+
+- Nincs scope-eltérés. A teljes Flutter-suite, property gate és release APK
+  nem helyben futott; ezek az orchestrátor exact-SHA CI-kapui.
+
 ## 11. Review — a Claude tölti ki
