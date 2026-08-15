@@ -188,4 +188,45 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Implementáció
+
+- `lib/features/practice_generator/domain/model/skill_estimate.dart`: immutable
+  `SkillEstimate` unknown/null performance állapottal, bounded ismert értékkel
+  és bizonytalansággal, trenddel, valamint privacy-safe `EvidenceSummary` DTO-val.
+- `lib/features/practice_generator/domain/policy/evidence_weight_policy.dart`:
+  explicit `singleEvidenceInfluenceCap`, determinisztikus source/confidence/
+  recency/sample-count súlyozás és stale-dekálás.
+- `lib/features/practice_generator/application/service/skill_estimate_reducer.dart`:
+  rendezett, outcome-ID szerinti deduplikált reducer; konzervatív baseline-
+  frissítés, konfliktus miatti uncertainty-emelés, stale állapot és bounded trend.
+- `lib/features/practice_generator/public.dart`: a három új publikus contract exportja.
+- `test/features/practice_generator/skill_estimate/`: A1–A8 tesztek, a három
+  evidence-mennyiség cella, explicit cap, stale, discomfort-szeparáció és bounds.
+
+### Futtatott ellenőrzések
+
+- RED (TDD): a három új tesztfájl production contract nélkül fordítási hibával
+  leállt (hiányzó `SkillEstimate`, `EvidenceWeightPolicy`, `SkillEstimateReducer`);
+  ezután a célzott futás **14/14 passed**.
+- `dart format lib/features/practice_generator/domain/model/skill_estimate.dart lib/features/practice_generator/domain/policy/evidence_weight_policy.dart lib/features/practice_generator/application/service/skill_estimate_reducer.dart lib/features/practice_generator/public.dart test/features/practice_generator/skill_estimate/skill_estimate_test.dart test/features/practice_generator/skill_estimate/evidence_weight_policy_test.dart test/features/practice_generator/skill_estimate/skill_estimate_reducer_test.dart`
+  — 7 fájl formázva, majd a gate-ben **1525 files (0 changed)**.
+- `tools/round-gate.sh test/features/practice_generator/skill_estimate/skill_estimate_reducer_test.dart test/features/practice_generator/skill_estimate/evidence_weight_policy_test.dart test/features/practice_generator/skill_estimate/skill_estimate_test.dart`
+  — format zöld; analyze: `No issues found`; a három célzott teszt zöld;
+  architecture, secrets és l10n zöld. A gate strukturált eredménye:
+  `{"outcome":"pass","exit_code":0,"failed_step":null}`.
+
+### Valódi-sértés próba
+
+- Az `SkillEstimate._unknown` ágát ideiglenesen `level = 0` értékre cseréltem.
+  A `flutter test test/features/practice_generator/skill_estimate/skill_estimate_test.dart`
+  futásban az A5 piros lett: `Expected: null`, `Actual: <0.0>`.
+  Ezután visszaállítottam a helyes `level = null` implementációt, és a teljes
+  round gate zöld lett.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Eltérés nincs a brief scope-jához képest.
+- A teljes Flutter suite, friss randomizált property gate és APK-build nem lokális
+  implementer-feladat; ezek a CI/orchestrátor merge-kapui.
+
 ## 11. Review — a Claude tölti ki
