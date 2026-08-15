@@ -240,3 +240,14 @@ E99-R09	docs/rounds/e99-r09-gov-30c-1-ingest-pipeline-composition.md	codex	0250	
 # még nincs megírva. Ez a kör sem kapcsol be semmit: a provider a végén is
 # StateError-t dob (A9 acceptance-cella).
 E99-R10	docs/rounds/e99-r10-gov-30c-2-evaluation-stage-composition.md	codex	0251	done
+#
+# E99-R11 (GOV-30c-3) — az ADR 0251 §5 NEVESÍTETT follow-upja, újramérve
+# 2026-08-15-én: a sapka továbbra is 9 (AnalysisProgressPhase.values.length),
+# a lánc viszont 18 stage (7 ingest + 11 evaluation), tehát a teljes lánc ma
+# nem szerelhető össze egyetlen AnalysisPipeline-példányba. Ez a kör a
+# progress-fázist leválasztja a stage-granularitásról (stage-id → fázis
+# térkép), és a szigorú monotonitást nem-csökkenőre enyhíti — a visszalépés
+# tiltása MARAD. Ez egy LEZÁRT kör (E06-R04) invariánsának szándékos
+# felülírása; az engedély az ADR 0252-ben és a brief §5.2-ben EXPLICIT, ezért
+# a kör nem áll meg H2-vel. A provider továbbra sem mozdul (A9).
+E99-R11	docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md	codex	0252	pending
