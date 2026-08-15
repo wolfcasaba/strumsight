@@ -8412,3 +8412,56 @@ L212](../docs/LESSONS.md)):** Full Gate
 mindkettő **success**. Az `origin/main` a dispatch (`4796d539`) és a
 merge között nem mozdult (H8 tiszta). Post-merge gate a friss `main`-en
 (`43fae1d2`) önállóan újrafuttatva: mind a 8 lépés zöld.
+
+## ✅ E99-R10 KÉSZ — GOV-30c-2 evaluation stage composition (2026-08-14)
+
+A V2 engine most az **értékelő** felet is hordozza: `AnalysisWorkState`
+bővítve `target`/`alignment`/`metrics`/`capabilityReports`/
+`overallConfidence`/`mode` mezőkkel, tizenegy granular
+`AnalysisStage`-szel (illesztés + kilenc metrika-adapter +
+capability/confidence resolver) `buildEvaluationStages()` +
+`classifyEvaluationStageFailure()` alakban — ugyanaz a minta, mint az
+ingest-láncon. A legveszélyesebb hibamód (üres/hiányzó referenciával
+hamis illesztés publikálása) egy hívás-számlálós teszttel ÉS egy
+önállóan megismételt valódi-sértés próbával zárva: nincs referencia esetén
+az illesztés `null` marad, a timing-capability `noReferenceTarget` okkal
+`unavailable`, a referencia-független metrikák (rhythm, pitch, dynamics
+stb.) ugyanúgy kiszámolódnak. A provider és mind a flag változatlanul
+OFF/fail-closed — a kör nulla production hívóval rendelkezik.
+
+**Első Terra-dispatch helyesen állt meg** (`stopped`) egy valós, mért
+ütközésen: a brief tizenegy stage-et kért, de a meglévő
+`AnalysisPipeline<T>` konstruktora legfeljebb `AnalysisProgressPhase.
+values.length` (9) stage-et enged. Az orchesztrátor egy dokumentált §0.0
+brief-revízióval + ADR 0251 §5 kiegészítéssel oldotta fel — a forbidden
+`analysis_pipeline.dart` érintése NÉLKÜL: a production kód továbbra is
+tizenegy granular stage-et épít, de a composition-teszt közvetlen,
+szekvenciális `stage.run(...)` hívásokkal bizonyítja a láncot
+`AnalysisPipeline` példányosítás helyett — a teljes 18 stage-es (7 ingest +
+11 evaluation) lánc tényleges összeszerelése és a cap valódi feloldása
+GOV-30c-3 feladata marad.
+
+Független correctness review **APPROVED** (0 BLOCKER/MAJOR/MINOR, 4 NOTE —
+mind névvel ellátott GOV-30c-3 follow-up: technique-proxy metrikák
+csendben eldobva, de ma hatástalanok; accent/subdivision/transition
+eredménye szerkezetileg nem fér a `metrics` listába; `modelConfidence`
+számítási módja új, brief-ben nem specifikált döntés). Kötelező dedikált
+security review (`risk = "high"`) **PASS** (0 CRITICAL/BLOCKER/MAJOR/MINOR,
+2 NOTE). A reviewer mindkét review-t SAJÁT, izolált `/tmp` klónban
+újrafuttatott gate-tel és egy önállóan megismételt A6 valódi-sértés
+próbával (guard eltávolítva → mindkét érintett teszt PIROS → visszaállítva)
+igazolta vissza.
+
+Exact-SHA `e3c681b6`: Full Gate
+[31795147660](https://github.com/wolfcasaba/strumsight/actions/runs/31795147660)
++ Router CI [31795149311](https://github.com/wolfcasaba/strumsight/actions/runs/31795149311)
+mindkettő success. `origin/main` nem mozdult a dispatch és a merge között.
+Squash-merge PR [#261](https://github.com/wolfcasaba/strumsight/pull/261),
+`82cfa588`; post-merge gate friss, helyben fetch-elt `main`-en is zöld (8/8).
+Implementer **Terra (Codex)**, javító kör nélkül (1 `stopped` + 1 `done`
+dispatch).
+
+Lecke: `docs/LESSONS.md` **L274** (a stage-lánc kompozíciós BIZONYÍTÁSA és a
+lánc TÉNYLEGES ÖSSZESZERELÉSE két külön döntés — az elsőt egy megosztott
+motor rejtett kapacitás-korlátja nem kell hogy megkösse, ha a motor
+generikus végrehajtási logikáját már külön teszt fedi).
