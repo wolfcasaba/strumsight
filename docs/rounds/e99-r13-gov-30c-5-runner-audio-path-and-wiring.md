@@ -320,4 +320,78 @@ kör `unknown`-ba fut (L254).
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5), egy dispatch.
+
+### 10.1 Mit csinál a kód
+
+- `AnalysisRunRequest` (`analysis_isolate_runner.dart`): `seed: AnalysisDocument`
+  + `audio: ValidatedPcmAnalysisInput` + opcionális `target: AnalysisTarget`.
+  `AnalysisRunner.start` mostantól ezt fogadja a korábbi `AnalysisDocument`
+  helyett.
+- Az izolátum-határ bővült: `AnalysisDocumentIsolateOperation`/
+  `AnalysisIsolateSpawner`/`spawnAnalysisIsolate` a JSON-kódolt seed mellett
+  natívan (nem JSON-on át) viszi át az `audio`/`target` objektumokat — a minta
+  ezért soha nem megy át a dokumentum-kódolón.
+- **`V2AnalysisRunner`** (ÚJ, `v2_analysis_runner.dart`): egyetlen, újrahasznált
+  `AnalysisPipeline<AnalysisWorkState>` példányt épít `buildFullAnalysisStages()`
+  + `analysisStagePhases` + `classifyAnalysisStageFailure` hármasból (nem saját
+  stage-lista). `start()` a kérésből `AnalysisWorkState.seed(input: audio, mode:
+  seed.mode, target: target)`-et épít, elindítja a pipeline-t, és az
+  `AnalysisPipelineResult` → `AnalysisRunResult` fordítást végzi. **A pipeline
+  in-process fut (nem izolátumban)** — ez pontosan az ADR 0254 §5.4 szövege
+  szerint jár el: `cancel()` a pipeline saját, kooperatív
+  `AnalysisCancellationSource`-át billenti, nem egy izolátumot öl ki. Az
+  izolátum-határ bővítése (fenti pont) így ELŐKÉSZÍTI, de nem ez a kör
+  kapcsolja be, hogy egy KÉSŐBBI kör a V2 futtatást levigye a UI szálról.
+- `analysisV2RunnerProvider` mostantól `V2AnalysisRunner()`-t ad `StateError`
+  helyett.
+- `ShadowAnalysisRunner.run()` a kapott `samples`/`sampleRate`-et
+  `ValidatedPcmAnalysisInput`-ba csomagolva továbbadja a V2 kérésben.
+- `AnalyzeAudioUseCase.call(AnalysisDocument input)` **szándékosan
+  változatlan kívülről**: az egyetlen hívója, `AnalysisController.analyze`
+  (`lib/features/audio_analysis/application/analysis_controller.dart`), NEM
+  szerepel az engedélyezett fájllistán, és `analyzeAudio(input)`-ot egy
+  `AnalysisDocument`-tel hívja. A use case belül egy üres,
+  csak-memóriabeli `ValidatedPcmAnalysisInput`-tel csomagolja a seedet —
+  dokumentálva a fájlban —, mert `AnalysisController`-nek ma nincs valódi
+  audio-forrása; egy jövőbeli kör, ami a controllert valódi felvételi útra
+  köti, ezt a placeholdert cseréli valódi mintára.
+
+### 10.2 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+`v2_analysis_runner_test.dart` A4 tesztjét ideiglenesen megrontottam: a
+lefutott dokumentumot egy új példányra cseréltem, amelynek `id` mezője
+tartalmazta a minta-markert (`document.id = '${document.id}-$marker'`).
+Eredmény: az A4 cella `expect(encoded.contains(marker.toString()), isFalse)`
+állítása **PIROSRA váltott** (`Expected: false / Actual: <true>`,
+`flutter test --plain-name "A4"`). A rontást visszaállítottam, a teszt utána
+ismét zöld. Sem az `engine/**`, sem a `domain/**` nem lett módosítva ehhez a
+próbához — a rontás a teszt saját, helyi dokumentum-példányán történt.
+
+### 10.3 Gate
+
+```
+tools/round-gate.sh test/features/audio_analysis/application/v2_analysis_runner_test.dart test/features/audio_analysis/application/analysis_cancellation_test.dart test/features/audio_analysis/application/analysis_controller_test.dart test/features/audio_analysis/application/shadow_analysis_runner_test.dart
+```
+
+`MINDEN GATE ZÖLD`: format, analyze, mind a négy célzott teszt-fájl (7+3+11+16
+teszt), architecture, secrets, l10n.
+
+### 10.4 A8/A9 bizonyíték
+
+`git diff --stat main -- lib/core/flags lib/features/audio_analysis/engine
+lib/features/audio_analysis/domain lib/features/audio_analysis/public.dart`
+→ **üres kimenet** (egyetlen sor sem változott ezekben az útvonalakban).
+A teljes `git diff --stat main` kizárólag a brief `allowed_paths`-ában
+felsorolt fájlokat mutatja (9 fájl: 5 `application/`, 3
+`test/…/application/`, ez a round-brief).
+
+### 10.5 Ismert korlát (nem ebben a körben)
+
+`AnalyzeAudioUseCase`/`AnalysisController` útvonala ma is placeholder (üres)
+audiót kap — a valódi felvételi/import audio ezen az útvonalon még nincs
+bekötve, mert `analysis_controller.dart` nem volt az engedélyezett
+fájllistán. A `ShadowAnalysisRunner` és a közvetlen `V2AnalysisRunner` út
+(amit `v2_analysis_runner_test.dart` bizonyít) valódi PCM-mel működik.
+
 ## 11. Review — a Claude tölti ki
