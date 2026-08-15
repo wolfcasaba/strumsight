@@ -118,4 +118,110 @@ void main() {
       expect(OutcomeId('outcome-9').value, 'outcome-9');
     });
   });
+
+  group('JSON round-trip', () {
+    test('PlanId toJson/fromJson round-trips the raw string', () {
+      final id = PlanId('plan-42');
+      expect(id.toJson(), 'plan-42');
+      expect(PlanId.fromJson(id.toJson()), equals(id));
+    });
+
+    test('DayId toJson/fromJson round-trips the raw string', () {
+      final id = DayId('day-42');
+      expect(id.toJson(), 'day-42');
+      expect(DayId.fromJson(id.toJson()), equals(id));
+    });
+
+    test('BlockId toJson/fromJson round-trips the raw string', () {
+      final id = BlockId('block-42');
+      expect(id.toJson(), 'block-42');
+      expect(BlockId.fromJson(id.toJson()), equals(id));
+    });
+
+    test('GoalId toJson/fromJson round-trips the raw string', () {
+      final id = GoalId('goal-42');
+      expect(id.toJson(), 'goal-42');
+      expect(GoalId.fromJson(id.toJson()), equals(id));
+    });
+
+    test('RevisionId toJson/fromJson round-trips the raw string', () {
+      final id = RevisionId('revision-42');
+      expect(id.toJson(), 'revision-42');
+      expect(RevisionId.fromJson(id.toJson()), equals(id));
+    });
+
+    test('OutcomeId toJson/fromJson round-trips the raw string', () {
+      final id = OutcomeId('outcome-42');
+      expect(id.toJson(), 'outcome-42');
+      expect(OutcomeId.fromJson(id.toJson()), equals(id));
+    });
+
+    test('fromJson rejects a non-String decoded value', () {
+      expect(() => PlanId.fromJson(42), throwsArgumentError);
+      expect(() => DayId.fromJson(<String, Object?>{}), throwsArgumentError);
+      expect(() => BlockId.fromJson(null), throwsArgumentError);
+      expect(() => GoalId.fromJson(<Object?>[]), throwsArgumentError);
+      expect(() => RevisionId.fromJson(true), throwsArgumentError);
+      expect(() => OutcomeId.fromJson(3.14), throwsArgumentError);
+    });
+
+    test('fromJson rejects a decoded String that fails id construction', () {
+      expect(() => PlanId.fromJson(''), throwsArgumentError);
+      expect(() => DayId.fromJson('   '), throwsArgumentError);
+      expect(() => BlockId.fromJson('block id'), throwsArgumentError);
+      expect(() => GoalId.fromJson('goal/id'), throwsArgumentError);
+      expect(() => RevisionId.fromJson('\t'), throwsArgumentError);
+      expect(() => OutcomeId.fromJson('outcome id'), throwsArgumentError);
+    });
+  });
+
+  group('injected deterministic generation (SDD Ch8 §5.5)', () {
+    test('PlanId.generate validates the injected function via PlanId(...)', () {
+      final generated = PlanId.generate(() => 'plan-generated-1');
+      expect(generated, equals(PlanId('plan-generated-1')));
+    });
+
+    test('DayId.generate validates the injected function via DayId(...)', () {
+      final generated = DayId.generate(() => 'day-generated-1');
+      expect(generated, equals(DayId('day-generated-1')));
+    });
+
+    test(
+      'BlockId.generate validates the injected function via BlockId(...)',
+      () {
+        final generated = BlockId.generate(() => 'block-generated-1');
+        expect(generated, equals(BlockId('block-generated-1')));
+      },
+    );
+
+    test('GoalId.generate validates the injected function via GoalId(...)', () {
+      final generated = GoalId.generate(() => 'goal-generated-1');
+      expect(generated, equals(GoalId('goal-generated-1')));
+    });
+
+    test(
+      'RevisionId.generate validates the injected function via RevisionId(...)',
+      () {
+        final generated = RevisionId.generate(() => 'revision-generated-1');
+        expect(generated, equals(RevisionId('revision-generated-1')));
+      },
+    );
+
+    test(
+      'OutcomeId.generate validates the injected function via OutcomeId(...)',
+      () {
+        final generated = OutcomeId.generate(() => 'outcome-generated-1');
+        expect(generated, equals(OutcomeId('outcome-generated-1')));
+      },
+    );
+
+    test('generate rejects an injected function returning an invalid id', () {
+      expect(() => PlanId.generate(() => ''), throwsArgumentError);
+      expect(() => DayId.generate(() => 'bad id'), throwsArgumentError);
+      expect(() => BlockId.generate(() => '   '), throwsArgumentError);
+      expect(() => GoalId.generate(() => 'bad/id'), throwsArgumentError);
+      expect(() => RevisionId.generate(() => ''), throwsArgumentError);
+      expect(() => OutcomeId.generate(() => 'bad id'), throwsArgumentError);
+    });
+  });
 }

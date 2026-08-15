@@ -294,4 +294,48 @@ tools/round-gate.sh test/features/practice_generator/domain/planner_ids_test.dar
 Minden lépés (`format`, `analyze`, mindhárom `test`, `architecture`,
 `secrets`, `l10n`) ZÖLD.
 
+### 10.6 Javító kör (`docs/reviews/e07-r02-review.md` MAJOR-1, MAJOR-2)
+
+**Végrehajtó:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-15, egyetlen javító
+kör, kizárólag `planner_ids.dart` + `planner_ids_test.dart` + ez a handoff.
+
+**MAJOR-1 (JSON round-trip hiánya) — zárva.** Mind a hat typed ID kapott egy
+explicit `String toJson()`-t (a nyers `value`-t adja vissza) és egy statikus
+`fromJson(Object? json)`-t, ami a dekódolt bemenetet a `_decodeJsonId` közös
+helperen futtatja végig, majd a **ugyanazon konstruktoron** (`PlanId(...)`
+stb.) keresztül épít példányt — tehát egy `fromJson`-nal létrehozott ID
+sosem kerülheti meg a §5.2 validációt. Új teszt-csoport
+(`planner_ids_test.dart` „JSON round-trip"): mind a hat ID érvényes
+round-trip cellája, egy nem-`String` dekódolt érték (int/map/null/list/
+bool/double) elutasítása mind a hat ID-n, és egy formátumot sértő dekódolt
+`String` (üres/whitespace/tiltott karakter) elutasítása mind a hat ID-n.
+
+**MAJOR-2 (injektált ID-generálás hiánya) — zárva.** Mind a hat típus kapott
+egy `factory <Id>.generate(String Function() generateId)` belépési pontot,
+ami az `analysis_recorder.dart:36` mintáját követi: a paraméter egy
+**sima `String Function()`**, nincs új `IdGenerator` absztrakció, nincs
+óra/random forrás a domainben. A generátor visszatérési értékét a
+**ugyanaz a konstruktor** validálja (`PlanId(generateId())`), tehát a
+generálás nem kerülheti meg a §5.2 validációt. Új teszt-csoport
+(„injected deterministic generation"): determinisztikus lambda-generátorral
+mind a hat ID sikeres construction-je, és egy érvénytelen id-t visszaadó
+generátor mind a hat ID-n `ArgumentError`-t dob.
+
+**Gate újrafuttatása javítás után (előtér, csonkítás nélkül):**
+
+```
+tools/round-gate.sh test/features/practice_generator/domain/planner_ids_test.dart test/features/practice_generator/domain/plan_enums_test.dart test/core/architecture_dependency_test.dart
+```
+
+Minden lépés ZÖLD: `format`, `analyze`, `test planner_ids_test.dart` (60/60,
+korábban 45), `test plan_enums_test.dart` (25/25, változatlan),
+`test architecture_dependency_test.dart` (18/18, változatlan),
+`architecture`, `secrets`, `l10n`.
+
+Módosított/staged fájlok ebben a javító körben:
+`lib/features/practice_generator/domain/id/planner_ids.dart`,
+`test/features/practice_generator/domain/planner_ids_test.dart`,
+ez a brief (`docs/rounds/e07-r02-typed-ids-enums-and-domain-primitives.md`).
+Semmi más útvonal nem érintett.
+
 ## 11. Review — a Claude tölti ki
