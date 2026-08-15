@@ -2,7 +2,7 @@
 
 Brief: `docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md`
 Reviewer: Codex (gpt-5.6-terra) · Dátum: 2026-08-15
-Verdikt: CHANGES REQUIRED (a funkcionális review F1 MAJOR megállapításával együtt)
+Verdikt: APPROVED
 
 ## Ellenőrzés
 
@@ -27,3 +27,15 @@ Javasolt irány: a belső request/audio referencia legyen nullázható, a spawn
 értékeit lokálisan rögzítse, majd teljesítés, hiba és cancel után minden úton
 engedje el; komplett és cancel regressziós teszt szükséges. Új PCM-logolást,
 perzisztenciát, exportot vagy dokumentum-codec transzportot a review nem talált.
+
+## F4 javításának security újraellenőrzése — 2026-08-15
+
+Verdikt: APPROVED
+
+Az `fe0c905f` pontosan a leletet javítja: a handleben a request már nem
+végleges referencia, és spawn után, cancelkor, illetve a terminális
+felszabadításkor nullázódik. A completed és cancelled út célzott tesztje
+mindkét esetben ellenőrzi, hogy a handle nem tartja a requestet. A diff nem
+vezet be PCM-logolást, perzisztenciát, exportot vagy hálózati transzportot.
+Az izolált reviewer-gate a brief §7 négy tesztjével, format/analyze,
+architecture, secrets és l10n lépésekkel zöld.

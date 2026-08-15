@@ -3,11 +3,11 @@
 Brief: `docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md`
 Diff: `1636b40d..7c6b762e`
 Reviewer: Codex (gpt-5.6-terra) · Dátum: 2026-08-15
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+Nyitott lelet: BLOCKER 0 · MAJOR 0 · MINOR 0 · NOTE 1 (F2, scope-on kívüli).
 
 ## Acceptance criteria
 
@@ -92,3 +92,19 @@ Az A4 valódi-sértés próbában a `0.918273645` PCM-marker a drót-dokumentum
 Az F1 és F3 javítását az izolált gate a megfelelő célzott tesztekkel újra
 igazolta, de F4 nyitott MAJOR mellett merge tilos. Ugyanazon `sonnet-impl`
 motor javító köre szükséges.
+
+## F4 javításának független ellenőrzése — 2026-08-15
+
+Verdikt: APPROVED
+
+Az `fe0c905f` javítás a `_IsolateAnalysisRun` belső request referenciáját
+nullázhatóvá tette. A referencia a spawn átadása után, `cancel()` esetén és az
+összes terminális `_dispose()` úton elengedésre kerül. Két regressziós teszt
+ellenőrzi, hogy befejezett, illetve spawn közben törölt run handle után a
+handle már nem tart requestet, így a PCM-listát sem.
+
+Az új, izolált klónban végrehajtott, a brief §7 szerinti teljes gate zöld:
+format, analyze, a négy célzott teszt, architecture, secrets és l10n. A friss
+mainre vett scope-audit is zöld (`c1d3b089..fe0c905f`, 12 changed paths,
+2 generated/ignored). Az F4 javításnak nincs nyitott BLOCKER vagy MAJOR
+utóhatása.
