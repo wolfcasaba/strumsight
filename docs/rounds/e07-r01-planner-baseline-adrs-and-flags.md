@@ -236,4 +236,43 @@ kör `unknown`-ba fut (L254).
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosított fájlok
+
+- `lib/app/config/feature_flags.dart` — hozzáadta a
+  `practiceGeneratorEnabled` és `plannerAssistEnabled` opcionális, alapból
+  `false` flaget a konstruktorhoz, a környezetgyárhoz, értékszemantikához és
+  diagnosztikai `toString()`-hez. A gyár mindkét flaget minden környezetben
+  explicit `false` értéken tartja.
+- `test/app/config/feature_flags_test.dart` — új háromcellás teszt a
+  konstruktor-alapértelmezésre, productionre és developmentre; a `toString()`
+  jelenlétét is méri.
+- `test/core/architecture_dependency_test.dart` — kétirányú regressziós próba:
+  Practice Generator → Learn és Learn → Practice Generator belső importja is
+  sértés.
+
+### Végrehajtott ellenőrzések
+
+- `dart format lib/app/config/feature_flags.dart test/app/config/feature_flags_test.dart test/core/architecture_dependency_test.dart`
+  — `Formatted 3 files (0 changed)`.
+- `flutter test test/app/config/feature_flags_test.dart` — 3 teszt zöld.
+- `flutter test test/core/architecture_dependency_test.dart` — 16 teszt zöld.
+- `tools/round-gate.sh test/app/config/feature_flags_test.dart test/core/architecture_dependency_test.dart`
+  — format: zöld (`1495 files, 0 changed`); analyze: zöld (`No issues found`);
+  mindkét célzott teszt, architecture, secrets és l10n is lefutott. A gate
+  strukturált záróeredménye: `{"outcome":"pass","exit_code":0,"failed_step":null}`.
+
+### Kötelező valódi-sértés próba
+
+Átmenetileg a gyárban a `practiceGeneratorEnabled: false` értéket
+`practiceGeneratorEnabled: nonProd` értékre állítottam. A
+`flutter test test/app/config/feature_flags_test.dart` exit kódja 1 lett; az
+`factory keeps both flags off in non-production` cella a várt `false` helyett
+`Actual: <true>` hibát jelzett. Az értéket azonnal visszaállítottam explicit
+`false`-ra, majd a célzott tesztek és a kör-gate újra zöldek voltak.
+
+### Nem futtatott ellenőrzések
+
+- Teljes `flutter test`, property gate és release APK: a kör-gate nem futtatja;
+  ezek a kör-branch CI-kapui, az orchestrátor feladatai.
+
 ## 11. Review — a Claude tölti ki
