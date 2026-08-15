@@ -1,11 +1,11 @@
 # E99-R11 (GOV-30c-3) — A progress-fázis leválasztása a stage-granularitásról
 
-- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, `main @ 0d4dbfa5`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, `main @ eb7ecc0c`)
 - **Típus:** **governance-kör** — a GOV-30c harmadik lépcsője (ADR 0251 §4–5)
 - **Kör-azonosító:** `E99-R11`. Emberi neve **GOV-30c-3**.
-- **Branch:** `codex/e99-r11-gov-30c-3-progress-phase-decoupling`
+- **Branch:** `sonnet-impl/e99-r11-gov-30c-3-progress-phase-decoupling`
 - **Előfeltétel:** `E99-R10` (GOV-30c-2) merge-elve (PR #261, `82cfa588`)
-- **Brief szerzője:** Claude (Opus 5) · **Implementáció:** Codex (Terra)
+- **Brief szerzője:** Claude (Opus 5) · **Implementáció:** Sonnet 5 (`sonnet-impl`)
 - **Előre kiosztott ADR:** [`0252`](../adr/0252-progress-phase-decoupled-from-stage-granularity.md)
   — **MÁR MEGÍRVA az orchesztrátor által, a `docs/adr/` a TILOS zónában van.**
   Az ADR 0252 **felülírja** az E06-R04 szigorú-monotonitás invariánsát (lásd §5.2).
@@ -30,6 +30,16 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+### §0.0 Pre-flight revízió — a tényleges implementer-azonosság (2026-08-15)
+
+Az eredeti, előre elkészített brief `codex` / Terra implementert és az ennek
+megfelelő branch-prefixet jelölt. Ennek a firingnek a driver által feloldott,
+explicit motorja **`sonnet-impl`**; a registry szerint ez `claude` harnesses
+Sonnet 5. A branch-prefix ezért `sonnet-impl/…`, hogy az ADR 0242 szerinti
+reviewer-függetlenség a valós implementer-azonosságból mérhető legyen. A
+váltás csak orchesztrációs metadata: az `allowed_paths`, az ADR 0252 és az
+összes acceptance-kritérium változatlan.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -292,6 +302,73 @@ kör `unknown`-ba fut (L254).
   dokumentum-összeállítás NEM ennek a körnek a dolga, még ha „már csak az
   hiányzik" érzés is támad. Az A9 ezt méri.
 
-## 10. Implementation handoff — a Codex tölti ki
+## 10. Implementation handoff
+
+**Státusz: IMPLEMENTED.**
+
+### 10.1 Mit csinál a kör
+
+- `engine/analysis_pipeline.dart`: `AnalysisPipeline` opcionális
+  `Map<String, AnalysisProgressPhase> stagePhases` konstruktor-paramétert
+  kapott. Térkép nélkül a viselkedés bitre változatlan (pozicionális
+  `AnalysisProgressPhase.values[index]` + a kilences hossz-sapka). Térképpel
+  a hossz-sapka nem érvényes; a konstruktor helyette azt ellenőrzi, hogy
+  minden stage-id szerepel a térképen (hiányzó → `ArgumentError`, A3), és
+  hogy a fázisok a stage-sorrend mentén nem csökkennek (visszalépő térkép →
+  `ArgumentError`, A4).
+- A publikálási invariáns (`publish()`) `<=` → `<`: a visszalépő fázis-esemény
+  továbbra is `StateError`-t dob (A6), az azonos fázis ismétlése már nem (A7).
+- `engine/stages/analysis_stage_phases.dart` (ÚJ): `analysisStagePhases` — a
+  18 stage-id → `AnalysisProgressPhase` adatvezérelt térképe, kizárólag az
+  `IngestStageIds`/`EvaluationStageIds` konstansaira hivatkozva;
+  `buildFullAnalysisStages()` — a hét ingest + tizenegy evaluation stage
+  fűzése egyetlen listába; `classifyAnalysisStageFailure()` — a két
+  composition-owned classifier közötti stage-id alapú dispatch.
+- A térkép nem-csökkenő a lánc mentén: preprocessing/signal-quality →
+  `preprocessing`, legacy-evidence/pitch → `extractingEvents`, harmony →
+  `estimatingHarmony`, rhythm/events → `estimatingBeatGrid`, a tíz metrika
+  evaluation-stage → `computingMetrics`, capability-confidence →
+  `buildingInsights`.
+
+### 10.2 Bizonyíték
+
+- `test/…/engine/stages/analysis_stage_phases_test.dart` (ÚJ): A2 (a teljes
+  lánc elfogadható a térképpel), A3 (hiányzó id → `ArgumentError`), A4
+  (visszalépő térkép → `ArgumentError`), A5 (a 18 stage és a térkép kulcsai
+  halmazként egyeznek), plusz a `classifyAnalysisStageFailure` dispatch-cella.
+- `test/…/engine/full_pipeline_composition_test.dart` (ÚJ): élő
+  `AnalysisPipeline<AnalysisWorkState>` a teljes 18 stage-gel valódi PCM
+  bemeneten (a `ingest_pipeline_composition_test.dart` A4 fixtúrájának
+  mintájára); a provenance stage-sorrendje, a publikált 18 fázis-esemény
+  pontos sorozata (a térkép szerint) és azok nem-csökkenő volta mind
+  rögzítve (A2, A8).
+- `test/…/engine/analysis_pipeline_test.dart`: két ÚJ cella — A6
+  (`_ExplicitPhaseStage`, ami `context.eventSink`-en keresztül közvetlenül
+  publikál egy visszalépő fázist, függetlenül attól, hogy a jelenlegi
+  stage/fázis huzalozás önmagában tudna-e ilyet termelni — ez a
+  futásidejű védőháló önálló bizonyítéka) és A7 (két stage azonos térképelt
+  fázissal nem dob), továbbá három kiegészítő cella: hiányzó
+  `stagePhases`-bejegyzés elutasítása, visszalépő `stagePhases` elutasítása,
+  és a kilencnél több stage elfogadása térképpel.
+- **Valódi-sértés próba (§6.1, elvégezve, majd visszaállítva):**
+  1. `<` → `<=` az invariánsban: az **A7** cella pirosra váltott (`Expected:
+     complete, Actual: failed`), pontosan a mátrix előírása szerint.
+  2. Az ellenőrzés teljes eltávolítása: az **A6** cella pirosra váltott
+     (`Expected: failed, Actual: complete`).
+  3. Mindkét próba után a kód visszaállítva az eredeti, helyes alakra —
+     `git diff` üres a próbák után.
+- `git diff --stat main...HEAD` a `lib/features/audio_analysis/application/**`
+  és a `lib/features/audio_analysis/domain/analysis_progress.dart` fájlokon
+  nulla sor — A9 (`analysisV2RunnerProvider` érintetlen, `StateError`-t dob)
+  és A10 (9 fázis marad) mind érvényes.
+
+### 10.3 Gate
+
+```
+tools/round-gate.sh test/features/audio_analysis/engine/full_pipeline_composition_test.dart test/features/audio_analysis/engine/analysis_pipeline_test.dart test/features/audio_analysis/engine/stages/analysis_stage_phases_test.dart
+```
+
+Minden lépés (format, analyze, a három teszt-útvonal külön-külön,
+architecture, secrets, l10n) ZÖLD.
 
 ## 11. Review — a Claude tölti ki

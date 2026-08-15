@@ -59,29 +59,58 @@ final class AnalysisPipeline<T> {
     required List<AnalysisStage<T, T>> stages,
     AnalysisStageFailureClassifier? failureClassifier,
     Stopwatch Function()? stopwatchFactory,
+    Map<String, AnalysisProgressPhase>? stagePhases,
   }) : _stages = List<AnalysisStage<T, T>>.unmodifiable(stages),
        _failureClassifier = failureClassifier ?? _fatalFailure,
-       _stopwatchFactory = stopwatchFactory ?? Stopwatch.new {
+       _stopwatchFactory = stopwatchFactory ?? Stopwatch.new,
+       _stagePhases = stagePhases == null
+           ? null
+           : Map<String, AnalysisProgressPhase>.unmodifiable(stagePhases) {
     if (_stages.isEmpty) {
       throw ArgumentError.value(stages, 'stages', 'must not be empty');
-    }
-    if (_stages.length > AnalysisProgressPhase.values.length) {
-      throw ArgumentError.value(
-        stages,
-        'stages',
-        'cannot exceed the nine ordered progress phases',
-      );
     }
     final ids = _stages.map((stage) => stage.id).toList(growable: false);
     if (ids.any((id) => id.trim().isEmpty) ||
         ids.toSet().length != ids.length) {
       throw ArgumentError.value(stages, 'stages', 'stage IDs must be unique');
     }
+    if (stagePhases == null) {
+      if (_stages.length > AnalysisProgressPhase.values.length) {
+        throw ArgumentError.value(
+          stages,
+          'stages',
+          'cannot exceed the nine ordered progress phases',
+        );
+      }
+    } else {
+      AnalysisProgressPhase? previousPhase;
+      for (final id in ids) {
+        final phase = stagePhases[id];
+        if (phase == null) {
+          throw ArgumentError.value(
+            stagePhases,
+            'stagePhases',
+            'missing a phase mapping for stage "$id"',
+          );
+        }
+        if (previousPhase != null && phase.index < previousPhase.index) {
+          throw ArgumentError.value(
+            stagePhases,
+            'stagePhases',
+            'phase mapping must not regress along the stage order (stage '
+                '"$id" maps to ${phase.name}, before '
+                '${previousPhase.name})',
+          );
+        }
+        previousPhase = phase;
+      }
+    }
   }
 
   final List<AnalysisStage<T, T>> _stages;
   final AnalysisStageFailureClassifier _failureClassifier;
   final Stopwatch Function() _stopwatchFactory;
+  final Map<String, AnalysisProgressPhase>? _stagePhases;
 
   int _nextRunNumber = 0;
   String? _activeRunId;
@@ -132,10 +161,8 @@ final class AnalysisPipeline<T> {
         return;
       }
       if (event is AnalysisPhaseProgressEvent) {
-        if (latestPhase != null && event.phase.index <= latestPhase!.index) {
-          throw StateError(
-            'Analysis progress phases must be strictly monotonic.',
-          );
+        if (latestPhase != null && event.phase.index < latestPhase!.index) {
+          throw StateError('Analysis progress phases must not regress.');
         }
         latestPhase = event.phase;
       }
@@ -174,7 +201,7 @@ final class AnalysisPipeline<T> {
         final stage = _stages[index];
         final context = AnalysisStageContext(
           runId: runId,
-          phase: AnalysisProgressPhase.values[index],
+          phase: _stagePhases?[stage.id] ?? AnalysisProgressPhase.values[index],
           cancellationToken: cancellationToken,
           eventSink: publish,
         );
