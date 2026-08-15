@@ -8645,3 +8645,119 @@ gate zöld. Exact-SHA `5b4ec293`: Full Gate
 + Router CI [31887571675](https://github.com/wolfcasaba/strumsight/actions/runs/31887571675)
 success. PR [#266](https://github.com/wolfcasaba/strumsight/pull/266)
 squash-merge `7ee451f7`; post-merge gate zöld. Lecke: **L281**.
+## ✅ E07-R05 KÉSZ — SkillEvidence normalizálás és evidence repository
+
+PR [#274](https://github.com/wolfcasaba/strumsight/pull/274), squash
+`36298ac5`. A `SkillEvidence` csak származtatott mérőszámot, provenance-t és
+strukturált discomfort-kategóriát tartalmaz; a self-report szabad szövege
+tranzitív bemenet, a repository, a log és az exportolható modell előtt
+eldobódik. Outcome-ID deduplikáció, inkluzív expiry és bounded query kész.
+Review + security review APPROVED; a valódi A5-sértés próba négy cellát
+pirosra váltott. Exact-SHA `7e127217`: Full Gate
+[31907935245](https://github.com/wolfcasaba/strumsight/actions/runs/31907935245)
++ Router CI [31908569509](https://github.com/wolfcasaba/strumsight/actions/runs/31908569509)
+success. Egy CI-javítás csak a guard által tiltott komment-literált rewordolta.
+
+## ✅ [HEAL E07-R04/H-NOSIGNAL] KÉSZ — a Codex `exec_command` korai „yield"-je után az orchestrátor újraindította a CI-várakozást ahelyett, hogy folytatta volna (2026-08-15)
+
+E07-R04 (Terra-orchesztrált) a kötelező `tools/wait-for-ci.sh 31902706136`
+CI-várakozó hívásnál H-NOSIGNAL-lal állt meg. A tmux pane-napló redraw-zaja
+miatt a valódi ok nem volt rekonstruálható belőle; a codex CLI SAJÁT
+strukturált rollout-JSONL-je
+(`~/.codex-terra/sessions/2026/08/15/rollout-2026-08-15T18-35-03-*.jsonl`)
+mutatta meg: a hívás az `exec_command`/`write_stdin` tool-interfészen
+HÁROMSZOR `"Script running with cell ID {94,96,98}"` választ kapott kb. 11
+másodpercnél (a kért `yield_time_ms` — 30000, majd 60000 — nem szabta meg
+ezt az időt), miközben a ténylegesen várt Full Gate futás 13 percig futott
+és zölden zárt (19:00:39→19:13:30Z). Az orchestrátor mindhárom alkalommal
+ÚJRA `exec_command`-ot hívott UGYANAZZAL a paranccsal ahelyett, hogy a
+kapott session/cellát folytatta volna — sosem olvasott valódi eredményt, a
+turn jelzés nélkül véget ért. Két közvetlen repró (`sleep 300`, egy
+`wait-for-ci.sh` alakú `gh` poll-ciklus) igazolta: nincs kemény
+kill-időkorlát — a modell máskor helyesen FOLYTATJA (resume) a yield-elt
+sessiont, csak a preambulum sosem mondta ki, hogy CI-várakozásnál pontosan
+ez a teendő.
+
+Javítás: `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 új
+bullet — megnevezi a mért cella-választ, kimondja: yield után UGYANAZT a
+sessiont kérdezd le újra, SOSE indítsd újra magát a parancsot. Regressziós
+teszt `tools/tests/test_pipeline_codex_orchestrator_preamble.py` (RED a
+javítás előtt, GREEN utána); teljes `pytest tools/tests`: 442 passed, 438
+subtests, nincs regresszió. PR
+[#271](https://github.com/wolfcasaba/strumsight/pull/271), squash
+`769ed42d`, Router CI
+[31904279406](https://github.com/wolfcasaba/strumsight/actions/runs/31904279406)
+success az exact `38e5b11c` SHA-n (docs/tools-only, nincs Dart-változás,
+Full Gate nem releváns). Lecke: `docs/LESSONS.md` **L282**.
+
+**E07-R04 saját tartalmi munkája már merge-elve**: implementáció + 1
+javító kör (F1 — a sérült, hibás típusú `targetDate`/`metricTarget` többé
+nem válhat csendes `null`-lá), review APPROVED. A rebase-elt exact-SHA
+`864cf4ab` Full Gate és Router CI eredménye egyaránt success; PR
+[#272](https://github.com/wolfcasaba/strumsight/pull/272), squash
+`ac12b017`.
+
+## ✅ E07-R03 KÉSZ — Goal, availability és learner-constraint domain (2026-08-15)
+
+SDD Ch8 Kör 3: `lib/features/practice_generator/domain/model/practice_goal.dart`
+(stabil kódú goal-type/priority/lifecycle enumok + `MetricTarget` +
+`PracticeGoal`, egyetlen engedélyezett lifecycle-átmenetgráf, normalizálatlan
+custom goal `isExecutable == false`), `weekly_availability.dart` (`LocalDate`
+— timezone-semleges helyi naptári nap, NEM `DateTime` —, naponta változó
+`DailyAvailability`, hard/soft napi maximum), `learner_constraints.dart`
+(equipment/tuning/capability/comfort/accessibility/preference/avoid
+kategóriák, a hard/soft keménység a kategóriától FÜGGETLEN mező — a
+`comfort` is lehet hard), `request_validator.dart` (pure konfliktus-detektor:
+hard sértés hiba, soft sértés költséges warning; nem javít, nem ütemez).
+ADR 0258 (hard korlát sosem sérthető, soft költséggel igen; napi hard
+maximum inkluzív, befelé kerekít; elérhetőség helyi dátumhoz kötött).
+
+Correctness review **APPROVED** (0 BLOCKER/MAJOR, 1 MINOR, 2 NOTE) — a
+reviewer a helyi gate-et saját izolált `/tmp` klónban 9/9 zölddel
+újrafuttatta, a `scope-audit.py`-jal mérve mind a 10 megváltozott útvonal az
+`allowed_paths`-on belül volt, és egy eldobható próbateszttel három, a kör
+saját négy tesztfájlában lefedetlen `RequestValidator`-ágat (elérhetetlen nap
+ütemezése, soft-maximum lineáris költsége, validátoron át futó
+`customGoalNotExecutable`) is lefuttatott — mind a három helyesen
+viselkedett (MINOR-1 follow-up, nem blokkoló). `risk = "normal"`, dedikált
+security review nem volt kötelező.
+
+Exact-SHA `93ffe3f`: Full Gate
+[31900345340](https://github.com/wolfcasaba/strumsight/actions/runs/31900345340)
++ Router CI [31900353853](https://github.com/wolfcasaba/strumsight/actions/runs/31900353853)
+mindkettő success; squash-merge PR
+[#270](https://github.com/wolfcasaba/strumsight/pull/270), `f7db0f00`. Egy
+párhuzamos batch-prep kör docs-only commitja (`ba834de8`) miatt a branch az
+első dispatch előtt rebase-elve lett; onnantól `origin/main` a merge-ig nem
+mozdult. A post-merge gate friss `main`-en önállóan újrafuttatva is zöld
+(9/9). Implementer **Terra (Codex)**, egy `done` dispatch, javító kör
+nélkül. `practice_generator` flagek változatlanul `false`, nulla hívó a
+`lib/`-ben a kör saját fájljain kívül.
+
+## ✅ E07-R02 KÉSZ — Typed ID-k és stabil enum-kódok (2026-08-15, retroaktívan rögzítve)
+
+SDD Ch8 Kör 2: `domain/id/planner_ids.dart` (hat típusos ID —
+`PlanId`/`DayId`/`BlockId`/`GoalId`/`RevisionId`/`OutcomeId` —, mindegyik
+önálló `final class`, tehát a kereszt-típusú behelyettesítés fordítási
+hiba), `domain/model/plan_enums.dart` (öt stabil kódú enum-család:
+`PlanStatus`/`GenerationMode`/`BlockKind`/`ValidationSeverity`/
+`CandidateSource`, fail-loud `fromCode`). ADR 0257.
+
+Correctness review **APPROVED** (0 nyitott lelet) — ez a kör EGY javító
+kört kapott: az első review 2 MAJOR-t talált (a típusos ID-knek nem volt
+JSON round-trip szerződése; hiányzott az injektált ID-generálási seam), a
+`sonnet-impl` javító kör mindkettőt bezárta scope-tágítás nélkül
+(`toJson`/`fromJson`/`generate(String Function())` mind a hat ID-n, a
+validáció a rendes konstruktoron át fut), majd a reviewer friss izolált
+klónban a TELJES gate-et (format, analyze, 60 ID-teszt, 25 enum-teszt,
+architektúra, secrets, l10n) újra zöldre mérte. Az A6 valódi-sértés próba
+(az ismeretlen-kód hiba lecserélése csendes `values.first` fallback-re) az
+öt enum-család mindegyikén pirosra váltott, majd vissza lett állítva.
+
+Exact-SHA `8c6d13c0`: Full Gate
+[31898125573](https://github.com/wolfcasaba/strumsight/actions/runs/31898125573)
++ Router CI [31898243627](https://github.com/wolfcasaba/strumsight/actions/runs/31898243627)
+mindkettő success; squash-merge PR
+[#269](https://github.com/wolfcasaba/strumsight/pull/269), `5bb4f7d9`.
+Implementer **Claude Sonnet 5 (`sonnet-impl`)**, egy javító kör. Review:
+[`docs/reviews/e07-r02-review.md`](docs/reviews/e07-r02-review.md).

@@ -3,8 +3,44 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (E14-R01 merged as PR #275: recognition-recovery flags remain fail-closed
-> and the release activation contract is documented.)**
+> (E07-R06 merged as PR #276: the SkillEstimate reducer derives a bounded,
+> trend-aware skill snapshot from evidence with an explicit unknown state.)**
+
+> ## ✅ E07-R06 KÉSZ — SkillEstimate reducer és konfliktuskezelés
+
+> PR [#276](https://github.com/wolfcasaba/strumsight/pull/276), squash
+> `d1f36c8c`. SDD Ch8 Kör 6: `domain/model/skill_estimate.dart` (immutable
+> `SkillEstimate`, explicit `unknown` állapot `level=null`-lal, sosem `0.0`
+> default), `domain/policy/evidence_weight_policy.dart` (explicit
+> `singleEvidenceInfluenceCap`, forrás/confidence/recency/minta-szám
+> súlyozás), `application/service/skill_estimate_reducer.dart` (rendezett,
+> outcome-ID deduplikált, determinisztikus reducer — a konfliktus magas
+> bizonytalanságot ad, nem átlagot; a discomfort külön csatornán fut, sosem
+> a teljesítmény-értékben). ADR
+> [0261](docs/adr/0261-skill-estimate-bounded-influence-and-unknown-state.md).
+>
+> Independent review **APPROVED** egy javító kör után: az első pass 2
+> MAJOR-t talált (időben szétváló, valódi javulást tévesen konfliktusnak
+> minősített a reducer; egyező időpontú, ellentmondó evidence-nél az
+> outcome-ID sorrendje adott hamis irányt a trendnek) — mindkettőt a javító
+> kör zárta (időbélyeg-bucketelt konfliktus-detektálás, a trend csak eltérő
+> időpontok között számít). Kötelező security review (`risk="high"`)
+> **PASS** (0 CRITICAL/BLOCKER/MAJOR, 1 MINOR: a jövőbeli fogyasztó a
+> `SkillEstimateState.stale` státuszra kapuzza a confidence-megjelenítést,
+> ne csak a numerikus `uncertainty`-ra).
+>
+> Exact-SHA `698ceccb`: Full Gate
+> [31913532960](https://github.com/wolfcasaba/strumsight/actions/runs/31913532960)
+> + Router CI [31913526737](https://github.com/wolfcasaba/strumsight/actions/runs/31913526737)
+> mindkettő success; post-merge gate friss `main`-en önállóan újrafuttatva is
+> zöld (8/8). Egy korábbi, jelzés nélkül megszakadt session hagyta a kört
+> implementálva + review-zva + javítva + jóváhagyva, nyitott PR-ral; ez a
+> session örökölte, és a `main` egy közbeeső, független commitja miatt piros
+> Router CI-t talált (`817ea579`, E13 queue-engine mező javítás — a kör
+> saját `allowed_paths`-ától diszjunkt fájl). Konfliktusmentes rebase +
+> `safe-force-push.sh` + CI-újradispatch oldotta (ADR 0242 §H8), nem halt.
+> `practiceGeneratorEnabled` flag változatlanul `false`, nulla hívó a
+> reducerre a domain rétegen kívül.
 
 > ## ✅ E14-R01 KÉSZ — Recognition recovery kickoff és release guard
 >
@@ -20,123 +56,6 @@
 > + Router CI [31910963645](https://github.com/wolfcasaba/strumsight/actions/runs/31910963645)
 > success; post-merge célzott gate a friss `main`-en újrafuttatva.
 
-> ## ✅ E07-R05 KÉSZ — SkillEvidence normalizálás és evidence repository
->
-> PR [#274](https://github.com/wolfcasaba/strumsight/pull/274), squash
-> `36298ac5`. A `SkillEvidence` csak származtatott mérőszámot, provenance-t és
-> strukturált discomfort-kategóriát tartalmaz; a self-report szabad szövege
-> tranzitív bemenet, a repository, a log és az exportolható modell előtt
-> eldobódik. Outcome-ID deduplikáció, inkluzív expiry és bounded query kész.
-> Review + security review APPROVED; a valódi A5-sértés próba négy cellát
-> pirosra váltott. Exact-SHA `7e127217`: Full Gate
-> [31907935245](https://github.com/wolfcasaba/strumsight/actions/runs/31907935245)
-> + Router CI [31908569509](https://github.com/wolfcasaba/strumsight/actions/runs/31908569509)
-> success. Egy CI-javítás csak a guard által tiltott komment-literált rewordolta.
->
-> ## ✅ [HEAL E07-R04/H-NOSIGNAL] KÉSZ — a Codex `exec_command` korai „yield"-je után az orchestrátor újraindította a CI-várakozást ahelyett, hogy folytatta volna (2026-08-15)
->
-> E07-R04 (Terra-orchesztrált) a kötelező `tools/wait-for-ci.sh 31902706136`
-> CI-várakozó hívásnál H-NOSIGNAL-lal állt meg. A tmux pane-napló redraw-zaja
-> miatt a valódi ok nem volt rekonstruálható belőle; a codex CLI SAJÁT
-> strukturált rollout-JSONL-je
-> (`~/.codex-terra/sessions/2026/08/15/rollout-2026-08-15T18-35-03-*.jsonl`)
-> mutatta meg: a hívás az `exec_command`/`write_stdin` tool-interfészen
-> HÁROMSZOR `"Script running with cell ID {94,96,98}"` választ kapott kb. 11
-> másodpercnél (a kért `yield_time_ms` — 30000, majd 60000 — nem szabta meg
-> ezt az időt), miközben a ténylegesen várt Full Gate futás 13 percig futott
-> és zölden zárt (19:00:39→19:13:30Z). Az orchestrátor mindhárom alkalommal
-> ÚJRA `exec_command`-ot hívott UGYANAZZAL a paranccsal ahelyett, hogy a
-> kapott session/cellát folytatta volna — sosem olvasott valódi eredményt, a
-> turn jelzés nélkül véget ért. Két közvetlen repró (`sleep 300`, egy
-> `wait-for-ci.sh` alakú `gh` poll-ciklus) igazolta: nincs kemény
-> kill-időkorlát — a modell máskor helyesen FOLYTATJA (resume) a yield-elt
-> sessiont, csak a preambulum sosem mondta ki, hogy CI-várakozásnál pontosan
-> ez a teendő.
->
-> Javítás: `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 új
-> bullet — megnevezi a mért cella-választ, kimondja: yield után UGYANAZT a
-> sessiont kérdezd le újra, SOSE indítsd újra magát a parancsot. Regressziós
-> teszt `tools/tests/test_pipeline_codex_orchestrator_preamble.py` (RED a
-> javítás előtt, GREEN utána); teljes `pytest tools/tests`: 442 passed, 438
-> subtests, nincs regresszió. PR
-> [#271](https://github.com/wolfcasaba/strumsight/pull/271), squash
-> `769ed42d`, Router CI
-> [31904279406](https://github.com/wolfcasaba/strumsight/actions/runs/31904279406)
-> success az exact `38e5b11c` SHA-n (docs/tools-only, nincs Dart-változás,
-> Full Gate nem releváns). Lecke: `docs/LESSONS.md` **L282**.
->
-> **E07-R04 saját tartalmi munkája már merge-elve**: implementáció + 1
-> javító kör (F1 — a sérült, hibás típusú `targetDate`/`metricTarget` többé
-> nem válhat csendes `null`-lá), review APPROVED. A rebase-elt exact-SHA
-> `864cf4ab` Full Gate és Router CI eredménye egyaránt success; PR
-> [#272](https://github.com/wolfcasaba/strumsight/pull/272), squash
-> `ac12b017`.
->
-> ## ✅ E07-R03 KÉSZ — Goal, availability és learner-constraint domain (2026-08-15)
->
-> SDD Ch8 Kör 3: `lib/features/practice_generator/domain/model/practice_goal.dart`
-> (stabil kódú goal-type/priority/lifecycle enumok + `MetricTarget` +
-> `PracticeGoal`, egyetlen engedélyezett lifecycle-átmenetgráf, normalizálatlan
-> custom goal `isExecutable == false`), `weekly_availability.dart` (`LocalDate`
-> — timezone-semleges helyi naptári nap, NEM `DateTime` —, naponta változó
-> `DailyAvailability`, hard/soft napi maximum), `learner_constraints.dart`
-> (equipment/tuning/capability/comfort/accessibility/preference/avoid
-> kategóriák, a hard/soft keménység a kategóriától FÜGGETLEN mező — a
-> `comfort` is lehet hard), `request_validator.dart` (pure konfliktus-detektor:
-> hard sértés hiba, soft sértés költséges warning; nem javít, nem ütemez).
-> ADR 0258 (hard korlát sosem sérthető, soft költséggel igen; napi hard
-> maximum inkluzív, befelé kerekít; elérhetőség helyi dátumhoz kötött).
->
-> Correctness review **APPROVED** (0 BLOCKER/MAJOR, 1 MINOR, 2 NOTE) — a
-> reviewer a helyi gate-et saját izolált `/tmp` klónban 9/9 zölddel
-> újrafuttatta, a `scope-audit.py`-jal mérve mind a 10 megváltozott útvonal az
-> `allowed_paths`-on belül volt, és egy eldobható próbateszttel három, a kör
-> saját négy tesztfájlában lefedetlen `RequestValidator`-ágat (elérhetetlen nap
-> ütemezése, soft-maximum lineáris költsége, validátoron át futó
-> `customGoalNotExecutable`) is lefuttatott — mind a három helyesen
-> viselkedett (MINOR-1 follow-up, nem blokkoló). `risk = "normal"`, dedikált
-> security review nem volt kötelező.
->
-> Exact-SHA `93ffe3f`: Full Gate
-> [31900345340](https://github.com/wolfcasaba/strumsight/actions/runs/31900345340)
-> + Router CI [31900353853](https://github.com/wolfcasaba/strumsight/actions/runs/31900353853)
-> mindkettő success; squash-merge PR
-> [#270](https://github.com/wolfcasaba/strumsight/pull/270), `f7db0f00`. Egy
-> párhuzamos batch-prep kör docs-only commitja (`ba834de8`) miatt a branch az
-> első dispatch előtt rebase-elve lett; onnantól `origin/main` a merge-ig nem
-> mozdult. A post-merge gate friss `main`-en önállóan újrafuttatva is zöld
-> (9/9). Implementer **Terra (Codex)**, egy `done` dispatch, javító kör
-> nélkül. `practice_generator` flagek változatlanul `false`, nulla hívó a
-> `lib/`-ben a kör saját fájljain kívül.
->
-> ## ✅ E07-R02 KÉSZ — Typed ID-k és stabil enum-kódok (2026-08-15, retroaktívan rögzítve)
->
-> SDD Ch8 Kör 2: `domain/id/planner_ids.dart` (hat típusos ID —
-> `PlanId`/`DayId`/`BlockId`/`GoalId`/`RevisionId`/`OutcomeId` —, mindegyik
-> önálló `final class`, tehát a kereszt-típusú behelyettesítés fordítási
-> hiba), `domain/model/plan_enums.dart` (öt stabil kódú enum-család:
-> `PlanStatus`/`GenerationMode`/`BlockKind`/`ValidationSeverity`/
-> `CandidateSource`, fail-loud `fromCode`). ADR 0257.
->
-> Correctness review **APPROVED** (0 nyitott lelet) — ez a kör EGY javító
-> kört kapott: az első review 2 MAJOR-t talált (a típusos ID-knek nem volt
-> JSON round-trip szerződése; hiányzott az injektált ID-generálási seam), a
-> `sonnet-impl` javító kör mindkettőt bezárta scope-tágítás nélkül
-> (`toJson`/`fromJson`/`generate(String Function())` mind a hat ID-n, a
-> validáció a rendes konstruktoron át fut), majd a reviewer friss izolált
-> klónban a TELJES gate-et (format, analyze, 60 ID-teszt, 25 enum-teszt,
-> architektúra, secrets, l10n) újra zöldre mérte. Az A6 valódi-sértés próba
-> (az ismeretlen-kód hiba lecserélése csendes `values.first` fallback-re) az
-> öt enum-család mindegyikén pirosra váltott, majd vissza lett állítva.
->
-> Exact-SHA `8c6d13c0`: Full Gate
-> [31898125573](https://github.com/wolfcasaba/strumsight/actions/runs/31898125573)
-> + Router CI [31898243627](https://github.com/wolfcasaba/strumsight/actions/runs/31898243627)
-> mindkettő success; squash-merge PR
-> [#269](https://github.com/wolfcasaba/strumsight/pull/269), `5bb4f7d9`.
-> Implementer **Claude Sonnet 5 (`sonnet-impl`)**, egy javító kör. Review:
-> [`docs/reviews/e07-r02-review.md`](docs/reviews/e07-r02-review.md).
-
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -146,9 +65,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-15 (E07-R03 zárása): az E07-R01 és az E99-R13 banner (utóbbi a
-> saját self-heal jegyzeteivel együtt) archiválva; a fejlécben az E07-R03 és
-> a retroaktívan pótolt E07-R02 banner marad.
+> 2026-08-15 (E07-R06 zárása): az E07-R05, a [HEAL E07-R04/H-NOSIGNAL]
+> önjavító jegyzet (a hozzá tartozó E07-R04 tartalmi összefoglalóval együtt),
+> az E07-R03 és az E07-R02 banner archiválva; a fejlécben az E07-R06 és a
+> E14-R01 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -309,9 +229,22 @@
   napi elérhetőség —, `domain/model/learner_constraints.dart` — hard/soft
   korlátok, a keménység a kategóriától független mező —,
   `domain/service/request_validator.dart` — pure konfliktus-detektor —,
-  [ADR 0258](docs/adr/0258-hard-and-soft-planning-constraints.md)) kész.
-  **Mindkét flag `false` marad minden környezetben**, nulla
-  `lib/features/practice_generator/` hívó a domain rétegen kívül — mindhárom
+  [ADR 0258](docs/adr/0258-hard-and-soft-planning-constraints.md)),
+  **E07-R04** (`PracticeGenerationRequest` verziózás + draft persistence,
+  [ADR 0259](docs/adr/0259-generation-request-versioning-and-draft-isolation.md)),
+  **E07-R05** (`SkillEvidence` normalizálás — csak származtatott mérőszám,
+  provenance és strukturált discomfort-kategória, a self-report szabad
+  szövege a repository előtt eldobódik —, evidence repository outcome-ID
+  dedup + inkluzív expiry + bounded query,
+  [ADR 0260](docs/adr/0260-skill-evidence-privacy-and-deduplication.md)) és
+  **E07-R06** (`domain/model/skill_estimate.dart` — explicit `unknown`
+  állapot, sosem `0.0` default —, `domain/policy/evidence_weight_policy.dart`
+  — explicit bounded-influence cap —, `application/service/
+  skill_estimate_reducer.dart` — determinisztikus, konfliktus-tudatos
+  reducer, a discomfort külön csatornán fut —,
+  [ADR 0261](docs/adr/0261-skill-estimate-bounded-influence-and-unknown-state.md))
+  kész. **Mindkét flag `false` marad minden környezetben**, nulla
+  `lib/features/practice_generator/` hívó a domain rétegen kívül — mind a hat
   kör kizárólag a határokat és a típusos domaint rögzítette. SDD forrás:
   [`docs/sdd/08-epic-07-ai-practice-generator.md`](docs/sdd/08-epic-07-ai-practice-generator.md).
   A generátor a legacy Learn/Progress/Songs/Analyze adaptereken keresztül lát
@@ -914,6 +847,18 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-15):** `main` @ `d1f36c8c` — E07-R06 SkillEstimate
+reducer és konfliktuskezelés, PR
+[#276](https://github.com/wolfcasaba/strumsight/pull/276), squash-merge.
+Exact-SHA `698ceccb`: Full Gate
+[31913532960](https://github.com/wolfcasaba/strumsight/actions/runs/31913532960)
++ Router CI [31913526737](https://github.com/wolfcasaba/strumsight/actions/runs/31913526737)
+mindkettő success. A branch egy örökölt (jelzés nélkül megszakadt) session
+után `main`-től eggyel lemaradva állt (`817ea579`, E13 queue-engine mező
+javítás — a kör `allowed_paths`-ától diszjunkt fájl); konfliktusmentesen
+rebase-elve és `safe-force-push.sh`-sal pusholva lett, `origin/main` a
+rebase utáni CI-újradispatch és a merge között nem mozdult.
+
 **Aktuális állapot (2026-08-15):** `main` @ `fc494ef6` — E14-R01 Recognition
 Accuracy & Useful UI Recovery kickoff, PR
 [#275](https://github.com/wolfcasaba/strumsight/pull/275), squash-merge.
@@ -1239,6 +1184,26 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R06 — SkillEstimate reducer és konfliktuskezelés** (PR
+[#276](https://github.com/wolfcasaba/strumsight/pull/276), squash `d1f36c8c`,
+[ADR 0261](docs/adr/0261-skill-estimate-bounded-influence-and-unknown-state.md)).
+Determinisztikus, bounded-influence reducer: az `unknown` állapot explicit
+(`level=null`, sosem `0.0`), egyetlen evidence hatása felülről korlátozott
+(`singleEvidenceInfluenceCap`), konfliktus magas bizonytalanságot ad (nem
+átlagot), a discomfort külön csatornán fut, sosem a teljesítmény-értékben.
+Két MAJOR review-lelet javítva (időben szétváló, valódi javulás ne
+minősüljön konfliktusnak; egyező időpontú evidence trendje ne az
+outcome-ID sorrendjéből jöjjön) — mindkettő időbélyeg-bucketelt
+konfliktus-detektálással zárva, regressziós tesztekkel igazolva.
+Correctness review APPROVED, kötelező (`risk="high"`) security review PASS
+(1 non-blocking MINOR egy jövőbeli fogyasztónak). Egy örökölt (korábbi,
+jelzés nélkül megszakadt) session hagyta implementálva + review-zva +
+javítva + jóváhagyva, nyitott PR-ral; ez a session örökölte, egy közbeeső
+`main`-commit (E13 queue-engine mező javítás, diszjunkt fájl) miatt
+konfliktusmentesen rebase-elt, `safe-force-push.sh`-sal pusholt és
+CI-t újradispatch-elt. Exact-SHA Full Gate + Router CI mindkettő zöld;
+post-merge gate friss `main`-en is zöld. Implementer Terra, egy javító kör.
 
 **E14-R01 — Recognition recovery kickoff és release guard** (PR
 [#275](https://github.com/wolfcasaba/strumsight/pull/275), squash `fc494ef6`,
@@ -1705,11 +1670,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R06** (Chapter 8, Kör 6 — SkillEstimate
-reducer és konfliktuskezelés,
-[`e07-r06-skill-estimate-reducer.md`](docs/rounds/e07-r06-skill-estimate-reducer.md)).
-Az E07-R05 evidence-contractjaihoz kell mérni; a practice-generator flagek
-változatlanul `false` maradnak.
+**A soron következő SDD-lépés: E07-R07** (Chapter 8, Kör 7 — Legacy Learn és
+Progress evidence adapterek,
+[`e07-r07-legacy-evidence-adapters.md`](docs/rounds/e07-r07-legacy-evidence-adapters.md),
+brief-státusz PREPARED). Előfeltétel `E07-R06` merge-elve (**kész**). A brief
+pre-flightja kötelezően méri újra a TÉNYLEGES `lib/features/learn/` és
+`lib/features/progress/` mezőneveket indítás előtt; a practice-generator
+flagek változatlanul `false` maradnak.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"
