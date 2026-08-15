@@ -7,26 +7,42 @@
 > publishable `AnalysisDocument` and runs the deterministic insight rules on
 > the exact published instance, 18→20 stages, while the runner stays
 > fail-closed. Next named step is GOV-30c-5 — the runner-boundary audio path
-> — brief written (ADR 0254) and self-healed once (H3 `allowed_paths` gap,
-> see below), first implementer dispatch pending. See §6.)**
+> — brief written (ADR 0254), self-healed TWICE (H3 `allowed_paths` gap, then
+> an unrelated pipeline-infra H-NOSIGNAL — see below), and has substantial
+> self-reported-but-NOT-independently-verified implementer progress waiting
+> in a committed worktree branch. See §6.)**
 >
-> **E99-R13 H3 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra fix).**
-> Az első dispatch (`sonnet-impl`) H3-mal megállt: a diffje egy, az ADR 0254
-> §5.1 `AnalysisRunner.start` szignatúra-váltása (`AnalysisDocument` →
-> `AnalysisRunRequest`) miatt KÉNYSZERŰEN módosítandó, de az
-> `allowed_paths`-ból hiányzó harmadik teszt-oldali fake-et is érintette
-> (`analysis_controller_test.dart` `_QueueRunner`-je — repó-szinten HÁROM
-> fájl `implements AnalysisRunner`-t, a brief csak kettőt sorolt fel). A
-> brief `allowed_paths`/§4/§7 mostantól mindhárom fake-et felsorolja, és a
-> korábbi, nemlétező `analysis_isolate_runner_test.dart`-ra mutató
-> hivatkozást is a valódi `analysis_cancellation_test.dart`-ra cseréli (a
-> megállt kör saját, dispatch előtti pre-flightja ezt már megtalálta,
-> uncommitted). Regressziós teszt: `tools/tests/test_e99_r13_runner_scope.py`
-> (RED az eredeti brieffel, GREEN a javítottal). Lecke: `docs/LESSONS.md`
-> **L277**. A megállt kör félkész munkapéldánya
-> (`/home/ubuntu/ss-sonnet-impl-e99-r13`) nem push-olt, tartalmi munkáját ez
-> a self-heal NEM vitte tovább — E99-R13 friss dispatch-ra vár a javított
-> brieffel.
+> **E99-R13 H-NOSIGNAL self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra
+> fix, 2. önjavítás ugyanezen a körön).** A 10:20:06-kor indult Terra
+> orchesztrátor-session (`codex exec`) 11:03:26-kor jelzésfájl nélkül kilépett
+> (a pane visszaesett az üres bash-promptra); a driver csak a 20 perces
+> log-elakadás-őrnél, 11:23:38-kor ismerte fel — a Codex/Terra fallback-ágnak
+> nem volt pane-process-halál-ellenőrzése (a Claude-ágnak, kvóta-célra, már
+> van). Javítás: `tools/round-pipeline.sh` `run_tmux_session`-je motorfüggetlen
+> gyors-kilépést kap, ha a hívó megadja a várt process-comm-mintát (8.
+> paraméter); a Codex/Terra fallback-ág mostantól `CODEX_PROCESS_COMM_PATTERN`
+> ellen figyel. Regressziós teszt:
+> `tools/tests/test_round_pipeline_fallback_engine_exit.py` (RED a fix előtt —
+> `unbound variable` a hiányzó mintára —, GREEN utána; 2. eset negatív
+> kontroll az élő process ellen). Lecke: `docs/LESSONS.md` **L278**.
+>
+> **A megállt kör tartalmi állapota (FONTOS a következő dispatch-nak).** A
+> `/home/ubuntu/ss-sonnet-impl-e99-r13` munkapéldány (branch
+> `sonnet-impl/e99-r13-gov-30c-5-runner-audio-path-and-wiring`, HEAD
+> `7289181b`, `dirty_files=0`, nem push-olt) a H3-heal utáni dispatch alatt
+> VALÓS előrehaladást ért el: a review mindkét MAJOR leletét (F1 — a V2
+> DSP-lánc izolátumba vitele; F3 — az izolátum progress-eventek runId-jának
+> a külső handle-re térképezése) az implementer FIXED-re írta a
+> `docs/reviews/e99-r13-review.md`-ben, saját teszttel és — állítása
+> szerint — zöld `tools/round-gate.sh`-sal, mindkettő commitolva. A második
+> (F3) javító implementer-futás UGYANAKKOR `.codex-round-status`
+> `status=unknown`-t hagyott (`exit 0`, de lezáró jelzés nélkül — ugyanaz a
+> mintázat, ami az ORCHESZTRÁTOR sessiont is levitte, lásd fent). **Ez az
+> állítás implementer-önjelentés, FÜGGETLENÜL NEM újraellenőrzött** — a
+> következő dispatch-nak a §0.2 örökség-ellenőrzés szerint ezt a branch-et
+> kell felhasználnia (nem tisztán újrakezdeni), de a review-t és a gate-et
+> a normál protokoll szerint FÜGGETLENÜL kell megismételnie, mielőtt
+> CI-t dispatch-elne rá.
 >
 > ## ✅ E99-R12 KÉSZ — GOV-30c-4 document assembly and insights (2026-08-15)
 >

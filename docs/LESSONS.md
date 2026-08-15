@@ -10333,3 +10333,69 @@ regressziós minta: `tools/tests/test_e99_r13_runner_scope.py` — géppel
 pinneli a mért implementor-halmazt, és ellenőrzi, hogy mindegyik szerepel az
 `allowed_paths`-ban, hogy egy új implementor megjelenése tesztbukásként
 látsszon, ne egy újabb H3 haltként.
+
+## L278 — A Codex/Terra fallback-ágnak nem volt pane-process-halál-ellenőrzése: ha a `codex exec` jelzésfájl nélkül, magától kilép, a driver csak a teljes 20 perces elakadás-őrnél vette észre (E99-R13, H-NOSIGNAL önjavítás, 2026-08-15)
+
+**Mit mértünk.** Az E99-R13 orchesztrátor-sessionjét (Terra, `codex exec` a
+fallback-ágon, `session-E99-R13-20260815T102006-fallback.log`) a driver
+11:23:38-kor H-NOSIGNAL-lal állította le. A session-napló utolsó módosítása
+(`stat -c %y`) 11:03:26 volt — a `codex exec` process EKKOR lépett ki (a
+pane visszaesett az üres bash-promptra, a fájl onnantól nem mozdult). A
+driver csak a `stall_seconds` (20 perc) elteltével, 11:23:38-kor ismerte fel
+a hiányzó jelzést: **~20 perc tétlen várakozás egy már holt folyamatra**,
+miközben a láncot 5 percenként lezáró cron-firing négyszer futott le hiába
+("zár foglalt"). A session-napló szerint a folyamat egy második javító
+implementer-kör diagnózisaként több egymást követő review/security-doksi
+verziót olvasott vissza `git log`-szerű, drága hívásokkal (utolsó mért
+állapot: „tokens used 452,254"), majd a `codex exec` turn véget ért,
+MIELŐTT a kötelező záró lépését (`.pipeline/round-status` írása) végrehajtotta
+volna — a nyitott BLOCKER-lelet (F3) és a hiányzó implementer-jelzés miatt
+korrekt „nem mergeelhető" következtetésig eljutott, de a jelzésfájlt már nem
+írta meg.
+
+**Gyökérok.** A `run_tmux_session` (`tools/round-pipeline.sh`) elsődleges
+Claude-ágának MÁR van pane-process-halál-ellenőrzése (`ps -t <pane_tty> -o
+comm=` a `CLAUDE_PROCESS_COMM_PATTERN` ellen, [[L174]] utáni kiegészítés) —
+de ez KIZÁRÓLAG `watch_claude_limit=1` mellett fut, és kifejezetten
+kvóta-célra épült (a folyamat hiánya ⇒ „a Claude kvótája kimerült, a
+fallback veszi át"). A Codex/Terra fallback-ág ezt a paramétert MINDIG
+`0`-val hívja (a fallbacknak nincs további fallbackja), ezért ott a
+folyamat-halál detektálásának egyetlen útja a `has-session` (a TELJES
+tmux-session halála — ezt nem fedi az eset, mert a pane mögötti üres `bash`
+shell életben marad) és a 20 perces log-mtime elakadás-őr maradt. Ez
+pontosan az a rés, amit [[L174]] (E05-R17) a Claude-ágra már befoltozott —
+a Codex/Terra ág soha nem kapta meg az analóg védelmet, mert eddig a
+gyakorlatban vagy a jelzésfájl, vagy (ritkán) a teljes tmux-halál zárta a
+hurkot.
+
+**Javítás.** `tools/round-pipeline.sh`: új `CODEX_PROCESS_COMM_PATTERN='^codex$'`
+(mérve `/proc/<pid>/comm` mintavétellel egy valódi `codex exec` futáson —
+natív ELF bináris ezen a boxon, nem node-wrapper, nincs a Claude-nál mért
+`.exe`-szórás). A `run_tmux_session` új, nyolcadik, opcionális
+`fallback_process_pattern` paramétert kap; ha nem üres, a Claude-ág
+mintájára — de attól függetlenül, KVÓTA-jelentés és zárolás nélkül — minden
+poll-körben megnézi, fut-e még ilyen nevű process a pane tty-jén; ha nem,
+azonnal kilép a várakozásból ahelyett, hogy kivárná a teljes
+`stall_seconds`-ot. A Claude-hívás nem ad 8. argumentumot, ezért ott a
+viselkedés bit-re változatlan. A hamis pozitív ellen mérve: egy tmux-panen
+belüli szülő+gyerek-processz-pár esetén a szülő a `ps -t <tty>` listázásban
+a GYEREK FUTÁSA ALATT is szerepel, amíg maga a szülő nem lép ki — egy
+tool-hívás közbeni ideiglenes gyerek-processz (pl. egy `bash` al-hívás)
+tehát NEM okoz hamis „a motor kilépett" jelzést, amíg maga a `codex`/`claude`
+process életben van.
+
+**Hogyan alkalmazd.** Ha egy jövőbeli engine-ág (új harness, új fallback)
+`run_tmux_session`-t hív, és van értelme a gyors kilépésnek, adja át a
+saját, MÉRT (nem feltételezett) process-comm-mintáját 8. argumentumként — a
+minta hiánya biztonságosan visszaesik a régi, csak-stall-őrös
+viselkedésre. Regressziós teszt:
+`tools/tests/test_round_pipeline_fallback_engine_exit.py` — két eset: (1) a
+motor-process eltűnt a pane-ről → gyors kilépés a stall-őr ELŐTT; (2) a
+motor-process még fut → a gyorsító NEM szakítja meg a várakozást (negatív
+kontroll a hamis pozitív ellen). Rokon [[L174]] (az eredeti stall-guard
+bevezetése) és [[L258]] (a legutóbbi H-NOSIGNAL, más gyökérokkal: ott egy
+védtelen `gh` hívás fagyasztotta le a sessiont MAGÁBAN a hívásban; itt a
+folyamat rendesen kilépett, csak a driver vette észre lassan). Ez a javítás
+a DETEKTÁLÁS sebességét javítja, nem azt, hogy egy orchesztrátor-turn miért
+fogy ki a záró jelzése előtt — az utóbbi továbbra is a self-heal (jelen
+kör) és a driver H-NOSIGNAL ága által kezelt, elfogadott kockázat.
