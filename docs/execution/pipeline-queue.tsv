@@ -321,3 +321,21 @@ E07-R27	docs/rounds/e07-r27-missed-day-and-pause.md	codex	0269	pending
 E07-R28	docs/rounds/e07-r28-planner-assist-gateway.md	codex	0270	pending
 E07-R29	docs/rounds/e07-r29-accessibility-privacy-hardening.md	minimax	nincs	pending
 E07-R30	docs/rounds/e07-r30-evaluation-and-epic-closure.md	codex	nincs	pending
+#
+# ===== 2. FEJLESZTÉSI SÁV — Chapter 14 (Recognition Recovery) =====
+# User-döntés 2026-08-15: az Epic 7 MELLETT fusson egy második sáv, ami előbb a
+# felismerés IGAZMONDÁSÁT állítja helyre. Mért indok (Ch14 audit a SZÁLLÍTOTT
+# appról): chord 67,1%, onset F1 67,4%, direction 80,7% — és a Live UI külön
+# confidence/uncertainty/signal-quality nélkül mutat magabiztos kártyákat.
+# Alapszabály: UNKNOWN > CONFIDENTLY WRONG (ADR 0271).
+#
+# Az `E14` a FEJEZETET jelöli, nem epicet (az epicek E01-E10) — mint az E99.
+# A párhuzam NEM új pipeline: PIPELINE_SLOTS=2 ugyanezen a soron, és a
+# tools/round-slots.py diszjunktság-ellenőrzése (ADR 0171 §1) garantálja, hogy
+# két egyszerre futó kör ne érjen ugyanahhoz a fájlhoz. A box RAM-fedezete
+# MÉRVE elbírja: `--effective-slots 2` → 2.
+#
+# A Ch14 első blokkja R01-R13 (mérési alap + truthfulness). A Ch13 (UI/UX, 36
+# kör) UTÁNA jön — user-döntés, mert a design-rendszer közben végig fennmaradna
+# az igazmondási hiba.
+E14-R01	docs/rounds/e14-r01-recovery-kickoff-and-release-guard.md	codex	0271	pending
