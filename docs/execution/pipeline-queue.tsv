@@ -302,3 +302,6 @@ E07-R08	docs/rounds/e07-r08-practice-catalog-adapter.md	minimax	0262	pending
 E07-R09	docs/rounds/e07-r09-exercise-prescription.md	minimax	nincs	pending
 E07-R10	docs/rounds/e07-r10-adaptive-practice-plan-domain.md	codex	nincs	pending
 E07-R11	docs/rounds/e07-r11-plan-validator-and-repair.md	codex	0263	pending
+E07-R12	docs/rounds/e07-r12-skill-priority-engine.md	codex	0264	pending
+E07-R13	docs/rounds/e07-r13-candidate-selector.md	codex	nincs	pending
+E07-R14	docs/rounds/e07-r14-time-budget-allocator.md	codex	nincs	pending
