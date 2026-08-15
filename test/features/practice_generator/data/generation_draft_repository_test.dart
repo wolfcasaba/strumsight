@@ -86,6 +86,32 @@ void main() {
       },
     );
 
+    test('a persisted draft with a non-null, non-string goal.targetDate is a '
+        'controlled failure, not a silent data loss (F1 regression)', () async {
+      final store = InMemoryKeyValueStore();
+      final repository = GenerationDraftRepository(keyValueStore: store);
+      final json = const GenerationRequestSerializer().toJson(buildDraft());
+      json['goals'] = <Map<String, dynamic>>[
+        {
+          'id': 'goal-1',
+          'type': 'chordChanges',
+          'priority': 'primary',
+          'status': 'proposed',
+          'createdAt': '2026-08-01T00:00:00.000Z',
+          'targetDate': 42,
+        },
+      ];
+      await store.writeString(
+        GenerationDraftRepository.draftStorageKey,
+        jsonEncode(json),
+      );
+
+      final result = await repository.loadDraft();
+
+      expect(result.isFailure, isTrue);
+      expect(result.failureOrNull, isA<StorageFailure>());
+    });
+
     test(
       'saving or clearing a draft never touches the active-plan key (A7)',
       () async {

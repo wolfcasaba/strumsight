@@ -212,4 +212,74 @@ void main() {
       );
     });
   });
+
+  group(
+    'GenerationRequestSerializer malformed optional fields (A6, review F1)',
+    () {
+      test('a non-null, non-string goal.targetDate is a controlled rejection, '
+          'not a silent null (F1 regression)', () {
+        final json = _serializer.toJson(buildRequest());
+        final goals = json['goals'] as List<dynamic>;
+        final goal = Map<String, dynamic>.from(
+          goals.single as Map<String, dynamic>,
+        );
+        goal['targetDate'] = 42;
+        json['goals'] = [goal];
+
+        expect(
+          () => _serializer.fromJson(json),
+          throwsA(isA<GenerationRequestSerializerException>()),
+        );
+      });
+
+      test('a null goal.targetDate is still read as absent, not rejected', () {
+        final json = _serializer.toJson(buildRequest());
+        final goals = json['goals'] as List<dynamic>;
+        final goal = Map<String, dynamic>.from(
+          goals.single as Map<String, dynamic>,
+        );
+        goal['targetDate'] = null;
+        json['goals'] = [goal];
+
+        final decoded = _serializer.fromJson(json);
+        expect(decoded.goals.single.targetDate, isNull);
+      });
+
+      test('a non-null, non-map goal.metricTarget is a controlled rejection, '
+          'not a silent null', () {
+        final json = _serializer.toJson(buildRequest());
+        final goals = json['goals'] as List<dynamic>;
+        final goal = Map<String, dynamic>.from(
+          goals.single as Map<String, dynamic>,
+        );
+        goal['metricTarget'] = 'not-a-map';
+        json['goals'] = [goal];
+
+        expect(
+          () => _serializer.fromJson(json),
+          throwsA(isA<GenerationRequestSerializerException>()),
+        );
+      });
+
+      test('a non-null, non-string metricTarget.targetDate is a controlled '
+          'rejection, not a silent null', () {
+        final json = _serializer.toJson(buildRequest());
+        final goals = json['goals'] as List<dynamic>;
+        final goal = Map<String, dynamic>.from(
+          goals.single as Map<String, dynamic>,
+        );
+        final metricTarget = Map<String, dynamic>.from(
+          goal['metricTarget'] as Map<String, dynamic>,
+        );
+        metricTarget['targetDate'] = 42;
+        goal['metricTarget'] = metricTarget;
+        json['goals'] = [goal];
+
+        expect(
+          () => _serializer.fromJson(json),
+          throwsA(isA<GenerationRequestSerializerException>()),
+        );
+      });
+    },
+  );
 }

@@ -304,4 +304,55 @@ lib/features/practice_generator/domain/model/practice_generation_request.dart`
 Nincs eltérés és nincs ki nem futtatott helyi ellenőrzés. CI-dispatch, review
 és merge az orchestrátor feladata.
 
+### Javító kör 1 — F1 (`b9afd6c7` review, MAJOR)
+
+- **Hiba:** `_goalFromJson` a `targetDate` mezőt `targetDateRaw is String ?
+  _dateFromJson(targetDateRaw) : null` mintával dekódolta — egy hiányzó
+  (`null`) és egy hibás típusú, nem-`null` érték (pl. `42`) egyaránt csendes
+  `null`-ra képződött le, ahelyett hogy az utóbbi kontrollált
+  `GenerationRequestSerializerException`-t dobott volna. Ugyanez a minta
+  volt jelen a `metricTarget` (`is Map ? … : null`) és a beágyazott
+  `MetricTarget.targetDate` mezőknél is.
+- **Javítás:** két megosztott helper, `_optionalDateFromJson` és
+  `_optionalMetricTargetFromJson`, amely explicit módon különbözteti meg a
+  `null` (hiányzó, engedélyezett) esetet a nem-`null`, hibás típusú esettől
+  (kontrollált `GenerationRequestSerializerException`,
+  `goalsInvalid` kóddal, mezőnkénti `field` útvonallal:
+  `goals.targetDate`, `goals.metricTarget`,
+  `goals.metricTarget.targetDate`). Mindhárom hívási hely (`_goalFromJson`
+  kétszer, `_metricTargetFromJson` egyszer) erre a két helperre lett
+  átállítva. `GenerationDraftRepository.loadDraft` változatlanul
+  `Failure(StorageFailure)`-ré képezi le a kivételt (nem módosult).
+- **Tartós regressziós tesztek:** `generation_request_serializer_test.dart`
+  új `GenerationRequestSerializer malformed optional fields (A6, review F1)`
+  csoport — `goal.targetDate = 42` (kontrollált kivétel),
+  `goal.targetDate = null` (változatlanul elfogadott hiányzó érték),
+  `goal.metricTarget = 'not-a-map'` (kontrollált kivétel),
+  `metricTarget.targetDate = 42` (kontrollált kivétel).
+  `generation_draft_repository_test.dart` új teszt: egy `goal.targetDate =
+  42`-t tartalmazó, közvetlenül a store-ba írt (a szerializeren megkerülve
+  konstruált) JSON draft `loadDraft()`-ja `Failure(StorageFailure)`-t ad.
+  Mind a négy új serializer-teszt és az új repository-teszt a javítás előtt
+  a régi `is String ? … : null` / `is Map ? … : null` mintával elbukott
+  volna (a hibás típusú érték csendben `null`-ra képződött volna le, a
+  `expect(..., throwsA(...))` / `Failure(StorageFailure)` elvárás nem
+  teljesült volna) — ez a javító kör szándéka szerinti RED→GREEN bizonyíték.
+
+### Futtatott ellenőrzések — javító kör 1
+
+```text
+tools/round-gate.sh test/features/practice_generator/data/generation_request_serializer_test.dart test/features/practice_generator/data/generation_draft_repository_test.dart
+  format: 1513 fájl, 0 módosítás
+  analyze: No issues found
+  generation_request_serializer_test.dart: 13 passed (9 + 4 új F1-regresszió)
+  generation_draft_repository_test.dart: 9 passed (8 + 1 új F1-regresszió)
+  architecture: Architecture dependencies OK (12 allowlisted deviation(s))
+  secrets: Secret scan OK (2574 file(s), 0 finding(s))
+  l10n: L10n parity OK (en → hu, 1276 message(s))
+```
+
+Csak az engedélyezett négy fájl változott
+(`generation_request_serializer.dart`, a két célzott tesztfájl, ez a
+brief). Nincs eltérés a briefhez képest.
+
 ## 11. Review — a Claude tölti ki

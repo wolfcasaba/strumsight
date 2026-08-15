@@ -308,18 +308,42 @@ class GenerationRequestSerializer {
       priority: GoalPriority.fromCode(priorityCode),
       status: PracticeGoalStatus.fromCode(statusCode),
       createdAt: createdAt,
-      targetDate: targetDateRaw is String ? _dateFromJson(targetDateRaw) : null,
+      targetDate: _optionalDateFromJson(targetDateRaw, 'goals.targetDate'),
       skillIds: <String>[
         for (final entry in (json['skillIds'] as List?) ?? const <Object?>[])
           if (entry is String) entry,
       ],
       songReference: json['songReference'] as String?,
-      metricTarget: metricTargetRaw is Map
-          ? _metricTargetFromJson(_asMap(metricTargetRaw))
-          : null,
+      metricTarget: _optionalMetricTargetFromJson(metricTargetRaw),
       userNote: json['userNote'] as String?,
       normalizedTargetId: json['normalizedTargetId'] as String?,
     );
+  }
+
+  /// `null` means the field is absent; any other non-[String] value is a
+  /// controlled rejection, never a silent `null` (ADR 0259 §4).
+  LocalDate? _optionalDateFromJson(Object? raw, String field) {
+    if (raw == null) return null;
+    if (raw is! String) {
+      throw GenerationRequestSerializerException(
+        GenerationRequestSerializerErrorCode.goalsInvalid,
+        field: field,
+      );
+    }
+    return _dateFromJson(raw);
+  }
+
+  /// `null` means the field is absent; any other non-[Map] value is a
+  /// controlled rejection, never a silent `null` (ADR 0259 §4).
+  MetricTarget? _optionalMetricTargetFromJson(Object? raw) {
+    if (raw == null) return null;
+    if (raw is! Map) {
+      throw GenerationRequestSerializerException(
+        GenerationRequestSerializerErrorCode.goalsInvalid,
+        field: 'goals.metricTarget',
+      );
+    }
+    return _metricTargetFromJson(_asMap(raw));
   }
 
   Map<String, dynamic> _metricTargetToJson(MetricTarget target) =>
@@ -361,7 +385,10 @@ class GenerationRequestSerializer {
       measurementCapability: measurementCapability,
       minimumConfidence: minimumConfidence.toDouble(),
       minimumSampleCount: minimumSampleCount.round(),
-      targetDate: targetDateRaw is String ? _dateFromJson(targetDateRaw) : null,
+      targetDate: _optionalDateFromJson(
+        targetDateRaw,
+        'goals.metricTarget.targetDate',
+      ),
     );
   }
 
