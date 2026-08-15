@@ -47,7 +47,7 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
 - **Hatás:** `AnalysisController._onProgress` kizárólag az aktív handle `runId`-jával egyező eseményt fogad el (`analysis_controller.dart:109-120`); ezért minden valódi V2 progress-event eldobódik késői eredményként. Ez megsérti a változatlan `AnalysisRunHandle.progress` contractot.
 - **Kötelező javítás:** a szülő isolate runnerben a bejövő progress-eventeket a külső `runId`-ra kell újracsomagolni/térképezni, a phase és számláló-adatok változatlan megőrzésével. Adj regressziós tesztet, amely a handle és minden továbbított phase-event `runId` egyezését ellenőrzi.
 - **Ellenőrzés:** a brief teljes `tools/round-gate.sh` parancsa és az új regressziós teszt.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (f5129590) — az `AnalysisIsolateRunner._IsolateAnalysisRun` mostantól minden izolátumból beérkező `AnalysisProgressEvent`-et a saját (külső) `runId`-jára térképez (`_remapRunId`), a `phase`/`completedUnits`/`totalUnits` adatok érintetlenül maradnak. Új regressziós teszt (`v2_analysis_runner_test.dart`, „F3 — every forwarded progress event carries the handle's runId, not the isolate-internal pipeline runId") ellenőrzi, hogy minden továbbított esemény `runId`-ja a handle `runId`-jával egyezik. A brief §7 négy célzott teszt-fájlos `tools/round-gate.sh` parancsa zölden lefutott (format/analyze/mind a négy teszt/architecture/secrets/l10n).
 
 ## Gate-bizonyíték ellenőrzése
 
