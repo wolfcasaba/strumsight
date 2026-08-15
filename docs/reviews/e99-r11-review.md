@@ -1,13 +1,13 @@
 # E99-R11 — Review
 
-Brief: `docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md`  
-Diff: `d4341eb..f1afd6e`  
-Reviewer: Terra (független a `sonnet-impl` implementertől) · Dátum: 2026-08-15  
-Verdikt: **CHANGES REQUIRED**
+Brief: `docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md`
+Diff: `d4341eb..39068df`
+Reviewer: Terra (független a `sonnet-impl` implementertől) · Dátum: 2026-08-15
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 Az opcionális, stage-id alapú fázistérkép a régi pozicionális utat és a
 kilences sapkát változatlanul hagyja, míg a teljes 18-stage kompozíció csak
@@ -51,9 +51,11 @@ eredménye: **OK**, 6 módosított útvonal, 0 listán kívüli és 0 generált/
 - **Kötelező javítás:** konstrukciókor defenzív immutable másolat, továbbá
   regressziós teszt, amely bizonyítja, hogy a hívó későbbi map-módosítása nem
   változtatja a pipeline futását.
-- **Státusz:** OPEN — javító kör szükséges.
+- **Státusz:** FIXED (`39068df`) — `Map.unmodifiable` snapshot készül a
+  konstrukciókor. Friss, originről klónozott review-ban a három célteszt
+  **22/22 passed**; köztük az F1 regressziós cella.
 
 ## Merge-döntés
 
-Az F1 MAJOR nyitott; merge tilos. A high-risk security review önállóan ugyanazt
-a mutálhatósági problémát reprodukálta.
+Az F1 MAJOR lezárva, nincs nyitott BLOCKER vagy MAJOR. A high-risk security
+review újrafuttatása és az exact-SHA CI még külön merge-feltétel.
