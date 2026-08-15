@@ -10511,3 +10511,18 @@ hiányzó kör idegen marad) bizonyítja, hogy az őr nem vesztette el a
 tényleges védelmi célját. Rokon: [[L279]] (ugyanennek a halt-nak a másik,
 elsődleges fele), [[ADR 0112]] Módosítás-blokk (2026-08-15, ugyanez a
 mérés normatív rögzítése).
+
+## L281 — A review-jelentés commitja új exact SHA: ha a Router CI path-szűrője nem figyeli a review-útvonalat, explicit dispatch kell (E99-R13, 2026-08-15)
+
+**Mit mértünk.** Az E99-R13 rebase utáni független review-jelentése a
+`5b4ec293` commitot hozta létre. A Full Gate ezen az exact SHA-n sikeresen
+lefutott, de a push-triggerelt Router CI csak az előző `ef6f5d41` SHA-hoz
+kapcsolódott: a változás kizárólag `docs/reviews/**` alatt volt, ami nem
+illeszkedik a Router CI automatikus trigger-útvonalaira. A korábbi zöld run
+ezért nem volt merge-evidencia az új HEAD-hez.
+
+**Hogyan alkalmazd.** A review-artefaktum commitja UTÁN mindig hasonlítsd össze
+a Router CI `headSha`-ját a merge-elni kívánt HEAD-del. Eltéréskor ne fogadd
+el a korábbi zöldet, és ne várj automatikus futásra: `gh workflow run
+router-ci.yml --ref <branch>`, majd `tools/wait-for-ci.sh <run-id>`. E99-R13
+ezt a `31887571675` success runnal igazolta a `5b4ec293` SHA-n.

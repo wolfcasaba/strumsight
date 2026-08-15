@@ -8465,3 +8465,21 @@ Lecke: `docs/LESSONS.md` **L274** (a stage-lánc kompozíciós BIZONYÍTÁSA és
 lánc TÉNYLEGES ÖSSZESZERELÉSE két külön döntés — az elsőt egy megosztott
 motor rejtett kapacitás-korlátja nem kell hogy megkösse, ha a motor
 generikus végrehajtási logikáját már külön teszt fedi).
+
+## ✅ E99-R13 / GOV-30c-5 MERGED — runner-boundary audio path and V2 wiring (2026-08-15)
+
+Az ADR 0254 szerinti `AnalysisRunRequest` a dokumentum-seedet és a kizárólag
+memóriabeli PCM-bemenetet szétválasztja. A `V2AnalysisRunner` a teljes 20-stage
+láncot izolátumban futtatja, a progress-eventeket a külső handle `runId`-jára
+térképezi, a terminal és cancel útvonalakon pedig elengedi a nyers PCM-et. A
+shadow út a V1 mintát pontosan továbbadja; a kilenc rollout flag OFF maradt.
+
+A correctness review három MAJOR-t zárt regressziós tesztekkel: F1 (a lánc
+ne a hívó izolátumban fusson), F3 (a progress `runId` szerződés), F4 (a már
+lezárt handle ne tartson PCM-et). A security review PASS. A branch a healed
+`main`-re konfliktusmentesen rebase-elt; scope-audit és független `/tmp`
+gate zöld. Exact-SHA `5b4ec293`: Full Gate
+[31886930654](https://github.com/wolfcasaba/strumsight/actions/runs/31886930654)
++ Router CI [31887571675](https://github.com/wolfcasaba/strumsight/actions/runs/31887571675)
+success. PR [#266](https://github.com/wolfcasaba/strumsight/pull/266)
+squash-merge `7ee451f7`; post-merge gate zöld. Lecke: **L281**.

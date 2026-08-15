@@ -3,15 +3,11 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (E99-R12 GOV-30c-4 merged, PR #263; the V2 chain now assembles a
-> publishable `AnalysisDocument` and runs the deterministic insight rules on
-> the exact published instance, 18→20 stages, while the runner stays
-> fail-closed. Next named step is GOV-30c-5 — the runner-boundary audio path
-> — brief written (ADR 0254), self-healed THREE TIMES (H3 `allowed_paths`
-> gap, an unrelated pipeline-infra H-NOSIGNAL, then a second H3 on Router
-> CI — see below), and has substantial, review-APPROVED implementer
-> progress waiting in an open PR (#266), still needing a rebase onto the
-> healed `main` before its own CI is green. See §6.)**
+> (E99-R13 GOV-30c-5 merged, PR #266; the V2 runner now keeps PCM solely in
+> memory, executes the 20-stage chain off the caller isolate, preserves
+> cancellation/progress contracts, and releases raw PCM on every terminal
+> path. All flags remain OFF. GOV-30c is complete; no next round is started
+> by this session.)**
 >
 > **E99-R13 second H3 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra
 > fix, 3. önjavítás ugyanezen a körön, 2026-08-15).** A push-olt,
@@ -58,7 +54,7 @@
 > `unbound variable` a hiányzó mintára —, GREEN utána; 2. eset negatív
 > kontroll az élő process ellen). Lecke: `docs/LESSONS.md` **L278**.
 >
-> **A megállt kör tartalmi állapota (FONTOS a következő dispatch-nak).** A
+> **A korábbi megállt kör tartalmi állapota (archív).** A
 > `/home/ubuntu/ss-sonnet-impl-e99-r13` munkapéldány (branch
 > `sonnet-impl/e99-r13-gov-30c-5-runner-audio-path-and-wiring`, HEAD
 > `b64fd0ec`, `dirty_files=0`) NYITOTT, REVIEW-APPROVED PR-ban áll (**PR
@@ -73,11 +69,28 @@
 > fent), de a PR #266 branch-e MAGA még NINCS rebase-elve a healed `main`-re
 > — a branch saját Router CI-ja a fixek nélkül továbbra is piros lenne. A
 > KÖVETKEZŐ dispatch-nak a §0.2 örökség-ellenőrzés szerint ezt a branch-et
-> kell felhasználnia (nem tisztán újrakezdeni): rebase (vagy `git merge
-> --no-ff origin/main`, ha a branch már publikus és a rebase force-push-t
-> igényelne, ld. ADR 0112 H8-módosítás) a healed `main`-re, majd a review-t
-> és a gate-et a normál protokoll szerint FÜGGETLENÜL kell megismételnie,
-> mielőtt bármilyen CI-t dispatch-elne rá.
+> használta fel: a branch konfliktusmentesen rebase-elt a healed `main`-re,
+> majd a review, a helyi gate és az exact-SHA CI függetlenül megismétlődött,
+> mielőtt a PR merge-elődött.
+
+> ## ✅ E99-R13 KÉSZ — GOV-30c-5 runner-boundary audio path and wiring (2026-08-15)
+>
+> Az ADR 0254 `AnalysisRunRequest`-je elkülöníti a perzisztálható
+> `AnalysisDocument` seedet és a kizárólag memóriabeli `ValidatedPcmAnalysisInput`
+> adatot. A valódi `V2AnalysisRunner` izolátumban futtatja a teljes 20-stage
+> láncot, a progress-eventeket a külső handle `runId`-jára térképezi, és minden
+> completion/cancel/spawn-verseny útvonalon elengedi a nyers PCM-referenciát.
+> A shadow út a V1-nek adott pontos mintát továbbadja a V2 kérésnek; a kilenc
+> flag változatlanul OFF maradt.
+>
+> Correctness review **APPROVED**, security review **PASS**; az F1 (UI-isolate
+> lánc), F3 (progress `runId`) és F4 (PCM-élettartam) MAJOR leletek regressziós
+> tesztekkel zárultak. Exact-SHA `5b4ec293`: Full Gate
+> [31886930654](https://github.com/wolfcasaba/strumsight/actions/runs/31886930654)
+> + Router CI [31887571675](https://github.com/wolfcasaba/strumsight/actions/runs/31887571675)
+> success; squash-merge PR [#266](https://github.com/wolfcasaba/strumsight/pull/266),
+> `7ee451f7`. A post-merge gate friss `main`-en zöld. Implementer
+> `sonnet-impl`; a kör három előzetes self-heal után zárult.
 >
 > ## ✅ E99-R12 KÉSZ — GOV-30c-4 document assembly and insights (2026-08-15)
 >
