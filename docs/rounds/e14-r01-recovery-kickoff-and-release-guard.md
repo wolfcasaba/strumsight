@@ -283,4 +283,20 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 - A teljes Flutter suite, randomizált property gate és CI release evidence nem
   futott lokálisan: ezek a kör utáni CI-dispatch és orchestrátori kapu részei.
 
+### 10.1 Javítás a review után (Claude orchestrátor, 2026-08-15, `234f84a7`)
+
+A független `security-reviewer` review (`docs/reviews/e14-r01-security.md`,
+F1, MINOR) mérve talált egy hibás forrás-hivatkozást: a
+`docs/eval/recognition-release-guard.md` mindhárom mért számot (chord 67,1%,
+onset F1 67,4%, direction 80,7%) a 82-felvételes DSP-baseline korpuszhoz
+kötötte, de a direction 80,7% valójában a live 3-osztályos CRNN külön
+held-out eval foldjából való (`docs/handoff-archive.md` round 175), ahogy azt
+az ADR 0271 saját táblázata helyesen külön sorban jelöli
+(„direction accuracy (true-strum eval eseményeken)"). A `234f84a7` commit a
+doc szövegét pontosította — két külön forrás, mindegyik a saját méréséhez
+kötve —, hogy egy jövőbeli evaluation report/baseline manifest ne keverje
+össze a két korpuszt egyetlen hash alá. A célzott gate (`tools/round-gate.sh
+test/app/config/feature_flags_test.dart`) a javítás után újra lefuttatva
+változatlanul zöld (a diff docs-only, Dart-kódot nem érint).
+
 ## 11. Review — a Claude tölti ki
