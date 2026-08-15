@@ -6,7 +6,7 @@ void main() {
   const mappingTable = LegacyMappingTable(
     version: 2,
     entries: <LegacySkillMapping>[
-      LegacySkillMapping(lessonId: 'unused-here', skillIds: <String>['x']),
+      LegacySkillMapping(lessonId: 'unused-here', skillId: 'x'),
     ],
   );
 

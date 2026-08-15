@@ -21,9 +21,9 @@ void main() {
     entries: <LegacySkillMapping>[
       LegacySkillMapping(
         lessonId: 'g-major-first-strum',
-        skillIds: <String>['chord.gMajor'],
+        skillId: 'chord.gMajor',
       ),
-      LegacySkillMapping(lessonId: 'no-signal-lesson', skillIds: <String>[]),
+      LegacySkillMapping(lessonId: 'no-signal-lesson', skillId: null),
     ],
   );
 
@@ -149,6 +149,65 @@ void main() {
         );
       },
     );
+  });
+
+  group('LegacyLessonCatalogAdapter — builtIn mapping (review F1)', () {
+    test('a real, shipping Lessons.all built-in lesson produces evidence', () {
+      // Guards against the review F1 regression: LegacyMappingTable.builtIn
+      // must reference actual `Lessons.all` ids, not plausible-looking
+      // placeholders — otherwise every shipping lesson is `unmappedLesson`
+      // and Learn evidence is never produced in production.
+      final shippingLesson = Lessons.all.firstWhere(
+        (lesson) =>
+            LegacyMappingTable.builtIn.lookup(lesson.id).found &&
+            LegacyMappingTable.builtIn.lookup(lesson.id).skillId != null,
+        orElse: () => throw StateError(
+          'no Lessons.all entry is mapped by LegacyMappingTable.builtIn',
+        ),
+      );
+      final adapter = const LegacyLessonCatalogAdapter();
+
+      final result = adapter.readEvidence(<LegacyLessonOutcome>[
+        LegacyLessonOutcome(
+          lesson: shippingLesson,
+          sourceOutcomeId: OutcomeId('builtin-outcome-1'),
+          measuredAt: DateTime.utc(2026, 8, 10),
+          capturedAt: DateTime.utc(2026, 8, 15),
+          performance: PerformanceEvidence(
+            metricCode: 'chordChangeAccuracy',
+            value: 0.75,
+          ),
+        ),
+      ]);
+
+      expect(result.warnings, isEmpty);
+      expect(result.evidence, hasLength(1));
+      expect(result.evidence.single.source, EvidenceSource.learn);
+    });
+  });
+
+  group('LegacyLessonCatalogAdapter — one outcome, one skill (review F2)', () {
+    test('an outcome for a lesson mapped to a single skill produces exactly '
+        'one evidence, and it survives EvidenceAggregator + repository '
+        'ingestion', () {
+      final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
+
+      final result = adapter.readEvidence(<LegacyLessonOutcome>[
+        outcomeFor('g-major-first-strum', outcomeId: 'f2-outcome-1'),
+      ]);
+
+      expect(result.evidence, hasLength(1));
+
+      final repository = InMemoryPracticeEvidenceRepository();
+      final aggregator = EvidenceAggregator(repository: repository);
+      for (final evidence in result.evidence) {
+        aggregator.ingest(evidence);
+      }
+
+      final stored = repository.findByOutcomeId(OutcomeId('f2-outcome-1'));
+      expect(stored, isNotNull);
+      expect(stored!.skillId, 'chord.gMajor');
+    });
   });
 
   group(

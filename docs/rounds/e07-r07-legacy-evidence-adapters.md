@@ -273,4 +273,54 @@ eltérés, új nem került hozzá) · `secrets` ZÖLD · `l10n` ZÖLD.
 
 `git status --short` a jelzés előtt tiszta (minden módosítás commitolva).
 
+### 10.1 Javító kör (F1/F2, ugyanaz a Sonnet implementer) — 2026-08-15
+
+**F1 javítás.** A `LegacyMappingTable.builtIn` a review által mért, kitalált
+ID-kat (`g-major-first-strum`, `c-to-g-swap`, `d-major-basics`) valódi,
+`lib/features/learn/model/lesson.dart` `Lessons.all`-ban létező ID-kra
+cserélte: `first-strums` → `chord.gMajor`, `two-chord-change` →
+`chord.cMajor`, `eighth-drive` → `chord.dMajor` (tábla `version: 2`). Új
+teszt (`legacy_lesson_catalog_adapter_test.dart`, „builtIn mapping (review
+F1)" csoport) a valódi `Lessons.all`-ból keres egy, a `builtIn` táblában
+mappingelt leckét, és bizonyítja, hogy az adapter rajta keresztül tényleges
+evidence-et ad — nem csak a fixture-ön.
+
+**F2 javítás.** A mapping szerződés egy outcome → egy skill kapcsolatra
+szűkült: `LegacySkillMapping.skillIds` (`List<String>`) helyett
+`LegacySkillMapping.skillId` (`String?`, `null` = ismert lecke, nincs
+skill-jel). Az „ismeretlen lecke" vs. „ismert lecke, üres mapping" határ
+megkülönböztetéséhez (ami a régi kódban a lista üres/`null` volta volt) egy
+új `LegacyMappingLookup` (`found` + `skillId`) érték-típus és
+`LegacyMappingTable.lookup(lessonId)` metódus került be a
+`skillIdsFor`/`skillIdFor` nullable-only visszatérés helyett. A
+`LegacyLessonCatalogAdapter` így outcome-onként **legfeljebb egy**
+`SkillEvidence`-et gyárt — a korábbi `for (final skillId in skillIds)` ciklus
+megszűnt. Regressziós teszt (`legacy_lesson_catalog_adapter_test.dart`, „one
+outcome, one skill (review F2)" csoport) az adapter kimenetét
+`EvidenceAggregator.ingest` + `InMemoryPracticeEvidenceRepository` láncon át
+is ellenőrzi: a tárolt evidence a várt `skillId`-val elérhető
+`findByOutcomeId`-on. A `legacy_progress_evidence_adapter_test.dart` fixture
+mapping-táblája ugyanerre az API-ra frissült (`skillIds: ['x']` →
+`skillId: 'x'`); a Progress adapter szerződése változatlan (mindig egyetlen,
+hívó által adott `skillId`).
+
+**Gate — javító futás (2026-08-15, ugyanezen a branchen):**
+
+```
+tools/round-gate.sh test/features/practice_generator/adapter/legacy_lesson_catalog_adapter_test.dart test/features/practice_generator/adapter/legacy_progress_evidence_adapter_test.dart
+```
+
+`format` ZÖLD (2 fájl újraformázva a `dart format` első futása után, majd a
+gate megismételve) · `analyze` ZÖLD (`No issues found!`) ·
+`test .../legacy_lesson_catalog_adapter_test.dart` ZÖLD (9 teszt, `+9 All
+tests passed!` — a korábbi 7 + az F1 + az F2 regresszió) ·
+`test .../legacy_progress_evidence_adapter_test.dart` ZÖLD (12 teszt, `+12
+All tests passed!`) · `architecture` ZÖLD (12 engedélyezett eltérés) ·
+`secrets` ZÖLD · `l10n` ZÖLD. **MINDEN GATE ZÖLD.**
+
+Csak az engedélyezett `legacy_mapping_table.dart`,
+`legacy_lesson_catalog_adapter.dart`, a két adapter-teszt és ez a brief-fájl
+módosult; a `legacy_progress_evidence_adapter.dart` implementációja
+változatlan (csak a fixture-je frissült a teszben).
+
 ## 11. Review — a Claude tölti ki

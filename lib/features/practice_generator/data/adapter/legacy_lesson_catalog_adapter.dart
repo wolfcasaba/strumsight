@@ -63,34 +63,33 @@ final class LegacyLessonCatalogAdapter
       }
 
       final lessonId = outcome.lesson.id;
-      final skillIds = mappingTable.skillIdsFor(lessonId);
-      if (skillIds == null) {
+      final lookup = mappingTable.lookup(lessonId);
+      if (!lookup.found) {
         warnings.add(
           SkillSnapshotWarning(code: 'unmappedLesson', detail: lessonId),
         );
         continue;
       }
-      if (skillIds.isEmpty) {
+      final skillId = lookup.skillId;
+      if (skillId == null) {
         warnings.add(
           SkillSnapshotWarning(code: 'emptySkillMapping', detail: lessonId),
         );
         continue;
       }
 
-      for (final skillId in skillIds) {
-        evidence.add(
-          SkillEvidence(
-            skillId: skillId,
-            source: EvidenceSource.learn,
-            sourceOutcomeId: outcome.sourceOutcomeId,
-            measurementVersion: mappingTable.version,
-            measuredAt: outcome.measuredAt,
-            capturedAt: outcome.capturedAt,
-            confidence: confidence,
-            performance: outcome.performance,
-          ),
-        );
-      }
+      evidence.add(
+        SkillEvidence(
+          skillId: skillId,
+          source: EvidenceSource.learn,
+          sourceOutcomeId: outcome.sourceOutcomeId,
+          measurementVersion: mappingTable.version,
+          measuredAt: outcome.measuredAt,
+          capturedAt: outcome.capturedAt,
+          confidence: confidence,
+          performance: outcome.performance,
+        ),
+      );
     }
 
     return SkillSnapshotResult(evidence: evidence, warnings: warnings);
