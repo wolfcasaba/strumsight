@@ -83,10 +83,7 @@ final class LegacyProgressEvidenceAdapter
       final skillId = outcome.skillId;
       if (skillId == null || skillId.trim().isEmpty) {
         warnings.add(
-          SkillSnapshotWarning(
-            code: 'missingSkillId',
-            detail: outcomeId.value,
-          ),
+          SkillSnapshotWarning(code: 'missingSkillId', detail: outcomeId.value),
         );
         continue;
       }

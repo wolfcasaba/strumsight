@@ -50,67 +50,85 @@ void main() {
   });
 
   group('LegacyProgressEvidenceAdapter — provenance (A3, A4)', () {
-    test('the evidence measurementVersion is the mapping table version (A3)', () {
-      final adapter = LegacyProgressEvidenceAdapter(mappingTable: mappingTable);
+    test(
+      'the evidence measurementVersion is the mapping table version (A3)',
+      () {
+        final adapter = LegacyProgressEvidenceAdapter(
+          mappingTable: mappingTable,
+        );
 
-      final result = adapter.readEvidence(<LegacyProgressOutcome>[
-        outcomeFor(),
-      ]);
+        final result = adapter.readEvidence(<LegacyProgressOutcome>[
+          outcomeFor(),
+        ]);
 
-      expect(result.evidence.single.measurementVersion, 2);
-    });
+        expect(result.evidence.single.measurementVersion, 2);
+      },
+    );
 
-    test('the evidence source is marked legacy progress, not a live source (A4)', () {
-      final adapter = LegacyProgressEvidenceAdapter(mappingTable: mappingTable);
+    test(
+      'the evidence source is marked legacy progress, not a live source (A4)',
+      () {
+        final adapter = LegacyProgressEvidenceAdapter(
+          mappingTable: mappingTable,
+        );
 
-      final result = adapter.readEvidence(<LegacyProgressOutcome>[
-        outcomeFor(),
-      ]);
+        final result = adapter.readEvidence(<LegacyProgressOutcome>[
+          outcomeFor(),
+        ]);
 
-      expect(result.evidence.single.source, EvidenceSource.progress);
-      expect(result.evidence.single.source, isNot(EvidenceSource.analyzeV2));
-    });
+        expect(result.evidence.single.source, EvidenceSource.progress);
+        expect(result.evidence.single.source, isNot(EvidenceSource.analyzeV2));
+      },
+    );
   });
 
   group('LegacyProgressEvidenceAdapter — determinism and dedup (A5, A6)', () {
-    test('the same input yields the same evidence regardless of order (A5)', () {
-      final adapter = LegacyProgressEvidenceAdapter(mappingTable: mappingTable);
-      final a = outcomeFor(outcomeId: 'order-a', skillId: 'chord.gMajor');
-      final b = outcomeFor(outcomeId: 'order-b', skillId: 'chord.cMajor');
-
-      final forward = adapter.readEvidence(<LegacyProgressOutcome>[a, b]);
-      final reversed = adapter.readEvidence(<LegacyProgressOutcome>[b, a]);
-
-      final forwardBySkill = {
-        for (final e in forward.evidence) e.skillId: e,
-      };
-      final reversedBySkill = {
-        for (final e in reversed.evidence) e.skillId: e,
-      };
-
-      expect(forward.evidence, hasLength(2));
-      expect(reversed.evidence, hasLength(2));
-      expect(forwardBySkill.keys, reversedBySkill.keys);
-      for (final skillId in forwardBySkill.keys) {
-        expect(
-          forwardBySkill[skillId]!.sourceOutcomeId,
-          reversedBySkill[skillId]!.sourceOutcomeId,
+    test(
+      'the same input yields the same evidence regardless of order (A5)',
+      () {
+        final adapter = LegacyProgressEvidenceAdapter(
+          mappingTable: mappingTable,
         );
-      }
-    });
+        final a = outcomeFor(outcomeId: 'order-a', skillId: 'chord.gMajor');
+        final b = outcomeFor(outcomeId: 'order-b', skillId: 'chord.cMajor');
 
-    test('a duplicated source outcome id is ingested once, not per replay (A6)', () {
-      final adapter = LegacyProgressEvidenceAdapter(mappingTable: mappingTable);
-      final duplicate = outcomeFor(outcomeId: 'dup-progress-1');
+        final forward = adapter.readEvidence(<LegacyProgressOutcome>[a, b]);
+        final reversed = adapter.readEvidence(<LegacyProgressOutcome>[b, a]);
 
-      final result = adapter.readEvidence(<LegacyProgressOutcome>[
-        duplicate,
-        duplicate,
-        duplicate,
-      ]);
+        final forwardBySkill = {for (final e in forward.evidence) e.skillId: e};
+        final reversedBySkill = {
+          for (final e in reversed.evidence) e.skillId: e,
+        };
 
-      expect(result.evidence, hasLength(1));
-    });
+        expect(forward.evidence, hasLength(2));
+        expect(reversed.evidence, hasLength(2));
+        expect(forwardBySkill.keys, reversedBySkill.keys);
+        for (final skillId in forwardBySkill.keys) {
+          expect(
+            forwardBySkill[skillId]!.sourceOutcomeId,
+            reversedBySkill[skillId]!.sourceOutcomeId,
+          );
+        }
+      },
+    );
+
+    test(
+      'a duplicated source outcome id is ingested once, not per replay (A6)',
+      () {
+        final adapter = LegacyProgressEvidenceAdapter(
+          mappingTable: mappingTable,
+        );
+        final duplicate = outcomeFor(outcomeId: 'dup-progress-1');
+
+        final result = adapter.readEvidence(<LegacyProgressOutcome>[
+          duplicate,
+          duplicate,
+          duplicate,
+        ]);
+
+        expect(result.evidence, hasLength(1));
+      },
+    );
 
     test('dedup is keyed on the outcome id, not on measuredAt (A6)', () {
       final adapter = LegacyProgressEvidenceAdapter(mappingTable: mappingTable);
@@ -136,34 +154,44 @@ void main() {
   group(
     'LegacyProgressEvidenceAdapter — missing identity never fabricated (A8)',
     () {
-      test('a record with no sourceOutcomeId produces no evidence, no exception', () {
-        final adapter = LegacyProgressEvidenceAdapter(mappingTable: mappingTable);
+      test(
+        'a record with no sourceOutcomeId produces no evidence, no exception',
+        () {
+          final adapter = LegacyProgressEvidenceAdapter(
+            mappingTable: mappingTable,
+          );
 
-        Object? thrown;
-        late final SkillSnapshotResult result;
-        try {
-          result = adapter.readEvidence(<LegacyProgressOutcome>[
-            outcomeFor(outcomeId: null),
+          Object? thrown;
+          late final SkillSnapshotResult result;
+          try {
+            result = adapter.readEvidence(<LegacyProgressOutcome>[
+              outcomeFor(outcomeId: null),
+            ]);
+          } catch (e) {
+            thrown = e;
+          }
+
+          expect(thrown, isNull);
+          expect(result.evidence, isEmpty);
+          expect(result.warnings.single.code, 'missingOutcomeId');
+        },
+      );
+
+      test(
+        'a record with no skill link produces no evidence, no exception',
+        () {
+          final adapter = LegacyProgressEvidenceAdapter(
+            mappingTable: mappingTable,
+          );
+
+          final result = adapter.readEvidence(<LegacyProgressOutcome>[
+            outcomeFor(skillId: null),
           ]);
-        } catch (e) {
-          thrown = e;
-        }
 
-        expect(thrown, isNull);
-        expect(result.evidence, isEmpty);
-        expect(result.warnings.single.code, 'missingOutcomeId');
-      });
-
-      test('a record with no skill link produces no evidence, no exception', () {
-        final adapter = LegacyProgressEvidenceAdapter(mappingTable: mappingTable);
-
-        final result = adapter.readEvidence(<LegacyProgressOutcome>[
-          outcomeFor(skillId: null),
-        ]);
-
-        expect(result.evidence, isEmpty);
-        expect(result.warnings.single.code, 'missingSkillId');
-      });
+          expect(result.evidence, isEmpty);
+          expect(result.warnings.single.code, 'missingSkillId');
+        },
+      );
 
       test(
         'a record with no explicit normalized performance produces no evidence',

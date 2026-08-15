@@ -72,108 +72,128 @@ void main() {
       },
     );
 
-    test('an unmapped lesson id produces no evidence and no exception (A2)', () {
-      final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
-
-      Object? thrown;
-      late final SkillSnapshotResult result;
-      try {
-        result = adapter.readEvidence(<LegacyLessonOutcome>[
-          outcomeFor('totally-unknown-lesson'),
-        ]);
-      } catch (e) {
-        thrown = e;
-      }
-
-      expect(thrown, isNull);
-      expect(result.evidence, isEmpty);
-      expect(result.warnings, hasLength(1));
-      expect(result.warnings.single.code, 'unmappedLesson');
-    });
-  });
-
-  group('LegacyLessonCatalogAdapter — provenance (A3, A4)', () {
-    test('the evidence measurementVersion is the mapping table version (A3)', () {
-      final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
-
-      final result = adapter.readEvidence(<LegacyLessonOutcome>[
-        outcomeFor('g-major-first-strum'),
-      ]);
-
-      expect(result.evidence.single.measurementVersion, 3);
-    });
-
-    test('the evidence source is marked legacy learn, not a live source (A4)', () {
-      final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
-
-      final result = adapter.readEvidence(<LegacyLessonOutcome>[
-        outcomeFor('g-major-first-strum'),
-      ]);
-
-      expect(result.evidence.single.source, EvidenceSource.learn);
-      expect(result.evidence.single.source, isNot(EvidenceSource.analyzeV2));
-    });
-  });
-
-  group('LegacyLessonCatalogAdapter — dedup and determinism (A5, A6)', () {
-    test('a duplicated source outcome id is ingested once, order-independent', () {
-      final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
-      final first = outcomeFor('g-major-first-strum', outcomeId: 'dup-1');
-      final second = outcomeFor('g-major-first-strum', outcomeId: 'dup-1');
-
-      final forward = adapter.readEvidence(<LegacyLessonOutcome>[
-        first,
-        second,
-      ]);
-      final reversed = adapter.readEvidence(<LegacyLessonOutcome>[
-        second,
-        first,
-      ]);
-
-      expect(forward.evidence, hasLength(1));
-      expect(reversed.evidence, hasLength(1));
-      expect(forward.evidence.single.sourceOutcomeId, reversed.evidence.single.sourceOutcomeId);
-    });
-  });
-
-  group('LegacyLessonCatalogAdapter — real-violation probe (§6.1, documented in §10)', () {
     test(
-      'a name-similarity fallback (rejected design) would wrongly map an unmapped lesson',
+      'an unmapped lesson id produces no evidence and no exception (A2)',
       () {
-        // This test intentionally exercises what the round brief forbids:
-        // guessing a skill because the lesson name contains a chord name.
-        // It asserts the CORRECT (adapter) behaviour — no evidence — and
-        // documents, via the comment, what a heuristic fallback would do
-        // instead (produce evidence and turn A1 red). See round handoff §10
-        // for the full probe-and-revert record.
         final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
 
-        final result = adapter.readEvidence(<LegacyLessonOutcome>[
-          LegacyLessonOutcome(
-            lesson: lessonFixture(
-              'totally-unmapped-lesson',
-              name: 'G Major Warm-Up',
-            ),
-            sourceOutcomeId: OutcomeId('probe-1'),
-            measuredAt: DateTime.utc(2026, 8, 10),
-            capturedAt: DateTime.utc(2026, 8, 15),
-            performance: PerformanceEvidence(
-              metricCode: 'chordChangeAccuracy',
-              value: 0.9,
-            ),
-          ),
-        ]);
+        Object? thrown;
+        late final SkillSnapshotResult result;
+        try {
+          result = adapter.readEvidence(<LegacyLessonOutcome>[
+            outcomeFor('totally-unknown-lesson'),
+          ]);
+        } catch (e) {
+          thrown = e;
+        }
 
-        expect(
-          result.evidence,
-          isEmpty,
-          reason:
-              'the lesson name contains "G Major" but has no explicit mapping '
-              'entry — a name-heuristic fallback would wrongly produce '
-              'evidence here (A1)',
-        );
+        expect(thrown, isNull);
+        expect(result.evidence, isEmpty);
+        expect(result.warnings, hasLength(1));
         expect(result.warnings.single.code, 'unmappedLesson');
       },
     );
   });
+
+  group('LegacyLessonCatalogAdapter — provenance (A3, A4)', () {
+    test(
+      'the evidence measurementVersion is the mapping table version (A3)',
+      () {
+        final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
+
+        final result = adapter.readEvidence(<LegacyLessonOutcome>[
+          outcomeFor('g-major-first-strum'),
+        ]);
+
+        expect(result.evidence.single.measurementVersion, 3);
+      },
+    );
+
+    test(
+      'the evidence source is marked legacy learn, not a live source (A4)',
+      () {
+        final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
+
+        final result = adapter.readEvidence(<LegacyLessonOutcome>[
+          outcomeFor('g-major-first-strum'),
+        ]);
+
+        expect(result.evidence.single.source, EvidenceSource.learn);
+        expect(result.evidence.single.source, isNot(EvidenceSource.analyzeV2));
+      },
+    );
+  });
+
+  group('LegacyLessonCatalogAdapter — dedup and determinism (A5, A6)', () {
+    test(
+      'a duplicated source outcome id is ingested once, order-independent',
+      () {
+        final adapter = LegacyLessonCatalogAdapter(mappingTable: mappingTable);
+        final first = outcomeFor('g-major-first-strum', outcomeId: 'dup-1');
+        final second = outcomeFor('g-major-first-strum', outcomeId: 'dup-1');
+
+        final forward = adapter.readEvidence(<LegacyLessonOutcome>[
+          first,
+          second,
+        ]);
+        final reversed = adapter.readEvidence(<LegacyLessonOutcome>[
+          second,
+          first,
+        ]);
+
+        expect(forward.evidence, hasLength(1));
+        expect(reversed.evidence, hasLength(1));
+        expect(
+          forward.evidence.single.sourceOutcomeId,
+          reversed.evidence.single.sourceOutcomeId,
+        );
+      },
+    );
+  });
+
+  group(
+    'LegacyLessonCatalogAdapter — real-violation probe (§6.1, documented in §10)',
+    () {
+      test(
+        'a name-similarity fallback (rejected design) would wrongly map an unmapped lesson',
+        () {
+          // This test intentionally exercises what the round brief forbids:
+          // guessing a skill because the lesson name contains a chord name.
+          // It asserts the CORRECT (adapter) behaviour — no evidence — and
+          // documents, via the comment, what a heuristic fallback would do
+          // instead (produce evidence and turn A1 red). See round handoff §10
+          // for the full probe-and-revert record.
+          final adapter = LegacyLessonCatalogAdapter(
+            mappingTable: mappingTable,
+          );
+
+          final result = adapter.readEvidence(<LegacyLessonOutcome>[
+            LegacyLessonOutcome(
+              lesson: lessonFixture(
+                'totally-unmapped-lesson',
+                name: 'G Major Warm-Up',
+              ),
+              sourceOutcomeId: OutcomeId('probe-1'),
+              measuredAt: DateTime.utc(2026, 8, 10),
+              capturedAt: DateTime.utc(2026, 8, 15),
+              performance: PerformanceEvidence(
+                metricCode: 'chordChangeAccuracy',
+                value: 0.9,
+              ),
+            ),
+          ]);
+
+          expect(
+            result.evidence,
+            isEmpty,
+            reason:
+                'the lesson name contains "G Major" but has no explicit mapping '
+                'entry — a name-heuristic fallback would wrongly produce '
+                'evidence here (A1)',
+          );
+          expect(result.warnings.single.code, 'unmappedLesson');
+        },
+      );
+    },
+  );
 }
