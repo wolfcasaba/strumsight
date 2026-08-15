@@ -98,6 +98,22 @@ void main() {
       },
     );
 
+    test('F3 — every forwarded progress event carries the handle\'s runId, '
+        'not the isolate-internal pipeline runId', () async {
+      final runner = V2AnalysisRunner();
+      final handle = runner.start(_request(samples: _fullClip()));
+
+      final events = <AnalysisProgressEvent>[];
+      final subscription = handle.progress.listen(events.add);
+      await handle.result;
+      await subscription.cancel();
+
+      expect(events, isNotEmpty);
+      for (final event in events) {
+        expect(event.runId, handle.runId);
+      }
+    });
+
     test('A6 — cancel yields no partial document', () async {
       final runner = V2AnalysisRunner();
       final handle = runner.start(_request(samples: _fullClip()));

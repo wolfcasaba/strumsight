@@ -170,7 +170,7 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
       await for (final message in messages) {
         if (_cancelled) break;
         if (message is AnalysisProgressEvent) {
-          _progress.add(message);
+          _progress.add(_remapRunId(message));
           continue;
         }
         if (message is String) {
@@ -214,6 +214,31 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
         const AnalysisRunResult(completion: AnalysisCompletionStatus.cancelled),
       );
     }
+  }
+
+  /// The isolate-side operation (e.g. the V2 pipeline) mints its own
+  /// internal run id for [AnalysisProgressEvent]s. Callers only know this
+  /// handle's [runId] (ADR 0254's stable `AnalysisRunHandle` contract), so
+  /// every forwarded event is re-stamped with it here, keeping phase and
+  /// unit-count data untouched.
+  AnalysisProgressEvent _remapRunId(AnalysisProgressEvent event) {
+    return switch (event) {
+      AnalysisPhaseProgressEvent(
+        :final phase,
+        :final completedUnits,
+        :final totalUnits,
+      ) =>
+        AnalysisPhaseProgressEvent(
+          runId: runId,
+          phase: phase,
+          completedUnits: completedUnits,
+          totalUnits: totalUnits,
+        ),
+      AnalysisRunResultEvent(:final completion) => AnalysisRunResultEvent(
+        runId: runId,
+        completion: completion,
+      ),
+    };
   }
 
   void _complete({
