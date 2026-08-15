@@ -61,3 +61,34 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
 ## Merge-döntés
 
 Az F3 nyitott MAJOR, ezért ADR 0052 szerint merge tilos. Javító implementer-kör szükséges ugyanazon branchen.
+
+## Független újraellenőrzés — 2026-08-15 (friss main-re rebase után)
+
+Verdikt: CHANGES REQUIRED
+
+Az `origin/main` friss `c1d3b089` SHA-jára rebase-elt diff scope-auditja
+zöld (`12 changed path(s), 2 generated/ignored`). A reviewer saját, izolált
+klónjában a brief §7 pontos `tools/round-gate.sh` hívása teljesen zöld lett:
+format, analyze, mind a négy célzott teszt, architecture, secrets és l10n.
+Az A4 valódi-sértés próbában a `0.918273645` PCM-marker a drót-dokumentum
+`input.fingerprint` mezőjébe került; az A4 teszt várt módon piros lett
+(`Expected: false, Actual: true`), majd a változtatás vissza lett állítva.
+
+### F4 — MAJOR — A lezárt handle a nyers PCM-et a futás után is megtartja
+
+- **Fájl:** `lib/features/audio_analysis/application/analysis_isolate_runner.dart:137-139,259-270`
+- **Probléma:** `_IsolateAnalysisRun` végleges `request` mezője tartja az
+  `AnalysisRunRequest.audio.input.samples` listát. A teljesítés és a
+  `cancel()` is csak az izolátumot/portokat zárja le; a requestet nem engedi
+  el. Bármely hívó, amely a már lezárt `AnalysisRunHandle`-t megtartja,
+  ezzel a nyers PCM-et is erősen elérhetővé teszi.
+- **Hatás:** sérti a brief §5.2 és ADR 0254 §2 előírását, hogy a minta a futás
+  végén eldobódik. Ez privacy- és memória-élettartam-hiba, nem pusztán GC-időzítés.
+- **Kötelező javítás:** a belső request/audio referencia legyen megszüntethető,
+  és spawn után, illetve minden terminális/cancel úton legyen nullázva; teszt
+  bizonyítsa a teljesítés és a cancel utáni audio-elengedést. Csak a briefben
+  engedélyezett `analysis_isolate_runner.dart` és célzott tesztfájlok érinthetők.
+
+Az F1 és F3 javítását az izolált gate a megfelelő célzott tesztekkel újra
+igazolta, de F4 nyitott MAJOR mellett merge tilos. Ugyanazon `sonnet-impl`
+motor javító köre szükséges.
