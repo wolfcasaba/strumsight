@@ -1,6 +1,6 @@
 # E07-R02 — Review
 
-**Verdict:** CHANGES REQUESTED
+**Verdict:** APPROVED
 
 - Brief: `docs/rounds/e07-r02-typed-ids-enums-and-domain-primitives.md`
 - Reviewed commit: `98af81af` (`sonnet-impl/e07-r02-typed-ids-enums-and-domain-primitives`)
@@ -42,8 +42,23 @@
 | A8 | Pass | No `DateTime.now()` or `Random` in the new domain. |
 | SDD JSON / injected generation requirements | **Fail** | The two MAJOR findings above remain open. |
 
-## Required next step
+## Corrective re-review (`5bf55028`)
 
-Run one corrective `sonnet-impl` round on the same branch, limited to the
-existing allowed ID file, ID tests, brief handoff, and this review's findings.
-Afterward, rerun this review and the complete gate in a fresh isolated clone.
+The single `sonnet-impl` corrective round closed both MAJOR findings without
+expanding scope:
+
+- Each ID now has `toJson`, `fromJson(Object?)`, and `generate(String
+  Function())`; `fromJson` and `generate` both pass values through the normal
+  type-specific constructor, so validation cannot be bypassed.
+- The ID tests now cover six valid JSON round trips, all six non-String JSON
+  rejections, six invalid decoded strings, six deterministic generated values,
+  and six invalid generator outputs.
+- A fresh isolated clone (`/tmp/review-e07-r02-fix.AXeofq`) passed the exact
+  complete round gate: format, analyze, 60 ID tests, 25 enum tests, 17
+  architecture tests, architecture, secrets, and l10n.
+- The type-safety violation probe `final DayId x = PlanId('plan-1');` failed
+  analysis with `invalid_assignment`, then was removed. The prior A6 default
+  fallback probe remains valid and is documented above.
+
+No BLOCKER, MAJOR, MINOR, or NOTE remains open. CI must be dispatched for the
+review-report commit's exact SHA before merge.
