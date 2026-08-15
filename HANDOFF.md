@@ -3,66 +3,78 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (E07-R01 merged, PR #268 — Epic 7 (AI Practice Generator) kickoff: ADR
-> 0255/0256 rögzítve, `practiceGeneratorEnabled` + `plannerAssistEnabled`
-> feature flag bevezetve, mindkettő `false` minden környezetben, nulla
-> alkalmazáslogika. No next round is started by this session.)**
+> (E07-R03 merged, PR #270 — Epic 7 Kör 3: `PracticeGoal`/`WeeklyAvailability`/
+> `LearnerConstraints`/`RequestValidator` determinisztikus domain modellek,
+> ADR 0258 hard/soft korlát-szétválasztás, nulla production wiring. E07-R02
+> (PR #269) ezzel a frissítéssel kapja meg a saját fejléc-bannerét is — a
+> saját záró körének kimaradt lépése, most pótolva. No next round is started
+> by this session.)**
 >
-> ## ✅ E07-R01 KÉSZ — Practice Generator baseline, ADR-ek és feature flagek (2026-08-15)
+> ## ✅ E07-R03 KÉSZ — Goal, availability és learner-constraint domain (2026-08-15)
 >
-> Az Epic 7 (AI Practice Generator) nyitókörének pre-flightját (ADR 0255
-> deterministic-first, ADR 0256 immutable múlt, a
-> `docs/rounds/e07-r01-planner-baseline-adrs-and-flags.md` brief) egy Opus 5
-> kickoff-session már közvetlenül a `main`-re commitolta a kör indítása előtt
-> (`fc4b10e4`, user-döntés 2026-08-15) — a pipeline-orchesztrátor ezt mérve
-> újrahasznosította a §0.2 örökség-szabály szerint, nem írta újra. A
-> `FeatureFlags` konstruktor + `forEnvironment` gyár + `toString()` mindhárom
-> helyén két új, opcionális, alapból `false` flag jelent meg; a gyár
-> EXPLICIT `false`-on tartja mindkettőt minden környezetben (NEM a
-> szomszédos rollout-flagek `nonProd` mintája — ez volt a brief §9 kimondott
-> fő kockázata). Az architektúra-őr kétirányú tiltással bővült a jövőbeli
-> `practice_generator` feature-re. Nulla `lib/features/practice_generator/`
-> könyvtár, nulla módosított meglévő flag-sor (csak hozzáadás: 125
-> insertions, 0 deletions a 4 engedélyezett fájlon).
+> SDD Ch8 Kör 3: `lib/features/practice_generator/domain/model/practice_goal.dart`
+> (stabil kódú goal-type/priority/lifecycle enumok + `MetricTarget` +
+> `PracticeGoal`, egyetlen engedélyezett lifecycle-átmenetgráf, normalizálatlan
+> custom goal `isExecutable == false`), `weekly_availability.dart` (`LocalDate`
+> — timezone-semleges helyi naptári nap, NEM `DateTime` —, naponta változó
+> `DailyAvailability`, hard/soft napi maximum), `learner_constraints.dart`
+> (equipment/tuning/capability/comfort/accessibility/preference/avoid
+> kategóriák, a hard/soft keménység a kategóriától FÜGGETLEN mező — a
+> `comfort` is lehet hard), `request_validator.dart` (pure konfliktus-detektor:
+> hard sértés hiba, soft sértés költséges warning; nem javít, nem ütemez).
+> ADR 0258 (hard korlát sosem sérthető, soft költséggel igen; napi hard
+> maximum inkluzív, befelé kerekít; elérhetőség helyi dátumhoz kötött).
 >
-> Correctness review **APPROVED** (0 BLOCKER/MAJOR/MINOR/NOTE) — a reviewer
-> saját, független valódi-sértés próbát futtatott (`plannerAssistEnabled`
-> ideiglenes `nonProd`-ra állítása → az A2 nem-production cella
-> `Expected: false / Actual: <true>` hibával pirosra váltott → visszaállítva),
-> külön az implementer saját, másik flagen futtatott próbájától. `risk =
-> "normal"` és a diff nem érint `.ai/router.toml` high-risk útvonalat —
-> dedikált security review nem volt kötelező ehhez a körhöz.
+> Correctness review **APPROVED** (0 BLOCKER/MAJOR, 1 MINOR, 2 NOTE) — a
+> reviewer a helyi gate-et saját izolált `/tmp` klónban 9/9 zölddel
+> újrafuttatta, a `scope-audit.py`-jal mérve mind a 10 megváltozott útvonal az
+> `allowed_paths`-on belül volt, és egy eldobható próbateszttel három, a kör
+> saját négy tesztfájlában lefedetlen `RequestValidator`-ágat (elérhetetlen nap
+> ütemezése, soft-maximum lineáris költsége, validátoron át futó
+> `customGoalNotExecutable`) is lefuttatott — mind a három helyesen
+> viselkedett (MINOR-1 follow-up, nem blokkoló). `risk = "normal"`, dedikált
+> security review nem volt kötelező.
 >
-> Exact-SHA `2962341e`: Full Gate
-> [31893700124](https://github.com/wolfcasaba/strumsight/actions/runs/31893700124)
-> + Router CI [31894278758](https://github.com/wolfcasaba/strumsight/actions/runs/31894278758)
-> (Router CI kézzel dispatch-elve, mert a review-commit önmagában nem
-> érintett Router-CI trigger-path-ot) mindkettő success; squash-merge PR
-> [#268](https://github.com/wolfcasaba/strumsight/pull/268), `b70d4077`.
-> `origin/main` nem mozdult a dispatch és a merge között; a post-merge gate
-> friss `main`-en önállóan újrafuttatva is zöld (7/7). Implementer **Terra
-> (Codex)**, egy `done` dispatch, javító kör nélkül.
+> Exact-SHA `93ffe3f`: Full Gate
+> [31900345340](https://github.com/wolfcasaba/strumsight/actions/runs/31900345340)
+> + Router CI [31900353853](https://github.com/wolfcasaba/strumsight/actions/runs/31900353853)
+> mindkettő success; squash-merge PR
+> [#270](https://github.com/wolfcasaba/strumsight/pull/270), `f7db0f00`. Egy
+> párhuzamos batch-prep kör docs-only commitja (`ba834de8`) miatt a branch az
+> első dispatch előtt rebase-elve lett; onnantól `origin/main` a merge-ig nem
+> mozdult. A post-merge gate friss `main`-en önállóan újrafuttatva is zöld
+> (9/9). Implementer **Terra (Codex)**, egy `done` dispatch, javító kör
+> nélkül. `practice_generator` flagek változatlanul `false`, nulla hívó a
+> `lib/`-ben a kör saját fájljain kívül.
+>
+> ## ✅ E07-R02 KÉSZ — Typed ID-k és stabil enum-kódok (2026-08-15, retroaktívan rögzítve)
+>
+> SDD Ch8 Kör 2: `domain/id/planner_ids.dart` (hat típusos ID —
+> `PlanId`/`DayId`/`BlockId`/`GoalId`/`RevisionId`/`OutcomeId` —, mindegyik
+> önálló `final class`, tehát a kereszt-típusú behelyettesítés fordítási
+> hiba), `domain/model/plan_enums.dart` (öt stabil kódú enum-család:
+> `PlanStatus`/`GenerationMode`/`BlockKind`/`ValidationSeverity`/
+> `CandidateSource`, fail-loud `fromCode`). ADR 0257.
+>
+> Correctness review **APPROVED** (0 nyitott lelet) — ez a kör EGY javító
+> kört kapott: az első review 2 MAJOR-t talált (a típusos ID-knek nem volt
+> JSON round-trip szerződése; hiányzott az injektált ID-generálási seam), a
+> `sonnet-impl` javító kör mindkettőt bezárta scope-tágítás nélkül
+> (`toJson`/`fromJson`/`generate(String Function())` mind a hat ID-n, a
+> validáció a rendes konstruktoron át fut), majd a reviewer friss izolált
+> klónban a TELJES gate-et (format, analyze, 60 ID-teszt, 25 enum-teszt,
+> architektúra, secrets, l10n) újra zöldre mérte. Az A6 valódi-sértés próba
+> (az ismeretlen-kód hiba lecserélése csendes `values.first` fallback-re) az
+> öt enum-család mindegyikén pirosra váltott, majd vissza lett állítva.
+>
+> Exact-SHA `8c6d13c0`: Full Gate
+> [31898125573](https://github.com/wolfcasaba/strumsight/actions/runs/31898125573)
+> + Router CI [31898243627](https://github.com/wolfcasaba/strumsight/actions/runs/31898243627)
+> mindkettő success; squash-merge PR
+> [#269](https://github.com/wolfcasaba/strumsight/pull/269), `5bb4f7d9`.
+> Implementer **Claude Sonnet 5 (`sonnet-impl`)**, egy javító kör. Review:
+> [`docs/reviews/e07-r02-review.md`](docs/reviews/e07-r02-review.md).
 
-> ## ✅ E99-R13 KÉSZ — GOV-30c-5 runner-boundary audio path and wiring (2026-08-15)
->
-> Az ADR 0254 `AnalysisRunRequest`-je elkülöníti a perzisztálható
-> `AnalysisDocument` seedet és a kizárólag memóriabeli `ValidatedPcmAnalysisInput`
-> adatot. A valódi `V2AnalysisRunner` izolátumban futtatja a teljes 20-stage
-> láncot, a progress-eventeket a külső handle `runId`-jára térképezi, és minden
-> completion/cancel/spawn-verseny útvonalon elengedi a nyers PCM-referenciát.
-> A shadow út a V1-nek adott pontos mintát továbbadja a V2 kérésnek; a kilenc
-> flag változatlanul OFF maradt.
->
-> Correctness review **APPROVED**, security review **PASS**; az F1 (UI-isolate
-> lánc), F3 (progress `runId`) és F4 (PCM-élettartam) MAJOR leletek regressziós
-> tesztekkel zárultak. Exact-SHA `5b4ec293`: Full Gate
-> [31886930654](https://github.com/wolfcasaba/strumsight/actions/runs/31886930654)
-> + Router CI [31887571675](https://github.com/wolfcasaba/strumsight/actions/runs/31887571675)
-> success; squash-merge PR [#266](https://github.com/wolfcasaba/strumsight/pull/266),
-> `7ee451f7`. A post-merge gate friss `main`-en zöld. Implementer
-> `sonnet-impl`; a kör három előzetes self-heal után zárult — a self-heal
-> jegyzetek `docs/handoff-archive.md`-be kerültek.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -72,9 +84,9 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-15 (E07-R01 zárása): az E99-R13 két self-heal jegyzete (ADR 0112) +
-> az E99-R12 és az E99-R11 banner archiválva; a fejlécben az E07-R01 és az
-> E99-R13 banner marad.
+> 2026-08-15 (E07-R03 zárása): az E07-R01 és az E99-R13 banner (utóbbi a
+> saját self-heal jegyzeteivel együtt) archiválva; a fejlécben az E07-R03 és
+> a retroaktívan pótolt E07-R02 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -227,9 +239,18 @@
   baseline, [ADR 0255](docs/adr/0255-deterministic-first-practice-planning.md)
   deterministic-first, [ADR 0256](docs/adr/0256-practice-plan-revisions-immutable-past.md)
   immutable múlt, `practiceGeneratorEnabled` + `plannerAssistEnabled` feature
-  flag) kész. **Mindkét flag `false` marad minden környezetben**, nulla
-  `lib/features/practice_generator/` kód — a kör kizárólag a határokat
-  rögzítette. SDD forrás:
+  flag), **E07-R02** (`domain/id/planner_ids.dart` — hat típusos ID —,
+  `domain/model/plan_enums.dart` — öt stabil kódú enum-család —,
+  [ADR 0257](docs/adr/0257-planner-typed-ids-and-stable-enum-codes.md)) és
+  **E07-R03** (`domain/model/practice_goal.dart` — cél, metric target, goal
+  lifecycle —, `domain/model/weekly_availability.dart` — `LocalDate`-alapú
+  napi elérhetőség —, `domain/model/learner_constraints.dart` — hard/soft
+  korlátok, a keménység a kategóriától független mező —,
+  `domain/service/request_validator.dart` — pure konfliktus-detektor —,
+  [ADR 0258](docs/adr/0258-hard-and-soft-planning-constraints.md)) kész.
+  **Mindkét flag `false` marad minden környezetben**, nulla
+  `lib/features/practice_generator/` hívó a domain rétegen kívül — mindhárom
+  kör kizárólag a határokat és a típusos domaint rögzítette. SDD forrás:
   [`docs/sdd/08-epic-07-ai-practice-generator.md`](docs/sdd/08-epic-07-ai-practice-generator.md).
   A generátor a legacy Learn/Progress/Songs/Analyze adaptereken keresztül lát
   (az Audio Analysis V2 lánc futtatható, de minden flagje OFF — a generátor
@@ -830,6 +851,16 @@
   ha időközben elkészült, vagy jelezze egy jövőbeli session, ha még hiányzik.
 
 ## 4. Current branch
+
+**Aktuális állapot (2026-08-15):** `main` @ `f7db0f00` — E07-R03 goal,
+availability és learner-constraint domain, PR
+[#270](https://github.com/wolfcasaba/strumsight/pull/270), squash-merge.
+Exact-SHA `93ffe3f`: Full Gate
+[31900345340](https://github.com/wolfcasaba/strumsight/actions/runs/31900345340)
++ Router CI [31900353853](https://github.com/wolfcasaba/strumsight/actions/runs/31900353853)
+mindkettő success. `origin/main` a branch rebase-e (egy párhuzamos batch-prep
+kör `ba834de8` docs-only commitja) után nem mozdult a merge-ig; post-merge
+`tools/round-gate.sh` zöld a friss `main`-en (9/9).
 
 **Aktuális állapot (2026-08-15):** `main` @ `e5cae94d` — E99-R11
 GOV-30c-3 progress-phase decoupling, PR

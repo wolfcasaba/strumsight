@@ -6,6 +6,61 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E07-R01 KÉSZ — Practice Generator baseline, ADR-ek és feature flagek (2026-08-15)
+
+Az Epic 7 (AI Practice Generator) nyitókörének pre-flightját (ADR 0255
+deterministic-first, ADR 0256 immutable múlt, a
+`docs/rounds/e07-r01-planner-baseline-adrs-and-flags.md` brief) egy Opus 5
+kickoff-session már közvetlenül a `main`-re commitolta a kör indítása előtt
+(`fc4b10e4`, user-döntés 2026-08-15) — a pipeline-orchesztrátor ezt mérve
+újrahasznosította a §0.2 örökség-szabály szerint, nem írta újra. A
+`FeatureFlags` konstruktor + `forEnvironment` gyár + `toString()` mindhárom
+helyén két új, opcionális, alapból `false` flag jelent meg; a gyár
+EXPLICIT `false`-on tartja mindkettőt minden környezetben (NEM a
+szomszédos rollout-flagek `nonProd` mintája — ez volt a brief §9 kimondott
+fő kockázata). Az architektúra-őr kétirányú tiltással bővült a jövőbeli
+`practice_generator` feature-re. Nulla `lib/features/practice_generator/`
+könyvtár, nulla módosított meglévő flag-sor (csak hozzáadás: 125
+insertions, 0 deletions a 4 engedélyezett fájlon).
+
+Correctness review **APPROVED** (0 BLOCKER/MAJOR/MINOR/NOTE) — a reviewer
+saját, független valódi-sértés próbát futtatott (`plannerAssistEnabled`
+ideiglenes `nonProd`-ra állítása → az A2 nem-production cella
+`Expected: false / Actual: <true>` hibával pirosra váltott → visszaállítva),
+külön az implementer saját, másik flagen futtatott próbájától. `risk =
+"normal"` és a diff nem érint `.ai/router.toml` high-risk útvonalat —
+dedikált security review nem volt kötelező ehhez a körhöz.
+
+Exact-SHA `2962341e`: Full Gate
+[31893700124](https://github.com/wolfcasaba/strumsight/actions/runs/31893700124)
++ Router CI [31894278758](https://github.com/wolfcasaba/strumsight/actions/runs/31894278758)
+(Router CI kézzel dispatch-elve, mert a review-commit önmagában nem
+érintett Router-CI trigger-path-ot) mindkettő success; squash-merge PR
+[#268](https://github.com/wolfcasaba/strumsight/pull/268), `b70d4077`.
+`origin/main` nem mozdult a dispatch és a merge között; a post-merge gate
+friss `main`-en önállóan újrafuttatva is zöld (7/7). Implementer **Terra
+(Codex)**, egy `done` dispatch, javító kör nélkül.
+
+## ✅ E99-R13 KÉSZ — GOV-30c-5 runner-boundary audio path and wiring (2026-08-15)
+
+Az ADR 0254 `AnalysisRunRequest`-je elkülöníti a perzisztálható
+`AnalysisDocument` seedet és a kizárólag memóriabeli `ValidatedPcmAnalysisInput`
+adatot. A valódi `V2AnalysisRunner` izolátumban futtatja a teljes 20-stage
+láncot, a progress-eventeket a külső handle `runId`-jára térképezi, és minden
+completion/cancel/spawn-verseny útvonalon elengedi a nyers PCM-referenciát.
+A shadow út a V1-nek adott pontos mintát továbbadja a V2 kérésnek; a kilenc
+flag változatlanul OFF maradt.
+
+Correctness review **APPROVED**, security review **PASS**; az F1 (UI-isolate
+lánc), F3 (progress `runId`) és F4 (PCM-élettartam) MAJOR leletek regressziós
+tesztekkel zárultak. Exact-SHA `5b4ec293`: Full Gate
+[31886930654](https://github.com/wolfcasaba/strumsight/actions/runs/31886930654)
++ Router CI [31887571675](https://github.com/wolfcasaba/strumsight/actions/runs/31887571675)
+success; squash-merge PR [#266](https://github.com/wolfcasaba/strumsight/pull/266),
+`7ee451f7`. A post-merge gate friss `main`-en zöld. Implementer
+`sonnet-impl`; a kör három előzetes self-heal után zárult — a self-heal
+jegyzetek lásd lent.
+
 ## 🔧 E99-R13 self-heal jegyzetek (ADR 0112, pipeline-infra, 2026-08-15)
 
 **E99-R13 second H3 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra
