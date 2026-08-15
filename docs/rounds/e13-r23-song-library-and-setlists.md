@@ -1,0 +1,193 @@
+# E13-R23 — Song Library, Overview és Setlist lista UI
+
+- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 74f8a8ec`)
+- **Típus:** Chapter 13 (UI/UX Design System), Kör 23
+- **Kör-azonosító:** `E13-R23`
+- **Branch:** `<motor>/e13-r23-song-library-and-setlists`
+- **Előfeltétel:** `E13-R22` merge-elve (gyakorlási eredmények)
+- **Brief szerzője:** Claude (Opus 5)
+- **Előre kiosztott ADR:** nincs — az ADR 0275 (legacy route) és 0277 érvényes.
+
+> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el a TÉNYLEGES dal-dokumentum
+> modellt és repository-t, kiemelten a **forrás/licenc** mezőket — a §5.2
+> jelölés csak a mért mezőkre írható meg. Eltérésnél §0.0 revízió.
+
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "lib/features/songs/library/",
+  "lib/features/songs/overview/",
+  "lib/features/setlists/",
+  "lib/app/routing/",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/features/songs/song_library_test.dart",
+  "test/features/songs/song_asset_state_test.dart",
+  "test/features/songs/setlist_list_test.dart",
+  "docs/rounds/e13-r23-song-library-and-setlists.md",
+]
+gate_tests = [
+  "test/features/songs/song_library_test.dart",
+  "test/features/songs/song_asset_state_test.dart",
+  "test/features/songs/setlist_list_test.dart",
+]
+native_gate = false
+```
+
+## 0. Kör-jelzés és STOP-protokoll
+
+```bash
+tools/codex-signal.sh progress "<egy sor>"
+tools/codex-signal.sh done "<egy sor>"
+tools/codex-signal.sh stopped "<egy sor>"
+tools/codex-signal.sh blocked "<egy sor>"
+```
+
+Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 1. Cél
+
+Az UI-24–UI-25 és UI-32 Songs-tartalmak migrációja **offline készenlét** és
+**forrás/licenc** jelöléssel (SDD Ch13 Kör 23).
+
+## 2. Jelenlegi állapot — mért tények
+
+- Az R08 shellje és az R12 kártyái készen állnak; a Songs terület
+  a shell egyik cél-destinationje.
+- Az R10 ADR 0277: az offline nem hiba, a cached tartalom látható marad.
+- A dalok egy része **közösségi / csak olvasható** forrásból származhat.
+
+## 3. Scope
+
+**Benne van:** a dal-könyvtár folytatás / keresés / szűrés / forrás / készenlét
+komponensekkel · a dal áttekintő nézete (szakaszok, haladás, hangolás, eszközök,
+elsődleges gyakorlás-akció) · a setlist-lista készenléti és **hiányzó dal**
+állapotokkal · compact lista és expanded lista-részlet elrendezés · közösségi /
+csak olvasható forrás, hiányzó offline eszköz, elérhető frissítés állapotok ·
+route-alias teszt a meglévő útvonalakról.
+
+**NINCS benne (tilos):** a dal-import vagy a szerkesztő (Kör 24) · a tréner
+(Kör 25) · a dal-dokumentum séma módosítása · `docs/adr/**`, `tools/**`,
+`.github/**`.
+
+## 4. Engedélyezett fájlok
+
+| Útvonal | Indok |
+|---|---|
+| `songs/library/` | a könyvtár UI-ja |
+| `songs/overview/` | a dal áttekintő nézete |
+| `setlists/` | a setlist-lista |
+| `lib/app/routing/` | **kizárólag** az alias/redirect bejegyzések |
+| `lib/l10n/app_{en,hu}.arb` | a dal-szövegek |
+| `test/features/songs/*_test.dart` (3) | a §6 cellái |
+| `docs/rounds/e13-r23-…md` | a §10 handoff |
+
+**Tilos zóna:** `lib/features/songs/import/`, `editor/`, `trainer/` ·
+`lib/core/design_system/**` · `lib/core/theme/**` · `docs/adr/**` ·
+`docs/sdd/**` · `tools/**` · `.github/**`.
+
+## 5. Kötött architekturális döntések
+
+### 5.1 A helyi dal OFFLINE elérhető
+
+A készüléken tárolt dal hálózat nélkül is megnyitható és gyakorolható. Az
+offline állapot nem tesz semmit elérhetetlenné, ami helyben megvan.
+
+### 5.2 A forrás és a licenc-státusz LÁTHATÓ
+
+A felhasználónak tudnia kell, saját importja, beépített vagy közösségi
+tartalmat néz-e, és hogy szerkesztheti-e. Ez az ADR 0278 provenance-elvének
+tartalmi megfelelője.
+
+**NEM elfogadható gyengítés:** a forrás elrejtése „egységes lista-megjelenés"
+kedvéért. A csak olvasható tartalom szerkesztési kísérlete így csak a hibánál
+derülne ki.
+
+### 5.3 A hiányzó kísérőhang NEM rejti el a többi tartalmat
+
+Ha a backing track nincs letöltve, a dal szövege, akkordjai és szakaszai
+továbbra is elérhetők. Csak az érintett funkció jelöli a hiányt.
+
+**NEM elfogadható gyengítés:** a teljes dal letiltása hiányzó eszköz miatt.
+A tartalom nagy része hangfájl nélkül is használható.
+
+### 5.4 A setlist SORRENDJE és készenléte pontos
+
+A sorrend a felhasználóé; a készenlét minden tételre külön látszik, a hiányzó
+dal pedig **nevesítve** jelenik meg, nem néma kihagyással.
+
+### 5.5 A legacy route MŰKÖDIK
+
+Az ADR 0275 §3 alkalmazása a Songs területre.
+
+## 6. Acceptance criteria
+
+| # | Kritérium | Bizonyíték |
+|---|---|---|
+| A1 | A helyi dal offline megnyitható | `song_asset_state_test.dart` |
+| A2 | A forrás és a licenc-státusz látható a listában és az áttekintőben | `song_library_test.dart` |
+| A3 | A csak olvasható forrás szerkesztése nem indítható | ugyanott |
+| A4 | Hiányzó kísérőhang mellett a többi tartalom elérhető | `song_asset_state_test.dart` |
+| A5 | A setlist sorrendje és tételenkénti készenléte helyes | `setlist_list_test.dart` |
+| A6 | A hiányzó dal nevesítve jelenik meg a setlistben | ugyanott |
+| A7 | A legacy songs/setlists route-ok működnek | `song_library_test.dart` |
+| A8 | A keresés és a szűrés állapota megmarad visszatéréskor | ugyanott |
+
+### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
+
+| Hibás implementáció | Melyik cella vált PIROSRA |
+|---|---|
+| A forrás nem jelenik meg a listában | **A2** |
+| A csak olvasható dal szerkeszthető | **A3** |
+| Hiányzó backing track → a dal letiltva | **A4** |
+| A hiányzó setlist-tétel némán kimarad | **A6** |
+| A legacy route törölve | A7 |
+| A szűrő visszatéréskor nullázódik | A8 |
+
+**Az eszköz-készenlét három kötelező cellája** (a küszöb: mely eszköz hiányzik):
+
+| Cella | Bemenet | Elvárt |
+|---|---|---|
+| a küszöb alatt | minden eszköz megvan | teljes funkcionalitás |
+| rajta (a küszöbön) | **a kísérőhang hiányzik**, a dokumentum megvan | a dal **megnyitható**, csak a lejátszás jelöli a hiányt |
+| a küszöb fölött | maga a dal-dokumentum hiányzik | a tétel hibásként, **nevesítve** jelenik meg |
+
+**Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** tiltsd le a dalt
+hiányzó kísérőhang esetén → az **A4** cellának PIROSNAK kell lennie → állítsd
+vissza.
+
+## 7. Kötelező ellenőrzések
+
+```bash
+tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart
+```
+
+Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
+`&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`
+kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küldeni**
+(`run_in_background`) — az egy-fordulós harness a forduló végén megöli (L254).
+
+## 8. Implementációs sorrend
+
+1. A könyvtár lista + keresés/szűrés/folytatás, állapotmegőrzéssel.
+2. A forrás/licenc jelölés és a csak olvasható zárolás.
+3. Az eszköz-készenlét három cellája.
+4. A dal áttekintő nézete + elsődleges gyakorlás-akció.
+5. A setlist-lista sorrenddel, készenléttel, nevesített hiánnyal.
+6. A legacy route-aliasok + a hozzájuk tartozó cella.
+7. A valódi-sértés próba, §10-be dokumentálva.
+8. `tools/round-gate.sh` a §7 szerint.
+
+## 9. Kockázatok
+
+- **A hiányzó eszköz miatti teljes letiltás.** Egyszerű szabály, és
+  használhatatlanná tesz egy amúgy teljes dalt (A4).
+- **A rejtett forrás.** A szerkesztési kísérlet csak hibánál derül ki, ami a
+  felhasználó munkáját viszi (A2/A3).
+- **A néma setlist-kihagyás.** Fellépés közben a legrosszabb: a felhasználó nem
+  tudja, mi maradt ki (A6).
+
+## 10. Implementation handoff — az implementer tölti ki
+
+## 11. Review — a Claude tölti ki
