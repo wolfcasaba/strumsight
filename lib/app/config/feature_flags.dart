@@ -41,6 +41,9 @@ final class FeatureFlags {
     this.analysisComparisonEnabled = false,
     this.analysisPracticeIntegrationEnabled = false,
     this.analysisTutorIntegrationEnabled = false,
+    this.recognitionRecoveryEnabled = false,
+    this.recognitionShadowModeEnabled = false,
+    this.newLiveStageEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -94,6 +97,9 @@ final class FeatureFlags {
       analysisComparisonEnabled: false,
       analysisPracticeIntegrationEnabled: false,
       analysisTutorIntegrationEnabled: false,
+      recognitionRecoveryEnabled: false,
+      recognitionShadowModeEnabled: false,
+      newLiveStageEnabled: false,
     );
   }
 
@@ -209,6 +215,18 @@ final class FeatureFlags {
   /// This remains OFF in every environment until Tutor wiring ships.
   final bool analysisTutorIntegrationEnabled;
 
+  /// Whether the recognition recovery program may activate its guarded paths.
+  /// It remains OFF in every environment until evaluation evidence is accepted.
+  final bool recognitionRecoveryEnabled;
+
+  /// Whether recognition recovery may run in shadow mode without UI changes.
+  /// It remains OFF in every environment until evaluation evidence is accepted.
+  final bool recognitionShadowModeEnabled;
+
+  /// Whether the new Live recognition stage may be reachable.
+  /// It remains OFF in every environment until evaluation evidence is accepted.
+  final bool newLiveStageEnabled;
+
   /// The build-time rollout level. Shadow execution has an additional
   /// runtime Lab-mode gate, so it is intentionally not inferred here.
   AnalysisRolloutStage get analysisRolloutStage => audioAnalysisV2Enabled
@@ -258,7 +276,11 @@ final class FeatureFlags {
       other.analysisComparisonEnabled == analysisComparisonEnabled &&
       other.analysisPracticeIntegrationEnabled ==
           analysisPracticeIntegrationEnabled &&
-      other.analysisTutorIntegrationEnabled == analysisTutorIntegrationEnabled;
+      other.analysisTutorIntegrationEnabled ==
+          analysisTutorIntegrationEnabled &&
+      other.recognitionRecoveryEnabled == recognitionRecoveryEnabled &&
+      other.recognitionShadowModeEnabled == recognitionShadowModeEnabled &&
+      other.newLiveStageEnabled == newLiveStageEnabled;
 
   @override
   int get hashCode {
@@ -296,6 +318,9 @@ final class FeatureFlags {
       analysisComparisonEnabled,
       analysisPracticeIntegrationEnabled,
       analysisTutorIntegrationEnabled,
+      recognitionRecoveryEnabled,
+      recognitionShadowModeEnabled,
+      newLiveStageEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -339,5 +364,8 @@ final class FeatureFlags {
       'analysisComparisonEnabled: $analysisComparisonEnabled, '
       'analysisPracticeIntegrationEnabled: '
       '$analysisPracticeIntegrationEnabled, '
-      'analysisTutorIntegrationEnabled: $analysisTutorIntegrationEnabled)';
+      'analysisTutorIntegrationEnabled: $analysisTutorIntegrationEnabled, '
+      'recognitionRecoveryEnabled: $recognitionRecoveryEnabled, '
+      'recognitionShadowModeEnabled: $recognitionShadowModeEnabled, '
+      'newLiveStageEnabled: $newLiveStageEnabled)';
 }
