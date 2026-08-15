@@ -1,8 +1,8 @@
 # E07-R04 — Review
 
-Brief: `docs/rounds/e07-r04-generation-request-and-draft-persistence.md`  
-Diff: `2d65f862..17abfd6e`  
-Reviewer: Codex (orchestrator fallback) · Dátum: 2026-08-15  
+Brief: `docs/rounds/e07-r04-generation-request-and-draft-persistence.md`
+Diff: `2d65f862..17abfd6e`
+Reviewer: Codex (orchestrator fallback) · Dátum: 2026-08-15
 Verdikt: APPROVED (javító kör után)
 
 ## Összegzés
