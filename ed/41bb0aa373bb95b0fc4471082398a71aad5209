@@ -1,0 +1,1 @@
+round=99 verdict=pass tests=448 lesson=fakeasync-hangs-platform-awaits-use-plain-test
