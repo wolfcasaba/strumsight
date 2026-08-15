@@ -10606,3 +10606,22 @@ domainben található API-használatként jelezte.
 stringben se írj le a guard hatókörén belül; a round-gate után a teljes CI az
 egyetlen teljes bizonyíték. A javításkor csak a kommentet kellett átírni,
 viselkedés nem változott.
+
+## L284 — `gh pr edit --body` és a puszta `gh pr view` GraphQL hibával elhasal ezen a repón, a body-frissítés csendben NEM alkalmazódik (E07-R06, 2026-08-15)
+
+**Mit mértünk.** `gh pr edit 276 --body "..."` exit code 1-gyel hibázott:
+`GraphQL: Projects (classic) is being deprecated in favor of the new
+Projects experience ... (repository.pullRequest.projectCards)`. A
+következő `gh pr view 276 --json body` megerősítette: a body **nem**
+változott — a mutation teljes egészében elmaradt, nem csak egy figyelmeztetés
+volt. Ugyanez a hiba jelentkezik a mezőválasztás nélküli `gh pr view <n>`
+hívásnál is; a `--json <mezők>` alakkal futtatott `gh pr view`/`gh pr list`
+hívások viszont zöldek (ahogy a `gh pr merge --squash --delete-branch` is).
+
+**Hogyan alkalmazd.** Ezen a repón (`wolfcasaba/strumsight`) `gh pr edit
+--body` és a mezőválasztás nélküli `gh pr view` nem megbízható — mindig
+`--json <konkrét mezők>` alakot használj lekérdezésre, és PR-body
+frissítésnél ne állj meg a nemnulla exit code-nál: az **nem** halt-ok
+(nem H1–H8), csak egy kozmetikai frissítés marad el — a CI-evidencia
+tényleges rögzítése úgyis a HANDOFF/RTM/git-notes feladata, ne blokkold
+rajta a merge-et.
