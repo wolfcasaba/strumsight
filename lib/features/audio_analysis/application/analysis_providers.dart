@@ -36,6 +36,7 @@ import 'analysis_isolate_runner.dart';
 import 'analyze_audio_use_case.dart';
 import 'cancel_analysis_use_case.dart';
 import 'save_analysis_use_case.dart';
+import 'v2_analysis_runner.dart';
 
 /// Sub-directory inside the app-support directory that owns the
 /// analysis tree. The directory MUST exist before
@@ -207,15 +208,13 @@ const String analysisMigrationStorageKey = StorageKeys.analysisMigrationState;
 /// Re-export the cache storage key so callers do not import core storage.
 const String analysisCacheStorageKey = StorageKeys.analysisCache;
 
-/// Composition seam for the first concrete V2 pipeline. It intentionally
-/// fails closed until a future round designs the shared DSP work-state and
-/// supplies a serializable isolate operation (ADR 0240 decision 4).
-final analysisV2RunnerProvider = Provider<AnalysisRunner>((_) {
-  throw StateError(
-    'analysisV2RunnerProvider has no concrete V2 DSP stage list yet. '
-    'A future pipeline-composition round must override it.',
-  );
-});
+/// Composition seam for the real V2 pipeline (ADR 0254). Runnable now, but
+/// still reached only through the nine analysis-flags that stay off in every
+/// environment (ADR 0254 §5.5) — this round wires the chain without
+/// switching any user-facing path on.
+final analysisV2RunnerProvider = Provider<AnalysisRunner>(
+  (_) => V2AnalysisRunner(),
+);
 
 /// Application entry point for an injected analysis runner.
 final analyzeAudioUseCaseProvider = Provider<AnalyzeAudioUseCase>(

@@ -44,12 +44,51 @@ void main() {
     'a real isolate round-trips the document codec without serialization failure',
     () async {
       final runner = AnalysisIsolateRunner(operation: _echoDocumentJson);
-      final result = await runner.start(_document()).result;
+      final result = await runner.start(_request()).result;
 
       expect(result.completion, AnalysisCompletionStatus.complete);
       expect(result.document?.id, 'isolate-document');
     },
   );
+
+  test('a completed run releases the raw-PCM request (F4: no reachable audio '
+      'after the run finishes)', () async {
+    final runner = AnalysisIsolateRunner(operation: _echoDocumentJson);
+    final handle = runner.start(_request());
+
+    await handle.result;
+
+    expect(debugAnalysisRunHandleHoldsRequest(handle), isFalse);
+  });
+
+  test('a cancelled run releases the raw-PCM request (F4: no reachable audio '
+      'after cancel)', () async {
+    final isolateSpawned = Completer<void>();
+    final allowAssignment = Completer<void>();
+    final runner = AnalysisIsolateRunner(
+      operation: _echoDocumentJson,
+      isolateSpawner: (replyTo, documentJson, audio, target, operation) async {
+        final isolate = await spawnAnalysisIsolate(
+          replyTo,
+          documentJson,
+          audio,
+          target,
+          operation,
+        );
+        isolateSpawned.complete();
+        await allowAssignment.future;
+        return isolate;
+      },
+    );
+
+    final handle = runner.start(_request());
+    await isolateSpawned.future;
+    await handle.cancel();
+    allowAssignment.complete();
+    await handle.result;
+
+    expect(debugAnalysisRunHandleHoldsRequest(handle), isFalse);
+  });
 
   test(
     'cancellation during spawn kills the later-assigned isolate before it finishes work',
@@ -63,15 +102,22 @@ void main() {
       final allowAssignment = Completer<void>();
       final runner = AnalysisIsolateRunner(
         operation: _writeCompletionMarkerAfterDelay,
-        isolateSpawner: (replyTo, input, operation) async {
-          final isolate = await spawnAnalysisIsolate(replyTo, input, operation);
-          isolateSpawned.complete();
-          await allowAssignment.future;
-          return isolate;
-        },
+        isolateSpawner:
+            (replyTo, documentJson, audio, target, operation) async {
+              final isolate = await spawnAnalysisIsolate(
+                replyTo,
+                documentJson,
+                audio,
+                target,
+                operation,
+              );
+              isolateSpawned.complete();
+              await allowAssignment.future;
+              return isolate;
+            },
       );
 
-      final run = runner.start(_document(id: marker.path));
+      final run = runner.start(_request(document: _document(id: marker.path)));
       await isolateSpawned.future;
       await run.cancel();
       allowAssignment.complete();
@@ -83,9 +129,19 @@ void main() {
   );
 }
 
-String _echoDocumentJson(String documentJson) => documentJson;
+String _echoDocumentJson(
+  String documentJson,
+  ValidatedPcmAnalysisInput audio,
+  AnalysisTarget? target,
+  void Function(AnalysisProgressEvent event) reportProgress,
+) => documentJson;
 
-Future<String> _writeCompletionMarkerAfterDelay(String documentJson) async {
+Future<String> _writeCompletionMarkerAfterDelay(
+  String documentJson,
+  ValidatedPcmAnalysisInput audio,
+  AnalysisTarget? target,
+  void Function(AnalysisProgressEvent event) reportProgress,
+) async {
   final json = jsonDecode(documentJson) as Map<String, Object?>;
   await Future<void>.delayed(const Duration(milliseconds: 150));
   await File(json['id']! as String).writeAsString('completed');
@@ -97,7 +153,7 @@ final class _SingleRunRunner implements AnalysisRunner {
   final _CleanupRun _run;
 
   @override
-  AnalysisRunHandle start(AnalysisDocument input) => _run;
+  AnalysisRunHandle start(AnalysisRunRequest input) => _run;
 }
 
 final class _CleanupRun implements AnalysisRunHandle {
@@ -133,6 +189,18 @@ final class _NoopCredit implements AnalysisPracticeCreditRecorder {
   @override
   void record(AnalysisDocument document) {}
 }
+
+AnalysisRunRequest _request({AnalysisDocument? document}) => AnalysisRunRequest(
+  seed: document ?? _document(),
+  audio: ValidatedPcmAnalysisInput(
+    input: PcmAnalysisInput(
+      samples: const <double>[0, 0, 0],
+      sampleRate: 48000,
+      channelCount: 1,
+      source: AnalysisInputSource.microphone,
+    ),
+  ),
+);
 
 AnalysisDocument _document({String id = 'isolate-document'}) =>
     AnalysisDocument(

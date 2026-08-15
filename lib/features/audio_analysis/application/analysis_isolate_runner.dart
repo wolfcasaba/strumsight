@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:meta/meta.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/data/analysis_document_codec.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_input.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
+import 'package:strumsight/features/audio_analysis/domain/target/analysis_target.dart';
 
 /// A cancellable execution returned synchronously when a run is started.
 abstract interface class AnalysisRunHandle {
@@ -31,15 +34,39 @@ final class AnalysisRunResult {
 
 /// Boundary consumed by the application use case and faked by controller tests.
 abstract interface class AnalysisRunner {
-  AnalysisRunHandle start(AnalysisDocument input);
+  AnalysisRunHandle start(AnalysisRunRequest input);
 }
 
-/// Top-level, isolate-sendable document transformation using codec JSON.
-///
-/// A future real stage-chain composition supplies this operation. It is not
-/// created in this round because no concrete V2 stage list exists yet.
+/// The input to one analysis run (ADR 0254 §1): a document seed carrying
+/// identity/mode/provenance, the validated PCM the chain actually analyses,
+/// and an optional performance reference. [seed] is never the audio carrier —
+/// [audio] lives only in memory for the lifetime of the run and is never
+/// written into a persisted, exportable [AnalysisDocument].
+final class AnalysisRunRequest {
+  const AnalysisRunRequest({
+    required this.seed,
+    required this.audio,
+    this.target,
+  });
+
+  final AnalysisDocument seed;
+  final ValidatedPcmAnalysisInput audio;
+  final AnalysisTarget? target;
+}
+
+/// Top-level, isolate-sendable analysis operation. [documentJson] carries the
+/// codec-encoded run seed; [audio] and [target] cross the isolate boundary as
+/// native Dart objects so the raw PCM never round-trips through the document
+/// codec (ADR 0254 §2). [reportProgress] lets a long-running operation (e.g.
+/// the V2 stage chain) publish [AnalysisProgressEvent]s back to the spawning
+/// isolate as they occur, ahead of the final return value.
 typedef AnalysisDocumentIsolateOperation =
-    FutureOr<String> Function(String documentJson);
+    FutureOr<String> Function(
+      String documentJson,
+      ValidatedPcmAnalysisInput audio,
+      AnalysisTarget? target,
+      void Function(AnalysisProgressEvent event) reportProgress,
+    );
 
 /// Spawns the isolate used for one analysis run.
 ///
@@ -48,18 +75,28 @@ typedef AnalysisDocumentIsolateOperation =
 typedef AnalysisIsolateSpawner =
     Future<Isolate> Function(
       SendPort replyTo,
-      String input,
+      String documentJson,
+      ValidatedPcmAnalysisInput audio,
+      AnalysisTarget? target,
       AnalysisDocumentIsolateOperation operation,
     );
 
 /// Default [AnalysisIsolateSpawner] used by production analysis runs.
 Future<Isolate> spawnAnalysisIsolate(
   SendPort replyTo,
-  String input,
+  String documentJson,
+  ValidatedPcmAnalysisInput audio,
+  AnalysisTarget? target,
   AnalysisDocumentIsolateOperation operation,
 ) => Isolate.spawn<_IsolateRequest>(
   _isolateEntry,
-  _IsolateRequest(replyTo: replyTo, input: input, operation: operation),
+  _IsolateRequest(
+    replyTo: replyTo,
+    documentJson: documentJson,
+    audio: audio,
+    target: target,
+    operation: operation,
+  ),
 );
 
 /// One-shot isolate runner. Each [start] creates a fresh isolate; [cancel]
@@ -75,11 +112,11 @@ final class AnalysisIsolateRunner implements AnalysisRunner {
   int _nextRunNumber = 0;
 
   @override
-  AnalysisRunHandle start(AnalysisDocument input) {
+  AnalysisRunHandle start(AnalysisRunRequest input) {
     final runId = 'analysis-isolate-${++_nextRunNumber}';
     return _IsolateAnalysisRun(
       runId: runId,
-      input: input,
+      request: input,
       operation: operation,
       isolateSpawner: isolateSpawner,
     );
@@ -89,16 +126,23 @@ final class AnalysisIsolateRunner implements AnalysisRunner {
 final class _IsolateAnalysisRun implements AnalysisRunHandle {
   _IsolateAnalysisRun({
     required this.runId,
-    required this.input,
+    required AnalysisRunRequest request,
     required this.operation,
     required this.isolateSpawner,
   }) : _result = Completer<AnalysisRunResult>() {
+    _request = request;
     unawaited(_start());
   }
 
   @override
   final String runId;
-  final AnalysisDocument input;
+
+  /// The raw-PCM-carrying request. Nulled out as soon as the spawn call has
+  /// handed the audio off to the isolate boundary (or on any terminal/cancel
+  /// path that never reaches spawn), so a caller holding a closed
+  /// [AnalysisRunHandle] cannot keep the sample buffer reachable (ADR 0254
+  /// §2, brief §5.2).
+  AnalysisRunRequest? _request;
   final AnalysisDocumentIsolateOperation operation;
   final AnalysisIsolateSpawner isolateSpawner;
   final StreamController<AnalysisProgressEvent> _progress =
@@ -117,42 +161,47 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
 
   Future<void> _start() async {
     try {
-      final encodedInput = const AnalysisDocumentCodec().encode(input);
+      final request = _request;
+      if (request == null) return;
+      final encodedSeed = const AnalysisDocumentCodec().encode(request.seed);
       final messages = ReceivePort();
       _messages = messages;
       _isolate = await isolateSpawner(
         messages.sendPort,
-        encodedInput,
+        encodedSeed,
+        request.audio,
+        request.target,
         operation,
       );
+      _request = null;
       if (_cancelled) {
         await _dispose();
         return;
       }
-      _progress.add(
-        AnalysisPhaseProgressEvent(
-          runId: runId,
-          phase: AnalysisProgressPhase.finalizing,
-        ),
-      );
-      final message = await messages.first;
-      if (_cancelled) return;
-      if (message is String) {
-        final decoded = const AnalysisDocumentCodec().decode(message);
-        switch (decoded) {
-          case Success<AnalysisDocument>(:final value):
-            _complete(completion: value.completion.status, value: value);
-          case Failure<AnalysisDocument>(:final error):
-            _complete(
-              completion: AnalysisCompletionStatus.failed,
-              failure: error,
-            );
+      await for (final message in messages) {
+        if (_cancelled) break;
+        if (message is AnalysisProgressEvent) {
+          _progress.add(_remapRunId(message));
+          continue;
         }
-      } else {
-        _complete(
-          completion: AnalysisCompletionStatus.failed,
-          failure: UnknownFailure(cause: message),
-        );
+        if (message is String) {
+          final decoded = const AnalysisDocumentCodec().decode(message);
+          switch (decoded) {
+            case Success<AnalysisDocument>(:final value):
+              _complete(completion: value.completion.status, value: value);
+            case Failure<AnalysisDocument>(:final error):
+              _complete(
+                completion: AnalysisCompletionStatus.failed,
+                failure: error,
+              );
+          }
+        } else {
+          _complete(
+            completion: AnalysisCompletionStatus.failed,
+            failure: UnknownFailure(cause: message),
+          );
+        }
+        break;
       }
     } on Object catch (error, stackTrace) {
       if (!_cancelled) {
@@ -170,12 +219,38 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
   Future<void> cancel() async {
     if (_disposed || _cancelled) return;
     _cancelled = true;
+    _request = null;
     await _dispose();
     if (!_result.isCompleted) {
       _result.complete(
         const AnalysisRunResult(completion: AnalysisCompletionStatus.cancelled),
       );
     }
+  }
+
+  /// The isolate-side operation (e.g. the V2 pipeline) mints its own
+  /// internal run id for [AnalysisProgressEvent]s. Callers only know this
+  /// handle's [runId] (ADR 0254's stable `AnalysisRunHandle` contract), so
+  /// every forwarded event is re-stamped with it here, keeping phase and
+  /// unit-count data untouched.
+  AnalysisProgressEvent _remapRunId(AnalysisProgressEvent event) {
+    return switch (event) {
+      AnalysisPhaseProgressEvent(
+        :final phase,
+        :final completedUnits,
+        :final totalUnits,
+      ) =>
+        AnalysisPhaseProgressEvent(
+          runId: runId,
+          phase: phase,
+          completedUnits: completedUnits,
+          totalUnits: totalUnits,
+        ),
+      AnalysisRunResultEvent(:final completion) => AnalysisRunResultEvent(
+        runId: runId,
+        completion: completion,
+      ),
+    };
   }
 
   void _complete({
@@ -200,6 +275,7 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
     final isolate = _isolate;
     _isolate = null;
     isolate?.kill(priority: Isolate.immediate);
+    _request = null;
     if (_disposed) return;
     _disposed = true;
     _messages?.close();
@@ -207,21 +283,38 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
   }
 }
 
+/// Test-only introspection of whether [handle] still holds the raw-PCM
+/// request (ADR 0254 §2, brief §5.2: a run releases its sample buffer once
+/// terminal or cancelled). Not part of [AnalysisRunHandle]'s contract.
+@visibleForTesting
+bool debugAnalysisRunHandleHoldsRequest(AnalysisRunHandle handle) =>
+    handle is _IsolateAnalysisRun && handle._request != null;
+
 final class _IsolateRequest {
   const _IsolateRequest({
     required this.replyTo,
-    required this.input,
+    required this.documentJson,
+    required this.audio,
+    required this.target,
     required this.operation,
   });
 
   final SendPort replyTo;
-  final String input;
+  final String documentJson;
+  final ValidatedPcmAnalysisInput audio;
+  final AnalysisTarget? target;
   final AnalysisDocumentIsolateOperation operation;
 }
 
 void _isolateEntry(_IsolateRequest request) async {
   try {
-    request.replyTo.send(await request.operation(request.input));
+    final result = await request.operation(
+      request.documentJson,
+      request.audio,
+      request.target,
+      request.replyTo.send,
+    );
+    request.replyTo.send(result);
   } on Object catch (error) {
     request.replyTo.send(error.toString());
   }
