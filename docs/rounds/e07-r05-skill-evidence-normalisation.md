@@ -251,7 +251,7 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   — `EvidenceAggregator.ingest`: dedup a `sourceOutcomeId` alapján
   (első beérkezés nyer, idempotens újrajátszásnál), és a logger csak
   `skillId` / `source` / `sourceOutcomeId` / `discomfortCategory` mezőket
-  kap — a `DiscomfortReport.note` sosem kerül a `fields` map-be.
+  kap.
 - `lib/features/practice_generator/public.dart` bővítve a négy új
   exporttal.
 
@@ -278,5 +278,69 @@ zöld (6/6).
 
 **Formázás:** `dart format` lefutott az összes érintett `lib/`/`test/`
 fájlon (a gate `format` lépése is ezt ellenőrizte, változás nélkül).
+
+### 10.1 Javító kör — F1 MAJOR (2026-08-15)
+
+**Talált hiba (review F1):** `DiscomfortReport.note` egy publikus,
+korlátozás nélküli `String?` mező volt magán a `SkillEvidence` modellen. Az
+in-memory repository a teljes evidence-t megőrizte, így a szabad szöveg
+(akár egy data-URI-szerű, base64-kódolt hangfelvétel) bekerülhetett a
+perzisztált/exportálható evidence-be — az ADR 0260 §1 és a brief A1
+kritériuma ellen.
+
+**Javítás:** `DiscomfortReport`-ról teljesen eltávolítva a `note` mező (és a
+csak ezt kiszolgáló `_normalizeOptionalText` segédfüggvény) — a típus mostantól
+kizárólag a strukturált `category`-t hordozza, szabad szöveg számára nincs
+hely a modellen. A tanuló önjelentésének nyers szövege az
+`EvidenceAggregator.ingest` egy új, tranziens `discomfortNote` opcionális
+paraméterén léphet be a rendszerbe (a Kör 7-8 önjelentés-adapterének szánva),
+de az `ingest` testében ezt SOHA nem olvassa ki: nem kerül az `evidence`-be,
+nem kerül a repository-ba, nem kerül a logger `fields` map-jébe, eseménynévbe
+vagy kivételbe.
+
+**Regressziós teszt:** `evidence_aggregator_test.dart` egy új cellája
+(`a data-URI/base64-like discomfort note is discarded at the ingestion
+boundary — never stored, serialized, logged, or in an exception (regression,
+F1)`) egy `data:audio/wav;base64,…` alakú szöveget ad át `discomfortNote`-ként,
+majd bizonyítja: (1) a visszaadott/tárolt `SkillEvidence` `toString()`-je és a
+`repository.allForSkill(...)` eredményének `toString()`-je nem tartalmazza a
+payloadot (nincs hova tárolni/szerializálni — a `DiscomfortReport`-on
+típusszinten nincs mező hozzá); (2) a `CollectingAppLogger` egyetlen
+rekordja sem tartalmazza; (3) az `ingest` nem dob kivételt, és ha mégis
+dobna, annak `toString()`-je sem tartalmazná. A meglévő három A5-cella
+(`a discomfort free-text note never reaches the logger`,
+`logging only carries the stable outcome id and discomfort category`,
+`duplicate ingestion also never logs the note (dedup path)`) most a
+`discomfortNote` paraméteren keresztül adja át a titkos szöveget (a
+`DiscomfortReport` konstruktorán már nem lehetne). Az A1/A4 cellák a
+`skill_evidence_test.dart`-ban a `DiscomfortReport(category: …)` alakra
+frissültek — az A1–A9 viselkedés máskülönben változatlan.
+
+**Új valódi-sértés próba (F1-re célzottan):** `evidence_aggregator.dart`
+`ingest`-jébe ideiglenesen visszakerült egy `'discomfortNote': discomfortNote`
+mező a log `fields`-be. Ennek hatására mind a négy A5-cella pirosra váltott
+(`Expected: false, Actual: <true>`, a data-URI szöveg megjelent a
+naplórekordban) — `flutter test
+test/features/practice_generator/evidence/evidence_aggregator_test.dart`
+külön futtatásával igazolva (+3 -4). A módosítást ezután visszaállítottam.
+
+**Javító gate (csonkítatlan, teljes brief §7 parancs):**
+
+```
+tools/round-gate.sh test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/evidence/skill_evidence_test.dart test/features/practice_generator/evidence/evidence_repository_fake_test.dart
+```
+
+Eredmény: `format` zöld (a `evidence_aggregator_test.dart` egy `dart format`
+futással), `analyze` zöld (0 issue), mindhárom célzott teszt zöld — most
+7 + 13 + 9 = 29 cella (az új F1-regresszióval eggyel több, mint korábban) —,
+`architecture` zöld, `secrets` zöld, `l10n` zöld → **MINDEN GATE ZÖLD**.
+
+**Érintett fájlok a javító körben:** `skill_evidence.dart` (a `note` mező és
+segédfüggvénye eltávolítva), `evidence_aggregator.dart` (`ingest` új
+`discomfortNote` paramétere), `skill_evidence_test.dart` és
+`evidence_aggregator_test.dart` (a fentiek szerint frissítve/bővítve), jelen
+handoff (§10.1). A `practice_evidence_repository.dart` és a `public.dart`
+nem változott — a repository már eleve azt tárolta, amit a modell átadott
+neki, a hiba forrása kizárólag a modellben volt.
 
 ## 11. Review — a Claude tölti ki

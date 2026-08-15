@@ -88,10 +88,7 @@ void main() {
             metricCode: 'chordChangeAccuracy',
             value: 0.9,
           ),
-          discomfort: DiscomfortReport(
-            category: DiscomfortCategory.pain,
-            note: 'wrist ache',
-          ),
+          discomfort: DiscomfortReport(category: DiscomfortCategory.pain),
         );
 
         expect(withBoth.performance!.value, 0.9);

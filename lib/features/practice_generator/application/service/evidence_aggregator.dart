@@ -17,9 +17,14 @@ abstract final class EvidenceAggregatorEvent {
 ///
 /// The pre-flight measurement of `main @ c4497773` (round brief §0.0) found
 /// call sites are not trusted to remember redaction, so this aggregator only
-/// ever logs a stable outcome identifier and a discomfort *category* — the
-/// learner's free-text self-report ([DiscomfortReport.note]) is never passed
-/// to [logger], not in an event name, a field, or an exception.
+/// ever logs a stable outcome identifier and a discomfort *category*.
+/// [SkillEvidence] itself has no field capable of holding a discomfort
+/// free-text note (ADR 0260 §1, §4) — [ingest]'s [discomfortNote] parameter
+/// exists only so a future self-report call site (Kör 7-8) can hand off the
+/// learner's raw text without having to remember to strip it first. It is
+/// discarded immediately at this boundary: never attached to [evidence],
+/// never passed to [_repository], never passed to [logger] (not in an event
+/// name, a field, or an exception), and never returned.
 final class EvidenceAggregator {
   const EvidenceAggregator({
     required PracticeEvidenceRepository repository,
@@ -36,7 +41,10 @@ final class EvidenceAggregator {
   /// [evidence] is dropped — this keeps ingestion idempotent regardless of
   /// replay order. Returns the evidence now held by the repository for this
   /// outcome id.
-  SkillEvidence ingest(SkillEvidence evidence) {
+  ///
+  /// [discomfortNote] is accepted and immediately discarded — see the class
+  /// doc. It is never read by this method.
+  SkillEvidence ingest(SkillEvidence evidence, {String? discomfortNote}) {
     final existing = _repository.findByOutcomeId(evidence.sourceOutcomeId);
     if (existing != null) {
       _logger.info(

@@ -102,25 +102,24 @@ final class PerformanceEvidence {
 }
 
 /// A learner's own discomfort signal, kept on its own scale (ADR 0260 §2).
-/// [note] is free text the learner wrote and MUST NEVER reach a log sink —
-/// callers that log evidence may only surface [category].
+///
+/// This type intentionally has NO free-text field (ADR 0260 §1, §4): a
+/// learner's self-report note is transient input at the ingestion boundary
+/// (see `EvidenceAggregator.ingest`'s `discomfortNote` parameter) and is
+/// discarded there — it never becomes part of the persisted/exportable
+/// evidence model, so there is nothing here that could leak into storage,
+/// serialization, or a log sink.
 final class DiscomfortReport {
-  DiscomfortReport({required this.category, String? note})
-    : note = _normalizeOptionalText(note);
+  DiscomfortReport({required this.category});
 
   final DiscomfortCategory category;
 
-  /// Free-text self-report. Never pass this to a logger.
-  final String? note;
-
   @override
   bool operator ==(Object other) =>
-      other is DiscomfortReport &&
-      category == other.category &&
-      note == other.note;
+      other is DiscomfortReport && category == other.category;
 
   @override
-  int get hashCode => Object.hash(category, note);
+  int get hashCode => category.hashCode;
 }
 
 /// Immutable, versioned, confidence-aware observation about a skill.
@@ -235,12 +234,6 @@ String _requireText(String value, String name) {
     throw ArgumentError.value(value, name, 'must not be empty or blank');
   }
   return trimmed;
-}
-
-String? _normalizeOptionalText(String? value) {
-  if (value == null) return null;
-  final trimmed = value.trim();
-  return trimmed.isEmpty ? null : trimmed;
 }
 
 int _requireVersion(int value) {

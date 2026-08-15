@@ -146,11 +146,9 @@ void main() {
         evidence(
           outcomeId: 'outcome-1',
           performance: null,
-          discomfort: DiscomfortReport(
-            category: DiscomfortCategory.pain,
-            note: secretNote,
-          ),
+          discomfort: DiscomfortReport(category: DiscomfortCategory.pain),
         ),
+        discomfortNote: secretNote,
       );
 
       expect(logger.events, isNotEmpty);
@@ -177,11 +175,9 @@ void main() {
           evidence(
             outcomeId: 'outcome-1',
             performance: null,
-            discomfort: DiscomfortReport(
-              category: DiscomfortCategory.tension,
-              note: secretNote,
-            ),
+            discomfort: DiscomfortReport(category: DiscomfortCategory.tension),
           ),
+          discomfortNote: secretNote,
         );
 
         expect(logger.fields.single['sourceOutcomeId'], 'outcome-1');
@@ -198,19 +194,73 @@ void main() {
         logger: logger,
       );
 
-      final withNote = evidence(
+      final withDiscomfort = evidence(
         outcomeId: 'outcome-1',
         performance: null,
-        discomfort: DiscomfortReport(
-          category: DiscomfortCategory.pain,
-          note: secretNote,
-        ),
+        discomfort: DiscomfortReport(category: DiscomfortCategory.pain),
       );
-      aggregator.ingest(withNote);
-      aggregator.ingest(withNote);
+      aggregator.ingest(withDiscomfort, discomfortNote: secretNote);
+      aggregator.ingest(withDiscomfort, discomfortNote: secretNote);
 
       for (final logged in logger.everyLoggedString) {
         expect(logged.contains(secretNote), isFalse);
+      }
+    });
+
+    test('a data-URI/base64-like discomfort note is discarded at the ingestion '
+        'boundary — never stored, serialized, logged, or in an exception '
+        '(regression, F1)', () {
+      const dataUriNote =
+          'data:audio/wav;base64,'
+          'UklGRixhAAAAV0FWRWZtdCAQAAAAAQACAESsAAAAiBUAAAIAEABkYXRh';
+      final repository = InMemoryPracticeEvidenceRepository();
+      final logger = CollectingAppLogger();
+      final aggregator = EvidenceAggregator(
+        repository: repository,
+        logger: logger,
+      );
+
+      Object? thrown;
+      SkillEvidence? stored;
+      try {
+        stored = aggregator.ingest(
+          evidence(
+            outcomeId: 'outcome-data-uri',
+            performance: null,
+            discomfort: DiscomfortReport(category: DiscomfortCategory.pain),
+          ),
+          discomfortNote: dataUriNote,
+        );
+      } catch (e) {
+        thrown = e;
+      }
+
+      expect(
+        thrown,
+        isNull,
+        reason: 'ingest must not throw for an otherwise-valid evidence',
+      );
+
+      // Not stored: DiscomfortReport has no field capable of holding it.
+      expect(stored, isNotNull);
+      expect(stored!.discomfort!.category, DiscomfortCategory.pain);
+
+      // Not serialized: nothing round-trips it back out.
+      expect(stored.toString(), isNot(contains(dataUriNote)));
+      expect(stored.discomfort.toString(), isNot(contains(dataUriNote)));
+      expect(
+        repository.allForSkill('chord.gMajor').toString(),
+        isNot(contains(dataUriNote)),
+      );
+
+      // Not logged, in any event name, field, or error.
+      for (final logged in logger.everyLoggedString) {
+        expect(logged.contains(dataUriNote), isFalse);
+      }
+
+      // Not in an exception message, should any future path throw.
+      if (thrown != null) {
+        expect(thrown.toString(), isNot(contains(dataUriNote)));
       }
     });
   });
