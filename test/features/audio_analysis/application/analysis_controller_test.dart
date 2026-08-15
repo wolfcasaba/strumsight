@@ -264,7 +264,7 @@ final class _QueueRunner implements AnalysisRunner {
   final List<_FakeRun> _runs;
 
   @override
-  AnalysisRunHandle start(AnalysisDocument input) => _runs.removeAt(0);
+  AnalysisRunHandle start(AnalysisRunRequest input) => _runs.removeAt(0);
 }
 
 final class _FakeRun implements AnalysisRunHandle {

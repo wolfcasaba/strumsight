@@ -4,6 +4,7 @@ import 'package:strumsight/features/analyze/public.dart';
 
 import '../data/shadow/shadow_diff_report.dart';
 import '../domain/analysis_document.dart';
+import '../domain/analysis_input.dart';
 import 'analysis_isolate_runner.dart';
 
 /// Injectable V1 boundary used by [ShadowAnalysisRunner].
@@ -53,7 +54,19 @@ final class ShadowAnalysisRunner {
     AnalysisRunResult? v2Result;
     var v2Failed = false;
     try {
-      final handle = v2Runner.start(v2Input);
+      final handle = v2Runner.start(
+        AnalysisRunRequest(
+          seed: v2Input,
+          audio: ValidatedPcmAnalysisInput(
+            input: PcmAnalysisInput(
+              samples: samples,
+              sampleRate: sampleRate,
+              channelCount: 1,
+              source: v2Input.input.source,
+            ),
+          ),
+        ),
+      );
       v2Result = await handle.result;
       v2Failed =
           v2Result.document == null ||

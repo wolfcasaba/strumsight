@@ -5,7 +5,9 @@ import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/data/analysis_document_codec.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
+import 'package:strumsight/features/audio_analysis/domain/analysis_input.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
+import 'package:strumsight/features/audio_analysis/domain/target/analysis_target.dart';
 
 /// A cancellable execution returned synchronously when a run is started.
 abstract interface class AnalysisRunHandle {
@@ -31,15 +33,36 @@ final class AnalysisRunResult {
 
 /// Boundary consumed by the application use case and faked by controller tests.
 abstract interface class AnalysisRunner {
-  AnalysisRunHandle start(AnalysisDocument input);
+  AnalysisRunHandle start(AnalysisRunRequest input);
 }
 
-/// Top-level, isolate-sendable document transformation using codec JSON.
-///
-/// A future real stage-chain composition supplies this operation. It is not
-/// created in this round because no concrete V2 stage list exists yet.
+/// The input to one analysis run (ADR 0254 §1): a document seed carrying
+/// identity/mode/provenance, the validated PCM the chain actually analyses,
+/// and an optional performance reference. [seed] is never the audio carrier —
+/// [audio] lives only in memory for the lifetime of the run and is never
+/// written into a persisted, exportable [AnalysisDocument].
+final class AnalysisRunRequest {
+  const AnalysisRunRequest({
+    required this.seed,
+    required this.audio,
+    this.target,
+  });
+
+  final AnalysisDocument seed;
+  final ValidatedPcmAnalysisInput audio;
+  final AnalysisTarget? target;
+}
+
+/// Top-level, isolate-sendable analysis operation. [documentJson] carries the
+/// codec-encoded run seed; [audio] and [target] cross the isolate boundary as
+/// native Dart objects so the raw PCM never round-trips through the document
+/// codec (ADR 0254 §2).
 typedef AnalysisDocumentIsolateOperation =
-    FutureOr<String> Function(String documentJson);
+    FutureOr<String> Function(
+      String documentJson,
+      ValidatedPcmAnalysisInput audio,
+      AnalysisTarget? target,
+    );
 
 /// Spawns the isolate used for one analysis run.
 ///
@@ -48,18 +71,28 @@ typedef AnalysisDocumentIsolateOperation =
 typedef AnalysisIsolateSpawner =
     Future<Isolate> Function(
       SendPort replyTo,
-      String input,
+      String documentJson,
+      ValidatedPcmAnalysisInput audio,
+      AnalysisTarget? target,
       AnalysisDocumentIsolateOperation operation,
     );
 
 /// Default [AnalysisIsolateSpawner] used by production analysis runs.
 Future<Isolate> spawnAnalysisIsolate(
   SendPort replyTo,
-  String input,
+  String documentJson,
+  ValidatedPcmAnalysisInput audio,
+  AnalysisTarget? target,
   AnalysisDocumentIsolateOperation operation,
 ) => Isolate.spawn<_IsolateRequest>(
   _isolateEntry,
-  _IsolateRequest(replyTo: replyTo, input: input, operation: operation),
+  _IsolateRequest(
+    replyTo: replyTo,
+    documentJson: documentJson,
+    audio: audio,
+    target: target,
+    operation: operation,
+  ),
 );
 
 /// One-shot isolate runner. Each [start] creates a fresh isolate; [cancel]
@@ -75,11 +108,11 @@ final class AnalysisIsolateRunner implements AnalysisRunner {
   int _nextRunNumber = 0;
 
   @override
-  AnalysisRunHandle start(AnalysisDocument input) {
+  AnalysisRunHandle start(AnalysisRunRequest input) {
     final runId = 'analysis-isolate-${++_nextRunNumber}';
     return _IsolateAnalysisRun(
       runId: runId,
-      input: input,
+      request: input,
       operation: operation,
       isolateSpawner: isolateSpawner,
     );
@@ -89,7 +122,7 @@ final class AnalysisIsolateRunner implements AnalysisRunner {
 final class _IsolateAnalysisRun implements AnalysisRunHandle {
   _IsolateAnalysisRun({
     required this.runId,
-    required this.input,
+    required this.request,
     required this.operation,
     required this.isolateSpawner,
   }) : _result = Completer<AnalysisRunResult>() {
@@ -98,7 +131,7 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
 
   @override
   final String runId;
-  final AnalysisDocument input;
+  final AnalysisRunRequest request;
   final AnalysisDocumentIsolateOperation operation;
   final AnalysisIsolateSpawner isolateSpawner;
   final StreamController<AnalysisProgressEvent> _progress =
@@ -117,12 +150,14 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
 
   Future<void> _start() async {
     try {
-      final encodedInput = const AnalysisDocumentCodec().encode(input);
+      final encodedSeed = const AnalysisDocumentCodec().encode(request.seed);
       final messages = ReceivePort();
       _messages = messages;
       _isolate = await isolateSpawner(
         messages.sendPort,
-        encodedInput,
+        encodedSeed,
+        request.audio,
+        request.target,
         operation,
       );
       if (_cancelled) {
@@ -210,18 +245,24 @@ final class _IsolateAnalysisRun implements AnalysisRunHandle {
 final class _IsolateRequest {
   const _IsolateRequest({
     required this.replyTo,
-    required this.input,
+    required this.documentJson,
+    required this.audio,
+    required this.target,
     required this.operation,
   });
 
   final SendPort replyTo;
-  final String input;
+  final String documentJson;
+  final ValidatedPcmAnalysisInput audio;
+  final AnalysisTarget? target;
   final AnalysisDocumentIsolateOperation operation;
 }
 
 void _isolateEntry(_IsolateRequest request) async {
   try {
-    request.replyTo.send(await request.operation(request.input));
+    request.replyTo.send(
+      await request.operation(request.documentJson, request.audio, request.target),
+    );
   } on Object catch (error) {
     request.replyTo.send(error.toString());
   }

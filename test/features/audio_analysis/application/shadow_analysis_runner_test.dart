@@ -44,6 +44,37 @@ void main() {
       });
     }
 
+    test(
+      'A7 — forwards the exact V1 audio to the injected V2 runner request',
+      () async {
+        AnalysisRunRequest? captured;
+        final seed = _document();
+        final samples = strumSignal(lowFirst: true);
+        final runner = ShadowAnalysisRunner(
+          v1Analyze: const ClipAnalyzer().analyze,
+          v2Runner: _Runner(
+            () => AnalysisRunResult(
+              completion: AnalysisCompletionStatus.complete,
+              document: _document(),
+            ),
+            onStart: (request) => captured = request,
+          ),
+        );
+
+        await runner.run(
+          samples: samples,
+          sampleRate: 44100,
+          v2Input: seed,
+          labModeActive: true,
+          audioAnalysisV2Enabled: true,
+        );
+
+        expect(captured, isNotNull);
+        expect(captured!.audio.input.samples, samples);
+        expect(identical(captured!.seed, seed), isTrue);
+      },
+    );
+
     test('isolates a throwing V2 runner from the V1 result', () async {
       final runner = ShadowAnalysisRunner(
         v1Analyze: _v1,
@@ -232,12 +263,16 @@ AnalysisDocument _document() => AnalysisDocument(
 );
 
 final class _Runner implements AnalysisRunner {
-  _Runner(this._result);
+  _Runner(this._result, {this.onStart});
 
   final AnalysisRunResult Function() _result;
+  final void Function(AnalysisRunRequest request)? onStart;
 
   @override
-  AnalysisRunHandle start(AnalysisDocument _) => _Handle(_result());
+  AnalysisRunHandle start(AnalysisRunRequest request) {
+    onStart?.call(request);
+    return _Handle(_result());
+  }
 }
 
 final class _Handle implements AnalysisRunHandle {
