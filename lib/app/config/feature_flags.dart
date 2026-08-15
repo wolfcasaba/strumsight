@@ -19,6 +19,8 @@ final class FeatureFlags {
     this.songTrainerV2Enabled = false,
     this.aiTutorEnabled = false,
     this.aiTutorCloudEnabled = false,
+    this.practiceGeneratorEnabled = false,
+    this.plannerAssistEnabled = false,
     this.visionEnabled = false,
     this.visionSetupEnabled = false,
     this.visionHandTrackingEnabled = false,
@@ -70,6 +72,8 @@ final class FeatureFlags {
       songTrainerV2Enabled: nonProd,
       aiTutorEnabled: false,
       aiTutorCloudEnabled: false,
+      practiceGeneratorEnabled: false,
+      plannerAssistEnabled: false,
       visionEnabled: false,
       visionSetupEnabled: false,
       visionHandTrackingEnabled: false,
@@ -125,6 +129,14 @@ final class FeatureFlags {
 
   /// Whether cloud AI Tutor capabilities are available. Defaults to OFF.
   final bool aiTutorCloudEnabled;
+
+  /// Whether deterministic practice-plan generation is available. It remains
+  /// OFF in every environment until its rollout decision is recorded.
+  final bool practiceGeneratorEnabled;
+
+  /// Whether model-assisted practice-plan suggestions are available. It
+  /// remains OFF in every environment until its rollout decision is recorded.
+  final bool plannerAssistEnabled;
 
   /// Whether the offline-first Computer Vision capability is available.
   final bool visionEnabled;
@@ -218,6 +230,8 @@ final class FeatureFlags {
       other.songTrainerV2Enabled == songTrainerV2Enabled &&
       other.aiTutorEnabled == aiTutorEnabled &&
       other.aiTutorCloudEnabled == aiTutorCloudEnabled &&
+      other.practiceGeneratorEnabled == practiceGeneratorEnabled &&
+      other.plannerAssistEnabled == plannerAssistEnabled &&
       other.visionEnabled == visionEnabled &&
       other.visionSetupEnabled == visionSetupEnabled &&
       other.visionHandTrackingEnabled == visionHandTrackingEnabled &&
@@ -260,6 +274,8 @@ final class FeatureFlags {
       songTrainerV2Enabled,
       aiTutorEnabled,
       aiTutorCloudEnabled,
+      practiceGeneratorEnabled,
+      plannerAssistEnabled,
       visionEnabled,
       visionSetupEnabled,
       visionHandTrackingEnabled,
@@ -298,6 +314,8 @@ final class FeatureFlags {
       'songTrainerV2Enabled: $songTrainerV2Enabled, '
       'aiTutorEnabled: $aiTutorEnabled, '
       'aiTutorCloudEnabled: $aiTutorCloudEnabled, '
+      'practiceGeneratorEnabled: $practiceGeneratorEnabled, '
+      'plannerAssistEnabled: $plannerAssistEnabled, '
       'visionEnabled: $visionEnabled, '
       'visionSetupEnabled: $visionSetupEnabled, '
       'visionHandTrackingEnabled: $visionHandTrackingEnabled, '
