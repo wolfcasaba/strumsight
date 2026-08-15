@@ -24,8 +24,18 @@ A SDD-t nem egyetlen óriási feladatként kell átadni a Codexnek. Mindig ponto
 | 10 | Epic 9: Community Platform | 32 | Chapter 2 és 9; backend migráció | [`10-epic-09-community-platform.md`](10-epic-09-community-platform.md) |
 | 11 | Epic 10: Offline AI | 32 | Chapter 5 gateway contract; Chapter 2 platform | [`11-epic-10-offline-ai.md`](11-epic-10-offline-ai.md) |
 | 12 | Release Roadmap, Sprint Planning & Final Integration | 42 | Chapter 1–11 specifikációja és megvalósítási állapota | [`12-release-roadmap-final-integration.md`](12-release-roadmap-final-integration.md) |
+| 13 | UI/UX Design System & Screen Specification | 36 | cross-cutting; Chapter 1–12 felületei | [`13-chapter-13-ui-ux-design-system.md`](13-chapter-13-ui-ux-design-system.md) |
+| 14 | Recognition Accuracy & Useful UI Recovery | 42 | Chapter 7 audio analysis; Chapter 13 UI | [`14-chapter-14-recognition-ui-recovery.md`](14-chapter-14-recognition-ui-recovery.md) |
 
 > A körszámokat a tényleges Markdown-fejezetekből számoltuk. A Chapter 12 jelenlegi dokumentuma 42 integrációs kört tartalmaz; végrehajtáskor a fájl tartalma az irányadó.
+>
+> **Chapter 13 és 14 (hozzáadva 2026-08-15).** Egyik sem epic: cross-cutting
+> programok, ezért a kör-azonosítójuk `E13-RNN` és `E14-RNN` — a szám a
+> FEJEZETET jelöli, nem egy epicet (az epicek E01–E10). Ugyanaz a minta, mint az
+> `E99` governance-pszeudoepic. A Chapter 14 kutatási alapja:
+> [`docs/research/recognition-research-sources.md`](../research/recognition-research-sources.md),
+> a végrehajtási gyorsindító:
+> [`docs/research/recognition-recovery-quick-start.md`](../research/recognition-recovery-quick-start.md).
 
 ## Függőségi kép
 
