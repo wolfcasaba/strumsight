@@ -199,8 +199,7 @@ final class AnalysisPipeline<T> {
         final stage = _stages[index];
         final context = AnalysisStageContext(
           runId: runId,
-          phase:
-              _stagePhases?[stage.id] ?? AnalysisProgressPhase.values[index],
+          phase: _stagePhases?[stage.id] ?? AnalysisProgressPhase.values[index],
           cancellationToken: cancellationToken,
           eventSink: publish,
         );

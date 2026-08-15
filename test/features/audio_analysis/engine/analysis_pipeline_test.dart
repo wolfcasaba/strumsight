@@ -236,36 +236,33 @@ void main() {
       );
     });
 
-    test(
-      'A6 — a regressing published phase event fails the run with a '
-      'StateError',
-      () async {
-        final pipeline = AnalysisPipeline<int>(
-          stages: <AnalysisStage<int, int>>[
-            _ExplicitPhaseStage(
-              id: 'first',
-              phase: AnalysisProgressPhase.estimatingBeatGrid,
-            ),
-            _ExplicitPhaseStage(
-              id: 'second',
-              phase: AnalysisProgressPhase.preprocessing,
-            ),
-          ],
-        );
+    test('A6 — a regressing published phase event fails the run with a '
+        'StateError', () async {
+      final pipeline = AnalysisPipeline<int>(
+        stages: <AnalysisStage<int, int>>[
+          _ExplicitPhaseStage(
+            id: 'first',
+            phase: AnalysisProgressPhase.estimatingBeatGrid,
+          ),
+          _ExplicitPhaseStage(
+            id: 'second',
+            phase: AnalysisProgressPhase.preprocessing,
+          ),
+        ],
+      );
 
-        final observation = await _observe(
-          pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
-        );
+      final observation = await _observe(
+        pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
+      );
 
-        expect(observation.result.completion, AnalysisCompletionStatus.failed);
-        expect(observation.result.value, isNull);
-        expect(observation.result.failure, isA<UnknownFailure>());
-        expect(
-          (observation.result.failure! as UnknownFailure).cause,
-          isA<StateError>(),
-        );
-      },
-    );
+      expect(observation.result.completion, AnalysisCompletionStatus.failed);
+      expect(observation.result.value, isNull);
+      expect(observation.result.failure, isA<UnknownFailure>());
+      expect(
+        (observation.result.failure! as UnknownFailure).cause,
+        isA<StateError>(),
+      );
+    });
 
     test(
       'A7 — two stages sharing the same mapped phase do not throw',
@@ -302,66 +299,54 @@ void main() {
       },
     );
 
-    test(
-      'rejects a stagePhases map missing a mapping for a stage ID',
-      () {
-        expect(
-          () => AnalysisPipeline<int>(
-            stages: <AnalysisStage<int, int>>[FakeAnalysisStage(id: 'only')],
-            stagePhases: const <String, AnalysisProgressPhase>{},
-          ),
-          throwsArgumentError,
-        );
-      },
-    );
+    test('rejects a stagePhases map missing a mapping for a stage ID', () {
+      expect(
+        () => AnalysisPipeline<int>(
+          stages: <AnalysisStage<int, int>>[FakeAnalysisStage(id: 'only')],
+          stagePhases: const <String, AnalysisProgressPhase>{},
+        ),
+        throwsArgumentError,
+      );
+    });
 
-    test(
-      'rejects a stagePhases map that regresses along the stage order',
-      () {
-        expect(
-          () => AnalysisPipeline<int>(
-            stages: <AnalysisStage<int, int>>[
-              FakeAnalysisStage(id: 'first'),
-              FakeAnalysisStage(id: 'second'),
-            ],
-            stagePhases: const <String, AnalysisProgressPhase>{
-              'first': AnalysisProgressPhase.computingMetrics,
-              'second': AnalysisProgressPhase.preprocessing,
-            },
-          ),
-          throwsArgumentError,
-        );
-      },
-    );
-
-    test(
-      'a stagePhases map allows more stages than progress phases',
-      () async {
-        final pipeline = AnalysisPipeline<int>(
-          stages: List<AnalysisStage<int, int>>.generate(
-            AnalysisProgressPhase.values.length + 1,
-            (index) => FakeAnalysisStage(id: 'stage-$index'),
-          ),
-          stagePhases: <String, AnalysisProgressPhase>{
-            for (
-              var index = 0;
-              index < AnalysisProgressPhase.values.length + 1;
-              index++
-            )
-              'stage-$index': AnalysisProgressPhase.values[index ~/ 2],
+    test('rejects a stagePhases map that regresses along the stage order', () {
+      expect(
+        () => AnalysisPipeline<int>(
+          stages: <AnalysisStage<int, int>>[
+            FakeAnalysisStage(id: 'first'),
+            FakeAnalysisStage(id: 'second'),
+          ],
+          stagePhases: const <String, AnalysisProgressPhase>{
+            'first': AnalysisProgressPhase.computingMetrics,
+            'second': AnalysisProgressPhase.preprocessing,
           },
-        );
+        ),
+        throwsArgumentError,
+      );
+    });
 
-        final observation = await _observe(
-          pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
-        );
+    test('a stagePhases map allows more stages than progress phases', () async {
+      final pipeline = AnalysisPipeline<int>(
+        stages: List<AnalysisStage<int, int>>.generate(
+          AnalysisProgressPhase.values.length + 1,
+          (index) => FakeAnalysisStage(id: 'stage-$index'),
+        ),
+        stagePhases: <String, AnalysisProgressPhase>{
+          for (
+            var index = 0;
+            index < AnalysisProgressPhase.values.length + 1;
+            index++
+          )
+            'stage-$index': AnalysisProgressPhase.values[index ~/ 2],
+        },
+      );
 
-        expect(
-          observation.result.completion,
-          AnalysisCompletionStatus.complete,
-        );
-      },
-    );
+      final observation = await _observe(
+        pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
+      );
+
+      expect(observation.result.completion, AnalysisCompletionStatus.complete);
+    });
   });
 }
 

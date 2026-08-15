@@ -20,92 +20,86 @@ const _sampleRate = 44100;
 
 void main() {
   group('full analysis pipeline composition (ADR 0252)', () {
-    test(
-      'A2/A8 — all 18 stages run in a single live AnalysisPipeline with '
-      'non-decreasing published phases',
-      () async {
-        final pipeline = AnalysisPipeline<AnalysisWorkState>(
-          stages: buildFullAnalysisStages(),
-          failureClassifier: classifyAnalysisStageFailure,
-          stagePhases: analysisStagePhases,
-        );
-        final initial = AnalysisWorkState.seed(
-          input: _input(samples: _fullClip()),
-          mode: AnalysisMode.freePlay,
-        );
+    test('A2/A8 — all 18 stages run in a single live AnalysisPipeline with '
+        'non-decreasing published phases', () async {
+      final pipeline = AnalysisPipeline<AnalysisWorkState>(
+        stages: buildFullAnalysisStages(),
+        failureClassifier: classifyAnalysisStageFailure,
+        stagePhases: analysisStagePhases,
+      );
+      final initial = AnalysisWorkState.seed(
+        input: _input(samples: _fullClip()),
+        mode: AnalysisMode.freePlay,
+      );
 
-        final run = pipeline.start(
-          initial,
-          cancellationToken: AnalysisCancellationSource(),
-        );
-        final events = <AnalysisProgressEvent>[];
-        final done = Completer<void>();
-        final subscription = run.progress.listen(
-          events.add,
-          onDone: done.complete,
-        );
-        final result = await run.result;
-        await done.future;
-        await subscription.cancel();
+      final run = pipeline.start(
+        initial,
+        cancellationToken: AnalysisCancellationSource(),
+      );
+      final events = <AnalysisProgressEvent>[];
+      final done = Completer<void>();
+      final subscription = run.progress.listen(
+        events.add,
+        onDone: done.complete,
+      );
+      final result = await run.result;
+      await done.future;
+      await subscription.cancel();
 
-        expect(result.completion, AnalysisCompletionStatus.complete);
-        final value = result.value;
-        expect(value, isNotNull);
-        expect(
-          result.provenance.stageTimings.map((timing) => timing.id),
-          <String>[
-            IngestStageIds.preprocessing,
-            IngestStageIds.signalQuality,
-            IngestStageIds.legacyEvidence,
-            IngestStageIds.pitch,
-            IngestStageIds.harmony,
-            IngestStageIds.rhythm,
-            IngestStageIds.events,
-            EvaluationStageIds.alignment,
-            EvaluationStageIds.timing,
-            EvaluationStageIds.timingHotspots,
-            EvaluationStageIds.rhythm,
-            EvaluationStageIds.pitch,
-            EvaluationStageIds.dynamics,
-            EvaluationStageIds.accent,
-            EvaluationStageIds.subdivision,
-            EvaluationStageIds.transitions,
-            EvaluationStageIds.technique,
-            EvaluationStageIds.capability,
-          ],
-        );
+      expect(result.completion, AnalysisCompletionStatus.complete);
+      final value = result.value;
+      expect(value, isNotNull);
+      expect(
+        result.provenance.stageTimings.map((timing) => timing.id),
+        <String>[
+          IngestStageIds.preprocessing,
+          IngestStageIds.signalQuality,
+          IngestStageIds.legacyEvidence,
+          IngestStageIds.pitch,
+          IngestStageIds.harmony,
+          IngestStageIds.rhythm,
+          IngestStageIds.events,
+          EvaluationStageIds.alignment,
+          EvaluationStageIds.timing,
+          EvaluationStageIds.timingHotspots,
+          EvaluationStageIds.rhythm,
+          EvaluationStageIds.pitch,
+          EvaluationStageIds.dynamics,
+          EvaluationStageIds.accent,
+          EvaluationStageIds.subdivision,
+          EvaluationStageIds.transitions,
+          EvaluationStageIds.technique,
+          EvaluationStageIds.capability,
+        ],
+      );
 
-        final publishedPhases = events
-            .whereType<AnalysisPhaseProgressEvent>()
-            .map((event) => event.phase)
-            .toList();
-        expect(publishedPhases, hasLength(18));
+      final publishedPhases = events
+          .whereType<AnalysisPhaseProgressEvent>()
+          .map((event) => event.phase)
+          .toList();
+      expect(publishedPhases, hasLength(18));
+      expect(publishedPhases, <AnalysisProgressPhase>[
+        for (final stage in buildFullAnalysisStages())
+          analysisStagePhases[stage.id]!,
+      ]);
+      for (var index = 1; index < publishedPhases.length; index++) {
         expect(
-          publishedPhases,
-          <AnalysisProgressPhase>[
-            for (final stage in buildFullAnalysisStages())
-              analysisStagePhases[stage.id]!,
-          ],
+          publishedPhases[index].index,
+          greaterThanOrEqualTo(publishedPhases[index - 1].index),
         );
-        for (var index = 1; index < publishedPhases.length; index++) {
-          expect(
-            publishedPhases[index].index,
-            greaterThanOrEqualTo(publishedPhases[index - 1].index),
-          );
-        }
-        // The evaluation stages share `computingMetrics` — proof that the
-        // decoupled map, not the old positional cap, is what makes 18
-        // stages composable at all (ADR 0252 §5.1).
-        expect(
-          publishedPhases.where(
-            (phase) => phase == AnalysisProgressPhase.computingMetrics,
-          ),
-          hasLength(10),
-        );
-        expect(value!.capabilityReports, isNotEmpty);
-        expect(value.overallConfidence, isNotNull);
-      },
-    );
+      }
+      // The evaluation stages share `computingMetrics` — proof that the
+      // decoupled map, not the old positional cap, is what makes 18
+      // stages composable at all (ADR 0252 §5.1).
+      expect(
+        publishedPhases.where(
+          (phase) => phase == AnalysisProgressPhase.computingMetrics,
+        ),
+        hasLength(10),
+      );
+      expect(value!.capabilityReports, isNotEmpty);
+      expect(value.overallConfidence, isNotNull);
+    });
   });
 }
 

@@ -36,8 +36,7 @@ const Map<String, AnalysisProgressPhase> analysisStagePhases =
       IngestStageIds.events: AnalysisProgressPhase.estimatingBeatGrid,
       EvaluationStageIds.alignment: AnalysisProgressPhase.computingMetrics,
       EvaluationStageIds.timing: AnalysisProgressPhase.computingMetrics,
-      EvaluationStageIds.timingHotspots:
-          AnalysisProgressPhase.computingMetrics,
+      EvaluationStageIds.timingHotspots: AnalysisProgressPhase.computingMetrics,
       EvaluationStageIds.rhythm: AnalysisProgressPhase.computingMetrics,
       EvaluationStageIds.pitch: AnalysisProgressPhase.computingMetrics,
       EvaluationStageIds.dynamics: AnalysisProgressPhase.computingMetrics,
@@ -63,9 +62,7 @@ buildFullAnalysisStages() =>
 /// Dispatches to the ingest or evaluation composition-owned classifier by
 /// stage id, so the full chain keeps each stage's original degradation
 /// policy unchanged.
-StageFailure classifyAnalysisStageFailure(
-  String stageId,
-  AppFailure failure,
-) => _ingestStageIds.contains(stageId)
+StageFailure classifyAnalysisStageFailure(String stageId, AppFailure failure) =>
+    _ingestStageIds.contains(stageId)
     ? classifyIngestStageFailure(stageId, failure)
     : classifyEvaluationStageFailure(stageId, failure);
