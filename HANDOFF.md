@@ -3,8 +3,22 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (E07-R05 merged as PR #274: privacy-safe SkillEvidence normalisation and
-> in-memory evidence repository are now on `main`.)**
+> (E14-R01 merged as PR #275: recognition-recovery flags remain fail-closed
+> and the release activation contract is documented.)**
+
+> ## ✅ E14-R01 KÉSZ — Recognition recovery kickoff és release guard
+>
+> PR [#275](https://github.com/wolfcasaba/strumsight/pull/275), squash
+> `fc494ef6`. Három új recovery flag (`recognitionRecoveryEnabled`,
+> `recognitionShadowModeEnabled`, `newLiveStageEnabled`) minden környezetben
+> explicit `false`, és még nincs consumerük; ezért a kör nulla Live/UI- vagy
+> hálózati viselkedést változtat. A release-guard dokumentum evaluation
+> reportot, baseline/candidate manifestet, corpus hash-t és rollback-receptet
+> kér az aktiválás előtt. A correctness és a kötelező high-risk security
+> review APPROVED; a provenance-MINOR javítva. Exact-SHA `ab615c6f`: Full Gate
+> [31910980257](https://github.com/wolfcasaba/strumsight/actions/runs/31910980257)
+> + Router CI [31910963645](https://github.com/wolfcasaba/strumsight/actions/runs/31910963645)
+> success; post-merge célzott gate a friss `main`-en újrafuttatva.
 
 > ## ✅ E07-R05 KÉSZ — SkillEvidence normalizálás és evidence repository
 >
@@ -900,6 +914,16 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-15):** `main` @ `fc494ef6` — E14-R01 Recognition
+Accuracy & Useful UI Recovery kickoff, PR
+[#275](https://github.com/wolfcasaba/strumsight/pull/275), squash-merge.
+Exact-SHA `ab615c6f`: Full Gate
+[31910980257](https://github.com/wolfcasaba/strumsight/actions/runs/31910980257)
++ Router CI [31910963645](https://github.com/wolfcasaba/strumsight/actions/runs/31910963645)
+mindkettő success. A branch a dispatch előtt `903e7a7d`-re
+konfliktusmentesen rebase-elve lett, és `origin/main` a dispatch és merge
+között nem mozdult.
+
 **Aktuális állapot (2026-08-15):** `main` @ `ac12b017` — E07-R04
 PracticeGenerationRequest és draft persistence, PR
 [#272](https://github.com/wolfcasaba/strumsight/pull/272), squash-merge.
@@ -1215,6 +1239,17 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E14-R01 — Recognition recovery kickoff és release guard** (PR
+[#275](https://github.com/wolfcasaba/strumsight/pull/275), squash `fc494ef6`,
+[ADR 0271](docs/adr/0271-recognition-recovery-program.md)). A három recovery
+flag opcionális és minden `AppEnvironment` alatt explicit `false`; nincs
+felhasználói útvonal, DSP/ML-konstans, modell vagy CI-workflow módosítás. A
+release activation contract az evaluation reportot, baseline/candidate
+manifestet, corpus hash-t és rollback-receptet fail-closed előfeltételként
+rögzíti. Isolated review mutáció-próba `false → nonProd` gyengítéskor a lab és
+development tesztcellákat pirosra váltotta, majd visszaállt. Correctness és
+security review APPROVED; Full Gate + Router CI exact-SHA success.
 
 **E07-R04 — PracticeGenerationRequest és draft persistence** (PR
 [#272](https://github.com/wolfcasaba/strumsight/pull/272), squash `ac12b017`,
