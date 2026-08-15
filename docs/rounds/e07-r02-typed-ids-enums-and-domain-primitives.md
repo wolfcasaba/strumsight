@@ -227,4 +227,71 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Végrehajtó:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-15.
+
+### 10.1 Létrehozott fájlok
+
+- `lib/features/practice_generator/domain/id/planner_ids.dart` — hat typed
+  ID (`PlanId`, `DayId`, `BlockId`, `GoalId`, `RevisionId`, `OutcomeId`),
+  mindegyik önálló `final class`, privát konstruktorral + validáló
+  factoryval, explicit `==`/`hashCode`. Közös `_validateId` privát helper
+  (üres/whitespace + `^[A-Za-z0-9._:-]+$` formátumellenőrzés).
+- `lib/features/practice_generator/domain/model/plan_enums.dart` — öt
+  enum-család stabil kódokkal, a SDD Ch8 mért szövegéből véve:
+  `PlanStatus` (§7.7), `GenerationMode` (§10.2), `BlockKind` (§16.4),
+  `ValidationSeverity` (§17.2), `CandidateSource` (§14.2 „Forrás"). Közös
+  privát `_decodeEnumCode<T extends Enum>` helper: üres/`null` kód és
+  ismeretlen kód egyaránt `ArgumentError`-t dob, sosem esik vissza egy
+  alapértelmezett értékre.
+- `lib/features/practice_generator/public.dart` — barrel, kizárólag a két
+  fenti fájlt exportálja.
+- `test/features/practice_generator/domain/planner_ids_test.dart` (45 teszt),
+  `test/features/practice_generator/domain/plan_enums_test.dart` (25 teszt).
+- `test/core/architecture_dependency_test.dart` — új csoport
+  („practice generator domain stays framework-free (E07-R02)"), ami a
+  `lib/features/practice_generator/domain/` valódi fájljait olvassa be és
+  keres tiltott mintát (`package:flutter/`, `dart:ui`, `DateTime.now(`,
+  `Random(`).
+
+### 10.2 Mért eltérés a `tool/check_architecture.dart`-tól (dokumentált, nem javított)
+
+A `checkArchitecture` `_isSharedDomain` listája ma csak
+`lib/core/music/`, `lib/core/audio/codec/` és
+`lib/features/practice/domain/` prefixeket ismeri fel Flutter-független
+domainként — `lib/features/practice_generator/domain/` **nincs** benne, és
+a `tool/check_architecture.dart` NEM szerepel ennek a körnek az
+engedélyezett fájllistáján, tehát nem bővíthettem. Emiatt az A1/A8
+kritérium bizonyítéka nem a `checkArchitecture` gépén, hanem egy új,
+valódi könyvtárat beolvasó teszten (fent, 10.1) és a kézi `grep`-en
+(10.3) keresztül él. A prefix bővítése egy jövőbeli, `tool/`-t is
+engedélyező körre marad.
+
+### 10.3 Kézi `grep` bizonyíték (A1, A8)
+
+```
+grep -rn "package:flutter\|dart:ui\|DateTime.now\|Random(" lib/features/practice_generator/
+→ NO MATCHES (clean)
+```
+
+### 10.4 Valódi-sértés próba (A6, kötelező)
+
+A `plan_enums.dart` `_decodeEnumCode` függvényében az üres/`null`-ellenőrzést
+és az `ArgumentError` dobást ideiglenesen `return values.first;`-re
+cseréltem. `flutter test test/features/practice_generator/domain/plan_enums_test.dart`
+lefuttatva: mind az öt enum-család mindkét A6-cellája (üres/`null` és
+ismeretlen kód) **PIROSRA** váltott (10 megbukott teszt, pl.
+„ValidationSeverity empty or null code is a controlled error, not a
+default (A6)" → `Expected: throws ArgumentError, Actual: returned
+ValidationSeverity:<info>`). Ezután a fájlt visszaállítottam az eredeti
+(dobó) implementációra, és a teszt újra 25/25 zöld.
+
+### 10.5 Gate
+
+```
+tools/round-gate.sh test/features/practice_generator/domain/planner_ids_test.dart test/features/practice_generator/domain/plan_enums_test.dart test/core/architecture_dependency_test.dart
+```
+
+Minden lépés (`format`, `analyze`, mindhárom `test`, `architecture`,
+`secrets`, `l10n`) ZÖLD.
+
 ## 11. Review — a Claude tölti ki

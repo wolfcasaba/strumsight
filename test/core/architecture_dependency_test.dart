@@ -13,6 +13,39 @@ void main() {
     });
   });
 
+  // E07-R02: `lib/features/practice_generator/domain/` is new and not yet
+  // among `checkArchitecture`'s hard-coded shared-domain prefixes (only
+  // `lib/core/music/`, `lib/core/audio/codec/` and
+  // `lib/features/practice/domain/` are covered there today). Widening that
+  // list lives in `tool/check_architecture.dart`, which is outside this
+  // round's allowed-paths — so this scans the real, checked-in source
+  // directly for the same forbidden dependencies (ADR 0257 §6, A1/A8).
+  group('practice generator domain stays framework-free (E07-R02)', () {
+    test('no Flutter, dart:ui, DateTime.now(), or Random in the domain', () {
+      final domainDir = Directory('lib/features/practice_generator/domain');
+      expect(domainDir.existsSync(), isTrue);
+
+      final offenders = <String>[];
+      for (final entity in domainDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        final content = entity.readAsStringSync();
+        const forbidden = [
+          'package:flutter/',
+          'dart:ui',
+          'DateTime.now(',
+          'Random(',
+        ];
+        for (final marker in forbidden) {
+          if (content.contains(marker)) {
+            offenders.add('${entity.path} contains "$marker"');
+          }
+        }
+      }
+
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+  });
+
   group('architecture dependency rules', () {
     late Directory project;
 
