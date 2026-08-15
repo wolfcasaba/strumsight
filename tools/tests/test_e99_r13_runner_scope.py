@@ -29,9 +29,31 @@ fresh dispatch a brief that still points at a nonexistent file.
 
 This guard encodes both measured facts as a machine check: every file that
 `implements AnalysisRunner` must be listed in the brief's `allowed_paths`, and
-the currently-measured set is pinned so a new implementor appearing later (or
-the set silently shrinking) is a visible test failure here, not a fresh H3
-halt three commands into a round.
+the pinned baseline set may not silently shrink.
+
+Correction (self-heal, halt H3 recurrence, 2026-08-15, second occurrence same
+day): the first version of this guard pinned `KNOWN_IMPLEMENTORS` with a full
+`assertEqual`, including the "a new implementor appearing later must fail
+here too" direction. That is structurally incompatible with this repo's own
+round lifecycle: E99-R13's implementer (sonnet-impl) went on to add a
+genuinely new, brief-sanctioned implementor,
+`lib/features/audio_analysis/application/v2_analysis_runner.dart` (already
+present in this brief's `allowed_paths` since the FIRST H3 self-heal, commit
+1636b40d), on its own branch -- which is, by definition, always ahead of
+`main` while a round is in flight. Measured
+(`gh run view 31884234750 --log-failed`): Router CI failed on the round's own
+branch (PR #266) because `KNOWN_IMPLEMENTORS` (4 entries, `main`'s actual
+state) no longer equalled the round branch's actual 5-file set. Editing
+`KNOWN_IMPLEMENTORS` to 5 entries would have "fixed" the round branch but
+broken `main`'s OWN post-merge Router CI (main's tree genuinely has only 4
+implementors until v2_analysis_runner.dart is actually merged) -- trading one
+red for a worse one that blocks every future round dispatch, not just this
+one. The "new implementor" direction is redundant anyway:
+`test_brief_allows_every_analysisrunner_implementor` below already requires
+EVERY actual implementor (baseline or newly-added) to be in the round's own
+`allowed_paths`, on any branch, without needing a hardcoded snapshot. So this
+guard now only asserts the non-redundant, branch-invariant half: none of the
+pinned baseline implementors may silently disappear.
 """
 
 from __future__ import annotations
@@ -72,9 +94,21 @@ def _files_implementing_analysis_runner() -> list[str]:
 
 class E99R13RunnerScopeTest(unittest.TestCase):
     def test_measured_analysisrunner_implementor_set(self) -> None:
-        """Pin the currently measured set -- a NEW implementor appearing
-        later must fail loudly here, not surface as a fresh H3 halt."""
-        self.assertEqual(_files_implementing_analysis_runner(), sorted(KNOWN_IMPLEMENTORS))
+        """Pin the baseline -- none of the founding implementors may
+        silently disappear. (Deliberately one-directional: see the module
+        docstring's "Correction" section for why asserting the OTHER
+        direction -- no new implementor beyond this set -- breaks `main`'s
+        own Router CI the moment a round legitimately adds one on its own,
+        still-unmerged branch. That direction is covered, branch-safely, by
+        test_brief_allows_every_analysisrunner_implementor below.)"""
+        missing = [
+            path
+            for path in KNOWN_IMPLEMENTORS
+            if path not in _files_implementing_analysis_runner()
+        ]
+        self.assertEqual(
+            missing, [], f"AnalysisRunner implementor(s) disappeared: {missing}"
+        )
 
     def test_brief_allows_every_analysisrunner_implementor(self) -> None:
         """The halt trigger: allowed_paths must cover every implementor,
