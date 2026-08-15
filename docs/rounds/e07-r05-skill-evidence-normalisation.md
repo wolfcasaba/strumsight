@@ -231,4 +231,52 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Új fájlok:**
+
+- `lib/features/practice_generator/domain/model/skill_evidence.dart` —
+  `SkillEvidence`, `PerformanceEvidence`, `DiscomfortReport`,
+  `EvidenceSource`, `DiscomfortCategory`. `measuredAt` sosem lehet
+  `capturedAt` után (jövőbeli mérés → `ArgumentError`), `validUntil` sosem
+  `measuredAt` előtt, `confidence` a `[0,1]` zárt tartományban, és a
+  konstruktor legalább egy `performance`/`discomfort` mezőt megkövetel.
+  A domain nem hív `DateTime.now()`-t vagy `Random`-ot — mindkét időbélyeget
+  a hívó adja át.
+- `lib/features/practice_generator/domain/repository/practice_evidence_repository.dart`
+  — `PracticeEvidenceRepository` port +
+  `InMemoryPracticeEvidenceRepository` fake. `save` a `sourceOutcomeId`
+  szerint kulcsol, nincs törlés/expire metódus; `query` szűr `skillId`,
+  `asOf` (a `validUntil` határ inkluzív) és opcionális `measuredFrom`/
+  `measuredTo` szerint.
+- `lib/features/practice_generator/application/service/evidence_aggregator.dart`
+  — `EvidenceAggregator.ingest`: dedup a `sourceOutcomeId` alapján
+  (első beérkezés nyer, idempotens újrajátszásnál), és a logger csak
+  `skillId` / `source` / `sourceOutcomeId` / `discomfortCategory` mezőket
+  kap — a `DiscomfortReport.note` sosem kerül a `fields` map-be.
+- `lib/features/practice_generator/public.dart` bővítve a négy új
+  exporttal.
+
+**Gate (a brief §7 szerint, csonkítatlan, három külön teszt-processz):**
+
+```
+tools/round-gate.sh test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/evidence/skill_evidence_test.dart test/features/practice_generator/evidence/evidence_repository_fake_test.dart
+```
+
+Eredmény: `format` zöld, `analyze` zöld (0 issue), mindhárom célzott teszt
+zöld (6 + 13 + 9 = 28 cella), `architecture` zöld, `secrets` zöld, `l10n`
+zöld → **MINDEN GATE ZÖLD**.
+
+**Valódi-sértés próba (§6.1, kötelező):** `evidence_aggregator.dart`
+`ingest`-jébe ideiglenesen bekerült egy `'discomfortNote':
+evidence.discomfort!.note` mező a log `fields`-be. Ennek hatására az **A5**
+cella mindhárom tesztje ([`a discomfort free-text note never reaches the
+logger`], [`logging only carries the stable outcome id and discomfort
+category`], [`duplicate ingestion also never logs the note (dedup path)`])
+pirosra váltott (`Expected: false, Actual: <true>`, a szabad szöveg
+megjelent a naplórekordban) — a `evidence_aggregator_test.dart` külön
+futtatásával igazolva. A módosítást ezután visszaállítottam, és a teszt újra
+zöld (6/6).
+
+**Formázás:** `dart format` lefutott az összes érintett `lib/`/`test/`
+fájlon (a gate `format` lépése is ezt ellenőrizte, változás nélkül).
+
 ## 11. Review — a Claude tölti ki
