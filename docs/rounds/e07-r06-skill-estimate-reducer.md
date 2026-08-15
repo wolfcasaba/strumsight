@@ -199,6 +199,10 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 - `lib/features/practice_generator/application/service/skill_estimate_reducer.dart`:
   rendezett, outcome-ID szerinti deduplikált reducer; konzervatív baseline-
   frissítés, konfliktus miatti uncertainty-emelés, stale állapot és bounded trend.
+- Corrective review pass: a konfliktus csak azonos időpontú, összehasonlítható
+  mérések közötti eltérést jelenti; a trend időbélyeg-bucketekből készül, így
+  az outcome ID nem adhat irányt egyező időpontú evidence-nek. Két regressziós
+  teszt rögzíti az időben elkülönülő javulást és az ID-permutációt.
 - `lib/features/practice_generator/public.dart`: a három új publikus contract exportja.
 - `test/features/practice_generator/skill_estimate/`: A1–A8 tesztek, a három
   evidence-mennyiség cella, explicit cap, stale, discomfort-szeparáció és bounds.
@@ -214,6 +218,8 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   — format zöld; analyze: `No issues found`; a három célzott teszt zöld;
   architecture, secrets és l10n zöld. A gate strukturált eredménye:
   `{"outcome":"pass","exit_code":0,"failed_step":null}`.
+- A review-javítás után ugyanez a gate újra lefutott; a két új reducer-regresszió
+  is zöld volt.
 
 ### Valódi-sértés próba
 

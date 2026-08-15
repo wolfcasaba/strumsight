@@ -128,6 +128,55 @@ void main() {
       },
     );
 
+    test('time-separated monotonic improvement is a trend, not a conflict', () {
+      final estimate = reduce(<SkillEvidence>[
+        evidence(
+          outcomeId: 'first',
+          value: 0.20,
+          measuredAt: DateTime.utc(2026, 8, 16),
+        ),
+        evidence(
+          outcomeId: 'second',
+          value: 0.25,
+          measuredAt: DateTime.utc(2026, 8, 17),
+        ),
+        evidence(
+          outcomeId: 'third',
+          value: 0.85,
+          measuredAt: DateTime.utc(2026, 8, 18),
+        ),
+        evidence(
+          outcomeId: 'fourth',
+          value: 0.90,
+          measuredAt: DateTime.utc(2026, 8, 19),
+        ),
+      ]);
+
+      expect(estimate.state, isNot(SkillEstimateState.conflicted));
+      expect(estimate.trend, SkillTrend.improving);
+      expect(estimate.trendDelta, greaterThan(0));
+    });
+
+    test('equal-time conflict has no ID-derived directional trend', () {
+      final measuredAt = DateTime.utc(2026, 8, 19);
+      final ascendingIds = reduce(<SkillEvidence>[
+        evidence(outcomeId: 'alpha', value: 0.20, measuredAt: measuredAt),
+        evidence(outcomeId: 'bravo', value: 0.25, measuredAt: measuredAt),
+        evidence(outcomeId: 'charlie', value: 0.90, measuredAt: measuredAt),
+      ]);
+      final descendingIds = reduce(<SkillEvidence>[
+        evidence(outcomeId: 'alpha', value: 0.90, measuredAt: measuredAt),
+        evidence(outcomeId: 'bravo', value: 0.25, measuredAt: measuredAt),
+        evidence(outcomeId: 'charlie', value: 0.20, measuredAt: measuredAt),
+      ]);
+
+      for (final estimate in <SkillEstimate>[ascendingIds, descendingIds]) {
+        expect(estimate.state, SkillEstimateState.conflicted);
+        expect(estimate.trend, SkillTrend.unknown);
+        expect(estimate.trendDelta, 0);
+      }
+    });
+
     test(
       'expired evidence remains visible as stale with reduced influence (A6)',
       () {

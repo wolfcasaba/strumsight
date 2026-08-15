@@ -88,8 +88,7 @@ final class SkillEstimateReducer {
               ) /
               totalWeight;
     final level = _clamp01(0.5 + (weightedMean - 0.5) * aggregateInfluence);
-    final spread = _spread(weighted.map((item) => item.value));
-    final conflicted = spread >= policy.conflictThreshold;
+    final conflicted = _hasComparableConflict(weighted);
     final uncertainty = _clamp01(
       math.max(0.05, 1 - aggregateInfluence) +
           (conflicted ? policy.conflictUncertaintyPenalty : 0),
@@ -144,25 +143,49 @@ final class SkillEstimateReducer {
   }
 
   double _trendDelta(List<_WeightedEvidence> evidence) {
-    if (evidence.length < 2) return 0;
-    final chronological = evidence.toList(growable: false)
-      ..sort((first, second) {
-        final time = first.evidence.measuredAt.compareTo(
-          second.evidence.measuredAt,
-        );
-        return time != 0
-            ? time
-            : first.evidence.sourceOutcomeId.value.compareTo(
-                second.evidence.sourceOutcomeId.value,
-              );
-      });
+    final chronological = _timeBuckets(evidence);
+    if (chronological.length < 2) return 0;
     final split = chronological.length ~/ 2;
     final early = chronological.take(split);
     final late = chronological.skip(split);
-    final delta = _weightedMean(late) - _weightedMean(early);
+    final delta = _bucketMean(late) - _bucketMean(early);
     return delta
         .clamp(-policy.maximumTrendMagnitude, policy.maximumTrendMagnitude)
         .toDouble();
+  }
+
+  bool _hasComparableConflict(List<_WeightedEvidence> evidence) =>
+      _timeBuckets(evidence).any(
+        (bucket) =>
+            bucket.length > 1 &&
+            _spread(bucket.map((item) => item.value)) >=
+                policy.conflictThreshold,
+      );
+
+  List<List<_WeightedEvidence>> _timeBuckets(List<_WeightedEvidence> evidence) {
+    final chronological = evidence.toList(growable: false)
+      ..sort(
+        (first, second) =>
+            first.evidence.measuredAt.compareTo(second.evidence.measuredAt),
+      );
+    final buckets = <List<_WeightedEvidence>>[];
+    for (final item in chronological) {
+      if (buckets.isEmpty ||
+          buckets.last.first.evidence.measuredAt != item.evidence.measuredAt) {
+        buckets.add(<_WeightedEvidence>[]);
+      }
+      buckets.last.add(item);
+    }
+    return buckets;
+  }
+
+  double _bucketMean(Iterable<List<_WeightedEvidence>> buckets) {
+    final list = buckets.toList(growable: false);
+    if (list.isEmpty) return 0.5;
+    return list
+            .map(_weightedMean)
+            .fold<double>(0, (total, mean) => total + mean) /
+        list.length;
   }
 
   double _weightedMean(Iterable<_WeightedEvidence> evidence) {
