@@ -273,6 +273,34 @@ import '../../../core/music/chord.dart';
       );
     });
 
+    test('blocks Practice Generator feature internals in both directions', () {
+      _write(
+        project,
+        'lib/features/practice_generator/application/practice_planner.dart',
+        "import '../../learn/application/learn_progress_reader.dart';",
+      );
+      _write(
+        project,
+        'lib/features/learn/application/practice_plan_adapter.dart',
+        "import '../../practice_generator/application/practice_planner.dart';",
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(
+        report.unexpectedViolations.map((violation) => violation.key),
+        containsAll({
+          'lib/features/practice_generator/application/practice_planner.dart '
+              '-> lib/features/learn/application/learn_progress_reader.dart',
+          'lib/features/learn/application/practice_plan_adapter.dart -> '
+              'lib/features/practice_generator/application/practice_planner.dart',
+        }),
+      );
+    });
+
     // Regression for the E04-R21 halt H3 (ADR 0112 self-heal, ADR 0176,
     // 2026-08-06). ADR 0089 designates `song_trainer/domain/public.dart` as the
     // cross-feature entry point, but the checker previously accepted ONLY the
