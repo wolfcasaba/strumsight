@@ -3,10 +3,12 @@
 import 'dart:async';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_capability.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_document.dart';
 import 'package:strumsight/features/audio_analysis/domain/analysis_progress.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_cancellation.dart';
+import 'package:strumsight/features/audio_analysis/engine/analysis_context.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_pipeline.dart';
 import 'package:strumsight/features/audio_analysis/engine/analysis_stage.dart';
 import '../../../support/fake_analysis_stages.dart';
@@ -233,7 +235,159 @@ void main() {
         throwsArgumentError,
       );
     });
+
+    test(
+      'A6 — a regressing published phase event fails the run with a '
+      'StateError',
+      () async {
+        final pipeline = AnalysisPipeline<int>(
+          stages: <AnalysisStage<int, int>>[
+            _ExplicitPhaseStage(
+              id: 'first',
+              phase: AnalysisProgressPhase.estimatingBeatGrid,
+            ),
+            _ExplicitPhaseStage(
+              id: 'second',
+              phase: AnalysisProgressPhase.preprocessing,
+            ),
+          ],
+        );
+
+        final observation = await _observe(
+          pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
+        );
+
+        expect(observation.result.completion, AnalysisCompletionStatus.failed);
+        expect(observation.result.value, isNull);
+        expect(observation.result.failure, isA<UnknownFailure>());
+        expect(
+          (observation.result.failure! as UnknownFailure).cause,
+          isA<StateError>(),
+        );
+      },
+    );
+
+    test(
+      'A7 — two stages sharing the same mapped phase do not throw',
+      () async {
+        final pipeline = AnalysisPipeline<int>(
+          stages: <AnalysisStage<int, int>>[
+            FakeAnalysisStage(id: 'first'),
+            FakeAnalysisStage(id: 'second'),
+          ],
+          stagePhases: const <String, AnalysisProgressPhase>{
+            'first': AnalysisProgressPhase.computingMetrics,
+            'second': AnalysisProgressPhase.computingMetrics,
+          },
+        );
+
+        final observation = await _observe(
+          pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
+        );
+
+        expect(
+          observation.result.completion,
+          AnalysisCompletionStatus.complete,
+        );
+        final phaseEvents = observation.events
+            .whereType<AnalysisPhaseProgressEvent>()
+            .toList();
+        expect(phaseEvents, hasLength(2));
+        expect(
+          phaseEvents.every(
+            (event) => event.phase == AnalysisProgressPhase.computingMetrics,
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test(
+      'rejects a stagePhases map missing a mapping for a stage ID',
+      () {
+        expect(
+          () => AnalysisPipeline<int>(
+            stages: <AnalysisStage<int, int>>[FakeAnalysisStage(id: 'only')],
+            stagePhases: const <String, AnalysisProgressPhase>{},
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test(
+      'rejects a stagePhases map that regresses along the stage order',
+      () {
+        expect(
+          () => AnalysisPipeline<int>(
+            stages: <AnalysisStage<int, int>>[
+              FakeAnalysisStage(id: 'first'),
+              FakeAnalysisStage(id: 'second'),
+            ],
+            stagePhases: const <String, AnalysisProgressPhase>{
+              'first': AnalysisProgressPhase.computingMetrics,
+              'second': AnalysisProgressPhase.preprocessing,
+            },
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test(
+      'a stagePhases map allows more stages than progress phases',
+      () async {
+        final pipeline = AnalysisPipeline<int>(
+          stages: List<AnalysisStage<int, int>>.generate(
+            AnalysisProgressPhase.values.length + 1,
+            (index) => FakeAnalysisStage(id: 'stage-$index'),
+          ),
+          stagePhases: <String, AnalysisProgressPhase>{
+            for (
+              var index = 0;
+              index < AnalysisProgressPhase.values.length + 1;
+              index++
+            )
+              'stage-$index': AnalysisProgressPhase.values[index ~/ 2],
+          },
+        );
+
+        final observation = await _observe(
+          pipeline.start(0, cancellationToken: AnalysisCancellationSource()),
+        );
+
+        expect(
+          observation.result.completion,
+          AnalysisCompletionStatus.complete,
+        );
+      },
+    );
   });
+}
+
+/// Publishes an explicit, caller-chosen phase directly through
+/// [AnalysisStageContext.eventSink] — bypassing the per-stage fixed
+/// [AnalysisStageContext.phase] — so tests can exercise
+/// [AnalysisPipeline]'s runtime regression guard independently of whether
+/// the current stage/phase wiring can itself produce a regression.
+final class _ExplicitPhaseStage implements AnalysisStage<int, int> {
+  const _ExplicitPhaseStage({required this.id, required this.phase});
+
+  @override
+  final String id;
+
+  final AnalysisProgressPhase phase;
+
+  @override
+  int get version => 1;
+
+  @override
+  Future<AppResult<int>> run(int input, AnalysisStageContext context) async {
+    context.eventSink(
+      AnalysisPhaseProgressEvent(runId: context.runId, phase: phase),
+    );
+    return AppResult<int>.success(input + 1);
+  }
 }
 
 Future<_RunObservation> _observe(AnalysisPipelineRun<int> run) async {
