@@ -224,4 +224,84 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `practice_generation_request.dart`: `GenerationRequestId` (ADR 0257
+  mintájú typed id, saját fájlban, mivel `planner_ids.dart` tiltott zóna).
+  `PracticeGenerationRequest` immutable; kötelező mezők: `id`, `createdAt`
+  (kívülről kapott, UTC-re normalizált), `locale`, `generationMode`,
+  `planHorizonDays` (≥1), `availability`, `constraints`, opcionális `goals`.
+  `seed` (int, `[0, 2^32)`) és `contentHash` (hex SHA-256) **számított
+  getter**, nem konstruktor-paraméter — az ADR 0259 §1 kifejezett döntése
+  szerint a seed nem injektálható. A hash bemenete (`_contentSnapshot`)
+  szándékosan **kizárja** `id`-t és minden `DateTime`-ot (a request saját
+  `createdAt`-ját és minden goal saját `createdAt`-ját is) — ezek
+  provenance, nem tartalom. A `_canonicalize` rekurzívan rendezett kulcsú
+  Map-re alakítja a snapshotot a hash-elés előtt (ADR 0259 §2 — a mezősorrend
+  nem befolyásolhatja a hash-t).
+- `generation_request_serializer.dart`: `GenerationRequestSerializer`
+  (`currentSchemaVersion = 2`, `oldestSupportedSchemaVersion = 1`).
+  `toJson`/`fromJson` teljes round-trip a goal/availability/constraint
+  hármasra. A v1→v2 migráció valódi tartalom-transzformáció: v1 a módot
+  `mode` kulcs alatt, a horizontot egész `horizonWeeks`-ben tárolta;
+  migráláskor `generationMode = mode`, `planHorizonDays = horizonWeeks * 7`.
+  `schemaVersion > current` VAGY `< oldest` → kontrollált
+  `GenerationRequestSerializerException` (soha best-effort olvasás).
+- `generation_draft_repository.dart`: `GenerationDraftRepository` a
+  `KeyValueStore` + `AppResult`/`StorageFailure` mintát követi (mint
+  `LocalPracticeHistoryRepository`), egyetlen draftot tart
+  `draftStorageKey = 'ss.practice_generator.generation_draft'` alatt — ez a
+  kulcs deliberately elkülönül minden jövőbeli aktív-terv kulcstól (nem
+  közös kulcs + státusz mező). `loadDraft()` minden dekódolási hibát
+  (JSON-parse, séma-sértés, jövőbeli schemaVersion) `Failure(StorageFailure)`
+  -ként ad vissza, sosem dob kivételt a hívó felé. `clearDraft()` a
+  `KeyValueStore.remove`-ra épül, ami hiányzó kulcsra is sikerrel tér vissza
+  → idempotens.
+- `public.dart`: `practice_generation_request.dart` exportálva (csak a
+  domain modell — a serializer és a repository szándékosan NEM export, SDD
+  Ch8 §8.2 szerint).
+- A két célzott tesztfájl lefedi az A1–A8 cellákat, köztük a három
+  schema-cellát (v1 migrál, v2 határeset változatlan, v3 kontrollált hiba)
+  és a mezősorrend-independence cellát (a perzisztált JSON kulcssorrendjét
+  megfordítva dekódolva ugyanaz a hash/seed).
+
+### Valódi-sértés próba
+
+Ideiglenesen a `_contentSnapshot()`-ba bekerült a `'createdAt':
+createdAt.toIso8601String()` bejegyzés (a request saját létrehozási
+időbélyege belekeverve a hash bemenetébe). A
+`flutter test test/features/practice_generator/data/generation_request_serializer_test.dart`
+futásban az A2 cella (`id and createdAt do not affect the hash/seed`)
+elvárt módon PIROS lett:
+
+```text
+Expected: <1600702440>
+  Actual: <681666119>
+```
+
+(a másik hat A2/A3/A4/A5 teszt is elbukott ugyanebben a futásban, mert
+azok is a `buildRequest()` segédfüggvényen és a hash-stabilitáson múlnak —
+ez megerősíti, hogy a teszt valóban a determinizmust méri, nem egy
+mellékes állítást). A módosítás visszaállítva, a gate előtt zöldre futtatva.
+
+### Futtatott ellenőrzések
+
+```text
+tools/round-gate.sh test/features/practice_generator/data/generation_request_serializer_test.dart test/features/practice_generator/data/generation_draft_repository_test.dart
+  format: 1513 fájl, 0 módosítás
+  analyze: No issues found
+  generation_request_serializer_test.dart: 9 passed
+  generation_draft_repository_test.dart: 8 passed
+  architecture: Architecture dependencies OK (12 allowlisted deviation(s))
+  secrets: Secret scan OK (2568 file(s), 0 finding(s))
+  l10n: L10n parity OK (en → hu, 1276 message(s))
+```
+
+`grep -n "Random\|DateTime.now()\|package:flutter"
+lib/features/practice_generator/domain/model/practice_generation_request.dart`
+→ nincs találat (A9).
+
+Nincs eltérés és nincs ki nem futtatott helyi ellenőrzés. CI-dispatch, review
+és merge az orchestrátor feladata.
+
 ## 11. Review — a Claude tölti ki
