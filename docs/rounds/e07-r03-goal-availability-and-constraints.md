@@ -1,6 +1,10 @@
 # E07-R03 — Goal, availability és learner constraint domain
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 5dfabf8e`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, `main @ a31bb2b1`) — a
+  §2.1/§2.2 hivatkozásokat a tényleges `planner_ids.dart`/`plan_enums.dart`
+  ellen mérve nincs eltérés (`GoalId` létezik, az öt enum-család egyike sem
+  goal-lifecycle-specifikus — ez a kör hozza létre a saját goal-státusz
+  típusát a `practice_goal.dart`-ban). ADR 0258 tartalma is mérve, változatlan.
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 3
 - **Kör-azonosító:** `E07-R03`
 - **Branch:** `<motor>/e07-r03-goal-availability-and-constraints`
