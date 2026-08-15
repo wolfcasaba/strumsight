@@ -10526,3 +10526,71 @@ a Router CI `headSha`-ját a merge-elni kívánt HEAD-del. Eltéréskor ne fogad
 el a korábbi zöldet, és ne várj automatikus futásra: `gh workflow run
 router-ci.yml --ref <branch>`, majd `tools/wait-for-ci.sh <run-id>`. E99-R13
 ezt a `31887571675` success runnal igazolta a `5b4ec293` SHA-n.
+
+## L282 — A Codex `exec_command` eszköze hosszú/csendes parancsnál korán "yield"-el; az orchestrátor újraindította a parancsot ahelyett, hogy a kapott cellát folytatta volna, és sosem olvasott valódi eredményt (E07-R04, H-NOSIGNAL, 2026-08-15)
+
+**Mit mértünk.** A halt oka a tmux pane-naplóból (`.pipeline/session-E07-R04-
+20260815T183502-fallback.log`) NEM volt rekonstruálható — a codex TUI
+folyamatos képernyő-újrarajzolása miatt a tényleges tool-hívások/válaszok
+elvesztek a redraw-zajban (ugyanaz a szöveg tucatszor ismétlődött, a valódi
+utolsó állapot pedig kimaradt). A tényleges bizonyíték a codex CLI SAJÁT,
+strukturált session-naplója volt: `~/.codex-terra/sessions/2026/08/15/
+rollout-2026-08-15T18-35-03-01a006b4-bf64-7bd3-a25b-789fcc8d7e16.jsonl`. Ebben
+látszik, hogy a kötelező CI-várakozó hívást — `tools/wait-for-ci.sh
+31902706136` — az orchestrátor a `exec_command({"cmd": …, "yield_time_ms":
+30000, …})` JS-szerű tool-interfészen indította. Mindhárom kísérlet
+`"Script running with cell ID {94,96,98}"` választ kapott kb. 11 másodpercnél
+— a kért `yield_time_ms` (30000, majd 60000) NEM szabta meg ezt az időt,
+korábban is jött a yield. A ténylegesen várt Full Gate futás eközben 13
+percig futott (19:00:39→19:13:30Z UTC) és zölden zárt, de az orchestrátor
+MINDHÁROM alkalommal ÚJ `exec_command`-ot indított UGYANAZZAL a paranccsal
+ahelyett, hogy a kapott session/cella-azonosítót folytatta volna — soha nem
+olvasta el a valódi végeredményt. A 3. kísérlet után a turn jelzés nélkül
+véget ért ("A merge még nem történt meg... nem írok hamis jelzést"), három
+elárvult `wait-for-ci.sh` példány maradt futva, amíg a `codex exec` process
+halálával azok is kilőve nem lettek.
+
+**Ellenőrző mérés.** Két közvetlen repró UGYANEBBEN a környezetben (`codex
+exec -s danger-full-access`, `CODEX_HOME=~/.codex-terra`) igazolta, hogy
+NINCS kemény kill-időkorlát: egy sima `sleep 300` és egy `wait-for-ci.sh`
+alakú `gh api rate_limit` poll-ciklus is végigfutott — de csak azért, mert a
+modell a SAJÁT rollout-naplója szerint helyesen folytatta ugyanazt a yield-elt
+sessiont több `write_stdin`/`wait` híváson át (állandó `session_id`, pl.
+`73414`; a látható „cell ID" számláló pollonként nő), ahelyett hogy
+újraindította volna. A modell tehát ISMERI a helyes folytatás-mintát —
+csak a preambulum sosem mondta ki, hogy a CI-várakozásnál pontosan ez a
+teendő egy yield után.
+
+**Gyökérok.** `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 azt
+állította: „Nincs 600 s-os Bash-plafonod ... Te futtathatod előtérben,
+végig. Ne darabold, ne indítsd háttérbe." Ez igaz abban az értelemben, hogy
+semmi nem öli meg a folyamatot — de hiányos: nem említette, hogy maga az
+`exec_command`/`write_stdin` eszköz saját döntéssel is visszaadhatja a
+vezérlést egy még futó parancsra ("yield"), és nem mondta meg, mi a teendő
+ilyenkor. A modell emiatt a CI-várakozásnál a rosszabbik stratégiát
+(újraindítás) választotta, holott a saját korábbi, versenyhelyzet nélküli
+válaszaiban bizonyítottan ismeri a helyeset (folytatás/resume).
+
+**Javítás.** `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 új
+bullet: megnevezi a mért `"Script running with cell ID N"` választ, idézi az
+E07-R04 mért koordinátáit, és kimondja a szabályt — yield után UGYANAZT a
+sessiont/cellát kérdezd le újra, amíg valódi kimenetet nem kapsz, SOSE
+indítsd újra magát a parancsot. Kritikus a `tools/wait-for-ci.sh`-ra, mert a
+CI rutinszerűen 10+ percig fut, jóval túl egyetlen yield-ablakon.
+Regressziós teszt: `tools/tests/test_pipeline_codex_orchestrator_preamble.py`
+(4 eset: cella-válasz megnevezve, újraindítás tiltva, E07-R04/H-NOSIGNAL
+idézve, `wait-for-ci.sh` megnevezve) — PIROS volt a javítás előtt (4/4
+bukott), ZÖLD utána. Teljes `python3 -m pytest tools/tests -q`: 442 passed,
+438 subtests passed, nincs regresszió. PR #271, squash `769ed42d`, Router CI
+[31904279406](https://github.com/wolfcasaba/strumsight/actions/runs/31904279406)
+success az exact `38e5b11c` SHA-n (nincs Dart-változás, Full Gate nem
+releváns).
+
+**Hogyan alkalmazd.** Codex/Terra-oldali önjavításnál vagy körvezénylésnél,
+ha egy tool-hívás naplóban nem látszik tisztán mi történt (TUI redraw-zaj),
+NE a tmux pane-t reprodukáld tovább — olvasd a codex CLI saját, strukturált
+rollout-JSONL-jét (`$CODEX_HOME/sessions/<év>/<hó>/<nap>/rollout-*.jsonl`),
+ott minden `custom_tool_call`/`function_call` és a párja
+`*_output` pontosan, redraw nélkül megvan. Ha egy hosszú előtérbeli hívás
+(CI-várakozás, gate-futtatás) `"Script running with cell ID N"`-t ad vissza,
+az NEM hiba: a session-t/cellát kell tovább lekérdezni, nem újraindítani.

@@ -3,12 +3,53 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (E07-R03 merged, PR #270 — Epic 7 Kör 3: `PracticeGoal`/`WeeklyAvailability`/
-> `LearnerConstraints`/`RequestValidator` determinisztikus domain modellek,
-> ADR 0258 hard/soft korlát-szétválasztás, nulla production wiring. E07-R02
-> (PR #269) ezzel a frissítéssel kapja meg a saját fejléc-bannerét is — a
-> saját záró körének kimaradt lépése, most pótolva. No next round is started
-> by this session.)**
+> (H-NOSIGNAL self-heal PR #271 merged — Codex/Terra orchestrator preamble now
+> explains exec_command's yield/resume pattern; chain unblocked. E07-R04's own
+> implementation is reviewed APPROVED and CI-green on its branch but not yet
+> merged — the chain dispatches it automatically on the next firing.)**
+>
+> ## ✅ [HEAL E07-R04/H-NOSIGNAL] KÉSZ — a Codex `exec_command` korai „yield"-je után az orchestrátor újraindította a CI-várakozást ahelyett, hogy folytatta volna (2026-08-15)
+>
+> E07-R04 (Terra-orchesztrált) a kötelező `tools/wait-for-ci.sh 31902706136`
+> CI-várakozó hívásnál H-NOSIGNAL-lal állt meg. A tmux pane-napló redraw-zaja
+> miatt a valódi ok nem volt rekonstruálható belőle; a codex CLI SAJÁT
+> strukturált rollout-JSONL-je
+> (`~/.codex-terra/sessions/2026/08/15/rollout-2026-08-15T18-35-03-*.jsonl`)
+> mutatta meg: a hívás az `exec_command`/`write_stdin` tool-interfészen
+> HÁROMSZOR `"Script running with cell ID {94,96,98}"` választ kapott kb. 11
+> másodpercnél (a kért `yield_time_ms` — 30000, majd 60000 — nem szabta meg
+> ezt az időt), miközben a ténylegesen várt Full Gate futás 13 percig futott
+> és zölden zárt (19:00:39→19:13:30Z). Az orchestrátor mindhárom alkalommal
+> ÚJRA `exec_command`-ot hívott UGYANAZZAL a paranccsal ahelyett, hogy a
+> kapott session/cellát folytatta volna — sosem olvasott valódi eredményt, a
+> turn jelzés nélkül véget ért. Két közvetlen repró (`sleep 300`, egy
+> `wait-for-ci.sh` alakú `gh` poll-ciklus) igazolta: nincs kemény
+> kill-időkorlát — a modell máskor helyesen FOLYTATJA (resume) a yield-elt
+> sessiont, csak a preambulum sosem mondta ki, hogy CI-várakozásnál pontosan
+> ez a teendő.
+>
+> Javítás: `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 új
+> bullet — megnevezi a mért cella-választ, kimondja: yield után UGYANAZT a
+> sessiont kérdezd le újra, SOSE indítsd újra magát a parancsot. Regressziós
+> teszt `tools/tests/test_pipeline_codex_orchestrator_preamble.py` (RED a
+> javítás előtt, GREEN utána); teljes `pytest tools/tests`: 442 passed, 438
+> subtests, nincs regresszió. PR
+> [#271](https://github.com/wolfcasaba/strumsight/pull/271), squash
+> `769ed42d`, Router CI
+> [31904279406](https://github.com/wolfcasaba/strumsight/actions/runs/31904279406)
+> success az exact `38e5b11c` SHA-n (docs/tools-only, nincs Dart-változás,
+> Full Gate nem releváns). Lecke: `docs/LESSONS.md` **L282**.
+>
+> **E07-R04 saját tartalmi munkája ettől függetlenül MÁR KÉSZ, de MÉG NEM
+> mergelve**: implementáció + 1 javító kör (F1 — a sérült, hibás típusú
+> `targetDate`/`metricTarget` csendben `null`-lá vált ahelyett, hogy
+> `GenerationRequestSerializerException`-t dobna — javítva), review
+> APPROVED, branch
+> `sonnet-impl/e07-r04-generation-request-and-draft-persistence` @
+> `f989bebd`, Full Gate + Router CI mindkettő success ezen a SHA-n. Ez az
+> önjavítás — a protokoll szerint (ADR 0112) — SZÁNDÉKOSAN nem vezényelte
+> le/mergelte magát a megállt kört, csak az akadályt hárította el; a lánc a
+> következő firingen automatikusan újradispatcheli és fejezi be.
 >
 > ## ✅ E07-R03 KÉSZ — Goal, availability és learner-constraint domain (2026-08-15)
 >
