@@ -1,20 +1,20 @@
 # E07-R04 — Review
 
 Brief: `docs/rounds/e07-r04-generation-request-and-draft-persistence.md`  
-Diff: `2d65f862..d6c5430a`  
+Diff: `2d65f862..17abfd6e`  
 Reviewer: Codex (orchestrator fallback) · Dátum: 2026-08-15  
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED (javító kör után)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 nyitott · MINOR: 0 · NOTE: 0
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
 | A1–A5 | Request round-trip, stabil seed/hash, kulcssorrend, schema-migráció és future-version elutasítás | ✅ | `generation_request_serializer_test.dart`, 9/9 zöld |
-| A6 | Sérült/séma-sértő draft kontrollált hiba | ❌ | F1: hibás beágyazott mező csendes adatvesztést okoz |
+| A6 | Sérült/séma-sértő draft kontrollált hiba | ✅ | F1 javítva, serializer 13/13 + repository 9/9 |
 | A7–A8 | Külön draft-kulcs, aktív terv izolációja, idempotens törlés | ✅ | `generation_draft_repository_test.dart`, 8/8 zöld |
 | A9 | Nincs tiltott domain-függőség | ✅ | implementer grep, diff-audit |
 
@@ -32,7 +32,7 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
 - **Bizonyíték:** Eldobható review-proba a serializer tesztjében `targetDate = 42` mellett `GenerationRequestSerializerException`-t várt; a tényleges hívás `PracticeGenerationRequest`-tel tért vissza. A teszt szándékosan PIROS volt, utána el lett távolítva a `/tmp` review-klónból.
 - **Kötelező javítás:** A dekóder minden opcionális mezőn különböztesse meg a hiányzó `null`-t a hibás típustól; hibás típus vagy hibás beágyazott alak esetén stabil `GenerationRequestSerializerException`-t adjon. A draft repository ezt változatlanul `StorageFailure`-ré képezze le.
 - **Ellenőrzés:** Tartós teszt: `targetDate = 42` → serializer controlled exception; az ugyanez a mentett draftra → `Failure(StorageFailure)`. A célzott gate-et futtasd újra.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`17abfd6e`) — a nem-null, hibás típusú `targetDate` és `metricTarget` most `GenerationRequestSerializerException`; a repository ezt `StorageFailure`-ré képezi. Friss izolált klónban a négy serializer-regresszió és a persisted-draft regresszió is zöld.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -40,10 +40,10 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
 |---|---|---|
 | format | zöld | ✅ izolált klón gate |
 | analyze | zöld | ✅ izolált klón gate, `No issues found` |
-| célzott tesztek | 17/17 zöld | ✅ serializer 9/9, repository 8/8 az izolált klónban |
+| célzott tesztek | 22/22 zöld | ✅ javítás után serializer 13/13, repository 9/9 az izolált klónban |
 | architektúra/secrets/l10n | zöld | ✅ izolált klón teljes gate-folyamata |
 | CI (teljes suite + property + APK) | még nincs dispatch | ❌ a review-lelet miatt helyesen nincs merge-evidencia |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint a nyitott F1 MAJOR miatt a merge tiltott. A következő lépés ugyanazon `sonnet-impl` motor javító köre, kizárólag F1 lezárására.
+Az F1 lezárult, a független review APPROVED. CI nélkül továbbra is merge tilos; a következő lépés az exact-`17abfd6e` CI-dispatch és annak zöld ellenőrzése.
