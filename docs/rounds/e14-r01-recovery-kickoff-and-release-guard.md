@@ -244,4 +244,43 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Státusz:** implementálva 2026-08-15 a
+`terra/e14-r01-recovery-kickoff-and-release-guard` branchen.
+
+### Módosított fájlok
+
+- `lib/app/config/feature_flags.dart`: három opcionális, alapértelmezetten
+  `false` recognition-recovery flag; a gyár mindhárom környezetben explicit
+  `false` értéket ad; az `==`, `hashCode` és `toString()` is tartalmazza őket.
+- `test/app/config/feature_flags_test.dart`: önálló recognition-recovery
+  tesztcsoport konstruktor-defaultra, érték-szemantikára, valamint production,
+  lab és development gyárértékre.
+- `docs/eval/recognition-release-guard.md`: az aktiválást blokkoló, konkrét
+  evaluation report, baseline/candidate manifest, corpus hash és rollback
+  recept szerződése; a legacy DSP baseline marad.
+
+### Futtatott ellenőrzések és tényleges eredmények
+
+- RED: `flutter test test/app/config/feature_flags_test.dart` a teszt első
+  felvétele után a várt fordítási hibával bukott: a három új named parameter és
+  getter még nem létezett.
+- GREEN: ugyanaz a célzott teszt a megvalósítás után `7` teszttel,
+  `All tests passed!` eredménnyel zárt.
+- Valódi-sértés próba: a gyárban ideiglenesen
+  `recognitionRecoveryEnabled: nonProd` értékkel futtatott ugyanazon teszt
+  várt módon bukott. A lab és development cella `Expected: false`,
+  `Actual: <true>` hibát adott; production zöld maradt. A helyes explicit
+  `false` visszaállítása után a célzott teszt ismét `7`/`7` zöld.
+- `tools/round-gate.sh test/app/config/feature_flags_test.dart` — exit `0`:
+  format: `1508 files (0 changed)`; analyze: `No issues found!`; célzott
+  teszt: `7`/`7`; architecture: `OK (12 allowlisted deviation(s))`; secret
+  scan: `2606 file(s) scanned, 0 finding(s)`; l10n parity: `1276 message(s)`.
+
+### Eltérések, nem futtatott ellenőrzések és scope
+
+- Nincs eltérés a brief scope-jától. Nem módosult `.github/**`, `docs/sdd/**`,
+  `docs/adr/**`, `lib/features/**`, DSP/ML konstans vagy modell-asset.
+- A teljes Flutter suite, randomizált property gate és CI release evidence nem
+  futott lokálisan: ezek a kör utáni CI-dispatch és orchestrátori kapu részei.
+
 ## 11. Review — a Claude tölti ki
