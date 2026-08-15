@@ -1,6 +1,6 @@
 # E07-R04 — PracticeGenerationRequest és draft persistence
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 46338f48`)
+- **Státusz:** PLANNING (pre-flight felülvizsgálva 2026-08-15, `main @ 2d65f862`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 4
 - **Kör-azonosító:** `E07-R04`
 - **Branch:** `<motor>/e07-r04-generation-request-and-draft-persistence`
@@ -45,6 +45,22 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+### 0.0 Pre-flight revízió (2026-08-15, `main @ 2d65f862`)
+
+- A brief-lint jelentés `nincs lelet`; nincs B*/S* feloldandó pont.
+- Az R02/R03 tényleges contractjai: `GenerationMode` a
+  `plan_enums.dart`-ban; `PracticeGoal`, `WeeklyAvailability` és
+  `LearnerConstraints` immutable, értékegyenlőséget adó domain modellek.
+  Ezeket a request közvetlenül hordozhatja; a kör nem ír producer- vagy UI
+  réteget.
+- A meglévő lokális persistence-minta a `KeyValueStore` +
+  `AppResult`/`StorageFailure`: a `LocalPracticeHistoryRepository` külön,
+  namespaced kulcsra ír, és tárolóhiba esetén failure-t ad vissza. A draft
+  repository ezt a mintát követi, saját, az aktív terv tárolóhelyétől eltérő
+  kulccsal; közvetlen `SharedPreferences`-import nem megengedett.
+- Az előre kiosztott ADR 0259 már a `ed2ae399` commitban elfogadott,
+  változatlan artefaktum. A pre-flight nem ír új vagy versengő ADR-t.
 
 ## 1. Cél
 
