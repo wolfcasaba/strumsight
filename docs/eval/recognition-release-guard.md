@@ -7,11 +7,16 @@ program does not activate a replacement model or change user-visible Live
 behavior in E14-R01. Its governing rule is **`UNKNOWN > CONFIDENTLY WRONG`**:
 an unverified recognition result must not be presented as certain.
 
-The measured baseline is the 82-recording phone-guitar corpus documented in
-[`real-audio-dsp-baseline.md`](real-audio-dsp-baseline.md): chord accuracy
-**67.1%**, onset F1 at 50 ms **67.4%**, and direction accuracy **80.7%**.
-Those measurements are the release comparison point, not an activation
-approval for a new model.
+The measured baseline draws on two separate sources — a future evaluation
+report must cite the correct one per metric, not a single blended corpus:
+the 82-recording phone-guitar corpus documented in
+[`real-audio-dsp-baseline.md`](real-audio-dsp-baseline.md) gives chord
+accuracy **67.1%** and onset F1 at 50 ms **67.4%**. Direction accuracy
+**80.7%** is a separate measurement — the live 3-class CRNN's held-out eval
+fold on true-strum events (`docs/handoff-archive.md` round 175; see also
+[ADR 0271](../adr/0271-recognition-recovery-program.md)) — and is not part of
+the 82-recording corpus. Those measurements are the release comparison point,
+not an activation approval for a new model.
 
 ## Activation contract
 
