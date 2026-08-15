@@ -95,7 +95,7 @@ architektúra-guard, hogy a design system **ne importáljon feature-logikát**.
 **Tilos zóna:** `lib/core/theme/**` · `lib/features/**` · `lib/app/**` ·
 `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`.
 
-## 5. Kötött architekturális döntések (ADR 0272)
+## 5. Kötött architekturális döntések (ADR 0273)
 
 ### 5.1 EGY belépő: `public.dart`
 
