@@ -3,10 +3,8 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (H-NOSIGNAL self-heal PR #271 merged — Codex/Terra orchestrator preamble now
-> explains exec_command's yield/resume pattern; chain unblocked. E07-R04's own
-> implementation is reviewed APPROVED and CI-green on its branch but not yet
-> merged — the chain dispatches it automatically on the next firing.)**
+> (E07-R04 merged as PR #272 after the H-NOSIGNAL self-heal: versioned,
+> deterministic generation requests and isolated drafts are now on `main`.)**
 >
 > ## ✅ [HEAL E07-R04/H-NOSIGNAL] KÉSZ — a Codex `exec_command` korai „yield"-je után az orchestrátor újraindította a CI-várakozást ahelyett, hogy folytatta volna (2026-08-15)
 >
@@ -40,16 +38,12 @@
 > success az exact `38e5b11c` SHA-n (docs/tools-only, nincs Dart-változás,
 > Full Gate nem releváns). Lecke: `docs/LESSONS.md` **L282**.
 >
-> **E07-R04 saját tartalmi munkája ettől függetlenül MÁR KÉSZ, de MÉG NEM
-> mergelve**: implementáció + 1 javító kör (F1 — a sérült, hibás típusú
-> `targetDate`/`metricTarget` csendben `null`-lá vált ahelyett, hogy
-> `GenerationRequestSerializerException`-t dobna — javítva), review
-> APPROVED, branch
-> `sonnet-impl/e07-r04-generation-request-and-draft-persistence` @
-> `f989bebd`, Full Gate + Router CI mindkettő success ezen a SHA-n. Ez az
-> önjavítás — a protokoll szerint (ADR 0112) — SZÁNDÉKOSAN nem vezényelte
-> le/mergelte magát a megállt kört, csak az akadályt hárította el; a lánc a
-> következő firingen automatikusan újradispatcheli és fejezi be.
+> **E07-R04 saját tartalmi munkája már merge-elve**: implementáció + 1
+> javító kör (F1 — a sérült, hibás típusú `targetDate`/`metricTarget` többé
+> nem válhat csendes `null`-lá), review APPROVED. A rebase-elt exact-SHA
+> `864cf4ab` Full Gate és Router CI eredménye egyaránt success; PR
+> [#272](https://github.com/wolfcasaba/strumsight/pull/272), squash
+> `ac12b017`.
 >
 > ## ✅ E07-R03 KÉSZ — Goal, availability és learner-constraint domain (2026-08-15)
 >
@@ -893,15 +887,14 @@
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-15):** `main` @ `f7db0f00` — E07-R03 goal,
-availability és learner-constraint domain, PR
-[#270](https://github.com/wolfcasaba/strumsight/pull/270), squash-merge.
-Exact-SHA `93ffe3f`: Full Gate
-[31900345340](https://github.com/wolfcasaba/strumsight/actions/runs/31900345340)
-+ Router CI [31900353853](https://github.com/wolfcasaba/strumsight/actions/runs/31900353853)
-mindkettő success. `origin/main` a branch rebase-e (egy párhuzamos batch-prep
-kör `ba834de8` docs-only commitja) után nem mozdult a merge-ig; post-merge
-`tools/round-gate.sh` zöld a friss `main`-en (9/9).
+**Aktuális állapot (2026-08-15):** `main` @ `ac12b017` — E07-R04
+PracticeGenerationRequest és draft persistence, PR
+[#272](https://github.com/wolfcasaba/strumsight/pull/272), squash-merge.
+Exact-SHA `864cf4ab`: Full Gate
+[31905168438](https://github.com/wolfcasaba/strumsight/actions/runs/31905168438)
++ Router CI [31905169678](https://github.com/wolfcasaba/strumsight/actions/runs/31905169678)
+mindkettő success. A branch `344c2fdc`-re konfliktusmentesen rebase-elve lett,
+és `origin/main` a dispatch és a merge között nem mozdult.
 
 **Aktuális állapot (2026-08-15):** `main` @ `e5cae94d` — E99-R11
 GOV-30c-3 progress-phase decoupling, PR
@@ -1209,6 +1202,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R04 — PracticeGenerationRequest és draft persistence** (PR
+[#272](https://github.com/wolfcasaba/strumsight/pull/272), squash `ac12b017`,
+[ADR 0259](docs/adr/0259-generation-request-versioning-and-draft-isolation.md)).
+Immutable, schema-verziózott generation request készült kanonikus SHA-256
+content-hash-sel és származtatott seeddel; a hashből kizárt idő/provenance nem
+rontja a reprodukálhatóságot. A v1→v2 migráció támogatott, jövőbeli vagy sérült
+séma kontrollált hibát ad. A wizard-draft a `KeyValueStore` külön namespaced
+kulcsán él, ezért nem írhat aktív tervet; olvasási hiba `StorageFailure`, a
+törlés idempotens. Egy MAJOR review-lelet javítva regressziós tesztekkel:
+hibás típusú opcionális `targetDate`/`metricTarget` nem veszhet el némán.
+Correctness review APPROVED, local gate és exact-SHA Full Gate + Router CI
+zöld; flag/provider/UI érintetlen. Implementer `sonnet-impl`, egy javító kör.
 
 **E99-R11 — GOV-30c-3 progress-phase decoupling** (PR
 [#262](https://github.com/wolfcasaba/strumsight/pull/262), squash `e5cae94d`,
@@ -1651,20 +1657,14 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**E07-R01 (Epic 7 kickoff) KÉSZ, MERGE-ELVE (2026-08-15, PR #268, `b70d4077`).**
-Az Epic 7 (AI Practice Generator) határai rögzítve: [ADR 0255](docs/adr/0255-deterministic-first-practice-planning.md)/[0256](docs/adr/0256-practice-plan-revisions-immutable-past.md),
-két flag (`practiceGeneratorEnabled`, `plannerAssistEnabled`) `false` minden
-környezetben, kétirányú architektúra-őr a jövőbeli feature-re. Nulla
-alkalmazáslogika, `lib/features/practice_generator/` még nem létezik.
-
-**A soron következő, névvel ellátott SDD-lépés: E07-R02** (Chapter 8, Kör 2 —
-Typed ID-k, enumok és domain primitívek,
-[`08-epic-07-ai-practice-generator.md`](docs/sdd/08-epic-07-ai-practice-generator.md)).
-Még nincs brief és nincs `docs/execution/pipeline-queue.tsv` sor sem — a user
-kifejezett döntése (2026-08-15) szerint a briefeket **körönként** írjuk, nem
-batch-ben (az előre írt briefek mért hézagokat termeltek E99-R09..R13-ban).
-A `round-brief-prep` skilllel kell előkészíteni ÉS a queue-t bővíteni,
-mielőtt bármelyik pipeline-session dispatch-elhetné.
+**A soron következő SDD-lépés: E07-R05** (Chapter 8, Kör 5 — SkillEvidence
+normalizálás és evidence repository,
+[`e07-r05-skill-evidence-normalisation.md`](docs/rounds/e07-r05-skill-evidence-normalisation.md)).
+A brief és a queue-sor már előkészített, de a kör saját pre-flightja kötelező:
+R02–R04 tényleges contractjai és a logger-redakciós minta újramérendő. A brief
+`risk = "high"`, ezért független security review kötelező; nyers audio/video
+nem kerülhet evidence-be, és minden practice-generator flag változatlanul
+`false` marad.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"
