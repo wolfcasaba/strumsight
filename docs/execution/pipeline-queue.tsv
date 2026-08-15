@@ -339,3 +339,11 @@ E07-R30	docs/rounds/e07-r30-evaluation-and-epic-closure.md	codex	nincs	pending
 # kör) UTÁNA jön — user-döntés, mert a design-rendszer közben végig fennmaradna
 # az igazmondási hiba.
 E14-R01	docs/rounds/e14-r01-recovery-kickoff-and-release-guard.md	codex	0271	pending
+#
+# ===== 3. SÁV — Chapter 13 (UI/UX Design System) =====
+# A queue-ban az E14 blokk MÖGÉ kerül: user-döntés 2026-08-15 szerint előbb a
+# felismerés igazmondása (Ch14 R01-R13), utána a design-rendszer. A briefek
+# viszont előre elkészülnek, hogy a lánc ne álljon meg brief-írásra.
+# Az `E13` a FEJEZETET jelöli, nem epicet.
+E13-R01	docs/rounds/e13-r01-ui-baseline-inventory.md	minimax	nincs	prepared
+E13-R02	docs/rounds/e13-r02-design-system-foundation.md	codex	0273	prepared
