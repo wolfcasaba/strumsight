@@ -264,4 +264,4 @@ E99-R11	docs/rounds/e99-r11-gov-30c-3-progress-phase-decoupling.md	codex	0252	do
 # runner-határon keresztül. Ez önálló architekturális döntés (ADR 0253 §4), a
 # GOV-30c-5 dolga; ebben a körben TILOS hozzányúlni. A V2 elemzés ezért egy
 # lépcsővel később lesz futtatható, mint az ADR 0251 §4 becsülte.
-E99-R12	docs/rounds/e99-r12-gov-30c-4-document-assembly-and-insights.md	codex	0253	pending
+E99-R12	docs/rounds/e99-r12-gov-30c-4-document-assembly-and-insights.md	codex	0253	done
