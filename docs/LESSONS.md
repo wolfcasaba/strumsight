@@ -10399,3 +10399,115 @@ folyamat rendesen kilépett, csak a driver vette észre lassan). Ez a javítás
 a DETEKTÁLÁS sebességét javítja, nem azt, hogy egy orchesztrátor-turn miért
 fogy ki a záró jelzése előtt — az utóbbi továbbra is a self-heal (jelen
 kör) és a driver H-NOSIGNAL ága által kezelt, elfogadott kockázat.
+
+## L279 — Egy önjavítás által pinnelt `assertEqual` exact-set regressziós teszt szerkezetileg összeegyeztethetetlen egy AKTÍV, brief-szentesített kör-branch-csel: csak az egyirányú (nem-zsugorodás) invariáns branch-biztos (E99-R13, H3 2. előfordulása, 2026-08-15)
+
+**Mit mértünk.** Az E99-R13 kör (implementer sonnet-impl) a review-ban
+APPROVED (0 BLOCKER/MAJOR/MINOR) állapotba jutott, push-olt, PR-t nyitott
+(#266), majd Router CI-n H3-mal állt meg: `gh run view 31884234750
+--log-failed` szerint `tools/tests/test_e99_r13_runner_scope.py:77`
+(`test_measured_analysisrunner_implementor_set`) bukott, mert a `KNOWN_
+IMPLEMENTORS` pinnelt 4-elemű halmaza már nem egyezett a branch tényleges
+5 fájljával — a round SAJÁT, brief-szentesített (`allowed_paths` már
+tartalmazta az ELSŐ H3 self-healtől, 1636b40d) új implementorral,
+`v2_analysis_runner.dart`-tal bővült. A halt saját jelentése (`detail=`
+mező) a `KNOWN_IMPLEMENTORS` egyszerű bővítését javasolta — ez a
+diagnózis a FÁJL-t helyesen azonosította, de a javaslat végrehajtása
+törte volna a `main` SAJÁT Router CI-ját: `main`-en ténylegesen csak 4
+implementor létezik (az 5. fájl a még nem merge-elt round-branch-en van),
+tehát egy 5-elemű pin ott mismatch-elt volna — egy pirosat cserélt volna
+egy ROSSZABBRA, ami az ÖSSZES jövőbeli kör-dispatch-ot blokkolta volna
+(`main $workflow futása(i) pirosak` előfeltétel,
+`tools/round-pipeline.sh` 3. szakasz).
+
+**Gyökérok.** Az ELSŐ H3 self-heal (1636b40d) a pinnelt tesztet
+`assertEqual(actual, sorted(KNOWN_IMPLEMENTORS))`-ként írta — mindkét
+irányban zár: se zsugorodás, se bővülés. Ez a kétirányú zár strukturálisan
+összeegyeztethetetlen az SDD kör-életciklussal, amiben egy kör-branch
+DEFINÍCIÓ SZERINT a `main`-nél előrébb jár, amíg nincs merge-elve — egy
+briefben szentesített ÚJ implementor pontosan ezt a legitim előrehaladást
+jelenti, nem regressziót. A bővülés-irány emellett REDUNDÁNS is volt: a
+fájlban lévő MÁSIK teszt,
+`test_brief_allows_every_analysisrunner_implementor`, már branch-biztosan
+(hardcodolt pin nélkül, a kör SAJÁT `allowed_paths`-át olvasva) lefedi
+ugyanezt az invariánst.
+
+**Javítás.** `test_measured_analysisrunner_implementor_set` mostantól
+csak az EGYIRÁNYÚ, nem-redundáns felét állítja: `KNOWN_IMPLEMENTORS`
+egyetlen tagja sem tűnhet el csendben
+(`missing = [p for p in KNOWN_IMPLEMENTORS if p not in actual]`,
+`assertEqual(missing, [])`) — sem `main`-en, sem egy azt megelőző
+kör-branch-en, mert a `KNOWN_IMPLEMENTORS ⊆ actual` mindkét fán igaz
+marad, akárhány legitim új implementor jön hozzá. `KNOWN_IMPLEMENTORS`
+maga VÁLTOZATLAN maradt (4 elem — nem kellett és nem is szabadott
+bővíteni).
+
+**Hogyan alkalmazd.** Mielőtt egy self-heal (vagy bármely kör) egy
+pinnelt `assertEqual(mért_állapot, KONSTANS)` regressziós tesztet ír egy
+router-CI útvonalon: mérd meg a saját fixet KÉT fán is — a `main`-en (ahol
+a fix landol) ÉS az érintett, még nyílt kör-branch-en (ha van) —, mert a
+Router CI mindkettőn fut, és egy kör-branch DEFINÍCIÓ SZERINT eltérhet a
+`main`-től amíg nincs merge-elve. Ha a két fa nem tud UGYANAZZAL a
+pinnelt konstanssal egyszerre zöld lenni, a pin szerkezete hibás — nem a
+konstans értéke —, és az egyetlen biztonságos irány a nem-redundáns,
+egyirányú invariánsra szűkítés, sosem a teszt törlése. Mérve mindkét fán,
+`git worktree add --detach` + a javított teszt-fájl felülrétegzésével
+(commit nélkül), a valódi CI-hibaüzenettel egyezően reprodukálva a
+javítás előtt és után is. Rokon: [[L126]] és [[L136]] (ugyanaz a `main`
+vs. kör-branch feszültség, ott a healed-`main`-re rebase-eléssel, itt a
+teszt-invariáns újratervezésével oldva).
+
+## L280 — Egy sikeres self-heal NEM garantálja, hogy a lánc ténylegesen folytatódik: a „nyitott PR van" előfeltétel csak az EPHEMER inflight-nyilvántartást ismerte, a PERZISZTENS sor-fájlt nem — egy push+PR+review UTÁN, de merge ELŐTT halt kör örökre foreign-nek látszott a SAJÁT PR-jén (E99-R13, H3 2. előfordulása, 2026-08-15)
+
+**Mit mértünk.** [[L279]] Router CI-javítása önmagában NEM oldotta volna
+fel a láncot tartósan. `tools/round-pipeline.sh` 3. szakaszának „nyitott
+PR van" / „fut egy workflow" előfeltételei (`count_foreign`,
+`own_branches`) kizárólag az `inflight_rounds()`-ot (a `.pipeline/
+inflight/` könyvtárat) ismerik „sajátnak" — ezt viszont MINDEN
+script-kilépéskor törli a `trap 'inflight_remove "$active_inflight"'
+EXIT`, és csak AZUTÁN tölti fel újra (`inflight_add`, 6. szakasz), hogy a
+3–5. szakasz (előfeltételek → kör-választás) már lefutott. Az E99-R13
+saját orchesztrátor-sessionje push-olt, PR-t nyitott (#266), review-t
+kapott, majd Router CI-hibán H3-mal megállt MIELŐTT merge-elt volna — a
+PR NYITVA maradt a session kilépésekor. Kód-olvasással (nem feltevéssel)
+bizonyítva: a KÖVETKEZŐ cron-firingen `inflight_rounds()` üres (még nem
+választottunk kört), tehát `own_branches` üres, a #266 branch-e illeszkedik
+a `ROUND_BRANCH_PATTERN`-re, és a `count_foreign` idegennek számolja —
+`die "nyitott PR van (1)"` (exit 4). Ez NEM `HALTED`-et ír (nincs
+`notify` hívás rá) — csendes, jelzés nélküli holtpont MINDEN jövőbeli
+firingen, örökre, mert semmi a `tools/`-ban nem zár le egy hátrahagyott
+PR-t.
+
+**Mérve, nem csak levezetve.** A hipotézist a tényleges függvényekkel
+igazoltam: a JAVÍTÁS ELŐTTI `round-pipeline.sh`-t (`git show
+origin/main:tools/round-pipeline.sh`) a kör valódi branch-nevével és a
+sor-fájl valódi, `pending` E99-R13 sorával futtatva `own_branches=[]`,
+`count_foreign` kimenete `1` (idegen — a bug reprodukálva); a javított
+scripttel ugyanaz a bemenet `own_branches=[e99-r13]`, kimenet `0` (saját).
+
+**Javítás.** `docs/execution/pipeline-queue.tsv` saját, NEM `done` sora
+egy körre PERZISZTENS „ez a miénk" jel — túléli a session-határt, szemben
+az `inflight_dir`-rel. Új `queue_active_branch_pattern()` a sor-fájl
+minden nem-`done` sorának kör-azonosítóját `own_branches`-be fűzi az
+`inflight_branch_pattern()` mellé (mindkettő ugyanabba a `|`-elválasztott
+regex-mintába, közös dedup nélkül is biztonságosan, mert a `grep -Evi`
+csak a MATCH-re kérdez). Kapott egy `PIPELINE_QUEUE_FILE` override-ot is
+(a meglévő `PIPELINE_STATE_DIR` mintájára), hogy izoláltan tesztelhető
+legyen a valódi sor-fájl piszkítása nélkül.
+
+**Hogyan alkalmazd.** Egy self-heal ne álljon meg a HALTED fájlban
+LEÍRT, szó szerinti gyökéroknál — mérd meg explicit módon: "ha ez a fix
+zölden merge-elődik, a lánc a KÖVETKEZŐ cron-firingen ténylegesen
+végig tud-e menni a 3–4. szakaszon a megállt kör redispatch-áig, vagy egy
+MÁSIK, eddig ki nem próbált előfeltétel-kombináció (itt: push+PR+review
+UTÁN, de merge ELŐTT halt kör) útban áll?" Ez a kombináció korábban SOHA
+nem fordult elő ezen a körön (az 1. H3 push előtt állt meg, a H-NOSIGNAL
+PR-nyitás előtt) — az, hogy egy előfeltétel korábban sosem hibázott, nem
+bizonyíték arra, hogy az ÚJ állapottér alatt sem fog. Regressziós teszt:
+`tools/tests/test_round_pipeline_queue_pending_pr_guard.py` — a valódi
+kör-branch névvel és sor-fájl sorral reprodukálja a piros→zöld átmenetet,
+plusz két negatív kontroll (`done` kör idegen marad, sor-fájlból teljesen
+hiányzó kör idegen marad) bizonyítja, hogy az őr nem vesztette el a
+tényleges védelmi célját. Rokon: [[L279]] (ugyanennek a halt-nak a másik,
+elsődleges fele), [[ADR 0112]] Módosítás-blokk (2026-08-15, ugyanez a
+mérés normatív rögzítése).

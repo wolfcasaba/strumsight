@@ -7,10 +7,42 @@
 > publishable `AnalysisDocument` and runs the deterministic insight rules on
 > the exact published instance, 18→20 stages, while the runner stays
 > fail-closed. Next named step is GOV-30c-5 — the runner-boundary audio path
-> — brief written (ADR 0254), self-healed TWICE (H3 `allowed_paths` gap, then
-> an unrelated pipeline-infra H-NOSIGNAL — see below), and has substantial
-> self-reported-but-NOT-independently-verified implementer progress waiting
-> in a committed worktree branch. See §6.)**
+> — brief written (ADR 0254), self-healed THREE TIMES (H3 `allowed_paths`
+> gap, an unrelated pipeline-infra H-NOSIGNAL, then a second H3 on Router
+> CI — see below), and has substantial, review-APPROVED implementer
+> progress waiting in an open PR (#266), still needing a rebase onto the
+> healed `main` before its own CI is green. See §6.)**
+>
+> **E99-R13 second H3 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra
+> fix, 3. önjavítás ugyanezen a körön, 2026-08-15).** A push-olt,
+> review-APPROVED implementer-branch (PR #266) Router CI-n H3-mal állt meg:
+> `tools/tests/test_e99_r13_runner_scope.py` — az ELSŐ H3-heal (1636b40d)
+> pinnelt `KNOWN_IMPLEMENTORS`-a nem ismerte a round SAJÁT, brief-szentesített
+> új implementorát (`v2_analysis_runner.dart`). A HALTED `detail=` mezőjének
+> szó szerinti javaslata (a pinnelt lista bővítése) VÉGREHAJTVA `main` SAJÁT
+> Router CI-ját törte volna el (mérve: `main`-en ténylegesen csak 4
+> implementor létezik, az 5. csak a még nyílt round-branch-en) — a helyes
+> javítás a pinnelt teszt egyirányúra (csak zsugorodás-tiltás) korrekciója
+> volt; a redundáns bővülés-irányt a szomszéd
+> `test_brief_allows_every_analysisrunner_implementor` már branch-biztosan
+> lefedte. **Egy második, független gyökérokot is találtam és javítottam
+> ugyanebben a self-healben, miközben azt mértem, hogy az első fix UTÁN a
+> lánc ténylegesen tovább tud-e menni:** a driver „nyitott PR van"
+> előfeltétele (`tools/round-pipeline.sh`, `count_foreign`) csak az ephemer
+> `inflight_rounds()`-ot ismerte sajátnak — egy push+PR+review UTÁN, de
+> merge ELŐTT halt kör (pontosan ez) a KÖVETKEZŐ firingen örökre idegennek
+> látszott volna a SAJÁT nyitott PR-jén, `die "nyitott PR van"`
+> (HALTED-írás és értesítés NÉLKÜL) minden jövőbeli firingen. Javítás:
+> `docs/execution/pipeline-queue.tsv` nem-`done` sorai is „sajátnak"
+> számítanak mostantól (`queue_active_branch_pattern()`, +
+> `PIPELINE_QUEUE_FILE` teszt-override). Mindkét javítás mérve reprodukálva
+> (piros a fixek előtt, zöld utána, negatív kontrollokkal a valódi kör-branch
+> nevével és sor-fájl sorával). Teljes `python3 -m pytest tools/tests -q`:
+> 438 passed, 0 failed. PR [#267](https://github.com/wolfcasaba/strumsight/pull/267),
+> squash-merge `936b25e4` — Router CI zöld mindkét fán (a heal-branch-en ÉS
+> a post-merge `main`-en, exact-SHA, `tools/wait-for-ci.sh`-val várva).
+> Leckék: `docs/LESSONS.md` **L279**, **L280**. ADR 0112 Módosítás-blokk
+> (2026-08-15).
 >
 > **E99-R13 H-NOSIGNAL self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra
 > fix, 2. önjavítás ugyanezen a körön).** A 10:20:06-kor indult Terra
@@ -29,20 +61,23 @@
 > **A megállt kör tartalmi állapota (FONTOS a következő dispatch-nak).** A
 > `/home/ubuntu/ss-sonnet-impl-e99-r13` munkapéldány (branch
 > `sonnet-impl/e99-r13-gov-30c-5-runner-audio-path-and-wiring`, HEAD
-> `7289181b`, `dirty_files=0`, nem push-olt) a H3-heal utáni dispatch alatt
-> VALÓS előrehaladást ért el: a review mindkét MAJOR leletét (F1 — a V2
-> DSP-lánc izolátumba vitele; F3 — az izolátum progress-eventek runId-jának
-> a külső handle-re térképezése) az implementer FIXED-re írta a
-> `docs/reviews/e99-r13-review.md`-ben, saját teszttel és — állítása
-> szerint — zöld `tools/round-gate.sh`-sal, mindkettő commitolva. A második
-> (F3) javító implementer-futás UGYANAKKOR `.codex-round-status`
-> `status=unknown`-t hagyott (`exit 0`, de lezáró jelzés nélkül — ugyanaz a
-> mintázat, ami az ORCHESZTRÁTOR sessiont is levitte, lásd fent). **Ez az
-> állítás implementer-önjelentés, FÜGGETLENÜL NEM újraellenőrzött** — a
-> következő dispatch-nak a §0.2 örökség-ellenőrzés szerint ezt a branch-et
-> kell felhasználnia (nem tisztán újrakezdeni), de a review-t és a gate-et
-> a normál protokoll szerint FÜGGETLENÜL kell megismételnie, mielőtt
-> CI-t dispatch-elne rá.
+> `b64fd0ec`, `dirty_files=0`) NYITOTT, REVIEW-APPROVED PR-ban áll (**PR
+> [#266](https://github.com/wolfcasaba/strumsight/pull/266)**, legutóbbi
+> commit „docs(review): approve E99-R13 F4 correction") — a review mindkét
+> eredeti MAJOR leletét (F1 — a V2 DSP-lánc izolátumba vitele; F3 — az
+> izolátum progress-eventek runId-jának a külső handle-re térképezése) és egy
+> F4 korrekciót is FIXED/approved-ra írt. **Ez implementer/review-önjelentés,
+> ezt a self-heal FÜGGETLENÜL NEM ellenőrizte** — a self-heal mandátuma
+> kizárólag infrastruktúra, a round tartalmához nem nyúlt. A Router CI-blokk,
+> ami a legutóbbi dispatch-ot megállította, EL VAN HÁRÍTVA a `main`-en (lásd
+> fent), de a PR #266 branch-e MAGA még NINCS rebase-elve a healed `main`-re
+> — a branch saját Router CI-ja a fixek nélkül továbbra is piros lenne. A
+> KÖVETKEZŐ dispatch-nak a §0.2 örökség-ellenőrzés szerint ezt a branch-et
+> kell felhasználnia (nem tisztán újrakezdeni): rebase (vagy `git merge
+> --no-ff origin/main`, ha a branch már publikus és a rebase force-push-t
+> igényelne, ld. ADR 0112 H8-módosítás) a healed `main`-re, majd a review-t
+> és a gate-et a normál protokoll szerint FÜGGETLENÜL kell megismételnie,
+> mielőtt bármilyen CI-t dispatch-elne rá.
 >
 > ## ✅ E99-R12 KÉSZ — GOV-30c-4 document assembly and insights (2026-08-15)
 >

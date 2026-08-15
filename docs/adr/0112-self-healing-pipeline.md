@@ -207,6 +207,40 @@ review-jelentés a következő orchestrátor-session dolga marad (ADR 0112 §1:
 „az önjavító kör dolga nem a megállt kör levezénylése"). Lecke:
 `docs/LESSONS.md` **L253**.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-15) — a jelentett gyökérok javítása nem elég: mérd meg, hogy a lánc UTÁNA tényleg tovább tud-e menni
+
+Mérés: E99-R13/H3 (2. előfordulás, PR #266 már nyitva a haltkor) — a HALTED
+fájl `detail=` mezője helyesen mutatott egy `tools/tests/`-beli fájlra, de a
+javasolt javítás (egy pinnelt konstans egyszerű bővítése) VÉGREHAJTVA
+`main` SAJÁT Router CI-ját törte volna el, mert `main` és a még nyílt
+kör-branch ténylegesen KÜLÖNBÖZŐ fát mértek (a branch a round saját,
+brief-szentesített munkájával előrébb járt). A helyes javítás a pinnelt
+teszt szerkezetének egyirányúra korrekciója volt, nem a jelentett „bővítsd a
+listát" lépés szó szerinti végrehajtása — lásd `docs/LESSONS.md`
+[[L279]].
+
+Ugyanebben a self-healben egy MÁSODIK, független gyökérokot is mérnünk
+kellett: a jelentett Router CI-fix önmagában zölden merge-elve SEM oldotta
+volna fel a láncot tartósan, mert a driver „nyitott PR van" előfeltétele
+(`tools/round-pipeline.sh`, `count_foreign`) csak az ephemer
+`inflight_rounds()`-ot ismeri sajátnak, a push+PR+review UTÁN, de merge
+ELŐTT halt kör pedig PONTOSAN ezt az állapotteret hozza létre — a következő
+firing a saját, nyitva hagyott PR-t idegennek látta volna, `die "nyitott PR
+van"` minden jövőbeli firingen, HALTED-írás és értesítés nélkül. Lásd
+`docs/LESSONS.md` [[L280]].
+
+**Szabály.** Az önjavítás §1 mércéje („a gyökérok megszüntetése, majd a
+lánc a következő firingen újraindítja a megállt kört") NEM azt jelenti,
+hogy a HALTED fájl szó szerinti `detail=` javaslatát kell végrehajtani, és
+NEM áll meg a jelentett gyökérok javításánál. A self-healnek explicit módon
+meg kell mérnie (kód-olvasással, nem feltevéssel, ideális esetben a saját
+fixét a `main`-en ÉS egy érintett nyílt kör-branch-en is lefuttatva): a
+javítás zöld merge-e UTÁN a lánc a KÖVETKEZŐ cron-firingen ténylegesen
+végig tud-e menni a megállt kör redispatch-áig, vagy egy másik,
+eddig-ki-nem-próbált előfeltétel-kombináció útban áll-e. Ez a tágabb jog
+(§2) alá tartozik: a második gyökérok is `tools/`-infrastruktúra, nem a
+megállt kör tartalmi munkája, és saját, dedikált regressziós tesztet kapott.
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör
