@@ -108,3 +108,16 @@ format, analyze, a négy célzott teszt, architecture, secrets és l10n. A friss
 mainre vett scope-audit is zöld (`c1d3b089..fe0c905f`, 12 changed paths,
 2 generated/ignored). Az F4 javításnak nincs nyitott BLOCKER vagy MAJOR
 utóhatása.
+
+## Rebase utáni független ellenőrzés — 2026-08-15
+
+Verdikt: APPROVED
+
+Az `ef6f5d41` exact head a `bf07f415` mainre történt tiszta rebase eredménye;
+a kör saját alkalmazás- és tesztdiffje változatlan maradt. Egy új, izolált
+`/tmp/review-e99-r13-UMEMmZ` klónban a kötelező scope-audit
+`Legacy scope audit OK (12 changed path(s), 2 generated/ignored)` eredményt
+adott. A brief §7 szerinti teljes `tools/round-gate.sh` hívás zölden lezárult:
+format, analyze, a négy célzott teszt, architecture, secrets és l10n.
+Nyitott BLOCKER vagy MAJOR nincs; a merge további feltétele kizárólag az
+exact-`ef6f5d41` CI-bizonyíték.
