@@ -10297,3 +10297,39 @@ javítás olcsó (rename + belső linkek), de csak akkor, ha MERGE ELŐTT
 történik — merge UTÁN egy extra docs-only commitot igényel, ami (L266/L274
 szerint) újabb CI-redispatch-et is kényszeríthet, ha a review-fájl-rename a
 CI-dispatch UTÁN történik.
+
+## L277 — Egy interfész-szignatúra váltásnál az `allowed_paths`-ot `implements`-találatokkal add meg, ne csak a hívóhelyekkel (E99-R13 H3 self-heal, 2026-08-15)
+
+**Mit mértünk.** Az E99-R13 (GOV-30c-5) ADR 0254 §5.1 megváltoztatja az
+`AnalysisRunner.start` szignatúráját (`AnalysisDocument` → az új
+`AnalysisRunRequest`). A brief `allowed_paths`-a a két ismert HÍVÓHELYET
+(`AnalyzeAudioUseCase`, `ShadowAnalysisRunner`) és — a kör saját, dispatch
+előtti pre-flight-revíziója után — két teszt-oldali fake-et sorolt fel, de a
+repóban HÁROM `test/` fájl tartalmaz `implements AnalysisRunner`-t. A
+harmadikat (`analysis_controller_test.dart` `_QueueRunner`-je) a brief-írás
+nem találta meg. Az implementer (`sonnet-impl`) helyesen elkészítette az
+EGYETLEN kényszerített javítást (az override-szignatúra egysoros igazítása —
+enélkül a csomag nem fordul), de ez a brief listáján kívül esett, és a
+legacy scope-audit (`tools/round-scope-audit.sh` → `tools/scope-audit.py`)
+helyesen állította le a kört (H3). Az önjavító kör mérése:
+`grep -rn "implements AnalysisRunner" lib/ test/` a repóban HÁROM fájlt ad,
+nem kettőt — a brief-szerző nem futtatott ilyen repó-szintű grep-et, csak a
+hívóhelyeket kereste kód-olvasással.
+
+**Miért.** Dart-ban egy `abstract interface class` szignatúra-változása
+MINDEN implementort/fake-et egyszerre kényszerít — nincs részleges migrációs
+állapot, a csomag vagy egyben fordul, vagy egyben nem. Aki csak azt keresi,
+KI HÍVJA a metódust (a production hívóhelyek), szisztematikusan kihagyja a
+teszt-oldali fake-eket (kik IMPLEMENTÁLJÁK az interfészt) — két különböző
+kérdés, két különböző grep-minta.
+
+**Hogyan alkalmazd.** Amikor egy brief (vagy egy pre-flight-revízió) egy
+publikus interfész/absztrakt osztály szignatúráját változtatja, a brief
+lezárása előtt futtass egy repó-szintű `grep -rn "implements
+<InterfészNév>"` (és releváns esetben `extends <OsztályNév>`) keresést — NE
+csak a hívóhely-keresésre hagyatkozz. Az `allowed_paths`-nak MINDEN
+találatot tartalmaznia kell, production ÉS teszt-oldali fake egyaránt. A
+regressziós minta: `tools/tests/test_e99_r13_runner_scope.py` — géppel
+pinneli a mért implementor-halmazt, és ellenőrzi, hogy mindegyik szerepel az
+`allowed_paths`-ban, hogy egy új implementor megjelenése tesztbukásként
+látsszon, ne egy újabb H3 haltként.

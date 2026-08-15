@@ -1,6 +1,6 @@
 # E99-R13 (GOV-30c-5) — A runner-határ audió-útja és a V2 lánc bekötése
 
-- **Státusz:** PLANNING (pre-flight lezárva 2026-08-15, friss `main`)
+- **Státusz:** PLANNING (self-heal revízió lezárva 2026-08-15, friss `main`)
 - **Típus:** **governance-kör** — a GOV-30c ÖTÖDIK és ZÁRÓ lépcsője
 - **Kör-azonosító:** `E99-R13`. Emberi neve **GOV-30c-5**.
 - **Branch:** `<motor>/e99-r13-gov-30c-5-runner-audio-path-and-wiring`
@@ -13,6 +13,38 @@
 > **Ez a kör teszi FUTTATHATÓVÁ a V2 elemzést** — de **nem kapcsolja be**.
 > Mind a kilenc flag OFF marad; a rollout külön, EMBERI döntés (§5.5).
 
+## 0.0 Self-heal pre-flight revízió (ADR 0112 önjavító kör, 2026-08-15, halt H3)
+
+Az első dispatch (implementer `sonnet-impl`) H3-mal megállt: a diffje
+érintette a `test/…/application/analysis_controller_test.dart` fájlt, ami
+nem szerepelt az `allowed_paths`-ban. Mérve (`git -C
+/home/ubuntu/ss-sonnet-impl-e99-r13 diff -- test/features/audio_analysis/
+application/analysis_controller_test.dart`): a diff egyetlen kényszerített,
+mechanikus sor — a fájl egy `_QueueRunner implements AnalysisRunner` fake-et
+tartalmaz, és az ADR 0254 §5.1 `AnalysisRunner.start` szignatúra-váltása
+(`AnalysisDocument` → `AnalysisRunRequest`) miatt ennek override-ja enélkül
+nem fordul. Repó-szintű méréssel (`grep -rn "implements AnalysisRunner"`) ez
+a HARMADIK ilyen test-oldali fake — a brief csak kettőt (`shadow_analysis_
+runner_test.dart`, és az alábbi pont szerint `analysis_cancellation_test.
+dart`) sorolt fel. A gyökérok tehát nem az implementer diffje, hanem az
+`allowed_paths` hiányos listája (Class B) — a self-heal ezt egészíti ki
+(regressziós teszt: `tools/tests/test_e99_r13_runner_scope.py`).
+
+Emellett az eredeti `allowed_paths`/`gate_tests` a
+`test/…/application/analysis_isolate_runner_test.dart` fájlra hivatkozott,
+ami NEM létezik ebben a repóban (mérve: a fájl nincs a fán). A megállt kör
+saját, még dispatch előtti pre-flightja ezt már megtalálta és lokálisan
+(nem push-olt, commit `245116d3` a `sonnet-impl/e99-r13-…` ágon) kijavította
+— a tényleges izolátum-/cancel-szerződést ma az `analysis_cancellation_test.
+dart` méri (`AnalysisIsolateRunner`, `spawnAnalysisIsolate`), ezért a listák
+ezt a létező fájlt nevezik meg, csere, nem scope-bővítés. Ez a self-heal ezt
+a már mért, már helyes korrekciót is átveszi, hogy a következő friss
+dispatch ne kapjon egy nemlétező fájlra mutató briefet.
+
+A megállt kör félkész munkapéldánya (`/home/ubuntu/ss-sonnet-impl-e99-r13`,
+push nélkül) ezzel a revízióval elavul; a lánc E99-R13-at friss dispatch-csal
+indítja újra, ez a self-heal nem viszi tovább a tartalmi implementációt.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -23,13 +55,14 @@ allowed_paths = [
   "lib/features/audio_analysis/application/analyze_audio_use_case.dart",
   "lib/features/audio_analysis/application/shadow_analysis_runner.dart",
   "test/features/audio_analysis/application/v2_analysis_runner_test.dart",
-  "test/features/audio_analysis/application/analysis_isolate_runner_test.dart",
+  "test/features/audio_analysis/application/analysis_cancellation_test.dart",
+  "test/features/audio_analysis/application/analysis_controller_test.dart",
   "test/features/audio_analysis/application/shadow_analysis_runner_test.dart",
   "docs/rounds/e99-r13-gov-30c-5-runner-audio-path-and-wiring.md",
 ]
 gate_tests = [
   "test/features/audio_analysis/application/v2_analysis_runner_test.dart",
-  "test/features/audio_analysis/application/analysis_isolate_runner_test.dart",
+  "test/features/audio_analysis/application/analysis_cancellation_test.dart",
 ]
 native_gate = false
 ```
@@ -151,7 +184,8 @@ kör egyiket sem mozdítja** (A8).
 | `application/analyze_audio_use_case.dart` | a szignatúra igazítása |
 | `application/shadow_analysis_runner.dart` | a minta továbbadása |
 | `test/…/application/v2_analysis_runner_test.dart` | **ÚJ** — végponttól végpontig |
-| `test/…/application/analysis_isolate_runner_test.dart` | a bővült határ |
+| `test/…/application/analysis_cancellation_test.dart` | a bővült izolátum-határ és cancellation (§0.0: a tényleges test erre a fájlra mutat, nem a nemlétező `analysis_isolate_runner_test.dart`-ra) |
+| `test/…/application/analysis_controller_test.dart` | a `_QueueRunner` fake harmadik `implements AnalysisRunner` helye — a §5.1 szignatúra-váltás compile-kényszerítette igazítása (§0.0, halt H3) |
 | `test/…/application/shadow_analysis_runner_test.dart` | a továbbadás bizonyítéka |
 | `docs/rounds/e99-r13-…md` | a §10 handoff |
 
@@ -250,7 +284,7 @@ a dokumentum egy mezőjébe → az **A4** cellának PIROSNAK kell lennie → ved
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/audio_analysis/application/v2_analysis_runner_test.dart test/features/audio_analysis/application/analysis_isolate_runner_test.dart test/features/audio_analysis/application/shadow_analysis_runner_test.dart
+tools/round-gate.sh test/features/audio_analysis/application/v2_analysis_runner_test.dart test/features/audio_analysis/application/analysis_cancellation_test.dart test/features/audio_analysis/application/analysis_controller_test.dart test/features/audio_analysis/application/shadow_analysis_runner_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,

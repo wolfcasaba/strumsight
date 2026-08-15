@@ -7,7 +7,26 @@
 > publishable `AnalysisDocument` and runs the deterministic insight rules on
 > the exact published instance, 18→20 stages, while the runner stays
 > fail-closed. Next named step is GOV-30c-5 — the runner-boundary audio path
-> — brief not yet written, see §6.)**
+> — brief written (ADR 0254) and self-healed once (H3 `allowed_paths` gap,
+> see below), first implementer dispatch pending. See §6.)**
+>
+> **E99-R13 H3 self-heal (ADR 0112, NEM egy SDD-kör — pipeline-infra fix).**
+> Az első dispatch (`sonnet-impl`) H3-mal megállt: a diffje egy, az ADR 0254
+> §5.1 `AnalysisRunner.start` szignatúra-váltása (`AnalysisDocument` →
+> `AnalysisRunRequest`) miatt KÉNYSZERŰEN módosítandó, de az
+> `allowed_paths`-ból hiányzó harmadik teszt-oldali fake-et is érintette
+> (`analysis_controller_test.dart` `_QueueRunner`-je — repó-szinten HÁROM
+> fájl `implements AnalysisRunner`-t, a brief csak kettőt sorolt fel). A
+> brief `allowed_paths`/§4/§7 mostantól mindhárom fake-et felsorolja, és a
+> korábbi, nemlétező `analysis_isolate_runner_test.dart`-ra mutató
+> hivatkozást is a valódi `analysis_cancellation_test.dart`-ra cseréli (a
+> megállt kör saját, dispatch előtti pre-flightja ezt már megtalálta,
+> uncommitted). Regressziós teszt: `tools/tests/test_e99_r13_runner_scope.py`
+> (RED az eredeti brieffel, GREEN a javítottal). Lecke: `docs/LESSONS.md`
+> **L277**. A megállt kör félkész munkapéldánya
+> (`/home/ubuntu/ss-sonnet-impl-e99-r13`) nem push-olt, tartalmi munkáját ez
+> a self-heal NEM vitte tovább — E99-R13 friss dispatch-ra vár a javított
+> brieffel.
 >
 > ## ✅ E99-R12 KÉSZ — GOV-30c-4 document assembly and insights (2026-08-15)
 >
