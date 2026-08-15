@@ -1,8 +1,8 @@
 # E07-R05 — Review
 
-Brief: `docs/rounds/e07-r05-skill-evidence-normalisation.md`  
-Diff: `c4497773..8bff05c3`  
-Reviewer: Codex (orchestrator fallback) · Dátum: 2026-08-15  
+Brief: `docs/rounds/e07-r05-skill-evidence-normalisation.md`
+Diff: `c4497773..1b1148f9`
+Reviewer: Codex (orchestrator fallback) · Dátum: 2026-08-15
 Verdikt: APPROVED
 
 ## Összegzés
@@ -42,6 +42,13 @@ Az izolált klónban az `EvidenceAggregator` logmezőihez ideiglenesen hozzáadt
 | 3 célzott tesztfájl | ✅ 7 + 13 + 9 teszt zöld |
 | architecture, secrets, l10n | ✅ teljes `tools/round-gate.sh` összegzés zöld |
 | CI | ⏳ a review-jelentés commitjának exact SHA-jára újra-dispatch szükséges |
+
+### C1 — CI architecture guard — FIXED (`1b1148f9`)
+
+Full Gate `31907084609` egyetlen hibája a domain-documentationben szereplő
+tiltott `DateTime.now(` szövegliterál volt; a guard ezt helyesen észlelte. A
+javítás csak a comment átírása, a viselkedés változatlan. Az implementer
+célzott round gate-je zöld; a review-artefaktum új SHA-jára ismét CI szükséges.
 
 ## Merge-döntés
 

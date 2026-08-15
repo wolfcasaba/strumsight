@@ -1,7 +1,7 @@
 # E07-R05 — Security review
 
-Reviewed commit: `8bff05c3`  
-Reviewer: independent security review · Dátum: 2026-08-15  
+Reviewed commits: `8bff05c3`, `1b1148f9`
+Reviewer: independent security review · Dátum: 2026-08-15
 Verdikt: APPROVED after F1 correction
 
 ## Scope
