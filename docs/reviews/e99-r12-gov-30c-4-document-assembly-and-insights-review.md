@@ -101,7 +101,15 @@ megismételtem**, nem fogadtam el bemondásra:
   implementációja ugyanannak a privacy-kritikus kontraktusnak („sose PCM,
   csak hash") — ha az egyiket egy jövőbeli kör javítja/hangolja, a másik
   csendben lemarad. Ma nincs funkcionális eltérés (mindkettő SHA-256 fölött
-  16 bites kvantált PCM-en).
+  16 bites kvantált PCM-en). **A független security review ugyanezt a
+  duplikációt önállóan is megtalálta** (NOTE-2,
+  `e99-r12-gov-30c-4-document-assembly-and-insights-security.md`) — a két
+  review egymástól függetlenül konvergált ugyanarra a megfigyelésre, ami
+  megerősíti, hogy valódi, follow-up-ra érdemes tétel, plusz egy precíz
+  correctness-részletet is hozzátesz: a header-kódolás (string-join vs.
+  bináris `ByteData(20)`) ÉS a minta-forrás (nyers vs. kanonikus PCM) is
+  eltér, tehát a két fingerprint SOSEM fog egyezni, nem csak elméletileg
+  térhet el.
 - **Javasolt irány:** follow-up körben cserélni `AudioFingerprint.compute(...)`
   hívásra (`preprocessingVersion: input.preprocessedAudio?.preprocessingVersion
   ?? 'unavailable'`), ami ~15 sort törölne.
@@ -140,11 +148,21 @@ megismételtem**, nem fogadtam el bemondásra:
 | l10n | (nem jelentve) | ✅ zöld (1276 üzenet, en↔hu) |
 | CI (teljes suite + property + APK) | — | dispatch alatt, ld. round-status |
 
-Biztonsági/adatvédelmi review (kötelező, `risk = "high"`): külön agent
-futtatva, lásd `e99-r12-gov-30c-4-document-assembly-and-insights-security.md`.
+Biztonsági/adatvédelmi review (kötelező, `risk = "high"`): külön, izolált
+klónban futtatott dedikált pass — lásd
+`e99-r12-gov-30c-4-document-assembly-and-insights-security.md` — **PASS**,
+0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE (előretekintő, egyik a fenti N2-vel
+konvergál).
+
+`full-gate.yml` az implementer-commit SHA-ján (`b376dbe9`, run
+[31875103848](https://github.com/wolfcasaba/strumsight/actions/runs/31875103848))
+**success**. A két review-commit hozzáadása után a gate-et a végleges SHA-n
+újra kell dispatch-elni (ADR 0086 §2 exact-SHA szabály) — ez az orchesztrátor
+következő lépése.
 
 ## Merge-döntés
 
 ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-Ez a review 0 BLOCKER/MAJOR-t talált. A merge-döntés a security review
-eredményére és a CI (full-gate.yml + router-ci.yml) zöld futására vár.
+Ez a review 0 BLOCKER/MAJOR-t talált, a security review is 0
+CRITICAL/BLOCKER/MAJOR/MINOR-t (PASS). A merge a végleges SHA-n újra
+dispatch-elt `full-gate.yml` + `router-ci.yml` zöld futására vár.
