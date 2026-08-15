@@ -183,7 +183,8 @@ final class SkillEvidence {
   final DateTime measuredAt;
 
   /// Reference instant this evidence was captured/ingested, supplied by the
-  /// caller (never `DateTime.now()`); used only to bound [measuredAt].
+  /// caller as an explicit deterministic clock reading, not read internally;
+  /// used only to bound [measuredAt].
   final DateTime capturedAt;
 
   /// Normalised reliability in the inclusive `[0, 1]` range.

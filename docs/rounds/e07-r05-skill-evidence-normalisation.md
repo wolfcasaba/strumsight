@@ -343,4 +343,27 @@ handoff (§10.1). A `practice_evidence_repository.dart` és a `public.dart`
 nem változott — a repository már eleve azt tárolta, amit a modell átadott
 neki, a hiba forrása kizárólag a modellben volt.
 
+### 10.2 CI javítás — architecture gate (2026-08-15)
+
+**Talált hiba (Full Gate `31907084609`):** `test/core/architecture_dependency_test.dart`
+pirosra váltott, mert `skill_evidence.dart` egy dokumentációs kommentje
+tartalmazta a tiltott szó szerinti `DateTime.now(` mintát (a `capturedAt`
+mezőt magyarázó sor: „supplied by the caller (never `DateTime.now()`)").
+
+**Javítás:** a komment átfogalmazva ugyanarra a szabályra — a `caller`
+egy explicit, determinisztikus óraértéket ad át, nem belül olvasódik ki —,
+a tiltott literál nélkül. Viselkedés, más fájl, vagy a gate nem változott.
+
+**Javító gate (csonkítatlan, teljes brief §7 parancs):**
+
+```
+tools/round-gate.sh test/features/practice_generator/evidence/evidence_aggregator_test.dart test/features/practice_generator/evidence/skill_evidence_test.dart test/features/practice_generator/evidence/evidence_repository_fake_test.dart
+```
+
+Eredmény: mind a 8 lépés (`format`, `analyze`, 3× `test`, `architecture`,
+`secrets`, `l10n`) zöld → **MINDEN GATE ZÖLD**.
+
+**Érintett fájl:** `skill_evidence.dart` (csak a `capturedAt` doc-komment
+átfogalmazva), jelen handoff (§10.2).
+
 ## 11. Review — a Claude tölti ki
