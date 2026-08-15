@@ -2,11 +2,31 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-14
-> (E99-R10 GOV-30c-2 merged, PR #261; the evaluation half of the V2 chain —
-> reference seeding, alignment, nine metric adapters, capability/confidence —
-> now exists alongside the ingest half, both still unwired. Next pending
-> round: GOV-30c-3, see §6.)**
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
+> (E99-R11 GOV-30c-3 merged, PR #262; the full 18-stage V2 pipeline now
+> publishes mapped, non-decreasing UI phases independently of stage count,
+> while the runner remains fail-closed. Next work needs a new GOV-30c-4 brief,
+> see §6.)**
+>
+> ## ✅ E99-R11 KÉSZ — GOV-30c-3 progress-phase decoupling (2026-08-15)
+>
+> Az `AnalysisPipeline<AnalysisWorkState>` már egyetlen élő példányban futtatja
+> a hét ingest és tizenegy evaluation stage-et. Az új explicit stage-ID →
+> `AnalysisProgressPhase` térkép leválasztja a 9 UI-fázist a 18 DSP-stage
+> granularitásától: egy fázis több stage-hez tartozhat, de visszalépés
+> konstrukciókor és futáskor is tiltott. Map nélküli legacy hívók a korábbi
+> sorszám-alapú 9-stage capet őrzik. A kör nem drótozta be a runner providert,
+> és egy flag sem változott.
+>
+> Correctness review **APPROVED**; a kötelező, dedikált security review
+> először 1 MAJOR-t talált (a hívó módosíthatta a már validált térképet), amit
+> unmodifiable defensive snapshot és regressziós teszt zárt le, majd **PASS**.
+> Az exact-SHA `211b53c2` Full Gate
+> [31872874525](https://github.com/wolfcasaba/strumsight/actions/runs/31872874525)
+> + Router CI [31873455184](https://github.com/wolfcasaba/strumsight/actions/runs/31873455184)
+> mindkettő success; squash-merge PR [#262](https://github.com/wolfcasaba/strumsight/pull/262),
+> `e5cae94d`. A post-merge gate a friss `main`-en is zöld. Implementer
+> `sonnet-impl`, egy javító dispatch.
 >
 > ## ✅ E99-R10 KÉSZ — GOV-30c-2 evaluation stage composition (2026-08-14)
 >
@@ -61,23 +81,6 @@
 > motor rejtett kapacitás-korlátja nem kell hogy megkösse, ha a motor
 > generikus végrehajtási logikáját már külön teszt fedi).
 >
-> ## ✅ E99-R09 KÉSZ — GOV-30c-1 PCM ingest pipeline composition (2026-08-14)
->
-> A V2 engine most egy immutable `AnalysisWorkState`-et visz a hét typed
-> stage-en: preprocessing → signal quality → legacy evidence → pitch →
-> harmony → rhythm → events. A `LegacyEvidenceIngestStage` a már review-zott
-> V1 `ClipAnalyzerStage` vékony wrapperje, ezért a lánc kizárólag validált
-> PCM-ből is előállítja a timeline-alapot; a provider és mind a kilenc flag
-> változatlanul OFF/fail-closed. Az első review 1 MAJOR-t talált (A4 csak
-> kézzel beadott V1 evidence-szel futott); a brief §0.0 pontosítása és egy
-> javító dispatch zárta: PCM-only A4 és legacy-evidence fatális teszt készült.
-> Független correctness + security review APPROVED. Exact-SHA `5d2e0da0`:
-> Full Gate [31780988606](https://github.com/wolfcasaba/strumsight/actions/runs/31780988606)
-> és kézzel dispatch-elt Router CI
-> [31781917615](https://github.com/wolfcasaba/strumsight/actions/runs/31781917615)
-> success; squash PR [#259](https://github.com/wolfcasaba/strumsight/pull/259),
-> `cb76db0f`. Implementer `sonnet-impl`, 1 javító dispatch.
->
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -87,10 +90,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> Ismételt diéta: 2026-08-14 (E99-R10 zárása): az E06-R30 és az E06-R29 KÉSZ
-> banner archiválásra került (az előző, E99-R09-et záró session ezt még nem
-> végezte el, ezért ideiglenesen három banner élt a fejlécben — most kettőre
-> igazítva), a fejlécben most az E99-R10 és az E99-R09 banner él.
+> 2026-08-15 (E99-R11 zárása): az E99-R09 banner archiválva; a fejlécben az
+> E99-R11 és az E99-R10 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -836,6 +837,15 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-15):** `main` @ `e5cae94d` — E99-R11
+GOV-30c-3 progress-phase decoupling, PR
+[#262](https://github.com/wolfcasaba/strumsight/pull/262), squash-merge.
+Exact-SHA `211b53c2`: Full Gate
+[31872874525](https://github.com/wolfcasaba/strumsight/actions/runs/31872874525)
++ Router CI [31873455184](https://github.com/wolfcasaba/strumsight/actions/runs/31873455184)
+mindkettő success. `origin/main` nem mozdult a dispatch és merge között;
+post-merge `tools/round-gate.sh` zöld a friss `main`-en.
+
 **Aktuális állapot (2026-08-14):** `main` @ `82cfa588` — E99-R10
 GOV-30c-2 evaluation stage composition, PR
 [#261](https://github.com/wolfcasaba/strumsight/pull/261), squash-merge.
@@ -1133,6 +1143,18 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E99-R11 — GOV-30c-3 progress-phase decoupling** (PR
+[#262](https://github.com/wolfcasaba/strumsight/pull/262), squash `e5cae94d`,
+[ADR 0252](docs/adr/0252-analysis-progress-phase-decoupling.md)).
+Az explicit stage-ID → `AnalysisProgressPhase` map a hét ingest és tizenegy
+evaluation stage-et egyetlen élő `AnalysisPipeline<AnalysisWorkState>`-ben
+futtatja; azonos fázis ismételhető, visszalépés konstrukciókor és futáskor is
+tiltott. Map nélküli hívó a legacy 9-stage capet kapja. A correctness review
+APPROVED, a high-risk security review F1 MAJOR-ja (hívóoldali map-mutáció)
+defensive immutable snapshot + regressziós teszttel zárva PASS. Exact-SHA
+CI és post-merge gate zöld. Provider és flag érintetlen. Implementer
+`sonnet-impl`, egy javító dispatch.
 
 **E99-R10 — GOV-30c-2 evaluation stage composition** (PR
 [#261](https://github.com/wolfcasaba/strumsight/pull/261), squash `82cfa588`,
@@ -1563,37 +1585,19 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**E99-R10 (GOV-30c-2) KÉSZ, MERGE-ELVE (2026-08-14, PR #261, `82cfa588`).**
-A V2 lánc most a hét ingest-stage (GOV-30c-1, E99-R09) ÉS a tizenegy
-evaluation-stage (GOV-30c-2, ez a kör) modelljét is hordozza — mindkettő
-egyelőre kizárólag `buildXStages()` + `classifyXFailure()` LISTA-alakban,
-`AnalysisPipeline`-példányba nem drótozva. A `docs/execution/pipeline-queue.tsv`
-E99-sora ezzel a körrel is `done` — a queue-ban **nincs automatikusan
-dispatch-elhető következő GOV-30c sor**, mert a GOV-30c-3 briefje szándékosan
-még nincs megírva (ADR 0251 §4).
+**E99-R11 (GOV-30c-3) KÉSZ, MERGE-ELVE (2026-08-15, PR #262, `e5cae94d`).**
+A teljes, 18-stage V2 lánc már éles `AnalysisPipeline<AnalysisWorkState>`
+példányban fut; az UI progress-phase és a DSP-stage granularitás szétválasztása
+megvan. A `analysisV2RunnerProvider` továbbra is tudatosan `StateError`-ral
+fail-closed, és minden flag OFF.
 
-**A soron következő, névvel ellátott lépés: GOV-30c-3.** Az ADR 0251 §4 és
-§5 (ez a kör) szerint a scope-ja:
-
-1. **Insights/hotspots** — a meglévő determinisztikus insight-engine
-   (E06-R20) és a timing-hotspot builder (amit ez a kör csak FUTTAT, de
-   eldob — `TimingHotspotsEvaluationStage`) becsatolása.
-2. **`AnalysisDocument` összeállítás** — MA ez a réteg **nem létezik** az
-   engine-ben (mérve mindkét megelőző körben: `grep -rln "AnalysisDocument("
-   lib/features/audio_analysis/` → csak domain-típus, codec, legacy-adapter).
-3. **`analysisV2RunnerProvider` felülírása** — **csak ebben a körben**
-   szabad hozzányúlni; GOV-30c-1/2 mindkettő szándékosan érintetlenül
-   hagyta (`StateError`).
-4. **A 9-es progress-fázis-cap valódi feloldása** — a GOV-30c-2 (§0.0
-   revízió, `docs/LESSONS.md` L274) mérve dokumentálta: a 18 stage-es (7
-   ingest + 11 evaluation) teljes lánc éles `AnalysisPipeline<AnalysisWorkState>`-
-   példányba drótozásához a `AnalysisProgressPhase` 9 UI-fázisa és a
-   DSP-stage-granularitás szétválasztása (vagy más feloldás) szükséges — a
-   GOV-30c-3 pre-flightja ezt ÚJRA mérje meg (lehet, hogy a stage-szám vagy
-   a cap időközben változott), ne a L274 lecke bemondására hagyatkozzon.
-
-**A GOV-30c-3 briefje még nincs megírva** — a `round-brief-prep` skillel
-kell elkészíteni, mielőtt bármelyik implementer motor elindulhatna rajta.
+**A soron következő, névvel ellátott lépés: GOV-30c-4.** Még nincs brief;
+a `round-brief-prep` skilllel kell előkészíteni dispatch előtt. Tervezett
+scope: (1) a meglévő determinisztikus insights és timing-hotspotok becsatolása,
+(2) `AnalysisDocument` összeállítása, (3) kizárólag itt a
+`analysisV2RunnerProvider` felülírása a teljes pipeline-ra. A pre-flight
+ismét mérje fel a domain-adatforrásokat és a provider tulajdonlási láncát; új
+flag, illetve default-on V2 út nem része ennek a feladatnak.
 
 **Egyéb, GOV-30c-3-tól FÜGGETLEN, EMBERI döntést igénylő irányok**
 (a completion report `docs/sdd/epic-06-completion-report.md` „Nyitott

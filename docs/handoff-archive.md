@@ -6,6 +6,21 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E99-R09 KÉSZ — GOV-30c-1 PCM ingest pipeline composition (2026-08-14)
+
+A V2 engine immutable `AnalysisWorkState`-et visz a hét typed stage-en:
+preprocessing → signal quality → legacy evidence → pitch → harmony → rhythm
+→ events. A `LegacyEvidenceIngestStage` a review-zott V1 `ClipAnalyzerStage`
+vékony wrapperje, ezért a lánc validált PCM-ből is előállítja a timeline-alapot;
+a provider és minden flag OFF/fail-closed maradt. Az első review 1 MAJOR-t
+talált (A4 csak kézzel beadott V1 evidence-szel futott); a brief §0.0
+pontosítása és egy javító dispatch PCM-only A4-et és legacy-evidence fatális
+tesztet adott. Correctness + security review APPROVED. Exact-SHA `5d2e0da0`:
+Full Gate [31780988606](https://github.com/wolfcasaba/strumsight/actions/runs/31780988606)
+és Router CI [31781917615](https://github.com/wolfcasaba/strumsight/actions/runs/31781917615)
+success; squash PR [#259](https://github.com/wolfcasaba/strumsight/pull/259),
+`cb76db0f`. Implementer `sonnet-impl`, 1 javító dispatch.
+
 ## ✅ E06-R30 KÉSZ — Shadow rollout, migráció és Epic 6 lezárás (2026-08-14, ZÁRÓ KÖR)
 
 A V1 shipping út változatlan. A kilenc Epic 6 flag minden környezetben OFF;

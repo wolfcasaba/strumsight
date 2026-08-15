@@ -10256,3 +10256,18 @@ a `HANDOFF.md`, az SDD-fejezet és a releváns ADR olvasása kötelező explicit
 Ha egy jövőbeli önjavító kör ezt a mintát harmadszor is méri, érdemes
 megfontolni a §3 lista bővítését (ez NEM ennek a sessionnek a hatásköre,
 `tools/`/`AGENTS.md` módosítása forbidden zone).
+
+## L275 — A konstruktor-validáció nem tart, ha a validált konfigurációt a hívó később módosíthatja (E99-R11, 2026-08-15)
+
+**Mit mértünk.** E99-R11-ben az `AnalysisPipeline` a stage-ID → progress-fázis
+térképet konstrukciókor validálta, de ugyanazt a módosítható `Map` referenciát
+tárolta. A dedikált security review a pipeline létrehozása UTÁN átírta a második
+stage fázisát `computingMetrics`-ről `preprocessing`-re: a korábban érvényes
+konfiguráció így futáskor visszalépett és `StateError`-ral bukott. A konstruktor
+ellenőrzése önmagában nem véd a hívóoldali mutáció ellen.
+
+**Hogyan alkalmazd.** Minden validált, hívótól kapott módosítható gyűjteményt
+az API-határon másolj és tedd immutable-vé (`Map.unmodifiable`, illetve a
+megfelelő list/set snapshot). A regressziós teszt a konstrukció UTÁN módosítsa
+az eredeti gyűjteményt, és bizonyítsa, hogy a már létrejött objektum viselkedése
+változatlan marad.
