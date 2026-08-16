@@ -216,9 +216,7 @@ final class WeeklyScheduleRequest {
     // Days in the years strictly before `year`.
     final previousYears = year - 1;
     final leapYearsBefore =
-        (previousYears ~/ 4) -
-        (previousYears ~/ 100) +
-        (previousYears ~/ 400);
+        (previousYears ~/ 4) - (previousYears ~/ 100) + (previousYears ~/ 400);
     final daysBeforeYear = 365 * previousYears + leapYearsBefore;
 
     // Days in the months strictly before `month` of `year`.
@@ -227,8 +225,7 @@ final class WeeklyScheduleRequest {
     for (var m = 1; m < month; m++) {
       daysBeforeMonth += monthLengths[m - 1];
     }
-    final isLeap =
-        (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    final isLeap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
     if (month > 2 && isLeap) {
       daysBeforeMonth += 1;
     }

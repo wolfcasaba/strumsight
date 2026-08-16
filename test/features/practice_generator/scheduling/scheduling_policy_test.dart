@@ -204,83 +204,80 @@ void main() {
       expect(policy.phaseForDayDistance(8), SchedulingPhase.none);
     });
 
-    test(
-      'dayDistanceFromToday is a true Gregorian day count across month/year '
-      'rollovers (F2)',
-      () {
-        // The naive `year*10000 + month*100 + day` ordinal broke every
-        // boundary: Jan→Feb was 70, Dec→Jan was 8870. The fix measures
-        // the real calendar gap, leap years included.
-        final jan31 = LocalDate(2026, 1, 31);
-        final feb1 = LocalDate(2026, 2, 1);
-        final dec31 = LocalDate(2026, 12, 31);
-        final jan1Next = LocalDate(2027, 1, 1);
-        final request = buildRequest(
-          availability: buildWeek(start: jan31, count: 2),
-          budgets: <LocalDate, TimeBudget>{
-            jan31: buildBudget(),
-            feb1: buildBudget(),
-          },
-          candidates: const <ScheduleCandidate>[],
-          today: jan31,
-          songTargetDate: jan31,
-        );
-        expect(request.dayDistanceFromToday(jan31), 0);
-        expect(request.dayDistanceFromToday(feb1), 1);
-        // Same request, but swap the today anchor to the year boundary.
-        final yearBoundaryRequest = buildRequest(
-          availability: buildWeek(start: dec31, count: 2),
-          budgets: <LocalDate, TimeBudget>{
-            dec31: buildBudget(),
-            jan1Next: buildBudget(),
-          },
-          candidates: const <ScheduleCandidate>[],
-          today: dec31,
-          songTargetDate: dec31,
-        );
-        expect(yearBoundaryRequest.dayDistanceFromToday(dec31), 0);
-        expect(yearBoundaryRequest.dayDistanceFromToday(jan1Next), 1);
+    test('dayDistanceFromToday is a true Gregorian day count across month/year '
+        'rollovers (F2)', () {
+      // The naive `year*10000 + month*100 + day` ordinal broke every
+      // boundary: Jan→Feb was 70, Dec→Jan was 8870. The fix measures
+      // the real calendar gap, leap years included.
+      final jan31 = LocalDate(2026, 1, 31);
+      final feb1 = LocalDate(2026, 2, 1);
+      final dec31 = LocalDate(2026, 12, 31);
+      final jan1Next = LocalDate(2027, 1, 1);
+      final request = buildRequest(
+        availability: buildWeek(start: jan31, count: 2),
+        budgets: <LocalDate, TimeBudget>{
+          jan31: buildBudget(),
+          feb1: buildBudget(),
+        },
+        candidates: const <ScheduleCandidate>[],
+        today: jan31,
+        songTargetDate: jan31,
+      );
+      expect(request.dayDistanceFromToday(jan31), 0);
+      expect(request.dayDistanceFromToday(feb1), 1);
+      // Same request, but swap the today anchor to the year boundary.
+      final yearBoundaryRequest = buildRequest(
+        availability: buildWeek(start: dec31, count: 2),
+        budgets: <LocalDate, TimeBudget>{
+          dec31: buildBudget(),
+          jan1Next: buildBudget(),
+        },
+        candidates: const <ScheduleCandidate>[],
+        today: dec31,
+        songTargetDate: dec31,
+      );
+      expect(yearBoundaryRequest.dayDistanceFromToday(dec31), 0);
+      expect(yearBoundaryRequest.dayDistanceFromToday(jan1Next), 1);
 
-        // Leap-year day: 2024 is a leap year, so 2024-02-28 → 2024-03-01
-        // spans two calendar days (the 29th is between them).
-        final feb28Leap = LocalDate(2024, 2, 28);
-        final mar1Leap = LocalDate(2024, 3, 1);
-        final feb28NonLeap = LocalDate(2025, 2, 28);
-        final mar1NonLeap = LocalDate(2025, 3, 1);
-        final leapRequest = buildRequest(
-          availability: buildWeek(start: feb28Leap, count: 2),
-          budgets: <LocalDate, TimeBudget>{
-            feb28Leap: buildBudget(),
-            mar1Leap: buildBudget(),
-          },
-          candidates: const <ScheduleCandidate>[],
-          today: feb28Leap,
-          songTargetDate: feb28Leap,
-        );
-        expect(leapRequest.dayDistanceFromToday(feb28Leap), 0);
-        expect(leapRequest.dayDistanceFromToday(mar1Leap), 2);
-        // Non-leap baseline: Feb 28 → Mar 1 is one calendar day.
-        final nonLeapRequest = buildRequest(
-          availability: buildWeek(start: feb28NonLeap, count: 2),
-          budgets: <LocalDate, TimeBudget>{
-            feb28NonLeap: buildBudget(),
-            mar1NonLeap: buildBudget(),
-          },
-          candidates: const <ScheduleCandidate>[],
-          today: feb28NonLeap,
-          songTargetDate: feb28NonLeap,
-        );
-        expect(nonLeapRequest.dayDistanceFromToday(feb28NonLeap), 0);
-        expect(nonLeapRequest.dayDistanceFromToday(mar1NonLeap), 1);
+      // Leap-year day: 2024 is a leap year, so 2024-02-28 → 2024-03-01
+      // spans two calendar days (the 29th is between them).
+      final feb28Leap = LocalDate(2024, 2, 28);
+      final mar1Leap = LocalDate(2024, 3, 1);
+      final feb28NonLeap = LocalDate(2025, 2, 28);
+      final mar1NonLeap = LocalDate(2025, 3, 1);
+      final leapRequest = buildRequest(
+        availability: buildWeek(start: feb28Leap, count: 2),
+        budgets: <LocalDate, TimeBudget>{
+          feb28Leap: buildBudget(),
+          mar1Leap: buildBudget(),
+        },
+        candidates: const <ScheduleCandidate>[],
+        today: feb28Leap,
+        songTargetDate: feb28Leap,
+      );
+      expect(leapRequest.dayDistanceFromToday(feb28Leap), 0);
+      expect(leapRequest.dayDistanceFromToday(mar1Leap), 2);
+      // Non-leap baseline: Feb 28 → Mar 1 is one calendar day.
+      final nonLeapRequest = buildRequest(
+        availability: buildWeek(start: feb28NonLeap, count: 2),
+        budgets: <LocalDate, TimeBudget>{
+          feb28NonLeap: buildBudget(),
+          mar1NonLeap: buildBudget(),
+        },
+        candidates: const <ScheduleCandidate>[],
+        today: feb28NonLeap,
+        songTargetDate: feb28NonLeap,
+      );
+      expect(nonLeapRequest.dayDistanceFromToday(feb28NonLeap), 0);
+      expect(nonLeapRequest.dayDistanceFromToday(mar1NonLeap), 1);
 
-        // Symmetry: distance is signed by [LocalDate.compareTo], so
-        // `today → other` is the negation of `other → today`.
-        expect(
-          -request.dayDistanceFromToday(feb1),
-          request.dayDistanceFromToday(jan31),
-        );
-      },
-    );
+      // Symmetry: distance is signed by [LocalDate.compareTo], so
+      // `today → other` is the negation of `other → today`.
+      expect(
+        -request.dayDistanceFromToday(feb1),
+        request.dayDistanceFromToday(jan31),
+      );
+    });
 
     test('the policy is immutable — every field is final', () {
       // Type-level check: the field declarations include `final`.
