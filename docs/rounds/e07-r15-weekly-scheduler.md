@@ -1,13 +1,13 @@
 # E07-R15 — WeeklyScheduler és terhelésrotáció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 5cdd7472`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-16, `main @ 0a1f6709`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 15
 - **Kör-azonosító:** `E07-R15`
 - **Branch:** `<motor>/e07-r15-weekly-scheduler`
 - **Előfeltétel:** `E07-R14` merge-elve (időfelosztás)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0258 (elérhetőség,
-  hard korlát) és 0255 (determinizmus) rögzíti.
+- **Előre kiosztott ADR:** [0299](../adr/0299-weekly-scheduler-contract.md)
+  — a heti ütemező explicit, domain-pure input/output szerződése.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R03
 > `weekly_availability.dart` és az R14 `time_budget.dart` tényleges alakját.
@@ -25,6 +25,7 @@ allowed_paths = [
   "test/features/practice_generator/scheduling/scheduling_policy_test.dart",
   "test/fixtures/practice_generator/scheduling",
   "docs/rounds/e07-r15-weekly-scheduler.md",
+  "docs/adr/0299-weekly-scheduler-contract.md",
 ]
 gate_tests = [
   "test/features/practice_generator/scheduling/weekly_scheduler_test.dart",
@@ -74,6 +75,32 @@ közösen használt scheduling-builder helyet. A self-heal regressziós tesztje
 ugyanazzal az `audit_legacy_scope()` funkcióval bizonyítja, hogy a mért út most
 in-scope, egy közvetlen, `scheduling/`-en kívüli szomszéd út pedig továbbra is
 scope-sértés.
+=======
+## 0.0 Pre-flight revízió (2026-08-16)
+
+- **Mérés:** `WeeklyAvailability` a helyi `LocalDate`-hez kötött és egy
+  unavailable naphoz `maximumMinutes == 0`-t kényszerít
+  (`domain/model/weekly_availability.dart`). A napi időkeret tényleges
+  megszerzési lánca `DailyAvailability` →
+  `TimeBudgetAllocator.allocate(availability: …)`; az allocator unavailable
+  napra `ArgumentError`-ral fail-closed módon leáll
+  (`domain/service/time_budget_allocator.dart`). Nincs még scheduler-input,
+  -döntés vagy policy típus, és a `PracticeBlock` már prescriptiont igényel,
+  miközben az SDD pipeline-ban a scheduling a prescription construction előtt
+  van.
+- **Feloldás:** az ADR 0299 a scheduler saját `ScheduleCandidate`,
+  `WeeklyScheduleRequest` és `ScheduleDecision` domain-contractját rögzíti.
+  A request az R14-ben már elosztott `TimeBudget`-et és az R03 availabilityt
+  kapja, ezért az ütemező nem szerez erőforrást és nem számol újra napi
+  budgetet. A `today` és az opcionális song céldátum explicit input; nincs
+  óraolvasás. A pihenőnap a brief szigorúbb szabálya szerint üres, még könnyű
+  ismétlés sem kerül rá.
+- **Scope:** a foglalt ADR 0299 és ez a brief explicit engedélyezett artefaktum;
+  a korábbi `docs/adr/**` tiltás erre az egy, még nem merge-elt ADR-re nem
+  vonatkozik. Más ADR, SDD, tool vagy production útvonal továbbra is tilos.
+- **Küszöbmérés:** `python3 -c 'limit=2; print({"below": 1, "at": limit,
+  "above": limit + 1})'` → `1 / 2 / 3`; a high-load sorozat maximuma 2,
+  ezért a 2 még elfogadott, a 3. nap átrendezendő.
 
 ## 1. Cél
 
