@@ -306,4 +306,45 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 2026-08-16 — implementációs átadás
+
+- `exercise_candidate.dart`: a teljes, stabil capability-vokabulár, explicit
+  `supported`/`unsupported` állapot, időtartam-, nehézség- és hatdimenziós
+  terhelés-metaadat, valamint az immutable `ExerciseCandidate` szerződés.
+- `practice_catalog_snapshot.dart`: külön katalogus- és content-revízió,
+  dimenziónkénti mismatch-jelzés és stabil `source:id:revision` rendezés.
+- `practice_catalog_reader.dart`: a két revíziót egyben átadó application port.
+- A Practice Engine és Legacy Learn adapterek hívó-táplált, I/O- és provider-
+  mentes transzformátorok. A Practice Engine kizárólag
+  `features/practice/public.dart`-ot, a Legacy adapter kizárólag
+  `features/learn/public.dart`-ot importálja. A definition/lesson által nem
+  hordozott prerequisite, offline, content-revision és load metaadatot a hívó
+  adja át; hiány esetén a jelölt kimarad figyelmeztetéssel. A Legacy skill
+  kizárólag a meglévő `LegacyMappingTable` explicit bejegyzéséből származik.
+- A `public.dart` exportálja az új modell-, port- és adapter-szerződéseket.
+
+**TDD bizonyíték.** A két új catalog-tesztet először production típusok nélkül
+futtattam: várt fordítási hibával PIROS volt (pl. `ExerciseCandidate` és
+`PracticeEngineCatalogAdapter` hiányzott). Az implementáció után a célzott
+tesztfuttatás 8/8 zöld lett.
+
+**Valódi-sértés próba (A6).** A Practice Engine adapterben ideiglenesen a
+hiányzó `prerequisites` mezőt `['default']` értékkel pótoltam, és az
+előfeltétel-hiány kizárását kikapcsoltam. A célzott A6 teszt a várt módon
+PIROS lett: `Expected: empty`, `Actual: [Instance of 'ExerciseCandidate']`.
+Azonnal visszaállítottam a production ágat: null/üres prerequisite esetén
+`missingPrerequisite` figyelmeztetés és kizárás marad.
+
+**Futtatott ellenőrzések eddig.**
+
+- `flutter test test/features/practice_generator/catalog/practice_catalog_snapshot_test.dart test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart`
+  — 8/8 zöld a visszaállítás után; a teljes kör-gate ezt frissen megismételte.
+- `flutter test test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart --name 'skips incomplete entries and warns instead of defaulting metadata'`
+  — szándékosan PIROS a fenti valódi-sértés alatt, majd a production változtatás
+  visszaállítva.
+- `tools/round-gate.sh test/features/practice_generator/catalog/practice_catalog_snapshot_test.dart test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart`
+  — **ZÖLD**: format, analyze, mindkét célzott test, architecture, secrets és
+  l10n. A teljes suite, friss property gate és release APK a Claude-oldali
+  CI-kapu; ezt az implementer nem indítja.
+
 ## 11. Review — a Claude tölti ki
