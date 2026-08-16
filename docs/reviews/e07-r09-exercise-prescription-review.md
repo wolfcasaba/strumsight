@@ -1,17 +1,18 @@
 # E07-R09 — Review
 
 Brief: `docs/rounds/e07-r09-exercise-prescription.md`
-Diff: `75b0cb36...de0efd35`
+Diff: `64fbfbef...dd1bb36f`
 Reviewer: Codex / GPT-5.6 Terra · Dátum: 2026-08-16
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 3 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-Az izolált reviewer-gate és a scope-audit zöld, de három eldobható,
-shipping-kontraktusra célzott próbateszt piros: a recipe candidate-tartományon
-kívüli időt, eltérő serializált identity-t és törtszámú countot fogad el.
+Az első review három MAJOR leletét a `60c65adf` javította. A friss, izolált
+review-klónból futtatott teljes round-gate és scope-audit zöld. A1 valódi-
+sértés próbája (a maximummal egyenlő cél elutasítása) célzottan piros lett,
+majd a klónban visszaállítottam; a shipping diff érintetlen maradt.
 
 ## Acceptance criteria
 
@@ -22,8 +23,8 @@ kívüli időt, eltérő serializált identity-t és törtszámú countot fogad 
 | A3 | Mérhető criteria | ✅ | Explicit, nem üres capability-set + unsupported elutasítás. |
 | A4 | Fallback skill-kompatibilitás | ✅ | Halmazegyezés tesztelt. |
 | A5 | Explicit criteria | ✅ | Hiányzó/üres capability-set elutasított. |
-| A6 | Veszteségmentes JSON round-trip | ❌ | F2, F3. |
-| A7 | Hard időkorlát | ❌ | F1: candidate duration-bound nélkül érvényes recipe készül. |
+| A6 | Veszteségmentes JSON round-trip | ✅ | Identity- és törtszám-korrupciót elutasító regressziós cellák. |
+| A7 | Hard időkorlát | ✅ | Candidate-duration és hard-elapsed alsó/határ/felső cellák. |
 
 ## Scope-audit
 
@@ -47,7 +48,8 @@ generated/ignored.
 - **Kötelező javítás:** Candidate-bound validáció konstrukcióban és `fromJson`
   újravalidációban; minimum alatt / minimumon / maximumon / maximum fölött
   regressziós cellák.
-- **Státusz:** OPEN
+- **Státusz:** CLOSED — `60c65adf`; konstrukció és decode is validálja az
+  inclusive candidate-duration tartományt, négy boundary regressziós cellával.
 
 ### F2 — MAJOR — A decoder csendben más candidate-re írja át a receptet
 
@@ -65,7 +67,8 @@ generated/ignored.
 - **Kötelező javítás:** Persistáld a teljes stabil candidate-identity-t,
   beleértve `contentRevision`-t; dekódoláskor minden primary- és fallback-
   referencia pontos egyezését követeld meg, eltérés/hiány esetén `ArgumentError`.
-- **Státusz:** OPEN
+- **Státusz:** CLOSED — `60c65adf`; a primary és fallback identity minden
+  stabil mezőjét (content revisionnel együtt) persistálja és pontosan ellenőrzi.
 
 ### F3 — MAJOR — A fractional JSON-count csendes kerekítése megváltoztatja a receptet
 
@@ -80,7 +83,8 @@ generated/ignored.
 - **Kötelező javítás:** Count/delta/microsecond mező csak pontos egész
   JSON-szám lehet; nincs `.round()` fallback. Minden érintett decoder kapjon
   fractional-elutasítás tesztet.
-- **Státusz:** OPEN
+- **Státusz:** CLOSED — `60c65adf`; count, delta és microsecond JSON mezők
+  csak pontos egészként dekódolhatók, `.round()` fallback nélkül.
 
 ### N1 — NOTE — A wrapper gate-shape lelete script-olvasásból jött
 
@@ -99,10 +103,11 @@ A reviewer valódi gate-je pipe nélkül zöld. Javító körben ne használj a
 | célzott tesztek | ✅ 24 + 16 |
 | architecture | ✅ |
 | secrets + l10n | ✅ |
-| content probes | ❌ F1, F2, F3 |
-| CI | még nem dispatch-elt — nyitott MAJOR miatt tiltott |
+| content probes | ✅ A1 valódi-sértés próba piros; F1–F3 regressziós cellák zöldek |
+| CI | a review után exact-SHA dispatch kötelező |
 
 ## Merge-döntés
 
-Merge **tilos**, amíg F1–F3 nyitott. A javító kör ugyanazzal a `sonnet-impl`
-motorral fusson; utána új izolált review, gate és CI szükséges.
+Az első review után a javító commit lezárta F1–F3-at. A re-review APPROVED;
+merge csak a branch current SHA-ján futó zöld Full Gate és Router CI után
+engedett.
