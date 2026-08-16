@@ -373,4 +373,35 @@ hozzájuk igazítani.
 
 **Commit:** `60b27f05` (`fix(test): correct A5 song-target phase test (F4)`)
 
+### F5 javítás — explicit performance fázisállítások (2026-08-16)
+
+Az F5 MAJOR-t kizárólag az A5 teszt-szerződés szigorításával javítottam;
+production scheduler- vagy policy-kód nem változott.
+
+**A javítás.** A target-day cella a `dayDecisions[0].phase`, a
+post-target-day cella pedig a `dayDecisions[1].phase` értékét explicit
+`SchedulingPhase.performance`-ként várja. Így a policy `dayDistance <= 0`
+őrének feltételezett `dayDistance < 0` gyengítése a target napot
+`lightReview`-vá tenné, és a target-day teszt ezen az állításon pirosra vált.
+
+**Gate kimenet (round-gate.sh, futtatva 2026-08-16, csonkítás és pipe nélkül):**
+
+```text
+tools/round-gate.sh test/features/practice_generator/scheduling/weekly_scheduler_test.dart test/features/practice_generator/scheduling/scheduling_policy_test.dart
+
+[1] format: ZÖLD — Formatted 1583 files (0 changed)
+[2] analyze: ZÖLD — No issues found
+[3] weekly_scheduler_test.dart: ZÖLD — 22 teszt átment
+[4] scheduling_policy_test.dart: ZÖLD — 19 teszt átment
+[5] architecture: ZÖLD
+[6] secrets: ZÖLD
+[7] l10n: ZÖLD
+
+ROUND_GATE_RESULT_FILE:
+{"command_exit_code":0,"error_hash":null,"exit_code":0,"failed_step":null,"outcome":"pass","schema_version":1}
+```
+
+**Diff scope.** Csak az A5 teszt (`weekly_scheduler_test.dart`) és e kör
+handoff-szakasza módosult. A policy és a scheduler változatlan.
+
 ## 11. Review — a Claude tölti ki

@@ -453,6 +453,7 @@ void main() {
       // itself with `lightReviewWindow` so the audit log can group
       // taper-window days without re-deriving the phase from the
       // `target → date` gap.
+      expect(decision.dayDecisions[0].phase, SchedulingPhase.performance);
       expect(decision.dayDecisions[0].selectedCandidates, hasLength(1));
       expect(
         decision.dayDecisions[0].selectedCandidates.single.identity,
@@ -552,6 +553,10 @@ void main() {
       // The 5-minute review candidate cannot land on day 0 (day-
       // budget saturated), so it moves to day 1 — the post-target
       // day.
+      expect(
+        postTargetReviewDecision.dayDecisions[1].phase,
+        SchedulingPhase.performance,
+      );
       expect(
         postTargetReviewDecision.dayDecisions[0].selectedCandidates,
         hasLength(1),
