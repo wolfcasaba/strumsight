@@ -6,6 +6,20 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E07-R09 KÉSZ — ExercisePrescription és success criteria
+
+PR [#281](https://github.com/wolfcasaba/strumsight/pull/281), squash `3cc55dd4`.
+Az ADR [0294](docs/adr/0294-exercise-prescription-measurability-and-bounded-execution.md)
+szerinti tiszta domain-contract elkészült: explicit maximumos repetition,
+supported capabilityhez kötött tempo és success criteria, azonos skill-target
+fallback, candidate-duration és inkluzív hard elapsed-limit validáció, valamint
+identity- és count-safe JSON. A független review három MAJOR-t zárt, majd
+APPROVED lett; a rebase utáni izolált gate zöld, az A1 `target >= maximum`
+valódi-sértés próba csak a kötelező 10/10 inkluzív cellát buktatta. Exact
+`94f44ba0`: Full Gate [31925781873](https://github.com/wolfcasaba/strumsight/actions/runs/31925781873)
+és Router CI [31926331096](https://github.com/wolfcasaba/strumsight/actions/runs/31926331096)
+success. Mindkét generator flag `false`; production caller nincs.
+
 ## ✅ E07-R08 KÉSZ — Practice catalog capability adapter
 
 PR [#278](https://github.com/wolfcasaba/strumsight/pull/278), squash

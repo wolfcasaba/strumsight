@@ -1782,16 +1782,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R09** (Chapter 8, Kör 9 —
-`ExercisePrescription` és success criteria; brief már `PREPARED`:
-`docs/rounds/e07-r09-exercise-prescription.md`). Az új session pre-flightban
-mérje újra a `docs/execution/pipeline-queue.tsv` E07-R09 sorát (queue-engine
-`minimax`, de a `.pipeline/engine-override` felülírhatja — ld. a pipeline
-prompt „MOTOR-FELÁLLÁS" szakaszát) és az E07-R08 katalógus-jelölt TÉNYLEGES
-alakját (`ExerciseCandidate`/`PracticeCatalogSnapshot`,
-`lib/features/practice_generator/domain/model/`), mielőtt a brief-re
-támaszkodna. A `practiceGeneratorEnabled` és `plannerAssistEnabled` flagek
-változatlanul `false` maradnak.
+**A soron következő SDD-lépés: E07-R10** (Chapter 8, Kör 10 —
+`AdaptivePracticePlan`, day, block és revision domain). A friss session
+pre-flightban az E07-R09 `ExercisePrescription` tényleges contractját és az
+ADR 0294 határait mérje újra; a `practiceGeneratorEnabled` és
+`plannerAssistEnabled` flagek változatlanul `false` maradnak.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"
