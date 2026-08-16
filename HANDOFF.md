@@ -3,12 +3,51 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (H-NOSIGNAL self-heal PR #280 merged — self-heal launcher no longer races
-> itself, and the Codex/Terra preamble now forbids ending a turn on
-> status-only text while a poll session is open; chain unblocked. E07-R09's
-> own attempted implementation had a real Full Gate failure (`DateTime.now()`
-> in domain code) and its stale PR #279 was closed by the cleanup — a fresh
-> E07-R09 attempt starts from the untouched brief on the next firing.)**
+> (H5 self-heal PR #282 merged — the E07-R02 domain-purity guard test now
+> masks comments/strings instead of raw-text-matching, so a truthful doc
+> comment describing the purity guarantee no longer trips the check itself.
+> E07-R09's own branch, PR #281 (`sonnet-impl/e07-r09-exercise-prescription`,
+> already independently reviewed APPROVED), was deliberately left untouched —
+> the pipeline's own continuation logic (ADR 0242 D2) will pick it back up on
+> the next firing and its Full Gate should now pass cleanly.)**
+>
+> ## ✅ [HEAL E07-R09/H5] KÉSZ — a domain-purity guard a saját dokumentációját cáfolta meg magának (2026-08-16)
+>
+> Az E07-R09 Full Gate-je kétszer piros volt ugyanarra az okra:
+> `test/core/architecture_dependency_test.dart` „practice generator domain
+> stays framework-free (E07-R02)” blokkja a NYERS fájlszövegen keresett
+> tiltott markert (`DateTime.now(`) — az `exercise_prescription.dart:6`
+> doc-commentje szó szerint idézi a „`DateTime.now()`-free, `Random`-free”
+> garanciát, és ez a dokumentáció-string buktatta meg a saját magát leíró
+> ellenőrzést (mért, egyetlen offender:
+> [31922993201](https://github.com/wolfcasaba/strumsight/actions/runs/31922993201)).
+> **Ez a MÁSODIK előfordulása** ugyanennek a hibaosztálynak egy nap alatt —
+> `docs/LESSONS.md` **L283** (E07-R05, 2026-08-15) ugyanezt a blokkot mérte
+> `skill_evidence.dart`-on, és csak a kommentet írta át. Mivel a self-heal
+> szélesebb jogosultsággal rendelkezik, mint egy normál kör-session, ez a
+> javítás most a guard-ot magát javította: a blokk két trivia-maszkolt
+> nézetet vizsgál a nyers szöveg helyett — komment mindig maszkolt;
+> string-literál tartalom csak a két hívás-markernél (`DateTime.now(`,
+> `Random(`) maszkolt, az import-URI markereknél (`package:flutter/`,
+> `dart:ui`) megőrződik (valódi előfordulásuk kizárólag import-string-ben él
+> — ezt a buktatót a saját regressziós tesztem fogta meg írás közben, még a
+> PR megnyitása előtt). A minta a testvér guard
+> (`test/features/practice/domain/domain_purity_test.dart`) már bizonyított
+> trivia-maszkoló logikáját tükrözi. PR
+> [#282](https://github.com/wolfcasaba/strumsight/pull/282), squash
+> `8ffa3ca1`, Full Gate ekvivalens (`build-apk.yml`)
+> [31924697541](https://github.com/wolfcasaba/strumsight/actions/runs/31924697541)
+> success az exact `d82e55f1` SHA-n (egyetlen tesztfájl, nincs router-ci
+> trigger-útvonal érintve). Lecke: `docs/LESSONS.md` **L291**.
+>
+> A megállt kör saját ága (`sonnet-impl/e07-r09-exercise-prescription`, PR
+> #281, független review-val már **APPROVED** — BLOCKER:0/MAJOR:0) SZÁNDÉKOSAN
+> érintetlen maradt: ez a self-heal a megállt kör levezénylése helyett kizárólag
+> az akadályt szüntette meg (ADR 0112 mandátum). ADR 0242 D2
+> (`resolve_branch_implementer`) a következő E07-R09 firingen folytatásként
+> ismeri fel azt a branch-et, a mostantól javított guard alatt a Full
+> Gate-nek zölden kell zárnia — nincs elvesző munka, nincs duplikált
+> implementáció.
 >
 > ## ✅ [HEAL E07-R09/H-NOSIGNAL] KÉSZ — az önjavító session sosem regisztrálta magát inflight-ként (párhuzamos második önjavítás indult), és egy igaz, de nem-terminális státusz-mondat jelzésfájl nélkül is H-NOSIGNAL (2026-08-16)
 >
@@ -51,41 +90,6 @@
 > kódjavításon dolgozik, és nem duplikálta azt. A sor-fájl E07-R09 sora
 > változatlanul `pending`; egy friss kör-session a következő firingen
 > újrakezdi az érintetlen briefből.
->
-> ## ✅ E07-R08 KÉSZ — Practice catalog capability adapter
->
-> PR [#278](https://github.com/wolfcasaba/strumsight/pull/278), squash
-> `3fd35781`. SDD Ch8 Kör 8: `ExerciseCandidate` (capability/duration/
-> difficulty-range/load-profile/offline metadata/source-reference) +
-> `PracticeCatalogSnapshot` (independent catalog- and content-revision,
-> deterministic string-key ordering) + `PracticeCatalogReader` port +
-> two pure, caller-fed adapters — `PracticeEngineCatalogAdapter`
-> (`practice/public.dart`) and `LegacyLessonCandidateAdapter`
-> (`learn/public.dart`, reusing the R07 `LegacyMappingTable`). ADR
-> [0262](docs/adr/0262-catalog-snapshot-revisions-and-capability-truth.md).
->
-> **Pre-flight found a real gap:** `practice/public.dart` does not export
-> `PracticeCatalogRepository`/`BuiltinPracticeCatalog`/the Riverpod catalog
-> providers — only `PracticeDefinition` and its value types. Resolved via a
-> documented §0.0 brief revision (no `allowed_paths` change): both adapters
-> are pure, caller-fed transformers over already-exported values, matching
-> every other Epic 7 adapter's zero-live-read pattern; wiring the real
-> catalog read is left to a future round.
->
-> Independent review **APPROVED** after one fix round: F1 MAJOR —
-> `requiresMicrophone`/`supportsTempo`/`supportsLoop` silently defaulted to
-> `unsupported` for every candidate despite being deterministically knowable
-> (100% mic-driven content; `PracticeSessionConfig` tempo/loop are
-> definition-independent — this is ADR 0262's own headline tempo-control
-> example) — fixed, with the Legacy adapter's tempo/loop left `unsupported`
-> as an explicit, documented source-limitation decision. F2 MINOR — the six
-> new value types lacked `operator==`/`hashCode`, inconsistent with the rest
-> of the codebase — fixed. Both independently re-verified with throwaway
-> probe tests in a fresh isolated clone. Exact-SHA `4556a2ce`: Full Gate
-> [31918372154](https://github.com/wolfcasaba/strumsight/actions/runs/31918372154)
-> + Router CI [31918359641](https://github.com/wolfcasaba/strumsight/actions/runs/31918359641)
-> both success; post-merge gate on fresh `main` also green (7/7). Both
-> generator flags still `false`; zero production caller.
 
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -96,8 +100,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-16 (E07-R08 zárása): az E07-R06 banner archiválva; a fejlécben az
-> E07-R08 és E07-R07 banner marad.
+> 2026-08-16 (HEAL E07-R09/H5 zárása): az E07-R08 banner archiválva; a
+> fejlécben a HEAL E07-R09/H5 és HEAL E07-R09/H-NOSIGNAL banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state

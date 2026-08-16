@@ -6,6 +6,41 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E07-R08 KÉSZ — Practice catalog capability adapter
+
+PR [#278](https://github.com/wolfcasaba/strumsight/pull/278), squash
+`3fd35781`. SDD Ch8 Kör 8: `ExerciseCandidate` (capability/duration/
+difficulty-range/load-profile/offline metadata/source-reference) +
+`PracticeCatalogSnapshot` (independent catalog- and content-revision,
+deterministic string-key ordering) + `PracticeCatalogReader` port +
+two pure, caller-fed adapters — `PracticeEngineCatalogAdapter`
+(`practice/public.dart`) and `LegacyLessonCandidateAdapter`
+(`learn/public.dart`, reusing the R07 `LegacyMappingTable`). ADR
+[0262](docs/adr/0262-catalog-snapshot-revisions-and-capability-truth.md).
+
+**Pre-flight found a real gap:** `practice/public.dart` does not export
+`PracticeCatalogRepository`/`BuiltinPracticeCatalog`/the Riverpod catalog
+providers — only `PracticeDefinition` and its value types. Resolved via a
+documented §0.0 brief revision (no `allowed_paths` change): both adapters
+are pure, caller-fed transformers over already-exported values, matching
+every other Epic 7 adapter's zero-live-read pattern; wiring the real
+catalog read is left to a future round.
+
+Independent review **APPROVED** after one fix round: F1 MAJOR —
+`requiresMicrophone`/`supportsTempo`/`supportsLoop` silently defaulted to
+`unsupported` for every candidate despite being deterministically knowable
+(100% mic-driven content; `PracticeSessionConfig` tempo/loop are
+definition-independent — this is ADR 0262's own headline tempo-control
+example) — fixed, with the Legacy adapter's tempo/loop left `unsupported`
+as an explicit, documented source-limitation decision. F2 MINOR — the six
+new value types lacked `operator==`/`hashCode`, inconsistent with the rest
+of the codebase — fixed. Both independently re-verified with throwaway
+probe tests in a fresh isolated clone. Exact-SHA `4556a2ce`: Full Gate
+[31918372154](https://github.com/wolfcasaba/strumsight/actions/runs/31918372154)
++ Router CI [31918359641](https://github.com/wolfcasaba/strumsight/actions/runs/31918359641)
+both success; post-merge gate on fresh `main` also green (7/7). Both
+generator flags still `false`; zero production caller.
+
 ## ✅ E14-R01 KÉSZ — Recognition recovery kickoff és release guard
 
 PR [#275](https://github.com/wolfcasaba/strumsight/pull/275), squash

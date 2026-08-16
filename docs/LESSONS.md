@@ -10861,3 +10861,73 @@ Codex/Terra-oldali önjavításnál a strukturált rollout-JSONL-ben a
 és a megelőző poll-sorozat `output` mezője üres/nem-terminális maradt, az
 PONTOSAN ez a hibaosztály — függetlenül attól, hogy a szöveg tartalma igaz
 volt-e.
+
+## L291 — Egy MÁSODSZOR jelentkező domain-purity false-positive a guard trivia-vak scanjét kéri, nem egy újabb kommentátírást (E07-R09, H5, 2026-08-16)
+
+**Mit mértünk.** Az E07-R09 Full Gate kétszer piros ugyanarra az okra:
+`test/core/architecture_dependency_test.dart` „practice generator domain
+stays framework-free (E07-R02)” blokkja `content.contains(marker)`-rel, a
+NYERS fájlszövegen keresett tiltott markert (`DateTime.now(`) — az
+`exercise_prescription.dart:6` doc-commentje szó szerint idézi a
+„`DateTime.now()`-free, `Random`-free” garanciát, és ez a
+dokumentáció-string buktatta meg a saját magát leíró ellenőrzést (mért,
+egyetlen offender:
+[31922993201](https://github.com/wolfcasaba/strumsight/actions/runs/31922993201)).
+Ez PONTOSAN ugyanaz a hibaosztály, mint **L283** (E07-R05, 2026-08-15,
+`skill_evidence.dart`) — egy nappal korábban, UGYANEBBEN a blokkban,
+UGYANAZON a `domainDir.listSync` scan-en.
+
+**Gyökérok.** A blokk E07-R02-ben stopgapként született (a fájl saját
+kommentje szerint `tool/check_architecture.dart` `_isSharedDomain` listája
+akkor még nem tartalmazta a `practice_generator/domain`-t), és sosem kapott
+trivia-tudatos (comment/string-kizáró) logikát — miközben a TESTVÉR guard,
+`test/features/practice/domain/domain_purity_test.dart`, már régóta pontosan
+ezt csinálja helyesen, saját regressziós tesztekkel („purity scan ignores
+forbidden spellings in comments and strings”). Az L283 javítása a TÜNETET
+kezelte (átírta a kommentet: „never reads a wall clock” a szó szerinti API-
+idézet helyett), nem az OKOT — ezért egy nappal később, egy MÁSIK fájlban
+(más implementer, más kör), ugyanaz a minta tért vissza. A projekt saját ADR
+0257-e is szó szerint ezt a frázist használja („nincs `DateTime.now()` vagy
+`Random`”), tehát a guard hatóköre alatt idiomatikus, visszatérő
+megfogalmazást büntetett.
+
+**Javítás.** PR [#282](https://github.com/wolfcasaba/strumsight/pull/282)
+(heal/E07-R09-H5-1, ADR 0112 önjavító kör — normál kör-session nem nyúlhatna
+ehhez a fájlhoz, a self-heal viszont igen): a blokk mostantól KÉT
+trivia-maszkolt nézetet vizsgál a nyers szöveg helyett — komment MINDIG
+maszkolt; string-literál TARTALOM csak a két hívás-markernél (`DateTime.now(`,
+`Random(`) maszkolt (valódi előfordulásuk mindig végrehajtható kód, sosem
+string-tartalom), az import-URI markereknél (`package:flutter/`, `dart:ui`)
+viszont MEGŐRZŐDIK (valódi előfordulásuk kizárólag import/export/part
+string-literálban él — ha ezeket is maszkolnám, az egész fél-ellenőrzést
+csendben vakká tenném). Ezt a buktatót a SAJÁT regressziós tesztem fogta meg
+ÍRÁS KÖZBEN, még a PR megnyitása előtt: egy naiv „maszkold az összes
+stringet” első verzió a `package:flutter/`-importot ellenőrző pozitív
+kontroll-eset alatt bukott (elvárt 1 offender, kapott 0), mert az import URI
+maga is string-literál. A minta a testvér guard
+(`domain_purity_test.dart`) már bizonyított trivia-maszkoló logikáját
+tükrözi. A regresszió a MÉRT, valós doc-comment szöveget használja
+fixture-ként, nem kitaláltat. `tools/round-gate.sh
+test/core/architecture_dependency_test.dart`: format/analyze/test/
+architecture/secrets/l10n mind zöld a heal branch-en; Full Gate ekvivalens
+(`build-apk.yml`)
+[31924697541](https://github.com/wolfcasaba/strumsight/actions/runs/31924697541)
+success az exact `d82e55f1` SHA-n, squash `8ffa3ca1`. A heal a megállt kör
+saját ágát (`sonnet-impl/e07-r09-exercise-prescription`, PR #281,
+BLOCKER:0/MAJOR:0 független review-val már jóváhagyva) szándékosan
+érintetlenül hagyta — ADR 0242 D2 (`resolve_branch_implementer`) a
+következő E07-R09 firingen folytatásként ismeri fel azt a branch-et, és a
+mostantól javított guard alatt a Full Gate-nek zölden kell zárnia.
+
+**Hogyan alkalmazd.** (1) Ha egy false-positive MÁSODSZOR jelentkezik
+ugyanabból az ellenőrzésből — akkor is, ha más fájlban, más kör alatt —, az
+már NEM elszigetelt eset: a tünet-szintű javítás (átírt komment) csak
+elhalasztja a KÖVETKEZŐ előfordulást. Keresd meg a `docs/LESSONS.md`-ben, van-e
+korábbi bejegyzés UGYANARRÓL az ellenőrzésről, mielőtt megismétled ugyanazt a
+tünet-javítást. (2) Mielőtt egy trivia-maszkoló ellenőrzést írsz vagy
+módosítasz, kérdezd meg MINDEN egyes tiltott markerről külön: „ez a marker
+valaha LEGITIMEN string-literálon belül él (pl. import URI)?” — ha igen, azt
+a markert TILOS string-maszkolással kizárni, különben az a fél-ellenőrzés
+csendben teljes vak folttá válik. (3) Írj pozitív kontroll-tesztet MINDEN
+tiltott markerre a regresszióban, ne csak a false-positive-ra — ez fogta meg
+a saját, első hibás implementációmat, mielőtt bárki más látta volna.
