@@ -1,13 +1,43 @@
 # E07-R13 — CandidateSelector, hard filter és diversity
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ bb867ad4`)
+- **Státusz:** PRE-FLIGHT REVISED (2026-08-16, `main @ b5128132`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 13
 - **Kör-azonosító:** `E07-R13`
 - **Branch:** `<motor>/e07-r13-candidate-selector`
 - **Előfeltétel:** `E07-R12` merge-elve (prioritás-motor)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0258 (hard korlát),
-  0262 (jelölt-igazság) és 0264 (magyarázhatóság) rögzíti.
+- **Előre kiosztott ADR:** [0297](../adr/0297-candidate-selection-filter-ranking-and-fallback-boundary.md)
+
+## 0.0 Pre-flight revízió (2026-08-16)
+
+**Mért eltérések és feloldásuk.** Az előre írt brief `main @ bb867ad4`
+állapotot említett. A dispatch előtti mérés `main @ b5128132`-n ezt találta:
+
+- az R08 `ExerciseCandidate` csak explicit capability-térképet és
+  `offlineAvailable`-t hordoz; `locked` mezője nincs;
+- az ADR 0262 szerint a `PracticeCatalogSnapshot.candidates` elemei már
+  létező, végrehajtható források, a `contentLocked` katalogizálási kizárás a
+  snapshot `warnings` listájában marad;
+- az R11 `PlanValidationContext` a futáskori végrehajthatóságot typed,
+  identity-alapú megerősítő halmazokkal, `hardAvoidIdentities`-szel méri;
+- a két új teszt ugyanazt a teljes `ExerciseCandidate` capability-térképét és
+  catalog snapshotot építi. A repository bevett mintája a bare
+  `test/fixtures/practice_generator/<terület>/` könyvtár (R10/R11).
+
+**Kötött feloldás.** A selector csak `PracticeCatalogSnapshot`-ból választ;
+locked tartalmat nem tud és nem próbál visszahozni, mert az nem candidate. A
+futáskori hard kizárások inputja typed, identity-alapú és fail-closed marad;
+offline-nem-megerősített jelölt fallbackként sem választható. Az A2 ezt a
+selector tényleges határán méri, a locked-állítást pedig az R08 katalógus
+szerződése biztosítja. A selector nem értelmezi a `LearnerConstraint.value`
+szabad szövegét. A döntés egyben a policy-verziót, rendezett rejected-listát
+és választott/fallback jelöltet tartalmaz. A részletes boundary-t ADR 0297
+rögzíti.
+
+**Scope-revízió.** A kizárólag teszt-fixture könyvtár és az ehhez a körhöz
+foglaló által kiosztott új ADR bekerült az engedélyezett listába. Más útvonal
+nem bővült; `exercise_candidate.dart`, catalog- és validation-contract nem
+változik.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R08
 > `ExerciseCandidate` tényleges mezőit (locked/elérhetőség, capability,
@@ -23,6 +53,8 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/candidates/candidate_selector_test.dart",
   "test/features/practice_generator/candidates/candidate_policy_test.dart",
+  "test/fixtures/practice_generator/candidates",
+  "docs/adr/0297-candidate-selection-filter-ranking-and-fallback-boundary.md",
   "docs/rounds/e07-r13-candidate-selector.md",
 ]
 gate_tests = [
@@ -76,6 +108,8 @@ szűrő megkerülhetővé tétele · `Random` (a seed injektált) · Flutter,
 | `domain/service/candidate_selector.dart` | **ÚJ** — a választó |
 | `public.dart` | a barrel bővítése |
 | `test/…/candidates/*_test.dart` (2 db) | a §6 cellái |
+| `test/fixtures/practice_generator/candidates/` | közös, teljes capability/catalog teszt-builderek |
+| `docs/adr/0297-…md` | selector boundary és R08/R11 input-szerződés |
 | `docs/rounds/e07-r13-…md` | a §10 handoff |
 
 **Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
@@ -104,8 +138,11 @@ Ugyanaz a kérés ugyanazt a választást adja.
 
 ### 5.4 `locked` vagy elérhetetlen tartalom SOHA nem választható
 
-Sem elsődlegesen, sem fallbackként. Az offline-elérhetőség az R08 metaadatából
-jön (ADR 0262 §5), nem futásidejű próbálkozásból.
+Sem elsődlegesen, sem fallbackként. A `locked` R08-ban katalogizálási kizárás:
+nem kerül a `PracticeCatalogSnapshot.candidates` halmazába (ADR 0262), ezért
+a selector nem tudja visszahozni. Az offline-elérhetőség a jelölt explicit
+metaadata és a typed, identity-alapú caller-confirmation metszete; nem
+futásidejű próbálkozásból vagy free-text constraintből ered.
 
 ### 5.5 A döntés az ELUTASÍTOTTAKAT is hordozza
 
@@ -123,7 +160,7 @@ cseréli.
 | # | Kritérium | Bizonyíték |
 |---|---|---|
 | A1 | Hard-kizárt jelölt SEMMILYEN pontszámmal nem jön vissza | `candidate_selector_test.dart` |
-| A2 | `locked`/elérhetetlen tartalom nem választható, fallbackként sem | ugyanott |
+| A2 | Katalogizálási `locked` jelölt nem hozható vissza; offline-nem-megerősített jelölt nem választható, fallbackként sem | ugyanott |
 | A3 | A diversity nem tesz elsővé kevésbé relevánsat | ugyanott |
 | A4 | Azonos seed → azonos választás | `candidate_policy_test.dart` |
 | A5 | A döntés felsorolja az elutasítottakat és okukat | `candidate_selector_test.dart` |
