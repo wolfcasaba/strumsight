@@ -1,8 +1,8 @@
 # E07-R15 — Review
 
-Brief: `docs/rounds/e07-r15-weekly-scheduler.md`  
-Diff: `2ccfeba6..2177a1cd`  
-Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-16  
+Brief: `docs/rounds/e07-r15-weekly-scheduler.md`
+Diff: `2ccfeba6..2177a1cd`
+Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-16
 Verdikt: CHANGES REQUIRED
 
 ## Összegzés
