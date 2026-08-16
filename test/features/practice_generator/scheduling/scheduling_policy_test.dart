@@ -240,13 +240,24 @@ void main() {
       expect(yearBoundaryRequest.dayDistanceFromToday(jan1Next), 1);
 
       // Leap-year day: 2024 is a leap year, so 2024-02-28 → 2024-03-01
-      // spans two calendar days (the 29th is between them).
+      // spans two calendar days (the 29th is between them). Hand-roll
+      // the availabilities: `buildWeek(start: feb28, count: 2)` would
+      // walk day-by-day and emit [feb28, feb29] in 2024 (the leap day
+      // itself), not the [feb28, mar1] pair this test needs.
       final feb28Leap = LocalDate(2024, 2, 28);
       final mar1Leap = LocalDate(2024, 3, 1);
       final feb28NonLeap = LocalDate(2025, 2, 28);
       final mar1NonLeap = LocalDate(2025, 3, 1);
+      final leapAvailability = WeeklyAvailability([
+        buildDayAvailability(date: feb28Leap),
+        buildDayAvailability(date: mar1Leap),
+      ]);
+      final nonLeapAvailability = WeeklyAvailability([
+        buildDayAvailability(date: feb28NonLeap),
+        buildDayAvailability(date: mar1NonLeap),
+      ]);
       final leapRequest = buildRequest(
-        availability: buildWeek(start: feb28Leap, count: 2),
+        availability: leapAvailability,
         budgets: <LocalDate, TimeBudget>{
           feb28Leap: buildBudget(),
           mar1Leap: buildBudget(),
@@ -259,7 +270,7 @@ void main() {
       expect(leapRequest.dayDistanceFromToday(mar1Leap), 2);
       // Non-leap baseline: Feb 28 → Mar 1 is one calendar day.
       final nonLeapRequest = buildRequest(
-        availability: buildWeek(start: feb28NonLeap, count: 2),
+        availability: nonLeapAvailability,
         budgets: <LocalDate, TimeBudget>{
           feb28NonLeap: buildBudget(),
           mar1NonLeap: buildBudget(),
@@ -272,10 +283,17 @@ void main() {
       expect(nonLeapRequest.dayDistanceFromToday(mar1NonLeap), 1);
 
       // Symmetry: distance is signed by [LocalDate.compareTo], so
-      // `today → other` is the negation of `other → today`.
+      // `today → feb1 − today → jan31` equals the calendar gap
+      // jan31 → feb1 (one day, in either direction).
       expect(
-        -request.dayDistanceFromToday(feb1),
-        request.dayDistanceFromToday(jan31),
+        request.dayDistanceFromToday(feb1) -
+            request.dayDistanceFromToday(jan31),
+        1,
+      );
+      expect(
+        request.dayDistanceFromToday(jan31) -
+            request.dayDistanceFromToday(feb1),
+        -1,
       );
     });
 
