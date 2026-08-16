@@ -11092,3 +11092,25 @@ fel, hogy mind ugyanazt a nem-triviális fixture-t építi-e. Ha igen, a
 `test/fixtures/<feature>/<terület>` bare könyvtárat a dispatch ELŐTT, szűken
 fel kell venni az `allowed_paths` listába. Ez különösen kötelező, ha az aznapi
 korábbi kör már ugyanebben a feature-ben fixture-scope revíziót hozott.
+
+## L297 — A signed céldátum-fázis tesztje nem várhat új anyagot a már elmúlt cél után (E07-R15 H7 self-heal, 2026-08-16)
+
+**Mérve.** Az E07-R15 F1 javítás a scheduler fázisát a tényleges
+`songTargetDate − scheduledDate` távolságból számolta. A korábbi A5 teszt
+ugyanakkor `songTargetDate == today` mellett az öt nappal későbbi dátumra új
+anyagot várt. A távolság ott `-4`, ezért a policy performance-fázist adott és
+a teszt `weekly_scheduler_test.dart:453` pontján `várt 1, kapott 0` hibával
+piros lett. Az SDD Epic 7 §10.3 ezt a viselkedést támasztja alá: céldátum után
+nem indulhat automatikus végtelen folytatás.
+
+**Feloldás.** A brief §5.5 és A5 cellája most kimondja: ha
+`songTargetDate − scheduledDate <= 0`, performance-fázisban csak review jelölt
+ütemezhető; új anyag sem a céldátumon, sem utána nem indul automatikusan. A
+`tools/tests/test_e07_r15_song_target_phase_brief.py` a korábbi briefen piros,
+a tisztázott szerződésen zöld regressziós őr. PR #290, squash `3c47d8ae`,
+Router CI `31944884528` az exact headen success.
+
+**Hogyan alkalmazd.** Song-goal fázistesztnél mindig a `target − scheduled`
+távolság előjelével dokumentáld az elvárt fázist, és tegyél külön cellát a
+céldátumra, valamint legalább egy céldátum utáni napra. Ne következtess a
+következő heti napra pusztán abból, hogy a cél a mai napon van.
