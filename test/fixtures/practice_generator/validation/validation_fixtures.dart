@@ -14,7 +14,7 @@ ExerciseCandidate buildCandidate({
   CandidateSource source = CandidateSource.practiceCatalog,
   String contentRevision = defaultContentRevision,
   bool offlineAvailable = true,
-  Iterable<String> prerequisites = const <String>[],
+  Iterable<String> prerequisites = const <String>['fixture.baseline'],
   LoadLevel frettingHandLoad = LoadLevel.low,
   Map<ExerciseCapability, CapabilitySupport> capabilityOverrides =
       const <ExerciseCapability, CapabilitySupport>{},

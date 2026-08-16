@@ -91,6 +91,12 @@ final class PlanValidationContext {
   }
 }
 
+/// The stable, catalog-declared prerequisite code that signals a candidate
+/// needs the learner's instrument tuning confirmed before scheduling. This
+/// is a structural match against a fixed catalog identifier — never an
+/// interpretation of [LearnerConstraint] free text (§0.0.1).
+const String _tuningPrerequisiteCode = 'guitar.tuned';
+
 /// Validates every hard invariant in an [AdaptivePracticePlan] (ADR 0263
 /// §1). The result is a gate, never advice: `error`/`fatal` findings mean
 /// the plan must not be activated (`PlanValidationResult.isActivatable`).
@@ -306,7 +312,7 @@ final class PlanValidator {
         ),
       );
     }
-    if (candidate.prerequisites.isNotEmpty &&
+    if (candidate.prerequisites.contains(_tuningPrerequisiteCode) &&
         !context.confirmedTuningIdentities.contains(identity)) {
       issues.add(
         _unconfirmed(
