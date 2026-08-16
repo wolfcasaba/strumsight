@@ -75,7 +75,6 @@ közösen használt scheduling-builder helyet. A self-heal regressziós tesztje
 ugyanazzal az `audit_legacy_scope()` funkcióval bizonyítja, hogy a mért út most
 in-scope, egy közvetlen, `scheduling/`-en kívüli szomszéd út pedig továbbra is
 scope-sértés.
-=======
 ## 0.0 Pre-flight revízió (2026-08-16)
 
 - **Mérés:** `WeeklyAvailability` a helyi `LocalDate`-hez kötött és egy
