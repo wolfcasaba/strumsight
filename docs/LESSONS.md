@@ -11143,3 +11143,15 @@ reviewer-függetlenségi adat. Önmagában még nem bizonyítja, hogy a branch a
 közben merge-elt self-heal után is a jelenlegi briefet méri. Folytatáskor a
 freshness-ancestor mérés mindig megelőzi a régi leletek javítását és a gate
 újrafuttatását.
+
+## L299 — A „csak review jelölt” és a `performance` fázis külön szerződés; a regressziós tesztnek mindkettőt mérnie kell (E07-R15 F5, 2026-08-16)
+
+**Mérve.** A target-day A5 teszt új anyag kizárását már mérte, de a policy
+`dayDistance <= 0` guardjának `< 0`-ra lazítása után is zöld maradt, mert a
+`lightReview` ugyanúgy kizárja az új anyagot. Az explicit
+`dayDecisions[index].phase == SchedulingPhase.performance` állítás erre a
+mutációra piros lett.
+
+**Hogyan alkalmazd.** Ha két állapot azonos külső engedélyezést ad, a kritikus
+állapotértéket is közvetlenül assertáld; kompatibilitási teszt önmagában nem
+bizonyítja a fázisszerződést.

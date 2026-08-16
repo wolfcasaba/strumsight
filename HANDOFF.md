@@ -3,9 +3,13 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (E07-R14 done — five typed daily time budgets, deterministic hard-limit / policy
-> allocation, micro-plan and typed shorten/extend change sets; independent review,
-> Full Gate and Router CI exact-SHA green, PR #288. The E07-R15 H3 self-heal
+> (E07-R15 done — domain-pure, deterministic WeeklyScheduler with daily focus,
+> rest/unavailable, high-load, bounded-review and signed song-target performance
+> guards; independent review + security PASS, Full Gate and Router CI exact-SHA
+> green, PR #294. Prior: E07-R14 done — five typed daily time budgets,
+> deterministic hard-limit / policy allocation, micro-plan and typed shorten/extend
+> change sets; independent review, Full Gate and Router CI exact-SHA green, PR #288.
+> The E07-R15 H3 self-heal
 > narrowed its brief scope to the shared scheduling-fixture directory with an
 > executable scope-audit regression guard; the subsequent H7 self-heal made the
 > signed target-date performance boundary explicit and added its brief-contract
@@ -925,6 +929,13 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-16):** `main` @ `7f4be792` — E07-R15
+WeeklyScheduler, PR [#294](https://github.com/wolfcasaba/strumsight/pull/294),
+squash-merge. Exact `e100564d`: Full Gate
+[31948064288](https://github.com/wolfcasaba/strumsight/actions/runs/31948064288)
++ Router CI [31948065345](https://github.com/wolfcasaba/strumsight/actions/runs/31948065345)
+success; post-merge célzott gate zöld.
+
 **Aktuális állapot (2026-08-16):** `main` @ `70e6e718` — E07-R14 daily
 time-budget allocator, PR [#288](https://github.com/wolfcasaba/strumsight/pull/288),
 squash-merge. Exact `de95bd30`: Full Gate
@@ -1308,6 +1319,16 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R15 — WeeklyScheduler és terhelésrotáció** (PR
+[#294](https://github.com/wolfcasaba/strumsight/pull/294), squash `7f4be792`,
+[ADR 0299](docs/adr/0299-weekly-scheduler-contract.md)). Domain-pure,
+determinista heti döntés availability-, R14 `TimeBudget`-, explicit today- és
+song-target inputtal. Unavailable/rest nap üres, primary/secondary fókusz,
+inkluzív high-load-run és review-ratio korlátos; `target - scheduledDate <= 0`
+performance, ezért csak review jelölt lehet. Review APPROVED, security PASS;
+F1–F5 javítva, a phase-boundary mutáció ténylegesen piros. Exact `e100564d`:
+Full Gate + Router CI success; post-merge gate zöld.
 
 **E07-R14 — TimeBudgetAllocator és micro-plan** (PR
 [#288](https://github.com/wolfcasaba/strumsight/pull/288), squash `70e6e718`,
@@ -1916,11 +1937,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R15** (Chapter 8, heti ütemezés). A friss
-session pre-flightban mérje újra az E07-R14 `TimeBudgetAllocator` contractját,
-különösen a typed időösszeget, hard maximumot és typed change-setet. A
-`practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
-`false` maradnak.
+**A soron következő SDD-lépés: E07-R16** (Chapter 8, progression és regression
+policy). A friss session pre-flightban mérje újra az E07-R15 scheduler contractját,
+különösen a signed song-target performance boundaryt. A `practiceGeneratorEnabled`
+és `plannerAssistEnabled` flagek változatlanul `false` maradnak.
 
 **Korábbi kijelölt SDD-kör (2026-08-16, azóta lezárult): E07-R10 —
 AdaptivePracticePlan, day, block és revision domain** (Chapter 8, Kör 10).

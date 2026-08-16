@@ -6,6 +6,21 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E07-R15 — WeeklyScheduler és terhelésrotáció (2026-08-16)
+
+PR [#294](https://github.com/wolfcasaba/strumsight/pull/294), squash
+`7f4be792`, ADR [0299](adr/0299-weekly-scheduler-contract.md). A tiszta
+domain scheduler explicit availability, R14 TimeBudget, `today`, rest-day és
+song-target inputból készít stabil heti döntést. Unavailable/rest napra nem
+kerül blokk; a daily primary/secondary, inkluzív high-load-run és bounded
+review-ratio policy mérve; a signed `target - scheduledDate <= 0` performance
+fázis csak review jelöltet enged. F1–F5 review-lelet javítva, az F5
+performance-boundary mutáció ténylegesen piros. [Review APPROVED](reviews/e07-r15-review.md),
+[security PASS](reviews/e07-r15-security.md); exact `e100564d`: Full Gate
+[31948064288](https://github.com/wolfcasaba/strumsight/actions/runs/31948064288)
+és Router CI [31948065345](https://github.com/wolfcasaba/strumsight/actions/runs/31948065345)
+success; post-merge célzott gate zöld.
+
 ## ✅ E07-R12 — SkillPriorityEngine és policy config (2026-08-16)
 
 Az E07-R12 a célokból, evidence-ből és prerequisite-ekből tiszta domain
