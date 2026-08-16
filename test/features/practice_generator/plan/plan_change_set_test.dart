@@ -33,7 +33,10 @@ void main() {
         changeSet.changes.single.after['estimatedElapsedMicros'],
         600000000,
       );
-      expect(changeSet.toJson()['changes'], isA<List<Object?>>());
+      final serializedChanges =
+          changeSet.toJson()['changes']! as List<Map<String, Object?>>;
+      expect(serializedChanges, isA<List<Object?>>());
+      expect(serializedChanges.single['type'], 'updated');
     });
   });
 }

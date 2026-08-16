@@ -3,7 +3,35 @@ library;
 
 import '../id/planner_ids.dart';
 
-enum PlanChangeType { added, removed, updated, moved, statusChanged }
+enum PlanChangeType {
+  added('added'),
+  removed('removed'),
+  updated('updated'),
+  moved('moved'),
+  statusChanged('statusChanged');
+
+  const PlanChangeType(this.code);
+
+  final String code;
+
+  static PlanChangeType fromCode(String? code) {
+    if (code == null || code.trim().isEmpty) {
+      throw ArgumentError.value(
+        code,
+        'code',
+        'PlanChangeType code must not be empty',
+      );
+    }
+    for (final value in values) {
+      if (value.code == code) return value;
+    }
+    throw ArgumentError.value(
+      code,
+      'code',
+      'Unknown PlanChangeType code: $code',
+    );
+  }
+}
 
 /// Stable, typed causes for a revision; free-text explanations are excluded.
 enum PlanChangeReason {
@@ -59,7 +87,7 @@ final class PlanChange {
   final bool reversible;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'type': type.name,
+    'type': type.code,
     'target': target,
     'before': before,
     'after': after,
