@@ -1,13 +1,14 @@
 # E07-R09 — ExercisePrescription és success criteria
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ ba834de8`)
+- **Státusz:** PLANNING (pre-flight: 2026-08-16, baseline: `origin/main @ 22257ffc`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 9
 - **Kör-azonosító:** `E07-R09`
 - **Branch:** `<motor>/e07-r09-exercise-prescription`
 - **Előfeltétel:** `E07-R08` merge-elve (katalógus-pillanatkép)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0262 §2 (kimondott
-  capability) és az ADR 0255 (determinizmus) már rögzíti.
+- **ADR:** [0294](../adr/0294-exercise-prescription-measurability-and-bounded-execution.md)
+  — a pre-flight rögzítette a meglévő candidate-capabilityk és a
+  sikerkritériumok közti, nem kitalálható határt.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R08 tényleges
 > `exercise_candidate.dart` mezőit (mely capability-k vannak, hogyan jelölt az
@@ -24,6 +25,7 @@ allowed_paths = [
   "test/features/practice_generator/prescription/exercise_prescription_test.dart",
   "test/features/practice_generator/prescription/success_criteria_test.dart",
   "docs/rounds/e07-r09-exercise-prescription.md",
+  "docs/adr/0294-exercise-prescription-measurability-and-bounded-execution.md",
 ]
 gate_tests = [
   "test/features/practice_generator/prescription/exercise_prescription_test.dart",
@@ -42,6 +44,41 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 Pre-flight revízió (mérve 2026-08-16)
+
+Az R08 tényleges `ExerciseCandidate` konstruktorát és a két adapter tényleges
+hívási helyét újramértük (`exercise_candidate.dart:141-218`,
+`practice_engine_catalog_adapter.dart:58-92`,
+`legacy_lesson_candidate_adapter.dart:61-79`). A candidate kötelező,
+nem üres `skillTargets`-et és a teljes `ExerciseCapability` mapet hordozza;
+az utóbbi minden ma ismert capabilityt explicit `supported` vagy
+`unsupported` értékkel jelöl. A mapnek **nincs** külön, szabad szöveges
+metric- vagy criteria-measurement truthja. A két meglévő scoring-capability
+(`supportsDirectionScoring`, `supportsChordScoring`, `supportsPitchScoring`)
+és az executor-control capabilityk jelentése ugyanakkor pontosan a R08-ból
+érkezik, ezért nem szabad belőlük új, név-alapú metrikát következtetni.
+
+Ennek megfelelően a §5.3 és az A3 implementálható, nem találgató
+operacionalizálása az ADR 0294 szerint: minden `SuccessCriteria` explicit,
+nem üres `requiredCapabilities` halmazt hordoz, amelynek minden eleme a
+candidate-en `supported`; a konstrukció más esetben hibát ad. A kör **nem**
+vezet be szabad szöveges metric-code → capability leképezést és nem módosítja
+az R08 candidate-contractot. A `completion` és `assessmentOnly` sem kaphat
+implicit, üres „mérhető” defaultot; a későbbi executor csak a most
+deklarált capability-ig állíthat sikert.
+
+A fallback „ugyanaz a skill” mért, többértékű candidate-mezőhöz igazodik:
+a primary és minden fallback `skillTargets.toSet()` értéke pontosan egyezzen;
+a sorrend nem pedagógiai különbség. A hard időkorlát későbbi tervszintű
+korlát, ezért a recept saját, explicit `hardElapsedLimit` mezőt hordoz és
+annál hosszabb aktív+rest idő nem konstruálható. Ez az ADR 0258 §3 inkluzív
+határát alkalmazza, nem próbál hozzáférni a Kör 10 plan-időkeretéhez.
+
+Az ADR 0294-et a pre-flight foglalta és írta; a §4 és az `ai-router`
+`allowed_paths` blokk egyetlen dokumentum-kivételként tartalmazza. Minden
+más `docs/adr/**` továbbra is tilos. A brief-lint jelentés (`strict`) üres,
+így további lint-revízió nem szükséges.
 
 ## 1. Cél
 
@@ -64,7 +101,8 @@ capabilityjéből.
 
 **NINCS benne (tilos):** terv-összeállítás (Kör 10) · validátor/repair
 (Kör 11) · prioritás/választás (Kör 12-13) · Flutter, `DateTime.now()`,
-`Random` · más `lib/features/**`, `lib/app/**`, `docs/adr/**`, `tools/**`.
+`Random` · más `lib/features/**`, `lib/app/**`, `tools/**`. Egyetlen
+dokumentum-kivétel az ADR 0294; más `docs/adr/**` továbbra is tilos.
 
 ## 4. Engedélyezett fájlok
 
@@ -76,9 +114,10 @@ capabilityjéből.
 | `public.dart` | a barrel bővítése |
 | `test/…/prescription/*_test.dart` (2 db) | a §6 cellái |
 | `docs/rounds/e07-r09-…md` | a §10 handoff |
+| `docs/adr/0294-exercise-prescription-measurability-and-bounded-execution.md` | **ÚJ, pre-flight** — §0.0 capability/criterion és bounded-elapsed döntése |
 
-**Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
-`docs/sdd/**` · `tools/**` · `.github/**`.
+**Tilos zóna:** más `lib/features/**` · `lib/app/**` · minden más
+`docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`.
 
 ## 5. Kötött architekturális döntések
 
@@ -97,8 +136,11 @@ tartalmazhat** tempó-előírást. A validáció konstrukciókor fut.
 
 ### 5.3 A sikerkritérium MÉRHETŐ kell legyen a jelölt capabilityjéből
 
-Nem írható elő olyan kritérium, amit a végrehajtó réteg nem tud megmérni.
-Ellenkező esetben a tanuló sosem „teljesíti" a blokkot.
+Minden `SuccessCriteria` explicit, nem üres `requiredCapabilities` halmazt
+hordoz. Konstrukciókor minden tagjának a candidate-en `supported` értékűnek
+kell lennie; nincs szabad szöveges metric-code-ból következtetés és nincs
+implicit, üres „completion” vagy „assessment” kivétel. Ellenkező esetben a
+tanuló sosem „teljesíti" a blokkot.
 
 **NEM elfogadható gyengítés:** nem mérhető kritérium „majd a felhasználó
 eldönti" alapon — az a sikert szubjektívvá teszi, és a progresszió
@@ -133,10 +175,10 @@ teljesült".
 |---|---|
 | Nagyon nagy default maximum korlát helyett | **A1** |
 | A tempó-validáció futásidőre halasztva | A2 |
-| Bármilyen kritérium elfogadva | **A3** |
+| Hiányzó/unsupported required capabilityvel bíró kritérium elfogadva | **A3** |
 | A fallback más skillt céloz | A4 |
 | Hiányzó kritérium „teljesültnek" véve | **A5** |
-| Kerekítés felfelé az időtartamnál | A7 |
+| `hardElapsedLimit` fölötti vagy felfelé kerekített teljes idő elfogadva | A7 |
 
 **Az ismétlésszám három kötelező cellája** (a határ: a maximum):
 
