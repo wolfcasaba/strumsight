@@ -5,7 +5,9 @@
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
 > (E07-R14 done — five typed daily time budgets, deterministic hard-limit / policy
 > allocation, micro-plan and typed shorten/extend change sets; independent review,
-> Full Gate and Router CI exact-SHA green, PR #288. Next: E07-R15 weekly schedule.) Prior:
+> Full Gate and Router CI exact-SHA green, PR #288. The E07-R15 H3 self-heal
+> narrowed its brief scope to the shared scheduling-fixture directory with an
+> executable scope-audit regression guard; its product round may now restart.) Prior:
 > E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
 > domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
 > `PracticeItemStatus` transition contract, monotonic `PlanRevision` full

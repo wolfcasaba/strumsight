@@ -23,6 +23,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/scheduling/weekly_scheduler_test.dart",
   "test/features/practice_generator/scheduling/scheduling_policy_test.dart",
+  "test/fixtures/practice_generator/scheduling",
   "docs/rounds/e07-r15-weekly-scheduler.md",
 ]
 gate_tests = [
@@ -42,6 +43,37 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 H3 self-heal scope-revízió (2026-08-16)
+
+**Módosítás (ADR 0112 önjavító kör, 2026-08-16).** Ez a revízió kizárólag az
+`allowed_paths` hiányát javítja; a scheduler szerződése, acceptance criteria és
+a mérce változatlanok.
+
+**Mért gyökérok.** A két névre szóló scheduling-teszt mind ugyanazt a
+nem-triviális, paraméterezhető `WeeklyAvailability` / `TimeBudget` /
+`ScheduleCandidate` összeállítást használja. Az implementer ezért a repo
+meglévő `test/fixtures/<feature>/<terület>/<név>_fixtures.dart` konvenciója
+szerint létrehozta a
+`test/fixtures/practice_generator/scheduling/scheduling_fixtures.dart`
+megosztott builder-fájlt, de az eredeti `allowed_paths` egyetlen fixture-helyet
+sem adott. A scope-audit ezért helyesen megállította a kört:
+
+```bash
+python3 tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e07-r15 \
+  --brief docs/rounds/e07-r15-weekly-scheduler.md \
+  --base 5e0c08a5fda48a323cebdf22d9814824c89016dc
+# exit 1 — path outside allowed scope:
+# test/fixtures/practice_generator/scheduling/scheduling_fixtures.dart
+```
+
+**Szűk feloldás.** Az allowlist a bare
+`test/fixtures/practice_generator/scheduling` könyvtárral bővül. Ez nem az
+egész `practice_generator` fixture-fát engedi meg: csak a két R15 teszt által
+közösen használt scheduling-builder helyet. A self-heal regressziós tesztje
+ugyanazzal az `audit_legacy_scope()` funkcióval bizonyítja, hogy a mért út most
+in-scope, egy közvetlen, `scheduling/`-en kívüli szomszéd út pedig továbbra is
+scope-sértés.
 
 ## 1. Cél
 
@@ -74,6 +106,7 @@ Flutter, `DateTime.now()`, `Random` · más `lib/features/**`, `docs/adr/**`.
 | `domain/service/weekly_scheduler.dart` | **ÚJ** — az ütemező |
 | `public.dart` | a barrel bővítése |
 | `test/…/scheduling/*_test.dart` (2 db) | a §6 cellái |
+| `test/fixtures/practice_generator/scheduling/` | a két scheduling-teszt közös, paraméterezhető builderjei |
 | `docs/rounds/e07-r15-…md` | a §10 handoff |
 
 **Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
