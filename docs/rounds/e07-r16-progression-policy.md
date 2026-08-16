@@ -184,4 +184,36 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Implemented
+
+- `domain/policy/progression_policy.dart` — versioned, centralized one-step,
+  evidence/confidence, cooldown, tempo-clamp and minimum-control bounds.
+- `domain/model/adaptation_decision.dart` — immutable request/profile/decision
+  contracts, typed reasons, stable evidence references and policy provenance.
+- `domain/service/adaptation_decider.dart` — deterministic cross-session
+  advance/regress/maintain decision with discomfort and safety precedence,
+  explicit too-hard fast path, repeated-struggle guard and no wall-clock read.
+- `public.dart` — exports all three new public domain contracts.
+- `test/features/practice_generator/adaptation/` — A1–A8 and policy-bound
+  coverage, including the inclusive evidence threshold matrix.
+
+### Valódi-sértés próba
+
+Temporarily changed the default `maximumDifficultyStep` from `1` to `2` and
+relaxed its constructor guard, then ran the isolated A1 test. It failed as
+required: expected next difficulty `5`, actual `6`. Restored the default to
+`1` and the exact-one-step constructor guard before the final gate.
+
+### Verification
+
+- `tools/round-gate.sh test/features/practice_generator/adaptation/adaptation_decider_test.dart test/features/practice_generator/adaptation/progression_policy_test.dart`
+  — PASS: format, analyze, both targeted test files, architecture, secret scan
+  and l10n parity all green.
+- The full suite, fresh property gate and release APK were not run locally;
+  they are CI/orchestrator responsibilities under ADR 0053 and AGENTS.md §12.
+
+### Deviations and follow-up
+
+None. `HANDOFF.md` remains untouched for the orchestrator after merge.
+
 ## 11. Review — a Claude tölti ki
