@@ -57,8 +57,8 @@ final class RepetitionPrescription {
       );
     }
     return RepetitionPrescription(
-      target: targetRaw.round(),
-      maximum: maximumRaw.round(),
+      target: _requireExactInt(targetRaw, 'target'),
+      maximum: _requireExactInt(maximumRaw, 'maximum'),
     );
   }
 
@@ -82,23 +82,28 @@ final class FallbackReference {
     required String exerciseId,
     required this.source,
     required Iterable<String> skillTargets,
+    required String contentRevision,
   }) : exerciseId = _requireText(exerciseId, 'exerciseId'),
-       skillTargets = _requireNonEmptyCodes(skillTargets, 'skillTargets');
+       skillTargets = _requireNonEmptyCodes(skillTargets, 'skillTargets'),
+       contentRevision = _requireText(contentRevision, 'contentRevision');
 
   final String exerciseId;
   final CandidateSource source;
   final List<String> skillTargets;
+  final String contentRevision;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'exerciseId': exerciseId,
     'source': source.code,
     'skillTargets': skillTargets,
+    'contentRevision': contentRevision,
   };
 
   static FallbackReference fromJson(Map<String, dynamic> json) {
     final exerciseId = json['exerciseId'];
     final sourceCode = json['source'];
     final skillTargetsRaw = json['skillTargets'];
+    final contentRevision = json['contentRevision'];
     if (exerciseId is! String) {
       throw ArgumentError.value(
         exerciseId,
@@ -120,6 +125,13 @@ final class FallbackReference {
         'FallbackReference JSON requires a skillTargets list',
       );
     }
+    if (contentRevision is! String) {
+      throw ArgumentError.value(
+        contentRevision,
+        'contentRevision',
+        'FallbackReference JSON requires a String contentRevision',
+      );
+    }
     return FallbackReference(
       exerciseId: exerciseId,
       source: CandidateSource.fromCode(sourceCode),
@@ -134,6 +146,7 @@ final class FallbackReference {
               'each skillTargets entry must be a String',
             ),
       ],
+      contentRevision: contentRevision,
     );
   }
 
@@ -143,11 +156,16 @@ final class FallbackReference {
       other is FallbackReference &&
           other.exerciseId == exerciseId &&
           other.source == source &&
-          _sameList(other.skillTargets, skillTargets);
+          _sameList(other.skillTargets, skillTargets) &&
+          other.contentRevision == contentRevision;
 
   @override
-  int get hashCode =>
-      Object.hash(exerciseId, source, Object.hashAll(skillTargets));
+  int get hashCode => Object.hash(
+    exerciseId,
+    source,
+    Object.hashAll(skillTargets),
+    contentRevision,
+  );
 }
 
 /// The concrete, bounded, measurable execution recipe for one chosen
@@ -178,6 +196,7 @@ final class ExercisePrescription {
   }) : exerciseId = candidate.exerciseId,
        source = candidate.source,
        skillTargets = List<String>.unmodifiable(candidate.skillTargets),
+       contentRevision = candidate.contentRevision,
        loopCount = _requirePositiveInt(loopCount, 'loopCount'),
        fallbacks = _buildFallbacks(fallbackCandidates, candidate.skillTargets) {
     if (activeDuration <= Duration.zero) {
@@ -185,6 +204,16 @@ final class ExercisePrescription {
         activeDuration,
         'activeDuration',
         'must be positive',
+      );
+    }
+    final supportedDurations = candidate.supportedDurations;
+    if (activeDuration < supportedDurations.minimum ||
+        activeDuration > supportedDurations.maximum) {
+      throw ArgumentError.value(
+        activeDuration,
+        'activeDuration',
+        'must be within candidate ${candidate.exerciseId} supportedDurations '
+            '(${supportedDurations.minimum}..${supportedDurations.maximum})',
       );
     }
     if (restDuration.isNegative) {
@@ -229,6 +258,7 @@ final class ExercisePrescription {
   final String exerciseId;
   final CandidateSource source;
   final List<String> skillTargets;
+  final String contentRevision;
   final Duration activeDuration;
   final Duration restDuration;
   final int? tempoBpm;
@@ -247,6 +277,7 @@ final class ExercisePrescription {
     'exerciseId': exerciseId,
     'source': source.code,
     'skillTargets': skillTargets,
+    'contentRevision': contentRevision,
     'activeDurationMicros': activeDuration.inMicroseconds,
     'restDurationMicros': restDuration.inMicroseconds,
     'tempoBpm': tempoBpm,
@@ -344,16 +375,51 @@ final class ExercisePrescription {
         'must be an object when present',
       );
     }
+    _requireMatchingPrimaryIdentity(json, candidate);
+    final decodedFallbacks = [
+      for (final entry in fallbacksRaw)
+        if (entry is Map)
+          FallbackReference.fromJson(Map<String, dynamic>.from(entry))
+        else
+          throw ArgumentError.value(
+            entry,
+            'fallbacks',
+            'each fallbacks entry must be an object',
+          ),
+    ];
+    final expectedFallbacks = _buildFallbacks(
+      fallbackCandidates,
+      candidate.skillTargets,
+    );
+    if (!_sameList(decodedFallbacks, expectedFallbacks)) {
+      throw ArgumentError.value(
+        fallbacksRaw,
+        'fallbacks',
+        'serialized fallbacks do not match the supplied fallbackCandidates '
+            'identity exactly',
+      );
+    }
     return ExercisePrescription(
       candidate: candidate,
-      activeDuration: Duration(microseconds: activeMicros.round()),
-      restDuration: Duration(microseconds: restMicros.round()),
-      tempoBpm: (tempoBpmRaw as num?)?.round(),
+      activeDuration: Duration(
+        microseconds: _requireExactInt(activeMicros, 'activeDurationMicros'),
+      ),
+      restDuration: Duration(
+        microseconds: _requireExactInt(restMicros, 'restDurationMicros'),
+      ),
+      tempoBpm: tempoBpmRaw == null
+          ? null
+          : _requireExactInt(tempoBpmRaw as num, 'tempoBpm'),
       repetition: RepetitionPrescription.fromJson(
         Map<String, dynamic>.from(repetitionRaw),
       ),
-      loopCount: loopCountRaw.round(),
-      hardElapsedLimit: Duration(microseconds: hardLimitMicros.round()),
+      loopCount: _requireExactInt(loopCountRaw, 'loopCount'),
+      hardElapsedLimit: Duration(
+        microseconds: _requireExactInt(
+          hardLimitMicros,
+          'hardElapsedLimitMicros',
+        ),
+      ),
       successCriteria: SuccessCriteria.fromJson(
         Map<String, dynamic>.from(successCriteriaRaw),
       ),
@@ -373,6 +439,7 @@ final class ExercisePrescription {
           other.exerciseId == exerciseId &&
           other.source == source &&
           _sameList(other.skillTargets, skillTargets) &&
+          other.contentRevision == contentRevision &&
           other.activeDuration == activeDuration &&
           other.restDuration == restDuration &&
           other.tempoBpm == tempoBpm &&
@@ -388,6 +455,7 @@ final class ExercisePrescription {
     exerciseId,
     source,
     Object.hashAll(skillTargets),
+    contentRevision,
     activeDuration,
     restDuration,
     tempoBpm,
@@ -422,10 +490,85 @@ List<FallbackReference> _buildFallbacks(
         exerciseId: fallback.exerciseId,
         source: fallback.source,
         skillTargets: fallback.skillTargets,
+        contentRevision: fallback.contentRevision,
       ),
     );
   }
   return List<FallbackReference>.unmodifiable(result);
+}
+
+void _requireMatchingPrimaryIdentity(
+  Map<String, dynamic> json,
+  ExerciseCandidate candidate,
+) {
+  final exerciseId = json['exerciseId'];
+  final sourceCode = json['source'];
+  final skillTargetsRaw = json['skillTargets'];
+  final contentRevision = json['contentRevision'];
+  if (exerciseId is! String) {
+    throw ArgumentError.value(
+      exerciseId,
+      'exerciseId',
+      'ExercisePrescription JSON requires a String exerciseId',
+    );
+  }
+  if (sourceCode is! String) {
+    throw ArgumentError.value(
+      sourceCode,
+      'source',
+      'ExercisePrescription JSON requires a String source',
+    );
+  }
+  if (skillTargetsRaw is! List) {
+    throw ArgumentError.value(
+      skillTargetsRaw,
+      'skillTargets',
+      'ExercisePrescription JSON requires a skillTargets list',
+    );
+  }
+  if (contentRevision is! String) {
+    throw ArgumentError.value(
+      contentRevision,
+      'contentRevision',
+      'ExercisePrescription JSON requires a String contentRevision',
+    );
+  }
+  final skillTargets = [
+    for (final entry in skillTargetsRaw)
+      if (entry is String)
+        entry
+      else
+        throw ArgumentError.value(
+          entry,
+          'skillTargets',
+          'each skillTargets entry must be a String',
+        ),
+  ];
+  final identityMatches =
+      exerciseId == candidate.exerciseId &&
+      CandidateSource.fromCode(sourceCode) == candidate.source &&
+      _sameList(skillTargets, candidate.skillTargets) &&
+      contentRevision == candidate.contentRevision;
+  if (!identityMatches) {
+    throw ArgumentError.value(
+      json,
+      'candidate',
+      'serialized exerciseId/source/skillTargets/contentRevision do not '
+          'match the supplied candidate identity exactly',
+    );
+  }
+}
+
+int _requireExactInt(num value, String name) {
+  final asInt = value.toInt();
+  if (asInt != value) {
+    throw ArgumentError.value(
+      value,
+      name,
+      'must be an exact integer — fractional JSON values are rejected',
+    );
+  }
+  return asInt;
 }
 
 int _requirePositiveInt(int value, String name) {
