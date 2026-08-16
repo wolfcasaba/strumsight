@@ -188,17 +188,17 @@ final class WeeklyScheduleRequest {
   int dayDistanceFromToday(LocalDate date) =>
       _dayOrdinal(date) - _dayOrdinal(today);
 
-  /// The sign-preserving number of calendar days between the song
-  /// [songTargetDate] and `date`. Positive when `date` is after the
-  /// target, zero on the target, negative before. Falls back to
+  /// The sign-preserving number of calendar days from `date` to the song
+  /// [songTargetDate]. Positive when the target is after `date`, zero on
+  /// the target, negative after the target. Falls back to
   /// [dayDistanceFromToday] when no song target is set so the helper
   /// is always callable; the scheduler uses it to derive each day's
-  /// [SchedulingPhase] from the actual `target → date` gap, not from
+  /// [SchedulingPhase] from the actual `target - scheduledDate` gap, not from
   /// `today → date` (F1).
   int dayDistanceFromTarget(LocalDate date) {
     final target = songTargetDate;
     if (target == null) return dayDistanceFromToday(date);
-    return _dayOrdinal(date) - _dayOrdinal(target);
+    return _dayOrdinal(target) - _dayOrdinal(date);
   }
 
   /// The days-since-proleptic-Gregorian-epoch ordinal. The exact epoch

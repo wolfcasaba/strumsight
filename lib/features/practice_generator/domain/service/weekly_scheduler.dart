@@ -90,7 +90,7 @@ final class WeeklyScheduler {
       // [SchedulingPhase.none] band so the phase gate never rejects
       // candidates (ADR 0299 §1: the scheduler does not invent
       // song-target context). When a target is supplied, the phase
-      // comes from the `target → date` distance so a future target
+      // comes from the `target - scheduledDate` distance so a future target
       // outside this week still drives a coherent taper window (F1).
       final phase = hasSongTarget
           ? policy.phaseForDayDistance(request.dayDistanceFromTarget(date))

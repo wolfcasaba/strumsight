@@ -495,71 +495,65 @@ void main() {
       );
     });
 
-    test('the same week + same today with two different song targets '
-        'produces different phases (F1)', () {
-      // The phase is derived from the `target → date` gap, not from
-      // `today → date`. With target = today, the days sit at distances
-      // 0..6 → performance, lightReview, lightReview, lightReview,
-      // preparation, preparation, preparation. Shifting the target to
-      // today + 4 shifts every distance by 4, so day 1 moves from
-      // performance to performance (still past the new target), day 5
-      // moves from preparation to performance (now equals the new
-      // target), and day 6/7 move into lightReview. A new-material
-      // candidate therefore lands on day 5 in the first case but on
-      // day 1 in the second.
+    test('a future target derives phase from target minus scheduled date '
+        'and places only compatible material (F1)', () {
+      // The scheduler passes the policy `target - scheduledDate`, not
+      // `scheduledDate - target`: 10 days before the target is none,
+      // two days before is lightReview, and the target day is performance.
       final today = LocalDate(2026, 8, 16);
-      final week = buildSevenDayWeek(today);
+      final lightReviewDate = _addDays(today, 8);
+      final target = _addDays(today, 10);
+      final availability = WeeklyAvailability([
+        buildDayAvailability(date: today),
+        buildDayAvailability(date: lightReviewDate),
+        buildDayAvailability(date: target),
+      ]);
+      final budgets = <LocalDate, TimeBudget>{
+        today: buildBudget(),
+        lightReviewDate: buildBudget(),
+        target: buildBudget(),
+      };
       final policy = SchedulingPolicy(maximumReviewRatio: 1.0);
-      final candidate = buildCandidate(
-        identity: 'practiceCatalog:n1:rev1',
-        materialKind: CandidateMaterialKind.newMaterial,
-        durationMinutes: 5,
-      );
-
-      // Case A — target on today. New material must land on the first
-      // preparation day (day 5, distance 4 from today).
-      final requestA = buildRequest(
-        availability: week.availability,
-        budgets: week.budgets,
-        candidates: [candidate],
+      final request = buildRequest(
+        availability: availability,
+        budgets: budgets,
+        candidates: [
+          buildCandidate(
+            identity: 'practiceCatalog:new:rev1',
+            focus: CandidateFocus.primaryFocus,
+            materialKind: CandidateMaterialKind.newMaterial,
+            durationMinutes: 5,
+          ),
+          buildCandidate(
+            identity: 'practiceCatalog:review:rev1',
+            focus: CandidateFocus.primaryFocus,
+            materialKind: CandidateMaterialKind.review,
+            durationMinutes: 5,
+          ),
+        ],
         today: today,
-        songTargetDate: today,
+        songTargetDate: target,
       );
-      final decisionA = WeeklyScheduler(policy: policy).schedule(requestA);
-      expect(decisionA.deferredCandidates, isEmpty);
-      final placedDayA = decisionA.dayDecisions.firstWhere(
-        (d) => d.selectedCandidates.isNotEmpty,
-      );
-      expect(placedDayA.date, _addDays(today, 4));
-      expect(placedDayA.phase, SchedulingPhase.preparation);
+      final decision = WeeklyScheduler(policy: policy).schedule(request);
 
-      // Case B — target on today + 4. Day 5 is now the target itself
-      // (performance, no new material), so the new-material candidate
-      // must defer from days 1..7 and not place.
-      final requestB = buildRequest(
-        availability: week.availability,
-        budgets: week.budgets,
-        candidates: [candidate],
-        today: today,
-        songTargetDate: _addDays(today, 4),
-      );
-      final decisionB = WeeklyScheduler(policy: policy).schedule(requestB);
-      expect(decisionB.deferredCandidates, hasLength(1));
+      expect(request.dayDistanceFromTarget(today), 10);
+      expect(request.dayDistanceFromTarget(lightReviewDate), 2);
+      expect(request.dayDistanceFromTarget(target), 0);
+      expect(decision.dayDecisions.map((day) => day.phase), <SchedulingPhase>[
+        SchedulingPhase.none,
+        SchedulingPhase.lightReview,
+        SchedulingPhase.performance,
+      ]);
       expect(
-        decisionB.deferredCandidates.single.reasonCode,
-        'schedule.decision.phaseMismatch',
+        decision.dayDecisions[0].selectedCandidates.single.identity,
+        'practiceCatalog:new:rev1',
       );
-      for (final day in decisionB.dayDecisions) {
-        expect(day.selectedCandidates, isEmpty);
-      }
-      // The day-1 phase under target B is performance (date - target
-      // = -4 ≤ 0), not the preparation phase day-1 sat under target
-      // A — that shift is the F1 fix.
-      expect(decisionB.dayDecisions.first.phase, SchedulingPhase.performance);
-
-      // The two decisions are structurally distinct even though every
-      // other input is identical.
-      expect(decisionA, isNot(equals(decisionB)));
+      expect(
+        decision.dayDecisions[1].selectedCandidates.single.identity,
+        'practiceCatalog:review:rev1',
+      );
+      expect(decision.dayDecisions[2].selectedCandidates, isEmpty);
+      expect(decision.deferredCandidates, isEmpty);
     });
   });
 

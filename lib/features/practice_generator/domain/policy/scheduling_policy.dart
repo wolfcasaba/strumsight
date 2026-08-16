@@ -241,10 +241,10 @@ final class SchedulingPolicy {
   /// agrees on the threshold.
   static const LoadLevel highLoadLevel = LoadLevel.high;
 
-  /// Decide which phase a date falls into given its `today`-to-`target`
-  /// distance in days.
+  /// Decide which phase a scheduled date falls into given its
+  /// `target - scheduledDate` distance in days.
   ///
-  /// The distance is `(target - today).inDays`, signed by the
+  /// The distance is `(target - scheduledDate).inDays`, signed by the
   /// [LocalDate] order. A non-positive distance returns
   /// [SchedulingPhase.performance] (today and earlier targets), a
   /// positive distance inside the light-review window returns
