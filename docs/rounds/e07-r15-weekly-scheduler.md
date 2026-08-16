@@ -1,13 +1,13 @@
 # E07-R15 — WeeklyScheduler és terhelésrotáció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 5cdd7472`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-16, `main @ 0a1f6709`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 15
 - **Kör-azonosító:** `E07-R15`
 - **Branch:** `<motor>/e07-r15-weekly-scheduler`
 - **Előfeltétel:** `E07-R14` merge-elve (időfelosztás)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0258 (elérhetőség,
-  hard korlát) és 0255 (determinizmus) rögzíti.
+- **Előre kiosztott ADR:** [0299](../adr/0299-weekly-scheduler-contract.md)
+  — a heti ütemező explicit, domain-pure input/output szerződése.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R03
 > `weekly_availability.dart` és az R14 `time_budget.dart` tényleges alakját.
@@ -26,6 +26,7 @@ allowed_paths = [
   "test/fixtures/practice_generator/scheduling",
   "tools/tests/test_e07_r15_song_target_phase_brief.py",
   "docs/rounds/e07-r15-weekly-scheduler.md",
+  "docs/adr/0299-weekly-scheduler-contract.md",
 ]
 gate_tests = [
   "test/features/practice_generator/scheduling/weekly_scheduler_test.dart",
@@ -75,6 +76,31 @@ közösen használt scheduling-builder helyet. A self-heal regressziós tesztje
 ugyanazzal az `audit_legacy_scope()` funkcióval bizonyítja, hogy a mért út most
 in-scope, egy közvetlen, `scheduling/`-en kívüli szomszéd út pedig továbbra is
 scope-sértés.
+## 0.0 Pre-flight revízió (2026-08-16)
+
+- **Mérés:** `WeeklyAvailability` a helyi `LocalDate`-hez kötött és egy
+  unavailable naphoz `maximumMinutes == 0`-t kényszerít
+  (`domain/model/weekly_availability.dart`). A napi időkeret tényleges
+  megszerzési lánca `DailyAvailability` →
+  `TimeBudgetAllocator.allocate(availability: …)`; az allocator unavailable
+  napra `ArgumentError`-ral fail-closed módon leáll
+  (`domain/service/time_budget_allocator.dart`). Nincs még scheduler-input,
+  -döntés vagy policy típus, és a `PracticeBlock` már prescriptiont igényel,
+  miközben az SDD pipeline-ban a scheduling a prescription construction előtt
+  van.
+- **Feloldás:** az ADR 0299 a scheduler saját `ScheduleCandidate`,
+  `WeeklyScheduleRequest` és `ScheduleDecision` domain-contractját rögzíti.
+  A request az R14-ben már elosztott `TimeBudget`-et és az R03 availabilityt
+  kapja, ezért az ütemező nem szerez erőforrást és nem számol újra napi
+  budgetet. A `today` és az opcionális song céldátum explicit input; nincs
+  óraolvasás. A pihenőnap a brief szigorúbb szabálya szerint üres, még könnyű
+  ismétlés sem kerül rá.
+- **Scope:** a foglalt ADR 0299 és ez a brief explicit engedélyezett artefaktum;
+  a korábbi `docs/adr/**` tiltás erre az egy, még nem merge-elt ADR-re nem
+  vonatkozik. Más ADR, SDD, tool vagy production útvonal továbbra is tilos.
+- **Küszöbmérés:** `python3 -c 'limit=2; print({"below": 1, "at": limit,
+  "above": limit + 1})'` → `1 / 2 / 3`; a high-load sorozat maximuma 2,
+  ezért a 2 még elfogadott, a 3. nap átrendezendő.
 
 ## 0.1 H7 self-heal policy-revízió (2026-08-16)
 
@@ -243,5 +269,139 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   lehet (A6).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### F4 javítás — A5 song-target phase teszt (2026-08-16)
+
+A review F4 leletét kizárólag teszt-szerződés javítással zártam; a scheduler
+és a policy production-kód nem módosult.
+
+**A hiba.** A régi A5 teszt (`weekly_scheduler_test.dart:413-496`) azt
+várta, hogy `songTargetDate == today` mellett egy newMaterial jelölt a
+céldátum UTÁNI ötödik napra (distance -4) kerüljön. A policy szerződése
+szerint viszont minden nem-pozitív distance performance fázisú
+(`SchedulingPolicy.phaseForDayDistance`), ahova csak review jelölt
+kerülhet. A scheduler helyesen dolgozott — a teszt elvárása volt elavult.
+
+**A javítás.** A célzott A5 tesztet két tiszta teszttel helyettesítettem:
+
+1. `the target day itself is in the performance phase — only review
+   candidates qualify (A5, brief §0.1)` — 7-napos hét, `today == target`.
+   Minden nap performance fázisú. A review jelölt a céldátum napjára
+   (day 0) kerül, a newMaterial jelölt minden napot elutasít és a hét
+   utolsó napjához (`today + 6`) kötve `phaseMismatch` miatt halasztódik.
+   A régi, day 5-ös újanyag-elvárás nincs jelen.
+
+2. `a post-target day is in the performance phase — only review
+   candidates qualify (A5, brief §0.1)` — 2-napos hét, `today == target`.
+   Day 0 (target, distance 0) és day 1 (post-target, distance -1) is
+   performance. Egy 30 perces review jelölt kitölti day 0 büdzséjét; egy
+   5 perces review jelölt day 1-re (a post-target napra) kerül. Egy
+   newMaterial jelölt egyik napra sem kerülhet — mindkettő elutasítja,
+   a halasztás dátuma a második (és egyben utolsó) elutasító nap, `today + 1`.
+
+**Gate kimenet (round-gate.sh, futtatva 2026-08-16, csonkítás nélkül):**
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 1583 files (0 changed) in 6.25 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Analyzing 3 items...
+No issues found! (ran in 5.1s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice_generator/scheduling/weekly_scheduler_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/scheduling/weekly_scheduler_test.dart
+
+00:00 +22: All tests passed!
+
+    → [3] test test/features/practice_generator/scheduling/weekly_scheduler_test.dart: ZÖLD
+
+═══ [4] test test/features/practice_generator/scheduling/scheduling_policy_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/scheduling/scheduling_policy_test.dart
+
+00:00 +19: All tests passed!
+
+    → [4] test test/features/practice_generator/scheduling/scheduling_policy_test.dart: ZÖLD
+
+═══ [5] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [5] architecture: ZÖLD
+
+═══ [6] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+Secret scan OK (2765 file(s) scanned, 0 finding(s)).
+
+    → [6] secrets: ZÖLD
+
+═══ [7] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+L10n parity OK (en → hu, 1276 message(s)).
+
+    → [7] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice_generator/scheduling/weekly_scheduler_test.dart zöld
+    test test/features/practice_generator/scheduling/scheduling_policy_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+**Diff scope.** Egyetlen fájl, 168 sor hozzáadás / 36 sor törlés:
+`test/features/practice_generator/scheduling/weekly_scheduler_test.dart`.
+Production-kód (`lib/features/practice_generator/domain/**`) és policy nem
+módosult — a scheduler és a `SchedulingPolicy.phaseForDayDistance` a brief
+§0.1 szerinti szerződésnek már megfeleltek; csak a teszt szerződését kellett
+hozzájuk igazítani.
+
+**Commit:** `60b27f05` (`fix(test): correct A5 song-target phase test (F4)`)
+
+### F5 javítás — explicit performance fázisállítások (2026-08-16)
+
+Az F5 MAJOR-t kizárólag az A5 teszt-szerződés szigorításával javítottam;
+production scheduler- vagy policy-kód nem változott.
+
+**A javítás.** A target-day cella a `dayDecisions[0].phase`, a
+post-target-day cella pedig a `dayDecisions[1].phase` értékét explicit
+`SchedulingPhase.performance`-ként várja. Így a policy `dayDistance <= 0`
+őrének feltételezett `dayDistance < 0` gyengítése a target napot
+`lightReview`-vá tenné, és a target-day teszt ezen az állításon pirosra vált.
+
+**Gate kimenet (round-gate.sh, futtatva 2026-08-16, csonkítás és pipe nélkül):**
+
+```text
+tools/round-gate.sh test/features/practice_generator/scheduling/weekly_scheduler_test.dart test/features/practice_generator/scheduling/scheduling_policy_test.dart
+
+[1] format: ZÖLD — Formatted 1583 files (0 changed)
+[2] analyze: ZÖLD — No issues found
+[3] weekly_scheduler_test.dart: ZÖLD — 22 teszt átment
+[4] scheduling_policy_test.dart: ZÖLD — 19 teszt átment
+[5] architecture: ZÖLD
+[6] secrets: ZÖLD
+[7] l10n: ZÖLD
+
+ROUND_GATE_RESULT_FILE:
+{"command_exit_code":0,"error_hash":null,"exit_code":0,"failed_step":null,"outcome":"pass","schema_version":1}
+```
+
+**Diff scope.** Csak az A5 teszt (`weekly_scheduler_test.dart`) és e kör
+handoff-szakasza módosult. A policy és a scheduler változatlan.
 
 ## 11. Review — a Claude tölti ki
