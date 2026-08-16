@@ -98,6 +98,52 @@ void main() {
       );
       expect(result.isActivatable, isFalse);
     });
+
+    test('a completed block inside a non-completed day is still fatal-guarded '
+        '(review probe)', () {
+      final previousBlock = buildBlock(
+        id: 'block.1',
+        order: 1,
+        status: PracticeItemStatus.completed,
+        estimatedElapsed: const Duration(minutes: 6),
+      );
+      final previousDay = buildDay(
+        id: 'day.1',
+        localDate: LocalDate(2026, 8, 17),
+        blocks: <PracticeBlock>[
+          previousBlock,
+          buildBlock(id: 'block.2', order: 2),
+        ],
+      );
+      final modifiedBlock = buildBlock(
+        id: 'block.1',
+        order: 1,
+        status: PracticeItemStatus.completed,
+        estimatedElapsed: const Duration(minutes: 7),
+      );
+      final currentDay = buildDay(
+        id: 'day.1',
+        localDate: LocalDate(2026, 8, 17),
+        blocks: <PracticeBlock>[
+          modifiedBlock,
+          buildBlock(id: 'block.2', order: 2),
+        ],
+      );
+      final previousPlan = buildPlan(days: <PracticeDay>[previousDay]);
+      final currentPlan = buildPlan(days: <PracticeDay>[currentDay]);
+      final context = buildContext(previousSnapshot: previousPlan);
+
+      final result = const PlanValidator().validate(currentPlan, context);
+
+      expect(result.hasFatal, isTrue);
+      expect(
+        result.issues.any(
+          (issue) => issue.code == PlanValidationCode.completedHistoryModified,
+        ),
+        isTrue,
+      );
+      expect(result.isActivatable, isFalse);
+    });
   });
 
   group('A7: hard-avoid is error, not warning', () {

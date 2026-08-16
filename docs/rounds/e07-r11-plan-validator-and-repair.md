@@ -401,4 +401,47 @@ brief `docs/rounds/e07-r11-…md` fájlját ez a §10 szakasz egészíti ki).
 `docs/adr/0263-…` nem módosult. Titok-vizsgálat (`check_secrets.dart`):
 0 találat.
 
+### 10.6 Javító kör — `docs/reviews/e07-r11-review.md` MAJOR
+
+**Talált hiba:** `_validateCompletedHistory` csak a `previousDay.status ==
+completed` esetet vizsgálta; egy `completed` `PracticeBlock`-ot egy
+nem-completed napon belül módosítani (vagy eltávolítani) nem váltott ki
+`completedHistoryModified` fatalt.
+
+**Javítás** (`plan_validator.dart` `_validateCompletedHistory`): a napszintű
+egyezés-ellenőrzés megmarad a `completed` napokra; emellett minden előző
+snapshotbeli napra végigmegy az összes `completed` blokkon, és a blokk ID
+alapján megkeresi az új snapshot megfelelő blokkját — hiányzó vagy
+érték-eltérő találat esetén ugyanazt a `completedHistoryModified` fatalt
+adja, most már a `blockId` mezővel is kitöltve.
+
+**Regressziós teszt:** `test/features/practice_generator/validation/
+plan_validator_test.dart` `severity boundary (§6.1)` csoportjában új eset —
+"a completed block inside a non-completed day is still fatal-guarded
+(review probe)" — reprodukálja a review próbáját (egy `completed`
+`block.1` 6→7 percre módosítva egy nem-completed napban), és a fix előtt
+`result.hasFatal` hamis lett volna.
+
+**Gate újrafuttatása (csonkítatlan, §7 alak):**
+
+```
+$ tools/round-gate.sh test/features/practice_generator/validation/plan_validator_test.dart test/features/practice_generator/validation/plan_repairer_test.dart test/property/planner_repair_property_test.dart
+...
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice_generator/validation/plan_validator_test.dart zöld
+    test test/features/practice_generator/validation/plan_repairer_test.dart zöld
+    test test/property/planner_repair_property_test.dart       zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+Az érintett fájlok (`plan_validator.dart`,
+`plan_validator_test.dart`, ez a szakasz) mindegyike a §0.0
+`allowed_paths` listáján van; ADR, CI és tooling fájl nem módosult.
+
 ## 11. Review — a Claude tölti ki

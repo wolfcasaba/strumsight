@@ -134,11 +134,9 @@ final class PlanValidator {
     final issues = <PlanValidationIssue>[];
     for (final day in plan.days) {
       final previousDay = previousDaysById[day.id];
-      if (previousDay == null ||
-          previousDay.status != PracticeItemStatus.completed) {
-        continue;
-      }
-      if (day != previousDay) {
+      if (previousDay == null) continue;
+      if (previousDay.status == PracticeItemStatus.completed &&
+          day != previousDay) {
         issues.add(
           PlanValidationIssue(
             severity: ValidationSeverity.fatal,
@@ -147,6 +145,27 @@ final class PlanValidator {
             dayId: day.id,
           ),
         );
+        continue;
+      }
+      final blocksById = <BlockId, PracticeBlock>{
+        for (final block in day.blocks) block.id: block,
+      };
+      for (final previousBlock in previousDay.blocks) {
+        if (previousBlock.status != PracticeItemStatus.completed) continue;
+        final block = blocksById[previousBlock.id];
+        if (block == null || block != previousBlock) {
+          issues.add(
+            PlanValidationIssue(
+              severity: ValidationSeverity.fatal,
+              code: PlanValidationCode.completedHistoryModified,
+              message:
+                  'Completed block ${previousBlock.id.value} in day '
+                  '${day.id.value} was modified.',
+              dayId: day.id,
+              blockId: previousBlock.id,
+            ),
+          );
+        }
       }
     }
     return issues;
