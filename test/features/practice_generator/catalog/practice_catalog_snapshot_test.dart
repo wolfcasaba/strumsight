@@ -83,4 +83,103 @@ void main() {
       },
     );
   });
+
+  group('Practice catalog values — equality (F2)', () {
+    test('ExerciseCandidate compares every value field', () {
+      expect(
+        candidate(exerciseId: 'exercise.a'),
+        candidate(exerciseId: 'exercise.a'),
+      );
+      expect(
+        candidate(exerciseId: 'exercise.a'),
+        isNot(candidate(exerciseId: 'exercise.b')),
+      );
+    });
+
+    test('SupportedDurations compares both bounds', () {
+      expect(
+        SupportedDurations.exact(const Duration(minutes: 1)),
+        SupportedDurations.exact(const Duration(minutes: 1)),
+      );
+      expect(
+        SupportedDurations.exact(const Duration(minutes: 1)),
+        isNot(SupportedDurations.exact(const Duration(minutes: 2))),
+      );
+    });
+
+    test('DifficultyRange compares both bounds', () {
+      expect(
+        DifficultyRange.exact('beginner'),
+        DifficultyRange.exact('beginner'),
+      );
+      expect(
+        DifficultyRange.exact('beginner'),
+        isNot(DifficultyRange.exact('intermediate')),
+      );
+    });
+
+    test('ExerciseLoadProfile compares every load dimension', () {
+      expect(
+        const ExerciseLoadProfile.all(LoadLevel.low),
+        const ExerciseLoadProfile.all(LoadLevel.low),
+      );
+      expect(
+        const ExerciseLoadProfile.all(LoadLevel.low),
+        isNot(const ExerciseLoadProfile.all(LoadLevel.high)),
+      );
+    });
+
+    test('PracticeCatalogSnapshot compares revisions and content', () {
+      final same = PracticeCatalogSnapshot(
+        catalogRevision: 'catalog.v1',
+        contentRevision: 'content.v1',
+        candidates: <ExerciseCandidate>[candidate(exerciseId: 'exercise.a')],
+      );
+      final different = PracticeCatalogSnapshot(
+        catalogRevision: 'catalog.v2',
+        contentRevision: 'content.v1',
+        candidates: <ExerciseCandidate>[candidate(exerciseId: 'exercise.a')],
+      );
+
+      expect(
+        same,
+        PracticeCatalogSnapshot(
+          catalogRevision: 'catalog.v1',
+          contentRevision: 'content.v1',
+          candidates: <ExerciseCandidate>[candidate(exerciseId: 'exercise.a')],
+        ),
+      );
+      expect(same, isNot(different));
+    });
+
+    test('CandidateExclusionWarning compares every value field', () {
+      const warning = CandidateExclusionWarning(
+        reason: CandidateExclusionReason.missingPrerequisite,
+        source: 'practiceCatalog',
+        exerciseId: 'exercise.a',
+        detail: 'prerequisites',
+      );
+
+      expect(
+        warning,
+        const CandidateExclusionWarning(
+          reason: CandidateExclusionReason.missingPrerequisite,
+          source: 'practiceCatalog',
+          exerciseId: 'exercise.a',
+          detail: 'prerequisites',
+        ),
+      );
+      expect(
+        warning,
+        isNot(
+          const CandidateExclusionWarning(
+            reason: CandidateExclusionReason.missingPrerequisite,
+            source: 'practiceCatalog',
+            exerciseId: 'exercise.a',
+            detail: 'loadProfile',
+          ),
+        ),
+      );
+    });
+  });
 }

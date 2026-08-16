@@ -66,6 +66,18 @@ void main() {
           CapabilitySupport.unsupported,
         );
         expect(
+          candidate.capabilities[ExerciseCapability.requiresMicrophone],
+          CapabilitySupport.supported,
+        );
+        expect(
+          candidate.capabilities[ExerciseCapability.supportsTempo],
+          CapabilitySupport.supported,
+        );
+        expect(
+          candidate.capabilities[ExerciseCapability.supportsLoop],
+          CapabilitySupport.supported,
+        );
+        expect(
           candidate.capabilities[ExerciseCapability.supportsDirectionScoring],
           CapabilitySupport.supported,
         );
@@ -173,6 +185,11 @@ void main() {
       expect(result.candidates.single.source, CandidateSource.legacyLesson);
       expect(result.candidates.single.skillTargets, <String>['chord.gMajor']);
       expect(result.candidates.single.difficultyRange.minimum, 'intermediate');
+      expect(
+        result.candidates.single.capabilities[ExerciseCapability
+            .requiresMicrophone],
+        CapabilitySupport.supported,
+      );
     });
   });
 }

@@ -66,6 +66,27 @@ final class ExerciseLoadProfile {
   final LoadLevel repetition;
   final LoadLevel novelty;
   final LoadLevel concentration;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExerciseLoadProfile &&
+          other.cognitive == cognitive &&
+          other.frettingHand == frettingHand &&
+          other.pickingHand == pickingHand &&
+          other.repetition == repetition &&
+          other.novelty == novelty &&
+          other.concentration == concentration;
+
+  @override
+  int get hashCode => Object.hash(
+    cognitive,
+    frettingHand,
+    pickingHand,
+    repetition,
+    novelty,
+    concentration,
+  );
 }
 
 /// The bounded duration interval one candidate can execute.
@@ -81,6 +102,16 @@ final class SupportedDurations {
 
   final Duration minimum;
   final Duration maximum;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SupportedDurations &&
+          other.minimum == minimum &&
+          other.maximum == maximum;
+
+  @override
+  int get hashCode => Object.hash(minimum, maximum);
 }
 
 /// The inclusive authored difficulty range for an exercise.
@@ -94,6 +125,16 @@ final class DifficultyRange {
 
   final String minimum;
   final String maximum;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DifficultyRange &&
+          other.minimum == minimum &&
+          other.maximum == maximum;
+
+  @override
+  int get hashCode => Object.hash(minimum, maximum);
 }
 
 /// A practice item that refers only to content an existing executor can run.
@@ -128,6 +169,35 @@ final class ExerciseCandidate {
 
   /// Stable lexical key used by [PracticeCatalogSnapshot] ordering.
   String get sortKey => '${source.code}:$exerciseId:$contentRevision';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExerciseCandidate &&
+          other.exerciseId == exerciseId &&
+          other.source == source &&
+          _sameList(other.skillTargets, skillTargets) &&
+          _sameList(other.prerequisites, prerequisites) &&
+          other.supportedDurations == supportedDurations &&
+          other.difficultyRange == difficultyRange &&
+          _sameCapabilities(other.capabilities, capabilities) &&
+          other.loadProfile == loadProfile &&
+          other.offlineAvailable == offlineAvailable &&
+          other.contentRevision == contentRevision;
+
+  @override
+  int get hashCode => Object.hash(
+    exerciseId,
+    source,
+    Object.hashAll(skillTargets),
+    Object.hashAll(prerequisites),
+    supportedDurations,
+    difficultyRange,
+    _capabilitiesHash(capabilities),
+    loadProfile,
+    offlineAvailable,
+    contentRevision,
+  );
 }
 
 ExerciseCapabilities _completeCapabilities(
@@ -153,6 +223,25 @@ List<String> _requiredCodes(Iterable<String> values, String name) {
   }
   return List<String>.unmodifiable(result);
 }
+
+bool _sameList<T>(List<T> left, List<T> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
+}
+
+bool _sameCapabilities(ExerciseCapabilities left, ExerciseCapabilities right) =>
+    ExerciseCapability.values.every(
+      (capability) => left[capability] == right[capability],
+    );
+
+int _capabilitiesHash(ExerciseCapabilities capabilities) => Object.hashAll(
+  ExerciseCapability.values.map(
+    (capability) => Object.hash(capability, capabilities[capability]),
+  ),
+);
 
 String _requiredCode(String value, String name) {
   final trimmed = value.trim();

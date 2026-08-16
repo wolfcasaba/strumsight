@@ -60,6 +60,8 @@ final class LegacyLessonCandidateAdapter {
       }
 
       final capabilities = allCapabilitiesUnsupported();
+      capabilities[ExerciseCapability.requiresMicrophone] =
+          CapabilitySupport.supported;
       capabilities[ExerciseCapability.supportsOffline] = entry.offlineAvailable!
           ? CapabilitySupport.supported
           : CapabilitySupport.unsupported;

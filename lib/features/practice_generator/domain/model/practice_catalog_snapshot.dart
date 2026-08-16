@@ -21,6 +21,18 @@ final class CandidateExclusionWarning {
   final String detail;
 
   String get sortKey => '${reason.code}:$source:$exerciseId:$detail';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CandidateExclusionWarning &&
+          other.reason == reason &&
+          other.source == source &&
+          other.exerciseId == exerciseId &&
+          other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(reason, source, exerciseId, detail);
 }
 
 /// Stable diagnostic reasons from SDD Ch8 §14.6.
@@ -85,6 +97,23 @@ final class PracticeCatalogSnapshot {
     }
     return Set<CatalogRevisionMismatch>.unmodifiable(mismatches);
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PracticeCatalogSnapshot &&
+          other.catalogRevision == catalogRevision &&
+          other.contentRevision == contentRevision &&
+          _sameList(other.candidates, candidates) &&
+          _sameList(other.warnings, warnings);
+
+  @override
+  int get hashCode => Object.hash(
+    catalogRevision,
+    contentRevision,
+    Object.hashAll(candidates),
+    Object.hashAll(warnings),
+  );
 }
 
 List<ExerciseCandidate> _sortCandidates(Iterable<ExerciseCandidate> input) {
@@ -107,4 +136,12 @@ String _requiredRevision(String value, String name) {
     throw ArgumentError.value(value, name, 'must not be empty or blank');
   }
   return trimmed;
+}
+
+bool _sameList<T>(List<T> left, List<T> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }

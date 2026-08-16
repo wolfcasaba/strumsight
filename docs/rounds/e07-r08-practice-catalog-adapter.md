@@ -347,4 +347,27 @@ Azonnal visszaállítottam a production ágat: null/üres prerequisite esetén
   l10n. A teljes suite, friss property gate és release APK a Claude-oldali
   CI-kapu; ezt az implementer nem indítja.
 
+### 2026-08-16 — Javító kör #1
+
+- F1 javítva: minden Practice Engine jelölt explicit `requiresMicrophone`,
+  `supportsTempo` és `supportsLoop` támogatást kap; minden Legacy Learn
+  jelölt explicit `requiresMicrophone` támogatást kap. A capability-tesztek
+  mind a négy pozitív állítást mérik, miközben a korábbi negatív capability
+  assertek változatlanul megmaradtak.
+- A Legacy Learn `supportsTempo` és `supportsLoop` értéke szándékosan
+  `unsupported` maradt: a `Lesson` publikus modelljében nincs a Practice
+  Session Config megfelelője, így erre nincs determinisztikusan mérhető jel.
+  Ez explicit, forráskorlátból eredő döntés, nem hallgatólagos alapérték.
+- F2 javítva: a hat új catalog value típus mezőnkénti `operator ==` és
+  `hashCode` implementációt kapott. Az equality-tesztek típusonként azonos és
+  eltérő értéket is összevetnek.
+
+**Javító kör ellenőrzése.**
+`tools/round-gate.sh test/features/practice_generator/catalog/practice_catalog_snapshot_test.dart test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart`
+— **ZÖLD**: format, analyze, `practice_catalog_snapshot_test.dart` 9/9,
+`practice_engine_catalog_adapter_test.dart` 5/5, architecture (12 változatlan
+allowlisted deviation), secrets (0 finding) és l10n (1276 üzenet) egyaránt
+zöld. A teljes suite, friss property gate és APK továbbra is Claude-oldali
+CI-kapu.
+
 ## 11. Review — a Claude tölti ki

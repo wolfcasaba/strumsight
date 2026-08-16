@@ -57,6 +57,12 @@ final class PracticeEngineCatalogAdapter {
 
       final definition = entry.definition;
       final capabilities = allCapabilitiesUnsupported();
+      capabilities[ExerciseCapability.requiresMicrophone] =
+          CapabilitySupport.supported;
+      capabilities[ExerciseCapability.supportsTempo] =
+          CapabilitySupport.supported;
+      capabilities[ExerciseCapability.supportsLoop] =
+          CapabilitySupport.supported;
       capabilities[ExerciseCapability.supportsDirectionScoring] =
           definition.scoringProfile.weights.containsKey(
             PracticeScoreDimension.direction,
