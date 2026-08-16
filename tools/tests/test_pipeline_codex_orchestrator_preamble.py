@@ -58,5 +58,45 @@ class CodexOrchestratorPreambleYieldResumeTest(unittest.TestCase):
         self.assertIn("wait-for-ci.sh", self.text)
 
 
+class CodexOrchestratorPreambleNoStatusOnlyTurnEndTest(unittest.TestCase):
+    """Following the yield-resume rule above correctly is not sufficient on
+    its own -- the preamble must also forbid ending a turn on bare status
+    narration while a poll session is still open.
+
+    Measured 2026-08-16 (E07-R09, H-NOSIGNAL self-heal, orchestrator session
+    `01a00823-261b-7e70-94ad-b7c011007011`,
+    `~/.codex-terra/sessions/2026/08/16/rollout-2026-08-16T01-15-16-*.jsonl`):
+    the orchestrator correctly resumed the SAME `wait-for-ci.sh` session
+    (`session_id 75633`) across 17 consecutive `write_stdin` polls over
+    ~8.5 minutes -- exactly what the E07-R04 fix above requires, and not a
+    bug. `wait-for-ci.sh`'s own `max_wait` (1800s) was nowhere near
+    exhausted, and the actually-awaited Full Gate run (databaseId
+    31920433829) did not reach a terminal state until 02:03:14Z
+    (`conclusion=failure`) -- the wait was genuine, not a stall. The turn
+    nonetheless ended at 01:58:45Z on a single text message ("... Full
+    Gate ... still running; not merged yet") with no further tool call and
+    no round-signal file, which the driver correctly recognised as
+    H-NOSIGNAL (`ELAKADÁS-GYORSÍTÓ`, tools/round-pipeline.sh) rather than
+    waiting out the full 20-minute stall guard. The existing preamble text
+    told the model how to resume a yielded command but never said a bare
+    non-terminal status update could not, by itself, end the turn.
+    """
+
+    def setUp(self) -> None:
+        self.text = PREAMBLE.read_text(encoding="utf-8")
+
+    def test_the_preamble_forbids_ending_a_turn_on_status_text_alone(self) -> None:
+        self.assertIn("NEM érhet véget csak szöveggel", self.text)
+
+    def test_the_preamble_cites_the_measured_e07_r09_incident(self) -> None:
+        self.assertIn("E07-R09", self.text)
+        self.assertIn("75633", self.text)
+
+    def test_the_preamble_names_the_specific_still_running_status_message(self) -> None:
+        """Must name the literal failure shape (a truthful-but-incomplete
+        status message) so it's recognizable, not just an abstract rule."""
+        self.assertIn("még tart; merge még nem történt", self.text)
+
+
 if __name__ == "__main__":
     unittest.main()
