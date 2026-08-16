@@ -7,7 +7,13 @@ void main() {
       expect(CandidatePolicy.defaultPolicy.version, 'candidate-policy-v1');
       expect(CandidatePolicy.defaultPolicy.diversityWindow, 0.05);
       expect(CandidatePolicy.defaultPolicy.recentOverusePenalty, 0.2);
-      expect(CandidatePolicy.defaultPolicy.explorationWeight, 0.05);
+      // explorationWeight is semantically active: the default `0` means
+      // strict lexical order; positive values enable the deterministic
+      // seed-based permutation (ADR 0297 §3).
+      expect(CandidatePolicy.defaultPolicy.explorationWeight, 0);
+      expect(CandidatePolicy.defaultPolicy.difficultyWeight, 0);
+      expect(CandidatePolicy.defaultPolicy.preferenceWeight, 0);
+      expect(CandidatePolicy.defaultPolicy.measurabilityWeight, 0);
     });
 
     test('a custom version is retained verbatim for provenance (A4)', () {
@@ -25,6 +31,29 @@ void main() {
       expect(a.recentOverusePenalty, b.recentOverusePenalty);
       expect(a.diversityWindow, b.diversityWindow);
       expect(a.explorationWeight, b.explorationWeight);
+      expect(a.difficultyWeight, b.difficultyWeight);
+      expect(a.preferenceWeight, b.preferenceWeight);
+      expect(a.measurabilityWeight, b.measurabilityWeight);
+    });
+
+    test('candidate-level soft weights and explorationWeight are independent '
+        'tunables (A3)', () {
+      // The three soft-factor weights and explorationWeight can each be
+      // tuned without forcing changes to the other fields — the policy
+      // carries them as distinct, validated knobs (ADR 0297 §3).
+      final policy = CandidatePolicy(
+        difficultyWeight: 0.3,
+        preferenceWeight: 0.2,
+        measurabilityWeight: 0.1,
+        explorationWeight: 0.4,
+      );
+      expect(policy.difficultyWeight, 0.3);
+      expect(policy.preferenceWeight, 0.2);
+      expect(policy.measurabilityWeight, 0.1);
+      expect(policy.explorationWeight, 0.4);
+      // Untouched fields stay at the v1 default.
+      expect(policy.recentOverusePenalty, 0.2);
+      expect(policy.diversityWindow, 0.05);
     });
 
     test('stable lexical tie-break is enforced by the default window (A8)', () {
@@ -51,6 +80,28 @@ void main() {
       );
       expect(
         () => CandidatePolicy(explorationWeight: 1.5),
+        throwsArgumentError,
+      );
+      expect(
+        () => CandidatePolicy(explorationWeight: -0.1),
+        throwsArgumentError,
+      );
+      expect(() => CandidatePolicy(difficultyWeight: 1.5), throwsArgumentError);
+      expect(
+        () => CandidatePolicy(difficultyWeight: -0.1),
+        throwsArgumentError,
+      );
+      expect(() => CandidatePolicy(preferenceWeight: 1.5), throwsArgumentError);
+      expect(
+        () => CandidatePolicy(preferenceWeight: -0.1),
+        throwsArgumentError,
+      );
+      expect(
+        () => CandidatePolicy(measurabilityWeight: 1.5),
+        throwsArgumentError,
+      );
+      expect(
+        () => CandidatePolicy(measurabilityWeight: -0.1),
         throwsArgumentError,
       );
       expect(() => CandidatePolicy(diversityWindow: -0.1), throwsArgumentError);

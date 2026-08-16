@@ -94,6 +94,8 @@ CandidateRuntimeContext buildContext({
   Iterable<String> confirmedOfflineIdentities = const <String>[],
   Iterable<String> confirmedTuningIdentities = const <String>[],
   Iterable<String> recentlyUsedIdentities = const <String>[],
+  Map<String, CandidateRankingProfile> rankingProfiles =
+      const <String, CandidateRankingProfile>{},
 }) => CandidateRuntimeContext(
   hardAvoidIdentities: hardAvoidIdentities,
   confirmedAssetIdentities: confirmedAssetIdentities,
@@ -101,7 +103,42 @@ CandidateRuntimeContext buildContext({
   confirmedOfflineIdentities: confirmedOfflineIdentities,
   confirmedTuningIdentities: confirmedTuningIdentities,
   recentlyUsedIdentities: recentlyUsedIdentities,
+  rankingProfiles: rankingProfiles,
 );
+
+CandidateRankingProfile buildRankingProfile({
+  double difficultyAffinity = 0,
+  double preferenceAffinity = 0,
+  double measurabilityScore = 0,
+}) => CandidateRankingProfile(
+  difficultyAffinity: difficultyAffinity,
+  preferenceAffinity: preferenceAffinity,
+  measurabilityScore: measurabilityScore,
+);
+
+Map<String, CandidateRankingProfile> buildRankingProfiles(
+  Iterable<ExerciseCandidate> candidates, {
+  double difficultyAffinity = 0,
+  double preferenceAffinity = 0,
+  double measurabilityScore = 0,
+  double Function(ExerciseCandidate)? difficultyAffinityFor,
+  double Function(ExerciseCandidate)? preferenceAffinityFor,
+  double Function(ExerciseCandidate)? measurabilityScoreFor,
+}) {
+  final result = <String, CandidateRankingProfile>{};
+  for (final candidate in candidates) {
+    final identity = identityOf(candidate);
+    result[identity] = buildRankingProfile(
+      difficultyAffinity:
+          difficultyAffinityFor?.call(candidate) ?? difficultyAffinity,
+      preferenceAffinity:
+          preferenceAffinityFor?.call(candidate) ?? preferenceAffinity,
+      measurabilityScore:
+          measurabilityScoreFor?.call(candidate) ?? measurabilityScore,
+    );
+  }
+  return result;
+}
 
 String identityOf(ExerciseCandidate candidate) =>
     CandidateRuntimeContext.identityOf(candidate);

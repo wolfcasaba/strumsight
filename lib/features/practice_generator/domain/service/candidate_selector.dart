@@ -43,6 +43,8 @@ final class CandidateRuntimeContext {
     Iterable<String> confirmedOfflineIdentities = const <String>[],
     Iterable<String> confirmedTuningIdentities = const <String>[],
     Iterable<String> recentlyUsedIdentities = const <String>[],
+    Map<String, CandidateRankingProfile> rankingProfiles =
+        const <String, CandidateRankingProfile>{},
   }) : hardAvoidIdentities = Set<String>.unmodifiable(hardAvoidIdentities),
        confirmedAssetIdentities = Set<String>.unmodifiable(
          confirmedAssetIdentities,
@@ -58,6 +60,9 @@ final class CandidateRuntimeContext {
        ),
        recentlyUsedIdentities = Set<String>.unmodifiable(
          recentlyUsedIdentities,
+       ),
+       _rankingProfiles = Map<String, CandidateRankingProfile>.unmodifiable(
+         rankingProfiles,
        );
 
   /// Identities the caller has determined are hard-avoided for this learner
@@ -74,6 +79,14 @@ final class CandidateRuntimeContext {
   /// [CandidatePolicy.recentOverusePenalty] (brief A7). The selector never
   /// reads a clock — recency windows belong to the caller.
   final Set<String> recentlyUsedIdentities;
+
+  final Map<String, CandidateRankingProfile> _rankingProfiles;
+
+  /// Caller-supplied per-candidate ranking profile for one identity.
+  /// Returns [CandidateRankingProfile.neutral] when the caller did not
+  /// populate one (brief §3).
+  CandidateRankingProfile rankingProfileFor(String identity) =>
+      _rankingProfiles[identity] ?? CandidateRankingProfile.neutral;
 
   static String identityOf(ExerciseCandidate candidate) =>
       '${candidate.source.code}:${candidate.exerciseId}';
@@ -121,17 +134,14 @@ final class CandidateSelector {
         );
         continue;
       }
-      ranked.add(
-        _ScoredCandidate(
-          candidate,
-          identity,
-          _compositeScore(
-            priority: priority,
-            identity: identity,
-            context: context,
-          ),
-        ),
+      final profile = context.rankingProfileFor(identity);
+      final composite = _compositeScore(
+        priority: priority,
+        identity: identity,
+        context: context,
+        profile: profile,
       );
+      ranked.add(_ScoredCandidate(candidate, identity, composite, profile));
     }
 
     ranked.sort(_compareScored);
@@ -151,9 +161,7 @@ final class CandidateSelector {
         scored: selectedScored,
         skillId: skillId,
         relevanceScore: priority.score,
-        includeOveruseFactor: context.recentlyUsedIdentities.contains(
-          selectedScored.identity,
-        ),
+        context: context,
       );
     }
     SelectedCandidate? fallback;
@@ -162,9 +170,7 @@ final class CandidateSelector {
         scored: fallbackScored,
         skillId: skillId,
         relevanceScore: priority.score,
-        includeOveruseFactor: context.recentlyUsedIdentities.contains(
-          fallbackScored.identity,
-        ),
+        context: context,
       );
     }
 
@@ -182,11 +188,16 @@ final class CandidateSelector {
     required SkillPriority priority,
     required String identity,
     required CandidateRuntimeContext context,
+    required CandidateRankingProfile profile,
   }) {
-    final penalty = context.recentlyUsedIdentities.contains(identity)
+    final overuse = context.recentlyUsedIdentities.contains(identity)
         ? policy.recentOverusePenalty
         : 0.0;
-    return priority.score - penalty;
+    return priority.score +
+        policy.difficultyWeight * profile.difficultyAffinity +
+        policy.preferenceWeight * profile.preferenceAffinity +
+        policy.measurabilityWeight * profile.measurabilityScore -
+        overuse;
   }
 
   List<_ScoredCandidate> _topBucket(List<_ScoredCandidate> ranked) {
@@ -207,6 +218,11 @@ final class CandidateSelector {
   _ScoredCandidate? _pickFromBucket(List<_ScoredCandidate> bucket, int seed) {
     if (bucket.isEmpty) return null;
     if (bucket.length == 1) return bucket.single;
+    // explorationWeight == 0 collapses to strict lexical order — the seed
+    // never affects the winner. Positive values enable the deterministic
+    // seed-based permutation, still bounded by the lexical tie-break and
+    // the diversityWindow that defined this bucket (ADR 0297 §3).
+    if (policy.explorationWeight == 0) return bucket.first;
     final indexed = List<_ScoredCandidate>.of(bucket);
     indexed.sort((left, right) {
       final leftKey = _seedKey(seed, left.identity);
@@ -233,7 +249,7 @@ final class CandidateSelector {
     required _ScoredCandidate scored,
     required String skillId,
     required double relevanceScore,
-    required bool includeOveruseFactor,
+    required CandidateRuntimeContext context,
   }) {
     final factors = <CandidateFactor>[
       CandidateFactor(
@@ -242,7 +258,47 @@ final class CandidateSelector {
         contribution: relevanceScore,
       ),
     ];
-    if (includeOveruseFactor) {
+    if (policy.difficultyWeight > 0 && scored.profile.difficultyAffinity != 0) {
+      final contribution =
+          policy.difficultyWeight * scored.profile.difficultyAffinity;
+      if (contribution != 0) {
+        factors.add(
+          CandidateFactor(
+            kind: CandidateFactorKind.difficulty,
+            normalizedValue: scored.profile.difficultyAffinity,
+            contribution: contribution,
+          ),
+        );
+      }
+    }
+    if (policy.preferenceWeight > 0 && scored.profile.preferenceAffinity != 0) {
+      final contribution =
+          policy.preferenceWeight * scored.profile.preferenceAffinity;
+      if (contribution != 0) {
+        factors.add(
+          CandidateFactor(
+            kind: CandidateFactorKind.preference,
+            normalizedValue: scored.profile.preferenceAffinity,
+            contribution: contribution,
+          ),
+        );
+      }
+    }
+    if (policy.measurabilityWeight > 0 &&
+        scored.profile.measurabilityScore != 0) {
+      final contribution =
+          policy.measurabilityWeight * scored.profile.measurabilityScore;
+      if (contribution != 0) {
+        factors.add(
+          CandidateFactor(
+            kind: CandidateFactorKind.measurability,
+            normalizedValue: scored.profile.measurabilityScore,
+            contribution: contribution,
+          ),
+        );
+      }
+    }
+    if (context.recentlyUsedIdentities.contains(scored.identity)) {
       factors.add(
         CandidateFactor(
           kind: CandidateFactorKind.recentOveruse,
@@ -338,11 +394,17 @@ int _compareScored(_ScoredCandidate left, _ScoredCandidate right) {
 }
 
 class _ScoredCandidate {
-  _ScoredCandidate(this.candidate, this.identity, this.compositeScore);
+  _ScoredCandidate(
+    this.candidate,
+    this.identity,
+    this.compositeScore,
+    this.profile,
+  );
 
   final ExerciseCandidate candidate;
   final String identity;
   final double compositeScore;
+  final CandidateRankingProfile profile;
 }
 
 class _HardReason {

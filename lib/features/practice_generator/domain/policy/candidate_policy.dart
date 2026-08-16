@@ -16,11 +16,17 @@ final class CandidatePolicy {
     String version = 'candidate-policy-v1',
     this.recentOverusePenalty = 0.2,
     this.diversityWindow = 0.05,
-    this.explorationWeight = 0.05,
+    this.explorationWeight = 0.0,
+    this.difficultyWeight = 0.0,
+    this.preferenceWeight = 0.0,
+    this.measurabilityWeight = 0.0,
   }) : version = _requireText(version, 'version') {
     _requireUnitInterval(recentOverusePenalty, 'recentOverusePenalty');
     _requireNonNegativeFinite(diversityWindow, 'diversityWindow');
     _requireUnitInterval(explorationWeight, 'explorationWeight');
+    _requireUnitInterval(difficultyWeight, 'difficultyWeight');
+    _requireUnitInterval(preferenceWeight, 'preferenceWeight');
+    _requireUnitInterval(measurabilityWeight, 'measurabilityWeight');
     if (diversityWindow > 1) {
       throw ArgumentError.value(
         diversityWindow,
@@ -34,9 +40,15 @@ final class CandidatePolicy {
     : version = 'candidate-policy-v1',
       recentOverusePenalty = 0.2,
       diversityWindow = 0.05,
-      explorationWeight = 0.05;
+      explorationWeight = 0,
+      difficultyWeight = 0,
+      preferenceWeight = 0,
+      measurabilityWeight = 0;
 
-  /// Default policy for this initial selection contract.
+  /// Default policy for this initial selection contract. All candidate-level
+  /// soft-factor weights and `explorationWeight` are `0` so the default
+  /// contract reproduces the prior lexical behavior with no soft-factor
+  /// noise. Activate soft factors explicitly via a custom policy.
   static const CandidatePolicy defaultPolicy = CandidatePolicy._default();
 
   /// Stable identifier retained by [CandidateDecision] as selection
@@ -53,11 +65,25 @@ final class CandidatePolicy {
   /// strict equality; `1` permits any candidate targeting the skill.
   final double diversityWindow;
 
-  /// Reserved for caller reporting; the selector reads the seed at call
-  /// time, not from this weight, so this field is informational today and
-  /// future tunings of the deterministic permutation can hook into it
-  /// without a constructor break.
+  /// Toggles the deterministic seed-based permutation inside the
+  /// [diversityWindow] bucket. `0` → strict lexical order, the seed never
+  /// affects the winner. Positive values → the seed drives a deterministic
+  /// permutation of the bucket with a lexical tie-break, still bounded by
+  /// the [diversityWindow] so the chosen candidate can never outscore the
+  /// canonical top of the bucket (ADR 0297 §3).
   final double explorationWeight;
+
+  /// Weight applied to [CandidateRankingProfile.difficultyAffinity] when
+  /// computing the candidate-specific composite score (brief §3, A3).
+  final double difficultyWeight;
+
+  /// Weight applied to [CandidateRankingProfile.preferenceAffinity] when
+  /// computing the candidate-specific composite score (brief §3, A3).
+  final double preferenceWeight;
+
+  /// Weight applied to [CandidateRankingProfile.measurabilityScore] when
+  /// computing the candidate-specific composite score (brief §3, A3).
+  final double measurabilityWeight;
 }
 
 String _requireText(String value, String name) {

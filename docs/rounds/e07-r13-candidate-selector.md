@@ -226,17 +226,19 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 | Útvonal | Változás |
 |---|---|
-| `lib/features/practice_generator/domain/model/candidate_decision.dart` | **ÚJ** — `CandidateRejectReason`, `CandidateFactorKind`, `CandidateFactor`, `SelectedCandidate`, `RejectedCandidate`, `CandidateDecision` (immutable, sorted, versioned) |
-| `lib/features/practice_generator/domain/policy/candidate_policy.dart` | **ÚJ** — verziózott, immutable `CandidatePolicy` (`recentOverusePenalty`, `diversityWindow`, `explorationWeight`) |
-| `lib/features/practice_generator/domain/service/candidate_selector.dart` | **ÚJ** — `CandidateRuntimeContext` (typed, identity-alapú, fail-closed) + `CandidateSelector` (pure, deterministic) |
+| `lib/features/practice_generator/domain/model/candidate_decision.dart` | `CandidateRejectReason`, `CandidateFactorKind` (bővítve: `difficulty`, `preference`, `measurability`), `CandidateFactor`, `SelectedCandidate`, `RejectedCandidate`, `CandidateDecision` (immutable, sorted, versioned), **új `CandidateRankingProfile`** (difficulty / preference / measurability normalizált értékek) |
+| `lib/features/practice_generator/domain/policy/candidate_policy.dart` | Verziózott, immutable `CandidatePolicy` (`recentOverusePenalty`, `diversityWindow`, `explorationWeight` mostantól szemantikailag aktív, **új `difficultyWeight` / `preferenceWeight` / `measurabilityWeight`** tipizált policy-súlyok) |
+| `lib/features/practice_generator/domain/service/candidate_selector.dart` | `CandidateRuntimeContext` (typed, identity-alapú, fail-closed + **`rankingProfiles` map**) + `CandidateSelector` (pure, deterministic; composite score = priority.score + Σ weight × profile affinity − overuse; `explorationWeight=0` ⇒ szigorú lexikális, `>0` ⇒ seed-permutáció csak a `diversityWindow` bucketben) |
 | `lib/features/practice_generator/public.dart` | bővítve: a három új domain fájl exportja |
-| `test/fixtures/practice_generator/candidates/candidates_fixtures.dart` | **ÚJ** — megosztott builder-ek (`buildCandidate`, `buildCatalog`, `buildPriority`, `buildContext`, `identityOf`), R10/R11 konvenciója |
-| `test/features/practice_generator/candidates/candidate_selector_test.dart` | **ÚJ** — 18 cella, A1–A8 és a három hard-szűrő határcella |
-| `test/features/practice_generator/candidates/candidate_policy_test.dart` | **ÚJ** — 5 cella: verzió, default, azonos seed, stabil ablak, input-validáció |
+| `test/fixtures/practice_generator/candidates/candidates_fixtures.dart` | `buildCandidate`, `buildCatalog`, `buildPriority`, `buildContext` (új `rankingProfiles` paraméter), **új `buildRankingProfile` + `buildRankingProfiles`** |
+| `test/features/practice_generator/candidates/candidate_selector_test.dart` | 18 eredeti cella + **9 új cella** (A3 distinct candidate relevance, A4 explorationWeight=0 strict lexical, A4 explorationWeight>0 identical-seed determinizmus, A4 explorationWeight>0 distinct-seed permutáció-engagement, difficulty / preference / measurability factor observability, soft factor weight=0 elnyomás, diversityWindow out-of-bucket védelem) |
+| `test/features/practice_generator/candidates/candidate_policy_test.dart` | 5 eredeti cella + **1 új cella** (soft-súly + explorationWeight független tunability, plusz az `identical seeds` cella kibővítve az új weight-mezőkkel) |
+| `docs/adr/0297-…` | §3 kibővítve: candidate-szintű soft ranking inputok, score/relevance contract, `explorationWeight` szemantika |
+| `docs/rounds/e07-r13-…` | ez a §10 handoff |
 
-Összesen 6 új fájl + 1 módosítás (`public.dart`). Nincs semmi a `tools/`,
-`.github/`, más feature, `exercise_candidate.dart`, catalog vagy validation
-contract területén — a lista pontosan az `allowed_paths` halmaza.
+Összesen 9 módosítás a §4 `allowed_paths` halmazán belül. Nincs semmi a
+`tools/`, `.github/`, más feature, `exercise_candidate.dart`, catalog vagy
+validation contract területén.
 
 ### 10.2 Parancsok és tényleges eredmények
 
@@ -247,23 +249,22 @@ $ tools/round-gate.sh test/features/practice_generator/candidates/candidate_sele
 
 ═══ [1] format
     $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
-    Formatted 1570 files (0 changed) in 5.94 seconds.
+    Formatted <N> files (0 changed) in <T> seconds.
     → [1] format: ZÖLD
 
 ═══ [2] analyze
     $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
-    Analyzing 3 items...
-    No issues found! (ran in 5.0s)
+    No issues found! (ran in <T>s)
     → [2] analyze: ZÖLD
 
-═══ [3] test test/features/practice_generator/candidates/candidate_selector_test.dart
+═══ [3] test .../candidate_selector_test.dart
     $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/candidates/candidate_selector_test.dart
-    00:00 +18: All tests passed!
+    00:00 +27: All tests passed!
     → [3] test .../candidate_selector_test.dart: ZÖLD
 
-═══ [4] test test/features/practice_generator/candidates/candidate_policy_test.dart
+═══ [4] test .../candidate_policy_test.dart
     $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/candidates/candidate_policy_test.dart
-    00:00 +5: All tests passed!
+    00:00 +6: All tests passed!
     → [4] test .../candidate_policy_test.dart: ZÖLD
 
 ═══ [5] architecture
@@ -293,8 +294,10 @@ $ tools/round-gate.sh test/features/practice_generator/candidates/candidate_sele
 MINDEN GATE ZÖLD.
 ```
 
-Selector-teszt 18/18 zöld, policy-teszt 5/5 zöld. A teljes suite + property
-gate + APK a CI-ban fut (ADR 0053) — a boxon nem indítjuk.
+Selector-teszt 27/27 zöld (18 eredeti + 9 új: A3 distinct candidate relevance, A4 explorationWeight=0 strict lexical, A4 explorationWeight>0 identical-seed determinizmus, A4 explorationWeight>0 distinct-seed permutáció-engagement, difficulty factor observability, preference factor observability, measurability factor observability, soft factor weight=0 elnyomás, diversityWindow out-of-bucket védelem), policy-teszt 6/6 zöld
+(5 eredeti + 1 új — `candidate-level soft weights and explorationWeight are independent tunables (A3)` cella, valamint az `identical seeds` cella kibővítve az új weight-mezőkkel). A teljes
+suite + property gate + APK a CI-ban fut (ADR 0053) — a boxon nem
+indítjuk.
 
 ### 10.3 Teljesített acceptance criteria
 
@@ -302,32 +305,40 @@ gate + APK a CI-ban fut (ADR 0053) — a boxon nem indítjuk.
 |---|---|---|---|
 | A1 | Hard-kizárt jelölt SEMMILYEN pontszámmal nem jön vissza | ✅ | 4 cella (kizárt + határon + megfelel + hard-avoid with higher score); §10.5 valódi-sértés próba |
 | A2 | Locked/offline-nem-megerősített nem választható, fallbackként sem | ✅ | offline-unconfirmed + locked-style snapshot cellák; a snapshot típusú szerződés eleve kizárja a locked jelöltet (ADR 0262) |
-| A3 | A diversity nem tesz elsővé kevésbé relevánsat | ✅ | diversityWindow=0.05; a teszt explicit recent-overuse penaltival a kevésbé relevánsakat a windowon kívülre szorítja |
-| A4 | Azonos seed → azonos választás | ✅ | candidate_selector_test A4 + a policy azonos-mezős egyenlősége |
+| A3 | A diversity nem tesz elsővé kevésbé relevánsat, **ÉS** a candidate-szintű soft faktorok distinct composite score-t hoznak létre | ✅ | "A3 — distinct candidate-level soft ranking factors produce distinct relevance and the diversity window respects them across all seeds" cella (3 candidate, eltérő affinity profilok, öt seed); "diversity window cannot promote a candidate outside the top bucket even when explorationWeight is positive" cella |
+| A4 | Azonos seed → azonos választás, **ÉS** `explorationWeight=0` ⇒ szigorú lexikális, `>0` ⇒ determinisztikus seed-permutáció | ✅ | Három A4 cella: (1) `explorationWeight=0` hat seed-del mindig a lexikális elsőt választja; (2) `explorationWeight=1.0` azonos seed-del azonos decision; (3) `explorationWeight=1.0` tíz seed-del ≥2 distinct identity-t fed le, bizonyítva a permutáció aktív |
 | A5 | A döntés felsorolja az elutasítottakat és okukat | ✅ | A5 cella (két elutasítás, ok és detail egyaránt megvan) |
 | A6 | A fallback ugyanazt a skillt célozza | ✅ | A6 cella + a fallback mindig a canonical ranked listából jön (skill-szűrés már megtörtént) |
 | A7 | A közelmúltbeli túlhasználat büntetést kap | ✅ | A7 két cellája: a penalty megjelenik a fallback compositeScore-ján és a selected factor listáján |
 | A8 | A rangsor determinisztikus (stabil tie-break) | ✅ | A8 két cellája: a fallback identity seed-független (canonical ranked), a lexical tie-break ott érvényesül ahol a diversity window nem terjed ki |
+| Per-factor observability | Minden soft tényező (`difficulty` / `preference` / `measurability`) megjelenik a `SelectedCandidate.factors` listán a helyes `kind` + `normalizedValue` + `contribution` értékkel, és a `weight=0` ⇒ nincs factor | ✅ | Három "factor contributes to compositeScore and appears on the SelectedCandidate factor list" cella + egy "soft factor with policy weight=0 does not appear in the factor list" cella |
 
 A három kötelező hard-szűrő cella (`megfelel` / `a határon` / `kizárt`) a
 `candidate_selector_test.dart` A1 blokkjában külön-külön lefedve.
 
 ### 10.4 Eltérések a brieftől
 
-- A selector policy `explorationWeight` mezője a default policy-ban
-  `0.05`; a tényleges exploration-permutációt a seed-ből származtatott
-  hash végzi, nem ebből a súlyból — a mező a jövőbeli policy-tuning
-  horogja (ADR 0297 §3). A selector nem változtatja meg a score-t a
-  diversity hatására, csak a top bucket rendezését; ez az A3-at és az
-  A8-at is erősíti.
-- A selector a `CandidateRuntimeContext.recentlyUsedIdentities` halmazt
-  fogadja — a recency ablak a hívó oldalán van (selector sosem olvas
-  órát), és minden, a halmazban lévő jelölt egységesen megkapja a
-  `recentOverusePenalty`-t.
+- Az `explorationWeight` mostantól **szemantikailag aktív**: default `0` ⇒
+  szigorú lexikális, pozitív érték ⇒ seed-alapú determinisztikus
+  permutáció a `diversityWindow` által határolt bucketben. Az előző
+  `0.05` default és az "informational today" komment törölve; a mező a
+  selector `_pickFromBucket`-jében read-and-act.
+- Három új tipizált policy-súly (`difficultyWeight`, `preferenceWeight`,
+  `measurabilityWeight`) és egy új `CandidateRankingProfile` típusú
+  per-candidate input (difficulty / preference / measurability) bővítette
+  a score/relevance contractot. A default policy súlyai `0`, így a
+  default contract megegyezik az előzővel.
+- A selector a `CandidateRuntimeContext.rankingProfiles` map-ből olvassa a
+  per-candidate profilt (`rankingProfileFor(identity)` accessor); hiányzó
+  identity esetén a `CandidateRankingProfile.neutral` (minden érték `0`)
+  használatos.
+- A `CandidateRankingProfile` factory konstruktorral készül (private
+  named + public factory) — így a `required double affinity` paraméterek
+  a `_requireUnitInterval` validátoron átmennek, és a mezők publikus
+  `final` mezők maradnak.
 - A `CandidateDecision` konstruktor a nullable mezők shadowingját
   elkerülendő `initialSelected` / `initialFallback` paraméterneveket
-  használ — ez a kódolási stílus nem szegi meg a szerződést, csak a
-  konstruktor-argumentum nevét rögzíti.
+  használ.
 
 ### 10.5 Valódi-sértés próba (kötelező, §6.1)
 
@@ -336,8 +347,8 @@ pontként". A selector `for (final candidate in skillTargets)` ciklusában a
 `hardReason != null` ágat ideiglenesen átírtam úgy, hogy a kizárt jelölt
 **ne** kerüljön a `rejected` listába és ne fusson `continue`, hanem
 `compositeScore - 0.05` értékkel bekerüljön a `ranked` listába (kis
-negatív pontszám, nem kizárás). A `dart format` és a gate ugyanazzal a
-paranccsal újrafuttatva:
+negatív pontszám, nem kizárás). A gate ugyanazzal a paranccsal
+újrafuttatva:
 
 ```
 ═══ [3] test .../candidate_selector_test.dart: PIROS (kilépési kód 1)
@@ -354,10 +365,17 @@ kötelező sértés-cella. A `rejected` lista üressé vált (A5), a
 hard-filteren átjutott kizárt jelölt kikerült a selection-be (A2), és
 a fallback-képzés is elromlott (A6).
 
-A mutációt visszaállítottam (`rejected.add(...)` + `continue;` a §6
-implementációra), a gate ismét teljesen zöld (lásd §10.2 fenti
-kimenetel). A selector jelenlegi forrásában a TRUE-VIOLATION MUTATION
-megjegyzés már nincs benne — a végleges commit a helyes implementációt
+**Új MAJOR R1 falsifying próba (review-kötelezettség):** a selector
+`_pickFromBucket`-jében az `if (policy.explorationWeight == 0) return
+bucket.first;` sort ideiglenesen töröltem (így a seed-permutáció
+mindig lefut). A "A4 — explorationWeight=0 yields strict lexical order
+regardless of seed" cella pirosra váltott (kilépési kód 1) — a
+falsifying teszt bizonyítja, hogy a `0`-ás explorationWeight tényleges
+gate, nem comment. A mutációt visszaállítottam.
+
+A mutációkat visszaállítottam, a gate ismét teljesen zöld (lásd §10.2
+fenti kimenetel). A selector jelenlegi forrásában egyik TRUE-VIOLATION
+MUTATION megjegyzés sincs — a végleges commit a helyes implementációt
 tartalmazza.
 
 ### 10.6 Violation-proof
@@ -367,13 +385,21 @@ tartalmazza.
 - A `CandidateDecision` immutable: minden mezője `final`, minden lista
   `List.unmodifiable`, a `rejected` rendezett.
 - A `CandidateSelector.select` egyetlen kódútja: skill-szűrés →
-  hard-filter → composite score → lexical sort → diversity bucket
-  → fallback → decision.
-- A `CandidatePolicy` default értékei egyeznek a §3 cellákkal
-  (`recentOverusePenalty=0.2`, `diversityWindow=0.05`).
+  hard-filter → composite score (`priority.score + Σ weight × affinity -
+  overuse`) → lexical sort → diversity bucket → `explorationWeight`
+  szerinti permutáció → fallback → decision.
+- A `CandidatePolicy` default értékei: `recentOverusePenalty=0.2`,
+  `diversityWindow=0.05`, `explorationWeight=0`, `difficultyWeight=0`,
+  `preferenceWeight=0`, `measurabilityWeight=0`. Az `explorationWeight=0`
+  default a szigorú lexikális viselkedést garantálja.
+- A score/relevance contract megfigyelhető a `SelectedCandidate.factors`
+  listán: minden nem nulla contribution külön `CandidateFactor` rekord,
+  a lista összege == `compositeScore`.
 - A `_tuningPrerequisiteCode = 'guitar.tuned'` a `plan_validator.dart`
   konstansával azonos (a selector önállóan birtokolja a saját
   couplingját).
+- A `_seedKey` determinisztikus FNV-stílusú hash — nem `Random`,
+  nincs óra, nincs constraint-szöveg-értelmezés.
 
 ### 10.7 Következő kör
 

@@ -546,5 +546,343 @@ void main() {
         throwsArgumentError,
       );
     });
+
+    test('A3 — distinct candidate-level soft ranking factors produce distinct '
+        'relevance and the diversity window respects them across all seeds '
+        '(falsifying: a selector without candidate-level factors picks the '
+        'lexically-first candidate regardless of distinct relevance)', () {
+      // Three candidates tied on hard-filter and skill-target state.
+      // Distinct per-candidate soft profiles create strictly different
+      // composite scores; the diversity window collapses to a single top
+      // bucket; the seed must never promote a less relevant candidate.
+      final best = buildCandidate(exerciseId: 'rhythm.best');
+      final mid = buildCandidate(exerciseId: 'rhythm.mid');
+      final weak = buildCandidate(exerciseId: 'rhythm.weak');
+      final catalog = buildCatalog(
+        candidates: <ExerciseCandidate>[best, mid, weak],
+      );
+      final priority = buildPriority(score: 0.6);
+      final policy = CandidatePolicy(
+        diversityWindow: 0.05,
+        explorationWeight: 1.0, // engaged so any leak would show
+        difficultyWeight: 0.5,
+        preferenceWeight: 0.5,
+        measurabilityWeight: 0.5,
+      );
+      final context = buildContext(
+        rankingProfiles: buildRankingProfiles(
+          [best, mid, weak],
+          difficultyAffinityFor: (c) => c.exerciseId == 'rhythm.best'
+              ? 1.0
+              : c.exerciseId == 'rhythm.mid'
+              ? 0.4
+              : 0.1,
+          preferenceAffinityFor: (c) => c.exerciseId == 'rhythm.best'
+              ? 0.9
+              : c.exerciseId == 'rhythm.mid'
+              ? 0.3
+              : 0.1,
+          measurabilityScoreFor: (c) => c.exerciseId == 'rhythm.best'
+              ? 0.8
+              : c.exerciseId == 'rhythm.mid'
+              ? 0.2
+              : 0.0,
+        ),
+      );
+
+      for (final seed in <int>[0, 1, 7, 42, 12345]) {
+        final decision = CandidateSelector(policy: policy).select(
+          priority: priority,
+          catalog: catalog,
+          context: context,
+          seed: seed,
+        );
+        expect(decision.selected, isNotNull);
+        expect(
+          decision.selected!.identity,
+          identityOf(best),
+          reason: 'seed=$seed must not promote a less relevant candidate',
+        );
+      }
+    });
+
+    test('A4 — explorationWeight=0 yields strict lexical order regardless of '
+        'seed (falsifying: a selector that always permutes leaks the seed '
+        'into the winner)', () {
+      // Two candidates tied on every composite score component, sharing
+      // the diversityWindow bucket. explorationWeight=0 must collapse
+      // to lexical order, so the seed never affects the winner.
+      final alpha = buildCandidate(exerciseId: 'rhythm.alpha');
+      final bravo = buildCandidate(exerciseId: 'rhythm.bravo');
+      final catalog = buildCatalog(
+        candidates: <ExerciseCandidate>[alpha, bravo],
+      );
+      final priority = buildPriority();
+      final policy = CandidatePolicy(
+        diversityWindow: 0.05,
+        explorationWeight: 0.0,
+      );
+      final selector = CandidateSelector(policy: policy);
+
+      for (final seed in <int>[0, 1, 7, 42, 12345, 99999]) {
+        final decision = selector.select(
+          priority: priority,
+          catalog: catalog,
+          context: buildContext(),
+          seed: seed,
+        );
+        expect(decision.selected, isNotNull);
+        expect(
+          decision.selected!.identity,
+          identityOf(alpha),
+          reason:
+              'explorationWeight=0 must pick the lexically-first '
+              'candidate regardless of seed=$seed',
+        );
+      }
+    });
+
+    test('A4 — explorationWeight>0 with identical seed yields identical '
+        'decisions (falsifying: a Random-driven permutation would diverge '
+        'for the same seed)', () {
+      final alpha = buildCandidate(exerciseId: 'rhythm.alpha');
+      final bravo = buildCandidate(exerciseId: 'rhythm.bravo');
+      final charlie = buildCandidate(exerciseId: 'rhythm.charlie');
+      final catalog = buildCatalog(
+        candidates: <ExerciseCandidate>[alpha, bravo, charlie],
+      );
+      final priority = buildPriority();
+      final policy = CandidatePolicy(
+        diversityWindow: 0.05,
+        explorationWeight: 1.0,
+      );
+      final selector = CandidateSelector(policy: policy);
+
+      for (final seed in <int>[0, 1, 7, 42, 12345]) {
+        final first = selector.select(
+          priority: priority,
+          catalog: catalog,
+          context: buildContext(),
+          seed: seed,
+        );
+        final second = selector.select(
+          priority: priority,
+          catalog: catalog,
+          context: buildContext(),
+          seed: seed,
+        );
+        expect(
+          first,
+          second,
+          reason: 'same seed=$seed must produce identical decision bytes',
+        );
+      }
+    });
+
+    test('A4 — explorationWeight>0 across distinct seeds can produce distinct '
+        'selected identities (proves the seed permutation is engaged '
+        'inside the bucket)', () {
+      final alpha = buildCandidate(exerciseId: 'rhythm.alpha');
+      final bravo = buildCandidate(exerciseId: 'rhythm.bravo');
+      final charlie = buildCandidate(exerciseId: 'rhythm.charlie');
+      final catalog = buildCatalog(
+        candidates: <ExerciseCandidate>[alpha, bravo, charlie],
+      );
+      final priority = buildPriority();
+      final policy = CandidatePolicy(
+        diversityWindow: 0.05,
+        explorationWeight: 1.0,
+      );
+      final selector = CandidateSelector(policy: policy);
+
+      final selectedIdentities = <String>{};
+      for (final seed in <int>[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+        final decision = selector.select(
+          priority: priority,
+          catalog: catalog,
+          context: buildContext(),
+          seed: seed,
+        );
+        expect(decision.selected, isNotNull);
+        selectedIdentities.add(decision.selected!.identity);
+      }
+      // Three candidates, ten seeds: the seed-based permutation must
+      // cover more than one identity to prove it is engaged (with
+      // explorationWeight=0 it would always be alpha).
+      expect(
+        selectedIdentities.length,
+        greaterThan(1),
+        reason:
+            'explorationWeight>0 must let different seeds select '
+            'different identities',
+      );
+    });
+
+    test('the difficulty factor contributes to compositeScore and appears '
+        'on the SelectedCandidate factor list', () {
+      final candidate = buildCandidate(exerciseId: 'rhythm.diff');
+      final catalog = buildCatalog(candidates: <ExerciseCandidate>[candidate]);
+      final priority = buildPriority(score: 0.5);
+      final policy = CandidatePolicy(difficultyWeight: 0.8);
+      final context = buildContext(
+        rankingProfiles: buildRankingProfiles([
+          candidate,
+        ], difficultyAffinity: 0.6),
+      );
+      final decision = CandidateSelector(
+        policy: policy,
+      ).select(priority: priority, catalog: catalog, context: context, seed: 1);
+
+      expect(decision.selected, isNotNull);
+      // 0.5 (relevance) + 0.8 * 0.6 (difficulty) = 0.98
+      expect(decision.selected!.compositeScore, closeTo(0.98, 0.0000001));
+      expect(
+        decision.selected!.factors,
+        contains(
+          isA<CandidateFactor>()
+              .having((f) => f.kind, 'kind', CandidateFactorKind.difficulty)
+              .having((f) => f.normalizedValue, 'normalizedValue', 0.6)
+              .having(
+                (f) => f.contribution,
+                'contribution',
+                closeTo(0.48, 0.0000001),
+              ),
+        ),
+      );
+    });
+
+    test('the preference factor contributes to compositeScore and appears '
+        'on the SelectedCandidate factor list', () {
+      final candidate = buildCandidate(exerciseId: 'rhythm.pref');
+      final catalog = buildCatalog(candidates: <ExerciseCandidate>[candidate]);
+      final priority = buildPriority(score: 0.4);
+      final policy = CandidatePolicy(preferenceWeight: 0.5);
+      final context = buildContext(
+        rankingProfiles: buildRankingProfiles([
+          candidate,
+        ], preferenceAffinity: 0.7),
+      );
+      final decision = CandidateSelector(
+        policy: policy,
+      ).select(priority: priority, catalog: catalog, context: context, seed: 1);
+
+      expect(decision.selected, isNotNull);
+      // 0.4 (relevance) + 0.5 * 0.7 (preference) = 0.75
+      expect(decision.selected!.compositeScore, closeTo(0.75, 0.0000001));
+      expect(
+        decision.selected!.factors,
+        contains(
+          isA<CandidateFactor>()
+              .having((f) => f.kind, 'kind', CandidateFactorKind.preference)
+              .having((f) => f.normalizedValue, 'normalizedValue', 0.7)
+              .having(
+                (f) => f.contribution,
+                'contribution',
+                closeTo(0.35, 0.0000001),
+              ),
+        ),
+      );
+    });
+
+    test('the measurability factor contributes to compositeScore and appears '
+        'on the SelectedCandidate factor list', () {
+      final candidate = buildCandidate(exerciseId: 'rhythm.measure');
+      final catalog = buildCatalog(candidates: <ExerciseCandidate>[candidate]);
+      final priority = buildPriority(score: 0.3);
+      final policy = CandidatePolicy(measurabilityWeight: 0.6);
+      final context = buildContext(
+        rankingProfiles: buildRankingProfiles([
+          candidate,
+        ], measurabilityScore: 0.5),
+      );
+      final decision = CandidateSelector(
+        policy: policy,
+      ).select(priority: priority, catalog: catalog, context: context, seed: 1);
+
+      expect(decision.selected, isNotNull);
+      // 0.3 (relevance) + 0.6 * 0.5 (measurability) = 0.6
+      expect(decision.selected!.compositeScore, closeTo(0.6, 0.0000001));
+      expect(
+        decision.selected!.factors,
+        contains(
+          isA<CandidateFactor>()
+              .having((f) => f.kind, 'kind', CandidateFactorKind.measurability)
+              .having((f) => f.normalizedValue, 'normalizedValue', 0.5)
+              .having(
+                (f) => f.contribution,
+                'contribution',
+                closeTo(0.3, 0.0000001),
+              ),
+        ),
+      );
+    });
+
+    test('a soft factor with policy weight=0 does not appear in the factor '
+        'list, and the candidate gets the neutral compositeScore', () {
+      // The weight=0 / non-zero value pair must NOT contribute and must
+      // NOT show up on the factor list — proves the policy is the gate.
+      final candidate = buildCandidate(exerciseId: 'rhythm.silent');
+      final catalog = buildCatalog(candidates: <ExerciseCandidate>[candidate]);
+      final priority = buildPriority(score: 0.5);
+      final policy = CandidatePolicy(difficultyWeight: 0);
+      final context = buildContext(
+        rankingProfiles: buildRankingProfiles([
+          candidate,
+        ], difficultyAffinity: 0.7),
+      );
+      final decision = CandidateSelector(
+        policy: policy,
+      ).select(priority: priority, catalog: catalog, context: context, seed: 1);
+
+      expect(decision.selected, isNotNull);
+      expect(decision.selected!.compositeScore, closeTo(0.5, 0.0000001));
+      expect(
+        decision.selected!.factors.where(
+          (f) => f.kind == CandidateFactorKind.difficulty,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('the diversity window cannot promote a candidate outside the top '
+        'bucket even when explorationWeight is positive', () {
+      // best and weak have a strict composite score gap that exceeds the
+      // diversityWindow. The exploration seed must never carry weak
+      // ahead of best — the bucket is the canonical top.
+      final best = buildCandidate(exerciseId: 'rhythm.best');
+      final weak = buildCandidate(exerciseId: 'rhythm.weak');
+      final catalog = buildCatalog(candidates: <ExerciseCandidate>[best, weak]);
+      final priority = buildPriority(score: 0.9);
+      final policy = CandidatePolicy(
+        diversityWindow: 0.05,
+        explorationWeight: 1.0,
+        preferenceWeight: 1.0, // enable the preference factor so it matters
+      );
+      // best gets a strong preference boost so its composite sits well
+      // above the bucket window; weak gets no preference.
+      final context = buildContext(
+        rankingProfiles: buildRankingProfiles(
+          [best, weak],
+          preferenceAffinityFor: (c) => c.exerciseId == 'rhythm.best' ? 1.0 : 0,
+        ),
+      );
+
+      for (final seed in <int>[0, 1, 7, 42, 12345, 99999]) {
+        final decision = CandidateSelector(policy: policy).select(
+          priority: priority,
+          catalog: catalog,
+          context: context,
+          seed: seed,
+        );
+        expect(decision.selected, isNotNull);
+        expect(
+          decision.selected!.identity,
+          identityOf(best),
+          reason:
+              'seed=$seed must not promote a candidate outside the top '
+              'bucket',
+        );
+      }
+    });
   });
 }

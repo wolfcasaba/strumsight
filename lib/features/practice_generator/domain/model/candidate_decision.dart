@@ -40,6 +40,9 @@ enum CandidateRejectReason {
 /// exploration are tie-breaks, never score modifiers (ADR 0297 §3).
 enum CandidateFactorKind {
   relevance('candidate.factor.relevance'),
+  difficulty('candidate.factor.difficulty'),
+  preference('candidate.factor.preference'),
+  measurability('candidate.factor.measurability'),
   recentOveruse('candidate.factor.recentOveruse');
 
   const CandidateFactorKind(this.code);
@@ -55,6 +58,72 @@ enum CandidateFactorKind {
 
   @override
   String toString() => code;
+}
+
+/// Typed, caller-supplied, normalized affinities for one candidate that the
+/// selector combines with the corresponding [CandidatePolicy] weights to
+/// produce a candidate-specific composite score (ADR 0297 §3).
+///
+/// The default [_neutral] profile has every affinity at zero so it never
+/// contributes unless the caller populates a non-default profile AND the
+/// policy enables the matching weight.
+final class CandidateRankingProfile {
+  CandidateRankingProfile._({
+    required this.difficultyAffinity,
+    required this.preferenceAffinity,
+    required this.measurabilityScore,
+  });
+
+  factory CandidateRankingProfile({
+    required double difficultyAffinity,
+    required double preferenceAffinity,
+    required double measurabilityScore,
+  }) => CandidateRankingProfile._(
+    difficultyAffinity: _requireUnitInterval(
+      difficultyAffinity,
+      'difficultyAffinity',
+    ),
+    preferenceAffinity: _requireUnitInterval(
+      preferenceAffinity,
+      'preferenceAffinity',
+    ),
+    measurabilityScore: _requireUnitInterval(
+      measurabilityScore,
+      'measurabilityScore',
+    ),
+  );
+
+  /// How well the candidate's authored difficulty aligns with the learner's
+  /// current skill level — `0` = far off, `1` = on level (brief §3).
+  final double difficultyAffinity;
+
+  /// The learner's affinity for this candidate — `0` = avoided, `1` =
+  /// preferred (brief §3).
+  final double preferenceAffinity;
+
+  /// How measurable the candidate's outcome is — `0` = opaque, `1` =
+  /// fully scored across direction, chord, and pitch channels (brief §3).
+  final double measurabilityScore;
+
+  /// The neutral, zero-contribution profile used when the caller has no
+  /// per-candidate signal to provide.
+  static final CandidateRankingProfile neutral = CandidateRankingProfile(
+    difficultyAffinity: 0,
+    preferenceAffinity: 0,
+    measurabilityScore: 0,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CandidateRankingProfile &&
+          other.difficultyAffinity == difficultyAffinity &&
+          other.preferenceAffinity == preferenceAffinity &&
+          other.measurabilityScore == measurabilityScore;
+
+  @override
+  int get hashCode =>
+      Object.hash(difficultyAffinity, preferenceAffinity, measurabilityScore);
 }
 
 /// A single signed contribution to a [SelectedCandidate.compositeScore].
