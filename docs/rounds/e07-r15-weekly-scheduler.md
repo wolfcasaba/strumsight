@@ -270,4 +270,107 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### F4 javítás — A5 song-target phase teszt (2026-08-16)
+
+A review F4 leletét kizárólag teszt-szerződés javítással zártam; a scheduler
+és a policy production-kód nem módosult.
+
+**A hiba.** A régi A5 teszt (`weekly_scheduler_test.dart:413-496`) azt
+várta, hogy `songTargetDate == today` mellett egy newMaterial jelölt a
+céldátum UTÁNI ötödik napra (distance -4) kerüljön. A policy szerződése
+szerint viszont minden nem-pozitív distance performance fázisú
+(`SchedulingPolicy.phaseForDayDistance`), ahova csak review jelölt
+kerülhet. A scheduler helyesen dolgozott — a teszt elvárása volt elavult.
+
+**A javítás.** A célzott A5 tesztet két tiszta teszttel helyettesítettem:
+
+1. `the target day itself is in the performance phase — only review
+   candidates qualify (A5, brief §0.1)` — 7-napos hét, `today == target`.
+   Minden nap performance fázisú. A review jelölt a céldátum napjára
+   (day 0) kerül, a newMaterial jelölt minden napot elutasít és a hét
+   utolsó napjához (`today + 6`) kötve `phaseMismatch` miatt halasztódik.
+   A régi, day 5-ös újanyag-elvárás nincs jelen.
+
+2. `a post-target day is in the performance phase — only review
+   candidates qualify (A5, brief §0.1)` — 2-napos hét, `today == target`.
+   Day 0 (target, distance 0) és day 1 (post-target, distance -1) is
+   performance. Egy 30 perces review jelölt kitölti day 0 büdzséjét; egy
+   5 perces review jelölt day 1-re (a post-target napra) kerül. Egy
+   newMaterial jelölt egyik napra sem kerülhet — mindkettő elutasítja,
+   a halasztás dátuma a második (és egyben utolsó) elutasító nap, `today + 1`.
+
+**Gate kimenet (round-gate.sh, futtatva 2026-08-16, csonkítás nélkül):**
+
+```
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+
+Formatted 1583 files (0 changed) in 6.25 seconds.
+
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+
+Analyzing 3 items...
+No issues found! (ran in 5.1s)
+
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice_generator/scheduling/weekly_scheduler_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/scheduling/weekly_scheduler_test.dart
+
+00:00 +22: All tests passed!
+
+    → [3] test test/features/practice_generator/scheduling/weekly_scheduler_test.dart: ZÖLD
+
+═══ [4] test test/features/practice_generator/scheduling/scheduling_policy_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/scheduling/scheduling_policy_test.dart
+
+00:00 +19: All tests passed!
+
+    → [4] test test/features/practice_generator/scheduling/scheduling_policy_test.dart: ZÖLD
+
+═══ [5] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+
+Architecture dependencies OK (12 allowlisted deviation(s)).
+
+    → [5] architecture: ZÖLD
+
+═══ [6] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+
+Secret scan OK (2765 file(s) scanned, 0 finding(s)).
+
+    → [6] secrets: ZÖLD
+
+═══ [7] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+
+L10n parity OK (en → hu, 1276 message(s)).
+
+    → [7] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice_generator/scheduling/weekly_scheduler_test.dart zöld
+    test test/features/practice_generator/scheduling/scheduling_policy_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+**Diff scope.** Egyetlen fájl, 168 sor hozzáadás / 36 sor törlés:
+`test/features/practice_generator/scheduling/weekly_scheduler_test.dart`.
+Production-kód (`lib/features/practice_generator/domain/**`) és policy nem
+módosult — a scheduler és a `SchedulingPolicy.phaseForDayDistance` a brief
+§0.1 szerinti szerződésnek már megfeleltek; csak a teszt szerződését kellett
+hozzájuk igazítani.
+
+**Commit:** `60b27f05` (`fix(test): correct A5 song-target phase test (F4)`)
+
 ## 11. Review — a Claude tölti ki
