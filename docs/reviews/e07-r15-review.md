@@ -111,3 +111,23 @@ Reviewer: Codex / gpt-5.6-terra (izolált klón:
 
 **CHANGES REQUIRED** — BLOCKER: 0 · MAJOR: 1 (F5) · MINOR: 0 · NOTE: 0.
 Merge és a jelenlegi CI-futás elfogadása tilos, amíg az F5 nincs lezárva.
+
+## F5 javításának független újraértékelése — 2026-08-16
+
+Reviewer: Codex / gpt-5.6-terra (izolált klón:
+`/tmp/review-e07-r15-f5-J6we71`, head `82366219`).
+
+- Scope audit a Codex-javítás induló headjétől (`c2190ea6`) → **OK** (2
+  changed path, 0 generated/ignored).
+- A teljes célzott `tools/round-gate.sh` ismét zöld: format, analyze, mindkét
+  scheduling teszt, architecture, secret és l10n.
+- A5 most explicit `SchedulingPhase.performance` értéket vár a target-day és
+  post-target-day cellában.
+- Valódi-sértés próba: a policy `dayDistance <= 0` guardját ideiglenesen
+  `< 0`-ra lazítva a target-day A5 cella várt `performance`, kapott
+  `lightReview` hibával **piros** lett; a guard visszaállítása után a
+  review-klón tiszta.
+
+**APPROVED** — F1/F2/F3 korábbi forrásjavításai, F4 céldátum-utáni
+újanyag-szerződése és F5 performance-fázis regressziója zárva. BLOCKER: 0 ·
+MAJOR: 0 · MINOR: 0 · NOTE: 0.
