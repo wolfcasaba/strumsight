@@ -3,10 +3,10 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (HEAL E07-R11/H3 done — the E07-R11 brief was missing a shared validation-
-> fixture directory in `allowed_paths`; widened with `test/fixtures/
-> practice_generator/validation` and a regression test, PR #284. The chain
-> resumes E07-R11 (PlanValidator and deterministic repair) next. Prior:
+> (E07-R11 done — deterministic PlanValidator and bounded PlanRepairer merged,
+> including completed-block immutable-history guard after one independent-review
+> MAJOR correction; Full Gate + Router CI exact-SHA green, PR #285. Next:
+> E07-R12 planner algorithm.) Prior:
 > E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
 > domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
 > `PracticeItemStatus` transition contract, monotonic `PlanRevision` full
@@ -14,6 +14,16 @@
 > that structurally excludes learner free text. Both the independent review
 > (1 MINOR, fixed) and the mandatory security review (`risk = "high"`) closed
 > clean — see §2 for detail.)**
+
+> ## ✅ [E07-R11] KÉSZ — PlanValidator és korlátos deterministic repair (2026-08-16)
+>
+> A `PlanValidationContext` explicit catalog/availability/identity inputtal
+> fail-closed validál; `error`/`fatal` nem aktiválható. A `PlanRepairer`
+> determinisztikus, korlátos és minden lépést `systemAdaptation` okkal naplóz;
+> sosem módosít completed múltat vagy növeli a hard időmaximumot. A független
+> review egy active day completed-block múltmódosítási rést talált, amit a
+> regressziós teszttel javítottunk. PR #285, squash `3178508c`; Full Gate
+> `31933205113` és Router CI `31933789551` zöld. Következő: E07-R12.
 >
 > ## ✅ [E07-R10] KÉSZ — AdaptivePracticePlan, day, block és revision domain (2026-08-16)
 >
