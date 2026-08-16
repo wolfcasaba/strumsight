@@ -3,10 +3,9 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (E07-R11 done — deterministic PlanValidator and bounded PlanRepairer merged,
-> including completed-block immutable-history guard after one independent-review
-> MAJOR correction; Full Gate + Router CI exact-SHA green, PR #285. Next:
-> E07-R12 planner algorithm.) Prior:
+> (E07-R12 done — deterministic, explainable SkillPriorityEngine and versioned
+> policy merged; independent review, Full Gate and Router CI exact-SHA green,
+> PR #286. Next: E07-R13 candidate selection.) Prior:
 > E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
 > domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
 > `PracticeItemStatus` transition contract, monotonic `PlanRevision` full
@@ -918,6 +917,15 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-16):** `main` @ `18630834` — E07-R12
+SkillPriorityEngine és verziózott priority policy, PR
+[#286](https://github.com/wolfcasaba/strumsight/pull/286), squash-merge.
+Exact-SHA `2295063e`: Full Gate
+[31935775887](https://github.com/wolfcasaba/strumsight/actions/runs/31935775887)
++ Router CI [31935764217](https://github.com/wolfcasaba/strumsight/actions/runs/31935764217)
+mindkettő success; `origin/main` nem mozdult a dispatch és a merge között. A
+post-merge célzott gate a friss, fast-forwardolt `main`-en zöld.
+
 **Aktuális állapot (2026-08-16):** `main` @ `c2778bbc` — E07-R10
 AdaptivePracticePlan/day/block/revision domain, PR
 [#283](https://github.com/wolfcasaba/strumsight/pull/283), squash-merge.
@@ -1285,6 +1293,22 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R12 — SkillPriorityEngine és policy config** (PR
+[#286](https://github.com/wolfcasaba/strumsight/pull/286), squash `18630834`,
+[ADR 0264](docs/adr/0264-explainable-priority-and-versioned-policy.md)). Pure,
+caller-supplied `asOf`-ra épülő SkillPriorityEngine: signed, normalizált
+faktorokkal magyarázható score, unknown skillhez közepes assessment-prioritás,
+primary-goal/prerequisite/coverage-debt boost, uncertainty/fatigue/novelty
+penalty és discomfort safety override. A `PriorityPolicy` immutable,
+verziózott; holtversenyben stabil lexikografikus skill-ID dönt. A review
+APPROVED (0 BLOCKER/MAJOR): az unknown-assessment mutáció A2-t ténylegesen
+pirosra vitte, a safe/painful sorrendet külön eldobható teszt mérte.
+
+Exact `2295063e`: Full Gate
+[31935775887](https://github.com/wolfcasaba/strumsight/actions/runs/31935775887)
++ Router CI [31935764217](https://github.com/wolfcasaba/strumsight/actions/runs/31935764217)
+success; post-merge gate zöld.
 
 **E07-R10 — AdaptivePracticePlan, day, block és revision domain** (PR
 [#283](https://github.com/wolfcasaba/strumsight/pull/283), squash `c2778bbc`,
@@ -1866,13 +1890,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R11** (Chapter 8, Kör 11 — `PlanValidator`
-és deterministic repair, `docs/rounds/e07-r11-plan-validator-and-repair.md`).
-A friss session pre-flightban mérje újra az E07-R10 tényleges
-`AdaptivePracticePlan`/`PracticeDay`/`PracticeBlock`/`PlanRevision`/
-`PlanChangeSet` contractját (a `PracticeItemStatus` pinnelt átmenet-tábláját
-és a `practice_block.dart`-beli helyét is) — a validator ezekre az EGZAKT
-típusokra épül, nem a brief eredeti feltételezéseire. A
+**A soron következő SDD-lépés: E07-R13** (Chapter 8, Kör 13 —
+`CandidateSelector`, hard filter és diversity). A friss session pre-flightban
+mérje újra az E07-R12 tényleges `SkillPriority`/`PriorityPolicy` contractját:
+a hard korlát továbbra is csak a jelölt-szűrésé, sosem priority faktor. A
 `practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
 `false` maradnak.
 

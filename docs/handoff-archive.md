@@ -6,6 +6,20 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E07-R12 — SkillPriorityEngine és policy config (2026-08-16)
+
+Az E07-R12 a célokból, evidence-ből és prerequisite-ekből tiszta domain
+kontraktuson rangsorol: a `SkillPriority` élő signed-faktorlistája adja az
+indoklást, a `PriorityPolicy` pedig immutable, verziózott provenance-et.
+`unknown` nem alacsony level, hanem assessment; discomfort safety override
+biztosan a safe jelöltek után rendezi. PR [#286](https://github.com/wolfcasaba/strumsight/pull/286),
+squash `18630834`; Full Gate
+[31935775887](https://github.com/wolfcasaba/strumsight/actions/runs/31935775887)
+és Router CI [31935764217](https://github.com/wolfcasaba/strumsight/actions/runs/31935764217)
+exact `2295063e` SHA-n success. A review APPROVED (0 BLOCKER/MAJOR); az
+unknown-assessment mutáció az A2-t pirosra vitte, majd a visszaállított ág
+zölden ment át. A post-merge célzott gate is zöld.
+
 ## ✅ [HEAL E07-R09/H5] KÉSZ — a domain-purity guard a saját dokumentációját cáfolta meg magának (2026-08-16)
 
 Az E07-R09 Full Gate-je kétszer piros volt ugyanarra az okra:
