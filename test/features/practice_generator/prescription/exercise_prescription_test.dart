@@ -12,12 +12,18 @@ void main() {
           ExerciseCapability.supportsTempo: CapabilitySupport.supported,
         },
     String contentRevision = 'content.v1',
+    SupportedDurations? supportedDurations,
   }) => ExerciseCandidate(
     exerciseId: exerciseId,
     source: source,
     skillTargets: skillTargets,
     prerequisites: const <String>['guitar.tuned'],
-    supportedDurations: SupportedDurations.exact(const Duration(minutes: 30)),
+    supportedDurations:
+        supportedDurations ??
+        SupportedDurations(
+          minimum: const Duration(seconds: 1),
+          maximum: const Duration(minutes: 30),
+        ),
     difficultyRange: DifficultyRange.exact('beginner'),
     capabilities: <ExerciseCapability, CapabilitySupport>{
       ...allCapabilitiesUnsupported(),
@@ -238,6 +244,91 @@ void main() {
     });
   });
 
+  group(
+    'ExercisePrescription — activeDuration within candidate bounds (F1)',
+    () {
+      ExerciseCandidate boundedCandidate() => candidate(
+        supportedDurations: SupportedDurations(
+          minimum: const Duration(minutes: 10),
+          maximum: const Duration(minutes: 20),
+        ),
+      );
+
+      test('rejects an activeDuration below the candidate minimum', () {
+        final narrow = boundedCandidate();
+
+        expect(
+          () => prescription(
+            forCandidate: narrow,
+            activeDuration: const Duration(minutes: 5),
+            hardElapsedLimit: const Duration(minutes: 25),
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('accepts an activeDuration exactly at the candidate minimum '
+          '(inclusive boundary)', () {
+        final narrow = boundedCandidate();
+
+        expect(
+          () => prescription(
+            forCandidate: narrow,
+            activeDuration: const Duration(minutes: 10),
+            hardElapsedLimit: const Duration(minutes: 25),
+          ),
+          returnsNormally,
+        );
+      });
+
+      test('accepts an activeDuration exactly at the candidate maximum '
+          '(inclusive boundary)', () {
+        final narrow = boundedCandidate();
+
+        expect(
+          () => prescription(
+            forCandidate: narrow,
+            activeDuration: const Duration(minutes: 20),
+            hardElapsedLimit: const Duration(minutes: 25),
+          ),
+          returnsNormally,
+        );
+      });
+
+      test('rejects an activeDuration above the candidate maximum', () {
+        final narrow = boundedCandidate();
+
+        expect(
+          () => prescription(
+            forCandidate: narrow,
+            activeDuration: const Duration(minutes: 25),
+            hardElapsedLimit: const Duration(minutes: 30),
+          ),
+          throwsArgumentError,
+        );
+      });
+
+      test('decoding re-validates the candidate duration bound, never '
+          'accepting a tampered document', () {
+        final narrow = boundedCandidate();
+        final original = prescription(
+          forCandidate: narrow,
+          activeDuration: const Duration(minutes: 10),
+          hardElapsedLimit: const Duration(minutes: 25),
+        );
+        final malformed = Map<String, dynamic>.from(original.toJson());
+        malformed['activeDurationMicros'] = const Duration(
+          minutes: 5,
+        ).inMicroseconds;
+
+        expect(
+          () => ExercisePrescription.fromJson(malformed, candidate: narrow),
+          throwsArgumentError,
+        );
+      });
+    },
+  );
+
   group('ExercisePrescription — construction validation', () {
     test('rejects a non-positive active duration', () {
       expect(
@@ -346,6 +437,188 @@ void main() {
 
       expect(
         () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('ExercisePrescription — decode identity verification (F2)', () {
+    test('rejects decoding when the serialized exerciseId does not match the '
+        'supplied candidate', () {
+      final primary = candidate();
+      final original = prescription(forCandidate: primary);
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      malformed['exerciseId'] = 'exercise.other';
+
+      expect(
+        () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects decoding when the serialized source does not match the '
+        'supplied candidate', () {
+      final primary = candidate();
+      final original = prescription(forCandidate: primary);
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      malformed['source'] = CandidateSource.legacyLesson.code;
+
+      expect(
+        () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects decoding when the serialized skillTargets do not match the '
+        'supplied candidate', () {
+      final primary = candidate();
+      final original = prescription(forCandidate: primary);
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      malformed['skillTargets'] = <String>['other.skill'];
+
+      expect(
+        () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects decoding when the serialized contentRevision does not '
+        'match the supplied candidate', () {
+      final primary = candidate();
+      final original = prescription(forCandidate: primary);
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      malformed['contentRevision'] = 'content.v2';
+
+      expect(
+        () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects decoding when a serialized fallback exerciseId does not '
+        'match the supplied fallbackCandidates', () {
+      final primary = candidate();
+      final fallback = candidate(
+        exerciseId: 'exercise.fallback',
+        source: CandidateSource.legacyLesson,
+      );
+      final original = prescription(
+        forCandidate: primary,
+        fallbackCandidates: <ExerciseCandidate>[fallback],
+      );
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      final fallbacksRaw = List<Map<String, dynamic>>.from(
+        (malformed['fallbacks'] as List).map(
+          (entry) => Map<String, dynamic>.from(entry as Map),
+        ),
+      );
+      fallbacksRaw[0]['exerciseId'] = 'exercise.other';
+      malformed['fallbacks'] = fallbacksRaw;
+
+      expect(
+        () => ExercisePrescription.fromJson(
+          malformed,
+          candidate: primary,
+          fallbackCandidates: <ExerciseCandidate>[fallback],
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects decoding when a serialized fallback contentRevision does '
+        'not match the supplied fallbackCandidates', () {
+      final primary = candidate();
+      final fallback = candidate(
+        exerciseId: 'exercise.fallback',
+        source: CandidateSource.legacyLesson,
+      );
+      final original = prescription(
+        forCandidate: primary,
+        fallbackCandidates: <ExerciseCandidate>[fallback],
+      );
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      final fallbacksRaw = List<Map<String, dynamic>>.from(
+        (malformed['fallbacks'] as List).map(
+          (entry) => Map<String, dynamic>.from(entry as Map),
+        ),
+      );
+      fallbacksRaw[0]['contentRevision'] = 'content.v2';
+      malformed['fallbacks'] = fallbacksRaw;
+
+      expect(
+        () => ExercisePrescription.fromJson(
+          malformed,
+          candidate: primary,
+          fallbackCandidates: <ExerciseCandidate>[fallback],
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
+  group('ExercisePrescription — fractional JSON counts rejected (F3)', () {
+    test('rejects a fractional loopCount, never rounding', () {
+      final primary = candidate();
+      final original = prescription(forCandidate: primary);
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      malformed['loopCount'] = 1.9;
+
+      expect(
+        () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a fractional activeDurationMicros, never rounding', () {
+      final primary = candidate();
+      final original = prescription(forCandidate: primary);
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      malformed['activeDurationMicros'] = 1.5;
+
+      expect(
+        () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a fractional tempoBpm, never rounding', () {
+      final primary = candidate();
+      final original = prescription(forCandidate: primary, tempoBpm: 90);
+      final malformed = Map<String, dynamic>.from(original.toJson());
+      malformed['tempoBpm'] = 90.5;
+
+      expect(
+        () => ExercisePrescription.fromJson(malformed, candidate: primary),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a fractional repetition target, never rounding', () {
+      expect(
+        () => RepetitionPrescription.fromJson(<String, dynamic>{
+          'target': 1.9,
+          'maximum': 10,
+        }),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a fractional repetition maximum, never rounding', () {
+      expect(
+        () => RepetitionPrescription.fromJson(<String, dynamic>{
+          'target': 1,
+          'maximum': 10.5,
+        }),
+        throwsArgumentError,
+      );
+    });
+
+    test('rejects a fractional progression repetitionTargetDelta', () {
+      expect(
+        () => ProgressionStep.fromJson(<String, dynamic>{
+          'direction': ProgressionDirection.advance.code,
+          'repetitionTargetDelta': 1.5,
+        }),
         throwsArgumentError,
       );
     });

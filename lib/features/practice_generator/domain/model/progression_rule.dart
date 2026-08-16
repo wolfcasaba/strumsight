@@ -80,7 +80,10 @@ final class ProgressionStep {
     }
     return ProgressionStep(
       direction: ProgressionDirection.fromCode(directionCode),
-      repetitionTargetDelta: deltaRaw.round(),
+      repetitionTargetDelta: _requireExactInt(
+        deltaRaw,
+        'repetitionTargetDelta',
+      ),
     );
   }
 
@@ -151,6 +154,18 @@ final class ProgressionRule {
 
   @override
   int get hashCode => Object.hash(onSuccess, onFailure);
+}
+
+int _requireExactInt(num value, String name) {
+  final asInt = value.toInt();
+  if (asInt != value) {
+    throw ArgumentError.value(
+      value,
+      name,
+      'must be an exact integer — fractional JSON values are rejected',
+    );
+  }
+  return asInt;
 }
 
 int _requireNonZero(int value, String name) {
