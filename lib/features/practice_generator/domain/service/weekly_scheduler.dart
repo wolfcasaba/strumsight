@@ -89,9 +89,11 @@ final class WeeklyScheduler {
       // When no song target was supplied, every day sits in the
       // [SchedulingPhase.none] band so the phase gate never rejects
       // candidates (ADR 0299 §1: the scheduler does not invent
-      // song-target context).
+      // song-target context). When a target is supplied, the phase
+      // comes from the `target → date` distance so a future target
+      // outside this week still drives a coherent taper window (F1).
       final phase = hasSongTarget
-          ? policy.phaseForDayDistance(request.dayDistanceFromToday(date))
+          ? policy.phaseForDayDistance(request.dayDistanceFromTarget(date))
           : SchedulingPhase.none;
       final isRest = request.restDays.contains(date);
       final isUnavailable = !availability.isAvailable;

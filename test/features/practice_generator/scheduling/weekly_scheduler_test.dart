@@ -494,6 +494,72 @@ void main() {
         _addDays(today, 6),
       );
     });
+
+    test('the same week + same today with two different song targets
+        produces different phases (F1)', () {
+      // The phase is derived from the `target → date` gap, not from
+      // `today → date`. With target = today, the days sit at distances
+      // 0..6 → performance, lightReview, lightReview, lightReview,
+      // preparation, preparation, preparation. Shifting the target to
+      // today + 4 shifts every distance by 4, so day 1 moves from
+      // performance to performance (still past the new target), day 5
+      // moves from preparation to performance (now equals the new
+      // target), and day 6/7 move into lightReview. A new-material
+      // candidate therefore lands on day 5 in the first case but on
+      // day 1 in the second.
+      final today = LocalDate(2026, 8, 16);
+      final week = buildSevenDayWeek(today);
+      final policy = SchedulingPolicy(maximumReviewRatio: 1.0);
+      final candidate = buildCandidate(
+        identity: 'practiceCatalog:n1:rev1',
+        materialKind: CandidateMaterialKind.newMaterial,
+        durationMinutes: 5,
+      );
+
+      // Case A — target on today. New material must land on the first
+      // preparation day (day 5, distance 4 from today).
+      final requestA = buildRequest(
+        availability: week.availability,
+        budgets: week.budgets,
+        candidates: [candidate],
+        today: today,
+        songTargetDate: today,
+      );
+      final decisionA = WeeklyScheduler(policy: policy).schedule(requestA);
+      expect(decisionA.deferredCandidates, isEmpty);
+      final placedDayA = decisionA.dayDecisions
+          .firstWhere((d) => d.selectedCandidates.isNotEmpty);
+      expect(placedDayA.date, _addDays(today, 4));
+      expect(placedDayA.phase, SchedulingPhase.preparation);
+
+      // Case B — target on today + 4. Day 5 is now the target itself
+      // (performance, no new material), so the new-material candidate
+      // must defer from days 1..7 and not place.
+      final requestB = buildRequest(
+        availability: week.availability,
+        budgets: week.budgets,
+        candidates: [candidate],
+        today: today,
+        songTargetDate: _addDays(today, 4),
+      );
+      final decisionB = WeeklyScheduler(policy: policy).schedule(requestB);
+      expect(decisionB.deferredCandidates, hasLength(1));
+      expect(
+        decisionB.deferredCandidates.single.reasonCode,
+        'schedule.decision.phaseMismatch',
+      );
+      for (final day in decisionB.dayDecisions) {
+        expect(day.selectedCandidates, isEmpty);
+      }
+      // The day-1 phase under target B is performance (date - target
+      // = -4 ≤ 0), not the preparation phase day-1 sat under target
+      // A — that shift is the F1 fix.
+      expect(decisionB.dayDecisions.first.phase, SchedulingPhase.performance);
+
+      // The two decisions are structurally distinct even though every
+      // other input is identical.
+      expect(decisionA, isNot(equals(decisionB)));
+    });
   });
 
   group('A6: the same input produces the same decision (determinism)', () {
@@ -568,6 +634,104 @@ void main() {
       // order, so the decisions must be equal.
       expect(first, equals(second));
     });
+
+    test(
+      'a non-sorted availability input produces the same decision as the '
+      'sorted input (F3)',
+      () {
+        // The scheduler canonicalises the walking order by
+        // [LocalDate.compareTo] inside the request constructor. A
+        // builder that emits the days in reverse order must therefore
+        // produce the same decision as the forward-sorted case. The
+        // high-load run, which is the most order-sensitive signal,
+        // must agree day-for-day.
+        final today = LocalDate(2026, 8, 16);
+        final policy = SchedulingPolicy(maximumHighLoadRunDays: 2);
+        final sortedAvailability = buildSevenDayWeek(today).availability;
+
+        // Build a reversed-availability: same dates, but constructed
+        // in reverse order. `WeeklyAvailability` rejects duplicates
+        // so the test stays structurally valid.
+        final reversedDays = sortedAvailability.days.reversed.toList();
+        final reversedAvailability = WeeklyAvailability(reversedDays);
+
+        // The two availabilities must agree on the set of dates.
+        expect(
+          reversedAvailability.days
+              .map((d) => d.date)
+              .toSet(),
+          sortedAvailability.days.map((d) => d.date).toSet(),
+        );
+        // …but disagree on the input order.
+        expect(
+          reversedAvailability.days.map((d) => d.date).toList(),
+          isNot(equals(sortedAvailability.days.map((d) => d.date).toList())),
+        );
+
+        final budgets = <LocalDate, TimeBudget>{
+          for (final day in sortedAvailability.days)
+            if (day.isAvailable) day.date: buildBudget(),
+        };
+
+        // Mix in some non-trivial candidates: a couple of high-load
+        // candidates (so the high-load run is order-sensitive) and
+        // one review candidate (to exercise A4 with the sorted walk).
+        final candidates = [
+          buildCandidate(
+            identity: 'practiceCatalog:c1:rev1',
+            loadLevel: LoadLevel.high,
+          ),
+          buildCandidate(
+            identity: 'practiceCatalog:c2:rev1',
+            loadLevel: LoadLevel.high,
+          ),
+          buildCandidate(
+            identity: 'practiceCatalog:r1:rev1',
+            materialKind: CandidateMaterialKind.review,
+            durationMinutes: 5,
+          ),
+        ];
+
+        final sortedRequest = buildRequest(
+          availability: sortedAvailability,
+          budgets: budgets,
+          candidates: candidates,
+          today: today,
+        );
+        final reversedRequest = buildRequest(
+          availability: reversedAvailability,
+          budgets: budgets,
+          candidates: candidates,
+          today: today,
+        );
+
+        final sortedDecision = WeeklyScheduler(policy: policy).schedule(
+          sortedRequest,
+        );
+        final reversedDecision = WeeklyScheduler(policy: policy).schedule(
+          reversedRequest,
+        );
+
+        // The decisions are byte-equal: every day's candidate list,
+        // every deferred entry, the policy provenance.
+        expect(reversedDecision, equals(sortedDecision));
+
+        // Belt-and-braces: the high-load run lands on the same two
+        // days in both decisions. With limit 2, day 1 + day 2 host
+        // the two high-load candidates; day 3 is recovery; day 4
+        // would be the start of a fresh run but there are no more
+        // high-load candidates to place.
+        final sortedPlaced = [
+          for (final day in sortedDecision.dayDecisions)
+            if (day.selectedCandidates.isNotEmpty) day.date,
+        ];
+        final reversedPlaced = [
+          for (final day in reversedDecision.dayDecisions)
+            if (day.selectedCandidates.isNotEmpty) day.date,
+        ];
+        expect(reversedPlaced, equals(sortedPlaced));
+      },
+    );
   });
 
   group('A7: the per-day focus limit is enforced', () {

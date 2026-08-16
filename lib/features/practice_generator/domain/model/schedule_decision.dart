@@ -135,6 +135,10 @@ final class WeeklyScheduleRequest {
     for (final day in availability.days) {
       dates.add(day.date);
     }
+    // Canonicalise the walking order to chronological via
+    // [LocalDate.compareTo] so non-sorted `availability.days` input
+    // still produces a deterministic, chronological walk (F3, A6/A8).
+    dates.sort((left, right) => left.compareTo(right));
     _weekDates = List<LocalDate>.unmodifiable(dates);
     _validateSongTarget();
   }
@@ -168,47 +172,78 @@ final class WeeklyScheduleRequest {
   final LocalDate? songTargetDate;
 
   /// The ordered, sorted list of dates the scheduler will emit
-  /// decisions for. Computed once at construction time.
+  /// decisions for. Computed once at construction time, canonicalised
+  /// by [LocalDate.compareTo] so non-sorted `availability.days`
+  /// input still produces a deterministic, chronological walk (A8).
   late final List<LocalDate> _weekDates;
 
   /// The days the scheduler will emit decisions for, in chronological
   /// order (A8).
   List<LocalDate> get weekDates => _weekDates;
 
-  /// The sign-preserving number of days between `today` and `date`.
-  /// Positive when `date` is after `today`, zero on `today`, negative
-  /// before. The [SchedulingPolicy.phaseForDayDistance] method reads
-  /// this value.
-  int dayDistanceFromToday(LocalDate date) {
-    final todayOrdinal = _ordinal(today);
-    final dateOrdinal = _ordinal(date);
-    return dateOrdinal - todayOrdinal;
+  /// The sign-preserving number of calendar days between `today` and
+  /// `date`. Positive when `date` is after `today`, zero on `today`,
+  /// negative before. The value is the true Gregorian day count, so
+  /// it survives month/year rollovers and the leap-year rule (F2).
+  int dayDistanceFromToday(LocalDate date) =>
+      _dayOrdinal(date) - _dayOrdinal(today);
+
+  /// The sign-preserving number of calendar days between the song
+  /// [songTargetDate] and `date`. Positive when `date` is after the
+  /// target, zero on the target, negative before. Falls back to
+  /// [dayDistanceFromToday] when no song target is set so the helper
+  /// is always callable; the scheduler uses it to derive each day's
+  /// [SchedulingPhase] from the actual `target → date` gap, not from
+  /// `today → date` (F1).
+  int dayDistanceFromTarget(LocalDate date) {
+    final target = songTargetDate;
+    if (target == null) return dayDistanceFromToday(date);
+    return _dayOrdinal(date) - _dayOrdinal(target);
   }
 
-  static int _ordinal(LocalDate date) {
-    // The scheduler uses the date's lexicographic sort key as a stable
-    // ordinal so the calculation is dependency-free. The exact value is
-    // not significant — only the ordering and the gap matters.
-    return date.year * 10000 + date.month * 100 + date.day;
+  /// The days-since-proleptic-Gregorian-epoch ordinal. The exact epoch
+  /// is irrelevant — only the difference between two ordinals matters.
+  /// The computation uses the proleptic Gregorian rule:
+  /// leap if divisible by 4, except when divisible by 100, unless
+  /// also divisible by 400. So `2026-01-31 → 2026-02-01` is `+1`,
+  /// `2026-12-31 → 2027-01-01` is `+1`, and `2024-02-28 → 2024-03-01`
+  /// is `+2` (2024 is a leap year).
+  static int _dayOrdinal(LocalDate date) {
+    final year = date.year;
+    final month = date.month;
+    final day = date.day;
+
+    // Days in the years strictly before `year`.
+    final previousYears = year - 1;
+    final leapYearsBefore =
+        (previousYears ~/ 4) -
+        (previousYears ~/ 100) +
+        (previousYears ~/ 400);
+    final daysBeforeYear = 365 * previousYears + leapYearsBefore;
+
+    // Days in the months strictly before `month` of `year`.
+    const monthLengths = <int>[31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    var daysBeforeMonth = 0;
+    for (var m = 1; m < month; m++) {
+      daysBeforeMonth += monthLengths[m - 1];
+    }
+    final isLeap =
+        (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    if (month > 2 && isLeap) {
+      daysBeforeMonth += 1;
+    }
+
+    // Days within the month, zero-indexed.
+    return daysBeforeYear + daysBeforeMonth + (day - 1);
   }
 
   void _validateSongTarget() {
-    final target = songTargetDate;
-    if (target == null) return;
-    var found = false;
-    for (final day in availability.days) {
-      if (day.date == target) {
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
-      throw ArgumentError.value(
-        target,
-        'songTargetDate',
-        'must reference a date in the availability',
-      );
-    }
+    // The song target may sit outside the weekly availability — it is
+    // the calendar anchor for the taper window, not a day in this
+    // week. The only hard invariant is that a target, when supplied,
+    // must be a valid [LocalDate] (the constructor already enforces
+    // this). The distance computation handles out-of-week targets
+    // natively (F1).
   }
 
   static Map<LocalDate, TimeBudget> _validateBudgets({
