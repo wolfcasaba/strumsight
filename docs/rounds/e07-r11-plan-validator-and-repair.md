@@ -24,6 +24,7 @@ allowed_paths = [
   "test/features/practice_generator/validation/plan_validator_test.dart",
   "test/features/practice_generator/validation/plan_repairer_test.dart",
   "test/property/planner_repair_property_test.dart",
+  "test/fixtures/practice_generator/validation",
   "docs/rounds/e07-r11-plan-validator-and-repair.md",
 ]
 gate_tests = [
@@ -43,6 +44,77 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 Tervezési baseline és pre-flight revízió
+
+**2026-08-16, H3 self-heal revízió (ADR 0112 önjavító kör, E07-R11, 1/3.
+kísérlet).** Új ADR nincs — ez a revízió kizárólag `allowed_paths`-ot bővíti,
+normatív döntést nem hoz.
+
+**Mért gyökérok.** Az eredeti `allowed_paths` a két validáció-tesztfájlt
+(`plan_validator_test.dart`, `plan_repairer_test.dart`) és a property-tesztet
+egyenként, névre szólóan sorolta fel, de egyetlen megosztott fixture-helyet
+sem — miközben a §6/§6.1 acceptance criteria mind a két tesztfájltól
+**ugyanazt** a nem-triviális `AdaptivePracticePlan`/`PracticeDay`/
+`PracticeBlock`/`WeeklyAvailability` felépítést várja el (9 kritérium +
+a súlyosság három kötelező cellája). A sonnet-impl (engine=minimax-m3)
+implementer emiatt a listán kívül hozta létre a
+`test/fixtures/practice_generator/validation/validation_fixtures.dart`
+fájlt (munkapéldány `/home/ubuntu/ss-sonnet-impl-e07-r11`, `head=a82bef17`,
+7 piszkos fájl, egyik sem commitolva), amit a scope-audit helyesen
+`stopped`-ra váltott (H3, `.pipeline/HALTED` halted_at=2026-08-16T06:06:06Z):
+
+```
+python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e07-r11 \
+  --brief docs/rounds/e07-r11-plan-validator-and-repair.md \
+  --base a82bef17a5b9cd6d8ac27f45c12c50e494511775
+# exit 1 — "path outside allowed scope:
+#   test/fixtures/practice_generator/validation/validation_fixtures.dart"
+```
+
+A self-heal a fenti parancsot a halt-olt munkapéldányon újra lefuttatta —
+ugyanaz a verdikt.
+
+**Miért pont ez a fájl, és miért ártalmatlan.** A self-heal elolvasta a fájl
+teljes (225 soros) tartalmát: kizárólag a már engedélyezett
+`package:strumsight/features/practice_generator/public.dart` publikus
+típusaiból (`ExerciseCandidate`, `ExercisePrescription`, `PracticeBlock`,
+`PracticeDay`, `WeeklyAvailability`, `AdaptivePracticePlan`, …) épít
+paraméterezhető teszt-builder függvényeket — **nincs** benne domain-döntés,
+`Random` vagy óra-olvasás (a `DateTime.utc(2026, 8, 16)` egy rögzített
+fixture-literál, nem futásidejű hívás), és nem duplikál semmilyen production
+logikát. 0 tartalmi/architekturális döntés változik ezzel a revízióval.
+
+**Ez NEM új probléma-osztály.** Ugyanez a hiányzó-megosztott-fixture minta a
+repóban már többször mérve volt: [[L242]] (E06-R20, PR #236,
+`test/fixtures/analysis/insights`) és [[L246]] (E06-R23,
+`labels_adapter.dart`) — mindkettő H3 self-heal, mindkettő azonos alakú
+feloldással. A **közvetlen** precedens viszont az ELŐZŐ kör, ugyanebben a
+feature-fában: `docs/rounds/e07-r10-adaptive-practice-plan-domain.md` §0.0.1
+(2026-08-16, kör-közbeni kiegészítés, MERGE-ELVE `c2778bbc`/PR #283-ként) —
+ott a Terra implementer SAJÁT `stopped` jelzése után az orchesztrátor
+felvette `test/fixtures/practice_generator/plan/plan_fixtures.dart`-ot, és
+explicit dokumentálta a repo-szintű `test/fixtures/<feature>/<terület>/
+<név>_fixtures.dart` konvenciót — de az R11 brief **2026-08-15-én, R10 előtt**
+lett előre megírva (`Státusz: PREPARED`), és R10 csak `05:50:55`-kor (ma
+reggel) merge-elődött, közvetlenül R11 dispatchja (`05:51:04`) előtt — a két
+esemény között nem futott friss pre-flight, ami az R10-frissen-mért
+konvenciót R11-re is átvezette volna. Ez a NEGYEDIK mérés ugyanarra a
+gyökérokra (hiányos `allowed_paths` egy több tesztfájl által megosztott,
+nem-triviális builder-igényre) — a legfrissebb kettő (R10 §0.0.1 és ez a
+self-heal) között alig öt óra telt el, ugyanabban a feature-ágban.
+
+**Feloldás.** `allowed_paths` a `test/fixtures/practice_generator/validation`
+könyvtárral bővült (bare directory, `*` nélkül — a `tools/ai_router/brief.py`
+`SAFE_PATH` mintája globot nem enged; a `_matches()` prefix-szemantikája a
+könyvtár ALATTI bármely fájlt automatikusan fedi, R10/E06-R20 mintáját
+követve, nem az egyetlen jelenleg létező fájlnevet rögzítve). Regressziós
+védelem: `tools/tests/test_e07_r11_validation_fixture_scope.py` — a valódi
+mért halt-útvonalat futtatja `audit_legacy_scope()`-on a ténylegesen
+committolt brief ellen, bizonyítva, hogy a mért útvonal az új listával belül
+van, egy szomszédos, a `validation/` alkönyvtáron KÍVÜLI útvonal viszont
+továbbra is kívül marad (a bővítés szűk, nem az egész `test/fixtures/
+practice_generator/` fa).
 
 ## 1. Cél
 
@@ -79,6 +151,7 @@ property-teszt seedje injektált) · más `lib/features/**`, `docs/adr/**`.
 | `public.dart` | a barrel bővítése |
 | `test/…/validation/*_test.dart` (2 db) | a §6 cellái |
 | `test/property/planner_repair_property_test.dart` | **ÚJ** — terminálás fuzz-zal |
+| `test/fixtures/practice_generator/validation/**` | **ÚJ** — megosztott `AdaptivePracticePlan`/`PracticeDay`/`WeeklyAvailability` builder a validator+repairer teszthez (H3 self-heal, §0.0) |
 | `docs/rounds/e07-r11-…md` | a §10 handoff |
 
 **Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
