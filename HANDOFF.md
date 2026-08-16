@@ -3,8 +3,44 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (E07-R07 merged as PR #277: explicit legacy Learn/Progress evidence
-> adapters provide only versioned, attested evidence.)**
+> (E07-R08 merged as PR #278: practice catalog capability adapter —
+> revisioned, capability-true exercise candidates from Practice Engine and
+> legacy Learn content.)**
+
+> ## ✅ E07-R08 KÉSZ — Practice catalog capability adapter
+>
+> PR [#278](https://github.com/wolfcasaba/strumsight/pull/278), squash
+> `3fd35781`. SDD Ch8 Kör 8: `ExerciseCandidate` (capability/duration/
+> difficulty-range/load-profile/offline metadata/source-reference) +
+> `PracticeCatalogSnapshot` (independent catalog- and content-revision,
+> deterministic string-key ordering) + `PracticeCatalogReader` port +
+> two pure, caller-fed adapters — `PracticeEngineCatalogAdapter`
+> (`practice/public.dart`) and `LegacyLessonCandidateAdapter`
+> (`learn/public.dart`, reusing the R07 `LegacyMappingTable`). ADR
+> [0262](docs/adr/0262-catalog-snapshot-revisions-and-capability-truth.md).
+>
+> **Pre-flight found a real gap:** `practice/public.dart` does not export
+> `PracticeCatalogRepository`/`BuiltinPracticeCatalog`/the Riverpod catalog
+> providers — only `PracticeDefinition` and its value types. Resolved via a
+> documented §0.0 brief revision (no `allowed_paths` change): both adapters
+> are pure, caller-fed transformers over already-exported values, matching
+> every other Epic 7 adapter's zero-live-read pattern; wiring the real
+> catalog read is left to a future round.
+>
+> Independent review **APPROVED** after one fix round: F1 MAJOR —
+> `requiresMicrophone`/`supportsTempo`/`supportsLoop` silently defaulted to
+> `unsupported` for every candidate despite being deterministically knowable
+> (100% mic-driven content; `PracticeSessionConfig` tempo/loop are
+> definition-independent — this is ADR 0262's own headline tempo-control
+> example) — fixed, with the Legacy adapter's tempo/loop left `unsupported`
+> as an explicit, documented source-limitation decision. F2 MINOR — the six
+> new value types lacked `operator==`/`hashCode`, inconsistent with the rest
+> of the codebase — fixed. Both independently re-verified with throwaway
+> probe tests in a fresh isolated clone. Exact-SHA `4556a2ce`: Full Gate
+> [31918372154](https://github.com/wolfcasaba/strumsight/actions/runs/31918372154)
+> + Router CI [31918359641](https://github.com/wolfcasaba/strumsight/actions/runs/31918359641)
+> both success; post-merge gate on fresh `main` also green (7/7). Both
+> generator flags still `false`; zero production caller.
 
 > ## ✅ E07-R07 KÉSZ — Legacy Learn és Progress evidence adapterek
 >
@@ -27,42 +63,6 @@
 > success; a post-merge célzott gate a friss `main`-en szintén zöld (7/7).
 > Mindkét generator flag továbbra is `false`; production hívó nincs.
 
-> ## ✅ E07-R06 KÉSZ — SkillEstimate reducer és konfliktuskezelés
-
-> PR [#276](https://github.com/wolfcasaba/strumsight/pull/276), squash
-> `d1f36c8c`. SDD Ch8 Kör 6: `domain/model/skill_estimate.dart` (immutable
-> `SkillEstimate`, explicit `unknown` állapot `level=null`-lal, sosem `0.0`
-> default), `domain/policy/evidence_weight_policy.dart` (explicit
-> `singleEvidenceInfluenceCap`, forrás/confidence/recency/minta-szám
-> súlyozás), `application/service/skill_estimate_reducer.dart` (rendezett,
-> outcome-ID deduplikált, determinisztikus reducer — a konfliktus magas
-> bizonytalanságot ad, nem átlagot; a discomfort külön csatornán fut, sosem
-> a teljesítmény-értékben). ADR
-> [0261](docs/adr/0261-skill-estimate-bounded-influence-and-unknown-state.md).
->
-> Independent review **APPROVED** egy javító kör után: az első pass 2
-> MAJOR-t talált (időben szétváló, valódi javulást tévesen konfliktusnak
-> minősített a reducer; egyező időpontú, ellentmondó evidence-nél az
-> outcome-ID sorrendje adott hamis irányt a trendnek) — mindkettőt a javító
-> kör zárta (időbélyeg-bucketelt konfliktus-detektálás, a trend csak eltérő
-> időpontok között számít). Kötelező security review (`risk="high"`)
-> **PASS** (0 CRITICAL/BLOCKER/MAJOR, 1 MINOR: a jövőbeli fogyasztó a
-> `SkillEstimateState.stale` státuszra kapuzza a confidence-megjelenítést,
-> ne csak a numerikus `uncertainty`-ra).
->
-> Exact-SHA `698ceccb`: Full Gate
-> [31913532960](https://github.com/wolfcasaba/strumsight/actions/runs/31913532960)
-> + Router CI [31913526737](https://github.com/wolfcasaba/strumsight/actions/runs/31913526737)
-> mindkettő success; post-merge gate friss `main`-en önállóan újrafuttatva is
-> zöld (8/8). Egy korábbi, jelzés nélkül megszakadt session hagyta a kört
-> implementálva + review-zva + javítva + jóváhagyva, nyitott PR-ral; ez a
-> session örökölte, és a `main` egy közbeeső, független commitja miatt piros
-> Router CI-t talált (`817ea579`, E13 queue-engine mező javítás — a kör
-> saját `allowed_paths`-ától diszjunkt fájl). Konfliktusmentes rebase +
-> `safe-force-push.sh` + CI-újradispatch oldotta (ADR 0242 §H8), nem halt.
-> `practiceGeneratorEnabled` flag változatlanul `false`, nulla hívó a
-> reducerre a domain rétegen kívül.
-
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -72,8 +72,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-16 (E07-R07 zárása): az E14-R01 banner archiválva; a fejlécben az
-> E07-R07 és E07-R06 banner marad.
+> 2026-08-16 (E07-R08 zárása): az E07-R06 banner archiválva; a fejlécben az
+> E07-R08 és E07-R07 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -248,11 +248,16 @@
   skill_estimate_reducer.dart` — determinisztikus, konfliktus-tudatos
   reducer, a discomfort külön csatornán fut —,
   [ADR 0261](docs/adr/0261-skill-estimate-bounded-influence-and-unknown-state.md))
-  kész, valamint **E07-R07** (explicit, versioned Legacy Learn/Progress
+  kész, **E07-R07** (explicit, versioned Legacy Learn/Progress
   `SkillSnapshotReader` adapterek; ismeretlen/hiányos legacy adatból nincs
-  inference vagy fabricated identity, [ADR 0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md)).
+  inference vagy fabricated identity, [ADR 0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md))
+  és **E07-R08** (`ExerciseCandidate`/`PracticeCatalogSnapshot` — csak
+  létező, végrehajtható forrásra mutató, revíziózott katalógus-jelöltek;
+  `PracticeCatalogReader` port + két hívó-táplált adapter (Practice Engine,
+  Legacy Learn fallback); a nem támogatott capability kimondott
+  `unsupported`, sosem hiányzó mező, [ADR 0262](docs/adr/0262-catalog-snapshot-revisions-and-capability-truth.md)).
   **Mindkét flag `false` marad minden környezetben**, nulla
-  `lib/features/practice_generator/` production hívó — mind a hét kör
+  `lib/features/practice_generator/` production hívó — mind a nyolc kör
   kizárólag a határokat és a típusos domaint rögzítette. SDD forrás:
   [`docs/sdd/08-epic-07-ai-practice-generator.md`](docs/sdd/08-epic-07-ai-practice-generator.md).
   A generátor a legacy Learn/Progress/Songs/Analyze adaptereken keresztül lát
@@ -855,6 +860,15 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-16):** `main` @ `3fd35781` — E07-R08 Practice
+catalog capability adapter, PR
+[#278](https://github.com/wolfcasaba/strumsight/pull/278), squash-merge.
+Exact-SHA `4556a2ce`: Full Gate
+[31918372154](https://github.com/wolfcasaba/strumsight/actions/runs/31918372154)
++ Router CI [31918359641](https://github.com/wolfcasaba/strumsight/actions/runs/31918359641)
+mindkettő success. `origin/main` nem mozdult a dispatch és a merge között;
+a post-merge célzott gate friss, fast-forwardolt `main`-en zöld.
+
 **Aktuális állapot (2026-08-16):** `main` @ `afd7e9c4` — E07-R07 Legacy
 Learn és Progress evidence adapterek, PR
 [#277](https://github.com/wolfcasaba/strumsight/pull/277), squash-merge.
@@ -1201,6 +1215,47 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R08 — Practice catalog capability adapter** (PR
+[#278](https://github.com/wolfcasaba/strumsight/pull/278), squash `3fd35781`,
+[ADR 0262](docs/adr/0262-catalog-snapshot-revisions-and-capability-truth.md)).
+`ExerciseCandidate`/`PracticeCatalogSnapshot` — csak létező, végrehajtható
+forrásra mutató jelöltek, két független (katalógus/tartalom) revízió,
+determinisztikus `source:id:revision` rendezés, hiányzó kötelező metaadat →
+kimarad + figyelmeztetés (default-pótlás tilos). Két pure, hívó-táplált
+adapter: `PracticeEngineCatalogAdapter` (`practice/public.dart`) és
+`LegacyLessonCandidateAdapter` (`learn/public.dart`, az R07
+`LegacyMappingTable` újrafelhasználásával).
+
+Pre-flight mérés talált egy valódi rést: a `practice/public.dart` nem
+exportálja a katalógus repository/controller réteget
+(`PracticeCatalogRepository`/`BuiltinPracticeCatalog`/Riverpod providerek) —
+csak a `PracticeDefinition` value-típust. Dokumentált §0.0 brief-revízióval
+oldva (`allowed_paths` változatlan): mindkét adapter pure, hívó-táplált
+transzformátor, az élő katalógus-beolvasás egy jövőbeli kör dolga —
+konzisztens az Epic 7 eddigi minden adapterének nulla-hívós mintájával.
+
+Independent review **APPROVED** egy javító kör után: F1 MAJOR — a
+`requiresMicrophone`/`supportsTempo`/`supportsLoop` mindkét adapteren
+hamisan `unsupported` maradt minden jelöltre, holott mindhárom
+determinisztikusan ismert (100%-ban mikrofonos detektálású tartalom; a
+`PracticeSessionConfig` tempó/loop mezői definíciófüggetlenek — ez pontosan
+az ADR 0262 saját, kiemelt tempó-vezérlés példája) — javítva, a Legacy
+adapter tempó/loop mezője explicit, indokolt forráskorlátból marad
+`unsupported`. F2 MINOR — a hat új value-típus nem implementált
+`operator==`/`hashCode`-ot — javítva. Mindkettő eldobható próbateszttel,
+friss izolált klónban függetlenül megerősítve. A javító kör jelzésének
+`gate_shape=VIOLATION` mezője kivizsgálva és hamis pozitívnak bizonyult (a
+modell a gate-script FORRÁSÁT olvasta ki `sed`-del, `&&`-lánccal más git
+parancsokhoz kötve — a tényleges gate-futtatás önálló, láncolás nélküli
+volt).
+
+Exact-SHA `4556a2ce`: Full Gate
+[31918372154](https://github.com/wolfcasaba/strumsight/actions/runs/31918372154)
++ Router CI [31918359641](https://github.com/wolfcasaba/strumsight/actions/runs/31918359641)
+mindkettő success; post-merge gate friss `main`-en is zöld (7/7).
+Implementer **Terra**, egy javító kör. Review:
+[`docs/reviews/e07-r08-review.md`](docs/reviews/e07-r08-review.md).
 
 **E07-R07 — Legacy Learn és Progress evidence adapterek** (PR
 [#277](https://github.com/wolfcasaba/strumsight/pull/277), squash `afd7e9c4`,
@@ -1699,11 +1754,16 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R08** (Chapter 8, Kör 8 — Practice catalog
-capability adapter). Az új session csak kész, commitolt briefből indulhat;
-E07-R07 legacy evidence adapterei az input-határ, a
-`practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
-`false` maradnak.
+**A soron következő SDD-lépés: E07-R09** (Chapter 8, Kör 9 —
+`ExercisePrescription` és success criteria; brief már `PREPARED`:
+`docs/rounds/e07-r09-exercise-prescription.md`). Az új session pre-flightban
+mérje újra a `docs/execution/pipeline-queue.tsv` E07-R09 sorát (queue-engine
+`minimax`, de a `.pipeline/engine-override` felülírhatja — ld. a pipeline
+prompt „MOTOR-FELÁLLÁS" szakaszát) és az E07-R08 katalógus-jelölt TÉNYLEGES
+alakját (`ExerciseCandidate`/`PracticeCatalogSnapshot`,
+`lib/features/practice_generator/domain/model/`), mielőtt a brief-re
+támaszkodna. A `practiceGeneratorEnabled` és `plannerAssistEnabled` flagek
+változatlanul `false` maradnak.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"

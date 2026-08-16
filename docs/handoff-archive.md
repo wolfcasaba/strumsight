@@ -8775,3 +8775,39 @@ mindkettő success; squash-merge PR
 [#269](https://github.com/wolfcasaba/strumsight/pull/269), `5bb4f7d9`.
 Implementer **Claude Sonnet 5 (`sonnet-impl`)**, egy javító kör. Review:
 [`docs/reviews/e07-r02-review.md`](docs/reviews/e07-r02-review.md).
+
+## ✅ E07-R06 KÉSZ — SkillEstimate reducer és konfliktuskezelés (2026-08-15)
+
+PR [#276](https://github.com/wolfcasaba/strumsight/pull/276), squash
+`d1f36c8c`. SDD Ch8 Kör 6: `domain/model/skill_estimate.dart` (immutable
+`SkillEstimate`, explicit `unknown` állapot `level=null`-lal, sosem `0.0`
+default), `domain/policy/evidence_weight_policy.dart` (explicit
+`singleEvidenceInfluenceCap`, forrás/confidence/recency/minta-szám
+súlyozás), `application/service/skill_estimate_reducer.dart` (rendezett,
+outcome-ID deduplikált, determinisztikus reducer — a konfliktus magas
+bizonytalanságot ad, nem átlagot; a discomfort külön csatornán fut, sosem
+a teljesítmény-értékben). ADR
+[0261](docs/adr/0261-skill-estimate-bounded-influence-and-unknown-state.md).
+
+Independent review **APPROVED** egy javító kör után: az első pass 2
+MAJOR-t talált (időben szétváló, valódi javulást tévesen konfliktusnak
+minősített a reducer; egyező időpontú, ellentmondó evidence-nél az
+outcome-ID sorrendje adott hamis irányt a trendnek) — mindkettőt a javító
+kör zárta (időbélyeg-bucketelt konfliktus-detektálás, a trend csak eltérő
+időpontok között számít). Kötelező security review (`risk="high"`)
+**PASS** (0 CRITICAL/BLOCKER/MAJOR, 1 MINOR: a jövőbeli fogyasztó a
+`SkillEstimateState.stale` státuszra kapuzza a confidence-megjelenítést,
+ne csak a numerikus `uncertainty`-ra).
+
+Exact-SHA `698ceccb`: Full Gate
+[31913532960](https://github.com/wolfcasaba/strumsight/actions/runs/31913532960)
++ Router CI [31913526737](https://github.com/wolfcasaba/strumsight/actions/runs/31913526737)
+mindkettő success; post-merge gate friss `main`-en önállóan újrafuttatva is
+zöld (8/8). Egy korábbi, jelzés nélkül megszakadt session hagyta a kört
+implementálva + review-zva + javítva + jóváhagyva, nyitott PR-ral; ez a
+session örökölte, és a `main` egy közbeeső, független commitja miatt piros
+Router CI-t talált (`817ea579`, E13 queue-engine mező javítás — a kör
+saját `allowed_paths`-ától diszjunkt fájl). Konfliktusmentes rebase +
+`safe-force-push.sh` + CI-újradispatch oldotta (ADR 0242 §H8), nem halt.
+`practiceGeneratorEnabled` flag változatlanul `false`, nulla hívó a
+reducerre a domain rétegen kívül.

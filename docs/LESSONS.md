@@ -10640,3 +10640,100 @@ legalább egy valós public katalóguselemhez kötött teszt ellenőrizze, és a
 adapter→aggregátor→repository teljes útvonalán bizonyítsa az identity
 szerződést. Egyetlen source outcome több skillre csak akkor bontható, ha a
 forrás külön, valós outcome-azonosítókat szolgáltat.
+
+## L286 — A brief-preambulum „mérd meg a public.dart-ot” utasítása a repository/provider réteget is jelenti, nem csak a value-típusokat (E07-R08, 2026-08-16)
+
+**Mit mértünk.** Az E07-R08 brief pre-flight kikötése azt kérte: mérd meg,
+mit ad ma a Practice Engine a `public.dart`-ján át. A mérés kimutatta, hogy
+`lib/features/practice/public.dart` a `PracticeDefinition`-t (és a hozzá
+tartozó value-típusokat: `PracticeMode`, `PracticeSource`, `ScoringProfile`,
+`Tempo`, `Meter`, `BeatPosition`, `PracticeEvent`) exportálja, de **nem**
+exportálja a `PracticeCatalogRepository`/`BuiltinPracticeCatalog`/
+`practiceCatalogRepositoryProvider` réteget — vagyis egy „Practice Engine
+adapter”, ahogy a brief prózája elsőre sugallta (élő katalógus-olvasás), a
+tényleges `allowed_paths` és a tilos zóna mellett kivitelezhetetlen lett
+volna anélkül, hogy a `practice` feature saját `public.dart`-ját bővítenénk
+— ami viszont MINDIG kívül esik egy másik feature-t célzó kör
+`allowed_paths`-án. A feloldás dokumentált §0.0 brief-revízióval: mindkét
+adapter (Practice Engine ÉS a legacy fallback) PURE, hívó-táplált
+transzformátor lett — pontosan azt a mintát követve, amit az Epic 7 R01-R07
+minden adaptere már alkalmazott (hívó-táplált wrapper, nulla élő
+repository-olvasás, nulla production hívó). A `PracticeDefinition.difficulty`
+mező (típus: `PracticeDifficulty`) hasonlóan exportálatlan volt, de a `.code`
+lánc (`definition.difficulty.code`) a `public.dart`-on át, import-sértés
+nélkül olvasható — a Dart tagfeloldás nem követeli meg a köztes mező TÍPUSÁNAK
+név szerinti importját, csak a saját nevesítését (típusannotáció,
+`switch`-eset, enum-konstruktor) tiltja.
+
+**Hogyan alkalmazd.** Mielőtt egy „X feature adapter” jellegű kör
+pre-flightjában feltételeznéd, hogy egy másik feature repository/controller
+rétege elérhető: `grep`-eld ki a CÉL feature `public.dart`-ját ténylegesen —
+ne a `PracticeDefinition`-höz hasonló value-típus exportjából következtess a
+repository-réteg exportjára, a kettő független döntés. Ha hiányzik, az NEM
+automatikusan H3-halt-ok: mérd meg, van-e a projektben már bevett „pure,
+caller-fed transformer” minta (ebben az epicben igen — minden korábbi kör
+ezt választotta), és ha van, kövesd — ez az `allowed_paths` bővítése nélkül
+oldja fel a rést. A `.code`/stabil-kód mezők (a `PracticeMode`/`PracticeSource`/
+`PracticeDifficulty` mintája) kifejezetten a cross-feature-határon át olvasásra
+lettek tervezve — a típus exportjának hiánya nem jelenti azt, hogy az ÉRTÉK
+elérhetetlen.
+
+## L287 — A capability-térkép konzervatív alapértéke (`unsupported`) hamis állítás lehet, ha a jel az adapter saját bemenetéből determinisztikusan ismert (E07-R08, 2026-08-16)
+
+**Mit mértünk.** A `PracticeEngineCatalogAdapter`/`LegacyLessonCandidateAdapter`
+mindegyike `allCapabilitiesUnsupported()`-ból indult, és csak néhány kulcsot
+írt felül ténylegesen mért jellel (`supportsDirectionScoring`/
+`supportsChordScoring`/`supportsOffline`). A `requiresMicrophone` MINDKÉT
+adapter MINDEN jelöltjén `unsupported` maradt — holott ez 100%-ban hamis
+állítás: a Practice V2 és a Learn lecke-tartalom kizárólag élő mikrofonos
+detektálással megy. A `supportsTempo`/`supportsLoop` a Practice Engine
+adapteren szintén mindig `unsupported` maradt, holott a
+`PracticeSessionConfig.effectiveTempo`/`loopCount` minden `PracticeDefinition`-re
+egyaránt, definíciófüggetlenül elérhető — ez pontosan az ADR 0262 saját,
+kiemelt tempó-vezérlés példája. A round saját acceptance criteria (A2: „nem
+támogatott capability explicit `unsupported`”) STRUKTURÁLISAN teljesült (a
+`_completeCapabilities` konstruktor-guard kizárja a hiányzó kulcsot), ezért a
+gate zöld maradt — a hiba csak eldobható, célzott próbateszttel (a konkrét
+kulcsok VALÓS értékének lekérdezésével) volt kimérhető, nem a meglévő
+tesztkészlet olvasásával.
+
+**Hogyan alkalmazd.** „Capability truth” jellegű körök review-jában ne
+elégedj meg azzal, hogy a hiányzó-mező-tilalom (ADR 0262 §2 mintája)
+strukturálisan érvényesül — kérdezd meg KÜLÖN minden `unsupported`-ra
+alapértelmezett kulcsról: van-e az adapter bemenetéből 100%-ban levezethető
+válasz, amit a kód mégsem használ ki? Ha az ADR/SDD egy kapacitást explicit
+PÉLDAKÉNT nevez meg (itt: „tempó-vezérlés”), az a legkockázatosabb kulcs —
+pontosan ott várható a legszigorúbb review-figyelem. Egy eldobható
+próbateszt, ami minden várt-`supported` kulcs TÉNYLEGES értékét kiírja (nem
+csak a NEM-támogatottakat ellenőrzi, ahogy a shipped teszt tette), ezt a
+hibaosztályt a gate futtatása nélkül is megfogja.
+
+## L288 — A `gate_shape=VIOLATION`/`dirty_files=N` jelzésmezők heurisztikák, nem ítéletek — a log/git-állapot tényleges vizsgálata dönt (E07-R08, 2026-08-16)
+
+**Mit mértünk.** Az E07-R08 javító körének `.codex-round-status` jelzése
+`gate_shape=VIOLATION`-t írt. A log tényleges átvizsgálása kimutatta: a
+minta (`round-gate\.sh[^\n]*(\| *(tail|head)|&&)`) egy `sed -n '1,260p'
+tools/round-gate.sh && git status --short && ...` diagnosztikai sorra
+illeszkedett — a modell a GATE SZKRIPT FORRÁSÁT olvasta ki (hogy megértse a
+viselkedését), és ezt `&&`-lánccal kötötte más, ártalmatlan git-parancsokhoz;
+a TÉNYLEGES, önálló `tools/round-gate.sh <útvonalak>` hívás (külön log-sor)
+láncolás nélküli volt, és a hozzá tartozó teljes, csonkítatlan kimenet mind a
+hét lépésre ZÖLD-et mutatott. Mindkét fordulóban (első dispatch ÉS javító
+kör) a jelzés `dirty_files=1`-et írt annak ellenére, hogy a workdir
+`git status --short` a jelzés-fájl elolvasásakor azonnal ellenőrizve TISZTA
+volt — a `codex-signal.sh` a `git status --porcelain`-t a jelzésfájl `mv`-je
+(véglegesítése) ELŐTT, közvetlenül a záró commit UTÁN méri, ezért egy
+jóindulatú, egy-pillanatnyi időzítési rés adhatja ezt az értéket valódi
+elveszett munka nélkül.
+
+**Hogyan alkalmazd.** Egyik jelzőmező sem önmagában bizonyíték `elfogadásra`
+VAGY `elutasításra` — mindkettő azt jelzi, HOL nézz utána. `gate_shape=
+VIOLATION` esetén `grep -nE` a pontos regexet a logon, és nézd meg, a
+találat a GATE FUTTATÁSÁRA (való `&&`/`|`) illeszkedik-e, vagy csak egy
+ártalmatlan, más célú sorra (forráskód-olvasás, diagnosztika). `dirty_files
+!= 0` esetén a friss `git status --short`/`git log --oneline` a workdirben
+a hiteles forrás, nem a jelzésfájl pillanatfelvétele — ha a jelenlegi
+állapot tiszta és a commit tartalma koherens a diff-stat-tal, a korábbi
+`dirty_files` érték egy múltbeli pillanat, nem a jelenlegi tény. Egyik eset
+sem old fel automatikusan egy VALÓS sértést — csak azt mondja ki, hogy ez a
+KONKRÉT találat, kivizsgálva, nem az.
