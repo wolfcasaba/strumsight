@@ -99,6 +99,41 @@ meg vakon újra — két divergens ADR-szöveg ugyanarra a számra rosszabb, min
 újrahasznosítás. Ha csak félkész, jelöletlen munka van: hagyd, és indíts
 tisztán.
 
+## 0.3 Folytatáskori upstream-szinkron — a javítás és review ELŐTT
+
+Ha a körhöz már van commitolt távoli ág vagy a §0.2 talált megőrzendő
+munkapéldányt, a folytatás **nem** indulhat a branch régi briefjével. Minden
+review, célzott gate és javító-dispatch előtt mérd meg, hogy a kör-branch
+tartalmazza-e az aktuális `origin/main`-t:
+
+```bash
+git -C <kör-munkapéldány> fetch origin main
+git -C <kör-munkapéldány> merge-base --is-ancestor origin/main HEAD
+```
+
+Ha a második parancs nem 0-val tér vissza, előbb építsd be az upstreamet;
+pusztán a korábbi gate-kimenet vagy review-lelet erre nem ad felmentést:
+
+```bash
+git -C <kör-munkapéldány> merge --no-ff origin/main
+git -C <kör-munkapéldány> diff --check
+git -C <kör-munkapéldány> merge-base --is-ancestor origin/main HEAD
+git -C <kör-munkapéldány> push origin HEAD:<kör-branch>
+```
+
+Publikus branch történetét nem írod át és nem force-push-olod. Ha a merge csak
+a már merge-elt self-heal és a kör briefje között konfliktál, az aktuális
+`main` brief-változatát őrizd meg, majd normál push-sal publikáld a
+freshness-bizonyítékot. Más fájlra kiterjedő vagy nem egyértelmű konfliktus
+**H8**: ne futtasd a régi szerződéshez tartozó javítót vagy review-t.
+
+**Mért ok (E07-R15/H7, 2026-08-16):** a H7 self-heal a signed
+`songTargetDate − scheduledDate <= 0` performance-szerződést már merge-elte,
+de a régi kör-branch enélkül indult újra. Emiatt az A5 ismét a céldátum utáni
+new-material elvárást futtatta, és a kötelező gate ugyanazzal a hibával állt
+meg. A fenti ancestor-mérés ezt a megismétlődést a javító- vagy review-lépés
+előtt megfogja.
+
 ## 1. A pre-flight KÖTELEZŐ, és két mérési szabállyal bővült
 
 Az előre megírt briefek mért állításai avulnak. Indítás előtt minden briefben
