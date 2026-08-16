@@ -27,45 +27,59 @@ void main() {
   );
 
   group('PriorityPolicy — versioned deterministic configuration', () {
-    test('ties resolve by stable skill identifier independent of input order (A7)', () {
-      final engine = const SkillPriorityEngine();
-      final forward = engine.rank(
-        candidates: <SkillPriorityCandidate>[
-          candidate('skill.charlie'),
-          candidate('skill.alpha'),
-          candidate('skill.bravo'),
-        ],
-        asOf: asOf,
-      );
-      final reverse = engine.rank(
-        candidates: <SkillPriorityCandidate>[
-          candidate('skill.bravo'),
-          candidate('skill.charlie'),
-          candidate('skill.alpha'),
-        ],
-        asOf: asOf,
-      );
+    test(
+      'ties resolve by stable skill identifier independent of input order (A7)',
+      () {
+        final engine = const SkillPriorityEngine();
+        final forward = engine.rank(
+          candidates: <SkillPriorityCandidate>[
+            candidate('skill.charlie'),
+            candidate('skill.alpha'),
+            candidate('skill.bravo'),
+          ],
+          asOf: asOf,
+        );
+        final reverse = engine.rank(
+          candidates: <SkillPriorityCandidate>[
+            candidate('skill.bravo'),
+            candidate('skill.charlie'),
+            candidate('skill.alpha'),
+          ],
+          asOf: asOf,
+        );
 
-      expect(
-        forward.map((priority) => priority.skillId),
-        <String>['skill.alpha', 'skill.bravo', 'skill.charlie'],
-      );
-      expect(
-        reverse.map((priority) => priority.skillId),
-        forward.map((priority) => priority.skillId),
-      );
-    });
+        expect(forward.map((priority) => priority.skillId), <String>[
+          'skill.alpha',
+          'skill.bravo',
+          'skill.charlie',
+        ]);
+        expect(
+          reverse.map((priority) => priority.skillId),
+          forward.map((priority) => priority.skillId),
+        );
+      },
+    );
 
     test('the configured policy version is retained in every output (A8)', () {
-      final priority = SkillPriorityEngine(
-        policy: PriorityPolicy(version: 'priority-policy-test-v2'),
-      ).rank(candidates: <SkillPriorityCandidate>[candidate('skill.version')], asOf: asOf).single;
+      final priority =
+          SkillPriorityEngine(
+                policy: PriorityPolicy(version: 'priority-policy-test-v2'),
+              )
+              .rank(
+                candidates: <SkillPriorityCandidate>[
+                  candidate('skill.version'),
+                ],
+                asOf: asOf,
+              )
+              .single;
 
       expect(priority.policyVersion, 'priority-policy-test-v2');
     });
 
     test('coverage debt remains normalized across its configured horizon', () {
-      final policy = PriorityPolicy(coverageDebtHorizon: const Duration(days: 20));
+      final policy = PriorityPolicy(
+        coverageDebtHorizon: const Duration(days: 20),
+      );
 
       expect(policy.coverageDebt(asOf: asOf, lastPracticedAt: asOf), 0);
       expect(

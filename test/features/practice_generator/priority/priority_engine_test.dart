@@ -76,9 +76,10 @@ void main() {
     novelty: novelty,
   );
 
-  SkillPriority rankOne(SkillPriorityCandidate item) => const SkillPriorityEngine()
-      .rank(candidates: <SkillPriorityCandidate>[item], asOf: asOf)
-      .single;
+  SkillPriority rankOne(SkillPriorityCandidate item) =>
+      const SkillPriorityEngine()
+          .rank(candidates: <SkillPriorityCandidate>[item], asOf: asOf)
+          .single;
 
   group('SkillPriorityEngine — explainable ranking', () {
     test('factor contributions add up exactly to the priority score (A1)', () {
@@ -105,81 +106,95 @@ void main() {
       );
     });
 
-    test('unknown skill is an assessment priority between strong and weak (A2)', () {
-      final priorities = const SkillPriorityEngine().rank(
-        candidates: <SkillPriorityCandidate>[
-          candidate(skillId: 'skill.strong', level: 0.9),
-          candidate(skillId: 'skill.unknown'),
-          candidate(skillId: 'skill.weak', level: 0.1),
-        ],
-        asOf: asOf,
-      );
+    test(
+      'unknown skill is an assessment priority between strong and weak (A2)',
+      () {
+        final priorities = const SkillPriorityEngine().rank(
+          candidates: <SkillPriorityCandidate>[
+            candidate(skillId: 'skill.strong', level: 0.9),
+            candidate(skillId: 'skill.unknown'),
+            candidate(skillId: 'skill.weak', level: 0.1),
+          ],
+          asOf: asOf,
+        );
 
-      final byId = <String, SkillPriority>{
-        for (final priority in priorities) priority.skillId: priority,
-      };
-      expect(byId['skill.weak']!.score, greaterThan(byId['skill.unknown']!.score));
-      expect(
-        byId['skill.unknown']!.score,
-        greaterThan(byId['skill.strong']!.score),
-      );
-      expect(
-        byId['skill.unknown']!.factorFor(
-          SkillPriorityFactorKind.assessment,
-        )!.normalizedValue,
-        greaterThan(0),
-      );
-      expect(
-        byId['skill.unknown']!.factorFor(
-          SkillPriorityFactorKind.skillGap,
-        )!.normalizedValue,
-        0,
-      );
-    });
+        final byId = <String, SkillPriority>{
+          for (final priority in priorities) priority.skillId: priority,
+        };
+        expect(
+          byId['skill.weak']!.score,
+          greaterThan(byId['skill.unknown']!.score),
+        );
+        expect(
+          byId['skill.unknown']!.score,
+          greaterThan(byId['skill.strong']!.score),
+        );
+        expect(
+          byId['skill.unknown']!
+              .factorFor(SkillPriorityFactorKind.assessment)!
+              .normalizedValue,
+          greaterThan(0),
+        );
+        expect(
+          byId['skill.unknown']!
+              .factorFor(SkillPriorityFactorKind.skillGap)!
+              .normalizedValue,
+          0,
+        );
+      },
+    );
 
-    test('primary goal boosts a skill but discomfort safety overrides it (A3)', () {
-      final safe = rankOne(
-        candidate(
-          skillId: 'skill.safe',
-          level: 0.5,
-          goals: <PracticeGoal>[primaryGoal('skill.safe')],
-        ),
-      );
-      final painful = rankOne(
-        candidate(
-          skillId: 'skill.painful',
-          level: 0.5,
-          goals: <PracticeGoal>[primaryGoal('skill.painful')],
-          evidence: <SkillEvidence>[painEvidence('skill.painful')],
-        ),
-      );
-
-      expect(
-        safe.factorFor(SkillPriorityFactorKind.goalAlignment)!.contribution,
-        greaterThan(0),
-      );
-      expect(painful.isSafetyOverridden, isTrue);
-      expect(
-        painful.factorFor(SkillPriorityFactorKind.discomfortSafety)!.contribution,
-        lessThan(0),
-      );
-    });
-
-    test('prerequisite demand moves a skill ahead of an otherwise equal skill (A4)', () {
-      final priorities = const SkillPriorityEngine().rank(
-        candidates: <SkillPriorityCandidate>[
-          candidate(skillId: 'skill.unlocked', level: 0.5),
+    test(
+      'primary goal boosts a skill but discomfort safety overrides it (A3)',
+      () {
+        final safe = rankOne(
           candidate(
-            skillId: 'skill.prerequisite',
+            skillId: 'skill.safe',
             level: 0.5,
-            prerequisiteDemand: 1,
+            goals: <PracticeGoal>[primaryGoal('skill.safe')],
           ),
-        ],
-        asOf: asOf,
-      );
+        );
+        final painful = rankOne(
+          candidate(
+            skillId: 'skill.painful',
+            level: 0.5,
+            goals: <PracticeGoal>[primaryGoal('skill.painful')],
+            evidence: <SkillEvidence>[painEvidence('skill.painful')],
+          ),
+        );
 
-      expect(priorities.first.skillId, 'skill.prerequisite');
-    });
+        expect(
+          safe.factorFor(SkillPriorityFactorKind.goalAlignment)!.contribution,
+          greaterThan(0),
+        );
+        expect(painful.isSafetyOverridden, isTrue);
+        expect(
+          painful
+              .factorFor(SkillPriorityFactorKind.discomfortSafety)!
+              .contribution,
+          lessThan(0),
+        );
+      },
+    );
+
+    test(
+      'prerequisite demand moves a skill ahead of an otherwise equal skill (A4)',
+      () {
+        final priorities = const SkillPriorityEngine().rank(
+          candidates: <SkillPriorityCandidate>[
+            candidate(skillId: 'skill.unlocked', level: 0.5),
+            candidate(
+              skillId: 'skill.prerequisite',
+              level: 0.5,
+              prerequisiteDemand: 1,
+            ),
+          ],
+          asOf: asOf,
+        );
+
+        expect(priorities.first.skillId, 'skill.prerequisite');
+      },
+    );
 
     test('higher estimate uncertainty applies a ranking penalty (A5)', () {
       final certain = rankOne(
@@ -192,7 +207,9 @@ void main() {
       expect(uncertain.score, lessThan(certain.score));
       expect(
         uncertain.factorFor(SkillPriorityFactorKind.uncertainty)!.contribution,
-        lessThan(certain.factorFor(SkillPriorityFactorKind.uncertainty)!.contribution),
+        lessThan(
+          certain.factorFor(SkillPriorityFactorKind.uncertainty)!.contribution,
+        ),
       );
     });
 
@@ -210,15 +227,21 @@ void main() {
 
       expect(overdue.score, greaterThan(recent.score));
       expect(
-        overdue.factorFor(SkillPriorityFactorKind.coverageDebt)!.normalizedValue,
+        overdue
+            .factorFor(SkillPriorityFactorKind.coverageDebt)!
+            .normalizedValue,
         greaterThan(
-          recent.factorFor(SkillPriorityFactorKind.coverageDebt)!.normalizedValue,
+          recent
+              .factorFor(SkillPriorityFactorKind.coverageDebt)!
+              .normalizedValue,
         ),
       );
     });
 
     test('hard constraints never appear as a ranking factor (A9)', () {
-      final priority = rankOne(candidate(skillId: 'skill.filtered', level: 0.5));
+      final priority = rankOne(
+        candidate(skillId: 'skill.filtered', level: 0.5),
+      );
 
       expect(
         priority.factors.map((factor) => factor.kind.name),
