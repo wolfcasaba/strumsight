@@ -24,6 +24,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/execution/plan_compiler_test.dart",
   "test/features/practice_generator/execution/plan_execution_coordinator_test.dart",
+  "test/fixtures/practice_generator/execution/",
   "docs/rounds/e07-r23-plan-compiler-and-execution.md",
 ]
 gate_tests = [

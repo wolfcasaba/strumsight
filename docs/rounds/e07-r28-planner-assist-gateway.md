@@ -26,6 +26,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/assist/planner_assist_gateway_test.dart",
   "test/features/practice_generator/assist/planner_assist_schema_test.dart",
+  "test/fixtures/practice_generator/assist/",
   "docs/rounds/e07-r28-planner-assist-gateway.md",
 ]
 gate_tests = [

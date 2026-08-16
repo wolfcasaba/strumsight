@@ -26,6 +26,7 @@ allowed_paths = [
   "test/features/songs/trainer/playhead_loop_sync_test.dart",
   "test/features/songs/trainer/playback_only_result_test.dart",
   "test/features/songs/trainer/setlist_run_test.dart",
+  "test/fixtures/songs/trainer/",
   "docs/rounds/e13-r25-song-trainer-and-setlist-run.md",
 ]
 gate_tests = [

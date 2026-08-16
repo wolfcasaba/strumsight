@@ -26,6 +26,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/outcome/outcome_ingestion_service_test.dart",
   "test/features/practice_generator/outcome/revise_practice_plan_test.dart",
+  "test/fixtures/practice_generator/outcome/",
   "docs/rounds/e07-r26-outcome-ingestion-and-revision.md",
 ]
 gate_tests = [

@@ -27,6 +27,7 @@ allowed_paths = [
   "docs/privacy/practice-planning-data.md",
   "test/features/practice_generator/accessibility/planner_accessibility_test.dart",
   "test/features/practice_generator/accessibility/planner_privacy_test.dart",
+  "test/fixtures/practice_generator/accessibility/",
   "docs/rounds/e07-r29-accessibility-privacy-hardening.md",
 ]
 gate_tests = [

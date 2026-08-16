@@ -26,6 +26,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/evidence_integration/analysis_evidence_adapter_test.dart",
   "test/features/practice_generator/evidence_integration/vision_evidence_adapter_test.dart",
+  "test/fixtures/practice_generator/evidence_integration/",
   "docs/rounds/e07-r25-analysis-and-vision-evidence.md",
 ]
 gate_tests = [

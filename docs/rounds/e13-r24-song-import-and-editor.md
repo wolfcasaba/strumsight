@@ -26,6 +26,7 @@ allowed_paths = [
   "test/features/songs/import/import_blocking_error_test.dart",
   "test/features/songs/import/editor_draft_test.dart",
   "test/features/songs/import/editor_keyboard_flow_test.dart",
+  "test/fixtures/songs/import/",
   "docs/rounds/e13-r24-song-import-and-editor.md",
 ]
 gate_tests = [

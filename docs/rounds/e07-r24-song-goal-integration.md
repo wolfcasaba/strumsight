@@ -23,6 +23,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/song_goal/song_goal_planner_test.dart",
   "test/features/practice_generator/song_goal/song_goal_reader_adapter_test.dart",
+  "test/fixtures/practice_generator/song_goal/",
   "docs/rounds/e07-r24-song-goal-integration.md",
 ]
 gate_tests = [

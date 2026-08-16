@@ -25,6 +25,7 @@ allowed_paths = [
   "test/features/gamification/ui/streak_states_test.dart",
   "test/features/gamification/ui/compassionate_copy_test.dart",
   "test/features/gamification/ui/reduced_motion_test.dart",
+  "test/fixtures/gamification/ui/",
   "docs/rounds/e13-r32-gamification-ui.md",
 ]
 gate_tests = [

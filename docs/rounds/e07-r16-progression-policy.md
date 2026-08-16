@@ -23,6 +23,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/adaptation/adaptation_decider_test.dart",
   "test/features/practice_generator/adaptation/progression_policy_test.dart",
+  "test/fixtures/practice_generator/adaptation/",
   "docs/rounds/e07-r16-progression-policy.md",
 ]
 gate_tests = [

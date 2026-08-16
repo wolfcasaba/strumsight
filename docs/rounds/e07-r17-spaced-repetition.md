@@ -23,6 +23,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/review/review_queue_test.dart",
   "test/features/practice_generator/review/spaced_repetition_policy_test.dart",
+  "test/fixtures/practice_generator/review/",
   "docs/rounds/e07-r17-spaced-repetition.md",
 ]
 gate_tests = [

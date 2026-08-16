@@ -27,6 +27,7 @@ allowed_paths = [
   "test/features/analyze/results/timeline_virtualization_test.dart",
   "test/features/analyze/results/chart_semantics_test.dart",
   "test/features/analyze/results/compare_compatibility_test.dart",
+  "test/fixtures/analyze/results/",
   "docs/rounds/e13-r27-analysis-results-ui.md",
 ]
 gate_tests = [

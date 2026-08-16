@@ -24,6 +24,7 @@ allowed_paths = [
   "test/features/practice/session/session_transitions_test.dart",
   "test/features/practice/session/pause_recovery_test.dart",
   "test/features/practice/session/result_navigation_test.dart",
+  "test/fixtures/practice/session/",
   "docs/rounds/e13-r21-practice-session-ui.md",
 ]
 gate_tests = [

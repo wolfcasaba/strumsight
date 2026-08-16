@@ -26,6 +26,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/continuity/missed_day_policy_test.dart",
   "test/features/practice_generator/continuity/pause_resume_test.dart",
+  "test/fixtures/practice_generator/continuity/",
   "docs/rounds/e07-r27-missed-day-and-pause.md",
 ]
 gate_tests = [

@@ -24,6 +24,7 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/application/generation_orchestrator_test.dart",
   "test/features/practice_generator/application/plan_generator_controller_test.dart",
+  "test/fixtures/practice_generator/application/",
   "docs/rounds/e07-r18-generation-orchestrator.md",
 ]
 gate_tests = [
