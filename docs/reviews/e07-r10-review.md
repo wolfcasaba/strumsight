@@ -1,13 +1,13 @@
 # E07-R10 — Review
 
 Brief: docs/rounds/e07-r10-adaptive-practice-plan-domain.md
-Diff: `git diff de060337...5a3c3454` (`origin/main` @ pre-flight → `terra/e07-r10-adaptive-practice-plan-domain` HEAD)
+Diff: `git diff de060337...0a479818` (`origin/main` @ pre-flight → `terra/e07-r10-adaptive-practice-plan-domain` HEAD, javító kör #1 után)
 Reviewer: Claude (Sonnet 5) · Dátum: 2026-08-16
-Verdikt: CHANGES REQUESTED (egyetlen MINOR, körben javítandó — nincs BLOCKER/MAJOR)
+Verdikt: **APPROVED** (javító kör #1 után, `0a479818`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 1 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 1 (FIXED, `0a479818`) · NOTE: 0
 
 ## Acceptance criteria
 
@@ -47,7 +47,7 @@ A 11 fájl pontosan a §4 (a §0.0.1 addendummal bővített) engedélyezett list
 - **Hatás:** ma nulla aktív kockázat — a `PlanChangeSet`-nek nincs `fromJson`-ja, semmi nem perzisztálja/dekódolja még (a repository Kör 19). DE amint egy jövőbeli kör perzisztálja (ami ADR 0256 §4 explicit célja — a change setek a modell-javaslatok hatásának mérésére szolgálnak, tehát idővel BIZTOSAN tárolásra kerülnek), egy ártatlan Dart-identifier átnevezés (pl. `moved` → `reordered`) csendben eltérő JSON-t termel a régi rekordokhoz képest — pontosan az a hibaosztály, amit a domain többi enumja explicit véd.
 - **Kötelező javítás:** `PlanChangeType`-ot alakítsd a domain többi enumjával egyező stabil-kódú mintára (`code` mező + `fromCode()`, a meglévő `PlanChangeReason`/`_decodeEnumCode`-stílust követve ugyanabban a fájlban), és a `PlanChange.toJson()`-t `'type': type.code`-ra.
 - **Ellenőrzés:** a meglévő `plan_change_set_test.dart` bővíthető egy `expect(changeSet.toJson()['changes'].single['type'], 'updated')` (vagy a választott stabil string) assertióval, hogy a jövőbeli `.name`-re való visszacsúszást a teszt maga fogja meg.
-- **Státusz:** OPEN — javító kör indítva ugyanazzal a motorral (terra), a diff triviális (~10 sor), nem hizlalja érdemben a kört.
+- **Státusz:** **FIXED** (`0a479818`) — `PlanChangeType` most `code`+`fromCode()` a domain konvenciója szerint, `toJson()` a kódot írja, a teszt explicit `expect(serializedChanges.single['type'], 'updated')`-del méri. Függetlenül újrafuttatva friss `/tmp/review-e07-r10-fix1` klónban: mind a 8 gate-lépés ZÖLD, scope-audit `OK (f1baea51..0a479818, 2 changed path(s), 0 generated/ignored)` — pontosan a két engedélyezett fájl.
 
 ## Próbatesztek (eldobható, dokumentálva, nem commitolva)
 
@@ -73,4 +73,8 @@ A **teljes** `flutter test` + randomizált property gate + APK a CI-ban fut (ADR
 
 ## Merge-döntés
 
-Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge — ez a feltétel gate-oldalon MÁR teljesül. Az egyetlen nyitott MINOR (F1) nem blokkolja a merge-et a szabálytábla szerint, de mivel a javítása trivális és nem hizlalja a diffet, egy rövid javító kör következik előbb; utána ez a jelentés APPROVED-ra frissül a javító commit SHA-jával.
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
+Mindkét feltétel teljesül (`0a479818`-on újramérve). Az egyetlen lelet (F1)
+FIXED. Hátralévő kötelező lépés a merge előtt: biztonsági review (a brief
+`risk = "high"`, AGENTS.md §15.1), majd a CI-dispatch a `tools/round-ci-plan.py`
+kimenete szerint, exact-SHA zöld a merge SHA-ján.
