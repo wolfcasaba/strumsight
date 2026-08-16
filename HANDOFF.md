@@ -3,13 +3,13 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (H5 self-heal PR #282 merged — the E07-R02 domain-purity guard test now
-> masks comments/strings instead of raw-text-matching, so a truthful doc
-> comment describing the purity guarantee no longer trips the check itself.
-> E07-R09's own branch, PR #281 (`sonnet-impl/e07-r09-exercise-prescription`,
-> already independently reviewed APPROVED), was deliberately left untouched —
-> the pipeline's own continuation logic (ADR 0242 D2) will pick it back up on
-> the next firing and its Full Gate should now pass cleanly.)**
+> (E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
+> domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
+> `PracticeItemStatus` transition contract, monotonic `PlanRevision` full
+> snapshots, structured `PlanChangeSet` diffs, and a `PracticePlanSummary` DTO
+> that structurally excludes learner free text. Both the independent review
+> (1 MINOR, fixed) and the mandatory security review (`risk = "high"`) closed
+> clean — see §2 for detail.)**
 >
 > ## ✅ [HEAL E07-R09/H5] KÉSZ — a domain-purity guard a saját dokumentációját cáfolta meg magának (2026-08-16)
 >
@@ -49,47 +49,47 @@
 > Gate-nek zölden kell zárnia — nincs elvesző munka, nincs duplikált
 > implementáció.
 >
-> ## ✅ [HEAL E07-R09/H-NOSIGNAL] KÉSZ — az önjavító session sosem regisztrálta magát inflight-ként (párhuzamos második önjavítás indult), és egy igaz, de nem-terminális státusz-mondat jelzésfájl nélkül is H-NOSIGNAL (2026-08-16)
+> ## ✅ [E07-R10] KÉSZ — AdaptivePracticePlan, day, block és revision domain (2026-08-16)
 >
-> Két független, mért gyökérok ugyanazon halt mögött. **(1)** `attempt_selfheal()`
-> (`tools/round-pipeline.sh`) sosem hívta az `inflight_add`/`inflight_remove`
-> párt, amit a normál kör-dispatch régóta használ — a `.pipeline/HALTED` addig
-> megmarad, amíg EGY önjavító session le nem zárja, ezért minden 5 perces
-> cron-firing addig újabb, párhuzamos önjavító sessiont indított ugyanarra a
-> haltra. Élesben mérve: `heal-E07-R09-1` (02:00:03) és `heal-E07-R09-2`
-> (02:05:02) egyszerre futott, mindkét `PIPELINE_SLOTS=2` foglalva, mindkettő
-> a KÖZÖS `heal-status` fájlt írta volna, a puszta párhuzamos indulás egy
-> kísérletet fogyasztott a 3-as büdzséből valódi kudarc nélkül. **(2)** A
-> Codex/Terra orchesztrátor-preambulum az E07-R04/L282 óta tiltja a yield-elt
-> parancs újraindítását, de nem mondta ki, hogy egy csak-szöveges, IGAZ, de
-> nem-terminális státusz-mondat („még fut") is, önmagában, jelzésfájl nélkül,
-> véget vethet a turnnak. Mérve (session `01a00823-261b-…`): a `wait-for-ci.sh`
-> session-jét (`session_id 75633`) 17 poll alatt, 8,5 percig HELYESEN
-> folytatta — majd a turn egyetlen státusz-mondattal véget ért, miközben a
-> ténylegesen várt Full Gate futás csak percekkel később, pirosan zárt.
+> Az ADR [0256](docs/adr/0256-practice-plan-revisions-immutable-past.md)
+> (revízió-alapú immutable múlt) megvalósítása: `lib/features/practice_generator/domain/model/`
+> — `AdaptivePracticePlan` (verziózott, veszteségmentes round-trip JSON,
+> `generationProvenance`+`policyVersions`, `PracticePlanSummary` DTO), `PracticeDay`/
+> `PracticeBlock` (közös, pinnelt `PracticeItemStatus` — 8 érték az SDD §16.5-ből
+> szó szerint, `practice_block.dart`-ban, `PracticeGoalStatus`/`PracticeGoal`
+> mintáját tükröző `canTransitionTo`/`transitionTo` + completed-content guard),
+> `PlanRevision` (szigorúan monoton szám, TELJES immutable snapshot — nem diff),
+> `PlanChangeSet`/`PlanChange` (strukturált before/after, typed `PlanChangeReason`,
+> szabad szöveg nélkül).
 >
-> Javítás: `tools/round-pipeline.sh` `attempt_selfheal()` most regisztrálja/
-> törli magát az `inflight_dir`-ben (bash `RETURN`-trap), és kihagyja a
-> firinget kísérlet-fogyasztás nélkül, ha már fut egy a körre;
-> `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 új bullet
-> kimondja: amíg egy elindított session/cella nem adott terminális
-> eredményt, a turn NEM érhet véget csak szöveggel. Mindkét regressziós
-> tesztcsoport PIROS volt a javítás előtt (`git stash` roundtrip), ZÖLD
-> utána; teljes `tools/tests` izolált worktree-ben: 452 passed, 499
-> subtests passed. PR [#280](https://github.com/wolfcasaba/strumsight/pull/280),
-> squash `0aa72692`, Router CI
-> [31922273433](https://github.com/wolfcasaba/strumsight/actions/runs/31922273433)
-> success az exact `7dd1cfeb` SHA-n (docs/tools-only, nincs Dart-változás,
-> Full Gate nem releváns). Leckék: `docs/LESSONS.md` **L289**, **L290**.
+> **Két scope-kérdést a pre-flight/kör közbeni §0.0/§0.0.1 brief-revízió oldott
+> fel** (a brief eredetileg egy nem-létező `planned` státuszértékre hivatkozott
+> — az SDD-ben csak §16.5 „Block status” 8-elemű listája létezik, külön „Day
+> status” szakasz nélkül; illetve az implementer egy negyedik, megosztott
+> teszt-fixture fájlt kért a brief 3-fájlos korlátján túl — a repo már meglévő
+> `test/fixtures/<feature>/<terület>/<név>_fixtures.dart` konvencióját követve
+> engedélyezve, `plan_enums.dart` érintése nélkül). A független review 1 MINOR-t
+> talált (`PlanChangeType` a domain stabil-kódú konvenciója helyett nyers
+> `.name`-et perzisztált) — egy rövid javító körben javítva (`0a479818`),
+> függetlenül újramérve. A kötelező biztonsági review (`risk = "high"`) PASS:
+> a `PracticePlanSummary` strukturálisan kizárja a `PracticeGoal.userNote`-ot
+> (poison-pill teszttel bizonyítva), minden `fromJson` fail-closed, 4
+> nem-blokkoló NOTE jövőbeli köröknek (perzisztencia/AI-tutor export).
 >
-> Cleanup (nem a kódjavítás része): a megállt E07-R09 kör nyitott PR #279-e
-> (`sonnet-impl/e07-r09-exercise-prescription`) egy valódi Full Gate hibát
-> hordozott (`exercise_prescription.dart` `DateTime.now(`-t tartalmaz, a
-> brief saját tilalma ellenére) — a `heal-E07-R09-2` testvér-session zárta le
-> (PR close + branch delete), miután észlelte, hogy ez a session már a
-> kódjavításon dolgozik, és nem duplikálta azt. A sor-fájl E07-R09 sora
-> változatlanul `pending`; egy friss kör-session a következő firingen
-> újrakezdi az érintetlen briefből.
+> Két saját, független valódi-sértés próba (A2 revízió-immutabilitás, A4
+> completed-block-tartalom-immutabilitás): mindkettő PIROSRA váltott a guard
+> ideiglenes eltávolításával, majd zölden visszaállt. Review:
+> [`e07-r10-review.md`](docs/reviews/e07-r10-review.md) (APPROVED),
+> [`e07-r10-security.md`](docs/reviews/e07-r10-security.md) (PASS). PR
+> [#283](https://github.com/wolfcasaba/strumsight/pull/283), squash `c2778bbc`,
+> exact `4d4c3ee4`: Full Gate
+> [31929041014](https://github.com/wolfcasaba/strumsight/actions/runs/31929041014)
+> + Router CI [31929076484](https://github.com/wolfcasaba/strumsight/actions/runs/31929076484)
+> success (Router CI manuálisan dispatch-elve, mert a csúcs-commit önmagában
+> nem érintett trigger-útvonalat). Mindkét flag (`practiceGeneratorEnabled`,
+> `plannerAssistEnabled`) `false` marad, nulla production hívó — production
+> viselkedés változatlan. Következő kör: **E07-R11** (PlanValidator és
+> deterministic repair, `docs/rounds/e07-r11-plan-validator-and-repair.md`).
 
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -100,8 +100,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-16 (HEAL E07-R09/H5 zárása): az E07-R08 banner archiválva; a
-> fejlécben a HEAL E07-R09/H5 és HEAL E07-R09/H-NOSIGNAL banner marad.
+> 2026-08-16 (E07-R10 zárása): a HEAL E07-R09/H-NOSIGNAL banner archiválva; a
+> fejlécben a HEAL E07-R09/H5 és E07-R10 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -279,13 +279,23 @@
   kész, **E07-R07** (explicit, versioned Legacy Learn/Progress
   `SkillSnapshotReader` adapterek; ismeretlen/hiányos legacy adatból nincs
   inference vagy fabricated identity, [ADR 0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md))
-  és **E07-R08** (`ExerciseCandidate`/`PracticeCatalogSnapshot` — csak
+  **E07-R08** (`ExerciseCandidate`/`PracticeCatalogSnapshot` — csak
   létező, végrehajtható forrásra mutató, revíziózott katalógus-jelöltek;
   `PracticeCatalogReader` port + két hívó-táplált adapter (Practice Engine,
   Legacy Learn fallback); a nem támogatott capability kimondott
-  `unsupported`, sosem hiányzó mező, [ADR 0262](docs/adr/0262-catalog-snapshot-revisions-and-capability-truth.md)).
+  `unsupported`, sosem hiányzó mező, [ADR 0262](docs/adr/0262-catalog-snapshot-revisions-and-capability-truth.md)),
+  **E07-R09** (`domain/model/exercise_prescription.dart` — bounded, immutable
+  execution recept egy választott `ExerciseCandidate`-hez: explicit maximumos
+  repetition, capability-hez kötött tempo/success criteria, azonos
+  skill-target fallback, inkluzív hard elapsed-limit validáció,
+  [ADR 0294](docs/adr/0294-exercise-prescription-measurability-and-bounded-execution.md))
+  és **E07-R10** (`AdaptivePracticePlan`/`PracticeDay`/`PracticeBlock` —
+  közös, pinnelt `PracticeItemStatus` átmenet-kontraktus,
+  `PlanRevision` szigorúan monoton, TELJES immutable snapshot,
+  `PlanChangeSet` strukturált diff typed indokkal, user-note-mentes
+  `PracticePlanSummary` — az ADR 0256 megvalósítása).
   **Mindkét flag `false` marad minden környezetben**, nulla
-  `lib/features/practice_generator/` production hívó — mind a nyolc kör
+  `lib/features/practice_generator/` production hívó — mind a tíz kör
   kizárólag a határokat és a típusos domaint rögzítette. SDD forrás:
   [`docs/sdd/08-epic-07-ai-practice-generator.md`](docs/sdd/08-epic-07-ai-practice-generator.md).
   A generátor a legacy Learn/Progress/Songs/Analyze adaptereken keresztül lát
@@ -888,6 +898,18 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-16):** `main` @ `c2778bbc` — E07-R10
+AdaptivePracticePlan/day/block/revision domain, PR
+[#283](https://github.com/wolfcasaba/strumsight/pull/283), squash-merge.
+Exact-SHA `4d4c3ee4`: Full Gate
+[31929041014](https://github.com/wolfcasaba/strumsight/actions/runs/31929041014)
++ Router CI [31929076484](https://github.com/wolfcasaba/strumsight/actions/runs/31929076484)
+mindkettő success (Router CI manuálisan dispatch-elve, mert a csúcs-commit
+önmagában docs/reviews-only, nem érintett trigger-útvonalat — a korábbi,
+`docs/rounds/**`-et érintő push-ok a saját SHA-jukon már zölden lefutottak).
+`origin/main` nem mozdult a dispatch és a merge között; a post-merge célzott
+gate friss, fast-forwardolt `main`-en zöld.
+
 **Aktuális állapot (2026-08-16):** `main` @ `3fd35781` — E07-R08 Practice
 catalog capability adapter, PR
 [#278](https://github.com/wolfcasaba/strumsight/pull/278), squash-merge.
@@ -1243,6 +1265,48 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R10 — AdaptivePracticePlan, day, block és revision domain** (PR
+[#283](https://github.com/wolfcasaba/strumsight/pull/283), squash `c2778bbc`,
+[ADR 0256](docs/adr/0256-practice-plan-revisions-immutable-past.md)).
+`AdaptivePracticePlan` (verziózott, veszteségmentes JSON round-trip,
+`generationProvenance`+`policyVersions`, `PracticePlanSummary` DTO amely
+strukturálisan kizárja a `PracticeGoal.userNote`-ot), `PracticeDay`/
+`PracticeBlock` (közös, pinnelt 8-értékű `PracticeItemStatus` — SDD §16.5
+szó szerint, `practice_block.dart`-ban — a `PracticeGoalStatus`/
+`PracticeGoal.canTransitionTo`/`transitionTo` mintáját tükröző kikényszerített
+átmenet-kontraktus + completed-content guard), `PlanRevision` (szigorúan
+monoton szám, TELJES immutable snapshot — sosem diff az élő tervhez képest),
+`PlanChangeSet`/`PlanChange` (strukturált before/after, typed
+`PlanChangeReason`, szabad szöveg nélkül).
+
+Két scope-kérdést a pre-flight/kör közbeni §0.0/§0.0.1 dokumentált
+brief-revízió oldott fel (a brief eredeti `planned` státusz-példája egy
+sehol nem létező enumra hivatkozott; az implementer egy negyedik, megosztott
+teszt-fixture fájlt kért — a repo már meglévő
+`test/fixtures/<feature>/<terület>/<név>_fixtures.dart` konvenciója szerint
+engedélyezve, `plan_enums.dart` érintése nélkül).
+
+Independent review **APPROVED** egy javító kör után: F1 MINOR — a
+`PlanChangeType` a domain stabil-kódú konvenciója (`code`+`fromCode()`)
+helyett a nyers Dart `.name`-et perzisztálta a JSON-ban, ami egy jövőbeli
+identifier-átnevezést csendes adatkorrupcióvá tehetett volna — javítva
+(`0a479818`), függetlenül újramérve friss `/tmp` klónban (mind a 8 gate-lépés
+zöld, scope-audit OK). Két saját, független valódi-sértés próba (A2 revízió-
+immutabilitás, A4 completed-block-tartalom-immutabilitás): mindkettő
+PIROSRA váltott a guard ideiglenes eltávolításával, majd zölden visszaállt.
+
+A kötelező biztonsági review (`risk = "high"`, AGENTS.md §15.1) **PASS**: 0
+CRITICAL/BLOCKER/MAJOR/MINOR, 4 nem-blokkoló NOTE jövőbeli köröknek (a teljes
+`toJson()` a perzisztenciához szükségszerűen hordozza a `userNote`-ot — egy
+jövőbeli off-device/AI-export útnak a `toSummary()`-n vagy egy redaktoron
+kell mennie, nem a nyers dokumentumon; `PlanChange.before`/`after` tartalom
+ma validálatlan; `fromJson` kollekciók hossz-korlát nélküliek; `exerciseId`
+charset-aszimmetria az ID-típusokhoz képest). Review:
+[`e07-r10-review.md`](docs/reviews/e07-r10-review.md),
+[`e07-r10-security.md`](docs/reviews/e07-r10-security.md). Mindkét flag
+(`practiceGeneratorEnabled`, `plannerAssistEnabled`) `false` marad, nulla
+production hívó — production viselkedés bitre változatlan.
 
 **E07-R08 — Practice catalog capability adapter** (PR
 [#278](https://github.com/wolfcasaba/strumsight/pull/278), squash `3fd35781`,
@@ -1782,11 +1846,19 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R10** (Chapter 8, Kör 10 —
-`AdaptivePracticePlan`, day, block és revision domain). A friss session
-pre-flightban az E07-R09 `ExercisePrescription` tényleges contractját és az
-ADR 0294 határait mérje újra; a `practiceGeneratorEnabled` és
-`plannerAssistEnabled` flagek változatlanul `false` maradnak.
+**A soron következő SDD-lépés: E07-R11** (Chapter 8, Kör 11 — `PlanValidator`
+és deterministic repair, `docs/rounds/e07-r11-plan-validator-and-repair.md`).
+A friss session pre-flightban mérje újra az E07-R10 tényleges
+`AdaptivePracticePlan`/`PracticeDay`/`PracticeBlock`/`PlanRevision`/
+`PlanChangeSet` contractját (a `PracticeItemStatus` pinnelt átmenet-tábláját
+és a `practice_block.dart`-beli helyét is) — a validator ezekre az EGZAKT
+típusokra épül, nem a brief eredeti feltételezéseire. A
+`practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
+`false` maradnak.
+
+**Korábbi kijelölt SDD-kör (2026-08-16, azóta lezárult): E07-R10 —
+AdaptivePracticePlan, day, block és revision domain** (Chapter 8, Kör 10).
+Lásd §5.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"
