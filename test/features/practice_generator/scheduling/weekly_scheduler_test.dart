@@ -411,14 +411,20 @@ void main() {
     });
 
     test('the target day itself is in the performance phase — only review '
-        'candidates qualify', () {
-      // When `songTargetDate == today`, day 1 is the target day and
-      // sits in performance phase (distance 0). Review candidates may
-      // land on day 1; new-material candidates must defer. The new-
-      // material candidate lands on the first preparation day (day 5
-      // from today, distance 4 → preparation).
+        'candidates qualify (A5, brief §0.1)', () {
+      // When `songTargetDate == today`, every day in the week sits at
+      // a non-positive target distance: day 0 is the target (distance
+      // 0), days 1..6 are post-target (distance -1..-6). The policy
+      // maps every non-positive distance to [SchedulingPhase.performance],
+      // so every day in the week is performance — only review
+      // candidates qualify. The previous expectation that a new-
+      // material candidate lands on day 5 (a post-target day,
+      // distance -4) is wrong; that day is performance and cannot
+      // accept new material. The corrected behaviour is that the
+      // new-material candidate is deferred with `phaseMismatch`
+      // because every day in the week rejected it.
       final today = LocalDate(2026, 8, 16);
-      final target = today; // performance
+      final target = today; // performance on day 0; days 1..6 also performance
       final week = buildSevenDayWeek(today);
       final policy = SchedulingPolicy(maximumReviewRatio: 1.0);
       final candidates = [
@@ -442,56 +448,182 @@ void main() {
       );
       final decision = WeeklyScheduler(policy: policy).schedule(request);
 
-      // Day 1 is in performance phase. Only the review candidate may
-      // land on day 1; the new-material candidate lands on day 5 (the
-      // first preparation day, distance 4).
+      // The review candidate lands on the target day (day 0,
+      // distance 0). The day is performance phase and still tags
+      // itself with `lightReviewWindow` so the audit log can group
+      // taper-window days without re-deriving the phase from the
+      // `target → date` gap.
       expect(decision.dayDecisions[0].selectedCandidates, hasLength(1));
       expect(
         decision.dayDecisions[0].selectedCandidates.single.identity,
         'practiceCatalog:r1:rev1',
       );
-      expect(decision.dayDecisions[4].selectedCandidates, hasLength(1));
       expect(
-        decision.dayDecisions[4].selectedCandidates.single.identity,
+        decision.dayDecisions[0].reasonCodes,
+        containsAll(<String>[
+          'schedule.decision.selected',
+          'schedule.decision.lightReviewWindow',
+        ]),
+      );
+
+      // No other day carries a candidate. Days 1..6 are post-target
+      // (distance -1..-6) and therefore performance — the bounded
+      // review-ratio gate cannot land the new-material candidate on
+      // any of them either, because the review candidate is already
+      // placed (ratio = 1.0, at the policy limit but not over).
+      // The new-material candidate has nowhere to go.
+      for (var i = 1; i < decision.dayDecisions.length; i++) {
+        expect(
+          decision.dayDecisions[i].selectedCandidates,
+          isEmpty,
+          reason: 'day $i (distance -$i from target) is performance phase',
+        );
+      }
+
+      // The new-material candidate is deferred with `phaseMismatch`.
+      // The deferred date is the last day it tried — `today + 6`,
+      // the last day in the 7-day week — confirming the candidate
+      // was rejected from the target day onward (every day in the
+      // week is performance, so the rejection repeats on every day).
+      expect(decision.deferredCandidates, hasLength(1));
+      expect(
+        decision.deferredCandidates.single.candidate.identity,
         'practiceCatalog:n1:rev1',
       );
-      expect(decision.deferredCandidates, isEmpty);
-
-      // Force the new-material candidate into a window where every day
-      // is in the taper (performance / lightReview) by widening the
-      // policy's `lightReviewWindowDays`. A single new-material
-      // candidate is deferred everywhere — the binding reason is
-      // `phaseMismatch`.
-      final wideWindowPolicy = SchedulingPolicy(
-        maximumReviewRatio: 1.0,
-        reviewLeadDays: 7,
-        lightReviewWindowDays: 7,
+      expect(
+        decision.deferredCandidates.single.reasonCode,
+        'schedule.decision.phaseMismatch',
       );
-      final windowedRequest = buildRequest(
-        availability: week.availability,
-        budgets: week.budgets,
+      expect(decision.deferredCandidates.single.date, _addDays(today, 6));
+    });
+
+    test('a post-target day is in the performance phase — only review '
+        'candidates qualify (A5, brief §0.1)', () {
+      // A post-target day is a day that sits *after* the song target.
+      // Its target distance is `target - scheduledDate`, which is
+      // negative — the policy maps every non-positive distance to
+      // the performance phase. The test uses a 2-day week with
+      // `today == target`: day 0 is the target day (distance 0) and
+      // day 1 is the post-target day (distance -1). Both are
+      // performance — only review candidates qualify.
+      final today = LocalDate(2026, 8, 16);
+      final target = today;
+      final postTargetDate = _addDays(today, 1);
+      final availability = WeeklyAvailability([
+        buildDayAvailability(date: today),
+        buildDayAvailability(date: postTargetDate),
+      ]);
+      final budgets = <LocalDate, TimeBudget>{
+        today: buildBudget(),
+        postTargetDate: buildBudget(),
+      };
+      final policy = SchedulingPolicy(maximumReviewRatio: 1.0);
+
+      // Case 1 — a review candidate lands on the post-target day.
+      // The day-budget on day 0 (target) is saturated by a 30-minute
+      // review candidate, so the second review candidate cannot land
+      // there and moves to day 1 — the post-target day. Both days
+      // are performance, so the day-budget gate is the binding
+      // constraint for the second review candidate.
+      final postTargetReviewRequest = buildRequest(
+        availability: availability,
+        budgets: budgets,
         candidates: [
           buildCandidate(
-            identity: 'practiceCatalog:n2:rev1',
-            materialKind: CandidateMaterialKind.newMaterial,
+            identity: 'practiceCatalog:r1:rev1',
+            focus: CandidateFocus.primaryFocus,
+            materialKind: CandidateMaterialKind.review,
+            durationMinutes: 30,
+          ),
+          buildCandidate(
+            identity: 'practiceCatalog:r2:rev1',
+            focus: CandidateFocus.primaryFocus,
+            materialKind: CandidateMaterialKind.review,
+            durationMinutes: 5,
           ),
         ],
         today: today,
         songTargetDate: target,
       );
-      final windowedDecision = WeeklyScheduler(
-        policy: wideWindowPolicy,
-      ).schedule(windowedRequest);
-      expect(windowedDecision.deferredCandidates, hasLength(1));
+      final postTargetReviewDecision = WeeklyScheduler(
+        policy: policy,
+      ).schedule(postTargetReviewRequest);
+      // The 30-minute review candidate lands on day 0 (target).
+      // The 5-minute review candidate cannot land on day 0 (day-
+      // budget saturated), so it moves to day 1 — the post-target
+      // day.
       expect(
-        windowedDecision.deferredCandidates.single.reasonCode,
+        postTargetReviewDecision.dayDecisions[0].selectedCandidates,
+        hasLength(1),
+      );
+      expect(
+        postTargetReviewDecision
+            .dayDecisions[0]
+            .selectedCandidates
+            .single
+            .identity,
+        'practiceCatalog:r1:rev1',
+      );
+      expect(
+        postTargetReviewDecision.dayDecisions[1].selectedCandidates,
+        hasLength(1),
+      );
+      expect(
+        postTargetReviewDecision
+            .dayDecisions[1]
+            .selectedCandidates
+            .single
+            .identity,
+        'practiceCatalog:r2:rev1',
+      );
+      // The post-target day carries the `lightReviewWindow` reason
+      // because it sits in the performance taper window (distance
+      // -1 ≤ 0 → performance, which is part of the taper band).
+      expect(
+        postTargetReviewDecision.dayDecisions[1].reasonCodes,
+        containsAll(<String>[
+          'schedule.decision.selected',
+          'schedule.decision.lightReviewWindow',
+        ]),
+      );
+      expect(postTargetReviewDecision.deferredCandidates, isEmpty);
+
+      // Case 2 — a new-material candidate is deferred everywhere.
+      // Both day 0 (target, distance 0) and day 1 (post-target,
+      // distance -1) are performance, so the candidate cannot land
+      // on either. The deferred date is the last day it tried —
+      // `today + 1`, the post-target day — confirming both days
+      // rejected it.
+      final newMaterialRequest = buildRequest(
+        availability: availability,
+        budgets: budgets,
+        candidates: [
+          buildCandidate(
+            identity: 'practiceCatalog:n1:rev1',
+            materialKind: CandidateMaterialKind.newMaterial,
+            durationMinutes: 5,
+          ),
+        ],
+        today: today,
+        songTargetDate: target,
+      );
+      final newMaterialDecision = WeeklyScheduler(
+        policy: policy,
+      ).schedule(newMaterialRequest);
+      expect(newMaterialDecision.dayDecisions[0].selectedCandidates, isEmpty);
+      expect(newMaterialDecision.dayDecisions[1].selectedCandidates, isEmpty);
+      expect(newMaterialDecision.deferredCandidates, hasLength(1));
+      expect(
+        newMaterialDecision.deferredCandidates.single.reasonCode,
         'schedule.decision.phaseMismatch',
       );
-      // last-day tracking: the schedule scanned every day before
-      // giving up, so the deferred date is today + 6.
+      // Deferred date is the last day that rejected it (`today + 1`,
+      // the post-target day). Day 0 (target) was the first to
+      // reject, but the scheduler records the last rejection —
+      // confirming both days rejected it.
       expect(
-        windowedDecision.deferredCandidates.single.date,
-        _addDays(today, 6),
+        newMaterialDecision.deferredCandidates.single.date,
+        _addDays(today, 1),
       );
     });
 
