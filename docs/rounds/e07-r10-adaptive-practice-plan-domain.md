@@ -26,6 +26,7 @@ allowed_paths = [
   "test/features/practice_generator/plan/adaptive_practice_plan_test.dart",
   "test/features/practice_generator/plan/plan_revision_test.dart",
   "test/features/practice_generator/plan/plan_change_set_test.dart",
+  "test/fixtures/practice_generator/plan/plan_fixtures.dart",
   "docs/rounds/e07-r10-adaptive-practice-plan-domain.md",
 ]
 gate_tests = [
@@ -45,6 +46,125 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-16, AGENTS.md §2 hatáskör)
+
+**Mért hiányosság.** A brief §5.4 és §6.1 `completed → planned` példája egy
+`planned` nevű kódolt státuszértéket feltételez, de a kódban ma **egyetlen**
+day/block-szintű státusz-enum sem létezik.
+`lib/features/practice_generator/domain/model/plan_enums.dart` `PlanStatus`-a
+(7 érték: `draft/active/paused/completed/archived/superseded/cancelled`)
+**kizárólag** az `AdaptivePracticePlan`-hoz tartozik — a doc-comment szó
+szerint "Lifecycle state of an `AdaptivePracticePlan`-to-be", és az SDD
+`docs/sdd/08-epic-07-ai-practice-generator.md` **§7.7 "Tervállapot"** ugyanezt
+a 7 értéket adja meg terv-szinten (mérve, grep). Az SDD **§16.5 "Block
+status"** szakasza egy MÁSIK, 8-elemű listát ad
+(`planned/ready/inProgress/completed/skipped/substituted/unavailable/expired`),
+de **nincs külön "Day status" szakasz** sehol a fájlban (grep-elve a teljes
+`08-epic-07-ai-practice-generator.md`-n: 0 találat "DayStatus"-ra vagy "Day
+status"-ra) — a `PracticeDay.status` (SDD §16.2 kódváz) célenumja nincs
+explicit megnevezve.
+
+**Döntés — ez NEM új architekturális döntés (nem kap új ADR-t), csak az ADR
+0257 stabil-kódú enum mintájának alkalmazása egy SDD-szinten alulspecifikált
+résre:**
+
+1. Egy új, stabil-kódú enum, **`PracticeItemStatus`**, a §16.5 nyolc
+   értékével **szó szerint**. Ezt használja **mind** a `PracticeDay.status`,
+   **mind** a `PracticeBlock.status` — az SDD egyetlen vocabulary-t ad a 16.
+   fejezet Day+Block alszakaszaihoz, külön Day-lista nélkül, és a két modell
+   (16.2/16.3) közvetlenül egymás után áll a szakaszban.
+2. **A helye `practice_block.dart`** — **NEM** `plan_enums.dart`. A
+   `plan_enums.dart` **nincs** ennek a körnek az `allowed_paths` listáján, és
+   a benne élő öt család mind R02-es, több modellen átívelő alapcsalád (SDD
+   Ch8 §7.7/§10.2/§14.2/§16.4/§17.2) — ezzel szemben a modell-lokális enumok
+   a saját modelljük fájljában élnek, mért precedens:
+   `PracticeGoalStatus`/`PracticeGoalType`/`GoalPriority`/`MetricDirection`
+   a `practice_goal.dart`-ban, `SuccessCriterionKind` a `success_criteria.dart`-ban,
+   `CatalogRevisionMismatch`/`CandidateExclusionReason` a
+   `practice_catalog_snapshot.dart`-ban. Ez a döntés ezt a mért konvenciót
+   követi, és elkerül egy indokolatlan `allowed_paths`-bővítést.
+   `practice_day.dart` importálja a típust `practice_block.dart`-ból.
+3. **Kötelező mintakövetés.** A `canTransitionTo`/`transitionTo` pár
+   pontosan a már bevált `PracticeGoalStatus`/`PracticeGoal` mintát tükrözze
+   (`lib/features/practice_generator/domain/model/practice_goal.dart:204-240`):
+   `bool canTransitionTo(PracticeItemStatus next) => switch (status) { … }`
+   plusz egy `StateError`-t dobó `transitionTo(next)`, amely — mivel minden
+   modell immutable — egy ÚJ példányt ad vissza a régi helyett (ahogy
+   `PracticeGoal.transitionTo` teszi). Mindkét osztályon (`PracticeDay`,
+   `PracticeBlock`) külön-külön implementálva.
+4. **A pinnelt átmenet-tábla** (ebből következik a §6.1 `completed → planned`
+   cellája: `completed` terminális, minden kimenő éle tiltott):
+
+   | Forrás | Legális célok |
+   |---|---|
+   | `planned` | `ready`, `inProgress`, `substituted`, `unavailable`, `skipped`, `expired` |
+   | `ready` | `inProgress`, `substituted`, `unavailable`, `skipped`, `expired` |
+   | `inProgress` | `completed`, `skipped`, `substituted`, `unavailable` |
+   | `completed` | *(terminális — immutable, ADR 0256 §Döntés 2, brief §5.3)* |
+   | `skipped` | *(terminális)* |
+   | `substituted` | *(terminális EBBEN a revízióban — a csere egy ÚJ revízióban jelenik meg, ADR 0256 §Döntés 1/3)* |
+   | `unavailable` | *(terminális EBBEN a revízióban)* |
+   | `expired` | *(terminális)* |
+
+   `adaptive_practice_plan_test.dart`-ban mind a nyolc forrás-állapot legális
+   ÉS legalább egy tiltott célja is tesztelve legyen (nem csak a brief §5.4
+   egyetlen `completed → planned` példája) — ez a §6.1 A5 cellájának teljes
+   bizonyítéka, nem csak egy mintavétel.
+
+5. **Kifejezetten KÍVÜL esik ezen a körön** (ne építsd meg, és ne is hagyd ki
+   emiatt az immutability-ellenőrzést): az SDD §16.7 "kivéve explicit
+   adatkorrekciót audit loggal" kivétele. A `completed` tartalom védelme (§5.3,
+   A4) EBBEN a körben **feltétel nélküli** hiba — a jövőbeli audit-log-os
+   felülbírálási útvonal egy KÉSŐBBI kör (validator/repair, Kör 11 vagy azon
+   túl) döntése.
+
+6. **Nem blokkoló javaslat** (implementer szabadsága — egyetlen
+   acceptance-cella sem méri a pontos alakot): a `generationProvenance` és
+   `policyVersions` mezőkhöz természetes, már létező építőelemek a
+   `GenerationRequestId` (R04, `practice_generation_request.dart`) és a
+   `PracticeCatalogSnapshot.catalogRevision`/`.contentRevision` (R08,
+   `practice_catalog_snapshot.dart`) — nem kötelező ezeket használni, de ha
+   szabadon dönt, ne találjon fel egy párhuzamos azonosítót ott, ahol már
+   van egy.
+
+**Erőforrás-tulajdonlás ellenőrzés (pipeline-prompt §1, 2. mérési szabály):**
+N/A — ez a kör tisztán immutable domain modell, nincs lease/lock/handle/
+subscription a scope-ban, nincs `.acquire(` hívási lánc, amit mérni kellene.
+
+### 0.0.1 Kör közbeni kiegészítés (Claude, 2026-08-16, az implementer első `stopped` jelzése után)
+
+A Terra az első fordulóban `stopped`-ot jelzett: „Scope conflict: reusable
+test fixture needs a fourth test file, but brief permits exactly three test
+files." — a három teszt (`adaptive_practice_plan_test.dart`,
+`plan_revision_test.dart`, `plan_change_set_test.dart`) mindegyike ugyanazt a
+builder-gráfot igényli (typed ID-k, egy teljes `AdaptivePracticePlan`/
+`PracticeDay`/`PracticeBlock`/`ExerciseCandidate` felépítő lánc,
+`resolveCandidate`, a nyolc `PracticeItemStatus` átmenet-térképe) — ezt
+triplikálni valódi karbantartási kockázat (a három másolat szét tud csúszni).
+
+**Mért precedens.** A `practice_generator` SAJÁT teszt-fájában (mind a 19
+meglévő `_test.dart`) MA egyetlen megosztott helper sincs — ez tehát ÚJ minta
+ennek a feature-nek. De a REPO EGÉSZÉBEN már négy helyen létezik pontosan ez a
+minta, egységes elnevezéssel: `test/fixtures/analysis/insights/insight_fixtures.dart`,
+`test/fixtures/vision/posture/posture_fixtures.dart`,
+`test/fixtures/vision/picking/picking_fixtures.dart`,
+`test/fixtures/vision/tracks/track_fixtures.dart` — mind
+`test/fixtures/<feature>/<terület>/<név>_fixtures.dart` alakban.
+
+**Döntés:** EGY új fájl, `test/fixtures/practice_generator/plan/plan_fixtures.dart`,
+felvéve az `allowed_paths`-ba (fent) és a §4 táblába — a mért,
+repo-szintű konvenciót követve, nem egy önkényes helyet kitalálva. Ez
+kizárólag TESZT-kód (nincs production/viselkedési kockázat), és szigorúan a
+három meglévő teszt-fájl közös setupját fedi — nem general-purpose
+test-support modul, nem kerül a megosztott `test/support/`-ba (az más
+feature-ek közötti, session/gateway-szintű fake-eket tart, ide nem illik).
+
+A Terra a meglévő, még nem commitolt munkáját (a három teszt-fájl, jelenleg
+`plan_fixtures.dart` nélkül, ezért fordítás előtti állapotban) folytatja —
+NEM kezdi újra.
+
+---
 
 ## 1. Cél
 
@@ -82,6 +202,7 @@ más `lib/features/**`, `lib/app/**`, `docs/adr/**`, `tools/**`.
 | `domain/model/plan_change_set.dart` | **ÚJ** — gépi diff |
 | `public.dart` | a barrel bővítése |
 | `test/…/plan/*_test.dart` (3 db) | a §6 cellái |
+| `test/fixtures/practice_generator/plan/plan_fixtures.dart` | **ÚJ, §0.0.1-ben engedélyezve** — a 3 teszt közös builder-je |
 | `docs/rounds/e07-r10-…md` | a §10 handoff |
 
 **Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
@@ -191,5 +312,53 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   az ADR 0256 §4 célja (a javaslatok hatásának mérése) elveszne (A6).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Megvalósítás
+
+- `practice_block.dart`: nyolc stabil-kódú `PracticeItemStatus`, pinnelt
+  átmenetmátrix, immutable `PracticeBlock`, JSON és completed-content guard.
+- `practice_day.dart`: ugyanaz a státusz-contract és immutable napmodell,
+  JSON-nal és completed-day content guarddal.
+- `adaptive_practice_plan.dart`: verziózott, veszteségmentes terv-JSON,
+  teljes goal/prescription round-trip, provenance/policy-verziók és
+  user-note-mentes `PracticePlanSummary`.
+- `plan_revision.dart`: szigorúan monoton revision-szám, teljes snapshot és
+  `final` mezők; a korábbi revision csak validációs bemenet, nem élő tartalom.
+- `plan_change_set.dart`: typed változástípusok és indokok, strukturált
+  before/after értékekkel.
+- `public.dart`: a hat új domain-contract publikus exportja.
+- A három tervteszt közös, feature-local builderét a jóváhagyott
+  `test/fixtures/practice_generator/plan/plan_fixtures.dart` adja.
+
+### Acceptance evidence
+
+- A1–A3: `plan_revision_test.dart` a revision alatt/egyenlő/fölötte három
+  celláját, a teljes snapshotot és az írás-tilalmat méri.
+- A4–A5: `adaptive_practice_plan_test.dart` mind a nyolc státusz legalább egy
+  elfogadott (nem terminális) és egy tiltott célját blockon és napon külön
+  méri, továbbá a completed block replacement hibáját.
+- A6: `plan_change_set_test.dart` typed indokot és strukturált before/after
+  adatot mér.
+- A7–A8: a plan JSON round-trip teljes értékegyenlőségét, a summary user-note
+  redakcióját méri.
+
+### Valódi-sértés próba
+
+`PlanRevision.snapshot` ideiglenesen nem-`final` mező volt. A
+`flutter test test/features/practice_generator/plan/plan_revision_test.dart`
+futásban az A2 teszt elvártan PIROS lett: a dynamic assignment visszatért egy
+`AdaptivePracticePlan`-nel a várt `NoSuchMethodError` helyett. A mezőt azonnal
+visszaállítottam `final`-ra; a teljes célzott tesztcsomag ezután zöld.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/features/practice_generator/plan/plan_revision_test.dart test/features/practice_generator/plan/adaptive_practice_plan_test.dart test/features/practice_generator/plan/plan_change_set_test.dart` — **40 passed**.
+- `flutter analyze lib/ test/ tool/` — **No issues found**.
+- `tools/round-gate.sh test/features/practice_generator/plan/plan_revision_test.dart test/features/practice_generator/plan/adaptive_practice_plan_test.dart test/features/practice_generator/plan/plan_change_set_test.dart` — **format/analyze/3 célzott teszt/architecture/secrets/l10n zöld**.
+
+### Eltérés / nem futtatott ellenőrzés
+
+- Nincs funkcionális eltérés. Backend vagy natív scope nincs, ezért nincs
+  backend pytest vagy lokális APK-build.
 
 ## 11. Review — a Claude tölti ki
