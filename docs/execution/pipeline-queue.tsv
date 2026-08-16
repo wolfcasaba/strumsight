@@ -297,7 +297,7 @@ E07-R03	docs/rounds/e07-r03-goal-availability-and-constraints.md	minimax	0258	do
 E07-R04	docs/rounds/e07-r04-generation-request-and-draft-persistence.md	minimax	0259	done
 E07-R05	docs/rounds/e07-r05-skill-evidence-normalisation.md	codex	0260	done
 E07-R06	docs/rounds/e07-r06-skill-estimate-reducer.md	codex	0261	done
-E07-R07	docs/rounds/e07-r07-legacy-evidence-adapters.md	minimax	nincs	pending
+E07-R07	docs/rounds/e07-r07-legacy-evidence-adapters.md	minimax	nincs	done
 E07-R08	docs/rounds/e07-r08-practice-catalog-adapter.md	minimax	0262	pending
 E07-R09	docs/rounds/e07-r09-exercise-prescription.md	minimax	nincs	pending
 E07-R10	docs/rounds/e07-r10-adaptive-practice-plan-domain.md	codex	nincs	pending
