@@ -1,6 +1,6 @@
 # E07-R08 — Practice catalog capability adapter
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ a31bb2b1`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-16, kód olvasva: `main @ 5281d0f5`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 8
 - **Kör-azonosító:** `E07-R08`
 - **Branch:** `<motor>/e07-r08-practice-catalog-adapter`
@@ -45,6 +45,126 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 Pre-flight mérés és brief-revízió (Claude, 2026-08-16, kód olvasva: `main @ 5281d0f5`)
+
+**1. A „Practice Engine adapter" NEM érheti el a katalógus repository/controller
+réteget — DRIFT, feloldva lent, `allowed_paths` változatlan.** Mérve:
+`lib/features/practice/public.dart` (114 export sor) NEM exportálja a
+`PracticeCatalogRepository`-t (`domain/repository/practice_catalog_repository.dart`),
+a `BuiltinPracticeCatalog`-ot (`data/builtin_practice_catalog.dart`), sem a
+`practiceCatalogRepositoryProvider`/`practiceCatalogProvider` Riverpod
+providereket (`application/practice_catalog_controller.dart`) — csak
+value-típusokat exportál (`PracticeDefinition`, `PracticeMode`,
+`PracticeSource`, `ScoringProfile`, `Tempo`, `Meter`, `BeatPosition`,
+`PracticeEvent`, …). Ezek a fájlok NINCSENEK ennek a körnek az engedélyezett
+listáján, és kívül esnek a tilos zónán (`lib/features/practice/**`) —
+bővítésük **H3** lenne, nem ennek a körnek a hatásköre.
+
+**Feloldás (nem igényel `allowed_paths` bővítést):** a
+`practice_engine_catalog_adapter.dart` NEM olvashat élőben katalógust — PURE,
+**hívó-táplált** transzformátor legyen, ami `PracticeDefinition` értékeket
+(egyenként, vagy egy hívó-átadott `Iterable<PracticeDefinition>`-ként) alakít
+`ExerciseCandidate`-tá, saját Riverpod-függőség és
+`PracticeCatalogRepository`-import NÉLKÜL. Ez pontosan azt a mintát követi,
+amit az Epic 7 MINDEN eddigi adaptere alkalmaz
+(`legacy_lesson_catalog_adapter.dart`, `legacy_progress_evidence_adapter.dart`:
+hívó-táplált wrapper, nulla production hívó, nulla élő repository-olvasás) — a
+valódi katalógus-beolvasás (`practiceCatalogRepositoryProvider.all()`)
+bekötése egy JÖVŐBELI, dedikált wiring-kör dolga, nem ezé. A
+`practice_catalog_reader.dart` PORT (`application/port/`) ettől függetlenül a
+teljes hívó-oldali szerződést írhatja le (pl. `PracticeCatalogSnapshot
+read(...)`) — csak a Practice Engine KONKRÉT adapter-implementációja marad
+hívó-táplált ebben a körben. **NEM elfogadható gyengítés:** a
+`practiceCatalogRepositoryProvider`/`BuiltinPracticeCatalog` közvetlen
+importja vagy egy saját, párhuzamos Riverpod-provider bevezetése a
+practice_generator oldalán — mindkettő scope-sértés (H3) VAGY architektúra-őr
+piros.
+
+**2. `PracticeDefinition.difficulty` (típus: `PracticeDifficulty`) exportálatlan,
+de a `.code` lánc elérhető — nincs drift, csak pontosítás.**
+`practice_difficulty.dart` (`beginner`/`intermediate`/`advanced`, stabil
+`.code` String) sincs a public.dart-on, DE a `PracticeDefinition.difficulty`
+mező maga publikus (a `PracticeDefinition` osztály exportált), és a Dart
+tagfeloldás nem követeli meg, hogy a mező TÍPUSÁT is név szerint importáld a
+tag-hozzáféréshez — tehát `definition.difficulty.code` (egy String) a
+public.dart-on át, import-sértés NÉLKÜL olvasható; csak magát a
+`PracticeDifficulty` azonosítót (típusannotáció, `switch`-eset,
+`PracticeDifficulty.beginner` konstruktor) nem szabad leírni. **NE próbálj
+`practice_difficulty.dart`-ot közvetlenül importálni** — az architektúra-őr ezt
+tiltott cross-feature importként buktatja (A8 cella).
+
+**3. A legacy `Lesson` (Learn feature) nem hordoz skill-taget — az R07
+`LegacyMappingTable` mintája újrafelhasználható.** `lib/features/learn/model/lesson.dart`
+(a `learn/public.dart` a TELJES fájlt exportálja) mezői: `id`, `name`, `bpm`,
+`difficulty` (saját `Difficulty` enum, névvel is elérhető), `beatsPerBar`,
+`events`, `totalBeats` — nincs skillTag/prerequisite mező. Mivel az ADR 0262
+§5 explicit a skill-tag-hiányt hozza fel a kizárás példájaként, és a
+`legacy_lesson_candidate_adapter.dart`-nak adnia kell a kötelező
+`skillTargets` mezőt, a már szállított
+`practice_generator/data/adapter/legacy_mapping_table.dart` (R07, UGYANEBBEN
+a feature-ben — szabadon importálható, ez nem `allowed_paths`-sértés: az
+csak az ÍRÁST korlátozza, az olvasást/importot nem) a kézenfekvő, ADR
+0293-mintát követő forrás a lecke→skill leképezéshez (SDD Ch8 §5.1:
+névhasonlóság-alapú találgatás tilos). Nem kötelező újrafelhasználni, de egy
+önálló, párhuzamos mapping-mechanizmus bevezetése indoklást igényel a §10
+handoffban.
+
+**4. Az `ExerciseCandidate` mezőneveinek és a kapcsolódó enumoknak a forrása:
+SDD Ch8 §14.1–14.6 — a brief §3/§4 prózája ennek tömörítése, nem
+helyettesítése.** Szó szerint idézve:
+
+```dart
+final class ExerciseCandidate {
+  const ExerciseCandidate({
+    required this.exerciseId,
+    required this.source,
+    required this.skillTargets,
+    required this.prerequisites,
+    required this.supportedDurations,
+    required this.difficultyRange,
+    required this.capabilities,
+    required this.loadProfile,
+    required this.offlineAvailable,
+    required this.contentRevision,
+  });
+}
+```
+
+Forrás-enum (§14.2, legalább ennyi érték): `practiceCatalog`, `legacyLesson`,
+`songRange`, `analysisHotspot`, `visionCalibration`, `assessment`,
+`freePractice`, `reflection`, `rest` — **ebben a körben csak a
+`practiceCatalog` és a `legacyLesson` kap termelőt** (a két adapter), a többi
+stabil kódú, de hívatlan érték marad (ne dobd el az enumból, csak nincs rá
+gyártó ebben a körben).
+
+Capability-példák (§14.3, NEM zárt lista — a kör saját, stabil kódú enumja
+ebből indulhat ki): `requiresMicrophone`, `requiresCamera`,
+`requiresBackingTrack`, `requiresSongAsset`, `supportsTempo`, `supportsLoop`,
+`supportsDirectionScoring`, `supportsChordScoring`, `supportsPitchScoring`,
+`supportsOffline`, `supportsLeftHandedUi`, `supportsReducedMotion` — mindegyik
+`unsupported`, ha a forrás nem ad rá bizonyítékot (ADR 0262 §2, ez a kör §5.2
+szabálya).
+
+Load-profile dimenziók (§14.4, mind kötelező, ordinal `low`/`medium`/`high`):
+cognitive load, fretting-hand load, picking-hand load, repetition load,
+novelty, concentration demand. „A skála pedagógiai proxy, nem egészségügyi
+mérés."
+
+Kizárási okok (§14.6, a figyelmeztetés kódkészlete — legalább ennyi stabil
+kód): `missingPrerequisite`, `hardAvoid`, `unsupportedDevice`, `wrongTuning`,
+`missingAsset`, `offlineUnavailable`, `contentLocked`, `safetyConflict`,
+`durationIncompatible`, `localeUnavailable`, `revisionMissing`. Ebben a
+körben csak a metaadat-hiányhoz tartozó kód (pl. `missingPrerequisite`) kap
+valódi termelőt (§6.1) — a többi stabil kódú, hívatlan érték marad.
+
+**Mérési szabály 2 (erőforrás-tulajdonlás) — ellenőrizve, NEM alkalmazható.**
+Ez a kör nem rendel lease/lock/handle/subscription erőforrást egyik rétegnek
+sem: szinkron, tisztán funkcionális domain/adapter réteg, mikrofon/hálózat/
+storage-hívás nélkül.
+
+**Összegzés:** a fenti mérésekkel az `allowed_paths`/`gate_tests` **változatlan**
+marad — mindkét deviancia a már engedélyezett fájlokon belül feloldható.
 
 ## 1. Cél
 
@@ -185,5 +305,69 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   futásonként más — a determinizmus csendben elveszik (A5).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### 2026-08-16 — implementációs átadás
+
+- `exercise_candidate.dart`: a teljes, stabil capability-vokabulár, explicit
+  `supported`/`unsupported` állapot, időtartam-, nehézség- és hatdimenziós
+  terhelés-metaadat, valamint az immutable `ExerciseCandidate` szerződés.
+- `practice_catalog_snapshot.dart`: külön katalogus- és content-revízió,
+  dimenziónkénti mismatch-jelzés és stabil `source:id:revision` rendezés.
+- `practice_catalog_reader.dart`: a két revíziót egyben átadó application port.
+- A Practice Engine és Legacy Learn adapterek hívó-táplált, I/O- és provider-
+  mentes transzformátorok. A Practice Engine kizárólag
+  `features/practice/public.dart`-ot, a Legacy adapter kizárólag
+  `features/learn/public.dart`-ot importálja. A definition/lesson által nem
+  hordozott prerequisite, offline, content-revision és load metaadatot a hívó
+  adja át; hiány esetén a jelölt kimarad figyelmeztetéssel. A Legacy skill
+  kizárólag a meglévő `LegacyMappingTable` explicit bejegyzéséből származik.
+- A `public.dart` exportálja az új modell-, port- és adapter-szerződéseket.
+
+**TDD bizonyíték.** A két új catalog-tesztet először production típusok nélkül
+futtattam: várt fordítási hibával PIROS volt (pl. `ExerciseCandidate` és
+`PracticeEngineCatalogAdapter` hiányzott). Az implementáció után a célzott
+tesztfuttatás 8/8 zöld lett.
+
+**Valódi-sértés próba (A6).** A Practice Engine adapterben ideiglenesen a
+hiányzó `prerequisites` mezőt `['default']` értékkel pótoltam, és az
+előfeltétel-hiány kizárását kikapcsoltam. A célzott A6 teszt a várt módon
+PIROS lett: `Expected: empty`, `Actual: [Instance of 'ExerciseCandidate']`.
+Azonnal visszaállítottam a production ágat: null/üres prerequisite esetén
+`missingPrerequisite` figyelmeztetés és kizárás marad.
+
+**Futtatott ellenőrzések eddig.**
+
+- `flutter test test/features/practice_generator/catalog/practice_catalog_snapshot_test.dart test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart`
+  — 8/8 zöld a visszaállítás után; a teljes kör-gate ezt frissen megismételte.
+- `flutter test test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart --name 'skips incomplete entries and warns instead of defaulting metadata'`
+  — szándékosan PIROS a fenti valódi-sértés alatt, majd a production változtatás
+  visszaállítva.
+- `tools/round-gate.sh test/features/practice_generator/catalog/practice_catalog_snapshot_test.dart test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart`
+  — **ZÖLD**: format, analyze, mindkét célzott test, architecture, secrets és
+  l10n. A teljes suite, friss property gate és release APK a Claude-oldali
+  CI-kapu; ezt az implementer nem indítja.
+
+### 2026-08-16 — Javító kör #1
+
+- F1 javítva: minden Practice Engine jelölt explicit `requiresMicrophone`,
+  `supportsTempo` és `supportsLoop` támogatást kap; minden Legacy Learn
+  jelölt explicit `requiresMicrophone` támogatást kap. A capability-tesztek
+  mind a négy pozitív állítást mérik, miközben a korábbi negatív capability
+  assertek változatlanul megmaradtak.
+- A Legacy Learn `supportsTempo` és `supportsLoop` értéke szándékosan
+  `unsupported` maradt: a `Lesson` publikus modelljében nincs a Practice
+  Session Config megfelelője, így erre nincs determinisztikusan mérhető jel.
+  Ez explicit, forráskorlátból eredő döntés, nem hallgatólagos alapérték.
+- F2 javítva: a hat új catalog value típus mezőnkénti `operator ==` és
+  `hashCode` implementációt kapott. Az equality-tesztek típusonként azonos és
+  eltérő értéket is összevetnek.
+
+**Javító kör ellenőrzése.**
+`tools/round-gate.sh test/features/practice_generator/catalog/practice_catalog_snapshot_test.dart test/features/practice_generator/catalog/practice_engine_catalog_adapter_test.dart`
+— **ZÖLD**: format, analyze, `practice_catalog_snapshot_test.dart` 9/9,
+`practice_engine_catalog_adapter_test.dart` 5/5, architecture (12 változatlan
+allowlisted deviation), secrets (0 finding) és l10n (1276 üzenet) egyaránt
+zöld. A teljes suite, friss property gate és APK továbbra is Claude-oldali
+CI-kapu.
 
 ## 11. Review — a Claude tölti ki

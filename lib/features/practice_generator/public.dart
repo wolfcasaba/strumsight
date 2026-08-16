@@ -2,15 +2,19 @@
 library;
 
 export 'application/port/skill_snapshot_reader.dart';
+export 'application/port/practice_catalog_reader.dart';
 export 'application/service/evidence_aggregator.dart';
 export 'application/service/skill_estimate_reducer.dart';
+export 'data/adapter/legacy_lesson_candidate_adapter.dart';
 export 'data/adapter/legacy_lesson_catalog_adapter.dart';
 export 'data/adapter/legacy_mapping_table.dart';
 export 'data/adapter/legacy_progress_evidence_adapter.dart';
 export 'domain/id/planner_ids.dart';
+export 'domain/model/exercise_candidate.dart';
 export 'domain/model/learner_constraints.dart';
 export 'domain/model/plan_enums.dart';
 export 'domain/model/practice_generation_request.dart';
+export 'domain/model/practice_catalog_snapshot.dart';
 export 'domain/model/practice_goal.dart';
 export 'domain/model/skill_evidence.dart';
 export 'domain/model/skill_estimate.dart';
@@ -18,3 +22,4 @@ export 'domain/model/weekly_availability.dart';
 export 'domain/policy/evidence_weight_policy.dart';
 export 'domain/repository/practice_evidence_repository.dart';
 export 'domain/service/request_validator.dart';
+export 'data/adapter/practice_engine_catalog_adapter.dart';
