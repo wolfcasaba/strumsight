@@ -10931,3 +10931,75 @@ a markert TILOS string-maszkolással kizárni, különben az a fél-ellenőrzés
 csendben teljes vak folttá válik. (3) Írj pozitív kontroll-tesztet MINDEN
 tiltott markerre a regresszióban, ne csak a false-positive-ra — ez fogta meg
 a saját, első hibás implementációmat, mielőtt bárki más látta volna.
+
+## L292 — A megosztott hub checkoutja NEM stabil egy kör alatt: egy párhuzamos session/automatizáció csendben visszaváltja `main`-re a pre-flight commitok ELVESZTÉSE nélkül (E07-R10, 2026-08-16)
+
+**Mérve.** Az E07-R10 pre-flightja három, egymástól független commitot vitt
+fel a `terra/e07-r10-adaptive-practice-plan-domain` branch-re (§0.0
+brief-revízió, §0.0.1 addendum, review-jelentés). MINDHÁROM alkalommal, a
+`git checkout <round-branch>` + commit UTÁN, a KÖVETKEZŐ fájlművelet (Edit
+vagy Read) egy rendszer-reminder-t kapott: a cél-fájl tartalma a `main`
+branch-en lévő, RÉGEBBI változatot mutatta — a `git status --short`/`git
+branch --show-current` ellenőrzés minden alkalommal megerősítette, hogy a
+hub időközben `main`-re váltott vissza, jelzés vagy saját akció nélkül. A
+`ps -ef` egy StrumSight remote-control bridge (pid 1505910) több gyermek
+sessionjét mutatta (`gh pr checks <más PR-szám>` várakozók) — ez a mért
+„shared-tree coordination” jelenség (lásd a memóriát), de ÚJ, mérve most
+először: a flip NEM egyszeri, hanem A KÖR TELJES ÉLETCIKLUSA ALATT
+ismétlődően bekövetkezhet (itt: legalább háromszor egy ~15 perces kör alatt),
+és a JELENSÉG MAGA néma — nincs hozzá figyelmeztetés, csak a következő
+fájlművelet eredményéből derül ki.
+
+**Miért NEM adatvesztés.** A `git checkout main` egy MÁSIK folyamat által
+csak a hub MUNKAKÖNYVTÁRÁNAK checkoutját mozgatja — a branch REF-je (és rajta
+a commit) érintetlen marad (`git branch -v` mindig megmutatta a helyes SHA-t,
+`git reflog` pontosan rögzítette a `moving from <round-branch> to main`
+eseményeket). A `main` maga sem mozdult (`origin/main` SHA-ja a kör elejétől
+a végéig változatlan maradt) — tehát ez ártalmatlan, amíg a hívó ÉSZREVESZI
+és nem ijed meg tőle (pl. nem futtat destruktív parancsot „helyreállításként”).
+
+**Hogyan alkalmazd.** (1) SOHA ne tételezd fel, hogy a hub checkoutja stabil
+marad egy `git checkout <round-branch>` UTÁN, akárhány tool-hívással később —
+minden git-művelet ELŐTT, ami a round branch tartalmára támaszkodik (Edit,
+`cat`, commit), explicit ellenőrizd `git branch --show-current`-tel, és ha
+elmozdult, `git checkout <round-branch>` + `git fetch`+`git merge --ff-only
+origin/<round-branch>` (SOHA ne `reset --hard` — a helyi commit lehet, hogy
+még nincs pusholva). (2) Emiatt a pre-flight/review-commitokat MINDIG pushold
+azonnal a commit UTÁN (ne halmozz fel több lokális commitot pusholás
+nélkül) — ez a legolcsóbb védelem: ha a hub flip-jét később veszed észre,
+a branch REF-en (lokálisan VAGY originon) a munka már biztonságban van. (3)
+Az izolált implementer-munkapéldány (`ss-<motor>-<kör>`, klónozva a hub-ról a
+dispatch pillanatában) A SAJÁT külön repo-ja — a hub KÉSŐBBI checkout-flipje
+nem érinti; ha a hubon módosítasz valamit AZUTÁN, hogy a munkapéldányt már
+klónoztad (pl. egy §0.0.1 addendum), azt a munkapéldányba KÜLÖN
+`fetch`+`merge --ff-only`-val kell bevinni, a hub aktuális checkout-állapotától
+függetlenül.
+
+## L293 — Ha egy brief `allowed_paths`-ának egyetlen modell-fájlja igényel egy ÚJ, megosztott enumot, ne bővítsd a scope-ot egy közös enum-fájlra — keresd meg, hova teszi a kódbázis MÁR MEGLÉVŐ mintája a modell-lokális enumokat (E07-R10, 2026-08-16)
+
+**Mérve.** Az E07-R10 brief `completed → planned` átmenet-példája egy
+`planned` nevű kódolt státuszértékre hivatkozott, ami a pre-flight
+pillanatában SEHOL nem létezett: a `plan_enums.dart` `PlanStatus`-a
+(7 érték) kizárólag az `AdaptivePracticePlan`-hoz tartozik (SDD §7.7), és
+a `PracticeDay`/`PracticeBlock` célenumja nem volt megnevezve. Az SDD
+§16.5 „Block status” 8-elemű listája adta a hiányzó értékkészletet, de
+a `plan_enums.dart` maga NEM volt a kör `allowed_paths` listáján — az
+első ösztön (a hiányzó enumot oda tenni, ahol a domain MÁR MEGLÉVŐ,
+több-modellen-átívelő enum-családjai élnek) `allowed_paths`-bővítést
+igényelt volna. A tényleges vizsgálat viszont megmutatta: a `plan_enums.dart`
+öt családja (R02-es) mind SDD-fejezet-szintű, több modellt kiszolgáló
+alapcsalád — miközben a domain modell-LOKÁLIS enumjai (`PracticeGoalStatus`
+a `practice_goal.dart`-ban, `SuccessCriterionKind` a `success_criteria.dart`-
+ban, `CatalogRevisionMismatch`/`CandidateExclusionReason` a
+`practice_catalog_snapshot.dart`-ban) MINDIG a saját modelljük fájljában
+élnek — tehát az új enum helyes helye `practice_block.dart` volt (MÁR az
+`allowed_paths`-on), nem `plan_enums.dart`.
+
+**Hogyan alkalmazd.** Mielőtt egy hiányzó enum/típus miatt `allowed_paths`-
+bővítést kérnél (akár implementerként STOP-pal, akár orchestrátorként §0.0
+revízióval), grep-eld ki a kódbázis MEGLÉVŐ szórási mintáját UGYANARRA a
+kategóriára (itt: „hol élnek a modell-specifikus, stabil-kódú enumok ebben a
+feature-ben?”) — ha a minta konzisztensen modell-lokális, azt kövesd, NE egy
+közös/megosztott fájlt válassz alapértelmezésként. Ez egyszerre kerüli el az
+indokolatlan scope-bővítést ÉS az inkonzisztens architektúrát, amit egy
+később érkező review MAJOR-ként fogna meg.
