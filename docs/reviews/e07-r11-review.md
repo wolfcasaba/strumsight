@@ -1,6 +1,6 @@
 # E07-R11 — független review
 
-**Verdikt:** CHANGES REQUESTED
+**Verdikt:** APPROVED (javító commit: `3c6e879d`)
 
 **Review baseline:** `20d7499d..13a70949`  
 **Implementer:** Sonnet 5 (`sonnet-impl`)  
@@ -21,3 +21,14 @@
 ## Következő lépés
 
 Egy javító implementer-kör szükséges ugyanazzal a motorral. Merge tilos, amíg a MAJOR nem zárul le és a független re-review zöld.
+
+## Javító kör re-review
+
+`3c6e879d` az előző snapshot minden completed blokkját ID szerint
+visszakeresi az új snapshotban, és hiány vagy értékeltérés esetén
+`completedHistoryModified` fatal leletet ad. A reprodukáló eset most tartós
+teszt a validator tesztfájlban, a friss `/tmp/review-e07-r11-fix` klónban zöld.
+
+Az exact javítási SHA-n a független round-gate és a scope-audit zöld.
+Security audit: tiszta domain-logika; nincs hálózati, audio-, kamera-, secret-
+vagy szabad-szöveges learner-data út. Nincs nyitott BLOCKER/MAJOR/MINOR lelet.
