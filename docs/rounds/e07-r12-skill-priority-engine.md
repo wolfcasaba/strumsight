@@ -185,4 +185,45 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `domain/policy/priority_policy.dart` — immutable, verziózott policy; minden
+  súly `[0, 1]`-re validált, a coverage debtet explicit `asOf` időből,
+  pozitív horizonon normalizálja.
+- `domain/model/skill_priority.dart` — immutable candidate/input és priority
+  output; a tényezők normalizált értéket és signed hozzájárulást hordoznak,
+  amelyek összege a score. Hard constraint nem input és nem faktor.
+- `domain/service/priority_engine.dart` — pure, `asOf`-injektált rangsoroló:
+  known gap, unknown assessment, primary-goal, prerequisite, uncertainty,
+  coverage debt, fatigue és novelty tényezőkkel; discomfort esetén safety
+  override és utolsó hely; azonos score-nál lexikografikus `skillId` tie-break.
+- `public.dart` — a három új public domain contract exportja.
+- `test/features/practice_generator/priority/priority_engine_test.dart` — A1–A6
+  és A9; a három kötelező skill-state cellát is méri.
+- `test/features/practice_generator/priority/priority_policy_test.dart` — A7–A8,
+  coverage-normalizálás és policy-validáció.
+
+### Valódi-sértés próba
+
+Az engine-ben az `unknown` assessment ágat ideiglenesen `0.0`-ra cseréltem.
+`flutter test test/features/practice_generator/priority/priority_engine_test.dart`
+exit 1-gyel zárt: az A2 szerint az `unknown` tényleges score-ja `-0.1` lett,
+ami nem nagyobb a strong skill `0.03499999999999999` score-jánál. A
+`policy.assessmentValue`-re visszaállítás után ugyanaz a teszt zöld.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/features/practice_generator/priority/priority_engine_test.dart test/features/practice_generator/priority/priority_policy_test.dart`
+  — exit 0, `00:00 +11: All tests passed!`
+- `tools/round-gate.sh test/features/practice_generator/priority/priority_engine_test.dart test/features/practice_generator/priority/priority_policy_test.dart`
+  — exit 0; format: `Formatted 1564 files (0 changed)`, analyze: `No issues
+  found!`; a gate a két célzott tesztet és architecture ellenőrzést is a
+  mérce-artefaktumon keresztül futtatta.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Nincs scope-eltérés.
+- CI-dispatch, független review és merge az orchestrátor feladata; helyben a
+  teljes Flutter suite és APK build nem futott.
+
 ## 11. Review — a Claude tölti ki
