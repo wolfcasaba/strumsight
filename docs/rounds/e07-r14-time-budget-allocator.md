@@ -229,4 +229,103 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Módosított / új fájlok
+
+| Útvonal | Állapot |
+|---|---|
+| `lib/features/practice_generator/domain/model/time_budget.dart` | **ÚJ** — az öt typed budget + `PlannedActiveSegment`. |
+| `lib/features/practice_generator/domain/policy/time_allocation_policy.dart` | **ÚJ** — `TimeAllocationPolicy` + öt `PlanTemplate` (micro/small/medium/large/extraLarge). |
+| `lib/features/practice_generator/domain/service/time_budget_allocator.dart` | **ÚJ** — `TimeBudgetAllocator` + `TimeBudgetAllocation` + `TimeBudgetScaling` + `TimeBudgetAllocationEvidence`. |
+| `lib/features/practice_generator/public.dart` | bővítve 3 export sorral. |
+| `test/features/practice_generator/allocation/time_budget_allocator_test.dart` | **ÚJ** — A1, A2, A3, A5, A6, A7. |
+| `test/features/practice_generator/allocation/time_allocation_policy_test.dart` | **ÚJ** — A8 + policy-shape coverage. |
+| `test/fixtures/practice_generator/allocation/allocation_fixtures.dart` | **ÚJ** — `buildAvailability` + `runAllocation` segédfüggvények. |
+| `test/property/planner_time_budget_property_test.dart` | **ÚJ** — A4 (sum precision) + A3/A5/A7/A8-as spot-checks. |
+
+### 10.2 Algoritmus (rövid)
+
+A `TimeBudgetAllocator.allocate` a következő lépéseket hajtja végre:
+
+1. **Hard maximum clamp.** Ha `requestedTotal > hardMaximum`, a kért összeg le
+   van vágva a hard maximumra (inkluzív felső határ, ADR 0298 §2).
+2. **Sablon kiválasztása.** A `policy.templateFor(total)` a teljes
+   `elapsedSession` alapján választ: micro (≤5), small (6–12), medium (13–30),
+   large (31–60), extraLarge (>60).
+3. **Reserve-ek levonása.** A sablon rögzíti a `setupMinutes`,
+   `reflectionMinutes` és a blokkok közötti `restPerGapMinutes` értékeit; ezek
+   a fix tartalékok.
+4. **Active felosztás.** A maradék `activeAvailable` percet a sablon
+   slot-jaira osztja: minden slot a saját `minimums[i]` percét kapja
+   alaphangon, a maradék pool egyenletesen oszlik, az 1-perces maradék a
+   primary focus-ba kerül (priority order). Ezzel a `pool ~/ slots`-os
+   lefelé kerekítés és az exact-budget repair garantálja, hogy a
+   `segments.sum == activePlaying` pontosan.
+5. **Safe overload.** Ha a sablon `minimums` összege nem fér bele az
+   `activeAvailable`-ba, a rendszer egyetlen primary focus blokkra esik
+   vissza, ami a teljes kért időt viszi — ez a fragment-policy (§5.2).
+6. **Change-set.** Ha a clamp bármennyi időt levágott, a `TimeBudgetAllocation`
+   egy `PlanChangeSet`-et ad `PlanChangeReason.systemAdaptation` okkal és
+   `timeBudget.hardMaximumClamped` bizonyítékkal.
+
+### 10.3 A5 cella primary-minimum értelmezése
+
+A brief A5 cellája kimondja: „Ha a nap egyáltalán tartalmaz gyakorlást, az
+elsődleges célhoz tartozó blokk minimum-időt kap". A property-teszt az
+`requestedTotal >= primaryMinimumMinutes` esetre szorítkozik, mert a
+§5.5-ös micro-plan a teljes napot a primary focus-ba önti (akár 1 percre
+is), és ilyenkor a minimum szándékosan a fenntarthatóságnál alacsonyabb:
+a `time_budget_allocator_test.dart` A5-ös cellái a 13/90 perces keretekre
+szorítkoznak, ahol a minimum garantálható.
+
+### 10.4 Valódi-sértés próba (A1/A4)
+
+**Mért cella.** A felfelé kerekítés a `_allocateBlocks` `perSlot` változóján:
+`pool ~/ slots` → `(pool + slots - 1) ~/ slots` (ceiling).
+
+**A1 / A4 próbaeredmények (review-hoz, nem kerül commit-ba):**
+
+- `time_budget_allocator_test.dart`:
+
+  - A1 felső cella (`above the hard maximum is clamped down to the limit`):
+    PIROS — a 25 ≥ 20 clamp esetén a felfelé kerekítés 22 percet adott a
+    20-as hard maximum helyett.
+  - A1 `exactly at the hard maximum is accepted as the inclusive top`: PIROS
+    — a 20-as kérésre 22 percet generált.
+  - A1 `below the hard maximum is accepted without scaling`: PIROS — a
+    19-es kérésre 21 percet generált.
+  - A1 `every segment is non-negative and the sum is exact`: PIROS — a
+    90-perces keretben 92 percet mutatott (2 perccel túllépve).
+  - A2 20/45/90 cellák: PIROS — mind az `elapsedSession`, mind a
+    `segments.sum` assertion-ön elbukott.
+  - A2 5/10 cellák: ZÖLD — az aktív 1 slot elegendő ahhoz, hogy a
+    felfelé kerekítés azonos maradjon a lefelével (nincs maradék).
+  - A3/A5/A6/A7/A8 cellák: ZÖLD — a fragment-policy, a primary-minimum
+    és a determinizmus nem függ a kerekítés irányától.
+
+- `planner_time_budget_property_test.dart` (`A4`):
+
+  - PIROS trial 0-ban: 48 perces hard maximumot a felfelé kerekítés 51
+    percre vitte (3 perccel túllépve). A `lessThanOrEqualTo(hardMaximum)`
+    assertion elbukott; a maradék 299 trial-ra a teszt nem jutott el.
+
+**Visszaállítás.** A `perSlot` sort visszaírtam `pool ~/ slots` (floor)
+értékre — a `time_budget_allocator_test.dart` 17 / 17 cellája, a
+`time_allocation_policy_test.dart` 5 / 5 cellája és a property-teszt
+300 / 300 trial-ja ismét zöld.
+
+A dokumentum megerősíti, hogy a lefelé kerekítés nem placebo: a felfelé
+kerekítés konkrétan, mérhetően töri a hard maximumot — a 90 perces
+keret +2 perccel, a property-teszt +3 perccel lépte azt át.
+
+### 10.5 Gate
+
+```bash
+tools/round-gate.sh test/features/practice_generator/allocation/time_budget_allocator_test.dart test/features/practice_generator/allocation/time_allocation_policy_test.dart test/property/planner_time_budget_property_test.dart
+```
+
+A kapu előtérben, csonkítatlan kimenettel fut. Implementer-jelzés:
+
+`tools/codex-signal.sh done "E07-R14 implementálva; célzott gate zöld; commit=<sha>"`
+
 ## 11. Review — a Claude tölti ki
+
