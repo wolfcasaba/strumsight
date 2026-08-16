@@ -985,6 +985,29 @@ attempt_selfheal() {
     return 3
   fi
 
+  # MÉRVE ÉLESBEN 2026-08-16 (E07-R09 H-NOSIGNAL önjavítás, 1. kísérlet
+  # közben): az attempt_selfheal() idáig SOSE regisztrálta magát az
+  # inflight_dir-ben, szemben a normál kör-dispatch-csal, amely
+  # `inflight_add "$round" "$brief"`-t hív a session indítása előtt (lentebb
+  # a §4 törzsében) — l. tools/tests/test_round_pipeline_queue_pending_pr_guard.py
+  # fejléce ugyanerről a regiszterről. A HALTED fájl addig megmarad, amíg EGY
+  # önjavító session le nem zárja; eközben MINDEN cron-firing (itt 5
+  # percenként) újra azt látja: „HALTED jelen van, van szabad slot", és
+  # újabb önjavítási kísérletet indít, akkor is, ha az előző MÉG FUT. Élesben
+  # mérve: `heal-E07-R09-1` 02:00:03-kor indult (ez a session), a driver
+  # semmit nem tudott róla, és `heal-E07-R09-2` 02:05:02-kor — ekkor mindkét
+  # slot (PIPELINE_SLOTS=2) egyszerre futtatott egy-egy Claude-orchestrátort
+  # UGYANARRA a haltra, mindkettő a KÖZÖS `$heal_status_file`-t írta volna a
+  # végén (`run_orchestrator_session` `rm -f "$signal_file"`-lel INDUL, tehát
+  # a később induló törli a korábban induló jelzését is, ha az közben ír), és
+  # a puszta párhuzamos indulás — nem valódi kudarc — fogyasztott el egy
+  # kísérletet a $selfheal_max (3) büdzséből (l. `selfheal.count` 2-nél állt,
+  # mielőtt bármelyik session befejeződött volna).
+  if inflight_rounds | grep -qFx "$halt_round"; then
+    log "önjavítás már fut ehhez a körhöz ($halt_round) — ez a firing kihagyja (nincs párhuzamos önjavító session, nem számít bele a kísérletbe)"
+    return 3
+  fi
+
   # Nem önjavítható haltok (ADR 0138). Az ADR 0112 egyetlen emberi határa a
   # MÉRCE gyengítése; ide tartozik minden olyan ok, amit az önjavító session
   # KÖRBEN oldana fel — a H-INDEP-et például kvótazárlat alatt maga a Terra
@@ -1029,6 +1052,15 @@ attempt_selfheal() {
 
   log "ÖNJAVÍTÓ KÖR indul: $halt_round / $halt_code ($attempts/$selfheal_max)"
   notify "🔧 önjavítás indul: $halt_round" "$halt_code · $attempts/$selfheal_max kísérlet"
+
+  # A fenti guard erre támaszkodik — amíg ez a session fut, egy párhuzamos
+  # firing lássa és hagyja ki. A RETURN trap a bash-ban a DEFINIÁLÓ függvény
+  # (itt: attempt_selfheal) visszatérésekor tüzel, beágyazott hívások (pl.
+  # run_orchestrator_session) saját visszatérésén NEM — tehát a regisztráció
+  # a teljes hátralévő függvénytörzset (a mérce-őrszem/PR-ellenőrzést is)
+  # lefedi, nem csak a session-várakozást.
+  inflight_add "$halt_round" "heal:$halt_code"
+  trap 'inflight_remove "$halt_round"' RETURN
 
   if ! run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
         "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" "$heal_model"; then

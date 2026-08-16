@@ -65,6 +65,35 @@ Doksi-elsőbbség ütközéskor: `AGENTS.md` → `docs/sdd/00-index.md` →
   példányt, és minden ismétlés eggyel többet hagy futva a turn haláláig. Ez
   kritikus a `tools/wait-for-ci.sh`-ra: a CI rutinszerűen 10+ percig fut, ez
   jóval túl van egyetlen yield-ablakon.
+- **A fenti szabályt HELYESEN követve is elakadhatsz — egy csak-szöveges
+  „még fut / még nem kész" válasz, ÚJABB tool-hívás vagy jelzésfájl nélkül,
+  MINDIG H-NOSIGNAL-t okoz, akkor is, ha a mondat igaz.** Mérve (E07-R09,
+  H-NOSIGNAL önjavítás, 2026-08-16, session
+  `01a00823-261b-7e70-94ad-b7c011007011`,
+  `~/.codex-terra/sessions/2026/08/16/rollout-2026-08-16T01-15-16-*.jsonl`):
+  a kötelező `tools/wait-for-ci.sh 31920433829` hívás session-jét
+  (`session_id 75633`) 01:49:57-től 01:58:42-ig, 17 egymást követő
+  `write_stdin`-poll alatt (kb. 8,5 percig) a fenti szabály szerint
+  HELYESEN, UGYANAZT a sessiont folytatva kérdezted le — ez nem volt hiba.
+  A `max_wait` (alapértelmezett 1800s) ekkor még távolról sem telt le, és a
+  ténylegesen várt Full Gate futás (databaseId 31920433829) csak 02:03:14-kor
+  zárt (`conclusion=failure`) — a várakozás tehát VALÓDI és INDOKOLT volt,
+  nem elakadás. A turn mégis 01:58:45-kor véget ért egyetlen szöveges
+  státusz-üzenettel (szó szerint: „E07-R09 folyamatban: az implementáció és
+  a független re-review zöld, PR #279 nyitva. A Full Gate exact-SHA CI
+  futása (`31920433829`) még tart; merge még nem történt.") — sem újabb
+  poll, sem `outcome=halted` jelzés nem követte, úgyhogy a driver a
+  `codex exec` folyamat halálát jelzésfájl nélküli kilépésként
+  (H-NOSIGNAL) észlelte. **A szabály: amíg egy elindított várakozó
+  session/cella nem adott terminális eredményt (kilépési kódot VAGY
+  tényleges „kész" tartalmat), a turnod NEM érhet véget csak szöveggel.**
+  Vagy folytatod a pollingot — MOST, ugyanebben a turnban,
+  újabb tool-hívással, mert nincs „következő firing": a `codex exec`
+  session egyszeri, a folyamat a turn végén megszűnik —, vagy — ha tényleg
+  meg kell szakítanod (§4) — a `outcome=halted` jelzést írod ki ELŐBB, és
+  csak utána zárod a választ szöveggel. Egy „még fut, majd figyelem" mondat
+  jelzésfájl nélkül PONTOSAN a H-NOSIGNAL halt, függetlenül attól, hogy a
+  státusz igaz volt-e.
 - **Nincs `run_in_background` / háttér-task fogalmad**, és nem is kell: a
   hosszú hívásokat előtérben futtatod.
 - **Te magad, mint orchestrátor, NE válts vissza Claude-ra.** Kvóta-fallback

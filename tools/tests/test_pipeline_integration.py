@@ -334,6 +334,116 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertNotIn("ÖNJAVÍTÓ KÖR indul", exhausted.stderr)
             self.assertTrue((state / "HALTED").exists())
 
+    def test_selfheal_skips_a_round_that_already_has_an_active_heal_session(self) -> None:
+        # Measured live 2026-08-16 (E07-R09 H-NOSIGNAL self-heal, attempt
+        # 1/3 -- this very session): attempt_selfheal() never registered the
+        # round it was healing in .pipeline/inflight, unlike the normal
+        # round-dispatch path (`inflight_add "$round" "$brief"` right before
+        # `run_orchestrator_session`; see
+        # test_round_pipeline_queue_pending_pr_guard.py for the sibling gap
+        # this same registry already closed once, on the OTHER side of the
+        # halt/resume boundary). HALTED stays present until ONE heal session
+        # resolves it, so every 5-minute cron firing in between saw "HALTED
+        # still there, a slot is free" and launched ANOTHER concurrent
+        # self-heal attempt for the identical (round, halt_code) --
+        # `heal-E07-R09-1` (started 02:00:03) and `heal-E07-R09-2` (started
+        # 02:05:02) both ran at once (`tmux ls` showed both sessions alive;
+        # `.pipeline/selfheal.count` read `E07-R09|H-NOSIGNAL|2` before
+        # either had finished), both about to write the SAME shared
+        # heal-status file at the end, each consuming one slot of the
+        # 3-attempt self-heal budget for a launch race rather than a real
+        # failure.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            (state / "HALTED").write_text("round=E09-R01\nhalt=H-NOSIGNAL\nsummary=teszt halt\n")
+            inflight = state / "inflight"
+            inflight.mkdir()
+            (inflight / "E09-R01").write_text(
+                "round=E09-R01\nbrief=heal:H-NOSIGNAL\nbranch=\nworktree=\n"
+                "started_at=2026-08-16T02:00:03+00:00\n"
+            )
+            env = dict(os.environ)
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_NO_LAUNCH="1",
+            )
+
+            result = self.run_command(["bash", str(script)], env=env)
+
+            self.assertEqual(result.returncode, 3)
+            self.assertIn("már fut", result.stderr)
+            # A concurrent-launch skip must not burn the attempt budget --
+            # it is not a genuine failed attempt.
+            self.assertNotIn("ÖNJAVÍTÓ KÖR indul", result.stderr)
+            self.assertFalse((state / "selfheal.count").exists())
+            self.assertTrue((state / "HALTED").exists())
+            # The pre-existing marker (simulating the other, still-running
+            # session) must survive untouched -- this firing must not remove
+            # a marker it did not create.
+            self.assertTrue((inflight / "E09-R01").exists())
+
+    def test_selfheal_registers_and_clears_its_own_inflight_marker(self) -> None:
+        # Companion to the skip test above: the skip test proves the guard
+        # RESPECTS a pre-existing marker, but seeds that marker by hand, so
+        # it cannot tell a real `inflight_add` call apart from one that was
+        # never made. This test proves the OTHER half: attempt_selfheal()
+        # itself must call `inflight_add` before launching (so a concurrent
+        # firing a moment later would actually see it) and `inflight_remove`
+        # once run_orchestrator_session returns (so a failed-to-launch
+        # attempt does not leave a permanent "already running" marker
+        # behind) -- via a python3 stub that transparently logs matching
+        # `round-slots.py inflight-add|inflight-remove` invocations while
+        # still executing them for real, so the on-disk marker lifecycle
+        # (created, then gone) is exercised exactly as in production.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        real_python3 = shutil.which("python3")
+        self.assertIsNotNone(real_python3, "python3 kell a teszthez")
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            stub_bin = state / "bin"
+            stub_bin.mkdir()
+            call_log = state / "inflight-calls.log"
+            stub = stub_bin / "python3"
+            stub.write_text(
+                "#!/bin/sh\n"
+                "case \"$*\" in\n"
+                "  *round-slots.py*inflight-add*|*round-slots.py*inflight-remove*)\n"
+                f"    echo \"$*\" >> {call_log}\n"
+                "    ;;\n"
+                "esac\n"
+                f"exec {real_python3} \"$@\"\n"
+            )
+            stub.chmod(0o755)
+            (state / "HALTED").write_text("round=E09-R01\nhalt=H-NOSIGNAL\nsummary=teszt halt\n")
+            env = dict(os.environ)
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_NO_LAUNCH="1",
+                PATH=f"{stub_bin}:{env['PATH']}",
+            )
+
+            result = self.run_command(["bash", str(script)], env=env)
+
+            self.assertEqual(result.returncode, 3)
+            self.assertIn("ÖNJAVÍTÓ KÖR indul", result.stderr)
+            self.assertIn("jelzés nélkül ért véget", result.stderr)
+            self.assertEqual((state / "selfheal.count").read_text(), "E09-R01|H-NOSIGNAL|1\n")
+
+            calls = call_log.read_text().splitlines() if call_log.exists() else []
+            self.assertTrue(
+                any("inflight-add" in line and "--round E09-R01" in line for line in calls),
+                f"attempt_selfheal() must register itself before launching; calls={calls!r}",
+            )
+            self.assertTrue(
+                any("inflight-remove" in line and "--round E09-R01" in line for line in calls),
+                f"attempt_selfheal() must deregister itself once the launch attempt ends; calls={calls!r}",
+            )
+            # The marker registered for the (failed-to-launch) attempt must
+            # not leak past this firing -- the NEXT firing must be free to
+            # retry rather than seeing a permanently-stuck "already running".
+            self.assertFalse((state / "inflight" / "E09-R01").exists())
+
     def test_selfheal_attempt_counter_is_scoped_to_round_and_halt_code(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:
