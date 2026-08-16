@@ -11092,3 +11092,54 @@ fel, hogy mind ugyanazt a nem-triviális fixture-t építi-e. Ha igen, a
 `test/fixtures/<feature>/<terület>` bare könyvtárat a dispatch ELŐTT, szűken
 fel kell venni az `allowed_paths` listába. Ez különösen kötelező, ha az aznapi
 korábbi kör már ugyanebben a feature-ben fixture-scope revíziót hozott.
+
+## L297 — A signed céldátum-fázis tesztje nem várhat új anyagot a már elmúlt cél után (E07-R15 H7 self-heal, 2026-08-16)
+
+**Mérve.** Az E07-R15 F1 javítás a scheduler fázisát a tényleges
+`songTargetDate − scheduledDate` távolságból számolta. A korábbi A5 teszt
+ugyanakkor `songTargetDate == today` mellett az öt nappal későbbi dátumra új
+anyagot várt. A távolság ott `-4`, ezért a policy performance-fázist adott és
+a teszt `weekly_scheduler_test.dart:453` pontján `várt 1, kapott 0` hibával
+piros lett. Az SDD Epic 7 §10.3 ezt a viselkedést támasztja alá: céldátum után
+nem indulhat automatikus végtelen folytatás.
+
+**Feloldás.** A brief §5.5 és A5 cellája most kimondja: ha
+`songTargetDate − scheduledDate <= 0`, performance-fázisban csak review jelölt
+ütemezhető; új anyag sem a céldátumon, sem utána nem indul automatikusan. A
+`tools/tests/test_e07_r15_song_target_phase_brief.py` a korábbi briefen piros,
+a tisztázott szerződésen zöld regressziós őr. PR #290, squash `3c47d8ae`,
+Router CI `31944884528` az exact headen success.
+
+**Hogyan alkalmazd.** Song-goal fázistesztnél mindig a `target − scheduled`
+távolság előjelével dokumentáld az elvárt fázist, és tegyél külön cellát a
+céldátumra, valamint legalább egy céldátum utáni napra. Ne következtess a
+következő heti napra pusztán abból, hogy a cél a mai napon van.
+
+## L298 — Egy merge-elt self-heal szerződését a folytatott kör-branchnek a review és a javító gate előtt be kell építenie (E07-R15 H7, 2026-08-16)
+
+**Mérve.** Az E07-R15/H7 első self-healje a signed
+`songTargetDate − scheduledDate <= 0` performance-határt merge-elte a
+`main`-be (`3c47d8ae`, PR #290). A megállt
+`minimax/e07-r15-weekly-scheduler` branch azonban `f025c7d7`-en maradt;
+`git merge-base --is-ancestor origin/main f025c7d7` nem 0-val tér vissza. A
+következő orchestrátor-session a nyitott review-lelet javítását ezen a régi
+branch-en folytatta, és a `weekly_scheduler_test.dart:453` ugyanazt a cél
+utáni new-material elvárást futtatta újra. A gate ezért ismét `Expected length
+1, Actual []` hibával állt meg — a brief javítása önmagában nem jutott el a
+teszthez.
+
+**Feloldás.** A pipeline-orchestrator prompt §0.3 kötelezővé teszi a
+`git -C <kör-munkapéldány> fetch origin main` és
+`merge-base --is-ancestor origin/main HEAD` mérést minden folytatott branch
+review-ja, gate-je és javító-dispatch-e előtt. Lejáratkor előbb a normál,
+nem-force `merge --no-ff origin/main`, majd `diff --check`, az ancestor
+bizonyítás és a normál push fut; brief-only konfliktus az aktuális `main`
+változatát őrzi meg, más konfliktus H8. A
+`tools/tests/test_orchestrator_resume_upstream_sync.py` őrzi a futtatható
+operátori szerződést.
+
+**Hogyan alkalmazd.** A „van egy commitolt kör-branch” nem csak
+reviewer-függetlenségi adat. Önmagában még nem bizonyítja, hogy a branch a
+közben merge-elt self-heal után is a jelenlegi briefet méri. Folytatáskor a
+freshness-ancestor mérés mindig megelőzi a régi leletek javítását és a gate
+újrafuttatását.

@@ -7,7 +7,13 @@
 > allocation, micro-plan and typed shorten/extend change sets; independent review,
 > Full Gate and Router CI exact-SHA green, PR #288. The E07-R15 H3 self-heal
 > narrowed its brief scope to the shared scheduling-fixture directory with an
-> executable scope-audit regression guard; its product round may now restart.) Prior:
+> executable scope-audit regression guard; the subsequent H7 self-heal made the
+> signed target-date performance boundary explicit and added its brief-contract
+> regression guard (PR #290, Router CI exact-SHA green). A repeated H7 then
+> exposed that resumed branches were not required to integrate that merged
+> brief before review; the pipeline prompt now gates repair/review on measured
+> `origin/main` ancestry (HEAL E07-R15/H7, upstream-sync). Its product round
+> may now restart.) Prior:
 > E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
 > domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
 > `PracticeItemStatus` transition contract, monotonic `PlanRevision` full

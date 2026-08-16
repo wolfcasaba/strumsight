@@ -24,6 +24,7 @@ allowed_paths = [
   "test/features/practice_generator/scheduling/weekly_scheduler_test.dart",
   "test/features/practice_generator/scheduling/scheduling_policy_test.dart",
   "test/fixtures/practice_generator/scheduling",
+  "tools/tests/test_e07_r15_song_target_phase_brief.py",
   "docs/rounds/e07-r15-weekly-scheduler.md",
   "docs/adr/0299-weekly-scheduler-contract.md",
 ]
@@ -101,6 +102,31 @@ scope-sértés.
   "above": limit + 1})'` → `1 / 2 / 3`; a high-load sorozat maximuma 2,
   ezért a 2 még elfogadott, a 3. nap átrendezendő.
 
+## 0.1 H7 self-heal policy-revízió (2026-08-16)
+
+**Módosítás (ADR 0112 önjavító kör, 2026-08-16).** Ez a pontosítás nem vezet
+be új scheduler-policyt: a signed cél-dátum szabályt és az SDD §10.3
+„céldátum után automatikusan ne generáljon végtelen folytatást” korlátját
+teszi egyértelművé a kör tesztelhető szerződésében.
+
+**Mért gyökérok.** Az F1 javítás után a scheduler a tényleges,
+`songTargetDate − scheduledDate` távolságot adja a fázis-policynek. A régi A5
+teszt ugyanakkor `songTargetDate == today` esetén a céldátum UTÁNI ötödik napra
+új anyagot várt. Ennek a távolsága `-4`, tehát a policy szerint performance;
+a reprodukció a régi elvárásnál `várt 1, kapott 0` eredményt adott
+(`weekly_scheduler_test.dart:453`).
+
+**Kötött feloldás.** Ha `songTargetDate − scheduledDate <= 0`, a nap
+performance fázisú: csak review jelölt lehet rajta. Új anyag sem a céldátum
+napján, sem céldátum utáni napon nem ütemezhető automatikusan. Pozitív
+távolságnál a meglévő preparation/light-review ablakok változatlanul
+érvényesek. A kör folytatásakor az A5 tesztnek ezt kell bizonyítania; a
+korábbi, céldátum utáni újanyag-elvárást el kell távolítani.
+
+Az engedélyezett fájllista kizárólag a
+`tools/tests/test_e07_r15_song_target_phase_brief.py` regressziós őrrel bővül;
+ez nem a scheduler-termékkör általános `tools/**` hozzáférése.
+
 ## 1. Cél
 
 A kiválasztott receptek napokra rendezése fókusz-, pihenő- és periodizációs
@@ -133,10 +159,11 @@ Flutter, `DateTime.now()`, `Random` · más `lib/features/**`, `docs/adr/**`.
 | `public.dart` | a barrel bővítése |
 | `test/…/scheduling/*_test.dart` (2 db) | a §6 cellái |
 | `test/fixtures/practice_generator/scheduling/` | a két scheduling-teszt közös, paraméterezhető builderjei |
+| `tools/tests/test_e07_r15_song_target_phase_brief.py` | H7 self-heal brief-szerződés regressziós őre |
 | `docs/rounds/e07-r15-…md` | a §10 handoff |
 
 **Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
-`docs/sdd/**` · `tools/**` · `.github/**`.
+`docs/sdd/**` · `tools/**` (kivéve a fenti, névre szóló H7 őr) · `.github/**`.
 
 ## 5. Kötött architekturális döntések
 
@@ -164,8 +191,12 @@ a teljes napot").
 
 ### 5.5 A dal-cél fázisok a CÉLDÁTUMHOZ igazodnak
 
-Céldátum előtt könnyű ismétlés lehetséges (nem új anyag). A fázisok
-determinisztikusan következnek a céldátumból és a mai naptól.
+A fázisokat a signed `songTargetDate − scheduledDate` távolság határozza meg,
+nem a futtatáskori „mai nap” önmagában. Pozitív távolságnál a meglévő
+preparation/light-review ablakok érvényesek; a light-review ablakban könnyű
+ismétlés lehetséges (nem új anyag). Nulla vagy negatív távolság — a céldátum
+és az azt követő napok — performance fázis: csak review jelölt lehet. Így a
+céldátum utáni napon sem indul automatikus újanyag-folytatás.
 
 ### 5.6 Az ütemező REPRODUKÁLHATÓ
 
@@ -180,7 +211,7 @@ rögzített.
 | A2 | A nagy terhelésű napok limitje nem sérül | ugyanott |
 | A3 | Pihenőnapra nem kerül tartalom | ugyanott |
 | A4 | Az ismétlés-arány a policy korlátja alatt marad | `scheduling_policy_test.dart` |
-| A5 | Céldátum előtt könnyű ismétlés kerül, nem új anyag | `weekly_scheduler_test.dart` |
+| A5 | A signed cél-dátum fázisgate-je: a light-review, a céldátum és az utána következő performance nap csak review jelöltet enged | `weekly_scheduler_test.dart` |
 | A6 | Ugyanaz a bemenet → ugyanaz a heti beosztás | ugyanott |
 | A7 | A napi fókusz-limit (elsődleges/másodlagos) betartva | ugyanott |
 | A8 | A helyi dátumhatárok helyesek (hét eleje/vége) | ugyanott |
@@ -193,7 +224,7 @@ rögzített.
 | A nagy terhelésű napok egymás után | A2 |
 | Pihenőnapra könnyű ismétlés | **A3** |
 | Az ismétlés kitölti a napot | A4 |
-| Céldátum előtt új anyag | A5 |
+| Light-review, céldátum vagy céldátum utáni performance napon új anyag | A5 |
 | A napok bejárása `Map` sorrendben | A6 |
 
 **A napi terhelés három kötelező cellája** (a határ: az egymás utáni nagy terhelésű napok limitje):
