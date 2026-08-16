@@ -28,21 +28,71 @@ void main() {
       final offenders = <String>[];
       for (final entity in domainDir.listSync(recursive: true)) {
         if (entity is! File || !entity.path.endsWith('.dart')) continue;
-        final content = entity.readAsStringSync();
-        const forbidden = [
-          'package:flutter/',
-          'dart:ui',
-          'DateTime.now(',
-          'Random(',
-        ];
-        for (final marker in forbidden) {
-          if (content.contains(marker)) {
-            offenders.add('${entity.path} contains "$marker"');
-          }
-        }
+        offenders.addAll(
+          _forbiddenDomainMarkerOffenders(
+            entity.path,
+            entity.readAsStringSync(),
+          ),
+        );
       }
 
       expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    // Regression for the E07-R09 halt H5 (ADR 0112 self-heal, 2026-08-16,
+    // docs/LESSONS.md L291): the scan above used to match forbidden markers
+    // against the RAW file text, so `exercise_prescription.dart`'s own doc
+    // comment — truthfully documenting the purity guarantee this very check
+    // enforces — tripped the check it was describing (measured, exact wording
+    // from the failing Full Gate run,
+    // https://github.com/wolfcasaba/strumsight/actions/runs/31922993201).
+    // Comments and string literals must be excluded from the scan; a real
+    // occurrence in executable code must still be caught.
+    test('ignores forbidden markers inside comments and string literals', () {
+      const measuredPurityDocComment = '''
+/// The bounded, measurable execution recipe for one chosen
+/// [ExerciseCandidate] (SDD Ch8 Kör 9, ADR 0294).
+///
+/// Deliberately out of scope (later rounds, ADR 0294 §Kontextus):
+/// plan assembly, validator/repair, priority/selection. Flutter-free,
+/// `DateTime.now()`-free, `Random`-free — every input is supplied by the
+/// caller (ADR 0257 §5-6).
+library;
+''';
+      expect(
+        _forbiddenDomainMarkerOffenders(
+          'memory.dart',
+          measuredPurityDocComment,
+        ),
+        isEmpty,
+      );
+
+      const stringLiteralExplanation =
+          "throw StateError('DateTime.now( must never appear here');";
+      expect(
+        _forbiddenDomainMarkerOffenders(
+          'memory.dart',
+          stringLiteralExplanation,
+        ),
+        isEmpty,
+      );
+
+      const realWallClockCall = 'final started = DateTime.now();';
+      expect(
+        _forbiddenDomainMarkerOffenders('memory.dart', realWallClockCall),
+        ['memory.dart contains "DateTime.now("'],
+      );
+
+      const realRandomCall = 'final roll = Random().nextInt(6);';
+      expect(_forbiddenDomainMarkerOffenders('memory.dart', realRandomCall), [
+        'memory.dart contains "Random("',
+      ]);
+
+      const realFlutterImport = "import 'package:flutter/widgets.dart';";
+      expect(
+        _forbiddenDomainMarkerOffenders('memory.dart', realFlutterImport),
+        ['memory.dart contains "package:flutter/"'],
+      );
     });
   });
 
@@ -525,4 +575,78 @@ void _write(Directory project, String relativePath, String contents) {
   final file = File('${project.path}/$relativePath');
   file.parent.createSync(recursive: true);
   file.writeAsStringSync(contents);
+}
+
+// `package:flutter/` and `dart:ui` only ever legitimately match inside an
+// import/export/part URI, which is itself a string literal — so string
+// contents must stay VISIBLE for these two. `DateTime.now(` and `Random(`
+// are calls: real occurrences are executable code, never string contents, so
+// string contents must be MASKED for these two (otherwise a doc comment or
+// error message quoting the call would false-positive — the exact E07-R09
+// halt H5 shape). Comments are trivia for every marker and are always
+// masked. See the regression test above (ADR 0112 self-heal, 2026-08-16).
+const _importUriMarkers = ['package:flutter/', 'dart:ui'];
+const _callMarkers = ['DateTime.now(', 'Random('];
+
+List<String> _forbiddenDomainMarkerOffenders(String path, String content) {
+  final withoutComments = _withoutTrivia(content, maskStrings: false);
+  final withoutCommentsAndStrings = _withoutTrivia(content, maskStrings: true);
+  return [
+    for (final marker in _importUriMarkers)
+      if (withoutComments.contains(marker)) '$path contains "$marker"',
+    for (final marker in _callMarkers)
+      if (withoutCommentsAndStrings.contains(marker))
+        '$path contains "$marker"',
+  ];
+}
+
+/// Returns [source] with `//` and `/* */` comments always omitted, and
+/// string-literal contents (single/double/triple-quoted) omitted only when
+/// [maskStrings] is true. String and comment boundaries are always parsed
+/// as atomic units — regardless of [maskStrings] — so a `//` inside a string
+/// or a quote inside a comment can never be misread as the other kind of
+/// trivia. Not raw-string-aware: acceptable here because that only widens
+/// what a marker match could still be checked against, never narrows it.
+String _withoutTrivia(String source, {required bool maskStrings}) {
+  final buffer = StringBuffer();
+  var index = 0;
+  while (index < source.length) {
+    if (source.startsWith('//', index)) {
+      final newline = source.indexOf('\n', index);
+      index = newline == -1 ? source.length : newline;
+      continue;
+    }
+    if (source.startsWith('/*', index)) {
+      var depth = 1;
+      index += 2;
+      while (index < source.length && depth > 0) {
+        if (source.startsWith('/*', index)) {
+          depth++;
+          index += 2;
+        } else if (source.startsWith('*/', index)) {
+          depth--;
+          index += 2;
+        } else {
+          index++;
+        }
+      }
+      continue;
+    }
+    final char = source[index];
+    if (char == "'" || char == '"') {
+      final start = index;
+      final triple = source.startsWith('$char$char$char', index);
+      final delimiter = triple ? '$char$char$char' : char;
+      index += delimiter.length;
+      while (index < source.length && !source.startsWith(delimiter, index)) {
+        index += (source[index] == r'\' && index + 1 < source.length) ? 2 : 1;
+      }
+      index = (index + delimiter.length).clamp(0, source.length);
+      if (!maskStrings) buffer.write(source.substring(start, index));
+      continue;
+    }
+    buffer.write(char);
+    index++;
+  }
+  return buffer.toString();
 }
