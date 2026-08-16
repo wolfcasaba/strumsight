@@ -1,6 +1,6 @@
 # E07-R11 — PlanValidator és deterministic repair
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ ba834de8`)
+- **Státusz:** IN PROGRESS (pre-flight felülmérve 2026-08-16, `main @ 74215044`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 11
 - **Kör-azonosító:** `E07-R11`
 - **Branch:** `<motor>/e07-r11-plan-validator-and-repair`
@@ -115,6 +115,45 @@ committolt brief ellen, bizonyítva, hogy a mért útvonal az új listával bel�
 van, egy szomszédos, a `validation/` alkönyvtáron KÍVÜLI útvonal viszont
 továbbra is kívül marad (a bővítés szűk, nem az egész `test/fixtures/
 practice_generator/` fa).
+### 0.0.1 Pre-flight revízió — a validáció bemenete explicit domain-context
+
+**Mérés.** A `PracticeBlock` csak az `ExercisePrescription` snapshotját
+tárolja (`exerciseId`, `source`, `contentRevision`, idő és success criteria);
+nem tartalmaz aktuális catalog-assetet, eszközállapotot, hangolást vagy
+load-profilt. Ezek a `ExerciseCandidate`/`PracticeCatalogSnapshot` oldalon
+érhetők el, a `LearnerConstraint.code`/`value` pedig szándékosan általános
+string, tehát a validátor nem következtethet belőle saját string-szabályt.
+`PlanChangeReason.systemAdaptation` már létezik és a repair strukturált oka
+lehet. Bizonyíték: `practice_block.dart`, `exercise_prescription.dart`,
+`exercise_candidate.dart`, `practice_catalog_snapshot.dart`,
+`learner_constraints.dart`, `plan_change_set.dart` a `main @ c573ed2f`-n.
+
+**Feloldás.** A két új service saját, public domain contractja
+`PlanValidationContext`: a hívó által adott, immutable catalog snapshot,
+hard availability és comparison input. A context explicit, typed/identity
+alapú állításokkal szolgáltatja az aktuális executabilityt (referenced
+candidate + content revision, asset, device capability, offline, tuning és
+hard-avoid); a validator ezekből **csak** determinisztikus leletet készít,
+nem értelmezi a constraint szabad szövegét. A load-profile-t ugyanebből a
+catalog snapshotból olvassa. A completed-history ellenőrzéshez a context az
+előző teljes snapshotot is hordozza.
+
+**Kötelező szűk szerződés.** Az identity `source.code:exerciseId`; a jelenlegi
+catalogban hiányzó identity vagy eltérő content revision `error`. A context
+nem megerősített asset/capability/offline/tuning/hard-avoid állapota szintén
+`error` (nincs optimistic fallback). A hard maximum a `WeeklyAvailability`
+hard maximuma, összehasonlítás mikrosecond pontosságú és inkluzív. A
+terhelési sorrend egy day blokkjainak növekvő `order` sorrendje; három egymást
+követő, `frettingHand == LoadLevel.high` blokk `warning` (a terv review-ra
+szorul, de nem lesz automatikusan végrehajthatatlan). Az érték a service
+injektálható policy-paramétere, alapértelmezése 2 megengedett egymás után.
+
+**Repair-határ.** A repair kizárólag nem-completed blokkokat rövidíthet vagy
+eltávolíthat; a contextből kapott új `RevisionId`-vel `PlanChangeSet`-et ad
+vissza, minden változáshoz `PlanChangeReason.systemAdaptation`-nel. `fatal`,
+completed-history sértés vagy a megadott iterációs korlát kimerülése sikertelen
+eredmény, nem további próbálkozás. Ez a feloldás nem módosít lezárt ADR-t és
+nem bővíti a fájllistát.
 
 ## 1. Cél
 
@@ -261,5 +300,148 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 - **A `completed` átrendezése.** Egy „takarítás" a múltba nyúlna (A6).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-16.
+
+### 10.1 Létrehozott/módosított fájlok
+
+- `lib/features/practice_generator/domain/model/plan_validation_issue.dart`
+  — **ÚJ**: `PlanValidationCode`, `PlanValidationIssue`,
+  `PlanValidationResult` (`isActivatable`, `hasError`, `hasFatal`).
+- `lib/features/practice_generator/domain/service/plan_validator.dart`
+  — **ÚJ**: `PlanValidationContext` (a §0.0.1-ben előírt explicit
+  catalog/availability/repair-revision/previous-snapshot/confirmed-identity
+  szerződés) és `PlanValidator` (A1, A7, A8, A9, hard maximum, completed
+  history).
+- `lib/features/practice_generator/domain/service/plan_repairer.dart`
+  — **ÚJ**: `PlanRepairOutcome`, `PlanRepairer` (bounded, deterministic,
+  csak nem-completed blokk eltávolítás, `PlanChangeSet` minden lépéshez
+  `systemAdaptation` okkal).
+- `lib/features/practice_generator/public.dart` — a három új
+  típuscsalád exportja.
+- `test/fixtures/practice_generator/validation/validation_fixtures.dart`
+  — **ÚJ**: megosztott builderek (`buildCandidate`, `buildPrescription`,
+  `buildBlock`, `buildDay`, `buildPlan`, `buildCatalog`,
+  `buildAvailability`, `buildContext`).
+- `test/features/practice_generator/validation/plan_validator_test.dart`
+  — **ÚJ**: 15 teszt, a §6.1 három súlyosság-cellája + A1/A7/A8/A9 + hard
+  maximum.
+- `test/features/practice_generator/validation/plan_repairer_test.dart`
+  — **ÚJ**: 8 teszt, A2 (cap-szintű, unit), A3–A6.
+- `test/property/planner_repair_property_test.dart` — **ÚJ**: A2 fuzz
+  gate (300 randomizált próba/futás, `PROPERTY_SEED` konvenció),
+  A3–A6 spot-check ugyanazon próbákon.
+
+### 10.2 Tervezési döntések, amelyek nem voltak explicit a briefben
+
+- **Tuning-igény jele:** mivel `ExerciseCandidate.prerequisites` sosem
+  lehet üres (konstruktor-invariáns), a "hangolás megerősítendő" jelzés
+  egy stabil, katalógus-deklarált prerequisite-kóddal
+  (`'guitar.tuned'`) történő pontos egyezés — nem szabad szöveg
+  értelmezés, hanem katalógus-oldali, típusos azonosító-egyeztetés
+  (`plan_validator.dart` `_tuningPrerequisiteCode`).
+- **Repair-lépés:** minden lépés pontosan egy nem-completed blokkot
+  távolít el (a §0.0.1 "rövidíthet vagy eltávolíthat" közül a szűkebb,
+  eltávolítás-only részhalmazt választottam) — ez elegendő A1–A9
+  teljesítéséhez, és egyszerűbben bizonyítható determinisztikusnak.
+- **`repairRevisionId`:** a `PlanValidationContext` explicit mezője —
+  a repairer sosem generál revíziós azonosítót (ADR 0263 §5: nincs
+  óra, nincs `Random`).
+
+### 10.3 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+A `plan_repairer.dart` `repair()` metódusában a `for (var iteration = 1;
+iteration <= maxIterations; iteration++)` felső korlátot ideiglenesen
+`for (var iteration = 1; true; iteration++)`-re cseréltem (a korlát
+teljes eltávolítása), majd lefuttattam:
+
+```
+$ flutter test test/property/planner_repair_property_test.dart
+...
+00:00 +0 -1: PlanRepairer.repair terminates within maxIterations for every input [E]
+  Expected: a value less than or equal to <1>
+    Actual: <4>
+     Which: is not a value less than or equal to <1>
+```
+
+**PIROS** — az `outcome.iterationsUsed <= maxIterations` állítás azonnal
+elbukott, mert a korlát nélkül a repair a caller által megadott
+kis `maxIterations`-t figyelmen kívül hagyva egészen a teljes
+javításig (vagy a feladásig) fut, ami éles adaton pontosan az ADR 0263
+kontextusában leírt „app-fagyás" kockázatot demonstrálja (a hívó SLA-ja
+sérül). A módosítást ezután visszaállítottam (`git diff` a próba után
+üres volt a fájlra), és a teljes gate újra zöld (§7 lásd lent).
+
+### 10.4 A §7 gate futtatása (csonkítatlan, külön processzek)
+
+```
+$ tools/round-gate.sh test/features/practice_generator/validation/plan_validator_test.dart test/features/practice_generator/validation/plan_repairer_test.dart test/property/planner_repair_property_test.dart
+...
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice_generator/validation/plan_validator_test.dart zöld
+    test test/features/practice_generator/validation/plan_repairer_test.dart zöld
+    test test/property/planner_repair_property_test.dart       zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A property tesztet ezen felül négy random seeddel (`PROPERTY_SEED=1|7|
+12345|999999`) is lefuttattam külön-külön — mindegyik zöld.
+
+### 10.5 Scope
+
+`git diff --stat 20d7499d HEAD` (a pre-flight revízió utáni bázistól):
+kizárólag a 8, `allowed_paths`-ban engedélyezett fájl változott (a
+brief `docs/rounds/e07-r11-…md` fájlját ez a §10 szakasz egészíti ki).
+`docs/adr/0263-…` nem módosult. Titok-vizsgálat (`check_secrets.dart`):
+0 találat.
+
+### 10.6 Javító kör — `docs/reviews/e07-r11-review.md` MAJOR
+
+**Talált hiba:** `_validateCompletedHistory` csak a `previousDay.status ==
+completed` esetet vizsgálta; egy `completed` `PracticeBlock`-ot egy
+nem-completed napon belül módosítani (vagy eltávolítani) nem váltott ki
+`completedHistoryModified` fatalt.
+
+**Javítás** (`plan_validator.dart` `_validateCompletedHistory`): a napszintű
+egyezés-ellenőrzés megmarad a `completed` napokra; emellett minden előző
+snapshotbeli napra végigmegy az összes `completed` blokkon, és a blokk ID
+alapján megkeresi az új snapshot megfelelő blokkját — hiányzó vagy
+érték-eltérő találat esetén ugyanazt a `completedHistoryModified` fatalt
+adja, most már a `blockId` mezővel is kitöltve.
+
+**Regressziós teszt:** `test/features/practice_generator/validation/
+plan_validator_test.dart` `severity boundary (§6.1)` csoportjában új eset —
+"a completed block inside a non-completed day is still fatal-guarded
+(review probe)" — reprodukálja a review próbáját (egy `completed`
+`block.1` 6→7 percre módosítva egy nem-completed napban), és a fix előtt
+`result.hasFatal` hamis lett volna.
+
+**Gate újrafuttatása (csonkítatlan, §7 alak):**
+
+```
+$ tools/round-gate.sh test/features/practice_generator/validation/plan_validator_test.dart test/features/practice_generator/validation/plan_repairer_test.dart test/property/planner_repair_property_test.dart
+...
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice_generator/validation/plan_validator_test.dart zöld
+    test test/features/practice_generator/validation/plan_repairer_test.dart zöld
+    test test/property/planner_repair_property_test.dart       zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+Az érintett fájlok (`plan_validator.dart`,
+`plan_validator_test.dart`, ez a szakasz) mindegyike a §0.0
+`allowed_paths` listáján van; ADR, CI és tooling fájl nem módosult.
 
 ## 11. Review — a Claude tölti ki
