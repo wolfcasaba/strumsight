@@ -1,6 +1,6 @@
 # E07-R11 — PlanValidator és deterministic repair
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ ba834de8`)
+- **Státusz:** IN PROGRESS (pre-flight felülmérve 2026-08-16, `main @ 74215044`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 11
 - **Kör-azonosító:** `E07-R11`
 - **Branch:** `<motor>/e07-r11-plan-validator-and-repair`
@@ -115,6 +115,45 @@ committolt brief ellen, bizonyítva, hogy a mért útvonal az új listával bel�
 van, egy szomszédos, a `validation/` alkönyvtáron KÍVÜLI útvonal viszont
 továbbra is kívül marad (a bővítés szűk, nem az egész `test/fixtures/
 practice_generator/` fa).
+### 0.0.1 Pre-flight revízió — a validáció bemenete explicit domain-context
+
+**Mérés.** A `PracticeBlock` csak az `ExercisePrescription` snapshotját
+tárolja (`exerciseId`, `source`, `contentRevision`, idő és success criteria);
+nem tartalmaz aktuális catalog-assetet, eszközállapotot, hangolást vagy
+load-profilt. Ezek a `ExerciseCandidate`/`PracticeCatalogSnapshot` oldalon
+érhetők el, a `LearnerConstraint.code`/`value` pedig szándékosan általános
+string, tehát a validátor nem következtethet belőle saját string-szabályt.
+`PlanChangeReason.systemAdaptation` már létezik és a repair strukturált oka
+lehet. Bizonyíték: `practice_block.dart`, `exercise_prescription.dart`,
+`exercise_candidate.dart`, `practice_catalog_snapshot.dart`,
+`learner_constraints.dart`, `plan_change_set.dart` a `main @ c573ed2f`-n.
+
+**Feloldás.** A két új service saját, public domain contractja
+`PlanValidationContext`: a hívó által adott, immutable catalog snapshot,
+hard availability és comparison input. A context explicit, typed/identity
+alapú állításokkal szolgáltatja az aktuális executabilityt (referenced
+candidate + content revision, asset, device capability, offline, tuning és
+hard-avoid); a validator ezekből **csak** determinisztikus leletet készít,
+nem értelmezi a constraint szabad szövegét. A load-profile-t ugyanebből a
+catalog snapshotból olvassa. A completed-history ellenőrzéshez a context az
+előző teljes snapshotot is hordozza.
+
+**Kötelező szűk szerződés.** Az identity `source.code:exerciseId`; a jelenlegi
+catalogban hiányzó identity vagy eltérő content revision `error`. A context
+nem megerősített asset/capability/offline/tuning/hard-avoid állapota szintén
+`error` (nincs optimistic fallback). A hard maximum a `WeeklyAvailability`
+hard maximuma, összehasonlítás mikrosecond pontosságú és inkluzív. A
+terhelési sorrend egy day blokkjainak növekvő `order` sorrendje; három egymást
+követő, `frettingHand == LoadLevel.high` blokk `warning` (a terv review-ra
+szorul, de nem lesz automatikusan végrehajthatatlan). Az érték a service
+injektálható policy-paramétere, alapértelmezése 2 megengedett egymás után.
+
+**Repair-határ.** A repair kizárólag nem-completed blokkokat rövidíthet vagy
+eltávolíthat; a contextből kapott új `RevisionId`-vel `PlanChangeSet`-et ad
+vissza, minden változáshoz `PlanChangeReason.systemAdaptation`-nel. `fatal`,
+completed-history sértés vagy a megadott iterációs korlát kimerülése sikertelen
+eredmény, nem további próbálkozás. Ez a feloldás nem módosít lezárt ADR-t és
+nem bővíti a fájllistát.
 
 ## 1. Cél
 
