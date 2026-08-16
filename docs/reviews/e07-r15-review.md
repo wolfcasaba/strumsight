@@ -63,3 +63,51 @@ BLOCKER: 0 · MAJOR: 3 · MINOR: 0 · NOTE: 0
 ## Merge-döntés
 
 Az első MiniMax-javítás után F1 MAJOR nyitva maradt; az ADR 0087 szerinti következő javítást Codex viszi külön munkapéldányban. Merge továbbra is tilos.
+
+## F4 javításának független újraértékelése — 2026-08-16
+
+Reviewer: Codex / gpt-5.6-terra (izolált klón:
+`/tmp/review-e07-r15-arsAdY`, head `1f106792`).
+
+### Ellenőrzött bizonyíték
+
+- `python3 tools/scope-audit.py --repo /tmp/review-e07-r15-arsAdY --brief
+  docs/rounds/e07-r15-weekly-scheduler.md --base
+  229fe9a8fddb408212d523275608e698be023f82` → **OK** (2 changed path, 0
+  generated/ignored).
+- `tools/round-gate.sh
+  test/features/practice_generator/scheduling/weekly_scheduler_test.dart
+  test/features/practice_generator/scheduling/scheduling_policy_test.dart` →
+  format, analyze, mindkét célzott teszt, architecture, secret és l10n
+  **zöld**.
+- `python3 tools/tests/test_e07_r15_song_target_phase_brief.py` → **OK**.
+- Az F4 korábbi, céldátum UTÁNI újanyag-elvárása eltűnt; a két új cella a
+  review jelölt target- és post-target napi elhelyezését, valamint az
+  újanyag `phaseMismatch` deferálását méri.
+
+### F5 — MAJOR — a cél-napi `performance` státuszt a regresszió nem méri
+
+- **Fájl:** `test/features/practice_generator/scheduling/weekly_scheduler_test.dart:413-635`
+- **Probléma:** A két új A5 cella csak azt méri, hogy a target és post-target
+  napokon új anyag nem választódik ki. A `SchedulingPhase.lightReview` is
+  ugyanezt a jelöltkizárást adja, ezért a teszt nem bizonyítja a brief §0.1 és
+  §5.5 saját állítását: `songTargetDate - scheduledDate <= 0` esetén a nap
+  **performance**.
+- **Valódi-sértés próba:** az izolált klónban
+  `scheduling_policy.dart`-ban a `dayDistance <= 0` guardot ideiglenesen
+  `dayDistance < 0`-ra lazítottam. A cél napja így `lightReview` lett, de
+  `flutter test ... --plain-name 'the target day itself is in the performance
+  phase — only review candidates qualify (A5, brief §0.1)'` továbbra is
+  **zöld** maradt. A guardot azonnal visszaállítottam; a review-klón tiszta.
+- **Hatás:** A5 és a brief mérce-mátrixa nem falszifikálja a target-day
+  performance/performance-boundary szerződést; egy későbbi policy-regresszió
+  zölden átcsúszhat.
+- **Kötelező javítás:** az A5 target- és post-target cellák explicit
+  `SchedulingPhase.performance` elvárást tartalmazzanak (célszerűen a
+  `dayDecisions[index].phase` mezőre), hogy a fenti mutáció piros legyen.
+- **Státusz:** OPEN.
+
+### Verdikt
+
+**CHANGES REQUIRED** — BLOCKER: 0 · MAJOR: 1 (F5) · MINOR: 0 · NOTE: 0.
+Merge és a jelenlegi CI-futás elfogadása tilos, amíg az F5 nincs lezárva.
