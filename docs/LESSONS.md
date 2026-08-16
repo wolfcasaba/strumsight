@@ -11045,3 +11045,17 @@ előtti pre-flight explicit kérdezze meg, hozott-e a testvér-kör kör-közben
 scope-revíziót, ami átvezetendő — a „friss `main`-t olvastam" önmagában nem
 elég, ha a revízió maga nem a briefben, hanem egy MÁSIK, párhuzamosan
 gyorsan mozgó kör §0.0.1-jében él.
+
+## L295 — A publikus policy-mező constructor-validációja nem bizonyítja, hogy a mező vezérli a viselkedést (E07-R14, 2026-08-16)
+
+**Mérve.** Az E07-R14 első implementációja validálta és dokumentálta a
+`roundingIncrement` és `ceilingMinutes` mezőt, de az allocator egyik értéket
+sem olvasta. Az alapértékes unit-tesztek és a teljes célzott gate zöldek
+maradtak; a független review két nem-default policyval olvasta a tényleges
+hívási utat, ezért MAJOR-ként megtalálta. A javítás után külön unit- és
+randomizált property-cellák bizonyítják az eltérő eredményt, az exact összeget
+és a hard maximumot.
+
+**Hogyan alkalmazd.** Minden új publikus policy-paraméterhez legyen legalább
+egy nem-default, megfigyelhető kimenetet adó teszt. A constructor kivételét
+tesztelő cella csak bemeneti validációt bizonyít, a policy bekötését nem.

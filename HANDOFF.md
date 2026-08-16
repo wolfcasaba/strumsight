@@ -3,9 +3,9 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (E07-R12 done — deterministic, explainable SkillPriorityEngine and versioned
-> policy merged; independent review, Full Gate and Router CI exact-SHA green,
-> PR #286. Next: E07-R13 candidate selection.) Prior:
+> (E07-R14 done — five typed daily time budgets, deterministic hard-limit / policy
+> allocation, micro-plan and typed shorten/extend change sets; independent review,
+> Full Gate and Router CI exact-SHA green, PR #288. Next: E07-R15 weekly schedule.) Prior:
 > E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
 > domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
 > `PracticeItemStatus` transition contract, monotonic `PlanRevision` full
@@ -917,6 +917,13 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-16):** `main` @ `70e6e718` — E07-R14 daily
+time-budget allocator, PR [#288](https://github.com/wolfcasaba/strumsight/pull/288),
+squash-merge. Exact `de95bd30`: Full Gate
+[31940629128](https://github.com/wolfcasaba/strumsight/actions/runs/31940629128)
++ Router CI [31940614513](https://github.com/wolfcasaba/strumsight/actions/runs/31940614513)
+success; a post-merge célzott gate a friss `main`-en zöld.
+
 **Aktuális állapot (2026-08-16):** `main` @ `18630834` — E07-R12
 SkillPriorityEngine és verziózott priority policy, PR
 [#286](https://github.com/wolfcasaba/strumsight/pull/286), squash-merge.
@@ -1293,6 +1300,17 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R14 — TimeBudgetAllocator és micro-plan** (PR
+[#288](https://github.com/wolfcasaba/strumsight/pull/288), squash `70e6e718`,
+[ADR 0298](docs/adr/0298-time-budget-allocation-contract.md)). Domain-pure,
+determinista napi felosztó az SDD öt typed idejére: active playing, rest,
+setup, reflection és elapsed session. Az inkluzív hard maximum, a policy
+ceilinge és a floor-rounding sosem lép át napi korlátot; rövidítés és explicit
+`extendToday` typed `systemAdaptation` change-setet ad. A review két MAJOR-t
+talált (hiányzó extend út, inert policy mezők), egy MiniMax javító kör zárta,
+az ismételt független review APPROVED; egy stale belső doc-link MINOR maradt.
+Exact `de95bd30`: Full Gate + Router CI success; post-merge gate zöld.
 
 **E07-R12 — SkillPriorityEngine és policy config** (PR
 [#286](https://github.com/wolfcasaba/strumsight/pull/286), squash `18630834`,
@@ -1890,10 +1908,9 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R13** (Chapter 8, Kör 13 —
-`CandidateSelector`, hard filter és diversity). A friss session pre-flightban
-mérje újra az E07-R12 tényleges `SkillPriority`/`PriorityPolicy` contractját:
-a hard korlát továbbra is csak a jelölt-szűrésé, sosem priority faktor. A
+**A soron következő SDD-lépés: E07-R15** (Chapter 8, heti ütemezés). A friss
+session pre-flightban mérje újra az E07-R14 `TimeBudgetAllocator` contractját,
+különösen a typed időösszeget, hard maximumot és typed change-setet. A
 `practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
 `false` maradnak.
 
