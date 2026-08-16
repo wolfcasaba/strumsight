@@ -313,4 +313,52 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `practice_block.dart`: nyolc stabil-kódú `PracticeItemStatus`, pinnelt
+  átmenetmátrix, immutable `PracticeBlock`, JSON és completed-content guard.
+- `practice_day.dart`: ugyanaz a státusz-contract és immutable napmodell,
+  JSON-nal és completed-day content guarddal.
+- `adaptive_practice_plan.dart`: verziózott, veszteségmentes terv-JSON,
+  teljes goal/prescription round-trip, provenance/policy-verziók és
+  user-note-mentes `PracticePlanSummary`.
+- `plan_revision.dart`: szigorúan monoton revision-szám, teljes snapshot és
+  `final` mezők; a korábbi revision csak validációs bemenet, nem élő tartalom.
+- `plan_change_set.dart`: typed változástípusok és indokok, strukturált
+  before/after értékekkel.
+- `public.dart`: a hat új domain-contract publikus exportja.
+- A három tervteszt közös, feature-local builderét a jóváhagyott
+  `test/fixtures/practice_generator/plan/plan_fixtures.dart` adja.
+
+### Acceptance evidence
+
+- A1–A3: `plan_revision_test.dart` a revision alatt/egyenlő/fölötte három
+  celláját, a teljes snapshotot és az írás-tilalmat méri.
+- A4–A5: `adaptive_practice_plan_test.dart` mind a nyolc státusz legalább egy
+  elfogadott (nem terminális) és egy tiltott célját blockon és napon külön
+  méri, továbbá a completed block replacement hibáját.
+- A6: `plan_change_set_test.dart` typed indokot és strukturált before/after
+  adatot mér.
+- A7–A8: a plan JSON round-trip teljes értékegyenlőségét, a summary user-note
+  redakcióját méri.
+
+### Valódi-sértés próba
+
+`PlanRevision.snapshot` ideiglenesen nem-`final` mező volt. A
+`flutter test test/features/practice_generator/plan/plan_revision_test.dart`
+futásban az A2 teszt elvártan PIROS lett: a dynamic assignment visszatért egy
+`AdaptivePracticePlan`-nel a várt `NoSuchMethodError` helyett. A mezőt azonnal
+visszaállítottam `final`-ra; a teljes célzott tesztcsomag ezután zöld.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/features/practice_generator/plan/plan_revision_test.dart test/features/practice_generator/plan/adaptive_practice_plan_test.dart test/features/practice_generator/plan/plan_change_set_test.dart` — **40 passed**.
+- `flutter analyze lib/ test/ tool/` — **No issues found**.
+- `tools/round-gate.sh test/features/practice_generator/plan/plan_revision_test.dart test/features/practice_generator/plan/adaptive_practice_plan_test.dart test/features/practice_generator/plan/plan_change_set_test.dart` — **format/analyze/3 célzott teszt/architecture/secrets/l10n zöld**.
+
+### Eltérés / nem futtatott ellenőrzés
+
+- Nincs funkcionális eltérés. Backend vagy natív scope nincs, ezért nincs
+  backend pytest vagy lokális APK-build.
+
 ## 11. Review — a Claude tölti ki
