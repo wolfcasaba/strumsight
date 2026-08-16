@@ -102,6 +102,9 @@ final class PlanRepairer {
       changes.add(step.change);
     }
     final finalResult = validator.validate(current, context);
+    if (!finalResult.hasError && !finalResult.hasFatal) {
+      return _succeed(plan, current, changes, context, maxIterations);
+    }
     return PlanRepairOutcome.failed(
       remainingIssues: finalResult.issues,
       iterationsUsed: maxIterations,
