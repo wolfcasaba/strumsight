@@ -1,10 +1,13 @@
 # E07-R08 — Független review
 
 - **Első review SHA:** `8c9df8c4597533b1fc0c1a85ff5503f42f6b0c67`
+- **Javító kör #1 SHA:** `b3a311653790` (a review-commit `86bc9cca` fölött)
 - **Pre-flight bázis:** `19836c652afc9203c7d6014fbe4524c4449661a0`
-- **Reviewer:** Claude (Sonnet 5) orchestrátor, izolált klón: `/tmp/review-e07-r08`
-  (forrás: `/home/ubuntu/ss-terra-e07-r08`, a branch még nincs origin-en)
-- **Verdikt:** **CHANGES REQUESTED**
+- **Reviewer:** Claude (Sonnet 5) orchestrátor, izolált klónok:
+  `/tmp/review-e07-r08` (első pass), `/tmp/review-e07-r08-fix1` (javítás
+  utáni pass) — forrás mindkétszer `/home/ubuntu/ss-terra-e07-r08`, a branch
+  még nincs origin-en
+- **Verdikt:** **APPROVED** (javító kör #1 után)
 
 ## Bizonyíték
 
@@ -102,7 +105,16 @@ Engedélyezett fájlokon kívüli változás: **nincs** (9/9 a listán, ld. fent
   `requiresMicrophone`-ra — ezek híján a mostani teszt csak a NEGATÍV
   (`requiresCamera`/`requiresBackingTrack`) oldalt fogja, a pozitív oldal
   bizonyítatlan marad.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`b3a31165`) — a Practice Engine adapter mindhárom
+  kulcsot `supported`-ra állítja; a Legacy adapter a `requiresMicrophone`-t
+  `supported`-ra, a `supportsTempo`/`supportsLoop`-ot explicit,
+  megindokolt `unsupported`-on hagyja (§10 „Javító kör #1": nincs
+  session-config megfelelő a `Lesson`-on). Mindkét pozitív állítás tesztelt
+  (`practice_engine_catalog_adapter_test.dart` diffje). Saját, eldobható
+  próbateszttel (`/tmp/review-e07-r08-fix1/test/_review_probe_fix1_test.dart`,
+  törölve) függetlenül megerősítve: mindhárom Practice Engine kulcs
+  `supported`, a negatív kulcsok (pl. `requiresCamera`) változatlanul
+  `unsupported` — nincs regresszió.
 
 ### F2 — MINOR — Az új value-típusok nem implementálnak `operator==`/`hashCode`-ot
 
@@ -126,9 +138,15 @@ Engedélyezett fájlokon kívüli változás: **nincs** (9/9 a listán, ld. fent
   hash), a Practice feature meglévő mintáját követve.
 - **Ellenőrzés:** egy egyszerű `expect(candidateA, candidateA_copy)` /
   `expect(candidateA, isNot(candidateB))` teszt-pár típusonként.
-- **Státusz:** OPEN — ha a diff a javító körben túl nagyra nőne emiatt, a
-  szerző dönthet follow-up mellett a handoffban indokolva (a MINOR-osztály
-  ezt megengedi); ez önmagában nem tartja nyitva a merge-et.
+- **Státusz:** **FIXED** (`b3a31165`) — mind a hat típus (`ExerciseCandidate`,
+  `SupportedDurations`, `DifficultyRange`, `ExerciseLoadProfile`,
+  `PracticeCatalogSnapshot`, `CandidateExclusionWarning`) mezőnkénti
+  `operator==`/`hashCode`-ot kapott (lista/capability-map összevetés saját
+  lokális helperrel, konzisztensen a Practice feature `listEquals`/`listHash`
+  szellemével). Saját, eldobható próbateszttel függetlenül megerősítve:
+  két, mezőnként azonos `ExerciseCandidate` egyenlő és azonos hash-t ad, egy
+  eltérő `exerciseId`-jú nem egyenlő; a `PracticeCatalogSnapshot` mezőnkénti
+  egyezése is helyesen egyenlőséget ad.
 
 ### N1 — NOTE — `missingPrerequisite` kód három különböző hiányzó mezőre újrahasznosítva
 
@@ -141,7 +159,7 @@ Engedélyezett fájlokon kívüli változás: **nincs** (9/9 a listán, ld. fent
   ténylegesen hordozza a pontos okot. Nem blokkol; egy jövőbeli SDD-bővítés
   fontolhatja saját kódok hozzáadását.
 
-## Gate-bizonyíték ellenőrzése
+## Gate-bizonyíték ellenőrzése (első pass)
 
 | Gate | Állított eredmény (handoff) | Ellenőrizve (saját, izolált klón) |
 |---|---|---|
@@ -152,11 +170,39 @@ Engedélyezett fájlokon kívüli változás: **nincs** (9/9 a listán, ld. fent
 | architecture | zöld | ✅ `tool/check_architecture.dart` → OK (12 allowlisted deviation, változatlan) |
 | secrets | (nem állította, a gate maga futtatja) | ✅ 0 finding |
 | l10n | (nem állította, a gate maga futtatja) | ✅ OK |
-| CI (teljes suite + property + APK) | — | még nem dispatch-elve (review-fázis) |
+
+## Javító kör #1 és lezáró ellenőrzés
+
+- A javító kör (`b3a31165`) a review-jelentést nem érintette (csak olvasta).
+  `gate_shape=VIOLATION` jelzést kapott a `.codex-round-status`-ban — a log
+  ellenőrzése után **hamis pozitívnak** bizonyult: a heurisztika a
+  `round-gate.sh` FORRÁSÁT `sed`-del kiolvasó, más (git status/diff)
+  parancsokkal `&&`-lánccal összekötött diagnosztikai lépésre ütött
+  (`/tmp/codex-e07-r08-fix1.log:7847`), NEM magára a gate-FUTTATÁSRA — a
+  tényleges, önálló `tools/round-gate.sh` hívás (log:7081) és a hozzá tartozó
+  teljes, csonkítatlan kimenet (log:8496-8722) tiszta, láncolás nélküli
+  futást mutat, mind a hét lépés ZÖLD.
+- Scope audit a javító kör után (`tools/scope-audit.py --repo
+  /tmp/review-e07-r08-fix1 --brief docs/rounds/e07-r08-practice-catalog-adapter.md
+  --base 86bc9cca`) → `OK`, 7 módosított út, 0 generált/ignorált.
+- Független gate friss `/tmp/review-e07-r08-fix1` klónban: format, analyze,
+  `practice_catalog_snapshot_test.dart` 9/9, `practice_engine_catalog_adapter_test.dart`
+  5/5, architecture, secrets, l10n → **mind zöld**.
+- Eldobható review-próba (`test/_review_probe_fix1_test.dart`, törölve) F1-et
+  és F2-t is közvetlenül, a shipped teszteken kívül újra megmérte (ld. F1/F2
+  Státusz sorok fent) — mindkettő megerősítve.
+- A `dirty_files=1` mindkét jelzésben (első forduló és javító kör is) egy
+  jóindulatú időzítési műtermék: a `codex-signal.sh done` a `git status
+  --porcelain`-t a jelzésfájl `mv`-je ELŐTT méri, közvetlenül a záró commit
+  után — mindkét esetben a workdir `git status --short` a jelzés után
+  azonnal ellenőrizve **tiszta** volt, és a commit tartalma teljes/koherens
+  volt a diff-stattal.
+
+F1 és F2 javítva; N1 nem igényel akciót. Új BLOCKER vagy MAJOR nincs.
 
 ## Merge-döntés
 
 ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-**F1 MAJOR nyitva** → merge egyelőre TILOS. Javító kör szükséges (ugyanaz a
-motor, `terra`, ugyanazon a branch-en) — F1 kötelező javítás, F2 opcionális
-(a szerző dönthet follow-up mellett indoklással), N1 nem igényel akciót.
+Mind a hét gate-lépés zöld (első pass ÉS javító kör után is, két független
+`/tmp` klónban), a scope-audit mindkétszer `OK`, F1/F2 zárva, N1
+informális. **Merge engedélyezett.**
