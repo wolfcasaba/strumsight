@@ -328,4 +328,3 @@ A kapu előtérben, csonkítatlan kimenettel fut. Implementer-jelzés:
 `tools/codex-signal.sh done "E07-R14 implementálva; célzott gate zöld; commit=<sha>"`
 
 ## 11. Review — a Claude tölti ki
-
