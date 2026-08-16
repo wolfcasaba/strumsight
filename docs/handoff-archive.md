@@ -8811,3 +8811,24 @@ saját `allowed_paths`-ától diszjunkt fájl). Konfliktusmentes rebase +
 `safe-force-push.sh` + CI-újradispatch oldotta (ADR 0242 §H8), nem halt.
 `practiceGeneratorEnabled` flag változatlanul `false`, nulla hívó a
 reducerre a domain rétegen kívül.
+
+## ✅ E07-R07 KÉSZ — Legacy Learn és Progress evidence adapterek
+
+PR [#277](https://github.com/wolfcasaba/strumsight/pull/277), squash
+`afd7e9c4`. SDD Ch8 Kör 7: az új `SkillSnapshotReader` porton át a
+`LegacyLessonCatalogAdapter` és `LegacyProgressEvidenceAdapter` kizárólag
+explicit, verziózott mappingból képez `SkillEvidence`-et. Ismeretlen vagy
+hiányos legacy rekordból nincs találgatás, készített outcome-ID, illetve
+másodpercből normalizált teljesítményérték. ADR
+[0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md).
+
+Independent review **APPROVED** egy javító kör után: az F1 MAJOR a nem
+létező built-in lesson ID-kat, az F2 MAJOR az egy outcome-ból több skillhez
+kiadott, repository-ban csendben elvesző evidence-et tárta fel. A javítás a
+shipping `Lessons.all` ID-kra rögzítette a táblát és egy outcome → legfeljebb
+egy skill szerződésre szűkítette; mindkettőt adapter→aggregátor→repository
+regressziós teszt méri. Exact-SHA `2d75d8b1`: Full Gate
+[31915638913](https://github.com/wolfcasaba/strumsight/actions/runs/31915638913)
++ Router CI [31915639663](https://github.com/wolfcasaba/strumsight/actions/runs/31915639663)
+success; a post-merge célzott gate a friss `main`-en szintén zöld (7/7).
+Mindkét generator flag továbbra is `false`; production hívó nincs.

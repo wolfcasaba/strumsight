@@ -10737,3 +10737,127 @@ a hiteles forrás, nem a jelzésfájl pillanatfelvétele — ha a jelenlegi
 `dirty_files` érték egy múltbeli pillanat, nem a jelenlegi tény. Egyik eset
 sem old fel automatikusan egy VALÓS sértést — csak azt mondja ki, hogy ez a
 KONKRÉT találat, kivizsgálva, nem az.
+
+## L289 — Az önjavító session sosem regisztrálta magát az `inflight_dir`-ben, ezért egy 5 percnél tovább futó self-heal mellett a KÖVETKEZŐ cron-firing PÁRHUZAMOS, második önjavító sessiont indított ugyanarra a haltra (E07-R09, H-NOSIGNAL, 2026-08-16)
+
+**Mit mértünk.** Ennek a self-heal futásnak a KÖZEPÉN (ez a session maga volt
+az 1/3. kísérlet, indult 02:00:03-kor) a `.pipeline/chain.log` és a `tmux ls`
+azt mutatta, hogy 02:05:02-kor a driver egy MÁSODIK, párhuzamos önjavító
+sessiont is indított (`heal-E07-R09-2`, 2/3. kísérlet) UGYANARRA a haltra —
+mindkét `PIPELINE_SLOTS=2` slot egyszerre egy-egy Claude-orchestrátort
+futtatott ugyanazon `(round=E07-R09, halt=H-NOSIGNAL)` pár feloldásán,
+miközben `.pipeline/selfheal.count` már `E07-R09|H-NOSIGNAL|2`-t mutatott,
+jóval mielőtt bármelyik session befejeződött volna. Mindkettő ugyanazt a
+KÖZÖS `.pipeline/heal-status` fájlt írta volna a végén (a `{{HEAL_STATUS_FILE}}`
+helyettesítő minden kísérlet promptjában ugyanarra az útvonalra mutat,
+`heal_status_file="$state_dir/heal-status"`), és a puszta párhuzamos indulás —
+nem valódi kudarc — fogyasztott volna el egy kísérletet a `$selfheal_max`
+(3) büdzséből.
+
+**Gyökérok.** A normál kör-dispatch régóta véd ez ellen: a driver
+`inflight_add "$round" "$brief"`-t hív a session indítása előtt, és
+`trap 'inflight_remove "$active_inflight"' EXIT`-tel törli, amíg a session
+fut — ezt olvassa `inflight_rounds()`, és erre épül a
+`tools/tests/test_round_pipeline_queue_pending_pr_guard.py` fejlécében leírt
+másik, ROKON hiányosság is (az inflight-regiszter session-határon túl NEM
+él, ezért a „nyitott PR" őr a sor-fájlra is támaszkodik). Az
+`attempt_selfheal()` viszont — a `tools/round-pipeline.sh` H-NOSIGNAL/egyéb
+halt-ágán induló javító session — SOHA nem hívta ezt: sem regisztrációt, sem
+törlést nem végzett. A `.pipeline/HALTED` fájl addig megmarad, amíg EGY
+önjavító session le nem zárja, ezért minden cron-firing, amíg ez tart, újra
+azt látta: „HALTED jelen van, van szabad slot" — és mivel semmi nem jelezte,
+hogy már fut egy, elindított egy újabbat.
+
+**Javítás.** `tools/round-pipeline.sh` `attempt_selfheal()`: (1) a
+kikapcsolt-ellenőrzés UTÁN, még a kísérletszámláló növelése ELŐTT egy új őr —
+ha `inflight_rounds | grep -qFx "$halt_round"`, a firing kilép (nem számít
+bele a kísérletbe); (2) a session indítása előtt `inflight_add "$halt_round"
+"heal:$halt_code"`, majd `trap 'inflight_remove "$halt_round"' RETURN` — a
+bash RETURN-trap a DEFINIÁLÓ függvény (itt: `attempt_selfheal`)
+visszatérésekor tüzel, beágyazott hívások (pl. `run_orchestrator_session`)
+saját visszatérésén NEM, empirikusan ellenőrizve — tehát a regisztráció a
+teljes hátralévő függvénytörzset (a mérce-őrszemet és a PR-ellenőrzést is)
+lefedi, nem csak a session-várakozást. Regressziós tesztek
+(`tools/tests/test_pipeline_integration.py`): egy teszt előre beültetett
+inflight-jelölővel bizonyítja, hogy a driver kihagyja a firinget és NEM
+növeli a `selfheal.count`-ot; egy másik, `python3`-stubon átvezetett
+hívásnaplóval bizonyítja, hogy `attempt_selfheal()` maga valóban meghívja
+mind az `inflight-add`, mind az `inflight-remove` alparancsot a helyes
+körazonosítóval — mindkettő PIROS volt a javítás előtt (`git stash` a
+`tools/round-pipeline.sh`-ra), ZÖLD utána. Teljes `tools/tests` (izolált
+worktree, `/tmp/rvenv/bin/python3 -m pytest tools/tests -q`): 452 passed,
+499 subtests passed. PR #280, squash `0aa72692`, Router CI
+[31922273433](https://github.com/wolfcasaba/strumsight/actions/runs/31922273433)
+success az exact `7dd1cfeb` SHA-n (nincs Dart-változás, Full Gate nem
+releváns).
+
+**Hogyan alkalmazd.** Bármelyik, session-élettartamhoz kötött „ez fut most"
+regiszter (itt: `inflight_dir`) csak annyit ér, amennyi KÓDÚT ténylegesen
+beírja és törli — nem elég, hogy LÉTEZIK a mechanizmus valahol a fájlban, ha
+az ÚJ hívási ág (itt: az önjavító ág, a normál kör-dispatchtól KÜLÖN
+kódútvonalon) nem hívja meg. Egy megosztott erőforrást (fájl, slot, jelzés)
+kiszolgáló ÖSSZES belépési pontot át kell nézni, nem csak a „fő", elsőként
+írt ágat — az önjavítás pontosan azért létezik, hogy egy ritka, korábban
+sosem gyakorolt kódutat fusson be, ezért az ilyen aszimmetriák itt bújnak
+meg legtovább.
+
+## L290 — Egy csak-szöveges, IGAZ, de nem-terminális státusz-üzenet ("még fut") jelzésfájl nélkül ugyanúgy H-NOSIGNAL, mint egy hibás parancs-újraindítás — a helyes yield-resume minta követése önmagában nem elég (E07-R09, H-NOSIGNAL, 2026-08-16)
+
+**Mit mértünk.** Az E07-R09 orchesztrátor (Terra) saját, strukturált
+rollout-naplója (`~/.codex-terra/sessions/2026/08/16/rollout-2026-08-16T01-15-16-
+01a00823-261b-7e70-94ad-b7c011007011.jsonl`) szerint a kötelező
+`tools/wait-for-ci.sh 31920433829` hívás (`exec_command`) 01:49:27-kor
+`session_id 75633`-at kapott, majd 01:49:57-től 01:58:42-ig 17 egymást követő
+`write_stdin({"session_id": 75633, "chars": "", ...})` hívással, kb. 8,5
+percen át, HELYESEN UGYANAZT a sessiont kérdezte le újra — pontosan az
+L282/E07-R04 mérés szerinti helyes minta, minden egyes válasz
+`"output":""` (a mögöttes `wait-for-ci.sh` csendben pollozik, amíg a
+workflow nem `completed`). A saját `max_wait` (alapértelmezett 1800s) ekkor
+még távolról sem telt le, és a ténylegesen várt Full Gate futás
+(`databaseId 31920433829`) csak 02:03:14Z-kor zárt le
+(`conclusion=failure`) — a várakozás tehát VALÓDI és INDOKOLT volt. A turn
+mégis 01:58:45Z-kor véget ért egyetlen `agent_message`/`task_complete`
+eseménnyel, szó szerint: „E07-R09 folyamatban: az implementáció és a
+független re-review zöld, PR #279 nyitva. A Full Gate exact-SHA CI futása
+(`31920433829`) még tart; merge még nem történt." — nem következett sem
+újabb tool-hívás, sem `outcome=halted` jelzés. A driver ezt az
+ELAKADÁS-GYORSÍTÓ (L278/E99-R13) segítségével MÁSODPERCEKEN belül helyesen
+H-NOSIGNAL-ként ismerte fel (nem várta ki a 20 perces elakadás-őrt).
+
+**Gyökérok.** `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 az
+L282/E07-R04 javítás óta kimondta: yield után UGYANAZT a sessiont/cellát
+kérdezd le újra, SOSE indítsd újra magát a parancsot. Ez a szabály
+KIZÁRÓLAG azt tiltotta, hogy a modell újraindítsa a parancsot — nem mondta
+ki, hogy egy csak-szöveges, nem-terminális státusz-üzenet, ÚJABB tool-hívás
+vagy jelzésfájl nélkül, MAGÁBAN is véget vethet a turnnak. A §3 általános
+mondata („Jelzés nélküli futás = bukott futás") jelen volt, de nem kötötte
+össze ezzel a konkrét mintával — egy igaz, becsületes „még fut" mondat
+ÖNMAGÁBAN nem tűnt „elakadásnak" a modell számára, ezért nem aktiválta a §4
+„Ha te is elakadsz" → `outcome=halted` ágat sem.
+
+**Javítás.** `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 új
+bullet, közvetlenül az L282 yield-resume szabálya után: névvel idézi az
+E07-R09 mért session-t és a szó szerinti státusz-mondatot, és kimondja —
+amíg egy elindított várakozó session/cella nem adott terminális eredményt, a
+turn NEM érhet véget csak szöveggel; vagy folytatod a pollingot MOST,
+ugyanebben a turnban (nincs „következő firing", a `codex exec` session
+egyszeri), vagy a §4 szerinti `outcome=halted` jelzést írod ki ELŐBB.
+Regressziós tesztek (`tools/tests/test_pipeline_codex_orchestrator_preamble.py`,
+új `CodexOrchestratorPreambleNoStatusOnlyTurnEndTest` osztály, 3 eset: a
+tiltó mondat szó szerint jelen van, E07-R09/`session_id 75633` idézve, a
+mért státusz-mondat szó szerint idézve) — mindhárom PIROS volt a javítás
+előtt, ZÖLD utána (közvetlen revert-és-újrafuttatás). Ugyanabban a PR-ben
+(#280) ment, mint az L289 javítása; a teljes gate és a Router CI eredménye
+ott.
+
+**Hogyan alkalmazd.** Egy korábbi self-heal ÁLTAL helyesen betanított
+viselkedés (itt: „ne indítsd újra a yield-elt parancsot") NEM zárja ki, hogy
+UGYANAZ a hibaosztály (H-NOSIGNAL) egy MÁSIK, szomszédos mintán át
+visszatérjen — a modell tökéletesen tarthatja be a betanított szabályt, és a
+szabály hézagán (mit jelent pontosan „a turn végetérhet") mégis elcsúszhat.
+Codex/Terra-oldali önjavításnál a strukturált rollout-JSONL-ben a
+`write_stdin`/`custom_tool_call_output` sorozat UTOLSÓ eleme után az UTOLSÓ
+`agent_message`/`task_complete` eseményt nézd meg külön: ha az csak szöveg,
+és a megelőző poll-sorozat `output` mezője üres/nem-terminális maradt, az
+PONTOSAN ez a hibaosztály — függetlenül attól, hogy a szöveg tartalma igaz
+volt-e.

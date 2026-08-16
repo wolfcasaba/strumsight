@@ -3,10 +3,55 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (E07-R08 merged as PR #278: practice catalog capability adapter —
-> revisioned, capability-true exercise candidates from Practice Engine and
-> legacy Learn content.)**
-
+> (H-NOSIGNAL self-heal PR #280 merged — self-heal launcher no longer races
+> itself, and the Codex/Terra preamble now forbids ending a turn on
+> status-only text while a poll session is open; chain unblocked. E07-R09's
+> own attempted implementation had a real Full Gate failure (`DateTime.now()`
+> in domain code) and its stale PR #279 was closed by the cleanup — a fresh
+> E07-R09 attempt starts from the untouched brief on the next firing.)**
+>
+> ## ✅ [HEAL E07-R09/H-NOSIGNAL] KÉSZ — az önjavító session sosem regisztrálta magát inflight-ként (párhuzamos második önjavítás indult), és egy igaz, de nem-terminális státusz-mondat jelzésfájl nélkül is H-NOSIGNAL (2026-08-16)
+>
+> Két független, mért gyökérok ugyanazon halt mögött. **(1)** `attempt_selfheal()`
+> (`tools/round-pipeline.sh`) sosem hívta az `inflight_add`/`inflight_remove`
+> párt, amit a normál kör-dispatch régóta használ — a `.pipeline/HALTED` addig
+> megmarad, amíg EGY önjavító session le nem zárja, ezért minden 5 perces
+> cron-firing addig újabb, párhuzamos önjavító sessiont indított ugyanarra a
+> haltra. Élesben mérve: `heal-E07-R09-1` (02:00:03) és `heal-E07-R09-2`
+> (02:05:02) egyszerre futott, mindkét `PIPELINE_SLOTS=2` foglalva, mindkettő
+> a KÖZÖS `heal-status` fájlt írta volna, a puszta párhuzamos indulás egy
+> kísérletet fogyasztott a 3-as büdzséből valódi kudarc nélkül. **(2)** A
+> Codex/Terra orchesztrátor-preambulum az E07-R04/L282 óta tiltja a yield-elt
+> parancs újraindítását, de nem mondta ki, hogy egy csak-szöveges, IGAZ, de
+> nem-terminális státusz-mondat („még fut") is, önmagában, jelzésfájl nélkül,
+> véget vethet a turnnak. Mérve (session `01a00823-261b-…`): a `wait-for-ci.sh`
+> session-jét (`session_id 75633`) 17 poll alatt, 8,5 percig HELYESEN
+> folytatta — majd a turn egyetlen státusz-mondattal véget ért, miközben a
+> ténylegesen várt Full Gate futás csak percekkel később, pirosan zárt.
+>
+> Javítás: `tools/round-pipeline.sh` `attempt_selfheal()` most regisztrálja/
+> törli magát az `inflight_dir`-ben (bash `RETURN`-trap), és kihagyja a
+> firinget kísérlet-fogyasztás nélkül, ha már fut egy a körre;
+> `docs/execution/pipeline-codex-orchestrator-preamble.md` §2 új bullet
+> kimondja: amíg egy elindított session/cella nem adott terminális
+> eredményt, a turn NEM érhet véget csak szöveggel. Mindkét regressziós
+> tesztcsoport PIROS volt a javítás előtt (`git stash` roundtrip), ZÖLD
+> utána; teljes `tools/tests` izolált worktree-ben: 452 passed, 499
+> subtests passed. PR [#280](https://github.com/wolfcasaba/strumsight/pull/280),
+> squash `0aa72692`, Router CI
+> [31922273433](https://github.com/wolfcasaba/strumsight/actions/runs/31922273433)
+> success az exact `7dd1cfeb` SHA-n (docs/tools-only, nincs Dart-változás,
+> Full Gate nem releváns). Leckék: `docs/LESSONS.md` **L289**, **L290**.
+>
+> Cleanup (nem a kódjavítás része): a megállt E07-R09 kör nyitott PR #279-e
+> (`sonnet-impl/e07-r09-exercise-prescription`) egy valódi Full Gate hibát
+> hordozott (`exercise_prescription.dart` `DateTime.now(`-t tartalmaz, a
+> brief saját tilalma ellenére) — a `heal-E07-R09-2` testvér-session zárta le
+> (PR close + branch delete), miután észlelte, hogy ez a session már a
+> kódjavításon dolgozik, és nem duplikálta azt. A sor-fájl E07-R09 sora
+> változatlanul `pending`; egy friss kör-session a következő firingen
+> újrakezdi az érintetlen briefből.
+>
 > ## ✅ E07-R08 KÉSZ — Practice catalog capability adapter
 >
 > PR [#278](https://github.com/wolfcasaba/strumsight/pull/278), squash
@@ -41,27 +86,6 @@
 > + Router CI [31918359641](https://github.com/wolfcasaba/strumsight/actions/runs/31918359641)
 > both success; post-merge gate on fresh `main` also green (7/7). Both
 > generator flags still `false`; zero production caller.
-
-> ## ✅ E07-R07 KÉSZ — Legacy Learn és Progress evidence adapterek
->
-> PR [#277](https://github.com/wolfcasaba/strumsight/pull/277), squash
-> `afd7e9c4`. SDD Ch8 Kör 7: az új `SkillSnapshotReader` porton át a
-> `LegacyLessonCatalogAdapter` és `LegacyProgressEvidenceAdapter` kizárólag
-> explicit, verziózott mappingból képez `SkillEvidence`-et. Ismeretlen vagy
-> hiányos legacy rekordból nincs találgatás, készített outcome-ID, illetve
-> másodpercből normalizált teljesítményérték. ADR
-> [0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md).
->
-> Independent review **APPROVED** egy javító kör után: az F1 MAJOR a nem
-> létező built-in lesson ID-kat, az F2 MAJOR az egy outcome-ból több skillhez
-> kiadott, repository-ban csendben elvesző evidence-et tárta fel. A javítás a
-> shipping `Lessons.all` ID-kra rögzítette a táblát és egy outcome → legfeljebb
-> egy skill szerződésre szűkítette; mindkettőt adapter→aggregátor→repository
-> regressziós teszt méri. Exact-SHA `2d75d8b1`: Full Gate
-> [31915638913](https://github.com/wolfcasaba/strumsight/actions/runs/31915638913)
-> + Router CI [31915639663](https://github.com/wolfcasaba/strumsight/actions/runs/31915639663)
-> success; a post-merge célzott gate a friss `main`-en szintén zöld (7/7).
-> Mindkét generator flag továbbra is `false`; production hívó nincs.
 
 > ## 📦 Korábbi kör-narratívák → archívum
 >
