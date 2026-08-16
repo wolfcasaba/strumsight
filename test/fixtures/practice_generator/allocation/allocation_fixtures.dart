@@ -19,10 +19,10 @@ final allocationToRevisionId = RevisionId('allocation.revision.1');
 /// stable across runs.
 DailyAvailability buildAvailability({
   int maximumMinutes = 20,
+  int? targetMinutes,
   ConstraintStrength maximumStrength = ConstraintStrength.hard,
   AvailabilityStatus status = AvailabilityStatus.available,
   int minimumMinutes = 0,
-  int? targetMinutes,
   LocalDate? date,
   int softExcessMinuteCost = 0,
 }) => DailyAvailability(
@@ -42,11 +42,13 @@ DailyAvailability buildAvailability({
 /// builder so the cell assertions stay focused on the contract.
 TimeBudgetAllocation runAllocation({
   Duration? requestedTotal,
+  int? targetMinutes,
   int maximumMinutes = 20,
   ConstraintStrength maximumStrength = ConstraintStrength.hard,
   TimeAllocationPolicy? policy,
   RevisionId? fromRevisionId,
   RevisionId? toRevisionId,
+  bool extendToday = false,
 }) {
   final allocator = TimeBudgetAllocator(
     policy: policy ?? TimeAllocationPolicy.defaultPolicy,
@@ -54,10 +56,12 @@ TimeBudgetAllocation runAllocation({
   return allocator.allocate(
     availability: buildAvailability(
       maximumMinutes: maximumMinutes,
+      targetMinutes: targetMinutes,
       maximumStrength: maximumStrength,
     ),
     requestedTotal: requestedTotal,
     fromRevisionId: fromRevisionId ?? allocationFromRevisionId,
     toRevisionId: toRevisionId ?? allocationToRevisionId,
+    extendToday: extendToday,
   );
 }
