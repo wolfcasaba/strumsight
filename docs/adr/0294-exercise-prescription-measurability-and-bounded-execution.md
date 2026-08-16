@@ -1,6 +1,6 @@
 # ADR 0294 — ExercisePrescription mérhetőségi és korlátos végrehajtási határa
 
-**Státusz:** elfogadva (2026-08-16, E07-R09 pre-flight).  
+**Státusz:** elfogadva (2026-08-16, E07-R09 pre-flight).
 **Forrás:** [E07-R09](../rounds/e07-r09-exercise-prescription.md), SDD Ch8 §15.
 **Épít:** [ADR 0255](0255-deterministic-first-practice-planning.md),
 [ADR 0258](0258-hard-and-soft-planning-constraints.md) és

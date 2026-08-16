@@ -1,8 +1,8 @@
 # E07-R09 — Review
 
-Brief: `docs/rounds/e07-r09-exercise-prescription.md`  
-Diff: `75b0cb36...de0efd35`  
-Reviewer: Codex / GPT-5.6 Terra · Dátum: 2026-08-16  
+Brief: `docs/rounds/e07-r09-exercise-prescription.md`
+Diff: `75b0cb36...de0efd35`
+Reviewer: Codex / GPT-5.6 Terra · Dátum: 2026-08-16
 Verdikt: **CHANGES REQUIRED**
 
 ## Összegzés
