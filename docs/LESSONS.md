@@ -11003,3 +11003,45 @@ feature-ben?”) — ha a minta konzisztensen modell-lokális, azt kövesd, NE e
 közös/megosztott fájlt válassz alapértelmezésként. Ez egyszerre kerüli el az
 indokolatlan scope-bővítést ÉS az inkonzisztens architektúrát, amit egy
 később érkező review MAJOR-ként fogna meg.
+
+## L294 — Egy pre-written brief nem örökli automatikusan az ELŐZŐ kör kör-közbeni scope-revízióját, még ha ugyanabban a feature-fában, ugyanazon a napon merge-el is — a negyedik mérés a hiányzó-megosztott-fixture mintára öt óra alatt (E07-R11, H3 self-heal, 2026-08-16)
+
+**Mérve.** Az E07-R11 brief (előre megírva 2026-08-15) `allowed_paths`-a a
+két validáció-tesztfájlt és a property-tesztet névre szólóan sorolta fel, de
+egyetlen megosztott fixture-helyet sem — miközben §6/§6.1 mindkét tesztfájltól
+ugyanazt a nem-triviális `AdaptivePracticePlan`/`PracticeDay`/
+`WeeklyAvailability` felépítést várta el. Az implementer (sonnet-impl,
+engine=minimax-m3) emiatt listán kívül hozta létre a
+`test/fixtures/practice_generator/validation/validation_fixtures.dart`-ot,
+helyesen H3-mal halt. A közvetlen előzmény: `E07-R10` §0.0.1 — UGYANEZEN a
+napon, mindössze órákkal korábban (merge `05:50:55`, R11 dispatch `05:51:04`)
+— pontosan ugyanezt a hiányt mérte a saját feature-fájában
+(`test/fixtures/practice_generator/plan/plan_fixtures.dart`), és explicit
+dokumentálta a repo-szintű `test/fixtures/<feature>/<terület>/
+<név>_fixtures.dart` konvenciót. A friss precedens léte a `main`-en NEM
+akadályozta meg a halt megismétlődését, mert az R11 brief korábban (2026-08-15)
+lett megírva, és a két dispatch között nem futott olyan pre-flight lépés, ami
+egy másik, MÉG FOLYAMATBAN lévő kör aznapi tanulságát átvezette volna.
+Feloldás: `allowed_paths` bővült a `test/fixtures/practice_generator/
+validation` bare directoryval (ua. minta, mint R10/[[L242]]/[[L246]]).
+Regressziós védelem: `tools/tests/test_e07_r11_validation_fixture_scope.py`
+— a mért halt-útvonalat futtatja `audit_legacy_scope()`-on a committolt brief
+ellen, és egy `validation/`-on KÍVÜLI szomszéd útvonalat is mér, bizonyítva,
+hogy a bővítés szűk maradt.
+
+**Hogyan alkalmazd.** Ez a NEGYEDIK mérés ugyanarra a gyökérokra
+([[L242]]/E06-R20, [[L246]]/E06-R23, R10 §0.0.1, most E07-R11) — a minta már
+nem eseti, hanem szisztematikus: egy kör §6 acceptance criteriája, amint
+**kettő vagy több** tesztfájl ugyanazt a nem-triviális domain-objektumot
+építi fel, majdnem BIZTOSAN egy megosztott `test/fixtures/<feature>/<terület>`
+könyvtárat igényel, függetlenül attól, hogy ezt a brief szerzője előre látta-e.
+Batch- vagy pre-write időpontban ELSŐ osztályú ellenőrzésként kezeld (ne
+utólagosként): ha egy brief két+ tesztfájlt sorol fel `allowed_paths`-ban,
+és azok közös fixture-igénye valószínűsíthető, vedd fel a könyvtárat is —
+még ha a konkrét fájlnév nem is dönthető el előre. Ha egy pre-written brief
+egy MÁSIK, még folyamatban lévő testvér-kör mögött/mellett dispatchol
+ugyanabban a feature-fában (mint itt R10→R11, öt órán belül): a dispatch
+előtti pre-flight explicit kérdezze meg, hozott-e a testvér-kör kör-közbeni
+scope-revíziót, ami átvezetendő — a „friss `main`-t olvastam" önmagában nem
+elég, ha a revízió maga nem a briefben, hanem egy MÁSIK, párhuzamosan
+gyorsan mozgó kör §0.0.1-jében él.

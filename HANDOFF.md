@@ -3,51 +3,17 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
+> (HEAL E07-R11/H3 done — the E07-R11 brief was missing a shared validation-
+> fixture directory in `allowed_paths`; widened with `test/fixtures/
+> practice_generator/validation` and a regression test, PR #284. The chain
+> resumes E07-R11 (PlanValidator and deterministic repair) next. Prior:
+> E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
 > domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
 > `PracticeItemStatus` transition contract, monotonic `PlanRevision` full
 > snapshots, structured `PlanChangeSet` diffs, and a `PracticePlanSummary` DTO
 > that structurally excludes learner free text. Both the independent review
 > (1 MINOR, fixed) and the mandatory security review (`risk = "high"`) closed
 > clean — see §2 for detail.)**
->
-> ## ✅ [HEAL E07-R09/H5] KÉSZ — a domain-purity guard a saját dokumentációját cáfolta meg magának (2026-08-16)
->
-> Az E07-R09 Full Gate-je kétszer piros volt ugyanarra az okra:
-> `test/core/architecture_dependency_test.dart` „practice generator domain
-> stays framework-free (E07-R02)” blokkja a NYERS fájlszövegen keresett
-> tiltott markert (`DateTime.now(`) — az `exercise_prescription.dart:6`
-> doc-commentje szó szerint idézi a „`DateTime.now()`-free, `Random`-free”
-> garanciát, és ez a dokumentáció-string buktatta meg a saját magát leíró
-> ellenőrzést (mért, egyetlen offender:
-> [31922993201](https://github.com/wolfcasaba/strumsight/actions/runs/31922993201)).
-> **Ez a MÁSODIK előfordulása** ugyanennek a hibaosztálynak egy nap alatt —
-> `docs/LESSONS.md` **L283** (E07-R05, 2026-08-15) ugyanezt a blokkot mérte
-> `skill_evidence.dart`-on, és csak a kommentet írta át. Mivel a self-heal
-> szélesebb jogosultsággal rendelkezik, mint egy normál kör-session, ez a
-> javítás most a guard-ot magát javította: a blokk két trivia-maszkolt
-> nézetet vizsgál a nyers szöveg helyett — komment mindig maszkolt;
-> string-literál tartalom csak a két hívás-markernél (`DateTime.now(`,
-> `Random(`) maszkolt, az import-URI markereknél (`package:flutter/`,
-> `dart:ui`) megőrződik (valódi előfordulásuk kizárólag import-string-ben él
-> — ezt a buktatót a saját regressziós tesztem fogta meg írás közben, még a
-> PR megnyitása előtt). A minta a testvér guard
-> (`test/features/practice/domain/domain_purity_test.dart`) már bizonyított
-> trivia-maszkoló logikáját tükrözi. PR
-> [#282](https://github.com/wolfcasaba/strumsight/pull/282), squash
-> `8ffa3ca1`, Full Gate ekvivalens (`build-apk.yml`)
-> [31924697541](https://github.com/wolfcasaba/strumsight/actions/runs/31924697541)
-> success az exact `d82e55f1` SHA-n (egyetlen tesztfájl, nincs router-ci
-> trigger-útvonal érintve). Lecke: `docs/LESSONS.md` **L291**.
->
-> A megállt kör saját ága (`sonnet-impl/e07-r09-exercise-prescription`, PR
-> #281, független review-val már **APPROVED** — BLOCKER:0/MAJOR:0) SZÁNDÉKOSAN
-> érintetlen maradt: ez a self-heal a megállt kör levezénylése helyett kizárólag
-> az akadályt szüntette meg (ADR 0112 mandátum). ADR 0242 D2
-> (`resolve_branch_implementer`) a következő E07-R09 firingen folytatásként
-> ismeri fel azt a branch-et, a mostantól javított guard alatt a Full
-> Gate-nek zölden kell zárnia — nincs elvesző munka, nincs duplikált
-> implementáció.
 >
 > ## ✅ [E07-R10] KÉSZ — AdaptivePracticePlan, day, block és revision domain (2026-08-16)
 >
@@ -90,6 +56,50 @@
 > `plannerAssistEnabled`) `false` marad, nulla production hívó — production
 > viselkedés változatlan. Következő kör: **E07-R11** (PlanValidator és
 > deterministic repair, `docs/rounds/e07-r11-plan-validator-and-repair.md`).
+>
+> ## ✅ [HEAL E07-R11/H3] KÉSZ — az E07-R11 brief hiányzott egy megosztott validáció-fixture könyvtárat (2026-08-16)
+>
+> Az E07-R11 brief `allowed_paths`-a a két validáció-tesztfájlt
+> (`plan_validator_test.dart`, `plan_repairer_test.dart`) és a property-tesztet
+> névre szólóan sorolta fel, de egyetlen megosztott fixture-helyet sem —
+> miközben §6/§6.1 mindkét tesztfájltól ugyanazt a nem-triviális
+> `AdaptivePracticePlan`/`PracticeDay`/`WeeklyAvailability` felépítést várta
+> el. A sonnet-impl (engine=minimax-m3) implementer emiatt listán kívül hozta
+> létre `test/fixtures/practice_generator/validation/validation_fixtures.dart`-ot
+> (munkapéldány `/home/ubuntu/ss-sonnet-impl-e07-r11`, `head=a82bef17`, 7
+> piszkos fájl, egyik sem commitolva) — a scope-audit helyesen `stopped`-ra
+> váltotta (H3, `.pipeline/HALTED` halted_at=2026-08-16T06:06:06Z).
+>
+> **Nem új hibaosztály.** A közvetlen precedens az ELŐZŐ kör, ugyanebben a
+> feature-fában: `E07-R10` §0.0.1 — alig öt órával korábban (R10 merge
+> `05:50:55`, R11 dispatch `05:51:04`) pontosan ugyanezt a hiányt mérte
+> (`test/fixtures/practice_generator/plan/plan_fixtures.dart`), de az R11
+> brief korábban (2026-08-15) lett előre megírva, és a két dispatch között
+> nem futott olyan pre-flight, ami az R10-frissen-mért konvenciót átvezette
+> volna. Lásd még `docs/LESSONS.md` **L242** (E06-R20) és **L246** (E06-R23) —
+> ez a NEGYEDIK mérés ugyanarra a gyökérokra. A self-heal elolvasta a fájl
+> teljes tartalmát: kizárólag a már engedélyezett `public.dart` típusaiból
+> épít paraméterezhető teszt-builder függvényeket, 0 domain-döntés.
+>
+> Feloldás: `allowed_paths` bővült a `test/fixtures/practice_generator/
+> validation` bare directoryval (R10/L242 mintáját követve, nem az egyetlen
+> jelenleg létező fájlnevet rögzítve) — 0 tartalmi/architekturális döntés
+> változott. Regressziós védelem:
+> `tools/tests/test_e07_r11_validation_fixture_scope.py` — a mért
+> halt-útvonalat futtatja `audit_legacy_scope()`-on a committolt brief ellen,
+> és egy `validation/`-on kívüli szomszéd útvonalat is mér, bizonyítva, hogy
+> a bővítés szűk maradt. Teljes `tools/tests` gate: 454 passed, 498 subtests
+> passed. PR [#284](https://github.com/wolfcasaba/strumsight/pull/284),
+> squash `46f8c23f`, Router CI
+> [31931326850](https://github.com/wolfcasaba/strumsight/actions/runs/31931326850)
+> success az exact `be5826a0` SHA-n (docs/tools-only, nincs Dart-változás,
+> Full Gate nem releváns). Lecke: `docs/LESSONS.md` **L294**.
+>
+> A megállt kör saját munkapéldánya (`/home/ubuntu/ss-sonnet-impl-e07-r11`,
+> commitolatlan, PR nélkül) SZÁNDÉKOSAN érintetlen maradt: ez a self-heal a
+> megállt kör levezénylése helyett kizárólag az akadályt szüntette meg (ADR
+> 0112 mandátum). A lánc a következő firingen E07-R11-et friss dispatchként
+> vagy folytatásként veszi fel, a most javított `allowed_paths` alatt.
 
 > ## 📦 Korábbi kör-narratívák → archívum
 >
@@ -100,8 +110,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-16 (E07-R10 zárása): a HEAL E07-R09/H-NOSIGNAL banner archiválva; a
-> fejlécben a HEAL E07-R09/H5 és E07-R10 banner marad.
+> 2026-08-16 (HEAL E07-R11/H3 zárása): a HEAL E07-R09/H5 banner archiválva; a
+> fejlécben az E07-R10 és HEAL E07-R11/H3 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state

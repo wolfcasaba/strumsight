@@ -6,6 +6,44 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ [HEAL E07-R09/H5] KÉSZ — a domain-purity guard a saját dokumentációját cáfolta meg magának (2026-08-16)
+
+Az E07-R09 Full Gate-je kétszer piros volt ugyanarra az okra:
+`test/core/architecture_dependency_test.dart` „practice generator domain
+stays framework-free (E07-R02)” blokkja a NYERS fájlszövegen keresett
+tiltott markert (`DateTime.now(`) — az `exercise_prescription.dart:6`
+doc-commentje szó szerint idézi a „`DateTime.now()`-free, `Random`-free”
+garanciát, és ez a dokumentáció-string buktatta meg a saját magát leíró
+ellenőrzést (mért, egyetlen offender:
+[31922993201](https://github.com/wolfcasaba/strumsight/actions/runs/31922993201)).
+**Ez a MÁSODIK előfordulása** ugyanennek a hibaosztálynak egy nap alatt —
+`docs/LESSONS.md` **L283** (E07-R05, 2026-08-15) ugyanezt a blokkot mérte
+`skill_evidence.dart`-on, és csak a kommentet írta át. Mivel a self-heal
+szélesebb jogosultsággal rendelkezik, mint egy normál kör-session, ez a
+javítás most a guard-ot magát javította: a blokk két trivia-maszkolt
+nézetet vizsgál a nyers szöveg helyett — komment mindig maszkolt;
+string-literál tartalom csak a két hívás-markernél (`DateTime.now(`,
+`Random(`) maszkolt, az import-URI markereknél (`package:flutter/`,
+`dart:ui`) megőrződik (valódi előfordulásuk kizárólag import-string-ben él
+— ezt a buktatót a saját regressziós tesztem fogta meg írás közben, még a
+PR megnyitása előtt). A minta a testvér guard
+(`test/features/practice/domain/domain_purity_test.dart`) már bizonyított
+trivia-maszkoló logikáját tükrözi. PR
+[#282](https://github.com/wolfcasaba/strumsight/pull/282), squash
+`8ffa3ca1`, Full Gate ekvivalens (`build-apk.yml`)
+[31924697541](https://github.com/wolfcasaba/strumsight/actions/runs/31924697541)
+success az exact `d82e55f1` SHA-n (egyetlen tesztfájl, nincs router-ci
+trigger-útvonal érintve). Lecke: `docs/LESSONS.md` **L291**.
+
+A megállt kör saját ága (`sonnet-impl/e07-r09-exercise-prescription`, PR
+#281, független review-val már **APPROVED** — BLOCKER:0/MAJOR:0) SZÁNDÉKOSAN
+érintetlen maradt: ez a self-heal a megállt kör levezénylése helyett kizárólag
+az akadályt szüntette meg (ADR 0112 mandátum). ADR 0242 D2
+(`resolve_branch_implementer`) a következő E07-R09 firingen folytatásként
+ismeri fel azt a branch-et, a mostantól javított guard alatt a Full
+Gate-nek zölden kell zárnia — nincs elvesző munka, nincs duplikált
+implementáció.
+
 ## ✅ [HEAL E07-R09/H-NOSIGNAL] KÉSZ — az önjavító session sosem regisztrálta magát inflight-ként (párhuzamos második önjavítás indult), és egy igaz, de nem-terminális státusz-mondat jelzésfájl nélkül is H-NOSIGNAL (2026-08-16)
 
 Két független, mért gyökérok ugyanazon halt mögött. **(1)** `attempt_selfheal()`
