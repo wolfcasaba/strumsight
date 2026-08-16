@@ -6,6 +6,20 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E14-R01 KÉSZ — Recognition recovery kickoff és release guard
+
+PR [#275](https://github.com/wolfcasaba/strumsight/pull/275), squash
+`fc494ef6`. Három recovery flag (`recognitionRecoveryEnabled`,
+`recognitionShadowModeEnabled`, `newLiveStageEnabled`) minden környezetben
+explicit `false`, consumer nélkül; ezért a kör nulla Live/UI- vagy hálózati
+viselkedést változtat. A release-guard evaluation reportot,
+baseline/candidate manifestet, corpus hash-t és rollback-receptet kér az
+aktiválás előtt. Correctness + kötelező high-risk security review APPROVED,
+a provenance-MINOR javítva. Exact-SHA `ab615c6f`: Full Gate
+[31910980257](https://github.com/wolfcasaba/strumsight/actions/runs/31910980257)
++ Router CI [31910963645](https://github.com/wolfcasaba/strumsight/actions/runs/31910963645)
+success; post-merge célzott gate a friss `main`-en zöld.
+
 ## ✅ E07-R01 KÉSZ — Practice Generator baseline, ADR-ek és feature flagek (2026-08-15)
 
 Az Epic 7 (AI Practice Generator) nyitókörének pre-flightját (ADR 0255

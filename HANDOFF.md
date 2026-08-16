@@ -2,9 +2,30 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-15
-> (E07-R06 merged as PR #276: the SkillEstimate reducer derives a bounded,
-> trend-aware skill snapshot from evidence with an explicit unknown state.)**
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
+> (E07-R07 merged as PR #277: explicit legacy Learn/Progress evidence
+> adapters provide only versioned, attested evidence.)**
+
+> ## ✅ E07-R07 KÉSZ — Legacy Learn és Progress evidence adapterek
+>
+> PR [#277](https://github.com/wolfcasaba/strumsight/pull/277), squash
+> `afd7e9c4`. SDD Ch8 Kör 7: az új `SkillSnapshotReader` porton át a
+> `LegacyLessonCatalogAdapter` és `LegacyProgressEvidenceAdapter` kizárólag
+> explicit, verziózott mappingból képez `SkillEvidence`-et. Ismeretlen vagy
+> hiányos legacy rekordból nincs találgatás, készített outcome-ID, illetve
+> másodpercből normalizált teljesítményérték. ADR
+> [0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md).
+>
+> Independent review **APPROVED** egy javító kör után: az F1 MAJOR a nem
+> létező built-in lesson ID-kat, az F2 MAJOR az egy outcome-ból több skillhez
+> kiadott, repository-ban csendben elvesző evidence-et tárta fel. A javítás a
+> shipping `Lessons.all` ID-kra rögzítette a táblát és egy outcome → legfeljebb
+> egy skill szerződésre szűkítette; mindkettőt adapter→aggregátor→repository
+> regressziós teszt méri. Exact-SHA `2d75d8b1`: Full Gate
+> [31915638913](https://github.com/wolfcasaba/strumsight/actions/runs/31915638913)
+> + Router CI [31915639663](https://github.com/wolfcasaba/strumsight/actions/runs/31915639663)
+> success; a post-merge célzott gate a friss `main`-en szintén zöld (7/7).
+> Mindkét generator flag továbbra is `false`; production hívó nincs.
 
 > ## ✅ E07-R06 KÉSZ — SkillEstimate reducer és konfliktuskezelés
 
@@ -42,20 +63,6 @@
 > `practiceGeneratorEnabled` flag változatlanul `false`, nulla hívó a
 > reducerre a domain rétegen kívül.
 
-> ## ✅ E14-R01 KÉSZ — Recognition recovery kickoff és release guard
->
-> PR [#275](https://github.com/wolfcasaba/strumsight/pull/275), squash
-> `fc494ef6`. Három új recovery flag (`recognitionRecoveryEnabled`,
-> `recognitionShadowModeEnabled`, `newLiveStageEnabled`) minden környezetben
-> explicit `false`, és még nincs consumerük; ezért a kör nulla Live/UI- vagy
-> hálózati viselkedést változtat. A release-guard dokumentum evaluation
-> reportot, baseline/candidate manifestet, corpus hash-t és rollback-receptet
-> kér az aktiválás előtt. A correctness és a kötelező high-risk security
-> review APPROVED; a provenance-MINOR javítva. Exact-SHA `ab615c6f`: Full Gate
-> [31910980257](https://github.com/wolfcasaba/strumsight/actions/runs/31910980257)
-> + Router CI [31910963645](https://github.com/wolfcasaba/strumsight/actions/runs/31910963645)
-> success; post-merge célzott gate a friss `main`-en újrafuttatva.
-
 > ## 📦 Korábbi kör-narratívák → archívum
 >
 > A lezárt körök részletes története a
@@ -65,10 +72,8 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-15 (E07-R06 zárása): az E07-R05, a [HEAL E07-R04/H-NOSIGNAL]
-> önjavító jegyzet (a hozzá tartozó E07-R04 tartalmi összefoglalóval együtt),
-> az E07-R03 és az E07-R02 banner archiválva; a fejlécben az E07-R06 és a
-> E14-R01 banner marad.
+> 2026-08-16 (E07-R07 zárása): az E14-R01 banner archiválva; a fejlécben az
+> E07-R07 és E07-R06 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -243,9 +248,12 @@
   skill_estimate_reducer.dart` — determinisztikus, konfliktus-tudatos
   reducer, a discomfort külön csatornán fut —,
   [ADR 0261](docs/adr/0261-skill-estimate-bounded-influence-and-unknown-state.md))
-  kész. **Mindkét flag `false` marad minden környezetben**, nulla
-  `lib/features/practice_generator/` hívó a domain rétegen kívül — mind a hat
-  kör kizárólag a határokat és a típusos domaint rögzítette. SDD forrás:
+  kész, valamint **E07-R07** (explicit, versioned Legacy Learn/Progress
+  `SkillSnapshotReader` adapterek; ismeretlen/hiányos legacy adatból nincs
+  inference vagy fabricated identity, [ADR 0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md)).
+  **Mindkét flag `false` marad minden környezetben**, nulla
+  `lib/features/practice_generator/` production hívó — mind a hét kör
+  kizárólag a határokat és a típusos domaint rögzítette. SDD forrás:
   [`docs/sdd/08-epic-07-ai-practice-generator.md`](docs/sdd/08-epic-07-ai-practice-generator.md).
   A generátor a legacy Learn/Progress/Songs/Analyze adaptereken keresztül lát
   (az Audio Analysis V2 lánc futtatható, de minden flagje OFF — a generátor
@@ -847,6 +855,15 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-16):** `main` @ `afd7e9c4` — E07-R07 Legacy
+Learn és Progress evidence adapterek, PR
+[#277](https://github.com/wolfcasaba/strumsight/pull/277), squash-merge.
+Exact-SHA `2d75d8b1`: Full Gate
+[31915638913](https://github.com/wolfcasaba/strumsight/actions/runs/31915638913)
++ Router CI [31915639663](https://github.com/wolfcasaba/strumsight/actions/runs/31915639663)
+mindkettő success. `origin/main` nem mozdult a dispatch és a merge között;
+a post-merge célzott gate friss, fast-forwardolt `main`-en zöld.
+
 **Aktuális állapot (2026-08-15):** `main` @ `d1f36c8c` — E07-R06 SkillEstimate
 reducer és konfliktuskezelés, PR
 [#276](https://github.com/wolfcasaba/strumsight/pull/276), squash-merge.
@@ -1184,6 +1201,18 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R07 — Legacy Learn és Progress evidence adapterek** (PR
+[#277](https://github.com/wolfcasaba/strumsight/pull/277), squash `afd7e9c4`,
+[ADR 0293](docs/adr/0293-legacy-evidence-adapter-identity-and-mapping-contract.md)).
+Az explicit, versioned mappingot használó `SkillSnapshotReader` adapterek
+csak teljesen attesztált legacy outcome-ból gyártanak evidence-et; nincs
+heurisztika, fabricated identity vagy raw secondsből képzett performance.
+Correctness review APPROVED egy javító kör után: F1 a valódi shipping lesson
+ID-kat, F2 az egy outcome → egy skill repository-kompatibilis szerződést
+rögzítette regressziós tesztekkel. Exact-SHA Full Gate + Router CI zöld;
+post-merge gate friss `main`-en is zöld. Implementer `sonnet-impl`, egy
+javító dispatch.
 
 **E07-R06 — SkillEstimate reducer és konfliktuskezelés** (PR
 [#276](https://github.com/wolfcasaba/strumsight/pull/276), squash `d1f36c8c`,
@@ -1670,13 +1699,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R07** (Chapter 8, Kör 7 — Legacy Learn és
-Progress evidence adapterek,
-[`e07-r07-legacy-evidence-adapters.md`](docs/rounds/e07-r07-legacy-evidence-adapters.md),
-brief-státusz PREPARED). Előfeltétel `E07-R06` merge-elve (**kész**). A brief
-pre-flightja kötelezően méri újra a TÉNYLEGES `lib/features/learn/` és
-`lib/features/progress/` mezőneveket indítás előtt; a practice-generator
-flagek változatlanul `false` maradnak.
+**A soron következő SDD-lépés: E07-R08** (Chapter 8, Kör 8 — Practice catalog
+capability adapter). Az új session csak kész, commitolt briefből indulhat;
+E07-R07 legacy evidence adapterei az input-határ, a
+`practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
+`false` maradnak.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"

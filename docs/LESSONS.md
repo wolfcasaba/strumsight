@@ -10625,3 +10625,18 @@ frissítésnél ne állj meg a nemnulla exit code-nál: az **nem** halt-ok
 (nem H1–H8), csak egy kozmetikai frissítés marad el — a CI-evidencia
 tényleges rögzítése úgyis a HANDOFF/RTM/git-notes feladata, ne blokkold
 rajta a merge-et.
+
+## L285 — A legacy mapping „plauzibilis” azonosítóját mindig a shipping public katalógushoz kell kötni (E07-R07, 2026-08-16)
+
+**Mit mértünk.** A kezdeti E07-R07 mapping három hihető, de nem létező
+lesson ID-t tartalmazott. Az izolált review a valódi `Lessons.all` elemeivel
+mutatta ki, hogy emiatt minden shipping Learn outcome `unmappedLesson` lenne.
+Ugyanez a review azt is kimérte, hogy az egy outcome-ból több skillhez kiadott
+evidence a repository globális `sourceOutcomeId` deduplikációján csendben
+elveszti a második elemet.
+
+**Hogyan alkalmazd.** Legacy adapterhez a production built-in mappinget
+legalább egy valós public katalóguselemhez kötött teszt ellenőrizze, és az
+adapter→aggregátor→repository teljes útvonalán bizonyítsa az identity
+szerződést. Egyetlen source outcome több skillre csak akkor bontható, ha a
+forrás külön, valós outcome-azonosítókat szolgáltat.
