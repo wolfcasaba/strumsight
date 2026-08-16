@@ -121,7 +121,9 @@ AdaptivePracticePlan buildPlan({
   startDate: LocalDate(2026, 8, 17),
   endDate: LocalDate(2026, 8, 23),
   goals: <PracticeGoal>[buildGoal()],
-  days: days ?? <PracticeDay>[buildDay(id: 'day.1', localDate: LocalDate(2026, 8, 17))],
+  days:
+      days ??
+      <PracticeDay>[buildDay(id: 'day.1', localDate: LocalDate(2026, 8, 17))],
   activeRevisionId: RevisionId(revisionId),
   generationProvenance: GenerationRequestId('request.1'),
   policyVersions: const <String, String>{

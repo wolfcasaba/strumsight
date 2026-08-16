@@ -9,7 +9,10 @@ import 'package:strumsight/features/practice_generator/public.dart';
 
 import '../../../fixtures/practice_generator/validation/validation_fixtures.dart';
 
-List<PracticeBlock> _hardAvoidedBlocks(int count, ExercisePrescription prescription) => [
+List<PracticeBlock> _hardAvoidedBlocks(
+  int count,
+  ExercisePrescription prescription,
+) => [
   for (var i = 0; i < count; i++)
     buildBlock(id: 'block.${i + 1}', order: i + 1, prescription: prescription),
 ];
@@ -270,7 +273,9 @@ void main() {
           ),
         ],
       );
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final outcome = const PlanRepairer().repair(plan, context);
 

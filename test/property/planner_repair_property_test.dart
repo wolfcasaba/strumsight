@@ -59,10 +59,15 @@ void main() {
           localDate: LocalDate(2026, 8, 17),
           blocks: blocks,
         );
-        final plan = buildPlan(id: 'trial.$trial.plan', days: <PracticeDay>[day]);
+        final plan = buildPlan(
+          id: 'trial.$trial.plan',
+          days: <PracticeDay>[day],
+        );
         final context = buildContext(
           catalog: buildCatalog(candidates: [candidate]),
-          hardAvoidIdentities: avoidAll ? <String>[identityOf(candidate)] : const [],
+          hardAvoidIdentities: avoidAll
+              ? <String>[identityOf(candidate)]
+              : const [],
           availability: buildAvailability(
             maximumMinutes: tightMaximum ? 1 + rng.nextInt(10) : 120,
           ),
@@ -80,7 +85,9 @@ void main() {
         expect(repeat.iterationsUsed, outcome.iterationsUsed);
         expect(repeat.plan, outcome.plan);
         expect(
-          repeat.changeSet == null ? null : jsonEncode(repeat.changeSet!.toJson()),
+          repeat.changeSet == null
+              ? null
+              : jsonEncode(repeat.changeSet!.toJson()),
           outcome.changeSet == null
               ? null
               : jsonEncode(outcome.changeSet!.toJson()),
@@ -91,7 +98,8 @@ void main() {
 
           // A3: never above the hard maximum.
           final daily = context.availability.forDate(repairedDay.localDate);
-          if (daily != null && daily.maximumStrength == ConstraintStrength.hard) {
+          if (daily != null &&
+              daily.maximumStrength == ConstraintStrength.hard) {
             final totalMicros = repairedDay.blocks.fold<int>(
               0,
               (total, block) => total + block.estimatedElapsed.inMicroseconds,

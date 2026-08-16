@@ -21,7 +21,9 @@ void main() {
         ],
       );
       final plan = buildPlan(days: <PracticeDay>[day]);
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator().validate(plan, context);
 
@@ -150,7 +152,9 @@ void main() {
           ),
         ],
       );
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator().validate(plan, context);
 
@@ -215,7 +219,9 @@ void main() {
           ),
         ],
       );
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator().validate(plan, context);
 
@@ -242,7 +248,9 @@ void main() {
           ),
         ],
       );
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator().validate(plan, context);
 
@@ -269,7 +277,9 @@ void main() {
           ),
         ],
       );
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator().validate(plan, context);
 
@@ -323,7 +333,9 @@ void main() {
         ],
       );
       final plan = buildPlan(days: <PracticeDay>[day]);
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator().validate(plan, context);
 
@@ -346,7 +358,9 @@ void main() {
         ],
       );
       final plan = buildPlan(days: <PracticeDay>[day]);
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator().validate(plan, context);
 
@@ -369,7 +383,9 @@ void main() {
         ],
       );
       final plan = buildPlan(days: <PracticeDay>[day]);
-      final context = buildContext(catalog: buildCatalog(candidates: [candidate]));
+      final context = buildContext(
+        catalog: buildCatalog(candidates: [candidate]),
+      );
 
       final result = const PlanValidator(
         maxConsecutiveHighFrettingLoad: 1,

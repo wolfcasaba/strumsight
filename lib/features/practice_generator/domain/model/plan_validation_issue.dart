@@ -22,8 +22,7 @@ abstract final class PlanValidationCode {
   static const String tuningNotConfirmed = 'plan.block.tuning.notConfirmed';
   static const String hardAvoidViolated = 'plan.block.hardAvoid.violated';
   static const String hardMaximumExceeded = 'plan.day.hardMaximum.exceeded';
-  static const String loadSequencingWarning =
-      'plan.day.loadSequencing.warning';
+  static const String loadSequencingWarning = 'plan.day.loadSequencing.warning';
   static const String completedHistoryModified =
       'plan.completedHistory.modified';
 }
@@ -69,8 +68,7 @@ final class PlanValidationIssue {
   int get hashCode => Object.hash(severity, code, message, dayId, blockId);
 
   @override
-  String toString() =>
-      'PlanValidationIssue(${severity.code}, $code, $message)';
+  String toString() => 'PlanValidationIssue(${severity.code}, $code, $message)';
 }
 
 /// Immutable, deterministically ordered output of `PlanValidator.validate`.
