@@ -11059,3 +11059,36 @@ randomizált property-cellák bizonyítják az eltérő eredményt, az exact ös
 **Hogyan alkalmazd.** Minden új publikus policy-paraméterhez legyen legalább
 egy nem-default, megfigyelhető kimenetet adó teszt. A constructor kivételét
 tesztelő cella csak bemeneti validációt bizonyít, a policy bekötését nem.
+
+## L296 — Egy azonos feature-szülőben sorolt két scheduling-teszt is explicit, szűk fixture-könyvtárat igényel; a korábbi aznapi fixture-lecke pre-flight nélküli figyelmen kívül hagyása újra H3-at okoz (E07-R15, ADR 0112 self-heal, 2026-08-16)
+
+**Mérve.** Az E07-R15 eredeti briefje két külön scheduling tesztfájlt
+engedélyezett, de nem engedélyezett megosztott fixture-helyet. Az implementer
+emiatt a repó következetes
+`test/fixtures/<feature>/<terület>/<név>_fixtures.dart` konvenciójának
+megfelelően létrehozta a
+`test/fixtures/practice_generator/scheduling/scheduling_fixtures.dart`
+builder-fájlt. A `python3 tools/scope-audit.py --repo
+/home/ubuntu/ss-minimax-e07-r15 --brief docs/rounds/e07-r15-weekly-scheduler.md
+--base 5e0c08a5fda48a323cebdf22d9814824c89016dc` a 7 módosított út közül
+pontosan ezt az egyet jelölte scope-sértésnek; a leállás tehát helyes H3 volt,
+nem product-code hiba. A fájlt mindkét engedélyezett teszt importálja, és csak
+`WeeklyAvailability`, `TimeBudget` és `ScheduleCandidate` paraméterezhető
+teszt-összeállítását végzi. A közvetlen precedens az ugyanazon napi E07-R11
+H3 self-heal ([[L294]]), amely már kimondta, hogy két vagy több közös,
+nem-triviális domain-buildert igénylő tesztnek bare fixture-könyvtár kell.
+
+**Feloldás.** Az E07-R15 allowlistje a szűk
+`test/fixtures/practice_generator/scheduling` könyvtárral bővült; nem az
+egész feature fixture-fája lett engedélyezve. A
+`tools/tests/test_e07_r15_scheduling_fixture_scope.py` a valós halt-utat az
+azonos `audit_legacy_scope()` implementációval zöldre méri, míg a közvetlenül
+a `practice_generator` fixture-root alá helyezett szomszéd út továbbra is
+piros. A teljes `tools/tests` sáv a self-heal gate-je.
+
+**Hogyan alkalmazd.** A pre-flight ne csak a production input-contractokat
+olvassa újra: ha a brief kettő vagy több konkrét tesztfájlt sorol fel, mérje
+fel, hogy mind ugyanazt a nem-triviális fixture-t építi-e. Ha igen, a
+`test/fixtures/<feature>/<terület>` bare könyvtárat a dispatch ELŐTT, szűken
+fel kell venni az `allowed_paths` listába. Ez különösen kötelező, ha az aznapi
+korábbi kör már ugyanebben a feature-ben fixture-scope revíziót hozott.
