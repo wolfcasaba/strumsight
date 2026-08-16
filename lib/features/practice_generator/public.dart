@@ -1,8 +1,12 @@
 /// Public domain contract for cross-feature Practice Generator consumers.
 library;
 
+export 'application/port/skill_snapshot_reader.dart';
 export 'application/service/evidence_aggregator.dart';
 export 'application/service/skill_estimate_reducer.dart';
+export 'data/adapter/legacy_lesson_catalog_adapter.dart';
+export 'data/adapter/legacy_mapping_table.dart';
+export 'data/adapter/legacy_progress_evidence_adapter.dart';
 export 'domain/id/planner_ids.dart';
 export 'domain/model/learner_constraints.dart';
 export 'domain/model/plan_enums.dart';
