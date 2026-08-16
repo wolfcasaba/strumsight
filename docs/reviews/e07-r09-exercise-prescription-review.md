@@ -111,3 +111,17 @@ A reviewer valódi gate-je pipe nélkül zöld. Javító körben ne használj a
 Az első review után a javító commit lezárta F1–F3-at. A re-review APPROVED;
 merge csak a branch current SHA-ján futó zöld Full Gate és Router CI után
 engedett.
+
+## Rebase utáni független ellenőrzés (2026-08-16)
+
+Az ágat a `d4ee9061` main-rebase után ismét, elkülönített
+`/tmp/review-e07-r09-final-2` klónban ellenőriztem. A
+`tools/round-gate.sh test/features/practice_generator/prescription/exercise_prescription_test.dart test/features/practice_generator/prescription/success_criteria_test.dart`
+strukturált eredménye `pass`; a scope-audit (`--base d4ee9061`) **OK** volt
+9 módosított úttal és 1 generated/ignored review-artefaktummal.
+
+Az A1 valódi-sértés próbában ideiglenesen `target > maximum` helyett
+`target >= maximum` volt. A célzott teszt kizárólag a kötelező, inkluzív
+10/10 cellán bukott meg, majd a klónban azonnal visszaállítottam. A merge-re
+kerülő diff tiszta. **Verdikt változatlan: APPROVED** (BLOCKER: 0, MAJOR: 0,
+MINOR: 0).
