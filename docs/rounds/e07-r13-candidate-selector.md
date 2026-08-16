@@ -222,4 +222,163 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Módosított fájlok
+
+| Útvonal | Változás |
+|---|---|
+| `lib/features/practice_generator/domain/model/candidate_decision.dart` | **ÚJ** — `CandidateRejectReason`, `CandidateFactorKind`, `CandidateFactor`, `SelectedCandidate`, `RejectedCandidate`, `CandidateDecision` (immutable, sorted, versioned) |
+| `lib/features/practice_generator/domain/policy/candidate_policy.dart` | **ÚJ** — verziózott, immutable `CandidatePolicy` (`recentOverusePenalty`, `diversityWindow`, `explorationWeight`) |
+| `lib/features/practice_generator/domain/service/candidate_selector.dart` | **ÚJ** — `CandidateRuntimeContext` (typed, identity-alapú, fail-closed) + `CandidateSelector` (pure, deterministic) |
+| `lib/features/practice_generator/public.dart` | bővítve: a három új domain fájl exportja |
+| `test/fixtures/practice_generator/candidates/candidates_fixtures.dart` | **ÚJ** — megosztott builder-ek (`buildCandidate`, `buildCatalog`, `buildPriority`, `buildContext`, `identityOf`), R10/R11 konvenciója |
+| `test/features/practice_generator/candidates/candidate_selector_test.dart` | **ÚJ** — 18 cella, A1–A8 és a három hard-szűrő határcella |
+| `test/features/practice_generator/candidates/candidate_policy_test.dart` | **ÚJ** — 5 cella: verzió, default, azonos seed, stabil ablak, input-validáció |
+
+Összesen 6 új fájl + 1 módosítás (`public.dart`). Nincs semmi a `tools/`,
+`.github/`, más feature, `exercise_candidate.dart`, catalog vagy validation
+contract területén — a lista pontosan az `allowed_paths` halmaza.
+
+### 10.2 Parancsok és tényleges eredmények
+
+A §7 kötelező gate-artefaktum, csonkítatlanul:
+
+```
+$ tools/round-gate.sh test/features/practice_generator/candidates/candidate_selector_test.dart test/features/practice_generator/candidates/candidate_policy_test.dart
+
+═══ [1] format
+    $ /home/ubuntu/flutter/bin/dart format --output=none --set-exit-if-changed lib test tool
+    Formatted 1570 files (0 changed) in 5.94 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ /home/ubuntu/flutter/bin/flutter analyze lib/ test/ tool/
+    Analyzing 3 items...
+    No issues found! (ran in 5.0s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/practice_generator/candidates/candidate_selector_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/candidates/candidate_selector_test.dart
+    00:00 +18: All tests passed!
+    → [3] test .../candidate_selector_test.dart: ZÖLD
+
+═══ [4] test test/features/practice_generator/candidates/candidate_policy_test.dart
+    $ /home/ubuntu/flutter/bin/flutter test test/features/practice_generator/candidates/candidate_policy_test.dart
+    00:00 +5: All tests passed!
+    → [4] test .../candidate_policy_test.dart: ZÖLD
+
+═══ [5] architecture
+    $ /home/ubuntu/flutter/bin/dart run tool/check_architecture.dart
+    Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [5] architecture: ZÖLD
+
+═══ [6] secrets
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_secrets.dart
+    Secret scan OK (2738 file(s) scanned, 0 finding(s)).
+    → [6] secrets: ZÖLD
+
+═══ [7] l10n
+    $ /home/ubuntu/flutter/bin/dart run tool/ci/check_l10n_parity.dart
+    L10n parity OK (en → hu, 1276 message(s)).
+    → [7] l10n: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test .../candidate_selector_test.dart                     zöld
+    test .../candidate_policy_test.dart                       zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+Selector-teszt 18/18 zöld, policy-teszt 5/5 zöld. A teljes suite + property
+gate + APK a CI-ban fut (ADR 0053) — a boxon nem indítjuk.
+
+### 10.3 Teljesített acceptance criteria
+
+| # | Kritérium | Státusz | Bizonyíték |
+|---|---|---|---|
+| A1 | Hard-kizárt jelölt SEMMILYEN pontszámmal nem jön vissza | ✅ | 4 cella (kizárt + határon + megfelel + hard-avoid with higher score); §10.5 valódi-sértés próba |
+| A2 | Locked/offline-nem-megerősített nem választható, fallbackként sem | ✅ | offline-unconfirmed + locked-style snapshot cellák; a snapshot típusú szerződés eleve kizárja a locked jelöltet (ADR 0262) |
+| A3 | A diversity nem tesz elsővé kevésbé relevánsat | ✅ | diversityWindow=0.05; a teszt explicit recent-overuse penaltival a kevésbé relevánsakat a windowon kívülre szorítja |
+| A4 | Azonos seed → azonos választás | ✅ | candidate_selector_test A4 + a policy azonos-mezős egyenlősége |
+| A5 | A döntés felsorolja az elutasítottakat és okukat | ✅ | A5 cella (két elutasítás, ok és detail egyaránt megvan) |
+| A6 | A fallback ugyanazt a skillt célozza | ✅ | A6 cella + a fallback mindig a canonical ranked listából jön (skill-szűrés már megtörtént) |
+| A7 | A közelmúltbeli túlhasználat büntetést kap | ✅ | A7 két cellája: a penalty megjelenik a fallback compositeScore-ján és a selected factor listáján |
+| A8 | A rangsor determinisztikus (stabil tie-break) | ✅ | A8 két cellája: a fallback identity seed-független (canonical ranked), a lexical tie-break ott érvényesül ahol a diversity window nem terjed ki |
+
+A három kötelező hard-szűrő cella (`megfelel` / `a határon` / `kizárt`) a
+`candidate_selector_test.dart` A1 blokkjában külön-külön lefedve.
+
+### 10.4 Eltérések a brieftől
+
+- A selector policy `explorationWeight` mezője a default policy-ban
+  `0.05`; a tényleges exploration-permutációt a seed-ből származtatott
+  hash végzi, nem ebből a súlyból — a mező a jövőbeli policy-tuning
+  horogja (ADR 0297 §3). A selector nem változtatja meg a score-t a
+  diversity hatására, csak a top bucket rendezését; ez az A3-at és az
+  A8-at is erősíti.
+- A selector a `CandidateRuntimeContext.recentlyUsedIdentities` halmazt
+  fogadja — a recency ablak a hívó oldalán van (selector sosem olvas
+  órát), és minden, a halmazban lévő jelölt egységesen megkapja a
+  `recentOverusePenalty`-t.
+- A `CandidateDecision` konstruktor a nullable mezők shadowingját
+  elkerülendő `initialSelected` / `initialFallback` paraméterneveket
+  használ — ez a kódolási stílus nem szegi meg a szerződést, csak a
+  konstruktor-argumentum nevét rögzíti.
+
+### 10.5 Valódi-sértés próba (kötelező, §6.1)
+
+A §6.1-ben megjelölt hibás implementáció: "A hard kizárás nagy negatív
+pontként". A selector `for (final candidate in skillTargets)` ciklusában a
+`hardReason != null` ágat ideiglenesen átírtam úgy, hogy a kizárt jelölt
+**ne** kerüljön a `rejected` listába és ne fusson `continue`, hanem
+`compositeScore - 0.05` értékkel bekerüljön a `ranked` listába (kis
+negatív pontszám, nem kizárás). A `dart format` és a gate ugyanazzal a
+paranccsal újrafuttatva:
+
+```
+═══ [3] test .../candidate_selector_test.dart: PIROS (kilépési kód 1)
+  5 cella pirosra váltott:
+    A1 — a hard-avoided candidate never returns regardless of its score [E]
+    A1 (kizárt) — a candidate that fails one hard filter is excluded [E]
+    A2 — an offline-unconfirmed candidate cannot be selected or fallback [E]
+    A5 — the decision lists every rejected candidate with its reason [E]
+    A6 — when only one candidate survives the hard filter, the fallback is null [E]
+```
+
+A legfontosabb: **A1** cella pirosra váltott, pontosan a §6.1
+kötelező sértés-cella. A `rejected` lista üressé vált (A5), a
+hard-filteren átjutott kizárt jelölt kikerült a selection-be (A2), és
+a fallback-képzés is elromlott (A6).
+
+A mutációt visszaállítottam (`rejected.add(...)` + `continue;` a §6
+implementációra), a gate ismét teljesen zöld (lásd §10.2 fenti
+kimenetel). A selector jelenlegi forrásában a TRUE-VIOLATION MUTATION
+megjegyzés már nincs benne — a végleges commit a helyes implementációt
+tartalmazza.
+
+### 10.6 Violation-proof
+
+- A selector nem használ `Random`-ot, `DateTime.now()`-t, vagy
+  `LearnerConstraint.value` értelmezést (ADR 0297 §1).
+- A `CandidateDecision` immutable: minden mezője `final`, minden lista
+  `List.unmodifiable`, a `rejected` rendezett.
+- A `CandidateSelector.select` egyetlen kódútja: skill-szűrés →
+  hard-filter → composite score → lexical sort → diversity bucket
+  → fallback → decision.
+- A `CandidatePolicy` default értékei egyeznek a §3 cellákkal
+  (`recentOverusePenalty=0.2`, `diversityWindow=0.05`).
+- A `_tuningPrerequisiteCode = 'guitar.tuned'` a `plan_validator.dart`
+  konstansával azonos (a selector önállóan birtokolja a saját
+  couplingját).
+
+### 10.7 Következő kör
+
+A soron következő kör: **E07-R14** (Practice Time Allocation, SDD Ch8 Kör 14).
+A selector kimenete (`SelectedCandidate` + `compositeScore` + factors)
+közvetlenül a Kör 14 inputja lesz a time-allocation policy számára.
+
 ## 11. Review — a Claude tölti ki
