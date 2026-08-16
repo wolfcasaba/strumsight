@@ -26,6 +26,7 @@ allowed_paths = [
   "test/features/practice_generator/plan/adaptive_practice_plan_test.dart",
   "test/features/practice_generator/plan/plan_revision_test.dart",
   "test/features/practice_generator/plan/plan_change_set_test.dart",
+  "test/fixtures/practice_generator/plan/plan_fixtures.dart",
   "docs/rounds/e07-r10-adaptive-practice-plan-domain.md",
 ]
 gate_tests = [
@@ -131,6 +132,38 @@ résre:**
 N/A — ez a kör tisztán immutable domain modell, nincs lease/lock/handle/
 subscription a scope-ban, nincs `.acquire(` hívási lánc, amit mérni kellene.
 
+### 0.0.1 Kör közbeni kiegészítés (Claude, 2026-08-16, az implementer első `stopped` jelzése után)
+
+A Terra az első fordulóban `stopped`-ot jelzett: „Scope conflict: reusable
+test fixture needs a fourth test file, but brief permits exactly three test
+files." — a három teszt (`adaptive_practice_plan_test.dart`,
+`plan_revision_test.dart`, `plan_change_set_test.dart`) mindegyike ugyanazt a
+builder-gráfot igényli (typed ID-k, egy teljes `AdaptivePracticePlan`/
+`PracticeDay`/`PracticeBlock`/`ExerciseCandidate` felépítő lánc,
+`resolveCandidate`, a nyolc `PracticeItemStatus` átmenet-térképe) — ezt
+triplikálni valódi karbantartási kockázat (a három másolat szét tud csúszni).
+
+**Mért precedens.** A `practice_generator` SAJÁT teszt-fájában (mind a 19
+meglévő `_test.dart`) MA egyetlen megosztott helper sincs — ez tehát ÚJ minta
+ennek a feature-nek. De a REPO EGÉSZÉBEN már négy helyen létezik pontosan ez a
+minta, egységes elnevezéssel: `test/fixtures/analysis/insights/insight_fixtures.dart`,
+`test/fixtures/vision/posture/posture_fixtures.dart`,
+`test/fixtures/vision/picking/picking_fixtures.dart`,
+`test/fixtures/vision/tracks/track_fixtures.dart` — mind
+`test/fixtures/<feature>/<terület>/<név>_fixtures.dart` alakban.
+
+**Döntés:** EGY új fájl, `test/fixtures/practice_generator/plan/plan_fixtures.dart`,
+felvéve az `allowed_paths`-ba (fent) és a §4 táblába — a mért,
+repo-szintű konvenciót követve, nem egy önkényes helyet kitalálva. Ez
+kizárólag TESZT-kód (nincs production/viselkedési kockázat), és szigorúan a
+három meglévő teszt-fájl közös setupját fedi — nem general-purpose
+test-support modul, nem kerül a megosztott `test/support/`-ba (az más
+feature-ek közötti, session/gateway-szintű fake-eket tart, ide nem illik).
+
+A Terra a meglévő, még nem commitolt munkáját (a három teszt-fájl, jelenleg
+`plan_fixtures.dart` nélkül, ezért fordítás előtti állapotban) folytatja —
+NEM kezdi újra.
+
 ---
 
 ## 1. Cél
@@ -169,6 +202,7 @@ más `lib/features/**`, `lib/app/**`, `docs/adr/**`, `tools/**`.
 | `domain/model/plan_change_set.dart` | **ÚJ** — gépi diff |
 | `public.dart` | a barrel bővítése |
 | `test/…/plan/*_test.dart` (3 db) | a §6 cellái |
+| `test/fixtures/practice_generator/plan/plan_fixtures.dart` | **ÚJ, §0.0.1-ben engedélyezve** — a 3 teszt közös builder-je |
 | `docs/rounds/e07-r10-…md` | a §10 handoff |
 
 **Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
