@@ -1,13 +1,40 @@
 # E07-R14 — TimeBudgetAllocator és micro-plan
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ bb867ad4`)
+- **Státusz:** PRE-FLIGHT REVISED (2026-08-16, `main @ 3643444a`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 14
 - **Kör-azonosító:** `E07-R14`
 - **Branch:** `<motor>/e07-r14-time-budget-allocator`
 - **Előfeltétel:** `E07-R13` merge-elve (jelölt-választó)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határt az ADR 0258 §3 (inkluzív hard
-  maximum, befelé kerekítés) már rögzíti.
+- **Előre kiosztott ADR:** [0298](../adr/0298-time-budget-allocation-contract.md)
+
+## 0.0 Pre-flight revízió (2026-08-16)
+
+**Mért eltérések és feloldásuk.** A brief korábbi alapja `bb867ad4` volt, a
+dispatch előtti tényleges alap `3643444a`. A `weekly_availability.dart`
+`DailyAvailability` modellje egy helyi `LocalDate`-hez tartozó,
+`minimumMinutes <= targetMinutes <= maximumMinutes` perceket tárol; a hard
+maximumot `maximumStrength == ConstraintStrength.hard` jelöli. A feature-ben
+az időkeretet nem birtokolja lease vagy más lifecycle-erőforrás: a teljes
+`lib/features/practice_generator` hívási láncban nincs `.acquire(...)` hívás.
+
+Az SDD Ch8 §21.1 öt, nem négy budget-típust nevez meg:
+`activePlaying`, `elapsedSession`, `rest`, `setup`, `reflection`. A felhasználó
+által adott napi idő az `elapsedSession`; a többi három nem aktív reserve és
+az aktív játék összege pontosan ezt adja. A korábbi „négy keret” szöveg ezért
+pontatlan volt, a speciális ötperces mód pedig nem arányosan zsugorított terv:
+pontosan egy primary active-playing fókuszblokkot ad, miközben a setup/reserve
+idő továbbra is a teljes elapsed budget része.
+
+**Scope-revízió.** A foglaló által kiosztott ADR 0298 és a három új teszt
+ugyanazon nem triviális time-budget bemenetét építő, bare
+`test/fixtures/practice_generator/allocation/` könyvtár bekerült az
+engedélyezett listába. Ez a L294 szerinti megelőző scope-szűkítés; más
+production contract nem változik. Az ADR rögzíti a pontos budget-identitást,
+az inkluzív hard maximumot, a lefelé kerekítést és a typed change-ok okát.
+
+**Kiszámolt küszöbcellák.** `python3 -c 'print(20-1, 20, 20+1)'` → `19 20 21`:
+19 és 20 perc belefér, a 21 perces jelöltet befelé kell javítani 20-ra.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R03
 > `weekly_availability.dart` tényleges mezőit (helyi dátum, percek, hard
@@ -23,7 +50,9 @@ allowed_paths = [
   "lib/features/practice_generator/public.dart",
   "test/features/practice_generator/allocation/time_budget_allocator_test.dart",
   "test/features/practice_generator/allocation/time_allocation_policy_test.dart",
+  "test/fixtures/practice_generator/allocation",
   "test/property/planner_time_budget_property_test.dart",
+  "docs/adr/0298-time-budget-allocation-contract.md",
   "docs/rounds/e07-r14-time-budget-allocator.md",
 ]
 gate_tests = [
@@ -61,7 +90,8 @@ A napi idő **pontos**, pedagógiailag használható felosztása — 5 perctől
 
 ## 3. Scope
 
-**Benne van:** aktív / eltelt / pihenő / bemelegítő keret szétválasztása ·
+**Benne van:** `activePlaying` / `elapsedSession` / `rest` / `setup` /
+`reflection` keret szétválasztása ·
 minimum blokkhossz és kerekítési szabály · **5 perces micro-plan** politika ·
 elsődleges cél minimum-garanciája · értelmetlenül rövid blokkok összevonása
 vagy törlése · „ma rövidebb" / „ma hosszabb" döntés change-set okkal.
@@ -74,12 +104,14 @@ a hard maximum túllépése bármilyen indokkal · Flutter, `DateTime.now()`,
 
 | Útvonal | Indok |
 |---|---|
-| `domain/model/time_budget.dart` | **ÚJ** — a négy keret |
+| `domain/model/time_budget.dart` | **ÚJ** — az öt typed budget |
 | `domain/policy/time_allocation_policy.dart` | **ÚJ** — minimumok, kerekítés, micro-plan |
 | `domain/service/time_budget_allocator.dart` | **ÚJ** — a felosztó |
 | `public.dart` | a barrel bővítése |
 | `test/…/allocation/*_test.dart` (2 db) | a §6 cellái |
+| `test/fixtures/practice_generator/allocation/` | közös, paraméterezhető time-budget teszt-builderek |
 | `test/property/planner_time_budget_property_test.dart` | **ÚJ** — összeg-pontosság |
+| `docs/adr/0298-…md` | az öt budget és a hard-max határ szerződése |
 | `docs/rounds/e07-r14-…md` | a §10 handoff |
 
 **Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
@@ -96,6 +128,14 @@ az összeg ellenőrzött (ADR 0258 §3).
 **NEM elfogadható gyengítés:** „egy perc túllépés belefér". A tanuló megadott
 korlátja szerződés.
 
+### 5.1.1 Az elapsed budget öt typed részből áll
+
+`elapsedSession == activePlaying + rest + setup + reflection` minden sikeres
+allocationnál. A `TimeBudget` az öt SDD-nevű typed mennyiséget hordozza; a
+warmup a `activePlaying` kategóriáján belüli tartalom, nem hatodik keret.
+`setup`, `rest` és `reflection` reserve-e nem jelenhet meg aktív játékidőként.
+Az ADR 0298 rögzíti ezt a határt.
+
 ### 5.2 Nincs negatív és nincs törmelék-blokk
 
 Negatív időtartam hiba. A minimum blokkhossznál rövidebb maradék **nem lesz
@@ -103,7 +143,8 @@ külön blokk** — összevonódik vagy törlődik, okkal.
 
 ### 5.3 Az összeg kerekítés UTÁN is pontos
 
-A blokkok aktív ideje + pihenő + bemelegítő **pontosan** a keretbe fér. Ezt
+A teljes `elapsedSession` (`activePlaying + rest + setup + reflection`)
+**pontosan** a keretbe fér. Ezt
 property-teszt bizonyítja, nem néhány kézzel írt eset.
 
 ### 5.4 Az elsődleges cél MINIMUM-garanciát kap
@@ -169,7 +210,7 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 8. Implementációs sorrend
 
-1. `time_budget.dart` — a négy keret, negatív érték tiltásával.
+1. `time_budget.dart` — az öt typed budget, negatív érték tiltásával.
 2. `time_allocation_policy.dart` — minimumok, befelé kerekítés, micro-plan.
 3. `time_budget_allocator.dart` — a felosztás, összeg-ellenőrzéssel.
 4. A property-teszt az összeg pontosságára.
