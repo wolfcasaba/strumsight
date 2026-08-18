@@ -43,6 +43,32 @@ on:
       - "docs/execution/pipeline-orchestrator-prompt.md"
       - "docs/execution/pipeline-selfheal-prompt.md"
       - "docs/execution/pipeline-codex-orchestrator-preamble.md"
+      # --- Implementer-burkolók és motor-konfiguráció (2026-08-18) ----------
+      # MÉRT rés: ez a 17 útvonal mind olyan fájl, amire a `tools/tests`
+      # csomag HIVATKOZIK (tehát van rá guard-teszt), de a szűrőben nem
+      # szerepelt — így egy őket módosító PR-en a Router CI EL SEM INDULT.
+      # Konkrét eset: a PR #298 a `tools/mm-round.sh` engedélyezett
+      # eszközlistáját és az `engine-registry.tsv` időkorlátját írta át, és
+      # nulla CI futott rá. A listát a
+      # `tools/tests/test_router_ci_path_filter.py` őrzi, hogy ne rothadjon
+      # vissza; újraméréshez futtasd azt a tesztet.
+      - "tools/mm-round.sh"
+      - "tools/codex-round.sh"
+      - "tools/codex-signal.sh"
+      - "tools/ai-router-round.sh"
+      - "tools/engine-profile.sh"
+      - "tools/scope-audit.py"
+      - "tools/round-scope-audit.sh"
+      - "tools/safe-force-push.sh"
+      - "tools/fix-workspace-origin.sh"
+      - "tools/prepare-flutter-generated.sh"
+      - "tools/wait-for-ci.sh"
+      - "tools/wait-for-round.sh"
+      - "tools/wait-for-router.sh"
+      - "docs/execution/engine-registry.tsv"
+      - "docs/execution/implementer-preamble*.md"
+      - "docs/execution/02-codex-playbook.md"
+      - "docs/execution/06-requirements-traceability-matrix.md"
 
 permissions:
   contents: read
