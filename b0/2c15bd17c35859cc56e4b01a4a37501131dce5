@@ -1,0 +1,1 @@
+round=128 verdict=pass tests=507+25 lesson=lock-honest-output-guards-with-characterization-tests

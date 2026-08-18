@@ -1,0 +1,1 @@
+round=E02-R13 verdict=pass tests=689 lesson=ui-round-bugs-live-between-cells engine=minimax fix_rounds=2 pr=37 run=30673821431
