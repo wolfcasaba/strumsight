@@ -264,6 +264,107 @@ class PipelineIntegrationTest(unittest.TestCase):
 
             self.assertEqual(completed.returncode, 5, completed.stdout + completed.stderr)
 
+    def test_wait_for_round_recognizes_a_completion_signalled_between_two_fresh_polls(self) -> None:
+        # MÉRT gyökérok (E07-R19, H-NOSIGNAL önjavítás, 2026-08-18, session
+        # rollout `01a014b9-af37-7033-8ced-28b00e8f7116`): a Terra
+        # orchestrátor `exec_command`/`wait` harnessje csendes parancsnál
+        # önmagától „yield"-el, ezért a dokumentált „exit 5 -> hívd meg újra"
+        # szerződés szerint ezt a scriptet NEM egyetlen hosszan futó
+        # hívásként indította, hanem ~20, egyenként friss folyamatként (cell
+        # ID 65..87). A javítás ELŐTT minden friss folyamat a SAJÁT indulási
+        # pillanatában újraszámolta a baseline-t a jelzésfájl AKKORI
+        # tartalmából, ezért egy, a tényleges befejezés UTÁN induló friss
+        # hívás a friss `done`-t tekintette baseline-nak, és sosem jelentette
+        # késznek. Élesben `.codex-round-status` `status=done` (a Codex-javító
+        # kör commitolva és pusholva, gate zöld) már 12:30:06Z-kor készen
+        # állt, az orchestrátor mégis 12:37:08-ig, 7 percen át üres kimenetet
+        # kapott minden friss hívástól, majd jelzés nélkül elfogyott a turnja
+        # (H-NOSIGNAL) -- a kész munka a branchen vesztegelt.
+        #
+        # Ez a teszt pontosan ezt a rést reprodukálja: az ELSŐ hívás (még
+        # nincs jelzés) megalapozza a baseline-t és lejár; a jelzés a hívások
+        # KÖZÖTT érkezik (nem a várakozás alatt); a MÁSODIK, teljesen friss
+        # folyamat kell, hogy azonnal felismerje.
+        with tempfile.TemporaryDirectory() as directory_name:
+            worktree = self.make_router_signal_worktree(Path(directory_name))
+            env = dict(os.environ, WAIT_POLL_SECONDS="1")
+
+            first = self.run_command(
+                ["bash", str(ROOT / "tools" / "wait-for-round.sh"), str(worktree), "2"],
+                env=env,
+            )
+            self.assertEqual(first.returncode, 5, first.stdout + first.stderr)
+
+            script = worktree / "tools" / "codex-signal.sh"
+            self.run_command(["bash", str(script), "done", "repair committed and pushed"], cwd=worktree)
+
+            second = self.run_command(
+                ["bash", str(ROOT / "tools" / "wait-for-round.sh"), str(worktree), "5"],
+                env=env,
+            )
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            self.assertIn("status=done", second.stdout)
+
+    def test_wait_for_router_recognizes_a_completion_signalled_between_two_fresh_polls(self) -> None:
+        # Ugyanaz a rés, ugyanaz a javítás, mint wait-for-round.sh-nál: a
+        # router-oldali várakoztató a `.codex-round-status` UGYANAZT a
+        # `signalled_at` baseline-mechanizmust örökli, tehát ugyanígy vak
+        # marad egy, a tényleges befejezés UTÁN induló friss hívásban.
+        with tempfile.TemporaryDirectory() as directory_name:
+            worktree = self.make_router_signal_worktree(Path(directory_name))
+            env = dict(os.environ, WAIT_POLL_SECONDS="1")
+
+            first = self.run_command(
+                ["bash", str(ROOT / "tools" / "wait-for-router.sh"), str(worktree), "2"],
+                env=env,
+            )
+            self.assertEqual(first.returncode, 5, first.stdout + first.stderr)
+
+            script = worktree / "tools" / "codex-signal.sh"
+            self.run_command(["bash", str(script), "READY_FOR_REVIEW", "router done"], cwd=worktree)
+
+            second = self.run_command(
+                ["bash", str(ROOT / "tools" / "wait-for-router.sh"), str(worktree), "5"],
+                env=env,
+            )
+            self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+            self.assertIn("router_status=READY_FOR_REVIEW", second.stdout)
+
+    def test_wait_for_round_still_ignores_a_delivered_signal_once_a_new_wait_begins(self) -> None:
+        # Nem-regressziós társteszt: az EREDETI védelem (E02-R08 resume, a
+        # fájl tetején lévő header) nem sérülhet a fenti javítástól. Az ELSŐ
+        # várakozás a valódi dispatch-mintát követi (a hívás baseline-ja MÉG
+        # üres, a jelzés a várakozás ALATT érkezik -- ugyanaz a Popen-minta,
+        # mint `test_wait_for_round_does_not_recognize_router_terminal_signals`-
+        # nál) és helyesen kézbesíti a `stopped`-ot. Ha egy terminális jelzést
+        # már KÉZBESÍTETTÜNK egy hívónak, egy azt KÖVETŐ, teljesen új
+        # várakozás ne jelentse azonnal késznek ugyanazt a még mindig ott ülő,
+        # régi jelzést -- a marker a kézbesítéskor törlődik, az új várakozás
+        # pedig a jelenlegi (régi) tartalmat veszi fel új baseline-nak, ahogy
+        # a javítás előtt is tette.
+        with tempfile.TemporaryDirectory() as directory_name:
+            worktree = self.make_router_signal_worktree(Path(directory_name))
+            env = dict(os.environ, WAIT_POLL_SECONDS="1")
+            script = worktree / "tools" / "codex-signal.sh"
+
+            first = subprocess.Popen(
+                ["bash", str(ROOT / "tools" / "wait-for-round.sh"), str(worktree), "10"],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+            )
+            time.sleep(1)
+            self.run_command(["bash", str(script), "stopped", "decision needed"], cwd=worktree)
+            stdout, stderr = first.communicate(timeout=10)
+            self.assertEqual(first.returncode, 3, stdout + stderr)
+
+            second = self.run_command(
+                ["bash", str(ROOT / "tools" / "wait-for-round.sh"), str(worktree), "2"],
+                env=env,
+            )
+            self.assertEqual(second.returncode, 5, second.stdout + second.stderr)
+
     def test_selfheal_prompt_defines_the_three_outcomes_and_the_gate_boundary(self) -> None:
         prompt = (ROOT / "docs" / "execution" / "pipeline-selfheal-prompt.md").read_text()
         for placeholder in ("{{ROUND}}", "{{HALT_CODE}}", "{{ATTEMPT}}", "{{HEAL_STATUS_FILE}}"):
