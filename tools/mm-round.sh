@@ -135,7 +135,22 @@ if [ "$external_endpoint" = "1" ]; then
   # A TodoWrite a befejezetlen fa ellen: a listát vezető modell nem felejti
   # el a hátralévő acceptance-pontokat (a félkész fa a lánc legdrágább
   # hibaosztálya).
-  launch_args+=(--allowedTools "Read,Write,Edit,Glob,Grep,Bash,TodoWrite")
+  #
+  # `Task` (alügynökök) — user-döntés 2026-08-18. MÉRVE ezen a boxon, három
+  # élő próbával a MiniMax endpointon (nem feltételezés):
+  #   1. `Explore` alügynök lefut és helyes eredményt ad;
+  #   2. a projekt OPUS-ra rögzített ügynöke (`flutter-reviewer`,
+  #      `model: claude-opus-4-8`) is lefut — a `~/.claude-minimax/settings.json`
+  #      `ANTHROPIC_DEFAULT_OPUS_MODEL=MiniMax-M3[1m]` leképezése fedi, tehát
+  #      NINCS Claude-kvóta-szivárgás (a base URL a MiniMax endpoint);
+  #   3. az alügynök `Bash`-t is tud futtatni `--permission-mode acceptEdits`
+  #      mellett (`git diff --stat` → BASH_OK).
+  # Miért éri meg: a MiniMax mért gyengéi (invariáns-lazítás, fixture-default
+  # vakfolt, a handoffba írt nem futtatott állítás — docs/LESSONS.md) mind
+  # ÖNELLENŐRZÉSSEL foghatók, és az alügynök friss kontextusból nézi a diffet.
+  # A használat szabályait a motor-preambulum §8 köti meg (szinkron futás,
+  # nincs `model` felülírás, a gate a szülőben marad).
+  launch_args+=(--allowedTools "Read,Write,Edit,Glob,Grep,Bash,TodoWrite,Task")
 else
   # --- Natív Claude-modell (Sonnet 5) sajátosságai -------------------------
   # 1. NINCS auto-compact override: a natív modellnél a CLI ISMERI a valódi
