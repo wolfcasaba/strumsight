@@ -63,6 +63,29 @@
 > priority fail-closed cellája ezt rögzíti. Lecke: **L308**.
 
 
+> ## 🛡️ [IMPLEMENTER-ŐRÖK + SLOT-ZÁR] Gépi őrök a claude-harness köröknek, és a párhuzam MÁSODIK gyökéroka — ADR 0309 (2026-08-18)
+>
+> **Implementer-őrök (PR #309, ADR 0309).** A MiniMax/Sonnet implementer három
+> mért hibaosztálya (listán kívüli fájl, gate-csonkítás, jelzés nélküli kilépés)
+> szövegesen tiltva volt, mégis megtörtént — ezért gépi réteg került alá:
+> `tools/hooks/implementer_guard.py` (scope-őr fail-closed, tiltott
+> parancsalakok, korlátos Stop-jelzésőr, `dart format` írás után), amit a
+> `tools/mm-round.sh` `--settings tools/implementer-settings.json`-nal CSAK az
+> implementer-sessionre tölt be. Emellé `tools/implementer-agents.json`
+> (`round-auditor` alügynök a KÖTELEZŐ önellenőrzéshez), a nyilvántartás
+> `max_out` oszlopa végre hat (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`), és a kör utáni
+> scope-audit is megkapja a briefet (eddig némán kimaradt).
+> **Mérve élesben:** a modell kiadta a `Write`-ot egy listán kívüli fájlra →
+> `PreToolUse:Write hook error: IMPLEMENTER-ŐR …` → a fájl nem jött létre.
+>
+> **Slot-zár szivárgás (PR #310).** Egyetlen futó kör mellett a driver „minden
+> slot foglalt (2)"-t naplózott: a `.pipeline/lock` FD-jét a **tmux szerver**
+> tartotta (E07-R22 drivere indította 18:13-kor, a 19:47-es merge után is élt).
+> `PIPELINE_SLOTS=2` mellett az 1-es slot tartósan foglalt maradt — ez a
+> „0 párhuzamos kör" mérés MÁSODIK, a sor-szerializációtól független oka.
+> Javítva: a tmux-hívások fd 9-et lezáró alhéjban futnak; funkcionális
+> falszifikációs teszt őrzi (`tools/tests/test_slot_lock_inheritance.py`).
+
 > ## 🚀 [PIPELINE v2] Áteresztő-program beütemezve — ADR 0307, E99-R14…R19 (2026-08-18)
 >
 > A lánc saját sebességének MÉRT átvizsgálása után hat governance-kör került a

@@ -11719,3 +11719,33 @@ vagy hiányzó fájl hiba jön egy review-gate futásból egy ÁLLÍTOTTAN kész
 az ELSŐ gyanú a hiányzó push legyen, nem a diff tartalma. Rokon hibaosztály,
 más mechanizmus: [[L175]]/[[L179]] (worktree vs. clone — ott a klónozás módja
 volt hibás, itt a forrás-repó frissessége).
+
+## L312 — A `tmux new-session` a kliens FD-jeit a SZERVERNEK adja át, és a szerver túléli a kört: a slot-zár így némán, tartósan foglalt maradt (2026-08-18)
+
+**Tünet.** Egyetlen futó kör (E99-R14) mellett a driver minden firingen azt
+naplózta, hogy `minden slot foglalt (2)` — a `PIPELINE_SLOTS=2` tehát nem adott
+párhuzamot, de a napló nem mondta meg, miért.
+
+**Mérés.** A `/proc/<pid>/fd` szerint a `.pipeline/lock` (1-es slot) FD-jét a
+**tmux szerver** tartotta: `PID 1023005 … cmd=tmux new-session -d -s
+pipeline-E07-R22 bash`. Ezt a szervert az E07-R22 drivere indította 18:13-kor;
+a kör 19:47-kor merge-elt, a szerver mégis élt, mert a KÖVETKEZŐ kör session-je
+ugyanabban a szerverben futott. A tmux kliens FD-jei a szerverre öröklődnek, és
+a szerver élettartama nem a köré.
+
+**Miért maradt rejtve.** A driver ezt a hibaosztályt már ismerte: a pinger-alhéj
+2026-07-31 óta zárja az fd 9-et („a slot-zár nem öröklődhet"). Csak a
+tmux-hívások maradtak ki a mintából — egy három soros rés egy egyébként helyes
+védelemben. A hatás pedig egy MÁSIK, valódi ok (a sor függőségi
+szerializációja) mögé bújt: a „0 párhuzamos kör" mérésre volt kész magyarázat,
+ezért a második ok fel sem merült.
+
+**Tanulság.** Ha egy védelem egy hibaosztály ellen már létezik, keresd meg a
+védelem MINDEN hívási helyét, ne csak azt az egyet, ami a mérést kiváltotta.
+És ha egy jelenségre van jó magyarázat, az nem zárja ki, hogy legyen egy másik
+is: a mérést a jelenség ISMÉTLŐDÉSÉIG kell folytatni („egyetlen kör fut, mégis
+minden slot foglalt" — ez a mondat volt a nyom, nem a lassúság).
+
+Javítás: a három tmux-hívás fd 9-et lezáró alhéjban (`tools/round-pipeline.sh`),
+őr: `tools/tests/test_slot_lock_inheritance.py` (statikus + FUNKCIONÁLIS
+falszifikáció). Rokon: [[L117]] (a nem bizonyítható őr = bukott őr).
