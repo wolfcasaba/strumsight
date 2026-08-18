@@ -26,7 +26,9 @@ class PlanReasonSheet extends StatelessWidget {
 
   /// Optional: when the caller has the [SkillPriority] for the block's
   /// primary skill, the sheet can append the uncertainty line (A6). When
-  /// `null`, the sheet renders only the reason-code lines.
+  /// `null`, the sheet still appends the uncertainty line as a fail-closed
+  /// signal (F1 review, §5.4) — the absence of confidence data is itself
+  /// evidence we cannot claim a confident reason.
   final SkillPriority? priority;
 
   /// Confidence threshold below which the uncertainty line is shown.
@@ -118,11 +120,14 @@ class PlanReasonSheet extends StatelessWidget {
 
   bool get _isUncertain {
     final priority = this.priority;
-    if (priority == null) return false;
+    // §5.4 / F1 review: missing priority is a fail-closed signal —
+    // without confidence data we cannot claim the reason line is
+    // trustworthy, so the sheet appends the uncertainty line.
+    if (priority == null) return true;
     final uncertaintyFactor = priority.factorFor(
       SkillPriorityFactorKind.uncertainty,
     );
-    if (uncertaintyFactor == null) return false;
+    if (uncertaintyFactor == null) return true;
     return uncertaintyFactor.normalizedValue >= uncertaintyThreshold;
   }
 }

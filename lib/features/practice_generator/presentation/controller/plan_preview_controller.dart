@@ -24,6 +24,7 @@ import '../../domain/model/plan_enums.dart';
 import '../../domain/model/plan_validation_issue.dart';
 import '../../domain/model/practice_block.dart';
 import '../../domain/model/practice_day.dart';
+import '../../domain/model/skill_priority.dart';
 import '../../domain/model/weekly_availability.dart';
 import '../../domain/service/plan_validator.dart';
 
@@ -79,17 +80,20 @@ final class PlanPreviewController extends ChangeNotifier {
     required PlanValidationContext validationContext,
     required this.activation,
     PlanValidator? validator,
+    Map<BlockId, SkillPriority> priorities = const <BlockId, SkillPriority>{},
   }) : _plan = initialPlan,
        _context = validationContext,
        _validator = validator ?? const PlanValidator(),
        _validation = (validator ?? const PlanValidator()).validate(
          initialPlan,
          validationContext,
-       );
+       ),
+       _priorities = Map<BlockId, SkillPriority>.unmodifiable(priorities);
 
   final PlanValidationContext _context;
   final PlanValidator _validator;
   GenerationPlanActivation activation;
+  final Map<BlockId, SkillPriority> _priorities;
 
   AdaptivePracticePlan _plan;
   PlanValidationResult _validation;
@@ -204,6 +208,14 @@ final class PlanPreviewController extends ChangeNotifier {
   /// surfaced so a test can assert every setter calls back into the
   /// validator (A2).
   int get editCount => _editCount;
+
+  /// Returns the [SkillPriority] recorded for [blockId] when the
+  /// controller was built, or `null` when no priority was supplied for
+  /// that block. The caller ([PlanReasonSheet]) uses the absence of a
+  /// priority as a fail-closed signal (F1 review, §5.4): without
+  /// confidence data, the reason sheet must say so instead of implying a
+  /// confident decision.
+  SkillPriority? priorityFor(BlockId blockId) => _priorities[blockId];
 
   void _applyPlan(AdaptivePracticePlan next) {
     _plan = next;

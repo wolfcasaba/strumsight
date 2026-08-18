@@ -121,7 +121,18 @@ class _PlanPreviewScreenState extends State<PlanPreviewScreen> {
                       PlanDayCard(
                         day: day,
                         onReasonRequested: (block) {
-                          PlanReasonSheet.show(context, block: block);
+                          // §5.4 (F1 review): thread the recorded
+                          // priority through to the sheet so its A6
+                          // uncertainty line stays confidence-honest.
+                          // When the caller never recorded a priority
+                          // for this block, `priorityFor` returns null
+                          // and the sheet falls back to its fail-closed
+                          // "uncertain" wording — see PlanReasonSheet.
+                          PlanReasonSheet.show(
+                            context,
+                            block: block,
+                            priority: widget.controller.priorityFor(block.id),
+                          );
                         },
                         onBlockDurationChanged: (blockId, next) {
                           widget.controller.editBlockActiveDuration(
