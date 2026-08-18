@@ -3,7 +3,25 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-18
-> (E07-R17 done — bounded deterministic review queue: typed targets/outcomes,
+> (E07-R18 done — application-level, cancellable, state-machine-driven
+> GenerationOrchestrator: immutable `GenerationState` (idle/running/completed/
+> cancelled/failed + 4 stage checkpoints), a `GenerationOrchestrator` that
+> chains the R05–R17 evidence/priority/candidate/time-budget/scheduling/
+> review-queue/validator/repairer services into one cancellable, per-request
+> single-flight run, and a Flutter-free `PlanGeneratorController` bridge. A
+> §0.0 pre-flight revision resolved a measured gap the first dispatch
+> correctly stopped on (no scope-approved `WeeklyScheduleDecision →
+> AdaptivePracticePlan` assembly contract existed) by assigning that assembly
+> to the already-allowed orchestrator file, no new production file. Independent
+> review found and closed 1 BLOCKER (a same-request double-`generate()` call
+> on `PlanGeneratorController` threw an uncaught `StateError` instead of
+> resolving `AppResult` — violated ADR 0266's "no raw exception crosses the
+> boundary") + 1 MAJOR (the validate-reject/repair-fail no-activation branch
+> had zero test coverage) in one fix round, both confirmed fixed via a
+> disposable probe test run by hand in an isolated clone; security review
+> (risk=high) PASS with 4 forward-looking NOTEs for the future activation
+> implementation. Full Gate and Router CI exact-SHA green, PR #300. Both
+> flags remain `false`, zero production callers. Prior: E07-R17 done — bounded deterministic review queue: typed targets/outcomes,
 > explicit local-date interval policy, strict daily budget, deduplication and
 > replacement-required handling; review APPROVED, exact-SHA CI green, PR #296.
 > Prior: E07-R16 done — bounded, evidence-based progression/regression policy for
@@ -928,6 +946,17 @@
   ha időközben elkészült, vagy jelezze egy jövőbeli session, ha még hiányzik.
 
 ## 4. Current branch
+
+**Aktuális állapot (2026-08-18):** `main` @ `c4e0bd0b` — E07-R18
+GenerationOrchestrator, PR [#300](https://github.com/wolfcasaba/strumsight/pull/300),
+squash-merge. Exact `74916469`: Full Gate
+[32129580603](https://github.com/wolfcasaba/strumsight/actions/runs/32129580603)
++ Router CI [32129429169](https://github.com/wolfcasaba/strumsight/actions/runs/32129429169)
+success; `origin/main` mozdult a dispatch és a merge között (2 nem-átfedő
+pipeline-commit, `#298`/`#299`) — a round branch mergelte, újra-dispatch-elve
+az egyesített SHA-n. Egy javító kör (`bf821515`) zárta F1 BLOCKER + F2 MAJOR
+leletet, saját kézzel újramérve. Post-merge célzott gate zöld a friss,
+fast-forwardolt `main`-en.
 
 **Aktuális állapot (2026-08-18):** `main` @ `e95f9f67` — E07-R17 bounded
 spaced-repetition review queue, PR #296 squash-merge. Exact `6d4261f7`:
@@ -1973,15 +2002,21 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R18** (Chapter 8, GenerationOrchestrator,
-progress és cancellation). A friss session pre-flightban mérje újra az R17
-review-budget/replacement contractját és az R16 `ProgressionPolicy`/
-`AdaptationDecider` határait. A
+**A soron következő SDD-lépés: E07-R19** (Chapter 8, Local repository,
+migráció és korrupcióvédelem, `docs/rounds/e07-r19-local-plan-repository.md`,
+ADR 0267 már megírva). A friss session pre-flightban mérje újra a Core
+atomikus-írás API-t (brief saját pre-flight-jegyzete) ÉS az E07-R18
+biztonsági review NOTE-4 leletét: a `GenerationPlanActivation.activate(plan)`
+interfész (`lib/features/practice_generator/application/service/
+generation_orchestrator.dart`) ma NEM dokumentál idempotenciát, atomicitást
+vagy authz-felelősséget — az R19 valódi, repository-backed `activate`
+implementációja előtt ezt tisztázni kell (lásd
+`docs/reviews/e07-r18-generation-orchestrator-security.md` NOTE-4). A
 `practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
 `false` maradnak.
 
-**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R16 —
-Progression és regression policy** (Chapter 8, Kör 16). Lásd §5.
+**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R18 —
+GenerationOrchestrator, progress és cancellation** (Chapter 8, Kör 18). Lásd §4.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"

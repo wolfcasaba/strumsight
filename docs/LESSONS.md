@@ -11155,3 +11155,68 @@ mutációra piros lett.
 **Hogyan alkalmazd.** Ha két állapot azonos külső engedélyezést ad, a kritikus
 állapotértéket is közvetlenül assertáld; kompatibilitási teszt önmagában nem
 bizonyítja a fázisszerződést.
+
+## L300 — Egy "fűzd össze a kész építőelemeket" kör brief-je hallgathat egy valódi, köztes összeállítási lépésről; a pipeline-diagram stage-listája nem helyettesíti a per-stage owner-listát (E07-R18, 2026-08-18)
+
+**Mérve.** Az E07-R18 briefje (§1 „Cél") a teljes generálási pipeline
+alkalmazásszintű összefűzését írta elő az R05-R17 KÉSZ építőelemeiből. A
+SDD Ch8 §18 diagramja explicit stage-ként sorolja fel a „Prescription
+construction"-t a „Weekly scheduling" és a „Spaced repetition insertion"
+között — de a Ch8 „Fejlesztési körök" (Kör 1–30) listájában EGYETLEN kör sem
+kapta ezt a felelősséget: a Kör 9 (`ExercisePrescription` MODELL) explicit
+kizárta „plan assembly"-t a saját hatóköréből
+(`exercise_prescription.dart:1-8` doc-comment), a Kör 18 (GenerationOrchestrator)
+brief-je pedig csak a szekvenálást/megszakítást/állapotgépet nevezte meg,
+nem az összeállítást magát. Az első Terra-dispatch ezt helyesen `stopped`-dal
+jelezte: `PlanValidator`/`PlanRepairer` kizárólag kész `AdaptivePracticePlan`-t
+fogad, a `WeeklyScheduler` kimenete viszont csak könnyűsúlyú
+`ScheduleCandidate`-eket hordoz, és az `ExercisePrescription`
+konstruktorának KÖTELEZŐ, hívó-adott policy-mezői (rep-szám, tempó, success
+criteria) SEHOL nem lettek levezetve egyetlen korábbi körben sem.
+
+**Feloldás.** A pre-flight §0.0 brief-revízió (nem halt) az összeállítást a
+MÁR engedélyezett `generation_orchestrator.dart`-hoz rendelte (nincs új
+production fájl → nem H3), és a policy-tartalmi kérdést (a konkrét
+rep/tempó/success-criteria érték) explicit KÍVÜL helyezte ezen a körön mért
+elfogadhatóságán — mert egyik acceptance-cella sem vizsgálja azt. A
+`ScheduleCandidate → PracticeBlock.kind/materialKind` leképezésre konkrét,
+determinisztikus alapszabályt adott (bounded enum-tér, orchestrátor-glue),
+az `ExercisePrescription` konkrét ÉRTÉKeire pedig egyszerű, rögzített,
+dokumentált alapértéket VAGY egy a fájlon belüli injektált seamet engedett,
+follow-up-ként megjelölve a tényleges pedagógiai hangolást.
+
+**Hogyan alkalmazd.** Egy pipeline-diagram (SDD §18-höz hasonló) stage-listája
+NEM azonos a fejlesztési körök owner-listájával — a kettő közötti hézagot csak
+KERESZT-ELLENŐRZÉSSEL találod meg (minden diagram-stage-hez rendelj egy
+konkrét kör-számot, és amelyikhez nem tartozik, azt mérd ki a pre-flightban,
+mielőtt dispatch-elsz). Ha az implementer emiatt `stopped`-ot jelez, az NEM
+tévedés — a helyes válasz egy §0.0 revízió, amely a hiányzó felelősséget a
+MÁR engedélyezett fájlok egyikéhez rendeli (ha ez lehetséges) és a nyitva
+maradó policy-tartalmat explicit, dokumentáltan follow-upra teszi, NEM egy új,
+engedélyezetlen fájl bevezetése (az H3 lenne).
+
+## L301 — Egy helyesen működő request-szintű single-flight dedup NEM helyettesíti az állapot-publikálás saját idempotencia-őrjét; a két réteg külön hibázhat (E07-R18 F1, 2026-08-18)
+
+**Mérve.** A `GenerationOrchestrator.generate()` helyesen dedupolt: két
+egyidejű hívás ugyanarra a `GenerationRequestId`-ra ugyanazt a Future-t kapta
+vissza (`identical(first, second)` teszttel bizonyítva). A fölé épített
+`PlanGeneratorController.generate()` viszont MINDKÉT hívó folytatását
+elindította, amikor a közös Future teljesült — mindkettő megpróbálta
+publikálni a záró állapotátmenetet. Az első `running → completed`-re zárt
+sikerrel; a második `_state.transitionTo(completed)`-je `StateError`-t
+dobott, mert `GenerationState._canTransitionTo` `completed`-ből csak
+`running`-ba enged átmenetet. A hiba a review saját, eldobható próbatesztjével
+(két egyidejű `controller.generate(input)` hívás `Future.wait`-tel) azonnal
+piros lett, majd a javítás után zöld.
+
+**Hogyan alkalmazd.** Amikor egy réteg (itt: a controller) egy MÁSIK réteg
+(itt: az orchestrátor) már helyesen dedupolt aszinkron eredményét várja meg,
+a felső réteg saját, KÖVETKEZMÉNYES mellékhatása (itt: állapot-publikálás)
+KÜLÖN idempotencia-őrt igényel — nem elég azt ellenőrizni, hogy „ugyanaz a
+kérés fut-e" (`requestId` egyezés), azt IS ellenőrizni kell, hogy „én vagyok-e
+MÉG az, aki jogosult lezárni ezt az állapotot" (`status == running`, nem csak
+`requestId` egyezés). Konkrét regressziós minta: bármely UI-vezérlő, ami egy
+megosztott, single-flight Future-t végfelhasználói callback-ből (állapot-
+publikálás, analytics, side-effect) zár le, teszteljen egy „dupla-tap"
+forgatókönyvet `Future.wait([call1, call2])`-vel, ne csak a mögöttes
+dedup-mechanizmust önmagában.
