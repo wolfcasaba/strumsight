@@ -119,9 +119,17 @@ class PracticePlanMigrator {
     Map<String, Object?> envelope,
     int fromVersion,
   ) {
-    // Today: only one known prior shape (v0 → v1) and it is a no-op
-    // (no field renames happened between v0 and v1). When the envelope
-    // schema changes, branch on [fromVersion] here.
-    return envelope;
+    // Today: only one known prior shape (v0 → v1) and the body itself is
+    // a no-op (no field renames happened between v0 and v1) — but the
+    // envelope's own `schemaVersion` label must still advance to current,
+    // or a reader that persists this map back verbatim would keep
+    // writing a stale version forever (M-01). The checksum is computed
+    // over `body` only (see [PracticePlanSerializer.openEnvelope]), so
+    // relabelling the version here does not invalidate it. When the
+    // envelope schema changes, branch on [fromVersion] here.
+    return <String, Object?>{
+      ...envelope,
+      'schemaVersion': currentSupportedSchemaVersion,
+    };
   }
 }

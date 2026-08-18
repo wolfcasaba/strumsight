@@ -55,10 +55,14 @@ void main() {
       final migrated = migrator.migrateEnvelope(<String, Object?>{
         'schemaVersion': below,
       });
-      // The migrator does not relabel the schemaVersion (the body codec
-      // reads the migrated envelope). What matters here is that the
-      // call did not throw and returned an envelope-shaped map.
-      expect(migrated['schemaVersion'], below);
+      // The migrator DOES relabel the schemaVersion to current — a
+      // reader that persisted this map back verbatim must never keep
+      // writing a stale version label after migrating the shape forward
+      // (A7, M-01 regression).
+      expect(
+        migrated['schemaVersion'],
+        PracticePlanMigrator.currentSupportedSchemaVersion,
+      );
     });
 
     test('a missing schemaVersion field reads as a controlled '
