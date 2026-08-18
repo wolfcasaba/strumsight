@@ -40,7 +40,13 @@ class ReviewerIndependenceTest(unittest.TestCase):
                 (home / ".mmx").mkdir()
                 (home / ".mmx" / "config.json").write_text('{"api_key": "fixture"}')
 
-            environment = dict(os.environ)
+            # Ugyanaz a szivárgás, mint a rotációs tesztekben (E99-R14 H3):
+            # az ambiens `PIPELINE_*` override elmozdítaná a mért alapértelmezést.
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith("PIPELINE_")
+            }
             environment.pop("MINIMAX_API_KEY", None)
             environment["HOME"] = str(home)
             environment["PIPELINE_STATE_DIR"] = str(state)
