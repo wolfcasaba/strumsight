@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+> **E07-R23 KÉSZ — PlanCompiler és Practice Engine végrehajtás** — PR
+> [#316](https://github.com/wolfcasaba/strumsight/pull/316), squash
+> `d02718fb` (2026-08-18). `PlanCompiler` egy validált terv-blokkot fordít
+> pontos, végrehajtható Practice Engine lépéssé — revízió- és
+> capability-ellenőrzéssel indítás előtt, a recept konfigjának
+> közelítés-mentes átadásával. `PracticeOutcomeAdapter` a Practice Engine
+> **hívó-táplált** terminál-bemenetét normalizálja (`completed` /
+> `cancelled` / `failedTechnical` / `skipped` / `unavailable`), mert a §0.0
+> pre-flight kimérte: a Practice Engine ma KIZÁRÓLAG a `completed` ágon
+> állít elő `PracticeSessionResult`-ot (ADR 0077 §9,
+> `practice_session_controller.dart:245-256`) — a `cancelled`/`failed` ág
+> nem. `PlanExecutionCoordinator` indít + idempotensen könyvel
+> (`blockExecutionId` replay-nél first-write-wins). [ADR
+> 0268](docs/adr/0268-technical-failure-is-not-skill-failure.md)
+> végrehajtva: a technikai hiba SOSEM tanuló-teljesítmény, a megszakítás
+> részleges (nem kudarc), az elavult/unavailable blokk nem indul.
+>
+> [Correctness review](docs/reviews/e07-r23-review.md) APPROVED egy javító
+> kör után: az F1 MAJOR azt mérte, hogy a session-konfig pontos-egyezés
+> hiba-ága (§5.4 — „nem körülbelül") tesztelve NINCS — a review saját kézzel
+> eltávolította a védelmet, és mind a 7 akkori teszt zöld maradt. A javítás
+> (`mismatchedSessionConfig()` + egy negatív teszt) után a review
+> MEGISMÉTELTE a próbát: PIROS a védelem nélkül, ZÖLD vele — a zárás valódi,
+> nem bemondás. [Security review](docs/reviews/e07-r23-security.md) PASS
+> (kötelező, brief `risk = "high"`): 0 CRITICAL/BLOCKER/MAJOR/MINOR, 5
+> előretekintő NOTE a jövőbeli wiring körnek (elsősorban: a `metricEvidence`
+> kulcsok és a `failureCode` maradjanak gép-eredetűek, ne kerüljön bele
+> szabad szöveg). Exact-SHA: Full Gate
+> [32194483344](https://github.com/wolfcasaba/strumsight/actions/runs/32194483344)
+> és Router CI
+> [32194473562](https://github.com/wolfcasaba/strumsight/actions/runs/32194473562)
+> success a merge-előtti pontos fejen; post-merge célzott gate a friss
+> `main`-en önállóan újrafuttatva is zöld (7/7). `practiceGeneratorEnabled`
+> marad `false`, nulla production hívó — tisztán domain/application/data
+> réteg-bővítés.
+>
+> **Folyamat-megjegyzés (két külön mérve, mindkettő a review-oldali
+> független friss klónozás fogta meg, nem a bemondás):** (1) a javító kör
+> `.codex-round-status` `done` jelzése után a HEAD nem volt push-olva
+> originra — ugyanaz a hibaosztály, mint `docs/LESSONS.md` L311; (2) a `main`
+> a kör folyamán ötször mozdult (más, párhuzamos governance-körök
+> docs/tools-commitjai miatt) — minden alkalommal újra-szinkronizálva és a
+> CI-t (Full Gate + Router CI) újra-dispatch-elve az ADR 0086 §2 exact-SHA
+> szabálya szerint, mielőtt a végső merge megtörtént. Következő kör:
+> **E07-R24**, új sessionben.
+
 > **E07-R22 KÉSZ — Weekly Plan és Today screen** — PR
 > [#307](https://github.com/wolfcasaba/strumsight/pull/307), squash
 > `dd80179e` (2026-08-18). Az aktív terv napi ("ma") és heti nézete
@@ -44,23 +90,6 @@
 > VALÓDI router-hívási úton futó elfogadási cellát kell írnia. Lecke:
 > **L309**. Következő kör: E07-R23 (PlanCompiler és Practice Engine
 > végrehajtás, SDD Ch8 Kör 23), új sessionben.
-
-> **E07-R21 KÉSZ — Plan preview, explanation és kézi szerkesztés** — PR
-> [#306](https://github.com/wolfcasaba/strumsight/pull/306), squash
-> `64e3a802` (2026-08-18). Az offline, fixture-alapú preview napokra és
-> blokkokra bontva renderel, minden szerkesztés után a meglévő
-> `PlanValidator`-ral újramér, error/fatal esetén blokkol, warningot explicit
-> áttekintéshez köt, és csak explicit confirm után hívja a meglévő
-> `GenerationPlanActivation` contractot. Az indoklás ARB-alapú, a confidence
-> hiányát vagy gyengeségét fail-closed módon kimondja. [ADR 0306](docs/adr/0306-plan-preview-presentation-activation-boundary.md),
-> [correctness review](docs/reviews/e07-r21-review.md) APPROVED,
-> [security review](docs/reviews/e07-r21-security.md) PASS. Exact-SHA:
-> Full Gate [32168166999](https://github.com/wolfcasaba/strumsight/actions/runs/32168166999)
-> és Router CI [32168172689](https://github.com/wolfcasaba/strumsight/actions/runs/32168172689)
-> success. A review egy BLOCKER-t zárt egy MiniMax-javító körben: a közvetlen
-> reason-sheet teszt nem fedte az éles screen-utat, amely kezdetben elvesztette
-> a priority/confidence adatot; az új whole-screen regresszió és a hiányzó
-> priority fail-closed cellája ezt rögzíti. Lecke: **L308**.
 
 
 > ## 🛡️ [IMPLEMENTER-ŐRÖK + SLOT-ZÁR] Gépi őrök a claude-harness köröknek, és a párhuzam MÁSODIK gyökéroka — ADR 0309 (2026-08-18)
@@ -243,57 +272,6 @@
 > ezt a self-heal nem módosította. Lecke: **L313**. A lánc E99-R14-gyel
 > folytatódik a következő cron-firingen.
 
-> ## ✅ [HEAL E07-R21/H2] KÉSZ — a brief saját ADR 0266-glosszája volt téves, nem az ADR; R21 egy nem integrált preview-komponensre szűkült — PR #305, `078c4ab4` (2026-08-18)
->
-> Az E07-R21 pre-flightja H2-vel halt: §5.1 „csak explicit felhasználói
-> megerősítésre aktivál" mandátuma szemben állt a közben merge-elt E07-R18
-> `GenerationOrchestrator._run()`-jával, ami egy sikeres `generate()` hívás
-> saját záró hatásaként, megszakítás nélkül aktivál
-> (`generation_orchestrator.dart:150-154`) — a halt saját elemzése ezt a
-> briefben tiltott application-réteg módosítását igénylőnek mérte, és
-> emberi döntést kért (R18 aktivációs határának módosítása vagy R21
-> scope-csökkentés).
->
-> A self-heal (ADR 0112, 3/3. kísérlet — az 1. és 2. kísérlet jelzés nélkül
-> ért véget, 20 perces elakadás-őr ölte) az ADR 0266 TELJES szövegét
-> elolvasva megmérte: a 2. döntés („Részleges terv soha nem aktiválódik")
-> kizárólag a MEGSZAKÍTOTT/hibás futásra vonatkozik — a brief saját
-> frontmatterje viszont „nincs automatikus aktiválás"-ként glosszázta, ami
-> egy szűkebb döntés téves, tág átfogalmazása volt, és a halt erre a
-> glosszára épített, nem az ADR tényleges szövegére. Az összes R21
-> acceptance criteria (A1–A8) teljesíthető egy `PlanPreviewController`-rel,
-> ami SOSEM hívja a `GenerationOrchestrator`-t/`PlanGeneratorController`-t:
-> egy már összeállított tervet kap, a MEGLÉVŐ `PlanValidator`-on
-> újravalidál, a MEGLÉVŐ `GenerationPlanActivation` interfészen aktivál —
-> mindhárom típus már publikus a `public.dart`-on, egyetlen sor
-> domain/application-kód sem módosul, `allowed_paths` byte-for-byte
-> változatlan. Ugyanaz a hibaosztály, mint az E07-R19/H3 self-heal
-> ([[L302]]).
->
-> A javítás: `docs/rounds/e07-r21-plan-preview-and-explanation.md` §0.0
-> pre-flight revízió (mért gyökérok + a szűkített, meglévő-típusokra épülő
-> terv) és `docs/adr/0266-…md` dátumozott „Módosítás (ADR 0112 önjavító
-> kör)" pontosító blokk, történet-átírás nélkül; regressziós őr:
-> `tools/tests/test_e07_r21_activation_boundary_scope.py` (6 teszt — RED a
-> pristine `main`-en 2/6, GREEN a revízió után mind a 6). Full
-> `python3 -m pytest tools/tests -q`, a doboz lokális
-> `PIPELINE_ORCH_SWAP_ENGINE` env-override-jától megtisztítva (ez a 4,
-> ettől független, e körhöz nem tartozó helyi hibát okozott — a `main`
-> Router CI-je az utolsó 5 commit mindegyikén zöld, tehát ez NEM
-> repó-regresszió, hanem ennek a doboznak a session-env-je): 473 zöld, 522
-> subtest zöld, 0 hiba. Router CI exact-SHA: a PR #305 headSha
-> `b788b25d` → `success` (a squash-merge SHA `078c4ab4`, nincs Dart-
-> változás, tehát a Router CI az egyetlen szükséges CI-bizonyíték).
->
-> **Nyitott follow-up** (dokumentálva, még ki nem osztott kör): a
-> `GenerationOrchestrator.generate()` ma egyetlen, megszakítás nélküli
-> hívásban fuzionálja a validálást/javítást és az aktiválást — amíg ez nem
-> válik szét egy explicit, elkülönített aktivációs hívássá, a preview-
-> képernyő NEM köthető a valódi generálási folyamathoz (csak fixture-
-> tervekkel tesztelhető ebben a körben). Ez sem E07-R18, sem E07-R21
-> scope-ja nem volt. Lecke: **L307**. A lánc E07-R21-gyel folytatódik a
-> következő cron-firingen, friss (nem healed) dispatch-csel a revideált
-> brief ellenében.
 
 > **E07-R19 KÉSZ — PR #303, `2ce22f3b` (2026-08-18).** A local plan
 > repository elkülönített draft/active/archive névterekkel, checksumos
@@ -561,10 +539,12 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-18 (E07-R22 zárása): az E07-R20 banner archiválva; a fejlécben az
-> E07-R22, E07-R21 és HEAL E07-R21/H2 banner marad (a kettő együtt az R21
-> narratíva). 2026-08-16 (HEAL E07-R11/H3 zárása): a HEAL E07-R09/H5 banner
-> archiválva; a fejlécben az E07-R10 és HEAL E07-R11/H3 banner marad.
+> 2026-08-18 (E07-R23 zárása): az E07-R21 és HEAL E07-R21/H2 banner
+> archiválva; a fejlécben az E07-R23 és E07-R22 banner marad. 2026-08-18
+> (E07-R22 zárása): az E07-R20 banner archiválva; a fejlécben az E07-R22,
+> E07-R21 és HEAL E07-R21/H2 banner marad (a kettő együtt az R21 narratíva).
+> 2026-08-16 (HEAL E07-R11/H3 zárása): a HEAL E07-R09/H5 banner archiválva;
+> a fejlécben az E07-R10 és HEAL E07-R11/H3 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state

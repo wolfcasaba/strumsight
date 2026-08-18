@@ -6,6 +6,20 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ HEAL E07-R21/H2 — brief saját ADR 0266-glosszája volt téves (2026-08-18)
+
+Az E07-R21 pre-flightja H2-vel halt: a brief frontmatterje „nincs automatikus
+aktiválás"-t állított, ami az ADR 0266 2. döntésének ("Részleges terv soha
+nem aktiválódik") téves, tág átfogalmazása volt — az ADR valójában csak a
+megszakított/hibás futásra vonatkozott. A self-heal (ADR 0112, 3/3.
+kísérlet) az ADR teljes szövegét elolvasva megmérte, hogy minden R21
+acceptance criteria teljesíthető egy `PlanPreviewController`-rel, ami sosem
+hívja a `GenerationOrchestrator`-t, csak a meglévő `PlanValidator`/
+`GenerationPlanActivation` interfészeken dolgozik — `allowed_paths`
+változatlan, 0 domain/application-kód módosult. PR #305, squash `078c4ab4`.
+Regressziós őr: `tools/tests/test_e07_r21_activation_boundary_scope.py`.
+Lecke: L307.
+
 ## ✅ E07-R21 — Plan preview, explanation és kézi szerkesztés (2026-08-18)
 
 PR [#306](https://github.com/wolfcasaba/strumsight/pull/306), squash
