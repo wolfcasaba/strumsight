@@ -1772,7 +1772,7 @@ if [ -f "$engine_override_file" ]; then
   # A kiértékelés a `engine-profile.sh evaluate` parancsra van bízva — így
   # a driver motor-override blokkja és a tesztek UGYANAZT a függvényt hívják
   # (M3: nincs duplikált logika, a korábbi `--engine-override-evaluate`
-  # top-level hook törölve). A kimenet: stdout = <motor> | EXPIRED | <empty>;
+  # top-level hook törölve). A kimenet: stdout = <motor> | EXPIRED:<motor> | <empty>;
   # exit 0/1/2/3/4. A státuszt KÖZVETLENÜL a parancs után capture-öljük,
   # mert a `set -uo pipefail` nem állítja vissza a $?-t, de bármilyen
   # következő parancs felülírná.
@@ -1787,9 +1787,14 @@ if [ -f "$engine_override_file" ]; then
       engine=$engine_override
       ;;
     1)
-      # EXPIRED — a függvény már törölte a fájlt. A queue engine oszlopa marad.
-      log "MOTOR-OVERRIDE LEJÁRT: $evaluate_output — a queue engine oszlopa lép vissza"
-      notify "⏰ motor-override lejárt" "$evaluate_output — a queue soronkénti engine értéke lép életbe" high
+      # EXPIRED — a függvény már törölte a fájlt, ezért a motornevet a
+      # strukturált kimenetből kell megőrizni az audit- és ntfy-eseményhez.
+      expired_engine=${evaluate_output#EXPIRED:}
+      if [ "$expired_engine" = "$evaluate_output" ] || [ -z "$expired_engine" ]; then
+        die "a lejárt motor-override kiértékelése nem tartalmaz motornevet: $evaluate_output"
+      fi
+      log "MOTOR-OVERRIDE LEJÁRT: $expired_engine — a queue engine oszlopa lép vissza"
+      notify "⏰ motor-override lejárt" "$expired_engine — a queue soronkénti engine értéke lép életbe" high
       ;;
     2)
       # STALE — a függvény a motornevet írta a stdout-ba, de a kor-

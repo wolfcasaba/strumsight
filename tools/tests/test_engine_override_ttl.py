@@ -86,6 +86,86 @@ def run_evaluate(state_dir: Path, profile_script: Path, warn_hours: str | None =
     return result.returncode, (result.stdout or "").strip()
 
 
+def run_expired_override_driver(
+    state_dir: Path, engine: str
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    """Run the real driver selection path with its external prerequisites stubbed.
+
+    The driver is invoked with ``--dry-run`` so it reaches the actual
+    motor-override/log/notify branch but cannot launch an orchestrator session.
+    ``git``, ``gh`` and ``curl`` are deterministic stand-ins for their external
+    boundaries; the driver and engine-profile scripts themselves are real.
+    """
+    override = state_dir / "engine-override"
+    _make_ttl_override(override, engine, expires_at=str(_now_epoch() - 60), reason="teszt")
+    (state_dir / "ntfy-topic").write_text("e99-r14-test\n", encoding="utf-8")
+    queue = state_dir / "queue.tsv"
+    queue.write_text(
+        "E99-R14\tdocs/rounds/e99-r14-gov-08-engine-policy-measured.md\t"
+        "qwen-plus\t0307\tpending\n",
+        encoding="utf-8",
+    )
+
+    bin_dir = state_dir / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "claude").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (bin_dir / "gh").write_text(
+        "#!/bin/sh\n"
+        "case \"$1 $2\" in\n"
+        "  'pr list'|'run list') exit 0 ;;\n"
+        "  *) exit 1 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "git").write_text(
+        "#!/bin/sh\n"
+        "case \"$1\" in\n"
+        "  fetch|status|ls-remote) exit 0 ;;\n"
+        "  rev-parse)\n"
+        "    [ \"$2\" = '--abbrev-ref' ] && printf 'main\\n' || printf 'fixture-sha\\n' ;;\n"
+        "  *) exit 1 ;;\n"
+        "esac\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "curl").write_text(
+        "#!/bin/sh\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  case \"$1\" in\n"
+        "    -d) printf '%s\\n' \"$2\" >> \"$FAKE_CURL_BODIES\"; shift 2 ;;\n"
+        "    *) shift ;;\n"
+        "  esac\n"
+        "done\n",
+        encoding="utf-8",
+    )
+    for executable in bin_dir.iterdir():
+        executable.chmod(0o755)
+
+    notify_bodies = state_dir / "notify-bodies"
+    home_dir = state_dir / "home"
+    home_dir.mkdir()
+    environment = dict(os.environ)
+    environment.update(
+        HOME=str(home_dir),
+        PIPELINE_STATE_DIR=str(state_dir),
+        PIPELINE_QUEUE_FILE=str(queue),
+        PIPELINE_STATUS_CHECK="0",
+        PIPELINE_ORCH_ROTATION="claude",
+        PIPELINE_SLOTS="1",
+        PIPELINE_SELF_CHAIN="0",
+        FAKE_CURL_BODIES=str(notify_bodies),
+        PATH=f"{bin_dir}:{environment['PATH']}",
+    )
+    result = subprocess.run(
+        ["bash", str(ROOT / "tools" / "round-pipeline.sh"), "--dry-run"],
+        cwd=ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result, notify_bodies
+
+
 class _IsolatedProfileMixin:
     """M2 javítás: a falszifikációs tesztek a `tools/engine-profile.sh`-t és
     a registry-t egy átmeneti könyvtárba MÁSOLJÁK, és a forrást CSAK ott
@@ -164,14 +244,28 @@ class EngineOverrideTTLTest(unittest.TestCase):
         self.assertTrue(self.override.exists())
 
     def test_expires_at_in_past_triggers_deletion(self) -> None:
-        """§4 3. cella (2. fele): explicit expires_at a múltban → EXPIRED, a fájl TÖRLŐDIK."""
+        """§4 3. cella (2. fele): explicit expires_at a múltban → motorneves EXPIRED, a fájl TÖRLŐDIK."""
         _make_ttl_override(self.override, "qwen-plus", expires_at=str(_now_epoch() - 60), reason="kvóta")
 
         exit_code, stdout = run_evaluate(self.state, PROFILE)
 
         self.assertEqual(exit_code, 1, msg=f"lejárt: EXPIRED (1) kell, exit {exit_code}, stdout {stdout!r}")
-        self.assertEqual(stdout, "EXPIRED")
+        self.assertEqual(stdout, "EXPIRED:qwen-plus")
         self.assertFalse(self.override.exists(), "a lejárt fájlt TÖRÖLNI kell")
+
+    def test_expired_override_driver_logs_and_notifies_the_engine_before_deletion(self) -> None:
+        """M5: the real driver path preserves the expired engine in both audit sinks."""
+        result, notify_bodies = run_expired_override_driver(self.state, "qwen-plus")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        expected = "MOTOR-OVERRIDE LEJÁRT: qwen-plus — a queue engine oszlopa lép vissza"
+        self.assertIn(expected, result.stderr)
+        self.assertIn(expected, (self.state / "chain.log").read_text(encoding="utf-8"))
+        self.assertIn(
+            "qwen-plus — a queue soronkénti engine értéke lép életbe",
+            notify_bodies.read_text(encoding="utf-8"),
+        )
+        self.assertFalse(self.override.exists(), "the expired override must be deleted after its engine is captured")
 
     def test_expires_at_in_future_is_live_even_if_file_old(self) -> None:
         """200 órás mtime, de az expires_at a JÖVŐBEN → LIVE, nincs STALE warning.
@@ -281,6 +375,34 @@ class EngineOverrideFalsificationTest(unittest.TestCase, _IsolatedProfileMixin):
             self.override.exists(),
             "Ha a lejárat-ellenőrzés KI, a fájl NEM törlődik — a teszt PIROS, ahogy kell.",
         )
+
+    def test_lejart_motornev_belso_jelolore_vagy_uresre_cserelve_a_szerzodes_piros(self) -> None:
+        """M5 falszifikáció: az audit-motor nevét nem fedheti el belső jelölő.
+
+        Az izolált profilmásolatban az `EXPIRED:<motor>` szerződést előbb a
+        régi `EXPIRED` jelölőre, majd üres motorra rontjuk. Mindkét változat
+        megsérti a regressziós cella pontos, motorneves kimenetét.
+        """
+        for replacement in ('"EXPIRED"', '"EXPIRED:"'):
+            with self.subTest(replacement=replacement):
+                modified, count = re.subn(
+                    r'"EXPIRED:\$engine_override"', replacement, self._original_source,
+                )
+                self.assertEqual(count, 1, "a motorneves lejárati szerződés nem módosítható ellenőrizhetően")
+                self.profile_copy.write_text(modified, encoding="utf-8")
+                _make_ttl_override(
+                    self.override, "qwen-plus", expires_at=str(_now_epoch() - 60), reason="rövidre",
+                )
+
+                exit_code, stdout = run_evaluate(self.state, self.profile_copy)
+
+                self.assertEqual(exit_code, 1)
+                self.assertNotEqual(
+                    stdout,
+                    "EXPIRED:qwen-plus",
+                    "Belső jelölő vagy üres motor mellett a motorneves regressziós cellának PIROSRA kell váltania.",
+                )
+                self.assertFalse(self.override.exists(), "a falszifikált lejárati út is törölje a fájlt")
 
     def test_kor_figyelmeztetes_kivetelevel_a_kuszob_rajta_teszt_piros(self) -> None:
         """A kor-figyelmeztetés kikapcsolása → a 72 óra pontos-teszt PIROS.

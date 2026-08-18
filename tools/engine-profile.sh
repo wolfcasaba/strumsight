@@ -120,7 +120,7 @@ override_engine_is_valid() {   # $1=motor neve → 0 ha érvényes, 1 ha nem
 
 # Az override-fájl állapotának kiértékelése — a motor-override blokk (és a
 # tesztek) által hívott EGYETLEN belépési pont. Kimenet:
-#   stdout: <motor> | EXPIRED | <empty>
+#   stdout: <motor> | EXPIRED:<motor> | <empty>
 #   exit:   0=live · 1=expired · 2=stale (warn) · 3=no-file · 4=invalid
 # A függvény OLDALHATÁSA: a lejárt fájlt TÖRÖLI (a queue engine oszlopa lép
 # életbe). A log/ntfy hívás a HÍVÓ dolga (a függvény nem ismeri a
@@ -164,7 +164,9 @@ engine_override_evaluate() {   # $1=override fájl [$2=warn_threshold]
   if [ -n "$expires_at" ] && [ "$expires_at" != "-" ] \
       && [ "$(date +%s)" -ge "$expires_at" ]; then
     rm -f "$override_file"
-    printf '%s\n' "EXPIRED"
+    # A törlés ELŐTT még itt van az egyetlen megbízható motorazonosító. A
+    # strukturált érték a hívónak megőrzi azt az audit- és ntfy-eseményhez.
+    printf '%s\n' "EXPIRED:$engine_override"
     return 1
   fi
 
@@ -350,7 +352,7 @@ case "${1:-list}" in
   evaluate)
     # A driver motor-override blokkja ÉS a tesztek is ezt hívják (E99-R14 D2,
     # M3 javítás): a logika csak itt él, nincs duplikált teszthorog. A
-    # kimenet: stdout = <motor> | EXPIRED | <empty>; exit 0/1/2/3/4.
+    # kimenet: stdout = <motor> | EXPIRED:<motor> | <empty>; exit 0/1/2/3/4.
     # Az opcionális $2 a warn-threshold (alap 72).
     engine_override_evaluate "$override_file" "${2:-${PIPELINE_OVERRIDE_WARN_HOURS:-72}}"
     exit $?
