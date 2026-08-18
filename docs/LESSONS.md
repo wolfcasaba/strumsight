@@ -11982,3 +11982,67 @@ NEM eseti mérlegelés kérdése — lásd a kötelező „Kulcs-politiká"-t
 (`docs/execution/pipeline-selfheal-prompt.md`). Rokon: [[L314]], [[L313]],
 [[L312]] — mind ugyanaznap, mind a „megosztott ambiens állapot több
 egyidejű session között" hibaosztály tagja.
+
+## L316 — Az L182 `song_import_controller_test.dart` flake-je MÁSODJÁRA is HALT-ot okozott, ezúttal dedikált self-healt igényelve; a mért válasz változatlanul retry, de a rekurrencia magát a race-t IS napirendre teszi (E99-R14 H7, 2026-08-18)
+
+**Tünet.** `E99-R14` (implementer minimax, brief kizárólag GOV-08
+motor-policy/TTL tooling — `tools/engine-profile.sh`, `tools/round-metrics.py`,
+`tools/round-pipeline.sh` + tesztjeik, `docs/rounds/e99-r14-*`,
+`docs/reviews/e99-r14-review.md`) exact-SHA Full Gate futása (`32190289173`,
+`bfd43bf9`) pirosra váltott: 5072 zöld, **1 piros** —
+`test/features/song_trainer/application/import/song_import_controller_test.dart:
+cancellation during import closes the workspace without a record` —
+`Expected: empty`, `Actual: [_Directory: '/tmp/song-import-controller-
+<rnd>/import-1']`. **Szó szerint ugyanaz a teszt, ugyanaz az assert, ugyanaz
+a hibaüzenet-alak**, mint [[L182]] (E05-R21, 2026-08-08) — csak ott egy
+NORMÁL kör orchesztrátora oldotta fel inline, itt a HALT egy dedikált
+önjavító kört (ADR 0112) igényelt.
+
+**Mérés — ok-okozati lehetetlenség.** `git diff --name-only
+origin/main...bfd43bf9` = kizárólag a fenti `tools/**` + `docs/**` fájlok;
+`git diff origin/main...bfd43bf9 | grep -i song_trainer` **nulla találat** —
+a kör diffjének nincs importálási vagy futásidejű útja a song-import
+workspace-hez.
+
+**Mérés — izolált reprodukció a PONTOS piros SHA-n.** `git worktree add
+--detach /tmp/ss-heal-E99-R14-h7-repro bfd43bf9` (nem a megosztott fő
+munkafán — [[shared-tree-git-stash-hazard]] elve: külön workspace minden
+git-műveletnek), `flutter pub get`, majd `flutter test
+test/features/song_trainer/application/import/song_import_controller_test.dart`
+**5×, egyenként**: **5/5 zöld**, minden futásban a panaszolt teszt is —
+megegyezik az L182 „0/5 bukás pristine main-en" mintázatával. A teszt maga
+(93. sor: `await harness.workspaceRoot.list().toList()` közvetlenül a
+`cancel()` és egy KÉSVE érkező sikeres import-completion közé ékelve, `await
+importing` csak UTÁNA fut) valódi fájlrendszeri I/O timinget mér — ez
+izoláltan mindig ugyanúgy ütemeződik, a teljes suite (5073 teszt)
+párhuzamos terhelése alatt viszont nem.
+
+**Feloldás.** `gh run rerun 32190289173 --failed`, várakozás
+`tools/wait-for-ci.sh 32190289173 1800 60`-nal ELŐTÉRBEN (a H-NOSIGNAL/[[L183]]
+szabály — sosem csupasz `gh run watch`/`gh run list`-ciklus) → `completed
+success`, **ugyanazon** `headSha=bfd43bf9`-n. Router CI erre a SHA-ra
+függetlenül is már zöld volt (2 futás, `32190290978`/`32190279604`) — csak a
+Full Gate futása kellett újra. **Nincs kódváltoztatás, nincs PR**: a self-heal
+jogosultsága (`docs/execution/pipeline-selfheal-prompt.md` §2) `tools/**`,
+`.ai/**`, `docs/adr/**`-re és a megállt kör saját briefjére/allowlistjére
+szól — a `lib/features/song_trainer/` vagy a teszt maga NEM ezen kör
+hatóköre, még akkor sem, ha a race-nek volna kézenfekvő javítása (pl. a
+`cancel()` várja meg a workspace-törlés Future-jét, vagy a teszt egy
+explicit completion-jelre várjon a nyers `list()` helyett, ne rá). `outcome=retry`.
+
+**Szabály.** (1) Egy `song_import_controller_test.dart`-ról jövő, a kör
+diffjéhez ok-okozatilag nem köthető Full Gate piros **nem új nyomozás** —
+a válasz a [[L182]]/[[L183]] által már lefektetett, mért eljárás: diff-alapú
+kizárás → izolált 5× repro a PONTOS SHA-n → `gh run rerun --failed` +
+`tools/wait-for-ci.sh`, sosem bemondásra elfogadott rerun. (2) Ez a flake
+MOST MÁR KÉTSZER mérve okozott érdemi költséget (először egy kör saját idejét,
+most egy teljes self-heal ciklust) ugyanazzal a gyökérokkal, változatlanul
+javítatlanul — a *tünet* kezelése (rerun) helyes és a self-heal hatókörén
+belüli egyetlen lehetőség, de ez NEM helyettesíti a *race* tényleges
+javítását. Ezt egy jövőbeli, a `song_trainer`-import réteget explicit
+érintő NORMÁL kör briefjébe kell felvenni (nem self-healbe, ld. fenti
+hatókör-korlát) — vagy a `cancel()` szinkronizálja a workspace-cleanupot a
+visszatérése elé, vagy a teszt egy determinisztikus completion-szignálra
+várjon a `workspaceRoot.list()` helyett. Amíg ez nem történik meg, a flake
+ismétlődni fog, és minden előfordulás ugyanezt a mérési terhet rója egy
+teljesen független kör self-healjére. Rokon: [[L182]], [[L183]].
