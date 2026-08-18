@@ -1,13 +1,30 @@
 # E07-R23 — Review
 
 Brief: docs/rounds/e07-r23-plan-compiler-and-execution.md
-Diff: `git diff 4eb098d8..4bb62a62` (branch `codex/e07-r23-plan-compiler-and-execution`, synced onto `origin/main`@`9e47122f` before dispatch)
+Diff: `git diff 4eb098d8..a6e0436f` (branch `codex/e07-r23-plan-compiler-and-execution`, synced onto `origin/main`@`9e47122f` before dispatch)
 Reviewer: Claude (Opus 5, orchestrátor) · Dátum: 2026-08-18
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (F1 javítva `a6e0436f`-ben, függetlenül újramérve)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 2
+BLOCKER: 0 · MAJOR: 1 (FIXED) · MINOR: 1 (follow-up) · NOTE: 2
+
+**Frissítés (2026-08-18, javító kör után):** az F1 javítását (`a6e0436f`,
+motor: `codex`/Terra) a review saját kézzel, izolált friss klónban
+(`/tmp/review-e07-r23`, közvetlenül originból) ellenőrizte. Az eredeti
+valódi-sértés próbát MEGISMÉTELVE az `a6e0436f` kódján: az exact-match `if`-ág
+eltávolítása most az ÚJ `A5: rejects a session config…` tesztet PIROSRA
+fogja (`Expected: throws … / Actual: … PlanExecutionLaunch`), a védelem
+visszaállítása után minden teszt zöld. A `tools/round-gate.sh` (format,
+analyze, mindkét célzott teszt, architecture, secrets, l10n) mind ZÖLD; a
+`tools/scope-audit.py --base 4eb098d8` a teljes kör-diffen (implementáció +
+review + javítás) `OK, 9 changed path(s), 1 generated/ignored` (a
+generated/ignored a saját review-jelentés — állandó mentesség).
+**Megjegyzés a folyamatról:** a javító kör `.codex-round-status` `done`
+jelzése után a HEAD (`a6e0436f`) NEM volt push-olva originra (ugyanaz a
+hibaosztály, mint `docs/LESSONS.md` L311) — a review-oldali friss klónozás
+ezt azonnal `pathspec did not match`-csal jelezte; az orchestrátor pusholta
+utólag, mielőtt a fenti független ellenőrzés lefutott volna.
 
 ## Acceptance criteria
 
@@ -50,7 +67,7 @@ Legacy scope audit OK (4eb098d8..4bb62a622fa0, 8 changed path(s), 0 generated/ig
 - **Hatás:** egy jövőbeli, jóhiszemű refaktor (pl. a `_validateLaunch` egyszerűsítése vagy a mezőlista bővítése) észrevétlenül meglazíthatja vagy törölheti ezt az ADR 0268 4. pontjához kötött védelmet — a teljes célzott gate zöld maradna, és csak éles használatban derülne ki (a tanuló más tempón/hosszon gyakorol, mint amit a terv előírt, és a mérés emiatt értelmét veszti — pontosan a brief §9 saját kockázat-listájának első tétele).
 - **Kötelező javítás:** egy teszteset a `plan_execution_coordinator_test.dart`-ba, amely `matchingSessionConfig()`-ot egyetlen mezőn (pl. `loopCount` vagy `sessionTimeout`) eltérő értékre módosítva adja át `coordinator.start()`-nak, és `throwsArgumentError`-t (vagy a konkrét üzenetet) vár. Egy fixture-függvény (`mismatchedSessionConfig()`) hozzáadása az `execution_fixtures.dart`-hoz elegendő — mindkét fájl már az `allowed_paths`-on van, nincs scope-bővítés.
 - **Ellenőrzés:** az új teszt a mutált (védelem nélküli) kódon PIROS, az eredeti kódon ZÖLD — ugyanaz a valódi-sértés módszertan, amit a szerző az A1-hez már elvégzett.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`a6e0436f`) — `mismatchedSessionConfig()` (`loopCount: 2`) + `A5: rejects a session config that differs from the compiled prescription` teszt. A review saját kézzel megismételte a valódi-sértés próbát az `a6e0436f` kódján: PIROS a védelem nélkül, ZÖLD vele — a javítás valódi, nem csak dokumentált állítás.
 
 ### F2 — MINOR — A koordinátor több más védő `throw`-ága (blockId-eltérés, `PracticeSessionConfig.validate()` hiba, outcome-context eltérés) sem tesztelt
 
@@ -89,4 +106,9 @@ Minden gate-et **saját kézzel, izolált `/tmp/review-e07-r23` klónban** futta
 
 ## Merge-döntés
 
-**Merge TILOS, amíg az F1 (MAJOR) nyitva van** (ADR 0052 + a review-sablon súlyossági táblája). Az F1 javítása kicsi (egy fixture-függvény + egy teszteset, mindkettő már engedélyezett fájlban) — javasolt egy rövid javító kör ugyanazzal a motorral (`codex`), a leletlistával a promptban.
+Az F1 (MAJOR) javítva és függetlenül újramérve (ld. fenti frissítés) — nincs
+nyitott BLOCKER/MAJOR. A biztonsági review (`docs/reviews/e07-r23-security.md`,
+kötelező a brief `risk = "high"` miatt) verdiktje **PASS**, 0
+CRITICAL/BLOCKER/MAJOR/MINOR, 5 előretekintő NOTE. Az ADR 0052 szerint: minden
+gate zöld ÉS nincs nyitott BLOCKER/MAJOR → **merge engedélyezett**, a CI
+(teljes suite + property + Router CI) zöldjének független megerősítése után.
