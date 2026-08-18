@@ -108,6 +108,35 @@
 > diszjunkt munkafolyam — a `tools/round-slots.py plan` az E07-R22 mellé már
 > admittálja az E99-R14-et.
 
+> ## 🔁 [HEAL E99-R14/H7] `outcome=retry` — exact-SHA Full Gate 1 tesztje pirosra váltott, de a kör diffje `tools/**`+`docs/**`-re szorítkozik; izolált 5× repro a pontos SHA-n zöld, a rerun is zöld — ismétlődő, kör-független `song_import_controller_test.dart` flake (2026-08-18, L316)
+>
+> Az E99-R14 exact-SHA Full Gate futása (`32190289173`, fej `bfd43bf9`) 5072
+> zöld/1 piros eredménnyel állt le: `test/features/song_trainer/application/
+> import/song_import_controller_test.dart: cancellation during import closes
+> the workspace without a record` — `Expected: empty`, `Actual:
+> [_Directory: '.../import-1']`. A kör brifje kizárólag GOV-08 motor-policy
+> tooling (`tools/engine-profile.sh`, `tools/round-metrics.py`,
+> `tools/round-pipeline.sh` + tesztek, `docs/rounds/e99-r14-*`) — `git diff
+> origin/main...bfd43bf9` nulla `song_trainer` találatot ad, nincs ok-okozati
+> út. **Ugyanaz a teszt, ugyanaz az assert**, mint [[L182]] (E05-R21,
+> 2026-08-08) — ott egy normál kör oldotta fel inline, itt HALT-ot és
+> dedikált self-healt igényelt. Ez a heal a [[L182]]/[[L183]] mért eljárását
+> követte, nem fogadta el bemondásra: izolált `git worktree --detach` a
+> PONTOS `bfd43bf9` SHA-n, `flutter test
+> test/.../song_import_controller_test.dart` **5×** → **5/5 zöld**. Utána
+> `gh run rerun 32190289173 --failed`, várakozás `tools/wait-for-ci.sh`-sal
+> ELŐTÉRBEN (sosem csupasz `gh run watch`) → **`completed success`, ugyanazon
+> `bfd43bf9`-n**; Router CI erre a SHA-ra függetlenül is már zöld volt. Nincs
+> kódváltoztatás — a self-heal hatóköre (`tools/**`/`.ai/**`/`docs/adr/**` +
+> a megállt kör brifje) nem terjed ki a `song_trainer`-import rétegre, még ha
+> a race-nek volna is kézenfekvő javítása. **Nyitva maradt, dokumentált
+> tartozás:** ez a flake MOST MÁR KÉTSZER okozott mérhető költséget azonos
+> gyökérokkal, javítatlanul — egy jövőbeli, a `song_trainer`-import réteget
+> explicit célzó NORMÁL kör brifjének fel kellene vennie (`cancel()`
+> várja meg a workspace-cleanup Future-jét, vagy a teszt egy
+> determinisztikus completion-jelre várjon a nyers `list()` helyett).
+> Lecke: **[[L316]]**.
+
 > ## 🔁 [SELF-HEAL E07-R23/H6, 2. előfordulás] `outcome=retry` — az alábbi „KÉSZ" API-kulcsos javítás ~10 percen belül nyomtalanul eltűnt; nincs kód-gyökérok, a user kötelező kulcs-politikát hozott, és előfizetéses `codex login` állította helyre — VALÓDI hívással igazolva (2026-08-18, L315)
 >
 > Az alábbi [HEAL E99-R14/H6] bejegyzés „KÉSZ" jelzése **RÉSZBEN ELAVULT**: a
