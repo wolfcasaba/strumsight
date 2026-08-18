@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/practice_generator/data/local/generation_draft_repository.dart';
 import 'package:strumsight/features/practice_generator/presentation/controller/plan_setup_controller.dart';
@@ -30,6 +31,29 @@ void main() {
       ),
     ),
   );
+
+  Future<void> completeComfortStep(
+    WidgetTester tester,
+    PlanSetupController controller,
+    String comfortText,
+  ) async {
+    await pumpWizard(tester, controller);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('plan-goal-unknown')));
+    await tester.tap(find.byKey(const Key('plan-setup-next')));
+    await tester.pumpAndSettle();
+    for (var step = 1; step < 4; step++) {
+      await tester.tap(find.byKey(const Key('plan-setup-unknown')));
+      await tester.tap(find.byKey(const Key('plan-setup-next')));
+      await tester.pumpAndSettle();
+    }
+    await tester.enterText(
+      find.byKey(const Key('plan-comfort-free-text')),
+      comfortText,
+    );
+    await tester.tap(find.byKey(const Key('plan-setup-next')));
+    await tester.pumpAndSettle();
+  }
 
   testWidgets('starts without a draft and persists each completed step', (
     tester,
@@ -70,6 +94,59 @@ void main() {
 
     expect(restored.state.currentStep, 1);
     expect(restored.state.request!.goals.single.type.code, 'rhythm');
+  });
+
+  testWidgets('restores the next step after an unknown availability answer', (
+    tester,
+  ) async {
+    final store = InMemoryKeyValueStore();
+    final first = controllerFor(store);
+    addTearDown(first.dispose);
+    await pumpWizard(tester, first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('plan-goal-rhythm')));
+    await tester.tap(find.byKey(const Key('plan-setup-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('plan-setup-unknown')));
+    await tester.tap(find.byKey(const Key('plan-setup-next')));
+    await tester.pumpAndSettle();
+
+    expect(first.state.currentStep, 2);
+
+    final restored = controllerFor(store);
+    addTearDown(restored.dispose);
+    await pumpWizard(tester, restored);
+    await tester.pumpAndSettle();
+
+    expect(restored.state.currentStep, 2);
+  });
+
+  testWidgets('restores the next step after an unknown equipment answer', (
+    tester,
+  ) async {
+    final store = InMemoryKeyValueStore();
+    final first = controllerFor(store);
+    addTearDown(first.dispose);
+    await pumpWizard(tester, first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('plan-goal-rhythm')));
+    await tester.tap(find.byKey(const Key('plan-setup-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('plan-setup-unknown')));
+    await tester.tap(find.byKey(const Key('plan-setup-next')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('plan-setup-unknown')));
+    await tester.tap(find.byKey(const Key('plan-setup-next')));
+    await tester.pumpAndSettle();
+
+    expect(first.state.currentStep, 3);
+
+    final restored = controllerFor(store);
+    addTearDown(restored.dispose);
+    await pumpWizard(tester, restored);
+    await tester.pumpAndSettle();
+
+    expect(restored.state.currentStep, 3);
   });
 
   testWidgets('back navigation retains the previously entered answer', (
@@ -153,26 +230,41 @@ void main() {
   ) async {
     final controller = controllerFor(InMemoryKeyValueStore());
     addTearDown(controller.dispose);
-    await pumpWizard(tester, controller);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('plan-goal-unknown')));
-    await tester.tap(find.byKey(const Key('plan-setup-next')));
-    await tester.pumpAndSettle();
-    for (var step = 1; step < 4; step++) {
-      await tester.tap(find.byKey(const Key('plan-setup-unknown')));
-      await tester.tap(find.byKey(const Key('plan-setup-next')));
-      await tester.pumpAndSettle();
-    }
-    await tester.enterText(
-      find.byKey(const Key('plan-comfort-free-text')),
+    await completeComfortStep(
+      tester,
+      controller,
       'Wrist hurts after ten minutes',
     );
-    await tester.tap(find.byKey(const Key('plan-setup-next')));
-    await tester.pumpAndSettle();
 
     expect(
       controller.state.request!.constraints.constraints.single.value,
       'Wrist hurts after ten minutes',
     );
+  });
+
+  testWidgets('comfort free text never reaches debug output (A9)', (
+    tester,
+  ) async {
+    const sentinel = 'comfort-sentinel-raw-text';
+    final capturedDebugOutput = <String>[];
+    final originalDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) capturedDebugOutput.add(message);
+    };
+    try {
+      final successful = controllerFor(InMemoryKeyValueStore());
+      addTearDown(successful.dispose);
+      await completeComfortStep(tester, successful, sentinel);
+
+      final failedStore = InMemoryKeyValueStore()
+        ..failingKeys.add(GenerationDraftRepository.draftStorageKey);
+      final failed = controllerFor(failedStore);
+      addTearDown(failed.dispose);
+      await completeComfortStep(tester, failed, sentinel);
+
+      expect(capturedDebugOutput.join('\n'), isNot(contains(sentinel)));
+    } finally {
+      debugPrint = originalDebugPrint;
+    }
   });
 }

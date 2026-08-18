@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/foundation/app_result.dart';
+import '../../../../core/storage/key_value_store.dart';
 import '../../data/local/generation_draft_repository.dart';
 import '../../domain/model/learner_constraints.dart';
 import '../../domain/id/planner_ids.dart';
@@ -67,6 +68,12 @@ final class PlanSetupController extends ChangeNotifier {
   final String locale;
   final RequestValidator validator;
 
+  /// Kept beside, rather than inside, the request so an unanswered step is
+  /// still distinct from a step the learner has explicitly completed as
+  /// unknown.
+  static const String _draftProgressStorageKey =
+      '${GenerationDraftRepository.draftStorageKey}.step';
+
   PlanSetupState _state = const PlanSetupState();
   PlanSetupState get state => _state;
 
@@ -81,7 +88,7 @@ final class PlanSetupController extends ChangeNotifier {
         }
         _update(
           PlanSetupState(
-            currentStep: _resumeStep(value),
+            currentStep: _savedCurrentStep ?? 0,
             request: value,
             findings: _findingsFor(value),
           ),
@@ -140,7 +147,7 @@ final class PlanSetupController extends ChangeNotifier {
           ],
   );
 
-  /// Keeps comfort text exclusively inside the encrypted/local draft path;
+  /// Keeps comfort text exclusively inside the plaintext local draft path;
   /// this controller deliberately has no logging or analytics dependency.
   void setComfortText(String value) => _setCategory(
     ConstraintCategory.comfort,
@@ -161,12 +168,14 @@ final class PlanSetupController extends ChangeNotifier {
     final request = _state.request ?? _newRequest();
     if (_findingsFor(request).any((finding) => finding.isError)) return;
     final result = await draftRepository.saveDraft(request);
+    final nextStep = min(_state.currentStep + 1, 5);
+    final progressSaved = result.isSuccess && await _saveCurrentStep(nextStep);
     _update(
       PlanSetupState(
-        currentStep: min(_state.currentStep + 1, 5),
+        currentStep: nextStep,
         request: request,
         findings: _findingsFor(request),
-        persistenceFailed: result.isFailure,
+        persistenceFailed: result.isFailure || !progressSaved,
       ),
     );
   }
@@ -228,25 +237,26 @@ final class PlanSetupController extends ChangeNotifier {
       )
       .findings;
 
-  int _resumeStep(PracticeGenerationRequest request) {
-    if (request.constraints.constraints.any(
-      (constraint) => constraint.category == ConstraintCategory.comfort,
-    )) {
-      return 5;
+  int? get _savedCurrentStep {
+    final currentStep = draftRepository.keyValueStore.readInt(
+      _draftProgressStorageKey,
+    );
+    if (currentStep == null || currentStep < 0 || currentStep > 5) {
+      return null;
     }
-    if (request.constraints.constraints.any(
-      (constraint) => constraint.category == ConstraintCategory.preference,
-    )) {
-      return 4;
+    return currentStep;
+  }
+
+  Future<bool> _saveCurrentStep(int currentStep) async {
+    try {
+      await draftRepository.keyValueStore.writeInt(
+        _draftProgressStorageKey,
+        currentStep,
+      );
+      return true;
+    } on StorageException {
+      return false;
     }
-    if (request.constraints.constraints.any(
-      (constraint) => constraint.category == ConstraintCategory.equipment,
-    )) {
-      return 3;
-    }
-    if (request.availability.days.isNotEmpty) return 2;
-    if (request.goals.isNotEmpty) return 1;
-    return 0;
   }
 
   void _setRequest(PracticeGenerationRequest request) => _update(
