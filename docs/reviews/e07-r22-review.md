@@ -3,13 +3,38 @@
 Brief: docs/rounds/e07-r22-weekly-and-today-screen.md
 Diff: `git diff 4c0b6b82..cbee3d1c` (pre-flight commit → implementer commit) on `terra/e07-r22-weekly-and-today-screen`
 Reviewer: Claude (Sonnet 5, orchestrátor) · Dátum: 2026-08-18
-Verdikt: APPROVED (correctness) — **de lásd a §„Kombinált merge-döntés"-t: a dedikált biztonsági review CHANGES REQUIRED-ot adott, a merge ezen a körön emiatt nem történik meg fix nélkül**
+Verdikt: **APPROVED — javítás után, mindkét oldalról újramérve (commit `c2785002`)**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 · MINOR: 1 (biztonsági, carry-forward — lásd lent) · NOTE: 2
 
-## Kombinált merge-döntés (frissítve a biztonsági review után)
+## Kombinált merge-döntés (frissítve a javító kör után — VÉGSŐ)
+
+**Merge engedélyezve.** A javító kör (`c2785002`) mindkét biztonsági MAJORt
+zárta; a zárást EGY MÁSODIK, független `security-reviewer` agent-futás
+ellenőrizte (nem csak az orchestrátor olvasata) — saját 32-alakos Dart
+mátrix-próbával a MAJOR-1-re (nem csak a szállított teszt egyetlen alakja) és
+egy viselkedési mutáció-próbával a MAJOR-2 új A7 cellájára (a védelmet
+ideiglenesen visszarontva → piros → visszaállítva). Teljes jelentés:
+`docs/reviews/e07-r22-security.md` „Post-fix verification" szakasza.
+
+Egy ÚJ, nem-blokkoló MINOR is felszínre került a javításból: `isDeepLinkLaunch`
+alapértelmezett `false` és hívó-beállítású — ha egy jövőbeli hívó ELFELEJTI
+kitenni, miközben egy elutasított `launchRequest`-tel hívja, a screen
+STRUKTURÁLISAN nem tudja megkülönböztetni ezt a normál belső navigációtól
+(a MAJOR-2 EREDETI mintája). MINOR, nem MAJOR, mert: (1) ebben a körben ZÉRÓ
+production hívó van (`grep -rn "TodayPlanScreen("` csak a deklarációt és a
+saját teszteket találja); (2) a kontraktus doc-commentelt és a helyes
+használat tesztje operábilis piros; (3) a biztonsági review SAJÁT eredeti
+javaslata ajánlotta ezt a (gyengébb) opciót a sealed-típus mellett. **Kötelező
+követő teendő:** a jövőbeli notification/router wiring kör briefjébe EXPLICIT
+bemenetként be kell kerülnie (nem örökölhető csendben) — vagy `tryParse`
+totálissá tétele (`accepted`/`rejected` sealed eredmény, a bool törlésével),
+vagy a sealed `TodayLaunchContext`, ÉS egy a VALÓDI router-hívási úton futó
+elfogadási cella. Rögzítve a HANDOFF.md záró rituáléban is.
+
+### Eredeti (javítás előtti) leletek — a fenti javító kör zárta
 
 A `docs/reviews/e07-r22-security.md` (risk=high, kötelező) 2 nyitott MAJORt
 mért — mindkettőt magam is függetlenül reprodukáltam, mielőtt elfogadtam:
@@ -31,11 +56,11 @@ mért — mindkettőt magam is függetlenül reprodukáltam, mielőtt elfogadtam
   kapja el, mert `plan:` paraméter nélkül fut (a `plan` már null a
   gate-től függetlenül) — ezt a saját correctness-review-mban ÉN magam
   nem vettem észre elsőre; a biztonsági review helyesen fogta meg.
+  **Státusz: FIXED (`c2785002`)** — 2. független security-review megerősítve.
 
-Mindkettő a már engedélyezett fájlokon belül javítható, új fájl vagy ADR
-nélkül. **Javító kör indítva ugyanazzal a motorral (terra), a leletlistával.**
-A végső APPROVED csak a javítás UTÁNI, mindkét oldalról (correctness +
-security) újramért verdikt.
+Mindkettő a már engedélyezett fájlokon belül javítva, új fájl vagy ADR
+nélkül. **Státusz: FIXED (`c2785002`)** mindkettőre, ld. a fenti „Kombinált
+merge-döntés" szakaszt a záró verdiktért.
 
 Minden gate independently újrafuttatva egy izolált `/tmp/review-e07-r22`
 klónban (nem az implementer saját munkapéldányában). A legmagasabb kockázatú
@@ -154,6 +179,12 @@ nem az implementer saját munkapéldányában.
 | l10n | zöld | ✅ zöld (1354 üzenet, en→hu paritás) |
 | CI (teljes suite + property + APK) | nem futott (orchestrátor dolga, §7 szerint helyesen) | folyamatban — lásd a merge előtti CI-dispatch |
 
+**Javító kör utáni gate (commit `c2785002`, MÁSODIK, friss izolált klón):**
+format/analyze/architecture/secrets/l10n zöld; `today_plan_screen_test.dart`
+5/5 → **5/5** (az egyik cella átírva, létszám változatlan); `today_plan_
+controller_test.dart` 6/6 → **7/7** (F1 új tesztje). Mindkettő saját kézzel
+futtatva, nem az implementer §10 önjelentéséből átvéve.
+
 **Egy operatív megjegyzés a review-hoz, nem a kódhoz:** az implementer a
 `cbee3d1c` commitot a saját munkapéldányában (`/home/ubuntu/ss-terra-e07-r22`)
 hozta létre, de nem push-olta — a `.codex-round-status` `dirty_files=1`
@@ -171,7 +202,10 @@ lépését (implementer-push) pótoltam, mielőtt bármit elfogadtam volna.
 ## Merge-döntés
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-Correctness review APPROVED. A dedikált biztonsági review (risk=high,
-`docs/reviews/e07-r22-security.md`) külön fut, a merge-döntés arra is vár.
-CI-dispatch (build-apk vagy full-gate, a `round-ci-plan.py` szerint) és a
-Router CI exact-SHA zöldje a merge előfeltétele (§7 lásd a pipeline-promptban).
+**Mindkettő teljesül a `c2785002` javító kör után:** correctness review
+APPROVED, a dedikált biztonsági review (risk=high,
+`docs/reviews/e07-r22-security.md`) egy MÁSODIK, független
+`security-reviewer` agent-futással PASS-ra zárta mindkét MAJORt (1 új,
+nem-blokkoló, dokumentált carry-forward MINOR-ral). CI-dispatch (`full-gate.yml`,
+a `round-ci-plan.py` szerint — natív útvonalat nem érint) és a Router CI
+exact-SHA zöldje a merge utolsó előfeltétele.

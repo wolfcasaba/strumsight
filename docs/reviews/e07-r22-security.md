@@ -4,7 +4,11 @@ Brief: `docs/rounds/e07-r22-weekly-and-today-screen.md` (incl. §0.0 pre-flight 
 Diff reviewed: `git diff 4c0b6b82..cbee3d1c` (10 files, +1061/−2) in the isolated clone `/tmp/review-e07-r22`, branch `terra/e07-r22-weekly-and-today-screen`, HEAD `cbee3d1c` (verified with `git rev-parse HEAD`)
 Reviewer: Claude (security-reviewer subagent) · Date: 2026-08-18 · Scope: READ-ONLY, no production edits (AGENTS.md §15.1)
 
-## Verdict: **CHANGES REQUIRED**
+## Verdict (as reviewed at `cbee3d1c`): **CHANGES REQUIRED** — *superseded, see "Post-fix verification (commit `c2785002`)" at the end of this file*
+
+**Current verdict at `c2785002`: APPROVED — merge permitted.** Both MAJORs are
+closed by measurement; one **new MINOR** (caller-obligation residual on
+`isDeepLinkLaunch`) is carried forward to the routing/notification wiring round.
 
 CRITICAL: 0 · BLOCKER: 0 · **MAJOR: 2** · MINOR: 0 · NOTE: 4
 
@@ -157,3 +161,215 @@ whose input is a `cast<String, String>()` view over a non-String value,
 asserting `isNull` (not a throw); (2) an A7 test whose malformed payload is fed
 **together with an active plan** and asserts `today-plan-scheduled` is absent
 while `isTodayRouteEnabled` is false.
+
+---
+
+# Post-fix verification (commit `c2785002`)
+
+Re-review date: 2026-08-18 · Reviewer: Claude (security-reviewer subagent) ·
+Scope: **closure of MAJOR-1 and MAJOR-2 only**, plus a fresh look at whether the
+fix diff itself introduces anything new. NOTE-1…NOTE-4 and the "verified clean"
+table were deliberately **not** re-checked (unchanged code).
+
+Provenance verified independently, not taken from the hand-off summary:
+`git -C /tmp/review-e07-r22 rev-parse HEAD` → `c2785002`,
+`git branch --show-current` → `terra/e07-r22-weekly-and-today-screen`,
+fix diff `git diff c2785002~1 c2785002` = 5 files (+96/−30): the two production
+files, the two test files, and `docs/rounds/e07-r22-weekly-and-today-screen.md`.
+No other file changed since the reviewed commit except the two review reports.
+
+## Closure verdicts
+
+| Finding | Verdict |
+|---|---|
+| MAJOR-1 (`tryParse` throws on a `cast` view) | **FIXED** |
+| MAJOR-2 (rejected link ≡ no link → ungated render) | **FIXED** for the finding as filed; the gate now holds on every flagged path |
+| *new* MINOR-1 (`isDeepLinkLaunch` is unsafe-by-omission) | **NEW-ISSUE — non-blocking, carry-forward to the wiring round** |
+| Anything else new in the fix diff | **None found** (evidence below) |
+
+---
+
+## MAJOR-1 — **FIXED**
+
+**New code:** `today_plan_controller.dart:156-175` — `extra is! Map` (raw `Map`,
+no type argument) + `extra.length != 1`, then a per-entry
+`entry.key is! String || entry.value is! String || key != 'destination' ||
+value != 'today'` loop wrapped in `try { … } on TypeError { return null; }`.
+
+**My own reproduction (not the delivered test's shape).** Pure-Dart probe over
+**32 input shapes**, run with `dart run` inside the isolated clone against the
+real `TodayPlanRouteRequest` (temporary file, since deleted):
+
+- Lazy-`cast` views over a non-String **value**: `int` (the delivered test's
+  shape), **nested `Map`**, **`List`**, `null`, `bool`, `double`, `Object()`,
+  a double-applied `.cast()`, a `cast` over a `SplayTreeMap` source, a `cast`
+  over an `UnmodifiableMapView` source, and an explicit
+  `Map.castFrom<String, Object?, String, String>`.
+- Lazy-`cast` views over a non-String **key** (`{1: 'today'}`) and over a
+  non-String key *and* value simultaneously.
+- The realistic wiring shape from the original finding:
+  `(jsonDecode('{"destination":{"a":1}}') as Map<String, dynamic>).cast<String, String>()`
+  and its `{"destination":42}` sibling.
+- Raw (non-cast) hostile maps, the previous rejection matrix (null / String /
+  Uri / List / `{}` / extra key / case / whitespace), and the accepted shapes.
+
+**Result: 32/32 as expected — `failures=0`. Every Map-shaped hostile input
+returns `null`; none throws.** The `TypeError` raised while the lazy view
+materialises each `MapEntry` is raised *inside* the `for` header, i.e. inside
+the `try`, so it is caught; and for raw (uncast) maps the per-entry `is String`
+checks reject before any cast can occur. The fix is content-based, not tailored
+to the `int` case.
+
+**Red-trigger proof (the green result is meaningful).** I materialised the
+pre-fix parser from `cbee3d1c` side-by-side with the fixed one (prefixed
+imports) and ran the same shapes through both:
+
+```
+pre-fix (cbee3d1c) -> post-fix (c2785002)
+THREW _TypeError   -> null       cast/int value
+THREW _TypeError   -> null       cast/nested-Map value
+THREW _TypeError   -> null       cast/List value
+THREW _TypeError   -> null       jsonDecode -> cast (realistic wiring shape)
+null               -> REQUEST    raw Map<String,dynamic> valid payload
+null               -> REQUEST    jsonDecode valid payload
+REQUEST            -> REQUEST    valid Map<String,String>
+null               -> null       extra key
+```
+
+**Behaviour change worth recording (safety-positive, not a finding).** Dropping
+the `Map<String, String>` static gate means a *well-formed* payload delivered as
+`Map<String, dynamic>` — i.e. every `jsonDecode` result, the exact shape the
+notification wiring will produce — now **parses** instead of being rejected.
+That removes the strongest pressure toward `.cast()` in the wiring round and
+routes valid payloads through `permits()` (flag + active-plan gate) instead of
+through the ambiguous `null` branch. The accepted token still carries no fields
+and has a library-private const ctor, so nothing external survives parsing.
+
+**Residual, NOTE-level, not reproducible from external input:** `extra.length`
+on line 157 is evaluated *outside* the `try`, and the `catch` is narrowed to
+`TypeError`. A `Map` implementation whose `length`/`entries` getter throws (or
+throws a non-`TypeError`) would still propagate. I could not construct such an
+input from any realistic external source — `jsonDecode`, `Uri.queryParameters`,
+`Uri.splitQueryString` and `Map.cast` views all have total `length` — so this is
+recorded, not filed.
+
+---
+
+## MAJOR-2 — **FIXED** (with a new MINOR residual, below)
+
+**New code:** `today_plan_screen.dart:43-53` —
+`final isDeepLinkContext = isDeepLinkLaunch || launchRequest != null;` then
+`planForState = isDeepLinkContext ? (launchRequest?.permits(…) == true ? plan : null) : plan;`
+plus the new `isDeepLinkLaunch` parameter (default `false`, doc-commented
+"Routing must set this when it calls `TodayPlanRouteRequest.tryParse`").
+
+**Gating matrix I measured** (temporary widget test in the clone, since deleted;
+`plan` = active plan with a scheduled day for the controller's clock date;
+"PLAN EXPOSED" = the `today-plan-scheduled` key is in the tree):
+
+| # | `launchRequest` | `isDeepLinkLaunch` | flag | Result | Correct? |
+|---|---|---|---|---|---|
+| P1 | rejected (`null`) | `true` | off | empty | yes |
+| P2 | rejected (`null`) | `true` | **on** | empty | yes |
+| P3 | rejected (`null`) | **omitted** | off | **PLAN EXPOSED** | **no — see MINOR-1** |
+| P4 | valid | omitted | off | empty | yes (flag gate) |
+| P5 | valid | omitted | on | PLAN EXPOSED | yes |
+| P6 | valid | `true` | on | PLAN EXPOSED | yes |
+| P7 | none (in-app) | `false` | off | PLAN EXPOSED | yes (intended in-app path) |
+| P9 | rejected, canary | `true` | off | rendered text = `No active plan yet` / `Create and activate a practice plan…` / `Today` only; plan title absent | yes |
+
+P1/P2 are the direct closure of the finding as filed: a rejected payload can no
+longer obtain more than a valid one, and the flag gate is no longer dead code.
+
+**The delivered A7 cell is a genuine behavioural red-trigger** — not merely a
+compile-time one as §10 modestly claims. I mutated line 43 back to the pre-fix
+discriminator (`final isDeepLinkContext = launchRequest != null;`) and re-ran
+`flutter test today_plan_screen_test.dart`: the cell fails with
+`Actual: Found 0 widgets with key [<'today-plan-empty'>]` (`+4 -1`). The file was
+restored with `git checkout --` immediately afterwards; the clone's working tree
+is clean apart from this report.
+
+Both evidence items demanded by the original merge recommendation are delivered
+and were re-run by me: controller **7/7** and screen **5/5** (12 tests, all
+green) — matching the counts §10 claims.
+
+---
+
+## NEW MINOR-1 — `isDeepLinkLaunch` is safe-by-default but **unsafe-by-omission**; the old MAJOR-2 behaviour reproduces verbatim if a caller forgets it
+
+**Where:** `lib/features/practice_generator/presentation/screens/today_plan_screen.dart:14, 28-32, 43`.
+
+**Failure scenario (measured — row P3 above).** A future
+`app_router.dart` writes the natural call
+`TodayPlanScreen(plan: plan, launchRequest: TodayPlanRouteRequest.tryParse(state.extra))`
+and omits `isDeepLinkLaunch: true`. For a rejected payload
+(`?destination=today&utm_source=push`) `tryParse` returns `null` →
+`isDeepLinkContext = false || false = false` → `planForState = plan` → the full
+active plan renders **with `isTodayRouteEnabled == false`**. That is
+bit-for-bit the original MAJOR-2 outcome.
+
+**Root cause (structural, not stylistic):** rows **P3 and P7 are the same
+argument tuple** at the widget boundary — `plan != null`, `launchRequest == null`,
+`isDeepLinkLaunch == false`. The screen provably cannot distinguish "rejected
+deep link" from "no deep link"; the whole discriminator now lives in the caller,
+enforced only by a doc-comment. And the flag is load-bearing in *exactly one*
+row (P3) — the rejected case, i.e. the case the caller is least likely to think
+about, because the call site visibly "handles" the link via `launchRequest`.
+Rows P4/P5/P6 show the flag is redundant whenever the request parsed.
+
+**Why MINOR and not "MAJOR still open":**
+1. **No live gap in this round.** `grep -rn "TodayPlanScreen(" lib/` → the
+   constructor declaration only; all four call sites are in the round's own
+   tests. Nothing in the delivered code makes the unsafe call.
+2. The screen went from "cannot be used safely" to "can be used safely, and the
+   correct usage is documented on the parameter" — a real reduction, and the
+   correct usage is now covered by an operable red-triggering test.
+3. **My own original finding explicitly sanctioned this shape** — MAJOR-2's
+   "Suggested direction" offered "a sealed `TodayLaunchContext` … **or an
+   `isDeepLinkLaunch` bool alongside the request**". Codex implemented the
+   weaker of the two options I named; grading it MAJOR now would be moving the
+   goalposts.
+4. Exposure remains the learner's own on-device plan to the device holder — no
+   AGENTS.md §5 non-negotiable, nothing leaves the device.
+
+**Carry-forward requirement for the routing/notification wiring round** (this is
+where it becomes blocking): either
+(a) make `tryParse` total — return a non-nullable `TodayPlanLaunch` with
+`accepted(req)` / `rejected` members and let `null` mean only "no link", which
+deletes the bool and makes omission impossible; or
+(b) a sealed `TodayLaunchContext` (`inApp | deepLink(req) | rejectedDeepLink`)
+as originally suggested;
+and in either case ship an acceptance cell that drives the **real router call
+path** with a rejected payload plus an active plan and asserts
+`today-plan-scheduled` is absent — a test on the screen's parameters alone
+cannot detect the omission, because P3 and P7 are indistinguishable to it.
+
+---
+
+## Fresh look at the fix diff itself — nothing new filed
+
+| Checked | Evidence |
+|---|---|
+| New sinks / logging / network / storage | `git diff c2785002~1 c2785002 -- lib/` adds no import and no call to `print`/`debugPrint`/`Logger`/`dart:io`/`dio`/`File`/`jsonEncode`/`SharedPreferences`/`SecureStorage`. The two production files' import lists are byte-identical to `cbee3d1c`. |
+| New dependency / asset / permission | `pubspec.yaml`, `pubspec.lock`, `assets/`, platform manifests: not in the fix diff. |
+| Secrets | Fix diff adds no literal beyond `'destination'`, `1`, `'utm_source'`, `'push'`, `'day.19'` and Hungarian prose. |
+| Scope creep | 5 files, all inside the round's `allowed_paths`; `lib/app/routing/**` and `lib/core/notifications/**` still untouched. |
+| `on TypeError` breadth (could the new catch swallow something real?) | Scoped to the entry loop, whose body performs only `is` tests and `!=` comparisons. The only extra thing it can absorb is a `TypeError` thrown from a hostile `operator ==` — which fails **closed** (`return null`). It cannot mask a failure in `permits()`, in rendering, or in the domain layer. |
+| Widened accepted-input set | Measured above: only well-formed `{'destination':'today'}` payloads that were previously rejected for their *static* map type now parse. Verified no other shape flipped from `null` to `REQUEST` across the 32-shape matrix. |
+| §10/§11 doc claims | Verified, and honest: the "7/7" and "5/5" counts reproduce (12 tests green); the F2 RED note truthfully says the new cell previously *did not compile* rather than overclaiming a behavioural red — and I separately proved a behavioural red exists (mutation test above). No claim in the fix diff's prose was found to be false. |
+| False-confidence surface (§5.5) | The fix adds no user-visible copy; NOTE-4 wording is unchanged. |
+
+**Reproduction / cleanliness:** two temporary pure-Dart probes at the clone root
+and one temporary widget test under
+`test/features/practice_generator/presentation/` were run and then deleted, and
+the one mutated production line was restored via `git checkout --`;
+`git status --porcelain` in the clone is clean apart from this report. Nothing
+in `/home/ubuntu/music-theory` was touched, and no git remote operation was run.
+
+## Updated merge recommendation
+
+**Merge permitted.** CRITICAL: 0 · BLOCKER: 0 · MAJOR: 0 (2 closed) ·
+**MINOR: 1 (new, carry-forward)** · NOTE: 4 (unchanged, not re-reviewed).
+MINOR-1 must be listed as an explicit input to the routing/notification wiring
+round's brief, with the acceptance cell named above; it must not be inherited
+silently, because its failure mode is a verbatim recurrence of MAJOR-2.
