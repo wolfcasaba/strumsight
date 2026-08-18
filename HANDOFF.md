@@ -1,5 +1,22 @@
 # HANDOFF — StrumSight 🎸
 
+> **E07-R21 KÉSZ — Plan preview, explanation és kézi szerkesztés** — PR
+> [#306](https://github.com/wolfcasaba/strumsight/pull/306), squash
+> `64e3a802` (2026-08-18). Az offline, fixture-alapú preview napokra és
+> blokkokra bontva renderel, minden szerkesztés után a meglévő
+> `PlanValidator`-ral újramér, error/fatal esetén blokkol, warningot explicit
+> áttekintéshez köt, és csak explicit confirm után hívja a meglévő
+> `GenerationPlanActivation` contractot. Az indoklás ARB-alapú, a confidence
+> hiányát vagy gyengeségét fail-closed módon kimondja. [ADR 0306](docs/adr/0306-plan-preview-presentation-activation-boundary.md),
+> [correctness review](docs/reviews/e07-r21-review.md) APPROVED,
+> [security review](docs/reviews/e07-r21-security.md) PASS. Exact-SHA:
+> Full Gate [32168166999](https://github.com/wolfcasaba/strumsight/actions/runs/32168166999)
+> és Router CI [32168172689](https://github.com/wolfcasaba/strumsight/actions/runs/32168172689)
+> success. A review egy BLOCKER-t zárt egy MiniMax-javító körben: a közvetlen
+> reason-sheet teszt nem fedte az éles screen-utat, amely kezdetben elvesztette
+> a priority/confidence adatot; az új whole-screen regresszió és a hiányzó
+> priority fail-closed cellája ezt rögzíti. Lecke: **L308**.
+
 > ## ✅ [HEAL E07-R21/H2] KÉSZ — a brief saját ADR 0266-glosszája volt téves, nem az ADR; R21 egy nem integrált preview-komponensre szűkült — PR #305, `078c4ab4` (2026-08-18)
 >
 > Az E07-R21 pre-flightja H2-vel halt: §5.1 „csak explicit felhasználói
@@ -2192,16 +2209,12 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R21** (Chapter 8, Plan preview,
-explanation és kézi szerkesztés, `docs/rounds/e07-r21-plan-preview-and-
-explanation.md`). A friss session pre-flightban mérje újra: az E07-R20
-wizard `PracticeGenerationRequest`-jét ténylegesen felveszi-e egy
-`GenerationPlanInput`-ot építő hívó (az E07-R18 `GenerationOrchestrator`
-ma is csak egy KÉSZ `GenerationPlanInput`-ot fogad, azt sem a wizard, sem
-más production kód nem tölti fel); a `WeeklyScheduleDecision →
-AdaptivePracticePlan` összeállítás (E07-R18-ban az orchestrátorhoz rendelve)
-tényleges mezőkészletét, mert az R21 preview-nak ebből kell "miért ezt"
-magyarázatot renderelnie. `practiceGeneratorEnabled` és
+**A soron következő SDD-lépés: E07-R22** (Chapter 8, Weekly Plan és Today
+screen). A friss session pre-flightban mérje újra az R21 preview ma még
+fixture-alapú aktiválási határát: a `GenerationOrchestrator.generate()` továbbra
+is egyetlen hívásban validál/javít/aktivál, tehát a valódi
+generation→preview bekötés továbbra is külön follow-up. A R22 csak az aktív
+tervhez tartozó használati felületét vegye fel; `practiceGeneratorEnabled` és
 `plannerAssistEnabled` flagek változatlanul `false` maradnak.
 
 **Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R20 — Plan

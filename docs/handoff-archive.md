@@ -6,6 +6,25 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E07-R21 — Plan preview, explanation és kézi szerkesztés (2026-08-18)
+
+PR [#306](https://github.com/wolfcasaba/strumsight/pull/306), squash
+`64e3a802`, [ADR 0306](adr/0306-plan-preview-presentation-activation-boundary.md).
+Az új presentation réteg offline, fixture-alapú tervelőnézetet ad napokkal,
+blokkokkal, ARB reason sheet-tel, edit utáni validációval, warning-áttekintéssel
+és explicit aktiválással. A valós generation-flow továbbra sem köthető rá:
+`GenerationOrchestrator.generate()` validál/javít/aktiválása egyetlen
+application-hívásban fuzionált, ezért az éles wiring külön follow-up.
+
+Az első security review BLOCKER-je a screen→sheet confidence provenance
+elvesztése volt; a javító kör blokkonkénti priority-átadással és priority-hiány
+esetére fail-closed uncertainty sorral zárta. A whole-screen regresszió a két
+esetet valódi tappal méri. [Correctness review APPROVED](reviews/e07-r21-review.md),
+[security PASS](reviews/e07-r21-security.md); exact `3467f7cb`: Full Gate
+[32168166999](https://github.com/wolfcasaba/strumsight/actions/runs/32168166999)
+és Router CI [32168172689](https://github.com/wolfcasaba/strumsight/actions/runs/32168172689)
+success.
+
 ## ✅ E07-R15 — WeeklyScheduler és terhelésrotáció (2026-08-16)
 
 PR [#294](https://github.com/wolfcasaba/strumsight/pull/294), squash

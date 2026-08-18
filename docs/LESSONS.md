@@ -11586,3 +11586,25 @@ megnyitása.
 
 Rokon L: [[L302]] (ugyanaz a hibaosztály: PREPARED brief + közben merge-elt
 kód közti látszólagos ütközés, ami meglévő publikus típusokkal feloldható).
+
+## L308 — A közvetlen komponens-teszt nem bizonyítja a confidence-hűséget, ha az éles hívóút elvesztheti a provenance-et (E07-R21, 2026-08-18)
+
+**Mérve.** Az E07-R21 első, zöld gate-je után a független security review a
+valódi `PlanPreviewScreen → PlanReasonSheet` útvonalon BLOCKER-t talált. A
+sheet saját widget-tesztje explicit `SkillPriority`-t adott be, ezért az
+`uncertainty >= 0.5` esetben helyesen megjelent a bizonytalansági szöveg. A
+screen viszont a sheetet priority nélkül nyitotta (`plan_preview_screen.dart`
+123–125), a sheet pedig a `null` értéket magabiztosnak tekintette. Így az
+`evidence.tempo-accuracy` biztos hangvételű ARB-állítása gyenge evidence mellett
+is megjelenhetett — a zöld izolált teszt nem a shipping adatútvonalat mérte.
+
+**Javítás.** A controller blokkonkénti priority-snapshotot tárol, a screen azt
+továbbadja, a sheet pedig priority vagy uncertainty-faktor hiányában
+fail-closed uncertainty jelzést renderel. Két whole-screen regressziós teszt
+valódi block-tappel méri az uncertain és a missing-priority cellát; a független
+security re-review PASS lett.
+
+**Szabály.** Confidence/provenance felületet érintő acceptance criterionhoz
+legalább egy teszt a publikus, éles hívóútvonalon ellenőrizze az adat
+átadását. Ha a provenance a képernyőn hiányzik, a megjelenítés legyen
+konzervatív/fail-closed, ne implicit magabiztos.
