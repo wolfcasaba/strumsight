@@ -191,3 +191,20 @@ Elfogadott `outcome` értékek:
 
 A driver **a fájlt olvassa, nem a válaszszövegedet**. Az `outcome=fixed` hamis
 állítás, ha a PR nem merge-elődött zölden — és a mérce-őrszem úgyis lebuktat.
+
+## Kulcs-politika (user-döntés, 2026-08-18) — KÖTELEZŐ
+
+A boxon lévő `RAG_OPENAI_API_KEY` (`~/.rag-openai.env`) **kizárólag** a tudás-RAG
+index építésére való. **TILOS** bármilyen motor hitelesítésére fordítani
+(`codex login --api-key` / `--with-api-key`, `ANTHROPIC_AUTH_TOKEN`, bármely
+provider-token) — az a user API-számláját terhelné körönként, az előfizetés
+helyett.
+
+Ha egy motor hitelesítése lejárt, az **nem megkerülendő akadály**: a helyes
+kimenet `blocked` jelzés az okkal, vagy a működő motor-profil használata
+(`tools/engine-profile.sh use <név>`).
+
+**MÉRVE 2026-08-18:** amíg a kulcs `OPENAI_API_KEY` néven állt a boxon, egy
+önjavító kör hat percen belül megtalálta, és `codex login --with-api-key`-vel
+motor-hitelesítésre fordította — ettől minden további kör a user API-számláját
+terhelte volna.
