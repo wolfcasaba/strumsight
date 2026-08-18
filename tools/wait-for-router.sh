@@ -57,13 +57,30 @@ fi
 started=$(date +%s)
 # A kiinduló időbélyeg: egy KORÁBBI kör terminális jelzése ne zárja le azonnal
 # a várakozást (ugyanaz a védelem, mint wait-for-round.sh-nál).
-baseline=""
-[ -f "$signal" ] && baseline=$(grep -m1 '^signalled_at=' "$signal" 2>/dev/null || true)
+#
+# A baseline egy MARKER-fájlban él, nem csak ebben a folyamatban — ugyanaz a
+# javítás, mint wait-for-round.sh-nál (MÉRT rés, E07-R19 H-NOSIGNAL önjavítás,
+# 2026-08-18): a hívó a „exit 5 → hívd meg újra" szerződés szerint sok,
+# egyenként FRISS folyamatként indítja ezt a scriptet, nem egyetlen hosszan
+# futó hívásként. Egy tisztán memóriabeli baseline minden friss folyamat SAJÁT
+# indulási pillanatában újraszámolódna a jelzésfájl AKKORI tartalmából — egy,
+# a tényleges befejezés UTÁN induló friss hívás a friss jelzést tekintené
+# baseline-nak, és sosem jelentené késznek, amíg a `max_wait` le nem jár. A
+# marker a baseline-t az ELSŐ hívástól a terminális kézbesítésig megőrzi.
+marker="$workdir/.wait-for-router-baseline"
+if [ -f "$marker" ]; then
+  baseline=$(cat "$marker" 2>/dev/null || true)
+else
+  baseline=""
+  [ -f "$signal" ] && baseline=$(grep -m1 '^signalled_at=' "$signal" 2>/dev/null || true)
+  printf '%s' "$baseline" > "$marker"
+fi
 
 while true; do
   if [ -f "$signal" ]; then
     stamp=$(grep -m1 '^signalled_at=' "$signal" 2>/dev/null || true)
     if { [ "$stamp" != "$baseline" ] || [ -z "$baseline" ]; } && grep -q '^router_status=' "$signal" 2>/dev/null; then
+      rm -f "$marker"
       cat "$signal"
       exit 0
     fi

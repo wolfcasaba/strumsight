@@ -280,10 +280,13 @@ fi
 verify_claim() {
   local head_now dirty gate_shape
   head_now=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
-  # A burkoló SAJÁT artefaktumai (jelzésfájl, pid-fájl) nem számítanak munkának
-  # — nélkülük a „piszkos fa" mindig igaz lenne, és az őr sosem sülne el.
+  # A burkoló SAJÁT artefaktumai (jelzésfájl, pid-fájl, wait-for-round.sh
+  # baseline-marker) nem számítanak munkának — nélkülük a „piszkos fa" mindig
+  # igaz lenne, és az őr sosem sülne el.
   dirty=$(git -C "$workdir" status --porcelain -- . \
-    ':(exclude).codex-round-status' ':(exclude).mm-round-pid' | wc -l | tr -d " ")
+    ':(exclude).codex-round-status' ':(exclude).mm-round-pid' \
+    ':(exclude).wait-for-round-baseline' ':(exclude).wait-for-router-baseline' \
+    | wc -l | tr -d " ")
   if grep -qE '^status=done$' "$signal" 2>/dev/null \
     && [ "$head_now" = "$scope_base" ] && [ "$dirty" = "0" ]; then
     if [ "${ROUND_VERIFY_NOOP_OK:-0}" = "1" ]; then
