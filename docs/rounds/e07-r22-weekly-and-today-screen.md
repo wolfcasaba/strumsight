@@ -254,4 +254,50 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosítások
+
+- `today_plan_controller.dart`: injektált `DateTime`-óra helyi naptári
+  mezőiből számítja a mai `LocalDate`-ot; külön, semleges állapotot ad a
+  pihenő-, nem elérhető-, befejezett és ütemezetlen napokra. A pihenőnap
+  kizárólag `ScheduleDecisionReason.restDay.code` alapján azonosított.
+- `active_plan_controller.dart`: a tanuló rövidítés-, kihagyás- és
+  szüneteltetés-kéréséből új immutable snapshotot és
+  `PlanChangeReason.learnerReschedule` change-setet készít. Nem hajt végre
+  blokkot és nem ír storage-ba; a mentést a későbbi composition/integrációs
+  kör kapja meg a teljes `ActivePlanUpdate` értékkel.
+- `today_plan_screen.dart` és `weekly_plan_screen.dart`: ARB-alapú offline
+  nézetek üres, pihenő, nem elérhető, befejezett és tervezett állapotokra;
+  a start/swap/skip/shorten/pause callbackok explicit átadási pontok. A
+  deep-link contract csak típusos, már feloldott mapot fogad el; ismeretlen
+  érték és disabled flag biztonságos üres célra esik vissza.
+- `app_en.arb`, `app_hu.arb`, `public.dart`, valamint a két célzott teszt:
+  teljes kétnyelvű felület és publikus contract.
+
+### TDD és valódi-sértés bizonyíték
+
+- RED: az új application teszt a még nem exportált
+  `TodayPlanController`/`ActivePlanController` miatt fordítási hibával állt
+  meg; a production contract hozzáadása után 6/6 zöld.
+- Kötelező A3-sértés: a kontroller lokális `now.year/month/day` olvasását
+  átmenetileg `now.toUtc()`-re cseréltem, majd
+  `TZ=Europe/Berlin flutter test
+  test/features/practice_generator/application/today_plan_controller_test.dart`
+  parancsot futtattam. Az éjféli cella `day.19` helyett `day.18`-at kapott,
+  a 00:30-as cella pedig `2026-08-19` helyett `2026-08-18`-at; ez a várt
+  A3-RED. A helyi-dátum implementáció visszaállítása után ugyanaz a parancs
+  6/6 zöld.
+
+### Futtatott ellenőrzések
+
+- `flutter gen-l10n` — zöld.
+- `flutter test test/features/practice_generator/application/today_plan_controller_test.dart`
+  — 6/6 zöld.
+- `flutter test test/features/practice_generator/presentation/today_plan_screen_test.dart`
+  — 5/5 zöld.
+- `tools/round-gate.sh test/features/practice_generator/presentation/today_plan_screen_test.dart test/features/practice_generator/application/today_plan_controller_test.dart`
+  — az első teljes futás az analyze lépésben az egyetlen unused importtal
+  piros lett; az import eltávolítva. A javítás utáni teljes artefaktum-futás
+  `exit_code=0`: format, analyze, mindkét célzott teszt, architecture,
+  secrets és l10n mind zöld.
+
 ## 11. Review — a Claude tölti ki
