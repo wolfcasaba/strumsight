@@ -36,8 +36,11 @@ class PlanPreviewScreen extends StatefulWidget {
     Key? key,
     required AdaptivePracticePlan plan,
     required PlanValidationContext validationContext,
-    required PlanPreviewController Function(AdaptivePracticePlan, PlanValidationContext)
-        buildController,
+    required PlanPreviewController Function(
+      AdaptivePracticePlan,
+      PlanValidationContext,
+    )
+    buildController,
   }) {
     final controller = buildController(plan, validationContext);
     return PlanPreviewScreen(key: key, controller: controller);
@@ -100,8 +103,7 @@ class _PlanPreviewScreenState extends State<PlanPreviewScreen> {
                 _FindingsBanner(
                   issues: state.validation.issues
                       .where(
-                        (issue) =>
-                            issue.severity == ValidationSeverity.warning,
+                        (issue) => issue.severity == ValidationSeverity.warning,
                       )
                       .toList(growable: false),
                   isError: false,

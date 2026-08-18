@@ -31,31 +31,26 @@ void main() {
       },
     );
 
-    testWidgets(
-      'A5 (hu): the same code resolves through the hu ARB locale',
-      (tester) async {
-        final block = _blockWith(
-          reasonCodes: const <String>['goal.primary'],
-        );
+    testWidgets('A5 (hu): the same code resolves through the hu ARB locale', (
+      tester,
+    ) async {
+      final block = _blockWith(reasonCodes: const <String>['goal.primary']);
 
-        await _pump(tester, block, locale: const Locale('hu'));
-        await tester.tap(find.byKey(Key('plan-block-${block.id.value}')));
-        await tester.pumpAndSettle();
+      await _pump(tester, block, locale: const Locale('hu'));
+      await tester.tap(find.byKey(Key('plan-block-${block.id.value}')));
+      await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const Key('plan-reason-line-goal.primary')),
-          findsOneWidget,
-        );
-      },
-    );
+      expect(
+        find.byKey(const Key('plan-reason-line-goal.primary')),
+        findsOneWidget,
+      );
+    });
 
     testWidgets(
       'A6: when the matching factor is uncertain, the sheet appends the '
       'uncertainty line in the learner\'s language',
       (tester) async {
-        final block = _blockWith(
-          reasonCodes: const <String>['goal.primary'],
-        );
+        final block = _blockWith(reasonCodes: const <String>['goal.primary']);
         // Build a SkillPriority whose uncertainty factor is at the
         // threshold (>= 0.5).
         final priority = _priorityWithUncertainty(0.6);
@@ -64,29 +59,21 @@ void main() {
         await tester.tap(find.byKey(Key('plan-block-${block.id.value}')));
         await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const Key('plan-reason-uncertain')),
-          findsOneWidget,
-        );
+        expect(find.byKey(const Key('plan-reason-uncertain')), findsOneWidget);
       },
     );
 
     testWidgets(
       'A6 negative: a confident factor does NOT trigger the uncertainty line',
       (tester) async {
-        final block = _blockWith(
-          reasonCodes: const <String>['goal.primary'],
-        );
+        final block = _blockWith(reasonCodes: const <String>['goal.primary']);
         final priority = _priorityWithUncertainty(0.2);
 
         await _pumpWithPriority(tester, block, priority);
         await tester.tap(find.byKey(Key('plan-block-${block.id.value}')));
         await tester.pumpAndSettle();
 
-        expect(
-          find.byKey(const Key('plan-reason-uncertain')),
-          findsNothing,
-        );
+        expect(find.byKey(const Key('plan-reason-uncertain')), findsNothing);
       },
     );
 
@@ -106,9 +93,7 @@ void main() {
         // The chip strip is rendered with the supplied evidence refs only —
         // the sheet never invents new ones.
         expect(
-          find.byKey(
-            const Key('plan-reason-evidence-evidence.tempo-accuracy'),
-          ),
+          find.byKey(const Key('plan-reason-evidence-evidence.tempo-accuracy')),
           findsOneWidget,
         );
       },

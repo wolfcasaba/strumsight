@@ -60,8 +60,9 @@ final class PlanPreviewState {
 
   bool get hasBlockingError => validation.hasError || validation.hasFatal;
 
-  bool get hasWarning => validation.issues
-      .any((issue) => issue.severity == ValidationSeverity.warning);
+  bool get hasWarning => validation.issues.any(
+    (issue) => issue.severity == ValidationSeverity.warning,
+  );
 }
 
 /// Coordinates manual plan edits and explicit-confirm activation.
@@ -78,11 +79,13 @@ final class PlanPreviewController extends ChangeNotifier {
     required PlanValidationContext validationContext,
     required this.activation,
     PlanValidator? validator,
-  })  : _plan = initialPlan,
-        _context = validationContext,
-        _validator = validator ?? const PlanValidator(),
-        _validation = (validator ?? const PlanValidator())
-            .validate(initialPlan, validationContext);
+  }) : _plan = initialPlan,
+       _context = validationContext,
+       _validator = validator ?? const PlanValidator(),
+       _validation = (validator ?? const PlanValidator()).validate(
+         initialPlan,
+         validationContext,
+       );
 
   final PlanValidationContext _context;
   final PlanValidator _validator;
@@ -193,8 +196,9 @@ final class PlanPreviewController extends ChangeNotifier {
 
   bool get hasBlockingError => _validation.hasError || _validation.hasFatal;
 
-  bool get hasWarning => _validation.issues
-      .any((issue) => issue.severity == ValidationSeverity.warning);
+  bool get hasWarning => _validation.issues.any(
+    (issue) => issue.severity == ValidationSeverity.warning,
+  );
 
   /// Number of manual edits applied since the controller was built —
   /// surfaced so a test can assert every setter calls back into the

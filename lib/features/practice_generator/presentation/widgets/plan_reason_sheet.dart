@@ -42,10 +42,8 @@ class PlanReasonSheet extends StatelessWidget {
   }) => showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (sheetContext) => PlanReasonSheet(
-      block: block,
-      priority: priority,
-    ),
+    builder: (sheetContext) =>
+        PlanReasonSheet(block: block, priority: priority),
   );
 
   @override
@@ -121,7 +119,9 @@ class PlanReasonSheet extends StatelessWidget {
   bool get _isUncertain {
     final priority = this.priority;
     if (priority == null) return false;
-    final uncertaintyFactor = priority.factorFor(SkillPriorityFactorKind.uncertainty);
+    final uncertaintyFactor = priority.factorFor(
+      SkillPriorityFactorKind.uncertainty,
+    );
     if (uncertaintyFactor == null) return false;
     return uncertaintyFactor.normalizedValue >= uncertaintyThreshold;
   }

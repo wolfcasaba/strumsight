@@ -26,7 +26,7 @@ class PlanDayCard extends StatelessWidget {
 
   /// Forwarded to each block's duration slider.
   final void Function(String blockId, Duration newDuration)
-      onBlockDurationChanged;
+  onBlockDurationChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +100,8 @@ int _mondayBasedIndex(LocalDate date) {
   }
   final k = year % 100;
   final j = year ~/ 100;
-  final h = (date.day +
+  final h =
+      (date.day +
           ((13 * (month + 1)) ~/ 5) +
           k +
           (k ~/ 4) +

@@ -7,28 +7,25 @@ import '../../../fixtures/practice_generator/validation/validation_fixtures.dart
 
 void main() {
   group('PlanPreviewScreen', () {
-    testWidgets(
-      'A1: leaving the preview without confirm does NOT call '
-      'GenerationPlanActivation',
-      (tester) async {
-        final activation = _RecordingActivation();
-        final controller = _controllerFor(
-          activation: activation,
-          hardAvoid: false,
-        );
+    testWidgets('A1: leaving the preview without confirm does NOT call '
+        'GenerationPlanActivation', (tester) async {
+      final activation = _RecordingActivation();
+      final controller = _controllerFor(
+        activation: activation,
+        hardAvoid: false,
+      );
 
-        await _pumpPreview(tester, controller);
-        await tester.pumpAndSettle();
+      await _pumpPreview(tester, controller);
+      await tester.pumpAndSettle();
 
-        // Dispose the controller without ever calling confirmConfirmed.
-        // This is the path the production route takes when the user
-        // dismisses the screen: the widget unmounts, the controller is
-        // disposed, and no activation effect can fire.
-        controller.dispose();
+      // Dispose the controller without ever calling confirmConfirmed.
+      // This is the path the production route takes when the user
+      // dismisses the screen: the widget unmounts, the controller is
+      // disposed, and no activation effect can fire.
+      controller.dispose();
 
-        expect(activation.calls, isZero);
-      },
-    );
+      expect(activation.calls, isZero);
+    });
 
     testWidgets(
       'A2: every manual edit re-runs the validator before the next frame',
@@ -147,41 +144,34 @@ void main() {
       },
     );
 
-    testWidgets(
-      'A8: confirm is the ONLY path that calls activation',
-      (tester) async {
-        final activation = _RecordingActivation();
-        final controller = _controllerFor(
-          activation: activation,
-          hardAvoid: false,
-        );
-        addTearDown(controller.dispose);
+    testWidgets('A8: confirm is the ONLY path that calls activation', (
+      tester,
+    ) async {
+      final activation = _RecordingActivation();
+      final controller = _controllerFor(
+        activation: activation,
+        hardAvoid: false,
+      );
+      addTearDown(controller.dispose);
 
-        await _pumpPreview(tester, controller);
-        await tester.pumpAndSettle();
+      await _pumpPreview(tester, controller);
+      await tester.pumpAndSettle();
 
-        // Several edits without confirm → activation still untouched.
-        final block = controller.state.plan.days.first.blocks.first;
-        controller.editBlockActiveDuration(
-          block.id,
-          const Duration(minutes: 4),
-        );
-        await tester.pumpAndSettle();
-        controller.editBlockActiveDuration(
-          block.id,
-          const Duration(minutes: 6),
-        );
-        await tester.pumpAndSettle();
-        expect(activation.calls, isZero);
+      // Several edits without confirm → activation still untouched.
+      final block = controller.state.plan.days.first.blocks.first;
+      controller.editBlockActiveDuration(block.id, const Duration(minutes: 4));
+      await tester.pumpAndSettle();
+      controller.editBlockActiveDuration(block.id, const Duration(minutes: 6));
+      await tester.pumpAndSettle();
+      expect(activation.calls, isZero);
 
-        await tester.tap(find.byKey(const Key('plan-preview-confirm')));
-        await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('plan-preview-confirm')));
+      await tester.pumpAndSettle();
 
-        expect(activation.calls, 1);
-        expect(controller.state.confirmed, isTrue);
-        expect(controller.state.plan.status, PlanStatus.active);
-      },
-    );
+      expect(activation.calls, 1);
+      expect(controller.state.confirmed, isTrue);
+      expect(controller.state.plan.status, PlanStatus.active);
+    });
 
     testWidgets(
       'regression — every edit bumps editCount AND refreshes validation '
@@ -198,8 +188,7 @@ void main() {
         await tester.pumpAndSettle();
 
         final block = controller.state.plan.days.first.blocks.first;
-        final initialIssuesCount =
-            controller.state.validation.issues.length;
+        final initialIssuesCount = controller.state.validation.issues.length;
 
         // Edit once, twice — every edit must reach the validator.
         controller.editBlockActiveDuration(
@@ -207,8 +196,7 @@ void main() {
           const Duration(minutes: 8),
         );
         await tester.pumpAndSettle();
-        final afterFirstEditIssues =
-            controller.state.validation.issues.length;
+        final afterFirstEditIssues = controller.state.validation.issues.length;
         expect(controller.editCount, 1);
         // Validation either re-emits the same list or a different list
         // (depending on whether the edit changes anything). The point is
@@ -231,28 +219,27 @@ void main() {
       },
     );
 
-    testWidgets(
-      '§6.1 cell: error from manual edit also blocks activation',
-      (tester) async {
-        final activation = _RecordingActivation();
-        // Build a controller whose context hard-avoids the candidate, then
-        // a manual edit that bumps the plan to a hard-maximum violation
-        // surfaces a SECOND error finding.
-        final controller = _controllerFor(
-          activation: activation,
-          hardAvoid: true,
-          tightDailyMaximum: true,
-        );
-        addTearDown(controller.dispose);
+    testWidgets('§6.1 cell: error from manual edit also blocks activation', (
+      tester,
+    ) async {
+      final activation = _RecordingActivation();
+      // Build a controller whose context hard-avoids the candidate, then
+      // a manual edit that bumps the plan to a hard-maximum violation
+      // surfaces a SECOND error finding.
+      final controller = _controllerFor(
+        activation: activation,
+        hardAvoid: true,
+        tightDailyMaximum: true,
+      );
+      addTearDown(controller.dispose);
 
-        await _pumpPreview(tester, controller);
-        await tester.pumpAndSettle();
+      await _pumpPreview(tester, controller);
+      await tester.pumpAndSettle();
 
-        final result = await controller.confirmConfirmed();
-        expect(result.isFailure, isTrue);
-        expect(activation.calls, isZero);
-      },
-    );
+      final result = await controller.confirmConfirmed();
+      expect(result.isFailure, isTrue);
+      expect(activation.calls, isZero);
+    });
   });
 }
 
@@ -266,8 +253,9 @@ PlanPreviewController _controllerFor({
   final base = buildPlan();
   if (!consecutiveHighFretting) {
     final context = buildContext(
-      hardAvoidIdentities:
-          hardAvoid ? <String>[identityOf(candidate)] : <String>[],
+      hardAvoidIdentities: hardAvoid
+          ? <String>[identityOf(candidate)]
+          : <String>[],
       availability: tightDailyMaximum
           ? buildAvailability(maximumMinutes: 1)
           : buildAvailability(),
@@ -302,8 +290,9 @@ PlanPreviewController _controllerFor({
     catalog: catalog,
     availability: buildAvailability(),
     repairRevisionId: RevisionId('revision.2'),
-    hardAvoidIdentities:
-        hardAvoid ? <String>[identityOf(candidate)] : <String>[],
+    hardAvoidIdentities: hardAvoid
+        ? <String>[identityOf(candidate)]
+        : <String>[],
   );
   return PlanPreviewController(
     initialPlan: plan,
