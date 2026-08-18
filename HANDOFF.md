@@ -17,6 +17,29 @@
 > a priority/confidence adatot; az új whole-screen regresszió és a hiányzó
 > priority fail-closed cellája ezt rögzíti. Lecke: **L308**.
 
+
+> ## 🚀 [PIPELINE v2] Áteresztő-program beütemezve — ADR 0307, E99-R14…R19 (2026-08-18)
+>
+> A lánc saját sebességének MÉRT átvizsgálása után hat governance-kör került a
+> sor élére (`E99-R14` … `E99-R19`, mind `pending`), és a mérési alap az
+> [ADR 0307](docs/adr/0307-pipeline-throughput-program-v2.md)-ben áll.
+> **Azonnali intézkedés már megtörtént:** a `.pipeline/engine-override` tíz napja
+> `terra`-n ragadt (a 08-06-i kvótaválság maradéka, M3 közben 92%-on) — törölve,
+> a sor `engine` oszlopa dönt újra. Mérve: azonos epicen belül `terra` medián
+> **63 p**, `minimax` **49 p**, `sonnet-impl` **41 p** kör-idő.
+>
+> A hat kör: **R14** lejáró motor-override + motor-statisztika · **R15**
+> halt-eszkaláció (az utolsó self-heal kísérlet MÁS motorral) és ismétlődő
+> riasztás (mérve 42 órás néma állás, 08-16→08-18) · **R16** kör-granularitás
+> mérése + összevonási javaslat · **R17** l10n-fragmentumok (az `app_*.arb` 36
+> nyitott briefben ütközik) · **R18** generált `public.dart` barrelek (25/18/8
+> brief) · **R19** main-szinkron, egyetlen záró commit, őszinte `risk` besorolás.
+>
+> A `PIPELINE_SLOTS=2` mérve 08-04 óta NULLA párhuzamot adott (120 kör, 1 átfedő
+> pár): a sor függőségi értelemben soros volt. Az E99-sáv az első valóban
+> diszjunkt munkafolyam — a `tools/round-slots.py plan` az E07-R22 mellé már
+> admittálja az E99-R14-et.
+
 > ## ✅ [HEAL E07-R21/H2] KÉSZ — a brief saját ADR 0266-glosszája volt téves, nem az ADR; R21 egy nem integrált preview-komponensre szűkült — PR #305, `078c4ab4` (2026-08-18)
 >
 > Az E07-R21 pre-flightja H2-vel halt: §5.1 „csak explicit felhasználói
