@@ -128,6 +128,32 @@ eddig nem mondott ki explicit módon. A H3 halt tehát brief-tartalmi hiány
 
 **Státusz:** dispatch-elhető.
 
+### 0.0.1 Pre-flight revízió — E07-R18 security NOTE-4 aktiválási szerződése
+
+Az E07-R18 security review NOTE-4-je megmérte, hogy a
+`GenerationPlanActivation.activate(AdaptivePracticePlan)` seam még nem írja
+le az idempotenciát, atomicitást vagy az authorizáció felelősét. Ez a kör az
+első repository-backed megvalósítás, ezért a szerződést a kör saját,
+engedélyezett artefaktumaiban rögzíti — **más application-fájlt nem nyit meg**:
+
+1. `LocalPracticePlanRepository` a `GenerationPlanActivation` konkrét
+   megvalósítása. `activate(plan)` ugyanazzal a `PlanId`-val ismételve
+   idempotens: az immutable rekordot előbb teljesen kiírja, majd az aktív
+   mutatót váltja; nem duplikál revíziót vagy outcome-ot.
+2. Az aktiválás atomikus láthatósága a §0.0/§5.3 kulcs-sorrendjéből következik:
+   hiba esetén a régi aktív mutató marad érvényben, siker esetén csak teljes,
+   checksummal ellenőrizhető rekord válhat aktívvá.
+3. Ez offline, egy-alkalmazáspéldányos local store; felhasználói/account
+   authorizációs határ még nincs ebben a feature-ben. A repository nem fogad
+   hálózati identitást és nem végez authz-döntést; a hívó/composition root
+   felel azért, hogy csak az aktuális helyi profilhoz tartozó store-példányt
+   adjon át. Ezt a concrete class public doc-commentje is rögzíti.
+
+Ezzel a NOTE-4 három elvárása mérhető az R19 repository implementációján,
+anélkül, hogy a már lezárt R18 `application/service/` fájlját vagy bármely
+tilos zónát módosítanánk. A `local_repository_test.dart` külön cellával méri
+az ismételt `activate`-ot és az írás-hiba utáni mutató-változatlanságot.
+
 ## 1. Cél
 
 Draftok, aktív tervek, revíziók és eredmények biztonságos, **local-first**
