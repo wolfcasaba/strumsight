@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/practice_generator/data/local/generation_draft_repository.dart';
 import 'package:strumsight/features/practice_generator/presentation/controller/plan_setup_controller.dart';
