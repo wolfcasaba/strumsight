@@ -1755,21 +1755,94 @@ adr=$(printf '%s' "$next_line" | cut -f4)
 
 [ -f "$brief" ] || die "a kör briefje nem létezik: $brief"
 
-# --- Motor-override (ADR 0140) -------------------------------------------
+# --- Motor-override (ADR 0140 + E99-R14 / ADR 0307 §1 D2) -----------------
 # A motorok kvótája külön merül ki (a Terra 9%-on, 2026-08-05). Az override
 # egyetlen gitignore-olt fájl, ezért a váltás visszavonható: törlésével a
 # queue soronkénti `engine` értéke lép vissza életbe, konfiguráció-átírás
 # nélkül. `tools/engine-profile.sh use|clear`.
+#
+# E99-R14 D2: az override-fájl a TTL-t és az indoklást is hordozza
+# (3 soros alak, lásd `tools/engine-profile.sh`: `engine=`, `expires_at=`,
+# `reason=`). A driver KÖR-KIVÁLASZTÁSKOR ellenőrzi a lejáratot:
+#   - ha `expires_at` a múltban van, a fájl TÖRLŐDIK, a queue `engine`
+#     értéke lép életbe (napló + ntfy);
+#   - ha nincs `expires_at` (régi egysoros alak) ÉS a fájl mtime-ja
+#     régebbi, mint `PIPELINE_OVERRIDE_WARN_HOURS` (alap 72), a driver
+#     FIGYELMEZTET, de ÉL — a figyelem passzív, nem dönt helyette;
+#   - a ntfy NAPONTA LEGFELJEBB EGYSZER megy ki (állapot-bélyeg a
+#     `$state_dir`-ben), hogy ne zajosodjon a telefon;
+#   - a futó kört a lejárat NEM érinti — a kör a saját motorjával fejezi be.
+#
+# M3 javítás: a kiértékelést a `tools/engine-profile.sh evaluate` CLI végzi
+# (ugyanaz a függvény, amit a tesztek is hívnak — nincs duplikált logika).
+# A driver itt CSAK a log/ntfy hívásokat és a motorváltozó frissítését
+# végzi, a mérce-mátrix és a falszifikációs cellák a megosztott függvényt
+# mérik.
+override_file_mtime() { stat -c %Y "$engine_override_file" 2>/dev/null || echo 0; }
+override_file_age_hours() {
+  local mtime
+  mtime=$(override_file_mtime)
+  awk -v now="$(date +%s)" -v mt="$mtime" 'BEGIN { if (mt > 0) printf "%.2f", (now - mt) / 3600.0; else print "0" }'
+}
+
 engine_override_file="$state_dir/engine-override"
+override_warn_threshold=${PIPELINE_OVERRIDE_WARN_HOURS:-72}
+override_warn_state_file="$state_dir/override-warn-${override_warn_threshold}h.stamp"
 if [ -f "$engine_override_file" ]; then
-  engine_override=$(head -1 "$engine_override_file" | tr -d '[:space:]')
-  if [ -n "$engine_override" ] && validate_engine "$engine_override"; then
-    [ "$engine_override" != "$engine" ] && \
-      log "MOTOR-OVERRIDE: $engine → $engine_override (tools/engine-profile.sh clear old fel)"
-    engine=$engine_override
-  else
-    die "érvénytelen motor-override: $engine_override ($engine_override_file)"
-  fi
+  # A kiértékelés a `engine-profile.sh evaluate` parancsra van bízva — így
+  # a driver motor-override blokkja és a tesztek UGYANAZT a függvényt hívják
+  # (M3: nincs duplikált logika, a korábbi `--engine-override-evaluate`
+  # top-level hook törölve). A kimenet: stdout = <motor> | EXPIRED:<motor> | <empty>;
+  # exit 0/1/2/3/4. A státuszt KÖZVETLENÜL a parancs után capture-öljük,
+  # mert a `set -uo pipefail` nem állítja vissza a $?-t, de bármilyen
+  # következő parancs felülírná.
+  evaluate_output=$(bash "$repo_root/tools/engine-profile.sh" evaluate "$override_warn_threshold" 2>/dev/null)
+  evaluate_status=$?
+  engine_override=""
+  case "$evaluate_status" in
+    0)
+      engine_override="$evaluate_output"
+      [ "$engine_override" != "$engine" ] && \
+        log "MOTOR-OVERRIDE: $engine → $engine_override (tools/engine-profile.sh clear old fel)"
+      engine=$engine_override
+      ;;
+    1)
+      # EXPIRED — a függvény már törölte a fájlt, ezért a motornevet a
+      # strukturált kimenetből kell megőrizni az audit- és ntfy-eseményhez.
+      expired_engine=${evaluate_output#EXPIRED:}
+      if [ "$expired_engine" = "$evaluate_output" ] || [ -z "$expired_engine" ]; then
+        die "a lejárt motor-override kiértékelése nem tartalmaz motornevet: $evaluate_output"
+      fi
+      log "MOTOR-OVERRIDE LEJÁRT: $expired_engine — a queue engine oszlopa lép vissza"
+      notify "⏰ motor-override lejárt" "$expired_engine — a queue soronkénti engine értéke lép életbe" high
+      ;;
+    2)
+      # STALE — a függvény a motornevet írta a stdout-ba, de a kor-
+      # figyelmeztetés lép. A napló + a napi-egyszer ntfy a HÍVÓ dolga,
+      # mert ezek a lánc-naplóhoz / ntfy-topic-hoz kötöttek.
+      engine_override="$evaluate_output"
+      age_hours=$(override_file_age_hours)
+      log "MOTOR-OVERRIDE ÖREG: $engine_override (kora: ${age_hours} óra, küszöb: ${override_warn_threshold} óra) — az override Él, de fontold meg a feloldást (tools/engine-profile.sh clear)"
+      today=$(date +%Y%m%d)
+      if [ ! -f "$override_warn_state_file" ] || [ "$(cat "$override_warn_state_file" 2>/dev/null)" != "$today" ]; then
+        printf '%s' "$today" > "$override_warn_state_file"
+        notify "⚠ motor-override régi" "$engine_override (${age_hours} óra) — küszöb ${override_warn_threshold} óra" default
+      fi
+      engine=$engine_override
+      ;;
+    4)
+      # INVALID — a függvény a `engine_override` üresen hagyta, de a motor
+      # ténylegesen érvénytelen. A queue engine oszlopa üres lenne, ez a
+      # hiba „rosszabb, mint a nem-override" — die.
+      log "MOTOR-OVERRIDE: érvénytelen motor a $engine_override_file fájlban ('$evaluate_output')"
+      die "érvénytelen motor-override: $evaluate_output ($engine_override_file)"
+      ;;
+    *)
+      # 3 (no-file) nem fordulhat elő, mert a `if [ -f ... ]` őrzi az
+      # ágat. Minden más státusz a függvény belső hibája — die.
+      die "a motor-override kiértékelése ismeretlen státusszal tért vissza: $evaluate_status"
+      ;;
+  esac
 fi
 
 validate_engine "$engine" || die "ismeretlen implementer motor: $engine (auto|minimax|codex vagy a nyilvántartás neve)"

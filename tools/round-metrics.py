@@ -46,6 +46,13 @@ MERGED = re.compile(r"^(?P<round>[A-Z0-9-]+) MERGE-ELVE")
 HEAL = re.compile(r"^ÖNJAVÍTÓ KÖR indul: (?P<round>[A-Z0-9-]+) / (?P<code>[A-Z0-9-]+)")
 BLOCKED = re.compile(r"^HIBA: (?P<reason>.*)$")
 HALTED = re.compile(r"^a lánc MEGÁLLT")
+# E99-R14 D3: a motor-statisztika kimenetének alapja. A `log "következő kör: …"`
+# sor rögzíti, melyik motor vitte a kört — az `implementer=<x>` részt innen
+# nyerjük. A `[A-Za-z0-9_-]+` minta megengedi a kötőjeles motor-neveket
+# (`sonnet-impl`, `qwen-plus`).
+NEXT_ROUND = re.compile(
+    r"^következő kör: (?P<round>[A-Z0-9-]+) · orchestrátor=(?P<orchestrator>[A-Za-z0-9_-]+) · implementer=(?P<implementer>[A-Za-z0-9_-]+)"
+)
 
 
 def parse_chain_log(text: str) -> list[dict]:
@@ -73,6 +80,18 @@ def parse_chain_log(text: str) -> list[dict]:
         else:
             if HALTED.match(message):
                 events.append({"at": timestamp, "kind": "halt", "round": "", "detail": ""})
+            else:
+                next_match = NEXT_ROUND.match(message)
+                if next_match:
+                    events.append(
+                        {
+                            "at": timestamp,
+                            "kind": "next_round",
+                            "round": next_match.group("round"),
+                            "detail": "",
+                            "implementer": next_match.group("implementer"),
+                        }
+                    )
     return events
 
 
@@ -139,6 +158,151 @@ def summarize(events: list[dict]) -> dict:
         "max_idle_seconds": max(idles) if idles else None,
     }
     return {"schema_version": 1, "rounds": rounds, "summary": summary}
+
+
+# E99-R14 D3: motoronkénti statisztika. A számítás kizárólag a chain.log
+# eseményeiből dolgozik (nincs hálózat, nincs `gh` hívás), így tesztelhető
+# rögzített naplóból. A 10 óránál hosszabb kör-idő kiugró értékként marad
+# ki (mérve: E07-R16 = 2636 perc, egy 42 órás halt-epizód, ami nem
+# motor-tulajdonság).
+OUTLIER_THRESHOLD_SECONDS = 10 * 3600
+
+
+def engines_summary(events: list[dict], *, outlier_threshold: int = OUTLIER_THRESHOLD_SECONDS, epic: str | None = None) -> dict:
+    """Motoronkénti statisztika a `következő kör: … implementer=<x>` sorokból.
+
+    Az implementer hozzárendelés a `next_round` eseményből jön, a START és a
+    MERGED eseményekkel összekötve. A kiugró-szűrés CSAK a középső/átlag
+    számítást érinti — a `n` mező a TELJES mintát tükrözi (külön `n` oszlop
+    nélkül a kiugró-szűrés hatása láthatatlan lenne).
+
+    Az `epic` paraméter (opcionális) csak az adott epic köreit tartja meg
+    (pl. `epic="E07"` → `E07-R01`, `E07-R02`, ...). A szűrés a `round`
+    mező `epic-` prefix-ellenőrzésével történik, és a motor-aggregátum
+    ELŐTT lép életbe — így a `next_round` implementer-hozzárendelés, a
+    start/merged időpár, és a heal-számlálás is csak az epiches tartozó
+    körökre fut le. Üres epic-szűrés esetén a globális nézet marad.
+    """
+    if epic is not None:
+        epic_prefix = f"{epic}-"
+        events = [event for event in events if (event.get("round") or "").startswith(epic_prefix)]
+
+    # 1. lépés: implementer hozzárendelés az egyes körökhöz. A `next_round`
+    # esemény a kör KIVÁLASZTÁSAKOR íródik, tehát néha ELŐBB, mint a `start`
+    # (a motor-override és a függetlenség-feloldás a kettő között futhat le),
+    # néha UTÁNA. A kettő közötti SORREND nem garancia — a legegyszerűbb
+    # asszociáció: a `start` a `next_round` implementerét KAPJA, ha a
+    # `next_round.round` megegyezik; ellenkező esetben a `next_round`
+    # implementere a forrás.
+    implementer_for_round: dict[str, str] = {}
+    implementer_seen_at: dict[str, datetime] = {}
+    latest_event_at: dict[str, datetime] = {}
+    for event in events:
+        round_id = event.get("round") or ""
+        if not round_id:
+            continue
+        kind = event["kind"]
+        at = event["at"]
+        if kind == "next_round":
+            implementer = event.get("implementer") or ""
+            if implementer:
+                implementer_for_round[round_id] = implementer
+                implementer_seen_at[round_id] = at
+        latest_event_at[round_id] = at
+
+    # 2. lépés: a meglévő `summarize()`-szerű köridő-párok (start → merged).
+    # A `next_round` implementerét a `start` ESEMÉNY KÖRÉRE rendeljük, a
+    # START vagy a NEXT_ROUND időbélyegéből a korábbit használva.
+    open_start: dict[str, datetime] = {}
+    open_merged_at: dict[str, datetime] = {}
+
+    for event in events:
+        round_id = event["round"]
+        if not round_id:
+            continue
+        kind = event["kind"]
+        at = event["at"]
+        if kind == "start":
+            if round_id not in open_start:
+                open_start[round_id] = at
+        elif kind == "merged":
+            if round_id in open_start:
+                open_merged_at[round_id] = at
+
+    # 3. lépés: a tényleges motor-aggregátum. A `n` a TELJES (szűrés nélküli)
+    # mintán mért, így a kiugró-szűrés hatása a középső/átlag-becslésre
+    # külön látható lesz.
+    durations: dict[str, list[float]] = {}
+    heals: dict[str, int] = {}
+    heal_count_by_event = {}
+    for event in events:
+        if event["kind"] == "heal":
+            heal_count_by_event[event["round"]] = heal_count_by_event.get(event["round"], 0) + 1
+
+    for round_id, start_at in open_start.items():
+        merged_at = open_merged_at.get(round_id)
+        if merged_at is None:
+            continue
+        implementer = implementer_for_round.get(round_id, "")
+        if not implementer:
+            continue
+        duration = (merged_at - start_at).total_seconds()
+        durations.setdefault(implementer, []).append(duration)
+        if heal_count_by_event.get(round_id):
+            heals[implementer] = heals.get(implementer, 0) + 1
+
+    rows = []
+    for implementer, samples in sorted(durations.items()):
+        filtered = [s for s in samples if s < outlier_threshold]
+        n_total = len(samples)
+        n_filtered = len(filtered)
+        if filtered:
+            median_s = statistics.median(filtered)
+            mean_s = statistics.fmean(filtered)
+        else:
+            median_s = None
+            mean_s = None
+        rows.append(
+            {
+                "implementer": implementer,
+                "n": n_total,
+                "outliers_dropped": n_total - n_filtered,
+                "median_seconds": median_s,
+                "mean_seconds": mean_s,
+                "self_heal_rounds": heals.get(implementer, 0),
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "outlier_threshold_seconds": outlier_threshold,
+        "epic": epic,
+        "engines": rows,
+    }
+
+
+def render_engines_table(result: dict) -> str:
+    """A motoronkénti statisztika szöveges táblája."""
+    rows = result["engines"]
+    if not rows:
+        return "round-metrics: a naplóban nincs motor-hozzárendelhető kör\n"
+    lines = [
+        f"{'implementer':<16} {'n':>4} {'kiugró':>7} {'medián':>9} {'átlag':>9} {'önjavító':>9}",
+        "-" * 60,
+    ]
+    for row in rows:
+        median_cell = "—" if row["median_seconds"] is None else f"{row['median_seconds'] / 60:.0f}p"
+        mean_cell = "—" if row["mean_seconds"] is None else f"{row['mean_seconds'] / 60:.0f}p"
+        lines.append(
+            f"{row['implementer']:<16} {row['n']:>4} {row['outliers_dropped']:>7} "
+            f"{median_cell:>9} {mean_cell:>9} {row['self_heal_rounds']:>9}"
+        )
+    lines.append("")
+    lines.append(
+        f"Az átlag/medián kiszámítása előtt a 10+ órás kör-idők kiugróként kimaradnak "
+        f"(küszöb: {result['outlier_threshold_seconds'] // 3600} óra, mérve: E07-R16 = 2636p)."
+    )
+    return "\n".join(lines) + "\n"
 
 
 def engine_prices(repo: Path) -> dict[str, tuple[float, float]]:
@@ -296,6 +460,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--ledger", type=Path, default=REPO_ROOT / LEDGER_RELATIVE)
     parser.add_argument("--repo", type=Path, default=REPO_ROOT)
+    parser.add_argument(
+        "--engines",
+        action="store_true",
+        help="motoronkénti statisztika (E99-R14 D3): n, medián/átlag, önjavító — a 10+ órás kör-idők kiugróként kimaradnak",
+    )
+    parser.add_argument(
+        "--epic",
+        help="a `--engines` statisztikát egy adott epicre szűkíti (pl. `E07` → csak E07-R* körök); a motor-aggregátum ELŐTT lép életbe",
+    )
     arguments = parser.parse_args(argv)
 
     if arguments.cost:
@@ -324,6 +497,14 @@ def main(argv: list[str] | None = None) -> int:
     if not result["rounds"]:
         print("round-metrics: a naplóban nincs egyetlen BEFEJEZETT kör sem", file=sys.stderr)
         return 2
+
+    if arguments.engines:
+        engines_result = engines_summary(parse_chain_log(text), epic=arguments.epic)
+        if arguments.format == "json":
+            print(json.dumps(engines_result, ensure_ascii=False, sort_keys=True, indent=2))
+        else:
+            print(render_engines_table(engines_result), end="")
+        return 0
 
     if arguments.format == "json":
         print(json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2))
