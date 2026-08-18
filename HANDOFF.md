@@ -63,6 +63,29 @@
 > priority fail-closed cellája ezt rögzíti. Lecke: **L308**.
 
 
+> ## 🛡️ [IMPLEMENTER-ŐRÖK + SLOT-ZÁR] Gépi őrök a claude-harness köröknek, és a párhuzam MÁSODIK gyökéroka — ADR 0309 (2026-08-18)
+>
+> **Implementer-őrök (PR #309, ADR 0309).** A MiniMax/Sonnet implementer három
+> mért hibaosztálya (listán kívüli fájl, gate-csonkítás, jelzés nélküli kilépés)
+> szövegesen tiltva volt, mégis megtörtént — ezért gépi réteg került alá:
+> `tools/hooks/implementer_guard.py` (scope-őr fail-closed, tiltott
+> parancsalakok, korlátos Stop-jelzésőr, `dart format` írás után), amit a
+> `tools/mm-round.sh` `--settings tools/implementer-settings.json`-nal CSAK az
+> implementer-sessionre tölt be. Emellé `tools/implementer-agents.json`
+> (`round-auditor` alügynök a KÖTELEZŐ önellenőrzéshez), a nyilvántartás
+> `max_out` oszlopa végre hat (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`), és a kör utáni
+> scope-audit is megkapja a briefet (eddig némán kimaradt).
+> **Mérve élesben:** a modell kiadta a `Write`-ot egy listán kívüli fájlra →
+> `PreToolUse:Write hook error: IMPLEMENTER-ŐR …` → a fájl nem jött létre.
+>
+> **Slot-zár szivárgás (PR #310).** Egyetlen futó kör mellett a driver „minden
+> slot foglalt (2)"-t naplózott: a `.pipeline/lock` FD-jét a **tmux szerver**
+> tartotta (E07-R22 drivere indította 18:13-kor, a 19:47-es merge után is élt).
+> `PIPELINE_SLOTS=2` mellett az 1-es slot tartósan foglalt maradt — ez a
+> „0 párhuzamos kör" mérés MÁSODIK, a sor-szerializációtól független oka.
+> Javítva: a tmux-hívások fd 9-et lezáró alhéjban futnak; funkcionális
+> falszifikációs teszt őrzi (`tools/tests/test_slot_lock_inheritance.py`).
+
 > ## 🚀 [PIPELINE v2] Áteresztő-program beütemezve — ADR 0307, E99-R14…R19 (2026-08-18)
 >
 > A lánc saját sebességének MÉRT átvizsgálása után hat governance-kör került a
@@ -84,6 +107,51 @@
 > pár): a sor függőségi értelemben soros volt. Az E99-sáv az első valóban
 > diszjunkt munkafolyam — a `tools/round-slots.py plan` az E07-R22 mellé már
 > admittálja az E99-R14-et.
+
+> ## ✅ [HEAL E99-R14/H3] KÉSZ — a lánc cronja minden firingre `PIPELINE_ORCH_SWAP_ENGINE=minimax`-ot exportál, amit a driver-tesztek ambiensként örököltek — PR #311 (más session írta, ez a heal függetlenül újramérte), `80cdb46a` (2026-08-18)
+>
+> Az E99-R14 (GOV-08) a saját brief-diffjén zölden állt, de a kötelező teljes
+> `tools/tests` suite négy motor-függetlenségi teszttel
+> ([review](docs/reviews/e99-r14-review.md) M4: `4 failed, 508 passed, 546
+> subtests`) pirosra váltott, és H3-mal megállt
+> (`halted_at=2026-08-18T20:05:40Z`). A self-heal (1/3. kísérlet) megmérte a
+> gyökérokot: a `.pipeline`-t vezénylő cron-sor (`crontab -l`) MINDEN firingre
+> `PIPELINE_ORCH_ROTATION=alternate PIPELINE_ORCH_SWAP_ENGINE=minimax`-ot
+> exportál — ez öröklődik a tmux szerver globális környezetén és minden
+> onnan induló session/gyerekfolyamaton át, a `tools/tests/
+> test_orchestrator_rotation.py`/`test_reviewer_independence.py`
+> driver-segédje pedig `dict(os.environ)`-ból építette a tesztelt
+> `round-pipeline.sh` gyerekfolyamat környezetét. A MÉRT alapértelmezést
+> (`orch_swap_engine=sonnet-impl`, user-döntés 2026-08-11) így csendben
+> felülírta az üzemeltetői override, és a teszt a kettő ÜTKÖZÉSÉT mérte, nem a
+> kódot — `bash -x` közvetlen reprodukcióval igazolva. Ugyanez a hibaosztály
+> már egyszer félrevezetett egy self-healt (HEAL E07-R21/H2, kézi
+> env-tisztítással megkerülve, a defekt megmaradt), és szerkezetileg [[L312]]
+> rokona (ADR 0307 §1.3.1 — ott egy FD-t, itt egy env változót szivárogtat a
+> tmux szerver).
+>
+> **A tényleges javítást egy párhuzamosan futó másik governance-session adta**
+> (`/tmp/ss-hermetic`, branch `gov/hermetic-driver-tests`, PR
+> [#311](https://github.com/wolfcasaba/strumsight/pull/311), squash
+> `80cdb46a`, Router CI zöld a pontos head SHA-n): mindkét driver-segéd a
+> bázis környezetből mostantól kiszűri a `PIPELINE_*` kulcsokat, plusz egy
+> falszifikált regressziós őr (`AmbientEnvironmentLeakTest` — RED a szűrés
+> kiszedésével, GREEN vissza). Ez a self-heal — AGENTS.md §13 szellemében —
+> NEM indított versengő második javítást ugyanazon a két fájlon: bevárta a
+> már futó CI-t (`tools/wait-for-ci.sh`, védett timeouttal), majd a merge
+> UTÁN egy izolált klónban, a SAJÁT szennyezett ambiensében
+> (`PIPELINE_ORCH_SWAP_ENGINE=minimax` élve a futtató shellben) függetlenül
+> újramérte: `python3 -m pytest tools/tests -q` → **496 passed, 550
+> subtests, 0 hiba**.
+>
+> **Nyitva maradt, dokumentált megfigyelés (nem ennek a healnek a scope-ja):**
+> a crontab `PIPELINE_ORCH_SWAP_ENGINE=minimax` sora ma is ÉLESben minden
+> Terra-vezényelt kör csere-implementerét `minimax`-ra kényszeríti a
+> dokumentált `sonnet-impl` alapértelmezés helyett — pontosan az az
+> „elfelejtett, sosem lejáró override" minta, amit maga az E99-R14 D1/D2 a
+> `.pipeline/engine-override` FÁJLRA kíván kezelni. Emberi/governance döntés,
+> ezt a self-heal nem módosította. Lecke: **L313**. A lánc E99-R14-gyel
+> folytatódik a következő cron-firingen.
 
 > ## ✅ [HEAL E07-R21/H2] KÉSZ — a brief saját ADR 0266-glosszája volt téves, nem az ADR; R21 egy nem integrált preview-komponensre szűkült — PR #305, `078c4ab4` (2026-08-18)
 >

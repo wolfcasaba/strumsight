@@ -11719,3 +11719,98 @@ vagy hiányzó fájl hiba jön egy review-gate futásból egy ÁLLÍTOTTAN kész
 az ELSŐ gyanú a hiányzó push legyen, nem a diff tartalma. Rokon hibaosztály,
 más mechanizmus: [[L175]]/[[L179]] (worktree vs. clone — ott a klónozás módja
 volt hibás, itt a forrás-repó frissessége).
+
+## L312 — A `tmux new-session` a kliens FD-jeit a SZERVERNEK adja át, és a szerver túléli a kört: a slot-zár így némán, tartósan foglalt maradt (2026-08-18)
+
+**Tünet.** Egyetlen futó kör (E99-R14) mellett a driver minden firingen azt
+naplózta, hogy `minden slot foglalt (2)` — a `PIPELINE_SLOTS=2` tehát nem adott
+párhuzamot, de a napló nem mondta meg, miért.
+
+**Mérés.** A `/proc/<pid>/fd` szerint a `.pipeline/lock` (1-es slot) FD-jét a
+**tmux szerver** tartotta: `PID 1023005 … cmd=tmux new-session -d -s
+pipeline-E07-R22 bash`. Ezt a szervert az E07-R22 drivere indította 18:13-kor;
+a kör 19:47-kor merge-elt, a szerver mégis élt, mert a KÖVETKEZŐ kör session-je
+ugyanabban a szerverben futott. A tmux kliens FD-jei a szerverre öröklődnek, és
+a szerver élettartama nem a köré.
+
+**Miért maradt rejtve.** A driver ezt a hibaosztályt már ismerte: a pinger-alhéj
+2026-07-31 óta zárja az fd 9-et („a slot-zár nem öröklődhet"). Csak a
+tmux-hívások maradtak ki a mintából — egy három soros rés egy egyébként helyes
+védelemben. A hatás pedig egy MÁSIK, valódi ok (a sor függőségi
+szerializációja) mögé bújt: a „0 párhuzamos kör" mérésre volt kész magyarázat,
+ezért a második ok fel sem merült.
+
+**Tanulság.** Ha egy védelem egy hibaosztály ellen már létezik, keresd meg a
+védelem MINDEN hívási helyét, ne csak azt az egyet, ami a mérést kiváltotta.
+És ha egy jelenségre van jó magyarázat, az nem zárja ki, hogy legyen egy másik
+is: a mérést a jelenség ISMÉTLŐDÉSÉIG kell folytatni („egyetlen kör fut, mégis
+minden slot foglalt" — ez a mondat volt a nyom, nem a lassúság).
+
+Javítás: a három tmux-hívás fd 9-et lezáró alhéjban (`tools/round-pipeline.sh`),
+őr: `tools/tests/test_slot_lock_inheritance.py` (statikus + FUNKCIONÁLIS
+falszifikáció). Rokon: [[L117]] (a nem bizonyítható őr = bukott őr).
+
+## L313 — A lánc cronja `PIPELINE_ORCH_SWAP_ENGINE=minimax`-ot exportál minden firingre; a driver-tesztek `dict(os.environ)`-ból örökölték, és a MÉRT alapértelmezés helyett az üzemeltetői override-ot mérték (E99-R14 H3, 2026-08-18)
+
+**Tünet.** Az E99-R14 (GOV-08) a saját brief-diffjén zölden állt (a review M1–M3
+leletei lezárva), de a kötelező teljes `tools/tests` suite **négy** motor-
+függetlenségi teszttel pirosra váltott — a kör diffjétől teljesen függetlenül
+([review](reviews/e99-r14-review.md) M4: `4 failed, 508 passed, 546 subtests`).
+A self-heal (1/3. kísérlet, ADR 0112) a `.pipeline/HALTED`-et H3-mal kapta.
+
+**Mérés.** `crontab -l` szerint a `*/5 * * * *` sor MINDEN firingre
+`PIPELINE_ORCH_ROTATION=alternate PIPELINE_ORCH_SWAP_ENGINE=minimax`-ot
+exportál. Ez öröklődik a tmux szerver globális környezetén (`tmux
+show-environment -g` ugyanezt mutatta) és minden onnan induló session/gyerek-
+folyamaton át — beleértve EZT a heal-sessiont is. A
+`tools/tests/test_orchestrator_rotation.py`/`test_reviewer_independence.py`
+driver-segédje `dict(os.environ)`-ból építette a tesztelt `round-pipeline.sh`
+gyerekfolyamat környezetét, szűrés nélkül. `bash -x tools/round-pipeline.sh
+--independent-engine terra terra` közvetlen reprodukcióval mérve: a script
+`orch_swap_engine=${PIPELINE_ORCH_SWAP_ENGINE:-sonnet-impl}` MÉRT
+alapértelmezését (`sonnet-impl`, user-döntés 2026-08-11) csendben felülírta az
+ambiens `minimax`, és a `resolve_independent_engine` emiatt `minimax`-ot adott
+`sonnet-impl` helyett — a teszt így nem a kódot, hanem a kód és az üzemeltetői
+override ÜTKÖZÉSÉT mérte.
+
+**Rokon, nem első előfordulás.** Ugyanez a szivárgás egyszer már félremért egy
+másik köre is: a HEAL E07-R21/H2 handoff-bejegyzése a négy hibát „a doboz
+lokális `PIPELINE_ORCH_SWAP_ENGINE` env-override-jától" eredezteti, és a
+session-env KÉZI megtisztításával kerülte meg — a defekt maga megmaradt,
+később ez okozta az E99-R14 H3-at. Szerkezetileg [[L312]] rokona is (ugyanaz a
+nap, ugyanaz a „a tmux szerver túléli a kört és szivárogtat" hibaosztály, ADR
+0307 §1.3.1 — ott egy FD-t, itt egy env változót).
+
+**Javítás — MÁS session adta, ez a heal függetlenül újramérte.** Amíg a
+gyökérokot mértem, egy párhuzamosan futó governance-session (`/tmp/ss-hermetic`,
+branch `gov/hermetic-driver-tests`) MÁR commitolt egy pontosan erre a
+gyökérokra irányuló, tesztelt javítást: mindkét driver-segéd a bázis
+környezetből kiszűri a `PIPELINE_*` kulcsokat, mielőtt a gyerekfolyamat
+környezetét összeállítja, plusz egy falszifikált regressziós őr
+(`AmbientEnvironmentLeakTest` — RED a szűrés kiszedésével, GREEN vissza). PR
+[#311](https://github.com/wolfcasaba/strumsight/pull/311), squash `80cdb46a`,
+Router CI zöld a pontos head SHA-n. Ez a self-heal — AGENTS.md §13 („ne
+módosíts vagy törölj más munkáját") szellemében — NEM indított versengő
+második javítást ugyanazon a két fájlon, hanem bevárta a már futó CI-t
+(`tools/wait-for-ci.sh`, védett timeouttal), majd a merge UTÁN egy izolált
+klónban, a SAJÁT szennyezett ambiensében (`PIPELINE_ORCH_SWAP_ENGINE=minimax`
+élve a futtató shellben) újramérte: `python3 -m pytest tools/tests -q` → **496
+passed, 550 subtests, 0 hiba**.
+
+**Szabály.** (1) Egy driver-teszt, ami a KÓD alapértelmezését méri, sose
+építsen gyerekfolyamat-környezetet `dict(os.environ)`-ból explicit szűrés
+nélkül — az ambiens shell/tmux/cron bármikor tartalmazhat üzemeltetői
+override-ot, és a teszt attól kezdve nem determinisztikus. (2) Mielőtt egy
+self-heal saját javítást írna, keressen MÁR FUTÓ, ugyanarra a gyökérokra
+irányuló munkát (`git worktree list`, `ps`, `gh pr list`) — ha talál egyet,
+mérje meg és várja be, ne duplikáljon.
+
+**Nyitva maradt, dokumentált megfigyelés (nem ennek a healnek a scope-ja).** A
+crontab `PIPELINE_ORCH_SWAP_ENGINE=minimax` sora ma is ÉLESben minden
+Terra-vezényelt kör csere-implementerét `minimax`-ra kényszeríti a
+dokumentált `sonnet-impl` alapértelmezés (2026-08-11 user-döntés) helyett —
+ez a driver-tesztek javítása UTÁN már nem tesztszennyezés, hanem tényleges
+termelési viselkedés, és pontosan az az „elfelejtett, sosem lejáró override"
+minta, amit maga az E99-R14 D1/D2 a `.pipeline/engine-override` FÁJLRA kíván
+kezelni. A crontab-sor tartalmi/governance kérdés, ezt a self-heal — a
+mandátuma szerint a legkisebb javításra szorítkozva — nem módosította.

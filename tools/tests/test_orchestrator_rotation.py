@@ -37,8 +37,24 @@ REAL_BANNER = (
 )
 
 
+# MÉRT hiba (2026-08-18, E99-R14 H3 halt): ez a segéd az AMBIENS környezetből
+# indult, a lánc cronja viszont `PIPELINE_ORCH_ROTATION` és
+# `PIPELINE_ORCH_SWAP_ENGINE` értékeket exportál. A cronból indított kör
+# session-je ezeket örökölte, ezért a kötelező teljes tooling-suite HÁROM
+# függetlenségi tesztje pirosra váltott — a kör kódjától teljesen függetlenül.
+# A kör emiatt állt meg, és ugyanez a szivárgás egyszer már félremért egy
+# korábbi kört is (HANDOFF, E07-R21 heal).
+#
+# Egy driver-teszt, ami az ALAPÉRTELMEZETT viselkedést méri, nem támaszkodhat
+# arra, hogy a futtató környezetben nincs üzemeltetői override.
+def _hermetic_environment(**overrides: str) -> dict:
+    base = {key: value for key, value in os.environ.items() if not key.startswith("PIPELINE_")}
+    base.update(overrides)
+    return base
+
+
 def driver(*args: str, state: Path, **env: str) -> subprocess.CompletedProcess:
-    environment = dict(os.environ, PIPELINE_STATE_DIR=str(state), **env)
+    environment = _hermetic_environment(PIPELINE_STATE_DIR=str(state), **env)
     return subprocess.run(
         ["bash", str(DRIVER), *args],
         capture_output=True,
@@ -184,6 +200,39 @@ class PreemptionTest(unittest.TestCase):
                 "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION="claude"
             )
             self.assertEqual(result.stdout.strip(), "claude")
+
+
+class AmbientEnvironmentLeakTest(unittest.TestCase):
+    """A MÉRÉS nem függhet a futtató környezet üzemeltetői override-jaitól.
+
+    MÉRVE 2026-08-18: a lánc cronja `PIPELINE_ORCH_SWAP_ENGINE=minimax`-szal
+    indul, a kör session-je ezt örökölte, és a kötelező teljes tooling-suite
+    három függetlenségi tesztje pirosra váltott — a kör kódjától függetlenül.
+    Az E99-R14 emiatt H3-mal MEGÁLLT.
+    """
+
+    def test_an_operator_override_in_the_ambient_env_cannot_move_the_measured_default(self) -> None:
+        ambient = {
+            "PIPELINE_ORCH_SWAP_ENGINE": "minimax",
+            "PIPELINE_ORCH_ROTATION": "alternate",
+        }
+        original = {key: os.environ.get(key) for key in ambient}
+        os.environ.update(ambient)
+        try:
+            with tempfile.TemporaryDirectory() as name:
+                state = Path(name)
+                result = driver("--independent-engine", "terra", "terra", state=state)
+                self.assertEqual(
+                    result.stdout.strip(),
+                    "sonnet-impl",
+                    "az ambiens PIPELINE_* override elmozdította a mért alapértelmezést",
+                )
+        finally:
+            for key, value in original.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
 
 class IndependenceTest(unittest.TestCase):
