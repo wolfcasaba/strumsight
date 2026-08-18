@@ -47,6 +47,74 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
+## 0.0 Pre-flight revízió (2026-08-18, Sonnet 5 orchestrátor)
+
+- **Mérés — a pihenőnap TÉNYLEGES jelzése a `PracticeDay`-en:** a ma
+  `main`-en élő `GenerationOrchestrator._assembleDay`
+  (`lib/features/practice_generator/application/service/generation_orchestrator.dart:213-244`)
+  minden napra `status: PracticeItemStatus.planned`-ot ír (a pinnelt 8 érték
+  — `practice_block.dart:13` — között NINCS `rest` státusz), és a
+  pihenőnap kandidátus nélkül marad, tehát `blocks: []` — a `BlockKind.rest`
+  enum-érték (`plan_enums.dart`) létezik, de az `_assembleBlock` SOHA nem
+  konstruálja (csak kiválasztott `ScheduleCandidate`-ból épít blokkot,
+  pihenőnapon nincs ilyen). Az EGYETLEN túlélő jelzés a `reasonCodes` lista:
+  a `WeeklyScheduler` a pihenőnapra pontosan
+  `[ScheduleDecisionReason.restDay.code]`-ot ír (`weekly_scheduler.dart:245`),
+  ami a `scheduling_policy.dart:95` szerint a `'schedule.decision.restDay'`
+  string — textuálisan elkülönítve a kihagyott/nem-elérhető nap
+  `'schedule.decision.dayUnavailable'` kódjától (`scheduling_policy.dart:92`)
+  — és ez a lista a `PracticeDay`-be változatlanul bekerül
+  (`reasonCodes: decision.reasonCodes`, `generation_orchestrator.dart:242`).
+- **Feloldás — pihenőnap detektálás:** az A2/§5.2 kontraktusa PONTOSAN ez:
+  `day.reasonCodes.contains(ScheduleDecisionReason.restDay.code)` (a
+  `scheduling_policy.dart` már exportálva a `public.dart`-on, új export nem
+  kell). Az implementáció NEM alapulhat `status`-on (mindig `planned`, amíg
+  a nap el nem múlik) és NEM `blocks.any((b) => b.kind == BlockKind.rest)`-en
+  (ez a konstruktor-út halott — mindig `false`, tehát a pihenőnap ezen az
+  ágon MINDIG mulasztásnak látszana, pont az A2 által tiltott hiba). A
+  kihagyott/nem-elérhető naptól a `'schedule.decision.dayUnavailable'` kód
+  különbözteti meg — a két eset (`restDay` vs. `dayUnavailable`) vizuálisan
+  is különböző, semleges (nem büntető) megjelenítést kap; a §5.2 csak a
+  pihenőnapról rendelkezik explicit módon, a nem-elérhető nap megjelenítése
+  implementer-választás, amíg nem büntető jellegű.
+- **Mérés — deep link, TÉNYLEGES bekötés:** `lib/core/notifications/
+  nudge_service.dart` (`_scheduleWeek`, sor 140–162) a `zonedSchedule`
+  hívásban NEM ad `payload`-ot, és az `_init()` (sor 85–102) nem regisztrál
+  `onDidReceiveNotificationResponse`-t — az értesítés koppintása ma
+  SEMMILYEN adatot nem hordoz. `lib/app/routing/app_router.dart` és
+  `app_route.dart` nem ismer értesítés-koppintásból induló navigációt, és
+  mindkét fájl LISTÁN KÍVÜLI (nincs az `allowed_paths`-ban). A körnek tehát
+  ma nincs élő „deep link"-je, amit mérni lehetne.
+- **Feloldás — deep link scope:** az A7/§5.4 kontraktusa a kör saját,
+  engedélyezett fájljain belül él: a `today_plan_screen.dart` (vagy egy
+  típus a `today_plan_controller.dart`-ban) egy EXPLICIT, TÍPUSOS, nullable
+  paraméter-objektumot fogad (pl. route `extra`, vagy egy már feloldott
+  `Map<String, String>` — NEM nyers, parse-olatlan URI-string), és
+  ismeretlen/hiányzó/rossz típusú érték esetén a §5.3 szerinti biztonságos
+  nézetre esik vissza, kivétel nélkül. A teszt ezt a típust KÖZVETLENÜL
+  konstruálja unit/widget szinten. A valódi értesítés-koppintás → útvonal
+  bekötés (a `NudgeService` payloadja és az `app_router.dart` regisztrációja)
+  NEM ennek a körnek a dolga — ugyanaz a minta, mint minden korábbi E07 kör:
+  a kontraktus kész, a production bekötés egy későbbi, emberi döntésű kör
+  (mindkét érintett fájl listán kívüli, `allowed_paths` byte-for-byte
+  változatlan).
+- **Mérés — ADR-szükséglet:** az ADR 0258 §4 („Az elérhetőség helyi
+  dátumhoz kötött, nem UTC-pillanathoz") szó szerint lefedi az §5.1 határt —
+  ellenőrizve a fájl tényleges szövegében, nem csak a brief-glosszájából
+  (vö. L307: a glossza és az ADR eltérhet). A kör nem hoz új architekturális
+  döntést, ezért **nincs új ADR-szám foglalva** — a brief saját „nincs" jelzése
+  megerősítve, nem csak elfogadva.
+- **Feloldás — change-set indoklás (§5.5):** a meglévő `PlanChangeReason`
+  hat értéke közül (`plan_change_set.dart:37-43`) a tanuló-indított
+  rövidítés/csere/kihagyás akció kódja `PlanChangeReason.learnerReschedule` —
+  a `systemAdaptation` az ADR 0263 §4 szerint a determinisztikus
+  `PlanRepairer` SAJÁT, automatikus lépéseinek van fenntartva, nem a tanuló
+  explicit akciójának; a kettő összemosása provenance-hibát adna (vö. L308 —
+  hasonló hibaosztály egy korábbi körben már mért).
+- **Scope:** mindhárom feloldás kizárólag a már engedélyezett fájlokon
+  belüli implementációs döntés — az `allowed_paths` byte-for-byte
+  változatlan, 0 új fájl, 0 domain-módosítás.
+
 ## 1. Cél
 
 Az aktív terv napi használati felülete és **egygombos következő lépés**
@@ -186,4 +254,130 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosítások
+
+- `today_plan_controller.dart`: injektált `DateTime`-óra helyi naptári
+  mezőiből számítja a mai `LocalDate`-ot; külön, semleges állapotot ad a
+  pihenő-, nem elérhető-, befejezett és ütemezetlen napokra. A pihenőnap
+  kizárólag `ScheduleDecisionReason.restDay.code` alapján azonosított.
+- `active_plan_controller.dart`: a tanuló rövidítés-, kihagyás- és
+  szüneteltetés-kéréséből új immutable snapshotot és
+  `PlanChangeReason.learnerReschedule` change-setet készít. Nem hajt végre
+  blokkot és nem ír storage-ba; a mentést a későbbi composition/integrációs
+  kör kapja meg a teljes `ActivePlanUpdate` értékkel.
+- `today_plan_screen.dart` és `weekly_plan_screen.dart`: ARB-alapú offline
+  nézetek üres, pihenő, nem elérhető, befejezett és tervezett állapotokra;
+  a start/swap/skip/shorten/pause callbackok explicit átadási pontok. A
+  deep-link contract `Map`-bejegyzésenként ellenőrzi a kulcsok és értékek
+  tényleges `String` típusát; egy `Map.cast`-nézet type errora is üres
+  célra esik vissza. Az explicit `isDeepLinkLaunch` jelző megőrzi az
+  elutasított launch-kontextust, ezért a hibás payload nem keverhető össze
+  in-app megnyitással és a disabled flag biztonságos üres célra visz.
+- `app_en.arb`, `app_hu.arb`, `public.dart`, valamint a két célzott teszt:
+  teljes kétnyelvű felület és publikus contract.
+
+### TDD és valódi-sértés bizonyíték
+
+- RED: az új application teszt a még nem exportált
+  `TodayPlanController`/`ActivePlanController` miatt fordítási hibával állt
+  meg; a production contract hozzáadása után 6/6 zöld.
+- Kötelező A3-sértés: a kontroller lokális `now.year/month/day` olvasását
+  átmenetileg `now.toUtc()`-re cseréltem, majd
+  `TZ=Europe/Berlin flutter test
+  test/features/practice_generator/application/today_plan_controller_test.dart`
+  parancsot futtattam. Az éjféli cella `day.19` helyett `day.18`-at kapott,
+  a 00:30-as cella pedig `2026-08-19` helyett `2026-08-18`-at; ez a várt
+  A3-RED. A helyi-dátum implementáció visszaállítása után ugyanaz a parancs
+  6/6 zöld.
+- F1 RED: az új `Map.cast<String, String>()` nem-String értékes tesztje
+  `_TypeError`-ral bukott a parser lookupján; a bejegyzésszintű validáció és
+  a `TypeError` fail-closed kezelése után zöld.
+- F2 RED: az A7 aktív terv + elutasított `utm_source` payload cellája az
+  explicit launch-kontextus hiánya miatt nem fordult; az
+  `isDeepLinkLaunch` contract hozzáadása után a teszt üres állapotot és a
+  `today-plan-scheduled` hiányát igazolja.
+
+### Futtatott ellenőrzések
+
+- `flutter gen-l10n` — zöld.
+- `flutter test test/features/practice_generator/application/today_plan_controller_test.dart`
+  — 7/7 zöld (F1 regressziós cellával).
+- `flutter test test/features/practice_generator/presentation/today_plan_screen_test.dart`
+  — 5/5 zöld (F2 aktív terv + elutasított payload regressziós cellával).
+- `tools/round-gate.sh test/features/practice_generator/presentation/today_plan_screen_test.dart test/features/practice_generator/application/today_plan_controller_test.dart`
+  — az első teljes futás az analyze lépésben az egyetlen unused importtal
+  piros lett; az import eltávolítva. A javítás utáni teljes artefaktum-futás
+  `exit_code=0`: format, analyze, mindkét célzott teszt, architecture,
+  secrets és l10n mind zöld.
+- Javító kör: ugyanaz a teljes `tools/round-gate.sh` artefaktum
+  `exit_code=0`-val zárt; format (0 változás), analyze (0 issue), a screen
+  teszt 5/5 és a controller teszt 7/7 zöld, majd architecture, secrets és
+  l10n is zöld.
+
 ## 11. Review — a Claude tölti ki
+
+**Correctness review:** APPROVED, 0 BLOCKER/MAJOR/MINOR (`docs/reviews/e07-r22-review.md`).
+
+**Security review (kötelező, risk=high):** CHANGES REQUIRED, 2 nyitott MAJOR
+(`docs/reviews/e07-r22-security.md`, teljes indoklás ott). **A merge ezekig
+tilos.** Mindkettő ugyanazon a varraton ül, amit a brief §5.4/§9/A7 saját
+kockázatként nevezett meg, mindkettőt az orchestrátor is függetlenül
+reprodukálta (nem csak a review-jelentés állítása).
+
+### 11.1 Javító kör — kötelező feladatok
+
+**Végrehajtva, független re-review várható.** F1-ben a parser nyers `Map`
+bejegyzéseit ellenőrzi, így a lusta `.cast<String, String>()` view nem-String
+értéke `null`-t ad, nem kivételt. F2-ben az `isDeepLinkLaunch` explicit
+kontextusa elválasztja az elutasított payloadot az in-app indítástól; aktív
+tervvel és disabled flaggel is üres cél marad. A két célzott regressziós teszt
+zöld; a §7 gate a javító kör végén teljesen zölden lefutott.
+
+**F1 — MAJOR — `TodayPlanRouteRequest.tryParse` összeomolhat egy plauzibilis bemeneten**
+
+- **Fájl:** `today_plan_controller.dart:156-163`
+- **Probléma:** `extra is! Map<String, String>` csak a statikus wrapper-típust
+  ellenőrzi. Egy `(jsonDecode(...) as Map<String, dynamic>)
+  .cast<String, String>()` (a JSON-ból érkező payload IDIOMATIKUS
+  konverziója — ez lesz a jövőbeli wiring-kör természetes első próbálkozása,
+  mert egy nyers `Map<String, dynamic>` MA is `null`-t ad, tehát „sosem
+  parse-ol") átmegy ezen az `is`-ellenőrzésen, de a `extra[_destinationKey]`
+  lookup `TypeError`-t dob, ha a mögöttes érték nem `String` — MÉRVE:
+  `type '_Map<String, int>' is not a subtype of type 'String?' in type cast`.
+- **Kötelező javítás:** ne a generikus wrapper-típust ellenőrizd, hanem az
+  EGYES kulcs-érték párok tényleges típusát (`extra is Map` + minden érték
+  `is String`, a repó saját kodekjeiben már bevett elem-szintű validáció
+  mintájára). `try`/`catch` a lookup körül ELFOGADHATÓ alternatíva, de az
+  `is Map`-es elem-szintű ellenőrzés a preferált irány (nem rejti el a
+  típus-eltérést).
+- **Kötelező bizonyíték:** új teszt-eset, amiben a bemenet egy
+  `.cast<String, String>()` view egy nem-String értékkel — `tryParse(...)`
+  eredménye `isNull`, NEM dob kivételt.
+
+**F2 — MAJOR — egy elutasított deep link ugyanazt az ágat futtatja, mint amikor nincs is deep link, ezért a flag-ellenőrzés kimarad**
+
+- **Fájl:** `today_plan_screen.dart:36-42`
+- **Probléma:** `launchRequest != null && isPermittedLaunch != true ? null :
+  plan` — ha a `launchRequest` azért `null`, mert a `tryParse` ELUTASÍTOTTA
+  (pl. egy extra `utm_source` kulcs miatt), ez MEGKÜLÖNBÖZTETHETETLEN attól
+  az esettől, hogy sosem volt deep-link kontextus. A `&&` ilyenkor rövidzár,
+  a `permits()`/flag-ellenőrzés SOSE fut le, és a képernyő a VALÓDI, aktív
+  tervet rendereli — akkor is, ha `isTodayRouteEnabled == false`. Egy
+  manipulált/hibás paraméter tehát TÖBBET kap, mint egy jólformált, de
+  letiltott. A meglévő A7 „unknown deep-link" teszt ezt nem kapja el, mert
+  `plan:` paraméter NÉLKÜL fut.
+- **Kötelező javítás:** tedd explicitté a launch-kontextust ahelyett, hogy a
+  `null`-ra bíznád (pl. egy külön `isDeepLinkLaunch`/`isRejectedDeepLink`
+  jelző, vagy egy sealed launch-context típus), hogy egy ELUTASÍTOTT payload
+  a BIZTONSÁGOS ágra essen, ne az „nincs is launch context" ágra.
+- **Kötelező bizonyíték:** bővítsd az A7 „unknown deep-link" tesztet úgy,
+  hogy EGYÜTT adjon egy elutasított payloadot ÉS egy valódi aktív tervet
+  (`plan:` kitöltve) — a cellának ekkor `today-plan-scheduled`-et NEM
+  szabad renderelnie, még `isTodayRouteEnabled: false` mellett sem.
+
+Mindkét javítás a MÁR engedélyezett `allowed_paths`-on belül fér el (a két
+lib fájl + a két teszt fájl) — nincs scope-bővítés, nincs új ADR.
+
+A javításod után frissítsd ezt a §11-et és a §10 handoffot a végrehajtott
+változással, majd add ki a `done` kör-jelzést. A munkádat commitold a
+branchre.
