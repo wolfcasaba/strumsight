@@ -11608,3 +11608,114 @@ security re-review PASS lett.
 legalább egy teszt a publikus, éles hívóútvonalon ellenőrizze az adat
 átadását. Ha a provenance a képernyőn hiányzik, a megjelenítés legyen
 konzervatív/fail-closed, ne implicit magabiztos.
+
+## L309 — `Map.cast<K2,V2>()` egy LAZY view: átmegy az `is Map<K2,V2>` kapun, de a mögöttes elem-típus csak lookupkor derül ki — `TypeError` a "biztonságos" parserben (E07-R22, security review MAJOR-1, 2026-08-18)
+
+**Mérve.** Az E07-R22 `TodayPlanRouteRequest.tryParse(Object? extra)`
+guard-ja `extra is! Map<String, String>`-et ellenőrzött, majd
+`extra[_destinationKey]`-t olvasott — a doc-comment szerint „malformed or
+unknown external values become null". A dedikált biztonsági review (risk=high)
+mért egy ellenpéldát: `(jsonDecode('{"destination":{"nested":1}}') as
+Map<String, dynamic>).cast<String, String>()` — ez az IDIOMATIKUS módja annak,
+ahogy egy jövőbeli wiring-kör egy JSON notification-payloadot ebbe a
+formába hozná (egy nyers `Map<String, dynamic>` ugyanis MINDIG `null`-t adna,
+mert az `is Map<String,String>` rá sosem igaz — ez a nyomás vezetne a
+`.cast()`-hoz). A `.cast()` LAZY: a visszaadott érték `is Map<String,
+String>`-je `true` (a wrapper SAJÁT deklarált típusparamétereit nézi, nem az
+alatta lévő tényleges elemeket), de az `extra[_destinationKey]` lookup a
+tényleges lekéréskor `TypeError`-t dob, ha a mögöttes érték nem `String`.
+Saját, eldobható Dart-próbával megerősítve (`docs/reviews/e07-r22-security.md`):
+`type '_Map<String, int>' is not a subtype of type 'String?' in type cast`.
+A `tryParse` tehát a NEVÉVEL és a doc-commentjével ellentétben ÖSSZEOMOLT egy
+plauzibilis bemeneten — pontosan az a hibaosztály, amit egy „biztonságos külső
+input parser" nevű függvénynek ki KELLENE zárnia.
+
+**Javítás.** Ne a wrapper generikus típusát (`is Map<K,V>`) ellenőrizd, hanem
+minden kulcs-érték párt ELEM-SZINTEN (`entry.key is! String || entry.value is!
+String`), ÉS ezt vedd körbe `try { … } on TypeError { return null; }`-lal —
+az elem-szintű `is` check maga is elakadhat egy lazy-cast lookupon (a
+kivétel az ÉRTÉKKIOLVASÁS közben dobódik, mielőtt az `is` operátor egyáltalán
+lefutna), tehát a `try`/`catch` nem redundáns a per-elem checkkel, hanem a
+lookup-időzítésű hibaosztály MÁSODIK védelmi vonala. Egy MÁSODIK, független
+`security-reviewer` agent-futás egy 32-alakos mátrix-próbával (beágyazott Map,
+List, nem-String kulcs, dupla `.cast()`, `Map.castFrom`, `jsonDecode→cast`)
+erősítette meg a javítást — nem csak a szállított teszt egyetlen alakját.
+
+**Szabály.** Bármely `Object?`-et fogadó, „biztonságosan parse-oló" függvény,
+ami egy generikus típusú (`Map<K,V>`, `List<T>`) bemenetet fogad el, az `is
+Map<K,V>`/`is List<T>` ellenőrzést SOHA ne tekintse az elemek típusának
+bizonyítékának — Dart `.cast()`/`.castFrom()` (és minden lazy view) defeat-eli
+ezt. Validálj elem-szintű `is`-sel ÉS védd `try`/`on TypeError`-ral a lookup
+pillanatában dobódó hibát is. Ugyanaz a hibaosztály bárhol előfordulhat, ahol
+egy külső (JSON, platform-csatorna, plugin) payload `Map<String, dynamic>`-ként
+érkezik és egy szigorúbb generikus típusra kell szűkíteni.
+
+## L310 — Egy nullable „parse eredmény" típus, ahol a `null` egyszerre jelent „elutasítva" ÉS „nem is volt bemenet", fail-open kaput ad, ha a hívó a `null`-t az utóbbiként kezeli (E07-R22, security review MAJOR-2, 2026-08-18)
+
+**Mérve.** Az E07-R22 `today_plan_screen.dart`-ja `launchRequest !=
+null && isPermittedLaunch != true ? null : plan` alakban döntött: ha
+`launchRequest == null`, a VALÓS `plan`-t adta tovább gate nélkül. A `null`
+azonban KÉT, egymással ellentétes eredetű állapotot fedett: (1) sosem volt
+deep-link kontextus (belső navigáció — biztonságos plan-átadás helyes), és
+(2) a `TodayPlanRouteRequest.tryParse` EGY BEMENETET ELUTASÍTOTT (pl. egy
+extra `utm_source` kulcs miatt) — ez esetben a flag-/aktív-terv-ellenőrzés
+(`permits()`) SOSEM futott le, tehát egy manipulált paraméter TÖBBET kapott,
+mint egy jólformált, de letiltott (`isTodayRouteEnabled: false`). A kör saját
+A7 „unknown deep-link" tesztje ezt nem kapta el, mert `plan:` paraméter
+NÉLKÜL futott — a cella STRUKTURÁLISAN nem tudott pirosra váltani.
+
+**Javítás.** Explicit, hívó-beállított `isDeepLinkLaunch` jelző (vagy egy
+sealed launch-context típus) választja el a „nincs deep-link kontextus" ágat
+attól, hogy „volt kontextus, de a payload elutasítva" — a második eset MOST a
+biztonságos ágra esik, a `tryParse == null` eredményétől függetlenül. A javító
+kör A7 tesztje EGYÜTT ad elutasított payloadot ÉS valódi aktív tervet, és a
+`isDeepLinkLaunch: true` jelzőt is beállítja — ez a kombináció volt az
+eredeti hiba, amit a régi teszt nem fedett.
+
+**Fennmaradó, KÖTELEZŐEN tovább-adott rés (MINOR, nem blokkolt a merge-et).**
+A javítás a hívóra bízza az `isDeepLinkLaunch` kitöltését; ha egy jövőbeli
+hívó ELFELEJTI, a régi hibaosztály visszatér. A helyes végleges forma egy
+TOTÁLIS parse-eredmény (`accepted(req) | rejected`, nem `T?`), ami a bool-t
+feleslegessé teszi, mert a „nincs kontextus" állapotot magának a hívónak
+egyáltalán nem kell megkülönböztetnie a `rejected`-től — a típus maga zárja ki
+az elfelejtést.
+
+**Szabály.** Ha egy parse-függvény visszatérési típusa `T?`, és a hívó a
+`null`-t ÉRTELMEZI valamilyen döntéshez (nem csak eldobja), kérdezd meg: a
+`null` egynél TÖBB, egymástól eltérő jelentésű bemeneti állapotot fed-e le? Ha
+igen, a `T?` alultervezett — egy sealed/enum eredmény típus (`accepted | 
+rejected | absent`), ami a jelentéseket KÜLÖN értékként hordozza, kizárja azt
+a hibaosztályt, ahol a hívó (véletlenül vagy szándékosan) összemossa őket.
+Különösen releváns biztonsági kapuknál, ahol az egyik jelentés PERMISSZÍV, a
+másik RESTRIKTÍV ág felé vezet.
+
+## L311 — Egy implementer-kör (mindkét fordulóban, ugyanabban a körben) commitolt, de nem push-olt — a `.codex-round-status` `dirty_files` mezője ezt NEM jelzi, csak egy review-oldali friss klón „Does not exist" hibája fogja meg (E07-R22, 2026-08-18)
+
+**Mérve.** Az E07-R22 ELSŐ implementer-futása (`terra`) a `.codex-round-status`
+`done` jelzésében `head=cbee3d1c`-t és `dirty_files=1`-et adott — a
+munkapéldányban (`git -C <munkapéldány> status --short`) a fa TISZTA volt,
+de a `git status -sb` `[ahead 1]`-et mutatott: a commit a saját
+munkapéldányban élt, de sosem lett push-olva az `origin`-re. A `.codex-round
+-status` semelyik mezője nem méri a push-állapotot. A review ELSŐ,
+`/home/ubuntu/music-theory`-ből (a HUB SAJÁT, akkor még korábbi lokális
+branch-refjéből) klónozott futása ezért "Does not exist" hibával bukott a két
+új teszt-fájlon — a hub lokális `refs/heads/<branch>`-je csak addig frissül,
+amíg VALAKI `git fetch`-el rajta, egy másik klón push-a sosem frissíti
+automatikusan. A JAVÍTÓ kör (`c2785002`) UGYANEZT tette meg MÁSODSZOR is,
+ugyanabban a körben.
+
+**Javítás.** Az orchestrátor a hiányzó push-t az implementer saját, helyesen
+konfigurált `origin`-jéből (`git -C <munkapéldány> push origin <branch>`)
+pótolta, majd a hub lokális branch-refjét is szinkronizálta
+(`git fetch origin <branch>:<branch>`), mielőtt a review-klónt újra elkészítette.
+
+**Szabály.** A `.codex-round-status` `done`/`head` jelzése után, MIELŐTT egy
+review-klónt a HUB lokális elérési útjáról (`/home/ubuntu/music-theory`)
+klónoznál, mérd meg, hogy a jelzett `head` valóban elérhető-e az `origin`-en
+(`git ls-remote origin <branch>` vagy egy `git fetch` + összevetés) — vagy
+egyszerűen mindig az IMPLEMENTER SAJÁT munkapéldányából klónozz review-hoz
+(ami garantáltan a helyes HEAD-en áll), ne a hubból. Ha egy "Does not exist"
+vagy hiányzó fájl hiba jön egy review-gate futásból egy ÁLLÍTOTTAN kész körön,
+az ELSŐ gyanú a hiányzó push legyen, nem a diff tartalma. Rokon hibaosztály,
+más mechanizmus: [[L175]]/[[L179]] (worktree vs. clone — ott a klónozás módja
+volt hibás, itt a forrás-repó frissessége).
