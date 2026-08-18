@@ -1,0 +1,1 @@
+round=122 verdict=pass tests=500+25 lesson=optional-schema-field-must-match-column-nullability; pydantic-underscore-classvar-is-a-descriptor
