@@ -49,6 +49,12 @@ GATE = ROOT / "tools" / "round-gate.sh"
 
 VALID_BRIEF = """# E09-R01 — Példa kör
 
+<!-- A minta-brief a MINDENKORI elvárást modellezi: az S8 (ADR 0312) óta ide
+     tartozik a visszakeresett előzmény is — a lecke/ADR azonosítójával, vagy
+     annak kimondásával, hogy nincs ilyen. -->
+**Visszakeresett előzmények:** `lessons/L305` (a célzott gate önmagában nem
+elég), `adr/0312` (visszakeresési kötelezettség).
+
 ```ai-router
 schema_version = 1
 risk = "normal"

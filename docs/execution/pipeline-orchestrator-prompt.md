@@ -469,6 +469,25 @@ A `.pipeline/inflight/` könyvtár mondja meg, fut-e rajtad kívül másik kör
    azért engedett el, mert ez diszjunkt a másikétól. Átfedést észlelve: HALT
    (H3), ne „gyorsan rendezd".
 
+## 4.9 Visszakeresés a pre-flightban (ADR 0312) — KÖTELEZŐ
+
+A brief véglegesítése ELŐTT futtasd:
+
+```bash
+node tools/knowledge-rag.mjs --top 5 "<a kör témája + az érintett fájlok>"
+node tools/knowledge-rag.mjs --corpus lessons --top 5 "<a kör kockázatos része>"
+```
+
+A találatokat a brief §0.0 pre-flight szakaszában hivatkozd (`lessons/L###`,
+`adr/0###`), vagy mondd ki, hogy **nincs releváns előzmény** — a `brief-lint`
+`strict` szintje (S8) ezt keresi. MÉRVE: az E99-R14 H3 gyökéroka órákkal
+korábban már le volt írva, csak nem került elő; az E07-R21/H2-nél pedig a brief
+glosszája mondott mást, mint a hivatkozott ADR tényleges szövege.
+
+Ha az index elavult (`node tools/knowledge-rag.mjs --stat` → ELAVULT), az a
+lánc hibája, nem a tiéd: a merge-horgony újraindexel, és a következő kör már
+frisset lát.
+
 ## 5. Záró rituálék merge után (mind, sorrendben)
 
 1. `HANDOFF.md` frissítés (fejléc-dátum, §4–§6; a kész kör részletes története
