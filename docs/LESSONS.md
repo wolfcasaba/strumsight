@@ -11888,3 +11888,97 @@ hitelesítéssel megy, NEM a korábbi ChatGPT Pro előfizetéssel — ez a
 elavulttá teszi, amíg valaki (ember vagy egy jövőbeli GOV-kör) el nem dönti,
 hogy ez tartós váltás-e, vagy vissza kell állítani előfizetéses módra
 (`codex login`, böngészős vagy `--device-auth`).
+
+## L315 — Az L314 API-kulcsos "javítása" ~10 percen belül nyomtalanul eltűnt; nincs kód-gyökérok, a user policy-t hozott és előfizetéses logint állított helyre (E07-R23 H6, 2. előfordulás, 2026-08-18)
+
+**Tünet.** Az L314 self-healje 21:03:04-kor `outcome=fixed`-et jelentett
+(API-kulcsos `codex login --with-api-key`, VALÓDI `codex exec` hívással
+igazolva). A lánc folytatódott, E07-R23 21:10:05-kor újra dispatch-elt
+`engine=codex` alatt — és 21:18:07-kor **ugyanaz a kör, ugyanaz a H6**
+állt le megint: `~/.codex/auth.json` **teljesen hiányzott** (nem lejárt,
+nem érvénytelen — nem létezett), `codex login status` → „Not logged in".
+Ez a self-heal (2. önjavító kísérlet ugyanerre a gyökérokra ma este, a
+sajátjából 1/3.) a §1 mérési mandátumát követve **nem fogadta el bemondásra**
+sem a korábbi „fixed" jelentést, sem a HANDOFF „KÉSZ" szövegét.
+
+**Mérés — Class A kizárva.** `grep -rn "auth\.json" tools/*.sh tools/*.py`
+(tesztek nélkül) **nulla találat**: sem `tools/engine-profile.sh`, sem
+`tools/round-pipeline.sh` nem ír/töröl `~/.codex` hitelesítést — az
+`engine-profile.sh use/clear` kizárólag a `.pipeline/engine-override`
+mutatófájlt kezeli, a profilok (`~/.codex-terra`, `~/.codex-kilo`,
+`~/.claude-minimax`) tartalmát AGENTS.md §15.6.1 szerint sosem írja át. A
+gyökérok tehát nem a mi kódunkban van.
+
+**Mérés — a törlés időablaka és mechanizmusa.** `~/.codex/log/codex-login.log`
+utolsó bejegyzése `2026-08-18T20:57:51Z INFO codex_cli::login: starting api
+key login flow` — ez az L314 heal saját belépése, és **nincs utána semmilyen**
+login/logout esemény naplózva. A fájl tehát NEM egy újabb `codex login`
+hívástól tűnt el. `stat` a két meglévő backupra: `auth.json.bak-1785569043`
+Birth/Change=`2026-08-01T07:24:03Z` (Modify=`2026-07-22`, mert a `cp -p`
+megőrzi a FORRÁS mtime-ját — a `ls -la` dátuma innentől félrevezető, a
+tényleges keletkezést `stat`-tal, Birth/Change mezővel kell mérni, nem
+mtime-mal!), `auth.json.bak-preheal-1787086667` Birth/Change=
+`2026-08-18T20:57:47Z` (ez az L314 heal saját, a login ELŐTTI mentése). Egyik
+sem újabb, mint 20:57 — vagyis a 20:57:51-kor sikeresen megírt, VALÓDI
+`codex exec`-kel igazolt API-kulcsos `auth.json` nem lett sem felülírva, sem
+biztonsági mentve: egyszerűen **eltűnt**, dokumentált nyom nélkül. `ps -ef`
+egy másik, feltehetően emberi-vezérelt session (`codex-code-mode-host` alatti
+interaktív Claude Code, PID 1083685) háttér-taskjai közt egy 30 másodpercenként
+`~/.codex/auth.json`-t figyelő, 20 percre méretezett várakozó ciklust mutatott
+— körülmény-jel, hogy valaki tudatosan reagált az L314 heal
+mellékhatás-jelzésére (API-kulcsos mód helyett vissza akarta állítani az
+előfizetést), NEM bizonyíték.
+
+**Vakvágány, amit NEM használtam.** `~/.rag-openai.env` (kulcs neve
+`RAG_OPENAI_API_KEY`) `21:09:05Z`-kor keletkezett — egy perccel E07-R23 saját
+újra-dispatchja előtt —, de a repóban SEHOL nincs rá hivatkozás
+(`tools/**`-ben nulla találat), és a `codex-login.log` szerint nem is
+fogyasztotta el egyetlen login-hívás sem. Kapóra jövő, jól formázott
+kulcsfájlt találni a hibaablakban NEM azonos a felhasználásra szóló
+engedéllyel — ugyanez a csapda csattant be az L314 healnél is (ott egy
+`~/.openai.env` nevű fájllyal), és ekkor, amíg ezt a healt vezettem, a `main`
+egy párhuzamos, emberi-vezérelt commit-tal bővült
+(`ba621b8d`, 21:29:12Z): **kötelező, írott policy**
+(`docs/execution/pipeline-selfheal-prompt.md` „Kulcs-politika" szakasz) — a
+`RAG_OPENAI_API_KEY` KIZÁRÓLAG a tudás-RAG indexre való, motor-hitelesítésre
+fordítása TILOS (a user API-számláját terhelné körönként az előfizetés
+helyett), és lejárt motor-authnál a helyes válasz `blocked`+indoklás vagy
+működő motor-profilra váltás — NEM a hitelesítés megkerülése.
+
+**Feloldás — nem ez a self-heal írta.** `21:32Z`-kor `~/.codex/auth.json`
+visszatért, `codex login status` → **„Logged in using ChatGPT"** (előfizetéses
+mód, NEM API-kulcs — tehát valaki valódi, böngészős/device-code
+`codex login`-t futtatott, nem ismételte meg az L314 API-kulcsos útját). A
+figyelő háttérfolyamat eltűnt a `ps`-ből (a ciklusa `break`-elt). Ez a
+self-heal — a saját §1 mandátuma szerint — EZT sem fogadta el bemondásra:
+független, VALÓDI hívással igazoltam
+(`CODEX_HOME=~/.codex codex exec -s read-only --skip-git-repo-check "Reply
+with exactly the two words: auth ok"` → helyes válasz, 5 025 token, exit 0,
+session `01a016cb-…`). A `terra` profil ekkor is egy ÉLŐ E99-R14-folyamat
+(PID 1700113) alatt állt — `tools/engine-profile.sh use terra` ezért NEM lett
+volna biztonságos workaround: pontosan az eredeti (`refresh_token_reused`)
+ütközési mintát reprodukálta volna, csak a másik profil ellen, és globálisan
+minden körre hatna, nemcsak E07-R23-ra.
+
+**Kimenet.** Nincs kód-gyökérok, nincs regressziós teszt, nincs PR:
+`outcome=retry`. A lánc feloldódik, E07-R23 a megőrzött pre-flighttal
+(`9c2aa9bb`, `dirty_files=0`, `scope_audit=ok` — magam is megmértem)
+újra sorra kerül, ezúttal valódi, előfizetéses hitelesítés alatt.
+
+**Szabály.** (1) Egy self-heal saját, VALÓDI hívással igazolt „fixed"
+jelentése egy megosztott, interaktív-hozzáférésű boxon **nem garancia
+percek múlva sem** — egy másik folyamat/ember bármikor visszavonhatja. A
+következő self-healnek MINDIG újra kell mérnie, sosem szabad egy korábbi
+(akár a sajátját megelőző) heal „fixed" jelzését aktuális állapotként
+kezelnie. (2) `cp -p` a FORRÁS mtime-ját őrzi meg a másolaton — egy preheal-
+backup tényleges keletkezési idejét `stat` Birth/Change mezőjével mérd, ne
+`ls -la`-val, különben hetekkel korábbi másolatok a mai dátumot mutathatják
+(vagy fordítva). (3) Mielőtt egy másik motor-profilt „szabad" tartaléknak
+tekintenél, `ps -ef`-fel ellenőrizd az ÉLŐ használatát — megosztott
+CODEX_HOME alatt két egyidejű folyamat pontosan azt az ütközést
+reprodukálja, ami az eredeti incidenst okozta, csak más áldozaton. (4) A
+kapóra jövő, jól formázott titok-fájl motor-hitelesítésre fordítása mostantól
+NEM eseti mérlegelés kérdése — lásd a kötelező „Kulcs-politiká"-t
+(`docs/execution/pipeline-selfheal-prompt.md`). Rokon: [[L314]], [[L313]],
+[[L312]] — mind ugyanaznap, mind a „megosztott ambiens állapot több
+egyidejű session között" hibaosztály tagja.

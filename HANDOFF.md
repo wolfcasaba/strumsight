@@ -108,6 +108,31 @@
 > diszjunkt munkafolyam — a `tools/round-slots.py plan` az E07-R22 mellé már
 > admittálja az E99-R14-et.
 
+> ## 🔁 [SELF-HEAL E07-R23/H6, 2. előfordulás] `outcome=retry` — az alábbi „KÉSZ" API-kulcsos javítás ~10 percen belül nyomtalanul eltűnt; nincs kód-gyökérok, a user kötelező kulcs-politikát hozott, és előfizetéses `codex login` állította helyre — VALÓDI hívással igazolva (2026-08-18, L315)
+>
+> Az alábbi [HEAL E99-R14/H6] bejegyzés „KÉSZ" jelzése **RÉSZBEN ELAVULT**: a
+> 21:03-kor API-kulccsal helyreállított `~/.codex/auth.json` 21:03 és E07-R23
+> 21:18-as újabb H6-ja között **nyomtalanul eltűnt** — nem lejárt, a fájl
+> maga hiányzott. Ez a self-heal megmérte: `tools/**` egyetlen scriptje sem
+> nyúl `~/.codex/auth.json`-hoz (Class A kizárva), a
+> `~/.codex/log/codex-login.log`-ban 20:57:51Z után nincs újabb login/logout
+> esemény — a fájl nem egy újabb `codex login`-tól tűnt el, dokumentált nyom
+> nélkül. Vizsgálat közben a `main` egy párhuzamos, emberi-vezérelt session
+> commitjával bővült (`ba621b8d`): **kötelező policy**
+> (`docs/execution/pipeline-selfheal-prompt.md` „Kulcs-politika") — a boxon
+> talált `RAG_OPENAI_API_KEY` (`~/.rag-openai.env`, egy vakvágány, amit ez a
+> heal NEM használt) és bármely hasonló kapóra jövő kulcs motor-hitelesítésre
+> fordítása **TILOS** (a user API-számláját terhelné), lejárt motor-authnál a
+> helyes válasz `blocked`+indoklás vagy működő motor-profilra váltás. Percekkel
+> később `~/.codex/auth.json` visszatért `"Logged in using ChatGPT"`
+> (előfizetéses mód) — ezt EZ a self-heal független, VALÓDI
+> `codex exec -s read-only` hívással igazolta (5 025 token, exit 0), nem
+> fogadta el bemondásra. A `terra` profil élő E99-R14-folyamat alatt állt a
+> mérés pillanatában, ezért az `engine-profile.sh use terra` nem lett volna
+> biztonságos workaround. Nincs PR, nincs kód-diff: `outcome=retry`, a lánc
+> feloldódik, E07-R23 a megőrzött pre-flighttal (`9c2aa9bb`) újra sorra kerül.
+> Lecke: **[[L315]]**.
+
 > ## 🔐 [HEAL E99-R14/H6] KÉSZ — Codex CLI OAuth refresh token „already used" (401), a boxon frissen megjelent API-kulccsal helyreállítva, VALÓDI `codex exec` hívással bizonyítva — nincs kód-diff, egyúttal E07-R23/H6-ot is feloldja (2026-08-18)
 >
 > Az E99-R14 saját, review M5 leletét záró **kötelező Codex-javító köre**
