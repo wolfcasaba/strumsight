@@ -4,16 +4,16 @@ Brief: `docs/rounds/e07-r21-plan-preview-and-explanation.md`
 Diff: `e7a6a239..fbe9f7a2`
 Reviewer: Codex/Terra correctness review + independent security-reviewer
 Dátum: 2026-08-18
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
-Az izolált, távoli GitHub-klónon futtatott scope-audit és teljes lokális
-kör-gate zöld. A dedikált, ettől független security review azonban a tényleges
-képernyő-útvonalon egy confidence-sértést mért; a közvetlen sheet-widget teszt
-nem fedi ezt az integrációt.
+Az első review F1 BLOCKER-jét a MiniMax javító kör a controller → screen →
+sheet priority-átadásával és hiányzó priority esetére fail-closed
+uncertainty-jelzéssel zárta. A javított tipet friss, távoli GitHub-klónban a
+correctness gate újramérte; a dedikált security re-review is PASS.
 
 ## Acceptance criteria
 
@@ -24,7 +24,7 @@ nem fedi ezt az integrációt.
 | A3 | `error` blokkol | ✅ | A3 + manuális szerkesztéses cella |
 | A4 | warning explicit áttekintést kér | ✅ | A4 célteszt |
 | A5 | Reason code ARB-ből jön | ✅ | `plan_reason_sheet_test.dart`, en + hu A5 |
-| A6 | Bizonytalanság kimondott | ❌ | F1: az éles screen-útvonal priority nélkül nyit sheetet |
+| A6 | Bizonytalanság kimondott | ✅ | whole-screen F1 regresszió + missing-priority fail-closed cella |
 | A7 | Offline működik | ✅ | A7 widget-tesztek; diffben nincs hálózati/IO hívás |
 | A8 | Aktiválás csak confirmra | ✅ | A8 célteszt; `confirmConfirmed()` az egyetlen activation-hívó |
 
@@ -53,7 +53,7 @@ review-jelentés a review-artefaktum állandó mentességével kerül a branchre
   + `evidence.tempo-accuracy` blokkról megnyitott reason sheet tartalmazza a
   `plan-preview-reason-uncertain` elemet; a meglévő közvetlen sheet-teszt
   önmagában nem elég.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`2ec8e7e7`, tesztek: `f132a237`, dokumentált valódi-sértés próba: `9cc1c321`)
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -61,13 +61,11 @@ review-jelentés a review-artefaktum állandó mentességével kerül a branchre
 |---|---|
 | format | ✅ — 1617 fájl, 0 változás |
 | analyze | ✅ — `No issues found` |
-| célzott tesztek | ✅ — 8 preview + 5 reason-sheet teszt zöld |
+| célzott tesztek | ✅ — 10 preview + 6 reason-sheet teszt zöld |
 | architecture / secrets / l10n | ✅ — mind zöld az izolált klónon |
-| CI (teljes suite + property + APK) | ❌ — BLOCKER előtt nem dispatch-elhető |
+| CI (teljes suite + property + APK) | függőben — a review-artefaktum commitja után exact-SHA dispatch következik |
 
 ## Merge-döntés
 
-Az F1 BLOCKER nyitott, ezért az ADR 0052 szerint **merge tilos**. Egyetlen
-MiniMax-javító kör indulhat e jelentés teljes leletlistájával; utána friss
-izolált re-review szükséges. **A javító implementer a munkáját commitolja és
-pusholja erre a branchre, majd kötelező `done` vagy `stopped` kör-jelzést ad.**
+Az F1 lezárt, a correctness review APPROVED. Merge csak az exact-SHA CI teljes
+suite + property + APK, valamint Router CI zöld eredménye után engedett.
