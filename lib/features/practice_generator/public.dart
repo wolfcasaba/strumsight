@@ -3,7 +3,10 @@ library;
 
 export 'application/port/skill_snapshot_reader.dart';
 export 'application/port/practice_catalog_reader.dart';
+export 'application/controller/plan_generator_controller.dart';
+export 'application/model/generation_state.dart';
 export 'application/service/evidence_aggregator.dart';
+export 'application/service/generation_orchestrator.dart';
 export 'application/service/skill_estimate_reducer.dart';
 export 'data/adapter/legacy_lesson_candidate_adapter.dart';
 export 'data/adapter/legacy_lesson_catalog_adapter.dart';

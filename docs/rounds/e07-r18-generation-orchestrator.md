@@ -273,4 +273,56 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Módosított / új fájlok
+
+- `application/model/generation_state.dart` (NEW) — immutable `idle` /
+  `running` / terminal állapot és kikényszerített transition-mátrix.
+- `application/service/generation_orchestrator.dart` (NEW) — requestenkénti
+  cancellation source, progress-checkpoint, azonos-request in-flight dedup,
+  ScheduleDecision→plan assembly, validate/repair és csak a végén activation
+  seam.
+- `application/controller/plan_generator_controller.dart` (NEW) —
+  Flutter-mentes progress→immutable-state bridge, explicit subscription
+  lifecycle-lal.
+- `public.dart` — az új application contractok exportja.
+- `generation_orchestrator_test.dart`, `plan_generator_controller_test.dart`
+  (NEW) — A1–A8 és a három cancel-határ regressziói.
+
+### 10.2 §0.0 glue-döntések
+
+- `ScheduleCandidate` a catalog `ExerciseCandidate.sortKey` identity-ján
+  oldódik fel; hiányzó vagy incompatible candidate controlled `UnknownFailure`,
+  nem silent skip. A block `estimatedElapsed` és az `activeDuration` a
+  scheduler által már budgetelt `ScheduleCandidate.duration`; ezt az
+  orchestrator a candidate `supportedDurations` tartományára fail-closed
+  ellenőrzi.
+- `review` material → `BlockKind.maintenance`; új material primary/secondary
+  focus → `primaryFocus`/`secondaryFocus`; supporting new material →
+  `maintenance`. Ez véges, determinisztikus leképezés, nem vezet be új
+  PracticeBlock-szerepet.
+- A prescription átmeneti, rögzített policyja: 0 rest, 1 target/max repetition,
+  1 loop, `hardElapsedLimit == activeDuration`, tempo nélkül, és a candidate
+  első támogatott capability-jére épülő `completion.required` criteria. A
+  rep/tempo/criteria pedagógiai hangolása külön, még ki nem osztott follow-up;
+  ez a kör csak a biztonságos assembly seamet biztosítja.
+
+### 10.3 Megerősítés
+
+- RED: a két új tesztfájl a production contractok megírása előtt a hiányzó
+  Generation* típusok miatt fordítási hibával állt meg.
+- Célzott zöld: `flutter test test/features/practice_generator/application/
+  generation_orchestrator_test.dart test/features/practice_generator/
+  application/plan_generator_controller_test.dart` — 9 passed.
+- Valódi-sértés próba: az `activating` checkpoint utáni cancel-ellenőrzés
+  ideiglenes eltávolítása után az A2 boundary cella PIROS volt: a várt
+  `CancelledFailure` helyett sikeres eredmény jött vissza. A guard
+  visszaállítása után a két tesztfájl 9/9 zöld.
+- Kötelező gate: `tools/round-gate.sh test/features/practice_generator/
+  application/generation_orchestrator_test.dart test/features/practice_generator/
+  application/plan_generator_controller_test.dart` — ZÖLD (format,
+  analyze, a két külön célzott test és architecture). Az első gate analyze
+  lépése egyetlen saját, unused test-import miatt piros volt; az import
+  eltávolítása után a teljes artefaktum változatlan parancsával újrafutott
+  és zöld lett.
+
 ## 11. Review — a Claude tölti ki
