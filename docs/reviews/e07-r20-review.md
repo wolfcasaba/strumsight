@@ -1,11 +1,36 @@
 # E07-R20 — Review
 
 Brief: docs/rounds/e07-r20-plan-setup-wizard.md
-Diff: `git diff e5374943..d1a7a898` (`main...terra/e07-r20-plan-setup-wizard`)
+Diff: `git diff e5374943..201d7601` (`main...terra/e07-r20-plan-setup-wizard`)
 Reviewer: Claude (Sonnet 5) · Dátum: 2026-08-18
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (javító kör után, `201d7601`)
 
-## Összegzés
+## Frissítés a javító kör után (2026-08-18, `201d7601`)
+
+Mind a négy lelet (F1, F2, F3, F4) zárva, javító commitok:
+`63768316` (F1), `da6c02ba` (F2+F3), `da6c02ba` (F4), `5f664d10`
+(analyzer-javítás a saját tesztükben). Leletenkénti zárás-ellenőrzés
+lentebb, a saját eredeti — bug idejére írt — próbateszteimet is
+ÚJRAFUTTATVA a javított kódon (friss `/tmp/review-e07-r20-fix` klón):
+
+- F1 eredeti detektor-probe-ja (`source.contains('LocalDate(2026, 8, 17)')`)
+  most PIROS — a kőkemény literál eltűnt, a widget saját, injektált
+  `referenceDate` paraméterből számít hetet.
+- F2 eredeti reprodukáló probe-ja (`restored.state.currentStep == 2` egy
+  availability-unknown lépés után) most ZÖLD.
+- Mindkettő a javító kör SAJÁT, a diffben látott regressziós tesztjeivel is
+  megerősítve (ld. lent).
+
+Gate + scope-audit a javított HEAD-en, SAJÁT, friss izolált klónban
+(`/tmp/review-e07-r20-fix`), újra függetlenül lefuttatva — mindkettő zöld
+(részletek a "Gate-bizonyíték" és "Scope-audit" szakaszban, frissítve).
+
+A dedikált biztonsági review (`docs/reviews/e07-r20-security.md`) is
+frissítve APPROVED-ra.
+
+---
+
+## Eredeti review (2026-08-18, `d1a7a898`, CHANGES REQUIRED) — változatlanul megőrizve
 
 BLOCKER: 0 · MAJOR: 3 · MINOR: 1 · NOTE: 2
 
@@ -89,7 +114,15 @@ kívüli változás: **nincs**.
 - **Ellenőrzés:** egy teszt, ami KÉT különböző injektált "ma" mellett
   futtatja a widgetet, és megméri, hogy a felkínált nap dátuma a hívó által
   megadott referenciához igazodik (nem egy fix literál).
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`63768316`) — a widget most `required this.referenceDate`
+  paramétert kap (`plan_setup_screen.dart` a `widget.controller.clock()`-ot
+  adja át), és `_mondayOf(referenceDate)` számítja ki a hetet. Javító kör
+  saját regressziós tesztje: `availability_editor_test.dart` "uses the
+  injected reference date for the current week" — KÉT különböző
+  referenciadátummal (2026-08-18→2026-08-17, 2026-09-01→2026-08-31) méri a
+  `DailyAvailability.date` eredményt. Saját, eredeti detektor-probe-om
+  (`source.contains('LocalDate(2026, 8, 17)')`) a javított kódon
+  PIROSRA vált — a literál eltűnt.
 
 ### F2 — MAJOR — A `_resumeStep` nem tudja megkülönböztetni az "unknown"-nal lezárt lépést a "még meg sem nyitott" lépéstől
 
@@ -129,7 +162,16 @@ kívüli változás: **nincs**.
 - **Ellenőrzés:** a fenti próbateszt (vagy ezzel ekvivalens) mint állandó
   regressziós teszt — unknown-nal lezárt lépés → restart → helyes
   folytatási pont, legalább az elérhetőség és az equipment lépésre.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`da6c02ba`) — a `currentStep` most külön,
+  dedikált kulcs alatt (`{draftStorageKey}.step`) perzisztálódik
+  `next()`-ben, és `restore()` ezt olvassa vissza (`_savedCurrentStep`),
+  nem a domain-tartalom jelenlétéből következtet. Javító kör saját
+  regressziós tesztjei: `plan_setup_screen_test.dart` "restores the next
+  step after an unknown availability answer" (2. lépésre vár, nem 1-re) ÉS
+  "restores the next step after an unknown equipment answer" (3. lépésre
+  vár) — mindkettő a diffben olvasva megerősítve. Saját, eredeti
+  reprodukáló próbatesztem (goal→next, availability=unknown→next, restart,
+  `restored.state.currentStep == 2`) a javított kódon ÚJRAFUTTATVA ZÖLD.
 
 ### F3 — MAJOR (frissítve MINOR-ról a dedikált security review után) — Az A9 bizonyítéka nem a brief által előírt alakú; a tulajdonság ma igaz, de nincs regressziós őre
 
@@ -157,7 +199,15 @@ kívüli változás: **nincs**.
   `Zone`-alapú `print`-elfogás vagy hasonló mérés) ad a controller/screen
   köré, és megméri, hogy a comfort szabad szöveg SOSEM jelenik meg benne,
   még hibás mentés (`saveDraft` failure) esetén sem.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`da6c02ba`) — új teszt: `plan_setup_screen_test.dart`
+  "comfort free text never reaches debug output (A9)". Ideiglenesen
+  felülírja `debugPrint`-et (`flutter/foundation.dart`), egy egyedi
+  sentinel szöveggel végigviszi a comfort lépést KÉTSZER — egyszer sikeres
+  `saveDraft`-tal, egyszer `InMemoryKeyValueStore.failingKeys`-szel
+  szándékosan megbuktatott mentéssel —, és megméri, hogy a sentinel egyik
+  esetben sem jelenik meg az elfogott kimenetben. Ez a repo bevett
+  poison-pill mintáját követi, és MOST MÁR valódi piros-kiváltóval
+  rendelkezik: egy jövőbeli `debugPrint(request)` regresszió elkapná.
 
 ### F4 — MINOR (a dedikált security review lelete) — A controller doc-commentje tévesen "encrypted"-nek nevezi a draft-tárolást
 
@@ -178,7 +228,9 @@ kívüli változás: **nincs**.
 - **Kötelező javítás:** a szó cseréje pontos leírásra (pl. "plaintext local
   draft path"), vagy a mondat átfogalmazása úgy, hogy ne állítson
   titkosítást. Egysoros javítás, nem növeli a scope-ot.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`da6c02ba`) — a komment most: "Keeps comfort text
+  exclusively inside the plaintext local draft path" — pontos, nem állít
+  titkosítást.
 
 ### N1 — NOTE — A "custom" cél mindig megoldhatatlan hard-konfliktust hoz létre, kiút nélkül ezen a körön belül
 
@@ -207,6 +259,8 @@ kívüli változás: **nincs**.
 
 ## Gate-bizonyíték ellenőrzése
 
+**Eredeti kör (`d1a7a898`):**
+
 | Gate | Állított eredmény (implementer) | Ellenőrizve (reviewer, SAJÁT izolált klón) |
 |---|---|---|
 | format | zöld | ✅ zöld |
@@ -216,22 +270,34 @@ kívüli változás: **nincs**.
 | architecture | zöld | ✅ zöld (12 allowlisted deviation — pre-existing, e kör nem bővítette) |
 | secrets | (nem jelentve) | ✅ zöld (2833 fájl, 0 lelet) |
 | l10n parity | (nem jelentve) | ✅ zöld (1298 üzenet, en→hu) |
-| CI (teljes suite + property + APK) | nem futott (orchestrátor feladata) | még nem dispatch-elve — a fix kör után |
 
 `scope_audit=ok` a `.codex-round-status`-ban is (base `4c4de25b`, 10 changed
 path), a hiteles `tools/scope-audit.py` eszközzel függetlenül megerősítve.
 
+**Javító kör után (`201d7601`), SAJÁT, MÁSODIK friss izolált klónban
+(`/tmp/review-e07-r20-fix`):**
+
+| Gate | Állított eredmény (implementer) | Ellenőrizve (reviewer, SAJÁT izolált klón) |
+|---|---|---|
+| format | zöld | ✅ zöld |
+| analyze | zöld | ✅ zöld |
+| test plan_setup_screen_test.dart | zöld | ✅ zöld |
+| test availability_editor_test.dart | zöld, 3 teszt (+1 F1 regresszió) | ✅ zöld |
+| architecture | zöld | ✅ zöld (12 allowlisted deviation, változatlan) |
+| secrets | — | ✅ zöld (2835 fájl, 0 lelet) |
+| l10n parity | — | ✅ zöld (1298 üzenet, en→hu) |
+| scope-audit (`tools/scope-audit.py`, base `4c4de25b`, FULL kör) | — | ✅ OK, 12 changed path (10 implementer + 2 saját review-doksi, ez utóbbi kettő a scope-audit `generated/ignored` mentessége alatt) |
+| CI (teljes suite + property + APK) | nem futott (orchestrátor feladata) | dispatch következik ezután |
+
 ## Merge-döntés
 
-**Merge TILOS** — 3 nyitott MAJOR (F1, F2, F3) + 1 MINOR (F4). A gate teljes
-egészében zöld, de az ADR 0052 feltétele ("minden gate zöld ÉS nincs nyitott
-BLOCKER/MAJOR") csak az első felére teljesül. A dedikált biztonsági review
-(`docs/reviews/e07-r20-security.md`, kötelező a brief `risk = "high"` miatt)
-lezárult: CRITICAL/BLOCKER nélkül, F3-at függetlenül megerősítette (MAJOR),
-és egy új MINOR-t (F4) talált — sem aktív adatszivárgást, sem
-termékhatár-sértést nem mért.
+**A review-oldal APPROVED.** Mind a négy lelet zárva, mindegyik SAJÁT
+kézzel, friss izolált klónban ellenőrizve — gate, scope-audit ÉS (F1/F2
+esetén) az eredeti, bug-reprodukáló próbateszt újrafuttatásával. A dedikált
+biztonsági review is APPROVED (`docs/reviews/e07-r20-security.md`).
+0 nyitott BLOCKER/MAJOR/MINOR marad; a fennmaradó N1/N2 NOTE nem blokkol.
 
-Javító kör szükséges (ugyanaz a motor, `terra` — user-döntés 2026-07-31
-szerint ez a lánc normál útja) F1+F2+F3+F4 leletlistával; a javítás után a
-gate-et és a scope-auditot újra, saját kézzel, friss izolált klónban
-futtatom, a review-t és a security-review-t is frissítem.
+Az ADR 0052 zöld-kapu még egy tételre vár: a **teljes CI-suite** (property
+gate + APK) sikeres futása a kör-branchen, exact-SHA-n `201d7601` felett —
+ez az orchesztrátor következő lépése, a review-jelentés ezt nem
+helyettesíti.

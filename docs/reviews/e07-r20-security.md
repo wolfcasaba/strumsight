@@ -1,12 +1,36 @@
 # E07-R20 — Security / Privacy Review (dedicated, mandatory — brief `risk = "high"`)
 
 Brief: `docs/rounds/e07-r20-plan-setup-wizard.md`
-Diff: `git diff 4c4de25b..d1a7a898` (10 files, +947/−2, all under `presentation/`, `l10n/*.arb`, `public.dart`, round doc)
-Reviewer: Claude (security-reviewer subagent) · Date: 2026-08-18 · Scope: READ-ONLY, no production edits
+Diff (original): `git diff 4c4de25b..d1a7a898` (10 files, +947/−2, all under `presentation/`, `l10n/*.arb`, `public.dart`, round doc)
+Reviewer: Claude (security-reviewer subagent + orchestrator follow-up) · Date: 2026-08-18 · Scope: READ-ONLY, no production edits
 
-## Verdict: CHANGES REQUIRED (FAIL) — blocked by one MAJOR (a missing acceptance-mandated regression test) and one MINOR (an inaccurate security claim in a doc-comment). **No secret leak, no consent bypass, no path traversal, no boundary breach, and no active data leak was found.** The privacy property A9 relies on *holds today* — the blocker is that nothing guards it.
+## Verdict: **APPROVED** (javító kör után, `da6c02ba`)
 
-## Summary
+## Frissítés a javító kör után (orchestrátor, 2026-08-18)
+
+MAJOR-1 és MINOR-1 zárva ugyanabban a javító körben, mint a fő review F3/F4
+leletei (ugyanaz az alap probléma, két review egymástól függetlenül jutott
+ugyanoda):
+
+- **MAJOR-1 → FIXED (`da6c02ba`):** `plan_setup_screen_test.dart` új teszt,
+  "comfort free text never reaches debug output (A9)" — `debugPrint`
+  felülírással, sentinel szöveggel, sikeres ÉS szándékosan megbuktatott
+  `saveDraft` mellett is méri a naplózás hiányát. A §6.1 A9 piros-kiváltója
+  most már működik.
+- **MINOR-1 → FIXED (`da6c02ba`):** a controller doc-commentje most
+  "plaintext local draft path"-ot ír "encrypted" helyett — pontos állítás.
+
+Independens re-ellenőrzés (orchesztrátor, SAJÁT friss izolált klón,
+`/tmp/review-e07-r20-fix`): a teljes gate zöld, a `debugPrint`-override
+teszt a diffben olvasva ténylegesen egy elfogó sink-et állít be és a
+sentinelt keresi benne (nem csak a perzisztenciát méri, mint az eredeti
+teszt) — a MAJOR-1 kötelező javítási iránya pontosan teljesült. NOTE-1 és
+NOTE-2 változatlanul nyitva (nem blokkoló, jövőbeli körnek szóló
+megfigyelés).
+
+---
+
+## Eredeti jelentés (2026-08-18, `d1a7a898`, CHANGES REQUIRED) — változatlanul megőrizve
 
 CRITICAL: 0 · BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 2
 
