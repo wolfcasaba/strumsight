@@ -336,5 +336,11 @@ végleges célzott tesztfuttatás exit 0-val zöld.
   `saveDraft` mellett is bizonyítja a naplózás hiányát.
 - **F4:** `da6c02ba` — a controller kommentje pontosan plaintext helyi
   draft-tárolást ír le, nem titkosítást.
+- **Gate:** a kötelező `tools/round-gate.sh
+  test/features/practice_generator/presentation/plan_setup_screen_test.dart
+  test/features/practice_generator/presentation/availability_editor_test.dart`
+  végső futása exit 0: format, analyze, mindkét célzott teszt, architecture,
+  secrets és l10n zöld. Az első futás az analyzer redundáns tesztimportjára
+  állt meg; ezt `5f664d10` javította a teljes újrafuttatás előtt.
 
 ## 11. Review — a Claude tölti ki
