@@ -1,5 +1,50 @@
 # HANDOFF — StrumSight 🎸
 
+> **E07-R22 KÉSZ — Weekly Plan és Today screen** — PR
+> [#307](https://github.com/wolfcasaba/strumsight/pull/307), squash
+> `dd80179e` (2026-08-18). Az aktív terv napi ("ma") és heti nézete
+> **helyi dátumból**, injektált órával (`final DateTime Function() clock`,
+> a plan_setup_controller.dart-ban már bevett minta) — nincs `.toUtc()` a
+> vezérlőben. A pihenőnapot a `PracticeDay.reasonCodes.contains(
+> ScheduleDecisionReason.restDay.code)` jelzés különbözteti meg a
+> kihagyott/nem-elérhető naptól (a `PracticeItemStatus`-nak NINCS `rest`
+> értéke, és a `BlockKind.rest` sosem épül — a §0.0 pre-flight ezt mérte ki
+> a dispatch ELŐTT). Rövidítés/csere/kihagyás/szüneteltetés akciók
+> `PlanChangeReason.learnerReschedule` change-settel, storage-írás nélkül —
+> a mentés egy jövőbeli composition-kör dolga. Típusos,
+> `Map<String,String>`-alapú deep-link contract (`TodayPlanRouteRequest`),
+> nincs nyers URI-parse. [Correctness review](docs/reviews/e07-r22-review.md)
+> APPROVED, [security review](docs/reviews/e07-r22-security.md) PASS — 2
+> javító kör után, a MÁSODIK kört egy FÜGGETLEN, második
+> `security-reviewer` agent-futás ellenőrizte, nem csak az orchestrátor
+> olvasata. Exact-SHA: Full Gate
+> [32176316917](https://github.com/wolfcasaba/strumsight/actions/runs/32176316917)
+> és Router CI zöld az `5cae87d2` fejen. `practiceGeneratorEnabled` marad
+> `false`, nulla production hívó.
+>
+> **A biztonsági review 2 MAJORt zárt, és 1 nem-blokkoló, KÖTELEZŐEN
+> tovább-adandó MINORt hagyott nyitva a következő wiring körnek:**
+> `TodayPlanRouteRequest.tryParse` egy `Map<String,dynamic>.cast<String,
+> String>()` (a JSON-payloadból jövő IDIOMATIKUS konverzió) view-n
+> `TypeError`-t dobott a statikus `is Map<String,String>` kapu Dart-lazy-cast
+> gyengesége miatt — mérve: `type '_Map<String, int>' is not a subtype of
+> type 'String?' in type cast`; javítva elem-szintű `is String`
+> ellenőrzéssel + `try/on TypeError` védelemmel. A `today_plan_screen.dart`
+> egy ELUTASÍTOTT deep linket megkülönböztethetetlenné tett a "nincs is
+> deep link" esettől, ezért a flag-ellenőrzés kimaradt és egy manipulált
+> paraméter TÖBBET kapott, mint egy jólformált, de letiltott — javítva egy
+> explicit `isDeepLinkLaunch` paraméterrel. **Nyitott MINOR (kötelezően a
+> jövőbeli notification/router wiring kör briefjébe kerül, nem örökölhető
+> csendben):** az `isDeepLinkLaunch` hívó-beállítású és alapértelmezetten
+> `false` — ha egy jövőbeli hívó ELFELEJTI kitenni egy elutasított
+> `launchRequest` mellett, a screen STRUKTURÁLISAN nem tudja megkülönböztetni
+> ezt a normál belső navigációtól (a MAJOR-2 eredeti mintája). A wiring
+> körnek `tryParse`-t TOTÁLISSÁ kell tennie (`accepted`/`rejected` sealed
+> eredmény) vagy sealed `TodayLaunchContext`-et kell bevezetnie, ÉS egy a
+> VALÓDI router-hívási úton futó elfogadási cellát kell írnia. Lecke:
+> **L309**. Következő kör: E07-R23 (PlanCompiler és Practice Engine
+> végrehajtás, SDD Ch8 Kör 23), új sessionben.
+
 > **E07-R21 KÉSZ — Plan preview, explanation és kézi szerkesztés** — PR
 > [#306](https://github.com/wolfcasaba/strumsight/pull/306), squash
 > `64e3a802` (2026-08-18). Az offline, fixture-alapú preview napokra és
@@ -91,27 +136,6 @@
 > scope-ja nem volt. Lecke: **L307**. A lánc E07-R21-gyel folytatódik a
 > következő cron-firingen, friss (nem healed) dispatch-csel a revideált
 > brief ellenében.
-
-> **E07-R20 KÉSZ — PR #304, `b9dcbc76` (2026-08-18).** Öt lépéses, lokálisan
-> folytatható, akadálymentes Plan setup wizard (SDD Ch8 Kör 20): cél,
-> elérhetőség, felszerelés, preferencia, kényelem lépés; a "nem tudom" minden
-> lépésen elsőosztályú válasz, sosem fordul default értékre; a draft
-> lépésenként mentődik és app-újraindítás után is a helyes lépésen
-> folytatódik; a hard konfliktus (pl. végrehajthatatlan custom cél) azonnal
-> látszik a meglévő `RequestValidator`-on át; a kényelmetlenségi szabad
-> szöveg sosem kerül naplóba (mérve `debugPrint`-collector teszttel, siker-
-> és hibaútra is). A független review 1 fordulóban 2 MAJORt zárt SAJÁT
-> próbateszttel mérve (kőkemény, órától független naptári dátum az
-> elérhetőség-szerkesztőben; a wizard-resume nem tudta megkülönböztetni az
-> "unknown"-nal lezárt lépést a meg sem nyitottól), a dedikált biztonsági
-> review (risk=high) függetlenül ugyanarra az A9-hiányra jutott + 1 MINORt
-> talált (téves "encrypted" állítás egy kommentben) — mind zárva, mindkét
-> review APPROVED. `practiceGeneratorEnabled` változatlanul `false`, nulla
-> production hívó. Full Gate exact-SHA: `32155224320`, Router CI exact-SHA:
-> `32155221106`. Lecke: L305 (adat-jelenlétből derített resume-pont vs.
-> explicit unknown), L306 (widget "ma"-fogalma injektált óra nélkül).
-> Következő kör: E07-R21 (Plan preview, explanation és kézi szerkesztés,
-> `docs/rounds/e07-r21-plan-preview-and-explanation.md`), új sessionben.
 
 > **E07-R19 KÉSZ — PR #303, `2ce22f3b` (2026-08-18).** A local plan
 > repository elkülönített draft/active/archive névterekkel, checksumos
@@ -379,8 +403,10 @@
 >
 > **Szabály (ADR 0175 §4):** a fejlécben a friss állapot és a **két legutóbbi**
 > kör bannere marad; minden korábbi banner az archívumba kerül a kör lezárásakor.
-> 2026-08-16 (HEAL E07-R11/H3 zárása): a HEAL E07-R09/H5 banner archiválva; a
-> fejlécben az E07-R10 és HEAL E07-R11/H3 banner marad.
+> 2026-08-18 (E07-R22 zárása): az E07-R20 banner archiválva; a fejlécben az
+> E07-R22, E07-R21 és HEAL E07-R21/H2 banner marad (a kettő együtt az R21
+> narratíva). 2026-08-16 (HEAL E07-R11/H3 zárása): a HEAL E07-R09/H5 banner
+> archiválva; a fejlécben az E07-R10 és HEAL E07-R11/H3 banner marad.
 > A korábbi diéta-bejegyzések teljes szövege: `docs/handoff-archive.md`.
 
 ## 1. Current release state
@@ -574,8 +600,15 @@
   `PlanChangeSet` strukturált diff typed indokkal, user-note-mentes
   `PracticePlanSummary` — az ADR 0256 megvalósítása).
   **Mindkét flag `false` marad minden környezetben**, nulla
-  `lib/features/practice_generator/` production hívó — mind a tíz kör
-  kizárólag a határokat és a típusos domaint rögzítette. SDD forrás:
+  `lib/features/practice_generator/` production hívó — az R01–R10 kizárólag
+  a határokat és a típusos domaint rögzítette (a köztes **E07-R11…R21**
+  köröket, amik a validátort/repairert/wizardot/preview-t adták, ez a
+  bekezdés még nem gördítette bele — lásd a fejléc bannereit és
+  `docs/handoff-archive.md`-t). **E07-R22** hozzáadta az aktív terv napi/heti
+  presentation-rétegét (`today_plan_controller.dart`/`active_plan_controller.dart`/
+  `today_plan_screen.dart`/`weekly_plan_screen.dart`) — helyi dátum injektált
+  órával, pihenőnap ≠ mulasztás, típusos deep-link contract, tanuló-indított
+  change-setek storage-írás nélkül. SDD forrás:
   [`docs/sdd/08-epic-07-ai-practice-generator.md`](docs/sdd/08-epic-07-ai-practice-generator.md).
   A generátor a legacy Learn/Progress/Songs/Analyze adaptereken keresztül lát
   (az Audio Analysis V2 lánc futtatható, de minden flagje OFF — a generátor
