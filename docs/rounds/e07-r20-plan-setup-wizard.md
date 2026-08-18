@@ -1,18 +1,99 @@
 # E07-R20 — Plan setup wizard és input UX
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 135ef4af`)
+- **Státusz:** PREPARED → **pre-flight revideálva** (Claude, 2026-08-18, kód
+  olvasva: `main @ e5374943`; eredetileg előre megírva 2026-08-15, kód
+  olvasva: `main @ 135ef4af` — lásd §0.0)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 20
 - **Kör-azonosító:** `E07-R20`
-- **Branch:** `<motor>/e07-r20-plan-setup-wizard`
-- **Előfeltétel:** `E07-R19` merge-elve (repository)
+- **Branch:** `terra/e07-r20-plan-setup-wizard`
+- **Előfeltétel:** `E07-R19` merge-elve (repository) — **teljesül** (PR #303,
+  `2ce22f3b`).
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0259 (draft) és
-  0260 §4 (érzékeny szöveg nem naplózható) rögzíti.
+- **Előre kiosztott ADR:** nincs — a pre-flight (§0.0) megmérte, hogy egy új
+  ADR nem indokolt: a határokat az ADR 0257 (stabil enum-kódok), 0258
+  (hard/soft constraint), 0259 (draft), 0260 §4 (érzékeny szöveg nem
+  naplózható) és 0261 §2 (unknown önálló állapot) már lefedi, és a lenti
+  §0.0 pontok kizárólag ezek alkalmazását pontosítják, új architekturális
+  döntést nem hoznak.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd meg a projekt **ARB/l10n**
 > mintáját (`lib/l10n/app_hu.arb`, `app_en.arb`) és a meglévő wizard-jellegű
 > képernyők szerkezetét. **Minden felhasználói szöveg ARB-n át megy.**
 > Eltérésnél §0.0 revízió.
+
+## 0.0 Pre-flight revízió (Claude, 2026-08-18, kód olvasva: `main @ e5374943`)
+
+A brief 2026-08-15-i mért állításait a mai kódon újramértem. Egyik pont sem
+szűkíti vagy bővíti az `allowed_paths`-t vagy a §3 scope-ot — a §2 mért
+állapotot pontosítják, hogy az implementer ne induljon találgatásból.
+
+1. **A lépésenkénti draft-mentés konstrukciósan lehetséges már az első
+   lépés után is.** `WeeklyAvailability(const [])` és
+   `LearnerConstraints(const [])` érvényesek (nincs minimum-hossz megkötés a
+   konstruktorban), `PracticeGenerationRequest.goals` alapértelmezetten
+   `const []`. A meglévő, változatlan (NEM allowed_paths-on lévő, csak
+   HASZNÁLANDÓ) `GenerationDraftRepository.saveDraft` így egy csak a
+   cél-lépést tartalmazó draftot is el tud menteni teljes, érvényes
+   `PracticeGenerationRequest`-ként — nincs szükség egy külön,
+   presentation-lokális parciális draft-típusra.
+
+2. **`generationMode` és `planHorizonDays` egyik névre szóló lépéshez sincs
+   rendelve, és egyik típusnak sincs „unknown" értéke**
+   (`plan_enums.dart`: `GenerationMode` 7 konkrét kód, nincs `unknown`;
+   `planHorizonDays` egy sima `int`). Ez **nem** a §5.1 tiltott „nem tudom
+   → default" mintája, mert egyik mező sem felhasználó-látható kérdés a §3
+   öt lépése közül — nincs olyan UI-kérdés, aminek a válaszát felülírnánk.
+   Mért, meglévő konvenció (`test/features/practice_generator/data/
+   generation_draft_repository_test.dart`): a fixture
+   `generationMode: GenerationMode.starter` + `planHorizonDays: 7` párost
+   használ. A wizard a draft LÉTREHOZÁSAKOR állítsa be ugyanezt a két
+   értéket rögzített scaffolding-értékként (nem lépés, nem felhasználói
+   válasz); egy jövőbeli kör dolga, ha ezek is választhatóvá válnak.
+
+3. **A „nem tudom" (A4) minden érintett lépésen a meglévő domain
+   nullable/üres-lista szemantikájával fejezhető ki, domain-módosítás
+   nélkül:** `PracticeGoal.targetDate` és `PracticeGoal.metricTarget` már
+   nullable (a cél-lépés „nem tudom" válasza = `null`, nem egy kitalált
+   dátum/metrika); egy meg nem válaszolt nap egyszerűen hiányzik a
+   `WeeklyAvailability.days` listából (a lista bármilyen hosszú lehet, nincs
+   7-elemű elvárás); egy meg nem adott equipment/tuning/preferencia/avoid
+   egyszerűen nincs a `LearnerConstraints.constraints` listában. A wizard
+   felelőssége, hogy ne konstruáljon `DailyAvailability`-t vagy
+   `LearnerConstraint`-et olyan napra/kategóriára, amit a tanuló nem
+   válaszolt meg — a hiány maga az „unknown".
+
+4. **A9 (kényelmetlenségi szöveg naplózás-tilalma) egy ÚJ, kizárólag ehhez a
+   wizardhoz tartozó UI-bemenetre vonatkozik, NEM a meglévő
+   `SkillEvidence.DiscomfortReport`/`EvidenceAggregator.ingest` útvonalra**
+   (az egy másik, korábbi kör — R05/R06 — evidence-pipeline-ja, session
+   utáni önjelentésre, nem a generálási kérés setupjára). A „kényelem" lépés
+   strukturáltan `LearnerConstraint(category: ConstraintCategory.comfort,
+   …)` felé mehet; az ADR 0260 §4 elvét a wizard UI-szinten ismétli meg:
+   bármilyen szabad szöveget gyűjt is a lépés, az csak a draftba (helyi
+   storage) kerülhet — logger-hívásba (`print`, `debugPrint`, jövőbeli
+   analytics-hook) sosem.
+
+5. **A5 (azonnali hard-konfliktus) a meglévő `RequestValidator`
+   kör-korlátozott hívásával érhető el, módosítás nélkül.**
+   `RequestValidator.validate()` tiszta, szinkron, és részleges bemenettel
+   is hívható — a `scheduledMinutes`/`constraintViolations` paraméter üresen
+   hagyható, ezeket más, ezen a körön kívül eső rétegek töltik fel később. A
+   wizard a SAJÁT, addig ismert `goals`/`availability` állapotával hívja
+   lépésenként. A teljes cross-goal equipment-ütközés (katalógus-egyeztetés)
+   ezen a körön kívül esik — az A5 mérce-cellája a goal- és
+   availability-szintű, a validátorral ténylegesen visszaadható
+   ütközésekre és a domain-konstruktorok (`DailyAvailability` stb.) saját
+   `ArgumentError`-jaira vonatkozik, nem egy még nem létező catalog-matchre.
+
+6. **ID-generálás: nincs projektszintű `uuid` csomag.** A `pubspec.lock`
+   tartalmaz egy `uuid` bejegyzést, de az kizárólag TRANZITÍV függőség (nincs
+   a `pubspec.yaml` `dependencies` blokkjában) — `import 'package:uuid/...'`
+   nem fordulna, és a `pubspec.yaml` egyébként sincs az `allowed_paths`-on.
+   A `GenerationRequestId`/`GoalId` stb. `X.generate(String Function()
+   generateId)` mintája (ld. `planner_ids.dart`,
+   `practice_generation_request.dart`) bármilyen, a
+   `^[A-Za-z0-9._:-]+$` mintának megfelelő karakterláncot elfogad — elég egy
+   egyszerű, csomag nélküli generátor (pl. `dart:math` `Random` + időbélyeg).
 
 ```ai-router
 schema_version = 1
@@ -189,5 +270,77 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   hiányzik majd (A8).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Megvalósítás
+
+- `presentation/controller/plan_setup_controller.dart`: immutábilis wizard
+  állapot, injektált óra/ID-generátor, lépésenkénti
+  `GenerationDraftRepository.saveDraft`, visszaállítás és a meglévő
+  `RequestValidator` azonnali futtatása. Az unknown válaszok üres
+  goal/lista/constraintként maradnak meg; a comfort szöveghez nincs logger
+  vagy analytics függőség.
+- `presentation/screens/plan_setup_screen.dart`: öt lépéses, visszaléphető
+  képernyő, akadálymentes conflict-live-region és tartós controller-csere
+  esetén draft-visszatöltés.
+- `presentation/widgets/practice_goal_picker.dart`,
+  `availability_editor.dart`: explicit unknown vezérlők, nagy betűméretnél
+  tördelő Material-lista és lokalizált Semantics címke.
+- `app_en.arb`, `app_hu.arb`: azonos, teljes wizard-szövegkészlet.
+- `public.dart`: a controller és a képernyő public exportja.
+- A két új widget-teszt lefedi az A1–A9 releváns celláit, benne a wizard
+  előtti, határon lévő és kész állapotból való visszatöltéssel.
+
+### Futtatott ellenőrzések
+
+- `flutter gen-l10n` — exit 0.
+- `dart format <a kör hat Dart fájlja>` — exit 0.
+- `flutter test test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/availability_editor_test.dart`
+  — exit 0, 9 teszt zöld.
+- `tools/round-gate.sh test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/availability_editor_test.dart`
+  — exit 0: format, analyze, mindkét célzott teszt, architecture, secrets és
+  l10n ellenőrzés zöld.
+
+### Kötelező valódi-sértés próba (A4)
+
+A `PlanSetupController.selectGoal` unknown ágát ideiglenesen
+`PracticeGoalType.rhythm` alapértékre fordítottam. A célzott A4 teszt:
+
+```text
+flutter test ... --plain-name 'unknown answers are persisted as absence, never defaults (A4)'
+Expected: empty
+Actual: [Instance of 'PracticeGoal']
+exit 1
+```
+
+Ezután az ágat visszaállítottam `const <PracticeGoal>[]`-ra; a fenti,
+végleges célzott tesztfuttatás exit 0-val zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Nincs scope-elt domain/application, flag, router vagy backend változtatás.
+- A teljes CI suite/property/release APK nem lokálisan fut: a kör CI-dispatch,
+  review és merge a Claude-orchestrátor feladata.
+
+### Javító kör (F1–F4, 2026-08-18)
+
+- **F1:** `63768316` — az `AvailabilityEditor` injektált referenciadátumból
+  számítja az aktuális hétfőt; az
+  `availability_editor_test.dart` két különböző referenciahéten méri a
+  továbbadott `DailyAvailability.date` értékét.
+- **F2:** `da6c02ba` — a wizard-lépés külön draft-progressz kulcsban marad
+  meg, ezért az explicit `unknown` nem keveredik a meg nem nyitott lépéssel;
+  a `plan_setup_screen_test.dart` availability- és equipment-regressziói
+  restart után is a 2., illetve 3. lépést várják.
+- **F3:** `da6c02ba` — az A9 teszt gyűjtő `debugPrint` sinket állít be, és
+  ugyanazzal a sentinel szöveggel sikeres, majd szándékosan hibás
+  `saveDraft` mellett is bizonyítja a naplózás hiányát.
+- **F4:** `da6c02ba` — a controller kommentje pontosan plaintext helyi
+  draft-tárolást ír le, nem titkosítást.
+- **Gate:** a kötelező `tools/round-gate.sh
+  test/features/practice_generator/presentation/plan_setup_screen_test.dart
+  test/features/practice_generator/presentation/availability_editor_test.dart`
+  végső futása exit 0: format, analyze, mindkét célzott teszt, architecture,
+  secrets és l10n zöld. Az első futás az analyzer redundáns tesztimportjára
+  állt meg; ezt `5f664d10` javította a teljes újrafuttatás előtt.
 
 ## 11. Review — a Claude tölti ki

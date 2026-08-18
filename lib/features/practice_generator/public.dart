@@ -15,6 +15,8 @@ export 'data/adapter/legacy_progress_evidence_adapter.dart';
 export 'data/local/local_practice_plan_repository.dart';
 export 'data/local/practice_plan_migrator.dart';
 export 'data/local/practice_plan_serializer.dart';
+export 'presentation/controller/plan_setup_controller.dart';
+export 'presentation/screens/plan_setup_screen.dart';
 export 'domain/id/planner_ids.dart';
 export 'domain/model/exercise_candidate.dart';
 export 'domain/model/exercise_prescription.dart';
