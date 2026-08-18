@@ -1,9 +1,9 @@
 # E07-R21 — Review
 
-Brief: `docs/rounds/e07-r21-plan-preview-and-explanation.md`  
-Diff: `e7a6a239..fbe9f7a2`  
-Reviewer: Codex/Terra correctness review + independent security-reviewer  
-Dátum: 2026-08-18  
+Brief: `docs/rounds/e07-r21-plan-preview-and-explanation.md`
+Diff: `e7a6a239..fbe9f7a2`
+Reviewer: Codex/Terra correctness review + independent security-reviewer
+Dátum: 2026-08-18
 Verdikt: **CHANGES REQUIRED**
 
 ## Összegzés
