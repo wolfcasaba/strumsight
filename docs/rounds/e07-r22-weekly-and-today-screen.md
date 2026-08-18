@@ -301,3 +301,62 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   secrets és l10n mind zöld.
 
 ## 11. Review — a Claude tölti ki
+
+**Correctness review:** APPROVED, 0 BLOCKER/MAJOR/MINOR (`docs/reviews/e07-r22-review.md`).
+
+**Security review (kötelező, risk=high):** CHANGES REQUIRED, 2 nyitott MAJOR
+(`docs/reviews/e07-r22-security.md`, teljes indoklás ott). **A merge ezekig
+tilos.** Mindkettő ugyanazon a varraton ül, amit a brief §5.4/§9/A7 saját
+kockázatként nevezett meg, mindkettőt az orchestrátor is függetlenül
+reprodukálta (nem csak a review-jelentés állítása).
+
+### 11.1 Javító kör — kötelező feladatok
+
+**F1 — MAJOR — `TodayPlanRouteRequest.tryParse` összeomolhat egy plauzibilis bemeneten**
+
+- **Fájl:** `today_plan_controller.dart:156-163`
+- **Probléma:** `extra is! Map<String, String>` csak a statikus wrapper-típust
+  ellenőrzi. Egy `(jsonDecode(...) as Map<String, dynamic>)
+  .cast<String, String>()` (a JSON-ból érkező payload IDIOMATIKUS
+  konverziója — ez lesz a jövőbeli wiring-kör természetes első próbálkozása,
+  mert egy nyers `Map<String, dynamic>` MA is `null`-t ad, tehát „sosem
+  parse-ol") átmegy ezen az `is`-ellenőrzésen, de a `extra[_destinationKey]`
+  lookup `TypeError`-t dob, ha a mögöttes érték nem `String` — MÉRVE:
+  `type '_Map<String, int>' is not a subtype of type 'String?' in type cast`.
+- **Kötelező javítás:** ne a generikus wrapper-típust ellenőrizd, hanem az
+  EGYES kulcs-érték párok tényleges típusát (`extra is Map` + minden érték
+  `is String`, a repó saját kodekjeiben már bevett elem-szintű validáció
+  mintájára). `try`/`catch` a lookup körül ELFOGADHATÓ alternatíva, de az
+  `is Map`-es elem-szintű ellenőrzés a preferált irány (nem rejti el a
+  típus-eltérést).
+- **Kötelező bizonyíték:** új teszt-eset, amiben a bemenet egy
+  `.cast<String, String>()` view egy nem-String értékkel — `tryParse(...)`
+  eredménye `isNull`, NEM dob kivételt.
+
+**F2 — MAJOR — egy elutasított deep link ugyanazt az ágat futtatja, mint amikor nincs is deep link, ezért a flag-ellenőrzés kimarad**
+
+- **Fájl:** `today_plan_screen.dart:36-42`
+- **Probléma:** `launchRequest != null && isPermittedLaunch != true ? null :
+  plan` — ha a `launchRequest` azért `null`, mert a `tryParse` ELUTASÍTOTTA
+  (pl. egy extra `utm_source` kulcs miatt), ez MEGKÜLÖNBÖZTETHETETLEN attól
+  az esettől, hogy sosem volt deep-link kontextus. A `&&` ilyenkor rövidzár,
+  a `permits()`/flag-ellenőrzés SOSE fut le, és a képernyő a VALÓDI, aktív
+  tervet rendereli — akkor is, ha `isTodayRouteEnabled == false`. Egy
+  manipulált/hibás paraméter tehát TÖBBET kap, mint egy jólformált, de
+  letiltott. A meglévő A7 „unknown deep-link" teszt ezt nem kapja el, mert
+  `plan:` paraméter NÉLKÜL fut.
+- **Kötelező javítás:** tedd explicitté a launch-kontextust ahelyett, hogy a
+  `null`-ra bíznád (pl. egy külön `isDeepLinkLaunch`/`isRejectedDeepLink`
+  jelző, vagy egy sealed launch-context típus), hogy egy ELUTASÍTOTT payload
+  a BIZTONSÁGOS ágra essen, ne az „nincs is launch context" ágra.
+- **Kötelező bizonyíték:** bővítsd az A7 „unknown deep-link" tesztet úgy,
+  hogy EGYÜTT adjon egy elutasított payloadot ÉS egy valódi aktív tervet
+  (`plan:` kitöltve) — a cellának ekkor `today-plan-scheduled`-et NEM
+  szabad renderelnie, még `isTodayRouteEnabled: false` mellett sem.
+
+Mindkét javítás a MÁR engedélyezett `allowed_paths`-on belül fér el (a két
+lib fájl + a két teszt fájl) — nincs scope-bővítés, nincs új ADR.
+
+A javításod után frissítsd ezt a §11-et és a §10 handoffot a végrehajtott
+változással, majd add ki a `done` kör-jelzést. A munkádat commitold a
+branchre.
