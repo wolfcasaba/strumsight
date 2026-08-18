@@ -11286,3 +11286,91 @@ Rokon L-ek: [[L134]] (fantom public-bemenet → scope-szűkítés — ugyanaz a
 (batch-briefek típusneve elévülhet egy testvér-kör domain modelljétől — a
 rokon hibaosztály: a brief egy MÁSIK dokumentum tartalmára alapoz, ami a
 dispatch pillanatában már nem pontos).
+
+## L303 — `wait-for-round.sh`/`wait-for-router.sh` baseline-ja folyamat-memóriában élt: sok, egyenként friss hívásból álló polling-minta alatt egy MÁR KÉSZ jelzést sosem vett észre (E07-R19, halt H-NOSIGNAL, ADR 0112 önjavítás, 2026-08-18)
+
+**Tünet.** Az E07-R19 folytató köre (orchestrátor=Terra, implementer=minimax)
+11:55:07-kor indult, és 12:37:10-kor jelzés nélkül (H-NOSIGNAL) halt el — a
+pipeline saját elakadás-gyorsítója (E99-R13 mérése óta él) ~2 másodpercen
+belül helyesen észlelte, hogy a `codex` motor-folyamat kilépett a tmux
+pane-en. A tényleges implementer-munka (MiniMax kezdeti implementáció +
+egy MiniMax-javítás + egy Codex-javítás) eközben MÁR TELJESEN KÉSZ és
+pusholva volt (`minimax/e07-r19-local-plan-repository`, HEAD `0d505ca7`,
+`.codex-round-status` `status=done`/`signalled_at=2026-08-18T12:30:06Z`).
+
+**Mért gyökérok** (session rollout
+`~/.codex-terra/sessions/2026/08/18/rollout-2026-08-18T11-55-08-01a014b9-af37-7033-8ced-28b00e8f7116.jsonl`,
+638 sor, strukturált JSON — nem a nyers tmux-log, ami ugyanazt a tartalmat a
+TUI teljes-képernyős újrarajzolása miatt tucatszor megismétli és emiatt
+1,88 MB-ra dagad). A Terra `exec_command`/`wait` eszköze csendes parancsnál
+önmagától „yield"-el (ezt a promptban a §2 explicit dokumentálja két korábbi
+incidens, E07-R04 és E07-R09 alapján). A `docs/execution/pipeline-
+orchestrator-prompt.md` §0.1 ezért **explicit** „exit 5 → hívd meg újra"
+mintát ír elő `wait-for-round.sh`-hoz — ami helyes protokoll, de azt
+feltételezi, hogy minden egyes friss hívás a MÁSIK hívásokkal KONZISZTENS
+baseline-t lát. A rollout pontosan ezt a hívás-sorozatot rögzíti: cell ID
+65-től 87-ig (~20 hívás), mindegyik `tools/wait-for-round.sh
+/home/ubuntu/ss-minimax-e07-r19 540`, mindegyik ~15-28 mp után "Script
+completed" + ÜRES output — a `status=done` írása (12:30:06Z) UTÁN induló
+hívások (cell 76-tól) is üres kimenetet adtak, noha a jelzésfájl már órák
+óta nem, csak percek óta állt készen.
+
+A `wait-for-round.sh` (és az azonos mintájú `wait-for-router.sh`) a
+stale-signal védelmét (E02-R08 óta, „egy korábbi kör terminális jelzése ne
+zárja le azonnal a várakozást") egy `baseline` shell-változóban tartotta,
+amit MINDEN egyes hívás a SAJÁT indulásakor, a jelzésfájl AKKORI
+tartalmából számolt újra. Ez helyes egyetlen, hosszan futó hívásnál — de a
+§0.1 által előírt „hívd meg újra" minta alatt minden egyes friss folyamat
+a MÁSIK folyamatok baseline-jától függetlenül, a SAJÁT indulási
+pillanatában látott állapotot vette baseline-nak. Egy, a tényleges
+befejezés UTÁN induló friss hívás ezért a friss `done`-t tekintette
+baseline-nak, és — mivel a jelzésfájl attól kezdve nem változott — sosem
+jelentette késznek, amíg a `max_wait` (540 s) le nem járt, minden egyes
+alkalommal újra. Az orchestrátor emiatt 12:30:06Z (a tényleges befejezés)
+és 12:37:08Z (a turn vége) között kizárólag üres, informálatlan
+válaszokat kapott, végül stale szöveges státusszal ("a Codex javító kör
+még fut") zárta a választ tool-hívás vagy `outcome=halted` jelzés nélkül —
+ami önmagában is PONTOSAN az E07-R09 self-heal (2026-08-16) által már
+dokumentált és tiltott minta, csak a várt művelet (Codex-javítókör a
+korábbi CI helyett) volt más.
+
+**Javítás.** A baseline-t egy, a munkapéldányban élő MARKER-fájlba
+(`.wait-for-round-baseline` / `.wait-for-router-baseline`, gitignore-olt,
+ugyanabban a kategóriában, mint a már létező `.codex-round-status`/
+`.mm-round-pid` burkoló-artefaktumok) írjuk ki az ELSŐ híváskor, és minden
+KÖVETKEZŐ friss hívás onnan olvassa vissza — egészen a terminális
+kézbesítésig (`done`/`stopped`/`stalled`/`timeout`/`unknown`,
+ill. router-oldalon bármely `router_status=`), amikor a marker törlődik,
+hogy a KÖVETKEZŐ kör-attempt friss baseline-nal induljon (az eredeti
+E02-R08 védelem változatlan). `wait-for-router.sh` byte-azonos mintát
+örökölt, ezért ugyanazt a javítást kapta — enélkül a `engine=auto` út
+ugyanebbe a falba futott volna, csak más fájlnév alatt.
+
+**Regresszió.** `tools/tests/test_pipeline_integration.py` két új teszt: az
+első hívás jelzés NÉLKÜL lejár és megalapozza a baseline-t, a jelzés a
+hívások KÖZÖTT (nem alattuk) érkezik, a MÁSODIK, teljesen friss folyamat
+kell, hogy azonnal felismerje — mérve RED a javítás előtt
+(`AssertionError: 5 != 0`, mindkét scriptnél), GREEN utána. Egy harmadik,
+nem-regressziós társteszt igazolja, hogy egy MÁR KÉZBESÍTETT terminális
+jelzés nem tér vissza azonnal egy KÖVETKEZŐ, valóban új várakozásnál (az
+eredeti E02-R08 védelem sértetlen — zöld a javítás előtt ÉS után). Teljes
+`tools/tests` sáv: 467 teszt / 524 subtest, 0 hiba.
+
+**Szabály.** Ha egy várakoztató script kontraktusa explicit módon
+„térj vissza X kóddal, a hívó indítson friss hívást" (nem: „a hívó
+folytatja UGYANAZT a folyamatot/session-t"), a script belső
+állapotvédelme (itt: stale-signal baseline) NEM élhet kizárólag a
+folyamat memóriájában — a hívások közötti konzisztenciát csak egy, a
+folyamat-határokon átívelő, tartós tárolás garantálja. A pipeline már
+KÉT ilyen kontraktust ismer (`wait-for-round.sh`/`wait-for-router.sh` az
+„indítsd újra" mintával, `wait-for-ci.sh` a hívásonkénti timeout-tal védett
+egyetlen hosszú hívással) — újabb várakoztató script tervezésekor ezt
+explicit döntési pontként kell kezelni, nem hallgatólagos feltételezésként.
+
+Rokon L-ek: [[L12]] (a `wait-for-round.sh` eredeti terve, E02-R08), a
+`docs/LESSONS.md` E06-R25 (`wait-for-ci.sh`, timeout-védett `gh` hívások) és
+E99-R13 (elakadás-gyorsító, motorfüggetlen tmux-pane process-ellenőrzés)
+sorai — mindhárom UGYANAZT a mintacsaládot védi: egy orchestrátor-harness
+nem garantálja, hogy egyetlen hosszan futó hívást tud tartani egy csendes
+várakozás alatt, ezért minden ilyen várakoztató szerződésnek a
+folyamat-határokon túl is élnie kell.
