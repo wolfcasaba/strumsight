@@ -119,9 +119,57 @@ scope_base=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
 # A `claude -p`-nek nincs `-C` kapcsolója (mint a `codex exec`-nek), ezért a
 # munkapéldányba alhéjjal lépünk be — így a kör-jelzés `git rev-parse` hívása
 # is a helyes fát látja.
+# --- Implementer-őrök (ADR 0309) -----------------------------------------
+# A kör-szerződést (allowed_paths, tiltott parancsalakok, lezáró jelzés) gépi
+# hook méri, nem prompt-szöveg — a szöveges tiltás mérve nem tartott
+# (E02-R07 gate-csonkítás háromszor; két kör listán kívüli fájlt hozott létre;
+# H-NOSIGNAL 18 önjavító kör). A hookok CSAK ebben a sessionben élnek: a
+# `--settings` a kör munkapéldányából töltődik, és a `STRUMSIGHT_ROUND_BRIEF`
+# kapcsolja be őket. Régi ágon (ahol a fájl még nincs meg) a viselkedés
+# változatlan — visszafelé kompatibilis.
+guard_settings="$workdir/tools/implementer-settings.json"
+guard_hook="$workdir/tools/hooks/implementer_guard.py"
+round_brief=${ROUND_BRIEF:-}
+if [ -z "$round_brief" ]; then
+  case "$prompt_file" in
+    "$workdir"/docs/rounds/*.md) round_brief=${prompt_file#"$workdir"/} ;;
+  esac
+fi
+# A kör UTÁNI scope-audit (ADR 0138) eddig NÉMÁN kimaradt, ha a hívó nem
+# állította be a ROUND_BRIEF-et (mérve: `scope_audit=skipped`,
+# `scope_audit_reason=ROUND_BRIEF nincs beállítva`). Most, hogy a briefet
+# gépileg levezetjük, az auditált réteg is megkapja — a hook a gyors, lokális
+# őr, ez pedig a kör utáni, jelzésfájlba írt bizonyíték.
+if [ -z "${ROUND_BRIEF:-}" ] && [ -n "$round_brief" ]; then
+  export ROUND_BRIEF="$round_brief"
+fi
+
+round_id=${ROUND_ID:-}
+if [ -z "$round_id" ] && [ -n "$round_brief" ]; then
+  round_id=$(basename "$round_brief" | grep -oE '^[eE][0-9]{2}-[rR][0-9]{2}' | tr '[:lower:]' '[:upper:]')
+fi
+
+# A nyilvántartás `max_out` oszlopa eddig HOLT konfiguráció volt a
+# claude-harness úton: az `engine-profile.sh` exportálta (`ENGINE_MAX_OUTPUT`),
+# de senki nem adta át. A hosszú, több fájlt érintő szerkesztés így a CLI
+# alapértelmezésébe futott. A claude-harness megfelelője ez a változó.
 launch_env=(CLAUDE_CONFIG_DIR="$config_dir")
+[ -n "${ENGINE_MAX_OUTPUT:-}" ] && launch_env+=(CLAUDE_CODE_MAX_OUTPUT_TOKENS="$ENGINE_MAX_OUTPUT")
+if [ -n "$round_brief" ] && [ -f "$workdir/$round_brief" ] && [ -f "$guard_settings" ] && [ -f "$guard_hook" ]; then
+  launch_env+=(STRUMSIGHT_ROUND_BRIEF="$round_brief" STRUMSIGHT_ROUND_ID="${round_id:-ismeretlen}")
+  guard_enabled=1
+else
+  guard_enabled=0
+fi
 launch_args=(--model "$model" --permission-mode acceptEdits --strict-mcp-config
   --output-format stream-json --verbose)
+[ "$guard_enabled" = "1" ] && launch_args+=(--settings "$guard_settings")
+# Kör-auditor alügynök (ADR 0309 §4): a KÖTELEZŐ önellenőrzés ne a modell
+# ötletén múljon, hanem kapjon kész, célzott definíciót. A `Task` eszköz a
+# claude-harness motoroknál engedélyezett, és mérve működik a MiniMax
+# endpointon is.
+guard_agents="$workdir/tools/implementer-agents.json"
+[ -f "$guard_agents" ] && launch_args+=(--agents "$(cat "$guard_agents")")
 
 if [ "$external_endpoint" = "1" ]; then
   # --- MiniMax M3 sajátosságai (VÁLTOZATLANUL, user-kérés 2026-08-06) -------
