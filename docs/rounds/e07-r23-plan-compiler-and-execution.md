@@ -1,6 +1,6 @@
 # E07-R23 — PlanCompiler és Practice Engine végrehajtás
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 19b30557`)
+- **Státusz:** PLANNING (pre-flight lezárva 2026-08-18, kód olvasva: `main @ d67d102a`; előre megírva 2026-08-15, kód olvasva akkor: `main @ 19b30557`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 23
 - **Kör-azonosító:** `E07-R23`
 - **Branch:** `<motor>/e07-r23-plan-compiler-and-execution`
@@ -44,6 +44,95 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 Pre-flight mérés és brief-revízió (Claude Opus 5, 2026-08-18, kód olvasva: `main @ d67d102a`)
+
+**1. A `PracticeSessionResult` a Practice Engine-ben KIZÁRÓLAG a `completed` ágon
+keletkezik — a `cancelled` és `failed` terminális állapot NEM állít elő
+eredményt.** Mérve: ADR 0077 §9 ("Result kizárólag a `completed` ágon készül...
+a `cancelled` és a `failed` terminal státusz nem állít elő
+`PracticeSessionResult`-ot") és a MA ÉLŐ kód,
+`practice_session_controller.dart:245-256` ("Terminal-state cleanup. Per A15,
+`PracticeSessionResult` and the `recorder.record()` call are reserved for the
+`completed` branch; the `cancelled` and `failed` branches run only the
+resource-cleanup half."): az `if (newStatus == completed) { …
+_finalizeSession(…); } else if (cancelled) { _cleanupTerminalResources(); }
+else if (failed) { _cleanupTerminalResources(); }` elágazás valóban csak a
+`completed` ágon épít result objektumot. A result-oldali
+`PracticeFinishReason.interrupted` ráadásul EGYETLEN production helyen sem
+keletkezik (`grep -rn "PracticeFinishReason\." lib/features/practice
+--include=*.dart` → 0 találat `.interrupted`-re; a `_mapFinishReason`
+kimerítő switch-e az 5 state-oldali értéket 5 result-oldali értékre képezi,
+`interrupted` nélkül — a doc-comment ezt explicit ki is mondja).
+
+**Következmény:** a brief §6.1 3-soros mérce-mátrixa ("technikai hiba" /
+"megszakította" / "végigcsinálta") NEM építhető pusztán egy bejövő
+`practice.PracticeSessionResult.finishReason` vizsgálatából, mert a
+"technikai hiba" és a "megszakította" eset ÉPP AZOKON az ágakon áll elő
+(`failed`, `cancelled`), amelyeken a Practice Engine ma egyáltalán NEM
+produkál result objektumot. A Practice Engine módosítása ennek a körnek
+tiltott zónája (§3) — a feloldás ezért a
+`PlanExecutionCoordinator`/`PracticeOutcomeAdapter` BEMENETI szerződésének a
+kérdése, nem a Practice Engine-é.
+
+**Feloldás (`allowed_paths` változatlan — mindhárom pont a már engedélyezett
+3 új fájlban oldható meg):**
+
+a) A `PracticeOutcome.completionState` normatív forrása **SDD Ch8 §26.2** —
+szó szerint hat érték: `completed / partial / skipped / cancelled /
+failedTechnical / unavailable` ("A skip önmagában nem performance failure.").
+Ez PONTOSÍTJA, nem helyettesíti a §6.1 3-soros mátrixát. Eredet szerinti
+csoportosítás (mérve a Practice Engine-en, fent):
+
+| `completionState` | Honnan ered | Van mögötte `PracticeSessionResult`? |
+|---|---|---|
+| `unavailable` | a blokk indítás ELŐTT elakad (elavult revízió / hiányzó capability, §5.2) | nincs — a coordinator sosem indítja a sessiont |
+| `skipped` | a blokkot explicit kihagyják indítás előtt | nincs |
+| `failedTechnical` | Practice Engine `failed` terminal állapot (mikrofon/permission/crash) | **nincs** — a coordinatornak ezt a hívótól kapott, `PracticeSessionResult`-tól FÜGGETLEN jelzésként kell fogadnia |
+| `cancelled` | Practice Engine `cancelled` terminal állapot (explicit `CancelPractice`), mérhető attempt nélkül | **nincs** — ugyanaz az ok |
+| `partial` | a session elérte a `completed` állapotot, de NEM `completedAllTargets`-tel (`userFinished` vagy `timedOut` `finishReason`) — van mérhető attempt-adat | **van** |
+| `completed` | `PracticeFinishReason.completedAllTargets` | **van** |
+
+b) Emiatt a coordinátor/adapter bemenete NEM lehet kizárólag
+`practice.PracticeSessionResult` — definiáljon saját, hívó-táplált bemeneti
+szerződést (pl. a `practice_outcome_adapter.dart`-ban élő union/sealed típus:
+egy `PracticeSessionResult`-et hordozó ág ÉS egy attól független,
+"nincs result, mert cancel/technical-failure" ág) — ugyanaz a hívó-táplált
+minta, mint a Kör 8 katalógus-adapteré (saját Riverpod-függőség és élő
+subscription nélkül). A valós Practice Engine `cancelled`/`failed` ágának
+ehhez kötése (a ma hiányzó result-termelés pótlása) egy JÖVŐBELI wiring-kör
+dolga — ebben a körben a `cancelled`/`failedTechnical` teszt-cellák a
+hívó-táplált szerződésen át közvetlenül konstruálnak bemenetet, valós
+Practice Engine session nélkül.
+
+c) `PracticeFinishReason.interrupted` a mérés szerint sosem keletkezik éles
+kódúton — az adapter kezelje védekező, de nem termelő ágként (ugyanaz a
+"stabil kódú, hívatlan érték" minta, mint az R08 katalógus-adapter több
+enum-tagja).
+
+**2. Az elavult blokk ellenőrzésének köre helyesen szűk — nincs teendő.** Az
+SDD §25.4 nyolc staleness-dimenziót sorol fel, de a Kör 23 saját SDD
+feladatlistája kifejezetten csak kettőt ír elő: "Ellenőrizd exercise
+revisiont és capabilityt start előtt" — ez pontosan fedi a brief §5.2
+szövegét. A többi hat dimenzió (dal/range/tuning → Kör 24 Song Trainer
+integráció; plan revízió/blokk-kor/goal → későbbi tervrevíziós kör) NEM
+ennek a körnek a hatásköre — az implementer ne próbálja mind a nyolcat
+lefedni.
+
+**3. Az új típusok a 3 már engedélyezett fájlban kapnak otthont, NEM új
+domain/model fájlban.** Az SDD `PracticeOutcome` (§26.1) és `CompiledPlanStep`
+(§25.2) dataclass-alakot ír elő, de az `allowed_paths` nem tartalmaz
+`domain/model/practice_outcome.dart`-ot vagy hasonlót. A repo bevett mintáját
+követve (kis kísérő típusok a tulajdonos fájlban, pl.
+`RepetitionPrescription`/`FallbackReference` az `exercise_prescription.dart`-ban):
+a `CompiledPlanStep` a `plan_compiler.dart`-ban, a `PracticeOutcome` +
+completion-state/user-feedback típusai a `practice_outcome_adapter.dart`-ban,
+a `blockExecutionId` (típusos wrapper, SDD §9.1 mintáját követve) pedig a
+`plan_execution_coordinator.dart`-ban (ahol mintázódik) definiálandó — így
+elkerülhető egy indokolatlan H3.
+
+**Összegzés:** mindhárom pont a MÁR engedélyezett fájlokon belül oldható fel
+— `allowed_paths`/`gate_tests` változatlan.
 
 ## 1. Cél
 
