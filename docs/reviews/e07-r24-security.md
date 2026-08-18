@@ -1,8 +1,8 @@
 # E07-R24 — Security / privacy review
 
-Brief: `docs/rounds/e07-r24-song-goal-integration.md`  
-Reviewed commits: `05f0f45f` and repair delta `05f0f45f..1da19b7d`  
-Reviewer: independent security-reviewer · Dátum: 2026-08-18  
+Brief: `docs/rounds/e07-r24-song-goal-integration.md`
+Reviewed commits: `05f0f45f` and repair delta `05f0f45f..1da19b7d`
+Reviewer: independent security-reviewer · Dátum: 2026-08-18
 Verdikt: **PASS** on exact `1da19b7df14ea9620a22586d13e297a5db5d16ac`.
 
 ## Eredmény

@@ -1,8 +1,8 @@
 # E07-R24 — Correctness review
 
-Brief: `docs/rounds/e07-r24-song-goal-integration.md`  
-Diff: `git diff 2dd27bed..1da19b7d` (`minimax/e07-r24-song-goal-integration`)  
-Reviewer: Codex / Terra orchestrátor · Dátum: 2026-08-18  
+Brief: `docs/rounds/e07-r24-song-goal-integration.md`
+Diff: `git diff 2dd27bed..1da19b7d` (`minimax/e07-r24-song-goal-integration`)
+Reviewer: Codex / Terra orchestrátor · Dátum: 2026-08-18
 Verdikt: **APPROVED** — F1 MAJOR fixed in `1da19b7d` and independently remeasured.
 
 ## Összegzés
