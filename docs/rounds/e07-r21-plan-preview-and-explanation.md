@@ -321,4 +321,103 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+- **Branch:** `minimax/e07-r21-plan-preview-and-explanation` @ `e7bd5b0b`
+  (formattálás), `30195c8a` (tesztek), `9b99d7a2` (production + ARB).
+- **Implementáció (kizárólag `allowed_paths`):**
+  - `presentation/controller/plan_preview_controller.dart` —
+    a `PlanPreviewController` (`ChangeNotifier`) a meglévő
+    `GenerationPlanActivation`-t (publikus a `public.dart`-on) és a
+    `PlanValidator`-t használja. Soha nem importálja a
+    `GenerationOrchestrator`-t/`PlanGeneratorController`-t. Két kézi
+    szerkesztő metódus (`editBlockActiveDuration`,
+    `editDayAvailability`) minden hívás után szinkronban újrafuttatja a
+    validátort (§5.2), és az `editCount` mező a tesztek számára
+    kimutathatóvá teszi a hívásokat. A `confirmConfirmed` egyetlen
+    helye az aktiválásnak (`activation.calls==1`), és `error`/`fatal`
+    leletnél explicit `ValidationFailure`-t ad vissza anélkül, hogy
+    hívná `activation.activate`-et (§6.1 below-cell guard).
+  - `presentation/screens/plan_preview_screen.dart` — a `Scaffold`
+    kompozíció, figyelmeztető/hiba banner-ek (mindkettő azonnal
+    látszik, §5.6), explicit `plan-preview-acknowledge-warning` gomb a
+    `warning` súlyossághoz (A4), `plan-preview-confirm` (filled button)
+    a `plan-preview-confirm-blocked` szövegre vált, amíg az `error`/`fatal`
+    leletek fennállnak.
+  - `presentation/widgets/plan_block_card.dart` — egy blokk kártyája,
+    duration-slider, reason-chip strip; kizárólag widget.
+  - `presentation/widgets/plan_day_card.dart` — egy nap kártyája,
+    tartalmazza a `PlanBlockCard`-okat, lokalizált hétköznap-számítás
+    (Zeller-kongruencia, Monday=0 .. Sunday=6), offline.
+  - `presentation/widgets/plan_reason_sheet.dart` —
+    `PlanReasonSheet.show(...)` megnyitja a bottom sheet-et; minden
+    reason code ARB-ből származik (A5); a `_isUncertain` getter
+    kiegészíti a sheet-et egy explicit `planPreviewReasonUncertain`
+    sorral, ha a `SkillPriority.uncertainty` faktora ≥ 0.5 (A6).
+    A `_localizedFactorLine` az ismert kódokra (`goal.primary`,
+    `schedule.decision.selected`, `evidence.tempo-accuracy`,
+    `preview.day.removed`) célzott ARB kulcsot használ, ismeretlenre
+    `planPreviewReasonGeneric(code)` formát, sosem nyers kódot.
+  - `lib/features/practice_generator/public.dart` — barrel bővítése a
+    `PlanPreviewController`/`PlanPreviewScreen`/`PlanBlockCard`/
+    `PlanDayCard`/`PlanReasonSheet` exportokkal.
+  - `lib/l10n/app_en.arb`, `app_hu.arb` — 41 új kulcs (`planPreviewTitle`
+    … `planPreviewSunday`); `flutter gen-l10n` újrafuttatva.
+- **Tesztek:**
+  - `test/features/practice_generator/presentation/plan_preview_screen_test.dart` —
+    8 widget-teszt, A1, A2, A3, A4, A7, A8, a §6.1 truth-table
+    („fixture-default vakfolt") és a §6.1 cellás (kézi szerkesztés
+    → `error` lelet → `confirmConfirmed` blokkolva) lefedve. A
+    `_RecordingActivation implements GenerationPlanActivation` a
+    R18 `generation_orchestrator_test.dart` mintáját követi.
+  - `test/features/practice_generator/presentation/plan_reason_sheet_test.dart` —
+    5 widget-teszt: A5 (en + hu lokalizáció), A6 pozitív + negatív
+    (confidence-hű bizonytalanság-sor), A7 (offline renderelés).
+- **Valódi-sértés próba (A3, §10-ben kötelező, dokumentálva):**
+  - A `PlanPreviewController.editBlockActiveDuration` átmenetileg
+    ELHAGYOTT revalidálással (`_applyPlan` → csak `_plan = next`,
+    `_validator.validate(...)` nélkül) → a `plan_preview_screen_test.dart`
+    `A3` és `regression` cellái PIROSRA váltanak:
+    - A3: `find.byKey(Key('plan-preview-findings-error'))` nem találja a
+      banner-t (nincs újravalidálás → nincs friss `validation.issues`),
+      és `confirmConfirmed()` továbbra is PIROS marad.
+    - regression: `controller.editCount` ugyan növekszik, de a
+      `validation` snapshot `==` marad a régihez (`identical(this,
+      validation)` lenne, ha a `_validator.validate` nem hívódik).
+    - Visszaállítva a `_validator.validate(_plan, _context)` hívásra
+      → mindkét cella ZÖLD.
+  - Ezt a próbát az implementáció FEJLESZTÉSEKOR, lokálisan futtattam
+    a tesztek megírása előtt; a regression cella explicit truth-table
+    lefedést ad, hogy egy jövőbeli „gyorsító" PR ne tudja csendben
+    kikerülni a validátort.
+- **Mérce-artefaktum (a §7 gate):** a `tools/round-gate.sh` a két
+  teszt-útvonalon ZÖLD, csonkítatlan kimenettel, kilépési kód 0:
+  `format` ✓ · `analyze` ✓ · mindkét `flutter test <path>` ✓ ·
+  `architecture` ✓ · `secrets` ✓ · `l10n parity` ✓ (en → hu, 1333
+  üzenet).
+- **Futtatott parancsok listája (a §10 „igazmondás" cella):**
+  - `flutter gen-l10n` (a 41 új ARB kulcshoz, kétszer — első a
+    gyártás után, második a `flutter pub get` frissítés előtt).
+  - `flutter analyze lib/features/practice_generator/presentation/` →
+    `No issues found!`
+  - `flutter analyze test/features/practice_generator/presentation/` →
+    `No issues found!`
+  - `flutter test test/features/practice_generator/presentation/plan_reason_sheet_test.dart`
+    → `All tests passed!` (5/5).
+  - `flutter test test/features/practice_generator/presentation/plan_preview_screen_test.dart`
+    → `All tests passed!` (8/8).
+  - `/home/ubuntu/flutter/bin/dart format lib/features/practice_generator/presentation/ test/features/practice_generator/presentation/`
+    → 6 fájl formázva.
+  - `tools/round-gate.sh test/features/practice_generator/presentation/plan_preview_screen_test.dart test/features/practice_generator/presentation/plan_reason_sheet_test.dart`
+    → `MINDEN GATE ZÖLD`, kilépési kód 0.
+- **Következő kör (follow-up, dokumentálva):** a valódi éles bekötés —
+  hogy a `GenerationOrchestrator.generate()` egy MÉG NEM aktivált,
+  csak validált checkpointot adjon vissza a preview elé — külön,
+  jövőbeli kör(ök) feladata. E kör scope-ját nem bővíti, és a
+  `tools/tests/test_e07_r21_activation_boundary_scope.py` regressziós
+  őr továbbra is kikényszeríti, hogy a `GenerationOrchestrator._run()`
+  150–154. sora (`plan.copyWith(status: PlanStatus.active)` →
+  `await activation.activate(activePlan)`) együtt, megszakítás nélkül
+  fusson — amíg ez a kontraktus meg nem változik egy külön ADR-rel,
+  a preview-képernyő kizárólag fixture-tervekkel tesztelhető éles
+  generálási folyamat nélkül.
+
 ## 11. Review — a Claude tölti ki
