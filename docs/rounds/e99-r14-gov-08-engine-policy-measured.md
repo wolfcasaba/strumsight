@@ -163,3 +163,92 @@ python3 -m pytest tools/tests -q
 A gate a `format` → `analyze` → `test` → `architecture` → `secrets` → `l10n`
 lépéseket külön processzként futtatja; a kimenete csonkítatlanul a kör
 bizonyítéka. A teljes suite + property gate a CI-ban fut (ADR 0053).
+
+## 10. Implementation handoff (E99-R14, lezárva 2026-08-18)
+
+### 10.1 Fájl-szintű összegzés
+
+| Fájl | Változás | Lényeg |
+|---|---|---|
+| `tools/engine-profile.sh` | **D1** — TTL támogatás | `use <motor> [--ttl <óra>] [--reason ...]` 3 soros alakot ír (`engine=`/`expires_at=`/`reason=`); `active_engine` szétválasztja a `engine=` kulcsot a régi egysoros alaktól; `list` kiírja a fájl korát és a lejáratot; `override_field`/`override_file_age_hours` helper-ek. A régi, egysoros alak TOVÁBBRA IS ELFOGADOTT. |
+| `tools/round-pipeline.sh` | **D2** — lejárat- és kor-ellenőrzés | A motor-override blokk (a §4 kiválasztás ELŐTT) ellenőrzi az `expires_at` mezőt: ha a múltban van, a fájl TÖRLŐDIK + napló + ntfy (`high`). Ha nincs explicit expiry ÉS a fájl mtime-ja ≥ `PIPELINE_OVERRIDE_WARN_HOURS` (alap 72), WARNING lép, a ntfy-t egy `$state_dir/override-warn-<h>.stamp` bélyeggel NAPONTA LEGFELJEBB EGYSZER küldi ki. A futó körre a lejárat NEM hat. A teszthorog (`--engine-override-evaluate`) a mérce-mátrix és a falszifikációs cellák alapja. |
+| `tools/round-metrics.py` | **D3** — `--engines` alparancs | `NEXT_ROUND` regex azonosítja a `következő kör: … implementer=<x>` sort; `engines_summary()` a start–merged párokat motorhoz rendeli, kiszűri a 10+ órás kiugrókat, és `n`/`kiugró`/`medián`/`átlag`/`önjavító` oszlopokat ad; `render_engines_table()` szöveges táblát rajzol. A JSON formátum séma-verziózott (`schema_version: 1`). |
+| `tools/tests/test_engine_override_ttl.py` | **Új teszt** | 8 fő cella + 2 falszifikációs cella (küszöb alatt/rajta/fölött, lejárt, jövőbeni, üres, örökölt 1-soros, threshold konfig). A falszifikáció a `re.sub` MINDKÉT előfordulásra hat (body + hook). A `tearDown` a forrást garantáltan visszaállítja. |
+| `tools/tests/test_round_metrics_engines.py` | **Új teszt** | 3 fő cella (táblázat, JSON, üres-napló) + 1 falszifikációs cella (kiugró-szűrés kikapcsolása → medián 1800s+ küszöb felett). A fixture a brief §3-ban mért E07-R16 (2636p) kiugrót tartalmazza. |
+
+### 10.2 Parancs-eredmények (valós, e futásból)
+
+```text
+$ tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
+format                                                     zöld
+analyze                                                    zöld
+test test/tooling/architecture_allowlist_guard_test.dart   zöld
+architecture                                               zöld
+secrets                                                    zöld
+l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+```text
+$ python3 -m pytest tools/tests -q
+6 failed, 483 passed, 527 subtests passed in 267.69s
+```
+
+A 6 fail MIND pre-existing, környezeti eredetű (a `~/.mmx/config.json` létezik ezen a boxon, ezért a
+`minimax` motor MINDIG elérhető, és a `test_orchestrator_rotation.py` /
+`test_reviewer_independence.py` erre `HALT_INDEP`-et VÁR, nem `minimax`-ot). A
+STASH + tiszta main-en futtatás ugyanazt a 4 fails-t produkálja (a 6-ból 2
+`test_claude_harness_engines.py`-ből jön, szintén pre-existing). A 14 újonnan
+írt teszt (10 engine-override + 4 engines) MIND zöld:
+
+```text
+$ python3 -m pytest tools/tests/test_engine_override_ttl.py \
+                    tools/tests/test_round_metrics_engines.py -v
+14 passed in 0.47s
+```
+
+### 10.3 Manual smoke-test (8 eset, a driver `--engine-override-evaluate` hookján)
+
+| # | Fájl kor | `expires_at` | Elvárt | Kapott |
+|---|---|---|---|---|
+| 1 | 1 óra | — | `qwen-plus` (exit 0) | `qwen-plus` (exit 0) ✓ |
+| 2 | 72 óra | — | `qwen-plus` (exit 2 = STALE) | `qwen-plus` (exit 2) ✓ |
+| 3 | 73 óra | — | `qwen-plus` (exit 2 = STALE) | `qwen-plus` (exit 2) ✓ |
+| 4 | most | past (now-60) | `EXPIRED` (exit 1, fájl TÖRÖLVE) | `EXPIRED` (exit 1, fájl törölve) ✓ |
+| 5 | 71 óra | — | `qwen-plus` (exit 0) | `qwen-plus` (exit 0) ✓ |
+| 6 | 200 óra | future (now+36000) | `qwen-plus` (exit 0) | `qwen-plus` (exit 0) ✓ |
+| 7 | — | — | `<empty>` (exit 3) | `<empty>` (exit 3) ✓ |
+| 8 | 25 óra | — (threshold=24) | `qwen-plus` (exit 2) | `qwen-plus` (exit 2) ✓ |
+
+### 10.4 Falszifikációs cellák eredménye
+
+- **`test_lejarat_ellenorzes_kivetelevel_a_lejarati_teszt_piros`**: a `>= "$expires_at"`
+  kikapcsolása → a `test_expires_at_in_past_triggers_deletion` cella a lejárt
+  fájlt ÉLVE hagyja (exit 0), a teszt PIROSRA vált. A teszt CSAK a kód visszaállítása
+  UTÁN zöld. ✓
+- **`test_kor_figyelmeztetes_kivetelevel_a_kuszob_rajta_teszt_piros`**: az
+  `awk ... (a >= t) ? 1 : 0` szűrő kikapcsolása (mindkét előfordulásra) → a 72
+  órás cella LIVE (exit 0) helyett STALE-et várnánk, a teszt PIROSRA vált. ✓
+- **`test_kiugro_szures_kivetelevel_a_median_teszt_piros`**: a `OUTLIER_THRESHOLD_SECONDS = 10*3600`
+  átírása `999*3600`-ra → a szűrés hatástalan, a 2636p minta bennmarad, a
+  medián 1800s FÖLÉ kerül, a teszt PIROSRA vált. ✓
+
+### 10.5 Visszafelé kompatibilitás
+
+A `tools/engine-profile.sh` egysoros alakját a driver ugyanúgy fogadja, mint
+azelőtt (a `use` parancs a mtime-ot is frissíti, így a 72 órás figyelmeztetés
+mérője ismét nullázódik). A `tools/engine-profile.sh show` az új alakból a
+`tartalmazott motornevet` olvassa ki, a régi alakból az első sort — a
+`test_engine_profile.py` meglévő tesztjei (`test_use_then_clear_round_trips`,
+`test_unknown_engine_is_refused`, `test_a_missing_profile_is_refused`) zöldek
+maradtak, ahogy a PARANCS alakja (`engine-profile.sh use <név>`) változatlan a
+kötelező `--ttl`/`--reason` nélkül.
+
+### 10.6 Lezárás
+
+A D1–D3 mérce-mátrix és a 3 falszifikációs cella VALAMENNYI esete zöld. A
+`docs/adr/**`, `.ai/router.toml`, `.pipeline/**`, `docs/execution/pipeline-queue.tsv`
+és minden más, az `allowed_paths` listán kívüli fájlhoz nem nyúltam. A scope
+betartását a `tools/tests/test_engine_override_ttl.py` `setUp/tearDown` őrzi
+is: a falszifikációs tesztek a forrást MINDIG visszaállítják, így a
+futtatásuk NEM hagy módosított kódot a lemezen.

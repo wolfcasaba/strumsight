@@ -3,10 +3,23 @@
 #
 #   tools/engine-profile.sh list            # nyilvántartás + aktív + elérhetőség
 #   tools/engine-profile.sh show            # csak az aktív motor neve
-#   tools/engine-profile.sh use <name>      # MINDEN kör ezzel a motorral megy
+#   tools/engine-profile.sh use <name> [--ttl <óra>] [--reason "<szöveg>"]
+#                                          # MINDEN kör ezzel a motorral megy
 #   tools/engine-profile.sh clear           # vissza a queue soronkénti értékére
 #   tools/engine-profile.sh check <name>    # élő füst-teszt (egy olcsó hívás)
 #   tools/engine-profile.sh env <name>      # a wrapperhez: KEY=VALUE sorok
+#
+# `use <name> [--ttl <óra>] [--reason "<szöveg>"]` (E99-R14 / ADR 0307 §1 D1):
+# az override ettől kezdve 3 soros, gépileg elemezhető:
+#   engine=<név>
+#   expires_at=<epoch|->
+#   reason=<szöveg|->
+# A lejárat `--ttl <óra>`-val adható meg; a TTL-et a meghíváskor mért
+# `now + ttl_hours*3600` epoch értékre állítjuk. `--ttl 0` = azonnal lejárt
+# (teszthez). Az egysoros alak (csak a motornév) TOVÁBBRA IS ÉRVÉNYES — a
+# driver a hiányzó `expires_at`/`reason` sort lejárat nélküli override-ként
+# kezeli, a `list` parancs kiírja a fájl korát, és a 72 órás küszöb felett
+# naponta figyelmeztet (a lejárathoz képest passzív, a figyelemre aktív).
 #
 # MIÉRT KELL: a motorok kvótája külön-külön merül ki (a Terra 9%-on, 2026-08-05),
 # és a kifogyott motor helyett azonnal váltani kell — de úgy, hogy a régi
@@ -41,7 +54,40 @@ engine_names() {
 }
 
 active_engine() {
-  [ -f "$override_file" ] && head -1 "$override_file" | tr -d '[:space:]'
+  local first
+  [ -f "$override_file" ] || return 0
+  first=$(head -1 "$override_file" | tr -d '[:space:]')
+  [ -n "$first" ] || return 0
+  # Az új, 3 soros alak: `engine=<név>`. A régi, egysoros alak: `<név>` —
+  # utóbbit a driver a mai napig fogadja, és a `use` parancs lejárat
+  # megadása nélkül is KIÍRHATJA (ha a hívó nem ad `--ttl`-t). A driver
+  # szempontjából mindkettő érvényes, a `validate_engine` névre utazik.
+  case "$first" in
+    engine=*) printf '%s' "${first#engine=}" ;;
+    *)        printf '%s' "$first" ;;
+  esac
+}
+
+# A 3 soros override-fájl részei. A `engine=` kulcs a mérvadó; a többi sor
+# OPCIÓ — a régi, egysoros alak (csak motornév) továbbra is támogatott, és
+# `expires_at=""` + `reason=""` értékkel jelenik meg (azaz lejárat nélküli,
+# nem-indokolt override).
+override_field() {   # $1=kulcs (engine|expires_at|reason) → érték (vagy "-")
+  local key="$1" value
+  [ -f "$override_file" ] || { printf '%s' "-"; return; }
+  value=$(grep -E "^${key}=" "$override_file" 2>/dev/null | head -1 | cut -d= -f2-)
+  printf '%s' "${value:-}"
+}
+
+# Az override-fájl KORA órában (tizedes), a lejárattól függetlenül. A 72 órás
+# küszöb mérésének alapja: a `mtime` pontos, és a `use` parancs minden
+# híváskor frissíti (a TTL-lel együtt), tehát a fájl kora = a kapcsoló kora.
+override_file_age_hours() {
+  local mtime now
+  [ -f "$override_file" ] || { printf '%s' "0"; return; }
+  mtime=$(stat -c %Y "$override_file" 2>/dev/null) || { printf '%s' "0"; return; }
+  now=$(date +%s)
+  awk -v diff="$(( now - mtime ))" 'BEGIN { printf "%.2f", diff / 3600.0 }'
 }
 
 # Elérhető-e a motor: megvan a config dir ÉS az auth (kulcsfájl vagy előfizetés).
@@ -61,7 +107,22 @@ case "${1:-list}" in
     active=$(active_engine)
     printf '=== Implementer-motorok (ADR 0140) ===\n'
     if [ -n "$active" ]; then
+      age=$(override_file_age_hours)
+      expires_at=$(override_field expires_at)
+      reason=$(override_field reason)
+      if [ "$expires_at" = "-" ] || [ -z "$expires_at" ]; then
+        expiry_line="lejárat: nincs (régi egysoros alak)"
+      else
+        if [ "$(date +%s)" -ge "$expires_at" ]; then
+          expiry_line="lejárat: $(date -Is -d "@$expires_at") — LEJÁRT (a driver következő firingjén törlődik)"
+        else
+          remaining_hours=$(awk -v n="$expires_at" -v now="$(date +%s)" 'BEGIN { printf "%.1f", (n - now) / 3600.0 }')
+          expiry_line="lejárat: $(date -Is -d "@$expires_at") (${remaining_hours} óra múlva)"
+        fi
+      fi
       printf 'Aktív override: %s — MINDEN kör ezzel megy.\n' "$active"
+      printf 'Kora: %s óra · %s\n' "$age" "$expiry_line"
+      [ -n "$reason" ] && [ "$reason" != "-" ] && printf 'Indoklás: %s\n' "$reason"
       printf 'Feloldás: tools/engine-profile.sh clear\n\n'
     else
       printf 'Nincs override — a queue `engine` oszlopa dönt körönként.\n\n'
@@ -84,14 +145,54 @@ case "${1:-list}" in
     ;;
 
   use)
-    name=${2:?használat: engine-profile.sh use <name>}
+    name=${2:?használat: engine-profile.sh use <name> [--ttl <óra>] [--reason "<szöveg>"]}
+    shift 2
+    ttl_hours=""
+    reason=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --ttl)
+          [ "$#" -ge 2 ] || { echo "hiányzó érték a --ttl után" >&2; exit 2; }
+          ttl_hours=$2
+          shift 2
+          ;;
+        --reason)
+          [ "$#" -ge 2 ] || { echo "hiányzó érték a --reason után" >&2; exit 2; }
+          reason=$2
+          shift 2
+          ;;
+        *)
+          echo "ismeretlen kapcsoló: $1" >&2
+          exit 2
+          ;;
+      esac
+    done
     row=$(row_for "$name")
     [ -n "$row" ] || { echo "ismeretlen motor: $name (elérhető: $(engine_names | tr '\n' ' '))" >&2; exit 2; }
     status=$(availability "$row")
     [ "$status" = "kész" ] || { echo "a(z) $name motor nem használható: $status" >&2; exit 3; }
     mkdir -p "$state_dir"
-    printf '%s\n' "$name" > "$override_file"
+    # A TTL epoch-számítás: a teszthorognak szüksége van a pontos, gépileg
+    # olvasható formára, ezért `expires_at` mindig epoch (>0) vagy "-".
+    if [ -n "$ttl_hours" ]; then
+      case "$ttl_hours" in ''|*[!0-9.]*) echo "a TTL nem szám: $ttl_hours" >&2; exit 2 ;; esac
+      expires_at=$(awk -v h="$ttl_hours" 'BEGIN { printf "%d", h * 3600 }' | awk -v now="$(date +%s)" '{ printf "%d", now + $1 }')
+    else
+      expires_at="-"
+    fi
+    [ -z "$reason" ] && reason="-"
+    {
+      printf 'engine=%s\n' "$name"
+      printf 'expires_at=%s\n' "$expires_at"
+      printf 'reason=%s\n' "$reason"
+    } > "$override_file"
     printf 'Aktív implementer-motor: %s (%s)\n' "$name" "$(field "$row" 4)"
+    if [ "$expires_at" = "-" ]; then
+      printf 'Lejárat: nincs (régi egysoros viselkedés — a 72 órás kor-figyelmeztetés él).\n'
+    else
+      printf 'Lejárat: %s (TTL %.2f óra)\n' "$(date -Is -d "@$expires_at")" "$ttl_hours"
+    fi
+    [ "$reason" != "-" ] && printf 'Indoklás: %s\n' "$reason"
     printf 'Minden további kör ezzel megy. Vissza: tools/engine-profile.sh clear\n'
     ;;
 
@@ -149,7 +250,7 @@ case "${1:-list}" in
     ;;
 
   *)
-    echo "használat: engine-profile.sh [list | show | use <name> | clear | check <name> | env <name>]" >&2
+    echo "használat: engine-profile.sh [list | show | use <name> [--ttl <óra>] [--reason \"<szöveg>\"] | clear | check <name> | env <name>]" >&2
     exit 2
     ;;
 esac

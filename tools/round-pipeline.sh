@@ -1438,6 +1438,60 @@ case "${1:-}" in
     write_brief_lint "${2:-}" "${3:-}"
     exit 0
     ;;
+  --engine-override-evaluate)   # teszthorog (E99-R14 D2): a motor-override lejárat- és kor-ellenőrzését futtatja, $2=queue-engine, [$3=PIPELINE_OVERRIDE_WARN_HOURS]
+    # Az alábbi kód a fenti, motor-override blokkból származik — csak a log/ntfy
+    # némítva van, hogy a teszthorog csendben megkapja a döntést. A kimenet
+    # formátuma: a `motor-override` BLOKK ÁLLAPOTA (mért érték, lásd lent):
+    #   * <motor>   — az override ÉL, a queue-motor helyébe lép;
+    #   * EXPIRED   — `expires_at` a múltban volt, a fájl törölve;
+    #   * STALE     — a fájl öreg, de nincs explicit expiry — WARNING lép;
+    #   * <empty>   — nincs override-fájl;
+    # Exit-kód: 0=live, 1=expired, 2=stale, 3=nincs-fájl.
+    queue_engine_for_test="${2:-}"
+    # A valódi szkript-test a `case` ágak ELŐTT fut le, ezért a body
+    # változói (`engine_override_file`, `override_warn_threshold` stb.) még
+    # nincsenek inicializálva — itt, lokálisan töltjük fel.
+    state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
+    engine_override_file="$state_dir/engine-override"
+    override_warn_threshold=${PIPELINE_OVERRIDE_WARN_HOURS:-72}
+    if [ -n "${3:-}" ]; then override_warn_threshold="$3"; fi
+    override_file_age_hours() {
+      local mtime
+      [ -f "$engine_override_file" ] || { printf '%s' "0"; return; }
+      mtime=$(stat -c %Y "$engine_override_file" 2>/dev/null) || { printf '%s' "0"; return; }
+      awk -v now="$(date +%s)" -v mt="$mtime" 'BEGIN { if (mt > 0) printf "%.2f", (now - mt) / 3600.0; else print "0" }'
+    }
+    if [ ! -f "$engine_override_file" ]; then
+      printf '%s\n' "<empty>"; exit 3
+    fi
+    raw_first=$(head -1 "$engine_override_file" | tr -d '[:space:]')
+    case "$raw_first" in
+      engine=*) engine_override="${raw_first#engine=}" ;;
+      *)        engine_override="$raw_first" ;;
+    esac
+    if [ -z "$engine_override" ] || ! validate_engine "$engine_override"; then
+      exit 4
+    fi
+    expires_at=$(grep -E '^expires_at=' "$engine_override_file" 2>/dev/null | head -1 | cut -d= -f2-)
+    if [ -n "$expires_at" ] && [ "$expires_at" != "-" ] \
+        && case "$expires_at" in ''|*[!0-9]*) true ;; *) false ;; esac; then
+      expires_at=""
+    fi
+    if [ -n "$expires_at" ] && [ "$expires_at" != "-" ] \
+        && [ "$(date +%s)" -ge "$expires_at" ]; then
+      rm -f "$engine_override_file"
+      printf '%s\n' "EXPIRED"; exit 1
+    fi
+    if [ -z "$expires_at" ] || [ "$expires_at" = "-" ]; then
+      age_hours=$(override_file_age_hours)
+      above=$(awk -v a="$age_hours" -v t="$override_warn_threshold" 'BEGIN { print (a >= t) ? 1 : 0 }')
+      if [ "$above" = "1" ]; then
+        printf '%s' "$engine_override"; exit 2
+      fi
+    fi
+    printf '%s' "$engine_override"
+    exit 0
+    ;;
 esac
 
 # --- 1. Zár (slot-alapú, ADR 0171) ---------------------------------------
@@ -1723,18 +1777,89 @@ adr=$(printf '%s' "$next_line" | cut -f4)
 
 [ -f "$brief" ] || die "a kör briefje nem létezik: $brief"
 
-# --- Motor-override (ADR 0140) -------------------------------------------
+# --- Motor-override (ADR 0140 + E99-R14 / ADR 0307 §1 D2) -----------------
 # A motorok kvótája külön merül ki (a Terra 9%-on, 2026-08-05). Az override
 # egyetlen gitignore-olt fájl, ezért a váltás visszavonható: törlésével a
 # queue soronkénti `engine` értéke lép vissza életbe, konfiguráció-átírás
 # nélkül. `tools/engine-profile.sh use|clear`.
+#
+# E99-R14 D2: az override-fájl a TTL-t és az indoklást is hordozza
+# (3 soros alak, lásd `tools/engine-profile.sh`: `engine=`, `expires_at=`,
+# `reason=`). A driver KÖR-KIVÁLASZTÁSKOR ellenőrzi a lejáratot:
+#   - ha `expires_at` a múltban van, a fájl TÖRLŐDIK, a queue `engine`
+#     értéke lép életbe (napló + ntfy);
+#   - ha nincs `expires_at` (régi egysoros alak) ÉS a fájl mtime-ja
+#     régebbi, mint `PIPELINE_OVERRIDE_WARN_HOURS` (alap 72), a driver
+#     FIGYELMEZTET, de ÉL — a figyelem passzív, nem dönt helyette;
+#   - a ntfy NAPONTA LEGFELJEBB EGYSZER megy ki (állapot-bélyeg a
+#     `$state_dir`-ben), hogy ne zajosodjon a telefon;
+#   - a futó kört a lejárat NEM érinti — a kör a saját motorjával fejezi be.
+override_file_mtime() { stat -c %Y "$engine_override_file" 2>/dev/null || echo 0; }
+override_file_age_hours() {
+  local mtime
+  mtime=$(override_file_mtime)
+  awk -v now="$(date +%s)" -v mt="$mtime" 'BEGIN { if (mt > 0) printf "%.2f", (now - mt) / 3600.0; else print "0" }'
+}
+
 engine_override_file="$state_dir/engine-override"
+override_warn_threshold=${PIPELINE_OVERRIDE_WARN_HOURS:-72}
+override_warn_state_file="$state_dir/override-warn-${override_warn_threshold}h.stamp"
 if [ -f "$engine_override_file" ]; then
-  engine_override=$(head -1 "$engine_override_file" | tr -d '[:space:]')
+  # Az `engine=` kulcsot szigorúan vesszük, a régi egysoros alakot (csak
+  # motornév) továbbra is támogatjuk (a `use` parancs lejárat nélkül is
+  # írja).
+  raw_first=$(head -1 "$engine_override_file" | tr -d '[:space:]')
+  case "$raw_first" in
+    engine=*) engine_override="${raw_first#engine=}" ;;
+    *)        engine_override="$raw_first" ;;
+  esac
   if [ -n "$engine_override" ] && validate_engine "$engine_override"; then
-    [ "$engine_override" != "$engine" ] && \
-      log "MOTOR-OVERRIDE: $engine → $engine_override (tools/engine-profile.sh clear old fel)"
-    engine=$engine_override
+    # `expires_at` mező kinyerése: a 3 soros alak része, a régi egysoros
+    # alakból üresen marad — az ilyen fájl NINCS lejárva, csak
+    # "lejárat nélküli" override.
+    expires_at=$(grep -E '^expires_at=' "$engine_override_file" 2>/dev/null | head -1 | cut -d= -f2-)
+    if [ -n "$expires_at" ] && [ "$expires_at" != "-" ] && case "$expires_at" in ''|*[!0-9]*) true ;; *) false ;; esac; then
+      # Az `expires_at` jelen van és nem "-" és NEM szám — a `use` parancs
+      # soha nem ír ilyet (epoch vagy "-"), tehát ez az emberi kézi
+      # beavatkozás jele. Ilyenkor az óvatosság javára döntünk: a lejárat
+      # ellenőrzését KIHAGYJUK, csak a kor-figyelmeztetés lép (különben
+      # egy elgépelt timestamp azonnali queue-eltérést okozna).
+      log "MOTOR-OVERRIDE: $engine_override az expires_at mező érvénytelen ($expires_at) — csak a kor-figyelmeztetés lép"
+      expires_at=""
+    fi
+    # 1) LEJÁRAT-ELLENŐRZÉS (E99-R14 D2): ha a TTL a múltban van, a fájl
+    # TÖRLŐDIK, és a queue `engine` értéke lép életbe. A teszthorog a
+    # `expires_at` KIOLVASÁSÁT és az ÖSSZEHASONLÍTÁST is ellenőrzi
+    # (falszifikációs cella).
+    if [ -n "$expires_at" ] && [ "$expires_at" != "-" ] \
+        && [ "$(date +%s)" -ge "$expires_at" ]; then
+      log "MOTOR-OVERRIDE LEJÁRT: $engine_override (expires_at=$(date -Is -d "@$expires_at")) — a queue engine oszlopa lép vissza"
+      notify "⏰ motor-override lejárt" "$engine_override — a queue soronkénti engine értéke lép életbe" high
+      rm -f "$engine_override_file"
+      engine_override=""
+    else
+      # 2) KOR-FIGYELMEZTETÉS (E99-R14 D2): 72 órás küszöb. A `use` parancs
+      # frissíti a mtime-ot, tehát a fájl kora = a kapcsoló kora. Csak
+      # akkor lép, ha NINCS explicit `expires_at` (mert aki TTL-t adott,
+      # az szándékosan hosszabbít — az ismételt warning zavarna).
+      if [ -z "$expires_at" ] || [ "$expires_at" = "-" ]; then
+        age_hours=$(override_file_age_hours)
+        above=$(awk -v a="$age_hours" -v t="$override_warn_threshold" 'BEGIN { print (a >= t) ? 1 : 0 }')
+        if [ "$above" = "1" ]; then
+          log "MOTOR-OVERRIDE ÖREG: $engine_override (kora: ${age_hours} óra, küszöb: ${override_warn_threshold} óra) — az override Él, de fontold meg a feloldást (tools/engine-profile.sh clear)"
+          # A ntfy-t naponta legfeljebb egyszer küldjük (bélyeg a state_dir-
+          # ben), hogy a telefon ne zajosodjon.
+          today=$(date +%Y%m%d)
+          if [ ! -f "$override_warn_state_file" ] || [ "$(cat "$override_warn_state_file" 2>/dev/null)" != "$today" ]; then
+            printf '%s' "$today" > "$override_warn_state_file"
+            notify "⚠ motor-override régi" "$engine_override (${age_hours} óra) — küszöb ${override_warn_threshold} óra" default
+          fi
+        fi
+      fi
+      [ "$engine_override" != "$engine" ] && \
+        log "MOTOR-OVERRIDE: $engine → $engine_override (tools/engine-profile.sh clear old fel)"
+      engine=$engine_override
+    fi
   else
     die "érvénytelen motor-override: $engine_override ($engine_override_file)"
   fi
