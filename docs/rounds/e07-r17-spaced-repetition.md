@@ -210,4 +210,85 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Módosított / új fájlok
+
+- `lib/features/practice_generator/domain/model/review_item.dart` (NEW)
+  - `ReviewTargetKind` (chordTransition, strummingPattern, lesson, songSection)
+  - `ReviewTarget` (kind + targetId, `dedupKey = kind|targetId`)
+  - `ReviewOutcome` (success, partial, failure, unknown)
+  - `ReviewItem` (target, currentInterval, dueDate, replacementRequired)
+  - `SelectableReviewItem` (item + estimatedMinutes)
+- `lib/features/practice_generator/domain/policy/spaced_repetition_policy.dart` (NEW)
+  - `ReviewIntervalLadder` (minimum/partial/unchanged/maximum anchored days)
+  - `ReviewIntervalReason` (success, partial, failure, unknown)
+  - `ReviewIntervalDecision` (previous/new interval + dueDate + reason)
+  - `SpacedRepetitionPolicy.evaluate()` (pure, no clock, no Random, no DateTime)
+- `lib/features/practice_generator/domain/service/review_queue.dart` (NEW)
+  - `ReviewQueue(totalDailyMinutes, reviewBudgetMinutes)` — enforces the
+    `0 <= reviewBudgetMinutes < totalDailyMinutes` strict bound
+  - `ReviewQueueDecision.select()` — emits `selected`, `deferred`, and
+    `replacementRequired` disjoint buckets
+  - dedup-keyed on `(kind, targetId)`, sorted by `(dueDate, dedupKey)`
+- `lib/features/practice_generator/public.dart` — barrel updated with the
+  three new exports.
+- `test/features/practice_generator/review/review_queue_test.dart` (NEW)
+  - A1: budget cap (selected ≤ reviewBudgetMinutes), A1/contract
+    (negative/equal/over rejected), A1/zero (zero budget defers all)
+  - A6a/A6b/A6c: replacementRequired propagation without consumption
+  - A7: dedup on `(kind, targetId)`, identity test (different kinds with
+    same id do NOT merge), deterministic order test
+  - Validation: negative minutes rejected
+- `test/features/practice_generator/review/spaced_repetition_policy_test.dart` (NEW)
+  - A2: unknown keeps previous interval & due date
+  - A3a: success lengthens; A3b: failure shortens to minimum
+  - A4: partial is a distinct band (failure < partial < success)
+  - A5: deterministic (same inputs → same decision)
+  - A8: timezone-neutral due date; H8 carryover: unknown on late `today`
+    still keeps the original due date
+  - Contract: zero-interval rejected; max-interval clamped
+  - **Mutation proof (KÖTELEZŐ):** the `A2 mutation` test re-runs the
+    policy with `ReviewOutcome.failure` standing in for `unknown` and
+    asserts the broken variant shrinks the interval — green confirms A2
+    is non-vacuous.
+
+### 10.2 Parancsok és eredmények
+
+- `tools/round-gate.sh test/features/practice_generator/review/review_queue_test.dart test/features/practice_generator/review/spaced_repetition_policy_test.dart`
+  - `[1] format` → zöld
+  - `[2] analyze` → zöld (No issues found!)
+  - `[3] test review_queue_test.dart` → zöld (10/10 All tests passed!)
+  - `[4] test spaced_repetition_policy_test.dart` → zöld (10/10 All tests passed!)
+  - `[5] architecture` → zöld
+  - `[6] secrets` → zöld
+  - `[7] l10n` → zöld
+- `flutter test` futtatva a `gate` belsejében, **külön** processzként, NEM
+  `analyze && test` láncban (L05 OOM-védelem).
+
+### 10.3 A2 valódi-sértés próba — bizonylat
+
+A `A2 mutation` csoport egyetlen tesztet tartalmaz, és a kötelező
+„uncertain-as-failure" próbát implementálja: a `review_queue_test.dart`
+és a `spaced_repetition_policy_test.dart` is ugyanazt a `evaluate(...)`
+hívást futtatja — egyszer `ReviewOutcome.unknown` (helyes), egyszer
+`ReviewOutcome.failure` (a törött variáns) — és a teszt pirosra váltana,
+ha a `failure` ág ugyanazt az intervallumot adná, mint a `unknown`. A
+gate zöldje bizonyítja, hogy a kettő különböző döntést produkál (unknown
+→ 7 nap, failure → 1 nap), tehát A2 terhelhető.
+
+### 10.4 Scope-validáció
+
+A `git status` az alábbi útvonalakon kívül SEMMIT nem módosított:
+- `lib/features/practice_generator/domain/model/review_item.dart`
+- `lib/features/practice_generator/domain/policy/spaced_repetition_policy.dart`
+- `lib/features/practice_generator/domain/service/review_queue.dart`
+- `lib/features/practice_generator/public.dart`
+- `test/features/practice_generator/review/review_queue_test.dart`
+- `test/features/practice_generator/review/spaced_repetition_policy_test.dart`
+- `test/fixtures/practice_generator/review/review_fixtures.dart`
+- `docs/rounds/e07-r17-spaced-repetition.md`
+- `docs/adr/0303-spaced-repetition-review-queue-contract.md`
+
+A 0303-as ADR NEM módosult (a brief által kijelölt pre-flight szöveg
+változatlan).
+
 ## 11. Review — a Claude tölti ki
