@@ -335,13 +335,21 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
     kimutathatóvá teszi a hívásokat. A `confirmConfirmed` egyetlen
     helye az aktiválásnak (`activation.calls==1`), és `error`/`fatal`
     leletnél explicit `ValidationFailure`-t ad vissza anélkül, hogy
-    hívná `activation.activate`-et (§6.1 below-cell guard).
+    hívná `activation.activate`-et (§6.1 below-cell guard). A
+    konstruktor egy új `priorities: Map<BlockId, SkillPriority>`
+    opcionális paramétert fogad, és a `priorityFor(BlockId)` metódus
+    visszaadja az adott blokkhoz rendelt prioritást (vagy `null`-t, ha
+    nincs) — ezt olvassa a screen a reason sheet megnyitásakor (F1
+    review, §5.4).
   - `presentation/screens/plan_preview_screen.dart` — a `Scaffold`
     kompozíció, figyelmeztető/hiba banner-ek (mindkettő azonnal
     látszik, §5.6), explicit `plan-preview-acknowledge-warning` gomb a
     `warning` súlyossághoz (A4), `plan-preview-confirm` (filled button)
     a `plan-preview-confirm-blocked` szövegre vált, amíg az `error`/`fatal`
-    leletek fennállnak.
+    leletek fennállnak. Az `onReasonRequested` callback a
+    `widget.controller.priorityFor(block.id)` értéket adja át a
+    `PlanReasonSheet.show(...)`-nak, így a screen-útvonal is
+    confidence-hű (F1 review, §5.4).
   - `presentation/widgets/plan_block_card.dart` — egy blokk kártyája,
     duration-slider, reason-chip strip; kizárólag widget.
   - `presentation/widgets/plan_day_card.dart` — egy nap kártyája,
@@ -356,6 +364,10 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
     `schedule.decision.selected`, `evidence.tempo-accuracy`,
     `preview.day.removed`) célzott ARB kulcsot használ, ismeretlenre
     `planPreviewReasonGeneric(code)` formát, sosem nyers kódot.
+    **F1 review, §5.4 — defense in depth:** a getter `null` priority
+    és `null` bizonytalansági faktor esetén is `true`-t ad vissza
+    (fail-closed): a bizonyosság hiánya önmagában bizonytalanság,
+    nem jeleníthetünk meg magabiztos indoklást.
   - `lib/features/practice_generator/public.dart` — barrel bővítése a
     `PlanPreviewController`/`PlanPreviewScreen`/`PlanBlockCard`/
     `PlanDayCard`/`PlanReasonSheet` exportokkal.
@@ -368,9 +380,20 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
     → `error` lelet → `confirmConfirmed` blokkolva) lefedve. A
     `_RecordingActivation implements GenerationPlanActivation` a
     R18 `generation_orchestrator_test.dart` mintáját követi.
+    **F1 review javító kör (2026-08-18):** két újabb widget-teszt
+    került a fájlba — `F1 regression` (a screen-útvonalról megnyitott
+    reason sheet uncertainty=0.7 prioritással megjeleníti a
+    `plan-reason-uncertain` elemet) és `F1 fail-closed` (a screen
+    `priorityFor(block.id) == null` esetén is megjeleníti a
+    bizonytalanság-sort, bizonyítva, hogy a screen-útvonal nem
+    hallgatja el a hiányzó confidence adatot).
   - `test/features/practice_generator/presentation/plan_reason_sheet_test.dart` —
     5 widget-teszt: A5 (en + hu lokalizáció), A6 pozitív + negatív
     (confidence-hű bizonytalanság-sor), A7 (offline renderelés).
+    **F1 review javító kör:** egy újabb widget-teszt — `F1 fail-closed`
+    (`_pump` priority nélkül) — bizonyítja, hogy a sheet
+    önmagában is fail-closed, és `null` priority esetén is megjeleníti
+    a `plan-reason-uncertain` elemet.
 - **Valódi-sértés próba (A3, §10-ben kötelező, dokumentálva):**
   - A `PlanPreviewController.editBlockActiveDuration` átmenetileg
     ELHAGYOTT revalidálással (`_applyPlan` → csak `_plan = next`,
@@ -388,6 +411,18 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
     a tesztek megírása előtt; a regression cella explicit truth-table
     lefedést ad, hogy egy jövőbeli „gyorsító" PR ne tudja csendben
     kikerülni a validátort.
+- **Valódi-sértés próba (F1 BLOCKER javító kör, lokálisan futtatva):**
+  - A `_isUncertain` getter `null` priority-re visszaállítva
+    `return false`-ra (a sheet eredeti, F1 által kifogásolt
+    viselkedése) → a `plan_reason_sheet_test.dart` `F1 fail-closed`
+    cellája PIROSRA vált (`Found 0 widgets with key [<'plan-reason-uncertain'>]`),
+    és a `plan_preview_screen_test.dart` `F1 fail-closed` cellája is
+    PIROSRA vált ugyanazzal a hibaüzenettel.
+  - Visszaállítva a getter fail-closed viselkedésére → mindkét cella
+    ZÖLD. Ez a próba a screen-útvonalat és a sheet fail-closed őrét is
+    egyetlen teszt-párral fogja; egy jövőbeli „gyorsító" PR nem tudja
+    visszaállítani a magabiztos null-priority megjelenítést anélkül,
+    hogy ezt a két cellát pirosra ne váltaná.
 - **Mérce-artefaktum (a §7 gate):** a `tools/round-gate.sh` a két
   teszt-útvonalon ZÖLD, csonkítatlan kimenettel, kilépési kód 0:
   `format` ✓ · `analyze` ✓ · mindkét `flutter test <path>` ✓ ·
@@ -401,13 +436,32 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   - `flutter analyze test/features/practice_generator/presentation/` →
     `No issues found!`
   - `flutter test test/features/practice_generator/presentation/plan_reason_sheet_test.dart`
-    → `All tests passed!` (5/5).
+    → `All tests passed!` (5/5, az eredeti R21 körben; a F1 javító
+    körben 6/6 az új `F1 fail-closed` cellával).
   - `flutter test test/features/practice_generator/presentation/plan_preview_screen_test.dart`
-    → `All tests passed!` (8/8).
+    → `All tests passed!` (8/8, az eredeti R21 körben; a F1 javító
+    körben 10/10 az új `F1 regression` és `F1 fail-closed`
+    cellákkal).
   - `/home/ubuntu/flutter/bin/dart format lib/features/practice_generator/presentation/ test/features/practice_generator/presentation/`
     → 6 fájl formázva.
   - `tools/round-gate.sh test/features/practice_generator/presentation/plan_preview_screen_test.dart test/features/practice_generator/presentation/plan_reason_sheet_test.dart`
-    → `MINDEN GATE ZÖLD`, kilépési kód 0.
+    → `MINDEN GATE ZÖLD`, kilépési kód 0 (mindkét F1 javító körben
+    lefuttatva: egyszer a fix után, egyszer a mutáció-visszaállítás
+    után a fix újbóli megerösítésére).
+- **F1 javító kör scope-audit:** `git status --short` a javító kör
+  végén: 5 módosított fájl, mind az `allowed_paths` listán belül:
+  - `lib/features/practice_generator/presentation/controller/plan_preview_controller.dart`
+    (`priorityFor` lookup + `priorities` konstruktor-paraméter),
+  - `lib/features/practice_generator/presentation/screens/plan_preview_screen.dart`
+    (priority átadása a `PlanReasonSheet.show`-nak),
+  - `lib/features/practice_generator/presentation/widgets/plan_reason_sheet.dart`
+    (fail-closed `_isUncertain`),
+  - `test/features/practice_generator/presentation/plan_preview_screen_test.dart`
+    (2 új cella),
+  - `test/features/practice_generator/presentation/plan_reason_sheet_test.dart`
+    (1 új cella),
+  - `docs/rounds/e07-r21-plan-preview-and-explanation.md` (ez a §10).
+  A javító kör 0 listán kívüli útvonalat módosított.
 - **Következő kör (follow-up, dokumentálva):** a valódi éles bekötés —
   hogy a `GenerationOrchestrator.generate()` egy MÉG NEM aktivált,
   csak validált checkpointot adjon vissza a preview elé — külön,
