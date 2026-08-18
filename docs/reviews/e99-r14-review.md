@@ -182,3 +182,28 @@ próba után tiszta.
 
 **Végső verdikt: APPROVED.** Nyitott BLOCKER/MAJOR nincs. A CI exact-SHA
 bizonyíték és az ADR 0052 szerinti merge még hátra van.
+
+## Merge-előtti, upstream-friss független re-review — 2026-08-18
+
+- **Ellenőrzött HEAD:** `72377635e21691a8c2de4f1ce8d91a13782a3887`.
+- **Upstream:** `origin/main` = `2444e055bd2e43152a2e9bc86b4a775beb12a1eb`,
+  amely a branch őse (konfliktusmentes `--no-ff` merge után).
+- **Módszer:** friss, közvetlen távoli klón
+  (`/tmp/review-e99-r14-remote.JmiGMc`), scope-audit, teljes futtatható
+  Flutter-gate és a tooling-suite ismétlése.
+
+### Bizonyíték
+
+- Scope-audit: `Legacy scope audit OK (origin/main..72377635e216, 7 changed
+  path(s), 1 generated/ignored)`.
+- `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`:
+  format, analyze, célzott teszt, architecture, secrets és l10n zöld.
+- `/tmp/ss-heal-r12-pytest/bin/python3 -m pytest tools/tests -q`:
+  `527 passed, 1 skipped, 560 subtests passed` (284.92 s).
+- A gép alapértelmezett `/usr/bin/python3` interpreterében a `pytest` modul
+  nincs telepítve (`No module named pytest`); ez lokális eszközelőfeltétel,
+  nem a kör diffje. A teljes suite a projekt korábbi review-jaiban is használt
+  izolált pytest-környezetben futott le.
+
+**Végső verdikt: APPROVED.** Nyitott BLOCKER/MAJOR nincs; a következő kötelező
+bizonyíték az exact-SHA CI és a Router CI zöld eredménye.
