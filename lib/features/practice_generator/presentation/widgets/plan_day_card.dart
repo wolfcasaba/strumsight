@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
+import '../../domain/model/practice_block.dart';
 import '../../domain/model/practice_day.dart';
+import '../../domain/model/weekly_availability.dart';
 import 'plan_block_card.dart';
 
 /// Renders one [PracticeDay] as a card containing its blocks.

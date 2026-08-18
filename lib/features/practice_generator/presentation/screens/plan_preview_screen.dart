@@ -5,7 +5,6 @@ import '../../domain/id/planner_ids.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/plan_enums.dart';
 import '../../domain/model/plan_validation_issue.dart';
-import '../../domain/model/practice_block.dart';
 import '../../domain/service/plan_validator.dart';
 import '../controller/plan_preview_controller.dart';
 import '../widgets/plan_day_card.dart';
@@ -119,8 +118,9 @@ class _PlanPreviewScreenState extends State<PlanPreviewScreen> {
                     for (final day in state.plan.days)
                       PlanDayCard(
                         day: day,
-                        onReasonRequested: (block) =>
-                            PlanReasonSheet.show(context, block: block),
+                        onReasonRequested: (block) {
+                          PlanReasonSheet.show(context, block: block);
+                        },
                         onBlockDurationChanged: (blockId, next) {
                           widget.controller.editBlockActiveDuration(
                             BlockId(blockId),
@@ -137,18 +137,21 @@ class _PlanPreviewScreenState extends State<PlanPreviewScreen> {
                 onAcknowledgeWarning: () =>
                     setState(() => _warningAcknowledged = true),
                 onConfirm: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final navigator = Navigator.of(context);
+                  final l10nOnTap = l10n;
                   final result = await widget.controller.confirmConfirmed();
                   if (!mounted) return;
                   if (result.isFailure) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    messenger.showSnackBar(
                       SnackBar(
                         key: const Key('plan-preview-confirm-error'),
-                        content: Text(l10n.planPreviewConfirmFailed),
+                        content: Text(l10nOnTap.planPreviewConfirmFailed),
                       ),
                     );
                     return;
                   }
-                  Navigator.of(context).maybePop();
+                  navigator.maybePop();
                 },
               ),
             ],

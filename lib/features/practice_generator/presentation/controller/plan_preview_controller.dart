@@ -16,15 +16,16 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/foundation/app_result.dart';
 import '../../application/service/generation_orchestrator.dart';
+import '../../domain/id/planner_ids.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
+import '../../domain/model/exercise_candidate.dart';
+import '../../domain/model/exercise_prescription.dart';
 import '../../domain/model/plan_enums.dart';
 import '../../domain/model/plan_validation_issue.dart';
 import '../../domain/model/practice_block.dart';
 import '../../domain/model/practice_day.dart';
 import '../../domain/model/weekly_availability.dart';
 import '../../domain/service/plan_validator.dart';
-
-const Object _unsetSentinel = Object();
 
 /// Immutable view state for the plan preview screen.
 final class PlanPreviewState {
@@ -102,9 +103,12 @@ final class PlanPreviewController extends ChangeNotifier {
     confirmationError: _confirmationError,
   );
 
-  /// Edits a single block's prescribed active duration (bounded by the
-  /// candidate's supported duration window via revalidation — a value that
-  /// would invalidate the plan simply produces a new error finding).
+  /// Edits a single block's prescribed active duration. The edit is applied
+  /// without clamping — the validator (§5.2) re-runs synchronously and
+  /// surfaces an `error`/`warning` finding if the new duration violates an
+  /// invariant (e.g. the candidate's supported-duration window or the
+  /// daily hard maximum). The learner can then fix the edit before
+  /// activation.
   void editBlockActiveDuration(BlockId blockId, Duration newDuration) {
     if (_confirmed) return;
     final nextDays = <PracticeDay>[
@@ -210,19 +214,36 @@ final class PlanPreviewController extends ChangeNotifier {
     Duration newDuration,
   ) {
     final prescription = block.prescription;
-    final clamped = Duration(
-      microseconds: newDuration.inMicroseconds.clamp(
-        prescription.supportedDurations.minimum.inMicroseconds,
-        prescription.supportedDurations.maximum.inMicroseconds,
-      ),
+    // The new activeDuration is intentionally NOT clamped — revalidation
+    // (§5.2) is responsible for surfacing an `error`/`warning` if the
+    // edit breaks an invariant. Clamping here would hide the edit behind
+    // a "silent default" which is exactly the bug class the §0
+    // pre-flight calls out for the manual-edit path.
+    //
+    // The prescription does not keep its original [ExerciseCandidate]
+    // reference (only `exerciseId`/`source`/`skillTargets`/
+    // `contentRevision` are stored), so the controller looks the
+    // candidate up through the [PlanValidationContext] the caller
+    // supplied. If the lookup fails, the edit is rejected — the
+    // validator would have flagged the block as missing anyway.
+    final identity = PlanValidationContext.identityOfReference(
+      prescription.source.code,
+      prescription.exerciseId,
     );
+    final candidate = _context.candidateByIdentity(identity);
+    if (candidate == null) {
+      throw StateError(
+        'Cannot edit block ${block.id.value}: no catalog candidate for '
+        '$identity',
+      );
+    }
     final restDuration = prescription.restDuration;
     final loopCount = prescription.loopCount;
-    final elapsed = clamped + restDuration * loopCount;
+    final elapsed = newDuration + restDuration * loopCount;
     return block.replaceContent(
       prescription: ExercisePrescription(
-        candidate: prescription.candidate,
-        activeDuration: clamped,
+        candidate: candidate,
+        activeDuration: newDuration,
         restDuration: restDuration,
         tempoBpm: prescription.tempoBpm,
         repetition: prescription.repetition,

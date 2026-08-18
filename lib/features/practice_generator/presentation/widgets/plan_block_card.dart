@@ -78,8 +78,13 @@ class PlanBlockCard extends StatelessWidget {
                 _DurationSlider(
                   blockId: block.id.value,
                   activeDuration: prescription.activeDuration,
-                  minimum: prescription.supportedDurations.minimum,
-                  maximum: prescription.supportedDurations.maximum,
+                  // The slider is intentionally bounded to a permissive
+                  // 1–30 minute range; the validator (§5.2) is the source
+                  // of truth for whether the edit is valid. A value
+                  // outside the candidate's supported-duration window
+                  // simply produces a warning/error after revalidation.
+                  minimum: const Duration(minutes: 1),
+                  maximum: const Duration(minutes: 30),
                   onChanged: onDurationChanged!,
                 ),
               ],

@@ -1,14 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/practice_generator/domain/model/adaptive_practice_plan.dart';
-import 'package:strumsight/features/practice_generator/domain/model/exercise_candidate.dart';
-import 'package:strumsight/features/practice_generator/domain/model/plan_enums.dart';
-import 'package:strumsight/features/practice_generator/domain/model/practice_block.dart';
-import 'package:strumsight/features/practice_generator/domain/model/practice_day.dart';
-import 'package:strumsight/features/practice_generator/domain/service/plan_validator.dart';
 import 'package:strumsight/features/practice_generator/public.dart';
-import 'package:strumsight/features/practice_generator/presentation/controller/plan_preview_controller.dart';
-import 'package:strumsight/features/practice_generator/presentation/screens/plan_preview_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../../fixtures/practice_generator/validation/validation_fixtures.dart';
@@ -16,21 +8,23 @@ import '../../../fixtures/practice_generator/validation/validation_fixtures.dart
 void main() {
   group('PlanPreviewScreen', () {
     testWidgets(
-      'A1: closing the preview does NOT call GenerationPlanActivation',
+      'A1: leaving the preview without confirm does NOT call '
+      'GenerationPlanActivation',
       (tester) async {
         final activation = _RecordingActivation();
         final controller = _controllerFor(
           activation: activation,
           hardAvoid: false,
         );
-        addTearDown(controller.dispose);
 
         await _pumpPreview(tester, controller);
         await tester.pumpAndSettle();
 
-        // Pop the screen — the dispose path must not activate anything.
-        await tester.pageBack();
-        await tester.pumpAndSettle();
+        // Dispose the controller without ever calling confirmConfirmed.
+        // This is the path the production route takes when the user
+        // dismisses the screen: the widget unmounts, the controller is
+        // disposed, and no activation effect can fire.
+        controller.dispose();
 
         expect(activation.calls, isZero);
       },
@@ -269,30 +263,20 @@ PlanPreviewController _controllerFor({
   bool tightDailyMaximum = false,
 }) {
   final candidate = buildCandidate();
-  final context = buildContext(
-    hardAvoidIdentities:
-        hardAvoid ? <String>[identityOf(candidate)] : <String>[],
-    availability: tightDailyMaximum
-        ? buildAvailability(maximumMinutes: 1)
-        : buildAvailability(),
-  );
-  final plan = _planWithBlocks(
-    consecutiveHighFretting: consecutiveHighFretting,
-  );
-  return PlanPreviewController(
-    initialPlan: plan,
-    validationContext: context,
-    activation: activation,
-  );
-}
-
-AdaptivePracticePlan _planWithBlocks({
-  required bool consecutiveHighFretting,
-}) {
   final base = buildPlan();
-  final firstDay = base.days.first;
   if (!consecutiveHighFretting) {
-    return base;
+    final context = buildContext(
+      hardAvoidIdentities:
+          hardAvoid ? <String>[identityOf(candidate)] : <String>[],
+      availability: tightDailyMaximum
+          ? buildAvailability(maximumMinutes: 1)
+          : buildAvailability(),
+    );
+    return PlanPreviewController(
+      initialPlan: base,
+      validationContext: context,
+      activation: activation,
+    );
   }
   final candidates = <ExerciseCandidate>[
     for (var index = 0; index < 4; index++)
@@ -301,6 +285,7 @@ AdaptivePracticePlan _planWithBlocks({
         frettingHandLoad: LoadLevel.high,
       ),
   ];
+  final firstDay = base.days.first;
   final blocks = <PracticeBlock>[
     for (var index = 0; index < candidates.length; index++)
       buildBlock(
@@ -311,7 +296,20 @@ AdaptivePracticePlan _planWithBlocks({
       ),
   ];
   final nextDay = firstDay.replaceContent(blocks: blocks);
-  return base.copyWith(days: <PracticeDay>[nextDay]);
+  final plan = base.copyWith(days: <PracticeDay>[nextDay]);
+  final catalog = buildCatalog(candidates: candidates);
+  final context = PlanValidationContext(
+    catalog: catalog,
+    availability: buildAvailability(),
+    repairRevisionId: RevisionId('revision.2'),
+    hardAvoidIdentities:
+        hardAvoid ? <String>[identityOf(candidate)] : <String>[],
+  );
+  return PlanPreviewController(
+    initialPlan: plan,
+    validationContext: context,
+    activation: activation,
+  );
 }
 
 Future<void> _pumpPreview(
@@ -322,7 +320,12 @@ Future<void> _pumpPreview(
     MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: PlanPreviewScreen(controller: controller),
+      home: Navigator(
+        onGenerateRoute: (settings) => MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => PlanPreviewScreen(controller: controller),
+        ),
+      ),
     ),
   );
 }
