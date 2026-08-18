@@ -1,0 +1,59 @@
+# E99-R14 független review — GOV-08
+
+- **Review branch / HEAD:** `minimax/e99-r14-engine-policy-measured` / `75617abcc3916d911c8535ec800be8abb9a7834f`
+- **Review base:** `ba99bc562b62205c26650c31ddcff6ebd0c32f54`
+- **Módszer:** izolált klón (`/tmp/e99-r14-review.1OSSQn/repo`), scope-audit, célzott gate és eldobható tesztellenőrzések.
+- **Verdikt:** **CHANGES REQUIRED**
+
+## MAJOR
+
+### M1 — A kötelező `--epic <kód>` szűrés nincs implementálva
+
+**Hely:** `tools/round-metrics.py:457-458`
+
+A brief D3 egyértelműen `--epic <kód>` szűrést kér az `--engines` statisztikához. A CLI jelenleg maga jelzi, hogy a kapcsoló „jelenleg nem szűkít”, és az értéket sehol nem adja át a parsing/summarizing útnak. Emiatt például `--engines --epic E07` ugyanazt az összes epicet tartalmazó kimenetet adja, nem az E07 mintát.
+
+**Javítás:** az epicet a `következő kör:` eseményből szűrd még a motoronkénti összegzés előtt; egészítsd ki a rögzített-fixtúrás tesztet pozitív és negatív epic-cellával.
+
+### M2 — A tesztek futás közben a tracked production forrást írják át
+
+**Hely:** `tools/tests/test_engine_override_ttl.py:188-236`, `tools/tests/test_round_metrics_engines.py:170-178`
+
+Mindkét falszifikációs teszt közvetlenül felülírja a repository `tools/round-pipeline.sh`, illetve `tools/round-metrics.py` fájlját. A `tearDown` csak normál unittest-lefutáskor állít vissza; párhuzamos futás, megszakítás vagy processzthalál mellett módosított production forrás maradhat, illetve a tesztek versenyezhetnek egymással és a gate-tel. Ez nem biztonságos CI-tesztminta.
+
+**Javítás:** a falszifikációt ideiglenes, külön másolaton futtasd (a szükséges minimális tool/registry függőségekkel), és soha ne írd a checkout tracked fájljait.
+
+### M3 — A D2 teszthorog a brief kizárólagos módosítási zónáján kívül van, és a valódi úttal duplikált logikát tart fenn
+
+**Hely:** `tools/round-pipeline.sh:1441-1503`
+
+A brief §5 csak a motor-override blokkot és a hozzá tartozó log/ntfy hívást engedi módosítani. A `--engine-override-evaluate` új top-level `case` ág ezen kívül van. Ráadásul a TTL/kor ellenőrzést külön implementálja, így a teszt a másolatot, nem a tényleges kör-kiválasztási utat méri.
+
+**Javítás:** távolítsd el a duplikált teszthorgot; a D2 viselkedését a normál motor-override út kontrollált, ideiglenes tesztkörnyezetben mérd. A javítás maradjon a brief engedélyezett fájljain belül.
+
+### M4 — A brief kötelező teljes tooling-suite-ja piros
+
+**Bizonyíték:** az izolált klónban futtatva:
+
+```text
+$ /tmp/ss-heal-r12-pytest/bin/python3 -m pytest tools/tests -q
+4 failed, 485 passed, 527 subtests passed in 266.81s
+```
+
+A hibák:
+
+- `tools/tests/test_orchestrator_rotation.py::IndependenceTest::test_a_terra_led_round_swaps_the_implementer_to_claude`
+- `tools/tests/test_orchestrator_rotation.py::IndependenceTest::test_the_legacy_codex_engine_name_is_covered_too` (`codex`, `terra` subtest)
+- `tools/tests/test_reviewer_independence.py::ReviewerIndependenceTest::test_halt_rather_than_self_review_when_no_other_engine_exists`
+
+Az alapértelmezett `/usr/bin/python3` ráadásul nem tartalmaz `pytest`-et (`No module named pytest`), ezért a briefben előírt pontos parancs ezen a boxon eleve nem indítható. A hibák látszólag környezeti/baseline eredetűek, de a DoD 3 explicit módon zöld teljes suite-ot követel; ez a kör jelen állapotában nem merge-elhető.
+
+## Ellenőrzések
+
+- `python3 tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r14 --brief docs/rounds/e99-r14-gov-08-engine-policy-measured.md --base ba99bc562b62205c26650c31ddcff6ebd0c32f54` → `OK` (6 változott útvonal).
+- `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` → zöld: format, analyze, célzott Flutter-teszt, architecture, secrets, l10n.
+- `git diff --check` → zöld.
+
+## Következő lépés
+
+Egy MiniMax javító kör szükséges M1–M3-ra. M4 miatt a javítás után ismét teljes tooling-suite kell; zöld teljes suite nélkül a CI-dispatch és merge tiltott.
