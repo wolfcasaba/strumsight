@@ -217,6 +217,36 @@ a barrelt `tool/gen_public_barrel.dart` állítja elő, a gate a frissességet m
   `vision`, `share`, `upload` töredékekkel bővül (orchesztrátor-hatáskör: a
   fájl a `protected_paths` listáján van, implementer nem nyúlhat hozzá).
 
+## 5.1 Megfontolt, de ELHALASZTOTT lever: stacked körök
+
+A mezőny szekvenciális függőségre adott válasza a **stacked PR / stacked diff**:
+a következő változás nem a `main`-ről, hanem az előző, még nyitott ág tetejéről
+indul, így a lánc nem áll meg a merge-re. A Meta „stacked diffs" gyakorlatát a
+Graphite és a Sapling tette általánossá, a GitHub pedig 2026 augusztusában
+nyilvános előzetesbe vitte a natív stacked PR támogatást
+([InfoQ, 2026-08](https://www.infoq.com/news/2026/08/github-stacked-pull-requests/),
+[GitHub Docs](https://docs.github.com/en/pull-requests/get-started/about-stacked-prs),
+[Pragmatic Engineer](https://newsletter.pragmaticengineer.com/p/stacked-diffs)).
+
+Nálunk ez **ma nem fizet**, és ezt mérve mondjuk ki:
+
+* a mi köreink 22%-ánál javító kör fut (31/141); egy stack alsó elemének
+  javítása minden fölötte lévő kört újra-restackel — a Graphite `gt modify`
+  automatizálja, de a mi esetünkben minden restack után **újra kell futtatni a
+  gate-et és a review-t**, tehát a megspórolt várakozás visszajön javító
+  körökben;
+* a mi valódi blokkunk nem a merge-re várás (a holtidő mediánja **0 perc** az
+  ADR 0171 §2 óta), hanem a **fájl-szintű ütközés** (ARB, barrel) — azt a §4/§5
+  oldja fel;
+* a stack a `main`-t egy időre több, egymásra épülő, még nem mért ágra bontja —
+  ez a zöld kapu (ADR 0052) szempontjából kockázat, amit a jelenlegi
+  nyereség nem indokol.
+
+**Újranyitási feltétel (mérhető):** ha a §4/§5 után a `round-slots.py plan`
+tartósan admittál két kört, és a holtidő-arány mégis 15% fölé megy azzal az
+indokkal, hogy „a következő kör az előző merge-ére vár", akkor a stacked
+körök kérdését újra elő kell venni.
+
 ## 6. Várt hatás (a mért alapon, nem ígéret)
 
 | Lever | Mért veszteség ma | Várt megtakarítás |
