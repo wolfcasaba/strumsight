@@ -73,6 +73,22 @@ admittálható a második slotba, két, egymástól független ok miatt:
   `lib/core/design_system/public.dart` **18**-szor, a
   `lib/features/practice_generator/public.dart` **8**-szor szerepel.
 
+### 1.3.1 És egy HARMADIK ok, amit csak a program indulása után mértünk
+
+2026-08-18 19:50-kor, miközben egyetlen kör futott, a driver mégis azt naplózta,
+hogy „minden slot foglalt (2)". A mérés: a `.pipeline/lock` (1-es slot) FD-jét a
+**tmux szerver** tartotta — az a szerver, amit az E07-R22 drivere indított
+18:13-kor, és ami a 19:47-es merge UTÁN is élt, mert a következő kör session-je
+ugyanabban a szerverben futott. A `tmux new-session` a kliens FD-jeit átadja a
+szervernek, a szerver pedig túléli a kört.
+
+Következmény: `PIPELINE_SLOTS=2` mellett az 1-es slot TARTÓSAN foglalt maradt,
+tehát a lánc némán egysávosra esett vissza — a „0 párhuzamos kör" mérésnek ez a
+sor-szerializáció MELLETTI, második, gépi oka. A driver ezt a hibaosztályt
+ismerte (a pinger-alhéj 2026-07-31 óta zárja az fd 9-et), csak a tmux-hívások
+maradtak ki belőle. Javítás és falszifikációs teszt:
+`tools/tests/test_slot_lock_inheritance.py`.
+
 Az első ok szándékos és konzervatív (ADR 0171 §1) — a második viszont
 **mechanikus mellékhatás**: két kör nem azért ütközik, mert ugyanazt a logikát
 írja, hanem mert mindkettő hozzáfűz egy sort ugyanahhoz a barrel- vagy
