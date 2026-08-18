@@ -59,3 +59,34 @@ Az `E07-R18` §6.1 mérce-mátrixa, benne a megszakítás három kötelező cell
 (korán / **az utolsó lépés alatt, az aktiválás előtt → nincs írás** / a
 sikeres aktiválás után → no-op) és a valódi-sértés próbával: részeredményt
 mentve megszakításkor az **A1** cellának pirosnak kell lennie.
+
+## Módosítás (ADR 0112 önjavító kör, 2026-08-18)
+
+**Pontosítás, nem tartalmi változás.** A 2. döntés („Részleges terv soha nem
+aktiválódik") kizárólag a MEGSZAKÍTOTT vagy hibás futásra vonatkozik — nem
+mondja ki, és nem is mondta ki soha, hogy egy TELJES, sikeresen validált terv
+a `generate()` hívó felé való visszatérése ELŐTT, emberi megerősítés nélkül
+automatikusan aktiválódjon. Az, hogy `GenerationOrchestrator._run()`
+(`generation_orchestrator.dart:150-154`) egy sikeres validálás/javítás után
+azonnal, a `generate()` saját záró hatásaként hívja
+`activation.activate(activePlan)`-t, **implementációs választás volt ezen az
+ADR-en BELÜL**, nem annak a 2. döntésnek a szükségszerű következménye.
+
+Ezt a pontosítást az **E07-R21** (Plan preview, explanation és kézi
+szerkesztés) halt-je (H2, 2026-08-18) tette szükségessé: a brief saját
+frontmatterje az ADR-t „nincs automatikus aktiválás"-ként glosszázta, ami a
+fenti, szűkebb 2. döntéssel összekeverve téves premisszát adott, és a
+generálás-előtti előnézet + explicit megerősítés UX-et hibásan az
+application-réteg módosítását igénylőnek mérte. A self-heal feloldása
+(`docs/rounds/e07-r21-plan-preview-and-explanation.md` §0.0) R21-et egy
+önálló, a valódi `GenerationOrchestrator`-t nem hívó preview-komponensre
+szűkítette — ez NEM ennek az ADR-nek a döntéseit módosítja.
+
+**Nyitott follow-up** (még ki nem osztott kör): amíg `generate()` a
+validálást/javítást és az aktiválást egyetlen, megszakítás nélküli hívásban
+fuzionálja, semmilyen jövőbeli kör nem tudja a preview-képernyőt a VALÓDI
+generálási folyamathoz kötni úgy, hogy az aktiválás előtt egy MÉG NEM aktív,
+csak validált tervet kapjon vissza. Az éles bekötéshez `generate()`
+aktivációs lépését explicit, elkülönített hívássá kell szétválasztani —
+ez sem az E07-R18, sem az E07-R21 scope-ja nem volt/lesz, `HANDOFF.md`-ben
+nyitott tételként rögzítve.
