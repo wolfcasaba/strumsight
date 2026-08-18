@@ -271,4 +271,54 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `presentation/controller/plan_setup_controller.dart`: immutábilis wizard
+  állapot, injektált óra/ID-generátor, lépésenkénti
+  `GenerationDraftRepository.saveDraft`, visszaállítás és a meglévő
+  `RequestValidator` azonnali futtatása. Az unknown válaszok üres
+  goal/lista/constraintként maradnak meg; a comfort szöveghez nincs logger
+  vagy analytics függőség.
+- `presentation/screens/plan_setup_screen.dart`: öt lépéses, visszaléphető
+  képernyő, akadálymentes conflict-live-region és tartós controller-csere
+  esetén draft-visszatöltés.
+- `presentation/widgets/practice_goal_picker.dart`,
+  `availability_editor.dart`: explicit unknown vezérlők, nagy betűméretnél
+  tördelő Material-lista és lokalizált Semantics címke.
+- `app_en.arb`, `app_hu.arb`: azonos, teljes wizard-szövegkészlet.
+- `public.dart`: a controller és a képernyő public exportja.
+- A két új widget-teszt lefedi az A1–A9 releváns celláit, benne a wizard
+  előtti, határon lévő és kész állapotból való visszatöltéssel.
+
+### Futtatott ellenőrzések
+
+- `flutter gen-l10n` — exit 0.
+- `dart format <a kör hat Dart fájlja>` — exit 0.
+- `flutter test test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/availability_editor_test.dart`
+  — exit 0, 9 teszt zöld.
+- `tools/round-gate.sh test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/availability_editor_test.dart`
+  — exit 0: format, analyze, mindkét célzott teszt, architecture, secrets és
+  l10n ellenőrzés zöld.
+
+### Kötelező valódi-sértés próba (A4)
+
+A `PlanSetupController.selectGoal` unknown ágát ideiglenesen
+`PracticeGoalType.rhythm` alapértékre fordítottam. A célzott A4 teszt:
+
+```text
+flutter test ... --plain-name 'unknown answers are persisted as absence, never defaults (A4)'
+Expected: empty
+Actual: [Instance of 'PracticeGoal']
+exit 1
+```
+
+Ezután az ágat visszaállítottam `const <PracticeGoal>[]`-ra; a fenti,
+végleges célzott tesztfuttatás exit 0-val zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Nincs scope-elt domain/application, flag, router vagy backend változtatás.
+- A teljes CI suite/property/release APK nem lokálisan fut: a kör CI-dispatch,
+  review és merge a Claude-orchestrátor feladata.
+
 ## 11. Review — a Claude tölti ki
