@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+> **E07-R20 KÉSZ — PR #304, `b9dcbc76` (2026-08-18).** Öt lépéses, lokálisan
+> folytatható, akadálymentes Plan setup wizard (SDD Ch8 Kör 20): cél,
+> elérhetőség, felszerelés, preferencia, kényelem lépés; a "nem tudom" minden
+> lépésen elsőosztályú válasz, sosem fordul default értékre; a draft
+> lépésenként mentődik és app-újraindítás után is a helyes lépésen
+> folytatódik; a hard konfliktus (pl. végrehajthatatlan custom cél) azonnal
+> látszik a meglévő `RequestValidator`-on át; a kényelmetlenségi szabad
+> szöveg sosem kerül naplóba (mérve `debugPrint`-collector teszttel, siker-
+> és hibaútra is). A független review 1 fordulóban 2 MAJORt zárt SAJÁT
+> próbateszttel mérve (kőkemény, órától független naptári dátum az
+> elérhetőség-szerkesztőben; a wizard-resume nem tudta megkülönböztetni az
+> "unknown"-nal lezárt lépést a meg sem nyitottól), a dedikált biztonsági
+> review (risk=high) függetlenül ugyanarra az A9-hiányra jutott + 1 MINORt
+> talált (téves "encrypted" állítás egy kommentben) — mind zárva, mindkét
+> review APPROVED. `practiceGeneratorEnabled` változatlanul `false`, nulla
+> production hívó. Full Gate exact-SHA: `32155224320`, Router CI exact-SHA:
+> `32155221106`. Lecke: L305 (adat-jelenlétből derített resume-pont vs.
+> explicit unknown), L306 (widget "ma"-fogalma injektált óra nélkül).
+> Következő kör: E07-R21 (Plan preview, explanation és kézi szerkesztés,
+> `docs/rounds/e07-r21-plan-preview-and-explanation.md`), új sessionben.
+
 > **E07-R19 KÉSZ — PR #303, `2ce22f3b` (2026-08-18).** A local plan
 > repository elkülönített draft/active/archive névterekkel, checksumos
 > rekord-szintű korrupció-containmenttel, v0→v1 migrációval és korlátos
@@ -2119,18 +2140,24 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R19** (Chapter 8, Local repository,
-migráció és korrupcióvédelem, `docs/rounds/e07-r19-local-plan-repository.md`,
-ADR 0267 már megírva). A friss session pre-flightban mérje újra a Core
-atomikus-írás API-t (brief saját pre-flight-jegyzete) ÉS az E07-R18
-biztonsági review NOTE-4 leletét: a `GenerationPlanActivation.activate(plan)`
-interfész (`lib/features/practice_generator/application/service/
-generation_orchestrator.dart`) ma NEM dokumentál idempotenciát, atomicitást
-vagy authz-felelősséget — az R19 valódi, repository-backed `activate`
-implementációja előtt ezt tisztázni kell (lásd
-`docs/reviews/e07-r18-generation-orchestrator-security.md` NOTE-4). A
-`practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
-`false` maradnak.
+**A soron következő SDD-lépés: E07-R21** (Chapter 8, Plan preview,
+explanation és kézi szerkesztés, `docs/rounds/e07-r21-plan-preview-and-
+explanation.md`). A friss session pre-flightban mérje újra: az E07-R20
+wizard `PracticeGenerationRequest`-jét ténylegesen felveszi-e egy
+`GenerationPlanInput`-ot építő hívó (az E07-R18 `GenerationOrchestrator`
+ma is csak egy KÉSZ `GenerationPlanInput`-ot fogad, azt sem a wizard, sem
+más production kód nem tölti fel); a `WeeklyScheduleDecision →
+AdaptivePracticePlan` összeállítás (E07-R18-ban az orchestrátorhoz rendelve)
+tényleges mezőkészletét, mert az R21 preview-nak ebből kell "miért ezt"
+magyarázatot renderelnie. `practiceGeneratorEnabled` és
+`plannerAssistEnabled` flagek változatlanul `false` maradnak.
+
+**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R20 — Plan
+setup wizard és input UX** (Chapter 8, Kör 20). Lásd a fejléc ✅-blokk.
+
+**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R19 —
+Local repository, migráció és korrupcióvédelem** (Chapter 8, Kör 19). Lásd
+`docs/handoff-archive.md`.
 
 **Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R18 —
 GenerationOrchestrator, progress és cancellation** (Chapter 8, Kör 18). Lásd §4.

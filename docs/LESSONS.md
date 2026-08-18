@@ -11459,3 +11459,87 @@ termék-kódot, de egy MÁR `main`-en élő fájlban, ezért `heal/`-branch +
 merge + a kör ágának `git merge origin/main`-je volt a helyes út —
 együtt a két L a döntési fát adja: a hibás fájl `main`-en van-e vagy
 csak a kör ágán).
+
+## L305 — Egy adat-jelenlétből derített wizard-resume-pont nem tudja megkülönböztetni az explicit „unknown" választ a meg sem nyitott lépéstől (E07-R20, review F2, 2026-08-18)
+
+**Mérve.** Az E07-R20 (Plan setup wizard) implementere a
+`PlanSetupController._resumeStep`-et úgy írta, hogy a legutóbb
+befejezett wizard-lépést a `PracticeGenerationRequest` TARTALMÁBÓL
+következtette ki (`availability.days.isNotEmpty`,
+`constraints.any(category==equipment/preference/comfort)`). A kör
+saját, kötelező A4 architekturális döntése ("nem tudom" elsőosztályú
+válasz, sosem fordul default értékre) szerint MINDEN lépés „unknown"
+válasza pontosan ugyanazt az ÜRES/HIÁNYZÓ domain-állapotot hozza létre,
+mint amikor a tanuló még el sem érte azt a lépést — a két eset a
+TARTALOM szintjén megkülönböztethetetlen. A review saját, eldobható
+próbateszttel (nem csak olvasással) mérte: cél kiválasztva → Next
+(step 1) → elérhetőség lépésen explicit „nem tudom" → Next (ugyanabban
+a sessionben helyesen step 2-re lép) → controller eldobva → ÚJ
+controller ugyanazzal a store-ral, `restore()` →
+`expect(restored.state.currentStep, 2)` PIROS,
+`Expected: <2>; Actual: <1>` — a wizard visszaesett az elérhetőség
+lépésre, amit a tanuló már kifejezetten megválaszolt. A minta NEM csak
+az elérhetőség lépésre igaz — az equipment/preference/comfort lépésre
+is fennáll ugyanez, mivel mindegyik „unknown" válasza hiányzó
+constraint-bejegyzés.
+
+**Javítás.** A javító kör a `currentStep`-et magát perzisztálja egy
+KÜLÖN, a fő draft-kulcstól névtérileg elkülönített kulcs alatt
+(`{draftStorageKey}.step`), a MEGLÉVŐ (e körön kívül eső)
+`GenerationDraftRepository.keyValueStore` mezőn át — nem a domain-
+tartalomból derítve `restore()`-kor. Két regressziós teszt (elérhetőség
+2→3 és equipment 3→4 határ) + a review saját, eredeti reprodukáló
+próbatesztjének újrafuttatása a javított kódon (most zöld) igazolta a
+zárást.
+
+**Szabály.** Ha egy multi-step wizard/form „nem tudom" (vagy bármilyen
+más, szándékosan üres/alapértelmezett) válasza a domain-modellben
+UGYANAZT az állapotot hozza létre, mint a „még nem válaszolt", a
+resume/foly­tatás-pontot TILOS ebből a domain-tartalomból visszafejteni
+— a haladási mutatót (lépésszám vagy lépésenkénti „lezárva" jelző)
+KÜLÖN, a válasz-tartalomtól független csatornán kell perzisztálni. Ez
+általánosítható minden jövőbeli lépésenkénti draft-mentésre ebben a
+feature-fában (E07-R21+ Plan preview/Weekly/Today screen), nem csak a
+Plan setup wizardra.
+
+## L306 — Egy widget "ma" fogalmát injektált referenciaórából mérd, sosem fordítás-idejű `LocalDate`/`DateTime` konstansból (E07-R20, review F1, 2026-08-18)
+
+**Mérve.** Az E07-R20 `AvailabilityEditor` widgetje egyetlen
+kiválasztható napot kínált fel elérhetőségként, egy
+`static final LocalDate _monday = LocalDate(2026, 8, 17);`
+fordítás-idejű konstansként — sem `DateTime.now()`, sem injektált óra
+nem volt a fájlban (grep-pel megerősítve). A review egy egyszerű
+`python3 -c` dátumszámítással mérte: `2026-08-17` **hétfő** volt (a
+kód írásának pillanatában helyes), de a mérés napján, `2026-08-18`
+**kedd**-en MÁR EGY NAPPAL A MÚLTBAN volt, és minden további napon
+tovább öregszik. A hiba csendes: a felhasználó a UI-n csak „Hétfő"
+napnevet lát (a `planSetupMonday` ARB-kulcs nem dátumot ír), a mögötte
+tárolt `WeeklyAvailability.days[0].date` viszont egy sosem frissülő,
+végül mindig elmúlt naptári napra mutatott — csak akkor derülne ki,
+amikor egy jövőbeli kör erre a dátumra próbálna ütemezni.
+
+**Javítás.** A widget egy `required this.referenceDate` (`DateTime`)
+paramétert kapott (a hívó, `plan_setup_screen.dart`, a KONTROLLER MÁR
+meglévő `clock` mezőjét adja tovább:
+`referenceDate: widget.controller.clock()`), és egy `_mondayOf(date)`
+segédfüggvény számítja ki belőle az AKTUÁLIS hét hétfőjét
+(`date.weekday - DateTime.monday` nap levonásával). Regressziós teszt
+KÉT különböző referenciadátummal (2026-08-18→2026-08-17,
+2026-09-01→2026-08-31) méri, hogy a felkínált nap a hívó által adott
+referenciához igazodik, nem egy fix literálhoz.
+
+**Szabály.** Egy widget/kontroller "ma"/"ez a hét"/"jelenlegi nap"
+fogalmát MINDIG egy injektált referenciaórából (vagy már felbontott
+referenciadátumból) számítsd, sosem egy irodalmi `DateTime`/`LocalDate`
+konstansból — az utóbbi a MÉRÉS/ÍRÁS PILLANATÁHOZ kötött és onnantól
+monoton öregszik, gyakran ÉSZREVÉTLENÜL (ha a felszínen csak egy
+névre, pl. napnévre hivatkozik, nem a nyers dátumra). Ugyanaz a minta,
+mint az AGENTS.md §10 "determinisztikus clock/ID" szabálya — de itt a
+hiba iránya fordított: nem a teszt-determinizmus sérült, hanem a
+PRODUKCIÓS helyesség, mert a kód egyáltalán nem volt órafüggő ott,
+ahol lennie kellett volna.
+
+Rokon L: [[L305]] (ugyanabban a körben, ugyanabból az egy jó helyre
+nem betett órainjekcióból fakadó hibaosztály: a wizard MÁR rendelkezik
+egy `clock`/`generateId` injekciós mintával a kontrollerben — a hiba
+mindkét esetben az volt, hogy egy ÚJ helyen ezt nem vezették tovább).
