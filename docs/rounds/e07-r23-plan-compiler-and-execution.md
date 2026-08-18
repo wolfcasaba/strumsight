@@ -266,4 +266,49 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### E07-R23 implementation (Codex, 2026-08-18)
+
+- `PlanCompiler` now converts only caller-verified, current exercise facts
+  into a `CompiledPlanStep`; a content-revision mismatch or a missing required
+  capability yields an explicit `UnavailablePlanStep` with a replan fallback.
+  The compiled configuration keeps the prescription's active/rest time, tempo,
+  repetition bounds, loop count, and elapsed limit without approximation.
+- `PlanExecutionCoordinator` verifies the Practice Engine public
+  `PracticeSessionConfig` exactly against that compiled configuration, creates
+  a unique `BlockExecutionId` that retains its plan/revision/day/block origin,
+  and keeps first-write-wins outcome ingestion in process.
+- `PracticeOutcomeAdapter` accepts a `PracticeSessionResult` only on its
+  completed-session branch. Cancellation and technical failure instead use
+  caller-fed terminal input variants; technical failure and partial outcomes
+  cannot contribute skill evidence or request a regression.
+- The public barrel now exposes the execution outcome contract. Its older
+  serializer-only `PracticeOutcome` is hidden from the public barrel; local
+  persistence continues to import that record directly.
+
+#### Acceptance evidence
+
+- A1: technical failure has no skill-evidence or regression disposition.
+- A2/A3: stale content revision and a missing required capability both refuse
+  launch.
+- A4: replaying a `blockExecutionId` returns the original outcome as a
+  duplicate.
+- A5: every prescribed execution value is retained exactly.
+- A6: `PracticeFinishReason.interrupted` normalizes to `partial`, not failure.
+- A7: generated IDs differ and expose their plan/revision/day/block origin.
+
+#### Required real-violation test
+
+Temporarily changed `contributesSkillEvidence` so
+`failedTechnical` returned `true`, then ran the required gate. Format, analyze
+and the compiler test stayed green; A1 failed exactly as intended:
+`Expected: false / Actual: <true>` in
+`plan_execution_coordinator_test.dart`. The safe completed-only rule was then
+restored before the final gate.
+
+#### Final verification
+
+`tools/round-gate.sh test/features/practice_generator/execution/plan_compiler_test.dart test/features/practice_generator/execution/plan_execution_coordinator_test.dart`
+completed after restoration: format, analyze, both focused test files, and
+the architecture gate were green.
+
 ## 11. Review — a Claude tölti ki
