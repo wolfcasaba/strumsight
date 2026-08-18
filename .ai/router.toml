@@ -38,11 +38,16 @@ protected_paths = [
 high_risk_path_fragments = [
   "auth",
   "authorization",
+  "camera",
   "credential",
   "crypto",
   "encryption",
   "migration",
   "payment",
+  "privacy",
   "secret",
+  "share",
+  "upload",
+  "vision",
 ]
 native_gate_command = ["flutter", "build", "apk", "--debug"]
