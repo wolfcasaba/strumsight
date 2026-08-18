@@ -26,6 +26,93 @@ native_gate = false
 > ismétlésbe hajthatja a láncot. A `gate_tests` cella fa-egészség őr; a kör
 > tényleges mércéje a `pytest tools/tests` + Router CI (§7).
 
+## 0.0 Pre-flight revízió (orchesztrátor, 2026-08-18)
+
+**Visszakeresés (ADR 0312 §4.2, brief-lint S8):**
+`node tools/knowledge-rag.mjs --top 5 "self-heal önjavítás motorváltás engine
+escalation last attempt different engine"` és
+`node tools/knowledge-rag.mjs --corpus lessons --top 6 "önjavító session sajat
+motorja orchestrator engine Claude Terra fallback run_orchestrator_session"`
+lefutott. Releváns találat: **L127** (E04-R16) — a Kilo-qwen motorok
+„bejelent-majd-megáll" (`status=unknown`) hibája HARNESS-szintű, nem
+modell-egyedi; ha a D1 determinisztikus választása valaha egy `qwen-*`/Kilo
+sorra esne, ez a kockázat érvényes rá (a mai regiszter-sorrendben ez csak
+akkor fordulhat elő, ha a `codex`/`terra`/`minimax`/`sonnet-impl` sorok mind
+kizáródnak vagy elérhetetlenek). L278/L215/L229/L174/L289 a Claude/Terra
+fallback-ág és a kvóta-védőháló korábbi méréseit írják le, ezen brief tartalmi
+döntését nem módosítják. Nincs korábbi lecke, ami magát a „self-heal
+motorváltás az utolsó kísérletnél" mintát vagy egy ismétlődő-riasztás
+throttle-t mérte volna — mindkettő ÚJ terület.
+
+**D2 korrekció — MÉRT: a §2 „Jelenlegi állapot" azon állítása, hogy „a
+riasztás egyszer ment ki… és nem ismétlődött", TÉVES a kódhoz és a naplóhoz
+képest.** `grep -c "KIMERÜLT" .pipeline/chain.log` → **455** találat; az
+E07-R16 ablakában (2026-08-16T15:35 → 2026-08-18T09:02, kb. 42 óra) a napló
+**5 percenként, folyamatosan** „az önjavítás KIMERÜLT" sort ír — pontosan a
+cron-cadenciával (`crontab -l`: `*/5 * * * * … round-pipeline.sh`). Az
+`attempt_selfheal()` (`tools/round-pipeline.sh:1039-1045`) a kimerülési ágat
+FELTÉTEL NÉLKÜL újrafuttatja minden firingen (a `heal_count_file` a
+feloldásig változatlan), és a benne lévő
+`notify "🛑 önjavítás kimerült…" high` hívás **throttle nélkül** fut —
+tehát a mai valódi hiba **nem csend, hanem kontrollálatlan, 5 percenkénti,
+high-prioritású spam** (~504 push egy 42 órás ablakban). A „éjszaka ez egyenlő
+a csenddel" fordulat feltehetően azt írja le, hogy egy alvó/távoli emberre az
+500 azonos push ugyanolyan hatástalan, mint a nulla — nem azt, hogy a rendszer
+ne küldött volna újra.
+
+**Következmény a D2 implementációjára:** a feladat NEM egy új, párhuzamos
+emlékeztető hozzáadása a változatlan hívás MELLÉ (az kettőzött spam-et adna),
+hanem a **meglévő, throttle nélküli `notify` hívás lecserélése**
+`PIPELINE_HALT_REMINDER_MIN`/`PIPELINE_HALT_REMINDER_MAX_H` által kapuzott
+változatra, UGYANAZON a kódponton (`attempt_selfheal()` kimerülési ága,
+`tools/round-pipeline.sh:1039-1045`). A `log "az önjavítás KIMERÜLT…"` sor
+marad feltétel nélküli — ez adja a §4 „küszöb fölött" cella „a napló továbbra
+is ír" elvárását —, kizárólag a `notify(...)` hívás kap throttle-kaput.
+
+**D1 pontosítás — a `<kör-motor>` (4. paraméter) forrása.** A self-heal
+session `run_orchestrator_session()`-ön megy (`tools/round-pipeline.sh`), ami
+MINDEN körre és MINDEN önjavítási kísérletre AZONOS módon dönt: elsődlegesen
+Claude CLI (`CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir`,
+`--model $heal_model`, alapból `claude-sonnet-5`), és KIZÁRÓLAG
+Claude-kvótazárlat/rotáció alatt esik át a rögzített Terra-fallback ágra
+(`CODEX_HOME=$codex_home`, fixen `~/.codex-terra`). Ez a választás **nem függ
+attól, melyik kör vagy melyik IMPLEMENTER-motor halt el** — a
+`docs/execution/pipeline-queue.tsv`/`engine-registry.tsv` implementer-neve
+(minimax/codex/qwen-*/stb.) sosem jut el a self-heal dispatch-hoz; azt
+kizárólag a Claude-kvóta/rotáció állapota dönti el. A §2 „a self-heal MINDIG a
+kör saját motorjával indul" mondata tehát úgy pontos, hogy a self-heal motorja
+MINDIG UGYANAZ a fix Claude/Sonnet-5 identitás, kör-függetlenül — ez a
+nyilvántartás `sonnet-impl` sorával egyezik (harness=`claude`,
+config_dir=`~/.claude`, model=`claude-sonnet-5` — mind a három mező
+byte-egyenlő a `pipeline_claude_config_dir`/`heal_model` mai alapértékével,
+mérve `tools/round-pipeline.sh:101-142` és `docs/execution/engine-registry.tsv`).
+A `<kör-motor>` paraméter ÉRTÉKE ezért egy FIX konstans (`sonnet-impl`), NEM a
+halt-olt kör implementer-motorja — a hívó helyen (`attempt_selfheal`, az
+`attempts=$((attempts+1))` sor után) literál konstansként add át, ne a kör
+branch-éből vagy a queue sorából származtatva.
+
+**D1 végrehajtási megjegyzés (kódolási gotcha, nem tartalmi döntés):** a
+`docs/execution/engine-registry.tsv` fejlécsora (`name<TAB>harness<TAB>…`) NEM
+adatsor — a meglévő `tools/engine-profile.sh` `engine_names()`/`row_for()`
+mintáját kövesd (`grep -v '^[[:space:]]*#' … | grep -v '^name\t'`), különben a
+determinisztikus „első a sorrendben" keresés a fejlécet találná első
+jelöltként. Az „elérhető" (c) kritériumhoz a `tools/engine-profile.sh`
+`availability()` már bevett, STATIKUS ellenőrzését használd (a `config_dir`
+mezőnek könyvtárként kell léteznie, és ha az `auth_file` mező nem `-`,
+olvashatónak kell lennie) — élő füst-teszt (`engine-profile.sh check`) NEM
+indokolt egy önjavító-motorválasztáshoz, mert API-keretet égetne el a puszta
+döntésért. Méréssel megerősítve: `~/.codex`, `~/.codex-terra`, `~/.claude`,
+`~/.claude-minimax` mind léteznek ezen a boxon, tehát a `kör-motor=sonnet-impl`
+eset NEM vezet üres jelölt-listára (nem „elérhetetlen cél-státusz") — a
+regiszter-sorrendben az első illeszkedő, elérhető sor ma a `codex`.
+
+**ADR-döntés:** ez a kör NEM ír új ADR-t (a brief fejléce és az `allowed_paths`
+is kizárja a `docs/adr/**`-t) — az ADR 0307 §2 már lefedi, pontosan az E99-R14
+mintáját követve (`docs/rounds/e99-r14-gov-08-engine-policy-measured.md`
+fejléc, és a PR #317 diffje nem érintett ADR-fájlt). `tools/round-slots.py
+reserve-adr` ezért NEM fut le — egy fel nem használt szám foglalása felesleges
+könyvelés lenne.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
