@@ -108,6 +108,42 @@
 > diszjunkt munkafolyam — a `tools/round-slots.py plan` az E07-R22 mellé már
 > admittálja az E99-R14-et.
 
+> ## 🔐 [HEAL E99-R14/H6] KÉSZ — Codex CLI OAuth refresh token „already used" (401), a boxon frissen megjelent API-kulccsal helyreállítva, VALÓDI `codex exec` hívással bizonyítva — nincs kód-diff, egyúttal E07-R23/H6-ot is feloldja (2026-08-18)
+>
+> Az E99-R14 saját, review M5 leletét záró **kötelező Codex-javító köre**
+> (eredeti kísérlet + 2 automatikus folytatás) `status=unknown`-nal halt el;
+> HAT másodperccel az erre indított önjavítás elindulása után egy TŐLE
+> FÜGGETLEN kör, az E07-R23 (implementer=codex) is H6-tal állt le ugyanazzal
+> a mintával. Mindkét kör Codex-alfolyamat-logja (`/tmp/codex-e99-r14-m5.log`,
+> `/tmp/codex-e07-r23.log`) azonos, mért hibát adott: `codex_login::
+> auth::manager: Failed to refresh token: 401 … code: "refresh_token_reused"`
+> — a `~/.codex/auth.json` refresh tokenjét egy másik folyamat már
+> felhasználta, ezért a CLI onnantól minden hívásra 401-et kapott. Mivel
+> MINDEN `engine=codex` sor (és az E99-R14 MiniMax→Codex javító-eszkalációja
+> is) ugyanazt a megosztott `~/.codex` CODEX_HOME-ot használja, a gyökérok
+> közös infrastruktúra, nem a két kör tartalma.
+>
+> **Nem kód-javítás, hitelesítés-helyreállítás.** Az önjavítás indulása körüli
+> percekben megjelent a boxon egy `~/.openai.env` (`OPENAI_API_KEY=`,
+> friss időbélyeg, helyes jogosultság, **nincs** hozzá tartozó cron/
+> systemd/repo-eredet — mérve, kizárva) — a jelek (+ két aktív kézi SSH-
+> session) kézi emberi elhelyezésre mutatnak, amit a self-heal jelentése
+> KÖRÜLMÉNY-alapú következtetésként jelöl, nem tanúsítványként. A
+> `codex login --help` dokumentált headless-útját követve
+> (`printenv OPENAI_API_KEY | codex login --with-api-key`), a
+> `~/.codex/auth.json` időbélyegzett mentése után, a self-heal
+> helyreállította a hitelesítést, és — mivel a `codex login status` a törött
+> állapotban is „Logged in"-t mutatott (csak a LOKÁLIS fájlt nézi) — EGY
+> VALÓDI `codex exec -s read-only` hívással igazolta: helyes válasz, 23 303
+> token, valódi session-id. Lecke: **[[L314]]**.
+>
+> **Nyitva maradt, dokumentált mellékhatás (emberi döntés kell):** a
+> `~/.codex` mostantól API-kulcsos, TOKENENKÉNTI díjazású hitelesítéssel megy,
+> NEM a korábbi ChatGPT Pro előfizetéssel — a
+> `docs/execution/engine-registry.tsv` `codex` sora (`auth_env: -`) ezt még
+> nem tükrözi. Ha ez nem szándékos tartós váltás, `codex login`
+> (böngészős vagy `--device-auth`) visszaállítja az előfizetéses módot.
+
 > ## ✅ [HEAL E99-R14/H3] KÉSZ — a lánc cronja minden firingre `PIPELINE_ORCH_SWAP_ENGINE=minimax`-ot exportál, amit a driver-tesztek ambiensként örököltek — PR #311 (más session írta, ez a heal függetlenül újramérte), `80cdb46a` (2026-08-18)
 >
 > Az E99-R14 (GOV-08) a saját brief-diffjén zölden állt, de a kötelező teljes
