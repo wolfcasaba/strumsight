@@ -388,7 +388,8 @@ void main() {
       );
     });
 
-    test('unsatisfied prerequisite is reported on the assignment', () {
+    test('unsatisfied prerequisite with NO producer draft is dropped '
+        'with unsatisfiedPrerequisite (never attached to an assignment)', () {
       final asset = buildSongAssetReference(id: 'asset-a3b');
       final sections = <SongGoalSectionView>[
         buildSongGoalSectionView(
@@ -418,15 +419,97 @@ void main() {
         drafts: drafts,
         scheduledDate: LocalDate(2026, 9, 1),
         songTargetDate: LocalDate(2026, 9, 21),
-        // 'pentatonic-scale' is NOT in knownSkillIds.
+        // 'pentatonic-scale' is NOT in knownSkillIds AND no other draft
+        // produces it — the dependent song block must be DROPPED, never
+        // attached to an assignment with a side note. This is the A3
+        // regression that the prior implementation got wrong (the song
+        // block was scheduled and the unsatisfied prerequisite was only
+        // annotated on it).
         knownSkillIds: const ['chord-transition'],
       );
       final outcome =
           const SongGoalPlanner().plan(request) as SongGoalPlanningAccepted;
-      expect(outcome.assignments, hasLength(1));
-      expect(outcome.assignments.single.unsatisfiedPrerequisiteSkillIds, [
-        'pentatonic-scale',
-      ]);
+      expect(outcome.assignments, isEmpty);
+      expect(outcome.droppedDrafts, hasLength(1));
+      expect(
+        outcome.droppedDrafts.single.reasonCode,
+        SongGoalDropReason.unsatisfiedPrerequisite,
+      );
+      expect(outcome.droppedDrafts.single.detail, contains('pentatonic-scale'));
+    });
+
+    test('A3 regression — when a real producer draft is supplied, '
+        'the dependent draft is kept and ordered STRICTLY after the producer '
+        '(proves the unsatisfiedPrerequisite drop is reserved for the '
+        'no-producer branch)', () {
+      final asset = buildSongAssetReference(id: 'asset-a3c');
+      final sections = <SongGoalSectionView>[
+        buildSongGoalSectionView(
+          sectionId: 's-a3c-prereq',
+          sectionName: 'Scale',
+          kind: SongSectionKind.verse,
+          startMeasure: 0,
+          endMeasureExclusive: 8,
+          usableAssetReference: asset,
+        ),
+        buildSongGoalSectionView(
+          sectionId: 's-a3c-dependent',
+          sectionName: 'Solo',
+          kind: SongSectionKind.solo,
+          startMeasure: 8,
+          endMeasureExclusive: 16,
+          usableAssetReference: asset,
+        ),
+      ];
+      final read = buildSongGoalReadSuccess(
+        sections: sections,
+        revision: 7,
+        documentAssetReferences: [asset],
+      );
+      // Reverse-declared: the dependent solo draft comes FIRST in the
+      // caller's list, with prereq 'pentatonic-scale' which the scale
+      // draft produces. The planner must reorder the scale draft BEFORE
+      // the dependent draft AND keep both — proving that the new A3
+      // strict gate only fires when there is no producer.
+      final drafts = <SongGoalBlockDraft>[
+        buildSongGoalBlockDraft(
+          sectionView: sections[1], // dependent
+          targetSkillIds: const ['lead-improvisation'],
+          prerequisiteSkillIds: const ['pentatonic-scale'],
+          estimatedMinutes: 5,
+        ),
+        buildSongGoalBlockDraft(
+          sectionView: sections[0], // producer
+          targetSkillIds: const ['pentatonic-scale'],
+          estimatedMinutes: 5,
+        ),
+      ];
+      final request = buildSongGoalPlanningRequest(
+        read: read,
+        drafts: drafts,
+        scheduledDate: LocalDate(2026, 9, 1),
+        songTargetDate: LocalDate(2026, 9, 21),
+        // pentatonic-scale is NOT in knownSkillIds — only the producer
+        // draft can satisfy the prereq.
+        knownSkillIds: const ['chord-transition'],
+      );
+      final outcome =
+          const SongGoalPlanner().plan(request) as SongGoalPlanningAccepted;
+      expect(outcome.assignments, hasLength(2));
+      expect(outcome.droppedDrafts, isEmpty);
+      // Producer (scale) comes strictly first.
+      expect(
+        outcome.assignments[0].draft.sectionView.sectionId.value,
+        's-a3c-prereq',
+      );
+      expect(
+        outcome.assignments[1].draft.sectionView.sectionId.value,
+        's-a3c-dependent',
+      );
+      // Both assignments have NO unsatisfied prereqs — the gate would
+      // have dropped them otherwise.
+      expect(outcome.assignments[0].unsatisfiedPrerequisiteSkillIds, isEmpty);
+      expect(outcome.assignments[1].unsatisfiedPrerequisiteSkillIds, isEmpty);
     });
   });
 

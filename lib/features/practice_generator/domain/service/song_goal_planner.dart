@@ -565,10 +565,43 @@ final class SongGoalPlanner {
     var runningSongMinutes = 0;
     final assignments = <SongGoalPhaseAssignment>[];
     final drops = <SongGoalDraftDrop>[];
+    // A3 — actualized skills = the skills the caller already routes on
+    // (`knownSkillIds`) UNION the `targetSkillIds` of every draft the
+    // planner has already accepted in this very call. A draft whose
+    // prerequisiteSkillIds are NOT all in this set has no producer (no
+    // scheduled block produces the missing skill) and must be explicitly
+    // dropped — never attached to an assignment as a side note.
+    final actualizedSkills = <String>{
+      for (final skill in request.knownSkillIds) skill,
+    };
 
     for (final draft in orderedDrafts) {
       final section = draft.sectionView;
       final draftMinutes = draft.estimatedMinutes;
+
+      // A3 — strict prerequisite gate (ADR 0264 §4). If the draft's
+      // prerequisites are neither caller-known nor produced by an
+      // already-accepted prerequisite block, the dependent song block
+      // cannot be scheduled — the planner drops it explicitly with
+      // [SongGoalDropReason.unsatisfiedPrerequisite] and the caller can
+      // decide whether to defer the entire song goal or queue the
+      // missing prerequisite for the next planning round.
+      final unresolvedPrerequisites = [
+        for (final skill in draft.prerequisiteSkillIds)
+          if (!actualizedSkills.contains(skill)) skill,
+      ];
+      if (unresolvedPrerequisites.isNotEmpty) {
+        drops.add(
+          SongGoalDraftDrop(
+            draft: draft,
+            reasonCode: SongGoalDropReason.unsatisfiedPrerequisite,
+            detail:
+                'section=${section.sectionId.value},'
+                'missing=${unresolvedPrerequisites.join(",")}',
+          ),
+        );
+        continue;
+      }
 
       // A5 — explicit asset gate (ADR 0318 §Döntés 2). A section without
       // a usable public asset reference cannot be routed by the planner.
@@ -586,7 +619,7 @@ final class SongGoalPlanner {
       // A4 — no new technique in simulation.
       if (phase == SongGoalPhase.simulation) {
         final introducesNew = draft.targetSkillIds.any(
-          (skill) => !knownSkillSet.contains(skill),
+          (skill) => !actualizedSkills.contains(skill),
         );
         if (introducesNew) {
           drops.add(
@@ -612,22 +645,21 @@ final class SongGoalPlanner {
         continue;
       }
 
-      // A3 — prerequisite surfacing (the prerequisite ordering is already
-      // enforced by [_prerequisiteOrdered]; here we report which
-      // prerequisites were not in the known-skill surface).
-      final unsatisfied = [
-        for (final skill in draft.prerequisiteSkillIds)
-          if (!knownSkillSet.contains(skill)) skill,
-      ];
+      // The draft is accepted. Surface its `targetSkillIds` so any
+      // later draft that lists them as prerequisites sees the producer
+      // and avoids being dropped on the A3 strict gate above.
+      actualizedSkills.addAll(draft.targetSkillIds);
 
       assignments.add(
         SongGoalPhaseAssignment(
           draft: draft,
           phase: phase,
           targetSkillIds: List<String>.unmodifiable(draft.targetSkillIds),
-          unsatisfiedPrerequisiteSkillIds: List<String>.unmodifiable(
-            unsatisfied,
-          ),
+          // Every kept assignment has its prerequisites satisfied by
+          // definition — the A3 gate would have dropped it otherwise.
+          // We keep the field for diagnostic parity but it MUST be
+          // empty on a kept assignment.
+          unsatisfiedPrerequisiteSkillIds: const <String>[],
           minutes: draftMinutes,
         ),
       );

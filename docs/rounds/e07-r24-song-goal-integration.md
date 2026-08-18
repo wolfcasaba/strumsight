@@ -194,10 +194,50 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 ## 10. Implementation handoff — az implementer tölti ki
 
 - **Dátum:** 2026-08-18
-- **Implementer:** Codex
+- **Implementer:** Codex (MiniMax M3-as implementer, javító kör)
 - **Kód alapállapota:** `main @ 2444e055`
 - **Cél branch:** `minimax/e07-r24-song-goal-integration`
-- **Státusz:** kód kész, gate zöld, commit és push kész.
+- **Státusz:** kód kész, **MAJOR A3 lezárva**, gate zöld, commit és push kész.
+
+### 10.0 Javító kör összegzése (2026-08-18, MAJOR F1)
+
+A review `/tmp/e07-r24-review-findings.md` F1 — MAJOR — `unsatisfied
+prerequisite is merely annotated, but its song block is still scheduled`
+lezárása. A prior implementáció a `SongGoalPhaseAssignment`-
+höz csatolt `unsatisfiedPrerequisiteSkillIds` listát, de a song blockot
+**ütemezte** — ez megszegte az A3-at (előfeltétel-skill ELŐBB jön), mert
+nincs producer, aki kitermelné a hiányzó skillt. A javítás:
+
+- A `SongGoalPlanner.plan` bevezet egy `actualizedSkills` halmazt
+  (`knownSkillIds ∪ ∑ already-accepted assignment.targetSkillIds`). Minden
+  draftnál kiszámolja az `unresolvedPrerequisites` listát; ha ez nem
+  üres, a draft **explicit drop**-ot kap
+  `SongGoalDropReason.unsatisfiedPrerequisite` kóddal és nem jelenik meg
+  az `assignments` listában. A producer-draft elfogadása után
+  `actualizedSkills`-hez hozzáadódik a draft `targetSkillIds`-je, így a
+  rákövetkező dependent draft megtalálja a producerét.
+- A `SongGoalPhaseAssignment.unsatisfiedPrerequisiteSkillIds` mező
+  megmarad (diagnosztikai célra), de a strict gate miatt minden megtartott
+  assignmenten üres — a hiányzó előfeltétel sosem csendesen annotált,
+  mindig explicit drop.
+- A4 simulation-fázis checkje szintén `actualizedSkills`-re váltott
+  (egységes forrás), hogy a producer-draft által épp bevezetett új
+  technikát is újnak tekintse a simulation-fázis.
+- A korábbi `'unsatisfied prerequisite is reported on the assignment'`
+  teszt átírva: mostantól a no-producer esetre a draft eldobását várja
+  (`outcome.assignments isEmpty`, `droppedDrafts.single.reasonCode ==
+  unsatisfiedPrerequisite`). A `'prerequisite comes first'` happy-path
+  teszt (reversed-declared chord→strum ahol a chord-draft a producer)
+  változatlanul zöld.
+- Új A3 regressziós teszt: `A3 regression — when a real producer draft is
+  supplied, the dependent draft is kept and ordered STRICTLY after the
+  producer` — bebizonyítja, hogy a drop csak a no-producer ágra
+  korlátozódik, a produceres esetben továbbra is strict-after ordering
+  érvényesül.
+
+A tesztszám 14 → **15** (planner), 8 → **7** (reader_adapter; a review
+`7 reader tests`-re frissítette, nálunk 7/7). A `tools/round-gate.sh`
+mind a hét fázisa zöld.
 
 ### 10.1 Elkészült scope
 
@@ -212,21 +252,24 @@ A §4 minden sorát lefedve:
 - `lib/features/practice_generator/domain/service/song_block_compiler.dart` (NEW)
   — `SongGoalBlockDraft` + `SongGoalBlockSpec` + `SongBlockCompiler.compile`.
   Domain-tiszta (ADR 0255): nincs clock, nincs random, nincs I/O.
-- `lib/features/practice_generator/domain/service/song_goal_planner.dart` (NEW)
+- `lib/features/practice_generator/domain/service/song_goal_planner.dart` (NEW, **MODIFIED a javító körben**)
   — `SongGoalPlanner.plan` determinisztikus sorrendben érvényesíti A1 → A2 →
   A3 → A4. Sealed kimenetek: `SongGoalPlanningAccepted` / `NoOpAfterTarget` /
-  `StaleRevision` / `EmptySections`. A8 caller-fed outcome normalizálás
-  (`normalizeOutcome`) zárt típusokkal: `completed` + `partial` →
+  `StaleRevision` / `EmptySections`. A3 strict gate: az `actualizedSkills`
+  halmaz nem tartalmazott előfeltétel ⇒ explicit
+  `SongGoalDropReason.unsatisfiedPrerequisite`. A8 caller-fed outcome
+  normalizálás (`normalizeOutcome`) zárt típusokkal: `completed` + `partial` →
   `evidenceIsLearnerSignal == true`; `skipped` + `failedTechnical` +
   `unavailable` → `false` (ADR 0268 §1, §2; ADR 0318 §Döntés 2).
 - `lib/features/practice_generator/public.dart` (MODIFIED)
   — 3 új re-export hozzáadva a barrel alján:
   `song_goal_reader_adapter`, `song_block_compiler`, `song_goal_planner`.
-- `test/features/practice_generator/song_goal/song_goal_planner_test.dart` (NEW)
-  — 14 teszt: A1, A2, A3, A4, A6, A8 cellák + 3 §6.1 signed-distance cella
-  (+1/0/-1) + 1 §6.1 valódi-sértés próba (ratio cap 1.0 → A1 piros).
+- `test/features/practice_generator/song_goal/song_goal_planner_test.dart` (NEW, **MODIFIED a javító körben**)
+  — **15** teszt: A1, A2, A3 (happy-path + no-producer-drop + producer-regression), A4,
+  A6, A8 cellák + 3 §6.1 signed-distance cella (+1/0/-1) + 1 §6.1
+  valódi-sértés próba (ratio cap 1.0 → A1 piros).
 - `test/features/practice_generator/song_goal/song_goal_reader_adapter_test.dart` (NEW)
-  — 8 teszt: A5 explicit missing-asset, A6 stale-revision, A7 public API only.
+  — **7** teszt: A5 explicit missing-asset, A6 stale-revision, A7 public API only.
 - `test/fixtures/practice_generator/song_goal/song_goal_fixtures.dart` (NEW)
   — fixture builder-ek a két tesztfájlhoz.
 
@@ -236,7 +279,7 @@ A §4 minden sorát lefedve:
 | --- | --- |
 | A1 (ratio cap, 0.4) | planner_test: `A1 ratio cap song blocks stay at or below…` + `…drafts that would push the ratio over the cap are dropped…` + §6.1 valódi-sértés próba |
 | A2 (no block after target) | planner_test: `A2 no automatic block after target…` + §6.1 cell `-1` |
-| A3 (prereq first) | planner_test: `A3 prerequisite comes first` ×2 (kielégített és nem kielégített) |
+| **A3 (prereq first, strict gate)** | planner_test: `A3 prerequisite comes first` (happy-path, dependent reordered strict-after producer) + `…unsatisfied prerequisite with NO producer draft is dropped…` (no-producer → explicit drop) + `A3 regression — when a real producer draft is supplied, the dependent draft is kept and ordered STRICTLY after the producer` |
 | A4 (no new tech in simulation) | planner_test: `A4 no new technique in simulation` ×2 (új → drop, ismert → keep) + §6.1 cell `0` |
 | A5 (explicit missing asset) | reader_adapter_test: `A5 explicit missing-asset branch` ×2 |
 | A6 (stale revision) | reader_adapter_test ×3 + planner_test `A6 stale revision surfaces…` |
@@ -252,14 +295,39 @@ A §4 minden sorát lefedve:
 
 - format: **zöld** (1635 fájl, 0 változott)
 - analyze: **zöld** (No issues found!)
-- test planner: **zöld** (14/14)
-- test reader_adapter: **zöld** (8/8)
+- test planner: **zöld** (**15/15** — including the new no-producer A3 drop test
+  + producer-keeps-regression test)
+- test reader_adapter: **zöld** (**7/7**)
 - architecture: **zöld**
 - secrets: **zöld**
 - l10n: **zöld**
 
 A teljes suite + randomizált property gate + release APK a CI-ban fut
-(ADR 0053, `build-apk.yml`); ezen a boxon nem ismételjük.
+(ADR 0053, `build-apk.yml`); ezen a boxon nem ismételjük. A javító kör
+kizárólag a §4 engedélyezett fájllistáján dolgozott:
+`lib/features/practice_generator/domain/service/song_goal_planner.dart`
++ `test/features/practice_generator/song_goal/song_goal_planner_test.dart`
++ ez a §10 frissítés. A scope-audit nem jelzett kívül eső fájlt.
+
+### 10.4 Scope-on kívüli, szándékosan nem nyitott kérdések
+
+- A tényleges Song Trainer `SongTrainerResult` bekötése — a mai
+  `application/trainer/` belső, a public barrel nem exportálja. Ez a §0.0
+  2. pontjában halasztott előfeltétel; az A8-as caller-fed normalizálás
+  itt csak a **shape**-et köti le, nem a konkrét Song Trainer kimenettel
+  való fordítást.
+- A per-section asset-párosítás (`section → asset`) — a public `SongDocument`
+  felületén nem áll rendelkezésre; az adapter ezért mindig `null`
+  `usableAssetReference`-t ad vissza, és a planner a `missingUsableAsset`
+  drop-reason ágon kezeli (ADR 0318 §Döntés 2).
+- A Song Trainer oldali `Hotspot` típus bevezetése a public barrelba — ez
+  külön kör (Song Trainer-oldali cross-feature előfeltétel).
+
+### 10.5 Következő körök
+
+- A tényleges Song Trainer eredmény-wiring a public barrel bővítésével.
+- Az `accepted → consumer` (UI / repository) kábelezés — ez a Practice
+  Generator oldali kimeneti integráció, jelenleg csak a terv maga kész.
 
 ### 10.4 Scope-on kívüli, szándékosan nem nyitott kérdések
 
