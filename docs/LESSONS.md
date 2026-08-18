@@ -11982,3 +11982,118 @@ NEM eseti mérlegelés kérdése — lásd a kötelező „Kulcs-politiká"-t
 (`docs/execution/pipeline-selfheal-prompt.md`). Rokon: [[L314]], [[L313]],
 [[L312]] — mind ugyanaznap, mind a „megosztott ambiens állapot több
 egyidejű session között" hibaosztály tagja.
+
+## L316 — Az L182 `song_import_controller_test.dart` flake-je MÁSODJÁRA is HALT-ot okozott, ezúttal dedikált self-healt igényelve; a mért válasz változatlanul retry, de a rekurrencia magát a race-t IS napirendre teszi (E99-R14 H7, 2026-08-18)
+
+**Tünet.** `E99-R14` (implementer minimax, brief kizárólag GOV-08
+motor-policy/TTL tooling — `tools/engine-profile.sh`, `tools/round-metrics.py`,
+`tools/round-pipeline.sh` + tesztjeik, `docs/rounds/e99-r14-*`,
+`docs/reviews/e99-r14-review.md`) exact-SHA Full Gate futása (`32190289173`,
+`bfd43bf9`) pirosra váltott: 5072 zöld, **1 piros** —
+`test/features/song_trainer/application/import/song_import_controller_test.dart:
+cancellation during import closes the workspace without a record` —
+`Expected: empty`, `Actual: [_Directory: '/tmp/song-import-controller-
+<rnd>/import-1']`. **Szó szerint ugyanaz a teszt, ugyanaz az assert, ugyanaz
+a hibaüzenet-alak**, mint [[L182]] (E05-R21, 2026-08-08) — csak ott egy
+NORMÁL kör orchesztrátora oldotta fel inline, itt a HALT egy dedikált
+önjavító kört (ADR 0112) igényelt.
+
+**Mérés — ok-okozati lehetetlenség.** `git diff --name-only
+origin/main...bfd43bf9` = kizárólag a fenti `tools/**` + `docs/**` fájlok;
+`git diff origin/main...bfd43bf9 | grep -i song_trainer` **nulla találat** —
+a kör diffjének nincs importálási vagy futásidejű útja a song-import
+workspace-hez.
+
+**Mérés — izolált reprodukció a PONTOS piros SHA-n.** `git worktree add
+--detach /tmp/ss-heal-E99-R14-h7-repro bfd43bf9` (nem a megosztott fő
+munkafán — [[shared-tree-git-stash-hazard]] elve: külön workspace minden
+git-műveletnek), `flutter pub get`, majd `flutter test
+test/features/song_trainer/application/import/song_import_controller_test.dart`
+**5×, egyenként**: **5/5 zöld**, minden futásban a panaszolt teszt is —
+megegyezik az L182 „0/5 bukás pristine main-en" mintázatával. A teszt maga
+(93. sor: `await harness.workspaceRoot.list().toList()` közvetlenül a
+`cancel()` és egy KÉSVE érkező sikeres import-completion közé ékelve, `await
+importing` csak UTÁNA fut) valódi fájlrendszeri I/O timinget mér — ez
+izoláltan mindig ugyanúgy ütemeződik, a teljes suite (5073 teszt)
+párhuzamos terhelése alatt viszont nem.
+
+**Feloldás.** `gh run rerun 32190289173 --failed`, várakozás
+`tools/wait-for-ci.sh 32190289173 1800 60`-nal ELŐTÉRBEN (a H-NOSIGNAL/[[L183]]
+szabály — sosem csupasz `gh run watch`/`gh run list`-ciklus) → `completed
+success`, **ugyanazon** `headSha=bfd43bf9`-n. Router CI erre a SHA-ra
+függetlenül is már zöld volt (2 futás, `32190290978`/`32190279604`) — csak a
+Full Gate futása kellett újra. **Nincs kódváltoztatás, nincs PR**: a self-heal
+jogosultsága (`docs/execution/pipeline-selfheal-prompt.md` §2) `tools/**`,
+`.ai/**`, `docs/adr/**`-re és a megállt kör saját briefjére/allowlistjére
+szól — a `lib/features/song_trainer/` vagy a teszt maga NEM ezen kör
+hatóköre, még akkor sem, ha a race-nek volna kézenfekvő javítása (pl. a
+`cancel()` várja meg a workspace-törlés Future-jét, vagy a teszt egy
+explicit completion-jelre várjon a nyers `list()` helyett, ne rá). `outcome=retry`.
+
+**Szabály.** (1) Egy `song_import_controller_test.dart`-ról jövő, a kör
+diffjéhez ok-okozatilag nem köthető Full Gate piros **nem új nyomozás** —
+a válasz a [[L182]]/[[L183]] által már lefektetett, mért eljárás: diff-alapú
+kizárás → izolált 5× repro a PONTOS SHA-n → `gh run rerun --failed` +
+`tools/wait-for-ci.sh`, sosem bemondásra elfogadott rerun. (2) Ez a flake
+MOST MÁR KÉTSZER mérve okozott érdemi költséget (először egy kör saját idejét,
+most egy teljes self-heal ciklust) ugyanazzal a gyökérokkal, változatlanul
+javítatlanul — a *tünet* kezelése (rerun) helyes és a self-heal hatókörén
+belüli egyetlen lehetőség, de ez NEM helyettesíti a *race* tényleges
+javítását. Ezt egy jövőbeli, a `song_trainer`-import réteget explicit
+érintő NORMÁL kör briefjébe kell felvenni (nem self-healbe, ld. fenti
+hatókör-korlát) — vagy a `cancel()` szinkronizálja a workspace-cleanupot a
+visszatérése elé, vagy a teszt egy determinisztikus completion-szignálra
+várjon a `workspaceRoot.list()` helyett. Amíg ez nem történik meg, a flake
+ismétlődni fog, és minden előfordulás ugyanezt a mérési terhet rója egy
+teljesen független kör self-healjére. Rokon: [[L182]], [[L183]].
+
+## L317 — A `sdd-round-review` skill SAJÁT kanonikus klónozó parancsa a hubból (`/home/ubuntu/music-theory`) klónoz — pontosan az az anti-minta, amit L311 már dokumentált; a JAVÍTÓ kör push-elmaradása is megismétlődött (E07-R23, 2026-08-18)
+
+**Mérve.** Az E07-R23 review-lépése a `sdd-round-review` skill saját, szó
+szerinti példaparancsát követte: `git clone --branch <kör-branch>
+/home/ubuntu/music-theory /tmp/review-<kör>`. A hub lokális
+`refs/remotes/origin/<branch>` refje egy PRE-FLIGHT-időszaki fetchből
+(9c2aa9bb) származott — a dispatch UTÁNI push (a `ss-codex-e07-r23`
+munkapéldányból, `4eb098d8` majd `4bb62a62`) sosem frissítette automatikusan,
+mert két KÜLÖN `.git` könyvtárról van szó. Az első `round-gate.sh` futás ezért
+a teszt-fájlokra "Does not exist" hibával bukott — NEM a kód hibája, hanem a
+klónozás forrásáé. Ez a HARMADIK mérés ugyanarra a hibaosztályra
+([[L175]]/[[L179]] a worktree-vs-clone variáns, [[L311]] már PONT ezt a
+mintát írta le és PONT ezt a javaslatot adta: „egyszerűen mindig az
+IMPLEMENTER SAJÁT munkapéldányából klónozz review-hoz" — de ez a javaslat
+sosem került be a skill fájl SAJÁT példaparancsába, ezért a minta
+megismétlődött. Egy LESSONS.md-be írt tanulság önmagában nem védelem, csak a
+használt artefaktum (itt: a skill szövege) saját frissítése az.
+
+**Másodlagos, ugyanabban a körben mért ismétlődés.** A review-lépés SAJÁT
+javító köre (F1 fix, `a6e0436f`) is UGYANAZT tette, amit L311 az
+E07-R22-ben már mért: a `.codex-round-status` `done`/`head=a6e0436f` jelzése
+után a branch `[ahead 1]` maradt az originhoz képest — commitolva, de nem
+push-olva. A review-oldali friss (immár helyesen originból közvetlenül
+klónozott) újraklónozás `pathspec 'a6e0436f' did not match` hibával fogta meg
+azonnal, mielőtt bármit elfogadtam volna bemondásra.
+
+**Egy független subagent (security-reviewer) MAGA is ugyanebbe a hibába
+futott** (ugyanazt a `/tmp/review-e07-r23` útvonalat kapta paraméterként,
+amit én már — hibásan — a hubból klónoztam), és A SAJÁT KEZDEMÉNYEZÉSÉRE,
+utasítás nélkül, `git fetch origin && git checkout <sha>`-val helyreállította
+a helyes tartalmat, mielőtt bármit értékelt volna — dokumentálva a saját
+jelentésében. Ez pozitív megerősítés, hogy a „mérj, ne higgy a bemondásnak"
+kultúra a subagentekre is átöröklődik, még akkor is, ha a hívó (én) hibás
+kiindulási állapotot adott át.
+
+**Javítás ebben a körben.** Mindkét esetben a hiányzó push-t az implementer
+saját munkapéldányából (`git -C /home/ubuntu/ss-codex-e07-r23 push origin
+HEAD:<branch>`) pótoltam, majd a review-klónt KÖZVETLENÜL originból (nem a
+hubból) építettem újra minden egyes alkalommal.
+
+**Szabály / nyitott javítás (jövőbeli governance/E99 kör vagy önjavítás
+scope-ja, NEM ez a kör — a `.claude/skills/**` a jelen E07-brief
+`allowed_paths`-án kívül esik):** a `sdd-round-review` skill kanonikus
+klónozó parancsát cserélni kellene egyikre: (a) `git clone --branch
+<kör-branch> <implementer-munkapéldány-útvonala> /tmp/review-<kör>` (L311
+saját javaslata — garantáltan friss, mert az implementer sajátja), vagy (b)
+`git clone --branch <kör-branch> <origin-URL> /tmp/review-<kör>` (mindig a
+publikált igazságot adja, függetlenül attól, hogy a hub mikor fetchelt
+utoljára). A jelenlegi hub-alapú minta MINDEN jövőbeli review-lépést
+ugyanennek a hibaosztálynak tesz ki. Rokon: [[L175]], [[L179]], [[L311]].

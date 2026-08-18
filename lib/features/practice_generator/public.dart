@@ -10,13 +10,18 @@ export 'application/model/generation_state.dart';
 export 'application/service/evidence_aggregator.dart';
 export 'application/service/generation_orchestrator.dart';
 export 'application/service/skill_estimate_reducer.dart';
+export 'application/service/plan_execution_coordinator.dart';
 export 'data/adapter/legacy_lesson_candidate_adapter.dart';
 export 'data/adapter/legacy_lesson_catalog_adapter.dart';
 export 'data/adapter/legacy_mapping_table.dart';
 export 'data/adapter/legacy_progress_evidence_adapter.dart';
+export 'data/adapter/practice_outcome_adapter.dart';
 export 'data/local/local_practice_plan_repository.dart';
 export 'data/local/practice_plan_migrator.dart';
-export 'data/local/practice_plan_serializer.dart';
+// The older serializer record is repository-local. R23 publishes the richer
+// execution [PracticeOutcome] instead; local persistence keeps importing its
+// own record type directly.
+export 'data/local/practice_plan_serializer.dart' hide PracticeOutcome;
 export 'presentation/controller/plan_setup_controller.dart';
 export 'presentation/controller/plan_preview_controller.dart';
 export 'presentation/screens/plan_setup_screen.dart';
@@ -63,6 +68,7 @@ export 'domain/service/candidate_selector.dart';
 export 'domain/service/adaptation_decider.dart';
 export 'domain/service/plan_repairer.dart';
 export 'domain/service/plan_validator.dart';
+export 'domain/service/plan_compiler.dart';
 export 'domain/service/priority_engine.dart';
 export 'domain/service/request_validator.dart';
 export 'domain/service/review_queue.dart';
