@@ -5,11 +5,50 @@ Diff: `git diff 585a1c62..34db7a6f` (base = the pre-flight §0.0 revision commit
 head = the implementer's single feature commit), isolated clone
 `/tmp/review-E07-R18` (branch `terra/e07-r18-generation-orchestrator`)
 Reviewer: Claude (Sonnet 5) · Dátum: 2026-08-18
-Verdikt: **CHANGES REQUIRED**
+Verdikt (első kör): **CHANGES REQUIRED**
 
-## Összegzés
+## Frissítés — javító kör #1 után (2026-08-18)
 
-BLOCKER: 1 · MAJOR: 1 · MINOR: 1 · NOTE: 3
+Javító commit: `bf821515` (`fix(planner): harden generation controller
+review findings`), a `6b56878d` review-jelentés commit UTÁN dispatch-elve.
+Gate-eket ÚJRA, saját kézzel, FRISS izolált klónban futtattam
+(`/tmp/review-E07-R18-fix1`, `git clone --branch
+terra/e07-r18-generation-orchestrator` az originról, `bf821515` HEAD):
+
+- **F1 FIXED.** `plan_generator_controller.dart` guardja bővült
+  `_state.status != GenerationStatus.running`-nal a záró publikálás előtt
+  (pontosan a review javasolt iránya). Regressziós teszt: „A6 controller:
+  double-tap generate()…" — a saját kezemmel megerősítve, hogy a javítás
+  ELŐTTI állapoton (a review saját próbateszjével) PIROS, utána ZÖLD.
+  `plan_generator_controller_test.dart`: 4/4 zöld (izolált klónban mérve).
+- **F2 FIXED.** Új teszt: „A3: unrepairable validation failure never
+  activates a partial plan" — 4 hard-avoided jelölt + 3 repair-iteráció,
+  `ValidationFailure` + `activation.calls == 0`. Dokumentált valódi-sértés
+  próba (§10.3): a repair-elutasítási `Failure` ideiglenes `Success`-re
+  cserélésével PIROS, visszaállítás után ZÖLD.
+  `generation_orchestrator_test.dart`: 7/7 zöld (izolált klónban mérve).
+- **F3 empirikusan lezárva, NYITVA marad (elfogadva).** Terra kipróbálta a
+  `sync: false`-ra váltást — az A7 controller teszt PIROSRA váltott (az
+  aszinkron kézbesítés mellett a feliratkozó az `await` idejéig nem látta a
+  `completed` átmenetet), tehát a kód TÉNYLEG támaszkodik a szinkron
+  kézbesítésre a jelenlegi teszt-asszerciók mellett. Ez elfogadható,
+  empirikusan alátámasztott indoklás — a MINOR follow-upként nyitva marad,
+  NEM blokkolja a merge-et (a review-sablon szerint is: „MINOR:
+  javítható… ha nem hizlalja a diffet; egyébként follow-up").
+- **Scope-audit:** `Legacy scope audit OK (6b56878d..bf821515, 4 changed
+  path(s), 0 generated/ignored)` — a 4 útvonal: a briefdoksi §10 frissítése +
+  a 3 engedélyezett production/teszt fájl egyike-másika. Nincs listán kívüli
+  fájl.
+- **Gate — MINDEN ZÖLD** saját kézzel, izolált klónban: format, analyze,
+  mindkét célzott teszt, architecture, secrets, l10n.
+
+**Verdikt (javító kör után): APPROVED.** F1/F2 zárva, bizonyítva; F3 nyitott
+follow-up, nem blokkoló. CI-dispatch és merge mehet.
+
+## Eredeti (első körös) megállapítások
+
+BLOCKER: 1 (F1, FIXED) · MAJOR: 1 (F2, FIXED) · MINOR: 1 (F3, OPEN — nem
+blokkoló follow-up) · NOTE: 3 (F4-F6, nem blokkoló)
 
 Lásd külön a biztonsági review-t: [`e07-r18-generation-orchestrator-security.md`](e07-r18-generation-orchestrator-security.md)
 — **PASS**, 0 BLOCKER/MAJOR/MINOR, 4 forward-looking NOTE.
@@ -93,7 +132,9 @@ kitöltése) — ez explicit az `allowed_paths` utolsó sora.
 - **Ellenőrzés:** a fenti próbateszt (vagy ezzel ekvivalens) kerüljön be a
   végleges `plan_generator_controller_test.dart`-ba mint A6 controller-szintű
   cellája, és PIROS→ZÖLD legyen a javítás előtt/után.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bf821515`) — a guard bővült
+  `_state.status != GenerationStatus.running`-nal; a regressziós teszt
+  saját kézzel, izolált klónban ZÖLD.
 
 ### F2 — MAJOR — A3 "lépés hibázik → nincs aktiválás" csak az assembly-szintű hibaágra van tesztelve, a validate/repair-elutasítási ágra nincs
 
@@ -126,7 +167,9 @@ kitöltése) — ez explicit az `allowed_paths` utolsó sora.
   `Success`-t adna vissza (rövid, ideiglenes mutáció-próbával igazolva, a
   brief §10-be dokumentálva — ugyanaz a minta, mint az A1-re már elvégzett
   próba).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bf821515`) — új „A3: unrepairable validation
+  failure…" teszt, dokumentált valódi-sértés próbával (§10.3); saját
+  kézzel, izolált klónban ZÖLD.
 
 ### F3 — MINOR — `StreamController(..., sync: true)` mindkét broadcast controlleren
 
@@ -144,7 +187,13 @@ kitöltése) — ez explicit az `allowed_paths` utolsó sora.
   `sync: true` mellett, mint a alapértelmezett aszinkron kézbesítéssel.
 - **Javasolt irány:** válts `sync: false`-ra (az alapértelmezettre), hacsak
   nincs konkrét, dokumentált ok a szinkron kézbesítésre.
-- **Státusz:** OPEN (follow-up is elfogadható, nem növeli a diffet érdemben)
+- **Státusz:** WONTFIX ezen a körön, empirikusan alátámasztva (§10.3): a
+  `sync: false`-ra váltás próbája PIROSRA fordította az A7 controller
+  tesztet (az aszinkron kézbesítés mellett a feliratkozó nem látta időben a
+  `completed` átmenetet) — a kód ténylegesen támaszkodik a szinkron
+  kézbesítésre a jelenlegi assertion-stílus mellett. Follow-up marad: vagy a
+  tesztek igazítása aszinkron kézbesítéshez egy KÉSŐBBI körben, vagy a
+  `sync: true` választás explicit dokumentálása a kódban. Nem blokkol.
 
 ### F4 — NOTE — Pihenő/nem elérhető napok szintetikus `planned` státuszt és 1 mikroszekundumos budget-et kapnak
 
@@ -204,10 +253,23 @@ kitöltése) — ez explicit az `allowed_paths` utolsó sora.
 Minden fenti gate a saját kezemmel, elkülönített `/tmp/review-E07-R18` klónban
 futott, nem a közös munkafán és nem az implementer állításából átvéve.
 
+### Javító kör #1 utáni gate-bizonyíték (saját kézzel, FRISS izolált `/tmp/review-E07-R18-fix1` klónban, HEAD `bf821515`)
+
+| Gate | Ellenőrizve |
+|---|---|
+| format | ✅ zöld |
+| analyze | ✅ zöld |
+| test `generation_orchestrator_test.dart` | ✅ zöld — 7/7 passed (+1 az F2 javításból) |
+| test `plan_generator_controller_test.dart` | ✅ zöld — 4/4 passed (+1 az F1 javításból) |
+| architecture | ✅ zöld |
+| secrets | ✅ zöld |
+| l10n | ✅ zöld |
+| scope-audit (`--base 6b56878d`) | ✅ OK, 4 változott útvonal, 0 sértés |
+| CI (teljes suite + property + APK) | ⏳ a review lezárása után dispatch-elendő |
+
 ## Merge-döntés
 
-**Merge TILOS**, amíg F1 (BLOCKER) és F2 (MAJOR) nyitva van (ADR 0052). A
-javító kört UGYANAZ a motor (`terra`) viszi, ugyanazon a branchen, a fenti
-két leletlistával. F3 (MINOR) javítható ugyanabban a javító körben, ha nem
-hizlalja érdemben a diffet; ha nem fér bele, follow-up. F4-F6 (NOTE) nem
-blokkol, dokumentálva marad.
+**F1 és F2 zárva (FIXED, `bf821515`), saját kézzel újramérve.** F3 nyitott,
+de WONTFIX-ként dokumentált follow-up (empirikusan indokolt, nem blokkoló).
+F4-F6 (NOTE) és a biztonsági review 4 NOTE-ja nem blokkol. **A gate minden
+eleme zöld → CI-dispatch és squash-merge mehet (ADR 0052).**
