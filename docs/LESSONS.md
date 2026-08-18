@@ -11220,3 +11220,69 @@ megosztott, single-flight Future-t végfelhasználói callback-ből (állapot-
 publikálás, analytics, side-effect) zár le, teszteljen egy „dupla-tap"
 forgatókönyvet `Future.wait([call1, call2])`-vel, ne csak a mögöttes
 dedup-mechanizmust önmagában.
+
+## L302 — Egy PREPARED brief pre-flight calloutja Core/domain hiányra mérethet anélkül, hogy kimondaná: a hiányzó szerződés/invariáns a MEGLÉVŐ típusokkal és írási sorrenddel is teljesíthető, nem csak új, tilos-zónás fájllal (E07-R19, halt H3, ADR 0112 önjavítás, 2026-08-18)
+
+**Tünet.** Az E07-R19 (Local repository, migráció és korrupcióvédelem, előre
+megírva 2026-08-15) brief §0 pre-flight calloutja előírta: mérd meg a Core
+atomikus írási API-ját, és olvasd újra az R04 draft-repository mintáját. A
+kör saját pre-flightja (sonnet-impl via Terra, branch
+`sonnet-impl/e07-r19-local-plan-repository`, commit `1801a399`) helyesen
+mérte: sem `PracticePlanRepository`/`PracticeOutcome` domain-kontraktus (SDD
+Ch8 §30.1 interfész-vázlata), sem Core atomikus API nem létezik — de ebből
+azt a következtetést vonta le, hogy MINDKÉT hiány tilos-zónás (domain/Core)
+fájlt igényel, és **H3-mal halt** (`.pipeline/HALTED`,
+halted_at=2026-08-18T11:24:19+00:00), mert az `allowed_paths` egyik zónát
+sem engedi.
+
+**Mért gyökérok (self-heal reprodukció, 1/3. kísérlet).** A következtetés
+túlterjeszkedő volt:
+
+1. `rg -n "PracticePlanRepository|PracticeOutcome|PracticePlanId"
+   lib/features/practice_generator` → 0 találat — DE a brief saját §0
+   callout-ja már megnevezte az R04 `GenerationDraftRepository`-t, ami
+   pontosan ugyanezt a mintát mutatja: konkrét osztály, `abstract interface
+   class` NÉLKÜL a domainben, meglévő domain típusra (itt:
+   `PracticeGenerationRequest`) építve. A „repository-szerződés" (§3) tehát
+   NEM jelenti azt, hogy új domain interfészt kell írni — az implementer a
+   saját pre-flight instrukcióját ([ADR 0259 §3] „olvasd újra az R04
+   mintáját") nem vezette végig erre a következtetésre.
+2. A Core `KeyValueStore.writeString(key, value)` hívása a hívó szemszögéből
+   már ATOMIKUS egyetlen kulcsra (a Future vagy egy TELJES értékkel zár le,
+   vagy eldobódik — részleges string nem olvasható vissza ugyanazon a
+   kulcson). A „megszakított írás nem hagy félkész rekordot" invariáns ebből
+   következően **kulcs-sorrend** kérdése (ÚJ kulcs előbb, mutató-váltás
+   utoljára), amit a repóban KÉT másik, élesben futó komponens
+   (`storage_migrator.dart` `WrapJsonDocumentMigration.apply`: „write new …
+   remove old"; `json_document_store.dart` `JsonDocumentStore.write`:
+   „quarantine copy → new document → drop legacy key") már bizonyítottan
+   megold — Core-módosítás nélkül. Az implementer csak a szó szerinti
+   „atomic" kulcsszót kereste (`rg -n "atomic|writeString"
+   lib/core/storage`), nem a MINTÁT, ami a repóban máshol (más feature saját
+   storage-rétegében, `song_trainer/data/local/atomic_file_writer.dart`) is
+   megjelenik — az viszont más, fájl-alapú stratégia és nem publikus, tehát
+   cross-feature nem importálható, csak megismételhető (amire ennek a
+   körnek nincs is szüksége).
+
+**Szabály.** Amikor egy PREPARED brief pre-flight calloutja Core- vagy
+domain-hiányra méret, és a mérés valóban hiányt talál, a KÖVETKEZŐ lépés NEM
+automatikusan „tilos zóna kell" — előbb azt kell megmérni, hogy (a) a
+hiányzó KONTRAKTUS helyettesíthető-e egy, a megengedett fájlokon belüli
+KONKRÉT osztállyal (a repo saját, máshol már bizonyított mintája szerint —
+itt: R04 `GenerationDraftRepository`), és (b) a hiányzó INVARIÁNS (itt:
+atomicitás) levezethető-e a MEGLÉVŐ API kontraktusából (itt: egyetlen
+`KeyValueStore.writeString` hívás már all-or-nothing) plusz a hívó saját
+írási SORRENDjéből, ahelyett hogy egy teljesen új, alacsonyabb szintű
+mechanizmust (fájl-alapú atomikus írás, ahogy a `song_trainer`-ben)
+importálna vagy másolna. Csak ha mindkét próba negatív, indokolt a H3 halt.
+A self-heal feloldása kizárólag dokumentált §0.0 brief-revízió volt —
+`allowed_paths` byte-for-byte változatlan, 0 produkciós fájl módosult
+(`tools/tests/test_e07_r19_repository_contract_scope.py` a regresszió-őr:
+mért típus-tények zárolása, plusz a §0.0 szöveg jelenléte — RED a mérje-fel
+briefen, GREEN a revízió után).
+
+Rokon L-ek: [[L134]] (fantom public-bemenet → scope-szűkítés — ugyanaz a
+„mérd, a forrásdokumentum vázlatát ne higgy el szó szerint" elv), [[L225]]
+(batch-briefek típusneve elévülhet egy testvér-kör domain modelljétől — a
+rokon hibaosztály: a brief egy MÁSIK dokumentum tartalmára alapoz, ami a
+dispatch pillanatában már nem pontos).

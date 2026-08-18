@@ -44,6 +44,36 @@
 > before review, so the pipeline prompt now gates repair/review on measured
 > `origin/main` ancestry (HEAL E07-R15/H7, upstream-sync).)**
 
+> ## ✅ [HEAL E07-R19/H3] KÉSZ — a brief pre-flight calloutja Core/domain hiányra méretett, de nem mondta ki: a hiány meglévő típusokkal és írási sorrenddel is teljesíthető (2026-08-18)
+>
+> Az E07-R19 (Local repository, migráció és korrupcióvédelem) saját
+> pre-flightja (sonnet-impl via Terra, branch
+> `sonnet-impl/e07-r19-local-plan-repository`, commit `1801a399`) helyesen
+> mérte, hogy sem `PracticePlanRepository`/`PracticeOutcome` domain-kontraktus
+> (SDD Ch8 §30.1), sem Core atomikus write API nem létezik — de abból, hogy
+> MINDKÉT hiány tilos-zónás fájlt igényel, H3-mal halt (`.pipeline/HALTED`,
+> halted_at=2026-08-18T11:24:19+00:00).
+>
+> A self-heal (1/3. kísérlet) megmérte, hogy a következtetés túlterjeszkedő
+> volt: a brief saját §0 callout-ja már megnevezte az R04
+> `GenerationDraftRepository`-t — egy KONKRÉT osztályt, `abstract interface
+> class` nélkül, meglévő domain típusra építve —, ami pontosan a
+> „repository-szerződés" mintája; és egyetlen `KeyValueStore.writeString`
+> hívás a hívó szemszögéből már all-or-nothing, tehát a „megszakított írás
+> nem hagy félkész rekordot" invariáns kulcs-sorrenddel (ÚJ kulcs előbb,
+> mutató-váltás utoljára) old meg, Core-módosítás nélkül — pontosan úgy,
+> ahogy a repóban máshol (`storage_migrator.dart`, `json_document_store.dart`)
+> már bizonyítottan működik.
+>
+> A feloldás kizárólag dokumentált §0.0 brief-revízió: `allowed_paths`
+> byte-for-byte változatlan, 0 produkciós fájl módosult. Regressziós őr:
+> `tools/tests/test_e07_r19_repository_contract_scope.py` (mért típus-tények
+> zárolása + a §0.0 szöveg jelenléte — RED a mérje-fel briefen, GREEN a
+> revízió után). PR [#301](https://github.com/wolfcasaba/strumsight/pull/301),
+> squash `b87c7479`; Router CI zöld a pontos head SHA-n (nincs Dart-változás,
+> build-apk nem indult). `docs/LESSONS.md` **L302**. A lánc E07-R19-cel
+> folytatódik a következő cron-firingen.
+>
 > ## ✅ [E07-R11] KÉSZ — PlanValidator és korlátos deterministic repair (2026-08-16)
 >
 > A `PlanValidationContext` explicit catalog/availability/identity inputtal
