@@ -321,4 +321,20 @@ végleges célzott tesztfuttatás exit 0-val zöld.
 - A teljes CI suite/property/release APK nem lokálisan fut: a kör CI-dispatch,
   review és merge a Claude-orchestrátor feladata.
 
+### Javító kör (F1–F4, 2026-08-18)
+
+- **F1:** `63768316` — az `AvailabilityEditor` injektált referenciadátumból
+  számítja az aktuális hétfőt; az
+  `availability_editor_test.dart` két különböző referenciahéten méri a
+  továbbadott `DailyAvailability.date` értékét.
+- **F2:** `da6c02ba` — a wizard-lépés külön draft-progressz kulcsban marad
+  meg, ezért az explicit `unknown` nem keveredik a meg nem nyitott lépéssel;
+  a `plan_setup_screen_test.dart` availability- és equipment-regressziói
+  restart után is a 2., illetve 3. lépést várják.
+- **F3:** `da6c02ba` — az A9 teszt gyűjtő `debugPrint` sinket állít be, és
+  ugyanazzal a sentinel szöveggel sikeres, majd szándékosan hibás
+  `saveDraft` mellett is bizonyítja a naplózás hiányát.
+- **F4:** `da6c02ba` — a controller kommentje pontosan plaintext helyi
+  draft-tárolást ír le, nem titkosítást.
+
 ## 11. Review — a Claude tölti ki
