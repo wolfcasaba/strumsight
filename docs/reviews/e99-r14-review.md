@@ -91,3 +91,57 @@ hibát adja, mint a javítás előtt. E javításuk a brief §5 szerinti tilos
 **Végső verdikt: CHANGES REQUIRED / merge tiltott.** A javított E99-R14 diff
 önmagában elfogadható, de a brief kötelező teljes tooling-suite DoD-ja nem
 teljesül, ezért CI-dispatch és merge nem indítható.
+
+## Friss, upstream-szinkron re-review — 2026-08-18
+
+- **Ellenőrzött HEAD:** `7a1b26466912` (tartalmazza az `origin/main`
+  `d67d102a` self-healját).
+- **Módszer:** friss GitHub-klón (`/tmp/review-e99-r14-fresh.PEpf4f/repo`),
+  scope-audit a tényleges `origin/main` bázishoz, futtatható gate, teljes
+  tooling-suite JUnit eredménnyel és célzott kód-/falszifikációs audit.
+
+### Lezárt korábbi leletek
+
+- **M1:** a `--engines --epic` szűrés az aggregáció előtt működik; pozitív,
+  negatív és kevert-fixtúrás cellák mérik.
+- **M2:** a falszifikációk kizárólag ideiglenes scriptmásolatokat módosítanak.
+- **M3:** nincs top-level teszthorog; a driver és a teszt ugyanazt az
+  `engine-profile.sh evaluate` kiértékelést használja.
+- **M4:** az upstream `80cdb46a` hermetikussá tette a driver-tesztek
+  környezetét. A friss teljes suite JUnit-ja: `tests=1063`, `failures=0`,
+  `errors=0` (268.467 s).
+
+### MAJOR
+
+#### M5 — Lejárt override-nál elveszik a motor neve a kötelező audit- és ntfy-üzenetből
+
+**Hely:** `tools/engine-profile.sh:163-168`,
+`tools/round-pipeline.sh:1773-1776`.
+
+Az `engine_override_evaluate` lejáratkor csak az `EXPIRED` literált írja ki,
+majd törli az override-fájlt. A hívó ezt változatlanul naplózza és küldi
+értesítésben, ezért a tényleges esemény `MOTOR-OVERRIDE LEJÁRT: EXPIRED`, nem
+a brief D2 által megkövetelt `MOTOR-OVERRIDE LEJÁRT: <motor>`. A törlés után a
+motor már nem állítható vissza a fájlból, így ez valódi auditálhatósági veszteség.
+
+**Bizonyíték:** a lejárati ágban az egyetlen stdout `EXPIRED`; a hívó ezt
+`$evaluate_output`-ként interpolálja. A jelenlegi teszt csak a törlést és az
+exit-kódot méri, a log-/notify-üzenet motornevét nem.
+
+**Javítási irány:** az értékelő adja át a lejárt motornevet strukturáltan
+(például `EXPIRED:<motor>`), a driver pedig ebből képezze a pontos log- és
+ntfy-szöveget; ehhez adj a valódi driver-úton futó regressziós cellát.
+
+### Ellenőrzések
+
+- `python3 tools/scope-audit.py --repo <fresh-clone> --brief ... --base origin/main`
+  → `OK` (7 changed path(s), 1 generated/ignored).
+- `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`
+  → zöld (format, analyze, célzott teszt, architecture, secrets, l10n).
+- `/tmp/ss-heal-r12-pytest/bin/python3 -m pytest tools/tests -q --junitxml=...`
+  → JUnit: 1 063 teszt, 0 failure, 0 error.
+- `tools/tests/test_engine_override_ttl.py` és
+  `tools/tests/test_round_metrics_engines.py` → 17 passed.
+
+**Verdikt: CHANGES REQUIRED.** M5 nyitott; merge tilos a javítás és új
+független review előtt.
