@@ -322,6 +322,47 @@ E07-R28	docs/rounds/e07-r28-planner-assist-gateway.md	codex	0270	pending
 E07-R29	docs/rounds/e07-r29-accessibility-privacy-hardening.md	minimax	nincs	pending
 E07-R30	docs/rounds/e07-r30-evaluation-and-epic-closure.md	codex	nincs	pending
 #
+# ===== EPIC 8 — Gamification (Chapter 9, 30 kör) =====
+# Briefek előre megírva 2026-08-18 (main @ ea6569fb), mind `brief-lint --level
+# strict` tiszta. Az elvi alapot a MÁR MEGÍRT ADR 0289 (az elsajátítottság
+# bizonyíték, nem XP) és ADR 0290 (együttérző széria, idempotens beváltás) adja;
+# az új ADR-számok (0300-0320) FOGLALTAK, a dokumentumot a kör indítási
+# pre-flightjában a Claude írja meg a brief §5-éből.
+# A motor-oszlop GÉPI: a brief risk + allowed_paths értékeiből számolt
+# (tools/tests/test_pipeline_integration.py::test_open_rounds_follow_the_
+# measured_engine_rule) — kézzel NEM felülírandó.
+#
+E08-R01	docs/rounds/e08-r01-gamification-baseline-and-principles.md	minimax	nincs	pending
+E08-R02	docs/rounds/e08-r02-canonical-activity-events.md	codex	0300	pending
+E08-R03	docs/rounds/e08-r03-reward-ledger-and-idempotency.md	codex	0301	pending
+E08-R04	docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md	codex	0302	pending
+E08-R05	docs/rounds/e08-r05-reward-eligibility-and-trust-policy.md	codex	0303	pending
+E08-R06	docs/rounds/e08-r06-xp-policy-engine-and-diminishing-returns.md	codex	0304	pending
+E08-R07	docs/rounds/e08-r07-level-curve-and-profile-projection.md	codex	0305	pending
+E08-R08	docs/rounds/e08-r08-gamification-repository-and-storage-schema.md	codex	0306	pending
+E08-R09	docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md	codex	0307	pending
+E08-R10	docs/rounds/e08-r10-streak-v2-domain-and-legacy-migration.md	codex	0308	pending
+E08-R11	docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md	codex	0309	pending
+E08-R12	docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md	minimax	nincs	pending
+E08-R13	docs/rounds/e08-r13-achievement-domain-and-catalog.md	codex	0310	pending
+E08-R14	docs/rounds/e08-r14-achievement-evaluator-and-projection.md	codex	0311	pending
+E08-R15	docs/rounds/e08-r15-achievement-ui-and-evidence.md	minimax	nincs	pending
+E08-R16	docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md	codex	0312	pending
+E08-R17	docs/rounds/e08-r17-daily-quest-generator.md	codex	0313	pending
+E08-R18	docs/rounds/e08-r18-weekly-quest-and-consistency.md	codex	nincs	pending
+E08-R19	docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md	codex	0314	pending
+E08-R20	docs/rounds/e08-r20-quest-and-challenge-ui.md	minimax	nincs	pending
+E08-R21	docs/rounds/e08-r21-mastery-milestone-domain-and-evaluator.md	codex	0315	pending
+E08-R22	docs/rounds/e08-r22-reward-inbox-and-celebration.md	minimax	0316	pending
+E08-R23	docs/rounds/e08-r23-gamification-hub-and-level-ui.md	minimax	nincs	pending
+E08-R24	docs/rounds/e08-r24-practice-and-learn-integration.md	codex	0317	pending
+E08-R25	docs/rounds/e08-r25-song-trainer-and-setlist-integration.md	codex	nincs	pending
+E08-R26	docs/rounds/e08-r26-cross-feature-gamification-integration.md	codex	nincs	pending
+E08-R27	docs/rounds/e08-r27-gamification-accessibility-and-settings.md	minimax	0318	pending
+E08-R28	docs/rounds/e08-r28-ledger-sync-contract-and-merge.md	codex	0319	pending
+E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	codex	0320	pending
+E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	minimax	nincs	pending
+#
 # ===== 2. FEJLESZTÉSI SÁV — Chapter 14 (Recognition Recovery) =====
 # User-döntés 2026-08-15: az Epic 7 MELLETT fusson egy második sáv, ami előbb a
 # felismerés IGAZMONDÁSÁT állítja helyre. Mért indok (Ch14 audit a SZÁLLÍTOTT
