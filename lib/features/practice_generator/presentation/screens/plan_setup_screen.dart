@@ -143,6 +143,7 @@ class _PlanSetupScreenState extends State<PlanSetupScreen> {
             AvailabilityEditor(
               days: request?.availability.days ?? const [],
               onChanged: widget.controller.setAvailability,
+              referenceDate: widget.controller.clock(),
             ),
             TextButton(
               key: const Key('plan-setup-unknown'),

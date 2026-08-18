@@ -10,20 +10,20 @@ class AvailabilityEditor extends StatelessWidget {
   const AvailabilityEditor({
     required this.days,
     required this.onChanged,
+    required this.referenceDate,
     super.key,
   });
 
   final List<DailyAvailability> days;
   final ValueChanged<List<DailyAvailability>> onChanged;
-
-  static final LocalDate _monday = LocalDate(2026, 8, 17);
+  final DateTime referenceDate;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final monday = _mondayOf(referenceDate);
     final isAvailable = days.any(
-      (day) =>
-          day.date == _monday && day.status == AvailabilityStatus.available,
+      (day) => day.date == monday && day.status == AvailabilityStatus.available,
     );
     return Semantics(
       label: l10n.planSetupMondayAvailability,
@@ -38,7 +38,7 @@ class AvailabilityEditor extends StatelessWidget {
           value
               ? <DailyAvailability>[
                   DailyAvailability(
-                    date: _monday,
+                    date: monday,
                     status: AvailabilityStatus.available,
                     minimumMinutes: 0,
                     targetMinutes: 20,
@@ -50,5 +50,13 @@ class AvailabilityEditor extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static LocalDate _mondayOf(DateTime date) {
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final monday = startOfDay.subtract(
+      Duration(days: date.weekday - DateTime.monday),
+    );
+    return LocalDate(monday.year, monday.month, monday.day);
   }
 }
