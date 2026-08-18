@@ -8,8 +8,9 @@
 - **Branch:** `<motor>/e07-r21-plan-preview-and-explanation`
 - **Előfeltétel:** `E07-R20` merge-elve (setup wizard)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0264 (faktoronkénti
-  indoklás), 0263 (validáció mint kapu) és 0266 rögzíti. **Pontosítás
+- **Előre kiosztott ADR:** **ADR 0306** — Plan-preview presentation activation
+  boundary. Az ADR 0264 (faktoronkénti indoklás), 0263 (validáció mint kapu)
+  és 0266 határait erre alkalmazza. **Pontosítás
   (§0.0, 2026-08-18):** a 0266 az ATOMICITÁSRÓL szól (megszakítás után nincs
   írás, RÉSZLEGES terv nem aktiválódik) — nem arról, hogy egy TELJES, sikeres
   generálás emberi megerősítés nélkül aktiválódjon-e. Ez a brief korábbi
@@ -147,6 +148,30 @@ criteria sem tágul — kizárólag azt mondja meg, MELYIK meglévő, publikus
 típuson át teljesíthető a §1 „Cél" anélkül, hogy a tilos application-réteget
 érintené. Regressziós őr:
 `tools/tests/test_e07_r21_activation_boundary_scope.py`.
+
+### E07-R21 friss pre-flight mérése (2026-08-18, `main @ 5086bc12`)
+
+- A H2 self-heal feloldása jelenleg is érvényes: a tényleges aktiváció útja
+  `GenerationOrchestrator._run()` 150–154. sora (`plan.copyWith(status:
+  PlanStatus.active)` majd `activation.activate`); a presentation alatt nincs
+  meglévő hívója sem a `GenerationOrchestrator`-nak, sem a
+  `PlanGeneratorController`-nek.
+- A `public.dart` már exportálja az `AdaptivePracticePlan`,
+  `PlanValidationContext`, `PlanValidator` és `GenerationPlanActivation`
+  contractokat. Ezért az R21 a saját engedélyezett presentation-fájljain belül
+  teljesíthető; domain- vagy application-fájl bővítése nem szükséges.
+- A `PlanValidationResult.isActivatable` ténylegesen csak `error`/`fatal`
+  leletnél hamis; a warning önmagában nem blokkol. Ezt az R21 explicit
+  warning-áttekintési állapottal egészíti ki, nem a domain-súlyosság
+  átértelmezésével.
+- A `SkillPriorityFactorKind` valós faktorai: `skillGap`, `assessment`,
+  `goalAlignment`, `prerequisite`, `uncertainty`, `coverageDebt`, `fatigue`,
+  `novelty`, `discomfortSafety`. A reason-sheet csak ezek strukturált
+  adataiból képezhet lokalizált állítást.
+- `rg -n 'GenerationPlanInput\\(|PlanGeneratorController\\(|GenerationOrchestrator\\(' lib`
+  alapján a wizardnak továbbra sincs production hívója, amely `GenerationPlanInput`-ot
+  állítana elő; az éles generation→preview bekötés ezért marad a §0.0-ban
+  rögzített, külön későbbi follow-up.
 
 ## 1. Cél
 
