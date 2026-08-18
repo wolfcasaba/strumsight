@@ -5,15 +5,16 @@
 ///
 /// * **drafts** — `ss.practice_generator.plan.draft.<draftKey>`: in-progress
 ///   plans assembled by the wizard, never touching an active record.
-/// * **active** — `ss.practice_generator.plan.active.<planId>.<revisionId>`
-///   for the **immutable** record under a per-revision-id key, plus a single
+/// * **active** — `ss.practice_generator.plan.active.<length:planId>.
+///   <length:revisionId>` for the **immutable** record under a
+///   per-revision-id key, plus a single
 ///   `ss.practice_generator.plan.active_pointer` that names the
 ///   `{planId, revisionId}` pair the app loads on start. The pointer is the
 ///   *last* thing written on `activate`, so a partial write leaves the
 ///   prior pointer intact.
-/// * **archive** — `ss.practice_generator.plan.archive.<planId>.revisions.<id>`
-///   and `…outcomes.<id>` for the bounded history, plus `…index` records
-///   that list the ids in newest-first order.
+/// * **archive** — `ss.practice_generator.plan.archive.<length:planId>.
+///   revisions.<length:id>` and `…outcomes.<length:id>` for the bounded
+///   history, plus `…index` records that list the ids in newest-first order.
 ///
 /// Why per-revision-id storage instead of a single document:
 /// * A **single-record corruption** stays single-record. A serialised
@@ -92,6 +93,42 @@ final class ActivePlanActivationOutcome {
   final bool revisionWritten;
 }
 
+/// A present active-pointer record cannot be decoded safely. This is distinct
+/// from an absent pointer (first launch), so callers never mistake corruption
+/// for an empty store.
+final class PracticePlanActivePointerCorruptionException implements Exception {
+  const PracticePlanActivePointerCorruptionException({
+    required this.key,
+    required this.cause,
+    required this.stackTrace,
+  });
+
+  final String key;
+  final Object cause;
+  final StackTrace stackTrace;
+
+  @override
+  String toString() =>
+      'PracticePlanActivePointerCorruptionException(key: $key)';
+}
+
+/// An archive index is present but cannot be decoded safely. Appending is
+/// refused so a corrupt index is never replaced with a fresh empty one.
+final class PracticePlanArchiveIndexCorruptionException implements Exception {
+  const PracticePlanArchiveIndexCorruptionException({
+    required this.key,
+    required this.cause,
+    required this.stackTrace,
+  });
+
+  final String key;
+  final Object cause;
+  final StackTrace stackTrace;
+
+  @override
+  String toString() => 'PracticePlanArchiveIndexCorruptionException(key: $key)';
+}
+
 /// Local repository implementation that satisfies the
 /// [GenerationPlanActivation] contract for the orchestrator AND owns the
 /// archived revisions and outcomes (the store layer that future history
@@ -126,36 +163,48 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
   static String draftStorageKey(String draftKey) =>
       '$_namespace.draft.$draftKey';
 
-  /// `active.<planId>.<revisionId>` — the *immutable* record under a
-  /// per-revision-id key.
+  /// `active.<length:planId>.<length:revisionId>` — the *immutable* record
+  /// under a per-revision-id key. Length-prefixed segments keep dotted ids
+  /// injective: `{a.b, c}` cannot collide with `{a, b.c}`.
   static String activePlanRevisionKey({
     required PlanId planId,
     required RevisionId revisionId,
-  }) => '$_namespace.active.${planId.value}.${revisionId.value}';
+  }) =>
+      '$_namespace.active.${_keySegment(planId.value)}.'
+      '${_keySegment(revisionId.value)}';
 
-  /// `archive.<planId>.revisions.index` — newest-first list of
+  /// `archive.<length:planId>.revisions.index` — newest-first list of
   /// `RevisionId` values for that plan.
   static String archiveRevisionsIndexKey(PlanId planId) =>
-      '$_namespace.archive.${planId.value}.revisions.index';
+      '$_namespace.archive.${_keySegment(planId.value)}.revisions.index';
 
-  /// `archive.<planId>.revisions.<revisionId>` — one immutable stored
-  /// revision snapshot.
+  /// `archive.<length:planId>.revisions.<length:revisionId>` — one immutable
+  /// stored revision snapshot.
   static String archiveRevisionKey({
     required PlanId planId,
     required RevisionId revisionId,
-  }) => '$_namespace.archive.${planId.value}.revisions.${revisionId.value}';
+  }) =>
+      '$_namespace.archive.${_keySegment(planId.value)}.revisions.'
+      '${_keySegment(revisionId.value)}';
 
-  /// `archive.<planId>.outcomes.index` — newest-first list of
+  /// `archive.<length:planId>.outcomes.index` — newest-first list of
   /// `OutcomeId` values for that plan.
   static String archiveOutcomesIndexKey(PlanId planId) =>
-      '$_namespace.archive.${planId.value}.outcomes.index';
+      '$_namespace.archive.${_keySegment(planId.value)}.outcomes.index';
 
-  /// `archive.<planId>.outcomes.<outcomeId>` — one immutable stored
-  /// outcome record.
+  /// `archive.<length:planId>.outcomes.<length:outcomeId>` — one immutable
+  /// stored outcome record.
   static String archiveOutcomeKey({
     required PlanId planId,
     required OutcomeId outcomeId,
-  }) => '$_namespace.archive.${planId.value}.outcomes.${outcomeId.value}';
+  }) =>
+      '$_namespace.archive.${_keySegment(planId.value)}.outcomes.'
+      '${_keySegment(outcomeId.value)}';
+
+  /// Stable, injective segment encoding for persistence-key identifiers.
+  /// The length is the Dart string's UTF-16 code-unit count, which is the
+  /// same representation used by the key-value store API.
+  static String _keySegment(String value) => '${value.length}:$value';
 
   // ---------------------------------------------------------------------
   // Activation (the GenerationPlanActivation contract)
@@ -224,7 +273,16 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         planId: priorPointer.planId,
         revisionId: priorPointer.revisionId,
       );
-      await keyValueStore.remove(priorRecordKey);
+      try {
+        await keyValueStore.remove(priorRecordKey);
+      } on StorageException {
+        // The pointer is already committed. Retaining a harmless orphaned
+        // old record is safer than reporting the completed activation as a
+        // failure; a later successful activation may remove it.
+        return Success<ActivePlanActivationOutcome>(
+          ActivePlanActivationOutcome(pointer: pointer, revisionWritten: true),
+        );
+      }
     }
 
     return Success<ActivePlanActivationOutcome>(
@@ -236,9 +294,9 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
   // Active plan read
   // ---------------------------------------------------------------------
 
-  /// Loads the currently-active plan, or `Success(null)` when none has
-  /// been activated (first launch, or a corrupted-pointer record skipped
-  /// by [readActivePlan]).
+  /// Loads the currently-active plan, or `Success(null)` when none has been
+  /// activated. A present-but-corrupt pointer is a controlled failure, never
+  /// silently reclassified as first launch.
   Future<AppResult<AdaptivePracticePlan?>> readActivePlan() async =>
       _runRead(() async {
         final pointer = _readActivePointerSync();
@@ -533,17 +591,16 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     if (raw == null) return null;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return null;
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('active pointer must be a JSON object');
+      }
       return serializer.decodeActivePointer(decoded);
-    } on PracticePlanSerializerException {
-      // Corrupted pointer: treat as no active plan. Callers can still
-      // rebuild by reading the archive / drafts.
-      return null;
-    } on PracticePlanMigratorException {
-      // A too-new pointer cannot identify an active plan; same
-      // defensive default as a corrupted pointer (record-level fault
-      // isolation, §5.2).
-      return null;
+    } catch (error, stackTrace) {
+      throw PracticePlanActivePointerCorruptionException(
+        key: activePointerKey,
+        cause: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -552,20 +609,22 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     if (raw == null) return <T>[];
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return <T>[];
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('archive index must be a JSON object');
+      }
       if (decoded['kind'] == PracticePlanRecordKind.archivedRevisionIndex) {
         return serializer.decodeArchivedRevisionsIndex(decoded).cast<T>();
       }
       if (decoded['kind'] == PracticePlanRecordKind.archivedOutcomeIndex) {
         return serializer.decodeArchivedOutcomesIndex(decoded).cast<T>();
       }
-      return <T>[];
-    } on PracticePlanSerializerException {
-      return <T>[];
-    } on PracticePlanMigratorException {
-      // Too-new index — nothing on this build can enumerate it; treat
-      // the log as empty so other (readable) records survive (A2).
-      return <T>[];
+      throw const FormatException('archive index kind is not recognized');
+    } catch (error, stackTrace) {
+      throw PracticePlanArchiveIndexCorruptionException(
+        key: key,
+        cause: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 

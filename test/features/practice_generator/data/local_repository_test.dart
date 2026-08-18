@@ -79,6 +79,38 @@ void main() {
           isNot(contains(LocalPracticePlanRepository.activePointerKey)),
         );
       });
+
+      test('dotted plan and revision ids produce distinct active and archive '
+          'keys for otherwise-colliding pairs', () {
+        final firstPlanId = PlanId('plan.a');
+        final firstRevisionId = RevisionId('revision.b');
+        final secondPlanId = PlanId('plan.a.revision');
+        final secondRevisionId = RevisionId('b');
+
+        expect(
+          LocalPracticePlanRepository.activePlanRevisionKey(
+            planId: firstPlanId,
+            revisionId: firstRevisionId,
+          ),
+          isNot(
+            LocalPracticePlanRepository.activePlanRevisionKey(
+              planId: secondPlanId,
+              revisionId: secondRevisionId,
+            ),
+          ),
+        );
+        expect(
+          LocalPracticePlanRepository.archiveRevisionKey(
+            planId: firstPlanId,
+            revisionId: RevisionId('b.revisions.index'),
+          ),
+          isNot(
+            LocalPracticePlanRepository.archiveRevisionsIndexKey(
+              PlanId('plan.a.revisions.b'),
+            ),
+          ),
+        );
+      });
     });
 
     group('active plan persistence (A1)', () {
@@ -215,6 +247,38 @@ void main() {
           expect(reloaded.valueOrNull, firstPlan);
         },
       );
+
+      test('a failed old-record cleanup does not report a committed '
+          'activation as a failure', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final firstPlan = plan();
+        final nextPlan = _bumpedPlan(number: 99);
+
+        expect(
+          (await repository.activateAndReport(firstPlan)).isSuccess,
+          isTrue,
+        );
+        final oldRecordKey = LocalPracticePlanRepository.activePlanRevisionKey(
+          planId: firstPlan.id,
+          revisionId: firstPlan.activeRevisionId,
+        );
+        store.failingKeys.add(oldRecordKey);
+
+        final result = await repository.activateAndReport(nextPlan);
+
+        store.failingKeys.remove(oldRecordKey);
+        expect(result.isSuccess, isTrue);
+        expect(result.valueOrNull!.revisionWritten, isTrue);
+        final active = await repository.readActivePlan();
+        expect(active.isSuccess, isTrue);
+        expect(active.valueOrNull, nextPlan);
+        expect(
+          store.contains(oldRecordKey),
+          isTrue,
+          reason: 'failed housekeeping must leave the old record intact',
+        );
+      });
     });
 
     group('record-level corruption containment (A2)', () {
@@ -324,9 +388,9 @@ void main() {
         );
       });
 
-      test('an active pointer above the supported version is treated as '
-          '"no active plan", mirroring the corrupt-pointer defensive '
-          'default (A7, above cell — pointer)', () async {
+      test('an active pointer above the supported version is a controlled '
+          'corruption failure, never a first-launch success '
+          '(A7, above cell — pointer)', () async {
         final store = InMemoryKeyValueStore();
         final repository = _newRepository(store);
         final p1 = plan();
@@ -341,11 +405,13 @@ void main() {
         final activeResult = await repository.readActivePlan();
         final draftResult = await repository.readDraft('main');
 
-        // Pointer is too-new — readActivePlan yields Success(null)
-        // (the safe default for an unreadable pointer) and the draft
-        // namespace, untouched, still works.
-        expect(activeResult.isSuccess, isTrue);
-        expect(activeResult.valueOrNull, isNull);
+        // Pointer is too-new — preserve the distinction between a missing
+        // pointer (first launch) and an unreadable persisted pointer.
+        expect(activeResult.isFailure, isTrue);
+        expect(
+          activeResult.failureOrNull!.cause,
+          isA<PracticePlanActivePointerCorruptionException>(),
+        );
         // Draft key was never written — but the read should still be
         // a clean Success(null), not a thrown exception.
         expect(draftResult.isSuccess, isTrue);
@@ -423,46 +489,61 @@ void main() {
         },
       );
 
-      test(
-        'an archived index record above the supported version leaves '
-        'the read of THAT plan empty while other plans stay readable '
-        '(A7, above cell — index records collapse to an empty log)',
-        () async {
-          final store = InMemoryKeyValueStore();
-          final repository = _newRepository(store);
-          final planA = PlanId('plan.A');
-          final planB = PlanId('plan.B');
+      test('an archived index record above the supported version fails the '
+          'read of THAT plan while other plans stay readable '
+          '(A7, above cell — index is preserved)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final planA = PlanId('plan.A');
+        final planB = PlanId('plan.B');
 
-          // plan.A: one healthy revision.
-          await repository.appendRevision(_revision(planA, number: 1));
-          // plan.B: one healthy revision (kept).
-          await repository.appendRevision(_revision(planB, number: 1));
+        // plan.A: one healthy revision.
+        await repository.appendRevision(_revision(planA, number: 1));
+        // plan.B: one healthy revision (kept).
+        await repository.appendRevision(_revision(planB, number: 1));
 
-          // Bump plan.A's revisions index to current + 1.
-          _retuneEnvelope(
-            store,
-            key: LocalPracticePlanRepository.archiveRevisionsIndexKey(planA),
-            schemaVersion:
-                PracticePlanMigrator.currentSupportedSchemaVersion + 1,
-          );
+        // Bump plan.A's revisions index to current + 1.
+        _retuneEnvelope(
+          store,
+          key: LocalPracticePlanRepository.archiveRevisionsIndexKey(planA),
+          schemaVersion: PracticePlanMigrator.currentSupportedSchemaVersion + 1,
+        );
 
-          final logA = await repository.readArchive(planA);
-          final logB = await repository.readArchive(planB);
+        final logA = await repository.readArchive(planA);
+        final logB = await repository.readArchive(planB);
 
-          expect(logA.isSuccess, isTrue);
-          expect(
-            logA.valueOrNull!.revisions,
-            isEmpty,
-            reason: 'too-new index collapses to an empty log',
-          );
-          expect(logB.isSuccess, isTrue);
-          expect(
-            logB.valueOrNull!.revisions,
-            hasLength(1),
-            reason: 'other plans remain readable',
-          );
-        },
-      );
+        expect(logA.isFailure, isTrue);
+        expect(
+          logA.failureOrNull!.cause,
+          isA<PracticePlanArchiveIndexCorruptionException>(),
+        );
+        expect(logB.isSuccess, isTrue);
+        expect(
+          logB.valueOrNull!.revisions,
+          hasLength(1),
+          reason: 'other plans remain readable',
+        );
+      });
+
+      test('a malformed active pointer is a controlled corruption failure, '
+          'not a first-launch success', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        await repository.activateAndReport(plan());
+        await store.writeString(
+          LocalPracticePlanRepository.activePointerKey,
+          'not-json',
+        );
+
+        final result = await repository.readActivePlan();
+
+        expect(result.isFailure, isTrue);
+        expect(result.failureOrNull, isA<StorageFailure>());
+        expect(
+          result.failureOrNull!.cause,
+          isA<PracticePlanActivePointerCorruptionException>(),
+        );
+      });
 
       test('a draft record above the supported version is a controlled '
           'read failure (A7, above cell — draft)', () async {
@@ -631,6 +712,47 @@ void main() {
           expect(ids.contains('outcome.a'), isTrue);
         },
       );
+    });
+
+    group('archive index corruption containment', () {
+      test('a corrupt archive index fails an append without overwriting the '
+          'index or orphaning existing history', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final planId = PlanId('plan.1');
+        final firstRevision = _revision(planId, number: 1);
+        final secondRevision = _revision(planId, number: 2);
+        expect(
+          (await repository.appendRevision(firstRevision)).isSuccess,
+          isTrue,
+        );
+
+        final indexKey = LocalPracticePlanRepository.archiveRevisionsIndexKey(
+          planId,
+        );
+        const corruptIndex = 'not-json-at-all';
+        await store.writeString(indexKey, corruptIndex);
+
+        final result = await repository.appendRevision(secondRevision);
+
+        expect(result.isFailure, isTrue);
+        expect(result.failureOrNull, isA<StorageFailure>());
+        expect(
+          result.failureOrNull!.cause,
+          isA<PracticePlanArchiveIndexCorruptionException>(),
+        );
+        expect(store.readString(indexKey), corruptIndex);
+        expect(
+          store.contains(
+            LocalPracticePlanRepository.archiveRevisionKey(
+              planId: planId,
+              revisionId: secondRevision.id,
+            ),
+          ),
+          isFalse,
+          reason: 'a rejected append must not create an unindexed record',
+        );
+      });
     });
 
     group('bounded history (A6)', () {

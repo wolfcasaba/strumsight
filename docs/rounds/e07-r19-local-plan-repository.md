@@ -481,6 +481,47 @@ viselkedését (fentebb részletezve) — amit a fenti 4. lépésben
 kijavítottam. A második gate-futtatás a javítás után is minden
 cellán zöld.
 
+### Codex repair after MiniMax repair #1 (2026-08-18)
+
+**Módosított fájlok:**
+
+- `lib/features/practice_generator/data/local/local_practice_plan_repository.dart`
+- `test/features/practice_generator/data/local_repository_test.dart`
+- ez a brief (§10 handoff)
+
+**Javítások és regressziós bizonyítékok:**
+
+1. Az aktív mutató commitja utáni régi rekord-törlés best-effort: egy
+   `StorageException` már nem fordítja `Failure`-re a láthatóvá vált új tervet.
+   A célzott teszt ellenőrzi, hogy a következő terv aktív marad és a régi rekord
+   ártalmatlanul megmarad, ha a cleanup elbukik.
+2. Az active és archive kulcsok minden `PlanId`/revízió/outcome komponenst
+   stabil, hossz-prefixes (`<length>:<value>`) formában tárolnak. A dotted-ID
+   regressziós teszt két korábban ütköző active párt, valamint archive rekord ↔
+   index ütközést mér.
+3. Jelenlévő, de olvashatatlan archive index `StorageFailure`-ként tér vissza
+   `PracticePlanArchiveIndexCorruptionException` okkal. `appendRevision` az
+   index olvasása előtt nem ír új rekordot, ezért nem írhatja felül a sérült
+   indexet és nem árvíthatja el a meglévő történetet.
+4. Jelenlévő, malformed vagy túl új active pointer
+   `PracticePlanActivePointerCorruptionException`-nel burkolt kontrollált
+   `StorageFailure`; csak a hiányzó pointer jelenti az első indítást.
+
+**Lefuttatott parancsok és tényleges eredmények:**
+
+1. `dart format lib/features/practice_generator/data/local/local_practice_plan_repository.dart test/features/practice_generator/data/local_repository_test.dart`
+   — **Formatted 2 files (2 changed)**.
+2. `flutter test test/features/practice_generator/data/local_repository_test.dart`
+   — **27 passed**.
+3. `tools/round-gate.sh test/features/practice_generator/data/local_repository_test.dart test/features/practice_generator/data/practice_plan_migrator_test.dart`
+   — kilépési kód **0**: format (**1604 files, 0 changed**), analyze (**No
+   issues found**), `local_repository_test.dart` (**27 passed**),
+   `practice_plan_migrator_test.dart` (**10 passed**).
+
+**Nem futtatott ellenőrzések:** teljes Flutter suite, property gate és CI/APK;
+ezek a kör-orchestrátor merge előtti CI-kötelezettségei, nem az implementer
+helyi gate-jei.
+
 ## 11. Review — a Claude tölti ki
 
 ## 11. Review — a Claude tölti ki
