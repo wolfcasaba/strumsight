@@ -324,5 +324,22 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   lépése egyetlen saját, unused test-import miatt piros volt; az import
   eltávolítása után a teljes artefaktum változatlan parancsával újrafutott
   és zöld lett.
+- E07-R18 javító kör: az A6 controller-regresszió a guard javítása ELŐTT
+  PIROS volt (`Bad state: Cannot transition generation from
+  GenerationStatus.completed to GenerationStatus.completed`); a terminális
+  állapot-publikálás most csak az aktuális, még `running` kéréshez tartozik,
+  a két egyidejű hívás a közös sikeres eredményt kapja. A controller-célteszt
+  ezután 4/4 zöld volt.
+- E07-R18 javító kör: az A3 validate/repair-elutasítást négy külön,
+  hard-avoided jelölttel és három repair-iterációval méri; a repair így
+  kontrolláltan elutasít, `ValidationFailure`-t ad, és `activation.calls ==
+  0`. Valódi-sértés próba: a repair-elutasítási `Failure` helyén ideiglenesen
+  `Success(plan)` visszaadásával a teszt PIROS volt (sikert kapott a várt
+  failure helyett); visszaállítás után az orchestrator-célteszt 7/7 zöld.
+- F3 follow-up marad: mindkét broadcast `StreamController` `sync: true`
+  beállításának ideiglenes `sync: false` cseréje után a meglévő A7 controller
+  teszt PIROS volt, mert az aszinkron kézbesítéskor a feliratkozó utolsó
+  állapota még `running` volt a várt `completed` helyett. A jelenlegi
+  szinkron kézbesítésre való függést ezért ez a javító kör nem változtatja.
 
 ## 11. Review — a Claude tölti ki

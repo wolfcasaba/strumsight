@@ -48,7 +48,11 @@ final class PlanGeneratorController {
       );
     }
     final result = await orchestrator.generate(input);
-    if (_disposed || _state.requestId != input.request.id) return result;
+    if (_disposed ||
+        _state.requestId != input.request.id ||
+        _state.status != GenerationStatus.running) {
+      return result;
+    }
     final terminal = switch (result) {
       Success<AdaptivePracticePlan>() => GenerationStatus.completed,
       Failure<AdaptivePracticePlan>(:final error)

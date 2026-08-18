@@ -46,6 +46,22 @@ void main() {
     activation.complete();
     expect(await pending, isA<Success<AdaptivePracticePlan>>());
   });
+
+  test('A6 controller: double-tap generate() on the same in-flight request '
+      'does not throw', () async {
+    final controller = PlanGeneratorController(
+      orchestrator: GenerationOrchestrator(activation: _NoopActivation()),
+    );
+    final input = _input();
+
+    final results = await Future.wait([
+      controller.generate(input),
+      controller.generate(input),
+    ]);
+
+    expect(results[0], isA<Success<AdaptivePracticePlan>>());
+    expect(results[1], isA<Success<AdaptivePracticePlan>>());
+  });
 }
 
 GenerationPlanInput _input() {

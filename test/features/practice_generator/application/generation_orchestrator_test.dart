@@ -83,6 +83,44 @@ void main() {
       },
     );
 
+    test(
+      'A3: unrepairable validation failure never activates a partial plan',
+      () async {
+        final candidates = <ExerciseCandidate>[
+          for (var index = 0; index < 4; index++)
+            buildCandidate(exerciseId: 'exercise.rhythm.$index'),
+        ];
+        final activation = _RecordingActivation();
+        final orchestrator = GenerationOrchestrator(
+          activation: activation,
+          repairer: const PlanRepairer(maxIterations: 3),
+        );
+
+        final result = await orchestrator.generate(
+          _input(
+            catalogCandidates: candidates,
+            hardAvoidIdentities: candidates.map(identityOf),
+            scheduledCandidates: candidates
+                .map(
+                  (candidate) => ScheduleCandidate(
+                    identity: candidate.sortKey,
+                    focus: CandidateFocus.primaryFocus,
+                    materialKind: CandidateMaterialKind.newMaterial,
+                    loadLevel: LoadLevel.low,
+                    duration: const Duration(minutes: 5),
+                    skillTargets: candidate.skillTargets,
+                  ),
+                )
+                .toList(),
+          ),
+        );
+
+        expect(result, isA<Failure<AdaptivePracticePlan>>());
+        expect(result.failureOrNull, isA<ValidationFailure>());
+        expect(activation.calls, isZero);
+      },
+    );
+
     test('A5: retry starts clean after a failed request', () async {
       final candidate = buildCandidate();
       final activation = _RecordingActivation();
@@ -118,6 +156,8 @@ void main() {
 
 GenerationPlanInput _input({
   Iterable<ExerciseCandidate>? catalogCandidates,
+  Iterable<String> hardAvoidIdentities = const <String>[],
+  Iterable<ScheduleCandidate>? scheduledCandidates,
   String? scheduledIdentity,
 }) {
   final candidate = buildCandidate();
@@ -145,7 +185,8 @@ GenerationPlanInput _input({
       DaySchedulingDecision(
         date: availability.days.single.date,
         phase: SchedulingPhase.none,
-        selectedCandidates: <ScheduleCandidate>[scheduled],
+        selectedCandidates:
+            scheduledCandidates ?? <ScheduleCandidate>[scheduled],
         reasonCodes: const <String>['schedule.decision.selected'],
       ),
     ],
@@ -161,6 +202,7 @@ GenerationPlanInput _input({
       catalog: buildCatalog(
         candidates: catalogCandidates ?? <ExerciseCandidate>[candidate],
       ),
+      hardAvoidIdentities: hardAvoidIdentities,
     ),
     planId: PlanId('plan.1'),
     initialRevisionId: RevisionId('revision.1'),
