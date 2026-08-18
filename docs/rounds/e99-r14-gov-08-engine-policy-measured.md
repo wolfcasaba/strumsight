@@ -1,6 +1,6 @@
 # E99-R14 (GOV-08) — Motorválasztás mérésre kötve: lejáró override és motor-statisztika
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 52324cb3`)
+- **Státusz:** PREFLIGHT COMMITTED (2026-08-18, `main @ 604253eb`)
 - **Típus:** **governance-kör** — a lánc SAJÁT infrastruktúrája, nem terméki viselkedés
 - **Kör-azonosító:** `E99-R14` (az `E99` a governance-körök fenntartott pszeudo-epicje). Emberi neve **GOV-08**.
 - **Előfeltétel:** nincs (a sorban korábbi E99-körök mind `done`)
@@ -40,6 +40,20 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélkül a kör bukott. **STOP-protokoll:** ha a munka listán kívüli
 fájlt kívánna, a kimenet `stopped` + a brief revíziójának kérése — az
 `allowed_paths` lista tágítása TILOS.
+
+### §0.0 Pre-flight revízió — 2026-08-18
+
+- A körhöz kiosztott `0307` ADR nem írandó újra: a
+  `docs/adr/0307-pipeline-throughput-program-v2.md` már a merge-elt
+  `main @ 604253eb` része (`docs(pipeline): ADR 0307 …`, PR #308). A
+  foglaló a már elfoglalt számra `0308`-at adott. A `docs/adr/**` tilos zóna
+  változatlan; ez a kör kizárólag az ADR §1-ben leírt D1–D3 megvalósítása.
+- A jelenlegi út ténylegesen `tools/engine-profile.sh:active_engine` →
+  `tools/round-pipeline.sh` motor-override blokk (`engine-override` első sora)
+  → a kiválasztott `engine`; jelenleg sem lejárat-, sem mtime-ellenőrzés nincs.
+  Ez a D2 mérési alapja, nem a rétegrajz.
+- A brief-lint `strict` jelentése: nincs lelet. A 72 órás küszöb három cellája
+  a §4-ben marad kötelező, a falszifikációs cellákkal együtt.
 
 ## 1. Cél — mit mértünk
 
