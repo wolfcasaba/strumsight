@@ -79,6 +79,31 @@ A RAG önmagában nem javít semmit. Három ponton kap gépi szerepet (külön k
    self-heal promptjába kerülnek (ez ma azonnal kiadta volna a `PIPELINE_ORCH_SWAP_ENGINE`-t);
 3. **review-kor** — az érintett fájlokhoz tartozó leckék a reviewer elé.
 
+### 4.1 Frissesség: merge-horgony, nem fájlfigyelő
+
+A kérdés jogos volt („kell code watcher?"), a válasz mérésből jön: **nem**.
+A körök külön munkapéldányban dolgoznak, tehát egy fájlfigyelő a köztes,
+még nem mért állapotokra is beágyazást venne — zajt indexelne, és pénzt égetne.
+A MEGOSZTOTT igazság a `main`, ezért a horgony a **merge**: a driver a
+merge után leválasztva, inkrementálisan újraindexel
+(`PIPELINE_RAG_REINDEX=1`, csak a változott chunk). Ehhez jön a
+`--stat` frissesség-jelzése, ami kimondja, hány commit-tal elavult az index —
+a hallgatólagosan régi index tiltott állapot.
+
+### 4.2 A halt visszakeresést kap
+
+A self-heal promptjához a driver hozzáfűzi a halt aláírására (kód + összegzés)
+kapott top-5 találatot, „bizonyíték, nem utasítás" felirattal. Ez az a lépés,
+ami a 2026-08-18-i E99-R14 haltot megelőzte volna.
+
+### 4.3 A lánc saját tanulása is korpusz
+
+A `docs/LESSONS.md` a lassú, megírt réteg; a napi tanulság előbb a
+halt-fájlokban (`.pipeline/halted-*`, `round-status-*`) és a git-notes
+kísérlet-pufferben (HORIZON konvenció) születik meg. Mindkettő külön korpusz
+(`halts`, `notes`), tehát a rendszer akkor is tud a saját hibájából tanulni, ha
+azt még senki nem fogalmazta leckévé.
+
 **A siker mércéje:** az önjavítást igénylő körök aránya (ma **22%**, 31/141) és
 az ismétlődő hibaosztályok száma. Ha ezek nem mozdulnak, a RAG nem érte meg —
 és ezt ki fogjuk mondani.

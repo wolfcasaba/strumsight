@@ -276,6 +276,30 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                 )
             )
 
+    # S8 — visszakeresett előzmények (ADR 0312 §4.1). MÉRVE 2026-08-18: az
+    # E99-R14 H3 gyökéroka ÓRÁKKAL korábban le volt írva (HANDOFF, E07-R21
+    # heal), és egy kör mégis belefutott; az E07-R21/H2-nél pedig a brief
+    # glosszája mondott mást, mint a hivatkozott ADR tényleges szövege. A
+    # briefnek ezért meg kell mutatnia, MIT nézett meg: legalább egy
+    # tudás-index találat azonosítóját (`lessons/L###`, `adr/0###`, `halts/…`),
+    # VAGY azt a kimondott állítást, hogy nincs releváns előzmény.
+    # STRICT, nem base: a meglévő briefek nem teljesítik, és a CI-kapu nem
+    # szigorodhat egy új szokás miatt.
+    # A markernek EXPLICITNEK kell lennie: a puszta ADR-link vagy a saját
+    # brief-útvonal minden briefben szerepel, tehát trivilálisan teljesülne —
+    # egy mindig zöld szabály leszoktat az olvasásáról (ugyanaz a hibaosztály,
+    # amit a falszifikációs cella hamis pozitívjainál már mértünk).
+    if not re.search(r"(visszakeresett előzmény|nincs releváns előzmény)", text, re.I):
+        findings.append(
+            Finding(
+                "strict",
+                "S8",
+                "nincs visszakeresett előzmény: futtasd a "
+                "`node tools/knowledge-rag.mjs --top 5 \"<a kör témája>\"` parancsot, és "
+                "hivatkozd a releváns leckét/ADR-t (vagy mondd ki, hogy nincs ilyen)",
+            )
+        )
+
     # S1 — STOP-protokoll: scope-ütközéskor a brief-revízió a kimenet, nem a
     # lista-tágítás. Enélkül az implementer csendben tágít.
     if not any(marker in text for marker in STOP_MARKERS):

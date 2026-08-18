@@ -213,6 +213,47 @@ function collect() {
       for (const c of chunkMarkdownSections(readFileSync(path, 'utf8'), `${corpus}/${rel}`, rel)) chunks.push({ corpus, ...c });
     }
   }
+  // A LÁNC SAJÁT TANULÁSA (ADR 0312 §4.3): a `docs/LESSONS.md` a lassú, írott
+  // réteg, de a napi tanulság előbb a halt-fájlokban és a git-notes
+  // kísérlet-pufferben (HORIZON konvenció) születik meg. Ezek nélkül a
+  // visszakeresés csak azt látja, amit valaki már megfogalmazott.
+  if (want('halts')) {
+    // A `.pipeline/` a HUB-ban él (gitignore-olt), a körök viszont külön
+    // munkapéldányból futnak — ezért a hub állapotkönyvtárát is megnézzük.
+    const candidates = [process.env.PIPELINE_STATE_DIR, join(ROOT, '.pipeline'), join(homedir(), 'music-theory', '.pipeline')];
+    const dir = candidates.find((c) => c && existsSync(c)) || join(ROOT, '.pipeline');
+    if (existsSync(dir)) {
+      for (const name of readdirSync(dir).filter((f) => /^(halted-|round-status-|heal-status)/.test(f))) {
+        const path = join(dir, name);
+        try {
+          if (!statSync(path).isFile()) continue;
+          const body = readFileSync(path, 'utf8').trim();
+          if (!body) continue;
+          const round = (body.match(/^round=(\S+)/m) || [])[1] || name;
+          const code = (body.match(/^halt=(\S+)/m) || [])[1] || (body.match(/^outcome=(\S+)/m) || [])[1] || '';
+          for (const c of splitOversized(body, `halts/${name}`, `${round} ${code}`.trim(), { file: `.pipeline/${name}` })) {
+            chunks.push({ corpus: 'halts', ...c });
+          }
+        } catch { /* egy olvashatatlan állapotfájl nem buktathatja az indexet */ }
+      }
+    }
+  }
+  if (want('notes')) {
+    try {
+      const raw = execSync(`git -C ${ROOT} log --notes=* --pretty=format:%H%x1f%s%x1f%N%x1e -n 400`, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+      for (const record of raw.split('\x1e')) {
+        const [hash, subject, note] = record.split('\x1f');
+        if (!note || !note.trim()) continue;
+        chunks.push({
+          corpus: 'notes',
+          id: `notes/${(hash || '').trim().slice(0, 12)}`,
+          title: `git-note: ${(subject || '').trim().slice(0, 120)}`,
+          text: `${(subject || '').trim()}\n\n${note.trim()}`,
+          file: 'git-notes',
+        });
+      }
+    } catch { /* notes nélküli klón: nem hiba */ }
+  }
   if (want('code')) {
     for (const dir of ['lib', 'test', 'tools', 'tool']) {
       for (const path of walk(join(ROOT, dir), new Set(['.dart', '.py', '.sh', '.mjs']))) {

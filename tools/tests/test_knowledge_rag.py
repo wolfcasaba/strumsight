@@ -100,3 +100,60 @@ class KnowledgeRagTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(shutil.which("node"), "nincs node ezen a futón")
+class LearningCorporaTest(unittest.TestCase):
+    """A lánc SAJÁT tanulása is korpusz (ADR 0312 §4.3)."""
+
+    def test_git_notes_are_indexed_as_an_experience_buffer(self) -> None:
+        result = node("--bm25", "--corpus", "notes", "--top", "3", "--json", "round verdict lesson")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        if not hits:
+            self.skipTest("ebben a klónban nincsenek git-notes")
+        self.assertTrue(all(hit["id"].startswith("notes/") for hit in hits), hits)
+
+    def test_halt_records_are_retrievable_by_their_code(self) -> None:
+        result = node("--bm25", "--corpus", "halts", "--top", "3", "--json", "H3 halt scope")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        if not hits:
+            self.skipTest("nincs elérhető .pipeline állapotkönyvtár ezen a futón")
+        self.assertTrue(all(hit["corpus"] == "halts" for hit in hits), hits)
+
+
+class PipelineWiringTest(unittest.TestCase):
+    """A RAG csak akkor ér valamit, ha a lánc TÉNYLEG használja."""
+
+    def test_the_driver_reindexes_after_a_merge(self) -> None:
+        driver = (REPO_ROOT / "tools" / "round-pipeline.sh").read_text(encoding="utf-8")
+        self.assertIn("PIPELINE_RAG_REINDEX", driver)
+        # Az útvonal idézőjeles változóból jön, ezért a két jelet külön mérjük.
+        self.assertIn("knowledge-rag.mjs", driver)
+        self.assertIn("--reindex", driver)
+
+    def test_the_self_heal_prompt_gets_prior_cases(self) -> None:
+        driver = (REPO_ROOT / "tools" / "round-pipeline.sh").read_text(encoding="utf-8")
+        self.assertIn("Korábbi, hasonló esetek a tudás-indexből", driver)
+
+    def test_the_orchestrator_prompt_requires_a_retrieval_step(self) -> None:
+        prompt = (REPO_ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text(encoding="utf-8")
+        self.assertIn("knowledge-rag.mjs", prompt)
+
+    def test_brief_lint_flags_a_brief_without_retrieved_precedent(self) -> None:
+        import subprocess as sp
+        brief = REPO_ROOT / "docs" / "rounds" / "e99-r15-gov-09-halt-escalation.md"
+        result = sp.run(
+            ["python3", str(REPO_ROOT / "tools" / "brief-lint.py"), "--brief", str(brief), "--level", "strict"],
+            capture_output=True, text=True, timeout=120,
+        )
+        self.assertIn("S8", result.stdout, result.stdout[-400:])
+
+    def test_the_base_gate_did_not_get_stricter(self) -> None:
+        import subprocess as sp
+        result = sp.run(
+            ["python3", str(REPO_ROOT / "tools" / "brief-lint.py"), "--open", "--level", "base"],
+            capture_output=True, text=True, timeout=600,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout[-600:])
