@@ -36,6 +36,7 @@ import '../../domain/model/plan_revision.dart';
 import '../../domain/model/practice_block.dart';
 import '../../domain/model/practice_goal.dart';
 import '../../domain/model/weekly_availability.dart';
+import 'practice_plan_migrator.dart';
 
 /// What the envelope's `kind` field is allowed to be. Stable string codes,
 /// persisted across builds.
@@ -247,8 +248,21 @@ final class PracticePlanDraftEnvelope {
 /// Stateless: one instance can be shared. The checksum algorithm is
 /// non-injectable on purpose — the goal is "every copy of this build reads
 /// the same checksum", not "any algorithm we ever want to swap".
+///
+/// The [migrator] gates the envelope's `schemaVersion` on every read (§5.6):
+/// * `> migrator.currentSupportedSchemaVersion` is a controlled rejection —
+///   the body is never decoded for a build that does not understand it.
+/// * `== migrator.currentSupportedSchemaVersion` is read unchanged.
+/// * `< migrator.currentSupportedSchemaVersion` is routed through the
+///   forward-migration path **before** the checksum is verified, so the
+///   checksum is checked against the migrated body, never silently against
+///   the original.
 class PracticePlanSerializer {
-  const PracticePlanSerializer();
+  const PracticePlanSerializer({this.migrator = const PracticePlanMigrator()});
+
+  /// Schema-version gate used by [openEnvelope]. Defaults to a const
+  /// [PracticePlanMigrator]; injection is supported for tests.
+  final PracticePlanMigrator migrator;
 
   /// What `encode*` writes into the envelope's `schemaVersion`.
   static const int currentEnvelopeSchemaVersion = 1;
@@ -312,7 +326,20 @@ class PracticePlanSerializer {
   // Decoding
   // ---------------------------------------------------------------------
 
-  /// Opens the envelope only — checks shape and **the checksum**.
+  /// Opens the envelope only — gates **schemaVersion** through [migrator],
+  /// then checks shape and **the checksum** (§5.6).
+  ///
+  /// Order matters:
+  /// 1. Type-validate the integer `schemaVersion`.
+  /// 2. Ask [migrator] whether the version is readable. A
+  ///    `> currentSupportedSchemaVersion` envelope throws
+  ///    [PracticePlanMigratorException] BEFORE the body is even checked,
+  ///    never a best-effort decode.
+  /// 3. Older envelopes go through `migrator.migrateEnvelope` BEFORE the
+  ///    checksum is computed — so the checksum verifies against the
+  ///    migrated body, not the original.
+  /// 4. Shape (`kind`/`body`/`checksum` present) and checksum
+  ///    consistency are verified last.
   Envelope openEnvelope(Object? envelope) {
     if (envelope is! Map) {
       throw PracticePlanSerializerException(
@@ -333,21 +360,31 @@ class PracticePlanSerializer {
         field: 'schemaVersion',
       );
     }
-    final kind = asMap['kind'];
+    // Migrator gate: too-new envelopes never reach body decoding.
+    // Older envelopes get migrated forward BEFORE checksum verification.
+    migrator.ensureSupported(envelopeSchemaVersion: rawVersion);
+    final Map<String, dynamic> working =
+        rawVersion < PracticePlanMigrator.currentSupportedSchemaVersion
+        ? Map<String, dynamic>.from(
+            migrator.migrateEnvelope(asMap as Map<String, Object?>),
+          )
+        : asMap;
+    final workingVersion = working['schemaVersion'] as int;
+    final kind = working['kind'];
     if (kind is! String || kind.isEmpty) {
       throw PracticePlanSerializerException(
         PracticePlanSerializerErrorCode.kindMissing,
         field: 'kind',
       );
     }
-    final body = asMap['body'];
+    final body = working['body'];
     if (body is! Map) {
       throw PracticePlanSerializerException(
         PracticePlanSerializerErrorCode.bodyMissing,
         field: 'body',
       );
     }
-    final checksum = asMap['checksum'];
+    final checksum = working['checksum'];
     if (checksum is! String || checksum.isEmpty) {
       throw PracticePlanSerializerException(
         PracticePlanSerializerErrorCode.checksumMissing,
@@ -363,7 +400,7 @@ class PracticePlanSerializer {
       );
     }
     return Envelope(
-      envelopeSchemaVersion: rawVersion,
+      envelopeSchemaVersion: workingVersion,
       kind: kind,
       body: bodyMap,
     );

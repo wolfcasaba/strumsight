@@ -45,6 +45,7 @@ import '../../application/service/generation_orchestrator.dart'
 import '../../domain/id/planner_ids.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/practice_block.dart';
+import 'practice_plan_migrator.dart';
 import 'practice_plan_serializer.dart';
 
 /// Public view over the persisted practice log: the revisions and outcomes
@@ -471,6 +472,10 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         );
       } on PracticePlanSerializerException {
         dropped.revisions++;
+      } on PracticePlanMigratorException {
+        // A too-new revision cannot be decoded on this build;
+        // record-level isolation (A2): drop the one and keep the rest.
+        dropped.revisions++;
       }
     }
     return out;
@@ -510,6 +515,10 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         out.add(serializer.decodeOutcomeRecord(decoded));
       } on PracticePlanSerializerException {
         dropped.outcomes++;
+      } on PracticePlanMigratorException {
+        // A too-new outcome cannot be decoded on this build;
+        // record-level isolation (A2): drop the one and keep the rest.
+        dropped.outcomes++;
       }
     }
     return out;
@@ -530,6 +539,11 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       // Corrupted pointer: treat as no active plan. Callers can still
       // rebuild by reading the archive / drafts.
       return null;
+    } on PracticePlanMigratorException {
+      // A too-new pointer cannot identify an active plan; same
+      // defensive default as a corrupted pointer (record-level fault
+      // isolation, §5.2).
+      return null;
     }
   }
 
@@ -547,6 +561,10 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       }
       return <T>[];
     } on PracticePlanSerializerException {
+      return <T>[];
+    } on PracticePlanMigratorException {
+      // Too-new index — nothing on this build can enumerate it; treat
+      // the log as empty so other (readable) records survive (A2).
       return <T>[];
     }
   }

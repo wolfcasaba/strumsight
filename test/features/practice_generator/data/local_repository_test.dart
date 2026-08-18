@@ -5,6 +5,7 @@ import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/features/practice_generator/data/local/local_practice_plan_repository.dart';
+import 'package:strumsight/features/practice_generator/data/local/practice_plan_migrator.dart';
 import 'package:strumsight/features/practice_generator/data/local/practice_plan_serializer.dart';
 import 'package:strumsight/features/practice_generator/domain/id/planner_ids.dart';
 import 'package:strumsight/features/practice_generator/domain/model/adaptive_practice_plan.dart';
@@ -284,6 +285,315 @@ void main() {
       });
     });
 
+    group('schema-version gate on the read path (A7, repository-level)', () {
+      // The migrator MUST run before body decoding for every persisted
+      // record kind. The brief calls out six kinds (active record, draft,
+      // revision, outcome, revisions index, outcomes index) plus the
+      // active pointer. The §6.1 three schema cells (below / at / above)
+      // are exercised here against the repository, not just the migrator
+      // (the migrator test alone proved no production caller).
+      test('an active plan record above the supported version is a '
+          'controlled read failure (A7, above cell — current+1 is '
+          'rejected before its body is decoded)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final p1 = plan();
+        await repository.activateAndReport(p1);
+
+        // Bump the stored active record to schemaVersion = current + 1.
+        _retuneEnvelope(
+          store,
+          key: LocalPracticePlanRepository.activePlanRevisionKey(
+            planId: p1.id,
+            revisionId: p1.activeRevisionId,
+          ),
+          schemaVersion: PracticePlanMigrator.currentSupportedSchemaVersion + 1,
+        );
+
+        final result = await repository.readActivePlan();
+
+        expect(result.isFailure, isTrue);
+        final error = result.failureOrNull;
+        expect(error, isA<StorageFailure>());
+        // The migrator exception is the cause — proves the gate fired
+        // BEFORE the body codec tried to decode the future shape.
+        expect(error!.cause, isA<PracticePlanMigratorException>());
+        expect(
+          (error.cause as PracticePlanMigratorException).code,
+          PracticePlanMigratorErrorCode.schemaVersionTooNew,
+        );
+      });
+
+      test('an active pointer above the supported version is treated as '
+          '"no active plan", mirroring the corrupt-pointer defensive '
+          'default (A7, above cell — pointer)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final p1 = plan();
+        await repository.activateAndReport(p1);
+
+        _retuneEnvelope(
+          store,
+          key: LocalPracticePlanRepository.activePointerKey,
+          schemaVersion: PracticePlanMigrator.currentSupportedSchemaVersion + 1,
+        );
+
+        final activeResult = await repository.readActivePlan();
+        final draftResult = await repository.readDraft('main');
+
+        // Pointer is too-new — readActivePlan yields Success(null)
+        // (the safe default for an unreadable pointer) and the draft
+        // namespace, untouched, still works.
+        expect(activeResult.isSuccess, isTrue);
+        expect(activeResult.valueOrNull, isNull);
+        // Draft key was never written — but the read should still be
+        // a clean Success(null), not a thrown exception.
+        expect(draftResult.isSuccess, isTrue);
+        expect(draftResult.valueOrNull, isNull);
+      });
+
+      test(
+        'an archived revision record above the supported version is '
+        'dropped from the log without taking the rest of the archive '
+        'with it (A7, above cell — revisions, record-level isolation)',
+        () async {
+          final store = InMemoryKeyValueStore();
+          final repository = _newRepository(store);
+          final planId = PlanId('plan.1');
+
+          // Seed three valid revisions.
+          await repository.appendRevision(_revision(planId, number: 1));
+          await repository.appendRevision(_revision(planId, number: 2));
+          await repository.appendRevision(_revision(planId, number: 3));
+
+          // Bump revision 2 to current + 1 — keep body & checksum so this
+          // proves the gate, not the checksum path.
+          _retuneEnvelope(
+            store,
+            key: LocalPracticePlanRepository.archiveRevisionKey(
+              planId: planId,
+              revisionId: RevisionId('revision.2'),
+            ),
+            schemaVersion:
+                PracticePlanMigrator.currentSupportedSchemaVersion + 1,
+          );
+
+          final archive = await repository.readArchive(planId);
+
+          expect(archive.isSuccess, isTrue);
+          final log = archive.valueOrNull!;
+          final numbers = log.revisions.map((r) => r.number).toList();
+          // Newest-first; revision 2 dropped, 3 and 1 survive.
+          expect(numbers, <int>[3, 1]);
+          expect(log.droppedRevisions, 1, reason: 'one record was dropped');
+        },
+      );
+
+      test(
+        'an archived outcome record above the supported version is '
+        'dropped from the log without taking the rest of the archive '
+        'with it (A7, above cell — outcomes, record-level isolation)',
+        () async {
+          final store = InMemoryKeyValueStore();
+          final repository = _newRepository(store);
+          final planId = PlanId('plan.1');
+
+          await repository.appendOutcome(_outcome('outcome.a'));
+          await repository.appendOutcome(_outcome('outcome.b'));
+          await repository.appendOutcome(_outcome('outcome.c'));
+
+          _retuneEnvelope(
+            store,
+            key: LocalPracticePlanRepository.archiveOutcomeKey(
+              planId: planId,
+              outcomeId: OutcomeId('outcome.b'),
+            ),
+            schemaVersion:
+                PracticePlanMigrator.currentSupportedSchemaVersion + 1,
+          );
+
+          final archive = await repository.readArchive(planId);
+
+          expect(archive.isSuccess, isTrue);
+          final log = archive.valueOrNull!;
+          final ids = log.outcomes.map((o) => o.id.value).toList();
+          // Newest-first; outcome.b dropped, outcome.c and outcome.a survive.
+          expect(ids, <String>['outcome.c', 'outcome.a']);
+          expect(log.droppedOutcomes, 1);
+        },
+      );
+
+      test(
+        'an archived index record above the supported version leaves '
+        'the read of THAT plan empty while other plans stay readable '
+        '(A7, above cell — index records collapse to an empty log)',
+        () async {
+          final store = InMemoryKeyValueStore();
+          final repository = _newRepository(store);
+          final planA = PlanId('plan.A');
+          final planB = PlanId('plan.B');
+
+          // plan.A: one healthy revision.
+          await repository.appendRevision(_revision(planA, number: 1));
+          // plan.B: one healthy revision (kept).
+          await repository.appendRevision(_revision(planB, number: 1));
+
+          // Bump plan.A's revisions index to current + 1.
+          _retuneEnvelope(
+            store,
+            key: LocalPracticePlanRepository.archiveRevisionsIndexKey(planA),
+            schemaVersion:
+                PracticePlanMigrator.currentSupportedSchemaVersion + 1,
+          );
+
+          final logA = await repository.readArchive(planA);
+          final logB = await repository.readArchive(planB);
+
+          expect(logA.isSuccess, isTrue);
+          expect(
+            logA.valueOrNull!.revisions,
+            isEmpty,
+            reason: 'too-new index collapses to an empty log',
+          );
+          expect(logB.isSuccess, isTrue);
+          expect(
+            logB.valueOrNull!.revisions,
+            hasLength(1),
+            reason: 'other plans remain readable',
+          );
+        },
+      );
+
+      test('a draft record above the supported version is a controlled '
+          'read failure (A7, above cell — draft)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        await repository.saveDraft(draftKey: 'main', plan: plan());
+
+        _retuneEnvelope(
+          store,
+          key: LocalPracticePlanRepository.draftStorageKey('main'),
+          schemaVersion: PracticePlanMigrator.currentSupportedSchemaVersion + 1,
+        );
+
+        final result = await repository.readDraft('main');
+
+        expect(result.isFailure, isTrue);
+        final error = result.failureOrNull;
+        expect(error, isA<StorageFailure>());
+        expect(error!.cause, isA<PracticePlanMigratorException>());
+        expect(
+          (error.cause as PracticePlanMigratorException).code,
+          PracticePlanMigratorErrorCode.schemaVersionTooNew,
+        );
+      });
+
+      test('an active plan record at the supported version is read '
+          'unchanged (A7, at cell — current is the no-op path)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final p1 = plan();
+        await repository.activateAndReport(p1);
+
+        // No tampering — the envelope is already schemaVersion=current.
+        final raw = store.readString(
+          LocalPracticePlanRepository.activePlanRevisionKey(
+            planId: p1.id,
+            revisionId: p1.activeRevisionId,
+          ),
+        );
+        expect(raw, isNotNull);
+        final decoded = jsonDecode(raw!) as Map<String, dynamic>;
+        expect(
+          decoded['schemaVersion'],
+          PracticePlanMigrator.currentSupportedSchemaVersion,
+        );
+
+        final reloaded = await repository.readActivePlan();
+        expect(reloaded.isSuccess, isTrue);
+        expect(reloaded.valueOrNull, p1);
+      });
+
+      test('an active plan record one below the supported version routes '
+          'through the forward-migration path and reads back identically '
+          '(A7, below cell — current−1 migrates, never throws)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final p1 = plan();
+        await repository.activateAndReport(p1);
+
+        _retuneEnvelope(
+          store,
+          key: LocalPracticePlanRepository.activePlanRevisionKey(
+            planId: p1.id,
+            revisionId: p1.activeRevisionId,
+          ),
+          schemaVersion: PracticePlanMigrator.currentSupportedSchemaVersion - 1,
+        );
+
+        final reloaded = await repository.readActivePlan();
+
+        expect(reloaded.isSuccess, isTrue);
+        // The no-op migration pass-through keeps the body identical, so
+        // checksum verification still passes and the plan reads back
+        // equal to the original.
+        expect(reloaded.valueOrNull, p1);
+      });
+
+      test('an archived revision record one below the supported version '
+          'routes through the forward-migration path and survives '
+          '(A7, below cell — revision migration)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final planId = PlanId('plan.1');
+
+        await repository.appendRevision(_revision(planId, number: 1));
+        await repository.appendRevision(_revision(planId, number: 2));
+
+        _retuneEnvelope(
+          store,
+          key: LocalPracticePlanRepository.archiveRevisionKey(
+            planId: planId,
+            revisionId: RevisionId('revision.1'),
+          ),
+          schemaVersion: PracticePlanMigrator.currentSupportedSchemaVersion - 1,
+        );
+
+        final archive = await repository.readArchive(planId);
+
+        expect(archive.isSuccess, isTrue);
+        final log = archive.valueOrNull!;
+        expect(
+          log.droppedRevisions,
+          0,
+          reason: 'older-record migration must not drop',
+        );
+        // Newest-first; both revisions present, revision.1 route through
+        // the migrator on read.
+        expect(log.revisions.map((r) => r.number), <int>[2, 1]);
+      });
+
+      test('a draft record one below the supported version routes '
+          'through the forward-migration path and reads back identically '
+          '(A7, below cell — draft migration)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        final draftPlan = plan(title: 'd');
+        await repository.saveDraft(draftKey: 'main', plan: draftPlan);
+
+        _retuneEnvelope(
+          store,
+          key: LocalPracticePlanRepository.draftStorageKey('main'),
+          schemaVersion: PracticePlanMigrator.currentSupportedSchemaVersion - 1,
+        );
+
+        final reloaded = await repository.readDraft('main');
+
+        expect(reloaded.isSuccess, isTrue);
+        expect(reloaded.valueOrNull, draftPlan);
+      });
+    });
+
     group('appendOutcome idempotence (A4)', () {
       test('appending the same OutcomeId twice yields exactly one record, '
           'with the second call as a no-op', () async {
@@ -444,3 +754,24 @@ AdaptivePracticePlan _bumpedPlan({int number = 99}) {
 // failing-keys behaviour the `failingKeys` set configures.
 // ignore: unused_element
 typedef _Anchor = KeyValueStore;
+
+/// Reads the stored envelope at [key], re-stamps only `schemaVersion` to
+/// the requested value (leaving the body and checksum exactly as encoded
+/// by the serializer), and writes it back. This simulates a record
+/// authored by a build with a different envelope version without
+/// tampering with the checksum-protected body.
+///
+/// Required by the schema-version gate tests (A7) to construct the
+/// "current+1" and "current-1" inputs that the read path must then
+/// gate / migrate.
+Future<void> _retuneEnvelope(
+  InMemoryKeyValueStore store, {
+  required String key,
+  required int schemaVersion,
+}) async {
+  final raw = store.readString(key);
+  expect(raw, isNotNull, reason: 'seed record missing at $key');
+  final decoded = jsonDecode(raw!) as Map<String, dynamic>;
+  decoded['schemaVersion'] = schemaVersion;
+  await store.writeString(key, jsonEncode(decoded));
+}
