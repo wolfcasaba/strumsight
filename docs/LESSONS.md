@@ -11543,3 +11543,46 @@ Rokon L: [[L305]] (ugyanabban a körben, ugyanabból az egy jó helyre
 nem betett órainjekcióból fakadó hibaosztály: a wizard MÁR rendelkezik
 egy `clock`/`generateId` injekciós mintával a kontrollerben — a hiba
 mindkét esetben az volt, hogy egy ÚJ helyen ezt nem vezették tovább).
+
+## L307 — Egy PREPARED brief saját ADR-glosszája (nem maga az ADR) adhatja a téves premisszát, ami egy meglévő publikus szerződéssel valójában feloldható konfliktust alkalmazás-réteg-bővítést igénylőnek mér (E07-R21, halt H2, ADR 0112 önjavítás, 2026-08-18)
+
+**Mérve.** Az E07-R21 (2026-08-15 írva, `main @ 135ef4af` ellenében olvasva)
+pre-flightja H2-vel halt: §5.1 „csak explicit felhasználói megerősítésre
+aktivál" mandátuma szemben állt a közben merge-elt E07-R18
+`GenerationOrchestrator._run()`-jával, ami egy sikeres `generate()` hívás
+saját záró hatásaként, megszakítás nélkül aktivál
+(`generation_orchestrator.dart:150-154`, `rg`-vel megerősítve). A halt saját
+elemzése ezt a briefben tiltott application-réteg módosítását igénylőnek
+mérte, és emberi döntést kért: R18 aktivációs határának módosítása, vagy
+R21 scope-jának csökkentése.
+
+A tényleges ADR (0266) teljes szövegének elolvasása megmutatta: a 2. döntés
+("Részleges terv soha nem aktiválódik") CÍME és szövege is kizárólag a
+MEGSZAKÍTOTT/hibás futásra vonatkozik — nem mondja ki, hogy egy TELJES,
+sikeres terv emberi megerősítés nélkül aktiválódjon. A brief saját
+frontmatterje viszont "0266 (nincs automatikus aktiválás)"-ként glosszázta
+az ADR-t — egy szűkebb döntés téves, tág átfogalmazása —, és a pre-flight
+halt erre a téves glosszára épített, nem az ADR tényleges szövegére.
+
+**Feloldás.** Az összes R21 acceptance criteria (A1–A8) teljesíthető egy
+`PlanPreviewController`-rel, ami SOSEM hívja a `GenerationOrchestrator`-t/
+`PlanGeneratorController`-t: egy már összeállított `AdaptivePracticePlan`-t
+és `PlanValidationContext`-et kap, a MEGLÉVŐ `PlanValidator`-on
+újravalidál, és a MEGLÉVŐ `GenerationPlanActivation` interfészen aktivál —
+mindhárom típus már publikus a `public.dart`-on, egyetlen sor
+domain/application-kód sem módosul. Ugyanaz a mintázat, mint [[L302]]
+(E07-R19/H3): egy PREPARED brief pre-flight-ja hiányt/ütközést mérhet
+anélkül, hogy kimondaná — a hiány a MEGLÉVŐ, publikus típusokkal is
+feloldható, nem csak egy tiltott zóna megnyitásával.
+
+**Szabály.** Mielőtt egy pre-flight/halt egy ADR-t korlátnak hivatkozva
+scope-bővítést vagy emberi döntést kér, **olvasd el az ADR TELJES szövegét**
+— ne a briefbe (vagy egy korábbi jelentésbe) írt egysoros glosszáját. Egy
+ADR címe/döntés-száma gyakran SZŰKEBB, mint amire egy frontmatter-glossza
+utal; a glossza saját maga is hibaforrás, nem csak a kód. Ha az ADR
+tényleges szövege nem tiltja a konfliktust okozó viselkedést, a helyes
+javítás egy dokumentált brief-/ADR-pontosítás (Class B), nem a tiltott zóna
+megnyitása.
+
+Rokon L: [[L302]] (ugyanaz a hibaosztály: PREPARED brief + közben merge-elt
+kód közti látszólagos ütközés, ami meglévő publikus típusokkal feloldható).

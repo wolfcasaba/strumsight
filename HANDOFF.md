@@ -1,5 +1,57 @@
 # HANDOFF — StrumSight 🎸
 
+> ## ✅ [HEAL E07-R21/H2] KÉSZ — a brief saját ADR 0266-glosszája volt téves, nem az ADR; R21 egy nem integrált preview-komponensre szűkült — PR #305, `078c4ab4` (2026-08-18)
+>
+> Az E07-R21 pre-flightja H2-vel halt: §5.1 „csak explicit felhasználói
+> megerősítésre aktivál" mandátuma szemben állt a közben merge-elt E07-R18
+> `GenerationOrchestrator._run()`-jával, ami egy sikeres `generate()` hívás
+> saját záró hatásaként, megszakítás nélkül aktivál
+> (`generation_orchestrator.dart:150-154`) — a halt saját elemzése ezt a
+> briefben tiltott application-réteg módosítását igénylőnek mérte, és
+> emberi döntést kért (R18 aktivációs határának módosítása vagy R21
+> scope-csökkentés).
+>
+> A self-heal (ADR 0112, 3/3. kísérlet — az 1. és 2. kísérlet jelzés nélkül
+> ért véget, 20 perces elakadás-őr ölte) az ADR 0266 TELJES szövegét
+> elolvasva megmérte: a 2. döntés („Részleges terv soha nem aktiválódik")
+> kizárólag a MEGSZAKÍTOTT/hibás futásra vonatkozik — a brief saját
+> frontmatterje viszont „nincs automatikus aktiválás"-ként glosszázta, ami
+> egy szűkebb döntés téves, tág átfogalmazása volt, és a halt erre a
+> glosszára épített, nem az ADR tényleges szövegére. Az összes R21
+> acceptance criteria (A1–A8) teljesíthető egy `PlanPreviewController`-rel,
+> ami SOSEM hívja a `GenerationOrchestrator`-t/`PlanGeneratorController`-t:
+> egy már összeállított tervet kap, a MEGLÉVŐ `PlanValidator`-on
+> újravalidál, a MEGLÉVŐ `GenerationPlanActivation` interfészen aktivál —
+> mindhárom típus már publikus a `public.dart`-on, egyetlen sor
+> domain/application-kód sem módosul, `allowed_paths` byte-for-byte
+> változatlan. Ugyanaz a hibaosztály, mint az E07-R19/H3 self-heal
+> ([[L302]]).
+>
+> A javítás: `docs/rounds/e07-r21-plan-preview-and-explanation.md` §0.0
+> pre-flight revízió (mért gyökérok + a szűkített, meglévő-típusokra épülő
+> terv) és `docs/adr/0266-…md` dátumozott „Módosítás (ADR 0112 önjavító
+> kör)" pontosító blokk, történet-átírás nélkül; regressziós őr:
+> `tools/tests/test_e07_r21_activation_boundary_scope.py` (6 teszt — RED a
+> pristine `main`-en 2/6, GREEN a revízió után mind a 6). Full
+> `python3 -m pytest tools/tests -q`, a doboz lokális
+> `PIPELINE_ORCH_SWAP_ENGINE` env-override-jától megtisztítva (ez a 4,
+> ettől független, e körhöz nem tartozó helyi hibát okozott — a `main`
+> Router CI-je az utolsó 5 commit mindegyikén zöld, tehát ez NEM
+> repó-regresszió, hanem ennek a doboznak a session-env-je): 473 zöld, 522
+> subtest zöld, 0 hiba. Router CI exact-SHA: a PR #305 headSha
+> `b788b25d` → `success` (a squash-merge SHA `078c4ab4`, nincs Dart-
+> változás, tehát a Router CI az egyetlen szükséges CI-bizonyíték).
+>
+> **Nyitott follow-up** (dokumentálva, még ki nem osztott kör): a
+> `GenerationOrchestrator.generate()` ma egyetlen, megszakítás nélküli
+> hívásban fuzionálja a validálást/javítást és az aktiválást — amíg ez nem
+> válik szét egy explicit, elkülönített aktivációs hívássá, a preview-
+> képernyő NEM köthető a valódi generálási folyamathoz (csak fixture-
+> tervekkel tesztelhető ebben a körben). Ez sem E07-R18, sem E07-R21
+> scope-ja nem volt. Lecke: **L307**. A lánc E07-R21-gyel folytatódik a
+> következő cron-firingen, friss (nem healed) dispatch-csel a revideált
+> brief ellenében.
+
 > **E07-R20 KÉSZ — PR #304, `b9dcbc76` (2026-08-18).** Öt lépéses, lokálisan
 > folytatható, akadálymentes Plan setup wizard (SDD Ch8 Kör 20): cél,
 > elérhetőség, felszerelés, preferencia, kényelem lépés; a "nem tudom" minden
