@@ -45,6 +45,93 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
+## 0.0 Pre-flight revízió — hiányzó terv-összeállítási kontraktus (2026-08-18)
+
+**HALT, majd feloldva.** Az első dispatch (`terra`, session
+`01a01456-cb4d-7df1-bd93-eab421dc3881`) `stopped`-ot jelzett: „no
+scope-approved ScheduleDecision-to-AdaptivePracticePlan assembly contract
+exists for validation/repair." Fájlt nem módosított, gate-et nem futtatott —
+a jelzés helyes volt, MÉRVE:
+
+1. **A `PlanValidator.validate()`/`PlanRepairer.repair()` (mindkettő
+   engedélyezett, MEGLÉVŐ, változatlan hívandó) kizárólag kész
+   `AdaptivePracticePlan`-t fogad** — a plan `PracticeDay.blocks`
+   (`domain/model/practice_day.dart:14`) `List<PracticeBlock>`, és minden
+   `PracticeBlock.prescription` (`domain/model/practice_block.dart:52,72`)
+   egy már megépített `ExercisePrescription`.
+2. **`WeeklyScheduler.schedule()` kimenete (`WeeklyScheduleDecision`,
+   `domain/model/schedule_decision.dart:437`) NEM `ExercisePrescription`-t,
+   hanem `ScheduleCandidate`-okat hordoz** (`identity`, `focus`,
+   `materialKind`, `loadLevel`, `duration`, `skillTargets` —
+   `schedule_decision.dart:30-102`) — ez a scheduler SAJÁT, R15-ös
+   egyszerűsített candidate-reprezentációja, nem a `PracticeBlock`
+   szerződése.
+3. **`ExercisePrescription`-t ma SEHOL nem épít semmilyen szolgáltatás.** A
+   konstruktora (`domain/model/exercise_prescription.dart:184-256`)
+   `repetition: RepetitionPrescription`, `loopCount`, `hardElapsedLimit`,
+   `successCriteria: SuccessCriteria`, opcionális `tempoBpm` KÖTELEZŐ,
+   hívó-adott paramétereket vár — ezek egyike sincs jelen sem az
+   `ExerciseCandidate`-en (`domain/model/exercise_candidate.dart:141-201` —
+   nincs alapértelmezett rep-szám, tempó vagy success criteria mező), sem a
+   `ScheduleCandidate`-en. A fájl saját doc-commentje (1-8. sor) explicit
+   kizárja a „plan assembly"-t az R09 hatóköréből — ez a hiányzó darab
+   SOHA nem lett külön körre kiosztva az R05–R17 listában (`docs/sdd/
+   08-epic-07-ai-practice-generator.md` „Kör 5"–„Kör 17" egyike sem
+   „ExercisePrescription-policy" vagy hasonló címmel).
+4. **Ugyanez, kisebb súllyal, a `SelectedCandidate → ScheduleCandidate`
+   átalakításra is igaz**: a `focus`/`materialKind`/konkrét `duration` mezők
+   (`scheduling_policy.dart:23,32`) nincsenek a `SelectedCandidate`-en
+   (`domain/model/candidate_decision.dart:157-213` — csak `candidate`,
+   `skillId`, `relevanceScore`, `compositeScore`, `factors`).
+
+**Feloldás — a §4 fájllista VÁLTOZATLAN, nincs új production fájl (tehát nem
+H3: a „tilos zóna" a jelenlegi `allowed_paths`-on kívüli fájlokra vonatkozik,
+ez a döntés egyiket sem érinti):**
+
+- A `WeeklyScheduleDecision` → `AdaptivePracticePlan` összeállítás (a
+  hiányzó „Prescription construction" pipeline-lépés, SDD Ch8 §18 diagram) a
+  `generation_orchestrator.dart` (már engedélyezett, ÚJ fájl) saját
+  felelőssége — ezt a kört ez a lépés is terheli, nem csak a
+  sorrendezés/megszakítás.
+- **A `ScheduleCandidate`→`PracticeBlock.kind`/`materialKind`-jellegű
+  leképezés** (bounded, véges enum-tér, minden bemenete már ismert típus)
+  legyen az orchestrátor saját, determinisztikus, dokumentált glue-logikája
+  — pl. `materialKind = review`, ha a candidate identitása szerepel a
+  `ReviewQueueDecision` kimenetében, egyébként `newMaterial`; `focus` a
+  scheduler napi sorrendjéből (első = `primaryFocus`, további =
+  `secondaryFocus`) vagy a `SkillPriority` sorrendből származzon; `duration`
+  a `ScheduleCandidate.duration` (a scheduler már ezt választotta ki a
+  napi `TimeBudget`-hez illesztve). A pontos szabályt a §10 handoffban
+  írd le — ez a döntés a tiéd, a mérce-mátrix (§6.1) egyik cellája sem
+  vizsgálja a leképezés tartalmi helyességét, csak azt, hogy a pipeline
+  végigfut/megszakad/hibázik helyesen.
+- **Az `ExercisePrescription` mezőinek (`repetition`, `loopCount`,
+  `hardElapsedLimit`, `successCriteria`, `tempoBpm`) tényleges ÉRTÉKE
+  explicit KÍVÜL esik ezen a körön a mérhetőségen** — A1–A8 egyike sem
+  vizsgálja a prescription TARTALMÁT, csak a folyamat cancel/fail/activate
+  szemantikáját. Két elfogadható megoldás, a választás a tiéd:
+  (a) egyszerű, rögzített, dokumentált deterministikus alapérték
+  (pl. `activeDuration = candidate.supportedDurations.minimum`, kis fix
+  `repetition`/`loopCount`, `tempoBpm = null`, a candidate által támogatott
+  LEGEGYSZERŰBB `successCriteria`) közvetlenül a orchestrátorban; vagy
+  (b) egy a orchestrátoron belül definiált (NEM külön fájlban — az új fájl
+  H3 lenne) injektált seam (pl. egy kis `abstract interface class` vagy
+  function typedef a `generation_orchestrator.dart`-ban), amit a teszt egy
+  triviális fake-kel táplál, a valódi policy-hangolást explicit egy KÉSŐBBI,
+  még ki nem osztott körre hagyva. Bármelyiket választod, **dokumentáld a
+  §10-ben**, és jelöld follow-up-ként a tényleges rep/tempó/criteria-policy
+  hangolását — ez NEM ennek a körnek a acceptance criteriuma.
+- **Ha bármelyik döntés kivételt dobna** (pl. `ExercisePrescription`
+  konstruktor bounds-check, mert a választott `activeDuration` kívül esik
+  `supportedDurations`-on), az a szokásos `AppFailure`-képzési szabály alá
+  esik (§6 döntés 6) — nem crash, nem silent skip.
+
+Ez a revízió a kör §2 „önállóan dönthetsz… ezt a kör-briefet (dokumentált
+§0.0 revízióval)" hatáskörébe tartozik: nem nyúl `docs/adr/**`-hoz, nem bővíti
+az engedélyezett fájllistát, és a §6 acceptance criteria-t sem tágítja —
+kizárólag azt mondja meg, MELYIK meglévő, engedélyezett fájl viseli a már a
+brief §1 „Cél"-jában is benne foglalt terv-összeállítás felelősségét.
+
 ## 1. Cél
 
 A teljes generálási folyamat alkalmazásszintű, **megszakítható**, állapotgéppel
