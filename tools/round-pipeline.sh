@@ -558,10 +558,22 @@ run_tmux_session() {
     return 90
   fi
 
-  tmux kill-session -t "$tmux_session" 2>/dev/null || true
-  tmux new-session -d -s "$tmux_session" bash
-  tmux pipe-pane -t "$tmux_session" -o "cat >> $session_log"
-  tmux send-keys -t "$tmux_session" "$shell_command" Enter
+  # MÉRT hiba (2026-08-18): a tmux SZERVER a kliens FD-jeit örökli, tehát a
+  # slot-zár (fd 9) nála marad — és a szerver túléli a kört (amíg BÁRMELYIK
+  # tmux session él). Következmény: az E07-R22 driver által 18:13-kor indított
+  # szerver 19:47-es merge után is fogta a `.pipeline/lock`-ot, ezért a
+  # `PIPELINE_SLOTS=2` mellett az 1-es slot TARTÓSAN foglalt volt — a lánc
+  # egysávosra esett vissza anélkül, hogy ez bárhol látszott volna.
+  #
+  # A driver ezt a hibaosztályt már ismerte (a pinger-alhéj fd 9-et zár,
+  # 2026-07-31), csak a tmux-hívások maradtak ki. Az alhéj mindhármat lefedi.
+  (
+    exec 9>&-
+    tmux kill-session -t "$tmux_session" 2>/dev/null || true
+    tmux new-session -d -s "$tmux_session" bash
+    tmux pipe-pane -t "$tmux_session" -o "cat >> $session_log"
+    tmux send-keys -t "$tmux_session" "$shell_command" Enter
+  )
   log "session indult: $tmux_session (mód: $session_mode) → $session_log"
 
   (
