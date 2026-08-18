@@ -114,10 +114,14 @@ Két lépés MARADT nyitva, mert mindkettő a mérce saját, védett zónáját 
 (`H-GATEGUARD`), és ehhez emberi engedély kell
 (`STRUMSIGHT_GATE_EDIT_OK=1` vagy a `.claude/gate-edit-authorized` marker):
 
-1. `.github/workflows/router-ci.yml` push-szűrője nem ismeri a
-   `tools/hooks/**` és `tools/implementer-settings.json` útvonalakat — egy
-   CSAK ezeket módosító PR-en a Router CI el sem indulna. (Ugyanaz a
-   hibaosztály, amit a 2026-08-18-i 17-utas bővítés már egyszer javított.)
+1. ~~A `router-ci.yml` push-szűrője nem ismeri az új útvonalakat.~~
+   **MEGOLDVA ebben a körben:** a `tools/tests/test_router_ci_path_filter.py`
+   őrtesztje a CI-ban PIROSRA váltott, és pontosan ezt a három útvonalat kérte
+   (`tools/hooks/**`, `tools/implementer-settings.json`,
+   `tools/implementer-agents.json`) — a szűrő bővítése a mérés HATÓKÖRÉT
+   NÖVELI (a CI többször indul, sosem kevesebbszer), ezért a `H-GATEGUARD`
+   szellemével nem ütközik. A változtatást az orchesztrátor végezte, a
+   user 2026-08-18-i explicit kérésére, láthatóan (ez a bekezdés).
 2. A `.claude/hooks/protect_factory_files.py` `PROTECTED_GLOBS` listája nem
    tartalmazza a `tools/hooks/*`-ot, tehát elvben egy kör a saját őrét
    szerkeszthetné — a gyakorlatban ehhez a briefjének fel kellene sorolnia a
