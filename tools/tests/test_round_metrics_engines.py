@@ -12,6 +12,7 @@ medián-teszt PIROS kell legyen (a 2636p minta elhúzza a mediánt).
 
 import io
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -132,32 +133,135 @@ class EnginesSubcommandTest(unittest.TestCase):
         self.assertEqual(result.returncode, 2, msg=f"stderr: {result.stderr}")
         self.assertIn("BEFEJEZETT", result.stderr)
 
+    def test_engines_epic_filter_includes_only_matching_rounds(self) -> None:
+        """--epic E07 (pozitív cella): a fixture minden köre E07, a teljes tábla megmarad.
+
+        A fixture 4 minimax + 2 sonnet-impl kört tartalmaz, mind E07-R*. A
+        `--epic E07` szűrés ugyanazt a táblát adja, mint a szűrés nélküli
+        nézet — az értékek bit-re azonosak. A JSON kimenet `epic` mezője
+        `E07`, és a sorok száma nem változik.
+        """
+        exit_code, stdout, _ = run_engines(["--epic", "E07", "--format", "json"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["epic"], "E07")
+        engines = {row["implementer"]: row for row in payload["engines"]}
+        self.assertIn("minimax", engines)
+        self.assertIn("sonnet-impl", engines)
+        # A fixture-ből a szűrt nézet megegyezik a szűretlennel.
+        self.assertEqual(engines["minimax"]["n"], 4)
+        self.assertEqual(engines["sonnet-impl"]["n"], 2)
+
+    def test_engines_epic_filter_excludes_other_epics(self) -> None:
+        """--epic E99 (negatív cella): a fixture E07-R* köröket tartalmaz, E99-R*-t nem.
+
+        A szűrés MIND a 6 kört kiszűri, a motor-aggregátum üres. A JSON
+        `epic` mezője `E99`, a `engines` lista üres, a szöveges tábla
+        az üres-napló üzenetet adja.
+        """
+        # A JSON-t nézzük: a `engines` lista üres, és az `epic` rögzítve van.
+        exit_code, stdout, _ = run_engines(["--epic", "E99", "--format", "json"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        self.assertEqual(payload["epic"], "E99")
+        self.assertEqual(payload["engines"], [], msg=f"a(z) E99 szűrés nem üres: {payload['engines']!r}")
+
+        # A szöveges tábla: explicit üres-üzenet.
+        _, table_stdout, _ = run_engines(["--epic", "E99"])
+        self.assertIn("nincs motor-hozzárendelhető kör", table_stdout)
+
+    def test_engines_epic_filter_partial_overlap(self) -> None:
+        """--epic E07 parciális átfedés: a fixture csak E07 kört tartalmaz, DE a
+        motor-aggregátum csak az epiches sorokra épül — egy másik epic hozzáadása
+        a fixture-höz az E07 statisztikát NEM változtatná meg.
+
+        Ez a cella az E07 + E99 keverékkel dolgozik: az E99-es köröknek
+        NEM szabad megjelenniük az E07-es szűrt nézetben, és fordítva.
+        """
+        # Készítünk egy másik epicet (E99-R01) a fixture-höz, és ellenőrizzük,
+        # hogy a két szűrt nézet DISZJUNKT.
+        extended_log = FIXTURE_LOG + (
+            "2026-08-12T10:00:00+00:00  következő kör: E99-R01 · orchestrátor=claude · implementer=claude-impl · brief=x · ADR=y\n"
+            "2026-08-12T10:00:01+00:00  orchestrátor-session indul (E99-R01)\n"
+            "2026-08-12T10:25:00+00:00  E99-R01 MERGE-ELVE — done\n"
+        )
+        exit_code, stdout, _ = run_engines(["--epic", "E07", "--format", "json"], log_text=extended_log)
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        engines = {row["implementer"]: row for row in payload["engines"]}
+        # Az E99-R01 (claude-impl) NEM jelenik meg az E07 nézetben.
+        self.assertNotIn("claude-impl", engines)
+        self.assertEqual(engines["minimax"]["n"], 4)
+
+        # A fordított szűrés: csak a claude-impl jelenik meg.
+        exit_code, stdout, _ = run_engines(["--epic", "E99", "--format", "json"], log_text=extended_log)
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(stdout)
+        engines = {row["implementer"]: row for row in payload["engines"]}
+        self.assertEqual(list(engines.keys()), ["claude-impl"])
+        self.assertEqual(engines["claude-impl"]["n"], 1)
+
 
 class EnginesOutlierFalsificationTest(unittest.TestCase):
     """Falszifikációs cella (brief §4, kötelező).
 
-    A kiugró-szűrés kikapcsolása a forrásban → a medián-teszt PIROS.
+    M2 javítás: a forrást IZOLÁLT MÁSOLATON módosítjuk. A termelési
+    `tools/round-metrics.py` ÉRINTETLEN marad — sem a teszt futása
+    alatt, sem párhuzamos futás / processz-halál esetén. A `setUp`
+    előkészíti a másolatot, a `tearDown` (vagy `addCleanup`) törli.
     """
 
     def setUp(self) -> None:
-        self._original = SCRIPT.read_text(encoding="utf-8")
+        # M2 javítás: a forrást IZOLÁLT MÁSOLATRA cseréljük — a termelési
+        # SCRIPT nem módosul, a teszt a másolaton dolgozik.
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+        self.script_copy = Path(self._temp.name) / "round-metrics.py"
+        shutil.copy(SCRIPT, self.script_copy)
+        self._original = self.script_copy.read_text(encoding="utf-8")
 
     def tearDown(self) -> None:
-        SCRIPT.write_text(self._original, encoding="utf-8")
+        # M2 javítás: a forrást MINDIG visszaállítjuk (a másolatot) — egy
+        # kósza hiba nem hagyhat módosított kódot a lemezen. A teljes
+        # temp-könyvtárat amúgy is törli a `setUp` `addCleanup`
+        # regisztrációja; ez a visszaállítás a párhuzamos futás
+        # védelme, ha a `_temp` cleanup-ja késne.
+        self.script_copy.write_text(self._original, encoding="utf-8")
+
+    def _run_engines_with_copy(self, additional: list[str] = None, log_text: str = FIXTURE_LOG) -> tuple[int, str, str]:
+        """A MÁSOLT scriptre futtatja a `--engines` parancsot."""
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as handle:
+            handle.write(log_text)
+            log_path = Path(handle.name)
+        try:
+            result = subprocess.run(
+                [sys.executable, str(self.script_copy), "--chain-log", str(log_path), "--engines", *(additional or [])],
+                capture_output=True, text=True, cwd=ROOT,
+            )
+            return result.returncode, result.stdout, result.stderr
+        finally:
+            log_path.unlink(missing_ok=True)
 
     def test_kiugro_szures_kivetelevel_a_median_teszt_piros(self) -> None:
-        """A `n < outlier_threshold` szűrő kikapcsolása → a medián kiugró_after."""
+        """A `n < outlier_threshold` szűrő kikapcsolása → a medián kiugró_after.
+
+        M2 javítás: a módosítás a MÁSOLT scriptre fut, a termelési forrás
+        nem változik. M3 javítás nincs hatással — a falszifikáció a
+        D3 statisztikai kódot célozza, nem a motor-override-ot.
+        """
         # A `OUTLIER_THRESHOLD_SECONDS = 10 * 3600` és a szűrő:
         # `filtered = [s for s in samples if s < outlier_threshold]`. A szűrő
-        # kikapcsolása: threshold=11h → a 2636p (43.9h) BENT marad.
+        # kikapcsolása: threshold=999h → a 2636p (43.9h) BENT marad.
         modified = self._original.replace(
             "OUTLIER_THRESHOLD_SECONDS = 10 * 3600",
             "OUTLIER_THRESHOLD_SECONDS = 999 * 3600  # E99-R14 falszifikáció: kiugró-szűrés KIKAPCSOLVA",
         )
         self.assertNotEqual(modified, self._original, "a módosítás nem illeszkedett")
-        SCRIPT.write_text(modified, encoding="utf-8")
+        self.script_copy.write_text(modified, encoding="utf-8")
 
-        exit_code, stdout, _ = run_engines(["--format", "json"])
+        exit_code, stdout, _ = self._run_engines_with_copy(["--format", "json"])
         self.assertEqual(exit_code, 0)
         payload = json.loads(stdout)
         engines = {row["implementer"]: row for row in payload["engines"]}

@@ -168,14 +168,25 @@ def summarize(events: list[dict]) -> dict:
 OUTLIER_THRESHOLD_SECONDS = 10 * 3600
 
 
-def engines_summary(events: list[dict], *, outlier_threshold: int = OUTLIER_THRESHOLD_SECONDS) -> dict:
+def engines_summary(events: list[dict], *, outlier_threshold: int = OUTLIER_THRESHOLD_SECONDS, epic: str | None = None) -> dict:
     """Motoronkénti statisztika a `következő kör: … implementer=<x>` sorokból.
 
     Az implementer hozzárendelés a `next_round` eseményből jön, a START és a
     MERGED eseményekkel összekötve. A kiugró-szűrés CSAK a középső/átlag
     számítást érinti — a `n` mező a TELJES mintát tükrözi (külön `n` oszlop
     nélkül a kiugró-szűrés hatása láthatatlan lenne).
+
+    Az `epic` paraméter (opcionális) csak az adott epic köreit tartja meg
+    (pl. `epic="E07"` → `E07-R01`, `E07-R02`, ...). A szűrés a `round`
+    mező `epic-` prefix-ellenőrzésével történik, és a motor-aggregátum
+    ELŐTT lép életbe — így a `next_round` implementer-hozzárendelés, a
+    start/merged időpár, és a heal-számlálás is csak az epiches tartozó
+    körökre fut le. Üres epic-szűrés esetén a globális nézet marad.
     """
+    if epic is not None:
+        epic_prefix = f"{epic}-"
+        events = [event for event in events if (event.get("round") or "").startswith(epic_prefix)]
+
     # 1. lépés: implementer hozzárendelés az egyes körökhöz. A `next_round`
     # esemény a kör KIVÁLASZTÁSAKOR íródik, tehát néha ELŐBB, mint a `start`
     # (a motor-override és a függetlenség-feloldás a kettő között futhat le),
@@ -265,6 +276,7 @@ def engines_summary(events: list[dict], *, outlier_threshold: int = OUTLIER_THRE
     return {
         "schema_version": 1,
         "outlier_threshold_seconds": outlier_threshold,
+        "epic": epic,
         "engines": rows,
     }
 
@@ -455,7 +467,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--epic",
-        help="(jelenleg nem szűkít) — a fenntartott epic-szűrő neve, hogy a jövőben a `--engines` szűrhető legyen",
+        help="a `--engines` statisztikát egy adott epicre szűkíti (pl. `E07` → csak E07-R* körök); a motor-aggregátum ELŐTT lép életbe",
     )
     arguments = parser.parse_args(argv)
 
@@ -487,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if arguments.engines:
-        engines_result = engines_summary(parse_chain_log(text))
+        engines_result = engines_summary(parse_chain_log(text), epic=arguments.epic)
         if arguments.format == "json":
             print(json.dumps(engines_result, ensure_ascii=False, sort_keys=True, indent=2))
         else:

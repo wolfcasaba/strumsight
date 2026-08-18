@@ -90,6 +90,98 @@ override_file_age_hours() {
   awk -v diff="$(( now - mtime ))" 'BEGIN { printf "%.2f", diff / 3600.0 }'
 }
 
+# Ugyanaz, mint feljebb, de a fájl útvonala paraméter (E99-R14 D2 / M3 javítás:
+# a `evaluate` parancs és a tesztek egy tetszőleges útvonalra hívják, nem
+# csak a globális `$override_file`-ra).
+override_file_age_hours_for() {   # $1=override fájl útvonala
+  local file="$1" mtime now
+  [ -f "$file" ] || { printf '%s' "0"; return; }
+  mtime=$(stat -c %Y "$file" 2>/dev/null) || { printf '%s' "0"; return; }
+  now=$(date +%s)
+  awk -v diff="$(( now - mtime ))" 'BEGIN { printf "%.2f", diff / 3600.0 }'
+}
+
+# Motor-név validáció az override-fájl olvasásához. A driver `validate_engine`
+# függvénye a registry-t a `$repo_root/docs/execution/engine-registry.tsv`-n
+# keresi; itt a `$registry` már eleve a fájlra mutat, ezért a registry-sor
+# lekéréséhez `row_for`-t használunk. A három legacy motor (auto/minimax/codex)
+# és a registry-név ugyanúgy érvényes — a `use` parancs amúgy is csak registry-
+# nevet ír a fájlba, az auto/minimax/codex a queue engine oszlopából jön.
+override_engine_is_valid() {   # $1=motor neve → 0 ha érvényes, 1 ha nem
+  local name="$1" row
+  case "$name" in
+    auto | minimax | codex) return 0 ;;
+    *)
+      row=$(row_for "$name")
+      [ -n "$row" ]
+      ;;
+  esac
+}
+
+# Az override-fájl állapotának kiértékelése — a motor-override blokk (és a
+# tesztek) által hívott EGYETLEN belépési pont. Kimenet:
+#   stdout: <motor> | EXPIRED | <empty>
+#   exit:   0=live · 1=expired · 2=stale (warn) · 3=no-file · 4=invalid
+# A függvény OLDALHATÁSA: a lejárt fájlt TÖRÖLI (a queue engine oszlopa lép
+# életbe). A log/ntfy hívás a HÍVÓ dolga (a függvény nem ismeri a
+# lánc-naplót / ntfy-topic-ot).
+#
+# M3 javítás: ezelőtt a `tools/round-pipeline.sh --engine-override-evaluate`
+# top-level hook ugyanezt a logikát MÁSOLTA — ez a függvény az EGYETLEN
+# implementáció, és a driver motor-override blokkja, valamint a tesztek is
+# ezt hívják.
+engine_override_evaluate() {   # $1=override fájl [$2=warn_threshold]
+  local override_file="$1"
+  local warn_threshold="${2:-72}"
+  local raw_first engine_override expires_at age_hours above
+
+  if [ ! -f "$override_file" ]; then
+    printf '%s\n' "<empty>"
+    return 3
+  fi
+
+  raw_first=$(head -1 "$override_file" | tr -d '[:space:]')
+  case "$raw_first" in
+    engine=*) engine_override="${raw_first#engine=}" ;;
+    *)        engine_override="$raw_first" ;;
+  esac
+  if [ -z "$engine_override" ] || ! override_engine_is_valid "$engine_override"; then
+    return 4
+  fi
+
+  expires_at=$(grep -E '^expires_at=' "$override_file" 2>/dev/null | head -1 | cut -d= -f2-)
+  # Az `expires_at` jelen van és nem "-" és NEM szám — a `use` parancs
+  # soha nem ír ilyet (epoch vagy "-"), tehát ez az emberi kézi
+  # beavatkozás jele. Ilyenkor az óvatosság javára döntünk: a lejárat
+  # ellenőrzését KIHAGYJUK, csak a kor-figyelmeztetés lép.
+  if [ -n "$expires_at" ] && [ "$expires_at" != "-" ] \
+      && case "$expires_at" in ''|*[!0-9]*) true ;; *) false ;; esac; then
+    expires_at=""
+  fi
+
+  # 1) LEJÁRAT-ELLENŐRZÉS (E99-R14 D2): ha a TTL a múltban van, a fájl
+  # TÖRLŐDIK, és a queue `engine` értéke lép életbe.
+  if [ -n "$expires_at" ] && [ "$expires_at" != "-" ] \
+      && [ "$(date +%s)" -ge "$expires_at" ]; then
+    rm -f "$override_file"
+    printf '%s\n' "EXPIRED"
+    return 1
+  fi
+
+  # 2) KOR-FIGYELMEZTETÉS (E99-R14 D2): a küszöb felett WARNING, a fájl ÉL.
+  if [ -z "$expires_at" ] || [ "$expires_at" = "-" ]; then
+    age_hours=$(override_file_age_hours_for "$override_file")
+    above=$(awk -v a="$age_hours" -v t="$warn_threshold" 'BEGIN { print (a >= t) ? 1 : 0 }')
+    if [ "$above" = "1" ]; then
+      printf '%s' "$engine_override"
+      return 2
+    fi
+  fi
+
+  printf '%s' "$engine_override"
+  return 0
+}
+
 # Elérhető-e a motor: megvan a config dir ÉS az auth (kulcsfájl vagy előfizetés).
 availability() {
   local row=$1 config auth_file
@@ -102,6 +194,12 @@ availability() {
   printf 'kész'
 }
 
+# A CLI kapcsoló csak közvetlen végrehajtás esetén fut le — a fájl
+# forrásként is betölthető a függvény-könyvtár miatt (a
+# `engine_override_evaluate` függvényt a driver és a tesztek is hívják
+# a motor-override úton). A `BASH_SOURCE[0] != $0` minta a szokásos
+# bash-irányelv: csak a SAJÁT híváskor fut a CLI.
+if [ "${BASH_SOURCE[0]}" = "$0" ]; then
 case "${1:-list}" in
   list)
     active=$(active_engine)
@@ -249,8 +347,18 @@ case "${1:-list}" in
       "$name" "$(field "$row" 2)" "$(field "$row" 4)"
     ;;
 
+  evaluate)
+    # A driver motor-override blokkja ÉS a tesztek is ezt hívják (E99-R14 D2,
+    # M3 javítás): a logika csak itt él, nincs duplikált teszthorog. A
+    # kimenet: stdout = <motor> | EXPIRED | <empty>; exit 0/1/2/3/4.
+    # Az opcionális $2 a warn-threshold (alap 72).
+    engine_override_evaluate "$override_file" "${2:-${PIPELINE_OVERRIDE_WARN_HOURS:-72}}"
+    exit $?
+    ;;
+
   *)
-    echo "használat: engine-profile.sh [list | show | use <name> [--ttl <óra>] [--reason \"<szöveg>\"] | clear | check <name> | env <name>]" >&2
+    echo "használat: engine-profile.sh [list | show | use <name> [--ttl <óra>] [--reason \"<szöveg>\"] | clear | check <name> | env <name> | evaluate [<warn_threshold>]]" >&2
     exit 2
     ;;
 esac
+fi
