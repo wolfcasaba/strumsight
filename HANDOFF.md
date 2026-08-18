@@ -44,6 +44,44 @@
 > before review, so the pipeline prompt now gates repair/review on measured
 > `origin/main` ancestry (HEAL E07-R15/H7, upstream-sync).)**
 
+> ## ✅ [HEAL E07-R19/H-NOSIGNAL] KÉSZ — `wait-for-round.sh`/`wait-for-router.sh` baseline-ja folyamat-memóriában élt, nem vette észre a köztes-hívások közt már kész jelzést (2026-08-18)
+>
+> Az E07-R19 folytató köre (orchestrátor=Terra, implementer=minimax) jelzés
+> nélkül halt el 12:37:10-kor — a pipeline elakadás-gyorsítója (E99-R13 óta)
+> ~2 mp alatt helyesen észlelte, hogy a `codex` motor-folyamat kilépett. A
+> tényleges implementer-munka (MiniMax kezdeti implementáció + 1 MiniMax- +
+> 1 Codex-javítókör) eközben MÁR KÉSZ és pusholva volt
+> (`minimax/e07-r19-local-plan-repository` @ `0d505ca7`, `.codex-round-status`
+> `status=done`/`signalled_at=12:30:06Z`).
+>
+> A session rollout (`~/.codex-terra/sessions/…/rollout-2026-08-18T11-55-08-…jsonl`,
+> strukturált JSON, nem a redundáns TUI-újrarajzolással dagadó tmux-log)
+> megmérte a gyökérokot: a Terra `exec_command`/`wait` eszköze csendes
+> parancsnál önmagától „yield"-el, ezért a dokumentált „exit 5 → hívd meg
+> újra" szerződés szerint `tools/wait-for-round.sh`-t ~20, egyenként FRISS
+> folyamatként hívta (cell ID 65–87), nem egyetlen hosszan futó hívásként.
+> A script a stale-signal védelmét (E02-R08) egy `baseline` shell-változóban
+> tartotta, amit MINDEN friss folyamat a SAJÁT indulásakor, a jelzésfájl
+> AKKORI tartalmából számolt újra — egy, a tényleges befejezés (12:30:06Z)
+> UTÁN induló friss hívás ezért a friss `done`-t tekintette baseline-nak, és
+> sosem jelentette késznek. Az orchestrátor 7 percen át kizárólag üres
+> kimenetet kapott, majd stale szöveges státusszal ("a Codex javító kör még
+> fut") zárta a választ jelzés nélkül — pontosan az E07-R09 self-heal
+> (2026-08-16) által már dokumentált és tiltott minta.
+>
+> A javítás a baseline-t egy, a munkapéldányban élő MARKER-fájlba
+> (`.wait-for-round-baseline`/`.wait-for-router-baseline`, gitignore-olt)
+> perzisztálja az első hívástól a terminális kézbesítésig, hogy a köztes
+> friss újraindítások UGYANAZT lássák; `wait-for-router.sh` (`engine=auto`)
+> byte-azonos mintát örökölt, ezért ugyanazt a javítást kapta. Két
+> regressziós teszt (RED a javítás előtt, `5 != 0`, GREEN utána, mindkét
+> scriptre) + egy nem-regressziós társteszt (az eredeti E02-R08 védelem
+> változatlan). `tools/tests`: 467/467 zöld, 524 subtest. PR
+> [#302](https://github.com/wolfcasaba/strumsight/pull/302), squash
+> `5b520739`; Router CI zöld a pontos head SHA-n (router-only fix, nincs
+> Dart-változás, build-apk nem indult). `docs/LESSONS.md` **L303**. A lánc
+> E07-R19-cel folytatódik a következő cron-firingen.
+>
 > ## ✅ [HEAL E07-R19/H3] KÉSZ — a brief pre-flight calloutja Core/domain hiányra méretett, de nem mondta ki: a hiány meglévő típusokkal és írási sorrenddel is teljesíthető (2026-08-18)
 >
 > Az E07-R19 (Local repository, migráció és korrupcióvédelem) saját

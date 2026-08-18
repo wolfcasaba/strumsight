@@ -66,6 +66,11 @@ backend/.venv/
 .codex-round-status
 .mm-round-pid
 
+# wait-for-round.sh / wait-for-router.sh baseline-marker (E07-R19 H-NOSIGNAL
+# önjavítás, 2026-08-18) — futásonkénti, lokális
+.wait-for-round-baseline
+.wait-for-router-baseline
+
 # Autonóm kör-pipeline futásidejű állapota (ADR 0087) — sosem committolt
 .pipeline/
 

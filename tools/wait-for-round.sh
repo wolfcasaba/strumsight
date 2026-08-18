@@ -39,8 +39,33 @@ fi
 started=$(date +%s)
 # A kiinduló időbélyeg: egy KORÁBBI kör terminális jelzése ne zárja le azonnal
 # a várakozást (E02-R08 resume — a `stalled` jelzés bent maradt a fájlban).
-baseline=""
-[ -f "$signal" ] && baseline=$(grep -m1 '^signalled_at=' "$signal" 2>/dev/null || true)
+#
+# A baseline egy MARKER-fájlban él, nem csak ebben a folyamatban (MÉRT rés,
+# E07-R19 H-NOSIGNAL önjavítás, 2026-08-18). Egyes orchestrátor-harnessek
+# (Terra/Codex `exec_command`+`wait`) csendes parancsnál önmaguktól
+# „yield"-elnek, ezért a hívó a dokumentált „exit 5 → hívd meg újra"
+# szerződés szerint sok, egyenként FRISS folyamatként indítja ezt a scriptet,
+# nem egyetlen hosszan futó hívásként. Egy tisztán memóriabeli baseline ekkor
+# minden friss folyamat SAJÁT indulási pillanatában újraszámolódna a
+# jelzésfájl AKKORI tartalmából — egy, a tényleges befejezés UTÁN induló
+# friss hívás a friss `done`-t tekintené baseline-nak, és sosem jelentené
+# késznek, amíg a `max_wait` le nem jár. Mérve: `.codex-round-status`
+# `status=done`/`signalled_at=2026-08-18T12:30:06Z` már készen és pusholva
+# állt, az orchestrátor mégis 12:37:08-ig, 7 percen át üres kimenetet kapott
+# minden friss hívástól (session rollout `01a014b9…`, ismételt
+# `tools/wait-for-round.sh … 540` hívások, mindegyik ~15–28 mp után "Script
+# completed", üres output), majd jelzés nélkül elfogyott a turnja —
+# H-NOSIGNAL. A marker a baseline-t az ELSŐ hívástól a terminális
+# kézbesítésig megőrzi, hogy a köztes friss újraindítások UGYANAZT lássák,
+# ne a saját indulásuk pillanatát.
+marker="$workdir/.wait-for-round-baseline"
+if [ -f "$marker" ]; then
+  baseline=$(cat "$marker" 2>/dev/null || true)
+else
+  baseline=""
+  [ -f "$signal" ] && baseline=$(grep -m1 '^signalled_at=' "$signal" 2>/dev/null || true)
+  printf '%s' "$baseline" > "$marker"
+fi
 
 while true; do
   if [ -f "$signal" ]; then
@@ -49,10 +74,12 @@ while true; do
     if [ "$stamp" != "$baseline" ] || [ -z "$baseline" ]; then
       case "$status" in
         done)
+          rm -f "$marker"
           cat "$signal"
           exit 0
           ;;
         stopped)
+          rm -f "$marker"
           cat "$signal"
           echo
           echo "→ Az implementer DÖNTÉST VÁR. Olvasd el a summary mezőt, dönts," >&2
@@ -60,6 +87,7 @@ while true; do
           exit 3
           ;;
         stalled|timeout|unknown)
+          rm -f "$marker"
           cat "$signal"
           echo
           echo "→ A futás nem ért végig ($status). Resume UGYANAZZAL a session-iddel," >&2
