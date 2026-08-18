@@ -1,4 +1,6 @@
 import 'dart:convert';
+// ignore: depend_on_referenced_packages
+import 'package:crypto/crypto.dart' as crypto;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
@@ -346,6 +348,193 @@ void main() {
         // reproducible code, never a thrown exception.
         expect(reloaded.isFailure, isTrue);
         expect(reloaded.failureOrNull, isA<StorageFailure>());
+      });
+
+      test(
+        'a re-stamped-checksum, semantically corrupted archive revision '
+        'is dropped, while the healthy sibling remains readable '
+        '(S-02 — record-level isolation over any decode exception)',
+        () async {
+          final store = InMemoryKeyValueStore();
+          final repository = _newRepository(store);
+          final planId = PlanId('plan.1');
+
+          // Two healthy revisions on disk.
+          final first = _revision(planId, number: 1);
+          final second = _revision(planId, number: 2);
+          await repository.appendRevision(first);
+          await repository.appendRevision(second);
+
+          // Corrupt revision.1's body in a way the domain decoders reject
+          // with an exception OTHER than PracticePlanSerializerException
+          // (DateTime.parse throws FormatException), then re-stamp the
+          // checksum to match. This proves the record-level drop is
+          // driven by the catch-all on the decode path — not by the
+          // envelope's checksum gate, which now trusts the body.
+          final corruptKey = LocalPracticePlanRepository.archiveRevisionKey(
+            planId: planId,
+            revisionId: first.id,
+          );
+          final raw = store.readString(corruptKey);
+          expect(raw, isNotNull);
+          final envelope = jsonDecode(raw!) as Map<String, dynamic>;
+          final body = envelope['body'] as Map<String, dynamic>;
+          body['createdAt'] = 'not-a-valid-iso-date';
+          envelope['body'] = body;
+          envelope['checksum'] = _sha256OfCanonicalJson(
+            body as Map<String, Object?>,
+          );
+          await store.writeString(corruptKey, jsonEncode(envelope));
+
+          final archive = await repository.readArchive(planId);
+
+          // The healthy sibling reads back; the corrupt one is silently
+          // dropped. The whole read does NOT fail just because one record
+          // is semantically broken — S-02 / A2 invariant.
+          expect(archive.isSuccess, isTrue);
+          final log = archive.valueOrNull!;
+          final numbers = log.revisions.map((r) => r.number).toList();
+          expect(numbers, <int>[2], reason: 'sibling survives, corrupt gone');
+          expect(
+            log.droppedRevisions,
+            1,
+            reason: 'exactly the one re-stamped-checksum record is dropped',
+          );
+        },
+      );
+
+      test(
+        'a re-stamped-checksum, semantically corrupted archive outcome '
+        'is dropped, while the healthy sibling remains readable '
+        '(S-02 — outcome symmetry: same catch-all must guard outcomes)',
+        () async {
+          final store = InMemoryKeyValueStore();
+          final repository = _newRepository(store);
+          final planId = PlanId('plan.1');
+
+          // Two healthy outcomes on disk.
+          final first = _outcome('outcome.a');
+          final second = _outcome('outcome.b');
+          await repository.appendOutcome(first);
+          await repository.appendOutcome(second);
+
+          // Corrupt outcome.a's body in a way the domain decoders reject
+          // with a non-serializer exception (DateTime.parse throws
+          // FormatException on a bad ISO string), then re-stamp the
+          // checksum. This proves the catch-all on the OUTCOMES read path
+          // is what saves the sibling — not the envelope's checksum gate,
+          // which now trusts the body.
+          final corruptKey = LocalPracticePlanRepository.archiveOutcomeKey(
+            planId: planId,
+            outcomeId: first.id,
+          );
+          final raw = store.readString(corruptKey);
+          expect(raw, isNotNull);
+          final envelope = jsonDecode(raw!) as Map<String, dynamic>;
+          final body = envelope['body'] as Map<String, dynamic>;
+          body['recordedAt'] = 'not-a-valid-iso-date';
+          envelope['body'] = body;
+          envelope['checksum'] = _sha256OfCanonicalJson(
+            body as Map<String, Object?>,
+          );
+          await store.writeString(corruptKey, jsonEncode(envelope));
+
+          final archive = await repository.readArchive(planId);
+
+          expect(archive.isSuccess, isTrue);
+          final log = archive.valueOrNull!;
+          final ids = log.outcomes.map((o) => o.id.value).toList();
+          expect(ids, <String>[
+            'outcome.b',
+          ], reason: 'sibling survives, corrupt gone');
+          expect(
+            log.droppedOutcomes,
+            1,
+            reason: 'exactly the one re-stamped-checksum outcome is dropped',
+          );
+        },
+      );
+    });
+
+    group('non-object JSON corruption (S-01)', () {
+      test(
+        'a present-but-non-object active record is a controlled '
+        'StorageFailure, not a first-launch success (S-01, active)',
+        () async {
+          final store = InMemoryKeyValueStore();
+          final repository = _newRepository(store);
+          final p1 = plan();
+          await repository.activateAndReport(p1);
+
+          // Overwrite the active record with each of the three persistence
+          // shapes the bug used to silently treat as "absent" — a list,
+          // a JSON null, and a JSON number. All are valid JSON, none is a
+          // JSON object.
+          for (final corruptValue in <Object?>[<Object?>[], null, 42]) {
+            final activeKey = LocalPracticePlanRepository.activePlanRevisionKey(
+              planId: p1.id,
+              revisionId: p1.activeRevisionId,
+            );
+            await store.writeString(activeKey, jsonEncode(corruptValue));
+
+            final result = await repository.readActivePlan();
+
+            expect(
+              result.isFailure,
+              isTrue,
+              reason:
+                  'present-but-non-object active record ($corruptValue) '
+                  'must be a StorageFailure, never Success(null)',
+            );
+            final failure = result.failureOrNull;
+            expect(failure, isA<StorageFailure>());
+            expect(failure!.code, FailureCode.storageRead);
+            // The cause is a controlled serializer exception with the
+            // stable `notAnObject` code — no persisted raw value escapes.
+            expect(failure.cause, isA<PracticePlanSerializerException>());
+            expect(
+              (failure.cause as PracticePlanSerializerException).code,
+              PracticePlanSerializerErrorCode.notAnObject,
+            );
+            // The redacting log path takes the failure, not the raw
+            // bytes — verify the value was never carried in toString.
+            expect(
+              failure.toString(),
+              isNot(contains(jsonEncode(corruptValue))),
+            );
+          }
+        },
+      );
+
+      test('a present-but-non-object draft is a controlled StorageFailure, '
+          'not a first-launch success (S-01, draft)', () async {
+        final store = InMemoryKeyValueStore();
+        final repository = _newRepository(store);
+        await repository.saveDraft(draftKey: 'main', plan: plan());
+
+        for (final corruptValue in <Object?>[<Object?>[], null, 42]) {
+          final draftKey = LocalPracticePlanRepository.draftStorageKey('main');
+          await store.writeString(draftKey, jsonEncode(corruptValue));
+
+          final result = await repository.readDraft('main');
+
+          expect(
+            result.isFailure,
+            isTrue,
+            reason:
+                'present-but-non-object draft ($corruptValue) must be a '
+                'StorageFailure, never Success(null)',
+          );
+          final failure = result.failureOrNull;
+          expect(failure, isA<StorageFailure>());
+          expect(failure!.code, FailureCode.storageRead);
+          expect(failure.cause, isA<PracticePlanSerializerException>());
+          expect(
+            (failure.cause as PracticePlanSerializerException).code,
+            PracticePlanSerializerErrorCode.notAnObject,
+          );
+          expect(failure.toString(), isNot(contains(jsonEncode(corruptValue))));
+        }
       });
     });
 
@@ -896,4 +1085,27 @@ Future<void> _retuneEnvelope(
   final decoded = jsonDecode(raw!) as Map<String, dynamic>;
   decoded['schemaVersion'] = schemaVersion;
   await store.writeString(key, jsonEncode(decoded));
+}
+
+/// Recomputes the SHA-256 checksum the [PracticePlanSerializer] would
+/// have written for [body] — key-sorted, deterministic canonicalization,
+/// hex digest. Used by the S-02 regression test to *re-stamp* an
+/// envelope's checksum after a semantic mutation, so the read path
+/// cannot fall back to the checksum gate to mask the catch-all.
+String _sha256OfCanonicalJson(Map<String, Object?> body) {
+  // Mirrors `practice_plan_serializer.dart::_canonicalize`: recursively
+  // sort map keys so the JSON encoding is insertion-order-independent.
+  Object? canonicalize(Object? value) {
+    if (value is Map) {
+      final keys = value.keys.map((k) => k.toString()).toList()..sort();
+      return <String, Object?>{for (final k in keys) k: canonicalize(value[k])};
+    }
+    if (value is List) {
+      return <Object?>[for (final item in value) canonicalize(item)];
+    }
+    return value;
+  }
+
+  final canonical = jsonEncode(canonicalize(body));
+  return crypto.sha256.convert(utf8.encode(canonical)).toString();
 }

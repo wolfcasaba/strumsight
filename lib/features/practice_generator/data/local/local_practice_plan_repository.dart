@@ -310,7 +310,14 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         try {
           final decoded = jsonDecode(raw);
           if (decoded is! Map<String, dynamic>) {
-            return const Success<AdaptivePracticePlan?>(null);
+            // A present-but-non-object envelope (list, null, number, …) is
+            // persistence corruption, NOT an absent record. The serializer
+            // has a stable code for this shape; the cause we surface carries
+            // no persisted bytes (the brief §10/S-01 forbids leaking the raw
+            // value into a StorageFailure).
+            throw PracticePlanSerializerException(
+              PracticePlanSerializerErrorCode.notAnObject,
+            );
           }
           final plan = serializer.decodePlanRecord(
             decoded,
@@ -357,7 +364,12 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         try {
           final decoded = jsonDecode(raw);
           if (decoded is! Map<String, dynamic>) {
-            return const Success<AdaptivePracticePlan?>(null);
+            // A present-but-non-object envelope (list, null, number, …) is
+            // persistence corruption, NOT an absent draft (S-01). The cause
+            // we surface carries no persisted bytes.
+            throw PracticePlanSerializerException(
+              PracticePlanSerializerErrorCode.notAnObject,
+            );
           }
           final draft = serializer.decodeDraft(
             decoded,
@@ -534,6 +546,15 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         // A too-new revision cannot be decoded on this build;
         // record-level isolation (A2): drop the one and keep the rest.
         dropped.revisions++;
+      } catch (_) {
+        // Any other decode-time exception (FormatException from
+        // DateTime.parse, ArgumentError from a typed id decoder,
+        // TypeError from a missing field, …) is still record-level
+        // corruption. The healthy sibling must remain readable —
+        // never let one bad body take the whole archive with it
+        // (S-02). The original exception is intentionally swallowed:
+        // the dropped* counter is the only signal the caller gets.
+        dropped.revisions++;
       }
     }
     return out;
@@ -576,6 +597,14 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       } on PracticePlanMigratorException {
         // A too-new outcome cannot be decoded on this build;
         // record-level isolation (A2): drop the one and keep the rest.
+        dropped.outcomes++;
+      } catch (_) {
+        // Any other decode-time exception (FormatException from
+        // DateTime.parse, ArgumentError from a typed id decoder,
+        // TypeError from a missing field, …) is still record-level
+        // corruption. Sibling records remain readable (S-02). The
+        // original exception is intentionally swallowed; the
+        // dropped* counter is the only signal the caller gets.
         dropped.outcomes++;
       }
     }

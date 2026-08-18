@@ -522,6 +522,148 @@ cellán zöld.
 ezek a kör-orchestrátor merge előtti CI-kötelezettségei, nem az implementer
 helyi gate-jei.
 
+### Codex repair after security review (E07-R19 S-01 / S-02, 2026-08-18)
+
+**Biztonsági review által kért kötelező javítások — mindkettő zöld.**
+
+**Módosított fájlok:**
+
+- `lib/features/practice_generator/data/local/local_practice_plan_repository.dart`
+- `test/features/practice_generator/data/local_repository_test.dart`
+- ez a brief (§10 handoff)
+
+**S-01 — csak a hiányzó storage key legyen `Success(null)`.**
+
+A `readActivePlan` és a `readDraft` a `decoded is! Map<String, dynamic>` esetén
+korábban `const Success<AdaptivePracticePlan?>(null)`-t adott, ami
+összetéveszthető volt az első indítással. A javítás:
+`throw PracticePlanSerializerException(PracticePlanSerializerErrorCode.notAnObject);`
+a már meglévő `on PracticePlanSerializerException` `try`-blokkon belül — így
+a StorageFailure-vé alakítás az eddig is használt úton történik, és a
+`StorageFailure.cause`-ként az exception megy tovább, **NEM a persistált nyers
+érték** (a `PracticePlanSerializerException` csak `code` + `field` mezőt hordoz,
+a raw `[]` / `null` / `42` soha nem jelenik meg a `failure.toString()`-ban —
+ezt a teszt explicit ellenőrzi).
+
+Regressziós cellák (kettő, ahogy a review kérte):
+- `non-object JSON corruption (S-01) / a present-but-non-object active record
+  is a controlled StorageFailure, not a first-launch success (S-01, active)` —
+  végigmegy a `[]`, `null`, `42` három alakján, mind a háromra:
+  `Failure<AdaptivePracticePlan?>(StorageFailure(code: storageRead,
+  cause: PracticePlanSerializerException(code: notAnObject)))`, és a
+  `failure.toString()` nem tartalmazza a `jsonEncode(corruptValue)`-t.
+- `non-object JSON corruption (S-01) / a present-but-non-object draft is a
+  controlled StorageFailure, not a first-launch success (S-01, draft)` —
+  ugyanaz a draft kulcsra.
+
+**S-02 — a per-record catch a teljes dekódolási kivételt lezárja.**
+
+Az `_readRevisions` és `_readOutcomes` per-rekord `try` blokkja korábban csak
+`PracticePlanSerializerException`-t és `PracticePlanMigratorException`-t kapott
+el — a domain dekóder `DateTime.parse` → `FormatException`,
+`PlanId.fromJson`/`RevisionId.fromJson`/`OutcomeId.fromJson` →
+`ArgumentError`, illetve egyéb `TypeError` mind a `_runRead` globális
+`catch`-ágáig jutott, és az EGÉSZ archív olvasás `StorageFailure`-szel tért
+vissza, a többi (egészséges) rekord elveszett.
+
+A javítás: minden per-rekord `try` után `catch (_)` ág, ami a `dropped.*`
+számlálót növeli; az eredeti kivétel elnyelve, mert a `dropped*` az egyetlen
+jel, amit a hívó kap (a StorageFailure-t NEM a per-rekord szinten
+állítjuk elő — az index-szintű hiba továbbra is controlled plan-level failure,
+az A2 invariáns és a brief §5.2 értelmében).
+
+Regressziós cellák (a review egy re-stamped-checksum, szemantikailag sérült
+body + egészséges sibling tesztet kért; a szimmetria kedvéért kettőt adtam):
+- `record-level corruption containment (A2) / a re-stamped-checksum,
+  semantically corrupted archive revision is dropped, while the healthy
+  sibling remains readable (S-02 — record-level isolation over any decode
+  exception)` — két revision; revision.1 `body['createdAt']` mezőjét
+  `'not-a-valid-iso-date'`-re állítjuk, a checksumot a `_sha256OfCanonicalJson`
+  segédfüggvénnyel újraszámoljuk (a serializer `_canonicalize` + SHA-256
+  reprodukálása), majd a beolvasás `Success`, csak revision.2 maradt,
+  `droppedRevisions == 1`. A régi kód ezen a teszten az egész archívot
+  `StorageFailure`-szel tenné elérhetetlenné.
+- `record-level corruption containment (A2) / a re-stamped-checksum,
+  semantically corrupted archive outcome is dropped, while the healthy
+  sibling remains readable (S-02 — outcome symmetry: same catch-all must
+  guard outcomes)` — ugyanez outcome-okra; `body['recordedAt']` corrupt, a
+  kód útja szimmetrikus, de a teszt ezt explicit méri (`droppedOutcomes == 1`).
+
+A `_sha256OfCanonicalJson` segédfüggvény a serializer belső
+`_canonicalize` + `crypto.sha256.convert` mintáját másolja (a
+`_computeChecksum` privát, ezért a tesztben reprodukáljuk); a segéd csak a
+S-02 regressziós cellákhoz kell, semmi mást nem változtat.
+
+**Invariánsok őrei (a brief „Ne lazíts tesztet, ne nyelj el hibát globálisan,
+és ne módosíts immutable revisiont"):**
+
+- A per-rekord `catch (_)` CSAK a `_readRevisions` és `_readOutcomes` ciklus-
+  testén belül van; a `_runRead` / `_runWrite` globális `catch (e, stackTrace)`
+  ágai érintetlenek, NEM lettek kiterjesztve. Az index-szintű hiba továbbra
+  is `StorageFailure`-ként terjed.
+- Az immutábilis revisiont a kód nem írja felül: a `serializer.encodeRevisionRecord`
+  meghívása megmaradt, a checksum-recompute csak a teszt-oldali segédben
+  történik (a teszt ír közvetlenül a `store.writeString`-gel egy
+  manipulált envelope-ot, az appendix nem hívódik erre a rekordra).
+- A `StorageFailure.cause` a `PracticePlanSerializerException` (csak `code` +
+  `field`), a perzisztált nyers érték sehol nem jelenik meg — ezt a teszt a
+  `failure.toString() isNot(contains(jsonEncode(corruptValue)))` sorral
+  méri.
+
+**Lefuttatott parancsok és tényleges eredmények:**
+
+1. `dart format test/features/practice_generator/data/local_repository_test.dart`
+   — **Formatted 1 file (1 changed) in 0.03 seconds** (első futáskor a
+   szerkesztés után a gate kijelezte; a manuális `dart format` hívás
+   kijavította, a gate második futás `0 changed`).
+2. `tools/round-gate.sh test/features/practice_generator/data/local_repository_test.dart
+   test/features/practice_generator/data/practice_plan_migrator_test.dart`
+   — kilépési kód **0**, **MINDEN GATE ZÖLD**:
+   - `format`: **Formatted 1604 files (0 changed)** — zöld.
+   - `analyze`: **No issues found! (ran in 5.0s)** — zöld. (Két `const_with_non_const`
+     hiba az első menetben a `const PracticePlanSerializerException(...)`
+     miatt; a `PracticePlanSerializerException` konstruktora nem `const`,
+     a `const` kulcsszót levettük, a hiba megszűnt.)
+   - `test test/features/practice_generator/data/local_repository_test.dart`:
+     **+31 All tests passed!** (a korábbi 27-ről 31-re bővült: 2 új S-01
+     cella, 2 új S-02 cella — 1-1 a review-kért teszt + 1-1 szimmetria).
+   - `test test/features/practice_generator/data/practice_plan_migrator_test.dart`:
+     **+10 All tests passed!** — zöld, a migrátor nem módosult.
+   - `architecture`: **Architecture dependencies OK (12 allowlisted
+     deviation(s)).** — zöld.
+   - `secrets`: **Secret scan OK (2827 file(s) scanned, 0 finding(s)).** — zöld.
+   - `l10n`: **L10n parity OK (en → hu, 1276 message(s)).** — zöld.
+3. `git diff --stat` — 2 módosított fájl, mindkettő az `allowed_paths`
+   listán: `local_practice_plan_repository.dart` (33 sor), `local_repository_test.dart`
+   (~210 sor hozzáadva). A `serializer.dart`, `migrator.dart`, `public.dart`,
+   `practice_plan_migrator_test.dart` NEM módosultak. A
+   `git diff --stat` kimenete:
+
+   ```
+   .../data/local/local_practice_plan_repository.dart | 33 +++--
+   .../data/local_repository_test.dart                | 210 +++++++++++++++++++++
+   2 files changed, 211 insertions(+), 32 deletions(-)
+   ```
+
+**Subagent self-review (§0.0.4 motor-preambulumból):** szinkron, `run_in_background: false`,
+`general-purpose` alügynök futott a brief, a `git diff --stat` és a termelési
+kód átolvasásával. Három kérdésre válaszolt (scope, acceptance, handoff) —
+**Scope: PASS**, **S-01: PASS** (mind az 5 assert: isFailure, isA<StorageFailure>,
+`code == storageRead`, `cause is PracticePlanSerializerException` `code ==
+notAnObject`, és a `failure.toString()` nem tartalmazza a raw value-t),
+**S-02: PASS** (a per-rekord `catch (_)` mindkét útvonalon jelen van, a
+re-stamp helper a `crypto.sha256.convert`-et használja, a teszt a healthy
+siblinget olvassa és `droppedRevisions == 1`-t állít). A WARN-ok: a S-02
+fix outcome-szimmetriáját is teszteljük (zártam a rést); a comment-ek
+stíluskonzisztenciája (aktív cella `§10/S-01`-et idéz, draft csak `S-01`-et —
+kozmetikai, mindkettő helyes). A második gate-futtatás a review után is
+minden cellán zöld.
+
+**Nem futtatott ellenőrzések:** teljes Flutter suite, property gate és CI/APK;
+ezek a kör-orchestrátor merge előtti CI-kötelezettségei, nem az implementer
+helyi gate-jei. A round-gate.sh ezen a boxon 7 lépésben zöld (a fenti 1–7
+felsorolás), a CI a §7 / ADR 0053 szerinti bővített csomagot futtatja.
+
 ## 11. Review — a Claude tölti ki
 
 ## 11. Review — a Claude tölti ki
