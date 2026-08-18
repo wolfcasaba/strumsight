@@ -2,29 +2,26 @@
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-16
-> (E07-R15 done — domain-pure, deterministic WeeklyScheduler with daily focus,
-> rest/unavailable, high-load, bounded-review and signed song-target performance
-> guards; independent review + security PASS, Full Gate and Router CI exact-SHA
-> green, PR #294. Prior: E07-R14 done — five typed daily time budgets,
-> deterministic hard-limit / policy allocation, micro-plan and typed shorten/extend
-> change sets; independent review, Full Gate and Router CI exact-SHA green, PR #288.
-> The E07-R15 H3 self-heal
-> narrowed its brief scope to the shared scheduling-fixture directory with an
-> executable scope-audit regression guard; the subsequent H7 self-heal made the
-> signed target-date performance boundary explicit and added its brief-contract
-> regression guard (PR #290, Router CI exact-SHA green). A repeated H7 then
-> exposed that resumed branches were not required to integrate that merged
-> brief before review; the pipeline prompt now gates repair/review on measured
-> `origin/main` ancestry (HEAL E07-R15/H7, upstream-sync). Its product round
-> may now restart.) Prior:
-> E07-R10 merged — the canonical, immutable, revisioned `AdaptivePracticePlan`
-> domain model: `PracticeDay`/`PracticeBlock` with a shared, pinned
-> `PracticeItemStatus` transition contract, monotonic `PlanRevision` full
-> snapshots, structured `PlanChangeSet` diffs, and a `PracticePlanSummary` DTO
-> that structurally excludes learner free text. Both the independent review
-> (1 MINOR, fixed) and the mandatory security review (`risk = "high"`) closed
-> clean — see §2 for detail.)**
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-18
+> (E07-R16 done — bounded, evidence-based progression/regression policy for
+> the AI Practice Generator: centralized `ProgressionPolicy` bounds
+> (one-step-max adaptation, tempo clamp, cooldown, minimum evidence),
+> discomfort/safety always blocks advance regardless of performance,
+> repeated-struggle-only regression (a single weak session is noise),
+> immediate "too hard" self-report override, every decision
+> evidence-referenced; independent review + security PASS, Full Gate and
+> Router CI exact-SHA green, PR #295. Prior: E07-R15 done — domain-pure,
+> deterministic WeeklyScheduler with daily focus, rest/unavailable,
+> high-load, bounded-review and signed song-target performance guards;
+> independent review + security PASS, Full Gate and Router CI exact-SHA
+> green, PR #294. The E07-R15 H3 self-heal narrowed its brief scope to the
+> shared scheduling-fixture directory with an executable scope-audit
+> regression guard; the subsequent H7 self-heal made the signed target-date
+> performance boundary explicit and added its brief-contract regression
+> guard (PR #290, Router CI exact-SHA green); a repeated H7 then exposed
+> that resumed branches were not required to integrate that merged brief
+> before review, so the pipeline prompt now gates repair/review on measured
+> `origin/main` ancestry (HEAL E07-R15/H7, upstream-sync).)**
 
 > ## ✅ [E07-R11] KÉSZ — PlanValidator és korlátos deterministic repair (2026-08-16)
 >
@@ -929,6 +926,13 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-18):** `main` @ `2dabfd9f` — E07-R16 progression
+policy, PR [#295](https://github.com/wolfcasaba/strumsight/pull/295),
+squash-merge. Exact `b72408ca`: Full Gate
+[32117512693](https://github.com/wolfcasaba/strumsight/actions/runs/32117512693)
++ Router CI [32117514820](https://github.com/wolfcasaba/strumsight/actions/runs/32117514820)
+success; post-merge célzott gate zöld.
+
 **Aktuális állapot (2026-08-16):** `main` @ `7f4be792` — E07-R15
 WeeklyScheduler, PR [#294](https://github.com/wolfcasaba/strumsight/pull/294),
 squash-merge. Exact `e100564d`: Full Gate
@@ -1319,6 +1323,21 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R16 — Progression és regression policy** (PR
+[#295](https://github.com/wolfcasaba/strumsight/pull/295), squash `2dabfd9f`,
+[ADR 0265](docs/adr/0265-bounded-evidence-based-difficulty-adaptation.md)).
+Domain-pure `AdaptationDecider`: centralizált `ProgressionPolicy` (max egy
+nehézségi fok/lépés, tempo-clamp, cooldown, minimum evidence — mind egy
+helyen), discomfort/biztonsági blokk a teljesítménytől függetlenül, csak
+ismételt küzdelem okoz regressziót, explicit „túl nehéz" self-report azonnali
+regressziót ad a küszöb megkerülésével, minden döntés stabil evidence-
+hivatkozást hordoz. Review APPROVED (0 BLOCKER/MAJOR, 1 MINOR follow-up, 4
+NOTE); security PASS (0 CRITICAL/BLOCKER/MAJOR/MINOR, 2 NOTE). A kötelező
+valódi-sértés próba (2 lépéses ugrás engedélyezése) az A1 cellát ténylegesen
+pirosra vitte, majd állandó regressziós tesztté vált. Exact `b72408ca`: Full
+Gate + Router CI success; post-merge gate zöld. `practiceGeneratorEnabled`/
+`plannerAssistEnabled` változatlanul `false`, nulla production hívó.
 
 **E07-R15 — WeeklyScheduler és terhelésrotáció** (PR
 [#294](https://github.com/wolfcasaba/strumsight/pull/294), squash `7f4be792`,
@@ -1937,14 +1956,15 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R16** (Chapter 8, progression és regression
-policy). A friss session pre-flightban mérje újra az E07-R15 scheduler contractját,
-különösen a signed song-target performance boundaryt. A `practiceGeneratorEnabled`
-és `plannerAssistEnabled` flagek változatlanul `false` maradnak.
+**A soron következő SDD-lépés: E07-R17** (Chapter 8, spaced-repetition
+policy, `docs/rounds/e07-r17-spaced-repetition.md`). A friss session
+pre-flightban mérje újra az E07-R16 `ProgressionPolicy`/`AdaptationDecider`
+contractját, különösen a discomfort-blokk és a cooldown határait. A
+`practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
+`false` maradnak.
 
-**Korábbi kijelölt SDD-kör (2026-08-16, azóta lezárult): E07-R10 —
-AdaptivePracticePlan, day, block és revision domain** (Chapter 8, Kör 10).
-Lásd §5.
+**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R16 —
+Progression és regression policy** (Chapter 8, Kör 16). Lásd §5.
 
 **Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
 completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"
