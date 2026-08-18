@@ -1,5 +1,12 @@
 # HANDOFF — StrumSight 🎸
 
+> **E07-R19 KÉSZ — PR #303, `2ce22f3b` (2026-08-18).** A local plan
+> repository elkülönített draft/active/archive névterekkel, checksumos
+> rekord-szintű korrupció-containmenttel, v0→v1 migrációval és korlátos
+> történettel merge-elve. A független review és security re-review APPROVED;
+> Full Gate exact-SHA: `32147063069`, Router CI exact-SHA: `32148470452`.
+> Következő kör: E07-R20, új sessionben.
+
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-18
