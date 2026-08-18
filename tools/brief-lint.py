@@ -289,7 +289,13 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
     # brief-útvonal minden briefben szerepel, tehát trivilálisan teljesülne —
     # egy mindig zöld szabály leszoktat az olvasásáról (ugyanaz a hibaosztály,
     # amit a falszifikációs cella hamis pozitívjainál már mértünk).
-    if not re.search(r"(visszakeresett előzmény|nincs releváns előzmény)", text, re.I):
+    # ...és CSAK NYITOTT körre: egy lezárt kör briefje történelem, a
+    # visszakeresés viszont a pre-flight kötelezettsége. Enélkül a szabály
+    # visszamenőleg adna leletet a `done` körökre (mérve: E06-R10 briefje).
+    round_status = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(brief.task_id, "")
+    if round_status != "done" and not re.search(
+        r"(visszakeresett előzmény|nincs releváns előzmény)", text, re.I
+    ):
         findings.append(
             Finding(
                 "strict",
