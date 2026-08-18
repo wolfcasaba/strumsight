@@ -1,5 +1,25 @@
 # HANDOFF — StrumSight 🎸
 
+> **E99-R14 KÉSZ — GOV-08 motor-override lejárat és motor-statisztika** — PR
+> [#317](https://github.com/wolfcasaba/strumsight/pull/317), squash
+> `52200a81` (2026-08-18). Az `engine-profile.sh use` TTL-t és indoklást
+> tároló, háromsoros override-formátumot kapott, miközben a régi egysoros
+> forma változatlanul olvasható. A driver lejárt override-nál töröl, a
+> motornevet megtartó audit/ntfy üzenetet ír; lejárat nélküli, 72 órásnál
+> idősebb override-nál naponta legfeljebb egy értesítést küld. A
+> `round-metrics.py --engines --epic` immár chain.log-alapú mintaszámot,
+> mediánt, átlagot, kiugrót és önjavítást mutat motoronként.
+>
+> A [független review](docs/reviews/e99-r14-review.md) APPROVED: M1–M5
+> (epic-szűrés, izolált falszifikáció, egyetlen valódi kiértékelési út,
+> hermetikus driver-teszt, lejárt motor auditálhatósága) zárva. Exact-SHA:
+> Full Gate [32197051577](https://github.com/wolfcasaba/strumsight/actions/runs/32197051577)
+> és Router CI [32197078395](https://github.com/wolfcasaba/strumsight/actions/runs/32197078395)
+> success a `9fdf556e` fejen; post-merge gate a `52200a81` mainen is zöld.
+> A teljes tooling-suite az izolált projekt pytest-környezetben `527 passed,
+> 1 skipped, 560 subtests passed`; a rendszer `/usr/bin/python3` interpreter
+> nem tartalmaz `pytest` modult. Következő kör: **E99-R15**, új sessionben.
+
 > **E07-R23 KÉSZ — PlanCompiler és Practice Engine végrehajtás** — PR
 > [#316](https://github.com/wolfcasaba/strumsight/pull/316), squash
 > `d02718fb` (2026-08-18). `PlanCompiler` egy validált terv-blokkot fordít

@@ -6,6 +6,28 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E99-R14 (GOV-08) — Lejáró motor-override és motor-statisztika (2026-08-18)
+
+PR [#317](https://github.com/wolfcasaba/strumsight/pull/317), squash
+`52200a81`. Az ADR 0307 §1 három mérhető védelmet kapott: (1) a
+`tools/engine-profile.sh use <motor> [--ttl <óra>] [--reason <szöveg>]`
+`engine=`/`expires_at=`/`reason=` formátumot ír, de a régi egysoros override
+is él; (2) a kör-kiválasztási út lejárt override-ot töröl és a motornevet
+megőrző audit/ntfy eseményt küld, az expiry nélküli 72+ órás fájlt pedig csak
+figyelmezteti; (3) `tools/round-metrics.py --engines --epic` kizárólag a
+chain.log-ból számít motoronkénti köridőt és önjavítást, a 10 órán túli
+kiugrók nélkül.
+
+A független review M1–M5 leleteket zárt: az epic-szűrés valódi, a
+falszifikációk már nem írnak tracked forrást, nincs teszthorog-duplikáció,
+az ambiens driver-env upstream hermetikus, és a lejárt motor neve nem vész el
+törléskor. Exact `9fdf556e`: Full Gate
+[32197051577](https://github.com/wolfcasaba/strumsight/actions/runs/32197051577)
+és Router CI
+[32197078395](https://github.com/wolfcasaba/strumsight/actions/runs/32197078395)
+success; post-merge gate zöld. A tooling-suite az izolált pytest-környezetben
+`527 passed, 1 skipped, 560 subtests passed`.
+
 ## ✅ HEAL E07-R21/H2 — brief saját ADR 0266-glosszája volt téves (2026-08-18)
 
 Az E07-R21 pre-flightja H2-vel halt: a brief frontmatterje „nincs automatikus
