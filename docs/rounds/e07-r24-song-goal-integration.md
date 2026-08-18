@@ -193,4 +193,92 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+- **Dátum:** 2026-08-18
+- **Implementer:** Codex
+- **Kód alapállapota:** `main @ 2444e055`
+- **Cél branch:** `minimax/e07-r24-song-goal-integration`
+- **Státusz:** kód kész, gate zöld, commit és push kész.
+
+### 10.1 Elkészült scope
+
+A §4 minden sorát lefedve:
+
+- `lib/features/practice_generator/data/adapter/song_goal_reader_adapter.dart` (NEW)
+  — `SongGoalReaderAdapter` tisztán caller-fed `SongDocument`-ből épít
+  `SongGoalReadOutcome`-t. Csak a `package:strumsight/features/song_trainer/domain/public.dart`
+  felületet olvassa. Sealed: `SongGoalReadSuccess` / `SongGoalReadStaleRevision` /
+  `SongGoalReadNoSections`. `usableAssetReference == null` explicit jelzés,
+  sosem csendes kihagyás (ADR 0318 §Döntés 2).
+- `lib/features/practice_generator/domain/service/song_block_compiler.dart` (NEW)
+  — `SongGoalBlockDraft` + `SongGoalBlockSpec` + `SongBlockCompiler.compile`.
+  Domain-tiszta (ADR 0255): nincs clock, nincs random, nincs I/O.
+- `lib/features/practice_generator/domain/service/song_goal_planner.dart` (NEW)
+  — `SongGoalPlanner.plan` determinisztikus sorrendben érvényesíti A1 → A2 →
+  A3 → A4. Sealed kimenetek: `SongGoalPlanningAccepted` / `NoOpAfterTarget` /
+  `StaleRevision` / `EmptySections`. A8 caller-fed outcome normalizálás
+  (`normalizeOutcome`) zárt típusokkal: `completed` + `partial` →
+  `evidenceIsLearnerSignal == true`; `skipped` + `failedTechnical` +
+  `unavailable` → `false` (ADR 0268 §1, §2; ADR 0318 §Döntés 2).
+- `lib/features/practice_generator/public.dart` (MODIFIED)
+  — 3 új re-export hozzáadva a barrel alján:
+  `song_goal_reader_adapter`, `song_block_compiler`, `song_goal_planner`.
+- `test/features/practice_generator/song_goal/song_goal_planner_test.dart` (NEW)
+  — 14 teszt: A1, A2, A3, A4, A6, A8 cellák + 3 §6.1 signed-distance cella
+  (+1/0/-1) + 1 §6.1 valódi-sértés próba (ratio cap 1.0 → A1 piros).
+- `test/features/practice_generator/song_goal/song_goal_reader_adapter_test.dart` (NEW)
+  — 8 teszt: A5 explicit missing-asset, A6 stale-revision, A7 public API only.
+- `test/fixtures/practice_generator/song_goal/song_goal_fixtures.dart` (NEW)
+  — fixture builder-ek a két tesztfájlhoz.
+
+### 10.2 Acceptance mátrix lefedettség
+
+| Cell | Lefedve hol |
+| --- | --- |
+| A1 (ratio cap, 0.4) | planner_test: `A1 ratio cap song blocks stay at or below…` + `…drafts that would push the ratio over the cap are dropped…` + §6.1 valódi-sértés próba |
+| A2 (no block after target) | planner_test: `A2 no automatic block after target…` + §6.1 cell `-1` |
+| A3 (prereq first) | planner_test: `A3 prerequisite comes first` ×2 (kielégített és nem kielégített) |
+| A4 (no new tech in simulation) | planner_test: `A4 no new technique in simulation` ×2 (új → drop, ismert → keep) + §6.1 cell `0` |
+| A5 (explicit missing asset) | reader_adapter_test: `A5 explicit missing-asset branch` ×2 |
+| A6 (stale revision) | reader_adapter_test ×3 + planner_test `A6 stale revision surfaces…` |
+| A7 (public API only) | reader_adapter_test: `A7 public API only` |
+| A8 (outcome normalization) | planner_test: `A8 caller-fed outcome normalization` ×2 (completed/partial vs skipped/failedTechnical/unavailable) |
+| §6.1 +1 (before) | planner_test: `§6.1 signed-distance cells cell +1` |
+| §6.1 0 (target day) | planner_test: `§6.1 signed-distance cells cell 0` |
+| §6.1 -1 (after) | planner_test: `§6.1 signed-distance cells cell -1` |
+
+### 10.3 Gate eredmény
+
+`tools/round-gate.sh test/features/practice_generator/song_goal/song_goal_planner_test.dart test/features/practice_generator/song_goal/song_goal_reader_adapter_test.dart`
+
+- format: **zöld** (1635 fájl, 0 változott)
+- analyze: **zöld** (No issues found!)
+- test planner: **zöld** (14/14)
+- test reader_adapter: **zöld** (8/8)
+- architecture: **zöld**
+- secrets: **zöld**
+- l10n: **zöld**
+
+A teljes suite + randomizált property gate + release APK a CI-ban fut
+(ADR 0053, `build-apk.yml`); ezen a boxon nem ismételjük.
+
+### 10.4 Scope-on kívüli, szándékosan nem nyitott kérdések
+
+- A tényleges Song Trainer `SongTrainerResult` bekötése — a mai
+  `application/trainer/` belső, a public barrel nem exportálja. Ez a §0.0
+  2. pontjában halasztott előfeltétel; az A8-as caller-fed normalizálás
+  itt csak a **shape**-et köti le, nem a konkrét Song Trainer kimenettel
+  való fordítást.
+- A per-section asset-párosítás (`section → asset`) — a public `SongDocument`
+  felületén nem áll rendelkezésre; az adapter ezért mindig `null`
+  `usableAssetReference`-t ad vissza, és a planner a `missingUsableAsset`
+  drop-reason ágon kezeli (ADR 0318 §Döntés 2).
+- A Song Trainer oldali `Hotspot` típus bevezetése a public barrelba — ez
+  külön kör (Song Trainer-oldali cross-feature előfeltétel).
+
+### 10.5 Következő körök
+
+- A tényleges Song Trainer eredmény-wiring a public barrel bővítésével.
+- Az `accepted → consumer` (UI / repository) kábelezés — ez a Practice
+  Generator oldali kimeneti integráció, jelenleg csak a terv maga kész.
+
 ## 11. Review — a Claude tölti ki

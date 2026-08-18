@@ -75,3 +75,6 @@ export 'domain/service/review_queue.dart';
 export 'domain/service/time_budget_allocator.dart';
 export 'domain/service/weekly_scheduler.dart';
 export 'data/adapter/practice_engine_catalog_adapter.dart';
+export 'data/adapter/song_goal_reader_adapter.dart';
+export 'domain/service/song_block_compiler.dart';
+export 'domain/service/song_goal_planner.dart';
