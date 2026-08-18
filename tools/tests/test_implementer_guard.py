@@ -146,6 +146,8 @@ class ImplementerGuardTest(unittest.TestCase):
             "git push origin HEAD:branch --force",
             "pip install pytest",
             "git -C /home/ubuntu/music-theory checkout main",
+            "codex login --with-api-key",
+            "CODEX_HOME=~/.codex codex login --api-key $RAG_OPENAI_API_KEY",
         )
         for command in forbidden:
             with self.subTest(command=command):

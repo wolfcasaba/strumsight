@@ -1,0 +1,102 @@
+"""A tudás-RAG darabolójának és frissesség-őrének mérése (ADR 0310).
+
+A RAG értéke a VISSZAKERESHETŐSÉG, ezért a teszt nem a modellt méri, hanem azt,
+amit gépileg lehet: a chunk-határokat, a korpusz-lefedettséget és azt, hogy az
+elavult index elavultnak LÁTSZIK-e (mérve 2026-08-18: a régi kód-index három
+hete állt, 168 fájlt ismert a 918-ból, és ezt semmi nem jelezte).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+TOOL = REPO_ROOT / "tools" / "knowledge-rag.mjs"
+
+
+def node(*args: str, cwd: Path | None = None, env: dict | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["node", str(TOOL), *args],
+        capture_output=True,
+        text=True,
+        cwd=str(cwd or REPO_ROOT),
+        env={**os.environ, **(env or {})},
+        timeout=600,
+    )
+
+
+@unittest.skipUnless(shutil.which("node"), "nincs node ezen a futón")
+class KnowledgeRagTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.index_dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        # Kulcs nélkül futunk: a BM25-ág mérhető hálózat nélkül.
+        self.env = {"RAG_INDEX_DIR": str(self.index_dir), "OPENAI_API_KEY": ""}
+
+    def test_every_lesson_becomes_its_own_chunk(self) -> None:
+        """A leckék száma a chunkok alsó korlátja — egy lecke nem olvadhat a szomszédjába."""
+        lessons = (REPO_ROOT / "docs" / "LESSONS.md").read_text(encoding="utf-8")
+        expected = lessons.count("\n## L")
+        result = node("--bm25", "--corpus", "lessons", "--top", "1", "--json", "lecke", env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        self.assertTrue(hits, "a lecke-korpusz üres")
+        self.assertTrue(hits[0]["id"].startswith("lessons/L"), hits[0]["id"])
+        self.assertGreater(expected, 300, "a lecke-marker konvenció megváltozott")
+
+    def test_a_measured_lesson_is_retrievable_by_its_own_words(self) -> None:
+        """L313 (ambiens PIPELINE_* szivárgás) — pont az az eset, amit a RAG-nak fognia kell."""
+        result = node(
+            "--bm25", "--corpus", "lessons", "--top", "8", "--json",
+            "PIPELINE_ORCH_SWAP_ENGINE driver teszt os.environ örökölte",
+            env=self.env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        ids = [hit["id"] for hit in json.loads(result.stdout)]
+        self.assertIn("lessons/L313", ids, f"a mért lecke nincs a top-8-ban: {ids}")
+
+    def test_the_code_corpus_covers_the_live_tree_not_a_stale_snapshot(self) -> None:
+        """MÉRVE: a régi kód-index 168 fájlt ismert a 918-ból, három hete."""
+        result = node("--bm25", "--corpus", "code", "--top", "3", "--json", "PlanValidator", env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        self.assertTrue(hits, "a kód-korpusz nem ad találatot a friss fára")
+        self.assertTrue(
+            any(hit["file"].startswith("lib/") or hit["file"].startswith("test/") for hit in hits),
+            [hit["file"] for hit in hits],
+        )
+
+    def test_stat_reports_a_missing_index_instead_of_pretending(self) -> None:
+        result = node("--stat", env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("MÉG NEM ÉPÜLT", result.stdout)
+
+    def test_stat_flags_an_index_built_on_an_older_commit(self) -> None:
+        """Az elavult index a legveszélyesebb: magabiztos, de régi választ ad."""
+        (self.index_dir / "index.json").write_text(
+            json.dumps({
+                "meta": {"model": "text-embedding-3-small", "updatedAt": "2026-07-28T19:11:07Z",
+                          "commit": "0" * 40, "chunks": 310, "counts": {"code": 310}},
+                "entries": {},
+            }),
+            encoding="utf-8",
+        )
+        result = node("--stat", env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ELAVULT", result.stdout)
+
+    def test_search_degrades_to_bm25_without_a_key_instead_of_failing(self) -> None:
+        result = node("--corpus", "adr", "--top", "2", "--json", "zöld kapu", env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(json.loads(result.stdout))
+
+
+if __name__ == "__main__":
+    unittest.main()
