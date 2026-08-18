@@ -3,7 +3,7 @@
 **Dátum:** 2026-08-18
 **Reviewer:** független security-reviewer, izolált klón
 **Implementer:** MiniMax
-**Verdikt:** CHANGES REQUESTED
+**Verdikt:** APPROVED (re-review: `0758a2a0`)
 
 ## Mérések
 
@@ -29,7 +29,8 @@
 - **Kötelező javítás:** csak a hiányzó storage-kulcs maradhat `Success(null)`;
   minden jelen lévő, nem objektum envelope `StorageFailure` legyen. Adj
   aktív- és draft-regressziós tesztet.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`0758a2a0`), a re-review az aktív és draft `[]`,
+  `null`, `42` celláit, a redacted hibakódot és a nyers érték hiányát mérte.
 
 ### S-02 — MAJOR — egy szemantikailag sérült archív rekord az egész archívot elviheti
 
@@ -44,9 +45,12 @@
   kivétel legyen az adott rekord eldobása; az index-szintű sérülés maradjon
   kontrollált plan-szintű hiba. Adj re-stamped checksumos sérült body + ép
   sibling regressziós cellát.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`0758a2a0`), a re-review checksum-re-stamped,
+  szemantikailag sérült revision- és outcome-body mellett is mérte az ép
+  sibling túlélését és az egyes dropped számlálókat.
 
 ## Merge-döntés
 
-S-01 és S-02 nyitott MAJOR, ezért merge tilos a javítás, független re-review
-és exact-SHA CI utánig.
+S-01 és S-02 lezárva. A security re-review nem talált új BLOCKER, MAJOR vagy
+MINOR leletet. A merge-t az exact-SHA Full Gate és Router CI zöld eredménye
+engedi.

@@ -3,7 +3,7 @@
 **Dátum:** 2026-08-18  
 **Reviewer:** Codex / gpt-5.6-terra (orchestrátor)  
 **Implementer:** MiniMax, majd a kör korábbi javításai  
-**Verdikt:** CHANGES REQUESTED
+**Verdikt:** APPROVED
 
 ## Elvégzett mérések
 
@@ -57,7 +57,6 @@ próba ezt közvetlenül ismét megmérte.
 
 ## Merge-döntés
 
-A security review két nyitott MAJOR-t talált (`e07-r19-security.md`, S-01 és
-S-02), ezért merge tilos. A következő MiniMax javító körnek a leleteket és a
-regressziós celláikat kell lezárnia; ezután teljes újra-review és exact-SHA
-CI szükséges.
+A security re-review (`e07-r19-security.md`) S-01-et és S-02-t a
+`0758a2a0` javításon lezárta. Nincs nyitott BLOCKER vagy MAJOR; a merge az
+exact-SHA Full Gate és Router CI zöld eredményétől függ.
