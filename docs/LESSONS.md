@@ -11814,3 +11814,77 @@ termelési viselkedés, és pontosan az az „elfelejtett, sosem lejáró overri
 minta, amit maga az E99-R14 D1/D2 a `.pipeline/engine-override` FÁJLRA kíván
 kezelni. A crontab-sor tartalmi/governance kérdés, ezt a self-heal — a
 mandátuma szerint a legkisebb javításra szorítkozva — nem módosította.
+
+## L314 — A Codex CLI OAuth refresh tokenje „already used" 401-re fordult minden `~/.codex` hívásra; a self-heal a boxon frissen megjelent API-kulccsal állította helyre, VALÓDI `codex exec` hívással bizonyítva (E99-R14 H6, egyúttal E07-R23 H6, 2026-08-18)
+
+**Tünet.** Két, egymástól független kör állt le percen belül ugyanazzal a
+mintával. Az E99-R14 (GOV-08) saját, review M5 leletét záró **kötelező
+Codex-javító köre** (`/home/ubuntu/ss-codex-e99-r14-repair`, branch
+`minimax/e99-r14-engine-policy-measured`) az eredeti kísérlet + 2 automatikus
+folytatás után is jelzés nélkül halt el (`.codex-round-status`:
+`status=unknown`, `summary=a Codex lezáró jelzés nélkül lépett ki (exit 1)`,
+`continuations=2`) → HALT H6 20:47:38-kor. Hat másodperccel az erre indított
+önjavítás elindulása UTÁN (20:50:02) egy MÁSIK, tőle független kör, az
+E07-R23 (implementer=codex) is H6-tal állt le ugyanazzal a tünettel
+(`status=unknown` 3 kísérlet után) — 20:50:08-kor.
+
+**Mérés.** A megállt kör naplója NEM az összegző mondatot, hanem a nyers
+kimenetet adta bizonyítéknak: mindkét kör Codex-alfolyamatának logja
+(`/tmp/codex-e99-r14-m5.log`, `/tmp/codex-e07-r23.log`) azonos hibát
+tartalmazott, percre egyező időbélyeggel:
+
+```
+ERROR codex_login::auth::manager: Failed to refresh token: 401 Unauthorized: {
+  "error": { "message": "Your refresh token has already been used to
+  generate a new access token. Please try signing in again.",
+  "code": "refresh_token_reused" } }
+ERROR codex_models_manager::manager: … auth error: 401, auth error code: token_expired
+```
+
+A `~/.codex/auth.json` (utolsó módosítás 2026-08-01, tehát 17 napig
+változatlan) refresh tokenjét egy MÁSIK folyamat már felhasználta egy új
+access token generálására — az OAuth-szerver ezután minden újrahasználati
+kísérletet elutasít. Mivel MINDEN `engine=codex` sor (és az E99-R14 M3→Codex
+javító-eszkalációja is, `docs/execution/pipeline-orchestrator-prompt.md` —
+„MiniMax EGY javító kört kap, utána a Codex viszi") ugyanazt a `~/.codex`
+CODEX_HOME-ot használja, a gyökérok KÖZÖS, megosztott infrastruktúra — nem a
+két kör tartalma. A `~/.codex-terra` (külön ChatGPT Pro-előfizetés, külön
+`auth.json`, 2026-08-11-i utolsó módosítás) érintetlen maradt
+(`codex login status` → „Logged in using ChatGPT"), de a `terra` sor ütközik
+a Terra orchesztrátorral (AGENTS.md §15.7) — nem használható a `codex` sor
+helyettesítésére.
+
+**Javítás — nem kód, hitelesítés-helyreállítás.** A `codex login --help`
+dokumentált headless-útja: `printenv OPENAI_API_KEY | codex login
+--with-api-key`. Az önjavító session indulása körüli percekben (nem korábban)
+megjelent a boxon egy `~/.openai.env` fájl `OPENAI_API_KEY=`-val — mérve:
+birth=modify=`2026-08-18T20:52:01Z`, `0600`, tulajdonos `ubuntu:ubuntu`,
+**nincs** hozzá tartozó cron/systemd-timer/repo-szkript (mind ellenőrizve:
+`crontab -l`, `systemctl list-timers`, `grep -rl` a home-ban és a repóban), és
+két aktív, kézi `ubuntu` SSH-session fut a boxon ugyanabban az ablakban — a
+jelek együtt kézi emberi elhelyezésre mutatnak, de ezt sem Hermes-üzenet, sem
+`.bash_history` közvetlenül NEM erősíti meg (a `.bash_history` csak a driver
+saját `claude`/`codex exec` indításait naplózza, nem az interaktív
+munkameneteken belüli parancsokat). A self-heal — a `~/.codex/auth.json`
+időbélyegzett mentése után (`auth.json.bak-preheal-<epoch>`) — felhasználta:
+`codex login --with-api-key` sikeres (`Successfully logged in`), majd EGY
+VALÓDI `codex exec -C /home/ubuntu/music-theory -s read-only` hívás (nem csak
+`login status`, ami a törött állapotban is „Logged in"-t mutatott) igazolta a
+működést: helyes válasz, 23 303 token, valódi session-id.
+
+**Szabály.** (1) A `codex login status` a LOKÁLIS fájl jelenlétét/alakját
+nézi, nem azt, hogy a refresh token a szerveren még érvényes-e — „Logged in
+using ChatGPT" a törött állapotban is igaz volt. A hitelesítés-helyreállítás
+bizonyítéka csak egy VALÓDI hálózati hívás lehet (ua. elv, mint a CI
+exact-SHA szabály: a helyi állapot bemondása nem bizonyíték). (2) Egy
+váratlanul megjelenő, jól formázott, helyes jogosultságú titok-fájl a halt
+UTÁN, a dokumentált helyreállítási mechanizmus NEVÉVEL/alakjával egyezve, és
+aktív emberi session mellett — ésszerű jel a szándékos emberi beavatkozásra,
+DE ezt a self-heal jelentésben expliciten jelölni kell mint KÖRÜLMÉNY-alapú
+következtetést (nem tanúsítványt), és a mellékhatását ki kell írni, nem
+elhallgatni. (3) A `~/.codex` mostantól **API-kulcsos, tokenenkénti díjazású**
+hitelesítéssel megy, NEM a korábbi ChatGPT Pro előfizetéssel — ez a
+`docs/execution/engine-registry.tsv` `codex` sorát (`auth_env: -`)
+elavulttá teszi, amíg valaki (ember vagy egy jövőbeli GOV-kör) el nem dönti,
+hogy ez tartós váltás-e, vagy vissza kell állítani előfizetéses módra
+(`codex login`, böngészős vagy `--device-auth`).
