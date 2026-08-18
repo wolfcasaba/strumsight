@@ -154,11 +154,23 @@ final class TodayPlanRouteRequest {
   static const String _todayDestination = 'today';
 
   static TodayPlanRouteRequest? tryParse(Object? extra) {
-    if (extra is! Map<String, String> ||
-        extra.length != 1 ||
-        extra[_destinationKey] != _todayDestination) {
+    if (extra is! Map || extra.length != 1) {
       return null;
     }
+
+    try {
+      for (final entry in extra.entries) {
+        if (entry.key is! String ||
+            entry.value is! String ||
+            entry.key != _destinationKey ||
+            entry.value != _todayDestination) {
+          return null;
+        }
+      }
+    } on TypeError {
+      return null;
+    }
+
     return const TodayPlanRouteRequest._();
   }
 

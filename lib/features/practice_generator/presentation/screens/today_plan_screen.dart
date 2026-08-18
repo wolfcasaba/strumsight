@@ -11,6 +11,7 @@ class TodayPlanScreen extends StatelessWidget {
     required this.controller,
     this.plan,
     this.launchRequest,
+    this.isDeepLinkLaunch = false,
     this.isTodayRouteEnabled = false,
     this.onStart,
     this.onSwap,
@@ -23,6 +24,12 @@ class TodayPlanScreen extends StatelessWidget {
   final TodayPlanController controller;
   final AdaptivePracticePlan? plan;
   final TodayPlanRouteRequest? launchRequest;
+
+  /// Preserves an attempted deep-link launch when [launchRequest] was rejected.
+  ///
+  /// Routing must set this when it calls [TodayPlanRouteRequest.tryParse], so
+  /// a malformed payload cannot be mistaken for an in-app launch.
+  final bool isDeepLinkLaunch;
   final bool isTodayRouteEnabled;
   final ValueChanged<PracticeBlock>? onStart;
   final ValueChanged<PracticeBlock>? onSwap;
@@ -33,13 +40,17 @@ class TodayPlanScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isPermittedLaunch = launchRequest?.permits(
-      activePlan: plan,
-      isFeatureEnabled: isTodayRouteEnabled,
-    );
-    final state = controller.resolve(
-      launchRequest != null && isPermittedLaunch != true ? null : plan,
-    );
+    final isDeepLinkContext = isDeepLinkLaunch || launchRequest != null;
+    final planForState = isDeepLinkContext
+        ? launchRequest?.permits(
+                    activePlan: plan,
+                    isFeatureEnabled: isTodayRouteEnabled,
+                  ) ==
+                  true
+              ? plan
+              : null
+        : plan;
+    final state = controller.resolve(planForState);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.todayPlanTitle)),
       body: SafeArea(

@@ -45,24 +45,34 @@ void main() {
       expect(find.byKey(const Key('today-plan-missed-day')), findsNothing);
     });
 
-    testWidgets('A7: an unknown deep-link payload safely falls back', (
-      tester,
-    ) async {
-      final launch = TodayPlanRouteRequest.tryParse(const <String, String>{
-        'destination': 'unrecognised',
-      });
+    testWidgets(
+      'A7: a rejected deep-link payload cannot expose an active plan',
+      (tester) async {
+        final launch = TodayPlanRouteRequest.tryParse(const <String, String>{
+          'destination': 'today',
+          'utm_source': 'push',
+        });
+        final plan = buildPlan(
+          days: <PracticeDay>[
+            buildDay(id: 'day.19', localDate: LocalDate(2026, 8, 19)),
+          ],
+        );
 
-      await _pump(
-        tester,
-        TodayPlanScreen(
-          controller: TodayPlanController(clock: () => DateTime(2026, 8, 19)),
-          launchRequest: launch,
-        ),
-      );
+        await _pump(
+          tester,
+          TodayPlanScreen(
+            controller: TodayPlanController(clock: () => DateTime(2026, 8, 19)),
+            plan: plan,
+            launchRequest: launch,
+            isDeepLinkLaunch: true,
+          ),
+        );
 
-      expect(launch, isNull);
-      expect(find.byKey(const Key('today-plan-empty')), findsOneWidget);
-    });
+        expect(launch, isNull);
+        expect(find.byKey(const Key('today-plan-empty')), findsOneWidget);
+        expect(find.byKey(const Key('today-plan-scheduled')), findsNothing);
+      },
+    );
 
     testWidgets('A7: a disabled Today deep link cannot expose an active plan', (
       tester,

@@ -5,6 +5,18 @@ import '../../../fixtures/practice_generator/validation/validation_fixtures.dart
 
 void main() {
   group('TodayPlanController', () {
+    test(
+      'A7: a cast map with a non-string value is rejected without throwing',
+      () {
+        final hostile = <String, Object?>{
+          'destination': 1,
+        }.cast<String, String>();
+
+        expect(() => TodayPlanRouteRequest.tryParse(hostile), returnsNormally);
+        expect(TodayPlanRouteRequest.tryParse(hostile), isNull);
+      },
+    );
+
     test('A3 below threshold: local 23:59 selects the current local day', () {
       final controller = TodayPlanController(
         clock: () => DateTime(2026, 8, 18, 23, 59),

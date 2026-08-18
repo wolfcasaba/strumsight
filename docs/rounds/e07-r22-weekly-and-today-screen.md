@@ -268,8 +268,11 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 - `today_plan_screen.dart` és `weekly_plan_screen.dart`: ARB-alapú offline
   nézetek üres, pihenő, nem elérhető, befejezett és tervezett állapotokra;
   a start/swap/skip/shorten/pause callbackok explicit átadási pontok. A
-  deep-link contract csak típusos, már feloldott mapot fogad el; ismeretlen
-  érték és disabled flag biztonságos üres célra esik vissza.
+  deep-link contract `Map`-bejegyzésenként ellenőrzi a kulcsok és értékek
+  tényleges `String` típusát; egy `Map.cast`-nézet type errora is üres
+  célra esik vissza. Az explicit `isDeepLinkLaunch` jelző megőrzi az
+  elutasított launch-kontextust, ezért a hibás payload nem keverhető össze
+  in-app megnyitással és a disabled flag biztonságos üres célra visz.
 - `app_en.arb`, `app_hu.arb`, `public.dart`, valamint a két célzott teszt:
   teljes kétnyelvű felület és publikus contract.
 
@@ -286,19 +289,30 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   a 00:30-as cella pedig `2026-08-19` helyett `2026-08-18`-at; ez a várt
   A3-RED. A helyi-dátum implementáció visszaállítása után ugyanaz a parancs
   6/6 zöld.
+- F1 RED: az új `Map.cast<String, String>()` nem-String értékes tesztje
+  `_TypeError`-ral bukott a parser lookupján; a bejegyzésszintű validáció és
+  a `TypeError` fail-closed kezelése után zöld.
+- F2 RED: az A7 aktív terv + elutasított `utm_source` payload cellája az
+  explicit launch-kontextus hiánya miatt nem fordult; az
+  `isDeepLinkLaunch` contract hozzáadása után a teszt üres állapotot és a
+  `today-plan-scheduled` hiányát igazolja.
 
 ### Futtatott ellenőrzések
 
 - `flutter gen-l10n` — zöld.
 - `flutter test test/features/practice_generator/application/today_plan_controller_test.dart`
-  — 6/6 zöld.
+  — 7/7 zöld (F1 regressziós cellával).
 - `flutter test test/features/practice_generator/presentation/today_plan_screen_test.dart`
-  — 5/5 zöld.
+  — 5/5 zöld (F2 aktív terv + elutasított payload regressziós cellával).
 - `tools/round-gate.sh test/features/practice_generator/presentation/today_plan_screen_test.dart test/features/practice_generator/application/today_plan_controller_test.dart`
   — az első teljes futás az analyze lépésben az egyetlen unused importtal
   piros lett; az import eltávolítva. A javítás utáni teljes artefaktum-futás
   `exit_code=0`: format, analyze, mindkét célzott teszt, architecture,
   secrets és l10n mind zöld.
+- Javító kör: ugyanaz a teljes `tools/round-gate.sh` artefaktum
+  `exit_code=0`-val zárt; format (0 változás), analyze (0 issue), a screen
+  teszt 5/5 és a controller teszt 7/7 zöld, majd architecture, secrets és
+  l10n is zöld.
 
 ## 11. Review — a Claude tölti ki
 
@@ -311,6 +325,13 @@ kockázatként nevezett meg, mindkettőt az orchestrátor is függetlenül
 reprodukálta (nem csak a review-jelentés állítása).
 
 ### 11.1 Javító kör — kötelező feladatok
+
+**Végrehajtva, független re-review várható.** F1-ben a parser nyers `Map`
+bejegyzéseit ellenőrzi, így a lusta `.cast<String, String>()` view nem-String
+értéke `null`-t ad, nem kivételt. F2-ben az `isDeepLinkLaunch` explicit
+kontextusa elválasztja az elutasított payloadot az in-app indítástól; aktív
+tervvel és disabled flaggel is üres cél marad. A két célzott regressziós teszt
+zöld; a §7 gate a javító kör végén teljesen zölden lefutott.
 
 **F1 — MAJOR — `TodayPlanRouteRequest.tryParse` összeomolhat egy plauzibilis bemeneten**
 
