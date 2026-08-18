@@ -98,6 +98,23 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'F1 fail-closed: a null priority renders the uncertainty line so the '
+      'caller cannot hide a missing-confidence state (§5.4)',
+      (tester) async {
+        final block = _blockWith(reasonCodes: const <String>['goal.primary']);
+
+        // _pump omits the optional priority — the sheet must treat the
+        // absence of confidence data as evidence we cannot claim a
+        // confident reason (F1 BLOCKER fix).
+        await _pump(tester, block);
+        await tester.tap(find.byKey(Key('plan-block-${block.id.value}')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('plan-reason-uncertain')), findsOneWidget);
+      },
+    );
   });
 }
 

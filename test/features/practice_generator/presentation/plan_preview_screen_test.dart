@@ -240,6 +240,78 @@ void main() {
       expect(result.isFailure, isTrue);
       expect(activation.calls, isZero);
     });
+
+    testWidgets(
+      'F1 regression: opening the reason sheet from the screen path with an '
+      'uncertain priority appends the uncertainty line (§5.4, A6)',
+      (tester) async {
+        final activation = _RecordingActivation();
+        final base = buildPlan();
+        final firstBlock = base.days.first.blocks.first;
+        // The block has evidence.tempo-accuracy by default (fixture) — the
+        // very code path the F1 review flagged. The screen receives the
+        // priority through the controller, and the sheet must append the
+        // uncertainty line because the priority's uncertainty factor is
+        // at/above the threshold.
+        final priority = SkillPriority(
+          skillId: 'rhythm.quarterNotes',
+          score: -0.21,
+          policyVersion: 'policy.test.v1',
+          factors: <SkillPriorityFactor>[
+            SkillPriorityFactor(
+              kind: SkillPriorityFactorKind.uncertainty,
+              normalizedValue: 0.7,
+              contribution: -0.21,
+            ),
+          ],
+          isSafetyOverridden: false,
+        );
+        final controller = PlanPreviewController(
+          initialPlan: base,
+          validationContext: buildContext(),
+          activation: activation,
+          priorities: <BlockId, SkillPriority>{firstBlock.id: priority},
+        );
+        addTearDown(controller.dispose);
+
+        await _pumpPreview(tester, controller);
+        await tester.pumpAndSettle();
+
+        // Tap the real on-screen block → the screen wires the priority
+        // through → the sheet opens with uncertainty. This is the path the
+        // existing plan_reason_sheet_test never covered (it opened the
+        // sheet directly via `PlanReasonSheet.show`).
+        await tester.tap(find.byKey(Key('plan-block-${firstBlock.id.value}')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('plan-reason-uncertain')), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'F1 fail-closed: the screen also renders the uncertainty line when '
+      'NO priority was supplied for the tapped block (§5.4)',
+      (tester) async {
+        final activation = _RecordingActivation();
+        // Same fixture, NO priorities map entry for the block. The screen
+        // looks up priorityFor and gets null; the sheet must fail-closed
+        // and append the uncertainty line rather than imply confidence.
+        final controller = _controllerFor(
+          activation: activation,
+          hardAvoid: false,
+        );
+        addTearDown(controller.dispose);
+
+        await _pumpPreview(tester, controller);
+        await tester.pumpAndSettle();
+
+        final firstBlock = controller.state.plan.days.first.blocks.first;
+        await tester.tap(find.byKey(Key('plan-block-${firstBlock.id.value}')));
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('plan-reason-uncertain')), findsOneWidget);
+      },
+    );
   });
 }
 
