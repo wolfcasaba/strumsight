@@ -44,6 +44,48 @@
 > before review, so the pipeline prompt now gates repair/review on measured
 > `origin/main` ancestry (HEAL E07-R15/H7, upstream-sync).)**
 
+> ## ✅ [HEAL E07-R19/H4] KÉSZ — a v0→v1 envelope-migráció nem relabelte a schemaVersion-t; a fix a kör saját ágára ment, nem `main`-re (2026-08-18)
+>
+> A független review (`docs/reviews/e07-r19-review.md`, branch
+> `minimax/e07-r19-local-plan-repository` @ `dce4f957`) egy nyitott MAJORt
+> (M-01) mért: `PracticePlanMigrator._migrateVxToCurrent` a v0 envelope-ot
+> változatlanul adta vissza, így a migrált eredmény `schemaVersion`-je `0`
+> maradt az elvárt `1` helyett (ADR 0267 §6, brief A7 below-cell) —
+> eldobható próba: `Expected: <1>; Actual: <0>`. A review „a kör korábbi
+> MiniMax- és Codex-javítási kerete a handoff szerint már elfogyott"
+> indoklással H4-gyel halt.
+>
+> A self-heal (1/3. kísérlet) megmérte, hogy a branch `.codex-round-status`
+> jelzése (`head=0d505ca7`, `signalled_at=12:30:06Z`) a MiniMax implementer
+> SAJÁT, első befejezés-jelzése volt, nem egy review-utáni javító kör; a
+> kör két korábbi self-healje (H3 — brief-scope, PR #301; H-NOSIGNAL —
+> `wait-for-round.sh` infra, PR #302) egyike sem érintette a
+> migrátort. A hibás kód kizárólag a kör SAJÁT, `main`-be még nem olvadt
+> ágán él (a fájl `main`-en nem is létezik), ezért a javítás célja a kör
+> ága lett — nem egy `main`-alapú `heal/`-branch —, a
+> `pipeline-orchestrator-prompt.md` H8-szakaszának „normál push a
+> kör-worktree-re" mintáját követve. `tools/round-pipeline.sh`
+> mérce-őrszeme (`heal_pr_number` / `gate_test_count` /
+> `gate_artifact_hashes`) ezt kifejezetten tolerálja, amíg `main` és a
+> védett gate-artefaktumok (`tools/round-gate.sh`,
+> `.github/workflows/{build-apk,router-ci}.yml`) érintetlenek.
+>
+> A javítás: `_migrateVxToCurrent` másolatot ad vissza
+> `schemaVersion: currentSupportedSchemaVersion` felülírással (a checksum
+> csak a `body`-t fedi, tehát ez nem érvényteleníti); a meglévő
+> `practice_plan_migrator_test.dart` "below cell" esete maga is a régi,
+> hibás `0` értéket várta — ez az oka, hogy a gate korábban zölden ment át
+> M-01 mellett — most a current verziót várja. Elkülönített worktree-ben
+> mérve piros a javítás előtt (`Expected: <1>; Actual: <0>`), zöld utána;
+> `tools/round-gate.sh test/features/practice_generator/data/
+> local_repository_test.dart test/features/practice_generator/data/
+> practice_plan_migrator_test.dart` minden lépése zöld
+> (format/analyze/mindkét célzott teszt/architecture/secrets/l10n). Fix
+> commit a kör ágán: `45395d9f`. `main` és a round-brief érintetlen.
+> `docs/LESSONS.md` **L304**. A lánc E07-R19-cel folytatódik a következő
+> cron-firingen — a következő orchestrátor-session friss review-t indít a
+> most javított ágon.
+
 > ## ✅ [HEAL E07-R19/H-NOSIGNAL] KÉSZ — `wait-for-round.sh`/`wait-for-router.sh` baseline-ja folyamat-memóriában élt, nem vette észre a köztes-hívások közt már kész jelzést (2026-08-18)
 >
 > Az E07-R19 folytató köre (orchestrátor=Terra, implementer=minimax) jelzés
