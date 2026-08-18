@@ -145,3 +145,40 @@ ntfy-szöveget; ehhez adj a valódi driver-úton futó regressziós cellát.
 
 **Verdikt: CHANGES REQUIRED.** M5 nyitott; merge tilos a javítás és új
 független review előtt.
+
+## M5 javítás utáni végső független re-review — 2026-08-18
+
+- **Ellenőrzött HEAD:** `ee9fd3fd726a0b39df6a7bb1871123ff6e4a648f`
+  (`fix(tools): preserve expired override engine audit`).
+- **Módszer:** friss távoli branch-klón
+  (`/tmp/review-e99-r14-remote.QqOajM/repo`), `origin/main` alapú
+  scope-audit, futtatható Flutter gate, teljes tooling-suite és eldobható
+  valódi-sértés próba.
+
+### Lezárt lelet
+
+#### M5 — FIXED (`ee9fd3fd`)
+
+Az értékelő a törlés előtt `EXPIRED:<motor>` strukturált értéket ad vissza.
+A valós driver-ág azt fail-closed módon bontja ki, és a motornevet az audit
+logba, valamint az ntfy törzsébe írja. A `test_engine_override_ttl.py`
+kontrollált driver-fixture-e mindkét csatornát és a fájltörlést méri.
+
+**Valódi-sértés próba:** az izolált review-klónban az
+`EXPIRED:$engine_override` értéket ideiglenesen régi `EXPIRED`-re rontottam.
+A tényleges driver-utazó regressziós cella piros lett (`returncode=4`,
+`nem tartalmaz motornevet: EXPIRED`), majd a visszaállított forráson zöld
+lett. A review-klón `git diff --check` és `git status --short` állapota a
+próba után tiszta.
+
+### Végső ellenőrzések
+
+- `python3 tools/scope-audit.py --repo . --brief ... --base origin/main` →
+  `Legacy scope audit OK` (7 változott útvonal, 1 generated/ignored).
+- `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`
+  → format, analyze, célzott test, architecture, secrets és l10n zöld.
+- `/tmp/ss-heal-r12-pytest/bin/python3 -m pytest tools/tests -q` →
+  `515 passed, 552 subtests passed` (268.87 s).
+
+**Végső verdikt: APPROVED.** Nyitott BLOCKER/MAJOR nincs. A CI exact-SHA
+bizonyíték és az ADR 0052 szerinti merge még hátra van.
