@@ -47,6 +47,74 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
+## 0.0 Pre-flight revízió (2026-08-18, Sonnet 5 orchestrátor)
+
+- **Mérés — a pihenőnap TÉNYLEGES jelzése a `PracticeDay`-en:** a ma
+  `main`-en élő `GenerationOrchestrator._assembleDay`
+  (`lib/features/practice_generator/application/service/generation_orchestrator.dart:213-244`)
+  minden napra `status: PracticeItemStatus.planned`-ot ír (a pinnelt 8 érték
+  — `practice_block.dart:13` — között NINCS `rest` státusz), és a
+  pihenőnap kandidátus nélkül marad, tehát `blocks: []` — a `BlockKind.rest`
+  enum-érték (`plan_enums.dart`) létezik, de az `_assembleBlock` SOHA nem
+  konstruálja (csak kiválasztott `ScheduleCandidate`-ból épít blokkot,
+  pihenőnapon nincs ilyen). Az EGYETLEN túlélő jelzés a `reasonCodes` lista:
+  a `WeeklyScheduler` a pihenőnapra pontosan
+  `[ScheduleDecisionReason.restDay.code]`-ot ír (`weekly_scheduler.dart:245`),
+  ami a `scheduling_policy.dart:95` szerint a `'schedule.decision.restDay'`
+  string — textuálisan elkülönítve a kihagyott/nem-elérhető nap
+  `'schedule.decision.dayUnavailable'` kódjától (`scheduling_policy.dart:92`)
+  — és ez a lista a `PracticeDay`-be változatlanul bekerül
+  (`reasonCodes: decision.reasonCodes`, `generation_orchestrator.dart:242`).
+- **Feloldás — pihenőnap detektálás:** az A2/§5.2 kontraktusa PONTOSAN ez:
+  `day.reasonCodes.contains(ScheduleDecisionReason.restDay.code)` (a
+  `scheduling_policy.dart` már exportálva a `public.dart`-on, új export nem
+  kell). Az implementáció NEM alapulhat `status`-on (mindig `planned`, amíg
+  a nap el nem múlik) és NEM `blocks.any((b) => b.kind == BlockKind.rest)`-en
+  (ez a konstruktor-út halott — mindig `false`, tehát a pihenőnap ezen az
+  ágon MINDIG mulasztásnak látszana, pont az A2 által tiltott hiba). A
+  kihagyott/nem-elérhető naptól a `'schedule.decision.dayUnavailable'` kód
+  különbözteti meg — a két eset (`restDay` vs. `dayUnavailable`) vizuálisan
+  is különböző, semleges (nem büntető) megjelenítést kap; a §5.2 csak a
+  pihenőnapról rendelkezik explicit módon, a nem-elérhető nap megjelenítése
+  implementer-választás, amíg nem büntető jellegű.
+- **Mérés — deep link, TÉNYLEGES bekötés:** `lib/core/notifications/
+  nudge_service.dart` (`_scheduleWeek`, sor 140–162) a `zonedSchedule`
+  hívásban NEM ad `payload`-ot, és az `_init()` (sor 85–102) nem regisztrál
+  `onDidReceiveNotificationResponse`-t — az értesítés koppintása ma
+  SEMMILYEN adatot nem hordoz. `lib/app/routing/app_router.dart` és
+  `app_route.dart` nem ismer értesítés-koppintásból induló navigációt, és
+  mindkét fájl LISTÁN KÍVÜLI (nincs az `allowed_paths`-ban). A körnek tehát
+  ma nincs élő „deep link"-je, amit mérni lehetne.
+- **Feloldás — deep link scope:** az A7/§5.4 kontraktusa a kör saját,
+  engedélyezett fájljain belül él: a `today_plan_screen.dart` (vagy egy
+  típus a `today_plan_controller.dart`-ban) egy EXPLICIT, TÍPUSOS, nullable
+  paraméter-objektumot fogad (pl. route `extra`, vagy egy már feloldott
+  `Map<String, String>` — NEM nyers, parse-olatlan URI-string), és
+  ismeretlen/hiányzó/rossz típusú érték esetén a §5.3 szerinti biztonságos
+  nézetre esik vissza, kivétel nélkül. A teszt ezt a típust KÖZVETLENÜL
+  konstruálja unit/widget szinten. A valódi értesítés-koppintás → útvonal
+  bekötés (a `NudgeService` payloadja és az `app_router.dart` regisztrációja)
+  NEM ennek a körnek a dolga — ugyanaz a minta, mint minden korábbi E07 kör:
+  a kontraktus kész, a production bekötés egy későbbi, emberi döntésű kör
+  (mindkét érintett fájl listán kívüli, `allowed_paths` byte-for-byte
+  változatlan).
+- **Mérés — ADR-szükséglet:** az ADR 0258 §4 („Az elérhetőség helyi
+  dátumhoz kötött, nem UTC-pillanathoz") szó szerint lefedi az §5.1 határt —
+  ellenőrizve a fájl tényleges szövegében, nem csak a brief-glosszájából
+  (vö. L307: a glossza és az ADR eltérhet). A kör nem hoz új architekturális
+  döntést, ezért **nincs új ADR-szám foglalva** — a brief saját „nincs" jelzése
+  megerősítve, nem csak elfogadva.
+- **Feloldás — change-set indoklás (§5.5):** a meglévő `PlanChangeReason`
+  hat értéke közül (`plan_change_set.dart:37-43`) a tanuló-indított
+  rövidítés/csere/kihagyás akció kódja `PlanChangeReason.learnerReschedule` —
+  a `systemAdaptation` az ADR 0263 §4 szerint a determinisztikus
+  `PlanRepairer` SAJÁT, automatikus lépéseinek van fenntartva, nem a tanuló
+  explicit akciójának; a kettő összemosása provenance-hibát adna (vö. L308 —
+  hasonló hibaosztály egy korábbi körben már mért).
+- **Scope:** mindhárom feloldás kizárólag a már engedélyezett fájlokon
+  belüli implementációs döntés — az `allowed_paths` byte-for-byte
+  változatlan, 0 új fájl, 0 domain-módosítás.
+
 ## 1. Cél
 
 Az aktív terv napi használati felülete és **egygombos következő lépés**
