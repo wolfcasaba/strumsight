@@ -12046,3 +12046,54 @@ visszatérése elé, vagy a teszt egy determinisztikus completion-szignálra
 várjon a `workspaceRoot.list()` helyett. Amíg ez nem történik meg, a flake
 ismétlődni fog, és minden előfordulás ugyanezt a mérési terhet rója egy
 teljesen független kör self-healjére. Rokon: [[L182]], [[L183]].
+
+## L317 — A `sdd-round-review` skill SAJÁT kanonikus klónozó parancsa a hubból (`/home/ubuntu/music-theory`) klónoz — pontosan az az anti-minta, amit L311 már dokumentált; a JAVÍTÓ kör push-elmaradása is megismétlődött (E07-R23, 2026-08-18)
+
+**Mérve.** Az E07-R23 review-lépése a `sdd-round-review` skill saját, szó
+szerinti példaparancsát követte: `git clone --branch <kör-branch>
+/home/ubuntu/music-theory /tmp/review-<kör>`. A hub lokális
+`refs/remotes/origin/<branch>` refje egy PRE-FLIGHT-időszaki fetchből
+(9c2aa9bb) származott — a dispatch UTÁNI push (a `ss-codex-e07-r23`
+munkapéldányból, `4eb098d8` majd `4bb62a62`) sosem frissítette automatikusan,
+mert két KÜLÖN `.git` könyvtárról van szó. Az első `round-gate.sh` futás ezért
+a teszt-fájlokra "Does not exist" hibával bukott — NEM a kód hibája, hanem a
+klónozás forrásáé. Ez a HARMADIK mérés ugyanarra a hibaosztályra
+([[L175]]/[[L179]] a worktree-vs-clone variáns, [[L311]] már PONT ezt a
+mintát írta le és PONT ezt a javaslatot adta: „egyszerűen mindig az
+IMPLEMENTER SAJÁT munkapéldányából klónozz review-hoz" — de ez a javaslat
+sosem került be a skill fájl SAJÁT példaparancsába, ezért a minta
+megismétlődött. Egy LESSONS.md-be írt tanulság önmagában nem védelem, csak a
+használt artefaktum (itt: a skill szövege) saját frissítése az.
+
+**Másodlagos, ugyanabban a körben mért ismétlődés.** A review-lépés SAJÁT
+javító köre (F1 fix, `a6e0436f`) is UGYANAZT tette, amit L311 az
+E07-R22-ben már mért: a `.codex-round-status` `done`/`head=a6e0436f` jelzése
+után a branch `[ahead 1]` maradt az originhoz képest — commitolva, de nem
+push-olva. A review-oldali friss (immár helyesen originból közvetlenül
+klónozott) újraklónozás `pathspec 'a6e0436f' did not match` hibával fogta meg
+azonnal, mielőtt bármit elfogadtam volna bemondásra.
+
+**Egy független subagent (security-reviewer) MAGA is ugyanebbe a hibába
+futott** (ugyanazt a `/tmp/review-e07-r23` útvonalat kapta paraméterként,
+amit én már — hibásan — a hubból klónoztam), és A SAJÁT KEZDEMÉNYEZÉSÉRE,
+utasítás nélkül, `git fetch origin && git checkout <sha>`-val helyreállította
+a helyes tartalmat, mielőtt bármit értékelt volna — dokumentálva a saját
+jelentésében. Ez pozitív megerősítés, hogy a „mérj, ne higgy a bemondásnak"
+kultúra a subagentekre is átöröklődik, még akkor is, ha a hívó (én) hibás
+kiindulási állapotot adott át.
+
+**Javítás ebben a körben.** Mindkét esetben a hiányzó push-t az implementer
+saját munkapéldányából (`git -C /home/ubuntu/ss-codex-e07-r23 push origin
+HEAD:<branch>`) pótoltam, majd a review-klónt KÖZVETLENÜL originból (nem a
+hubból) építettem újra minden egyes alkalommal.
+
+**Szabály / nyitott javítás (jövőbeli governance/E99 kör vagy önjavítás
+scope-ja, NEM ez a kör — a `.claude/skills/**` a jelen E07-brief
+`allowed_paths`-án kívül esik):** a `sdd-round-review` skill kanonikus
+klónozó parancsát cserélni kellene egyikre: (a) `git clone --branch
+<kör-branch> <implementer-munkapéldány-útvonala> /tmp/review-<kör>` (L311
+saját javaslata — garantáltan friss, mert az implementer sajátja), vagy (b)
+`git clone --branch <kör-branch> <origin-URL> /tmp/review-<kör>` (mindig a
+publikált igazságot adja, függetlenül attól, hogy a hub mikor fetchelt
+utoljára). A jelenlegi hub-alapú minta MINDEN jövőbeli review-lépést
+ugyanennek a hibaosztálynak tesz ki. Rokon: [[L175]], [[L179]], [[L311]].
