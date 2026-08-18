@@ -1,13 +1,13 @@
 # E07-R17 — Spaced repetition és maintenance queue
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 5cdd7472`)
+- **Státusz:** PLANNING (pre-flight revízió: 2026-08-18, `main @ e527dec1`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 17
 - **Kör-azonosító:** `E07-R17`
 - **Branch:** `<motor>/e07-r17-spaced-repetition`
 - **Előfeltétel:** `E07-R16` merge-elve (progresszió)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0255 (determinizmus),
-  0258 §4 (helyi dátum) és 0261 (`unknown`) rögzíti.
+- **Előre kiosztott ADR:** [0303](../adr/0303-spaced-repetition-review-queue-contract.md)
+  — a review-cél, eredmény, nap-budget és törölt-tartalom explicit domain szerződése.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R03 helyi-dátum
 > modelljét (a due date erre épül) és az R08 katalógus-revízióit (a törölt
@@ -25,6 +25,7 @@ allowed_paths = [
   "test/features/practice_generator/review/spaced_repetition_policy_test.dart",
   "test/fixtures/practice_generator/review/",
   "docs/rounds/e07-r17-spaced-repetition.md",
+  "docs/adr/0303-spaced-repetition-review-queue-contract.md",
 ]
 gate_tests = [
   "test/features/practice_generator/review/review_queue_test.dart",
@@ -43,6 +44,29 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 Pre-flight revízió (2026-08-18)
+
+- **Mérés:** `LocalDate` a `domain/model/weekly_availability.dart` tiszta
+  év/hónap/nap value object; nincs offset vagy `DateTime`, ezért a due date
+  ebből származhat és időzóna-váltástól független marad. Az R08
+  `PracticeCatalogSnapshot` csak a catalog/content revisionök eltérését méri;
+  konkrét törölt targetet nem azonosít. A tényleges executable identity az
+  `ExerciseCandidate.source.code:exerciseId` (`exercise_candidate.dart`), és
+  nincs meglévő `ReviewItem`, review-eredmény vagy review-queue input.
+- **Feloldás:** ADR 0303 szerint az új `ReviewTarget` saját, stabil
+  `kind + targetId` identitású (chord transition, strumming pattern, lesson,
+  song section), tehát nem hamisan azonos a jelenlegi catalog candidate-tel.
+  A `ReviewQueue` explicit current-target halmazt kap: hiányzó targetből
+  `replacementRequired` állapotú elem lesz, nem törlődik. A napi input explicit
+  `totalDailyMinutes` és `reviewBudgetMinutes`; a konstruktor megköveteli,
+  hogy `0 <= reviewBudgetMinutes < totalDailyMinutes`, ezért a queue önmagában
+  sem töltheti ki a napot, és nem számolja újra az R15 arány-policyt.
+  A `SpacedRepetitionPolicy` csak explicit `LocalDate` és előző intervallum
+  alapján dolgozik; `unknown` változatlanul hagyja az intervallumot.
+- **Scope:** a lefoglalt ADR 0303 és ez a brief a kör saját, még nem merge-elt
+  pre-flight artefaktuma, ezért az allowlistben kifejezetten szerepel. Más ADR,
+  SDD, tool vagy production útvonal továbbra is tilos.
 
 ## 1. Cél
 
@@ -76,9 +100,10 @@ budget túllépése · Flutter, `DateTime.now()`, `Random` · más
 | `public.dart` | a barrel bővítése |
 | `test/…/review/*_test.dart` (2 db) | a §6 cellái |
 | `docs/rounds/e07-r17-…md` | a §10 handoff |
+| `docs/adr/0303-spaced-repetition-review-queue-contract.md` | a kör saját, még nem merge-elt domain-szerződése |
 
-**Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` ·
-`docs/sdd/**` · `tools/**` · `.github/**`.
+**Tilos zóna:** más `lib/features/**` · `lib/app/**` · `docs/adr/**` (kivéve a
+fenti ADR 0303) · `docs/sdd/**` · `tools/**` · `.github/**`.
 
 ## 5. Kötött architekturális döntések
 
