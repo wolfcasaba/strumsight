@@ -15,6 +15,24 @@ void main() {
 
   group('PlanExecutionCoordinator — normalized outcomes', () {
     test(
+      'A5: rejects a session config that differs from the compiled prescription',
+      () {
+        final coordinator = PlanExecutionCoordinator(
+          createExecutionToken: () => 'execution-token-1',
+        );
+
+        expect(
+          () => coordinator.start(
+            context: executionContext(),
+            step: compiledStep(),
+            sessionConfig: mismatchedSessionConfig(),
+          ),
+          throwsArgumentError,
+        );
+      },
+    );
+
+    test(
       'A1: a technical failure never contributes skill evidence or regression',
       () {
         final coordinator = PlanExecutionCoordinator(

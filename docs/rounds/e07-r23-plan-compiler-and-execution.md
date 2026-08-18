@@ -305,6 +305,13 @@ and the compiler test stayed green; A1 failed exactly as intended:
 `plan_execution_coordinator_test.dart`. The safe completed-only rule was then
 restored before the final gate.
 
+The review-required A5 negative cell now passes a `mismatchedSessionConfig()`
+whose `loopCount` differs from the compiled prescription. I temporarily removed
+the coordinator's exact-match `if` branch and ran the coordinator test: A5
+failed exactly as intended, because the call returned `PlanExecutionLaunch`
+instead of throwing `ArgumentError`. The branch was restored before the final
+gate.
+
 #### Final verification
 
 `tools/round-gate.sh test/features/practice_generator/execution/plan_compiler_test.dart test/features/practice_generator/execution/plan_execution_coordinator_test.dart`

@@ -95,6 +95,9 @@ PracticeSessionConfig matchingSessionConfig() => const PracticeSessionConfig(
   reducedMotion: false,
 );
 
+PracticeSessionConfig mismatchedSessionConfig() =>
+    matchingSessionConfig().copyWith(loopCount: 2);
+
 PlanExecutionContext executionContext() => PlanExecutionContext(
   planId: PlanId('plan.execution.1'),
   revisionId: RevisionId('revision.execution.1'),
