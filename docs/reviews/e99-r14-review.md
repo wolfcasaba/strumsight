@@ -57,3 +57,37 @@ Az alapértelmezett `/usr/bin/python3` ráadásul nem tartalmaz `pytest`-et (`No
 ## Következő lépés
 
 Egy MiniMax javító kör szükséges M1–M3-ra. M4 miatt a javítás után ismét teljes tooling-suite kell; zöld teljes suite nélkül a CI-dispatch és merge tiltott.
+
+## Javítás utáni független re-review — 2026-08-18
+
+- **Javítási commit:** `88910482` (`fix(tools): E99-R14 repair pass — M1 --epic filter, M2 isolated falsification copies, M3 unified evaluate hook`)
+- **Friss upstream merge után ellenőrzött HEAD:** `81cc1d23108598391128a257a8b661bc6ec1dff5`
+
+### Lezárt leletek
+
+- **M1 lezárva:** `--engines --epic E07` ténylegesen csak `E07-R*` eseményeket aggregál; pozitív, negatív és részleges-átfedési fixtúrás cellák vannak.
+- **M2 lezárva:** a falszifikáció a `engine-profile.sh` és a metrics script ideiglenes másolatán fut. A célzott teszt után a review checkout tiszta maradt.
+- **M3 lezárva:** a top-level `--engine-override-evaluate` hook törölve. A kiértékelésnek egy közös implementációja van `tools/engine-profile.sh:evaluate` alatt, amelyet a tényleges motor-override blokk hív.
+
+### Re-review bizonyíték
+
+```text
+$ /tmp/ss-heal-r12-pytest/bin/python3 -m pytest \
+    tools/tests/test_engine_override_ttl.py \
+    tools/tests/test_round_metrics_engines.py -q
+17 passed in 0.65s
+
+$ tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
+format, analyze, célzott Flutter-teszt, architecture, secrets, l10n: zöld
+
+$ /tmp/ss-heal-r12-pytest/bin/python3 -m pytest tools/tests -q
+4 failed, 508 passed, 546 subtests passed in 267.96s
+```
+
+Az utolsó futás ugyanazt a négy, E99-R14-től független motor-függetlenségi
+hibát adja, mint a javítás előtt. E javításuk a brief §5 szerinti tilos
+`round-pipeline.sh` területet vagy a nem engedélyezett tesztfájlokat érintené.
+
+**Végső verdikt: CHANGES REQUIRED / merge tiltott.** A javított E99-R14 diff
+önmagában elfogadható, de a brief kötelező teljes tooling-suite DoD-ja nem
+teljesül, ezért CI-dispatch és merge nem indítható.
