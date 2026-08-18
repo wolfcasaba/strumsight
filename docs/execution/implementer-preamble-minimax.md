@@ -97,9 +97,11 @@ legyen — a burkoló abban keresi a parancsalakot és a kilépési kódot.
 1. **Tájékozódás induláskor** (`Explore`): a brief §4 listáján szereplő fájlok
    TÉNYLEGES mai állapotának feltérképezése. Olcsóbb, mint a saját
    kontextusodat teleolvasni, és a hosszú kör végén marad helyed.
-2. **KÖTELEZŐ önellenőrzés a `done` jelzés ELŐTT.** Indíts egy alügynököt
-   (`flutter-devil-advocate`, vagy `general-purpose`, ha az nem elérhető)
-   ezzel a három kérdéssel, a briefet és a `git diff`-et átadva neki:
+2. **KÖTELEZŐ önellenőrzés a `done` jelzés ELŐTT.** Indíts egy alügynököt —
+   elsődlegesen a **`round-auditor`**-t, amit a burkoló ad át (`--agents`), és
+   ami már pontosan ezt a három kérdést kapta meg; ha valamiért nem elérhető,
+   `flutter-devil-advocate` vagy `general-purpose`. Add át neki a brief
+   útvonalát és a `git diff`-et:
    - **Scope:** van-e a diffben a §4 engedélyezett listán KÍVÜLI fájl?
    - **Acceptance:** a §6 MINDEN cellájához tartozik-e ténylegesen FUTÓ teszt,
      és a §6.1 mérce-mátrix minden sorára igaz-e, hogy az ott leírt hibás
@@ -115,3 +117,24 @@ Amit az alügynök állít, azt a te gate-futtatásod igazolja. Ha az önellenő
 scope-sértést vagy hiányzó mérce-cellát talál, a helyes válasz a javítás —
 vagy `tools/codex-signal.sh stopped "<egy sor>"`, ha a brief maga ütközik.
 Az alügynök „minden rendben" jelentése önmagában soha nem elég a `done`-hoz.
+
+## 9. Gépi őrök: amit a hook blokkol, azt NE kerüld meg (ADR 0309)
+
+A körödben három gépi őr fut (`tools/hooks/implementer_guard.py`, a burkoló
+tölti be — orchesztrátor- és emberi sessionben nem is létezik):
+
+| Mit blokkol | Mikor látod | Mi a HELYES válasz |
+|---|---|---|
+| a brief `allowed_paths` listáján kívüli írás | `Write`/`Edit` hívásod hibát kap | `tools/codex-signal.sh stopped "<mi kell és miért>"` — a lista tágítása tilos |
+| tiltott parancsalak (gate-csonkítás, `analyze && test`, `git stash`, force-push, csomagtelepítés, a fő munkafa módosítása) | `Bash` hívásod hibát kap | futtasd az üzenetben megnevezett alternatívát |
+| lezáró jelzés nélküli megállás | a session nem tud lezárulni (legfeljebb kétszer) | fejezd be a munkát, majd `done`/`stopped`/`blocked` jelzés |
+
+**A blokk nem hiba, amit ki kell trükközni.** Ha a scope-őr megállít, TILOS
+ugyanazt a fájlt `Bash`-en át (`cat > fájl`, `sed -i`, `tee`) megírni: a kör
+utáni scope-audit és a független review úgyis megtalálja, és a kör javító körrel
+vagy `H3` halttal zárul — csak órákkal később. Az őr azt a hibaosztályt fogja
+meg, ami MÉRVE kétszer is javító körré vált; ha megkerülöd, a saját köröd idejét
+égeted el.
+
+**Amit az őr NEM tesz:** nem méri a munkád minőségét, és nem ment fel a §8.4
+kötelező alügynökös önellenőrzés alól. Egy kör lehet őr-tiszta és mégis rossz.

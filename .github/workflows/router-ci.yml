@@ -58,6 +58,12 @@ on:
       - "tools/ai-router-round.sh"
       - "tools/engine-profile.sh"
       - "tools/scope-audit.py"
+      # --- Implementer-őrök (ADR 0309) -------------------------------------
+      # A hook, a settings és az ügynök-definíció a kör-szerződés mérésének
+      # része; a `tools/tests/test_implementer_guard.py` hivatkozik rájuk.
+      - "tools/hooks/**"
+      - "tools/implementer-settings.json"
+      - "tools/implementer-agents.json"
       - "tools/round-scope-audit.sh"
       - "tools/safe-force-push.sh"
       - "tools/fix-workspace-origin.sh"
