@@ -7,7 +7,20 @@ Verdikt: CHANGES REQUIRED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 1 · NOTE: 2
+BLOCKER: 0 · MAJOR: 3 · MINOR: 1 · NOTE: 2
+
+**Frissítve a dedikált biztonsági review után** (`docs/reviews/e07-r20-security.md`,
+kötelező a brief `risk = "high"` miatt): a security-reviewer FÜGGETLENÜL
+ugyanarra az A9-gyűjtő-logger hiányra bukkant, és MAJOR-nak minősítette
+(lentebb F3 ennek megfelelően MINOR→MAJOR frissítve) — indoka: a §6.1
+A9-hez tartozó piros-kiváltó ("A szabad szöveg naplózva → A9") ma
+**működésképtelen**, mert nincs teszt, ami elkapná. Emellett egy ÚJ leletet
+is talált (F4, MINOR): a controller doc-commentje "encrypted/local draft
+path"-nak nevezi a draft-tárolást, holott az a MEGLÉVŐ (e körön kívüli)
+`GenerationDraftRepository` → `KeyValueStore` → `SharedPreferencesStore`
+láncon **plaintext**. Sem aktív adatszivárgást, sem termékhatár-sértést
+(AGENTS.md §5) nem talált — a security-review teljes checklistje és a
+"tisztának mért" lista a `docs/reviews/e07-r20-security.md` fájlban.
 
 A gate (format/analyze/mindkét célzott teszt/architecture/secrets/l10n)
 SAJÁT, izolált `/tmp/review-e07-r20` klónban újrafuttatva **zöld** — ez a
@@ -35,7 +48,7 @@ zártak le.
 | A6 | Nagy betűméretnél nincs túlcsordulás | ✅ | `availability_editor_test.dart` textScaler×2, `tester.takeException()` null — SAJÁT klónban újrafuttatva zöld |
 | A7 | Semantics címkék jelen vannak | ✅ | `availability_editor_test.dart`: `find.bySemanticsLabel('Monday availability')`; a többi lépés Material-widgetjei (RadioListTile/SwitchListTile/TextField) beépített semantics-szel |
 | A8 | Minden szöveg ARB-ből (hu+en) | ✅ | SAJÁT klónban `check_l10n_parity.dart` zöld ("L10n parity OK (en → hu, 1298 message(s))"); diff-ben mind a 19 új kulcs mindkét fájlban jelen |
-| A9 | Kényelmetlenségi szöveg nem kerül naplóba | ⚠️ **PRÓBA HIÁNYZIK — ld. F3** | a tulajdonság ma igaz (`grep -rniE "print\(\|debugPrint\|logger\|log\.\|\.log\(\|analytics" lib/features/practice_generator/presentation/` → csak egy doc-comment-találat, hívás nincs), de a brief saját "gyűjtő logger" bizonyíték-előírása nem teljesült — a leszállított teszt csak a perzisztenciát méri, nem a naplózás-tilalmat |
+| A9 | Kényelmetlenségi szöveg nem kerül naplóba | ⚠️ **PRÓBA HIÁNYZIK — ld. F3 (MAJOR, a dedikált security review is önállóan ugyanide jutott)** | a tulajdonság ma igaz (`grep -rniE "print\(\|debugPrint\|logger\|log\.\|\.log\(\|analytics" lib/features/practice_generator/presentation/` → csak egy doc-comment-találat, hívás nincs), de a brief saját "gyűjtő logger" bizonyíték-előírása nem teljesült — a leszállított teszt csak a perzisztenciát méri, nem a naplózás-tilalmat; a §6.1 A9 piros-kiváltója ma működésképtelen |
 
 ## Scope-audit
 
@@ -118,7 +131,7 @@ kívüli változás: **nincs**.
   folytatási pont, legalább az elérhetőség és az equipment lépésre.
 - **Státusz:** OPEN
 
-### F3 — MINOR — Az A9 bizonyítéka nem a brief által előírt alakú; a tulajdonság ma igaz, de nincs regressziós őre
+### F3 — MAJOR (frissítve MINOR-ról a dedikált security review után) — Az A9 bizonyítéka nem a brief által előírt alakú; a tulajdonság ma igaz, de nincs regressziós őre
 
 - **Fájl:** `test/features/practice_generator/presentation/plan_setup_screen_test.dart:151-177`
 - **Probléma:** a brief §6 acceptance-táblája A9 bizonyítékaként kifejezetten
@@ -144,6 +157,27 @@ kívüli változás: **nincs**.
   `Zone`-alapú `print`-elfogás vagy hasonló mérés) ad a controller/screen
   köré, és megméri, hogy a comfort szabad szöveg SOSEM jelenik meg benne,
   még hibás mentés (`saveDraft` failure) esetén sem.
+- **Státusz:** OPEN
+
+### F4 — MINOR (a dedikált security review lelete) — A controller doc-commentje tévesen "encrypted"-nek nevezi a draft-tárolást
+
+- **Fájl:** `lib/features/practice_generator/presentation/controller/plan_setup_controller.dart:143-144`
+- **Probléma:** `/// Keeps comfort text exclusively inside the encrypted/local
+  draft path;` — a draft ténylegesen a MEGLÉVŐ (e körön kívül eső)
+  `GenerationDraftRepository` → `KeyValueStore` láncon át
+  `SharedPreferencesStore`-ba kerül, ami **plaintext**, nem titkosított
+  (`lib/core/storage/shared_preferences_store.dart` az EGYETLEN production
+  `KeyValueStore` implementáció; a titkosított tárolás egy KÜLÖN,
+  `SecureStore`/`flutter_secure_storage` interfész, amit ma kizárólag a JWT
+  használ, `storage_keys.dart:111 secureAuthToken`).
+- **Hatás:** alacsony ma (a doc-comment maga nem befolyásol futásidejű
+  viselkedést), de egy jövőbeli karbantartó ezt a hamis állítást olvasva
+  tévesen azt hihetné, hogy az egészség-jellegű szöveg titkosítva van
+  nyugalmi állapotban, és emiatt óvatlanabbul bővítené a tárolt tartalmat
+  vagy egy exportot.
+- **Kötelező javítás:** a szó cseréje pontos leírásra (pl. "plaintext local
+  draft path"), vagy a mondat átfogalmazása úgy, hogy ne állítson
+  titkosítást. Egysoros javítás, nem növeli a scope-ot.
 - **Státusz:** OPEN
 
 ### N1 — NOTE — A "custom" cél mindig megoldhatatlan hard-konfliktust hoz létre, kiút nélkül ezen a körön belül
@@ -189,12 +223,15 @@ path), a hiteles `tools/scope-audit.py` eszközzel függetlenül megerősítve.
 
 ## Merge-döntés
 
-**Merge TILOS** — 2 nyitott MAJOR (F1, F2). A gate teljes egészében zöld, de
-az ADR 0052 feltétele ("minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR")
-csak az első felére teljesül. Javító kör szükséges (ugyanaz a motor, `terra`,
-user-döntés 2026-07-31 szerint ez a lánc normál útja) F1+F2+F3 leletlistával;
-a javítás után a gate-et és a scope-auditot újra, saját kézzel, friss
-izolált klónban futtatom, és a jelentést frissítem.
+**Merge TILOS** — 3 nyitott MAJOR (F1, F2, F3) + 1 MINOR (F4). A gate teljes
+egészében zöld, de az ADR 0052 feltétele ("minden gate zöld ÉS nincs nyitott
+BLOCKER/MAJOR") csak az első felére teljesül. A dedikált biztonsági review
+(`docs/reviews/e07-r20-security.md`, kötelező a brief `risk = "high"` miatt)
+lezárult: CRITICAL/BLOCKER nélkül, F3-at függetlenül megerősítette (MAJOR),
+és egy új MINOR-t (F4) talált — sem aktív adatszivárgást, sem
+termékhatár-sértést nem mért.
 
-Külön biztonsági review fut párhuzamosan (a brief `risk = "high"`), annak
-eredménye `docs/reviews/e07-r20-security.md`-ben, a merge-döntés arra is vár.
+Javító kör szükséges (ugyanaz a motor, `terra` — user-döntés 2026-07-31
+szerint ez a lánc normál útja) F1+F2+F3+F4 leletlistával; a javítás után a
+gate-et és a scope-auditot újra, saját kézzel, friss izolált klónban
+futtatom, a review-t és a security-review-t is frissítem.
