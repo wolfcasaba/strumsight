@@ -61,3 +61,57 @@ rész-ellenőrzést.
 Az első lépésed a brief §6 acceptance-pontjaiból készített lista legyen, és
 csak akkor jelezz `done`-t, ha minden elem kipipálva — a félkész fa a lánc
 legdrágább hibaosztálya.
+
+## 8. Alügynökök (`Task`) — a te legerősebb önellenőrző eszközöd
+
+A `Task` eszköz nálad ENGEDÉLYEZETT (user-döntés 2026-08-18), és a boxon élő
+próbával mérve működik a MiniMax endpointon: az `Explore`, a projekt
+`.claude/agents/` ügynökei és az alügynökök `Bash`-hívásai is lefutnak. Az
+alügynök **friss kontextusból** nézi a munkádat — pontosan az a nézőpont, ami
+a mért gyengéidet (invariáns-lazítás, fixture-default vakfolt, nem futtatott
+állítás a handoffban) meg tudja fogni, mielőtt a reviewer teszi meg.
+
+### 8.1 SZINKRON futtatás — ez nem stílus, hanem életciklus
+
+Az alügynököt MINDIG `run_in_background: false` paraméterrel indítsd, és várd
+meg az eredményét, mielőtt továbbmész.
+
+Ez a kör EGYETLEN fordulóban fut (`claude -p`). Ha háttérbe küldött ügynököt
+hagysz futni, és lezárod a fordulót, a folyamat kilépésekor a háttér-feladat is
+MEGHAL — az az értesítés, amit interaktív munkamenetben kapnál, ebben a
+harnessben SOSEM érkezik meg. Mérve: `docs/LESSONS.md` L183 / L254.
+
+### 8.2 NE adj át `model` paramétert
+
+Az alügynök örökölje a te modelledet. Egy explicit `model:` felülírás a
+MiniMax endpointon nem létező modellt kérne.
+
+### 8.3 A GATE a szülőben marad, előtérben
+
+`tools/round-gate.sh`-t **te magad** futtatod, előtérben, csonkítatlanul.
+Alügynökre bízni tilos: a mérce az, hogy a gate teljes kimenete a te naplódban
+legyen — a burkoló abban keresi a parancsalakot és a kilépési kódot.
+
+### 8.4 Mire használd — sorrendben
+
+1. **Tájékozódás induláskor** (`Explore`): a brief §4 listáján szereplő fájlok
+   TÉNYLEGES mai állapotának feltérképezése. Olcsóbb, mint a saját
+   kontextusodat teleolvasni, és a hosszú kör végén marad helyed.
+2. **KÖTELEZŐ önellenőrzés a `done` jelzés ELŐTT.** Indíts egy alügynököt
+   (`flutter-devil-advocate`, vagy `general-purpose`, ha az nem elérhető)
+   ezzel a három kérdéssel, a briefet és a `git diff`-et átadva neki:
+   - **Scope:** van-e a diffben a §4 engedélyezett listán KÍVÜLI fájl?
+   - **Acceptance:** a §6 MINDEN cellájához tartozik-e ténylegesen FUTÓ teszt,
+     és a §6.1 mérce-mátrix minden sorára igaz-e, hogy az ott leírt hibás
+     implementációt a megnevezett cella tényleg pirosra váltaná?
+   - **Igazmondás:** a §10 handoffba írt minden állítás mögött van-e olyan
+     parancs, amit LEFUTTATTÁL ebben a körben?
+3. **Teszt-hézag keresés** (`flutter-test-writer`), ha a mérce-mátrix valamelyik
+   cellájához nem találsz mérő tesztet.
+
+### 8.5 Az alügynök jelentése NEM bizonyíték
+
+Amit az alügynök állít, azt a te gate-futtatásod igazolja. Ha az önellenőrzés
+scope-sértést vagy hiányzó mérce-cellát talál, a helyes válasz a javítás —
+vagy `tools/codex-signal.sh stopped "<egy sor>"`, ha a brief maga ütközik.
+Az alügynök „minden rendben" jelentése önmagában soha nem elég a `done`-hoz.
