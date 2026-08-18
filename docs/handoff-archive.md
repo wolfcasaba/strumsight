@@ -25,6 +25,29 @@ esetet valódi tappal méri. [Correctness review APPROVED](reviews/e07-r21-revie
 és Router CI [32168172689](https://github.com/wolfcasaba/strumsight/actions/runs/32168172689)
 success.
 
+## ✅ E07-R20 — Plan setup wizard és input UX (2026-08-18)
+
+PR [#304](https://github.com/wolfcasaba/strumsight/pull/304), squash `b9dcbc76`.
+Öt lépéses, lokálisan folytatható, akadálymentes Plan setup wizard (SDD Ch8
+Kör 20): cél, elérhetőség, felszerelés, preferencia, kényelem lépés; a "nem
+tudom" minden lépésen elsőosztályú válasz, sosem fordul default értékre; a
+draft lépésenként mentődik és app-újraindítás után is a helyes lépésen
+folytatódik; a hard konfliktus (pl. végrehajthatatlan custom cél) azonnal
+látszik a meglévő `RequestValidator`-on át; a kényelmetlenségi szabad szöveg
+sosem kerül naplóba (mérve `debugPrint`-collector teszttel, siker- és
+hibaútra is).
+
+A független review 1 fordulóban 2 MAJORt zárt SAJÁT próbateszttel mérve
+(kőkemény, órától független naptári dátum az elérhetőség-szerkesztőben; a
+wizard-resume nem tudta megkülönböztetni az "unknown"-nal lezárt lépést a meg
+sem nyitottól), a dedikált biztonsági review (risk=high) függetlenül ugyanarra
+az A9-hiányra jutott + 1 MINORt talált (téves "encrypted" állítás egy
+kommentben) — mind zárva, mindkét review APPROVED. `practiceGeneratorEnabled`
+változatlanul `false`, nulla production hívó. Full Gate exact-SHA:
+`32155224320`, Router CI exact-SHA: `32155221106`. Lecke: L305 (adat-
+jelenlétből derített resume-pont vs. explicit unknown), L306 (widget
+"ma"-fogalma injektált óra nélkül).
+
 ## ✅ E07-R15 — WeeklyScheduler és terhelésrotáció (2026-08-16)
 
 PR [#294](https://github.com/wolfcasaba/strumsight/pull/294), squash
