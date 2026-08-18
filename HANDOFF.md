@@ -3,7 +3,10 @@
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-18
-> (E07-R16 done — bounded, evidence-based progression/regression policy for
+> (E07-R17 done — bounded deterministic review queue: typed targets/outcomes,
+> explicit local-date interval policy, strict daily budget, deduplication and
+> replacement-required handling; review APPROVED, exact-SHA CI green, PR #296.
+> Prior: E07-R16 done — bounded, evidence-based progression/regression policy for
 > the AI Practice Generator: centralized `ProgressionPolicy` bounds
 > (one-step-max adaptation, tempo clamp, cooldown, minimum evidence),
 > discomfort/safety always blocks advance regardless of performance,
@@ -926,6 +929,11 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-18):** `main` @ `e95f9f67` — E07-R17 bounded
+spaced-repetition review queue, PR #296 squash-merge. Exact `6d4261f7`:
+Full Gate 32122497306 + Router CI 32122499507 success; post-merge célzott
+gate zöld.
+
 **Aktuális állapot (2026-08-18):** `main` @ `2dabfd9f` — E07-R16 progression
 policy, PR [#295](https://github.com/wolfcasaba/strumsight/pull/295),
 squash-merge. Exact `b72408ca`: Full Gate
@@ -1323,6 +1331,15 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R17 — Spaced repetition és maintenance queue** (PR #296, squash
+`e95f9f67`, [ADR 0303](docs/adr/0303-spaced-repetition-review-queue-contract.md)).
+Domain-pure typed review identity, explicit `LocalDate` interval-ladder,
+strict daily review budget, replacement-required handling for missing targets
+and deterministic deduplication. Review APPROVED (0 BLOCKER/MAJOR; 1 NOTE);
+the unknown→failure mutation made A2 red. Exact `6d4261f7`: Full Gate +
+Router CI success; post-merge gate zöld. Flags remain `false` with zero
+production callers.
 
 **E07-R16 — Progression és regression policy** (PR
 [#295](https://github.com/wolfcasaba/strumsight/pull/295), squash `2dabfd9f`,
@@ -1956,10 +1973,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R17** (Chapter 8, spaced-repetition
-policy, `docs/rounds/e07-r17-spaced-repetition.md`). A friss session
-pre-flightban mérje újra az E07-R16 `ProgressionPolicy`/`AdaptationDecider`
-contractját, különösen a discomfort-blokk és a cooldown határait. A
+**A soron következő SDD-lépés: E07-R18** (Chapter 8, GenerationOrchestrator,
+progress és cancellation). A friss session pre-flightban mérje újra az R17
+review-budget/replacement contractját és az R16 `ProgressionPolicy`/
+`AdaptationDecider` határait. A
 `practiceGeneratorEnabled` és `plannerAssistEnabled` flagek változatlanul
 `false` maradnak.
 
