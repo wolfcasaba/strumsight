@@ -3,11 +3,39 @@
 Brief: docs/rounds/e07-r22-weekly-and-today-screen.md
 Diff: `git diff 4c0b6b82..cbee3d1c` (pre-flight commit → implementer commit) on `terra/e07-r22-weekly-and-today-screen`
 Reviewer: Claude (Sonnet 5, orchestrátor) · Dátum: 2026-08-18
-Verdikt: APPROVED
+Verdikt: APPROVED (correctness) — **de lásd a §„Kombinált merge-döntés"-t: a dedikált biztonsági review CHANGES REQUIRED-ot adott, a merge ezen a körön emiatt nem történik meg fix nélkül**
 
 ## Összegzés
 
 BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2
+
+## Kombinált merge-döntés (frissítve a biztonsági review után)
+
+A `docs/reviews/e07-r22-security.md` (risk=high, kötelező) 2 nyitott MAJORt
+mért — mindkettőt magam is függetlenül reprodukáltam, mielőtt elfogadtam:
+
+- **MAJOR-1** (`today_plan_controller.dart:156-163`): saját eldobható Dart
+  próbával megerősítve — `(jsonDecode('{"destination":{"nested":1}}') as
+  Map<String,dynamic>).cast<String,String>()` átmegy az `is
+  Map<String,String>` kapun (`true`), de a `extra[_destinationKey]` lookup
+  `_TypeError`-t dob — mért kimenet: `type '_Map<String, int>' is not a
+  subtype of type 'String?' in type cast`. A `tryParse` tehát a saját
+  doc-commentjével ellentétben ÖSSZEOMOLHAT egy plauzibilis, JSON-ból
+  származó bemeneten.
+- **MAJOR-2** (`today_plan_screen.dart:36-42`): saját kód-olvasással
+  megerősítve — a `launchRequest != null && isPermittedLaunch != true ?
+  null : plan` ág akkor is a VALÓDI `plan`-t adja a kontrollernek, ha a
+  `launchRequest` azért `null`, mert a `tryParse` ELUTASÍTOTTA (nem azért,
+  mert nem is volt deep-link kontextus) — ilyenkor a `permits()`/flag-
+  ellenőrzés SOSEM fut le. A saját A7 „unknown deep-link" tesztem ezt nem
+  kapja el, mert `plan:` paraméter nélkül fut (a `plan` már null a
+  gate-től függetlenül) — ezt a saját correctness-review-mban ÉN magam
+  nem vettem észre elsőre; a biztonsági review helyesen fogta meg.
+
+Mindkettő a már engedélyezett fájlokon belül javítható, új fájl vagy ADR
+nélkül. **Javító kör indítva ugyanazzal a motorral (terra), a leletlistával.**
+A végső APPROVED csak a javítás UTÁNI, mindkét oldalról (correctness +
+security) újramért verdikt.
 
 Minden gate independently újrafuttatva egy izolált `/tmp/review-e07-r22`
 klónban (nem az implementer saját munkapéldányában). A legmagasabb kockázatú
