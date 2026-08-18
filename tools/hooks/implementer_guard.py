@@ -103,6 +103,15 @@ FORBIDDEN_BASH = (
         "a MEGOSZTOTT fő munkafa módosítása",
         "a köröd a saját munkapéldányában dolgozik — a fő fához ne nyúlj",
     ),
+    (
+        # USER-DÖNTÉS 2026-08-18: „az openait ne használjuk csak a rag
+        # adatbázishoz". MÉRVE ugyanaznap: egy önjavító kör megtalálta a boxon
+        # a kulcsot, és `codex login --with-api-key`-vel motor-hitelesítésre
+        # fordította — ettől minden kör a user API-számláját terhelte volna.
+        re.compile(r"\bcodex\s+login\b[^\n]*--(with-)?api-key\b|RAG_OPENAI_API_KEY[^\n]*codex"),
+        "a RAG-kulcs motor-hitelesítésre fordítása",
+        "a RAG_OPENAI_API_KEY KIZÁRÓLAG a tudás-index építésére való; motor-auth hiba → `blocked` jelzés",
+    ),
 )
 
 

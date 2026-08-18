@@ -64,6 +64,9 @@ on:
       - "tools/hooks/**"
       - "tools/implementer-settings.json"
       - "tools/implementer-agents.json"
+      # Tudás-RAG (ADR 0312): a darabolás, a frissesség-jelzés és a bekötés
+      # mind mért viselkedés, guard-teszttel — a szűrőnek indulnia kell rájuk.
+      - "tools/knowledge-rag.mjs"
       - "tools/round-scope-audit.sh"
       - "tools/safe-force-push.sh"
       - "tools/fix-workspace-origin.sh"
