@@ -11374,3 +11374,88 @@ sorai — mindhárom UGYANAZT a mintacsaládot védi: egy orchestrátor-harness
 nem garantálja, hogy egyetlen hosszan futó hívást tud tartani egy csendes
 várakozás alatt, ezért minden ilyen várakoztató szerződésnek a
 folyamat-határokon túl is élnie kell.
+
+## L304 — Egy H4 self-heal, aminek a gyökéroka a MEGÁLLT KÖR SAJÁT, még nem merge-elt ágán élő kódhiba, a kör ágára tartozik, nem egy `main`-alapú `heal/`-branchre (E07-R19, halt H4, ADR 0112 önjavítás, 2026-08-18)
+
+**Tünet.** A független review (`docs/reviews/e07-r19-review.md`, MiniMax
+implementáció, branch `minimax/e07-r19-local-plan-repository` @ `dce4f957`)
+egy nyitott MAJORt (M-01) mért: `PracticePlanMigrator._migrateVxToCurrent`
+változatlanul adta vissza a v0 envelope-ot, így a `migrateEnvelope`
+eredményének `schemaVersion`-je `0` maradt az elvárt `1` (`ADR 0267` §6,
+brief A7 below-cell) helyett — eldobható próba: `Expected: <1>; Actual:
+<0>`. A review indoklása szerint „a kör korábbi MiniMax- és
+Codex-javítási kerete a handoff szerint már elfogyott", ezért H4-gyel
+halt ahelyett, hogy egy újabb javító kört indított volna.
+
+**Mért gyökérok.** A `.codex-round-status` (branch HEAD `0d505ca7`)
+`summary=E07-R19 repair committed and pushed…`, `signalled_at=12:30:06Z`
+bizonyítja, hogy ez a commit a MiniMax implementer **saját, első**
+befejezés-jelzése volt — nem egy review-CHANGES-REQUESTED utáni javító
+kör. A branch két korábbi self-healje (H3 — brief-scope revízió, PR
+#301; H-NOSIGNAL — `wait-for-round.sh` infra-hiba, PR #302,
+[[L303]]) egyike sem M-01-et javította: egyik sem érintette
+`practice_plan_migrator.dart`-ot. A H4-döntés tehát azonosította a
+self-heal-kísérletszámot a kör saját MiniMax/Codex javító-kör
+számlálójával, holott a kettő különböző dolog — az ÖRÖKÖLT motor
+(MiniMax → Codex eszkaláció, `pipeline-orchestrator-prompt.md` §2)
+budgetje M-01-re nézve valójában **nem lett elköltve**. Ez önmagában
+nem tette a halt-ot hibássá (a self-heal ADR 0112 szerint bármikor
+feloldhat egy H4-et), de a fix formáját meghatározta: a hibás kód
+kizárólag a megállt kör SAJÁT, `main`-be még nem olvadt ágán létezik
+(`git diff origin/main..origin/minimax/e07-r19-local-plan-repository`
+öt commitot ad, a migrator fájl `main`-en nem is létezik) — egy
+`main`-alapú `heal/`-branch tehát nem tudná hova tenni a javítást.
+
+**Javítás.** A `_migrateVxToCurrent` most egy másolatot ad vissza,
+`schemaVersion: currentSupportedSchemaVersion` felülírással (a checksum
+a `PracticePlanSerializer.openEnvelope`-ban kizárólag a `body`-t fedi,
+tehát a relabeling nem érvényteleníti). A meglévő
+`practice_plan_migrator_test.dart` "below cell" esete maga is a régi,
+hibás `0` értéket várta — ez az oka, hogy a gate korábban zölden ment
+át M-01 mellett; a teszt asszertje most a current verziót várja.
+Elkülönített worktree-ben (`git worktree add … minimax/e07-r19-local-
+plan-repository`, NEM `origin/main`-ről) a javítás előtt a mért
+kimenet piros volt (`Expected: <1>; Actual: <0>`, a review saját
+próbájával egyező), utána zöld. A javítás közvetlenül a kör ágára
+(`minimax/e07-r19-local-plan-repository`, `45395d9f`) lett pusholva —
+**nem** külön `heal/E07-R19-H4-1` branch-csel `main`-re, a
+`pipeline-orchestrator-prompt.md` H8-szakaszának mintáját követve
+(„… normál push … a következő friss kör-sessionben folytatható").
+`main` és a `docs/rounds/*.md` brief érintetlen maradt.
+
+**Miért biztonságos ez a `round-pipeline.sh` mérce-őrszeme szerint is.**
+Az `attempt_selfheal` a heal LEZÁRÁSA után `heal/${round}-${code}-
+${attempt}` néven keres egy merge-elt PR-t (`heal_pr_number`); ha nincs
+ilyen, a `main` `gate_test_count`/`gate_artifact_hashes`
+(`tools/round-gate.sh`, `build-apk.yml`, `router-ci.yml`) előtte/utána
+ujjlenyomatára esik vissza. Mivel ez a javítás `main`-t egyáltalán nem
+érintette, mindkét ujjlenyomat változatlan marad, tehát a „nincs
+merge-elt heal-PR" ág NEM jelez H-GATEGUARD-ot — a kör-ágra pusholt,
+PR nélküli javítás a mércének bizonyíthatóan megfelel.
+
+**Regresszió.** `test/features/practice_generator/data/
+practice_plan_migrator_test.dart` (10/10, "below cell" eset a
+regresszió). `tools/round-gate.sh test/features/practice_generator/
+data/local_repository_test.dart test/features/practice_generator/data/
+practice_plan_migrator_test.dart`: format/analyze/mindkét célzott
+teszt/architecture/secrets/l10n mind zöld.
+
+**Szabály.** (1) Egy H4 self-heal ELSŐ lépése annak MÉRÉSE — a
+`.codex-round-status` `summary`/`signalled_at` és a branch commit-
+üzenetek alapján —, hogy a hivatkozott „javító kör" ténylegesen a
+review talált leletére futott-e, ne csak higgyen a HALTED-összegzésnek;
+egy self-heal (más halt-kódra) nem ugyanaz, mint egy review-CHANGES-
+REQUESTED-utáni implementer javító kör. (2) Ha a gyökérok a megállt kör
+SAJÁT, még nem `main`-be olvadt ágán élő kód (nem infra/`tools/`/ADR),
+a javítás CÉLJA a kör ága, plain push-sal — a self-heal §4 sablonjának
+„worktree `origin/main`-ről, `heal/`-branch, PR" alapértelmezése az
+INFRA-osztályú javításokra van írva, a H8-szakasz explicit kivétele
+(kör-ág, normál push, PR nélkül) a mintaadó erre az esetre is.
+
+Rokon L-ek: [[L303]] (a két korábbi E07-R19 self-heal, aminek a
+kísérletszámát a review tévesen a javító-kör budgethez rendelte),
+[[L70]] (egy korábbi H4 — a self-heal ott KÖZVETLENÜL javított
+termék-kódot, de egy MÁR `main`-en élő fájlban, ezért `heal/`-branch +
+merge + a kör ágának `git merge origin/main`-je volt a helyes út —
+együtt a két L a döntési fát adja: a hibás fájl `main`-en van-e vagy
+csak a kör ágán).
