@@ -265,6 +265,45 @@ hivatkozásának téves, mért olvasatát zárja ki jövőbeli reviewekben.
 
 Lecke: `docs/LESSONS.md` [[L322]].
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-19) — H3 igazoltan ártalmatlan implementer-debris feloldása REVERT-tel, `allowed_paths` bővítése nélkül
+
+Mérés: E99-R18/H3 — a MiniMax implementer a saját, még nem review-zott
+worktree-jében (`/home/ubuntu/ss-minimax-e99-r18`) három nyomkövetetlen fájlt
+hagyott a brief `allowed_paths`-án kívül (`test_project/lib/features/demo/
+public.dart` + két testvérfájl). A Terra orchesztrátor-session ezt H3-mal
+állította le, holott `docs/execution/pipeline-orchestrator-prompt.md` VIOLATION-
+sora már eleve két utat ismer: „a listán kívüli fájlokat **vissza kell
+állítani**, vagy H3 halt" — és a §2 „Önállóan dönthetsz" felsorolása
+kifejezetten megnevezi „az engedélyezett-fájllista **szűkítését**" mint a kör
+saját hatáskörét. A revert tehát NEM igényelte volna a H3 „tilos zóna
+feloldása" eszkalációt (az egy ÚJ engedélyre vonatkozik, nem egy meglévő
+allowlist-hez való visszaigazításra) — ez a self-heal a mérés alapján
+kizárólag azt a döntést hozta meg, amit a saját protokollja már
+felhatalmazott, de a rotáción lévő motor nem gyakorolt.
+
+**A döntés kizárólag mért, nem feltételezett tényre épül**, és csak addig a
+körig érvényes precedens, amíg ugyanez a mérés elvégezhető: a kifogásolt
+útvonal(ak) (a) nulla hivatkozással szerepelnek bármely tracked/untracked
+forrásban (`grep -rn`), (b) funkcionálisan redundánsak egy már létező,
+helyesen izolált automatizált fixture-rel, és (c) egyetlen deliverable-t vagy
+acceptance-cellát sem fednek le a brief D-feladatai vagy „Tilos zóna"
+szakasza szerint. Ha akár egy is hiányzik ezek közül — vagyis nem
+egyértelmű, hogy a fájl elhagyható-e —, a döntés VISSZA H3-ra esik (vagy
+`outcome=escalate`), NEM automatikus revert. A self-heal ezt a döntést a
+kör saját briefjének dokumentált `## 0.0 Pre-flight revízió` szakaszába
+írta (nem a self-heal maga törölte a fájlokat a megállt implementer
+worktree-jén — az a következő, friss E99-R18 dispatch dolga, hiszen az ADR
+0112 §2 jogosultsága a briefre/allowlistre szól, nem a kör saját,
+review-zatlan implementer-ágára).
+
+Ez a döntés a `test_e07_r29_accessibility_privacy_scope.py` precedens
+TÜKÖRKÉPE: ott a listán kívüli fájlok igazoltan hiányzó deliverable-ek
+voltak, és a helyes feloldás `allowed_paths`-bővítés volt. A két minta nem
+helyettesíti egymást — melyiket kell alkalmazni, azt a fenti (a)-(c) mérés
+dönti el, sosem az, hogy melyik a kényelmesebb.
+
+Lecke: `docs/LESSONS.md` [[L333]].
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör
