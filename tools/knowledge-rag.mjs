@@ -119,15 +119,19 @@ function parseCorpusList(raw) {
 /** Egy chunk beleesik-e a kért korpusz-szűrőbe. */
 const inCorpus = (name) => !flags.corpus || flags.corpus.has(name);
 
-// ADR 0316 §2.2 — SÚLYOZOTT fúzió. A mért hibaosztály az volt, hogy egy ritka
-// domain-terminus (flaky, H8, tmux, win32) erős lexikai jelét a szemantikus ág
-// hígította, mert az RRF egyenlő súlyt adott a két ágnak. Az alapértelmezés
-// ezért a lexikai ág javára billen; `RAG_W_BM25` / `RAG_W_EMB` felülírja.
-// MÉRVE a `tools/rag-eval.tsv` mércén: a lexikai ág felé billentés ROMLIK
-// (bm25×2 → 36,8%), a szemantikus ág felé billentés javít. Az ADR 0316 §2.2
-// eredeti feltevése — „az alapértelmezés a lexikai ág javára billen" — egyetlen
-// anekdotán (a szó szerint beírt „flaky") alapult; parafrazált kérdésen, ami a
-// valós használat, éppen fordítva igaz.
+// ADR 0316 §2.2 — SÚLYOZOTT fúzió, `RAG_W_BM25` / `RAG_W_EMB` felülírja.
+//
+// Az ADR eredeti előírása az volt, hogy az alapértelmezés a LEXIKAI ág javára
+// billenjen: a feltevés szerint egy ritka domain-terminus (flaky, H8, tmux,
+// win32) erős lexikai jelét hígította a szemantikus ág. MÉRVE a
+// `tools/rag-eval.tsv` mércén ez az irány ROMLIK: bm25×2 → 36,8% (MRR 0,254),
+// míg emb×2 → 52,6% (MRR 0,491).
+//
+// A feltevés azért dőlt meg, mert egyetlen anekdotán állt: a szó szerint
+// beírt „flaky" szón. A valós használat PARAFRÁZIS („miért bukik el néha a
+// property gate…"), ahol nincs közös ritka szó, tehát a BM25-ág vak — mérve
+// ugyanerre a kérdésre L142 a BM25 top-40-ben SINCS benne, a szemantikus ágon
+// viszont #11. Ezért az alapértelmezés a szemantikus ág javára billen.
 const W_BM25 = Number(process.env.RAG_W_BM25 ?? 1.0);
 const W_EMB = Number(process.env.RAG_W_EMB ?? 2.0);
 // ADR 0316 §2.3 — dokumentum-korlát: egy forrásfájlból legfeljebb ennyi chunk

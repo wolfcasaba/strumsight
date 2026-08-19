@@ -195,3 +195,81 @@ class PipelineWiringTest(unittest.TestCase):
             capture_output=True, text=True, timeout=600,
         )
         self.assertEqual(result.returncode, 0, result.stdout[-600:])
+
+
+@unittest.skipUnless(shutil.which("node"), "nincs node ezen a futón")
+class RetrievalRankingTest(unittest.TestCase):
+    """A RANGSOR mérése (ADR 0316).
+
+    A visszakeresés minőségét a `tools/rag-eval.tsv` mércéje méri; ezek a
+    tesztek azt védik, ami gépileg ellenőrizhető hálózat nélkül: a
+    dokumentum-korlát CSOPORTOSÍTÁSI EGYSÉGÉT, a több-korpuszos szűrőt és az
+    ágankénti helyezés láthatóságát.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.index_dir = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        self.env = {"RAG_INDEX_DIR": str(self.index_dir), "OPENAI_API_KEY": ""}
+
+    def test_the_document_cap_does_not_collapse_a_record_corpus(self) -> None:
+        """A `docs/LESSONS.md` 346 leckéje EGY fájl — a fájl-alapú korlát az
+        egész korpuszt két találatra vágná.
+
+        MÉRVE 2026-08-19: a naiv, fájlra csoportosító korlát a visszakeresési
+        mércét 53,8%-ról 38,5%-ra rontotta, és a döntő leckék (L142, L143,
+        L323) kiestek a top-20-ból. Ez a teszt azt a regressziót fogja meg.
+        """
+        result = node("--bm25", "--corpus", "lessons", "--top", "8", "--json", "gate",
+                      env={**self.env, "RAG_MAX_PER_DOC": "2"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        self.assertGreater(
+            len(hits), 2,
+            "a dok-korlát a lecke-korpuszt fájl-szinten csoportosítja — "
+            f"csak {len(hits)} találat jött vissza",
+        )
+
+    def test_the_document_cap_does_bound_a_narrative_document(self) -> None:
+        """Ahol egy fájl ÖSSZEFÜGGŐ dokumentum, ott a korlátnak élnie kell:
+        egyetlen forrás ne foglalhassa a lista több helyét (MÉRVE: egy
+        lekérdezés első négy helyét ugyanannak a briefnek négy szakasza vitte)."""
+        result = node("--bm25", "--corpus", "sdd", "--top", "12", "--json", "teszt gate kör",
+                      env={**self.env, "RAG_MAX_PER_DOC": "2"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        self.assertTrue(hits, "üres találati lista")
+        per_file: dict[str, int] = {}
+        for h in hits:
+            per_file[h["file"]] = per_file.get(h["file"], 0) + 1
+        worst = max(per_file.values())
+        self.assertLessEqual(worst, 2, f"egy forrás {worst} helyet foglal: {per_file}")
+
+    def test_several_corpora_can_be_filtered_in_one_call(self) -> None:
+        """`--corpus lessons,adr` — a pre-flight természetes szűkítése."""
+        result = node("--bm25", "--corpus", "lessons,adr", "--top", "12", "--json", "gate kör",
+                      env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        found = {h["corpus"] for h in hits}
+        self.assertTrue(found <= {"lessons", "adr"}, f"idegen korpusz szivárgott be: {found}")
+        self.assertEqual(found, {"lessons", "adr"}, f"nem mindkét korpuszból jött találat: {found}")
+
+    def test_the_handoff_corpus_is_indexed(self) -> None:
+        """A HANDOFF.md + archívum 12 093 sora korábban EGYÁLTALÁN nem volt
+        kereshető (ADR 0316 §2.4)."""
+        result = node("--bm25", "--corpus", "handoff", "--top", "3", "--json", "kör lezárva",
+                      env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        hits = json.loads(result.stdout)
+        self.assertTrue(hits, "a handoff korpusz üres")
+        self.assertTrue(all(h["corpus"] == "handoff" for h in hits), hits)
+
+    def test_the_result_shows_which_branch_ranked_it(self) -> None:
+        """A puszta RRF-pontszám rang-információ, nem relevancia (1/61, 1/62 …):
+        ugyanaz a 0,0164 jött ki értelmes és értelmetlen kérdésre is. Az
+        ágankénti helyezés az, amiből a hiba diagnosztizálható."""
+        result = node("--bm25", "--corpus", "lessons", "--top", "3", "win32", env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("bm25#", result.stdout, result.stdout[:400])
