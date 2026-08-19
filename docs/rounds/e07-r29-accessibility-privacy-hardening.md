@@ -9,6 +9,59 @@
 - **Előre kiosztott ADR:** nincs — a határokat az ADR 0260 §4 (érzékeny szöveg),
   0265 §3 (discomfort blokkol) és 0270 rögzíti.
 
+## 0.0 Pre-flight revízió (2026-08-19, `main @ 1cad061e`)
+
+**Végrehajthatósági eredmény: STOP — H3 (tilos zóna).** Ez a revízió a
+dispatch előtti mérést rögzíti; nem tágítja az engedélyezett fájllistát és nem
+változtat acceptance-kritériumot.
+
+### Mért tények
+
+- A l10n-őrt a `tool/ci/check_l10n_parity.dart` adja (a round gate is ezt
+  futtatja). Az `app_en.arb`/`app_hu.arb` kulcs-, üresség- és
+  placeholder-paritását méri, de saját kommentje szerint nem tudja bizonyítani,
+  hogy a UI minden szöveget ARB-n keresztül használ. Ezért A1 gépi része
+  rendelkezésre áll, az A2–A5 UI-audit viszont csak az érintett képernyőkön
+  mérhető.
+- `docs/privacy/` ezen a HEAD-en még nem létezik; az új, engedélyezett
+  `docs/privacy/practice-planning-data.md` létrehozható.
+- A tényleges perzisztens planning-adatok tulajdonosa nem az új use case-ek:
+  a draftot a kizárt
+  `data/local/generation_draft_repository.dart`, az active plan/revision/
+  outcome archive-ot a kizárt
+  `data/local/local_practice_plan_repository.dart` kezeli. Az utóbbi publikus
+  mutációi között nincs policy-szerinti teljes törlés vagy export, a
+  `KeyValueStore` pedig kulcs-enumerálást sem ad. A `PracticeEvidenceRepository`
+  szintén kizárt domain-fájl, és a szerződése szándékosan csak `save`-ot,
+  keresést és lekérdezést definiál — törlést nem.
+- Az A2–A5 és A9 viselkedése ma a szintén kizárt, már létező
+  `presentation/screens/today_plan_screen.dart`,
+  `weekly_plan_screen.dart`, `plan_setup_screen.dart` és a hozzájuk tartozó
+  controller/domain útvonalakon él. Az új `plan_privacy_screen.dart` nem tudja
+  a meglévő státuszok, akciók, nagybetűs layout vagy reduced-motion viselkedését
+  auditálhatóan megváltoztatni.
+- A discomfort input tényleges útja már biztonságos: az
+  `EvidenceAggregator.ingest(..., discomfortNote:)` az ingyenes szöveget
+  eldobja, és csak stabil kategóriát naplóz; az `AdaptationDecider` a
+  discomfortot progresszió-blokkolónak kezeli. Ez A6/A9 kiindulási bizonyíték,
+  nem engedély az érintetlen rétegek átírására.
+
+### Kötelező feloldás a következő, új briefben
+
+Az E07-R29 jelen szerződésével implementer-dispatch tilos. Egy új, önálló
+briefnek tételesen engedélyeznie kell a planning storage-owner és evidence-port
+fájlokat, azok tesztjeit, valamint az auditált meglévő planner képernyőket; és
+meg kell határoznia a felhasználó által indított törlés policyjét az ADR 0260
+§5 immutable/expiry szabályával összhangban. Ez architekturális scope-bővítés,
+nem szűkítés, ezért ebben a körben H3.
+
+**Visszakeresett előzmények:** `lessons/L260` (redakciós teszt csak
+értékoldali kanárival bizonyít szivárgást), `lessons/L261` (saját tiltott zóna
+és kötelező működés ütközésekor bound feloldás kell, nem csendes tágítás),
+`lessons/L107` (a meglévő őr lefedettségét mérni kell, nem feltételezni).
+Nincs olyan releváns, már elfogadott ADR, amely a planning evidence explicit
+felhasználói törlésének teljes storage-körét definiálná.
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd meg a projekt **l10n
 > paritás-ellenőrzőjét** (`tools/check_l10n_parity` vagy a `test/tooling/`
 > megfelelője) és a meglévő adatvédelmi dokumentumok helyét
