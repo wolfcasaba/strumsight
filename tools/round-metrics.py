@@ -35,10 +35,17 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from tools.ai_router.brief import BriefMetadataError, load_brief
+else:
+    from .ai_router.brief import BriefMetadataError, load_brief
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 LEDGER_RELATIVE = Path(".pipeline") / "cost.tsv"
 REGISTRY_RELATIVE = Path("docs") / "execution" / "engine-registry.tsv"
+QUEUE_RELATIVE = Path("docs") / "execution" / "pipeline-queue.tsv"
 
 LINE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+\-]\d{2}:\d{2})\s\s(?P<message>.*)$")
 START = re.compile(r"^orchestrátor-session indul \((?P<round>[A-Z0-9-]+)\)")
@@ -281,6 +288,187 @@ def engines_summary(events: list[dict], *, outlier_threshold: int = OUTLIER_THRE
     }
 
 
+# E99-R16 D1: kör-granularitás. A rögzített (merge-elt) köröket a briefjük
+# méretével (allowed_paths + gate_tests darabszáma, native_gate flag) párosítjuk,
+# és a kör-időt a méret függvényében ábrázoljuk. A tengelymetszet a MÉRT fix
+# overhead, a meredekség a fájlonkénti határköltség. A 10 óránál hosszabb
+# körök kiugróként maradnak ki — az E07-R16 (2636p halt-epizód) egyetlen
+# pontja elmozdítaná a meredekséget a tűrésen kívülre (mérve: S6 szabály
+# falszifikációs cellája).
+GRANULARITY_SIZE_BANDS: tuple[tuple[int, int], ...] = ((1, 4), (5, 8), (9, 10**9))
+
+
+def _round_size(metadata) -> int:
+    """`allowed_paths` + `gate_tests` egyesített mérete — a brief-fájl maga
+    nem számít (a granularitás a MUNKÁ-t méri, nem a brief-dokumentumot)."""
+    return len(metadata.allowed_paths) + len(metadata.gate_tests)
+
+
+def load_briefs_for_queue(repo: Path, queue_path: Path | None = None) -> dict[str, object]:
+    """A sor-fájlban HIVATKOZOTT összes brief metadata-ja. A `round_id` (normált
+    nagybetűs) → BriefMetadata. A hibás / nem olvasható briefek kimaradnak
+    (a granularitás-elemzés csak az érvényes adatpontokból dolgozik)."""
+    if queue_path is None:
+        queue_path = repo / QUEUE_RELATIVE
+    try:
+        text = queue_path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    briefs: dict[str, object] = {}
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 5:
+            continue
+        brief_path = repo / parts[1]
+        try:
+            briefs[parts[0].upper()] = load_brief(brief_path).metadata
+        except (BriefMetadataError, OSError):
+            continue
+    return briefs
+
+
+def granularity_summary(
+    events: list[dict],
+    *,
+    briefs: dict[str, object],
+    outlier_threshold: int = OUTLIER_THRESHOLD_SECONDS,
+) -> dict:
+    """Kör-granularitás: a merge-elt körök kör-ideje ↔ brief-méret párosítása.
+
+    A kiugró-szűrés CSAK a sáv- és regresszió-számítást érinti (ugyanaz a
+    elv, mint az `engines_summary`-nál): a `samples` mező a TELJES mintát
+    tükrözi, hogy a kiugrók száma látható maradjon.
+
+    A lineáris illesztés `statistics.linear_regression` (Python 3.10+) — a
+    `tools/round-metrics.py` már importálja a `statistics` modult, és a
+    numpy/scipy bevezetése nem indokolt.
+    """
+    open_start: dict[str, datetime] = {}
+    open_merged_at: dict[str, datetime] = {}
+    for event in events:
+        round_id = event.get("round") or ""
+        if not round_id:
+            continue
+        kind = event["kind"]
+        at = event["at"]
+        if kind == "start" and round_id not in open_start:
+            open_start[round_id] = at
+        elif kind == "merged" and round_id in open_start:
+            open_merged_at[round_id] = at
+
+    samples: list[dict] = []
+    for round_id, start_at in open_start.items():
+        merged_at = open_merged_at.get(round_id)
+        if merged_at is None:
+            continue
+        metadata = briefs.get(round_id)
+        if metadata is None:
+            continue
+        duration = (merged_at - start_at).total_seconds()
+        samples.append(
+            {
+                "round": round_id,
+                "duration_seconds": duration,
+                "size_files": _round_size(metadata),
+                "native_gate": bool(metadata.native_gate),
+            }
+        )
+
+    filtered = [item for item in samples if item["duration_seconds"] < outlier_threshold]
+    outliers_dropped = len(samples) - len(filtered)
+
+    bands: list[dict] = []
+    for low, high in GRANULARITY_SIZE_BANDS:
+        band_samples = [item for item in filtered if low <= item["size_files"] <= high]
+        durations_band = [item["duration_seconds"] for item in band_samples]
+        if durations_band:
+            median_s = statistics.median(durations_band)
+            mean_s = statistics.fmean(durations_band)
+        else:
+            median_s = None
+            mean_s = None
+        bands.append(
+            {
+                "size_min": low,
+                "size_max": high if high < 10**9 else None,
+                "n": len(band_samples),
+                "median_seconds": median_s,
+                "mean_seconds": mean_s,
+            }
+        )
+
+    regression: dict
+    xs = [float(item["size_files"]) for item in filtered]
+    ys = [item["duration_seconds"] / 60.0 for item in filtered]
+    if len(xs) >= 2:
+        slope, intercept = statistics.linear_regression(xs, ys)
+        correlation = statistics.correlation(xs, ys)
+        r_squared = correlation * correlation if correlation is not None else None
+        regression = {
+            "n": len(xs),
+            "slope_minutes_per_file": slope,
+            "intercept_minutes": intercept,
+            "r_squared": r_squared,
+        }
+    else:
+        regression = {
+            "n": len(xs),
+            "slope_minutes_per_file": None,
+            "intercept_minutes": None,
+            "r_squared": None,
+        }
+
+    return {
+        "schema_version": 1,
+        "outlier_threshold_seconds": outlier_threshold,
+        "samples": samples,
+        "outliers_dropped": outliers_dropped,
+        "bands": bands,
+        "regression": regression,
+    }
+
+
+def _fmt_slope(value: float | None) -> str:
+    return "—" if value is None else f"{value:.1f}"
+
+
+def render_granularity_table(result: dict) -> str:
+    """A granularitás-elemzés szöveges táblája: sávonkénti medián + regresszió."""
+    lines = [
+        f"{'méret-sáv':<14} {'n':>4} {'medián':>9} {'átlag':>9}",
+        "-" * 40,
+    ]
+    for band in result["bands"]:
+        size_label = (
+            f"{band['size_min']}+"
+            if band["size_max"] is None
+            else f"{band['size_min']}–{band['size_max']}"
+        )
+        median_cell = "—" if band["median_seconds"] is None else f"{band['median_seconds'] / 60:.0f}p"
+        mean_cell = "—" if band["mean_seconds"] is None else f"{band['mean_seconds'] / 60:.0f}p"
+        lines.append(
+            f"{size_label:<14} {band['n']:>4} {median_cell:>9} {mean_cell:>9}"
+        )
+
+    reg = result["regression"]
+    lines.append("")
+    lines.append(
+        f"lineáris illesztés (kör-idő ~ fájlszám): n={reg['n']}, "
+        f"meredekség={_fmt_slope(reg['slope_minutes_per_file'])}p/fájl, "
+        f"tengelymetszet={_fmt_slope(reg['intercept_minutes'])}p"
+    )
+    if reg["r_squared"] is not None:
+        lines.append(f"R²={reg['r_squared']:.3f}")
+    lines.append(
+        f"A 10+ órás kör-idők kiugróként maradnak ki (küszöb: "
+        f"{result['outlier_threshold_seconds'] // 3600} óra, "
+        f"ebben a mintában {result['outliers_dropped']} db)."
+    )
+    return "\n".join(lines) + "\n"
+
+
 def render_engines_table(result: dict) -> str:
     """A motoronkénti statisztika szöveges táblája."""
     rows = result["engines"]
@@ -469,6 +657,17 @@ def main(argv: list[str] | None = None) -> int:
         "--epic",
         help="a `--engines` statisztikát egy adott epicre szűkíti (pl. `E07` → csak E07-R* körök); a motor-aggregátum ELŐTT lép életbe",
     )
+    parser.add_argument(
+        "--granularity",
+        action="store_true",
+        help="E99-R16 D1: a merge-elt körök kör-ideje ↔ brief-méret (allowed_paths + gate_tests) párosítása; méret-sávonkénti medián + lineáris regresszió",
+    )
+    parser.add_argument(
+        "--queue",
+        type=Path,
+        default=REPO_ROOT / QUEUE_RELATIVE,
+        help="a granularitás-elemzéshez használt sor-fájl (alap: docs/execution/pipeline-queue.tsv)",
+    )
     arguments = parser.parse_args(argv)
 
     if arguments.cost:
@@ -504,6 +703,24 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(engines_result, ensure_ascii=False, sort_keys=True, indent=2))
         else:
             print(render_engines_table(engines_result), end="")
+        return 0
+
+    if arguments.granularity:
+        briefs = load_briefs_for_queue(arguments.repo, arguments.queue)
+        granularity_result = granularity_summary(
+            parse_chain_log(text),
+            briefs=briefs,
+        )
+        if not granularity_result["samples"]:
+            print(
+                "round-metrics: a naplóban nincs a sor-fájl briefjeihez párosítható merge-elt kör",
+                file=sys.stderr,
+            )
+            return 2
+        if arguments.format == "json":
+            print(json.dumps(granularity_result, ensure_ascii=False, sort_keys=True, indent=2))
+        else:
+            print(render_granularity_table(granularity_result), end="")
         return 0
 
     if arguments.format == "json":
