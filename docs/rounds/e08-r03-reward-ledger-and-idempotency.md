@@ -50,6 +50,15 @@ hirdetett rétegnél ez pontosan a CLAUDE.md „Cloud writes swallowed by
 try/catch → silent no-op" hibaosztálya, ha a repository felülete TÖBBET
 ígér, mint amit ténylegesen teljesít. Lásd 0.0.4.
 
+Az indításkori ismételt lekérdezés (`2026-08-19`, `main @ 0872b8e9`) ugyanezt
+az **[[L28]]**-at adta első releváns lessons-találatként, és a **[[L302]]**-t
+mint scope-őrt: a hiányzó Core-segéd önmagában nem indokol új, tilos-zónás
+fájlt, ha a meglévő `JsonDocumentStore` szerződés teljesíti a szükséges
+whole-document recovery-t. A tényleges mérés szerint ez itt fennáll, ezért
+sem új Core API, sem allowed-path bővítés nem szükséges. A RAG-index három
+committal lemaradt; az indexelés a merge-horgony feladata, nem ennek a körnek
+a scope-ja.
+
 ### 0.0.2 A§6.1/A2 hivatkozott „mintája" pontatlan — mindkét idézett fájlt elolvastam
 
 A §6.1 tábla és a §9 „Kockázatok" is a `test/features/progress/
