@@ -1,18 +1,18 @@
 # E07-R25 — Review
 
 Brief: `docs/rounds/e07-r25-analysis-and-vision-evidence.md`  
-Diff: `0585083e..62db0425`  
+Diff: `0585083e..3e59011f`  
 Reviewer: Codex / gpt-5.6-terra  
 Date: 2026-08-19  
-Verdict: CHANGES REQUIRED
+Verdict: APPROVED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
-The isolated gate and machine scope audit pass, but the Vision adapter does
-not enforce its own `ObservationState` safety contract. The default reader is
-safe today; the public port is not guaranteed to be.
+The isolated gate and machine scope audit pass. The corrective commit
+`3e59011f` closes F1 with an adapter-level, fail-closed state gate and two
+port-boundary tests.
 
 ## Acceptance criteria
 
@@ -24,7 +24,7 @@ safe today; the public port is not guaranteed to be.
 | A4 | Jelminőség nem skill-ítélet | ✅ | Analysis adapter setup-advisory cells. |
 | A5 | Csak allowlisted Vision proxy | ✅ | `metricNotAllowed` cell. |
 | A6 | Konfliktus bizonytalanságot ad | ✅ | Analysis adapter conflict cells. |
-| A7 | Capability-hiány explicit | ❌ | F1: a port által átadott `notObservable` fact nem védett. |
+| A7 | Capability-hiány explicit | ✅ | F1 corrective state-gate tests; `notObservable` contributes zero evidence. |
 | A8 | Csak public API | ✅ | Architecture gate; adapter imports nested Vision barrel only. |
 
 ## Scope-audit
@@ -57,7 +57,10 @@ safe today; the public port is not guaranteed to be.
 - **Ellenőrzés:** A javított `vision_evidence_adapter_test.dart` legyen piros
   a state-gate eltávolításakor, majd futtasd a brief négy célzott tesztjét a
   `tools/round-gate.sh` artefaktummal.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`3e59011f`): the adapter rejects `notObservable` facts
+  before constructing `SkillEvidence`, emits `stateNotAllowed` with only the
+  stable measurement id, and the two new stub-reader cells are green in the
+  fresh isolated gate.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -68,9 +71,9 @@ safe today; the public port is not guaranteed to be.
 | célzott tesztek | ✅ 4/4 green |
 | architecture / secrets / l10n | ✅ green |
 | scope audit | ✅ `OK` |
-| CI (full suite + property + workflow) | függőben — javítás után dispatch |
+| CI (full suite + property + workflow) | függőben — APPROVED diff után dispatch |
 
 ## Merge-döntés
 
-F1 MAJOR nyitott, ezért merge tilos. Egy MiniMax javító kör szükséges ugyanazon
-branch-en.
+Nincs nyitott BLOCKER vagy MAJOR. A merge a CI-tervező által előírt exact-SHA
+workflow(ok) sikeres lefutása után engedélyezett.
