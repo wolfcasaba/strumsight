@@ -5,6 +5,7 @@ export 'application/port/skill_snapshot_reader.dart';
 export 'application/port/practice_catalog_reader.dart';
 export 'application/port/analysis_evidence_reader.dart';
 export 'application/port/vision_evidence_reader.dart';
+export 'application/port/planner_assist_gateway.dart';
 export 'application/controller/plan_generator_controller.dart';
 export 'application/controller/active_plan_controller.dart';
 export 'application/controller/today_plan_controller.dart';
@@ -25,6 +26,10 @@ export 'data/adapter/legacy_progress_evidence_adapter.dart';
 export 'data/adapter/practice_outcome_adapter.dart';
 export 'data/adapter/analysis_evidence_adapter.dart';
 export 'data/adapter/vision_evidence_adapter.dart';
+export 'data/adapter/tutor_plan_proposal_adapter.dart';
+export 'data/ai/planner_assist_schema.dart';
+export 'data/ai/remote_planner_assist_gateway.dart';
+export 'data/ai/fake_planner_assist_gateway.dart';
 export 'data/local/local_practice_plan_repository.dart';
 export 'data/local/practice_plan_migrator.dart';
 // The older serializer record is repository-local. R23 publishes the richer
