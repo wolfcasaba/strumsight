@@ -1,6 +1,6 @@
 # E07-R25 — Analyze és Computer Vision evidence integráció
 
-- **Státusz:** HALTED — pre-flight scope conflict (2026-08-19, `main @ 90df4d04`)
+- **Státusz:** PREPARED — self-heal E07-R25/H3 brief-bővítés után (2026-08-19, `main @ 90df4d04`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 25
 - **Kör-azonosító:** `E07-R25`
 - **Branch:** `<motor>/e07-r25-analysis-and-vision-evidence`
@@ -39,6 +39,70 @@ vagy bármely raw/internal Vision típus használata nem alternatíva. L308,
 L190, ADR 0193 és ADR 0260 releváns előzmény; a RAG index friss volt
 (`90df4d04`, 2026-08-19T00:26:21Z).
 
+### 0.0.1 Önjavító kör (ADR 0112, E07-R25/H3) — a follow-up brief bővítése
+
+**Mérés (self-heal, 2026-08-19, izolált worktree `main @ 90df4d04`-ről).** Az
+ADR 0319 döntése helyes, de a saját megnevezett fájllistája hiányos volt egy
+MÁSODIK, tőle független szerződési rés miatt: az `EvidenceWeightPolicy.
+sourceReliability` (`lib/features/practice_generator/domain/policy/
+evidence_weight_policy.dart:66-71`) egy `default` ág NÉLKÜLI, kimerítő
+`switch (source)`-t futtat a 4 jelenlegi `EvidenceSource` értéken. Egy ötödik
+(`vision`) érték hozzáadása `skill_evidence.dart`-hoz enélkül nem HALT-ot,
+hanem egy MÁSIK, kevésbé olvasható hibát adna: `flutter analyze` non-
+exhaustive-switch hibával állna le egy olyan fájlban, amit a brief továbbra
+sem engedne módosítani. Ez a self-heal ezt a második rést is bezárja, a
+javítás egyetlen — az ADR 0319-cel egyenrangú — brief-bővítés.
+
+A második fél (a Vision-oldali narrow contract) helye: `lib/features/vision/
+domain/evidence/public.dart` — ÚJ fájl, az ADR 0193/[[L193]] már bevált
+mintáját követve (egy meglévő wide barrel MÓDOSÍTÁSA helyett egy önálló, szűk
+NESTED `public.dart`, amit az `ADR 0176`
+`tool/check_architecture.dart:_isFeaturePublicBarrel` guardja módosítás
+nélkül, bármely `/public.dart`-ra végződő fájlként már ma legális
+cross-feature határnak fogad el). Ez a fájl KIZÁRÓLAG a már meglévő, mért
+raw-media-mentes fúziós kimenetet exportálhatja:
+`VisionEvidence`/`ObservationState` (`domain/evidence/vision_evidence.dart`),
+`EvidenceMetric`/`EvidenceMetricFamily` (`domain/evidence/
+vision_observation.dart` — a `VisionEvidence.metric` mező típusa) és
+`EvidenceProvenance`/`EvidenceWindow`/`GeometrySource`
+(`domain/evidence/evidence_provenance.dart` — verziózott/minőségi metaadat,
+nem mérési nyersadat). A `domain/evidence/` könyvtár TÖBBI fájlja
+(`vision_observation.dart` teljes `VisionObservation` típusa,
+`confidence_model.dart`) és minden landmark/geometry/provider/presentation
+típus **kívül marad** — a kontraktus nem a könyvtár, csak ez az egy ÚJ fájl.
+
+**A follow-up implementernek tilos** ebből a fájlból bármilyen kamera-
+koordinátát, landmarköt, frame-et vagy fájlútvonalat exportálnia; az A1
+valódi-sértés próba (§6.1) erre a fájlra is vonatkozik.
+
+`allowed_paths` és `gate_tests` az alábbi öt bejegyzéssel bővül (az ADR 0319
+által feltételezett kilenc eredeti bejegyzés változatlan):
+
+```
+lib/features/practice_generator/domain/model/skill_evidence.dart
+lib/features/practice_generator/domain/policy/evidence_weight_policy.dart
+lib/features/vision/domain/evidence/public.dart
+test/features/practice_generator/evidence/skill_evidence_test.dart
+test/features/practice_generator/skill_estimate/evidence_weight_policy_test.dart
+```
+
+Regressziós védelem (a jelen self-healnél, nem a follow-up implementernél):
+`tools/tests/test_e07_r25_vision_evidence_scope.py` — méri az
+`EvidenceSource`/`sourceReliability` jelenlegi (4-értékű, kimerítő) alakját,
+a három újranyitott Vision-típus raw-mentességét, és hogy `allowed_paths`
+pontosan ezzel az öt bejegyzéssel bővült, egyetlen szomszédos fájl vagy
+könyvtár SEM esik bele járulékosan.
+
+**Visszakeresett előzmény** (`node tools/knowledge-rag.mjs --top 5 "vision
+evidence provenance narrow public contract EvidenceSource skill evidence"`,
+self-heal, 2026-08-19): a legjobb találatok a §0.0.1 döntést megerősítik, nem
+ellentmondanak neki — az SDD Ch8 evidence-checklist
+(`docs/sdd/08-epic-07-ai-practice-generator.md#369`) explicit kimondja, hogy
+minden evidence provenance-t/confidence-et/verziót hordozzon és hogy nyers
+audio/videó sosem kerül a generátor domainbe; a `vision_evidence.dart`
+találat ugyanazt a fúziós kimenetet mutatja, amit a §0.0.1 exportálni kíván.
+Nincs ellentmondó vagy korábban figyelmen kívül hagyott lecke.
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd meg az Audio Analysis V2
 > **tényleges** `public.dart` felületét és a **flagek állását** — a GOV-30c óta
 > a lánc futtatható, de minden flag OFF. A vision flagek szintén OFF. A
@@ -58,10 +122,17 @@ allowed_paths = [
   "test/features/practice_generator/evidence_integration/vision_evidence_adapter_test.dart",
   "test/fixtures/practice_generator/evidence_integration/",
   "docs/rounds/e07-r25-analysis-and-vision-evidence.md",
+  "lib/features/practice_generator/domain/model/skill_evidence.dart",
+  "lib/features/practice_generator/domain/policy/evidence_weight_policy.dart",
+  "lib/features/vision/domain/evidence/public.dart",
+  "test/features/practice_generator/evidence/skill_evidence_test.dart",
+  "test/features/practice_generator/skill_estimate/evidence_weight_policy_test.dart",
 ]
 gate_tests = [
   "test/features/practice_generator/evidence_integration/analysis_evidence_adapter_test.dart",
   "test/features/practice_generator/evidence_integration/vision_evidence_adapter_test.dart",
+  "test/features/practice_generator/evidence/skill_evidence_test.dart",
+  "test/features/practice_generator/skill_estimate/evidence_weight_policy_test.dart",
 ]
 native_gate = false
 ```
@@ -96,10 +167,15 @@ bekötése a terv-prioritásba (SDD Ch8 Kör 25).
 **Benne van:** időzítés-, tempóstabilitás-, ütés-egyensúly-, akkord- és
 hotspot-evidence leképezése · **csak engedélyezett** vision-proxyk · a
 capability-hiány és az alacsony bizonyosság kezelése · a **jelminőség-hiba**
-elkülönítése a **készség-hibától** · több forrás közti konfliktus fixture-je.
+elkülönítése a **készség-hibától** · több forrás közti konfliktus fixture-je ·
+(self-heal E07-R25/H3, §0.0.1) egy hiteles `EvidenceSource.vision` érték +
+regressziós teszt, és egy Vision-owned, szűk, raw-mentes `public.dart`
+contract a `domain/evidence/` alatt, kizárólag a §0.0.1-ben megnevezett
+típusokkal.
 
 **NINCS benne (tilos):** **nyers frame vagy nyers audio bármilyen formában** ·
-flag `true`-ra állítása · az Analyze/Vision feature-ök módosítása · más
+flag `true`-ra állítása · az Analyze/Vision feature-ök módosítása (a §0.0.1
+egyetlen, névre szólóan engedélyezett ÚJ Vision-fájl kivételével) · más
 feature belső importja · `docs/adr/**`, `tools/**`, `.github/**`.
 
 ## 4. Engedélyezett fájlok
@@ -113,9 +189,20 @@ feature belső importja · `docs/adr/**`, `tools/**`, `.github/**`.
 | `public.dart` | a barrel bővítése |
 | `test/…/evidence_integration/*_test.dart` (2 db) | a §6 cellái |
 | `docs/rounds/e07-r25-…md` | a §10 handoff |
+| `domain/model/skill_evidence.dart` | **(§0.0.1)** `EvidenceSource.vision` érték |
+| `domain/policy/evidence_weight_policy.dart` | **(§0.0.1)** a kimerítő switch új ága — enélkül nem fordul |
+| `vision/domain/evidence/public.dart` | **(§0.0.1) ÚJ** — szűk, raw-mentes Vision→skill contract |
+| `test/…/evidence/skill_evidence_test.dart` | **(§0.0.1)** a `vision` érték regressziós teszt |
+| `test/…/skill_estimate/evidence_weight_policy_test.dart` | **(§0.0.1)** az új reliability-ág teszt |
 
 **Tilos zóna:** `lib/features/audio_analysis/**` és `lib/features/vision/**`
-tartalma · `lib/app/config/feature_flags.dart` · `docs/adr/**` · `tools/**`.
+tartalma **a fenti, §0.0.1 alatt névre szólóan engedélyezett EGY ÚJ fájl
+kivételével** · `lib/app/config/feature_flags.dart` · `docs/adr/**` ·
+`tools/**`. A `vision/domain/evidence/` könyvtár minden MÁS fájlja (a
+meglévő `vision_evidence.dart`, `vision_observation.dart`,
+`evidence_provenance.dart`, `confidence_model.dart`) továbbra is tilos —
+azokból csak EXPORTÁLNI szabad az új `public.dart`-on át, tartalmuk nem
+módosítható.
 
 ## 5. Kötött architekturális döntések
 
@@ -157,6 +244,16 @@ használhatók. Nincs „ha már látjuk, használjuk" bővítés.
 Ha az audio és a vision ellentmond, az eredmény magasabb bizonytalanság — nem
 az egyik önkényes preferálása (ADR 0261 §3).
 
+### 5.7 A Vision-owned `public.dart` contract kizárólag fúziós kimenetet exportál (self-heal E07-R25/H3, §0.0.1)
+
+Az ÚJ `lib/features/vision/domain/evidence/public.dart` csak a §0.0.1-ben
+névre szólóan felsorolt típusokat (`VisionEvidence`, `ObservationState`,
+`EvidenceMetric`, `EvidenceMetricFamily`, `EvidenceProvenance`,
+`EvidenceWindow`, `GeometrySource`) exportálhatja. Landmark, pose, frame,
+kamera-koordináta, provider vagy presentation típus ezen a fájlon **soha** —
+ez ugyanaz a szabály, mint az 5.1, csak a Vision-oldali kilépési pontra
+alkalmazva (ADR 0193/[[L193]] mintája).
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
@@ -196,7 +293,7 @@ minta-hivatkozást az evidence-be → az **A1** cellának PIROSNAK kell lennie �
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/practice_generator/evidence_integration/analysis_evidence_adapter_test.dart test/features/practice_generator/evidence_integration/vision_evidence_adapter_test.dart
+tools/round-gate.sh test/features/practice_generator/evidence_integration/analysis_evidence_adapter_test.dart test/features/practice_generator/evidence_integration/vision_evidence_adapter_test.dart test/features/practice_generator/evidence/skill_evidence_test.dart test/features/practice_generator/skill_estimate/evidence_weight_policy_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
@@ -223,6 +320,9 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   ragad (A2).
 - **A jelminőség mint készség.** Zajos felvételből gyenge tanuló — a rendszer
   a saját méréshibáját rója fel a felhasználónak (A4).
+- **(§0.0.1) Kimerítő switch csapda.** `EvidenceWeightPolicy.
+  sourceReliability` `default` ág nélküli `switch`; az új `vision` ág
+  hozzáadása nélkül `flutter analyze` non-exhaustive-switch hibával áll le.
 
 ## 10. Implementation handoff — az implementer tölti ki
 

@@ -1,5 +1,47 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E07-R25/H3] KÉSZ — brief-bővítés: hiteles `EvidenceSource.vision` + egy exhaustive-switch fordítási csapda + szűk Vision-owned evidence contract — PR #319, squash `ea042640` (2026-08-19)
+
+Az E07-R25 (Analyze/Vision evidence integráció) saját pre-flightja (ADR 0319,
+Terra→minimax, `main @ 90df4d04`) helyesen HALT-olt: a Practice Generator
+`EvidenceSource` enumja (`skill_evidence.dart:17-21`) nem ismer `vision`
+értéket, és az egyetlen scope-on belüli Vision-kontraktus
+(`vision/domain/integration/public.dart`, ADR 0193) nem ad át skillhez
+kötött numerikus evidence-et — a §1 cél és az A5/A6/A8 elfogadási pontok
+emiatt nem teljesíthetők a régi `allowed_paths`-on belül.
+
+Az önjavítás (ADR 0112, 1/3. kísérlet) a saját, független kódmérésével egy
+MÁSODIK, ADR 0319-től független rést is talált: `EvidenceWeightPolicy.
+sourceReliability` (`evidence_weight_policy.dart:66-71`) egy `default` ág
+nélküli, kimerítő `switch`-et futtat a jelenlegi 4 `EvidenceSource` értéken.
+Az ADR 0319 saját listája ezt a fájlt nem nevezte meg — egy `vision` érték
+hozzáadása enélkül NEM ugyanazt a HALT-ot hozta volna vissza a következő
+dispatchkor, hanem egy kevésbé olvasható `flutter analyze`
+non-exhaustive-switch hibát, ugyanabban a tiltott zónában.
+
+**Javítás:** `docs/rounds/e07-r25-analysis-and-vision-evidence.md` §0.0.1
+öt névre szóló fájllal bővíti `allowed_paths`/`gate_tests`-t:
+`skill_evidence.dart`, `evidence_weight_policy.dart`, a két teszt-társuk, és
+egy ÚJ, szűk, raw-media-mentes `lib/features/vision/domain/evidence/
+public.dart` (ADR 0193/L193 nested-barrel minta — additív fájl, a megosztott
+architektúra-guard és minden más Vision-fogyasztó változatlan). Az ADR 0319
+egy dátumozott záró-bekezdést kapott, ami a második rést és a feloldást
+rögzíti. Semmilyen production kód nem változott — tisztán
+folyamat/dokumentáció-scope (ADR 0112 §2/§3).
+
+**Kötelező regresszió (PIROS a revízió előtt → ZÖLD utána, mindkét irányban
+mérve):** `tools/tests/test_e07_r25_vision_evidence_scope.py` — a mért
+`EvidenceSource`/`sourceReliability` alakot, a három újranyitott
+Vision-típus raw-mentességét és az `allowed_paths` pontos, öt bejegyzésű
+bővülését zárolja (egy szomszédos, a bővítésen kívüli útvonal továbbra is
+scope-on kívül marad). Teljes `tools/tests`: **535 passed, 560 subtests
+passed, 0 hiba**. `tools/brief-lint.py --level strict`: tiszta. Nincs
+Dart-változás, ezért `build-apk.yml` nem releváns; a Router CI (a diff
+`tools/**`/`docs/rounds/**`/`docs/execution/pipeline-queue.tsv`-t érint) volt
+az egyetlen szükséges kapu, `tools/wait-for-ci.sh`-sal várva előtérben, a
+merge előtt SHA-egyezés igazolva. Lecke: **[[L319]]**. A lánc E07-R25-tel
+folytatódik a következő cron-firingen, a most bővített `allowed_paths` alatt.
+
 > **E07-R24 KÉSZ — Song goal és Song Trainer integráció** — PR
 > [#318](https://github.com/wolfcasaba/strumsight/pull/318), squash
 > `b08c00e9` (2026-08-19). A Practice Generator most explicit, caller-fed

@@ -58,3 +58,20 @@ okozhat üres tervet.
 - L190 alapján a wide `vision/public.dart` továbbra sem megengedett kerülőút;
   L308 alapján az új tesztnek a tényleges adapter→evidence útvonalon kell
   megőriznie a confidence/provenance mezőket.
+
+### Self-heal follow-up (ADR 0112 önjavító kör, E07-R25/H3, 2026-08-19)
+
+A follow-up brief-bővítés megtörtént (`docs/rounds/
+e07-r25-analysis-and-vision-evidence.md` §0.0.1) — az itt megnevezett két
+változás mellett egy HARMADIK, ettől az ADR-től független szerződési rést is
+lezárt: `EvidenceWeightPolicy.sourceReliability`
+(`evidence_weight_policy.dart:66-71`) `default` ág nélküli, kimerítő
+`switch`-e nem fordulna az itt döntésben (1) pont alatt előírt új
+`EvidenceSource.vision` érték mellett, ha a fájl nem kerül az
+`allowed_paths`-ba. Az (2) pont alatti Vision-owned contract konkrét helye:
+`lib/features/vision/domain/evidence/public.dart` (ÚJ fájl, ADR 0193/L193
+nested-barrel mintája), kizárólag `VisionEvidence`/`ObservationState`,
+`EvidenceMetric`/`EvidenceMetricFamily` és
+`EvidenceProvenance`/`EvidenceWindow`/`GeometrySource` exportjával. A
+brief-bővítés machine-checked regresszióval zárva:
+`tools/tests/test_e07_r25_vision_evidence_scope.py`.
