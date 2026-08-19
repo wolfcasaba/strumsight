@@ -10,9 +10,10 @@ void main() {
     required DateTime measuredAt,
     DateTime? validUntil,
     double confidence = 1.0,
+    EvidenceSource source = EvidenceSource.analyzeV2,
   }) => SkillEvidence(
     skillId: 'chord.gMajor',
-    source: EvidenceSource.analyzeV2,
+    source: source,
     sourceOutcomeId: OutcomeId('outcome-$value-$sampleCount'),
     measurementVersion: 1,
     measuredAt: measuredAt,
@@ -68,4 +69,57 @@ void main() {
       },
     );
   });
+
+  group(
+    'EvidenceWeightPolicy — vision sourceReliability (E07-R25 §0.0.1, A3)',
+    () {
+      test(
+        'vision reliability is below analyzeV2, above progress (cap-respecting)',
+        () {
+          final policy = EvidenceWeightPolicy();
+          final visionReliability = policy.sourceReliability(
+            EvidenceSource.vision,
+          );
+          final analyzeReliability = policy.sourceReliability(
+            EvidenceSource.analyzeV2,
+          );
+          final progressReliability = policy.sourceReliability(
+            EvidenceSource.progress,
+          );
+
+          expect(visionReliability, lessThan(analyzeReliability));
+          expect(visionReliability, greaterThan(progressReliability));
+          expect(
+            visionReliability,
+            greaterThanOrEqualTo(0),
+            reason: 'reliability must be a non-negative scalar',
+          );
+          expect(
+            visionReliability,
+            lessThanOrEqualTo(1),
+            reason: 'reliability must be at most 1',
+          );
+        },
+      );
+
+      test('low-confidence vision evidence stays well below the cap (A3)', () {
+        final policy = EvidenceWeightPolicy(singleEvidenceInfluenceCap: 0.25);
+        final weight = policy.weightFor(
+          evidence(
+            value: 0.5,
+            sampleCount: 1,
+            measuredAt: DateTime.utc(2026, 8, 20),
+            confidence: 0.2,
+            source: EvidenceSource.vision,
+          ),
+          asOf: DateTime.utc(2026, 8, 20),
+        );
+        expect(weight, lessThan(policy.singleEvidenceInfluenceCap));
+        // A very-low-confidence vision record must not dominate the
+        // aggregate — it is naturally bounded by sourceReliability *
+        // confidence.
+        expect(weight, lessThan(0.2));
+      });
+    },
+  );
 }
