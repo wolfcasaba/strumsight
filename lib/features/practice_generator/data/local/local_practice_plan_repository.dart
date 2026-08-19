@@ -718,6 +718,11 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       _trackRemove(archiveOutcomesIndexKey(planId));
     }
 
+    // F1 fix: drop the manifest itself so a fresh repository after
+    // delete-all starts from a truly empty key surface. The next
+    // writer then re-creates the manifest on its first key touch.
+    await keyValueStore.remove(manifestKey);
+
     return Success<PracticePlanDeletionOutcome>(
       PracticePlanDeletionOutcome(planIds: planIds),
     );
