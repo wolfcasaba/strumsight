@@ -1,6 +1,6 @@
 # E99-R17 (GOV-11) — Az ARB-ütközés feloldása: feature-szintű l10n-fragmentumok és generált aggregátum
 
-- **Státusz:** PLANNING (pre-flight 2026-08-19, `main @ 67d459f1`)
+- **Státusz:** HOLD — `H-GATEGUARD` (pre-flight folytatás 2026-08-19, `main @ dc6b4583`)
 - **Típus:** **governance-kör** — a párhuzamos körök első fizikai blokkjának feloldása
 - **Kör-azonosító:** `E99-R17`. Emberi neve **GOV-11**.
 - **Előfeltétel:** `E99-R16` merge-elve
@@ -37,6 +37,32 @@ native_gate = false
 > egyezése**, nem szemrevételezés.
 
 ## 0.0 Pre-flight revízió (2026-08-19)
+
+### Folytatási mérés (2026-08-19, `origin/main @ dc6b4583`)
+
+- A megőrzött kör-branch D1 commitja (`eb915931`) előtt a `main` nyolc
+  committal előrelépett. A branch a `630f8615` merge commitban konfliktusmentesen
+  tartalmazza az aktuális `origin/main`-t, és a freshness-bizonyíték pusholva
+  van; régi szerződéshez nem indult javító-dispatch.
+- A foglaló most `0324`-et adott, de új ADR továbbra sem készül: az elfogadott
+  ADR 0307 §4 már normatívan rögzíti ezt a döntést, `docs/adr/**` pedig tiltott
+  zóna. A foglalás nem jogosít fel új ADR létrehozására.
+- Kötelező RAG-mérés: `node tools/knowledge-rag.mjs --top 5 "E99-R17 ARB l10n
+  feature fragments generated aggregate check_l10n_parity tool/ci"` és
+  `node tools/knowledge-rag.mjs --corpus lessons --top 5 "protected gate file
+  H-GATEGUARD l10n parity generated ARB fragments"`. Az index `55b2bf16`-on
+  nyolc committal elavult, ezért ez nem újraindexelési hatáskör; a találatok
+  továbbra is a generált l10n előkészítésére (`lessons/L89`, `lessons/L111`) és
+  a gate elkülönített futtatására (`lessons/L130`) mutatnak. A jelen kör
+  közvetlen, frissebb precedense `lessons/L323`: a marker önmagában nem nyitja
+  fel az implementer-őrt.
+- A tényleges út most is `tools/round-gate.sh:243` →
+  `tool/ci/check_l10n_parity.dart`; a `tool/ci/*` a gyári mérce védett
+  globja. A `.claude/gate-edit-authorized` marker jelen van, de a D1 utáni
+  branch-történetben nincs emberi commit a D2 célfájlra. Ezért D2 nem
+  dispatch-elhető: a következő helyes lépés a user személyes szerkesztése és
+  pushja erre a branchre, vagy a kör holdon hagyása. A scope-lista nem bővül,
+  és a mérce nem változik.
 
 - A `main @ 67d459f1` tényleges ARB-mérése eltér az előre írt briefétől:
   `app_en.arb` 1 988 sor / 1 354 üzenetkulcs, `app_hu.arb` 1 911 sor /
