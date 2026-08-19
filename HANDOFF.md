@@ -1,5 +1,74 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E07-R25/H5] KÉSZ — két, egymástól független, self-heal-generált bidirekcionális regressziós pin egyirányúsítva (ADR 0112) — PR #321, squash `a1613fa5` (2026-08-19)
+
+Az E07-R25 (Analyze/Vision evidence integráció) Router CI-ja kétszer pirosra
+váltott a kör saját, még nem merge-elt ágán
+(`minimax/e07-r25-analysis-and-vision-evidence`), és a driver H5-tel
+megállt: `tools/tests/test_e07_r25_vision_evidence_scope.py` (a H3 self-heal
+sajátja, [[L319]]) két bidirekcionális `assertEqual`-lel pinnelte az
+`EvidenceSource` értékkészletét 4 elemre — a kör implementere közben a SAJÁT
+ágán, a H3 által jóváhagyott módon hozzáadta `EvidenceSource.vision`-t
+(5. érték), ami a bidirekcionális pint elkerülhetetlenül pirosra váltotta.
+**Ez byte-pontosan [[L279]]/[[L280]] hibaosztálya** (E99-R13, 2026-08-15) —
+egy self-heal-generált pin szerkezetileg összeegyeztethetetlen egy AKTÍV,
+brief-szentesített kör-branch-csel, ami definíció szerint előrébb jár
+`main`-nél. A javítás [[L279]] receptjét szó szerint alkalmazza: mindkét
+teszt egyirányú, nem-zsugorodás invariánsra vált (a founding 4 érték egyike
+sem tűnhet el csendben); `ORIGINAL_EVIDENCE_SOURCE_VALUES` MAGA változatlan
+maradt — bővítése "megjavította" volna a kör-ágat, de eltörte volna `main`
+SAJÁT, merge utáni Router CI-ját (4 értéke van, amíg a kör ténylegesen nem
+merge-el).
+
+**Egy MÁSODIK, a HALT által nem jelentett, ugyanebbe a hibaosztályba tartozó
+gyökérokot a SAJÁT fix gate-futtatása fedett fel:** `main` Router CI-ja a
+H5-fixem ELŐTT is pirosra váltott (`32207252052`, `32208143911`) egy MÁSIK
+self-heal-generált teszten,
+`test_knowledge_rag.py::test_brief_lint_flags_a_brief_without_retrieved_precedent`,
+amely egy VALÓDI kör briefjére (`e99-r15-gov-09-halt-escalation.md`)
+mutatott. A `brief-lint.py` S8 (ADR 0312) checkje szándékosan néma egy
+`done` kör briefjén (mért precedens: `e06-r10`) — mihelyt E99-R15 lezárult,
+az S8 helyesen elhallgatott, és a teszt nem regresszió, hanem az S8 saját,
+szándékos működése miatt tört el. Bármely valódi kör brief-je időzített
+bomba ehhez a fixture-höz; a javítás egy szintetikus, a valódi sorban soha
+nem szereplő task-id-jú (`E00-R00`) brief, ami a csatolást szünteti meg, nem
+csak odébb tolja a lejáratot. Változatlanul hagyva ez a második gyökérok is
+blokkolta volna MINDEN jövőbeli kör Router CI zöld merge-ét, nem csak
+E07-R25-ét.
+
+**Mindkét irányban mérve** egy izolált heal worktree-ben (a kör-ág valódi
+`skill_evidence.dart`/`evidence_weight_policy.dart`-ját commit nélkül a
+plain `main` fölé rétegezve): javítatlan teszt + kör-ág kód → PIROS
+(byte-azonos a valódi CI-hibával, futások
+[32204906795](https://github.com/wolfcasaba/strumsight/actions/runs/32204906795),
+[32206385772](https://github.com/wolfcasaba/strumsight/actions/runs/32206385772));
+javított teszt + plain `main` kód → ZÖLD; javított teszt + kör-ág kód →
+ZÖLD. Egy önálló diff-méréssel (nem a kör saját jelentése alapján) igazolva:
+`git diff origin/main...origin/minimax/e07-r25-analysis-and-vision-evidence`
+minden érintett fájlja pontosan a H3 által jóváhagyott
+`ORIGINAL_ALLOWED_PATHS ∪ NEW_ALLOWED_PATHS` unióját fedi, scope-tágítás
+nélkül; a kör saját, független review-ja (`docs/reviews/e07-r25-review.md`)
+APPROVED, 0 BLOCKER/MAJOR/MINOR, A1–A8 mind bizonyítva. Sem a
+`tools/round-gate.sh`, sem a `.github/workflows/` nem változott; a
+teszt-fájlok metódusszáma változatlan (7, 13) — csak átírva, egy sem törölve.
+Teljes `python3 -m pytest tools/tests -q`: **537 passed, 1 skipped, 565
+subtests passed, 0 failure**. Router CI (egyetlen szükséges kapu, nincs
+Dart-változás) zöld a pontos merge SHA-n
+([32209227423](https://github.com/wolfcasaba/strumsight/actions/runs/32209227423)),
+`tools/wait-for-ci.sh`-sal várva előtérben. Post-merge egy FRISS klónból
+(GitHub-ról, nem a helyi, elmaradt `main`-ből) függetlenül újramérve: a két
+javított teszt zöld; egy MÁSIK, a MEGELŐZŐ kör (E99-R15) HANDOFF-jában már
+dokumentált, élő sor-fájl-állapotra érzékeny flake
+(`test_pipeline_integration.py::test_a_full_firing_retries_the_round_
+instead_of_healing_a_resolved_terra_wall`) a megosztott, párhuzamosan
+terhelt Oracle-boxon inkonzisztensen jelentkezett (a pre-merge commit
+UGYANAZON pillanatban zöld volt) — bájt-azonos fájltartalommal a két commit
+közt az érintett útvonalakon, tehát NEM ennek a fixnek a regressziója; a
+SAJÁT PR Router CI-ja (izolált, terheletlen GitHub-runner, pontos merge SHA)
+az irányadó bizonyíték, és az zöld volt. Lecke: **[[L321]]**. A lánc
+E07-R25-tel folytatódik a következő cron-firingen, a most javított
+mércén.
+
 > **E99-R15 (GOV-09) KÉSZ — Halt-eszkaláció: motorváltás az utolsó önjavító
 > kísérletnél és ismétlődő riasztás throttle-lel** — PR
 > [#320](https://github.com/wolfcasaba/strumsight/pull/320), squash
