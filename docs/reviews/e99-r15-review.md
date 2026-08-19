@@ -1,13 +1,49 @@
 # E99-R15 — Review
 
 Brief: docs/rounds/e99-r15-gov-09-halt-escalation.md
-Diff: `git diff 1be7fe50...05d81543` (1be7fe50 = orchestrátor pre-flight §0.0 revízió `main`-en; 05d81543 = implementer commit a `codex/e99-r15-gov-09-halt-escalation` branchen)
-Reviewer: Claude (Sonnet 5, orchesztrátor) · Dátum: 2026-08-19
-Verdikt: CHANGES REQUIRED
+Diff: `git diff 1be7fe50...e938588a` (1be7fe50 = orchestrátor pre-flight §0.0 revízió `main`-en; 05d81543 = implementer első commit; e938588a = F1 javító commit a `codex/e99-r15-gov-09-halt-escalation` branchen)
+Reviewer: Claude (Sonnet 5, orchesztrátor) · Dátum: 2026-08-19 (első verdikt), frissítve 2026-08-19 (F1 javítás után)
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 (1 zárva javítással) · MINOR: 0 · NOTE: 1
+
+## F1 zárása (javító kör után)
+
+A javító commit (`e938588a`, `fix(pipeline): preserve self-heal quota fallback`)
+minimális diffet ad: amikor `heal_engine == round_engine` (1–2. kísérlet, vagy
+alternatíva nélküli utolsó kísérlet), az `attempt_selfheal` a VÁLTOZATLAN
+`run_orchestrator_session`-t hívja (a kvóta-tudatos Claude→Terra fallbackkel),
+és a §0.0-ban javasolt új `heal_engine_for_attempt`/`run_selfheal_session` út
+kizárólag a valódi motorváltás esetén fut. Pontosan a review javasolt iránya.
+
+Saját, független ellenőrzés (**friss** `/tmp/review-e99-r15-2` klón, a
+`https://github.com/wolfcasaba/strumsight.git`-ból, NEM a korábbi
+`/tmp/review-e99-r15`-ből):
+
+- **Regressziós teszt megléte:** `test_first_attempt_keeps_the_legacy_terra_fallback_when_claude_is_blocked`
+  — szimulált `claude_unavailable_until` zárlat mellett méri, hogy a dispatch a
+  Terra-fallback ágra esik (`CODEX_HOME=<terra_config>` a konstruált parancsban),
+  nem az új `run_selfheal_session` útra.
+- **Saját falszifikáció:** az `if [ "$heal_engine" = "$round_engine" ]`
+  feltételt `if false`-ra cserélve (mindig az új, kvóta-tudatlan ág fut) → 3
+  failed / 2 passed (a fenti regressziós teszt ÉS az „1–2. kísérlet legacy
+  runner" subtestek PIROSAK: `AssertionError: 'sonnet-impl' != 'legacy-runner'`).
+  Visszaállítás után `3 passed, 6 subtests passed`.
+- **Célzott teszt (friss klón, önálló venv):** `3 passed, 6 subtests passed`.
+- **Teljes suite (friss klón, önálló venv, `-u ENGINE_MODEL -u ROUND_ENGINE`):**
+  `530 passed, 1 skipped, 565 subtests passed in 363.03s` — nulla piros.
+- **Dart gate (friss klón):** `tools/round-gate.sh
+  test/tooling/architecture_allowlist_guard_test.dart` → format/analyze/célzott
+  teszt/architecture/secrets/l10n mind zöld.
+- **Scope-audit (friss klón, `--base 1be7fe50`):** `Legacy scope audit OK
+  (1be7fe50..e938588ac723, 6 changed path(s), 2 generated/ignored)` — a 2
+  „generated/ignored" a KÉT review-jelentés saját fájlja (a review-jelentés
+  soha nem sértés, `tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`),
+  a maradék 4 pontosan az `allowed_paths`.
+
+**F1 STÁTUSZ: FIXED (`e938588a`).**
 
 ## Acceptance criteria (brief §6 DoD)
 
@@ -103,7 +139,7 @@ Mindkét guard valódi, load-bearing — nem csak formálisan lefedett.
   Claude-ág hibázik) — a jelenlegi `test_selfheal_escalation.py` ezt NEM
   fedi (a saját `run_orchestrator_session`/`run_selfheal_session` stubja a
   hívó FÜGGVÉNY NEVÉT rögzíti, nem a kvóta-ági viselkedést).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`e938588a`) — lásd „F1 zárása" fent a mért bizonyítékért.
 
 ### N1 — NOTE — `run_selfheal_session` minimax-ági env-hidalása nem redundáns, de rejtett
 
@@ -121,16 +157,16 @@ Mindkét guard valódi, load-bearing — nem csak formálisan lefedett.
 
 ## Gate-bizonyíték ellenőrzése
 
-| Gate | Állított eredmény (implementer) | Ellenőrizve (saját, izolált futtatás) |
+| Gate | Állított eredmény (implementer, F1 javítás után) | Ellenőrizve (saját, FRISS izolált klón) |
 |---|---|---|
 | format/analyze/architecture/secrets/l10n | zöld | ✅ zöld (`tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`) |
-| célzott teszt (`test_selfheal_escalation.py`) | `2 passed, 6 subtests passed` | ✅ `2 passed, 6 subtests passed` |
-| `python3 -m pytest tools/tests -q` | `528 passed, 2 skipped, 565 subtests` | ✅ `529 passed, 1 skipped, 565 subtests` (a kettő közti eltérés a briefben dokumentált, körtől független ambiens-szivárgás — lásd fent) |
-| CI (teljes suite + property + APK/full-gate) | nem futott (implementer megjegyzése) | — az orchesztrátor dolga a review után |
+| célzott teszt (`test_selfheal_escalation.py`) | `3 passed, 6 subtests passed` | ✅ `3 passed, 6 subtests passed` |
+| `python3 -m pytest tools/tests -q` | `529 passed, 2 skipped, 565 subtests` | ✅ `530 passed, 1 skipped, 565 subtests` (ugyanaz az ambiens-eltérés, mint korábban — a saját tiszta környezetemben 1-gyel több passed) |
+| CI (`full-gate.yml`, `router-ci.yml`) | — | dispatch-elve a review után, az orchesztrátor várja be |
 
 ## Merge-döntés
 
-**CHANGES REQUIRED — F1 (MAJOR) nyitva.** Az ADR 0052 szerint minden gate
-zöld ÉS nincs nyitott BLOCKER/MAJOR kell a merge-hez; itt a gate-ek zöldek, de
-F1 nyitva van. Javító kört indítok (ugyanaz a motor — `codex` —, F1
-leletlistával), majd a gate-eket újra lefuttatom és a jelentést frissítem.
+**APPROVED — 0 nyitott BLOCKER/MAJOR** (F1 zárva `e938588a`-val, saját
+méréssel megerősítve). Az ADR 0052 szerint minden gate zöld ÉS nincs nyitott
+BLOCKER/MAJOR → merge, amint a CI (`full-gate.yml` + `router-ci.yml`) is
+zöld a merge SHA-n.
