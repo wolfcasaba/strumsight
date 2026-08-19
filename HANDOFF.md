@@ -1,5 +1,43 @@
 # HANDOFF — StrumSight 🎸
 
+## 🛑 [HEAL E99-R16/H3] ESCALATE — a javítás helye (`.github/workflows/router-ci.yml`) a self-heal abszolút tiltott zónája; EMBERI szerkesztés szükséges — a lánc ÁLL (2026-08-19)
+
+**A pipeline ELSŐ `outcome=escalate` eredménye** (a teljes git-notes history —
+476 korábbi self-heal/kör bejegyzés — egyike sem `verdict=escalate` eddig).
+
+Az E99-R16 (GOV-10, round-granularity mérőeszköz, PR
+[#323](https://github.com/wolfcasaba/strumsight/pull/323),
+`minimax/e99-r16-round-granularity` @ `ea6e763a`) review-ja
+(`docs/reviews/e99-r16-review.md`) F1 (MAJOR), F2 (MAJOR) és M1 (MINOR)
+leletét FIXED-nek és függetlenül újramértnek találta — ezt EBBEN a
+self-healben saját, izolált klónból megismételt méréssel is megerősítettem
+(`python3 -m pytest tools/tests -q` → **1 failed, 550 passed, 1 skipped,
+565 subtests passed**, byte-azonos a review záró táblázatával). Az EGYETLEN
+maradék hiba (F3): `tools/tests/test_router_ci_path_filter.py
+::test_every_test_referenced_file_is_in_the_ci_filter` pirosra vált, mert az
+új `tools/brief-merge-plan.py` nincs lefedve a `.github/workflows/
+router-ci.yml` `paths:` szűrőjében. A review ezt tévesen a self-heal
+feladatának címezte — de [[ADR 0112]] §3 kivétel nélkül tiltja a
+`.github/workflows/` módosítását self-heal számára is (részletes indoklás:
+`docs/LESSONS.md` **L322**, ADR 0112 2026-08-19-i módosítás-blokkja).
+
+**Javasolt emberi lépés (gyors, alacsony kockázatú):**
+`.github/workflows/router-ci.yml` `paths:` blokkjába egy sor:
+`"tools/brief-merge-plan.py"` (a meglévő egyenkénti-fájlos minta szerint,
+pl. `tools/model-router.py` mellé). Ellenőrzés:
+`python3 -m unittest tools.tests.test_router_ci_path_filter -v` → mindkét
+teszt zöld. **Ezután a PR #323 branch-ének is be kell olvasztania a friss
+`main`-t** (a teszt a round branch SAJÁT `router-ci.yml`-másolatát méri, nem
+a `main`-ét) — a H8-recept szerint (`docs/LESSONS.md`), utána a szokásos
+CI-dispatch + zöld kapus squash-merge mehet, **további review-kör nélkül**
+(a review már APPROVED tartalmilag).
+
+PR #323 nyitva marad, NEM lett lezárva vagy módosítva ebben a self-healben —
+a tartalmi munka (F1/F2/M1) érintetlen. A lánc a user döntéséig áll (a
+következő cron-firing ismét megpróbálná a self-healt, de a strukturális ok
+és a kísérletszámláló változatlan marad, amíg valaki nem szerkeszti a
+workflow-fájlt).
+
 ## ✅ E07-R25 KÉSZ — Analyze és Vision származtatott evidence integráció — PR #322, squash `3ab2a147` (2026-08-19)
 
 Az Analyze és a Vision csak származtatott, confidence-aware evidence-et adhat
@@ -2635,6 +2673,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 **E04-R22 — Tutor Profile, Privacy, Data & Consent UI** — KÉSZ (PR #157, `faa3f32`, nincs új ADR — ADR 0132+0134 hatálya; MiniMax M3; ld. fejléc ✅-blokk).
 
 ## 6. Exact next task
+
+**🛑 A lánc jelenleg ÁLL, EMBERI döntés/szerkesztés vár (2026-08-19):**
+E99-R16/H3 `outcome=escalate` — ld. a fejléc-blokkot és `docs/LESSONS.md`
+L322. Semmi más (E07-R26 sem) nem folytatódik automatikusan, amíg a
+`.github/workflows/router-ci.yml` egysoros javítása meg nem történik.
 
 **A következő Epic 7 SDD-lépés: E07-R26** (outcome ingestion és revision).
 Friss sessionben indul; az E07-R25 eredményét csak a szűk public boundary-kon

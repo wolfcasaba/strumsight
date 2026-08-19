@@ -241,6 +241,30 @@ eddig-ki-nem-próbált előfeltétel-kombináció útban áll-e. Ez a tágabb jo
 (§2) alá tartozik: a második gyökérok is `tools/`-infrastruktúra, nem a
 megállt kör tartalmi munkája, és saját, dedikált regressziós tesztet kapott.
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-19) — a §3 tiltása a self-healre AKKOR IS érvényes, ha egy kör-review kifejezetten a self-healnek címzi a `.github/workflows/` javítását
+
+Mérés: E99-R16/H3 — a kör saját review-ja (`docs/reviews/e99-r16-review.md`,
+F3) a `docs/execution/pipeline-orchestrator-prompt.md` §4 „az önjavító kör
+dolga (ADR 0112 §3)" mondatára hivatkozva arra a következtetésre jutott,
+hogy a self-heal feladata a `.github/workflows/router-ci.yml` `paths:`
+blokkjának egysoros bővítése. Ez téves: a §4 cross-route hivatkozása a §3
+PROTOKOLLJÁRA mutat (mérd fel a gyökérokot; ha az őszinte javítás a mércét
+érintené, `outcome=escalate`), nem egy felhatalmazásra a fájl szerkesztésére
+— §3 kivétel nélkül tiltja a `.github/workflows/` módosítását, és ez a
+tiltás a §2 tágabb jogosultság-listájában SOHA nem szerepelt (az eredeti,
+ADR-t bevezető `a6204429` commit óta változatlan).
+
+**Egyértelműsítés, normatív tartalom-változás nélkül:** ha egy kör-review
+vagy egy HALT `detail=`-je az EGYETLEN hátralévő javítási helyként
+`.github/workflows/`-t vagy `tools/round-gate.sh`-t nevezi meg, a helyes
+review-konklúzió és a helyes self-heal-kimenet egyaránt `outcome=escalate`
+(vagy egy kifejezetten erre a fájlra felhatalmazott, EMBER által jóváhagyott
+brief/ADR-döntés) — sosem „a self-heal majd megoldja". Ez a §3 szó szerinti
+tartalmát nem módosítja, csak a §4 (round-prompt) cross-route
+hivatkozásának téves, mért olvasatát zárja ki jövőbeli reviewekben.
+
+Lecke: `docs/LESSONS.md` [[L322]].
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör
