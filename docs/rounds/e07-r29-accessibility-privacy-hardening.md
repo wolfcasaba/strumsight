@@ -610,4 +610,27 @@ kanonikus handoff-felülete. Az orchestrátor (a §11 review-zó Claude) a
 review dokumentumokat saját scope-ján belül frissítheti, ha szükséges; a
 jelen implementer-kör scope-extensiont nem kért.
 
+### 10.6.3 E07-R29 F3 repair (2026-08-19) — manifest write failure closure
+
+The durable-manifest helpers now return `Future<void>` and every existing
+repository mutation awaits them inside its `_runWrite` operation. A rejected
+manifest write or removal therefore returns the initiating save / activate /
+delete operation through the normal `StorageFailure` path rather than becoming
+a detached asynchronous error. The activation housekeeping exception remains
+limited to failure while removing the old record; an ensuing manifest failure
+is deliberately not swallowed. The delete-all corrupt-pointer guard likewise
+rethrows `StorageException` so a manifest failure remains observable.
+
+`test/features/practice_generator/data/local_repository_test.dart` adds the
+durable `F3 — manifest persistence failures` regression: a store configured to
+reject `LocalPracticePlanRepository.manifestKey` makes `saveDraft` return a
+`StorageFailure` with the original `StorageException` key. The test was RED
+before this repair (`saveDraft` returned `Success` and Flutter reported the
+manifest exception as unhandled) and GREEN afterwards.
+
+Verification after the repair: `flutter gen-l10n` restored this fresh
+worktree's ignored localization output; the exact §7 `tools/round-gate.sh`
+invocation then completed with `outcome: pass`, `exit_code: 0` (format,
+analyze, all nine targeted test paths, architecture, secrets, and l10n).
+
 ## 11. Review — a Claude tölti ki

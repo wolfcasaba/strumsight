@@ -1033,6 +1033,32 @@ void main() {
       });
     });
 
+    group('F3 — manifest persistence failures (E07-R29 review)', () {
+      test(
+        'a rejected manifest write makes saveDraft return StorageFailure',
+        () async {
+          final store = InMemoryKeyValueStore()
+            ..failingKeys.add(LocalPracticePlanRepository.manifestKey);
+          final repository = _newRepository(store);
+
+          final result = await repository.saveDraft(
+            draftKey: 'main',
+            plan: plan(),
+          );
+
+          expect(result.isFailure, isTrue);
+          final failure = result.failureOrNull;
+          expect(failure, isA<StorageFailure>());
+          expect(failure!.code, FailureCode.storageWrite);
+          expect(failure.cause, isA<StorageException>());
+          expect(
+            (failure.cause! as StorageException).key,
+            LocalPracticePlanRepository.manifestKey,
+          );
+        },
+      );
+    });
+
     group('bounded history (A6)', () {
       test('revisions beyond maxRevisionsPerPlan evict the oldest, never '
           'modify an existing one', () async {

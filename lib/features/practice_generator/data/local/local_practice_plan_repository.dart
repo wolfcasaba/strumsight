@@ -188,7 +188,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
   /// number for the UI ("done" toast).
   int get trackedKeyCount => _writtenKeys.length;
 
-  void _trackWrite(String key) {
+  Future<void> _trackWrite(String key) async {
     // The manifest is itself a tracked entry but never appears in the
     // manifest body (it would otherwise recurse). Track its presence so
     // delete-all can also remove it.
@@ -198,13 +198,13 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     // Persist the updated manifest. A failure here is propagated by the
     // caller (which is inside a `_runWrite` block) and surfaces as the
     // normal `StorageFailure` path; we do NOT swallow it.
-    _persistManifestSync();
+    await _persistManifest();
   }
 
-  void _trackRemove(String key) {
+  Future<void> _trackRemove(String key) async {
     if (key == manifestKey) return;
     if (_writtenKeys.remove(key)) {
-      _persistManifestSync();
+      await _persistManifest();
     }
   }
 
@@ -312,7 +312,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     // Step 1: write the immutable record under its revision-id key.
     final recordEnvelope = serializer.encodePlanRecord(plan);
     await keyValueStore.writeString(revisionKey, jsonEncode(recordEnvelope));
-    _trackWrite(revisionKey);
+    await _trackWrite(revisionKey);
 
     // Step 2: switch the pointer last.
     final pointerEnvelope = serializer.encodeActivePointer(pointer);
@@ -320,7 +320,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       activePointerKey,
       jsonEncode(pointerEnvelope),
     );
-    _trackWrite(activePointerKey);
+    await _trackWrite(activePointerKey);
 
     // Step 3 (best-effort housekeeping): if there was a previous active
     // pointer on a different revision id, drop the previous record only
@@ -335,7 +335,6 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       );
       try {
         await keyValueStore.remove(priorRecordKey);
-        _trackRemove(priorRecordKey);
       } on StorageException {
         // The pointer is already committed. Retaining a harmless orphaned
         // old record is safer than reporting the completed activation as a
@@ -344,6 +343,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
           ActivePlanActivationOutcome(pointer: pointer, revisionWritten: true),
         );
       }
+      await _trackRemove(priorRecordKey);
     }
 
     return Success<ActivePlanActivationOutcome>(
@@ -413,7 +413,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     );
     final storageKey = draftStorageKey(draftKey);
     await keyValueStore.writeString(storageKey, jsonEncode(envelope));
-    _trackWrite(storageKey);
+    await _trackWrite(storageKey);
     return const Success<void>(null);
   });
 
@@ -451,7 +451,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       _runWrite(() async {
         final key = draftStorageKey(draftKey);
         await keyValueStore.remove(key);
-        _trackRemove(key);
+        await _trackRemove(key);
         return const Success<void>(null);
       });
 
@@ -485,7 +485,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         );
         final envelope = serializer.encodeRevisionRecord(revision);
         await keyValueStore.writeString(recordKey, jsonEncode(envelope));
-        _trackWrite(recordKey);
+        await _trackWrite(recordKey);
 
         final updated = <RevisionId>[revision.id, ...existing];
         final capped = historyPolicy.capRevisions(updated);
@@ -494,7 +494,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
           indexKey,
           jsonEncode(serializer.encodeArchivedRevisionsIndex(capped)),
         );
-        _trackWrite(indexKey);
+        await _trackWrite(indexKey);
 
         // Eviction: dropped ids lose their record key. The index itself is
         // already shrunk above, so the next read path will not look them
@@ -507,7 +507,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
               revisionId: id,
             );
             await keyValueStore.remove(droppedKey);
-            _trackRemove(droppedKey);
+            await _trackRemove(droppedKey);
           }
         }
         return const Success<void>(null);
@@ -532,7 +532,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         );
         final envelope = serializer.encodeOutcomeRecord(outcome);
         await keyValueStore.writeString(recordKey, jsonEncode(envelope));
-        _trackWrite(recordKey);
+        await _trackWrite(recordKey);
 
         final updated = <OutcomeId>[outcome.id, ...existing];
         final capped = historyPolicy.capOutcomes(updated);
@@ -541,7 +541,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
           indexKey,
           jsonEncode(serializer.encodeArchivedOutcomesIndex(capped)),
         );
-        _trackWrite(indexKey);
+        await _trackWrite(indexKey);
 
         final kept = capped.toSet();
         for (final id in existing) {
@@ -551,7 +551,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
               outcomeId: id,
             );
             await keyValueStore.remove(droppedKey);
-            _trackRemove(droppedKey);
+            await _trackRemove(droppedKey);
           }
         }
         return const Success<void>(null);
@@ -671,8 +671,10 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
             revisionId: pointer.revisionId,
           );
           await keyValueStore.remove(activeKey);
-          _trackRemove(activeKey);
+          await _trackRemove(activeKey);
         }
+      } on StorageException {
+        rethrow;
       } on Object {
         // A corrupt active pointer: still drop the pointer key below;
         // the active record (if any) stays orphaned in the namespace
@@ -680,13 +682,13 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       }
     }
     await keyValueStore.remove(activePointerKey);
-    _trackRemove(activePointerKey);
+    await _trackRemove(activePointerKey);
 
     // Drafts: one `remove()` per known draft.
     for (final draftKey in knownDraftKeysSync()) {
       final key = draftStorageKey(draftKey);
       await keyValueStore.remove(key);
-      _trackRemove(key);
+      await _trackRemove(key);
     }
 
     // Archive: walk every per-plan namespace and remove indexes +
@@ -700,10 +702,10 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       for (final id in revisionIds) {
         final key = archiveRevisionKey(planId: planId, revisionId: id);
         await keyValueStore.remove(key);
-        _trackRemove(key);
+        await _trackRemove(key);
       }
       await keyValueStore.remove(archiveRevisionsIndexKey(planId));
-      _trackRemove(archiveRevisionsIndexKey(planId));
+      await _trackRemove(archiveRevisionsIndexKey(planId));
       // Outcomes.
       final outcomeIds = _readIdListOrEmpty<OutcomeId>(
         archiveOutcomesIndexKey(planId),
@@ -712,10 +714,10 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       for (final id in outcomeIds) {
         final key = archiveOutcomeKey(planId: planId, outcomeId: id);
         await keyValueStore.remove(key);
-        _trackRemove(key);
+        await _trackRemove(key);
       }
       await keyValueStore.remove(archiveOutcomesIndexKey(planId));
-      _trackRemove(archiveOutcomesIndexKey(planId));
+      await _trackRemove(archiveOutcomesIndexKey(planId));
     }
 
     // F1 fix: drop the manifest itself so a fresh repository after
@@ -827,12 +829,10 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
   /// F1 fix: persist the current `_writtenKeys` list as the manifest.
   /// Called from every [_trackWrite] / [_trackRemove] so the on-disk
   /// manifest is always a snapshot of the keys the planner currently
-  /// owns. The persist is intentionally fire-and-forget at the track
-  /// level (the calling public method is inside a `_runWrite` block,
-  /// and the same `StorageException` is propagated there).
-  void _persistManifestSync() {
-    keyValueStore.writeString(manifestKey, jsonEncode(_writtenKeys));
-  }
+  /// owns. Callers await this inside their `_runWrite` operation, so a
+  /// storage rejection maps to the normal `StorageFailure` result.
+  Future<void> _persistManifest() =>
+      keyValueStore.writeString(manifestKey, jsonEncode(_writtenKeys));
 
   /// Parses the `<L:planId>` length-prefixed segment from an archive key.
   ///
