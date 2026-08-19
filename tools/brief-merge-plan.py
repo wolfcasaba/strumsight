@@ -222,8 +222,8 @@ def find_merge_candidates(
             slope = regression.get("slope_minutes_per_file")
             intercept = regression.get("intercept_minutes")
         estimate = _estimate_pair_seconds(
-            len(left_metadata.allowed_paths),
-            len(right_metadata.allowed_paths),
+            len(left_metadata.allowed_paths) + len(left_metadata.gate_tests),
+            len(right_metadata.allowed_paths) + len(right_metadata.gate_tests),
             slope_minutes_per_file=slope,
             intercept_minutes=intercept,
         )

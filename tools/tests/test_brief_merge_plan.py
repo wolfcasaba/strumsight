@@ -439,6 +439,130 @@ class BriefMergePlanRegressionTest(unittest.TestCase):
         # A táblázat `megtakarítás` oszlopa a `20p` értéket tartalmazza.
         self.assertIn("20p", stdout, msg=f"F1: a 'saved' cella NEM 20p: {stdout!r}")
 
+    def test_with_regression_size_includes_gate_tests(self) -> None:
+        """M1 (MINOR) regresszió: a `_estimate_pair_seconds` mindkét mérete a
+        `gate_tests` darabszámával KIEGÉSZÍTETT `allowed_paths + gate_tests`
+        összeggel számol — ez illeszkedik a `tools/round-metrics.py:_round_size`
+        által a D1 `--granularity` X-tengelyén használt képlethez. A régi
+        (hibás) kód CSAK az `allowed_paths` darabszámát adta át → a mért
+        érték `slope × gate_tests_count` perccel rövidebb lett.
+
+        A teszt két, ELTÉRŐ `gate_tests` darabszámú briefet állít be
+        (bal = 1 gate_test, jobb = 2 gate_test), rögzített
+        `slope` / `intercept` regresszióval hívja a CLI-t, és a kapott
+        `left_minutes` / `right_minutes` értéket a KÉZZEL számolt
+        `intercept + slope * (allowed_paths + gate_tests)` képlettel
+        hasonlítja össze. A régi kód PIROS (mindkét oldal azonos kisebb
+        értéket adná), az új ZÖLD.
+        """
+        slope = 3.0
+        intercept = 10.0
+        # bal: 4 allowed + 2 gate  →  size = 6  →  left_minutes = 10 + 3*6 = 28
+        # jobb: 4 allowed + 4 gate →  size = 8  →  right_minutes = 10 + 3*8 = 34
+        # A kettő közti különbség CSAK a gate_tests darabszámból jön — ez a
+        # M1 egyetlen szükséges feltétele, és ha a régi (hibás) kód futna,
+        # a két érték egyenlő lenne (10 + 3*4 = 22 == 22).
+        left_paths = ["docs/rounds/e07-r01.md"] + [
+            f"lib/features/songs/x_{i}.dart" for i in range(3)
+        ]  # 4 elem
+        right_paths = ["docs/rounds/e07-r02.md"] + [
+            f"lib/features/songs/y_{i}.dart" for i in range(3)
+        ]  # 4 elem
+        left_gate_tests = [
+            "test/songs/left_gate_a.dart",
+            "test/songs/left_gate_b.dart",
+        ]  # 2 gate
+        right_gate_tests = [
+            "test/songs/right_gate_a.dart",
+            "test/songs/right_gate_b.dart",
+            "test/songs/right_gate_c.dart",
+            "test/songs/right_gate_d.dart",
+        ]  # 4 gate
+        expected_left_size = len(left_paths) + len(left_gate_tests)  # 6
+        expected_right_size = len(right_paths) + len(right_gate_tests)  # 8
+        expected_left_minutes = intercept + slope * expected_left_size  # 28
+        expected_right_minutes = intercept + slope * expected_right_size  # 34
+
+        # A fixture-t közvetlenül építjük (a `_build_queue` egységes
+        # 1-gate defaultja most nem felel meg — per-brief gate_tests kell).
+        tmp = self._tmp / "fixture-m1-gate-counts"
+        docs = tmp / "docs" / "rounds"
+        docs.mkdir(parents=True, exist_ok=True)
+        pipeline = tmp / "docs" / "execution"
+        pipeline.mkdir(parents=True, exist_ok=True)
+        (docs / "e07-r01.md").write_text(
+            _brief_text(left_paths, gate_tests=left_gate_tests),
+            encoding="utf-8",
+        )
+        (docs / "e07-r02.md").write_text(
+            _brief_text(right_paths, gate_tests=right_gate_tests),
+            encoding="utf-8",
+        )
+        queue_lines = [
+            "E07-R01\tdocs/rounds/e07-r01.md\tcodex\tnincs\tpending",
+            "E07-R02\tdocs/rounds/e07-r02.md\tcodex\tnincs\tpending",
+        ]
+        (pipeline / "pipeline-queue.tsv").write_text(
+            "\n".join(queue_lines) + "\n", encoding="utf-8"
+        )
+        regression_payload = {
+            "n": 4,
+            "slope_minutes_per_file": slope,
+            "intercept_minutes": intercept,
+            "r_squared": 0.9,
+        }
+        regression_path = tmp / "regression.json"
+        regression_path.write_text(json.dumps(regression_payload), encoding="utf-8")
+
+        exit_code, stdout, stderr = run_merge_plan(
+            tmp,
+            [
+                "--format", "json",
+                "--max-paths", "12",
+                "--with-regression", str(regression_path),
+            ],
+        )
+        self.assertEqual(exit_code, 0, msg=f"M1 REGRESSZIÓ: a CLI kivételt dob / nem 0: {stderr!r}")
+        self.assertNotIn("Traceback", stderr, msg=f"M1 REGRESSZIÓ: traceback a stderrben: {stderr!r}")
+
+        payload = json.loads(stdout)
+        candidates = payload["candidates"]
+        self.assertEqual(len(candidates), 1, msg=f"M1: a pár nem javasolt: {payload!r}")
+        basis = candidates[0]["regression_basis"]
+        self.assertIsNotNone(basis["left_minutes"], msg=f"M1: left_minutes None: {basis!r}")
+        self.assertIsNotNone(basis["right_minutes"], msg=f"M1: right_minutes None: {basis!r}")
+        self.assertAlmostEqual(
+            basis["left_minutes"],
+            expected_left_minutes,
+            places=6,
+            msg=(
+                f"M1: left_minutes={basis['left_minutes']!r}, "
+                f"elvárt {expected_left_minutes} "
+                f"(= {intercept} + {slope} * {expected_left_size})"
+            ),
+        )
+        self.assertAlmostEqual(
+            basis["right_minutes"],
+            expected_right_minutes,
+            places=6,
+            msg=(
+                f"M1: right_minutes={basis['right_minutes']!r}, "
+                f"elvárt {expected_right_minutes} "
+                f"(= {intercept} + {slope} * {expected_right_size})"
+            ),
+        )
+        # A két oldal közti különbség CSAK a gate_tests darabszámból jön —
+        # ez a M1 egyértelmű bizonyítéka.
+        self.assertNotAlmostEqual(
+            basis["left_minutes"],
+            basis["right_minutes"],
+            places=6,
+            msg=(
+                f"M1: left_minutes == right_minutes ({basis['left_minutes']!r}), "
+                "a gate_tests darabszámát a kód nem veszi figyelembe"
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
