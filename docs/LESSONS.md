@@ -12308,3 +12308,90 @@ egy megosztott, párhuzamosan terhelt Oracle-boxon futtatott utólagos
 ellenőrzés.
 
 Rokon: [[L279]], [[L280]], [[ADR 0112]].
+
+## L322 — A `.github/workflows/` a self-heal abszolút tiltott zónája AKKOR IS, ha a kör saját review-ja kifejezetten a self-healnek címzi a javítást — a pipeline ELSŐ mért `outcome=escalate`-je (E99-R16, H3, 2026-08-19)
+
+**Mit mértem.** E99-R16 (GOV-10, round-granularity mérőeszköz) HALT (H3)-tal
+állt meg: a review (`docs/reviews/e99-r16-review.md`, F3 lelet) szerint F1
+(MAJOR), F2 (MAJOR) és M1 (MINOR) mind FIXED és függetlenül újramérve, az
+EGYETLEN nyitva maradó tétel `tools/tests/test_router_ci_path_filter.py
+::test_every_test_referenced_file_is_in_the_ci_filter`: az új
+`tools/brief-merge-plan.py` (D2, saját guard-teszttel,
+`test_brief_merge_plan.py`) nincs lefedve a `.github/workflows/router-ci.yml`
+`paths:` szűrőjében, tehát egy jövőbeli, KIZÁRÓLAG ezt a fájlt érintő push
+nem indítana Router CI-t. A review szó szerint ezt írta: „a self-heal
+egyetlen, pontosan megnevezett teendője a router-ci.yml egysoros bővítése" —
+a `docs/execution/pipeline-orchestrator-prompt.md` §4 „ha az akadály éppen
+ott van [.github/-ban], az halt, és az önjavító kör dolga (ADR 0112 §3)"
+mondatára hivatkozva.
+
+**Ez téves következtetés volt, függetlenül igazolva.** [[ADR 0112]] §3 (a
+LEGFELSŐBB forrás, nem egy levezetett prompt-sablon) szó szerint, kivétel
+nélkül, gépileg őrzött módon tiltja a `.github/workflows/` módosítását — ez
+UGYANOTT szerepel, ahol a self-heal tágabb jogosultságát (§2) is definiálja,
+tehát a §2 tágítása NEM terjed ki erre a fájlra. A `pipeline-orchestrator-
+prompt.md` §4 „az önjavító kör dolga (ADR 0112 §3)" utalása magára a
+PROTOKOLLRA mutat (mérd fel, hogy a mérce megsértése nélkül javítható-e; ha
+nem, `outcome=escalate`), NEM egy felhatalmazásra, hogy a self-heal
+szerkessze a fájlt. A `docs/execution/pipeline-selfheal-prompt.md` saját §3-a
+(„nem nyúlsz a `tools/round-gate.sh`-hoz és a `.github/workflows/`-hoz")
+ugyanezt mondja ki, és ez a sor SZÓ SZERINT az ADR 0112-t bevezető eredeti
+commitban (`a6204429`) van jelen — nem egy utólagos szigorítás egy korábbi
+incidens után, hanem a protokoll saját, kezdettől fogva változatlan határa.
+Független megerősítés: `HANDOFF.md` §3 már korábban is, több GOV-30c körön
+át dokumentálta, hogy a `.github/workflows/**` „szándékosan tilos zóna...
+H-GATEGUARD" — ez a mérés tehát nem az első, csak az első, ahol egy review
+tévesen a self-healre hárította a felelősséget.
+
+**Saját, független mérés (nem a review szava alapján).** Izolált klónban
+(`ea6e763a`, a round branch feje): `python3 -m unittest
+tools.tests.test_router_ci_path_filter -v` → byte-azonos hiba,
+`missing=['tools/brief-merge-plan.py']`. A `router-ci.yml` teljes `paths:`
+blokkja 42 explicit mintát tartalmaz, egyik sem illeszkedik
+`tools/brief-merge-plan.py`-ra (ellenőrizve a teszt saját `_matches()`
+logikájával, nem csak vizuálisan). Teljes `python3 -m pytest tools/tests -q`
+(izolált venv): **1 failed, 550 passed, 1 skipped, 565 subtests passed** —
+byte-azonos a review záró táblázatával, tehát F1/F2/M1 VALÓBAN fixed, F3 a
+kizárólagos maradék.
+
+**Miért nem volt más, self-heal-hatáskörön belüli javítás.** Számba vett és
+elvetett alternatívák: (1) a teszt lazítása/a `tools/brief-merge-plan.py`
+kizárása a `referenced_by_tests()` halmazból — tesztgyengítés, kifejezetten
+tiltott; (2) a router-ci.yml-re mutató elérési út indirekcióval kikerülése
+(pl. a teszt konstansának átírása egy másik fájlra) — ugyanaz a tiltott
+kategória, csak megkerülő formában; (3) DoD #3 (`pytest tools/tests -q`
+zöld) elfogadása pirosan, brief-revízióval — ütközik az ADR 0052 zöld
+kapujával (változatlan, ADR 0112 fejléce szerint is), ami a self-healre is
+vonatkozik. **Az EGYETLEN honest javítás helye maga a tiltott fájl** — ez
+pontosan az ADR 0112 §3 „ha az őszinte javításhoz mégis a mércéhez kellene
+nyúlni" esete.
+
+**Kimenet.** `outcome=escalate` — a pipeline 476 korábbi git-notes bejegyzése
+között (`git notes`, teljes history) egyszer sem fordult elő `verdict=
+escalate`; ez az ELSŐ mért eset. A lánc áll, a user dönt. Javasolt emberi
+lépés: `.github/workflows/router-ci.yml` `paths:` blokkjába egy sor,
+`"tools/brief-merge-plan.py"` (a meglévő egyenkénti-fájlos minta szerint),
+ellenőrizve `python3 -m unittest tools.tests.test_router_ci_path_filter -v`-
+vel. **Fontos, nem nyilvánvaló következmény:** ez a fix önmagában, csak a
+`main`-en NEM elég — a PR #323 (`minimax/e99-r16-round-granularity`,
+`ea6e763a`) saját gate-je a router-ci.yml SAJÁT munkafa-másolatát méri,
+tehát a friss `main`-t előbb a H8-mintát követve (`docs/LESSONS.md` H8-
+receptek, non-force merge) be kell olvasztani a round branchbe, mielőtt
+annak SAJÁT `pytest tools/tests -q` gate-je zöldre válthatna.
+
+**Tanulság.** (1) Egy review, ami a `.github/workflows/` (vagy
+`tools/round-gate.sh`) szerkesztését javasolja MEGOLDÁSKÉNT, tévesen jár el
+— a helyes review-konklúzió egy ilyen leletre `outcome=escalate` (vagy egy
+kifejezetten erre a fájlra felhatalmazott, EMBER által jóváhagyott brief),
+sosem „a self-heal majd megoldja". (2) Egy származtatott prompt-sablon
+(`pipeline-orchestrator-prompt.md`) cross-route hivatkozása („X dolga") a
+CÉLPONT ADR/sablon saját szövegével együtt olvasandó, nem önmagában — a
+hivatkozás itt a PROTOKOLLRA mutatott, nem egy felhatalmazásra. (3) A
+gépi őr (gate-artefaktum blob-hash összevetés, [[ADR 0112]] §3) ettől a
+hibától FÜGGETLENÜL is elkapta volna a próbálkozást — tehát még ha ez a
+self-heal tévedésből módosította volna a `router-ci.yml`-t, a driver
+`H-GATEGUARD`-dal állt volna le, nem oldotta volna fel a láncot. A
+kettős védelem (prompt-szöveg + gépi őr) itt a SZÁNDÉK szintjén állt meg,
+mielőtt a gépi őrnek egyáltalán dolga lett volna.
+
+Rokon: [[ADR 0112]].

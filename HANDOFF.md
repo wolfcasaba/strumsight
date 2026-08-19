@@ -1,5 +1,76 @@
 # HANDOFF — StrumSight 🎸
 
+## 🛑 [HEAL E99-R16/H3] ESCALATE — a javítás helye (`.github/workflows/router-ci.yml`) a self-heal abszolút tiltott zónája; EMBERI szerkesztés szükséges — a lánc ÁLL (2026-08-19)
+
+**A pipeline ELSŐ `outcome=escalate` eredménye** (a teljes git-notes history —
+476 korábbi self-heal/kör bejegyzés — egyike sem `verdict=escalate` eddig).
+
+Az E99-R16 (GOV-10, round-granularity mérőeszköz, PR
+[#323](https://github.com/wolfcasaba/strumsight/pull/323),
+`minimax/e99-r16-round-granularity` @ `ea6e763a`) review-ja
+(`docs/reviews/e99-r16-review.md`) F1 (MAJOR), F2 (MAJOR) és M1 (MINOR)
+leletét FIXED-nek és függetlenül újramértnek találta — ezt EBBEN a
+self-healben saját, izolált klónból megismételt méréssel is megerősítettem
+(`python3 -m pytest tools/tests -q` → **1 failed, 550 passed, 1 skipped,
+565 subtests passed**, byte-azonos a review záró táblázatával). Az EGYETLEN
+maradék hiba (F3): `tools/tests/test_router_ci_path_filter.py
+::test_every_test_referenced_file_is_in_the_ci_filter` pirosra vált, mert az
+új `tools/brief-merge-plan.py` nincs lefedve a `.github/workflows/
+router-ci.yml` `paths:` szűrőjében. A review ezt tévesen a self-heal
+feladatának címezte — de [[ADR 0112]] §3 kivétel nélkül tiltja a
+`.github/workflows/` módosítását self-heal számára is (részletes indoklás:
+`docs/LESSONS.md` **L322**, ADR 0112 2026-08-19-i módosítás-blokkja).
+
+**Javasolt emberi lépés (gyors, alacsony kockázatú):**
+`.github/workflows/router-ci.yml` `paths:` blokkjába egy sor:
+`"tools/brief-merge-plan.py"` (a meglévő egyenkénti-fájlos minta szerint,
+pl. `tools/model-router.py` mellé). Ellenőrzés:
+`python3 -m unittest tools.tests.test_router_ci_path_filter -v` → mindkét
+teszt zöld. **Ezután a PR #323 branch-ének is be kell olvasztania a friss
+`main`-t** (a teszt a round branch SAJÁT `router-ci.yml`-másolatát méri, nem
+a `main`-ét) — a H8-recept szerint (`docs/LESSONS.md`), utána a szokásos
+CI-dispatch + zöld kapus squash-merge mehet, **további review-kör nélkül**
+(a review már APPROVED tartalmilag).
+
+PR #323 nyitva marad, NEM lett lezárva vagy módosítva ebben a self-healben —
+a tartalmi munka (F1/F2/M1) érintetlen. A lánc a user döntéséig áll (a
+következő cron-firing ismét megpróbálná a self-healt, de a strukturális ok
+és a kísérletszámláló változatlan marad, amíg valaki nem szerkeszti a
+workflow-fájlt).
+
+**2. önjavító kísérlet (attempt 2/3) — független megerősítés, állapot
+változatlan:** egy MÁSODIK, önálló session a fentieket bemondásra nem
+elfogadva újra megmérte. Friss izolált klónban (`ea6e763a`) megismételt
+`python3 -m unittest tools.tests.test_router_ci_path_filter -v` byte-azonos
+`missing=['tools/brief-merge-plan.py']` hibát ad; a teszt saját
+forráskódjának (`_matches`/`referenced_by_tests`,
+`tools/tests/test_router_ci_path_filter.py`) közvetlen elolvasása
+megerősíti, hogy a self-heal hatáskörén belül nincs alternatív javítás — a
+teszt lazítása és a fájl átnevezése/kizárása egyaránt csak a tiltott
+„megkerülés indirekcióval" kategória más alakja lenne ([[L322]]). `PR #323`
+és a `router-ci.yml` bit-azonos állapotban van az 1. kísérlet óta (nincs
+emberi beavatkozás — ellenőrizve `git log -- .github/workflows/router-ci.yml`
+és a PR friss `headRefOid`-ja alapján). A 3. (utolsó) önjavító kísérlet a
+GOV-09 motorváltási szabály szerint már más motort használ (`terra`); ha az
+is `escalate`-et ad, a lánc a `tools/pipeline-status.sh --resume` emberi
+lépésre vár.
+
+## ✅ E07-R25 KÉSZ — Analyze és Vision származtatott evidence integráció — PR #322, squash `3ab2a147` (2026-08-19)
+
+Az Analyze és a Vision csak származtatott, confidence-aware evidence-et adhat
+át a Practice Generatornak. Az új adapterek a publikus Audio Analysis API-t,
+illetve a szűk `vision/domain/evidence/public.dart` contractot használják;
+nyers audio, frame, landmark, koordináta és fájlútvonal nem kerül át. A Vision
+hiánya üres, hibamentes eredmény, a `notObservable` port-bemenet adapter-szinten
+fail-closed, az alacsony confidence pedig súlykorlátozott marad. A független
+review APPROVED (0 BLOCKER/MAJOR/MINOR); a reviewer valódi-sértés próbája a
+`notObservable` őr eltávolításakor két cellát pirosra váltott, visszaállítás
+után 10/10 Vision adapter teszt zöld. Exact `cbcb30c7`: Full Gate
+[32210677497](https://github.com/wolfcasaba/strumsight/actions/runs/32210677497)
+és Router CI
+[32210693573](https://github.com/wolfcasaba/strumsight/actions/runs/32210693573)
+success. A merge utáni célzott gate a záró rituálé része.
+
 ## ✅ [HEAL E07-R25/H5] KÉSZ — két, egymástól független, self-heal-generált bidirekcionális regressziós pin egyirányúsítva (ADR 0112) — PR #321, squash `a1613fa5` (2026-08-19)
 
 Az E07-R25 (Analyze/Vision evidence integráció) Router CI-ja kétszer pirosra
@@ -1548,6 +1619,11 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-19):** `main` @ `3ab2a147` — E07-R25 Analyze és
+Vision evidence integráció, PR [#322](https://github.com/wolfcasaba/strumsight/pull/322),
+squash-merge. Exact `cbcb30c7`: Full Gate 32210677497 + Router CI 32210693573
+success; a post-merge célzott gate futása a záró rituálé része.
+
 **Aktuális állapot (2026-08-19):** `main` @ `b08c00e9` — E07-R24 song-goal
 integráció, PR [#318](https://github.com/wolfcasaba/strumsight/pull/318),
 squash-merge. Exact `028ea117`: Full Gate 32200092798 + Router CI 32200094318
@@ -2615,11 +2691,14 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R25** (Chapter 8, Analyze és Computer
-Vision evidence integráció). A fresh-session pre-flight mérje meg a tényleges
-Analyze/vision publikus contractot és ownership-láncot; exact string/fret vagy
-technikai hiba csak mért evidence alapján állítható, és nyers kamera-frame nem
-hagyhatja el az eszközt.
+**🛑 A lánc jelenleg ÁLL, EMBERI döntés/szerkesztés vár (2026-08-19):**
+E99-R16/H3 `outcome=escalate` — ld. a fejléc-blokkot és `docs/LESSONS.md`
+L322. Semmi más (E07-R26 sem) nem folytatódik automatikusan, amíg a
+`.github/workflows/router-ci.yml` egysoros javítása meg nem történik.
+
+**A következő Epic 7 SDD-lépés: E07-R26** (outcome ingestion és revision).
+Friss sessionben indul; az E07-R25 eredményét csak a szűk public boundary-kon
+át használhatja, és a nyers audio-/kamera-adat tilalma változatlan.
 
 **A soron következő SDD-lépés: E07-R22** (Chapter 8, Weekly Plan és Today
 screen). A friss session pre-flightban mérje újra az R21 preview ma még
