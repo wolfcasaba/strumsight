@@ -63,6 +63,7 @@ dry_run=0
 
 state_dir=${PIPELINE_STATE_DIR:-"$repo_root/.pipeline"}
 queue_file=${PIPELINE_QUEUE_FILE:-"$repo_root/docs/execution/pipeline-queue.tsv"}
+engine_registry=${PIPELINE_ENGINE_REGISTRY:-"$repo_root/docs/execution/engine-registry.tsv"}
 prompt_template="$repo_root/docs/execution/pipeline-orchestrator-prompt.md"
 heal_template="$repo_root/docs/execution/pipeline-selfheal-prompt.md"
 codex_preamble="$repo_root/docs/execution/pipeline-codex-orchestrator-preamble.md"
@@ -71,6 +72,7 @@ halt_file="$state_dir/HALTED"
 status_file="$state_dir/round-status"   # csak a default; a kör kiválasztása után kör-kulcsolt lesz
 heal_status_file="$state_dir/heal-status"
 heal_count_file="$state_dir/selfheal.count"
+halt_reminder_file="$state_dir/halt-reminder-last"
 router_status_file="$state_dir/router-status"
 chain_log="$state_dir/chain.log"
 
@@ -98,6 +100,8 @@ session_timeout=${PIPELINE_SESSION_TIMEOUT:-14400}   # 4 óra: kör + javító k
 heal_timeout=${PIPELINE_SELFHEAL_TIMEOUT:-10800}     # 3 óra: diagnózis + fix + CI
 selfheal_enabled=${PIPELINE_SELFHEAL:-1}
 selfheal_max=${PIPELINE_SELFHEAL_MAX:-3}
+halt_reminder_min=${PIPELINE_HALT_REMINDER_MIN:-60}
+halt_reminder_max_h=${PIPELINE_HALT_REMINDER_MAX_H:-24}
 claude_bin=${CLAUDE_BIN:-claude}
 # Sonnet 5 az orchestrátor-default (user-döntés 2026-08-06: „állítsd át az
 # orchestrátort MINDEN RÉTEGBEN Sonnet 5 modellre, a fejlesztő agentet pedig
@@ -688,6 +692,146 @@ codex_prompt_file() {
   printf '%s\n' "$merged"
 }
 
+# A self-heal motorválasztása a nyilvántartást olvassa, nem a kör queue-sorát:
+# a heal orchestrátor mai, rögzített identitása `sonnet-impl` (E99-R15 §0.0).
+selfheal_engine_registry_row() {   # $1=motor neve → a nyilvántartás sora
+  [ -r "$engine_registry" ] || return 1
+  grep -v '^[[:space:]]*#' "$engine_registry" | grep -v '^name	' \
+    | awk -F'\t' -v n="$1" '$1 == n {print; found=1; exit} END {exit !found}'
+}
+
+selfheal_engine_field() { printf '%s' "$1" | cut -f"$2"; }
+
+selfheal_engine_path() { printf '%s' "${1/#\~/$HOME}"; }
+
+selfheal_engine_is_available() {   # $1=registry sor → 0, ha statikusan futtatható
+  local row="$1" harness config auth_file
+  harness=$(selfheal_engine_field "$row" 2)
+  config=$(selfheal_engine_path "$(selfheal_engine_field "$row" 3)")
+  auth_file=$(selfheal_engine_field "$row" 6)
+  case "$harness" in
+    claude | codex) ;;
+    *) return 1 ;;
+  esac
+  [ -d "$config" ] || return 1
+  [ "$auth_file" = "-" ] || [ -r "$(selfheal_engine_path "$auth_file")" ]
+}
+
+# Az utolsó önjavító próbálkozás keres egy statikusan elérhető, más modellű
+# motort. Nincs jelölt → visszaadja az eredetit: fail-open a mai viselkedésre.
+heal_engine_for_attempt() {   # $1=kör $2=halt-kód $3=kísérlet $4=kör-motor
+  local attempt="$3" round_engine="$4" current_row current_model
+  local candidate row candidate_model
+
+  if [ "$attempt" -lt "$selfheal_max" ]; then
+    printf '%s\n' "$round_engine"
+    return 0
+  fi
+
+  current_row=$(selfheal_engine_registry_row "$round_engine") || {
+    printf '%s\n' "$round_engine"
+    return 0
+  }
+  current_model=$(selfheal_engine_field "$current_row" 4)
+  while IFS= read -r candidate; do
+    [ -n "$candidate" ] || continue
+    row=$(selfheal_engine_registry_row "$candidate") || continue
+    candidate_model=$(selfheal_engine_field "$row" 4)
+    [ "$candidate" != "$round_engine" ] || continue
+    [ "$candidate_model" != "$current_model" ] || continue
+    selfheal_engine_is_available "$row" || continue
+    printf '%s\n' "$candidate"
+    return 0
+  done < <(grep -v '^[[:space:]]*#' "$engine_registry" | grep -v '^name	' | cut -f1)
+
+  printf '%s\n' "$round_engine"
+}
+
+pipeline_now_epoch() {
+  case "${PIPELINE_TEST_NOW:-}" in
+    '' ) date +%s ;;
+    *[!0-9]* ) date +%s ;;
+    * ) printf '%s\n' "$PIPELINE_TEST_NOW" ;;
+  esac
+}
+
+halt_reminder_due() {   # $1=kör $2=halt-kód → 0, ha MOST kell küldeni
+  local round="$1" halt_code="$2" now halted_at halted_epoch
+  local last_line last_reminder min_seconds max_seconds
+  now=$(pipeline_now_epoch)
+  halted_at=$(grep -m1 '^halted_at=' "$halt_file" | cut -d= -f2-)
+  halted_epoch=$(TZ=UTC date -d "$halted_at" +%s 2>/dev/null) || return 0
+  case "$halt_reminder_min" in ''|*[!0-9]*) return 0 ;; esac
+  case "$halt_reminder_max_h" in ''|*[!0-9]*) return 0 ;; esac
+  min_seconds=$(( halt_reminder_min * 60 ))
+  max_seconds=$(( halt_reminder_max_h * 60 * 60 ))
+  [ "$now" -lt "$(( halted_epoch + max_seconds ))" ] || return 1
+
+  [ -f "$halt_reminder_file" ] || return 0
+  last_line=$(cat "$halt_reminder_file")
+  case "$last_line" in
+    "$round|$halt_code|"*) last_reminder=${last_line##*|} ;;
+    *) return 0 ;;
+  esac
+  case "$last_reminder" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$now" -ge "$(( last_reminder + min_seconds ))" ]
+}
+
+record_halt_reminder() {   # $1=kör $2=halt-kód
+  printf '%s|%s|%s\n' "$1" "$2" "$(pipeline_now_epoch)" > "$halt_reminder_file"
+}
+
+# A választott motor a nyilvántartás saját harnessén fut. A MiniMax-kulcsot az
+# engine-profile csak a tmux-beli shellben olvassa be, így nem kerül argv-be.
+run_selfheal_session() {   # $1=motor $2=tmux-név $3=prompt $4=log $5=jelzés $6=timeout $7=label
+  local engine="$1" tmux_session="$2" prompt_file="$3" session_log="$4"
+  local signal_file="$5" timeout_s="$6" label="$7"
+  local row harness config_dir model auth_env codex_prompt runner profile_env
+
+  row=$(selfheal_engine_registry_row "$engine") || {
+    log "az önjavító motor nincs a nyilvántartásban: $engine"
+    return 1
+  }
+  selfheal_engine_is_available "$row" || {
+    log "az önjavító motor nem elérhető: $engine"
+    return 1
+  }
+  harness=$(selfheal_engine_field "$row" 2)
+  config_dir=$(selfheal_engine_path "$(selfheal_engine_field "$row" 3)")
+  model=$(selfheal_engine_field "$row" 4)
+  auth_env=$(selfheal_engine_field "$row" 5)
+  rm -f "$signal_file"
+
+  case "$harness" in
+    claude)
+      runner="CLAUDE_CONFIG_DIR='$config_dir' DISABLE_AUTOUPDATER=1 $claude_bin $session_mode_flag --permission-mode bypassPermissions --model '$model' --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'"
+      case "$model" in
+        claude-* | sonnet-* | opus-* | haiku-*) ;;
+        *)
+          profile_env="eval \"\$(bash '$repo_root/tools/engine-profile.sh' env '$engine')\";"
+          runner="$profile_env export ANTHROPIC_BASE_URL='https://api.minimax.io/anthropic'; export ANTHROPIC_AUTH_TOKEN=\"\${$auth_env:-}\"; $runner"
+          ;;
+      esac
+      run_tmux_session "$tmux_session" "$runner" "$session_log" "$signal_file" \
+        "$timeout_s" "$label" 0 "$CLAUDE_PROCESS_COMM_PATTERN"
+      ;;
+    codex)
+      command -v "$codex_bin" >/dev/null || {
+        log "nincs $codex_bin CLI — az önjavító motor nem indítható"
+        return 1
+      }
+      codex_prompt=$(codex_prompt_file "$prompt_file")
+      runner="CODEX_HOME='$config_dir' $codex_bin exec -m '$model' -C '$repo_root' -s danger-full-access \"\$(cat '$codex_prompt')\" < /dev/null"
+      run_tmux_session "$tmux_session" "$runner" "$session_log" "$signal_file" \
+        "$timeout_s" "$label" 0 "${CODEX_PROCESS_COMM_PATTERN:-codex}"
+      ;;
+    *)
+      log "nem támogatott önjavító harness: $harness"
+      return 1
+      ;;
+  esac
+}
+
 # Egy orchestrátori munkadarab levezénylése: elsőként Claude, kvótazárlat vagy
 # kvótára utaló néma halál esetén Codex/Terra. 0 = van jelzésfájl.
 run_orchestrator_session() {
@@ -985,7 +1129,7 @@ handle_round_halt() {   # $1=kör $2=status-fájl $3=session-napló — a HALT E
 attempt_selfheal() {
   local halt_round halt_code attempts stamp prompt_file heal_log
   local tests_before hashes_before tests_after hashes_after outcome summary
-  local heal_branch pr_number violation
+  local heal_branch pr_number violation round_engine heal_engine engine_note
 
   halt_round=$(grep -m1 '^round=' "$halt_file" | cut -d= -f2-)
   halt_code=$(grep -m1 '^halt=' "$halt_file" | cut -d= -f2-)
@@ -1039,12 +1183,34 @@ attempt_selfheal() {
   attempts=$(heal_attempts "$halt_round" "$halt_code")
   if [ "$attempts" -ge "$selfheal_max" ]; then
     log "az önjavítás KIMERÜLT ($attempts/$selfheal_max) — $halt_round / $halt_code"
-    notify "🛑 önjavítás kimerült: $halt_round" \
-      "$halt_code — $selfheal_max kísérlet után is áll, emberi döntés kell" high
+    if halt_reminder_due "$halt_round" "$halt_code"; then
+      notify "🛑 önjavítás kimerült: $halt_round" \
+        "$halt_code — $selfheal_max kísérlet után is áll, emberi döntés kell: tools/pipeline-status.sh --resume" high
+      record_halt_reminder "$halt_round" "$halt_code"
+    fi
     return 3
   fi
   attempts=$(( attempts + 1 ))
   printf '%s|%s|%s\n' "$halt_round" "$halt_code" "$attempts" > "$heal_count_file"
+
+  # A self-heal dispatch nem a halt-olt kör implementerét kapja, hanem a
+  # rögzített Claude/Sonnet-identitást (brief §0.0). Az utolsó próbálkozás
+  # ebből választ eltérő, más modellű alternatívát a nyilvántartásból.
+  round_engine="sonnet-impl"
+  heal_engine=$(heal_engine_for_attempt "$halt_round" "$halt_code" "$attempts" "$round_engine")
+  if [ "$attempts" -eq "$selfheal_max" ]; then
+    if [ "$heal_engine" != "$round_engine" ]; then
+      log "ÖNJAVÍTÓ MOTORVÁLTÁS: $halt_round $round_engine → $heal_engine (utolsó kísérlet)"
+      notify "🔁 ÖNJAVÍTÓ MOTORVÁLTÁS: $halt_round" \
+        "$round_engine → $heal_engine (utolsó kísérlet)" high
+      engine_note="**MÁS MOTOR futtatja ezt az utolsó kísérletet:** $round_engine helyett $heal_engine. Olvasd el az előző két .pipeline/heal-*.log naplót: ezek bemenetek a diagnózishoz, ne ismételd meg változtatás nélkül ugyanazt a munkát."
+    else
+      log "ÖNJAVÍTÓ MOTORVÁLTÁS NINCS: $halt_round / $halt_code — nincs elérhető, más modellű támogatott motor; a mai $round_engine viselkedés marad"
+      engine_note="Az utolsó kísérlethez nincs elérhető, más modellű támogatott motor, ezért a mai $round_engine viselkedés marad."
+    fi
+  else
+    engine_note="Ez még nem az utolsó önjavító kísérlet; a rögzített $round_engine motor fut."
+  fi
 
   # A mérce állapota a javítás ELŐTT, a jelenlegi main-en.
   git fetch -q origin main 2>/dev/null || true
@@ -1060,6 +1226,7 @@ attempt_selfheal() {
       -e "s|{{MAX_ATTEMPTS}}|$selfheal_max|g" \
       -e "s|{{HALT_FILE}}|$halt_file|g" \
       -e "s|{{HEAL_STATUS_FILE}}|$heal_status_file|g" \
+      -e "s|{{ENGINE_CONTEXT}}|$engine_note|g" \
       "$heal_template" > "$prompt_file"
 
   # Visszakeresés a halt aláírására (ADR 0312 §4.2). MÉRVE 2026-08-18: az
@@ -1094,12 +1261,20 @@ attempt_selfheal() {
   inflight_add "$halt_round" "heal:$halt_code"
   trap 'inflight_remove "$halt_round"' RETURN
 
-  if ! run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
-        "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" "$heal_model"; then
+  # A változatlan motor a korábbi, kvóta-tudatos orchestrator-úton marad.
+  # Kizárólag a D1 által bevezetett valódi motorváltás fut a registry saját
+  # harnessén; így az első két kísérlet Claude→Terra fallbackje bitre azonos.
+  if [ "$heal_engine" = "$round_engine" ]; then
+    run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
+      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" "$heal_model"
+  else
+    run_selfheal_session "$heal_engine" "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
+      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round"
+  fi || {
     log "az önjavító session jelzés nélkül ért véget — a lánc áll"
     notify "⛔ önjavítás jelzés nélkül halt" "$halt_round / $halt_code — kivizsgálás kell" high
     return 3
-  fi
+  }
 
   outcome=$(grep -m1 '^outcome=' "$heal_status_file" | cut -d= -f2-)
   summary=$(grep -m1 '^summary=' "$heal_status_file" | cut -d= -f2-)
@@ -1192,9 +1367,8 @@ attempt_selfheal() {
 # motor alapból a `sonnet-impl` — így a szerepek cserélnek, nem gyengül a
 # mezőny.
 engine_registry_row() {   # $1=motor neve → a nyilvántartás sora
-  local registry="${BASH_SOURCE[0]%/*}/../docs/execution/engine-registry.tsv"
-  [ -r "$registry" ] || return 1
-  grep -v '^[[:space:]]*#' "$registry" | awk -F'\t' -v n="$1" '$1 == n {print; found=1; exit} END {exit !found}'
+  [ -r "$engine_registry" ] || return 1
+  grep -v '^[[:space:]]*#' "$engine_registry" | awk -F'\t' -v n="$1" '$1 == n {print; found=1; exit} END {exit !found}'
 }
 
 # 0, ha a motor az ELŐFIZETÉSES Claude-keretet fogyasztja (claude harness ÉS
