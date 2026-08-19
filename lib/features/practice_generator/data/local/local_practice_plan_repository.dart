@@ -143,12 +143,70 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     PracticePlanSerializer? serializer,
     PracticePlanHistoryPolicy? historyPolicy,
   }) : serializer = serializer ?? const PracticePlanSerializer(),
-       historyPolicy = historyPolicy ?? const PracticePlanHistoryPolicy();
+       historyPolicy = historyPolicy ?? const PracticePlanHistoryPolicy() {
+    // F1 fix (E07-R29 review). The manifest is the durable source of
+    // truth for restart-stable discovery: on construction we hydrate
+    // `_writtenKeys` from the persisted manifest so a fresh repository
+    // over the same store sees every key a prior instance wrote. The
+    // shared `KeyValueStore` contract exposes no key enumeration, so
+    // hydration is the only way to make `knownDraftKeysSync()` /
+    // `knownPlanIdsSync()` (and therefore delete-all / export-all)
+    // restart-stable. A corrupt or absent manifest is treated as
+    // "no planner-owned keys in the past" — see `_loadManifest()`.
+    _loadManifest();
+  }
 
   final KeyValueStore keyValueStore;
   final ExerciseCandidateResolver resolveCandidate;
   final PracticePlanSerializer serializer;
   final PracticePlanHistoryPolicy historyPolicy;
+
+  /// Durable manifest key. Records the list of every planner-owned key
+  /// the repository ever wrote. The planner owns the only writers and
+  /// the only readers of this manifest; it lives at a stable prefix and
+  /// is part of the planner namespace (`ss.practice_generator.plan.*`).
+  static const String manifestKey = '$_namespace.manifest';
+
+  /// Every key this repository has ever written, in insertion order.
+  ///
+  /// The planner delete-all / export-all paths need a bounded enumeration
+  /// of the keys it owns. The shared [KeyValueStore] contract intentionally
+  /// does NOT expose a `keys()` member, so the repository persists a
+  /// _manifest_ that names every key it has touched (F1 fix). The
+  /// in-memory list is a hydrated cache seeded from the manifest on
+  /// construction and kept in sync through [_trackWrite] /
+  /// [_trackRemove].
+  ///
+  /// Pre-manifest records (keys a much older build wrote before this
+  /// manifest existed) are NOT enumerable under the current
+  /// `KeyValueStore` contract — see the F1 closure note in the review
+  /// documents for the exact bound.
+  final List<String> _writtenKeys = <String>[];
+
+  /// Public read-only count of keys the repository currently owns. Used
+  /// by the delete-all use case to surface a stable "removed N keys"
+  /// number for the UI ("done" toast).
+  int get trackedKeyCount => _writtenKeys.length;
+
+  Future<void> _trackWrite(String key) async {
+    // The manifest is itself a tracked entry but never appears in the
+    // manifest body (it would otherwise recurse). Track its presence so
+    // delete-all can also remove it.
+    if (key == manifestKey) return;
+    if (_writtenKeys.contains(key)) return;
+    _writtenKeys.add(key);
+    // Persist the updated manifest. A failure here is propagated by the
+    // caller (which is inside a `_runWrite` block) and surfaces as the
+    // normal `StorageFailure` path; we do NOT swallow it.
+    await _persistManifest();
+  }
+
+  Future<void> _trackRemove(String key) async {
+    if (key == manifestKey) return;
+    if (_writtenKeys.remove(key)) {
+      await _persistManifest();
+    }
+  }
 
   // ---------------------------------------------------------------------
   // Key namespace (A5: draft and active share NO key prefix)
@@ -254,6 +312,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     // Step 1: write the immutable record under its revision-id key.
     final recordEnvelope = serializer.encodePlanRecord(plan);
     await keyValueStore.writeString(revisionKey, jsonEncode(recordEnvelope));
+    await _trackWrite(revisionKey);
 
     // Step 2: switch the pointer last.
     final pointerEnvelope = serializer.encodeActivePointer(pointer);
@@ -261,6 +320,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
       activePointerKey,
       jsonEncode(pointerEnvelope),
     );
+    await _trackWrite(activePointerKey);
 
     // Step 3 (best-effort housekeeping): if there was a previous active
     // pointer on a different revision id, drop the previous record only
@@ -283,6 +343,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
           ActivePlanActivationOutcome(pointer: pointer, revisionWritten: true),
         );
       }
+      await _trackRemove(priorRecordKey);
     }
 
     return Success<ActivePlanActivationOutcome>(
@@ -350,10 +411,9 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         savedAt: DateTime.now().toUtc(),
       ),
     );
-    await keyValueStore.writeString(
-      draftStorageKey(draftKey),
-      jsonEncode(envelope),
-    );
+    final storageKey = draftStorageKey(draftKey);
+    await keyValueStore.writeString(storageKey, jsonEncode(envelope));
+    await _trackWrite(storageKey);
     return const Success<void>(null);
   });
 
@@ -389,7 +449,9 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
 
   Future<AppResult<void>> clearDraft(String draftKey) async =>
       _runWrite(() async {
-        await keyValueStore.remove(draftStorageKey(draftKey));
+        final key = draftStorageKey(draftKey);
+        await keyValueStore.remove(key);
+        await _trackRemove(key);
         return const Success<void>(null);
       });
 
@@ -423,6 +485,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         );
         final envelope = serializer.encodeRevisionRecord(revision);
         await keyValueStore.writeString(recordKey, jsonEncode(envelope));
+        await _trackWrite(recordKey);
 
         final updated = <RevisionId>[revision.id, ...existing];
         final capped = historyPolicy.capRevisions(updated);
@@ -431,6 +494,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
           indexKey,
           jsonEncode(serializer.encodeArchivedRevisionsIndex(capped)),
         );
+        await _trackWrite(indexKey);
 
         // Eviction: dropped ids lose their record key. The index itself is
         // already shrunk above, so the next read path will not look them
@@ -438,9 +502,12 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         final kept = capped.toSet();
         for (final id in existing) {
           if (!kept.contains(id)) {
-            await keyValueStore.remove(
-              archiveRevisionKey(planId: revision.planId, revisionId: id),
+            final droppedKey = archiveRevisionKey(
+              planId: revision.planId,
+              revisionId: id,
             );
+            await keyValueStore.remove(droppedKey);
+            await _trackRemove(droppedKey);
           }
         }
         return const Success<void>(null);
@@ -465,6 +532,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
         );
         final envelope = serializer.encodeOutcomeRecord(outcome);
         await keyValueStore.writeString(recordKey, jsonEncode(envelope));
+        await _trackWrite(recordKey);
 
         final updated = <OutcomeId>[outcome.id, ...existing];
         final capped = historyPolicy.capOutcomes(updated);
@@ -473,13 +541,17 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
           indexKey,
           jsonEncode(serializer.encodeArchivedOutcomesIndex(capped)),
         );
+        await _trackWrite(indexKey);
 
         final kept = capped.toSet();
         for (final id in existing) {
           if (!kept.contains(id)) {
-            await keyValueStore.remove(
-              archiveOutcomeKey(planId: outcome.planId, outcomeId: id),
+            final droppedKey = archiveOutcomeKey(
+              planId: outcome.planId,
+              outcomeId: id,
             );
+            await keyValueStore.remove(droppedKey);
+            await _trackRemove(droppedKey);
           }
         }
         return const Success<void>(null);
@@ -502,6 +574,338 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
           ),
         );
       });
+
+  // ---------------------------------------------------------------------
+  // Audit / discovery (used by the delete-all & export-all use cases)
+  // ---------------------------------------------------------------------
+
+  /// Every plan id this repository has ever written on disk, across drafts,
+  /// the active pointer, and both archive indexes.
+  ///
+  /// The delete-all and export-all use cases need the full set of
+  /// `planId`s so they can walk every archive branch. The keys themselves
+  /// are derived from the four stable prefixes the repository owns; no
+  /// `keyValueStore.keys` enumeration is required, keeping the surface
+  /// deliberately narrow (no shared `KeyValueStore` change).
+  ///
+  /// A corrupt archive index is **silently skipped** — it neither aborts
+  /// the audit nor silently widens the scope. The intent is "best-effort,
+  /// bounded to what the repository can read cleanly", exactly the same
+  /// posture as `readArchive`.
+  Set<PlanId> knownPlanIdsSync() {
+    final plans = <PlanId>{};
+    // 1. Active pointer.
+    final rawPointer = keyValueStore.readString(activePointerKey);
+    if (rawPointer != null) {
+      try {
+        final decoded = jsonDecode(rawPointer);
+        if (decoded is Map<String, dynamic>) {
+          final pointer = serializer.decodeActivePointer(decoded);
+          plans.add(pointer.planId);
+        }
+      } on Object {
+        // A corrupt active-pointer record is best-effort skipped — the
+        // delete use case will still remove the key itself in §3.1.
+      }
+    }
+    // 2. Archive indexes — one per plan, both revisions and outcomes.
+    final allKeys = _namespaceKeys();
+    for (final key in allKeys) {
+      final planId = _planIdFromArchiveIndexKey(key);
+      if (planId != null) plans.add(planId);
+    }
+    return plans;
+  }
+
+  /// The current active pointer, decoded on the synchronous read path.
+  /// Used by the export-all use case to include the active plan in the
+  /// export even though the active record is reached through a
+  /// separate `readActivePlan()` call.
+  ActivePlanPointer? readActivePointerSync() {
+    try {
+      return _readActivePointerSync();
+    } on PracticePlanActivePointerCorruptionException {
+      return null;
+    }
+  }
+
+  /// The wizard-in-progress draft key (e.g. `"main"`) the repository has
+  /// ever saved. Used by the export-all use case to include drafts.
+  List<String> knownDraftKeysSync() {
+    final out = <String>[];
+    final allKeys = _namespaceKeys();
+    for (final key in allKeys) {
+      final draft = _draftKeyFromDraftStorageKey(key);
+      if (draft != null) out.add(draft);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------
+  // User-initiated delete-all (E07-R29 §5.7 — the SOLE entry point that
+  // physically removes planner data; never called automatically).
+  // ---------------------------------------------------------------------
+
+  /// Removes every key the planner ever wrote: the active pointer + active
+  /// record, every draft (under `draft.<key>`), every archived revision /
+  /// outcome record + their indexes. Returns the set of plan ids whose
+  /// evidence should subsequently be purged by
+  /// `PracticeEvidenceRepository.deleteForPlan`.
+  ///
+  /// This method is **only** callable from `DeletePracticePlanningData`
+  /// (E07-R29 §5.7). It is intentionally NOT exposed via the
+  /// `GenerationPlanActivation` contract used by the orchestrator.
+  Future<AppResult<PracticePlanDeletionOutcome>>
+  deleteAllPlanningData() async => _runWrite(() async {
+    final planIds = knownPlanIdsSync();
+    // Remove the active pointer + its active record, regardless of
+    // whether the pointer's revision record still exists.
+    final pointerRaw = keyValueStore.readString(activePointerKey);
+    if (pointerRaw != null) {
+      try {
+        final decoded = jsonDecode(pointerRaw);
+        if (decoded is Map<String, dynamic>) {
+          final pointer = serializer.decodeActivePointer(decoded);
+          final activeKey = activePlanRevisionKey(
+            planId: pointer.planId,
+            revisionId: pointer.revisionId,
+          );
+          await keyValueStore.remove(activeKey);
+          await _trackRemove(activeKey);
+        }
+      } on StorageException {
+        rethrow;
+      } on Object {
+        // A corrupt active pointer: still drop the pointer key below;
+        // the active record (if any) stays orphaned in the namespace
+        // and the next §5.7 sweep never reaches it again.
+      }
+    }
+    await keyValueStore.remove(activePointerKey);
+    await _trackRemove(activePointerKey);
+
+    // Drafts: one `remove()` per known draft.
+    for (final draftKey in knownDraftKeysSync()) {
+      final key = draftStorageKey(draftKey);
+      await keyValueStore.remove(key);
+      await _trackRemove(key);
+    }
+
+    // Archive: walk every per-plan namespace and remove indexes +
+    // their referenced records.
+    for (final planId in planIds) {
+      // Revisions.
+      final revisionIds = _readIdListOrEmpty<RevisionId>(
+        archiveRevisionsIndexKey(planId),
+        decode: RevisionId.fromJson,
+      );
+      for (final id in revisionIds) {
+        final key = archiveRevisionKey(planId: planId, revisionId: id);
+        await keyValueStore.remove(key);
+        await _trackRemove(key);
+      }
+      await keyValueStore.remove(archiveRevisionsIndexKey(planId));
+      await _trackRemove(archiveRevisionsIndexKey(planId));
+      // Outcomes.
+      final outcomeIds = _readIdListOrEmpty<OutcomeId>(
+        archiveOutcomesIndexKey(planId),
+        decode: OutcomeId.fromJson,
+      );
+      for (final id in outcomeIds) {
+        final key = archiveOutcomeKey(planId: planId, outcomeId: id);
+        await keyValueStore.remove(key);
+        await _trackRemove(key);
+      }
+      await keyValueStore.remove(archiveOutcomesIndexKey(planId));
+      await _trackRemove(archiveOutcomesIndexKey(planId));
+    }
+
+    // F1 fix: drop the manifest itself so a fresh repository after
+    // delete-all starts from a truly empty key surface. The next
+    // writer then re-creates the manifest on its first key touch.
+    await keyValueStore.remove(manifestKey);
+
+    return Success<PracticePlanDeletionOutcome>(
+      PracticePlanDeletionOutcome(planIds: planIds),
+    );
+  });
+
+  // ---------------------------------------------------------------------
+  // Export-all (user-initiated)
+  // ---------------------------------------------------------------------
+
+  /// Snapshots the full planner state — the active plan, every draft,
+  /// every archive branch (revisions + outcomes) for every plan the
+  /// repository knows about — into an in-memory map the
+  /// `ExportPracticePlanningData` use case can serialise to JSON.
+  ///
+  /// Corrupt individual records are silently dropped — the export never
+  /// blocks on a single bad record, but also never invents content.
+  Future<AppResult<PracticePlanExportSnapshot>> exportSnapshot() async =>
+      _runRead(() async {
+        final pointer = readActivePointerSync();
+        AdaptivePracticePlan? activePlan;
+        if (pointer != null) {
+          final result = await readActivePlan();
+          if (result is Success<AdaptivePracticePlan?>) {
+            activePlan = result.value;
+          }
+        }
+
+        final drafts = <String, AdaptivePracticePlan>{};
+        for (final draftKey in knownDraftKeysSync()) {
+          final result = await readDraft(draftKey);
+          if (result is Success<AdaptivePracticePlan?>) {
+            final value = result.value;
+            if (value != null) drafts[draftKey] = value;
+          }
+        }
+
+        final archive = <PlanId, ArchivedPracticeLog>{};
+        for (final planId in knownPlanIdsSync()) {
+          final result = await readArchive(planId);
+          if (result is Success<ArchivedPracticeLog>) {
+            archive[planId] = result.value;
+          }
+        }
+
+        return Success<PracticePlanExportSnapshot>(
+          PracticePlanExportSnapshot(
+            activePointer: pointer,
+            activePlan: activePlan,
+            drafts: drafts,
+            archive: archive,
+          ),
+        );
+      });
+
+  // ---------------------------------------------------------------------
+  // Internal helpers (delete / export)
+  // ---------------------------------------------------------------------
+
+  /// Best-effort enumeration of every key the planner namespace owns.
+  ///
+  /// Backed by [_writtenKeys]: the shared `KeyValueStore` contract is
+  /// deliberately key-enumeration-free (see `core/storage/
+  /// key_value_store.dart`), so the repository persists a manifest that
+  /// lists every key it has touched and hydrates `_writtenKeys` from it
+  /// on construction. Pre-seeded keys written by another component are
+  /// not tracked, by design — the delete-all sweep is scoped to keys the
+  /// planner itself owns.
+  Iterable<String> _namespaceKeys() sync* {
+    // The manifest itself is always considered owned. It lives in the
+    // planner namespace and is removed alongside user-data keys on
+    // delete-all — a fresh repository constructed after delete-all sees
+    // an absent manifest and starts with an empty key list.
+    yield manifestKey;
+    for (final key in _writtenKeys) {
+      if (key.startsWith('$_namespace.')) yield key;
+    }
+  }
+
+  /// F1 fix: hydrate [_writtenKeys] from the persisted manifest. The
+  /// manifest is a JSON array of strings under [manifestKey]. A missing
+  /// manifest means "no planner-owned keys have ever been written yet" —
+  /// the delete-all sweep is a no-op, the export-all is empty. A
+  /// present-but-unreadable manifest is treated as empty (corrupt
+  /// manifests do not block the rest of the system).
+  void _loadManifest() {
+    final raw = keyValueStore.readString(manifestKey);
+    if (raw == null) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      for (final entry in decoded) {
+        if (entry is String && entry != manifestKey) {
+          if (!_writtenKeys.contains(entry)) _writtenKeys.add(entry);
+        }
+      }
+    } on Object {
+      // A corrupt manifest is best-effort skipped; a later write will
+      // rewrite it as a complete list.
+    }
+  }
+
+  /// F1 fix: persist the current `_writtenKeys` list as the manifest.
+  /// Called from every [_trackWrite] / [_trackRemove] so the on-disk
+  /// manifest is always a snapshot of the keys the planner currently
+  /// owns. Callers await this inside their `_runWrite` operation, so a
+  /// storage rejection maps to the normal `StorageFailure` result.
+  Future<void> _persistManifest() =>
+      keyValueStore.writeString(manifestKey, jsonEncode(_writtenKeys));
+
+  /// Parses the `<L:planId>` length-prefixed segment from an archive key.
+  ///
+  /// The archive key shape is
+  ///   `<namespace>.archive.<L:planId>.revisions[.index|<L:revisionId>]`
+  ///   `<namespace>.archive.<L:planId>.outcomes[.index|<L:outcomeId>]`
+  /// where `<L:planId>` is `<utf16-length>:value` (e.g. `7:plan.A`).
+  ///
+  /// The `PlanId` value itself can contain dots, so a plain
+  /// `tail.split('.')` cannot disambiguate the segments reliably — the
+  /// length prefix is the ONLY safe separator. The previous parser
+  /// silently returned `null` for any `planId` containing a dot, which
+  /// made `knownPlanIdsSync()` miss archive-only plans whose id has a
+  /// dot (F1 fix measured regression).
+  PlanId? _planIdFromArchiveIndexKey(String key) {
+    const archivePrefix = 'archive.';
+    if (!key.startsWith('$_namespace.')) return null;
+    final tail = key.substring('$_namespace.'.length);
+    if (!tail.startsWith(archivePrefix)) return null;
+    final body = tail.substring(archivePrefix.length);
+
+    // Parse the leading `<L>` of the length-prefixed planId.
+    final colonIdx = body.indexOf(':');
+    if (colonIdx <= 0) return null;
+    final length = int.tryParse(body.substring(0, colonIdx));
+    if (length == null || length < 0) return null;
+
+    // The planId value occupies exactly `length` chars after the colon.
+    final valueStart = colonIdx + 1;
+    if (valueStart + length > body.length) return null;
+    final value = body.substring(valueStart, valueStart + length);
+    final remainder = body.substring(valueStart + length);
+
+    // Suffix check — the only valid tails after a length-prefixed planId.
+    if (remainder == '.revisions.index' ||
+        remainder == '.outcomes.index' ||
+        remainder.startsWith('.revisions.') ||
+        remainder.startsWith('.outcomes.')) {
+      return PlanId(value);
+    }
+    return null;
+  }
+
+  String? _draftKeyFromDraftStorageKey(String key) {
+    if (!key.startsWith('$_namespace.draft.')) return null;
+    final tail = key.substring('$_namespace.draft.'.length);
+    if (tail.isEmpty) return null;
+    return tail;
+  }
+
+  /// A best-effort, throw-free variant of [_readIdList] used by the
+  /// delete-all path: a corrupt index just yields an empty list (the
+  /// key itself is then removed by the caller).
+  List<T> _readIdListOrEmpty<T>(
+    String key, {
+    required T Function(Object?) decode,
+  }) {
+    final raw = keyValueStore.readString(key);
+    if (raw == null) return <T>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return <T>[];
+      if (decoded['kind'] == PracticePlanRecordKind.archivedRevisionIndex) {
+        return serializer.decodeArchivedRevisionsIndex(decoded).cast<T>();
+      }
+      if (decoded['kind'] == PracticePlanRecordKind.archivedOutcomeIndex) {
+        return serializer.decodeArchivedOutcomesIndex(decoded).cast<T>();
+      }
+      return <T>[];
+    } on Object {
+      return <T>[];
+    }
+  }
 
   Future<List<ArchivedRevision>> _readRevisions(
     PlanId planId,
@@ -742,4 +1146,31 @@ class PracticePlanHistoryPolicy {
 class _ReadDropCounts {
   int revisions = 0;
   int outcomes = 0;
+}
+
+/// Outcome of a user-initiated delete-all: the set of plan ids whose
+/// evidence the caller must subsequently purge via
+/// `PracticeEvidenceRepository.deleteForPlan`. Empty when no plan had
+/// ever been activated and no draft was ever saved.
+final class PracticePlanDeletionOutcome {
+  const PracticePlanDeletionOutcome({required this.planIds});
+
+  final Set<PlanId> planIds;
+}
+
+/// Snapshot of the planner state at the moment of an export request. The
+/// `ExportPracticePlanningData` use case JSON-encodes this object, never
+/// reaching back into the live store.
+final class PracticePlanExportSnapshot {
+  const PracticePlanExportSnapshot({
+    required this.activePointer,
+    required this.activePlan,
+    required this.drafts,
+    required this.archive,
+  });
+
+  final ActivePlanPointer? activePointer;
+  final AdaptivePracticePlan? activePlan;
+  final Map<String, AdaptivePracticePlan> drafts;
+  final Map<PlanId, ArchivedPracticeLog> archive;
 }

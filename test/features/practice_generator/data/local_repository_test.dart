@@ -944,6 +944,121 @@ void main() {
       });
     });
 
+    group('F1 — durable manifest (E07-R29 review)', () {
+      test('a fresh repository over the same store discovers the writer\'s '
+          'planner-owned keys (drafts, archive-only plans).', () async {
+        final store = InMemoryKeyValueStore();
+        final writer = _newRepository(store);
+
+        // Seed: an active plan, a draft, and an archive-only revision on
+        // a different plan that was NEVER activated in this writer.
+        await writer.activateAndReport(plan());
+        await writer.saveDraft(
+          draftKey: 'main',
+          plan: plan(title: 'd'),
+        );
+        await writer.appendRevision(_revision(PlanId('plan.2'), number: 1));
+
+        // Restart boundary — a fresh repository over the same store.
+        final reader = _newRepository(store);
+
+        // Both the draft AND the archive-only plan are visible (the
+        // measured F1 failure: in-memory _writtenKeys was empty on the
+        // restart side, so they fell off the discovery surface).
+        expect(reader.knownDraftKeysSync(), ['main']);
+        expect(
+          reader.knownPlanIdsSync(),
+          containsAll(<PlanId>{PlanId('plan.1'), PlanId('plan.2')}),
+        );
+
+        // The manifest itself lives on disk so a third repository also
+        // sees the same key set.
+        final third = _newRepository(store);
+        expect(third.knownDraftKeysSync(), ['main']);
+        expect(
+          third.knownPlanIdsSync(),
+          containsAll(<PlanId>{PlanId('plan.1'), PlanId('plan.2')}),
+        );
+
+        // delete-all on the third repository wipes EVERY planner-owned
+        // key, including the manifest itself.
+        final deleted = await third.deleteAllPlanningData();
+        expect(deleted.isSuccess, isTrue);
+
+        final afterDelete = _newRepository(store);
+        expect(afterDelete.knownDraftKeysSync(), isEmpty);
+        expect(afterDelete.knownPlanIdsSync(), isEmpty);
+        expect(
+          store.contains(LocalPracticePlanRepository.manifestKey),
+          isFalse,
+        );
+      });
+
+      test('the manifest persists through a draft clear-then-resave cycle '
+          '(restart-stable draft discovery).', () async {
+        final store = InMemoryKeyValueStore();
+        final writer = _newRepository(store);
+        await writer.saveDraft(
+          draftKey: 'main',
+          plan: plan(title: 'd1'),
+        );
+        await writer.clearDraft('main');
+        await writer.saveDraft(
+          draftKey: 'main',
+          plan: plan(title: 'd2'),
+        );
+
+        final reader = _newRepository(store);
+        expect(reader.knownDraftKeysSync(), ['main']);
+      });
+
+      test('a corrupt manifest on disk is treated as empty (no-op '
+          'discovery; does not poison the repository).', () {
+        // Seed a manifest whose JSON body is not a List.
+        final store = InMemoryKeyValueStore();
+        store.values[LocalPracticePlanRepository.manifestKey] =
+            '{"not":"a list"}';
+        // Other planner-owned keys were never recorded by this build —
+        // the manifest is the only ledger.
+        store.values[LocalPracticePlanRepository.draftStorageKey('survivor')] =
+            '"raw"';
+
+        final repository = _newRepository(store);
+        // A corrupt manifest falls back to "no planner-owned keys" and
+        // the rest of the surface works as designed (writes still
+        // succeed). The pre-existing, non-manifest key is unreadable
+        // by `_namespaceKeys()` only because the manifest itself is
+        // empty — by design.
+        expect(repository.knownDraftKeysSync(), isEmpty);
+      });
+    });
+
+    group('F3 — manifest persistence failures (E07-R29 review)', () {
+      test(
+        'a rejected manifest write makes saveDraft return StorageFailure',
+        () async {
+          final store = InMemoryKeyValueStore()
+            ..failingKeys.add(LocalPracticePlanRepository.manifestKey);
+          final repository = _newRepository(store);
+
+          final result = await repository.saveDraft(
+            draftKey: 'main',
+            plan: plan(),
+          );
+
+          expect(result.isFailure, isTrue);
+          final failure = result.failureOrNull;
+          expect(failure, isA<StorageFailure>());
+          expect(failure!.code, FailureCode.storageWrite);
+          expect(failure.cause, isA<StorageException>());
+          expect(
+            (failure.cause! as StorageException).key,
+            LocalPracticePlanRepository.manifestKey,
+          );
+        },
+      );
+    });
+
     group('bounded history (A6)', () {
       test('revisions beyond maxRevisionsPerPlan evict the oldest, never '
           'modify an existing one', () async {

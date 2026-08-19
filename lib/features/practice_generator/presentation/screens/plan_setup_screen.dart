@@ -184,6 +184,12 @@ class _PlanSetupScreenState extends State<PlanSetupScreen> {
               decoration: InputDecoration(hintText: l10n.planSetupComfortHint),
               onChanged: widget.controller.setComfortText,
             ),
+            const SizedBox(height: 4),
+            Semantics(
+              key: const Key('plan-comfort-safety-hint'),
+              label: l10n.practicePrivacyDiscomfortSafetyBody,
+              child: Text(l10n.practicePrivacyDiscomfortSafetyBody),
+            ),
             TextButton(
               key: const Key('plan-setup-unknown'),
               onPressed: () {
