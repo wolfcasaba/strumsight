@@ -452,6 +452,82 @@ void main() {
         throwsArgumentError,
       );
     });
+
+    test(
+      'F1: a completed day keeps its original localDate across pause/resume',
+      () {
+        // F1 (review E07-R27): resume must never rewrite the historical
+        // localDate of a completed day. This is the immutable-past
+        // contract (ADR 0256). The previously broken implementation
+        // applied the same shift to every day, so this completed day
+        // would land on 2026-08-10 instead of staying at 2026-08-01.
+        final useCase = ResumePracticePlan(
+          clock: () => DateTime.utc(2026, 8, 17),
+          longBreakThreshold: 21,
+        );
+        const pauseDate = LocalDate(2026, 8, 3);
+        const resumeDate = LocalDate(2026, 8, 10);
+
+        // Build a paused plan whose first day is *completed* and whose
+        // remaining days are planned. The re-anchor shift would be +9
+        // days (resumeDate - originalStart = 2026-08-10 - 2026-08-01).
+        // A completed day must NOT receive that shift.
+        final pausedSnapshot = _planWithCompletedDay(
+          startDate: LocalDate(2026, 8, 1),
+          endDate: LocalDate(2026, 8, 10),
+          status: PlanStatus.paused,
+          completedDayId: DayId('day.1'),
+          completedDayDate: LocalDate(2026, 8, 1),
+        );
+        final previous = PlanRevision(
+          id: RevisionId('revision.1'),
+          planId: pausedSnapshot.id,
+          number: 1,
+          createdAt: DateTime.utc(2026, 8, 1),
+          reason: PlanRevisionReason.learnerReschedule,
+          snapshot: pausedSnapshot,
+        );
+
+        final result = useCase.call(
+          ResumePracticePlanRequest(
+            previous: previous,
+            nextRevisionId: RevisionId('revision.2'),
+            pauseDate: pauseDate,
+            resumeDate: resumeDate,
+            originalMode: GenerationMode.adaptive,
+          ),
+        );
+
+        final resumedDays = result.revision.snapshot.days;
+        // F1: the completed day is preserved at its original localDate.
+        final completedDay = resumedDays.firstWhere(
+          (d) => d.id == DayId('day.1'),
+        );
+        expect(completedDay.localDate, LocalDate(2026, 8, 1));
+        expect(completedDay.status, PracticeItemStatus.completed);
+        // Completed day's other content survives untouched (timeBudget,
+        // blocks, primaryFocusSkillIds, reasonCodes) — the immutable
+        // past contract isn't only about the date.
+        expect(completedDay.timeBudget, const Duration(minutes: 20));
+        expect(completedDay.primaryFocusSkillIds, const <String>[
+          'rhythm.quarterNotes',
+        ]);
+        expect(completedDay.reasonCodes, const <String>['goal.primary']);
+
+        // F1: the future (planned) days DO re-anchor onto resumeDate.
+        final firstPlannedDay = resumedDays.firstWhere(
+          (d) => d.id == DayId('day.2'),
+        );
+        expect(firstPlannedDay.localDate, LocalDate(2026, 8, 11));
+        expect(firstPlannedDay.status, PracticeItemStatus.planned);
+
+        // The day's list is sorted chronologically — the preserved
+        // completed day precedes the re-anchored planned days.
+        final localDates = [for (final day in resumedDays) day.localDate];
+        final sorted = [...localDates]..sort((a, b) => a.compareTo(b));
+        expect(localDates, sorted);
+      },
+    );
   });
 }
 
@@ -472,6 +548,58 @@ AdaptivePracticePlan _planWithDays({
         id: DayId('day.${days.length + 1}'),
         localDate: current,
         status: PracticeItemStatus.planned,
+        timeBudget: const Duration(minutes: 20),
+        blocks: const <PracticeBlock>[],
+        primaryFocusSkillIds: const <String>['rhythm.quarterNotes'],
+        reasonCodes: const <String>['goal.primary'],
+      ),
+    );
+    if (current.compareTo(endDate) == 0) break;
+  }
+  return AdaptivePracticePlan(
+    id: PlanId('plan.continuity'),
+    schemaVersion: 1,
+    status: status,
+    title: 'Continuity plan',
+    createdAt: DateTime.utc(2026, 8, 1),
+    startDate: startDate,
+    endDate: endDate,
+    goals: const <PracticeGoal>[],
+    days: days,
+    activeRevisionId: RevisionId('revision.1'),
+    generationProvenance: GenerationRequestId('request.continuity'),
+    policyVersions: const <String, String>{},
+  );
+}
+
+/// Builds a paused plan with one historical completed day at
+/// [completedDayDate] and the remaining days [planned][PracticeItemStatus.planned].
+/// Used to exercise F1 — the resume must preserve the completed day at
+/// its original localDate.
+AdaptivePracticePlan _planWithCompletedDay({
+  required LocalDate startDate,
+  required LocalDate endDate,
+  required PlanStatus status,
+  required DayId completedDayId,
+  required LocalDate completedDayDate,
+}) {
+  assert(startDate.compareTo(endDate) <= 0, 'start must be <= end');
+  assert(
+    completedDayDate.compareTo(startDate) >= 0 &&
+        completedDayDate.compareTo(endDate) <= 0,
+    'completedDayDate must lie within the plan window',
+  );
+  final days = <PracticeDay>[];
+  for (var i = 0; ; i++) {
+    final current = _addDays(startDate, i);
+    final isCompleted = current == completedDayDate;
+    days.add(
+      PracticeDay(
+        id: isCompleted ? completedDayId : DayId('day.${days.length + 1}'),
+        localDate: current,
+        status: isCompleted
+            ? PracticeItemStatus.completed
+            : PracticeItemStatus.planned,
         timeBudget: const Duration(minutes: 20),
         blocks: const <PracticeBlock>[],
         primaryFocusSkillIds: const <String>['rhythm.quarterNotes'],

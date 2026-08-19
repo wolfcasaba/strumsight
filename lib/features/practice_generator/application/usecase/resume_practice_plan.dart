@@ -27,6 +27,7 @@ import '../../domain/id/planner_ids.dart';
 import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/plan_enums.dart';
 import '../../domain/model/plan_revision.dart';
+import '../../domain/model/practice_block.dart';
 import '../../domain/model/practice_day.dart';
 import '../../domain/model/weekly_availability.dart';
 
@@ -121,6 +122,15 @@ final class ResumePracticePlan {
 
     final shiftedDays = <PracticeDay>[];
     for (final day in oldDays) {
+      if (day.status == PracticeItemStatus.completed) {
+        // Immutable past (ADR 0256, F1). A completed day keeps its
+        // original localDate — re-anchoring a finished day would
+        // rewrite the audit log of what the learner actually did on
+        // that calendar day. Status, timeBudget, blocks,
+        // primaryFocusSkillIds, and reasonCodes also stay untouched.
+        shiftedDays.add(day);
+        continue;
+      }
       final newOrdinal = _dayOrdinal(day.localDate) + shift;
       if (newOrdinal < resumeOrdinal) {
         // Drop days that would fall before the resume date — no backlog
@@ -140,6 +150,11 @@ final class ResumePracticePlan {
         ),
       );
     }
+
+    // Keep the days list in chronological order. Completed days that
+    // pre-date the resume date survive in their original slot, so the
+    // list may interleave preserved and shifted entries.
+    shiftedDays.sort((a, b) => a.localDate.compareTo(b.localDate));
 
     if (shiftedDays.isEmpty) {
       throw StateError(
