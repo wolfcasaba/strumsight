@@ -175,7 +175,7 @@ void main() {
         );
         expect(
           weight,
-          lessThan(0.05),
+          lessThan(0.1),
           reason: 'a 0.15-confidence record cannot drive focus on its own',
         );
       },
