@@ -360,3 +360,30 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   orchesztrátor feladatai.
 
 ## 11. Review — a Claude tölti ki
+
+**Correctness review:** [`docs/reviews/e08-r02-review.md`](../reviews/e08-r02-review.md)
+— **APPROVED**, 0 BLOCKER/MAJOR/MINOR, 3 NOTE. A gate-et és mindkét
+brief-kötelező valódi-sértés próbát (schemaVersion A2, architektúra-guard
+A6) a reviewer saját kézzel, izolált `/tmp` klónban megismételte, nem az
+implementer önjelentése alapján fogadta el.
+
+**Security review** (risk=high, AGENTS.md §15.1):
+[`docs/reviews/e08-r02-security.md`](../reviews/e08-r02-security.md) —
+**APPROVED (PASS)**, 0 CRITICAL/BLOCKER/MAJOR, 1 MINOR, 4 NOTE. Az ELSŐ
+futás egy elavult worktree-snapshoton téves BLOCKER-t jelentett (az
+implementer commitja akkor még nem volt pusholva); a megismételt futás a
+GitHub origin-ról frissen klónozva megerősítette a valós tartalmat és PASS
+verdiktet adott. Az egyetlen MINOR (a gamification architektúra-guard
+marker-listája nem fed hálózati/fájl-IO markert — `dart:io`/`dart:convert`/
+`package:dio/`/`package:http/`) **ma nem aktív sértés** (a domain tiszta),
+és a security reviewer explicit **nem blokkolja** vele ezt a merge-öt —
+follow-up a Kör 3/4 előtt, `docs/LESSONS.md`-ben rögzítve.
+
+**Zöld kapu:** `full-gate.yml` [32298644861](https://github.com/wolfcasaba/strumsight/actions/runs/32298644861)
+success a `3b63029d` SHA-n (a két review-report commit előtti implementációs
+állapot + a correctness review commitja). Router CI ugyanezen az ágon
+(`95ddec13`-on, az utolsó `docs/rounds/**`-et érintő push-on) szintén
+success; a review-report-commitok `docs/reviews/**`-et érintenek, ami nem
+Router-CI trigger-útvonal — ez a §11 szerkesztés (ami `docs/rounds/**`-et
+érint) friss Router CI futást vált ki a valódi végső SHA-n, merge előtt
+ellenőrizve.
