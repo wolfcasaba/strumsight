@@ -32,6 +32,95 @@ native_gate = false
 > fordítási hibaként vagy — rosszabb — egy másik szimbólum árnyékolásaként
 > jelentkezne. A mérce ezért az export-halmaz azonossága.
 
+## 0.0 Pre-flight revízió (önjavítás, ADR 0112, 2026-08-19, `main @ 1a051d85`)
+
+**Végrehajthatósági eredmény: a H3 halt oka NEM tartalmi hiányosság, hanem
+igazoltan ártalmatlan implementer-debris — a feloldás REVERT, nem
+`allowed_paths`-bővítés.**
+
+### Mért tények
+
+A MiniMax implementer (`/home/ubuntu/ss-minimax-e99-r18`, ág
+`minimax/e99-r18-gov-12-generated-public-barrels`, HEAD `e9c4a26b`) a
+fenti `allowed_paths`-on BELÜLI, öt commitban felépített D1/D2/D4 munkája
+(a jelenlegi, commitolatlan diffben mérve hat fájl: a négy
+`practice_generator/public/*.dart` fragmentum, `test/tooling/
+gen_public_barrel_test.dart`, `tool/gen_public_barrel.dart`) MELLETT három
+NYOMKÖVETETLEN (untracked) fájlt hagyott a munkapéldányban:
+
+```
+test_project/lib/features/demo/public.dart
+test_project/lib/features/demo/public/application.dart
+test_project/lib/features/demo/public/domain.dart
+```
+
+Ez a saját scope-audit-ja (`tools/scope-audit.py`, `.codex-round-status`)
+szerint is sértés (`scope_audit=VIOLATION`,
+`scope_audit_base=6a6344a07d2fcfcebeb4916e43179b110ea9b7d9`, a base-től az
+öt commitot is számoló `scope_audit_changed=14`, ebből 3 a violation); az
+implementer MAGA is `stopped`-ot jelzett (`implementer_status=stopped`) —
+tehát a modell is észlelte, hogy valami kilóg. A Terra orchesztrátor-session
+(`pipeline-E99-R18-fallback`) ezt követően `H3`-mal állt le,
+`.pipeline/HALTED`-ben rögzítve: „A new brief-revision/human decision is
+required before any continuation."
+
+**A `test_project/` NEM legitim munka — ez mérve van, nem feltételezve:**
+
+- `grep -rn "test_project" .` a teljes munkapéldányban (a stopped
+  implementer worktree-jén) **nulla** találatot ad bármely tracked vagy
+  untracked Dart/Python/shell forrásban — semmi nem hivatkozik rá, semmi nem
+  generálja.
+- A `test/tooling/gen_public_barrel_test.dart` SAJÁT, automatizált
+  fixture-je már helyesen `Directory.systemTemp.createTempSync
+  ('strumsight_public_barrel_')`-t használ (a fájl `setUp`/`tearDown`-ja) —
+  a `test_project/` tehát funkcionálisan redundáns ezzel a fixture-rel.
+- A `test_project/lib/features/demo/public.dart` +
+  `public/{application,domain}.dart` tartalma **bájtra megegyezik** a fenti
+  automatizált teszt `seedFreshBarrel()` segédfüggvénye által memóriában
+  felépített fixture-tartalommal (`export '../application/port/a.dart';`
+  stb.) — ez egy kézi, a repó fájlrendszerén kívülre nem szánt smoke-teszt
+  lenyomata, nem egy elfelejtett deliverable.
+- A brief D1–D4 feladatai és az 5. „Tilos zóna" (kizárólag a
+  `practice_generator` barrel migrálható) egyike sem nevez meg semmilyen
+  `demo`/`test_project` scaffoldot.
+
+### Kötelező feloldás
+
+`docs/execution/pipeline-orchestrator-prompt.md` VIOLATION-sorát idézve: „a
+listán kívüli fájlokat **vissza kell állítani**, vagy H3 halt" — és ugyanott
+a §2 „Önállóan dönthetsz és folytathatod a kört" felsorolása kifejezetten
+tartalmazza „az engedélyezett-fájllista **szűkítését**" mint a kör saját
+hatáskörét. A `test_project/` TÖRLÉSE (nem allow-listázása) éppen ez az
+eset: a diffet az EREDETI `allowed_paths`-hoz igazítja, nem a tiltott zóna
+feloldását kéri — tehát nem H3-t igénylő döntés, hanem a §2 alatt már
+felhatalmazott revert. A fenti `ai-router` blokk **változatlan**: a
+`test_project/`-hez (vagy bármely `demo`/scratch mintához) **nem** kerül
+`allowed_paths`-bejegyzés.
+
+A folytatás módja: a megállt implementer-worktree
+(`/home/ubuntu/ss-minimax-e99-r18`) törölje a három fájlt, majd a hat,
+ÉRDEMI, scope-on belüli fájl (D1/D2/D4 munka) a szokásos módon megy tovább
+review/gate felé. Ezt a self-heal SZÁNDÉKOSAN nem hajtja végre saját kézzel
+— a self-heal jogosultsága (ADR 0112 §2) a briefre és az
+engedélyezett-fájllistára szól, nem a kör saját, még nem review-zott
+implementer-ágára; a következő E99-R18 dispatch (friss
+orchesztrátor-session) dolga eldönteni, hogy a meglévő worktree-t
+újrahasznosítja-e (a törlés után) vagy frissen indul.
+
+**Miért nem illik ide az E07-R29/H3 minta** (`tools/tests/
+test_e07_r29_accessibility_privacy_scope.py`): ott a listán kívüli fájlok
+IGAZOLTAN szükséges, meglévő storage-tulajdonosok voltak — a helyes
+feloldás `allowed_paths`-bővítés volt. Itt a mérés az ELLENKEZŐJÉT mutatja
+(nulla hivatkozás, redundáns az automatizált fixture-rel, kívül esik minden
+D1–D4 cellán) — a helyes feloldás ezért a bővítés tükörképe: **revert, és
+az allowlist érintetlenül hagyása**. A self-heal jelentése ezt a döntést a
+regressziós teszttel (`tools/tests/test_e99_r18_scope_debris_revert.py`)
+gépileg is rögzíti, mindkét irányban (a debris VIOLATION marad, amíg jelen
+van; az allowlist nem bővül).
+
+Lecke: `docs/LESSONS.md` [[L333]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
+Módosítás (2026-08-19).
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
