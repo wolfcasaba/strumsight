@@ -12165,3 +12165,146 @@ bármely más állítást (a jelen protokoll már kimondott elve, [[subagent-res
 rokona: egy korábbi, akár saját magad által írt ADR sem bizonyíték
 bemondásra). Rokon: [[L302]] (ugyanaz a hibaosztály egyszer: PREPARED brief +
 scope-rés, meglévő típusokkal feloldható — itt egy MÁSODIK, rejtett rés).
+
+---
+
+## L320 — A `python3 -m pytest tools/tests -q` egy „valódi queue-t olvasó" tesztje áltévesen pirosra vált, ha az ORCHESZTRÁTOR saját, ÉPP FUTÓ körének sora a `pipeline-queue.tsv`-ben még `pending` — nem kódregresszió, hanem egy időzítési artefakt a záró jelzés előtt (E99-R15, 2026-08-19)
+
+**Mit mértünk.** Az E99-R15 (GOV-09) merge UTÁNI, kötelező post-merge gate
+(`python3 -m pytest tools/tests -q`, friss izolált klón) egy hibával állt le:
+`test_pipeline_integration.py::test_a_full_firing_retries_the_round_instead_of_healing_a_resolved_terra_wall`
+— `AssertionError: True is not false` a `(state / "HALTED").exists()` cellán,
+6/6 ismétlésben DETERMINISZTIKUSAN (nem flake). A brief-lint/self-heal
+kultúra szerinti gyanú első köre — „a saját diffem törte el" — méréssel
+cáfolva: a pontos ugyanazon commit tesztje ZÖLD, ha KIZÁRÓLAG a
+`docs/execution/pipeline-queue.tsv` E99-R15 sorát (`pending` → `done`)
+módosítom, a `tools/round-pipeline.sh` tartalmát ÉRINTETLENÜL hagyva.
+
+**A gyökérok.** A teszt (saját kommentje szerint is tudatosan) a REAL
+repository-n futtatja a `round-pipeline.sh`-t: egy fixture Terra-halt
+archiválása UTÁN a driver folytatja a normál dispatch-ágra, ahol a VALÓDI
+`pipeline-queue.tsv`-t olvassa, és a következő `pending` sort veszi fel —
+`PIPELINE_NO_LAUNCH=1` csak a TÉNYLEGES tmux/claude-indítást tiltja le, a
+prompt-építést és a placeholder-session „nincs jelzés" HALT-jának kiírását
+nem. Az E99-R15 sora a `pipeline-queue.tsv`-ben a kör MERGE-e UTÁN IS
+`pending` marad — ez helyes és VÁRT állapot, mert a driver a sort a saját
+`.pipeline/round-status-E99-R15` jelzésem FELDOLGOZÁSA UTÁN, egy KÉSŐBBI
+firingen frissíti (§4: „nem nyúl a `pipeline-queue.tsv`-hez — azt a driver
+vezeti" — az orchesztrátor SOSEM írja ezt a fájlt). A teszt tehát pontosan
+azt az átmeneti ablakot méri félre kódhibaként, ami MINDEN kör saját
+záró-jelzése ELŐTT, a driver saját könyvelésében természetesen fennáll.
+
+**Miért nem ütközik ez a CI-vel.** A `router-ci.yml` UGYANEZT a suite-ot
+futtatja (`python -m pytest tools/tests -q`), mégis zöld volt a merge SHA-n
+— mert a GitHub Actions checkout NEM ugyanazt a futtatási környezetet adja
+(a script saját `main`-azonosság- és `gh pr list`-előfeltétel-őrei ott egy
+KORÁBBI, más ágú kilépéssel állnak meg, mielőtt a queue-olvasó ághoz
+érnének) — mérve: egy helyi, hálózattól elszigetelt bare-repo klónban a
+`git branch --show-current`/`gh pr list` előfeltétel-őrök ELŐBB buknak el,
+mint ahogy a queue-olvasó ág egyáltalán elérhető lenne. A LOKÁLIS,
+teljes-gh-auth-szal futó post-merge gate ezért SZIGORÚBB egy adott szűk
+ablakban, mint a CI — nem megengedőbb.
+
+**Hogyan alkalmazd.** Ha egy orchesztrátor a SAJÁT, még záratlan körének
+post-merge `python3 -m pytest tools/tests -q` futtatásakor pontosan ezt a
+tesztet látja pirosra válni, ELŐSZÖR mérd meg (ne a diffet gyanúsítsd
+azonnal): `sed` -sel (nem commitolva) ideiglenesen `pending`→`done`-ra
+állítva a SAJÁT kör sorát a `pipeline-queue.tsv`-ben (majd `git checkout --`
+a fájlra), fusson-e a teszt zölden — ha igen, ez a jelen lecke, nem
+kódregresszió, és a `pipeline-queue.tsv`-t NEM szabad commitolva javítani
+(az orchesztrátor tiltott zónája — §4). A záró kör-jelzés (`.pipeline/
+round-status-<kör>`) megírása után a driver saját, következő firingje
+természetes úton felold. Rokon hibaosztály (élő repo-állapotra érzékeny
+teszt): [[L316]] (más ok, ugyanaz a „ne a diffemet gyanúsítsd először, mérj"
+elv).
+
+## L321 — Egy önjavítás által pinnelt regressziós teszt UGYANAZON hibaosztálya (bidirekcionális `assertEqual` egy AKTÍV kör-brancsen vagy `done`-ná váló kör-brief tartalmán) KÉTSZER, EGYMÁSTÓL FÜGGETLENÜL is előfordult ugyanabban a self-healben (E07-R25, H5, 2026-08-19)
+
+**Mit mértünk (elsődleges, a HALT jelentette gyökérok).** A H3 self-heal
+(PR #319, [[L319]]) `tools/tests/test_e07_r25_vision_evidence_scope.py`-ja
+két bidirekcionális `assertEqual`-t pinnelt egy 4-elemű
+`EvidenceSource`-értékkészletre. Az E07-R25 kör implementere a SAJÁT, még
+nem merge-elt ágán (`minimax/e07-r25-analysis-and-vision-evidence`)
+pontosan a H3 által jóváhagyott `EvidenceSource.vision`-t adta hozzá —
+legitim, brief-szentesített előrehaladás. Router CI kétszer pirosra váltott
+a kör ágán (futások
+[32204906795](https://github.com/wolfcasaba/strumsight/actions/runs/32204906795),
+[32206385772](https://github.com/wolfcasaba/strumsight/actions/runs/32206385772)),
+mert a pin nem lehet egyszerre zöld `main` tényleges 4-értékű és a kör-ág
+tényleges 5-értékű fáján. **Ez BYTE-PONTOSAN [[L279]]/[[L280]] hibaosztálya**
+(E99-R13, 2026-08-15) — ugyanaz a self-heal-generált pin-minta, más fájlon,
+négy nappal később, egy MÁSIK self-heal (H3) által írva, amely nem ismerte
+(vagy nem alkalmazta) a korábbi leckét.
+
+**Javítás — [[L279]] receptje szó szerint alkalmazva.** Mindkét teszt
+egyirányú, nem-zsugorodás invariánsra vált (`missing = [v for v in
+ORIGINAL_EVIDENCE_SOURCE_VALUES if v not in values]; assertEqual(missing,
+[])`); `ORIGINAL_EVIDENCE_SOURCE_VALUES` MAGA változatlan (4 elem) —
+bővítése "megjavította" volna a kör-ágat, de eltörte volna `main` SAJÁT,
+merge utáni Router CI-ját. Mindkét irányban mérve egy izolált heal
+worktree-ben (a kör-ág valódi `skill_evidence.dart`/
+`evidence_weight_policy.dart`-ját commit nélkül a plain `main` fölé
+rétegezve): javítatlan teszt + kör-ág kód → PIROS (byte-azonos a CI valódi
+hibájával); javított teszt + plain `main` kód → ZÖLD; javított teszt +
+kör-ág kód → ZÖLD.
+
+**Mit mértünk (MÁSODIK, a HALT által NEM jelentett, saját fix
+gate-futtatása közben talált gyökérok).** A teljes `tools/tests` suite
+`main`-en (a H5 fixem ELŐTT is!) pirosra váltott egy MÁSIK, ugyanebbe a
+hibaosztályba tartozó teszten:
+`test_knowledge_rag.py::test_brief_lint_flags_a_brief_without_retrieved_precedent`
+egy VALÓDI kör briefjére (`e99-r15-gov-09-halt-escalation.md`) mutatott,
+hogy bizonyítsa: a `brief-lint.py` S8 (ADR 0312 §4.1) leletet ad egy
+előzmény-hivatkozás nélküli briefre. Az S8 check SZÁNDÉKOSAN néma, ha a kör
+sor-fájlbeli státusza `done` (mért precedens: `e06-r10` briefje,
+`test_e06_r10_brief_is_clean_after_the_h3_self_heal`,
+`tools/tests/test_pipeline_throughput.py`) — mihelyt az E99-R15 lezárult, az
+S8 HELYESEN elhallgatott a saját briefjén, és ez a teszt nem regresszió
+miatt, hanem az S8 SAJÁT, szándékos működése miatt tört el. **Bármely valódi
+kör brief-je időzített bomba ehhez a fixture-höz** — minden kör előbb-utóbb
+`done`-ná válik. Mérve: két Router CI futás `main`-en pirosra váltott
+(`32207252052` a `6f753440` fejen, `32208143911` a rákövetkező `d84bcc63`
+fejen) — ez a fejlődő fix NÉLKÜL az ÉN H5-javításom sem tudott volna zölden
+merge-elődni, mert a Router CI a TELJES suite-ot futtatja, nem csak a diff
+által érintett fájlokat.
+
+**Javítás.** A valódi, mutálódó kör-brief helyett egy szintetikus,
+soha-nem-a-valódi-sorban-szereplő task-id-jú (`E00-R00`) brief fixture, a
+repón BELÜLI (a `lint_text()` `path.resolve().relative_to(repo.resolve())`
+ellenőrzése miatt) ideiglenes könyvtárban — ez a csatolást szünteti meg, nem
+csak a lejárati dátumát tolja odébb.
+
+**Hogyan alkalmazd.** (1) Mielőtt egy self-heal (VAGY bármely kör) egy
+pinnelt `assertEqual(mért_állapot, KONSTANS)` regressziós tesztet ír egy
+router-CI útvonalon, OLVASD EL [[L279]]-et előbb — ez már a MÁSODIK mért
+előfordulása ugyanennek a hibaosztálynak, és a második self-heal (én) sem
+ismerte a részleteket, csak utólag, a saját CI-hibájából rekonstruálva
+jutott el ugyanarra a megoldásra. (2) Egy teszt, ami egy VALÓDI,
+életciklussal rendelkező kör-brief tartalmára vagy sor-fájlbeli
+STÁTUSZÁRA (nem csak `EvidenceSource`-szerű enumértékre) pinnel egy
+"jelenleg hiányzik X" állítást, ugyanígy időzített bomba — a `done` átmenet
+elkerülhetetlen. A megoldás szintetikus fixture, nem egy másik valódi,
+egyelőre-még-nyitott brief kiválasztása (az csak odébb tolja a
+lejáratot). (3) Egy self-heal saját gate-futtatása (a kötelező `python3 -m
+pytest tools/tests -q`) MÁSODIK, a HALT által nem jelentett gyökérokot is
+felszínre hozhat — ez NEM automatikusan a self-heal scope-ján kívüli:
+ha `tools/tests/**`-ben van és blokkolja a SAJÁT fixed zöld merge-ét (mert a
+Router CI a teljes suite-ot futtatja), a második gyökérok javítása a
+[[ADR 0112]] 2026-08-15-i módosításának hatálya alá esik ("a második
+gyökérok is tools/-infrastruktúra, nem a megállt kör tartalmi munkája").
+(4) Post-merge, FRISS klónból (nem a local `main`-ből, ami elmaradhat) a
+teljes suite egyetlen, ISMERT, már a MEGELŐZŐ kör HANDOFF-jában
+dokumentált, élő-sor-fájl-állapotra érzékeny flake-et mutatott
+(`test_pipeline_integration.py::test_a_full_firing_retries_the_round_
+instead_of_healing_a_resolved_terra_wall`) — a pre-merge commit (`d26e7655`)
+UGYANAZON pillanatban és UGYANAZON élő sorral lefuttatva ZÖLD volt, a
+merge-commit (`a1613fa5`) 3/3-ban PIROS; a két fájl tartalma a két commit
+közt bizonyíthatóan bájt-azonos ebben a tesztben érintett útvonalakon
+(`git diff` üres rájuk) — környezeti terhelés/időzítés-érzékeny flake, NEM
+ennek a fixnek a regressziója, és NEM ennek a self-healnek a scope-ja
+(rokon: [[L316]]). A SAJÁT PR Router CI futása (izolált, terheletlen
+GitHub-runneren, a pontos merge SHA-n) zöld volt — az az irányadó kapu, nem
+egy megosztott, párhuzamosan terhelt Oracle-boxon futtatott utólagos
+ellenőrzés.
+
+Rokon: [[L279]], [[L280]], [[ADR 0112]].

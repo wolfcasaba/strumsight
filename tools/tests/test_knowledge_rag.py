@@ -142,12 +142,50 @@ class PipelineWiringTest(unittest.TestCase):
         self.assertIn("knowledge-rag.mjs", prompt)
 
     def test_brief_lint_flags_a_brief_without_retrieved_precedent(self) -> None:
+        """Corrected under the E07-R25 H5 self-heal (ADR 0112, 2026-08-19) --
+        same failure class as docs/LESSONS.md L279/L280. The original
+        fixture pointed at a REAL round's brief
+        (`e99-r15-gov-09-halt-escalation.md`). `brief-lint.py`'s S8 check is
+        deliberately silent once that round's queue row is `done` (see the
+        "CSAK NYITOTT körre" comment above S8's implementation; measured
+        precedent: `e06-r10`'s brief, `test_e06_r10_brief_is_clean_after_
+        the_h3_self_heal` in test_pipeline_throughput.py) -- so the moment
+        E99-R15 completed, brief-lint correctly stopped flagging it and this
+        test broke, not because S8 regressed but because it did exactly what
+        it was designed to do. Any real round brief is a ticking time bomb
+        for this fixture, since every round eventually reaches `done`; a
+        synthetic brief with a task id that never appears in the real queue
+        removes the coupling instead of just moving its expiry date."""
         import subprocess as sp
-        brief = REPO_ROOT / "docs" / "rounds" / "e99-r15-gov-09-halt-escalation.md"
-        result = sp.run(
-            ["python3", str(REPO_ROOT / "tools" / "brief-lint.py"), "--brief", str(brief), "--level", "strict"],
-            capture_output=True, text=True, timeout=120,
+        import tempfile
+
+        brief_text = (
+            "# E00-R00 — Self-heal fixture (no retrieved-precedent section)\n\n"
+            "```ai-router\n"
+            'schema_version = 1\n'
+            'risk = "normal"\n'
+            "allowed_paths = [\n"
+            '  "lib/features/example/example.dart",\n'
+            '  "test/features/example/example_test.dart",\n'
+            "]\n"
+            'gate_tests = ["test/features/example"]\n'
+            "native_gate = false\n"
+            "```\n\n"
+            "## 1. Cél\n\n"
+            "Self-heal fixture -- deliberately carries no retrieved-precedent "
+            "marker, so S8 (ADR 0312 §4.1) must fire regardless of any real "
+            "round's queue status.\n"
         )
+        # `brief-lint.py`'s lint_text() requires the brief path to resolve
+        # under `repo` (`path.resolve().relative_to(repo.resolve())`), so the
+        # tempdir must be nested inside REPO_ROOT, not the system temp root.
+        with tempfile.TemporaryDirectory(dir=REPO_ROOT) as tmp:
+            brief = Path(tmp) / "e00-r00-selfheal-fixture.md"
+            brief.write_text(brief_text, encoding="utf-8")
+            result = sp.run(
+                ["python3", str(REPO_ROOT / "tools" / "brief-lint.py"), "--brief", str(brief), "--level", "strict"],
+                capture_output=True, text=True, timeout=120,
+            )
         self.assertIn("S8", result.stdout, result.stdout[-400:])
 
     def test_the_base_gate_did_not_get_stricter(self) -> None:
