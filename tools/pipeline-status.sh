@@ -196,6 +196,19 @@ print(" ".join(value.split())[:500])
       echo "  (még nincs router-jelzés)"
     fi
     echo
+    echo "--- emberi gate-döntésre váró körök (ADR 0321) ---"
+    if [ -f "$queue_file" ] && grep -qP '\thold$' "$queue_file"; then
+      grep -v '^[[:space:]]*#' "$queue_file" | awk -F'\t' '$5=="hold" {printf "  %-9s %s\n", $1, $2}'
+      echo "  feloldás: a sor-fájlban 'hold' → 'pending' (a védett fájlt a user maga viszi fel a kör-ágra)"
+      echo "  a védett ütközések listája: tools/gateguard-scan.py --all"
+    else
+      echo "  (egy sincs)"
+    fi
+    if [ -f "$state_dir/gateguard-holds.tsv" ]; then
+      echo "  --- utolsó 5 automatikus gate-hold ---"
+      tail -5 "$state_dir/gateguard-holds.tsv" | awk -F'\t' '{printf "  %s  %s  %s\n", $1, $2, $3}'
+    fi
+    echo
     echo "--- sor ---"
     if [ -f "$queue_file" ]; then
       grep -v '^[[:space:]]*#' "$queue_file" | awk -F'\t' 'NF>=5 {printf "  %-9s %-8s %-6s %s\n", $1, $5, $3, $2}'

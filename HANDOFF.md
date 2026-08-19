@@ -1,54 +1,41 @@
 # HANDOFF — StrumSight 🎸
 
-## 🛑 E99-R17 (GOV-11) MEGÁLLT — `H-GATEGUARD`, EMBERI DÖNTÉS KELL (2026-08-19 05:31 óta)
+## ✅ A LÁNC ÚJRA MEGY — a `H-GATEGUARD` mostantól KÖRT tart vissza, nem a LÁNCOT (ADR 0321, 2026-08-19)
 
-A kör D2-je a `tool/ci/check_l10n_parity.dart` gate-ellenőrzőt bővítené
-`--check` móddal; a `protect_factory_files` hook a `tool/ci/*` glob miatt
-blokkolta. **A self-heal helyesen NEM próbálta megkerülni** — a H-GATEGUARD az
-egyetlen halt, amit ADR 0112 sosem javít automatikusan. A D1 rész tisztán,
-scope-auditálva fel van tolva: `eb915931` a
-`minimax/e99-r17-gov-11-l10n-parallel-safety` ágon.
+**A probléma, mérve.** Az `E99-R17` háromszor állt meg ugyanazzal a gyökérokkal
+(05:31 / 09:56 / 10:38 UTC), és mivel a `.pipeline/HALTED` jelzés GLOBÁLIS, a
+lánc 05:31–10:40 között **nulla kört vitt előre** — miközben a sorban **32
+olyan nyitott kör** állt (E07/E08 termék-munka), aminek semmi köze a gate-hez.
+A halt gyökéroka TERVEZÉSI hiba volt: a brief `allowed_paths` listáján védett
+fájl (`tool/ci/check_l10n_parity.dart`) szerepelt, amit autonóm session
+strukturálisan nem tud megírni (L322–L323).
 
-**Gyökér-ok: TERVEZÉSI hiba a briefben.** Az `allowed_paths` listára felkerült
-egy olyan fájl (`tool/ci/check_l10n_parity.dart`), amit az őr véd — pontosan az
-a hibaosztály, amit a „az engedélyezett-fájllista a tervezőt is köti" tanulság
-tilt. Brief-írás közben a `PROTECTED_GLOBS` listát is ellenőrizni kell, nem csak
-a teszt-fát.
+**A javítás három rétege (ADR 0321):**
 
-**Emberi döntés kell — három út:** (1) `.claude/gate-edit-authorized` marker erre
-az egy körre, utána törölve (a valódi kapu így is marad: review + CI + merge);
-(2) brief-revízió, ami kiviszi a frissesség-ellenőrzést a gate-ből — de ez a D2
-célját rontja el; (3) az E99-R17 `hold`-ra, a lánc megy az R18-ra. Az ajánlás
-az (1).
+1. **Kör-szintű hold.** Kör-session `H-GATEGUARD` haltja → a kör sora `hold`
+   (commit + push), halt-archívum + `.pipeline/gateguard-holds.tsv` főkönyv +
+   ntfy, és a lánc a következő pending körrel MEGY TOVÁBB.
+2. **Az őrszem haltja LÁNC-szintű marad.** Ha a haltot az önjavítás fölötti
+   őrszem írta (`gateguard_origin=selfheal` gépi mező), a mércét gyengítő
+   commit már a main-en állhat → az egész lánc áll, ahogy eddig.
+3. **Pre-flight a dispatch ELŐTT.** `tools/gateguard-scan.py` a védett listát
+   **magából az őrből** importálja (nincs második igazság), és a driver a
+   kiválasztott kör briefjét ezzel méri. Ütközés → azonnali `hold`,
+   implementer-futás és halt nélkül.
 
-**2. előfordulás (2026-08-19 09:56, H3, self-heal 1/3) — a marker NEM oldotta
-fel, mert egy HARMADIK, a markert nem ismerő őr is véd.** A user 09:53:18-kor
-létrehozta a `.claude/gate-edit-authorized` markert (indoklás: „E99-R17
-GOV-11 D2 … EGY körre") és feloldotta a láncot — ez az (1) ajánlott út volt.
-A kör 09:55:05-kor újraindult (implementer: minimax), és 09:56:36-kor **szó
-szerint ugyanazzal a gyökérokkal állt meg újra**
-(`.codex-round-status`: „…az implementer_guard (a
-`.claude/gate-edit-authorized` marker SEM engedélyezett) kettős védelme
-blokkolja"). Mérve (self-heal): a markernek a repóban EGYETLEN fogyasztója
-van, a `protect_factory_files.py` — ez csak CLAUDE-oldali
-(orchesztrátor/self-heal) sessionre fut. A kört ténylegesen implementáló
-minimax-session a `tools/hooks/implementer_guard.py` (ADR 0309) alatt fut,
-aminek a markerről fogalma sincs, és feltétel nélkül blokkol. Ráadásul
-[[L322]] szerint egy autonóm CLAUDE-oldali session SEM tudja ténylegesen
-felhasználni a markert (a Claude Code harness saját auto-mode osztályozója
-azt is blokkolja) — tehát **a marker+resume kombináció ezen a boxon
-strukturálisan sosem old fel egy H-GATEGUARD haltot**, akárhányszor próbálják.
-Mérés részletei: `docs/LESSONS.md` [[L323]].
+**Amit NEM változtat meg:** a mércét és az emberi határt. Gate-érintő kör
+továbbra sem fut le emberi döntés nélkül (ADR 0112 §3 érintetlen).
 
-**Ami tényleg működik (E99-R16 precedens, `e71ded2f`):** a user SZEMÉLYESEN
-szerkeszti meg és pusholja a `tool/ci/check_l10n_parity.dart`-ot a
-`minimax/e99-r17-gov-11-l10n-parallel-safety` ágra — jelenleg `eb915931`-en
-áll, **2 commit-tal `origin/main` (`acdb5428`) mögött**, tehát a szerkesztés
-előtt/után egy upstream-merge is kell —, utána
-`tools/pipeline-status.sh --resume`: az implementer onnan a D3/D4-gyel
-(tuner-migráció, `round-slots.py` `GENERATED_PATHS`) normálisan folytathatja,
-mert azok NEM védett útvonalak. Alternatíva változatlanul: (2) brief-revízió;
-(3) `hold`.
+**Emberi döntésre váró (hold) körök — egy közös alkalommal, kötegben:**
+`E99-R17` (`tool/ci/check_l10n_parity.dart`), `E99-R20`, `E99-R21`
+(`tools/round-gate.sh` + workflow), `E99-R22`, `E08-R29` (workflow).
+Gépi lista: `tools/gateguard-scan.py --all` · státusz:
+`tools/pipeline-status.sh` „emberi gate-döntésre váró körök" szakasz.
+A feloldás menete (E99-R16 precedens): a user SZEMÉLYESEN szerkeszti és
+pusholja a védett fájlt a kör ágára, majd a sorban `hold` → `pending`.
+
+**Őrteszt:** `tools/tests/test_gateguard_autohold.py` (12 eset, zöld) ·
+tanulság: `docs/LESSONS.md` L324 · brief-szabály: `docs/execution/08-round-brief.md` §4.
 
 ## ✅ Router CI paths-szűrő: családi glob — PR #324, squash `a2d64831` (2026-08-19)
 
