@@ -65,16 +65,6 @@ void main() {
     capturedAt: capturedAt ?? now(),
   );
 
-  VisionEvidenceAdapter adapterWith({
-    Set<String>? allow,
-    double ceiling = 0.6,
-  }) => VisionEvidenceAdapter(
-    reader: const DefaultVisionEvidenceReader(),
-    measurementVersion: 1,
-    allowedMetricKeys: allow ?? const {'posture:shoulderAsymmetry'},
-    experimentalConfidenceCeiling: ceiling,
-  );
-
   VisionEvidenceAdapter adaptedTo({
     required List<VisionEvidenceFact> facts,
     Set<String>? allow,

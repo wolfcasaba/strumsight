@@ -46,12 +46,11 @@ sealed class AnalysisEvidenceView {
 /// and reference instant.
 final class AnalysisEvidenceMetricView extends AnalysisEvidenceView {
   AnalysisEvidenceMetricView({
-    required AnalysisMetricResult metric,
+    required this.metric,
     required String skillHint,
     required DateTime capturedAt,
   }) : skillHint = _requireSkillHint(skillHint, 'skillHint'),
-       capturedAt = capturedAt.toUtc(),
-       metric = metric;
+       capturedAt = capturedAt.toUtc();
 
   final AnalysisMetricResult metric;
   final String skillHint;
@@ -71,12 +70,10 @@ final class AnalysisEvidenceSignalQualityView extends AnalysisEvidenceView {
 /// (A7, ADR 0262).
 final class AnalysisEvidenceUnavailableView extends AnalysisEvidenceView {
   AnalysisEvidenceUnavailableView({
-    required AnalysisCapability capability,
-    required CapabilityUnavailableReason reason,
+    required this.capability,
+    required this.reason,
     required String skillHint,
-  }) : capability = capability,
-       reason = reason,
-       skillHint = _requireSkillHint(skillHint, 'skillHint');
+  }) : skillHint = _requireSkillHint(skillHint, 'skillHint');
 
   final AnalysisCapability capability;
   final CapabilityUnavailableReason reason;
