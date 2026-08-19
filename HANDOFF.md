@@ -1,5 +1,102 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E07-R28 KÉSZ — Tutor és PlannerAssistGateway integráció — PR #329, squash `b021eff2` (2026-08-19)
+
+Az opcionális, nem-autoritatív **PlannerAssist** gateway (SDD Ch8 Kör 28,
+[ADR 0270](docs/adr/0270-planner-assist-allowlist-and-untrusted-input.md),
+előre megírva 2026-08-15) egy strukturált request/response sémán és
+**exact** goal-/skill-/candidate-allowlisten (nincs fuzzy illesztés) keresztül
+enged nem megbízható nyelvimodell-választ a determinisztikus tervező elé —
+a modell SOHA nem aktivál tervet, minden felhő-hiba (timeout, rate limit,
+hálózat, kikapcsolt flag) determinisztikus tartalékra esik vissza, és a
+tanuló szabad szövege külön, nem-megbízható mezőként utazik, sosem az
+instrukció-mezőben.
+
+**Pre-flight mérés fordította meg az implementáció irányát.** A brief §1 (az
+Epic 7 SDD-forrása, `08-epic-07-ai-practice-generator.md` Kör 28) szó szerint
+azt írta elő, hogy az adapter a Chapter 5 `ai_tutor`
+`PracticePlanDraft`-ját képezze le — a mérés viszont azt mutatta, hogy
+`lib/features/ai_tutor/public.dart` **fagyasztott üres** (`library;`, 0
+export), egy E04-R01-ben merge-elt regressziós teszt
+(`ai_tutor_boundary_test.dart`) őrzi, és ugyanez a hibaosztály HÁROMSZOR
+mérve, MINDHÁROMSZOR scope-szűkítéssel oldva (`docs/LESSONS.md` L121/L133/
+L139). A §0.0 pre-flight revízió ugyanezt az utat követte: a
+`TutorPlanProposalAdapter` egy SAJÁT, e körben definiált `TutorPlanOutline`
+típusból épít requestet a practice-generator SAJÁT publikus
+katalógus-/skill-felületéről — `ai_tutor` import **nélkül**. Az implementer
+(Codex) a §0.0-t szó szerint követte, és a saját docstring-jében is rögzítette
+az indokot.
+
+**Mindkét review zöld.** A [correctness review](docs/reviews/e07-r28-review.md)
+APPROVED (0 BLOCKER/MAJOR/MINOR, 3 NOTE) — a reviewer saját, független
+valódi-sértés próbával mérte az A2 allowlist-et (a candidate-ellenőrzés
+ideiglenes gyengítése PIROSRA vitte a tesztet, visszaállítás után zöld). A
+kötelező [security review](docs/reviews/e07-r28-security.md) (brief
+`risk = "high"`) **PASS** — 0 CRITICAL/BLOCKER/MAJOR, 1 MINOR (a séma
+`goalIds`/`skillIds`/`candidateIds` tömbjei ma méretkorlát nélküliek —
+ártalmatlan, mert nincs élő transport, de a jövőbeli hálózati bekötés előtt
+egysoros cappal érdemes zárni), 5 NOTE (a jövőbeli transport/UI-bekötő
+körnek: a prompt-elkülönítés STRUKTURÁLIS, csak akkor marad az, ha a jövőbeli
+HTTP-transport nem fűzi össze `instructions` + `untrustedLearnerNote`-ot egy
+stringgé). Exact `dc413fd8`: Full Gate
+[32266022078](https://github.com/wolfcasaba/strumsight/actions/runs/32266022078)
+és Router CI
+[32266095192](https://github.com/wolfcasaba/strumsight/actions/runs/32266095192)
+success; post-merge célzott gate a friss `main`-en (`b021eff2`) önállóan is
+zöld. `plannerAssistEnabled` változatlanul `false`, nulla production hívó.
+
+**Folyamat-lecke ([[L326]]).** Az implementer-wrapper (`codex-round.sh`) NEM
+push-ol automatikusan — a commit a review indulásakor CSAK az izolált
+`ss-codex-e07-r28` munkapéldányban létezett. Az orchestrátornak kellett
+push-olnia originre a review-klónozás ELŐTT; enélkül SEM a saját `/tmp`-klón,
+SEM a párhuzamosan dispatch-elt security-reviewer subagent (aki a megosztott
+fából klónozott) nem látta volna a valódi kódot. Ez a [[L325]] (E07-R26,
+stale local ref) ROKON, de ELTÉRŐ gyökérokú hibaosztálya: ott a push
+megtörtént, csak a lokális ref nem követte; itt a push MAGA hiányzott, ezért
+az L325 „fetch origin előbb" receptje önmagában nem lett volna elég.
+
+**Utólag mért, EBBEN a pre-flightban felfedezett, NYITOTT tartozás
+(nem E07-R28 hibája, hanem E07-R27-é):** az E07-R27 (PR #328, squash
+`a0c61044`) brief-je `risk = "high"`-ra volt állítva, de a kötelező
+biztonsági review (`docs/reviews/e07-r27-security.md`) SOHA nem készült el —
+a kör a correctness review-val (APPROVED) egyedül merge-elt, és a záró
+rituálék (HANDOFF/RTM/LESSONS) is elmaradtak, csak a
+`docs/execution/pipeline-queue.tsv` `done` jelzése készült el
+(`chore(pipeline): E07-R27 done`, `e95bd937`). Ez a HANDOFF-bejegyzés ezt a
+hiányt UTÓLAG dokumentálja (ld. lentebb), de a hiányzó security review-t NEM
+pótolja — az egy jövőbeli kör vagy emberi döntés dolga. Következő kör:
+**E07-R29** (Accessibility, localization, privacy és safety hardening, SDD
+Ch8 Kör 29), új sessionben.
+
+## ✅ [UTÓLAGOS DOKUMENTÁCIÓ] E07-R27 KÉSZ — Missed day, catch-up, pause és returning flow — PR #328, squash `a0c61044` (2026-08-19, retroaktívan rögzítve az E07-R28 pre-flightjában)
+
+**Ez a bejegyzés utólag készült** — az E07-R27 saját sessionje a merge után
+nem futtatta le a záró rituálékat (HANDOFF/RTM/LESSONS-frissítés
+elmaradt, csak a pipeline-queue `done` jelzése történt meg). A tartalom a PR
+törzséből és a meglévő [review](docs/reviews/e07-r27-review.md)-ból
+rekonstruált, NEM az eredeti orchestrátor első kézből írt összegzése.
+
+Domain-pure `MissedDayPolicy` a múltbeli napokat completed/missed/future
+kategóriákba sorolja és reschedule-módot választ; a 21 napos rés a
+konzervatív oldalra esik, ezért `readinessProposal`-t ad
+([ADR 0269](docs/adr/0269-non-punitive-missed-day-handling.md) §5.4).
+`PausePracticePlan` `paused` státuszra vált új revízióval;
+`ResumePracticePlan` újra-horgonyozza a naplistát (a `resumeDate` lesz az új
+`startDate`), eldobja a hátralékos napokat, és `returningAfterBreak` módra
+vált, ha a rés eléri a küszöböt. Nem büntető, "bűntudatkeltés-mentes"
+catch-up UI.
+
+**A review egy javító kör után APPROVED** (`docs/reviews/e07-r27-review.md`,
+0 BLOCKER/MAJOR/MINOR/NOTE nyitva): F1 (MAJOR — a resume felülírta egy
+completed nap történeti dátumát) és egy második MAJOR javítva, re-review
+`1c5d4562`-n. **A kötelező biztonsági review HIÁNYZIK** — a brief
+`risk = "high"`, de `docs/reviews/e07-r27-security.md` sosem készült el; ezt
+az E07-R28 pre-flightja fedte fel utólag (ld. fent). Exact `10ed4874`: Full
+Gate [32259717044](https://github.com/wolfcasaba/strumsight/actions/runs/32259717044)
+és Router CI
+[32259719677](https://github.com/wolfcasaba/strumsight/actions/runs/32259719677)
+success.
+
 ## ✅ E07-R26 KÉSZ — Outcome ingestion, review update és plan revision — PR #326, squash `d7e894de` (2026-08-19)
 
 A befejezett gyakorlás-blokkok eredményének feldolgozása és az **átlátható**
@@ -1711,6 +1808,17 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-19):** `main` @ `b021eff2` — E07-R28
+PlannerAssistGateway integráció, PR [#329](https://github.com/wolfcasaba/strumsight/pull/329),
+squash-merge. Exact `dc413fd8`: Full Gate 32266022078 + Router CI 32266095192
+success; post-merge célzott gate a friss `main`-en zöld.
+
+**Aktuális állapot (2026-08-19):** `main` @ `a0c61044` — E07-R27 missed-day/
+pause/returning flow, PR [#328](https://github.com/wolfcasaba/strumsight/pull/328),
+squash-merge. Exact `10ed4874`: Full Gate 32259717044 + Router CI 32259719677
+success. (Retroaktívan rögzítve — a záró rituálék az eredeti sessionben
+elmaradtak, ld. a fejléc-blokkot.)
+
 **Aktuális állapot (2026-08-19):** `main` @ `3ab2a147` — E07-R25 Analyze és
 Vision evidence integráció, PR [#322](https://github.com/wolfcasaba/strumsight/pull/322),
 squash-merge. Exact `cbcb30c7`: Full Gate 32210677497 + Router CI 32210693573
@@ -2134,6 +2242,27 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R28 — Tutor és PlannerAssistGateway integráció** (PR
+[#329](https://github.com/wolfcasaba/strumsight/pull/329), squash `b021eff2`,
+[ADR 0270](docs/adr/0270-planner-assist-allowlist-and-untrusted-input.md)).
+Strukturált request/response séma, exact goal-/skill-/candidate-allowlist
+(nincs fuzzy), determinisztikus fallback minden felhő-hibára, tanuló-szöveg
+elkülönítve nem-megbízható mezőként. Pre-flight §0.0 mérte: `ai_tutor`
+`public.dart` fagyasztott üres ([[L121]]/[[L133]]/[[L139]] osztálya) —
+`TutorPlanProposalAdapter` SAJÁT `TutorPlanOutline` típust definiál, `ai_tutor`
+import nélkül. Review APPROVED (0 BLOCKER/MAJOR/MINOR, saját valódi-sértés
+próba az A2-n); kötelező security review PASS (1 MINOR follow-up: uncapped
+ID-array a sémában). Exact `dc413fd8`: Full Gate + Router CI success;
+post-merge gate zöld. `plannerAssistEnabled` változatlanul `false`.
+
+**E07-R27 — Missed day, catch-up, pause és returning flow** (PR
+[#328](https://github.com/wolfcasaba/strumsight/pull/328), squash `a0c61044`,
+ADR 0269 — meglévő). Domain-pure `MissedDayPolicy`, 21 napos küszöb
+`readinessProposal`-t ad, Pause/Resume revíziók, non-shaming catch-up UI.
+Review APPROVED egy javító kör után. **Hiányzó kötelező security review**
+(brief `risk=high`) — utólag mérve, ld. a fejléc-blokkot. Exact `10ed4874`:
+Full Gate + Router CI success. (Retroaktívan rögzítve.)
 
 **E07-R24 — Song goal és Song Trainer integráció** (PR [#318](https://github.com/wolfcasaba/strumsight/pull/318),
 squash `b08c00e9`, [ADR 0318](docs/adr/0318-song-goal-public-boundary-and-caller-fed-input.md)).
@@ -2783,10 +2912,18 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**🛑 A lánc jelenleg ÁLL, EMBERI döntés/szerkesztés vár (2026-08-19):**
-E99-R16/H3 `outcome=escalate` — ld. a fejléc-blokkot és `docs/LESSONS.md`
-L322. Semmi más (E07-R26 sem) nem folytatódik automatikusan, amíg a
-`.github/workflows/router-ci.yml` egysoros javítása meg nem történik.
+**A következő Epic 7 SDD-lépés: E07-R29** (Accessibility, localization,
+privacy és safety hardening, SDD Ch8 Kör 29). Friss sessionben indul.
+
+**Nyitott, EMBERI döntést igénylő tartozás (2026-08-19, E07-R28 pre-flightja
+fedte fel):** az E07-R27 (PR #328) `risk=high` briefje mellett a kötelező
+biztonsági review sosem készült el (`docs/reviews/e07-r27-security.md`
+hiányzik) — egy jövőbeli kör vagy emberi döntés pótolhatja retroaktívan.
+
+**🛑 [ELAVULT, MEGOLDVA] A lánc jelenleg ÁLL...** — az alábbi bekezdés
+E99-R16/H3-ra vonatkozott; az ADR 0321 (H-GATEGUARD kör-szintű hold, ld. a
+fejléc-blokkot fentebb) és a család-glob javítás (PR #324) azóta feloldotta,
+a lánc E07-R27/R28-cal folytatódott. Megtartva történeti kontextusnak:
 
 **A következő Epic 7 SDD-lépés: E07-R26** (outcome ingestion és revision).
 Friss sessionben indul; az E07-R25 eredményét csak a szűk public boundary-kon

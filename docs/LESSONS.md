@@ -12592,3 +12592,44 @@ ezen sajátosságát.
 Rokon: [[shared-tree-coordination]] (a memóriában — a megosztott fa más
 körvédelmi mintája), [[L175]], [[L179]] (a `git worktree add` vs `git clone`
 hasonló csendes-hiba osztálya, más okból).
+
+## L326 — `codex-round.sh`/`mm-round.sh` NEM push-ol automatikusan: az implementer commitja a review ELŐTT is csak lokális maradhat — az L325 „fetch origin előbb" receptje ide nem elég, mert az originen sincs még ott (E07-R28, 2026-08-19)
+
+**Mit mértünk.** Az implementer (`codex-round.sh`) `status=done`-t jelzett
+`head=a1a6da38`-cal a saját izolált munkapéldányában
+(`/home/ubuntu/ss-codex-e07-r28`), de ez a commit SEM az origin
+`codex/e07-r28-planner-assist-gateway` branch-én, SEM a megosztott
+`/home/ubuntu/music-theory` fa semelyik refjén nem volt jelen — a wrapper
+scriptek egyike sem futtat `git push`-t. Egy `git clone --branch <kör-branch>
+https://github.com/…` (tehát az [[L325]] javasolt, origin-ből klónozó
+receptje is) a `ed197b04` pre-flight commitnál állt meg, nem az implementáció
+fejénél — a régi lecke feltételezi, hogy a push MEGTÖRTÉNT, csak a lokális
+ref nem követte; itt a push MAGA hiányzott. A saját reviewer-klónom ebbe
+futott bele először; a párhuzamosan dispatch-elt `security-reviewer`
+subagent — akinek a promptjában (hibásan) a megosztott fát adtam meg
+klónforrásnak — UGYANEBBE futott, és önállóan, `ss-codex-e07-r28`-ból
+fetchelve állt helyre.
+
+**Miért.** A push az orchesztrátor felelőssége (a wrapper szándékosan csak
+commitol, a branch-tulajdonlás és a publikálás időzítése az övé — pl. hogy egy
+`stopped`/`blocked` jelzésű félkész munka NE kerüljön originre automatikusan).
+Ez a szándékos tervezési döntés viszont azt jelenti, hogy a review (saját
+vagy subagent) ELSŐ lépése — MIELŐTT bármilyen klónozás történne — annak
+ellenőrzése, hogy az implementer jelzett `head`-je tényleg elérhető-e
+originről: `git ls-remote <origin-url> refs/heads/<kör-branch>` és vesd össze
+a `.codex-round-status` `head=`-jével. Ha eltér: `git -C
+<ss-motor-kör-munkapéldány> push origin <kör-branch>` ELŐSZÖR, review-klónozás
+csak utána.
+
+**Hogyan alkalmazd.** (1) Minden `/tmp`-review-klónt az origin URL-ből
+készíts, SOHA a megosztott `/home/ubuntu/music-theory`-ból (ez az [[L325]]
+staleness-osztályát is kizárja, nem csak ezt). (2) Push-ellenőrzés a
+klónozás ELŐTT, a fenti `git ls-remote` paranccsal — ne a klónozás
+sikerességéből következtess (az sosem hibázik régi branch-en). (3)
+Subagentnek adott review-feladat promptjába írd bele explicit a klónozandó
+URL-t (origin, nem a helyi fa) ÉS a várt HEAD SHA-t, hogy a subagent saját
+maga tudja ellenőrizni, nem csak bemondásra higgyen.
+
+Rokon: [[L325]] (ugyanaz a tünetosztály — csendben elavult review-klón —, más
+gyökérok), [[L311]] (a javító kör `done` jelzése utáni hiányzó push, rokon
+mintázat implementer-oldalon).
