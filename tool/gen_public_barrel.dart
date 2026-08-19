@@ -50,11 +50,14 @@ final class PublicBarrel {
   String render() {
     final buffer = StringBuffer(_header());
     final seenPaths = <String>{};
-    for (final fragment in fragments) {
+    for (var index = 0; index < fragments.length; index++) {
+      final fragment = fragments[index];
+      // Blank-line separator between groups, NOT after the final fragment
+      // (matches `dart format`'s trailing-newline expectation).
+      if (index > 0) buffer.write('\n');
       final content = fragment.readAsStringSync();
       final normalized = _normalizeFragment(content);
       buffer.write(normalized);
-      buffer.write('\n');
       for (final exportPath in _exportPaths(content)) {
         if (!seenPaths.add(exportPath)) {
           throw _DuplicateExportError(

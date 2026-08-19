@@ -1,5 +1,6 @@
 /// Public domain contract for cross-feature Practice Generator consumers.
 library;
+
 export 'application/port/skill_snapshot_reader.dart';
 export 'application/port/practice_catalog_reader.dart';
 export 'application/port/analysis_evidence_reader.dart';
@@ -100,4 +101,3 @@ export 'presentation/widgets/plan_block_card.dart';
 export 'presentation/widgets/plan_day_card.dart';
 export 'presentation/widgets/plan_reason_sheet.dart';
 export 'presentation/widgets/catch_up_sheet.dart';
-
