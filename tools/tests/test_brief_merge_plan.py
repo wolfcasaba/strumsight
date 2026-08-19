@@ -288,5 +288,157 @@ class BriefMergePlanFalsificationTest(unittest.TestCase):
         self.assertIn("lib/features/songs", stdout)
 
 
+class BriefMergePlanRegressionTest(unittest.TestCase):
+    """Az E99-R16 review F1 leletének regressziós tesztje.
+
+    A `tools/brief-merge-plan.py` rationale stringje (a `--with-regression`
+    útvonalon) egy Python format-spec-et használ a `saved_minutes` kiírására.
+    A `.0p` NEM érvényes float presentation type — `ValueError: Unknown format
+    code 'p' for object of type 'float'`-szel omlik össze MINDEN alkalommal,
+    amikor a jelölt pár MIND A NÉGY feltételt teljesíti ÉS a flag át van adva
+    (a tool dokumentált fő használati módja).
+
+    A teszt egy VALÓS jelölt páron hívja a `--with-regression` flaggel a
+    CLI-t, és:
+      (a) exit code 0;
+      (b) a `regression_basis` kitöltött (a `saved_overhead_minutes` nem None,
+          a `slope_minutes_per_file` / `intercept_minutes` visszakapható);
+      (c) a `rationale` TARTALMAZZA a `becsült megtakarítás:` szöveget és a
+          formázott percértéket (`{value:.0f}p`).
+
+    E három feltétel bármelyikének sérülése (más formátum-hiba, kivétel,
+    néma None) a teszt PIROS — ez a refaktor-biztos fedezék.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = Path(tempfile.mkdtemp(prefix="merge-plan-regression-"))
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _make_pair_with_regression(
+        self,
+        *,
+        left_files: int,
+        right_files: int,
+        slope: float,
+        intercept: float,
+    ) -> Path:
+        """Egy VALÓS szomszédos E07-R01/R02 pár + regresszió JSON.
+
+        A `left_files` + `right_files` az egyesített allowed_paths méretét
+        11-re állítja (a küszöb alatt, így a pár JAVASOLT), és a regresszió
+        a `20p fix overhead` értéket adja (a `rationale` szövegében
+        ellenőrizhető).
+        """
+        rows = [
+            ("E07-R01", "docs/rounds/e07-r01.md", "pending"),
+            ("E07-R02", "docs/rounds/e07-r02.md", "pending"),
+        ]
+        briefs = {
+            "E07-R01": (
+                ["docs/rounds/e07-r01.md"]
+                + [f"lib/features/songs/x_{i}.dart" for i in range(left_files)],
+                False,
+            ),
+            "E07-R02": (
+                ["docs/rounds/e07-r02.md"]
+                + [f"lib/features/songs/y_{i}.dart" for i in range(right_files)],
+                False,
+            ),
+        }
+        queue_path, repo_root = _build_queue(rows=rows, briefs=briefs)
+        new_root = self._tmp / f"fixture-{left_files}-{right_files}-reg"
+        shutil.copytree(repo_root, new_root)
+        # A regresszió JSON a `_estimate_pair_seconds` szerződését követi:
+        # top-level `slope_minutes_per_file` + `intercept_minutes` (a D1
+        # `tools/round-metrics.py --granularity` kimenetének `regression`
+        # mezője).
+        regression_payload = {
+            "n": 4,
+            "slope_minutes_per_file": slope,
+            "intercept_minutes": intercept,
+            "r_squared": 0.9,
+        }
+        regression_path = new_root / "regression.json"
+        regression_path.write_text(json.dumps(regression_payload), encoding="utf-8")
+        return new_root
+
+    def test_with_regression_fills_rationale_without_format_error(self) -> None:
+        """A `.0p` → `.0f` javítás UTÁN a `--with-regression` hívás:
+          (a) exit code 0 (NEM ValueError);
+          (b) `regression_basis` kitöltött;
+          (c) `rationale` tartalmazza a formázott percértéket.
+        """
+        # left=4 (5), right=5 (6) → egyesített = 11 (a küszöb alatt, javasolt).
+        # A regresszió `intercept_minutes=20.0` → a `saved_overhead_minutes`
+        # 20.0, a `rationale` szövegében `20p fix overhead` jelenik meg.
+        repo_root = self._make_pair_with_regression(
+            left_files=4,
+            right_files=5,
+            slope=1.5,
+            intercept=20.0,
+        )
+        regression_path = repo_root / "regression.json"
+
+        exit_code, stdout, stderr = run_merge_plan(
+            repo_root,
+            [
+                "--format", "json",
+                "--max-paths", "12",
+                "--with-regression", str(regression_path),
+            ],
+        )
+        # (a) Nem szabad kivételt dobni — a `F1` lelet éppen ez volt.
+        self.assertEqual(exit_code, 0, msg=f"F1 REGRESSZIÓ: a CLI kivételt dob / nem 0: {stderr!r}")
+        self.assertNotIn("Traceback", stderr, msg=f"F1 REGRESSZIÓ: traceback a stderrben: {stderr!r}")
+
+        payload = json.loads(stdout)
+        candidates = payload["candidates"]
+        self.assertEqual(len(candidates), 1, msg=f"F1: a pár nem javasolt: {payload!r}")
+        pair = candidates[0]
+
+        # (b) A `regression_basis` minden kulcsa kitöltött.
+        basis = pair["regression_basis"]
+        self.assertIsNotNone(basis["intercept_minutes"], msg=f"F1: intercept_minutes None: {basis!r}")
+        self.assertIsNotNone(basis["slope_minutes_per_file"], msg=f"F1: slope_minutes_per_file None: {basis!r}")
+        self.assertIsNotNone(basis["saved_overhead_minutes"], msg=f"F1: saved_overhead_minutes None: {basis!r}")
+        self.assertEqual(basis["intercept_minutes"], 20.0)
+        self.assertEqual(basis["saved_overhead_minutes"], 20.0)
+
+        # (c) A `rationale` a formázott szöveget TARTALMAZZA — a `:.0f` él,
+        # a `p` mértékegység maradt. Ha valaki visszaáll `.0p`-ra, a `rationale`
+        # MEGSEMMISÜL, mert a format-string kivételt dob a pár kiértékelése
+        # ELŐTT — az `(a)` assert ezt már elkapja, de a `rationale` konkrét
+        # szövegének ellenőrzése a pozitív eset (a javítás UTÁN) véd.
+        self.assertIn("becsült megtakarítás:", pair["rationale"])
+        self.assertIn("20p fix overhead", pair["rationale"], msg=f"F1: a rationale NEM tartalmazza a formázott értéket: {pair['rationale']!r}")
+
+    def test_with_regression_text_format_also_works(self) -> None:
+        """A szöveges (táblázatos) kimenet is megjelenik — a CLI NEM csak JSON-ban
+        használatos. A `:.0p` hiba a `text` formátumra is ugyanúgy kihat (a
+        cella ugyanazt a kódot használja)."""
+        repo_root = self._make_pair_with_regression(
+            left_files=4,
+            right_files=5,
+            slope=1.5,
+            intercept=20.0,
+        )
+        regression_path = repo_root / "regression.json"
+
+        exit_code, stdout, stderr = run_merge_plan(
+            repo_root,
+            [
+                "--format", "text",
+                "--max-paths", "12",
+                "--with-regression", str(regression_path),
+            ],
+        )
+        self.assertEqual(exit_code, 0, msg=f"F1 REGRESSZIÓ (text): {stderr!r}")
+        self.assertNotIn("Traceback", stderr)
+        # A táblázat `megtakarítás` oszlopa a `20p` értéket tartalmazza.
+        self.assertIn("20p", stdout, msg=f"F1: a 'saved' cella NEM 20p: {stdout!r}")
+
+
 if __name__ == "__main__":
     unittest.main()

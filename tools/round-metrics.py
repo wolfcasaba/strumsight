@@ -35,12 +35,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    from tools.ai_router.brief import BriefMetadataError, load_brief
-else:
-    from .ai_router.brief import BriefMetadataError, load_brief
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 LEDGER_RELATIVE = Path(".pipeline") / "cost.tsv"
@@ -307,7 +301,22 @@ def _round_size(metadata) -> int:
 def load_briefs_for_queue(repo: Path, queue_path: Path | None = None) -> dict[str, object]:
     """A sor-fájlban HIVATKOZOTT összes brief metadata-ja. A `round_id` (normált
     nagybetűs) → BriefMetadata. A hibás / nem olvasható briefek kimaradnak
-    (a granularitás-elemzés csak az érvényes adatpontokból dolgozik)."""
+    (a granularitás-elemzés csak az érvényes adatpontokból dolgozik).
+
+    A `brief` importja LOKÁLIS (NEM modul-szintű): a `--engines` / `--cost` /
+    alapértelmezett tábla útvonalak nem igénylik a `tools` csomagot, így a
+    másolt + önállóan futtatott script-példány (ld. `EnginesOutlierFalsificationTest`)
+    e nélkül is működik. A `--granularity` az egyetlen útvonal, ami
+    brief-eket olvas — az úgysem értelmezhető másolt scriptként.
+    """
+    if __package__ in (None, ""):
+        # A `tools` csomag csak a repo-gyökérből indulva importálható —
+        # ha a script más cwd-ből fut (pl. a granularitás-teszt subprocess-e),
+        # a saját fájl-helye alapján tesszük elérhetővé.
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from tools.ai_router.brief import BriefMetadataError, load_brief
+    else:
+        from .ai_router.brief import BriefMetadataError, load_brief
     if queue_path is None:
         queue_path = repo / QUEUE_RELATIVE
     try:

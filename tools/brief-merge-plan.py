@@ -249,7 +249,7 @@ def find_merge_candidates(
                     f"egyesített allowed_paths = {len(merged)} ≤ {max_paths}, "
                     f"egyik sem natív gate; "
                     + (
-                        f"becsült megtakarítás: {estimate['saved_minutes']:.0p}p fix overhead"
+                        f"becsült megtakarítás: {estimate['saved_minutes']:.0f}p fix overhead"
                         if estimate["saved_minutes"] is not None
                         else "mért indok nincs (nincs D1 regresszió)"
                     )
