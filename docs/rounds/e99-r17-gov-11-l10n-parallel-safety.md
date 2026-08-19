@@ -11,7 +11,6 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "tool/gen_l10n_segments.dart",
-  "tool/ci/check_l10n_parity.dart",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
   "lib/l10n/features/tuner_en.arb",
@@ -58,11 +57,15 @@ native_gate = false
   fel az implementer-őrt.
 - A tényleges út most is `tools/round-gate.sh:243` →
   `tool/ci/check_l10n_parity.dart`; a `tool/ci/*` a gyári mérce védett
-  globja. A `.claude/gate-edit-authorized` marker jelen van, de a D1 utáni
-  branch-történetben nincs emberi commit a D2 célfájlra. Ezért D2 nem
-  dispatch-elhető: a következő helyes lépés a user személyes szerkesztése és
-  pushja erre a branchre, vagy a kör holdon hagyása. A scope-lista nem bővül,
-  és a mérce nem változik.
+  globja. **D2 EZZEL LE VAN ZÁRVA (2026-08-19, emberi engedéllyel futó
+  interaktív session):** a `--check` hívás a branchen van, a `main()` a
+  frissességet és a paritást EGYÜTT méri, és a lépés pirosra vált elavult
+  aggregátumra. A védett fájl ezért **kikerült az `allowed_paths` listáról** —
+  a gate-őr pre-flightja így nem teszi újra hold-ra a kört, az implementer
+  pedig nem is nyúlhat hozzá. **A hátralévő munka: D3 (tuner-migráció), D4
+  (`round-slots.py`) és a §4 mérce-mátrix tesztjei.** A `l10n` gate-lépés a
+  D3 előtt SZÁNDÉKOSAN piros (`hiányzó alap: lib/l10n/base/app_en.arb`) —
+  ez a D3 hiányát méri, nem D2 hibája; a zöld a D3 után áll elő.
 
 - A `main @ 67d459f1` tényleges ARB-mérése eltér az előre írt briefétől:
   `app_en.arb` 1 988 sor / 1 354 üzenetkulcs, `app_hu.arb` 1 911 sor /
