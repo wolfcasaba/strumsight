@@ -191,6 +191,9 @@ final class GenerationOutcome {
   final List<String> errors;
 
   bool get isOk => errors.isEmpty && !stale;
+
+  @override
+  String toString() => 'GenerationOutcome($locale)';
 }
 
 /// Egy lokál mentését/előállítását végzi a megadott projekt-gyökérben.
