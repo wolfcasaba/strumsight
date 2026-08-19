@@ -296,4 +296,51 @@ A **teljes** suite és az APK a CI-ban fut (ADR 0053), nem itt.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Implemented files
+
+- `test/fixtures/practice_planner/golden_profiles.dart`: three deterministic
+  Dart-builder learner profiles with checked expected executable candidates,
+  including a confirmed-microphone capability path.
+- `test/property/planner_invariants_property_test.dart`: 80 seeded trials
+  (default `PROPERTY_SEED=42`) assert byte-identical serialized plans, zero
+  hard findings, a reached no-op activation boundary, and zero writes.
+- `test/property/planner_golden_fixture_test.dart`: asserts zero hard findings
+  and exact expected candidates over the corpus.
+- `lib/features/practice_generator/application/service/shadow_plan_generator.dart`:
+  evaluation-only end-to-end composition through the real orchestrator with a
+  counting, no-op `GenerationPlanActivation`; it imports no local repository
+  or active-plan controller.
+- `tool/practice_plan_eval/plan_quality_report.dart`: prints per-profile
+  success, hard-findings, activation/write counts, total latency, and RSS delta.
+- `docs/sdd/epic-07-completion-report.md`: completion evidence and explicitly
+  named rollout/device/preview/assist open items.
+
+### Measurements and checks run
+
+- `flutter test test/property/planner_invariants_property_test.dart` — pass.
+- `PROPERTY_SEED=20260819 flutter test
+  test/property/planner_invariants_property_test.dart` — pass.
+- `flutter test test/property/planner_golden_fixture_test.dart` — pass after
+  restoration.
+- `flutter test tool/practice_plan_eval/plan_quality_report.dart` — invoked
+  the report: 3/3 successful plans, 0 hard violations, 3 activation calls,
+  0 persistent writes, 76,782 microseconds total, 3,735,552-byte RSS delta.
+- Real-violation probe: temporarily set the starter profile expected candidate
+  to `probe.invalidCandidate`; the golden test failed with actual
+  `rhythm.quarterNotes.steady`; restored the expectation afterward.
+
+### Scope and remaining checks
+
+- No feature flag or `.github/**` file was changed.
+- `ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh
+  test/property/planner_invariants_property_test.dart
+  test/property/planner_golden_fixture_test.dart` — pass: format, analyze,
+  both targeted tests, architecture, secrets, and l10n all green. The zero
+  sleep only removes the gate's configurable inter-step delay; no check was
+  skipped. Full CI, randomized property gate, and APK remain
+  orchestrator-owned merge evidence.
+- Direct `dart run tool/practice_plan_eval/plan_quality_report.dart` stopped
+  during package build hooks in this environment without running the report;
+  `flutter test` executed the same `main()` and produced the measurement above.
+
 ## 11. Review — a Claude tölti ki
