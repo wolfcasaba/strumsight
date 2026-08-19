@@ -12926,3 +12926,21 @@ tesz.
 — amíg ez nem történik meg, minden review-session tudja, hogy a dokumentált
 parancs ezen a hibaosztályon elhasalhat, és a fenti GitHub-URL-es alakot
 használja helyette elsőként, nem csak hibaelhárításként.
+
+## L332 — A wrapper gate-shape ellenőrzése a modellnapló szövegét is mérheti, ezért a `VIOLATION` önmagában nem bizonyít egy hibásan futtatott gate-et (E08-R01, 2026-08-19)
+
+**Mit mértünk.** Az E08-R01 implementer `.codex-round-status` fájlja
+`gate_shape=VIOLATION` értéket kapott, miközben a konkrét gate-hívás a
+`tools/round-gate.sh ...` forma volt, csővezeték és `&&` nélkül. A
+`tools/mm-round.sh:375–379` a teljes modellnaplóban regexszel keresi a
+`round-gate.sh` és `pipe/tail/head/&&` együttes előfordulását; a naplóban a
+modell saját leírása „no pipe/tail/&&” szöveget tartalmazott. A reviewer
+friss, izolált gate-je ezért az egyetlen valós futtatási bizonyíték: 9/9 zöld.
+
+**Miért.** A log-szintű minta nem tudja megkülönböztetni a tiltott parancsot a
+tiltás idézésétől, így false positive-ot adhat.
+
+**Hogyan alkalmazd.** `gate_shape=VIOLATION` esetén a merge előtt nézd meg a
+tényleges napló-hívást és futtasd újra a gate-et izolált reviewer-klónban. A
+valódi csonkoló/láncoló hívás továbbra is blokkoló; pusztán a tiltás szöveges
+említése nem az.

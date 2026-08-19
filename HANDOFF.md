@@ -1,5 +1,27 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R01 KÉSZ — Gamification baseline és mért migrációs szerződés — PR #334, squash `0e19f67d` (2026-08-19)
+
+Az Epic 8 nyitókörének kimenete az
+[`epic-08-start.md`](docs/baseline/epic-08-start.md): file:line alapú leltár a
+Progress, Streak, Learn és Share tényleges feature- és import-éleiről, aktuális
+és legacy storage-kulcsokról/wire-alakokról, streak-freeze, Daily Challenge és
+lesson-star határokról, a meglévő guardokról és az ADR 0289/0290 dark-pattern
+checklistről. Az új [ADR 0328](docs/adr/0328-measured-gamification-baseline-contract.md)
+rögzíti, hogy a baseline migrációs szerződés, nem új jutalom-policy.
+
+Az első független review két MAJOR leletet mért: a baseline tévesen tagadta a
+Share production forrásait és a Learn közvetlen Progress/Streak importjait,
+valamint több ADR-követelményt olyan teszttel jelölt lefedettnek, amely csak
+szomszédos viselkedést vizsgált. A MiniMax javító köre mindkettőt zárta; a
+végső [review](docs/reviews/e08-r01-review.md) APPROVED (0 BLOCKER/MAJOR,
+1 MINOR tipográfiai NOTE). Full Gate
+[32293515991](https://github.com/wolfcasaba/strumsight/actions/runs/32293515991)
+és Router CI
+[32293556103](https://github.com/wolfcasaba/strumsight/actions/runs/32293556103)
+success a merge-előtti exact `1949f96c` SHA-n; post-merge célzott gate a friss
+`main`-en (`0e19f67d`) 9/9 zöld. Következő kör: **E08-R02**, új sessionben.
+
 ## ✅ E07-R30 KÉSZ — Evaluation harness, shadow rollout és Epic 7 lezárás — PR #333, squash `ee5821dd` (2026-08-19) — **EPIC 7 LEZÁRVA**
 
 Epic 7 (AI Practice Generator) záró köre. Implementer: Codex (`~/.codex`).
