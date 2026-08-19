@@ -1,6 +1,6 @@
 # E07-R27 — Missed day, catch-up, pause és returning flow
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 0afb9994`)
+- **Státusz:** READY (pre-flight felülvizsgálva 2026-08-19, `main @ 2485b78a`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 27
 - **Kör-azonosító:** `E07-R27`
 - **Branch:** `<motor>/e07-r27-missed-day-and-pause`
@@ -46,6 +46,49 @@ tools/codex-signal.sh blocked "<egy sor>"
 ```
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
+
+## 0.0 Pre-flight mérés és brief-revízió (2026-08-19, `main @ 2485b78a`)
+
+**Az ADR-foglalás feloldása.** A brief által hivatkozott ADR 0269 már
+elfogadott, merge-elt döntés (`docs/adr/0269-non-punitive-missed-day-handling.md`),
+ezért ebben a körben nem készül második ADR. A `round-slots.py reserve-adr`
+által kiadott 0327 foglalás nem használható: az új ADR írása a brief tilos
+zónája, és a 0269 döntését duplikálná.
+
+**R15 tényleges rest-day jelölése.** A `WeeklyScheduler` a rest napot az
+`ScheduleDecisionReason.restDay.code` (`schedule.decision.restDay`) reason
+code-dal adja ki (`domain/service/weekly_scheduler.dart:98–129, 242–246`),
+és `TodayPlanController.resolve` ezt az elsőbbségi jelet olvassa
+(`application/controller/today_plan_controller.dart:79–90`). A policy A2
+cellája ezért ezt a reason code-ot fogja bemenetként használni; az üres blokk
+önmagában nem rest-day bizonyíték.
+
+**R22 tényleges „ma” útja.** `TodayPlanController` az injektált `DateTime
+Function` helyi `year/month/day` mezőiből képez `LocalDate`-et, UTC-konverzió
+nélkül (`today_plan_controller.dart:43–55`). Az új policy/use case-ek is
+hívó-táplált `LocalDate`/óra bemenetet kapnak; nem olvasnak faliórát és nem
+konvertálnak UTC-re. A timezone A7 cella ugyanahhoz a helyi dátumhoz tartozó,
+eltérő offsetű órákkal igazolja, hogy nincs hamis mulasztás.
+
+**Meglévő revision- és returning-contractok.** `AdaptivePracticePlan.copyWith`
+már fogad `PlanStatus`-t, a `PlanStatus.paused` és a
+`GenerationMode.returningAfterBreak` már létezik (`domain/model/plan_enums.dart`);
+a resume új `PlanRevision`-je a meglévő `PlanRevisionReason.learnerReschedule`
+értéket használja. Nem szükséges enum- vagy modellfájl-módosítás. A `PlanRevision`
+`previous` paraméterével ma is kikényszeríti a monoton revíziószámot.
+
+**Küszöb konkretizálása.** A „több hét” ebben a körben
+`longBreakThreshold = 21 nap`. Kötelező cellák: 20 nap → egyszerű,
+keretnövelés nélküli újraütemezés; 21 nap → readiness-javaslat; 22 nap →
+readiness-javaslat konzervatív első nappal. A számítást az implementer
+`python3 -c 'print(21 - 1, 21, 21 + 1)'` parancsa rögzíti a handoffban.
+
+**Visszakeresett előzmény (RAG).** A friss index `2485b78a` commitot jelöl. Releváns előzmény:
+`lessons/L306` — a widget „ma” fogalmát injektált referenciaórából kell
+mérni, nem fordításidejű dátumból. Ezen kívül nem került elő ellentmondó,
+kihagyott napra vagy szünetre vonatkozó lecke; ADR 0256 (immutable past),
+0258 (hard napi maximum és local date) és 0261 (unknown/readiness) a már
+hivatkozott, alkalmazandó döntési alap.
 
 ## 1. Cél
 
@@ -137,6 +180,8 @@ folytatásra hívó. Ez acceptance-cella, nem stílus-kérés.
 | A folytatás a régi revízióba ír | A4 |
 | Hosszú szünet után a régi nehézséggel folytat | **A5** |
 | Utazáskor hamis mulasztás | A7 |
+| Az optional/secondary blokk is átkerül | A6 |
+| Bűntudatkeltő angol vagy magyar ARB-szöveg | A8 (ARB-assert + reviewer) |
 
 **A kihagyás-hossz három kötelező cellája** (a küszöb: a „hosszabb szünet" határa):
 
