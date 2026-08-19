@@ -1,5 +1,60 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E07-R26 KÉSZ — Outcome ingestion, review update és plan revision — PR #326, squash `d7e894de` (2026-08-19)
+
+A befejezett gyakorlás-blokkok eredményének feldolgozása és az **átlátható**
+jövőbeli tervmódosítás (SDD Ch8 Kör 26) egy tisztán application-rétegbeli,
+**hívó-táplált** csővezetékként épült meg: `OutcomeIngestionService`
+(revízió-egyezés, dedup, `SpacedRepetitionPolicy`-alapú review-frissítés,
+technikai hiba nem adaptálható — ADR 0268), `RecordPracticeOutcome` (a
+service + `AdaptationDecider` összefűzése), `RevisePracticePlan`
+(immutable-múlt guard a meglévő `PracticeItemStatus.completed`
+mintával — ADR 0256; kis/nagy változás szétválasztás, a "fókusz váltása" is;
+elutasított proposal auditálható marad; `PlanRevision(previous:)` meglévő
+monotonitás-védelme — nincs saját számláló) és `PlanChangeReviewScreen`
+(lokalizált before/after diff a nagy változáshoz). **Egyik új fájl sem hív
+repository-metódust** — a §0.0 pre-flight mérése szerint a repository-lokális
+és az R23 execution-oldali `PracticeOutcome` két, AZONOS NEVŰ, eltérő alakú
+típus (a `public.dart` `hide`-olja az előbbit); a perzisztencia-bekötés
+szándékosan egy jövőbeli wiring-körre marad, az R16/R17/R19/R22/R23 mintáját
+követve (`practiceGeneratorEnabled` marad `false`, nulla production hívó).
+
+A független review (`docs/reviews/e07-r26-review.md`) egy javító kör után
+APPROVED: az F1 MAJOR (a brief §5.2 "fókusz váltása" structural-change ága a
+kódban helyesen működött, de a kör saját teszt-suite-ja 0%-ban fedte —
+reviewer-oldali eldobható próbateszttel mérve, nem a kód olvasásából
+következtetve) egyetlen új teszttel zárult, valódi-sértés próbával
+(PIROS→ZÖLD) igazolva. A kötelező biztonsági review
+(`docs/reviews/e07-r26-security.md`, `risk=high`) **PASS** — 0
+CRITICAL/BLOCKER/MAJOR/MINOR, 5 előretekintő NOTE (sink-mentes, be nem
+kötött réteg). Két nem-blokkoló follow-up nyitva maradt: F2 (MINOR) — a
+`PlanChange.target` új `day:<id>[:block:<id>]` formátuma nem fedi a MEGLÉVŐ
+termelők (`plan_repairer.dart`, `active_plan_controller.dart`,
+`time_budget_allocator.dart`) `block:`/`plan:`/`timeBudget` alakjait, mérve
+egy eldobható próbateszttel (elkapatlan `ArgumentError`) — nincs élő hívó,
+egy jövőbeli wiring-körnek kell tudnia róla; F3 (NOTE) — a review screen
+nyers belső értékeket (mikroszekundum, enum-kód) jelenít meg humanizálás
+nélkül. Exact `254a4efe`: Full Gate
+[32251015719](https://github.com/wolfcasaba/strumsight/actions/runs/32251015719)
+és Router CI
+[32251108229](https://github.com/wolfcasaba/strumsight/actions/runs/32251108229)
+success.
+
+**Folyamat-lecke ([[L325]]):** a review-oldali `/tmp` klón NÉMÁN elavult
+ágat adhat, ha a `git clone --branch <kör-branch>` a megosztott
+`/home/ubuntu/music-theory` fából történik, miközben az implementáció egy
+KÜLÖN klónból (`ss-codex-<kör>`) pusholt közvetlenül originre — a megosztott
+fa lokális branch-refje csak explicit `git fetch origin <branch>:<branch>`-re
+mozdul. Kétszer mérve ugyanebben a körben (a fő reviewer és a párhuzamosan
+dispatch-elt security-reviewer subagent is ugyanabba a csapdába futott,
+mindkettő önállóan helyreállt).
+
+Ehhez a körhöz **nem kellett új ADR** — a brief saját indoklása szerint a
+határokat a MEGLÉVŐ ADR 0256/0265/0268 rögzíti (az E07-R22 precedensével
+egyezően); a defenzíven lefoglalt `0325` szám nem került felhasználásra.
+Következő kör: **E07-R27** (Missed day, catch-up, pause és returning flow),
+új sessionben.
+
 ## ✅ A LÁNC ÚJRA MEGY — a `H-GATEGUARD` mostantól KÖRT tart vissza, nem a LÁNCOT (ADR 0321, 2026-08-19)
 
 **A probléma, mérve.** Az `E99-R17` háromszor állt meg ugyanazzal a gyökérokkal
@@ -587,8 +642,10 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-19
+> (E07-R26 done — outcome ingestion + plan revision, caller-fed / zero
+> repository writes, see banner above.) Prior: 2026-08-19
 > (E99-R15/GOV-09 done — self-heal engine escalation + halt-reminder throttle,
-> see banner above.) Prior: 2026-08-18
+> see banner further below.) Prior: 2026-08-18
 > (E07-R18 done — application-level, cancellable, state-machine-driven
 > GenerationOrchestrator: immutable `GenerationState` (idle/running/completed/
 > cancelled/failed + 4 stage checkpoints), a `GenerationOrchestrator` that

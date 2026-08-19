@@ -12543,3 +12543,52 @@ emberi döntés nélkül. Csak nem viszi magával a többi 32-t.
 Őrteszt: `tools/tests/test_gateguard_autohold.py`.
 
 Rokon: [[L322]], [[L323]], [[ADR 0321]], [[ADR 0112]], [[ADR 0309]].
+
+## L325 — A review-oldali `git clone --branch <kör-branch> /home/ubuntu/music-theory /tmp/review-<kör>` NÉMÁN elavult ágat ad, ha az implementáció EGY MÁSIK klónból (`ss-<motor>-<kör>`) pusholt közvetlenül originre — a helyi branch-ref csak explicit fetch-csel mozdul (E07-R26, 2026-08-19)
+
+**Mérés.** A kör szabvány mintája: a pre-flight commit a megosztott fában
+(`/home/ubuntu/music-theory`) készül, a kör branch-e onnan kerül ki, majd az
+implementáció egy ELKÜLÖNÍTETT klónban (`git clone <fő-repó> /home/ubuntu/ss-
+codex-<kör>`) fut, és az implementer/javító kör onnan pushol közvetlenül
+originre. A `sdd-round-review` skill (és ez a HANDOFF-recept is) a review
+lépését így írja elő: `git clone --branch <kör-branch> /home/ubuntu/
+music-theory /tmp/review-<kör>`. Ez a parancs a `/home/ubuntu/music-theory`
+LOKÁLIS `.git`-jéből klónoz — és a lokális branch-ref ott **nem mozdul el
+magától**, amikor egy MÁSIK klónból (`ss-codex-<kör>`) történik push az
+originre. A push csak `origin/<branch>`-et frissíti a távoli szerveren; a
+`/home/ubuntu/music-theory` SAJÁT, lokális `<branch>` refje a régi commitnál
+ragad, amíg valaki explicit `git fetch origin <branch>:<branch>`-et nem
+futtat benne. Az eredmény: a `/tmp/review-<kör>` klón CSENDBEN a
+pre-flight-commitnál áll meg — nincs hibaüzenet, a `git clone` sikeresen
+lefut, csak a tartalma elavult. Kétszer mérve EBBEN a körben, EGYMÁSTÓL
+FÜGGETLENÜL: (1) a fő reviewer saját `/tmp/review-e07-r26` klónja a
+scope-audit `0 changed path(s)`-t adott (a `base..head` mindkét oldala
+ugyanarra a pre-flight commitra oldódott fel); (2) a párhuzamosan dispatch-elt
+`security-reviewer` subagent UGYANEZT a mintát kapta feladatul, és
+UGYANÍGY nulla diffet talált, mielőtt saját maga rájött a hibára és a
+`ss-codex-<kör>` klónból helyreállt.
+
+**Miért nem vette észre azonnal egyik fél sem.** A `git clone --branch X`
+sikeresen lefut akkor is, ha az `X` branch a forrás repóban régi — a git nem
+tudja (és nem is tudhatja pusztán a lokális állapotból), hogy létezik egy
+frissebb, originre már felkerült verzió. A `tools/scope-audit.py`
+`--base <sha>` paramétere is simán lefut egy `base==head` tartományon, és
+`0 changed path(s), OK`-t ad — ami FORMAILAG helyes válasz egy hibás
+kérdésre, nem hibaüzenet.
+
+**Szabály.** Mielőtt egy review-célú (vagy bármilyen célú) `/tmp`-klónt
+készítesz a MEGOSZTOTT `/home/ubuntu/music-theory`-ból, ha van esély rá, hogy
+a kör branch-e egy MÁSIK klónból mozdult (ez a normál eset minden
+`ss-<motor>-<kör>`-ös dispatch után): **előbb**
+`git -C /home/ubuntu/music-theory fetch origin <branch>:<branch>`, és csak
+utána `git clone --branch <branch> /home/ubuntu/music-theory /tmp/…`. A
+klónozás UTÁN a review ELSŐ lépése legyen egy triviális ellenőrzés:
+`git -C /tmp/review-<kör> log --oneline -1` egyezzen az implementer saját
+munkapéldányának (`ss-<motor>-<kör>`) `HEAD`-jével — ha nem, a klón elavult,
+nem a diff üres. Subagentnek adott review-feladatban ezt a lépést a
+promptba explicit be kell írni, mert a subagent nem ismeri a megosztott fa
+ezen sajátosságát.
+
+Rokon: [[shared-tree-coordination]] (a memóriában — a megosztott fa más
+körvédelmi mintája), [[L175]], [[L179]] (a `git worktree add` vs `git clone`
+hasonló csendes-hiba osztálya, más okból).
