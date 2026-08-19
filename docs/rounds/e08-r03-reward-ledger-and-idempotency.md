@@ -31,6 +31,94 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight — mért revízió (Claude, 2026-08-19, `main @ fc1ff764`)
+
+Az `ADR 0301` [megírva](../adr/0301-reward-ledger-append-only-idempotency.md)
+a §5 döntéseiből. Öt mérés indokolja ezt a revíziót — egyik sem H-halt-ok,
+mind a pre-flight normál teendője (AGENTS.md §1, S8).
+
+### 0.0.1 Visszakeresés (ADR 0312 / brief-lint S8)
+
+`node tools/knowledge-rag.mjs --top 5 "reward ledger idempotency
+append-if-absent race dedup"` — a találatok túlnyomó része maga ez a brief
+(elvárt, PREPARED dokumentum). `node tools/knowledge-rag.mjs --corpus
+lessons --top 6 "JsonDocumentStore JsonCollectionStore capRecords maxItems
+silent data loss storage"` **egy közvetlenül releváns találatot** adott:
+**[[L28]]** — a `JsonDocumentStore.write()` egy `StorageException`-t
+logol-és-normálisan-visszatér, nem dob; egy „auditálható igazságforrásnak"
+hirdetett rétegnél ez pontosan a CLAUDE.md „Cloud writes swallowed by
+try/catch → silent no-op" hibaosztálya, ha a repository felülete TÖBBET
+ígér, mint amit ténylegesen teljesít. Lásd 0.0.4.
+
+### 0.0.2 A§6.1/A2 hivatkozott „mintája" pontatlan — mindkét idézett fájlt elolvastam
+
+A §6.1 tábla és a §9 „Kockázatok" is a `test/features/progress/
+practice_log_race_test.dart`-ot nevezi meg úgy, mint ami „pontosan ezt [a
+`Future.wait` konkurens dupla-hozzáfűzést] őrzi". **Mérve: nem.** Elolvasva
+mindkét jelölt fájlt (`practice_log_race_test.dart` ÉS a testvér-sweep
+`test/core/store_race_sweep_test.dart`) — egyik sem `Future.wait`-alapú
+konkurens írást tesztel. Mindkettő a „hideg indulás után az azonnali írás
+nem törli a már tárolt előzményt" hibaosztályt őrzi regresszióként (E01-R07
+óta szerkezetileg megszűnt hibaosztály — a szinkron `build()`-beli olvasás
+miatt nincs „üres alapérték most, tárolt adat később" ablak). Ez **más**
+hibaosztály, mint az A2 versenyhelyzet (két konkurens hívás azonos
+`sourceEventId`-vel).
+
+**Nem blokkoló, de a implementert téves keresésre küldte volna:** az A2
+cellának NINCS meglévő mintafájlja ebben a projektben — ez az ELSŐ
+`Future.wait`-alapú konkurens-írás próba. A helyes precedens a
+**szerializálás mechanizmusára** (nem a teszt alakjára) `SongTransport.
+_commandTail` (`lib/features/song_trainer/application/trainer/
+song_transport.dart:52,68-70`) — lásd ADR 0301 2. pont. A §6.1 és §9
+szövegét változatlanul hagyom (a hiba ártalmatlan félreirányítás, nem téves
+acceptance-elvárás), ez a bekezdés a helyesbítés.
+
+### 0.0.3 `JsonDocumentStore`, NEM `JsonCollectionStore` — kimondva, mert az utóbbi a megszokottabb minta
+
+A §8.4 „a `JsonDocumentStore` mintájára" már a helyes réteget nevezi meg, de
+nem mondja ki, MIÉRT nem a `JsonCollectionStore<T>` — a projekt ma MINDEN
+más kollekciója (streak, songs, setlists, favourites, library — mérve:
+`test/core/store_race_sweep_test.dart`) ez utóbbin megy, tehát ez a
+„megszokott" választás egy implementer számára. Mérve
+(`lib/core/storage/json_document_store.dart`): a `JsonCollectionStore.
+write()` minden híváskor `capRecords`-ot hív, ami `maxItems` fölött **eldobja
+a legrégebbi bejegyzéseket** — ez egy audit-ledgernél a §5.1 append-only
+invariáns csendes megsértése volna. Lásd ADR 0301 4. pont — ez a döntés oka,
+nem új elvárás.
+
+### 0.0.4 Írás-hiba jelzése — review-time ellenőrzés, NEM új acceptance-cella
+
+**[[L28]]** (E02-R18) pontosan ugyanezen a `JsonDocumentStore.write()`
+swallow-szemantikán bukott két BLOCKERT: egy „valódi implementációnak"
+hirdetett recorder `Success`-t adott, miközben a lemezre semmi nem íródott.
+A brief §8.3 nem ír elő explicit hiba-jelzési szerződést az
+`appendIfAbsent`-re, és az A1–A8 egyike sem teszteli írás-hiba
+propagálását — **új, teszttel alá nem támasztott mandátumot ezért NEM
+adok** (az S2 falszifikációs-cella elvvel ütközne). Amit a §0.0 helyett a
+review fog kézzel ellenőrizni: az `appendIfAbsent` doc-commentje/felülete
+NE ígérjen erősebb tartósságot, mint amit ténylegesen teljesít (pl. ha a
+metódus neve vagy dokumentációja garantált perzisztenciát sugall, miközben a
+mögötte álló `JsonDocumentStore.write()` egy `StorageException`-t csak logol
+— az L28 pontos alakja, review-BLOCKER). Az „in-memory igaz a
+session-höz, a lemez best-effort" szerződés önmagában elfogadható —
+UGYANEZ a szerződés minden más kollekcióra is érvényes ma —, amíg a
+felület ezt nem tagadja.
+
+### 0.0.5 Megerősített, nem változtatott tények
+
+- `LearningActivityEvent.eventId` (`lib/features/gamification/domain/
+  activity/learning_activity_event.dart:12`) `String`, kötelező,
+  hívó-adta — a brief pre-flight calloutja pontos, nincs teendő.
+- `lib/features/gamification/domain/rewards/` és `data/` valóban nem
+  léteznek (mérve újra ezen a pre-flighton).
+- `test/core/architecture_dependency_test.dart` „gamification domain stays
+  framework-free" csoportja `lib/features/gamification/domain`-t
+  REKURZÍVAN listázza — egy új `rewards/` alkönyvtár automatikusan a
+  scope része, a teszt (ami NINCS az engedélyezett listán) módosítása
+  nélkül. Lásd ADR 0301 7. pont.
+- `ADR 0301` a `.pipeline/inflight/adr/0301` foglalás szerint még
+  fogyasztatlan volt ezen a pre-flighton — most írva, nincs ütközés.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
