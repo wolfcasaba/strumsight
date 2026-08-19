@@ -329,7 +329,7 @@ E07-R26	docs/rounds/e07-r26-outcome-ingestion-and-revision.md	codex	nincs	done
 E07-R27	docs/rounds/e07-r27-missed-day-and-pause.md	codex	0269	done
 E07-R28	docs/rounds/e07-r28-planner-assist-gateway.md	codex	0270	done
 E07-R29	docs/rounds/e07-r29-accessibility-privacy-hardening.md	minimax	nincs	done
-E07-R30	docs/rounds/e07-r30-evaluation-and-epic-closure.md	codex	nincs	pending
+E07-R30	docs/rounds/e07-r30-evaluation-and-epic-closure.md	codex	nincs	done
 #
 # ===== EPIC 8 — Gamification (Chapter 9, 30 kör) =====
 # Briefek előre megírva 2026-08-18 (main @ ea6569fb), mind `brief-lint --level
