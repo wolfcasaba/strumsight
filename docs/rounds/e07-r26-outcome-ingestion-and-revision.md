@@ -322,7 +322,10 @@ darabszámtól függetlenül megerősítést kér.
 - A1/A2: a completed blokkot célzó change set `StateError`-ral elutasított.
 - A3: a már feldolgozott outcome visszajátszása `duplicate`, review-módosítás
   nélkül.
-- A4: 1 változás automatikus; pontosan 2 és 3 változás megerősítésre vár.
+- A4: 1 időtartam-változás automatikus; pontosan 2 és 3 változás
+  megerősítésre vár. A külön
+  `A4: a single future primary-focus change requires confirmation` eset egy
+  egyetlen elemű fókuszváltást is megerősítésre várónak és inaktívnak mér.
 - A5: elutasított nagy proposal megtartja a teljes `PlanChangeSet` auditját,
   de nincs aktív revision.
 - A6: elavult revision outcome `staleRevision` eredményt ad.
@@ -333,7 +336,12 @@ darabszámtól függetlenül megerősítést kér.
 **Valódi-sértés próba.** A completed-blokk guardját ideiglenesen
 `inProgress`-re módosítva a `revise_practice_plan_test.dart` A1/A2 cellája
 PIROS volt: várt `StateError`, ténylegesen `PlanRevisionProposal` tért vissza.
-A `completed` guard visszaállítása után a két célzott fájl 9/9 tesztje zöld.
+A `completed` guard visszaállítása után az akkor célzott két fájl 9/9 tesztje
+zöld volt.
+Az F1 javításának valódi-sértés próbája: a
+`primaryFocusSkillIds`-ellenőrzések ideiglenes eltávolításakor az új A4 teszt
+PIROS volt (`Expected: true`, `Actual: <false>`); a visszaállítás után a
+célzott teszt ZÖLD.
 
 **Futtatott ellenőrzések.**
 
@@ -343,6 +351,11 @@ A `completed` guard visszaállítása után a két célzott fájl 9/9 tesztje z�
 - `ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh ...` → format, analyze,
   mindkét célzott teszt, architecture, secrets és l10n mind zöld.
 - `git diff --check` → exit 0.
+- F1 javítás: `tools/round-gate.sh
+  test/features/practice_generator/outcome/outcome_ingestion_service_test.dart
+  test/features/practice_generator/outcome/revise_practice_plan_test.dart` →
+  exit 0; format: 1648 fájl, 0 változás; analyze: `No issues found!`; az
+  outcome-ingestion teszt 3/3, a revise-practice-plan teszt 7/7 zöld.
 
 **Tényleges `git diff --stat`:** 10 fájl, 851 beszúrás (a négy új
 alkalmazás/UI fájl, két új teszt, barrel, két ARB és ez a handoff).

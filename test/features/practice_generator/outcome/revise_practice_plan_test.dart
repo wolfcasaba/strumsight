@@ -102,6 +102,30 @@ void main() {
     expect(result.revision!.number, 2);
   });
 
+  test('A4: a single future primary-focus change requires confirmation', () {
+    final focusChange = PlanChange(
+      type: PlanChangeType.updated,
+      target: 'day:day.1',
+      before: const <String, Object?>{
+        'primaryFocusSkillIds': <String>['rhythm.quarterNotes'],
+      },
+      after: const <String, Object?>{
+        'primaryFocusSkillIds': <String>['chords.openTransitions'],
+      },
+      reason: PlanChangeReason.systemAdaptation,
+      evidenceRefs: const <String>['outcome.1'],
+      confidence: .8,
+      requiresUserConfirmation: false,
+      reversible: true,
+    );
+    final result = revise().call(
+      request(changes: <PlanChange>[focusChange], candidate: previous.snapshot),
+    );
+
+    expect(result.requiresUserConfirmation, isTrue);
+    expect(result.isActive, isFalse);
+  });
+
   test('A4 at threshold: two future block changes require confirmation', () {
     final result = revise().call(
       request(
