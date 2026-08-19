@@ -112,6 +112,12 @@ rm -f "$signal" "$pid_file"
 # mutat, itt (az implementer indulása ELŐTT) a hub saját upstream-jére áll.
 bash "$script_dir/fix-workspace-origin.sh" "$workdir" >&2 || true
 
+# Self-heal E08-R03/H6 (docs/LESSONS.md L339) — lásd a codex-round.sh azonos
+# szakaszának indoklását: a gitignore-olt generált Flutter/l10n előfeltétel
+# munkapéldányonkénti, a `$workdir` SAJÁT másolatát hívjuk argumentum
+# nélkül (L232/E06-R13), fail-open.
+bash "$workdir/tools/prepare-flutter-generated.sh" >&2 || true
+
 # A scope-audit (ADR 0138) bázisa: a munkapéldány HEAD-je az indítás
 # pillanatában — lásd a codex-round.sh azonos szakaszának indoklását.
 scope_base=$(git -C "$workdir" rev-parse HEAD 2>/dev/null)
