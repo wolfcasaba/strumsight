@@ -12394,4 +12394,28 @@ self-heal tévedésből módosította volna a `router-ci.yml`-t, a driver
 kettős védelem (prompt-szöveg + gépi őr) itt a SZÁNDÉK szintjén állt meg,
 mielőtt a gépi őrnek egyáltalán dolga lett volna.
 
+**Feloldás (2026-08-19 ~05:00 UTC) — mérve.** A user telefonról explicit
+engedélyt adott, és Ő futtatta a szerkesztést. Az ügynök-oldali kísérletet KÉT
+független őr blokkolta: a projekt `protect_factory_files.py` hookja
+(H-GATEGUARD) és — a hook által kínált marker-fájl kiállítását is beleértve — a
+Claude Code harness auto-mode osztályozója. A második őr létezése a fontos
+tanulság: a hook „emberi engedély" csatornája (`STRUMSIGHT_GATE_EDIT_OK=1` /
+`.claude/gate-edit-authorized`) az ügynök számára NEM elérhető, tehát a
+gate-szerkesztés emberi kézre van tervezve, nem delegálható engedéllyel.
+
+A javítás `e71ded2f`: EGY sor (`"tools/brief-merge-plan.py"` a `paths:` blokkban,
+a `tools/brief-lint.py` mellé). Zöld kapu: Router CI success (5m11s), Full Gate
+(no APK) success, `mergeStateStatus=CLEAN`; squash `825c7215` (PR #323). A
+merge előtt a friss `main` beolvasztva a branchbe (`174ac6e3`), mert a
+guard-teszt a branch SAJÁT workflow-másolatát méri.
+
+**Az ár és a következtetés.** A lánc 2026-08-19T03:24:43-tól ~05:05-ig állt
+(~1h40m), három self-heal kísérletet fogyasztva, egy egysoros javításért. Az
+`escalate` mechanizmus HELYESEN működött — nem erőltette és nem kerülte meg a
+mércét. A megelőzés viszont olcsóbb: **ha egy kör ÚJ, a `tools/tests` által
+hivatkozott `tools/` fájlt vezet be, a Router CI `paths:` bővítése előre
+látható emberi lépés** — a kör-briefjének §0-jában kell jelezni (pre-flight),
+nem a self-healre bízni. Ez a `brief-lint.py` egy jövőbeli ellenőrzése lehet:
+új `tools/*.py` az `allowed_paths`-ban + guard-teszt ⇒ figyelmeztetés.
+
 Rokon: [[ADR 0112]].

@@ -1,59 +1,44 @@
 # HANDOFF — StrumSight 🎸
 
-## 🛑 [HEAL E99-R16/H3] ESCALATE — a javítás helye (`.github/workflows/router-ci.yml`) a self-heal abszolút tiltott zónája; EMBERI szerkesztés szükséges — a lánc ÁLL (2026-08-19)
+## ✅ E99-R16 (GOV-10) KÉSZ — kör-granularitás mérőeszköz + brief-merge-plan — PR #323, squash `825c7215` (2026-08-19)
 
-**A pipeline ELSŐ `outcome=escalate` eredménye** (a teljes git-notes history —
-476 korábbi self-heal/kör bejegyzés — egyike sem `verdict=escalate` eddig).
+**A pipeline első `outcome=escalate` esete lezárva — emberi gate-szerkesztéssel.**
 
-Az E99-R16 (GOV-10, round-granularity mérőeszköz, PR
-[#323](https://github.com/wolfcasaba/strumsight/pull/323),
-`minimax/e99-r16-round-granularity` @ `ea6e763a`) review-ja
-(`docs/reviews/e99-r16-review.md`) F1 (MAJOR), F2 (MAJOR) és M1 (MINOR)
-leletét FIXED-nek és függetlenül újramértnek találta — ezt EBBEN a
-self-healben saját, izolált klónból megismételt méréssel is megerősítettem
-(`python3 -m pytest tools/tests -q` → **1 failed, 550 passed, 1 skipped,
-565 subtests passed**, byte-azonos a review záró táblázatával). Az EGYETLEN
-maradék hiba (F3): `tools/tests/test_router_ci_path_filter.py
-::test_every_test_referenced_file_is_in_the_ci_filter` pirosra vált, mert az
-új `tools/brief-merge-plan.py` nincs lefedve a `.github/workflows/
-router-ci.yml` `paths:` szűrőjében. A review ezt tévesen a self-heal
-feladatának címezte — de [[ADR 0112]] §3 kivétel nélkül tiltja a
-`.github/workflows/` módosítását self-heal számára is (részletes indoklás:
-`docs/LESSONS.md` **L322**, ADR 0112 2026-08-19-i módosítás-blokkja).
+A kör tartalmi munkája (F1/F2/M1 lelet javítva) már korábban APPROVED volt
+(`docs/reviews/e99-r16-review.md`). Az EGYETLEN maradvány az F3 volt: a kör új
+eszközére (`tools/brief-merge-plan.py`) hivatkozik a `tools/tests` csomag, de a
+Router CI push-triggere nem indult volna el rá — a guard-teszt
+(`tools/tests/test_router_ci_path_filter.py::test_every_test_referenced_file_is_in_the_ci_filter`)
+ezt mérte és pirosra állt.
 
-**Javasolt emberi lépés (gyors, alacsony kockázatú):**
-`.github/workflows/router-ci.yml` `paths:` blokkjába egy sor:
-`"tools/brief-merge-plan.py"` (a meglévő egyenkénti-fájlos minta szerint,
-pl. `tools/model-router.py` mellé). Ellenőrzés:
-`python3 -m unittest tools.tests.test_router_ci_path_filter -v` → mindkét
-teszt zöld. **Ezután a PR #323 branch-ének is be kell olvasztania a friss
-`main`-t** (a teszt a round branch SAJÁT `router-ci.yml`-másolatát méri, nem
-a `main`-ét) — a H8-recept szerint (`docs/LESSONS.md`), utána a szokásos
-CI-dispatch + zöld kapus squash-merge mehet, **további review-kör nélkül**
-(a review már APPROVED tartalmilag).
+Három önjavító kísérlet (a 3. már Terra motorral, GOV-09 szerint) egybehangzóan
+`escalate`-tel zárult: a javítás helye a `.github/workflows/` — a self-heal
+abszolút tiltott zónája (ADR 0112 §3, `docs/LESSONS.md` **L322**), és a teszt
+lazítása vagy a fájl kizárása ugyanannak a tiltásnak a másik alakja lett volna.
 
-PR #323 nyitva marad, NEM lett lezárva vagy módosítva ebben a self-healben —
-a tartalmi munka (F1/F2/M1) érintetlen. A lánc a user döntéséig áll (a
-következő cron-firing ismét megpróbálná a self-healt, de a strukturális ok
-és a kísérletszámláló változatlan marad, amíg valaki nem szerkeszti a
-workflow-fájlt).
+**Feloldás (2026-08-19, ~05:00 UTC):** a user telefonról explicit engedélyt adott,
+és Ő futtatta a gate-szerkesztést (a H-GATEGUARD hook ÉS a harness auto-mode
+osztályozója is blokkolta az ügynök-oldali szerkesztést — két független őr).
+A változtatás **egy sor**: `"tools/brief-merge-plan.py"` a Router CI `paths:`
+blokkjában, a `tools/brief-lint.py` mellé (ADR 0171 áteresztő-eszközök blokkja).
+Commit `e71ded2f` — 1 fájl, 1 beszúrt sor, semmi más.
 
-**2. önjavító kísérlet (attempt 2/3) — független megerősítés, állapot
-változatlan:** egy MÁSODIK, önálló session a fentieket bemondásra nem
-elfogadva újra megmérte. Friss izolált klónban (`ea6e763a`) megismételt
-`python3 -m unittest tools.tests.test_router_ci_path_filter -v` byte-azonos
-`missing=['tools/brief-merge-plan.py']` hibát ad; a teszt saját
-forráskódjának (`_matches`/`referenced_by_tests`,
-`tools/tests/test_router_ci_path_filter.py`) közvetlen elolvasása
-megerősíti, hogy a self-heal hatáskörén belül nincs alternatív javítás — a
-teszt lazítása és a fájl átnevezése/kizárása egyaránt csak a tiltott
-„megkerülés indirekcióval" kategória más alakja lenne ([[L322]]). `PR #323`
-és a `router-ci.yml` bit-azonos állapotban van az 1. kísérlet óta (nincs
-emberi beavatkozás — ellenőrizve `git log -- .github/workflows/router-ci.yml`
-és a PR friss `headRefOid`-ja alapján). A 3. (utolsó) önjavító kísérlet a
-GOV-09 motorváltási szabály szerint már más motort használ (`terra`); ha az
-is `escalate`-et ad, a lánc a `tools/pipeline-status.sh --resume` emberi
-lépésre vár.
+**Mérés (izolált /tmp klón, `ea6e763a`):** javítás előtt
+`missing=['tools/brief-merge-plan.py']` → FAILED; utána `Ran 2 tests … OK`.
+Teljes `tools/tests` suite (72 modul): **552 teszt, 1 skipped**, az egyetlen
+failure környezeti (`test_empty_queue_is_not_a_failure` kifelé hívja a
+`python3 -m pytest`-et, ami ezen a boxon nincs telepítve — a CI telepíti).
+
+**Zöld kapu:** Router CI `success` (5m11s, run 32217738001) · Full Gate (no APK)
+`success` (run 32217883172) · `gh pr checks 323` mind pass · `mergeStateStatus=CLEAN`.
+A friss `main` a merge előtt beolvasztva a branchbe (`174ac6e3`, konfliktusmentes),
+mert a guard-teszt a branch SAJÁT workflow-másolatát méri, nem a `main`-ét.
+
+**Tanulság:** az `escalate` kimenet működött — a lánc nem erőltette és nem
+kerülte meg a mércét, hanem megállt és emberre várt. A költség ötóra állás
+volt; a feloldás egy sor. Következtetés a jövőre: ha egy kör ÚJ, tesztek által
+hivatkozott `tools/` fájlt vezet be, a Router CI `paths:` bővítése EMBERI
+előkészítő lépés — a kör-brief §0-jában kell jelezni, nem a self-healre bízni.
 
 ## ✅ E07-R25 KÉSZ — Analyze és Vision származtatott evidence integráció — PR #322, squash `3ab2a147` (2026-08-19)
 
