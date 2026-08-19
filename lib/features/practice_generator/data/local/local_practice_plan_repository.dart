@@ -829,28 +829,46 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     keyValueStore.writeString(manifestKey, jsonEncode(_writtenKeys));
   }
 
+  /// Parses the `<L:planId>` length-prefixed segment from an archive key.
+  ///
+  /// The archive key shape is
+  ///   `<namespace>.archive.<L:planId>.revisions[.index|<L:revisionId>]`
+  ///   `<namespace>.archive.<L:planId>.outcomes[.index|<L:outcomeId>]`
+  /// where `<L:planId>` is `<utf16-length>:value` (e.g. `7:plan.A`).
+  ///
+  /// The `PlanId` value itself can contain dots, so a plain
+  /// `tail.split('.')` cannot disambiguate the segments reliably — the
+  /// length prefix is the ONLY safe separator. The previous parser
+  /// silently returned `null` for any `planId` containing a dot, which
+  /// made `knownPlanIdsSync()` miss archive-only plans whose id has a
+  /// dot (F1 fix measured regression).
   PlanId? _planIdFromArchiveIndexKey(String key) {
-    const revisionsPrefix = 'archive.';
-    const outcomesPrefix = 'archive.';
+    const archivePrefix = 'archive.';
     if (!key.startsWith('$_namespace.')) return null;
     final tail = key.substring('$_namespace.'.length);
-    if (!tail.startsWith(revisionsPrefix) && !tail.startsWith(outcomesPrefix)) {
-      return null;
-    }
-    final segments = tail.split('.');
-    if (segments.length < 3) return null;
-    // ['archive', '<length:planId>', 'revisions'|'outcomes', 'index']
-    if (segments[2] != 'revisions' && segments[2] != 'outcomes') return null;
-    final lengthEncoded = segments[1];
-    final colon = lengthEncoded.indexOf(':');
-    if (colon <= 0) return null;
-    final lengthStr = lengthEncoded.substring(0, colon);
-    final length = int.tryParse(lengthStr);
+    if (!tail.startsWith(archivePrefix)) return null;
+    final body = tail.substring(archivePrefix.length);
+
+    // Parse the leading `<L>` of the length-prefixed planId.
+    final colonIdx = body.indexOf(':');
+    if (colonIdx <= 0) return null;
+    final length = int.tryParse(body.substring(0, colonIdx));
     if (length == null || length < 0) return null;
-    final value = lengthEncoded.substring(colon + 1);
-    if (value.length != length) return null;
-    if (segments[3] != 'index') return null;
-    return PlanId(value);
+
+    // The planId value occupies exactly `length` chars after the colon.
+    final valueStart = colonIdx + 1;
+    if (valueStart + length > body.length) return null;
+    final value = body.substring(valueStart, valueStart + length);
+    final remainder = body.substring(valueStart + length);
+
+    // Suffix check — the only valid tails after a length-prefixed planId.
+    if (remainder == '.revisions.index' ||
+        remainder == '.outcomes.index' ||
+        remainder.startsWith('.revisions.') ||
+        remainder.startsWith('.outcomes.')) {
+      return PlanId(value);
+    }
+    return null;
   }
 
   String? _draftKeyFromDraftStorageKey(String key) {
