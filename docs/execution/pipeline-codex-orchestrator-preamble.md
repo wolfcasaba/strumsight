@@ -94,6 +94,32 @@ Doksi-elsőbbség ütközéskor: `AGENTS.md` → `docs/sdd/00-index.md` →
   csak utána zárod a választ szöveggel. Egy „még fut, majd figyelem" mondat
   jelzésfájl nélkül PONTOSAN a H-NOSIGNAL halt, függetlenül attól, hogy a
   státusz igaz volt-e.
+- **A fenti szabályt is HELYESEN követve is elakadhatsz —**
+  egy alparancs sikeres lezárása attól még nem azonos a kör lezárásával,
+  **tehát a turnod ETTŐL SEM érhet véget szöveggel.** Mérve (E07-R29,
+  H-NOSIGNAL önjavítás, 2026-08-19, session
+  `01a01ab2-9b80-7780-84f7-f21daf3759af`,
+  `~/.codex-terra/sessions/2026/08/19/rollout-2026-08-19T15-45-07-*.jsonl`):
+  a végső, független újra-ellenőrzés friss klónban futtatott
+  `tools/round-gate.sh`-hívása 16:56:47Z-kor VALÓDI, teljes, sikeres
+  eredménnyel zárt (`exit_code 0`, a gate saját „MINDEN GATE ZÖLD"
+  összegzése mind a 14 lépésre) — ez NEM az előző két bullet mintája: nem
+  yield, nem csonka poll, a parancs ténylegesen befejeződött. A turn mégis
+  16:56:53Z-kor, hat másodperccel később, egyetlen szöveges összegzéssel
+  ért véget: „A kör még folyamatban van: a végső, független kör-gate
+  14/14 zöld,
+  de a kötelező CI-dispatch, exact-SHA ellenőrzés és merge még hátravan." —
+  a modell PONTOSAN tudta, hogy a lenti §3 szerinti kötelező hátralévő
+  lépések (push, CI-dispatch, exact-SHA ellenőrzés, merge, kör-jelzés)
+  nincsenek kész, mégsem hívott egyetlen további tool-t sem, és
+  `outcome=halted`-et sem írt. **A szabály:**
+  egy alparancs sikeres lezárása attól még nem azonos a kör lezárásával
+  **— a §3 teljes listája dönt, nem az utolsó hívás kimenetele.** Ha a §3
+  szerinti bármelyik lépés hátravan, a válaszod KÖVETKEZŐ eleme egy újabb
+  tool-hívás legyen (push/`gh workflow run`/`tools/wait-for-ci.sh`/merge),
+  SOSE egy „még hátravan" mondat — vagy, ha valóban meg kell szakítanod,
+  előbb írd ki a §4 szerinti `outcome=halted` jelzést, és csak utána zárod
+  a választ szöveggel.
 - **Nincs `run_in_background` / háttér-task fogalmad**, és nem is kell: a
   hosszú hívásokat előtérben futtatod.
 - **Te magad, mint orchestrátor, NE válts vissza Claude-ra.** Kvóta-fallback

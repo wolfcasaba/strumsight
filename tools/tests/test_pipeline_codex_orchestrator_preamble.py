@@ -98,5 +98,51 @@ class CodexOrchestratorPreambleNoStatusOnlyTurnEndTest(unittest.TestCase):
         self.assertIn("még tart; merge még nem történt", self.text)
 
 
+class CodexOrchestratorPreambleNoStopAfterSuccessfulSubtaskTest(unittest.TestCase):
+    """A successful, terminal sub-command result (e.g. the round-gate's own
+    summary) is not the same as the round being done -- the preamble must
+    forbid ending the turn on status text even when the last tool call
+    itself genuinely succeeded.
+
+    Measured 2026-08-19 (E07-R29, H-NOSIGNAL self-heal, orchestrator session
+    `01a01ab2-9b80-7780-84f7-f21daf3759af`,
+    `~/.codex-terra/sessions/2026/08/19/rollout-2026-08-19T15-45-07-*.jsonl`):
+    the final independent re-verification's `tools/round-gate.sh` call, run
+    in a fresh clone, finished at 16:56:47Z with a genuine, terminal,
+    successful result (exit code 0, the gate's own "MINDEN GATE ZOLD"
+    summary across all 14 steps). Unlike L282/L290, this was not a yield and
+    not a non-terminal poll -- the command actually completed. The turn
+    still ended six seconds later, at 16:56:53Z, on a single text summary
+    ("... 14/14 zold, de a kotelezo CI-dispatch, exact-SHA ellenorzes es
+    merge meg hatravan.") with no further tool call and no round-signal
+    file -- the model correctly stated that mandatory work remained, and
+    stopped anyway. The existing preamble rules cover restarting a yielded
+    command (L282) and ending a turn on a non-terminal poll (L290), but
+    neither says a successful SUB-task result cannot itself be mistaken for
+    the round being finished.
+    """
+
+    def setUp(self) -> None:
+        self.text = PREAMBLE.read_text(encoding="utf-8")
+
+    def test_the_preamble_forbids_treating_a_successful_subtask_as_round_done(self) -> None:
+        self.assertIn(
+            "egy alparancs sikeres lezárása attól még nem azonos a kör lezárásával",
+            self.text,
+        )
+
+    def test_the_preamble_cites_the_measured_e07_r29_incident(self) -> None:
+        self.assertIn("E07-R29", self.text)
+        self.assertIn("01a01ab2-9b80-7780-84f7-f21daf3759af", self.text)
+
+    def test_the_preamble_names_the_specific_still_pending_status_message(self) -> None:
+        """Must name the literal failure shape (a truthful status message
+        following a genuinely successful gate run) so it's recognizable."""
+        self.assertIn(
+            "kötelező CI-dispatch, exact-SHA ellenőrzés és merge még hátravan",
+            self.text,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
