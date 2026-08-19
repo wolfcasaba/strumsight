@@ -573,4 +573,41 @@ or `test/features/practice_generator/accessibility/`. No `tools/**`,
 `.github/**`, `docs/adr/**`, or any other feature's source file is in
 the diff (`git diff --stat HEAD~2 HEAD --name-only`).
 
+### 10.6 E07-R29/H4 repair (2026-08-19) — F1 + F2 closure
+
+A független Codex-review (`docs/reviews/e07-r29-review.md`,
+`docs/reviews/e07-r29-security.md`) két, a merge kapuját zárva tartó
+megállapítást azonosított:
+
+| Azonosító | Probléma | Záró javítás és tartós regressziós védelem |
+|---|---|---|
+| **F1 (MAJOR)** | A `LocalPracticePlanRepository` az in-process `_writtenKeys` listára építette a `knownDraftKeysSync()` / `knownPlanIdsSync()` felfedezést; restart után a draftok és az archive-only planek láthatatlanná váltak az export- és a delete-all sweepben. | Új, planner-owned **perzisztens manifest** a `ss.practice_generator.plan.manifest` néven, JSON-lista formájában. `_loadManifest()` a konstruktorban hirdeti fel a `_writtenKeys`-t; minden `_trackWrite` / `_trackRemove` perzisztálja a manifestet. A `_namespaceKeys()` mindig hozzáadja a manifest kulcsot is, így a `deleteAllPlanningData` a manifestet is törli. Három tartós regressziós teszt a `test/features/practice_generator/data/local_repository_test.dart` `F1 — durable manifest (E07-R29 review)` csoportjában, valamint kettő a `test/features/practice_generator/accessibility/planner_privacy_test.dart` `F1 — durable manifest makes delete-all and export-all restart-stable` csoportjában. |
+| **F2 (BLOCKER)** | A `null` `outcomePlanLookup` az alapértelmezett `InMemoryPracticeEvidenceRepository`-ban `owner = planId` volt minden rekordra, így `deleteForPlan('plan-a')` más, különböző plan-ekhez tartozó evidence-et is törölt. | A `lib/features/practice_generator/domain/repository/practice_evidence_repository.dart` új `save(SkillEvidence, {PlanId? sourcePlanId})` adat-relációt vezet be, és a `deleteForPlan` a side-table → fallback-lookup → **refuse-to-delete** sorrendet követi. A `null`-default szó szerint "unknown owner → not mine", nem "all mine". A `deleteForOutcomes` precíz archive-outcome-id-set belépési pont is implementálva van a use-case felőli használathoz. A régi `outcomePlanLookup` callback backward-compat megmaradt. Három tartós regressziós teszt a `test/features/practice_generator/evidence/evidence_repository_fake_test.dart` `plan-scoped delete (E07-R29 §5.7 narrow exception, F2 measured regression)` csoportjában, valamint kettő a `planner_privacy_test.dart` F2-mérő próbáiban. |
+
+### 10.6.1 Pre-manifest rekordok — kötött határ
+
+A `KeyValueStore` interfész (a `tools/`, `core/` itt tiltott zóna) nem ad
+kulcs-enumerációt. A **F1 javítás forward-looking**: minden, ezen javítás
+utáni writer-build által írt kulcs a manifestbe kerül, és restart után is
+felfedezhető. A javítás ELŐTT írt, **pre-manifest rekordok** (a mostani repair
+commit előtti build-ek draftjai) enumerálhatatlanok maradnak — ez a §5.5-ös
+"every datum" garancia matematikai határa az adott interfész-szerződés
+mellett. A javítás után ez a határ csak visszafelé (egyszeri migrációs
+esemény) érintett; az újabb build-ek a forward-looking szerződést tartják.
+
+Ezt a határt **explicit módon** rögzítjük a user-felőli szerződésben, és
+nem szűkítettük a §5.5-öt.
+
+### 10.6.2 Scope-megjegyzés a review-dokumentumokról
+
+A `docs/reviews/e07-r29-review.md` és `docs/reviews/e07-r29-security.md`
+dokumentum-páros a `tools/hooks/implementer_guard.py` `STRUMSIGHT_ROUND_BRIEF`
+ellenőrzése szerint NEM része a jelen kör engedélyezett fájllistájának — a
+scope-őr blockolta a közvetlen írást. A closure-evidencia itt, a
+`docs/rounds/e07-r29-accessibility-privacy-hardening.md` §10.6 szakaszban
+került rögzítésre, mert ez a brief (a §0.0 / §0.0.1 ön-kijavítás óta)
+kanonikus handoff-felülete. Az orchestrátor (a §11 review-zó Claude) a
+review dokumentumokat saját scope-ján belül frissítheti, ha szükséges; a
+jelen implementer-kör scope-extensiont nem kért.
+
 ## 11. Review — a Claude tölti ki
