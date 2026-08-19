@@ -144,15 +144,24 @@ class CiPlanTest(unittest.TestCase):
     def test_router_ci_expectation_comes_from_the_real_workflow(self) -> None:
         text = (ROOT / ".github" / "workflows" / "router-ci.yml").read_text(encoding="utf-8")
         paths = ci_plan.router_ci_trigger_paths(text)
-        self.assertIn("docs/rounds/**", paths)
-        self.assertIn("tools/tests/**", paths)
-        self.assertTrue(
-            ci_plan.plan(
-                native_gate=False,
-                changed_files=("docs/rounds/e09-r01.md",),
-                router_ci_paths=paths,
-            )["router_ci_expected"]
-        )
+        self.assertTrue(paths, "a router-ci.yml paths: blokkja nem elemezhető")
+
+        # LEFEDETTSÉGET mérünk, nem minta-SZÖVEGET (2026-08-19). A korábbi
+        # assertIn("tools/tests/**", paths) a felsorolás ALAKJÁHOZ kötötte a
+        # tesztet: amikor a fájlonkénti lista családi globra cserélődött
+        # (tools/**), pirosra váltott, holott a lefedettség NŐTT (127 -> 143
+        # fájl, docs/LESSONS.md L322). A minta szövege nem viselkedés — a
+        # viselkedés az, hogy egy ilyen fájl elindítja-e a Router CI-t.
+        for covered in ("tools/tests/test_pipeline_throughput.py", "docs/rounds/e09-r01.md"):
+            with self.subTest(path=covered):
+                self.assertTrue(
+                    ci_plan.plan(
+                        native_gate=False,
+                        changed_files=(covered,),
+                        router_ci_paths=paths,
+                    )["router_ci_expected"],
+                    f"{covered} nem indítja el a Router CI-t",
+                )
         self.assertFalse(
             ci_plan.plan(
                 native_gate=False,

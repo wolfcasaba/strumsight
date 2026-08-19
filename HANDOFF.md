@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## 🛑 E99-R17 (GOV-11) MEGÁLLT — `H-GATEGUARD`, EMBERI DÖNTÉS KELL (2026-08-19 05:31 óta)
+
+A kör D2-je a `tool/ci/check_l10n_parity.dart` gate-ellenőrzőt bővítené
+`--check` móddal; a `protect_factory_files` hook a `tool/ci/*` glob miatt
+blokkolta. **A self-heal helyesen NEM próbálta megkerülni** — a H-GATEGUARD az
+egyetlen halt, amit ADR 0112 sosem javít automatikusan. A D1 rész tisztán,
+scope-auditálva fel van tolva: `eb915931` a
+`minimax/e99-r17-gov-11-l10n-parallel-safety` ágon.
+
+**Gyökér-ok: TERVEZÉSI hiba a briefben.** Az `allowed_paths` listára felkerült
+egy olyan fájl (`tool/ci/check_l10n_parity.dart`), amit az őr véd — pontosan az
+a hibaosztály, amit a „az engedélyezett-fájllista a tervezőt is köti" tanulság
+tilt. Brief-írás közben a `PROTECTED_GLOBS` listát is ellenőrizni kell, nem csak
+a teszt-fát.
+
+**Emberi döntés kell — három út:** (1) `.claude/gate-edit-authorized` marker erre
+az egy körre, utána törölve (a valódi kapu így is marad: review + CI + merge);
+(2) brief-revízió, ami kiviszi a frissesség-ellenőrzést a gate-ből — de ez a D2
+célját rontja el; (3) az E99-R17 `hold`-ra, a lánc megy az R18-ra. Az ajánlás
+az (1).
+
+**2. előfordulás (2026-08-19 09:56, H3, self-heal 1/3) — a marker NEM oldotta
+fel, mert egy HARMADIK, a markert nem ismerő őr is véd.** A user 09:53:18-kor
+létrehozta a `.claude/gate-edit-authorized` markert (indoklás: „E99-R17
+GOV-11 D2 … EGY körre") és feloldotta a láncot — ez az (1) ajánlott út volt.
+A kör 09:55:05-kor újraindult (implementer: minimax), és 09:56:36-kor **szó
+szerint ugyanazzal a gyökérokkal állt meg újra**
+(`.codex-round-status`: „…az implementer_guard (a
+`.claude/gate-edit-authorized` marker SEM engedélyezett) kettős védelme
+blokkolja"). Mérve (self-heal): a markernek a repóban EGYETLEN fogyasztója
+van, a `protect_factory_files.py` — ez csak CLAUDE-oldali
+(orchesztrátor/self-heal) sessionre fut. A kört ténylegesen implementáló
+minimax-session a `tools/hooks/implementer_guard.py` (ADR 0309) alatt fut,
+aminek a markerről fogalma sincs, és feltétel nélkül blokkol. Ráadásul
+[[L322]] szerint egy autonóm CLAUDE-oldali session SEM tudja ténylegesen
+felhasználni a markert (a Claude Code harness saját auto-mode osztályozója
+azt is blokkolja) — tehát **a marker+resume kombináció ezen a boxon
+strukturálisan sosem old fel egy H-GATEGUARD haltot**, akárhányszor próbálják.
+Mérés részletei: `docs/LESSONS.md` [[L323]].
+
+**Ami tényleg működik (E99-R16 precedens, `e71ded2f`):** a user SZEMÉLYESEN
+szerkeszti meg és pusholja a `tool/ci/check_l10n_parity.dart`-ot a
+`minimax/e99-r17-gov-11-l10n-parallel-safety` ágra — jelenleg `eb915931`-en
+áll, **2 commit-tal `origin/main` (`acdb5428`) mögött**, tehát a szerkesztés
+előtt/után egy upstream-merge is kell —, utána
+`tools/pipeline-status.sh --resume`: az implementer onnan a D3/D4-gyel
+(tuner-migráció, `round-slots.py` `GENERATED_PATHS`) normálisan folytathatja,
+mert azok NEM védett útvonalak. Alternatíva változatlanul: (2) brief-revízió;
+(3) `hold`.
+
+## ✅ Router CI paths-szűrő: családi glob — PR #324, squash `a2d64831` (2026-08-19)
+
+Az E99-R16 escalate HIBAOSZTÁLYÁNAK megszüntetése (nem a tünetéé): a `paths:`
+blokk 36 fájlonkénti bejegyzése helyett `tools/**` + `docs/execution/**`.
+Mérve: lefedettség **127 → 143 fájl (+16)**, elveszett lefedettség **nincs** —
+szigorúan bővítő változás, az őr védelme érintetlen. A teljes `tools/tests`
+suite elkapott egy minta-SZÖVEGHEZ kötött tesztet
+(`test_pipeline_throughput.py`); a javítás lefedettség-alapú állítás lett,
+mutációval igazolva, hogy szigorúbb (`tools/**` eltávolítására PIROS).
+Zöld kapu: Router CI + Full Gate (no APK) success. Részletek: `docs/LESSONS.md`
+**L322** záró blokkja. Mindkét gate-szerkesztést EMBER futtatta — az őr
+módosítása szándékosan ELMARADT.
+
 ## ✅ E99-R16 (GOV-10) KÉSZ — kör-granularitás mérőeszköz + brief-merge-plan — PR #323, squash `825c7215` (2026-08-19)
 
 **A pipeline első `outcome=escalate` esete lezárva — emberi gate-szerkesztéssel.**

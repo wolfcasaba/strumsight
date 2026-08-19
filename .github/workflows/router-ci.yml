@@ -14,71 +14,26 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "tools/ai_router/**"
-      - "tools/model-router.py"
-      - "tools/minimax-quota.py"
-      - "tools/openspace-vm-wrapper.py"
-      - "tools/tests/**"
-      - "tools/round-gate.sh"
-      - "tools/round-pipeline.sh"
-      - "tools/pipeline-status.sh"
-      # ADR 0171 áteresztő-képesség eszközei: a CI-terv, a brief-lint, a
-      # slot-tervező és az időmérleg maga is a mérce része (a CI-terv dönti
-      # el, melyik workflow a kapu), ezért ugyanez a sáv méri őket.
-      - "tools/round-ci-plan.py"
-      - "tools/brief-lint.py"
-      - "tools/brief-merge-plan.py"
-      - "tools/round-slots.py"
-      - "tools/round-metrics.py"
-      - "tools/round-merge-lock.sh"
-      - ".github/workflows/full-gate.yml"
+      # Családi glob, NEM fájlonkénti felsorolás (2026-08-19). MÉRT ok: a
+      # fájlonkénti lista karbantartási adósság — minden új, teszt által
+      # hivatkozott tools/ fájl kimarad belőle, a guard-teszt
+      # (tools/tests/test_router_ci_path_filter.py) pirosra vált, és a javítás
+      # helye ÉPPEN EZ A FÁJL, ami a self-heal abszolút tiltott zónája
+      # (ADR 0112 §3). Ez állította meg a láncot az E99-R16/H3-ban, a pipeline
+      # ELSŐ escalate-jével (docs/LESSONS.md L322): 3 önjavító kísérlet,
+      # ~1h40m állás, egyetlen hiányzó sorért.
+      #
+      # A glob a HIBAOSZTÁLYT szünteti meg, nem a tünetet. Mérve 2026-08-19:
+      # a lefedett verziókövetett fájlok száma 127 -> 143 (+16), és EGYETLEN
+      # korábban lefedett fájl sem esik ki — a változás szigorúan B�VÍTŐ,
+      # tehát nem gyengíti a mércét. A korábbi fájlonkénti lista indoklásai
+      # (PR #298 rés, ADR 0171, ADR 0309, ADR 0312) a git blame-ben maradnak.
+      - "tools/**"
+      - "docs/execution/**"
+      - "docs/rounds/**"
       - ".ai/**"
       - ".github/workflows/router-ci.yml"
-      # A tools/tests a kör-briefek és a pipeline-sor metaadatait IS méri
-      # (test_epic3_brief_metadata.py, test_pipeline_integration.py), ezért egy
-      # docs-only kör is pirosra állíthatja a suite-ot anélkül, hogy ez a
-      # workflow lefutna. Mérve 2026-08-02: az E03-R03 briefjének `allowed_paths`
-      # drift-je a merge után négy körön át észrevétlen maradt.
-      - "docs/rounds/**"
-      - "docs/execution/pipeline-queue.tsv"
-      - "docs/execution/pipeline-orchestrator-prompt.md"
-      - "docs/execution/pipeline-selfheal-prompt.md"
-      - "docs/execution/pipeline-codex-orchestrator-preamble.md"
-      # --- Implementer-burkolók és motor-konfiguráció (2026-08-18) ----------
-      # MÉRT rés: ez a 17 útvonal mind olyan fájl, amire a `tools/tests`
-      # csomag HIVATKOZIK (tehát van rá guard-teszt), de a szűrőben nem
-      # szerepelt — így egy őket módosító PR-en a Router CI EL SEM INDULT.
-      # Konkrét eset: a PR #298 a `tools/mm-round.sh` engedélyezett
-      # eszközlistáját és az `engine-registry.tsv` időkorlátját írta át, és
-      # nulla CI futott rá. A listát a
-      # `tools/tests/test_router_ci_path_filter.py` őrzi, hogy ne rothadjon
-      # vissza; újraméréshez futtasd azt a tesztet.
-      - "tools/mm-round.sh"
-      - "tools/codex-round.sh"
-      - "tools/codex-signal.sh"
-      - "tools/ai-router-round.sh"
-      - "tools/engine-profile.sh"
-      - "tools/scope-audit.py"
-      # --- Implementer-őrök (ADR 0309) -------------------------------------
-      # A hook, a settings és az ügynök-definíció a kör-szerződés mérésének
-      # része; a `tools/tests/test_implementer_guard.py` hivatkozik rájuk.
-      - "tools/hooks/**"
-      - "tools/implementer-settings.json"
-      - "tools/implementer-agents.json"
-      # Tudás-RAG (ADR 0312): a darabolás, a frissesség-jelzés és a bekötés
-      # mind mért viselkedés, guard-teszttel — a szűrőnek indulnia kell rájuk.
-      - "tools/knowledge-rag.mjs"
-      - "tools/round-scope-audit.sh"
-      - "tools/safe-force-push.sh"
-      - "tools/fix-workspace-origin.sh"
-      - "tools/prepare-flutter-generated.sh"
-      - "tools/wait-for-ci.sh"
-      - "tools/wait-for-round.sh"
-      - "tools/wait-for-router.sh"
-      - "docs/execution/engine-registry.tsv"
-      - "docs/execution/implementer-preamble*.md"
-      - "docs/execution/02-codex-playbook.md"
-      - "docs/execution/06-requirements-traceability-matrix.md"
+      - ".github/workflows/full-gate.yml"
 
 permissions:
   contents: read

@@ -12418,4 +12418,95 @@ látható emberi lépés** — a kör-briefjének §0-jában kell jelezni (pre-f
 nem a self-healre bízni. Ez a `brief-lint.py` egy jövőbeli ellenőrzése lehet:
 új `tools/*.py` az `allowed_paths`-ban + guard-teszt ⇒ figyelmeztetés.
 
-Rokon: [[ADR 0112]].
+**Végleges megoldás (2026-08-19, PR #324, squash `a2d64831`) — a hibaosztály
+megszűnt.** Az L322 első felében leírt javítás (egy hiányzó `paths:` sor) a
+TÜNETET kezelte. A gyökér-ok a `router-ci.yml` szerkezete volt: 36 fájlonkénti
+bejegyzés sorolta fel a mért `tools/` és `docs/execution/` fájlokat, ezért
+MINDEN új, teszt által hivatkozott fájl ugyanezt a haltot termelte volna újra —
+és a javítás helye mindig a self-heal tiltott zónája.
+
+A csere: 36 egyedi bejegyzés helyett `tools/**` + `docs/execution/**`. Mérve a
+valódi guard-teszt predikátumaival: a lefedett verziókövetett fájlok száma
+**127 → 143 (+16)**, és EGYETLEN korábban lefedett fájl sem esik ki — a
+változás szigorúan bővítő, tehát nem gyengíti a mércét. A
+`tools/round-ci-plan.py` illesztője helyesen kezeli a `**`-ot
+(`tools/**` → `^tools/.*$`), 9/9 illesztési próbával igazolva.
+
+**A teljes suite egy csatolt tesztet fogott meg** — és ez a bejegyzés valódi
+tanulsága. A `test_pipeline_throughput.py` a Router CI elvárását
+`assertIn("tools/tests/**", paths)` alakban állította: minta-SZÖVEGHEZ kötötte
+magát, nem viselkedéshez. Ezért pirosra váltott attól a változástól, ami a
+lefedettséget NÖVELTE. A javítás lefedettség-alapú állítás lett (indít-e a
+`tools/tests/...` fájl Router CI-t), és mivel ez teszt-módosítás a saját
+változtatás ÚTJÁBAN — pontosan az a minta, amit az L282 és a
+`gateguard-sentinel-misses-test-relaxation` tanulság tilt —, mutációval
+igazolva, hogy az új állítás SZIGORÚBB: `tools/**` eltávolítására PIROS,
+`docs/rounds/**` eltávolítására PIROS, ép állapoton ZÖLD.
+
+**Hogyan alkalmazd.** (1) Ha egy gate-konfiguráció FELSOROLÁSSAL fedi le azt,
+amit egy guard-teszt CSALÁDKÉNT mér, az karbantartási adósság, ami előbb-utóbb
+haltot termel — cseréld családi globra, mert a glob bővítő, a felsorolás
+pedig rothad. (2) Teszt SOHA ne minta-szöveget állítson, ha a mért tulajdonság
+lefedettség: a szöveg-állítás egyszerre ad hamis riasztást (átnevezésre pirosít)
+és vakfoltot (törött illesztőre zöldet ad). (3) Ha egy változtatás útjában álló
+tesztet módosítasz, a bizonyítás nem opcionális: mutáld el a mért tulajdonságot,
+és mutasd meg, hogy az ÚJ állítás elbukik rá.
+
+Rokon: [[ADR 0112]], [[L282]].
+
+## L323 — A `.claude/gate-edit-authorized` marker megléte önmagában NEM oldja fel a H-GATEGUARD haltot: az implementer-guard egy HARMADIK, a markert egyáltalán nem ismerő őr (E99-R17, H3, 2026-08-19)
+
+**Mérés.** Az E99-R17 (GOV-11) D2 lépése a `tool/ci/check_l10n_parity.dart`
+gate-szkriptet bővítené `--check` móddal. Ez a fájl bizonyítottan a
+végrehajtható mérce része, nem egy túlvédett melléktermék:
+`tools/round-gate.sh:242-243` közvetlenül futtatja `l10n` gate-lépésként
+(`"$dart_bin" run tool/ci/check_l10n_parity.dart`) — a `protect_factory_files.py`
+`tool/ci/*` globja tehát jogosan véd, a hatókör NEM szűkíthető anélkül, hogy a
+mércét ne gyengítené. Az első halt (`H-GATEGUARD`, 05:31) emiatt helyesen
+állt meg emberi döntésért. A user 09:53:18-kor feloldotta a láncot ÉS
+létrehozta a `.claude/gate-edit-authorized` markert, pontos, dátumozott
+indoklással, kizárólag erre az egy fájlra/körre szűkítve — ez a HANDOFF által
+ajánlott (1) út volt. A lánc 09:55:05-kor újraindította a kört (implementer:
+minimax), és **09:56:36-kor — a marker létrehozása után 3 perc 18
+másodperccel, a kör-session indulása után 91 másodperccel — szó szerint
+ugyanaz a halt jött vissza**: `.codex-round-status` szerint „a
+protect_factory_files hook (tool/ci/* glob) ÉS az implementer_guard (a
+`.claude/gate-edit-authorized` marker SEM engedélyezett) kettős védelme
+blokkolja".
+
+**Gyökérok.** A markernek **egyetlen fogyasztója van a teljes repóban**
+(`grep -rln gate-edit-authorized tools/ .claude/` → kizárólag
+`protect_factory_files.py` és a saját tesztje) — ez a hook kizárólag a
+CLAUDE-oldali (orchesztrátor/self-heal) sessionökre fut. A kör tényleges
+munkáját végző IMPLEMENTER (minimax/codex, `tools/mm-round.sh`) egy MÁSIK,
+független hook alatt fut, a `tools/hooks/implementer_guard.py`-n (ADR 0309),
+aminek forráskódjában NULLA hivatkozás van `gate-edit-authorized`-ra vagy
+`GATE_EDIT_OK`-ra — a kör-szerződést védő glob-listája feltétel nélkül,
+escape nélkül blokkol. Ezzel egyidejűleg [[L322]] már mérte, hogy egy
+AUTONÓM CLAUDE-oldali (self-heal) session sem tudja ténylegesen felhasználni
+a markert: a Claude Code harness saját auto-mode osztályozója az ügynök-oldali
+szerkesztési kísérletet a markertől függetlenül is blokkolja. A
+gate-edit-authorized csatornának tehát **három, egymástól független őre van
+útban egyszerre** — protect_factory_files.py (csak Claude-oldalt véd, és csak
+markerrel ELVILEG enged), a harness auto-mode osztályozója (markerrel SEM
+enged agent-oldalt) és implementer_guard.py (a markert nem is ismeri) —, és
+**nincs olyan session-típus ezen a boxon, aminek a marker ténylegesen utat
+nyitna.**
+
+**Szabály.** A `.claude/gate-edit-authorized` marker létrehozása ÖNMAGÁBAN
+SOHA nem elég a lánc feloldásához: dokumentáció/indoklás, nem mechanizmus, ha
+nincs mögötte egy VALÓDI emberi kéz, ami maga futtatja az Edit/Write-ot (ahogy
+E99-R16-nál történt: a user személyesen írta meg és pusholta az egysoros
+javítást, `e71ded2f`, [[L322]]). Ha a human csak markert hoz létre és
+`--resume`-ol, a lánc **strukturálisan garantáltan** ugyanazzal a
+H-GATEGUARD-dal áll meg újra, akárhányszor próbálják — a self-heal ezt nem
+tudja és nem is szabad, hogy megkerülje (ADR 0112 §3, a mérce változatlan
+marad). Amit egy self-heal-session ilyenkor tehet: mérje meg és nevezze meg
+pontosan, MELYIK guard-réteg blokkol, hogy a human ne egy már kipróbált,
+hatástalan lépést ismételjen (marker + resume) egy harmadszor is, hanem vagy
+(a) személyesen szerkeszti + pusholja a védett fájlt a kör branchére, onnan a
+kör a nem védett hátralévő lépésekkel (itt: D3/D4) normálisan folytatható;
+vagy (b) brief-revízió, ami kiviszi az igényt a védett fájlból; vagy (c)
+`hold`.
+
+Rokon: [[L322]], [[ADR 0112]], [[ADR 0309]].

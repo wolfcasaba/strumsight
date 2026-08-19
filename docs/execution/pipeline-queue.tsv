@@ -319,12 +319,12 @@ E99-R16	docs/rounds/e99-r16-gov-10-round-granularity.md	minimax	nincs	done
 E99-R17	docs/rounds/e99-r17-gov-11-l10n-parallel-safety.md	minimax	nincs	pending
 E99-R18	docs/rounds/e99-r18-gov-12-generated-public-barrels.md	codex	nincs	pending
 E99-R19	docs/rounds/e99-r19-gov-13-chain-hygiene.md	codex	nincs	pending
-E99-R20	docs/rounds/e99-r20-gov-14-round-landing-automation.md	codex	0313	pending
+E99-R20	docs/rounds/e99-r20-gov-14-round-landing-automation.md	codex	0313	hold
 E07-R23	docs/rounds/e07-r23-plan-compiler-and-execution.md	codex	0268	done
 E07-R24	docs/rounds/e07-r24-song-goal-integration.md	codex	nincs	done
 E07-R25	docs/rounds/e07-r25-analysis-and-vision-evidence.md	codex	0319	done
-E99-R21	docs/rounds/e99-r21-gov-15-gate-step-taxonomy.md	codex	0314	pending
-E99-R22	docs/rounds/e99-r22-gov-16-halt-guard-ledger.md	minimax	0315	pending
+E99-R21	docs/rounds/e99-r21-gov-15-gate-step-taxonomy.md	codex	0314	hold
+E99-R22	docs/rounds/e99-r22-gov-16-halt-guard-ledger.md	minimax	0315	hold
 E07-R26	docs/rounds/e07-r26-outcome-ingestion-and-revision.md	codex	nincs	pending
 E07-R27	docs/rounds/e07-r27-missed-day-and-pause.md	codex	0269	pending
 E07-R28	docs/rounds/e07-r28-planner-assist-gateway.md	codex	0270	pending
@@ -369,7 +369,7 @@ E08-R25	docs/rounds/e08-r25-song-trainer-and-setlist-integration.md	codex	nincs	
 E08-R26	docs/rounds/e08-r26-cross-feature-gamification-integration.md	codex	nincs	pending
 E08-R27	docs/rounds/e08-r27-gamification-accessibility-and-settings.md	minimax	0318	pending
 E08-R28	docs/rounds/e08-r28-ledger-sync-contract-and-merge.md	codex	0319	pending
-E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	codex	0320	pending
+E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	codex	0320	hold
 E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	minimax	nincs	pending
 #
 # ===== 2. FEJLESZTÉSI SÁV — Chapter 14 (Recognition Recovery) =====
