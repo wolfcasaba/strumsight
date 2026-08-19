@@ -987,6 +987,23 @@ class PipelineIntegrationTest(unittest.TestCase):
                 # továbbfut a kör-indítási ágra, ahol a VALÓDI queue-t olvassa
                 # — tiszta `main`-ről futtatva éles sessiont indított.
                 PIPELINE_NO_LAUNCH="1",
+                # MÉRVE 2026-08-19 (pytest a boxon, tiszta `main`): a
+                # `PIPELINE_NO_LAUNCH` csak a SESSIONT hagyja el, a kör-ág
+                # kiválasztását nem — a driver lefut a dispatchig, a session
+                # jelzés nélkül "ér véget", és `handle_round_halt` ÚJ HALTED-et
+                # ír. Az alábbi `assertFalse(HALTED)` cella így nem a stale halt
+                # archiválását mérte, hanem azt, hogy a firing a dispatch ELŐTT
+                # elhal (CI-ban: a checkout nem `main`-en van → teszt-módú
+                # `die`) — környezetfüggő zöld, nem mérés. Izolált, kizárólag
+                # 'done' sorokból álló sorral a mért viselkedés (stale halt
+                # archiválva, önjavítás nem indul) változatlan, a zaj eltűnik.
+                PIPELINE_QUEUE_FILE=str(state / "empty-queue.tsv"),
+            )
+
+            (state / "empty-queue.tsv").write_text(
+                "# minden sor 'done' — ennek a firingnek nincs mit dispatchelnie\n"
+                "E03-R08\tdocs/rounds/e03-r08-persistent-v2-migration.md\tcodex\tnincs\tdone\n",
+                encoding="utf-8",
             )
 
             result = self.run_command(["bash", str(script)], env=env)
