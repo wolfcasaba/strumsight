@@ -38,6 +38,23 @@ következő cron-firing ismét megpróbálná a self-healt, de a strukturális o
 és a kísérletszámláló változatlan marad, amíg valaki nem szerkeszti a
 workflow-fájlt).
 
+**2. önjavító kísérlet (attempt 2/3) — független megerősítés, állapot
+változatlan:** egy MÁSODIK, önálló session a fentieket bemondásra nem
+elfogadva újra megmérte. Friss izolált klónban (`ea6e763a`) megismételt
+`python3 -m unittest tools.tests.test_router_ci_path_filter -v` byte-azonos
+`missing=['tools/brief-merge-plan.py']` hibát ad; a teszt saját
+forráskódjának (`_matches`/`referenced_by_tests`,
+`tools/tests/test_router_ci_path_filter.py`) közvetlen elolvasása
+megerősíti, hogy a self-heal hatáskörén belül nincs alternatív javítás — a
+teszt lazítása és a fájl átnevezése/kizárása egyaránt csak a tiltott
+„megkerülés indirekcióval" kategória más alakja lenne ([[L322]]). `PR #323`
+és a `router-ci.yml` bit-azonos állapotban van az 1. kísérlet óta (nincs
+emberi beavatkozás — ellenőrizve `git log -- .github/workflows/router-ci.yml`
+és a PR friss `headRefOid`-ja alapján). A 3. (utolsó) önjavító kísérlet a
+GOV-09 motorváltási szabály szerint már más motort használ (`terra`); ha az
+is `escalate`-et ad, a lánc a `tools/pipeline-status.sh --resume` emberi
+lépésre vár.
+
 ## ✅ E07-R25 KÉSZ — Analyze és Vision származtatott evidence integráció — PR #322, squash `3ab2a147` (2026-08-19)
 
 Az Analyze és a Vision csak származtatott, confidence-aware evidence-et adhat
