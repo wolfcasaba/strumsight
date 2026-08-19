@@ -295,4 +295,58 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### E07-R26 implementer handoff (Codex, 2026-08-19)
+
+**Módosított fájlok.**
+
+- `application/service/outcome_ingestion_service.dart`: hívó-táplált
+  revision-validáció, outcome-ID deduplikáció és `SpacedRepetitionPolicy`
+  alapú review-item frissítés; technikai hiba nem adaptálható.
+- `application/usecase/record_practice_outcome.dart`: a service és az
+  `AdaptationDecider` repository-írás nélküli összefűzése.
+- `application/usecase/revise_practice_plan.dart`: immutable múlt- és
+  future-only cél-ellenőrzés, auditálható proposal, valamint a meglévő
+  `PlanRevision(previous:)` monotonitás-védelem használata.
+- `presentation/screens/plan_change_review_screen.dart`, `public.dart`, ARB:
+  lokalizált before/after diff-áttekintés és publikus contractok.
+- A két outcome teszt: A1–A8 és a három változás-nagyság cella.
+
+**Küszöb.** A megerősítési határ két érintett jövőbeli elem, inkluzívan:
+egy blokk még lokális korrekció, kettő már a terv szerkezetére is hatással
+lehet. Reprodukálható mérés: `python3 -c 'print(1 + 1)'` → `2`. Strukturális
+(`added`, `removed`, `moved`, focus- vagy napi időkeret-változás) módosítás
+darabszámtól függetlenül megerősítést kér.
+
+**Acceptance evidence.**
+
+- A1/A2: a completed blokkot célzó change set `StateError`-ral elutasított.
+- A3: a már feldolgozott outcome visszajátszása `duplicate`, review-módosítás
+  nélkül.
+- A4: 1 változás automatikus; pontosan 2 és 3 változás megerősítésre vár.
+- A5: elutasított nagy proposal megtartja a teljes `PlanChangeSet` auditját,
+  de nincs aktív revision.
+- A6: elavult revision outcome `staleRevision` eredményt ad.
+- A7: `failedTechnical` review-elemet és adaptációs ágat nem indít.
+- A8: az új revision a meglévő `previous:` konstruktori guardot kapja, a
+  sorszáma szigorúan növekszik.
+
+**Valódi-sértés próba.** A completed-blokk guardját ideiglenesen
+`inProgress`-re módosítva a `revise_practice_plan_test.dart` A1/A2 cellája
+PIROS volt: várt `StateError`, ténylegesen `PlanRevisionProposal` tért vissza.
+A `completed` guard visszaállítása után a két célzott fájl 9/9 tesztje zöld.
+
+**Futtatott ellenőrzések.**
+
+- `flutter test ...outcome_ingestion_service_test.dart ...revise_practice_plan_test.dart`
+  → 9/9 zöld.
+- `flutter analyze lib/ test/ tool/` → `No issues found!`.
+- `ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh ...` → format, analyze,
+  mindkét célzott teszt, architecture, secrets és l10n mind zöld.
+- `git diff --check` → exit 0.
+
+**Tényleges `git diff --stat`:** 10 fájl, 851 beszúrás (a négy új
+alkalmazás/UI fájl, két új teszt, barrel, két ARB és ez a handoff).
+Nincs backend- vagy repository-write; a persistence-wiring a brief szerinti
+következő körre marad.
+
 ## 11. Review — a Claude tölti ki
