@@ -1,12 +1,14 @@
 # E08-R01 — Gamification baseline, elvek és audit
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** PRE-FLIGHT COMMITTED (2026-08-19, kód olvasva: `main @ 9a955273`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 1
 - **Kör-azonosító:** `E08-R01`
 - **Branch:** `<motor>/e08-r01-gamification-baseline-and-principles`
 - **Előfeltétel:** `E07-R30` merge-elve (Epic 7 lezárása)
 - **Brief szerzője:** Claude (Opus 5)
-- **ADR:** nincs — ez a kör nem hoz kötött architekturális döntést.
+- **ADR:** [`0328`](../adr/0328-measured-gamification-baseline-contract.md) — a
+  baseline mért migrációs szerződés; a termékelveket továbbra is a 0289/0290
+  ADR rögzíti.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/features/streak/`, `lib/features/progress/` és `lib/features/learn/` TÉNYLEGES fájllistáját és a `lib/core/storage/storage_keys.dart` kulcsait — a baseline minden állítása mért tény kell legyen, fájlnévvel és sorszámmal. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
@@ -15,6 +17,7 @@
 schema_version = 1
 risk = "normal"
 allowed_paths = [
+  "docs/adr/0328-measured-gamification-baseline-contract.md",
   "docs/baseline/epic-08-start.md",
   "docs/rounds/e08-r01-gamification-baseline-and-principles.md",
 ]
@@ -37,6 +40,49 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélkül a kör bukott. **Listán kívüli fájl kellene → `stopped`**,
 és a kimenet a brief-revízió kérése, nem az `allowed_paths` csendes tágítása.
 Meglévő, ma zöld teszt elbukása → `blocked`, nem a teszt átírása.
+
+### 0.0 Pre-flight revízió — 2026-08-19
+
+- **Mért baseline és kóddrift.** A brief eredeti `main @ ea6569fb` állítása
+  elavult; az induló commit `9a955273`. A fájlleltár ténylegesen `streak`: 8
+  Dart fájl, `progress`: 8, `learn`: 24. A gamifikációs szerződés jelenlegi
+  kulcsai `lessonProgress` (storage_keys.dart:33), `practiceLog` (43),
+  `dailyGoalMinutes` (44) és `streak` (45); legacy párjaik a 180., 186–188.
+  sorban vannak. A wire-alakot a lesson (map `data` body,
+  lesson_progress_repository.dart:28–95), streak (object `data` body,
+  streak_repository.dart:32–45) és practice-log (bounded, newest-last
+  collection, practice_log_repository.dart:35–49) méri.
+- **Visszakeresett előzmény.** A visszakeresés az E08-R01 saját vázlata mellett a
+  `lessons/L209`-et hozta: a batch brief ADR-száma és fájlleltára külön
+  avulhat. Ezért a foglalóval kért 0328-as ADR-t és a teljes leltárt dispatch
+  előtt rögzítjük. Nincs más, kifejezetten gamification-baseline
+  kulcslefedettségre vonatkozó lessons-előzmény.
+- **Brief-lint S6.** A `tools/brief-merge-plan.py --format json` nem jelölt
+  E08-R01-et egyesíthető párnak; csak E08-R03–R19 feature-root párjai jöttek
+  vissza. A külön baseline-kör megtartandó: nem hoz létre
+  `lib/features/gamification`-ot, míg a jelölt későbbi körök igen.
+- **Foglalás és döntés.** `tools/round-slots.py reserve-adr --round E08-R01`
+  eredménye `0328`. A 0328 nem írja újra a 0289/0290 termékelveit; azt
+  rögzíti, hogy a baseline későbbi migrációk teljes, mért kulcs- és
+  wire-format szerződése. Emiatt az egyedi ADR-út bekerült az allowed listába.
+- **Acceptance-javítás.** A §6.1 rövid összegzése a „fölött” cellára tévesen
+  „elfogad”-ot mondott, miközben a táblázat helyesen A2 PIROS-at ír. Hiányzó
+  vagy nem létező kulcs → A2 PIROS.
+
+### 0.0.1 Mért hivatkozások a végrehajtáshoz
+
+- `streak_logic.dart:11–20, 32–62`: freeze küszöbök, helyi-éjféli epoch-nap,
+  és a tényleges alkalmazási út.
+- `daily_challenge.dart:45–57`: epoch-nap seed, a három lehetséges hossz és
+  a név-rotáció.
+- `lesson_progress.dart:8–18`: inkluzív 70/80/90%-os star-határok.
+- `storage_keys.dart:33–45, 180–188`: a baseline kötelező kulcslistája.
+
+### 0.0.2 Scope-ütközés STOP-szabály
+
+Ha a mérés a felsorolt három repositoryon, feature-fákon vagy a 0328-as ADR-en
+kívüli módosítást tenne szükségessé, az implementer `stopped` jelzést ad; az
+orchestrátor nem tágít csendben listát.
 
 ## 1. Cél
 
@@ -68,7 +114,8 @@ tesztek (race-, screen-size- és a11y-guardok) leltára.
 **NINCS benne (tilos):**
 
 - **Bármely `lib/**` fájl módosítása** — ez docs-only kör.
-- Új ADR írása: a 0289 és 0290 már kimondta az elveket; a `docs/adr/` TILOS zóna.
+- Más ADR írása vagy módosítása: a 0289 és 0290 már kimondta a termékelveket;
+  kizárólag a 0328-as, e körben foglalt baseline-szerződés engedélyezett.
 - Meglévő teszt átírása vagy törlése.
 - A `lib/features/gamification/` fa létrehozása — az a Kör 2 dolga.
 
@@ -78,8 +125,11 @@ tesztek (race-, screen-size- és a11y-guardok) leltára.
 |---|---|
 | `docs/baseline/epic-08-start.md` | **ÚJ** — az egyetlen artefaktum, amit ez a kör előállít |
 | `docs/rounds/e08-r01-gamification-baseline-and-principles.md` | a §10 handoff és a §0.0 pre-flight revízió |
+| `docs/adr/0328-measured-gamification-baseline-contract.md` | a foglalt, csak a baseline mint migrációs szerződését rögzítő ADR |
 
-**Tilos zóna:** `lib/**` (a TELJES alkalmazáskód) · `test/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
+**Tilos zóna:** `lib/**` (a TELJES alkalmazáskód) · `test/**` · `docs/adr/**`
+**a fent egyedileg engedélyezett 0328-as ADR kivételével** · `docs/sdd/**` ·
+`tools/**` · `.github/**` · `backend/**`
 
 ## 5. Kötött architekturális döntések
 
@@ -139,7 +189,7 @@ checklist a végrehajtható alak.
 | **rajta** (a küszöbön) | pontosan a `storage_keys.dart` gamifikációs kulcsai, legacy párokkal | **A2 ZÖLD** — ez az elvárt állapot |
 | a küszöb **fölött** | a baseline nem létező kulcsot is felsorol | **A2 PIROS** — kitalált kulcs ugyanúgy hibás, mint a hiányzó |
 
-A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
+A hármas tömören: **alatt** → elutasít · **rajta** → elfogad · **fölött** → elutasít.
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
 
