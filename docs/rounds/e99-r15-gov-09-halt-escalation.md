@@ -242,24 +242,31 @@ A teljes suite + property gate a CI-ban fut (ADR 0053).
     mai viselkedést. A kiválasztott motor saját harnessén indul. A kimerült
     állapot `halt-reminder-last` állapotfájllal 60 perces throttlet és 24 órás
     felső korlátot kap, miközben a `KIMERÜLT` naplósor minden firingkor megmarad.
+  - F1 review-javítás: amikor a kiválasztott self-heal motor megegyezik a
+    rögzített `sonnet-impl` motorral, a dispatch a változatlan
+    `run_orchestrator_session`-ön marad a `$heal_model` paraméterrel. Így az
+    első két próbálkozás, illetve az alternatíva nélküli utolsó próbálkozás
+    megőrzi a Claude-kvótazárlat → Terra fallbacket; csak a tényleges
+    motorváltás használja a registry-saját `run_selfheal_session` útvonalat.
   - `tools/tests/test_selfheal_escalation.py`: a §4 hat cellája, valamint a
     váltási ntfy/log és a rendered prompt D3-követelményei hermetikus
-    fixture-rel lefedve.
+    fixture-rel lefedve; F1-re egy szimulált `claude_unavailable_until`
+    zárlat igazolja, hogy az első próbálkozás a Terra-fallback dispatchre esik.
   - `docs/execution/pipeline-selfheal-prompt.md`: a rendered utolsó-kísérlet
     promptja megkapja a motorváltás és az előző `.pipeline/heal-*.log` naplók
     bemenetként kezelésének utasítását.
-- **RED/GREEN:** a kezdeti célzott futás 5 hibával mérte a hiányzó explicit
-  runner-választást és throttle-t; a megvalósítás után `2 passed, 6 subtests
-  passed`.
+- **RED/GREEN:** az F1 regressziós teszt a javítás előtt a `new-runner`
+  dispatch-csel bukott a várt `terra-fallback` helyett; a javítás után
+  `3 passed, 6 subtests passed`.
 - **Falszifikáció:** a D1 választás ideiglenes kikapcsolása a 3. kísérlet
   celláját pirosra váltotta; a D2 időbélyeg-kapu ideiglenes kikapcsolása az
   59 perces és 24 órán túli cellát pirosra váltotta. Mindkét őr visszaállítva,
   utána célzottan zöld.
 - **Futtatott ellenőrzések:**
-  - `/tmp/e99-r15-pytest/bin/python3 -m pytest tools/tests/test_selfheal_escalation.py -q`
-    → `2 passed, 6 subtests passed`.
-  - `env -u ENGINE_MODEL -u ROUND_ENGINE /tmp/e99-r15-pytest/bin/python3 -m pytest tools/tests -q`
-    → `528 passed, 2 skipped, 565 subtests passed`.
+  - `/tmp/e99-r15-pytest-fix/bin/python -m pytest tools/tests/test_selfheal_escalation.py -q`
+    → `3 passed, 6 subtests passed`.
+  - `env -u ENGINE_MODEL -u ROUND_ENGINE /tmp/e99-r15-pytest-fix/bin/python -m pytest tools/tests -q`
+    → `529 passed, 2 skipped, 565 subtests passed`.
   - `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`
     → format, analyze, célzott teszt, architecture, secrets és l10n zöld.
 - **Környezeti eltérés:** a szanitálatlan teljes tooling-suite egyszer a

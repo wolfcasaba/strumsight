@@ -1261,12 +1261,20 @@ attempt_selfheal() {
   inflight_add "$halt_round" "heal:$halt_code"
   trap 'inflight_remove "$halt_round"' RETURN
 
-  if ! run_selfheal_session "$heal_engine" "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
-        "$heal_status_file" "$heal_timeout" "önjavítás $halt_round"; then
+  # A változatlan motor a korábbi, kvóta-tudatos orchestrator-úton marad.
+  # Kizárólag a D1 által bevezetett valódi motorváltás fut a registry saját
+  # harnessén; így az első két kísérlet Claude→Terra fallbackje bitre azonos.
+  if [ "$heal_engine" = "$round_engine" ]; then
+    run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
+      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" "$heal_model"
+  else
+    run_selfheal_session "$heal_engine" "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
+      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round"
+  fi || {
     log "az önjavító session jelzés nélkül ért véget — a lánc áll"
     notify "⛔ önjavítás jelzés nélkül halt" "$halt_round / $halt_code — kivizsgálás kell" high
     return 3
-  fi
+  }
 
   outcome=$(grep -m1 '^outcome=' "$heal_status_file" | cut -d= -f2-)
   summary=$(grep -m1 '^summary=' "$heal_status_file" | cut -d= -f2-)
