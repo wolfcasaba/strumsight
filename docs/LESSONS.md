@@ -12453,3 +12453,60 @@ tesztet módosítasz, a bizonyítás nem opcionális: mutáld el a mért tulajdo
 és mutasd meg, hogy az ÚJ állítás elbukik rá.
 
 Rokon: [[ADR 0112]], [[L282]].
+
+## L323 — A `.claude/gate-edit-authorized` marker megléte önmagában NEM oldja fel a H-GATEGUARD haltot: az implementer-guard egy HARMADIK, a markert egyáltalán nem ismerő őr (E99-R17, H3, 2026-08-19)
+
+**Mérés.** Az E99-R17 (GOV-11) D2 lépése a `tool/ci/check_l10n_parity.dart`
+gate-szkriptet bővítené `--check` móddal. Ez a fájl bizonyítottan a
+végrehajtható mérce része, nem egy túlvédett melléktermék:
+`tools/round-gate.sh:242-243` közvetlenül futtatja `l10n` gate-lépésként
+(`"$dart_bin" run tool/ci/check_l10n_parity.dart`) — a `protect_factory_files.py`
+`tool/ci/*` globja tehát jogosan véd, a hatókör NEM szűkíthető anélkül, hogy a
+mércét ne gyengítené. Az első halt (`H-GATEGUARD`, 05:31) emiatt helyesen
+állt meg emberi döntésért. A user 09:53:18-kor feloldotta a láncot ÉS
+létrehozta a `.claude/gate-edit-authorized` markert, pontos, dátumozott
+indoklással, kizárólag erre az egy fájlra/körre szűkítve — ez a HANDOFF által
+ajánlott (1) út volt. A lánc 09:55:05-kor újraindította a kört (implementer:
+minimax), és **09:56:36-kor — a marker létrehozása után 3 perc 18
+másodperccel, a kör-session indulása után 91 másodperccel — szó szerint
+ugyanaz a halt jött vissza**: `.codex-round-status` szerint „a
+protect_factory_files hook (tool/ci/* glob) ÉS az implementer_guard (a
+`.claude/gate-edit-authorized` marker SEM engedélyezett) kettős védelme
+blokkolja".
+
+**Gyökérok.** A markernek **egyetlen fogyasztója van a teljes repóban**
+(`grep -rln gate-edit-authorized tools/ .claude/` → kizárólag
+`protect_factory_files.py` és a saját tesztje) — ez a hook kizárólag a
+CLAUDE-oldali (orchesztrátor/self-heal) sessionökre fut. A kör tényleges
+munkáját végző IMPLEMENTER (minimax/codex, `tools/mm-round.sh`) egy MÁSIK,
+független hook alatt fut, a `tools/hooks/implementer_guard.py`-n (ADR 0309),
+aminek forráskódjában NULLA hivatkozás van `gate-edit-authorized`-ra vagy
+`GATE_EDIT_OK`-ra — a kör-szerződést védő glob-listája feltétel nélkül,
+escape nélkül blokkol. Ezzel egyidejűleg [[L322]] már mérte, hogy egy
+AUTONÓM CLAUDE-oldali (self-heal) session sem tudja ténylegesen felhasználni
+a markert: a Claude Code harness saját auto-mode osztályozója az ügynök-oldali
+szerkesztési kísérletet a markertől függetlenül is blokkolja. A
+gate-edit-authorized csatornának tehát **három, egymástól független őre van
+útban egyszerre** — protect_factory_files.py (csak Claude-oldalt véd, és csak
+markerrel ELVILEG enged), a harness auto-mode osztályozója (markerrel SEM
+enged agent-oldalt) és implementer_guard.py (a markert nem is ismeri) —, és
+**nincs olyan session-típus ezen a boxon, aminek a marker ténylegesen utat
+nyitna.**
+
+**Szabály.** A `.claude/gate-edit-authorized` marker létrehozása ÖNMAGÁBAN
+SOHA nem elég a lánc feloldásához: dokumentáció/indoklás, nem mechanizmus, ha
+nincs mögötte egy VALÓDI emberi kéz, ami maga futtatja az Edit/Write-ot (ahogy
+E99-R16-nál történt: a user személyesen írta meg és pusholta az egysoros
+javítást, `e71ded2f`, [[L322]]). Ha a human csak markert hoz létre és
+`--resume`-ol, a lánc **strukturálisan garantáltan** ugyanazzal a
+H-GATEGUARD-dal áll meg újra, akárhányszor próbálják — a self-heal ezt nem
+tudja és nem is szabad, hogy megkerülje (ADR 0112 §3, a mérce változatlan
+marad). Amit egy self-heal-session ilyenkor tehet: mérje meg és nevezze meg
+pontosan, MELYIK guard-réteg blokkol, hogy a human ne egy már kipróbált,
+hatástalan lépést ismételjen (marker + resume) egy harmadszor is, hanem vagy
+(a) személyesen szerkeszti + pusholja a védett fájlt a kör branchére, onnan a
+kör a nem védett hátralévő lépésekkel (itt: D3/D4) normálisan folytatható;
+vagy (b) brief-revízió, ami kiviszi az igényt a védett fájlból; vagy (c)
+`hold`.
+
+Rokon: [[L322]], [[ADR 0112]], [[ADR 0309]].
