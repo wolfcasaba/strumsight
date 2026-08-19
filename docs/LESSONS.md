@@ -12833,3 +12833,96 @@ ancestor-alapú) ellenőrzés előtt, ha a munkapéldány `codex-round.sh`/
 `/home/ubuntu/music-theory` fa): fuss le a fenti explicit-refspec receptet, és
 `git rev-parse origin/main` eredményét vesd össze a GitHub-on ismert legfrissebb
 `main` SHA-val, mielőtt az `is-ancestor` kimenetét bizonyítékként elfogadnád.
+
+## L330 — Egy brief ÉS a hivatkozott SDD-fejezet EGYIDEJŰLEG téveszthet ugyanabban az irányban: a property-teszt könyvtár csak a tényleges CI composite action hardcode-olt argumentumával mérhető, nem a doksi-szöveggel (E07-R30, pre-flight, 2026-08-19)
+
+**Mit mértünk.** Az E07-R30 brief (és a hivatkozott SDD-fejezet,
+`docs/sdd/08-epic-07-ai-practice-generator.md:4330`, szó szerint UGYANAZT
+írta) a két új property tesztnek a `test/features/practice_generator/
+property/` útvonalat írta elő. A pre-flight (§1 kötelező mérési szabálya:
+"grep-eld ki a kódból") megnézte a tényleges CI-t:
+`.github/actions/flutter-gates/action.yml:47` a "Property gate (randomized
+seed)" lépést szó szerint `flutter test test/property`-vel indítja,
+`PROPERTY_SEED: ${{ github.run_id }}` env-vel — ez az EGYETLEN hely, ahol a
+CI a HORIZON anti-reward-hacking randomizált seedet adja (a megelőző "Test
+gate" lépés, `flutter test` a teljes fán, PROPERTY_SEED nélkül fut, tehát
+mindig a 42 default-ra esne vissza). A brief eredeti útvonala NINCS a
+`test/property` alatt — a hardcode-olt CI-argumentum egy KÖNYVTÁRRA, nem
+mintára illeszkedik, tehát bármely azon kívüli fájl STRUKTURÁLISAN
+láthatatlan a randomizált-seedes lépésnek, függetlenül attól, hogy a fájlnév
+`*_property_test.dart`-ra végződik-e.
+
+**Gyökérok.** A brief és az SDD-fejezet ugyanabból az elavult feltevésből
+íródott (egy korábbi, feature-scope-olt property-könyvtár konvenciót
+feltételeztek), és mivel MINDKETTŐ dokumentum ugyanazt állította, egy
+kereszt-dokumentum-egyeztetés (brief vs. SDD-fejezet) ezt a hibát NEM fogta
+volna meg — csak a tényleges, futtatható CI-konfiguráció ellenőrzése. Ez az
+[ADR 0312 §1] "elérhetetlen cél-státusz" hibaosztály egy alfaja: itt a "cél"
+nem egy enum-érték volt, hanem "a teszt fusson a randomizált CI-seeddel", és
+az ezt előállító INPUT egy hardcode-olt shell-argumentum egy composite
+action-ben, nem a fájl neve vagy tartalma.
+
+**Kockázat, ha változatlan marad.** A property teszt zöld lett volna
+LOKÁLISAN és a sima CI "Test gate" lépésben is (mindig 42 seeddel) — a hiba
+csak SOHA nem derült volna ki, mert nincs olyan futtatható jel, ami pirosra
+váltana. Ez pontosan a fajta "csendes reward-hacking" eset, amit a HORIZON
+randomizált property-gate konvenció (CLAUDE.md) kizárni hivatott.
+
+**Javítás/recept.** Ha egy brief ÚJ property (vagy bármilyen, dedikált
+CI-lépéssel kapuzott) teszt-fájlt vezet be, a pre-flight ne a brief vagy az
+SDD-fejezet szövegét fogadja el forrásnak a KÖNYVTÁRRA — grep-elje ki a
+tényleges dedikált CI-lépés parancsát (`.github/actions/**/action.yml`,
+`.github/workflows/*.yml`) és keressen egy MEGLÉVŐ, azonos kategóriájú
+tesztet a fájlrendszeren (itt: `test/property/planner_repair_property_test.dart`
+már létezett a HELYES könyvtárban) — a meglévő, már CI-vel bizonyítottan
+működő testvér-fájl a legmegbízhatóbb referencia, nem a brief szövege.
+
+**Hogyan alkalmazd.** Minden jövőbeli kör pre-flightjában, ha a brief ÚJ
+property/golden/coverage/lint stb. tesztet vezet be egy DEDIKÁLT CI-lépéssel
+(nem csak az általános `flutter test`): (1) grep-eld ki a lépés PONTOS
+parancsát a composite action/workflow fájlból; (2) ha az egy KÖNYVTÁRRA
+argumentál (nem mintára), a könyvtárnak PONTOSAN egyeznie kell; (3) keress
+egy meglévő testvér-fájlt ugyanabban a kategóriában, és kövesd annak
+útvonalát, ne a brief szövegét.
+
+## L331 — A `sdd-round-review` skill saját `git clone --branch <kör-branch> /home/ubuntu/music-theory /tmp/review-<kör>` receptje NÉMÁN elhasal, ha a kör-branch egy IZOLÁLT implementer-klónból pusholt közvetlenül originre, és a megosztott fa sosem fetchelte (E07-R30, review, 2026-08-19)
+
+**Mit mértünk.** A review-lépésben a skill saját, szó szerinti parancsát
+futtattam: `git clone --branch codex/e07-r30-evaluation-and-epic-closure
+/home/ubuntu/music-theory /tmp/review-e07-r30`. Azonnal elhasalt:
+`fatal: Remote branch codex/e07-r30-evaluation-and-epic-closure not found in
+upstream origin`. A branch VALÓJÁBAN létezett originen (én magam pusholtam
+percekkel korábban az `ss-codex-e07-r30` izolált munkapéldányból közvetlenül
+GitHub-ra) — de a `git clone <lokális-útvonal>` a FORRÁS repó SAJÁT, lokálisan
+ismert refjeiből dolgozik, és a megosztott `/home/ubuntu/music-theory` fa
+sosem futtatott `git fetch`-et erre az ágra (az implementáció és a review
+között NEM volt a megosztott fán végzett `git fetch origin <branch>`).
+
+**Gyökérok.** Ez [[L325]]/[[L326]] ROKON, de egy HARMADIK, elkülönült
+trigger-pontja: L325 azt mérte, hogy a megosztott fa lokális branch-refje
+csendben elavul; L326 azt, hogy az implementer-wrapper nem push-ol
+automatikusan. Itt mindkettő elő volt készítve helyesen (a push megtörtént),
+mégis elhasalt — mert a review-skill SAJÁT dokumentált parancsa a
+MEGOSZTOTT LOKÁLIS fát adja klón-forrásnak, ami strukturálisan soha nem
+frissül automatikusan idegen branch-ekre, függetlenül attól, hogy az origin
+maga naprakész-e.
+
+**Javítás/recept.** A review-klónozáshoz a GITHUB REMOTE URL-t használd
+klón-forrásnak, ne a megosztott lokális fát — ez teljesen kizárja ezt a
+hibaosztályt, mert nem függ a megosztott fa saját fetch-állapotától:
+
+```bash
+git clone --branch <kör-branch> https://github.com/wolfcasaba/strumsight.git /tmp/review-<kör>
+```
+
+Alternatíva (ha muszáj a lokális fából klónozni): előbb
+`git -C /home/ubuntu/music-theory fetch origin <kör-branch>`, utána a
+klónozás — de ez egy plusz lépés, amit a GitHub URL-es forma feleslegessé
+tesz.
+
+**Hogyan alkalmazd.** A `sdd-round-review` skill 2. lépésének parancsmintáját
+(jelenleg `git clone --branch <kör-branch> /home/ubuntu/music-theory
+/tmp/review-<kör>`) a jövőben a GitHub remote URL-es alakra érdemes cserélni
+— amíg ez nem történik meg, minden review-session tudja, hogy a dokumentált
+parancs ezen a hibaosztályon elhasalhat, és a fenti GitHub-URL-es alakot
+használja helyette elsőként, nem csak hibaelhárításként.

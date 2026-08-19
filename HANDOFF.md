@@ -1,5 +1,89 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E07-R30 KÉSZ — Evaluation harness, shadow rollout és Epic 7 lezárás — PR #333, squash `ee5821dd` (2026-08-19) — **EPIC 7 LEZÁRVA**
+
+Epic 7 (AI Practice Generator) záró köre. Implementer: Codex (`~/.codex`).
+`ShadowPlanGenerator` (`lib/features/practice_generator/application/service/
+shadow_plan_generator.dart`, ÚJ) az Epic 7 **első éles, vég-az-végig
+kompozíciója**: evidence → skill estimate → priority → candidate selection →
+time budget → weekly schedule → a VALÓDI `GenerationOrchestrator.generate()`,
+egy saját, no-op `GenerationPlanActivation`-nel (hívásszámláló, nulla
+perzisztencia) — a shadow-terv ugyanazon a determinisztikus kódúton születik,
+mint az éles út, de sosem aktivál valódi állapotot. A fájl szerkezetileg sem
+importál semmit a `data/local/`-ból vagy az `active_plan_controller.dart`-ból,
+és nincs `lib/` consumere / `public.dart` exportja — a futó appból
+elérhetetlen.
+
+**Pre-flight (§0.0) két, a mért CI-vel ütköző brief-útvonalat javított
+dispatch ELŐTT.** (1) A brief (és az SDD-fejezet saját fájllistája is)
+`test/features/practice_generator/property/`-t írt elő a két új property
+tesztnek — mérve viszont, hogy `.github/actions/flutter-gates/action.yml:47`
+a CI randomizált-seedes lépését KIZÁRÓLAG a `test/property` könyvtáron
+futtatja (`PROPERTY_SEED: ${{ github.run_id }}`); a brief eredeti útvonalán
+a tesztek soha nem kapták volna meg a randomizált seedet, csak a fix 42-t a
+sima Test gate-en belül, ami aláásta volna A2/A3-at. Revízió: mindkét teszt
+`test/property/`-be került, a meglévő `planner_repair_property_test.dart`/
+`planner_time_budget_property_test.dart` mintáját követve. (2) A
+`golden_profiles` fixture `.json`-ról `.dart`-ra váltott, mert
+`PracticeGenerationRequest`-nek (és beágyazott típusainak) nincs
+`fromJson`/`toJson`-ja — a feature MINDEN meglévő fixture-je Dart
+builder-függvény. A pre-flight emellett dokumentálta (nem-blokkoló
+iránymutatásként), hogy `GenerationPlanInput`-ot korábban SOHA nem épített
+`lib/` kód — a `shadow_plan_generator.dart` ezt először teszi élesben.
+
+**Mindkét review zöld, mindkettőt Claude saját kézzel, izolált `/tmp`
+klónban ellenőrizte — nem az implementer önjelentése alapján.** A
+[correctness review](docs/reviews/e07-r30-review.md) APPROVED (0
+BLOCKER/MAJOR/MINOR, 1 NOTE): a gate-et egy friss, GitHub originről klónozott
+`/tmp` munkapéldányban újrafuttatta, a hiteles `tools/scope-audit.py`-val
+mérte a scope-ot (7 fájl, 0 sértés), saját kézzel megismételte a brief
+kötelező valódi-sértés próbáját (egy golden profil elvárását elrontva a
+golden-fixture teszt PIROSRA váltott, visszaállítás után zöld), és egy
+harmadik, korábban ki nem próbált `PROPERTY_SEED` értékkel is lezöldítette a
+property tesztet. A kötelező [security review](docs/reviews/e07-r30-security.md)
+(`risk=high`) **PASS** — 0 CRITICAL/BLOCKER/MAJOR/MINOR, 3 előretekintő NOTE
+(egyik sem blokkol): `AdaptivePracticePlan.toJson()` egy jövőbeli szabad
+szöveges golden profilnál a determinizmus-teszt logjába kerülhetne (ma
+inaktív); az aktiválási határ továbbra is fuzionált a
+`GenerationOrchestrator`-ban (a completion report ezt maga nevezi meg nyitott
+tételként); az eval-tool `test/`-ből importál (réteg-higiénia, nem szállítási
+kockázat).
+
+**Zöld kapu.** A `round-ci-plan.py` `full-gate.yml`-t (nincs natív diff) ÉS
+Router CI-t (a diff `docs/rounds/**`-t érint) is előírt. Mindkettő zöld a
+végleges, mindkét review-commitot is tartalmazó HEAD-en (`d40e2050` — a
+review-dokumentumok commitolása UTÁN a korábbi, `404b9b76`-on dispatch-elt
+futásokat újra kellett indítani a helyes exact-SHA-n): Full Gate
+[32289312900](https://github.com/wolfcasaba/strumsight/actions/runs/32289312900)
+és Router CI
+[32289316122](https://github.com/wolfcasaba/strumsight/actions/runs/32289316122)
+success, `gh run view --json headSha` mindkettőn egyezett a merge előtti
+lokális HEAD-del. Post-merge célzott gate a friss `main`-en (`ee5821dd`)
+önállóan is zöld (7/7: format, analyze, 2 teszt-útvonal, architecture,
+secrets, l10n). Két mért lecke: **[[L330]]** (a property-teszt könyvtárat a
+tényleges CI composite action hardcode-olt argumentumával kell mérni, nem a
+brief/SDD-fejezet szövegével — mindkettő egyszerre tévedhet ugyanabban az
+irányban) és **[[L331]]** (a `sdd-round-review` skill saját
+review-klónozó parancsa a megosztott lokális fából elhasal, ha a kör-branch
+egy izolált implementer-klónból pusholt közvetlenül originre — GitHub
+remote URL-ből klónozva a hiba osztálya kizárt).
+
+**Nyitott tételek (a completion report — `docs/sdd/epic-07-completion-report.md`
+— és a security review NOTE-2 által megnevezve, jövőbeli körnek/emberi
+döntésnek):** a `practiceGeneratorEnabled`/`plannerAssistEnabled` flagek
+bekapcsolása emberi release-döntés; a teljes CI-suite/property/APK
+CI-bizonyíték továbbra is kötelező (ez a helyi korpuszfutás nem helyettesíti);
+valós Android-eszközös offline flow és eszköz-specifikus latency/memória
+baseline még hátravan; a `GenerationOrchestrator.generate()` továbbra is
+egyetlen hívásban fuzionálja a validálást/javítást az aktiválással — egy
+jövőbeli preview-confirmation implementáló körnek külön kell választania,
+mielőtt valódi (perzisztáló) activation bekötődik; a Planner Assist-nek
+nincs élő transport-rolloutja ebben a körben.
+
+**Epic 7 (AI Practice Generator) ezzel lezárva** (R01–R30, SDD Ch8). A lánc
+**Epic 8-cal (Gamification, SDD Chapter 9, 30 kör) folytatódik: E08-R01**
+(Gamification baseline és principles), új sessionben.
+
 ## ✅ E07-R29 KÉSZ — Accessibility, localization, privacy és safety hardening — PR #332, squash `73e7876e` (2026-08-19)
 
 A friss orchesztrátor-session (Sonnet 5) a H-NOSIGNAL self-heal (lent) által
@@ -1309,7 +1393,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   bekötetlen). Evidencia:
   [`docs/baseline/epic-06-audio-analysis-start.md`](docs/baseline/epic-06-audio-analysis-start.md),
   [`docs/reviews/e06-r06-recorder-audio-session-integration-review.md`](docs/reviews/e06-r06-recorder-audio-session-integration-review.md).
-- **Epic 7 (AI Practice Generator) elkezdve** — **E07-R01** (nyitókör:
+- **Epic 7 (AI Practice Generator) — LEZÁRVA E07-R30-cal (2026-08-19, PR #333,
+  squash `ee5821dd`).** `ShadowPlanGenerator` (evaluation-only, no-op
+  activation) + golden-korpusz property gate + `docs/sdd/
+  epic-07-completion-report.md`; `practiceGeneratorEnabled`/
+  `plannerAssistEnabled` mindvégig `false` maradt, a rollout emberi döntés.
+  Részletek a fejléc ✅-blokkjában és §5-ben. Az építkezés sorrendje —
+  **E07-R01** (nyitókör:
   baseline, [ADR 0255](docs/adr/0255-deterministic-first-practice-planning.md)
   deterministic-first, [ADR 0256](docs/adr/0256-practice-plan-revisions-immutable-past.md)
   immutable múlt, `practiceGeneratorEnabled` + `plannerAssistEnabled` feature
@@ -1964,6 +2054,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-19):** `main` @ `ee5821dd` — E07-R30 Evaluation
+harness, shadow rollout és Epic 7 lezárás, PR
+[#333](https://github.com/wolfcasaba/strumsight/pull/333), squash-merge.
+Exact `d40e2050`: Full Gate 32289312900 + Router CI 32289316122 success;
+post-merge célzott gate a friss `main`-en önállóan is zöld. **Epic 7 kész** —
+a lánc E08-R01-gyel (Gamification baseline, SDD Chapter 9) folytatódik.
+
 **Aktuális állapot (2026-08-19):** `main` @ `b021eff2` — E07-R28
 PlannerAssistGateway integráció, PR [#329](https://github.com/wolfcasaba/strumsight/pull/329),
 squash-merge. Exact `dc413fd8`: Full Gate 32266022078 + Router CI 32266095192
@@ -2398,6 +2495,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R30 — Evaluation harness, shadow rollout és Epic 7 lezárás** (PR
+[#333](https://github.com/wolfcasaba/strumsight/pull/333), squash `ee5821dd`,
+nincs új ADR). `ShadowPlanGenerator` — az Epic 7 első éles, vég-az-végig
+determinisztikus pipeline-kompozíció, no-op activationnel (sosem aktivál
+valódi állapotot). 3 golden tanulói profil, invariáns + golden-fixture
+property tesztek (`test/property/`, nem a brief eredeti, CI-vel nem egyező
+útvonalán — pre-flight §0.0 javította), `plan_quality_report.dart` riport,
+Epic 7 completion report a nyitott tételekkel. Review APPROVED (0
+BLOCKER/MAJOR/MINOR, saját izolált-klónos gate-újrafuttatással és saját
+valódi-sértés próbával igazolva); kötelező security review PASS (0
+CRITICAL/BLOCKER/MAJOR/MINOR, 3 NOTE). Exact `d40e2050`: Full Gate + Router
+CI success; post-merge gate zöld. Egyetlen flag sem mozdult. **Epic 7 lezárva.**
 
 **E07-R28 — Tutor és PlannerAssistGateway integráció** (PR
 [#329](https://github.com/wolfcasaba/strumsight/pull/329), squash `b021eff2`,
@@ -3068,8 +3178,32 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő Epic 7 SDD-lépés: E07-R29** (Accessibility, localization,
-privacy és safety hardening, SDD Ch8 Kör 29). Friss sessionben indul.
+**A következő SDD-lépés: E08-R01** (Gamification baseline és principles,
+SDD Chapter 9 — `docs/rounds/e08-r01-gamification-baseline-and-principles.md`,
+engine `minimax`). **Epic 7 (AI Practice Generator, R01–R30) lezárva** — az
+E08 sor (30 kör, Chapter 9) `docs/execution/pipeline-queue.tsv`-ben előre
+megírva és brief-lintelve. Friss sessionben indul.
+
+**Nyitott, EMBERI döntést igénylő tartozások, Epic 7-ből örökölve:**
+
+- (2026-08-19, E07-R30 completion report + security review NOTE-2) a
+  `GenerationOrchestrator.generate()` továbbra is egyetlen hívásban
+  fuzionálja a validálást/javítást az aktiválással — egy jövőbeli
+  preview-confirmation / valódi rollout implementáló körnek külön kell
+  választania, mielőtt perzisztáló activation bekötődik.
+- (2026-08-19, E07-R30 completion report) `practiceGeneratorEnabled` és
+  `plannerAssistEnabled` bekapcsolása emberi release-döntés, a release gate
+  után; a teljes CI-suite/property/APK továbbra is kötelező merge-evidencia,
+  ezt a helyi golden-korpusz mérés NEM helyettesíti; valós Android-eszközös
+  offline flow és eszköz-specifikus latency/memória baseline hátravan.
+- (2026-08-19, E07-R28 pre-flightja fedte fel) az E07-R27 (PR #328)
+  `risk=high` briefje mellett a kötelező biztonsági review sosem készült el
+  (`docs/reviews/e07-r27-security.md` hiányzik) — egy jövőbeli kör vagy
+  emberi döntés pótolhatja retroaktívan.
+
+**Korábbi kijelölt SDD-kör (2026-08-19, azóta lezárult): E07-R29**
+(Accessibility, localization, privacy és safety hardening, SDD Ch8 Kör 29).
+Lásd a fejléc ✅-blokkot.
 
 **Nyitott, EMBERI döntést igénylő tartozás (2026-08-19, E07-R28 pre-flightja
 fedte fel):** az E07-R27 (PR #328) `risk=high` briefje mellett a kötelező
