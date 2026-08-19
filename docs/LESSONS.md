@@ -12768,3 +12768,68 @@ megfogalmazása enged-e rést, mielőtt ötödik, még szélesebb szabályt írn
 Rokon: [[L289]] (ugyanennek a self-heal-sorozatnak a testvérlelete, szintén
 PR #280-ban), [[L291]] (a „második előfordulás tágabb lefedést kér, nem új
 mintát" meta-elv, aminek ez a lecke maga is konkrét példája).
+
+## L329 — `--branch`-es `git clone` single-branch refspecet ad; a §0.3 kötelező `origin/main` ancestor-mérés ebben a munkapéldányban CSENDESEN hamis pozitívot ad, ha csak `git fetch origin main`-t hívsz (E07-R29, orchesztrátor-session, 2026-08-19)
+
+**Mit mértünk.** A H-NOSIGNAL-önjavítás (PR #331) után a friss E07-R29
+orchesztrátor-session a §0.2 örökség-ellenőrzéssel megtalálta a korábbi
+`/home/ubuntu/ss-codex-e07-r29-fix` munkapéldányt (a Codex-eszkaláció F3
+javítását tartalmazó, push-olt branch). A §0.3 kötelező lépése szerint
+lefuttattam benne: `git fetch origin main` majd `git merge-base --is-ancestor
+origin/main HEAD` — ez **sikeresen (exit 0) „CONTAINS MAIN: YES"-t adott**,
+holott a branch két, a `main`-en már megvolt commitot (`90cf0628`, `7bc588c9`
+— maga a H-NOSIGNAL-heal doksija) valójában NEM tartalmazott. Közvetlen
+ellenőrzéssel (`git log --oneline 8212b0cb | grep 7bc588c9` → 0 találat;
+`git merge-base 7bc588c9 8212b0cb` → egy KORÁBBI közös ős, nem az egyik a
+másik leszármazottja) igazolva: az `is-ancestor` check HAMIS POZITÍVOT adott.
+
+**Gyökérok.** `git rev-parse origin/main` ugyanabban a munkapéldányban egy
+RÉGI SHA-t adott vissza (a klónozás-kori `main` fejét), a `git config
+--get-all remote.origin.fetch` pedig felfedte, hogy a repó fetch-refspecje
+KIZÁRÓLAG a kör saját branch-ét (`+refs/heads/minimax/e07-r29-…:refs/remotes/
+origin/minimax/e07-r29-…`) tartalmazza — **nincs benne sem wildcard
+(`refs/heads/*`), sem `main`**. Ez a SKILL.md §3 előírt klónozási módja
+(`git clone --branch <round-branch> <hub> <cél>`) git-alapértelmezett
+mellékhatása: a `--branch` kapcsoló a modern gitben implicit
+`--single-branch`-et von maga után, ha nem adsz explicit
+`--no-single-branch`-et. Emiatt `git fetch origin main` (refspec nélkül) a
+tartalmat leszedi `FETCH_HEAD`-be, de a `refs/remotes/origin/main` lokális
+követő-ágat **nem** frissíti — a fetch „sikeres", a hívó mégis egy elavult
+referenciát mér, csendben. Ez ROKON, de ELTÉRŐ gyökérokú, mint [[L325]]
+(E07-R26: ugyanez a tünet, de ott az ok a MEGOSZTOTT fő fa lokális
+branch-refjének nem-mozgása volt, nem egy szándékosan szűkített
+klón-refspec) — a `git fetch origin <branch>` „előbb fetchelj" receptje
+ÖNMAGÁBAN itt NEM elég, mert maga a fetch-cél hiányzik a repó
+refspec-konfigjából.
+
+**Kockázat, ha változatlan marad.** A §0.3 lépést épp [[L298]] (E07-R15/H7,
+2026-08-16: „egy merge-elt self-heal szerződését a folytatott kör-branchnek a
+review és a javító gate előtt be kell építenie") mérte szükségesnek: egy régi
+branch-en végzett review/gate/javítás megismételheti a main-en már javított
+hibát. Ha az ancestor-check maga hamis pozitívot ad egy
+ilyen szűk-refspecű munkapéldányban, a §0.3 CSENDESEN nem védi ki pontosan
+azt a hibaosztályt, amire tervezték — az orchesztrátor jóhiszeműen „szinkron"
+állapotot jelentene egy valójában elavult branchen.
+
+**Javítás/recept.** Az `ss-<motor>-<kör>` munkapéldányokban `origin/main`
+ancestor-mérés ELŐTT MINDIG explicit cél-refspeccel fetchelj, ne csupasz
+branch-névvel:
+
+```bash
+git fetch origin +refs/heads/main:refs/remotes/origin/main
+git rev-parse origin/main   # ellenőrizd, hogy MOZDULT-e a klónozás-kori SHA-hoz képest
+git merge-base --is-ancestor origin/main HEAD
+```
+
+(Ekvivalens alternatíva: `git remote set-branches --add origin main` egyszer,
+utána a csupasz `git fetch origin main` is frissíti a követő-ágat.) A csupasz
+`git fetch origin main` hívás önmagában NEM bizonyíték — csak azt igazolja,
+hogy a hálózat elérte a `main`-t, nem azt, hogy a LOKÁLIS `origin/main` ref
+mozdult.
+
+**Hogyan alkalmazd.** Minden jövőbeli §0.3 (vagy bármilyen `origin/main`
+ancestor-alapú) ellenőrzés előtt, ha a munkapéldány `codex-round.sh`/
+`mm-round.sh` által használt `ss-<motor>-<kör>` klón (nem a megosztott
+`/home/ubuntu/music-theory` fa): fuss le a fenti explicit-refspec receptet, és
+`git rev-parse origin/main` eredményét vesd össze a GitHub-on ismert legfrissebb
+`main` SHA-val, mielőtt az `is-ancestor` kimenetét bizonyítékként elfogadnád.

@@ -1,5 +1,65 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E07-R29 KÉSZ — Accessibility, localization, privacy és safety hardening — PR #332, squash `73e7876e` (2026-08-19)
+
+A friss orchesztrátor-session (Sonnet 5) a H-NOSIGNAL self-heal (lent) által
+otthagyott állapotot vette át: az implementer- és javító-munka
+(`minimax/e07-r29-accessibility-privacy-hardening`,
+`codex/e07-r29-accessibility-privacy-hardening-fix`) már push-olva volt, a
+dolog csak a hátralévő review-zárás, CI-dispatch és merge volt.
+
+**A review három leletet talált, mind zárva.** F1 (MAJOR — a `_writtenKeys`
+in-memory lista miatt restart után a draft/archive-only tervek eltűntek a
+delete-all/export sweepből) és F2 (BLOCKER — a `null` `outcomePlanLookup`
+alapértelmezett `owner = planId` miatt egy plan-scoped törlés más terv
+evidence-ét is elvitte) a MiniMax-nak járó EGY javító körben zárult
+(`0a6315d2`…`3e05d243`, perzisztált manifest + adat-alapú plan-ownership). A
+review egy MÁSODIK, friss valódi-sértés próbával F3-at is talált (MAJOR — a
+manifest-írás `_trackWrite`/`_trackRemove` nem `await`-elte a
+`keyValueStore.writeString`-et, a hiba silent no-op-ként veszett el); mivel a
+MiniMax egy javító köre már elfogyott, a motor-eszkaláció szabálya szerint
+(AGENTS.md/ADR 0087 §2) a Codex vitte a második javítást (`8212b0cb`).
+
+**Az orchesztrátor a Codex-javítást NEM a `.codex-round-status` önjelentése
+alapján fogadta el.** Elolvasta a `8212b0cb` teljes diffjét, majd saját,
+izolált `flutter test test/features/practice_generator/data/
+local_repository_test.dart` futtatással megerősítette — **36/36 zöld**,
+köztük az új `F3 — manifest persistence failures` eset. Csak ez után
+frissítette `docs/reviews/e07-r29-review.md`/`e07-r29-security.md`-t
+CHANGES REQUIRED/BLOCKED → **APPROVED/PASS**-ra, és töltötte ki a brief §11-et.
+
+**Mért gotcha a §0.3 upstream-szinkron lépésben (lásd [[L329]]):** a
+`git clone --branch <round-branch>` (SKILL.md §3) implicit single-branch
+refspecet ad a munkapéldánynak — egy csupasz `git fetch origin main` ebben
+NEM frissíti a lokális `origin/main` követő-ágat, és a `merge-base
+--is-ancestor` emiatt HAMIS POZITÍVOT adott, mielőtt az explicit
+`git fetch origin +refs/heads/main:refs/remotes/origin/main` alakra váltva a
+valódi (két commitnyi) elmaradást ki nem mértem. Csak ez után volt biztonságos
+a review-t és a gate-et lezárni.
+
+**Zöld kapu.** A round-ci-plan.py `full-gate.yml`-t (nincs natív diff) ÉS
+Router CI-t (a diff `docs/rounds/**`-t érint) is előírt. Mindkettő zöld a
+végleges, `origin/main`-nel egyesített HEAD-en: exact `1aa7923a` → Full Gate
+[32282687647](https://github.com/wolfcasaba/strumsight/actions/runs/32282687647)
+és Router CI
+[32282629066](https://github.com/wolfcasaba/strumsight/actions/runs/32282629066)
+success, `gh run view --json headSha` mindkettőn egyezett a lokális HEAD-del
+merge előtt. Post-merge célzott gate a friss `main`-en (`73e7876e`)
+önállóan is zöld (14/14: format, analyze, 9 teszt-útvonal, architecture,
+secrets, l10n). Lecke: **[[L329]]**.
+
+Az implementáció maga: teljes hu/en ARB-paritás (25 új kulcs), nagy
+betűméret/screen-reader/reduced-motion audit a meglévő planner-képernyőkön,
+nem-szín-alapú státuszjelölés (`TodayPlanMode` szöveg+ikon badge), redakciós
+audit (`ExportPracticePlanningData._redactPlanJson` kitörli a
+comfort-constraint értéket és minden goal `userNote`-ját), és a
+felhasználó-kezdeményezett teljes törlés/export (`plan_privacy_screen.dart`,
+`delete_practice_planning_data.dart`, `export_practice_planning_data.dart`) —
+az ADR 0260 §5 szűk, csak erre a hívási útra fenntartott kivételként
+(`docs/privacy/practice-planning-data.md` rögzíti a policy-kört).
+`practiceGeneratorEnabled`/flag-ek változatlanul `false`. Következő kör:
+**E08-R…** vagy a soron lévő pipeline-tétel, új sessionben.
+
 ## ✅ [HEAL E07-R29/H-NOSIGNAL] KÉSZ — preambulum: alparancs sikeres lezárása ≠ kör lezárása — PR #331, squash `90cf0628` (2026-08-19)
 
 Az E07-R29 friss orchesztrátor-sessionje (Terra, rotáció szerint) a H3
