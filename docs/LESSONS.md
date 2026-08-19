@@ -12944,3 +12944,112 @@ tiltás idézésétől, így false positive-ot adhat.
 tényleges napló-hívást és futtasd újra a gate-et izolált reviewer-klónban. A
 valódi csonkoló/láncoló hívás továbbra is blokkoló; pusztán a tiltás szöveges
 említése nem az.
+
+## L333 — Egy brief-be előre írt ADR-szám a brief-írás és a kör-indítás között elavulhat, akkor is, ha nincs párhuzamos verseny (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 briefje (írva 2026-08-18) `ADR 0300`-at „a szám
+FOGLALT" állítással jelölte előre kiosztottnak. A pre-flightban
+`tools/round-slots.py reserve-adr --round E08-R02` lefuttatása ELŐTT mérve:
+`.pipeline/inflight/adr/0300` már létezett, `round=E07-R15` tartalommal
+(foglalva 2026-08-16, tehát a brief ÍRÁSA előtt), és a `docs/adr/`
+könyvtárban NINCS `0300-*.md` — a számot egy korábbi kör foglalta, sosem
+fogyasztotta el. A `reserve_adr()` csak `max(used)+1`-et ad ki, egy
+alacsonyabb, korábban foglalt számot sosem told fel újra
+(`tools/round-slots.py:201-229`) — a tényleges friss szám `0329` lett.
+
+**Miért.** Ez NEM a mért 0139-duplikátum-hibaosztály (két PÁRHUZAMOS munka
+ugyanazt a számot foglalja le egyszerre) — itt egyetlen, szekvenciális
+foglalás-sorozat volt, csak a brief egy KORÁBBI, más körnek szánt (és soha
+fel nem használt) foglalást idézett, mintha az neki szólna. A
+brief-írás és a kör tényleges indítása között eltelt idő (itt egy nap) alatt
+a foglalási ns namespace tovább haladt.
+
+**Hogyan alkalmazd.** A §1.0.1 szabály („ADR-számot a foglalótól kérj, ne
+`ls`-sel") ETTŐL a hibaosztálytól is véd, ha KÖVETIK: sosem szabad egy brief
+„a szám FOGLALT" állítását bemondásra elfogadni, akkor sem, ha nincs
+látható párhuzamos munka — a `reserve-adr` hívás minden pre-flightban
+kötelező, függetlenül attól, hogy a brief mennyire magabiztosan idéz egy
+számot.
+
+## L334 — A legacy (nem-`auto`) Codex-motor commitol, de nem feltétlenül pushol — az orchesztrátornak a `done` jelzés után ellenőriznie/pusholnia kell, mielőtt review-t indít (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 implementer (`codex` motor, `tools/codex-round.sh`)
+`.codex-round-status`-a `status=done`, `head=95ddec13`-at jelzett. A review
+ELSŐ lépéseként friss klónozás az origin branch-ről ekkor `af86bc59`-at (a
+Claude pre-flight commitját) adta vissza — az implementer commitja
+LOKÁLISAN megvolt a munkapéldányban, de sosem lett pusholva. Az
+orchesztrátornak kellett kézzel pusholnia (`git push origin
+codex/e08-r02-canonical-activity-events:codex/e08-r02-canonical-activity-events`,
+tiszta fast-forward), mielőtt bármilyen review érvényes lehetett volna.
+
+**Miért.** AGENTS.md §15.2 a Codex-szerepet commit-kötelezettséggel írja le,
+de explicit push-kötelezettséget NEM mond ki. A `tools/codex-round.sh` saját
+`fix-workspace-origin.sh` lépése ezt implicit FELTÉTELEZI („hogy egy
+implementer-push ne utasuljon el"), de nem KÉNYSZERÍTI ki és nem is
+ellenőrzi utólag, hogy a push valóban megtörtént-e. Az `auto` router-motorra
+ezzel szemben AGENTS §15.6 pont 7 explicit kimondja: „a modellek nem
+commitolnak" — a legacy Codex-útvonalra nincs ilyen szimmetrikus, explicit
+push-szabály.
+
+**Hogyan alkalmazd.** A `done` jelzés feldolgozásakor a `head=` mezőt ne csak
+a `.codex-round-status`-ból olvasd ki, hanem MÉRD MEG: `git ls-remote origin
+refs/heads/<kör-branch>` (vagy egy friss klón) egyezzen a jelzett
+`head`-del. Ha nem egyezik, pushold a munkapéldányból ELŐSZÖR, és csak
+UTÁNA indíts review-t vagy klónozz review-célra — lásd L335, ami pontosan
+ennek elmulasztásából eredő másodlagos hibát írja le.
+
+## L335 — A `risk=high` security review dispatch-elése az implementer push-jának megerősítése ELŐTT hamis BLOCKER-t termel egy elavult snapshot miatt (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 orchesztrátora a `security-reviewer` agentet
+(`isolation: "worktree"`) PÁRHUZAMOSAN indította a saját izolált `/tmp`
+klónjának létrehozásával — abban a pillanatban, amikor az implementer
+commitja (lásd L334) MÉG NEM volt pusholva. A security agent worktree-je a
+megosztott hub-ból ágazott, aminek a `codex/e08-r02-...` branch-referenciája
+ekkor `af86bc59`-ra mutatott (a valós push csak percekkel később történt meg
+— részben azért is, mert a lokális hub SAJÁT branch-mutatója egy `fetch` UTÁN
+sem frissül automatikusan, csak a remote-tracking ág, lásd [[L331]]). A
+security agent ezt a valós, de MÁR ELAVULT állapotot mérte, és korrekt
+módszertannal, de téves alapon **BLOCKER**-t jelentett: „az implementáció
+nincs az ágon". Az újrafuttatás — MOST MÁR a push után, a GitHub origin-ról
+frissen klónozva — **PASS** verdiktet adott.
+
+**Miért.** A worktree-izolációt (vagy a megosztott hub-ból való klónozást)
+igénylő agentek a DISPATCH pillanatában látják a branch állapotát, nem a
+dispatch-et KÉRŐ szándékot. Ha az orchesztrátor a review-t azonnal, az
+implementer `done` jelzése UTÁN, de a push MEGERŐSÍTÉSE (L334) ELŐTT
+indítja, egy időzítési rés nyílik, amiben a review tárgya még nem létezik a
+review által elért forrásból.
+
+**Hogyan alkalmazd.** A `risk=high` security review dispatch-elése ELŐTT
+mérd meg (ne csak feltételezd), hogy a kör-branch a jelzett `head`-en áll az
+origin-on (L334 lépése után). Ha a review mégis „hiányzó kód" BLOCKER-t ad,
+az ELSŐ diagnózis ne a kód valódi hiánya legyen, hanem a review saját
+forrás-frissessége — verifikáld a review saját `git log`/`rev-parse`
+kimenetét, mielőtt bármit elfogadsz vagy elutasítasz alapján.
+
+## L336 — A CI-dispatch UTÁNI, csak `docs/reviews/**`-et érintő review-commit nem vált ki friss Router CI-futást — a merge-előtti exact-SHA ellenőrzés ezt a drift-et is kifoghatja (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02-ben a `full-gate.yml` dispatch és a Router CI
+mindkettő zöld volt egy korábbi SHA-n (`3b63029d`), de az orchesztrátor UTÁNA
+még egy `docs/rounds/e08-r02-...md` §11-et kitöltő commitot tett a branch-re
+(`4b46ef44`) — ez `docs/rounds/**`-et érint, tehát Router CI-t triggerel, DE
+ha a köztes commit KIZÁRÓLAG `docs/reviews/**`-et érintette volna (ahogy az
+egyik közbülső commit ténylegesen tette), a Router CI `on.push.paths`
+szűrője azt a push-ot át sem eresztette volna — a Router CI utolsó ismert
+futása egy KORÁBBI SHA-n maradt volna rögzítve, miközben a tényleges merge
+SHA már túllépett rajta.
+
+**Miért.** A Router CI `on.push.paths`-alapú trigger csak az ADOTT push
+által érintett fájlokat nézi, nem a branch teljes, KUMULATÍV állapotát —
+egy több-commitos záró sorozat (correctness review → security review → brief
+§11) minden egyes push-a KÜLÖN kerül kiértékelésre a trigger-szűrőn.
+
+**Hogyan alkalmazd.** Merge előtt MINDIG a TÉNYLEGES végső HEAD SHA-n nézd
+meg mind a `full-gate`/`build-apk`, mind a Router CI futását (§3.0), ne egy
+korábbi, „elég közeli" SHA-n mért zöld eredményre hagyatkozz. Ha a záró
+review-dokumentumok elhelyezése miatt a HEAD a CI-dispatch óta mozdult,
+dispatch-eld újra a natív gate-et is, és ha az utolsó Router-CI-releváns
+útvonal (`docs/rounds/**` stb.) nem a tényleges végső commitban változott,
+tudatosan hozz létre egy olyan záró commitot (pl. a brief §11 kitöltése),
+ami ezt kiváltja — ez egyúttal más kötelező tartalmat (a review-linkek
+brief-be írása) is szolgál, nem tiszta ceremónia.

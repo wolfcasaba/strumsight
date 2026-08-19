@@ -1,5 +1,92 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R02 KÉSZ — Kanonikus tanulási esemény-szerződések — PR #335, squash `a3d98ed2` (2026-08-19)
+
+A gamifikáció EGYETLEN bemenete: a feature-agnosztikus, immutable, verziózott
+`LearningActivityEvent` sealed hierarchia (`lib/features/gamification/domain/
+activity/`) hat altípussal (Practice, Song, Analysis, Plan, Tutor, Vision),
+hívó-adta stabil `eventId`-vel, kötelező `schemaVersion`-nel (ismeretlen
+érték hibát dob, nem csendes default), és explicit `type`-discriminatorral a
+JSON round-tripben (nem mezőkitalálás). `ActivitySource`/`EvidenceTrust`
+enumok, `RewardEligibility` adatkontraktus (típus, nem logika — a döntési
+logika Kör 5), `lib/features/gamification/public.dart` egyetlen belépő. A kör
+NEM integrál egyetlen feature-t sem — Kör 24–26 dolga. Implementer: Codex
+(`~/.codex`, `gpt-5.6-terra`).
+
+**A pre-flight egy KRITIKUS, mért hibát javított dispatch előtt: az előre
+kiosztott `ADR 0300` már foglalt volt.** `.pipeline/inflight/adr/0300`
+`round=E07-R15` tartalommal létezett (foglalva 2026-08-16, a brief 2026-08-18-i
+írása ELŐTT), de a `docs/adr/`-ban nincs `0300-*.md` — a számot egy korábbi
+kör foglalta, sosem fogyasztotta el. A friss `tools/round-slots.py
+reserve-adr` a valódi **`ADR 0329`**-et adta. A pre-flight egy második,
+technikai kérdést is tisztázott: az A6 architektúra-őr nem bővítheti a
+`tool/check_architecture.dart` hardcode-olt `_isSharedDomain()` listáját (az
+a fájl nincs a kör engedélyezett listáján), ezért a bevált E07-R02 mintát
+követve egy önálló teszt-csoport épült `test/core/architecture_dependency_
+test.dart`-ban, a meglévő `_forbiddenDomainMarkerOffenders`/`_withoutTrivia`
+segédfüggvények újrafelhasználásával — az implementer ezt pontosan a
+pre-flight §0.0.2 útmutatása szerint valósította meg.
+
+**A review saját kézhez, izolált `/tmp` klónban mindkét kötelező
+valódi-sértés próbát megismételte, nem az implementer önjelentése alapján
+fogadta el.** A `schemaVersion` guard ideiglenes eltávolítása az A2 cellát
+pontosan a várt hibaüzenettel vitte pirosra; egy befecskendezett
+`package:flutter/foundation.dart` import az új architektúra-guardot vitte
+pirosra, pontos hibaüzenettel. Mindkettő tiszta visszaállítás után zöld. A
+[correctness review](docs/reviews/e08-r02-review.md) **APPROVED** (0
+BLOCKER/MAJOR/MINOR, 3 NOTE — enum wire-formátum a Dart `.name`-en, nem
+explicit kódtérképen, ADR 0257 precedenséhez képest; az A1 „const
+konstruktor" bizonyítéka forráskód-szintű, nem futásidejű teszt; a
+`score`/`duration` minden altípuson univerzális mező, a Kör 24-26
+integrátornak érdemes lehet altípusonként felülvizsgálnia). A kötelező
+[security review](docs/reviews/e08-r02-security.md) (`risk=high`) **PASS**
+(0 CRITICAL/BLOCKER/MAJOR, 1 MINOR, 4 NOTE) — az egyetlen MINOR: az új
+architektúra-guard marker-listája nem fed hálózati/fájl-IO markert
+(`dart:io`/`dart:convert`/`package:dio/`/`package:http/`), ami MA nem aktív
+sértés (a domain tiszta), de a Kör 3 (ledger) / Kör 4 (outbox) előtt
+javítandó, mielőtt azok valódi sink-szomszédot hoznak a domain mellé.
+
+**Két mért process-hiba a záráshoz vezető úton, mindkettő javítva, mindkettő
+lecke.** (1) Az implementer `done`-t jelzett, de a commitja nem volt
+pusholva — az orchesztrátor pusholta, mielőtt bármilyen review érvényes
+lehetett volna ([[L334]]). (2) A biztonsági review ELSŐ futása ezt az
+pusholatlan állapotot mérte (egy worktree-izoláció a push ELŐTT ágazott le),
+és emiatt téves BLOCKER-t adott — a push megerősítése után frissen
+klónozva megismételve **PASS** lett ([[L335]]). Egy harmadik lecke a
+CI-exact-SHA ellenőrzésről: a záró review-dokumentum-commitok nem mindig
+váltanak ki friss Router CI-futást, ha nem érintik a `docs/rounds/**`
+útvonalat — a brief §11 kitöltése (ami ÉRINTI) végül friss, a tényleges
+végső SHA-n mért Router CI-futást adott ([[L336]]).
+
+**Zöld kapu.** A `round-ci-plan.py` `full-gate.yml`-t (nincs natív diff) ÉS
+Router CI-t (a diff `docs/rounds/**`-t érint) is előírt. Mindkettő zöld a
+végleges, mindkét review-t és a brief §11-et is tartalmazó HEAD-en
+(`4b46ef44` — egy köztes SHA-n dispatch-elt Full Gate-et a §11-lezáró commit
+miatt újra kellett dispatch-elni, hogy pontosan a merge SHA-n legyen
+evidencia): Full Gate
+[32300885059](https://github.com/wolfcasaba/strumsight/actions/runs/32300885059)
+és Router CI
+[32300867375](https://github.com/wolfcasaba/strumsight/actions/runs/32300867375)
+success. Post-merge célzott gate a friss `main`-en (`a3d98ed2`) önállóan is
+zöld (7/7: format, analyze, 2 teszt-útvonal, architecture, secrets, l10n).
+
+**A kör alatt egy párhuzamos self-heal (E99-R18, egy másik kör H3 haltjának
+javítása) futott ugyanebben a megosztott munkafában** — a záró rituálék
+(ez a HANDOFF-frissítés, RTM, LESSONS, git-notes) a `tools/round-merge-lock.sh`
+zárral sorosítva készültek, a másik kör branch-ét/PR-ját nem érintettem.
+
+Négy mért lecke: **[[L333]]** (egy brief-be előre írt ADR-szám a brief-írás
+és a kör-indítás között elavulhat, verseny nélkül is), **[[L334]]** (a
+legacy Codex-motor commitol, de nem feltétlenül pushol), **[[L335]]** (a
+security review dispatch-elése az implementer push-ja előtt hamis BLOCKER-t
+termel egy elavult snapshot miatt), **[[L336]]** (a CI-dispatch utáni,
+csak `docs/reviews/**`-et érintő commit nem vált ki friss Router CI-t —
+merge előtt mindig a tényleges végső SHA-n kell ellenőrizni). Nyitott tétel
+a Kör 3/4-nek: a security review MINOR-1 leletét (guard marker-lista
+hálózati/fájl-IO kiegészítése) rendezni kell, mielőtt a ledger/outbox valódi
+sink-szomszédot hoz a gamification domain mellé. Következő kör: **E08-R03**
+(Reward ledger és idempotency index), új sessionben.
+
 ## ✅ E08-R01 KÉSZ — Gamification baseline és mért migrációs szerződés — PR #334, squash `0e19f67d` (2026-08-19)
 
 Az Epic 8 nyitókörének kimenete az
