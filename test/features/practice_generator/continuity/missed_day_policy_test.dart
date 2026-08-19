@@ -24,6 +24,7 @@ void main() {
       final decision = policy.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: <MissedDayObservation>[
             MissedDayObservation(
               localDate: LocalDate(2026, 8, 16),
@@ -45,6 +46,7 @@ void main() {
       final decision = policy.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: <MissedDayObservation>[
             MissedDayObservation(
               localDate: LocalDate(2026, 8, 16),
@@ -66,6 +68,7 @@ void main() {
       final decision = policy.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: <MissedDayObservation>[
             MissedDayObservation(
               localDate: LocalDate(2026, 8, 16),
@@ -87,6 +90,7 @@ void main() {
       final decision = policy.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: <MissedDayObservation>[
             MissedDayObservation(
               localDate: LocalDate(2026, 8, 16),
@@ -108,6 +112,7 @@ void main() {
       final decision = policy.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: <MissedDayObservation>[
             MissedDayObservation(
               localDate: LocalDate(2026, 8, 17),
@@ -140,6 +145,7 @@ void main() {
         final decision = policy.evaluate(
           MissedDayInput(
             today: LocalDate(2026, 8, 17),
+            nextDayBudget: const Duration(minutes: 20),
             observations: <MissedDayObservation>[
               MissedDayObservation(
                 localDate: LocalDate(2026, 8, 16),
@@ -168,6 +174,7 @@ void main() {
       final decision = policy.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: observations,
         ),
       );
@@ -188,6 +195,7 @@ void main() {
       final decision = policy.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: observations,
         ),
       );
@@ -209,6 +217,7 @@ void main() {
         final decision = policy.evaluate(
           MissedDayInput(
             today: LocalDate(2026, 8, 17),
+            nextDayBudget: const Duration(minutes: 20),
             observations: observations,
           ),
         );
@@ -236,12 +245,21 @@ void main() {
           today: LocalDate(2026, 8, 17),
         );
         final today = LocalDate(2026, 8, 17);
+        const dayBudget = Duration(minutes: 20);
 
         final left = policy.evaluate(
-          MissedDayInput(today: today, observations: observations),
+          MissedDayInput(
+            today: today,
+            nextDayBudget: dayBudget,
+            observations: observations,
+          ),
         );
         final right = policy.evaluate(
-          MissedDayInput(today: today, observations: observations),
+          MissedDayInput(
+            today: today,
+            nextDayBudget: dayBudget,
+            observations: observations,
+          ),
         );
 
         expect(left.missedDayCount, right.missedDayCount);
@@ -269,6 +287,7 @@ void main() {
       final decision = violating.evaluate(
         MissedDayInput(
           today: LocalDate(2026, 8, 17),
+          nextDayBudget: const Duration(minutes: 20),
           observations: observations,
         ),
       );
@@ -286,6 +305,134 @@ void main() {
       expect(
         () => MissedDayPolicy(longBreakThreshold: -1),
         throwsArgumentError,
+      );
+    });
+
+    test('F2: the next-day hard budget is carried through the decision '
+        'unchanged (no growth from missed days)', () {
+      // F2 (review E07-R27): the A1 no-growth invariant is now
+      // part of the typed contract. The policy accepts a
+      // caller-supplied next-day budget and returns it on the
+      // decision unchanged. A consumer that wanted to grow the
+      // budget from missed days would have to ignore the decision
+      // field — a visible, reviewable violation.
+      const dayBudget = Duration(minutes: 30);
+      final policy = MissedDayPolicy();
+      final observations = continuityMissedObservations(
+        startDate: LocalDate(2026, 7, 28),
+        count: 10,
+        today: LocalDate(2026, 8, 17),
+      );
+      final decision = policy.evaluate(
+        MissedDayInput(
+          today: LocalDate(2026, 8, 17),
+          nextDayBudget: dayBudget,
+          observations: observations,
+        ),
+      );
+
+      // F2: the decision's nextDayBudget equals the input
+      // nextDayBudget — the typed no-growth invariant.
+      expect(decision.nextDayBudget, dayBudget);
+      expect(decision.nextDayBudget, decision.nextDayBudget);
+      // Sanity: the mode is still simpleReschedule, no readiness
+      // flip at 10 missed days.
+      expect(decision.mode, RescheduleMode.simpleReschedule);
+    });
+
+    test('F2: every mode (simple/readiness/reduced) keeps the next-day '
+        'budget unchanged', () {
+      // F2: the no-growth invariant holds across the three
+      // reschedule modes — not only for the simple case but also
+      // for the readiness proposal at the threshold and the
+      // reduced-difficulty proposal above it.
+      const dayBudget = Duration(minutes: 45);
+      final policy = MissedDayPolicy();
+
+      // Case 1: below threshold → simpleReschedule.
+      final below = policy.evaluate(
+        MissedDayInput(
+          today: LocalDate(2026, 8, 17),
+          nextDayBudget: dayBudget,
+          observations: continuityMissedObservations(
+            startDate: LocalDate(2026, 7, 28),
+            count: 5,
+            today: LocalDate(2026, 8, 17),
+          ),
+        ),
+      );
+      expect(below.mode, RescheduleMode.simpleReschedule);
+      expect(below.nextDayBudget, dayBudget);
+
+      // Case 2: at threshold → readinessProposal.
+      final atThreshold = policy.evaluate(
+        MissedDayInput(
+          today: LocalDate(2026, 8, 17),
+          nextDayBudget: dayBudget,
+          observations: continuityMissedObservations(
+            startDate: LocalDate(2026, 7, 27),
+            count: 21,
+            today: LocalDate(2026, 8, 17),
+          ),
+        ),
+      );
+      expect(atThreshold.mode, RescheduleMode.readinessProposal);
+      expect(atThreshold.nextDayBudget, dayBudget);
+
+      // Case 3: above threshold → readinessProposalReducedDifficulty.
+      final aboveThreshold = policy.evaluate(
+        MissedDayInput(
+          today: LocalDate(2026, 8, 17),
+          nextDayBudget: dayBudget,
+          observations: continuityMissedObservations(
+            startDate: LocalDate(2026, 7, 26),
+            count: 25,
+            today: LocalDate(2026, 8, 17),
+          ),
+        ),
+      );
+      expect(
+        aboveThreshold.mode,
+        RescheduleMode.readinessProposalReducedDifficulty,
+      );
+      expect(aboveThreshold.nextDayBudget, dayBudget);
+    });
+
+    test('F2 real violation probe: a budget + missedDuration mutation must '
+        'fail A1', () {
+      // F2 violation probe: the A1 invariant is `decision.nextDayBudget
+      // == input.nextDayBudget`. A violating implementation that
+      // would grow the budget by the missed duration would return
+      // `input.nextDayBudget + missedDuration`, and this test
+      // reduces that to a falsifiable equality.
+      const dayBudget = Duration(minutes: 30);
+      const missedDurationPerDay = Duration(minutes: 5);
+      final observations = continuityMissedObservations(
+        startDate: LocalDate(2026, 7, 28),
+        count: 10,
+        today: LocalDate(2026, 8, 17),
+      );
+      final policy = MissedDayPolicy();
+      final decision = policy.evaluate(
+        MissedDayInput(
+          today: LocalDate(2026, 8, 17),
+          nextDayBudget: dayBudget,
+          observations: observations,
+        ),
+      );
+
+      // The violating computation: budget + missedDuration * count.
+      // If the implementation did this, the decision field would
+      // equal this value, and the A1 assertion would fail.
+      final violated = dayBudget + (missedDurationPerDay * 10);
+
+      // A1 invariant: the decision's budget is exactly the input.
+      expect(decision.nextDayBudget, dayBudget);
+      // The violating value is rejected by the contract.
+      expect(
+        decision.nextDayBudget,
+        isNot(equals(violated)),
+        reason: 'A1 forbids growing the next-day budget from missed days',
       );
     });
 

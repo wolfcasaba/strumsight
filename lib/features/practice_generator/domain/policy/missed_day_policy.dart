@@ -103,10 +103,22 @@ final class MissedDayObservation {
 
 /// The full caller-supplied input the policy needs.
 final class MissedDayInput {
-  const MissedDayInput({required this.today, required this.observations});
+  const MissedDayInput({
+    required this.today,
+    required this.nextDayBudget,
+    required this.observations,
+  });
 
   /// The local calendar `today` (ADR 0258 §4).
   final LocalDate today;
+
+  /// The next day's hard budget — the absolute ceiling the day cannot
+  /// exceed (ADR 0258 §3). The policy carries this value through to
+  /// the decision unchanged so the A1 no-growth contract is part of
+  /// the typed surface, not a comment. A consumer that wanted to grow
+  /// the budget from missed days would have to ignore the decision
+  /// field — which becomes a visible, reviewable violation.
+  final Duration nextDayBudget;
 
   /// The day's snapshots. Order is not significant — the policy sorts
   /// them by [LocalDate.compareTo].
@@ -146,6 +158,7 @@ final class MissedDayDecision {
   const MissedDayDecision({
     required this.classifications,
     required this.missedDayCount,
+    required this.nextDayBudget,
     required this.mode,
   });
 
@@ -154,6 +167,13 @@ final class MissedDayDecision {
 
   /// The number of [MissedDayKind.missed] rows.
   final int missedDayCount;
+
+  /// The next day's hard budget, equal to [MissedDayInput.nextDayBudget]
+  /// — never grown by missed time (ADR 0258 §3, brief §5.1). The
+  /// equality is the typed no-growth invariant: a consumer that
+  /// receives this field can compare it to the input and treat a
+  /// mismatch as a hard contract violation.
+  final Duration nextDayBudget;
 
   /// The reschedule mode the application layer should apply.
   final RescheduleMode mode;
@@ -209,6 +229,7 @@ final class MissedDayPolicy {
         classifications,
       ),
       missedDayCount: missedCount,
+      nextDayBudget: input.nextDayBudget,
       mode: _modeFor(missedCount),
     );
   }

@@ -465,8 +465,8 @@ void main() {
           clock: () => DateTime.utc(2026, 8, 17),
           longBreakThreshold: 21,
         );
-        const pauseDate = LocalDate(2026, 8, 3);
-        const resumeDate = LocalDate(2026, 8, 10);
+        final pauseDate = LocalDate(2026, 8, 3);
+        final resumeDate = LocalDate(2026, 8, 10);
 
         // Build a paused plan whose first day is *completed* and whose
         // remaining days are planned. The re-anchor shift would be +9
