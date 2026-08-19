@@ -36,8 +36,8 @@
 library;
 
 import '../model/practice_block.dart';
-import '../model/schedule_decision.dart';
 import '../model/weekly_availability.dart';
+import 'scheduling_policy.dart';
 
 /// What a single day means for the missed-day classifier.
 enum MissedDayKind {
@@ -78,7 +78,7 @@ enum RescheduleMode {
 
 /// A single day's snapshot as the policy sees it.
 final class MissedDayObservation {
-  const MissedDayObservation({
+  MissedDayObservation({
     required this.localDate,
     required this.status,
     required this.reasonCodes,
@@ -113,7 +113,9 @@ final class MissedDayInput {
   final List<MissedDayObservation> observations;
 }
 
-/// One row in the policy's per-day classification.
+/// One row in the policy's per-day classification. Value-class — two
+/// rows with the same fields are equal so callers can compare policy
+/// outputs without walking the list manually (A7).
 final class MissedDayClassification {
   const MissedDayClassification({
     required this.localDate,
@@ -127,6 +129,16 @@ final class MissedDayClassification {
   /// True when this row should be added to the missed-day count that
   /// drives the reschedule mode.
   final bool contributesToCount;
+
+  @override
+  bool operator ==(Object other) =>
+      other is MissedDayClassification &&
+      other.localDate == localDate &&
+      other.kind == kind &&
+      other.contributesToCount == contributesToCount;
+
+  @override
+  int get hashCode => Object.hash(localDate, kind, contributesToCount);
 }
 
 /// The policy's verdict.
@@ -151,7 +163,7 @@ final class MissedDayDecision {
 /// construction; the policy itself never mutates.
 final class MissedDayPolicy {
   MissedDayPolicy({
-    this.longBreakThreshold = 21,
+    int longBreakThreshold = 21,
     String? restDayReasonCode,
     String? unavailableReasonCode,
   }) : longBreakThreshold = _positive(longBreakThreshold, 'longBreakThreshold'),

@@ -15,7 +15,6 @@
 library;
 
 import '../../domain/id/planner_ids.dart';
-import '../../domain/model/adaptive_practice_plan.dart';
 import '../../domain/model/plan_enums.dart';
 import '../../domain/model/plan_revision.dart';
 import '../../domain/model/weekly_availability.dart';

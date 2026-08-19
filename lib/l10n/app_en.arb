@@ -1999,7 +1999,7 @@
   "@weeklyPlanScheduled": {"placeholders": {"count": {"type": "int"}}},
   "practicePlanCatchUpSheetTitle": "When you miss a day",
   "@practicePlanCatchUpSheetTitle": {},
-  "practicePlanCatchUpSheetBody": "Missing a day is part of playing. Your plan adapts — it never punishes you.",
+  "practicePlanCatchUpSheetBody": "Skipping a day is part of playing. Your plan adapts — it never adds extra work.",
   "@practicePlanCatchUpSheetBody": {},
   "practicePlanCatchUpSheetNoBacklogTitle": "No catch-up pressure",
   "@practicePlanCatchUpSheetNoBacklogTitle": {},

@@ -92,7 +92,7 @@ final class ResumePracticePlanResult {
 
 /// Pure use case.
 final class ResumePracticePlan {
-  ResumePracticePlan({required this.clock, this.longBreakThreshold = 21})
+  ResumePracticePlan({required this.clock, int longBreakThreshold = 21})
     : longBreakThreshold = _positive(longBreakThreshold, 'longBreakThreshold');
 
   /// Inclusive lower bound for the "long break" mode flip. The
