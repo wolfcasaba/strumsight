@@ -12165,3 +12165,55 @@ bármely más állítást (a jelen protokoll már kimondott elve, [[subagent-res
 rokona: egy korábbi, akár saját magad által írt ADR sem bizonyíték
 bemondásra). Rokon: [[L302]] (ugyanaz a hibaosztály egyszer: PREPARED brief +
 scope-rés, meglévő típusokkal feloldható — itt egy MÁSODIK, rejtett rés).
+
+---
+
+## L320 — A `python3 -m pytest tools/tests -q` egy „valódi queue-t olvasó" tesztje áltévesen pirosra vált, ha az ORCHESZTRÁTOR saját, ÉPP FUTÓ körének sora a `pipeline-queue.tsv`-ben még `pending` — nem kódregresszió, hanem egy időzítési artefakt a záró jelzés előtt (E99-R15, 2026-08-19)
+
+**Mit mértünk.** Az E99-R15 (GOV-09) merge UTÁNI, kötelező post-merge gate
+(`python3 -m pytest tools/tests -q`, friss izolált klón) egy hibával állt le:
+`test_pipeline_integration.py::test_a_full_firing_retries_the_round_instead_of_healing_a_resolved_terra_wall`
+— `AssertionError: True is not false` a `(state / "HALTED").exists()` cellán,
+6/6 ismétlésben DETERMINISZTIKUSAN (nem flake). A brief-lint/self-heal
+kultúra szerinti gyanú első köre — „a saját diffem törte el" — méréssel
+cáfolva: a pontos ugyanazon commit tesztje ZÖLD, ha KIZÁRÓLAG a
+`docs/execution/pipeline-queue.tsv` E99-R15 sorát (`pending` → `done`)
+módosítom, a `tools/round-pipeline.sh` tartalmát ÉRINTETLENÜL hagyva.
+
+**A gyökérok.** A teszt (saját kommentje szerint is tudatosan) a REAL
+repository-n futtatja a `round-pipeline.sh`-t: egy fixture Terra-halt
+archiválása UTÁN a driver folytatja a normál dispatch-ágra, ahol a VALÓDI
+`pipeline-queue.tsv`-t olvassa, és a következő `pending` sort veszi fel —
+`PIPELINE_NO_LAUNCH=1` csak a TÉNYLEGES tmux/claude-indítást tiltja le, a
+prompt-építést és a placeholder-session „nincs jelzés" HALT-jának kiírását
+nem. Az E99-R15 sora a `pipeline-queue.tsv`-ben a kör MERGE-e UTÁN IS
+`pending` marad — ez helyes és VÁRT állapot, mert a driver a sort a saját
+`.pipeline/round-status-E99-R15` jelzésem FELDOLGOZÁSA UTÁN, egy KÉSŐBBI
+firingen frissíti (§4: „nem nyúl a `pipeline-queue.tsv`-hez — azt a driver
+vezeti" — az orchesztrátor SOSEM írja ezt a fájlt). A teszt tehát pontosan
+azt az átmeneti ablakot méri félre kódhibaként, ami MINDEN kör saját
+záró-jelzése ELŐTT, a driver saját könyvelésében természetesen fennáll.
+
+**Miért nem ütközik ez a CI-vel.** A `router-ci.yml` UGYANEZT a suite-ot
+futtatja (`python -m pytest tools/tests -q`), mégis zöld volt a merge SHA-n
+— mert a GitHub Actions checkout NEM ugyanazt a futtatási környezetet adja
+(a script saját `main`-azonosság- és `gh pr list`-előfeltétel-őrei ott egy
+KORÁBBI, más ágú kilépéssel állnak meg, mielőtt a queue-olvasó ághoz
+érnének) — mérve: egy helyi, hálózattól elszigetelt bare-repo klónban a
+`git branch --show-current`/`gh pr list` előfeltétel-őrök ELŐBB buknak el,
+mint ahogy a queue-olvasó ág egyáltalán elérhető lenne. A LOKÁLIS,
+teljes-gh-auth-szal futó post-merge gate ezért SZIGORÚBB egy adott szűk
+ablakban, mint a CI — nem megengedőbb.
+
+**Hogyan alkalmazd.** Ha egy orchesztrátor a SAJÁT, még záratlan körének
+post-merge `python3 -m pytest tools/tests -q` futtatásakor pontosan ezt a
+tesztet látja pirosra válni, ELŐSZÖR mérd meg (ne a diffet gyanúsítsd
+azonnal): `sed` -sel (nem commitolva) ideiglenesen `pending`→`done`-ra
+állítva a SAJÁT kör sorát a `pipeline-queue.tsv`-ben (majd `git checkout --`
+a fájlra), fusson-e a teszt zölden — ha igen, ez a jelen lecke, nem
+kódregresszió, és a `pipeline-queue.tsv`-t NEM szabad commitolva javítani
+(az orchesztrátor tiltott zónája — §4). A záró kör-jelzés (`.pipeline/
+round-status-<kör>`) megírása után a driver saját, következő firingje
+természetes úton felold. Rokon hibaosztály (élő repo-állapotra érzékeny
+teszt): [[L316]] (más ok, ugyanaz a „ne a diffemet gyanúsítsd először, mérj"
+elv).

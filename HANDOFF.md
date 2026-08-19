@@ -1,5 +1,56 @@
 # HANDOFF — StrumSight 🎸
 
+> **E99-R15 (GOV-09) KÉSZ — Halt-eszkaláció: motorváltás az utolsó önjavító
+> kísérletnél és ismétlődő riasztás throttle-lel** — PR
+> [#320](https://github.com/wolfcasaba/strumsight/pull/320), squash
+> `dcbfb469` (2026-08-19). `heal_engine_for_attempt` az utolsó
+> (`selfheal_max`-adik) self-heal kísérletnél determinisztikusan más,
+> statikusan elérhető, más `model`-ű motort választ a nyilvántartásból (mai
+> alapértelmezés: `codex`), ha van ilyen; az 1–2. kísérlet és az alternatíva
+> nélküli utolsó kísérlet a rögzített `sonnet-impl` identitáson marad. A
+> kimerült self-heal riasztása (`notify … high`) — amely a `.pipeline/
+> chain.log` mérése szerint korábban **5 percenként, throttle nélkül**
+> ismétlődött (455 találat, egyetlen 42 órás ablakban ~504 push) —
+> `PIPELINE_HALT_REMINDER_MIN` (60 perc) throttle-t és
+> `PIPELINE_HALT_REMINDER_MAX_H` (24 óra) felső korlátot kapott; a `KIMERÜLT`
+> naplósor változatlanul minden firingkor ír.
+>
+> **A pre-flight (§0.0) egy MÉRT, TÉVES brief-állítást korrigált** a
+> dispatch előtt: a brief „a riasztás egyszer ment ki, nem ismétlődött"
+> mondata a `chain.log`-gal szemben hamis volt — a valódi mai hiba
+> kontrollálatlan spam, nem csend; ez eldöntötte, hogy D2 a MEGLÉVŐ `notify`
+> hívást kapuzza, nem egy másodikat ad hozzá mellé.
+>
+> **A független review (`docs/reviews/e99-r15-review.md`) 1 MAJORT talált és
+> zárt egy javító körben:** az implementer első commitja (`05d81543`) egy ÚJ
+> `run_selfheal_session` dispatch-útra váltott MINDEN kísérletnél, elveszítve
+> a régi `run_orchestrator_session` beépített Claude-kvótazárlat→Terra
+> automatikus fallbackjét — nemcsak az utolsó, motorváltós kísérletnél, hanem
+> az 1–2.-nál is, ami sértette a brief saját „a mai viselkedés nem érintett
+> ágakon bitre azonos" ígéretét. A review saját falszifikációval mérte
+> (`claude_unavailable_until` szimulált zárlat), a javítás (`e938588a`)
+> minimális: a változatlan motor a régi, kvóta-tudatos úton marad, a
+> `run_selfheal_session` kizárólag valódi motorváltásnál fut. A kötelező
+> biztonsági review (`docs/reviews/e99-r15-security.md`, `risk=high`) PASS —
+> 0 CRITICAL/BLOCKER/MAJOR/MINOR, függetlenül nyomon követve a MiniMax
+> auth-token teljes futásidejű útját (nincs szivárgás argv-be, naplóba vagy
+> commitba). Exact-SHA: Full Gate
+> [32205415850](https://github.com/wolfcasaba/strumsight/actions/runs/32205415850)
+> és Router CI [32204921953](https://github.com/wolfcasaba/strumsight/actions/runs/32204921953)
+> success a merge-előtti `e938588a` fejen.
+>
+> **Post-merge gate (mind saját, izolált klónban futtatva):** a Dart gate
+> (`tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`)
+> zöld. A `python3 -m pytest tools/tests -q` egyetlen determinisztikus (nem
+> flaky) hibával állt le
+> (`test_pipeline_integration.py::test_a_full_firing_retries_the_round_instead_of_healing_a_resolved_terra_wall`)
+> — méréssel kizárva, hogy ez a kör kódjának regressziója: a hiba KIZÁRÓLAG
+> attól függ, hogy az E99-R15 sora a `docs/execution/pipeline-queue.tsv`-ben
+> még `pending` (a driver ezt a saját `.pipeline/round-status-E99-R15`
+> jelzésem feldolgozása UTÁN, egy KÉSŐBBI firingen frissíti — nem az
+> orchesztrátor dolga, §4). A `pipeline-queue.tsv` sort NEM módosítottam
+> (tiltott zóna). Lecke: **[[L320]]**.
+
 ## ✅ [HEAL E07-R25/H3] KÉSZ — brief-bővítés: hiteles `EvidenceSource.vision` + egy exhaustive-switch fordítási csapda + szűk Vision-owned evidence contract — PR #319, squash `ea042640` (2026-08-19)
 
 Az E07-R25 (Analyze/Vision evidence integráció) saját pre-flightja (ADR 0319,
@@ -360,7 +411,9 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
-> [How to update](#how-to-update-this-file)). Last updated: **2026-08-18
+> [How to update](#how-to-update-this-file)). Last updated: **2026-08-19
+> (E99-R15/GOV-09 done — self-heal engine escalation + halt-reminder throttle,
+> see banner above.) Prior: 2026-08-18
 > (E07-R18 done — application-level, cancellable, state-machine-driven
 > GenerationOrchestrator: immutable `GenerationState` (idle/running/completed/
 > cancelled/failed + 4 stage checkpoints), a `GenerationOrchestrator` that
