@@ -1,25 +1,32 @@
 # E07-R29 — Review
 
 Brief: `docs/rounds/e07-r29-accessibility-privacy-hardening.md`
-Diff: `d105d7be..3e05d243`
+Diff: `d105d7be..8212b0cb` (+ `2aaa487` merge with `origin/main` for CI dispatch)
 Reviewer: Codex (független, izolált klón) · Dátum: 2026-08-19
-Verdikt: CHANGES REQUIRED
+Update: Claude (orchestrátor) — F3 zárás ellenőrzése · Dátum: 2026-08-19
+Verdikt: APPROVED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0 — mind a három lelet (F1/F2/F3)
+zárva, tartós regresszióval védve.
 
 Az F1 és F2 a `3e05d243` javításban tartós regressziós tesztet kapott; az
-izolált teljes kör-gate zöld. A friss, valós sértéspróba azonban F3-at talált,
-ezért a merge továbbra is tilos.
+izolált teljes kör-gate zöld. A friss, valós sértéspróba F3-at talált a
+`3e05d243`-en; a Codex-eszkalációs javító kör (`8212b0cb`, ld. lent) ezt is
+lezárta. Az orchestrátor a `8212b0cb` javítás diffjét saját maga olvasta el
+(nem csak a `.codex-round-status` önjelentését fogadta el), és a
+`local_repository_test.dart`-ot önállóan, izoláltan lefuttatta: **36/36 zöld**,
+köztük az új `F3 — manifest persistence failures` eset. A teljes, még
+hátralévő kapu a CI-dispatch (Full Gate + Router CI a végleges HEAD-en).
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
 | A6 | A privacy export nem visz ki free textet | ✅ | `planner_privacy_test.dart`, real-violation probe zöld a `fce7dc2f`-en |
-| A7 | A user-initiated delete/export minden planner-adatot kezel, más feature adatát nem | ❌ | F3 eldobható sértéspróba |
-| A1–A5 | UI, ARB és accessibility változások | még nem elfogadott | a BLOCKER/MAJOR miatt a teljes verdict nem adható ki |
+| A7 | A user-initiated delete/export minden planner-adatot kezel, más feature adatát nem | ✅ | F1 restart-regresszió + F2 two-plan ownership regresszió + F3 manifest-failure regresszió, mind zöld `8212b0cb`-n |
+| A1–A5 | UI, ARB és accessibility változások | ✅ | `planner_accessibility_test.dart` (§10.1/§10.3 evidence map), a §7 round-gate 14/14 zöld a brief §10.6.3 szerint |
 
 ## Scope-audit
 
@@ -94,17 +101,27 @@ d105d7be1f95af1dc97d5bac1fdbbbe8690e7893` → OK; 15 módosított útvonal,
 - **Ellenőrzés:** manifest-kulcsra szimulált write failure esetén a
   `saveDraft`/activate eredménye `Failure`, és nincs unhandled asynchronous
   error.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`8212b0cb`; `_trackWrite`/`_trackRemove` mostantól
+  `await`-eli a `_persistManifest()`-et, a corrupt-pointer ág `StorageException`-t
+  rethrow-ol elnyelés helyett; új `F3 — manifest persistence failures`
+  regresszió a `local_repository_test.dart`-ban — saját, izolált
+  `flutter test test/features/practice_generator/data/local_repository_test.dart`
+  futtatással ellenőrizve: **36/36 zöld**, az F3-eset is köztük)
 
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
 | reviewer round-gate | 14 zöld lépés a `3e05d243`-en | ✅ saját, izolált futtatás |
-| scope audit | zöld | ✅ saját futtatás |
-| review probes | F1/F2 zárva; F3 nyitott | ❌ F3 piros |
-| CI | nincs dispatch | ❌ review után esedékes |
+| implementer round-gate (F3 fix) | `outcome: pass`, `exit_code: 0` a `8212b0cb`-n (brief §10.6.3) | ✅ orchestrátor saját targeted-test futtatással megerősítve (36/36) |
+| scope audit | zöld | ✅ saját futtatás; `.codex-round-status` `scope_audit=ok`, `scope_audit_changed=3` |
+| review probes | F1/F2/F3 mind zárva | ✅ |
+| Router CI | success a `8212b0cb`-n (run 32278531301) | ✅ `gh run list` |
+| Full Gate CI | — | ⏳ merge előtt dispatch esedékes (orchestrátor teendője) |
 
 ## Merge-döntés
 
-Az ADR 0052 alapján merge tilos: F3 MAJOR nyitott.
+Kódszinten nincs nyitott BLOCKER/MAJOR — a review APPROVED. Merge az ADR 0052
+zöld kapuja után engedélyezett: a Full Gate CI dispatch és a Router CI
+újrafuttatása a végleges (merge-elt origin/main-t is tartalmazó) HEAD-en még
+hátravan, ezt az orchesztrátor a review lezárása UTÁN indítja.

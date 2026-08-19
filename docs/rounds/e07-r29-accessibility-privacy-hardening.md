@@ -634,3 +634,25 @@ invocation then completed with `outcome: pass`, `exit_code: 0` (format,
 analyze, all nine targeted test paths, architecture, secrets, and l10n).
 
 ## 11. Review — a Claude tölti ki
+
+**Verdikt: APPROVED** (`docs/reviews/e07-r29-review.md`, `docs/reviews/e07-r29-security.md`).
+
+Két javító kör zárta le a review-t (mindkettő a §2 "javító kör a lánc normál
+útja" szabálya szerint): a MiniMax-fix (`0a6315d2`…`3e05d243`) zárta F1
+(MAJOR, restart-instabil felfedezés) és F2 (BLOCKER, plan-scoped evidence
+delete más tervet is törölt) leleteket; a motor-eszkaláció (a MiniMax-nak
+járó EGY javító kör elfogyott, ld. AGENTS.md/ADR 0087 §2 eszkalációs
+szabálya) a Codex-hoz vitte F3-at (MAJOR, a durable manifest írása nem volt
+`await`-elve, a hiba silent no-op-ként veszett el) — commit `8212b0cb`.
+
+Az orchestrátor a Codex-javítást NEM a `.codex-round-status` önjelentése
+alapján fogadta el: elolvasta a `8212b0cb` teljes diffjét, és saját, izolált
+`flutter test test/features/practice_generator/data/local_repository_test.dart`
+futtatással megerősítette — 36/36 zöld, köztük az új
+`F3 — manifest persistence failures` eset. A security review (S1/S2)
+ugyanerre az F1/F2/F3 láncra épül; mindkettő zárva, verdikt PASS.
+
+Hátralévő gate a merge előtt: Full Gate CI (round-ci-plan.py döntése) +
+Router CI a végleges (origin/main-t is tartalmazó) HEAD-en, exact-SHA
+egyeztetéssel — ezt az orchesztrátor a review lezárása UTÁN, a jelen
+kör-brief §10.6.3 utáni commitban dispatch-eli.
