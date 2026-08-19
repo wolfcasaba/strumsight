@@ -12115,3 +12115,53 @@ figyelmeztetés jelenlétét ellenőrizte, nem a tiltott kimenet hiányát.
 **Hogyan alkalmazd.** Függő célnál külön kövesd az `actualized` tételeket, és
 a tesztben legyen no-producer cella: a cél hiányozzon a kimenetből. A puszta
 diagnosztikai lista soha ne legyen engedélyezési bizonyíték.
+
+---
+
+## L319 — Egy pre-flight/ADR saját megnevezett `allowed_paths`-listája hiányos maradhat: a scope-résen TÚL is méresd meg, nem csak azt fogadd el, amit az ADR maga állít (E07-R25 H3 self-heal, 2026-08-19)
+
+**Mit mértünk.** Az E07-R25 pre-flightja (ADR 0319) helyesen mérte és
+dokumentálta a fő blokkolót: a Practice Generator `EvidenceSource` enumja
+(`skill_evidence.dart:17-21`) nem ismer `vision` értéket, és az egyetlen
+scope-on belüli Vision cross-feature contract (`vision/domain/integration/
+public.dart`, ADR 0193) nem ad át skillhez kötött numerikus evidence-et. Az
+ADR 0319 „Következmények" szakasza pontosan megnevezte, mit kell a
+következő briefnek engedélyeznie — de ez a lista NEM volt teljes. Az
+önjavítás (ADR 0112, H3) a saját, független kódmérésével egy MÁSODIK,
+ADR 0319-től független rést talált: `EvidenceWeightPolicy.
+sourceReliability` (`evidence_weight_policy.dart:66-71`) egy `default` ág
+nélküli, kimerítő `switch (source)`-t futtat a 4 jelenlegi
+`EvidenceSource` értéken. Egy ötödik (`vision`) érték hozzáadása enélkül
+NEM ugyanazt a H3 HALT-ot reprodukálta volna a következő dispatchkor, hanem
+egy kevésbé olvasható, más tünetű hibát: `flutter analyze`
+non-exhaustive-switch hibával állt volna le egy olyan fájlban, amit a brief
+(az ADR 0319 utáni állapotában is) továbbra sem engedne módosítani.
+
+**Miért.** Egy pre-flight vagy ADR saját „mit engedélyezzen a következő
+brief" ajánlása a SAJÁT vizsgálati útját tükrözi — itt: a cél típus
+(`EvidenceSource`) deklarációjáig jutott el, de nem futtatott
+teljes-körű keresést minden HELYRE, ahol az adott típus KIMERÍTŐEN van
+kezelve (`switch` `default` nélkül, exhaustive pattern-match). Egy enumhoz
+új érték hozzáadása Dartban pontosan ott tör, ahol valaki KIMERÍTŐEN
+switchel rá — ez tetszőleges távolságra lehet a deklarációtól, és semmilyen
+import-gráf vagy `grep <TypeName>` nem különbözteti meg magától egy nem
+kimerítő használattól. Ugyanez a hibaosztály bármely megosztott enumnál
+előfordulhat: a scope-bővítés helyes IRÁNYÁT (melyik enum, melyik érték) egy
+pre-flight helyesen mérheti, miközben a bővítés TELJESSÉGÉT (mely fájlok
+törnének emiatt) nem.
+
+**Hogyan alkalmazd.** Amikor egy self-heal (vagy pre-flight) egy megosztott
+domain-típus (enum, sealed union, `switch`-csel kezelt osztályhierarchia)
+bővítését engedélyezi egy brief `allowed_paths`-ában, GREP-eld a típus MINDEN
+előfordulását a `lib/`+`test/` fában (nem csak a deklarációt), és minden
+találatnál nézd meg, van-e `default`-mentes kimerítő `switch`/`when`-alakú
+kezelés — az ilyen fájlt IS fel kell venni a listába, különben a következő
+dispatch egy MÁSIK, kevésbé olvasható hibával fog megállni, nem ugyanazzal a
+HALT-tal (tehát a driver a javítás sikerét látszólag igazolná, majd a
+következő kör mégis elbukna). Ugyanez fordítva is igaz: ha egy self-heal egy
+KORÁBBI pre-flight/ADR ajánlását „készen kapott bemenetként" fogadja el
+brief-bővítéskor, azt a bemenetet ugyanúgy méréssel kell ellenőrizni, mint
+bármely más állítást (a jelen protokoll már kimondott elve, [[subagent-results-are-data]]
+rokona: egy korábbi, akár saját magad által írt ADR sem bizonyíték
+bemondásra). Rokon: [[L302]] (ugyanaz a hibaosztály egyszer: PREPARED brief +
+scope-rés, meglévő típusokkal feloldható — itt egy MÁSODIK, rejtett rés).
