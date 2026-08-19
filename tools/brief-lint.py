@@ -343,6 +343,32 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
     if not any(marker.lower() in text.lower() for marker in SIGNAL_MARKERS):
         findings.append(Finding("strict", "S4", "nincs kör-jelzés (STOP/`done`) szakasz"))
 
+    # S6 — aránytalanul kicsi kör (E99-R16 D3, ADR 0307 §3). Ha a brief
+    # `allowed_paths` listája a brief-dokumentumon és a `gate_tests` elemein
+    # kívül 2-nél kevesebb fájlt tartalmaz, és `native_gate = false`, a kör
+    # valószínűleg összevonható a sorban szomszédos körével — a mérőeszköz
+    # a `tools/brief-merge-plan.py`. CSAK strict, NEM base: egyes jogosan
+    # kicsi körök (pl. ADR-bejegyzés, hotfix-egy-sor) nem CI-pirosak.
+    # A küszöb SZÁNDÉKOSAN 2 (nem 1): a jelenlegi 6-os, 8-as `allowed_paths`
+    # méretű governance-körök többsége a brief-fájlon kívül 5-7 fájlt ír —
+    # a küszöb alatt az EGYSZERŰ (1 munka-fájl) kör marad.
+    non_test_paths = [
+        path
+        for path in metadata.allowed_paths
+        if path != relative and path not in metadata.gate_tests
+    ]
+    if not metadata.native_gate and len(non_test_paths) < 2:
+        findings.append(
+            Finding(
+                "strict",
+                "S6",
+                "a brief munka-területe aránytalanul kicsi (a brief-fájlon és a "
+                f"gate_tests-en kívül {len(non_test_paths)} fájl); valószínűleg "
+                "összevonható a szomszédjával — futtasd a `tools/brief-merge-plan.py` "
+                "elemzést, és mérlegeld az egyesítést",
+            )
+        )
+
     return findings
 
 
