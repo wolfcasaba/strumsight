@@ -118,7 +118,7 @@ regressziós teszttel (`tools/tests/test_e99_r18_scope_debris_revert.py`)
 gépileg is rögzíti, mindkét irányban (a debris VIOLATION marad, amíg jelen
 van; az allowlist nem bővül).
 
-Lecke: `docs/LESSONS.md` [[L333]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
+Lecke: `docs/LESSONS.md` [[L337]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
 Módosítás (2026-08-19).
 
 ## 0. Kör-jelzés és STOP-protokoll

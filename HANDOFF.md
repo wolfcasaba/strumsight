@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R18/H3] KÉSZ — revert-not-expand: implementer scratch debris — PR #337, squash `80b70d1e` (2026-08-19)
+
+A MiniMax implementer (`/home/ubuntu/ss-minimax-e99-r18`, ág
+`minimax/e99-r18-gov-12-generated-public-barrels`, HEAD `e9c4a26b`) három
+nyomkövetetlen fájlt hagyott a brief `allowed_paths`-án kívül
+(`test_project/lib/features/demo/{public.dart,public/application.dart,
+public/domain.dart}`). A Terra orchesztrátor-session ezt H3-mal állította le
+(`.pipeline/HALTED`, 20:43:38Z), holott `docs/execution/
+pipeline-orchestrator-prompt.md` VIOLATION-sora már eleve két utat ismer: „a
+listán kívüli fájlokat **vissza kell állítani**, vagy H3 halt" — és a §2
+„Önállóan dönthetsz" felsorolása kifejezetten megnevezi „az
+engedélyezett-fájllista **szűkítését**" mint a kör saját hatáskörét.
+
+Az önjavítás (ADR 0112, 1/3. kísérlet) méréssel igazolta, hogy a három fájl
+NEM legitim munka — nulla hivatkozás bármely tracked/untracked forrásban,
+tartalma bájtra megegyezik a `gen_public_barrel_test.dart` saját, már
+`Directory.systemTemp`-be izolált fixture-jével, egyik D-feladatot vagy
+„Tilos zóna" cellát sem fedi — és ezt dokumentált `## 0.0 Pre-flight
+revízió`-ként írta a brief-be: a helyes folytatás REVERT, `allowed_paths`
+bővítése NÉLKÜL (a `test_e07_r29_accessibility_privacy_scope.py` precedens
+tükörképe, ahol a listán kívüli fájlok igazoltan hiányzó deliverable-ek
+voltak). Az ADR 0112-t egy dated Módosítás-blokk egészíti ki, amely ezt a
+precedenst SZŰKEN általánosítja (csak akkor alkalmazható, ha a kifogásolt
+útvonalak mérhetően függetlenek minden deliverable-től — egyébként H3/
+escalate marad az alapértelmezés). Regressziós teszt (`tools/tests/
+test_e99_r18_scope_debris_revert.py`, real measured data): egy eset
+valóban piros-a-javítás-előtt/zöld-utána (a brief §0.0 dokumentációja), a
+többi a mért adatot zárja a valódi `audit_legacy_scope()`-pal mindkét
+irányban. `python3 -m pytest tools/tests -q`: 578 passed, 565 subtests
+passed (833→834 teszt-fájl, egyetlen gate-artefaktum hash sem változott).
+Router CI [32302589265](https://github.com/wolfcasaba/strumsight/actions/runs/32302589265)
+success a merge-előtti exact `547e524e` SHA-n (nincs Dart-változás, tehát a
+Router CI az egyetlen szükséges CI-bizonyíték).
+
+A self-heal SZÁNDÉKOSAN nem nyúlt a megállt implementer saját
+worktree-jéhez/ágához — az ADR 0112 §2 jogosultsága a briefre és az
+engedélyezett-fájllistára szól, nem egy még nem review-zott implementer-ág
+tartalmára. A következő E99-R18 dispatch dönt: újrahasznosítja-e a meglévő
+worktree-t (a három fájl törlése után) vagy frissen indul.
+
+**Mért mellékhatás, dokumentálva ([[L338]]):** a self-heal PR-be előre írt
+`[[L333]]` lecke-hivatkozás a merge KÖZBEN ütközésbe került az egyidejűleg
+záruló E08-R02 saját `L333–L336` foglalásával (`6db8abcc`) — a helyes,
+frissen leolvasott szám `L337` lett, és ez a záró commit javítja a már
+merge-elt hivatkozásokat (ADR 0112, a brief) is.
+
 ## ✅ E08-R02 KÉSZ — Kanonikus tanulási esemény-szerződések — PR #335, squash `a3d98ed2` (2026-08-19)
 
 A gamifikáció EGYETLEN bemenete: a feature-agnosztikus, immutable, verziózott

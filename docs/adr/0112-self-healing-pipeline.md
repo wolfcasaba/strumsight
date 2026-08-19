@@ -302,7 +302,7 @@ voltak, és a helyes feloldás `allowed_paths`-bővítés volt. A két minta nem
 helyettesíti egymást — melyiket kell alkalmazni, azt a fenti (a)-(c) mérés
 dönti el, sosem az, hogy melyik a kényelmesebb.
 
-Lecke: `docs/LESSONS.md` [[L333]].
+Lecke: `docs/LESSONS.md` [[L337]].
 
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 

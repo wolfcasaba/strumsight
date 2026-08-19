@@ -13053,3 +13053,69 @@ dispatch-eld újra a natív gate-et is, és ha az utolsó Router-CI-releváns
 tudatosan hozz létre egy olyan záró commitot (pl. a brief §11 kitöltése),
 ami ezt kiváltja — ez egyúttal más kötelező tartalmat (a review-linkek
 brief-be írása) is szolgál, nem tiszta ceremónia.
+
+## L337 — Egy H3 halt, ahol a listán kívüli fájl igazoltan ártalmatlan implementer-debris (nulla hivatkozás, redundáns egy már izolált automatizált fixture-rel), a `pipeline-orchestrator-prompt.md` saját szabálya szerint REVERT-tel oldható, `allowed_paths`-bővítés nélkül (E99-R18, H3 self-heal, ADR 0112, 2026-08-19)
+
+**Mit mértünk.** A MiniMax implementer (`/home/ubuntu/ss-minimax-e99-r18`)
+három nyomkövetetlen fájlt hagyott a brief `allowed_paths`-án kívül
+(`test_project/lib/features/demo/{public.dart,public/application.dart,
+public/domain.dart}`). A Terra orchesztrátor-session ezt H3-mal állította le,
+holott `docs/execution/pipeline-orchestrator-prompt.md` VIOLATION-sora már
+eleve két utat ismer: „a listán kívüli fájlokat **vissza kell állítani**,
+vagy H3 halt" — és a §2 „Önállóan dönthetsz" felsorolása kifejezetten
+megnevezi „az engedélyezett-fájllista **szűkítését**" mint a kör saját
+hatáskörét. Méréssel igazolható volt, hogy a három fájl NEM legitim munka:
+`grep -rn "test_project"` nulla találatot adott bármely tracked/untracked
+forrásban, a tartalom bájtra megegyezett a `gen_public_barrel_test.dart`
+saját, már `Directory.systemTemp`-be izolált fixture-jével, és egyik nem
+fedett le semmilyen D-feladatot vagy „Tilos zóna" cellát.
+
+**Miért.** A H3 halt-kód a „tilos zóna feloldása" (ÚJ engedély) eszkalációját
+védi, nem minden listán-kívüli-fájl esetet — egy revert (a diffet az EREDETI
+allowlisthez igazítani) a §2 alatt már felhatalmazott, nem eszkalációt
+igénylő döntés. A rotáción lévő motor (Terra) ezt nem gyakorolta — ez a
+self-heal a mérés alapján kizárólag azt a döntést hozta meg, amit a saját
+protokoll már engedélyezett.
+
+**Hogyan alkalmazd.** Egy H3 halt-nál MINDIG mérd meg, melyik eset áll fenn,
+mielőtt brief-bővítéshez nyúlnál: (a) a fájl nulla hivatkozással szerepel
+bármely tracked/untracked forrásban, (b) funkcionálisan redundáns egy már
+létező, helyesen izolált automatizált fixture-rel, (c) egyetlen deliverable-t
+vagy acceptance-cellát sem fed le a brief D-feladatai vagy „Tilos zóna"
+szakasza szerint. Mindhárom együtt → REVERT dokumentált §0.0 revízióval,
+`allowed_paths` érintetlenül. Ha akár egy is hiányzik — vagyis nem
+egyértelmű, hogy a fájl elhagyható-e —, marad a H3/`escalate`, NEM
+automatikus revert. Ez a `test_e07_r29_accessibility_privacy_scope.py`
+precedens (allowed_paths-bővítés) TÜKÖRKÉPE — melyiket kell alkalmazni, azt a
+fenti mérés dönti el, sosem az, hogy melyik a kényelmesebb. Regressziós teszt:
+`tools/tests/test_e99_r18_scope_debris_revert.py`.
+
+## L338 — Egy self-heal session ELŐRE kiszámított LESSONS.md sorszáma (pl. „L333") ütközhet egy PÁRHUZAMOSAN záruló, független kör saját záró-dokumentáció commitjával — a sorszámot közvetlenül a záró commit ELŐTT, `git fetch`+`ff` UTÁN kell újra leolvasni (E99-R18 H3 self-heal, 2026-08-19)
+
+**Mit mértünk.** A kör-brief és az ADR 0112 §0.0/Módosítás szövegébe a
+`[[L333]]` hivatkozást írtam a self-heal PR (#337) elkészítésekor. A PR
+merge-elése ALATT egy másik, PÁRHUZAMOS session (E08-R02 záró
+`docs(handoff+lessons+rtm)` commitja, `6db8abcc`) a `main`-en L333–L336-ot már
+elfoglalta — a heal PR-em CI-je és scope-auditja ezt nem vehette észre, mert
+a `[[L333]]` egy sima szöveges hivatkozás, nem egy géppel ellenőrzött
+egyediség-korlát. A merge UTÁNI `git fetch`+`grep "^## L3"` mutatta meg, hogy
+a valódi következő szabad szám L337, nem L333 — a már merge-elt
+`[[L333]]`-hivatkozások (ADR 0112, a brief) egy MÁSIK, témában teljesen
+független leckére mutattak volna.
+
+**Miért.** A megosztott fán több session dolgozik egyszerre
+([[shared-tree-coordination]]); a LESSONS.md sorszáma csak a ténylegesen
+COMMITOLT állapot alapján derül ki, egy korábban (akár csak percekkel
+korábban) leolvasott „utolsó szám + 1" a session teljes futása alatt
+elavulhat, PR-on és külön docs-only záró-commit határon át is.
+
+**Hogyan alkalmazd.** A LESSONS.md sorszámot NE a session elején (a
+diagnózis/tervezés fázisban) számítsd ki és véglegesítsd a PR-tartalomban —
+ha mégis (mert a lecke-hivatkozás a dokumentált revízió RÉSZE, mint itt a
+§0.0-ban), a PR MERGE UTÁN, a docs-only záró commit ELŐTT `git fetch origin
+main && git merge --ff-only origin/main`, majd `grep -n "^## L[0-9]" docs/
+LESSONS.md | tail` — és ha a szám időközben foglalt lett, a záró commitban
+JAVÍTSD a már merge-elt hivatkozás(oka)t is a helyes, frissen leolvasott
+számra. A javítás maga docs-only, nem igényel új PR-t/gate-et (lásd a
+`docs(handoff+lessons+rtm): ... closing` minta közvetlen `main`-push
+precedensét, pl. `f2028ef6`).
