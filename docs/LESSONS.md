@@ -12633,3 +12633,67 @@ maga tudja ellenőrizni, nem csak bemondásra higgyen.
 Rokon: [[L325]] (ugyanaz a tünetosztály — csendben elavult review-klón —, más
 gyökérok), [[L311]] (a javító kör `done` jelzése utáni hiányzó push, rokon
 mintázat implementer-oldalon).
+
+---
+
+## L327 — Egy pre-flight saját „mi hiányzik" mérése IRÁNYBAN helyes lehet, de a javasolt SZÉLESSÉGBEN felül- vagy alulmérhet — a self-healnek mindkét irányban újra kell mérnie, nem elfogadnia (E07-R29 H3 self-heal, 2026-08-19)
+
+**Mit mértünk.** Az E07-R29 pre-flightja (Terra orchestrátor, `29863cba` a
+sosem push-olt `minimax/e07-r29-…` ágon) helyesen mérte a fő blokkolót: a
+törlés/export acceptance criteria a kizárt `LocalPracticePlanRepository`/
+`GenerationDraftRepository`/`PracticeEvidenceRepository` fájlokban él, az
+accessibility audit pedig a kizárt, már létező planner-képernyőkön — egy
+brand-new fájlokból álló `allowed_paths` egyiket sem éri el. A pre-flight
+saját szövege emellett egy MELLÉKES megfigyelést is rögzített: „a
+`KeyValueStore` kulcs-enumerálást sem ad" — ami olvasható úgy is, mintha a
+megosztott, minden feature-t kiszolgáló storage-interfészt is meg kellene
+nyitni. Az önjavítás ezt a mellékes állítást is lemérte (nem csak a fő
+blokkolót fogadta el bemondásra), és azt találta, hogy HAMIS útra vezetett
+volna: a `LocalPracticePlanRepository` MINDEN saját kulcsát maga generálja
+(statikus builderek: `activePointerKey`, `activePlanRevisionKey`,
+`archiveRevisionsIndexKey`/`archiveRevisionKey`, ugyanígy outcome-ra), és MÁR
+MA is egyenként hívja `keyValueStore.remove(<ismert kulcs>)`-ot a
+bounded-history evikció során (`appendRevision`/`appendOutcome`) — egy
+teljes, egy-terv-re-szóló törlés tehát ugyanezzel a mintával megírható
+KIZÁRÓLAG ebben az egy fájlban, a megosztott interfész módosítása NÉLKÜL.
+
+**Miért.** [[L319]] (E07-R25 H3) már dokumentálta, hogy egy pre-flight/ADR
+saját „mit engedélyezzen a következő brief" ajánlása HIÁNYOS maradhat — a
+vizsgálati út nem ért el minden helyre, ahol egy bővítés töri a fordítást.
+Ez a mérés a FORDÍTOTT irányt mutatja: a pre-flight saját ajánlása néhol
+SZÉLESEBB is lehet a ténylegesen szükségesnél, mert egy futólagos
+megfigyelést („X interfész nem ad Y-t") könnyű defenzíven „tehát X-et is
+nyisd meg"-ként olvasni, ahelyett hogy megmérnénk: a hívó tud-e Y nélkül is
+célt érni egy már meglévő, szűkebb mintával. Mindkét irány ugyanabból a
+gyökérokból fakad — egy korábbi mérés (akár a jelen self-heal saját
+elődje) nem bizonyíték bemondásra, [[subagent-results-are-data]] rokona —,
+de az egyik a hatókört SZŰKÍTI (kevesebb megosztott, más feature-öket is
+érintő fájl nyílik meg), a másik TÁGÍTJA (egy valós, de nem névre szólóan
+megnevezett fájl is bekerül). Egy self-heal, amely csak az egyik irányban
+ellenőriz, felényi biztonságot ad.
+
+Egy MÁSODIK, önálló mérés is ebből a körből: amikor egy scope-bővítés MÁR
+LÉTEZŐ (nem vadonatúj) fájlokat nyit meg írásra, ezek saját, már létező
+tesztjei is felkerültek `gate_tests`-be, nem csak `allowed_paths`-ba — a
+korábbi H3-precedensek (L11, L25 típusú widening-ek) mind ÚJ tesztfájlt
+adtak `gate_tests`-hez, mert a bővítés maga is új fájlokat vezetett be. Ha a
+bővítés meglévő, MA már zöld tesztekkel védett fájlokat nyit meg, és ezeket
+a teszteket NEM veszed fel a kör saját gate-jébe, a kör helyi
+`tools/round-gate.sh` futása vakon marad a saját maga okozta regresszióra —
+csak a végső, körön TÚLI CI teljes suite fogná meg, sokkal később.
+
+**Hogyan alkalmazd.** (1) Egy pre-flight vagy korábbi self-heal saját „mit
+kell megnyitni" ajánlását két irányban mérd újra, ne csak fogadd el: hiányzik-e
+belőle egy fájl (L319), ÉS tartalmaz-e olyat, ami egy szűkebb, már létező
+mintával (a célfájl saját maga is tudja generálni/eltávolítani az általa
+birtokolt kulcsokat/erőforrásokat) kiváltható. A második kérdés
+megválaszolásához OLVASD EL a hivatkozott interfész tényleges hívóit — ne a
+hiány TÉNYÉBŐL következtess a bővítés SZÜKSÉGESSÉGÉRE. (2) Amikor egy
+brief-widening MEGLÉVŐ fájlokat nyit meg (nem csak vadonatúj, a kör által
+frissen létrehozandókat), vedd fel azok saját, már létező tesztjeit is
+`gate_tests`-be — a kör saját gate-je így a bővített területen is védett,
+nem csak a végső CI. Rokon: [[L319]] (ugyanaz a „mérd újra, ne fogadd el"
+elv, ellentétes irányban), [[L261]] (saját tiltott zóna és kötelező működés
+ütközésekor a feloldásnak bound-nak kell lennie, nem csendes tágításnak —
+ez a mérés pontosan ezt hajtotta végre: a bound szűkebb lett, mint a
+kiinduló javaslat).

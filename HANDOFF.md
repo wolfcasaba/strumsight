@@ -1,5 +1,55 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E07-R29/H3] KÉSZ — brief-bővítés: storage-owner, evidence-port és auditált planner-képernyők — PR #330, squash `7176875d` (2026-08-19)
+
+Az E07-R29 (Accessibility, localization, privacy és safety hardening) saját
+pre-flightja (Terra orchesztrátor, `29863cba` a sosem push-olt
+`minimax/e07-r29-accessibility-privacy-hardening` ágon) helyesen HALT-olt:
+a §3/§5.5 teljes törlés/export és a meglévő planner-képernyők
+accessibility-auditja a brief régi `allowed_paths`-ában NEM elérhető
+fájlokban él — a tényleges storage-tulajdonosok
+(`data/local/local_practice_plan_repository.dart`,
+`generation_draft_repository.dart`), az evidence-port
+(`domain/repository/practice_evidence_repository.dart` — szándékosan SOSEM
+töröl, ADR 0260 §5) és a már létező `today_plan_screen.dart`/
+`weekly_plan_screen.dart`/`plan_setup_screen.dart` mind a régi tiltott
+zónában voltak. Ez a session soha nem érte el a `main`-t — a Terra-session a
+mérés után korrektül `H3`-mal állt le, implementer-dispatch nélkül.
+
+Az önjavítás (ADR 0112, 1/3. kísérlet) portolta ezt a mérést `main`-re §0.0
+gyanánt, majd §0.0.1-ben oldotta fel — **egyetlen** brief-bővítéssel, új ADR
+nélkül (a pre-flight saját szövege szerint ide nem tartozik elfogadott ADR):
+17 névre szóló bejegyzés `allowed_paths`-ban (10 meglévő `lib/`-tulajdonos +
+7 saját, már létező tesztjük), ebből 7 `gate_tests`-ben is, hogy a kör SAJÁT
+gate-je — ne csak a végső CI — védje a bővített területet. Egy új §5.7
+rögzíti az ADR 0260 §5 viszonyát: az automatikus/lekérdezés-idejű elévülés
+VÁLTOZATLAN marad mindenhol, az új evidence-törlő metódus egy szűk, csak a
+felhasználó-kezdeményezett „mindent törölj" útra fenntartott kivétel.
+
+**Mért, a pre-flight saját szövegénél szűkebb megoldás:** `lib/core/storage/
+key_value_store.dart` (a megosztott, minden feature-t kiszolgáló
+`KeyValueStore` interfész) NEM kellett megnyitni — a
+`LocalPracticePlanRepository` minden saját kulcsát maga generálja, és már ma
+is egyenként hívja `keyValueStore.remove()`-ot a bounded-history evikció
+során (`appendRevision`/`appendOutcome`) —, tehát egy teljes, egy-terv-re
+szóló törlés ugyanezzel a mintával, KIZÁRÓLAG ebben az egy fájlban megírható.
+
+**Kötelező regresszió (PIROS a revízió előtt → ZÖLD utána, mindkét irányban
+mérve):** `tools/tests/test_e07_r29_accessibility_privacy_scope.py` — a
+valódi `audit_legacy_scope()`-ot futtatja a committolt brief ellen; méri a
+mért halt-útvonalak és a teljes §0.0.1-grant hatókörbe kerülését, hogy egy-egy
+szomszédos fájl mind a négy bővített területen (megosztott storage-interfész,
+szomszédos repository, már biztonságosnak mért service, szomszédos képernyő)
+kívül marad, hogy `allowed_paths`/`gate_tests` pontosan az eredeti + az új
+bejegyzésekkel bővült, és hogy minden újonnan engedélyezett útvonal ma is
+létezik. Teljes `tools/tests`: **571 passed, 567 subtests passed, 0 hiba**.
+`tools/brief-lint.py --level strict` és a Router CI saját `--open --level
+base` kapuja: tiszta. Nincs Dart-változás, ezért `build-apk.yml` nem
+releváns; a Router CI (a diff `tools/**`/`docs/rounds/**`-t érint) volt az
+egyetlen szükséges kapu, `tools/wait-for-ci.sh`-sal várva előtérben, a merge
+előtt SHA-egyezés igazolva. Lecke: **[[L327]]**. A lánc E07-R29-cel
+folytatódik a következő cron-firingen, a most bővített `allowed_paths` alatt.
+
 ## ✅ E07-R28 KÉSZ — Tutor és PlannerAssistGateway integráció — PR #329, squash `b021eff2` (2026-08-19)
 
 Az opcionális, nem-autoritatív **PlannerAssist** gateway (SDD Ch8 Kör 28,
