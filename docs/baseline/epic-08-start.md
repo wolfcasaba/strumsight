@@ -27,14 +27,35 @@
 | `lib/features/streak/` | 8 db | 5 db | forrás: 700 · teszt: 328 |
 | `lib/features/progress/` | 8 db | 5 db | forrás: 1028 · teszt: 419 |
 | `lib/features/learn/` | 24 db | 34 db | forrás: 3732 · teszt: 3624 |
-| `lib/features/share/` | — | 7 db | teszt: 809 |
+| `lib/features/share/` | **9 db** | 7 db | forrás: 1397 · teszt: 809 |
 | `lib/features/gamification/` | **nem létezik** — e körben hozandó létre (Kör 2) | — | — |
 
-Forrás-sorok ellenőrizve `wc -l` alapján (lásd §10 handoff, `find ... -name '*.dart' | xargs wc -l`).
-A `lib/features/learn/` és `test/features/learn/` pontos száma az Explore-ágens
-mérése: 24 + 34, összesen 3732 + 3624 sor. A Share feature-nek nincs
-`lib/features/share/` termelő forrása a gamification-bevonás szempontjából
-(csak a `Wrapped`-szerű nézetekhez kapcsolódó widgetek).
+A `lib/features/share/` kilenc forrás-fájlját a `find lib/features/share
+-type f -name '*.dart'` listázza:
+
+- `lib/features/share/public.dart` (13 sor) — a feature barrel: a 4–13.
+  sorokban exportálja a `weekly_recap`-ot, a `share_content`-et, a
+  `share_service`-t, és a két preview képernyőt (`share_preview_screen.dart`,
+  `wrapped_preview_screen.dart`).
+- `lib/features/share/share_service.dart` (133 sor) — a `ShareService` osztály
+  a 15. sorban; a `capturePng` (20–33.), `shareCard` (37–48.), `shareImage`
+  (53–80.), `shareText` (83–95.) és `shareExportFile` (112–132.) metódusokkal.
+  Ezek a `share_plus` csomagra épülnek (`share_service.dart:7`), és a teljes
+  platform-share életciklust birtokolják (beleértve az ADR 0247 szerinti
+  öntörlő temp-file kontraktust is).
+- `lib/features/share/share_content.dart` (136 sor) — a `ShareContent` (caption
+  + fájlnév) és a `WeeklyRecap` gyártása.
+- `lib/features/share/model/weekly_recap.dart` (82 sor) — a `WeeklyRecap`
+  immutable adatszerkezete.
+- `lib/features/share/screens/{share_preview_screen,strum_reel_screen,wrapped_preview_screen}.dart`
+  — három navigálható preview képernyő (összesen 599 sor).
+- `lib/features/share/widgets/{strum_card,wrapped_card}.dart` — a két
+  megosztható kártya widget (összesen 434 sor).
+
+A forrás-sorok ellenőrizve `wc -l` alapján (lásd §10 handoff, `find ...
+-name '*.dart' | xargs wc -l`). A `lib/features/learn/` és a
+`test/features/learn/` pontos száma az Explore-ágens mérése: 24 + 34,
+összesen 3732 + 3624 sor.
 
 ### 1.2 Cross-feature import-térkép (RAG chunk 002 — feature határok)
 
@@ -43,16 +64,18 @@ A feature-ek csak `public.dart` barrel-en vagy közös core modellen át
 
 | Él | Fogyaszt | Forrás | Megjegyzés |
 |---|---|---|---|
-| Streak ⇄ Progress | `lib/features/progress/screens/progress_screen.dart:30` | `StreakLogic.epochDayOf(...)` | a napi gyakorlás-szám és a streak ugyanazt az epoch-napot használja |
+| Progress ⇄ Streak | `lib/features/progress/screens/progress_screen.dart:8,30` | `import '../../streak/public.dart';` + `StreakLogic.epochDayOf(...)` | a napi gyakorlás-szám és a streak ugyanazt az epoch-napot használja |
+| Learn ⇄ Streak | `lib/features/learn/model/lesson.dart:7`, `lib/features/learn/screens/learn_screen.dart:18`, `lib/features/learn/screens/lesson_list_screen.dart:9` | `import '../../streak/public.dart';` | a Learn a Streak `public.dart`-ból a `streak_logic.dart` és `daily_challenge.dart` típusait olvassa (export: `streak/public.dart:5–6`) |
+| Learn � Progress | `lib/features/learn/screens/learn_screen.dart:12` | `import '../../progress/public.dart';` | a `PracticeEntry` / `PracticeStats` típusok a progress `public.dart`-ból jönnek (export: `progress/public.dart:5–6`) |
+| Learn ⇄ Share | `lib/features/learn/screens/lesson_score_preview_screen.dart:4,20` | `import '../../share/public.dart';` + `ShareService` (alapértelmezett konstruktorparaméter) | a lesson-score preview képernyő a `ShareService`-t a share `public.dart`-ból használja (`share/public.dart:9`) |
 | Progress ⇄ Practice (sibling) | `lib/features/progress/model/practice_stats.dart:4` | `import '../../practice/public.dart' hide PracticeSource;` | a V2 aggregátor a Practice feature-en át érhető el |
-| Streak provider | `lib/features/streak/providers/streak_provider.dart:24` | `StreakLogic.epochDayOf(now ?? DateTime.now())` | azonos clock; a streak provider NEM importálja a Progress-ot |
-| Learn ⇄ Streak | nincs közvetlen él | — | a learn és a streak feature-ök egymástól függetlenek, csak a `practice_log`-on át osztoznak a napon |
-| Learn ⇄ Progress | nincs közvetlen él | — | a `PracticeEntry.directionAccuracy` (practice_entry.dart:13–17) a Progress-ból olvasható, de a Learn nem függ a Progress-tól |
+| Streak provider | `lib/features/streak/providers/streak_provider.dart:3–5` | `import '../streak_logic.dart';` (és NEM a progress publikus contractot) | a streak provider kizárólag a saját feature-én belülről olvassa a logikát; a `progress_screen` az egyetlen fogyasztó, amely a Streak `epochDayOf`-ját használja |
 
-A `lib/features/gamification/` Kör 2-ben létrehozandó feature a fenti három
-feature (streak, progress, learn) felett ül, és kizárólag a `public.dart`
-barrel-eken át éri el azokat — ez a 0289 §2 (auditálható bizonyíték) és a
-0290 §3 (nincs optimista jóváírás) betartásának előfeltétele.
+A `lib/features/gamification/` Kör 2-ben létrehozandó feature a fenti négy
+feature (streak, progress, learn, share) felett ül, és kizárólag a
+`public.dart` barrel-eken át éri el azokat — ez a 0289 §2 (auditálható
+bizonyíték) és a 0290 §3 (nincs optimista jóváírás) betartásának
+előfeltétele.
 
 ---
 
@@ -341,24 +364,35 @@ megosztási képernyők őrei.
 
 ### 8.4 ADR-fedettség a tesztekben
 
+A táblázat „Státusz” oszlopa kizárólag a megnevezett teszt **közvetlen
+assertionjeit** tekinti lefedettnek. A „kapcsolódó, de nem elégséges” azt
+jelenti, hogy a teszt a szomszédos viselkedést őrzi (pl. a11y, race), de
+NEM méri az adott ADR-pontot közvetlenül — ezért a lefedettség hamis
+zöldítését kerüljük el.
+
 | ADR | Döntés | Létező mérő teszt | Státusz |
 |---|---|---|---|
-| 0289 §1 | elsajátítottság mért, nem XP | `streak_logic_test`, `practice_stats_test` | lefedett |
-| 0289 §2 | bizonyíték auditálható | `weekly_bars_a11y_test:32–38` (semantics label) | részben |
-| 0289 §3 | hiányzó adat ≠ 0 | `practice_stats_test:43–55` (avg accuracy null) | lefedett |
+| 0289 §1 | elsajátítottság mért, nem XP | — | **GAP** — a `streak_logic_test` és a `practice_stats_test` kizárólag a streak-math és a stat-aggregáció tényét őrzi; egyik sem assertálja, hogy a felület NEM jelenít meg XP-t, és nincs UI-szintű „nincs XP-szám” assertion |
+| 0289 §2 | bizonyíték auditálható | `weekly_bars_a11y_test:20–42` | **kapcsolódó, de nem elégséges** — a teszt a11y semantics-labelt ellenőriz, nem az ADR által megkívánt konkrét session-evidence (egy megnyitható practice-session, ami méri a mastery-állítást). Az a11y és az auditálhatóság két különböző követelmény |
+| 0289 §3 | hiányzó adat ≠ 0 | `practice_stats_test:43–55` (`averageDirectionAccuracy` null, ha nincs scored) | **lefedett** — közvetlenül assertálja, hogy scored run nélkül az accuracy `null`, nem `0.0` |
 | 0289 §4 | trend ≥ 5 adatpont kell | — | **GAP** |
 | 0289 §5 | verzió-váltás látható | — | **GAP** |
 | 0289 §6 | előfeltételek tisztelete | — | **GAP** |
-| 0290 §1 | nincs büntető széria-nyelv | `skill_reframe_test:75–85` | lefedett |
-| 0290 §2 | idempotens, UI nem számol | `streak_provider_test:13–30` | lefedett |
-| 0290 §3 | nincs optimista jóváírás | `practice_log_race_test:29–58` | lefedett |
-| 0290 §4 | jutalom forrása auditálható | `weekly_bars_a11y_test` | részben |
+| 0290 §1 | nincs büntető széria-nyelv | `skill_reframe_test:75–85` (a skill-szekció elrejtése üres állapotban) | **kapcsolódó, de nem elégséges** — a teszt az UI-elrejtést őrzi („zeros would demotivate”), de nem a 0290 §1 szóhasználati tilalmát (büntető / bűntudatkeltő nyelv); a tényleges nyelvi leltár (string-assertion a streak-szövegekre) hiányzik |
+| 0290 §2 | idempotens, UI nem számol | `streak_provider_test:13–30` | **kapcsolódó, de nem elégséges** — a teszt a streak-provider same-day no-op-ját és a nap-átlépését őrzi (idempotencia-rész), de NEM bizonyítja, hogy a jutalom-számítás a UI-ból kitiltott (ehhez külön provider-/widget-szintű assert kellene, ami a jutalom-számot kizárólag a use-case-re korlátozza) |
+| 0290 §3 | nincs optimista jóváírás | `practice_log_race_test:29–58` | **kapcsolódó, de nem elégséges** — a teszt a cold-start race-t őrzi (immediate record MERGE), nem a 0290 §3 szerinti „a jutalom-egyenleg CSAK a főkönyv megerősítése után frissülhet" konkrét tilalmát. Az optimista UI-t külön widget-szintű assert kellene |
+| 0290 §4 | jutalom forrása auditálható | — | **GAP** — a `weekly_bars_a11y_test` a11y semantics, nem jutalom-audit |
 | 0290 §5 | nincs fizetős megőrzés | — | **GAP** (nincs UI- vagy provider-szintű assert; a Kör 8-ban beépítendő) |
 | 0290 §6 | érthető, teljesíthető feltétel | — | **GAP** |
 | 0290 §7 | csökkentett mozgás alternatíva | — | **GAP** |
 
-A GAP-sorok a Kör 8–10 migráció **kötelező** follow-up tesztjei; ezen a
-körön (docs-only) nem pótolhatók.
+A **GAP**- és **kapcsolódó, de nem elégséges** sorok együtt a Kör 8–10
+migráció **kötelező** follow-up tesztjei; ezen a körön (docs-only) nem
+pótolhatók. A 0289 §1 (mastery ≠ XP) és a 0290 §4 (jutalom-audit) külön
+kiemelendő: a meglévő a11y/logika tesztek a fenti értelemben NEM
+bizonyítják a tényleges termékhatárt, ezért a Kör 8-ban dedikált
+widget-tesztek beépítendők (a `flutter-test-writer` ügynök a
+`weekly_bars_a11y_test.dart` mintára kaphat feladatot).
 
 ---
 
