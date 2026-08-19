@@ -1,5 +1,21 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E07-R25 KÉSZ — Analyze és Vision származtatott evidence integráció — PR #322, squash `3ab2a147` (2026-08-19)
+
+Az Analyze és a Vision csak származtatott, confidence-aware evidence-et adhat
+át a Practice Generatornak. Az új adapterek a publikus Audio Analysis API-t,
+illetve a szűk `vision/domain/evidence/public.dart` contractot használják;
+nyers audio, frame, landmark, koordináta és fájlútvonal nem kerül át. A Vision
+hiánya üres, hibamentes eredmény, a `notObservable` port-bemenet adapter-szinten
+fail-closed, az alacsony confidence pedig súlykorlátozott marad. A független
+review APPROVED (0 BLOCKER/MAJOR/MINOR); a reviewer valódi-sértés próbája a
+`notObservable` őr eltávolításakor két cellát pirosra váltott, visszaállítás
+után 10/10 Vision adapter teszt zöld. Exact `cbcb30c7`: Full Gate
+[32210677497](https://github.com/wolfcasaba/strumsight/actions/runs/32210677497)
+és Router CI
+[32210693573](https://github.com/wolfcasaba/strumsight/actions/runs/32210693573)
+success. A merge utáni célzott gate a záró rituálé része.
+
 ## ✅ [HEAL E07-R25/H5] KÉSZ — két, egymástól független, self-heal-generált bidirekcionális regressziós pin egyirányúsítva (ADR 0112) — PR #321, squash `a1613fa5` (2026-08-19)
 
 Az E07-R25 (Analyze/Vision evidence integráció) Router CI-ja kétszer pirosra
@@ -1548,6 +1564,11 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-19):** `main` @ `3ab2a147` — E07-R25 Analyze és
+Vision evidence integráció, PR [#322](https://github.com/wolfcasaba/strumsight/pull/322),
+squash-merge. Exact `cbcb30c7`: Full Gate 32210677497 + Router CI 32210693573
+success; a post-merge célzott gate futása a záró rituálé része.
+
 **Aktuális állapot (2026-08-19):** `main` @ `b08c00e9` — E07-R24 song-goal
 integráció, PR [#318](https://github.com/wolfcasaba/strumsight/pull/318),
 squash-merge. Exact `028ea117`: Full Gate 32200092798 + Router CI 32200094318
@@ -2615,11 +2636,9 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A soron következő SDD-lépés: E07-R25** (Chapter 8, Analyze és Computer
-Vision evidence integráció). A fresh-session pre-flight mérje meg a tényleges
-Analyze/vision publikus contractot és ownership-láncot; exact string/fret vagy
-technikai hiba csak mért evidence alapján állítható, és nyers kamera-frame nem
-hagyhatja el az eszközt.
+**A következő Epic 7 SDD-lépés: E07-R26** (outcome ingestion és revision).
+Friss sessionben indul; az E07-R25 eredményét csak a szűk public boundary-kon
+át használhatja, és a nyers audio-/kamera-adat tilalma változatlan.
 
 **A soron következő SDD-lépés: E07-R22** (Chapter 8, Weekly Plan és Today
 screen). A friss session pre-flightban mérje újra az R21 preview ma még
