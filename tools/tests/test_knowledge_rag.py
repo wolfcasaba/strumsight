@@ -273,3 +273,15 @@ class RetrievalRankingTest(unittest.TestCase):
         result = node("--bm25", "--corpus", "lessons", "--top", "3", "win32", env=self.env)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("bm25#", result.stdout, result.stdout[:400])
+
+    def test_the_default_fusion_is_the_measured_one(self) -> None:
+        """A fúzió alapértelmezése MÉRT döntés (score 57,9% vs rank 52,6%).
+
+        A `--eval` mérce API-kulcsot igényel, tehát CI-ben nem fut — ez az őr
+        azt fogja meg, ha valaki némán visszabillenti a rang-alapú fúzióra.
+        """
+        source = (REPO_ROOT / "tools" / "knowledge-rag.mjs").read_text(encoding="utf-8")
+        self.assertIn("process.env.RAG_FUSION || 'score'", source,
+                      "a fúzió alapértelmezése nem a mért 'score'")
+        self.assertIn("function scoreFuse", source)
+        self.assertIn("function rrf", source, "a rang-alapú ág eltűnt — a mérce nem összehasonlítható")

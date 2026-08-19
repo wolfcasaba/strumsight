@@ -496,6 +496,54 @@ function rrf(rankings, k = 60) {
 }
 
 /**
+ * PONTSZÁM-alapú fúzió — a rang-alapú RRF alternatívája.
+ *
+ * MIÉRT merült fel: a rang-kijelzés megmutatta, hogy a két ág találatai
+ * szinte teljesen DISZJUNKTAK (a fúzió utáni lista `bm25#1, emb#1, bm25#2,
+ * emb#2 …` mintát ad). Ilyenkor az RRF nem rangsorol, csak összefésül, mert
+ * a rang önmagában nem mondja meg, hogy egy találat ERŐS vagy csak
+ * „a legjobb a gyengék közül".
+ *
+ * Itt ezért ágon belül min-max normalizálunk [0,1]-re, és a normalizált
+ * pontszámokat súlyozva adjuk össze: egy kiugróan erős szemantikus találat
+ * így felülírhat egy gyenge lexikait, ahelyett hogy váltogatnának.
+ *
+ * A normalizálás ágon BELÜL történik, mert a koszinusz (~0,3–0,6) és a BM25
+ * (nem korlátos) skálája nem összemérhető.
+ */
+function scoreFuse(rankings) {
+  const out = new Map();
+  for (const { rows, weight, label } of rankings) {
+    if (!rows.length) continue;
+    const values = rows.map((r) => r.score);
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const span = max - min || 1;
+    rows.forEach((row, rank) => {
+      const id = row.chunk?.id ?? row.id;
+      const cur = out.get(id) ?? { score: 0, ranks: {} };
+      cur.score += weight * ((row.score - min) / span);
+      cur.ranks[label] = rank + 1;
+      out.set(id, cur);
+    });
+  }
+  return out;
+}
+
+/**
+ * `RAG_FUSION=rank|score` — az alapértelmezést a MÉRCE döntötte el, nem ízlés.
+ *
+ * Mérve a `tools/rag-eval.tsv`-n (bm25×1 emb×2, dok-korlát 2):
+ *   rank  (RRF)          10/19 (52,6%)  MRR 0,491
+ *   score (normalizált)  11/19 (57,9%)  MRR 0,537
+ *
+ * A rang-alapú ág legjobbja emb×4-gyel is csak MRR 0,500 volt, tehát a
+ * különbség nem súly-hangolás kérdése: a rang egyszerűen nem hordozza, hogy
+ * egy találat erős-e, márpedig a két ág diszjunkt.
+ */
+const FUSION = (process.env.RAG_FUSION || 'score').toLowerCase();
+
+/**
  * Dokumentum-korlát (ADR 0316 §2.3): egy forrásfájlból legfeljebb `max` chunk
  * kerülhet a listára. MÉRVE: egy lekérdezés első négy helyét ugyanannak a
  * briefnek négy szakasza foglalta el. A korlát a LISTÁRA vonatkozik, nem az
@@ -565,7 +613,7 @@ async function rankAll(q) {
   if (lexical.length) branches.push({ rows: lexical, weight: W_BM25, label: 'bm25' });
   if (semantic.length) branches.push({ rows: semantic, weight: W_EMB, label: 'emb' });
 
-  const fused = rrf(branches);
+  const fused = FUSION === 'score' ? scoreFuse(branches) : rrf(branches);
   const ordered = [...fused.entries()]
     .sort((a, b) => b[1].score - a[1].score)
     .map(([id, v]) => ({ id, score: v.score, ranks: v.ranks, chunk: byId.get(id) }))
