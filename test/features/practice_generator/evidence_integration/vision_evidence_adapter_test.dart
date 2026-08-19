@@ -242,6 +242,94 @@ void main() {
     });
   });
 
+  group(
+    'VisionEvidenceAdapter — port-boundary fail-closed on notObservable facts '
+    '(review F1)',
+    () {
+      test('an allowlisted fact with state: notObservable produces zero '
+          'SkillEvidence and a stable, raw-media-free warning (F1)', () {
+        // The §0.0.1 DefaultVisionEvidenceReader filters notObservable
+        // observations before producing a VisionEvidenceFact. The
+        // VisionEvidenceReader port, however, is an abstract interface:
+        // a custom reader could hand the adapter an allowlisted fact
+        // whose state is notObservable. The adapter must fail closed at
+        // its own gate (brief §5.2 / §5.4) — admit no SkillEvidence and
+        // emit a stable, raw-media-free warning whose detail is the
+        // fact's stable measurementId only.
+        //
+        // Removing the adapter-level state gate makes this test fail:
+        // the allowlisted notObservable fact would otherwise be admitted
+        // as a fabricated 0/0.0 SkillEvidence record.
+        final adapter = adaptedTo(
+          facts: [
+            fact(
+              state: ObservationState.notObservable,
+              measurementId: 'vision-evi-port-leak',
+            ),
+          ],
+        );
+        final result = adapter.adapt(
+          <VisionEvidenceObservationView>[],
+          asOf: now(),
+        );
+
+        expect(
+          result.evidence,
+          isEmpty,
+          reason:
+              'F1: notObservable is not a measurable contribution; '
+              'the adapter must never admit it as SkillEvidence, even '
+              'when the allowlist accepts the metric key and a custom '
+              'reader passes the fact through',
+        );
+        expect(result.warnings, hasLength(1));
+        expect(result.warnings.first.code, 'stateNotAllowed');
+        expect(
+          result.warnings.first.detail,
+          'vision-evi-port-leak',
+          reason:
+              'F1: the warning detail must be a stable, raw-media-free '
+              'identifier (the measurement id only) — never a frame, '
+              'coordinate, landmark, or path',
+        );
+      });
+
+      test('an observed fact alongside a notObservable fact still yields '
+          'exactly one SkillEvidence and one stateNotAllowed warning', () {
+        // Mixed-input adversarial case: the adapter must apply its state
+        // gate independently to each fact — admitting the observed one
+        // and rejecting the notObservable one — not as a batch.
+        final adapter = adaptedTo(
+          facts: [
+            fact(
+              measurementId: 'vision-evi-observed-1',
+              state: ObservationState.observed,
+            ),
+            fact(
+              measurementId: 'vision-evi-port-leak-2',
+              state: ObservationState.notObservable,
+            ),
+          ],
+        );
+        final result = adapter.adapt(
+          <VisionEvidenceObservationView>[],
+          asOf: now(),
+        );
+
+        expect(result.evidence, hasLength(1));
+        expect(result.evidence.single.source, EvidenceSource.vision);
+        expect(
+          result.warnings.where((w) => w.code == 'stateNotAllowed'),
+          hasLength(1),
+        );
+        expect(
+          result.warnings.firstWhere((w) => w.code == 'stateNotAllowed').detail,
+          'vision-evi-port-leak-2',
+        );
+      });
+    },
+  );
+
   group('VisionEvidenceAdapter — experimental ceiling', () {
     test('an experimental fact cannot exceed the configured ceiling', () {
       final adapter = adaptedTo(

@@ -19,6 +19,18 @@
 /// A2 (vision OFF / capability missing) is enforced structurally: when the
 /// input list is empty, the result's [SkillEvidence] list is empty and no
 /// exception, `null`, or fabricated zero is produced.
+///
+/// Port-boundary defence in depth: even though the §0.0.1 default reader
+/// filters `ObservationState.notObservable` observations before producing
+/// any [VisionEvidenceFact], a custom [VisionEvidenceReader] could pass
+/// an allowlisted fact with `state: ObservationState.notObservable`
+/// through the port. The doc-contract permits only `observed` and
+/// `inferred` states to contribute a [SkillEvidence.performance] value;
+/// `experimental` is held to a stricter confidence ceiling; and
+/// `notObservable` carries no measured value — admitting it would
+/// fabricate a placeholder (a 0/0.0 evidence record) and violate A7.
+/// The adapter therefore fails closed at its own gate, independent of
+/// which reader implementation sits behind it (review F1, brief §5.2).
 library;
 
 import '../../application/port/vision_evidence_reader.dart';
@@ -152,6 +164,27 @@ final class VisionEvidenceAdapter {
           VisionEvidenceAdapterWarning(
             code: 'metricNotAllowed',
             detail: fact.metricKey,
+          ),
+        );
+        continue;
+      }
+
+      // Port-boundary fail-closed (review F1, brief §5.2 / §5.4). The
+      // §0.0.1 default reader filters notObservable observations BEFORE
+      // producing a VisionEvidenceFact, but the port contract permits
+      // ANY VisionEvidenceReader — a custom reader could pass an
+      // allowlisted notObservable fact through. The doc-contract permits
+      // only observed/inferred states to contribute a
+      // SkillEvidence.performance value; experimental is held to a
+      // stricter confidence ceiling; notObservable carries no measured
+      // value, so admitting it would fabricate a placeholder and violate
+      // A7. Skip with a stable, raw-media-free warning that names the
+      // fact's stable measurementId only.
+      if (fact.state == ObservationState.notObservable) {
+        warnings.add(
+          VisionEvidenceAdapterWarning(
+            code: 'stateNotAllowed',
+            detail: fact.measurementId,
           ),
         );
         continue;
