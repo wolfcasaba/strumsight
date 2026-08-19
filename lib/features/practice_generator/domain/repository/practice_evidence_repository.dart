@@ -2,6 +2,15 @@
 /// per [SkillEvidence.sourceOutcomeId] and never deleted by expiry — the
 /// store is the "immutable past" (ADR 0256) the Kör 6 reducer needs to tell
 /// "no data" apart from "old data".
+///
+/// **Sole deletion entry-point.** The only mutation that physically removes
+/// evidence is [deleteForPlan], a user-initiated, plan-scoped hook reserved
+/// for the `DeletePracticePlanningData` use case (E07-R29 §5.7). Every
+/// other call site — the skill estimator reducer, the bounded `query`,
+/// the schema migrator, the practice-evidence aggregator — sees an
+/// evidence store that is **immutable**: expiry is query-time, never
+/// storage-time. Implementations MUST throw [UnsupportedError] from any
+/// other delete path.
 library;
 
 import '../id/planner_ids.dart';
@@ -30,14 +39,47 @@ abstract interface class PracticeEvidenceRepository {
     DateTime? measuredFrom,
     DateTime? measuredTo,
   });
+
+  /// Removes every evidence record whose `sourceOutcomeId` belongs to
+  /// [planId].
+  ///
+  /// **Sole evidence-removal entry-point** (E07-R29 §5.7, ADR 0260 §5
+  /// narrow exception). Callable ONLY by
+  /// `DeletePracticePlanningData`; any other caller — the reducer, the
+  /// `query` path, the migrator, the aggregator — keeps evidence
+  /// immutable.
+  ///
+  /// The `planId` parameter scopes the delete: evidence written by another
+  /// feature with a `sourceOutcomeId` that happens to share a string value
+  /// is never reached, because no other feature persists evidence through
+  /// this port (it is the planner's exclusive evidence store).
+  ///
+  /// Returns the number of evidence records removed, primarily so tests
+  /// can assert that the hook ran end-to-end.
+  int deleteForPlan(PlanId planId);
 }
 
 /// In-memory [PracticeEvidenceRepository] fake for tests and the mock-mode
 /// data path. Keeps every evidence ever saved; `query` filters, it never
 /// forgets.
+///
+/// The sole deletion path [deleteForPlan] is reserved for the planner's
+/// own "delete everything" use case (E07-R29 §5.7). It is not used by the
+/// reducer, the bounded query, the migrator or the aggregator.
 final class InMemoryPracticeEvidenceRepository
     implements PracticeEvidenceRepository {
+  /// Optional lookup table to scope the plan-scoped delete. Tests that
+  /// build evidence with `sourceOutcomeId` outside the planner's own
+  /// outcome-id space inject a custom resolver so the delete can prove it
+  /// never reaches across the feature boundary. The default returns
+  /// `null` — evidence was written by the planner and therefore belongs
+  /// to the planner's own plan-id space, which the caller knows.
+  InMemoryPracticeEvidenceRepository({
+    PlanId? Function(String sourceOutcomeId)? outcomePlanLookup,
+  }) : _outcomePlanLookup = outcomePlanLookup;
+
   final Map<String, SkillEvidence> _byOutcomeId = <String, SkillEvidence>{};
+  final PlanId? Function(String sourceOutcomeId)? _outcomePlanLookup;
 
   @override
   void save(SkillEvidence evidence) {
@@ -83,5 +125,20 @@ final class InMemoryPracticeEvidenceRepository
           return true;
         })
         .toList(growable: false);
+  }
+
+  @override
+  int deleteForPlan(PlanId planId) {
+    final owned = _outcomePlanLookup;
+    var removed = 0;
+    _byOutcomeId.removeWhere((outcomeId, evidence) {
+      final owner = owned == null ? planId : owned(outcomeId);
+      if (owner == planId) {
+        removed++;
+        return true;
+      }
+      return false;
+    });
+    return removed;
   }
 }
