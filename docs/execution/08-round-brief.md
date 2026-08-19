@@ -61,6 +61,18 @@ szekciójába szabad írni.
 > *Mért eset:* E02-R07 javító kör, 456 soros új tesztfájl az explicit tiltás
 > ellenére ([`docs/reviews/e02-r07-review.md`](../reviews/e02-r07-review.md) §7.3).
 
+> **KÖTELEZŐ pre-flight a listára ([ADR 0321](../adr/0321-gateguard-round-hold-not-chain-halt.md)):**
+> ```bash
+> tools/gateguard-scan.py --brief docs/rounds/<ez-a-brief>.md   # 0 = indítható
+> ```
+> Ha a lista védett fájlt tartalmaz (`tools/round-gate.sh`, `tool/ci/*`,
+> `.github/workflows/*`, `tools/ai_router/*`, `schemas/*`, `.claude/hooks/*`),
+> a kört **autonóm session nem tudja végrehajtani** — sem markerrel, sem
+> újrapróbálással ([`LESSONS.md` L322–L324](../LESSONS.md)). Ilyenkor vagy ki
+> kell venni a védett fájlt a kör hatóköréből, vagy emberi gate-lépést kell
+> terveznie; a driver az ilyen kört a dispatch előtt `hold`-ra teszi.
+> *Mért eset:* E99-R17, három halt ugyanazzal a gyökérokkal, ~5 óra lánc-leállás.
+
 ## 5. Kötött architekturális döntések
 
 Amit a kör NEM tervezhet újra. Új ADR nélkül nem térhet el tőle.

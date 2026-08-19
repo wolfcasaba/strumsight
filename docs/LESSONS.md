@@ -12510,3 +12510,36 @@ vagy (b) brief-revízió, ami kiviszi az igényt a védett fájlból; vagy (c)
 `hold`.
 
 Rokon: [[L322]], [[ADR 0112]], [[ADR 0309]].
+
+## L324 — Egy emberi döntésre váró kör NE fagyassza be a tőle független 32 kört: a `H-GATEGUARD` hatóköre a KÖR, nem a LÁNC (E99-R17, 2026-08-19, ADR 0321)
+
+**Mérés.** Az `E99-R17` háromszor állt meg ugyanazzal a gyökérokkal (05:31,
+09:56, 10:38 UTC), és a lánc 05:31–10:40 között **nulla kört vitt előre**,
+miközben a sorban 32 olyan nyitott kör állt, aminek semmi köze a gate-hez. Az
+ok a jelzés hatóköre: a `.pipeline/HALTED` GLOBÁLIS
+(`tools/round-pipeline.sh` §2), tehát bármelyik kör haltja az EGÉSZ sort
+megállítja. A `H-GATEGUARD` viszont ([[L322]], [[L323]]) az egyetlen olyan
+halt-osztály, amit ezen a boxon **strukturálisan garantáltan** nem old fel sem
+önjavítás, sem újrapróbálás, sem marker — kizárólag emberi kéz. Vagyis a lánc
+teljes leállását olyan esemény okozta, amiről előre tudható volt, hogy nem
+fog magától elmúlni.
+
+**A második, olcsóbban elkapható réteg.** A halt gyökéroka TERVEZÉSI hiba
+volt: a brief `allowed_paths` listáján védett fájl (`tool/ci/…`) szerepelt.
+Ez a dispatch ELŐTT mérhető — géppel, a védett listát magából az őrből
+importálva (`tools/gateguard-scan.py`, ami a mai soron azonnal 5 ilyen kört
+talált: E99-R17/R20/R21/R22, E08-R29). Az implementer-session elindítása
+ezekre a körökre eleve elpazarolt futás.
+
+**Szabály (ADR 0321).** (1) Kör-session `H-GATEGUARD` haltja → a kör sora
+`hold`, archívum + főkönyv + ntfy, a lánc MEGY TOVÁBB. (2) Az ŐRSZEM haltja
+(`gateguard_origin=selfheal`, a mércét gyengítő commit már a main-en állhat)
+→ továbbra is LÁNC-szintű megállás; a megkülönböztetés gépi mező, nem
+szövegértelmezés. (3) Brief-íráskor a teszt-fa mellett a védett listát is meg
+kell mérni: `tools/gateguard-scan.py --brief <brief>`. Amit ez NEM változtat
+meg: a mérce és az emberi határ — a gate-érintő kör továbbra sem fut le
+emberi döntés nélkül. Csak nem viszi magával a többi 32-t.
+
+Őrteszt: `tools/tests/test_gateguard_autohold.py`.
+
+Rokon: [[L322]], [[L323]], [[ADR 0321]], [[ADR 0112]], [[ADR 0309]].
