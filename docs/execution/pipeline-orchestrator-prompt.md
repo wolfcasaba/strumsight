@@ -471,12 +471,27 @@ A `.pipeline/inflight/` könyvtár mondja meg, fut-e rajtad kívül másik kör
 
 ## 4.9 Visszakeresés a pre-flightban (ADR 0312) — KÖTELEZŐ
 
-A brief véglegesítése ELŐTT futtasd:
+A brief véglegesítése ELŐTT futtasd — **ebben a sorrendben**:
 
 ```bash
+# 1) ELŐSZÖR SZŰKÍTVE. Mérve (ADR 0331): a szűkített kérdések 11/15-öt
+#    találnak el, a teljes korpuszosak 0/4-et. A szűkítés a KAR.
+node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "<a kör témája>"
+node tools/knowledge-rag.mjs --corpus lessons,halts --top 5 "<a kör kockázatos része>"
+
+# 2) CSAK EZUTÁN a teljes korpuszon, kiegészítésként
 node tools/knowledge-rag.mjs --top 5 "<a kör témája + az érintett fájlok>"
-node tools/knowledge-rag.mjs --corpus lessons --top 5 "<a kör kockázatos része>"
 ```
+
+**Miért ez a sorrend:** a teljes korpuszon a sablon-című review- és
+brief-szakaszok darabszámmal nyernek, és lenyomják a döntő leckét. Mérve: egy
+valós kérdésre a döntő lecke a szemantikus ágon a 11. helyen állt 18 998 chunk
+között, szűkítve viszont az 1. helyen.
+
+A találat mellett kiírt ág-helyezés (`bm25#3 emb#11`) megmutatja, MELYIK ág
+hozta: ha csak `bm25#` van, a kérdés szó szerinti egyezésre épült; ha csak
+`emb#`, akkor jelentés-alapú. Gyenge találatnál fogalmazd át a kérdést, ne a
+`--top`-ot emeld.
 
 A találatokat a brief §0.0 pre-flight szakaszában hivatkozd (`lessons/L###`,
 `adr/0###`), vagy mondd ki, hogy **nincs releváns előzmény** — a `brief-lint`

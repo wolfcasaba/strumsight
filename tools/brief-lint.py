@@ -301,7 +301,8 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                 "strict",
                 "S8",
                 "nincs visszakeresett előzmény: futtasd a "
-                "`node tools/knowledge-rag.mjs --top 5 \"<a kör témája>\"` parancsot, és "
+                "`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "
+                "\"<a kör témája>\"` parancsot (SZŰKÍTVE — mérve ez talál, ADR 0331), és "
                 "hivatkozd a releváns leckét/ADR-t (vagy mondd ki, hogy nincs ilyen)",
             )
         )
