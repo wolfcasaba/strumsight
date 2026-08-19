@@ -1,13 +1,17 @@
 # E07-R26 — Review
 
 Brief: docs/rounds/e07-r26-outcome-ingestion-and-revision.md
-Diff: `git diff 26cdad92..d3c337e5` (pre-flight commit → implementer commit)
+Diff: `git diff 26cdad92..a6aad341` (pre-flight commit → javító kör 1 után)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-19
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (javító kör 1 után, `a6aad341`)
+
+Biztonsági review (kötelező, brief `risk = "high"`):
+`docs/reviews/e07-r26-security.md` — **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR,
+5 előretekintő NOTE.
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 (1 FIXED) · MINOR: 1 (follow-up) · NOTE: 1
 
 Independens gate-újrafuttatás izolált `/tmp/review-e07-r26` klónban: **MINDEN
 GATE ZÖLD** (format, analyze, mindkét célzott teszt 9/9, architecture,
@@ -24,7 +28,7 @@ mért, nem a kód olvasásából következtetett lelet.
 | A1 | A lezárt múlt változatlan marad | ✅ | `revise_practice_plan_test.dart::A1/A2`; `_validateImmutablePast` érték-egyenlőséggel hasonlít (`PracticeDay`/`PracticeBlock` mindkettő felülírja `operator ==`/`hashCode`, ld. `practice_day.dart:151-163`, `practice_block.dart:184-197` — ellenőrizve, NEM referencia-egyenlőség) |
 | A2 | A change set csak jövőbeli blokkot érint | ✅ | ugyanott + `_validateFutureTarget` (`revise_practice_plan.dart:153-168`), a `plan_repairer.dart:167,176-184` meglévő `status == completed` mintáját követi |
 | A3 | Duplikált eredmény egyszer dolgozódik fel | ✅ | `outcome_ingestion_service_test.dart::A3` — a replay `duplicate` státuszt ad, a review-item VÁLTOZATLAN marad (nem csak egy flag-ellenőrzés: az első hívás ténylegesen 7→14 napra módosítja az intervallumot, a replay nem) |
-| A4 | Kis változás automatikus, nagy megerősítést kér | ⚠️ RÉSZBEN | count-alapú ág (1/2/3 változás) tesztelve és zöld; a STRUKTURÁLIS ág (`_isStructuralChange`, brief §5.2 "fókusz váltása") a kódban helyesen működik (saját próbateszttel igazolva), de a kör SAJÁT teszt-suite-jában NULLA lefedettséggel — ld. **F1** |
+| A4 | Kis változás automatikus, nagy megerősítést kér | ✅ | count-alapú ág (1/2/3 változás) ÉS a strukturális ág (`_isStructuralChange`, brief §5.2 "fókusz váltása") is tesztelve — `revise_practice_plan_test.dart::"A4: a single future primary-focus change requires confirmation"` (javító kör 1, `a6aad341`); ld. lezárt **F1** |
 | A5 | Az elutasított change set auditálható, de nem aktív | ✅ | `revise_practice_plan_test.dart::A5` — `changeSet.changes` hossza megmarad, `isActive=false` |
 | A6 | Nem aktuális revízióra hivatkozó eredmény kontrolláltan kezelt | ✅ | `outcome_ingestion_service_test.dart::A6` — `staleRevision` státusz, review-item változatlan |
 | A7 | A technikai hiba nem indít adaptációt (ADR 0268) | ✅ | `outcome_ingestion_service_test.dart::A7` + `record_practice_outcome.dart:71` (`canAdapt && adaptationRequest != null` kapu) — a technikai hiba `canAdapt=false`-t ad, az `AdaptationDecider` sosem hívódik |
@@ -85,7 +89,19 @@ szükség).
   `primaryFocusSkillIds`/`timeBudgetMicros` ágat a `_isStructuralChange`-ből
   (valódi-sértés próba, a §10 handoffban dokumentálva) — utána visszaállítva
   ZÖLD.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`a6aad341`, javító kör 1). Az implementer pontosan
+  a kért tesztet adta hozzá (`revise_practice_plan_test.dart`, 1 elemű
+  `primaryFocusSkillIds`-változás, `target: 'day:day.1'`,
+  `requiresUserConfirmation`/`isActive` mindkettő ellenőrizve) és a §10
+  handoffban dokumentálta a saját valódi-sértés próbáját (a check
+  eltávolításakor PIROS `Expected: true, Actual: <false>`, visszaállítva
+  ZÖLD). Reviewer-oldali független megerősítés: friss `/tmp/review-e07-r26`
+  klónban `tools/round-gate.sh` a két célzott teszttel újrafuttatva —
+  `revise_practice_plan_test.dart` most **7/7** zöld (a korábbi 6/7 helyett),
+  format/analyze/architecture/secrets/l10n mind zöld,
+  `tools/scope-audit.py`: `OK (26cdad92..a6aad341053d, 11 changed path(s), 1
+  generated/ignored)` — a +1 a reviewer saját `docs/reviews/e07-r26-review.md`
+  fájlja (mentesített, ld. `sdd-round-review` skill), nem sértés.
 
 ### F2 — MINOR — `PlanChange.target` új szűk formátuma nem fedi a MEGLÉVŐ termelői konvenciókat
 
@@ -141,20 +157,23 @@ szükség).
 
 ## Gate-bizonyíték ellenőrzése
 
-| Gate | Állított eredmény (implementer) | Ellenőrizve (reviewer, izolált klón) |
+| Gate | Állított eredmény (implementer, javító kör 1) | Ellenőrizve (reviewer, friss izolált klón, `a6aad341`) |
 |---|---|---|
-| format | zöld | ✅ zöld |
-| analyze | `No issues found!` | ✅ `No issues found! (ran in 5.0s)` |
-| `outcome_ingestion_service_test.dart` | zöld | ✅ 3/3 (`A3`, `A6`, `A7`) |
-| `revise_practice_plan_test.dart` | zöld | ✅ 6/6 (`A1/A2`, `A4×3`, `A5`, `A8`) |
-| architecture | zöld | ✅ `12 allowlisted deviation(s)` — előzetes, e kör NEM módosította |
-| secrets | (nem jelentve külön) | ✅ `0 finding(s)` |
-| l10n | (nem jelentve külön) | ✅ `en → hu, 1366 message(s)` parity |
-| scope-audit | (implementer: `scope_audit=ok`, 10 fájl) | ✅ `tools/scope-audit.py`: `OK`, 10 changed path(s) |
-| CI (teljes suite + property + APK) | — | még nem dispatch-elve (a review után) |
+| format | zöld (1648 fájl, 0 változás) | ✅ zöld |
+| analyze | `No issues found!` | ✅ `No issues found!` |
+| `outcome_ingestion_service_test.dart` | 3/3 zöld | ✅ 3/3 (`A3`, `A6`, `A7`) |
+| `revise_practice_plan_test.dart` | 7/7 zöld | ✅ 7/7 (`A1/A2`, `A4×4` — az új fókusz-cellával, `A5`, `A8`) |
+| architecture | — | ✅ `12 allowlisted deviation(s)` — e kör NEM módosította |
+| secrets | — | ✅ `0 finding(s)` |
+| l10n | — | ✅ `en → hu, 1366 message(s)` parity |
+| scope-audit | — | ✅ `tools/scope-audit.py`: `OK`, 11 changed path(s), 1 generated/ignored (a reviewer saját jelentése) |
+| biztonsági review (risk=high, kötelező) | — | ✅ `docs/reviews/e07-r26-security.md` — PASS, 0 CRITICAL/BLOCKER/MAJOR/MINOR |
+| CI (teljes suite + property + APK) | — | dispatch a review után, merge előtt |
 
 ## Merge-döntés
 
-**Merge TILOS, amíg F1 nyitva van** (MAJOR). F2/F3 nem blokkol. Javító kör
-indul ugyanazon a motoron (`codex`), az F1 leletlistával; a javítás után a
-gate-eket ismételten, izolált klónban futtatom, és ezt a jelentést frissítem.
+Minden lokális gate zöld (kétszer, függetlenül, izolált klónban mérve),
+`tools/scope-audit.py` szerint scope-sértés nincs, a kötelező biztonsági
+review PASS. **F1 (MAJOR) FIXED, F2/F3 nem blokkoló follow-up.** ADR 0052
+szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → a CI-dispatch és a
+merge mehet.
