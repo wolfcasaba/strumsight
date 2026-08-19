@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E07-R29/H-NOSIGNAL] KÉSZ — preambulum: alparancs sikeres lezárása ≠ kör lezárása — PR #331, squash `90cf0628` (2026-08-19)
+
+Az E07-R29 friss orchesztrátor-sessionje (Terra, rotáció szerint) a H3
+self-heal (fent) után helyesen újraindult, és ~72 percen át helyesen
+vezényelte a kört: implementer-dispatch, review, javítás, majd egy
+Codex/Terra escalation-javítás az utolsó nyitott leletre. A záró, független
+`tools/round-gate.sh` friss klónban 16:56:47Z-kor VALÓDI, sikeres
+eredménnyel zárt (mind a 14 lépés zöld) — a turn mégis hat másodperccel
+később, 16:56:53Z-kor egyetlen szöveges összegzéssel ért véget
+(„…14/14 zöld, de a kötelező CI-dispatch, exact-SHA ellenőrzés és merge még
+hátravan.") jelzésfájl nélkül. A pipeline ELAKADÁS-GYORSÍTÓja 20
+másodpercen belül H-NOSIGNAL-ként ismerte fel (`.pipeline/chain.log`,
+16:57:12).
+
+**Mért, dokumentált precedenshez illeszkedő gyökérok.** Ugyanennek a
+`docs/execution/pipeline-codex-orchestrator-preamble.md`-nek két KORÁBBI,
+szomszédos rését az L282 (E07-R04, yielded parancs újraindítása) és az L290
+(E07-R09, turn vége csonka poll közben) már bezárta — de egyik szabály sem
+mondta ki, hogy egy alparancs SIKERES, terminális eredménye ugyanúgy nem
+helyettesíti a kör-jelzést. A Codex/Terra rollout-JSONL
+(`~/.codex-terra/sessions/2026/08/19/rollout-2026-08-19T15-45-07-*.jsonl`)
+pontosan ezt mérte: a modell hűen, hazugság nélkül idézte a valódi „14/14
+zöld" eredményt, majd egy alparancs lezárását a kör lezárásával azonosítva
+állt meg.
+
+**A javítás egyetlen új szabály-bullet + regressziós teszt.** A preambulum
+§2-je egy új, névvel idézett bullet-et kapott az L290-bullet után: „egy
+alparancs sikeres lezárása attól még nem azonos a kör lezárásával" — ha a
+§3 checklist bármelyik eleme (push, CI-dispatch, exact-SHA ellenőrzés,
+merge, kör-jelzés) hátravan, a válasz KÖVETKEZŐ eleme kötelezően újabb
+tool-hívás. Regresszió: `tools/tests/test_pipeline_codex_orchestrator_preamble.py`
+új `CodexOrchestratorPreambleNoStopAfterSuccessfulSubtaskTest` osztálya (3
+eset), PIROS a javítás előtt → ZÖLD utána, a 7 meglévő preambulum-teszttel
+együtt is zöld. Teljes `tools/tests`: **574 passed, 567 subtests passed, 0
+hiba** (571→574). Router CLI smoke és `brief-lint.py --open --level base`
+lokálisan is zöld, egyezően a CI lépéseivel. Exact SHA `3ca6d07d`: Router CI
+([32280795044](https://github.com/wolfcasaba/strumsight/actions/runs/32280795044))
+`conclusion=success`, `headSha` és a PR `headRefOid`-ja a merge előtt
+egyezett a lokális HEAD-del. Nincs Dart-változás, ezért `build-apk.yml` nem
+releváns — a Router CI volt az egyetlen szükséges kapu. Lecke: **[[L328]]**.
+A lánc E07-R29-cel folytatódik a következő cron-firingen; a már elkészült
+implementer- és javító-munka (`minimax/e07-r29-accessibility-privacy-hardening`,
+`codex/e07-r29-accessibility-privacy-hardening-fix` ágak, mindkettő
+push-olva originre) érintetlen — a friss orchesztrátor-session dolga csak a
+hátralévő CI-dispatch + merge.
+
 ## ✅ [HEAL E07-R29/H3] KÉSZ — brief-bővítés: storage-owner, evidence-port és auditált planner-képernyők — PR #330, squash `7176875d` (2026-08-19)
 
 Az E07-R29 (Accessibility, localization, privacy és safety hardening) saját

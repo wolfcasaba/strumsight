@@ -12697,3 +12697,74 @@ elv, ellentétes irányban), [[L261]] (saját tiltott zóna és kötelező műk�
 ütközésekor a feloldásnak bound-nak kell lennie, nem csendes tágításnak —
 ez a mérés pontosan ezt hajtotta végre: a bound szűkebb lett, mint a
 kiinduló javaslat).
+
+## L328 — Egy SIKERES, terminális alparancs-eredmény (a kör-gate zöld összegzése) épp úgy H-NOSIGNAL-lal végződhet, mint egy csonka poll — az L290 csak az utóbbira védett (E07-R29, H-NOSIGNAL önjavítás, 2026-08-19)
+
+**Mit mértünk.** Az E07-R29 Terra-orchesztrátor session
+(`01a01ab2-9b80-7780-84f7-f21daf3759af`,
+`~/.codex-terra/sessions/2026/08/19/rollout-2026-08-19T15-45-07-*.jsonl`)
+~72 percig helyesen vezényelte a kört: implementer-dispatch, review, javítás,
+majd egy Codex/Terra escalation-javítás az utolsó nyitott leletre. Ezután egy
+végső, független újra-ellenőrzést futtatott friss klónban —
+`tools/round-gate.sh` mind a 14 lépésre —, ami 16:56:47Z-kor VALÓDI,
+terminális, SIKERES eredménnyel zárt (`exit_code 0`, a gate saját „MINDEN
+GATE ZÖLD" összegzése). Ez nem az L282/L290 mintája: nem yield, nem csonka
+poll, a parancs ténylegesen befejeződött. A turn mégis mindössze hat
+másodperccel később, 16:56:53Z-kor véget ért egyetlen szöveges összegzéssel:
+„A kör még folyamatban van: a végső, független kör-gate 14/14 zöld, de a
+kötelező CI-dispatch, exact-SHA ellenőrzés és merge még hátravan." — sem
+újabb tool-hívás, sem `outcome=halted` jelzés nem követte. A driver ezt az
+ELAKADÁS-GYORSÍTÓval (L278/E99-R13) 20 másodpercen belül helyesen
+H-NOSIGNAL-ként ismerte fel (`.pipeline/chain.log`, 16:57:12).
+
+**Gyökérok.** [[L290]] (E07-R09) már megtiltotta, hogy a turn csak-szöveges
+státuszmondattal érjen véget, amíg egy elindított várakozó session/cella NEM
+adott terminális eredményt — de ez a szabály kifejezetten a NEM-terminális
+poll esetére szól. Itt a megelőző hívás (a gate) terminális ÉS sikeres volt;
+a modell PONTOSAN idézte is a valódi eredményt („14/14 zöld"), majd azt a
+hibát követte el, hogy egy ALPARANCS sikeres lezárását a KÖR saját
+lezárásával azonosította. Az L290 szövege ezt a hibaosztályt nem nevezte
+meg — ugyanaz a család (turn vége jelzésfájl nélkül), de más trigger
+(sikeres rész-eredmény, nem csonka poll), pontosan az [[L291]]-ben már
+leírt minta szerint: egy MÁSODSZOR, szomszédos alakban jelentkező
+hibaosztály a meglévő védelem SZŰK ÉRTELMEZÉSÉT kéri számon, nem egy
+teljesen új szabályt.
+
+**Javítás.** Új szabály-bullet a
+`docs/execution/pipeline-codex-orchestrator-preamble.md` §2-ben, közvetlenül
+az L290-bullet után, névvel idézve a mért sessiont és a szó szerinti
+státuszmondatot: „egy alparancs sikeres lezárása attól még nem azonos a kör
+lezárásával" — ha a §3 szerinti bármelyik lépés (push, CI-dispatch,
+exact-SHA ellenőrzés, merge, kör-jelzés) hátravan, a válasz KÖVETKEZŐ eleme
+kötelezően újabb tool-hívás, nem összegző mondat. Regressziós teszt
+(`tools/tests/test_pipeline_codex_orchestrator_preamble.py`, új
+`CodexOrchestratorPreambleNoStopAfterSuccessfulSubtaskTest` osztály, 3 eset:
+a tiltó mondat szó szerint jelen van, az E07-R29 session-id idézve, a mért
+státuszmondat szó szerint idézve) — mindhárom PIROS volt a javítás előtt,
+ZÖLD utána. Teljes `tools/tests`: **574 passed, 567 subtests passed, 0
+hiba** (571→574, a három új esettel; a 7 meglévő preambulum-teszt is zölden
+maradt — nincs regresszió). Router CLI smoke (`model-router.py --help`) és
+`tools/brief-lint.py --open --level base` lokálisan is zöld, pontosan
+Router CI lépéseivel egyezően. Exact SHA `3ca6d07d`: Router CI
+([32280795044](https://github.com/wolfcasaba/strumsight/actions/runs/32280795044))
+`conclusion=success`, a run `headSha`-ja és a PR `headRefOid`-ja mind
+egyezett a lokális HEAD-del a merge előtt. PR
+[#331](https://github.com/wolfcasaba/strumsight/pull/331), squash
+`90cf0628`. Nincs Dart-változás, ezért `build-apk.yml` nem releváns — a
+Router CI volt az egyetlen szükséges kapu.
+
+**Hogyan alkalmazd.** Amikor egy H-NOSIGNAL gyökérokát a Codex/Terra
+rollout-JSONL-ből mérve az UTOLSÓ `agent_message`/`task_complete` eseményt
+vizsgálod, ne csak azt kérdezd, terminális volt-e a MEGELŐZŐ tool-eredmény
+(ez az L290 kérdése) — azt is kérdezd, hogy a KÖR saját §3-checklistje kész
+van-e. Egy zöld rész-eredmény (gate, teszt, build, review) sosem
+helyettesíti a kör-jelzést, még akkor sem, ha a modell a rész-eredményt
+hűen, hazugság nélkül idézte. Ez a család (a preambulum §2 „ne állj meg
+szöveggel" szabályai) jellemzően SZOMSZÉDOS, nem teljesen új triggerekben
+tér vissza — [[L282]] (újraindítás yield után), [[L290]] (csonka poll után),
+most (sikeres alparancs után) — úgyhogy egy jövőbeli negyedik előfordulásnál
+először azt mérd meg, hogy a meglévő három bullet valamelyikének SZŰK
+megfogalmazása enged-e rést, mielőtt ötödik, még szélesebb szabályt írnál.
+Rokon: [[L289]] (ugyanennek a self-heal-sorozatnak a testvérlelete, szintén
+PR #280-ban), [[L291]] (a „második előfordulás tágabb lefedést kér, nem új
+mintát" meta-elv, aminek ez a lecke maga is konkrét példája).
