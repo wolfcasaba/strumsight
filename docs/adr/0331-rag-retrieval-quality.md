@@ -102,6 +102,42 @@ találatai szinte teljesen DISZJUNKTAK. Ilyenkor az RRF nem rangsorol, csak
 gyengék legjobbja. A rang-ág a súlyok emelésével sem érte utol (plafon: MRR
 0,500), tehát nem hangolási kérdés volt.
 
+## 3.1 A mérce bővítése valós használatból, és HÁROM megbukott hipotézis
+
+A 19 soros, kézzel írt fixture-t **28 sorra bővítettük valós használatból**:
+12 kör-brief §0.1 „Visszakeresett előzmény" szakasza rögzíti, MIT kerestek és
+MI bizonyult döntőnek. Ahol a brief a szó szerinti lekérdezést is leírta, azt
+használjuk, nem átfogalmazva; az elvárt helyezés a brief SAJÁT `--top` értéke.
+Ezek többsége SZŰRŐ NÉLKÜLI, mert élesben így kérdeztek — ettől a mért átlag
+alacsonyabb, és ez a szándék: a mérce a valóságot mérje.
+
+Bővítés után: **16/28 (57,1%), MRR 0,474** — ugyanaz a kód, őszintébb mérce.
+
+Ezen a mércén HÁROM javítási hipotézist mértünk. **Mind a három megbukott**, és
+ezt azért rögzítjük, mert mindegyik hihető, és mérce nélkül beépült volna:
+
+| hipotézis | mechanizmus | mért eredmény |
+|---|---|---|
+| korpusz-MÉRET normalizálás | a nagy korpuszok (code 4330, sdd 3826) tömegükkel kiszorítják a kicsiket (lessons 350, dsp 130) → ágankénti, korpuszonkénti jelölt-korlát | K=5 → MRR 0,435; K=8 → 0,464; K=20 → 0,458; **K=0 (ki) → 0,474** — a korlát MINDIG ront |
+| súly-újrahangolás a bővült mércén | hátha az optimum elmozdult | 1:1 → 0,448; 1:3 → 0,467; 1,5:2 → 0,448; **1:2 → 0,474** — a meglévő alapértelmezés marad a legjobb |
+| MAX-fúzió összeadás helyett | egy magányos erős ági találatot ne hígítson a másik ág tömege | **MRR 0,393** — érzékelhetően rosszabb |
+
+A refutált kód NEM maradt a fában (holt kapcsoló = karbantartási adósság); a
+tudás itt van.
+
+**A MÉRT gyökérok, amit ezek feltártak:** nem egyetlen ág gyenge, hanem a
+**jó ág a kérdés TÍPUSÁTÓL függ**. Ugyanarra a leckére (L142):
+
+* szó szerinti kérdés („flaky teszt zöld újrafuttatásra…") → BM25 **#7**,
+  az embedding-ág a top 60-ban SEM hozza;
+* parafrázis („miért bukik el néha a property gate…") → embedding **#11**,
+  a BM25 a top 40-ben SINCS benne.
+
+Egyetlen FIX súlypár ezért elvileg sem szolgálhatja mindkettőt — a súlyozás
+kimerült. A következő lépés nem hangolás, hanem **kérdés-adaptív ágsúlyozás**
+(a lekérdezés lexikai élességéből számolt, futásidejű súly). Ez már
+tervezésváltás, külön munka; a mérce most már meg tudja mondani, sikerült-e.
+
 ## 4. Amit ez a döntés NEM tesz
 
 - Nem cserél embedding-modellt és nem épít újra nulláról indexet: a súlyozás,
