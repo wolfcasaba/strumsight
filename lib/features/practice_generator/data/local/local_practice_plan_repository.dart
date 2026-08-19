@@ -143,25 +143,44 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
     PracticePlanSerializer? serializer,
     PracticePlanHistoryPolicy? historyPolicy,
   }) : serializer = serializer ?? const PracticePlanSerializer(),
-       historyPolicy = historyPolicy ?? const PracticePlanHistoryPolicy();
+       historyPolicy = historyPolicy ?? const PracticePlanHistoryPolicy() {
+    // F1 fix (E07-R29 review). The manifest is the durable source of
+    // truth for restart-stable discovery: on construction we hydrate
+    // `_writtenKeys` from the persisted manifest so a fresh repository
+    // over the same store sees every key a prior instance wrote. The
+    // shared `KeyValueStore` contract exposes no key enumeration, so
+    // hydration is the only way to make `knownDraftKeysSync()` /
+    // `knownPlanIdsSync()` (and therefore delete-all / export-all)
+    // restart-stable. A corrupt or absent manifest is treated as
+    // "no planner-owned keys in the past" — see `_loadManifest()`.
+    _loadManifest();
+  }
 
   final KeyValueStore keyValueStore;
   final ExerciseCandidateResolver resolveCandidate;
   final PracticePlanSerializer serializer;
   final PracticePlanHistoryPolicy historyPolicy;
 
+  /// Durable manifest key. Records the list of every planner-owned key
+  /// the repository ever wrote. The planner owns the only writers and
+  /// the only readers of this manifest; it lives at a stable prefix and
+  /// is part of the planner namespace (`ss.practice_generator.plan.*`).
+  static const String manifestKey = '$_namespace.manifest';
+
   /// Every key this repository has ever written, in insertion order.
   ///
   /// The planner delete-all / export-all paths need a bounded enumeration
   /// of the keys it owns. The shared [KeyValueStore] contract intentionally
-  /// does NOT expose a `keys()` member, so the repository tracks its own
-  /// writes instead. Each entry is added the first time a key is touched
-  /// and removed when the delete-all sweep drops it.
+  /// does NOT expose a `keys()` member, so the repository persists a
+  /// _manifest_ that names every key it has touched (F1 fix). The
+  /// in-memory list is a hydrated cache seeded from the manifest on
+  /// construction and kept in sync through [_trackWrite] /
+  /// [_trackRemove].
   ///
-  /// Pre-seeded keys (keys a different code path wrote into the same store
-  /// before this repository was constructed) are NOT tracked here — the
-  /// delete-all sweep is, by design, scoped to the keys the planner itself
-  /// owns.
+  /// Pre-manifest records (keys a much older build wrote before this
+  /// manifest existed) are NOT enumerable under the current
+  /// `KeyValueStore` contract — see the F1 closure note in the review
+  /// documents for the exact bound.
   final List<String> _writtenKeys = <String>[];
 
   /// Public read-only count of keys the repository currently owns. Used
@@ -170,11 +189,23 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
   int get trackedKeyCount => _writtenKeys.length;
 
   void _trackWrite(String key) {
-    if (!_writtenKeys.contains(key)) _writtenKeys.add(key);
+    // The manifest is itself a tracked entry but never appears in the
+    // manifest body (it would otherwise recurse). Track its presence so
+    // delete-all can also remove it.
+    if (key == manifestKey) return;
+    if (_writtenKeys.contains(key)) return;
+    _writtenKeys.add(key);
+    // Persist the updated manifest. A failure here is propagated by the
+    // caller (which is inside a `_runWrite` block) and surfaces as the
+    // normal `StorageFailure` path; we do NOT swallow it.
+    _persistManifestSync();
   }
 
   void _trackRemove(String key) {
-    _writtenKeys.remove(key);
+    if (key == manifestKey) return;
+    if (_writtenKeys.remove(key) != null) {
+      _persistManifestSync();
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -749,14 +780,53 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
   ///
   /// Backed by [_writtenKeys]: the shared `KeyValueStore` contract is
   /// deliberately key-enumeration-free (see `core/storage/
-  /// key_value_store.dart`), so this repository tracks its own writes
-  /// instead. Pre-seeded keys written by another component are not
-  /// tracked, by design — the delete-all sweep is scoped to keys the
+  /// key_value_store.dart`), so the repository persists a manifest that
+  /// lists every key it has touched and hydrates `_writtenKeys` from it
+  /// on construction. Pre-seeded keys written by another component are
+  /// not tracked, by design — the delete-all sweep is scoped to keys the
   /// planner itself owns.
   Iterable<String> _namespaceKeys() sync* {
+    // The manifest itself is always considered owned. It lives in the
+    // planner namespace and is removed alongside user-data keys on
+    // delete-all — a fresh repository constructed after delete-all sees
+    // an absent manifest and starts with an empty key list.
+    yield manifestKey;
     for (final key in _writtenKeys) {
       if (key.startsWith('$_namespace.')) yield key;
     }
+  }
+
+  /// F1 fix: hydrate [_writtenKeys] from the persisted manifest. The
+  /// manifest is a JSON array of strings under [manifestKey]. A missing
+  /// manifest means "no planner-owned keys have ever been written yet" —
+  /// the delete-all sweep is a no-op, the export-all is empty. A
+  /// present-but-unreadable manifest is treated as empty (corrupt
+  /// manifests do not block the rest of the system).
+  void _loadManifest() {
+    final raw = keyValueStore.readString(manifestKey);
+    if (raw == null) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+      for (final entry in decoded) {
+        if (entry is String && entry != manifestKey) {
+          if (!_writtenKeys.contains(entry)) _writtenKeys.add(entry);
+        }
+      }
+    } on Object {
+      // A corrupt manifest is best-effort skipped; a later write will
+      // rewrite it as a complete list.
+    }
+  }
+
+  /// F1 fix: persist the current `_writtenKeys` list as the manifest.
+  /// Called from every [_trackWrite] / [_trackRemove] so the on-disk
+  /// manifest is always a snapshot of the keys the planner currently
+  /// owns. The persist is intentionally fire-and-forget at the track
+  /// level (the calling public method is inside a `_runWrite` block,
+  /// and the same `StorageException` is propagated there).
+  void _persistManifestSync() {
+    keyValueStore.writeString(manifestKey, jsonEncode(_writtenKeys));
   }
 
   PlanId? _planIdFromArchiveIndexKey(String key) {
