@@ -296,4 +296,48 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosított fájlok
+
+- `lib/features/gamification/domain/rewards/reward_reason.dart` — a stabil,
+  lokalizálható `RewardReason` enum.
+- `lib/features/gamification/domain/rewards/reward_ledger_entry.dart` —
+  immutable, verziózott receipt, validált ID-, policy- és XP-invariánsokkal.
+- `lib/features/gamification/data/reward_ledger_repository.dart` — append-only
+  szerződés, processed-event index-lekérdezés és stabil lapozási értékobjektum.
+- `lib/features/gamification/data/local_reward_ledger_repository.dart` —
+  cap nélküli `JsonDocumentStore`-tárolás, nyers jövőbeli rekord-megőrzés,
+  whole-document crash-helyreállítás és példányszintű Future-tail sorosítás.
+- `lib/features/gamification/public.dart` — a domain és repository contract
+  exportjai.
+- `test/features/gamification/data/reward_ledger_repository_test.dart` — A1–A8
+  mérce, a limit 0/1/túl-nagy hármas és model-validáció.
+
+### Futtatott parancsok és tényleges eredmények
+
+- **TDD piros:**
+  `/home/ubuntu/flutter/bin/flutter test test/features/gamification/data/reward_ledger_repository_test.dart`
+  a production fájlok létrehozása előtt a várt hiányzó
+  `local_reward_ledger_repository.dart` / `reward_ledger_repository.dart` és
+  ledger-típus fordítási hibáival állt meg.
+- **TDD zöld:** ugyanaz a célzott `flutter test` a megvalósítás után
+  `+9: All tests passed!` eredménnyel zárt.
+- **Kötelező valódi-sértés próba:** az atomikus Future-tail helyére ideiglenes
+  `contains` + külön `await` utáni hozzáfűzés került. A
+  `tools/round-gate.sh test/features/gamification/data/reward_ledger_repository_test.dart`
+  futásán a format és analyze zöld volt, az A2 cella várt módon piros:
+  `Expected: ... length of <1>; Actual: WhereIterable<bool>:[true, true]`.
+  A Future-tail azonnal visszaállítva.
+- **Visszaállítás utáni gate:**
+  `tools/round-gate.sh test/features/gamification/data/reward_ledger_repository_test.dart`
+  — format zöld (1684 fájl, 0 változás), analyze zöld (0 issue), a célzott
+  teszt `+9: All tests passed!`, architecture zöld (12 allowlisted deviation),
+  secrets zöld (2974 fájl, 0 finding).
+
+### Eltérés és nem futtatott ellenőrzések
+
+- Eltérés nincs: a tárolás a kötött `JsonDocumentStore`-ra épül, nem
+  `JsonCollectionStore`-ra; nincs retention-cap, update vagy delete API.
+- A teljes Flutter-suite, property gate, CI-dispatch, PR és merge nem az
+  implementer feladata; Claude futtatja/diszpatcheli őket a kör branchén.
+
 ## 11. Review — a Claude tölti ki
