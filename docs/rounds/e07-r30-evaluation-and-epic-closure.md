@@ -19,19 +19,126 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "tool/practice_plan_eval/plan_quality_report.dart",
-  "test/fixtures/practice_planner/golden_profiles.json",
-  "test/features/practice_generator/property/planner_invariants_property_test.dart",
-  "test/features/practice_generator/property/planner_golden_fixture_test.dart",
+  "test/fixtures/practice_planner/golden_profiles.dart",
+  "test/property/planner_invariants_property_test.dart",
+  "test/property/planner_golden_fixture_test.dart",
   "lib/features/practice_generator/application/service/shadow_plan_generator.dart",
   "docs/sdd/epic-07-completion-report.md",
   "docs/rounds/e07-r30-evaluation-and-epic-closure.md",
 ]
 gate_tests = [
-  "test/features/practice_generator/property/planner_invariants_property_test.dart",
-  "test/features/practice_generator/property/planner_golden_fixture_test.dart",
+  "test/property/planner_invariants_property_test.dart",
+  "test/property/planner_golden_fixture_test.dart",
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight — mért revízió (Claude, 2026-08-19, `main @ 0d68d72c`)
+
+**Visszakeresett előzmény (ADR 0312, brief-lint S8).**
+`node tools/knowledge-rag.mjs --top 5 "shadow plan generator evaluation harness
+golden profile GenerationOrchestrator no-op activation property test
+PROPERTY_SEED"` legjobb találata pontosan a döntő fájl volt:
+`tools/tests/test_e07_r21_activation_boundary_scope.py` — az E07-R21/H2
+self-heal regressziós őre, ami épp azt a tényt pinneli, amit lent az
+"aktiválás nélküli generálás" szakasz újra levezet. `--corpus lessons`
+találatai: L92 (randomizált property-generátor determinizmusa — index, nem
+karakterkód-maradék, a §A2/§A3 teszt megírásához releváns), L142 (HARD-seedes
+property-gate boundary-flaky lehet kis mintán — a §5.3 NULLA-küszöb erre nem
+érzékeny, mert abszolút, nem %-os, de a próbaszám megválasztásánál érdemes
+tudni róla), L110 (`Process.run('rg', …)` a boxon zöld, CI-runneren PIROS —
+a `plan_quality_report.dart` és az új tesztek NE hívjanak külső binárist).
+
+**1. KRITIKUS — a property-teszt útvonal a mért CI-vel ütközött (javítva
+fent, a TOML blokkban).** `.github/actions/flutter-gates/action.yml:47`
+mérten `flutter test test/property`-t futtat a "Property gate (randomized
+seed)" lépésben, `PROPERTY_SEED: ${{ github.run_id }}` env-vel — ez az
+EGYETLEN CI-lépés, ami a randomizált seedet adja. A megelőző "Test gate"
+lépés (`flutter test`, teljes fa, minden meglévő `.github/workflows/*.yml`-ben
+`PROPERTY_SEED` env NÉLKÜL fut) mindig a 42 default-ra esne vissza. A brief
+eredeti `test/features/practice_generator/property/`-je (és az SDD-fejezet
+saját fájllistája, `docs/sdd/08-epic-07-ai-practice-generator.md:4330`, ami
+ugyanezt írja) NINCS a `test/property` alatt — az új property tesztek a CI-ban
+SOHA nem futottak volna a randomizált seeddel, csak a fix 42-vel a sima Test
+gate-en belül, ami közvetlenül aláásta volna A2/A3-at (a HORIZON
+anti-reward-hacking mérce, `CLAUDE.md`). Nincs is precedens az útvonalra:
+`find test/features -type d -iname property` üres, míg a MEGLÉVŐ
+planner-property-tesztek (`test/property/planner_repair_property_test.dart`,
+`test/property/planner_time_budget_property_test.dart`, mindkettő
+`Platform.environment['PROPERTY_SEED']`-et olvas, default 42) mind
+`test/property/`-ben élnek. Az SDD-fejezet fájllistája emellett egy nem
+létező `.github/workflows/flutter-ci.yml`-t is megnevez (a mai CI
+`build-apk.yml`/`full-gate.yml`/`router-ci.yml` hármasra bomlott) — ugyanaz az
+elavulási osztály, nem külön hiba (AGENTS.md §2: "Elavult dokumentumot nem
+szabad csendben követni. Dokumentáld az eltérést."). **Revízió:** mindkét
+property-teszt célja `test/property/` (fent a TOML-ban, lent a §4/§7/§8-ban is
+javítva); a `.github/**` tiltott zóna változatlan, egyetlen workflow-fájlhoz
+sem nyúlunk.
+
+**2. `golden_profiles` fixture formátum — REVÍZIÓ (`.json` → `.dart`).**
+Mérve: `PracticeGenerationRequest`/`WeeklyAvailability`/`PracticeGoal`/
+`LearnerConstraints` egyikének SINCS `fromJson`/`toJson`-ja (csak a beágyazott
+`GenerationRequestId`-nek, `practice_generation_request.dart:27-31`). A
+practice_generator feature MINDEN meglévő fixture-je
+(`test/fixtures/practice_generator/**`, pl. `validation/
+validation_fixtures.dart`, `plan/plan_fixtures.dart`) Dart builder-függvény
+minta — a repóban van 22 JSON fixture, de egyik sem ebben a feature-ben, és
+egyik sem szerializál ilyen gazdag, beágyazott domain-objektumot kézzel írt
+parserrel. Egy bespoke JSON→domain parser megírása egyetlen záró körben, egy
+bevált, meglévő mintával szemben indokolatlan kockázat. **Revízió:**
+`test/fixtures/practice_planner/golden_profiles.dart` — Dart
+builder-függvények listája, a `validation_fixtures.dart` mintáját követve
+(`import 'package:strumsight/features/practice_generator/public.dart';`,
+majd egyenkénti, paraméterezhető builder minden golden profilhoz).
+
+**3. Nincs meglévő kompozíciós gyökér — architektúra-iránymutatás (nem
+blokkoló, de a helyes megoldáshoz kritikus).** Mérve:
+`grep -rl "GenerationPlanInput(" lib/` NULLA találat — a `GenerationPlanInput`
+konstruktort SOHA nem hívja `lib/` kód, kizárólag két teszt
+(`test/features/practice_generator/application/generation_orchestrator_test.dart`,
+`.../plan_generator_controller_test.dart`) építi kézzel, egy jelöltes/egy
+napos minimál bemenettel. `PlanGeneratorController` maga sem építi — készen
+kapja paraméterként. A `shadow_plan_generator.dart` lesz tehát az Epic 7 ELSŐ
+éles vég-az-végig kompozíciója (evidence → skill estimate → priority →
+candidate selection → time budget → weekly schedule → `GenerationPlanInput` →
+`GenerationOrchestrator.generate()`) — ez lényegesen nagyobb feladat, mint
+amit a §8 4. sora sejtet, de VALÓS, a scope-on belüli munka, nem
+brief-hiba. Iránymutatás (nem kényszerítő, de mért-ok-alapú):
+
+- Az "aktivál nélküli generálás" mérten bevett mintája ebben a kódbázisban
+  (ADR 0266 "Módosítás" záró szakasza + `PlanPreviewController` docstringje +
+  `generation_orchestrator_test.dart` `_RecordingActivation`/`_NoopActivation`
+  osztályai + a most visszakeresett `test_e07_r21_activation_boundary_scope.py`
+  forcing function): `GenerationOrchestrator._run()` a validálást/javítást és
+  az aktiválást EGY atomi hívásban fuzionálja (`generate()` maga hívja
+  `activation.activate(activePlan)`-t záró hatásként) — ezt a fájlt a brief
+  NEM engedi módosítani, és nem is kell: az `activation` paraméter injektált
+  interfész pontosan erre az esetre. A `ShadowPlanGenerator` építsen egy SAJÁT,
+  no-op `GenerationPlanActivation` implementációt (hívásszámláló, semmilyen
+  perzisztencia), és ezzel példányosítsa a VALÓDI `GenerationOrchestrator`-t —
+  így a shadow-terv ugyanazon a determinisztikus kódúton születik, mint az
+  éles út (nem duplikált, drift-mentes logika), de az "aktiválás" ténylegesen
+  semmilyen valódi állapotot nem ír. A4 falszifikálható mérceként ezt
+  használd: a no-op activation hívásszáma > 0 (a generálás lefutott), DE a
+  `shadow_plan_generator.dart` szerkezetileg sem importál semmit a
+  `data/local/`-ból vagy az `application/controller/
+  active_plan_controller.dart`-ból (grep-ellenőrizhető invariáns, nem csak
+  futásidejű megfigyelés).
+- Minden köztes szolgáltatás (`SkillEstimateReducer`, `SkillPriorityEngine`,
+  `CandidateSelector`, `TimeBudgetAllocator`, `WeeklyScheduler`) publikusan
+  elérhető a `public.dart`-on át; a pontos bemenet/kimenet alakhoz a saját
+  tesztjük a hiteles forrás (`test/features/practice_generator/**/
+  *_test.dart` az adott szolgáltatáshoz) — ne találj ki új alakot mérés
+  nélkül.
+- `ValidationSeverity` (`domain/model/plan_enums.dart:90`) legalább `fatal`,
+  `error`, `warning` értékeket ismeri; `PlanValidationResult.isActivatable`
+  ezekre `false` — ez fedi a brief §2 "error/fatal mellett nem aktiválható"
+  állítását, nincs ütközés, nincs revízió szükséges itt.
+
+**ADR:** nem szükséges új szám. A fenti három pont dokumentációs/útvonal-
+pontosítás egy MÉG NEM dispatch-elt kör briefjén (§2 szerint teljes egészében
+az orchestrátor hatásköre), nem architekturális döntés — az ADR 0255/0263/
+0266/0270 változatlan marad, egyiket sem kell módosítani.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -74,9 +181,9 @@ funkció · `docs/adr/**`, `tools/**` (a `tool/practice_plan_eval/` kivételéve
 | Útvonal | Indok |
 |---|---|
 | `tool/practice_plan_eval/plan_quality_report.dart` | **ÚJ** — a riport |
-| `test/fixtures/practice_planner/golden_profiles.json` | **ÚJ** — a korpusz |
-| `test/…/property/planner_invariants_property_test.dart` | **ÚJ** |
-| `test/…/property/planner_golden_fixture_test.dart` | **ÚJ** |
+| `test/fixtures/practice_planner/golden_profiles.dart` | **ÚJ** — a korpusz (Dart builder, ld. §0.0 pont 2) |
+| `test/property/planner_invariants_property_test.dart` | **ÚJ** (ld. §0.0 pont 1 — a CI hardcoded `test/property`-t futtat randomizált seeddel) |
+| `test/property/planner_golden_fixture_test.dart` | **ÚJ** (ugyanaz) |
 | `application/service/shadow_plan_generator.dart` | **ÚJ** — árnyék-mód |
 | `docs/sdd/epic-07-completion-report.md` | **ÚJ** — a záró jelentés |
 | `docs/rounds/e07-r30-…md` | a §10 handoff |
@@ -156,7 +263,7 @@ vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/practice_generator/property/planner_invariants_property_test.dart test/features/practice_generator/property/planner_golden_fixture_test.dart
+tools/round-gate.sh test/property/planner_invariants_property_test.dart test/property/planner_golden_fixture_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
@@ -168,7 +275,7 @@ A **teljes** suite és az APK a CI-ban fut (ADR 0053), nem itt.
 
 ## 8. Implementációs sorrend
 
-1. `golden_profiles.json` — a fixture-korpusz (több tanulói profil).
+1. `golden_profiles.dart` — a fixture-korpusz (több tanulói profil, Dart builder).
 2. `planner_invariants_property_test.dart` — invariánsok + seed-determinizmus.
 3. `planner_golden_fixture_test.dart` — nulla hard sértés a korpuszon.
 4. `shadow_plan_generator.dart` — generál, nem aktivál.
