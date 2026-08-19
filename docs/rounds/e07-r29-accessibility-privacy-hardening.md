@@ -267,6 +267,40 @@ gate_tests = [
 native_gate = false
 ```
 
+### 0.0.2 Aktuális dispatch-pre-flight (2026-08-19, `main @ e6f4c677`)
+
+Az örökölt `29863cba` pre-flightot az aktuális `main`-re merge-elve
+(`ad365d98`) újramértük, mielőtt az implementer indul. A §0.0.1 17/7-es,
+név szerinti bővítése továbbra is a lehető legszűkebb: a
+`LocalPracticePlanRepository` és `GenerationDraftRepository` ma is maguk
+hívják a `keyValueStore.remove()`-ot; a shared `KeyValueStore`-hoz nincs
+szükség módosításra. A `PracticeEvidenceRepository` továbbra is kizárólag
+`save`/lekérdezés műveleteket ad, tehát a user-kezdeményezett, plan-szűk
+törléshez a §5.7-ben engedélyezett, külön dokumentált metódus valóban ezen a
+porton szükséges.
+
+Az A4 cél-státuszok nem csak táblázatban léteznek: a
+`TodayPlanController` ma tényleges bemeneti ágakon állítja elő mind a hat
+`TodayPlanMode`-ot (`noActivePlan`, `notScheduled`, `restDay`,
+`unavailableDay`, `completedDay`, `plannedDay`; 59–123. sor), és a
+`TodayPlanScreen` mindet külön képernyőprojekcióba vezeti (60–81. sor).
+Az accessibility-audit ezért ezen a valós hívási láncon mérhető. A l10n
+paritás-őr ténylegesen `tool/ci/check_l10n_parity.dart` (156–157. sor,
+`app_en.arb` ↔ `app_hu.arb`); `docs/privacy/` még nem létezik, így az
+engedélyezett policy-dokumentum létrehozása szabályos új fájl. A meglévő
+`public.dart` már exportálja a planning feature szerződéseit, ezért a két új
+use case saját exportja scope-on belül, további cross-feature megnyitás nélkül
+vizsgálható.
+
+`tools/knowledge-rag.mjs --top 5` a brief saját R29-szakaszát, valamint
+`lessons/L319`, `lessons/L169`, `lessons/L260` és `lessons/L107` találatokat
+adta. Ezek közül L319/L327 a named-scope mindkét irányú mérését, L260 a
+value-oldali redakciós kanárit, L169 a pozitív, zárt privacy-őrt támasztja
+alá. Az index `1cad061e`-n áll, két committal elavult; ADR 0312 szerint ez a
+merge-horgony láncállapota, nem e kör scope-ja, ezért nincs önkényes
+újraindexelés. `tools/brief-lint.py --level strict` és
+`tools/gateguard-scan.py` jelen briefen zöld.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
