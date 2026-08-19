@@ -12217,3 +12217,94 @@ round-status-<kör>`) megírása után a driver saját, következő firingje
 természetes úton felold. Rokon hibaosztály (élő repo-állapotra érzékeny
 teszt): [[L316]] (más ok, ugyanaz a „ne a diffemet gyanúsítsd először, mérj"
 elv).
+
+## L321 — Egy önjavítás által pinnelt regressziós teszt UGYANAZON hibaosztálya (bidirekcionális `assertEqual` egy AKTÍV kör-brancsen vagy `done`-ná váló kör-brief tartalmán) KÉTSZER, EGYMÁSTÓL FÜGGETLENÜL is előfordult ugyanabban a self-healben (E07-R25, H5, 2026-08-19)
+
+**Mit mértünk (elsődleges, a HALT jelentette gyökérok).** A H3 self-heal
+(PR #319, [[L319]]) `tools/tests/test_e07_r25_vision_evidence_scope.py`-ja
+két bidirekcionális `assertEqual`-t pinnelt egy 4-elemű
+`EvidenceSource`-értékkészletre. Az E07-R25 kör implementere a SAJÁT, még
+nem merge-elt ágán (`minimax/e07-r25-analysis-and-vision-evidence`)
+pontosan a H3 által jóváhagyott `EvidenceSource.vision`-t adta hozzá —
+legitim, brief-szentesített előrehaladás. Router CI kétszer pirosra váltott
+a kör ágán (futások
+[32204906795](https://github.com/wolfcasaba/strumsight/actions/runs/32204906795),
+[32206385772](https://github.com/wolfcasaba/strumsight/actions/runs/32206385772)),
+mert a pin nem lehet egyszerre zöld `main` tényleges 4-értékű és a kör-ág
+tényleges 5-értékű fáján. **Ez BYTE-PONTOSAN [[L279]]/[[L280]] hibaosztálya**
+(E99-R13, 2026-08-15) — ugyanaz a self-heal-generált pin-minta, más fájlon,
+négy nappal később, egy MÁSIK self-heal (H3) által írva, amely nem ismerte
+(vagy nem alkalmazta) a korábbi leckét.
+
+**Javítás — [[L279]] receptje szó szerint alkalmazva.** Mindkét teszt
+egyirányú, nem-zsugorodás invariánsra vált (`missing = [v for v in
+ORIGINAL_EVIDENCE_SOURCE_VALUES if v not in values]; assertEqual(missing,
+[])`); `ORIGINAL_EVIDENCE_SOURCE_VALUES` MAGA változatlan (4 elem) —
+bővítése "megjavította" volna a kör-ágat, de eltörte volna `main` SAJÁT,
+merge utáni Router CI-ját. Mindkét irányban mérve egy izolált heal
+worktree-ben (a kör-ág valódi `skill_evidence.dart`/
+`evidence_weight_policy.dart`-ját commit nélkül a plain `main` fölé
+rétegezve): javítatlan teszt + kör-ág kód → PIROS (byte-azonos a CI valódi
+hibájával); javított teszt + plain `main` kód → ZÖLD; javított teszt +
+kör-ág kód → ZÖLD.
+
+**Mit mértünk (MÁSODIK, a HALT által NEM jelentett, saját fix
+gate-futtatása közben talált gyökérok).** A teljes `tools/tests` suite
+`main`-en (a H5 fixem ELŐTT is!) pirosra váltott egy MÁSIK, ugyanebbe a
+hibaosztályba tartozó teszten:
+`test_knowledge_rag.py::test_brief_lint_flags_a_brief_without_retrieved_precedent`
+egy VALÓDI kör briefjére (`e99-r15-gov-09-halt-escalation.md`) mutatott,
+hogy bizonyítsa: a `brief-lint.py` S8 (ADR 0312 §4.1) leletet ad egy
+előzmény-hivatkozás nélküli briefre. Az S8 check SZÁNDÉKOSAN néma, ha a kör
+sor-fájlbeli státusza `done` (mért precedens: `e06-r10` briefje,
+`test_e06_r10_brief_is_clean_after_the_h3_self_heal`,
+`tools/tests/test_pipeline_throughput.py`) — mihelyt az E99-R15 lezárult, az
+S8 HELYESEN elhallgatott a saját briefjén, és ez a teszt nem regresszió
+miatt, hanem az S8 SAJÁT, szándékos működése miatt tört el. **Bármely valódi
+kör brief-je időzített bomba ehhez a fixture-höz** — minden kör előbb-utóbb
+`done`-ná válik. Mérve: két Router CI futás `main`-en pirosra váltott
+(`32207252052` a `6f753440` fejen, `32208143911` a rákövetkező `d84bcc63`
+fejen) — ez a fejlődő fix NÉLKÜL az ÉN H5-javításom sem tudott volna zölden
+merge-elődni, mert a Router CI a TELJES suite-ot futtatja, nem csak a diff
+által érintett fájlokat.
+
+**Javítás.** A valódi, mutálódó kör-brief helyett egy szintetikus,
+soha-nem-a-valódi-sorban-szereplő task-id-jú (`E00-R00`) brief fixture, a
+repón BELÜLI (a `lint_text()` `path.resolve().relative_to(repo.resolve())`
+ellenőrzése miatt) ideiglenes könyvtárban — ez a csatolást szünteti meg, nem
+csak a lejárati dátumát tolja odébb.
+
+**Hogyan alkalmazd.** (1) Mielőtt egy self-heal (VAGY bármely kör) egy
+pinnelt `assertEqual(mért_állapot, KONSTANS)` regressziós tesztet ír egy
+router-CI útvonalon, OLVASD EL [[L279]]-et előbb — ez már a MÁSODIK mért
+előfordulása ugyanennek a hibaosztálynak, és a második self-heal (én) sem
+ismerte a részleteket, csak utólag, a saját CI-hibájából rekonstruálva
+jutott el ugyanarra a megoldásra. (2) Egy teszt, ami egy VALÓDI,
+életciklussal rendelkező kör-brief tartalmára vagy sor-fájlbeli
+STÁTUSZÁRA (nem csak `EvidenceSource`-szerű enumértékre) pinnel egy
+"jelenleg hiányzik X" állítást, ugyanígy időzített bomba — a `done` átmenet
+elkerülhetetlen. A megoldás szintetikus fixture, nem egy másik valódi,
+egyelőre-még-nyitott brief kiválasztása (az csak odébb tolja a
+lejáratot). (3) Egy self-heal saját gate-futtatása (a kötelező `python3 -m
+pytest tools/tests -q`) MÁSODIK, a HALT által nem jelentett gyökérokot is
+felszínre hozhat — ez NEM automatikusan a self-heal scope-ján kívüli:
+ha `tools/tests/**`-ben van és blokkolja a SAJÁT fixed zöld merge-ét (mert a
+Router CI a teljes suite-ot futtatja), a második gyökérok javítása a
+[[ADR 0112]] 2026-08-15-i módosításának hatálya alá esik ("a második
+gyökérok is tools/-infrastruktúra, nem a megállt kör tartalmi munkája").
+(4) Post-merge, FRISS klónból (nem a local `main`-ből, ami elmaradhat) a
+teljes suite egyetlen, ISMERT, már a MEGELŐZŐ kör HANDOFF-jában
+dokumentált, élő-sor-fájl-állapotra érzékeny flake-et mutatott
+(`test_pipeline_integration.py::test_a_full_firing_retries_the_round_
+instead_of_healing_a_resolved_terra_wall`) — a pre-merge commit (`d26e7655`)
+UGYANAZON pillanatban és UGYANAZON élő sorral lefuttatva ZÖLD volt, a
+merge-commit (`a1613fa5`) 3/3-ban PIROS; a két fájl tartalma a két commit
+közt bizonyíthatóan bájt-azonos ebben a tesztben érintett útvonalakon
+(`git diff` üres rájuk) — környezeti terhelés/időzítés-érzékeny flake, NEM
+ennek a fixnek a regressziója, és NEM ennek a self-healnek a scope-ja
+(rokon: [[L316]]). A SAJÁT PR Router CI futása (izolált, terheletlen
+GitHub-runneren, a pontos merge SHA-n) zöld volt — az az irányadó kapu, nem
+egy megosztott, párhuzamosan terhelt Oracle-boxon futtatott utólagos
+ellenőrzés.
+
+Rokon: [[L279]], [[L280]], [[ADR 0112]].
