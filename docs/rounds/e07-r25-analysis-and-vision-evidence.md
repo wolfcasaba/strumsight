@@ -1,13 +1,43 @@
 # E07-R25 — Analyze és Computer Vision evidence integráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 19b30557`)
+- **Státusz:** HALTED — pre-flight scope conflict (2026-08-19, `main @ 90df4d04`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 25
 - **Kör-azonosító:** `E07-R25`
 - **Branch:** `<motor>/e07-r25-analysis-and-vision-evidence`
 - **Előfeltétel:** `E07-R24` merge-elve (dal-integráció)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a határokat az ADR 0260 (nyers média
-  tilalma, discomfort külön), 0261 (`unknown`) és 0262 (capability) rögzíti.
+- **Pre-flight ADR:** [ADR 0319](../adr/0319-vision-evidence-provenance-and-safe-boundary-prerequisite.md)
+
+## 0.0 Pre-flight revízió — HALT H3
+
+**Mérés (2026-08-19, `main @ 90df4d04`).** A brief régi alapja
+`19b30557` volt. A jelenlegi `lib/app/config/feature_flags.dart:24-43` és
+`80-99` szerint minden Vision- és Audio Analysis V2 flag továbbra is `false`,
+tehát a degradációs elv helyes. Az Audio Analysis root `public.dart`-ja
+létezik, de túl széles: data-, engine-, presentation- és raw-közeli típusokat
+is exportál (`lib/features/audio_analysis/public.dart:28-126`). A Vision root
+barrelje ugyanezt a problémát hordozza (`lib/features/vision/public.dart:9-85`);
+az ADR 0193 által bevezetett szűk `vision/domain/integration/public.dart`
+viszont a jelen kör prioritás-mappingjához nem ad át numerikus, skillhez kötött
+performance-értéket.
+
+**Blokkoló szerződési rés.** A planner `SkillEvidence.source` mezője a
+`lib/features/practice_generator/domain/model/skill_evidence.dart:17-21`
+alapján csak `learn`, `progress`, `analyzeV2` és `selfReport` lehet. A Vision
+evidence-et ezért csak hibás provenance-nal lehetne `analyzeV2`-nek címkézni,
+vagy a jelen brief tilos zónáját áttörve kellene a közös evidence-modellt és
+tesztjeit bővíteni. Egyik sem elfogadható. A jelen scope nem tartalmazza sem
+a hiteles Vision-forrást, sem a `vision` source-értéket, ezért a §1 cél és
+A5/A6/A8 korrektül nem teljesíthető.
+
+**Döntés.** A kör nem dispatch-elhető. A következő, új briefnek explicit
+engedélyeznie kell (1) a provenance-megőrző Vision source-változatot és annak
+regressziós tesztjeit a Practice Generator evidence-modellben, valamint (2) a
+Visionből kizárólag származtatott, skillhez rendelt, numerikus evidence-et
+átadó szűk publikus contractot és annak boundary-őrét. A wide public barrel
+vagy bármely raw/internal Vision típus használata nem alternatíva. L308,
+L190, ADR 0193 és ADR 0260 releváns előzmény; a RAG index friss volt
+(`90df4d04`, 2026-08-19T00:26:21Z).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd meg az Audio Analysis V2
 > **tényleges** `public.dart` felületét és a **flagek állását** — a GOV-30c óta
