@@ -68,18 +68,17 @@ abstract interface class PracticeEvidenceRepository {
 /// reducer, the bounded query, the migrator or the aggregator.
 final class InMemoryPracticeEvidenceRepository
     implements PracticeEvidenceRepository {
+  InMemoryPracticeEvidenceRepository({this.outcomePlanLookup});
+
   /// Optional lookup table to scope the plan-scoped delete. Tests that
   /// build evidence with `sourceOutcomeId` outside the planner's own
   /// outcome-id space inject a custom resolver so the delete can prove it
   /// never reaches across the feature boundary. The default returns
   /// `null` — evidence was written by the planner and therefore belongs
   /// to the planner's own plan-id space, which the caller knows.
-  InMemoryPracticeEvidenceRepository({
-    PlanId? Function(String sourceOutcomeId)? outcomePlanLookup,
-  }) : _outcomePlanLookup = outcomePlanLookup;
+  final PlanId? Function(String sourceOutcomeId)? outcomePlanLookup;
 
   final Map<String, SkillEvidence> _byOutcomeId = <String, SkillEvidence>{};
-  final PlanId? Function(String sourceOutcomeId)? _outcomePlanLookup;
 
   @override
   void save(SkillEvidence evidence) {
@@ -129,7 +128,7 @@ final class InMemoryPracticeEvidenceRepository
 
   @override
   int deleteForPlan(PlanId planId) {
-    final owned = _outcomePlanLookup;
+    final owned = outcomePlanLookup;
     var removed = 0;
     _byOutcomeId.removeWhere((outcomeId, evidence) {
       final owner = owned == null ? planId : owned(outcomeId);
