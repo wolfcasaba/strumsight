@@ -1,29 +1,28 @@
 # E08-R01 — Review
 
-Brief: `docs/rounds/e08-r01-gamification-baseline-and-principles.md`  
-Diff: `origin/main...minimax/e08-r01-gamification-baseline-and-principles`  
-Reviewer: Codex / gpt-5.6-terra (független orchestrátor)  
-Dátum: 2026-08-19  
-Verdikt: **CHANGES REQUIRED**
+Brief: `docs/rounds/e08-r01-gamification-baseline-and-principles.md`
+Diff: `origin/main...minimax/e08-r01-gamification-baseline-and-principles`
+Reviewer: Codex / gpt-5.6-terra (független orchestrátor)
+Dátum: 2026-08-19
+Verdikt: **APPROVED** (javító review: `e7b46750`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 1 · NOTE: 1
 
-Az izolált, GitHub-originről klónozott review-fa (`d72bf193`) gate-je 9/9
-zöld, a scope-audit tiszta. Ez nem bizonyítja a baseline központi
-tartalmi állításait: a file:line ellenőrzés két megtévesztő térképet és
-indokolatlan ADR-tesztlefedettséget talált.
+Az első review (`d72bf193`) két MAJOR leletét a `e4574c74` javította; a
+review-fresh clone végső HEAD-je `e7b46750`. A független gate újra 9/9 zöld,
+a scope-audit tiszta. Az F1 és F2 konkrét ellenőrzései lezárultak.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| A1 | Minden baseline-állítás visszakereshető | ❌ | F1: §1.1 és §1.2 több, kóddal cáfolható állítása |
+| A1 | Minden baseline-állítás visszakereshető | ✅ | §1.1–§1.2 mért Share- és Learn-import hivatkozások; N2 csak tipográfiai jel |
 | A2 | Aktuális és legacy kulcslista teljes | ✅ | reviewer key-scan; a valódi-sértés próba `practice_streak_v1` törlésekor `BASELINE_MISSING` |
 | A3 | Freeze-szabály számszerű | ✅ | baseline §3 ↔ `streak_logic.dart:11–20,32–62` |
 | A4 | Daily challenge determinisztikus | ✅ | baseline §4 ↔ `daily_challenge.dart:45–57` |
-| A5 | Race/a11y/screen-size guardok leltára | ❌ | F2: a §8.4 ADR-lefedettségi minősítései nem a tesztek által bizonyítottak |
+| A5 | Race/a11y/screen-size guardok leltára | ✅ | §8 guard-típusok, §8.4 közvetlen assertion-alapú státuszok |
 | A6 | Alkalmazáskód változatlan | ✅ | csak docs-pathok a diffben |
 | A7 | Tiltólista ADR-hivatkozású | ✅ | baseline §9 D1–D16 mind 0289/0290 hivatkozású |
 | A8 | Meglévő tesztek zöldek | ✅ | izolált `tools/round-gate.sh` 9/9 zöld |
@@ -54,7 +53,7 @@ b5317fd52b41aeb10839f9a90c971155f3b35632` → `Legacy scope audit OK`;
 - **Ellenőrzés:** `find lib/features/share -type f -name '*.dart'` és
   `rg -n "../../(streak|progress)/public.dart" lib/features/learn` eredménye
   egyezzen a baseline hivatkozásaival.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`e4574c74`)
 
 ### F2 — MAJOR — Az ADR-lefedettségi táblázat tesztekkel nem bizonyított állításokat zöldít
 
@@ -73,6 +72,17 @@ b5317fd52b41aeb10839f9a90c971155f3b35632` → `Legacy scope audit OK`;
 - **Ellenőrzés:** A táblázat minden „lefedett” sorához a megnevezett teszt
   konkrét assertionje és a releváns ADR-követelmény között legyen közvetlen
   kapcsolat.
+- **Státusz:** FIXED (`e4574c74`)
+
+### N2 — MINOR — Hibás karakter a Learn–Progress címkében
+
+- **Fájl:** `docs/baseline/epic-08-start.md:69`
+- **Probléma:** A kapcsolat címkéjében `Learn � Progress` szerepel a várt
+  `Learn ⇄ Progress` helyett.
+- **Hatás:** Nem változtatja meg a szomszédos, helyes file:line bizonyítékot,
+  de rontja a baseline olvashatóságát.
+- **Javaslat:** Következő dokumentációs érintéskor javítandó; a diff
+  növelése nélkül nem blokkoló.
 - **Státusz:** OPEN
 
 ### N1 — NOTE — A wrapper gate-shape jelzése hamis pozitív
@@ -99,7 +109,20 @@ kimenettel piros állapotot adott; a sort ezután változatlanul visszaállítot
 | Scope-audit | ✅ 2 engedélyezett changed path |
 | CI | még nem dispatch-elt; javítás után új exact-SHA run kell |
 
+## Javító review bizonyítéka
+
+- F1: `find lib/features/share -type f -name '*.dart'` → 9; a baseline §1.1
+  ugyanezt és a `public.dart:4–13` / `share_service.dart:15–132` forrásokat
+  rögzíti. `rg -n "../../(streak|progress)/public.dart" lib/features/learn`
+  → négy tényleges import, mind a baseline §1.2-ben szerepel.
+- F2: a baseline §8.4 minden „lefedett” sorát a megnevezett assertionre
+  korlátozza; az XP/mastery, reward-UI és audit-evidence sorok GAP vagy
+  „kapcsolódó, de nem elégséges” státuszúak.
+- Végső, izolált `tools/round-gate.sh` → 9/9 zöld.
+- Végső scope-audit → 3 changed path, ebből 1 review-artefaktum
+  generated/ignored, sértés nincs.
+
 ## Merge-döntés
 
-Az F1 és F2 MAJOR leletek miatt merge tilos. A javító kör után friss izolált
-review, célzott gate és exact-SHA CI szükséges.
+Nincs nyitott BLOCKER vagy MAJOR. A zöld merge-kapuhoz még a jelenlegi exact
+HEAD-re dispatch-elt teljes CI-suite/property gate, APK és Router CI kell.
