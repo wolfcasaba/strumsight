@@ -27,6 +27,7 @@ on:
       # el, melyik workflow a kapu), ezért ugyanez a sáv méri őket.
       - "tools/round-ci-plan.py"
       - "tools/brief-lint.py"
+      - "tools/brief-merge-plan.py"
       - "tools/round-slots.py"
       - "tools/round-metrics.py"
       - "tools/round-merge-lock.sh"
