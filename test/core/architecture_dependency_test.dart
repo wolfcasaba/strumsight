@@ -427,6 +427,55 @@ import 'package:strumsight/features/song_trainer/domain/models/song_document.dar
       );
     });
 
+    // E99-R18 (GOV-12): the generated-barrel fragments live at
+    // `lib/features/<f>/public/<topic>.dart`. They are feature-INTERNAL:
+    // a cross-feature import of a fragment must still be flagged, because
+    // the barrel is regenerated from them and is the SOLE cross-feature
+    // entry point. The feature-boundary rule does not loosen.
+    test(
+      'flags cross-feature imports of public.dart fragments as violations',
+      () {
+        _write(
+          project,
+          'lib/features/ai_tutor/application/tools/song_tutor_tools.dart',
+          '''
+import '../../../practice_generator/public/data.dart';
+import 'package:strumsight/features/practice_generator/public/domain.dart';
+''',
+        );
+
+        final report = checkArchitecture(
+          projectRoot: project,
+          allowlist: const {},
+        );
+
+        expect(
+          report.unexpectedViolations.map((violation) => violation.key),
+          containsAll({
+            'lib/features/ai_tutor/application/tools/song_tutor_tools.dart -> '
+                'lib/features/practice_generator/public/data.dart',
+            'lib/features/ai_tutor/application/tools/song_tutor_tools.dart -> '
+                'lib/features/practice_generator/public/domain.dart',
+          }),
+        );
+      },
+    );
+
+    test('allows imports of a fragment from inside the same feature', () {
+      _write(
+        project,
+        'lib/features/practice_generator/application/service/foo.dart',
+        "import '../public/data.dart';",
+      );
+
+      final report = checkArchitecture(
+        projectRoot: project,
+        allowlist: const {},
+      );
+
+      expect(report.unexpectedViolations, isEmpty);
+    });
+
     test('rejects raw frame payloads from vision persistence', () {
       _write(
         project,
