@@ -1,4 +1,5 @@
-"""Regression guard for the E07-R25 self-heal (ADR 0112, halt H3, 2026-08-19).
+"""Regression guard for the E07-R25 self-heal (ADR 0112, halt H3, 2026-08-19;
+corrected under halt H5, 2026-08-19).
 
 Measured root cause of the halt: the PREPARED E07-R25 brief's `allowed_paths`
 lets the implementer write two new adapters
@@ -26,11 +27,13 @@ another.
 
 This guard locks in three things so neither halt can silently return:
 
-  * the measured fact the widening depends on -- `EvidenceSource` still has
-    exactly its original four values and `evidence_weight_policy.dart`'s
-    switch is still exhaustive over exactly those four (source: this test's
-    own `EvidenceSource` value list and the arm-count regex below). If a
-    later round changes either fact, this test turns red on purpose;
+  * the measured founding fact the widening depends on -- `EvidenceSource`
+    still carries at least its original four values, and
+    `evidence_weight_policy.dart`'s switch still has a matching arm for
+    each of them, with no `default` arm (source: this test's own
+    `EvidenceSource` value list and the arm-count regex below). This half
+    is deliberately ONE-DIRECTIONAL -- see "Correction" below for why the
+    other direction (no value beyond these four) cannot be pinned here;
   * the Vision types the new narrow contract is meant to re-export
     (`VisionEvidence`, `ObservationState`, `EvidenceMetric`,
     `EvidenceProvenance`) are declared where ADR 0319's follow-up assumes,
@@ -40,6 +43,40 @@ This guard locks in three things so neither halt can silently return:
     test files the follow-up implementation needs, as a narrow *addition*
     to ADR 0319's own list -- not a blanket widening of
     `practice_generator/domain` or `vision/**`.
+
+Correction (self-heal, halt H5, 2026-08-19): the first version of this
+guard pinned `ORIGINAL_EVIDENCE_SOURCE_VALUES` with a full `assertEqual` in
+both tests below, including the "no value/arm beyond these four" direction.
+That is structurally incompatible with this repo's own round lifecycle --
+the same failure class already measured once in
+`tools/tests/test_e99_r13_runner_scope.py`'s own "Correction" section
+(`docs/LESSONS.md` L279/L280, 2026-08-15): the E07-R25 round's implementer
+went on to add the brief-sanctioned `EvidenceSource.vision` (this file's
+own H3 widening) on its own, still-unmerged branch
+(`minimax/e07-r25-analysis-and-vision-evidence`) -- which is, by
+definition, always ahead of `main` while the round is in flight. Measured
+(`gh run view 32206385772 --log-failed`, and independently reproduced in an
+isolated heal worktree by overlaying the round branch's
+`skill_evidence.dart`/`evidence_weight_policy.dart` uncommitted over a
+plain `origin/main` checkout): Router CI failed on the round's own branch
+because both assertions no longer equalled `main`'s actual 4-value state
+once the branch's `vision` addition was in the checked-out tree. Widening
+`ORIGINAL_EVIDENCE_SOURCE_VALUES` to 5 entries would "fix" the round branch
+but break `main`'s OWN post-merge Router CI (main's tree genuinely has only
+4 `EvidenceSource` values until the round actually merges) -- trading one
+red for a worse one that blocks every future round dispatch, not just this
+one (L279's exact failure mode). Both tests below now assert only the
+non-redundant, branch-invariant half: none of the founding four may
+silently disappear, or lose their `sourceReliability` arm.
+`ORIGINAL_EVIDENCE_SOURCE_VALUES` itself is unchanged (still 4 entries --
+it was not, and must not be, widened). The other direction (no
+value/arm beyond a brief-sanctioned addition) is already covered,
+branch-safely, by `test_allowed_paths_is_the_original_nine_plus_exactly_
+five_new_entries` and `test_new_paths_are_in_scope_via_the_real_audit`
+below (which files may change), plus Dart's own compiler: a switch arm
+added for a value with no corresponding brief-approved file change is a
+hard exhaustive-switch compile break, caught by `flutter analyze` in the
+Full Gate, not by this Python test.
 """
 
 import re
@@ -136,7 +173,12 @@ FORBIDDEN_RAW_MARKERS = (
 
 
 class E07R25VisionEvidenceScopeTest(unittest.TestCase):
-    def test_evidence_source_still_has_exactly_the_original_four_values(self) -> None:
+    def test_evidence_source_still_has_the_original_four_values(self) -> None:
+        """Deliberately one-directional: see the module docstring's
+        "Correction" section for why asserting the OTHER direction -- no
+        value beyond these four -- breaks `main`'s own Router CI the moment
+        the round legitimately adds `vision` on its own, still-unmerged
+        branch."""
         text = SKILL_EVIDENCE.read_text(encoding="utf-8")
         match = _ENUM_VALUES_RE.search(text)
         self.assertIsNotNone(match, "EvidenceSource enum body not found")
@@ -145,20 +187,24 @@ class E07R25VisionEvidenceScopeTest(unittest.TestCase):
             for line in match.group(1).split(",")
             if line.strip()
         )
+        missing = [v for v in ORIGINAL_EVIDENCE_SOURCE_VALUES if v not in values]
         self.assertEqual(
-            values,
-            ORIGINAL_EVIDENCE_SOURCE_VALUES,
-            "EvidenceSource's value set changed -- re-check whether the "
-            "E07-R25 H3 brief revision (new 'vision' value) is still "
-            f"accurate: {SKILL_EVIDENCE.relative_to(REPO_ROOT)}",
+            missing,
+            [],
+            f"EvidenceSource value(s) disappeared: {missing} -- "
+            f"{SKILL_EVIDENCE.relative_to(REPO_ROOT)}",
         )
 
-    def test_evidence_weight_policy_switch_is_exhaustive_over_the_original_four(
+    def test_evidence_weight_policy_switch_still_covers_the_original_four(
         self,
     ) -> None:
         """Locks in the gap ADR 0319 itself did not name: this switch has no
         default arm, so it will fail to compile the moment `EvidenceSource`
-        gains a fifth value -- unless this file is also brief-allowed."""
+        gains a value with no matching arm -- unless the arm's file is also
+        brief-allowed. Deliberately one-directional over the arm set, for
+        the same reason as
+        test_evidence_source_still_has_the_original_four_values above
+        (module docstring, "Correction")."""
         text = EVIDENCE_WEIGHT_POLICY.read_text(encoding="utf-8")
         match = _SWITCH_ARMS_RE.search(text)
         self.assertIsNotNone(
@@ -172,7 +218,10 @@ class E07R25VisionEvidenceScopeTest(unittest.TestCase):
             "no longer apply; re-check before trusting NEW_ALLOWED_PATHS",
         )
         arms = re.findall(r"EvidenceSource\.(\w+)\s*=>", match.group(1))
-        self.assertEqual(tuple(arms), ORIGINAL_EVIDENCE_SOURCE_VALUES)
+        missing = [v for v in ORIGINAL_EVIDENCE_SOURCE_VALUES if v not in arms]
+        self.assertEqual(
+            missing, [], f"sourceReliability arm(s) disappeared: {missing}"
+        )
 
     def test_vision_evidence_types_exist_and_stay_raw_free(self) -> None:
         for source, must_declare in (
