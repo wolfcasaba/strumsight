@@ -150,6 +150,7 @@ void main() {
               id: AnalysisMetricId.timingMeanAbsoluteError,
               value: 0.2,
               confidence: 0.15,
+              sampleCount: 1,
             ),
             skillHint: 'chord.gMajor',
             capturedAt: now(),
