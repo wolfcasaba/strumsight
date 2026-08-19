@@ -1,54 +1,637 @@
 # HANDOFF — StrumSight 🎸
 
-## 🛑 E99-R17 (GOV-11) MEGÁLLT — `H-GATEGUARD`, EMBERI DÖNTÉS KELL (2026-08-19 05:31 óta)
+## ✅ [HEAL E08-R03/H6] KÉSZ — round wrapperek önelőkészítik a Flutter l10n-t dispatch előtt — PR #338, squash `911e5145` (2026-08-19)
 
-A kör D2-je a `tool/ci/check_l10n_parity.dart` gate-ellenőrzőt bővítené
-`--check` móddal; a `protect_factory_files` hook a `tool/ci/*` glob miatt
-blokkolta. **A self-heal helyesen NEM próbálta megkerülni** — a H-GATEGUARD az
-egyetlen halt, amit ADR 0112 sosem javít automatikusan. A D1 rész tisztán,
-scope-auditálva fel van tolva: `eb915931` a
-`minimax/e99-r17-gov-11-l10n-parallel-safety` ágon.
+E08-R03 H6-tal állt meg: a Codex implementer `blocked`-ot jelzett, mert a
+`flutter analyze` 1071 független hibával blokkolt a hiányzó generált
+`lib/l10n/app_localizations.dart` miatt. A nyomozás saját méréssel (a
+`.pipeline/session-E08-R03-20260819T212506.log` és `/tmp/codex-e08-r03.log`
+teljes visszakövetésével, nem bemondásra) igazolta a gyökérokot: az
+orchesztrátor a `/home/ubuntu/ss-codex-e08-r03` klónt HELYESEN készítette elő
+(`tools/prepare-flutter-generated.sh` lefutott, a generált fájlok ott
+léteztek), de a TÉNYLEGES Codex-dispatch a `/home/ubuntu/ss-codex-e08-r03-
+impl` útvonalra ment — ami `git worktree list` szerint egy `git worktree
+add`-dal nyitott WORKTREE volt a klónról, nem önálló klón. A gitignore-olt
+generált kimenet worktree-k közt nem öröklődik, ezért a `-impl` sosem kapta
+meg a saját `gen-l10n` futtatását, noha `.dart_tool/` (tehát valamilyen `pub
+get`) már lefutott ott. Az implementer helyesen `blocked`-ot jelzett ahelyett,
+hogy saját maga hívta volna a `tools/prepare-flutter-generated.sh`-t — az a
+saját tiltott zónáján (`tools/**`) kívül esett.
 
-**Gyökér-ok: TERVEZÉSI hiba a briefben.** Az `allowed_paths` listára felkerült
-egy olyan fájl (`tool/ci/check_l10n_parity.dart`), amit az őr véd — pontosan az
-a hibaosztály, amit a „az engedélyezett-fájllista a tervezőt is köti" tanulság
-tilt. Brief-írás közben a `PROTECTED_GLOBS` listát is ellenőrizni kell, nem csak
-a teszt-fát.
+Ez a **negyedik** mérés ugyanerre a hibaosztályra (korábbi: L222/E06-R07,
+L228/E06-R10, L230/E06-R11) — mindegyik javítása eddig egy PRÓZAI lépés volt
+az orchesztrátor promptjában/skill-jében, legutóbb a `sdd-round-driver`
+SKILL.md §3-ba ágyazva. Ez a lépés MOST IS a helyén volt és le is futott —
+csak épp egy másik könyvtárra, mint ahova a tényleges dispatch ment. A
+javítás ezért a mechanikus legalsó rétegbe került: `tools/codex-round.sh` és
+`tools/mm-round.sh` mostantól minden dispatch ELŐTT lefuttatja a **workdir
+saját másolatát** (`"$workdir/tools/prepare-flutter-generated.sh"`,
+argumentum nélkül — L232/E06-R13), fail-open, függetlenül attól, mit tett az
+orchesztrátor, és függetlenül attól, hogy a workdir klón vagy worktree.
+Regressziós teszt (`tools/tests/test_round_wrapper_flutter_prerequisite.py`,
+valódi mért adat: a `ss-codex-e08-r03` → `ss-codex-e08-r03-impl` worktree-alak
+szó szerinti reprodukciója hamis codex/claude/flutter binárisokkal) — piros a
+javítás előtt (a flutter binárist egyik burkoló sem hívta meg), zöld utána
+(`pub get` → `gen-l10n` → engine-hívás, ebben a sorrendben, a fájl a
+worktree-ben jön létre). `python3 -m pytest tools/tests -q`: 580 passed, 566
+subtests passed; a négy érintett burkoló-tesztfájl (`test_qwen_
+implementer_hardening.py`, `test_claude_harness_engines.py`, `test_fix_
+workspace_origin.py`, `test_prepare_flutter_generated.py`) külön futtatva is
+zöld (53 passed) — nincs regresszió. Router CI
+[32308153558](https://github.com/wolfcasaba/strumsight/actions/runs/32308153558)
+success a merge-előtti exact `32aa633a` SHA-n (nincs Dart-változás, tehát a
+Router CI az egyetlen szükséges CI-bizonyíték). Lecke: [[L339]].
 
-**Emberi döntés kell — három út:** (1) `.claude/gate-edit-authorized` marker erre
-az egy körre, utána törölve (a valódi kapu így is marad: review + CI + merge);
-(2) brief-revízió, ami kiviszi a frissesség-ellenőrzést a gate-ből — de ez a D2
-célját rontja el; (3) az E99-R17 `hold`-ra, a lánc megy az R18-ra. Az ajánlás
-az (1).
+A self-heal nem nyúlt a leftover `/home/ubuntu/ss-codex-e08-r03` /
+`ss-codex-e08-r03-impl` munkapéldányokhoz (nincs bennük nyitott PR — az
+implementer a félkész implementációt commit nélkül hagyta) — a következő
+E08-R03 dispatch a saját §0.2 „Örökség-ellenőrzés" lépésével dönt a
+sorsukról, és mostantól, akármelyiket is választja, a saját workdir-jét maga
+a burkoló készíti elő.
 
-**2. előfordulás (2026-08-19 09:56, H3, self-heal 1/3) — a marker NEM oldotta
-fel, mert egy HARMADIK, a markert nem ismerő őr is véd.** A user 09:53:18-kor
-létrehozta a `.claude/gate-edit-authorized` markert (indoklás: „E99-R17
-GOV-11 D2 … EGY körre") és feloldotta a láncot — ez az (1) ajánlott út volt.
-A kör 09:55:05-kor újraindult (implementer: minimax), és 09:56:36-kor **szó
-szerint ugyanazzal a gyökérokkal állt meg újra**
-(`.codex-round-status`: „…az implementer_guard (a
-`.claude/gate-edit-authorized` marker SEM engedélyezett) kettős védelme
-blokkolja"). Mérve (self-heal): a markernek a repóban EGYETLEN fogyasztója
-van, a `protect_factory_files.py` — ez csak CLAUDE-oldali
-(orchesztrátor/self-heal) sessionre fut. A kört ténylegesen implementáló
-minimax-session a `tools/hooks/implementer_guard.py` (ADR 0309) alatt fut,
-aminek a markerről fogalma sincs, és feltétel nélkül blokkol. Ráadásul
-[[L322]] szerint egy autonóm CLAUDE-oldali session SEM tudja ténylegesen
-felhasználni a markert (a Claude Code harness saját auto-mode osztályozója
-azt is blokkolja) — tehát **a marker+resume kombináció ezen a boxon
-strukturálisan sosem old fel egy H-GATEGUARD haltot**, akárhányszor próbálják.
-Mérés részletei: `docs/LESSONS.md` [[L323]].
+## ✅ [HEAL E99-R18/H3] KÉSZ — revert-not-expand: implementer scratch debris — PR #337, squash `80b70d1e` (2026-08-19)
 
-**Ami tényleg működik (E99-R16 precedens, `e71ded2f`):** a user SZEMÉLYESEN
-szerkeszti meg és pusholja a `tool/ci/check_l10n_parity.dart`-ot a
-`minimax/e99-r17-gov-11-l10n-parallel-safety` ágra — jelenleg `eb915931`-en
-áll, **2 commit-tal `origin/main` (`acdb5428`) mögött**, tehát a szerkesztés
-előtt/után egy upstream-merge is kell —, utána
-`tools/pipeline-status.sh --resume`: az implementer onnan a D3/D4-gyel
-(tuner-migráció, `round-slots.py` `GENERATED_PATHS`) normálisan folytathatja,
-mert azok NEM védett útvonalak. Alternatíva változatlanul: (2) brief-revízió;
-(3) `hold`.
+A MiniMax implementer (`/home/ubuntu/ss-minimax-e99-r18`, ág
+`minimax/e99-r18-gov-12-generated-public-barrels`, HEAD `e9c4a26b`) három
+nyomkövetetlen fájlt hagyott a brief `allowed_paths`-án kívül
+(`test_project/lib/features/demo/{public.dart,public/application.dart,
+public/domain.dart}`). A Terra orchesztrátor-session ezt H3-mal állította le
+(`.pipeline/HALTED`, 20:43:38Z), holott `docs/execution/
+pipeline-orchestrator-prompt.md` VIOLATION-sora már eleve két utat ismer: „a
+listán kívüli fájlokat **vissza kell állítani**, vagy H3 halt" — és a §2
+„Önállóan dönthetsz" felsorolása kifejezetten megnevezi „az
+engedélyezett-fájllista **szűkítését**" mint a kör saját hatáskörét.
+
+Az önjavítás (ADR 0112, 1/3. kísérlet) méréssel igazolta, hogy a három fájl
+NEM legitim munka — nulla hivatkozás bármely tracked/untracked forrásban,
+tartalma bájtra megegyezik a `gen_public_barrel_test.dart` saját, már
+`Directory.systemTemp`-be izolált fixture-jével, egyik D-feladatot vagy
+„Tilos zóna" cellát sem fedi — és ezt dokumentált `## 0.0 Pre-flight
+revízió`-ként írta a brief-be: a helyes folytatás REVERT, `allowed_paths`
+bővítése NÉLKÜL (a `test_e07_r29_accessibility_privacy_scope.py` precedens
+tükörképe, ahol a listán kívüli fájlok igazoltan hiányzó deliverable-ek
+voltak). Az ADR 0112-t egy dated Módosítás-blokk egészíti ki, amely ezt a
+precedenst SZŰKEN általánosítja (csak akkor alkalmazható, ha a kifogásolt
+útvonalak mérhetően függetlenek minden deliverable-től — egyébként H3/
+escalate marad az alapértelmezés). Regressziós teszt (`tools/tests/
+test_e99_r18_scope_debris_revert.py`, real measured data): egy eset
+valóban piros-a-javítás-előtt/zöld-utána (a brief §0.0 dokumentációja), a
+többi a mért adatot zárja a valódi `audit_legacy_scope()`-pal mindkét
+irányban. `python3 -m pytest tools/tests -q`: 578 passed, 565 subtests
+passed (833→834 teszt-fájl, egyetlen gate-artefaktum hash sem változott).
+Router CI [32302589265](https://github.com/wolfcasaba/strumsight/actions/runs/32302589265)
+success a merge-előtti exact `547e524e` SHA-n (nincs Dart-változás, tehát a
+Router CI az egyetlen szükséges CI-bizonyíték).
+
+A self-heal SZÁNDÉKOSAN nem nyúlt a megállt implementer saját
+worktree-jéhez/ágához — az ADR 0112 §2 jogosultsága a briefre és az
+engedélyezett-fájllistára szól, nem egy még nem review-zott implementer-ág
+tartalmára. A következő E99-R18 dispatch dönt: újrahasznosítja-e a meglévő
+worktree-t (a három fájl törlése után) vagy frissen indul.
+
+**Mért mellékhatás, dokumentálva ([[L338]]):** a self-heal PR-be előre írt
+`[[L333]]` lecke-hivatkozás a merge KÖZBEN ütközésbe került az egyidejűleg
+záruló E08-R02 saját `L333–L336` foglalásával (`6db8abcc`) — a helyes,
+frissen leolvasott szám `L337` lett, és ez a záró commit javítja a már
+merge-elt hivatkozásokat (ADR 0112, a brief) is.
+
+## ✅ E08-R02 KÉSZ — Kanonikus tanulási esemény-szerződések — PR #335, squash `a3d98ed2` (2026-08-19)
+
+A gamifikáció EGYETLEN bemenete: a feature-agnosztikus, immutable, verziózott
+`LearningActivityEvent` sealed hierarchia (`lib/features/gamification/domain/
+activity/`) hat altípussal (Practice, Song, Analysis, Plan, Tutor, Vision),
+hívó-adta stabil `eventId`-vel, kötelező `schemaVersion`-nel (ismeretlen
+érték hibát dob, nem csendes default), és explicit `type`-discriminatorral a
+JSON round-tripben (nem mezőkitalálás). `ActivitySource`/`EvidenceTrust`
+enumok, `RewardEligibility` adatkontraktus (típus, nem logika — a döntési
+logika Kör 5), `lib/features/gamification/public.dart` egyetlen belépő. A kör
+NEM integrál egyetlen feature-t sem — Kör 24–26 dolga. Implementer: Codex
+(`~/.codex`, `gpt-5.6-terra`).
+
+**A pre-flight egy KRITIKUS, mért hibát javított dispatch előtt: az előre
+kiosztott `ADR 0300` már foglalt volt.** `.pipeline/inflight/adr/0300`
+`round=E07-R15` tartalommal létezett (foglalva 2026-08-16, a brief 2026-08-18-i
+írása ELŐTT), de a `docs/adr/`-ban nincs `0300-*.md` — a számot egy korábbi
+kör foglalta, sosem fogyasztotta el. A friss `tools/round-slots.py
+reserve-adr` a valódi **`ADR 0329`**-et adta. A pre-flight egy második,
+technikai kérdést is tisztázott: az A6 architektúra-őr nem bővítheti a
+`tool/check_architecture.dart` hardcode-olt `_isSharedDomain()` listáját (az
+a fájl nincs a kör engedélyezett listáján), ezért a bevált E07-R02 mintát
+követve egy önálló teszt-csoport épült `test/core/architecture_dependency_
+test.dart`-ban, a meglévő `_forbiddenDomainMarkerOffenders`/`_withoutTrivia`
+segédfüggvények újrafelhasználásával — az implementer ezt pontosan a
+pre-flight §0.0.2 útmutatása szerint valósította meg.
+
+**A review saját kézhez, izolált `/tmp` klónban mindkét kötelező
+valódi-sértés próbát megismételte, nem az implementer önjelentése alapján
+fogadta el.** A `schemaVersion` guard ideiglenes eltávolítása az A2 cellát
+pontosan a várt hibaüzenettel vitte pirosra; egy befecskendezett
+`package:flutter/foundation.dart` import az új architektúra-guardot vitte
+pirosra, pontos hibaüzenettel. Mindkettő tiszta visszaállítás után zöld. A
+[correctness review](docs/reviews/e08-r02-review.md) **APPROVED** (0
+BLOCKER/MAJOR/MINOR, 3 NOTE — enum wire-formátum a Dart `.name`-en, nem
+explicit kódtérképen, ADR 0257 precedenséhez képest; az A1 „const
+konstruktor" bizonyítéka forráskód-szintű, nem futásidejű teszt; a
+`score`/`duration` minden altípuson univerzális mező, a Kör 24-26
+integrátornak érdemes lehet altípusonként felülvizsgálnia). A kötelező
+[security review](docs/reviews/e08-r02-security.md) (`risk=high`) **PASS**
+(0 CRITICAL/BLOCKER/MAJOR, 1 MINOR, 4 NOTE) — az egyetlen MINOR: az új
+architektúra-guard marker-listája nem fed hálózati/fájl-IO markert
+(`dart:io`/`dart:convert`/`package:dio/`/`package:http/`), ami MA nem aktív
+sértés (a domain tiszta), de a Kör 3 (ledger) / Kör 4 (outbox) előtt
+javítandó, mielőtt azok valódi sink-szomszédot hoznak a domain mellé.
+
+**Két mért process-hiba a záráshoz vezető úton, mindkettő javítva, mindkettő
+lecke.** (1) Az implementer `done`-t jelzett, de a commitja nem volt
+pusholva — az orchesztrátor pusholta, mielőtt bármilyen review érvényes
+lehetett volna ([[L334]]). (2) A biztonsági review ELSŐ futása ezt az
+pusholatlan állapotot mérte (egy worktree-izoláció a push ELŐTT ágazott le),
+és emiatt téves BLOCKER-t adott — a push megerősítése után frissen
+klónozva megismételve **PASS** lett ([[L335]]). Egy harmadik lecke a
+CI-exact-SHA ellenőrzésről: a záró review-dokumentum-commitok nem mindig
+váltanak ki friss Router CI-futást, ha nem érintik a `docs/rounds/**`
+útvonalat — a brief §11 kitöltése (ami ÉRINTI) végül friss, a tényleges
+végső SHA-n mért Router CI-futást adott ([[L336]]).
+
+**Zöld kapu.** A `round-ci-plan.py` `full-gate.yml`-t (nincs natív diff) ÉS
+Router CI-t (a diff `docs/rounds/**`-t érint) is előírt. Mindkettő zöld a
+végleges, mindkét review-t és a brief §11-et is tartalmazó HEAD-en
+(`4b46ef44` — egy köztes SHA-n dispatch-elt Full Gate-et a §11-lezáró commit
+miatt újra kellett dispatch-elni, hogy pontosan a merge SHA-n legyen
+evidencia): Full Gate
+[32300885059](https://github.com/wolfcasaba/strumsight/actions/runs/32300885059)
+és Router CI
+[32300867375](https://github.com/wolfcasaba/strumsight/actions/runs/32300867375)
+success. Post-merge célzott gate a friss `main`-en (`a3d98ed2`) önállóan is
+zöld (7/7: format, analyze, 2 teszt-útvonal, architecture, secrets, l10n).
+
+**A kör alatt egy párhuzamos self-heal (E99-R18, egy másik kör H3 haltjának
+javítása) futott ugyanebben a megosztott munkafában** — a záró rituálék
+(ez a HANDOFF-frissítés, RTM, LESSONS, git-notes) a `tools/round-merge-lock.sh`
+zárral sorosítva készültek, a másik kör branch-ét/PR-ját nem érintettem.
+
+Négy mért lecke: **[[L333]]** (egy brief-be előre írt ADR-szám a brief-írás
+és a kör-indítás között elavulhat, verseny nélkül is), **[[L334]]** (a
+legacy Codex-motor commitol, de nem feltétlenül pushol), **[[L335]]** (a
+security review dispatch-elése az implementer push-ja előtt hamis BLOCKER-t
+termel egy elavult snapshot miatt), **[[L336]]** (a CI-dispatch utáni,
+csak `docs/reviews/**`-et érintő commit nem vált ki friss Router CI-t —
+merge előtt mindig a tényleges végső SHA-n kell ellenőrizni). Nyitott tétel
+a Kör 3/4-nek: a security review MINOR-1 leletét (guard marker-lista
+hálózati/fájl-IO kiegészítése) rendezni kell, mielőtt a ledger/outbox valódi
+sink-szomszédot hoz a gamification domain mellé. Következő kör: **E08-R03**
+(Reward ledger és idempotency index), új sessionben.
+
+## ✅ E08-R01 KÉSZ — Gamification baseline és mért migrációs szerződés — PR #334, squash `0e19f67d` (2026-08-19)
+
+Az Epic 8 nyitókörének kimenete az
+[`epic-08-start.md`](docs/baseline/epic-08-start.md): file:line alapú leltár a
+Progress, Streak, Learn és Share tényleges feature- és import-éleiről, aktuális
+és legacy storage-kulcsokról/wire-alakokról, streak-freeze, Daily Challenge és
+lesson-star határokról, a meglévő guardokról és az ADR 0289/0290 dark-pattern
+checklistről. Az új [ADR 0328](docs/adr/0328-measured-gamification-baseline-contract.md)
+rögzíti, hogy a baseline migrációs szerződés, nem új jutalom-policy.
+
+Az első független review két MAJOR leletet mért: a baseline tévesen tagadta a
+Share production forrásait és a Learn közvetlen Progress/Streak importjait,
+valamint több ADR-követelményt olyan teszttel jelölt lefedettnek, amely csak
+szomszédos viselkedést vizsgált. A MiniMax javító köre mindkettőt zárta; a
+végső [review](docs/reviews/e08-r01-review.md) APPROVED (0 BLOCKER/MAJOR,
+1 MINOR tipográfiai NOTE). Full Gate
+[32293515991](https://github.com/wolfcasaba/strumsight/actions/runs/32293515991)
+és Router CI
+[32293556103](https://github.com/wolfcasaba/strumsight/actions/runs/32293556103)
+success a merge-előtti exact `1949f96c` SHA-n; post-merge célzott gate a friss
+`main`-en (`0e19f67d`) 9/9 zöld. Következő kör: **E08-R02**, új sessionben.
+
+## ✅ E07-R30 KÉSZ — Evaluation harness, shadow rollout és Epic 7 lezárás — PR #333, squash `ee5821dd` (2026-08-19) — **EPIC 7 LEZÁRVA**
+
+Epic 7 (AI Practice Generator) záró köre. Implementer: Codex (`~/.codex`).
+`ShadowPlanGenerator` (`lib/features/practice_generator/application/service/
+shadow_plan_generator.dart`, ÚJ) az Epic 7 **első éles, vég-az-végig
+kompozíciója**: evidence → skill estimate → priority → candidate selection →
+time budget → weekly schedule → a VALÓDI `GenerationOrchestrator.generate()`,
+egy saját, no-op `GenerationPlanActivation`-nel (hívásszámláló, nulla
+perzisztencia) — a shadow-terv ugyanazon a determinisztikus kódúton születik,
+mint az éles út, de sosem aktivál valódi állapotot. A fájl szerkezetileg sem
+importál semmit a `data/local/`-ból vagy az `active_plan_controller.dart`-ból,
+és nincs `lib/` consumere / `public.dart` exportja — a futó appból
+elérhetetlen.
+
+**Pre-flight (§0.0) két, a mért CI-vel ütköző brief-útvonalat javított
+dispatch ELŐTT.** (1) A brief (és az SDD-fejezet saját fájllistája is)
+`test/features/practice_generator/property/`-t írt elő a két új property
+tesztnek — mérve viszont, hogy `.github/actions/flutter-gates/action.yml:47`
+a CI randomizált-seedes lépését KIZÁRÓLAG a `test/property` könyvtáron
+futtatja (`PROPERTY_SEED: ${{ github.run_id }}`); a brief eredeti útvonalán
+a tesztek soha nem kapták volna meg a randomizált seedet, csak a fix 42-t a
+sima Test gate-en belül, ami aláásta volna A2/A3-at. Revízió: mindkét teszt
+`test/property/`-be került, a meglévő `planner_repair_property_test.dart`/
+`planner_time_budget_property_test.dart` mintáját követve. (2) A
+`golden_profiles` fixture `.json`-ról `.dart`-ra váltott, mert
+`PracticeGenerationRequest`-nek (és beágyazott típusainak) nincs
+`fromJson`/`toJson`-ja — a feature MINDEN meglévő fixture-je Dart
+builder-függvény. A pre-flight emellett dokumentálta (nem-blokkoló
+iránymutatásként), hogy `GenerationPlanInput`-ot korábban SOHA nem épített
+`lib/` kód — a `shadow_plan_generator.dart` ezt először teszi élesben.
+
+**Mindkét review zöld, mindkettőt Claude saját kézzel, izolált `/tmp`
+klónban ellenőrizte — nem az implementer önjelentése alapján.** A
+[correctness review](docs/reviews/e07-r30-review.md) APPROVED (0
+BLOCKER/MAJOR/MINOR, 1 NOTE): a gate-et egy friss, GitHub originről klónozott
+`/tmp` munkapéldányban újrafuttatta, a hiteles `tools/scope-audit.py`-val
+mérte a scope-ot (7 fájl, 0 sértés), saját kézzel megismételte a brief
+kötelező valódi-sértés próbáját (egy golden profil elvárását elrontva a
+golden-fixture teszt PIROSRA váltott, visszaállítás után zöld), és egy
+harmadik, korábban ki nem próbált `PROPERTY_SEED` értékkel is lezöldítette a
+property tesztet. A kötelező [security review](docs/reviews/e07-r30-security.md)
+(`risk=high`) **PASS** — 0 CRITICAL/BLOCKER/MAJOR/MINOR, 3 előretekintő NOTE
+(egyik sem blokkol): `AdaptivePracticePlan.toJson()` egy jövőbeli szabad
+szöveges golden profilnál a determinizmus-teszt logjába kerülhetne (ma
+inaktív); az aktiválási határ továbbra is fuzionált a
+`GenerationOrchestrator`-ban (a completion report ezt maga nevezi meg nyitott
+tételként); az eval-tool `test/`-ből importál (réteg-higiénia, nem szállítási
+kockázat).
+
+**Zöld kapu.** A `round-ci-plan.py` `full-gate.yml`-t (nincs natív diff) ÉS
+Router CI-t (a diff `docs/rounds/**`-t érint) is előírt. Mindkettő zöld a
+végleges, mindkét review-commitot is tartalmazó HEAD-en (`d40e2050` — a
+review-dokumentumok commitolása UTÁN a korábbi, `404b9b76`-on dispatch-elt
+futásokat újra kellett indítani a helyes exact-SHA-n): Full Gate
+[32289312900](https://github.com/wolfcasaba/strumsight/actions/runs/32289312900)
+és Router CI
+[32289316122](https://github.com/wolfcasaba/strumsight/actions/runs/32289316122)
+success, `gh run view --json headSha` mindkettőn egyezett a merge előtti
+lokális HEAD-del. Post-merge célzott gate a friss `main`-en (`ee5821dd`)
+önállóan is zöld (7/7: format, analyze, 2 teszt-útvonal, architecture,
+secrets, l10n). Két mért lecke: **[[L330]]** (a property-teszt könyvtárat a
+tényleges CI composite action hardcode-olt argumentumával kell mérni, nem a
+brief/SDD-fejezet szövegével — mindkettő egyszerre tévedhet ugyanabban az
+irányban) és **[[L331]]** (a `sdd-round-review` skill saját
+review-klónozó parancsa a megosztott lokális fából elhasal, ha a kör-branch
+egy izolált implementer-klónból pusholt közvetlenül originre — GitHub
+remote URL-ből klónozva a hiba osztálya kizárt).
+
+**Nyitott tételek (a completion report — `docs/sdd/epic-07-completion-report.md`
+— és a security review NOTE-2 által megnevezve, jövőbeli körnek/emberi
+döntésnek):** a `practiceGeneratorEnabled`/`plannerAssistEnabled` flagek
+bekapcsolása emberi release-döntés; a teljes CI-suite/property/APK
+CI-bizonyíték továbbra is kötelező (ez a helyi korpuszfutás nem helyettesíti);
+valós Android-eszközös offline flow és eszköz-specifikus latency/memória
+baseline még hátravan; a `GenerationOrchestrator.generate()` továbbra is
+egyetlen hívásban fuzionálja a validálást/javítást az aktiválással — egy
+jövőbeli preview-confirmation implementáló körnek külön kell választania,
+mielőtt valódi (perzisztáló) activation bekötődik; a Planner Assist-nek
+nincs élő transport-rolloutja ebben a körben.
+
+**Epic 7 (AI Practice Generator) ezzel lezárva** (R01–R30, SDD Ch8). A lánc
+**Epic 8-cal (Gamification, SDD Chapter 9, 30 kör) folytatódik: E08-R01**
+(Gamification baseline és principles), új sessionben.
+
+## ✅ E07-R29 KÉSZ — Accessibility, localization, privacy és safety hardening — PR #332, squash `73e7876e` (2026-08-19)
+
+A friss orchesztrátor-session (Sonnet 5) a H-NOSIGNAL self-heal (lent) által
+otthagyott állapotot vette át: az implementer- és javító-munka
+(`minimax/e07-r29-accessibility-privacy-hardening`,
+`codex/e07-r29-accessibility-privacy-hardening-fix`) már push-olva volt, a
+dolog csak a hátralévő review-zárás, CI-dispatch és merge volt.
+
+**A review három leletet talált, mind zárva.** F1 (MAJOR — a `_writtenKeys`
+in-memory lista miatt restart után a draft/archive-only tervek eltűntek a
+delete-all/export sweepből) és F2 (BLOCKER — a `null` `outcomePlanLookup`
+alapértelmezett `owner = planId` miatt egy plan-scoped törlés más terv
+evidence-ét is elvitte) a MiniMax-nak járó EGY javító körben zárult
+(`0a6315d2`…`3e05d243`, perzisztált manifest + adat-alapú plan-ownership). A
+review egy MÁSODIK, friss valódi-sértés próbával F3-at is talált (MAJOR — a
+manifest-írás `_trackWrite`/`_trackRemove` nem `await`-elte a
+`keyValueStore.writeString`-et, a hiba silent no-op-ként veszett el); mivel a
+MiniMax egy javító köre már elfogyott, a motor-eszkaláció szabálya szerint
+(AGENTS.md/ADR 0087 §2) a Codex vitte a második javítást (`8212b0cb`).
+
+**Az orchesztrátor a Codex-javítást NEM a `.codex-round-status` önjelentése
+alapján fogadta el.** Elolvasta a `8212b0cb` teljes diffjét, majd saját,
+izolált `flutter test test/features/practice_generator/data/
+local_repository_test.dart` futtatással megerősítette — **36/36 zöld**,
+köztük az új `F3 — manifest persistence failures` eset. Csak ez után
+frissítette `docs/reviews/e07-r29-review.md`/`e07-r29-security.md`-t
+CHANGES REQUIRED/BLOCKED → **APPROVED/PASS**-ra, és töltötte ki a brief §11-et.
+
+**Mért gotcha a §0.3 upstream-szinkron lépésben (lásd [[L329]]):** a
+`git clone --branch <round-branch>` (SKILL.md §3) implicit single-branch
+refspecet ad a munkapéldánynak — egy csupasz `git fetch origin main` ebben
+NEM frissíti a lokális `origin/main` követő-ágat, és a `merge-base
+--is-ancestor` emiatt HAMIS POZITÍVOT adott, mielőtt az explicit
+`git fetch origin +refs/heads/main:refs/remotes/origin/main` alakra váltva a
+valódi (két commitnyi) elmaradást ki nem mértem. Csak ez után volt biztonságos
+a review-t és a gate-et lezárni.
+
+**Zöld kapu.** A round-ci-plan.py `full-gate.yml`-t (nincs natív diff) ÉS
+Router CI-t (a diff `docs/rounds/**`-t érint) is előírt. Mindkettő zöld a
+végleges, `origin/main`-nel egyesített HEAD-en: exact `1aa7923a` → Full Gate
+[32282687647](https://github.com/wolfcasaba/strumsight/actions/runs/32282687647)
+és Router CI
+[32282629066](https://github.com/wolfcasaba/strumsight/actions/runs/32282629066)
+success, `gh run view --json headSha` mindkettőn egyezett a lokális HEAD-del
+merge előtt. Post-merge célzott gate a friss `main`-en (`73e7876e`)
+önállóan is zöld (14/14: format, analyze, 9 teszt-útvonal, architecture,
+secrets, l10n). Lecke: **[[L329]]**.
+
+Az implementáció maga: teljes hu/en ARB-paritás (25 új kulcs), nagy
+betűméret/screen-reader/reduced-motion audit a meglévő planner-képernyőkön,
+nem-szín-alapú státuszjelölés (`TodayPlanMode` szöveg+ikon badge), redakciós
+audit (`ExportPracticePlanningData._redactPlanJson` kitörli a
+comfort-constraint értéket és minden goal `userNote`-ját), és a
+felhasználó-kezdeményezett teljes törlés/export (`plan_privacy_screen.dart`,
+`delete_practice_planning_data.dart`, `export_practice_planning_data.dart`) —
+az ADR 0260 §5 szűk, csak erre a hívási útra fenntartott kivételként
+(`docs/privacy/practice-planning-data.md` rögzíti a policy-kört).
+`practiceGeneratorEnabled`/flag-ek változatlanul `false`. Következő kör:
+**E08-R…** vagy a soron lévő pipeline-tétel, új sessionben.
+
+## ✅ [HEAL E07-R29/H-NOSIGNAL] KÉSZ — preambulum: alparancs sikeres lezárása ≠ kör lezárása — PR #331, squash `90cf0628` (2026-08-19)
+
+Az E07-R29 friss orchesztrátor-sessionje (Terra, rotáció szerint) a H3
+self-heal (fent) után helyesen újraindult, és ~72 percen át helyesen
+vezényelte a kört: implementer-dispatch, review, javítás, majd egy
+Codex/Terra escalation-javítás az utolsó nyitott leletre. A záró, független
+`tools/round-gate.sh` friss klónban 16:56:47Z-kor VALÓDI, sikeres
+eredménnyel zárt (mind a 14 lépés zöld) — a turn mégis hat másodperccel
+később, 16:56:53Z-kor egyetlen szöveges összegzéssel ért véget
+(„…14/14 zöld, de a kötelező CI-dispatch, exact-SHA ellenőrzés és merge még
+hátravan.") jelzésfájl nélkül. A pipeline ELAKADÁS-GYORSÍTÓja 20
+másodpercen belül H-NOSIGNAL-ként ismerte fel (`.pipeline/chain.log`,
+16:57:12).
+
+**Mért, dokumentált precedenshez illeszkedő gyökérok.** Ugyanennek a
+`docs/execution/pipeline-codex-orchestrator-preamble.md`-nek két KORÁBBI,
+szomszédos rését az L282 (E07-R04, yielded parancs újraindítása) és az L290
+(E07-R09, turn vége csonka poll közben) már bezárta — de egyik szabály sem
+mondta ki, hogy egy alparancs SIKERES, terminális eredménye ugyanúgy nem
+helyettesíti a kör-jelzést. A Codex/Terra rollout-JSONL
+(`~/.codex-terra/sessions/2026/08/19/rollout-2026-08-19T15-45-07-*.jsonl`)
+pontosan ezt mérte: a modell hűen, hazugság nélkül idézte a valódi „14/14
+zöld" eredményt, majd egy alparancs lezárását a kör lezárásával azonosítva
+állt meg.
+
+**A javítás egyetlen új szabály-bullet + regressziós teszt.** A preambulum
+§2-je egy új, névvel idézett bullet-et kapott az L290-bullet után: „egy
+alparancs sikeres lezárása attól még nem azonos a kör lezárásával" — ha a
+§3 checklist bármelyik eleme (push, CI-dispatch, exact-SHA ellenőrzés,
+merge, kör-jelzés) hátravan, a válasz KÖVETKEZŐ eleme kötelezően újabb
+tool-hívás. Regresszió: `tools/tests/test_pipeline_codex_orchestrator_preamble.py`
+új `CodexOrchestratorPreambleNoStopAfterSuccessfulSubtaskTest` osztálya (3
+eset), PIROS a javítás előtt → ZÖLD utána, a 7 meglévő preambulum-teszttel
+együtt is zöld. Teljes `tools/tests`: **574 passed, 567 subtests passed, 0
+hiba** (571→574). Router CLI smoke és `brief-lint.py --open --level base`
+lokálisan is zöld, egyezően a CI lépéseivel. Exact SHA `3ca6d07d`: Router CI
+([32280795044](https://github.com/wolfcasaba/strumsight/actions/runs/32280795044))
+`conclusion=success`, `headSha` és a PR `headRefOid`-ja a merge előtt
+egyezett a lokális HEAD-del. Nincs Dart-változás, ezért `build-apk.yml` nem
+releváns — a Router CI volt az egyetlen szükséges kapu. Lecke: **[[L328]]**.
+A lánc E07-R29-cel folytatódik a következő cron-firingen; a már elkészült
+implementer- és javító-munka (`minimax/e07-r29-accessibility-privacy-hardening`,
+`codex/e07-r29-accessibility-privacy-hardening-fix` ágak, mindkettő
+push-olva originre) érintetlen — a friss orchesztrátor-session dolga csak a
+hátralévő CI-dispatch + merge.
+
+## ✅ [HEAL E07-R29/H3] KÉSZ — brief-bővítés: storage-owner, evidence-port és auditált planner-képernyők — PR #330, squash `7176875d` (2026-08-19)
+
+Az E07-R29 (Accessibility, localization, privacy és safety hardening) saját
+pre-flightja (Terra orchesztrátor, `29863cba` a sosem push-olt
+`minimax/e07-r29-accessibility-privacy-hardening` ágon) helyesen HALT-olt:
+a §3/§5.5 teljes törlés/export és a meglévő planner-képernyők
+accessibility-auditja a brief régi `allowed_paths`-ában NEM elérhető
+fájlokban él — a tényleges storage-tulajdonosok
+(`data/local/local_practice_plan_repository.dart`,
+`generation_draft_repository.dart`), az evidence-port
+(`domain/repository/practice_evidence_repository.dart` — szándékosan SOSEM
+töröl, ADR 0260 §5) és a már létező `today_plan_screen.dart`/
+`weekly_plan_screen.dart`/`plan_setup_screen.dart` mind a régi tiltott
+zónában voltak. Ez a session soha nem érte el a `main`-t — a Terra-session a
+mérés után korrektül `H3`-mal állt le, implementer-dispatch nélkül.
+
+Az önjavítás (ADR 0112, 1/3. kísérlet) portolta ezt a mérést `main`-re §0.0
+gyanánt, majd §0.0.1-ben oldotta fel — **egyetlen** brief-bővítéssel, új ADR
+nélkül (a pre-flight saját szövege szerint ide nem tartozik elfogadott ADR):
+17 névre szóló bejegyzés `allowed_paths`-ban (10 meglévő `lib/`-tulajdonos +
+7 saját, már létező tesztjük), ebből 7 `gate_tests`-ben is, hogy a kör SAJÁT
+gate-je — ne csak a végső CI — védje a bővített területet. Egy új §5.7
+rögzíti az ADR 0260 §5 viszonyát: az automatikus/lekérdezés-idejű elévülés
+VÁLTOZATLAN marad mindenhol, az új evidence-törlő metódus egy szűk, csak a
+felhasználó-kezdeményezett „mindent törölj" útra fenntartott kivétel.
+
+**Mért, a pre-flight saját szövegénél szűkebb megoldás:** `lib/core/storage/
+key_value_store.dart` (a megosztott, minden feature-t kiszolgáló
+`KeyValueStore` interfész) NEM kellett megnyitni — a
+`LocalPracticePlanRepository` minden saját kulcsát maga generálja, és már ma
+is egyenként hívja `keyValueStore.remove()`-ot a bounded-history evikció
+során (`appendRevision`/`appendOutcome`) —, tehát egy teljes, egy-terv-re
+szóló törlés ugyanezzel a mintával, KIZÁRÓLAG ebben az egy fájlban megírható.
+
+**Kötelező regresszió (PIROS a revízió előtt → ZÖLD utána, mindkét irányban
+mérve):** `tools/tests/test_e07_r29_accessibility_privacy_scope.py` — a
+valódi `audit_legacy_scope()`-ot futtatja a committolt brief ellen; méri a
+mért halt-útvonalak és a teljes §0.0.1-grant hatókörbe kerülését, hogy egy-egy
+szomszédos fájl mind a négy bővített területen (megosztott storage-interfész,
+szomszédos repository, már biztonságosnak mért service, szomszédos képernyő)
+kívül marad, hogy `allowed_paths`/`gate_tests` pontosan az eredeti + az új
+bejegyzésekkel bővült, és hogy minden újonnan engedélyezett útvonal ma is
+létezik. Teljes `tools/tests`: **571 passed, 567 subtests passed, 0 hiba**.
+`tools/brief-lint.py --level strict` és a Router CI saját `--open --level
+base` kapuja: tiszta. Nincs Dart-változás, ezért `build-apk.yml` nem
+releváns; a Router CI (a diff `tools/**`/`docs/rounds/**`-t érint) volt az
+egyetlen szükséges kapu, `tools/wait-for-ci.sh`-sal várva előtérben, a merge
+előtt SHA-egyezés igazolva. Lecke: **[[L327]]**. A lánc E07-R29-cel
+folytatódik a következő cron-firingen, a most bővített `allowed_paths` alatt.
+
+## ✅ E07-R28 KÉSZ — Tutor és PlannerAssistGateway integráció — PR #329, squash `b021eff2` (2026-08-19)
+
+Az opcionális, nem-autoritatív **PlannerAssist** gateway (SDD Ch8 Kör 28,
+[ADR 0270](docs/adr/0270-planner-assist-allowlist-and-untrusted-input.md),
+előre megírva 2026-08-15) egy strukturált request/response sémán és
+**exact** goal-/skill-/candidate-allowlisten (nincs fuzzy illesztés) keresztül
+enged nem megbízható nyelvimodell-választ a determinisztikus tervező elé —
+a modell SOHA nem aktivál tervet, minden felhő-hiba (timeout, rate limit,
+hálózat, kikapcsolt flag) determinisztikus tartalékra esik vissza, és a
+tanuló szabad szövege külön, nem-megbízható mezőként utazik, sosem az
+instrukció-mezőben.
+
+**Pre-flight mérés fordította meg az implementáció irányát.** A brief §1 (az
+Epic 7 SDD-forrása, `08-epic-07-ai-practice-generator.md` Kör 28) szó szerint
+azt írta elő, hogy az adapter a Chapter 5 `ai_tutor`
+`PracticePlanDraft`-ját képezze le — a mérés viszont azt mutatta, hogy
+`lib/features/ai_tutor/public.dart` **fagyasztott üres** (`library;`, 0
+export), egy E04-R01-ben merge-elt regressziós teszt
+(`ai_tutor_boundary_test.dart`) őrzi, és ugyanez a hibaosztály HÁROMSZOR
+mérve, MINDHÁROMSZOR scope-szűkítéssel oldva (`docs/LESSONS.md` L121/L133/
+L139). A §0.0 pre-flight revízió ugyanezt az utat követte: a
+`TutorPlanProposalAdapter` egy SAJÁT, e körben definiált `TutorPlanOutline`
+típusból épít requestet a practice-generator SAJÁT publikus
+katalógus-/skill-felületéről — `ai_tutor` import **nélkül**. Az implementer
+(Codex) a §0.0-t szó szerint követte, és a saját docstring-jében is rögzítette
+az indokot.
+
+**Mindkét review zöld.** A [correctness review](docs/reviews/e07-r28-review.md)
+APPROVED (0 BLOCKER/MAJOR/MINOR, 3 NOTE) — a reviewer saját, független
+valódi-sértés próbával mérte az A2 allowlist-et (a candidate-ellenőrzés
+ideiglenes gyengítése PIROSRA vitte a tesztet, visszaállítás után zöld). A
+kötelező [security review](docs/reviews/e07-r28-security.md) (brief
+`risk = "high"`) **PASS** — 0 CRITICAL/BLOCKER/MAJOR, 1 MINOR (a séma
+`goalIds`/`skillIds`/`candidateIds` tömbjei ma méretkorlát nélküliek —
+ártalmatlan, mert nincs élő transport, de a jövőbeli hálózati bekötés előtt
+egysoros cappal érdemes zárni), 5 NOTE (a jövőbeli transport/UI-bekötő
+körnek: a prompt-elkülönítés STRUKTURÁLIS, csak akkor marad az, ha a jövőbeli
+HTTP-transport nem fűzi össze `instructions` + `untrustedLearnerNote`-ot egy
+stringgé). Exact `dc413fd8`: Full Gate
+[32266022078](https://github.com/wolfcasaba/strumsight/actions/runs/32266022078)
+és Router CI
+[32266095192](https://github.com/wolfcasaba/strumsight/actions/runs/32266095192)
+success; post-merge célzott gate a friss `main`-en (`b021eff2`) önállóan is
+zöld. `plannerAssistEnabled` változatlanul `false`, nulla production hívó.
+
+**Folyamat-lecke ([[L326]]).** Az implementer-wrapper (`codex-round.sh`) NEM
+push-ol automatikusan — a commit a review indulásakor CSAK az izolált
+`ss-codex-e07-r28` munkapéldányban létezett. Az orchestrátornak kellett
+push-olnia originre a review-klónozás ELŐTT; enélkül SEM a saját `/tmp`-klón,
+SEM a párhuzamosan dispatch-elt security-reviewer subagent (aki a megosztott
+fából klónozott) nem látta volna a valódi kódot. Ez a [[L325]] (E07-R26,
+stale local ref) ROKON, de ELTÉRŐ gyökérokú hibaosztálya: ott a push
+megtörtént, csak a lokális ref nem követte; itt a push MAGA hiányzott, ezért
+az L325 „fetch origin előbb" receptje önmagában nem lett volna elég.
+
+**Utólag mért, EBBEN a pre-flightban felfedezett, NYITOTT tartozás
+(nem E07-R28 hibája, hanem E07-R27-é):** az E07-R27 (PR #328, squash
+`a0c61044`) brief-je `risk = "high"`-ra volt állítva, de a kötelező
+biztonsági review (`docs/reviews/e07-r27-security.md`) SOHA nem készült el —
+a kör a correctness review-val (APPROVED) egyedül merge-elt, és a záró
+rituálék (HANDOFF/RTM/LESSONS) is elmaradtak, csak a
+`docs/execution/pipeline-queue.tsv` `done` jelzése készült el
+(`chore(pipeline): E07-R27 done`, `e95bd937`). Ez a HANDOFF-bejegyzés ezt a
+hiányt UTÓLAG dokumentálja (ld. lentebb), de a hiányzó security review-t NEM
+pótolja — az egy jövőbeli kör vagy emberi döntés dolga. Következő kör:
+**E07-R29** (Accessibility, localization, privacy és safety hardening, SDD
+Ch8 Kör 29), új sessionben.
+
+## ✅ [UTÓLAGOS DOKUMENTÁCIÓ] E07-R27 KÉSZ — Missed day, catch-up, pause és returning flow — PR #328, squash `a0c61044` (2026-08-19, retroaktívan rögzítve az E07-R28 pre-flightjában)
+
+**Ez a bejegyzés utólag készült** — az E07-R27 saját sessionje a merge után
+nem futtatta le a záró rituálékat (HANDOFF/RTM/LESSONS-frissítés
+elmaradt, csak a pipeline-queue `done` jelzése történt meg). A tartalom a PR
+törzséből és a meglévő [review](docs/reviews/e07-r27-review.md)-ból
+rekonstruált, NEM az eredeti orchestrátor első kézből írt összegzése.
+
+Domain-pure `MissedDayPolicy` a múltbeli napokat completed/missed/future
+kategóriákba sorolja és reschedule-módot választ; a 21 napos rés a
+konzervatív oldalra esik, ezért `readinessProposal`-t ad
+([ADR 0269](docs/adr/0269-non-punitive-missed-day-handling.md) §5.4).
+`PausePracticePlan` `paused` státuszra vált új revízióval;
+`ResumePracticePlan` újra-horgonyozza a naplistát (a `resumeDate` lesz az új
+`startDate`), eldobja a hátralékos napokat, és `returningAfterBreak` módra
+vált, ha a rés eléri a küszöböt. Nem büntető, "bűntudatkeltés-mentes"
+catch-up UI.
+
+**A review egy javító kör után APPROVED** (`docs/reviews/e07-r27-review.md`,
+0 BLOCKER/MAJOR/MINOR/NOTE nyitva): F1 (MAJOR — a resume felülírta egy
+completed nap történeti dátumát) és egy második MAJOR javítva, re-review
+`1c5d4562`-n. **A kötelező biztonsági review HIÁNYZIK** — a brief
+`risk = "high"`, de `docs/reviews/e07-r27-security.md` sosem készült el; ezt
+az E07-R28 pre-flightja fedte fel utólag (ld. fent). Exact `10ed4874`: Full
+Gate [32259717044](https://github.com/wolfcasaba/strumsight/actions/runs/32259717044)
+és Router CI
+[32259719677](https://github.com/wolfcasaba/strumsight/actions/runs/32259719677)
+success.
+
+## ✅ E07-R26 KÉSZ — Outcome ingestion, review update és plan revision — PR #326, squash `d7e894de` (2026-08-19)
+
+A befejezett gyakorlás-blokkok eredményének feldolgozása és az **átlátható**
+jövőbeli tervmódosítás (SDD Ch8 Kör 26) egy tisztán application-rétegbeli,
+**hívó-táplált** csővezetékként épült meg: `OutcomeIngestionService`
+(revízió-egyezés, dedup, `SpacedRepetitionPolicy`-alapú review-frissítés,
+technikai hiba nem adaptálható — ADR 0268), `RecordPracticeOutcome` (a
+service + `AdaptationDecider` összefűzése), `RevisePracticePlan`
+(immutable-múlt guard a meglévő `PracticeItemStatus.completed`
+mintával — ADR 0256; kis/nagy változás szétválasztás, a "fókusz váltása" is;
+elutasított proposal auditálható marad; `PlanRevision(previous:)` meglévő
+monotonitás-védelme — nincs saját számláló) és `PlanChangeReviewScreen`
+(lokalizált before/after diff a nagy változáshoz). **Egyik új fájl sem hív
+repository-metódust** — a §0.0 pre-flight mérése szerint a repository-lokális
+és az R23 execution-oldali `PracticeOutcome` két, AZONOS NEVŰ, eltérő alakú
+típus (a `public.dart` `hide`-olja az előbbit); a perzisztencia-bekötés
+szándékosan egy jövőbeli wiring-körre marad, az R16/R17/R19/R22/R23 mintáját
+követve (`practiceGeneratorEnabled` marad `false`, nulla production hívó).
+
+A független review (`docs/reviews/e07-r26-review.md`) egy javító kör után
+APPROVED: az F1 MAJOR (a brief §5.2 "fókusz váltása" structural-change ága a
+kódban helyesen működött, de a kör saját teszt-suite-ja 0%-ban fedte —
+reviewer-oldali eldobható próbateszttel mérve, nem a kód olvasásából
+következtetve) egyetlen új teszttel zárult, valódi-sértés próbával
+(PIROS→ZÖLD) igazolva. A kötelező biztonsági review
+(`docs/reviews/e07-r26-security.md`, `risk=high`) **PASS** — 0
+CRITICAL/BLOCKER/MAJOR/MINOR, 5 előretekintő NOTE (sink-mentes, be nem
+kötött réteg). Két nem-blokkoló follow-up nyitva maradt: F2 (MINOR) — a
+`PlanChange.target` új `day:<id>[:block:<id>]` formátuma nem fedi a MEGLÉVŐ
+termelők (`plan_repairer.dart`, `active_plan_controller.dart`,
+`time_budget_allocator.dart`) `block:`/`plan:`/`timeBudget` alakjait, mérve
+egy eldobható próbateszttel (elkapatlan `ArgumentError`) — nincs élő hívó,
+egy jövőbeli wiring-körnek kell tudnia róla; F3 (NOTE) — a review screen
+nyers belső értékeket (mikroszekundum, enum-kód) jelenít meg humanizálás
+nélkül. Exact `254a4efe`: Full Gate
+[32251015719](https://github.com/wolfcasaba/strumsight/actions/runs/32251015719)
+és Router CI
+[32251108229](https://github.com/wolfcasaba/strumsight/actions/runs/32251108229)
+success.
+
+**Folyamat-lecke ([[L325]]):** a review-oldali `/tmp` klón NÉMÁN elavult
+ágat adhat, ha a `git clone --branch <kör-branch>` a megosztott
+`/home/ubuntu/music-theory` fából történik, miközben az implementáció egy
+KÜLÖN klónból (`ss-codex-<kör>`) pusholt közvetlenül originre — a megosztott
+fa lokális branch-refje csak explicit `git fetch origin <branch>:<branch>`-re
+mozdul. Kétszer mérve ugyanebben a körben (a fő reviewer és a párhuzamosan
+dispatch-elt security-reviewer subagent is ugyanabba a csapdába futott,
+mindkettő önállóan helyreállt).
+
+Ehhez a körhöz **nem kellett új ADR** — a brief saját indoklása szerint a
+határokat a MEGLÉVŐ ADR 0256/0265/0268 rögzíti (az E07-R22 precedensével
+egyezően); a defenzíven lefoglalt `0325` szám nem került felhasználásra.
+Következő kör: **E07-R27** (Missed day, catch-up, pause és returning flow),
+új sessionben.
+
+## ✅ A LÁNC ÚJRA MEGY — a `H-GATEGUARD` mostantól KÖRT tart vissza, nem a LÁNCOT (ADR 0321, 2026-08-19)
+
+**A probléma, mérve.** Az `E99-R17` háromszor állt meg ugyanazzal a gyökérokkal
+(05:31 / 09:56 / 10:38 UTC), és mivel a `.pipeline/HALTED` jelzés GLOBÁLIS, a
+lánc 05:31–10:40 között **nulla kört vitt előre** — miközben a sorban **32
+olyan nyitott kör** állt (E07/E08 termék-munka), aminek semmi köze a gate-hez.
+A halt gyökéroka TERVEZÉSI hiba volt: a brief `allowed_paths` listáján védett
+fájl (`tool/ci/check_l10n_parity.dart`) szerepelt, amit autonóm session
+strukturálisan nem tud megírni (L322–L323).
+
+**A javítás három rétege (ADR 0321):**
+
+1. **Kör-szintű hold.** Kör-session `H-GATEGUARD` haltja → a kör sora `hold`
+   (commit + push), halt-archívum + `.pipeline/gateguard-holds.tsv` főkönyv +
+   ntfy, és a lánc a következő pending körrel MEGY TOVÁBB.
+2. **Az őrszem haltja LÁNC-szintű marad.** Ha a haltot az önjavítás fölötti
+   őrszem írta (`gateguard_origin=selfheal` gépi mező), a mércét gyengítő
+   commit már a main-en állhat → az egész lánc áll, ahogy eddig.
+3. **Pre-flight a dispatch ELŐTT.** `tools/gateguard-scan.py` a védett listát
+   **magából az őrből** importálja (nincs második igazság), és a driver a
+   kiválasztott kör briefjét ezzel méri. Ütközés → azonnali `hold`,
+   implementer-futás és halt nélkül.
+
+**Amit NEM változtat meg:** a mércét és az emberi határt. Gate-érintő kör
+továbbra sem fut le emberi döntés nélkül (ADR 0112 §3 érintetlen).
+
+**Emberi döntésre váró (hold) körök — egy közös alkalommal, kötegben:**
+`E99-R17` (`tool/ci/check_l10n_parity.dart`), `E99-R20`, `E99-R21`
+(`tools/round-gate.sh` + workflow), `E99-R22`, `E08-R29` (workflow).
+Gépi lista: `tools/gateguard-scan.py --all` · státusz:
+`tools/pipeline-status.sh` „emberi gate-döntésre váró körök" szakasz.
+A feloldás menete (E99-R16 precedens): a user SZEMÉLYESEN szerkeszti és
+pusholja a védett fájlt a kör ágára, majd a sorban `hold` → `pending`.
+
+**Őrteszt:** `tools/tests/test_gateguard_autohold.py` (12 eset, zöld) ·
+tanulság: `docs/LESSONS.md` L324 · brief-szabály: `docs/execution/08-round-brief.md` §4.
 
 ## ✅ Router CI paths-szűrő: családi glob — PR #324, squash `a2d64831` (2026-08-19)
 
@@ -600,8 +1183,10 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 > **Read this first at the start of every session.** Single source of truth for
 > "what's done / what's next" — short operational snapshot (SDD Ch2 §16.6
 > [How to update](#how-to-update-this-file)). Last updated: **2026-08-19
+> (E07-R26 done — outcome ingestion + plan revision, caller-fed / zero
+> repository writes, see banner above.) Prior: 2026-08-19
 > (E99-R15/GOV-09 done — self-heal engine escalation + halt-reminder throttle,
-> see banner above.) Prior: 2026-08-18
+> see banner further below.) Prior: 2026-08-18
 > (E07-R18 done — application-level, cancellable, state-machine-driven
 > GenerationOrchestrator: immutable `GenerationState` (idle/running/completed/
 > cancelled/failed + 4 stage checkpoints), a `GenerationOrchestrator` that
@@ -1012,7 +1597,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   bekötetlen). Evidencia:
   [`docs/baseline/epic-06-audio-analysis-start.md`](docs/baseline/epic-06-audio-analysis-start.md),
   [`docs/reviews/e06-r06-recorder-audio-session-integration-review.md`](docs/reviews/e06-r06-recorder-audio-session-integration-review.md).
-- **Epic 7 (AI Practice Generator) elkezdve** — **E07-R01** (nyitókör:
+- **Epic 7 (AI Practice Generator) — LEZÁRVA E07-R30-cal (2026-08-19, PR #333,
+  squash `ee5821dd`).** `ShadowPlanGenerator` (evaluation-only, no-op
+  activation) + golden-korpusz property gate + `docs/sdd/
+  epic-07-completion-report.md`; `practiceGeneratorEnabled`/
+  `plannerAssistEnabled` mindvégig `false` maradt, a rollout emberi döntés.
+  Részletek a fejléc ✅-blokkjában és §5-ben. Az építkezés sorrendje —
+  **E07-R01** (nyitókör:
   baseline, [ADR 0255](docs/adr/0255-deterministic-first-practice-planning.md)
   deterministic-first, [ADR 0256](docs/adr/0256-practice-plan-revisions-immutable-past.md)
   immutable múlt, `practiceGeneratorEnabled` + `plannerAssistEnabled` feature
@@ -1667,6 +2258,24 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-19):** `main` @ `ee5821dd` — E07-R30 Evaluation
+harness, shadow rollout és Epic 7 lezárás, PR
+[#333](https://github.com/wolfcasaba/strumsight/pull/333), squash-merge.
+Exact `d40e2050`: Full Gate 32289312900 + Router CI 32289316122 success;
+post-merge célzott gate a friss `main`-en önállóan is zöld. **Epic 7 kész** —
+a lánc E08-R01-gyel (Gamification baseline, SDD Chapter 9) folytatódik.
+
+**Aktuális állapot (2026-08-19):** `main` @ `b021eff2` — E07-R28
+PlannerAssistGateway integráció, PR [#329](https://github.com/wolfcasaba/strumsight/pull/329),
+squash-merge. Exact `dc413fd8`: Full Gate 32266022078 + Router CI 32266095192
+success; post-merge célzott gate a friss `main`-en zöld.
+
+**Aktuális állapot (2026-08-19):** `main` @ `a0c61044` — E07-R27 missed-day/
+pause/returning flow, PR [#328](https://github.com/wolfcasaba/strumsight/pull/328),
+squash-merge. Exact `10ed4874`: Full Gate 32259717044 + Router CI 32259719677
+success. (Retroaktívan rögzítve — a záró rituálék az eredeti sessionben
+elmaradtak, ld. a fejléc-blokkot.)
+
 **Aktuális állapot (2026-08-19):** `main` @ `3ab2a147` — E07-R25 Analyze és
 Vision evidence integráció, PR [#322](https://github.com/wolfcasaba/strumsight/pull/322),
 squash-merge. Exact `cbcb30c7`: Full Gate 32210677497 + Router CI 32210693573
@@ -2090,6 +2699,40 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R30 — Evaluation harness, shadow rollout és Epic 7 lezárás** (PR
+[#333](https://github.com/wolfcasaba/strumsight/pull/333), squash `ee5821dd`,
+nincs új ADR). `ShadowPlanGenerator` — az Epic 7 első éles, vég-az-végig
+determinisztikus pipeline-kompozíció, no-op activationnel (sosem aktivál
+valódi állapotot). 3 golden tanulói profil, invariáns + golden-fixture
+property tesztek (`test/property/`, nem a brief eredeti, CI-vel nem egyező
+útvonalán — pre-flight §0.0 javította), `plan_quality_report.dart` riport,
+Epic 7 completion report a nyitott tételekkel. Review APPROVED (0
+BLOCKER/MAJOR/MINOR, saját izolált-klónos gate-újrafuttatással és saját
+valódi-sértés próbával igazolva); kötelező security review PASS (0
+CRITICAL/BLOCKER/MAJOR/MINOR, 3 NOTE). Exact `d40e2050`: Full Gate + Router
+CI success; post-merge gate zöld. Egyetlen flag sem mozdult. **Epic 7 lezárva.**
+
+**E07-R28 — Tutor és PlannerAssistGateway integráció** (PR
+[#329](https://github.com/wolfcasaba/strumsight/pull/329), squash `b021eff2`,
+[ADR 0270](docs/adr/0270-planner-assist-allowlist-and-untrusted-input.md)).
+Strukturált request/response séma, exact goal-/skill-/candidate-allowlist
+(nincs fuzzy), determinisztikus fallback minden felhő-hibára, tanuló-szöveg
+elkülönítve nem-megbízható mezőként. Pre-flight §0.0 mérte: `ai_tutor`
+`public.dart` fagyasztott üres ([[L121]]/[[L133]]/[[L139]] osztálya) —
+`TutorPlanProposalAdapter` SAJÁT `TutorPlanOutline` típust definiál, `ai_tutor`
+import nélkül. Review APPROVED (0 BLOCKER/MAJOR/MINOR, saját valódi-sértés
+próba az A2-n); kötelező security review PASS (1 MINOR follow-up: uncapped
+ID-array a sémában). Exact `dc413fd8`: Full Gate + Router CI success;
+post-merge gate zöld. `plannerAssistEnabled` változatlanul `false`.
+
+**E07-R27 — Missed day, catch-up, pause és returning flow** (PR
+[#328](https://github.com/wolfcasaba/strumsight/pull/328), squash `a0c61044`,
+ADR 0269 — meglévő). Domain-pure `MissedDayPolicy`, 21 napos küszöb
+`readinessProposal`-t ad, Pause/Resume revíziók, non-shaming catch-up UI.
+Review APPROVED egy javító kör után. **Hiányzó kötelező security review**
+(brief `risk=high`) — utólag mérve, ld. a fejléc-blokkot. Exact `10ed4874`:
+Full Gate + Router CI success. (Retroaktívan rögzítve.)
 
 **E07-R24 — Song goal és Song Trainer integráció** (PR [#318](https://github.com/wolfcasaba/strumsight/pull/318),
 squash `b08c00e9`, [ADR 0318](docs/adr/0318-song-goal-public-boundary-and-caller-fed-input.md)).
@@ -2739,10 +3382,42 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**🛑 A lánc jelenleg ÁLL, EMBERI döntés/szerkesztés vár (2026-08-19):**
-E99-R16/H3 `outcome=escalate` — ld. a fejléc-blokkot és `docs/LESSONS.md`
-L322. Semmi más (E07-R26 sem) nem folytatódik automatikusan, amíg a
-`.github/workflows/router-ci.yml` egysoros javítása meg nem történik.
+**A következő SDD-lépés: E08-R01** (Gamification baseline és principles,
+SDD Chapter 9 — `docs/rounds/e08-r01-gamification-baseline-and-principles.md`,
+engine `minimax`). **Epic 7 (AI Practice Generator, R01–R30) lezárva** — az
+E08 sor (30 kör, Chapter 9) `docs/execution/pipeline-queue.tsv`-ben előre
+megírva és brief-lintelve. Friss sessionben indul.
+
+**Nyitott, EMBERI döntést igénylő tartozások, Epic 7-ből örökölve:**
+
+- (2026-08-19, E07-R30 completion report + security review NOTE-2) a
+  `GenerationOrchestrator.generate()` továbbra is egyetlen hívásban
+  fuzionálja a validálást/javítást az aktiválással — egy jövőbeli
+  preview-confirmation / valódi rollout implementáló körnek külön kell
+  választania, mielőtt perzisztáló activation bekötődik.
+- (2026-08-19, E07-R30 completion report) `practiceGeneratorEnabled` és
+  `plannerAssistEnabled` bekapcsolása emberi release-döntés, a release gate
+  után; a teljes CI-suite/property/APK továbbra is kötelező merge-evidencia,
+  ezt a helyi golden-korpusz mérés NEM helyettesíti; valós Android-eszközös
+  offline flow és eszköz-specifikus latency/memória baseline hátravan.
+- (2026-08-19, E07-R28 pre-flightja fedte fel) az E07-R27 (PR #328)
+  `risk=high` briefje mellett a kötelező biztonsági review sosem készült el
+  (`docs/reviews/e07-r27-security.md` hiányzik) — egy jövőbeli kör vagy
+  emberi döntés pótolhatja retroaktívan.
+
+**Korábbi kijelölt SDD-kör (2026-08-19, azóta lezárult): E07-R29**
+(Accessibility, localization, privacy és safety hardening, SDD Ch8 Kör 29).
+Lásd a fejléc ✅-blokkot.
+
+**Nyitott, EMBERI döntést igénylő tartozás (2026-08-19, E07-R28 pre-flightja
+fedte fel):** az E07-R27 (PR #328) `risk=high` briefje mellett a kötelező
+biztonsági review sosem készült el (`docs/reviews/e07-r27-security.md`
+hiányzik) — egy jövőbeli kör vagy emberi döntés pótolhatja retroaktívan.
+
+**🛑 [ELAVULT, MEGOLDVA] A lánc jelenleg ÁLL...** — az alábbi bekezdés
+E99-R16/H3-ra vonatkozott; az ADR 0321 (H-GATEGUARD kör-szintű hold, ld. a
+fejléc-blokkot fentebb) és a család-glob javítás (PR #324) azóta feloldotta,
+a lánc E07-R27/R28-cal folytatódott. Megtartva történeti kontextusnak:
 
 **A következő Epic 7 SDD-lépés: E07-R26** (outcome ingestion és revision).
 Friss sessionben indul; az E07-R25 eredményét csak a szűk public boundary-kon

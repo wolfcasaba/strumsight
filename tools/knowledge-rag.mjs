@@ -87,19 +87,56 @@ const OPENAI_KEY = process.env.RAG_OPENAI_API_KEY || '';
 
 // ---------- CLI ----------
 const argv = process.argv.slice(2);
-const flags = { corpus: null, top: 8, reindex: false, json: false, stat: false, bm25: false };
+const flags = {
+  corpus: null, top: 8, reindex: false, json: false, stat: false, bm25: false,
+  emb: false, eval: false, maxPerDoc: null, explain: false,
+};
 const words = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--corpus') flags.corpus = argv[++i];
+  // ADR 0316 §2.5: több korpusz egy hívásban — `--corpus lessons,halts,adr`.
+  if (a === '--corpus') flags.corpus = parseCorpusList(argv[++i]);
   else if (a === '--top') flags.top = Number(argv[++i]);
   else if (a === '--reindex') flags.reindex = true;
   else if (a === '--json') flags.json = true;
   else if (a === '--stat') flags.stat = true;
   else if (a === '--bm25') flags.bm25 = true;
+  else if (a === '--emb') flags.emb = true;
+  else if (a === '--eval') flags.eval = true;
+  else if (a === '--explain') flags.explain = true;
+  else if (a === '--max-per-doc') flags.maxPerDoc = Number(argv[++i]);
   else words.push(a);
 }
 const query = words.join(' ').trim();
+
+/** `--corpus lessons,halts` → Set{lessons,halts}; üres/hiányzó → null (mind). */
+function parseCorpusList(raw) {
+  if (!raw) return null;
+  const names = String(raw).split(',').map((s) => s.trim()).filter(Boolean);
+  return names.length ? new Set(names) : null;
+}
+
+/** Egy chunk beleesik-e a kért korpusz-szűrőbe. */
+const inCorpus = (name) => !flags.corpus || flags.corpus.has(name);
+
+// ADR 0316 §2.2 — SÚLYOZOTT fúzió, `RAG_W_BM25` / `RAG_W_EMB` felülírja.
+//
+// Az ADR eredeti előírása az volt, hogy az alapértelmezés a LEXIKAI ág javára
+// billenjen: a feltevés szerint egy ritka domain-terminus (flaky, H8, tmux,
+// win32) erős lexikai jelét hígította a szemantikus ág. MÉRVE a
+// `tools/rag-eval.tsv` mércén ez az irány ROMLIK: bm25×2 → 36,8% (MRR 0,254),
+// míg emb×2 → 52,6% (MRR 0,491).
+//
+// A feltevés azért dőlt meg, mert egyetlen anekdotán állt: a szó szerint
+// beírt „flaky" szón. A valós használat PARAFRÁZIS („miért bukik el néha a
+// property gate…"), ahol nincs közös ritka szó, tehát a BM25-ág vak — mérve
+// ugyanerre a kérdésre L142 a BM25 top-40-ben SINCS benne, a szemantikus ágon
+// viszont #11. Ezért az alapértelmezés a szemantikus ág javára billen.
+const W_BM25 = Number(process.env.RAG_W_BM25 ?? 1.0);
+const W_EMB = Number(process.env.RAG_W_EMB ?? 2.0);
+// ADR 0316 §2.3 — dokumentum-korlát: egy forrásfájlból legfeljebb ennyi chunk
+// kerülhet a LISTÁRA (az indexet nem érinti). 0 = korlátozás nélkül.
+const MAX_PER_DOC = Number(flags.maxPerDoc ?? process.env.RAG_MAX_PER_DOC ?? 2);
 
 // ---------- chunkolók ----------
 const sha = (s) => createHash('sha1').update(s).digest('hex').slice(0, 12);
@@ -201,10 +238,22 @@ function walk(dir, exts, acc = []) {
 
 function collect() {
   const chunks = [];
-  const want = (name) => !flags.corpus || flags.corpus === name;
+  const want = inCorpus;
 
   if (want('lessons') && existsSync(join(ROOT, 'docs', 'LESSONS.md'))) {
     for (const c of chunkLessons(readFileSync(join(ROOT, 'docs', 'LESSONS.md'), 'utf8'))) chunks.push({ corpus: 'lessons', ...c });
+  }
+  // ADR 0316 §2.4 — `handoff` korpusz. MÉRVE: a HANDOFF.md (3 059 sor) és a
+  // docs/handoff-archive.md (9 034 sor) — együtt 12 093 sor OPERATÍV történet —
+  // egyáltalán nem volt indexelve, miközben épp ezt kérdezi az önjavító ág.
+  if (want('handoff')) {
+    for (const rel of ['HANDOFF.md', 'docs/handoff-archive.md']) {
+      const path = join(ROOT, rel);
+      if (!existsSync(path)) continue;
+      for (const c of chunkMarkdownSections(readFileSync(path, 'utf8'), `handoff/${rel}`, rel)) {
+        chunks.push({ corpus: 'handoff', ...c });
+      }
+    }
   }
   for (const [corpus, dir] of [['adr', 'docs/adr'], ['rounds', 'docs/rounds'], ['reviews', 'docs/reviews'], ['sdd', 'docs/sdd'], ['dsp', 'docs/rag/chunks'], ['plan', 'docs/plans/gpt']]) {
     if (!want(corpus) || !existsSync(join(ROOT, dir))) continue;
@@ -423,30 +472,130 @@ function bm25(chunks, q) {
   }).filter((x) => x.score > 0).sort((a, b2) => b2.score - a.score);
 }
 
+/**
+ * Súlyozott RRF (ADR 0316 §2.2).
+ *
+ * `rankings`: [{ rows, weight, label }] — ágakként a rendezett találatlista.
+ * A visszaadott térkép id → { score, ranks } , ahol a `ranks` ágankénti
+ * 1-alapú helyezést tart. A helyezés MEGJELENÍTÉSE szándékos: a puszta RRF-
+ * pontszám (1/(k+rang)) rang-információ, nem relevancia — a felhasználó abból
+ * nem tudja megítélni, hogy erős vagy gyenge találatot lát.
+ */
 function rrf(rankings, k = 60) {
-  const scores = new Map();
-  for (const ranking of rankings) {
-    ranking.forEach((row, rank) => {
+  const out = new Map();
+  for (const { rows, weight, label } of rankings) {
+    rows.forEach((row, rank) => {
       const id = row.chunk?.id ?? row.id;
-      scores.set(id, (scores.get(id) ?? 0) + 1 / (k + rank + 1));
+      const cur = out.get(id) ?? { score: 0, ranks: {} };
+      cur.score += weight / (k + rank + 1);
+      cur.ranks[label] = rank + 1;
+      out.set(id, cur);
     });
   }
-  return scores;
+  return out;
 }
 
-async function search() {
+/**
+ * PONTSZÁM-alapú fúzió — a rang-alapú RRF alternatívája.
+ *
+ * MIÉRT merült fel: a rang-kijelzés megmutatta, hogy a két ág találatai
+ * szinte teljesen DISZJUNKTAK (a fúzió utáni lista `bm25#1, emb#1, bm25#2,
+ * emb#2 …` mintát ad). Ilyenkor az RRF nem rangsorol, csak összefésül, mert
+ * a rang önmagában nem mondja meg, hogy egy találat ERŐS vagy csak
+ * „a legjobb a gyengék közül".
+ *
+ * Itt ezért ágon belül min-max normalizálunk [0,1]-re, és a normalizált
+ * pontszámokat súlyozva adjuk össze: egy kiugróan erős szemantikus találat
+ * így felülírhat egy gyenge lexikait, ahelyett hogy váltogatnának.
+ *
+ * A normalizálás ágon BELÜL történik, mert a koszinusz (~0,3–0,6) és a BM25
+ * (nem korlátos) skálája nem összemérhető.
+ */
+function scoreFuse(rankings) {
+  const out = new Map();
+  for (const { rows, weight, label } of rankings) {
+    if (!rows.length) continue;
+    const values = rows.map((r) => r.score);
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const span = max - min || 1;
+    rows.forEach((row, rank) => {
+      const id = row.chunk?.id ?? row.id;
+      const cur = out.get(id) ?? { score: 0, ranks: {} };
+      cur.score += weight * ((row.score - min) / span);
+      cur.ranks[label] = rank + 1;
+      out.set(id, cur);
+    });
+  }
+  return out;
+}
+
+/**
+ * `RAG_FUSION=rank|score` — az alapértelmezést a MÉRCE döntötte el, nem ízlés.
+ *
+ * Mérve a `tools/rag-eval.tsv`-n (bm25×1 emb×2, dok-korlát 2):
+ *   rank  (RRF)          10/19 (52,6%)  MRR 0,491
+ *   score (normalizált)  11/19 (57,9%)  MRR 0,537
+ *
+ * A rang-alapú ág legjobbja emb×4-gyel is csak MRR 0,500 volt, tehát a
+ * különbség nem súly-hangolás kérdése: a rang egyszerűen nem hordozza, hogy
+ * egy találat erős-e, márpedig a két ág diszjunkt.
+ */
+const FUSION = (process.env.RAG_FUSION || 'score').toLowerCase();
+
+/**
+ * Dokumentum-korlát (ADR 0316 §2.3): egy forrásfájlból legfeljebb `max` chunk
+ * kerülhet a listára. MÉRVE: egy lekérdezés első négy helyét ugyanannak a
+ * briefnek négy szakasza foglalta el. A korlát a LISTÁRA vonatkozik, nem az
+ * indexre; a kiszorított forrásokat a `--explain` megmutatja.
+ */
+/**
+ * Korpuszok, amelyekben EGY fájl önálló rekordok GYŰJTEMÉNYE, nem egyetlen
+ * összefüggő dokumentum. Itt a „dokumentum" rossz csoportosítási egység:
+ * a `docs/LESSONS.md` 346 leckéje mind ugyanaz a `file`, tehát a korlát az
+ * egész korpuszt két találatra vágná.
+ *
+ * MÉRVE: naiv fájl-alapú korláttal a mérce 53,8% → 38,5%-ra ROMLOTT, és a
+ * döntő leckék (L142, L143, L323) teljesen kiestek a top-20-ból.
+ */
+const RECORD_CORPORA = new Set(['lessons', 'halts', 'notes']);
+
+const groupKey = (chunk, id) =>
+  RECORD_CORPORA.has(chunk?.corpus) ? id : (chunk?.file ?? id);
+
+function capPerDocument(rows, max) {
+  if (!max || max <= 0) return { kept: rows, dropped: [] };
+  const seen = new Map();
+  const kept = [];
+  const dropped = [];
+  for (const r of rows) {
+    const key = groupKey(r.chunk, r.id);
+    const n = seen.get(key) ?? 0;
+    if (n >= max) { dropped.push(r); continue; }
+    seen.set(key, n + 1);
+    kept.push(r);
+  }
+  return { kept, dropped };
+}
+
+/**
+ * A KÖZÖS rangsorolás — a keresés és a mérce ugyanezt hívja, hogy a mérce
+ * tényleg azt mérje, amit a felhasználó kap (ADR 0316 §2.1).
+ * Visszaad: { kept, dropped } — a dokumentum-korláttal szűrt, rendezett lista.
+ */
+async function rankAll(q) {
   const index = loadIndex();
   const hasIndex = Object.keys(index.entries || {}).length > 0;
   const chunks = collect();
   const byId = new Map(chunks.map((c) => [c.id, c]));
-  const lexical = bm25(chunks, query).slice(0, 50);
+  const lexical = flags.emb ? [] : bm25(chunks, q).slice(0, 50);
 
   let semantic = [];
   if (!flags.bm25 && OPENAI_KEY && hasIndex) {
-    const [qv] = await embed([query]);
+    const [qv] = await embed([q]);
     const store = loadVectors(index);
     semantic = Object.entries(index.entries)
-      .filter(([id]) => byId.has(id) && (!flags.corpus || byId.get(id).corpus === flags.corpus))
+      .filter(([id]) => byId.has(id) && inCorpus(byId.get(id).corpus))
       .map(([id, e]) => {
         const vec = e.vec
           ? e.vec
@@ -460,24 +609,52 @@ async function search() {
       .slice(0, 50);
   }
 
-  const fused = rrf(semantic.length ? [lexical, semantic] : [lexical]);
-  const results = [...fused.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, flags.top)
-    .map(([id, score]) => ({ id, score, chunk: byId.get(id) }))
+  const branches = [];
+  if (lexical.length) branches.push({ rows: lexical, weight: W_BM25, label: 'bm25' });
+  if (semantic.length) branches.push({ rows: semantic, weight: W_EMB, label: 'emb' });
+
+  const fused = FUSION === 'score' ? scoreFuse(branches) : rrf(branches);
+  const ordered = [...fused.entries()]
+    .sort((a, b) => b[1].score - a[1].score)
+    .map(([id, v]) => ({ id, score: v.score, ranks: v.ranks, chunk: byId.get(id) }))
     .filter((r) => r.chunk);
+
+  // A korlát a RENDEZETT listára megy, és CSAK utána vágunk `--top`-ra —
+  // különben a kiszorított helyeket nem töltené fel a következő forrás.
+  return capPerDocument(ordered, MAX_PER_DOC);
+}
+
+/** A mérce ezt hívja: a végleges, korlátozott sorrend. */
+async function rankFor(q) {
+  const { kept } = await rankAll(q);
+  return kept;
+}
+
+async function search() {
+  const { kept, dropped } = await rankAll(query);
+  const results = kept.slice(0, flags.top);
 
   if (flags.json) {
     console.log(JSON.stringify(results.map((r) => ({
       id: r.id, corpus: r.chunk.corpus, title: r.chunk.title, file: r.chunk.file,
-      score: Number(r.score.toFixed(5)), excerpt: r.chunk.text.slice(0, 600),
+      score: Number(r.score.toFixed(5)), ranks: r.ranks, excerpt: r.chunk.text.slice(0, 600),
     })), null, 2));
     return;
   }
   if (!results.length) { console.log('nincs találat'); return; }
   for (const r of results) {
-    console.log(`\n=== [${r.chunk.corpus}] ${r.chunk.title}  (${r.id}, score ${r.score.toFixed(4)}) ===`);
+    const where = Object.entries(r.ranks).map(([k, v]) => `${k}#${v}`).join(' ') || '—';
+    console.log(`\n=== [${r.chunk.corpus}] ${r.chunk.title}  (${r.id}, score ${r.score.toFixed(4)}, ${where}) ===`);
     console.log(r.chunk.text.slice(0, 700).trim());
+  }
+  if (flags.explain) {
+    console.log(`\n--- fúzió: bm25×${W_BM25} emb×${W_EMB}, dok-korlát ${MAX_PER_DOC || 'nincs'} ---`);
+    const bySource = new Map();
+    for (const d of dropped.slice(0, 40)) bySource.set(d.chunk.file, (bySource.get(d.chunk.file) ?? 0) + 1);
+    if (bySource.size) {
+      console.log('a dokumentum-korlát miatt kiesett:');
+      for (const [file, n] of bySource) console.log(`  ${file}  (${n} további szakasz)`);
+    }
   }
 }
 
@@ -498,7 +675,60 @@ function stat() {
   for (const [corpus, n] of Object.entries(meta.counts || {})) console.log(`  ${corpus.padEnd(9)} ${n}`);
 }
 
+/**
+ * Visszakeresési MÉRCE (ADR 0316 §2.1).
+ *
+ * `tools/rag-eval.tsv`: kérdés ⇥ elvárt chunk-azonosító ⇥ elvárt legrosszabb
+ * helyezés ⇥ korpusz-szűrő (opcionális). Jelenti a találati arányt és az
+ * átlagos reciprok helyezést (MRR), hogy a rangsor hangolása MÉRT legyen,
+ * ne ízlés kérdése.
+ */
+async function runEval() {
+  const evalFile = join(ROOT, 'tools', 'rag-eval.tsv');
+  if (!existsSync(evalFile)) {
+    console.error(`nincs mérce-fájl: ${evalFile}`);
+    process.exit(2);
+  }
+  const rows = readFileSync(evalFile, 'utf8').split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'))
+    .map((l) => l.split('\t').map((s) => s.trim()));
+
+  let hits = 0;
+  let mrr = 0;
+  const failures = [];
+  for (const [q, expectedId, wantRankRaw, corpusRaw] of rows) {
+    const wantRank = Number(wantRankRaw || 5);
+    flags.corpus = parseCorpusList(corpusRaw);
+    flags.top = Math.max(wantRank, 20);
+    const ranked = await rankFor(q);
+    // Az elvárt oszlop `|`-lal ALTERNATÍVÁKAT sorolhat: egy kérdésre több
+    // dokumentum is jogosan válaszolhat (mérve: a pengetés-irány kérdésre a
+    // `006-strum-direction` és a `015-strum-direction-ml` egyaránt helyes).
+    // A találat SZAKASZ-szinten is számít: ha a jó dokumentum másik szakasza
+    // jön vissza, az is a jó helyre mutat.
+    const wanted = expectedId.split('|').map((s) => s.trim()).filter(Boolean);
+    const matches = (r) => wanted.some((e) =>
+      r.id === e || r.id.startsWith(`${e}#`) || r.chunk.title.startsWith(e));
+    const pos = ranked.findIndex(matches);
+    const rank = pos < 0 ? 0 : pos + 1;
+    if (rank && rank <= wantRank) { hits++; mrr += 1 / rank; }
+    else failures.push({ q, expectedId, wantRank, rank: rank || '—' });
+    const mark = rank && rank <= wantRank ? 'OK ' : 'HIB';
+    console.log(`${mark} ${String(rank || '—').padStart(3)}/${String(wantRank).padEnd(2)}  ${expectedId.padEnd(10)} ${q.slice(0, 62)}`);
+  }
+  const pct = rows.length ? (100 * hits / rows.length).toFixed(1) : '0.0';
+  console.log(`\ntalálat: ${hits}/${rows.length} (${pct}%)   MRR: ${(mrr / (rows.length || 1)).toFixed(3)}`);
+  console.log(`fúzió:   bm25×${W_BM25} emb×${W_EMB}   dok-korlát: ${MAX_PER_DOC || 'nincs'}`);
+  if (failures.length) process.exitCode = 1;
+}
+
 if (flags.stat) { stat(); }
 else if (flags.reindex) { await reindex(); }
-else if (!query) { console.error('használat: node tools/knowledge-rag.mjs [--corpus <név>] [--top N] [--json] "<kérdés>"'); process.exit(2); }
+else if (flags.eval) { await runEval(); }
+else if (!query) {
+  console.error('használat: node tools/knowledge-rag.mjs [--corpus a,b] [--top N] [--json] [--explain] "<kérdés>"');
+  console.error('           node tools/knowledge-rag.mjs --eval     # visszakeresési mérce');
+  process.exit(2);
+}
 else { await search(); }

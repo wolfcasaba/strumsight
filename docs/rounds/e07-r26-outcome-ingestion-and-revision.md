@@ -47,6 +47,121 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
+## 0.0 Pre-flight mérés és brief-revízió (Claude Sonnet 5, 2026-08-19, kód olvasva: `main @ a0f764d5`)
+
+A brief fejlécében kért újraolvasás (R10 `PlanChangeSet`, R19 repository felület,
+R16 adaptációs döntés) megtörtént. Hat mért pont; **egyik sem bővíti az
+`allowed_paths`-t** — mind a §5/§8 mechanizmus-szintű pontosítása.
+
+**1. `PlanChangeSet` (R10) létezik, de a "csak jövőre" és "kis/nagy" logika
+NULLA — ez a kör valódi, tiszta lappal induló munkája.** Mérve:
+`lib/features/practice_generator/domain/model/plan_change_set.dart:57-96` —
+`PlanChange.target` szabad szöveg (`String`), nincs benne állapot-ellenőrzés;
+a három meglévő gyártó (`plan_repairer.dart:209`,
+`time_budget_allocator.dart:471`, `active_plan_controller.dart:173`) mind
+`requiresUserConfirmation: false`-t ír kőbe. Repó-szintű
+`grep -rn "changeMagnitude|majorChange|minorChange"` → 0 találat.
+**Következmény:** ez NEM eltérés, csak megerősítés — a §5.1/§5.2/§6.1
+küszöb- és jövő-only logikája ténylegesen új tervezői munka, nem meglévő kód
+összekötése.
+
+**2. [KRITIKUS, de allowed_paths-t NEM bővíti] Két, AZONOS NEVŰ, eltérő alakú
+`PracticeOutcome` típus él a fában — a repository-írás ezért ki van zárva
+ebből a körből.** Mérve:
+- `data/adapter/practice_outcome_adapter.dart:114-143` — az R23
+  execution-oldali, `public.dart`-ból exportált `PracticeOutcome`
+  (id/planId/revisionId/dayId/blockId/source/startedAt/completedAt/
+  activeDuration/completionState/metricEvidence/userFeedback) — pontosan az
+  SDD Ch8 §26.1 alakja.
+- `data/local/practice_plan_serializer.dart:95-125` — a repository-lokális
+  `PracticeOutcome` (id/planId/revisionId/recordedAt/durationMinutes/
+  completedBlockCount/plannedBlockCount/summary) — MÁS mezőkészlet.
+- `public.dart:25-28`: „A régebbi serializer-rekord repository-lokális. Az
+  R23 a gazdagabb execution `PracticeOutcome`-ot publikálja; a lokális
+  persistence a SAJÁT rekordtípusát importálja közvetlenül" — a barrel
+  explicit `hide PracticeOutcome`-ot ír a serializer exportjára.
+- `LocalPracticePlanRepository.appendOutcome(PracticeOutcome outcome)`
+  (`data/local/local_practice_plan_repository.dart:451`) a REPOSITORY-lokális
+  alakot várja — ehhez a service-nek a `practice_plan_serializer.dart`-ot
+  KÖZVETLENÜL kellene importálnia (nem a barrelen át), ami a fenti kommentnek
+  ellentmond, és a fájl maga nincs az `allowed_paths`-on.
+
+**Feloldás (`allowed_paths` VÁLTOZATLAN):** az `outcome_ingestion_service.dart`,
+a `record_practice_outcome.dart` és a `revise_practice_plan.dart` **tisztán
+application-réteg, hívó-táplált szolgáltatás** — az aktív plan/nap/blokk
+pillanatkép, a már feldolgozott outcome-azonosítók halmaza, a review-elemek
+és az aktív revízió a HÍVÓTÓL érkezik paraméterként, a kimenet (frissített
+review-elemek, `AdaptationDecision`, `PlanChangeSet`, esetleg egy új
+`PlanRevision`) a HÍVÓNAK adódik vissza — **egyik új fájl sem hív
+repository-metódust, és egyik sem importálja a `practice_plan_serializer.dart`-ot.**
+Ugyanaz a minta, mint R16 (`AdaptationDecider`), R17 (`ReviewQueue`) és R23
+(`PracticeOutcomeAdapter`/`PlanExecutionCoordinator`) — mindegyik
+domain-tiszta, `practiceGeneratorEnabled=false`, nulla production hívó. A
+repository-perzisztencia bekötése (a két `PracticeOutcome`-alak
+összeegyeztetése) egy JÖVŐBELI wiring-kör dolga — az R22 MINOR-jának
+([[L309]]) és az R19/R23 mintájának megfelelően.
+
+**3. `outcome_ingestion_service.dart` bemenete a §2 alatti, `public.dart`-ból
+exportált R23-alak — SOHA nem a repository-lokális.** A barrel `hide
+PracticeOutcome`-ja (line 28) ezt gépileg is kikényszeríti: a
+repository-lokális alakra való véletlen hivatkozás a barrelen át fordítási
+hiba, nem néma téves kötés.
+
+**4. Az "evidence- és ismétlés-sor frissítése" (§3) tényleges mutáló
+logikája NEM a `ReviewQueue` (az csak SZELEKTOR), hanem a
+`SpacedRepetitionPolicy.evaluate()`.** Mérve: `domain/service/review_queue.dart`
+`ReviewQueue.select(...)` a mai jelöltekből választ, nincs "outcome-ból
+frissítés" metódusa. A mutáló lépés:
+`domain/policy/spaced_repetition_policy.dart:205-236` —
+`SpacedRepetitionPolicy.evaluate({required ReviewItem item, required
+ReviewOutcome outcome, required LocalDate today}) -> ReviewIntervalDecision`.
+Az `outcome_ingestion_service.dart` ezt HÍVJA minden érintett `ReviewItem`-re
+(az `allowed_paths` az írást korlátozza, a meglévő szolgáltatás hívását nem).
+
+**5. Az A8 ("revízió-szám monoton nő") NEM új számláló-mechanizmust igényel:
+a `PlanRevision` konstruktora már ma kikényszeríti, ha megkapja a
+`previous`-t.** Mérve: `domain/model/plan_revision.dart:22-52` — `if
+(previous != null && number <= previous.number) throw ArgumentError(...)`.
+**Feloldás:** a `revise_practice_plan.dart` az aktív (hívó-táplált)
+`PlanRevision`-t adja át `previous:`-ként az új revízió gyártásakor — az A8
+teszt-cellája ezt a meglévő védelmet fedi le, nem egy új számlálót ír. (Az
+`ArchivedRevision`, `data/local/practice_plan_serializer.dart:212-230`, a
+repository-lokális írott alak, saját validáció nélkül — de a 2. pont szerint
+ez a kör nem ír a repositoryba, tehát ez itt irreleváns.)
+
+**6. Az R16/`AdaptationDecision`, az R19 repo-olvasás és az ADR
+0256/0265/0268 feltételezése PONTOS, nincs eltérés.**
+`AdaptationDecision.evidenceIds` nem-üres, kikényszerítve
+(`domain/model/adaptation_decision.dart:187-227`) — ADR 0265 §6 teljesül.
+`LocalPracticePlanRepository.readActivePlan()/readArchive()`
+(`data/local/local_practice_plan_repository.dart:300,491`) elég egy jövőbeli
+wiring-körnek a hívó-táplált olvasáshoz (ez a kör nem hívja őket, ld. 2.
+pont). Az ADR 0256/0265/0268 szövege a brief §2/§9 idézeteivel egyezik.
+
+**Visszakeresés (ADR 0312 §4.9 / brief-lint S8):**
+`node tools/knowledge-rag.mjs --top 5 "outcome ingestion revise practice plan
+change set future-only small large confirmation"` legjobb találata az SDD
+Ch8 checklist szakasza
+(`docs/sdd/08-epic-07-ai-practice-generator.md:2145-2240`: "Outcome ingestion
+idempotens / Completed múlt nem változik / Major plan change confirmationt
+igényel / Minden change set reasonnel és evidence refekkel rendelkezik") —
+pontosan az A1–A8 fedése. A `--corpus lessons` közvetlen témai precedenst nem
+adott; a releváns folyamat-leckék: **[[L304]]** (E07-R19 — ugyanennek a
+repositorynak egy mért hibája a MEGÁLLT kör SAJÁT ágára tartozik, nem külön
+heal-branch-re — irányadó, ha e kör alatt a repository-rétegben hibát
+találunk), **[[L227]]** (egy pre-flight-revízió új szabálya retroaktív
+ütközésbe kerülhet egy korábban írt acceptance-cellával — ha az implementer a
+fenti 2–5. pont bármelyikét ütközőnek méri egy acceptance-cellával, a helyes
+válasz tiszta `stopped`, nem workaround) és **[[L309]]** (a
+repository-wiring MINOR-ként explicit egy jövőbeli körre hagyható,
+dokumentáltan — pontosan a 2. pont feloldásának mintája).
+
+**Összegzés:** `allowed_paths`, `gate_tests`, a §6 acceptance criteria és a
+§3/§4 tiltott zóna **változatlan**. Ez a §0.0 kizárólag a §5/§8
+mechanizmus-szintű pontosítása: melyik meglévő típust/metódust hívja a 3 új
+fájl, és mit NEM ér el ez a kör (repository-írás). Az implementer a §8
+sorrendjét ezzel a pontosítással kövesse.
+
 ## 1. Cél
 
 A befejezett blokkok eredményének feldolgozása és **átlátható** jövőbeli
@@ -179,5 +294,72 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   javaslatok (A5).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### E07-R26 implementer handoff (Codex, 2026-08-19)
+
+**Módosított fájlok.**
+
+- `application/service/outcome_ingestion_service.dart`: hívó-táplált
+  revision-validáció, outcome-ID deduplikáció és `SpacedRepetitionPolicy`
+  alapú review-item frissítés; technikai hiba nem adaptálható.
+- `application/usecase/record_practice_outcome.dart`: a service és az
+  `AdaptationDecider` repository-írás nélküli összefűzése.
+- `application/usecase/revise_practice_plan.dart`: immutable múlt- és
+  future-only cél-ellenőrzés, auditálható proposal, valamint a meglévő
+  `PlanRevision(previous:)` monotonitás-védelem használata.
+- `presentation/screens/plan_change_review_screen.dart`, `public.dart`, ARB:
+  lokalizált before/after diff-áttekintés és publikus contractok.
+- A két outcome teszt: A1–A8 és a három változás-nagyság cella.
+
+**Küszöb.** A megerősítési határ két érintett jövőbeli elem, inkluzívan:
+egy blokk még lokális korrekció, kettő már a terv szerkezetére is hatással
+lehet. Reprodukálható mérés: `python3 -c 'print(1 + 1)'` → `2`. Strukturális
+(`added`, `removed`, `moved`, focus- vagy napi időkeret-változás) módosítás
+darabszámtól függetlenül megerősítést kér.
+
+**Acceptance evidence.**
+
+- A1/A2: a completed blokkot célzó change set `StateError`-ral elutasított.
+- A3: a már feldolgozott outcome visszajátszása `duplicate`, review-módosítás
+  nélkül.
+- A4: 1 időtartam-változás automatikus; pontosan 2 és 3 változás
+  megerősítésre vár. A külön
+  `A4: a single future primary-focus change requires confirmation` eset egy
+  egyetlen elemű fókuszváltást is megerősítésre várónak és inaktívnak mér.
+- A5: elutasított nagy proposal megtartja a teljes `PlanChangeSet` auditját,
+  de nincs aktív revision.
+- A6: elavult revision outcome `staleRevision` eredményt ad.
+- A7: `failedTechnical` review-elemet és adaptációs ágat nem indít.
+- A8: az új revision a meglévő `previous:` konstruktori guardot kapja, a
+  sorszáma szigorúan növekszik.
+
+**Valódi-sértés próba.** A completed-blokk guardját ideiglenesen
+`inProgress`-re módosítva a `revise_practice_plan_test.dart` A1/A2 cellája
+PIROS volt: várt `StateError`, ténylegesen `PlanRevisionProposal` tért vissza.
+A `completed` guard visszaállítása után az akkor célzott két fájl 9/9 tesztje
+zöld volt.
+Az F1 javításának valódi-sértés próbája: a
+`primaryFocusSkillIds`-ellenőrzések ideiglenes eltávolításakor az új A4 teszt
+PIROS volt (`Expected: true`, `Actual: <false>`); a visszaállítás után a
+célzott teszt ZÖLD.
+
+**Futtatott ellenőrzések.**
+
+- `flutter test ...outcome_ingestion_service_test.dart ...revise_practice_plan_test.dart`
+  → 9/9 zöld.
+- `flutter analyze lib/ test/ tool/` → `No issues found!`.
+- `ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh ...` → format, analyze,
+  mindkét célzott teszt, architecture, secrets és l10n mind zöld.
+- `git diff --check` → exit 0.
+- F1 javítás: `tools/round-gate.sh
+  test/features/practice_generator/outcome/outcome_ingestion_service_test.dart
+  test/features/practice_generator/outcome/revise_practice_plan_test.dart` →
+  exit 0; format: 1648 fájl, 0 változás; analyze: `No issues found!`; az
+  outcome-ingestion teszt 3/3, a revise-practice-plan teszt 7/7 zöld.
+
+**Tényleges `git diff --stat`:** 10 fájl, 851 beszúrás (a négy új
+alkalmazás/UI fájl, két új teszt, barrel, két ARB és ez a handoff).
+Nincs backend- vagy repository-write; a persistence-wiring a brief szerinti
+következő körre marad.
 
 ## 11. Review — a Claude tölti ki

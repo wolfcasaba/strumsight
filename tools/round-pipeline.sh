@@ -1125,6 +1125,98 @@ handle_round_halt() {   # $1=kör $2=status-fájl $3=session-napló — a HALT E
   log "az önjavítás (ADR 0112) a következő cron-firingen indul; kikapcsolva: PIPELINE_SELFHEAL=0"
 }
 
+
+# --- H-GATEGUARD: KÖR-szintű hold, nem LÁNC-szintű megállás (ADR 0321) -----
+# MÉRVE 2026-08-19 (E99-R17, három egymást követő halt 05:31 / 09:56 / 10:38):
+# a `H-GATEGUARD` az ADR 0112 egyetlen emberi határa, ezért az önjavítás
+# helyesen nem nyúl hozzá — a HALTED jelzés viszont GLOBÁLIS, így EGYETLEN
+# gate-érintő kör a sor MIND a 37 nyitott körét megállította, köztük a tőle
+# teljesen független E07/E08 termék-munkát. A mérce változatlan: a kör NEM
+# fut le, ember dönt róla. Csak a hatóköre szűkül a saját sorára.
+#
+# A `gateguard_origin=selfheal` mezőt az őrszem-ág írja (lásd attempt_selfheal):
+# ott a halt azt jelenti, hogy a MAIN-en már állhat a mércét gyengítő commit —
+# az továbbra is lánc-szintű megállás, mert a következő kör mércéje is romlott.
+queue_hold_round() {   # $1=kör $2=indoklás → 0 ha a sor 'hold'-ra állt ÉS fel van tolva
+  local round="$1" reason="$2"
+  [ -f "$queue_file" ] || { log "sor-fájl hiányzik — nem állítható hold-ra: $round"; return 1; }
+  grep -qP "^$round\t.*\tpending$" "$queue_file" || {
+    log "a(z) $round sora nem 'pending' — hold-ra állítás kihagyva"
+    return 1
+  }
+  if [ -z "${PIPELINE_STATE_DIR:-}" ]; then
+    # Éles ág: a sor-fájl a repóban van, a változást commitolni KELL, mert a
+    # következő firing „piszkos munkafa" őre különben megállítja a láncot.
+    [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] || {
+      log "a munkafa nem a main-en van — a(z) $round hold-ra állítása kimarad (marad a lánc-szintű halt)"
+      return 1
+    }
+    [ -z "$(git status --porcelain)" ] || {
+      log "piszkos munkafa — a(z) $round hold-ra állítása kimarad (marad a lánc-szintű halt)"
+      return 1
+    }
+    git fetch -q origin main && git reset -q --hard origin/main || {
+      log "a main szinkronizálása nem sikerült — a(z) $round hold-ra állítása kimarad"
+      return 1
+    }
+  fi
+  sed -i "s|^\($round\t.*\t\)pending$|\1hold|" "$queue_file"
+  grep -qP "^$round\t.*\thold$" "$queue_file" || {
+    log "a(z) $round sorát nem sikerült hold-ra írni"
+    return 1
+  }
+  [ -n "${PIPELINE_STATE_DIR:-}" ] && return 0
+  git add "$queue_file" || return 1
+  git commit -q -m "chore(pipeline): $round hold — $reason (ADR 0321)" || {
+    git checkout -q -- "$queue_file" 2>/dev/null || true
+    return 1
+  }
+  if ! git push -q origin main; then
+    # A leggyakoribb ok: az origin/main közben elmozdult. Egy rebase után
+    # újrapróbáljuk; ha az sem megy, VISSZAVONJUK a lokális commitot —
+    # különben a következő firing a „lokális main eltér" ágon állna meg.
+    if ! { git fetch -q origin main && git rebase -q origin/main && git push -q origin main; }; then
+      log "a hold-commit push-a nem ment át — visszavonva, marad a lánc-szintű halt ($round)"
+      git rebase --abort >/dev/null 2>&1 || true
+      git reset -q --hard origin/main
+      return 1
+    fi
+  fi
+  return 0
+}
+
+gateguard_ledger_append() {   # $1=kör $2=halt-kód $3=összefoglaló
+  printf '%s\t%s\t%s\t%s\n' "$(date -Is)" "$1" "$2" "$3" >> "$state_dir/gateguard-holds.tsv"
+}
+
+gateguard_hold_halted_round() {   # 0 = a haltot kör-szintű hold váltotta ki és el van intézve; 1 = maradjon a lánc-szintű halt
+  local round halt_code summary origin archive
+  [ "${PIPELINE_GATEGUARD_AUTOHOLD:-1}" = "1" ] || return 1
+  [ -f "$halt_file" ] || return 1
+  halt_code=$(grep -m1 '^halt=' "$halt_file" | cut -d= -f2-)
+  summary=$(grep -m1 '^summary=' "$halt_file" | cut -d= -f2-)
+  origin=$(grep -m1 '^gateguard_origin=' "$halt_file" | cut -d= -f2-)
+  [ "$origin" = "selfheal" ] && return 1
+  case "$halt_code" in
+    H-GATEGUARD) ;;
+    *) case "$summary" in H-GATEGUARD*) ;; *) return 1 ;; esac ;;
+  esac
+  round=$(grep -m1 '^round=' "$halt_file" | cut -d= -f2-)
+  [ -n "$round" ] || return 1
+  queue_hold_round "$round" "H-GATEGUARD" || return 1
+  archive="$state_dir/gateguard-hold-$round-$(date +%Y%m%dT%H%M%S).txt"
+  {
+    cat "$halt_file"
+    echo "resolution=queue-hold"
+    echo "held_at=$(date -Is)"
+  } > "$archive"
+  rm -f "$halt_file"
+  gateguard_ledger_append "$round" "$halt_code" "$summary"
+  log "H-GATEGUARD → HOLD: a(z) $round sora 'hold' (emberi döntés kell hozzá), a lánc a többi körrel MEGY TOVÁBB — archívum: $archive"
+  notify "⏸️ H-GATEGUARD → hold: $round" "a kör emberi gate-döntésre vár; a lánc a következő körrel folytatódik" high
+  return 0
+}
+
 # Kimenet: 0 = a halt feloldva, mehet tovább a lánc; 3 = áll, ember kell.
 attempt_selfheal() {
   local halt_round halt_code attempts stamp prompt_file heal_log
@@ -1331,6 +1423,11 @@ attempt_selfheal() {
     {
       echo "round=$halt_round"
       echo "halt=H-GATEGUARD"
+      # Gépi megkülönböztetés (ADR 0321): ezt a haltot az ŐRSZEM írta, tehát a
+      # mércét gyengítő commit MÁR a main-en állhat — a lánc egésze áll meg,
+      # nem csak ez a kör. A kör-session által jelzett H-GATEGUARD (ott ez a
+      # mező hiányzik) ezzel szemben csak a saját sorát tartja vissza.
+      echo "gateguard_origin=selfheal"
       echo "summary=az önjavítás a MÉRCÉHEZ nyúlt — emberi jóváhagyás kell: $violation"
       echo "detail=eredeti halt: $halt_code · javítás: $summary · napló: $heal_log"
       echo "halted_at=$(date -Is)"
@@ -1701,6 +1798,9 @@ fi
 # --- 2. Halt-állapot → önjavítás (ADR 0112) -------------------------------
 # A halt nem a lánc vége, hanem az önjavító kör bemenete. A driver ugyanezen a
 # záron belül indítja: egyszerre továbbra is EGY session dolgozik.
+if [ -f "$halt_file" ] && gateguard_hold_halted_round; then
+  log "a gate-érintő kör hold-ra került — ez a firing a soron következő pending körrel folytatja"
+fi
 if [ -f "$halt_file" ]; then
   log "a lánc MEGÁLLT — $halt_file:"
   cat "$halt_file" >&2
@@ -1928,6 +2028,30 @@ engine=$(printf '%s' "$next_line" | cut -f3)
 adr=$(printf '%s' "$next_line" | cut -f4)
 
 [ -f "$brief" ] || die "a kör briefje nem létezik: $brief"
+
+# --- 4.1 MÉRCE-őr pre-flight (ADR 0321) -----------------------------------
+# A `H-GATEGUARD` halt gyökéroka MÉRVE (E99-R17, 2026-08-19) TERVEZÉSI hiba:
+# a brief `allowed_paths` listáján olyan fájl szerepel, amit a
+# `.claude/hooks/protect_factory_files.py` véd. Ezt a kör NEM tudja megoldani —
+# sem markerrel, sem újrapróbálással (docs/LESSONS.md L322–L323) —, tehát a
+# session elindítása garantáltan elpazarolt implementer-futás és egy halt.
+# Az ütközést a dispatch ELŐTT mérjük, a védett listát magából az őrből
+# importálva (tools/gateguard-scan.py), és a kört a sorban hold-ra tesszük:
+# az emberi döntés megmarad, a lánc viszont megy tovább a következő körrel.
+if [ "${PIPELINE_GATEGUARD_PREFLIGHT:-1}" = "1" ] && [ -f "$repo_root/tools/gateguard-scan.py" ]; then
+  gateguard_conflicts=$(python3 "$repo_root/tools/gateguard-scan.py" --repo "$repo_root" --brief "$brief" 2>/dev/null) || gateguard_status=$?
+  gateguard_status=${gateguard_status:-0}
+  if [ "$gateguard_status" = "1" ]; then
+    log "MÉRCE-ŐR PRE-FLIGHT: a(z) $round briefje védett fájlt kérne — $(printf '%s' "$gateguard_conflicts" | tr '\n' ' ')"
+    if queue_hold_round "$round" "H-GATEGUARD pre-flight"; then
+      gateguard_ledger_append "$round" "H-GATEGUARD-PREFLIGHT" "$(printf '%s' "$gateguard_conflicts" | tr '\n' ' ')"
+      log "a(z) $round sora HOLD — emberi gate-döntés kell hozzá; a lánc a következő firingen a soron következő kört viszi"
+      notify "⏸️ gate-érintő kör hold-on: $round" "a brief védett fájlt kérne — emberi döntés kell, a lánc megy tovább" high
+      exit 0
+    fi
+    die "a(z) $round briefje védett fájlt kérne, és a sor hold-ra állítása nem sikerült — emberi döntés kell"
+  fi
+fi
 
 # --- Motor-override (ADR 0140 + E99-R14 / ADR 0307 §1 D2) -----------------
 # A motorok kvótája külön merül ki (a Terra 9%-on, 2026-08-05). Az override

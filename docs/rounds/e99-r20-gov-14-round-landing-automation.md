@@ -13,7 +13,11 @@ allowed_paths = [
   "tools/round-land.sh",
   "tools/tests/test_round_land.py",
   "docs/execution/pipeline-orchestrator-prompt.md",
-  ".github/workflows/router-ci.yml",
+  # ".github/workflows/router-ci.yml" — TÁRGYTALAN (mérve 2026-08-19).
+  # A kör CSAK `tools/` alá hoz létre fájlt, a workflow `paths:` blokkja
+  # pedig már `tools/**` családi globot használ (PR #324), tehát a CI
+  # lefedettség automatikus. A védett fájl ezért kikerült a listáról:
+  # így a mérce-őr pre-flightja nem teszi hold-ra a kört.
   "docs/rounds/e99-r20-gov-14-round-landing-automation.md",
 ]
 gate_tests = [

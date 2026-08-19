@@ -62,21 +62,25 @@ class TodayPlanScreen extends StatelessWidget {
               stateKey: const Key('today-plan-rest-day'),
               title: l10n.todayPlanRestTitle,
               body: l10n.todayPlanRestBody,
+              statusLabel: l10n.practicePlanStatusRestLabel,
             ),
             TodayPlanMode.unavailableDay => _MessageState(
               stateKey: const Key('today-plan-unavailable-day'),
               title: l10n.todayPlanUnavailableTitle,
               body: l10n.todayPlanUnavailableBody,
+              statusLabel: l10n.practicePlanStatusUnavailableLabel,
             ),
             TodayPlanMode.completedDay => _MessageState(
               stateKey: const Key('today-plan-completed-day'),
               title: l10n.todayPlanCompletedTitle,
               body: l10n.todayPlanCompletedBody,
+              statusLabel: l10n.practicePlanStatusCompletedLabel,
             ),
             TodayPlanMode.notScheduled => _MessageState(
               stateKey: const Key('today-plan-not-scheduled'),
               title: l10n.todayPlanNotScheduledTitle,
               body: l10n.todayPlanNotScheduledBody,
+              statusLabel: l10n.practicePlanStatusNotScheduledLabel,
             ),
             TodayPlanMode.plannedDay => _PlannedDay(
               state: state,
@@ -104,6 +108,20 @@ class _EmptyState extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
+      Semantics(
+        label: l10n.practicePlanStatusNoActiveLabel,
+        container: true,
+        child: Row(
+          key: const Key('today-plan-status-badge'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.info_outline, semanticLabel: 'status'),
+            const SizedBox(width: 6),
+            Text(l10n.practicePlanStatusNoActiveLabel),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
       Text(
         l10n.todayPlanEmptyTitle,
         style: Theme.of(context).textTheme.titleLarge,
@@ -119,16 +137,38 @@ class _MessageState extends StatelessWidget {
     required Key stateKey,
     required this.title,
     required this.body,
+    this.statusLabel,
   }) : super(key: stateKey);
 
   final String title;
   final String body;
+
+  /// An optional, semantics-labelled status badge. The status is never
+  /// communicated by colour alone (A4) — this badge is text + icon so
+  /// screen readers and colour-blind users see the same information.
+  final String? statusLabel;
 
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
+      if (statusLabel != null) ...[
+        Semantics(
+          label: statusLabel,
+          container: true,
+          child: Row(
+            key: const Key('today-plan-status-badge'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.info_outline, semanticLabel: 'status'),
+              const SizedBox(width: 6),
+              Text(statusLabel!),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
       Text(title, style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 8),
       Text(body),
@@ -161,6 +201,20 @@ class _PlannedDay extends StatelessWidget {
       key: const Key('today-plan-scheduled'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Semantics(
+          label: l10n.practicePlanStatusPlannedLabel,
+          container: true,
+          child: Row(
+            key: const Key('today-plan-status-badge'),
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.event_note, semanticLabel: 'status'),
+              const SizedBox(width: 6),
+              Text(l10n.practicePlanStatusPlannedLabel),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         Text(l10n.todayPlanRemaining(_formatDuration(state.remainingTime))),
         const SizedBox(height: 16),
         Text(

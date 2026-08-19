@@ -12510,3 +12510,658 @@ vagy (b) brief-revízió, ami kiviszi az igényt a védett fájlból; vagy (c)
 `hold`.
 
 Rokon: [[L322]], [[ADR 0112]], [[ADR 0309]].
+
+## L324 — Egy emberi döntésre váró kör NE fagyassza be a tőle független 32 kört: a `H-GATEGUARD` hatóköre a KÖR, nem a LÁNC (E99-R17, 2026-08-19, ADR 0321)
+
+**Mérés.** Az `E99-R17` háromszor állt meg ugyanazzal a gyökérokkal (05:31,
+09:56, 10:38 UTC), és a lánc 05:31–10:40 között **nulla kört vitt előre**,
+miközben a sorban 32 olyan nyitott kör állt, aminek semmi köze a gate-hez. Az
+ok a jelzés hatóköre: a `.pipeline/HALTED` GLOBÁLIS
+(`tools/round-pipeline.sh` §2), tehát bármelyik kör haltja az EGÉSZ sort
+megállítja. A `H-GATEGUARD` viszont ([[L322]], [[L323]]) az egyetlen olyan
+halt-osztály, amit ezen a boxon **strukturálisan garantáltan** nem old fel sem
+önjavítás, sem újrapróbálás, sem marker — kizárólag emberi kéz. Vagyis a lánc
+teljes leállását olyan esemény okozta, amiről előre tudható volt, hogy nem
+fog magától elmúlni.
+
+**A második, olcsóbban elkapható réteg.** A halt gyökéroka TERVEZÉSI hiba
+volt: a brief `allowed_paths` listáján védett fájl (`tool/ci/…`) szerepelt.
+Ez a dispatch ELŐTT mérhető — géppel, a védett listát magából az őrből
+importálva (`tools/gateguard-scan.py`, ami a mai soron azonnal 5 ilyen kört
+talált: E99-R17/R20/R21/R22, E08-R29). Az implementer-session elindítása
+ezekre a körökre eleve elpazarolt futás.
+
+**Szabály (ADR 0321).** (1) Kör-session `H-GATEGUARD` haltja → a kör sora
+`hold`, archívum + főkönyv + ntfy, a lánc MEGY TOVÁBB. (2) Az ŐRSZEM haltja
+(`gateguard_origin=selfheal`, a mércét gyengítő commit már a main-en állhat)
+→ továbbra is LÁNC-szintű megállás; a megkülönböztetés gépi mező, nem
+szövegértelmezés. (3) Brief-íráskor a teszt-fa mellett a védett listát is meg
+kell mérni: `tools/gateguard-scan.py --brief <brief>`. Amit ez NEM változtat
+meg: a mérce és az emberi határ — a gate-érintő kör továbbra sem fut le
+emberi döntés nélkül. Csak nem viszi magával a többi 32-t.
+
+Őrteszt: `tools/tests/test_gateguard_autohold.py`.
+
+Rokon: [[L322]], [[L323]], [[ADR 0321]], [[ADR 0112]], [[ADR 0309]].
+
+## L325 — A review-oldali `git clone --branch <kör-branch> /home/ubuntu/music-theory /tmp/review-<kör>` NÉMÁN elavult ágat ad, ha az implementáció EGY MÁSIK klónból (`ss-<motor>-<kör>`) pusholt közvetlenül originre — a helyi branch-ref csak explicit fetch-csel mozdul (E07-R26, 2026-08-19)
+
+**Mérés.** A kör szabvány mintája: a pre-flight commit a megosztott fában
+(`/home/ubuntu/music-theory`) készül, a kör branch-e onnan kerül ki, majd az
+implementáció egy ELKÜLÖNÍTETT klónban (`git clone <fő-repó> /home/ubuntu/ss-
+codex-<kör>`) fut, és az implementer/javító kör onnan pushol közvetlenül
+originre. A `sdd-round-review` skill (és ez a HANDOFF-recept is) a review
+lépését így írja elő: `git clone --branch <kör-branch> /home/ubuntu/
+music-theory /tmp/review-<kör>`. Ez a parancs a `/home/ubuntu/music-theory`
+LOKÁLIS `.git`-jéből klónoz — és a lokális branch-ref ott **nem mozdul el
+magától**, amikor egy MÁSIK klónból (`ss-codex-<kör>`) történik push az
+originre. A push csak `origin/<branch>`-et frissíti a távoli szerveren; a
+`/home/ubuntu/music-theory` SAJÁT, lokális `<branch>` refje a régi commitnál
+ragad, amíg valaki explicit `git fetch origin <branch>:<branch>`-et nem
+futtat benne. Az eredmény: a `/tmp/review-<kör>` klón CSENDBEN a
+pre-flight-commitnál áll meg — nincs hibaüzenet, a `git clone` sikeresen
+lefut, csak a tartalma elavult. Kétszer mérve EBBEN a körben, EGYMÁSTÓL
+FÜGGETLENÜL: (1) a fő reviewer saját `/tmp/review-e07-r26` klónja a
+scope-audit `0 changed path(s)`-t adott (a `base..head` mindkét oldala
+ugyanarra a pre-flight commitra oldódott fel); (2) a párhuzamosan dispatch-elt
+`security-reviewer` subagent UGYANEZT a mintát kapta feladatul, és
+UGYANÍGY nulla diffet talált, mielőtt saját maga rájött a hibára és a
+`ss-codex-<kör>` klónból helyreállt.
+
+**Miért nem vette észre azonnal egyik fél sem.** A `git clone --branch X`
+sikeresen lefut akkor is, ha az `X` branch a forrás repóban régi — a git nem
+tudja (és nem is tudhatja pusztán a lokális állapotból), hogy létezik egy
+frissebb, originre már felkerült verzió. A `tools/scope-audit.py`
+`--base <sha>` paramétere is simán lefut egy `base==head` tartományon, és
+`0 changed path(s), OK`-t ad — ami FORMAILAG helyes válasz egy hibás
+kérdésre, nem hibaüzenet.
+
+**Szabály.** Mielőtt egy review-célú (vagy bármilyen célú) `/tmp`-klónt
+készítesz a MEGOSZTOTT `/home/ubuntu/music-theory`-ból, ha van esély rá, hogy
+a kör branch-e egy MÁSIK klónból mozdult (ez a normál eset minden
+`ss-<motor>-<kör>`-ös dispatch után): **előbb**
+`git -C /home/ubuntu/music-theory fetch origin <branch>:<branch>`, és csak
+utána `git clone --branch <branch> /home/ubuntu/music-theory /tmp/…`. A
+klónozás UTÁN a review ELSŐ lépése legyen egy triviális ellenőrzés:
+`git -C /tmp/review-<kör> log --oneline -1` egyezzen az implementer saját
+munkapéldányának (`ss-<motor>-<kör>`) `HEAD`-jével — ha nem, a klón elavult,
+nem a diff üres. Subagentnek adott review-feladatban ezt a lépést a
+promptba explicit be kell írni, mert a subagent nem ismeri a megosztott fa
+ezen sajátosságát.
+
+Rokon: [[shared-tree-coordination]] (a memóriában — a megosztott fa más
+körvédelmi mintája), [[L175]], [[L179]] (a `git worktree add` vs `git clone`
+hasonló csendes-hiba osztálya, más okból).
+
+## L326 — `codex-round.sh`/`mm-round.sh` NEM push-ol automatikusan: az implementer commitja a review ELŐTT is csak lokális maradhat — az L325 „fetch origin előbb" receptje ide nem elég, mert az originen sincs még ott (E07-R28, 2026-08-19)
+
+**Mit mértünk.** Az implementer (`codex-round.sh`) `status=done`-t jelzett
+`head=a1a6da38`-cal a saját izolált munkapéldányában
+(`/home/ubuntu/ss-codex-e07-r28`), de ez a commit SEM az origin
+`codex/e07-r28-planner-assist-gateway` branch-én, SEM a megosztott
+`/home/ubuntu/music-theory` fa semelyik refjén nem volt jelen — a wrapper
+scriptek egyike sem futtat `git push`-t. Egy `git clone --branch <kör-branch>
+https://github.com/…` (tehát az [[L325]] javasolt, origin-ből klónozó
+receptje is) a `ed197b04` pre-flight commitnál állt meg, nem az implementáció
+fejénél — a régi lecke feltételezi, hogy a push MEGTÖRTÉNT, csak a lokális
+ref nem követte; itt a push MAGA hiányzott. A saját reviewer-klónom ebbe
+futott bele először; a párhuzamosan dispatch-elt `security-reviewer`
+subagent — akinek a promptjában (hibásan) a megosztott fát adtam meg
+klónforrásnak — UGYANEBBE futott, és önállóan, `ss-codex-e07-r28`-ból
+fetchelve állt helyre.
+
+**Miért.** A push az orchesztrátor felelőssége (a wrapper szándékosan csak
+commitol, a branch-tulajdonlás és a publikálás időzítése az övé — pl. hogy egy
+`stopped`/`blocked` jelzésű félkész munka NE kerüljön originre automatikusan).
+Ez a szándékos tervezési döntés viszont azt jelenti, hogy a review (saját
+vagy subagent) ELSŐ lépése — MIELŐTT bármilyen klónozás történne — annak
+ellenőrzése, hogy az implementer jelzett `head`-je tényleg elérhető-e
+originről: `git ls-remote <origin-url> refs/heads/<kör-branch>` és vesd össze
+a `.codex-round-status` `head=`-jével. Ha eltér: `git -C
+<ss-motor-kör-munkapéldány> push origin <kör-branch>` ELŐSZÖR, review-klónozás
+csak utána.
+
+**Hogyan alkalmazd.** (1) Minden `/tmp`-review-klónt az origin URL-ből
+készíts, SOHA a megosztott `/home/ubuntu/music-theory`-ból (ez az [[L325]]
+staleness-osztályát is kizárja, nem csak ezt). (2) Push-ellenőrzés a
+klónozás ELŐTT, a fenti `git ls-remote` paranccsal — ne a klónozás
+sikerességéből következtess (az sosem hibázik régi branch-en). (3)
+Subagentnek adott review-feladat promptjába írd bele explicit a klónozandó
+URL-t (origin, nem a helyi fa) ÉS a várt HEAD SHA-t, hogy a subagent saját
+maga tudja ellenőrizni, nem csak bemondásra higgyen.
+
+Rokon: [[L325]] (ugyanaz a tünetosztály — csendben elavult review-klón —, más
+gyökérok), [[L311]] (a javító kör `done` jelzése utáni hiányzó push, rokon
+mintázat implementer-oldalon).
+
+---
+
+## L327 — Egy pre-flight saját „mi hiányzik" mérése IRÁNYBAN helyes lehet, de a javasolt SZÉLESSÉGBEN felül- vagy alulmérhet — a self-healnek mindkét irányban újra kell mérnie, nem elfogadnia (E07-R29 H3 self-heal, 2026-08-19)
+
+**Mit mértünk.** Az E07-R29 pre-flightja (Terra orchestrátor, `29863cba` a
+sosem push-olt `minimax/e07-r29-…` ágon) helyesen mérte a fő blokkolót: a
+törlés/export acceptance criteria a kizárt `LocalPracticePlanRepository`/
+`GenerationDraftRepository`/`PracticeEvidenceRepository` fájlokban él, az
+accessibility audit pedig a kizárt, már létező planner-képernyőkön — egy
+brand-new fájlokból álló `allowed_paths` egyiket sem éri el. A pre-flight
+saját szövege emellett egy MELLÉKES megfigyelést is rögzített: „a
+`KeyValueStore` kulcs-enumerálást sem ad" — ami olvasható úgy is, mintha a
+megosztott, minden feature-t kiszolgáló storage-interfészt is meg kellene
+nyitni. Az önjavítás ezt a mellékes állítást is lemérte (nem csak a fő
+blokkolót fogadta el bemondásra), és azt találta, hogy HAMIS útra vezetett
+volna: a `LocalPracticePlanRepository` MINDEN saját kulcsát maga generálja
+(statikus builderek: `activePointerKey`, `activePlanRevisionKey`,
+`archiveRevisionsIndexKey`/`archiveRevisionKey`, ugyanígy outcome-ra), és MÁR
+MA is egyenként hívja `keyValueStore.remove(<ismert kulcs>)`-ot a
+bounded-history evikció során (`appendRevision`/`appendOutcome`) — egy
+teljes, egy-terv-re-szóló törlés tehát ugyanezzel a mintával megírható
+KIZÁRÓLAG ebben az egy fájlban, a megosztott interfész módosítása NÉLKÜL.
+
+**Miért.** [[L319]] (E07-R25 H3) már dokumentálta, hogy egy pre-flight/ADR
+saját „mit engedélyezzen a következő brief" ajánlása HIÁNYOS maradhat — a
+vizsgálati út nem ért el minden helyre, ahol egy bővítés töri a fordítást.
+Ez a mérés a FORDÍTOTT irányt mutatja: a pre-flight saját ajánlása néhol
+SZÉLESEBB is lehet a ténylegesen szükségesnél, mert egy futólagos
+megfigyelést („X interfész nem ad Y-t") könnyű defenzíven „tehát X-et is
+nyisd meg"-ként olvasni, ahelyett hogy megmérnénk: a hívó tud-e Y nélkül is
+célt érni egy már meglévő, szűkebb mintával. Mindkét irány ugyanabból a
+gyökérokból fakad — egy korábbi mérés (akár a jelen self-heal saját
+elődje) nem bizonyíték bemondásra, [[subagent-results-are-data]] rokona —,
+de az egyik a hatókört SZŰKÍTI (kevesebb megosztott, más feature-öket is
+érintő fájl nyílik meg), a másik TÁGÍTJA (egy valós, de nem névre szólóan
+megnevezett fájl is bekerül). Egy self-heal, amely csak az egyik irányban
+ellenőriz, felényi biztonságot ad.
+
+Egy MÁSODIK, önálló mérés is ebből a körből: amikor egy scope-bővítés MÁR
+LÉTEZŐ (nem vadonatúj) fájlokat nyit meg írásra, ezek saját, már létező
+tesztjei is felkerültek `gate_tests`-be, nem csak `allowed_paths`-ba — a
+korábbi H3-precedensek (L11, L25 típusú widening-ek) mind ÚJ tesztfájlt
+adtak `gate_tests`-hez, mert a bővítés maga is új fájlokat vezetett be. Ha a
+bővítés meglévő, MA már zöld tesztekkel védett fájlokat nyit meg, és ezeket
+a teszteket NEM veszed fel a kör saját gate-jébe, a kör helyi
+`tools/round-gate.sh` futása vakon marad a saját maga okozta regresszióra —
+csak a végső, körön TÚLI CI teljes suite fogná meg, sokkal később.
+
+**Hogyan alkalmazd.** (1) Egy pre-flight vagy korábbi self-heal saját „mit
+kell megnyitni" ajánlását két irányban mérd újra, ne csak fogadd el: hiányzik-e
+belőle egy fájl (L319), ÉS tartalmaz-e olyat, ami egy szűkebb, már létező
+mintával (a célfájl saját maga is tudja generálni/eltávolítani az általa
+birtokolt kulcsokat/erőforrásokat) kiváltható. A második kérdés
+megválaszolásához OLVASD EL a hivatkozott interfész tényleges hívóit — ne a
+hiány TÉNYÉBŐL következtess a bővítés SZÜKSÉGESSÉGÉRE. (2) Amikor egy
+brief-widening MEGLÉVŐ fájlokat nyit meg (nem csak vadonatúj, a kör által
+frissen létrehozandókat), vedd fel azok saját, már létező tesztjeit is
+`gate_tests`-be — a kör saját gate-je így a bővített területen is védett,
+nem csak a végső CI. Rokon: [[L319]] (ugyanaz a „mérd újra, ne fogadd el"
+elv, ellentétes irányban), [[L261]] (saját tiltott zóna és kötelező működés
+ütközésekor a feloldásnak bound-nak kell lennie, nem csendes tágításnak —
+ez a mérés pontosan ezt hajtotta végre: a bound szűkebb lett, mint a
+kiinduló javaslat).
+
+## L328 — Egy SIKERES, terminális alparancs-eredmény (a kör-gate zöld összegzése) épp úgy H-NOSIGNAL-lal végződhet, mint egy csonka poll — az L290 csak az utóbbira védett (E07-R29, H-NOSIGNAL önjavítás, 2026-08-19)
+
+**Mit mértünk.** Az E07-R29 Terra-orchesztrátor session
+(`01a01ab2-9b80-7780-84f7-f21daf3759af`,
+`~/.codex-terra/sessions/2026/08/19/rollout-2026-08-19T15-45-07-*.jsonl`)
+~72 percig helyesen vezényelte a kört: implementer-dispatch, review, javítás,
+majd egy Codex/Terra escalation-javítás az utolsó nyitott leletre. Ezután egy
+végső, független újra-ellenőrzést futtatott friss klónban —
+`tools/round-gate.sh` mind a 14 lépésre —, ami 16:56:47Z-kor VALÓDI,
+terminális, SIKERES eredménnyel zárt (`exit_code 0`, a gate saját „MINDEN
+GATE ZÖLD" összegzése). Ez nem az L282/L290 mintája: nem yield, nem csonka
+poll, a parancs ténylegesen befejeződött. A turn mégis mindössze hat
+másodperccel később, 16:56:53Z-kor véget ért egyetlen szöveges összegzéssel:
+„A kör még folyamatban van: a végső, független kör-gate 14/14 zöld, de a
+kötelező CI-dispatch, exact-SHA ellenőrzés és merge még hátravan." — sem
+újabb tool-hívás, sem `outcome=halted` jelzés nem követte. A driver ezt az
+ELAKADÁS-GYORSÍTÓval (L278/E99-R13) 20 másodpercen belül helyesen
+H-NOSIGNAL-ként ismerte fel (`.pipeline/chain.log`, 16:57:12).
+
+**Gyökérok.** [[L290]] (E07-R09) már megtiltotta, hogy a turn csak-szöveges
+státuszmondattal érjen véget, amíg egy elindított várakozó session/cella NEM
+adott terminális eredményt — de ez a szabály kifejezetten a NEM-terminális
+poll esetére szól. Itt a megelőző hívás (a gate) terminális ÉS sikeres volt;
+a modell PONTOSAN idézte is a valódi eredményt („14/14 zöld"), majd azt a
+hibát követte el, hogy egy ALPARANCS sikeres lezárását a KÖR saját
+lezárásával azonosította. Az L290 szövege ezt a hibaosztályt nem nevezte
+meg — ugyanaz a család (turn vége jelzésfájl nélkül), de más trigger
+(sikeres rész-eredmény, nem csonka poll), pontosan az [[L291]]-ben már
+leírt minta szerint: egy MÁSODSZOR, szomszédos alakban jelentkező
+hibaosztály a meglévő védelem SZŰK ÉRTELMEZÉSÉT kéri számon, nem egy
+teljesen új szabályt.
+
+**Javítás.** Új szabály-bullet a
+`docs/execution/pipeline-codex-orchestrator-preamble.md` §2-ben, közvetlenül
+az L290-bullet után, névvel idézve a mért sessiont és a szó szerinti
+státuszmondatot: „egy alparancs sikeres lezárása attól még nem azonos a kör
+lezárásával" — ha a §3 szerinti bármelyik lépés (push, CI-dispatch,
+exact-SHA ellenőrzés, merge, kör-jelzés) hátravan, a válasz KÖVETKEZŐ eleme
+kötelezően újabb tool-hívás, nem összegző mondat. Regressziós teszt
+(`tools/tests/test_pipeline_codex_orchestrator_preamble.py`, új
+`CodexOrchestratorPreambleNoStopAfterSuccessfulSubtaskTest` osztály, 3 eset:
+a tiltó mondat szó szerint jelen van, az E07-R29 session-id idézve, a mért
+státuszmondat szó szerint idézve) — mindhárom PIROS volt a javítás előtt,
+ZÖLD utána. Teljes `tools/tests`: **574 passed, 567 subtests passed, 0
+hiba** (571→574, a három új esettel; a 7 meglévő preambulum-teszt is zölden
+maradt — nincs regresszió). Router CLI smoke (`model-router.py --help`) és
+`tools/brief-lint.py --open --level base` lokálisan is zöld, pontosan
+Router CI lépéseivel egyezően. Exact SHA `3ca6d07d`: Router CI
+([32280795044](https://github.com/wolfcasaba/strumsight/actions/runs/32280795044))
+`conclusion=success`, a run `headSha`-ja és a PR `headRefOid`-ja mind
+egyezett a lokális HEAD-del a merge előtt. PR
+[#331](https://github.com/wolfcasaba/strumsight/pull/331), squash
+`90cf0628`. Nincs Dart-változás, ezért `build-apk.yml` nem releváns — a
+Router CI volt az egyetlen szükséges kapu.
+
+**Hogyan alkalmazd.** Amikor egy H-NOSIGNAL gyökérokát a Codex/Terra
+rollout-JSONL-ből mérve az UTOLSÓ `agent_message`/`task_complete` eseményt
+vizsgálod, ne csak azt kérdezd, terminális volt-e a MEGELŐZŐ tool-eredmény
+(ez az L290 kérdése) — azt is kérdezd, hogy a KÖR saját §3-checklistje kész
+van-e. Egy zöld rész-eredmény (gate, teszt, build, review) sosem
+helyettesíti a kör-jelzést, még akkor sem, ha a modell a rész-eredményt
+hűen, hazugság nélkül idézte. Ez a család (a preambulum §2 „ne állj meg
+szöveggel" szabályai) jellemzően SZOMSZÉDOS, nem teljesen új triggerekben
+tér vissza — [[L282]] (újraindítás yield után), [[L290]] (csonka poll után),
+most (sikeres alparancs után) — úgyhogy egy jövőbeli negyedik előfordulásnál
+először azt mérd meg, hogy a meglévő három bullet valamelyikének SZŰK
+megfogalmazása enged-e rést, mielőtt ötödik, még szélesebb szabályt írnál.
+Rokon: [[L289]] (ugyanennek a self-heal-sorozatnak a testvérlelete, szintén
+PR #280-ban), [[L291]] (a „második előfordulás tágabb lefedést kér, nem új
+mintát" meta-elv, aminek ez a lecke maga is konkrét példája).
+
+## L329 — `--branch`-es `git clone` single-branch refspecet ad; a §0.3 kötelező `origin/main` ancestor-mérés ebben a munkapéldányban CSENDESEN hamis pozitívot ad, ha csak `git fetch origin main`-t hívsz (E07-R29, orchesztrátor-session, 2026-08-19)
+
+**Mit mértünk.** A H-NOSIGNAL-önjavítás (PR #331) után a friss E07-R29
+orchesztrátor-session a §0.2 örökség-ellenőrzéssel megtalálta a korábbi
+`/home/ubuntu/ss-codex-e07-r29-fix` munkapéldányt (a Codex-eszkaláció F3
+javítását tartalmazó, push-olt branch). A §0.3 kötelező lépése szerint
+lefuttattam benne: `git fetch origin main` majd `git merge-base --is-ancestor
+origin/main HEAD` — ez **sikeresen (exit 0) „CONTAINS MAIN: YES"-t adott**,
+holott a branch két, a `main`-en már megvolt commitot (`90cf0628`, `7bc588c9`
+— maga a H-NOSIGNAL-heal doksija) valójában NEM tartalmazott. Közvetlen
+ellenőrzéssel (`git log --oneline 8212b0cb | grep 7bc588c9` → 0 találat;
+`git merge-base 7bc588c9 8212b0cb` → egy KORÁBBI közös ős, nem az egyik a
+másik leszármazottja) igazolva: az `is-ancestor` check HAMIS POZITÍVOT adott.
+
+**Gyökérok.** `git rev-parse origin/main` ugyanabban a munkapéldányban egy
+RÉGI SHA-t adott vissza (a klónozás-kori `main` fejét), a `git config
+--get-all remote.origin.fetch` pedig felfedte, hogy a repó fetch-refspecje
+KIZÁRÓLAG a kör saját branch-ét (`+refs/heads/minimax/e07-r29-…:refs/remotes/
+origin/minimax/e07-r29-…`) tartalmazza — **nincs benne sem wildcard
+(`refs/heads/*`), sem `main`**. Ez a SKILL.md §3 előírt klónozási módja
+(`git clone --branch <round-branch> <hub> <cél>`) git-alapértelmezett
+mellékhatása: a `--branch` kapcsoló a modern gitben implicit
+`--single-branch`-et von maga után, ha nem adsz explicit
+`--no-single-branch`-et. Emiatt `git fetch origin main` (refspec nélkül) a
+tartalmat leszedi `FETCH_HEAD`-be, de a `refs/remotes/origin/main` lokális
+követő-ágat **nem** frissíti — a fetch „sikeres", a hívó mégis egy elavult
+referenciát mér, csendben. Ez ROKON, de ELTÉRŐ gyökérokú, mint [[L325]]
+(E07-R26: ugyanez a tünet, de ott az ok a MEGOSZTOTT fő fa lokális
+branch-refjének nem-mozgása volt, nem egy szándékosan szűkített
+klón-refspec) — a `git fetch origin <branch>` „előbb fetchelj" receptje
+ÖNMAGÁBAN itt NEM elég, mert maga a fetch-cél hiányzik a repó
+refspec-konfigjából.
+
+**Kockázat, ha változatlan marad.** A §0.3 lépést épp [[L298]] (E07-R15/H7,
+2026-08-16: „egy merge-elt self-heal szerződését a folytatott kör-branchnek a
+review és a javító gate előtt be kell építenie") mérte szükségesnek: egy régi
+branch-en végzett review/gate/javítás megismételheti a main-en már javított
+hibát. Ha az ancestor-check maga hamis pozitívot ad egy
+ilyen szűk-refspecű munkapéldányban, a §0.3 CSENDESEN nem védi ki pontosan
+azt a hibaosztályt, amire tervezték — az orchesztrátor jóhiszeműen „szinkron"
+állapotot jelentene egy valójában elavult branchen.
+
+**Javítás/recept.** Az `ss-<motor>-<kör>` munkapéldányokban `origin/main`
+ancestor-mérés ELŐTT MINDIG explicit cél-refspeccel fetchelj, ne csupasz
+branch-névvel:
+
+```bash
+git fetch origin +refs/heads/main:refs/remotes/origin/main
+git rev-parse origin/main   # ellenőrizd, hogy MOZDULT-e a klónozás-kori SHA-hoz képest
+git merge-base --is-ancestor origin/main HEAD
+```
+
+(Ekvivalens alternatíva: `git remote set-branches --add origin main` egyszer,
+utána a csupasz `git fetch origin main` is frissíti a követő-ágat.) A csupasz
+`git fetch origin main` hívás önmagában NEM bizonyíték — csak azt igazolja,
+hogy a hálózat elérte a `main`-t, nem azt, hogy a LOKÁLIS `origin/main` ref
+mozdult.
+
+**Hogyan alkalmazd.** Minden jövőbeli §0.3 (vagy bármilyen `origin/main`
+ancestor-alapú) ellenőrzés előtt, ha a munkapéldány `codex-round.sh`/
+`mm-round.sh` által használt `ss-<motor>-<kör>` klón (nem a megosztott
+`/home/ubuntu/music-theory` fa): fuss le a fenti explicit-refspec receptet, és
+`git rev-parse origin/main` eredményét vesd össze a GitHub-on ismert legfrissebb
+`main` SHA-val, mielőtt az `is-ancestor` kimenetét bizonyítékként elfogadnád.
+
+## L330 — Egy brief ÉS a hivatkozott SDD-fejezet EGYIDEJŰLEG téveszthet ugyanabban az irányban: a property-teszt könyvtár csak a tényleges CI composite action hardcode-olt argumentumával mérhető, nem a doksi-szöveggel (E07-R30, pre-flight, 2026-08-19)
+
+**Mit mértünk.** Az E07-R30 brief (és a hivatkozott SDD-fejezet,
+`docs/sdd/08-epic-07-ai-practice-generator.md:4330`, szó szerint UGYANAZT
+írta) a két új property tesztnek a `test/features/practice_generator/
+property/` útvonalat írta elő. A pre-flight (§1 kötelező mérési szabálya:
+"grep-eld ki a kódból") megnézte a tényleges CI-t:
+`.github/actions/flutter-gates/action.yml:47` a "Property gate (randomized
+seed)" lépést szó szerint `flutter test test/property`-vel indítja,
+`PROPERTY_SEED: ${{ github.run_id }}` env-vel — ez az EGYETLEN hely, ahol a
+CI a HORIZON anti-reward-hacking randomizált seedet adja (a megelőző "Test
+gate" lépés, `flutter test` a teljes fán, PROPERTY_SEED nélkül fut, tehát
+mindig a 42 default-ra esne vissza). A brief eredeti útvonala NINCS a
+`test/property` alatt — a hardcode-olt CI-argumentum egy KÖNYVTÁRRA, nem
+mintára illeszkedik, tehát bármely azon kívüli fájl STRUKTURÁLISAN
+láthatatlan a randomizált-seedes lépésnek, függetlenül attól, hogy a fájlnév
+`*_property_test.dart`-ra végződik-e.
+
+**Gyökérok.** A brief és az SDD-fejezet ugyanabból az elavult feltevésből
+íródott (egy korábbi, feature-scope-olt property-könyvtár konvenciót
+feltételeztek), és mivel MINDKETTŐ dokumentum ugyanazt állította, egy
+kereszt-dokumentum-egyeztetés (brief vs. SDD-fejezet) ezt a hibát NEM fogta
+volna meg — csak a tényleges, futtatható CI-konfiguráció ellenőrzése. Ez az
+[ADR 0312 §1] "elérhetetlen cél-státusz" hibaosztály egy alfaja: itt a "cél"
+nem egy enum-érték volt, hanem "a teszt fusson a randomizált CI-seeddel", és
+az ezt előállító INPUT egy hardcode-olt shell-argumentum egy composite
+action-ben, nem a fájl neve vagy tartalma.
+
+**Kockázat, ha változatlan marad.** A property teszt zöld lett volna
+LOKÁLISAN és a sima CI "Test gate" lépésben is (mindig 42 seeddel) — a hiba
+csak SOHA nem derült volna ki, mert nincs olyan futtatható jel, ami pirosra
+váltana. Ez pontosan a fajta "csendes reward-hacking" eset, amit a HORIZON
+randomizált property-gate konvenció (CLAUDE.md) kizárni hivatott.
+
+**Javítás/recept.** Ha egy brief ÚJ property (vagy bármilyen, dedikált
+CI-lépéssel kapuzott) teszt-fájlt vezet be, a pre-flight ne a brief vagy az
+SDD-fejezet szövegét fogadja el forrásnak a KÖNYVTÁRRA — grep-elje ki a
+tényleges dedikált CI-lépés parancsát (`.github/actions/**/action.yml`,
+`.github/workflows/*.yml`) és keressen egy MEGLÉVŐ, azonos kategóriájú
+tesztet a fájlrendszeren (itt: `test/property/planner_repair_property_test.dart`
+már létezett a HELYES könyvtárban) — a meglévő, már CI-vel bizonyítottan
+működő testvér-fájl a legmegbízhatóbb referencia, nem a brief szövege.
+
+**Hogyan alkalmazd.** Minden jövőbeli kör pre-flightjában, ha a brief ÚJ
+property/golden/coverage/lint stb. tesztet vezet be egy DEDIKÁLT CI-lépéssel
+(nem csak az általános `flutter test`): (1) grep-eld ki a lépés PONTOS
+parancsát a composite action/workflow fájlból; (2) ha az egy KÖNYVTÁRRA
+argumentál (nem mintára), a könyvtárnak PONTOSAN egyeznie kell; (3) keress
+egy meglévő testvér-fájlt ugyanabban a kategóriában, és kövesd annak
+útvonalát, ne a brief szövegét.
+
+## L331 — A `sdd-round-review` skill saját `git clone --branch <kör-branch> /home/ubuntu/music-theory /tmp/review-<kör>` receptje NÉMÁN elhasal, ha a kör-branch egy IZOLÁLT implementer-klónból pusholt közvetlenül originre, és a megosztott fa sosem fetchelte (E07-R30, review, 2026-08-19)
+
+**Mit mértünk.** A review-lépésben a skill saját, szó szerinti parancsát
+futtattam: `git clone --branch codex/e07-r30-evaluation-and-epic-closure
+/home/ubuntu/music-theory /tmp/review-e07-r30`. Azonnal elhasalt:
+`fatal: Remote branch codex/e07-r30-evaluation-and-epic-closure not found in
+upstream origin`. A branch VALÓJÁBAN létezett originen (én magam pusholtam
+percekkel korábban az `ss-codex-e07-r30` izolált munkapéldányból közvetlenül
+GitHub-ra) — de a `git clone <lokális-útvonal>` a FORRÁS repó SAJÁT, lokálisan
+ismert refjeiből dolgozik, és a megosztott `/home/ubuntu/music-theory` fa
+sosem futtatott `git fetch`-et erre az ágra (az implementáció és a review
+között NEM volt a megosztott fán végzett `git fetch origin <branch>`).
+
+**Gyökérok.** Ez [[L325]]/[[L326]] ROKON, de egy HARMADIK, elkülönült
+trigger-pontja: L325 azt mérte, hogy a megosztott fa lokális branch-refje
+csendben elavul; L326 azt, hogy az implementer-wrapper nem push-ol
+automatikusan. Itt mindkettő elő volt készítve helyesen (a push megtörtént),
+mégis elhasalt — mert a review-skill SAJÁT dokumentált parancsa a
+MEGOSZTOTT LOKÁLIS fát adja klón-forrásnak, ami strukturálisan soha nem
+frissül automatikusan idegen branch-ekre, függetlenül attól, hogy az origin
+maga naprakész-e.
+
+**Javítás/recept.** A review-klónozáshoz a GITHUB REMOTE URL-t használd
+klón-forrásnak, ne a megosztott lokális fát — ez teljesen kizárja ezt a
+hibaosztályt, mert nem függ a megosztott fa saját fetch-állapotától:
+
+```bash
+git clone --branch <kör-branch> https://github.com/wolfcasaba/strumsight.git /tmp/review-<kör>
+```
+
+Alternatíva (ha muszáj a lokális fából klónozni): előbb
+`git -C /home/ubuntu/music-theory fetch origin <kör-branch>`, utána a
+klónozás — de ez egy plusz lépés, amit a GitHub URL-es forma feleslegessé
+tesz.
+
+**Hogyan alkalmazd.** A `sdd-round-review` skill 2. lépésének parancsmintáját
+(jelenleg `git clone --branch <kör-branch> /home/ubuntu/music-theory
+/tmp/review-<kör>`) a jövőben a GitHub remote URL-es alakra érdemes cserélni
+— amíg ez nem történik meg, minden review-session tudja, hogy a dokumentált
+parancs ezen a hibaosztályon elhasalhat, és a fenti GitHub-URL-es alakot
+használja helyette elsőként, nem csak hibaelhárításként.
+
+## L332 — A wrapper gate-shape ellenőrzése a modellnapló szövegét is mérheti, ezért a `VIOLATION` önmagában nem bizonyít egy hibásan futtatott gate-et (E08-R01, 2026-08-19)
+
+**Mit mértünk.** Az E08-R01 implementer `.codex-round-status` fájlja
+`gate_shape=VIOLATION` értéket kapott, miközben a konkrét gate-hívás a
+`tools/round-gate.sh ...` forma volt, csővezeték és `&&` nélkül. A
+`tools/mm-round.sh:375–379` a teljes modellnaplóban regexszel keresi a
+`round-gate.sh` és `pipe/tail/head/&&` együttes előfordulását; a naplóban a
+modell saját leírása „no pipe/tail/&&” szöveget tartalmazott. A reviewer
+friss, izolált gate-je ezért az egyetlen valós futtatási bizonyíték: 9/9 zöld.
+
+**Miért.** A log-szintű minta nem tudja megkülönböztetni a tiltott parancsot a
+tiltás idézésétől, így false positive-ot adhat.
+
+**Hogyan alkalmazd.** `gate_shape=VIOLATION` esetén a merge előtt nézd meg a
+tényleges napló-hívást és futtasd újra a gate-et izolált reviewer-klónban. A
+valódi csonkoló/láncoló hívás továbbra is blokkoló; pusztán a tiltás szöveges
+említése nem az.
+
+## L333 — Egy brief-be előre írt ADR-szám a brief-írás és a kör-indítás között elavulhat, akkor is, ha nincs párhuzamos verseny (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 briefje (írva 2026-08-18) `ADR 0300`-at „a szám
+FOGLALT" állítással jelölte előre kiosztottnak. A pre-flightban
+`tools/round-slots.py reserve-adr --round E08-R02` lefuttatása ELŐTT mérve:
+`.pipeline/inflight/adr/0300` már létezett, `round=E07-R15` tartalommal
+(foglalva 2026-08-16, tehát a brief ÍRÁSA előtt), és a `docs/adr/`
+könyvtárban NINCS `0300-*.md` — a számot egy korábbi kör foglalta, sosem
+fogyasztotta el. A `reserve_adr()` csak `max(used)+1`-et ad ki, egy
+alacsonyabb, korábban foglalt számot sosem told fel újra
+(`tools/round-slots.py:201-229`) — a tényleges friss szám `0329` lett.
+
+**Miért.** Ez NEM a mért 0139-duplikátum-hibaosztály (két PÁRHUZAMOS munka
+ugyanazt a számot foglalja le egyszerre) — itt egyetlen, szekvenciális
+foglalás-sorozat volt, csak a brief egy KORÁBBI, más körnek szánt (és soha
+fel nem használt) foglalást idézett, mintha az neki szólna. A
+brief-írás és a kör tényleges indítása között eltelt idő (itt egy nap) alatt
+a foglalási ns namespace tovább haladt.
+
+**Hogyan alkalmazd.** A §1.0.1 szabály („ADR-számot a foglalótól kérj, ne
+`ls`-sel") ETTŐL a hibaosztálytól is véd, ha KÖVETIK: sosem szabad egy brief
+„a szám FOGLALT" állítását bemondásra elfogadni, akkor sem, ha nincs
+látható párhuzamos munka — a `reserve-adr` hívás minden pre-flightban
+kötelező, függetlenül attól, hogy a brief mennyire magabiztosan idéz egy
+számot.
+
+## L334 — A legacy (nem-`auto`) Codex-motor commitol, de nem feltétlenül pushol — az orchesztrátornak a `done` jelzés után ellenőriznie/pusholnia kell, mielőtt review-t indít (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 implementer (`codex` motor, `tools/codex-round.sh`)
+`.codex-round-status`-a `status=done`, `head=95ddec13`-at jelzett. A review
+ELSŐ lépéseként friss klónozás az origin branch-ről ekkor `af86bc59`-at (a
+Claude pre-flight commitját) adta vissza — az implementer commitja
+LOKÁLISAN megvolt a munkapéldányban, de sosem lett pusholva. Az
+orchesztrátornak kellett kézzel pusholnia (`git push origin
+codex/e08-r02-canonical-activity-events:codex/e08-r02-canonical-activity-events`,
+tiszta fast-forward), mielőtt bármilyen review érvényes lehetett volna.
+
+**Miért.** AGENTS.md §15.2 a Codex-szerepet commit-kötelezettséggel írja le,
+de explicit push-kötelezettséget NEM mond ki. A `tools/codex-round.sh` saját
+`fix-workspace-origin.sh` lépése ezt implicit FELTÉTELEZI („hogy egy
+implementer-push ne utasuljon el"), de nem KÉNYSZERÍTI ki és nem is
+ellenőrzi utólag, hogy a push valóban megtörtént-e. Az `auto` router-motorra
+ezzel szemben AGENTS §15.6 pont 7 explicit kimondja: „a modellek nem
+commitolnak" — a legacy Codex-útvonalra nincs ilyen szimmetrikus, explicit
+push-szabály.
+
+**Hogyan alkalmazd.** A `done` jelzés feldolgozásakor a `head=` mezőt ne csak
+a `.codex-round-status`-ból olvasd ki, hanem MÉRD MEG: `git ls-remote origin
+refs/heads/<kör-branch>` (vagy egy friss klón) egyezzen a jelzett
+`head`-del. Ha nem egyezik, pushold a munkapéldányból ELŐSZÖR, és csak
+UTÁNA indíts review-t vagy klónozz review-célra — lásd L335, ami pontosan
+ennek elmulasztásából eredő másodlagos hibát írja le.
+
+## L335 — A `risk=high` security review dispatch-elése az implementer push-jának megerősítése ELŐTT hamis BLOCKER-t termel egy elavult snapshot miatt (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 orchesztrátora a `security-reviewer` agentet
+(`isolation: "worktree"`) PÁRHUZAMOSAN indította a saját izolált `/tmp`
+klónjának létrehozásával — abban a pillanatban, amikor az implementer
+commitja (lásd L334) MÉG NEM volt pusholva. A security agent worktree-je a
+megosztott hub-ból ágazott, aminek a `codex/e08-r02-...` branch-referenciája
+ekkor `af86bc59`-ra mutatott (a valós push csak percekkel később történt meg
+— részben azért is, mert a lokális hub SAJÁT branch-mutatója egy `fetch` UTÁN
+sem frissül automatikusan, csak a remote-tracking ág, lásd [[L331]]). A
+security agent ezt a valós, de MÁR ELAVULT állapotot mérte, és korrekt
+módszertannal, de téves alapon **BLOCKER**-t jelentett: „az implementáció
+nincs az ágon". Az újrafuttatás — MOST MÁR a push után, a GitHub origin-ról
+frissen klónozva — **PASS** verdiktet adott.
+
+**Miért.** A worktree-izolációt (vagy a megosztott hub-ból való klónozást)
+igénylő agentek a DISPATCH pillanatában látják a branch állapotát, nem a
+dispatch-et KÉRŐ szándékot. Ha az orchesztrátor a review-t azonnal, az
+implementer `done` jelzése UTÁN, de a push MEGERŐSÍTÉSE (L334) ELŐTT
+indítja, egy időzítési rés nyílik, amiben a review tárgya még nem létezik a
+review által elért forrásból.
+
+**Hogyan alkalmazd.** A `risk=high` security review dispatch-elése ELŐTT
+mérd meg (ne csak feltételezd), hogy a kör-branch a jelzett `head`-en áll az
+origin-on (L334 lépése után). Ha a review mégis „hiányzó kód" BLOCKER-t ad,
+az ELSŐ diagnózis ne a kód valódi hiánya legyen, hanem a review saját
+forrás-frissessége — verifikáld a review saját `git log`/`rev-parse`
+kimenetét, mielőtt bármit elfogadsz vagy elutasítasz alapján.
+
+## L336 — A CI-dispatch UTÁNI, csak `docs/reviews/**`-et érintő review-commit nem vált ki friss Router CI-futást — a merge-előtti exact-SHA ellenőrzés ezt a drift-et is kifoghatja (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02-ben a `full-gate.yml` dispatch és a Router CI
+mindkettő zöld volt egy korábbi SHA-n (`3b63029d`), de az orchesztrátor UTÁNA
+még egy `docs/rounds/e08-r02-...md` §11-et kitöltő commitot tett a branch-re
+(`4b46ef44`) — ez `docs/rounds/**`-et érint, tehát Router CI-t triggerel, DE
+ha a köztes commit KIZÁRÓLAG `docs/reviews/**`-et érintette volna (ahogy az
+egyik közbülső commit ténylegesen tette), a Router CI `on.push.paths`
+szűrője azt a push-ot át sem eresztette volna — a Router CI utolsó ismert
+futása egy KORÁBBI SHA-n maradt volna rögzítve, miközben a tényleges merge
+SHA már túllépett rajta.
+
+**Miért.** A Router CI `on.push.paths`-alapú trigger csak az ADOTT push
+által érintett fájlokat nézi, nem a branch teljes, KUMULATÍV állapotát —
+egy több-commitos záró sorozat (correctness review → security review → brief
+§11) minden egyes push-a KÜLÖN kerül kiértékelésre a trigger-szűrőn.
+
+**Hogyan alkalmazd.** Merge előtt MINDIG a TÉNYLEGES végső HEAD SHA-n nézd
+meg mind a `full-gate`/`build-apk`, mind a Router CI futását (§3.0), ne egy
+korábbi, „elég közeli" SHA-n mért zöld eredményre hagyatkozz. Ha a záró
+review-dokumentumok elhelyezése miatt a HEAD a CI-dispatch óta mozdult,
+dispatch-eld újra a natív gate-et is, és ha az utolsó Router-CI-releváns
+útvonal (`docs/rounds/**` stb.) nem a tényleges végső commitban változott,
+tudatosan hozz létre egy olyan záró commitot (pl. a brief §11 kitöltése),
+ami ezt kiváltja — ez egyúttal más kötelező tartalmat (a review-linkek
+brief-be írása) is szolgál, nem tiszta ceremónia.
+
+## L337 — Egy H3 halt, ahol a listán kívüli fájl igazoltan ártalmatlan implementer-debris (nulla hivatkozás, redundáns egy már izolált automatizált fixture-rel), a `pipeline-orchestrator-prompt.md` saját szabálya szerint REVERT-tel oldható, `allowed_paths`-bővítés nélkül (E99-R18, H3 self-heal, ADR 0112, 2026-08-19)
+
+**Mit mértünk.** A MiniMax implementer (`/home/ubuntu/ss-minimax-e99-r18`)
+három nyomkövetetlen fájlt hagyott a brief `allowed_paths`-án kívül
+(`test_project/lib/features/demo/{public.dart,public/application.dart,
+public/domain.dart}`). A Terra orchesztrátor-session ezt H3-mal állította le,
+holott `docs/execution/pipeline-orchestrator-prompt.md` VIOLATION-sora már
+eleve két utat ismer: „a listán kívüli fájlokat **vissza kell állítani**,
+vagy H3 halt" — és a §2 „Önállóan dönthetsz" felsorolása kifejezetten
+megnevezi „az engedélyezett-fájllista **szűkítését**" mint a kör saját
+hatáskörét. Méréssel igazolható volt, hogy a három fájl NEM legitim munka:
+`grep -rn "test_project"` nulla találatot adott bármely tracked/untracked
+forrásban, a tartalom bájtra megegyezett a `gen_public_barrel_test.dart`
+saját, már `Directory.systemTemp`-be izolált fixture-jével, és egyik nem
+fedett le semmilyen D-feladatot vagy „Tilos zóna" cellát.
+
+**Miért.** A H3 halt-kód a „tilos zóna feloldása" (ÚJ engedély) eszkalációját
+védi, nem minden listán-kívüli-fájl esetet — egy revert (a diffet az EREDETI
+allowlisthez igazítani) a §2 alatt már felhatalmazott, nem eszkalációt
+igénylő döntés. A rotáción lévő motor (Terra) ezt nem gyakorolta — ez a
+self-heal a mérés alapján kizárólag azt a döntést hozta meg, amit a saját
+protokoll már engedélyezett.
+
+**Hogyan alkalmazd.** Egy H3 halt-nál MINDIG mérd meg, melyik eset áll fenn,
+mielőtt brief-bővítéshez nyúlnál: (a) a fájl nulla hivatkozással szerepel
+bármely tracked/untracked forrásban, (b) funkcionálisan redundáns egy már
+létező, helyesen izolált automatizált fixture-rel, (c) egyetlen deliverable-t
+vagy acceptance-cellát sem fed le a brief D-feladatai vagy „Tilos zóna"
+szakasza szerint. Mindhárom együtt → REVERT dokumentált §0.0 revízióval,
+`allowed_paths` érintetlenül. Ha akár egy is hiányzik — vagyis nem
+egyértelmű, hogy a fájl elhagyható-e —, marad a H3/`escalate`, NEM
+automatikus revert. Ez a `test_e07_r29_accessibility_privacy_scope.py`
+precedens (allowed_paths-bővítés) TÜKÖRKÉPE — melyiket kell alkalmazni, azt a
+fenti mérés dönti el, sosem az, hogy melyik a kényelmesebb. Regressziós teszt:
+`tools/tests/test_e99_r18_scope_debris_revert.py`.
+
+## L338 — Egy self-heal session ELŐRE kiszámított LESSONS.md sorszáma (pl. „L333") ütközhet egy PÁRHUZAMOSAN záruló, független kör saját záró-dokumentáció commitjával — a sorszámot közvetlenül a záró commit ELŐTT, `git fetch`+`ff` UTÁN kell újra leolvasni (E99-R18 H3 self-heal, 2026-08-19)
+
+**Mit mértünk.** A kör-brief és az ADR 0112 §0.0/Módosítás szövegébe a
+`[[L333]]` hivatkozást írtam a self-heal PR (#337) elkészítésekor. A PR
+merge-elése ALATT egy másik, PÁRHUZAMOS session (E08-R02 záró
+`docs(handoff+lessons+rtm)` commitja, `6db8abcc`) a `main`-en L333–L336-ot már
+elfoglalta — a heal PR-em CI-je és scope-auditja ezt nem vehette észre, mert
+a `[[L333]]` egy sima szöveges hivatkozás, nem egy géppel ellenőrzött
+egyediség-korlát. A merge UTÁNI `git fetch`+`grep "^## L3"` mutatta meg, hogy
+a valódi következő szabad szám L337, nem L333 — a már merge-elt
+`[[L333]]`-hivatkozások (ADR 0112, a brief) egy MÁSIK, témában teljesen
+független leckére mutattak volna.
+
+**Miért.** A megosztott fán több session dolgozik egyszerre
+([[shared-tree-coordination]]); a LESSONS.md sorszáma csak a ténylegesen
+COMMITOLT állapot alapján derül ki, egy korábban (akár csak percekkel
+korábban) leolvasott „utolsó szám + 1" a session teljes futása alatt
+elavulhat, PR-on és külön docs-only záró-commit határon át is.
+
+**Hogyan alkalmazd.** A LESSONS.md sorszámot NE a session elején (a
+diagnózis/tervezés fázisban) számítsd ki és véglegesítsd a PR-tartalomban —
+ha mégis (mert a lecke-hivatkozás a dokumentált revízió RÉSZE, mint itt a
+§0.0-ban), a PR MERGE UTÁN, a docs-only záró commit ELŐTT `git fetch origin
+main && git merge --ff-only origin/main`, majd `grep -n "^## L[0-9]" docs/
+LESSONS.md | tail` — és ha a szám időközben foglalt lett, a záró commitban
+JAVÍTSD a már merge-elt hivatkozás(oka)t is a helyes, frissen leolvasott
+számra. A javítás maga docs-only, nem igényel új PR-t/gate-et (lásd a
+`docs(handoff+lessons+rtm): ... closing` minta közvetlen `main`-push
+precedensét, pl. `f2028ef6`).
+
+## L339 — A Flutter/l10n előfeltétel workflow-szövegbe ágyazott orchesztrátor-lépése önmagában nem véd, ha a TÉNYLEGES dispatch-cél eltér attól, amit az orchesztrátor előkészített — a burkoló (codex-round.sh/mm-round.sh) SAJÁT maga készíti elő a $workdir-jét (self-heal E08-R03/H6, 2026-08-19, PR #338)
+
+**Mit mértünk.** Az E08-R03 H6-tal állt meg: a Codex implementer `blocked`-ot
+jelzett, mert a `flutter analyze` 1071 független hibával blokkolt a hiányzó
+generált `lib/l10n/app_localizations.dart` miatt
+(`.pipeline/session-E08-R03-20260819T212506.log`, `/tmp/codex-e08-r03.log`).
+A nyomozás saját méréssel (nem bemondásra) igazolta a láncot: (1) az
+orchesztrátor a `/home/ubuntu/ss-codex-e08-r03` klónt HELYESEN készítette elő
+— `tools/prepare-flutter-generated.sh` lefutott, a generált `.dart` fájlok ott
+léteztek; (2) a TÉNYLEGES Codex-dispatch mégis a
+`/home/ubuntu/ss-codex-e08-r03-impl` útvonalra ment, ami — `git -C
+ss-codex-e08-r03 worktree list` szerint — egy `git worktree add`-dal nyitott
+WORKTREE volt a klónról (`.git` fájl, nem könyvtár); (3) a gitignore-olt
+generált kimenet worktree-k közt NEM öröklődik — a `-impl`-ben volt
+`.dart_tool/` (valamilyen `pub get` lefutott), de a `gen-l10n` sosem futott
+ott; (4) az implementer helyesen `blocked`-ot jelzett ahelyett, hogy saját
+maga hívta volna a `tools/prepare-flutter-generated.sh`-t, mert az a saját
+tiltott zónáján (`tools/**`) kívül esett.
+
+**Miért.** Ez a NEGYEDIK mérés ugyanerre a hibaosztályra (korábbi: L222/
+E06-R07, L228/E06-R10, L230/E06-R11) — mindegyik javítása eddig egy PRÓZAI
+lépés volt az orchesztrátor promptjában/skill-jében
+(`.claude/skills/sdd-round-driver/SKILL.md` §3: „A git clone UTÁN, a
+dispatch ELŐTT, MINDIG: bash <munkapéldány>/tools/prepare-flutter-
+generated.sh"). Ez a lépés MOST IS a helyén volt, és a naplók szerint LE IS
+FUTOTT — csak épp egy másik könyvtárra, mint ahova a tényleges dispatch
+ment. Egy workflow-szövegbe ágyazott emlékeztető nem tud védeni egy olyan
+hibától, ahol maga a dispatch-cél tér el az előkészítettől — a védelemnek a
+tényleges dispatch-hívás MECHANIKUS részének kell lennie, nem egy korábbi,
+elvileg-hozzá-tartozó lépésnek.
+
+**Hogyan alkalmazd.** `tools/codex-round.sh` és `tools/mm-round.sh` mostantól
+minden dispatch előtt lefuttatja a `"$workdir/tools/prepare-flutter-
+generated.sh"`-t (a workdir SAJÁT másolatát, argumentum nélkül — L232/
+E06-R13: a script a repo_root-ot a BASH_SOURCE-ból számolja, egy másik
+munkapéldány másolatának meghívása NÉMÁN a rossz fát készíti elő), fail-open.
+Ez a workdir eredetétől (klón vagy worktree) és az orchesztrátor saját
+lépéseitől függetlenül működik. Általánosítható elv: ha egy előfeltétel
+kritikus és a helye mechanikusan elérhető (itt: a burkoló, ami MINDEN
+dispatch előtt lefut), a prózai/workflow-szintű emlékeztetőt egy szinttel
+lejjebb, a tényleges végrehajtási útba kell tenni — nem csak MÉG EGYSZER
+leírni a promptban. Regressziós teszt:
+`tools/tests/test_round_wrapper_flutter_prerequisite.py` (a mért
+`ss-codex-e08-r03` → `ss-codex-e08-r03-impl` worktree-alakot szó szerint
+reprodukálja, hamis codex/claude/flutter binárisokkal).
