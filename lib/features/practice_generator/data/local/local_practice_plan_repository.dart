@@ -203,7 +203,7 @@ class LocalPracticePlanRepository implements GenerationPlanActivation {
 
   void _trackRemove(String key) {
     if (key == manifestKey) return;
-    if (_writtenKeys.remove(key) != null) {
+    if (_writtenKeys.remove(key)) {
       _persistManifestSync();
     }
   }

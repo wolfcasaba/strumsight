@@ -12,8 +12,10 @@ import 'package:strumsight/features/practice_generator/domain/model/adaptive_pra
 import 'package:strumsight/features/practice_generator/domain/model/plan_enums.dart';
 import 'package:strumsight/features/practice_generator/domain/model/plan_revision.dart';
 import 'package:strumsight/features/practice_generator/domain/model/practice_day.dart';
+import 'package:strumsight/features/practice_generator/domain/model/practice_generation_request.dart';
 import 'package:strumsight/features/practice_generator/domain/model/practice_goal.dart';
 import 'package:strumsight/features/practice_generator/domain/model/skill_evidence.dart';
+import 'package:strumsight/features/practice_generator/domain/model/weekly_availability.dart';
 import 'package:strumsight/features/practice_generator/domain/repository/practice_evidence_repository.dart';
 
 import '../../../core/storage/in_memory_key_value_store.dart';
@@ -232,13 +234,13 @@ void main() {
             status: PlanStatus.archived,
             title: 'A',
             createdAt: DateTime.utc(2026, 8, 19, 9),
-            startDate: DateTime.utc(2026, 8, 20),
-            endDate: DateTime.utc(2026, 9, 20),
+            startDate: LocalDate(2026, 8, 20),
+            endDate: LocalDate(2026, 9, 20),
             goals: const <PracticeGoal>[],
             days: const <PracticeDay>[],
             activeRevisionId: RevisionId('revision.A.1'),
-            generationProvenance: const [],
-            policyVersions: const <String, String>{},
+            generationProvenance: GenerationRequestId('archive-only.A'),
+            policyVersions: const <String, String>{'catalog': 'catalog.v1'},
           ),
         );
         await writer.saveDraft(
