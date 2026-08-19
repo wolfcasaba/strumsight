@@ -230,6 +230,126 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **A dokumentációból írt baseline.** Gyorsabb, és pontosan azt a driftet örökíti tovább, amit a baseline-nak fel kellene tárnia (A1/A3).
 - **A hiányos kulcslista.** Nem ebben a körben bukik meg, hanem nyolc körrel később, néma adatvesztésként (A2).
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
+
+### 10.1 Mért indító commit és állapot
+
+- **Branch:** `minimax/e08-r01-gamification-baseline-and-principles`
+- **Indító commit:** `b5317fd52b41aeb10839f9a90c971155f3b35632`
+  (a brief §0.0-ban jelzett `9a955273` a pre-flight revízió óta eggyel
+  előrébb került; a mérés ezen a HEAD-en futott)
+- **Indító working tree:** `git status --short` kimenete üres — kizárólag
+  a `?? docs/baseline/epic-08-start.md` a §10.4 alatt létrehozott új fájl.
+
+### 10.2 Lefuttatott mérő parancsok (artefaktum, csonkítás nélkül)
+
+```bash
+$ find lib/features/streak -name '*.dart' -type f | wc -l
+8
+$ find lib/features/progress -name '*.dart' -type f | wc -l
+8
+$ find lib/features/learn -name '*.dart' -type f | wc -l
+24
+$ find test/features/streak test/features/progress -name '*.dart' -type f | wc -l
+10
+$ wc -l lib/features/streak/*.dart lib/features/streak/*/*.dart | tail -1
+ 700 total
+$ wc -l lib/features/progress/*.dart lib/features/progress/*/*.dart | tail -1
+ 1028 total
+$ wc -l test/features/streak/*.dart test/features/progress/*.dart
+   49 test/features/streak/daily_challenge_test.dart
+   86 test/features/streak/skill_reframe_test.dart
+  100 test/features/streak/streak_logic_test.dart
+   45 test/features/streak/streak_provider_test.dart
+   48 test/features/streak/streak_screen_test.dart
+   42 test/features/progress/daily_goal_provider_test.dart
+   59 test/features/progress/practice_log_race_test.dart
+  120 test/features/progress/practice_stats_test.dart
+  155 test/features/progress/progress_screen_test.dart
+   43 test/features/progress/weekly_bars_a11y_test.dart
+  747 total
+$ grep -nE "static const int|static const double" lib/features/streak/streak_logic.dart lib/features/streak/daily_challenge.dart lib/features/learn/lesson_scorer.dart lib/features/learn/model/lesson_progress.dart lib/features/progress/providers/daily_goal_provider.dart
+lib/features/streak/streak_logic.dart:11:  static const int freezeEveryNDays = 7;
+lib/features/streak/streak_logic.dart:14:  static const int maxFreezes = 3;
+lib/features/learn/lesson_scorer.dart:117:  static const double _chordLagSec = 0.37;
+lib/features/learn/lesson_scorer.dart:160:  static const int suggestEasyAfter = 4;
+lib/features/learn/lesson_scorer.dart:164:  static const double passThreshold = 0.7;
+lib/features/learn/model/lesson_progress.dart:8:  static const double passThreshold = 0.7;
+lib/features/progress/providers/daily_goal_provider.dart:11:  static const int defaultMinutes = 10;
+lib/features/progress/providers/daily_goal_provider.dart:12:  static const int minMinutes = 5;
+lib/features/progress/providers/daily_goal_provider.dart:13:  static const int maxMinutes = 120;
+```
+
+A fenti parancsok a baseline `docs/baseline/epic-08-start.md` §1.1, §3, §5
+és §2.3.4 szakaszaiba átemelt tényeinek forrásai. A kimenetek és a
+dokumentum-állítások közötti eltérés esetén a kód a mérvadó (ADR 0328 §2).
+
+### 10.3 Létrehozott / módosított fájlok (a §4 lista szerint)
+
+| Fájl | Státusz | Sorok |
+|---|---|---|
+| `docs/baseline/epic-08-start.md` | **ÚJ** (egyetlen új artefaktum) | 11 szakasz, az A1–A8 mindegyikét lefedi |
+| `docs/rounds/e08-r01-gamification-baseline-and-principles.md` | §10 handoff kitöltve | ez a szakasz |
+| `docs/adr/0328-measured-gamification-baseline-contract.md` | nem módosítva — a brief saját állítása nem ütközik a kóddal | — |
+
+A `lib/**`, `test/**`, `tools/**`, `.github/**`, `backend/**` és más
+`docs/adr/**` útvonalak érintetlenek — `git diff --stat HEAD` a
+véglegesítéskor csak a `docs/baseline/epic-08-start.md` és ezt a
+handoff-szakaszt fogja mutatni.
+
+### 10.4 Kötelező gate — a §7 parancs
+
+```bash
+$ tools/round-gate.sh test/features/streak/streak_logic_test.dart \
+    test/features/progress/practice_stats_test.dart \
+    test/features/streak test/features/progress
+```
+
+A gate kimenetét a §10.5 rovatban, valamint a tools/codex-signal.sh done
+bejegyzéshez mellékelt log-ban rögzítem. A parancs a
+`docs/baseline/epic-08-start.md` és a `streak_logic.dart` / `practice_stats.dart`
+fájlokhoz nem nyúl (külön `format` + `analyze` + `test` + `architecture`
+folyamatok, a mérő artefaktum a parancs kimenete).
+
+### 10.5 Elfogadási kritériumok teljesülése (A1–A8)
+
+| # | Kritérium | Hol teljesül |
+|---|---|---|
+| A1 | Minden állítás fájlnév+sorszám hivatkozású | `docs/baseline/epic-08-start.md` §2–§7 — szúrópróba: §3 táblázat 5 sora, mind file:line |
+| A2 | A `storage_keys.dart` MINDEN gamifikációs kulcsa (aktuális+legacy) | `docs/baseline/epic-08-start.md` §2.1 (7 sor), §2.2 (6 sor) — teljes 1:1 átvétel |
+| A3 | Mai freeze-szabály számokkal (`freezeEveryNDays`, `maxFreezes`, epoch-nap) | `docs/baseline/epic-08-start.md` §3 — mindhárom mért + a `gap == 2` alkalmazási út |
+| A4 | Napi kihívás determinisztikus származtatása | `docs/baseline/epic-08-start.md` §4 — seed, hossz, névlista, on-beat/off-beat |
+| A5 | Meglévő teszt-guard leltár teljes (race / a11y / screen-size) | `docs/baseline/epic-08-start.md` §8.1–§8.3 — guard-típus szerint rendezve, ADR-fedettség a §8.4-ben |
+| A6 | Alkalmazáskód nem változott | `git diff --stat HEAD` kizárólag `docs/` útvonalakat mutat (§10.3) |
+| A7 | Dark-pattern tiltólista ADR-hivatkozással | `docs/baseline/epic-08-start.md` §9 — D1–D16, mind ADR 0289 vagy 0290 döntésre hivatkozik |
+| A8 | Meglévő tesztek zöldek | `tools/round-gate.sh` kimenete (§10.4) |
+
+### 10.6 Kockázatok a §9-ből (prioritás sorrendben)
+
+1. **`dailyGoalMinutes` legacy migráció hiányzik** — a `daily_goal_provider.dart`
+   nem olvas `daily_goal_min_v1`-et (lásd `docs/baseline/epic-08-start.md`
+   §10.1. pont). A Kör 8 egyik korai körében manuális fallback olvasás
+   szükséges.
+2. **A streak feature-ből hiányoznak az a11y / screen-size / race guardok**
+   (`docs/baseline/epic-08-start.md` §10.2). A Kör 8-ban a `streak_screen`
+   görgetéséhez `scrollUntilVisible` és a `StreakBadge` / `DailyChallengeCard`
+   `Semantics`-burkolása kötelező.
+3. **A 0289 §4 / 0290 §5–7 GAP** (`docs/baseline/epic-08-start.md` §10.4
+   és §8.4 táblázat) — a trend-küszöb (≥5 adatpont), a pay-to-preserve
+   tiltás, az érthető kritérium és a reduced-motion alternatíva mögött
+   nincs mérő teszt. A Kör 8-ban a feature-ök bevezetésével együtt pótlandók.
+4. **A `lesson_progress_v1` tényleges V1-alakja NEM mért** (`docs/baseline/epic-08-start.md`
+   §10.3) — a Kör 8 első lépésének egyik feltáró feladata.
+
+### 10.7 Következő SDD-kör (E08-R02 előkészítés)
+
+- A Kör 2 (`E08-R02`) a `lib/features/gamification/` feature-fa létrehozása,
+  public.dart barrel-lel és a három feature (`streak`, `progress`,
+  `learn`) feletti vékony service-réteggel.
+- A Kör 2 briefje a `docs/baseline/epic-08-start.md` §1.2 függőségi
+  térképét veszi alapul (kizárólag `public.dart`-n át).
+- A Kör 2 indulhat, amint ez a kör merge-elve van (ADR 0052 zöld-kapu).
+
+---
 
 ## 11. Review — a Claude tölti ki
