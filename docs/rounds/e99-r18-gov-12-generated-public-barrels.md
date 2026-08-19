@@ -1,9 +1,11 @@
 # E99-R18 (GOV-12) — Generált `public.dart` barrelek: a második fizikai ütközés-felület feloldása
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 52324cb3`)
+- **Státusz:** READY FOR IMPLEMENTATION (pre-flight revised 2026-08-19, `main @ 1a051d85`)
 - **Típus:** **governance-kör**
 - **Kör-azonosító:** `E99-R18`. Emberi neve **GOV-12**.
-- **Előfeltétel:** `E99-R17` merge-elve (ugyanaz a `tools/round-slots.py` felület bővül)
+- **Előfeltétel:** nincs technikai előfeltétel. Az E99-R17 emberi gate-holdon
+  van; a jelen kör a saját `tools/round-slots.py`-módosításával vezeti be a
+  public-barrel generált-útvonal kezelését.
 - **Brief szerzője:** Claude (Opus 5, orchesztrátor) · **ADR:** [`0307`](../adr/0307-pipeline-throughput-program-v2.md) **§5**
 
 ```ai-router
@@ -32,6 +34,24 @@ native_gate = false
 > fordítási hibaként vagy — rosszabb — egy másik szimbólum árnyékolásaként
 > jelentkezne. A mérce ezért az export-halmaz azonossága.
 
+## 0.0 Pre-flight brief-revízió (orchesztrátor, 2026-08-19)
+
+| # | Mért valóság | Feloldás |
+|---|---|---|
+| R1 | A pipeline-prompt „nincs ADR” sora ellenére a brief már az elfogadott ADR 0307 §5-re hivatkozik, és a saját tilos zónája kizárja a `docs/adr/**`-t. A `tools/round-slots.py reserve-adr --round E99-R18` **0330**-at foglalt, de az nem kerül ebben a körben ADR-fájlba. | **Nincs új ADR.** A 0330 felhasználatlan foglalás; a kötött döntés az ADR 0307 §5. |
+| R2 | `git log --all --grep E99-R17` szerint az E99-R17 saját ága létezik, de nincs merge-commit/PR; `tool/gen_l10n_segments.dart`, `tools/tests/test_round_slots_generated_paths.py` és `GENERATED_PATHS` a `main`-ből hiányoznak. Az oka a `tool/ci/*` védett gate-fájl miatti emberi hold (ADR 0321, lessons/L323–L324). | Az E99-R18 nem támaszkodhat E99-R17 nem merge-elt kódjára. D4 **újonnan vezeti be** a public-barrelek saját, glob-alapú generált-útvonal kezelését; nem importál és nem másol l10n-mechanizmust. |
+| R3 | `lib/features/practice_generator/public.dart` a mai `main`-en **100 soros**, **94** `export` sort tartalmaz, van egy rejtő `hide PracticeOutcome`, és még nincs `public/` fragmentumkönyvtára. `tool/check_architecture.dart` csak az üres argumentumlistát és a `--print-allowlist` opciót fogadja; a `round-gate.sh` közvetlenül ezt hívja. | A pilot kizárólag e 94 export útvonalát osztja a négy, már engedélyezett `public/*.dart` fragmentumba. A `hide` és minden export direktíva az eredeti szemantikával marad; a generátor és a checker együtt adja a D2 frissességvizsgálatot. |
+| R4 | `tools/round-slots.py` ma csak az öt `SERIALIZED_PATHS`-ot szűri ki; nincs `GENERATED_PATHS` vagy glob-felismerés. | D4 szövegét úgy kell értelmezni, hogy a kör **létrehozza** a glob-szabályt. A pontos `lib/features/*/public.dart` gyökér barrel generált, a `lib/features/*/public/*.dart` fragmentumok változatlanul ütköznek. |
+| R5 | `tools/gateguard-scan.py --brief …` exit **0**; a D2 által érintett `tool/check_architecture.dart` nem védett útvonal. A lokális `python3 -m pytest tools/tests -q` környezetben korábban mért hiányzó `pytest` miatt nem implementer-futtatható csomagtelepítés nélkül. | Az implementer a saját új Python-tesztjét `python3 -m unittest tools.tests.test_round_slots_generated_barrels` alakkal futtatja; a teljes pytest-korpusz a review/CI evidenciája, nem helyettesíthető állítólagos zöld eredménnyel. |
+
+**Visszakeresett előzmény (ADR 0312 §4.1, brief-lint S8):**
+
+- `node tools/knowledge-rag.mjs --top 5 "generated public.dart barrel exports fragments architecture gate round slots"` a jelen briefet, valamint a `public.dart`-határ releváns tesztjeit adta vissza.
+- `node tools/knowledge-rag.mjs --corpus lessons --top 5 "generated public.dart barrel scope generated paths collision"` szerint a közvetlen előzmények `lessons/L190` és `lessons/L193`: a cross-feature szabály csak a barrel célútját méri, ezért a generálás nem bővítheti a publikus szimbólumhalmazt, és a szűk public surface külön mérendő. Az E99-R17 holdjának konkrét oka `lessons/L323–L324` / ADR 0321. Nincs már merge-elt, közvetlen public-barrel-generátor előzmény.
+
+Ez a revízió kizárólag elavult méréseket és a nem merge-elt előfeltételt
+pontosítja; az `allowed_paths` listája és a D1–D4 termékcél változatlan.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -52,18 +72,20 @@ A 75 nyitott briefből a `lib/features/gamification/public.dart` **25**-ben, a
 azért, mert minden kör hozzáfűz egy `export` sort. Ez a második olyan
 ütközés-felület (az ARB után), ami mechanikus, nem tartalmi.
 
-A `practice_generator/public.dart` ma **67 sor**, tisztán export-lista → ez a
+A `practice_generator/public.dart` ma **100 sor**, ebből **94** export-direktíva
+és két megőrzendő magyarázó komment; a publikus felület ettől még kézzel
+karbantartott → ez a
 pilot. (A `gamification` és a `design_system` barrel még nem létezik a fán; a
 mechanizmus az ő születésükkor már készen áll.)
 
 ## 2. Jelenlegi állapot — mérve
 
-- `lib/features/practice_generator/public.dart`: `library;` + 60+ `export`
-  sor, kézzel karbantartva.
+- `lib/features/practice_generator/public.dart`: `library;` + **94** `export`
+  direktíva, köztük egy `hide PracticeOutcome`, kézzel karbantartva.
 - `tool/check_architecture.dart` gate-lépés őrzi a feature-határokat
   (cross-feature import csak `public.dart`-on át).
-- `tools/round-slots.py`: az E99-R17-ben bevezetett `GENERATED_PATHS` halmaz
-  már létezik (l10n-aggregátumokra).
+- `tools/round-slots.py`: csak `SERIALIZED_PATHS` létezik; a D4 itt vezeti be
+  a public-barrel glob-alapú generált-útvonal szabályát.
 
 ## 3. Feladatok
 
@@ -94,7 +116,7 @@ composite lépéslistája változatlan (ADR 0171 paritás-őre sértetlen).
 
 ### D4 — `tools/round-slots.py`: a generált barrel nem ütközés
 
-- A `GENERATED_PATHS` halmaz mintával bővül: `lib/features/*/public.dart`
+- A generált-útvonal szabály mintával jön létre: `lib/features/*/public.dart`
   (glob, nem fix lista) — ezek újragenerálhatók, tehát nem ütközés.
 - A fragmentumok (`lib/features/*/public/*.dart`) TELJES ÉRTÉKŰ ütközési
   felületek maradnak.
