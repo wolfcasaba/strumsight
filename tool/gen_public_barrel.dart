@@ -84,8 +84,13 @@ final class PublicBarrel {
   String _header() {
     if (_barrelFile.existsSync()) {
       final text = _barrelFile.readAsStringSync();
+      // Lazily match every line up to and including the first `library;`
+      // directive. The captured span is then padded with a single blank
+      // line so the first fragment can begin on its own line — the standard
+      // barrel layout (and the one the existing practice_generator barrel
+      // already uses).
       final match = RegExp(r'^(?:.*\n)*?library;\n').firstMatch(text);
-      if (match != null) return match.group(0)!;
+      if (match != null) return '${match.group(0)}\n';
     }
     return _defaultHeader();
   }
