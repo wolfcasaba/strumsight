@@ -13165,3 +13165,44 @@ leírni a promptban. Regressziós teszt:
 `tools/tests/test_round_wrapper_flutter_prerequisite.py` (a mért
 `ss-codex-e08-r03` → `ss-codex-e08-r03-impl` worktree-alakot szó szerint
 reprodukálja, hamis codex/claude/flutter binárisokkal).
+
+## L340 — A `gate_shape` anti-hallucináció-őr sortörés nélküli regexe hamis pozitívot ad, ha a napló a teljes promptot egyetlen sorba írja (E08-R03, 2026-08-19)
+
+**Mit mértünk.** Az E08-R03 (második nekifutás) implementer-jelzésfájlja
+`gate_shape=VIOLATION`-t írt, holott a brief §7 „`round-gate.sh` csővezeték/
+lánc nélkül" tilalmát az implementer betartotta. A review saját méréssel (nem
+bemondásra) igazolta: `grep -n "round-gate\.sh" /tmp/codex-e08-r03-run2.log`
+minden TÉNYLEGES végrehajtást (`/bin/bash -lc 'tools/round-gate.sh ...'`,
+hét előfordulás) csővezeték/lánc NÉLKÜL mutatott. A hamis pozitív forrása a
+`codex exec` induló hívása, ami a TELJES preambulum+prompt szöveget
+EGYETLEN log-sorba írja — ez a sor szó szerint tartalmazza mind a brief
+`round-gate.sh` idézetét, mind (egy másik, a preambulum 2. pontjából
+származó példában) a `git add -A && git commit` mintát. A `tools/
+codex-round.sh` `verify_claim()` regexe (`round-gate\.sh[^\n]*(\|
+*(tail|head)|&&)`, 296-336. sor) sortörés nélkül keres egy `[^\n]*`
+szakaszt, ezért a két, egymással nem összefüggő idézet ugyanazon a (nagyon
+hosszú) log-soron egyetlen találatnak látszott.
+
+**Miért.** A regex azt a feltevést kódolja, hogy „`round-gate.sh` és egy
+tiltott pipe/lánc-operátor UGYANAZON a soron" ⟺ „egy tényleges shell-hívás
+csővezetékbe/láncba tette a gate-et". Ez igaz egy NORMÁL, soronkénti
+shell-naplóra, de HAMIS egy olyan naplósorra, ami maga egy hosszú
+szöveg-blobot (a prompt/preambulum tartalmát) tükröz vissza — ott a sor
+„shell-parancs-szerűsége" félrevezető. Az őr NEM tud különbséget tenni „a
+promptban SZEREPEL a tiltott minta szövege" és „a shell TÉNYLEG futtatta a
+tiltott mintát" között, mert csak a nyers log-szöveget nézi, nem a
+végrehajtási rekordok (`/bin/bash -lc '...'` idézett string) határait.
+
+**Hogyan alkalmazd.** A `gate_shape=VIOLATION` (vagy bármely más anti-
+hallucináció-jelzés) NEM helyettesíti a review kötelező, saját kézzel,
+izolált klónban végzett gate-újrafuttatását (`sdd-round-review` skill 2.
+lépés) — ez már eddig is a szabály volt, ez a mérés csak megerősíti, MIÉRT
+nem szabad kivételt tenni még akkor sem, ha a jelzésfájl piros. Ha
+`gate_shape=VIOLATION`-t látsz: NE fogadd el bemondásra a hamis-pozitív
+magyarázatot sem — mérd meg te magad (`grep -n "round-gate\.sh"
+<implementer-log>` és nézd meg, a találat egy `/bin/bash -lc '...'`
+végrehajtási sorban van-e, vagy egy prompt-visszhang sorban), és a saját
+gate-újrafuttatásod eredményét dokumentáld bizonyítékként, nem a mezőt. Nem
+sürgős `tools/`-javítás (a self-heal hatásköre, ha újra előfordul): a
+regexet a log SOR-onkénti egyezés helyett a shell-hívás idézett rekordjára
+kellene szűkíteni.
