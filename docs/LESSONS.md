@@ -13119,3 +13119,49 @@ JAVÍTSD a már merge-elt hivatkozás(oka)t is a helyes, frissen leolvasott
 számra. A javítás maga docs-only, nem igényel új PR-t/gate-et (lásd a
 `docs(handoff+lessons+rtm): ... closing` minta közvetlen `main`-push
 precedensét, pl. `f2028ef6`).
+
+## L339 — A Flutter/l10n előfeltétel workflow-szövegbe ágyazott orchesztrátor-lépése önmagában nem véd, ha a TÉNYLEGES dispatch-cél eltér attól, amit az orchesztrátor előkészített — a burkoló (codex-round.sh/mm-round.sh) SAJÁT maga készíti elő a $workdir-jét (self-heal E08-R03/H6, 2026-08-19, PR #338)
+
+**Mit mértünk.** Az E08-R03 H6-tal állt meg: a Codex implementer `blocked`-ot
+jelzett, mert a `flutter analyze` 1071 független hibával blokkolt a hiányzó
+generált `lib/l10n/app_localizations.dart` miatt
+(`.pipeline/session-E08-R03-20260819T212506.log`, `/tmp/codex-e08-r03.log`).
+A nyomozás saját méréssel (nem bemondásra) igazolta a láncot: (1) az
+orchesztrátor a `/home/ubuntu/ss-codex-e08-r03` klónt HELYESEN készítette elő
+— `tools/prepare-flutter-generated.sh` lefutott, a generált `.dart` fájlok ott
+léteztek; (2) a TÉNYLEGES Codex-dispatch mégis a
+`/home/ubuntu/ss-codex-e08-r03-impl` útvonalra ment, ami — `git -C
+ss-codex-e08-r03 worktree list` szerint — egy `git worktree add`-dal nyitott
+WORKTREE volt a klónról (`.git` fájl, nem könyvtár); (3) a gitignore-olt
+generált kimenet worktree-k közt NEM öröklődik — a `-impl`-ben volt
+`.dart_tool/` (valamilyen `pub get` lefutott), de a `gen-l10n` sosem futott
+ott; (4) az implementer helyesen `blocked`-ot jelzett ahelyett, hogy saját
+maga hívta volna a `tools/prepare-flutter-generated.sh`-t, mert az a saját
+tiltott zónáján (`tools/**`) kívül esett.
+
+**Miért.** Ez a NEGYEDIK mérés ugyanerre a hibaosztályra (korábbi: L222/
+E06-R07, L228/E06-R10, L230/E06-R11) — mindegyik javítása eddig egy PRÓZAI
+lépés volt az orchesztrátor promptjában/skill-jében
+(`.claude/skills/sdd-round-driver/SKILL.md` §3: „A git clone UTÁN, a
+dispatch ELŐTT, MINDIG: bash <munkapéldány>/tools/prepare-flutter-
+generated.sh"). Ez a lépés MOST IS a helyén volt, és a naplók szerint LE IS
+FUTOTT — csak épp egy másik könyvtárra, mint ahova a tényleges dispatch
+ment. Egy workflow-szövegbe ágyazott emlékeztető nem tud védeni egy olyan
+hibától, ahol maga a dispatch-cél tér el az előkészítettől — a védelemnek a
+tényleges dispatch-hívás MECHANIKUS részének kell lennie, nem egy korábbi,
+elvileg-hozzá-tartozó lépésnek.
+
+**Hogyan alkalmazd.** `tools/codex-round.sh` és `tools/mm-round.sh` mostantól
+minden dispatch előtt lefuttatja a `"$workdir/tools/prepare-flutter-
+generated.sh"`-t (a workdir SAJÁT másolatát, argumentum nélkül — L232/
+E06-R13: a script a repo_root-ot a BASH_SOURCE-ból számolja, egy másik
+munkapéldány másolatának meghívása NÉMÁN a rossz fát készíti elő), fail-open.
+Ez a workdir eredetétől (klón vagy worktree) és az orchesztrátor saját
+lépéseitől függetlenül működik. Általánosítható elv: ha egy előfeltétel
+kritikus és a helye mechanikusan elérhető (itt: a burkoló, ami MINDEN
+dispatch előtt lefut), a prózai/workflow-szintű emlékeztetőt egy szinttel
+lejjebb, a tényleges végrehajtási útba kell tenni — nem csak MÉG EGYSZER
+leírni a promptban. Regressziós teszt:
+`tools/tests/test_round_wrapper_flutter_prerequisite.py` (a mért
+`ss-codex-e08-r03` → `ss-codex-e08-r03-impl` worktree-alakot szó szerint
+reprodukálja, hamis codex/claude/flutter binárisokkal).

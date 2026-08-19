@@ -1,5 +1,54 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E08-R03/H6] KÉSZ — round wrapperek önelőkészítik a Flutter l10n-t dispatch előtt — PR #338, squash `911e5145` (2026-08-19)
+
+E08-R03 H6-tal állt meg: a Codex implementer `blocked`-ot jelzett, mert a
+`flutter analyze` 1071 független hibával blokkolt a hiányzó generált
+`lib/l10n/app_localizations.dart` miatt. A nyomozás saját méréssel (a
+`.pipeline/session-E08-R03-20260819T212506.log` és `/tmp/codex-e08-r03.log`
+teljes visszakövetésével, nem bemondásra) igazolta a gyökérokot: az
+orchesztrátor a `/home/ubuntu/ss-codex-e08-r03` klónt HELYESEN készítette elő
+(`tools/prepare-flutter-generated.sh` lefutott, a generált fájlok ott
+léteztek), de a TÉNYLEGES Codex-dispatch a `/home/ubuntu/ss-codex-e08-r03-
+impl` útvonalra ment — ami `git worktree list` szerint egy `git worktree
+add`-dal nyitott WORKTREE volt a klónról, nem önálló klón. A gitignore-olt
+generált kimenet worktree-k közt nem öröklődik, ezért a `-impl` sosem kapta
+meg a saját `gen-l10n` futtatását, noha `.dart_tool/` (tehát valamilyen `pub
+get`) már lefutott ott. Az implementer helyesen `blocked`-ot jelzett ahelyett,
+hogy saját maga hívta volna a `tools/prepare-flutter-generated.sh`-t — az a
+saját tiltott zónáján (`tools/**`) kívül esett.
+
+Ez a **negyedik** mérés ugyanerre a hibaosztályra (korábbi: L222/E06-R07,
+L228/E06-R10, L230/E06-R11) — mindegyik javítása eddig egy PRÓZAI lépés volt
+az orchesztrátor promptjában/skill-jében, legutóbb a `sdd-round-driver`
+SKILL.md §3-ba ágyazva. Ez a lépés MOST IS a helyén volt és le is futott —
+csak épp egy másik könyvtárra, mint ahova a tényleges dispatch ment. A
+javítás ezért a mechanikus legalsó rétegbe került: `tools/codex-round.sh` és
+`tools/mm-round.sh` mostantól minden dispatch ELŐTT lefuttatja a **workdir
+saját másolatát** (`"$workdir/tools/prepare-flutter-generated.sh"`,
+argumentum nélkül — L232/E06-R13), fail-open, függetlenül attól, mit tett az
+orchesztrátor, és függetlenül attól, hogy a workdir klón vagy worktree.
+Regressziós teszt (`tools/tests/test_round_wrapper_flutter_prerequisite.py`,
+valódi mért adat: a `ss-codex-e08-r03` → `ss-codex-e08-r03-impl` worktree-alak
+szó szerinti reprodukciója hamis codex/claude/flutter binárisokkal) — piros a
+javítás előtt (a flutter binárist egyik burkoló sem hívta meg), zöld utána
+(`pub get` → `gen-l10n` → engine-hívás, ebben a sorrendben, a fájl a
+worktree-ben jön létre). `python3 -m pytest tools/tests -q`: 580 passed, 566
+subtests passed; a négy érintett burkoló-tesztfájl (`test_qwen_
+implementer_hardening.py`, `test_claude_harness_engines.py`, `test_fix_
+workspace_origin.py`, `test_prepare_flutter_generated.py`) külön futtatva is
+zöld (53 passed) — nincs regresszió. Router CI
+[32308153558](https://github.com/wolfcasaba/strumsight/actions/runs/32308153558)
+success a merge-előtti exact `32aa633a` SHA-n (nincs Dart-változás, tehát a
+Router CI az egyetlen szükséges CI-bizonyíték). Lecke: [[L339]].
+
+A self-heal nem nyúlt a leftover `/home/ubuntu/ss-codex-e08-r03` /
+`ss-codex-e08-r03-impl` munkapéldányokhoz (nincs bennük nyitott PR — az
+implementer a félkész implementációt commit nélkül hagyta) — a következő
+E08-R03 dispatch a saját §0.2 „Örökség-ellenőrzés" lépésével dönt a
+sorsukról, és mostantól, akármelyiket is választja, a saját workdir-jét maga
+a burkoló készíti elő.
+
 ## ✅ [HEAL E99-R18/H3] KÉSZ — revert-not-expand: implementer scratch debris — PR #337, squash `80b70d1e` (2026-08-19)
 
 A MiniMax implementer (`/home/ubuntu/ss-minimax-e99-r18`, ág
