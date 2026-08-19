@@ -232,3 +232,41 @@ python3 -m pytest tools/tests -q
 
 A gate-lépések külön processzben futnak; a csonkítatlan kimenet a bizonyíték.
 A teljes suite + property gate a CI-ban fut (ADR 0053).
+
+## Implementation handoff
+
+- **Megvalósítás:**
+  - `tools/round-pipeline.sh`: az utolsó self-heal-kísérlethez a rögzített
+    `sonnet-impl` identitástól eltérő, más modellű, statikusan elérhető motort
+    választ a registry-sorrendben; hiányzó jelöltnél naplózottan megtartja a
+    mai viselkedést. A kiválasztott motor saját harnessén indul. A kimerült
+    állapot `halt-reminder-last` állapotfájllal 60 perces throttlet és 24 órás
+    felső korlátot kap, miközben a `KIMERÜLT` naplósor minden firingkor megmarad.
+  - `tools/tests/test_selfheal_escalation.py`: a §4 hat cellája, valamint a
+    váltási ntfy/log és a rendered prompt D3-követelményei hermetikus
+    fixture-rel lefedve.
+  - `docs/execution/pipeline-selfheal-prompt.md`: a rendered utolsó-kísérlet
+    promptja megkapja a motorváltás és az előző `.pipeline/heal-*.log` naplók
+    bemenetként kezelésének utasítását.
+- **RED/GREEN:** a kezdeti célzott futás 5 hibával mérte a hiányzó explicit
+  runner-választást és throttle-t; a megvalósítás után `2 passed, 6 subtests
+  passed`.
+- **Falszifikáció:** a D1 választás ideiglenes kikapcsolása a 3. kísérlet
+  celláját pirosra váltotta; a D2 időbélyeg-kapu ideiglenes kikapcsolása az
+  59 perces és 24 órán túli cellát pirosra váltotta. Mindkét őr visszaállítva,
+  utána célzottan zöld.
+- **Futtatott ellenőrzések:**
+  - `/tmp/e99-r15-pytest/bin/python3 -m pytest tools/tests/test_selfheal_escalation.py -q`
+    → `2 passed, 6 subtests passed`.
+  - `env -u ENGINE_MODEL -u ROUND_ENGINE /tmp/e99-r15-pytest/bin/python3 -m pytest tools/tests -q`
+    → `528 passed, 2 skipped, 565 subtests passed`.
+  - `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart`
+    → format, analyze, célzott teszt, architecture, secrets és l10n zöld.
+- **Környezeti eltérés:** a szanitálatlan teljes tooling-suite egyszer a
+  `test_claude_harness_engines.py` meglévő legacy MiniMax-tesztjén bukott,
+  mert a harness `ENGINE_MODEL=gpt-5.6-terra` értéke a teszt saját
+  `dict(os.environ)` környezetébe öröklődött. A konkrét teszt az értékek
+  eltávolításával zölden reprodukálható volt; a körtől független,
+  allowed_paths-on kívüli teszt-higiéniai hiba, ezért itt nem módosult.
+- **Nem futtatott ellenőrzések:** CI full suite/property/release APK, PR és
+  független correctness/security review az orchestrátor következő lépése.

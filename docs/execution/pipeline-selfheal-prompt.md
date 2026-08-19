@@ -7,6 +7,8 @@ hogy a lánc magától mehessen tovább.
 A user döntése (2026-08-01): *„az orchestrátor MINDIG javítsa a hibát, a cél az
 autonóm fejlesztés."* Tehát a halt nem kérdés az ember felé — **feladat**.
 
+{{ENGINE_CONTEXT}}
+
 ## 0. Amit elolvasol, mielőtt bármit teszel
 
 ```bash
