@@ -245,4 +245,55 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### E07-R28 implementation handoff (2026-08-19)
+
+- `application/port/planner_assist_gateway.dart`: külön, nem végrehajtható
+  `PlannerAssistProposal`-t, strukturált request/promptot, cancellation
+  contractot és determinisztikus fallback magyarázatot vezet be. A proposal
+  egyetlen lifecycle állapota `awaitingConfirmation`; nincs aktiváló API vagy
+  terv-módosító referencia.
+- `data/ai/planner_assist_schema.dart`: a teljes model-választ atomikusan
+  validálja (schema version, locale, kötelező confirmation, méretkorlát,
+  unsafe tartalom és exact goal/skill/candidate allowlist). Minden hiba teljes
+  elutasítás, részleges kiolvasás nélkül.
+- `data/ai/remote_planner_assist_gateway.dart` és
+  `fake_planner_assist_gateway.dart`: a timeout, rate limit, hálózati hiba,
+  cancellation és OFF állapot kizárólag fallback eventet ad; a hívó tulajdonú
+  draftot nem fogadja be és nem módosíthatja.
+- `data/adapter/tutor_plan_proposal_adapter.dart`: saját, típusos
+  `TutorPlanOutline`-ból és a practice generator publikus katalógusából épít
+  requestet. Nincs `ai_tutor` import; a fagyasztott üres Tutor boundary
+  változatlan marad.
+- `public.dart`, két assist teszt és a közös fixture: a publikus contract és
+  A1–A8 mérce lefedése.
+
+**TDD bizonyíték.** A két új tesztfájl az implementáció előtt futott és a
+hiányzó `PlannerAssist*` contractokra compilation RED eredményt adott. Az
+implementáció után a célzott parancs zöld: `10` teszt passed.
+
+**Valódi-sértés próba (A2).** A candidate allowlist ellenőrzése ideiglenesen
+csak a response-beli block-listára gyengült. Ekkor
+`flutter test test/features/practice_generator/assist/planner_assist_schema_test.dart`
+egyértelműen PIROS lett: az `A2` teszt `PlannerAssistAccepted`-et kapott a
+várt `PlannerAssistRejected` helyett. Az exact `containsCandidate` őr
+visszaállítása után ugyanaz a teszt újra zöld.
+
+**Futtatott ellenőrzések a gate előtt.**
+
+```text
+flutter test test/features/practice_generator/assist/planner_assist_gateway_test.dart test/features/practice_generator/assist/planner_assist_schema_test.dart
+→ 10 passed
+```
+
+**Kötelező lokális gate.**
+
+```text
+tools/round-gate.sh test/features/practice_generator/assist/planner_assist_gateway_test.dart test/features/practice_generator/assist/planner_assist_schema_test.dart
+→ pass (format, analyze, 6 gateway test, 4 schema test, architecture,
+  secrets és l10n); strukturált gate-eredmény: exit_code=0
+```
+
+**Nem futtatott ellenőrzések.** CI teljes suite, friss seedes property gate és
+APK build az orchestrátor merge-előtti felelőssége.
+
 ## 11. Review — a Claude tölti ki
