@@ -304,4 +304,59 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosított fájlok
+
+- `lib/features/gamification/domain/activity/activity_source.dart` — a nyolc
+  stabil, perzisztálható forráskód enum-szerződése.
+- `lib/features/gamification/domain/activity/evidence_trust.dart` — az öt
+  bizonyítékmegbízhatósági szint enum-szerződése.
+- `lib/features/gamification/domain/activity/reward_eligibility.dart` —
+  immutable, validált reward-eligibility adatkontraktus; policy-logika nélkül.
+- `lib/features/gamification/domain/activity/learning_activity_event.dart` —
+  a sealed alaptípus és a Practice/Song/Analysis/Plan/Tutor/Vision altípusok;
+  hívó-adta `eventId`, schema- és értékhatár-validáció, explicit `type`-alapú
+  JSON dekódolás.
+- `lib/features/gamification/public.dart` — az új feature kizárólagos public
+  belépője.
+- `test/features/gamification/domain/activity_event_test.dart` — A2–A5/A8
+  mátrix, explicit-discriminator regresszió, és az időtartam küszöb alatti /
+  rajta lévő / fölötti cellái.
+- `test/core/architecture_dependency_test.dart` — a gamification-domain
+  framework-, storage-, óra- és véletlenforrás-mentességi őre.
+
+### Ténylegesen futtatott ellenőrzések
+
+- `flutter test test/features/gamification/domain/activity_event_test.dart`
+  (RED, a production fájlok létrehozása előtt): a hiányzó
+  `package:strumsight/features/gamification/public.dart` és a szerződés-típusok
+  fordítási hibája, ahogy elvárt.
+- `flutter test test/core/architecture_dependency_test.dart` (RED, a
+  gamification domain létrehozása előtt): az E08-R02 csoport a hiányzó
+  `lib/features/gamification/domain` könyvtárra bukott.
+- `flutter test test/features/gamification/domain/activity_event_test.dart`
+  (GREEN): 13/13 teszt zöld a minimális implementáció után, majd ismét zöld a
+  refaktor után.
+- `flutter test test/core/architecture_dependency_test.dart` (GREEN): 19/19
+  teszt zöld az új domain-guarddal.
+- **Valódi-sértés próba:** a `schemaVersion !=
+  learningActivityEventSchemaVersion` elutasító ága ideiglenesen ki lett véve,
+  majd futott a kötelező `tools/round-gate.sh
+  test/features/gamification/domain/activity_event_test.dart
+  test/core/architecture_dependency_test.dart`. A format és analyze zöld volt;
+  a célteszt az A2 cellán piros lett (exit 1): `Expected: throws ArgumentError`
+  helyett `PracticeActivityEvent` tért vissza a 2-es schema-verzióra. Az ág
+  visszaállítva.
+- Visszaállítás után a kötelező `tools/round-gate.sh
+  test/features/gamification/domain/activity_event_test.dart
+  test/core/architecture_dependency_test.dart` teljesen zöld: format (0
+  változás), analyze (0 issue), activity esemény teszt 13/13, architecture
+  teszt 19/19, és `Architecture dependencies OK (12 allowlisted deviations)`.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Nincs scope- vagy szerződéseltérés.
+- Teljes Flutter-suite, property gate, release APK, CI-dispatch, PR és merge
+  nem futott ebben a körben: ezek a brief és az `AGENTS.md` szerint a Claude
+  orchesztrátor feladatai.
+
 ## 11. Review — a Claude tölti ki
