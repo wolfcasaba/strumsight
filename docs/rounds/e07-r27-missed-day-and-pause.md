@@ -225,4 +225,140 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Küszöb számítása.**
+
+```bash
+$ python3 -c 'print(21 - 1, 21, 21 + 1)'
+20 21 22
+```
+
+A 6.1 három cellája: 20 (alatta) → `simpleReschedule`, 21 (rajta) →
+`readinessProposal`, 22 (fölötte) → `readinessProposalReducedDifficulty`.
+A határ a 21. cellán van (a küszöb a **óvatosabb** oldalhoz tartozik,
+ADR 0269 §5.4).
+
+**A kihagyás-hossz három cellája (6.1):**
+
+| Cella | Bemenet | Elvárt | Bizonyíték |
+|---|---|---|---|
+| alatta | 20 kihagyott nap | `simpleReschedule` | `missed_day_policy_test.dart` *6.1 below threshold (20 missed days) → simpleReschedule* |
+| rajta | 21 kihagyott nap | `readinessProposal` | `missed_day_policy_test.dart` *6.1 at threshold (21 missed days) → readinessProposal (boundary belongs to cautious side)* |
+| fölötte | 22 kihagyott nap | `readinessProposalReducedDifficulty` | `missed_day_policy_test.dart` *6.1 above threshold (22 missed days) → readinessProposalReducedDifficulty* |
+
+**Valódi-sértés próba (A1 cella fogának bizonyítása).**
+
+A `missed_day_policy_test.dart` 6.1 *real violation probe* sora egy
+szándékosan apró küszöbbel (`longBreakThreshold = 1`) épített policy-t
+próbál — 20 kihagyott nappal a politika azonnal
+`readinessProposalReducedDifficulty` módba billen, és NEM
+`simpleReschedule`-be. Ez a teszt pirosra festene minden olyan
+implementációt, amelyik „több nap = több munka" receptet követ, és
+így bizonyítja, hogy az **A1** cella éles: a kihagyott idő soha nem
+növeli a következő napi keretet.
+
+**Gate — futtatott parancs és kimenete (csonkítatlan, §7).**
+
+```bash
+$ tools/round-gate.sh test/features/practice_generator/continuity/missed_day_policy_test.dart test/features/practice_generator/continuity/pause_resume_test.dart
+```
+
+Lépések és eredmény:
+
+- `[1] format` → **ZÖLD** (`Formatted 1655 files (0 changed) in 6.45 seconds.`)
+- `[2] analyze` → **ZÖLD** (`No issues found! (ran in 5.2s)` — `lib/ test/ tool/`)
+- `[3] test .../missed_day_policy_test.dart` → **ZÖLD** (13/13 átment)
+- `[4] test .../pause_resume_test.dart` → **ZÖLD** (12/12 átment)
+- `[5] architecture` → **ZÖLD** (`Architecture dependencies OK (12 allowlisted deviation(s)).`)
+- `[6] secrets` → **ZÖLD** (`Secret scan OK (2927 file(s) scanned, 0 finding(s)).`)
+- `[7] l10n` → **ZÖLD** (`L10n parity OK (en → hu, 1379 message(s)).`)
+
+`MINDEN GATE ZÖLD.`
+
+**Implementáció — mit készített a forduló.**
+
+- `lib/features/practice_generator/domain/policy/missed_day_policy.dart` —
+  tiszta, hívó-táplált policy. Négy bementi mód: `MissedDayKind.{completed,
+  missed, future}` · három kimeneti mód: `RescheduleMode.{simpleReschedule,
+  readinessProposal, readinessProposalReducedDifficulty}` · `MissedDayPolicy`
+  konstruktora `_positive` validátorral védi a küszöböt. A 21 a határ — a
+  határ a **óvatosabb** oldalhoz tartozik (ADR 0269 §5.4). A 22+ a
+  csökkentett nehézségű readiness (ADR 0261 §2 idő-megfelelője).
+- `lib/features/practice_generator/application/usecase/pause_practice_plan.dart` —
+  a `previous` snapshot `PlanStatus.paused` státuszra vált, a naplista
+  változatlan. Csak `PlanStatus.active` tervet fogad; a `paused`/`draft`
+  esetre `StateError`. A visszaadott `revision.snapshot.activeRevisionId`
+  az új `nextRevisionId`.
+- `lib/features/practice_generator/application/usecase/resume_practice_plan.dart` —
+  re-anchoröl: a `shift = resumeOrdinal - originalStartOrdinal` tolja
+  előre a naplistát, hogy az első nap a `resumeDate` legyen. A
+  `gapDays = resumeOrdinal - pauseOrdinal` határozza meg a módot:
+  `>= longBreakThreshold` → `returningAfterBreak`, egyébként az eredeti
+  `originalMode`. A `resumeDate <= pauseDate` esetre `ArgumentError`. A
+  `previous.snapshot.status != paused` esetre `StateError`. Nincs
+  backlog, nincs keret-növelés (A3, A5).
+- `lib/features/practice_generator/presentation/widgets/catch_up_sheet.dart` —
+  `StatelessWidget` modal, 5 sor a nem szégyenítő ARB-ből + egy
+  „Értem" / „Got it" bezáró gomb. A `CatchUpSheet.show(context)` a
+  `showModalBottomSheet` hívó.
+- `lib/features/practice_generator/public.dart` — a barrel kibővítve:
+  `missed_day_policy`, `pause_practice_plan`, `resume_practice_plan`,
+  `catch_up_sheet` néven exportálja a fentieket.
+- `lib/l10n/app_en.arb` + `lib/l10n/app_hu.arb` — 13+13 kulcs:
+  `practicePlanCatchUpSheet{Title,Body,NoBacklogTitle,NoBacklogBody,
+  RestDayTitle,RestDayBody,PrimaryMovesTitle,PrimaryMovesBody,
+  TravelTitle,TravelBody,ReturnTitle,ReturnBody,Dismiss}` hu + en
+  szinkronban. A 6.1 cella-példány az A8 szégyen-tiltás ellenőrzésére
+  az `en` és `hu` body-t is végigpásztázza a
+  *missed/behind/failure/lazy/guilt/punish/fail* törzseken (HU-ban
+  ezek egyike sem jelenik meg szubsztringként).
+- `test/features/practice_generator/continuity/missed_day_policy_test.dart` —
+  13 teszt: A1 ×2 (egyszeri kihagyás + valódi-sértés próba), A2 ×3
+  (pihenőnap / teljesített / unavailable), A1 (ma és a jövő),
+  A6 (csak elsődleges), 6.1 ×3 (20/21/22), A7 (időzóna-ekvivalencia),
+  konstrukció-validátor, A8 (ARB szégyen-blokk).
+- `test/features/practice_generator/continuity/pause_resume_test.dart` — 12
+  teszt: A3 (pause nem termel backlogot), pause-elutasítás ×2,
+  A3 + A4 (resume új revíziót hoz korrigált dátumokkal), A3 (nincs
+  backlog), A3 (napok ledobása védőág), A5 ×2 (küszöb / küszöb fölött),
+  resume < küszöb (eredeti mód megmarad), resume-elutasítás ×2,
+  konstrukció-validátor.
+- `test/fixtures/practice_generator/continuity/continuity_fixtures.dart` —
+  `continuityMissedObservations` és `continuityActiveRevision` építő-
+  függvények, proleptikus Gergely-napi számítással.
+
+**Acceptance-cella-és teszt-hozzárendelés:**
+
+| Cella | Teszt(ek) |
+|---|---|
+| A1 | `missed_day_policy_test.dart` *A1: a single missed day produces simpleReschedule, not growth* és *6.1 real violation probe* |
+| A2 | `missed_day_policy_test.dart` *A2: a rest day is never a missed day / a completed day is never a missed day / an unavailable day is not a missed day* |
+| A3 | `pause_resume_test.dart` *A3: pausing does not accrue missed days / A3 + A4: resume produces a new revision with corrected dates / A3: paused days do not generate backlog on resume / A3: paused days that would fall before resumeDate are dropped* |
+| A4 | `pause_resume_test.dart` *A3 + A4: resume produces a new revision with corrected dates* |
+| A5 | `pause_resume_test.dart` *A5: at the 21-day threshold … / A5: above the 21-day threshold …* |
+| A6 | `missed_day_policy_test.dart` *A6: only primary focus matters — secondary-only day is not missed* |
+| A7 | `missed_day_policy_test.dart` *A7: timezone-equivalent "today" inputs produce identical decisions* (érték-egyenlőségen alapul) |
+| A8 | `missed_day_policy_test.dart` *A8: ARB strings for catch-up sheet do not shame the learner* |
+| 6.1 ×3 | `missed_day_policy_test.dart` *6.1 below / at / above threshold* |
+
+**Miért nincs külön `flag` mező.** A `PausePracticePlan`/`ResumePracticePlan`
+kizárólag a `PlanStatus` + `PlanRevision` lánc meglévő mezőire épít
+(ADR 0256, 0269 §5.3); a terv nem kap boolean „wasPaused" flaget (a
+flag true-ra állítása a brief kifejezett tiltólistáján van).
+
+**Kimaradt kódrészletek.** A `PracticeDay`/`AdaptivePracticePlan`
+copyWith-ja nem támogatja a `startDate`/`endDate` közvetlen
+felülírását, ezért a `ResumePracticePlan` a tervet közvetlenül
+rekonstruálja a konstruktorán, a `PracticeDay`-ket újraépíti a
+`localDate` shiftjével — a többi mező (id, status, timeBudget, blocks,
+primaryFocusSkillIds, reasonCodes) megmarad.
+
+**L10n-fájlok újragenerálása.** A `lib/l10n/app_localizations*.dart`
+fájlok a brief által megadott `generate: true` móddal futnak le; a
+kör végén a `tools/ci/check_l10n_parity.dart` lépés zöldre futott
+(`L10n parity OK (en → hu, 1379 message(s)).`).
+
+**Stop-protokoll.** A kör nem ütközött tiltott zónába (a `Codex-signal`
+várható `done` jelzésre).
+
+
 ## 11. Review — a Claude tölti ki
