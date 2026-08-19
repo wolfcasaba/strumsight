@@ -33,6 +33,7 @@ Kilépési kódok:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -56,6 +57,14 @@ SERIALIZED_PATHS = frozenset(
         "docs/execution/pipeline-queue.tsv",
         "docs/execution/06-requirements-traceability-matrix.md",
     }
+)
+# Public barrelek generált artefaktumok (tool/gen_public_barrel.dart kimenetei);
+# bármely két kör újra tudja őket generálni ugyanabból a `public/*.dart`
+# halmazból, ezért NEM ütközési felület. A szabályt glob-bal fejezzük ki,
+# mert (a) a feature-lista nem fix, és (b) a `tools/round-slots.py` az
+# E99-R17 l10n-mechanizmusát nem importálhatja (emberi gate-hold).
+GENERATED_PATH_PATTERNS: tuple[str, ...] = (
+    "lib/features/*/public.dart",
 )
 ADR_NAME = re.compile(r"^(\d{4})-[a-z0-9-]+\.md$")
 ROUND_ID = re.compile(r"^[A-Z]\d{2}-R\d{2}$")
@@ -106,8 +115,22 @@ def unmet_prerequisites(repo: Path, round_id: str, brief: str, rows: list[tuple[
     return blocking
 
 
+def is_generated_path(path: str) -> bool:
+    """True iff [path] matches a generated-path pattern.
+
+    Generated paths are artifacts that any round can recreate from its
+    fragments (see [GENERATED_PATH_PATTERNS]). The fragments themselves
+    are NOT generated and remain full-value collision surfaces.
+    """
+    return any(fnmatch.fnmatchcase(path, pattern) for pattern in GENERATED_PATH_PATTERNS)
+
+
 def effective_paths(paths: tuple[str, ...]) -> frozenset[str]:
-    return frozenset(path for path in paths if path not in SERIALIZED_PATHS)
+    return frozenset(
+        path
+        for path in paths
+        if path not in SERIALIZED_PATHS and not is_generated_path(path)
+    )
 
 
 def paths_conflict(left: frozenset[str], right: frozenset[str]) -> list[tuple[str, str]]:
