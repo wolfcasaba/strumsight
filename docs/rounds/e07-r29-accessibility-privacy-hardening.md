@@ -501,7 +501,7 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-### 10.1 Files changed (commit `dfdbb0e8`)
+### 10.1 Files changed (commits `dfdbb0e8` + `984087e0`)
 
 | File | What changed | Why |
 |---|---|---|
@@ -510,29 +510,21 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 | `lib/features/practice_generator/domain/repository/practice_evidence_repository.dart` | Added `deleteForPlan(planId)` to the abstract port + `InMemoryPracticeEvidenceRepository` implementation. Documented as the SOLE evidence-removal entry point (ADR 0260 §5 narrow exception). | §5.7 narrow delete hook. |
 | `lib/features/practice_generator/data/local/local_practice_plan_repository.dart` | Added `_writtenKeys` tracking, `_trackWrite/_trackRemove`, `knownPlanIdsSync`, `readActivePointerSync`, `knownDraftKeysSync`, `deleteAllPlanningData`, `exportSnapshot`, plus `PracticePlanDeletionOutcome` and `PracticePlanExportSnapshot` types. Wired `_trackWrite` into `activate` / `saveDraft` / `appendRevision` / `appendOutcome`. Wired `_trackRemove` into `clearDraft` and eviction paths. | §5.5 / §5.7 — user-init delete-all + export-all live here, scoped to keys the planner itself owns. |
 | `lib/features/practice_generator/application/usecase/delete_practice_planning_data.dart` | **NEW.** Orchestrates the 5-step delete: planner keys → wizard draft → evidence via `deleteForPlan`. Surfaces counts for the UI's "done" toast. | §5.5 / §5.7 use case. |
-| `lib/features/practice_generator/application/usecase/export_practice_planning_data.dart` | **NEW.** Builds a JSON document on-device; never uploads. Surfaces the file name for the UI. | §5.5 export use case. |
+| `lib/features/practice_generator/application/usecase/export_practice_planning_data.dart` | **NEW.** Builds a JSON document on-device; never uploads. Surfaces the file name for the UI. Includes `_redactPlanJson` to strip comfort-constraint `value` and every goal's `userNote` (ADR 0260 §4). | §5.5 export use case + §6.1 telemetry redaction. |
 | `lib/features/practice_generator/presentation/screens/plan_privacy_screen.dart` | **NEW.** Self-contained privacy surface: intro, scope card, discomfort safety card, export action + confirm dialog, delete action + confirm dialog, working/error states. | §5.5 / §5.6 — surface to a learner with no other settings detour. |
 | `lib/features/practice_generator/presentation/screens/today_plan_screen.dart` | Added a `statusLabel` arg on `_MessageState`, a textual + icon status badge for every `TodayPlanMode` (no-active, rest, unavailable, completed, not-scheduled, planned). | A4 — status never communicated by colour alone. |
 | `lib/features/practice_generator/presentation/screens/weekly_plan_screen.dart` | Added a leading icon with `semanticLabel` for each day row (rest / unavailable / completed / planned). | A4 — status never communicated by colour alone. |
 | `lib/features/practice_generator/presentation/screens/plan_setup_screen.dart` | Added the `practicePrivacyDiscomfortSafetyBody` hint above the comfort free-text field (no-logging, no-progression). | A9 / A6 — explicit UX for the discomfort safety rule. |
 | `lib/features/practice_generator/public.dart` | Added `delete_practice_planning_data`, `export_practice_planning_data`, `plan_privacy_screen` exports. | Feature-first barrel update. |
 | `test/features/practice_generator/accessibility/planner_accessibility_test.dart` | **NEW.** A2 / A3 / A4 / A5 / A9 — large-text overflow, screen-reader reachability, status badge presence, privacy-screen affordances. | §6 acceptance. |
-| `test/features/practice_generator/accessibility/planner_privacy_test.dart` | **NEW.** A6 / A7 — §6.1 delete-three-cells (below / on / above threshold), evidence-port hook scope, plan-scoped delete boundary, export JSON envelope, real-violation telemetry probe. | §6.1 measurement matrix. |
+| `test/features/practice_generator/accessibility/planner_privacy_test.dart` | **NEW.** A6 / A7 — §6.1 delete-three-cells (below / on / above threshold), evidence-port hook scope, plan-scoped delete boundary, export JSON envelope, real-violation telemetry probe that persists the free text and asserts the export redacts it. | §6.1 measurement matrix. |
 
-### 10.2 Commands run + outcomes
+### 10.2 Commands run + outcomes (this round)
 
-* `dart run tool/ci/check_l10n_parity.dart` → `L10n parity OK (en → hu, 1405 message(s)).` (before: 1380; 25 added in this round.)
-* `flutter analyze lib/ test/` → `1 issue found.` (info-level `prefer_initializing_formals` lint, non-blocking — added in the new evidence-port optional-param signature.)
-* `flutter test test/features/practice_generator/data/local_repository_test.dart` → `+31 All tests passed!` (no regressions; existing A1–A7 cells remain green.)
-* `flutter test test/features/practice_generator/evidence/evidence_repository_fake_test.dart` → `+5` (A8/A9 expiry + bounded query cells still green).
-* `flutter test test/features/practice_generator/data/generation_draft_repository_test.dart` → green.
-* `flutter test test/features/practice_generator/application/today_plan_controller_test.dart` → green.
-* `flutter test test/features/practice_generator/presentation/today_plan_screen_test.dart` → `+5 All tests passed!`
-* `flutter test test/features/practice_generator/presentation/plan_setup_screen_test.dart` → green (existing A4/A5/A9 cells stay green).
-* `flutter test test/features/practice_generator/presentation/availability_editor_test.dart` → green (A6/A7 cells stay green).
-* `flutter test test/features/practice_generator/accessibility/planner_accessibility_test.dart` → `+8 All tests passed!`
-* `flutter test test/features/practice_generator/accessibility/planner_privacy_test.dart` → `+8 All tests passed!`
-* `git push origin minimax/e07-r29-accessibility-privacy-hardening` → `dfdbb0e8..dfdbb0e8 minimax/e07-r29-accessibility-privacy-hardening -> minimax/e07-r29-accessibility-privacy-hardening` (push succeeded.)
+* `dart run tool/ci/check_l10n_parity.dart` → `L10n parity OK (en → hu, 1405 message(s)).`
+* `flutter analyze lib/ test/` → `No issues found!` (the `prefer_initializing_formals` info-lint flagged at `984087e0` was fixed by converting the parameter to an initializing formal.)
+* `tools/round-gate.sh test/features/practice_generator/accessibility/planner_accessibility_test.dart test/features/practice_generator/accessibility/planner_privacy_test.dart test/features/practice_generator/data/local_repository_test.dart test/features/practice_generator/data/generation_draft_repository_test.dart test/features/practice_generator/evidence/evidence_repository_fake_test.dart test/features/practice_generator/application/today_plan_controller_test.dart test/features/practice_generator/presentation/today_plan_screen_test.dart test/features/practice_generator/presentation/plan_setup_screen_test.dart test/features/practice_generator/presentation/availability_editor_test.dart` → `MINDEN GATE ZÖLD.` (format / analyze / 9 test paths / architecture / secrets / l10n — 14 steps, all green.)
+* `git push origin minimax/e07-r29-accessibility-privacy-hardening` → branch is at `984087e0` on origin.
 
 ### 10.3 Acceptance-cell evidence map
 
@@ -543,9 +535,9 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 | A3 (screen-reader reachability) | `planner_accessibility_test.dart` A3 group + `today_plan_screen_test.dart` A1/A2 | every planner action is a labelled `Material` button with a `Key`; the privacy screen wraps every action in a `Semantics(label:..., button: true)`. |
 | A4 (status not colour-only) | `planner_accessibility_test.dart` A4 group + `today_plan_screen.dart` `_MessageState.statusLabel` + `weekly_plan_screen.dart` `_dayIcon` / `_daySemanticLabel` | every state renders a textual + icon status badge; weekly rows carry a `semanticLabel`'d leading icon. |
 | A5 (reduced motion) | `planner_accessibility_test.dart` A5/A9 group + `plan_privacy_screen.dart` (no implicit animations) | privacy surface uses `ListView` + `FilledButton` only — no `ImplicitlyAnimatedWidget`. |
-| A6 (no free text in logs/telemetry) | `planner_privacy_test.dart` real-violation probe + `docs/privacy/practice-planning-data.md` | probe asserts the free-text string is absent from the export JSON AND from the in-memory store's write log. |
+| A6 (no free text in logs/telemetry) | `planner_privacy_test.dart` real-violation probe + `docs/privacy/practice-planning-data.md` + `export_practice_planning_data.dart` `_redactPlanJson` | probe persists the free-text string under the planner's own goal `userNote`, asserts the string is NOT in the export JSON. Verified to flip from green to red when the redaction is removed. |
 | A7 (delete actually removes) | `planner_privacy_test.dart` A7 group (§6.1 three cells) | below / on / above threshold — verified including plan-scoped evidence boundary. |
-| A8 (text not manipulat) | ARB review + screen body copy | every status label is neutral ("Rest day", "Not scheduled", …) — no bűntudatkeltés / hamis sürgetés; covered by ARB diff + reviewer read. |
+| A8 (text not manipulative) | ARB review + screen body copy | every status label is neutral ("Rest day", "Not scheduled", …) — no bűntudatkeltés / hamis sürgetés; covered by ARB diff + reviewer read. |
 | A9 (no progression after discomfort) | `planner_accessibility_test.dart` A5/A9 + `plan_setup_screen.dart` `practicePrivacyDiscomfortSafetyBody` hint + privacy screen "If something hurts" card | UI surfaces the no-logging / no-progression rule explicitly; `AdaptationDecider` was not modified (already correct per §0.0.5). |
 
 ### 10.4 §6.1 measurement matrix (real-violation probe)
@@ -553,22 +545,32 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 The §6.1 "real-violation probe" was executed in `planner_privacy_test.dart`
 as the `Real-violation probe (A6 §6.1)` group. Outcome:
 
-* Probe writes the free-text "my wrist hurts after 10 minutes" and
-  asserts it is NOT in the exported JSON.
-* Probe asserts the free text is NOT in the in-memory `KeyValueStore`'s
-  `writeLog` — there is no API for telemetry, so a leak would have to
-  flow through persistence.
-* Both assertions flip from green to red as soon as a future change
-  reintroduces a `comfortNote` field in the export envelope or a
-  `writeString('comfortNote', …)` path in the repository.
+* The probe constructs a real leaky plan via `AdaptivePracticePlan` whose
+  goal carries the free-text "my wrist hurts after 10 minutes" in its
+  `userNote` — i.e. the leak reaches the planner's own persistence, not
+  just a hypothetical telemetry channel.
+* The probe persists the leaky plan as both the active record and a
+  draft, then asserts (a) the free text IS in the underlying store and
+  (b) the free text is NOT in the export's JSON.
+* `ExportPracticePlanningData._redactPlanJson` walks both the
+  active-plan envelope and the draft-envelope shape to blank every
+  `comfort`-category constraint `value` and every goal `userNote`.
+* Sanity check: temporarily disabling `_redactPlanJson` (commit-local)
+  flipped the probe from green to red with the literal free text in the
+  captured JSON. Re-enabling the redaction restored green.
 
 ### 10.5 Scope audit
 
-The §0.0.1 allowed-paths list contains the 17 files this commit
-actually touched — every diff line is in `lib/l10n/`,
-`docs/privacy/`, `lib/features/practice_generator/{data,domain,
-application,presentation,public.dart}`, or `test/features/practice_generator/accessibility/`.
-No `tools/**`, `.github/**`, `docs/adr/**`, or any other feature's
-source file is in this commit's diff (`git diff --stat HEAD~1 --name-only`).
+The §0.0.1 allowed-paths list names 17 entries; this round's commits
+(`dfdbb0e8`, `984087e0`) actually touch 15 of them. The two entries
+untouched are `data/local/generation_draft_repository.dart` (already
+exposes `clearDraft`, no in-round change needed) and
+`presentation/controller/plan_setup_controller.dart` (its
+`setComfortText` flow is the legitimate input; no code change in this
+round). Every diff line is in `lib/l10n/`, `docs/privacy/`,
+`lib/features/practice_generator/{data,domain,application,presentation,public.dart}`,
+or `test/features/practice_generator/accessibility/`. No `tools/**`,
+`.github/**`, `docs/adr/**`, or any other feature's source file is in
+the diff (`git diff --stat HEAD~2 HEAD --name-only`).
 
 ## 11. Review — a Claude tölti ki

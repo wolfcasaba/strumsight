@@ -34,6 +34,66 @@ final class ExportPracticePlanningDataResult {
   final int evidenceRecordCount;
 }
 
+/// Returns a plan with every `comfort`-category [LearnerConstraint]
+/// removed (its `value` is the free-text "comfort note") and with the
+/// `userNote` of every goal blanked. The export deliberately never
+/// carries free-text learner input (ADR 0260 §4): the on-device export
+/// file is something the learner may ultimately share, so it must not
+/// leak the comfort note.
+/// Strips comfort-category constraints' `value` fields and every goal's
+/// `userNote` from an already-encoded envelope. The envelope may be either
+/// the active-plan shape (`body = {...plan fields}`) or the draft-envelope
+/// shape (`body = {draftKey, savedAt, plan: {...plan fields}}`).
+/// The export deliberately never carries free-text learner input
+/// (ADR 0260 §4): the on-device export file is something the learner
+/// may ultimately share, so it must not leak the comfort note.
+Map<String, Object?> _redactPlanJson(Map<String, Object?> encoded) {
+  final body = encoded['body'];
+  if (body is! Map<String, Object?>) return encoded;
+
+  // Locate the plan-body sub-tree: either `body` itself (active) or
+  // `body['plan']` (draft envelope).
+  Map<String, Object?>? planBody;
+  if (body.containsKey('goals') && body['goals'] is List) {
+    planBody = body;
+  } else if (body['plan'] is Map<String, Object?>) {
+    planBody = body['plan'] as Map<String, Object?>;
+  }
+  if (planBody == null) return encoded;
+
+  if (planBody['constraints'] is Map<String, Object?>) {
+    final constraints = <String, Object?>{
+      for (final entry
+          in (planBody['constraints'] as Map<String, Object?>).entries)
+        entry.key: entry.value,
+    };
+    final values = constraints['values'];
+    if (values is List) {
+      constraints['values'] = <Object?>[
+        for (final raw in values)
+          if (raw is Map<String, Object?>)
+            (raw['category'] == 'comfort')
+                ? <String, Object?>{...raw, 'value': ''}
+                : raw
+          else
+            raw,
+      ];
+    }
+    planBody['constraints'] = constraints;
+  }
+
+  if (planBody['goals'] is List) {
+    planBody['goals'] = <Object?>[
+      for (final raw in (planBody['goals'] as List))
+        if (raw is Map<String, Object?>)
+          <String, Object?>{...raw, 'userNote': ''}
+        else
+          raw,
+    ];
+  }
+  return encoded;
+}
+
 /// Pure use case: no logging, no telemetry. Free-text "comfort notes"
 /// are NEVER present in the export — the planner does not persist them
 /// (ADR 0260 §4, ADR 0265 §3).
@@ -103,15 +163,17 @@ class ExportPracticePlanningData {
               },
         'plan': snap.activePlan == null
             ? null
-            : serializer.encodePlanRecord(snap.activePlan!),
+            : _redactPlanJson(serializer.encodePlanRecord(snap.activePlan!)),
       },
       'drafts': <String, Object?>{
         for (final entry in snap.drafts.entries)
-          entry.key: serializer.encodeDraft(
-            PracticePlanDraftEnvelope(
-              draftKey: entry.key,
-              plan: entry.value,
-              savedAt: clock().toUtc(),
+          entry.key: _redactPlanJson(
+            serializer.encodeDraft(
+              PracticePlanDraftEnvelope(
+                draftKey: entry.key,
+                plan: entry.value,
+                savedAt: clock().toUtc(),
+              ),
             ),
           ),
       },
