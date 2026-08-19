@@ -1,13 +1,13 @@
 # E07-R27 — Review
 
-Brief: `docs/rounds/e07-r27-missed-day-and-pause.md`  
-Diff: `6dff23ee..d55b6639`  
-Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-19  
-Verdikt: CHANGES REQUIRED
+Brief: `docs/rounds/e07-r27-missed-day-and-pause.md`
+Diff: `6dff23ee..d55b6639`
+Reviewer: Codex / gpt-5.6-terra · Dátum: 2026-08-19
+Verdikt: APPROVED (javítás utáni független re-review, `1c5d4562`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 nyitott (2 javítva) · MINOR: 0 · NOTE: 0
 
 Az izolált, commit-pontos `/tmp/review-e07-r27-d55b` klón scope-auditja OK
 (`11 changed path(s), 0 generated/ignored`), és a reviewer saját
@@ -51,7 +51,7 @@ review-jelentés a scope-audit beépített review-artefaktum mentessége alá es
   re-anchoröld. Adj checked-in regressziós tesztet erre a pontos esetre.
 - **Ellenőrzés:** a fenti próba a javított kör-tesztben legyen zöld, a
   célzott gate újrafuttatásával.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`150fc118`), reviewer-próba és checked-in F1 teszt zöld
 
 ### F2 — MAJOR — A1 napi-keret invariant nincs modellezve, a teszt csak módot ellenőriz
 
@@ -73,7 +73,7 @@ review-jelentés a scope-audit beépített review-artefaktum mentessége alá es
   kihagyott idővel legyen piros.
 - **Ellenőrzés:** célzott tesztben a hibás `budget + missedDuration` mutáció
   PIROS, visszaállítva ZÖLD.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`1f44fe43`), typed-budget és mutációs próba zöld
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -83,9 +83,10 @@ review-jelentés a scope-audit beépített review-artefaktum mentessége alá es
 | analyze | zöld | ✅ izolált klón |
 | célzott tesztek | zöld | ✅ izolált klón (13 + 12) |
 | architecture / secrets / l10n | zöld | ✅ izolált klón |
-| CI (teljes suite + property) | fut | ⏳ Full Gate dispatch folyamatban |
-| Router CI | fut | ⏳ branch SHA-n folyamatban |
+| CI (teljes suite + property) | korábbi dispatch elavult | ⏳ végső HEAD-re újradispatch szükséges |
+| Router CI | branch-push trigger | ⏳ végső HEAD-re ellenőrizendő |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint merge tilos, amíg F1 vagy F2 nyitott.
+F1 és F2 lezárva; az ADR 0052 szerinti merge-hez még a végső HEAD exact-SHA
+Full Gate és Router CI zöld eredménye kell.
