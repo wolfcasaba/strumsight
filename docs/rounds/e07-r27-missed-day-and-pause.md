@@ -256,6 +256,71 @@ implementációt, amelyik „több nap = több munka" receptet követ, és
 így bizonyítja, hogy az **A1** cella éles: a kihagyott idő soha nem
 növeli a következő napi keretet.
 
+A javító kör (F2) kiegészítette ezt egy *typed* no-growth próbával:
+a `MissedDayDecision.nextDayBudget` mező a hívó által átadott
+`Duration` értéket változatlanul viszi tovább. A *F2 real violation
+probe* teszt egy képzetes `budget + missedDuration * count` mutációt
+állít szembe a tényleges döntéssel, és a `nextDayBudget` mező
+egyenlőtlensége azonnal pirosra vált — típusos szinten, nem
+kommentben.
+
+**F1 fix — a completed nap immutable a resume során (ADR 0256).**
+
+Az E07-R27 review F1 leletét a javító kör lezárta. A
+`ResumePracticePlan` mostantól a `PracticeItemStatus.completed`
+státuszú napokat változatlanul (azonos `localDate`, `timeBudget`,
+`blocks`, `primaryFocusSkillIds`, `reasonCodes`) őrzi meg; a
+re-anchor (`shift = resumeOrdinal - originalStartOrdinal`) kizárólag
+a még nem completed, jövőbeli napokra hat. A naplista az átrendezés
+után kronologikusan rendezett, így a megőrzött és az áthelyezett
+bejegyzések koherens sorrendben maradnak.
+
+A regressziós teszt (`pause_resume_test.dart` *F1: a completed day
+keeps its original localDate across pause/resume*) egy paused tervet
+épít, amelynek első napja `completed` 2026-08-01, a többi `planned`;
+pauseDate=2026-08-03, resumeDate=2026-08-10. A teszt a completed
+napot 2026-08-01-en, a planned napokat 2026-08-11..2026-08-19 között
+várja, a naplistát időrendben, és a completed nap teljes
+tartalmát (status, timeBudget, primaryFocusSkillIds, reasonCodes)
+változatlanul.
+
+**F2 fix — a no-growth invariant a típusos contract része.**
+
+A `MissedDayPolicy` contractja a javító körben kiegészült a
+`nextDayBudget` mezővel. A `MissedDayInput` kötelezően fogad egy
+`Duration`-t, a `MissedDayDecision.nextDayBudget` ugyanazt az értéket
+adja vissza. A `decision.nextDayBudget == input.nextDayBudget`
+egyenlőség a típusos no-growth invariant — a review F2 leletét
+konkrét, géppel ellenőrizhető egyenlőségre cseréltük.
+
+Három új teszt védi:
+- *F2: the next-day hard budget is carried through the decision
+  unchanged* — egyszerű eset, 10 kihagyott nap,
+  `nextDayBudget = Duration(minutes: 30)`, a döntésben is 30.
+- *F2: every mode (simple/readiness/reduced) keeps the next-day
+  budget unchanged* — a három kimeneti mód mindegyikében (5 nap
+  → simpleReschedule, 21 nap → readinessProposal, 25 nap →
+  readinessProposalReducedDifficulty) azonos 45 perces bementi
+  költségvetést várunk vissza.
+- *F2 real violation probe: a budget + missedDuration mutation must
+  fail A1* — egy képzetes `budget + missedDurationPerDay * count`
+  értéket hasonlít a döntés mezőjéhez, és azonnal pirosra vált
+  ha az implementáció a kihagyott napokkal növelte volna a
+  keretet.
+
+A `MissedDayInput` mező-sorrend változott: `today` után most a
+`nextDayBudget` következik, és csak utána az `observations`. A
+meglévő 12 hívóhely (`missed_day_policy_test.dart`) át lett írva a
+kötelező `nextDayBudget: const Duration(minutes: 20)` mezővel. A
+A1, A2, A6, A7 és 6.1 cella-tesztek változatlanok.
+
+**Review-jelentés státusza.** A `docs/reviews/e07-r27-review.md` a
+jelenlegi kör rövid scope-audit-tiltólistáján van, ezért a F1/F2
+státusz-átállítást a javító implementer GUARD-ja blokkolta. Az
+orchestrátor a saját, független ellenőrzésével zárja a két
+MAJOR státuszt — a zöld tesztkimenet és a fenti leírás a
+forrása a ténynek.
+
 **Gate — futtatott parancs és kimenete (csonkítatlan, §7).**
 
 ```bash
@@ -266,8 +331,8 @@ Lépések és eredmény:
 
 - `[1] format` → **ZÖLD** (`Formatted 1655 files (0 changed) in 6.45 seconds.`)
 - `[2] analyze` → **ZÖLD** (`No issues found! (ran in 5.2s)` — `lib/ test/ tool/`)
-- `[3] test .../missed_day_policy_test.dart` → **ZÖLD** (13/13 átment)
-- `[4] test .../pause_resume_test.dart` → **ZÖLD** (12/12 átment)
+- `[3] test .../missed_day_policy_test.dart` → **ZÖLD** (16/16 átment)
+- `[4] test .../pause_resume_test.dart` → **ZÖLD** (13/13 átment)
 - `[5] architecture` → **ZÖLD** (`Architecture dependencies OK (12 allowlisted deviation(s)).`)
 - `[6] secrets` → **ZÖLD** (`Secret scan OK (2927 file(s) scanned, 0 finding(s)).`)
 - `[7] l10n` → **ZÖLD** (`L10n parity OK (en → hu, 1379 message(s)).`)
@@ -312,16 +377,19 @@ Lépések és eredmény:
   *missed/behind/failure/lazy/guilt/punish/fail* törzseken (HU-ban
   ezek egyike sem jelenik meg szubsztringként).
 - `test/features/practice_generator/continuity/missed_day_policy_test.dart` —
-  13 teszt: A1 ×2 (egyszeri kihagyás + valódi-sértés próba), A2 ×3
+  16 teszt: A1 ×2 (egyszeri kihagyás + valódi-sértés próba), A2 ×3
   (pihenőnap / teljesített / unavailable), A1 (ma és a jövő),
   A6 (csak elsődleges), 6.1 ×3 (20/21/22), A7 (időzóna-ekvivalencia),
-  konstrukció-validátor, A8 (ARB szégyen-blokk).
-- `test/features/practice_generator/continuity/pause_resume_test.dart` — 12
+  konstrukció-validátor, F2 (a no-budget-növelés invariant), F2
+  (minden módon átfuttatva), F2 (valódi-sértés próba),
+  A8 (ARB szégyen-blokk).
+- `test/features/practice_generator/continuity/pause_resume_test.dart` — 13
   teszt: A3 (pause nem termel backlogot), pause-elutasítás ×2,
   A3 + A4 (resume új revíziót hoz korrigált dátumokkal), A3 (nincs
   backlog), A3 (napok ledobása védőág), A5 ×2 (küszöb / küszöb fölött),
   resume < küszöb (eredeti mód megmarad), resume-elutasítás ×2,
-  konstrukció-validátor.
+  konstrukció-validátor, F1 (completed nap localDate-je a resume
+  során).
 - `test/fixtures/practice_generator/continuity/continuity_fixtures.dart` —
   `continuityMissedObservations` és `continuityActiveRevision` építő-
   függvények, proleptikus Gergely-napi számítással.
@@ -330,10 +398,10 @@ Lépések és eredmény:
 
 | Cella | Teszt(ek) |
 |---|---|
-| A1 | `missed_day_policy_test.dart` *A1: a single missed day produces simpleReschedule, not growth* és *6.1 real violation probe* |
+| A1 | `missed_day_policy_test.dart` *A1: a single missed day produces simpleReschedule, not growth* + *6.1 real violation probe* + *F2: the next-day hard budget is carried through the decision unchanged* + *F2: every mode (simple/readiness/reduced) keeps the next-day budget unchanged* + *F2 real violation probe: a budget + missedDuration mutation must fail A1* |
 | A2 | `missed_day_policy_test.dart` *A2: a rest day is never a missed day / a completed day is never a missed day / an unavailable day is not a missed day* |
-| A3 | `pause_resume_test.dart` *A3: pausing does not accrue missed days / A3 + A4: resume produces a new revision with corrected dates / A3: paused days do not generate backlog on resume / A3: paused days that would fall before resumeDate are dropped* |
-| A4 | `pause_resume_test.dart` *A3 + A4: resume produces a new revision with corrected dates* |
+| A3 | `pause_resume_test.dart` *A3: pausing does not accrue missed days / A3 + A4: resume produces a new revision with corrected dates / A3: paused days do not generate backlog on resume / A3: paused days that would fall before resumeDate are dropped* + (F1: completed napok megőrzése) |
+| A4 | `pause_resume_test.dart` *A3 + A4: resume produces a new revision with corrected dates* + *F1: a completed day keeps its original localDate across pause/resume* |
 | A5 | `pause_resume_test.dart` *A5: at the 21-day threshold … / A5: above the 21-day threshold …* |
 | A6 | `missed_day_policy_test.dart` *A6: only primary focus matters — secondary-only day is not missed* |
 | A7 | `missed_day_policy_test.dart` *A7: timezone-equivalent "today" inputs produce identical decisions* (érték-egyenlőségen alapul) |
