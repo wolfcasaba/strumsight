@@ -24,6 +24,10 @@ library;
 import '../../application/port/vision_evidence_reader.dart';
 import '../../domain/id/planner_ids.dart';
 import '../../domain/model/skill_evidence.dart';
+// Narrow public barrel: `ObservationState` is the only Vision type the
+// adapter references — never landmarks, frames, or geometry (ADR 0319).
+import 'package:strumsight/features/vision/domain/evidence/public.dart'
+    show ObservationState;
 
 /// Stable, log-safe reason the adapter could not turn a vision fact into a
 /// `SkillEvidence`. [code] is the log key; [detail] is a non-sensitive

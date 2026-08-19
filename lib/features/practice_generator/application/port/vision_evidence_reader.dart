@@ -24,11 +24,10 @@ import 'package:strumsight/features/vision/domain/evidence/public.dart'
 /// or any other content field (SDD Ch8 §5.1).
 final class VisionEvidenceObservationView {
   VisionEvidenceObservationView({
-    required VisionEvidence observation,
+    required this.observation,
     required String skillHint,
     required DateTime capturedAt,
-  }) : observation = observation,
-       skillHint = _requireSkillHint(skillHint, 'skillHint'),
+  }) : skillHint = _requireSkillHint(skillHint, 'skillHint'),
        capturedAt = capturedAt.toUtc();
 
   final VisionEvidence observation;

@@ -49,9 +49,9 @@ void main() {
 
   DateTime now() => DateTime.utc(2026, 8, 20);
 
-  Adapter defaults({double signalQualityThreshold = 0.55}) =>
-      const AnalysisEvidenceAdapter(
-        reader: DefaultAnalysisEvidenceReader(),
+  AnalysisEvidenceAdapter defaults({double signalQualityThreshold = 0.55}) =>
+      AnalysisEvidenceAdapter(
+        reader: const DefaultAnalysisEvidenceReader(),
         measurementVersion: 1,
         signalQualityThreshold: signalQualityThreshold,
         conflictThreshold: 0.4,
@@ -330,7 +330,7 @@ void main() {
         'SkillEvidence', () {
       final adapter = defaults();
       final result = adapter.adapt(<AnalysisEvidenceView>[
-        const AnalysisEvidenceUnavailableView(
+        AnalysisEvidenceUnavailableView(
           capability: AnalysisCapability.targetAlignment,
           reason: CapabilityUnavailableReason.noReferenceTarget,
           skillHint: 'chord.gMajor',

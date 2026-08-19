@@ -46,7 +46,7 @@ sealed class AnalysisEvidenceView {
 /// and reference instant.
 final class AnalysisEvidenceMetricView extends AnalysisEvidenceView {
   AnalysisEvidenceMetricView({
-    required this.metric,
+    required AnalysisMetricResult metric,
     required String skillHint,
     required DateTime capturedAt,
   }) : skillHint = _requireSkillHint(skillHint, 'skillHint'),
@@ -71,8 +71,8 @@ final class AnalysisEvidenceSignalQualityView extends AnalysisEvidenceView {
 /// (A7, ADR 0262).
 final class AnalysisEvidenceUnavailableView extends AnalysisEvidenceView {
   AnalysisEvidenceUnavailableView({
-    required this.capability,
-    required this.reason,
+    required AnalysisCapability capability,
+    required CapabilityUnavailableReason reason,
     required String skillHint,
   }) : capability = capability,
        reason = reason,
