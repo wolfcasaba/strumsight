@@ -12418,4 +12418,38 @@ látható emberi lépés** — a kör-briefjének §0-jában kell jelezni (pre-f
 nem a self-healre bízni. Ez a `brief-lint.py` egy jövőbeli ellenőrzése lehet:
 új `tools/*.py` az `allowed_paths`-ban + guard-teszt ⇒ figyelmeztetés.
 
-Rokon: [[ADR 0112]].
+**Végleges megoldás (2026-08-19, PR #324, squash `a2d64831`) — a hibaosztály
+megszűnt.** Az L322 első felében leírt javítás (egy hiányzó `paths:` sor) a
+TÜNETET kezelte. A gyökér-ok a `router-ci.yml` szerkezete volt: 36 fájlonkénti
+bejegyzés sorolta fel a mért `tools/` és `docs/execution/` fájlokat, ezért
+MINDEN új, teszt által hivatkozott fájl ugyanezt a haltot termelte volna újra —
+és a javítás helye mindig a self-heal tiltott zónája.
+
+A csere: 36 egyedi bejegyzés helyett `tools/**` + `docs/execution/**`. Mérve a
+valódi guard-teszt predikátumaival: a lefedett verziókövetett fájlok száma
+**127 → 143 (+16)**, és EGYETLEN korábban lefedett fájl sem esik ki — a
+változás szigorúan bővítő, tehát nem gyengíti a mércét. A
+`tools/round-ci-plan.py` illesztője helyesen kezeli a `**`-ot
+(`tools/**` → `^tools/.*$`), 9/9 illesztési próbával igazolva.
+
+**A teljes suite egy csatolt tesztet fogott meg** — és ez a bejegyzés valódi
+tanulsága. A `test_pipeline_throughput.py` a Router CI elvárását
+`assertIn("tools/tests/**", paths)` alakban állította: minta-SZÖVEGHEZ kötötte
+magát, nem viselkedéshez. Ezért pirosra váltott attól a változástól, ami a
+lefedettséget NÖVELTE. A javítás lefedettség-alapú állítás lett (indít-e a
+`tools/tests/...` fájl Router CI-t), és mivel ez teszt-módosítás a saját
+változtatás ÚTJÁBAN — pontosan az a minta, amit az L282 és a
+`gateguard-sentinel-misses-test-relaxation` tanulság tilt —, mutációval
+igazolva, hogy az új állítás SZIGORÚBB: `tools/**` eltávolítására PIROS,
+`docs/rounds/**` eltávolítására PIROS, ép állapoton ZÖLD.
+
+**Hogyan alkalmazd.** (1) Ha egy gate-konfiguráció FELSOROLÁSSAL fedi le azt,
+amit egy guard-teszt CSALÁDKÉNT mér, az karbantartási adósság, ami előbb-utóbb
+haltot termel — cseréld családi globra, mert a glob bővítő, a felsorolás
+pedig rothad. (2) Teszt SOHA ne minta-szöveget állítson, ha a mért tulajdonság
+lefedettség: a szöveg-állítás egyszerre ad hamis riasztást (átnevezésre pirosít)
+és vakfoltot (törött illesztőre zöldet ad). (3) Ha egy változtatás útjában álló
+tesztet módosítasz, a bizonyítás nem opcionális: mutáld el a mért tulajdonságot,
+és mutasd meg, hogy az ÚJ állítás elbukik rá.
+
+Rokon: [[ADR 0112]], [[L282]].
