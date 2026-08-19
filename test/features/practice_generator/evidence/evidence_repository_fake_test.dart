@@ -176,4 +176,76 @@ void main() {
       expect(result, isEmpty);
     });
   });
+
+  group('InMemoryPracticeEvidenceRepository — plan-scoped delete (E07-R29 §5.7 '
+      'narrow exception, F2 measured regression)', () {
+    test('deleteForPlan on the DEFAULT impl never treats unknown-ownership '
+        'records as the caller\'s (two plans).', () {
+      final repository = InMemoryPracticeEvidenceRepository();
+      // Two plans, two outcomes, owned via the save-time data relation.
+      repository.save(
+        evidence(outcomeId: 'plan.a.outcome.1'),
+        sourcePlanId: PlanId('plan.a'),
+      );
+      repository.save(
+        evidence(outcomeId: 'plan.b.outcome.1'),
+        sourcePlanId: PlanId('plan.b'),
+      );
+
+      final removed = repository.deleteForPlan(PlanId('plan.a'));
+
+      expect(removed, 1);
+      expect(repository.findByOutcomeId(OutcomeId('plan.a.outcome.1')), isNull);
+      expect(
+        repository.findByOutcomeId(OutcomeId('plan.b.outcome.1')),
+        isNotNull,
+        reason: 'plan.b record must survive a plan-scoped delete on plan.a',
+      );
+    });
+
+    test(
+      'a record saved WITHOUT a sourcePlanId has unknown ownership and '
+      'is preserved by deleteForPlan (F2 default-implementation contract).',
+      () {
+        final repository = InMemoryPracticeEvidenceRepository();
+        // Evidence whose ownership is unknowable from the record alone
+        // (the Aggregator production path).
+        repository.save(evidence(outcomeId: 'outcome.orphan'));
+
+        final removed = repository.deleteForPlan(PlanId('plan.a'));
+
+        expect(
+          removed,
+          0,
+          reason: 'unknown ownership is a refusal, NOT a wildcard claim',
+        );
+        expect(
+          repository.findByOutcomeId(OutcomeId('outcome.orphan')),
+          isNotNull,
+        );
+      },
+    );
+
+    test('the legacy outcomePlanLookup callback still narrows the delete '
+        'to records whose id matches the lookup (backward-compat).', () {
+      final repository = InMemoryPracticeEvidenceRepository(
+        outcomePlanLookup: (outcomeId) {
+          if (outcomeId.startsWith('plan.a.')) return PlanId('plan.a');
+          if (outcomeId.startsWith('plan.b.')) return PlanId('plan.b');
+          return null;
+        },
+      );
+      repository.save(evidence(outcomeId: 'plan.a.outcome.1'));
+      repository.save(evidence(outcomeId: 'plan.b.outcome.1'));
+
+      final removed = repository.deleteForPlan(PlanId('plan.a'));
+
+      expect(removed, 1);
+      expect(repository.findByOutcomeId(OutcomeId('plan.a.outcome.1')), isNull);
+      expect(
+        repository.findByOutcomeId(OutcomeId('plan.b.outcome.1')),
+        isNotNull,
+      );
+    });
+  });
 }

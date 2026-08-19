@@ -9,7 +9,9 @@ import 'package:strumsight/features/practice_generator/data/local/local_practice
 import 'package:strumsight/features/practice_generator/data/local/practice_plan_serializer.dart';
 import 'package:strumsight/features/practice_generator/domain/id/planner_ids.dart';
 import 'package:strumsight/features/practice_generator/domain/model/adaptive_practice_plan.dart';
+import 'package:strumsight/features/practice_generator/domain/model/plan_enums.dart';
 import 'package:strumsight/features/practice_generator/domain/model/plan_revision.dart';
+import 'package:strumsight/features/practice_generator/domain/model/practice_day.dart';
 import 'package:strumsight/features/practice_generator/domain/model/practice_goal.dart';
 import 'package:strumsight/features/practice_generator/domain/model/skill_evidence.dart';
 import 'package:strumsight/features/practice_generator/domain/repository/practice_evidence_repository.dart';
@@ -36,9 +38,11 @@ void main() {
       );
       await planRepo.appendRevision(_revision(PlanId('plan.1'), number: 1));
 
-      // Seed evidence for an outcome.
-      evidence.save(
-        _evidenceForOutcome(OutcomeId('outcome.1'), PlanId('plan.1')),
+      // Seed evidence for an outcome (with an explicit ownership record).
+      _saveEvidence(
+        evidence,
+        outcomeId: OutcomeId('outcome.1'),
+        planId: PlanId('plan.1'),
       );
 
       final result = await useCase();
@@ -110,8 +114,10 @@ void main() {
       'store keeps evidence otherwise (ADR 0260 §5 narrow exception).',
       () async {
         final evidence = _newEvidenceRepository();
-        evidence.save(
-          _evidenceForOutcome(OutcomeId('outcome.1'), PlanId('plan.1')),
+        _saveEvidence(
+          evidence,
+          outcomeId: OutcomeId('outcome.1'),
+          planId: PlanId('plan.1'),
         );
 
         expect(evidence.allForSkill('chord.gMajor'), hasLength(1));
@@ -123,8 +129,77 @@ void main() {
       },
     );
 
-    test('plan-scoped evidence delete does NOT touch evidence from another '
-        'plan (§5.7 narrow exception boundary).', () async {
+    test(
+      'a record saved WITHOUT explicit ownership is never deleted by '
+      'deleteForPlan — unknown ownership is a refusal, not a wildcard '
+      '(F2 default-implementation regression, two plans).',
+      () async {
+        final evidence = InMemoryPracticeEvidenceRepository();
+
+        // Two plans, two outcomes — both saved WITHOUT a source-plan-id
+        // (the "legitimate" production call path: the aggregator passes
+        // a SkillEvidence whose ownership is unknowable from the
+        // evidence record alone).
+        evidence.save(
+          _evidenceRecord(OutcomeId('plan.a.outcome.1')),
+        );
+        evidence.save(
+          _evidenceRecord(OutcomeId('plan.b.outcome.1')),
+        );
+
+        // Default-implementation regression: deleting "plan.a" must
+        // leave "plan.b" intact. With the F2 bug, the null-default
+        // lookup treated BOTH records as owned by the caller and would
+        // wipe both — measured regression.
+        final removed = evidence.deleteForPlan(PlanId('plan.a'));
+
+        expect(removed, 0, reason: 'no record carries plan-a ownership');
+        expect(
+          evidence.findByOutcomeId(OutcomeId('plan.a.outcome.1')),
+          isNotNull,
+          reason: 'unknown ownership must not silently lose the record',
+        );
+        expect(
+          evidence.findByOutcomeId(OutcomeId('plan.b.outcome.1')),
+          isNotNull,
+        );
+      },
+    );
+
+    test(
+      'deleteForPlan on the DEFAULT InMemory (no lookup, no
+      source-plan-id) does NOT treat every record as the caller\'s '
+      '(E07-R29 review F2 measured regression — two plans).',
+      () async {
+        final evidence = InMemoryPracticeEvidenceRepository();
+        // Save a single record with explicit ownership to plan.a.
+        _saveEvidence(
+          evidence,
+          outcomeId: OutcomeId('plan.a.outcome.1'),
+          planId: PlanId('plan.a'),
+        );
+        // Save a SECOND record whose ownership is none of the caller's
+        // business — a save WITHOUT a sourcePlanId (the Aggregator path).
+        evidence.save(_evidenceRecord(OutcomeId('plan.b.outcome.1')));
+
+        final removed = evidence.deleteForPlan(PlanId('plan.a'));
+
+        expect(removed, 1, reason: 'only the plan.a record matches');
+        expect(
+          evidence.findByOutcomeId(OutcomeId('plan.a.outcome.1')),
+          isNull,
+        );
+        expect(
+          evidence.findByOutcomeId(OutcomeId('plan.b.outcome.1')),
+          isNotNull,
+          reason: 'unknown-ownership record is NOT silently claimed',
+        );
+      },
+    );
+
+    test('legacy outcomePlanLookup still works for tests that build '
+        'evidence through a string-prefix pattern (F2 backward-compat).',
+        () async {
       final evidence = InMemoryPracticeEvidenceRepository(
         outcomePlanLookup: (outcomeId) {
           if (outcomeId.startsWith('plan.a.outcome')) return PlanId('plan.a');
@@ -132,36 +207,8 @@ void main() {
           return null;
         },
       );
-      evidence.save(
-        SkillEvidence(
-          skillId: 'chord.gMajor',
-          source: EvidenceSource.learn,
-          sourceOutcomeId: OutcomeId('plan.a.outcome.1'),
-          measurementVersion: 1,
-          measuredAt: DateTime.utc(2026, 8, 19),
-          capturedAt: DateTime.utc(2026, 8, 19),
-          confidence: 0.8,
-          performance: PerformanceEvidence(
-            metricCode: 'chordChangeAccuracy',
-            value: 0.7,
-          ),
-        ),
-      );
-      evidence.save(
-        SkillEvidence(
-          skillId: 'chord.gMajor',
-          source: EvidenceSource.learn,
-          sourceOutcomeId: OutcomeId('plan.b.outcome.1'),
-          measurementVersion: 1,
-          measuredAt: DateTime.utc(2026, 8, 19),
-          capturedAt: DateTime.utc(2026, 8, 19),
-          confidence: 0.8,
-          performance: PerformanceEvidence(
-            metricCode: 'chordChangeAccuracy',
-            value: 0.7,
-          ),
-        ),
-      );
+      evidence.save(_evidenceRecord(OutcomeId('plan.a.outcome.1')));
+      evidence.save(_evidenceRecord(OutcomeId('plan.b.outcome.1')));
 
       // Delete plan A only.
       final removed = evidence.deleteForPlan(PlanId('plan.a'));
@@ -175,6 +222,114 @@ void main() {
     });
   });
 
+  group('F1 — durable manifest makes delete-all and export-all restart-stable',
+      () {
+    test('a fresh repository over the same store discovers the former '
+        'draft AND an archive-only plan (E07-R29 review F1 measured '
+        'regression).', () async {
+      final store = InMemoryKeyValueStore();
+      final writer = _newPlanRepository(store);
+
+      // Two distinct plans: plan.A is activated AND archived; plan.B
+      // is archive-only (the F1 reviewer scenario — a plan that was
+      // once active, is no longer, but still has archive records on
+      // disk and was the precise case the §6.1 "archive-only plan"
+      // cell aimed at).
+      await writer.activateAndReport(
+        AdaptivePracticePlan(
+          id: PlanId('plan.A'),
+          schemaVersion: 1,
+          status: PlanStatus.archived,
+          title: 'A',
+          createdAt: DateTime.utc(2026, 8, 19, 9),
+          startDate: DateTime.utc(2026, 8, 20),
+          endDate: DateTime.utc(2026, 9, 20),
+          goals: const <PracticeGoal>[],
+          days: const <PracticeDay>[],
+          activeRevisionId: RevisionId('revision.A.1'),
+          generationProvenance: const [],
+          policyVersions: const <String, String>{},
+        ),
+      );
+      await writer.saveDraft(
+        draftKey: 'main',
+        plan: plan(title: 'main-draft'),
+      );
+      // Archive-only plan: never activated on this writer instance —
+      // directly archived.
+      await writer.appendRevision(
+        ArchivedRevision(
+          id: RevisionId('revision.B.1'),
+          planId: PlanId('plan.B'),
+          number: 1,
+          createdAt: DateTime.utc(2026, 8, 18, 10),
+          reason: PlanRevisionReason.initialGeneration,
+          previousRevisionId: null,
+          snapshot: plan(),
+        ),
+      );
+
+      // Sanity: the writer sees both drafts and both plans.
+      expect(writer.knownDraftKeysSync(), ['main']);
+      expect(
+        writer.knownPlanIdsSync(),
+        containsAll(<PlanId>{PlanId('plan.A'), PlanId('plan.B')}),
+      );
+
+      // --- The restart boundary. A fresh repository over the same
+      // store must discover both (the previous bug: in-memory
+      // `_writtenKeys` was empty, drafts and archive-only plans fell
+      // off the discovery surface).
+      final reader = _newPlanRepository(store);
+
+      expect(reader.knownDraftKeysSync(), ['main']);
+      expect(
+        reader.knownPlanIdsSync(),
+        containsAll(<PlanId>{PlanId('plan.A'), PlanId('plan.B')}),
+      );
+
+      // Export: includes the draft AND the archive-only plan's
+      // archived revisions.
+      final exported = await reader.exportSnapshot();
+      expect(exported.isSuccess, isTrue);
+      final snapshot = exported.valueOrNull!;
+      expect(snapshot.drafts.keys, contains('main'));
+      expect(snapshot.archive.keys, contains(PlanId('plan.B')));
+      expect(snapshot.archive[PlanId('plan.B')]!.revisions, hasLength(1));
+
+      // Delete: must wipe every planner-owned key including the draft
+      // and the archive-only plan.
+      final deleted = await reader.deleteAllPlanningData();
+      expect(deleted.isSuccess, isTrue);
+
+      // A new repository over the now-empty store starts with no
+      // keys and no plans.
+      final afterDelete = _newPlanRepository(store);
+      expect(afterDelete.knownDraftKeysSync(), isEmpty);
+      expect(afterDelete.knownPlanIdsSync(), isEmpty);
+      expect(
+        store.contains(LocalPracticePlanRepository.manifestKey),
+        isFalse,
+        reason: 'delete-all removes the manifest itself',
+      );
+    });
+
+    test('the persisted manifest survives a draft clearing (restart-stable '
+        'discovery of cleared-then-re-saved drafts).', () async {
+      final store = InMemoryKeyValueStore();
+      final writer = _newPlanRepository(store);
+
+      // Draft goes through save → clear → save cycle.
+      await writer.saveDraft(draftKey: 'main', plan: plan(title: 'd1'));
+      await writer.clearDraft('main');
+      await writer.saveDraft(draftKey: 'main', plan: plan(title: 'd2'));
+
+      // Fresh repository sees the live draft.
+      final reader = _newPlanRepository(store);
+      expect(reader.knownDraftKeysSync(), ['main']);
+    });
+  });
+
   group('ExportPracticePlanningData (A7 export mirror, §6.1 second row)', () {
     test('export never carries free-text comfort notes', () async {
       final store = _newStore();
@@ -183,8 +338,10 @@ void main() {
 
       // Activate a plan so the export has content to copy.
       await planRepo.activateAndReport(plan());
-      evidence.save(
-        _evidenceForOutcome(OutcomeId('outcome.1'), PlanId('plan.1')),
+      _saveEvidence(
+        evidence,
+        outcomeId: OutcomeId('outcome.1'),
+        planId: PlanId('plan.1'),
       );
 
       final captured = <String>[];
@@ -215,8 +372,10 @@ void main() {
         final planRepo = _newPlanRepository(store);
         final evidence = _newEvidenceRepository();
         await planRepo.activateAndReport(plan());
-        evidence.save(
-          _evidenceForOutcome(OutcomeId('outcome.1'), PlanId('plan.1')),
+        _saveEvidence(
+          evidence,
+          outcomeId: OutcomeId('outcome.1'),
+          planId: PlanId('plan.1'),
         );
 
         final captured = <String>[];
@@ -331,21 +490,27 @@ DeletePracticePlanningData _newDeleteUseCase(
   );
 }
 
-SkillEvidence _evidenceForOutcome(OutcomeId outcomeId, PlanId planId) {
-  return SkillEvidence(
-    skillId: 'chord.gMajor',
-    source: EvidenceSource.learn,
-    sourceOutcomeId: outcomeId,
-    measurementVersion: 1,
-    measuredAt: DateTime.utc(2026, 8, 19),
-    capturedAt: DateTime.utc(2026, 8, 19),
-    confidence: 0.8,
-    validUntil: DateTime.utc(2026, 9, 19),
-    performance: PerformanceEvidence(
-      metricCode: 'chordChangeAccuracy',
-      value: 0.7,
-    ),
-  );
+SkillEvidence _evidenceRecord(OutcomeId outcomeId) => SkillEvidence(
+  skillId: 'chord.gMajor',
+  source: EvidenceSource.learn,
+  sourceOutcomeId: outcomeId,
+  measurementVersion: 1,
+  measuredAt: DateTime.utc(2026, 8, 19),
+  capturedAt: DateTime.utc(2026, 8, 19),
+  confidence: 0.8,
+  validUntil: DateTime.utc(2026, 9, 19),
+  performance: PerformanceEvidence(
+    metricCode: 'chordChangeAccuracy',
+    value: 0.7,
+  ),
+);
+
+void _saveEvidence(
+  InMemoryPracticeEvidenceRepository evidence, {
+  required OutcomeId outcomeId,
+  required PlanId planId,
+}) {
+  evidence.save(_evidenceRecord(outcomeId), sourcePlanId: planId);
 }
 
 ArchivedRevision _revision(PlanId planId, {required int number}) =>
