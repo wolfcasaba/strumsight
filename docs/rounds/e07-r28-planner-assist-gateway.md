@@ -1,6 +1,6 @@
 # E07-R28 — Tutor és PlannerAssistGateway integráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 0afb9994`)
+- **Státusz:** READY (pre-flight felülvizsgálva 2026-08-19, `main @ e95bd937`)
 - **Típus:** Epic 7 (AI Practice Generator), SDD Ch8 Kör 28
 - **Kör-azonosító:** `E07-R28`
 - **Branch:** `<motor>/e07-r28-planner-assist-gateway`
@@ -47,6 +47,61 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
+## 0.0 Pre-flight mérés és brief-revízió (2026-08-19, `main @ e95bd937`)
+
+**Az `ai_tutor` `public.dart` mérve ÜRES, és ez FAGYASZTOTT invariáns, nem
+ideiglenes hiány.** `lib/features/ai_tutor/public.dart` ma két sor
+(`library;` + doc-comment), zéró export/import — ezt egy E04-R01-ben
+merge-elt regressziós teszt kényszeríti ki:
+`test/features/ai_tutor/ai_tutor_boundary_test.dart` ("the empty baseline
+boundary must not pull in another feature's domain, data, application, or
+presentation internals"). A `crossFeatureImportsMustUsePublicApi` szabály
+(`tool/check_architecture.dart`, `architectureAllowlist` már 12/12 tele) emiatt
+ma NULLA reachable szimbólumot ad az `ai_tutor` felől — sem a gyökér-, sem egy
+új nested `public.dart` nem oldaná (a fagyasztott boundary-teszt PONT ezt
+tiltja), és mindkét fájl (`ai_tutor/**`, `tool/check_architecture.dart`)
+egyszerre esik a brief tilos zónájába és az engedélyezett listán kívülre — a
+feloldásuk H3 lenne, nem ennek a körnek a hatásköre.
+
+**Ugyanez a hibaosztály HÁROMSZOR mérve, ugyanazzal a feloldással**
+(`lessons/L121` E04-R12, `lessons/L133` E04-R20, `lessons/L139` E04-R23): egy
+előre megírt brief additív `ai_tutor`-exportot feltételezett, a mérés mindig
+üres+fagyasztott barrelt talált, és a feloldás mindháromszor
+**scope-szűkítés** volt, sosem a guard módosítása. Ez a kör ugyanazt az utat
+követi.
+
+**Revízió.** A §3/§8 „a Tutor terv-vázlatának leképezése" **nem**
+`lib/features/ai_tutor/domain/models/practice_plan_draft.dart` importját
+jelenti (elérhetetlen — ne próbáld, a `flutter analyze`/architecture gate úgyis
+pirosra váltja). A `tutor_plan_proposal_adapter.dart` egy SAJÁT, ebben a
+körben definiált javaslat-típust ad ki a `planner_assist_schema.dart` validált
+válaszából (mezők: allowlistelt cél-/skill-/candidate-ID hivatkozások,
+rationale, blokk-vázlat) — importot csakis a practice_generator SAJÁT,
+már publikus katalógus-/skill-felületéről végez
+(`practice_catalog_reader.dart`, `skill_snapshot_reader.dart`,
+`domain/id/planner_ids.dart` — mind a meglévő `public.dart`-on). Az allowlist
+forrása ugyanez a felület. A valódi `ai_tutor` ↔ `practice_generator`
+drótozás (a tényleges `PracticePlanDraft` átalakítása erre az alakra) egy
+jövőbeli, hívó-táplált kör dolga marad — ugyanaz a minta, mint R23/R24/R26
+(`practiceGeneratorEnabled` marad `false`, nulla production hívó). A §6 A8
+cellája ("A Tutor-vázlat leképezése típusos, validált") ezzel az alakkal
+teljesül és marad mérhető — a "Tutor" a javaslat TÉMÁJÁRA utal (AI-tanácsadás),
+nem az `ai_tutor` feature-importra.
+
+**`plannerAssistEnabled` mérve OFF** (`lib/app/config/feature_flags.dart:23,79`
+— mindkét konstruktor-default `false`), a brief előfeltétele igaz. ADR 0255
+§2 újraolvasva: a „javaslat külön, validált csatornán érkezik, a
+determinisztikus tervező fogadja el vagy utasítja el" — ez a csatorna maga a
+`planner_assist_schema.dart`, az elfogadás/elutasítás egy KÉSŐBBI kör dolga
+(a generátor domain-rétege ennek a körnek is tilos zónája).
+
+**Visszakeresett előzmény (RAG, `node tools/knowledge-rag.mjs`, index
+`e95bd937`):** `adr/0139` (AI Tutor action proposal & confirmation — a
+„javasol, nem hajt végre" mintát az AI Tutor saját rétegén belül már
+alkalmazta), `adr/0141` (AI Tutor prompt-építés és injection boundary — A6
+cella mintája). `--corpus lessons`: `L121`/`L133`/`L139` (fent) a döntő
+találat; nincs ezekkel ütköző előzmény.
+
 ## 1. Cél
 
 A Tutor és az **opcionális** AI-segítség biztonságos bekötése típusos
@@ -64,7 +119,8 @@ javaslatokkal és determinisztikus tartalékkal (SDD Ch8 Kör 28).
 
 **Benne van:** strukturált kérés/válasz séma · **allowlist**: csak létező
 goal-, skill- és jelölt-ID fogadható el · a Tutor terv-vázlatának leképezése
-kérés/javaslat formára · **determinisztikus magyarázat-tartalék** · timeout,
+kérés/javaslat formára (**§0.0 szerint: SAJÁT javaslat-típusra, NEM
+`ai_tutor`-importra**) · **determinisztikus magyarázat-tartalék** · timeout,
 megszakítás és rate limit kezelése · prompt-injection és **nem megbízható
 felhasználói szöveg** elkülönítése.
 
@@ -170,7 +226,9 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 1. `planner_assist_schema.dart` — séma + allowlist-validáció.
 2. `planner_assist_gateway.dart` port + `fake_planner_assist_gateway.dart`.
 3. `remote_planner_assist_gateway.dart` — timeout, rate limit, megszakítás.
-4. `tutor_plan_proposal_adapter.dart` — típusos leképezés.
+4. `tutor_plan_proposal_adapter.dart` — típusos leképezés a §0.0 szerinti
+   SAJÁT javaslat-típusra (NEM `ai_tutor` import — az elérhetetlen, ne
+   próbáld).
 5. Tesztek a §6.1 három érvényesség-cellájával, prompt-injection fixture-rel.
 6. A valódi-sértés próba, §10-be dokumentálva.
 7. `tools/round-gate.sh` a §7 szerint.
