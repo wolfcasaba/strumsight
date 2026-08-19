@@ -12097,3 +12097,21 @@ saját javaslata — garantáltan friss, mert az implementer sajátja), vagy (b)
 publikált igazságot adja, függetlenül attól, hogy a hub mikor fetchelt
 utoljára). A jelenlegi hub-alapú minta MINDEN jövőbeli review-lépést
 ugyanennek a hibaosztálynak tesz ki. Rokon: [[L175]], [[L179]], [[L311]].
+
+---
+
+## L318 — Az előfeltétel-ID metadata nem bizonyít megvalósulást; a SongGoal akkor is bekerülhetett, ha producer egyáltalán nem létezett (E07-R24, 2026-08-19)
+
+**Mit mértünk.** Az E07-R24 első correctness review-ja egy no-producer
+`SongGoal` fixture-rel mérte, hogy a planner az `unsatisfiedPrerequisiteSkillIds`
+mezőbe ugyan felírta a hiányt, de a goal-hoz mégis assignmentet készített. A
+várt üres assignment-lista helyett valódi SongGoal-assignment jött létre
+([review F1](reviews/e07-r24-review.md)).
+
+**Miért.** A metadata rögzítheti, hogy mi hiányzik, de nem ugyanaz, mint a
+tényleges blokkban már megvalósított prerequisite. A korábbi teszt a
+figyelmeztetés jelenlétét ellenőrizte, nem a tiltott kimenet hiányát.
+
+**Hogyan alkalmazd.** Függő célnál külön kövesd az `actualized` tételeket, és
+a tesztben legyen no-producer cella: a cél hiányozzon a kimenetből. A puszta
+diagnosztikai lista soha ne legyen engedélyezési bizonyíték.

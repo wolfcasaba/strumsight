@@ -1,5 +1,21 @@
 # HANDOFF — StrumSight 🎸
 
+> **E07-R24 KÉSZ — Song goal és Song Trainer integráció** — PR
+> [#318](https://github.com/wolfcasaba/strumsight/pull/318), squash
+> `b08c00e9` (2026-08-19). A Practice Generator most explicit, caller-fed
+> `SongDocument`-ből normalizál song goalokat; az ismeretlen, hibás vagy
+> előfeltétel nélküli cél fail-closed kiesik. A blokkfordítás determinisztikus,
+> és csak a ténylegesen megvalósított prerequisite után enged célt tervbe.
+> [ADR 0318](docs/adr/0318-song-goal-public-boundary-and-caller-fed-input.md)
+> rögzíti a szándékosan szűk, Song Trainer belső rétegét meg nem nyitó
+> nyilvános határt. A correctness review az F1 MAJOR-t valódi no-producer
+> próbával találta és a MiniMax javító kör zárta; a security delta-review PASS.
+> Exact `028ea117`: Full Gate
+> [32200092798](https://github.com/wolfcasaba/strumsight/actions/runs/32200092798)
+> és Router CI
+> [32200094318](https://github.com/wolfcasaba/strumsight/actions/runs/32200094318)
+> success. Következő kör: **E07-R25**, új sessionben.
+
 > **E99-R14 KÉSZ — GOV-08 motor-override lejárat és motor-statisztika** — PR
 > [#317](https://github.com/wolfcasaba/strumsight/pull/317), squash
 > `52200a81` (2026-08-18). Az `engine-profile.sh use` TTL-t és indoklást
@@ -1368,6 +1384,11 @@
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-19):** `main` @ `b08c00e9` — E07-R24 song-goal
+integráció, PR [#318](https://github.com/wolfcasaba/strumsight/pull/318),
+squash-merge. Exact `028ea117`: Full Gate 32200092798 + Router CI 32200094318
+success; a post-merge célzott gate futása a záró rituálé része.
+
 **Aktuális állapot (2026-08-18):** `main` @ `c4e0bd0b` — E07-R18
 GenerationOrchestrator, PR [#300](https://github.com/wolfcasaba/strumsight/pull/300),
 squash-merge. Exact `74916469`: Full Gate
@@ -1781,6 +1802,13 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E07-R24 — Song goal és Song Trainer integráció** (PR [#318](https://github.com/wolfcasaba/strumsight/pull/318),
+squash `b08c00e9`, [ADR 0318](docs/adr/0318-song-goal-public-boundary-and-caller-fed-input.md)).
+Caller-fed `SongDocument` boundary, fail-closed reader/normalizer, deterministic
+song-block compiler és planner-integráció. Correctness review APPROVED egy
+MiniMax-javító kör után; security delta-review PASS. Exact `028ea117`: Full
+Gate + Router CI success; post-merge gate futása folyamatban.
 
 **E07-R17 — Spaced repetition és maintenance queue** (PR #296, squash
 `e95f9f67`, [ADR 0303](docs/adr/0303-spaced-repetition-review-queue-contract.md)).
@@ -2422,6 +2450,12 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 **E04-R22 — Tutor Profile, Privacy, Data & Consent UI** — KÉSZ (PR #157, `faa3f32`, nincs új ADR — ADR 0132+0134 hatálya; MiniMax M3; ld. fejléc ✅-blokk).
 
 ## 6. Exact next task
+
+**A soron következő SDD-lépés: E07-R25** (Chapter 8, Analyze és Computer
+Vision evidence integráció). A fresh-session pre-flight mérje meg a tényleges
+Analyze/vision publikus contractot és ownership-láncot; exact string/fret vagy
+technikai hiba csak mért evidence alapján állítható, és nyers kamera-frame nem
+hagyhatja el az eszközt.
 
 **A soron következő SDD-lépés: E07-R22** (Chapter 8, Weekly Plan és Today
 screen). A friss session pre-flightban mérje újra az R21 preview ma még

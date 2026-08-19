@@ -8,6 +8,22 @@
 
 ## ✅ E99-R14 (GOV-08) — Lejáró motor-override és motor-statisztika (2026-08-18)
 
+## ✅ E07-R24 — Song goal és Song Trainer integráció (2026-08-19)
+
+PR [#318](https://github.com/wolfcasaba/strumsight/pull/318), squash
+`b08c00e9`, [ADR 0318](adr/0318-song-goal-public-boundary-and-caller-fed-input.md).
+A pre-flight kimérte, hogy nincs a Song Trainer belső állapotát megnyitó
+nyilvános contract, ezért a kör explicit caller-fed `SongDocument` határt
+vezetett be. A reader/normalizer ismeretlen vagy hibás célt fail-closed
+eldob; a compiler csak valóban megvalósított prerequisite után tervezhet
+song-goalt. A correctness review F1 MAJOR-ja azt mérte, hogy egy csupán
+metadata-listában szereplő, de nem megvalósított prerequisite mégis átengedte
+a célt; a MiniMax javítás `actualizedSkills`-re épített szigorú őrt adott. A
+friss izolált re-review saját 0.4→1.0 ratio-policy sértéssel két A1 cellát
+pirosra vitt, majd visszaállítás után zöldet mért. Security delta-review PASS.
+Exact `028ea117`: Full Gate 32200092798 + Router CI 32200094318 success.
+
+
 PR [#317](https://github.com/wolfcasaba/strumsight/pull/317), squash
 `52200a81`. Az ADR 0307 §1 három mérhető védelmet kapott: (1) a
 `tools/engine-profile.sh use <motor> [--ttl <óra>] [--reason <szöveg>]`
