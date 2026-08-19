@@ -63,11 +63,28 @@ final class EvidenceWeightPolicy {
 
   /// Stable provenance reliability. Adapters may add sources only by changing
   /// this policy deliberately, rather than receiving an accidental default.
+  ///
+  /// `vision` (E07-R25, ADR 0319, narrow
+  /// `lib/features/vision/domain/evidence/public.dart` contract) is rated
+  /// below `analyzeV2` (0.9) but above `progress` (0.7): the value is
+  /// derived and confidence-calibrated once a vision session is running, but
+  /// it depends on a user-controlled capability (camera, pose tracking)
+  /// that may be unavailable on a given session, so the policy reflects that
+  /// asymmetry deliberately. The `singleEvidenceInfluenceCap` (default 0.25)
+  /// still bounds every individual weight — this reliability multiplies into
+  /// that bounded value, so even a maximally reliable vision record cannot
+  /// drive an aggressive focus on its own (A3).
+  ///
+  /// NB: the switch has no `default` arm — exhaustive enumeration is the
+  /// compile-time trap the E07-R25 self-heal reverted (see §0.0.1). Adding
+  /// any [EvidenceSource] value without a matching arm here is a hard
+  /// compile error, not a silent fallthrough.
   double sourceReliability(EvidenceSource source) => switch (source) {
     EvidenceSource.learn => 0.8,
     EvidenceSource.progress => 0.7,
     EvidenceSource.analyzeV2 => 0.9,
     EvidenceSource.selfReport => 0.5,
+    EvidenceSource.vision => 0.75,
   };
 
   /// Calculates and caps one evidence record's influence at caller-supplied

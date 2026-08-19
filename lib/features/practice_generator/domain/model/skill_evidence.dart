@@ -14,11 +14,19 @@ import '../id/planner_ids.dart';
 /// Where a [SkillEvidence] measurement originated. The concrete adapters for
 /// each source are a later round's work (Kör 7-8); this is only the shared
 /// vocabulary they will report through.
+///
+/// `vision` was added in E07-R25 (self-heal §0.0.1 — see ADR 0319 and the
+/// `EvidenceSource`/`sourceReliability` paired regression guard
+/// `tools/tests/test_e07_r25_vision_evidence_scope.py`). A vision-sourced
+/// measurement is a derived, capability-aware proxy from the narrow
+/// `lib/features/vision/domain/evidence/public.dart` contract — never a raw
+/// frame, pose, or landmark (ADR 0260 §1, ADR 0319 §Döntés).
 enum EvidenceSource {
   learn('learn'),
   progress('progress'),
   analyzeV2('analyzeV2'),
-  selfReport('selfReport');
+  selfReport('selfReport'),
+  vision('vision');
 
   const EvidenceSource(this.code);
 

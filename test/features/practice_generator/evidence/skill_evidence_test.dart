@@ -213,4 +213,68 @@ void main() {
       );
     });
   });
+
+  group(
+    'EvidenceSource.vision — round-trip + poison-pill (E07-R25 §0.0.1)',
+    () {
+      test('vision value round-trips through fromCode/toString', () {
+        expect(EvidenceSource.values, contains(EvidenceSource.vision));
+        expect(EvidenceSource.vision.code, 'vision');
+        expect(EvidenceSource.vision.toString(), 'vision');
+        expect(EvidenceSource.fromCode('vision'), EvidenceSource.vision);
+      });
+
+      test('an unknown EvidenceSource code is rejected', () {
+        expect(
+          () => EvidenceSource.fromCode('motion-capture'),
+          throwsArgumentError,
+          reason: 'No fabricated provenance label may slip through',
+        );
+      });
+
+      test('an empty EvidenceSource code is rejected', () {
+        expect(() => EvidenceSource.fromCode(''), throwsArgumentError);
+        expect(() => EvidenceSource.fromCode(null), throwsArgumentError);
+      });
+
+      test('a vision evidence record carries no raw-media field', () {
+        final vision = evidence(source: EvidenceSource.vision);
+        final serialized = jsonEncode(<String, Object?>{
+          'skillId': vision.skillId,
+          'source': vision.source.code,
+          'sourceOutcomeId': vision.sourceOutcomeId.value,
+          'measurementVersion': vision.measurementVersion,
+          'measuredAt': vision.measuredAt.toIso8601String(),
+          'capturedAt': vision.capturedAt.toIso8601String(),
+          'confidence': vision.confidence,
+          'performance': {
+            'metricCode': vision.performance!.metricCode,
+            'value': vision.performance!.value,
+            'sampleCount': vision.performance!.sampleCount,
+          },
+        });
+        final decoded = jsonDecode(serialized) as Map<String, Object?>;
+        for (final forbidden in const <String>[
+          'pcm',
+          'audio',
+          'wav',
+          'clip',
+          'samples',
+          'filePath',
+          'frame',
+          'Uint8List',
+          'HandLandmarks',
+          'PoseLandmarks',
+          'CameraImage',
+        ]) {
+          expect(
+            decoded.containsKey(forbidden),
+            isFalse,
+            reason:
+                'vision-sourced evidence must not carry a "$forbidden" field',
+          );
+        }
+      });
+    },
+  );
 }
