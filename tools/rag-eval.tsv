@@ -1,0 +1,37 @@
+# Visszakeresési mérce (ADR 0316 §2.1) — futtatás: node tools/knowledge-rag.mjs --eval
+#
+# Oszlopok TAB-bal: kérdés ⇥ elvárt chunk-azonosító ⇥ elvárt legrosszabb helyezés ⇥ korpusz-szűrő
+#
+# A kérdések ÚGY vannak megfogalmazva, ahogy munka közben tényleg elhangzanak —
+# nem a lecke címének visszamásolásával. Ez a lényeg: ha a kérdés a cím
+# szinonimája, a mérce önmagát méri, nem a visszakeresést.
+#
+# Az utolsó blokk korpusz-szűrő NÉLKÜL fut: a MÉRT hibaosztály épp az volt,
+# hogy a teljes korpuszon a döntő lecke kiesett a top-12-ből, mert sablon-című
+# review-szakaszok és egyetlen brief négy szakasza foglalta el a helyeket.
+
+# --- szűkített korpusz: lessons ---
+miért bukik el néha a property gate úgy hogy a kör maga jó	lessons/L142	5	lessons
+elfogy a memória amikor egyszerre futtatom az analyze-t és a tesztet	lessons/L05	5	lessons
+elvitte a munkámat valaki más mentése a közös fában	lessons/L143	5	lessons
+a kör indítója nem fogadja el a worktree-t csak a teljes másolatot	lessons/L103	5	lessons
+a gate környezeti hibával áll le sok párhuzamos flutter processz mellett	lessons/L105	5	lessons
+a felhatalmazó jelzőfájl megvan mégis megáll a mérce-őr	lessons/L323	5	lessons
+az önjavítás hozzányúlhat-e a CI munkafolyamat fájlokhoz	lessons/L322	5	lessons
+a teszt csak a közös munkafában bukik friss másolaton zöld	lessons/L262	5	lessons
+friss klónon pirosat mutat az analyze a generált fordítási fájlok miatt	lessons/L23	5	lessons
+a titok-kereső a mentésekre és a globális configra is nézzen	lessons/L34	5	lessons
+
+# --- MÁS korpuszok: a mérce nem gamelhető egyetlen korpusz felnyomásával ---
+# Ha valaki a lessons-t boostolná, ezek a sorok azonnal romlanak. Szándékos.
+melyik ágnevek nem számítanak idegen körnek a lánc szemében	adr/docs/adr/0175-chain-idle-and-context-diet.md	5	adr
+a mérce-őr a kört tartsa vissza ne az egész láncot	adr/docs/adr/0321-gateguard-round-hold-not-chain-halt.md	5	adr
+hogyan dől el hogy lefelé vagy felfelé pengettek	dsp/docs/rag/chunks/006-strum-direction.md|dsp/docs/rag/chunks/015-strum-direction-ml.md	5	dsp
+milyen jelből ismerjük fel a leütés pillanatát	dsp/docs/rag/chunks/005-onset-spectral-flux.md	5	dsp
+hol ellenőrzi a lánc hogy nincs-e követetlen változás induláskor	code/tools/round-pipeline.sh#1801	5	code
+
+# --- teljes korpusz (nincs szűrő): itt bukott meg a rangsor ---
+miért bukik el néha a property gate úgy hogy a kör maga jó	lessons/L142	8
+a felhatalmazó jelzőfájl megvan mégis megáll a mérce-őr	lessons/L323	8
+elvitte a munkámat valaki más mentése a közös fában	lessons/L143	8
+hogyan dől el hogy lefelé vagy felfelé pengettek	dsp/docs/rag/chunks/006-strum-direction.md|dsp/docs/rag/chunks/015-strum-direction-ml.md	8
