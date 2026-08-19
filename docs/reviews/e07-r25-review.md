@@ -1,79 +1,54 @@
-# E07-R25 — Review
+# E07-R25 — Independent review
 
-Brief: `docs/rounds/e07-r25-analysis-and-vision-evidence.md`  
-Diff: `0585083e..3e59011f`  
-Reviewer: Codex / gpt-5.6-terra  
-Date: 2026-08-19  
+Brief: `docs/rounds/e07-r25-analysis-and-vision-evidence.md`
+Diff: `origin/main...520c058d`
+Reviewer: Codex / gpt-5.6-terra
+Date: 2026-08-19
 Verdict: APPROVED
 
-## Összegzés
+## Summary
 
 BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
-The isolated gate and machine scope audit pass. The corrective commit
-`3e59011f` closes F1 with an adapter-level, fail-closed state gate and two
-port-boundary tests.
+The branch was first synchronised with current `origin/main` (including the
+E07-R25/H5 self-heal) without conflict. The original F1 MAJOR remains closed:
+the adapter itself rejects a port-supplied `notObservable` fact before building
+`SkillEvidence`.
 
 ## Acceptance criteria
 
-| # | Kritérium | Teljesült | Bizonyíték |
-|---|---|---|---|
-| A1 | Nyers média nem lép át | ✅ | Both adapter serialization tests; narrow barrel export list. |
-| A2 | Vision nélkül teljes értékű | ✅ | `vision_evidence_adapter_test.dart` empty-result cell. |
-| A3 | Alacsony confidence nem agresszív | ✅ | Analysis adapter / weight-policy cells. |
-| A4 | Jelminőség nem skill-ítélet | ✅ | Analysis adapter setup-advisory cells. |
-| A5 | Csak allowlisted Vision proxy | ✅ | `metricNotAllowed` cell. |
-| A6 | Konfliktus bizonytalanságot ad | ✅ | Analysis adapter conflict cells. |
-| A7 | Capability-hiány explicit | ✅ | F1 corrective state-gate tests; `notObservable` contributes zero evidence. |
-| A8 | Csak public API | ✅ | Architecture gate; adapter imports nested Vision barrel only. |
+| # | Result | Evidence |
+|---|---|---|
+| A1 | ✅ | Both adapter tests serialise only derived fields; the nested Vision barrel has the constrained export list. |
+| A2 | ✅ | Empty Vision input produces an empty result without an exception. |
+| A3 | ✅ | Analysis/weight-policy cells bound low-confidence influence. |
+| A4 | ✅ | Low signal quality emits a separate setup advisory, not a performance value. |
+| A5 | ✅ | A non-allowlisted Vision metric is dropped with `metricNotAllowed`. |
+| A6 | ✅ | Analysis conflict cells apply the uncertainty penalty. |
+| A7 | ✅ | `notObservable` is rejected both by the default reader and at the adapter port boundary. |
+| A8 | ✅ | The Vision adapter imports only `vision/domain/evidence/public.dart`; scope and architecture guards cover the boundary. |
 
-## Scope-audit
+## Scope and falsification
 
-`tools/scope-audit.py --repo /tmp/review-e07-r25-2 --brief docs/rounds/e07-r25-analysis-and-vision-evidence.md --base 0585083e` → `OK` (13 changed path, 0 ignored).
+`python3 tools/scope-audit.py --repo /tmp/review-e07-r25-BNrTgf --brief docs/rounds/e07-r25-analysis-and-vision-evidence.md --base origin/main` returned `Legacy scope audit OK (origin/main..520c058d0086, 14 changed path(s), 1 generated/ignored)`.
 
-## Megállapítások
+I temporarily removed the adapter's `ObservationState.notObservable` gate in
+the isolated clone. The Vision adapter test then failed in both F1 cells
+(`expected empty, actual SkillEvidence` and `expected length 1, actual length
+2`). I restored the exact gate and reran the file: **10 passed**. The isolated
+clone is clean of the temporary mutation.
 
-### F1 — MAJOR — A `notObservable` Vision fact skill evidence-é válhat
+## Gate evidence
 
-- **Fájl:** `lib/features/practice_generator/data/adapter/vision_evidence_adapter.dart:149-182`
-- **Probléma:** A doc-contract `observed`/`inferred` állapotot ír elő, de a
-  loop csak az allowlistet ellenőrzi és az `experimental` confidence-ét
-  korlátozza. Egy `VisionEvidenceReader` implementáció ezért átadhat egy
-  allowlisted `VisionEvidenceFact(state: ObservationState.notObservable)`
-  értéket, amelyből az adapter teljes `SkillEvidence`-et képez.
-- **Bizonyíték:** A saját teszt `StubVisionEvidenceReader`-e direkt
-  `VisionEvidenceFact` listát ad vissza (`vision_evidence_adapter_test.dart:32-43`),
-  tehát ez a port-szintű bemenet ma reprezentálható. A meglévő A7 cella csak
-  üres fact-lista melletti, előre gyártott warningot vizsgál (223-242), ezért
-  a hibás adapter zöld maradna.
-- **Hatás:** A kamera/capability hiánya hibásan negatív vagy pozitív
-  skill-jelként léphet be a prioritásba, megsértve brief §5.2/§5.4 és A7
-  degradációs szerződését.
-- **Kötelező javítás:** Az adapterben fail-closed módon skipeld a
-  `notObservable` facteket és adj stabil, raw-mentes warningot. A meglévő
-  adapter-tesztben legyen olyan cella, amely egy stub-readeren át átadott,
-  allowlisted `notObservable` factre **nulla evidence-et** és a warningot
-  követel. Az `experimental` ceiling-viselkedés maradjon változatlan.
-- **Ellenőrzés:** A javított `vision_evidence_adapter_test.dart` legyen piros
-  a state-gate eltávolításakor, majd futtasd a brief négy célzott tesztjét a
-  `tools/round-gate.sh` artefaktummal.
-- **Státusz:** FIXED (`3e59011f`): the adapter rejects `notObservable` facts
-  before constructing `SkillEvidence`, emits `stateNotAllowed` with only the
-  stable measurement id, and the two new stub-reader cells are green in the
-  fresh isolated gate.
-
-## Gate-bizonyíték ellenőrzése
-
-| Gate | Ellenőrizve |
+| Check | Result |
 |---|---|
-| format | ✅ isolated clone, 0 changed files |
-| analyze | ✅ no issues |
-| célzott tesztek | ✅ 4/4 green |
-| architecture / secrets / l10n | ✅ green |
-| scope audit | ✅ `OK` |
-| CI (full suite + property + workflow) | függőben — APPROVED diff után dispatch |
+| Machine scope audit | ✅ fresh isolated-clone run |
+| F1 adversarial mutation | ✅ red when broken, green after restoration |
+| `flutter test …vision_evidence_adapter_test.dart` | ✅ 10 passed |
+| Full local round gate | Previously green in the reviewed handoff; this session's two isolated gate processes completed after the host returned early, so their terminal output is not claimed here. |
+| Full CI, property gate, Router CI | Pending exact-SHA dispatch |
 
-## Merge-döntés
+## Merge decision
 
-Nincs nyitott BLOCKER vagy MAJOR. A merge a CI-tervező által előírt exact-SHA
-workflow(ok) sikeres lefutása után engedélyezett.
+No review finding blocks CI dispatch. Merge remains conditional on the planned
+exact-SHA workflow(s), including Router CI, succeeding.
