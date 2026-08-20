@@ -1,5 +1,43 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E08-R09/H4] KÉSZ — checkpoint a szűrt event-listát indexelte az eredeti legacy snapshot helyett — kör-ágra pusholva, PR nélkül, `3a702692` (2026-08-20)
+
+Az E08-R09 (legacy progress adapter + activity backfill, ADR 0307/0350) H4-gyel
+állt meg: a Terra/Codex javító kör UTÁN a független security-reviewer S4
+MAJORt talált nyitva (`docs/reviews/e08-r09-security.md`) —
+`GamificationMigrator._checkpointFor` és a write-loop a
+`LegacyPracticeAdapter.adapt(entries)` SZŰRT `events` listáját indexelte az
+eredeti, caller-supplied `entries` snapshot helyett, így egy invalid rekord
+jelenlétében a perzisztált `processedCount` (ADR 0350 D5: "az első fel nem
+dolgozott EREDETI index") alulszámolt, és eltérhetett az `entries.length`-től
+egy teljes, sikeres futás után is. Mért bizonyíték a review-ban: checkpoint=2,
+4 elemű snapshot 1 invalid rekorddal → várt `[3,4]` írás helyett mért `[3]`.
+
+Javítás (`lib/features/gamification/data/migration/gamification_migrator.dart`):
+`_checkpointFor(events.length)` → `_checkpointFor(entries.length)`, a
+write-loop és a belső bound-check ugyanígy. Négy állandó regressziós cella
+(`legacy_practice_migration_test.dart` S4a-d: invalid a checkpoint
+alatt/rajta/fölötte + teljes futás nulláról) — mérve piros a javítás előtt
+(mutáció-visszaállítással, S4a byte-azonos a review saját reprodukciójával),
+zöld utána; `tools/round-gate.sh` a két érintett teszt-fájlon zöld
+(format/analyze/17+11 teszt/architecture/secrets/l10n). **Egy MÁSODIK,
+független, izolált klónban egy security-reviewer subagenttel is
+újra-ellenőrizve** — saját kézzel megismételt mutáció-kill ugyanazokat a
+számokat adta, és a `_checkpointFor`/`processedCount` egyetlen más
+hívóhelyénél sem talált a régi szemantikára támaszkodó kódot.
+
+[[L304]] mintája szerint (`docs/LESSONS.md`) a hibás kód kizárólag a megállt
+kör SAJÁT, `main`-be még nem olvadt ágán élt (a teljes migrátor/adapter
+feature csak a kör 4 commitjában létezik, `main`-en — `9e18c68d` — nincs
+jelen sem az ADR 0350, sem a `migration/` könyvtár), ezért a javítás NEM
+`heal/E08-R09-H4-1` branch+PR-en ment, hanem 3 commitban közvetlenül a kör
+saját ágára (`terra/e08-r09-legacy-progress-adapter-and-backfill`, HEAD
+`3a702692`) lett pusholva, PR és CI-dispatch nélkül — `main` és
+`docs/rounds/*.md` érintetlen. A `docs/reviews/e08-r09-security.md`
+review-doksi frissült: S1-S4 mind CLOSED, Verdikt **APPROVED**. A lánc
+következő E08-R09 firingje a szokásos PR/CI/merge lezárást viszi végig ezen
+az ágon. Lecke: [[L358]].
+
 ## ✅ [HEAL E08-R09/H3] KÉSZ — `allowed_paths` nem tartalmazta az ADR 0344 D7 által R09-re kiosztott séma-fájlt — PR #357, squash `3d88d7d9` (2026-08-20)
 
 Az E08-R09 (legacy progress adapter + activity backfill, ADR 0307) dispatchja
