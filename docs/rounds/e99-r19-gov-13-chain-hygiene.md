@@ -179,7 +179,58 @@ a D2 fail-safe ágának kiszedése → a „státusz `pending`" eset **PIROS**.
 4. `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` zöld.
 5. Kör-jelzés `done`.
 
-## 7. Gate
+## 7. Implementation handoff (E99-R19 self-report)
+
+A kör implementer-oldali, futtatható eredménye — a review-board innen
+tudja, mit ellenőrizzen a kör-jelzés ELŐTT. A számok a
+`tools/round-gate.sh` és a `pytest` artefaktumokból származnak, a
+mérce-egyezés a `tools/round-gate.sh` kimenetének szó-szerinti
+ellenőrzésével bizonyítható.
+
+### D1 — main-szinkron
+
+- `tools/round-pipeline.sh`: a `main_sync_strategy()` függvény
+  szétválasztja a három esetet (azonos / szigorú lemaradás / valódi
+  divergencia). A piszkos-fa előfeltétel-őr változatlan (ADR 0175 §2).
+- Teszthorogok: `--main-sync-strategy`, `--main-sync-ff-merge` — a
+  függvény logikáját közvetlenül mérik, a driver indítása nélkül.
+
+### D2 — egyetlen záró commit
+
+- `docs/execution/pipeline-orchestrator-prompt.md` §5: a sor
+  `pending → done` átírása a `docs(handoff…)` commitba kerül.
+- `tools/round-pipeline.sh` `merged)` ága: fail-safe — ha a sor a
+  fetch után is `pending`, `chore(pipeline)` commit pótolja; ha
+  `done`, NEM készül plus commit (sed no-op, `git status --porcelain`
+  üres).
+- Teszthorog: `--pending-done-failsafe-required`.
+
+### D3 — `risk = "high"` indoklás
+
+- `tools/brief-lint.py` S7 strict lelet: vagy a router-konfig
+  `high_risk_path_fragments` egyezik az `allowed_paths` egy elemére,
+  VAGY a brief tartalmazza a `**Kockázat = high, indoklás:**` sort.
+  A marker `lstrip("> \t")`-vel kezeli a markdown blockquote-ot.
+  A korszak-határ: CSAK NYITOTT (`status != done`) körre lő — a 68
+  meglévő `risk = "high"` brief nem vált pirosra (a §4 ígérete).
+
+### Gate-eredmények (2026-08-20, jelen session)
+
+| gate | parancs | eredmény |
+|---|---|---|
+| architektúra | `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` | ZÖLD (format / analyze / test / architecture / secrets / l10n) |
+| pytest suite | `python3 -m pytest tools/tests -q` | **640 passed, 2 skipped, 567 subtests passed** (~5 perc 12 mp) |
+| brief-lint base | `python3 tools/brief-lint.py --open --level base` | nincs lelet |
+
+### Falszifikációs cellák bizonyítéka
+
+- D1: a `merge-base --is-ancestor` kifejezés a forrásban maradt
+  (`tools/tests/test_chain_hygiene.py::test_strictly_ahead_filter_must_not_be_swapped_for_differs`).
+- D2: a `pending → done` sed + `chore(pipeline)` + `git status
+  --porcelain` őr hármas a `merged)` blokkban maradt
+  (`tools/tests/test_chain_hygiene.py::test_fail_safe_arm_must_survive_being_disabled`).
+
+## 8. Gate
 
 ```bash
 tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
