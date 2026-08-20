@@ -13457,3 +13457,52 @@ kell összevetni, nem csak a létezését nézni.
 A dokumentált §0.0 brief-revízió (nem a szám csendes felülírása) rögzíti a
 mérést és az új számot — E08-R05-ben ez `docs/adr/0338-…md` és a brief
 §0.0 R1 sora.
+
+## L347 — A kör-ág-direct-push self-heal minta (L343) kizárólag a FUNKCIONÁLIS javításra érvényes; az ADR-0112 könyvelő commit sosem utazhat vele egy bundle-ben (E99-R18, H3 harmadik előfordulása, ADR 0112, 2026-08-20)
+
+**Mit mértünk.** A H8 self-heal (`7458ca83`) a `tools/round-slots.py`
+merge-konfliktusát — helyesen — a kör SAJÁT ágára pusholta, a L343 szerinti
+„nem `main`-merge, PR a következő dispatch dolga" mintát követve (a fix
+kör-ág-specifikus: egy a kör saját mergején belüli konfliktust old fel,
+önálló `main`-PR-ként nem is értelmezhető). Ugyanabban a merge-commitban a
+self-heal a saját ADR-0112 „Módosítás" könyvelő blokkját is a kör-ágra
+írta — de ezt sosem mozgatta át `main`-re. Két self-healen és ~40 percen át
+rejtve maradt (a köztes H3, második előfordulás, SAJÁT könyvelését helyesen
+`main`-re commitolta, de nem auditálta a H8 által otthagyott ADR-diffet),
+míg egy `--base origin/main` scope-audit (a kör-ág teljes, mergelhetőségi
+diffje, nem egy dispatch launch-HEAD-je) H3-mal HARMADSZOR is megállította a
+láncot: `docs/adr/0112-self-healing-pipeline.md` egy tiszta hozzáadásként
+jelent meg az `allowed_paths`-án kívül.
+
+**Miért nem `allowed_paths`-bővítés a helyes válasz.** Az ADR 0112 §2
+szerint a `docs/adr/**` self-heal-jogosultság a briefTŐL FÜGGETLEN — egyetlen
+termék-brief `allowed_paths`-ának sem kellene tartalmaznia. A bővítés tehát
+nem „a lista volt hiányos", hanem téves irányú fix lett volna: azt az
+illúziót keltené, hogy a kör saját implementere/reviewere jogosult
+ADR-0112-t szerkeszteni.
+
+**A szabály.** A L343 kör-ág-direct-push minta KIZÁRÓLAG akkor érvényes, ha
+a self-heal funkcionális javítása valóban kör-ág-specifikus. Az ADR-0112
+könyvelő blokk **sosem** az — ugyanaz a szöveg bármelyik kör self-healjéből
+születhetett volna —, ezért MINDIG a self-heal saját, brief-független
+csatornáján megy (közvetlen `main`-commit vagy -PR), akkor is, ha ugyanaz a
+session UGYANAKKOR egy kör-ág-specifikus javítást a kör saját ágára pushol:
+két KÜLÖN commit/push, sosem egy bundle. Ha egy self-heal mégis
+egybe-bundle-özte őket, a feloldás a blokk LEVÁLASZTÁSA, nem az
+`allowed_paths` bővítése: a tartalom változatlanul (byte-azonosan) landol
+`main`-en egy önálló commitban, majd a friss `main` a szokásos, nem-force
+móddal visszamergelődik a kör-ágra — ez a kör-ág diffjéből teljesen
+eltünteti az utat, allowlist-módosítás nélkül. Mechanikus regresszió:
+`tools/tests/test_legacy_scope.py::LegacyScopeTest::
+test_selfheal_adr_bookkeeping_must_land_on_base_not_only_the_round_branch`
+szintetikus git-fixture-rel méri mindkét mintát (bundle → `path outside
+allowed scope`; landolás+visszamerge → a path eltűnik a
+`collect_changed_paths`-ból).
+
+**Hogyan alkalmazd.** Ha egy self-heal a L343 kör-ág-push kivételt
+választja egy funkcionális javításhoz ÉS ugyanabban a körben ADR-0112-t is
+módosítana, azonnal külön válaszd szét a két commitot — az ADR-blokk
+landoljon `main`-en ELŐSZÖR (vagy külön PR-ként, vagy — ha maga a self-heal
+session már úgyis ír egy `main`-PR-t más okból — abba a PR-be csomagolva),
+és csak UTÁNA, külön lépésként kerüljön a kör-ág visszamergelésre. Sosem egy
+git-commit, ami mindkettőt egyszerre viszi a kör-ágra.
