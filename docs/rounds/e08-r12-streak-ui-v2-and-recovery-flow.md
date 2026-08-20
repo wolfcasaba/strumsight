@@ -1,6 +1,6 @@
 # E08-R12 — Streak felület V2 és visszatérés-folyamat
 
-- **Státusz:** READY (pre-flight revízió 2026-08-20, kód olvasva: `main @ 7b5315b4`)
+- **Státusz:** READY (pre-flight + H6 scope-revízió 2026-08-20, kód olvasva: `main @ 7b5315b4`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 12
 - **Kör-azonosító:** `E08-R12`
 - **Branch:** `terra/e08-r12-streak-ui-v2-and-recovery-flow`
@@ -19,6 +19,8 @@ allowed_paths = [
   "lib/features/gamification/presentation/widgets/streak_status_card.dart",
   "lib/features/gamification/presentation/widgets/weekly_consistency_card.dart",
   "lib/features/gamification/public.dart",
+  "lib/l10n/features/gamification_en.arb",
+  "lib/l10n/features/gamification_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/presentation/streak_detail_screen_test.dart",
@@ -70,6 +72,25 @@ jutalomszámítás tilalma és a régi route kompatibilitása termékbiztonsági
 határ; a kör ezért Sol correctness + security review-t kap akkor is, ha a
 fájlnév-minták önmagukban nem high-riskek.
 
+### 0.0.1 H6 self-heal scope-revízió — 2026-08-20
+
+A megállt Terra-futás ugyanazon a `524cf246` HEAD-en mérte, hogy a két
+`lib/l10n/app_<locale>.arb` fájl E99-R17 óta **generált aggregátum**, nem
+elsődleges szerkesztési pont. A brief mégis csak ezeket engedte, ezért az új
+kulcsok közvetlen aggregate-módosítása után a kötelező gate mindkét locale-ra
+`aggregátum elavult` hibával állt meg. A forrás-szegmensek hiányoztak az
+allowlistből; a generátor `--write` módja pedig eldobta volna a csak az
+aggregátumban létező kulcsokat.
+
+Feloldás: az új kulcsok kizárólag a
+`lib/l10n/features/gamification_{en,hu}.arb` forrás-szegmensekbe kerülnek. A
+`lib/l10n/app_{en,hu}.arb` generált aggregátum közvetlenül nem szerkeszthető;
+a szegmensek módosítása után kötelező a determinisztikus
+`dart run tool/gen_l10n_segments.dart --write`, és annak két kimenete marad
+név szerint az allowlistben. Ez az E99-R17 szerződését alkalmazza, nem lazítja
+az aggregate-freshness gate-et. Regressziós őr:
+`tools/tests/test_e08_r12_l10n_scope.py`.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -94,7 +115,9 @@ a tudás nem veszett el**, a visszatérés egy gomb — nem büntető visszaszá
 - A `/streak` útvonal ma a régi képernyőre mutat — ez a kör NEM cseréli le, csak új képernyőt ad mellé.
 - Az R11 szállította a heti következetesség projekcióját és az indok-kódos átmeneteket.
 - Az `ADR 0290` §1: a széria vége tényközlés, nem ítélet; nincs fizetős visszaállítás.
-- i18n: minden felhasználónak látszó szöveg ARB-n át megy (`lib/l10n/app_en.arb`, `app_hu.arb`).
+- i18n: minden felhasználónak látszó szöveg ARB-n át megy. Az új kulcsok
+  forrása a `lib/l10n/features/gamification_{en,hu}.arb`; a
+  `lib/l10n/app_{en,hu}.arb` determinisztikusan generált aggregátum.
 
 ## 3. Scope
 
@@ -118,8 +141,10 @@ működésének megőrzése · reduced-motion és nagy szövegskála elrendezés
 | `lib/features/gamification/presentation/widgets/streak_status_card.dart` | **ÚJ** — állapot + újrakeretezés |
 | `lib/features/gamification/presentation/widgets/weekly_consistency_card.dart` | **ÚJ** — a heti mérőszám |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
-| `lib/l10n/app_en.arb` | az ÚJ kulcsok — meglévő kulcs NEM módosítható |
-| `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
+| `lib/l10n/features/gamification_en.arb` | **ÚJ forrás-szegmens** — az új angol kulcsok; meglévő kulcs NEM módosítható |
+| `lib/l10n/features/gamification_hu.arb` | **ÚJ forrás-szegmens** — az új magyar kulcspárok |
+| `lib/l10n/app_en.arb` | **GENERÁLT** — csak a `gen_l10n_segments.dart --write` determinisztikus kimenete |
+| `lib/l10n/app_hu.arb` | **GENERÁLT** — csak a `gen_l10n_segments.dart --write` determinisztikus kimenete |
 | `test/features/gamification/presentation/streak_detail_screen_test.dart` | a §6 cellái |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**` · `lib/features/streak/**` · `lib/app/routing/**`
@@ -218,8 +243,11 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 8. Implementációs sorrend
 
-1. Az ARB-kulcsok felvétele (angol + magyar), a szégyenítés-mentes szövegekkel;
-   meglévő kulcs nem módosulhat.
+1. Az ARB-kulcsok felvétele a
+   `lib/l10n/features/gamification_{en,hu}.arb` forrás-szegmensekbe, a
+   szégyenítés-mentes szövegekkel; meglévő kulcs nem módosulhat. Ezután
+   `dart run tool/gen_l10n_segments.dart --write`; az aggregate fájlokat
+   közvetlenül szerkeszteni tilos.
 2. `streak_status_card.dart` — állapot + újrakeretezés („a tudásod megmaradt”).
 3. `weekly_consistency_card.dart` — a heti mérőszám.
 4. `streak_detail_screen.dart` — az ADR 0353 kötelező, caller-fed
