@@ -60,11 +60,24 @@ SERIALIZED_PATHS = frozenset(
 )
 # Public barrelek generált artefaktumok (tool/gen_public_barrel.dart kimenetei);
 # bármely két kör újra tudja őket generálni ugyanabból a `public/*.dart`
-# halmazból, ezért NEM ütközési felület. A szabályt glob-bal fejezzük ki,
-# mert (a) a feature-lista nem fix, és (b) a `tools/round-slots.py` az
-# E99-R17 l10n-mechanizmusát nem importálhatja (emberi gate-hold).
+# halmazból, ezért NEM ütközési felület.
+#
+# KIZÁRÓLAG AZ ITT FELSOROLT útvonalak számítanak generáltnak — NEM glob.
+# Egy feature barrelje csak akkor kerülhet ki az ütközés-számításból, ha a
+# saját körében (a) fragmentum-forrás, (b) a generátor frissességét mérő
+# teszt, és (c) explicit nyilvántartási bejegyzés egyaránt létezik (ADR 0336,
+# E99-R18 §0.0c). E99-R18-ban kizárólag a `practice_generator` felel meg
+# ennek; a többi feature root `public.dart`-ja és minden `public/*.dart`
+# fragmentuma TOVÁBBRA IS TELJES ÉRTÉKŰ ütközési felület.
+#
+# A korábbi, `lib/features/*/public.dart` blanket glob szándékosan túl széles
+# volt: a pilot egyetlen migrált feature-jére szélesítette ki a kivételt,
+# ami a `SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected`
+# regressziós őrt némította el (L343). A fenti lista ezt a konkrét, mért
+# kört nyilvántartja; egy jövőbeli feature csak a saját migrációs körében
+# (a fenti három feltétel együttes teljesülésével) kerülhet ide.
 GENERATED_PATH_PATTERNS: tuple[str, ...] = (
-    "lib/features/*/public.dart",
+    "lib/features/practice_generator/public.dart",
 )
 
 # Az ARB-aggregátumok (`tool/gen_l10n_segments.dart` írja) NEM ütközési felület:

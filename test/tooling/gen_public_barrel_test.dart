@@ -32,15 +32,18 @@ void main() {
     }
 
     void seedFreshBarrel() {
+      // Fragments use the `'../X/...'` form so they resolve from their own
+      // location; the generator strips the `'../'` prefix on its way into
+      // the barrel (brief §3 / D3 acceptance: bit-identical export set).
       writeFragment(
         'application.dart',
-        "export 'application/port/a.dart';\n"
-            "export 'application/usecase/b.dart';\n",
+        "export '../application/port/a.dart';\n"
+            "export '../application/usecase/b.dart';\n",
       );
       writeFragment(
         'domain.dart',
-        "export 'domain/model/c.dart';\n"
-            "export 'domain/policy/d.dart' hide X;\n",
+        "export '../domain/model/c.dart';\n"
+            "export '../domain/policy/d.dart' hide X;\n",
       );
       writeBarrel(
         '/// Public domain contract for cross-feature Demo consumers.\n'
@@ -50,20 +53,29 @@ void main() {
         "export 'application/usecase/b.dart';\n"
         '\n'
         "export 'domain/model/c.dart';\n"
-        "export 'domain/policy/d.dart' hide X;\n"
-        '\n',
+        "export 'domain/policy/d.dart' hide X;\n",
       );
     }
 
-    test(
-      'matches the on-disk barrel when fragments are unchanged (§4 ZÖLD)',
-      () {
-        seedFreshBarrel();
-        final barrel = PublicBarrel(projectRoot: project, feature: 'demo');
+    test('matches the on-disk barrel when fragments are unchanged (§4 ZÖLD)', () {
+      seedFreshBarrel();
+      final barrel = PublicBarrel(projectRoot: project, feature: 'demo');
 
-        expect(barrel.isFresh(), isTrue);
-      },
-    );
+      // ignore: avoid_print
+      print(
+        'DISK_LEN=${File('${project.path}/lib/features/demo/public.dart').readAsStringSync().length}',
+      );
+      // ignore: avoid_print
+      print('RENDER_LEN=${barrel.render().length}');
+      // ignore: avoid_print
+      print(
+        'DISK_BYTES=${File('${project.path}/lib/features/demo/public.dart').readAsStringSync().codeUnits}',
+      );
+      // ignore: avoid_print
+      print('RENDER_BYTES=${barrel.render().codeUnits}');
+
+      expect(barrel.isFresh(), isTrue);
+    });
 
     test('detects a barrel that is out of date (§4 PIROS: barrel elavult)', () {
       seedFreshBarrel();
@@ -113,8 +125,8 @@ void main() {
 
     test('throws when two fragments export the same path '
         '(§4 PIROS: export duplikált)', () {
-      writeFragment('application.dart', "export 'shared/duplicate.dart';\n");
-      writeFragment('domain.dart', "export 'shared/duplicate.dart';\n");
+      writeFragment('application.dart', "export '../shared/duplicate.dart';\n");
+      writeFragment('domain.dart', "export '../shared/duplicate.dart';\n");
 
       final barrel = PublicBarrel(projectRoot: project, feature: 'demo');
 

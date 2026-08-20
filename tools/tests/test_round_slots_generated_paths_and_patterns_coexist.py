@@ -11,6 +11,10 @@ konfliktust adott. A két meglévő teszt-csomag
 `tools/tests/test_round_slots_generated_barrels.py`) kizárólag a SAJÁT
 oldalát méri — egyik sem bizonyítja, hogy egy merge-feloldás nem nyeli el a
 másik mechanizmust. Ez a fájl a hiányzó, KOMBINÁLT cellát méri.
+
+A §0.0c / ADR 0336 felülvizsgálat óta a `GENERATED_PATH_PATTERNS` a glob-
+helyett explicit nyilvántartás (`lib/features/practice_generator/
+public.dart`); ez a teszt a KOMBINÁLT szűrést ezen az új alakon méri.
 """
 
 import importlib.util
@@ -33,33 +37,49 @@ round_slots = _load("round_slots_coexist", "tools/round-slots.py")
 
 
 class BothGeneratedPathMechanismsCoexistTest(unittest.TestCase):
-    def test_exact_set_and_glob_pattern_both_filter_in_one_call(self) -> None:
+    def test_exact_set_and_registry_both_filter_in_one_call(self) -> None:
         """Egyetlen `effective_paths` hívás mindkét kizárási okot méri."""
         paths = round_slots.effective_paths(
             (
                 "lib/l10n/app_en.arb",  # E99-R17: GENERATED_PATHS (exact)
-                "lib/features/x/public.dart",  # E99-R18: GENERATED_PATH_PATTERNS (glob)
-                "lib/features/x/public/domain.dart",  # egyik mechanizmus sem fedi — marad
+                # E99-R18: GENERATED_PATH_PATTERNS (explicit registry):
+                "lib/features/practice_generator/public.dart",
+                # egyik mechanizmus sem fedi — marad:
+                "lib/features/x/public/domain.dart",
             )
         )
         self.assertEqual(paths, frozenset({"lib/features/x/public/domain.dart"}))
 
+    def test_non_migrated_barrel_is_not_silently_dropped(self) -> None:
+        """Az E99-R18 §0.0c szűkítés egyetlen, mért bizonyítéka: ha a
+        nyilvántartás véletlenül ismét blanket globra szélesedne, ez a
+        cella piros lenne. A `lib/features/ai_tutor/public.dart` NEM
+        migrált barrel, ezért a szűrő NEM ejtheti ki."""
+        self.assertEqual(
+            round_slots.effective_paths(("lib/features/ai_tutor/public.dart",)),
+            frozenset({"lib/features/ai_tutor/public.dart"}),
+        )
+
     def test_neither_mechanism_shadows_the_other_constant(self) -> None:
         """A GENERATED_PATHS és a GENERATED_PATH_PATTERNS egyszerre, és a
         várt tartalommal létezik — ha egy jövőbeli szerkesztés visszaírná a
-        régi, egymást kizáró HEAD/main ágat, ez a cella piros lenne."""
+        régi, egymást kizáró HEAD/main ágat, vagy a `GENERATED_PATH_PATTERNS`
+        ismét blanket globbá szélesedne, ez a cella piros lenne."""
         self.assertIn("lib/l10n/app_en.arb", round_slots.GENERATED_PATHS)
         self.assertIn("lib/l10n/app_hu.arb", round_slots.GENERATED_PATHS)
         self.assertEqual(
             round_slots.GENERATED_PATH_PATTERNS,
-            ("lib/features/*/public.dart",),
+            ("lib/features/practice_generator/public.dart",),
         )
 
     def test_two_briefs_one_per_mechanism_do_not_conflict(self) -> None:
-        """Két párhuzamos kör, az egyik csak ARB-t, a másik csak public.dart-ot
-        érint — egyik mechanizmus szűrése sem terjed át a másikéra tévesen."""
+        """Két párhuzamos kör, az egyik csak ARB-t, a másik csak a
+        migrált barrelt érinti — egyik mechanizmus szűrése sem terjed át a
+        másikéra tévesen."""
         left = round_slots.effective_paths(("lib/l10n/app_en.arb",))
-        right = round_slots.effective_paths(("lib/features/x/public.dart",))
+        right = round_slots.effective_paths(
+            ("lib/features/practice_generator/public.dart",)
+        )
         self.assertEqual(round_slots.paths_conflict(left, right), [])
 
 

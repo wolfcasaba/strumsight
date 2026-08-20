@@ -56,7 +56,7 @@ final class PublicBarrel {
       // (matches `dart format`'s trailing-newline expectation).
       if (index > 0) buffer.write('\n');
       final content = fragment.readAsStringSync();
-      final normalized = _normalizeFragment(content);
+      final normalized = _rewriteFragmentForBarrel(content);
       buffer.write(normalized);
       for (final exportPath in _exportPaths(content)) {
         if (!seenPaths.add(exportPath)) {
@@ -118,6 +118,32 @@ String _normalizeFragment(String content) {
   return trimmed;
 }
 
+/// Rewrites a fragment's content for inclusion in the barrel.
+///
+/// The fragments live at `lib/features/<feature>/public/<topic>.dart`. The
+/// barrel lives at `lib/features/<feature>/public.dart` — one directory up.
+/// A bare `'application/...'`, `'data/...'`, etc. resolves correctly from the
+/// barrel but is unresolved from the fragment; the analyzer would error on
+/// the fragment. The author-friendly fix is to write the fragment's exports
+/// with a leading `'../'`, which is valid Dart from the fragment's own
+/// location AND rewrites to the canonical barrel-relative form on the way
+/// into the barrel (so the regenerated file matches the pre-migration barrel
+/// bit-for-bit, per brief §3 / D3 acceptance).
+String _rewriteFragmentForBarrel(String content) {
+  final normalized = _normalizeFragment(content);
+  return normalized.split('\n').map(_stripLeadingDotDotSlash).join('\n');
+}
+
+String _stripLeadingDotDotSlash(String line) {
+  // Only rewrite bare `'../X/...'` URIs in `export '...' [modifiers];` lines.
+  // Comments and other lines pass through unchanged.
+  final match = RegExp(r"^(\s*export\s+)'\.\./([^']+)'(.*)$").firstMatch(line);
+  if (match != null) {
+    return "${match.group(1)}'${match.group(2)}'${match.group(3)}";
+  }
+  return line;
+}
+
 String _humanTitle(String feature) {
   return feature
       .split('_')
@@ -132,13 +158,22 @@ String _humanTitle(String feature) {
 /// string-literal contents are not specially masked here because the
 /// fragments are short, hand-authored files whose exports always live on
 /// their own line — the same convention the original barrel followed.
+/// Leading `'../'` (the fragment's escape hatch so its exports resolve from
+/// its own location) is stripped so duplicate detection and the barrel
+/// output see the canonical barrel-relative path.
 Iterable<String> _exportPaths(String source) sync* {
   final exportRegex = RegExp(r'''^\s*export\s+r?['"]([^'"]+)['"]''');
   for (final rawLine in source.split('\n')) {
     final trimmed = rawLine.trimLeft();
     if (trimmed.startsWith('//')) continue;
     final match = exportRegex.firstMatch(rawLine);
-    if (match != null) yield match.group(1)!;
+    if (match != null) {
+      var path = match.group(1)!;
+      if (path.startsWith('../')) {
+        path = path.substring(3);
+      }
+      yield path;
+    }
   }
 }
 
