@@ -321,6 +321,11 @@ Falszifikációs bizonyíték:
    és a PR-head eltérése átjutott. A javítás után GREEN — `11 passed, 3
    subtests passed`; az F2-cella külön base-, head-branch- és head-SHA-eltérést
    is fail-closed módon mér.
+4. F3 TDD-RED: a repository-beli `LAND` execute bitjét mérő új cella a
+   `100644` móddal `1 failed, 11 passed, 3 subtests passed` eredményt adott.
+   A `tools/round-land.sh` git-módjának `100755`-re állítása után GREEN —
+   `12 passed, 3 subtests passed`; `git ls-files -s` első mezője `100755`, és
+   `test -x tools/round-land.sh` is sikeres.
 
 Eltérés, nem futtatott ellenőrzés, follow-up: nincs. A teljes Flutter-suite,
 property gate és exact-SHA Router CI a kör merge-előtti orchestrátori kapuja.
