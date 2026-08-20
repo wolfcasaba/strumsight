@@ -179,6 +179,20 @@ fallback_engine=${PIPELINE_FALLBACK_ENGINE:-terra}   # terra | none
 codex_bin=${CODEX_BIN:-codex}
 codex_home=${PIPELINE_FALLBACK_CODEX_HOME:-$HOME/.codex-terra}
 fallback_label="Terra (gpt-5.6-terra)"
+
+# --- Sol-orchestrátor (user-döntés 2026-08-20) -----------------------------
+# A ChatGPT Pro előfizetés napokon belül lejár, és ~90% kerete bent ragadna
+# („hadd fogyjon el"). Amíg él: MINDEN kör orchestrátora/reviewere a Sol
+# (gpt-5.6-sol), implementere a Terra (gpt-5.6-terra) — a queue nyitott sorai
+# ezzel a döntéssel `terra`-ra álltak. A Sol UGYANABBAN a CODEX_HOME-ban fut,
+# mint a Terra (ugyanaz az előfizetés/auth), csak a modellje más: a driver
+# explicit `-m`-mel indítja. A modell-azonosság szerinti függetlenség
+# (ADR 0138 mérési kulcsa: `orchestrator_conflicts_with_implementer`) áll —
+# a közös ELŐFIZETÉS-keretet a user e döntéssel tudatosan vállalta, épp a
+# keret elégetése a cél. Lejárat után feloldás: PIPELINE_ORCH_ROTATION env,
+# vagy az alábbi default visszaállítása `alternate`-re.
+sol_model=${PIPELINE_SOL_MODEL:-gpt-5.6-sol}
+sol_label="Sol ($sol_model)"
 claude_block_file="$state_dir/claude-blocked-until"
 claude_block_seconds=${PIPELINE_CLAUDE_BLOCK_SECONDS:-18000}   # 5 órás ablak
 claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json}
@@ -194,7 +208,10 @@ claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json
 # A rotáció ezért PROAKTÍV, nem reaktív: a körök felén eleve a Terra vezényel,
 # így egyik motor kerete sem merül ki. A fallback (ADR 0115) megmarad alatta
 # védőhálónak.
-orch_rotation=${PIPELINE_ORCH_ROTATION:-alternate}   # alternate | claude | terra
+# user-döntés 2026-08-20: a default `sol` — a lejáró Pro-keret égetéséig
+# MINDEN kört a Sol vezényel (a fenti Sol-blokk indoklásával). A korábbi
+# default az `alternate` volt (ADR 0222); env-vel bármikor visszaállítható.
+orch_rotation=${PIPELINE_ORCH_ROTATION:-sol}   # sol | alternate | claude | terra
 orch_last_file="$state_dir/orchestrator-last"
 # ADR 0242 D1: a rotáció KÖRÖNKÉNT kulcsolt, nem globális — egy kör MINDEN
 # dispatchje (elhalt + újraindított is) ugyanazt az orchestrátort kapja
@@ -525,7 +542,7 @@ claude_usage_block_until() {
 # orchestrator` argumentum nélküli teszthorga és a `resolve_independent_
 # engine`/`--orchestrator-engine` belső hívásai ezt az alakot használják, és
 # nem kaphatnak kör-kulcsolt állapotot.
-next_orchestrator() {   # [$1=kör-azonosító] → claude | terra
+next_orchestrator() {   # [$1=kör-azonosító] → claude | terra | sol
   local round="${1:-}" round_file="" last value
   if [ -n "$round" ]; then
     round_file="$orch_round_dir/$round"
@@ -538,6 +555,11 @@ next_orchestrator() {   # [$1=kör-azonosító] → claude | terra
 
   if [ "$fallback_engine" = "none" ]; then
     value=claude
+  elif [ "$orch_rotation" = "sol" ]; then
+    # A Sol a Codex-oldalon fut, nem a Claude-keretből — a Claude-zárlat
+    # ezért nem érinti; a pin a zárlat-mérés ELŐTT dől el (user-döntés
+    # 2026-08-20: minden kört a Sol vezényel, amíg a Pro-keret él).
+    value=sol
   elif claude_unavailable_until >/dev/null || claude_usage_block_until >/dev/null; then
     value=terra
   else
@@ -861,11 +883,20 @@ run_orchestrator_session() {
   local tmux_session="$1" prompt_file="$2" session_log="$3" signal_file="$4"
   local timeout_s="$5" label="$6" session_model="${7:-$claude_model}"
   local blocked_until codex_prompt
+  # A Codex-oldali orchestrátor alakja: Terra (default model, ADR 0115/0222)
+  # vagy Sol (user-döntés 2026-08-20, explicit `-m $sol_model` UGYANABBAN a
+  # CODEX_HOME-ban — az auth közös, csak a modell más).
+  local orch_codex_label="$fallback_label" orch_model_args=""
+  if [ "$orchestrator_preference" = "sol" ]; then
+    orch_codex_label=$sol_label
+    orch_model_args=" -m $sol_model"
+  fi
 
   rm -f "$signal_file"
 
-  if [ "$orchestrator_preference" = "terra" ] && [ "$fallback_engine" != "none" ]; then
-    log "ROTÁCIÓ: ezt a munkadarabot a $fallback_label vezényli (PIPELINE_ORCH_ROTATION=$orch_rotation)"
+  if { [ "$orchestrator_preference" = "terra" ] || [ "$orchestrator_preference" = "sol" ]; } \
+     && [ "$fallback_engine" != "none" ]; then
+    log "ROTÁCIÓ: ezt a munkadarabot a $orch_codex_label vezényli (PIPELINE_ORCH_ROTATION=$orch_rotation)"
   elif blocked_until=$(claude_unavailable_until); then
     log "a Claude-kvóta zárlat alatt van $(date -Is -d "@$blocked_until")-ig — a kört a $fallback_label viszi"
   elif blocked_until=$(claude_usage_block_until); then
@@ -901,8 +932,8 @@ run_orchestrator_session() {
 
   codex_prompt=$(codex_prompt_file "$prompt_file")
   run_tmux_session "${tmux_session}-fallback" \
-    "CODEX_HOME=$codex_home $codex_bin exec -C $repo_root -s danger-full-access \"\$(cat $codex_prompt)\" < /dev/null" \
-    "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($fallback_label)" 0 \
+    "CODEX_HOME=$codex_home $codex_bin exec$orch_model_args -C $repo_root -s danger-full-access \"\$(cat $codex_prompt)\" < /dev/null" \
+    "${session_log%.log}-fallback.log" "$signal_file" "$timeout_s" "$label ($orch_codex_label)" 0 \
     "$CODEX_PROCESS_COMM_PATTERN"
 }
 
@@ -1546,7 +1577,8 @@ resolve_independent_engine() {   # $1=queue-motor [$2=orchestrátor]
 
 # Kiírja, hogy egy adott kör-ágon commitolt implementer ÜTKÖZIK-e a megadott
 # orchestrátorral (ugyanazt az identitást/kvótát fogyasztaná).
-orchestrator_conflicts_with_implementer() {   # $1=orchestrátor(claude|terra) $2=implementer motor
+orchestrator_conflicts_with_implementer() {   # $1=orchestrátor(claude|terra|sol) $2=implementer motor
+  local row
   case "$1" in
     claude) engine_uses_claude_quota "$2" ;;
     # Csak a Terra-MODELLT (gpt-5.6-terra) futtató implementer ütközik a
@@ -1554,6 +1586,15 @@ orchestrator_conflicts_with_implementer() {   # $1=orchestrátor(claude|terra) $
     # resolve_independent_engine-ben (2026-08-11 mért rés: a `codex` név is
     # ide tartozik, nem csak a `terra`).
     terra) case "$2" in codex|terra) return 0 ;; *) return 1 ;; esac ;;
+    # A Sol ugyanazon a modell-azonossági kulcson mér, mint a terra ág: a
+    # Sol-MODELLT futtató implementer ütközne vele — ilyen sor ma nincs a
+    # nyilvántartásban, a gpt-5.6-terra implementer tehát NEM ütközik. A
+    # közös Pro-ELŐFIZETÉS a 2026-08-20-i user-döntés tudatos vállalása
+    # (a lejáró keret égetése), nem mérési rés.
+    sol)
+      row=$(engine_registry_row "$2") || return 1
+      [ "$(printf '%s' "$row" | cut -f4)" = "$sol_model" ]
+      ;;
     *) return 1 ;;
   esac
 }
@@ -1583,14 +1624,16 @@ resolve_branch_implementer() {   # $1=kör-azonosító → motor neve, vagy üre
 # identitása független az implementertől; a `terra` a `fallback_engine=none`
 # alatt nem elérhető. Az elérhetőség és a függetlenség két különböző kérdés —
 # egyik sem helyettesítheti a másikat (ADR 0242 §5.2).
-orchestrator_available() {   # $1=orchestrátor(claude|terra)
+orchestrator_available() {   # $1=orchestrátor(claude|terra|sol)
   case "$1" in
     claude)
       claude_unavailable_until >/dev/null && return 1
       claude_usage_block_until >/dev/null && return 1
       return 0
       ;;
-    terra) [ "$fallback_engine" != "none" ] ;;
+    # A Sol a Codex-oldalon fut (ugyanaz a CODEX_HOME, mint a Terráé), ezért
+    # az elérhetősége is a Codex-oldali kapcsolóhoz kötött.
+    terra | sol) [ "$fallback_engine" != "none" ] ;;
     *) return 1 ;;
   esac
 }
@@ -1668,12 +1711,12 @@ case "${1:-}" in
     resolve_independent_engine "${2:-}" "${3:-}"
     exit 0
     ;;
-  --orchestrator-engine)   # melyik motor vinné MOST a review-t (ADR 0115 + 0222 rotáció)
-    if [ "$(next_orchestrator)" = "terra" ]; then
-      printf '%s\n' "$fallback_engine"
-    else
-      printf 'claude\n'
-    fi
+  --orchestrator-engine)   # melyik motor vinné MOST a review-t (ADR 0115 + 0222 rotáció + Sol-pin)
+    case "$(next_orchestrator)" in
+      terra) printf '%s\n' "$fallback_engine" ;;
+      sol)   printf 'sol\n' ;;
+      *)     printf 'claude\n' ;;
+    esac
     exit 0
     ;;
   --next-orchestrator)     # [$2=kör] → a rotáció döntése: claude | terra (ADR 0222); kör-argumentummal körönként rögzített (ADR 0242 D1)
@@ -2292,7 +2335,7 @@ else
       ;;
   esac
 fi
-[ "$orchestrator" = "terra" ] && orchestrator_preference=terra
+case "$orchestrator" in terra | sol) orchestrator_preference=$orchestrator ;; esac
 
 log "következő kör: $round · orchestrátor=$orchestrator · implementer=$engine · brief=$brief · ADR=$adr"
 

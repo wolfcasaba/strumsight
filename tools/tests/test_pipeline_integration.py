@@ -45,7 +45,9 @@ class PipelineIntegrationTest(unittest.TestCase):
 
     def test_engine_enum_accepts_auto_and_keeps_legacy_overrides(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
-        for engine in ("auto", "minimax", "codex"):
+        # A `terra` a nyilvántartás sora (ADR 0140): a queue is hivatkozhat rá
+        # (user-döntés 2026-08-20 — Pro-keret égetése, minden nyitott sor terra).
+        for engine in ("auto", "minimax", "codex", "terra"):
             with self.subTest(engine=engine):
                 result = self.run_command(["bash", str(script), "--validate-engine", engine])
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -66,7 +68,8 @@ class PipelineIntegrationTest(unittest.TestCase):
         queue = (ROOT / "docs" / "execution" / "pipeline-queue.tsv").read_text()
         self.assertIn("auto | minimax | codex", queue)
         rows = [line.split("\t") for line in queue.splitlines() if line and not line.startswith("#")]
-        self.assertTrue(all(row[2] in {"auto", "minimax", "codex"} for row in rows))
+        # `terra` a 2026-08-20-i user-döntés (Pro-keret égetése) queue-értéke.
+        self.assertTrue(all(row[2] in {"auto", "minimax", "codex", "terra"} for row in rows))
         epic3 = [row for row in rows if row[0].startswith("E03-")]
         self.assertEqual([row[0] for row in epic3], [f"E03-R{i:02d}" for i in range(1, 23)])
         self.assertTrue(all(row[4] in {"pending", "running", "done"} for row in epic3))
@@ -120,6 +123,15 @@ class PipelineIntegrationTest(unittest.TestCase):
 
         for round_id, brief, engine, _adr, _status in open_rounds:
             with self.subTest(round=round_id):
+                # USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): a lejáró ChatGPT
+                # Pro előfizetés maradék ~90%-át el kell fogyasztani, ezért a
+                # nyitott sorok explicit `terra` pint kaptak — erre az
+                # időszakra a mért szabály FELFÜGGESZTVE. A carve-out szűk: a
+                # `terra` a pin egyértelmű jele (a mért szabály sosem ad
+                # `terra`-t, csak `minimax`/`codex`-et), tehát a szabály a
+                # nem-pinelt sorokra változatlanul mér.
+                if engine == "terra":
+                    continue
                 text = (ROOT / brief).read_text()
                 risk = re.search(r'^risk\s*=\s*"(\w+)"', text, re.M)
                 self.assertIsNotNone(risk, f"{brief}: nincs risk mező")
@@ -1330,11 +1342,16 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertIn("round-gate.sh", caught.stdout)
 
     def test_orchestrator_falls_back_to_terra_only_while_claude_is_blocked(self) -> None:
+        # A kvóta-fallback gépezetét (ADR 0115) az `alternate` rotáció alatt
+        # mérjük — a 2026-08-20-i Sol-pin default (lásd a lenti
+        # `test_the_default_orchestrator_is_the_sol_pin`) a zárlat-mérés
+        # ELŐTT dönt, így alatta ez az út nem is fut.
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:
             state = Path(directory_name)
             env = dict(os.environ)
             env["PIPELINE_STATE_DIR"] = str(state)
+            env["PIPELINE_ORCH_ROTATION"] = "alternate"
             block = state / "claude-blocked-until"
 
             default = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
@@ -1354,6 +1371,27 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertEqual(expired.stdout.strip(), "claude")
             self.assertTrue(expired_file_cleaned, "a lejárt zárlatot a driver takarítja")
             self.assertEqual(switched_off.stdout.strip(), "claude")
+
+    def test_the_default_orchestrator_is_the_sol_pin(self) -> None:
+        # USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): rotáció-env nélkül a
+        # review-t a Sol viszi, és ezt a Claude-zárlat sem billenti át — a
+        # Sol nem a Claude-keretből fogyaszt.
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            state = Path(directory_name)
+            env = {
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith("PIPELINE_")
+            }
+            env["PIPELINE_STATE_DIR"] = str(state)
+
+            default = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
+            (state / "claude-blocked-until").write_text("4102444800\n")
+            blocked = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
+
+            self.assertEqual(default.stdout.strip(), "sol")
+            self.assertEqual(blocked.stdout.strip(), "sol")
 
     def test_only_real_quota_messages_trigger_the_engine_switch(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
