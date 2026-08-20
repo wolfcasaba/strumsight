@@ -96,6 +96,31 @@ library;
     });
   });
 
+  // E08-R02: Gamification enters as a new feature-domain root. Its stable
+  // events must remain portable across the later reward ledger and outbox.
+  group('gamification domain stays framework-free (E08-R02)', () {
+    test(
+      'no framework, storage, wall-clock, or random source in the domain',
+      () {
+        final domainDir = Directory('lib/features/gamification/domain');
+        expect(domainDir.existsSync(), isTrue);
+
+        final offenders = <String>[];
+        for (final entity in domainDir.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) continue;
+          offenders.addAll(
+            _forbiddenGamificationDomainMarkerOffenders(
+              entity.path,
+              entity.readAsStringSync(),
+            ),
+          );
+        }
+
+        expect(offenders, isEmpty, reason: offenders.join('\n'));
+      },
+    );
+  });
+
   group('architecture dependency rules', () {
     late Directory project;
 
@@ -636,12 +661,36 @@ void _write(Directory project, String relativePath, String contents) {
 // masked. See the regression test above (ADR 0112 self-heal, 2026-08-16).
 const _importUriMarkers = ['package:flutter/', 'dart:ui'];
 const _callMarkers = ['DateTime.now(', 'Random('];
+const _gamificationImportUriMarkers = [
+  'package:flutter/',
+  'package:flutter_riverpod/',
+  'package:riverpod/',
+  'package:shared_preferences/',
+  'package:flutter_secure_storage/',
+  'package:sqflite/',
+  'dart:ui',
+];
 
 List<String> _forbiddenDomainMarkerOffenders(String path, String content) {
   final withoutComments = _withoutTrivia(content, maskStrings: false);
   final withoutCommentsAndStrings = _withoutTrivia(content, maskStrings: true);
   return [
     for (final marker in _importUriMarkers)
+      if (withoutComments.contains(marker)) '$path contains "$marker"',
+    for (final marker in _callMarkers)
+      if (withoutCommentsAndStrings.contains(marker))
+        '$path contains "$marker"',
+  ];
+}
+
+List<String> _forbiddenGamificationDomainMarkerOffenders(
+  String path,
+  String content,
+) {
+  final withoutComments = _withoutTrivia(content, maskStrings: false);
+  final withoutCommentsAndStrings = _withoutTrivia(content, maskStrings: true);
+  return [
+    for (final marker in _gamificationImportUriMarkers)
       if (withoutComments.contains(marker)) '$path contains "$marker"',
     for (final marker in _callMarkers)
       if (withoutCommentsAndStrings.contains(marker))
