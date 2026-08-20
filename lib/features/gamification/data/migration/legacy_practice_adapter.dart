@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:strumsight/features/progress/public.dart';
 
 import '../../domain/activity/activity_source.dart';
@@ -12,7 +15,17 @@ import '../../domain/activity/learning_activity_event.dart';
 final class LegacyPracticeAdapter {
   const LegacyPracticeAdapter();
 
+  static const int maxLegacyEntries = 400;
+  static const int _maximumDateTimeEpochDay = 100000000;
+
   List<PracticeActivityEvent> adapt(List<PracticeEntry> entries) {
+    if (entries.length > maxLegacyEntries) {
+      throw ArgumentError.value(
+        entries.length,
+        'entries.length',
+        'A legacy practice snapshot can contain at most $maxLegacyEntries entries.',
+      );
+    }
     final occurrences = <String, int>{};
     final events = <PracticeActivityEvent>[];
 
@@ -22,7 +35,7 @@ final class LegacyPracticeAdapter {
       final fingerprint = _fingerprint(entry);
       final ordinal = occurrences[fingerprint] ?? 0;
       occurrences[fingerprint] = ordinal + 1;
-      events.add(_eventFor(entry, fingerprint, ordinal));
+      events.add(_eventFor(entry, _digest(fingerprint), ordinal));
     }
 
     return List<PracticeActivityEvent>.unmodifiable(events);
@@ -30,6 +43,8 @@ final class LegacyPracticeAdapter {
 
   /// Whether [entry] is safe to represent as a canonical activity event.
   bool accepts(PracticeEntry entry) =>
+      entry.day >= 0 &&
+      entry.day <= _maximumDateTimeEpochDay &&
       entry.seconds >= 0 &&
       entry.strokes >= 0 &&
       entry.chords >= 0 &&
@@ -59,9 +74,17 @@ final class LegacyPracticeAdapter {
     );
   }
 
-  String _fingerprint(PracticeEntry entry) =>
-      '${entry.day}:${entry.source.name}:${entry.seconds}:${entry.strokes}:'
-      '${entry.chords}:${entry.directionAccuracy?.toString() ?? 'null'}';
+  String _fingerprint(PracticeEntry entry) => jsonEncode(<Object?>[
+    entry.day,
+    entry.source.name,
+    entry.seconds,
+    entry.strokes,
+    entry.chords,
+    entry.directionAccuracy,
+  ]);
+
+  String _digest(String fingerprint) =>
+      crypto.sha256.convert(utf8.encode(fingerprint)).toString();
 
   ActivitySource _activitySource(PracticeSource source) => switch (source) {
     PracticeSource.live => ActivitySource.live,

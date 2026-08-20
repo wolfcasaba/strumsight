@@ -1,11 +1,8 @@
 import 'package:strumsight/features/progress/public.dart';
 
 import '../../domain/activity/learning_activity_event.dart';
-import '../../domain/rewards/reward_ledger_entry.dart';
-import '../../domain/rewards/reward_reason.dart';
 import '../gamification_repository.dart';
 import '../gamification_storage_schema.dart';
-import '../reward_ledger_repository.dart';
 import 'legacy_practice_adapter.dart';
 
 /// Immutable summary of one caller-supplied legacy-practice snapshot.
@@ -30,23 +27,29 @@ final class LegacyPracticeBackfillReport {
 
 /// Backfills a fixed legacy-practice snapshot without retroactive rewards.
 ///
-/// Each successful ledger append advances the persisted checkpoint to the
-/// first unprocessed snapshot index. A ledger duplicate is also success: its
-/// stable source-event id proves the receipt already exists.
+/// Each successfully mapped event advances the persisted checkpoint to the
+/// first unprocessed snapshot index. Mapping is side-effect free apart from
+/// this best-effort checkpoint persistence.
 final class GamificationMigrator {
   GamificationMigrator({
     required this.gamificationRepository,
-    required this.rewardLedgerRepository,
     this.adapter = const LegacyPracticeAdapter(),
   });
 
   final GamificationRepository gamificationRepository;
-  final RewardLedgerRepository rewardLedgerRepository;
   final LegacyPracticeAdapter adapter;
 
   Future<LegacyPracticeBackfillReport> migrate(
     List<PracticeEntry> entries,
   ) async {
+    if (entries.length > LegacyPracticeAdapter.maxLegacyEntries) {
+      throw ArgumentError.value(
+        entries.length,
+        'entries.length',
+        'A legacy practice snapshot can contain at most '
+            '${LegacyPracticeAdapter.maxLegacyEntries} entries.',
+      );
+    }
     final acceptedEntries = <PracticeEntry>[
       for (final entry in entries)
         if (adapter.accepts(entry)) entry,
@@ -66,8 +69,6 @@ final class GamificationMigrator {
     final checkpoint = _checkpointFor(events.length);
 
     for (var index = checkpoint; index < events.length; index++) {
-      final event = events[index];
-      await rewardLedgerRepository.appendIfAbsent(_zeroXpReceipt(event));
       await gamificationRepository.replaceMigrationState(
         GamificationMigrationState(processedCount: index + 1),
       );
@@ -90,17 +91,4 @@ final class GamificationMigrator {
     }
     return checkpoint;
   }
-
-  RewardLedgerEntry _zeroXpReceipt(PracticeActivityEvent event) =>
-      RewardLedgerEntry(
-        ledgerId: 'legacy-receipt/${event.eventId}',
-        sourceEventId: event.eventId,
-        createdAt: event.occurredAt,
-        schemaVersion: rewardLedgerEntrySchemaVersion,
-        policyVersion: 1,
-        baseXp: 0,
-        bonusXp: 0,
-        totalXp: 0,
-        reasonCodes: const <RewardReason>[],
-      );
 }
