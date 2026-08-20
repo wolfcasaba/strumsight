@@ -95,9 +95,27 @@ branch=$(git -C "$repo_root" branch --show-current)
 if [ -z "$branch" ]; then
   blocked "detached HEAD-ről nem landolható kör"
 fi
+starting_head=$(git -C "$repo_root" rev-parse HEAD)
 
 cd "$repo_root"
-echo "round-land: round=$round pr=$pr branch=$branch"
+pr_metadata=""
+if ! pr_metadata=$(gh pr view "$pr" --json baseRefName,headRefName,headRefOid \
+  --jq '[.baseRefName, .headRefName, .headRefOid] | @tsv'); then
+  blocked "a PR strukturált metaadata nem kérdezhető le; push és merge nem történt"
+fi
+pr_base=""
+pr_head_branch=""
+pr_head_oid=""
+pr_metadata_extra=""
+if ! IFS=$'\t' read -r pr_base pr_head_branch pr_head_oid pr_metadata_extra <<< "$pr_metadata"; then
+  blocked "a PR strukturált metaadata olvashatatlan; push és merge nem történt"
+fi
+if [ -z "$pr_base" ] || [ -z "$pr_head_branch" ] || [ -z "$pr_head_oid" ] || [ -n "$pr_metadata_extra" ] \
+  || [ "$pr_base" != "main" ] || [ "$pr_head_branch" != "$branch" ] || [ "$pr_head_oid" != "$starting_head" ]; then
+  blocked "a PR metaadata nem egyezik a mért local HEAD-del; push és merge nem történt"
+fi
+
+echo "round-land: round=$round pr=$pr branch=$branch head=$starting_head"
 git fetch origin main
 
 resolve_conflicts() {
@@ -173,6 +191,15 @@ else
     blocked "a safe-force-push remote-only commitot talált; push és merge nem történt"
   fi
   blocked "a safe-force-push hibával állt le ($push_code); push és merge nem történt"
+fi
+
+landed_head=$(git rev-parse HEAD)
+if [ "$landed_head" != "$starting_head" ]; then
+  rebase_resolved_summary="nincs"
+  if [ "${#resolved_conflicts[@]}" -gt 0 ]; then
+    rebase_resolved_summary=$(IFS=', '; echo "${resolved_conflicts[*]}")
+  fi
+  blocked "a rebase új HEAD-et képzett ($landed_head); exact-SHA CI-dispatch szükséges a merge előtt; mechanikusan feloldva: $rebase_resolved_summary"
 fi
 
 if ! gh pr merge "$pr" --squash --delete-branch; then

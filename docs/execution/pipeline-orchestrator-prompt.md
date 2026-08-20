@@ -486,11 +486,21 @@ A `.pipeline/inflight/` könyvtár mondja meg, fut-e rajtad kívül másik kör
    egyszerre. A merge-előfeltételek (review, exact-SHA CI és scope-audit)
    igazolása után a landoló szerzi meg a zárat, frissíti a rebase-elt
    kombinált HEAD-et, azon futtatja a kaput, majd kizárólag a biztonságos
-   force-push protokoll után squash-merge-el:
+   force-push protokoll után, változatlan igazolt HEAD-en squash-merge-el:
 
    ```bash
    tools/round-land.sh --pr <PR> --round {{ROUND}} --gate-test <a brief gate_tests útvonala>
    ```
+
+   A landoló minden invokáció elején `gh pr view --json` strukturált
+   metaadatából ellenőrzi, hogy a PR base-e `main`, head branch-e a lokális
+   current branch, head SHA-ja pedig az induló lokális HEAD. Eltérés
+   fail-closed: nincs fetch/rebase, push vagy merge. Ha a landoló rebase miatt
+   új HEAD-et képez, a kombinált-HEAD gate és a safe push után `blocked`
+   jelzéssel **új exact-SHA CI-dispatch-t kér**, és abban az invokációban nem
+   merge-el. Ilyenkor a friss HEAD-re dispatch-eld és ellenőrizd a CI-t, majd
+   csak a változatlan, már igazolt HEAD-en hívd újra a landolót; ez a második
+   hívás mehet tovább merge-re.
 
    A mechanikus konfliktus-osztályt (saját brief és append-only naplók) a
    landoló kezeli. Szemantikus konfliktus továbbra is H8: nincs push vagy
