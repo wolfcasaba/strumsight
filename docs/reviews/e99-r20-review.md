@@ -1,9 +1,9 @@
 # E99-R20 — Független review
 
 Brief: `docs/rounds/e99-r20-gov-14-round-landing-automation.md`
-Diff: `9e18c68d..d0c25079` (javító commit: `1779de35`)
+Diff: `b7ef9899..475a9ab0` (helyreállítás: `93dabfb4`)
 Reviewer: Codex Sol · Dátum: 2026-08-20
-Verdikt: **APPROVED** (F3 javítás: `697277e8`)
+Verdikt: **APPROVED** (H8-SELFDUP re-review: `475a9ab0`)
 
 ## Összegzés
 
@@ -11,7 +11,10 @@ BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 Az első review két fail-closed rést talált. A `1779de35` javító commit mindkét
 próbát állandó regressziós cellává tette; a friss upstreamet tartalmazó
-`d0c25079` HEAD-en a scope-audit, a round-gate és a teljes tooling-suite zöld.
+helyreállított `475a9ab0` HEAD-en a scope-audit, a round-gate és a teljes
+tooling-suite zöld. A korábbi ág kilenc, kétszer szereplő patchét a
+`93dabfb4` őre rebase előtt, fail-closed állítja meg; a recovered ág csak egy
+lineáris patch-példányt tartalmaz.
 
 ## Acceptance criteria
 
@@ -25,9 +28,9 @@ próbát állandó regressziós cellává tette; a friss upstreamet tartalmazó
 
 ## Scope-audit
 
-`python3 tools/scope-audit.py --repo /tmp/review-e99-r20-sol-final.mE5SU4
+`python3 tools/scope-audit.py --repo /tmp/review-e99-r20-sol.eEhihV
 --brief docs/rounds/e99-r20-gov-14-round-landing-automation.md --base
-9e18c68d`: **OK**, 6 változott útvonal, ebből 2 generated/ignored review-
+b7ef9899`: **OK**, 6 változott útvonal, ebből 2 generated/ignored review-
 artefaktum. Scope-on kívüli implementációs változás nincs.
 
 ## Megállapítások
@@ -107,6 +110,19 @@ artefaktum. Scope-on kívüli implementációs változás nincs.
   adott. Friss izolált klónban `test -x` és a célzott suite zöld.
 - **Státusz:** FIXED (`697277e8`)
 
+### H8-SELFDUP helyreállítás — új regressziós bizonyíték
+
+- **Mért ok:** a rebase utáni friss csúcsba visszamerge-elt régi csúcs kilenc
+  nem-merge patchét megduplázta; ez okozta a következő rebase megtévesztő
+  add/add és tartalmi konfliktusait.
+- **Javítás:** a `93dabfb4` commit patch-id alapon, rebase előtt blokkolja a
+  branch saját duplikált patch-történetét, és H8-SELFDUP diagnózist ad.
+- **Mutációs próba:** a `self_duplicate_guard` hívás ideiglenes kihagyásával
+  `test_self_duplicated_branch_history_is_rejected_before_rebase` **RED**
+  (`returncode 0`, várt blocked helyett); visszaállítás után **GREEN**.
+- **Biztonsági eredmény:** az őr csak szigorít, push/merge jogosultságot nem
+  tágít, és a recovered ág nem írta át a sérült publikus branch történetét.
+
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Eredmény | Ellenőrizve |
@@ -114,8 +130,9 @@ artefaktum. Scope-on kívüli implementációs változás nincs.
 | scope-audit | 6 útvonal, 2 generated/ignored, OK | ✅ |
 | format/analyze/architecture/secrets/l10n | `MINDEN GATE ZÖLD` | ✅, friss izolált klón |
 | célzott Flutter-teszt | 1 passed | ✅ |
-| tooling pytest | 663 passed, 2 skipped, 574 subtests | ✅, 319.86 s |
-| landoló regressziós suite | 12 passed, 3 subtests | ✅, F1/F2/F3 lezárva |
+| tooling pytest | 664 passed, 2 skipped, 574 subtests | ✅, 321.15 s |
+| landoló regressziós suite | 13 passed, 3 subtests | ✅, F1/F2/F3 + H8-SELFDUP lezárva |
+| H8-SELFDUP mutáció | guard nélkül RED, visszaállítva GREEN | ✅ |
 | CI | még nincs végső exact-SHA run | ⏳ javítás után kötelező |
 
 ## Merge-döntés
