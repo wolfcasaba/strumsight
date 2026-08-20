@@ -22,6 +22,38 @@ vitte. Exact `0674de52`: Full Gate
 success. A részletes történet a `docs/handoff-archive.md` elején található.
 Következő SDD-kör: **E08-R12 — Streak UI V2 és recovery flow**.
 
+
+## 🚦 [GOV] E13-R01 `prepared` → `pending` — elindul a Chapter 13 (UI/UX design system) sáv (user-döntés 2026-08-20)
+
+**Miért:** a `pipeline-slots=2` merge után (PR #360) a második sáv MÉRHETŐEN
+üres maradt, mert nem volt engedélyezett munka hozzá — nem slot-hiba. A
+`tools/round-slots.py plan` az E08-R12 futása mellett ezt adta:
+`free_slots: 1`, `rejected: E99-R22 — teljesítetlen előfeltétel: E99-R21`
+(az R21 `hold`-on áll), az E13-sáv 36 sora pedig `prepared` volt, amit a
+driver szándékosan nem futtat — ember állítja futtathatóra.
+
+**A döntés:** a Chapter 13 program-nyitó köre, az **E13-R01** (UI baseline
+inventory és screenshot corpus) `pending`. Csak EZ az egy sor — az E13-R02…R36
+marad `prepared`, tehát a sáv körönként, emberi rálátással nyílik.
+
+**Mérve a döntés előtt (ezen a felhő-boxon, `main @ 7b5315b` + ez a sor):**
+
+* `python3 tools/brief-lint.py --open --level base` → *nincs lelet* (az
+  E13-R01 briefje a nyitott körök kapuján is átmegy);
+* `tools/round-slots.py plan --slots 2` az E08-R12-t `running`-ra állítva,
+  `inflight=E08-R12`: **admitted: E13-R01** — tehát a tervező fájl-diszjunktnak
+  és előfeltétel-késznek méri a futó gamification-kör mellett. (Ugyanez a hívás
+  az E08-R12 `pending` sorával az E08-R12-t admittálja: a `plan` a sor
+  státuszát nézi, nem az inflight-regisztert — ez a mérés kerete, nem lelet.)
+
+**Nem változott:** a slotszám (`2`), a rotáció (`sol`), a queue összes többi
+sora, és a mérce egyetlen lépése sem. A kör motorja a sor szerint `terra`,
+orchestrátora a Sol-pin szerint a Sol.
+
+**Az E13-R01 briefje kötelező pre-flightot ír elő** (§2 számai `main @
+17670d4f`-en készültek: képernyők, hex-találatok újramérése, eltérésnél §0.0
+revízió) — ezt az orchestrátor a dispatch előtt elvégzi.
+
 ## ✅ E99-R20 (GOV-14) KÉSZ — kombinált-HEAD kör-landoló és H8-SELFDUP őr — PR #361, squash `5ad15b5f` (2026-08-20)
 
 A `tools/round-land.sh` a merge-záron belül köti a PR identitását a mért
