@@ -1,6 +1,6 @@
 # E99-R17 (GOV-11) — Az ARB-ütközés feloldása: feature-szintű l10n-fragmentumok és generált aggregátum
 
-- **Státusz:** HOLD — `H-GATEGUARD` (pre-flight folytatás 2026-08-19, `main @ dc6b4583`)
+- **Státusz:** READY FOR IMPLEMENTATION (pre-flight folytatás 2026-08-20, `main @ a113cfc7`)
 - **Típus:** **governance-kör** — a párhuzamos körök első fizikai blokkjának feloldása
 - **Kör-azonosító:** `E99-R17`. Emberi neve **GOV-11**.
 - **Előfeltétel:** `E99-R16` merge-elve
@@ -36,6 +36,24 @@ native_gate = false
 > egyezése**, nem szemrevételezés.
 
 ## 0.0 Pre-flight revízió (2026-08-19)
+
+### Dispatch-feloldás (2026-08-20, `origin/main @ a113cfc7`)
+
+- A megőrzött távoli körág D2 commitját (`82002070`) és az aktuális `main`-t
+  a `2c5ba555` merge commit egyesíti; `git merge-base --is-ancestor
+  origin/main HEAD` és `git diff --check` is zöld, a freshness-bizonyíték
+  pusholva van.
+- A D2 kész: a védett `tool/ci/check_l10n_parity.dart` változatlanul a
+  korábbi, emberi gate-szerkesztés eredménye. Az implementer kizárólag a
+  jelen `allowed_paths` szerinti D3/D4 munkát végezheti.
+- A kötelező ADR-foglaló most `0332`-t adott. Új ADR továbbra sem készül,
+  mert az elfogadott ADR 0307 §4 a döntés normatív forrása, a `docs/adr/**`
+  pedig tiltott zóna.
+- A kötelező RAG-lekérdezések lefutottak; az index két committal elavult,
+  ezért újraindexelés nem e kör hatásköre. A releváns találatok az E99-R17
+  `H-GATEGUARD` precedense és az E08-R03 generált-l10n előfeltétel tanulsága;
+  ezek a D2 emberi feloldását, illetve a wrapper saját `gen-l10n` előkészítését
+  erősítik meg.
 
 ### Folytatási mérés (2026-08-19, `origin/main @ dc6b4583`)
 

@@ -57,6 +57,18 @@ SERIALIZED_PATHS = frozenset(
         "docs/execution/06-requirements-traceability-matrix.md",
     }
 )
+# Az ARB-aggregátumok (`tool/gen_l10n_segments.dart` írja) NEM ütközési felület:
+# a tartalmuk determinisztikusan újragenerálható, a frissességet a `l10n`
+# gate-lépés méri (`tool/ci/check_l10n_parity.dart`), és a merge-zár sorosítja
+# azokat a köröket, amelyek egy fragmentumhoz (`lib/l10n/base/`,
+# `lib/l10n/features/`) hozzáérnek. Két ilyen kör PÁRHUZAMOSAN futhat — ez a
+# GOV-11 / E99-R17 mechanikus feloldása (ADR 0307 §4).
+GENERATED_PATHS = frozenset(
+    {
+        "lib/l10n/app_en.arb",
+        "lib/l10n/app_hu.arb",
+    }
+)
 ADR_NAME = re.compile(r"^(\d{4})-[a-z0-9-]+\.md$")
 ROUND_ID = re.compile(r"^[A-Z]\d{2}-R\d{2}$")
 ROUND_TOKEN = re.compile(r"E\d{2}-R\d{2}")
@@ -107,7 +119,10 @@ def unmet_prerequisites(repo: Path, round_id: str, brief: str, rows: list[tuple[
 
 
 def effective_paths(paths: tuple[str, ...]) -> frozenset[str]:
-    return frozenset(path for path in paths if path not in SERIALIZED_PATHS)
+    return frozenset(
+        path for path in paths
+        if path not in SERIALIZED_PATHS and path not in GENERATED_PATHS
+    )
 
 
 def paths_conflict(left: frozenset[str], right: frozenset[str]) -> list[tuple[str, str]]:
