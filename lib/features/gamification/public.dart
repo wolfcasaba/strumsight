@@ -31,3 +31,6 @@ export 'data/reward_ledger_repository.dart';
 export 'infrastructure/default_reward_eligibility_policy.dart';
 export 'infrastructure/default_reward_policy.dart';
 export 'infrastructure/default_streak_policy.dart';
+export 'presentation/screens/streak_detail_screen.dart';
+export 'presentation/widgets/streak_status_card.dart';
+export 'presentation/widgets/weekly_consistency_card.dart';

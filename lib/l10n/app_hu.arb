@@ -2217,6 +2217,90 @@
   "streakStart": "Játssz egy kicsit ma, és indíts egy sorozatot",
   "streakTitle": "Gyakorlási sorozat",
   "streakTooltip": "A gyakorlási sorozatod",
+  "streakV2AlreadyQualifiedBody": "A minősített gyakorlásod rögzítve van.",
+  "streakV2AlreadyQualifiedTitle": "A mai nap már a ritmusod része",
+  "streakV2BrokenBody": "A megszerzett tudásod veled marad.",
+  "streakV2BrokenTitle": "A gyakorlási ritmusod készen áll, amikor te is",
+  "streakV2ClockAnomalyBody": "A gyakorlási előzményeid stabilak maradtak az idő ellenőrzése közben.",
+  "streakV2ClockAnomalyTitle": "A ritmusod változatlan",
+  "streakV2CurrentLabel": "Jelenlegi ritmus",
+  "streakV2CurrentSemantics": "Jelenlegi ritmus: {count} nap",
+  "@streakV2CurrentSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streakV2FreezeCoveredBody": "A gyakorlási előzményeid megmaradtak.",
+  "streakV2FreezeCoveredTitle": "A fagyasztásod megvédte ezt a ritmust",
+  "streakV2FreezesLabel": "Elérhető fagyasztások",
+  "streakV2FreezesSemantics": "Elérhető fagyasztások: {count}",
+  "@streakV2FreezesSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streakV2GraceBody": "Akkor térhetsz vissza, amikor neked megfelelő.",
+  "streakV2GraceTitle": "A ritmusodnak van tere lélegezni",
+  "streakV2InsufficientBody": "A ritmusod akkor folytatódhat, amikor készen állsz.",
+  "streakV2InsufficientTitle": "A gyakorlás minden pillanata számít",
+  "streakV2LongestLabel": "Leghosszabb ritmus",
+  "streakV2LongestSemantics": "Leghosszabb ritmus: {count} nap",
+  "@streakV2LongestSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streakV2PlannedRestBody": "A pihenés a fenntartható gyakorlási ritmus része.",
+  "streakV2PlannedRestTitle": "A tervezett pihenő védi a ritmusod",
+  "streakV2QualifiedBody": "Minden minősített nap támogatja a felépített gyakorlásodat.",
+  "streakV2QualifiedTitle": "A ritmusod épül",
+  "streakV2RecoveryCta": "Indíts egy visszatérő gyakorlást",
+  "streakV2RecoveryQualifiedBody": "Ma teret adtál a gyakorlásnak.",
+  "streakV2RecoveryQualifiedTitle": "A gyengéd visszatérés is számít",
+  "streakV2StatusSemantics": "{title}. {body}",
+  "@streakV2StatusSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "streakV2Title": "A gyakorlási ritmusod",
+  "streakV2TotalLabel": "Minősített napok",
+  "streakV2TotalSemantics": "Minősített napok: {count} nap",
+  "@streakV2TotalSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streakV2WeeklySemantics": "Heti következetesség: {count} a 7 napból",
+  "@streakV2WeeklySemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "streakV2WeeklyTitle": "Heti következetesség",
+  "streakV2WeeklyValue": "{count} a 7 napból",
+  "@streakV2WeeklyValue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "strumDown": "Le",
   "strumRest": "Szünet",
   "strumUp": "Fel",

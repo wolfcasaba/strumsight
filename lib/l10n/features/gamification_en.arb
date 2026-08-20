@@ -1,0 +1,71 @@
+{
+  "@@locale": "en",
+  "streakV2Title": "Your practice rhythm",
+  "streakV2CurrentLabel": "Current rhythm",
+  "streakV2LongestLabel": "Longest rhythm",
+  "streakV2TotalLabel": "Qualified days",
+  "streakV2FreezesLabel": "Available freezes",
+  "streakV2CurrentSemantics": "Current rhythm: {count} days",
+  "@streakV2CurrentSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "streakV2LongestSemantics": "Longest rhythm: {count} days",
+  "@streakV2LongestSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "streakV2TotalSemantics": "Qualified days: {count} days",
+  "@streakV2TotalSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "streakV2FreezesSemantics": "Available freezes: {count}",
+  "@streakV2FreezesSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "streakV2WeeklyTitle": "Weekly consistency",
+  "streakV2WeeklyValue": "{count} of 7 days",
+  "@streakV2WeeklyValue": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "streakV2WeeklySemantics": "Weekly consistency: {count} of 7 days",
+  "@streakV2WeeklySemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "streakV2QualifiedTitle": "Your rhythm is growing",
+  "streakV2QualifiedBody": "Every qualifying day supports the practice you are building.",
+  "streakV2RecoveryQualifiedTitle": "A gentle return counts",
+  "streakV2RecoveryQualifiedBody": "You made room to practise today.",
+  "streakV2InsufficientTitle": "Every moment of practice matters",
+  "streakV2InsufficientBody": "Your rhythm can continue when you are ready.",
+  "streakV2PlannedRestTitle": "Planned rest protects your rhythm",
+  "streakV2PlannedRestBody": "Rest is part of a sustainable practice rhythm.",
+  "streakV2GraceTitle": "Your rhythm has room to breathe",
+  "streakV2GraceBody": "A return when it feels right keeps the next step simple.",
+  "streakV2FreezeCoveredTitle": "Your freeze protected this rhythm",
+  "streakV2FreezeCoveredBody": "Your practice history is still here.",
+  "streakV2BrokenTitle": "Your practice rhythm is ready when you are",
+  "streakV2BrokenBody": "The skill you have built stays with you.",
+  "streakV2AlreadyQualifiedTitle": "Today is already part of your rhythm",
+  "streakV2AlreadyQualifiedBody": "Your qualifying practice is recorded.",
+  "streakV2ClockAnomalyTitle": "Your rhythm is unchanged",
+  "streakV2ClockAnomalyBody": "We kept your practice history steady while the time was checked.",
+  "streakV2StatusSemantics": "{title}. {body}",
+  "@streakV2StatusSemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "body": {"type": "String"}
+    }
+  },
+  "streakV2RecoveryCta": "Start a recovery practice"
+}
