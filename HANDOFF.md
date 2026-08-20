@@ -1,5 +1,53 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R18/H3] KÉSZ — a H8 ADR-0112 blokk landolt `main`-en, a kör-ág visszaszinkronizálva — PR #346, squash `ee010d39` (2026-08-20)
+
+Harmadik H3-halt ugyanazon a körön: a kör-ág az `origin/main`-hez képest a
+tiltott `docs/adr/0112-self-healing-pipeline.md`-et is módosította. Gyökérok
+(class A, folyamat/precondition): a H8 self-heal (`7458ca83`) a saját,
+kör-ág-specifikus javítását — helyesen — a kör SAJÁT ágára pusholta (L343
+mintája), de ugyanabban a merge-commitban a saját ADR-0112 „Módosítás"
+könyvelő blokkját is odaírta, és sosem mozgatta át `main`-re. Egyetlen
+termék-brief `allowed_paths`-ának sem kellene ezt az utat tartalmaznia (ADR
+0112 §2: ez kizárólag a self-heal saját, brieftől független joga) — az
+`allowed_paths` bővítése tehát téves irányú fix lett volna.
+
+Feloldás: a H8-blokk byte-azonosan landolt `main`-en (PR #346, `ee010d39`;
+egy apró szám-ütközés-javítás `a109edbc` — az L346 számot időközben az
+E08-R05 saját maga foglalta le), plusz egy új ADR-0112 blokk ([[L347]]) a
+szabály rögzítésére: a L343 kör-ág-push kivétel kizárólag a FUNKCIONÁLIS
+javításra érvényes, az ADR-0112 könyvelő commit sosem utazhat vele egy
+bundle-ben. A kör-ág ezután visszamergelte a friss `main`-t (`96f1ada2`,
+`6b9bf12f`) — a `docs/adr/0112` diffje emiatt teljesen eltűnt a kör-ág
+`origin/main`-hez képesti diffjéből, allowlist-módosítás nélkül.
+
+Saját méréssel igazolva a HALTED saját reprodukciós parancsával:
+`tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base origin/main` →
+`Legacy scope audit OK (origin/main..6b9bf12f005c, 15 changed path(s), 0
+generated/ignored)` (előtte: `FAILED, path outside allowed scope:
+docs/adr/0112-self-healing-pipeline.md`). Router CI zöld a heal-ág fején
+([32329319021](https://github.com/wolfcasaba/strumsight/actions/runs/32329319021));
+`python3 -m pytest tools/tests -q`: 594 passed, 565 subtests passed (+1 új
+hermetikus regressziós teszt, 0 törölve) —
+`tools/tests/test_legacy_scope.py::LegacyScopeTest::
+test_selfheal_adr_bookkeeping_must_land_on_base_not_only_the_round_branch`
+szintetikus git-fixture-rel méri mindkét mintát (bundle → sértés; landolás+
+visszamerge → a path eltűnik).
+
+**Mellékesen feltárt, NEM javított lelet** (H8-mintát követve, [[L343]]): a
+mergelt kör-ágon a teljes `pytest tools/tests -q` 2 piros tesztet mutat
+(`test_e99_r18_scope_debris_revert.py`), mert a kör SAJÁT, ezt a self-healt
+MEGELŐZŐ §0.0e munkája egy 12. bejegyzéssel bővítette az `allowed_paths`-t
+(`docs/adr/0339-...`), a két korábbi H3 self-heal által pinnelt tuple-ök
+viszont 11-et várnak. Igazoltan a resync ELŐTT is fennállt (a merge sem a
+briefet, sem a guard-tesztet nem érintette konfliktussal). A round saját
+allowlist-bookkeeping munkája — a brief §0.0f-je és a következő E99-R18
+dispatch dolga, nem a self-healé.
+
+Lecke: [[L347]]. ADR: [`0112`](docs/adr/0112-self-healing-pipeline.md)
+Módosítás (2026-08-20).
+
 ## ✅ E08-R05 KÉSZ — Reward eligibility és trust policy — PR #345, squash `30fa8138` (2026-08-20)
 
 Determinisztikus `RewardEligibilityPolicy` (application) +
