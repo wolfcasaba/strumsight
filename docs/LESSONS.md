@@ -13794,3 +13794,76 @@ session-nek. A `git reflog` a leggyorsabb módja annak eldöntésére, hogy
 „a munkám elveszett" vagy „csak a lokális mutató ütközött" — az első
 esetben a HEAD-nél nincs `reset:` bejegyzés idegen commit előtt, a
 másodikban van.
+
+## L356 — Az L341 négyes leszivárgás-pop-listája nem volt teljes: a `codex-round.sh`/`engine-profile.sh env <motor>` EGY SZINTTEL FELJEBBI exportja (`ENGINE_MODEL` és társai) ugyanabba a WrapperModeTest-be szivárog, bármelyik motorral (E99-R20 H6 self-heal, ADR 0112, 2026-08-20)
+
+**Mit mértünk.** Az E99-R20 (GOV-14, round-landolás-automatizálás) `terra`
+implementere `blocked`-ot jelzett: a kötelező §7 gate
+(`python3 -m pytest tools/tests -q`) a
+`WrapperModeTest.test_the_legacy_call_without_round_engine_stays_minimax`
+cellán bukott, KÉTSZER egymás után ugyanazzal az eredménnyel (`1 failed, 656
+passed, 2 skipped, 571 subtests`, mérve `/home/ubuntu/ss-terra-e99-r20`-ban,
+head `21224fa9`). A `.codex-round-status` összegzése („ROUND_ENGINE=terra
+környezeti szivárgás miatt 1 pre-existing wrapper-teszt piros") a
+MECHANIZMUST helyesen nevezte meg, de a self-heal saját, első reprodukciós
+kísérlete — a HALTED fájl szó szerinti parancsa, `ROUND_ENGINE=terra
+python3 -m pytest tools/tests -q`, egy FRISS shellben — **zöld** lett (657
+passed, 0 failed). Csak a nyers Terra-napló (`/tmp/codex-e99-r20.log`,
+~24000. sor) `AssertionError`-ja adta a tényleges gyökéroket: a `--model
+MiniMax-M3` hiányzott a rögzített kimenetből, holott a `BASE_URL`/
+`AUTH_TOKEN`/`CONFIG_DIR`/`COMPACT` mezők helyesen a MiniMax-ágat mutatták.
+
+**Miért.** Az L341 (E99-R17 H6, UGYANAZON a napon) a `WrapperModeTest.
+run_wrapper()`-t már megvédte a `mm-round.sh` SAJÁT `external_endpoint`
+launch_env négyesétől (`ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`MINIMAX_API_KEY`). Van viszont egy
+MÁSODIK, EGY SZINTTEL FELJEBBI export-forrás: `tools/codex-round.sh` (és a
+claude-harness oldali `tools/mm-round.sh` saját, explicit `ROUND_ENGINE` ága)
+a `tools/engine-profile.sh env <motor>` TELJES kimenetét exportálja a HÍVÓ
+session sajátjaként, mielőtt a tényleges implementer-motort elindítaná —
+`terra`-ra mérve (`bash tools/engine-profile.sh env terra`):
+`CODEX_HOME=/home/ubuntu/.codex-terra ENGINE_MODEL=gpt-5.6-terra
+ENGINE_STALL_MINUTES=12 ENGINE_ROUND_TIMEOUT=3600 ENGINE_CONTEXT_WINDOW=400000
+ENGINE_MAX_OUTPUT=64000 ENGINE_REASONING=-`. Ez az export a `codex exec`
+folyamat ÉS minden azutáni Bash-hívás (a §7 gate is!) környezetében megmarad.
+A `WrapperModeTest.run_wrapper("", ...)` "nincs ROUND_ENGINE" esetében a
+`mm-round.sh` SAJÁT `if [ -n "$round_engine" ]` ága helyesen NEM fut le
+(tehát NEM ír felül semmit), ezért a `model=${MM_MODEL:-${ENGINE_MODEL:-
+MiniMax-M3[1m]}}` (mm-round.sh:82) a leszivárgott `ENGINE_MODEL=gpt-5.6-terra`
+értéket adta a történeti alapértelmezés helyett — a `--model gpt-5.6-terra`
+nem illeszkedik a `claude-*|sonnet-*|opus-*|haiku-*` mintára, ezért a
+MiniMax-ág (helyes BASE_URL/CONFIG_DIR/COMPACT) fut le, de HIBÁS modellnévvel.
+A mechanizmus TETSZŐLEGES motorral kiváltható, nem csak `terra`-val — a
+self-heal saját reprodukciója közben a `CLAUDE_CONFIG_DIR` is mérhetően
+leszivárgott a SAJÁT (self-heal) Claude-session ambiens környezetéből
+(`/home/ubuntu/.claude`), ami önmagában igazolta, hogy egy négyelemű
+pop-lista szerkezetileg nem elég egy `dict(os.environ)`-ból induló
+szimulátor-tesztnél.
+
+**Hogyan alkalmazd.** A `run_wrapper()` `leaking_var` listáját a MEGLÉVŐ
+négy MELLÉ (nem helyette) kibővítettük a `tools/engine-profile.sh env`
+TELJES kulcskészletével: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `ENGINE_MODEL`,
+`ENGINE_STALL_MINUTES`, `ENGINE_ROUND_TIMEOUT`, `ENGINE_CONTEXT_WINDOW`,
+`ENGINE_MAX_OUTPUT`, `ENGINE_REASONING`. Regressziós teszt (RED a bővítés
+nélkül, GREEN vele, mindkét irányban mérve az izolált heal-worktree-ben,
+[PR #356](https://github.com/wolfcasaba/strumsight/pull/356), squash
+`a0bf0d51`, Router CI [32354341693](https://github.com/wolfcasaba/strumsight/actions/runs/32354341693)
+success): `test_ambient_engine_profile_env_does_not_leak_into_the_legacy_run`
+— a VALÓDI mért `terra`-export hét sorát szimulálja
+`unittest.mock.patch.dict`-tel, és megköveteli, hogy a `ROUND_ENGINE=""`
+hívás a történeti MiniMax-alapértelmezésnél maradjon. Teljes `tools/tests`
+gate az izolált heal-worktree-ben: 650 passed, 1 skipped, 570 subtests, 0
+failed; a merge-elt `main`-en egy FÜGGETLEN, friss klónból a célzott fájl
+újra mérve: 21 passed. Általánosítható elv: egy `dict(os.environ)`-ból induló
+burkoló-szimulátor tesztnél egy KORÁBBAN mért szivárgás-listát NEM szabad
+lezártnak tekinteni — minden ÚJABB export-forrás (itt: egy teljesen másik
+script, egy szinttel feljebb, a hívó session szintjén) saját, önálló
+szivárgási felület, amíg a teszt maga nem tér át egy VALÓDI, teljes
+környezet-izolációra (pl. explicit allowlist `dict(os.environ)` helyett —
+ez a self-heal ezt a nagyobb refaktort NEM végezte el, mert a mért
+gyökérokhoz képest aránytalan lett volna). Mellékesen mérve: az
+`engine-profile.sh env <motor>` diagnosztikai célú interaktív futtatása a
+kulcsot birtokló motoroknál (`minimax`, a Kilo-alapú motorok) a NYERS
+API-kulcsot írja stdoutra — self-heal/debug munkamenetben csak
+átirányítva vagy a kulcs nélküli motorokra (`terra`/`codex`/`sonnet-impl`)
+szabad hívni, hogy a session-átiratban ne maradjon élő kulcs.

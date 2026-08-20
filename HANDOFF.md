@@ -1,5 +1,49 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R20/H6] KÉSZ — `WrapperModeTest` hiányos leszivárgás-pop-listája — PR #356, squash `a0bf0d51` (2026-08-20)
+
+A `terra` implementer E99-R20-on (GOV-14, round-landolás-automatizálás,
+ADR 0313) `blocked`-ot jelzett: a kötelező §7 gate
+(`python3 -m pytest tools/tests -q`) a
+`WrapperModeTest.test_the_legacy_call_without_round_engine_stays_minimax`
+cellán bukott, KÉTSZER egymás után (mérve a saját worktree-jében,
+`/home/ubuntu/ss-terra-e99-r20`, head `21224fa9`). A self-heal saját, első
+reprodukciós kísérlete (a HALTED szó szerinti parancsa egy FRISS shellben)
+zöld lett — csak a nyers Terra-napló adta a tényleges gyökéroket: az L341
+(UGYANAZON a napon, E99-R17 H6) négyelemű leszivárgás-pop-listája nem volt
+teljes. A `tools/codex-round.sh` a `tools/engine-profile.sh env <motor>`
+teljes kimenetét (`ENGINE_MODEL` és hat társa) exportálja a HÍVÓ session
+sajátjaként, ami a §7 gate-en át ugyanúgy bekerül a `WrapperModeTest.
+run_wrapper()` szimulált alfolyamatába, mint az L341-ben talált négyes —
+csak EGY SZINTTEL FELJEBBI forrásból, és BÁRMELYIK motorral (nemcsak
+minimax-szal) kiváltható. A pop-listát a teljes `engine-profile.sh env`
+kulcskészletre bővítettük (`CODEX_HOME`, `CLAUDE_CONFIG_DIR`,
+`ENGINE_MODEL`, `ENGINE_STALL_MINUTES`, `ENGINE_ROUND_TIMEOUT`,
+`ENGINE_CONTEXT_WINDOW`, `ENGINE_MAX_OUTPUT`, `ENGINE_REASONING`), és egy
+regressziós tesztet adtunk hozzá, amely a valódi mért `terra`-exportot
+szimulálja (`test_ambient_engine_profile_env_does_not_leak_into_the_legacy_run`).
+RED a bővítés nélkül, GREEN vele; teljes `tools/tests` gate izolált
+heal-worktree-ben 650 passed/1 skipped/570 subtests/0 failed, Router CI
+[32354341693](https://github.com/wolfcasaba/strumsight/actions/runs/32354341693)
+success az exact push SHA-n; post-merge egy FÜGGETLEN, friss klónból a
+célzott fájl újra zöld (21 passed). Nincs törölt/gyengített teszt, nincs
+küszöb-lazítás, `tools/round-gate.sh`/`.github/workflows/**` érintetlen.
+Lecke: [[L356]] (a lecke egy mellékesen mért ballépést is dokumentál: az
+`engine-profile.sh env <motor>` diagnosztikai futtatása kulcsot birtokló
+motoroknál a NYERS API-kulcsot írja stdoutra — a self-heal ezt a boxon,
+sajátjának minősülő kulcsokkal, egy interaktív diagnosztikai lépésben tette,
+harmadik fél felé nem jutott ki, de jövőbeli self-healnek ezt kerülnie kell).
+
+Az eredeti E99-R20 (GOV-14) kör TARTALMI munkája (D1–D5, `tools/round-land.sh`
++ `tools/tests/test_round_land.py`) ÉRINTETLEN maradt a `terra` worktree-ben
+(`/home/ubuntu/ss-terra-e99-r20`, 3 commitolatlan fájl) — ezt a self-heal
+szándékosan NEM vitte tovább (ADR 0112 hatókör), a pipeline driver folytatja
+friss sessionben. Két, a körhöz nem tartozó, előzőleg is létező maradvány
+érintetlen maradt (nem ennek a self-healnek a hatóköre): a
+`gov/round-lander` remote branch (`da80e4d8`, a régi ADR 0313 + brief
+pre-flight-branchje, tartalma már máshonnan mergelve) és a
+`/home/ubuntu/ss-heal-E08-R04-1` worktree (egy korábbi self-heal maradványa).
+
 ## ✅ E08-R08 KÉSZ — Gamification repository és tároló-séma — PR #355, squash `ebb03d9d` (2026-08-20)
 
 Négy különálló, verziózott `JsonDocumentStore`-dokumentum EGY sémafájlban
