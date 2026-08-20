@@ -1,6 +1,6 @@
 # E99-R19 (GOV-13) — Lánc-higiénia: main-szinkron, egyetlen záró commit, őszinte kockázati besorolás
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 52324cb3`)
+- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-20 pre-flight, `main @ fca0a202`)
 - **Típus:** **governance-kör**
 - **Kör-azonosító:** `E99-R19`. Emberi neve **GOV-13**.
 - **Előfeltétel:** `E99-R15` merge-elve (`tools/round-pipeline.sh`), `E99-R16` merge-elve (`tools/brief-lint.py`)
@@ -28,6 +28,23 @@ native_gate = false
 > felülírt lokális commitot, vagy elveszett `done` státuszt okozna. A
 > `gate_tests` cella fa-egészség őr; a tényleges mérce a `pytest tools/tests`
 > és a Router CI (§7).
+
+## 0.0 Pre-flight revízió (2026-08-20)
+
+- **Mérés:** a friss `main` és `origin/main` ugyanaz a `fca0a202` commit;
+  `tools/round-pipeline.sh:1855–1856` továbbra is minden eltérésnél `die`-jal
+  áll meg, a záró `pending → done` fail-safe pedig `2317–2323` között külön
+  `chore(pipeline)` commitot és pushot készít. A brief D1–D3 aktuális kódra
+  vonatkozik.
+- **ADR:** a `tools/round-slots.py reserve-adr --round E99-R19` a `0343`
+  számot foglalta, de új ADR nem készül: a kör kötött döntéseit a már elfogadott
+  [`ADR 0307`](../adr/0307-pipeline-throughput-program-v2.md) §6 teljesen
+  lefedi. A foglalás nem módosíthatja a brief tilos `docs/adr/**` zónáját.
+- **Visszakeresett előzmény:** `adr/0307` §6 a D1–D3 célját és a mérési alapot
+  rögzíti; `halts/E99-R18 H3` a hosszan nyitott kör-ág és a mozgó
+  `origin/main` scope-audit-kockázatát mutatja. Következmény: minden dispatch,
+  review és CI előtt friss upstream-ősviszonyt kell mérni, a szimbolikus
+  bázisra támaszkodó következtetés nem elég.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
