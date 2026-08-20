@@ -1,13 +1,15 @@
 # E08-R09 — Security review
 
 Brief: `docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md`
-Diff: `git diff d2b26710..415a795a`
+Diff: `git diff d2b26710..415a795a`, S4 self-heal javítás: `git diff 415a795a..9821d00b`
 Reviewer: független GPT-5.6 Sol security-reviewer · Dátum: 2026-08-20
-Verdikt: **CHANGES REQUIRED**
+S4 javítás + független újra-ellenőrzés: önjavító kör (ADR 0112, halt H4,
+Claude Sonnet 5 + security-reviewer subagent) · Dátum: 2026-08-20
+Verdikt: **APPROVED** (S4 javítva `9821d00b`-ban, függetlenül újramérve — ld. lent)
 
 ## Összegzés
 
-CRITICAL: 0 · BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+CRITICAL: 0 · BLOCKER: 0 · MAJOR: 1 (FIXED) · MINOR: 0 · NOTE: 0
 
 ## Megállapítások
 
@@ -82,7 +84,22 @@ CRITICAL: 0 · BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
   hogy az utána álló valid rekord eredeti indexe megmaradjon. Állandó
   regressziós cella: invalid a checkpoint alatt, pontosan rajta és fölötte,
   valamint teljes futás után `processedCount == entries.length`.
-- **Státusz:** OPEN
+- **Státusz:** CLOSED (`9821d00b`) — a `_checkpointFor` hívás és a write-loop
+  most `entries.length`-en (nem `events.length`-en) fut; a bound-check is az
+  eredeti snapshotra vonatkozik. Négy állandó regressziós cella (S4a: invalid
+  a checkpoint alatt, S4b: pontosan rajta, S4c: fölötte, S4d: teljes futás
+  nulláról több invalid rekorddal) mind a négy hely-osztályt lefedi és a
+  `processedCount == entries.length` invariánst is ellenőrzi. Mérve a javítás
+  ELŐTT (mutáció-visszaállítással `415a795a`-ra): S4a/b/c
+  `Expected: [3, 4]  Actual: [3]` (S4a byte-azonos a review saját
+  reprodukciójával), S4d `Expected: [1, 2, 3, 4, 5]  Actual: [1, 2, 3]`;
+  UTÁNA mind a 17 cella zöld. **Függetlenül újra-ellenőrizve** egy friss,
+  izolált klónban (security-reviewer subagent, NEM az önjavító session saját
+  jelentésére hagyatkozva): saját kézzel megismételt mutáció-kill ugyanazokat
+  a számokat adta, a teljes `tools/round-gate.sh` a két érintett teszt-fájlon
+  zöld (format/analyze/17+11 teszt/architecture/secrets 3046 fájl 0
+  lelet/l10n), és a `_checkpointFor`/`processedCount` egyetlen más
+  hívóhelyénél sem talált a régi, hibás szemantikára támaszkodó kódot.
 
 ## Pozitív evidenciák
 
@@ -93,8 +110,18 @@ CRITICAL: 0 · BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
   SHA-256 ID, exact duplikátum, DateTime szélsőérték, illetve 400/401 cap zöld;
   az eredeti-index checkpoint cella piros (`Expected [3,4], Actual [3]`).
 - A re-review izolált klónja a próba törlése után tiszta maradt.
+- S4 javítás (`9821d00b`) állandó regressziója (S4a-S4d) és a kör-gate egy
+  MÁSODIK, független izolált klónban is zöld — ld. S4 Státusz fent.
 
 ## Merge-döntés
 
-S1–S3 lezárva, de S4 MAJOR nyitva: **merge tilos**. Terra javító kör, majd
-friss security re-review és exact-SHA CI kötelező.
+S1–S4 mind lezárva, minden lokális gate zöld, kétszer (implementer + önjavító
+self-heal, mindkettő független security-reviewer újramérésével) mérve. Nyitott
+BLOCKER/MAJOR nincs. **Merge engedélyezett**, amint a kör-branchre dispatchelt
+CI (Router CI + `tools/round-ci-plan.py` javasolta workflow) a merge SHA-n
+zöld (ADR 0052) — ezt a self-heal (ADR 0112) szándékosan NEM indította el:
+[[L304]] szerint a javítás a megállt kör SAJÁT, még nem `main`-be olvadt
+ágán élő kódhibát céloz, ezért közvetlenül a kör ágára (`terra/e08-r09-
+legacy-progress-adapter-and-backfill`) lett pusholva, PR és CI-dispatch
+nélkül — a lánc következő E08-R09 firingje viszi tovább a kör szokásos
+PR/CI/merge lezárását.
