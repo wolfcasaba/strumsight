@@ -76,6 +76,24 @@ nyitott `terra` queue-sorok visszaosztása (a lejárt előfizetéssel a
 `codex`/`terra` sor nem futtatható — `minimax`/`sonnet-impl` a mezőny), és a
 prompt MOTOR-FELÁLLÁS blokkjának frissítése. A pontos lépések a blokkban.
 
+## ✅ E99-R19 (GOV-13) KÉSZ — lánc-higiénia, PR #354, squash `4dc8f7d1` (2026-08-20)
+
+A pipeline tiszta, lemaradt `main`-je most csak fast-forwarddal frissül;
+valódi divergencia és piszkos fa továbbra is fail-closed megáll. A záró
+ritualé a queue `pending → done` átírását a HANDOFF-dokumentációval közös,
+egyetlen commitba írja, a driver korábbi `chore(pipeline)` ága pedig
+idempotens fail-safe marad. A strict brief-lint S7 csak az indoklás nélküli,
+nem router-kockázatos `risk = "high"` briefet jelzi; a base CI-szint nem
+szigorodott. A correctness review egy valódi lemaradt+piszkos-fa cellát
+kért; az F1 javítás után a review APPROVED, a security review PASS.
+
+Exact branch-head `c17ed660`: Full Gate
+[32347005385](https://github.com/wolfcasaba/strumsight/actions/runs/32347005385)
+és Router CI
+[32347032703](https://github.com/wolfcasaba/strumsight/actions/runs/32347032703)
+success. A merge-elt `main` (`4dc8f7d1`) post-merge gate-je is zöld;
+tooling-suite: 647 passed, 571 subtests. Lecke: [[L353]].
+
 ## ✅ [HEAL E99-R19/H3] KÉSZ — governance-kör SAJÁT `allowed_paths`-ban felsorolt pipeline-fájlja nem H3-alap — PR #352, squash `c4104234` (2026-08-20)
 
 A rotált (Terra) orchesztrátor megtagadta E99-R19 (GOV-13) implementer-
@@ -2772,6 +2790,12 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-20):** `main` @ `4dc8f7d1` — E99-R19 GOV-13
+lánc-higiénia, PR [#354](https://github.com/wolfcasaba/strumsight/pull/354),
+squash-merge. Implementer MiniMax; correctness review APPROVED, security
+review PASS. Exact `c17ed660`: Full Gate 32347005385 + Router CI 32347032703
+success; post-merge gate zöld. Az E08-R08 külön, izolált körben már fut.
+
 **Aktuális állapot (2026-08-20):** `main` @ `010989f3` — E08-R07 Szintgörbe
 és profil-projekció, PR [#349](https://github.com/wolfcasaba/strumsight/pull/349),
 squash-merge, implementer Codex (`~/.codex-terra`, gpt-5.6-terra) + 1 javító
@@ -3231,6 +3255,15 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E99-R19 — GOV-13 lánc-higiénia** (PR
+[#354](https://github.com/wolfcasaba/strumsight/pull/354), squash `4dc8f7d1`,
+ADR 0307 §6). A D1 main-szinkron csak tiszta, szigorúan lemaradt `main`-t
+fast-forwardol; a D2 záró dokumentáció és queue-státusz közös commitját, a
+D3 pedig az indoklás nélküli magas kockázat strict leletét méri. F1 MAJOR
+(a piszkos-fa teszt nem a tényleges őrt mérte) javítva; review APPROVED és
+security PASS. Exact `c17ed660`: Full Gate 32347005385 + Router CI 32347032703
+success; post-merge gate zöld (647 passed, 571 subtests).
 
 **E08-R03 — Reward ledger és idempotencia-index** (PR
 [#340](https://github.com/wolfcasaba/strumsight/pull/340), squash `39c0bd5f`,
@@ -3930,7 +3963,7 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 **A következő SDD-lépés: E08-R08** (Gamification repository és storage
 schema, SDD Chapter 9 — `docs/rounds/e08-r08-gamification-repository-and-
-storage-schema.md`, engine `codex`, a queue-ban előre kiosztott ADR `0306` —
+storage-schema.md`, engine `terra`, a queue-ban előre kiosztott ADR `0306` —
 a pre-flightban MÉRNI kell a `tools/round-slots.py reserve-adr`-ral, mert a
 sorozatos ADR-fogyás miatt valószínűleg ez is stale (lásd E08-R07 §0.0:
 `0305` → `0342` volt a mérve helyes szám). Friss sessionben indul.
