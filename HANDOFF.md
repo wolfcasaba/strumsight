@@ -1,5 +1,32 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R12 KÉSZ — együttérző Streak UI V2 és recovery flow — PR #367, squash `8aa0010b` (2026-08-20)
+
+A gamification feature caller-fed, passzív Streak V2 képernyőt kapott current,
+longest, total days, freeze és 0–7 heti consistency kártyákkal. A broken
+állapot kimondja, hogy a megszerzett tudás megmarad, a recovery CTA egyetlen
+hívó-adta callbacket indít büntető countdown nélkül, a planned rest külön
+védett állapot. A legacy `/streak` route változatlan; a későbbi wiring-kör
+köti be a V2 képernyőt. A layout 1.0/2.0/3.0 text scale mellett görgethető,
+teljes semantics címkéket ad, reduced motionnál pedig csak az átmenet ideje
+lesz nulla.
+
+Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Az első
+review egy MAJOR copy-őr hiányt és egy MINOR angol plural hibát talált; az egy
+javító kör után correctness és high-risk security review is APPROVED, nyitott
+lelet nélkül. A végső scope-audit 12 útvonalat, 2 generated/ignored
+review-jelentést és 0 sértést adott. A kombinált-HEAD gate 7/7 zöld (21 V2 +
+20 legacy streak teszt); a fix 80 px magasság, storage-import és tiltott
+broken-copy mutációk célzottan pirosak, restore után zöldek.
+
+Exact reviewed head `fe175652`: Full Gate
+[32406555330](https://github.com/wolfcasaba/strumsight/actions/runs/32406555330)
+és Router CI
+[32406581869](https://github.com/wolfcasaba/strumsight/actions/runs/32406581869)
+success. PR [#367](https://github.com/wolfcasaba/strumsight/pull/367), squash
+`8aa0010b`; ADR 0353. Következő SDD-kör: **E08-R13 — Achievement domain és
+katalógus**, új sessionben.
+
 ## ✅ [HEAL E08-R12/H8] KÉSZ — a publikus kör-ág veszteségmentesen tartalmazza a friss `main`-t — PR #371 (2026-08-20, L367)
 
 Az E08-R12 landolója a friss `main`-re rebase-elte a kör hét nem-merge

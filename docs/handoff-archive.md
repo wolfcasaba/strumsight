@@ -6,6 +6,37 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R12 — Streak UI V2 és recovery flow (2026-08-20)
+
+PR [#367](https://github.com/wolfcasaba/strumsight/pull/367), squash
+`8aa0010b`, [ADR 0353](adr/0353-caller-fed-compassionate-streak-v2-presentation.md).
+A `StreakDetailScreen` kizárólag hívó-adta `StreakState`,
+`StreakEvaluationReason`, validált `weeklyConsistencyDays` és recovery
+callback alapján renderel. Nem olvas providert, repositoryt, órát, route-ot
+vagy reward ledgert. A broken állapot együttérző, tudásmegőrző copyt és
+countdown nélküli CTA-t ad; a planned rest külön védett állapot. A régi
+`/streak` route változatlan maradt. Az EN/HU szövegek feature-szegmensből
+generált ARB aggregátumokon át érkeznek, az angol semantics ICU pluralja a
+0/1/2 széleket is helyesen kezeli.
+
+Az első Sol review MAJOR lelete azt mérte, hogy a broken title és CTA copyt az
+A1/A2 őr nem fedte le: `You lost your streak!` és `Return within 2 days`
+mutáció mellett 20/20 teszt zöld maradt. A MINOR lelet az `1 days` semantics
+volt. A Terra javító kör mindkettőt zárta; a re-review külön tiltott-title és
+szöveges-countdown mutációval igazolta a pirosat. A H6 l10n scope-heal, a H3
+presentation architecture-heal és a H8 history-heal után a végső Sol review
+ismét 7/7 round-gate-et, 21 V2 + 20 legacy streak tesztet, 12 útvonalas tiszta
+scope-auditot és három piros valódi-sértést mért: fix 80 px kártya,
+`shared_preferences` presentation-import és tiltott broken title. Correctness
+és high-risk security verdict: APPROVED, nyitott lelet nincs.
+
+Exact reviewed head `fe175652`: Full Gate
+[32406555330](https://github.com/wolfcasaba/strumsight/actions/runs/32406555330)
+és Router CI
+[32406581869](https://github.com/wolfcasaba/strumsight/actions/runs/32406581869)
+success. Implementer Terra (`gpt-5.6-terra`), reviewer/orchestrator Sol
+(`gpt-5.6-sol`), egy javító kör. Következő kör: E08-R13, külön sessionben.
+
 ## ✅ E08-R11 — Qualified day, planned rest és recovery policy (2026-08-20)
 
 PR [#363](https://github.com/wolfcasaba/strumsight/pull/363), squash

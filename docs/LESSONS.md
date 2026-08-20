@@ -14194,3 +14194,21 @@ remote kör-csúcsról normál merge-gel építsd be a friss `main`-t, majd bizo
 a faazonosságot és az ancestor-kapcsolatot. L253 nem ez az eset: itt nem két
 függetlenül írt azonos javítás kommentje ütközött, hanem egy már leváltott
 brief és a merge-elt self-heal scope-ja.
+
+## L368 — A generikus architecture checker és a tesztes réteghatár-őr bizonyítéka nem felcserélhető (E08-R12, 2026-08-20)
+
+**Mérés.** A végső E08-R12 review-ban egy ideiglenes
+`package:shared_preferences/shared_preferences.dart` import került a
+gamification presentation képernyőbe. A `dart run tool/check_architecture.dart`
+változatlanul zöld maradt, mert ez az általános importgráf-őr nem a
+gamification storage-markerlistát futtatja. Ugyanez a mutáció a
+`flutter test test/core/architecture_dependency_test.dart` célzott
+könyvtár-scan celláját pontosan a tiltott útvonal megnevezésével pirosra
+vitte; restore után a teljes 25 cellás fájl zöld lett.
+
+**Szabály.** Review-jelentésben mindig a ténylegesen falszifikált őrt nevezd
+meg. Az általános `tool/check_architecture.dart` zöldje nem bizonyít minden
+feature-specifikus réteghatárt; az E08-R12 storage-tilalmat a teljes CI-suite
+részeként futó `test/core/architecture_dependency_test.dart` őrzi. A brief
+szerinti round-gate és a teljes CI együtt adják a mércét, egyik eredményét sem
+szabad a másik eszköznek tulajdonítani.
