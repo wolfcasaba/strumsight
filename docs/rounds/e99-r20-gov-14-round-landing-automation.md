@@ -71,6 +71,16 @@ native_gate = false
   kombinált-HEAD gate és a safe push után merge nélkül `blocked` jelzéssel
   új exact-SHA CI-dispatch-t kér; csak a következő, változatlan és már
   igazolt HEAD-en futó invokáció merge-elhet.
+- **H8-SELFDUP helyreállítás (2026-08-20):** az első kétfázisú landolás
+  helyesen új exact-SHA CI-t kért, de az orchesztrátor utána a rebase ELŐTTI
+  régi csúcsot merge-elte vissza a friss csúcsba. Patch-id méréssel kilenc
+  kör-commit szerepelt kétszer; a következő rebase ezért saját magával adott
+  add/add és tartalmi konfliktust. A helyreállított ág az aktuális `main`
+  fölött egyetlen lineáris példányban hordozza a kör patcheit, a sérült
+  publikus ág történetét pedig nem írja át. A landoló új, fail-closed
+  `H8-SELFDUP` előfeltétel-őre rebase előtt felismeri ezt az alakot, és a
+  hermetikus regressziós cella a valódi „rebase, majd régi csúcs visszamerge”
+  mechanizmust reprodukálja.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -233,9 +243,9 @@ hívás injektált csonk:
 ## 6. Definition of Done
 
 1. D1–D5 kész; a `tools/round-land.sh` futtatható és `set -euo pipefail`-t használ.
-2. `tools/tests/test_round_land.py` lefedi a §4 nyolc eredeti celláját és a
-   két F1/F2 regressziós cellát hermetikus git-fixture-ön (az élő fát nem
-   érinti).
+2. `tools/tests/test_round_land.py` lefedi a §4 nyolc eredeti celláját, a két
+   F1/F2 regressziós cellát és a H8-SELFDUP helyreállítási cellát hermetikus
+   git-fixture-ön (az élő fát nem érinti).
 3. `python3 -m pytest tools/tests -q` zöld.
 4. `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` zöld.
 5. Kör-jelzés `done`.
