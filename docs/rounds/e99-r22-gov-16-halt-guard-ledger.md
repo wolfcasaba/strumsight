@@ -202,3 +202,33 @@ python3 -m pytest tools/tests -q
 
 A gate-lépések külön processzben futnak; a csonkítatlan kimenet a bizonyíték.
 A teljes suite + property gate a CI-ban fut (ADR 0053).
+
+## Implementation handoff
+
+- `tools/halt-ledger.py`: stdlib-only, READ-ONLY CLI a halt-rekordok számlálására,
+  a szóhatáros lecke-illesztésre és a gépi őrteszt-hivatkozások jelentésére
+  Markdown vagy JSON alakban. A jelentés minden sikeres futásnál 0-val tér vissza.
+- `tools/tests/test_halt_ledger.py`: hermetikus fixture-ök a §4 teljes
+  mátrixára, a 1/2/5 előfordulási küszöbre, a `H3`/`H30` szóhatárra, a
+  kimondott `nincs` döntésre és mindkét kimeneti alakra.
+- `docs/execution/pipeline-orchestrator-prompt.md`: a merge utáni záró
+  rituálékban rögzíti az új `**Őrteszt:**` konvenciót halt után.
+
+Futtatott parancsok:
+
+```text
+python3 -m py_compile tools/halt-ledger.py
+# sikeres (exit 0)
+
+python3 -m pytest tools/tests/test_halt_ledger.py -q
+# 7 passed in 0.47s
+
+python3 -m pytest tools/tests -q
+# sikeres (exit 0)
+
+tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
+# sikeres (exit 0): format, analyze, célzott teszt, architecture és secret scan zöld
+```
+
+Eltérés nincs. Nem futtatott ellenőrzés: a teljes Flutter/property suite és
+CI-dispatch a CI/orchestrátor felelőssége; a kör implementere nem dispatch-el.
