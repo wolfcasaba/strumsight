@@ -13373,3 +13373,54 @@ ellenőrizd a `headSha` azonosságát. A korábbi SHA zöld Router CI-je nem
 helyettesíti ezt. E08-R04-ben a kézi exact-SHA futás
 [32324054702](https://github.com/wolfcasaba/strumsight/actions/runs/32324054702)
 success lett.
+
+## L345 — Egy legitim allowlist-bővítés maga is új scope-rést nyithat, ha egy KORÁBBI self-heal már írt egy pinnelt regressziós őrt a lista bájtra-egyezésére; a helyes bővítés mérete csak `grep`-pel zárható le (E99-R18, H3 második előfordulása, ADR 0112, 2026-08-20)
+
+**Mit mértünk.** Az E99-R18 D4 §0.0c fixje (glob → explicit
+`practice_generator`-regisztráció, `main @` a kör-ág `6883d4d2`) technikailag
+zöld volt, de a kötelező scope-audit
+(`python3 tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base
+7458ca8330a66b9329b20009c400cb4a7bab3a14`) egy fájlon bukott:
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py`
+(„path outside allowed scope"). Ez a fájl a **H8** self-heal (ugyanaznap
+korábban, brief §0.0b) KÖZVETLEN kör-ági commitjából ered — a normál
+brief-szerkesztési folyamaton kívül, ADR 0112 §2 szélesebb jogosultsággal —,
+ezért sosem került be az eredeti brief-szerző `allowed_paths`-ába. A D4 fix
+legitim módon érintette (a fájl pontosan azt a mechanizmust méri, amit a
+§0.0c átalakít: `GENERATED_PATH_PATTERNS` tényleges értékét asszertálja) —
+ez a `tools/tests/test_e99_r18_scope_debris_revert.py` (az ELŐZŐ, 2026-08-19-i
+H3-önjavítás terméke) saját docstringje szerinti E07-R29 „valódi bővítés"
+minta, NEM a §0.0 „debris-revert" minta ismétlődése.
+
+A bővítés viszont MAGÁBA a debris-revert regressziós őrbe ütközött: az
+bájtra-egyezést követel a pinnelt `ORIGINAL_ALLOWED_PATHS` és a brief
+tényleges `allowed_paths`-a között (`test_allowed_paths_are_byte_identical_
+to_the_prepared_brief`). Az őr frissítése pedig — mivel MAGA a
+`tools/tests/test_e99_r18_scope_debris_revert.py` sem szerepelt az eredeti
+listán — ÖNMAGÁBAN is új, önhivatkozó scope-rést nyitott volna egy
+első próbálkozásban (egyetlen bejegyzéssel bővítve + egy ÚJ, harmadik
+regressziós-teszt fájlt hozzáadva). A lánc VÉGESEN zárt: `grep -rl
+"ORIGINAL_ALLOWED_PATHS\|e99-r18-gov-12-generated-public-barrels"
+tools/tests/` (2026-08-20) igazolta, hogy egyetlen harmadik fájl sem
+hivatkozik se a konstansra, se erre a briefre — a helyes bővítés pontosan
+**két** bejegyzés (a coexist-teszt + maga az őr fájlja), és az új
+regressziós bizonyítékot a MEGLÉVŐ őr-fájlba kellett összevonni (nem külön
+fájlba), hogy ne nyisson egy harmadik rést.
+
+**Hogyan alkalmazd.** Amikor egy self-heal `allowed_paths`-ot bővít egy
+KORÁBBI self-heal által a kör-ágra közvetlenül írt fájllal, MINDIG grep-eld
+végig, hivatkozik-e valamilyen MEGLÉVŐ regressziós őr a bővítendő lista
+BÁJTRA PONTOS tartalmára (`grep -rl "ORIGINAL_ALLOWED_PATHS" tools/tests/`
+vagy a brief fájlnevére) — egy ilyen őr saját frissítése további fájlérintés,
+ami MAGA is új, saját scope-audit-sértést nyithat. A javítás csak akkor kész,
+ha a self-heal SAJÁT bookkeeping-commitja UTÁNI, teljes `base..HEAD` diffet
+újra lefuttatva a scope-audit zöld — nem elég a production-fix egyetlen
+fájlját külön ellenőrizni, mert épp a bookkeeping-edit maga bukhat. Ha egy
+önjavító kör standalone regressziós-teszt fájlt akarna hozzáadni a
+kör-ághoz, azt inkább egy MEGLÉVŐ, már engedélyezett teszt-fájlba célszerű
+összevonni. Végső, saját méréssel igazolt eredmény: a HALTED-ben rögzített
+paranccsal (`--base 7458ca83...`) `Legacy scope audit OK (11 changed
+path(s))`; `python3 -m pytest tools/tests -q` 614 passed, 2 skipped (611
+passed alapról, +3 új regressziós teszt, 0 törölve/skip-elve). Nem
+main-merge — normál push a kör saját ágára, [[L343]] (H8) mintáját követve.

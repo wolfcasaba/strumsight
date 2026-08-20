@@ -1,5 +1,40 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R18/H3] KÉSZ — H8 kör-ági coexist-teszt bekerül az allowed_paths-ba, két bejegyzéssel — kör-ág `6a494d5e` (2026-08-20)
+
+A D4 §0.0c narrowing fix (glob → explicit `practice_generator`-regisztráció)
+technikailag zöld volt, de a scope-audit egy fájlon bukott:
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py` — ezt
+a **H8** self-heal (ugyanaznap korábban) írta közvetlenül a kör-ágra, a
+normál brief-szerkesztési folyamaton kívül, ezért sosem került az eredeti
+`allowed_paths`-ba. A D4 fix legitim módon érintette (pontosan azt a
+mechanizmust méri, amit átalakít) — ez a `tools/tests/
+test_e99_r18_scope_debris_revert.py` (az ELŐZŐ, 2026-08-19-i H3-önjavítás
+terméke) saját docstringje szerinti E07-R29 „valódi bővítés" minta, nem a
+§0.0 debris-revert minta ismétlődése.
+
+**Mért csavart:** a bővítés magába az ELŐZŐ H3 debris-revert regressziós
+őrbe ütközött, ami bájtra-egyezést követel a pinnelt `allowed_paths`-ra — az
+őr frissítése pedig, mivel saját maga sem szerepelt az eredeti listán,
+önmagában ÚJ scope-rést nyitott volna. `grep -rl` igazolta, hogy harmadik
+fájl nem hivatkozik a pinnelt konstansra, tehát a lánc pontosan **két**
+bejegyzésnél zár (a coexist-teszt + maga az őr fájlja); az új regressziós
+bizonyítékot a meglévő őr-fájlba kellett összevonni, nem külön fájlba, hogy
+ne nyisson egy harmadikat.
+
+Saját méréssel igazolva: a HALTED-ben rögzített reprodukciós paranccsal
+(`tools/scope-audit.py --base 7458ca83...`) `Legacy scope audit OK (11
+changed path(s))` (előtte: `FAILED`, 1 sértés); `python3 -m pytest
+tools/tests -q`: 614 passed, 2 skipped (611-ről, +3 új regressziós teszt, 0
+törölve). Router CI a kör-ág friss fejjel
+([32326908611](https://github.com/wolfcasaba/strumsight/actions/runs/32326908611))
+zöld. A H8 mintáját követve ([[L343]]) NEM main-merge: normál (nem force)
+push a kör saját ágára (`6a494d5e`), a PR/review a következő E99-R18
+dispatch dolga marad.
+
+Lecke: [[L345]]. ADR: [`0112`](docs/adr/0112-self-healing-pipeline.md)
+Módosítás (2026-08-20).
+
 ## ✅ E08-R04 KÉSZ — Activity outbox és megbízható feldolgozás — PR #344, squash `318edd6d` (2026-08-20)
 
 A Gamification feature most korlátos, perzisztens lokális activity outboxot
