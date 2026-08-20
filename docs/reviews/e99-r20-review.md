@@ -3,11 +3,11 @@
 Brief: `docs/rounds/e99-r20-gov-14-round-landing-automation.md`
 Diff: `9e18c68d..d0c25079` (javító commit: `1779de35`)
 Reviewer: Codex Sol · Dátum: 2026-08-20
-Verdikt: **APPROVED**
+Verdikt: **CHANGES REQUIRED** (landolási próbán újranyitva)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
+BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 Az első review két fail-closed rést talált. A `1779de35` javító commit mindkét
 próbát állandó regressziós cellává tette; a friss upstreamet tartalmazó
@@ -17,7 +17,7 @@ próbát állandó regressziós cellává tette; a friss upstreamet tartalmazó
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| 1 | Merge-záron belüli fetch/rebase/gate/push/merge | ✅ | `tools/round-land.sh`; rebase után kétfázisú exact-SHA ág |
+| 1 | Merge-záron belüli fetch/rebase/gate/push/merge | ❌ | F3: a script git-módja `100644`, közvetlenül nem indítható |
 | 2 | Mechanikus konfliktusok szűk allowlistje | ✅ | 8-cellás hermetikus suite; fail-closed mutáció RED |
 | 3 | Kombinált-HEAD kapu | ✅ | rebase után gate+safe push, majd merge helyett új exact-SHA CI-kérés |
 | 4 | Orchestrátor a landolót hívja | ✅ | `pipeline-orchestrator-prompt.md:484-497` |
@@ -86,6 +86,24 @@ artefaktum. Scope-on kívüli implementációs változás nincs.
   fail-closed. A pozitív út is zöld.
 - **Státusz:** FIXED (`1779de35`)
 
+### F3 — BLOCKER — A landoló nem futtatható fájl
+
+- **Fájl:** `tools/round-land.sh` git mode
+- **Probléma:** a Definition of Done futtatható scriptet kér, a prompt pedig
+  közvetlen `tools/round-land.sh ...` hívást ír elő, de a git index módja
+  `100644` (`stat`: `-rw-rw-r--`, 664).
+- **Bizonyíték:** a valódi merge-próba `tools/round-land.sh --pr 358 ...`
+  parancsa azonnal `/bin/bash: ... Permission denied` hibával állt meg; merge
+  nem történt. A suite azért maradt zöld, mert a fixture és a tesztek
+  `bash tools/round-land.sh` formában kerülték meg az execute bitet.
+- **Hatás:** a dokumentált és kötelező landolási út egyetlen körben sem
+  indítható el.
+- **Kötelező javítás:** gitben állítsd a fájlt `100755` módra, és adj olyan
+  regressziós tesztet, amely a repository-beli `LAND` execute bitjét méri.
+- **Ellenőrzés:** `git ls-files -s tools/round-land.sh` első mezője `100755`,
+  `test -x tools/round-land.sh`, célzott suite és round-gate zöld.
+- **Státusz:** OPEN
+
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Eredmény | Ellenőrizve |
@@ -99,5 +117,5 @@ artefaktum. Scope-on kívüli implementációs változás nincs.
 
 ## Merge-döntés
 
-Nincs nyitott BLOCKER/MAJOR. Az ADR 0052 szerint az APPROVED review után még
-az exact-SHA Full Gate és Router CI kötelező; csak mindkettő zöldjén landolhat.
+F3 nyitva, ezért merge tilos. Javítás után friss re-review és az új exact-SHA
+Full Gate + Router CI kötelező; csak mindkettő zöldjén landolhat.
