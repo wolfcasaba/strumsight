@@ -404,7 +404,7 @@ ennek a parancsnak `Legacy scope audit OK`-ra kell váltania (előtte: `FAILED,
 path outside allowed scope: docs/adr/0112-self-healing-pipeline.md`) — a
 mért utóeredmény a heal-status `detail=` mezőjében és a záró HANDOFF-ban.
 
-Lecke: `docs/LESSONS.md` [[L346]].
+Lecke: `docs/LESSONS.md` [[L347]].
 
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
