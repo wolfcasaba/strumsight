@@ -80,6 +80,22 @@ a Claude-útra.
 2. **Crontab-zaj (opcionális):** `crontab -l | grep PIPELINE_SLOTS` — a sor a
    fájl-elsőbbség miatt már hatástalan (log-sor jelzi, ha eltér), a zaj
    csökkentésére törölhető. A rotáció-sorral azonos megfontolás.
+## ✅ E08-R09 KÉSZ — Legacy progress adapter és activity backfill — PR #359, squash `842231f5` (2026-08-20)
+
+A legacy `PracticeEntry` snapshot most determinisztikus, SHA-256-alapú opaque
+activity ID-kre fordítható exact duplikátum-megőrzéssel; a backfill nulla
+retroaktív XP-t ad, de változtathatatlan statisztikai reportot készít. A
+`GamificationMigrationState.processedCount` az eredeti snapshot első fel nem
+dolgozott indexét tárolja, ezért invalid rekordok mellett is restart-biztos.
+Az első correctness review F1 BLOCKER + F2/F3 MAJOR, a security review S4
+MAJOR leletét két javítás lezárta; a végső Sol re-review és security review
+APPROVED. Exact `e25d3158`: Full Gate
+[32365896298](https://github.com/wolfcasaba/strumsight/actions/runs/32365896298)
+és Router CI
+[32365922753](https://github.com/wolfcasaba/strumsight/actions/runs/32365922753)
+success. A részletes történet a `docs/handoff-archive.md` elején található.
+Következő SDD-kör: **E08-R10 — Streak V2 domain és legacy migráció**.
+
 ## ✅ [HEAL E08-R09/H4] KÉSZ — checkpoint a szűrt event-listát indexelte az eredeti legacy snapshot helyett — kör-ágra pusholva, PR nélkül, `3a702692` (2026-08-20)
 
 Az E08-R09 (legacy progress adapter + activity backfill, ADR 0307/0350) H4-gyel
@@ -3049,6 +3065,14 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-20):** `main` @ `842231f5` — E08-R09 Legacy
+progress adapter és activity backfill, PR
+[#359](https://github.com/wolfcasaba/strumsight/pull/359), squash-merge.
+Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
+`e25d3158`: Full Gate 32365896298 + Router CI 32365922753 success; correctness
+és security review APPROVED. Következő: **E08-R10** (Streak V2 domain és
+legacy migráció).
+
 **Aktuális állapot (2026-08-20):** `main` @ `ebb03d9d` — E08-R08 Gamification
 repository és tároló-séma, PR [#355](https://github.com/wolfcasaba/strumsight/pull/355),
 squash-merge, implementer Codex (`~/.codex`, gpt-5.6-terra) + 1 javító kör
@@ -3524,6 +3548,15 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R09 — Legacy progress adapter és activity backfill** (PR
+[#359](https://github.com/wolfcasaba/strumsight/pull/359), squash `842231f5`,
+[ADR 0350](docs/adr/0350-legacy-practice-backfill-identity-zero-xp-and-checkpoint.md)).
+Deterministic SHA-256 activity ID, exact duplicate ordinal, nulla retroaktív
+XP, immutable baseline-report és eredeti-snapshot-indexű checkpoint. Az F1
+BLOCKER + F2/F3/S4 MAJOR leletek javítva; végső correctness/security review
+APPROVED. Exact `e25d3158`: Full Gate 32365896298 + Router CI 32365922753
+success. Részletesen: `docs/handoff-archive.md`.
 
 **E99-R19 — GOV-13 lánc-higiénia** (PR
 [#354](https://github.com/wolfcasaba/strumsight/pull/354), squash `4dc8f7d1`,
@@ -4230,13 +4263,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R09** (Legacy progress adapter és backfill,
-SDD Chapter 9 — `docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md`,
+**A következő SDD-lépés: E08-R10** (Streak V2 domain és legacy migráció,
+SDD Chapter 9 — `docs/rounds/e08-r10-streak-v2-domain-and-legacy-migration.md`,
 engine a queue-ban `terra` (a GOV rotáció alatt lásd a fejléc-blokk Sol/Terra
-felállását), a queue-ban előre kiosztott ADR `0307` — a pre-flightban MÉRNI
+felállását), a queue-ban előre kiosztott ADR `0308` — a pre-flightban MÉRNI
 kell a `tools/round-slots.py reserve-adr`-ral, mert a sorozatos ADR-fogyás
-miatt valószínűleg ez is stale (lásd E08-R08 fejléc: `0306` → `0344` volt a
-mérve helyes szám). Friss sessionben indul.
+miatt valószínűleg ez is stale (az E08-R09 `0307` helyett a foglaló által
+adott `0350`-et használta). Friss sessionben indul.
 
 **Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
 a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)

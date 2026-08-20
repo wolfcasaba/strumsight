@@ -6,6 +6,38 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R09 — Legacy progress adapter és activity backfill (2026-08-20)
+
+PR [#359](https://github.com/wolfcasaba/strumsight/pull/359), squash
+`842231f5`, [ADR 0350](adr/0350-legacy-practice-backfill-identity-zero-xp-and-checkpoint.md).
+A `LegacyPracticeAdapter` a teljes stabil legacy wire-tartalom SHA-256
+digestjéből és fingerprinten belüli occurrence ordinalból képez opaque,
+replay-stabil event ID-t, így az exact duplikátumok sem vesznek el. A
+`GamificationMigrator` nulla reward-ledger side effecttel immutable esemény-
+és statisztikai reportot készít; a `GamificationMigrationState.processedCount`
+az eredeti caller-supplied snapshot első fel nem dolgozott indexe, ezért az
+invalid rekordok sem tolják el a checkpoint indexterét.
+
+Az első correctness review F1 BLOCKER-t talált a best-effort ledger-write és
+a tartós checkpoint közti adatvesztési ablakra, F2 MAJOR-t a plaintext
+gyakorlási adatokból képzett ID-re, F3 MAJOR-t a decoder-valid extrém epoch-day
+`RangeError`-jára. A `415a795a` javítás eltávolította a ledger dependencyt,
+SHA-256 ID-t és explicit DateTime-tartományőrt adott. A security re-review S4
+MAJOR-ja ezután kimérte, hogy a checkpoint a szűrt `events` listát indexelte;
+a `9821d00b` az eredeti `entries` indexterére váltott és négy állandó S4
+regressziós cellát adott. A végső Sol review friss izolált klónban ugyanezt a
+hibát visszamutálva 4 piros tesztet mért (`[3,4]` helyett `[3]`, illetve
+`[1,2,3,4,5]` helyett `[1,2,3]`), visszaállítás után 17/17 zöldet; correctness
+és security verdict APPROVED.
+
+A három implementer-tartomány gépi scope-auditja külön-külön OK. Lokális
+exact-head gate: format 1715/0, analyze 0, célzott teszt 17/17, architecture
+OK (12 allowlist), secrets 3046/0, l10n 1405 parity. Exact `e25d3158`: Full
+Gate [32365896298](https://github.com/wolfcasaba/strumsight/actions/runs/32365896298)
+és Router CI
+[32365922753](https://github.com/wolfcasaba/strumsight/actions/runs/32365922753)
+success. Következő: E08-R10.
+
 ## ✅ E99-R19 (GOV-13) — Lánc-higiénia (2026-08-20)
 
 PR [#354](https://github.com/wolfcasaba/strumsight/pull/354), squash

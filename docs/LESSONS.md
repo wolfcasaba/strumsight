@@ -13973,3 +13973,23 @@ független diagnózis újrafuttatása a nulláról.
 
 Rokon L-ek: [[L304]] (az eredeti minta), [[L357]] (ugyanennek a körnek —
 E08-R09 — egy KORÁBBI, H3 self-healje, más gyökérokkal).
+
+## L359 — A lokális source repóból `git clone --branch <remote-tracking-ág>` nem feltétlenül látja az ágat; a review-klón explicit ref-fetch-csel legyen reprodukálható (E08-R09, 2026-08-20)
+
+**Tünet.** A végső, izolált E08-R09 review a skillben dokumentált
+`git clone --branch terra/e08-r09-legacy-progress-adapter-and-backfill
+/home/ubuntu/music-theory <tmp>` alakkal azonnal elbukott:
+`fatal: Remote branch ... not found in upstream origin`. A source repo ugyan
+frissen fetchelt `refs/remotes/origin/terra/e08-r09-...` refet tartalmazott,
+de nincs ugyanilyen lokális `refs/heads/...` ága; a lokális clone ezt a
+remote-tracking refet nem hirdette klónozható upstream branchként.
+
+**Mért javítás.** A reviewer előbb simán klónozta a lokális fő repót, majd a
+kör tényleges izolált worktree-jéből explicit fetchelte a HEAD-et és abból
+hozott létre review-ágat:
+`git fetch /home/ubuntu/ss-terra-e08-r09 HEAD`, majd
+`git switch -c review-e08-r09 FETCH_HEAD`. Az így kapott HEAD byte-azonosan
+`2268aaad` volt, a teljes round-gate zölden futott. Szabály: lokális
+source-clone-nál ne tételezd fel, hogy egy remote-tracking ref `--branch`-ként
+látható; vagy publikus origint klónozz exact branchről, vagy klónozás után
+explicit, mért refet fetch-elj az azt birtokló worktree-ből.
