@@ -14164,3 +14164,33 @@ függése nem kivétel az architektúrából, hanem a Chapter 1 szerinti rendes 
 határ; a storage-tilalmat külön, pozitív Flutter- és negatív storage-cellával
 kell őrizni. Ez scope-pontosítás, nem mércegyengítés: a tiltani kívánt storage-
 sértéshez állandó mutációs bizonyíték maradt.
+
+## L367 — Rebase után remote-only merge-commitokkal maradó brief-konfliktust a publikus kör-csúcsról indított normal merge old fel veszteség nélkül (E08-R12, H8 self-heal, 2026-08-20)
+
+**Mért hiba.** Az E08-R12 `round-land` a friss `origin/main` fölé sikeresen
+rebase-elte a hét nem-merge kör-commitot, és a teljes célzott gate zöld lett.
+A `safe-force-push` mégis négy remote-only commitot jelzett: három korábbi
+upstream-merge-et és a `524cf246` pre-flight briefet. Egy eldobható klónban a
+`524cf246` cherry-pickje pontosan a
+`docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md` fájlon adott
+content-konfliktust. A `main`-oldal ekkor már tartalmazta a H6 scope-revíziót
+(`425ad1d7`, PR #365), ezért a régi brief visszaépítése felülírhatta volna a
+jóváhagyott l10n source-segment allowlistet.
+
+**Javítás és regresszió.** A helyi rebase-elt csúcsot backup ref őrizte meg,
+a kör ága visszaállt a veszteségmentes távoli PR-csúcsra (`02ae43af`), majd
+`git merge --no-ff origin/main` készült. A merge konfliktusmentes volt; a
+brief 73 soros implementation handoffja és a merge-elt H6 scope egyszerre
+maradt meg. `git diff --exit-code <rebase-backup> HEAD` bizonyította a két fa
+byte-azonosságát, `git merge-base --is-ancestor origin/main HEAD` zöld lett,
+és normál push vitte fel a `c6a96fc1` csúcsot. A meglévő
+`PipelineIntegrationTest.test_selfheal_prompt_preserves_current_main_scope_for_h8_brief_conflicts`
+1/1 zöld; az exact-SHA Router CI 32402823817 success.
+
+**Szabály.** A L77/L82 receptje akkor is alkalmazható, ha az automata rebase
+már befejeződött, de a safe-force lépés őrizte meg a publikus merge-történetet:
+ne cherry-pickeld vissza a superseded pre-flightot és ne force-pusholj. A
+remote kör-csúcsról normál merge-gel építsd be a friss `main`-t, majd bizonyítsd
+a faazonosságot és az ancestor-kapcsolatot. L253 nem ez az eset: itt nem két
+függetlenül írt azonos javítás kommentje ütközött, hanem egy már leváltott
+brief és a merge-elt self-heal scope-ja.

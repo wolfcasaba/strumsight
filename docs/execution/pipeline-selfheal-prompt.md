@@ -124,6 +124,31 @@ git -C <kör-worktree> rebase --abort
 git -C <kör-worktree> merge --no-ff origin/main
 ```
 
+Ha a landoló rebase-e már **sikeresen befejeződött**, és csak az utána futó
+`safe-force-push` tár fel remote-only merge-commitokat meg egy superseded
+pre-flight briefet, nincs abortálható rebase. Ilyenkor előbb eldobható klónban
+bizonyítsd, hogy a régi pre-flight beépítési próbája pontosan az egy briefre
+konfliktusos, miközben a távoli PR-csúcsról indított
+`merge --no-ff --no-commit origin/main` más konfliktus nélkül felépül. Ezután
+a rebase-elt helyi csúcsot névvel ellátott backup refen őrizd meg, a kör helyi
+ágát állítsd az exact távoli PR-csúcsra, és onnan merge-eld a friss `main`-t:
+
+```bash
+git -C <kör-worktree> branch backup/<kör>-pre-h8 HEAD
+git -C <kör-worktree> switch --detach origin/<kör-branch>
+git -C <kör-worktree> branch -f <kör-branch> origin/<kör-branch>
+git -C <kör-worktree> switch <kör-branch>
+git -C <kör-worktree> merge --no-ff origin/main
+git -C <kör-worktree> diff --exit-code backup/<kör>-pre-h8 HEAD
+```
+
+A backup ref miatt helyi commit sem vész el; a kötelező faazonosság-próba
+bizonyítja, hogy a normal merge ugyanazt a tartalmat hordozza, mint a már zöld
+rebase-elt fa. Ha a remote-only listán a kör briefjén és igazolt upstream-
+merge-commitokon kívül más commit van, a merge-próba további konfliktust ad,
+vagy a két fa eltér, **ne** írd át az ágat: `outcome=escalate` a pontos
+commit-/konfliktus-/diff-listával.
+
 A merge-konfliktust úgy oldd fel, hogy az aktuális `main` brief-változatát
 őrzöd meg; a superseded `HALTED`/pre-flight szöveg, régi allowlist vagy régi
 handoff nem írhatja felül a merge-elt scope-ot. Ezután `git diff --check`,
