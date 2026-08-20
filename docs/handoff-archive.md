@@ -6,6 +6,23 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R04 — Activity outbox és megbízható feldolgozás (2026-08-20)
+
+PR [#344](https://github.com/wolfcasaba/strumsight/pull/344), squash
+`318edd6d`, [ADR 0333](adr/0333-activity-outbox-reliable-processing.md).
+MiniMax implementáció után a correctness és security review feltárta a
+restart utáni karantén-visszatöltés, majd a pending→quarantine átmenet
+crash-ablakát; mindkettő javítva és a re-review APPROVED/PASS. A repository
+egyetlen snapshotban tárolja a pending, attempt és quarantine állapotot; a
+drain csak sikeres ledger-commit után ackol, a retry-limit és a bounded
+capacity pedig karantént eredményez. Az izolált reviewer a korai-ack A4
+mutációval 9 hibát mért, visszaállítás után a 15 célteszt és a teljes helyi
+gate zöld. Exact `8402ee42`: Full Gate
+[32323029473](https://github.com/wolfcasaba/strumsight/actions/runs/32323029473)
+és Router CI
+[32324054702](https://github.com/wolfcasaba/strumsight/actions/runs/32324054702)
+success.
+
 ## ✅ E99-R14 (GOV-08) — Lejáró motor-override és motor-statisztika (2026-08-18)
 
 ## ✅ E07-R24 — Song goal és Song Trainer integráció (2026-08-19)

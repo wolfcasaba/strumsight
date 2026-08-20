@@ -1,5 +1,95 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R18/H3] KÉSZ — H8 kör-ági coexist-teszt bekerül az allowed_paths-ba, két bejegyzéssel — kör-ág `6a494d5e` (2026-08-20)
+
+A D4 §0.0c narrowing fix (glob → explicit `practice_generator`-regisztráció)
+technikailag zöld volt, de a scope-audit egy fájlon bukott:
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py` — ezt
+a **H8** self-heal (ugyanaznap korábban) írta közvetlenül a kör-ágra, a
+normál brief-szerkesztési folyamaton kívül, ezért sosem került az eredeti
+`allowed_paths`-ba. A D4 fix legitim módon érintette (pontosan azt a
+mechanizmust méri, amit átalakít) — ez a `tools/tests/
+test_e99_r18_scope_debris_revert.py` (az ELŐZŐ, 2026-08-19-i H3-önjavítás
+terméke) saját docstringje szerinti E07-R29 „valódi bővítés" minta, nem a
+§0.0 debris-revert minta ismétlődése.
+
+**Mért csavart:** a bővítés magába az ELŐZŐ H3 debris-revert regressziós
+őrbe ütközött, ami bájtra-egyezést követel a pinnelt `allowed_paths`-ra — az
+őr frissítése pedig, mivel saját maga sem szerepelt az eredeti listán,
+önmagában ÚJ scope-rést nyitott volna. `grep -rl` igazolta, hogy harmadik
+fájl nem hivatkozik a pinnelt konstansra, tehát a lánc pontosan **két**
+bejegyzésnél zár (a coexist-teszt + maga az őr fájlja); az új regressziós
+bizonyítékot a meglévő őr-fájlba kellett összevonni, nem külön fájlba, hogy
+ne nyisson egy harmadikat.
+
+Saját méréssel igazolva: a HALTED-ben rögzített reprodukciós paranccsal
+(`tools/scope-audit.py --base 7458ca83...`) `Legacy scope audit OK (11
+changed path(s))` (előtte: `FAILED`, 1 sértés); `python3 -m pytest
+tools/tests -q`: 614 passed, 2 skipped (611-ről, +3 új regressziós teszt, 0
+törölve). Router CI a kör-ág friss fejjel
+([32326908611](https://github.com/wolfcasaba/strumsight/actions/runs/32326908611))
+zöld. A H8 mintáját követve ([[L343]]) NEM main-merge: normál (nem force)
+push a kör saját ágára (`6a494d5e`), a PR/review a következő E99-R18
+dispatch dolga marad.
+
+Lecke: [[L345]]. ADR: [`0112`](docs/adr/0112-self-healing-pipeline.md)
+Módosítás (2026-08-20).
+
+## ✅ E08-R04 KÉSZ — Activity outbox és megbízható feldolgozás — PR #344, squash `318edd6d` (2026-08-20)
+
+A Gamification feature most korlátos, perzisztens lokális activity outboxot
+kapott explicit enqueue/drain contracttal. A ledger-írási hiba nem jut vissza
+a már mentett feature-sessionhöz; az ack csak sikeres, idempotens
+`appendIfAbsent` után történik. Sérült rekord, retry-limit és kapacitás feletti
+legrégebbi pending rekord lekérdezhető karanténba kerül. A konstruktor pozitív
+kapacitást és retry-limitet követel, a karantén snapshotja restart után is
+visszaolvasható. Döntés: [ADR 0333](docs/adr/0333-activity-outbox-reliable-processing.md).
+
+Független correctness review **APPROVED**, security review **PASS**; a végső
+izolált A4 mutáció (ack a ledger-írás előtt) pirosra vitte a célteszteket,
+visszaállítás után 15/15 zöld. Exact pre-merge CI a `8402ee42` headen: Full
+Gate [32323029473](https://github.com/wolfcasaba/strumsight/actions/runs/32323029473)
+és Router CI [32324054702](https://github.com/wolfcasaba/strumsight/actions/runs/32324054702)
+success. A post-merge `flutter analyze` zöld; a teljes post-merge gate
+ismételt futtatása a root worktree-ben a gate-scripten belül az analyze lépés
+után nem adott terminális összegzést, ezért nem tekinthető további gate-bizonyítéknak.
+
+Következő kijelölt SDD-kör: **E08-R05 — Reward eligibility és trust policy**.
+
+## ✅ [HEAL E99-R18/H8] KÉSZ — origin/main szinkron, unió generated-path feloldás — kör-ág `7458ca83` (2026-08-20)
+
+A lánc az E99-R18 (GOV-12) kör-ágának `origin/main` szinkronjánál H8-cal
+állt meg: a briefen kívül `tools/round-slots.py`-ban is tartalmi ütközés
+volt az E99-R17 (squash `8d7b6a67`) exact-set `GENERATED_PATHS`-a és az
+E99-R18 D4 saját, glob-alapú `GENERATED_PATH_PATTERNS`/`is_generated_path`
+mechanizmusa között — ez NEM a dokumentált brief-only H8 minta. Mérve: a
+két mechanizmus additív (mindkét oldal SAJÁT regressziós csomagja csak a
+sajátját méri); a feloldás mindkét konstanst megtartja, az `effective_paths`
+predikátumát unióvá bővíti, és egy új teszt
+(`test_round_slots_generated_paths_and_patterns_coexist.py`) méri a
+kombinált esetet. Normál (nem force) push a kör SAJÁT ágára — **ez NEM
+`main`-merge**, a H8-recept szerint a PR/review a következő E99-R18
+dispatch dolga marad.
+
+**A kötelező teljes `pytest tools/tests -q` gate egy MÁSIK, a H8-tól
+független, a kör SAJÁT D4 kódjában már a merge előtt is jelen lévő hibát
+tárt fel** (empirikusan igazolva a kör pre-merge HEAD-jén is):
+`SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected`
+piros, mert a D4 broad glob minden feature `public.dart`-ját generáltnak
+minősíti, holott csak a `practice_generator` lett migrálva — 25+18 nyitott
+brief két másik feature-ön ütközne felügyelet nélkül, ha ez elérné a
+`main`-t. Router CI ezért piros (run
+[32321598642](https://github.com/wolfcasaba/strumsight/actions/runs/32321598642)) — **ez a self-heal TUDATOSAN nem javította**: a helyes hatókör
+(pl. migrált-feature allowlist) a kör saját implementer+reviewer
+ciklusának termékdöntése, nem az ADR 0112 §2 szűk (brief/eszköz)
+jogosultságáé. A lelet a brief saját `## 0.0b` szakaszába, a
+`docs/LESSONS.md` **L343**-ba és a heal-status `detail=`-jébe is bekerült,
+hogy a következő E99-R18 dispatch az ELSŐ olvasatnál lássa, review előtt
+zárja.
+
+Lecke: [[L343]]. ADR: [`0112`](docs/adr/0112-self-healing-pipeline.md)
+Módosítás (2026-08-20).
+
 ## ✅ E99-R17 (GOV-11) KÉSZ — szegmentált ARB-források és determinisztikus aggregátum — PR #343, squash `8d7b6a67` (2026-08-20)
 
 Az angol és magyar ARB-k immár `base/` és feature-fragmentum forrásokból

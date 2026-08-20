@@ -13274,3 +13274,153 @@ tartozó metaadat külön rekord, a „létezik már az üzenetkulcs” nem elé
 feltétel a metaadat átvételéhez. Tartsd meg a forrás-szegmens tulajdonosát,
 és eltéréskor fail-closed hibát adj; külön teszteld a későbbi szegmensből
 érkező metaadatot és azt is, hogy hibánál nem készül részleges aggregátum.
+
+## L343 — H8-nál két additív mechanizmus uniója helyes, ha mindkét oldal SAJÁT tesztje méri a döntést; a kötelező teljes gate ettől függetlenül a kör SAJÁT, review előtti hibáját is feltárhatja, amit a self-heal dokumentál, nem javít (E99-R18, H8 self-heal, ADR 0112, 2026-08-20)
+
+**Mit mértünk.** Az E99-R18 (`/home/ubuntu/ss-minimax-e99-r18`) `origin/main`
+szinkronja (`git merge --no-ff origin/main`) két fájlban adott konfliktust:
+a kör saját briefjében és `tools/round-slots.py`-ban. A brief-konfliktus a
+dokumentált H8 minta ([[L77]], [[L82]]) — de a `round-slots.py` konfliktus
+NEM brief-only: az E99-R17 (`main`, squash `8d7b6a67`) exact-set
+`GENERATED_PATHS`-a és az E99-R18 D4 saját, glob-alapú
+`GENERATED_PATH_PATTERNS`/`is_generated_path`-je ugyanazt a két kódrészt (a
+konstans-blokk és az `effective_paths` szűrő-predikátum) módosította. Kézi
+nyomkövetéssel és mindkét oldal SAJÁT, már zöld-tesztelt regressziós
+csomagjával (`test_round_slots_generated_paths.py`,
+`test_round_slots_generated_barrels.py`) igazoltam: a két mechanizmus
+additív, egyik sem hivatkozik a másikéra — unió-predikátummal (mindhárom
+kizárási ok VAGY-kapcsolatban) mindkét csomag változtatás nélkül zöld marad.
+Ez a 2026-08-13-i ADR 0112 módosítás („H8 megosztott eszközfájl-konfliktus”)
+elvének megerősítése, nem új mintája.
+
+**A kötelező teljes gate (`python3 -m pytest tools/tests -q`) többet mért, mint a saját fix bizonyítékát.** A resolved HEAD-en 605 passed / 2 skipped /
+1 FAILED: `SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected`
+piros — a Router CI (run 32321598642) ugyanezt az egy cellát reprodukálta,
+tehát a branch push utáni CI is piros. **Empirikus ellenőrzés** (a kör saját,
+pre-merge HEAD-jén, `e9c4a26b`, a self-heal ÉRINTÉSE NÉLKÜL izoláltan
+lefuttatva ugyanezt az egy tesztet): a hiba MÁR OTT is piros — tehát a H8
+merge-feloldás bizonyítottan nem okozta, csak láthatóvá tette (előtte a
+konfliktus-jelölők miatti `SyntaxError` a teljes fájl collection-jét
+megakasztotta). A gyökérok a D4 SAJÁT, review előtti tervezési döntése: a
+`GENERATED_PATH_PATTERNS = ("lib/features/*/public.dart",)` glob
+SZÁNDÉKOSAN széles (a kör saját tesztje,
+`test_pattern_glob_is_not_narrowed_to_a_single_feature`, explicit TILTJA a
+szűkítést), de ezzel MINDEN feature `public.dart`-ját generáltnak (nem
+ütközőnek) minősíti, holott a D1–D3 pilot mérve kizárólag a
+`practice_generator`-t migrálta a fragmentum-rendszerre — a 75 nyitott
+brief közül 25 a `gamification/public.dart`-ot, 18 a
+`design_system/public.dart`-ot érinti, ezek MA MÉG kézzel karbantartott,
+valódi ütközési felületek.
+
+**Mit tettem, és mit NEM.** Megjavítottam a H8 gyökérokot: unió-predikátum
+`tools/round-slots.py`-ban + új, a kombinált esetet mérő regressziós teszt
+(`test_round_slots_generated_paths_and_patterns_coexist.py`, 21/21 zöld a
+három érintett tesztfájlon), normál (nem force) push a kör SAJÁT ágára
+(`7458ca83`, NEM `main`-re — a H8-recept nem ír elő PR-t/CI-dispatch-ot a
+narrow branch-sync esethez). NEM javítottam a broad-glob hibát: a helyes
+hatókör (pl. migrált-feature allowlist) termékdöntés, a kör saját
+implementer+reviewer ciklusáé — az ADR 0112 §2 jogosultsága a
+briefre/eszközre szól, nem a kör saját, még nem review-zott tartalmi
+munkájára. A leletet a kör saját briefjének új `## 0.0b` szakaszába írtam
+(a következő dispatch ELSŐ olvasata), hogy a felfedezés ne ismétlődjön meg
+drágábban a review-nál.
+
+**Miért `outcome=fixed`, és nem `escalate`, egy piros Router CI mellett.**
+A piros CI oka bizonyítottan a kör SAJÁT, review előtti, a H8-tól független
+kódja — nem a self-heal hozta létre, és nem ér el `main`-t (a kör ága még
+nem review-zott/merge-elt). A H8 SAJÁT gyökéroka (a merge-konfliktus)
+ténylegesen, regresszióval bizonyítottan megszűnt. Az `escalate` itt a
+protokoll túl-óvatos alkalmazása lenne: nincs mérce-gyengítési dilemma (a
+self-heal semmilyen ellenőrzést nem lazított), és a talált hiba útja már
+definiált (a kör saját review-ja). A user 2026-08-01-i döntése („az
+orchesztrátor MINDIG javítsa a hibát”) ide is vonatkozik: a lánc feloldása
+a helyes lépés, a talált mellékleletet dokumentálni — nem a teljes láncot
+megállítani egy nem-mérce-dilemmáért.
+
+**Hogyan alkalmazd.** (1) Egy H8-nál, ha a konfliktus túlmutat a brief-only
+mintán, MÉRD MEG mindkét oldal szándékát (docstring, saját teszt), mielőtt
+eldöntenéd, hogy unió-feloldás helyénvaló-e — csak akkor, ha mindkét oldal
+SAJÁT tesztje bizonyíthatóan, változtatás nélkül zöld marad az unió után.
+(2) A kötelező teljes gate-et MINDIG a resolved HEAD-en, a merge UTÁN
+futtasd — egy addig sosem tesztelt kör-ág saját, review előtti hibáját is
+feltárhatja. (3) Egy ilyen leletnél EMPIRIKUSAN (nem feltevéssel) igazold,
+hogy a hiba a self-heal érintése NÉLKÜL is megvan (checkout a pre-fix
+HEAD-re, izolált teszt-futtatás) — ez zárja ki, hogy a self-heal maga a
+gyökérok. (4) A lelet NEM állítja meg a self-healt (`outcome=fixed` marad
+helyes), ha (a) a SAJÁT gyökérok ténylegesen megszűnt, (b) az új lelet nem
+éri el a `main`-t, és (c) a lelet a kör saját briefjébe, a LESSONS-ba és a
+heal-status `detail=`-jébe is bekerül — de a heal-status SOHA nem állíthatja
+hamisan, hogy a CI zöld, ha nem az.
+
+Lásd: [[L337]] (H3 debris revert, ugyanez a kör), ADR
+[`0112`](../adr/0112-self-healing-pipeline.md) 2026-08-13-i és 2026-08-20-i
+módosítása.
+
+## L344 — Upstream-sync merge után a Router CI-t explicit dispatch-eld, ha a friss merge-diff már nem érinti a trigger-útvonalat (E08-R04, 2026-08-20)
+
+**Mit mértünk.** Az E08-R04 kezdeti implementációja módosította a
+`docs/rounds/**` briefet, ezért Router CI-köteles volt. A végső, green-gate
+előtti `origin/main` sync azonban csak `HANDOFF.md` és `docs/LESSONS.md`
+upstream-változásait hozta be. A branch új headjén (`8402ee42`) a Full Gate
+kézi dispatch-e success volt, miközben `gh run list --workflow router-ci.yml`
+nem adott ugyanarra a SHA-ra futást: a push path-filter a *legutóbbi merge
+commit* fájljait nézi, nem a PR teljes, korábbi diffjét.
+
+**Hogyan alkalmazd.** Ha a kör teljes diffje Router-CI trigger-utat érint,
+de a merge/rebase utáni új headen nincs automatikus Router CI, a merge előtt
+indíts `gh workflow run router-ci.yml --ref <round-branch>` dispatch-et és
+ellenőrizd a `headSha` azonosságát. A korábbi SHA zöld Router CI-je nem
+helyettesíti ezt. E08-R04-ben a kézi exact-SHA futás
+[32324054702](https://github.com/wolfcasaba/strumsight/actions/runs/32324054702)
+success lett.
+
+## L345 — Egy legitim allowlist-bővítés maga is új scope-rést nyithat, ha egy KORÁBBI self-heal már írt egy pinnelt regressziós őrt a lista bájtra-egyezésére; a helyes bővítés mérete csak `grep`-pel zárható le (E99-R18, H3 második előfordulása, ADR 0112, 2026-08-20)
+
+**Mit mértünk.** Az E99-R18 D4 §0.0c fixje (glob → explicit
+`practice_generator`-regisztráció, `main @` a kör-ág `6883d4d2`) technikailag
+zöld volt, de a kötelező scope-audit
+(`python3 tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base
+7458ca8330a66b9329b20009c400cb4a7bab3a14`) egy fájlon bukott:
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py`
+(„path outside allowed scope"). Ez a fájl a **H8** self-heal (ugyanaznap
+korábban, brief §0.0b) KÖZVETLEN kör-ági commitjából ered — a normál
+brief-szerkesztési folyamaton kívül, ADR 0112 §2 szélesebb jogosultsággal —,
+ezért sosem került be az eredeti brief-szerző `allowed_paths`-ába. A D4 fix
+legitim módon érintette (a fájl pontosan azt a mechanizmust méri, amit a
+§0.0c átalakít: `GENERATED_PATH_PATTERNS` tényleges értékét asszertálja) —
+ez a `tools/tests/test_e99_r18_scope_debris_revert.py` (az ELŐZŐ, 2026-08-19-i
+H3-önjavítás terméke) saját docstringje szerinti E07-R29 „valódi bővítés"
+minta, NEM a §0.0 „debris-revert" minta ismétlődése.
+
+A bővítés viszont MAGÁBA a debris-revert regressziós őrbe ütközött: az
+bájtra-egyezést követel a pinnelt `ORIGINAL_ALLOWED_PATHS` és a brief
+tényleges `allowed_paths`-a között (`test_allowed_paths_are_byte_identical_
+to_the_prepared_brief`). Az őr frissítése pedig — mivel MAGA a
+`tools/tests/test_e99_r18_scope_debris_revert.py` sem szerepelt az eredeti
+listán — ÖNMAGÁBAN is új, önhivatkozó scope-rést nyitott volna egy
+első próbálkozásban (egyetlen bejegyzéssel bővítve + egy ÚJ, harmadik
+regressziós-teszt fájlt hozzáadva). A lánc VÉGESEN zárt: `grep -rl
+"ORIGINAL_ALLOWED_PATHS\|e99-r18-gov-12-generated-public-barrels"
+tools/tests/` (2026-08-20) igazolta, hogy egyetlen harmadik fájl sem
+hivatkozik se a konstansra, se erre a briefre — a helyes bővítés pontosan
+**két** bejegyzés (a coexist-teszt + maga az őr fájlja), és az új
+regressziós bizonyítékot a MEGLÉVŐ őr-fájlba kellett összevonni (nem külön
+fájlba), hogy ne nyisson egy harmadik rést.
+
+**Hogyan alkalmazd.** Amikor egy self-heal `allowed_paths`-ot bővít egy
+KORÁBBI self-heal által a kör-ágra közvetlenül írt fájllal, MINDIG grep-eld
+végig, hivatkozik-e valamilyen MEGLÉVŐ regressziós őr a bővítendő lista
+BÁJTRA PONTOS tartalmára (`grep -rl "ORIGINAL_ALLOWED_PATHS" tools/tests/`
+vagy a brief fájlnevére) — egy ilyen őr saját frissítése további fájlérintés,
+ami MAGA is új, saját scope-audit-sértést nyithat. A javítás csak akkor kész,
+ha a self-heal SAJÁT bookkeeping-commitja UTÁNI, teljes `base..HEAD` diffet
+újra lefuttatva a scope-audit zöld — nem elég a production-fix egyetlen
+fájlját külön ellenőrizni, mert épp a bookkeeping-edit maga bukhat. Ha egy
+önjavító kör standalone regressziós-teszt fájlt akarna hozzáadni a
+kör-ághoz, azt inkább egy MEGLÉVŐ, már engedélyezett teszt-fájlba célszerű
+összevonni. Végső, saját méréssel igazolt eredmény: a HALTED-ben rögzített
+paranccsal (`--base 7458ca83...`) `Legacy scope audit OK (11 changed
+path(s))`; `python3 -m pytest tools/tests -q` 614 passed, 2 skipped (611
+passed alapról, +3 új regressziós teszt, 0 törölve/skip-elve). Nem
+main-merge — normál push a kör saját ágára, [[L343]] (H8) mintáját követve.

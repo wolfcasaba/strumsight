@@ -344,7 +344,7 @@ E07-R30	docs/rounds/e07-r30-evaluation-and-epic-closure.md	codex	nincs	done
 E08-R01	docs/rounds/e08-r01-gamification-baseline-and-principles.md	minimax	nincs	done
 E08-R02	docs/rounds/e08-r02-canonical-activity-events.md	codex	0300	done
 E08-R03	docs/rounds/e08-r03-reward-ledger-and-idempotency.md	codex	0301	done
-E08-R04	docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md	codex	0302	pending
+E08-R04	docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md	codex	0302	done
 E08-R05	docs/rounds/e08-r05-reward-eligibility-and-trust-policy.md	codex	0303	pending
 E08-R06	docs/rounds/e08-r06-xp-policy-engine-and-diminishing-returns.md	codex	0304	pending
 E08-R07	docs/rounds/e08-r07-level-curve-and-profile-projection.md	codex	0305	pending
