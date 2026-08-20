@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R04 KÉSZ — Activity outbox és megbízható feldolgozás — PR #344, squash `318edd6d` (2026-08-20)
+
+A Gamification feature most korlátos, perzisztens lokális activity outboxot
+kapott explicit enqueue/drain contracttal. A ledger-írási hiba nem jut vissza
+a már mentett feature-sessionhöz; az ack csak sikeres, idempotens
+`appendIfAbsent` után történik. Sérült rekord, retry-limit és kapacitás feletti
+legrégebbi pending rekord lekérdezhető karanténba kerül. A konstruktor pozitív
+kapacitást és retry-limitet követel, a karantén snapshotja restart után is
+visszaolvasható. Döntés: [ADR 0333](docs/adr/0333-activity-outbox-reliable-processing.md).
+
+Független correctness review **APPROVED**, security review **PASS**; a végső
+izolált A4 mutáció (ack a ledger-írás előtt) pirosra vitte a célteszteket,
+visszaállítás után 15/15 zöld. Exact pre-merge CI a `8402ee42` headen: Full
+Gate [32323029473](https://github.com/wolfcasaba/strumsight/actions/runs/32323029473)
+és Router CI [32324054702](https://github.com/wolfcasaba/strumsight/actions/runs/32324054702)
+success. A post-merge `flutter analyze` zöld; a teljes post-merge gate
+ismételt futtatása a root worktree-ben a gate-scripten belül az analyze lépés
+után nem adott terminális összegzést, ezért nem tekinthető további gate-bizonyítéknak.
+
+Következő kijelölt SDD-kör: **E08-R05 — Reward eligibility és trust policy**.
+
 ## ✅ [HEAL E99-R18/H8] KÉSZ — origin/main szinkron, unió generated-path feloldás — kör-ág `7458ca83` (2026-08-20)
 
 A lánc az E99-R18 (GOV-12) kör-ágának `origin/main` szinkronjánál H8-cal

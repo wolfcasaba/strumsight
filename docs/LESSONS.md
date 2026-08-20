@@ -13355,3 +13355,21 @@ hamisan, hogy a CI zöld, ha nem az.
 Lásd: [[L337]] (H3 debris revert, ugyanez a kör), ADR
 [`0112`](../adr/0112-self-healing-pipeline.md) 2026-08-13-i és 2026-08-20-i
 módosítása.
+
+## L344 — Upstream-sync merge után a Router CI-t explicit dispatch-eld, ha a friss merge-diff már nem érinti a trigger-útvonalat (E08-R04, 2026-08-20)
+
+**Mit mértünk.** Az E08-R04 kezdeti implementációja módosította a
+`docs/rounds/**` briefet, ezért Router CI-köteles volt. A végső, green-gate
+előtti `origin/main` sync azonban csak `HANDOFF.md` és `docs/LESSONS.md`
+upstream-változásait hozta be. A branch új headjén (`8402ee42`) a Full Gate
+kézi dispatch-e success volt, miközben `gh run list --workflow router-ci.yml`
+nem adott ugyanarra a SHA-ra futást: a push path-filter a *legutóbbi merge
+commit* fájljait nézi, nem a PR teljes, korábbi diffjét.
+
+**Hogyan alkalmazd.** Ha a kör teljes diffje Router-CI trigger-utat érint,
+de a merge/rebase utáni új headen nincs automatikus Router CI, a merge előtt
+indíts `gh workflow run router-ci.yml --ref <round-branch>` dispatch-et és
+ellenőrizd a `headSha` azonosságát. A korábbi SHA zöld Router CI-je nem
+helyettesíti ezt. E08-R04-ben a kézi exact-SHA futás
+[32324054702](https://github.com/wolfcasaba/strumsight/actions/runs/32324054702)
+success lett.
