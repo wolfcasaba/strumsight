@@ -42,43 +42,46 @@ replayt, mind a rekordszám megőrzését biztosítania kell.
    `legacy_practice_adapter.dart` a `progress/public.dart`-ból importált
    `PracticeEntry` listát alakítja kanonikus eseményekké. Nem nyit Progress
    repositoryt, storage plugint vagy Riverpod providert, és nem írja a legacy
-   naplót.
+   naplót. A mért legacy cap 400: pontosan 400 rekord elfogadott, 401 vagy több
+   explicit `ArgumentError`, nem korlátlan in-process munka.
 
-2. **Az esemény-ID a teljes stabil wire-fingerprint és a fingerprinten belüli
-   determinisztikus occurrence ordinal párja.** A fingerprint része a `day`,
-   `source`, `seconds`, `strokes`, `chords` és a nullable
-   `directionAccuracy`, kanonikus, locale-független kódolással. Az ordinal
+2. **Az esemény-ID a teljes stabil wire-fingerprint opaque SHA-256 digestje és
+   a fingerprinten belüli determinisztikus occurrence ordinal párja.** A
+   digest bemenete a `day`, `source`, `seconds`, `strokes`, `chords` és a
+   nullable `directionAccuracy` kanonikus, locale-független kódolása. A nyers
+   mezők nem jelenhetnek meg az ID-ban. Az ordinal
    kizárólag az ugyanilyen fingerprint korábbi előfordulásait számlálja a
    rögzített `newestLast` snapshotban. Nem globális számláló és nem véletlen
    UUID. Így ugyanaz a snapshot ugyanazt az ID-sorozatot adja, miközben az
    exact duplikátumok sem vesznek el.
 
-3. **A három legacy forrás explicit mapping.** `live` →
+3. **A három legacy forrás explicit mapping és szűk input-validáció.** `live` →
    `ActivitySource.live`, `analyze` → `ActivitySource.analyze`, `learn` →
    `ActivitySource.learn`. Az ismeretlen wire forrás nem egy új negyedik ág:
    a merge-elt Progress decoder szerződése szerint előbb `live`-ra degradál.
-   Negatív időtartam/számláló nem gyárthat kanonikus eseményt.
+   Negatív időtartam/számláló vagy negatív/DateTime-ként nem reprezentálható
+   epoch-day nem gyárthat kanonikus eseményt és nem állíthatja le a teljes
+   migrációt. A decoder-valid `day = 1 << 40` kötelező szélsőérték-cella.
 
-4. **A backfill nulla retroaktív XP-t ad, de auditálható receiptet és teljes
-   reportot készít.** Minden elfogadott legacy eseményhez a ledger
-   `appendIfAbsent` útján nulla-XP receipt tartozik (`baseXp = bonusXp =
-   totalXp = 0`, üres reason-lista). A migrátor visszatérési reportja a teljes
-   snapshot kanonikus eseményeit és aggregált rekordszám/idő/stroke/chord
-   baseline-ját adja. A meglévő legacy log változatlanul a történeti UI
-   forrása; a profile XP baseline ettől nem nő.
+4. **A backfill nulla retroaktív XP-t ad: a reward ledgerhez egyáltalán nem
+   nyúl.** A migrátor visszatérési reportja a teljes snapshot kanonikus
+   eseményeit és aggregált rekordszám/idő/stroke/chord baseline-ját adja. A
+   meglévő legacy log változatlanul a történeti UI forrása; a profile XP
+   baseline ettől nem nő. `RewardLedgerRepository` nem része a migrátor
+   contractjának.
 
 5. **A checkpoint az első fel nem dolgozott index.** A
    `GamificationMigrationState.processedCount` defaultja `0`, monoton, és
-   minden sikeres `appendIfAbsent` után perzisztálódik. Az `already present`
-   ugyanúgy siker: a ledger dedupja bizonyítja, hogy az esemény már megvan. A
-   `checkpoint = 2` esetén az 1-es index már kész, a 2-es az első feldolgozandó,
-   a 3-as későbbi. Félbeszakadás nem tekeri vissza a state-et.
+   minden sikeresen leképezett rekord után perzisztálódik. A `checkpoint = 2`
+   esetén az 1-es index már kész, a 2-es az első feldolgozandó, a 3-as későbbi.
+   Félbeszakadás nem tekeri vissza a state-et. Ha maga a best-effort
+   checkpoint-írás nem perzisztál, a következő futás legfeljebb tiszta mappinget
+   ismétel; ledger- vagy statisztikai adat nem veszhet el.
 
-6. **A migráció idempotenciája két, egymást erősítő őr.** Normál retrynál a
-   checkpoint kihagyja a kész prefixet. Ha a checkpoint hiányzik vagy
-   újraépül, a determinisztikus source-event ID + ledger
-   `appendIfAbsent` továbbra is megakadályozza a dupla receiptet. Ezért a
-   determinisztikus ID nem helyettesíthető a checkpointtal, és fordítva.
+6. **A migráció idempotenciája side-effect minimalizálásból ered.** Normál
+   retrynál a checkpoint kihagyja a kész prefixet. Ha a checkpoint hiányzik
+   vagy újraépül, a determinisztikus mapping/report újraszámítása nem ír
+   rewardot és nem módosítja a legacy logot; ezért a replay önmagában ártalmatlan.
 
 7. **A séma-bővítés szűk és visszafelé kompatibilis.** Az R09 kizárólag a
    `GamificationMigrationState` checkpoint mezőjét és JSON round-tripjét
@@ -90,17 +93,18 @@ replayt, mind a rekordszám megőrzését biztosítania kell.
 
 **Pozitív.** A migráció restart- és replay-biztos, nem ad ellenőrizetlen XP-t,
 nem veszít exact duplikátumot, és nem vesz át storage-tulajdonlást a Progress
-feature-től. Az idempotenciát a checkpoint elvesztése sem teszi kizárólag egy
-mutable index függvényévé.
+feature-től. A ledger és checkpoint közötti cross-document részleges siker
+lehetősége megszűnik, mert a migrátor nem ír ledgerbe.
 
 **Ár és korlát.** Az occurrence ordinal a migráció indulásakor átadott,
 rögzített `newestLast` snapshothoz tartozik. A migrátor nem vállal élő
 Progress-log lease-et; a caller felelőssége egy konzisztens snapshot átadása.
-A nulla-XP receipt nem helyettesíti a legacy statisztikai rekordot, ezért a
-legacy log törlése továbbra is tilos.
+A report nem helyettesíti a legacy statisztikai rekordot, ezért a legacy log
+törlése továbbra is tilos.
 
 ## Mérce
 
 Az E08-R09 brief A1–A11 cellái. Kötelező mutációs próba: az ID-képzést
-újrafuttatásonként növekvő globális számlálóra cserélve az A1/A2 teszt piros,
-majd visszaállítás után a teljes kör-gate zöld.
+újrafuttatásonként növekvő globális számlálóra cserélve az A1 teszt piros,
+majd visszaállítás után a teljes kör-gate zöld. A2 külön forrásőrrel bizonyítja,
+hogy a migrátornak nincs ledger side effectje.
