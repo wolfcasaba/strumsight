@@ -1,5 +1,40 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R17/H6] KÉSZ — hermetikus WrapperModeTest az ambiens MiniMax-endpoint szivárgás ellen — PR #342, squash `bdad2a64` (2026-08-20)
+
+Az E99-R17 minimax implementer `blocked`-ot jelzett: a kötelező §7 gate
+(`python3 -m pytest tools/tests -q`) 2 hibán bukott a
+`tools/tests/test_claude_harness_engines.py::WrapperModeTest`-ben, mindkettő
+a kör `allowed_paths` listáján kívül — jogos blokk, nem implementer-hiba.
+
+**Gyökérok (Class A, mérve):** a `run_wrapper()` teszt-fixture
+`dict(os.environ)`-ból indul. Amikor ez a pytest-gate egy ÉLŐ
+`ROUND_ENGINE=minimax` session Bash-hívásaként fut (pont ez az eset — a
+minimax implementer a saját gate-jét futtatja), a szülő session saját,
+jogos `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`MINIMAX_API_KEY` exportjai öröklődnek a
+szimulált `sonnet-impl` (natív, "nincs override") alfolyamatba, és két
+asszerció a szivárgást méri, nem a `mm-round.sh` tényleges viselkedését.
+Önálló, kód nélküli reprodukció megerősítette: pontosan ugyanez a 2 hiba.
+Ez **tisztán teszt-izolációs** hiba — egy valódi, friss `sonnet-impl`
+dispatch a driver saját tiszta al-folyamatából indul, a `mm-round.sh`
+termék-kód méve NEM hibás.
+
+**Javítás:** `run_wrapper()` explicit törli a négy szivárgás-gyanús
+változót az ambiens env-másolatból, mielőtt a teszt saját `extra_env`-je
+rákerülne. Regressziós teszt (RED→GREEN mérve, izolált worktree-ben):
+`test_ambient_endpoint_env_does_not_leak_into_a_subscription_mode_run`.
+Csak ez az egy tesztfájl változott (47 sor +, 0 −); `tools/mm-round.sh` és
+minden termék-fájl érintetlen. Teljes `tools/tests` mindkét irányban zöld
+(tiszta env 587 passed; a pontos szivárgás-reprodukcióval 586 passed 1
+skipped — 0 failed mindkétszer). Router CI zöld a merge SHA-n. Részletek:
+[[L341]].
+
+**A self-heal SZÁNDÉKOSAN nem vitte előre E99-R17 tartalmi munkáját** — a
+kör saját ága (`minimax/e99-r17-gov-11-l10n-parallel-safety`, benne a már
+zöld-tesztelt F1 javítással) érintetlen marad; a lánc ezután egy FRISS
+kör-sessionben folytatja E99-R17-et, immár hermetikus gate mellett.
+
 ## ✅ E08-R03 KÉSZ — Reward ledger és idempotencia-index — PR #340, squash `39c0bd5f` (2026-08-19)
 
 Append-only egyetlen igazságforrás a jutalmakra: immutable `RewardLedgerEntry`
