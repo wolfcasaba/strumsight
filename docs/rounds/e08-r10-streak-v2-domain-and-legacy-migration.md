@@ -241,4 +241,50 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `lib/features/gamification/domain/streak/streak_state.dart`: verziózott V2
+  state, semleges grace-alapállapot, másolás ellen védett planned-rest halmaz és
+  feature-semleges legacy projekció.
+- `lib/features/gamification/domain/streak/streak_transition.dart`: minden
+  qualified-day eredményhez típusos reason code.
+- `lib/features/gamification/domain/streak/streak_policy.dart`: óra- és
+  IO-mentes qualified-day policy; megőrzi a legacy gap, freeze-award és cap
+  viselkedést.
+- `lib/features/gamification/data/migration/legacy_streak_migrator.dart`:
+  csak olvasó adapter, amely az `ss.streak.state` envelope-ot részesíti
+  előnyben, majd raw `practice_streak_v1` fallbacket használ; egyik forrást sem
+  írja vagy törli.
+- `lib/features/gamification/public.dart`: a V2 streak contractok és a
+  read-only migrátor exportjai.
+- `test/features/gamification/domain/streak_policy_test.dart`: A1–A10
+  mezőmegőrzési, idempotencia, read-only, transition-mátrix, tisztasági és
+  legacy-projection tesztek.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/features/gamification/domain/streak_policy_test.dart` —
+  zöld, 11 teszt.
+- Kötelező valós-sértés próba: a
+  `gap == 2 && freezes > 0` ág ideiglenes eltávolítása után
+  `tools/round-gate.sh test/features/gamification/domain/streak_policy_test.dart test/features/streak`
+  a célzott A4 cellán piros lett: a freeze-es gap 2-re `Expected: <5>`,
+  `Actual: <1>`; az ág visszaállítva.
+- Visszaállítás után a kötelező gate ugyanazzal a paranccsal a format,
+  analyze és az új streak policy tesztet zölden futtatta; a futó parancs
+  eszközkimenete a `test/features/streak` lépés indításánál megszakadt, ezért
+  ebből nincs teljes gate-artefaktum.
+- `flutter test test/features/streak` — zöld, 20 teszt.
+- `dart run tool/check_architecture.dart` — zöld.
+- `dart run tool/ci/check_secrets.dart` — zöld, 3047 fájl, 0 finding.
+- `dart run tool/ci/check_l10n_parity.dart` — zöld, en → hu, 1405 message.
+- `git diff --check` — zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Teljes, végleges `round-gate.sh` green artefaktum nincs: a helyi eszköz a
+  visszaállított gate kimenetét a régi streak-suite indításánál lezárta. A
+  komponens-ellenőrzések külön zöldek, de ez nem helyettesíti a teljes gate-et.
+- CI-dispatch, PR és merge nem az implementer feladata.
+
 ## 11. Review — a Claude tölti ki
