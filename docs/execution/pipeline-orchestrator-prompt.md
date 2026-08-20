@@ -483,12 +483,18 @@ A `.pipeline/inflight/` könyvtár mondja meg, fut-e rajtad kívül másik kör
 
 1. **A záró rituálékat és a merge-et a merge-záron keresztül futtasd** — a
    közös dokumentumokat (HANDOFF, RTM, LESSONS, git-notes) nem írhatja két kör
-   egyszerre:
+   egyszerre. A merge-előfeltételek (review, exact-SHA CI és scope-audit)
+   igazolása után a landoló szerzi meg a zárat, frissíti a rebase-elt
+   kombinált HEAD-et, azon futtatja a kaput, majd kizárólag a biztonságos
+   force-push protokoll után squash-merge-el:
 
    ```bash
-   tools/round-merge-lock.sh gh pr merge <PR> --squash --delete-branch
-   tools/round-merge-lock.sh bash -c 'git fetch -q origin main && git ...'
+   tools/round-land.sh --pr <PR> --round {{ROUND}} --gate-test <a brief gate_tests útvonala>
    ```
+
+   A mechanikus konfliktus-osztályt (saját brief és append-only naplók) a
+   landoló kezeli. Szemantikus konfliktus továbbra is H8: nincs push vagy
+   merge, amíg az önjavító/humán feloldás meg nem születik.
 
 2. **A másik kör branch-ét, PR-jét, worktree-jét meg ne érintsd** — a te köröd
    fájlhalmaza a briefed `allowed_paths` listája, és a slot-tervező pontosan

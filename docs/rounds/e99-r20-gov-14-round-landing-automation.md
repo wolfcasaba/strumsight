@@ -249,10 +249,51 @@ A teljes suite + property gate a CI-ban fut (ADR 0053).
 
 ## 10. Implementation handoff — a Terra tölti ki
 
-- Fájlonkénti összefoglaló.
-- Futtatott parancsok és tényleges kimenet.
-- Falszifikációs próbák RED → GREEN bizonyítéka.
-- Eltérések, nem futtatott ellenőrzések és follow-upok.
+- `tools/round-land.sh`: új, futtatható, `set -euo pipefail` landoló. A
+  merge-záron belül fetchel, rebase-el, kizárólag a két append-only naplót
+  uniózza és a saját briefnél a friss main-oldalt tartja meg; minden más
+  konfliktust H8-cal abortál. A rebase-elt HEAD-en futtatja a megadott vagy
+  alapértelmezett kaput, utána a meglévő safe-force-push protokollt és a
+  squash-merge-et. Sikeres landoláskor `done` jelzést ír; a jelzés felsorolja
+  a mechanikusan feloldott utakat.
+- `tools/tests/test_round_land.py`: hermetikus bare-origin fixture és `gh`,
+  gate, signal csonkok. Lefedi a §4 nyolc celláját, a sikeres `done` jelzést
+  és a napló-feloldás útvonalának jelzését.
+- `docs/execution/pipeline-orchestrator-prompt.md`: a nyers merge-hívás helyett
+  a landoló kötelező hívását írja elő; a mechanikus osztályt a landolóra,
+  a szemantikus konfliktust H8-ra vezeti.
+
+Futtatott parancsok és tényleges eredmények:
+
+```text
+bash -n tools/round-land.sh
+python3 -m pytest tools/tests/test_round_land.py -q
+9 passed
+
+tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
+format: ZÖLD (1712 fájl, 0 változás)
+analyze: ZÖLD (No issues found)
+test: ZÖLD (1 passed)
+architecture: ZÖLD
+secrets: ZÖLD (3039 fájl, 0 finding)
+
+python3 -m pytest tools/tests -q
+658 passed, 2 skipped, 571 subtests passed in 319.43s
+```
+
+Falszifikációs bizonyíték:
+
+1. A fail-closed ág ideiglenes cseréje „ismeretlen útvonal = mechanikus"
+   feloldásra: RED — `3 failed, 6 passed`; a szemantikus tool-, az ismeretlen
+   dokumentum- és a vegyes konfliktus tesztje jogtalan sikeres landolást
+   mért. Az eredeti abort + H8 ág visszaállítása után GREEN — `9 passed`.
+2. A kombinált-HEAD kapu hívásának ideiglenes kihagyása: RED — `2 failed,
+   7 passed`; a default kapu eseménye hiányzott és a piros kapu tesztje
+   jogtalan sikeres landolást mért. Az eredeti `round-gate.sh` hívás
+   visszaállítása után GREEN — `9 passed`.
+
+Eltérés, nem futtatott ellenőrzés, follow-up: nincs. A teljes Flutter-suite,
+property gate és exact-SHA Router CI a kör merge-előtti orchestrátori kapuja.
 
 ## 11. Review — a Sol tölti ki
 
