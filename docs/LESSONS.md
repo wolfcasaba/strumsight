@@ -13206,3 +13206,53 @@ gate-újrafuttatásod eredményét dokumentáld bizonyítékként, nem a mezőt.
 sürgős `tools/`-javítás (a self-heal hatásköre, ha újra előfordul): a
 regexet a log SOR-onkénti egyezés helyett a shell-hívás idézett rekordjára
 kellene szűkíteni.
+
+## L341 — Egy live ROUND_ENGINE=minimax session ambiens env-je átszivárog a saját §7 pytest-gate-jén futó WrapperModeTest-be (E99-R17 H6 self-heal, 2026-08-20)
+
+**Mit mértünk.** Az E99-R17 minimax implementer `blocked`-ot jelzett: a
+kötelező §7 gate (`python3 -m pytest tools/tests -q`) 2 hibán bukott —
+`WrapperModeTest::test_a_native_claude_model_runs_without_an_endpoint_override`
+és `::test_sonnet_gets_its_own_tool_set_and_no_fake_compact_window` — mindkettő
+a `tools/tests/test_claude_harness_engines.py`-ben, a kör `allowed_paths`
+listáján kívül (sem ez a fájl, sem a `tools/mm-round.sh` nincs rajta), ezért
+az implementer jogosan nem tudta helyben javítani. Önálló reprodukció, kód
+nélkül: `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic
+ANTHROPIC_AUTH_TOKEN=x CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
+MINIMAX_API_KEY=x python3 -m pytest
+tools/tests/test_claude_harness_engines.py -q` → pontosan ugyanez a 2 hiba.
+
+**Miért.** A `WrapperModeTest.run_wrapper()` a szimulált `mm-round.sh`
+alfolyamat környezetét `dict(os.environ)`-ból építi. Amikor a §7 gate MAGA is
+egy ÉLŐ `ROUND_ENGINE=minimax` implementer-session Bash-hívásaként fut (ami
+pontosan ez az eset — a minimax implementer a SAJÁT kötelező gate-jét
+futtatja), a szülő session-nek jogosan van beállítva `ANTHROPIC_BASE_URL` +
+`ANTHROPIC_AUTH_TOKEN` + `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (a `mm-round.sh`
+`external_endpoint` ágának `launch_env`-jéből) és `MINIMAX_API_KEY` (az
+`engine-profile.sh env minimax` exportjából). Ez a négy érték a `dict(
+os.environ)`-on át változatlanul bekerül a `sonnet-impl` (natív,
+"nincs override") esetek szimulált alfolyamatába, és két asserció a
+leszivárgott ambiens értéket méri, nem a `mm-round.sh` tényleges
+viselkedését. **Ez tisztán teszt-izolációs hiba** — egy valódi, friss
+`sonnet-impl` dispatch a pipeline driver saját, tiszta al-folyamatából indul,
+nem egy élő minimax-session BELSEJÉBŐL, ezért a termék-kód (`mm-round.sh`)
+mérve NEM hibás.
+
+**Hogyan alkalmazd.** Minden env-változó-átadó burkoló-tesztnél (`run_wrapper`
+mintázat), ahol a teszt `dict(os.environ)`-ból indul: ha a burkoló bizonyos
+motor-profiloknál explicit KIEGÉSZÍT bizonyos változókat (itt: a MiniMax
+`external_endpoint` ág), a teszt-fixture-nek a MÁSIK ág (itt: natív/
+subscription) esetére explicit TÖRÖLNIE kell ugyanazokat a változókat az
+ambiens másolatból, mielőtt a saját `extra_env`-jét rárakja — nem elég
+feltételezni, hogy a futtató környezet "elég tiszta". A javítás
+([PR #342](https://github.com/wolfcasaba/strumsight/pull/342), squash
+`bdad2a64`): `run_wrapper()` explicit `pop()`-olja az `ANTHROPIC_BASE_URL`/
+`ANTHROPIC_AUTH_TOKEN`/`CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`MINIMAX_API_KEY`
+négyest. Regressziós teszt (RED a `pop()` nélkül, GREEN vele, mindkét irányban
+mérve az izolált heal-worktree-ben):
+`test_ambient_endpoint_env_does_not_leak_into_a_subscription_mode_run` —
+`unittest.mock.patch.dict`-tel szimulálja pontosan ezt a négy leszivárgott
+értéket (a valódi MiniMax base-url konstanssal), és megköveteli, hogy a
+`sonnet-impl` kimenet változatlanul "nincs override" maradjon. Teljes
+`tools/tests` gate ugyanabban az izolált worktree-ben, mindkét irányban
+mérve: tiszta env 587 passed / 0 failed, a pontos szivárgás-reprodukcióval
+586 passed 1 skipped / 0 failed.
