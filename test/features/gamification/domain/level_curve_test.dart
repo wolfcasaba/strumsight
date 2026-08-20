@@ -107,12 +107,12 @@ void main() {
       'a changed curve changes projection without duplicated thresholds',
       () {
         final curve = LevelCurve(<LevelDefinition>[
-          const LevelDefinition(
+          LevelDefinition(
             number: 1,
             levelThreshold: 0,
             titleKey: 'gamification.level.one',
           ),
-          const LevelDefinition(
+          LevelDefinition(
             number: 2,
             levelThreshold: 150,
             titleKey: 'gamification.level.two',
@@ -134,6 +134,29 @@ void main() {
   });
 
   group('A6/A7/A8 — domain contract', () {
+    test('level definitions reject invalid identifiers and thresholds', () {
+      expect(
+        () => LevelDefinition(
+          number: 0,
+          levelThreshold: 0,
+          titleKey: 'gamification.level.invalid',
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => LevelDefinition(
+          number: 1,
+          levelThreshold: -1,
+          titleKey: 'gamification.level.invalid',
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => LevelDefinition(number: 1, levelThreshold: 0, titleKey: ' '),
+        throwsArgumentError,
+      );
+    });
+
     test('level definitions keep localized title keys, not display text', () {
       final definition = _curve().definitions.last;
 
@@ -170,22 +193,22 @@ void main() {
 }
 
 LevelCurve _curve() => LevelCurve(<LevelDefinition>[
-  const LevelDefinition(
+  LevelDefinition(
     number: 1,
     levelThreshold: 0,
     titleKey: 'gamification.level.beginner',
   ),
-  const LevelDefinition(
+  LevelDefinition(
     number: 2,
     levelThreshold: 100,
     titleKey: 'gamification.level.explorer',
   ),
-  const LevelDefinition(
+  LevelDefinition(
     number: 3,
     levelThreshold: 250,
     titleKey: 'gamification.level.consistent',
   ),
-  const LevelDefinition(
+  LevelDefinition(
     number: 4,
     levelThreshold: 500,
     titleKey: 'gamification.level.advanced',

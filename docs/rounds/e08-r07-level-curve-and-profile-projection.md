@@ -248,8 +248,8 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-- `level_definition.dart`: immutable szint-definíció pozitív sorszámmal,
-  inkluzív XP-küszöbbel és `titleKey` lokalizációs kulccsal.
+- `level_definition.dart`: immutable szint-definíció futásidejű pozitív
+  sorszám-, nemnegatív küszöb- és nem üres `titleKey`-validációval.
 - `level_curve.dart`: egyetlen, validált és monoton görbeforrás; a küszöb
   pontosan a magasabb szinthez tartozik, a nagyon nagy bemenet felső
   szaturációval kezelődik.
@@ -273,7 +273,7 @@ feltételt visszaállítottam, majd a végső gate zölden lefutott.
 **Futtatott ellenőrzés:**
 `tools/round-gate.sh test/features/gamification/domain/level_curve_test.dart`
 — format zöld (1702 fájl, 0 módosítás), analyze zöld (0 issue), célzott teszt
-zöld (9/9), architecture zöld, secrets zöld (3016 fájl, 0 finding).
+zöld (10/10), architecture zöld, secrets zöld (3016 fájl, 0 finding).
 
 **Nem futtatott ellenőrzés:** teljes `flutter test`, property gate és release
 APK: a brief és az AGENTS.md szerint CI/Claude-orchestrátor felelőssége;
