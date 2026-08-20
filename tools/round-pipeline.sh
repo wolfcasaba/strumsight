@@ -276,6 +276,36 @@ if [ -s "$orch_rotation_file" ]; then
   esac
 fi
 
+# --- Slot-döntés a commitolt fájlból (user-döntés 2026-08-20) --------------
+# „Mind a két sloton a Sol orchestrátor és a Terra implementer dolgozzon."
+# A párhuzamos sávok száma UGYANOLYAN user-döntés, mint a rotáció, ezért
+# ugyanazon a szerződésen utazik: a commitolt docs/execution/pipeline-slots
+# ERŐSEBB az env-nél (file > env > script-default). MÉRT ok (E99-R14 lecke,
+# ugyanaz az osztály, mint a rotáció-fájlnál): a cron exportálja a
+# PIPELINE_SLOTS-ot, ami némán felülírná a git-en érkező döntést — a lánc
+# egysávosra esne vissza anélkül, hogy ez bárhol látszana.
+#
+# Üres/hiányzó fájl → env/default (a mai viselkedés); nem pozitív egész →
+# die (fail-closed, a Router CI a fájl értékét is őrzi). A RAM-fedezet őre
+# (effective_slots) VÁLTOZATLAN: a fájl a KÉRT slotszámot mondja meg, a
+# tényleges ettől lefelé térhet el, naplózott sorral (őszinte napló elve).
+# Teszt-horog: PIPELINE_SLOTS_FILE (=/dev/null → env-szemantika).
+slots_file=${PIPELINE_SLOTS_FILE:-"$repo_root/docs/execution/pipeline-slots"}
+if [ -s "$slots_file" ]; then
+  file_slots=$(head -1 "$slots_file" | tr -d '[:space:]')
+  case "$file_slots" in
+    '' | *[!0-9]*)
+      die "érvénytelen slot-érték a $slots_file fájlban: '$file_slots' (pozitív egész)"
+      ;;
+  esac
+  [ "$file_slots" -ge 1 ] \
+    || die "érvénytelen slot-érték a $slots_file fájlban: '$file_slots' (pozitív egész)"
+  if [ -n "${PIPELINE_SLOTS:-}" ] && [ "$PIPELINE_SLOTS" != "$file_slots" ]; then
+    log "SLOT-FÁJL: a commitolt $slots_file ('$file_slots') felülírja a PIPELINE_SLOTS env-t ('$PIPELINE_SLOTS')"
+  fi
+  slots=$file_slots
+fi
+
 # --- GitHub Actions kimaradás-őr (2026-08-06, MÉRT eset) ------------------
 # A GitHub 15:22-kor nyílt incidenst vezetett: „Workflow runs are failing or
 # delayed in starting, and some queued jobs may time out." Következmény a
@@ -1302,6 +1332,11 @@ attempt_selfheal() {
   local halt_round halt_code attempts stamp prompt_file heal_log
   local tests_before hashes_before tests_after hashes_after outcome summary
   local heal_branch pr_number violation round_engine heal_engine engine_note
+  # A heal-ülés orchestrátora KÖRNYEZETI döntés (lásd lentebb a Sol-pint), és
+  # csak erre a hívásra érvényes: bash dinamikus hatókör miatt a `local` a
+  # meghívott run_orchestrator_session-ben is látszik, a függvény visszatérése
+  # után viszont a globális érték áll vissza.
+  local orchestrator_preference="$orchestrator_preference"
 
   halt_round=$(grep -m1 '^round=' "$halt_file" | cut -d= -f2-)
   halt_code=$(grep -m1 '^halt=' "$halt_file" | cut -d= -f2-)
@@ -1365,10 +1400,26 @@ attempt_selfheal() {
   attempts=$(( attempts + 1 ))
   printf '%s|%s|%s\n' "$halt_round" "$halt_code" "$attempts" > "$heal_count_file"
 
-  # A self-heal dispatch nem a halt-olt kör implementerét kapja, hanem a
-  # rögzített Claude/Sonnet-identitást (brief §0.0). Az utolsó próbálkozás
-  # ebből választ eltérő, más modellű alternatívát a nyilvántartásból.
-  round_engine="sonnet-impl"
+  # A self-heal dispatch nem a halt-olt kör implementerét kapja, hanem egy
+  # RÖGZÍTETT identitást (brief §0.0). Az utolsó próbálkozás ebből választ
+  # eltérő, más modellű alternatívát a nyilvántartásból.
+  #
+  # user-döntés 2026-08-20 (kiterjesztés: „mind a két sloton a Sol
+  # orchestrátor és a Terra implementer dolgozzon"): az önjavító kör IS
+  # slotot foglal (`inflight_add` lentebb), tehát a Sol-pin alatt ez a
+  # munkadarab sem mehet a Claude-keretből — a heal-ülést a Sol vezényli
+  # (`gpt-5.6-sol`, a Terráéval közös CODEX_HOME/auth, explicit `-m`), a
+  # rögzített identitás pedig a nyilvántartás `sol` sora, hogy az utolsó
+  # kísérlet MÉRHETŐEN más modellre válthasson (ADR 0307 §2 lever).
+  # Pin nélkül (alternate | claude | terra rotáció) minden BIT-RE a régi,
+  # kvóta-tudatos Claude→Terra úton marad.
+  if [ "$orch_rotation" = "sol" ] && [ "$fallback_engine" != "none" ]; then
+    orchestrator_preference=sol
+    round_engine="sol"
+  else
+    orchestrator_preference=claude
+    round_engine="sonnet-impl"
+  fi
   heal_engine=$(heal_engine_for_attempt "$halt_round" "$halt_code" "$attempts" "$round_engine")
   if [ "$attempts" -eq "$selfheal_max" ]; then
     if [ "$heal_engine" != "$round_engine" ]; then
@@ -1613,10 +1664,11 @@ orchestrator_conflicts_with_implementer() {   # $1=orchestrátor(claude|terra|so
     # ide tartozik, nem csak a `terra`).
     terra) case "$2" in codex|terra) return 0 ;; *) return 1 ;; esac ;;
     # A Sol ugyanazon a modell-azonossági kulcson mér, mint a terra ág: a
-    # Sol-MODELLT futtató implementer ütközne vele — ilyen sor ma nincs a
-    # nyilvántartásban, a gpt-5.6-terra implementer tehát NEM ütközik. A
-    # közös Pro-ELŐFIZETÉS a 2026-08-20-i user-döntés tudatos vállalása
-    # (a lejáró keret égetése), nem mérési rés.
+    # Sol-MODELLT futtató implementer ütközik vele. A nyilvántartás `sol`
+    # sora (2026-08-20, a heal-identitás miatt) pontosan ilyen — implementer-
+    # nek választva tehát fail-closed `H-INDEP`; a gpt-5.6-terra implementer
+    # változatlanul NEM ütközik. A közös Pro-ELŐFIZETÉS a 2026-08-20-i
+    # user-döntés tudatos vállalása (a lejáró keret égetése), nem mérési rés.
     sol)
       row=$(engine_registry_row "$2") || return 1
       [ "$(printf '%s' "$row" | cut -f4)" = "$sol_model" ]
@@ -1873,6 +1925,10 @@ case "${1:-}" in
     fi
     rm -f "$tmp"
     exit 1
+    ;;
+  --requested-slots)    # a feloldott KÉRT slotszám a RAM-őr ELŐTT (file > env > default)
+    printf '%s\n' "$slots"
+    exit 0
     ;;
   --effective-slots)    # $2=kért slotszám → a RAM-fedezet szerinti tényleges (ADR 0171 §1)
     effective_slots "${2:-$slots}"

@@ -151,6 +151,11 @@ def run_expired_override_driver(
         PIPELINE_STATUS_CHECK="0",
         PIPELINE_ORCH_ROTATION="claude",
         PIPELINE_SLOTS="1",
+        # A cella az EGY-slotos kiválasztási ágat méri a saját fixture-
+        # queue-járól, ezért a commitolt slot-döntést (`2`, user-döntés
+        # 2026-08-20) itt kipinneljük — a `tools/round-slots.py plan` a
+        # `--repo` gyökér VALÓDI sorát olvasná, nem ezt a fixture-t.
+        PIPELINE_SLOTS_FILE="/dev/null",
         PIPELINE_SELF_CHAIN="0",
         FAKE_CURL_BODIES=str(notify_bodies),
         PATH=f"{bin_dir}:{environment['PATH']}",
