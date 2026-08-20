@@ -1,81 +1,81 @@
 # E08-R04 — Review
 
-Brief: `docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md`  
-Diff: `3f9481b6..cb0f967b`  
-Reviewer: Codex (independent orchestrator review) · Dátum: 2026-08-20  
-Verdikt: CHANGES REQUIRED
+Brief: `docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md`
+Diff: `3f9481b6..0e6c4472`
+Reviewer: Codex (independent orchestrator review) · Dátum: 2026-08-20
+Verdikt: APPROVED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-Az implementer scope-auditja és az ismételt kézi audit is tiszta: 6 módosított
-implementációs útvonal mind szerepel a brief engedélyezett listáján. Az
-izolált, tényleges `cb0f967b` implementer-HEAD klónban a célteszt 12/12 zöld,
-és az A4 valódi-sértés próba valóban pirosra vált. A karantén azonban csak
-memóriából olvasható vissza egy app/repository újraindítás után, noha a kód
-külön kulcsra már perzisztálja; ez megakadályozza, hogy a diagnostics később
-lekérdezze a történeti karantént.
+Az első review F1 leletét a `1a429d72` javította; az azt követő security
+review S2/S3 leleteit a független Terra javító kör `0e6c4472`-je zárta.
+Az ismételt, pontosan erre a commitra rögzített `/tmp` klónban a teljes
+kötelező gate zöld, és a scope-audit két megváltozott, engedélyezett útvonalat
+talált.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| A1 | Reward-hiba nem dob a session mentés fölé | ✅ | célteszt: 1. cella zöld |
-| A2 | Sikertelen drain után retry | ✅ | célteszt: 2. cella zöld |
-| A3 | Drain idempotens | ✅ | célteszt: 3. cella zöld |
-| A4 | Ack csak sikeres ledger-írás után | ✅ | valódi-sértés próba piros: `pending=[]`, visszaállítás után célteszt zöld |
-| A5 | Hibás rekord nem blokkol mögötteset | ✅ | célteszt: 5. cella zöld |
-| A6 | Karantén lekérdezhető diagnostics számára | ❌ | F1: új repository-példány üres karantént ad |
-| A7 | Korlátos sor, oldest quarantine | ✅ | célteszt: 7. cella zöld |
-| A8 | Retry limitnél karantén | ✅ | célteszt: 8. cella zöld |
+| A1 | Reward-hiba nem teszi sikertelenné a sessiont | ✅ | `activity_ingestor_test.dart`: A1 cella zöld |
+| A2 | Sikertelen drain utáni ismétlés feldolgozza az eseményt | ✅ | A2 crash/retry cella zöld |
+| A3 | Kétszeri drain egy ledger-bejegyzést ad | ✅ | A3 idempotencia cella zöld |
+| A4 | Ack csak sikeres ledger-írás után | ✅ | A4 cella; korábbi valódi-sértés próba piros, visszaállítva |
+| A5 | Sérült rekord nem blokkolja a mögötte lévőt | ✅ | A5 cella zöld |
+| A6 | Karantén lekérdezhető és restart után megmarad | ✅ | A6/F1 restart- és corrupt-payload cellák zöldek |
+| A7 | Korlát fölött a legrégebbi rekord karanténba kerül | ✅ | A7 alatta/rajta/fölötte mátrix és restart-cella zöld |
+| A8 | Retry-limit karanténba visz | ✅ | A8 cella zöld |
 
 ## Scope-audit
 
-Kézi futtatás eredménye: `Legacy scope audit OK` — 6 változott útvonal, 0
-generated/ignored és 0 listán kívüli útvonal.
+`tools/scope-audit.py --repo /tmp/review-e08-r04-fixed-jLToFR --brief
+docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md --base
+f698af1d…` → `Legacy scope audit OK` (2 changed path, 0 generated/ignored).
+Mindkét út a brief listáján szerepel.
 
-## Megállapítások
+## Javított megállapítások
 
-### F1 — MAJOR — A perzisztált karantén újraindítás után nem kérdezhető le
+### F1 — MAJOR — A perzisztált karantén restart után nem kérdezhető le
 
-- **Fájl:** `lib/features/gamification/data/local_activity_outbox_repository.dart:367-389, 440-462`
-- **Probléma:** `_persistQuarantine()` írja az `activityOutboxQuarantineKey`
-  JSON-át, de `_ensureLoaded()` csak a pending/attempts documentet olvassa.
-  `quarantineRecords()` egy friss repository-példányon ezért üres, még akkor
-  is, ha az előző példány already quarantine-ba tett retry-limitet elérő
-  rekordot.
-- **Hatás:** app restart után a diagnosztika nem látja a felhasználó elveszett
-  vagy hibás eseményeit; az A6 ígért lekérdezhető karantén nem tartós.
-- **Mért bizonyíték:** eldobható izolált teszt létrehozott egy `maxAttempts: 1`
-  retry-limit karantént, majd ugyanazzal a `KeyValueStore`-ral új
-  `LocalActivityOutboxRepository`-t épített. A várt `hasLength(1)` helyett az
-  actual `[]` volt.
-- **Kötelező javítás:** a karantén JSON szerződését explicit, hibatűrő
-  dekódolással töltsd vissza `_ensureLoaded()` alatt, a sérült karantén payloadot
-  pedig a meglévő tárolási quarantine-minta szerint őrizd meg. Adj committed
-  regressziós tesztet a repository-rekonstrukcióra.
-- **Ellenőrzés:** `activity_ingestor_test.dart` új restart-cellája; utána a
-  brief kötelező `tools/round-gate.sh` artefaktum.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`1a429d72`). `_ensureLoaded()` hibatűrően visszatölti a
+  karantént; a friss repository-instance regressziós cella zöld.
 
-### F2 — NOTE — A `dropped` jelentésnév a retry-t takarja
+### S2 — MAJOR — Pendingből karanténba átmozgatás crash-ablaka
 
-- **Fájl:** `lib/features/gamification/data/activity_outbox_repository.dart:155-158`
-- **Probléma:** a lista ténylegesen pendingben maradó, később újrapróbálandó
-  rekordokat tartalmaz; a "dropped" név elvesztésre utal.
-- **Státusz:** OPEN — csak akkor javítsd, ha az F1 minimális diffjébe természetesen beleillik.
+- **Státusz:** FIXED (`0e6c4472`). A pending, attempts és quarantine ugyanabba
+  az `JsonDocumentStore` snapshotba kerülnek; a régi külön quarantine-kulcs
+  csak olvasható migrációs fallback maradt.
+- **Valódi-sértés próba:** az új snapshot `quarantine` mezőjének ideiglenes
+  elhagyása után a restart-A6 és a capacity-restart A7 teszt piros lett;
+  visszaállítás után mind 15 célteszt zöld.
+
+### S3 — MAJOR — Release-ben hiányzó pozitivitás-ellenőrzés
+
+- **Státusz:** FIXED (`0e6c4472`). `_requirePositive` runtime
+  `ArgumentError.value`-t dob mindkét konstruktorparaméterre.
+- **Valódi-sértés próba:** az őr kiiktatására a Validation cella piros lett,
+  mert `capacity: 0` mellett a konstruktor visszatért; visszaállítva zöld.
+
+### F2 — NOTE — A `dropped` név retryra váró rekordot jelöl
+
+Nem blokkoló, meglévő public report-elnevezés; átnevezése scope-n kívüli API
+felületet érintene, ezért nem része ennek a javításnak.
 
 ## Gate-bizonyíték ellenőrzése
 
-| Gate | Ellenőrzés |
-|---|---|
-| format | izolált `round-gate` futás: zöld |
-| analyze | izolált `round-gate` futás: `No issues found` |
-| célzott teszt | izolált `flutter test …activity_ingestor_test.dart`: 12 passed |
-| architecture/secrets/l10n | teljes, review-oldali gate-összegzés még újrafuttatandó F1 javítása után |
+Az izolált, `0e6c4472`-re rögzített klónban futott:
+
+```bash
+ROUND_GATE_SLEEP_SECONDS=0 ROUND_GATE_RESULT_FILE=/tmp/e08-r04-review-gate.json \
+  tools/round-gate.sh test/features/gamification/application/activity_ingestor_test.dart
+```
+
+Mind a hat lépés zöld: format, analyze, 15 célteszt, architecture, secrets,
+l10n. A teljes suite, property gate és APK továbbra is a merge-előtti CI kapu.
 
 ## Merge-döntés
 
-Nyitott MAJOR miatt merge tilos. Egy MiniMax javító kör indul F1 lelettel;
-azután friss izolált review és a teljes kötelező gate következik.
+Nincs nyitott BLOCKER vagy MAJOR. A merge a választott workflow exact-SHA
+success, a Router CI és az aktuális `main`-szinkron után engedélyezett.

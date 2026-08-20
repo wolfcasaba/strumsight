@@ -1,53 +1,38 @@
 # E08-R04 — Security and product-boundary review
 
-Brief: `docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md`  
-Reviewed implementation: `cb0f967b`  
-Reviewer: independent security reviewer · Dátum: 2026-08-20  
-Verdikt: CHANGES REQUIRED
+Brief: `docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md`
+Reviewed implementation: `0e6c4472`
+Reviewer: independent security reviewer · Dátum: 2026-08-20
+Verdikt: APPROVED
 
 ## Összegzés
 
-CRITICAL: 0 · BLOCKER: 0 · MAJOR: 3 · MINOR: 0 · NOTE: 0
+CRITICAL: 0 · BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
-Nem került a diffbe hálózati hívás, nyers audio- vagy kameraadat, illetve
-érzékeny payloadot kiíró log. A scope-audit tiszta. A megbízható feldolgozás
-termékhatárát viszont három tárolási/configurációs hiba sérti.
+A diff nem vezet be hálózati hívást, nyers audio-/kameraadat-kezelést vagy
+érzékeny payloadot kiíró logot. A perzisztens sor kizárólag explicit
+`KeyValueStore`-t használ; nincs új platform-erőforrás vagy UI-kötés.
 
-## Megállapítások
+## Lezárt megállapítások
 
-### S1 — MAJOR — Karantén restart után nem tartós
+| ID | Lelet | Státusz |
+|---|---|---|
+| S1 | Karantén restart után nem tartós | FIXED `1a429d72` |
+| S2 | Pending→karantén két írása crash adatvesztést okozhat | FIXED `0e6c4472`: egyesített snapshot |
+| S3 | `capacity`/`maxAttempts` csak debug asserttal validált | FIXED `0e6c4472`: runtime `ArgumentError.value` |
 
-- **Fájl:** `lib/features/gamification/data/local_activity_outbox_repository.dart:330-416,432-452` (`cb0f967b`)
-- **Probléma:** a betöltés nem olvasta az `activityOutboxQuarantineKey`-t,
-  ezért a következő mentés felülírhatta a korábbi memórián kívüli karantént.
-- **Státusz:** a MiniMax F1 javítás (`1a429d72`) `_loadQuarantine` ágat és
-  restart-regressziós tesztet adott; a végső re-review ezt külön ellenőrzi.
+S2-t a reviewer valódi-sértés próbával is ellenőrizte: az egyesített snapshot
+karanténmezőjének ideiglenes elhagyása restart után piros A6/A7 cellákat adott.
+S3 őrének kiiktatása a release-szemantikát mérő Validation cellát pirosra
+váltotta. Mindkét próbát visszaállítás és zöld célteszt követte.
 
-### S2 — MAJOR — Pendingből karanténba átmozgatás közben crash adatvesztést okoz
+## Scope és kapu
 
-- **Fájl:** `lib/features/gamification/data/local_activity_outbox_repository.dart:164-189,215-234,281-301` (`cb0f967b`)
-- **Probléma:** a rekord előbb kikerül a pending listából, majd a pending
-  snapshot külön `await`-tal íródik ki; a karantén csak egy második írásban
-  mentődik. A két await közti crash után a rekord egyik tartós állapotban sincs.
-- **Hatás:** sérül az "never deleted / no data loss" és az A2/A5/A7/A8
-  szerződés.
-- **Kötelező javítás:** pending és quarantine atomikus, ugyanazon
-  crash-safe document-snapshotba kerüljön, vagy egy explicit recovery
-  protokoll garantálja, hogy az átmenet bármely pontján az egyik példány
-  megmarad. Adj crash-interleaving regressziós tesztet.
-- **Státusz:** OPEN
-
-### S3 — MAJOR — A kapacitás és retry-limit runtime validációja release-ben hiányzik
-
-- **Fájl:** `lib/features/gamification/data/local_activity_outbox_repository.dart:43-54,164-166` (`cb0f967b`)
-- **Probléma:** a pozitivitást csak Dart `assert` őrzi, amely release-ben nem
-  fut. `capacity=0` első enqueuekor üres listán `removeAt(0)`-hoz vezet;
-  `maxAttempts=0` a retry-szerződést teszi érvénytelenné.
-- **Kötelező javítás:** konstruktorban runtime `ArgumentError.value`, és
-  regressziós teszt assertion-mentes szemantikára.
-- **Státusz:** OPEN
+Az izolált scope-audit a javító commiton két engedélyezett változott útvonalat
+és nulla listán kívüli fájlt mért. A célzott `round-gate` format, analyze,
+test, architecture, secrets és l10n lépései zöldek.
 
 ## Merge-döntés
 
-S2 és S3 nyitott MAJOR, ezért a merge tilos. Az első MiniMax javító kör már
-lefutott; a következő javítást a motor-eszkaláció szerint Codex/Terra végzi.
+Nincs nyitott security vagy product-boundary lelet. A kötelező exact-SHA CI
+evidencia után merge-elhető.
