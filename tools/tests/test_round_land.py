@@ -88,7 +88,20 @@ class RoundLandTest(unittest.TestCase):
         bin_dir = root / "bin"
         bin_dir.mkdir()
         (bin_dir / "gh").write_text(
-            "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'gh %s\\n' \"$*\" >> \"$LAND_EVENTS\"\n",
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            "printf 'gh %s\\n' \"$*\" >> \"$LAND_EVENTS\"\n"
+            "if [ \"${1:-}\" = pr ] && [ \"${2:-}\" = view ]; then\n"
+            "  base=${GH_PR_BASE_REF:-main}\n"
+            "  head_ref=${GH_PR_HEAD_REF:-round}\n"
+            "  head_oid=${GH_PR_HEAD_OID:-$(git rev-parse HEAD)}\n"
+            "  if [[ \" $* \" == *\" --jq \"* ]]; then\n"
+            "    printf '%s\\t%s\\t%s\\n' \"$base\" \"$head_ref\" \"$head_oid\"\n"
+            "  else\n"
+            "    printf '{\\\"baseRefName\\\":\\\"%s\\\",\\\"headRefName\\\":\\\"%s\\\",\\\"headRefOid\\\":\\\"%s\\\"}\\n' \"$base\" \"$head_ref\" \"$head_oid\"\n"
+            "  fi\n"
+            "  exit 0\n"
+            "fi\n",
             encoding="utf-8",
         )
         (bin_dir / "gh").chmod(0o755)
@@ -140,11 +153,49 @@ class RoundLandTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         events = self._events(root)
+        self.assertIn("gh pr view 42 --json baseRefName,headRefName,headRefOid", events)
         self.assertIn("gate test/tooling/architecture_allowlist_guard_test.dart", events)
         self.assertIn("gh pr merge 42 --squash --delete-branch", events)
         signal = (work / ".codex-round-status").read_text(encoding="utf-8")
         self.assertIn("status=done", signal)
         self.assertIn("mechanikusan feloldva: nincs", signal)
+
+    def test_rebase_requires_a_fresh_exact_sha_ci_before_merging(self) -> None:
+        root, bare, work, environment = self._fixture()
+        write_commit(work, "feature.txt", "round change\n", "round change")
+        measured_head = git(work, "rev-parse", "HEAD")
+        other = self._other(root, bare)
+        write_commit(other, "main.txt", "upstream change\n", "upstream change")
+        git(other, "push", "-q", "origin", "main")
+
+        result = self._run(work, environment)
+
+        self._assert_blocked_without_merge(root, work, result)
+        self.assertNotEqual(git(work, "rev-parse", "HEAD"), measured_head)
+        self.assertIn("gate test/tooling/architecture_allowlist_guard_test.dart", self._events(root))
+        signal = (work / ".codex-round-status").read_text(encoding="utf-8")
+        self.assertIn("exact-SHA CI", signal)
+
+    def test_mismatched_pr_metadata_blocks_before_landing_actions(self) -> None:
+        mismatches = (
+            ("base", {"GH_PR_BASE_REF": "release"}),
+            ("head branch", {"GH_PR_HEAD_REF": "different-round"}),
+            ("head SHA", {"GH_PR_HEAD_OID": "0" * 40}),
+        )
+        for name, overrides in mismatches:
+            with self.subTest(name=name):
+                root, _bare, work, environment = self._fixture()
+                write_commit(work, "feature.txt", "round change\n", "round change")
+                measured_head = git(work, "rev-parse", "HEAD")
+                environment.update(overrides)
+
+                result = self._run(work, environment)
+
+                self._assert_blocked_without_merge(root, work, result)
+                self.assertEqual(git(work, "rev-parse", "HEAD"), measured_head)
+                events = self._events(root)
+                self.assertIn("gh pr view 42 --json baseRefName,headRefName,headRefOid", events)
+                self.assertNotIn("gate ", events)
 
     def test_handoff_conflict_unions_both_sections_without_markers(self) -> None:
         root, bare, work, environment = self._fixture()
@@ -155,14 +206,15 @@ class RoundLandTest(unittest.TestCase):
 
         result = self._run(work, environment)
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self._assert_blocked_without_merge(root, work, result)
         text = (work / "HANDOFF.md").read_text(encoding="utf-8")
         self.assertIn("main handoff", text)
         self.assertIn("round handoff", text)
         self.assertNotIn("<<<<<<<", text)
-        self.assertIn("gh pr merge", self._events(root))
+        self.assertIn("gate test/tooling/architecture_allowlist_guard_test.dart", self._events(root))
         signal = (work / ".codex-round-status").read_text(encoding="utf-8")
         self.assertIn("mechanikusan feloldva: HANDOFF.md", signal)
+        self.assertIn("exact-SHA CI", signal)
 
     def test_own_brief_conflict_keeps_the_fresh_main_version(self) -> None:
         root, bare, work, environment = self._fixture()
@@ -173,8 +225,9 @@ class RoundLandTest(unittest.TestCase):
 
         result = self._run(work, environment)
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self._assert_blocked_without_merge(root, work, result)
         self.assertEqual((work / "docs/rounds/e99-r20-test.md").read_text(encoding="utf-8"), "main brief\n")
+        self.assertIn("exact-SHA CI", (work / ".codex-round-status").read_text(encoding="utf-8"))
 
     def test_semantic_tool_conflict_aborts_rebase_and_blocks(self) -> None:
         root, bare, work, environment = self._fixture()
