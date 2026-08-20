@@ -304,6 +304,108 @@ dönti el, sosem az, hogy melyik a kényelmesebb.
 
 Lecke: `docs/LESSONS.md` [[L337]].
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-20) — a kötelező teljes gate egy H8 merge-feloldás UTÁN a kör SAJÁT, review előtti tartalmi hibáját is feltárhatja — ez nem a self-heal hatásköre, de dokumentálni kötelező
+
+Mérés: E99-R18/H8 — a `tools/round-slots.py` konfliktusa a `main` (E99-R17,
+exact-set `GENERATED_PATHS`) és a kör saját ága (E99-R18/D4, glob-alapú
+`GENERATED_PATH_PATTERNS`) között additívnak bizonyult: mindkét oldal SAJÁT,
+már zöld-tesztelt regressziós csomagja csak a saját mechanizmusát méri, egyik
+sem a másikét — a 2026-08-13-i módosítás (114. sor) elve ide is alkalmazható:
+mindkét hunk megtartása, unió-predikátum, egy új, a kombinált esetet mérő
+teszt. Ez a rész a 2026-08-13-i precedenst NEM módosítja, csak megerősíti.
+
+**Az ÚJ tanulság:** a kötelező `python3 -m pytest tools/tests -q` teljes
+gate (§4, a merge-feloldás UTÁN, nem csak az érintett tesztfájlakon) egy
+HARMADIK, a merge-mechanikától FÜGGETLEN, a kör SAJÁT, review előtti D4
+kódjában már a merge előtt is jelen lévő hibát tárt fel:
+`test_pipeline_throughput.py::SlotPlanningTest::
+test_real_epic_four_rounds_are_correctly_rejected` pirosra váltott, mert a
+D4 broad glob (`lib/features/*/public.dart`) MINDEN feature `public.dart`-
+ját generáltnak (nem ütközőnek) minősíti, holott a D1–D3 pilot mérve
+kizárólag a `practice_generator`-t migrálta — a többi feature (mérve: 25+18
+nyitott brief két másik feature-ön) public.dart-ja MA MÉG kézzel
+karbantartott, valódi ütközési felület. A self-heal ezt NEM javította: a
+helyes hatókör (pl. migrált-feature allowlist) termékdöntés, a kör saját
+implementer+reviewer ciklusáé, nem az ADR 0112 §2 szűk (brief/eszköz)
+jogosultságáé.
+
+**Szabály.** A H8 (vagy bármely) self-heal kötelező teljes gate-je nem csak
+a SAJÁT javítás RED→GREEN bizonyítéka — a teljes suite MÁS, a javítással
+nem összefüggő piros cellát is felszínre hozhat, különösen egy addig sosem
+futtatott, review előtti kör-ág esetén (itt a brief saját R5 sora már
+előre jelezte: a teljes pytest-korpuszt az implementer helyben nem tudta
+futtatni, „a review/CI evidenciája" maradt). Ilyenkor a self-heal dolga
+NEM a talált hiba kijavítása (az a kör tartalmi munkája, ADR 0112 §1 tiltja
+a megállt kör levezénylését), hanem a lelet **maximálisan látható**
+dokumentálása — a kör saját briefjében (a következő dispatch ELSŐ olvasata),
+`docs/LESSONS.md`-ben és a heal-status `detail=` mezőjében —, hogy a
+felfedezés költsége ne ismétlődjön meg egy következő, drágább (review-idejű)
+ponton. Az `outcome=fixed` így is helyes, ha a self-heal SAJÁT gyökéroka
+(itt: a H8 merge-konfliktus) ténylegesen, bizonyítottan megszűnt, ÉS az
+újonnan talált hiba nem éri el a `main`-t (a kör saját, még nem merge-elt
+ágán marad, ahol a normál review-gate úgyis elkapná).
+
+Lecke: `docs/LESSONS.md` [[L343]].
+
+### Módosítás (ADR 0112 önjavító kör, 2026-08-20) — H3 harmadik előfordulása: a self-heal ADR-0112 könyvelő commitja sosem utazhat KIZÁRÓLAG a kör-ágon
+
+Mérés: a fenti (2026-08-20, H8) blokk maga is ezt a hibát követte el. A H8
+self-heal a `tools/round-slots.py` uniós feloldását — helyesen — a kör SAJÁT
+ágára (`minimax/e99-r18-gov-12-generated-public-barrels`) pusholta, a L343
+szerinti „nem `main`-merge, a PR a következő dispatch dolga" mintát követve
+(a fix ROUND-branch-specifikus: egy a kör saját ágán belüli merge-konfliktust
+old fel, ezért önálló `main`-PR-ként nem is értelmezhető). A self-heal ezzel
+egy IDŐBEN, egyazon merge-commitban (`7458ca83`) a fenti ADR-0112
+„Módosítás" könyvelő blokkot is a kör-ágra írta — de ezt a blokkot SOSEM
+mozgatta át `main`-re. A blokk tartalma emiatt kizárólag a review-zatlan
+kör-ágon élt: a `main` ADR 0112 fájlja a 2026-08-19-i [[L337]] blokknál
+lezárt maradt.
+
+Két self-healen és ~40 percen át ez rejtve maradt, mert a köztes H3
+(második előfordulás, `de2f7657`) SAJÁT könyvelését — helyesen — közvetlenül
+`main`-re commitolta (HANDOFF+LESSONS, ADR-érintés nélkül), és nem auditálta
+a H8 által korábban otthagyott ADR-diffet. A lánc a következő
+`--base origin/main` scope-audit-on (a kör-ág teljes, végleges diffje a
+mergelhetőség kérdésére, NEM az egyes dispatchok launch-HEAD-jére —
+`tools/ai_router/legacy_scope.py` fejléce szerint szándékosan két különböző
+kérdés) akadt fenn: `docs/adr/0112-self-healing-pipeline.md` egy tiszta,
+43 soros hozzáadásként jelent meg a kör `allowed_paths`-án kívül — helyesen,
+mert egyetlen termék-brief `allowed_paths`-ának sem lenne szabad ezt az
+utat tartalmaznia (az ADR 0112 §2 szerint ez kizárólag a self-heal saját,
+brieftől független jogosultsága).
+
+**Szabály.** A L343 kör-ág-push minta KIZÁRÓLAG a self-heal FUNKCIONÁLIS
+javítására érvényes, ha az a javítás valóban kör-ág-specifikus (pl. egy a
+kör saját mergején belüli konfliktus feloldása, ami önálló `main`-commitként
+nem is értelmezhető). Az ADR-0112 „Módosítás" könyvelő blokk **sosem**
+kör-ág-specifikus — pontosan ugyanaz a szöveg bármelyik körhöz kötődő
+self-healből született volna. Ezért a könyvelő blokk MINDIG a self-heal saját,
+normál, brief-független csatornáján (közvetlen `main`-commit vagy -PR) megy,
+akkor is, ha ugyanaz a self-heal session UGYANAKKOR egy kör-ág-specifikus
+javítást a kör saját ágára pushol — a kettő két KÜLÖN commit/push, sosem egy
+bundle. Ha egy self-heal mégis egybe bundle-özte őket (mint H8), a feloldás
+NEM az `allowed_paths` bővítése (az ADR 0112 §2 jogosultsága nem a kör
+briefjéé), hanem a blokk leválasztása: a tartalom változatlanul landol
+`main`-en egy önálló self-heal-commitban, majd a friss `main` a szokásos,
+nem-force módon visszamergelődik a kör-ágra — ez a kör-ág diffjéből teljesen
+eltünteti az utat, allowlist-bővítés nélkül.
+
+Mechanikus regresszió: `tools/tests/test_legacy_scope.py::
+LegacyScopeTest::test_selfheal_adr_bookkeeping_must_land_on_base_not_only_the_round_branch`
+szintetikus git-fixture-rel méri mindkét mintát — a kör-ágra bundle-özött ADR
+blokk `path outside allowed scope` sértés (RED), a `base`-re előbb landolt,
+majd visszamergelt azonos tartalom eltűnik a `changed_paths`-ból (GREEN).
+
+A valódi incidensen a HALTED-ben rögzített reprodukció
+(`tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base origin/main`)
+a mérce: a fenti blokk `main`-re landolása és a kör-ág visszamergelése után
+ennek a parancsnak `Legacy scope audit OK`-ra kell váltania (előtte: `FAILED,
+path outside allowed scope: docs/adr/0112-self-healing-pipeline.md`) — a
+mért utóeredmény a heal-status `detail=` mezőjében és a záró HANDOFF-ban.
+
+Lecke: `docs/LESSONS.md` [[L346]].
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör
