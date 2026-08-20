@@ -27,6 +27,39 @@ success. PR [#367](https://github.com/wolfcasaba/strumsight/pull/367), squash
 `8aa0010b`; ADR 0353. Következő SDD-kör: **E08-R13 — Achievement domain és
 katalógus**, új sessionben.
 
+## 📐 [TERV] Chapter 14 briefek: E14-R15…R19 — a strum recovery blokk mérési fele (2026-08-20)
+
+**User-kérés:** „mehetsz tovább". A Chapter 14 §8 harmadik blokkja (R15–R24,
+strum onset + direction recovery) első öt köre — mindegyik **mérés és döntés**,
+nem hangolás: a production DSP-konstans egyikben sem mozdul.
+
+| Kör | Tárgy | ADR |
+|---|---|---|
+| `E14-R15` | hard-negative taxonómia (10+ kategória) + **false visible arrow/chord per perc** termék-metrika | 0367 |
+| `E14-R16` | canonical SuperFlux A/B (current / 24 sáv-oktáv / complex-domain / simple flux) CPU+latency-vel; a production konstans ÉRINTETLEN | 0368 |
+| `E14-R17` | referencia-modell reprodukció + **külön** kód/checkpoint/dataset licenc-audit, gépi licenc-őrrel | 0369 |
+| `E14-R18` | joint streaming onset+direction prototípus, verziózott IO-sémával; go/no-go az Alpha kapuhoz kötve | 0370 |
+| `E14-R19` | augmentáció seedelve/manifestelve/kikapcsolhatóan + ablation; romló subgroup → nincs automatikus elfogadás | 0371 |
+
+**Két mért tény, amire a briefek épülnek** (a pre-flight ezeket kéri újra):
+`ml/negatives.py` (r174) rögzíti, hogy a heurisztikus onset ~minden hatodik
+onsetje hamis, és a direction-CRNN ezekre ugyanolyan magabiztos (medián raw
+0,94 vs 0,97) — **a confidence önmagában nem szűr**, ezért kell a no-strum
+osztály ÉS a termék-oldali hamis-esemény metrika; `ml/augment.py` (r173)
+PCM-szintű augmentációja pedig MÁR LÉTEZIK, tehát az R19 bővít és bizonyít,
+nem újraír.
+
+**Két kutatási kör (`R17`, `R18`) `blocked`-dal zárhat**, ha a research-
+környezet vagy a checkpoint nem elérhető ezen a boxon — a brief ezt KÖTELEZŐ
+úttá teszi (Chapter 14 §9/9: hiányzó környezetnél tilos sikeres verifikációt
+állítani).
+
+**Mérve:** `brief-lint --level strict` mind az öt briefre → nincs lelet;
+`brief-lint --open --level base` → nincs lelet. A sorok `prepared`-ek.
+
+**Hátralévő Chapter 14:** R20–R42 (strum tanítás grouped holdouttal, chord
+recovery, adaptív termék-UI, field validation és rollout).
+
 ## ✅ [HEAL E08-R12/H8] KÉSZ — a publikus kör-ág veszteségmentesen tartalmazza a friss `main`-t — PR #371 (2026-08-20, L367)
 
 Az E08-R12 landolója a friss `main`-re rebase-elte a kör hét nem-merge
