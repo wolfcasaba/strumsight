@@ -49,3 +49,13 @@ felkiáltójel/tiltott nyelv miatt piros; canonical title mellett a `Return
 within 2 days` CTA külön is piros a szöveges-countdown őrön; restore után
 zöld. Nincs provider/repository/route/network/clock/storage/reward owner,
 secret vagy új lifecycle-erőforrás.
+
+## Végső upstream-szinkron ellenőrzés — 2026-08-20
+
+Az exact `01437c81` head már tartalmazza a H3 presentation-guard healjét.
+Friss izolált klónban a 7/7 kör-gate és a scope-audit zöld; 0 listán kívüli
+production útvonal és 0 secret lelet. Eldobható `SharedPreferences`
+presentation-import célzottan pirosra vitte a réteghatár-őrt, miközben a
+shipping Flutter-importok zöldek maradtak. A tiltott broken-title mutáció az
+A1 copy-őrt célzottan pirosra vitte. Restore után mindkét célzott teszt zöld,
+így a high-risk product/security verdikt változatlanul **APPROVED**.

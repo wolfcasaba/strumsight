@@ -69,3 +69,19 @@ Javító commit: `6ee12f46`. Friss klón:
 zöld; 21 V2 + 20 legacy teszt. A reviewer külön próbálta a tiltott broken
 title-t és — canonical title mellett — a szöveges CTA-countdownt; mindkettő az
 A1 cellát pirosra vitte. Restore után a célzott cella zöld és a klón tiszta.
+
+## Végső upstream-szinkron ellenőrzés — 2026-08-20
+
+A H3 architecture-guard heal merge-je után a branch az aktuális
+`origin/main @ ad49d79e` állapotot normál merge-committal beépítette. Az exact
+`01437c81` head friss, izolált `/tmp/review-e08-r12-final-1sJIus/repo`
+klónjában a scope-audit 12 változott útvonalat, 2 generated/ignored
+review-jelentést és 0 sértést adott. A teljes kör-gate 7/7 zöld: format,
+analyze, 21 V2 teszt, 20 legacy streak teszt, architecture, secrets és l10n.
+
+Két új valódi-sértés próba igazolta a heal utáni kombinált mércét. A
+`SharedPreferences` presentation-import az architecture cellát pontosan a
+közvetlen storage-határon pirosra vitte; a `You lost your streak!` forrás-copy
+az A1 cellát a felkiáltójel/tiltott nyelv miatt pirosra vitte. Mindkét
+mutáció visszaállítása után a célzott tesztek zöldek, a review-klón tiszta.
+Nyitott BLOCKER/MAJOR/MINOR nincs; verdikt változatlanul **APPROVED**.
