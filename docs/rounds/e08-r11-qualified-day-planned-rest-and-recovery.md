@@ -262,4 +262,44 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Fájlonkénti összefoglaló
+
+- `lib/features/gamification/infrastructure/default_streak_policy.dart` — új,
+  immutable és validált qualified/recovery threshold-konfiguráció (120s/60s),
+  valamint a Practice Generator publikus, típusos rest-day decisionjének
+  timezone-semleges epoch-day projekciója.
+- `lib/features/gamification/application/streak_service.dart` — tiszta,
+  caller-supplied napi evaluation typed application reasonnel; planned rest,
+  grace, freeze, broken, clock anomaly, idempotencia és külön, inkluzív
+  seven-day weekly consistency projekció.
+- `lib/features/gamification/public.dart` — a két új nyilvános contract
+  exportja.
+- `test/features/gamification/application/streak_service_test.dart` — A1–A10
+  bizonyíték: `119/120/121s`, explicit recovery `59/60/61s`, valós
+  `WeeklyScheduleDecision` rest fixture, öt-event idempotencia, clock no-op,
+  grace/freeze/broken reason-mátrix, independent weekly projection, no-XP és
+  public-import audit.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/features/gamification/application/streak_service_test.dart`
+  — **11/11 passed**.
+- Valódi-sértés próba: a `DefaultStreakPolicy.qualifies` ideiglenesen
+  `activity != null`-t adott vissza. A
+  `ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh test/features/gamification/application/streak_service_test.dart`
+  futásban az A1 119s cella piros volt (`Expected: <0>`, `Actual: <1>`),
+  továbbá a konfigurációs és recovery-alatti cellák is pirosak lettek. A
+  küszöb-logika visszaállítása után:
+  `ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh test/features/gamification/application/streak_service_test.dart`
+  — **zöld**: format, analyze, célzott 11 teszt, architecture, secrets, l10n.
+  A `ROUND_GATE_SLEEP_SECONDS=0` kizárólag a gate saját lépések közötti
+  várakozását nullázta a harness időkorlátja miatt; egy ellenőrző lépést vagy
+  küszöböt sem hagyott ki.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- CI-dispatch, `gh`, PR és merge nem futott — a brief szerint az
+  orchestrátor/reviewer feladata.
+- Nem volt scope-tágítás, domain/storage/ledger írás vagy XP-módosítás.
+
 ## 11. Review — a Claude tölti ki
