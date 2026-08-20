@@ -241,4 +241,40 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Implementált scope
+
+- `lib/features/gamification/domain/rewards/experience_points.dart` (NEW) — az öt komponens (`baseXp`, `durationXp`, `qualityXp`, `improvementXp`, `diversityXp`) és a `totalXp` összeg, valamint a `reductionReasons` oklista, json-round-trip-pal.
+- `lib/features/gamification/application/reward_policy_engine.dart` (NEW) — a `RewardPolicyRequest` (eventId, practiceKey, parentEventId, eligibility, mérések) és `RewardPolicyHistory` (earnedTodayXp, practiceOccurrenceCount, rewardedParentIds, rewardedChildParentIds) application contractja, plusz a `RewardPolicyDecision` és a `RewardPolicy` interfész.
+- `lib/features/gamification/infrastructure/default_reward_policy.dart` (NEW) — a `RewardPolicyConfig` (egyetlen, verziózott hangolási pont: `baseReward`, `durationRewardPerMinuteCap`, `qualityRewardCap`, `improvementRewardCap`, `diversityRewardCap`, `dailyXpCap`, `practiceRepeatBaseFactor`, `practiceRepeatMinFactor`) és a `DefaultRewardPolicy`, amely négy rétegben számol: (1) kapu-engedélyezett komponensek, (2) csökkenő hozam (gyakorlat-előfordulás szerinti floor-olt szorzó), (3) szülő↔gyermek dedup explicit `parentEventId` alapján, (4) napi plafon okkal együtt.
+- `lib/features/gamification/public.dart` — kizárólag export-sorok bővítése.
+- `test/features/gamification/application/reward_policy_engine_test.dart` (NEW) — a §6 mind a nyolc cellája + a küszöb három kötelező sora (99+1=100, 100+1=101, 101+1=102) + egy A3-mentesítő kiegészítés, ami kimondja, hogyan viselkedik a cap fölötti esemény.
+
+### Döntések és eltérések a briefhez képest
+
+- A szülő↔gyermek dedup saját okot NEM rögzít a `reductionReasons` listára (a `reward_reason.dart` scope-on kívül), mert a mostani enum-értékek közül egyik sem felel meg szemantikusan. A dedup strukturális: a másik végpont már átvette a jóváírást, és a jelenlegi esemény komponensei nullázódnak — a `totalXp == 0` és a policy-verzió a nyugtán megmarad. A5-tesztek ezt erősítik.
+- Az A3 cella a §6.1 „cap fölött eldobás" mutációhoz egy új, cap-túllépéses teszttel bővült (`test/features/gamification/application/reward_policy_engine_test.dart` A3-csoport, 3. teszt), mert különben a cap-drop bug csak az A4 cellákat pirosítaná — a measure-matrix viszont A3-at rendeli hozzá, és az „esemény nem vész el" invariáns a cap-rétegre is érvényes.
+- A `RewardPolicyRequest.validDuration` a briefben említett `practiceDuration`-t testesíti meg (R05-ös validációs eredmény, amit a motor már megkap).
+- A `RewardPolicyRequest.improvementDelta` nem R05-bemenet, hanem saját application-rétegbeli input (az R05 a `qualityBonus`/`mastery`/`verified` kapukkal csak jogosultságot dönt, a mértékeket a motor külön kapja).
+
+### §6 valódi-sértés próba eredménye
+
+A `_applyDailyCap` „már elérte a plafont" ágát ideiglenesen `throw StateError('event dropped: cap-exceedance')` mutációra cseréltem, futtattam a gate-et, megfigyeltem a piros cellákat, visszaállítottam.
+
+Mutáció alatt a gate a következő cellákat váltotta PIROSRA:
+
+- **A3** (cap fölötti megőrzés): `A3 cell: events above the daily cap still produce a receipt (zero XP, but the receipt and reason are preserved)` — `StateError` szállt el.
+- **A4** cap-receipt: `one XP on top of EXACTLY 100 already earned today clips to zero with the daily cap reason attached` és `one XP on top of 101 already earned today clips to zero (...)` — ugyanott váltott pirosra, ugyanazzal a hibával.
+
+Visszaállítás után a gate újra MINDEN ZÖLD (a teljes kimenet a futtatáskor): `format`, `analyze`, `test`, `architecture`, `secrets`, `l10n`. A policy-implementáció a §6.1 measure-matrix szerinti A3 cellát védi: cap fölötti esemény is kap nulla XP-s nyugtát a `dailyCapApplied` indokkal.
+
+### Gate-artefaktum (utolsó zöld futás)
+
+A `tools/round-gate.sh test/features/gamification/application/reward_policy_engine_test.dart` utolsó zöld futásának csonkolatlan kimenete a session-naplóban: 18/18 teszt zöld, mind a hat gate-lépés (format, analyze, test, architecture, secrets, l10n) zöld.
+
+### Kézben átadva a review-nak
+
+- A kör branch-e: `minimax/e08-r06-xp-policy-engine-and-diminishing-returns`
+- A scope csak az `allowed_paths` listán belül módosított (4 új fájl + 1 barrel-bővítés).
+- ADR 0341 a pre-flight-ban előre megírt; az implementer nem nyúlt hozzá.
+
 ## 11. Review — a Claude tölti ki
