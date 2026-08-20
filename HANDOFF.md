@@ -1,5 +1,64 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R18/H3] KÉSZ — a scope-audit jelentése feloldott SHA-t ír `origin/main` helyett, a kör-ág újraszinkronizálva — PR #348, squash `4105c695` (2026-08-20)
+
+Negyedik H3-halt ugyanazon a körön, de a korábbi hármtól ELTÉRŐ gyökérokkal.
+`docs/execution/pipeline-queue.tsv` egyszerre védett ÉS a pipeline saját
+üzemeltetése által folyamatosan, a kör tartalmától függetlenül íródik (minden
+kör-átmenet módosítja). A kör-ág szinkron-merge-e (`e75ae7a4`) néhány
+másodperccel egy önálló, a pipeline-tól származó könyvelő commit
+(`634562d7`, „E08-R06 done") előtt fagyasztotta be az `origin/main`
+pillanatképét — a kör SAJÁT, nem-merge commitjai bizonyíthatóan sosem
+érintették a queue-fájlt, mégis a végső `--base origin/main` scope-audit
+`protected path changed`-et jelzett, MERT a kör-ág merge-elt másolata
+(`E08-R06 … pending`) ténylegesen eltért a friss `main`-től (`E08-R06 …
+done`) — egy squash-merge ezt a sort tényleg visszaírta volna. **Ez nem a
+scope-audit hibája**: a `legacy_scope.py` fejléce szerint a végső audit
+szándékosan a mergelhetőség kérdésére válaszol ([[L347]] már tisztázta ezt a
+kettéválasztást a launch-HEAD implementer-scope kérdéstől) — a jelzés IGAZ
+volt.
+
+A tényleges javítás: a scope-audit JELENTÉSE a nyers `--base` argumentumot
+(a szimbolikus `"origin/main"` sztringet) írta ki feloldott SHA helyett, ami
+elrejtette, hogy két, néhány perccel eltérő futás a mögöttes bázis
+elmozdulása ellenére azonosnak látszott — ez a self-healben is valódi
+nyomozási időt vett el (a megosztott kör-munkapéldány elavult helyi
+`origin/main` referenciája miatt egy reprodukciós kísérlet hamis `OK`-t
+adott, amíg a blob-hash-ek közvetlen összevetése fel nem fedte az
+eltérést). Fix: `tools/ai_router/legacy_scope.py::audit_legacy_scope` a
+`base`-t egyetlen `git rev-parse` hívással a függvény elején SHA-ra oldja.
+
+Feloldás: a kör-ág (`minimax/e99-r18-gov-12-generated-public-barrels`) friss
+`origin/main`-nel újraszinkronizálva (a H8/`7458ca83` és a második H3/
+`96f1ada2` mintáját követve, közvetlen push, PR nélkül — a szinkron csakis
+upstream tartalmat húz be); a szinkron közben egy párhuzamosan pusholt F1
+review-javítás (`8eeb3146`, architektúra-guard visszaállítás) is
+becsatlakozott egy normál, force nélküli merge-dzsel. Végállapot: `dfbfb789`.
+
+Saját méréssel igazolva a HALTED saját reprodukciós parancsával, FRISS `git
+fetch` után: `tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18
+--brief docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base
+origin/main` → `Legacy scope audit OK (origin/main..dfbfb789bff1, 16
+changed path(s), 1 generated/ignored)` (előtte: `FAILED, protected path
+changed: docs/execution/pipeline-queue.tsv`). Router CI zöld a heal-ágon
+([32336566185](https://github.com/wolfcasaba/strumsight/actions/runs/32336566185),
+headSha egyezik); `python3 -m pytest tools/tests -q`: 596 passed, 565
+subtests passed (+2 új regressziós teszt, 0 törölve) —
+`test_base_symbolic_ref_resolves_to_a_concrete_sha` (RED a fix előtt: a
+jelentett `base` a nyers `"origin/main"` sztring; GREEN utána: 40-hex SHA)
+és `test_protected_bookkeeping_file_flagged_by_upstream_drift_clears_after_resync`
+(a valódi eset kicsinyített, valós útvonalat használó mása). Merge után
+independens ellenőrzés friss `main`-en: `pytest tools/tests/
+test_legacy_scope.py -q` 12/12 zöld.
+
+**Előretekintő szabály** (rögzítve ADR 0112-ben): ha ugyanez a minta
+(folyamatosan íródó védett fájl + hosszan nyitott kör-ág) ötödször
+jelentkezik ugyanezen a körön, az már nem pontjavítást igényel, hanem
+`outcome=escalate`-et.
+
+Lecke: [[L348]]. ADR: [`0112`](docs/adr/0112-self-healing-pipeline.md)
+Módosítás (2026-08-20).
+
 ## ✅ E08-R06 KÉSZ — XP policy engine és diminishing returns — PR #347, squash `29e78eaf` (2026-08-20)
 
 Magyarázható, verziózott ötkomponensű XP policy készült napi cap-pel,

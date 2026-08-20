@@ -13506,3 +13506,68 @@ landoljon `main`-en ELŐSZÖR (vagy külön PR-ként, vagy — ha maga a self-he
 session már úgyis ír egy `main`-PR-t más okból — abba a PR-be csomagolva),
 és csak UTÁNA, külön lépésként kerüljön a kör-ág visszamergelésre. Sosem egy
 git-commit, ami mindkettőt egyszerre viszi a kör-ágra.
+
+## L348 — Egy folyamatosan íródó védett fájl (`docs/execution/pipeline-queue.tsv`) szinkron-versenye igazi `--base origin/main` scope-audit sértést ad; a jelentés a nyers ref-sztringet írta ki feloldott SHA helyett, ami elrejtette, hogy két futás közben a bázis mozdult (E99-R18, H3 negyedik előfordulása, ADR 0112, 2026-08-20, PR #348)
+
+**Mit mértünk.** E99-R18/H3 negyedszer állt meg. A kör-ág szinkron-merge-e
+(`e75ae7a4`, 05:05:44Z) néhány másodperccel egy önálló, a pipeline-tól
+származó könyvelő commit (`634562d7`, „E08-R06 done") előtt fagyasztotta be
+az `origin/main` pillanatképét. A kör SAJÁT, nem-merge commitjai
+bizonyíthatóan sosem érintették `docs/execution/pipeline-queue.tsv`-t
+(`git log --no-merges <indulási-HEAD>..<kör-HEAD> --
+docs/execution/pipeline-queue.tsv` üres), a végső `--base origin/main`
+scope-audit mégis `protected path changed`-et jelzett — MERT a kör-ág
+merge-elt másolata (`E08-R06 … pending`) ténylegesen eltért a friss
+`main`-től (`E08-R06 … done`): egy squash-merge ezt a sort tényleg
+visszaírta volna. A jelzés tehát IGAZ volt, nem hamis pozitív — a
+`tools/ai_router/legacy_scope.py` fejléce szerint a végső audit
+szándékosan a mergelhetőség kérdésére válaszol, nem a launch-HEAD-hez mért
+implementer-munkára ([[L347]] már tisztázta ezt a kettéválasztást).
+
+**Amit a jelentés elrejtett.** A scope-audit a nyers `--base` argumentumot
+(a szimbolikus `"origin/main"` sztringet) írta ki a `base` mezőbe feloldott
+SHA helyett. Két, néhány perccel eltérő audit-futás ezért AZONOS
+„origin/main" bázist mutatott a kimenetében, holott a mögöttes commit
+közben tovább mozdult — ez önmagában valódi nyomozási időt vett el ebben a
+self-healben: a megosztott kör-munkapéldány (`/home/ubuntu/ss-minimax-e99-r18`)
+helyi `origin/main` referenciája `git fetch` hiányában elavult volt, és egy
+reprodukciós kísérlet emiatt hamis `OK`-t adott, amíg a blob-hash-ek
+közvetlen összevetése (`git ls-tree <ref> -- <path>`) fel nem fedte az
+eltérést.
+
+**A szabály.** A `--base origin/main` mozgó-cél szemantikája helyes és
+változatlan marad — NE a scope-audit szigorát gyengítsd egy protected-path
+sértés láttán, még akkor sem, ha a kör saját commitjai bizonyíthatóan nem
+érintik a jelzett fájlt. A helyes feloldás a kör-ág egy újabb szinkronja
+(ugyanaz a minta, mint H8-nál, `7458ca83`, és a második H3-nál, `96f1ada2`),
+SOSEM az `allowed_paths` bővítése vagy a protected-lista szűkítése. Amit
+viszont MINDIG javítani kell: egy audit-eszköz, aminek jelentése egy mozgó
+refet nevesít bázisként, oldja fel azt SHA-ra a jelentés elkészülte előtt —
+két futás így összevethető, és egy stale helyi ref azonnal észlelhető, nem
+csak blob-hash kézi ellenőrzéssel. Fix (PR #348, squash `4105c695`):
+`tools/ai_router/legacy_scope.py::audit_legacy_scope` a `base`-t egyetlen
+`git rev-parse` hívással a függvény elején SHA-ra oldja, mielőtt a diffhez
+vagy a jelentéshez használná — ezzel egy elméleti verseny-ablakot is zár
+(ha `origin/main` a diff-hívás KÖZBEN mozdulna). Mechanikus regresszió:
+`tools/tests/test_legacy_scope.py::LegacyScopeTest::
+test_base_symbolic_ref_resolves_to_a_concrete_sha` (a jelentett `base` 40-hex
+SHA a nyers `"origin/main"` sztring helyett — RED a fix előtt, GREEN utána)
+és `test_protected_bookkeeping_file_flagged_by_upstream_drift_clears_after_resync`
+(a valódi eset kicsinyített, valós útvonalat és sor-tartalmat használó
+mása). Router CI zöld a heal-ágon (32336566185), teljes `pytest
+tools/tests -q`: 596 passed/565 subtests (+2, 0 törölve), merge után
+függetlenül újra ellenőrizve friss `main`-en.
+
+**Hogyan alkalmazd.** Ha egy jövőbeli self-heal `protected path changed`-et
+lát egy olyan útvonalon, amit a pipeline saját üzemeltetése (nem egyetlen
+kör tartalma) folyamatosan ír — jelenleg egyedül `docs/execution/pipeline-queue.tsv`
+ismert ilyen —, először MÉRD MEG `git log --no-merges <base>..<HEAD> --
+<útvonal>`-lal, hogy a kör saját commitjai érintik-e. Ha üres, ez
+szinkron-verseny, nem scope-sértés: friss `git fetch` + a kör-ág újbóli
+szinkronja a feloldás, a fenti reprodukciós paranccsal igazolva
+`Legacy scope audit OK`-ra váltás. Ha E99-R18 (vagy bármely kör) ÖTÖDSZÖR
+fut ugyanebbe a mintába (folyamatosan íródó védett fájl + hosszan nyitott
+kör-ág), az már nem pontjavítást igényel: `outcome=escalate`, azzal a
+javaslattal, hogy a kör tartalmi munkája zárja le a kört gyorsabban, vagy a
+queue-bookkeeping kerüljön ki a védett listáról egy ember által jóváhagyott
+ADR-döntéssel.
