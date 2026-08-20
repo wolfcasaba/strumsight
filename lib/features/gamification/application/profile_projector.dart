@@ -1,30 +1,30 @@
 import '../data/reward_ledger_repository.dart';
 import '../domain/levels/level_curve.dart';
+import '../domain/levels/level_definition.dart';
 import '../domain/profile/gamification_profile.dart';
 import '../domain/rewards/reward_ledger_entry.dart';
 
 /// Rebuilds the gamification profile solely from append-only ledger entries.
 final class ProfileProjector {
   ProfileProjector({
-    required LevelCurve curve,
-    required RewardLedgerRepository ledger,
+    required this.curve,
+    required this.ledger,
     this.pageSize = 100,
-  }) : _curve = curve,
-       _ledger = ledger {
+  }) {
     if (pageSize < 1) {
       throw ArgumentError.value(pageSize, 'pageSize', 'must be at least one');
     }
   }
 
-  final LevelCurve _curve;
-  final RewardLedgerRepository _ledger;
+  final LevelCurve curve;
+  final RewardLedgerRepository ledger;
   final int pageSize;
 
   /// The deterministic zero-entry profile for this curve.
   GamificationProfile get initialProfile => GamificationProfile(
     schemaVersion: gamificationProfileSchemaVersion,
     totalXp: 0,
-    progress: _curve.progressForTotalXp(0),
+    progress: curve.progressForTotalXp(0),
   );
 
   /// Reads every stable ledger page and derives one profile from its entries.
@@ -37,7 +37,7 @@ final class ProfileProjector {
     String? cursor;
 
     do {
-      final page = _ledger.readPage(limit: pageSize, cursor: cursor);
+      final page = ledger.readPage(limit: pageSize, cursor: cursor);
       for (final entry in page.entries) {
         projection = projectIncrementally(
           profile: projection.profile,
@@ -63,8 +63,9 @@ final class ProfileProjector {
     required RewardLedgerEntry entry,
   }) {
     final totalXp = _saturatingAdd(profile.totalXp, entry.totalXp);
-    final curveProgress = _curve.progressForTotalXp(totalXp);
-    final progress = curveProgress.currentLevel.number < profile.currentLevel.number
+    final curveProgress = curve.progressForTotalXp(totalXp);
+    final progress =
+        curveProgress.currentLevel.number < profile.currentLevel.number
         ? profile.progress
         : curveProgress;
     final nextProfile = GamificationProfile(
@@ -76,7 +77,7 @@ final class ProfileProjector {
     return ProfileProjection(
       profile: nextProfile,
       crossedLevels: <LevelDefinition>[
-        for (final level in _curve.definitions)
+        for (final level in curve.definitions)
           if (level.number > profile.currentLevel.number &&
               level.number <= nextProfile.currentLevel.number)
             level,

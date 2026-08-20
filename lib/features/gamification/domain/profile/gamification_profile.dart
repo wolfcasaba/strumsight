@@ -1,4 +1,5 @@
 import '../levels/level_curve.dart';
+import '../levels/level_definition.dart';
 
 /// Current schema for an in-memory [GamificationProfile] snapshot.
 const int gamificationProfileSchemaVersion = 1;

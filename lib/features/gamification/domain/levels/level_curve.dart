@@ -5,7 +5,11 @@ final class LevelCurve {
   LevelCurve(List<LevelDefinition> definitions)
     : definitions = List<LevelDefinition>.unmodifiable(definitions) {
     if (this.definitions.isEmpty) {
-      throw ArgumentError.value(definitions, 'definitions', 'must not be empty');
+      throw ArgumentError.value(
+        definitions,
+        'definitions',
+        'must not be empty',
+      );
     }
 
     var previous = this.definitions.first;
@@ -95,10 +99,6 @@ final class LevelProgress {
           xpToNextLevel == other.xpToNextLevel;
 
   @override
-  int get hashCode => Object.hash(
-    currentLevel,
-    nextLevel,
-    xpIntoCurrentLevel,
-    xpToNextLevel,
-  );
+  int get hashCode =>
+      Object.hash(currentLevel, nextLevel, xpIntoCurrentLevel, xpToNextLevel);
 }
