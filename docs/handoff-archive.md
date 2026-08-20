@@ -6,6 +6,44 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E99-R20 (GOV-14) — Kombinált-HEAD kör-landoló és H8-SELFDUP őr (2026-08-20)
+
+PR [#361](https://github.com/wolfcasaba/strumsight/pull/361), squash
+`5ad15b5f`, [ADR 0313](adr/0313-round-landing-automation.md). A landoló a
+merge-záron belül validálja a PR base/head/head-SHA hármasát, friss
+`origin/main`-re rebase-el, fail-closed osztályozza a konfliktusokat, a
+kombinált HEAD-en futtatja a kör gate-jét, és a meglévő
+`safe-force-push.sh` protokollt használja. Rebase után merge nélkül új
+exact-SHA CI-t kér; csak egy második, változatlan és már igazolt invokáció
+merge-el.
+
+Az első correctness review F1 BLOCKERként azonosította, hogy rebase után a
+korábbi CI már nem exact-SHA bizonyíték; F2 MAJORként azt, hogy a `--pr` nem
+volt a mért lokális branchhez kötve. A második review F3 BLOCKERként mérte,
+hogy a landoló git-módja `100644`, ezért a dokumentált közvetlen hívás
+`Permission denied` hibával állt meg. Mindhárom javítás állandó regressziós
+cellát kapott. A high-risk security review APPROVED.
+
+A kör landolása közben egy külön H8 osztály is reprodukálódott: a helyesen
+rebase-elt és új CI-t kérő csúcsba az orchesztrátor visszamerge-elte a régi,
+rebase előtti csúcsot. Patch-id méréssel kilenc nem-merge patch kétszer
+szerepelt, ezért a következő rebase saját magával adott add/add és tartalmi
+konfliktust. A recovered ág egyetlen lineáris patch-példányból épült fel a
+friss main fölött, a sérült #358 publikus történetét nem írtuk át. A
+`H8-SELFDUP` őr ezt a mintát rebase előtt blokkolja; eldobható mutációban az
+őr kikapcsolása RED, visszaállítása GREEN eredményt adott.
+
+Izolált Sol-review: scope-audit OK (6 útvonal, 2 generated/ignored),
+round-gate 6/6 zöld, tooling pytest 664 passed / 2 skipped / 574 subtest.
+Exact `a73493f4`: Full Gate
+[32373805059](https://github.com/wolfcasaba/strumsight/actions/runs/32373805059)
+és Router CI
+[32373785655](https://github.com/wolfcasaba/strumsight/actions/runs/32373785655)
+success. A landoló a közben mozduló main miatt egyszer rebase-elt, a
+kombinált gate után safe-pusholt, új CI-t kért, majd a változatlan második
+invokáció távolról sikeresen merge-elte a PR-t. A friss, squash-merge-elt
+`main`-en a post-merge round-gate mind a 6 lépése zöld.
+
 ## ✅ E08-R10 — Streak V2 domain és read-only legacy migráció (2026-08-20)
 
 PR [#362](https://github.com/wolfcasaba/strumsight/pull/362), squash
