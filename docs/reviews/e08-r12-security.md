@@ -59,3 +59,18 @@ presentation-import célzottan pirosra vitte a réteghatár-őrt, miközben a
 shipping Flutter-importok zöldek maradtak. A tiltott broken-title mutáció az
 A1 copy-őrt célzottan pirosra vitte. Restore után mindkét célzott teszt zöld,
 így a high-risk product/security verdikt változatlanul **APPROVED**.
+
+## H8 protocol-heal utáni végső security re-review — 2026-08-20
+
+Az exact `b084cf1d` kombinált HEAD tartalmazza a H8 protocol-healt és az
+aktuális `origin/main @ c69653d1` csúcsot. Friss izolált klónban a scope-audit
+0 sértést, a teljes kör-gate 7/7 zöld eredményt adott, a secret scan 3090
+fájlon 0 leletet talált. A caller-fed production diff változatlan: nincs
+provider, repository, route, hálózat, clock, storage, reward-owner vagy új
+lifecycle-erőforrás.
+
+A közvetlen `package:shared_preferences/` presentation-import a dedikált
+architecture dependency cellát pirosra vitte; a tiltott broken-title mutáció
+az A1 copy-őrt, a fix 80 px kártyamagasság az A7 a11y cellát vitte pirosra.
+Restore után a célzott őrök zöldek, a review-klón tiszta. A high-risk verdikt
+változatlanul **APPROVED**, nyitott security/product-boundary lelet nincs.

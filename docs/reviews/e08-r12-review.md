@@ -85,3 +85,22 @@ közvetlen storage-határon pirosra vitte; a `You lost your streak!` forrás-cop
 az A1 cellát a felkiáltójel/tiltott nyelv miatt pirosra vitte. Mindkét
 mutáció visszaállítása után a célzott tesztek zöldek, a review-klón tiszta.
 Nyitott BLOCKER/MAJOR/MINOR nincs; verdikt változatlanul **APPROVED**.
+
+## H8 protocol-heal utáni végső re-review — 2026-08-20
+
+A branch a tényleges `origin/main @ c69653d1` csúcsot konfliktusmentes normal
+merge-gel építette be (`b084cf1d`). Friss izolált klón:
+`/tmp/review-e08-r12-current-AQ3PHH/repo`. A scope-audit 12 módosított
+útvonalat, 2 generated/ignored review-jelentést és 0 sértést adott. A teljes
+brief szerinti kör-gate 7/7 zöld: format, analyze, 21 V2 teszt, 20 legacy
+streak teszt, architecture, secrets és l10n.
+
+A végső mutációs auditban fix 80 px kártyamagasság 256–320 px overflow-val
+pirosra vitte az A7 cellát; közvetlen `package:shared_preferences/` import a
+dedikált `test/core/architecture_dependency_test.dart` réteghatár-cellát
+pirosra vitte; `You lost your streak!` angol broken cím az A1 copy-őrt
+pirosra vitte. A `tool/check_architecture.dart` általános őr nem méri ezt a
+presentation-storage határt, ezért a bizonyíték forrása helyesen a teljes
+CI-suite-ban is futó dedikált architecture teszt. Restore után az A1 célcella
+és a 25 cellás architecture suite zöld, a klón tiszta. A verdikt továbbra is
+**APPROVED**, nyitott lelet nincs.
