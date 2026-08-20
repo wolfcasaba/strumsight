@@ -1,8 +1,11 @@
 # HEAL E08-R12/H3 — Correctness review
 
-PR: [#369](https://github.com/wolfcasaba/strumsight/pull/369)  
-Base: `b0979855` · reviewed head: `af947c53`  
-Reviewer environment: isolated clone `/tmp/review-heal-e08-r12-MooQwl/repo`  
+PR: [#369](https://github.com/wolfcasaba/strumsight/pull/369)
+
+Base: `b0979855` · reviewed head: `af947c53`
+
+Reviewer environment: isolated clone `/tmp/review-heal-e08-r12-MooQwl/repo`
+
 Verdict: **APPROVED**
 
 ## Summary
