@@ -6,7 +6,7 @@
 - **Előfeltétel:** nincs technikai előfeltétel. Az E99-R17 emberi gate-holdon
   van; a jelen kör a saját `tools/round-slots.py`-módosításával vezeti be a
   public-barrel generált-útvonal kezelését.
-- **Brief szerzője:** Claude (Opus 5, orchesztrátor) · **ADR:** [`0307`](../adr/0307-pipeline-throughput-program-v2.md) **§5**
+- **Brief szerzője:** Claude (Opus 5, orchesztrátor) · **ADR:** [`0307`](../adr/0307-pipeline-throughput-program-v2.md) **§5**, [`0339`](../adr/0339-generated-public-barrel-registry.md)
 
 ```ai-router
 schema_version = 1
@@ -23,6 +23,7 @@ allowed_paths = [
   "test/tooling/gen_public_barrel_test.dart",
   "test/core/architecture_dependency_test.dart",
   "docs/rounds/e99-r18-gov-12-generated-public-barrels.md",
+  "docs/adr/0339-generated-public-barrel-registry.md",
 ]
 gate_tests = [
   "test/tooling/gen_public_barrel_test.dart",
@@ -329,6 +330,23 @@ még nem review-zott ágának tesztkarbantartása, a mérce
 
 Lecke: `docs/LESSONS.md` [[L345]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
 Módosítás (ADR 0112 önjavító kör, 2026-08-20).
+
+## 0.0e Pre-flight revízió — explicit generated-barrel registry ADR (2026-08-20)
+
+Az aktuális orchestrátor a kör számára lefoglalta az **ADR 0339**-et
+(`tools/round-slots.py reserve-adr --round E99-R18`). A §0.0c kód- és
+tesztbizonyítéka normatív döntést tartalmaz: csak az a feature-gyökér
+`public.dart` veszítheti el az ütközési felület státuszát, amelyhez egyszerre
+létezik fragmentum-forrás, determinisztikus generátor és frissesség-őr. A
+pilotban ez kizárólag a `practice_generator`; a blanket glob minden más,
+kézzel karbantartott feature contractját némán feloldaná.
+
+Az ADR ezt a szűk registry-szabályt rögzíti. A dokumentum felvételét az
+aktuális, explicit körutasítás engedélyezi; a `docs/adr/0339-...` út ezért a
+fenti `allowed_paths` része. A kör S8 visszakeresése most újra lefutott:
+szűkítve ADR 0176 és lessons/L129, teljes korpuszon a saját E99-R18/H8
+előzmény tért vissza; a közvetlen D4-precedens lessons/L343. Ezek nem
+engednek biztonságos blanket-glob kivételt.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
