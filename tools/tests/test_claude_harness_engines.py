@@ -16,6 +16,19 @@ helyesen megírta a `status=stopped` jelzést (H3 scope-sértés), a `claude -p`
 folyamat mégis percekig tovább futott — hat további commitot hozva létre a
 jelzés UTÁN, mielőtt ~15 perccel később magától kilépett. Lásd
 `test_a_process_that_keeps_running_after_signaling_is_killed_promptly`.
+
+Ötödik mért hibaminta (E99-R17 H6 self-heal, ADR 0112, 2026-08-20): a
+`run_wrapper` `dict(os.environ)`-ból indul, ezért ha ez a pytest-futás maga is
+egy `ROUND_ENGINE=minimax` implementer-session Bash-hívásaként fut (a
+kötelező §7 gate), a szülő session saját `ANTHROPIC_BASE_URL`/
+`ANTHROPIC_AUTH_TOKEN`/`CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`MINIMAX_API_KEY`
+exportjai változatlanul bekerülnek a szimulált alfolyamatba, és két
+`sonnet-impl` (natív, "nincs override") eset hamisan PIROSRA vált. Mérve:
+`ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic ANTHROPIC_AUTH_TOKEN=x
+CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 MINIMAX_API_KEY=x python3 -m pytest
+tools/tests/test_claude_harness_engines.py -q` → 2 failed (ugyanaz a két eset,
+amit a `mm-round.sh` saját gate-futása H6-ként jelzett). Lásd
+`test_ambient_endpoint_env_does_not_leak_into_a_subscription_mode_run`.
 """
 
 import os
@@ -24,6 +37,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 WRAPPER = ROOT / "tools" / "mm-round.sh"
@@ -104,6 +118,19 @@ class WrapperModeTest(unittest.TestCase):
             }
         )
         environment.pop("ROUND_BRIEF", None)
+        # A burkoló saját endpoint-döntésének útjából kitakarítjuk azt, amit
+        # egy ÉLŐ, ROUND_ENGINE=minimax implementer-session örökített ide
+        # (lásd a modul-docstring ötödik mért hibamintáját) — enélkül a
+        # "nincs override" asserciók a leszivárgott ambiens értéket mérnék, nem
+        # a `mm-round.sh` tényleges viselkedését. `extra_env` alább még
+        # felülírhatja, ha egy teszt szándékosan mást akar.
+        for leaking_var in (
+            "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_AUTH_TOKEN",
+            "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+            "MINIMAX_API_KEY",
+        ):
+            environment.pop(leaking_var, None)
         if extra_env:
             environment.update(extra_env)
 
@@ -124,6 +151,26 @@ class WrapperModeTest(unittest.TestCase):
         self.assertIn("BASE_URL=<nincs>", captured)
         self.assertNotIn("AUTH_TOKEN=<van>", captured)
         self.assertIn("--model claude-sonnet-5", captured)
+
+    def test_ambient_endpoint_env_does_not_leak_into_a_subscription_mode_run(self) -> None:
+        """MÉRT hibaminta (E99-R17 H6 self-heal, 2026-08-20) — lásd a modul-
+        docstring ötödik pontját. Ha ez a teszt maga is egy ROUND_ENGINE=
+        minimax implementer-session Bash-hívásaként fut, az `os.environ`
+        MÁR tartalmazza a szülő session saját MiniMax-endpoint exportjait;
+        itt szándékosan ugyanazokat az ÉRTÉKEKET szimuláljuk (a `mm-round.sh`
+        valódi MiniMax base-url konstansát), hogy a reprodukció a futtató
+        környezettől függetlenül, determinisztikusan lefusson."""
+        leaked_ambient_env = {
+            "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
+            "ANTHROPIC_AUTH_TOKEN": "leaked-ambient-token",
+            "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "1000000",
+            "MINIMAX_API_KEY": "leaked-ambient-key",
+        }
+        with patch.dict(os.environ, leaked_ambient_env):
+            captured = self.run_wrapper("sonnet-impl", extra_env={"MINIMAX_API_KEY": ""})
+        self.assertIn("BASE_URL=<nincs>", captured)
+        self.assertNotIn("AUTH_TOKEN=<van>", captured)
+        self.assertIn("COMPACT=<nincs>", captured)
 
     def test_the_effort_level_comes_from_the_registry(self) -> None:
         captured = self.run_wrapper("sonnet-impl", extra_env={"MINIMAX_API_KEY": ""})
