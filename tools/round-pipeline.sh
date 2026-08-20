@@ -303,6 +303,29 @@ slot_lock_path() {
   if [ "${1:-1}" -eq 1 ]; then printf '%s\n' "$lock_file"; else printf '%s.%s\n' "$lock_file" "$1"; fi
 }
 
+# D1 (E99-R19) — main-szinkron döntés a munkafán. Kilépés nélkül fut
+# (a hívó szál a `3. Előfeltételek` szakaszban van, a `die`-val ellenőrzött
+# feltételek már átmentek): azonos HEAD → noop; HEAD az origin/main őse →
+# `git merge --ff-only` + napló; valódi divergencia → `die` (emberi döntés).
+# A részletek és a mért indoklás a hívás helyénél.
+main_sync_strategy() {
+  local local_head_sha remote_main_sha old_head
+  local_head_sha=$(git rev-parse HEAD)
+  remote_main_sha=$(git rev-parse origin/main)
+  if [ "$local_head_sha" = "$remote_main_sha" ]; then
+    return 0
+  fi
+  if git merge-base --is-ancestor "$local_head_sha" "$remote_main_sha"; then
+    old_head="$local_head_sha"
+    if git merge --ff-only "$remote_main_sha" 2>/dev/null; then
+      log "main-szinkron: ${old_head:0:7} → $(git rev-parse --short HEAD) (ff-merge)"
+      return 0
+    fi
+    die "a lokális main ff-merge-e nem sikerült ($old_head → $remote_main_sha) — emberi döntés kell"
+  fi
+  die "a lokális main eltér az origin/main-től (valódi divergencia: $local_head_sha ↛ $remote_main_sha) — emberi döntés kell"
+}
+
 inflight_add() {   # $1=kör $2=brief
   [ -f "$repo_root/tools/round-slots.py" ] || return 0
   python3 "$repo_root/tools/round-slots.py" --repo "$repo_root" --inflight "$inflight_dir" \
@@ -1723,6 +1746,55 @@ case "${1:-}" in
     terra_clear_stale_halt_for "${2:-}"
     exit 0
     ;;
+  --main-sync-strategy)    # $2=munkafa-útvonal (cwd a teszt-repo) → D1 teszthorog: kiírja, hogy a driver ezen a fán melyik ágat venné (noop | ff-merge | halt:<oka>), exit 0/1/2
+    (
+      cd "${2:-$repo_root}" || exit 50
+      local_head_sha=$(git rev-parse HEAD 2>/dev/null) || { echo "halt:nincs-repo"; exit 1; }
+      remote_main_sha=$(git rev-parse origin/main 2>/dev/null) || { echo "halt:nincs-origin"; exit 1; }
+      if [ "$local_head_sha" = "$remote_main_sha" ]; then
+        echo "noop:${local_head_sha:0:7}"
+        exit 0
+      fi
+      if git merge-base --is-ancestor "$local_head_sha" "$remote_main_sha" 2>/dev/null; then
+        echo "ff-merge:${local_head_sha:0:7}->${remote_main_sha:0:7}"
+        exit 0
+      fi
+      echo "halt:divergencia:${local_head_sha:0:7}↛${remote_main_sha:0:7}"
+      exit 1
+    )
+    rc=$?; exit "$rc"
+    ;;
+  --main-sync-ff-merge)    # $2=munkafa-útvonal → D1 teszthorog: valóban végrehajtja a ff-merge-et (a fenti stratégia csak kiírja), exit 0 siker / 1 már azonos / 2 divergencia
+    (
+      cd "${2:-$repo_root}" || exit 50
+      local_head_sha=$(git rev-parse HEAD 2>/dev/null) || exit 50
+      remote_main_sha=$(git rev-parse origin/main 2>/dev/null) || exit 50
+      if [ "$local_head_sha" = "$remote_main_sha" ]; then
+        echo "noop"
+        exit 1
+      fi
+      if git merge-base --is-ancestor "$local_head_sha" "$remote_main_sha" 2>/dev/null; then
+        git merge --ff-only "$remote_main_sha" 2>&1
+        exit 0
+      fi
+      echo "divergencia"
+      exit 2
+    )
+    rc=$?; exit "$rc"
+    ;;
+  --pending-done-failsafe-required)    # $2=sor-fájl-útvonal $3=kör → D2 teszthorog: a `sed` parancs hatására a sor piszkos lesz-e (a fail-safe `chore(pipeline)` commit szükséges), exit 0 ha kell / 1 ha nem
+    queue="${2:-}"
+    round="${3:-}"
+    [ -n "$queue" ] && [ -n "$round" ] || exit 3
+    tmp=$(mktemp)
+    sed -e "s|^\($round\t.*\t\)pending$|\1done|" "$queue" > "$tmp"
+    if ! diff -q "$queue" "$tmp" >/dev/null 2>&1; then
+      rm -f "$tmp"
+      exit 0
+    fi
+    rm -f "$tmp"
+    exit 1
+    ;;
   --effective-slots)    # $2=kért slotszám → a RAM-fedezet szerinti tényleges (ADR 0171 §1)
     effective_slots "${2:-$slots}"
     exit 0
@@ -1852,9 +1924,24 @@ fi
 if [ -n "$(git status --porcelain)" ]; then
   die "piszkos munkafa — a lánc nem indul ismeretlen lokális változás fölé"
 fi
-if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
-  die "a lokális main eltér az origin/main-től — előbb rendezd (fetch + ff-merge)"
-fi
+# D1 (E99-R19): a main-szinkron három, ma még összemosott esetre bontása —
+# (a) azonos, (b) kizárólag LEMARADÁS (origin/main szigorúan előre van, a
+# lokális HEAD az őse), (c) VALÓDI DIVERGENCIA (lokális commit, ami nincs
+# az originen). A (b) a mért többség (2026-08-11..08-18 között 9 firing, egy
+# 18 perces epizódban 4 egymás után) — a lánc olyasmire várt, amit maga is
+# el tud végezni `git merge --ff-only`-val. A fa fenti piszkos-ellenőrzése
+# (`git status --porcelain` üres) garantálja, hogy az ff-merge nem hoz
+# konfliktust; a main-ágon való állás a fenti `current_branch=main` feltétel
+# alatt biztosított. A piszkos fa és a nem-main ág esete a fenti `die`
+# hívásokkal változatlanul megáll — az „előbb rendezd" üzenet csak akkor
+# jelenik meg, ha VALÓDI divergencia van.
+main_sync_strategy   # a `$local_head_sha` / `$remote_main_sha` változókat a
+                    # függvény tölti ki, és `git merge --ff-only`-t is az
+                    # indít (a chain.log-ba log-ozza a régi→új HEAD-et)
+                    # vagy `die`-val megáll divergencia esetén. Külön
+                    # függvény, hogy a tesztelhetőség ne függjön a driver
+                    # teljes, külső függőségekkel terhelt főágától —
+                    # l. tools/tests/test_chain_hygiene.py.
 
 # Párhuzamos autonóm driver ezen a boxon MÉRT jelenség (memória, E02-R01):
 # nyitott PR vagy futó workflow = valaki más visz egy kört. A SAJÁT, futó
@@ -2315,11 +2402,17 @@ case "$outcome" in
     log "$round MERGE-ELVE — $summary"
     notify "✅ $round merge-elve" "$summary"
     git fetch -q origin main && git reset -q --hard origin/main
-    # A sor-fájl frissítése SAJÁT commitban, hogy a kör diffjét ne szennyezze.
+    # D2 fail-safe (E99-R19): az orchesztrátor a záró `docs(handoff…)`
+    # commitba teszi a sor `pending → done` átírást (lásd
+    # pipeline-orchestrator-prompt.md §5). Ha a fetch már behozza azt a
+    # commitot, a `sed` no-op, nincs `chore(pipeline)` commit és nincs extra
+    # push/CI. Ha viszont a sor a fetch után is `pending` maradt (az
+    # orchesztrátor kihagyta a lépést), EZ az ág pótolja — az elveszett
+    # `done` státusz mért hibaosztály, a fail-safe zártan tartja.
     sed -i "s|^\($round\t.*\t\)pending$|\1done|" "$queue_file"
     if [ -n "$(git status --porcelain "$queue_file")" ]; then
       git add "$queue_file"
-      git commit -q -m "chore(pipeline): $round done (ADR 0087)"
+      git commit -q -m "chore(pipeline): $round done — fail-safe (ADR 0087, D2 E99-R19)"
       git push -q origin main || log "FIGYELEM: a sor-fájl push-a nem ment át"
     fi
     inflight_remove "$round"
