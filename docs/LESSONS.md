@@ -13732,3 +13732,138 @@ az összes korábbi, független hibautat. Egy precondition-guard csak akkor
 bizonyított, ha a tesztben pontosan az az utolsó különbség, amely a hibát
 okozza. Bizonyíték: `tools/tests/test_chain_hygiene.py`, review F1,
 PR #354 (`bf497480`).
+
+## L354 — Egy saját, a megosztott `JsonCollectionStore` elé illesztett előzetes validáló ciklus semlegesíti annak rekordonkénti hibatűrését — egyetlen hibás elem a teljes listát „sérültnek" jelenti (E08-R08, review F1, 2026-08-20)
+
+**Mit mértem.** A `LocalGamificationRepository.readInbox()` a nyers
+postaláda-listán egy SAJÁT `for` ciklusban előre dekódolt minden elemet
+(`GamificationInboxItem.fromJson`), és ha BÁRMELYIK dobott, a teljes
+metódus `GamificationRead.corrupt()`-ot adott vissza — a ténylegesen
+felhasznált `JsonCollectionStore<T>.read()` (ami rekordonként izolál, és a
+jó elemeket megtartja) ebben az ágban SOSEM futott le. Eldobható
+próbateszttel mérve: egy 3 elemű envelope (2 érvényes + 1, hiányzó `id`
+miatt érvénytelen KÖZÉPSŐ elem) `readInbox()`-ra `status=corrupt,
+value=null`-t adott, holott a `_inboxStore.read()` közvetlen hívása a 2
+érvényes bejegyzést visszaadta volna. Ez szó szerint az ellenkezője [ADR
+0054](../adr/0054-versioned-user-content-documents.md) Következmények
+szakasza garanciájának ("Corruption now costs one record, not one
+feature's entire content") — annak ellenére, hogy a pre-flight brief
+(§0.0, ADR 0344 Döntés 6) kifejezetten a `JsonCollectionStore`
+újrafelhasználását javasolta PONTOSAN emiatt a garancia miatt, és a
+gate/tesztek mind zöldek voltak (a suite nem tartalmazott
+részleges-sérülés cellát). A javítás egysoros törlés volt: a `body is!
+List` ellenőrzés után közvetlenül `_inboxStore.read()`-et kell visszaadni.
+
+**Hogyan alkalmazd.** Ha egy repository egy megosztott, rekordonként
+hibatűrő wrappert (`JsonCollectionStore`, vagy bármely hasonló „egy rossz
+elem csak azt az elemet kösse" absztrakció) használ, TILOS elé egy SAJÁT
+előzetes „dekódolható-e minden elem" kaput tenni — az egy csendes
+all-or-nothing regresszió, amit a zöld gate nem fog meg, csak egy
+kifejezetten a RÉSZLEGES sérülésre irányuló próba (nem csak „minden elem
+jó" vagy „minden elem rossz" szélsőérték). Review-ban: listás/kollekciós
+dokumentumnál a „sérült adat" acceptance cellához mindig írj egy
+vegyes-érvényességű (néhány jó + néhány rossz elem) próbát is, ne csak
+tiszta vagy teljesen sérült bemenetet.
+
+## L355 — Egy másik, a MEGOSZTOTT munkafán futó pipeline-session `git reset`-je + commitja átmenetileg felülírhatja a helyi branch-mutatót — a reflog azonnal megkülönbözteti a valódi adatvesztést a pusztán lokális ütközéstől (E08-R08, 2026-08-20)
+
+**Mit mértem.** A merge előtti utolsó `git log --graph` a megosztott
+`/home/ubuntu/music-theory` fán a `codex/e08-r08-…` branch-nevem alatt EGY
+IDEGEN commitot mutatott (`chore(pipeline): E99-R19 done`, szerző „Ralph
+(autonomous)"), a saját merge-commitom (`f58d1cbd`) helyett. A
+`git reflog` azonnal megmutatta a pontos mechanizmust:
+`HEAD@{1}: reset: moving to origin/main` majd `HEAD@{0}: commit: …E99-R19
+done…` — egy PÁRHUZAMOSAN futó E99-R19 pipeline-session saját záró
+rituáléja (feltehetően egy `git checkout main && git reset --hard
+origin/main`-szerű lépéssor) a MEGOSZTOTT fán a branch-mutatómat találta
+kicsekkolva, és arra futtatta a resetjét+commitját. `git ls-remote` az
+`origin`-on ellenőrizve a saját branch-em érintetlenül a helyes SHA-n állt
+— a probléma KIZÁRÓLAG a lokális working tree branch-mutatójára
+korlátozódott, az idegen commit sosem lett push-olva sehova (a szerző
+saját, KÉSŐBBI HANDOFF-close commitja `main`-en igazolta, hogy a másik
+session zavartalanul folytatta és lezárta a saját körét).
+
+**Hogyan alkalmazd.** Ütköző branch-állapot észlelésekor NE `git reset
+--hard`-dal "javítsd" a megosztott fát (ez destruktív parancs explicit
+user-engedély nélkül tilos, ÉS kockáztatja a másik, esetleg még futó
+session munkáját) — először `git ls-remote`-tal ellenőrizd, hogy a SAJÁT,
+már pusholt munkád érintetlen-e (ha igen, nincs valódi adatvesztés), majd
+minden hátralévő git-műveletet (merge, PR, post-merge gate) egy FRISS,
+izolált klónból végezz, a megosztott fát érintetlenül hagyva a másik
+session-nek. A `git reflog` a leggyorsabb módja annak eldöntésére, hogy
+„a munkám elveszett" vagy „csak a lokális mutató ütközött" — az első
+esetben a HEAD-nél nincs `reset:` bejegyzés idegen commit előtt, a
+másodikban van.
+
+## L356 — Az L341 négyes leszivárgás-pop-listája nem volt teljes: a `codex-round.sh`/`engine-profile.sh env <motor>` EGY SZINTTEL FELJEBBI exportja (`ENGINE_MODEL` és társai) ugyanabba a WrapperModeTest-be szivárog, bármelyik motorral (E99-R20 H6 self-heal, ADR 0112, 2026-08-20)
+
+**Mit mértünk.** Az E99-R20 (GOV-14, round-landolás-automatizálás) `terra`
+implementere `blocked`-ot jelzett: a kötelező §7 gate
+(`python3 -m pytest tools/tests -q`) a
+`WrapperModeTest.test_the_legacy_call_without_round_engine_stays_minimax`
+cellán bukott, KÉTSZER egymás után ugyanazzal az eredménnyel (`1 failed, 656
+passed, 2 skipped, 571 subtests`, mérve `/home/ubuntu/ss-terra-e99-r20`-ban,
+head `21224fa9`). A `.codex-round-status` összegzése („ROUND_ENGINE=terra
+környezeti szivárgás miatt 1 pre-existing wrapper-teszt piros") a
+MECHANIZMUST helyesen nevezte meg, de a self-heal saját, első reprodukciós
+kísérlete — a HALTED fájl szó szerinti parancsa, `ROUND_ENGINE=terra
+python3 -m pytest tools/tests -q`, egy FRISS shellben — **zöld** lett (657
+passed, 0 failed). Csak a nyers Terra-napló (`/tmp/codex-e99-r20.log`,
+~24000. sor) `AssertionError`-ja adta a tényleges gyökéroket: a `--model
+MiniMax-M3` hiányzott a rögzített kimenetből, holott a `BASE_URL`/
+`AUTH_TOKEN`/`CONFIG_DIR`/`COMPACT` mezők helyesen a MiniMax-ágat mutatták.
+
+**Miért.** Az L341 (E99-R17 H6, UGYANAZON a napon) a `WrapperModeTest.
+run_wrapper()`-t már megvédte a `mm-round.sh` SAJÁT `external_endpoint`
+launch_env négyesétől (`ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`MINIMAX_API_KEY`). Van viszont egy
+MÁSODIK, EGY SZINTTEL FELJEBBI export-forrás: `tools/codex-round.sh` (és a
+claude-harness oldali `tools/mm-round.sh` saját, explicit `ROUND_ENGINE` ága)
+a `tools/engine-profile.sh env <motor>` TELJES kimenetét exportálja a HÍVÓ
+session sajátjaként, mielőtt a tényleges implementer-motort elindítaná —
+`terra`-ra mérve (`bash tools/engine-profile.sh env terra`):
+`CODEX_HOME=/home/ubuntu/.codex-terra ENGINE_MODEL=gpt-5.6-terra
+ENGINE_STALL_MINUTES=12 ENGINE_ROUND_TIMEOUT=3600 ENGINE_CONTEXT_WINDOW=400000
+ENGINE_MAX_OUTPUT=64000 ENGINE_REASONING=-`. Ez az export a `codex exec`
+folyamat ÉS minden azutáni Bash-hívás (a §7 gate is!) környezetében megmarad.
+A `WrapperModeTest.run_wrapper("", ...)` "nincs ROUND_ENGINE" esetében a
+`mm-round.sh` SAJÁT `if [ -n "$round_engine" ]` ága helyesen NEM fut le
+(tehát NEM ír felül semmit), ezért a `model=${MM_MODEL:-${ENGINE_MODEL:-
+MiniMax-M3[1m]}}` (mm-round.sh:82) a leszivárgott `ENGINE_MODEL=gpt-5.6-terra`
+értéket adta a történeti alapértelmezés helyett — a `--model gpt-5.6-terra`
+nem illeszkedik a `claude-*|sonnet-*|opus-*|haiku-*` mintára, ezért a
+MiniMax-ág (helyes BASE_URL/CONFIG_DIR/COMPACT) fut le, de HIBÁS modellnévvel.
+A mechanizmus TETSZŐLEGES motorral kiváltható, nem csak `terra`-val — a
+self-heal saját reprodukciója közben a `CLAUDE_CONFIG_DIR` is mérhetően
+leszivárgott a SAJÁT (self-heal) Claude-session ambiens környezetéből
+(`/home/ubuntu/.claude`), ami önmagában igazolta, hogy egy négyelemű
+pop-lista szerkezetileg nem elég egy `dict(os.environ)`-ból induló
+szimulátor-tesztnél.
+
+**Hogyan alkalmazd.** A `run_wrapper()` `leaking_var` listáját a MEGLÉVŐ
+négy MELLÉ (nem helyette) kibővítettük a `tools/engine-profile.sh env`
+TELJES kulcskészletével: `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `ENGINE_MODEL`,
+`ENGINE_STALL_MINUTES`, `ENGINE_ROUND_TIMEOUT`, `ENGINE_CONTEXT_WINDOW`,
+`ENGINE_MAX_OUTPUT`, `ENGINE_REASONING`. Regressziós teszt (RED a bővítés
+nélkül, GREEN vele, mindkét irányban mérve az izolált heal-worktree-ben,
+[PR #356](https://github.com/wolfcasaba/strumsight/pull/356), squash
+`a0bf0d51`, Router CI [32354341693](https://github.com/wolfcasaba/strumsight/actions/runs/32354341693)
+success): `test_ambient_engine_profile_env_does_not_leak_into_the_legacy_run`
+— a VALÓDI mért `terra`-export hét sorát szimulálja
+`unittest.mock.patch.dict`-tel, és megköveteli, hogy a `ROUND_ENGINE=""`
+hívás a történeti MiniMax-alapértelmezésnél maradjon. Teljes `tools/tests`
+gate az izolált heal-worktree-ben: 650 passed, 1 skipped, 570 subtests, 0
+failed; a merge-elt `main`-en egy FÜGGETLEN, friss klónból a célzott fájl
+újra mérve: 21 passed. Általánosítható elv: egy `dict(os.environ)`-ból induló
+burkoló-szimulátor tesztnél egy KORÁBBAN mért szivárgás-listát NEM szabad
+lezártnak tekinteni — minden ÚJABB export-forrás (itt: egy teljesen másik
+script, egy szinttel feljebb, a hívó session szintjén) saját, önálló
+szivárgási felület, amíg a teszt maga nem tér át egy VALÓDI, teljes
+környezet-izolációra (pl. explicit allowlist `dict(os.environ)` helyett —
+ez a self-heal ezt a nagyobb refaktort NEM végezte el, mert a mért
+gyökérokhoz képest aránytalan lett volna). Mellékesen mérve: az
+`engine-profile.sh env <motor>` diagnosztikai célú interaktív futtatása a
+kulcsot birtokló motoroknál (`minimax`, a Kilo-alapú motorok) a NYERS
+API-kulcsot írja stdoutra — self-heal/debug munkamenetben csak
+átirányítva vagy a kulcs nélküli motorokra (`terra`/`codex`/`sonnet-impl`)
+szabad hívni, hogy a session-átiratban ne maradjon élő kulcs.
