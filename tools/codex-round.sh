@@ -68,6 +68,21 @@ rm -f "$signal"
 # javítani).
 bash "$script_dir/fix-workspace-origin.sh" "$workdir" >&2 || true
 
+# Self-heal E08-R03/H6 (docs/LESSONS.md L339): a gitignore-olt generált
+# Flutter/l10n előfeltétel (lib/l10n/app_localizations*.dart) klónonként és
+# worktree-nkénti — egy `git worktree add`-dal nyitott (vagy egy második
+# klónnal létrehozott) $workdir SOSEM örökli egy testvér-munkapéldány már
+# lefuttatott `pub get`/`gen-l10n` kimenetét. A SKILL.md §3 ezt eddig csak az
+# orchestrátornak írta elő prózában (mérve: L222/E06-R07, L228/E06-R10,
+# L230/E06-R11) — ez a NEGYEDIK mérés, és a workflow-szövegbe ágyazott lépés
+# önmagában nem tartott, mert a tényleges dispatch-cél eltért attól, amit az
+# orchesztrátor előkészített. A `$workdir` SAJÁT másolatát hívjuk (nem a
+# `$script_dir`-ét, ami a HÍVÓ saját fája — L232/E06-R13), argumentum
+# nélkül, mert a script a repo_root-ot a BASH_SOURCE-ból számolja. Fail-open:
+# ha a workdir nem Flutter-fa vagy a script hiányzik, a `flutter analyze`
+# saját, diagnosztizálható hibája a mérce, nem ez az előkészítő lépés.
+bash "$workdir/tools/prepare-flutter-generated.sh" >&2 || true
+
 # A scope-audit (ADR 0138) BÁZISA: a munkapéldány HEAD-je az indítás
 # pillanatában. Nem az `origin/main`, mert az orchestrátor pre-flight commitja
 # (kör-ADR + brief-revízió) jogosan nyúl az allowed_paths-on kívülre — innen

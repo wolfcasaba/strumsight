@@ -13,7 +13,11 @@ allowed_paths = [
   "tools/halt-ledger.py",
   "tools/tests/test_halt_ledger.py",
   "docs/execution/pipeline-orchestrator-prompt.md",
-  ".github/workflows/router-ci.yml",
+  # ".github/workflows/router-ci.yml" — TÁRGYTALAN (mérve 2026-08-19).
+  # A kör CSAK `tools/` alá hoz létre fájlt, a workflow `paths:` blokkja
+  # pedig már `tools/**` családi globot használ (PR #324), tehát a CI
+  # lefedettség automatikus. A védett fájl ezért kikerült a listáról:
+  # így a mérce-őr pre-flightja nem teszi hold-ra a kört.
   "docs/rounds/e99-r22-gov-16-halt-guard-ledger.md",
 ]
 gate_tests = [

@@ -12944,3 +12944,333 @@ tiltás idézésétől, így false positive-ot adhat.
 tényleges napló-hívást és futtasd újra a gate-et izolált reviewer-klónban. A
 valódi csonkoló/láncoló hívás továbbra is blokkoló; pusztán a tiltás szöveges
 említése nem az.
+
+## L333 — Egy brief-be előre írt ADR-szám a brief-írás és a kör-indítás között elavulhat, akkor is, ha nincs párhuzamos verseny (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 briefje (írva 2026-08-18) `ADR 0300`-at „a szám
+FOGLALT" állítással jelölte előre kiosztottnak. A pre-flightban
+`tools/round-slots.py reserve-adr --round E08-R02` lefuttatása ELŐTT mérve:
+`.pipeline/inflight/adr/0300` már létezett, `round=E07-R15` tartalommal
+(foglalva 2026-08-16, tehát a brief ÍRÁSA előtt), és a `docs/adr/`
+könyvtárban NINCS `0300-*.md` — a számot egy korábbi kör foglalta, sosem
+fogyasztotta el. A `reserve_adr()` csak `max(used)+1`-et ad ki, egy
+alacsonyabb, korábban foglalt számot sosem told fel újra
+(`tools/round-slots.py:201-229`) — a tényleges friss szám `0329` lett.
+
+**Miért.** Ez NEM a mért 0139-duplikátum-hibaosztály (két PÁRHUZAMOS munka
+ugyanazt a számot foglalja le egyszerre) — itt egyetlen, szekvenciális
+foglalás-sorozat volt, csak a brief egy KORÁBBI, más körnek szánt (és soha
+fel nem használt) foglalást idézett, mintha az neki szólna. A
+brief-írás és a kör tényleges indítása között eltelt idő (itt egy nap) alatt
+a foglalási ns namespace tovább haladt.
+
+**Hogyan alkalmazd.** A §1.0.1 szabály („ADR-számot a foglalótól kérj, ne
+`ls`-sel") ETTŐL a hibaosztálytól is véd, ha KÖVETIK: sosem szabad egy brief
+„a szám FOGLALT" állítását bemondásra elfogadni, akkor sem, ha nincs
+látható párhuzamos munka — a `reserve-adr` hívás minden pre-flightban
+kötelező, függetlenül attól, hogy a brief mennyire magabiztosan idéz egy
+számot.
+
+## L334 — A legacy (nem-`auto`) Codex-motor commitol, de nem feltétlenül pushol — az orchesztrátornak a `done` jelzés után ellenőriznie/pusholnia kell, mielőtt review-t indít (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 implementer (`codex` motor, `tools/codex-round.sh`)
+`.codex-round-status`-a `status=done`, `head=95ddec13`-at jelzett. A review
+ELSŐ lépéseként friss klónozás az origin branch-ről ekkor `af86bc59`-at (a
+Claude pre-flight commitját) adta vissza — az implementer commitja
+LOKÁLISAN megvolt a munkapéldányban, de sosem lett pusholva. Az
+orchesztrátornak kellett kézzel pusholnia (`git push origin
+codex/e08-r02-canonical-activity-events:codex/e08-r02-canonical-activity-events`,
+tiszta fast-forward), mielőtt bármilyen review érvényes lehetett volna.
+
+**Miért.** AGENTS.md §15.2 a Codex-szerepet commit-kötelezettséggel írja le,
+de explicit push-kötelezettséget NEM mond ki. A `tools/codex-round.sh` saját
+`fix-workspace-origin.sh` lépése ezt implicit FELTÉTELEZI („hogy egy
+implementer-push ne utasuljon el"), de nem KÉNYSZERÍTI ki és nem is
+ellenőrzi utólag, hogy a push valóban megtörtént-e. Az `auto` router-motorra
+ezzel szemben AGENTS §15.6 pont 7 explicit kimondja: „a modellek nem
+commitolnak" — a legacy Codex-útvonalra nincs ilyen szimmetrikus, explicit
+push-szabály.
+
+**Hogyan alkalmazd.** A `done` jelzés feldolgozásakor a `head=` mezőt ne csak
+a `.codex-round-status`-ból olvasd ki, hanem MÉRD MEG: `git ls-remote origin
+refs/heads/<kör-branch>` (vagy egy friss klón) egyezzen a jelzett
+`head`-del. Ha nem egyezik, pushold a munkapéldányból ELŐSZÖR, és csak
+UTÁNA indíts review-t vagy klónozz review-célra — lásd L335, ami pontosan
+ennek elmulasztásából eredő másodlagos hibát írja le.
+
+## L335 — A `risk=high` security review dispatch-elése az implementer push-jának megerősítése ELŐTT hamis BLOCKER-t termel egy elavult snapshot miatt (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02 orchesztrátora a `security-reviewer` agentet
+(`isolation: "worktree"`) PÁRHUZAMOSAN indította a saját izolált `/tmp`
+klónjának létrehozásával — abban a pillanatban, amikor az implementer
+commitja (lásd L334) MÉG NEM volt pusholva. A security agent worktree-je a
+megosztott hub-ból ágazott, aminek a `codex/e08-r02-...` branch-referenciája
+ekkor `af86bc59`-ra mutatott (a valós push csak percekkel később történt meg
+— részben azért is, mert a lokális hub SAJÁT branch-mutatója egy `fetch` UTÁN
+sem frissül automatikusan, csak a remote-tracking ág, lásd [[L331]]). A
+security agent ezt a valós, de MÁR ELAVULT állapotot mérte, és korrekt
+módszertannal, de téves alapon **BLOCKER**-t jelentett: „az implementáció
+nincs az ágon". Az újrafuttatás — MOST MÁR a push után, a GitHub origin-ról
+frissen klónozva — **PASS** verdiktet adott.
+
+**Miért.** A worktree-izolációt (vagy a megosztott hub-ból való klónozást)
+igénylő agentek a DISPATCH pillanatában látják a branch állapotát, nem a
+dispatch-et KÉRŐ szándékot. Ha az orchesztrátor a review-t azonnal, az
+implementer `done` jelzése UTÁN, de a push MEGERŐSÍTÉSE (L334) ELŐTT
+indítja, egy időzítési rés nyílik, amiben a review tárgya még nem létezik a
+review által elért forrásból.
+
+**Hogyan alkalmazd.** A `risk=high` security review dispatch-elése ELŐTT
+mérd meg (ne csak feltételezd), hogy a kör-branch a jelzett `head`-en áll az
+origin-on (L334 lépése után). Ha a review mégis „hiányzó kód" BLOCKER-t ad,
+az ELSŐ diagnózis ne a kód valódi hiánya legyen, hanem a review saját
+forrás-frissessége — verifikáld a review saját `git log`/`rev-parse`
+kimenetét, mielőtt bármit elfogadsz vagy elutasítasz alapján.
+
+## L336 — A CI-dispatch UTÁNI, csak `docs/reviews/**`-et érintő review-commit nem vált ki friss Router CI-futást — a merge-előtti exact-SHA ellenőrzés ezt a drift-et is kifoghatja (E08-R02, 2026-08-19)
+
+**Mit mértünk.** Az E08-R02-ben a `full-gate.yml` dispatch és a Router CI
+mindkettő zöld volt egy korábbi SHA-n (`3b63029d`), de az orchesztrátor UTÁNA
+még egy `docs/rounds/e08-r02-...md` §11-et kitöltő commitot tett a branch-re
+(`4b46ef44`) — ez `docs/rounds/**`-et érint, tehát Router CI-t triggerel, DE
+ha a köztes commit KIZÁRÓLAG `docs/reviews/**`-et érintette volna (ahogy az
+egyik közbülső commit ténylegesen tette), a Router CI `on.push.paths`
+szűrője azt a push-ot át sem eresztette volna — a Router CI utolsó ismert
+futása egy KORÁBBI SHA-n maradt volna rögzítve, miközben a tényleges merge
+SHA már túllépett rajta.
+
+**Miért.** A Router CI `on.push.paths`-alapú trigger csak az ADOTT push
+által érintett fájlokat nézi, nem a branch teljes, KUMULATÍV állapotát —
+egy több-commitos záró sorozat (correctness review → security review → brief
+§11) minden egyes push-a KÜLÖN kerül kiértékelésre a trigger-szűrőn.
+
+**Hogyan alkalmazd.** Merge előtt MINDIG a TÉNYLEGES végső HEAD SHA-n nézd
+meg mind a `full-gate`/`build-apk`, mind a Router CI futását (§3.0), ne egy
+korábbi, „elég közeli" SHA-n mért zöld eredményre hagyatkozz. Ha a záró
+review-dokumentumok elhelyezése miatt a HEAD a CI-dispatch óta mozdult,
+dispatch-eld újra a natív gate-et is, és ha az utolsó Router-CI-releváns
+útvonal (`docs/rounds/**` stb.) nem a tényleges végső commitban változott,
+tudatosan hozz létre egy olyan záró commitot (pl. a brief §11 kitöltése),
+ami ezt kiváltja — ez egyúttal más kötelező tartalmat (a review-linkek
+brief-be írása) is szolgál, nem tiszta ceremónia.
+
+## L337 — Egy H3 halt, ahol a listán kívüli fájl igazoltan ártalmatlan implementer-debris (nulla hivatkozás, redundáns egy már izolált automatizált fixture-rel), a `pipeline-orchestrator-prompt.md` saját szabálya szerint REVERT-tel oldható, `allowed_paths`-bővítés nélkül (E99-R18, H3 self-heal, ADR 0112, 2026-08-19)
+
+**Mit mértünk.** A MiniMax implementer (`/home/ubuntu/ss-minimax-e99-r18`)
+három nyomkövetetlen fájlt hagyott a brief `allowed_paths`-án kívül
+(`test_project/lib/features/demo/{public.dart,public/application.dart,
+public/domain.dart}`). A Terra orchesztrátor-session ezt H3-mal állította le,
+holott `docs/execution/pipeline-orchestrator-prompt.md` VIOLATION-sora már
+eleve két utat ismer: „a listán kívüli fájlokat **vissza kell állítani**,
+vagy H3 halt" — és a §2 „Önállóan dönthetsz" felsorolása kifejezetten
+megnevezi „az engedélyezett-fájllista **szűkítését**" mint a kör saját
+hatáskörét. Méréssel igazolható volt, hogy a három fájl NEM legitim munka:
+`grep -rn "test_project"` nulla találatot adott bármely tracked/untracked
+forrásban, a tartalom bájtra megegyezett a `gen_public_barrel_test.dart`
+saját, már `Directory.systemTemp`-be izolált fixture-jével, és egyik nem
+fedett le semmilyen D-feladatot vagy „Tilos zóna" cellát.
+
+**Miért.** A H3 halt-kód a „tilos zóna feloldása" (ÚJ engedély) eszkalációját
+védi, nem minden listán-kívüli-fájl esetet — egy revert (a diffet az EREDETI
+allowlisthez igazítani) a §2 alatt már felhatalmazott, nem eszkalációt
+igénylő döntés. A rotáción lévő motor (Terra) ezt nem gyakorolta — ez a
+self-heal a mérés alapján kizárólag azt a döntést hozta meg, amit a saját
+protokoll már engedélyezett.
+
+**Hogyan alkalmazd.** Egy H3 halt-nál MINDIG mérd meg, melyik eset áll fenn,
+mielőtt brief-bővítéshez nyúlnál: (a) a fájl nulla hivatkozással szerepel
+bármely tracked/untracked forrásban, (b) funkcionálisan redundáns egy már
+létező, helyesen izolált automatizált fixture-rel, (c) egyetlen deliverable-t
+vagy acceptance-cellát sem fed le a brief D-feladatai vagy „Tilos zóna"
+szakasza szerint. Mindhárom együtt → REVERT dokumentált §0.0 revízióval,
+`allowed_paths` érintetlenül. Ha akár egy is hiányzik — vagyis nem
+egyértelmű, hogy a fájl elhagyható-e —, marad a H3/`escalate`, NEM
+automatikus revert. Ez a `test_e07_r29_accessibility_privacy_scope.py`
+precedens (allowed_paths-bővítés) TÜKÖRKÉPE — melyiket kell alkalmazni, azt a
+fenti mérés dönti el, sosem az, hogy melyik a kényelmesebb. Regressziós teszt:
+`tools/tests/test_e99_r18_scope_debris_revert.py`.
+
+## L338 — Egy self-heal session ELŐRE kiszámított LESSONS.md sorszáma (pl. „L333") ütközhet egy PÁRHUZAMOSAN záruló, független kör saját záró-dokumentáció commitjával — a sorszámot közvetlenül a záró commit ELŐTT, `git fetch`+`ff` UTÁN kell újra leolvasni (E99-R18 H3 self-heal, 2026-08-19)
+
+**Mit mértünk.** A kör-brief és az ADR 0112 §0.0/Módosítás szövegébe a
+`[[L333]]` hivatkozást írtam a self-heal PR (#337) elkészítésekor. A PR
+merge-elése ALATT egy másik, PÁRHUZAMOS session (E08-R02 záró
+`docs(handoff+lessons+rtm)` commitja, `6db8abcc`) a `main`-en L333–L336-ot már
+elfoglalta — a heal PR-em CI-je és scope-auditja ezt nem vehette észre, mert
+a `[[L333]]` egy sima szöveges hivatkozás, nem egy géppel ellenőrzött
+egyediség-korlát. A merge UTÁNI `git fetch`+`grep "^## L3"` mutatta meg, hogy
+a valódi következő szabad szám L337, nem L333 — a már merge-elt
+`[[L333]]`-hivatkozások (ADR 0112, a brief) egy MÁSIK, témában teljesen
+független leckére mutattak volna.
+
+**Miért.** A megosztott fán több session dolgozik egyszerre
+([[shared-tree-coordination]]); a LESSONS.md sorszáma csak a ténylegesen
+COMMITOLT állapot alapján derül ki, egy korábban (akár csak percekkel
+korábban) leolvasott „utolsó szám + 1" a session teljes futása alatt
+elavulhat, PR-on és külön docs-only záró-commit határon át is.
+
+**Hogyan alkalmazd.** A LESSONS.md sorszámot NE a session elején (a
+diagnózis/tervezés fázisban) számítsd ki és véglegesítsd a PR-tartalomban —
+ha mégis (mert a lecke-hivatkozás a dokumentált revízió RÉSZE, mint itt a
+§0.0-ban), a PR MERGE UTÁN, a docs-only záró commit ELŐTT `git fetch origin
+main && git merge --ff-only origin/main`, majd `grep -n "^## L[0-9]" docs/
+LESSONS.md | tail` — és ha a szám időközben foglalt lett, a záró commitban
+JAVÍTSD a már merge-elt hivatkozás(oka)t is a helyes, frissen leolvasott
+számra. A javítás maga docs-only, nem igényel új PR-t/gate-et (lásd a
+`docs(handoff+lessons+rtm): ... closing` minta közvetlen `main`-push
+precedensét, pl. `f2028ef6`).
+
+## L339 — A Flutter/l10n előfeltétel workflow-szövegbe ágyazott orchesztrátor-lépése önmagában nem véd, ha a TÉNYLEGES dispatch-cél eltér attól, amit az orchesztrátor előkészített — a burkoló (codex-round.sh/mm-round.sh) SAJÁT maga készíti elő a $workdir-jét (self-heal E08-R03/H6, 2026-08-19, PR #338)
+
+**Mit mértünk.** Az E08-R03 H6-tal állt meg: a Codex implementer `blocked`-ot
+jelzett, mert a `flutter analyze` 1071 független hibával blokkolt a hiányzó
+generált `lib/l10n/app_localizations.dart` miatt
+(`.pipeline/session-E08-R03-20260819T212506.log`, `/tmp/codex-e08-r03.log`).
+A nyomozás saját méréssel (nem bemondásra) igazolta a láncot: (1) az
+orchesztrátor a `/home/ubuntu/ss-codex-e08-r03` klónt HELYESEN készítette elő
+— `tools/prepare-flutter-generated.sh` lefutott, a generált `.dart` fájlok ott
+léteztek; (2) a TÉNYLEGES Codex-dispatch mégis a
+`/home/ubuntu/ss-codex-e08-r03-impl` útvonalra ment, ami — `git -C
+ss-codex-e08-r03 worktree list` szerint — egy `git worktree add`-dal nyitott
+WORKTREE volt a klónról (`.git` fájl, nem könyvtár); (3) a gitignore-olt
+generált kimenet worktree-k közt NEM öröklődik — a `-impl`-ben volt
+`.dart_tool/` (valamilyen `pub get` lefutott), de a `gen-l10n` sosem futott
+ott; (4) az implementer helyesen `blocked`-ot jelzett ahelyett, hogy saját
+maga hívta volna a `tools/prepare-flutter-generated.sh`-t, mert az a saját
+tiltott zónáján (`tools/**`) kívül esett.
+
+**Miért.** Ez a NEGYEDIK mérés ugyanerre a hibaosztályra (korábbi: L222/
+E06-R07, L228/E06-R10, L230/E06-R11) — mindegyik javítása eddig egy PRÓZAI
+lépés volt az orchesztrátor promptjában/skill-jében
+(`.claude/skills/sdd-round-driver/SKILL.md` §3: „A git clone UTÁN, a
+dispatch ELŐTT, MINDIG: bash <munkapéldány>/tools/prepare-flutter-
+generated.sh"). Ez a lépés MOST IS a helyén volt, és a naplók szerint LE IS
+FUTOTT — csak épp egy másik könyvtárra, mint ahova a tényleges dispatch
+ment. Egy workflow-szövegbe ágyazott emlékeztető nem tud védeni egy olyan
+hibától, ahol maga a dispatch-cél tér el az előkészítettől — a védelemnek a
+tényleges dispatch-hívás MECHANIKUS részének kell lennie, nem egy korábbi,
+elvileg-hozzá-tartozó lépésnek.
+
+**Hogyan alkalmazd.** `tools/codex-round.sh` és `tools/mm-round.sh` mostantól
+minden dispatch előtt lefuttatja a `"$workdir/tools/prepare-flutter-
+generated.sh"`-t (a workdir SAJÁT másolatát, argumentum nélkül — L232/
+E06-R13: a script a repo_root-ot a BASH_SOURCE-ból számolja, egy másik
+munkapéldány másolatának meghívása NÉMÁN a rossz fát készíti elő), fail-open.
+Ez a workdir eredetétől (klón vagy worktree) és az orchesztrátor saját
+lépéseitől függetlenül működik. Általánosítható elv: ha egy előfeltétel
+kritikus és a helye mechanikusan elérhető (itt: a burkoló, ami MINDEN
+dispatch előtt lefut), a prózai/workflow-szintű emlékeztetőt egy szinttel
+lejjebb, a tényleges végrehajtási útba kell tenni — nem csak MÉG EGYSZER
+leírni a promptban. Regressziós teszt:
+`tools/tests/test_round_wrapper_flutter_prerequisite.py` (a mért
+`ss-codex-e08-r03` → `ss-codex-e08-r03-impl` worktree-alakot szó szerint
+reprodukálja, hamis codex/claude/flutter binárisokkal).
+
+## L340 — A `gate_shape` anti-hallucináció-őr sortörés nélküli regexe hamis pozitívot ad, ha a napló a teljes promptot egyetlen sorba írja (E08-R03, 2026-08-19)
+
+**Mit mértünk.** Az E08-R03 (második nekifutás) implementer-jelzésfájlja
+`gate_shape=VIOLATION`-t írt, holott a brief §7 „`round-gate.sh` csővezeték/
+lánc nélkül" tilalmát az implementer betartotta. A review saját méréssel (nem
+bemondásra) igazolta: `grep -n "round-gate\.sh" /tmp/codex-e08-r03-run2.log`
+minden TÉNYLEGES végrehajtást (`/bin/bash -lc 'tools/round-gate.sh ...'`,
+hét előfordulás) csővezeték/lánc NÉLKÜL mutatott. A hamis pozitív forrása a
+`codex exec` induló hívása, ami a TELJES preambulum+prompt szöveget
+EGYETLEN log-sorba írja — ez a sor szó szerint tartalmazza mind a brief
+`round-gate.sh` idézetét, mind (egy másik, a preambulum 2. pontjából
+származó példában) a `git add -A && git commit` mintát. A `tools/
+codex-round.sh` `verify_claim()` regexe (`round-gate\.sh[^\n]*(\|
+*(tail|head)|&&)`, 296-336. sor) sortörés nélkül keres egy `[^\n]*`
+szakaszt, ezért a két, egymással nem összefüggő idézet ugyanazon a (nagyon
+hosszú) log-soron egyetlen találatnak látszott.
+
+**Miért.** A regex azt a feltevést kódolja, hogy „`round-gate.sh` és egy
+tiltott pipe/lánc-operátor UGYANAZON a soron" ⟺ „egy tényleges shell-hívás
+csővezetékbe/láncba tette a gate-et". Ez igaz egy NORMÁL, soronkénti
+shell-naplóra, de HAMIS egy olyan naplósorra, ami maga egy hosszú
+szöveg-blobot (a prompt/preambulum tartalmát) tükröz vissza — ott a sor
+„shell-parancs-szerűsége" félrevezető. Az őr NEM tud különbséget tenni „a
+promptban SZEREPEL a tiltott minta szövege" és „a shell TÉNYLEG futtatta a
+tiltott mintát" között, mert csak a nyers log-szöveget nézi, nem a
+végrehajtási rekordok (`/bin/bash -lc '...'` idézett string) határait.
+
+**Hogyan alkalmazd.** A `gate_shape=VIOLATION` (vagy bármely más anti-
+hallucináció-jelzés) NEM helyettesíti a review kötelező, saját kézzel,
+izolált klónban végzett gate-újrafuttatását (`sdd-round-review` skill 2.
+lépés) — ez már eddig is a szabály volt, ez a mérés csak megerősíti, MIÉRT
+nem szabad kivételt tenni még akkor sem, ha a jelzésfájl piros. Ha
+`gate_shape=VIOLATION`-t látsz: NE fogadd el bemondásra a hamis-pozitív
+magyarázatot sem — mérd meg te magad (`grep -n "round-gate\.sh"
+<implementer-log>` és nézd meg, a találat egy `/bin/bash -lc '...'`
+végrehajtási sorban van-e, vagy egy prompt-visszhang sorban), és a saját
+gate-újrafuttatásod eredményét dokumentáld bizonyítékként, nem a mezőt. Nem
+sürgős `tools/`-javítás (a self-heal hatásköre, ha újra előfordul): a
+regexet a log SOR-onkénti egyezés helyett a shell-hívás idézett rekordjára
+kellene szűkíteni.
+
+## L341 — Egy live ROUND_ENGINE=minimax session ambiens env-je átszivárog a saját §7 pytest-gate-jén futó WrapperModeTest-be (E99-R17 H6 self-heal, 2026-08-20)
+
+**Mit mértünk.** Az E99-R17 minimax implementer `blocked`-ot jelzett: a
+kötelező §7 gate (`python3 -m pytest tools/tests -q`) 2 hibán bukott —
+`WrapperModeTest::test_a_native_claude_model_runs_without_an_endpoint_override`
+és `::test_sonnet_gets_its_own_tool_set_and_no_fake_compact_window` — mindkettő
+a `tools/tests/test_claude_harness_engines.py`-ben, a kör `allowed_paths`
+listáján kívül (sem ez a fájl, sem a `tools/mm-round.sh` nincs rajta), ezért
+az implementer jogosan nem tudta helyben javítani. Önálló reprodukció, kód
+nélkül: `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic
+ANTHROPIC_AUTH_TOKEN=x CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
+MINIMAX_API_KEY=x python3 -m pytest
+tools/tests/test_claude_harness_engines.py -q` → pontosan ugyanez a 2 hiba.
+
+**Miért.** A `WrapperModeTest.run_wrapper()` a szimulált `mm-round.sh`
+alfolyamat környezetét `dict(os.environ)`-ból építi. Amikor a §7 gate MAGA is
+egy ÉLŐ `ROUND_ENGINE=minimax` implementer-session Bash-hívásaként fut (ami
+pontosan ez az eset — a minimax implementer a SAJÁT kötelező gate-jét
+futtatja), a szülő session-nek jogosan van beállítva `ANTHROPIC_BASE_URL` +
+`ANTHROPIC_AUTH_TOKEN` + `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (a `mm-round.sh`
+`external_endpoint` ágának `launch_env`-jéből) és `MINIMAX_API_KEY` (az
+`engine-profile.sh env minimax` exportjából). Ez a négy érték a `dict(
+os.environ)`-on át változatlanul bekerül a `sonnet-impl` (natív,
+"nincs override") esetek szimulált alfolyamatába, és két asserció a
+leszivárgott ambiens értéket méri, nem a `mm-round.sh` tényleges
+viselkedését. **Ez tisztán teszt-izolációs hiba** — egy valódi, friss
+`sonnet-impl` dispatch a pipeline driver saját, tiszta al-folyamatából indul,
+nem egy élő minimax-session BELSEJÉBŐL, ezért a termék-kód (`mm-round.sh`)
+mérve NEM hibás.
+
+**Hogyan alkalmazd.** Minden env-változó-átadó burkoló-tesztnél (`run_wrapper`
+mintázat), ahol a teszt `dict(os.environ)`-ból indul: ha a burkoló bizonyos
+motor-profiloknál explicit KIEGÉSZÍT bizonyos változókat (itt: a MiniMax
+`external_endpoint` ág), a teszt-fixture-nek a MÁSIK ág (itt: natív/
+subscription) esetére explicit TÖRÖLNIE kell ugyanazokat a változókat az
+ambiens másolatból, mielőtt a saját `extra_env`-jét rárakja — nem elég
+feltételezni, hogy a futtató környezet "elég tiszta". A javítás
+([PR #342](https://github.com/wolfcasaba/strumsight/pull/342), squash
+`bdad2a64`): `run_wrapper()` explicit `pop()`-olja az `ANTHROPIC_BASE_URL`/
+`ANTHROPIC_AUTH_TOKEN`/`CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`MINIMAX_API_KEY`
+négyest. Regressziós teszt (RED a `pop()` nélkül, GREEN vele, mindkét irányban
+mérve az izolált heal-worktree-ben):
+`test_ambient_endpoint_env_does_not_leak_into_a_subscription_mode_run` —
+`unittest.mock.patch.dict`-tel szimulálja pontosan ezt a négy leszivárgott
+értéket (a valódi MiniMax base-url konstanssal), és megköveteli, hogy a
+`sonnet-impl` kimenet változatlanul "nincs override" maradjon. Teljes
+`tools/tests` gate ugyanabban az izolált worktree-ben, mindkét irányban
+mérve: tiszta env 587 passed / 0 failed, a pontos szivárgás-reprodukcióval
+586 passed 1 skipped / 0 failed.
+
+## L342 — Egy ARB `@key` metaadat csak azzal a szegmenssel lehet tulajdonosi kapcsolatban, amely az üzenetkulcsot is adta (E99-R17 F1, 2026-08-20)
+
+**Mit mértünk.** A szegmentált ARB-aggregátor eredeti merge-e egy későbbi
+feature-fragmentum `@greeting` metaadatát elfogadta, ha maga a `greeting`
+üzenet egy korábbi base-szegmensből már bekerült. Így a feature-fragmentum a
+másik szegmens localization-codegen metaadatát módosíthatta duplikált üzenet
+kulcs nélkül. A független review ezt MINOR-ként találta; a javítás
+`ownerLabel != segment.label` esetén explicit hibát és `aggregate=null`
+eredményt ad. A reviewer ezt a feltételt ideiglenesen `false`-ra cserélve
+mérte: a két cross-fragment regressziós eset piros lett, visszaállítás után
+mind a 11 célzott teszt zöld.
+
+**Hogyan alkalmazd.** Olyan összevonó formátumnál, ahol az üzenet és a hozzá
+tartozó metaadat külön rekord, a „létezik már az üzenetkulcs” nem elég
+feltétel a metaadat átvételéhez. Tartsd meg a forrás-szegmens tulajdonosát,
+és eltéréskor fail-closed hibát adj; külön teszteld a későbbi szegmensből
+érkező metaadatot és azt is, hogy hibánál nem készül részleges aggregátum.

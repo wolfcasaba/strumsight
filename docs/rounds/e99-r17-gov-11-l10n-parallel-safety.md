@@ -1,17 +1,16 @@
 # E99-R17 (GOV-11) — Az ARB-ütközés feloldása: feature-szintű l10n-fragmentumok és generált aggregátum
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 52324cb3`)
+- **Státusz:** READY FOR IMPLEMENTATION (pre-flight folytatás 2026-08-20, `main @ a113cfc7`)
 - **Típus:** **governance-kör** — a párhuzamos körök első fizikai blokkjának feloldása
 - **Kör-azonosító:** `E99-R17`. Emberi neve **GOV-11**.
 - **Előfeltétel:** `E99-R16` merge-elve
-- **Brief szerzője:** Claude (Opus 5, orchesztrátor) · **ADR:** [`0307`](../adr/0307-pipeline-throughput-program-v2.md) **§4**
+- **Brief szerzője:** Claude (Opus 5, orchesztrátor); pre-flight: Codex (Terra) · **ADR:** [`0307`](../adr/0307-pipeline-throughput-program-v2.md) **§4**
 
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
   "tool/gen_l10n_segments.dart",
-  "tool/ci/check_l10n_parity.dart",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
   "lib/l10n/features/tuner_en.arb",
@@ -36,6 +35,83 @@ native_gate = false
 > szöveghiányként jelenne meg. Ezért a mérce a kulcshalmaz **halmazszintű
 > egyezése**, nem szemrevételezés.
 
+## 0.0 Pre-flight revízió (2026-08-19)
+
+### Dispatch-feloldás (2026-08-20, `origin/main @ a113cfc7`)
+
+- A megőrzött távoli körág D2 commitját (`82002070`) és az aktuális `main`-t
+  a `2c5ba555` merge commit egyesíti; `git merge-base --is-ancestor
+  origin/main HEAD` és `git diff --check` is zöld, a freshness-bizonyíték
+  pusholva van.
+- A D2 kész: a védett `tool/ci/check_l10n_parity.dart` változatlanul a
+  korábbi, emberi gate-szerkesztés eredménye. Az implementer kizárólag a
+  jelen `allowed_paths` szerinti D3/D4 munkát végezheti.
+- A kötelező ADR-foglaló most `0332`-t adott. Új ADR továbbra sem készül,
+  mert az elfogadott ADR 0307 §4 a döntés normatív forrása, a `docs/adr/**`
+  pedig tiltott zóna.
+- A kötelező RAG-lekérdezések lefutottak; az index két committal elavult,
+  ezért újraindexelés nem e kör hatásköre. A releváns találatok az E99-R17
+  `H-GATEGUARD` precedense és az E08-R03 generált-l10n előfeltétel tanulsága;
+  ezek a D2 emberi feloldását, illetve a wrapper saját `gen-l10n` előkészítését
+  erősítik meg.
+
+### Folytatási mérés (2026-08-19, `origin/main @ dc6b4583`)
+
+- A megőrzött kör-branch D1 commitja (`eb915931`) előtt a `main` nyolc
+  committal előrelépett. A branch a `630f8615` merge commitban konfliktusmentesen
+  tartalmazza az aktuális `origin/main`-t, és a freshness-bizonyíték pusholva
+  van; régi szerződéshez nem indult javító-dispatch.
+- A foglaló most `0324`-et adott, de új ADR továbbra sem készül: az elfogadott
+  ADR 0307 §4 már normatívan rögzíti ezt a döntést, `docs/adr/**` pedig tiltott
+  zóna. A foglalás nem jogosít fel új ADR létrehozására.
+- Kötelező RAG-mérés: `node tools/knowledge-rag.mjs --top 5 "E99-R17 ARB l10n
+  feature fragments generated aggregate check_l10n_parity tool/ci"` és
+  `node tools/knowledge-rag.mjs --corpus lessons --top 5 "protected gate file
+  H-GATEGUARD l10n parity generated ARB fragments"`. Az index `55b2bf16`-on
+  nyolc committal elavult, ezért ez nem újraindexelési hatáskör; a találatok
+  továbbra is a generált l10n előkészítésére (`lessons/L89`, `lessons/L111`) és
+  a gate elkülönített futtatására (`lessons/L130`) mutatnak. A jelen kör
+  közvetlen, frissebb precedense `lessons/L323`: a marker önmagában nem nyitja
+  fel az implementer-őrt.
+- A tényleges út most is `tools/round-gate.sh:243` →
+  `tool/ci/check_l10n_parity.dart`; a `tool/ci/*` a gyári mérce védett
+  globja. **D2 EZZEL LE VAN ZÁRVA (2026-08-19, emberi engedéllyel futó
+  interaktív session):** a `--check` hívás a branchen van, a `main()` a
+  frissességet és a paritást EGYÜTT méri, és a lépés pirosra vált elavult
+  aggregátumra. A védett fájl ezért **kikerült az `allowed_paths` listáról** —
+  a gate-őr pre-flightja így nem teszi újra hold-ra a kört, az implementer
+  pedig nem is nyúlhat hozzá. **A hátralévő munka: D3 (tuner-migráció), D4
+  (`round-slots.py`) és a §4 mérce-mátrix tesztjei.** A `l10n` gate-lépés a
+  D3 előtt SZÁNDÉKOSAN piros (`hiányzó alap: lib/l10n/base/app_en.arb`) —
+  ez a D3 hiányát méri, nem D2 hibája; a zöld a D3 után áll elő.
+
+- A `main @ 67d459f1` tényleges ARB-mérése eltér az előre írt briefétől:
+  `app_en.arb` 1 988 sor / 1 354 üzenetkulcs, `app_hu.arb` 1 911 sor /
+  1 354 üzenetkulcs; mindkettőben pontosan 14 `tuner*` kulcs van. A
+  `lib/l10n/base/` és `lib/l10n/features/` még nem létezik. A cél és a pilot
+  ezért változatlan, de a régi 1 333-as szám nem használható bizonyítékként.
+- A `pipeline-queue.tsv` 77 nem-`done` sort tartalmaz. A valódi brieffájlok
+  átvizsgálása szerint `app_en.arb` 37, `app_hu.arb` 36 nyitott briefben
+  szerepel; ez megerősíti a mechanikus ütközést, de nem állít hamis, azonos
+  darabszámot a két fájlra.
+- A tényleges út ellenőrzése: `check_l10n_parity.dart` ma közvetlenül a két
+  aggregátumot olvassa; `round-gate.sh` ennek `main()`-ját hívja a meglévő
+  `l10n` lépésben. A D2 ezért ezt az egy gate-útvonalat bővíti, nem vezet be
+  új gate-lépést.
+- Az ADR-foglaló `0322`-t adott ki az E99-R17-nek, de **nem készül új ADR**:
+  az elfogadott ADR 0307 §4 szó szerint rögzíti ezt a szegmentálás- és
+  generált-aggregátum döntést, a brief pedig `docs/adr/**`-t tilt. Az E99-R16
+  pre-flight R1 ugyanezt a „`nincs`” pipeline-szöveget már méréssel oldotta
+  fel. A foglalás ezért szándékosan felhasználatlan; fájl létrehozása itt H3
+  lenne.
+- **Visszakeresett előzmény:** a RAG-index a méréskor 4 committal elavult volt,
+  de a releváns előzményeket visszaadta: `lessons/L111` és `lessons/L222`
+  szerint a friss klónban a `prepare-flutter-generated.sh` kötelező; a
+  `lessons/L177` szerint a wrapper `scope_audit` mezője kézi ellenőrzést is
+  igényel. Az ADR 0307 §4 a szegmentált, generált aggregátum mintájának
+  normatív forrása. Más releváns l10n-fragmentum előzményt a lekérdezés nem
+  talált.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -50,8 +126,8 @@ Lezáró jelzés nélkül a kör bukott. **STOP-protokoll:** listán kívüli f�
 
 ## 1. Cél — mit mértünk
 
-A `docs/execution/pipeline-queue.tsv` **75 nyitott** briefjéből a
-`lib/l10n/app_en.arb` és `lib/l10n/app_hu.arb` **36**-ban szerepel az
+A `docs/execution/pipeline-queue.tsv` **77 nem-`done`** briefjéből a
+`lib/l10n/app_en.arb` **37**-ben, az `lib/l10n/app_hu.arb` **36**-ban szerepel az
 `allowed_paths` listán. A `tools/round-slots.py` ezért bármely két ilyen kört
 ütközőnek lát — **nem azért, mert ugyanazt a logikát írják, hanem mert
 mindkettő hozzáfűz egy kulcsot ugyanahhoz a fájlhoz.**
@@ -62,12 +138,13 @@ mérce (l10n-paritás) gyengítése nélkül.
 
 ## 2. Jelenlegi állapot — mérve
 
-- `lib/l10n/app_en.arb`: 1946 sor, **1333** kulcs (a `@`-metaadatokon kívül);
-  `app_hu.arb` a párja. Mindkettő kézzel szerkesztett, egyetlen fájl.
+- `lib/l10n/app_en.arb`: 1 988 sor, **1 354** kulcs (a `@`-metaadatokon
+  kívül); `app_hu.arb`: 1 911 sor, ugyanennyi kulcs. Mindkettő kézzel
+  szerkesztett, egyetlen fájl.
 - `tool/ci/check_l10n_parity.dart` gate-lépés: minden sablonkulcshoz van
   nem üres, azonos helyőrzőjű fordítás.
 - `tools/round-slots.py`: `SERIALIZED_PATHS` (HANDOFF, RTM, LESSONS, sor-fájl)
-  nem számít ütközésnek — az ARB igen.
+  nem számít ütközésnek — az ARB igen; `GENERATED_PATHS` ma még nincs.
 - A `tuner` feature 14 kulccsal a legkisebb, önmagában zárt kulcscsoport → pilot.
 
 ## 3. Feladatok
@@ -129,7 +206,7 @@ kiszedése → a „NINCS ütközés" eset **PIROS**.
   `.pipeline/**`, `tools/round-pipeline.sh`.
 - **A `tuner`-en kívüli kulcscsoportok migrációja TILOS ebben a körben** — a
   többi feature lustán, a rá következő körök során vándorol át. A pilot mérete
-  szándékos: a mechanizmus bizonyítása a cél, nem az 1333 kulcs mozgatása.
+  szándékos: a mechanizmus bizonyítása a cél, nem az 1 354 kulcs mozgatása.
 - A `flutter gen-l10n` konfigurációja (`l10n.yaml`, ha van) változatlan: az
   aggregátum útvonala és neve nem változik, tehát a generált
   `AppLocalizations` érintetlen.

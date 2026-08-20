@@ -265,6 +265,88 @@ hivatkozásának téves, mért olvasatát zárja ki jövőbeli reviewekben.
 
 Lecke: `docs/LESSONS.md` [[L322]].
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-19) — H3 igazoltan ártalmatlan implementer-debris feloldása REVERT-tel, `allowed_paths` bővítése nélkül
+
+Mérés: E99-R18/H3 — a MiniMax implementer a saját, még nem review-zott
+worktree-jében (`/home/ubuntu/ss-minimax-e99-r18`) három nyomkövetetlen fájlt
+hagyott a brief `allowed_paths`-án kívül (`test_project/lib/features/demo/
+public.dart` + két testvérfájl). A Terra orchesztrátor-session ezt H3-mal
+állította le, holott `docs/execution/pipeline-orchestrator-prompt.md` VIOLATION-
+sora már eleve két utat ismer: „a listán kívüli fájlokat **vissza kell
+állítani**, vagy H3 halt" — és a §2 „Önállóan dönthetsz" felsorolása
+kifejezetten megnevezi „az engedélyezett-fájllista **szűkítését**" mint a kör
+saját hatáskörét. A revert tehát NEM igényelte volna a H3 „tilos zóna
+feloldása" eszkalációt (az egy ÚJ engedélyre vonatkozik, nem egy meglévő
+allowlist-hez való visszaigazításra) — ez a self-heal a mérés alapján
+kizárólag azt a döntést hozta meg, amit a saját protokollja már
+felhatalmazott, de a rotáción lévő motor nem gyakorolt.
+
+**A döntés kizárólag mért, nem feltételezett tényre épül**, és csak addig a
+körig érvényes precedens, amíg ugyanez a mérés elvégezhető: a kifogásolt
+útvonal(ak) (a) nulla hivatkozással szerepelnek bármely tracked/untracked
+forrásban (`grep -rn`), (b) funkcionálisan redundánsak egy már létező,
+helyesen izolált automatizált fixture-rel, és (c) egyetlen deliverable-t vagy
+acceptance-cellát sem fednek le a brief D-feladatai vagy „Tilos zóna"
+szakasza szerint. Ha akár egy is hiányzik ezek közül — vagyis nem
+egyértelmű, hogy a fájl elhagyható-e —, a döntés VISSZA H3-ra esik (vagy
+`outcome=escalate`), NEM automatikus revert. A self-heal ezt a döntést a
+kör saját briefjének dokumentált `## 0.0 Pre-flight revízió` szakaszába
+írta (nem a self-heal maga törölte a fájlokat a megállt implementer
+worktree-jén — az a következő, friss E99-R18 dispatch dolga, hiszen az ADR
+0112 §2 jogosultsága a briefre/allowlistre szól, nem a kör saját,
+review-zatlan implementer-ágára).
+
+Ez a döntés a `test_e07_r29_accessibility_privacy_scope.py` precedens
+TÜKÖRKÉPE: ott a listán kívüli fájlok igazoltan hiányzó deliverable-ek
+voltak, és a helyes feloldás `allowed_paths`-bővítés volt. A két minta nem
+helyettesíti egymást — melyiket kell alkalmazni, azt a fenti (a)-(c) mérés
+dönti el, sosem az, hogy melyik a kényelmesebb.
+
+Lecke: `docs/LESSONS.md` [[L337]].
+
+### Módosítás (ADR 0112 önjavító kör, 2026-08-20) — a kötelező teljes gate egy H8 merge-feloldás UTÁN a kör SAJÁT, review előtti tartalmi hibáját is feltárhatja — ez nem a self-heal hatásköre, de dokumentálni kötelező
+
+Mérés: E99-R18/H8 — a `tools/round-slots.py` konfliktusa a `main` (E99-R17,
+exact-set `GENERATED_PATHS`) és a kör saját ága (E99-R18/D4, glob-alapú
+`GENERATED_PATH_PATTERNS`) között additívnak bizonyult: mindkét oldal SAJÁT,
+már zöld-tesztelt regressziós csomagja csak a saját mechanizmusát méri, egyik
+sem a másikét — a 2026-08-13-i módosítás (114. sor) elve ide is alkalmazható:
+mindkét hunk megtartása, unió-predikátum, egy új, a kombinált esetet mérő
+teszt. Ez a rész a 2026-08-13-i precedenst NEM módosítja, csak megerősíti.
+
+**Az ÚJ tanulság:** a kötelező `python3 -m pytest tools/tests -q` teljes
+gate (§4, a merge-feloldás UTÁN, nem csak az érintett tesztfájlakon) egy
+HARMADIK, a merge-mechanikától FÜGGETLEN, a kör SAJÁT, review előtti D4
+kódjában már a merge előtt is jelen lévő hibát tárt fel:
+`test_pipeline_throughput.py::SlotPlanningTest::
+test_real_epic_four_rounds_are_correctly_rejected` pirosra váltott, mert a
+D4 broad glob (`lib/features/*/public.dart`) MINDEN feature `public.dart`-
+ját generáltnak (nem ütközőnek) minősíti, holott a D1–D3 pilot mérve
+kizárólag a `practice_generator`-t migrálta — a többi feature (mérve: 25+18
+nyitott brief két másik feature-ön) public.dart-ja MA MÉG kézzel
+karbantartott, valódi ütközési felület. A self-heal ezt NEM javította: a
+helyes hatókör (pl. migrált-feature allowlist) termékdöntés, a kör saját
+implementer+reviewer ciklusáé, nem az ADR 0112 §2 szűk (brief/eszköz)
+jogosultságáé.
+
+**Szabály.** A H8 (vagy bármely) self-heal kötelező teljes gate-je nem csak
+a SAJÁT javítás RED→GREEN bizonyítéka — a teljes suite MÁS, a javítással
+nem összefüggő piros cellát is felszínre hozhat, különösen egy addig sosem
+futtatott, review előtti kör-ág esetén (itt a brief saját R5 sora már
+előre jelezte: a teljes pytest-korpuszt az implementer helyben nem tudta
+futtatni, „a review/CI evidenciája" maradt). Ilyenkor a self-heal dolga
+NEM a talált hiba kijavítása (az a kör tartalmi munkája, ADR 0112 §1 tiltja
+a megállt kör levezénylését), hanem a lelet **maximálisan látható**
+dokumentálása — a kör saját briefjében (a következő dispatch ELSŐ olvasata),
+`docs/LESSONS.md`-ben és a heal-status `detail=` mezőjében —, hogy a
+felfedezés költsége ne ismétlődjön meg egy következő, drágább (review-idejű)
+ponton. Az `outcome=fixed` így is helyes, ha a self-heal SAJÁT gyökéroka
+(itt: a H8 merge-konfliktus) ténylegesen, bizonyítottan megszűnt, ÉS az
+újonnan talált hiba nem éri el a `main`-t (a kör saját, még nem merge-elt
+ágán marad, ahol a normál review-gate úgyis elkapná).
+
+Lecke: `docs/LESSONS.md` [[L343]].
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör

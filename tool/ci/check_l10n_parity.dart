@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../gen_l10n_segments.dart' as segments;
+
 /// The kinds of localization gap enforced by the CI gate.
 enum L10nIssueKind {
   missingTranslation,
@@ -131,6 +133,73 @@ L10nParityReport checkL10nParity({
   );
 }
 
+/// The locales whose `lib/l10n/app_<locale>.arb` aggregate is GENERATED from
+/// ARB segments (`lib/l10n/base/` + `lib/l10n/features/`).
+const List<String> generatedLocales = ['en', 'hu'];
+
+/// Whether every generated ARB aggregate on disk still matches its segments.
+final class L10nFreshnessReport {
+  L10nFreshnessReport({required List<String> problems})
+    : problems = List.unmodifiable(problems);
+
+  final List<String> problems;
+
+  bool get isClean => problems.isEmpty;
+
+  String format() {
+    if (isClean) {
+      return 'L10n aggregate freshness OK (${generatedLocales.join(', ')}).';
+    }
+    final output = StringBuffer(
+      'L10n aggregate freshness failed (${problems.length} issue(s)).',
+    );
+    for (final problem in problems) {
+      output
+        ..writeln()
+        ..write('- $problem');
+    }
+    return output.toString();
+  }
+}
+
+/// Runs the generator's `--check` branch in-process (ADR 0307 §4, E99-R17 D2).
+///
+/// A gate `l10n` lépése eddig CSAK a paritást mérte, a frissességet nem: a
+/// `lib/l10n/app_<locale>.arb` kézzel szerkeszthető maradt, és az elavult
+/// aggregátum ZÖLDEN ment át. Ez a hívás a MEGLÉVŐ lépést bővíti, nem vezet
+/// be újat — a `tools/round-gate.sh` és a CI composite lépéslistája így
+/// változatlan marad (az ADR 0171 paritás-őre nem sérül).
+///
+/// A generátort RELATÍV IMPORTtal hívjuk, nem alfolyamattal: így a `dart run`
+/// egyetlen fordítási egységben méri a két invariánst, és a lépés kimenete
+/// nem függ egy beágyazott folyamat útvonalától vagy kilépési kódjától.
+L10nFreshnessReport checkGeneratedAggregates({required Directory projectRoot}) {
+  final problems = <String>[];
+  for (final locale in generatedLocales) {
+    final segments.GenerationOutcome outcome;
+    try {
+      outcome = segments.generateLocale(
+        locale: locale,
+        projectRoot: projectRoot,
+        check: true,
+      );
+    } on FormatException catch (error) {
+      problems.add('[$locale] ${error.message}');
+      continue;
+    }
+    for (final message in outcome.errors) {
+      problems.add('[$locale] $message');
+    }
+    if (outcome.stale) {
+      problems.add(
+        '[$locale] az aggregátum elavult — futtasd: '
+        'dart run tool/gen_l10n_segments.dart --write',
+      );
+    }
+  }
+  return L10nFreshnessReport(problems: problems);
+}
+
 /// ARB message entries, excluding `@`-prefixed metadata and the `@@` header.
 Map<String, String> _messages(File arb) {
   final decoded = jsonDecode(arb.readAsStringSync()) as Map<String, dynamic>;
@@ -151,11 +220,19 @@ String _sorted(Set<String> names) =>
     names.isEmpty ? '—' : (names.toList()..sort()).join(', ');
 
 void main() {
-  final root = Directory.current.path;
+  final root = Directory.current;
+
+  // A két invariáns EGYÜTT dől el: a frissesség hibája nem takarhatja el a
+  // paritásét, ezért mindkettő lefut és mindkettő kiíródik, mielőtt a lépés
+  // pirosra vált.
+  final freshness = checkGeneratedAggregates(projectRoot: root);
+  stdout.writeln(freshness.format());
+
   final report = checkL10nParity(
-    template: File('$root/lib/l10n/app_en.arb'),
-    translation: File('$root/lib/l10n/app_hu.arb'),
+    template: File('${root.path}/lib/l10n/app_en.arb'),
+    translation: File('${root.path}/lib/l10n/app_hu.arb'),
   );
   stdout.writeln(report.format());
-  if (!report.isClean) exitCode = 1;
+
+  if (!freshness.isClean || !report.isClean) exitCode = 1;
 }
