@@ -1,5 +1,25 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E08-R12/H6] KÉSZ — generált l10n aggregátum helyett feature-szegmens scope — PR #365 (2026-08-20, L365)
+
+Az E08-R12 Terra implementere a brief szerint közvetlenül módosította a
+`lib/l10n/app_en.arb` és `app_hu.arb` fájlokat, de ezek E99-R17 óta generált
+aggregátumok. A kötelező round-gate ezért reprodukálhatóan mindkét locale-ra
+aggregate-freshness hibával állt meg; a generátor futtatása a hiányzó
+forrás-szegmensek miatt eldobta volna az új kulcsokat. Ez Class B brief-hiba
+volt, nem router baseline-drift és nem az E08-R10/L360 egyszeri
+motor-kimenetcsonkítása.
+
+A javított, kanonikus pre-flight brief név szerint engedi a
+`lib/l10n/features/gamification_{en,hu}.arb` forrás-szegmenseket és a két
+deterministikusan regenerált aggregátumot, tiltja az output közvetlen
+szerkesztését, és előírja a `dart run tool/gen_l10n_segments.dart --write`
+lépést. A `tools/tests/test_e08_r12_l10n_scope.py` a javítás előtt 2/2 piros,
+utána 2/2 zöld volt; strict brief-lint: nincs lelet; teljes Python/router gate:
+680 passed, 1 skipped, 587 subtests passed. A kör production diffje a Terra
+worktree-ben érintetlen maradt; a következő firing ugyanazt az E08-R12 kört
+folytatja az új source-segment contracttal. Lecke: **[[L365]]**.
+
 ## ✅ E08-R11 KÉSZ — Qualified day, planned rest és recovery policy — PR #363, squash `6a8d0b72` (2026-08-20)
 
 A gamification application-réteg most csak legalább 120 másodperc érvényes
