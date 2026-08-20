@@ -1,5 +1,27 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E08-R13/H3] KÉSZ — az achievement-fordítások source-segment scope-ja helyreállt — PR #373 (2026-08-20, L369)
+
+Az E08-R13 brief 20–30 achievementhez új lokalizált cím-, leírás- és
+akadálymentességi kulcsokat kért, de az E99-R17 óta generált
+`lib/l10n/app_en.arb` és `app_hu.arb` aggregátumokat engedte elsődleges
+szerkesztési pontként. A kötelező
+`lib/l10n/features/gamification_{en,hu}.arb` forrásszegmensek hiányoztak az
+allowlistből, ezért a kör a jóváhagyott scope-on belül nem volt
+megvalósítható. Ez Class B brief-hiba, nem router baseline-drift és nem
+külső szolgáltatási akadály.
+
+A H3 scope-revízió a gamification-szegmenseket nevezi elsődleges forrásnak,
+a két aggregátumot csak determinisztikus kimenetként engedi, és kötelezővé
+teszi a `dart run tool/gen_l10n_segments.dart --write` lépést. A valódi
+briefadatot olvasó `tools/tests/test_e08_r13_l10n_scope.py` a javítás előtt
+2/2 piros, utána 2/2 zöld; strict brief-lint: nincs lelet; teljes
+Python/router gate: 682 passed, 1 skipped, 604 subtests passed. Branch:
+`heal/E08-R13-H3-1`, javítási commit: `24492a53`, PR:
+[#373](https://github.com/wolfcasaba/strumsight/pull/373). Lecke: **L369**.
+Következő SDD-kör továbbra is: **E08-R13 — Achievement domain és
+katalógus**, friss sessionben, a javított briefből.
+
 ## ✅ E08-R12 KÉSZ — együttérző Streak UI V2 és recovery flow — PR #367, squash `8aa0010b` (2026-08-20)
 
 A gamification feature caller-fed, passzív Streak V2 képernyőt kapott current,
