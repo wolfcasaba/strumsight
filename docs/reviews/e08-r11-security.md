@@ -1,8 +1,8 @@
 # E08-R11 — High-risk security és abuse review
 
-Brief: `docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md`  
-Diff: `cca0c4d3..0df3c6f8`  
-Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20  
+Brief: `docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md`
+Diff: `cca0c4d3..0df3c6f8`
+Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20
 Verdikt: **APPROVED — security szempontból**
 
 ## Összegzés
