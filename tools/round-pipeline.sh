@@ -1764,9 +1764,19 @@ case "${1:-}" in
     )
     rc=$?; exit "$rc"
     ;;
-  --main-sync-ff-merge)    # $2=munkafa-útvonal → D1 teszthorog: valóban végrehajtja a ff-merge-et (a fenti stratégia csak kiírja), exit 0 siker / 1 már azonos / 2 divergencia
+  --main-sync-ff-merge)    # $2=munkafa-útvonal → D1 teszthorog: valóban végrehajtja a ff-merge-et (a fenti stratégia csak kiírja), exit 0 siker / 1 már azonos / 2 divergencia / 3 piszkos fa (előfeltétel)
     (
       cd "${2:-$repo_root}" || exit 50
+      # D1 piszkos-fa előfeltétel-őr (ADR 0175 §2, E99-R19 brief §4 4. cella):
+      # a `main_sync_strategy` a driver 3. Előfeltételek szakaszában a `die`
+      # miatt sosem fut piszkos fán, de a teszthorog itt is tükrözi ezt a
+      # viselkedést — különben a "main lemaradt + piszkos fa" mérőcella a
+      # "noop" / "divergencia" szerencsés egybeeséssel lenne piros, és a
+      # piszkos-fa őr kikerülése észrevétlen maradna (F1 review).
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "halt:dirty-tree"
+        exit 3
+      fi
       local_head_sha=$(git rev-parse HEAD 2>/dev/null) || exit 50
       remote_main_sha=$(git rev-parse origin/main 2>/dev/null) || exit 50
       if [ "$local_head_sha" = "$remote_main_sha" ]; then

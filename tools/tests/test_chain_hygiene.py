@@ -219,11 +219,41 @@ class MainSyncStrategyTest(unittest.TestCase):
         )
 
     def test_dirty_tree_is_stopped_above_the_main_sync_check(self) -> None:
-        # 4. cella: piszkos munkafa → ma is `die` (mérve: ADR 0175 §2).
-        # A D1 ezt a feltételt NEM bántja — a fa tisztasága a
-        # main-szinkron ELŐFELTÉTELE, nem része.
+        # 4. cella (brief §4): main LEMARADT + piszkos fa → megáll. A
+        # korábbi változat `HEAD == origin/main` (azonos) állapotára támaszkodott,
+        # és a `1` kilépés a hook "noop" ágából jött — a piszkos-fa őr kiiktatása
+        # esetén a teszt TÖRVÉNYESEN zöld maradt (F1 review). Az új fixture
+        # `HEAD ancestor-of origin/main` (valódi lemaradás), piszkos fával: a
+        # fa-őr nélkül az ff-merge SIKERESEN lezajlana, a `halt:dirty-tree`
+        # kilépés CSAK a `git status --porcelain` előfeltétel-őr miatt jön létre.
         with tempfile.TemporaryDirectory() as directory_name:
-            _, worktree = _make_bare_remote(Path(directory_name))
+            head_repo, worktree = _make_bare_remote(Path(directory_name))
+            self._push(head_repo, "remote commit 1")
+            subprocess.run(["git", "fetch", "-q", "origin"], cwd=worktree, check=True)
+            # A lemaradás tényleg fennáll (a HEAD az origin/main őse), és a fa
+            # piszkos — ez a 4. cella egyetlen állapota.
+            local_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=worktree,
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.strip()
+            remote_head = subprocess.run(
+                ["git", "rev-parse", "origin/main"],
+                cwd=worktree,
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", local_head, remote_head],
+                cwd=worktree,
+                check=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(local_head, remote_head)
+
             (worktree / "untracked.txt").write_text("dirty\n")
             status = subprocess.run(
                 ["git", "status", "--porcelain"],
@@ -235,12 +265,47 @@ class MainSyncStrategyTest(unittest.TestCase):
             self.assertTrue(status, "a kiindulási feltétel: legyen piszkos a fa")
 
             advance = self._ff_merge(worktree)
-            self.assertNotEqual(
+            self.assertEqual(
                 advance.returncode,
-                0,
-                "piszkos fán az ff-merge hook nem hozhat döntést (returncode!=0), "
-                "mert a driver előfeltétel-ellenőrzése a fán áll meg előbb",
+                3,
+                f"piszkos fán + valódi lemaradásnál a hook 'halt:dirty-tree' "
+                f"kilépéssel kell megállnia (returncode=3); got rc={advance.returncode} "
+                f"stdout={advance.stdout!r} stderr={advance.stderr!r}",
             )
+            self.assertTrue(
+                advance.stdout.startswith("halt:dirty-tree"),
+                f"a piszkos-fa őr kifejezett jelölése a stdout-ban kötelező "
+                f"(a 'noop' / 'divergencia' kilépéssel a cella nem a fa-őr miatt "
+                f"állna meg, hanem szerencsés egybeesésből); stdout={advance.stdout!r}",
+            )
+
+    def test_dirty_tree_guard_in_ff_merge_hook_must_not_be_removed(self) -> None:
+        # Falszifikációs cella (F1 review): a `--main-sync-ff-merge` hook
+        # piszkos-fa őre (`git status --porcelain` előfeltétel-ellenőrzés)
+        # kötelező — ha kikerül, a `test_dirty_tree_is_stopped_above_the_main_sync_check`
+        # pirosra váltana, és a `halt:dirty-tree` kilépés elveszne (a hook
+        # a piszkos fás fán csendben ff-merge-et hajtana végre, ami
+        # adatvesztéssel járhat). A forrás-szintű regression-védelem a
+        # `git status --porcelain` ÉS a `halt:dirty-tree` szó szerinti
+        # együttes jelenlétét ellenőrzi a hook blokkjában.
+        text = SCRIPT.read_text()
+        block = text.split("--main-sync-ff-merge", 1)[1].split(
+            "--pending-done-failsafe-required", 1
+        )[0]
+        self.assertIn(
+            "git status --porcelain",
+            block,
+            "a '--main-sync-ff-merge' hook piszkos-fa őre kötelező — "
+            "különben a 'main lemaradt + piszkos fa' cella csendben "
+            "ff-merge-et hajtana végre piszkos fán (F1 review)",
+        )
+        self.assertIn(
+            "halt:dirty-tree",
+            block,
+            "a piszkos-fa őr explicit 'halt:dirty-tree' jelölése kötelező "
+            "— különben a teszt nem tudná kifejezetten a fa-őr kilépését "
+            "azonosítani a 'noop' / 'divergencia' kilépések között",
+        )
 
 
 class PendingDoneFailSafeTest(unittest.TestCase):
