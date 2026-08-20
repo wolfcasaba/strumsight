@@ -1,6 +1,6 @@
 # E99-R20 (GOV-14) — Landoló: rebase-őr, konfliktus-osztályozás és kapu a kombinált állapoton
 
-- **Státusz:** READY FOR IMPLEMENTATION (pre-flight 2026-08-20, `main @ 909ea6c9`)
+- **Státusz:** APPROVED FOR MERGE (Sol re-review 2026-08-20, recovered HEAD)
 - **Típus:** **governance-kör** — a lánc SAJÁT vezérlése
 - **Kör-azonosító:** `E99-R20`. Emberi neve **GOV-14**.
 - **Előfeltétel:** nincs (a `tools/round-land.sh` új fájl; nem ütközik az E99-R14…R19 fájlhalmazával)
