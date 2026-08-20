@@ -1,6 +1,6 @@
 # E08-R13 — Achievement domain és katalógus
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** READY (H3 scope-revízió 2026-08-20, mérve: `main @ ecfbde54`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 13
 - **Kör-azonosító:** `E08-R13`
 - **Branch:** `<motor>/e08-r13-achievement-domain-and-catalog`
@@ -10,7 +10,7 @@
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R02 esemény-altípusait és az R06 XP-komponenseit — az objective-ek ezekre a metrikákra hivatkoznak; és ellenőrizd a `lib/l10n/app_en.arb` meglévő kulcs-konvencióját. Eltérésnél
+> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R02 esemény-altípusait és az R06 XP-komponenseit — az objective-ek ezekre a metrikákra hivatkoznak; és ellenőrizd a `lib/l10n/features/gamification_en.arb` meglévő kulcs-konvencióját. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
 ```ai-router
@@ -22,6 +22,8 @@ allowed_paths = [
   "lib/features/gamification/domain/achievements/achievement_catalog.dart",
   "lib/features/gamification/infrastructure/default_achievement_catalog.dart",
   "lib/features/gamification/public.dart",
+  "lib/l10n/features/gamification_en.arb",
+  "lib/l10n/features/gamification_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/domain/achievement_catalog_test.dart",
@@ -32,6 +34,39 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 H3 self-heal scope-revízió — 2026-08-20
+
+A megállt pre-flight az `ecfbde54` HEAD-en mérte, hogy az E99-R17 óta a
+`lib/l10n/app_{en,hu}.arb` két **generált aggregátum**, miközben a brief az
+achievement-fordításokhoz csak ezeket engedte. A kötelező elsődleges
+`lib/l10n/features/gamification_{en,hu}.arb` forrásszegmensek hiányoztak az
+allowlistből, ezért a kör a jóváhagyott scope-on belül nem volt
+megvalósítható.
+
+Feloldás: az új kulcsok kizárólag a gamification forrásszegmensekbe
+kerülnek. A generált aggregátum közvetlenül nem szerkeszthető; a
+`lib/l10n/app_{en,hu}.arb` csak kimenet. A szegmensek módosítása után
+kötelező a determinisztikus
+`dart run tool/gen_l10n_segments.dart --write`, és annak két kimenete marad
+név szerint az allowlistben. Ez az aggregate-freshness mércét nem lazítja.
+Regressziós őr: `tools/tests/test_e08_r13_l10n_scope.py`.
+
+### 0.0.1 Visszakeresett előzmény és kockázati indoklás
+
+A `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5
+"E08-R13 achievement katalógus generált l10n aggregátum gamification
+forrásszegmens"` keresés releváns találata L365: ugyanennek a generált
+aggregate / hiányzó source-segment hibának az E08-R12-n mért előzménye. Az
+ADR 0328 a mért gamification-baseline-t, az ADR 0344 pedig a későbbi
+katalógus-verzió perzisztálási határát erősíti meg; egyik sem változtatja
+meg e kör szűk domain- és l10n-scope-ját.
+
+**Kockázat = high, indoklás:** a stabil achievement-azonosítók és a
+deprecation-szerződés később tartós felhasználói eredményre hivatkozik;
+egy címből képzett vagy utólag eltűnő azonosító megszerzett haladást
+veszíthet el. A magas kockázat ezért indokolt, a high-risk független review
+kötelező marad.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -55,7 +90,10 @@ achievement stabil azonosítókkal, típusos objective-ekkel és **körmentes** 
 
 - Az R02 hat esemény-altípust ad; az R06 komponensenként bontott XP-t — az objective-ek ezekre a metrikákra hivatkozhatnak.
 - `lib/features/gamification/domain/achievements/` **nem létezik**.
-- i18n konvenció: `lib/l10n/app_en.arb` + `app_hu.arb`, a generált `app_localizations*.dart` gitignore-olt.
+- i18n konvenció: az új kulcsok elsődleges forrása a
+  `lib/l10n/features/gamification_{en,hu}.arb`; a
+  `lib/l10n/app_{en,hu}.arb` determinisztikusan generált aggregátum, a
+  `app_localizations*.dart` pedig gitignore-olt Flutter-kimenet.
 - Az `ADR 0289`: az elsajátítottság mért teljesítményből származik — az achievement **feltétele** mérhető metrika, nem puszta XP.
 
 ## 3. Scope
@@ -81,8 +119,10 @@ katalógus 20–30 elemmel · stabil azonosítók és ARB-kulcsok · tier-függ�
 | `lib/features/gamification/domain/achievements/achievement_catalog.dart` | **ÚJ** — a katalógus + validáció |
 | `lib/features/gamification/infrastructure/default_achievement_catalog.dart` | **ÚJ** — a gondozott 20–30 elem |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
-| `lib/l10n/app_en.arb` | az ÚJ kulcsok — meglévő kulcs NEM módosítható |
-| `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
+| `lib/l10n/features/gamification_en.arb` | elsődleges forrásszegmens — az ÚJ angol kulcsok; meglévő kulcs NEM módosítható |
+| `lib/l10n/features/gamification_hu.arb` | elsődleges forrásszegmens — az ÚJ magyar kulcspárok |
+| `lib/l10n/app_en.arb` | **GENERÁLT** — csak a `gen_l10n_segments.dart --write` determinisztikus kimenete |
+| `lib/l10n/app_hu.arb` | **GENERÁLT** — csak a `gen_l10n_segments.dart --write` determinisztikus kimenete |
 | `test/features/gamification/domain/achievement_catalog_test.dart` | a §6 cellái |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
@@ -166,8 +206,12 @@ kör-cellának PIROSNAK kell lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
+dart run tool/gen_l10n_segments.dart --write
 tools/round-gate.sh test/features/gamification/domain/achievement_catalog_test.dart
 ```
+
+Az első parancs a forrásszegmensekből regenerálja a két aggregátumot;
+kézi aggregate-szerkesztés tilos. A gate ezután a freshness-t is ellenőrzi.
 
 A gate artefaktum a mérce (`tools/round-gate.sh`) — a parancssorban
 reprodukált parancslista NEM bizonyíték (AGENTS.md §12, L09). A script
@@ -185,7 +229,10 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 3. `achievement_catalog.dart` — a katalógus + a validáló függvény (kör, hiányzó kulcs, ismeretlen objective).
 4. `achievement_progress.dart` — a haladás típusa.
 5. `default_achievement_catalog.dart` — a gondozott 20–30 elem.
-6. Az ARB-kulcsok felvétele mindkét nyelven.
+6. Az ARB-kulcsok felvétele a
+   `lib/l10n/features/gamification_{en,hu}.arb` forrásszegmensekbe, majd
+   `dart run tool/gen_l10n_segments.dart --write`; az aggregátumokat
+   közvetlenül szerkeszteni tilos.
 7. A `public.dart` export-sorai; a valódi-sértés próba §10-be.
 8. `tools/round-gate.sh` a §7 szerint.
 

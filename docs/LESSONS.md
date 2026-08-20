@@ -14212,3 +14212,27 @@ feature-specifikus réteghatárt; az E08-R12 storage-tilalmat a teljes CI-suite
 részeként futó `test/core/architecture_dependency_test.dart` őrzi. A brief
 szerinti round-gate és a teljes CI együtt adják a mércét, egyik eredményét sem
 szabad a másik eszköznek tulajdonítani.
+
+## L369 — A generált l10n-scope javítását minden későbbi, fordítást kérő briefre is át kell vinni (E08-R13, H3 self-heal, 2026-08-20)
+
+**Mért hiba.** Az E08-R13 `ecfbde54` pre-flight briefje 20–30 achievementhez
+kért új lokalizált cím-, leírás- és akadálymentességi kulcsokat, de az
+allowlist csak a `lib/l10n/app_en.arb` és `app_hu.arb` fájlokat tartalmazta.
+Ezek E99-R17 óta generált aggregátumok; a szükséges
+`lib/l10n/features/gamification_{en,hu}.arb` forrásszegmensek nem voltak
+engedélyezve. Ez ugyanaz a szerződéstípus, amelyet L365 az E08-R12-nél már
+rögzített, de a javítás csak annak az egy briefnek a scope-ját módosította;
+az előre megírt következő brief változatlanul hordozta a régi mintát.
+
+**Javítás és regresszió.** Az E08-R13 brief most a gamification
+forrásszegmenseket nevezi elsődleges szerkesztési pontnak, a két aggregátumot
+csak determinisztikus kimenetként engedi, és előírja a
+`dart run tool/gen_l10n_segments.dart --write` lépést. A valódi briefadatot
+olvasó `tools/tests/test_e08_r13_l10n_scope.py` a javítás előtt 2/2 piros
+volt — egyszer a két hiányzó forrásszegmensre, egyszer a hiányzó generálási
+szerződésre —, utána 2/2 zöld.
+
+**Szabály.** Egy konkrét round-brief self-healje nem javítja visszamenőleg a
+már előre megírt briefeket. Minden olyan briefet, amely új ARB-kulcsot kér,
+indításkor a jelenlegi l10n-topológia ellen kell mérni: a feature-szegmens a
+forrás, az aggregátum csak generált output, és a regenerálási lépés explicit.
