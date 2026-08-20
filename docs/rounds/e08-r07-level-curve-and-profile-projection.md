@@ -31,6 +31,58 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight revízió (2026-08-20, `main @ 634562d7`)
+
+**ADR-szám korrekció: `0305` → `0342`.** A brief 2026-08-18-i megírásakor a
+`0305` volt a következő szabad szám; azóta (E08-R01…R06 + több self-heal kör)
+`0306`–`0341` mind foglalt lett. A `tools/round-slots.py reserve-adr --round
+E08-R07` futtatása (ADR 0171 §4.1) a jelen pre-flightban `0342`-t adott —
+**ez a kötelező szám**, nem a brief fejlécében álló `0305`. Az implementer a
+`docs/adr/`-t egyébként sem érinti (tilos zóna) — az ADR-t a Claude írta meg
+[`0342-monotonic-level-curve-and-rebuildable-profile-projection.md`](../adr/0342-monotonic-level-curve-and-rebuildable-profile-projection.md)
+néven, a brief §5 döntéseiből.
+
+**Mért, megerősített tények (§1 pre-flight-mérés):**
+
+- `lib/features/gamification/domain/levels/` és `domain/profile/` **nem
+  léteznek** — a brief §2 állítása pontos (`ls` a domain könyvtáron: csak
+  `activity/`, `rewards/` van jelen).
+- Az R03 ledger lapozott olvasási felülete megerősítve:
+  `RewardLedgerRepository.readPage({required int limit, String? cursor})` →
+  `RewardLedgerPage { entries, nextCursor }`
+  (`lib/features/gamification/data/reward_ledger_repository.dart:16`). A
+  teljes újraépítés ezt hívja lapozva, `nextCursor == null`-ig.
+- Az R06 komponens-bontás (`ExperiencePoints`: `baseXp/durationXp/qualityXp/
+  improvementXp/diversityXp` → `totalXp`) a policy receiptjében él
+  (`domain/rewards/experience_points.dart`); maga a **ledger-bejegyzés**
+  (`RewardLedgerEntry`) ezt már `baseXp`/`bonusXp`/`totalXp`-re tömöríti
+  (`policyVersion`, `schemaVersion` mellett). A `profile_projector.dart`
+  ehhez a **ledger-bejegyzés** `totalXp` mezőjéhez olvas — a projektornak
+  NEM kell (és NEM is tudja) az öt-komponensű bontást visszafejteni.
+- Lokalizációs kulcs konvenció: a kódbázisban élő minta a `String titleKey`
+  mező (l. `lib/features/practice/data/builtin_practice_catalog.dart`,
+  `lib/features/practice/data/adapters/practice_adapter_keys.dart`) — a
+  `LevelDefinition` ezt a mintát kövesse (`titleKey`, nem beégetett szöveg,
+  nem `AppLocalizations`-hívás a domain rétegben).
+
+**Visszakeresés (ADR 0312/0331, §4.9, brief-lint S8):**
+
+```
+node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "monoton szintgörbe level curve profil projekció rebuild"
+node tools/knowledge-rag.mjs --corpus lessons,halts --top 5 "túlcsordulás védelem több szint egyszerre level up overflow monotonicity"
+node tools/knowledge-rag.mjs --top 5 "level_curve.dart profile_projector.dart gamification_profile.dart monoton szint schemaVersion"
+```
+
+Legközelebbi releváns találat: **L26** — „«a profilból jön» ≠ a
+profil-OBJEKTUM": egy SDD-szakasz stricter, KÜLÖN predikátumot rögzíthet,
+mint amit egy naiv implementáció összemos. Áttételesen releváns itt: a
+projektor NE tételezze fel, hogy egy szomszédos objektum (pl. az R06
+`ExperiencePoints`) mezői közvetlenül leképezik a szükséges bemenetet —
+minden mezőt a ténylegesen olvasott típuson (`RewardLedgerEntry.totalXp`)
+mérj, ne a szomszédos policy-típuson. **Nincs közvetlenül a monoton
+szintgörcs/túlcsordulás témára illő korábbi lecke vagy halt** — a keresés
+lefutott, a hiány dokumentált (S8 teljesítve).
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -195,5 +247,50 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **A lefelé számolás.** Balance-váltáskor „korrektnek” tűnik újraszámolni; a felhasználótól elvett szint viszont visszafordíthatatlan bizalomvesztés (A1).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+- `level_definition.dart`: immutable szint-definíció futásidejű pozitív
+  sorszám-, nemnegatív küszöb- és nem üres `titleKey`-validációval.
+- `level_curve.dart`: egyetlen, validált és monoton görbeforrás; a küszöb
+  pontosan a magasabb szinthez tartozik, a nagyon nagy bemenet felső
+  szaturációval kezelődik.
+- `gamification_profile.dart`: `schemaVersion`-ös, immutable ledger-projekciós
+  pillanatkép; ismeretlen verzió és negatív XP hibát ad.
+- `profile_projector.dart`: lapozott ledgerből teljes újraépítés és ugyanazt a
+  számítást használó inkrementális projekció; az üres első oldal kezdőprofilt
+  ad, cursor-stallt csak nem üres oldalnál jelez; minden egy eseményben átlépett
+  szintet visszaad, tartalomkapuzó kimenet nélkül.
+- `public.dart`: a szint- és profil-projekció contractjai exportálva.
+- `level_curve_test.dart`: A1–A8 cellák — monotonitás, inkluzív küszöb,
+  üres-ledger rebuild, teljes/incrementális azonosság, többes szintlépés,
+  szaturáció, egyetlen görbeforrás, görbeváltás alatti szint-megtartás,
+  lokalizációs kulcs, schema-verzió és kapuzás-tilalom.
+
+**Valódi-sértés próba (§6.1):** a `ProfileProjector` ideiglenesen csak a
+végső szintet tette a `crossedLevels` kimenetbe. A
+`tools/round-gate.sh test/features/gamification/domain/level_curve_test.dart`
+futásán a format és analyze zöld volt, az A3 cella pedig szándékosan piros:
+várt `[2, 3, 4]`, tényleges `[4]`. A helyes, minden átlépett szintet visszaadó
+feltételt visszaállítottam, majd a végső gate zölden lefutott.
+
+**Review-javítások (F1–F3):** az üres ledger rebuild regressziós tesztje a
+hibás `null` → `null` cursor-guarddal piros volt (`Bad state: ledger page
+cursor did not advance`), majd a guardot a nem üres oldalakra szűkítve zöld.
+A balance-váltási regressziós teszt egy korábbi 3. szintű profilt olyan görbére
+vetít, amely 250 XP-nél csak 2. szintet adna; a meglévő profil szintje 3 marad.
+A guard ideiglenes eltávolítása a tesztet szándékosan pirosra váltotta (várt 3,
+kapott 2), majd visszaállítottam. Az A8 regexe `r'\bunlock\w*\b'`; egy
+ideiglenes `unlockedContent` mező a `profile_projector.dart` fájlban a célzott
+tesztet szándékosan pirosra váltotta, mert a tiltott azonosítót megtalálta.
+A mezőt visszaállítottam.
+
+**Futtatott ellenőrzés:**
+`tools/round-gate.sh test/features/gamification/domain/level_curve_test.dart`
+— javító körben: format zöld (1702 fájl, 0 módosítás), analyze zöld (0 issue),
+célzott teszt zöld (12/12), architecture zöld (12 allowlistelt eltérés),
+secrets zöld (3017 fájl, 0 finding).
+
+**Nem futtatott ellenőrzés:** teljes `flutter test`, property gate és release
+APK: a brief és az AGENTS.md szerint CI/Claude-orchestrátor felelőssége;
+CI-dispatch, PR és merge nem implementer-feladat.
 
 ## 11. Review — a Claude tölti ki
