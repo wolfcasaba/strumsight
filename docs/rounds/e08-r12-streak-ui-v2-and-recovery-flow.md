@@ -271,6 +271,79 @@ kártyamagasság valódi-sértés próbát: ideiglenes rontás → A7 PIROS →
 visszaállítás → célzott teszt ZÖLD. A munkát a kör branchére commitolja, majd
 `tools/codex-signal.sh done` jelzést ad; scope-ütközésnél előbb `stopped`.
 
+### Terra implementáció — 2026-08-20
+
+### Terra review-javítás — 2026-08-20
+
+- `streak_detail_screen_test.dart`: az A1 őr most mindkét **forrás-locale**
+  `streakV2BrokenTitle`, `streakV2BrokenBody` és `streakV2RecoveryCta`
+  értékét vizsgálja szégyenítő/sürgető szóhasználat, felkiáltójel és szöveges
+  countdown ellen. Angol metric-semantics 0/1/2 élcellák is bekerültek.
+- `gamification_en.arb`: a current/longest/total semantics ICU plural formot
+  használ, így az angol egyes szám `1 day`.
+- `app_en.arb` és `app_hu.arb`: kizárólag a
+  `dart run tool/gen_l10n_segments.dart --write` determinisztikus kimenete.
+
+**Valódi-sértés próba (A1).** Az angol forrás-szegmensben a
+`streakV2BrokenTitle = "You lost your streak!"` és
+`streakV2RecoveryCta = "Return within 2 days"` mutációval a célzott suite
+piros lett az A1 cellán: a title-variáns a felkiáltójel, a csak-CTA variáns a
+`within` szöveges countdown tiltásán bukott. A canonical copy visszaállítása
+után a célzott teszt zöld.
+
+**Futtatott ellenőrzések.** `dart run tool/gen_l10n_segments.dart --write`,
+majd `flutter gen-l10n`; a teljes
+`tools/round-gate.sh test/features/gamification/presentation/streak_detail_screen_test.dart test/features/streak`
+`exit_code=0` eredménnyel zárt: format, analyze, 21 V2 teszt, 20 legacy
+streak teszt, architecture, secrets és l10n mind zöld. CI-dispatch, PR és
+merge továbbra is a Sol orchestrátor feladata, ezért ezek nem futottak.
+
+**Módosított fájlok.**
+
+- `lib/l10n/features/gamification_en.arb` és
+  `lib/l10n/features/gamification_hu.arb`: új, párban levő V2 streak-szövegek
+  és szemantikai helyőrzők; a broken copy mindkét nyelven kimondja, hogy a
+  megszerzett tudás megmarad.
+- `lib/l10n/app_en.arb` és `lib/l10n/app_hu.arb`: kizárólag a
+  `dart run tool/gen_l10n_segments.dart --write` determinisztikus kimenete.
+- `streak_detail_screen.dart`: passzív, caller-fed V2 képernyő, kész state /
+  reason / weekly projection / callback bemenettel; nincs provider, óra,
+  repository, route vagy reward-számítás.
+- `streak_status_card.dart`: reason-code alapú, ARB-szöveges és reduced-motion
+  érzékeny státuszkártya.
+- `weekly_consistency_card.dart`: validált, hívó-adta 0..7 heti projekció.
+- `public.dart`: kizárólag a három új presentation exportja.
+- `streak_detail_screen_test.dart`: A1–A8 reason-, CTA-, route-, i18n-,
+  semantika-, reduced-motion- és méretmátrix bizonyítékai.
+
+**Valódi-sértés próba (A7).** A metric kártya köré ideiglenesen `SizedBox(height:
+80)` került. A `320×568`, `textScaleFactor = 2.0` A7-cella erre RenderFlex
+bottom-overflow-val PIROS lett (a túlcsordulás 264 px). A fix magasságot
+eltávolítottam; a méretmátrix a teljes célzott tesztben ismét zöld. Az A7
+teszt emellett a nagy szövegnél a metric kártya természetes, 80 px feletti
+magasságát is ellenőrzi, így a fix magasság visszakerülése a cellát újra
+pirosra viszi.
+
+**Futtatott parancsok és tényleges eredmény.**
+
+- `dart run tool/gen_l10n_segments.dart --write` → en és hu aggregátum írva.
+- `flutter test test/features/gamification/presentation/streak_detail_screen_test.dart`
+  → 20 teszt zöld (a restore után).
+- `dart format lib/features/gamification/public.dart
+  lib/features/gamification/presentation/screens/streak_detail_screen.dart
+  lib/features/gamification/presentation/widgets/streak_status_card.dart
+  lib/features/gamification/presentation/widgets/weekly_consistency_card.dart
+  test/features/gamification/presentation/streak_detail_screen_test.dart` → 5
+  fájl, 0 változás.
+- `tools/round-gate.sh test/features/gamification/presentation/streak_detail_screen_test.dart
+  test/features/streak` → kilépési kód 0; format, analyze, mindkét tesztútvonal,
+  architecture, secrets és l10n mind zöld. A V2 fájl 20, a legacy streak
+  könyvtár 20 tesztet futtatott.
+
+**Eltérés és nem futtatott ellenőrzés.** Nincs scope-bővítés. CI-dispatch,
+PR-nyitás és merge nem implementer-feladat, ezért nem futott; azokat a Sol
+orchestrátor végzi a commit utáni review/CI-folyamatban.
+
 ## 11. Review — a Sol tölti ki
 
 Correctness: `docs/reviews/e08-r12-review.md`.

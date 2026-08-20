@@ -1,0 +1,147 @@
+import 'package:flutter/material.dart';
+import 'package:strumsight/features/gamification/application/streak_service.dart';
+import 'package:strumsight/features/gamification/domain/streak/streak_state.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/streak_status_card.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/weekly_consistency_card.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
+
+/// Caller-fed Streak V2 presentation with no policy, route, or storage owner.
+class StreakDetailScreen extends StatelessWidget {
+  StreakDetailScreen({
+    super.key,
+    required this.state,
+    required this.reason,
+    required this.weeklyConsistencyDays,
+    required this.onRecoveryPressed,
+  }) {
+    if (weeklyConsistencyDays < 0 || weeklyConsistencyDays > 7) {
+      throw ArgumentError.value(
+        weeklyConsistencyDays,
+        'weeklyConsistencyDays',
+        'must be between 0 and 7',
+      );
+    }
+  }
+
+  final StreakState state;
+  final StreakEvaluationReason reason;
+  final int weeklyConsistencyDays;
+  final VoidCallback onRecoveryPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(l10n.streakV2Title)),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          children: [
+            StreakStatusCard(reason: reason),
+            const SizedBox(height: 16),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final cardWidth = (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SizedBox(
+                      width: cardWidth,
+                      child: _StreakMetricCard(
+                        icon: Icons.local_fire_department_outlined,
+                        value: state.current,
+                        label: l10n.streakV2CurrentLabel,
+                        semantics: l10n.streakV2CurrentSemantics(state.current),
+                      ),
+                    ),
+                    SizedBox(
+                      width: cardWidth,
+                      child: _StreakMetricCard(
+                        icon: Icons.emoji_events_outlined,
+                        value: state.longest,
+                        label: l10n.streakV2LongestLabel,
+                        semantics: l10n.streakV2LongestSemantics(state.longest),
+                      ),
+                    ),
+                    SizedBox(
+                      width: cardWidth,
+                      child: _StreakMetricCard(
+                        icon: Icons.calendar_today_outlined,
+                        value: state.totalQualifiedDays,
+                        label: l10n.streakV2TotalLabel,
+                        semantics: l10n.streakV2TotalSemantics(
+                          state.totalQualifiedDays,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: cardWidth,
+                      child: _StreakMetricCard(
+                        icon: Icons.ac_unit,
+                        value: state.freezes,
+                        label: l10n.streakV2FreezesLabel,
+                        semantics: l10n.streakV2FreezesSemantics(state.freezes),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            WeeklyConsistencyCard(days: weeklyConsistencyDays),
+            if (reason == StreakEvaluationReason.broken) ...[
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                key: const Key('streak-recovery-cta'),
+                onPressed: onRecoveryPressed,
+                icon: const Icon(Icons.play_arrow_outlined),
+                label: Text(l10n.streakV2RecoveryCta),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StreakMetricCard extends StatelessWidget {
+  const _StreakMetricCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.semantics,
+  });
+
+  final IconData icon;
+  final int value;
+  final String label;
+  final String semantics;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    container: true,
+    label: semantics,
+    child: ExcludeSemantics(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon),
+              const SizedBox(height: 12),
+              Text(
+                value.toString(),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
