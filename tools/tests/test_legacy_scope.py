@@ -218,6 +218,107 @@ class LegacyScopeTest(unittest.TestCase):
         self.assertTrue(fixed_pattern.ok, fixed_pattern.format())
         self.assertNotIn("docs/adr/0112-self-healing-pipeline.md", fixed_pattern.changed_paths)
 
+    def test_base_symbolic_ref_resolves_to_a_concrete_sha(self) -> None:
+        # E99-R18 H3, fourth occurrence (2026-08-20): the final scope-audit
+        # is invoked with --base origin/main, a moving remote-tracking ref,
+        # by design (see audit_legacy_scope's resolve comment). Before this
+        # fix, two audits run minutes apart against the literal string
+        # "origin/main" reported the SAME base in their output even though
+        # upstream had advanced in between -- the report gave no way to
+        # tell the runs had compared against different commits. Simulate a
+        # remote-tracking ref with update-ref (no real remote needed).
+        root = self.make_repo()
+        initial = self.head(root)
+        subprocess.run(
+            ["git", "update-ref", "refs/remotes/origin/main", initial], cwd=root, check=True
+        )
+
+        (root / "lib/features/tutor/tool.dart").write_text("changed\n")
+        self.commit_all(root, "in scope")
+
+        audit = self.audit(root, "origin/main")
+
+        self.assertNotEqual(audit.base, "origin/main")
+        self.assertEqual(audit.base, initial)
+        self.assertRegex(audit.base, r"^[0-9a-f]{40}$")
+
+    def test_protected_bookkeeping_file_flagged_by_upstream_drift_clears_after_resync(
+        self,
+    ) -> None:
+        # E99-R18 H3, fourth occurrence (2026-08-20, measured on the real
+        # incident): docs/execution/pipeline-queue.tsv is BOTH protected and
+        # continuously rewritten by the pipeline itself as rounds merge,
+        # fully independent of any round's own content. The real round
+        # branch synced with origin/main via a merge commit (e75ae7a4,
+        # 05:05:44Z) a few seconds BEFORE an unrelated queue-bookkeeping
+        # commit (634562d7, "E08-R06 done") landed on main. The round's own
+        # commits never touched the queue file -- `git show <fix-commit> --
+        # docs/execution/pipeline-queue.tsv` was empty on the real branch --
+        # yet the final `--base origin/main` scope-audit correctly reported
+        # a protected-path violation: the round's merged-in copy
+        # (E08-R06=pending) genuinely differed from CURRENT main
+        # (E08-R06=done), and squash-merging the round as-is really would
+        # have reverted that row. This is not a tool bug -- audit_legacy_scope
+        # answers exactly the question its own module docstring says the
+        # final audit should ("is the branch, right now, safe to merge onto
+        # current main") -- so the fix is a resync, not a behaviour change.
+        # This test locks in that mechanism with the real path and a
+        # condensed version of the real row transition.
+        root = self.make_repo()
+        protected = PROTECTED + ("docs/execution/pipeline-queue.tsv",)
+        queue = root / "docs/execution/pipeline-queue.tsv"
+        queue.parent.mkdir(parents=True, exist_ok=True)
+        queue.write_text("E08-R06\tpending\n")
+        self.commit_all(root, "queue: E08-R06 pending")
+        upstream_stale = self.head(root)
+        subprocess.run(
+            ["git", "update-ref", "refs/remotes/origin/main", upstream_stale], cwd=root, check=True
+        )
+
+        subprocess.run(["git", "checkout", "-qb", "round"], cwd=root, check=True)
+        (root / "lib/features/tutor/tool.dart").write_text("round content\n")
+        self.commit_all(root, "round: in-scope D-work")
+        subprocess.run(["git", "merge", "-q", "--no-edit", "origin/main"], cwd=root, check=True)
+
+        # Upstream advances with an out-of-band bookkeeping commit the
+        # round's sync-merge above did not (could not) see.
+        subprocess.run(["git", "checkout", "-q", upstream_stale], cwd=root, check=True)
+        queue.write_text("E08-R06\tdone\n")
+        self.commit_all(root, "chore(pipeline): E08-R06 done")
+        upstream_fresh = self.head(root)
+        subprocess.run(
+            ["git", "update-ref", "refs/remotes/origin/main", upstream_fresh], cwd=root, check=True
+        )
+        subprocess.run(["git", "checkout", "-q", "round"], cwd=root, check=True)
+
+        stale = audit_legacy_scope(
+            root, base="origin/main", allowed_paths=ALLOWED, protected_paths=protected
+        )
+        self.assertFalse(stale.ok, stale.format())
+        self.assertIn(
+            "protected path changed: docs/execution/pipeline-queue.tsv", stale.violations
+        )
+        self.assertEqual(stale.base, upstream_fresh)
+
+        # Confirms this is upstream drift, not scope creep: the round's own
+        # commits never touch the queue file.
+        touched_by_round = subprocess.run(
+            [
+                "git", "log", "--no-merges", "--format=%H",
+                f"{upstream_stale}..round", "--", "docs/execution/pipeline-queue.tsv",
+            ],
+            cwd=root, check=True, capture_output=True, text=True,
+        ).stdout
+        self.assertEqual(touched_by_round.strip(), "")
+
+        subprocess.run(["git", "merge", "-q", "--no-edit", "origin/main"], cwd=root, check=True)
+
+        resynced = audit_legacy_scope(
+            root, base="origin/main", allowed_paths=ALLOWED, protected_paths=protected
+        )
+        self.assertTrue(resynced.ok, resynced.format())
+        self.assertNotIn("docs/execution/pipeline-queue.tsv", resynced.changed_paths)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -100,6 +100,14 @@ def audit_legacy_scope(
     if not allowed_paths:
         raise SecurityError("allowed_paths must not be empty")
     head = _git(repo, ["rev-parse", "HEAD"]).decode().strip()
+    # Resolve `base` (often a moving remote-tracking ref like `origin/main`,
+    # by design for the final pre-merge audit) to a concrete SHA up front, so
+    # the report always names the exact commit compared against -- not a ref
+    # string that silently means different things a few seconds apart when
+    # upstream advances mid-investigation (measured: E99-R18 H3, 4th
+    # occurrence, 2026-08-20 -- two `--base origin/main` runs a few minutes
+    # apart disagreed and neither run's output revealed why).
+    base = _git(repo, ["rev-parse", base]).decode().strip()
     changed = collect_changed_paths(repo, base)
 
     violations: list[str] = []

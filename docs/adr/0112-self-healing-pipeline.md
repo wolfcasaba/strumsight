@@ -406,6 +406,85 @@ mért utóeredmény a heal-status `detail=` mezőjében és a záró HANDOFF-ban
 
 Lecke: `docs/LESSONS.md` [[L347]].
 
+### Módosítás (ADR 0112 önjavító kör, 2026-08-20) — H3 negyedik előfordulása: a `--base origin/main` végső scope-audit egy folyamatosan íródó védett fájlon mérve helyesen jelez, de a jelentés nem árulta el, MELYIK commitot jelentette `origin/main`-nek
+
+Mérés: E99-R18/H3 negyedszer állt meg ugyanezen a körön. A gyökérok NEM
+azonos a H8/[[L343]] vagy a harmadik H3/[[L347]] mintájával (nincs se
+konfliktus, se bundle-özött könyvelő commit) — egy új, negyedik variáns: a
+`docs/execution/pipeline-queue.tsv` egyszerre védett ÉS a pipeline saját
+üzemeltetése által FOLYAMATOSAN, a kör tartalmától teljesen függetlenül
+íródik (minden kör-átmenet módosítja). A kör-ág szinkron-merge-e
+(`e75ae7a4`, 05:05:44Z) néhány másodperccel egy önálló, a pipeline-tól
+származó könyvelő commit (`634562d7`, „E08-R06 done") előtt fagyasztotta be
+az `origin/main` pillanatképét — a kör SAJÁT, nem-merge commitjai
+bizonyíthatóan sosem érintették a queue-fájlt (`git log --no-merges
+<indulási-HEAD>..<kör-HEAD> -- docs/execution/pipeline-queue.tsv` üres), a
+végső `--base origin/main` scope-audit mégis `protected path changed:
+docs/execution/pipeline-queue.tsv`-t jelzett, mert a kör-ág merge-elt
+másolata (`E08-R06 … pending`) ténylegesen eltért a friss `main`-től
+(`E08-R06 … done`) — egy változatlan-tartalmú squash-merge ezt a sort tényleg
+visszaírta volna `pending`-re.
+
+**Ez NEM a scope-audit hibája.** A `tools/ai_router/legacy_scope.py` saját
+fejléce szerint a végső, `--base origin/main` audit SZÁNDÉKOSAN a
+mergelhetőség kérdésére válaszol („biztonságos-e ezt a kör-ágat éppen most a
+jelenlegi `main`-re mergelni"), nem az implementer launch-HEAD-hez mért saját
+munkájára (az egy külön kérdés, [[L347]] már tisztázta a kettéválasztást). A
+mérés szerint a jelzés IGAZ volt — a helyes feloldás tehát a kör-ág egy
+újabb szinkronja, ugyanaz a minta, mint H8-nál (`7458ca83`) és a második
+H3-nál (`96f1ada2`), NEM a `--base` szemantikájának gyengítése.
+
+**A tényleges, javított hiba**: a scope-audit JELENTÉSE a nyers `--base`
+argumentumot (a szimbolikus `origin/main` sztringet) írta ki feloldott SHA
+helyett — két, néhány perccel eltérő audit-futás ezért azonos „origin/main"
+bázist mutatott a kimenetében, holott a mögöttes commit közben tovább
+mozdult. Ez önmagában legalább egyszer valódi nyomozási időt vett el (ebben
+a self-healben): a `/home/ubuntu/ss-minimax-e99-r18` megosztott
+kör-munkapéldány helyi `origin/main` referenciája a `git fetch` hiánya
+miatt elavult volt (`7bc75c5d`-re mutatott a valódi `634562d7` helyett), és
+emiatt egy reprodukciós kísérlet hamis `OK`-t adott — csak a blob-hash-ek
+közvetlen összevetése (`git ls-tree <ref> -- <path>`) fedte fel az eltérést.
+A fix (`tools/ai_router/legacy_scope.py::audit_legacy_scope`) a `base`-t
+egyetlen `git rev-parse` hívással a függvény elején SHA-ra oldja, és ez a
+feloldott érték kerül a jelentésbe és a tényleges diff-hívásba is — ezzel
+mind a jelentés kétértelműsége, mind egy elméleti verseny-ablak (ha
+`origin/main` a `collect_changed_paths`-hívás KÖZBEN mozdulna) megszűnik. A
+`--base origin/main` szándékolt, mozgó-cél szemantikája (fent) VÁLTOZATLAN
+marad — ez a fix kizárólag azt teszi láthatóvá és stabillá, hogy melyik
+commitra oldódott fel.
+
+Mechanikus regresszió: `tools/tests/test_legacy_scope.py::LegacyScopeTest::
+test_base_symbolic_ref_resolves_to_a_concrete_sha` (a jelentett `base` a
+nyers `"origin/main"` sztring helyett 40-hex SHA — RED a fix előtt, GREEN
+utána) és `test_protected_bookkeeping_file_flagged_by_upstream_drift_clears_after_resync`
+(a valódi eset kicsinyített, valós útvonalat és sor-tartalmat használó mása:
+a queue-fájl `pending`→`done` átmenete a kör-ágon kívül landol, a végső
+audit előbb `FAILED`-et ad — bizonyítva, hogy a kör SAJÁT commitjai nem
+érintik a fájlt —, majd egy második szinkron után `OK`-ra vált).
+
+A valódi incidensen a HALTED-ben rögzített reprodukció (`tools/scope-audit.py
+--repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base origin/main`,
+FRISS `git fetch` után) a mérce: a kör-ág `origin/main`-nel való újbóli
+szinkronja (`heal(E99-R18/H3): sync round branch with origin/main`) után
+`Legacy scope audit OK`-ra vált.
+
+**Az ismétlődés önmagában tanulság**: E99-R18 négyszer futott H3-ba,
+mindegyik különböző gyökérokkal (ártalmatlan debris → D4 merge-uniós rés →
+ADR-könyvelés bundle → folyamatosan íródó védett fájl szinkron-versenye). A
+közös minta: a kör szokatlanul sokáig (több mint hat másik kör
+élettartamán át) maradt nyitva review nélkül, ami minden, a `main`-en
+folyamatosan mozgó védett útvonalat (jelenleg egyedül a
+`docs/execution/pipeline-queue.tsv`) egyre valószínűbb ütközési felületté
+tesz. Ha egy jövőbeli önjavító session ötödször látja ugyanezt a mintát
+(azonos gyökérok: folyamatosan íródó védett fájl + hosszan nyitott kör-ág),
+az már nem újabb pontjavítást igényel, hanem `outcome=escalate`-et azzal a
+javaslattal, hogy a kör tartalmi munkája (nem a self-heal) zárja le a kört
+gyorsabban, vagy a queue-bookkeeping mozduljon ki a védett listáról egy
+kifejezett, ember által jóváhagyott ADR-döntéssel.
+
+Lecke: `docs/LESSONS.md` [[L348]].
+
 ### 6. Az ADR 0087 §7 „epic-zárás = halt" szabálya feloldódik
 
 A `prepared`/kézi indítás továbbra is a sor dolga, de ha egy epic-záró kör
