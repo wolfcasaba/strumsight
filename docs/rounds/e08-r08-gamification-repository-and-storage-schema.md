@@ -294,4 +294,55 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Implementáció
+
+- Létrejött a négy, különálló, versioned `JsonDocumentStore`-dokumentumot
+  összefogó séma: profil-pillanatkép (`schemaVersion` + `totalXp`),
+  katalógusverzió, reward postaláda és a szándékosan minimális migrációs
+  placeholder. A kulcsok kizárólag a
+  `gamification_storage_schema.dart`-ban élnek.
+- A `LocalGamificationRepository` a profilcserét egyetlen
+  `JsonDocumentStore.write()` hívással végzi és egy explicit
+  `GamificationReadStatus.corrupt` állapotot ad vissza a sérült, nem
+  dekódolható vagy ismeretlen verziójú dokumentumra. Olvasás közben nem írja
+  felül a tárolt bájtokat.
+- A postaláda a meglévő `JsonCollectionStore<GamificationInboxItem>`-ot
+  használja `maxItems: inboxRetentionLimit`-tel és `newestLast` sorrenddel;
+  a repository a nyesés darabszámát diagnosztikai eredményként visszaadja,
+  de nem vezet be saját nyesési algoritmust.
+- A profilhoz broadcast watch-stream és sorosított, versenymentes cseresor
+  készült. A public repository contract csak schema DTO-kat és sima Dart
+  streamet ad ki, ezért fake közvetlenül implementálható.
+- Az architecture guard a meglévő `_gamificationImportUriMarkers` és
+  `_forbiddenGamificationDomainMarkerOffenders` párral ellenőrzi a kötelező
+  `application/` és a létezés esetén a `presentation/` fát; új markerlista
+  vagy trivia-parser nem készült.
+
+### Mérések
+
+- RED: `flutter test test/features/gamification/data/gamification_repository_test.dart`
+  a három még nem létező production-import miatt fordítási hibával állt meg;
+  ez igazolta a tesztelőször felírt szerződést.
+- ZÖLD: `flutter test test/features/gamification/data/gamification_repository_test.dart test/core/architecture_dependency_test.dart`
+  → 32 teszt zöld (A1–A8, versenyhelyzet és architecture guard).
+
+### Kötelező valódi-sértés próba
+
+- A profilcserébe ideiglenesen a `JsonDocumentStore.write()` elé
+  `await _store.remove(_profileDocument.key)` került. A célzott A1 mérés
+  ekkor PIROS lett: a write logban
+  `remove:ss.gamification.profile_snapshot` jelent meg, amit az A1 cella
+  kifejezetten tilt. Az atomi egyhívásos implementáció visszaállítva.
+- Az első mutált `round-gate.sh` futás a tesztek előtt analyzer-pirosra állt
+  (2 style-info, 2 unused import); ezek a kör saját diagnosztikái voltak és
+  javítva lettek. A második pontos gate-hívás után a harness nem adta át a
+  záró stdout-ot, ezért ezt nem kezelem gate-bizonyítékként; a fenti, teljes
+  hibakimenetű A1 célzott mérés a falszifikáció tényleges bizonyítéka.
+
+### Kötelező green gate
+
+- `tools/round-gate.sh test/features/gamification/data/gamification_repository_test.dart test/core/architecture_dependency_test.dart`
+  → ZÖLD: format, analyze, 10 repository-teszt, 23 architecture-teszt,
+  architecture dependency, secret scan és l10n parity mind zöld.
+
 ## 11. Review — a Claude tölti ki
