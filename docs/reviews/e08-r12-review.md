@@ -1,8 +1,8 @@
 # E08-R12 — Correctness review
 
-Brief: `docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`  
-Diff: `git diff origin/main...b506516c`  
-Reviewer: Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20  
+Brief: `docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`
+Diff: `git diff origin/main...terra/e08-r12-streak-ui-v2-and-recovery-flow`
+Reviewer: Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20
 Verdikt: **APPROVED**
 
 ## Összegzés

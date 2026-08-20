@@ -1,8 +1,8 @@
 # E08-R12 — Security és product-boundary review
 
-Brief: `docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`  
-Diff: `origin/main...b506516c`  
-Reviewer: Sol high-risk audit · Dátum: 2026-08-20  
+Brief: `docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`
+Diff: `origin/main...terra/e08-r12-streak-ui-v2-and-recovery-flow`
+Reviewer: Sol high-risk audit · Dátum: 2026-08-20
 Verdikt: **APPROVED**
 
 ## Összegzés
