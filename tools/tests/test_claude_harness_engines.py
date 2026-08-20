@@ -29,6 +29,31 @@ CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 MINIMAX_API_KEY=x python3 -m pytest
 tools/tests/test_claude_harness_engines.py -q` → 2 failed (ugyanaz a két eset,
 amit a `mm-round.sh` saját gate-futása H6-ként jelzett). Lásd
 `test_ambient_endpoint_env_does_not_leak_into_a_subscription_mode_run`.
+
+Hatodik mért hibaminta (E99-R20 H6 self-heal, ADR 0112, 2026-08-20): ugyanez
+az osztály, más forrás. Az ötödik minta a `mm-round.sh` SAJÁT (`external_endpoint`
+ághoz tartozó) `launch_env`-jét takarította ki; a `tools/codex-round.sh`
+motor-profil blokkja viszont EGY SZINTTEL FELJEBB, a hívó session sajátjaként
+exportálja a `tools/engine-profile.sh env <motor>` teljes kimenetét
+(`ENGINE_MODEL`, `ENGINE_STALL_MINUTES`, `ENGINE_ROUND_TIMEOUT`,
+`ENGINE_CONTEXT_WINDOW`, `ENGINE_MAX_OUTPUT`, `ENGINE_REASONING`, valamint
+`CODEX_HOME`/`CLAUDE_CONFIG_DIR`) — ez a §7 gate-en ÁT ugyanúgy bekerül a
+`dict(os.environ)`-ba. Mérve: az E99-R20 `terra` implementer futása alatt
+`bash tools/engine-profile.sh env terra` → `ENGINE_MODEL=gpt-5.6-terra`
+(+ a fenti hattal), és a leszivárgott `ENGINE_MODEL` a `mm-round.sh:82`
+`model=${MM_MODEL:-${ENGINE_MODEL:-MiniMax-M3[1m]}}` során a "nincs
+ROUND_ENGINE" (`""`) esetben — ahol a wrapper SAJÁT `if [ -n "$round_engine" ]`
+ága helyesen NEM fut le, tehát NEM ír felül semmit — közvetlenül a hamis,
+ambiens `gpt-5.6-terra` értéket adta a `--model` kapcsolónak a történeti
+MiniMax-alapértelmezés (`MiniMax-M3[1m]`) helyett. `python3 -m pytest
+tools/tests -q` a valódi Terra-worktree-ben (`/home/ubuntu/ss-terra-e99-r20`,
+head `21224fa9`) kétszer egymás után `1 failed, 656 passed`-et mért
+(`WrapperModeTest.test_the_legacy_call_without_round_engine_stays_minimax`);
+egy KÜLÖN, friss shellben futtatott `ROUND_ENGINE=terra python3 -m pytest
+tools/tests -q` viszont zöld, mert ott hiányzik a `codex-round.sh` teljes
+export-blokkja — a puszta `ROUND_ENGINE=terra` NEM elég a reprodukcióhoz,
+a `tools/engine-profile.sh env terra` teljes hat sora kell. Lásd
+`test_ambient_engine_profile_env_does_not_leak_into_the_legacy_run`.
 """
 
 import os
@@ -119,16 +144,29 @@ class WrapperModeTest(unittest.TestCase):
         )
         environment.pop("ROUND_BRIEF", None)
         # A burkoló saját endpoint-döntésének útjából kitakarítjuk azt, amit
-        # egy ÉLŐ, ROUND_ENGINE=minimax implementer-session örökített ide
-        # (lásd a modul-docstring ötödik mért hibamintáját) — enélkül a
-        # "nincs override" asserciók a leszivárgott ambiens értéket mérnék, nem
-        # a `mm-round.sh` tényleges viselkedését. `extra_env` alább még
-        # felülírhatja, ha egy teszt szándékosan mást akar.
+        # egy ÉLŐ implementer-session örökített ide (lásd a modul-docstring
+        # ötödik ÉS hatodik mért hibamintáját) — enélkül a "nincs override"
+        # asserciók a leszivárgott ambiens értéket mérnék, nem a `mm-round.sh`
+        # tényleges viselkedését. Két forrás: a `mm-round.sh` SAJÁT
+        # `external_endpoint` launch_env-je (ötödik minta — az első négy) ÉS a
+        # `tools/codex-round.sh`/`tools/engine-profile.sh env <motor>`
+        # EGY SZINTTEL FELJEBBI exportja, ami BÁRMELYIK motorral (nemcsak
+        # minimax-szal) élő session Bash-hívásaként öröklődik (hatodik minta —
+        # a maradék hét). `extra_env` alább még felülírhatja, ha egy teszt
+        # szándékosan mást akar.
         for leaking_var in (
             "ANTHROPIC_BASE_URL",
             "ANTHROPIC_AUTH_TOKEN",
             "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
             "MINIMAX_API_KEY",
+            "CODEX_HOME",
+            "CLAUDE_CONFIG_DIR",
+            "ENGINE_MODEL",
+            "ENGINE_STALL_MINUTES",
+            "ENGINE_ROUND_TIMEOUT",
+            "ENGINE_CONTEXT_WINDOW",
+            "ENGINE_MAX_OUTPUT",
+            "ENGINE_REASONING",
         ):
             environment.pop(leaking_var, None)
         if extra_env:
@@ -171,6 +209,29 @@ class WrapperModeTest(unittest.TestCase):
         self.assertIn("BASE_URL=<nincs>", captured)
         self.assertNotIn("AUTH_TOKEN=<van>", captured)
         self.assertIn("COMPACT=<nincs>", captured)
+
+    def test_ambient_engine_profile_env_does_not_leak_into_the_legacy_run(self) -> None:
+        """MÉRT hibaminta (E99-R20 H6 self-heal, 2026-08-20) — lásd a modul-
+        docstring hatodik pontját. Ha ez a teszt maga is egy ÉLŐ
+        `ROUND_ENGINE=terra` implementer-session Bash-hívásaként fut, a
+        `tools/codex-round.sh` motor-profil blokkja már exportálta a
+        `tools/engine-profile.sh env terra` teljes kimenetét a szülő
+        session-be; itt szándékosan ugyanazokat az ÉRTÉKEKET szimuláljuk
+        (valódi mérés a boxon, 2026-08-20), hogy a reprodukció a futtató
+        környezettől függetlenül, determinisztikusan lefusson."""
+        leaked_ambient_env = {
+            "CODEX_HOME": "/home/ubuntu/.codex-terra",
+            "ENGINE_MODEL": "gpt-5.6-terra",
+            "ENGINE_STALL_MINUTES": "12",
+            "ENGINE_ROUND_TIMEOUT": "3600",
+            "ENGINE_CONTEXT_WINDOW": "400000",
+            "ENGINE_MAX_OUTPUT": "64000",
+            "ENGINE_REASONING": "-",
+        }
+        with patch.dict(os.environ, leaked_ambient_env):
+            captured = self.run_wrapper("", extra_env={"MINIMAX_API_KEY": "teszt-kulcs"})
+        self.assertIn("BASE_URL=https://api.minimax.io/anthropic", captured)
+        self.assertIn("--model MiniMax-M3", captured)
 
     def test_the_effort_level_comes_from_the_registry(self) -> None:
         captured = self.run_wrapper("sonnet-impl", extra_env={"MINIMAX_API_KEY": ""})
