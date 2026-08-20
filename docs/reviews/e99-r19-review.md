@@ -1,9 +1,9 @@
 # E99-R19 — Review
 
-Brief: `docs/rounds/e99-r19-gov-13-chain-hygiene.md`  
-Diff: `f2d98204...cf368d2a`  
-Reviewer: Codex (független, izolált `/tmp/review-e99-r19-cf368d2a` klón)  
-Dátum: 2026-08-20  
+Brief: `docs/rounds/e99-r19-gov-13-chain-hygiene.md`
+Diff: `f2d98204...cf368d2a`
+Reviewer: Codex (független, izolált `/tmp/review-e99-r19-cf368d2a` klón)
+Dátum: 2026-08-20
 Verdikt: CHANGES REQUIRED
 
 ## Összegzés

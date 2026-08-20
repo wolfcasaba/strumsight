@@ -1,7 +1,7 @@
 # E99-R19 — Security review
 
-Reviewer: Codex (független review)  
-Dátum: 2026-08-20  
+Reviewer: Codex (független review)
+Dátum: 2026-08-20
 Verdikt: PASS
 
 0 CRITICAL · 0 BLOCKER · 0 MAJOR
