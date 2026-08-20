@@ -1,12 +1,13 @@
 # E08-R06 — XP policy engine és csökkenő hozam
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** IN PROGRESS (pre-flight revízió: 2026-08-20, kód olvasva: `main @ 1af3ffa6`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 6
 - **Kör-azonosító:** `E08-R06`
 - **Branch:** `<motor>/e08-r06-xp-policy-engine-and-diminishing-returns`
 - **Előfeltétel:** `E08-R05` merge-elve (eligibility policy)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0304` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **Előre kiosztott ADR:** `ADR 0341` — az élő `tools/round-slots.py reserve-adr --round E08-R06`
+  foglaló adta; az eredeti `0304` már foglalt volt. Az ADR-t az orchestrátor írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
@@ -22,6 +23,7 @@ allowed_paths = [
   "lib/features/gamification/infrastructure/default_reward_policy.dart",
   "lib/features/gamification/public.dart",
   "test/features/gamification/application/reward_policy_engine_test.dart",
+  "docs/adr/0341-explainable-xp-policy-and-diminishing-returns.md",
   "docs/rounds/e08-r06-xp-policy-engine-and-diminishing-returns.md",
 ]
 gate_tests = [
@@ -29,6 +31,47 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight revízió (2026-08-20)
+
+**Mért kiindulás.** A pre-flight a tényleges `main @ 1af3ffa6` állapotot
+olvasta. Az R05 `RewardEligibilityDecision` négy kapuja `baseXp`,
+`qualityBonus`, `mastery`, `verified`, mindegyik `RewardGateDecision`; a
+`RewardLedgerEntry` már `int policyVersion`, `baseXp`, `bonusXp` és `totalXp`
+mezőket tárol. A kanonikus `LearningActivityEvent` jelenleg nem hordoz
+`parentEventId`-t vagy exercise-azonosítót. Ez a kör nem módosítja azt a
+lezárt contractot: a saját, új `RewardPolicyRequest` application-contractja
+veszi fel a `practiceKey` és az opcionális `parentEventId` adatot, míg a saját
+`RewardPolicyHistory` explicit korábbi event- és szülőazonosítókat kap. Így a
+szülő/gyermek deduplikáció mindkét beérkezési sorrendben determinisztikus,
+anélkül hogy a scope tiltott fájlját bővítenénk.
+
+**R05 illesztés.** A motor kizárólag már kiértékelt
+`RewardEligibilityDecision` bemenetből számol: `baseXp` kapu engedi a base és
+duration komponenst, `qualityBonus` a quality-t, `mastery` az improvementet,
+`verified` a diversity-t. Tiltott kapu komponense nulla; a korábbi policy
+reasonja megmarad az explainable receiptben. A motor új, külön eligibility
+döntést nem hoz.
+
+**Küszöb pontosítás.** A korábbi hármas utolsó összegző sora hibásan
+„alatt → elutasít"-t írt. A napi plafon nem elutasítás: a teljes cap előtti
+maradék jár, pontosan a capen és fölötte a receipt megmarad, de a napi cap
+miatti jóváírás nulla és `dailyCapApplied` indoka van. A `dailyXpCap = 100`
+származtatott cellák gépi ellenőrzése: `99 + 1 = 100` (teljes jóváírás),
+`100 + 1 = 101` (maradék `max(100 - 100, 0) = 0`),
+`101 + 1 = 102` (maradék `max(100 - 101, 0) = 0`).
+
+**Visszakeresett előzmény.** Szűkített RAG-találatok: `adr/0289` (XP nem mastery),
+`adr/0338` (R05 négy kapuja és `int policyVersion`), `halts/E08-R05`
+(független verified/mastary cella); teljes korpuszon az R05 és R03 merge
+összefoglalók megerősítették a contract-sorrendet. Nincs a körre külön,
+korábbi diminishing-return implementáció. A numerikus küszöbök
+értékkészletének mérésére alkalmazandó tanulság: `lessons/L259`.
+
+**ADR foglalás.** `tools/round-slots.py reserve-adr --round E08-R06` →
+`0341`; ezért a brief és a pre-flight ADR erre a számra váltott. A listába
+csak az orchestrátor által írt pre-flight ADR került, az implementer tilos
+zónája változatlan.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -69,7 +112,7 @@ plafon-csökkentés okának rögzítése a nyugtában · balance-konfiguráció 
 - Szintgörbe és profil-projekció — Kör 7.
 - Bármely UI: a felület nem számol jutalmat (ADR 0290 §2).
 - Az XP felhasználása elsajátítottság kimondására (ADR 0289) — abszolút tilos.
-- `docs/adr/**` — az ADR 0304-et a Claude írja.
+- `docs/adr/**` — az ADR 0341-et az orchestrátor írja.
 
 ## 4. Engedélyezett fájlok
 
@@ -80,10 +123,12 @@ plafon-csökkentés okának rögzítése a nyugtában · balance-konfiguráció 
 | `lib/features/gamification/infrastructure/default_reward_policy.dart` | **ÚJ** — a balance-konfiguráció és az alapértelmezett policy |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
 | `test/features/gamification/application/reward_policy_engine_test.dart` | a §6 cellái |
+| `docs/adr/0341-explainable-xp-policy-and-diminishing-returns.md` | csak orchestrátor pre-flight ADR-je |
+| `docs/rounds/e08-r06-xp-policy-engine-and-diminishing-returns.md` | §0.0 pre-flight és implementer handoff |
 
-**Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
+**Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` (kivéve az orchestrátor saját, fent listázott `0341` pre-flight ADR-je) · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
-## 5. Kötött architekturális döntések (ADR 0304)
+## 5. Kötött architekturális döntések (ADR 0341)
 
 ### 5.1 Minden XP MAGYARÁZHATÓ — komponensenként lebontva
 
@@ -150,11 +195,11 @@ bejegyzéseket.
 
 | Cella | Bemenet | Elvárt |
 |---|---|---|
-| a küszöb **alatt** | a napi összeg `dailyXpCap - 1` XP-nél tart, és jön 1 XP | a teljes 1 XP jóváírva, **nincs** csökkentési ok a nyugtában |
-| **rajta** (a küszöbön) | a napi összeg pontosan `dailyXpCap` | a plafon ELÉRVE — a további esemény csökkentett XP-t kap, a nyugta **rögzíti az okot**; az esemény maga NEM vész el |
-| a küszöb **fölött** | a napi összeg már `dailyXpCap` fölött van (korábbi bejegyzésekből) | a további esemény a csökkentett sávban marad, ok rögzítve; az előzmény érintetlen |
+| a küszöb **alatt** | `dailyXpCap = 100`, napi összeg 99 XP, és jön 1 XP (`99 + 1 = 100`) | a teljes 1 XP jóváírva, **nincs** csökkentési ok a nyugtában |
+| **rajta** (a küszöbön) | `dailyXpCap = 100`, napi összeg pontosan 100 XP, és jön 1 XP (`100 + 1 = 101`) | maradék `max(100 - 100, 0) = 0`; a receipt megmarad `dailyCapApplied` indokkal, az esemény maga NEM vész el |
+| a küszöb **fölött** | `dailyXpCap = 100`, napi összeg 101 XP, és jön 1 XP (`101 + 1 = 102`) | maradék `max(100 - 101, 0) = 0`; a receipt megmarad `dailyCapApplied` indokkal, az előzmény érintetlen |
 
-A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
+A hármas tömören: **alatt** → teljes jóváírás · **rajta** → nulla cap-maradék, receipt + indok · **fölött** → nulla cap-maradék, receipt + indok.
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
 
