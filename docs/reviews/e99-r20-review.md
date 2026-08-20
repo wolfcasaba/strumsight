@@ -3,11 +3,11 @@
 Brief: `docs/rounds/e99-r20-gov-14-round-landing-automation.md`
 Diff: `9e18c68d..d0c25079` (javító commit: `1779de35`)
 Reviewer: Codex Sol · Dátum: 2026-08-20
-Verdikt: **CHANGES REQUIRED** (landolási próbán újranyitva)
+Verdikt: **APPROVED** (F3 javítás: `697277e8`)
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 Az első review két fail-closed rést talált. A `1779de35` javító commit mindkét
 próbát állandó regressziós cellává tette; a friss upstreamet tartalmazó
@@ -17,7 +17,7 @@ próbát állandó regressziós cellává tette; a friss upstreamet tartalmazó
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| 1 | Merge-záron belüli fetch/rebase/gate/push/merge | ❌ | F3: a script git-módja `100644`, közvetlenül nem indítható |
+| 1 | Merge-záron belüli fetch/rebase/gate/push/merge | ✅ | git mode `100755`; közvetlen execute-bit regressziós cella zöld |
 | 2 | Mechanikus konfliktusok szűk allowlistje | ✅ | 8-cellás hermetikus suite; fail-closed mutáció RED |
 | 3 | Kombinált-HEAD kapu | ✅ | rebase után gate+safe push, majd merge helyett új exact-SHA CI-kérés |
 | 4 | Orchestrátor a landolót hívja | ✅ | `pipeline-orchestrator-prompt.md:484-497` |
@@ -102,7 +102,10 @@ artefaktum. Scope-on kívüli implementációs változás nincs.
   regressziós tesztet, amely a repository-beli `LAND` execute bitjét méri.
 - **Ellenőrzés:** `git ls-files -s tools/round-land.sh` első mezője `100755`,
   `test -x tools/round-land.sh`, célzott suite és round-gate zöld.
-- **Státusz:** OPEN
+- **Javítás:** a `697277e8` commit a git mode-ot `100755`-re állította, és a
+  repository-beli `LAND` execute bitjét közvetlenül mérő regressziós tesztet
+  adott. Friss izolált klónban `test -x` és a célzott suite zöld.
+- **Státusz:** FIXED (`697277e8`)
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -111,11 +114,11 @@ artefaktum. Scope-on kívüli implementációs változás nincs.
 | scope-audit | 6 útvonal, 2 generated/ignored, OK | ✅ |
 | format/analyze/architecture/secrets/l10n | `MINDEN GATE ZÖLD` | ✅, friss izolált klón |
 | célzott Flutter-teszt | 1 passed | ✅ |
-| tooling pytest | 662 passed, 2 skipped, 574 subtests | ✅, 341.69 s |
-| landoló regressziós suite | 11 passed, 3 subtests | ✅, F1/F2 lezárva |
+| tooling pytest | 663 passed, 2 skipped, 574 subtests | ✅, 319.86 s |
+| landoló regressziós suite | 12 passed, 3 subtests | ✅, F1/F2/F3 lezárva |
 | CI | még nincs végső exact-SHA run | ⏳ javítás után kötelező |
 
 ## Merge-döntés
 
-F3 nyitva, ezért merge tilos. Javítás után friss re-review és az új exact-SHA
-Full Gate + Router CI kötelező; csak mindkettő zöldjén landolhat.
+Nincs nyitott BLOCKER/MAJOR. Az ADR 0052 szerint az új exact-SHA Full Gate és
+Router CI még kötelező; csak mindkettő zöldjén landolhat.
