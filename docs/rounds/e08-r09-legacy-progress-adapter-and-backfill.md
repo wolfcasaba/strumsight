@@ -355,4 +355,49 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### E08-R09 implementáció (Terra, 2026-08-20)
+
+- `gamification_storage_schema.dart`: a kompatibilis, const alapértékű
+  `processedCount` checkpoint és annak JSON round-tripja; a korábbi R08
+  placeholder-dokumentum hiányzó mezővel is `0`-ra olvasható.
+- `legacy_practice_adapter.dart`: a caller-supplied Progress public contract
+  rekordjait kanonikus eseményekké alakítja. Az ID a teljes stabil wire
+  fingerprintet és a fingerprinten belüli ordinalt tartalmazza; a negatív vagy
+  érvénytelen direkt rekord nem ad eseményt.
+- `gamification_migrator.dart`: a teljes snapshotból alapvonal-reportot készít,
+  minden backfill receiptet nulla XP-vel ír, és minden sikeres ledger-append
+  után a következő feldolgozandó indexet perzisztálja.
+- `public.dart`: a két új migrációs contract exportja.
+- `legacy_practice_migration_test.dart`: A1–A11, a checkpoint-alatt/rajta/
+  fölötte útvonal, az R08 placeholder-kompatibilitás és 400 rekordos cap.
+
+**TDD RED/GREEN.** A kezdeti célzott futás a hiányzó
+`LegacyPracticeAdapter`, `GamificationMigrator` és `processedCount` szimbólumokon
+fordítási hibával (RED) állt meg. Az implementáció utáni célzott futás 11/11
+teszttel zöld volt. Az R08 placeholder-state regressziós tesztje a javítás előtt
+`JsonRecordException(missing, field: processedCount)` hibával piros volt, utána
+zöld.
+
+**Valódi-sértés próba.** Az ID-képzést ideiglenesen egy újrafuttatásonként
+növekvő globális számlálóra cseréltem. A pontos kör-gate format és analyze
+lépése zöld után a tesztlépésben A1, A2 és A5 piros lett: az ID-sorozat eltért,
+egy friss checkpoint fake hat receiptet kapott három helyett, a checkpoint
+folytatás pedig más ID-sorozatot látott. A determinisztikus fingerprint+ordinal
+kód visszaállítva.
+
+**Futtatott ellenőrzések.**
+
+```text
+flutter test test/features/gamification/data/legacy_practice_migration_test.dart
+  RED (hiányzó implementáció), majd GREEN (11/11), majd GREEN (12/12).
+
+tools/round-gate.sh test/features/gamification/data/legacy_practice_migration_test.dart
+  Mutációval: format/analyze GREEN, A1/A2/A5 RED.
+  Visszaállítás után: format/analyze/test/architecture GREEN; a gate sikeresen lefutott.
+```
+
+**Eltérés / nem futtatott ellenőrzés.** Nincs eltérés. Teljes Flutter suite,
+property gate, release APK és CI-dispatch nem implementer-hatáskör; ezek az
+orchestrátor kötelező merge előtti ellenőrzései.
+
 ## 11. Review — a Claude tölti ki

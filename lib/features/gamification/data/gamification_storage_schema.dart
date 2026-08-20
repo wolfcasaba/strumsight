@@ -118,20 +118,26 @@ final class GamificationInboxItem {
   };
 }
 
-/// Versioned placeholder for the migration state contract owned by R09/R10.
+/// Persisted checkpoint for idempotent gamification migrations.
 final class GamificationMigrationState {
-  const GamificationMigrationState()
+  const GamificationMigrationState({this.processedCount = 0})
     : schemaVersion = gamificationStorageSchemaVersion;
 
   final int schemaVersion;
 
+  /// The first legacy record index that has not been processed yet.
+  final int processedCount;
+
   factory GamificationMigrationState.fromJson(Map<String, dynamic> json) {
     _requireCurrentSchemaVersion(json);
-    return const GamificationMigrationState();
+    return GamificationMigrationState(
+      processedCount: optionalInt(json, 'processedCount', fallback: 0, min: 0),
+    );
   }
 
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': schemaVersion,
+    'processedCount': processedCount,
   };
 }
 
