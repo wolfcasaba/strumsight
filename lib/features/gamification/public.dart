@@ -1,6 +1,9 @@
 /// Public contract for future gamification consumers.
 library;
 
+export 'application/activity_event_ingestor.dart';
+export 'data/activity_outbox_repository.dart';
+export 'data/local_activity_outbox_repository.dart';
 export 'domain/activity/activity_source.dart';
 export 'domain/activity/evidence_trust.dart';
 export 'domain/activity/learning_activity_event.dart';

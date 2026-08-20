@@ -230,4 +230,59 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás áttekintése
+
+A kör öt új / módosított fájlt ad a gamification feature-höz:
+
+| Fájl | Szerep |
+|---|---|
+| `lib/features/gamification/data/activity_outbox_repository.dart` | Az interfész: `enqueue`, `drain`, `pendingRecords`, `quarantineRecords`, és a `ActivityOutboxRecord` / `ActivityOutboxQuarantine` / `ActivityOutboxEnqueueResult` / `ActivityOutboxDrainReport` értéktípusok. |
+| `lib/features/gamification/data/local_activity_outbox_repository.dart` | A korlátos FIFO sor, kísérletszámlálóval, `KeyValueStore`-ra sorosítva. A `capacity` és `maxAttempts` kötelező, pozitív konstruktor-bemenetek; a `(capacity+1)`-edik enqueue a legrégebbi pending rekordot karanténba helyezi. A drain a ledger kivételeit a saját határán belül kvártélyozza. |
+| `lib/features/gamification/application/activity_event_ingestor.dart` | A feature-session híd: `recordSavedActivity` (ellenőrzi az `entry.sourceEventId == event.eventId` egyezést, és enqueue-ol), valamint `drain` (a ledger-írásokat a határ túloldalán tartja). |
+| `lib/features/gamification/public.dart` | Három új export-sor: `activity_event_ingestor.dart`, `activity_outbox_repository.dart`, `local_activity_outbox_repository.dart`. |
+| `test/features/gamification/application/activity_ingestor_test.dart` | A1–A8 cellák + a konstruktor és az idellenőrzés validációja. |
+
+### Acceptance lefedettség
+
+- **A1** (`processing-failure/ledger-exception`): `_FakeRewardLedger.alwaysThrow = true` mellett a `recordSavedActivity` és a `drain` egyaránt dobásmentesen fut. A dobás elnyelődik, a rekord a pending sorban marad, és a `quarantined` lista a `dropped` jelentésben jelenik meg, amíg a `maxAttempts` határt el nem éri.
+- **A2** (crash-during-drain): a második drain a ledger helyreállása után a `R03` `appendIfAbsent`-jére támaszkodva egyszer hozza létre a bejegyzést — pending 1-ről 0-ra csökken, és a ledger pontosan egy bejegyzést kap.
+- **A3** (idempotens drain): ugyanaz a drain-idempotencia — a második `drain` üres pending listát lát, és nem ír a ledgerbe.
+- **A4** (delete-after-write): dobos drain mellett a rekord a pending sorban marad (`hasLength(1)`), és a ledger `hasProcessedEvent` hamisat ad vissza.
+- **A5** (malformed record): egy kézzel írt, dekódolhatatlan on-disk rekordot a betöltés a `malformedRaw` karanténba helyez, miközben a mögötte lévő jó rekord a drain során elismervényesül.
+- **A6** (karantén lekérdezhető): `maxAttempts=1` mellett az első dobó drain azonnal a `attemptLimitReached` karanténba helyezi a rekordot; a `quarantineRecords()` a kimenetet adja.
+- **A7** (kapacitás-mátrix): `capacity=4` mellett az `enqueue` 3/4/5 eseménnyel rendre a pending=3 / pending=4 (no eviction) / pending=4 + legrégebbi (activity-0) karanténba helyezését produkálja — az utolsó cella a `result.evicted` referencián is ellenőrizve.
+- **A8** (maxAttempts): `maxAttempts=3`, `alwaysThrow=true` mellett a 3. drain a rekordot `attemptLimitReached` karanténba helyezi, és a pending üres.
+
+### Valódi-sértés próba (KÖTELEZŐ, §10)
+
+A cél a hamis kiimplementáció korai törlésének kimutatása volt: a `_drain` törölje a pending rekordot a ledger hívása **ELŐTT** — ekkor a teszt-negyed `A4` cellájának PIROSRA kell váltania.
+
+**A próba eredménye:** a módosítással a `flutter test test/features/gamification/application/activity_ingestor_test.dart` futtatáskor a cella valóban PIROS lett (`[E]` mellette a futásban). A felfedezés pontos:
+
+```
+00:00 +0 -4: A4 — event deleted from outbox only AFTER successful ledger
+              write a throwing drain leaves the record in the pending
+              queue, not removed [E]
+```
+
+A bugot a tesztkimenet a `pendingRecords() == hasLength(1)` helyett `pendingRecords() == isEmpty` formában jelezte (a hibás kiimplementáció kiüríti a sort, mielőtt a ledgernek esélye lenne a ledger-oldali szempontból sikeres vagy sikertelen írásra). A próba lefutása után a kódot visszaállítottuk, és a teljes suite (12 teszt) újra zöld.
+
+A probe parancs: a `tools/round-gate.sh`-tól függetlenül futtatva, a `_drain` három soros inverziójával (record-eltávolítás a `try { appendIfAbsent }` blokk elé helyezve):
+
+```dart
+// HAMIS (PROBE) — visszaállítva az éles kódban:
+_pending.removeAt(index);
+_attempts.remove(record.entry.sourceEventId);
+await _persist();
+try {
+  appended = await _ledger.appendIfAbsent(record.entry);
+} on Object catch (...) { ... }
+```
+
+### Mért sajátosságok a mérce-teljesítésben
+
+- A drain kivétele a `try { _ledger.appendIfAbsent }` blokkban fut, így a `_drain` maga soha nem dob. A kivétel a `_logger.error` csatornáján jelenik meg, és a rekord a `dropped` listához adódik — ez felel meg az A1-nek.
+- A karantén a `loading` során is fogadhat rekordokat: ha a `_ensureLoaded` nem tudja dekódolni a perzisztált JSON-t, a nyers bájtokat a `ActivityOutboxQuarantine.malformedRaw` kvártélyba helyezi, nem droppolja. Ez az A5-öt biztosítja az out-of-the-box crash- és más írási hibákhoz.
+- A fixture `_FakeRewardLedger` a `LocalRewardLedgerRepository` felett ül: a teszt hordozhatósága kedvéért az `InMemoryKeyValueStore`-on osztoznak, így a kontrollálható `alwaysThrow` kapcsoló a mérő tokent szolgáltatja.
+
 ## 11. Review — a Claude tölti ki
