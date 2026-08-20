@@ -16,7 +16,9 @@
 //   3. bármely más futásidejű hiba (hiányzó fájl, parse-hiba) → kilépési kód 2.
 //
 // A kimenet kulcs-sorrendje ALFABETIKUS a `@@locale` fejléccel az első helyen;
-// az egyes üzenetek `@kulcs` metaadata azonnal a `kulcs` után következik.
+// az egyes üzenetek `@kulcs` metaadata azonnal a `kulcs` után következik, és
+// kizárolag abból a `Segment`-ből származhat, amelyik a `kulcs` üzenetet is
+// szolgáltatta — a cross-fragment `@kulcs` hiba (E99-R17 F1 lelet).
 import 'dart:convert';
 import 'dart:io';
 
@@ -88,17 +90,29 @@ MergeResult mergeSegments({
         continue; // a fejlécet a generator írja a saját lokáljával
       }
       if (key.startsWith('@')) {
-        // üzenet-metaadat: csak akkor kerül be, ha a hozzá tartozó kulcs
-        // már bekerült (és nem ütközött). Ez garantálja, hogy a `@kulcs`
-        // ÁRVAKÉNT soha ne jelenjen meg a kimenetben.
+        // üzenet-metaadat: kizárolag abban a `Segment`-ben, amelyik az
+        // üzenetet is szolgáltatta. Egy későbbi (vagy korábbi) fragmentum
+        // `@kulcs` bejegyzése CSENDESEN felülírhatná más szegmens
+        // codegen-metaadatát — ez E99-R17 F1 lelet, és mostantól HIBA.
+        // Az árva (üzenet nélküli) metaadatot változatlanul eldobjuk: az
+        // üzenet ugyanabból a fragmentumból később sem érkezhet, mert a
+        // szegmensek egyszer, ciklusban kerülnek feldolgozásra.
         final messageKey = key.substring(1);
-        if (!seenFrom.containsKey(messageKey)) {
+        final ownerLabel = seenFrom[messageKey];
+        if (ownerLabel == null) {
+          continue;
+        }
+        if (ownerLabel != segment.label) {
+          errors.add(
+            'cross-fragment metaadat "$key" a(z) ${segment.label} fájlban '
+            '(a(z) "$messageKey" üzenetet a(z) $ownerLabel szolgáltatta)',
+          );
           continue;
         }
         if (merged.containsKey(key)) {
           errors.add(
             'ismétlődő metaadat "$key" a(z) ${segment.label} fájlban '
-            '(a "${seenFrom[messageKey]}" már szolgáltatta)',
+            '(a(z) $ownerLabel már szolgáltatta)',
           );
           continue;
         }

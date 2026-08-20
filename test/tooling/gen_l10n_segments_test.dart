@@ -117,6 +117,90 @@ void main() {
       expect(merge.aggregate!.data['@greeting'], isA<Map>());
       expect(merge.aggregate!.data.containsKey('@orphan'), isFalse);
     });
+
+    test(
+      'cross-fragment metaadat — a generátor hibával utasítja el (E99-R17 F1)',
+      () {
+        // F1 lelet: ha egy későbbi fragmentum `@greeting` metaadatot ad,
+        // miközben a `greeting` üzenetet egy KORÁBBI fragmentum szolgáltatta,
+        // a metaadatot CSENDESEN elfogadtuk — és ezzel egy feature-fragmentum
+        // más szegmens codegen-metaadatát írhatta felül. A javítás után ez
+        // HIBA: a metaadat csak abból a `Segment`-ből származhat, amelyik az
+        // üzenetet is adta.
+        final merge = mergeSegments(
+          locale: 'en',
+          segments: [
+            Segment(
+              label: 'base',
+              path: 'base',
+              data: {'@@locale': 'en', 'greeting': 'Hello'},
+            ),
+            Segment(
+              label: 'feat',
+              path: 'feat',
+              // A 'greeting' üzenetét a `base` adta — a `feat` `@greeting`
+              // bejegyzése cross-fragment metaadat, és mostantól HIBA.
+              data: {
+                '@@locale': 'en',
+                'tunerTitle': 'Tuner',
+                '@greeting': {'description': 'felülírási kísérlet'},
+              },
+            ),
+          ],
+        );
+
+        expect(merge.isClean, isFalse);
+        expect(merge.aggregate, isNull);
+        expect(merge.errors, hasLength(1));
+        final error = merge.errors.single;
+        expect(error, contains('cross-fragment'));
+        expect(error, contains('@greeting'));
+        expect(error, contains('feat'));
+        expect(error, contains('base'));
+        // A `greeting` üzenet a base-ből származik, de a metaadat NEM
+        // kerülhetett be: a kulcshalmaz nem tartalmazza a felülírást.
+        // (A `merge.aggregate` null, tehát a kulcshalmazt külön kell
+        // ellenőrizni — ehhez kézzel újraegyesítjük, hogy a teszt
+        // HAMISÍTÁS-biztos legyen.)
+        expect(
+          merge.errors.join('\n'),
+          isNot(contains('ismétlődő kulcs')),
+          reason:
+              'a cross-fragment metaadat hibája ELFEDI a duplikált '
+              'kulcs hibáját — az üzenet itt nincs duplikálva',
+        );
+      },
+    );
+
+    test('cross-fragment metaadat: a metaadat hibája NEM engedi át a '
+        'kimenetet', () {
+      // Annak bizonyítása, hogy a cross-fragment metaadat NEM csendben
+      // "csak kimarad" — a teljes `aggregate` sem jön létre, és a hiba
+      // explicit a `merge.errors`-ben van.
+      final merge = mergeSegments(
+        locale: 'en',
+        segments: [
+          Segment(
+            label: 'base',
+            path: 'base',
+            data: {'@@locale': 'en', 'sharedKey': 'from-base'},
+          ),
+          Segment(
+            label: 'featureA',
+            path: 'featureA',
+            data: {
+              '@@locale': 'en',
+              '@sharedKey': {'description': 'cross-fragment metaadat'},
+            },
+          ),
+        ],
+      );
+
+      expect(merge.isClean, isFalse);
+      expect(merge.aggregate, isNull);
+      expect(merge.errors.single, contains('cross-fragment'));
+      expect(merge.errors.single, contains('@sharedKey'));
+    });
   });
 
   group('generateLocale', () {
