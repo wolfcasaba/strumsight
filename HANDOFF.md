@@ -1,5 +1,28 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E99-R20 (GOV-14) KÉSZ — kombinált-HEAD kör-landoló és H8-SELFDUP őr — PR #361, squash `5ad15b5f` (2026-08-20)
+
+A `tools/round-land.sh` a merge-záron belül köti a PR identitását a mért
+branchhez/SHA-hoz, friss `main`-re rebase-el, csak a két append-only naplót és
+a kör saját briefjét oldja mechanikusan, a kombinált HEAD-en futtatja a
+round-gate-et, majd safe-force-push után új exact-SHA CI-t kér. Változatlan,
+már igazolt HEAD-en squash-merge-el. Az új H8-SELFDUP patch-id őr rebase előtt
+blokkolja azt a mért hibát, amikor egy régi, rebase előtti csúcs
+visszamerge-elése a kör saját patcheit megduplázza.
+
+Implementer: Terra; független correctness és high-risk security review: Sol,
+mindkettő APPROVED. Izolált review: scope-audit OK (6 útvonal, 2
+generated/ignored), round-gate 6/6 zöld, tooling pytest 664 passed / 2 skipped
+/ 574 subtest; a H8-SELFDUP mutáció guard nélkül RED, visszaállítva GREEN.
+Exact `a73493f4`: Full Gate
+[32373805059](https://github.com/wolfcasaba/strumsight/actions/runs/32373805059)
+és Router CI
+[32373785655](https://github.com/wolfcasaba/strumsight/actions/runs/32373785655)
+success; post-merge round-gate a friss `main`-en 6/6 zöld. A részletes
+történet a `docs/handoff-archive.md` elején található.
+Következő SDD-kör: **E08-R11 — Qualified day, planned rest és recovery
+policy**.
+
 ## 🔥 [GOV] MIND A KÉT SLOT Sol+Terra — commitolt slot-döntés és Sol-vezényelt önjavítás (user-döntés 2026-08-20, branch `claude/sol-orchestrator-terra-implementator-jtf4z5`)
 
 **User-döntés:** „mind a két sloton azt akarom, hogy a Sol orchestrátor és a
@@ -3105,6 +3128,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-20):** `main` @ `5ad15b5f` — E99-R20 GOV-14
+kombinált-HEAD kör-landoló, PR [#361](https://github.com/wolfcasaba/strumsight/pull/361),
+squash-merge. Implementer Terra (`gpt-5.6-terra`), reviewer Sol
+(`gpt-5.6-sol`). Exact `a73493f4`: Full Gate 32373805059 + Router CI
+32373785655 success; correctness és security review APPROVED. Következő:
+**E08-R11**. Post-merge round-gate: 6/6 zöld.
+
 **Aktuális állapot (2026-08-20):** `main` @ `842231f5` — E08-R09 Legacy
 progress adapter és activity backfill, PR
 [#359](https://github.com/wolfcasaba/strumsight/pull/359), squash-merge.
@@ -3588,6 +3618,14 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E99-R20 — GOV-14 kör-landolás automatizálás** (PR
+[#361](https://github.com/wolfcasaba/strumsight/pull/361), squash `5ad15b5f`,
+[ADR 0313](docs/adr/0313-round-landing-automation.md)). Kétfázisú exact-SHA
+landolás, fail-closed konfliktus-osztályozás, PR-identitás-kötés és
+H8-SELFDUP guard. F1/F3 BLOCKER + F2 MAJOR javítva; végső
+correctness/security review APPROVED. Exact `a73493f4`: Full Gate 32373805059
++ Router CI 32373785655 success. Részletesen: `docs/handoff-archive.md`.
 
 **E08-R09 — Legacy progress adapter és activity backfill** (PR
 [#359](https://github.com/wolfcasaba/strumsight/pull/359), squash `842231f5`,
@@ -4303,13 +4341,12 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R10** (Streak V2 domain és legacy migráció,
-SDD Chapter 9 — `docs/rounds/e08-r10-streak-v2-domain-and-legacy-migration.md`,
-engine a queue-ban `terra` (a GOV rotáció alatt lásd a fejléc-blokk Sol/Terra
-felállását), a queue-ban előre kiosztott ADR `0308` — a pre-flightban MÉRNI
-kell a `tools/round-slots.py reserve-adr`-ral, mert a sorozatos ADR-fogyás
-miatt valószínűleg ez is stale (az E08-R09 `0307` helyett a foglaló által
-adott `0350`-et használta). Friss sessionben indul.
+**A következő SDD-lépés: E08-R11** (Qualified day, planned rest és recovery
+policy, SDD Chapter 9 —
+`docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md`, engine a
+queue-ban `terra`, előre kiosztott ADR `0309`, amelyet a pre-flightban a
+`tools/round-slots.py reserve-adr` foglalóval újra kell mérni). Friss
+sessionben indul.
 
 **Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
 a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)

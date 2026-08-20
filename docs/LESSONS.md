@@ -14031,3 +14031,32 @@ diagnosztikai lépés a PONTOS halt-parancs újrafuttatása byte-azonos
 munkapéldányon/HEAD-en. Ha zölden és gyorsan lezár, a hiba a hívó motor saját
 futtatókörnyezetében volt, nem a repóban — `outcome=retry`, kódjavítás
 nélkül. Rokon: [[L316]] (ugyanez a minta egy CI-flake-re, ott rekurrenciával).
+
+## L361 — A kétfázisú rebase után a régi csúcs visszamerge-elése ön-duplikált történetet készít; patch-id őr kell a megtévesztő H8 elé (E99-R20, 2026-08-20)
+
+**Mért hiba.** Az E99-R20 landoló első invokációja helyesen rebase-elte a
+körágat, lefuttatta a kombinált-HEAD gate-et, pusholta az új csúcsot és merge
+nélkül exact-SHA CI-t kért. Az orchesztrátor ezután tévesen a rebase ELŐTTI
+régi csúcsot merge-elte vissza a friss csúcsba. `git patch-id --stable`
+méréssel kilenc nem-merge patch kétszer szerepelt; a következő rebase ezért
+nem valódi upstream-konfliktust, hanem saját add/add és tartalmi
+konfliktusokat adott négy körfájlon.
+
+**Javítás és falszifikáció.** A recovered ág a friss `main` fölött egyetlen
+lineáris patch-példányból épült, a sérült publikus ág force-rewrite nélkül
+megmaradt. A `round-land.sh` új H8-SELFDUP előfeltétel-őre a branch saját
+nem-merge commitjainak patch-id-jait vizsgálja rebase előtt. A valódi
+„rebase, majd régi csúcs visszamerge” fixture az őr hívásának ideiglenes
+kikapcsolásával RED lett (`returncode 0`, várt blocked helyett),
+visszaállítással GREEN.
+
+**Két operátori kísérőmérés.** (1) A kombinált gate előtt a gitignore-olt
+Flutter l10n outputot a `prepare-flutter-generated.sh`-val elő kell állítani;
+enélkül az analyzer 1069 `AppLocalizations`-hibát adott, tracked kódhiba
+nélkül. (2) A GitHub squash-merge távolról sikerülhet úgy is, hogy a `gh pr
+merge --delete-branch` utólagos helyi takarítása nonzero-val tér vissza: a
+single-branch landing-klónban a PR #361 `MERGED` lett (`5ad15b5f`), de a
+hiányzó normál `origin/main` tracking branch miatt a CLI exit 1-et adott. A
+merge-eredményt ezért strukturált `gh pr view --json state,mergeCommit`
+ellenőrzéssel kell megkülönböztetni a takarítási hibától; a nonzero önmagában
+nem bizonyít sikertelen távoli merge-et.
