@@ -1,6 +1,6 @@
 # E08-R09 — Legacy progress adapter és activity backfill
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** PREPARED → **revideálva** (ADR 0112 önjavító kör, H3, 2026-08-20 — §0.0; előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 9
 - **Kör-azonosító:** `E08-R09`
 - **Branch:** `<motor>/e08-r09-legacy-progress-adapter-and-backfill`
@@ -17,6 +17,7 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
+  "lib/features/gamification/data/gamification_storage_schema.dart",
   "lib/features/gamification/data/migration/legacy_practice_adapter.dart",
   "lib/features/gamification/data/migration/gamification_migrator.dart",
   "lib/features/gamification/public.dart",
@@ -41,6 +42,82 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélkül a kör bukott. **Listán kívüli fájl kellene → `stopped`**,
 és a kimenet a brief-revízió kérése, nem az `allowed_paths` csendes tágítása.
 Meglévő, ma zöld teszt elbukása → `blocked`, nem a teszt átírása.
+
+## 0.0 Self-heal pre-flight revízió (ADR 0112 önjavító kör, 2026-08-20, halt H3)
+
+Az első dispatch (implementer `terra`) H3-mal állt meg, MODELLHÍVÁS ELŐTT — a
+saját pre-flightja mérte, hogy a §5.3 kötött döntés (migráció
+**ellenőrzőponttal**, A5: „Félbeszakadt migráció az ellenőrzőponttól
+folytatódik, nem elölről") és a §6.1 küszöb-hármas nem valósítható meg a mai
+`GamificationMigrationState` alakjával. Mérve (`main @ 71512fff`, a self-heal
+saját reprodukciója):
+
+```
+nl -ba lib/features/gamification/data/gamification_storage_schema.dart | sed -n '121,135p'
+#   121  /// Versioned placeholder for the migration state contract owned by R09/R10.
+#   122  final class GamificationMigrationState {
+#   123    const GamificationMigrationState()
+#   124      : schemaVersion = gamificationStorageSchemaVersion;
+#   126    final int schemaVersion;
+#   ...    -- nincs más mező, a checkpoint számára nincs hely
+```
+
+Ez nem implementer-hiba: az `ADR 0344` (E08-R08, elfogadva 2026-08-20) D7
+pontja **explicit** ezt a kört (R09/R10) jelöli ki a tényleges migrációs
+mezők forrásaként — „A tényleges migrációs mezőket a Kör 9/10 ... tölti ki"
+—, miközben az E08-R08 brief `lib/core/**`-t tiltotta, a mai `allowed_paths`
+pedig `lib/features/gamification/data/gamification_storage_schema.dart`-ot
+egyáltalán nem sorolta fel. A gyökérok tehát Class B: a kör-tartalom (ADR
+0344 D7 + a brief §5.3/A5 kötött döntése) ellentmond a saját
+`allowed_paths` listájának — a fájl, amit a §5.3 megkövetel, nincs
+engedélyezve.
+
+**Feloldás — szűk bővítés, egyetlen fájl.** `allowed_paths` a
+`gamification_storage_schema.dart`-tal bővült. A bővítés NEM ad új
+architekturális szabadságot: az implementer ebben a fájlban **kizárólag** a
+`GamificationMigrationState` osztályt bővítheti a checkpoint mezőjével/
+mezőivel (pl. egy monoton `processedCount`/`checkpoint` index) — a másik
+három dokumentum (`GamificationProfileSnapshot`, `GamificationCatalogVersion`,
+`GamificationInboxItem`), a `GamificationStorageKeys` kulcslista (A8: négy
+kulcs, változatlanul) és a `migrationStateMaxBytes` korlát NEM módosul.
+
+**Kötelező visszafelé-kompatibilitási korlát (nem tárgyalható).** A már
+merge-elt `test/features/gamification/data/gamification_repository_test.dart`
+NINCS ezen a listán (R08 tulajdona, ma zöld, ebben a körben TILOS zóna
+marad) és **A3 cellája** `const migration = GamificationMigrationState();`
+nulla-argumentumos konstrukciót vár el, amit a séma után is visszaolvashatóvá
+kell tenni. Az új mező(k)nek ezért **alapértelmezett értékkel** kell
+rendelkezniük a const konstruktorban (pl. `this.processedCount = 0`), hogy ez
+a zéró-argumentumos hívás és az A3 round-trip változatlanul zöld maradjon —
+ha ez a korlát a §5.3 megvalósítását ellehetetlenítené, az `stopped`/
+`escalate`, nem a R08 teszt átírása.
+
+**Visszakeresett előzmény (S8, `.pipeline/brief-lint-E08-R09.md`, a self-heal
+zárja le).** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5
+"gamification migration checkpoint allowed_paths schema placeholder"` a repó
+saját precedensét adja: [`ADR 0117`](../adr/0117-song-storage-migrator-boundary.md)
+Döntés 2 (E03-R08, dalfájl-migráció) már eldöntötte, hogy egy migrációs
+checkpoint **saját, verziózott JSON-dokumentumként** él, a meglévő
+atomikus-írás infrastruktúrán (ott `AtomicFileWriter`, itt
+`JsonDocumentStore.write()`) — ugyanaz a forma, amit ez a revízió a
+`GamificationMigrationState` bővítésével követ, nem egy új tárolási
+primitív. [`ADR 0328`](../adr/0328-measured-gamification-baseline-contract.md)
+(E08-R01) a jelen epic saját, mért migrációs-adatvesztés elleni fegyelmét
+rögzíti — ez a revízió nem ír felül belőle semmit, csak a §5.3/A5-öt teszi
+megvalósíthatóvá a már kijelölt ADR 0344 D7 nyomvonalon.
+
+Regressziós védelem:
+`tools/tests/test_e08_r09_migration_state_schema_scope.py` — a valódi mért
+halt-útvonalat futtatja `audit_legacy_scope()`-on a ténylegesen committolt
+brief ellen, bizonyítva, hogy a mért útvonal az új listával belül van, egy
+szomszédos, ugyanabban a könyvtárban élő fájl (`gamification_repository.dart`,
+a repository-interfész — ezt a kört NEM érinti) viszont továbbra is kívül
+marad — a bővítés egy fájl, nem az egész `data/` könyvtár.
+
+Az eredeti E08-R09 dispatch modellhívás nélkül állt meg (nincs félkész
+munkapéldány, nincs commit, nincs nyitott PR) — ez a self-heal nem visz
+tovább tartalmi migrációs munkát, a friss dispatch a felfrissített
+`allowed_paths`-szal indul újra.
 
 ## 1. Cél
 
