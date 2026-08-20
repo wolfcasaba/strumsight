@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/core/storage/json_document_store.dart';
 import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/features/gamification/data/gamification_repository.dart';
 import 'package:strumsight/features/gamification/data/gamification_storage_schema.dart';
@@ -78,6 +80,31 @@ void main() {
         expect(_profileSnapshot(_repository(store)).totalXp, 15);
       },
     );
+
+    test('A2: a malformed inbox record does not hide valid records', () {
+      final store = InMemoryKeyValueStore(<String, Object>{
+        GamificationStorageKeys.rewardInbox: jsonEncode(<String, Object?>{
+          'schemaVersion': documentSchemaVersion,
+          'items': <Object?>[
+            _inboxItem('inbox-good-1').toJson(),
+            <String, Object?>{
+              'schemaVersion': gamificationStorageSchemaVersion,
+              'createdAt': '2026-08-20T12:01:00.000Z',
+            },
+            _inboxItem('inbox-good-2').toJson(),
+          ],
+        }),
+      });
+
+      final read = _repository(store).readInbox();
+
+      expect(read.status, GamificationReadStatus.available);
+      expect(read.value, hasLength(2));
+      expect(read.value!.map((item) => item.id), <String>[
+        'inbox-good-1',
+        'inbox-good-2',
+      ]);
+    });
 
     test('concurrent profile replacements persist their call order', () async {
       final store = _InterruptingStore()..holdNextProfileWrite = true;

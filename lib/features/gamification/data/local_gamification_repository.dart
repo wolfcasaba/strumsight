@@ -133,13 +133,6 @@ final class LocalGamificationRepository implements GamificationRepository {
       return const GamificationRead<List<GamificationInboxItem>>.corrupt();
     }
 
-    try {
-      for (final rawItem in body) {
-        GamificationInboxItem.fromJson(requireObject(rawItem));
-      }
-    } on Object {
-      return const GamificationRead<List<GamificationInboxItem>>.corrupt();
-    }
     return GamificationRead<List<GamificationInboxItem>>.available(
       _inboxStore.read(),
     );

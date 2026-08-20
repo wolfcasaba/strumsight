@@ -345,4 +345,19 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   → ZÖLD: format, analyze, 10 repository-teszt, 23 architecture-teszt,
   architecture dependency, secret scan és l10n parity mind zöld.
 
+### F1 javító kör (2026-08-20)
+
+- A `readInbox()` a listaalak ellenőrzése után közvetlenül a
+  `JsonCollectionStore<GamificationInboxItem>.read()` eredményét adja vissza;
+  az előzetes, teljes listát eldobó DTO-validáló hurok törölve.
+- Az A2 regressziós teszt egy háromrekordos nyers envelope-ot ír közvetlenül
+  a store-ba. A hiányzó `id`-jű középső rekordot a collection store kihagyja,
+  miközben a két érvényes rekord `available` státuszban marad elérhető.
+- RED: a változtatás előtt a teszt `Expected: available`,
+  `Actual: corrupt` hibával bukott. ZÖLD: javítás után a repository-teszt
+  11/11 teszttel zöld.
+- `tools/round-gate.sh test/features/gamification/data/gamification_repository_test.dart test/core/architecture_dependency_test.dart`
+  → ZÖLD: format, analyze, 11 repository-teszt, 23 architecture-teszt,
+  architecture, secrets és l10n parity.
+
 ## 11. Review — a Claude tölti ki
