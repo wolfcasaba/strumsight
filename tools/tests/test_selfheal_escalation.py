@@ -12,7 +12,15 @@ SCRIPT = ROOT / "tools" / "round-pipeline.sh"
 
 
 class SelfhealEscalationTest(unittest.TestCase):
-    """GOV-09: the final self-heal attempt varies its engine; halt alerts throttle."""
+    """GOV-09: the final self-heal attempt varies its engine; halt alerts throttle.
+
+    A cellák a Sol-pin ELŐTTI, kvóta-tudatos Claude→Terra heal-utat mérik,
+    ezért explicit env-pinnel futnak (`PIPELINE_ORCH_ROTATION_FILE=/dev/null`
+    + `PIPELINE_ORCH_ROTATION=alternate`). Pin nélkül a commitolt
+    `docs/execution/orchestrator-rotation` (`sol`, user-döntés 2026-08-20)
+    érvényesülne, és a heal rögzített identitása a nyilvántartás `sol` sora
+    lenne — azt a Sol-pines utat a `test_sol_terra_both_slots.py` méri.
+    """
 
     def run_attempt(
         self,
@@ -86,6 +94,8 @@ attempt_selfheal
             PIPELINE_HALT_REMINDER_MIN="60",
             PIPELINE_HALT_REMINDER_MAX_H="24",
             PIPELINE_TEST_NOW=str(now),
+            PIPELINE_ORCH_ROTATION_FILE="/dev/null",
+            PIPELINE_ORCH_ROTATION="alternate",
             NOTIFICATIONS=str(notifications),
             LAUNCHED_ENGINE=str(launched_engine),
             PROMPT_COPY=str(prompt_copy),
@@ -184,6 +194,8 @@ attempt_selfheal
                 PIPELINE_ENGINE_REGISTRY=str(registry),
                 PIPELINE_SELFHEAL_MAX="3",
                 PIPELINE_TEST_NOW=str(now),
+                PIPELINE_ORCH_ROTATION_FILE="/dev/null",
+                PIPELINE_ORCH_ROTATION="alternate",
                 PIPELINE_FALLBACK_CODEX_HOME=str(terra_config),
                 CODEX_BIN="true",
                 DISPATCH_KIND=str(dispatch_kind),

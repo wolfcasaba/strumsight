@@ -580,6 +580,19 @@ A döntés kívülről lekérdezhető: `tools/round-pipeline.sh --independent-en
 > rotáció gépezete: env-pin alatt mérhető, és a lejárat utáni visszaállás
 > után újra ez az érvényes út. Részletek: HANDOFF (2026-08-20 GOV-bejegyzés)
 > és a `pipeline-orchestrator-prompt.md` MOTOR-FELÁLLÁS blokkja.
+>
+> **Kiterjesztés (user-döntés 2026-08-20): MIND A KÉT SLOT ezzel a
+> felállással megy.** A kért slotszám a commitolt
+> [`docs/execution/pipeline-slots`](docs/execution/pipeline-slots) fájlban
+> utazik (`2`), ami erősebb a `PIPELINE_SLOTS` env-nél (file > env >
+> script-default, fail-closed érvénytelen értékre) — ugyanaz a szerződés és
+> ugyanaz a mért indok, mint a rotáció-fájlnál. A RAM-fedezet őre (ADR 0171
+> §1) változatlan: a fájl a KÉRT sávokat mondja meg, a tényleges párhuzam
+> ettől lefelé térhet el, naplózott `SLOT-KORLÁT` sorral. Az **önjavító kör
+> is slotot foglal**, ezért a Sol-pin alatt azt is a Sol vezényli (rögzített
+> identitása a nyilvántartás `sol` sora), és az utolsó heal-kísérlet innen
+> vált más modellre — a gyakorlatban a Terrára (ADR 0307 §2). Pin nélkül a
+> heal bitre a régi, kvóta-tudatos Claude→Terra úton marad.
 
 A `H-INDEP` és a `H-GATEGUARD` **nem önjavítható** — az önjavító session
 kvótazárlat alatt maga is Terra, tehát körben oldaná fel. Ezekre emberi döntés

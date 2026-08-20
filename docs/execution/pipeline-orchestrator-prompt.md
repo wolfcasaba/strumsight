@@ -268,13 +268,29 @@ megmaradt — a user döntése: „hadd fogyjon el". Amíg az előfizetés él, 
 - **Javító kör: ugyanaz a `terra`** — nincs motorváltás javításkor, és a
   MiniMax-ra írt „EGY javító kör, utána Codex-eszkaláció" szabály tárgytalan,
   amíg a Terra az implementer.
+- **Mind a két slot ezzel a felállással megy** (user-döntés 2026-08-20,
+  kiterjesztés): a kért slotszám a **commitolt `docs/execution/pipeline-slots`**
+  fájlban utazik (`2`), ami ERŐSEBB a `PIPELINE_SLOTS` env-nél (file > env >
+  script-default) — ugyanaz a szerződés, mint a rotáció-fájlnál, ugyanazzal a
+  mért indokkal (a cron env-je némán egysávosra vinné vissza a láncot). A
+  RAM-fedezet őre változatlan: a fájl a KÉRT sávokat mondja meg, a tényleges
+  párhuzam ettől lefelé térhet el, naplózott `SLOT-KORLÁT` sorral. Állapot:
+  `tools/pipeline-status.sh` („slot: N kért → M tényleges").
+- **Az önjavító kör is slot**, ezért az sem megy a Claude-keretből: a Sol-pin
+  alatt a heal-ülést a **Sol** vezényli, rögzített identitása a nyilvántartás
+  `sol` sora, és a harmadik (utolsó) kísérlet innen vált MÁS modellre — a
+  gyakorlatban a **Terra** (ADR 0307 §2). Pin nélkül a heal a régi,
+  kvóta-tudatos Claude→Terra úton marad.
 - **Függetlenség:** a Sol↔Terra pár a modell-azonossági kulcson mérve
   független (két különböző modell; `orchestrator_conflicts_with_implementer`),
   a KÖZÖS Pro-előfizetés keretét a user e döntéssel tudatosan vállalta —
   éppen a keret elégetése a cél.
 - **A lejárat UTÁN** (a Codex-oldal auth/kvóta végleg elhal): írd át a
   `docs/execution/orchestrator-rotation` fájlt `alternate`-re (a
-  `test_the_committed_rotation_file_value_is_sol` cellával EGYÜTT), oszd
+  `test_the_committed_rotation_file_value_is_sol` cellával EGYÜTT) — ezzel a
+  heal is visszaáll a Claude-útra —, döntsd el, marad-e a két slot
+  (`docs/execution/pipeline-slots` + a
+  `test_the_committed_slots_file_value_is_two` cella EGYÜTT írandó át), oszd
   vissza a nyitott queue-sorokat a mért szabály szerint (`minimax`/`codex` →
   de a `codex`/`terra` sorok a lejárt előfizetéssel NEM futtathatók —
   ilyenkor `minimax`/`sonnet-impl` a mezőny), és frissítsd ezt a blokkot.
@@ -477,6 +493,11 @@ Három kötelező ellenőrzés a mért néma-bukások ellen (`docs/LESSONS.md` L
 - nem nyúl a `docs/execution/pipeline-queue.tsv`-hez (azt a driver vezeti).
 
 ## 4.1 Ha párhuzamos kör is fut (PIPELINE_SLOTS>1)
+
+A kért slotszám ma **2** (commitolt `docs/execution/pipeline-slots`,
+user-döntés 2026-08-20), és MINDKÉT sáv ugyanazzal a felállással megy: Sol
+vezényel, Terra implementál. A másik sáv tehát nem „idegen" motor — a
+munkamegosztás akkor is fájl-diszjunkt, a lenti két szabály változatlanul köt.
 
 A `.pipeline/inflight/` könyvtár mondja meg, fut-e rajtad kívül másik kör
 (`tools/round-slots.py inflight-list`). Ha igen, két szabály köt:
