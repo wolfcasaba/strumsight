@@ -1,34 +1,34 @@
 # E99-R20 — Független review
 
 Brief: `docs/rounds/e99-r20-gov-14-round-landing-automation.md`
-Diff: `d8552204..f7fec35a`
+Diff: `9e18c68d..d0c25079` (javító commit: `1779de35`)
 Reviewer: Codex Sol · Dátum: 2026-08-20
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
-Az engedélyezett diff, a deklarált kör-gate és a teljes tooling-suite zöld,
-de két eldobható próbateszt bizonyította, hogy a landoló nem köti össze
-fail-closed módon a mért lokális HEAD-et a ténylegesen merge-elt PR-rel.
+Az első review két fail-closed rést talált. A `1779de35` javító commit mindkét
+próbát állandó regressziós cellává tette; a friss upstreamet tartalmazó
+`d0c25079` HEAD-en a scope-audit, a round-gate és a teljes tooling-suite zöld.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| 1 | Merge-záron belüli fetch/rebase/gate/push/merge | ⚠️ | `tools/round-land.sh:65-180`; F1 nyitva |
+| 1 | Merge-záron belüli fetch/rebase/gate/push/merge | ✅ | `tools/round-land.sh`; rebase után kétfázisú exact-SHA ág |
 | 2 | Mechanikus konfliktusok szűk allowlistje | ✅ | 8-cellás hermetikus suite; fail-closed mutáció RED |
-| 3 | Kombinált-HEAD kapu | ⚠️ | a lokális kapu fut, de F1 miatt az exact-SHA CI bizonyítéka elavulhat |
+| 3 | Kombinált-HEAD kapu | ✅ | rebase után gate+safe push, majd merge helyett új exact-SHA CI-kérés |
 | 4 | Orchestrátor a landolót hívja | ✅ | `pipeline-orchestrator-prompt.md:484-497` |
 | 5 | Router-CI útvonal-lefedettség | ✅ | meglévő `tools/**` trigger; scope nem módosít workflow-t |
 
 ## Scope-audit
 
-`python3 tools/scope-audit.py --repo /tmp/review-e99-r20-sol.wJ7qq9 --brief
-docs/rounds/e99-r20-gov-14-round-landing-automation.md --base d8552204`:
-**OK**, 4 változott útvonal, 0 generated/ignored. Scope-on kívüli
-implementációs változás nincs.
+`python3 tools/scope-audit.py --repo /tmp/review-e99-r20-sol-final.mE5SU4
+--brief docs/rounds/e99-r20-gov-14-round-landing-automation.md --base
+9e18c68d`: **OK**, 6 változott útvonal, ebből 2 generated/ignored review-
+artefaktum. Scope-on kívüli implementációs változás nincs.
 
 ## Megállapítások
 
@@ -58,7 +58,10 @@ implementációs változás nincs.
 - **Ellenőrzés:** a fenti próba legyen GREEN; rebase esetén nincs
   `gh pr merge`, változatlan friss HEAD esetén a meglévő tiszta-cellában
   továbbra is van merge.
-- **Státusz:** OPEN
+- **Javítás:** a `1779de35` commit rebase után safe pushig jut, majd blocked
+  jelzéssel új exact-SHA CI-t kér; csak változatlan következő invokáció
+  merge-elhet. A regressziós cella zöld.
+- **Státusz:** FIXED (`1779de35`)
 
 ### F2 — MAJOR — A `--pr` nincs a mért branchhez kötve
 
@@ -78,21 +81,23 @@ implementációs változás nincs.
   és eltérő PR-metaadatot.
 - **Ellenőrzés:** a fenti próba legyen GREEN, és legyen pozitív cella a
   helyes PR/head kötésre.
-- **Státusz:** OPEN
+- **Javítás:** a `1779de35` commit minden git-művelet előtt egyezteti a PR
+  base/head/headOid mezőit; mindhárom eltérési alteszt push/gate/merge előtt
+  fail-closed. A pozitív út is zöld.
+- **Státusz:** FIXED (`1779de35`)
 
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Eredmény | Ellenőrizve |
 |---|---|---|
-| scope-audit | 4 útvonal, OK | ✅ |
+| scope-audit | 6 útvonal, 2 generated/ignored, OK | ✅ |
 | format/analyze/architecture/secrets/l10n | `MINDEN GATE ZÖLD` | ✅, friss izolált klón |
 | célzott Flutter-teszt | 1 passed | ✅ |
-| tooling pytest | 658 passed, 2 skipped, 571 subtests | ✅, 319.01 s |
-| review próbák | 2 failed | ❌, a két nyitott lelet reprodukciója |
+| tooling pytest | 662 passed, 2 skipped, 574 subtests | ✅, 341.69 s |
+| landoló regressziós suite | 11 passed, 3 subtests | ✅, F1/F2 lezárva |
 | CI | még nincs végső exact-SHA run | ⏳ javítás után kötelező |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint a merge tilos, amíg F1/F2 nyitva van. Javítás után friss
-izolált re-review, exact-SHA Full Gate/Router CI és csak utána landolás.
-
+Nincs nyitott BLOCKER/MAJOR. Az ADR 0052 szerint az APPROVED review után még
+az exact-SHA Full Gate és Router CI kötelező; csak mindkettő zöldjén landolhat.
