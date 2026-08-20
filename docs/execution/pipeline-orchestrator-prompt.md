@@ -254,9 +254,13 @@ megmaradt — a user döntése: „hadd fogyjon el". Amíg az előfizetés él, 
 érvényes felállás:
 
 - **Orchestrátor / reviewer / irányító: Sol** (`gpt-5.6-sol`, Codex CLI,
-  ugyanaz a `~/.codex-terra` CODEX_HOME, explicit `-m gpt-5.6-sol`) — a
-  `round-pipeline.sh` rotáció-defaultja `sol`, tehát MINDEN kört a Sol
-  vezényel (`PIPELINE_ORCH_ROTATION` env-vel felülírható).
+  ugyanaz a `~/.codex-terra` CODEX_HOME, explicit `-m gpt-5.6-sol`; a
+  modell-ID külső forrásból megerősítve 2026-08-20: a Codex CLI GPT-5.6
+  szintjei `gpt-5.6-sol` / `gpt-5.6-terra` / `gpt-5.6-luna`, a Sol a
+  flagship) — a rotációt a **commitolt `docs/execution/orchestrator-rotation`
+  fájl** hordozza (`sol`), ami ERŐSEBB a `PIPELINE_ORCH_ROTATION` env-nél
+  (file > env > script-default): a crontab exportált env-je nem írhatja
+  felül a git-en érkező user-döntést.
 - **Implementer: `terra`** (Codex CLI, `~/.codex-terra`, `gpt-5.6-terra`) —
   a queue MINDEN nyitott sora explicit `terra` (az ADR 0069 mért
   motor-szétosztása erre az időszakra felfüggesztve; a queue fejléce
@@ -268,11 +272,12 @@ megmaradt — a user döntése: „hadd fogyjon el". Amíg az előfizetés él, 
   független (két különböző modell; `orchestrator_conflicts_with_implementer`),
   a KÖZÖS Pro-előfizetés keretét a user e döntéssel tudatosan vállalta —
   éppen a keret elégetése a cél.
-- **A lejárat UTÁN** (a Codex-oldal auth/kvóta végleg elhal): állítsd vissza a
-  rotáció-defaultot `alternate`-re (`tools/round-pipeline.sh`), oszd vissza a
-  nyitott queue-sorokat a mért szabály szerint (`minimax`/`codex` → de a
-  `codex`/`terra` sorok a lejárt előfizetéssel NEM futtathatók — ilyenkor
-  `minimax`/`sonnet-impl` a mezőny), és frissítsd ezt a blokkot.
+- **A lejárat UTÁN** (a Codex-oldal auth/kvóta végleg elhal): írd át a
+  `docs/execution/orchestrator-rotation` fájlt `alternate`-re (a
+  `test_the_committed_rotation_file_value_is_sol` cellával EGYÜTT), oszd
+  vissza a nyitott queue-sorokat a mért szabály szerint (`minimax`/`codex` →
+  de a `codex`/`terra` sorok a lejárt előfizetéssel NEM futtathatók —
+  ilyenkor `minimax`/`sonnet-impl` a mezőny), és frissítsd ezt a blokkot.
 
 Ha a Sol/Terra limitre fut, a `codex_usage_limit_hold`
 (`tools/round-pipeline.sh`) tartja vissza a firingeket a reset-időig; a

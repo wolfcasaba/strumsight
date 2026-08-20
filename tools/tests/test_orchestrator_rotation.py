@@ -54,6 +54,12 @@ def _hermetic_environment(**overrides: str) -> dict:
 
 
 def driver(*args: str, state: Path, **env: str) -> subprocess.CompletedProcess:
+    # P1-fix (2026-08-20): a commitolt docs/execution/orchestrator-rotation
+    # fájl ERŐSEBB az env-nél. Az env-szemantikát mérő cellák ezért a fájlt
+    # üresre irányítják (/dev/null → [ -s ] hamis → az env él) — kivéve, ha
+    # a cella explicit fájl-útvonalat ad.
+    if "PIPELINE_ORCH_ROTATION" in env:
+        env.setdefault("PIPELINE_ORCH_ROTATION_FILE", "/dev/null")
     environment = _hermetic_environment(PIPELINE_STATE_DIR=str(state), **env)
     return subprocess.run(
         ["bash", str(DRIVER), *args],
@@ -148,6 +154,45 @@ class RotationTest(unittest.TestCase):
                 driver("--next-orchestrator", state=state, **alternate).stdout.strip(),
                 "claude",
             )
+
+    def test_the_committed_rotation_file_overrides_the_operator_env(self) -> None:
+        """P1-fix (2026-08-20): a rotáció user-döntés, és a döntés a repóban
+        utazik — a crontab exportált PIPELINE_ORCH_ROTATION-je (mért
+        szivárgás: E99-R14 H3) nem írhatja felül. File > env."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            rotation_file = state / "orchestrator-rotation"
+            rotation_file.write_text("terra\n", encoding="utf-8")
+            result = driver(
+                "--next-orchestrator",
+                state=state,
+                PIPELINE_ORCH_ROTATION="claude",
+                PIPELINE_ORCH_ROTATION_FILE=str(rotation_file),
+            )
+            self.assertEqual(result.stdout.strip(), "terra", result.stderr)
+
+    def test_the_committed_rotation_file_value_is_sol(self) -> None:
+        """A jelenleg érvényes user-döntés (2026-08-20, Pro-keret égetése)
+        pinje: a commitolt fájl értéke `sol`. A lejárat utáni visszaálláskor
+        a fájllal EGYÜTT ez a cella is frissítendő."""
+        committed = (ROOT / "docs" / "execution" / "orchestrator-rotation").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(committed.strip(), "sol")
+
+    def test_an_invalid_rotation_file_fails_closed(self) -> None:
+        """Érvénytelen commitolt érték nem eshet át némán env/defaultra."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            rotation_file = state / "orchestrator-rotation"
+            rotation_file.write_text("banana\n", encoding="utf-8")
+            result = driver(
+                "--next-orchestrator",
+                state=state,
+                PIPELINE_ORCH_ROTATION_FILE=str(rotation_file),
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("érvénytelen rotáció-érték", result.stderr)
 
     def test_the_rotation_can_be_pinned_to_one_engine(self) -> None:
         with tempfile.TemporaryDirectory() as name:
