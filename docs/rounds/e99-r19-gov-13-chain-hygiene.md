@@ -29,22 +29,49 @@ native_gate = false
 > `gate_tests` cella fa-egészség őr; a tényleges mérce a `pytest tools/tests`
 > és a Router CI (§7).
 
-## 0.0 Pre-flight revízió (2026-08-20)
+## 0.0 Pre-flight revízió (önjavítás, ADR 0112, 2026-08-20, H3)
 
-- **Mérés:** a friss `main` és `origin/main` ugyanaz a `fca0a202` commit;
-  `tools/round-pipeline.sh:1855–1856` továbbra is minden eltérésnél `die`-jal
-  áll meg, a záró `pending → done` fail-safe pedig `2317–2323` között külön
-  `chore(pipeline)` commitot és pushot készít. A brief D1–D3 aktuális kódra
-  vonatkozik.
-- **ADR:** a `tools/round-slots.py reserve-adr --round E99-R19` a `0343`
-  számot foglalta, de új ADR nem készül: a kör kötött döntéseit a már elfogadott
-  [`ADR 0307`](../adr/0307-pipeline-throughput-program-v2.md) §6 teljesen
-  lefedi. A foglalás nem módosíthatja a brief tilos `docs/adr/**` zónáját.
-- **Visszakeresett előzmény:** `adr/0307` §6 a D1–D3 célját és a mérési alapot
-  rögzíti; `halts/E99-R18 H3` a hosszan nyitott kör-ág és a mozgó
-  `origin/main` scope-audit-kockázatát mutatja. Következmény: minden dispatch,
-  review és CI előtt friss upstream-ősviszonyt kell mérni, a szimbolikus
-  bázisra támaszkodó következtetés nem elég.
+**A H3 halt hamis volt, a brief változatlan marad.** A rotált (Terra)
+orchesztrátor megtagadta az implementer indítását, mert a
+`docs/execution/pipeline-orchestrator-prompt.md` §4 szó szerinti olvasata
+szerint ez a session sosem módosíthatja a `tools/round-pipeline.sh`-t — holott
+pontosan ez a fájl a fenti `allowed_paths` **első** bejegyzése, azaz a kör
+saját, ADR 0307 §6 által alátámasztott céltárgya. Az ADR 0087 §2 H3-fogalma
+(„tilos zóna" = az `allowed_paths`-on **kívüli** útvonal) szerint egy a
+listában felsorolt fájl sosem H3-alap; öt korábbi governance-kör
+(E99-R08/14/15/16/18) gyakorlata ezt igazolja. A gyökérokot a
+`docs/execution/pipeline-orchestrator-prompt.md` §4 és a
+`docs/adr/0087-autonomous-round-pipeline.md` §7 javítása oldja fel (a §4
+szövege mostantól explicit módon megkülönbözteti az AD HOC, kör közbeni
+önszerkesztést a governance-kör saját, előre engedélyezett briefjétől).
+
+**Visszakeresett előzmény** (`node tools/knowledge-rag.mjs --corpus
+lessons,halts,adr --top 5`): `docs/LESSONS.md` L251 (E99-R08/H3) ugyanezt a
+mintázatot mérte más fájlon — a rotált orchesztrátor a brief szövegét szó
+szerint olvasva, eszköz-futtatás nélkül önmagára hivatkozva állt meg egy
+sosem tiltott úton. A `halts/halted-20260819T051948.txt` (E99-R16 H3, F3)
+kontraszt: ott a hiányzó `router-ci.yml`-lefedettség fixje **valóban**
+`.github/`-ot igényelt volna, ami helyesen maradt önjavító-kör-dolog — ez a
+mostani javítás **nem** lazítja a `.github/`-ra és a `round-gate.sh`-ra
+vonatkozó tilalmat, kizárólag a `tools/round-pipeline.sh` (és a másik két,
+ADR-ban is nevesített fájl) brief-`allowed_paths`-on belüli esetét
+egyértelműsíti. Részletek és a regressziós bizonyíték a heal-branchen:
+`heal/E99-R19-H3-1` (`tools/tests/test_pipeline_file_governance_round_exemption_docs.py`).
+
+**Az `allowed_paths` nem bővül, a D1–D3 tartalmi terv változatlan** — a
+következő session pre-flightja a szokásos módon (friss `main`-ellenőrzés)
+folytatja.
+
+**Folytatási mérés:** az örökölt `bc2850c8` pre-flight a `0343` ADR-számot
+foglalta, de új ADR nem készül: a D1–D3 döntéseit az elfogadott
+[`ADR 0307`](../adr/0307-pipeline-throughput-program-v2.md) §6 lefedi. A
+branch az aktuális `origin/main`-nel (`f2d98204`) össze lett szinkronizálva;
+`tools/round-pipeline.sh:1855–1856` továbbra is minden main-eltérésnél
+megáll, a `2317–2323` közti fail-safe pedig külön `chore(pipeline)` commitot
+készít. A RAG-találatok közül `halts/E99-R19 H3`, `lessons/L77` és
+`halts/E99-R18 H3` a friss upstream-ősviszony mérését írják elő minden
+dispatch, review és CI előtt. Az index két committal elavult, ezért ez a
+pre-flight a forrásfát és a friss `main`-t tekinti hitelesnek.
 
 ## 0. Kör-jelzés és STOP-protokoll
 

@@ -443,10 +443,22 @@ Három kötelező ellenőrzés a mért néma-bukások ellen (`docs/LESSONS.md` L
 ## 4. Amit ez a session SOHA nem tesz
 
 - nem indít második kört (a láncolás a pipeline dolga);
-- nem módosítja az `ADR 0087`-et, az `ADR 0112`-t, a `tools/round-pipeline.sh`-t,
-  a `tools/round-gate.sh`-t vagy a `.github/`-ot — **a mérce nem módosulhat
-  attól, akit mér**. Ha az akadály éppen ott van, az **halt**, és az önjavító
-  kör dolga (ADR 0112 §3);
+- **kör közben, ad hoc** — egy váratlanul útba kerülő akadály önkezű
+  megkerülésére — nem módosítja az `ADR 0087`-et, az `ADR 0112`-t, a
+  `tools/round-pipeline.sh`-t, a `tools/round-gate.sh`-t vagy a `.github/`-ot
+  — **a mérce nem módosulhat attól, akit mér**. Ha egy ilyen, ÚTKÖZBEN talált
+  akadály éppen ott van, az **halt**, és az önjavító kör dolga (ADR 0112 §3).
+  **Ez nem ugyanaz, mint egy governance-kör SAJÁT briefje**: ha a brief
+  `allowed_paths`-a — előre, írásban, ADR-alátámasztással — kifejezetten
+  felsorolja az egyik fenti fájlt, az implementer a szabványos
+  implementer → review → merge úton dolgozhat rajta, PONTOSAN úgy, mint
+  bármely más köri célfájlon. A `H3` (ADR 0087 §2) fogalma szerint tilos zóna
+  az, ami az `allowed_paths`-on **KÍVÜL** esik — egy a listában felsorolt
+  fájl nem az, tehát a dispatch megtagadása ilyenkor téves olvasat, nem
+  szabályalkalmazás (mérve: E99-R19/H3, 2026-08-20 — ugyanaz a mintázat, mint
+  a `docs/reviews/**` saját-jelentés hamis H3-a, E99-R08, `docs/LESSONS.md`
+  L251). Kétség esetén nézd meg a brief `allowed_paths`-át — ha a fájl ott
+  van, dispatch-elj; ha nincs, és mégis szükség lenne rá, az a valódi H3;
 - nem oszt új ADR-számot merge-elt döntés fölé;
 - nem nyúl a `docs/execution/pipeline-queue.tsv`-hez (azt a driver vezeti).
 

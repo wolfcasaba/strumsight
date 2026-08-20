@@ -145,6 +145,19 @@ szerződés (§2) ettől független.
 - nem zárja le az epicet: az **E02-R20** (epic-zárás) elérése **halt** —
   a záró kört ember indítja.
 
+> **Módosítás (ADR 0112 önjavító kör, 2026-08-20, E99-R19/H3):** a fenti
+> „kör közben" kizárólag az AD HOC, útközben talált akadály önkezű
+> megkerülésére vonatkozik — nem arra az esetre, amikor egy governance-kör
+> SAJÁT, előre írott briefje (ADR-alátámasztással, gépi `allowed_paths`
+> blokkal) e négy fájl valamelyikét kifejezetten a scope részévé teszi, és az
+> implementer a szabványos implementer → review → merge úton dolgozik rajta —
+> ez a §2 H3-definíciója szerint (tilos zóna = `allowed_paths`-on KÍVÜLI
+> útvonal) sosem volt tiltott, és öt korábbi governance-kör
+> (E99-R08/14/15/16/18) gyakorlata ezt igazolja. Mérve: az E99-R19 rotált
+> (Terra) orchestrátora a listán BELÜLI `tools/round-pipeline.sh`-ra a
+> listán kívülinek szánt tiltást alkalmazta — ugyanaz a mintázat, mint az
+> E99-R08/H3 (`docs/LESSONS.md` L251).
+
 ## Következmények
 
 - Az Epic 2 maradék kilenc köre felügyelet nélkül végigfuthat, de bármelyik
