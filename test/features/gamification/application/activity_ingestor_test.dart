@@ -185,6 +185,90 @@ void main() {
         );
       },
     );
+
+    test('a retry-limit quarantine survives a fresh repository built over the '
+        'same KeyValueStore (F1 restart regression)', () async {
+      final fixture = _Fixture(capacity: 4, maxAttempts: 1);
+      fixture.ledger.alwaysThrow = true;
+      final ingestor = fixture.ingestor;
+
+      await ingestor.recordSavedActivity(
+        event: fixture.event(eventId: 'activity-restart'),
+        entry: fixture.entry(sourceEventId: 'activity-restart'),
+      );
+
+      // First drain — the ledger throws; maxAttempts=1 means the record
+      // reaches the retry limit on its very first attempt.
+      final firstReport = await ingestor.drain();
+      expect(firstReport.quarantined, hasLength(1));
+      expect(
+        firstReport.quarantined.single.outcome,
+        ActivityOutboxOutcome.attemptLimitReached,
+      );
+
+      // Simulate an app/repository restart by building a fresh instance
+      // over the SAME KeyValueStore — the only way the on-disk bytes
+      // could be read back is if _ensureLoaded decodes the persisted
+      // quarantine key.
+      final rebuilt = LocalActivityOutboxRepository(
+        ledger: fixture.ledger,
+        store: fixture.store,
+        logger: const NoopAppLogger(),
+        capacity: 4,
+        maxAttempts: 1,
+      );
+
+      final rebuiltQuarantine = rebuilt.quarantineRecords();
+      expect(
+        rebuiltQuarantine,
+        hasLength(1),
+        reason: 'persisted quarantine must survive repository restart',
+      );
+      expect(
+        rebuiltQuarantine.single.outcome,
+        ActivityOutboxOutcome.attemptLimitReached,
+        reason: 'the retry-limit record must be restored with its outcome',
+      );
+      expect(
+        rebuiltQuarantine.single.event?.eventId,
+        'activity-restart',
+        reason: 'the decoded event must survive restart',
+      );
+      expect(
+        rebuiltQuarantine.single.entry?.sourceEventId,
+        'activity-restart',
+        reason: 'the decoded ledger entry must survive restart',
+      );
+      expect(rebuilt.pendingRecords(), isEmpty);
+    });
+
+    test(
+      'a corrupt quarantine payload keeps its raw bytes (F1 restart safety)',
+      () async {
+        // Seed the store with an unparseable quarantine blob — the load
+        // step must NOT throw, and must surface the raw bytes as a
+        // malformedRaw quarantine entry.
+        final store = InMemoryKeyValueStore();
+        store.values[activityOutboxQuarantineKey] = '{not valid json';
+
+        final rebuilt = LocalActivityOutboxRepository(
+          ledger: _FakeRewardLedger(store),
+          store: store,
+          logger: const NoopAppLogger(),
+          capacity: 4,
+          maxAttempts: 3,
+        );
+
+        final quarantine = rebuilt.quarantineRecords();
+        expect(quarantine, hasLength(1));
+        expect(
+          quarantine.single.outcome,
+          ActivityOutboxOutcome.malformedRecord,
+        );
+        expect(quarantine.single.rawEvent, '{not valid json');
+        expect(rebuilt.pendingRecords(), isEmpty);
+      },
+    );
   });
 
   group('A7 — capacity matrix (below / on / above)', () {

@@ -332,91 +332,239 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
     _loaded = true;
 
     final body = _document.readBody();
-    if (body is! Map<String, Object?>) return;
-    final rawPending = body[_bodyPendingKey];
-    if (rawPending is! List<Object?>) return;
-    final rawAttempts = body[_bodyAttemptsKey];
-    if (rawAttempts is! Map<String, Object?>) return;
+    if (body is Map<String, Object?>) {
+      final rawPending = body[_bodyPendingKey];
+      final rawAttempts = body[_bodyAttemptsKey];
+      if (rawPending is List<Object?> && rawAttempts is Map<String, Object?>) {
+        for (final MapEntry<String, Object?> entry in rawAttempts.entries) {
+          final value = entry.value;
+          if (value is int) {
+            _attempts[entry.key] = value;
+          }
+        }
 
-    for (final MapEntry<String, Object?> entry in rawAttempts.entries) {
-      final value = entry.value;
-      if (value is int) {
-        _attempts[entry.key] = value;
+        for (final raw in rawPending) {
+          if (raw is! Map) {
+            // Raw payload is not a record envelope — quarantine so the user can
+            // inspect the bytes (A5).
+            _logger.warning(
+              'gamification.outbox.pending_record_quarantined',
+              fields: <String, Object?>{'reason': 'not_a_map'},
+            );
+            _quarantine.add(
+              ActivityOutboxQuarantine.malformedRaw(
+                rawEvent: raw,
+                rawEntry: null,
+                reason: 'pending record is not a map',
+              ),
+            );
+            continue;
+          }
+          final rawMap = <String, Object?>{
+            for (final entry in raw.entries)
+              if (entry.key is String) entry.key as String: entry.value,
+          };
+          try {
+            final pending = _decodePending(requireObject(rawMap));
+            _pending.add(pending);
+          } on JsonRecordException catch (e) {
+            _logger.warning(
+              'gamification.outbox.pending_record_quarantined',
+              fields: <String, Object?>{
+                'reason': e.reason,
+                if (e.field != null) 'field': e.field,
+              },
+            );
+            _quarantine.add(
+              ActivityOutboxQuarantine.malformedRaw(
+                rawEvent: rawMap['event'],
+                rawEntry: rawMap['entry'],
+                reason: 'decode_failed: ${e.reason}',
+              ),
+            );
+          } on ArgumentError catch (e) {
+            _logger.warning(
+              'gamification.outbox.pending_record_quarantined',
+              error: e,
+              fields: <String, Object?>{'reason': 'invalid'},
+            );
+            _quarantine.add(
+              ActivityOutboxQuarantine.malformedRaw(
+                rawEvent: rawMap['event'],
+                rawEntry: rawMap['entry'],
+                reason: 'decode_failed: ${e.message ?? e.toString()}',
+              ),
+            );
+          } catch (e, stackTrace) {
+            _logger.warning(
+              'gamification.outbox.pending_record_quarantined',
+              error: e,
+              stackTrace: stackTrace,
+              fields: <String, Object?>{'reason': 'invalid'},
+            );
+            _quarantine.add(
+              ActivityOutboxQuarantine.malformedRaw(
+                rawEvent: rawMap['event'],
+                rawEntry: rawMap['entry'],
+                reason: 'decode_failed',
+              ),
+            );
+          }
+        }
       }
     }
 
-    for (final raw in rawPending) {
-      if (raw is! Map) {
-        // Raw payload is not a record envelope — quarantine so the user can
-        // inspect the bytes (A5).
+    // The quarantine lives on its OWN storage key and must load even when
+    // the pending document is absent — a fresh install or a corrupted
+    // pending blob cannot lose the user's diagnostic history (A6 / F1).
+    _loadQuarantine();
+  }
+
+  static const String _bodyPendingKey = 'pending';
+  static const String _bodyAttemptsKey = 'attempts';
+  static const String _quarantineRecordsKey = 'records';
+
+  /// Reads the persisted quarantine list under [activityOutboxQuarantineKey]
+  /// and populates [_quarantine]. Decode failures keep their raw bytes via
+  /// [ActivityOutboxQuarantine.malformedRaw] — no record is silently dropped
+  /// (A6 restart contract; F1 corrective).
+  void _loadQuarantine() {
+    String? raw;
+    try {
+      raw = _document.store.readString(activityOutboxQuarantineKey);
+    } on Object catch (error, stackTrace) {
+      _logger.error(
+        'gamification.outbox.quarantine_read_failed',
+        error: error,
+        stackTrace: stackTrace,
+        fields: <String, Object?>{'key': activityOutboxQuarantineKey},
+      );
+      return;
+    }
+    if (raw == null || raw.isEmpty) return;
+
+    final Object? payload;
+    try {
+      payload = jsonDecode(raw);
+    } on Object catch (error, stackTrace) {
+      _logger.warning(
+        'gamification.outbox.quarantine_decode_failed',
+        error: error,
+        stackTrace: stackTrace,
+        fields: <String, Object?>{'reason': 'unparsable'},
+      );
+      _quarantine.add(
+        ActivityOutboxQuarantine.malformedRaw(
+          rawEvent: raw,
+          rawEntry: null,
+          reason: 'decode_failed: unparsable',
+        ),
+      );
+      return;
+    }
+    if (payload is! Map<String, Object?>) {
+      _logger.warning(
+        'gamification.outbox.quarantine_decode_failed',
+        fields: <String, Object?>{'reason': 'not_a_map'},
+      );
+      _quarantine.add(
+        ActivityOutboxQuarantine.malformedRaw(
+          rawEvent: raw,
+          rawEntry: null,
+          reason: 'decode_failed: not_a_map',
+        ),
+      );
+      return;
+    }
+    final records = payload[_quarantineRecordsKey];
+    if (records is! List<Object?>) {
+      _logger.warning(
+        'gamification.outbox.quarantine_decode_failed',
+        fields: <String, Object?>{'reason': 'records_not_a_list'},
+      );
+      _quarantine.add(
+        ActivityOutboxQuarantine.malformedRaw(
+          rawEvent: raw,
+          rawEntry: null,
+          reason: 'decode_failed: records_not_a_list',
+        ),
+      );
+      return;
+    }
+
+    for (final rawRecord in records) {
+      if (rawRecord is! Map) {
         _logger.warning(
-          'gamification.outbox.pending_record_quarantined',
+          'gamification.outbox.quarantine_record_skipped',
           fields: <String, Object?>{'reason': 'not_a_map'},
         );
         _quarantine.add(
           ActivityOutboxQuarantine.malformedRaw(
-            rawEvent: raw,
+            rawEvent: rawRecord,
             rawEntry: null,
-            reason: 'pending record is not a map',
+            reason: 'decode_failed: record_not_a_map',
           ),
         );
         continue;
       }
       final rawMap = <String, Object?>{
-        for (final entry in raw.entries)
+        for (final entry in rawRecord.entries)
           if (entry.key is String) entry.key as String: entry.value,
       };
-      try {
-        final pending = _decodePending(requireObject(rawMap));
-        _pending.add(pending);
-      } on JsonRecordException catch (e) {
-        _logger.warning(
-          'gamification.outbox.pending_record_quarantined',
-          fields: <String, Object?>{
-            'reason': e.reason,
-            if (e.field != null) 'field': e.field,
-          },
-        );
-        _quarantine.add(
-          ActivityOutboxQuarantine.malformedRaw(
-            rawEvent: rawMap['event'],
-            rawEntry: rawMap['entry'],
-            reason: 'decode_failed: ${e.reason}',
-          ),
-        );
-      } on ArgumentError catch (e) {
-        _logger.warning(
-          'gamification.outbox.pending_record_quarantined',
-          error: e,
-          fields: <String, Object?>{'reason': 'invalid'},
-        );
-        _quarantine.add(
-          ActivityOutboxQuarantine.malformedRaw(
-            rawEvent: rawMap['event'],
-            rawEntry: rawMap['entry'],
-            reason: 'decode_failed: ${e.message ?? e.toString()}',
-          ),
-        );
-      } catch (e, stackTrace) {
-        _logger.warning(
-          'gamification.outbox.pending_record_quarantined',
-          error: e,
-          stackTrace: stackTrace,
-          fields: <String, Object?>{'reason': 'invalid'},
-        );
-        _quarantine.add(
-          ActivityOutboxQuarantine.malformedRaw(
-            rawEvent: rawMap['event'],
-            rawEntry: rawMap['entry'],
-            reason: 'decode_failed',
-          ),
-        );
-      }
+      _quarantine.add(_decodeQuarantineRecord(rawMap));
     }
   }
 
-  static const String _bodyPendingKey = 'pending';
-  static const String _bodyAttemptsKey = 'attempts';
+  /// Decodes one persisted quarantine record. If the inner event/entry pair
+  /// parses, the full decoded shape is preserved (including
+  /// [ActivityOutboxOutcome.attemptLimitReached]); otherwise the raw bytes
+  /// are kept verbatim via [ActivityOutboxQuarantine.malformedRaw] so the
+  /// user's bytes are never lost (A6).
+  ActivityOutboxQuarantine _decodeQuarantineRecord(Map<String, Object?> raw) {
+    final outcome = _decodeOutcome(raw['outcome']);
+    final reason = raw['reason'] is String ? raw['reason'] as String : '';
+    final attemptsRaw = raw['attempts'];
+    final attempts = attemptsRaw is int ? attemptsRaw : 0;
+
+    final eventField = raw['event'];
+    final entryField = raw['entry'];
+    if (eventField != null && entryField != null) {
+      try {
+        final event = LearningActivityEvent.fromJson(eventField);
+        final entry = RewardLedgerEntry.fromJson(entryField);
+        return ActivityOutboxQuarantine(
+          outcome: outcome ?? ActivityOutboxOutcome.malformedRecord,
+          event: event,
+          entry: entry,
+          attempts: attempts,
+          reason: reason,
+        );
+      } on Object catch (error, stackTrace) {
+        _logger.warning(
+          'gamification.outbox.quarantine_record_decode_failed',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        // Fall through — preserve raw bytes below.
+      }
+    }
+
+    final rawEvent = raw.containsKey('event') ? eventField : raw['rawEvent'];
+    final rawEntry = raw.containsKey('entry') ? entryField : raw['rawEntry'];
+    return ActivityOutboxQuarantine.malformedRaw(
+      rawEvent: rawEvent,
+      rawEntry: rawEntry,
+      reason: 'decode_failed: $reason',
+    );
+  }
+
+  ActivityOutboxOutcome? _decodeOutcome(Object? value) {
+    if (value is! String) return null;
+    for (final outcome in ActivityOutboxOutcome.values) {
+      if (outcome.name == value) return outcome;
+    }
+    return null;
+  }
 
   Map<String, Object?> _pendingSnapshot() => <String, Object?>{
     _bodyPendingKey: <Object?>[
