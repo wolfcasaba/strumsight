@@ -1,5 +1,31 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R07 KÉSZ — Szintgörbe és profil-projekció — PR #349, squash `010989f3` (2026-08-20)
+
+Monoton `LevelCurve` (egyetlen forrás, inkluzív küszöb, `int64`-közeli
+szaturáció), verziózott `GamificationProfile` a lapozott reward ledgerből
+teljesen újraépíthetően, és egy `ProfileProjector` (teljes újraépítés +
+inkrementális projekció azonos logikával, minden egy eseményben átlépett
+szint megjelenik). ADR 0342 (a briefben előre kiosztott `0305` stale volt —
+36 szám fogyott el 2026-08-18 óta, a foglaló adta a valódit).
+
+A független review az implementer saját zöld tesztjei MÖGÖTT három valódi
+rést talált — mindegyiket mutációs próbával mérve, nem csak olvasással: **F1
+BLOCKER** — `rebuild()` kivételt dobott egy vadonatúj (üres) ledgeren,
+pontosan a brief fő use case-én (a produkciós `LocalRewardLedgerRepository`
+ellen is reprodukálva); **F2 MAJOR** — a „szint soha nem csökken"
+lefelé-korrekciós guard teszteletlen volt, törlése mellett minden teszt zöld
+maradt; **F3 MAJOR** — az A8 unlock-tiltó regexe egy raw stringbeli dupla
+escaping miatt soha nem talált semmit. Egy javító kör mindhármat zárta,
+mindegyiket a reviewer külön-külön visszaellenőrizte (fix visszamutálva →
+az új teszt pirosra vált → visszaállítva). Lecke: [[L349]]–[[L351]].
+
+A kör alatt a `main` egyszer mozdult (E99-R18/H3 self-heal negyedik
+önjavítása, diszjunkt fájlkör) — rebase + teljes CI-újradispatch fogta meg.
+Full Gate exact-SHA: 32337856382 success; Router CI: 32337858078 success;
+post-merge célzott gate a friss `main`-en önállóan is zöld (6/6). Következő
+SDD-kör: E08-R08 — gamification repository és storage schema.
+
 ## ✅ [HEAL E99-R18/H3] KÉSZ — a scope-audit jelentése feloldott SHA-t ír `origin/main` helyett, a kör-ág újraszinkronizálva — PR #348, squash `4105c695` (2026-08-20)
 
 Negyedik H3-halt ugyanazon a körön, de a korábbi hármtól ELTÉRŐ gyökérokkal.
@@ -2638,6 +2664,16 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-20):** `main` @ `010989f3` — E08-R07 Szintgörbe
+és profil-projekció, PR [#349](https://github.com/wolfcasaba/strumsight/pull/349),
+squash-merge, implementer Codex (`~/.codex-terra`, gpt-5.6-terra) + 1 javító
+kör (F1 BLOCKER + F2/F3 MAJOR, review-jelentés: `docs/reviews/e08-r07-review.md`).
+A kör alatt a `main` egyszer mozdult (E99-R18/H3 self-heal negyedik
+önjavítása, PR #348, diszjunkt fájlkör) — rebase + teljes CI-újradispatch a
+§0.3 szerint. Exact `6ba6ca89`: Full Gate 32337856382 + Router CI 32337858078
+success; post-merge célzott gate a friss `main`-en önállóan is zöld (6/6).
+Következő: **E08-R08** (Gamification repository és storage schema).
+
 **Aktuális állapot (2026-08-19):** `main` @ `39c0bd5f` — E08-R03 Reward
 ledger és idempotencia-index, PR [#340](https://github.com/wolfcasaba/strumsight/pull/340),
 squash-merge. Exact `02477969` (a kör alatt a `main` háromszor mozdult, mindig
@@ -3784,10 +3820,26 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R04** (Activity outbox és megbízható
-feldolgozás, SDD Chapter 9 — `docs/rounds/e08-r04-activity-outbox-and-
-reliable-processing.md`, engine `codex`, előre kiosztott ADR `0302`). Friss
-sessionben indul.
+**A következő SDD-lépés: E08-R08** (Gamification repository és storage
+schema, SDD Chapter 9 — `docs/rounds/e08-r08-gamification-repository-and-
+storage-schema.md`, engine `codex`, a queue-ban előre kiosztott ADR `0306` —
+a pre-flightban MÉRNI kell a `tools/round-slots.py reserve-adr`-ral, mert a
+sorozatos ADR-fogyás miatt valószínűleg ez is stale (lásd E08-R07 §0.0:
+`0305` → `0342` volt a mérve helyes szám). Friss sessionben indul.
+
+**Nyitott, EMBERI döntést NEM igénylő, de a következő pár körben érdemes
+tartozás (2026-08-20, E08-R07 review):** a `docs/reviews/e08-r07-review.md`
+F1–F3 mintája — egy zöld gate/teszt-suite mögött is lehet teszteletlen guard
+vagy garantáltan-zöld guard-teszt; a review-protokoll (mutációs próba a
+guard-on, NEM csak a mért kódon) e nélkül nem fogta volna meg. Lásd
+[[L349]]–[[L351]] a `docs/LESSONS.md`-ben — jövőbeli review-k „X sosem
+csökkenhet/gyengülhet" jellegű brief-előírásainál alkalmazzák ugyanezt a
+mintát alapból, ne csak utólag.
+
+**Korábbi kijelölt SDD-kör (2026-08-20, azóta lezárult): E08-R04** (Activity
+outbox és megbízható feldolgozás, SDD Chapter 9 —
+`docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md`, engine
+`codex`, előre kiosztott ADR `0302`). Lásd a fejléc ✅-blokkot.
 
 **Nyitott, EMBERI döntést igénylő tartozás, E08-R02-ből örökölve, még
 mindig releváns:** a `docs/reviews/e08-r02-security.md` MINOR-1 lelete — az

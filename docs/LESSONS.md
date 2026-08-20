@@ -13571,3 +13571,103 @@ kör-ág), az már nem pontjavítást igényel: `outcome=escalate`, azzal a
 javaslattal, hogy a kör tartalmi munkája zárja le a kört gyorsabban, vagy a
 queue-bookkeeping kerüljön ki a védett listáról egy ember által jóváhagyott
 ADR-döntéssel.
+
+## L349 — Egy lapozó `do-while` a kezdő `cursor == null` értéket összemossa a „lapozás elakadt" hibajellel: egy vadonatúj (üres) forrás az ELSŐ hívásnál dob, nem a kezdő állapotot adja (E08-R07, review F1, 2026-08-20)
+
+**Mit mértem.** A `ProfileProjector.rebuild()` (`lib/features/gamification/
+application/profile_projector.dart`) egy `do { … } while (cursor != null)`
+hurokkal lapozza a reward ledgert. A törzs MINDIG lefut legalább egyszer; az
+első hívásnál a helyi `cursor` változó `null`. Egy vadonatúj felhasználó
+(üres ledger) esetén `readPage(limit: …, cursor: null)` — mind a
+teszt-dublőrben, mind a valódi `LocalRewardLedgerRepository`-ban — teljesen
+helyesen `nextCursor: null`-lal tér vissza: nincs több adat. A hurok
+stall-guardja (`if (page.nextCursor == cursor) throw StateError(...)`) ezt a
+helyes „nincs több adat" jelet összekeveri a „a lapozás nem haladt" hibás
+esettel, mert mindkettő `null == null`-ra fut az ELSŐ iterációban — és a
+brief §1 saját fő use case-én ([]„a főkönyvből teljes egészében újraépíthető
+profil") dob egy vadonatúj felhasználó legelső profil-újraépítésénél.
+Reprodukálva: egy `_EmptyLedger` implementáció + `await projector.rebuild()`
+→ `Bad state: ledger page cursor did not advance`. A valódi
+`LocalRewardLedgerRepository.readPage` forráskódjának kézi olvasása
+megerősítette: azonos módon `nextCursor: null`-t ad `cursor: null`
+bemenetre üres `_entries`-nél — a hiba a produkciós implementáció ellen is
+reprodukálódik, nem csak a tesztdublőr ellen.
+
+**A szabály.** Egy lapozó ciklus stall-guardja csak akkor jelezzen hibát, ha
+a KAPOTT OLDALON tényleg volt bejegyzés, de a cursor mégsem haladt
+(`page.entries.isNotEmpty && page.nextCursor == cursor`) — a „nulla
+bejegyzés, cursor változatlan" az ELSŐ hívásnál a normál „üres forrás" jel,
+nem hiba. Fix: `be823c74`. Mechanikus regresszió: `level_curve_test.dart`
+„an empty ledger rebuild returns the initial profile" — a fix visszamutálva
+(a guard-ból az `entries.isNotEmpty` feltételt elhagyva) ez a teszt
+önmagában pirosra vált, a többi zöld marad.
+
+**Hogyan alkalmazd.** Minden `do/while`- vagy „legalább egyszer lefut"
+lapozó ciklusnál MÉRD MEG explicit teszttel az ÜRES forrás esetét — ez a brief
+edge-case-hármasának („nem-nulla kezdet, határra kerekedő utolsó elem, üres
+bemenet", [[sdd-round-review skill]]) harmadik tagja, és pont ez maradt ki
+ebből a körből az implementer saját tesztsorából. A „nulladik állapot"
+(vadonatúj felhasználó, üres történet) minden StrumSight-felhasználónál
+ténylegesen bekövetkezik telepítéskor — ez sosem szélsőséges bemenet.
+
+## L350 — Egy védőgát-ág, amit egyetlen teszt sem különböztet meg a hiányától, néma halott kód: a törlése mellett is zöld marad a teljes suite (E08-R07, review F2, 2026-08-20)
+
+**Mit mértem.** A brief §5.1 és az ADR 0342 §2 kifejezetten, „NEM elfogadható
+gyengítés" jelöléssel emeli ki a kör EGYETLEN legfontosabb szabályát: a szint
+egy újraszámítás (görbe-/policy-verzióváltás) UTÁN sem csökkenhet egy már
+elért profilnál. A kódban ezt a `curveProgress.currentLevel.number <
+profile.currentLevel.number ? profile.progress : curveProgress` ág valósítja
+meg (`profile_projector.dart`) — helyesen. Az „A1" acceptance-teszt viszont
+rögzített görbén, monoton növekvő XP-n fut, ami a guard NÉLKÜL is triviálisan
+igaz (egy fix görbén `progressForTotalXp` önmagában monoton totalXp-ben); a
+„changed curve…" teszt a profilt IS az új görbével számolja, tehát a guard
+`<` ága sosem aktiválódik nála. Mérve: a guard-ág teljes törlése
+(`final progress = curveProgress;`) mellett a meglévő 10 teszt MIND zöld
+maradt.
+
+**A szabály.** Egy „X sosem történhet" védőgát csak akkor bizonyított, ha
+LÉTEZIK olyan teszt, ami a guard NÉLKÜL bizonyíthatóan pirosra vált — nem
+elég, hogy a guard MELLETT minden zöld. Property-jellegű tesztek ([]„nagyobb
+bemenet sosem ad kisebb kimenetet") gyakran triviálisan igazak a mögöttes
+alapfüggvényre magára is, és nem a védőgátat mérik, ha a bemenettér nem
+tartalmazza pont azt a szcenáriót (itt: két KÜLÖNBÖZŐ görbe/policy-verzió
+ütköztetése egy MEGLÉVŐ profilon), amire a védőgát épült. Fix: `be823c74` —
+`level_curve_test.dart` „a rebalance cannot lower an established profile
+level": egy 3. szintű profilt egy olyan görbével vetít tovább, ami 250 XP-t
+csak 2. szintnek adna. A guard eltávolítva ez a teszt ÖNMAGÁBAN pirosra vált,
+a többi zöld marad — ez már valódi, célzott bizonyíték.
+
+**Hogyan alkalmazd.** Egy review-ban, amikor a brief egy „X sosem
+gyengülhet/csökkenhet" invariánst „NEM elfogadható gyengítés" jelöléssel
+emel ki, FUSD LE a mutációs próbát a KÓDOLT guard-on (töröld/semlegesítsd, és
+nézd meg, melyik teszt vált pirosra) — ne fogadd el a zöld suite-ot
+bizonyítéknak pusztán azért, mert egy hasonló nevű acceptance-teszt létezik.
+Lásd [[L180]] (analóg minta: egy fail-closed guard, ami a deklarált alakot
+nézi a tényleges tartalom helyett).
+
+## L351 — Dart raw stringben a `\\b`/`\\w` DUPLÁN escape-eli a regex-metaszekvenciát: a compilelt minta szó szerinti backslash-karaktert keres, és soha nem talál semmit — egy „mindig zöld" biztonsági teszt (E08-R07, review F3, 2026-08-20)
+
+**Mit mértem.** Az A8 („a szint soha nem kapuz tartalmat", ADR 0289
+abszolút tiltása) gépi mércéje `level_curve_test.dart`-ban:
+`RegExp(r'\\bunlock\\w*\\b', caseSensitive: false)`. Dart raw stringben
+(`r'…'`) a backslash NEM escape-elődik — a `\\b` szó szerint KÉT backslash
+karakter, nem az egyetlen `\b` szóhatár-metaszekvencia. A ténylegesen
+compilelt regex ezért egy szó szerinti `\` karaktert vár `bunlock`/`w*`/`b`
+körül, amit a forráskód soha nem tartalmaz — a teszt garantáltan zöld,
+függetlenül attól, mi áll a vizsgált fájlokban. Empirikusan megerősítve:
+`pattern.hasMatch('unlockedContent')` és `pattern.hasMatch('…unlock
+anything')` mindkettő `false` a hibás mintával, mindkettő `true` a javított
+`r'\bunlock\w*\b'` (egyszeres backslash) mintával.
+
+**A szabály.** Raw string + regex-metaszekvencia kombinációnál a
+DUPLA-escaping a leggyakoribb hiba iránya (a szerző nem-raw stringből másolt
+mintát, vagy „biztonságból" duplázott) — és a hiba tünete nem fordítási
+hiba, hanem egy csendesen soha-nem-találó minta. Fix: `be823c74`.
+
+**Hogyan alkalmazd.** Minden `RegExp`-alapú guard-tesztet ÖNMAGÁBAN is
+mérj: illessz egy ISMERTEN TILTOTT minta-szöveget (itt: egy ideiglenes
+`unlockedContent`-jellegű mező) a vizsgált fájlba, fusd le a tesztet, várd a
+PIROS eredményt, majd állítsd vissza. Ha a guard-teszt a tiltott mintával
+sem vált pirosra, maga a guard hibás — ez ugyanaz a próba, mint amit a
+[[sdd-round-review skill]] minden „valódi-sértés próba" lépésnél előír, csak
+itt magára a mércére (nem a mért kódra) alkalmazva.
