@@ -14101,3 +14101,35 @@ változatlan maradt.
 stdin here-documenten át ment a `gh api` hívásnak. Strukturált vagy Markdown
 külső tartalmat ne fűzz double-quoted shell parancsba; stdin/JSON inputot vagy
 egy valóban literális, ellenőrzött argumentumcsatornát használj.
+
+## L365 — Generált l10n aggregátumot engedő, de a forrás-szegmenst kihagyó brief determinisztikusan H6-ra fut (E08-R12, 2026-08-20)
+
+**Mért hiba.** Az E08-R12 jóváhagyott pre-flight briefje (`524cf246`) az új
+fordításokhoz csak a `lib/l10n/app_en.arb` és `app_hu.arb` fájlokat engedte.
+A Terra ezekbe szabályosan felvette a mért 39+39 új top-level JSON-bejegyzést,
+majd a kötelező
+`tools/round-gate.sh test/features/gamification/presentation/streak_detail_screen_test.dart
+test/features/streak` mindkét locale-ra
+`aggregátum elavult — futtasd: dart run tool/gen_l10n_segments.dart --write`
+hibával állt meg. A paritás közben zöld volt (1437 kulcs), tehát nem hiányzó
+fordítás, hanem freshness-sértés történt.
+
+**Gyökérok.** E99-R17 óta a két `lib/l10n/app_<locale>.arb` generált output: a
+forrás a `lib/l10n/base/` és `lib/l10n/features/` uniója. A brief a generált
+kimenetet elsődleges szerkesztési pontként nevezte meg, a gamification
+forrás-szegmenst pedig nem engedte. A `--write` emiatt nem megőrizte, hanem
+eldobta volna a csak az aggregátumban létező új kulcsokat. Ez **Class B
+brief-hiba**, nem az L360 szerinti egyszeri motor-kimenetcsonkítás, és nem a
+H6 `rebase-baseline` esete: a nyers hiba nem tartalmazott `HEAD changed from
+baseline` üzenetet, a `524cf246` commit és `origin/main` között pedig nem volt
+közben merge-elt upstream drift.
+
+**Javítás és regresszió.** A brief most név szerint engedi a
+`lib/l10n/features/gamification_{en,hu}.arb` forrásokat és a két generált
+aggregátumot, tiltja az output közvetlen szerkesztését, és kötelezővé teszi a
+`dart run tool/gen_l10n_segments.dart --write` lépést. A
+`tools/tests/test_e08_r12_l10n_scope.py` a javítás előtt 2/2 piros volt
+(mindkét source segment hiányzott, és a brief nem nevezte a generálást), utána
+2/2 zöld. Szabály: minden új l10n-kulcsot kérő briefben a feature-szegmens az
+elsődleges allowlist-út; az aggregate csak név szerinti, determinisztikusan
+regenerált kimenet lehet.
