@@ -13867,3 +13867,40 @@ kulcsot birtokló motoroknál (`minimax`, a Kilo-alapú motorok) a NYERS
 API-kulcsot írja stdoutra — self-heal/debug munkamenetben csak
 átirányítva vagy a kulcs nélküli motorokra (`terra`/`codex`/`sonnet-impl`)
 szabad hívni, hogy a session-átiratban ne maradjon élő kulcs.
+
+## L357 — Egy kör-briefet ELŐRE megíró ADR explicit "a következő kör tölti ki" döntése (D7) nem garantálja, hogy a következő kör saját `allowed_paths`-a tartalmazza az ehhez szükséges fájlt (E08-R09, H3 self-heal, ADR 0112, 2026-08-20)
+
+Az E08-R08 (gamification repository, ADR 0344) tudatosan csak
+verzió-jelölő helyfoglalóként hagyta a `GamificationMigrationState`-et a
+`gamification_storage_schema.dart`-ban, és az ADR D7 pontja **explicit**
+kimondta: "A tényleges migrációs mezőket a Kör 9/10 ... tölti ki." Ez a
+döntés helyes volt — de az E08-R09 briefjét (előre megírva 2026-08-18,
+tehát MÉG az ADR 0344 elfogadása, 2026-08-20, ELŐTT) senki nem vetette
+össze utólag ezzel a konkrét ADR-ponttal: az `allowed_paths` a két ÚJ
+migrációs fájlt és a barrelt sorolta fel, de nem a sémafájlt, amiben a
+D7 által kiosztott munkának ténylegesen élnie kell. A kör saját kötött
+döntése (§5.3/A5: perzisztált checkpoint) és a saját `allowed_paths`-a
+emiatt ellentmondtak egymásnak — az orchesztrátor helyesen H3-mal állt
+meg, MODELLHÍVÁS ELŐTT, mielőtt bármilyen implementer-munka elindult
+volna.
+
+**Ez a negyedik mérés ugyanarra a mintára** — egy megelőző kör explicit
+"a KÖVETKEZŐ kör fogja kitölteni" döntése és egy előre megírt, a döntés
+elfogadása előtti pillanatban rögzült `allowed_paths` közötti drift —,
+csak itt a forrás nem egy hiányzó megosztott fixture-hely (mint [[L242]],
+[[L246]] vagy a közvetlen előzmény, E07-R11 §0.0), hanem egy ADR-szintű,
+más KÖRRE kiosztott felelősség. Általánosítható tanulság: amikor egy ADR
+D-pontja "ezt/ezeket a következő kör(ök) tölti/töltik ki" formában
+explicit másik körre hárít egy mezőt/fájlt, a hárított kör pre-flightjának
+**kötelezően** ellenőriznie kell, hogy a saját `allowed_paths`-a lefedi
+az áthárított fájlt — nem elég, hogy a brief témája ("legacy progress
+adapter és backfill") és az ADR témája ("gamification repository és
+tároló-séma") első ránézésre különböző fájlokat érint.
+
+**A javítás alakja is mérve, nem kitalálva.** A checkpoint-mezőt a
+séma-fájlban, egy meglévő verziózott `JsonDocumentStore`-dokumentumon
+belül bővíteni — nem egy új tárolási primitívet bevezetni — a repó saját,
+korábbi precedensét követi: [`ADR 0117`](adr/0117-song-storage-migrator-boundary.md)
+Döntés 2 (E03-R08) ugyanezt a mintát (checkpoint = saját, verziózott,
+atomikusan írt JSON-dokumentum) már megalapozta egy másik feature-fában.
+Lásd [[strumsight-autonomous-build]] a self-heal Class B protokolljáról.
