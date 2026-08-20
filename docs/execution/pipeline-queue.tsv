@@ -361,7 +361,7 @@ E08-R06	docs/rounds/e08-r06-xp-policy-engine-and-diminishing-returns.md	codex	03
 E08-R07	docs/rounds/e08-r07-level-curve-and-profile-projection.md	codex	0305	done
 E08-R08	docs/rounds/e08-r08-gamification-repository-and-storage-schema.md	terra	0306	done
 E08-R09	docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md	terra	0307	done
-E08-R10	docs/rounds/e08-r10-streak-v2-domain-and-legacy-migration.md	terra	0308	pending
+E08-R10	docs/rounds/e08-r10-streak-v2-domain-and-legacy-migration.md	terra	0308	done
 E08-R11	docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md	terra	0309	pending
 E08-R12	docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md	terra	nincs	pending
 E08-R13	docs/rounds/e08-r13-achievement-domain-and-catalog.md	terra	0310	pending
