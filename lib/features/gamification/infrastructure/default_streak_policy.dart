@@ -74,6 +74,6 @@ final class DefaultStreakPolicy {
   }
 
   static int _epochDayFor(LocalDate date) =>
-      DateTime.utc(date.year, date.month, date.day).millisecondsSinceEpoch ~/
+      DateTime(date.year, date.month, date.day).millisecondsSinceEpoch ~/
       Duration.millisecondsPerDay;
 }

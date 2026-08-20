@@ -105,7 +105,7 @@ void main() {
   group('A2, A6, and A10 — planned rest uses the public schedule contract', () {
     final service = StreakService();
     final restDate = LocalDate(2026, 8, 20);
-    final restDay = _epochDay(restDate);
+    final restDay = _shippingLocalMidnightEpochDay(restDate);
 
     test('a real typed rest decision protects the streak without a freeze', () {
       final previous = _state(
@@ -134,6 +134,27 @@ void main() {
       expect(nextDay.state.current, 5);
       expect(nextDay.state.freezes, 1);
     });
+
+    test(
+      'a local-midnight request epoch day recognizes the typed planned rest',
+      () {
+        final shippingRestDay = _shippingLocalMidnightEpochDay(restDate);
+        final result = service.evaluate(
+          StreakEvaluationRequest(
+            previous: _state(
+              current: 4,
+              longest: 4,
+              lastQualifiedDay: shippingRestDay - 1,
+              totalQualifiedDays: 4,
+            ),
+            epochDay: shippingRestDay,
+            weeklySchedule: _restSchedule(restDate),
+          ),
+        );
+
+        expect(result.reason, StreakEvaluationReason.plannedRest);
+      },
+    );
 
     test(
       'the service reads the typed public rest reason without a string guess',
@@ -277,8 +298,8 @@ WeeklyScheduleDecision _restSchedule(LocalDate restDate) =>
       policy: SchedulingPolicy.defaultPolicy,
     );
 
-int _epochDay(LocalDate date) =>
-    DateTime.utc(date.year, date.month, date.day).millisecondsSinceEpoch ~/
+int _shippingLocalMidnightEpochDay(LocalDate date) =>
+    DateTime(date.year, date.month, date.day).millisecondsSinceEpoch ~/
     Duration.millisecondsPerDay;
 
 StreakState _state({

@@ -267,7 +267,8 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - `lib/features/gamification/infrastructure/default_streak_policy.dart` — új,
   immutable és validált qualified/recovery threshold-konfiguráció (120s/60s),
   valamint a Practice Generator publikus, típusos rest-day decisionjének
-  timezone-semleges epoch-day projekciója.
+  shipping `StreakLogic`-kal egyező, helyi-éjféli epoch-day projekciója
+  rendszeróra-olvasás nélkül.
 - `lib/features/gamification/application/streak_service.dart` — tiszta,
   caller-supplied napi evaluation typed application reasonnel; planned rest,
   grace, freeze, broken, clock anomaly, idempotencia és külön, inkluzív
@@ -278,7 +279,8 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   bizonyíték: `119/120/121s`, explicit recovery `59/60/61s`, valós
   `WeeklyScheduleDecision` rest fixture, öt-event idempotencia, clock no-op,
   grace/freeze/broken reason-mátrix, independent weekly projection, no-XP és
-  public-import audit.
+  public-import audit; F1 regressziós cella a shipping helyi-éjféli request
+  epoch-nappal ugyanarra a typed rest napra `plannedRest`-et vár.
 
 ### Futtatott ellenőrzések
 
@@ -295,6 +297,17 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   A `ROUND_GATE_SLEEP_SECONDS=0` kizárólag a gate saját lépések közötti
   várakozását nullázta a harness időkorlátja miatt; egy ellenőrző lépést vagy
   küszöböt sem hagyott ki.
+- F1 timezone-javítás után `dart format
+  lib/features/gamification/infrastructure/default_streak_policy.dart
+  test/features/gamification/application/streak_service_test.dart` — **2 fájl,
+  0 változás**.
+- F1 timezone-javítás után `TZ=Europe/Budapest flutter test
+  test/features/gamification/application/streak_service_test.dart` — **12/12
+  passed**, a shipping helyi-éjféli epoch-day regressziós cellával együtt.
+- F1 timezone-javítás után `tools/round-gate.sh
+  test/features/gamification/application/streak_service_test.dart` — **zöld**:
+  format (1723 fájl, 0 változás), analyze (no issues), célzott 12 teszt,
+  architecture (12 allowlisted deviation), secrets és l10n.
 
 ### Eltérések és nem futtatott ellenőrzések
 
