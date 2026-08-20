@@ -3,11 +3,11 @@
 Brief: docs/rounds/e08-r05-reward-eligibility-and-trust-policy.md
 Diff: `git diff df41b69b..03085b4d1c4b` (pre-flight commit → implementer commit, branch `codex/e08-r05-reward-eligibility-and-trust-policy`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-20
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED (F1 javítva, javító commit `8a989af5`; upstream-sync merge `82b8b683`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 (1 javítva) · MINOR: 0 · NOTE: 2
 
 ## Acceptance criteria
 
@@ -47,7 +47,7 @@ pre-flight revíziója utáni handoff-frissítése).
 - **Hatás:** ha ez a regresszió valaha bekövetkezne, a `verified` mező hamis `true`-t adna vissza `scored`-szintű (nem `verified`-szintű) bizalom mellett is — ez pont az ADR 0289 „auditálható bizonyíték" elvét sértené a legszigorúbb kapunál, csendben, zöld gate mellett.
 - **Kötelező javítás:** egy új teszt-cella, ahol `mastery` GRANTED, de `verified` DENIED — pl. `trust: EvidenceTrust.scored` (eléri az alapértelmezett `masteryThreshold: scored`-ot, tehát `mastery` granted) ÉS ugyanez a `trust` NEM éri el `EvidenceTrust.verified`-et, tehát `verified` denied `insufficientTrust`-tal. (A jelenlegi `_request()`/`_policy()` alapértelmezett paraméterei — `trust: EvidenceTrust.scored`, `masteryThreshold: EvidenceTrust.scored` — már MA is pontosan ezt a helyzetet termelik; csak egyetlen `test(...)` blokk hiányzik, ami ezt ténylegesen ASSERTálja.)
 - **Ellenőrzés:** az új cella hozzáadása UTÁN a fenti `return mastery;` mutáció megismétlése — a célteszt-fájlnak PIROSRA kell váltania; visszaállítás után ismét 15/15 zöld.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`8a989af5`) — új cella: "mastery can be granted while verified remains denied"; a `return mastery;` mutáció megismétlése a javítás UTÁN pirosra váltott, ahogy kell (reviewer, saját /tmp klón)
 
 ### N1 — NOTE — `ActivityOutcome` és a meglévő `RewardEligibility.eligible`/`reasonCode` (R02) fogalmi átfedése
 
@@ -77,7 +77,7 @@ trust map-re.
 | secrets | zöld | ✅ zöld (3002 file scanned, 0 finding) |
 | l10n | zöld | ✅ zöld |
 | scope-audit | 5 changed, 0 generated/ignored, OK | ✅ megegyezik, saját futtatás |
-| CI (teljes suite + property + APK) | — (implementer nem futtatja) | folyamatban — az orchestrátor a review után dispatcheli |
+| CI (Full Gate + Router CI, exact-SHA) | — (implementer nem futtatja) | ✅ mindkettő success a merge SHA-n (`82b8b683`): [Full Gate](https://github.com/wolfcasaba/strumsight/actions/runs/32327526505), [Router CI](https://github.com/wolfcasaba/strumsight/actions/runs/32328486649) |
 
 Minden gate-bizonyítékot **saját kézzel, izolált `/tmp/review-e08-r05`
 klónban, a GitHub originról húzott, ténylegesen pusholt commitról**
@@ -87,13 +87,16 @@ hagyatkoztam.
 ## Security review
 
 Kockázatos kör (`risk = "high"` az `ai-router` blokkban) — a
-`security-reviewer` agent független futása folyamatban/lezárva; eredménye
-ennek a jelentésnek a frissítésekor kerül be, vagy a merge előtti külön
-lépésben rögzítve.
+`security-reviewer` agent független futása lezárult: **PASS**, 0
+BLOCKER/MAJOR, 3 alacsony kockázatú NOTE (purity-őr még nem fedi a
+gamification `application/`-t; `EvidenceTrust` sorrend-függés unpinned,
+már dokumentálva ADR 0338 §7-ben; `ArgumentError.value` numerikus
+input-echo, log-sink nélkül). Egyik NOTE sem blokkoló.
 
 ## Merge-döntés
 
 Az ADR 0052 szerint minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge.
-**Jelenleg egy nyitott MAJOR (F1) van** → **merge tilos**, amíg nincs zárva.
-Javító kör szükséges: **ugyanaz a motor (codex)**, a leletlistával (F1) a
-promptban, a meglévő branchen.
+F1 javítva (`8a989af5`), a javítás utáni ismételt gate + mutációs próba
+zöld/piros a várt módon. **Minden gate zöld, nincs nyitott BLOCKER/MAJOR**
+→ merge-elve: PR [#345](https://github.com/wolfcasaba/strumsight/pull/345),
+squash `30fa8138`.

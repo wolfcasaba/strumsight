@@ -13424,3 +13424,36 @@ paranccsal (`--base 7458ca83...`) `Legacy scope audit OK (11 changed
 path(s))`; `python3 -m pytest tools/tests -q` 614 passed, 2 skipped (611
 passed alapról, +3 új regressziós teszt, 0 törölve/skip-elve). Nem
 main-merge — normál push a kör saját ágára, [[L343]] (H8) mintáját követve.
+
+## L346 — Egy pre-asszignált ADR-szám markere létezhet, csak épp EGY MÁSIK kör nevén — nem elég azt ellenőrizni, hogy a szám foglalt-e, azt is kell, KIÉ (E08-R05, 2026-08-20)
+
+**Mit mértünk.** Az E08-R05 briefje 2026-08-18-i előkészítéskor „ADR 0303"-at
+kapott, „a szám FOGLALT" megjegyzéssel. A pre-flightban a KÖTELEZŐ
+`tools/round-slots.py reserve-adr --round E08-R05` hívás **0338**-at adott
+vissza — 35-tel többet. Ez [[L267]] mintájára hasonlít (pre-asszignált
+ADR-szám elavul), de a gyökérok MÁS: a `.pipeline/inflight/adr/0303` marker
+LÉTEZETT és VALÓDI foglalás volt — csak épp `round=E07-R17` tartalommal, nem
+E08-R05-tel. A brief szerzője (batch-tervezés) tehát nem egy sosem-foglalt
+számot extrapolált (L267 esete), hanem egy MÁSIK, ténylegesen létező
+foglalást írt rá tévesen a saját briefjére — valószínűleg egy batch-ülésben
+egyszerre előkészített több brief közötti kör-azonosító felcserélésével.
+
+**Miért nem elég a „foglalt-e" kérdés.** Egy `ls .pipeline/inflight/adr/0303`
+vagy akár egy `cat .pipeline/inflight/adr/0303` ránézésre „foglaltnak" látja
+a számot, és egy felületes pre-flight ebből könnyen azt a hibás
+következtetést vonhatja le, hogy „a brief állítása megerősítve, a marker
+létezik" — a marker `round=` mezőjét kifejezetten a SAJÁT kör-azonosítóval
+kell összevetni, nem csak a létezését nézni.
+
+**Hogyan alkalmazd.** A pre-flight ADR-ellenőrzés két lépése:
+1. `cat .pipeline/inflight/adr/<brief-ben-írt-szám>` — ha a `round=` mező
+   NEM a saját kör-azonosítót tartalmazza, a brief száma NEM a tiéd, akármit
+   is állít a fejléc.
+2. Mindig hívd élőben a `tools/round-slots.py reserve-adr --round <saját
+   kör>`-t, és a KAPOTT számot használd — ne a brief statikus állítását,
+   még akkor sem, ha egy marker-fájl létezik ugyanazon a számon (§1.0.1
+   már ezt írja elő; ez a lecke azt egészíti ki, hogy a marker LÉTEZÉSE
+   önmagában NEM cáfolja az elavulást, ha más kör nevén fut).
+A dokumentált §0.0 brief-revízió (nem a szám csendes felülírása) rögzíti a
+mérést és az új számot — E08-R05-ben ez `docs/adr/0338-…md` és a brief
+§0.0 R1 sora.
