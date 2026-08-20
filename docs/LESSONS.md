@@ -13671,3 +13671,45 @@ PIROS eredményt, majd állítsd vissza. Ha a guard-teszt a tiltott mintával
 sem vált pirosra, maga a guard hibás — ez ugyanaz a próba, mint amit a
 [[sdd-round-review skill]] minden „valódi-sértés próba" lépésnél előír, csak
 itt magára a mércére (nem a mért kódra) alkalmazva.
+
+## L352 — A `docs/execution/pipeline-orchestrator-prompt.md` §4 „sosem módosítja" tiltása a forrás ADR 0087 §7 „kör közben" minősítője nélkül másolódott át, ezért egy rotált orchestrátor egy governance-kör SAJÁT, `allowed_paths`-ban felsorolt `tools/round-pipeline.sh`-ra is alkalmazta, öt sikeres precedens ellenére (E99-R19, self-heal, ADR 0112, 2026-08-20)
+
+**Mit mértem.** A rotált (Terra) orchesztrátor H3-cal állította le E99-R19-et
+(GOV-13): a brief `allowed_paths`-ának **első** eleme `tools/round-pipeline.sh`
+— D1/D2 kifejezett céltárgya, ADR 0307 §6 által alátámasztva —, a session-
+prompt §4 viszont szó szerint, minősítő nélkül azt írja, hogy „ez a session
+soha nem módosítja … a `tools/round-pipeline.sh`-t". Terra saját szava
+(`.pipeline/session-E99-R19-20260820T063619-fallback.log`): „Nem indítok
+implementert olyan feladatra, amelyet ez a kör szerződése tilt." Az implementer
+el sem indult. Mérve: a forrás, `docs/adr/0087-autonomous-round-pipeline.md`
+§7 ugyanezt a tiltást **„kör közben"** minősítővel írja — ez a szó a prompt
+átiratából kimaradt. Az ADR 0087 §2 H3-fogalma emellett explicit: tilos zóna =
+az `allowed_paths`-on **kívüli** útvonal; egy a listában felsorolt fájl sosem
+az. Öt korábbi governance-kör (E99-R08, E99-R14, E99-R15, E99-R16, E99-R18)
+gyakorlata igazolja, hogy `tools/round-pipeline.sh` a szabványos
+implementer → review → merge úton rendszeresen, sikeresen módosul.
+
+**Miért.** Ugyanaz a mintázat, mint [[L251]] (E99-R08/H3): egy rotált,
+más motorral induló orchesztrátornak nincs meg az a hallgatólagos,
+felhalmozott tapasztalat, ami a Claude-orchesztrátort magától átvezeti egy
+abszolútnak HANGZÓ, de kontextusfüggő tiltáson — a szöveget a betű szerint
+követi, és önmagára hivatkozva áll meg egy sosem tiltott, saját brief által
+szentesített munkán. A gyökérok mindkét esetben ugyanaz a dokumentum-osztály:
+egy operatív prompt-átirat elveszít egy minősítőt, ami a forrás ADR-ben (itt:
+0087, ott: a `docs/reviews/**` generated/ignored kivétel) még megvolt.
+
+**Hogyan alkalmazd.** Mielőtt egy „ez a session/kör SOHA nem…" mondatot
+végső, abszolút tiltásként fogadsz el, nézd meg a **forrás ADR-t** — ha ott
+egy minősítő (itt: „kör közben") szűkíti a hatókört, a prompt-átiratnak is
+tükröznie kell, különben egy kevésbé tapasztalt motor a szűkebb forrást
+tágabbra olvassa. Konkrétan e négy fájlnál (`ADR 0087`, `ADR 0112`,
+`tools/round-pipeline.sh`, `tools/round-gate.sh`, `.github/`): ha egy
+governance-kör SAJÁT, előre írt `allowed_paths`-a nevesíti valamelyiket,
+az implementer a szabványos úton dolgozhat rajta — a tiltás kizárólag az AD
+HOC, útközben talált akadály önkezű megkerülésére vonatkozik. A `.github/`
+és a `round-gate.sh` határa emellett VALÓDI marad normál körre (kontraszt:
+`halts/halted-20260819T051948.txt`, E99-R16 H3/F3 — ott a `.github/` tényleg
+kellett volna, és az helyesen maradt önjavító-kör-dolog). Kétség esetén nézd
+meg a brief `allowed_paths`-át, ne a prompt szövegéből következtess. Fix +
+regressziós doksi-teszt: PR #352, squash `c4104234`
+(`tools/tests/test_pipeline_file_governance_round_exemption_docs.py`).

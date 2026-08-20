@@ -1,5 +1,37 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R19/H3] KÉSZ — governance-kör SAJÁT `allowed_paths`-ban felsorolt pipeline-fájlja nem H3-alap — PR #352, squash `c4104234` (2026-08-20)
+
+A rotált (Terra) orchesztrátor megtagadta E99-R19 (GOV-13) implementer-
+indítását: a brief `allowed_paths`-ának első eleme `tools/round-pipeline.sh`
+(D1/D2 kifejezett céltárgya, ADR 0307 §6), a
+`docs/execution/pipeline-orchestrator-prompt.md` §4 viszont minősítő nélkül
+mondja, hogy ez a session sosem módosítja azt. A forrás,
+`docs/adr/0087-autonomous-round-pipeline.md` §7 ugyanezt **„kör közben"**
+(ad hoc, útközben talált akadály) minősítővel írja — ez a szó a prompt
+átiratából hiányzott. Az ADR 0087 §2 H3-fogalma szerint tilos zóna kizárólag
+az `allowed_paths`-on **kívüli** útvonal; öt korábbi governance-kör
+(E99-R08/14/15/16/18) gyakorlata igazolja, hogy a fájl a szabványos
+implementer → review → merge úton rendszeresen módosul. Ugyanaz a mintázat,
+mint [[L251]] (E99-R08/H3): egy rotált motor a hallgatólagos Claude-
+tapasztalat nélkül a betű szerint olvas egy kontextusfüggő tiltást.
+
+Javítás: a prompt §4 és az ADR 0087 §7 (jelölt „Módosítás" blokk) explicit
+carve-outot kapott a governance-kör saját, előre engedélyezett briefjére; a
+`.github/` és a `round-gate.sh` határa VÁLTOZATLAN maradt normál körre.
+Regressziós doksi-teszt (a `test_reviewer_scope_exemption_docs.py` mintáját
+követve): `tools/tests/test_pipeline_file_governance_round_exemption_docs.py`
+— RED a javítás előtt, GREEN utána, mindkettő lokálisan igazolva. E99-R19
+brief `allowed_paths`-a és D1–D3 terve VÁLTOZATLAN, csak egy §0.0 addendumot
+kapott. Teljes `pytest tools/tests`: 625 passed, 565 subtests (310s); Router
+CI exact-SHA `a2f94f97`: [32341677224](https://github.com/wolfcasaba/strumsight/actions/runs/32341677224)
+success (nincs Dart-változás, `build-apk` nem indult). Lecke: [[L352]].
+
+Takarítás: a halted round MiniMax pre-flight-only debris ága
+(`minimax/e99-r19-gov-13-chain-hygiene`, csak egy státusz-bump commit, sosem
+nyílt rá PR) törölve. A lánc feloldva — a következő firing E99-R19-et friss
+sessionnel, a javított prompttal újrapróbálja.
+
 ## ✅ E08-R07 KÉSZ — Szintgörbe és profil-projekció — PR #349, squash `010989f3` (2026-08-20)
 
 Monoton `LevelCurve` (egyetlen forrás, inkluzív küszöb, `int64`-közeli
