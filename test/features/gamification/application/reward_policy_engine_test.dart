@@ -294,6 +294,43 @@ void main() {
         isNot(contains(RewardReason.dailyCapApplied)),
       );
     });
+
+    test('replaying an already rewarded child event produces zero XP '
+        '(idempotent re-submission must not farm credit)', () {
+      final policy = _policy();
+      final decision = policy.decide(
+        _request(
+          eventId: 'child-1',
+          practiceKey: 'lesson-pack-1',
+          parentEventId: 'session-summary-1',
+          eligibility: _eligibility(
+            granted: const <_Gate>{
+              _Gate.baseXp,
+              _Gate.qualityBonus,
+              _Gate.mastery,
+              _Gate.verified,
+            },
+          ),
+          validDuration: const Duration(minutes: 2),
+          qualityScore: 1.0,
+          improvementDelta: 1.0,
+          uniqueSourcesToday: 4,
+        ),
+        // The earlier pass already credited child-1 — note that neither
+        // rewardedParentIds nor rewardedChildParentIds contains "child-1"
+        // (the parent set holds "session-summary-1"; the child-parent set
+        // also holds the parent's id, never the child's own id). The
+        // event-id list is the only place the child's id is recorded.
+        _history(rewardedEventIds: const <String>{'child-1'}),
+      );
+
+      expect(decision.points.totalXp, 0);
+      expect(
+        decision.points.reductionReasons,
+        isNot(contains(RewardReason.dailyCapApplied)),
+      );
+      expect(decision.policyVersion, 1);
+    });
   });
 
   group('A6 — same input produces the same decision on every iteration', () {
@@ -512,12 +549,14 @@ RewardPolicyHistory _history({
   int epochDay = 20_260,
   int earnedTodayXp = 0,
   int practiceOccurrenceCount = 0,
+  Set<String> rewardedEventIds = const <String>{},
   Set<String> rewardedParentIds = const <String>{},
   Set<String> rewardedChildParentIds = const <String>{},
 }) => RewardPolicyHistory(
   epochDay: epochDay,
   earnedTodayXp: earnedTodayXp,
   practiceOccurrenceCount: practiceOccurrenceCount,
+  rewardedEventIds: rewardedEventIds,
   rewardedParentIds: rewardedParentIds,
   rewardedChildParentIds: rewardedChildParentIds,
 );

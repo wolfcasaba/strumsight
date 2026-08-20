@@ -269,7 +269,44 @@ Visszaállítás után a gate újra MINDEN ZÖLD (a teljes kimenet a futtatásko
 
 ### Gate-artefaktum (utolsó zöld futás)
 
-A `tools/round-gate.sh test/features/gamification/application/reward_policy_engine_test.dart` utolsó zöld futásának csonkolatlan kimenete a session-naplóban: 18/18 teszt zöld, mind a hat gate-lépés (format, analyze, test, architecture, secrets, l10n) zöld.
+A `tools/round-gate.sh test/features/gamification/application/reward_policy_engine_test.dart` utolsó zöld futásának csonkolatlan kimenete a session-naplóban: 19/19 teszt zöld, mind a hat gate-lépés (format, analyze, test, architecture, secrets, l10n) zöld.
+
+### Javító kör — F1 idempotens gyermek-event deduplikáció (review MAJOR)
+
+**Diagnózis.** A review F1 leletét a `RewardPolicyHistory.rewardedEventIds` getter okozta: a halmazt a `rewardedParentIds` és `rewardedChildParentIds` uniójaként származtattuk, de egyik szülő-készlet sem tartalmazza a gyermek saját event ID-ját (`child-1`). A `parentEventId: session-summary-1` alapú gyermek-event ismételt beküldése így észrevétlen maradt, és a motor másodszor is kiosztotta a teljes XP-t — farmolható idempotens újraküldés, ami sérti A5-öt.
+
+**Javítás (allowed_paths scope, 2 fájl).**
+
+1. `lib/features/gamification/application/reward_policy_engine.dart` — a `RewardPolicyHistory` származtatott gettere megszűnt, és a contract mostantól egy külön `Set<String> rewardedEventIds` kötelező mezőt fogad. A hívó (jövőbeli R03/R07 ledger bridge) felelőssége, hogy ezt a készletet karban tartsa — a motor csak olvassa.
+2. `lib/features/gamification/infrastructure/default_reward_policy.dart` — a `_dedup` réteg változatlan: továbbra is `history.rewardedEventIds.contains(request.eventId)` a korai kilépés, de most a halmaz ténylegesen a jutalmazott event ID-kből áll, nem a szülő ID-kból származik. A két szülő-készlet (`rewardedParentIds`, `rewardedChildParentIds`) továbbra is a saját A5-ágakban dolgozik (parent→child és child→parent sorrend).
+3. `test/features/gamification/application/reward_policy_engine_test.dart` — az A5 csoport bővült a review repro-próbájával (`replaying an already rewarded child event produces zero XP`), és a `_history` helper felvette az új `rewardedEventIds` opcionális paramétert (üres halmaz default).
+
+**A review F1 repro-próba bizonyítéka (RED → GREEN).** A javítás ELŐTT a `_dedup` réteget ideiglenesen arra a mutációra cseréltem, hogy a korai `rewardedEventIds.contains(...)` kilépés `false`-ra legyen kiértékelve (a többi branch és a history szerkezete változatlan). A `flutter test … --plain-name "replaying an already rewarded child event"` futás ekkor PIROS lett:
+
+```
+00:00 +0 -1: A5 — parent and child produce a single combined reward replaying
+        an already rewarded child event produces zero XP (idempotent re-
+        submission must not farm credit) [E]
+  Expected: <0>
+    Actual: <17>
+  test/features/gamification/application/reward_policy_engine_test.dart 327:7  main.<fn>.<fn>
+```
+
+A review ugyanazt a mintát jelentette (`Expected: <0>; Actual: <5>` más config mellett) — a teszt a bug valódi mércéje. Visszaállítás után a teljes `tools/round-gate.sh` ZÖLD:
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/gamification/application/reward_policy_engine_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A teszt számláló: 19/19 (a korábbi 18/18 + az új A5 child-replay cella). A meglévő A5 cellák (parent→child és child→parent sorrend) zöldek maradtak — a javítás nem érintette a szülő-készletek ágait.
 
 ### Kézben átadva a review-nak
 

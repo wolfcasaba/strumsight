@@ -119,6 +119,7 @@ final class RewardPolicyHistory {
     required this.epochDay,
     required this.earnedTodayXp,
     required this.practiceOccurrenceCount,
+    required this.rewardedEventIds,
     required this.rewardedParentIds,
     required this.rewardedChildParentIds,
   }) {
@@ -152,6 +153,14 @@ final class RewardPolicyHistory {
   /// `practiceOccurrenceCount`-th on the day (zero-indexed).
   final int practiceOccurrenceCount;
 
+  /// The distinct event ids already rewarded on [epochDay] in any role
+  /// (parent or child). The dedup layer consults this set against
+  /// [RewardPolicyRequest.eventId] so a re-submission of the same event
+  /// cannot double-claim — including a child re-sent with the same
+  /// `parentEventId`, which is NOT visible in either
+  /// [rewardedParentIds] or [rewardedChildParentIds] on its own.
+  final Set<String> rewardedEventIds;
+
   /// The parent event ids rewarded in their parent role on [epochDay]. When
   /// the requested event has a [RewardPolicyRequest.parentEventId] that is
   /// present here, the parent has already claimed the credit and the current
@@ -162,13 +171,6 @@ final class RewardPolicyHistory {
   /// [epochDay]. The decision suppresses a parent whose id appears here —
   /// the credit was already paid out via the child event.
   final Set<String> rewardedChildParentIds;
-
-  /// Distinct set of already-rewarded event ids on [epochDay] — used so a
-  /// re-submission of the same event id cannot double-claim.
-  Set<String> get rewardedEventIds => <String>{
-    ...rewardedParentIds,
-    ...rewardedChildParentIds,
-  };
 }
 
 /// Immutable output of a single policy evaluation. The receipt is total +
