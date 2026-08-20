@@ -569,6 +569,17 @@ A driver ezt automatikusan feloldja, mielőtt a kört elindítaná:
 
 A döntés kívülről lekérdezhető: `tools/round-pipeline.sh --independent-engine <motor>`.
 
+> **Ideiglenes felállás (user-döntés 2026-08-20, Pro-keret égetése):** a
+> lejáró ChatGPT Pro előfizetés maradékának elfogyasztásáig MINDEN kör
+> orchestrátora/reviewere a **Sol** (`gpt-5.6-sol`, a `round-pipeline.sh`
+> rotáció-defaultja `sol`), implementere a **`terra`** (`gpt-5.6-terra`, a
+> queue nyitott sorai). A függetlenség mérési kulcsa változatlanul a
+> modell-azonosság — a Sol↔Terra pár e szerint független, a közös
+> előfizetés-keret a döntés tudatos ára. A fenti tábla az `alternate`
+> rotáció gépezete: env-pin alatt mérhető, és a lejárat utáni visszaállás
+> után újra ez az érvényes út. Részletek: HANDOFF (2026-08-20 GOV-bejegyzés)
+> és a `pipeline-orchestrator-prompt.md` MOTOR-FELÁLLÁS blokkja.
+
 A `H-INDEP` és a `H-GATEGUARD` **nem önjavítható** — az önjavító session
 kvótazárlat alatt maga is Terra, tehát körben oldaná fel. Ezekre emberi döntés
 kell (`tools/pipeline-status.sh --resume`).

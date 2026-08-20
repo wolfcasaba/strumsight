@@ -247,25 +247,34 @@ használja; új task ID-val vagy state-törléssel újrakezdeni tilos. Új
 `READY_FOR_REVIEW` után az orchestrátor commitolja a javítást és megismétli a
 független review-t. Csak a **review + CI + merge** útvonal jelezhet `done`-t.
 
-### ✅ MOTOR-FELÁLLÁS (2026-08-08, user-döntés — a 2026-08-07-es Terra-tiltás FELOLDVA)
+### ✅ MOTOR-FELÁLLÁS (2026-08-20, user-döntés — Pro-keret égetése a lejáratig)
 
-A Terra (`gpt-5.6-terra`) kvótája visszatért (élő füst-teszt 2026-08-08 07:4x:
-`codex exec -m gpt-5.6-terra` → `TERRA_OK`), ezért az előző napi ideiglenes
-`terra` / `codex`-harness tiltás **megszűnt**. Az érvényes felállás:
+A ChatGPT Pro előfizetés **napokon belül lejár**, és a keretének ~90%-a
+megmaradt — a user döntése: „hadd fogyjon el". Amíg az előfizetés él, az
+érvényes felállás:
 
+- **Orchestrátor / reviewer / irányító: Sol** (`gpt-5.6-sol`, Codex CLI,
+  ugyanaz a `~/.codex-terra` CODEX_HOME, explicit `-m gpt-5.6-sol`) — a
+  `round-pipeline.sh` rotáció-defaultja `sol`, tehát MINDEN kört a Sol
+  vezényel (`PIPELINE_ORCH_ROTATION` env-vel felülírható).
 - **Implementer: `terra`** (Codex CLI, `~/.codex-terra`, `gpt-5.6-terra`) —
-  `.pipeline/engine-override` = `terra`, tehát a queue `engine` oszlopától
-  függetlenül MINDEN kör ezzel megy.
+  a queue MINDEN nyitott sora explicit `terra` (az ADR 0069 mért
+  motor-szétosztása erre az időszakra felfüggesztve; a queue fejléce
+  dokumentálja).
 - **Javító kör: ugyanaz a `terra`** — nincs motorváltás javításkor, és a
   MiniMax-ra írt „EGY javító kör, utána Codex-eszkaláció" szabály tárgytalan,
-  amíg a Terra az implementer (ő maga a legmagasabb szint).
-- **Orchestrátor / reviewer / irányító: Sonnet 5** (`claude-sonnet-5`, a
-  `round-pipeline.sh` `PIPELINE_MODEL` defaultja) — ezen NEM változtatunk.
-- **Orchestrátor-fallback (ADR 0115) újra BE:** a crontabból a
-  `PIPELINE_FALLBACK_ENGINE=none` törölve. A fallback csak akkor lép be, ha a
-  Claude-kvóta kimerül — a primer orchestrátor akkor is Sonnet 5.
+  amíg a Terra az implementer.
+- **Függetlenség:** a Sol↔Terra pár a modell-azonossági kulcson mérve
+  független (két különböző modell; `orchestrator_conflicts_with_implementer`),
+  a KÖZÖS Pro-előfizetés keretét a user e döntéssel tudatosan vállalta —
+  éppen a keret elégetése a cél.
+- **A lejárat UTÁN** (a Codex-oldal auth/kvóta végleg elhal): állítsd vissza a
+  rotáció-defaultot `alternate`-re (`tools/round-pipeline.sh`), oszd vissza a
+  nyitott queue-sorokat a mért szabály szerint (`minimax`/`codex` → de a
+  `codex`/`terra` sorok a lejárt előfizetéssel NEM futtathatók — ilyenkor
+  `minimax`/`sonnet-impl` a mezőny), és frissítsd ezt a blokkot.
 
-Ha a Terra ismét limitre fut, a `codex_usage_limit_hold`
+Ha a Sol/Terra limitre fut, a `codex_usage_limit_hold`
 (`tools/round-pipeline.sh`) tartja vissza a firingeket a reset-időig; a
 motorváltás akkor is **user-döntés**, nem automatikus.
 
