@@ -121,49 +121,93 @@ library;
     );
   });
 
-  group(
-    'gamification application and presentation keep storage in data (E08-R08)',
-    () {
-      test('no framework or direct storage import outside the data layer', () {
-        final applicationDir = Directory(
-          'lib/features/gamification/application',
-        );
-        final presentationDir = Directory(
-          'lib/features/gamification/presentation',
-        );
-        expect(applicationDir.existsSync(), isTrue);
+  group('gamification application stays framework-free and presentation keeps '
+      'storage in data (E08-R08)', () {
+    test('enforces the layer-specific dependency boundaries', () {
+      final applicationDir = Directory('lib/features/gamification/application');
+      final presentationDir = Directory(
+        'lib/features/gamification/presentation',
+      );
+      expect(applicationDir.existsSync(), isTrue);
 
-        final offenders = <String>[];
-        for (final directory in <Directory>[applicationDir, presentationDir]) {
-          if (!directory.existsSync()) continue;
-          for (final entity in directory.listSync(recursive: true)) {
-            if (entity is! File || !entity.path.endsWith('.dart')) continue;
-            offenders.addAll(
-              _forbiddenGamificationDomainMarkerOffenders(
-                entity.path,
-                entity.readAsStringSync(),
-              ),
-            );
-          }
-        }
-
-        expect(offenders, isEmpty, reason: offenders.join('\n'));
-      });
-
-      test('the reused guard detects a direct SharedPreferences import', () {
-        const directImport =
-            "import 'package:shared_preferences/shared_preferences.dart';";
-
-        expect(
+      final offenders = <String>[];
+      for (final entity in applicationDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        offenders.addAll(
           _forbiddenGamificationDomainMarkerOffenders(
-            'application.dart',
-            directImport,
+            entity.path,
+            entity.readAsStringSync(),
           ),
-          <String>['application.dart contains "package:shared_preferences/"'],
         );
-      });
-    },
-  );
+      }
+      if (presentationDir.existsSync()) {
+        for (final entity in presentationDir.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) continue;
+          offenders.addAll(
+            _forbiddenGamificationPresentationStorageMarkerOffenders(
+              entity.path,
+              entity.readAsStringSync(),
+            ),
+          );
+        }
+      }
+
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the reused guard detects a direct SharedPreferences import', () {
+      const directImport =
+          "import 'package:shared_preferences/shared_preferences.dart';";
+
+      expect(
+        _forbiddenGamificationDomainMarkerOffenders(
+          'application.dart',
+          directImport,
+        ),
+        <String>['application.dart contains "package:shared_preferences/"'],
+      );
+    });
+
+    test('the presentation guard detects direct storage imports', () {
+      const directImport =
+          "import 'package:shared_preferences/shared_preferences.dart';";
+
+      expect(
+        _forbiddenGamificationPresentationStorageMarkerOffenders(
+          'presentation.dart',
+          directImport,
+        ),
+        <String>['presentation.dart contains "package:shared_preferences/"'],
+      );
+    });
+
+    // Regression for E08-R12/H3 (Full Gate run 32393885486): the original
+    // E08-R08 scan reused the domain/application marker set for presentation
+    // and therefore rejected the three legitimate Flutter UI files below.
+    test('presentation allows the measured Flutter UI imports', () {
+      const measuredPresentationImports = <String, String>{
+        'lib/features/gamification/presentation/screens/'
+                'streak_detail_screen.dart':
+            "import 'package:flutter/material.dart';",
+        'lib/features/gamification/presentation/widgets/'
+                'streak_status_card.dart':
+            "import 'package:flutter/material.dart';",
+        'lib/features/gamification/presentation/widgets/'
+                'weekly_consistency_card.dart':
+            "import 'package:flutter/material.dart';",
+      };
+
+      final offenders = <String>[
+        for (final entry in measuredPresentationImports.entries)
+          ..._forbiddenGamificationPresentationStorageMarkerOffenders(
+            entry.key,
+            entry.value,
+          ),
+      ];
+
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+  });
 
   group('architecture dependency rules', () {
     late Directory project;
@@ -714,6 +758,11 @@ const _gamificationImportUriMarkers = [
   'package:sqflite/',
   'dart:ui',
 ];
+const _gamificationDirectStorageImportUriMarkers = [
+  'package:shared_preferences/',
+  'package:flutter_secure_storage/',
+  'package:sqflite/',
+];
 
 List<String> _forbiddenDomainMarkerOffenders(String path, String content) {
   final withoutComments = _withoutTrivia(content, maskStrings: false);
@@ -739,6 +788,17 @@ List<String> _forbiddenGamificationDomainMarkerOffenders(
     for (final marker in _callMarkers)
       if (withoutCommentsAndStrings.contains(marker))
         '$path contains "$marker"',
+  ];
+}
+
+List<String> _forbiddenGamificationPresentationStorageMarkerOffenders(
+  String path,
+  String content,
+) {
+  final withoutComments = _withoutTrivia(content, maskStrings: false);
+  return [
+    for (final marker in _gamificationDirectStorageImportUriMarkers)
+      if (withoutComments.contains(marker)) '$path contains "$marker"',
   ];
 }
 
