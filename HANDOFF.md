@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E08-R12/H8] KÉSZ — a publikus kör-ág veszteségmentesen tartalmazza a friss `main`-t (2026-08-20, L367)
+
+Az E08-R12 landolója a friss `main`-re rebase-elte a kör hét nem-merge
+commitját, majd a safe-force-push négy remote-only commitot talált: három
+korábbi upstream-merge-et és a `524cf246` pre-flight briefet. Az izolált
+cherry-pick próba pontosan a kör briefjén adott content-konfliktust. A
+`main`-oldal bizonyítottan tartalmazta a merge-elt H6 scope-revíziót
+(`425ad1d7`, PR #365), ezért a H8 brief-history protokoll volt alkalmazható.
+
+A távoli PR-csúcsról (`02ae43af`) indított `git merge --no-ff origin/main`
+konfliktus nélkül létrehozta a `c6a96fc1` csúcsot; a brief 73 soros
+implementation handoffja és a H6 allowlist egyszerre megmaradt. A helyreállított
+fa byte-azonos a korábban teljes round-gate-en zöld rebase-elt fával,
+`origin/main` bizonyított őse a csúcsnak, és normál push történt force nélkül.
+A H8 regressziós teszt 1/1 zöld; az exact-SHA Router CI
+[32402823817](https://github.com/wolfcasaba/strumsight/actions/runs/32402823817)
+success. A kör saját PR-je [#367](https://github.com/wolfcasaba/strumsight/pull/367)
+nyitva marad; a következő firing ezen a helyreállított ágon folytatja a
+landolást. Következő SDD-kör továbbra is: **E08-R12 — Streak UI V2 és recovery
+flow**.
+
 ## ✅ [HEAL E08-R12/H3] KÉSZ — a presentation Flutter-függése és storage-határa külön őrzött — PR #369 (2026-08-20, L366)
 
 Az E08-R12 exact-SHA Full Gate futása a három, brief által kötelező
