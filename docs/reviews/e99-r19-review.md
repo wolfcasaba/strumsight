@@ -1,21 +1,21 @@
 # E99-R19 — Review
 
 Brief: `docs/rounds/e99-r19-gov-13-chain-hygiene.md`
-Diff: `f2d98204...cf368d2a`
-Reviewer: Codex (független, izolált `/tmp/review-e99-r19-cf368d2a` klón)
+Diff: `8fb5beb5...334c5fef`
+Reviewer: Codex (független, izolált `/tmp/review-e99-r19-2aba1acb` klón)
 Dátum: 2026-08-20
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
 | 1 | D1 azonos / lemaradt / divergáló | ✅ | `test_chain_hygiene.py::MainSyncStrategyTest` és izolált git-fixtúrák |
-| 2 | D1 piszkos fa változatlanul megáll | ❌ | F1: a jelen teszt nem a tényleges előfeltételt méri |
+| 2 | D1 piszkos fa változatlanul megáll | ✅ | `halt:dirty-tree`, lemaradt+piszkos izolált fixtúra |
 | 3 | D2 done → nincs plusz commit; pending → fail-safe | ✅ | `PendingDoneFailSafeTest` cellák és idempotencia-próba |
 | 4 | D3 S7 strict, base változatlan | ✅ | `test_brief_risk_justification.py`; izolált CLI-cella |
 
@@ -43,17 +43,21 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 0
   okozza. A tesztnek pirosra kell váltania, ha ez az őr kikerül.
 - **Ellenőrzés:** célzott `python3 -m pytest tools/tests/test_chain_hygiene.py -q`,
   majd a teljes tooling-suite és a round gate.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bf497480`): a `--main-sync-ff-merge` teszthorog
+  explicit piszkosfa-őrt és `halt:dirty-tree` kimenetet kapott; a javított
+  fixtúra valódi lemaradást hoz létre. A reviewer ugyanazt a cellát célzottan
+  újrafuttatta (`10 passed`).
 
 ## Gate-bizonyíték ellenőrzése
 
 | Gate | Ellenőrizve |
 |---|---|
-| `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` | ✅ izolált klónban 6/6 zöld |
-| `python3 -m pytest tools/tests -q` | ✅ izolált klónban 640 passed, 2 skipped, 567 subtests passed |
+| `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` | ✅ friss izolált klónban 6/6 zöld |
+| `python3 -m pytest tools/tests -q` | ✅ friss izolált klónban 645 passed, 2 skipped, 571 subtests passed |
 | `python3 tools/brief-lint.py --open --level base` | ✅ nincs lelet |
-| CI (full suite + property) | ⏳ dispatch-elve, exact-SHA eredményre vár |
+| CI (full suite + property) | ⏳ a review-záró commit exact SHA-jára dispatch-elendő |
 
 ## Merge-döntés
 
-Az F1 MAJOR nyitott; merge tilos a javítás és az ismételt független review előtt.
+Nincs nyitott BLOCKER vagy MAJOR. Merge kizárólag a review-záró SHA exact CI
+és Router CI zöld eredménye után engedett.
