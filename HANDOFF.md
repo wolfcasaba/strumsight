@@ -1,5 +1,27 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R11 KÉSZ — Qualified day, planned rest és recovery policy — PR #363, squash `6a8d0b72` (2026-08-20)
+
+A gamification application-réteg most csak legalább 120 másodperc érvényes
+aktivitást minősít standard napnak; az explicit recovery út 60 másodpercnél
+nyílik. A tervezett pihenőnap a Practice Generator publikus, reason-code-os
+heti szerződéséből érkezik, nem fogyaszt freeze-t, az óra-visszalépés pedig
+nem növeli és nem töri a streaket. A hétnapos consistency külön, egyedi
+qualified napokból számolt projekció. A döntést ADR 0352 rögzíti.
+
+Implementer: Terra (`gpt-5.6-terra`); független correctness és high-risk
+security review: Sol (`gpt-5.6-sol`), mindkettő APPROVED. Az első review egy
+MAJOR hibát reprodukált `TZ=Europe/Budapest` alatt: az UTC-alapú rest-day
+konverzió eltért a shipping `StreakLogic.epochDayOf` helyi-midnight
+napalapjától. A javítás után 12/12 célzott teszt és a teljes 6/6 round-gate
+zöld; a „minden aktivitás kvalifikál" mutáció A1/A8/A9 cellákat pirosra
+vitte. Exact `0674de52`: Full Gate
+[32379760277](https://github.com/wolfcasaba/strumsight/actions/runs/32379760277)
+és Router CI
+[32379709904](https://github.com/wolfcasaba/strumsight/actions/runs/32379709904)
+success. A részletes történet a `docs/handoff-archive.md` elején található.
+Következő SDD-kör: **E08-R12 — Streak UI V2 és recovery flow**.
+
 ## ✅ E99-R20 (GOV-14) KÉSZ — kombinált-HEAD kör-landoló és H8-SELFDUP őr — PR #361, squash `5ad15b5f` (2026-08-20)
 
 A `tools/round-land.sh` a merge-záron belül köti a PR identitását a mért
@@ -3128,6 +3150,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-20):** `main` @ `6a8d0b72` — E08-R11 Qualified
+day, planned rest és recovery policy, PR
+[#363](https://github.com/wolfcasaba/strumsight/pull/363), squash-merge.
+Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
+`0674de52`: Full Gate 32379760277 + Router CI 32379709904 success;
+correctness és security review APPROVED. Következő: **E08-R12**.
+
 **Aktuális állapot (2026-08-20):** `main` @ `5ad15b5f` — E99-R20 GOV-14
 kombinált-HEAD kör-landoló, PR [#361](https://github.com/wolfcasaba/strumsight/pull/361),
 squash-merge. Implementer Terra (`gpt-5.6-terra`), reviewer Sol
@@ -4341,12 +4370,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R11** (Qualified day, planned rest és recovery
-policy, SDD Chapter 9 —
-`docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md`, engine a
-queue-ban `terra`, előre kiosztott ADR `0309`, amelyet a pre-flightban a
-`tools/round-slots.py reserve-adr` foglalóval újra kell mérni). Friss
-sessionben indul.
+**A következő SDD-lépés: E08-R12** (Streak UI V2 és recovery flow, SDD
+Chapter 9 —
+`docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`, engine a queue-ban
+`terra`). Friss sessionben indul; ez a session nem kezdi el.
 
 **Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
 a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)

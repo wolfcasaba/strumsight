@@ -14060,3 +14060,44 @@ hiányzó normál `origin/main` tracking branch miatt a CLI exit 1-et adott. A
 merge-eredményt ezért strukturált `gh pr view --json state,mergeCommit`
 ellenőrzéssel kell megkülönböztetni a takarítási hibától; a nonzero önmagában
 nem bizonyít sikertelen távoli merge-et.
+
+## L362 — A tervdátum epoch-napját ugyanazzal a helyi-midnight alappal kell képezni, mint a streak shipping napfüggvénye; egy UTC-only teszt pozitív időzónában hamis rest-day ágat rejt (E08-R11 F1, 2026-08-20)
+
+**Mért hiba.** Az első implementáció a `WeeklyScheduleDecision.date` értékét
+`DateTime.utc(year, month, day)` alapon alakította epoch-nappá, miközben a
+shipping `StreakLogic.epochDayOf` helyi `DateTime(year, month, day)`
+midnightot használ. UTC-ben a tesztek zöldek voltak; `TZ=Europe/Budapest`
+alatt ugyanaz a valódi tervezett pihenőnap `plannedRest` helyett `grace`
+állapotot adott.
+
+**Javítás és szabály.** A szolgáltatás a shipping napalap byte-azonos helyi
+midnight képletére váltott, a teszt pedig ugyanezt a publikus viselkedést
+pozitív UTC-offset alatt is méri. Dátum-only contract integrálásakor ne
+válassz új UTC/local szemantikát a hívó alapján: előbb keresd ki a fogyasztó
+tényleges epoch-day függvényét, majd legalább egy nem-UTC környezetben
+falszifikáld a határnapot.
+
+## L363 — Egy abszolút útról indított gate-script nem vált át automatikusan a reviewer klónjába; a tesztek a hívó munkakönyvtárát öröklik (E08-R11 review, 2026-08-20)
+
+**Mért hiba.** Az első izolált review-hívás a scriptet a friss `/tmp` klón
+abszolút útjáról indította, de a shell munkakönyvtára a hub repó maradt. A
+gate ezért a hub Flutter projektjét és annak régi tesztfájlját mérte, majd
+hamis piros eredményt adott. Ugyanaz a reviewer HEAD a klónból futtatott
+`tools/round-gate.sh` hívással 6/6 zöld lett.
+
+**Szabály.** Izolált review-nál az exact HEAD mellett a `cwd` is a mérési
+identitás része. A gate-et a reviewer klón munkakönyvtárából kell indítani;
+az abszolút scriptút önmagában nem izolálja a Flutter package-resolúciót.
+
+## L364 — Markdown backticket tartalmazó PR-szöveget nem szabad double-quoted shell argumentumba interpolálni: a shell parancshelyettesítésként végrehajtja (E08-R11 zárás, 2026-08-20)
+
+**Mért hiba.** A PR-leírás első frissítése a Markdown inline-code
+backtickjeit double-quoted shell argumentumban adta át. A shell megpróbálta
+parancsként futtatni a `gpt-5.6-terra`, `gpt-5.6-sol`, `0df3c6f8` és exact
+SHA szövegeket; a `gh pr edit` nem futott le, a PR és a merge szerencsére
+változatlan maradt.
+
+**Javítás és szabály.** A leírás JSON request bodyként, egy idézésmentes
+stdin here-documenten át ment a `gh api` hívásnak. Strukturált vagy Markdown
+külső tartalmat ne fűzz double-quoted shell parancsba; stdin/JSON inputot vagy
+egy valóban literális, ellenőrzött argumentumcsatornát használj.

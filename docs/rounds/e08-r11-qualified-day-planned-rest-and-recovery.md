@@ -1,6 +1,6 @@
 # E08-R11 — Qualified day, tervezett pihenőnap és visszatérés-politika
 
-- **Státusz:** IN PROGRESS (pre-flight: 2026-08-20, `main @ 915c4529`)
+- **Státusz:** DONE (PR #363, squash `6a8d0b72`, 2026-08-20)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 11
 - **Kör-azonosító:** `E08-R11`
 - **Branch:** `<motor>/e08-r11-qualified-day-planned-rest-and-recovery`

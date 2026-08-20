@@ -6,6 +6,38 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R11 — Qualified day, planned rest és recovery policy (2026-08-20)
+
+PR [#363](https://github.com/wolfcasaba/strumsight/pull/363), squash
+`6a8d0b72`, [ADR 0352](adr/0352-qualified-day-planned-rest-and-recovery-policy.md).
+A `StreakService` a 120 másodperces standard és a kizárólag explicit recovery
+esetén használható 60 másodperces minimumot egyetlen
+`DefaultStreakQualificationPolicy` konfigurációból alkalmazza. A napi
+projekció típusosan megkülönbözteti az insufficient, qualified,
+already-qualified, clock-anomaly, planned-rest, grace, freeze-covered és
+broken ágakat; nem ír storage-ot, nem oszt XP-t és nem használ órát vagy IO-t.
+A tervezett pihenőnap a Practice Generator publikus
+`WeeklyScheduleDecision` contractjából érkezik, freeze-fogyasztás nélkül. A
+weekly consistency az utolsó hét egyedi qualified epoch-napjait számlálja,
+függetlenül a daily streaktől.
+
+Az első Sol correctness review MAJOR lelete az UTC-alapú tervdátum-konverzió
+volt: `TZ=Europe/Budapest` alatt a shipping local-midnight
+`StreakLogic.epochDayOf` és az UTC-nap eltért, ezért a valódi rest day
+`grace` lett. A Terra javító kör helyi-midnight napalapra váltott és állandó
+regressziós cellát adott; az ismételt izolált review 12/12 teszttel és 6/6
+round-gate-tel APPROVED. A high-risk security review szintén APPROVED. Az
+eldobható „minden aktivitás kvalifikál" mutáció pirosra vitte az A1, A8 és A9
+őröket, visszaállítás után a suite zöld maradt.
+
+Exact reviewed head `0674de52`: Full Gate
+[32379760277](https://github.com/wolfcasaba/strumsight/actions/runs/32379760277)
+és Router CI
+[32379709904](https://github.com/wolfcasaba/strumsight/actions/runs/32379709904)
+success. A kör alatt a `main` egyszer mozdult; a branch konfliktusmentes
+`--no-ff` upstream-merge után új, exact-SHA CI-bizonyítékot kapott. A következő
+kör E08-R12, külön sessionben.
+
 ## ✅ E99-R20 (GOV-14) — Kombinált-HEAD kör-landoló és H8-SELFDUP őr (2026-08-20)
 
 PR [#361](https://github.com/wolfcasaba/strumsight/pull/361), squash
