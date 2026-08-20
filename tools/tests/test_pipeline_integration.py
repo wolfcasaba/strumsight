@@ -397,6 +397,15 @@ class PipelineIntegrationTest(unittest.TestCase):
         self.assertIn("merge-base --is-ancestor origin/main HEAD", prompt)
         self.assertIn("force-push", prompt)
         self.assertIn("aktuális `main` brief-változatát", prompt)
+        # E08-R12/H8: the rebase had already completed before safe-force-push
+        # exposed remote-only merge commits plus the superseded pre-flight.
+        # Recovery must preserve both heads until byte-identical trees prove
+        # that a normal merge loses neither the product diff nor current scope.
+        self.assertIn("safe-force-push", prompt)
+        self.assertIn("branch backup/<kör>-pre-h8 HEAD", prompt)
+        self.assertIn("switch --detach origin/<kör-branch>", prompt)
+        self.assertIn("diff --exit-code backup/<kör>-pre-h8 HEAD", prompt)
+        self.assertIn("remote-only listán", prompt)
         adr = (ROOT / "docs" / "adr" / "0112-self-healing-pipeline.md").read_text()
         self.assertIn("merge-base --is-ancestor origin/main HEAD", adr)
 
