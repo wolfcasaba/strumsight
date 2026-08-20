@@ -31,6 +31,107 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight revízió (2026-08-20, `main @ f2d98204`)
+
+**ADR-szám korrekció: `0306` → `0344`.** A brief 2026-08-18-i megírásakor a
+`0306` volt a következő szabad szám; azóta (E08-R01…R07 + több self-heal és
+governance-kör) `0307`–`0343` mind foglalt lett. A `tools/round-slots.py
+reserve-adr --round E08-R08` futtatása (ADR 0171 §4.1) a jelen pre-flightban
+`0344`-et adott — **ez a kötelező szám**, nem a brief fejlécében álló `0306`.
+Az implementer a `docs/adr/`-t egyébként sem érinti (tilos zóna) — az ADR-t a
+Claude írta meg
+[`0344-gamification-storage-schema-versioned-documents-and-layer-purity.md`](../adr/0344-gamification-storage-schema-versioned-documents-and-layer-purity.md)
+néven, a brief §5 döntéseiből (bővebb indoklással és precedens-hivatkozással,
+mint amit a §5 tömören leír).
+
+**Visszakeresés (ADR 0312 §4.9, szűkítve előbb, teljes korpusszal
+kiegészítve) — a `brief-lint` S8 lelet feloldása:**
+
+- [`ADR 0054`](../adr/0054-versioned-user-content-documents.md) — a
+  verziózott envelope + `JsonDocumentStore` alapminta, amit ez a kör négy új
+  dokumentumra alkalmaz (`bm25#1 emb#3`).
+- [`ADR 0301`](../adr/0301-reward-ledger-append-only-idempotency.md) §4 — mikor
+  NEM szabad `JsonCollectionStore`-t (cap-elő wrappert) használni; ez a kör az
+  ELLENTÉTES esetet dokumentálja a postaládára, ahol a cap-elés a kívánt
+  viselkedés, nem hiba (`bm25#5 emb#2` a kapcsolódó ADR 0328-ra, az idézett
+  0301-et a teljes-korpuszos kiegészítő kérdés hozta).
+- [`ADR 0328`](../adr/0328-measured-gamification-baseline-contract.md) — a
+  baseline-first fegyelem (`docs/baseline/epic-08-start.md`), amivel a
+  jövőbeli migrációs kör (Kör 9/10) az itt csak hely-fenntartásként bevezetett
+  migrációs-állapot dokumentumot ki fogja tölteni; ez az ADR NEM ír elő
+  konkrét migrációs-állapot JSON-alakot, ezért ez a kör szándékosan
+  minimális placeholdert ír, nem szerződést (lásd ADR 0344 Döntés 7).
+- Nincs olyan korábbi lecke vagy halt, ami ennek a körnek a konkrét
+  scope-jára (verziózott multi-dokumentum gamification-séma) közvetlenül
+  vonatkozna azon túl, amit a fenti három ADR már rögzít.
+
+**Mért, megerősített és korrigált tények (§1 pre-flight-mérés):**
+
+- **Korrekció:** a §2 „`test/core/architecture_dependency_test.dart` (467
+  sor)" állítása elavult — a fájl ma **750 sor** (`wc -l`, `main @ f2d98204`).
+  A hivatkozott csoportok (`gamification domain stays framework-free`,
+  `architecture dependency rules`) továbbra is léteznek és pontosan azt
+  csinálják, amit a brief állít; csak a sorszám avult el.
+- **Megerősítve:** `lib/features/streak/data/streak_repository.dart` pontosan
+  47 sor, a brief állítása pontos — `JsonObjectStore` + `legacyKey`, sérült
+  bájtnál a hívó `null`-t kap, néma felülírás nélkül.
+- **A `SharedPreferences`-guard (A5) valóban hiányzik, és a meglévő
+  gamification-guard közvetlenül újrafelhasználható.**
+  `test/core/architecture_dependency_test.dart` `_gamificationImportUriMarkers`
+  listája (694. sor) MÁR tartalmazza a `'package:shared_preferences/'`-t, és a
+  hozzá tartozó `_forbiddenGamificationDomainMarkerOffenders` helper (686.
+  sor) MÁR comment-/string-literal-tudatos (a közös `_withoutTrivia`
+  infrastruktúrán át) — de a hívó csoport (E08-R02, 101. sor) ma KIZÁRÓLAG a
+  `lib/features/gamification/domain` könyvtárt járja be. Mérve: nulla találat
+  sima `SharedPreferences` literálra a teszt fájlban a
+  `package:shared_preferences/` string-en kívül. **Javaslat Codexnek:** ÚJ
+  `group` az `application/` könyvtárra (kötelezően létezik, ugyanúgy ahogy a
+  domain-csoport `expect(domainDir.existsSync(), isTrue)`-t hív) + feltételes
+  scan a `presentation/`-re (`if (presentationDir.existsSync())` — a
+  gamification feature-nek ma nincs UI rétege), MINDKETTŐ a meglévő
+  `_gamificationImportUriMarkers` + `_forbiddenGamificationDomainMarkerOffenders`
+  párral, új marker-lista vagy comment-parser nélkül. Megerősítve: a mai
+  `lib/features/gamification/application/*.dart` mind a négy fájlja
+  (`activity_event_ingestor.dart`, `profile_projector.dart`,
+  `reward_eligibility_policy.dart`, `reward_policy_engine.dart`) egyetlen
+  framework-importot sem tartalmaz, tehát a teljes lista — nem csak a
+  `shared_preferences`-tag — kockázat nélkül alkalmazható rájuk.
+- **A postaláda (§6.1 küszöb-hármas) a meglévő `JsonCollectionStore<T>`
+  wrapperrel, egyedi nyesési logika nélkül megoldható.** Mérve
+  (`lib/core/storage/json_document_store.dart:294-300`, `capRecords`): a
+  `maxItems` alatt minden elem megmarad, PONTOSAN `maxItems`-en (a küszöbön)
+  is minden megmarad (inkluzív), fölötte a legrégebbi elem nyesődik — ez
+  szó szerint a brief §6.1 hármasa. Az ADR 0301 §4 ugyanezt a wrappert a
+  reward ledgerhez KIZÁRTA (a ledger soha nem veszíthet bejegyzést); a
+  postaláda a fordított eset, ahol a cap-elés a helyes, szándékos viselkedés.
+- **A profil-pillanatkép nem a domain `GamificationProfile` típust
+  perzisztálja.** `GamificationProfile.progress`
+  (`lib/features/gamification/domain/levels/level_curve.dart:49-75`)
+  kizárólag `LevelCurve.progressForTotalXp(totalXp)`-ból számítható, a domain
+  modell nem hordoz `toJson`/`fromJson`-t, és a `lib/features/gamification/
+  domain/**` ebben a körben tilos zóna (nem módosítható, hogy ilyen metódust
+  kapjon). A pillanatkép ezért a sémafájlban élő, önálló DTO — csak
+  `schemaVersion` + `totalXp`; a `progress` a hívó oldalán, a curve-vel
+  mindig újraszámolható, sosem tárolt derivált állapot. Részletek: ADR 0344
+  Döntés 5.
+- **A repository-szintű „figyelő adatfolyam" (A6) új mintát vezet be, nem
+  hiányzó meglévőt pótol.** Mérve: `grep -rn "StreamController\|Stream<"
+  lib/features/*/data/*.dart lib/core/storage/*.dart` nulla valódi találatot
+  ad (a korábbi `\.watch(` keresés kizárólag Riverpod `ref.watch(...)`
+  hívásokra illeszkedett hamisan) — egyetlen mai repository sem ad
+  `Stream`-et. A brief A6 elvárása tehát szándékosan ÚJ képesség ezen a
+  repositoryn, nem egy létező minta követése; az implementáció szabadon
+  választhat mechanizmust (pl. `StreamController.broadcast()` a helyi
+  repository-implementációban), amíg az interfész nem szivárogtat tárolási
+  típust (A4).
+- **`.pipeline/engine-override` nem létezik ma** — a repóban korábban
+  dokumentált, 2026-08-08-i „MINDEN kör Terrával megy" ideiglenes felállás
+  (`docs/execution/pipeline-orchestrator-prompt.md` boilerplate-je) NINCS
+  érvényben. A queue sora (`docs/execution/pipeline-queue.tsv:351`,
+  `E08-R08 … codex 0306 pending`) és a brief fejléce egyaránt `codex`-et ír —
+  ez a kötelező motor, a nevesített (`ROUND_BRIEF=… tools/codex-round.sh`)
+  útvonalon, nem az `auto` router és nem a Terra-mindig felállás.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
