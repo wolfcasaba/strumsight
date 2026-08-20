@@ -1,6 +1,6 @@
 # E99-R22 (GOV-16) — Halt-főkönyv: ismétlődő halt-osztály őrteszt nélkül
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 784e90e6`)
+- **Státusz:** READY FOR IMPLEMENTATION (pre-flight 2026-08-20, `main @ 8687ea61`)
 - **Típus:** **governance-kör** — a lánc SAJÁT tanulási hurka
 - **Kör-azonosító:** `E99-R22`. Emberi neve **GOV-16**.
 - **Előfeltétel:** `E99-R20` merge-elve (ugyanaz a fájl: `docs/execution/pipeline-orchestrator-prompt.md`)
@@ -30,6 +30,35 @@ native_gate = false
 > dokumentum-konvenciót ír le. Nem nyúl a kapuhoz, a lánc vezérléséhez, a
 > merge-úthoz, sem futásidejű viselkedéshez; a jelentés nem blokkol semmit.
 
+## 0.0 Pre-flight revízió (2026-08-20)
+
+- A brief-lint elsőként futott: `python3 tools/brief-lint.py --brief
+  docs/rounds/e99-r22-gov-16-halt-guard-ledger.md --level strict` → nincs
+  lelet. A mérce-őr pre-flightja szintén tiszta:
+  `tools/gateguard-scan.py --brief docs/rounds/e99-r22-gov-16-halt-guard-ledger.md`
+  → nincs ütközés.
+- Az indító prompt „a pre-flightban írd meg” szövegével szemben az
+  [`ADR 0315`](../adr/0315-halt-guard-ledger.md) már elfogadva és commitolva
+  van, a brief eredeti 7. sora pedig kifejezetten tilos zónának nevezi a
+  `docs/adr/**`-t. Az örökség-ellenőrzési szabály szerint a meglévő ADR-t
+  használjuk fel, nem írjuk újra. A foglaló ma `0373`-at adott; ez nem ennek
+  a körnek az ADR-je, és a kör diffjébe nem kerül.
+- A tényleges, verziókövetett `.pipeline/halted-*.txt` korpusz ma 10 rekord:
+  `H-INDEP = 4`, `H-GATEGUARD = 2`, `H3 = 2`, `H8 = 1`,
+  `H-NOSIGNAL = 1`. A mezőket a rekordokból mértük (`round=`, `halt=`,
+  `halted_at=`, egyes rekordokban `outcome=`), nem a régi összesítőből.
+- A géppel olvasható, félkövér `**Őrteszt:**` konvencióra továbbra is 0
+  találat van. Egy régi lecke (`L324`) tartalmaz nem félkövér `Őrteszt:` sort;
+  ez szándékosan nem teljesíti az ADR 0315 gépi alakját.
+- A kötelező, előbb szűkített, majd teljes korpuszos visszakeresés releváns
+  találatai: `adr/0315` (a főkönyv normatív döntése), `halts/E99-R16/H3`
+  (a fájlonkénti Router-CI szűrő korábbi néma rése) és `lessons/L323`
+  (a védett mérceútvonalak körüli hamis feloldás veszélye). A jelenlegi
+  `.github/workflows/router-ci.yml` már `tools/**` családi globot használ,
+  ezért D4 teljesíthető workflow-módosítás nélkül. Az index két committal
+  elavult volt; az ADR 0312 szerinti merge-horgony frissíti, ebben a körben
+  nem reindexeljük kézzel.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -44,6 +73,7 @@ Lezáró jelzés nélkül a kör bukott. **STOP-protokoll:** listán kívüli f�
 
 ## 0.1 Visszakeresett előzmény (tudás-index, ADR 0312 §4.1)
 
+Az eredeti brief visszakeresése:
 `node tools/knowledge-rag.mjs --top 4 "ugyanaz a hiba másodszor fordult elő őrteszt hiánya ismétlődő halt"`:
 
 - **`lessons/L315`** — a címében kimondva: *„E07-R23 H6, **2. előfordulás**"*.
@@ -54,8 +84,9 @@ Lezáró jelzés nélkül a kör bukott. **STOP-protokoll:** listán kívüli f�
   (motorváltás + ismételt riasztás). Határ: az R15 azzal foglalkozik, mi
   történjen egy NYITOTT halttal; ez a kör azzal, mi maradjon utána.
 
-Mérve ma: `grep -c "Őrteszt:" docs/LESSONS.md` → **0**. Vagyis géppel olvasható
-őrteszt-hivatkozás jelenleg egyetlen leckében sincs.
+Mérve a pre-flightban:
+`rg -c '\*\*Őrteszt:\*\*' docs/LESSONS.md` → **0**. Vagyis az ADR 0315
+géppel olvasható alakjában őrteszt-hivatkozás jelenleg egyetlen leckében sincs.
 
 ## 1. Cél
 
@@ -69,10 +100,10 @@ mely ismétlődő halt-osztály maradt gépi őr nélkül.
 
 - `.pipeline/halted-*.txt` rekordok mezői: `round=`, `halt=`, `summary=`,
   `detail=`, `session_log=`, `halted_at=`, egyeseken `outcome=`.
-- Halt-kód eloszlás mérve: H3 136, H6 129, H8 36, H-NOSIGNAL 46, H2 16,
-  H-GATEGUARD 8, H-INDEP 4.
-- `docs/LESSONS.md`: `## L<szám> — <cím>` szakaszok; géppel olvasható
-  őrteszt-hivatkozás **nincs** (0 találat).
+- Halt-kód eloszlás mérve a verziókövetett korpuszon: H-INDEP 4,
+  H-GATEGUARD 2, H3 2, H8 1, H-NOSIGNAL 1.
+- `docs/LESSONS.md`: `## L<szám> — <cím>` szakaszok; az ADR 0315 szerinti
+  félkövér, géppel olvasható őrteszt-hivatkozás **nincs** (0 találat).
 
 ## 3. Feladatok
 
