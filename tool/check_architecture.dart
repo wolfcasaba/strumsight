@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'gen_public_barrel.dart' as barrel;
+
 /// Existing architecture deviations, recorded as
 /// `<source file> -> <imported file or package URI>`.
 ///
@@ -755,9 +757,38 @@ const _uppercaseR = 0x52;
 const _lowercaseU = 0x75;
 const _lowercaseX = 0x78;
 
+/// Checks that every generated `lib/features/<feature>/public.dart` barrel
+/// matches the concatenation of its `public/*.dart` fragments. A stale
+/// barrel is a code_failure: a cross-feature consumer can silently lose an
+/// export or, worse, shadow another symbol. The brief §4 falsification cell
+/// is the back-pressure that keeps this check from being silently removed.
+String? _checkGeneratedBarrels(Directory projectRoot) {
+  final features = barrel.featuresWithPublicFragments(projectRoot);
+  if (features.isEmpty) return null;
+  final stale = <String>[];
+  for (final feature in features) {
+    final entry = barrel.PublicBarrel(
+      projectRoot: projectRoot,
+      feature: feature,
+    );
+    if (!entry.isFresh()) {
+      stale.add(feature);
+    }
+  }
+  if (stale.isEmpty) return null;
+  final buffer = StringBuffer('Generated public barrel(s) out of date:\n');
+  for (final feature in stale) {
+    buffer.writeln(
+      '  - $feature (run: dart run tool/gen_public_barrel.dart --write)',
+    );
+  }
+  return buffer.toString().trimRight();
+}
+
 void main(List<String> arguments) {
   try {
     final report = checkArchitecture(projectRoot: Directory.current);
+    final barrelError = _checkGeneratedBarrels(Directory.current);
     if (arguments.length == 1 && arguments.single == '--print-allowlist') {
       final hardViolations = report.violations
           .where(
@@ -804,11 +835,12 @@ void main(List<String> arguments) {
       exitCode = 64;
       return;
     }
-    if (report.isClean) {
+    if (report.isClean && barrelError == null) {
       stdout.writeln(report.format());
       return;
     }
-    stderr.writeln(report.format());
+    if (!report.isClean) stderr.writeln(report.format());
+    if (barrelError != null) stderr.writeln(barrelError);
     exitCode = 1;
   } on Object catch (error, stackTrace) {
     stderr.writeln('Architecture check could not run: $error');

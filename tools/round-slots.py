@@ -33,6 +33,7 @@ Kilépési kódok:
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -57,12 +58,38 @@ SERIALIZED_PATHS = frozenset(
         "docs/execution/06-requirements-traceability-matrix.md",
     }
 )
+# Public barrelek generált artefaktumok (tool/gen_public_barrel.dart kimenetei);
+# bármely két kör újra tudja őket generálni ugyanabból a `public/*.dart`
+# halmazból, ezért NEM ütközési felület.
+#
+# KIZÁRÓLAG AZ ITT FELSOROLT útvonalak számítanak generáltnak — NEM glob.
+# Egy feature barrelje csak akkor kerülhet ki az ütközés-számításból, ha a
+# saját körében (a) fragmentum-forrás, (b) a generátor frissességét mérő
+# teszt, és (c) explicit nyilvántartási bejegyzés egyaránt létezik (ADR 0336,
+# E99-R18 §0.0c). E99-R18-ban kizárólag a `practice_generator` felel meg
+# ennek; a többi feature root `public.dart`-ja és minden `public/*.dart`
+# fragmentuma TOVÁBBRA IS TELJES ÉRTÉKŰ ütközési felület.
+#
+# A korábbi, `lib/features/*/public.dart` blanket glob szándékosan túl széles
+# volt: a pilot egyetlen migrált feature-jére szélesítette ki a kivételt,
+# ami a `SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected`
+# regressziós őrt némította el (L343). A fenti lista ezt a konkrét, mért
+# kört nyilvántartja; egy jövőbeli feature csak a saját migrációs körében
+# (a fenti három feltétel együttes teljesülésével) kerülhet ide.
+GENERATED_PATH_PATTERNS: tuple[str, ...] = (
+    "lib/features/practice_generator/public.dart",
+)
+
 # Az ARB-aggregátumok (`tool/gen_l10n_segments.dart` írja) NEM ütközési felület:
 # a tartalmuk determinisztikusan újragenerálható, a frissességet a `l10n`
 # gate-lépés méri (`tool/ci/check_l10n_parity.dart`), és a merge-zár sorosítja
 # azokat a köröket, amelyek egy fragmentumhoz (`lib/l10n/base/`,
 # `lib/l10n/features/`) hozzáérnek. Két ilyen kör PÁRHUZAMOSAN futhat — ez a
 # GOV-11 / E99-R17 mechanikus feloldása (ADR 0307 §4).
+#
+# H8 self-heal (E99-R18, 2026-08-20): ez a halmaz és a fenti
+# GENERATED_PATH_PATTERNS két FÜGGETLEN, additív kizárási ok — az
+# `effective_paths` mindkettőt méri, egyik sem helyettesíti a másikat.
 GENERATED_PATHS = frozenset(
     {
         "lib/l10n/app_en.arb",
@@ -118,10 +145,23 @@ def unmet_prerequisites(repo: Path, round_id: str, brief: str, rows: list[tuple[
     return blocking
 
 
+def is_generated_path(path: str) -> bool:
+    """True iff [path] matches a generated-path pattern.
+
+    Generated paths are artifacts that any round can recreate from its
+    fragments (see [GENERATED_PATH_PATTERNS]). The fragments themselves
+    are NOT generated and remain full-value collision surfaces.
+    """
+    return any(fnmatch.fnmatchcase(path, pattern) for pattern in GENERATED_PATH_PATTERNS)
+
+
 def effective_paths(paths: tuple[str, ...]) -> frozenset[str]:
     return frozenset(
-        path for path in paths
-        if path not in SERIALIZED_PATHS and path not in GENERATED_PATHS
+        path
+        for path in paths
+        if path not in SERIALIZED_PATHS
+        and path not in GENERATED_PATHS
+        and not is_generated_path(path)
     )
 
 
