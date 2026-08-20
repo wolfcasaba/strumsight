@@ -66,9 +66,9 @@ final class GamificationMigrator {
         (total, entry) => total + entry.chords,
       ),
     );
-    final checkpoint = _checkpointFor(events.length);
+    final checkpoint = _checkpointFor(entries.length);
 
-    for (var index = checkpoint; index < events.length; index++) {
+    for (var index = checkpoint; index < entries.length; index++) {
       await gamificationRepository.replaceMigrationState(
         GamificationMigrationState(processedCount: index + 1),
       );
@@ -77,7 +77,7 @@ final class GamificationMigrator {
     return report;
   }
 
-  int _checkpointFor(int eventCount) {
+  int _checkpointFor(int totalEntryCount) {
     final state = gamificationRepository.readMigrationState();
     final checkpoint = switch (state.status) {
       GamificationReadStatus.missing => 0,
@@ -86,7 +86,7 @@ final class GamificationMigrator {
         'Cannot resume a corrupt gamification migration checkpoint.',
       ),
     };
-    if (checkpoint > eventCount) {
+    if (checkpoint > totalEntryCount) {
       throw StateError('Migration checkpoint exceeds the supplied snapshot.');
     }
     return checkpoint;

@@ -208,6 +208,75 @@ void main() {
 
       expect(LegacyPracticeAdapter().adapt(<PracticeEntry>[invalid]), isEmpty);
     });
+
+    test('S4a: an invalid record below the checkpoint still advances the '
+        'checkpoint through the original snapshot index space (security '
+        'review S4)', () async {
+      final repository = _FakeGamificationRepository(processedCount: 2);
+      const entries = <PracticeEntry>[
+        PracticeEntry(day: 20000, source: PracticeSource.live),
+        PracticeEntry(day: -1, source: PracticeSource.live),
+        PracticeEntry(day: 20002, source: PracticeSource.live),
+        PracticeEntry(day: 20003, source: PracticeSource.live),
+      ];
+
+      await _migrator(repository: repository).migrate(entries);
+
+      expect(repository.writtenProcessedCounts, <int>[3, 4]);
+      expect(repository.processedCount, entries.length);
+    });
+
+    test('S4b: an invalid record exactly at the checkpoint still advances the '
+        'checkpoint through the original snapshot index space', () async {
+      final repository = _FakeGamificationRepository(processedCount: 2);
+      const entries = <PracticeEntry>[
+        PracticeEntry(day: 20000, source: PracticeSource.live),
+        PracticeEntry(day: 20001, source: PracticeSource.live),
+        PracticeEntry(day: -1, source: PracticeSource.live),
+        PracticeEntry(day: 20003, source: PracticeSource.live),
+      ];
+
+      await _migrator(repository: repository).migrate(entries);
+
+      expect(repository.writtenProcessedCounts, <int>[3, 4]);
+      expect(repository.processedCount, entries.length);
+    });
+
+    test('S4c: an invalid record above the checkpoint still advances the '
+        'checkpoint through the original snapshot index space', () async {
+      final repository = _FakeGamificationRepository(processedCount: 2);
+      const entries = <PracticeEntry>[
+        PracticeEntry(day: 20000, source: PracticeSource.live),
+        PracticeEntry(day: 20001, source: PracticeSource.live),
+        PracticeEntry(day: 20002, source: PracticeSource.live),
+        PracticeEntry(day: -1, source: PracticeSource.live),
+      ];
+
+      await _migrator(repository: repository).migrate(entries);
+
+      expect(repository.writtenProcessedCounts, <int>[3, 4]);
+      expect(repository.processedCount, entries.length);
+    });
+
+    test(
+      'S4d: a full run always ends with processedCount == entries.length, '
+      'even with multiple invalid records scattered through the snapshot',
+      () async {
+        final repository = _FakeGamificationRepository();
+        const entries = <PracticeEntry>[
+          PracticeEntry(day: -1, source: PracticeSource.live),
+          PracticeEntry(day: 20001, source: PracticeSource.live),
+          PracticeEntry(day: -1, source: PracticeSource.live),
+          PracticeEntry(day: 20003, source: PracticeSource.live),
+          PracticeEntry(day: 20004, source: PracticeSource.live),
+        ];
+
+        await _migrator(repository: repository).migrate(entries);
+
+        expect(repository.writtenProcessedCounts, <int>[1, 2, 3, 4, 5]);
+        expect(repository.processedCount, entries.length);
+      },
+    );
   });
 }
 
