@@ -1,5 +1,29 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E08-R12/H3] KÉSZ — a presentation Flutter-függése és storage-határa külön őrzött — PR #369 (2026-08-20, L366)
+
+Az E08-R12 exact-SHA Full Gate futása a három, brief által kötelező
+gamification UI-fájlt azért utasította el, mert az E08-R08 architektúra-teszt
+ugyanazzal a markerlistával vizsgálta az application és presentation réteget.
+Ez a presentationben a legitim `package:flutter/` importot is tiltotta,
+miközben az eredeti A5 szerződés csak a közvetlen storage-import kizárását
+kérte ezen a rétegen.
+
+A javított őr az application rétegben továbbra is tiltja a frameworköt,
+storage-ot, faliórát és random forrást; a presentationben külön markerlista
+tiltja a `SharedPreferences`, secure-storage és sqflite közvetlen importját,
+de engedi a Flutter UI-t. A CI-ben mért három útvonalat használó regressziós
+cella a javítás előtt fordítási hibával piros, utána zöld lett; egy ideiglenes
+presentation `SharedPreferences` import a valódi-sértés próbában továbbra is
+pirosra vitte az őrt. Lokális `tools/round-gate.sh
+test/core/architecture_dependency_test.dart`: 6/6 zöld, 26/26 teszt.
+
+Branch: `heal/E08-R12-H3-1`; PR: [#369](https://github.com/wolfcasaba/strumsight/pull/369).
+Az E08-R12 saját PR-je [#367](https://github.com/wolfcasaba/strumsight/pull/367)
+nyitva marad, mert a pipeline perzisztens queue-azonosítása saját kör-PR-ként
+ismeri fel; a következő firing a heal merge-je után ugyanazt a kört folytatja.
+Következő SDD-kör továbbra is: **E08-R12 — Streak UI V2 és recovery flow**.
+
 ## ✅ [HEAL E08-R12/H6] KÉSZ — generált l10n aggregátum helyett feature-szegmens scope — PR #365 (2026-08-20, L365)
 
 Az E08-R12 Terra implementere a brief szerint közvetlenül módosította a

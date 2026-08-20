@@ -14133,3 +14133,34 @@ aggregátumot, tiltja az output közvetlen szerkesztését, és kötelezővé te
 2/2 zöld. Szabály: minden új l10n-kulcsot kérő briefben a feature-szegmens az
 elsődleges allowlist-út; az aggregate csak név szerinti, determinisztikusan
 regenerált kimenet lehet.
+
+## L366 — A presentation rétegre újrahasznált domain/application markerlista a legitim Flutter UI-t is tiltja; a rétegenként eltérő határt külön őrrel kell mérni (E08-R12, H3 self-heal, 2026-08-20)
+
+**Mért hiba.** Az exact-SHA Full Gate
+([32393885486](https://github.com/wolfcasaba/strumsight/actions/runs/32393885486))
+ugyanabban a `test/core/architecture_dependency_test.dart` cellában három
+leletet adott: a `streak_detail_screen.dart`, `streak_status_card.dart` és
+`weekly_consistency_card.dart` mind `package:flutter/` importot tartalmazott.
+Ezek pontosan az E08-R12 brief által kötelező presentation UI-fájlok. Az
+E08-R08 guard létrehozásakor a presentation könyvtár még nem létezett, ezért
+a teljes domain/application markerlista feltételes újrahasználata zöld volt;
+az eredeti acceptance criterion viszont csak a közvetlen
+`SharedPreferences`-importot tiltotta az application és presentation
+rétegben. A hiba így látens maradt az első valódi gamification UI-ig.
+
+**Javítás és falszifikáció.** Az application scan változatlanul a szigorú
+framework/storage/wall-clock/random markerlistát használja. A presentation
+scan külön, storage-only markerlistát kapott (`SharedPreferences`, secure
+storage, sqflite), tehát Fluttert használhat, közvetlenül tárolót továbbra sem.
+A regressziós cella a CI nyers három fájlútvonalát és Flutter-importját
+használja: a helper bevezetése előtt piros fordítási hibát, utána zöldet adott.
+Egy ideiglenes presentation `SharedPreferences` import a valódi-sértés
+próbában pirosra vitte a tényleges könyvtár-scan cellát, visszaállítás után a
+teljes 26 tesztes architecture fájl és a 6/6 round-gate zöld lett.
+
+**Szabály.** Egy megosztott markerlista csak akkor használható több rétegen,
+ha a rétegek legitim dependency-készlete is azonos. A presentation Flutter-
+függése nem kivétel az architektúrából, hanem a Chapter 1 szerinti rendes UI-
+határ; a storage-tilalmat külön, pozitív Flutter- és negatív storage-cellával
+kell őrizni. Ez scope-pontosítás, nem mércegyengítés: a tiltani kívánt storage-
+sértéshez állandó mutációs bizonyíték maradt.
