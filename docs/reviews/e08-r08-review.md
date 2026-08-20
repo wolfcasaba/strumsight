@@ -1,20 +1,21 @@
 # E08-R08 — Review
 
 Brief: `docs/rounds/e08-r08-gamification-repository-and-storage-schema.md`
-Diff: `git diff fa34423d..3c67f44f` (pre-flight commit → implementer HEAD)
+Diff: `git diff fa34423d..3c67f44f` (pre-flight commit → implementer HEAD),
+javító kör: `git diff 68094762..de425793`
 Reviewer: Claude (Sonnet 5) · Dátum: 2026-08-20
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (F1 javítva `de425793`-ban, függetlenül újramérve)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 (FIXED) · MINOR: 0 · NOTE: 1 (nem blokkoló, nyitva)
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
 | A1 | Pillanatkép-csere atomikus, megszakítás után a korábbi ép profil marad | ✅ | `gamification_repository_test.dart:16-35` (interrupting store, `writeLog` nem tartalmaz `remove:`); implementer §10 valódi-sértés próba (`_store.remove` beszúrva a write elé → write-log `remove:ss.gamification.profile_snapshot`); saját olvasás: `local_gamification_repository.dart:103-112` egyetlen `_profileDocument.write()` hívás |
-| A2 | Sérült adat nem íródik felül, explicit „sérült" jelzés | ✅ (single-doksik) / ⚠️ (lista) | `gamification_repository_test.dart:37-80` (corrupt read + write-after-corrupt quarantines the old bytes) — de lásd **F1**, a postaláda (lista-alakú dokumentum) NEM ugyanezt a garanciát kapja |
+| A2 | Sérült adat nem íródik felül, explicit „sérült" jelzés | ✅ | `gamification_repository_test.dart:37-80` (corrupt read + write-after-corrupt quarantines the old bytes) + a javító kör „A2: a malformed inbox record does not hide valid records" tesztje (**F1** javítva, lásd lent) |
 | A3 | Minden perzisztált modell verziózott, ismeretlen verzió explicit hibát ad | ✅ | `gamification_repository_test.dart:99-133` (mind a 4 típus `throwsFormatException` jövőbeli verzióra) + `:135-168` (round-trip) |
 | A4 | Repository interfész nem szivárogtat tárolási típust, fake-elhető | ✅ | `gamification_repository_test.dart:172-183` (forrás-szöveg nem tartalmaz `JsonDocumentStore`/`KeyValueStore`-t) + `_FakeGamificationRepository` (:290-339) sima Dart osztály |
 | A5 | Application/presentation NEM importál `SharedPreferences`-t | ✅ | `architecture_dependency_test.dart` új csoport (694/701. sor környéki `_gamificationImportUriMarkers` újrafelhasználásával); gate `[4] test test/core/architecture_dependency_test.dart` zöld, benne a 2 új teszt |
@@ -82,7 +83,20 @@ pontosan a brief §4 listája (3 új `data/` fájl, `public.dart` 3 export-sor,
   `gamification_repository_test.dart`-ban, pl. `A2: one malformed inbox
   entry does not hide the other valid entries`) a javítás után `available`
   státuszt és 2 elemű listát várjon.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`de425793`) — a javító kör törölte a redundáns
+  előzetes validáló ciklust; `readInbox()` a `body is! List` ellenőrzés
+  után közvetlenül `_inboxStore.read()`-et ad vissza. Állandósított
+  regressziós teszt: `gamification_repository_test.dart` „A2: a malformed
+  inbox record does not hide valid records" (2 jó + 1 hiányzó-`id` középső
+  elem → `status: available`, 2 elem, helyes sorrend). Saját, izolált
+  újraklónban (`/tmp/review-e08-r08-fix1`, HEAD `de425793`) függetlenül
+  megerősítve: `flutter test
+  test/features/gamification/data/gamification_repository_test.dart` →
+  11/11 zöld (az eredeti 10 + az új regressziós teszt); teljes
+  `tools/round-gate.sh` a §7 két útvonalával → minden lépés zöld
+  (format/analyze/mindkét célzott teszt/architecture/secrets/l10n).
+  `tools/scope-audit.py --base 68094762` → OK, 3 megváltozott útvonal, 0
+  sértés.
 
 ### N1 — NOTE — a watch-stream optimistán sugározza az értéket, mielőtt a tényleges írás sikerét ellenőrizné
 
@@ -125,8 +139,9 @@ https://github.com/wolfcasaba/strumsight.git`, HEAD `3c67f44f`):
 
 ## Merge-döntés
 
-**Merge TILTOTT amíg F1 nyitva** (ADR 0052 + AGENTS.md §15.2 — MAJOR nyitva
-blokkol). F1 javítása a lánc NORMÁL útja (nem halt): javító kör ugyanazon a
-motoron (`codex`), ugyanazon a branchen, a fenti leletlistával a promptban.
-A javítás után: gate újrafuttatás saját kézzel, e jelentés frissítése
-APPROVED-ra a javító commit SHA-jával, majd CI-dispatch és merge.
+F1 (MAJOR) javítva és függetlenül újramérve `de425793`-ban — lásd fent. N1
+(NOTE) nyitva marad, nem blokkol (jövőbeli kör dolga). Nyitott BLOCKER/MAJOR
+nincs, minden lokális gate zöld egy izolált klónban, saját kézzel mérve.
+**Merge engedélyezett**, amint a kör-branchre dispatchelt CI (Router CI +
+a `tools/round-ci-plan.py` által javasolt workflow) a merge SHA-n zöld
+(ADR 0052).
