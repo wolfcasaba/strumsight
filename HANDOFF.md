@@ -23,6 +23,86 @@ történet a `docs/handoff-archive.md` elején található.
 Következő SDD-kör: **E08-R11 — Qualified day, planned rest és recovery
 policy**.
 
+## 🔥 [GOV] MIND A KÉT SLOT Sol+Terra — commitolt slot-döntés és Sol-vezényelt önjavítás (user-döntés 2026-08-20, branch `claude/sol-orchestrator-terra-implementator-jtf4z5`)
+
+**User-döntés:** „mind a két sloton azt akarom, hogy a Sol orchestrátor és a
+Terra implementátor dolgozzon" — a PR #351 Sol-pin kiterjesztése a párhuzamos
+sávra. A kör-dispatch felállása (Sol vezényel, Terra implementál) már élt; ami
+hiányzott, az a két MÉRT rés:
+
+1. **A slotszám nem utazott a repóban.** A `PIPELINE_SLOTS` csak a cron
+   env-jében élt (`slots=${PIPELINE_SLOTS:-1}`), tehát pontosan az az osztály,
+   amit a rotációnál már megmértünk (E99-R14 lecke): a cron exportált env-je
+   némán felülírja a git-en érkező user-döntést, és a lánc egysávosra esik
+   vissza anélkül, hogy ez bárhol látszana. Mostantól a commitolt
+   [`docs/execution/pipeline-slots`](docs/execution/pipeline-slots) (`2`)
+   ERŐSEBB az env-nél (**file > env > script-default**), eltérő env-re
+   log-sort ír (`SLOT-FÁJL: …`), üres/hiányzó fájlra marad a mai env-
+   szemantika, nem pozitív egészre pedig `die` (fail-closed). A RAM-fedezet
+   őre (`effective_slots`, ADR 0171 §1) VÁLTOZATLAN — a fájl a KÉRT sávokat
+   mondja meg, a tényleges párhuzam ettől lefelé térhet el, naplózott
+   `SLOT-KORLÁT` sorral. Új teszthorog: `--requested-slots` (a RAM-őr ELŐTTI,
+   feloldott érték). A `tools/pipeline-status.sh` is ezt olvassa, különben
+   „1 kért"-et hazudott volna két futó sáv mellett.
+
+2. **Az önjavító kör is slotot foglal — de a Claude-keretből ment.** Az
+   `attempt_selfheal` a rögzített `sonnet-impl` identitással és
+   `orchestrator_preference=claude`-dal indult, vagyis a második sáv munkája
+   épp azt a keretet fogyasztotta, amit a Sol-pin kímélni akar. Mostantól a
+   pin alatt (`orch_rotation=sol` ÉS van Codex-oldal) a heal-ülést a **Sol**
+   vezényli, rögzített identitása a nyilvántartás új `sol` sora, és a
+   harmadik (utolsó) kísérlet innen vált MÁS modellre — a gyakorlatban a
+   **Terrára** (ADR 0307 §2 lever, ami `sol` sor nélkül némán elmaradt volna:
+   a `heal_engine_for_attempt` ismeretlen névre a saját motort adja vissza).
+   Pin nélkül (alternate | claude | terra) minden BITRE a régi, kvóta-tudatos
+   Claude→Terra úton marad; a `PIPELINE_FALLBACK_ENGINE=none` fail-safe
+   ugyanígy visszaejt a Claude-útra.
+
+**Függetlenség — nem nyílt rés.** Az új `sol` sor (`codex`, `~/.codex-terra`,
+`gpt-5.6-sol`) implementernek választva a MODELL-azonosság miatt ütközik a
+sol-orchestrátorral, tehát `H-INDEP` fail-closed; a `terra` (`gpt-5.6-terra`)
+változatlanul független. A `orchestrator_conflicts_with_implementer` elavult
+kommentje („ilyen sor ma nincs a nyilvántartásban") frissítve.
+
+**Módosult:** `tools/round-pipeline.sh` (slot-fájl precedencia + fail-closed,
+`--requested-slots` horog, Sol-vezényelt heal + `sol` heal-identitás, frissített
+függetlenség-komment), `docs/execution/pipeline-slots` (ÚJ, `2`),
+`docs/execution/engine-registry.tsv` (`sol` ülés + indoklás),
+`tools/pipeline-status.sh` (őszinte „kért" slotszám),
+`docs/execution/pipeline-orchestrator-prompt.md` (MOTOR-FELÁLLÁS + §4.1),
+`AGENTS.md` (§15.7 GOV-blokk), tesztek: ÚJ
+`tools/tests/test_sol_terra_both_slots.py` (13 cella: commitolt `2`, file>env,
+env-szemantika fájl nélkül, 4 fail-closed eset, RAM-őr épsége, `sol`
+registry-ülés, driver-default modell-egyezés, ütközés-mátrix, Sol-vezényelt
+heal, pin nélküli Claude-heal, utolsó kísérlet → Terra, `fallback=none`
+fail-safe), `tools/tests/test_selfheal_escalation.py` (a régi utat mérő cellák
+explicit env-pinnel — ugyanaz a minta, mint a PR #351 `alternate`-celláinál).
+
+**Mérés (ezen a boxon):** `python3 -m pytest tools/tests -q` — a kör előtt
+650 passed / 1 failed / 2 skipped / 570 subtests, a kör után (lásd a commit
+üzenetét) ugyanaz az egyetlen, KÖRNYEZETI piros
+(`WorkspaceRestorationHermeticityTest` — nincs `gh` CLI ebben a sandboxban, a
+VÁLTOZATLAN HEAD-en is ugyanígy piros). Az új cellák a production-változás
+NÉLKÜL mérve pirosak (15 failed / 5 passed a fájlon belül), vele zöldek.
+
+**Visszaálláskor** (a Pro lejárta után) a `docs/execution/pipeline-slots`
+fájlt és a `test_the_committed_slots_file_value_is_two` cellát EGYÜTT kell
+átírni; a rotáció-fájl `alternate`-re állítása magától visszaviszi a healt is
+a Claude-útra.
+
+**BOX-OLDALI TEENDŐK** (a felhő-sandboxból nem pótolhatók):
+
+1. **HORIZON git-notes** — a `refs/notes/*` push innen 403-tiltott (ugyanaz,
+   mint a 2026-08-20-i GOV-FIX 3. pontjánál). A merge után a boxon:
+
+   ```bash
+   git notes add -m "round=gov-both-slots-sol-terra verdict=pass tests=663 lesson=slot-decision-travels-in-the-repo-and-heal-follows-the-sol-pin" <a merge-elt squash-commit>
+   git push origin 'refs/notes/*'
+   ```
+
+2. **Crontab-zaj (opcionális):** `crontab -l | grep PIPELINE_SLOTS` — a sor a
+   fájl-elsőbbség miatt már hatástalan (log-sor jelzi, ha eltér), a zaj
+   csökkentésére törölhető. A rotáció-sorral azonos megfontolás.
 ## ✅ E08-R10 KÉSZ — Streak V2 domain és read-only legacy migráció — PR #362, squash `892e04a6` (2026-08-20)
 
 A gamification feature új, verziózott `StreakState` V2 contractot, tiszta és

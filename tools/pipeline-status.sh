@@ -165,7 +165,12 @@ print(" ".join(value.split())[:500])
     fi
     echo
     echo "--- áteresztő-képesség (ADR 0171) ---"
-    slots_wanted=${PIPELINE_SLOTS:-1}
+    # A KÉRT slotszámot a driver oldja fel (commitolt docs/execution/
+    # pipeline-slots > env > script-default, user-döntés 2026-08-20) — az
+    # env közvetlen olvasása itt hazudna: „1 kért" látszana, miközben a lánc
+    # két sávon megy.
+    slots_wanted=$(bash "$repo_root/tools/round-pipeline.sh" --requested-slots 2>/dev/null | tail -1)
+    case "$slots_wanted" in '' | *[!0-9]*) slots_wanted=${PIPELINE_SLOTS:-1} ;; esac
     slots_effective=$(bash "$repo_root/tools/round-pipeline.sh" --effective-slots "$slots_wanted" 2>/dev/null | tail -1)
     if [ "${PIPELINE_SELF_CHAIN:-1}" = "1" ]; then chain_state="BE"; else chain_state="KI"; fi
     printf '  slot: %s kért → %s tényleges · azonnali lánc-folytatás: %s\n' \

@@ -29,6 +29,17 @@ name	harness	config_dir	model	auth_env	auth_file	stall_min	timeout_s	ctx	max_out
 # `codex|terra` ága már eddig is helyesen kezelt.
 codex	codex	~/.codex	gpt-5.6-terra	-	-	12	3600	400000	64000	-	-	-	örökölt alapértelmezett Codex-motor; a `terra` sorral AZONOS modell → a Terra orchestrátorral ütközik
 terra	codex	~/.codex-terra	gpt-5.6-terra	-	-	12	3600	400000	64000	-	-	-	ChatGPT Pro előfizetés; ítéletigényes körökre
+# A `sol` az ORCHESTRÁTOR/REVIEWER-ülés motorja (Sol-pin, user-döntés
+# 2026-08-20): a Terráéval KÖZÖS `~/.codex-terra` auth, de MÁS modell
+# (`gpt-5.6-sol`). Azért van a nyilvántartásban, mert az önjavító kör
+# rögzített identitása a Sol-pin alatt ez a sor — enélkül az utolsó heal-
+# kísérlet motorváltása (ADR 0307 §2) némán elmaradna, hiszen a
+# `heal_engine_for_attempt` ismeretlen névre a saját motort adja vissza.
+# IMPLEMENTERNEK választva (queue-sor vagy `engine-profile.sh use sol`) a
+# sol-orchestrátorral AZONOS modell miatt ütközik → `H-INDEP` fail-closed
+# (`orchestrator_conflicts_with_implementer`), ami helyes: egy motor nem
+# review-zheti a saját diffjét.
+sol	codex	~/.codex-terra	gpt-5.6-sol	-	-	12	3600	400000	64000	-	-	-	orchestrátor/reviewer-ülés a Pro-keret égetéséig; implementernek választva H-INDEP (azonos modell a reviewerrel)
 minimax	claude	~/.claude-minimax	MiniMax-M3	MINIMAX_API_KEY	~/.mmx/config.json	20	5400	1000000	32768	0.30	1.20	-	9/10; mért gyengéje: invariánst lazít (LESSONS)
 qwen-plus	codex	~/.codex-kilo	qwen/qwen3.7-plus	KILOCODE_API_KEY	~/.kilocode-token	25	7200	1000000	32768	0.32	1.28	-	5/5 — a legjobb pontosság/ár; LASSÚ (~95 s/válasz)
 qwen-max	codex	~/.codex-kilo	qwen/qwen3.7-max	KILOCODE_API_KEY	~/.kilocode-token	25	7200	1000000	32768	1.25	3.75	-	5/5; 80.4 SWE-bench Verified; lassú
