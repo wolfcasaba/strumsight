@@ -1,17 +1,62 @@
 # E08-R11 — Qualified day, tervezett pihenőnap és visszatérés-politika
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** IN PROGRESS (pre-flight: 2026-08-20, `main @ 915c4529`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 11
 - **Kör-azonosító:** `E08-R11`
 - **Branch:** `<motor>/e08-r11-qualified-day-planned-rest-and-recovery`
 - **Előfeltétel:** `E08-R10` merge-elve (Streak V2 domain)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0309` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **Előre kiosztott ADR:** `ADR 0352` — a számot a foglaló kiosztotta. Az ADR-t az orchestrátor írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R10 `streak_policy.dart` és `streak_transition.dart` TÉNYLEGES felületét, valamint a `lib/features/practice_generator/` terv-szerződését (a tervezett pihenőnap onnan jön) — ha a mező neve eltér, §0.0 revízió. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight brief-revízió — 2026-08-20
+
+1. **ADR-szám:** a briefben előre szereplő `0309` már foglalt
+   (`docs/adr/0309-implementer-machine-guards.md`). A kötelező
+   `tools/round-slots.py reserve-adr --round E08-R11` mérés `0352`-t adott;
+   ez a kör kizárólag az ADR 0352-t használja.
+2. **R10 szerződés:** a tényleges `StreakPolicy.applyQualifiedDay` a hívótól
+   kapott epoch-napot kezeli, és már külön reason code-ot ad az azonos napra,
+   clock rollbackre, freeze-re és resetre. A perzisztált
+   `StreakGraceState` ma csak `none`; mivel a domain fájlok nincsenek az
+   engedélyezett listán, az R11 a grace / planned-rest / broken állapotot az
+   application-szintű, típusos napi átmeneti projekcióban adja vissza. A
+   `StreakState.graceState` és a storage wiring változatlan marad; ez nem
+   rejtett domain-módosítás.
+3. **Pihenőnap tényleges útja:** a Practice Generator publikus contractja
+   exportálja a `WeeklyScheduleDecision.dayDecisions` listát. A pihenőnapot a
+   `ScheduleDecisionReason.restDay.code` (`schedule.decision.restDay`) jelöli;
+   a streak service ezt a publikus contractot olvassa, a generator belső
+   fájlját nem importálja és nem módosítja. A mért hívási lánc nem szerez
+   lease-t, lockot vagy handle-t (`rg -n "\\.acquire\\("` → nincs találat az
+   érintett két feature-ben).
+4. **Küszöbök:** az SDD §8.10 példáját rögzítjük standard policyként:
+   `minQualifiedDuration = 120s`, explicit recovery módban
+   `minRecoveryDuration = 60s`. A kötelező határcellák a
+   `python3 -c` mérés szerint `119s / 120s / 121s`; recoverynél
+   `59s / 60s / 61s`. Mindkettő ugyanabban a konfigurációban él.
+5. **Weekly consistency:** külön projekció, amely a hívó által átadott
+   qualified epoch-napokból számolja az inkluzív, lekérdezési nappal záródó
+   hétnapos ablak egyedi napjait. Nem olvassa és nem vezeti le a daily
+   `current` streakből.
+6. **Visszakeresett előzmény:** `adr/0351` rögzíti, hogy az R10 policy csak a
+   már minősített nap streak-hatását kezeli; `adr/0299` a publikus, reason
+   code-os rest-day contract forrása; `adr/0290` tiltja a büntetést és a
+   negatív XP-t; `lessons/L302` előírja, hogy egy hiányzó alacsonyabb szintű
+   contract miatt csak akkor legyen H3, ha a meglévő publikus típusokkal és az
+   engedélyezett fájlokon belül sem teljesíthető az invariáns. A szűkített és
+   teljes korpuszos RAG-lekérdezések ezeket hozták fel; további releváns
+   előzmény nem került elő.
+
+**Kockázat = high, indoklás:** a kör a felhasználó hosszú távú streak
+állapotát, a freeze-fogyasztást és egy másik feature publikus terv-contractját
+kapcsolja össze. Hibás napkonverzió vagy reason code pénzben nem mérhető, de
+tartós motivációs állapotot ronthat; ezért correctness és külön security /
+abuse review is kötelező.
 
 ```ai-router
 schema_version = 1
@@ -81,12 +126,16 @@ kezelése.
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**` · `lib/features/streak/**` · `lib/features/practice_generator/**`
 
-## 5. Kötött architekturális döntések (ADR 0309)
+## 5. Kötött architekturális döntések (ADR 0352)
 
 ### 5.1 Egy véletlen pendítés NEM minősít napot
 
 A qualified day küszöbhöz kötött: minimum érvényes időtartam VAGY minimum
 érdemi tevékenység. A küszöb a konfigurációban él, nem a szolgáltatásba égetve.
+
+A standard konfiguráció `120s` minimumot használ. A rövid recovery út csak
+explicit `recoveryEligible` bemenettel nyílik meg, és akkor is legalább `60s`
+valid aktivitást követel; pusztán az esemény típusa vagy egy strum nem elegendő.
 
 **NEM elfogadható gyengítés:** „bármilyen esemény számít, mert az is elkötelezettség”.
 Akkor a széria a hitelességét veszti el — és az ADR 0289 szellemében a mérőszám a
@@ -122,6 +171,15 @@ A weekly consistency (hány minősített nap volt a héten) nem a napi szériáb
 származtatott érték, hanem önálló projekció. A kettő összekeverése azt jelentené, hogy egy
 megszakadt széria eltünteti a heti teljesítményt is.
 
+### 5.6 A napi állapot-projekció application contract, nem storage-migráció
+
+Az R11 visszatérési értéke típusosan megkülönbözteti a qualified,
+insufficient-activity, planned-rest, grace, freeze-covered, broken,
+already-qualified és clock-anomaly ágakat. A `StreakState` V2 perzisztált
+`graceState` enumját ez a kör nem bővíti és nem írja storage-ba. **Nem
+elfogadható gyengítés:** string reason code, vagy a domain enum scope-on kívüli
+módosítása.
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
@@ -134,6 +192,8 @@ megszakadt széria eltünteti a heti teljesítményt is.
 | A6 | Minden átmenet indok-kóddal tér vissza (freeze / grace / broken / anomália / pihenőnap) | `streak_service_test.dart` — átmenet-mátrix |
 | A7 | **Nincs büntető XP-vesztés** semmilyen átmenetnél | `streak_service_test.dart` — a főkönyv egyenlege nem csökken |
 | A8 | A küszöbök EGYETLEN konfigurációból jönnek (a konfiguráció módosítása átüt) | `streak_service_test.dart` |
+| A9 | A rövid recovery session csak explicit engedéllyel és a recovery-küszöbtől minősít | `streak_service_test.dart` — recovery `59s / 60s / 61s` + engedély nélküli cella |
+| A10 | A pihenőnap kizárólag a Practice Generator publikus reason code-jából jön; belső import nincs | `streak_service_test.dart` — valódi `WeeklyScheduleDecision` fixture + forrás-audit |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -145,6 +205,8 @@ megszakadt széria eltünteti a heti teljesítményt is.
 | Visszaállított óránál a széria törik | **A4** |
 | A heti következetesség a napi szériából származik | **A5** (megszakadt széria mellett nullát ad) |
 | A broken átmenet XP-t von le | **A7** — az ADR 0290 megsértése |
+| A recovery bármely rövid eventet elfogad | **A9** (59s és explicit-engedély nélküli 60s cella) |
+| A service stringből találja ki a pihenőnapot vagy belső fájlt importál | **A10** (publikus decision fixture + import-audit) |
 
 **A küszöb három kötelező cellája** (a qualified day minimum érvényes időtartama (`minQualifiedDuration`)):
 
@@ -157,6 +219,11 @@ megszakadt széria eltünteti a heti teljesítményt is.
 A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
+
+**Recovery-küszöb hármas:** `59s` → nem minősül · `60s` → explicit recovery
+engedéllyel minősül · `61s` → explicit recovery engedéllyel minősül. Ugyanaz
+a `60s` engedély nélkül továbbra sem minősül, mert a normál `120s` küszöb alatt
+van.
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** állítsd a qualified-day ellenőrzést úgy, hogy bármely esemény minősítsen napot,
 futtasd a gate-et → az **A1** küszöb alatti cellának PIROSNAK kell lennie → állítsd vissza.
