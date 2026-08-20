@@ -45,7 +45,7 @@ final class ProfileProjector {
         );
         crossedLevels.addAll(projection.crossedLevels);
       }
-      if (page.nextCursor == cursor) {
+      if (page.entries.isNotEmpty && page.nextCursor == cursor) {
         throw StateError('ledger page cursor did not advance');
       }
       cursor = page.nextCursor;

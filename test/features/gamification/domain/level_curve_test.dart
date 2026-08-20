@@ -33,6 +33,18 @@ void main() {
   });
 
   group('A2/A3 — rebuild and incremental projection', () {
+    test('an empty ledger rebuild returns the initial profile', () async {
+      final projector = ProfileProjector(
+        curve: _curve(),
+        ledger: _PagingLedger(const <RewardLedgerEntry>[]),
+      );
+
+      final rebuilt = await projector.rebuild();
+
+      expect(rebuilt.profile.totalXp, 0);
+      expect(rebuilt.profile.currentLevel.number, 1);
+    });
+
     test('paged rebuild equals incremental projection', () async {
       final entries = <RewardLedgerEntry>[
         _entry(ledgerId: 'one', totalXp: 30),
@@ -73,6 +85,43 @@ void main() {
         4,
       ]);
       expect(projection.profile.currentLevel.number, 4);
+    });
+
+    test('a rebalance cannot lower an established profile level', () {
+      final establishedProfile = GamificationProfile(
+        schemaVersion: gamificationProfileSchemaVersion,
+        totalXp: 250,
+        progress: _curve().progressForTotalXp(250),
+      );
+      final rebalancedCurve = LevelCurve(<LevelDefinition>[
+        LevelDefinition(
+          number: 1,
+          levelThreshold: 0,
+          titleKey: 'gamification.level.beginner',
+        ),
+        LevelDefinition(
+          number: 2,
+          levelThreshold: 200,
+          titleKey: 'gamification.level.explorer',
+        ),
+        LevelDefinition(
+          number: 3,
+          levelThreshold: 300,
+          titleKey: 'gamification.level.consistent',
+        ),
+      ]);
+      final projector = ProfileProjector(
+        curve: rebalancedCurve,
+        ledger: _PagingLedger(const <RewardLedgerEntry>[]),
+      );
+
+      final projection = projector.projectIncrementally(
+        profile: establishedProfile,
+        entry: _entry(totalXp: 0),
+      );
+
+      expect(projection.profile.totalXp, 250);
+      expect(projection.profile.currentLevel.number, 3);
     });
   });
 
@@ -184,7 +233,7 @@ void main() {
       ]) {
         expect(
           File(path).readAsStringSync(),
-          isNot(contains(RegExp(r'\\bunlock\\w*\\b', caseSensitive: false))),
+          isNot(contains(RegExp(r'\bunlock\w*\b', caseSensitive: false))),
           reason: '$path must not turn XP levels into content gates',
         );
       }

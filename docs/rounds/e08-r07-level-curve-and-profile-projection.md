@@ -256,12 +256,14 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - `gamification_profile.dart`: `schemaVersion`-ös, immutable ledger-projekciós
   pillanatkép; ismeretlen verzió és negatív XP hibát ad.
 - `profile_projector.dart`: lapozott ledgerből teljes újraépítés és ugyanazt a
-  számítást használó inkrementális projekció; minden egy eseményben átlépett
+  számítást használó inkrementális projekció; az üres első oldal kezdőprofilt
+  ad, cursor-stallt csak nem üres oldalnál jelez; minden egy eseményben átlépett
   szintet visszaad, tartalomkapuzó kimenet nélkül.
 - `public.dart`: a szint- és profil-projekció contractjai exportálva.
 - `level_curve_test.dart`: A1–A8 cellák — monotonitás, inkluzív küszöb,
-  teljes/incrementális azonosság, többes szintlépés, szaturáció, egyetlen
-  görbeforrás, lokalizációs kulcs, schema-verzió és kapuzás-tilalom.
+  üres-ledger rebuild, teljes/incrementális azonosság, többes szintlépés,
+  szaturáció, egyetlen görbeforrás, görbeváltás alatti szint-megtartás,
+  lokalizációs kulcs, schema-verzió és kapuzás-tilalom.
 
 **Valódi-sértés próba (§6.1):** a `ProfileProjector` ideiglenesen csak a
 végső szintet tette a `crossedLevels` kimenetbe. A
@@ -270,10 +272,22 @@ futásán a format és analyze zöld volt, az A3 cella pedig szándékosan piros
 várt `[2, 3, 4]`, tényleges `[4]`. A helyes, minden átlépett szintet visszaadó
 feltételt visszaállítottam, majd a végső gate zölden lefutott.
 
+**Review-javítások (F1–F3):** az üres ledger rebuild regressziós tesztje a
+hibás `null` → `null` cursor-guarddal piros volt (`Bad state: ledger page
+cursor did not advance`), majd a guardot a nem üres oldalakra szűkítve zöld.
+A balance-váltási regressziós teszt egy korábbi 3. szintű profilt olyan görbére
+vetít, amely 250 XP-nél csak 2. szintet adna; a meglévő profil szintje 3 marad.
+A guard ideiglenes eltávolítása a tesztet szándékosan pirosra váltotta (várt 3,
+kapott 2), majd visszaállítottam. Az A8 regexe `r'\bunlock\w*\b'`; egy
+ideiglenes `unlockedContent` mező a `profile_projector.dart` fájlban a célzott
+tesztet szándékosan pirosra váltotta, mert a tiltott azonosítót megtalálta.
+A mezőt visszaállítottam.
+
 **Futtatott ellenőrzés:**
 `tools/round-gate.sh test/features/gamification/domain/level_curve_test.dart`
-— format zöld (1702 fájl, 0 módosítás), analyze zöld (0 issue), célzott teszt
-zöld (10/10), architecture zöld, secrets zöld (3016 fájl, 0 finding).
+— javító körben: format zöld (1702 fájl, 0 módosítás), analyze zöld (0 issue),
+célzott teszt zöld (12/12), architecture zöld (12 allowlistelt eltérés),
+secrets zöld (3017 fájl, 0 finding).
 
 **Nem futtatott ellenőrzés:** teljes `flutter test`, property gate és release
 APK: a brief és az AGENTS.md szerint CI/Claude-orchestrátor felelőssége;
