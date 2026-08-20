@@ -1,0 +1,1 @@
+round=E02-R12 verdict=pass tests=8/8-gate lesson=argv-self-pgrep engine=minimax pipeline=first-run
