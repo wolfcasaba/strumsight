@@ -4,17 +4,18 @@ Reviewer: Codex Sol · Dátum: 2026-08-20 · Kockázat: high
 
 ## Verdikt
 
-**CHANGES REQUIRED.** CRITICAL: 0 · BLOCKER: 1 · MAJOR: 1.
+**APPROVED** a `1779de35` javítás és a `d0c25079` re-review alapján.
+CRITICAL: 0 · BLOCKER: 0 · MAJOR: 0.
 
 Az argumentumok shell-szinten idézettek, a PR-szám és kör formátuma validált,
 a konfliktus-allowlist ismeretlen útvonalon fail-closed. A két nyitott lelet
 azonban a merge hitelességi határát sérti:
 
-- **S1 / BLOCKER:** rebase után új HEAD keletkezik, de a script új exact-SHA
-  CI nélkül eljut a merge-hívásig (`e99-r20-review.md` F1).
-- **S2 / MAJOR:** a mért branch és a merge-elt PR identitása nincs
-  kriptografikus/mezőszintű egyezéssel ellenőrizve (`e99-r20-review.md` F2).
+- **S1 / BLOCKER — FIXED (`1779de35`):** új rebase-HEAD esetén gate és safe
+  push után nincs merge; új exact-SHA CI és változatlan második invokáció kell.
+- **S2 / MAJOR — FIXED (`1779de35`):** a PR `baseRefName`, `headRefName` és
+  `headRefOid` mezői minden git-művelet előtt egyeznek a mért lokális ággal.
 
-Mindkettőt eldobható hermetikus próbateszt reprodukálta. A merge a két lelet
-lezárásáig tilos; a szükséges javítás a brief engedélyezett `tools/`, teszt,
-prompt és saját brief útvonalain belül marad.
+Mindkét korábbi próbából állandó hermetikus regressziós cella lett. A célzott
+suite `11 passed, 3 subtests`, a teljes tooling-suite `662 passed, 2 skipped,
+574 subtests`; shell-injekciós vagy engedélytágító út nem maradt.
