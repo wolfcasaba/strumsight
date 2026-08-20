@@ -13256,3 +13256,21 @@ mérve az izolált heal-worktree-ben):
 `tools/tests` gate ugyanabban az izolált worktree-ben, mindkét irányban
 mérve: tiszta env 587 passed / 0 failed, a pontos szivárgás-reprodukcióval
 586 passed 1 skipped / 0 failed.
+
+## L342 — Egy ARB `@key` metaadat csak azzal a szegmenssel lehet tulajdonosi kapcsolatban, amely az üzenetkulcsot is adta (E99-R17 F1, 2026-08-20)
+
+**Mit mértünk.** A szegmentált ARB-aggregátor eredeti merge-e egy későbbi
+feature-fragmentum `@greeting` metaadatát elfogadta, ha maga a `greeting`
+üzenet egy korábbi base-szegmensből már bekerült. Így a feature-fragmentum a
+másik szegmens localization-codegen metaadatát módosíthatta duplikált üzenet
+kulcs nélkül. A független review ezt MINOR-ként találta; a javítás
+`ownerLabel != segment.label` esetén explicit hibát és `aggregate=null`
+eredményt ad. A reviewer ezt a feltételt ideiglenesen `false`-ra cserélve
+mérte: a két cross-fragment regressziós eset piros lett, visszaállítás után
+mind a 11 célzott teszt zöld.
+
+**Hogyan alkalmazd.** Olyan összevonó formátumnál, ahol az üzenet és a hozzá
+tartozó metaadat külön rekord, a „létezik már az üzenetkulcs” nem elég
+feltétel a metaadat átvételéhez. Tartsd meg a forrás-szegmens tulajdonosát,
+és eltéréskor fail-closed hibát adj; külön teszteld a későbbi szegmensből
+érkező metaadatot és azt is, hogy hibánál nem készül részleges aggregátum.

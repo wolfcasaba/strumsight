@@ -1,5 +1,24 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E99-R17 (GOV-11) KÉSZ — szegmentált ARB-források és determinisztikus aggregátum — PR #343, squash `8d7b6a67` (2026-08-20)
+
+Az angol és magyar ARB-k immár `base/` és feature-fragmentum forrásokból
+épülnek; a `tuner` 14 kulcsa önálló fragmentumba került, az `app_{en,hu}.arb`
+deterministikus, kulcsrendezett aggregátum. A gate a `--check` úton a
+frissességet és a 1 405 üzenet kulcs-/placeholder-paritását is méri. Az
+aggregátumok a slot-tervezőben regenerálhatók, ezért nem blokkolják a
+párhuzamos köröket, a feature-fragmentumok viszont továbbra is ütköznek.
+
+Független review APPROVED; high-risk security re-review PASS WITH NOTE. A
+reviewer valódi-sértés próbája a fragmentumközi `@key` tulajdonlás guardját
+ideiglenesen kikapcsolva két regressziós tesztet pirosra vitt, majd
+visszaállítás után zöldet mért. Exact-SHA CI: Full Gate
+[32318857856](https://github.com/wolfcasaba/strumsight/actions/runs/32318857856)
+és Router CI
+[32318859249](https://github.com/wolfcasaba/strumsight/actions/runs/32318859249)
+success. Post-merge célzott gate a friss `main`-en 7/7 zöld. Következő,
+kapcsolódó SDD-kör: **E99-R18 (GOV-12)** — generált `public.dart` barrelek.
+
 ## ✅ [HEAL E99-R17/H6] KÉSZ — hermetikus WrapperModeTest az ambiens MiniMax-endpoint szivárgás ellen — PR #342, squash `bdad2a64` (2026-08-20)
 
 Az E99-R17 minimax implementer `blocked`-ot jelzett: a kötelező §7 gate

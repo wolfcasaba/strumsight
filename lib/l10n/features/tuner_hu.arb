@@ -1,0 +1,27 @@
+{
+  "@@locale": "hu",
+  "tunerTitle": "Hangoló",
+  "tunerInTune": "Tiszta",
+  "tunerPinned": "kitűzött cél",
+  "tunerStringSemantic": "{name} húr{state}. Koppints a hangolási cél kitűzéséhez.",
+  "@tunerStringSemantic": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "tunerListening": "Pendíts meg egy húrt…",
+  "tunerReference": "Referencia A = {hz} Hz",
+  "tunerTuningLabel": "Hangolás",
+  "tunerTuningStandard": "Standard",
+  "tunerTuningDropD": "Drop D",
+  "tunerTuningHalfStepDown": "Fél hanggal lejjebb",
+  "tunerTuningDadgad": "DADGAD",
+  "tunerPlayReference": "Referenciahang lejátszása",
+  "tunerCentsSharp": "{cents} centtel magas",
+  "tunerCentsFlat": "{cents} centtel mély"
+}
