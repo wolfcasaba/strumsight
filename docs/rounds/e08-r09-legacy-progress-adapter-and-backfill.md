@@ -1,14 +1,16 @@
 # E08-R09 — Legacy progress adapter és activity backfill
 
-- **Státusz:** PREPARED → **revideálva** (ADR 0112 önjavító kör, H3, 2026-08-20 — §0.0; előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** PREPARED → **revideálva** (ADR 0112 önjavító kör, H3, majd
+  orchestrátor pre-flight, 2026-08-20 — §0.0/§0.1; előre megírva 2026-08-18,
+  aktuális kód olvasva: `main @ 9e18c68d`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 9
 - **Kör-azonosító:** `E08-R09`
 - **Branch:** `<motor>/e08-r09-legacy-progress-adapter-and-backfill`
 - **Előfeltétel:** `E08-R08` merge-elve (gamification repository)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0307` — a szám FOGLALT. Az ADR-t a Claude írja meg a
-  kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
-  NEM érinti (TILOS zóna).
+- **Mért ADR-foglalás:** `ADR 0350` — a `0307` stale volt és már foglalt; a
+  korrekció bizonyítéka §0.1. Az ADR-t az orchestrátor írta meg a §5
+  döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/features/progress/model/practice_entry.dart` TÉNYLEGES mezőit (86 sor) és a `lib/features/progress/data/practice_log_repository.dart`-ot — a determinisztikus legacy azonosító ezekből képződik. Ellenőrizd a `docs/baseline/epic-08-start.md` (R01) kulcslistáját is. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
@@ -119,6 +121,89 @@ munkapéldány, nincs commit, nincs nyitott PR) — ez a self-heal nem visz
 tovább tartalmi migrációs munkát, a friss dispatch a felfrissített
 `allowed_paths`-szal indul újra.
 
+## 0.1 Orchestrátor pre-flight revízió (2026-08-20, `main @ 9e18c68d`)
+
+**ADR-szám korrekció: `0307` → `0350`.** A `0307` már a merge-elt
+`docs/adr/0307-pipeline-throughput-program-v2.md`. A kötelező
+`tools/round-slots.py reserve-adr --round E08-R09` futás `0350`-et adott;
+ezért a kör döntése
+[`ADR 0350`](../adr/0350-legacy-practice-backfill-identity-zero-xp-and-checkpoint.md).
+
+**Visszakeresés (ADR 0312/0331, szűkítve előbb):**
+
+- [`ADR 0117`](../adr/0117-song-storage-migrator-boundary.md) D2: a
+  checkpoint külön, verziózott dokumentum, a már bizonyított atomikus
+  tárolási primitíven; ezt a kör az R08 `GamificationRepository`-ján át
+  követi (`bm25#3 emb#14`).
+- [`ADR 0328`](../adr/0328-measured-gamification-baseline-contract.md): a
+  migráció a tényleges legacy wire-alakból indul, nem egy történeti
+  leírásból. A jelenlegi baseline megerősíti a 400-as capet, a
+  `newestLast` sorrendet és az ismeretlen `src` → `live` degradációt.
+- [`ADR 0333`](../adr/0333-activity-outbox-reliable-processing.md): az
+  idempotens jutalomírás már a ledger `sourceEventId` dedupjára épül; a
+  migráció nem vezet be második dedup-forrást (`bm25#16 emb#7`).
+- A kockázatra szűkített keresés közvetlenül visszaadta az E08-R09/H3
+  self-heal leletet: a checkpoint sémafájlja már engedélyezett; az
+  implementer nem bővítheti tovább a scope-ot.
+
+**Mért contractok és tényleges hívási lánc:**
+
+- `PracticeEntry` mezői: `day`, `source`, `seconds`, `strokes`, `chords`,
+  `directionAccuracy`; a `PracticeSource` értékei pontosan `live`,
+  `analyze`, `learn`. A `progress/public.dart` exportálja a modellt, ezért
+  az adapter kizárólag ezt a publikus feature-határt importálhatja.
+- A legacy repository `JsonCollectionStore<PracticeEntry>`-t használ,
+  `maxEntries = 400`, `RecordOrder.newestLast`; az ismeretlen wire `src`
+  a decoderben szándékosan `PracticeSource.live`, a negatív numerikus rekord
+  pedig `JsonRecordException` miatt kimarad. A migrátor tárolót nem nyit:
+  caller-supplied, immutable listát kap.
+- A checkpoint tényleges tulajdonosa a már merge-elt
+  `GamificationRepository.readMigrationState()` /
+  `replaceMigrationState()` út; a local implementáció egyetlen
+  `JsonDocumentStore.write()`-tal ír a
+  `GamificationStorageKeys.migrationState` kulcsra. Nincs lease/lock/acquire
+  ezen az útvonalon.
+- Az R08 kompatibilitási cellája ma `const GamificationMigrationState()`
+  nulla-argumentumos konstruktort használ; az új `processedCount` ezért
+  default `0` értékű marad. A checkpoint-hármas konkrét mért cellái a
+  `python3 -c 'checkpoint=2; print(checkpoint-1, checkpoint,
+  checkpoint+1)'` kimenete szerint `1 / 2 / 3`.
+
+**Brief-drift feloldása.** A self-heal az `ai-router.allowed_paths` blokkot
+már bővítette a sémafájllal, de a §4 tételes táblája még nem tükrözte ezt;
+a két lista most egyezik. Az SDD kötelező 400-record, ismeretlen-source és
+negatív-record cellái A9–A11-ként bekerültek. Az exact, byte-azonos legacy
+rekordoknak nincs önálló tárolt ID-juk, ezért a tiszta tartalom-hash önmagában
+ütközne A8-cal: §5.1 az ID-t a teljes stabil wire-tartalom + az azonos
+fingerprintű rekordok determinisztikus előfordulási sorszáma párjaként rögzíti.
+Ez nem globális vagy újrafuttatásonként növekvő számláló.
+
+## 0.2 Review utáni saját-artefaktum revízió (2026-08-20, F1 BLOCKER)
+
+Az első implementáció a §5.2 korábbi, túl erős értelmezése szerint minden
+legacy eseményhez nulla-XP ledger receiptet írt, majd külön dokumentumban
+előreléptette a checkpointot. A független review valódi production
+repositorykkal falszifikálta ezt: ha a reward-ledger kulcs írását a platform
+megtagadja, a `JsonDocumentStore.write()` a hibát best-effort szerződés szerint
+logolja és elnyeli, ezért `appendIfAbsent()` in-memory sikert ad; a külön
+migration-state írás viszont sikerül. Restart után a receipt nincs lemezen, a
+checkpoint mégis túlhaladt rajta — néma, tartós backfill-vesztés.
+
+Ez a kör saját, még nem merge-elt ADR 0350 döntése, ezért az ADR 0087 §2
+szerint önállóan revideálható. **Feloldás:** nulla retroaktív XP azt jelenti,
+hogy a backfill a ledgerhez EGYÁLTALÁN nem nyúl. A történeti baseline a teljes,
+determinisztikus reportban marad; a checkpoint csak a tiszta adaptermunka
+előrehaladását jelzi. Checkpoint-írási hiba esetén legfeljebb újraszámítás
+történik, reward- vagy statisztikai adat nem veszhet el, mert a legacy log
+érintetlen és a mapping side-effectmentes. A `GamificationMigrator` ezért nem
+függhet `RewardLedgerRepository`-tól.
+
+A review további két mért korrekciója: az esemény-ID a kanonikus tartalom
+**SHA-256 digestjét** hordozza, nem a nyers `day/source/duration/...` mezőket;
+az adapter pedig csak DateTime-ként reprezentálható, nem negatív epoch-dayt
+fogad el. A legacy decoder által ma elfogadott `day = 1 << 40` külön
+regressziós cella: nem dobhat `RangeError`-t és nem gyárthat eseményt.
+
 ## 1. Cél
 
 A meglévő `PracticeEntry` előzmény használhatóvá tétele az új rendszerben — **dupla
@@ -144,12 +229,13 @@ ellenőrzőpont.
 - A legacy `progress` feature bármely fájljának módosítása — a régi rendszer tovább él.
 - A `practice_log_race_test.dart` vagy bármely meglévő teszt átírása.
 - Streak-migráció (Kör 10), UI, hálózat.
-- `docs/adr/**` — az ADR 0307-et a Claude írja.
+- `docs/adr/**` — az ADR 0350-et az orchestrátor írta.
 
 ## 4. Engedélyezett fájlok
 
 | Útvonal | Indok |
 |---|---|
+| `lib/features/gamification/data/gamification_storage_schema.dart` | a `GamificationMigrationState` kizárólagos, kompatibilis checkpoint-bővítése (§0.0) |
 | `lib/features/gamification/data/migration/legacy_practice_adapter.dart` | **ÚJ** — a legacy → kanonikus esemény leképezés |
 | `lib/features/gamification/data/migration/gamification_migrator.dart` | **ÚJ** — a vezérlő, ellenőrzőponttal |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
@@ -157,16 +243,20 @@ ellenőrzőpont.
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**` · `lib/features/progress/**` (a legacy rendszer ÉRINTETLEN)
 
-## 5. Kötött architekturális döntések (ADR 0307)
+## 5. Kötött architekturális döntések (ADR 0350)
 
 ### 5.1 A legacy azonosító DETERMINISZTIKUS — a rekord tartalmából
 
-Az azonosító a legacy rekord stabil mezőiből (időbélyeg + forrás + időtartam)
-képződik, tiszta függvényként. Ugyanaz a rekord újrafuttatáskor UGYANAZT az azonosítót adja,
+Az azonosító a legacy rekord TELJES stabil wire-tartalmából (`day`, forrás,
+időtartam, stroke/chord számlálók, nullable direction accuracy) és az ugyanazon
+fingerprint korábbi előfordulásainak determinisztikus ordinaljából képződik.
+Ugyanaz a rögzített `newestLast` snapshot újrafuttatáskor UGYANAZT az
+azonosító-sorozatot adja, az exact duplikátumok mégis külön rekordok maradnak,
 és az R03 dedupja emiatt tud dolgozni.
 
-**NEM elfogadható gyengítés:** növekvő sorszám vagy `Random`/`UUID v4` azonosító. A migráció
-második futása ekkor minden rekordot duplikálna.
+**NEM elfogadható gyengítés:** önmagában növekvő/globális sorszám vagy
+`Random`/`UUID v4` azonosító. A fingerprinten BELÜLI ordinal megengedett és
+A8 miatt kötelező; a szabadon futó számláló újrafuttatáskor duplikálna.
 
 ### 5.2 NULLA retroaktív XP — a backfill statisztikát épít, nem jutalmat
 
@@ -175,43 +265,70 @@ visszamenőleges gyakorlás **nem** ad XP-t. Indok: a régi rekordok nem mentek 
 jogosultsági kapuin (nincs trust-szint, nincs jelminőség), ezért a retroaktív XP
 ellenőrizetlen forrásból származna — és az ADR 0289 szerint az XP amúgy sem elsajátítottság.
 A régi előzmény **statisztikaként és profil-alapvonalként** megmarad és látszik.
+Ennek konkrét alakja: a migrátor a teljes caller-supplied snapshotból
+determinisztikus backfill reportot ad (rekordszám + aggregált idő/stroke/chord,
+valamint a kanonikus események), a ledgerhez viszont EGYÁLTALÁN nem nyúl. A
+meglévő legacy logot nem írja és nem törli.
 
 **NEM elfogadható gyengítés:** „egyszeri, korlátozott” retroaktív juttatás. Az is
 ellenőrizetlen forrás, csak kisebb — és a főkönyv auditálhatóságát rontja.
 
 ### 5.3 A migráció IDEMPOTENS, ellenőrzőponttal
 
-A migrátor rögzíti, meddig jutott. Az újrafuttatás nem dolgozza fel újra a már
-feldolgozott rekordokat, és félbeszakadás után onnan folytatja, ahol abbahagyta.
+A migrátor a `GamificationRepository` state-dokumentumában rögzíti, meddig
+jutott. A `processedCount` az ELSŐ FEL NEM DOLGOZOTT index; minden sikeresen
+leképezett rekord után lép előre és perzisztál. Az újrafuttatás nem lépteti újra
+a már feldolgozott prefixet, félbeszakadás után onnan folytatja, ahol
+abbahagyta. A teljes report tiszta újraszámítása nem side-effect és nem
+checkpoint-visszatekerés.
 
 ### 5.4 A legacy rendszer ÉRINTETLEN marad
 
 A `lib/features/progress/**` egyetlen fájlja sem módosul. A migráció **olvas**.
 A régi képernyők és tesztek változatlanul működnek — ez acceptance-cella (A6).
 
+### 5.5 Explicit erőforrás-határok
+
+A migrátor nem példányosít Progress repositoryt, `JsonDocumentStore`-t vagy
+Riverpod providert. Bemenete caller-supplied `List<PracticeEntry>` a
+`progress/public.dart` contracton, egyetlen side-effect portja a már létező
+`GamificationRepository` checkpoint-contract. `RewardLedgerRepository` nem
+lehet constructor-paraméter, import vagy mező. Így a legacy log továbbra is a
+Progress feature egyetlen író-tulajdona, a reward ledger pedig érintetlen.
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | A legacy azonosító determinisztikus: ugyanaz a rekord kétszer UGYANAZT az azonosítót adja | `legacy_practice_migration_test.dart` |
-| A2 | A migráció kétszeri futtatása után a főkönyv bejegyzés-száma VÁLTOZATLAN | `legacy_practice_migration_test.dart` — idempotencia-cella |
-| A3 | A backfill **nulla XP-t** ad a régi rekordokra; a statisztika mégis megjelenik | `legacy_practice_migration_test.dart` |
+| A1 | A legacy azonosító determinisztikus: ugyanaz a snapshot kétszer UGYANAZT az ID-sorozatot adja; két exact duplikátum külön stabil ID-t kap | `legacy_practice_migration_test.dart` |
+| A2 | A migráció első és második futása után is a főkönyv bejegyzés-száma a futás ELŐTTI értéken marad; a migrátor forrása nem függ `RewardLedgerRepository`-tól | `legacy_practice_migration_test.dart` — no-ledger-side-effect + forrásőr |
+| A3 | A backfill **semmilyen XP receiptet nem ír**; a report rekordszáma és aggregált idő/stroke/chord értékei mégis megjelennek | `legacy_practice_migration_test.dart` |
 | A4 | A live / analyze / learn források helyes `ActivitySource` értékre képződnek | `legacy_practice_migration_test.dart` — forrás-mátrix |
 | A5 | Félbeszakadt migráció az ellenőrzőponttól folytatódik, nem elölről | `legacy_practice_migration_test.dart` |
 | A6 | A `lib/features/progress/**` ÉRINTETLEN | `git diff --stat` |
 | A7 | A migráció után beérkező ÚJ esemény normálisan kap XP-t (a nulla-XP csak a backfillre vonatkozik) | `legacy_practice_migration_test.dart` |
 | A8 | A régi gyakorlási előzmény egyetlen rekordja sem vész el | `legacy_practice_migration_test.dart` — darabszám-egyezés |
+| A9 | A teljes legacy cap, 400 `newestLast` rekord adatvesztés nélkül feldolgozható; 401 elemű hibás caller-input explicit `ArgumentError`, nem korlátlan munka | `legacy_practice_migration_test.dart` — 400/401 határcella |
+| A10 | Ismeretlen wire `src` a meglévő decoder szerződése szerint `live`-ra degradál, és így migrálódik | `legacy_practice_migration_test.dart` — `PracticeEntry.fromJson` + adapter cella |
+| A11 | Negatív vagy DateTime-ként nem reprezentálható legacy numerikus rekord nem gyárt kanonikus eseményt, és nem dob ki nem kezelt `RangeError`-t | `legacy_practice_migration_test.dart` — decoder/adapter elutasítási cella (`day = -1`, `day = 1 << 40`) |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| Az azonosító növekvő sorszámból | **A1** és **A2** (a második futás duplikál) |
+| Az azonosító növekvő sorszámból | **A1** (a második adapter-run eltérő ID-sorozatot ad) |
 | A backfill retroaktív XP-t ad | **A3** |
 | A migrátor nem ír ellenőrzőpontot | **A5** (a félbeszakadás után elölről kezd) |
 | A migráció „rendbe teszi” a legacy naplót | **A6** (`git diff --stat` `progress/` útvonalat mutat) |
 | A nulla-XP szabály az ÚJ eseményekre is érvényes | **A7** |
 | A leképezés egy forrást kihagy | **A4** (a forrás-mátrix sora) |
+| A tartalom-hash az exact duplikátumokat összecsukja | **A1/A8** |
+| A migrátor a 400-as capnél 399-re vág | **A9** |
+| A publikus migrátor korlátlan caller-listát fogad | **A9** (401 elem explicit elutasítás) |
+| Ismeretlen forrást eldob a dokumentált `live` fallback helyett | **A10** |
+| Negatív rekordból eseményt gyárt | **A11** |
+| Decoder-valid extrém epoch-day `RangeError`-t dob | **A11** |
+| Az event ID nyers gyakorlási mezőket hordoz digest helyett | **A1** (64 lowercase hex digest-alak) |
 
 **A küszöb három kötelező cellája** (a migrációs ellenőrzőpont (`checkpoint`) — meddig jutott a feldolgozás):
 
@@ -221,12 +338,16 @@ A régi képernyők és tesztek változatlanul működnek — ez acceptance-cell
 | **rajta** (a küszöbön) | a rekord indexe pontosan `checkpoint` | **a következő feldolgozandó** — az ellenőrzőpont az ELSŐ FEL NEM DOLGOZOTT elemre mutat (exkluzív felső határ) |
 | a küszöb **fölött** | a rekord indexe `checkpoint` FÖLÖTT | még feldolgozandó |
 
+A konkrét `checkpoint = 2` triplet: index `1` → kihagyva, index `2` → első
+feldolgozandó, index `3` → később feldolgozandó.
+
 A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
 
-**Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** cseréld a determinisztikus azonosítót növekvő sorszámra, futtasd a gate-et → az
-**A2** (idempotencia) cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** cseréld a
+determinisztikus azonosítót újrafuttatásonként növekvő globális sorszámra,
+futtasd a gate-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
@@ -256,10 +377,55 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 9. Kockázatok
 
-- **A nem determinisztikus azonosító.** Az első futáson láthatatlan; a másodikon megduplázza a felhasználó teljes előzményét (A1/A2).
+- **A nem determinisztikus vagy nem opaque azonosító.** Az első futáson láthatatlan; a másodikon eltérő canonical historyt adhat, a plaintext alak pedig gyakorlási adatot szivárogtat az ID-fogyasztóknak (A1).
 - **A „kis retroaktív jutalom” kompromisszum.** Jóindulatú, és ellenőrizetlen forrásból tölti fel a főkönyvet, rontva annak auditálhatóságát (A3).
 - **A legacy „rendbetétele”.** A migráció közben látszó adósságok javítása scope-sértés, és a `progress` feature meglévő tesztjeit kockáztatja (A6).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### E08-R09 implementáció (Terra, 2026-08-20)
+
+- `gamification_storage_schema.dart`: a kompatibilis, const alapértékű
+  `processedCount` checkpoint és annak JSON round-tripja; a korábbi R08
+  placeholder-dokumentum hiányzó mezővel is `0`-ra olvasható.
+- `legacy_practice_adapter.dart`: a caller-supplied Progress public contract
+  rekordjait kanonikus eseményekké alakítja. Az ID a teljes stabil wire
+  fingerprintet és a fingerprinten belüli ordinalt tartalmazza; a negatív vagy
+  érvénytelen direkt rekord nem ad eseményt.
+- `gamification_migrator.dart`: a teljes snapshotból alapvonal-reportot készít,
+  minden backfill receiptet nulla XP-vel ír, és minden sikeres ledger-append
+  után a következő feldolgozandó indexet perzisztálja.
+- `public.dart`: a két új migrációs contract exportja.
+- `legacy_practice_migration_test.dart`: A1–A11, a checkpoint-alatt/rajta/
+  fölötte útvonal, az R08 placeholder-kompatibilitás és 400 rekordos cap.
+
+**TDD RED/GREEN.** A kezdeti célzott futás a hiányzó
+`LegacyPracticeAdapter`, `GamificationMigrator` és `processedCount` szimbólumokon
+fordítási hibával (RED) állt meg. Az implementáció utáni célzott futás 11/11
+teszttel zöld volt. Az R08 placeholder-state regressziós tesztje a javítás előtt
+`JsonRecordException(missing, field: processedCount)` hibával piros volt, utána
+zöld.
+
+**Valódi-sértés próba.** Az ID-képzést ideiglenesen egy újrafuttatásonként
+növekvő globális számlálóra cseréltem. A pontos kör-gate format és analyze
+lépése zöld után a tesztlépésben A1, A2 és A5 piros lett: az ID-sorozat eltért,
+egy friss checkpoint fake hat receiptet kapott három helyett, a checkpoint
+folytatás pedig más ID-sorozatot látott. A determinisztikus fingerprint+ordinal
+kód visszaállítva.
+
+**Futtatott ellenőrzések.**
+
+```text
+flutter test test/features/gamification/data/legacy_practice_migration_test.dart
+  RED (hiányzó implementáció), majd GREEN (11/11), majd GREEN (12/12).
+
+tools/round-gate.sh test/features/gamification/data/legacy_practice_migration_test.dart
+  Mutációval: format/analyze GREEN, A1/A2/A5 RED.
+  Visszaállítás után: format/analyze/test/architecture GREEN; a gate sikeresen lefutott.
+```
+
+**Eltérés / nem futtatott ellenőrzés.** Nincs eltérés. Teljes Flutter suite,
+property gate, release APK és CI-dispatch nem implementer-hatáskör; ezek az
+orchestrátor kötelező merge előtti ellenőrzései.
 
 ## 11. Review — a Claude tölti ki

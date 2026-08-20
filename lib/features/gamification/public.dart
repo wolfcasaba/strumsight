@@ -10,6 +10,8 @@ export 'data/local_activity_outbox_repository.dart';
 export 'data/gamification_repository.dart';
 export 'data/gamification_storage_schema.dart';
 export 'data/local_gamification_repository.dart';
+export 'data/migration/gamification_migrator.dart';
+export 'data/migration/legacy_practice_adapter.dart';
 export 'domain/activity/activity_source.dart';
 export 'domain/activity/evidence_trust.dart';
 export 'domain/activity/learning_activity_event.dart';
