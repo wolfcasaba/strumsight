@@ -18,6 +18,8 @@ allowed_paths = [
   "lib/features/practice_generator/public/",
   "tools/round-slots.py",
   "tools/tests/test_round_slots_generated_barrels.py",
+  "tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py",
+  "tools/tests/test_e99_r18_scope_debris_revert.py",
   "test/tooling/gen_public_barrel_test.dart",
   "test/core/architecture_dependency_test.dart",
   "docs/rounds/e99-r18-gov-12-generated-public-barrels.md",
@@ -233,6 +235,100 @@ lessons/L343 (ez a pontos D4 túl-széles-glob lelet). A teljes korpusz a
 közvetlen kör-briefet és az E99-R18/H8 leletet hozta vissza; ellentétes,
 biztonságos precedens nincs. A döntés az ADR 0307 §5 körszintű,
 determinista-generálhatósági elvének alkalmazása; új ADR nem szükséges.
+
+## 0.0d Pre-flight revízió (önjavítás, ADR 0112, H3, 2026-08-20) — a H8 által a kör-ágra írt coexist-teszt bekerül az `allowed_paths`-ba
+
+**Végrehajthatósági eredmény: a H3 halt oka NEM tartalmi hiányosság és NEM a
+§0.0/§0.0b debris-minta megismétlődése — a feloldás a §0.0c D4-szűkítés
+MELLÉ szükséges tesztkarbantartás allowlist-bővítése, mérve és dokumentálva;
+a debris-tilalom változatlan.**
+
+### Mért tények
+
+`python3 tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base
+7458ca8330a66b9329b20009c400cb4a7bab3a14` — saját méréssel megismételve —
+egyetlen útvonalon bukik:
+
+```
+Legacy scope audit FAILED (7458ca8330a6..826f930fe9fc, 10 changed path(s), 0 generated/ignored)
+- path outside allowed scope: tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py
+```
+
+`git diff --name-status 7458ca83..HEAD` a kör-ágon tíz megváltozott fájlt ad;
+kilenc pontosan a PREPARED `allowed_paths` kilenc bejegyzése, a tizedik
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py` — ez a
+fájl a `7458ca83` base ÓTA már LÉTEZIK a kör-ágon (a diff `M`, nem `A`), mert
+a §0.0b H8 önjavítás hozta létre KÖZVETLENÜL a kör-ágon, a normál
+brief-szerkesztési folyamaton KÍVÜL (ADR 0112 §2 szélesebb jogosultsága) —
+ezért sosem került be az eredeti brief-szerző `allowed_paths`-ába.
+
+A §0.0c D4 szűkítés (glob → explicit `practice_generator`-regisztráció)
+pontosan azt a mechanizmust cseréli le, amit ez a fájl mér (saját docstringje:
+„A két meglévő teszt-csomag... kizárólag a SAJÁT oldalát méri... Ez a fájl a
+hiányzó, KOMBINÁLT cellát méri" — a `GENERATED_PATH_PATTERNS` tényleges
+értékét is asszertálja). A frissítés nélkül `python3 -m pytest tools/tests -q`
+PIROSRA váltana (a régi `("lib/features/*/public.dart",)` asszerció a D4 fix
+utáni `("lib/features/practice_generator/public.dart",)` értékkel ütközne) —
+a fájl érintése tehát a D4 fix elmaradhatatlan része, nem választható munka.
+
+### Miért NEM a §0.0/§0.0b debris-minta ismétlődése
+
+A `tools/tests/test_e99_r18_scope_debris_revert.py` (H3, 2026-08-19) saját
+docstringje két mintát különböztet meg: az E07-R29/H3 precedens (a listán
+kívüli fájlok VALÓDI, hiányzó deliverable-ök → allowlist-bővítés a helyes
+feloldás) és a §0.0 debris-eset (nulla hivatkozású, redundáns kézi
+smoke-teszt lenyomat → revert a helyes feloldás). A jelen eset mérve az ELSŐ
+mintát követi:
+
+- a fájl TRACKELT (a H8 commit óta a kör-ág git-történetének része), nem
+  nyomkövetetlen debris;
+- a kör saját kötelező §7 gate-je (`pytest tools/tests -q`) ténylegesen
+  futtatja és a D4 mechanizmusra asszertál — nem redundáns egyetlen más
+  fixture-rel sem;
+- érintése nélkül a gate bizonyítottan PIROSRA váltana.
+
+### A feloldás — és miért két bejegyzés, nem egy
+
+Az `allowed_paths` elsőre **egy** bejegyzéssel bővülne:
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py`. Ez a
+bővítés viszont MAGA a `tools/tests/test_e99_r18_scope_debris_revert.py`
+(H3, 2026-08-19) regressziós őr `test_allowed_paths_are_byte_identical_
+to_the_prepared_brief` cellájába ütközik — az pinnelt, kilenc-elemű
+`ORIGINAL_ALLOWED_PATHS`-t bájtra egyezőnek követeli meg a brief tényleges
+`allowed_paths`-ával, tehát BÁRMILYEN bővítés elrontja, amíg maga az őr nem
+frissül. Az őr frissítése viszont ÚJABB fájlérintés a kör-ágon
+(`tools/tests/test_e99_r18_scope_debris_revert.py`), ami — mivel az eredeti
+brief sosem sorolta fel — MAGA is új scope-audit-sértés lenne. Ez a lánc itt
+LEÁLL: ellenőrizve (`grep -rl "ORIGINAL_ALLOWED_PATHS\|e99-r18-gov-12-
+generated-public-barrels" tools/tests/`), semmilyen HARMADIK fájl nem
+hivatkozik sem az `ORIGINAL_ALLOWED_PATHS` konstansra, sem erre a briefre —
+tehát az `allowed_paths` **pontosan két** bejegyzéssel bővül, egy zárt kör:
+
+- `tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py` — a
+  D4 §0.0c fix elmaradhatatlan tesztkarbantartása (fent);
+- `tools/tests/test_e99_r18_scope_debris_revert.py` — az előző bővítést
+  pinnelő regressziós őr elmaradhatatlan frissítése.
+
+A `test_e99_r18_scope_debris_revert.py` frissítése a pinned
+`ORIGINAL_ALLOWED_PATHS`-t a bővített, tizenegy-elemű listára váltja (a
+saját maga útvonalát is beleértve, hiszen az immár szó szerint szerepel a
+brief `allowed_paths` tömbjében), és a modul UPDATE-jegyzetében rögzíti a
+második H3-előfordulás mérését. A debris-kizáró asszerciók
+(`test_project/...` sosem kerülhet be) — az őr VALÓDI célja — változatlanok
+maradnak: ugyanabban a fájlban egy ÚJ tesztosztály (nem külön fájl, hogy ne
+nyisson egy harmadik scope-rést) a jelen, második H3-előfordulást a valódi,
+mért tizenegy-elemű round-diffen reprodukálja — PIROS a régi kilenc-elemű
+`allowed_paths`-szal, ZÖLD a bővítettel.
+
+Jogosultság: ADR 0112 §2 — a self-heal a megállt kör briefjét és
+engedélyezett-fájllistáját módosíthatja; mindkét új bejegyzés a kör saját,
+még nem review-zott ágának tesztkarbantartása, a mérce
+(`round-gate.sh`, `.github/workflows/**`, a scope-audit MECHANIZMUSA)
+érintetlen marad.
+
+Lecke: `docs/LESSONS.md` [[L345]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
+Módosítás (ADR 0112 önjavító kör, 2026-08-20).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
