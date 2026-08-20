@@ -1,7 +1,7 @@
 # E08-R11 — High-risk security és abuse review
 
 Brief: `docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md`  
-Diff: `cca0c4d3..84b149c6`  
+Diff: `cca0c4d3..0df3c6f8`  
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20  
 Verdikt: **APPROVED — security szempontból**
 
@@ -38,4 +38,4 @@ schema-korlátot kell alkalmaznia.
 ## Merge-hatás
 
 Security finding nem blokkol. A correctness review F1 MAJOR lelete ettől
-függetlenül merge-blokkoló.
+függetlenül `0df3c6f8`-ban lezárult; a security verdikt változatlanul APPROVED.

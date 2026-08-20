@@ -315,4 +315,15 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   orchestrátor/reviewer feladata.
 - Nem volt scope-tágítás, domain/storage/ledger írás vagy XP-módosítás.
 
-## 11. Review — a Claude tölti ki
+## 11. Review — Sol orchestrátor
+
+- Correctness: `docs/reviews/e08-r11-review.md` — **APPROVED** a
+  `0df3c6f8` javító commiton. Az első review F1 MAJOR időzóna-eltérést talált
+  (UTC plan-day kontra shipping local-midnight streak epoch); Budapest-próba
+  piros volt, a javítás után 12/12 zöld.
+- High-risk security/abuse: `docs/reviews/e08-r11-security.md` — **APPROVED**,
+  0 CRITICAL/BLOCKER/MAJOR/MINOR; egy nem blokkoló NOTE a belső caller-inputok
+  jövőbeli boundary-limitjéről.
+- Izolált re-review: scope-audit OK (7 diffútvonal, ebből 2 generated/ignored),
+  exact kör-gate 6/6 zöld. A reviewer `qualifies(any event)` mutációja az A1,
+  A8 és A9 küszöbcellákat pirosra vitte; visszaállítás után 12/12 zöld.
