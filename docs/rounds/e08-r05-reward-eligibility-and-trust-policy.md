@@ -292,4 +292,54 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `lib/features/gamification/application/reward_eligibility_policy.dart` — új
+  `ActivityOutcome`, validált immutable request, indok-kódos négy gate döntés,
+  verziózott összdöntés és a tiszta policy-interfész.
+- `lib/features/gamification/infrastructure/default_reward_eligibility_policy.dart`
+  — egyetlen, teljes forrástérképes konfiguráció (verzió, duration/trust
+  küszöbök, fatal-quality küszöb), standard factory és determinisztikus,
+  indokot öröklő négykapus kiértékelés. A quality és trust egymástól független.
+- `lib/features/gamification/public.dart` — csak az új application contract és
+  infrastruktúra exportjai.
+- `test/features/gamification/application/reward_eligibility_policy_test.dart`
+  — A1–A8 mátrix: low-trust, cancelled/failed, fatal/null quality, inkluzív
+  duration-határok, 100 futásos determinizmus, policy-verzió és két nem-default
+  konfiguráció viselkedési átütése.
+
+### Mért ellenőrzések
+
+- Baseline: `/home/ubuntu/flutter/bin/flutter test
+  test/features/gamification/domain/activity_event_test.dart
+  test/features/gamification/data/reward_ledger_repository_test.dart` — 22/22
+  zöld.
+- TDD RED: a kezdeti policy-teszt a hiányzó `ActivityOutcome`, request,
+  gate-decision, config és default-policy típusokra fordítási hibával bukott,
+  ahogy a még nem létező feature-től elvárt.
+- TDD GREEN: `/home/ubuntu/flutter/bin/flutter test
+  test/features/gamification/application/reward_eligibility_policy_test.dart`
+  — 15/15 zöld.
+- Kötelező valódi-sértés próba: a mastery trust-küszöbének ideiglenes
+  kiiktatásával ugyanaz a célteszt 2 hibára futott; az A2 low-trust cella
+  `Expected: false, Actual: <true>` eredménnyel, az A8 trust-küszöb cella is
+  piros lett. A küszöb-ág visszaállítása után a célteszt ismét 15/15 zöld.
+- Teljes helyi gate: `ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh
+  test/features/gamification/application/reward_eligibility_policy_test.dart`
+  — format, analyze, teszt, architecture, secrets és l10n mind zöld. A nullás
+  sleep csak a gate saját lépései közötti várakozását hagyta el; egyetlen gate
+  lépést vagy ellenőrző parancsot sem módosított.
+- Scope: `python3 tools/scope-audit.py --repo
+  /home/ubuntu/ss-codex-e08-r05 --brief
+  docs/rounds/e08-r05-reward-eligibility-and-trust-policy.md --base df41b69b`
+  — a handoff-frissítés utáni 5 changed path, 0 generated/ignored, OK.
+
+### Nem futtatott ellenőrzések és átadás
+
+- A teljes Flutter suite, a friss seedű property gate és a release APK CI-ban
+  kötelező; ezeket, a CI-dispatcht, PR-t, review-t és merge-et a kör-szerepkör
+  szerint Claude végzi.
+- Nem módosítottam `docs/adr/**`, `HANDOFF.md`, gate-eszközt vagy bármely
+  listán kívüli product-fájlt.
+
 ## 11. Review — a Claude tölti ki
