@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ [HEAL E08-R12/H8] KÉSZ — a publikus kör-ág veszteségmentesen tartalmazza a friss `main`-t (2026-08-20, L367)
+## ✅ [HEAL E08-R12/H8] KÉSZ — a publikus kör-ág veszteségmentesen tartalmazza a friss `main`-t — PR #371 (2026-08-20, L367)
 
 Az E08-R12 landolója a friss `main`-re rebase-elte a kör hét nem-merge
 commitját, majd a safe-force-push négy remote-only commitot talált: három
