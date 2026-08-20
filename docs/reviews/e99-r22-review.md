@@ -1,7 +1,7 @@
 # E99-R22 — Review
 
 Brief: `docs/rounds/e99-r22-gov-16-halt-guard-ledger.md`  
-Diff: `7f3618161ac3..6a776948ba2d`  
+Reviewed round diff: `7267fe6d8b02..05c2828d8296`  
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20  
 Verdikt: **APPROVED**
 
@@ -10,8 +10,13 @@ Verdikt: **APPROVED**
 BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0.
 
 A review friss, originről klónozott `/tmp/review-e99-r22-tRUREp`
-példányban futott. Production vagy implementációs fájlt a reviewer nem írt;
-csak eldobható mutációkat végzett, majd bájtra visszaállította őket.
+példányban futott. A review közben az `origin/main` `8687ea61` → `7267fe6d`
+SHA-ra mozdult; az upstream három, fájl-diszjunkt E99-R23 pre-flight fájlját
+normál `--no-ff` merge építette be. Ezután a teljes scope- és gate-review
+megismétlődött egy második friss klónban
+(`/tmp/review-e99-r22-sync-9dj7JA`) a kombinált `05c2828d` HEAD-en.
+Production vagy implementációs fájlt a reviewer nem írt; csak eldobható
+mutációkat végzett, majd bájtra visszaállította őket.
 
 ## Acceptance criteria
 
@@ -27,11 +32,11 @@ csak eldobható mutációkat végzett, majd bájtra visszaállította őket.
 
 ## Scope-audit
 
-Wrapper-jelzés: `scope_audit=ok`, base `7f361816`, 4 változott útvonal.  
-Független kézi audit:
+Wrapper-jelzés: `scope_audit=ok`, base `7f361816`, 4 implementer által
+változtatott útvonal. A végső, upstream-szinkron utáni kézi audit:
 
 ```text
-Legacy scope audit OK (7f3618161ac3..6a776948ba2d, 4 changed path(s), 0 generated/ignored)
+Legacy scope audit OK (7267fe6d8b02..05c2828d8296, 5 changed path(s), 1 generated/ignored)
 ```
 
 Az implementáció mind a négy változott útvonala szerepel a brief
@@ -57,7 +62,7 @@ commit négy útvonalat tartalmazott. Nincs elfogadatlan munkafa-diff.
 | Gate | Független eredmény |
 |---|---|
 | `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` | ✅ 6/6 lépés zöld: format, analyze, teszt, architecture, secrets, l10n |
-| `python3 -m pytest tools/tests -q` | ✅ 688 passed, 2 skipped, 604 subtests passed (344.78 s) |
+| `python3 -m pytest tools/tests -q` | ✅ végső kombinált HEAD: 688 passed, 2 skipped, 606 subtests passed (343.72 s); az első reviewed HEAD is zöld volt (604 subtest) |
 | `python3 -m pytest tools/tests/test_halt_ledger.py -q` | ✅ 7 passed (restore után) |
 | `git diff --check` | ✅ nincs hiba |
 | Scope-audit | ✅ 4 engedélyezett útvonal, 0 sértés |
@@ -68,6 +73,7 @@ sem illeszkedik a `.ai/router.toml` `high_risk_path_fragments` listájára.
 
 ## Merge-döntés
 
-A diff correctness- és scope-review szempontból **APPROVED**, nyitott lelet
-nincs. Merge csak az exact-SHA Full Gate és Router CI sikeres lezárása, a
-friss `origin/main` beépítése és a landoló kapujának zöld eredménye után.
+A `05c2828d` kombinált HEAD correctness- és scope-review szempontból
+**APPROVED**, nyitott lelet nincs. Merge csak az exact-SHA Full Gate és Router
+CI sikeres lezárása, a friss `origin/main` ellenőrzése és a landoló kapujának
+zöld eredménye után.
