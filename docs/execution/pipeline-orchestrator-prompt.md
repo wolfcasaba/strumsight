@@ -483,12 +483,28 @@ A `.pipeline/inflight/` könyvtár mondja meg, fut-e rajtad kívül másik kör
 
 1. **A záró rituálékat és a merge-et a merge-záron keresztül futtasd** — a
    közös dokumentumokat (HANDOFF, RTM, LESSONS, git-notes) nem írhatja két kör
-   egyszerre:
+   egyszerre. A merge-előfeltételek (review, exact-SHA CI és scope-audit)
+   igazolása után a landoló szerzi meg a zárat, frissíti a rebase-elt
+   kombinált HEAD-et, azon futtatja a kaput, majd kizárólag a biztonságos
+   force-push protokoll után, változatlan igazolt HEAD-en squash-merge-el:
 
    ```bash
-   tools/round-merge-lock.sh gh pr merge <PR> --squash --delete-branch
-   tools/round-merge-lock.sh bash -c 'git fetch -q origin main && git ...'
+   tools/round-land.sh --pr <PR> --round {{ROUND}} --gate-test <a brief gate_tests útvonala>
    ```
+
+   A landoló minden invokáció elején `gh pr view --json` strukturált
+   metaadatából ellenőrzi, hogy a PR base-e `main`, head branch-e a lokális
+   current branch, head SHA-ja pedig az induló lokális HEAD. Eltérés
+   fail-closed: nincs fetch/rebase, push vagy merge. Ha a landoló rebase miatt
+   új HEAD-et képez, a kombinált-HEAD gate és a safe push után `blocked`
+   jelzéssel **új exact-SHA CI-dispatch-t kér**, és abban az invokációban nem
+   merge-el. Ilyenkor a friss HEAD-re dispatch-eld és ellenőrizd a CI-t, majd
+   csak a változatlan, már igazolt HEAD-en hívd újra a landolót; ez a második
+   hívás mehet tovább merge-re.
+
+   A mechanikus konfliktus-osztályt (saját brief és append-only naplók) a
+   landoló kezeli. Szemantikus konfliktus továbbra is H8: nincs push vagy
+   merge, amíg az önjavító/humán feloldás meg nem születik.
 
 2. **A másik kör branch-ét, PR-jét, worktree-jét meg ne érintsd** — a te köröd
    fájlhalmaza a briefed `allowed_paths` listája, és a slot-tervező pontosan
