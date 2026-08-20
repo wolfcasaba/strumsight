@@ -1,5 +1,108 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E99-R17/H6] KÉSZ — hermetikus WrapperModeTest az ambiens MiniMax-endpoint szivárgás ellen — PR #342, squash `bdad2a64` (2026-08-20)
+
+Az E99-R17 minimax implementer `blocked`-ot jelzett: a kötelező §7 gate
+(`python3 -m pytest tools/tests -q`) 2 hibán bukott a
+`tools/tests/test_claude_harness_engines.py::WrapperModeTest`-ben, mindkettő
+a kör `allowed_paths` listáján kívül — jogos blokk, nem implementer-hiba.
+
+**Gyökérok (Class A, mérve):** a `run_wrapper()` teszt-fixture
+`dict(os.environ)`-ból indul. Amikor ez a pytest-gate egy ÉLŐ
+`ROUND_ENGINE=minimax` session Bash-hívásaként fut (pont ez az eset — a
+minimax implementer a saját gate-jét futtatja), a szülő session saját,
+jogos `ANTHROPIC_BASE_URL`/`ANTHROPIC_AUTH_TOKEN`/
+`CLAUDE_CODE_AUTO_COMPACT_WINDOW`/`MINIMAX_API_KEY` exportjai öröklődnek a
+szimulált `sonnet-impl` (natív, "nincs override") alfolyamatba, és két
+asszerció a szivárgást méri, nem a `mm-round.sh` tényleges viselkedését.
+Önálló, kód nélküli reprodukció megerősítette: pontosan ugyanez a 2 hiba.
+Ez **tisztán teszt-izolációs** hiba — egy valódi, friss `sonnet-impl`
+dispatch a driver saját tiszta al-folyamatából indul, a `mm-round.sh`
+termék-kód méve NEM hibás.
+
+**Javítás:** `run_wrapper()` explicit törli a négy szivárgás-gyanús
+változót az ambiens env-másolatból, mielőtt a teszt saját `extra_env`-je
+rákerülne. Regressziós teszt (RED→GREEN mérve, izolált worktree-ben):
+`test_ambient_endpoint_env_does_not_leak_into_a_subscription_mode_run`.
+Csak ez az egy tesztfájl változott (47 sor +, 0 −); `tools/mm-round.sh` és
+minden termék-fájl érintetlen. Teljes `tools/tests` mindkét irányban zöld
+(tiszta env 587 passed; a pontos szivárgás-reprodukcióval 586 passed 1
+skipped — 0 failed mindkétszer). Router CI zöld a merge SHA-n. Részletek:
+[[L341]].
+
+**A self-heal SZÁNDÉKOSAN nem vitte előre E99-R17 tartalmi munkáját** — a
+kör saját ága (`minimax/e99-r17-gov-11-l10n-parallel-safety`, benne a már
+zöld-tesztelt F1 javítással) érintetlen marad; a lánc ezután egy FRISS
+kör-sessionben folytatja E99-R17-et, immár hermetikus gate mellett.
+
+## ✅ E08-R03 KÉSZ — Reward ledger és idempotencia-index — PR #340, squash `39c0bd5f` (2026-08-19)
+
+Append-only egyetlen igazságforrás a jutalmakra: immutable `RewardLedgerEntry`
+(`sourceEventId`, policy-verzió, XP-komponensek, `RewardReason` kód) +
+`RewardReason` stabil enum + `RewardLedgerRepository` interfész (nincs
+`update`/`delete`) + `LocalRewardLedgerRepository` a `JsonDocumentStore`
+mintáján (NEM `JsonCollectionStore` — nincs `capRecords`/`maxItems`, egy
+audit-ledger nem veszíthet néma evictionnel). Az `appendIfAbsent` egyetlen
+atomikus Future-tail-lel szerializált (`SongTransport._commandTail` mintája,
+ADR 0301 2. pont) — a `contains`-majd-`append` szétválasztás technikailag
+kizárva. `lib/features/gamification/domain/rewards/`, `data/`, bővített
+`public.dart` (csak export-sor, a konkrét implementáció szándékosan NEM
+exportált). Implementer: Codex (`~/.codex`, `gpt-5.6-terra`), orchesztrátor/
+reviewer Claude Sonnet 5. [ADR 0301](docs/adr/0301-reward-ledger-append-only-idempotency.md).
+
+**Ez a kör második nekifutása.** Az első (21:25 UTC) H6-tal állt meg — a
+Codex implementer `blocked`-ot jelzett egy hiányzó generált Flutter l10n
+miatt, amit egy `git worktree add`-dal (nem klónnal) nyitott munkapéldány
+okozott. Egy self-heal (PR #338, [[L339]]) a burkoló scripteket javította
+(`codex-round.sh`/`mm-round.sh` mostantól minden dispatch előtt önmaga
+futtatja a `prepare-flutter-generated.sh`-t a saját workdirjén). Ez a futás
+egy friss `git clone`-ból indult; a korábbi két félkész, COMMITOLATLAN
+munkapéldányt (`ss-codex-e08-r03` — `stopped`, egy párhuzamos implementer
+által már foglalt branch miatt main-en ragadt uncommitolt diffel;
+`ss-codex-e08-r03-impl` — `blocked`, a fenti l10n-hiba) nem használtam fel:
+a brief §0.2 „félkész, jelöletlen munka → indíts tisztán" szabálya szerint.
+
+**A review saját kézhez, izolált `/tmp` klónban reprodukálta az A2
+mutációs próbát, nem az implementer önjelentésére hagyatkozott.** Az
+atomikus Future-tail-et ideiglenesen egy `hasProcessedEvent` + `await
+Future.delayed` + feltétlen append párra cserélve az A2 cella pontosan a
+várt módon (`Actual: WhereIterable<bool>:[true, true]`) PIROSRA vált,
+visszaállítás után ZÖLD. A [review](docs/reviews/e08-r03-review.md)
+**APPROVED** (0 BLOCKER/MAJOR/MINOR, 1 NOTE — a jelzésfájl `gate_shape=
+VIOLATION` mezője mért HAMIS POZITÍV volt: a `codex-round.sh` `verify_claim()`
+regexe a `codex exec` induló, teljes prompt+preambulum szöveget EGYETLEN
+log-sorba író hívása miatt két, egymással össze nem függő idézetet — a
+brief `round-gate.sh` hivatkozását és a preambulum MÁSIK példájából
+származó `git add -A && git commit` mintát — egyetlen találatnak látott a
+sortörés nélküli kereséssel; minden TÉNYLEGES `/bin/bash -lc 'tools/
+round-gate.sh ...'` végrehajtás a naplóban csővezeték/lánc nélküli volt,
+lásd [[L340]]).
+
+**A kör alatt a `main` HÁROMSZOR mozdult** (más, párhuzamos munka: a
+`ops/rag-retrieval-quality` PR #336 és két pipeline-feloldó commit, az
+egyik egy VALÓDI párhuzamos kör, E99-R17, ugyanebben a megosztott
+munkafában). Mindhárom alkalommal `git merge --no-ff origin/main` +
+teljes CI-újradispatch a §0.3 szerint, mielőtt a merge SHA-n bármilyen
+zöld kapu evidencia számított volna. A záró rituálékat (ez a
+HANDOFF-frissítés, RTM, LESSONS, git-notes) a `tools/round-merge-lock.sh`
+zárral sorosítva készítettem, az E99-R17 branch-ét/PR-ját nem érintettem.
+
+**Zöld kapu, mind a végleges, main-mozgás utáni HEAD-en (`02477969`):**
+Full Gate [32313777603](https://github.com/wolfcasaba/strumsight/actions/runs/32313777603)
+és Router CI [32313779449](https://github.com/wolfcasaba/strumsight/actions/runs/32313779449)
+success. Post-merge célzott gate a friss `main`-en (`39c0bd5f`) önállóan is
+zöld (7/7: format, analyze, 9 alteszt, architecture, secrets, l10n).
+Scope-audit: 7/7 megváltozott fájl az engedélyezett listán, 0 kívül.
+
+Egy mért lecke: **[[L340]]** (a `gate_shape` anti-hallucináció-őr hamis
+pozitívot adhat egy hosszú, sortörés nélküli log-sorra — a reviewer NE a
+mezőre, hanem saját izolált gate-újrafuttatásra hagyatkozzon). Nyitott
+tétel az E08-R02-ből öröklődve, még mindig releváns a Kör 4-nek: a
+security-review MINOR-1 leletét (architektúra-guard marker-lista
+hálózati/fájl-IO kiegészítése) rendezni kell, mielőtt az outbox valódi
+sink-szomszédot hoz a gamification domain mellé. Következő kör:
+**E08-R04** (Activity outbox és megbízható feldolgozás), új sessionben.
+
 ## ✅ [HEAL E08-R03/H6] KÉSZ — round wrapperek önelőkészítik a Flutter l10n-t dispatch előtt — PR #338, squash `911e5145` (2026-08-19)
 
 E08-R03 H6-tal állt meg: a Codex implementer `blocked`-ot jelzett, mert a
@@ -2258,6 +2361,14 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-19):** `main` @ `39c0bd5f` — E08-R03 Reward
+ledger és idempotencia-index, PR [#340](https://github.com/wolfcasaba/strumsight/pull/340),
+squash-merge. Exact `02477969` (a kör alatt a `main` háromszor mozdult, mindig
+`merge --no-ff` + teljes CI-újradispatch a §0.3 szerint): Full Gate
+32313777603 + Router CI 32313779449 success; post-merge célzott gate a friss
+`main`-en önállóan is zöld (7/7). Következő: **E08-R04** (Activity outbox és
+megbízható feldolgozás).
+
 **Aktuális állapot (2026-08-19):** `main` @ `ee5821dd` — E07-R30 Evaluation
 harness, shadow rollout és Epic 7 lezárás, PR
 [#333](https://github.com/wolfcasaba/strumsight/pull/333), squash-merge.
@@ -2699,6 +2810,20 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R03 — Reward ledger és idempotencia-index** (PR
+[#340](https://github.com/wolfcasaba/strumsight/pull/340), squash `39c0bd5f`,
+[ADR 0301](docs/adr/0301-reward-ledger-append-only-idempotency.md)).
+Append-only `RewardLedgerEntry` főkönyv + `RewardReason` kódok +
+`RewardLedgerRepository` (nincs update/delete) + `LocalRewardLedgerRepository`
+a `JsonDocumentStore` mintáján, atomikus Future-tail-lel szerializált
+`appendIfAbsent` (a `SongTransport._commandTail` mintája). Review APPROVED
+(0 BLOCKER/MAJOR/MINOR, 1 NOTE — `gate_shape` hamis pozitív, [[L340]]),
+az A2 párhuzamos-race cellát a reviewer saját izolált klónban, saját
+mutációs próbával reprodukálta. Exact `02477969`: Full Gate 32313777603 +
+Router CI 32313779449 success; post-merge gate zöld (7/7). Lásd a
+fejléc-blokkot a teljes történetért (második nekifutás egy H6-infra-hiba
+után, három `main`-szinkron a kör alatt egy valódi párhuzamos kör miatt).
 
 **E07-R30 — Evaluation harness, shadow rollout és Epic 7 lezárás** (PR
 [#333](https://github.com/wolfcasaba/strumsight/pull/333), squash `ee5821dd`,
@@ -3382,11 +3507,17 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R01** (Gamification baseline és principles,
-SDD Chapter 9 — `docs/rounds/e08-r01-gamification-baseline-and-principles.md`,
-engine `minimax`). **Epic 7 (AI Practice Generator, R01–R30) lezárva** — az
-E08 sor (30 kör, Chapter 9) `docs/execution/pipeline-queue.tsv`-ben előre
-megírva és brief-lintelve. Friss sessionben indul.
+**A következő SDD-lépés: E08-R04** (Activity outbox és megbízható
+feldolgozás, SDD Chapter 9 — `docs/rounds/e08-r04-activity-outbox-and-
+reliable-processing.md`, engine `codex`, előre kiosztott ADR `0302`). Friss
+sessionben indul.
+
+**Nyitott, EMBERI döntést igénylő tartozás, E08-R02-ből örökölve, még
+mindig releváns:** a `docs/reviews/e08-r02-security.md` MINOR-1 lelete — az
+architektúra-guard marker-listája nem fed hálózati/fájl-IO markert
+(`dart:io`/`dart:convert`/`package:dio/`/`package:http/`). Ma nem aktív
+sértés, de az outbox (E08-R04) valódi hálózati/tárolási sink-szomszédot hoz
+a gamification domain mellé — érdemes ELŐTTE rendezni.
 
 **Nyitott, EMBERI döntést igénylő tartozások, Epic 7-ből örökölve:**
 
