@@ -20,6 +20,34 @@ utána 2/2 zöld volt; strict brief-lint: nincs lelet; teljes Python/router gate
 worktree-ben érintetlen maradt; a következő firing ugyanazt az E08-R12 kört
 folytatja az új source-segment contracttal. Lecke: **[[L365]]**.
 
+## 📐 [TERV] Chapter 14 briefek: E14-R10…R14 — a „truthfulness és UX hotfix" blokk (2026-08-20)
+
+**User-kérés:** „mehetsz tovább" — a Chapter 14 briefelésének folytatása az
+R01–R09 blokk lezárása után. Ez az öt kör az, amelyik a user MÉRT panaszára
+válaszol („hiába van kész a backend, az APK-n nem látszik semmi"): itt lesz
+először igaz és látható a felismerés a felületen.
+
+| Kör | Tárgy | ADR | Előfeltétel |
+|---|---|---|---|
+| `E14-R10` | direction abstention: bizonytalan iránynál NINCS ↓/↑ nyíl; a user-küszöb nem mehet a biztonsági minimum alá; a bizonytalan esemény nem hibás esemény a pontozásban | 0362 | R04 + R08 |
+| `E14-R11` | külön chord- és strum-confidence, `noChord`/`unknownChord`/`lowSignal`, százalék helyett szöveges állapot | 0363 | R04 |
+| `E14-R12` | `RecognitionStabilizer` (Free/Guided profil): provisional → confirmed, immutábilis esemény, nincs timeline-churn | 0364 | R04 |
+| `E14-R13` | Live UI truthfulness: egy fő üzenet, history lenyitva NEM alapértelmezett, ok-szöveg bizonytalanságnál, 200% textscale | 0365 | R11 + R12 |
+| `E14-R14` | Audio Setup és Accuracy Check lépés-gép + eszköz-profil (képernyő nélkül, §0.0 drift) | 0366 | R05 + R11 |
+
+**Kötött döntés minden körben:** a shipping DSP/ML konstans NEM mozdul
+(AGENTS.md §9) — az R10 kapuja a classifier FÖLÉ kerül, nem bele; a küszöb
+held-out kalibrációs halmazon MÉRT érték, a `docs/eval/`-ban a futtatott
+paranccsal együtt. Az `E14-R14` `risk = "high"` (mikrofon + eszköz-profil),
+indoklás-sorral; a többi `normal`.
+
+**Mérve:** `python3 tools/brief-lint.py --brief <mind az öt> --level strict` →
+nincs lelet; `python3 tools/brief-lint.py --open --level base` → nincs lelet.
+A sorok `prepared`-ek: a futó prioritás változatlanul a Chapter 13 UI-sáv.
+
+**Hátralévő Chapter 14:** R15–R42 (hard-negative corpus, strum recovery,
+chord recovery, adaptív termék-UI, field validation) — briefek még nincsenek.
+
 ## 📝 [TERV] Chapter 14 — az E14-R06…R09 briefjei megírva: a mérési blokk (R01–R09) teljes (2026-08-20)
 
 **User-kérés:** „folytasd a briefek megírását". A Chapter 14 §8 szerinti első
