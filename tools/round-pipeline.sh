@@ -212,6 +212,13 @@ claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json
 # MINDEN kört a Sol vezényel (a fenti Sol-blokk indoklásával). A korábbi
 # default az `alternate` volt (ADR 0222); env-vel bármikor visszaállítható.
 orch_rotation=${PIPELINE_ORCH_ROTATION:-sol}   # sol | alternate | claude | terra
+# A rotáció USER-DÖNTÉS, és a döntés a REPÓBAN utazik: a commitolt
+# docs/execution/orchestrator-rotation fájl ERŐSEBB az env-nél
+# (file > env > script-default). MÉRT ok (E99-R14 lecke): a cron
+# PIPELINE_ORCH_ROTATION-t exportál, ami némán felülírná a git-en
+# keresztül érkező döntést. Teszt-horog: PIPELINE_ORCH_ROTATION_FILE
+# (=/dev/null → üres fájl → az env-szemantika mérhető marad).
+orch_rotation_file=${PIPELINE_ORCH_ROTATION_FILE:-"$repo_root/docs/execution/orchestrator-rotation"}
 orch_last_file="$state_dir/orchestrator-last"
 # ADR 0242 D1: a rotáció KÖRÖNKÉNT kulcsolt, nem globális — egy kör MINDEN
 # dispatchje (elhalt + újraindított is) ugyanazt az orchestrátort kapja
@@ -249,6 +256,25 @@ notify() {
 }
 
 die() { log "HIBA: $*"; exit "${2:-4}"; }
+
+# --- Rotáció-döntés a commitolt fájlból (user-döntés 2026-08-20) -----------
+# Ha a docs/execution/orchestrator-rotation nem üres, az Ő értéke a rotáció —
+# az operátori env csak fájl NÉLKÜL él. Üres/hiányzó fájl → env/default;
+# érvénytelen tartalom → die (a fájl commitolt, a Router CI őrzi az értékét).
+if [ -s "$orch_rotation_file" ]; then
+  file_rotation=$(head -1 "$orch_rotation_file" | tr -d '[:space:]')
+  case "$file_rotation" in
+    sol | alternate | claude | terra)
+      if [ -n "${PIPELINE_ORCH_ROTATION:-}" ] && [ "$PIPELINE_ORCH_ROTATION" != "$file_rotation" ]; then
+        log "ROTÁCIÓ-FÁJL: a commitolt $orch_rotation_file ('$file_rotation') felülírja a PIPELINE_ORCH_ROTATION env-t ('$PIPELINE_ORCH_ROTATION')"
+      fi
+      orch_rotation=$file_rotation
+      ;;
+    *)
+      die "érvénytelen rotáció-érték a $orch_rotation_file fájlban: '$file_rotation' (sol | alternate | claude | terra)"
+      ;;
+  esac
+fi
 
 # --- GitHub Actions kimaradás-őr (2026-08-06, MÉRT eset) ------------------
 # A GitHub 15:22-kor nyílt incidenst vezetett: „Workflow runs are failing or

@@ -1352,6 +1352,9 @@ class PipelineIntegrationTest(unittest.TestCase):
             env = dict(os.environ)
             env["PIPELINE_STATE_DIR"] = str(state)
             env["PIPELINE_ORCH_ROTATION"] = "alternate"
+            # A commitolt rotáció-fájl (P1-fix, 2026-08-20) erősebb az
+            # env-nél — az env-szemantika méréséhez üresre irányítjuk.
+            env["PIPELINE_ORCH_ROTATION_FILE"] = "/dev/null"
             block = state / "claude-blocked-until"
 
             default = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)

@@ -35,6 +35,11 @@ REGISTRY_PATH = ROOT / "docs" / "execution" / "engine-registry.tsv"
 
 
 def driver(*args: str, state: Path, **env: str) -> subprocess.CompletedProcess:
+    # P1-fix (2026-08-20): a commitolt docs/execution/orchestrator-rotation
+    # fájl ERŐSEBB az env-nél; az env-szemantikát mérő cellák a fájlt üresre
+    # irányítják (/dev/null), kivéve ha explicit fájl-útvonalat adnak.
+    if "PIPELINE_ORCH_ROTATION" in env:
+        env.setdefault("PIPELINE_ORCH_ROTATION_FILE", "/dev/null")
     environment = dict(os.environ, PIPELINE_STATE_DIR=str(state), **env)
     return subprocess.run(
         ["bash", str(DRIVER), *args],

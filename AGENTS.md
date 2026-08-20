@@ -571,8 +571,9 @@ A döntés kívülről lekérdezhető: `tools/round-pipeline.sh --independent-en
 
 > **Ideiglenes felállás (user-döntés 2026-08-20, Pro-keret égetése):** a
 > lejáró ChatGPT Pro előfizetés maradékának elfogyasztásáig MINDEN kör
-> orchestrátora/reviewere a **Sol** (`gpt-5.6-sol`, a `round-pipeline.sh`
-> rotáció-defaultja `sol`), implementere a **`terra`** (`gpt-5.6-terra`, a
+> orchestrátora/reviewere a **Sol** (`gpt-5.6-sol`; a rotációt a commitolt
+> `docs/execution/orchestrator-rotation` fájl hordozza — file > env >
+> script-default), implementere a **`terra`** (`gpt-5.6-terra`, a
 > queue nyitott sorai). A függetlenség mérési kulcsa változatlanul a
 > modell-azonosság — a Sol↔Terra pár e szerint független, a közös
 > előfizetés-keret a döntés tudatos ára. A fenti tábla az `alternate`
