@@ -1,8 +1,8 @@
-# Motorváltás: ezt a kört TE viszed (Codex / gpt-5.6-terra)
+# Motorváltás: ezt a kört TE viszed (Codex — gpt-5.6-sol vagy gpt-5.6-terra)
 
 Ez az előszó azért került az alábbi prompt elé, mert az **elsődleges
-orchestrátor (Claude) helyett most te vezénylsz** — ennek KÉT, egymástól
-független oka lehet, és a kettő NEM ugyanaz a helyzet:
+Claude-orchestrátor helyett most te vezénylsz** — ennek HÁROM, egymástól
+független oka lehet, és nem ugyanaz a helyzet:
 
 1. **Kvóta-fallback** ([ADR 0115](../adr/0115-orchestrator-engine-fallback.md),
    2026-08-02): az elsődleges orchestrátor (Claude) kvótája kimerült. User-döntés:
@@ -12,6 +12,11 @@ független oka lehet, és a kettő NEM ugyanaz a helyzet:
    2026-08-11): a körök fele szándékosan a tiéd, hogy egyik motor kerete se
    fogyjon el egyedül — ilyenkor a Claude-kvóta jellemzően **egészséges**, te
    egyszerűen soron következtél.
+3. **Sol-pin** (user-döntés 2026-08-20, Pro-keret égetése): a lejáró ChatGPT
+   Pro előfizetés maradékát el kell fogyasztani, ezért MINDEN kört te, a Sol
+   (`gpt-5.6-sol`) vezényelsz, az implementer pedig a Terra (`gpt-5.6-terra`).
+   A Claude-kvóta ilyenkor is jellemzően egészséges — a pin nem kvóta-vészjel.
+   Részletek: a lenti prompt „MOTOR-FELÁLLÁS (2026-08-20)" szakasza.
 
 Melyik esettel állsz szemben, a lenti §1.1 „Implementer-routing" mondja meg: ha
 a reviewer-függetlenség (ADR 0138/0222) miatt az implementer a nyilvántartás

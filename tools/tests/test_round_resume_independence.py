@@ -69,7 +69,11 @@ def make_round_branch(root: Path, remote_name: str, prefix: str, round_id: str) 
 
 
 class PerRoundRotationTest(unittest.TestCase):
-    """D1 (ADR 0242 §5.1): a rotáció a KÖRHÖZ rögzül, nem a lánchoz."""
+    """D1 (ADR 0242 §5.1): a rotáció a KÖRHÖZ rögzül, nem a lánchoz.
+
+    Az `alternate` léptetést a 2026-08-20-i Sol-pin default alatt explicit
+    env-vel mérjük — a körönkénti rögzítés gépezete a defaulttól független.
+    """
 
     def test_a_second_dispatch_of_the_same_round_keeps_its_orchestrator(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -77,13 +81,19 @@ class PerRoundRotationTest(unittest.TestCase):
             last = state / "orchestrator-last"
             last.write_text("claude\n", encoding="utf-8")
 
-            first = driver("--next-orchestrator", "E06-R23", state=state)
+            first = driver(
+                "--next-orchestrator", "E06-R23", state=state,
+                PIPELINE_ORCH_ROTATION="alternate",
+            )
             self.assertEqual(first.stdout.strip(), "terra", first.stderr)
             # az ELSŐ dispatch rögzít, és a globális léptető-fájl is frissül —
             # ez számít az ÚJ körök (nem ugyanez a kör) léptetésébe.
             self.assertEqual(last.read_text(encoding="utf-8").strip(), "terra")
 
-            second = driver("--next-orchestrator", "E06-R23", state=state)
+            second = driver(
+                "--next-orchestrator", "E06-R23", state=state,
+                PIPELINE_ORCH_ROTATION="alternate",
+            )
             self.assertEqual(
                 second.stdout.strip(),
                 "terra",
@@ -97,8 +107,46 @@ class PerRoundRotationTest(unittest.TestCase):
             state = Path(name)
             (state / "orchestrator-last").write_text("terra\n", encoding="utf-8")
             # E06-R23-hoz nincs rögzítés — csak E06-R24-et kérünk, ami ÚJ kör
-            result = driver("--next-orchestrator", "E06-R24", state=state)
+            result = driver(
+                "--next-orchestrator", "E06-R24", state=state,
+                PIPELINE_ORCH_ROTATION="alternate",
+            )
             self.assertEqual(result.stdout.strip(), "claude", result.stderr)
+
+    def test_the_sol_default_pins_every_new_round_to_sol(self) -> None:
+        """USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): rotáció-env nélkül az
+        ÚJ kör a Solhoz rögzül, és a második dispatch is azt kapja vissza.
+
+        A DEFAULT mérése nem támaszkodhat az ambiens `PIPELINE_*`
+        override-okra (mért szivárgás: E99-R14 H3), ezért ez a cella
+        hermetikus env-vel fut."""
+
+        def hermetic(*args: str, state: Path) -> subprocess.CompletedProcess:
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith("PIPELINE_")
+            }
+            environment["PIPELINE_STATE_DIR"] = str(state)
+            return subprocess.run(
+                ["bash", str(DRIVER), *args],
+                capture_output=True,
+                text=True,
+                env=environment,
+                timeout=60,
+            )
+
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-last").write_text("claude\n", encoding="utf-8")
+            first = hermetic("--next-orchestrator", "E08-R07", state=state)
+            self.assertEqual(first.stdout.strip(), "sol", first.stderr)
+            self.assertEqual(
+                (state / "orchestrator-round" / "E08-R07").read_text(encoding="utf-8").strip(),
+                "sol",
+            )
+            second = hermetic("--next-orchestrator", "E08-R07", state=state)
+            self.assertEqual(second.stdout.strip(), "sol", second.stderr)
 
 
 class ResumeImplementerFromBranchTest(unittest.TestCase):
@@ -272,6 +320,19 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             (state / "orchestrator-round" / "E06-R23").write_text("terra\n", encoding="utf-8")
             result = driver("--resume-orchestrator", "E06-R23", "minimax", state=state)
             self.assertEqual(result.stdout.strip(), "terra", result.stderr)
+
+    def test_a_sol_pin_facing_a_terra_implementer_is_kept(self) -> None:
+        """USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): a Sol (gpt-5.6-sol)
+        pin a gpt-5.6-terra implementerrel NEM ütközik -- a függetlenség
+        mérési kulcsa itt is a modell-azonosság (ugyanaz, mint a terra ág
+        `codex|terra` mérése), a közös előfizetés a döntés tudatos ára. A
+        folytatásnak ezért a Solt kell megtartania, nem billenhet claude-ra."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-round").mkdir()
+            (state / "orchestrator-round" / "E08-R07").write_text("sol\n", encoding="utf-8")
+            result = driver("--resume-orchestrator", "E08-R07", "terra", state=state)
+            self.assertEqual(result.stdout.strip(), "sol", result.stderr)
 
     def test_on_conflict_the_orchestrator_flips_not_the_implementer(self) -> None:
         """MÉRT eset: a kör orchestrátora 'claude'-ra billent (globális bug),
