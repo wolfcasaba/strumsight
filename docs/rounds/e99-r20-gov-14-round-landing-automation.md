@@ -1,6 +1,6 @@
 # E99-R20 (GOV-14) — Landoló: rebase-őr, konfliktus-osztályozás és kapu a kombinált állapoton
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 3ceb0787`)
+- **Státusz:** READY FOR IMPLEMENTATION (pre-flight 2026-08-20, `main @ 909ea6c9`)
 - **Típus:** **governance-kör** — a lánc SAJÁT vezérlése
 - **Kör-azonosító:** `E99-R20`. Emberi neve **GOV-14**.
 - **Előfeltétel:** nincs (a `tools/round-land.sh` új fájl; nem ütközik az E99-R14…R19 fájlhalmazával)
@@ -30,6 +30,40 @@ native_gate = false
 > Egy hibás konfliktus-besorolás némán ronthat naplót vagy rossz oldalt
 > tarthat meg. A `gate_tests` cella fa-egészség őr; a kör tényleges mércéje a
 > `pytest tools/tests` + Router CI (§7).
+
+## 0.0 Pre-flight revízió (Sol orchesztrátor, 2026-08-20)
+
+- A strict brief-lint jelentés (`.pipeline/brief-lint-E99-R20.md`) **nem
+  tartalmaz leletet**.
+- Az ADR-számfoglaló a mai futásban `0346`-ot adott, mert az előre kiosztott
+  [`ADR 0313`](../adr/0313-round-landing-automation.md) már elfogadva,
+  verziózva és merge-elve van (`784e90e6`, PR #313). Ezért ez a kör **nem ír
+  új ADR-t**, és a `docs/adr/**` tilos zóna változatlan. A generikus
+  orchestrátor-prompt „te írod meg” mondata ennél az előre dokumentált
+  governance-körnél stale; második, divergens ADR nem készül.
+- A kódban újramérve: `tools/round-merge-lock.sh` kizárólag a zárat szerzi
+  meg és a kapott parancsot futtatja; `tools/round-land.sh` továbbra sem
+  létezik; a kimondott nyers merge-út a
+  `docs/execution/pipeline-orchestrator-prompt.md:489` soron van (nem a brief
+  korábbi 463. során).
+- Az ADR 0242 óta a rebase utáni nyers, argumentum nélküli
+  `git push --force-with-lease` tilos. A D1 ezért a meglévő
+  `tools/safe-force-push.sh <branch>` artefaktumot hívja. Annak `3`-as
+  kódja remote-only commitot bizonyít: ilyenkor a landoló fail-closed
+  `blocked` jelzést ad és nem pushol/merge-el; nem próbálja kézzel felülírni
+  a biztonságos push-protokollt.
+- A D5 CI-lefedettség már teljesül: a
+  `.github/workflows/router-ci.yml:31` alatti `tools/**` családi glob mind a
+  landolót, mind a tesztjét lefedi. A workflow módosítása nem feladat; ezt a
+  meglévő `tools/tests/test_router_ci_path_filter.py` és az exact-SHA Router
+  CI bizonyítja.
+- A kötelező RAG-sorrend (szűkített `lessons,halts,adr` → szűkített
+  `lessons,halts` → teljes korpusz) friss, `909ea6c9` indexen futott.
+  Releváns előzmény: `lessons/L77` (saját brief-konfliktusnál a friss main
+  oldala nyer), `lessons/L253` (szöveges konfliktus és valódi logika
+  szétválasztása), valamint `halts/E06-R23 H8` (a nyers lease-push
+  adatvesztési kockázata). A teljes korpuszos keresés további közvetlen
+  előzményt nem adott; az ADR 0313 és ez a brief volt a két első találat.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -76,7 +110,7 @@ futtatás nélkül is lehetett volna mergelni.
 
 - `tools/round-merge-lock.sh` sorosít, de csak zár: rebase-t, osztályozást,
   kaput nem futtat.
-- `docs/execution/pipeline-orchestrator-prompt.md:463` a kimondott merge-út:
+- `docs/execution/pipeline-orchestrator-prompt.md:489` a kimondott merge-út:
   `tools/round-merge-lock.sh gh pr merge <PR> --squash --delete-branch`.
 - A H8 eljárás (prompt §, „rebase után mindig `--force-with-lease`, a
   visszautasítás önmagában nem H8") ma **prózában** él, gépi támasz nélkül.
@@ -97,8 +131,8 @@ Lépések sorrendben, a merge-záron BELÜL (a script maga hívja a
 2. ha a branch már a friss `main` fölött van → 4. lépés;
 3. `git rebase origin/main`; konfliktus esetén → D2;
 4. **kapu a kombinált (rebase utáni) HEAD-en** → D3;
-5. `git push --force-with-lease`; elutasítás esetén egyszeri újrafetch +
-   ismételt rebase, majd újabb elutasítás → `blocked`, H8-ra hagyva;
+5. `tools/safe-force-push.sh <branch>`; `3`-as visszatérés (remote-only
+   commit) vagy más push-hiba → `blocked`, nincs kézi/implicit lease-push;
 6. `gh pr merge <szám> --squash --delete-branch`.
 
 Minden lépés naplózva: `.pipeline/land-<kör>.log` (csonkítatlan).
@@ -133,11 +167,12 @@ Minden lépés naplózva: `.pipeline/land-<kör>.log` (csonkítatlan).
 szakasz megmarad, de kimondja, hogy a mechanikus osztályt a landoló kezeli, és
 H8-ot már csak a szemantikus osztályra kell jelenteni.
 
-### D5 — CI-szűrő
+### D5 — CI-szűrő (pre-flightban már teljesült, csak verifikáció)
 
-`.github/workflows/router-ci.yml` `paths:` blokkja fedje le a
-`tools/round-land.sh` és `tools/tests/test_round_land.py` fájlokat. A szűrő
-fedése **nő, sosem szűkül** (mérve: PR #309 piros CI-kapuja).
+A `.github/workflows/router-ci.yml` meglévő `tools/**` `paths:` globja lefedi
+a `tools/round-land.sh` és `tools/tests/test_round_land.py` fájlokat. A kör
+nem módosítja a workflow-t; a lefedettséget a meglévő
+`tools/tests/test_router_ci_path_filter.py` és az exact-SHA Router CI méri.
 
 ## 4. Mérce-mátrix (`tools/tests/test_round_land.py`)
 
@@ -153,7 +188,7 @@ hívás injektált csonk:
 | vegyes | `HANDOFF.md` **és** egy `.dart` forrás is ütközik | szemantikusként kezelve: abort, NINCS merge |
 | ismeretlen útvonal | `docs/execution/valami-uj.md` ütközik | szemantikus (fail-closed), NINCS merge |
 | piros kapu | rebase rendben, a kapu piros | NINCS push, NINCS merge, `blocked` |
-| lease-elutasítás | a `push --force-with-lease` kétszer elutasítva | `blocked`, NINCS merge |
+| biztonságos push megtagadása | a remote branch-en új, remote-only commit van | `tools/safe-force-push.sh` `3`; `blocked`, NINCS push/merge |
 
 **Falszifikációs cellák (kötelezők):**
 
@@ -192,3 +227,33 @@ python3 -m pytest tools/tests -q
 
 A gate-lépések külön processzben futnak; a csonkítatlan kimenet a bizonyíték.
 A teljes suite + property gate a CI-ban fut (ADR 0053).
+
+## 8. Implementációs sorrend
+
+1. Hermetikus origin + branch fixture és injektált `gh`/gate/signal csonkok.
+2. A nyolc mérce-cella RED állapotának rögzítése.
+3. `tools/round-land.sh`: argumentumok, merge-zár, rebase és fail-closed
+   konfliktus-osztályozás.
+4. Kombinált-HEAD gate, `safe-force-push.sh` és merge csak zöld úton.
+5. Az orchestrátor-prompt nyers merge-útjának cseréje a landolóra.
+6. Falszifikációs próbák, célzott pytest, teljes tooling-suite és round-gate.
+
+## 9. Kockázatok
+
+- A napló-unió elveszíthet vagy duplikálhat szakaszt; a kétoldali egyedi
+  markereket és a konfliktusjelölők hiányát külön teszt méri.
+- A saját brief azonosítása nem terjedhet ki idegen körre; vegyes és
+  ismeretlen konfliktus fail-closed.
+- A landoló nem helyettesíti az exact-SHA CI-t vagy a review-t; csak azok
+  után hívható, és rebase után a lokális kombinált állapotot újraméri.
+
+## 10. Implementation handoff — a Terra tölti ki
+
+- Fájlonkénti összefoglaló.
+- Futtatott parancsok és tényleges kimenet.
+- Falszifikációs próbák RED → GREEN bizonyítéka.
+- Eltérések, nem futtatott ellenőrzések és follow-upok.
+
+## 11. Review — a Sol tölti ki
+
+Link: `docs/reviews/e99-r20-review.md`
