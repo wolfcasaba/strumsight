@@ -3,18 +3,18 @@
 Brief: `docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`  
 Diff: `git diff origin/main...b506516c`  
 Reviewer: Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20  
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 ## Acceptance criteria
 
 | # | Teljesült | Bizonyíték |
 |---|---|---|
-| A1 | ❌ | A jelenlegi EN/HU copy megfelelő, de az A1 őr csak a broken body-t vizsgálja; F1 mutációja a tiltott címet zölden átengedte. |
-| A2 | ❌ | A CTA és az egyszeri callback működik, de a szöveges countdownot az őr nem fogja; F1. |
+| A1 | ✅ | Mindkét forrás-locale title/body/CTA őre; tiltott cím és CTA mutáció külön-külön piros, canonical copy zöld. |
+| A2 | ✅ | CTA egyszeri callback + időformátum- és szöveges-countdown őr; `Return within 2 days` mutáció piros. |
 | A3 | ✅ | `streak_status_card.dart:72–76`; planned-rest/broken páros widgetcella. |
 | A4 | ✅ | `streak_detail_screen.dart:17–23,92`; 0/4/7 + broken×4 és forbidden-owner forrásőr. |
 | A5 | ✅ | `app_router.dart:139` változatlan legacy `StreakScreen`; a legacy suite 20/20 zöld. |
@@ -35,7 +35,7 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 0
 - **Mért bizonyíték:** eldobható review-mutációban `streakV2BrokenTitle = "You lost your streak!"` és `streakV2RecoveryCta = "Return within 2 days"`; segment-generálás + `flutter gen-l10n` után a teljes új widget-suite **20/20 zöld** maradt.
 - **Hatás:** a high-risk együttérző nyelvi termékhatár regressziója zöld CI mellett kerülhetne be.
 - **Kötelező javítás:** mindkét forrás-locale broken title/body/CTA szövegét vizsgáló tiltott-nyelv és írásjel őr; szöveges countdown minták (`within/napon belül`, szám + időegység) tiltása; mutációs bizonyíték a handoffban.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`6ee12f46`) — mindkét forrás-locale title/body/CTA őrzött; reviewer-mutáció külön title és külön CTA esetben is piros, restore után zöld.
 
 ### F2 — MINOR — Az angol egyes számú semantics nyelvtanilag hibás
 
@@ -43,7 +43,7 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 0
 - **Probléma:** a current/longest/total semantics sablon mindig `days`, így érvényes `count = 1` esetén `1 days` hangzik el.
 - **Hatás:** képernyőolvasós minőségromlás, az A8 „teljes, mértékegységes” címkéjének gyenge széle.
 - **Javasolt javítás:** ICU plural form és 0/1/2 semantics cellák; ez a körben kis diffel javítható.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`6ee12f46`) — ICU plural form és 0/1/2 cellák.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -51,13 +51,21 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 0
 |---|---|---|
 | format | 1727 fájl, 0 változás | ✅ |
 | analyze | No issues found | ✅ |
-| új widgettesztek | 20/20 zöld | ✅ |
+| új widgettesztek | 21/21 zöld | ✅ |
 | legacy streak suite | 20/20 zöld | ✅ |
 | architecture / secrets / l10n | zöld / 3074 fájl, 0 lelet / 1437 pár | ✅ |
 | valódi-sértés A7 | fix 80 px → 264 px overflow + explicit assertion failure | ✅ |
-| CI teljes suite + property | javítás után dispatchelendő | ⏳ |
+| re-review mutáció | tiltott title piros; csak CTA countdown piros; restore zöld | ✅ |
+| CI teljes suite + property | re-review után dispatchelendő | ⏳ |
 
 ## Merge-döntés
 
-F1 nyitott MAJOR, ezért merge tilos. Ugyanazon Terra motor javít, majd friss izolált re-review és exact-SHA CI szükséges.
+Az F1/F2 lelet zárva, a független re-review APPROVED. Merge csak a változatlan exact SHA-n zöld Full Gate és Router CI után.
 
+## Re-review — 2026-08-20
+
+Javító commit: `6ee12f46`. Friss klón:
+`/tmp/rereview-e08-r12-71eAeY/repo`. A teljes `tools/round-gate.sh` 7/7
+zöld; 21 V2 + 20 legacy teszt. A reviewer külön próbálta a tiltott broken
+title-t és — canonical title mellett — a szöveges CTA-countdownt; mindkettő az
+A1 cellát pirosra vitte. Restore után a célzott cella zöld és a klón tiszta.

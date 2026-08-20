@@ -3,11 +3,11 @@
 Brief: `docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`  
 Diff: `origin/main...b506516c`  
 Reviewer: Sol high-risk audit · Dátum: 2026-08-20  
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 0
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 ## Pozitív határellenőrzés
 
@@ -29,16 +29,23 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 0
 - **Hatás:** shame/urgency vagy büntető szöveges countdown átmehet a zöld kapun.
 - **Kötelező javítás:** title + body + CTA, mindkét forrás-locale, tiltott szó /
   felkiáltójel / szöveges countdown őrrel; mutációs piros bizonyíték.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`6ee12f46`) — forrás-locale title/body/CTA őr; független tiltott-title és CTA-countdown mutáció külön-külön piros.
 
 ### S2 — MINOR — Angol egyes számú képernyőolvasó-címke hibás
 
 - **Fájl:** `lib/l10n/features/gamification_en.arb:8–24`
 - **Probléma:** `count = 1` esetén `1 days`.
 - **Javasolt javítás:** ICU plural + 0/1/2 cellák.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`6ee12f46`) — ICU plural + 0/1/2 cellák.
 
 ## Merge-döntés
 
-S1 nyitott MAJOR, ezért a high-risk termékhatár nem jóváhagyott; merge tilos a javítás és független re-review előtt.
+Az S1/S2 lelet zárva. A high-risk caller-fed, offline, reward-mentes és együttérző copy-határ APPROVED; merge csak exact-SHA zöld CI után.
 
+## Re-review — 2026-08-20
+
+A friss izolált klón teljes gate-je zöld. A `You lost your streak!` mutáció
+felkiáltójel/tiltott nyelv miatt piros; canonical title mellett a `Return
+within 2 days` CTA külön is piros a szöveges-countdown őrön; restore után
+zöld. Nincs provider/repository/route/network/clock/storage/reward owner,
+secret vagy új lifecycle-erőforrás.
