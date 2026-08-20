@@ -288,3 +288,11 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - CI-dispatch, PR és merge nem az implementer feladata.
 
 ## 11. Review — a Claude tölti ki
+
+- **Reviewer:** Codex (GPT-5.6 Sol), független a Terra implementertől.
+- **Verdikt:** APPROVED — BLOCKER/MAJOR/MINOR/NOTE: 0/0/0/0.
+- **Bizonyíték:** izolált reviewer gate 7/7 zöld; implementer scope-audit OK;
+  legacy↔V2 parity-próba zöld; kötelező gap-2 mutáció az A4 cellát pirosra
+  váltotta, majd visszaállítva a reviewer klón tiszta.
+- **Jelentések:** `docs/reviews/e08-r10-review.md`,
+  `docs/reviews/e08-r10-security.md`.
