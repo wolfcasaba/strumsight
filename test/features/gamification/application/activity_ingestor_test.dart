@@ -347,6 +347,47 @@ void main() {
         );
       },
     );
+
+    test('a failed legacy-quarantine write cannot lose an evicted record after '
+        'restart', () async {
+      final fixture = _Fixture(capacity: 1, maxAttempts: 3);
+      final ingestor = fixture.ingestor;
+
+      await ingestor.recordSavedActivity(
+        event: fixture.event(eventId: 'activity-old'),
+        entry: fixture.entry(sourceEventId: 'activity-old'),
+      );
+
+      // This models the former two-write persistence interleaving: the
+      // pending snapshot has been written, but a crash prevents the later
+      // quarantine-key write. A restart must still find the evicted record.
+      fixture.store.failingKeys.add(activityOutboxQuarantineKey);
+      await ingestor.recordSavedActivity(
+        event: fixture.event(eventId: 'activity-new'),
+        entry: fixture.entry(sourceEventId: 'activity-new'),
+      );
+
+      final restarted = LocalActivityOutboxRepository(
+        ledger: fixture.ledger,
+        store: fixture.store,
+        logger: const NoopAppLogger(),
+        capacity: 1,
+        maxAttempts: 3,
+      );
+
+      expect(
+        restarted.pendingRecords().single.event.eventId,
+        'activity-new',
+        reason: 'the next valid record must remain drainable',
+      );
+      final report = await restarted.drain();
+      expect(report.acknowledged, <String>['activity-new']);
+      expect(
+        restarted.quarantineRecords().single.event?.eventId,
+        'activity-old',
+        reason: 'an evicted record must survive every persistent point',
+      );
+    });
   });
 
   group('A8 — bounded retries — no infinite loop', () {
@@ -404,7 +445,11 @@ void main() {
             capacity: 0,
             maxAttempts: 3,
           ),
-          throwsA(isA<AssertionError>()),
+          throwsA(
+            isA<ArgumentError>()
+                .having((error) => error.invalidValue, 'invalidValue', 0)
+                .having((error) => error.name, 'name', 'capacity'),
+          ),
         );
         expect(
           () => LocalActivityOutboxRepository(
@@ -414,7 +459,11 @@ void main() {
             capacity: 4,
             maxAttempts: 0,
           ),
-          throwsA(isA<AssertionError>()),
+          throwsA(
+            isA<ArgumentError>()
+                .having((error) => error.invalidValue, 'invalidValue', 0)
+                .having((error) => error.name, 'name', 'maxAttempts'),
+          ),
         );
       },
     );

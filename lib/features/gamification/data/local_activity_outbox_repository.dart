@@ -49,11 +49,11 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
     required RewardLedgerRepository ledger,
     required KeyValueStore store,
     required AppLogger logger,
-    required this.capacity,
-    required this.maxAttempts,
+    required int capacity,
+    required int maxAttempts,
     JsonDocumentStore? document,
-  }) : assert(capacity > 0, 'capacity must be positive'),
-       assert(maxAttempts > 0, 'maxAttempts must be positive'),
+  }) : capacity = _requirePositive(capacity, 'capacity'),
+       maxAttempts = _requirePositive(maxAttempts, 'maxAttempts'),
        _ledger = ledger, // ignore: prefer_initializing_formals
        _logger = logger, // ignore: prefer_initializing_formals
        _document =
@@ -66,6 +66,13 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
              name: _documentName,
              bodyKey: _bodyKey,
            );
+
+  static int _requirePositive(int value, String name) {
+    if (value <= 0) {
+      throw ArgumentError.value(value, name, 'must be greater than zero');
+    }
+    return value;
+  }
 
   static const String _legacyStorageKey = 'gamification.activity_outbox_v1';
   static const String _documentName = 'activity_outbox';
@@ -156,7 +163,7 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
         reason: 'ledger already processed this source event',
       );
       _quarantine.add(quarantine);
-      await _persistQuarantine();
+      await _persist();
       return ActivityOutboxEnqueueResult(accepted: false, evicted: quarantine);
     }
 
@@ -186,7 +193,6 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
       _PendingRecord(event: record.event, entry: record.entry, attempts: 0),
     );
     await _persist();
-    await _persistQuarantine();
     return ActivityOutboxEnqueueResult(
       accepted: true,
       evicted: _pending.length > capacity ? evicted : evicted,
@@ -230,7 +236,6 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
           },
         );
         await _persist();
-        await _persistQuarantine();
         continue;
       }
 
@@ -297,7 +302,6 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
           },
         );
         await _persist();
-        await _persistQuarantine();
         continue;
       }
 
@@ -332,6 +336,7 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
     _loaded = true;
 
     final body = _document.readBody();
+    var loadedSnapshotQuarantine = false;
     if (body is Map<String, Object?>) {
       final rawPending = body[_bodyPendingKey];
       final rawAttempts = body[_bodyAttemptsKey];
@@ -412,23 +417,32 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
           }
         }
       }
+
+      // Pending and quarantine are one document snapshot. This means an
+      // eviction or retry-limit transition cannot persist an updated pending
+      // queue before its corresponding quarantine record is durable.
+      final rawQuarantine = body[_bodyQuarantineKey];
+      if (rawQuarantine is List<Object?>) {
+        _loadQuarantineRecords(rawQuarantine);
+        loadedSnapshotQuarantine = true;
+      }
     }
 
-    // The quarantine lives on its OWN storage key and must load even when
-    // the pending document is absent — a fresh install or a corrupted
-    // pending blob cannot lose the user's diagnostic history (A6 / F1).
-    _loadQuarantine();
+    // R04 originally persisted quarantine separately. Read that legacy shape
+    // only when the main snapshot has no quarantine field, then include it in
+    // the next unified snapshot. This retains F1 restart recovery without
+    // reintroducing the two-write crash window.
+    if (!loadedSnapshotQuarantine) _loadLegacyQuarantine();
   }
 
   static const String _bodyPendingKey = 'pending';
   static const String _bodyAttemptsKey = 'attempts';
+  static const String _bodyQuarantineKey = 'quarantine';
   static const String _quarantineRecordsKey = 'records';
 
-  /// Reads the persisted quarantine list under [activityOutboxQuarantineKey]
-  /// and populates [_quarantine]. Decode failures keep their raw bytes via
-  /// [ActivityOutboxQuarantine.malformedRaw] — no record is silently dropped
-  /// (A6 restart contract; F1 corrective).
-  void _loadQuarantine() {
+  /// Reads R04's original, separately persisted quarantine list for migration.
+  /// New writes include quarantine in the main outbox document snapshot.
+  void _loadLegacyQuarantine() {
     String? raw;
     try {
       raw = _document.store.readString(activityOutboxQuarantineKey);
@@ -492,6 +506,12 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
       return;
     }
 
+    _loadQuarantineRecords(records);
+  }
+
+  /// Decodes quarantine records from the current unified snapshot or the
+  /// legacy quarantine document. Decode failures retain their raw data.
+  void _loadQuarantineRecords(List<Object?> records) {
     for (final rawRecord in records) {
       if (rawRecord is! Map) {
         _logger.warning(
@@ -573,40 +593,24 @@ final class LocalActivityOutboxRepository implements ActivityOutboxRepository {
     _bodyAttemptsKey: <String, Object?>{
       for (final entry in _attempts.entries) entry.key: entry.value,
     },
+    _bodyQuarantineKey: <Object?>[
+      for (final record in _quarantine) _encodeQuarantine(record),
+    ],
   };
 
   Future<void> _persist() => _document.write(_pendingSnapshot());
 
-  Future<void> _persistQuarantine() async {
-    final payload = <String, Object?>{
-      'schemaVersion': activityOutboxSchemaVersion,
-      'records': <Object?>[
-        for (final record in _quarantine)
-          <String, Object?>{
-            'outcome': record.outcome.name,
-            if (record.event != null) 'event': record.event!.toJson(),
-            if (record.entry != null) 'entry': record.entry!.toJson(),
-            if (record.rawEvent != null) 'rawEvent': record.rawEvent,
-            if (record.rawEntry != null) 'rawEntry': record.rawEntry,
-            'attempts': record.attempts,
-            'reason': record.reason,
-          },
-      ],
-    };
-    try {
-      await _document.store.writeString(
-        activityOutboxQuarantineKey,
-        jsonEncode(payload),
-      );
-    } on StorageException catch (error, stackTrace) {
-      _logger.error(
-        'gamification.outbox.quarantine_write_failed',
-        error: error,
-        stackTrace: stackTrace,
-        fields: <String, Object?>{'key': activityOutboxQuarantineKey},
-      );
-    }
-  }
+  static Map<String, Object?> _encodeQuarantine(
+    ActivityOutboxQuarantine record,
+  ) => <String, Object?>{
+    'outcome': record.outcome.name,
+    if (record.event != null) 'event': record.event!.toJson(),
+    if (record.entry != null) 'entry': record.entry!.toJson(),
+    if (record.rawEvent != null) 'rawEvent': record.rawEvent,
+    if (record.rawEntry != null) 'rawEntry': record.rawEntry,
+    'attempts': record.attempts,
+    'reason': record.reason,
+  };
 
   static Map<String, Object?> _encodePending(_PendingRecord record) =>
       <String, Object?>{
