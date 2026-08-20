@@ -400,6 +400,10 @@ E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	terra	ni
 # kör) UTÁNA jön — user-döntés, mert a design-rendszer közben végig fennmaradna
 # az igazmondási hiba.
 E14-R01	docs/rounds/e14-r01-recovery-kickoff-and-release-guard.md	codex	0271	done
+E14-R02	docs/rounds/e14-r02-baseline-and-evidence-index.md	terra	0354	prepared
+E14-R03	docs/rounds/e14-r03-model-activation-telemetry.md	terra	0355	prepared
+E14-R04	docs/rounds/e14-r04-recognition-frame-v2-contract.md	terra	0356	prepared
+E14-R05	docs/rounds/e14-r05-live-signal-quality-analyzer.md	terra	0357	prepared
 #
 # ===== 3. SÁV — Chapter 13 (UI/UX Design System) =====
 # A queue-ban az E14 blokk MÖGÉ kerül: user-döntés 2026-08-15 szerint előbb a

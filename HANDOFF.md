@@ -20,6 +20,38 @@ utána 2/2 zöld volt; strict brief-lint: nincs lelet; teljes Python/router gate
 worktree-ben érintetlen maradt; a következő firing ugyanazt az E08-R12 kört
 folytatja az új source-segment contracttal. Lecke: **[[L365]]**.
 
+## 📝 [TERV] Chapter 14 — az E14-R02…R05 briefjei megírva (PREPARED, user-kérés 2026-08-20)
+
+**User-kérés:** „írd meg a briefeket az SDD tervek alapján" — a Chapter 14
+(Recognition Accuracy & Useful UI Recovery) folytatása. Az `E14-R01` (recovery
+kickoff + release guard) `done`, de a következő körökhöz **nem volt brief**,
+tehát a lánc nem tudta futtatni őket.
+
+**Megírva** (`tools/round-brief-prep` protokoll, mind a négy `brief-lint
+--level strict` szerint TISZTA):
+
+| Kör | Tárgy | ADR | Kockázat |
+|---|---|---|---|
+| `E14-R02` | reprodukálható felismerési baseline + evidence index | 0354 | normal |
+| `E14-R03` | model activation telemetry, fail-visible fallback | 0355 | high (telemetria-redakció) |
+| `E14-R04` | `RecognitionFrame` V2 domain contract (6 döntési állapot) | 0356 | normal |
+| `E14-R05` | Live signal quality analyzer (8 állapot, hiszterézis) | 0357 | high (nyers mikrofon-PCM) |
+
+**A briefek mért tényekre épülnek, nem a doksira** — a fontosabbak:
+`StrumCrnn.tryLoad` néma `catch (_) → null` (`strum_crnn.dart:28-35`) és a
+`_tryLiveCrnn` ugyanez (`live_pipeline.dart:21-30`), tehát ma nem látszik,
+melyik felismerő fut; a `LiveFrame` 11 mezőjéből EGYETLEN `confidence` van, és
+az a strumé (`live_frame.dart:69`), 19 fájl hivatkozik rá → kötelező adapter; a
+Live minőségjelzés ma egyetlen skálázott RMS (`live_pipeline.dart:231`),
+miközben a batch oldalon az `signal_quality_math.dart` (ADR 0224) mért
+képletei KÉSZEN vannak — az R05 ezért újrahasznosít, nem újraír.
+
+**A sorok `prepared`-ek, nem `pending`-ek:** a user prioritása most az UI-sáv
+(Chapter 13). Amikor a felismerési sáv is indulhat, a négy sor `pending`-re
+állítása egy commit — a `brief-lint --open --level base` már ma is tiszta rájuk.
+
+**Nyitva marad:** a Chapter 14 R06–R42 briefjei (36 kör) — a következő adag.
+
 ## ✅ E08-R11 KÉSZ — Qualified day, planned rest és recovery policy — PR #363, squash `6a8d0b72` (2026-08-20)
 
 A gamification application-réteg most csak legalább 120 másodperc érvényes
