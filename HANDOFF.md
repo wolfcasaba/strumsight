@@ -44,6 +44,39 @@ utána 2/2 zöld volt; strict brief-lint: nincs lelet; teljes Python/router gate
 worktree-ben érintetlen maradt; a következő firing ugyanazt az E08-R12 kört
 folytatja az új source-segment contracttal. Lecke: **[[L365]]**.
 
+## 📝 [TERV] Chapter 14 — az E14-R06…R09 briefjei megírva: a mérési blokk (R01–R09) teljes (2026-08-20)
+
+**User-kérés:** „folytasd a briefek megírását". A Chapter 14 §8 szerinti első
+blokk — **R01–R09: mérési és bizonyítási alap** — ezzel teljes: minden körhöz
+van futtatható szerződés.
+
+| Kör | Tárgy | ADR | Kockázat |
+|---|---|---|---|
+| `E14-R06` | Accuracy Lab csomag + consent-kapu (UI nélkül, §0.0 drift) | 0358 | high (mikrofon-felvétel, privacy) |
+| `E14-R07` | annotációs séma + validator + annotátor-egyetértés (GUI nélkül, §0.0 drift) | 0359 | normal |
+| `E14-R08` | csoportosított evaluation harness + leakage-védelem | 0360 | normal |
+| `E14-R09` | baseline dashboard + fail-closed release gate | 0361 | normal |
+
+**Két kötött scope-szűkítés (mindkettő §0.0-ban dokumentálva, mért indokkal):**
+az R06 a Lab **adat- és adatvédelmi magját** építi képernyő nélkül (a
+képernyők helye a Chapter 13 sáv, különben a két sáv ugyanarra a felületre
+írna), az R07 pedig az annotáció **szerződését és validatorát** GUI nélkül (a
+repónak nincs desktop/web célja, és a gate egy GUI-t nem tud vezetni). Mindkét
+felület-rész külön körre (`E14-R06b`, `E14-R07b`) marad.
+
+**Újrahasznosítás, nem újraírás:** az R07–R09 az `ADR 0249 / E06-R29` bevált
+alakját viszi tovább (`evaluation/analysis/manifest_schema.json` +
+`EvaluationManifestParser` + `tool/audio_analysis_evaluate.dart`): nyers audio
+soha nem kerül a repóba, a CI kis szintetikus fixture-ön fut, a valós korpusz
+külső manifesttel, kézzel. A `ml/honest_eval.py` (tanító oldal) NEM módosul.
+
+**Mérve:** `brief-lint --level strict` mind a négy briefre → *nincs lelet*;
+`brief-lint --open --level base` az összes nyitott körre → *nincs lelet*;
+`python3 -m pytest tools/tests -q` → 679 passed, 1 failed (a szokásos
+környezeti `gh`-piros), 595 subtests.
+
+**A sorok `prepared`-ek** — a futó prioritás változatlanul a Chapter 13 UI-sáv.
+
 ## 📝 [TERV] Chapter 14 — az E14-R02…R05 briefjei megírva (PREPARED, user-kérés 2026-08-20)
 
 **User-kérés:** „írd meg a briefeket az SDD tervek alapján" — a Chapter 14
