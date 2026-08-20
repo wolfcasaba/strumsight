@@ -527,7 +527,19 @@ frisset lát.
 ## 5. Záró rituálék merge után (mind, sorrendben)
 
 1. `HANDOFF.md` frissítés (fejléc-dátum, §4–§6; a kész kör részletes története
-   → `docs/handoff-archive.md`), `docs(handoff)` commit **és push**.
+   → `docs/handoff-archive.md`) **ÉS a sor-fájl `pending` → `done` átírása
+   UGYANABBAN a `docs(handoff…)` commitban** — ez a D2 (E99-R19 GOV-13):
+   egyetlen commit, egy push, egy CI-futás a kör végén. A merge-lockos
+   szakasznál (`tools/round-merge-lock.sh`) a munkafán a `git checkout` /
+   `git fetch -q origin main && git reset -q --hard origin/main` után a
+   `sed -i "s|^\({{ROUND}}\t.*\t\)pending$|\1done|" docs/execution/pipeline-queue.tsv`,
+   majd a közös `docs(handoff)` commit és push. A két művelet (queue +
+   handoff) egy commitba megy, a push egy menetben — ha bármelyik lépés
+   kimarad, a driver fail-safe ága (`tools/round-pipeline.sh`, a sor `merged`
+   kimenetele utáni rész) `chore(pipeline)` commitot készít és pushol, de
+   csak a valóban hiányzó darabot (lásd lent). A queue-t NEM szabad külön
+   pushban átírni: az a mért két-CI-futás-körönként hiba (4 perc 45 másodperc
+   extra, mérve 2026-08-11…08-18).
 2. RTM (`docs/execution/06-…`) + ADR-hivatkozások, ha a kör érintette.
 3. `docs/LESSONS.md` — minden MÉRT tanulság, hivatkozható forrással.
 4. Git-notes: `git notes add -m "round={{ROUND}} verdict=pass tests=<n> lesson=<slug> engine={{ENGINE}}"`,
@@ -540,6 +552,17 @@ frisset lát.
    nem módosítja. Így a gate a merge-elt kódot méri, nem egy hiányzó vagy
    elavult generált előfeltételt.
 6. Viking: `viking_remember` + `viking_session_commit`.
+
+> **Fail-safe (a driver oldaláról, ADR 0087 + D2 E99-R19):** ha az 1. lépés
+> valamiért kimarad (pl. a `docs(handoff)` push a merge-lock elvesztése
+> miatt félbeszakad), a `tools/round-pipeline.sh` `merged` kimeneteli ága
+> ÚJRA megméri a queue sort, és HA a(z) `{{ROUND}}` sor még mindig
+> `pending`, `chore(pipeline)` commitot készít a sor-fájlra és pushol — így
+> a `done` státusz garantáltan megérkezik. Ha a sor már `done` (az 1. lépés
+> sikeresen lefutott), ez az ág NEM készít üres commitot. A driver ága tehát
+> nem zavarja az egységes záró commitot, csak a ritka, tényleges kimaradás
+> esetén avatkozik be — a mért hibaosztály (elveszett `done` státusz) így
+> zárt marad.
 
 ## 6. A KÖTELEZŐ kör-jelzés — enélkül a futásod bukott
 

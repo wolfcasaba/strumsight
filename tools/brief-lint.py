@@ -74,6 +74,34 @@ SIGNAL_MARKERS = ("kör-jelzés", "codex-round-status", "round-status", "Kör-je
 
 
 QUEUE_RELATIVE = Path("docs") / "execution" / "pipeline-queue.tsv"
+ROUTER_CONFIG_RELATIVE = Path(".ai") / "router.toml"
+# A `risk = "high"` indoklás-kötelezettség (D3 / S7) a
+# `.ai/router.toml` `[security] high_risk_path_fragments` listáját használja
+# — a szigorítás a router-ci mércéjének saját, hivatalos forrásához kötött,
+# nem a brief-lint saját definíciójához.
+HIGH_RISK_JUSTIFICATION_MARKER = re.compile(r"^\*\*Kockázat = high, indoklás:\*\*")
+
+
+def _high_risk_fragments(repo: Path) -> tuple[str, ...]:
+    """A `[security] high_risk_path_fragments` értéke a router-configból.
+
+    A config hiánya vagy a kulcs elhagyása NEM kivétel: a D3 kimondja, hogy
+    `risk = "high"` csak akkor vállalható, ha a router konkrét, szöveges
+    útvonal-mintája vagy a brief saját indoklása megvan. Hiányzó config
+    mellett `()`-tel térünk vissza, ami minden magas-kockázatú briefet a
+    `JUSTIFICATION`-ágra kényszerít — konzervatív, de nem blokkoló (a
+    indoklás-sor bármikor hozzáírható).
+    """
+    path = repo / ROUTER_CONFIG_RELATIVE
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ()
+    import tomllib
+
+    parsed = tomllib.loads(text)
+    fragments = parsed.get("security", {}).get("high_risk_path_fragments", [])
+    return tuple(fragment for fragment in fragments if isinstance(fragment, str) and fragment)
 
 
 def queue_rows(repo: Path) -> list[tuple[str, str, str]]:
@@ -343,6 +371,59 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
     # S4 — kör-jelzés: jelzés nélküli futás = bukott futás (AGENTS.md §15.2).
     if not any(marker.lower() in text.lower() for marker in SIGNAL_MARKERS):
         findings.append(Finding("strict", "S4", "nincs kör-jelzés (STOP/`done`) szakasz"))
+
+    # S7 — `risk = "high"` indoklás-kötelezettség (E99-R19 D3, ADR 0307 §6).
+    # Ha a brief kockázati besorolása magas, két, egymást kizáró út tartja
+    # elfogadhatónak: (a) az `allowed_paths` ÉRINTI a router-konfig
+    # `high_risk_path_fragments` listájának LEGALÁBB egy elemét — a router
+    # CI mércéje így automatikusan szigorúbb ágra vált —, VAGY (b) a brief
+    # szövege tartalmazza a `**Kockázat = high, indoklás:**` kezdetű sort, ami
+    # kézzel, eseti indoklással látja el a magas besorolást. Mindkét út
+    # hiánya: S7 strict lelet (a `base` szint változatlan, hogy a 68 meglévő,
+    # nem igazolt `risk = "high"` brief egyből NE legyen piros — a kör
+    # pre-flightja az S7-et a §2 szerint javítja, nem a CI-kapu).
+    #
+    # A korszak-határ fontos: CSAK NYITOTT (státusz != done) körökre lő.
+    # Egy már lezárt kör briefje történeti rekord; a S7-et a §4 szerint
+    # NEM szabad visszamenőleg pirosra állítania (mérve: E06-R10 briefje
+    # `risk = "high"`, de a self-heal és a merge megelőzte a D3 bevezetését
+    # — a teszt-regresszió elkerülésének ez a kulcsa).
+    round_status_for_s7 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(brief.task_id, "")
+    if metadata.risk == "high" and round_status_for_s7 != "done":
+        fragments = _high_risk_fragments(repo)
+        hit_path = False
+        if fragments:
+            for allowed in metadata.allowed_paths:
+                if any(fragment in allowed for fragment in fragments):
+                    hit_path = True
+                    break
+        has_justification = False
+        for line in text.splitlines():
+            # A brief a `> **Kockázat = high, indoklás:** ...` alakot
+            # használja (markdown blockquote), és a marker a sor ELEJÉN
+            # álló szó-szerinti szöveget várja — a `>` és a vezető szóköz
+            # ezért a marker-illesztés ELŐTT le kell venni. A `lstrip`
+            # `"> \t"`-vel kezeli a „> > " mélyebb idézet-blokkot is.
+            candidate = line.lstrip("> \t").strip()
+            if HIGH_RISK_JUSTIFICATION_MARKER.match(candidate):
+                has_justification = True
+                break
+        if not hit_path and not has_justification:
+            fragments_hint = (
+                f"egyező allowed_path a router high_risk_path_fragments listájából "
+                f"({', '.join(fragments)}) VAGY "
+                if fragments
+                else ""
+            )
+            findings.append(
+                Finding(
+                    "strict",
+                    "S7",
+                    "risk = \"high\", de a brief sem "
+                    f"{fragments_hint}a `**Kockázat = high, indoklás:**` sort "
+                    "nem tartalmazza — az indoklás a pre-flight §2 teendője",
+                )
+            )
 
     # S6 — aránytalanul kicsi kör (E99-R16 D3, ADR 0307 §3). Ha a brief
     # `allowed_paths` listája a brief-dokumentumon és a `gate_tests` elemein

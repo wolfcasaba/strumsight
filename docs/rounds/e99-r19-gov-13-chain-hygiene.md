@@ -1,6 +1,6 @@
 # E99-R19 (GOV-13) — Lánc-higiénia: main-szinkron, egyetlen záró commit, őszinte kockázati besorolás
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 52324cb3`)
+- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-20 pre-flight, `main @ fca0a202`)
 - **Típus:** **governance-kör**
 - **Kör-azonosító:** `E99-R19`. Emberi neve **GOV-13**.
 - **Előfeltétel:** `E99-R15` merge-elve (`tools/round-pipeline.sh`), `E99-R16` merge-elve (`tools/brief-lint.py`)
@@ -61,6 +61,17 @@ egyértelműsíti. Részletek és a regressziós bizonyíték a heal-branchen:
 **Az `allowed_paths` nem bővül, a D1–D3 tartalmi terv változatlan** — a
 következő session pre-flightja a szokásos módon (friss `main`-ellenőrzés)
 folytatja.
+
+**Folytatási mérés:** az örökölt `bc2850c8` pre-flight a `0343` ADR-számot
+foglalta, de új ADR nem készül: a D1–D3 döntéseit az elfogadott
+[`ADR 0307`](../adr/0307-pipeline-throughput-program-v2.md) §6 lefedi. A
+branch az aktuális `origin/main`-nel (`f2d98204`) össze lett szinkronizálva;
+`tools/round-pipeline.sh:1855–1856` továbbra is minden main-eltérésnél
+megáll, a `2317–2323` közti fail-safe pedig külön `chore(pipeline)` commitot
+készít. A RAG-találatok közül `halts/E99-R19 H3`, `lessons/L77` és
+`halts/E99-R18 H3` a friss upstream-ősviszony mérését írják elő minden
+dispatch, review és CI előtt. Az index két committal elavult, ezért ez a
+pre-flight a forrásfát és a friss `main`-t tekinti hitelesnek.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -168,7 +179,58 @@ a D2 fail-safe ágának kiszedése → a „státusz `pending`" eset **PIROS**.
 4. `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` zöld.
 5. Kör-jelzés `done`.
 
-## 7. Gate
+## 7. Implementation handoff (E99-R19 self-report)
+
+A kör implementer-oldali, futtatható eredménye — a review-board innen
+tudja, mit ellenőrizzen a kör-jelzés ELŐTT. A számok a
+`tools/round-gate.sh` és a `pytest` artefaktumokból származnak, a
+mérce-egyezés a `tools/round-gate.sh` kimenetének szó-szerinti
+ellenőrzésével bizonyítható.
+
+### D1 — main-szinkron
+
+- `tools/round-pipeline.sh`: a `main_sync_strategy()` függvény
+  szétválasztja a három esetet (azonos / szigorú lemaradás / valódi
+  divergencia). A piszkos-fa előfeltétel-őr változatlan (ADR 0175 §2).
+- Teszthorogok: `--main-sync-strategy`, `--main-sync-ff-merge` — a
+  függvény logikáját közvetlenül mérik, a driver indítása nélkül.
+
+### D2 — egyetlen záró commit
+
+- `docs/execution/pipeline-orchestrator-prompt.md` §5: a sor
+  `pending → done` átírása a `docs(handoff…)` commitba kerül.
+- `tools/round-pipeline.sh` `merged)` ága: fail-safe — ha a sor a
+  fetch után is `pending`, `chore(pipeline)` commit pótolja; ha
+  `done`, NEM készül plus commit (sed no-op, `git status --porcelain`
+  üres).
+- Teszthorog: `--pending-done-failsafe-required`.
+
+### D3 — `risk = "high"` indoklás
+
+- `tools/brief-lint.py` S7 strict lelet: vagy a router-konfig
+  `high_risk_path_fragments` egyezik az `allowed_paths` egy elemére,
+  VAGY a brief tartalmazza a `**Kockázat = high, indoklás:**` sort.
+  A marker `lstrip("> \t")`-vel kezeli a markdown blockquote-ot.
+  A korszak-határ: CSAK NYITOTT (`status != done`) körre lő — a 68
+  meglévő `risk = "high"` brief nem vált pirosra (a §4 ígérete).
+
+### Gate-eredmények (2026-08-20, jelen session)
+
+| gate | parancs | eredmény |
+|---|---|---|
+| architektúra | `tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart` | ZÖLD (format / analyze / test / architecture / secrets / l10n) |
+| pytest suite | `python3 -m pytest tools/tests -q` | **640 passed, 2 skipped, 567 subtests passed** (~5 perc 12 mp) |
+| brief-lint base | `python3 tools/brief-lint.py --open --level base` | nincs lelet |
+
+### Falszifikációs cellák bizonyítéka
+
+- D1: a `merge-base --is-ancestor` kifejezés a forrásban maradt
+  (`tools/tests/test_chain_hygiene.py::test_strictly_ahead_filter_must_not_be_swapped_for_differs`).
+- D2: a `pending → done` sed + `chore(pipeline)` + `git status
+  --porcelain` őr hármas a `merged)` blokkban maradt
+  (`tools/tests/test_chain_hygiene.py::test_fail_safe_arm_must_survive_being_disabled`).
+
+## 8. Gate
 
 ```bash
 tools/round-gate.sh test/tooling/architecture_allowlist_guard_test.dart
