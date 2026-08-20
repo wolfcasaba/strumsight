@@ -112,22 +112,47 @@ class SessionGaugeTest(unittest.TestCase):
 
 
 class RotationTest(unittest.TestCase):
-    """A körök felét a Terra vezényli (user-döntés 2026-08-11)."""
+    """A körök felét a Terra vezényli (user-döntés 2026-08-11) — az
+    `alternate` léptetést a 2026-08-20-i Sol-pin default alatt explicit
+    env-vel mérjük (a gépezet változatlan, csak a default más)."""
+
+    def test_the_default_rotation_is_the_sol_pin(self) -> None:
+        """USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): rotáció-env nélkül
+        MINDEN kört a Sol (gpt-5.6-sol) vezényel, a globális léptető-fájl
+        állásától függetlenül."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            last = state / "orchestrator-last"
+            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "sol")
+            last.write_text("claude\n", encoding="utf-8")
+            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "sol")
+            last.write_text("terra\n", encoding="utf-8")
+            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "sol")
 
     def test_the_orchestrator_alternates_between_the_two_engines(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
             last = state / "orchestrator-last"
-            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "claude")
+            alternate = {"PIPELINE_ORCH_ROTATION": "alternate"}
+            self.assertEqual(
+                driver("--next-orchestrator", state=state, **alternate).stdout.strip(),
+                "claude",
+            )
             last.write_text("claude\n", encoding="utf-8")
-            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "terra")
+            self.assertEqual(
+                driver("--next-orchestrator", state=state, **alternate).stdout.strip(),
+                "terra",
+            )
             last.write_text("terra\n", encoding="utf-8")
-            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "claude")
+            self.assertEqual(
+                driver("--next-orchestrator", state=state, **alternate).stdout.strip(),
+                "claude",
+            )
 
     def test_the_rotation_can_be_pinned_to_one_engine(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
-            for pinned in ("claude", "terra"):
+            for pinned in ("claude", "terra", "sol"):
                 with self.subTest(engine=pinned):
                     result = driver(
                         "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION=pinned
@@ -135,16 +160,19 @@ class RotationTest(unittest.TestCase):
                     self.assertEqual(result.stdout.strip(), pinned)
 
     def test_without_a_fallback_engine_everything_stays_on_claude(self) -> None:
-        """`PIPELINE_FALLBACK_ENGINE=none` mellett nincs kinek rotálni."""
+        """`PIPELINE_FALLBACK_ENGINE=none` mellett nincs kinek rotálni —
+        a Codex-oldali Sol/Terra szék egyaránt a fallback-kapcsolóhoz kötött."""
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
-            result = driver(
-                "--next-orchestrator",
-                state=state,
-                PIPELINE_ORCH_ROTATION="terra",
-                PIPELINE_FALLBACK_ENGINE="none",
-            )
-            self.assertEqual(result.stdout.strip(), "claude")
+            for pinned in ("terra", "sol"):
+                with self.subTest(engine=pinned):
+                    result = driver(
+                        "--next-orchestrator",
+                        state=state,
+                        PIPELINE_ORCH_ROTATION=pinned,
+                        PIPELINE_FALLBACK_ENGINE="none",
+                    )
+                    self.assertEqual(result.stdout.strip(), "claude")
 
     def test_a_new_round_still_steps_even_when_another_round_is_pinned(self) -> None:
         """ADR 0242 D1 (A2): a körönkénti rögzítés csak az ADOTT kört
@@ -153,11 +181,17 @@ class RotationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
             (state / "orchestrator-last").write_text("claude\n", encoding="utf-8")
-            pinned = driver("--next-orchestrator", "E06-R23", state=state)
+            pinned = driver(
+                "--next-orchestrator", "E06-R23", state=state,
+                PIPELINE_ORCH_ROTATION="alternate",
+            )
             self.assertEqual(pinned.stdout.strip(), "terra")
             # E06-R23 most már rögzítve van 'terra'-ra -- egy ÚJ kör
             # (E06-R24) mégis a globális léptetőt olvassa, nem E06-R23 pin-jét.
-            fresh = driver("--next-orchestrator", "E06-R24", state=state)
+            fresh = driver(
+                "--next-orchestrator", "E06-R24", state=state,
+                PIPELINE_ORCH_ROTATION="alternate",
+            )
             self.assertEqual(fresh.stdout.strip(), "claude")
 
 

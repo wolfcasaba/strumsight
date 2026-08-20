@@ -1,5 +1,50 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔥 [GOV] Sol-orchestrátor + Terra-implementer MINDEN körben — Pro-keret égetése a lejáratig (user-döntés 2026-08-20, branch `claude/router-config-changes-odzv8m`)
+
+**User-döntés:** a ChatGPT Pro előfizetés **napokon belül lejár**, és a
+keretének ~90%-a megmaradt — „hadd fogyjon el". Amíg él, MINDEN kör:
+
+- **Orchestrátor/reviewer: Sol** (`gpt-5.6-sol`) — a `tools/round-pipeline.sh`
+  rotáció-defaultja `alternate` → **`sol`** (env-vel felülírható:
+  `PIPELINE_ORCH_ROTATION`). A Sol a Codex CLI-vel, a Terra
+  `~/.codex-terra` CODEX_HOME-jában fut (közös auth), explicit
+  `-m gpt-5.6-sol`-lal (`PIPELINE_SOL_MODEL` env-vel állítható). A Sol-pin a
+  Claude-zárlat mérése ELŐTT dönt (a Sol nem a Claude-keretből fogyaszt), a
+  körönkénti rögzítés (ADR 0242 D1) változatlanul működik rá.
+- **Implementer: `terra`** (`gpt-5.6-terra`) — a queue mind a 65 nyitott
+  (pending/hold/prepared) sora explicit `terra`-ra állt; az ADR 0069 mért
+  motor-szétosztási szabálya erre az időszakra FELFÜGGESZTVE (a queue
+  fejléce + `test_open_rounds_follow_the_measured_engine_rule` carve-out
+  dokumentálja). A lezárt sorok motorja történeti tény, változatlan.
+- **Függetlenség:** a Sol↔Terra pár a meglévő modell-azonossági kulcson
+  (`orchestrator_conflicts_with_implementer`) független — két különböző
+  modell; a közös Pro-ELŐFIZETÉS a döntés tudatos ára (épp a keret égetése a
+  cél). Az `orchestrator_available` a Codex-oldali kapcsolóhoz köti a Solt
+  (`PIPELINE_FALLBACK_ENGINE=none` → claude, fail-safe változatlan).
+
+**Módosult:** `tools/round-pipeline.sh` (sol rotációs mód + default, Sol
+session-indítás `-m`-mel, ütközés/elérhetőség/`--orchestrator-engine` horog),
+`docs/execution/pipeline-queue.tsv` (65 sor engine → `terra` + fejléc),
+`docs/execution/pipeline-orchestrator-prompt.md` (MOTOR-FELÁLLÁS blokk
+újraírva 2026-08-20-ra, benne a lejárat utáni visszaállás lépései),
+`docs/execution/pipeline-codex-orchestrator-preamble.md` (3. ok: Sol-pin),
+tesztek: `test_orchestrator_rotation.py`, `test_round_resume_independence.py`,
+`test_reviewer_independence.py`, `test_pipeline_integration.py` — az
+`alternate`/fallback gépezet cellái explicit env-pinnel mérik a régi utat,
+ÚJ cellák mérik a Sol-defaultot (default→sol zárlat alatt is; kör-pin sol;
+resume sol+terra; enum `terra`; `--validate-engine terra`).
+
+**Mérés (ezen a boxon):** `python3 -m pytest tools/tests -q` → **597 passed,
+1 failed** — az egy piros a `WorkspaceRestorationHermeticityTest` (nincs
+`gh` CLI ebben a sandboxban; a VÁLTOZATLAN HEAD-en ugyanígy piros, tehát
+környezeti, nem regresszió). CI-n (gh jelen) zöldnek kell lennie.
+
+**A lejárat UTÁN (visszaállás):** rotáció-default vissza `alternate`-re, a
+nyitott `terra` queue-sorok visszaosztása (a lejárt előfizetéssel a
+`codex`/`terra` sor nem futtatható — `minimax`/`sonnet-impl` a mezőny), és a
+prompt MOTOR-FELÁLLÁS blokkjának frissítése. A pontos lépések a blokkban.
+
 ## ✅ [HEAL E99-R18/H3] KÉSZ — a scope-audit jelentése feloldott SHA-t ír `origin/main` helyett, a kör-ág újraszinkronizálva — PR #348, squash `4105c695` (2026-08-20)
 
 Negyedik H3-halt ugyanazon a körön, de a korábbi hármtól ELTÉRŐ gyökérokkal.

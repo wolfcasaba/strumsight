@@ -51,6 +51,11 @@ class ReviewerIndependenceTest(unittest.TestCase):
             environment["HOME"] = str(home)
             environment["PIPELINE_STATE_DIR"] = str(state)
             environment["PIPELINE_FALLBACK_ENGINE"] = fallback_engine
+            # A kvóta-fallback gépezetét (ADR 0115/0138) az `alternate`
+            # rotáció alatt mérjük: a 2026-08-20-i Sol-pin default alatt a
+            # reviewer a Sol, akivel a codex/terra implementer nem ütközik,
+            # így ez az út nem is futna.
+            environment["PIPELINE_ORCH_ROTATION"] = "alternate"
 
             completed = subprocess.run(
                 [str(SCRIPT), "--independent-engine", queue_engine],

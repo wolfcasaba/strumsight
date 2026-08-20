@@ -2,10 +2,20 @@
 # Oszlopok TAB-bal elválasztva:
 #   round   brief                                  engine   adr    status
 # status: prepared | pending | running | done | halted
-# engine: auto | minimax | codex
+# engine: auto | minimax | codex | terra
 #   auto = MiniMax-first router (2 M3 megoldási kör, szükség esetén 1 Terra)
 #   minimax|codex = örökölt, kézi reprodukciós override
+#   terra = a nyilvántartás `terra` sora (~/.codex-terra, gpt-5.6-terra)
 # A '#'-tel kezdődő sorokat a driver átugorja.
+#
+# USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): a ChatGPT Pro előfizetés napokon
+# belül lejár, ~90% keretmaradékkal. Amíg él, MINDEN nyitott sor engine-je
+# `terra` (implementer: gpt-5.6-terra), az orchestrátor/reviewer pedig a Sol
+# (gpt-5.6-sol, `round-pipeline.sh` PIPELINE_ORCH_ROTATION default = sol).
+# Az ADR 0069 mért motor-szétosztási szabálya (minimax vs codex) erre az
+# időszakra FELFÜGGESZTVE — a lejárat után az új sorokra újra az érvényes,
+# és a megmaradt `terra` sorokat a mért szabály szerint kell visszaosztani.
+# A lezárt (`done`) sorok motorja történeti tény, változatlan.
 # A prepared sorokat a driver nem indítja el; az Epic 2 lezárása és emberi
 # jóváhagyás után az első indítható kör státusza kézzel pendingre állítható.
 #
@@ -317,14 +327,14 @@ E99-R14	docs/rounds/e99-r14-gov-08-engine-policy-measured.md	minimax	0307	done
 E99-R15	docs/rounds/e99-r15-gov-09-halt-escalation.md	codex	nincs	done
 E99-R16	docs/rounds/e99-r16-gov-10-round-granularity.md	minimax	nincs	done
 E99-R17	docs/rounds/e99-r17-gov-11-l10n-parallel-safety.md	minimax	nincs	done
-E99-R18	docs/rounds/e99-r18-gov-12-generated-public-barrels.md	codex	nincs	pending
-E99-R19	docs/rounds/e99-r19-gov-13-chain-hygiene.md	codex	nincs	pending
-E99-R20	docs/rounds/e99-r20-gov-14-round-landing-automation.md	codex	0313	pending
+E99-R18	docs/rounds/e99-r18-gov-12-generated-public-barrels.md	terra	nincs	pending
+E99-R19	docs/rounds/e99-r19-gov-13-chain-hygiene.md	terra	nincs	pending
+E99-R20	docs/rounds/e99-r20-gov-14-round-landing-automation.md	terra	0313	pending
 E07-R23	docs/rounds/e07-r23-plan-compiler-and-execution.md	codex	0268	done
 E07-R24	docs/rounds/e07-r24-song-goal-integration.md	codex	nincs	done
 E07-R25	docs/rounds/e07-r25-analysis-and-vision-evidence.md	codex	0319	done
-E99-R21	docs/rounds/e99-r21-gov-15-gate-step-taxonomy.md	codex	0314	hold
-E99-R22	docs/rounds/e99-r22-gov-16-halt-guard-ledger.md	minimax	0315	pending
+E99-R21	docs/rounds/e99-r21-gov-15-gate-step-taxonomy.md	terra	0314	hold
+E99-R22	docs/rounds/e99-r22-gov-16-halt-guard-ledger.md	terra	0315	pending
 E07-R26	docs/rounds/e07-r26-outcome-ingestion-and-revision.md	codex	nincs	done
 E07-R27	docs/rounds/e07-r27-missed-day-and-pause.md	codex	0269	done
 E07-R28	docs/rounds/e07-r28-planner-assist-gateway.md	codex	0270	done
@@ -347,30 +357,30 @@ E08-R03	docs/rounds/e08-r03-reward-ledger-and-idempotency.md	codex	0301	done
 E08-R04	docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md	codex	0302	done
 E08-R05	docs/rounds/e08-r05-reward-eligibility-and-trust-policy.md	codex	0303	done
 E08-R06	docs/rounds/e08-r06-xp-policy-engine-and-diminishing-returns.md	codex	0304	done
-E08-R07	docs/rounds/e08-r07-level-curve-and-profile-projection.md	codex	0305	pending
-E08-R08	docs/rounds/e08-r08-gamification-repository-and-storage-schema.md	codex	0306	pending
-E08-R09	docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md	codex	0307	pending
-E08-R10	docs/rounds/e08-r10-streak-v2-domain-and-legacy-migration.md	codex	0308	pending
-E08-R11	docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md	codex	0309	pending
-E08-R12	docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md	minimax	nincs	pending
-E08-R13	docs/rounds/e08-r13-achievement-domain-and-catalog.md	codex	0310	pending
-E08-R14	docs/rounds/e08-r14-achievement-evaluator-and-projection.md	codex	0311	pending
-E08-R15	docs/rounds/e08-r15-achievement-ui-and-evidence.md	minimax	nincs	pending
-E08-R16	docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md	codex	0312	pending
-E08-R17	docs/rounds/e08-r17-daily-quest-generator.md	codex	0313	pending
-E08-R18	docs/rounds/e08-r18-weekly-quest-and-consistency.md	codex	nincs	pending
-E08-R19	docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md	codex	0314	pending
-E08-R20	docs/rounds/e08-r20-quest-and-challenge-ui.md	minimax	nincs	pending
-E08-R21	docs/rounds/e08-r21-mastery-milestone-domain-and-evaluator.md	codex	0315	pending
-E08-R22	docs/rounds/e08-r22-reward-inbox-and-celebration.md	minimax	0316	pending
-E08-R23	docs/rounds/e08-r23-gamification-hub-and-level-ui.md	minimax	nincs	pending
-E08-R24	docs/rounds/e08-r24-practice-and-learn-integration.md	codex	0317	pending
-E08-R25	docs/rounds/e08-r25-song-trainer-and-setlist-integration.md	codex	nincs	pending
-E08-R26	docs/rounds/e08-r26-cross-feature-gamification-integration.md	codex	nincs	pending
-E08-R27	docs/rounds/e08-r27-gamification-accessibility-and-settings.md	minimax	0318	pending
-E08-R28	docs/rounds/e08-r28-ledger-sync-contract-and-merge.md	codex	0319	pending
-E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	codex	0320	hold
-E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	minimax	nincs	pending
+E08-R07	docs/rounds/e08-r07-level-curve-and-profile-projection.md	terra	0305	pending
+E08-R08	docs/rounds/e08-r08-gamification-repository-and-storage-schema.md	terra	0306	pending
+E08-R09	docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md	terra	0307	pending
+E08-R10	docs/rounds/e08-r10-streak-v2-domain-and-legacy-migration.md	terra	0308	pending
+E08-R11	docs/rounds/e08-r11-qualified-day-planned-rest-and-recovery.md	terra	0309	pending
+E08-R12	docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md	terra	nincs	pending
+E08-R13	docs/rounds/e08-r13-achievement-domain-and-catalog.md	terra	0310	pending
+E08-R14	docs/rounds/e08-r14-achievement-evaluator-and-projection.md	terra	0311	pending
+E08-R15	docs/rounds/e08-r15-achievement-ui-and-evidence.md	terra	nincs	pending
+E08-R16	docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md	terra	0312	pending
+E08-R17	docs/rounds/e08-r17-daily-quest-generator.md	terra	0313	pending
+E08-R18	docs/rounds/e08-r18-weekly-quest-and-consistency.md	terra	nincs	pending
+E08-R19	docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md	terra	0314	pending
+E08-R20	docs/rounds/e08-r20-quest-and-challenge-ui.md	terra	nincs	pending
+E08-R21	docs/rounds/e08-r21-mastery-milestone-domain-and-evaluator.md	terra	0315	pending
+E08-R22	docs/rounds/e08-r22-reward-inbox-and-celebration.md	terra	0316	pending
+E08-R23	docs/rounds/e08-r23-gamification-hub-and-level-ui.md	terra	nincs	pending
+E08-R24	docs/rounds/e08-r24-practice-and-learn-integration.md	terra	0317	pending
+E08-R25	docs/rounds/e08-r25-song-trainer-and-setlist-integration.md	terra	nincs	pending
+E08-R26	docs/rounds/e08-r26-cross-feature-gamification-integration.md	terra	nincs	pending
+E08-R27	docs/rounds/e08-r27-gamification-accessibility-and-settings.md	terra	0318	pending
+E08-R28	docs/rounds/e08-r28-ledger-sync-contract-and-merge.md	terra	0319	pending
+E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	terra	0320	hold
+E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	terra	nincs	pending
 #
 # ===== 2. FEJLESZTÉSI SÁV — Chapter 14 (Recognition Recovery) =====
 # User-döntés 2026-08-15: az Epic 7 MELLETT fusson egy második sáv, ami előbb a
@@ -395,39 +405,39 @@ E14-R01	docs/rounds/e14-r01-recovery-kickoff-and-release-guard.md	codex	0271	don
 # felismerés igazmondása (Ch14 R01-R13), utána a design-rendszer. A briefek
 # viszont előre elkészülnek, hogy a lánc ne álljon meg brief-írásra.
 # Az `E13` a FEJEZETET jelöli, nem epicet.
-E13-R01	docs/rounds/e13-r01-ui-baseline-inventory.md	minimax	nincs	prepared
-E13-R02	docs/rounds/e13-r02-design-system-foundation.md	codex	0273	prepared
-E13-R03	docs/rounds/e13-r03-semantic-colors-and-themes.md	codex	nincs	prepared
-E13-R04	docs/rounds/e13-r04-typography-and-text-scale.md	codex	nincs	prepared
-E13-R05	docs/rounds/e13-r05-spacing-and-surfaces.md	minimax	nincs	prepared
-E13-R06	docs/rounds/e13-r06-motion-and-reduced-motion.md	codex	0274	prepared
-E13-R07	docs/rounds/e13-r07-iconography-and-guitar-glyphs.md	minimax	nincs	prepared
-E13-R08	docs/rounds/e13-r08-adaptive-scaffold-and-navigation.md	codex	0275	prepared
-E13-R09	docs/rounds/e13-r09-stage-scaffold-and-transport.md	codex	0276	prepared
-E13-R10	docs/rounds/e13-r10-async-state-components.md	minimax	0277	prepared
-E13-R11	docs/rounds/e13-r11-actions-and-forms.md	minimax	nincs	prepared
-E13-R12	docs/rounds/e13-r12-cards-badges-and-status.md	minimax	0278	prepared
-E13-R13	docs/rounds/e13-r13-overlays-and-confirmations.md	minimax	0279	prepared
-E13-R14	docs/rounds/e13-r14-accessibility-toolkit.md	codex	0280	prepared
-E13-R15	docs/rounds/e13-r15-localization-resilience.md	minimax	nincs	prepared
-E13-R16	docs/rounds/e13-r16-launch-and-onboarding.md	minimax	0281	prepared
-E13-R17	docs/rounds/e13-r17-today-practice-profile-hubs.md	minimax	nincs	prepared
-E13-R18	docs/rounds/e13-r18-live-stage-ui.md	minimax	nincs	prepared
-E13-R19	docs/rounds/e13-r19-tuner-and-metronome-ui.md	minimax	nincs	prepared
-E13-R20	docs/rounds/e13-r20-chords-and-learning-ui.md	minimax	0282	prepared
-E13-R21	docs/rounds/e13-r21-practice-session-ui.md	minimax	nincs	prepared
-E13-R22	docs/rounds/e13-r22-practice-results-and-speed-builder.md	minimax	0283	prepared
-E13-R23	docs/rounds/e13-r23-song-library-and-setlists.md	minimax	nincs	prepared
-E13-R24	docs/rounds/e13-r24-song-import-and-editor.md	minimax	0284	prepared
-E13-R25	docs/rounds/e13-r25-song-trainer-and-setlist-run.md	minimax	nincs	prepared
-E13-R26	docs/rounds/e13-r26-analyze-recording-and-processing.md	minimax	0285	prepared
-E13-R27	docs/rounds/e13-r27-analysis-results-ui.md	minimax	0286	prepared
-E13-R28	docs/rounds/e13-r28-unified-library.md	minimax	nincs	prepared
-E13-R29	docs/rounds/e13-r29-coach-tutor-and-debrief.md	minimax	0287	prepared
-E13-R30	docs/rounds/e13-r30-vision-ui.md	minimax	0288	prepared
-E13-R31	docs/rounds/e13-r31-progress-and-skills.md	minimax	0289	prepared
-E13-R32	docs/rounds/e13-r32-gamification-ui.md	minimax	0290	prepared
-E13-R33	docs/rounds/e13-r33-community-feed-and-posts.md	minimax	0291	prepared
-E13-R34	docs/rounds/e13-r34-community-challenges-and-safety.md	minimax	nincs	prepared
-E13-R35	docs/rounds/e13-r35-account-privacy-and-share.md	minimax	0292	prepared
-E13-R36	docs/rounds/e13-r36-visual-regression-and-closure.md	codex	nincs	prepared
+E13-R01	docs/rounds/e13-r01-ui-baseline-inventory.md	terra	nincs	prepared
+E13-R02	docs/rounds/e13-r02-design-system-foundation.md	terra	0273	prepared
+E13-R03	docs/rounds/e13-r03-semantic-colors-and-themes.md	terra	nincs	prepared
+E13-R04	docs/rounds/e13-r04-typography-and-text-scale.md	terra	nincs	prepared
+E13-R05	docs/rounds/e13-r05-spacing-and-surfaces.md	terra	nincs	prepared
+E13-R06	docs/rounds/e13-r06-motion-and-reduced-motion.md	terra	0274	prepared
+E13-R07	docs/rounds/e13-r07-iconography-and-guitar-glyphs.md	terra	nincs	prepared
+E13-R08	docs/rounds/e13-r08-adaptive-scaffold-and-navigation.md	terra	0275	prepared
+E13-R09	docs/rounds/e13-r09-stage-scaffold-and-transport.md	terra	0276	prepared
+E13-R10	docs/rounds/e13-r10-async-state-components.md	terra	0277	prepared
+E13-R11	docs/rounds/e13-r11-actions-and-forms.md	terra	nincs	prepared
+E13-R12	docs/rounds/e13-r12-cards-badges-and-status.md	terra	0278	prepared
+E13-R13	docs/rounds/e13-r13-overlays-and-confirmations.md	terra	0279	prepared
+E13-R14	docs/rounds/e13-r14-accessibility-toolkit.md	terra	0280	prepared
+E13-R15	docs/rounds/e13-r15-localization-resilience.md	terra	nincs	prepared
+E13-R16	docs/rounds/e13-r16-launch-and-onboarding.md	terra	0281	prepared
+E13-R17	docs/rounds/e13-r17-today-practice-profile-hubs.md	terra	nincs	prepared
+E13-R18	docs/rounds/e13-r18-live-stage-ui.md	terra	nincs	prepared
+E13-R19	docs/rounds/e13-r19-tuner-and-metronome-ui.md	terra	nincs	prepared
+E13-R20	docs/rounds/e13-r20-chords-and-learning-ui.md	terra	0282	prepared
+E13-R21	docs/rounds/e13-r21-practice-session-ui.md	terra	nincs	prepared
+E13-R22	docs/rounds/e13-r22-practice-results-and-speed-builder.md	terra	0283	prepared
+E13-R23	docs/rounds/e13-r23-song-library-and-setlists.md	terra	nincs	prepared
+E13-R24	docs/rounds/e13-r24-song-import-and-editor.md	terra	0284	prepared
+E13-R25	docs/rounds/e13-r25-song-trainer-and-setlist-run.md	terra	nincs	prepared
+E13-R26	docs/rounds/e13-r26-analyze-recording-and-processing.md	terra	0285	prepared
+E13-R27	docs/rounds/e13-r27-analysis-results-ui.md	terra	0286	prepared
+E13-R28	docs/rounds/e13-r28-unified-library.md	terra	nincs	prepared
+E13-R29	docs/rounds/e13-r29-coach-tutor-and-debrief.md	terra	0287	prepared
+E13-R30	docs/rounds/e13-r30-vision-ui.md	terra	0288	prepared
+E13-R31	docs/rounds/e13-r31-progress-and-skills.md	terra	0289	prepared
+E13-R32	docs/rounds/e13-r32-gamification-ui.md	terra	0290	prepared
+E13-R33	docs/rounds/e13-r33-community-feed-and-posts.md	terra	0291	prepared
+E13-R34	docs/rounds/e13-r34-community-challenges-and-safety.md	terra	nincs	prepared
+E13-R35	docs/rounds/e13-r35-account-privacy-and-share.md	terra	0292	prepared
+E13-R36	docs/rounds/e13-r36-visual-regression-and-closure.md	terra	nincs	prepared
