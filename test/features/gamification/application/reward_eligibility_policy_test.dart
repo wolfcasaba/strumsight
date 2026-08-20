@@ -14,6 +14,13 @@ void main() {
       _expectDenied(decision.verified, RewardReason.insufficientTrust);
     });
 
+    test('mastery can be granted while verified remains denied', () {
+      final decision = _policy().evaluate(_request());
+
+      _expectGranted(decision.mastery);
+      _expectDenied(decision.verified, RewardReason.insufficientTrust);
+    });
+
     test('verified evidence independently grants every gate', () {
       final decision = _policy().evaluate(
         _request(trust: EvidenceTrust.verified),
