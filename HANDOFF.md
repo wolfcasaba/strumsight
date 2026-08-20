@@ -1,5 +1,50 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R08 KÉSZ — Gamification repository és tároló-séma — PR #355, squash `ebb03d9d` (2026-08-20)
+
+Négy különálló, verziózott `JsonDocumentStore`-dokumentum EGY sémafájlban
+(`gamification_storage_schema.dart`): profil-pillanatkép (`schemaVersion` +
+`totalXp` — a domain `GamificationProfile`-tól független DTO, a `progress`
+mindig a hívó `LevelCurve`-jével újraszámolva), katalógus-verzió, jutalom-
+postaláda (a MEGLÉVŐ `JsonCollectionStore<T>` wrapperrel, `maxItems:
+inboxRetentionLimit=50`, inkluzív küszöb) és egy szándékosan minimális
+migrációs-állapot placeholder (Kör 9/10 tölti majd ki). `LocalGamificationRepository`:
+atomikus egy-hívásos pillanatkép-csere, explicit `available/missing/corrupt`
+olvasási státusz, broadcast watch-stream. Új architektúra-guard: a
+gamification `application/` (és a még nem létező `presentation/`) NEM
+importálhat `SharedPreferences`-t — a MEGLÉVŐ E08-R02 marker-lista és helper
+újrafelhasználásával. ADR [`0344`](docs/adr/0344-gamification-storage-schema-versioned-documents-and-layer-purity.md)
+(a briefben előre kiosztott `0306` stale volt — a foglaló `0344`-et adta).
+Implementer: Codex (`~/.codex`, gpt-5.6-terra).
+
+A független review (`docs/reviews/e08-r08-review.md`) az implementer saját
+zöld tesztjei MÖGÖTT egy MAJOR rést talált, eldobható próbateszttel mérve:
+**F1** — `readInbox()` egy redundáns, saját előzetes validáló ciklust
+futtatott a `JsonCollectionStore` rekordonkénti hibatűrése ELŐTT, ezért egy
+EGYETLEN hibás postaláda-bejegyzés a TELJES listát (akár 49 érvényes
+bejegyzést is) „sérültnek" jelentette — ez pontosan az ellenkezője [ADR
+0054](docs/adr/0054-versioned-user-content-documents.md) garanciájának
+("corruption now costs one record, not one feature's entire content").
+Mérve egy 3 elemű (2 jó + 1 hiányzó-`id` közepes) envelope-próbával:
+`status=corrupt, value=null` a javítás előtt. Egy javító kör törölte a
+redundáns ciklust és állandó regressziós tesztet adott hozzá; a reviewer
+saját, izolált újraklónban függetlenül megerősítette (11/11 zöld a célzott
+tesztben). N1 (a watch-stream optimistán sugároz egy elnyelt írási hiba
+esetén — meglévő, projektszintű kockázat öröklődik, nem új regresszió) nyitva
+maradt, NEM blokkoló.
+
+A kör alatt a `main` HÁROMSZOR mozdult (E99-R19 GOV-13 lezárása, PR #353
+Sol-pin env-fix, E99-R20 GOV-14 induló munkája — mind diszjunkt fájlkör) —
+mindháromszor `merge --no-ff` + teljes CI-újradispatch a §0.3 szerint,
+IZOLÁLT `/tmp` klónokból (a megosztott munkafa közben egy párhuzamos E99-R19
+session `git reset`-je + commitja átmenetileg felülírta a helyi branch-
+mutatót a megosztott fán — az `origin`-on lévő, már pusholt munka
+érintetlen maradt, a felismerés után minden további git-művelet izolált
+klónból ment). Exact `91821f22`: Full Gate 32349845398 + Router CI 32349841249
+success; post-merge célzott gate a friss `main`-en (`ebb03d9d`) önállóan is
+zöld (7/7, izolált klónban mérve). Következő SDD-kör: **E08-R09** (Legacy
+progress adapter és backfill).
+
 ## 🔧 [GOV-FIX] A Sol-pin env-biztos: commitolt rotáció-fájl + modell-ID megerősítve + box-teendők (2026-08-20, a PR #351 follow-upja)
 
 A PR #351 három nyitott kockázatának zárása:
@@ -2790,6 +2835,16 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-20):** `main` @ `ebb03d9d` — E08-R08 Gamification
+repository és tároló-séma, PR [#355](https://github.com/wolfcasaba/strumsight/pull/355),
+squash-merge, implementer Codex (`~/.codex`, gpt-5.6-terra) + 1 javító kör
+(F1 MAJOR, review-jelentés: `docs/reviews/e08-r08-review.md`). A kör alatt a
+`main` háromszor mozdult (E99-R19 lezárása, PR #353, E99-R20 induló munkája)
+— mindháromszor `merge --no-ff` + teljes CI-újradispatch a §0.3 szerint.
+Exact `91821f22`: Full Gate 32349845398 + Router CI 32349841249 success;
+post-merge célzott gate a friss `main`-en önállóan is zöld (7/7). Következő:
+**E08-R09** (Legacy progress adapter és backfill).
+
 **Aktuális állapot (2026-08-20):** `main` @ `4dc8f7d1` — E99-R19 GOV-13
 lánc-higiénia, PR [#354](https://github.com/wolfcasaba/strumsight/pull/354),
 squash-merge. Implementer MiniMax; correctness review APPROVED, security
@@ -3961,12 +4016,29 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R08** (Gamification repository és storage
-schema, SDD Chapter 9 — `docs/rounds/e08-r08-gamification-repository-and-
-storage-schema.md`, engine `terra`, a queue-ban előre kiosztott ADR `0306` —
-a pre-flightban MÉRNI kell a `tools/round-slots.py reserve-adr`-ral, mert a
-sorozatos ADR-fogyás miatt valószínűleg ez is stale (lásd E08-R07 §0.0:
-`0305` → `0342` volt a mérve helyes szám). Friss sessionben indul.
+**A következő SDD-lépés: E08-R09** (Legacy progress adapter és backfill,
+SDD Chapter 9 — `docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md`,
+engine a queue-ban `terra` (a GOV rotáció alatt lásd a fejléc-blokk Sol/Terra
+felállását), a queue-ban előre kiosztott ADR `0307` — a pre-flightban MÉRNI
+kell a `tools/round-slots.py reserve-adr`-ral, mert a sorozatos ADR-fogyás
+miatt valószínűleg ez is stale (lásd E08-R08 fejléc: `0306` → `0344` volt a
+mérve helyes szám). Friss sessionben indul.
+
+**Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
+a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)
+optimistán sugározza a kért értéket, mielőtt a `JsonDocumentStore.write()`
+tényleges sikerét ellenőrizné — egy elnyelt platform-írási hiba esetén a
+figyelő a ténylegesnél frissebb (esetleg nem is perzisztált) profilt látná
+egy session erejéig. Meglévő, projektszintű kockázat öröklődik (egyetlen
+`JsonDocumentStore`-alapú írás sem különbözteti meg ma a sikeres és az
+elnyelt írást a hívó felé), NEM új regresszió — de a Kör 9/10 migráció vagy
+egy jövőbeli gamification-UI kör előtt érdemes rendezni: a stream a
+ténylegesen visszaolvasott állapotot sugározza a bemeneti érték helyett.
+Lásd `docs/reviews/e08-r08-review.md` N1.
+
+**Korábbi kijelölt SDD-kör (2026-08-20, azóta lezárult): E08-R08**
+(Gamification repository és storage schema, SDD Chapter 9). Lásd a
+fejléc ✅-blokkot.
 
 **Nyitott, EMBERI döntést NEM igénylő, de a következő pár körben érdemes
 tartozás (2026-08-20, E08-R07 review):** a `docs/reviews/e08-r07-review.md`

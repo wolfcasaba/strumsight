@@ -13732,3 +13732,65 @@ az összes korábbi, független hibautat. Egy precondition-guard csak akkor
 bizonyított, ha a tesztben pontosan az az utolsó különbség, amely a hibát
 okozza. Bizonyíték: `tools/tests/test_chain_hygiene.py`, review F1,
 PR #354 (`bf497480`).
+
+## L354 — Egy saját, a megosztott `JsonCollectionStore` elé illesztett előzetes validáló ciklus semlegesíti annak rekordonkénti hibatűrését — egyetlen hibás elem a teljes listát „sérültnek" jelenti (E08-R08, review F1, 2026-08-20)
+
+**Mit mértem.** A `LocalGamificationRepository.readInbox()` a nyers
+postaláda-listán egy SAJÁT `for` ciklusban előre dekódolt minden elemet
+(`GamificationInboxItem.fromJson`), és ha BÁRMELYIK dobott, a teljes
+metódus `GamificationRead.corrupt()`-ot adott vissza — a ténylegesen
+felhasznált `JsonCollectionStore<T>.read()` (ami rekordonként izolál, és a
+jó elemeket megtartja) ebben az ágban SOSEM futott le. Eldobható
+próbateszttel mérve: egy 3 elemű envelope (2 érvényes + 1, hiányzó `id`
+miatt érvénytelen KÖZÉPSŐ elem) `readInbox()`-ra `status=corrupt,
+value=null`-t adott, holott a `_inboxStore.read()` közvetlen hívása a 2
+érvényes bejegyzést visszaadta volna. Ez szó szerint az ellenkezője [ADR
+0054](../adr/0054-versioned-user-content-documents.md) Következmények
+szakasza garanciájának ("Corruption now costs one record, not one
+feature's entire content") — annak ellenére, hogy a pre-flight brief
+(§0.0, ADR 0344 Döntés 6) kifejezetten a `JsonCollectionStore`
+újrafelhasználását javasolta PONTOSAN emiatt a garancia miatt, és a
+gate/tesztek mind zöldek voltak (a suite nem tartalmazott
+részleges-sérülés cellát). A javítás egysoros törlés volt: a `body is!
+List` ellenőrzés után közvetlenül `_inboxStore.read()`-et kell visszaadni.
+
+**Hogyan alkalmazd.** Ha egy repository egy megosztott, rekordonként
+hibatűrő wrappert (`JsonCollectionStore`, vagy bármely hasonló „egy rossz
+elem csak azt az elemet kösse" absztrakció) használ, TILOS elé egy SAJÁT
+előzetes „dekódolható-e minden elem" kaput tenni — az egy csendes
+all-or-nothing regresszió, amit a zöld gate nem fog meg, csak egy
+kifejezetten a RÉSZLEGES sérülésre irányuló próba (nem csak „minden elem
+jó" vagy „minden elem rossz" szélsőérték). Review-ban: listás/kollekciós
+dokumentumnál a „sérült adat" acceptance cellához mindig írj egy
+vegyes-érvényességű (néhány jó + néhány rossz elem) próbát is, ne csak
+tiszta vagy teljesen sérült bemenetet.
+
+## L355 — Egy másik, a MEGOSZTOTT munkafán futó pipeline-session `git reset`-je + commitja átmenetileg felülírhatja a helyi branch-mutatót — a reflog azonnal megkülönbözteti a valódi adatvesztést a pusztán lokális ütközéstől (E08-R08, 2026-08-20)
+
+**Mit mértem.** A merge előtti utolsó `git log --graph` a megosztott
+`/home/ubuntu/music-theory` fán a `codex/e08-r08-…` branch-nevem alatt EGY
+IDEGEN commitot mutatott (`chore(pipeline): E99-R19 done`, szerző „Ralph
+(autonomous)"), a saját merge-commitom (`f58d1cbd`) helyett. A
+`git reflog` azonnal megmutatta a pontos mechanizmust:
+`HEAD@{1}: reset: moving to origin/main` majd `HEAD@{0}: commit: …E99-R19
+done…` — egy PÁRHUZAMOSAN futó E99-R19 pipeline-session saját záró
+rituáléja (feltehetően egy `git checkout main && git reset --hard
+origin/main`-szerű lépéssor) a MEGOSZTOTT fán a branch-mutatómat találta
+kicsekkolva, és arra futtatta a resetjét+commitját. `git ls-remote` az
+`origin`-on ellenőrizve a saját branch-em érintetlenül a helyes SHA-n állt
+— a probléma KIZÁRÓLAG a lokális working tree branch-mutatójára
+korlátozódott, az idegen commit sosem lett push-olva sehova (a szerző
+saját, KÉSŐBBI HANDOFF-close commitja `main`-en igazolta, hogy a másik
+session zavartalanul folytatta és lezárta a saját körét).
+
+**Hogyan alkalmazd.** Ütköző branch-állapot észlelésekor NE `git reset
+--hard`-dal "javítsd" a megosztott fát (ez destruktív parancs explicit
+user-engedély nélkül tilos, ÉS kockáztatja a másik, esetleg még futó
+session munkáját) — először `git ls-remote`-tal ellenőrizd, hogy a SAJÁT,
+már pusholt munkád érintetlen-e (ha igen, nincs valódi adatvesztés), majd
+minden hátralévő git-műveletet (merge, PR, post-merge gate) egy FRISS,
+izolált klónból végezz, a megosztott fát érintetlenül hagyva a másik
+session-nek. A `git reflog` a leggyorsabb módja annak eldöntésére, hogy
+„a munkám elveszett" vagy „csak a lokális mutató ütközött" — az első
+esetben a HEAD-nél nincs `reset:` bejegyzés idegen commit előtt, a
+másodikban van.
