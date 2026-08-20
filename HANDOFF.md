@@ -1,5 +1,25 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔁 [HEAL E08-R10/H6] `outcome=retry` — Terra `blocked` jelzés a kötelező round-gate.sh kimenet megszakadásáról; byte-azonos reprodukció 54s alatt 7/7 zölden zárt, kódjavítás nem kellett (2026-08-20, L360)
+
+Az E08-R10 (Streak V2 domain + legacy migráció, ADR 0351) Terra
+implementációja (`terra/e08-r10-streak-v2-domain-and-legacy-migration`, HEAD
+`f2e368b3`, `scope_audit=ok`) `blocked`-ot jelzett: a kötelező
+`tools/round-gate.sh test/features/gamification/domain/streak_policy_test.dart
+test/features/streak` hívás kimenete a legacy streak-suite indításánál
+megszakadt a Terra saját (Codex-exec) futtatókörnyezetében, jóllehet Terra
+saját ad-hoc tesztfuttatásai (11+20 teszt), az architecture/secrets/l10n
+ellenőrzés és a scope-audit mind zöldek voltak. A self-heal a PONTOS
+halt-parancsot futtatta újra ugyanazon a munkapéldányon és HEAD-en, egy
+MÁSIK, egyidejűleg futó self-heal (E99-R20/H8) mellett is: 54 másodperc
+alatt mind a 7 lépés zöld (`format`/`analyze`/mindkét teszt-útvonal/
+`architecture`/`secrets`/`l10n`), kilépési kód 0, „MINDEN GATE ZÖLD". Sem a
+gate script, sem a termék-kód nem hibás — a megszakadás a Terra saját, ezen
+a repón kívüli futtatókörnyezetének egyszeri jelensége volt. Nincs
+kódváltoztatás; a meglévő branch/commit érintetlenül vár a következő
+E08-R10 firingre, amely az örökség-ellenőrzés (§0.2) szerint megtalálja és
+onnan folytatja. Lecke: **[[L360]]**.
+
 ## ✅ E08-R09 KÉSZ — Legacy progress adapter és activity backfill — PR #359, squash `842231f5` (2026-08-20)
 
 A legacy `PracticeEntry` snapshot most determinisztikus, SHA-256-alapú opaque
