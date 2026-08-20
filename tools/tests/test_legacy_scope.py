@@ -169,6 +169,55 @@ class LegacyScopeTest(unittest.TestCase):
 
         self.assertEqual(list(changed), sorted(set(changed)))
 
+    def test_selfheal_adr_bookkeeping_must_land_on_base_not_only_the_round_branch(self) -> None:
+        # E99-R18 H3, third occurrence (2026-08-20): a self-heal (H8) pushed its
+        # functional fix directly onto the round branch (L343's precedent, valid
+        # because the fix resolved a conflict inside that branch's own merge),
+        # but bundled its ADR-0112 "Módosítás" bookkeeping commit into the SAME
+        # push. No round brief ever lists the ADR in allowed_paths -- self-heals
+        # reach ADRs via their own direct-to-base PR, never through a round's
+        # scope -- so the round branch tripped scope-audit on a path it had no
+        # legitimate reason to carry.
+        root = self.make_repo()
+        adr = root / "docs/adr/0112-self-healing-pipeline.md"
+        adr.parent.mkdir(parents=True, exist_ok=True)
+        adr.write_text("### Módosítás (older, already on base)\n")
+        self.commit_all(root, "docs/adr/0112 baseline (already-merged history)")
+        trunk_before_fix = self.head(root)
+
+        subprocess.run(["git", "checkout", "-qb", "round"], cwd=root, check=True)
+        (root / "lib/features/tutor/tool.dart").write_text("round content\n")
+        self.commit_all(root, "round: in-scope D-work")
+
+        booked = "\n### Módosítás (2026-08-20) — H8 bookkeeping\n\ntext\n"
+        adr.write_text(adr.read_text() + booked)
+        self.commit_all(root, "heal(E99-R18/H8): sync round branch + document ADR 0112")
+
+        wrong_pattern = self.audit(root, trunk_before_fix)
+
+        self.assertFalse(wrong_pattern.ok, wrong_pattern.format())
+        self.assertIn(
+            "path outside allowed scope: docs/adr/0112-self-healing-pipeline.md",
+            wrong_pattern.violations,
+        )
+
+        # Correct pattern: the identical bookkeeping text lands on trunk
+        # directly first (detached HEAD at the pre-fix trunk commit stands in
+        # for the self-heal's own ordinary PR straight to base), then the
+        # round branch merges the new trunk tip back in.
+        subprocess.run(["git", "checkout", "-q", trunk_before_fix], cwd=root, check=True)
+        adr.write_text(adr.read_text() + booked)
+        self.commit_all(root, "heal(E99-R18/H8): document ADR 0112 (landed on trunk directly)")
+        trunk_after_fix = self.head(root)
+
+        subprocess.run(["git", "checkout", "-q", "round"], cwd=root, check=True)
+        subprocess.run(["git", "merge", "-q", "--no-edit", trunk_after_fix], cwd=root, check=True)
+
+        fixed_pattern = self.audit(root, trunk_after_fix)
+
+        self.assertTrue(fixed_pattern.ok, fixed_pattern.format())
+        self.assertNotIn("docs/adr/0112-self-healing-pipeline.md", fixed_pattern.changed_paths)
+
 
 if __name__ == "__main__":
     unittest.main()
