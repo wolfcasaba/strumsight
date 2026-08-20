@@ -285,6 +285,41 @@ class RoundLandTest(unittest.TestCase):
 
         self._assert_blocked_without_merge(root, work, self._run(work, environment))
 
+    def test_self_duplicated_branch_history_is_rejected_before_rebase(self) -> None:
+        # H8-SELFDUP (E99-R20 self-heal, PR #358): a mért gyökérok — egy
+        # korábbi round-land.sh futás rebase-elte a branch-et (landed_head
+        # != starting_head -> blocked, friss exact-SHA CI kérve, D1 6.
+        # lépés), de a válasz a rebase ELŐTTI régi csúcsot MERGE-elte vissza
+        # az újba ahelyett hogy CI-t kért és újrafuttatta volna a landolót.
+        # Ez a branch saját tartalmát duplikálja, és a KÖVETKEZŐ rebase
+        # ezt self-inflicted add/add + content konfliktusokba futtatja,
+        # amit a mechanikus feloldó (HANDOFF/LESSONS/own_brief) helyesen
+        # nem old fel -> megtévesztő, sokfájlos generikus H8. A guard ezt
+        # a rebase megkísérlése ELŐTT kapja el, egyértelmű diagnózissal.
+        root, bare, work, environment = self._fixture()
+        write_commit(work, "feature.txt", "round change\n", "round change")
+        write_commit(work, "feature2.txt", "second change\n", "second change")
+        original_tip = git(work, "rev-parse", "HEAD")
+
+        other = self._other(root, bare)
+        write_commit(other, "upstream.txt", "upstream change\n", "upstream change")
+        git(other, "push", "-q", "origin", "main")
+        git(work, "fetch", "-q", "origin", "main")
+        git(work, "rebase", "-q", "origin/main")
+        rebased_tip = git(work, "rev-parse", "HEAD")
+        self.assertNotEqual(original_tip, rebased_tip)
+
+        git(work, "merge", "--no-ff", "-q", "-m", "bad merge: preserve old tip", original_tip)
+
+        result = self._run(work, environment)
+
+        self._assert_blocked_without_merge(root, work, result)
+        self.assertFalse((work / ".git" / "rebase-merge").exists())
+        self.assertEqual(git(work, "status", "--porcelain"), "")
+        self.assertNotIn("gate ", self._events(root))
+        signal = (work / ".codex-round-status").read_text(encoding="utf-8")
+        self.assertIn("H8-SELFDUP", signal)
+
 
 class OrchestratorPromptLandTest(unittest.TestCase):
     def test_merge_instruction_delegates_to_the_land_script(self) -> None:
