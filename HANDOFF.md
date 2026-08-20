@@ -1,5 +1,14 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R06 KÉSZ — XP policy engine és diminishing returns — PR #347, squash `29e78eaf` (2026-08-20)
+
+Magyarázható, verziózott ötkomponensű XP policy készült napi cap-pel,
+practice-repeat csökkenő hozammal és explicit parent/child deduppal. A review
+egy farmolható gyermek-event újraküldést talált; a javítás külön
+`rewardedEventIds` history-állapottal és A5 RED→GREEN regressziós teszttel
+zárta. Full Gate exact-SHA: 32333321826 success; Router CI: 32333305673
+success. Következő SDD-kör: E08-R07 — level curve és profile projection.
+
 ## ✅ [HEAL E99-R18/H3] KÉSZ — a H8 ADR-0112 blokk landolt `main`-en, a kör-ág visszaszinkronizálva — PR #346, squash `ee010d39` (2026-08-20)
 
 Harmadik H3-halt ugyanazon a körön: a kör-ág az `origin/main`-hez képest a
