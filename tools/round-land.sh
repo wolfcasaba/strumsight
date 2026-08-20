@@ -118,6 +118,28 @@ fi
 echo "round-land: round=$round pr=$pr branch=$branch head=$starting_head"
 git fetch origin main
 
+self_duplicate_guard() {
+  # H8-SELFDUP (E99-R20 self-heal): egy korábbi rebase már lefutott ezen a
+  # branch-en (landed_head != starting_head → blocked, exact-SHA CI kérve
+  # lásd D1 6. lépés), és a válasz tévedésből a régi, rebase ELŐTTI csúcsot
+  # MERGE-elte vissza a friss csúcsba (a rebase.sh-ban ehhez semmilyen
+  # kódút nem vezet — külső beavatkozás). Az eredmény: a branch saját
+  # tartalma kétszer szerepel benne, ami a valódi rebase-t self-inflicted
+  # add/add és content konfliktusokba futtatja (ezek NEM origin/main-nel
+  # való valódi ütközések). Ezt itt, a rebase megkísérlése ELŐTT kapjuk el,
+  # egyértelmű diagnózissal a megtévesztő, sokfájlos H8 helyett.
+  local base pairs duplicate_ids offenders
+  base=$(git merge-base HEAD origin/main)
+  pairs=$(git log --no-merges --format='commit %H' -p "$base..HEAD" | git patch-id --stable)
+  [ -n "$pairs" ] || return 0
+  duplicate_ids=$(printf '%s\n' "$pairs" | awk '{print $1}' | sort | uniq -d)
+  [ -n "$duplicate_ids" ] || return 0
+  offenders=$(awk 'NR==FNR {dup[$1]=1; next} ($1 in dup) {print $2}' \
+    <(printf '%s\n' "$duplicate_ids") <(printf '%s\n' "$pairs") | tr '\n' ' ')
+  blocked "H8-SELFDUP: a branch saját története ugyanazt a tartalmat kétszer tartalmazza (érintett commitok: ${offenders}). Ez jellemzően egy korábbi 'exact-SHA CI szükséges' blokkolásra adott hibás válasz — a régi, rebase előtti csúcsot MERGE-elték vissza, ahelyett hogy friss CI-t kértek és újrafuttatták volna a landolót. NE ismételd meg ezt: építsd újra a branch-et EGYETLEN tiszta rebase-szel a duplikátumok nélkül, és csak utána fuss neki újra."
+}
+self_duplicate_guard
+
 resolve_conflicts() {
   local conflicts conflict
   while true; do
