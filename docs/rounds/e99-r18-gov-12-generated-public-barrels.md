@@ -348,6 +348,43 @@ szűkítve ADR 0176 és lessons/L129, teljes korpuszon a saját E99-R18/H8
 előzmény tért vissza; a közvetlen D4-precedens lessons/L343. Ezek nem
 engednek biztonságos blanket-glob kivételt.
 
+## 0.0f Pre-flight revízió (önjavítás, ADR 0112, H3, 2026-08-20, harmadik előfordulás) — a kör-ág `docs/adr/0112` diffje leválasztva, upstream szinkron
+
+A lánc H3-mal állt meg: a kör-ág az `origin/main`-hez képest a tiltott
+`docs/adr/0112-self-healing-pipeline.md`-et is módosította — ezt a H8
+self-heal (§0.0b, merge `7458ca83`) egy időben a saját, kör-ág-specifikus
+javításával bundle-özve írta a kör-ágra, de sosem mozgatta át `main`-re. Nem
+`allowed_paths`-sértés a kódban: egyetlen termék-brief `allowed_paths`-ának
+sem kellene ezt az utat tartalmaznia (ADR 0112 §2 szerint ez kizárólag a
+self-heal saját, brieftől független jogosultsága).
+
+**Feloldás** (`docs/adr/0112-self-healing-pipeline.md`, ADR 0112 önjavító kör,
+2026-08-20, [[L347]]): a H8-blokk landolt `main`-en (PR #346, `ee010d39`, majd
+egy apró számozás-javítás `a109edbc` — az L346 számot a vele párhuzamosan
+záruló E08-R05 saját maga foglalta le, [[L346]] "kié a szám" tanulsága
+szerint), a kör-ág visszamergelte a friss `main`-t (`96f1ada2`). Saját méréssel
+igazolva: `tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base origin/main` →
+`Legacy scope audit OK (origin/main..96f1ada2b129, 15 changed path(s), 0
+generated/ignored)` (előtte: `FAILED, path outside allowed scope`).
+
+**Mellékesen feltárt, NEM javított lelet** (a H8-mintát követve, [[L343]]): a
+kötelező teljes `python3 -m pytest tools/tests -q` a mergelt kör-ágon **2
+piros tesztet** mutat, mindkettő a `tools/tests/
+test_e99_r18_scope_debris_revert.py`-ban rögzített, a MEGELŐZŐ két H3
+self-heal által pinnelt `allowed_paths`-tuple-ökben
+(`PRE_H3_20260820_ALLOWED_PATHS` + a H3-második-előfordulás bővítése):
+mindkettő 11 bejegyzést vár, a brief jelenlegi `allowed_paths`-a viszont
+12-t tartalmaz — a fenti §0.0e (ez a self-heal ELŐTT, a kör saját
+folytatásában landolt) hozzáadta a `docs/adr/0339-generated-public-barrel-
+registry.md` utat. Mérve: ez a rés a self-heal (a merge/resync) ELŐTT is
+fennállt — a merge nem érintette sem a brief `allowed_paths` tömbjét, sem a
+guard-teszt fájlját (mindkettő konfliktusmentesen automerge-elt, a `docs/adr/
+0112` fájl volt az egyetlen konfliktus). A helyes javítás a két pinnelt
+tuple frissítése a 12. bejegyzéssel — ez a kör SAJÁT allowlist-bookkeeping
+munkája (ADR 0112 §1 tiltja a megállt kör levezénylését), a következő E99-R18
+dispatch ELSŐ teendője review/merge előtt.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
