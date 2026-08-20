@@ -18,8 +18,6 @@ allowed_paths = [
   "lib/features/practice_generator/public/",
   "tools/round-slots.py",
   "tools/tests/test_round_slots_generated_barrels.py",
-  "tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py",
-  "docs/adr/0336-generated-public-barrel-eligibility.md",
   "test/tooling/gen_public_barrel_test.dart",
   "test/core/architecture_dependency_test.dart",
   "docs/rounds/e99-r18-gov-12-generated-public-barrels.md",
@@ -201,7 +199,7 @@ feljegyzés csak a felesleges újra-felfedezés költségét spórolja meg.
 Lecke: `docs/LESSONS.md` [[L343]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
 Módosítás (ADR 0112 önjavító kör, 2026-08-20).
 
-## 0.0c Pre-flight revízió — csak igazoltan generált barrel old fel slot-ütközést (ADR 0336, 2026-08-20)
+## 0.0c Pre-flight revízió — csak igazoltan generált barrel old fel slot-ütközést (2026-08-20)
 
 **Mérés és döntés.** A §0.0b-ban előírt reprodukciót a jelenlegi kör-ágon
 `python3 -m pytest tools/tests/test_pipeline_throughput.py::SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected -q`
@@ -233,7 +231,8 @@ contract maga a szabályozott feature-határ), lessons/L133 és lessons/L135
 (a brief és a tényleges guard viselkedését együtt kell mérni), valamint
 lessons/L343 (ez a pontos D4 túl-széles-glob lelet). A teljes korpusz a
 közvetlen kör-briefet és az E99-R18/H8 leletet hozta vissza; ellentétes,
-biztonságos precedens nincs. ADR: [`0336`](../adr/0336-generated-public-barrel-eligibility.md).
+biztonságos precedens nincs. A döntés az ADR 0307 §5 körszintű,
+determinista-generálhatósági elvének alkalmazása; új ADR nem szükséges.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
