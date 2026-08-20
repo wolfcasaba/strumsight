@@ -1,5 +1,25 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R10 KÉSZ — Streak V2 domain és read-only legacy migráció — PR #362, squash `892e04a6` (2026-08-20)
+
+A gamification feature új, verziózott `StreakState` V2 contractot, tiszta és
+óra-mentes `StreakPolicy`-t, típusos transition reasonöket, valamint read-only
+legacy adaptert kapott. Az adapter a `ss.streak.state` envelope-ot részesíti
+előnyben, majd a `practice_streak_v1` raw JSON-ra esik vissza; egyik forrást
+sem írja vagy törli. Az öt shipping legacy érték veszteség nélkül megmarad,
+a legacy feature és `/streak` útvonal érintetlen. A döntést ADR 0351 rögzíti.
+
+Implementer: Terra (`gpt-5.6-terra`); független correctness és security
+review: Sol (`gpt-5.6-sol`), mindkettő APPROVED, nyitott lelet nélkül. Az
+izolált reviewer gate 7/7 zöld; a legacy↔V2 eldobható parity-próba több mint
+4 000 kombinációt mért; a kötelező gap-2 mutáció az A4 cellát pirosra vitte.
+Exact `f5a0a8de`: Full Gate
+[32371975469](https://github.com/wolfcasaba/strumsight/actions/runs/32371975469)
+és Router CI
+[32371933077](https://github.com/wolfcasaba/strumsight/actions/runs/32371933077)
+success. A részletes történet a `docs/handoff-archive.md` elején található.
+Következő SDD-kör: **E08-R11 — Qualified day, planned rest és recovery policy**.
+
 ## 🔁 [HEAL E08-R10/H6] `outcome=retry` — Terra `blocked` jelzés a kötelező round-gate.sh kimenet megszakadásáról; byte-azonos reprodukció 54s alatt 7/7 zölden zárt, kódjavítás nem kellett (2026-08-20, L360)
 
 Az E08-R10 (Streak V2 domain + legacy migráció, ADR 0351) Terra

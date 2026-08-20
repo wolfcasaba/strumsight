@@ -6,6 +6,39 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R10 — Streak V2 domain és read-only legacy migráció (2026-08-20)
+
+PR [#362](https://github.com/wolfcasaba/strumsight/pull/362), squash
+`892e04a6`, [ADR 0351](adr/0351-streak-v2-read-only-legacy-migration-and-pure-policy.md).
+A pre-flight kimérte, hogy a core v22 migráció a nyers
+`practice_streak_v1` dokumentumot már áttehette a `ss.streak.state`
+envelope-ba és törölhette a régi kulcsot. Az elavult brief ezért dokumentált
+§0.0 revíziót kapott: a V2 migrátor az envelope-ot olvassa elsőként, raw
+legacy fallbackkel, és egyik forrást sem módosítja. A foglaló az előre írt,
+időközben elfogyott 0308 helyett ADR 0351-et osztott ki.
+
+A Terra implementáció verziózott, másolás ellen védett `StreakState`-et,
+típusos transition reasonöket, a teljes legacy gap/freeze/award/cap mátrixot
+reprodukáló tiszta policyt, feature-semleges legacy projectiont és read-only
+adaptert adott. A wrapper `blocked` jelzése a teljes gate-kimenet egyszeri
+megszakadása miatt született; az L360 self-heal és a jelen Sol review egyaránt
+teljes, 7/7 zöld gate-et mért, kódjavítás nem kellett.
+
+A független correctness review és a `risk = "high"` security review egyaránt
+APPROVED (0 nyitott BLOCKER/MAJOR/MINOR/NOTE). A reviewer izolált klónban
+scope-auditot futtatott (7 engedélyezett path, 0 sértés), több mint 4 000
+legacy↔V2 állapotkombináció mezőazonosságát mérte, majd a `gap == 2` freeze-ág
+ideiglenes rontásával igazolta, hogy az A4 regressziós cella valóban piros
+(`Expected 5`, `Actual 1`). Visszaállítás után a klón tiszta maradt.
+
+Lokális reviewer gate: format 1720/0, analyze 0, V2 policy 11/11, legacy
+streak 20/20, architecture OK (12 allowlist), secrets 3052/0, l10n 1405
+parity. Exact `f5a0a8de`: Full Gate
+[32371975469](https://github.com/wolfcasaba/strumsight/actions/runs/32371975469)
+és Router CI
+[32371933077](https://github.com/wolfcasaba/strumsight/actions/runs/32371933077)
+success. Következő: E08-R11.
+
 ## ✅ E08-R09 — Legacy progress adapter és activity backfill (2026-08-20)
 
 PR [#359](https://github.com/wolfcasaba/strumsight/pull/359), squash
