@@ -53,6 +53,15 @@ Future<void> _pump(
 Map<String, Object?> _arb(String path) =>
     Map<String, Object?>.from(jsonDecode(File(path).readAsStringSync()) as Map);
 
+List<String> _brokenCopies(String path) {
+  final locale = _arb(path);
+  return <String>[
+    locale['streakV2BrokenTitle']! as String,
+    locale['streakV2BrokenBody']! as String,
+    locale['streakV2RecoveryCta']! as String,
+  ];
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -72,29 +81,38 @@ void main() {
       }
     });
 
-    test('broken copy is compassionate in both locales', () {
-      final english = _arb('lib/l10n/app_en.arb');
-      final hungarian = _arb('lib/l10n/app_hu.arb');
-      final copies = <String>[
-        english['streakV2BrokenBody']! as String,
-        hungarian['streakV2BrokenBody']! as String,
-      ];
+    test('every broken title, body, and recovery CTA is compassionate', () {
+      final copiesByLocale = <String, List<String>>{
+        'en': _brokenCopies('lib/l10n/features/gamification_en.arb'),
+        'hu': _brokenCopies('lib/l10n/features/gamification_hu.arb'),
+      };
 
-      for (final copy in copies) {
-        final normalized = copy.toLowerCase();
-        expect(normalized, isNot(contains('!')));
-        expect(normalized, isNot(contains('lost')));
-        expect(normalized, isNot(contains('lose')));
-        expect(normalized, isNot(contains('hurry')));
-        expect(normalized, isNot(contains('urgent')));
-        expect(normalized, isNot(contains('elveszett')));
-        expect(normalized, isNot(contains('veszíts')));
-        expect(normalized, isNot(contains('sürg')));
+      for (final entry in copiesByLocale.entries) {
+        for (final copy in entry.value) {
+          final normalized = copy.toLowerCase();
+          expect(normalized, isNot(contains('!')));
+          expect(normalized, isNot(contains('lost')));
+          expect(normalized, isNot(contains('lose')));
+          expect(normalized, isNot(contains('hurry')));
+          expect(normalized, isNot(contains('urgent')));
+          expect(normalized, isNot(contains('deadline')));
+          expect(normalized, isNot(contains('elveszett')));
+          expect(normalized, isNot(contains('veszíts')));
+          expect(normalized, isNot(contains('sürg')));
+          expect(normalized, isNot(contains('határidő')));
+          expect(normalized, isNot(contains('within')));
+          expect(normalized, isNot(contains('napon belül')));
+          expect(
+            normalized,
+            isNot(matches(RegExp(r'\\b\\d+\\s*(?:day|days|nap)\\b'))),
+            reason: '${entry.key} copy must not include a text countdown',
+          );
+        }
       }
-      expect(copies[0].toLowerCase(), contains('skill'));
-      expect(copies[0].toLowerCase(), contains('stays'));
-      expect(copies[1].toLowerCase(), contains('tudás'));
-      expect(copies[1].toLowerCase(), contains('veled marad'));
+      expect(copiesByLocale['en']![1].toLowerCase(), contains('skill'));
+      expect(copiesByLocale['en']![1].toLowerCase(), contains('stays'));
+      expect(copiesByLocale['hu']![1].toLowerCase(), contains('tudás'));
+      expect(copiesByLocale['hu']![1].toLowerCase(), contains('veled marad'));
     });
   });
 
@@ -291,6 +309,20 @@ void main() {
         handle.dispose();
       },
     );
+
+    test('English metric semantics use the correct plural form', () {
+      final semantics = <String Function(int)>[
+        _english().streakV2CurrentSemantics,
+        _english().streakV2LongestSemantics,
+        _english().streakV2TotalSemantics,
+      ];
+
+      for (final semantic in semantics) {
+        expect(semantic(0), endsWith('0 days'));
+        expect(semantic(1), endsWith('1 day'));
+        expect(semantic(2), endsWith('2 days'));
+      }
+    });
 
     testWidgets(
       'reduced motion removes the transition duration but preserves status semantics',

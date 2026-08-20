@@ -273,6 +273,31 @@ visszaállítás → célzott teszt ZÖLD. A munkát a kör branchére commitolj
 
 ### Terra implementáció — 2026-08-20
 
+### Terra review-javítás — 2026-08-20
+
+- `streak_detail_screen_test.dart`: az A1 őr most mindkét **forrás-locale**
+  `streakV2BrokenTitle`, `streakV2BrokenBody` és `streakV2RecoveryCta`
+  értékét vizsgálja szégyenítő/sürgető szóhasználat, felkiáltójel és szöveges
+  countdown ellen. Angol metric-semantics 0/1/2 élcellák is bekerültek.
+- `gamification_en.arb`: a current/longest/total semantics ICU plural formot
+  használ, így az angol egyes szám `1 day`.
+- `app_en.arb` és `app_hu.arb`: kizárólag a
+  `dart run tool/gen_l10n_segments.dart --write` determinisztikus kimenete.
+
+**Valódi-sértés próba (A1).** Az angol forrás-szegmensben a
+`streakV2BrokenTitle = "You lost your streak!"` és
+`streakV2RecoveryCta = "Return within 2 days"` mutációval a célzott suite
+piros lett az A1 cellán: a title-variáns a felkiáltójel, a csak-CTA variáns a
+`within` szöveges countdown tiltásán bukott. A canonical copy visszaállítása
+után a célzott teszt zöld.
+
+**Futtatott ellenőrzések.** `dart run tool/gen_l10n_segments.dart --write`,
+majd `flutter gen-l10n`; a teljes
+`tools/round-gate.sh test/features/gamification/presentation/streak_detail_screen_test.dart test/features/streak`
+`exit_code=0` eredménnyel zárt: format, analyze, 21 V2 teszt, 20 legacy
+streak teszt, architecture, secrets és l10n mind zöld. CI-dispatch, PR és
+merge továbbra is a Sol orchestrátor feladata, ezért ezek nem futottak.
+
 **Módosított fájlok.**
 
 - `lib/l10n/features/gamification_en.arb` és
