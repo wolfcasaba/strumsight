@@ -1,5 +1,57 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R05 KÉSZ — Reward eligibility és trust policy — PR #345, squash `30fa8138` (2026-08-20)
+
+Determinisztikus `RewardEligibilityPolicy` (application) +
+`DefaultRewardEligibilityPolicy`/`RewardEligibilityPolicyConfig`
+(infrastructure): négy KÜLÖN dönthető kapu (alap-XP, quality bonus, mastery,
+verified), mindegyik stabil `RewardReason`-nal elutasításkor, verziózva
+(`policyVersion: int`, konzisztens az R03 `RewardLedgerEntry.policyVersion`
+mezőjével). A bizalom (`EvidenceTrust`, a mastery/verified kapukhoz) és a
+mért jelminőség (`quality`, a quality bonus + mastery kapukhoz) SZÁNDÉKOSAN
+független tengely — alacsony bizalom önmagában sosem tiltja a quality
+bonust, és a hiányzó/fatális minőség sosem alakul át néma számmá (ADR 0286
+§1). Döntés: [ADR 0338](docs/adr/0338-reward-eligibility-policy-four-gates.md).
+
+**A brief előre kiosztott `ADR 0303`-a elavult volt** — a
+`.pipeline/inflight/adr/0303` marker valójában az E07-R17 körhöz tartozott
+(mérve a pre-flightban); az élő `tools/round-slots.py reserve-adr` **0338**-at
+adott, dokumentált §0.0 brief-revízióval. [[L267]] precedense („pre-asszignált
+ADR-szám elavulhat") itt egy ÚJ változatban jelentkezett: a szám NEM
+sosem-foglalt volt, hanem egy MÁSIK kör markere alatt élt — lásd [[L346]].
+
+Független review egy MAJOR leletet talált: a `verified` kapu `mastery`-től
+való függetlensége egyetlen teszttel sem volt bizonyítva — mért,
+reprodukált mutációs próba (`_evaluateVerified` ideiglenes cseréje
+`return mastery;`-re, izolált `/tmp` klónban) a teljes 15/15 tesztet
+zöldön hagyta a rontás ALATT is. Javító kör (ugyanaz a motor, codex) egy
+cellával zárta (`mastery` adott, `verified` `insufficientTrust`-tal
+elutasítva); a mutáció megismétlése utána PIROSRA vált, ahogy kell.
+Security review (risk=high, kötelező) PASS, 0 BLOCKER/MAJOR, 3 alacsony
+kockázatú NOTE (két már ebben a körben dokumentált: `EvidenceTrust`
+sorrend-függés az ADR 0338 §7-ben; a purity-őr még nem fedi a
+gamification `application/`-t — jövőbeli bekötő kör dolga).
+
+A kör alatt a `main` egyszer mozdult (párhuzamos E99-R18 self-heal-lánc,
+ugyanabban a megosztott munkafában) — `git merge --no-ff origin/main`
+konfliktus nélkül, majd Full Gate ÉS Router CI (utóbbi manuálisan
+dispatch-elve, mert a sync-merge diffje már nem érintett trigger-útvonalat
+— [[L344]] pontosan ezt írja elő) mindkettő zöld a merge SHA-n
+(`82b8b683`): [Full Gate](https://github.com/wolfcasaba/strumsight/actions/runs/32327526505),
+[Router CI](https://github.com/wolfcasaba/strumsight/actions/runs/32328486649).
+Post-merge célzott gate a friss `main`-en (`30fa8138`) önállóan is zöld
+(format, analyze, 16/16 teszt, architecture, secrets, l10n). Scope-audit:
+a kör saját commitjai (pre-flight + implementáció + javítás) mind az 5
+`allowed_paths` bejegyzésen belül, 0 kívül.
+
+Review: [docs/reviews/e08-r05-review.md](docs/reviews/e08-r05-review.md)
+(APPROVED, F1 FIXED `8a989af5`). Leckék: [[L267]], [[L344]], [[L346]].
+Következő kijelölt SDD-kör: **E08-R06 — Kör 6 (XP policy engine és
+diminishing returns)**, előfeltétele ez a kör (jogosultsági policy) és az
+R03 ledger.
+
+
+
 ## ✅ [HEAL E99-R18/H3] KÉSZ — H8 kör-ági coexist-teszt bekerül az allowed_paths-ba, két bejegyzéssel — kör-ág `6a494d5e` (2026-08-20)
 
 A D4 §0.0c narrowing fix (glob → explicit `practice_generator`-regisztráció)
