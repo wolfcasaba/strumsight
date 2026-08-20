@@ -13993,3 +13993,41 @@ hozott létre review-ágat:
 source-clone-nál ne tételezd fel, hogy egy remote-tracking ref `--branch`-ként
 látható; vagy publikus origint klónozz exact branchről, vagy klónozás után
 explicit, mért refet fetch-elj az azt birtokló worktree-ből.
+
+## L360 — Egy Terra `blocked` jelzés a kötelező `round-gate.sh` kimenet megszakadásáról nem jelenti azt, hogy a gate piros vagy lassú: a saját, byte-azonos reprodukció 54s alatt 7/7 zölden zárt (E08-R10, H6 self-heal, 2026-08-20)
+
+**Tünet.** A Terra implementer `f2e368b3` commit után `blocked`-ot jelzett:
+"a kötelező teljes round-gate.sh kimeneti artefaktumot a helyi eszközkimenet
+a legacy streak-suite indításánál megszakította". A saját belső, ad-hoc
+`flutter test <fájl>` hívásai (NEM a mérce-artefaktum) 11+20 zöld tesztet,
+zöld architecture/secrets/l10n-t és zöld scope-auditot jelentettek — csak a
+HIVATALOS `tools/round-gate.sh test/features/gamification/domain/streak_policy_test.dart
+test/features/streak` hívás egy konkrét futása szakadt meg.
+
+**Mért reprodukció.** A self-heal a PONTOS halt-parancsot futtatta újra,
+ugyanabban a munkapéldányban (`/home/ubuntu/ss-terra-e08-r10`), ugyanazon a
+committolt HEAD-en (`f2e368b3`), miközben egy MÁSIK önjavító session
+(E99-R20/H8) egyidejűleg saját gate-et futtatott ugyanezen a 4 magos boxon.
+A reprodukció 2026-08-20T12:39:00Z-kor indult, 12:39:54Z-kor zárt (54
+másodperc), mind a 7 lépés zöld (`format`, `analyze`, mindkét teszt-útvonal,
+`architecture`, `secrets`, `l10n`), kilépési kód 0, "MINDEN GATE ZÖLD".
+
+**Következtetés — Class C, nem A/B.** Sem a gate script, sem a termék-kód,
+sem a box terheltsége nem volt a gyökérok: egy konkurens, szintén flutter
+tesztet futtató self-heal session mellett is 54s alatt zölden lezárt egy
+gate, amit a HANDOFF/AGENTS.md ~15 perces teljes-suite mérése alapján simán
+elvárnánk lassabbnak — ez a szűk, kétfájlos gate a teljes suite töredéke.
+A megszakadás a Terra saját Codex-exec sandboxának (`~/.codex-terra`)
+egyszeri, nem reprodukálható jelensége volt — ezen a repón kívüli,
+motor-specifikus flake, amit `tools/**` változtatás nem javít.
+`outcome=retry`: a lánc feloldódik, a meglévő branch/commit
+(`terra/e08-r10-streak-v2-domain-and-legacy-migration`, `f2e368b3`)
+érintetlen marad, a következő E08-R10 firing az örökség-ellenőrzés (§0.2)
+szerint ugyanezt a munkapéldányt találja meg és folytatja.
+
+**Szabály.** Egy implementer `blocked` jelzése a KÖTELEZŐ gate-artefaktum
+megszakadásáról ELSŐ körben mérendő, nem javítandó: a leggyorsabb, legolcsóbb
+diagnosztikai lépés a PONTOS halt-parancs újrafuttatása byte-azonos
+munkapéldányon/HEAD-en. Ha zölden és gyorsan lezár, a hiba a hívó motor saját
+futtatókörnyezetében volt, nem a repóban — `outcome=retry`, kódjavítás
+nélkül. Rokon: [[L316]] (ugyanez a minta egy CI-flake-re, ott rekurrenciával).
