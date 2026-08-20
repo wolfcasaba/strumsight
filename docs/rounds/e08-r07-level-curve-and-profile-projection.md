@@ -31,6 +31,58 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight revízió (2026-08-20, `main @ 634562d7`)
+
+**ADR-szám korrekció: `0305` → `0342`.** A brief 2026-08-18-i megírásakor a
+`0305` volt a következő szabad szám; azóta (E08-R01…R06 + több self-heal kör)
+`0306`–`0341` mind foglalt lett. A `tools/round-slots.py reserve-adr --round
+E08-R07` futtatása (ADR 0171 §4.1) a jelen pre-flightban `0342`-t adott —
+**ez a kötelező szám**, nem a brief fejlécében álló `0305`. Az implementer a
+`docs/adr/`-t egyébként sem érinti (tilos zóna) — az ADR-t a Claude írta meg
+[`0342-monotonic-level-curve-and-rebuildable-profile-projection.md`](../adr/0342-monotonic-level-curve-and-rebuildable-profile-projection.md)
+néven, a brief §5 döntéseiből.
+
+**Mért, megerősített tények (§1 pre-flight-mérés):**
+
+- `lib/features/gamification/domain/levels/` és `domain/profile/` **nem
+  léteznek** — a brief §2 állítása pontos (`ls` a domain könyvtáron: csak
+  `activity/`, `rewards/` van jelen).
+- Az R03 ledger lapozott olvasási felülete megerősítve:
+  `RewardLedgerRepository.readPage({required int limit, String? cursor})` →
+  `RewardLedgerPage { entries, nextCursor }`
+  (`lib/features/gamification/data/reward_ledger_repository.dart:16`). A
+  teljes újraépítés ezt hívja lapozva, `nextCursor == null`-ig.
+- Az R06 komponens-bontás (`ExperiencePoints`: `baseXp/durationXp/qualityXp/
+  improvementXp/diversityXp` → `totalXp`) a policy receiptjében él
+  (`domain/rewards/experience_points.dart`); maga a **ledger-bejegyzés**
+  (`RewardLedgerEntry`) ezt már `baseXp`/`bonusXp`/`totalXp`-re tömöríti
+  (`policyVersion`, `schemaVersion` mellett). A `profile_projector.dart`
+  ehhez a **ledger-bejegyzés** `totalXp` mezőjéhez olvas — a projektornak
+  NEM kell (és NEM is tudja) az öt-komponensű bontást visszafejteni.
+- Lokalizációs kulcs konvenció: a kódbázisban élő minta a `String titleKey`
+  mező (l. `lib/features/practice/data/builtin_practice_catalog.dart`,
+  `lib/features/practice/data/adapters/practice_adapter_keys.dart`) — a
+  `LevelDefinition` ezt a mintát kövesse (`titleKey`, nem beégetett szöveg,
+  nem `AppLocalizations`-hívás a domain rétegben).
+
+**Visszakeresés (ADR 0312/0331, §4.9, brief-lint S8):**
+
+```
+node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "monoton szintgörbe level curve profil projekció rebuild"
+node tools/knowledge-rag.mjs --corpus lessons,halts --top 5 "túlcsordulás védelem több szint egyszerre level up overflow monotonicity"
+node tools/knowledge-rag.mjs --top 5 "level_curve.dart profile_projector.dart gamification_profile.dart monoton szint schemaVersion"
+```
+
+Legközelebbi releváns találat: **L26** — „«a profilból jön» ≠ a
+profil-OBJEKTUM": egy SDD-szakasz stricter, KÜLÖN predikátumot rögzíthet,
+mint amit egy naiv implementáció összemos. Áttételesen releváns itt: a
+projektor NE tételezze fel, hogy egy szomszédos objektum (pl. az R06
+`ExperiencePoints`) mezői közvetlenül leképezik a szükséges bemenetet —
+minden mezőt a ténylegesen olvasott típuson (`RewardLedgerEntry.totalXp`)
+mérj, ne a szomszédos policy-típuson. **Nincs közvetlenül a monoton
+szintgörcs/túlcsordulás témára illő korábbi lecke vagy halt** — a keresés
+lefutott, a hiány dokumentált (S8 teljesítve).
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
