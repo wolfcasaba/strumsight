@@ -1,5 +1,57 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E08-R09/H3] KÉSZ — `allowed_paths` nem tartalmazta az ADR 0344 D7 által R09-re kiosztott séma-fájlt — PR #357, squash `3d88d7d9` (2026-08-20)
+
+Az E08-R09 (legacy progress adapter + activity backfill, ADR 0307) dispatchja
+H3-mal állt meg **modellhívás előtt** — a `terra` implementer még el sem
+indult (`.pipeline/HALTED` `implementer/PR/CI nem indult`). Gyökérok: a
+brief kötött döntése (§5.3/A5, ADR 0307) egy **perzisztált migrációs
+checkpointot** követel meg ("Félbeszakadt migráció az ellenőrzőponttól
+folytatódik, nem elölről"), de az egyetlen hely, ahol ez élhet —
+`GamificationMigrationState` a
+`lib/features/gamification/data/gamification_storage_schema.dart`-ban — az
+ELŐZŐ, már merge-elt E08-R08 kör (ADR 0344) D7 pontja szerint **szándékosan**
+csak verzió-jelölő helyfoglaló: "A tényleges migrációs mezőket a Kör 9/10
+... tölti ki." Az E08-R09 brief `allowed_paths`-a viszont sosem sorolta fel
+ezt a fájlt — a kör a saját elfogadási kritériumát nem tudta volna
+teljesíteni anélkül, hogy vagy scope-on kívülre lépjen, vagy csendben
+tágítsa a listát. Class B (kör-tartalom: ADR + brief kontra `allowed_paths`),
+nem implementer- vagy eszközhiba.
+
+Feloldás (`docs/rounds/e08-r09-legacy-progress-adapter-and-backfill.md`
+§0.0): a séma-fájl **egyetlen, szűken körülhatárolt** bővítésként bekerült
+az `allowed_paths`-ba — kizárólag a `GamificationMigrationState` osztály
+bővíthető checkpoint mezővel/mezőkkel, a másik három dokumentum és a
+`GamificationStorageKeys`/`migrationStateMaxBytes` nem. Kimondott,
+nem-tárgyalható korlát: az új mező(k)nek alapértelmezett értékkel kell
+rendelkezniük, hogy a már merge-elt (és ebben a körben TILOS zónában maradó)
+`gamification_repository_test.dart` A3 zéró-argumentumos round-trip cellája
+érintetlenül zöld maradjon. A brief-lint S8 strict lelete (nincs
+visszakeresett előzmény) is lezárva: `ADR 0117` Döntés 2 (E03-R08,
+dalfájl-migráció) ugyanezt a mintát — checkpoint mint saját verziózott
+JSON-dokumentum — már megalapozta.
+
+Regressziós védelem:
+`tools/tests/test_e08_r09_migration_state_schema_scope.py` —
+`audit_legacy_scope()`-ot futtatja a ténylegesen committolt brief ellen; a
+mért halt-útvonal RED volt a javítás előtt (kézzel visszaállítva
+`git show HEAD:...`-tal, nem kitalált feltevésből) és GREEN utána, egy
+szomszédos fájl (`gamification_repository.dart`, ugyanabban a könyvtárban)
+pedig továbbra is scope-on kívül marad — a bővítés egy fájl, nem az egész
+`data/` könyvtár. Teljes gate izolált heal-worktree-ben:
+`python3 -m pytest tools/tests -q` → 652 passed/1 skipped/570 subtests/0
+failed (650/1/570 volt a kör előtt). `brief-lint --open --level base` és
+`--level strict` is tiszta. Router CI
+[32357936017](https://github.com/wolfcasaba/strumsight/actions/runs/32357936017)
+success az exact push SHA-n (`c373f3f4`), amit a merge előtt a helyi HEAD-del
+összevetve igazoltam. Nincs törölt/gyengített teszt, nincs küszöb-lazítás,
+`tools/round-gate.sh`/`.github/workflows/**` érintetlen. Lecke: [[L357]].
+
+Az eredeti E08-R09 dispatch modellhívás nélkül állt meg — nem volt félkész
+munkapéldány, commit vagy nyitott PR a self-heal előtt, ezért ez a heal nem
+vitt tovább tartalmi migrációs munkát; a lánc friss dispatch-csal folytatja
+E08-R09-et a felfrissített brieffel.
+
 ## ✅ [HEAL E99-R20/H6] KÉSZ — `WrapperModeTest` hiányos leszivárgás-pop-listája — PR #356, squash `a0bf0d51` (2026-08-20)
 
 A `terra` implementer E99-R20-on (GOV-14, round-landolás-automatizálás,
