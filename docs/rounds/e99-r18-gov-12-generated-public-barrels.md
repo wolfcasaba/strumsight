@@ -18,6 +18,8 @@ allowed_paths = [
   "lib/features/practice_generator/public/",
   "tools/round-slots.py",
   "tools/tests/test_round_slots_generated_barrels.py",
+  "tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py",
+  "docs/adr/0336-generated-public-barrel-eligibility.md",
   "test/tooling/gen_public_barrel_test.dart",
   "test/core/architecture_dependency_test.dart",
   "docs/rounds/e99-r18-gov-12-generated-public-barrels.md",
@@ -199,6 +201,40 @@ feljegyzés csak a felesleges újra-felfedezés költségét spórolja meg.
 Lecke: `docs/LESSONS.md` [[L343]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
 Módosítás (ADR 0112 önjavító kör, 2026-08-20).
 
+## 0.0c Pre-flight revízió — csak igazoltan generált barrel old fel slot-ütközést (ADR 0336, 2026-08-20)
+
+**Mérés és döntés.** A §0.0b-ban előírt reprodukciót a jelenlegi kör-ágon
+`python3 -m pytest tools/tests/test_pipeline_throughput.py::SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected -q`
+adja: a széles `lib/features/*/public.dart` glob miatt az E04-R15 és E04-R16
+valódi, nem migrált `public.dart`-ütközése eltűnik. Ezzel szemben a
+`find lib/features -path '*/public/*.dart' -type f` mérés kizárólag a
+`practice_generator/public/{application,data,domain,presentation}.dart`
+fragmentumait találja; csak ehhez a feature-höz létezik tényleges, D1 szerinti
+generálási bizonyíték.
+
+Ezért a D4 feloldás **nem blanket glob**, hanem explicit, migrált-output
+nyilvántartás: ebben a körben kizárólag
+`lib/features/practice_generator/public.dart` generált és nem ütköző. Minden
+más feature gyökér `public.dart`-ja teljes értékű ütközési felület marad,
+amíg a saját körében fragmentumokkal, generátor-frissesség teszttel és
+nyilvántartási bejegyzéssel nem bizonyítottan generált. Ez scope-szűkítés a
+pilot tényleges bizonyítékához, nem más feature barreljének módosítása.
+
+**Falszifikáció.** A `tools/tests/test_round_slots_generated_barrels.py`
+teszt egyszerre méri, hogy (a) két `practice_generator/public.dart` út nem
+ütközik, és (b) két másik, nem regisztrált feature `public.dart` út ütközik;
+így az első esetben túl szűk, a másodikban túl széles implementáció is piros.
+A meglevő `SlotPlanningTest` az E04 valós brief-párján ugyanennek az utóbbi
+hibás implementációnak a regressziós őre. A korábbi globot és annak
+„nem szűkíthető” tesztcelláját e mért tény felülírja.
+
+**Visszakeresett előzmények.** A pre-flight szűkített RAG-találatai: ADR 0176 (a barrel
+contract maga a szabályozott feature-határ), lessons/L133 és lessons/L135
+(a brief és a tényleges guard viselkedését együtt kell mérni), valamint
+lessons/L343 (ez a pontos D4 túl-széles-glob lelet). A teljes korpusz a
+közvetlen kör-briefet és az E99-R18/H8 leletet hozta vissza; ellentétes,
+biztonságos precedens nincs. ADR: [`0336`](../adr/0336-generated-public-barrel-eligibility.md).
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -263,8 +299,10 @@ composite lépéslistája változatlan (ADR 0171 paritás-őre sértetlen).
 
 ### D4 — `tools/round-slots.py`: a generált barrel nem ütközés
 
-- A generált-útvonal szabály mintával jön létre: `lib/features/*/public.dart`
-  (glob, nem fix lista) — ezek újragenerálhatók, tehát nem ütközés.
+- A generált-barrel nyilvántartás csak a **bizonyítottan migrált**
+  `lib/features/practice_generator/public.dart` outputtal bővül. Blanket
+  `lib/features/*/public.dart` glob tilos: a még kézzel karbantartott feature
+  barrelek nem regenerálhatók, ezért továbbra is ütköznek.
 - A fragmentumok (`lib/features/*/public/*.dart`) TELJES ÉRTÉKŰ ütközési
   felületek maradnak.
 
@@ -276,15 +314,17 @@ composite lépéslistája változatlan (ADR 0171 paritás-őre sértetlen).
 | export **hiányzik** | fixtúra: egy fragmentum kimarad | `--check` **PIROS** |
 | export **duplikált** | ugyanaz az útvonal két fragmentumban | a generátor hibával áll meg (kilépési kód ≠ 0) |
 | barrel **elavult** | kézi szerkesztés a generált fájlban | `--check` **PIROS** |
-| `round-slots.py` | két brief, mindkettő `lib/features/x/public.dart` | NINCS ütközés |
+| `round-slots.py` | két brief, mindkettő `lib/features/practice_generator/public.dart` | NINCS ütközés |
+| `round-slots.py` | két brief, mindkettő `lib/features/x/public.dart` | ÜTKÖZÉS |
 | `round-slots.py` | két brief, mindkettő `lib/features/x/public/domain.dart` | ÜTKÖZÉS |
 
 **Falszifikációs cella (kötelező):** a D2 `--check` hívás kiszedése az
 `architecture` lépésből → a „barrel elavult" eset **PIROS** helyett zöld lenne,
 ezért a `test/tooling/gen_public_barrel_test.dart` erre írt esete **PIROS** →
-visszaállítás után zöld. Második falszifikáció: a D4 glob leszűkítése egyetlen
-feature-re → a `round-slots.py` „NINCS ütközés" esete másik feature-rel
-**PIROS**.
+visszaállítás után zöld. Második falszifikáció: a D4 nyilvántartásának
+blanket globra szélesítése → a `SlotPlanningTest` valós E04 brief-párja
+**PIROS**; a practice-generator bejegyzés kihagyása → a saját „NINCS
+ütközés” cella **PIROS**.
 
 ## 5. Tilos zóna
 
