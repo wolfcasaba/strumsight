@@ -248,4 +248,35 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+- `level_definition.dart`: immutable szint-definíció pozitív sorszámmal,
+  inkluzív XP-küszöbbel és `titleKey` lokalizációs kulccsal.
+- `level_curve.dart`: egyetlen, validált és monoton görbeforrás; a küszöb
+  pontosan a magasabb szinthez tartozik, a nagyon nagy bemenet felső
+  szaturációval kezelődik.
+- `gamification_profile.dart`: `schemaVersion`-ös, immutable ledger-projekciós
+  pillanatkép; ismeretlen verzió és negatív XP hibát ad.
+- `profile_projector.dart`: lapozott ledgerből teljes újraépítés és ugyanazt a
+  számítást használó inkrementális projekció; minden egy eseményben átlépett
+  szintet visszaad, tartalomkapuzó kimenet nélkül.
+- `public.dart`: a szint- és profil-projekció contractjai exportálva.
+- `level_curve_test.dart`: A1–A8 cellák — monotonitás, inkluzív küszöb,
+  teljes/incrementális azonosság, többes szintlépés, szaturáció, egyetlen
+  görbeforrás, lokalizációs kulcs, schema-verzió és kapuzás-tilalom.
+
+**Valódi-sértés próba (§6.1):** a `ProfileProjector` ideiglenesen csak a
+végső szintet tette a `crossedLevels` kimenetbe. A
+`tools/round-gate.sh test/features/gamification/domain/level_curve_test.dart`
+futásán a format és analyze zöld volt, az A3 cella pedig szándékosan piros:
+várt `[2, 3, 4]`, tényleges `[4]`. A helyes, minden átlépett szintet visszaadó
+feltételt visszaállítottam, majd a végső gate zölden lefutott.
+
+**Futtatott ellenőrzés:**
+`tools/round-gate.sh test/features/gamification/domain/level_curve_test.dart`
+— format zöld (1702 fájl, 0 módosítás), analyze zöld (0 issue), célzott teszt
+zöld (9/9), architecture zöld, secrets zöld (3016 fájl, 0 finding).
+
+**Nem futtatott ellenőrzés:** teljes `flutter test`, property gate és release
+APK: a brief és az AGENTS.md szerint CI/Claude-orchestrátor felelőssége;
+CI-dispatch, PR és merge nem implementer-feladat.
+
 ## 11. Review — a Claude tölti ki
