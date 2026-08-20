@@ -1,8 +1,8 @@
 # E99-R22 — Review
 
-Brief: `docs/rounds/e99-r22-gov-16-halt-guard-ledger.md`  
-Reviewed round diff: `7267fe6d8b02..05c2828d8296`  
-Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20  
+Brief: `docs/rounds/e99-r22-gov-16-halt-guard-ledger.md`
+Reviewed round diff: `7267fe6d8b02..05c2828d8296`
+Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-20
 Verdikt: **APPROVED**
 
 ## Összegzés
