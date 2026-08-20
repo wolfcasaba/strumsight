@@ -14236,3 +14236,21 @@ szerződésre —, utána 2/2 zöld.
 már előre megírt briefeket. Minden olyan briefet, amely új ARB-kulcsot kér,
 indításkor a jelenlegi l10n-topológia ellen kell mérni: a feature-szegmens a
 forrás, az aggregátum csak generált output, és a regenerálási lépés explicit.
+
+## L370 — A nem nulla precondition-check nem állítja meg a következő, új sorban álló mutációt `set -e` nélkül (E99-R22 zárás, 2026-08-20)
+
+**Mérés.** A review-jelentés frissítése után egyetlen shell-hívásban futott a
+`git diff --check`, majd külön sorokon a staging, commit és push. A check három
+trailing-space leletet írt ki és nem nulla kóddal tért vissza, a shell mégis
+végrehajtotta az utána következő commitot, mert a hívás nem használt `set -e`
+vagy explicit hibakezelést. A hibás Markdown így egy rövid időre publikus
+branch-csúcs lett; külön review-only commit és új `git diff --check` kellett a
+helyreállításhoz.
+
+**Javítás és szabály.** Mutáció előtti precondition-checket önálló tool-hívásban
+futtass, vagy explicit `|| exit` ággal védd; pusztán az, hogy a parancs egy
+korábbi sorban áll, nem kapu. A végső `ee053ba8` branch-HEAD-en a
+`git diff --check origin/main...HEAD` kimenete üres és exit 0 volt.
+
+**Őrteszt:** nincs — ez orchestration-parancssorrend; a végső exact-SHA CI és
+a megismételt diff-check a konkrét kört mérte.
