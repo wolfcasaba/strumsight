@@ -13274,3 +13274,84 @@ tartozó metaadat külön rekord, a „létezik már az üzenetkulcs” nem elé
 feltétel a metaadat átvételéhez. Tartsd meg a forrás-szegmens tulajdonosát,
 és eltéréskor fail-closed hibát adj; külön teszteld a későbbi szegmensből
 érkező metaadatot és azt is, hogy hibánál nem készül részleges aggregátum.
+
+## L343 — H8-nál két additív mechanizmus uniója helyes, ha mindkét oldal SAJÁT tesztje méri a döntést; a kötelező teljes gate ettől függetlenül a kör SAJÁT, review előtti hibáját is feltárhatja, amit a self-heal dokumentál, nem javít (E99-R18, H8 self-heal, ADR 0112, 2026-08-20)
+
+**Mit mértünk.** Az E99-R18 (`/home/ubuntu/ss-minimax-e99-r18`) `origin/main`
+szinkronja (`git merge --no-ff origin/main`) két fájlban adott konfliktust:
+a kör saját briefjében és `tools/round-slots.py`-ban. A brief-konfliktus a
+dokumentált H8 minta ([[L77]], [[L82]]) — de a `round-slots.py` konfliktus
+NEM brief-only: az E99-R17 (`main`, squash `8d7b6a67`) exact-set
+`GENERATED_PATHS`-a és az E99-R18 D4 saját, glob-alapú
+`GENERATED_PATH_PATTERNS`/`is_generated_path`-je ugyanazt a két kódrészt (a
+konstans-blokk és az `effective_paths` szűrő-predikátum) módosította. Kézi
+nyomkövetéssel és mindkét oldal SAJÁT, már zöld-tesztelt regressziós
+csomagjával (`test_round_slots_generated_paths.py`,
+`test_round_slots_generated_barrels.py`) igazoltam: a két mechanizmus
+additív, egyik sem hivatkozik a másikéra — unió-predikátummal (mindhárom
+kizárási ok VAGY-kapcsolatban) mindkét csomag változtatás nélkül zöld marad.
+Ez a 2026-08-13-i ADR 0112 módosítás („H8 megosztott eszközfájl-konfliktus”)
+elvének megerősítése, nem új mintája.
+
+**A kötelező teljes gate (`python3 -m pytest tools/tests -q`) többet mért, mint a saját fix bizonyítékát.** A resolved HEAD-en 605 passed / 2 skipped /
+1 FAILED: `SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected`
+piros — a Router CI (run 32321598642) ugyanezt az egy cellát reprodukálta,
+tehát a branch push utáni CI is piros. **Empirikus ellenőrzés** (a kör saját,
+pre-merge HEAD-jén, `e9c4a26b`, a self-heal ÉRINTÉSE NÉLKÜL izoláltan
+lefuttatva ugyanezt az egy tesztet): a hiba MÁR OTT is piros — tehát a H8
+merge-feloldás bizonyítottan nem okozta, csak láthatóvá tette (előtte a
+konfliktus-jelölők miatti `SyntaxError` a teljes fájl collection-jét
+megakasztotta). A gyökérok a D4 SAJÁT, review előtti tervezési döntése: a
+`GENERATED_PATH_PATTERNS = ("lib/features/*/public.dart",)` glob
+SZÁNDÉKOSAN széles (a kör saját tesztje,
+`test_pattern_glob_is_not_narrowed_to_a_single_feature`, explicit TILTJA a
+szűkítést), de ezzel MINDEN feature `public.dart`-ját generáltnak (nem
+ütközőnek) minősíti, holott a D1–D3 pilot mérve kizárólag a
+`practice_generator`-t migrálta a fragmentum-rendszerre — a 75 nyitott
+brief közül 25 a `gamification/public.dart`-ot, 18 a
+`design_system/public.dart`-ot érinti, ezek MA MÉG kézzel karbantartott,
+valódi ütközési felületek.
+
+**Mit tettem, és mit NEM.** Megjavítottam a H8 gyökérokot: unió-predikátum
+`tools/round-slots.py`-ban + új, a kombinált esetet mérő regressziós teszt
+(`test_round_slots_generated_paths_and_patterns_coexist.py`, 21/21 zöld a
+három érintett tesztfájlon), normál (nem force) push a kör SAJÁT ágára
+(`7458ca83`, NEM `main`-re — a H8-recept nem ír elő PR-t/CI-dispatch-ot a
+narrow branch-sync esethez). NEM javítottam a broad-glob hibát: a helyes
+hatókör (pl. migrált-feature allowlist) termékdöntés, a kör saját
+implementer+reviewer ciklusáé — az ADR 0112 §2 jogosultsága a
+briefre/eszközre szól, nem a kör saját, még nem review-zott tartalmi
+munkájára. A leletet a kör saját briefjének új `## 0.0b` szakaszába írtam
+(a következő dispatch ELSŐ olvasata), hogy a felfedezés ne ismétlődjön meg
+drágábban a review-nál.
+
+**Miért `outcome=fixed`, és nem `escalate`, egy piros Router CI mellett.**
+A piros CI oka bizonyítottan a kör SAJÁT, review előtti, a H8-tól független
+kódja — nem a self-heal hozta létre, és nem ér el `main`-t (a kör ága még
+nem review-zott/merge-elt). A H8 SAJÁT gyökéroka (a merge-konfliktus)
+ténylegesen, regresszióval bizonyítottan megszűnt. Az `escalate` itt a
+protokoll túl-óvatos alkalmazása lenne: nincs mérce-gyengítési dilemma (a
+self-heal semmilyen ellenőrzést nem lazított), és a talált hiba útja már
+definiált (a kör saját review-ja). A user 2026-08-01-i döntése („az
+orchesztrátor MINDIG javítsa a hibát”) ide is vonatkozik: a lánc feloldása
+a helyes lépés, a talált mellékleletet dokumentálni — nem a teljes láncot
+megállítani egy nem-mérce-dilemmáért.
+
+**Hogyan alkalmazd.** (1) Egy H8-nál, ha a konfliktus túlmutat a brief-only
+mintán, MÉRD MEG mindkét oldal szándékát (docstring, saját teszt), mielőtt
+eldöntenéd, hogy unió-feloldás helyénvaló-e — csak akkor, ha mindkét oldal
+SAJÁT tesztje bizonyíthatóan, változtatás nélkül zöld marad az unió után.
+(2) A kötelező teljes gate-et MINDIG a resolved HEAD-en, a merge UTÁN
+futtasd — egy addig sosem tesztelt kör-ág saját, review előtti hibáját is
+feltárhatja. (3) Egy ilyen leletnél EMPIRIKUSAN (nem feltevéssel) igazold,
+hogy a hiba a self-heal érintése NÉLKÜL is megvan (checkout a pre-fix
+HEAD-re, izolált teszt-futtatás) — ez zárja ki, hogy a self-heal maga a
+gyökérok. (4) A lelet NEM állítja meg a self-healt (`outcome=fixed` marad
+helyes), ha (a) a SAJÁT gyökérok ténylegesen megszűnt, (b) az új lelet nem
+éri el a `main`-t, és (c) a lelet a kör saját briefjébe, a LESSONS-ba és a
+heal-status `detail=`-jébe is bekerül — de a heal-status SOHA nem állíthatja
+hamisan, hogy a CI zöld, ha nem az.
+
+Lásd: [[L337]] (H3 debris revert, ugyanez a kör), ADR
+[`0112`](../adr/0112-self-healing-pipeline.md) 2026-08-13-i és 2026-08-20-i
+módosítása.
