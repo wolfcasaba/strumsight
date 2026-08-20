@@ -121,6 +121,50 @@ library;
     );
   });
 
+  group(
+    'gamification application and presentation keep storage in data (E08-R08)',
+    () {
+      test('no framework or direct storage import outside the data layer', () {
+        final applicationDir = Directory(
+          'lib/features/gamification/application',
+        );
+        final presentationDir = Directory(
+          'lib/features/gamification/presentation',
+        );
+        expect(applicationDir.existsSync(), isTrue);
+
+        final offenders = <String>[];
+        for (final directory in <Directory>[applicationDir, presentationDir]) {
+          if (!directory.existsSync()) continue;
+          for (final entity in directory.listSync(recursive: true)) {
+            if (entity is! File || !entity.path.endsWith('.dart')) continue;
+            offenders.addAll(
+              _forbiddenGamificationDomainMarkerOffenders(
+                entity.path,
+                entity.readAsStringSync(),
+              ),
+            );
+          }
+        }
+
+        expect(offenders, isEmpty, reason: offenders.join('\n'));
+      });
+
+      test('the reused guard detects a direct SharedPreferences import', () {
+        const directImport =
+            "import 'package:shared_preferences/shared_preferences.dart';";
+
+        expect(
+          _forbiddenGamificationDomainMarkerOffenders(
+            'application.dart',
+            directImport,
+          ),
+          <String>['application.dart contains "package:shared_preferences/"'],
+        );
+      });
+    },
+  );
+
   group('architecture dependency rules', () {
     late Directory project;
 
