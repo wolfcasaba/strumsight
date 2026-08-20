@@ -247,6 +247,9 @@ gondozott elemek száma):
 
 A két határ inkluzív: `20 <= elemszám <= 30`. A cellákat a §0.0.2-ben
 dokumentált `python3 -c` számítás adta, nem fejben választottuk.
+Az alsó küszöbhármas tömören: **alatta** 19 (hiba), **rajta** 20
+(elfogadva), **fölötte** 21 (elfogadva). A felső küszöbhármas: **alatta** 29
+(elfogadva), **rajta** 30 (elfogadva), **fölötte** 31 (hiba).
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** szúrj be egy kört a tier-gráfba (A → B → A), futtasd a gate-et → az **A3**
 kör-cellának PIROSNAK kell lennie → állítsd vissza.
