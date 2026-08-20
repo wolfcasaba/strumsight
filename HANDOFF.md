@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔥 [GOV] Sol-orchestrátor + Terra-implementer MINDEN körben — Pro-keret égetése a lejáratig (user-döntés 2026-08-20, branch `claude/router-config-changes-odzv8m`)
+## 🔥 [GOV] Sol-orchestrátor + Terra-implementer MINDEN körben — Pro-keret égetése a lejáratig (user-döntés 2026-08-20, PR #351, branch `claude/router-config-changes-odzv8m`)
 
 **User-döntés:** a ChatGPT Pro előfizetés **napokon belül lejár**, és a
 keretének ~90%-a megmaradt — „hadd fogyjon el". Amíg él, MINDEN kör:
