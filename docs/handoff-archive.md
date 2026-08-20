@@ -6,6 +6,26 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E99-R19 (GOV-13) — Lánc-higiénia (2026-08-20)
+
+PR [#354](https://github.com/wolfcasaba/strumsight/pull/354), squash
+`4dc8f7d1`, ADR 0307 §6. A pipeline main-szinkronja tiszta, szigorúan
+lemaradt mainen `merge --ff-only`-val folytatódik, de piszkos fán és valódi
+divergencián megáll. A záró queue-státusz és a handoff dokumentáció egyetlen
+commitba kerül; a driver meglevő `chore(pipeline)` ága csak hiányzó `done`
+esetén fut. A strict lint S7 az indoklás nélküli, router-szinten nem
+kockázatos `risk = "high"` briefet jelzi, a base gate változatlan.
+
+A correctness review F1 MAJOR-t talált: a piszkosfa-cella azonos HEAD miatt
+bukott, nem a tényleges piszkosfa-őrön. A javítás valódi lemaradt+piszkos
+git-fixtúrát és az őrt visszamutálva pirosodó tesztet adott; re-review
+APPROVED, security review PASS. Exact `c17ed660`: Full Gate
+[32347005385](https://github.com/wolfcasaba/strumsight/actions/runs/32347005385)
+és Router CI
+[32347032703](https://github.com/wolfcasaba/strumsight/actions/runs/32347032703)
+success; post-merge `round-gate` zöld, tooling-suite 647 passed, 571 subtests.
+Lecke: [[L353]].
+
 ## ✅ E08-R04 — Activity outbox és megbízható feldolgozás (2026-08-20)
 
 PR [#344](https://github.com/wolfcasaba/strumsight/pull/344), squash

@@ -13713,3 +13713,22 @@ kellett volna, és az helyesen maradt önjavító-kör-dolog). Kétség esetén 
 meg a brief `allowed_paths`-át, ne a prompt szövegéből következtess. Fix +
 regressziós doksi-teszt: PR #352, squash `c4104234`
 (`tools/tests/test_pipeline_file_governance_round_exemption_docs.py`).
+
+## L353 — Egy nemnullás kilépés önmagában nem bizonyítja, hogy a kívánt előfeltétel-őr állította meg a futást (E99-R19 F1, 2026-08-20)
+
+**Mit mértem.** Az E99-R19 első D1 piszkosfa-tesztje a
+`--main-sync-ff-merge` teszthorgot olyan repón futtatta, ahol `HEAD ==
+origin/main`. A horog nemnullásan tért vissza, de az ok az azonos HEAD volt,
+nem a brief által megkövetelt piszkosfa-őr; a production `git status
+--porcelain` ellenőrzésének eltávolítása mellett a teszt zöld maradt volna.
+A correctness review ezt F1 MAJOR-ként mérte. A javított fixtúra valódi
+lemaradást hoz létre, majd tracked módosítással teszi piszkossá a fát; a
+horog `halt:dirty-tree` választ ad, és az őr visszamutálása pirosra viszi a
+céltesztet.
+
+**Hogyan alkalmazd.** Negatív tesztnél ne csak az exit code-ot mérd: a
+várt, specifikus okot vagy állapotváltozást is ellenőrizd, és előbb zárd ki
+az összes korábbi, független hibautat. Egy precondition-guard csak akkor
+bizonyított, ha a tesztben pontosan az az utolsó különbség, amely a hibát
+okozza. Bizonyíték: `tools/tests/test_chain_hygiene.py`, review F1,
+PR #354 (`bf497480`).
