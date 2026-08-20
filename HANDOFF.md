@@ -45,6 +45,64 @@ nyitott `terra` queue-sorok visszaosztása (a lejárt előfizetéssel a
 `codex`/`terra` sor nem futtatható — `minimax`/`sonnet-impl` a mezőny), és a
 prompt MOTOR-FELÁLLÁS blokkjának frissítése. A pontos lépések a blokkban.
 
+## ✅ [HEAL E99-R19/H3] KÉSZ — governance-kör SAJÁT `allowed_paths`-ban felsorolt pipeline-fájlja nem H3-alap — PR #352, squash `c4104234` (2026-08-20)
+
+A rotált (Terra) orchesztrátor megtagadta E99-R19 (GOV-13) implementer-
+indítását: a brief `allowed_paths`-ának első eleme `tools/round-pipeline.sh`
+(D1/D2 kifejezett céltárgya, ADR 0307 §6), a
+`docs/execution/pipeline-orchestrator-prompt.md` §4 viszont minősítő nélkül
+mondja, hogy ez a session sosem módosítja azt. A forrás,
+`docs/adr/0087-autonomous-round-pipeline.md` §7 ugyanezt **„kör közben"**
+(ad hoc, útközben talált akadály) minősítővel írja — ez a szó a prompt
+átiratából hiányzott. Az ADR 0087 §2 H3-fogalma szerint tilos zóna kizárólag
+az `allowed_paths`-on **kívüli** útvonal; öt korábbi governance-kör
+(E99-R08/14/15/16/18) gyakorlata igazolja, hogy a fájl a szabványos
+implementer → review → merge úton rendszeresen módosul. Ugyanaz a mintázat,
+mint [[L251]] (E99-R08/H3): egy rotált motor a hallgatólagos Claude-
+tapasztalat nélkül a betű szerint olvas egy kontextusfüggő tiltást.
+
+Javítás: a prompt §4 és az ADR 0087 §7 (jelölt „Módosítás" blokk) explicit
+carve-outot kapott a governance-kör saját, előre engedélyezett briefjére; a
+`.github/` és a `round-gate.sh` határa VÁLTOZATLAN maradt normál körre.
+Regressziós doksi-teszt (a `test_reviewer_scope_exemption_docs.py` mintáját
+követve): `tools/tests/test_pipeline_file_governance_round_exemption_docs.py`
+— RED a javítás előtt, GREEN utána, mindkettő lokálisan igazolva. E99-R19
+brief `allowed_paths`-a és D1–D3 terve VÁLTOZATLAN, csak egy §0.0 addendumot
+kapott. Teljes `pytest tools/tests`: 625 passed, 565 subtests (310s); Router
+CI exact-SHA `a2f94f97`: [32341677224](https://github.com/wolfcasaba/strumsight/actions/runs/32341677224)
+success (nincs Dart-változás, `build-apk` nem indult). Lecke: [[L352]].
+
+Takarítás: a halted round MiniMax pre-flight-only debris ága
+(`minimax/e99-r19-gov-13-chain-hygiene`, csak egy státusz-bump commit, sosem
+nyílt rá PR) törölve. A lánc feloldva — a következő firing E99-R19-et friss
+sessionnel, a javított prompttal újrapróbálja.
+
+## ✅ E08-R07 KÉSZ — Szintgörbe és profil-projekció — PR #349, squash `010989f3` (2026-08-20)
+
+Monoton `LevelCurve` (egyetlen forrás, inkluzív küszöb, `int64`-közeli
+szaturáció), verziózott `GamificationProfile` a lapozott reward ledgerből
+teljesen újraépíthetően, és egy `ProfileProjector` (teljes újraépítés +
+inkrementális projekció azonos logikával, minden egy eseményben átlépett
+szint megjelenik). ADR 0342 (a briefben előre kiosztott `0305` stale volt —
+36 szám fogyott el 2026-08-18 óta, a foglaló adta a valódit).
+
+A független review az implementer saját zöld tesztjei MÖGÖTT három valódi
+rést talált — mindegyiket mutációs próbával mérve, nem csak olvasással: **F1
+BLOCKER** — `rebuild()` kivételt dobott egy vadonatúj (üres) ledgeren,
+pontosan a brief fő use case-én (a produkciós `LocalRewardLedgerRepository`
+ellen is reprodukálva); **F2 MAJOR** — a „szint soha nem csökken"
+lefelé-korrekciós guard teszteletlen volt, törlése mellett minden teszt zöld
+maradt; **F3 MAJOR** — az A8 unlock-tiltó regexe egy raw stringbeli dupla
+escaping miatt soha nem talált semmit. Egy javító kör mindhármat zárta,
+mindegyiket a reviewer külön-külön visszaellenőrizte (fix visszamutálva →
+az új teszt pirosra vált → visszaállítva). Lecke: [[L349]]–[[L351]].
+
+A kör alatt a `main` egyszer mozdult (E99-R18/H3 self-heal negyedik
+önjavítása, diszjunkt fájlkör) — rebase + teljes CI-újradispatch fogta meg.
+Full Gate exact-SHA: 32337856382 success; Router CI: 32337858078 success;
+post-merge célzott gate a friss `main`-en önállóan is zöld (6/6). Következő
+SDD-kör: E08-R08 — gamification repository és storage schema.
+
 ## ✅ [HEAL E99-R18/H3] KÉSZ — a scope-audit jelentése feloldott SHA-t ír `origin/main` helyett, a kör-ág újraszinkronizálva — PR #348, squash `4105c695` (2026-08-20)
 
 Negyedik H3-halt ugyanazon a körön, de a korábbi hármtól ELTÉRŐ gyökérokkal.
@@ -2683,6 +2741,16 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-20):** `main` @ `010989f3` — E08-R07 Szintgörbe
+és profil-projekció, PR [#349](https://github.com/wolfcasaba/strumsight/pull/349),
+squash-merge, implementer Codex (`~/.codex-terra`, gpt-5.6-terra) + 1 javító
+kör (F1 BLOCKER + F2/F3 MAJOR, review-jelentés: `docs/reviews/e08-r07-review.md`).
+A kör alatt a `main` egyszer mozdult (E99-R18/H3 self-heal negyedik
+önjavítása, PR #348, diszjunkt fájlkör) — rebase + teljes CI-újradispatch a
+§0.3 szerint. Exact `6ba6ca89`: Full Gate 32337856382 + Router CI 32337858078
+success; post-merge célzott gate a friss `main`-en önállóan is zöld (6/6).
+Következő: **E08-R08** (Gamification repository és storage schema).
+
 **Aktuális állapot (2026-08-19):** `main` @ `39c0bd5f` — E08-R03 Reward
 ledger és idempotencia-index, PR [#340](https://github.com/wolfcasaba/strumsight/pull/340),
 squash-merge. Exact `02477969` (a kör alatt a `main` háromszor mozdult, mindig
@@ -3829,10 +3897,26 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R04** (Activity outbox és megbízható
-feldolgozás, SDD Chapter 9 — `docs/rounds/e08-r04-activity-outbox-and-
-reliable-processing.md`, engine `codex`, előre kiosztott ADR `0302`). Friss
-sessionben indul.
+**A következő SDD-lépés: E08-R08** (Gamification repository és storage
+schema, SDD Chapter 9 — `docs/rounds/e08-r08-gamification-repository-and-
+storage-schema.md`, engine `codex`, a queue-ban előre kiosztott ADR `0306` —
+a pre-flightban MÉRNI kell a `tools/round-slots.py reserve-adr`-ral, mert a
+sorozatos ADR-fogyás miatt valószínűleg ez is stale (lásd E08-R07 §0.0:
+`0305` → `0342` volt a mérve helyes szám). Friss sessionben indul.
+
+**Nyitott, EMBERI döntést NEM igénylő, de a következő pár körben érdemes
+tartozás (2026-08-20, E08-R07 review):** a `docs/reviews/e08-r07-review.md`
+F1–F3 mintája — egy zöld gate/teszt-suite mögött is lehet teszteletlen guard
+vagy garantáltan-zöld guard-teszt; a review-protokoll (mutációs próba a
+guard-on, NEM csak a mért kódon) e nélkül nem fogta volna meg. Lásd
+[[L349]]–[[L351]] a `docs/LESSONS.md`-ben — jövőbeli review-k „X sosem
+csökkenhet/gyengülhet" jellegű brief-előírásainál alkalmazzák ugyanezt a
+mintát alapból, ne csak utólag.
+
+**Korábbi kijelölt SDD-kör (2026-08-20, azóta lezárult): E08-R04** (Activity
+outbox és megbízható feldolgozás, SDD Chapter 9 —
+`docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md`, engine
+`codex`, előre kiosztott ADR `0302`). Lásd a fejléc ✅-blokkot.
 
 **Nyitott, EMBERI döntést igénylő tartozás, E08-R02-ből örökölve, még
 mindig releváns:** a `docs/reviews/e08-r02-security.md` MINOR-1 lelete — az

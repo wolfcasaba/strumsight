@@ -1,10 +1,12 @@
 # E99-R18 (GOV-12) — Generált `public.dart` barrelek: a második fizikai ütközés-felület feloldása
 
-- **Státusz:** READY FOR IMPLEMENTATION (brief 2026-08-18, `main @ 52324cb3`)
+- **Státusz:** READY FOR IMPLEMENTATION (pre-flight revised 2026-08-19, `main @ 1a051d85`)
 - **Típus:** **governance-kör**
 - **Kör-azonosító:** `E99-R18`. Emberi neve **GOV-12**.
-- **Előfeltétel:** `E99-R17` merge-elve (ugyanaz a `tools/round-slots.py` felület bővül)
-- **Brief szerzője:** Claude (Opus 5, orchesztrátor) · **ADR:** [`0307`](../adr/0307-pipeline-throughput-program-v2.md) **§5**
+- **Előfeltétel:** nincs technikai előfeltétel. Az E99-R17 emberi gate-holdon
+  van; a jelen kör a saját `tools/round-slots.py`-módosításával vezeti be a
+  public-barrel generált-útvonal kezelését.
+- **Brief szerzője:** Claude (Opus 5, orchesztrátor) · **ADR:** [`0307`](../adr/0307-pipeline-throughput-program-v2.md) **§5**, [`0339`](../adr/0339-generated-public-barrel-registry.md)
 
 ```ai-router
 schema_version = 1
@@ -16,9 +18,12 @@ allowed_paths = [
   "lib/features/practice_generator/public/",
   "tools/round-slots.py",
   "tools/tests/test_round_slots_generated_barrels.py",
+  "tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py",
+  "tools/tests/test_e99_r18_scope_debris_revert.py",
   "test/tooling/gen_public_barrel_test.dart",
   "test/core/architecture_dependency_test.dart",
   "docs/rounds/e99-r18-gov-12-generated-public-barrels.md",
+  "docs/adr/0339-generated-public-barrel-registry.md",
 ]
 gate_tests = [
   "test/tooling/gen_public_barrel_test.dart",
@@ -121,6 +126,265 @@ van; az allowlist nem bővül).
 Lecke: `docs/LESSONS.md` [[L337]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
 Módosítás (2026-08-19).
 
+## 0.0b Pre-flight revízió (önjavítás, ADR 0112, H8, 2026-08-20, `main @ b1bab82a`)
+
+**Mért tény.** Az E99-R17 (GOV-11) idő közben zöld kapuval `main`-re
+merge-elődött (squash `8d7b6a67`, PR #343) — a fenti §0.0 R2 sorának
+premisszája („E99-R17 nem merge-elt”) mára hamis. Az `origin/main`
+szinkron (`git -C /home/ubuntu/ss-minimax-e99-r18 merge --no-ff
+origin/main`) ezért a jelen brief mellett a `tools/round-slots.py`-ban is
+tartalmi ütközést adott: az E99-R17 saját, EXACT-SET `GENERATED_PATHS`
+frozensetje (`lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`) és a D4 saját,
+GLOB-alapú `GENERATED_PATH_PATTERNS`/`is_generated_path` mechanizmusa
+ugyanazt a két kódrészt (a konstans-blokkot és az `effective_paths` szűrő-
+predikátumát) módosította.
+
+**Feloldás.** A két mechanizmus additív, egymásnak NEM mond ellent — a
+saját, már zöld-tesztelt regressziós csomagjaik (`tools/tests/
+test_round_slots_generated_paths.py` az E99-R17, `tools/tests/
+test_round_slots_generated_barrels.py` a jelen kör oldaláról) kizárólag a
+SAJÁT oldalukat mérik, egyik sem hivatkozik a másikéra. A merge-feloldás
+mindkét konstanst megtartja, és az `effective_paths` predikátumát unióvá
+bővíti: egy útvonal akkor (és csak akkor) számít generáltnak, ha
+`SERIALIZED_PATHS`-ban van, VAGY `GENERATED_PATHS`-ban van, VAGY illeszkedik
+egy `GENERATED_PATH_PATTERNS` globra. Mindkét meglévő teszt-csomag
+változtatás nélkül zöld marad; egy új, a self-heal által hozzáadott
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py`
+regressziós teszt méri a KOMBINÁLT esetet (mindkét mechanizmus egyszerre
+aktív egyetlen `effective_paths` híváson belül), amit egyik eredeti csomag
+sem fedett. A D1–D4 termékcél és a fenti `allowed_paths` VÁLTOZATLAN — a
+`tools/round-slots.py` már a listán szerepelt.
+
+**KRITIKUS, a self-heal saját kötelező gate-je által feltárt, NEM javított
+lelet — a következő E99-R18 dispatch dolga, review előtt kötelező zárni.**
+A teljes `python3 -m pytest tools/tests -q` (605 passed, 2 skipped, 1
+FAILED, 565 subtests, ismételve mérve a resolved HEAD-en) egyetlen piros
+cellát ad: `tools/tests/test_pipeline_throughput.py::SlotPlanningTest::
+test_real_epic_four_rounds_are_correctly_rejected` —
+`round_slots.paths_conflict` **üres listát** ad két, VALÓDI, már `done`
+Epic-4 brief (`e04-r15-streaming-transport.md`, `e04-r16-orchestration-
+state-machine.md`) között, holott a teszt mérve bizonyítja, hogy e két
+brief ténylegesen ugyanazt a (nem-practice_generator) `public.dart`-ot
+érinti — tehát VALÓDI ütközés, aminek a régi kódon detektálódnia KELLENE.
+
+**Gyökérok (nem a self-heal merge-feloldása — a D4 SAJÁT, pre-merge
+kódjában is jelen van):** a fenti `GENERATED_PATH_PATTERNS =
+("lib/features/*/public.dart",)` glob SZÁNDÉKOSAN széles (lásd a kör saját
+`tools/tests/test_round_slots_generated_barrels.py::
+test_pattern_glob_is_not_narrowed_to_a_single_feature` cellát — a szűkítés
+explicit TILOS), de ezzel MINDEN feature `public.dart`-ját generáltnak (=
+NEM ütköző) minősíti, holott a D1–D3 pilot MÉRVE (§1, R3) kizárólag a
+`practice_generator`-t migrálta a fragmentum-alapú, ténylegesen generált
+rendszerre — a 75 nyitott brief közül **25** a `lib/features/gamification/
+public.dart`-ot, **18** a `lib/core/design_system/public.dart`-ot érinti
+(§1), ezek MA MÉG kézzel karbantartott, teljes értékű ütközési felületek.
+A broad glob ezért NÉMÁN kikapcsolja az ütközés-detekciót minden nem
+migrált feature-re — pontosan a brief saját `Kockázat = high` sora által
+jósolt néma hiba, csak nem az export-halmazban, hanem a slot-tervezőben.
+
+**Miért nem javította ezt a self-heal:** a hiba a D4 SAJÁT, review előtti
+tervezési döntése (a glob hatóköre), nem a H8 merge-mechanika — az ADR 0112
+§2 jogosultsága a briefre/eszközökre szól, nem a kör saját, még nem
+review-zott tartalmi munkájára. A helyes feloldás (pl. explicit, migrált-
+feature allowlist a blanket glob helyett) termékdöntés, aminek a kör saját
+implementer+reviewer ciklusán kell átmennie — NEM egy 1-of-3 önjavító
+kísérlet dolga. A self-heal SZÁNDÉKOSAN nem nyúlt `is_generated_path`
+viselkedéséhez.
+
+**Kötelező a folytatáshoz:** a következő E99-R18 dispatch (vagy a review)
+zárja ezt a cellát — akár a glob szűkítésével egy migrált-feature
+allowlistre (és a `test_pattern_glob_is_not_narrowed_to_a_single_feature`
+cella ezzel összhangban lévő revíziójával), akár más, mérve bizonyítottan
+biztonságos megoldással — MIELŐTT ez a brief review-ra megy. A review saját
+gate-je (teljes `pytest tools/tests -q`) ezt a cellát úgyis blokkolná; ez a
+feljegyzés csak a felesleges újra-felfedezés költségét spórolja meg.
+
+Lecke: `docs/LESSONS.md` [[L343]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
+Módosítás (ADR 0112 önjavító kör, 2026-08-20).
+
+## 0.0c Pre-flight revízió — csak igazoltan generált barrel old fel slot-ütközést (2026-08-20)
+
+**Mérés és döntés.** A §0.0b-ban előírt reprodukciót a jelenlegi kör-ágon
+`python3 -m pytest tools/tests/test_pipeline_throughput.py::SlotPlanningTest::test_real_epic_four_rounds_are_correctly_rejected -q`
+adja: a széles `lib/features/*/public.dart` glob miatt az E04-R15 és E04-R16
+valódi, nem migrált `public.dart`-ütközése eltűnik. Ezzel szemben a
+`find lib/features -path '*/public/*.dart' -type f` mérés kizárólag a
+`practice_generator/public/{application,data,domain,presentation}.dart`
+fragmentumait találja; csak ehhez a feature-höz létezik tényleges, D1 szerinti
+generálási bizonyíték.
+
+Ezért a D4 feloldás **nem blanket glob**, hanem explicit, migrált-output
+nyilvántartás: ebben a körben kizárólag
+`lib/features/practice_generator/public.dart` generált és nem ütköző. Minden
+más feature gyökér `public.dart`-ja teljes értékű ütközési felület marad,
+amíg a saját körében fragmentumokkal, generátor-frissesség teszttel és
+nyilvántartási bejegyzéssel nem bizonyítottan generált. Ez scope-szűkítés a
+pilot tényleges bizonyítékához, nem más feature barreljének módosítása.
+
+**Falszifikáció.** A `tools/tests/test_round_slots_generated_barrels.py`
+teszt egyszerre méri, hogy (a) két `practice_generator/public.dart` út nem
+ütközik, és (b) két másik, nem regisztrált feature `public.dart` út ütközik;
+így az első esetben túl szűk, a másodikban túl széles implementáció is piros.
+A meglevő `SlotPlanningTest` az E04 valós brief-párján ugyanennek az utóbbi
+hibás implementációnak a regressziós őre. A korábbi globot és annak
+„nem szűkíthető” tesztcelláját e mért tény felülírja.
+
+**Visszakeresett előzmények.** A pre-flight szűkített RAG-találatai: ADR 0176 (a barrel
+contract maga a szabályozott feature-határ), lessons/L133 és lessons/L135
+(a brief és a tényleges guard viselkedését együtt kell mérni), valamint
+lessons/L343 (ez a pontos D4 túl-széles-glob lelet). A teljes korpusz a
+közvetlen kör-briefet és az E99-R18/H8 leletet hozta vissza; ellentétes,
+biztonságos precedens nincs. A döntés az ADR 0307 §5 körszintű,
+determinista-generálhatósági elvének alkalmazása; új ADR nem szükséges.
+
+## 0.0d Pre-flight revízió (önjavítás, ADR 0112, H3, 2026-08-20) — a H8 által a kör-ágra írt coexist-teszt bekerül az `allowed_paths`-ba
+
+**Végrehajthatósági eredmény: a H3 halt oka NEM tartalmi hiányosság és NEM a
+§0.0/§0.0b debris-minta megismétlődése — a feloldás a §0.0c D4-szűkítés
+MELLÉ szükséges tesztkarbantartás allowlist-bővítése, mérve és dokumentálva;
+a debris-tilalom változatlan.**
+
+### Mért tények
+
+`python3 tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base
+7458ca8330a66b9329b20009c400cb4a7bab3a14` — saját méréssel megismételve —
+egyetlen útvonalon bukik:
+
+```
+Legacy scope audit FAILED (7458ca8330a6..826f930fe9fc, 10 changed path(s), 0 generated/ignored)
+- path outside allowed scope: tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py
+```
+
+`git diff --name-status 7458ca83..HEAD` a kör-ágon tíz megváltozott fájlt ad;
+kilenc pontosan a PREPARED `allowed_paths` kilenc bejegyzése, a tizedik
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py` — ez a
+fájl a `7458ca83` base ÓTA már LÉTEZIK a kör-ágon (a diff `M`, nem `A`), mert
+a §0.0b H8 önjavítás hozta létre KÖZVETLENÜL a kör-ágon, a normál
+brief-szerkesztési folyamaton KÍVÜL (ADR 0112 §2 szélesebb jogosultsága) —
+ezért sosem került be az eredeti brief-szerző `allowed_paths`-ába.
+
+A §0.0c D4 szűkítés (glob → explicit `practice_generator`-regisztráció)
+pontosan azt a mechanizmust cseréli le, amit ez a fájl mér (saját docstringje:
+„A két meglévő teszt-csomag... kizárólag a SAJÁT oldalát méri... Ez a fájl a
+hiányzó, KOMBINÁLT cellát méri" — a `GENERATED_PATH_PATTERNS` tényleges
+értékét is asszertálja). A frissítés nélkül `python3 -m pytest tools/tests -q`
+PIROSRA váltana (a régi `("lib/features/*/public.dart",)` asszerció a D4 fix
+utáni `("lib/features/practice_generator/public.dart",)` értékkel ütközne) —
+a fájl érintése tehát a D4 fix elmaradhatatlan része, nem választható munka.
+
+### Miért NEM a §0.0/§0.0b debris-minta ismétlődése
+
+A `tools/tests/test_e99_r18_scope_debris_revert.py` (H3, 2026-08-19) saját
+docstringje két mintát különböztet meg: az E07-R29/H3 precedens (a listán
+kívüli fájlok VALÓDI, hiányzó deliverable-ök → allowlist-bővítés a helyes
+feloldás) és a §0.0 debris-eset (nulla hivatkozású, redundáns kézi
+smoke-teszt lenyomat → revert a helyes feloldás). A jelen eset mérve az ELSŐ
+mintát követi:
+
+- a fájl TRACKELT (a H8 commit óta a kör-ág git-történetének része), nem
+  nyomkövetetlen debris;
+- a kör saját kötelező §7 gate-je (`pytest tools/tests -q`) ténylegesen
+  futtatja és a D4 mechanizmusra asszertál — nem redundáns egyetlen más
+  fixture-rel sem;
+- érintése nélkül a gate bizonyítottan PIROSRA váltana.
+
+### A feloldás — és miért két bejegyzés, nem egy
+
+Az `allowed_paths` elsőre **egy** bejegyzéssel bővülne:
+`tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py`. Ez a
+bővítés viszont MAGA a `tools/tests/test_e99_r18_scope_debris_revert.py`
+(H3, 2026-08-19) regressziós őr `test_allowed_paths_are_byte_identical_
+to_the_prepared_brief` cellájába ütközik — az pinnelt, kilenc-elemű
+`ORIGINAL_ALLOWED_PATHS`-t bájtra egyezőnek követeli meg a brief tényleges
+`allowed_paths`-ával, tehát BÁRMILYEN bővítés elrontja, amíg maga az őr nem
+frissül. Az őr frissítése viszont ÚJABB fájlérintés a kör-ágon
+(`tools/tests/test_e99_r18_scope_debris_revert.py`), ami — mivel az eredeti
+brief sosem sorolta fel — MAGA is új scope-audit-sértés lenne. Ez a lánc itt
+LEÁLL: ellenőrizve (`grep -rl "ORIGINAL_ALLOWED_PATHS\|e99-r18-gov-12-
+generated-public-barrels" tools/tests/`), semmilyen HARMADIK fájl nem
+hivatkozik sem az `ORIGINAL_ALLOWED_PATHS` konstansra, sem erre a briefre —
+tehát az `allowed_paths` **pontosan két** bejegyzéssel bővül, egy zárt kör:
+
+- `tools/tests/test_round_slots_generated_paths_and_patterns_coexist.py` — a
+  D4 §0.0c fix elmaradhatatlan tesztkarbantartása (fent);
+- `tools/tests/test_e99_r18_scope_debris_revert.py` — az előző bővítést
+  pinnelő regressziós őr elmaradhatatlan frissítése.
+
+A `test_e99_r18_scope_debris_revert.py` frissítése a pinned
+`ORIGINAL_ALLOWED_PATHS`-t a bővített, tizenegy-elemű listára váltja (a
+saját maga útvonalát is beleértve, hiszen az immár szó szerint szerepel a
+brief `allowed_paths` tömbjében), és a modul UPDATE-jegyzetében rögzíti a
+második H3-előfordulás mérését. A debris-kizáró asszerciók
+(`test_project/...` sosem kerülhet be) — az őr VALÓDI célja — változatlanok
+maradnak: ugyanabban a fájlban egy ÚJ tesztosztály (nem külön fájl, hogy ne
+nyisson egy harmadik scope-rést) a jelen, második H3-előfordulást a valódi,
+mért tizenegy-elemű round-diffen reprodukálja — PIROS a régi kilenc-elemű
+`allowed_paths`-szal, ZÖLD a bővítettel.
+
+Jogosultság: ADR 0112 §2 — a self-heal a megállt kör briefjét és
+engedélyezett-fájllistáját módosíthatja; mindkét új bejegyzés a kör saját,
+még nem review-zott ágának tesztkarbantartása, a mérce
+(`round-gate.sh`, `.github/workflows/**`, a scope-audit MECHANIZMUSA)
+érintetlen marad.
+
+Lecke: `docs/LESSONS.md` [[L345]]. ADR: [`0112`](../adr/0112-self-healing-pipeline.md)
+Módosítás (ADR 0112 önjavító kör, 2026-08-20).
+
+## 0.0e Pre-flight revízió — explicit generated-barrel registry ADR (2026-08-20)
+
+Az aktuális orchestrátor a kör számára lefoglalta az **ADR 0339**-et
+(`tools/round-slots.py reserve-adr --round E99-R18`). A §0.0c kód- és
+tesztbizonyítéka normatív döntést tartalmaz: csak az a feature-gyökér
+`public.dart` veszítheti el az ütközési felület státuszát, amelyhez egyszerre
+létezik fragmentum-forrás, determinisztikus generátor és frissesség-őr. A
+pilotban ez kizárólag a `practice_generator`; a blanket glob minden más,
+kézzel karbantartott feature contractját némán feloldaná.
+
+Az ADR ezt a szűk registry-szabályt rögzíti. A dokumentum felvételét az
+aktuális, explicit körutasítás engedélyezi; a `docs/adr/0339-...` út ezért a
+fenti `allowed_paths` része. A kör S8 visszakeresése most újra lefutott:
+szűkítve ADR 0176 és lessons/L129, teljes korpuszon a saját E99-R18/H8
+előzmény tért vissza; a közvetlen D4-precedens lessons/L343. Ezek nem
+engednek biztonságos blanket-glob kivételt.
+
+## 0.0f Pre-flight revízió (önjavítás, ADR 0112, H3, 2026-08-20, harmadik előfordulás) — a kör-ág `docs/adr/0112` diffje leválasztva, upstream szinkron
+
+A lánc H3-mal állt meg: a kör-ág az `origin/main`-hez képest a tiltott
+`docs/adr/0112-self-healing-pipeline.md`-et is módosította — ezt a H8
+self-heal (§0.0b, merge `7458ca83`) egy időben a saját, kör-ág-specifikus
+javításával bundle-özve írta a kör-ágra, de sosem mozgatta át `main`-re. Nem
+`allowed_paths`-sértés a kódban: egyetlen termék-brief `allowed_paths`-ának
+sem kellene ezt az utat tartalmaznia (ADR 0112 §2 szerint ez kizárólag a
+self-heal saját, brieftől független jogosultsága).
+
+**Feloldás** (`docs/adr/0112-self-healing-pipeline.md`, ADR 0112 önjavító kör,
+2026-08-20, [[L347]]): a H8-blokk landolt `main`-en (PR #346, `ee010d39`, majd
+egy apró számozás-javítás `a109edbc` — az L346 számot a vele párhuzamosan
+záruló E08-R05 saját maga foglalta le, [[L346]] "kié a szám" tanulsága
+szerint), a kör-ág visszamergelte a friss `main`-t (`96f1ada2`). Saját méréssel
+igazolva: `tools/scope-audit.py --repo /home/ubuntu/ss-minimax-e99-r18 --brief
+docs/rounds/e99-r18-gov-12-generated-public-barrels.md --base origin/main` →
+`Legacy scope audit OK (origin/main..96f1ada2b129, 15 changed path(s), 0
+generated/ignored)` (előtte: `FAILED, path outside allowed scope`).
+
+**Mellékesen feltárt, NEM javított lelet** (a H8-mintát követve, [[L343]]): a
+kötelező teljes `python3 -m pytest tools/tests -q` a mergelt kör-ágon **2
+piros tesztet** mutat, mindkettő a `tools/tests/
+test_e99_r18_scope_debris_revert.py`-ban rögzített, a MEGELŐZŐ két H3
+self-heal által pinnelt `allowed_paths`-tuple-ökben
+(`PRE_H3_20260820_ALLOWED_PATHS` + a H3-második-előfordulás bővítése):
+mindkettő 11 bejegyzést vár, a brief jelenlegi `allowed_paths`-a viszont
+12-t tartalmaz — a fenti §0.0e (ez a self-heal ELŐTT, a kör saját
+folytatásában landolt) hozzáadta a `docs/adr/0339-generated-public-barrel-
+registry.md` utat. Mérve: ez a rés a self-heal (a merge/resync) ELŐTT is
+fennállt — a merge nem érintette sem a brief `allowed_paths` tömbjét, sem a
+guard-teszt fájlját (mindkettő konfliktusmentesen automerge-elt, a `docs/adr/
+0112` fájl volt az egyetlen konfliktus). A helyes javítás a két pinnelt
+tuple frissítése a 12. bejegyzéssel — ez a kör SAJÁT allowlist-bookkeeping
+munkája (ADR 0112 §1 tiltja a megállt kör levezénylését), a következő E99-R18
+dispatch ELSŐ teendője review/merge előtt.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -141,18 +405,20 @@ A 75 nyitott briefből a `lib/features/gamification/public.dart` **25**-ben, a
 azért, mert minden kör hozzáfűz egy `export` sort. Ez a második olyan
 ütközés-felület (az ARB után), ami mechanikus, nem tartalmi.
 
-A `practice_generator/public.dart` ma **67 sor**, tisztán export-lista → ez a
+A `practice_generator/public.dart` ma **100 sor**, ebből **94** export-direktíva
+és két megőrzendő magyarázó komment; a publikus felület ettől még kézzel
+karbantartott → ez a
 pilot. (A `gamification` és a `design_system` barrel még nem létezik a fán; a
 mechanizmus az ő születésükkor már készen áll.)
 
 ## 2. Jelenlegi állapot — mérve
 
-- `lib/features/practice_generator/public.dart`: `library;` + 60+ `export`
-  sor, kézzel karbantartva.
+- `lib/features/practice_generator/public.dart`: `library;` + **94** `export`
+  direktíva, köztük egy `hide PracticeOutcome`, kézzel karbantartva.
 - `tool/check_architecture.dart` gate-lépés őrzi a feature-határokat
   (cross-feature import csak `public.dart`-on át).
-- `tools/round-slots.py`: az E99-R17-ben bevezetett `GENERATED_PATHS` halmaz
-  már létezik (l10n-aggregátumokra).
+- `tools/round-slots.py`: csak `SERIALIZED_PATHS` létezik; a D4 itt vezeti be
+  a public-barrel glob-alapú generált-útvonal szabályát.
 
 ## 3. Feladatok
 
@@ -183,8 +449,10 @@ composite lépéslistája változatlan (ADR 0171 paritás-őre sértetlen).
 
 ### D4 — `tools/round-slots.py`: a generált barrel nem ütközés
 
-- A `GENERATED_PATHS` halmaz mintával bővül: `lib/features/*/public.dart`
-  (glob, nem fix lista) — ezek újragenerálhatók, tehát nem ütközés.
+- A generált-barrel nyilvántartás csak a **bizonyítottan migrált**
+  `lib/features/practice_generator/public.dart` outputtal bővül. Blanket
+  `lib/features/*/public.dart` glob tilos: a még kézzel karbantartott feature
+  barrelek nem regenerálhatók, ezért továbbra is ütköznek.
 - A fragmentumok (`lib/features/*/public/*.dart`) TELJES ÉRTÉKŰ ütközési
   felületek maradnak.
 
@@ -196,15 +464,17 @@ composite lépéslistája változatlan (ADR 0171 paritás-őre sértetlen).
 | export **hiányzik** | fixtúra: egy fragmentum kimarad | `--check` **PIROS** |
 | export **duplikált** | ugyanaz az útvonal két fragmentumban | a generátor hibával áll meg (kilépési kód ≠ 0) |
 | barrel **elavult** | kézi szerkesztés a generált fájlban | `--check` **PIROS** |
-| `round-slots.py` | két brief, mindkettő `lib/features/x/public.dart` | NINCS ütközés |
+| `round-slots.py` | két brief, mindkettő `lib/features/practice_generator/public.dart` | NINCS ütközés |
+| `round-slots.py` | két brief, mindkettő `lib/features/x/public.dart` | ÜTKÖZÉS |
 | `round-slots.py` | két brief, mindkettő `lib/features/x/public/domain.dart` | ÜTKÖZÉS |
 
 **Falszifikációs cella (kötelező):** a D2 `--check` hívás kiszedése az
 `architecture` lépésből → a „barrel elavult" eset **PIROS** helyett zöld lenne,
 ezért a `test/tooling/gen_public_barrel_test.dart` erre írt esete **PIROS** →
-visszaállítás után zöld. Második falszifikáció: a D4 glob leszűkítése egyetlen
-feature-re → a `round-slots.py` „NINCS ütközés" esete másik feature-rel
-**PIROS**.
+visszaállítás után zöld. Második falszifikáció: a D4 nyilvántartásának
+blanket globra szélesítése → a `SlotPlanningTest` valós E04 brief-párja
+**PIROS**; a practice-generator bejegyzés kihagyása → a saját „NINCS
+ütközés” cella **PIROS**.
 
 ## 5. Tilos zóna
 

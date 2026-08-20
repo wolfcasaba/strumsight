@@ -21,6 +21,7 @@ export 'application/usecase/pause_practice_plan.dart';
 export 'application/usecase/resume_practice_plan.dart';
 export 'application/usecase/delete_practice_planning_data.dart';
 export 'application/usecase/export_practice_planning_data.dart';
+
 export 'data/adapter/legacy_lesson_candidate_adapter.dart';
 export 'data/adapter/legacy_lesson_catalog_adapter.dart';
 export 'data/adapter/legacy_mapping_table.dart';
@@ -29,6 +30,8 @@ export 'data/adapter/practice_outcome_adapter.dart';
 export 'data/adapter/analysis_evidence_adapter.dart';
 export 'data/adapter/vision_evidence_adapter.dart';
 export 'data/adapter/tutor_plan_proposal_adapter.dart';
+export 'data/adapter/practice_engine_catalog_adapter.dart';
+export 'data/adapter/song_goal_reader_adapter.dart';
 export 'data/ai/planner_assist_schema.dart';
 export 'data/ai/remote_planner_assist_gateway.dart';
 export 'data/ai/fake_planner_assist_gateway.dart';
@@ -38,18 +41,7 @@ export 'data/local/practice_plan_migrator.dart';
 // execution [PracticeOutcome] instead; local persistence keeps importing its
 // own record type directly.
 export 'data/local/practice_plan_serializer.dart' hide PracticeOutcome;
-export 'presentation/controller/plan_setup_controller.dart';
-export 'presentation/controller/plan_preview_controller.dart';
-export 'presentation/screens/plan_setup_screen.dart';
-export 'presentation/screens/plan_preview_screen.dart';
-export 'presentation/screens/today_plan_screen.dart';
-export 'presentation/screens/weekly_plan_screen.dart';
-export 'presentation/screens/plan_change_review_screen.dart';
-export 'presentation/screens/plan_privacy_screen.dart';
-export 'presentation/widgets/plan_block_card.dart';
-export 'presentation/widgets/plan_day_card.dart';
-export 'presentation/widgets/plan_reason_sheet.dart';
-export 'presentation/widgets/catch_up_sheet.dart';
+
 export 'domain/id/planner_ids.dart';
 export 'domain/model/exercise_candidate.dart';
 export 'domain/model/exercise_prescription.dart';
@@ -94,7 +86,18 @@ export 'domain/service/request_validator.dart';
 export 'domain/service/review_queue.dart';
 export 'domain/service/time_budget_allocator.dart';
 export 'domain/service/weekly_scheduler.dart';
-export 'data/adapter/practice_engine_catalog_adapter.dart';
-export 'data/adapter/song_goal_reader_adapter.dart';
 export 'domain/service/song_block_compiler.dart';
 export 'domain/service/song_goal_planner.dart';
+
+export 'presentation/controller/plan_setup_controller.dart';
+export 'presentation/controller/plan_preview_controller.dart';
+export 'presentation/screens/plan_setup_screen.dart';
+export 'presentation/screens/plan_preview_screen.dart';
+export 'presentation/screens/today_plan_screen.dart';
+export 'presentation/screens/weekly_plan_screen.dart';
+export 'presentation/screens/plan_change_review_screen.dart';
+export 'presentation/screens/plan_privacy_screen.dart';
+export 'presentation/widgets/plan_block_card.dart';
+export 'presentation/widgets/plan_day_card.dart';
+export 'presentation/widgets/plan_reason_sheet.dart';
+export 'presentation/widgets/catch_up_sheet.dart';
