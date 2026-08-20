@@ -13904,3 +13904,72 @@ korábbi precedensét követi: [`ADR 0117`](adr/0117-song-storage-migrator-bound
 Döntés 2 (E03-R08) ugyanezt a mintát (checkpoint = saját, verziózott,
 atomikusan írt JSON-dokumentum) már megalapozta egy másik feature-fában.
 Lásd [[strumsight-autonomous-build]] a self-heal Class B protokolljáról.
+
+## L358 — Egy H4 self-heal, amelynek a review MÁR megadta az egzakt javítási receptet, a kör SAJÁT ágára tartozik másodszor is — [[L304]] mintája megerősítve (E08-R09, halt H4, ADR 0112 önjavítás, 2026-08-20)
+
+**Tünet.** A független security-reviewer (`docs/reviews/e08-r09-security.md`,
+branch `terra/e08-r09-legacy-progress-adapter-and-backfill` @ `415a795a`) egy
+Terra/Codex javító kör UTÁN is nyitva talált egy MAJORt (S4):
+`GamificationMigrator._checkpointFor` és a write-loop a
+`LegacyPracticeAdapter.adapt(entries)` SZŰRT (invalid rekordokat eldobó)
+`events` listáját indexelte, nem az eredeti, caller-supplied `entries`
+snapshotot, amit a `GamificationMigrationState.processedCount` kontraktusa
+(ADR 0350 D5: "az első fel nem dolgozott EREDETI index") megkövetel. Mért
+bizonyíték a review-ban: `processedCount=2` kezdő checkpoint, 4 elemű
+snapshot 1 invalid rekorddal → várt `[3,4]` írás/végső `processedCount=4`
+helyett mért `[3]`/`processedCount=3`.
+
+**Mért gyökérok.** `events.length <= entries.length` minden esetben, ha
+legalább egy rekord invalid; a két indextér csak akkor esik egybe (ezért
+maradt észrevétlen a kör SAJÁT, korábban zöld A5 tesztjében), ha a snapshot
+MINDEN eleme valid — az A5 teszt véletlenül csak ezt az esetet fedte. A
+security review adta az EGZAKT javítási receptet is ("a checkpoint ciklusa
+az eredeti `entries` indexein haladjon... regressziós cella: invalid a
+checkpoint alatt, pontosan rajta és fölötte, valamint teljes futás után
+`processedCount == entries.length`") — a self-heal dolga itt szó szerint a
+review saját preskripciójának végrehajtása és FÜGGETLEN mérése volt, nem egy
+önálló diagnózis.
+
+**Javítás.** `_checkpointFor(events.length)` → `_checkpointFor(entries.length)`,
+a write-loop bound-ja és a `_checkpointFor` belső bound-checkje ugyanígy
+(`lib/features/gamification/data/migration/gamification_migrator.dart`).
+Négy regressziós cella (S4a-d: invalid a checkpoint alatt/rajta/fölötte és
+teljes futás nulláról) — mérve piros a javítás előtt (mutáció-
+visszaállítással `415a795a`-ra, S4a byte-azonos a review saját
+reprodukciójával), zöld utána; `tools/round-gate.sh` a két érintett
+teszt-fájlon zöld. **Egy MÁSODIK, friss, izolált klónban, egy külön
+`security-reviewer` subagenttel függetlenül újra-ellenőrizve** (nem az
+önjavító session önjelentésére hagyatkozva) — saját kézzel megismételt
+mutáció-kill ugyanazokat a számokat adta, és a
+`_checkpointFor`/`processedCount` egyetlen más hívóhelyénél sem talált a
+régi szemantikára támaszkodó kódot.
+
+**[[L304]] mintája MÁSODSZOR is beigazolódott.** A hibás kód
+(`gamification_migrator.dart`, `legacy_practice_migration_test.dart`)
+kizárólag a megállt kör SAJÁT, `main`-be még nem olvadt ágán élt (a teljes
+migrátor/adapter feature csak a kör 4 commitjában létezik, `main`-en —
+`9e18c68d` — sem az ADR 0350, sem a `migration/` könyvtár nincs jelen). A
+javítás ezért NEM egy `main`-alapú `heal/E08-R09-H4-1` branch+PR-en ment,
+hanem 3 commitban közvetlenül a kör saját ágára
+(`terra/e08-r09-legacy-progress-adapter-and-backfill`, HEAD `3a702692`)
+lett pusholva, PR és CI-dispatch nélkül. A `docs/reviews/e08-r09-security.md`
+review-doksi maga is frissült (S1-S4 mind CLOSED, Verdikt **APPROVED**), hogy
+a lánc következő E08-R09 firingje ne kezdje elölről a review-t, csak a
+szokásos PR/CI/merge lezárást vigye végig.
+
+**Szabály (L304 megerősítése, nem új szabály).** Egy H4 self-heal ELSŐ
+lépése mindig annak eldöntése, hogy a hibás fájl létezik-e `main`-en. Ha
+igen: `heal/` branch + PR + merge ([[L70]] mintája). Ha nem (csak a megállt
+kör saját ágán): plain push arra az ágra, PR nélkül ([[L304]] és ez a
+mérés). A review-doksi frissítése (a talált lelet CLOSED-ra állítása,
+Verdikt frissítés) a self-heal dokumentálási kötelezettségének RÉSZE, nem
+opcionális kozmetika — enélkül a következő kör-session vagy a soron
+következő review újra nekifutna ugyanannak a kérdésnek. Másodlagos
+tanulság: amikor egy MAJOR-t találó review **explicit, egzakt javítási
+receptet** ad (fájl, sor, a helyes index-tér megnevezése, elvárt
+regressziós cellák), a self-heal leggyorsabb és legbiztonságosabb útja
+pontosan ennek a receptnek a végrehajtása és mérése — nem egy saját,
+független diagnózis újrafuttatása a nulláról.
+
+Rokon L-ek: [[L304]] (az eredeti minta), [[L357]] (ugyanennek a körnek —
+E08-R09 — egy KORÁBBI, H3 self-healje, más gyökérokkal).
