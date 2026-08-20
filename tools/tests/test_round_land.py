@@ -35,6 +35,12 @@ def write_commit(repo: Path, relative: str, text: str, message: str) -> None:
 class RoundLandTest(unittest.TestCase):
     maxDiff = None
 
+    def test_repository_lander_is_directly_executable(self) -> None:
+        self.assertTrue(
+            os.access(LAND, os.X_OK),
+            "tools/round-land.sh must retain its execute bit for direct orchestration",
+        )
+
     def _fixture(self) -> tuple[Path, Path, Path, dict[str, str]]:
         self.assertTrue(LAND.exists(), "RED: a round-land.sh még nem létezik")
         temporary = tempfile.TemporaryDirectory()
