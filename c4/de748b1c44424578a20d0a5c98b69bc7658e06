@@ -1,0 +1,1 @@
+round=GOV-03 verdict=pass tests=213py+15dart lesson=factory-hardening-scope-guard adr=0138 engine=claude-opus-5
