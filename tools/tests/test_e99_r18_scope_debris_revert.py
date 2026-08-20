@@ -70,11 +70,21 @@ never listed either. That second-order edit is where the chain actually
 stops: `grep -rl "ORIGINAL_ALLOWED_PATHS\|e99-r18-gov-12-generated-public-
 barrels" tools/tests/` (2026-08-20) shows no third file references either
 name, so no further file needs adding. `ORIGINAL_ALLOWED_PATHS` below
-therefore carries exactly TWO additional, measured, documented entries (see
-brief §0.0d): the coexist-test file, and this file's own path. The
-`test_project/demo` debris-exclusion assertions later in this file are
-UNCHANGED: this update widens the allowlist for a different, justified
-reason, not a reopening of the original H3 debris question.
+therefore carries the §0.0d TWO additional entries (the coexist-test file
+and this guard's own path) PLUS the §0.0e round-authored entry
+`docs/adr/0339-generated-public-barrel-registry.md` (see brief §0.0f for
+the closure lelet). The `test_project/demo` debris-exclusion assertions
+later in this file are UNCHANGED: this update widens the allowlist for a
+different, justified reason, not a reopening of the original H3 debris
+question.
+
+UPDATE (E99-R18/H3 self-heal, third occurrence, ADR 0112, 2026-08-20): the
+brief's `allowed_paths` now has 12 entries (the §0.0d 11 plus the §0.0e
+ADR-0339 registry); both pinned tuples below and the
+`test_the_fix_widened_the_allowlist_by_exactly_two_entries` cell were
+updated to track the 12th entry. Closure for the §0.0f lelet: the additivity
+test is now correctly named (three entries added since the H8 baseline:
+coexist-test, this guard, ADR 0339).
 """
 
 import subprocess
@@ -93,8 +103,10 @@ BRIEF = REPO_ROOT / "docs" / "rounds" / "e99-r18-gov-12-generated-public-barrels
 # §0.0d self-heal (2026-08-20) added exactly TWO entries -- the coexist-test
 # file the D4 fix needed, and this guard's own path (needed to update the
 # pinned tuple below) -- for the reason documented in the module docstring's
-# UPDATE note above. The `test_project/demo` debris paths below are still
-# deliberately absent from this tuple.
+# UPDATE note above. The §0.0e round-authored ADR 0339 registry entry was
+# added by the round's own continuation (before the §0.0f self-heal), and
+# is the THIRD tracked entry below. The `test_project/demo` debris paths
+# below are still deliberately absent from this tuple.
 ORIGINAL_ALLOWED_PATHS = (
     "tool/gen_public_barrel.dart",
     "tool/check_architecture.dart",
@@ -107,6 +119,7 @@ ORIGINAL_ALLOWED_PATHS = (
     "test/tooling/gen_public_barrel_test.dart",
     "test/core/architecture_dependency_test.dart",
     "docs/rounds/e99-r18-gov-12-generated-public-barrels.md",
+    "docs/adr/0339-generated-public-barrel-registry.md",
 )
 
 # Reproduced verbatim from `.codex-round-status`'s `scope_audit_violations=`
@@ -322,15 +335,23 @@ class E99R18H3SecondOccurrenceAllowlistTest(unittest.TestCase):
 
         self.assertTrue(audit.ok, audit.violations)
 
-    def test_the_fix_widened_the_allowlist_by_exactly_two_entries(self) -> None:
-        """The §0.0d resolution is additive-by-exactly-two (see module
-        docstring UPDATE note for why the chain stops there), not a rewrite:
-        proves nothing the H8 self-heal or the original brief author already
-        granted was silently dropped or replaced."""
+    def test_the_fix_widened_the_allowlist_by_exactly_three_entries(self) -> None:
+        """The §0.0d resolution (two entries: coexist-test + guard itself) PLUS
+        the §0.0e round-authored ADR 0339 entry is additive-by-exactly-three
+        (see module docstring UPDATE note for why the chain stops there), not
+        a rewrite: proves nothing the H8 self-heal or the original brief author
+        already granted was silently dropped or replaced."""
         allowed = tuple(load_brief(BRIEF).metadata.allowed_paths)
         added = set(allowed) - set(PRE_H3_20260820_ALLOWED_PATHS)
         removed = set(PRE_H3_20260820_ALLOWED_PATHS) - set(allowed)
-        self.assertEqual(added, {THE_H3_20260820_DISPUTED_PATH, "tools/tests/test_e99_r18_scope_debris_revert.py"})
+        self.assertEqual(
+            added,
+            {
+                THE_H3_20260820_DISPUTED_PATH,
+                "tools/tests/test_e99_r18_scope_debris_revert.py",
+                "docs/adr/0339-generated-public-barrel-registry.md",
+            },
+        )
         self.assertEqual(removed, set())
 
 
