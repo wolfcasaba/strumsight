@@ -3,24 +3,58 @@
 Brief: `docs/rounds/e08-r07-level-curve-and-profile-projection.md`
 Diff: `git diff be86e77e..e3a0eba0` (pre-flight base → implementer HEAD)
 Reviewer: Claude (Sonnet 5) · Dátum: 2026-08-20
-Verdikt: **CHANGES REQUIRED**
+Verdikt (első kör): CHANGES REQUIRED — lásd alul: **APPROVED** javító commit `be823c74` után
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 2 · MINOR: 0 · NOTE: 0
+Első kör: BLOCKER: 1 · MAJOR: 2 · MINOR: 0 · NOTE: 0
+Javító kör (`be823c74`) után: **mindhárom zárva, 0 nyitott BLOCKER/MAJOR.**
+
+## Javító kör utáni újra-ellenőrzés (2026-08-20, javító commit `be823c74`)
+
+Friss izolált klón, saját gate-futtatás:
+
+```
+tools/round-gate.sh test/features/gamification/domain/level_curve_test.dart
+→ format zöld · analyze zöld · test 12/12 zöld · architecture zöld (12 allowlisted,
+  változatlan) · secrets zöld (3017 fájl) · l10n zöld
+tools/scope-audit.py --base f94f66ce → OK, 3 changed path(s), 0 violation
+```
+
+Leletenkénti zárás-ellenőrzés — mindhárom esetben a JAVÍTÁS UTÁNI kódot ismét
+mutáltam a review-klónban az EREDETI hibára, és mértem, hogy az ÚJ, megtartott
+teszt valóban pirosra vált-e (majd visszaállítottam):
+
+- **F1 (BLOCKER):** a guard-ot visszaállítva `page.nextCursor == cursor`-ra
+  (az `entries.isNotEmpty` feltétel nélkül) → az új „an empty ledger rebuild
+  returns the initial profile" teszt pirosra vált, pontosan a jelentett
+  `Bad state: ledger page cursor did not advance` hibával. **FIXED.**
+- **F2 (MAJOR):** a `curveProgress.currentLevel.number < profile.currentLevel.number
+  ? profile.progress : curveProgress` guard-ágat törölve (`final progress =
+  curveProgress;`) → az új „a rebalance cannot lower an established profile
+  level" teszt pirosra vált (várt szint 3, kapott 2), a többi teszt
+  változatlanul zöld maradt. **FIXED.**
+- **F3 (MAJOR):** a regex most `r'\bunlock\w*\b'` (egyszeres backslash) —
+  külön Dart-szkripttel megerősítve, hogy `hasMatch('unlockedContent')`,
+  `hasMatch('...unlock anything')` és `hasMatch('...unlock() => {}')` mind
+  `true`. **FIXED.**
+
+Mindhárom fix minimális (a guard-feltétel szűkítése, illetve a regex
+egy-karakteres escaping-javítása) — nem hizlalja a diffet, nem nyúl az
+engedélyezett listán kívülre (scope-audit: 3 fájl, mind a §4/§10-ben várt).
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| A1 | Görbe monoton: nagyobb XP soha nem ad kisebb szintet | ⚠️ Részleges | `level_curve_test.dart` "a greater total XP never maps to a lower level" zöld, DE csak azonos görbén, növekvő XP-n — ez a tulajdonság bármely helyes `progressForTotalXp`-re triviálisan igaz, a guard nélkül is. Lásd **F2**. |
+| A1 | Görbe monoton: nagyobb XP soha nem ad kisebb szintet | ✅ (javítás után) | Eredetileg ⚠️ — a guard-ág teszteletlen volt (**F2**). Javítás után: „a rebalance cannot lower an established profile level" teszt önállóan is pirosra vált a guard eltávolításakor (mérve, lásd fent). |
 | A2 | Teljes újraépítés = inkrementális projekció | ✅ | `level_curve_test.dart:36` "paged rebuild equals incremental projection" — 3 bejegyzés, `pageSize: 1` (3 lapon át), `expect(rebuilt.profile, incrementalProfile)` zöld. Független gate-futtatással megerősítve. |
 | A3 | Egyetlen esemény több szintet is átléphet, mind megjelenik | ✅ | `level_curve_test.dart:59` — 650 XP egy eseményben → `crossedLevels` = `[2,3,4]`. Az implementer saját valódi-sértés próbája (§10) is dokumentálva: csak-végállapot verzió PIROSRA fogta. |
 | A4 | Nagyon nagy XP-nél nincs túlcsordulás, nincs negatív szint | ✅ | `level_curve_test.dart:80` — `maximumSupportedTotalXp - 1` + 10 XP → szaturál `maximumSupportedTotalXp`-n, `_saturatingAdd` felül-túlcsordulás nélkül (kód olvasva: `remaining` előbb, `additional >= remaining` védi az összeadást). |
 | A5 | Küszöbök egyetlen forrásból (`LevelCurve`) | ✅ | `LevelCurve` konstruktor kikényszeríti: level 1 = 0 XP-nél kezdődik, szigorúan növekvő küszöbök, konszekutív sorszámok. |
 | A6 | Szintcímek lokalizációs kulcsok, nem beégetett szöveg | ✅ | `titleKey: String` mező, a kódbázis meglévő konvenciója (`practice/data/builtin_practice_catalog.dart`) szerint; teszt ellenőrzi `contains('.')`. |
 | A7 | Profil verziózott, ismeretlen verzió hibát ad | ✅ | `gamificationProfileSchemaVersion`, konstruktor `ArgumentError` ismeretlen verzióra; teszt zöld. |
-| A8 | Szint nem kapuz tartalmat, nincs `unlock`-kimenet | ❌ | A §6.1 által előírt gépi mérce (a forráskód regex-szkennelése) **hibás regex miatt soha nem talál semmit** — lásd **F1**. A tényleges forráskód ma valóban nem ad unlock-mezőt (kézi olvasással megerősítve), de ez bizonyítatlan marad. |
+| A8 | Szint nem kapuz tartalmat, nincs `unlock`-kimenet | ✅ (javítás után) | Eredetileg ❌ — hibás regex (**F3**). Javítás után a `r'\bunlock\w*\b'` minta mérve valódi unlock-szöveget talál el; a tényleges forráskód nem tartalmaz ilyet. |
 
 ## Scope-audit
 
@@ -71,7 +105,7 @@ a brief §4 listája + a brief maga (§10 handoff-kitöltés).
 - **Ellenőrzés a javításhoz:** egy MEGTARTOTT (nem eldobott) teszt a
   `level_curve_test.dart`-ban: `rebuild()` egy ÜRES ledgeren → nem dob, és a
   visszaadott profil `totalXp == 0`, `currentLevel.number == 1`.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`be823c74`)
 
 ### F2 — MAJOR — A1 (a kör központi invariánsa) nincs valódi teszttel védve: a lefelé-korrekció elleni guard törölhető anélkül, hogy bármelyik teszt pirosra váltana
 
@@ -103,7 +137,7 @@ a brief §4 listája + a brief maga (§10 handoff-kitöltés).
   görbén szint 3-nál áll; ugyanazt a `totalXp`-t egy B görbével — ahol B
   szerint ez csak szint 2 lenne — `projectIncrementally`-vel továbbvetítve a
   szint marad 3, nem esik vissza 2-re).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`be823c74`)
 
 ### F3 — MAJOR — A8 gépi mércéje (unlock-tiltás) hibás regex miatt soha nem talál semmit
 
@@ -138,7 +172,7 @@ a brief §4 listája + a brief maga (§10 handoff-kitöltés).
   valódi-sértés próba: egy ideiglenesen bevezetett `unlockedContent`-jellegű
   mező a vizsgált fájlok egyikében pirosra kell váltsa a tesztet, majd
   visszaállítva zöld.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`be823c74`)
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -150,12 +184,15 @@ a brief §4 listája + a brief maga (§10 handoff-kitöltés).
 | architecture | zöld (implementer log) | ✅ — saját futtatás: OK, 12 allowlistelt eltérés (pre-existing, a scope-audit szerint ez a kör egyetlen fájlt sem ad az allowlisthez) |
 | secrets | zöld (implementer log) | ✅ — saját futtatás: OK, 3016 fájl, 0 lelet |
 | l10n | (nem jelentve az implementer log-ban) | ✅ — saját futtatás: OK (en/hu parity, 1405 üzenet) |
-| CI (teljes suite + property + APK) | — | ⏳ még nem dispatch-elve — a merge előtti kötelező lépés, F1–F3 javítása UTÁN |
+| CI (teljes suite + property + APK) | — | ⏳ dispatch a review lezárása UTÁN, a merge előtti kötelező lépés |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR szükséges
-a merge-hez. **F1 (BLOCKER) és F2/F3 (MAJOR) nyitva — merge TILOS.** Javító
-kört indítok ugyanazzal a motorral (`codex`), a fenti három lelettel a
-promptban, majd a javítás után újrafuttatom a teljes gate-mátrixot és
-frissítem ezt a jelentést.
+Első kör: **F1 (BLOCKER) és F2/F3 (MAJOR) nyitva — merge TILOS.**
+
+Javító kör (`be823c74`) után: mindhárom lelet FIXED, mindegyik saját, önállóan
+mért próbával megerősítve (a javítás visszamutálva → az ÚJ, megtartott teszt
+pirosra vált; visszaállítva → zöld). A targeted gate independently zöld,
+scope-audit OK. **Verdikt: APPROVED**, feltéve hogy a kötelező CI-suite
+(teljes teszt + randomizált property + APK, ADR 0053) is zöld lesz a merge
+SHA-n — ez a következő lépés, még nem történt meg ebben a jelentésben.
