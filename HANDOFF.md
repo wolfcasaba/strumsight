@@ -32,9 +32,23 @@ Következő SDD-kör: **E08-R12 — Streak UI V2 és recovery flow**.
 (az R21 `hold`-on áll), az E13-sáv 36 sora pedig `prepared` volt, amit a
 driver szándékosan nem futtat — ember állítja futtathatóra.
 
-**A döntés:** a Chapter 13 program-nyitó köre, az **E13-R01** (UI baseline
-inventory és screenshot corpus) `pending`. Csak EZ az egy sor — az E13-R02…R36
-marad `prepared`, tehát a sáv körönként, emberi rálátással nyílik.
+**A döntés (2026-08-20, két lépésben):** a Chapter 13 program-nyitó köre, az
+**E13-R01** (UI baseline inventory és screenshot corpus) `pending` — majd a
+user pontosítása után („hagy fejlessze a UI-t") a **teljes E13-sáv nyitva**:
+mind a 36 sor `pending`. A sáv így magától halad R01 → R02 → …, ahogy az Epic
+8 sáv teszi; bármelyik sor bármikor `hold`-ra tehető, ha közbe kell lépni.
+Ugyanaz a minta, mint az Epic 6 sorainak megnyitása (user-döntés 2026-08-11).
+
+**Mérve a teljes nyitásra:** `python3 tools/brief-lint.py --open --level base`
+mind a 36 nyitott E13-briefre → *nincs lelet*, tehát a Router CI nyitott-kör
+kapuja zöld marad.
+
+**Tesztelhetőség (user-igény):** az E13-R01 diffje szándékosan NEM hoz látható
+felületváltozást (leltár-tool + `docs/ui/**` baseline + teszt), a valódi UI a
+R02-től épül. A Dart-only körökre a `tools/round-ci-plan.py` APK NÉLKÜLI Full
+Gate-et ír elő, ezért a telefonos próbához az APK-t külön kell kérni:
+`gh workflow run build-apk.yml --ref main` (a futás artefaktumként adja a
+release APK-t).
 
 **Mérve a döntés előtt (ezen a felhő-boxon, `main @ 7b5315b` + ez a sor):**
 
