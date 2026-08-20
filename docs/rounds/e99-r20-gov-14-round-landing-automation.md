@@ -327,4 +327,13 @@ property gate és exact-SHA Router CI a kör merge-előtti orchestrátori kapuja
 
 ## 11. Review — a Sol tölti ki
 
-Link: `docs/reviews/e99-r20-review.md`
+Verdikt: **APPROVED** (`d0c25079`, javító commit `1779de35`).
+
+- F1/BLOCKER lezárva: rebase után safe push + új exact-SHA CI szükséges;
+  ugyanabban az invokációban nincs merge.
+- F2/MAJOR lezárva: a PR base/head/headOid metaadata a lokális, mért HEAD-hez
+  kötött minden git-művelet előtt.
+- Izolált re-review: `11 passed, 3 subtests`; teljes tooling-suite `662 passed,
+  2 skipped, 574 subtests`; round-gate 6/6 zöld; scope-audit OK.
+- Jelentések: `docs/reviews/e99-r20-review.md`,
+  `docs/reviews/e99-r20-security.md`.
