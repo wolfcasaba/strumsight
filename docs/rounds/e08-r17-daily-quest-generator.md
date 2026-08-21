@@ -13,6 +13,40 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R16 `quest_schedule.dart` mezőit és a `lib/features/practice_generator/` napi terv-szerződését; ellenőrizd a `lib/features/vision/` és `lib/features/analyze/` elérhetőségi (permission/capability) jelzéseit — a generátor ezekre szűr. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0.1 H4 mérce-revízió — ADR 0112 önjavító kör, 2026-08-21
+
+A megállt kör `a8980cab` javítócommitja után a független review az
+`account → cloud` production-mutációval újramérte az A3 account-cellát. A
+teszt **hibásan ZÖLD** maradt: a shipping katalógusból négy objective volt
+eligible, ezért a stabil rendezés és a max-3 kimeneti korlát a hibásan
+eligible account questet a negyedik helyen levágta. A cella így nem a
+capability-tengely helyes bekötését, csak a már levágott végeredményt mérte.
+
+Ez B osztályú mérce-contract hiány; a product scope és a célzott gate útjai
+nem változnak. Az A3 minden capability-tengelyéhez külön candidate-pool cella
+kötelező. Mindegyik fixture **pontosan két entry**-t tartalmaz: egy mindig
+elérhető local short entryt és pontosan a vizsgált capability entryt:
+
+- local short + `camera`;
+- local short + `account`;
+- local short + `cloud`.
+
+Ebben a két-entrys poolban az adott capability `false` értéke csak a local
+short questet hagyhatja meg; a többi két availability flag maradjon `true`.
+Így a max-3 levágás nem rejtheti el a hibásan eligible elemet. A shipping
+default katalógus ID-, short/rest- és exact capability-hozzárendelését ettől
+**külön contract-cella** méri; a production katalógus teljességének őrzése és
+az axis-izoláció nem mosható egyetlen fixture-be.
+
+Kötelező review-mutációk, mindegyik a saját izolált A3-celláján:
+
+- camera → account — **PIROS**;
+- account → cloud — **PIROS**;
+- cloud → camera — **PIROS**.
+
+A brief-contract tartós őre:
+`tools/tests/test_e08_r17_capability_axis_contract.py` (HEAL PR #390).
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -121,7 +155,7 @@ hibától.
 |---|---|---|
 | A1 | Ugyanaz a nap + profil + katalógus-verzió 100 futtatásra AZONOS küldetés-halmazt ad | `daily_quest_generator_test.dart` — determinizmus-cella |
 | A2 | A halmaz mérete a `[1, 3]` sávban van, és van benne legalább egy RÖVID objective | `daily_quest_generator_test.dart` — méret-hármas |
-| A3 | Nem elérhető kamera/fiók/felhő esetén az azt igénylő küldetés NEM generálódik | `daily_quest_generator_test.dart` — elérhetőség-mátrix |
+| A3 | Nem elérhető kamera/fiók/felhő esetén az azt igénylő küldetés NEM generálódik; mindhárom tengely külön, két-entrys candidate poolban bizonyított | `daily_quest_generator_test.dart` — három izolált elérhetőségi cella + külön shipping-catalog contract |
 | A4 | A generátor SEMMILYEN engedélykérést nem vált ki | `daily_quest_generator_test.dart` + review |
 | A5 | Tervezett pihenőnapon opcionális, nem kötelező küldetés jön létre | `daily_quest_generator_test.dart` |
 | A6 | A terv fájljai ÉRINTETLENEK | `git diff --stat` |
@@ -134,6 +168,9 @@ hibától.
 |---|---|
 | `Random()` mag nélkül | **A1** (a determinizmus-cella szór) |
 | A kamera-küldetés engedély nélkül is generálódik | **A3** |
+| camera → account capability-wiring | **A3-camera**, izolált local short + `camera` poolban PIROS |
+| account → cloud capability-wiring | **A3-account**, izolált local short + `account` poolban PIROS |
+| cloud → camera capability-wiring | **A3-cloud**, izolált local short + `cloud` poolban PIROS |
 | A generátor a terv-fájlba ír | **A6** |
 | Pihenőnapon kötelező gyakorlás generálódik | **A5** |
 | Üres katalógusnál üres lista | **A7** |
@@ -151,8 +188,13 @@ A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla d�
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
 
-**Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** cseréld a determinisztikus magot `Random()`-ra, futtasd a gate-et → az **A1**
-determinizmus-cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próbák (KÖTELEZŐK, §10-ben dokumentálva):**
+
+1. cseréld a determinisztikus magot `Random()`-ra, futtasd a gate-et → az
+   **A1** determinizmus-cellának PIROSNAK kell lennie → állítsd vissza;
+2. a §0.0.1 három capability-wiring mutációját egyenként alkalmazd → kizárólag
+   a hozzá tartozó izolált **A3** cellának PIROSNAK kell lennie → minden
+   mutáció után állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
@@ -174,11 +216,13 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 1. `default_quest_catalog.dart` — a küldetés-katalógus, képesség-igényekkel megjelölve.
 2. A determinisztikus mag származtatása (nap + profil-pillanatkép + katalógus-verzió), dokumentálva.
 3. `daily_quest_generator.dart` — szűrés elérhetőségre, majd determinisztikus választás.
-4. A `[1, 3]` sáv betartása, legalább egy rövid objective-vel.
-5. Pihenőnapi, opcionális küldetés ága.
-6. Tartalék küldetés üres katalógusra és új felhasználóra.
-7. A `public.dart` export-sorai; a valódi-sértés próba §10-be.
-8. `tools/round-gate.sh` a §7 szerint.
+4. A három capability-tengely külön két-entrys candidate-pool tesztje és a
+   shipping default katalógus külön contract-cellája.
+5. A `[1, 3]` sáv betartása, legalább egy rövid objective-vel.
+6. Pihenőnapi, opcionális küldetés ága.
+7. Tartalék küldetés üres katalógusra és új felhasználóra.
+8. A `public.dart` export-sorai; a valódi-sértés próbák §10-be.
+9. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 
