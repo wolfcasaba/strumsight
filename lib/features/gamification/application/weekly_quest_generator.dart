@@ -21,6 +21,7 @@ final class WeeklyQuestGenerationSnapshot {
     required this.availableDays,
     required this.availableMinutes,
     required this.baselineWeeklyMinutes,
+    required this.previousQuestId,
     required this.previousCompletedUnits,
     required this.observedCompletedUnits,
     required List<WeeklyQuestCandidate> candidates,
@@ -33,8 +34,15 @@ final class WeeklyQuestGenerationSnapshot {
         'must not be empty',
       );
     }
-    if (availableDays < 0 || availableMinutes < 0) {
-      throw ArgumentError('availability must not be negative');
+    if (availableDays < 0 || availableDays > 7) {
+      throw ArgumentError.value(
+        availableDays,
+        'availableDays',
+        'must be in the inclusive range 0..7',
+      );
+    }
+    if (availableMinutes < 0) {
+      throw ArgumentError('available minutes must not be negative');
     }
     if (baselineWeeklyMinutes < 1) {
       throw ArgumentError.value(
@@ -45,6 +53,20 @@ final class WeeklyQuestGenerationSnapshot {
     }
     if (previousCompletedUnits < 0 || observedCompletedUnits < 0) {
       throw ArgumentError('completed units must not be negative');
+    }
+    if (previousCompletedUnits > 0 && previousQuestId == null) {
+      throw ArgumentError.value(
+        previousQuestId,
+        'previousQuestId',
+        'is required when previous completed units are positive',
+      );
+    }
+    if (previousQuestId != null && previousQuestId!.isEmpty) {
+      throw ArgumentError.value(
+        previousQuestId,
+        'previousQuestId',
+        'must not be empty when provided',
+      );
     }
     if (this.candidates.map((candidate) => candidate.id).toSet().length !=
         this.candidates.length) {
@@ -61,6 +83,7 @@ final class WeeklyQuestGenerationSnapshot {
   final int availableDays;
   final int availableMinutes;
   final int baselineWeeklyMinutes;
+  final String? previousQuestId;
   final int previousCompletedUnits;
   final int observedCompletedUnits;
   final List<WeeklyQuestCandidate> candidates;
@@ -200,10 +223,9 @@ final class WeeklyQuestGenerator {
         : scaledTarget < 1
         ? 1
         : scaledTarget;
-    final completedUnits = _max(
-      snapshot.previousCompletedUnits,
-      snapshot.observedCompletedUnits,
-    );
+    final completedUnits = snapshot.previousQuestId == candidate.id
+        ? _max(snapshot.previousCompletedUnits, snapshot.observedCompletedUnits)
+        : snapshot.observedCompletedUnits;
     final progress = WeeklyQuestProgressProjection(
       targetUnits: targetUnits,
       completedUnits: completedUnits,

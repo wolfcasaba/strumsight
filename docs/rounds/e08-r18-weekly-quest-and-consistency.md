@@ -315,4 +315,20 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - Nincs scope-eltérés. CI-dispatch, PR és merge nem futott: ezek a Claude
   orchestrátor feladatai.
 
+### Correction evidence — 2026-08-21
+
+- Sol review F1: the snapshot now carries `previousQuestId`; only a matching
+  selected candidate combines `previousCompletedUnits` with observed units.
+  The shipping regression keeps the filtered improvement `4`-unit prior
+  progress from the active-days replacement, which starts at `0` observed
+  units. Positive prior units without an ID now reject construction.
+- Sol review F2: `availableDays` now accepts exactly `0..7`. The A1 matrix
+  explicitly measures `3 → 3`, `4 → 4`, `5 → 5`, `6 → 5`, and `7 → 5`, with
+  `-1` and `8` constructor rejection coverage.
+- `dart format lib/features/gamification/application/weekly_quest_generator.dart test/features/gamification/application/weekly_quest_generator_test.dart`
+  → 2 files formatted.
+- `tools/round-gate.sh test/features/gamification/application/weekly_quest_generator_test.dart`
+  → exit 0: format 0 changes; analyze no issues; all 14 targeted tests passed;
+  architecture dependencies OK; secrets stage passed.
+
 ## 11. Review — a Claude tölti ki
