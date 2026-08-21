@@ -335,27 +335,40 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ### Futtatott bizonyítás
 
-- RED: az új inventory teszt a hiányzó `tool/ui_inventory.dart` importtal
-  fordítási hibával állt meg; az implementáció után zöld lett.
-- Screenshot capture: `flutter test --update-goldens
+- **F1 RED:** a független review friss izolált klónban a korábbi
+  `testWidgets` struktúrát reprodukálhatóan 10 perc után timeoutolónak mérte
+  a `decodeImageFromList` várakozásán. A `tester.runAsync` önmagában ugyanígy
+  nem oldotta fel. **GREEN:** a validátor immár plain `test` aszinkron
+  környezetben, explicit 10 másodperces időkorláttal fut; a közvetlen célteszt
+  `1 passed` eredményt adott, a végső gate screenshot-tesztje is zöld lett.
+- **F2:** az `AppRoutes` 40 konstansát és a route-map 40 current-route sorát
+  tételesen újraellenőriztem; a corrected
+  `/song-trainer/result/:songId` sor a `songId` path-paraméter és a typed
+  `SongTrainerResult` `extra` kettős contractját dokumentálja.
+- **F3:** a dokumentált exact `rg -o` mérések a végső HEAD-en: direct
+  `Color(0x…)` 28 occurrence / 9 file, `TextStyle(` 174 occurrence,
+  `SizedBox(`/`EdgeInsets.` 817 occurrence. A parancsok és a mért egységek a
+  token-adósság dokumentumban szerepelnek.
+- **F4 capture és manuális review:** `flutter test --update-goldens
   --dart-define=CAPTURE_UI_BASELINE=true
-  test/ui/ui_baseline_screenshot_test.dart` → 1 passed, 1 skipped. A hét PNG
-  elkészült, és mind a hét fájlt kézzel megnyitottam.
-- Valódi-sértés próba: a `..sort()` eltávolítása után
-  `flutter test test/ui/ui_inventory_test.dart` PIROS lett: az első elem
-  `streak_screen.dart` volt az elvárt rendezett `ai_tutor/...` helyett.
-  A rendezés visszaállítása után a célteszt újra zöld.
-- Záró gate: `tools/round-gate.sh test/ui/ui_inventory_test.dart
-  test/ui/ui_baseline_screenshot_test.dart` → zöld. Az első gate-futtatás
-  szándékolatlanul formázatlan `ui_inventory_test.dart` miatt a format lépésen
-  megállt; `dart format` után a teljes, változatlan gate újrafutott és zölden
-  zárt.
+  test/ui/ui_baseline_screenshot_test.dart` → `1 passed, 1 skipped`. A capture
+  előtt a meglévő Poppins (Regular–ExtraBold) és Montserrat assetek
+  `FontLoader`-rel töltődnek be; új asset vagy `pubspec.yaml` változtatás nem
+  történt. A hét regenerált PNG-t (`live`, `tuner`, `analyze`, `learn`,
+  `library`, `settings`, `onboarding`) egyenként kézzel megnyitottam: a
+  production szöveg olvasható Poppins/Montserrat tipográfiával látszik.
+- **F5:** a Tuner és onboarding 390×844 corpus-képen a jobb felső
+  render-overflow figyelmeztető sáv külön P1, képernyőszintű leletként,
+  a screenshot-fájlokkal evidenciázva bekerült az accessibility backlogba.
+- **Végső gate:** `tools/round-gate.sh test/ui/ui_inventory_test.dart
+  test/ui/ui_baseline_screenshot_test.dart` → exit 0; format (1735 fájl, 0
+  változás), analyze, mindkét célteszt, architecture, secrets és l10n zöld.
 
 ### Eltérések és nem futtatott ellenőrzések
 
 - `lib/**` nem módosult. CI-dispatch, PR, push és APK-build nem futott: ezek
-  az orchestrátor/reviewer feladatai és ezen implementer-kör scope-ján kívül
-  vannak.
+  az orchestrátor/reviewer feladatai és ezen implementer-javító kör scope-ján
+  kívül vannak.
 - A normál corpus-teszt szándékosan nem pixel-golden összehasonlítás; a
   hordozható szerkezeti invariánsokat méri. A corpus eredetét a capture-recept
   és a hét manuális megnyitás bizonyítja.
