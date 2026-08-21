@@ -5,6 +5,13 @@ router registers 40 `GoRoute`s when every feature flag is enabled. Flag-gated
 routes are intentionally recorded: their deep links are not currently
 registered when their owning flag is off.
 
+E08-R15 adds the presentation-only
+`achievements_screen.dart` and `achievement_detail_screen.dart` inventory
+entries. They intentionally have no `AppRoutes` or `GoRoute` registration
+until E08-R30 route wiring, so the route catalogue remains at 40. Until then,
+there is no registered deep link to either screen; a direct deep-link attempt
+cannot reach the achievement list or detail UI.
+
 | Current route | Chapter 13 target / disposition | Deep-link or redirect risk |
 | --- | --- | --- |
 | `/welcome` | onboarding retained; then `/today` | first-run redirect must not loop |

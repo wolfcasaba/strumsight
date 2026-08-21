@@ -355,6 +355,21 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   evidence validáció. A végső `tools/round-gate.sh
   test/features/gamification/presentation/achievements_screen_test.dart` →
   **zöld** (format, analyze, 16 célzott teszt, architecture, secrets).
+- **Folytató javítókör — UI inventory:** `ui_inventory_test.dart` 60
+  production screenre emeli a stabil inventory-őrt, és külön őrzi az exact
+  `achievements_screen.dart` és `achievement_detail_screen.dart` útvonalat.
+  `migration-status.md` az E08-R15 által mért 60 screen- és 97 reusable
+  widget/view-source értéket, valamint a két achievement képernyőt tartalmazó
+  gamification sort rögzíti. `route-map.md` kimondja, hogy a két presentation
+  screen az E08-R30 route-wiringig szándékosan nem kap `AppRoutes` vagy
+  `GoRoute` bejegyzést; a route-katalógus 40 marad, ezért addig nincs
+  regisztrált deep linkjük.
+- **Folytató javítókör gate:** `tools/round-gate.sh
+  test/features/gamification/presentation/achievements_screen_test.dart
+  test/ui/ui_inventory_test.dart` → **zöld**: format (1752 fájl, 0 változás),
+  analyze (0 lelet), achievement suite (16/16), UI inventory (1/1),
+  architecture (12 allowlisted eltérés), secrets (3146 fájl, 0 lelet), l10n
+  (1532 EN/HU üzenet).
 
 ## 11. Review — a Claude tölti ki
 

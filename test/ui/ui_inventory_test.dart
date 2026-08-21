@@ -13,11 +13,23 @@ void main() {
       final second = UiInventory(repository).render();
 
       expect(first.toMarkdown(), second.toMarkdown());
-      expect(first.screenPaths, hasLength(58));
+      expect(first.screenPaths, hasLength(60));
       expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
       expect(
         first.screenPaths,
         contains('lib/features/live/screens/live_screen.dart'),
+      );
+      expect(
+        first.screenPaths,
+        contains(
+          'lib/features/gamification/presentation/screens/achievements_screen.dart',
+        ),
+      );
+      expect(
+        first.screenPaths,
+        contains(
+          'lib/features/gamification/presentation/screens/achievement_detail_screen.dart',
+        ),
       );
       expect(
         first.screenPaths,

@@ -1,7 +1,7 @@
 # Screen migration status
 
-Measured by `dart run tool/ui_inventory.dart` at E13-R01: 58 production screen
-sources, 96 reusable widget/view sources, and 16 dialog or bottom-sheet
+Measured by `dart run tool/ui_inventory.dart` at E08-R15: 60 production screen
+sources, 97 reusable widget/view sources, and 16 dialog or bottom-sheet
 sources. All are legacy baseline entries: no Chapter 13 design-system migration
 is claimed in this round.
 
@@ -20,7 +20,7 @@ is claimed in this round.
 | audio_analysis: compare, export, metric detail, overview, timeline | legacy / migration pending |
 | auth: login | legacy / migration pending |
 | chords: chord library | legacy / migration pending |
-| gamification: streak detail | legacy / migration pending |
+| gamification: achievements, achievement detail, streak detail | legacy / migration pending |
 | learn: latency calibration, player, lesson list, score preview | legacy / migration pending |
 | library: library, session detail | legacy / migration pending |
 | live: live | legacy / migration pending |
@@ -39,5 +39,5 @@ is claimed in this round.
 
 The canonical per-file list of screens, reusable widget/view sources, and
 dialog/bottom-sheet sources is the deterministic generator output in
-`tool/ui_inventory.dart`; its test holds the measured screen count at 58 and
+`tool/ui_inventory.dart`; its test holds the measured screen count at 60 and
 guards against traversal-order drift.
