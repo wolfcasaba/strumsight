@@ -14532,3 +14532,38 @@ közvetlenül a kombinált gate előtt újra kell futtatni. Ez környezeti
 helyreállítás, nem tracked forrás- vagy gate-módosítás.
 
 **Őrteszt:** nincs — gitignore-olt, upstreamfüggő környezeti előfeltétel; a reprodukció a `.pipeline/land-E13-R03.log` 38 analyzer hibája, majd ugyanazon HEAD-en prepare + 7/7 zöld gate.
+
+## L384 — Egy ThemeData-integráció scope-ja a meglévő adapter-kompatibilitási tesztet is magában foglalja (E13-R04, H3 self-heal, 2026-08-21)
+
+**Mért hiba.** Az E13-R04 pre-flightja az ADR 0383 §D3-ban kötött szerződéssé
+tette, hogy az `SsTypography` a
+`SsThemeExtensions.legacyThemeForBrightness` által visszaadott `ThemeData`
+extensionjei közé kerüljön. A meglévő
+`test/core/design_system/foundations_test.dart:41-50` ugyanakkor közvetlen
+`equals(AppTheme.dark())` és `equals(AppTheme.light())` objektumegyenlőséget
+várt. A helyes extension-regisztráció ezt a cellát a teljes CI-ban
+szükségképpen pirosra vinné, de az eredeti brief sem az allowlistben, sem a
+célzott gate-ben nem tartalmazta a tesztet. Az implementer ezért helyesen
+`stopped` jelzést adott production módosítás nélkül.
+
+**Gyökérok és javítás.** Ez B osztályú tranzakciós scope-hiány: a production
+adapter engedélyezése önmagában nem elég, ha annak korábbi kompatibilitási
+contractja egy másik, meglévő tesztben él. A brief exact egyetlen úttal,
+`test/core/design_system/foundations_test.dart`-tal bővült az
+`allowed_paths` és `gate_tests` listában is. A folytatott product kör ugyanabban
+a commitban őrzi meg a legacy szín-/theme-forrás paritását és cseréli le a
+túl erős teljes-objektum egyenlőséget olyan kompatibilitási állításra, amely
+az új typography extension tényleges jelenlétét is méri. Más design-system
+tesztút nem nyílt meg; a self-heal nem implementálta előre a product kódot.
+
+**Precedens-ellenőrzés.** Az L246 ugyanennek az absztrakt hibának a korábbi
+adapteres esete: egy port vagy integrációs pont engedélyezése mellett annak
+konkrét adaptere/contractja is scope. Az E13-R02 előzmények a compatibility
+layer forrásparitását bizonyítják, de a mostani, új extension miatt elavuló
+teljes `ThemeData`-egyenlőség külön mért eset.
+
+**Őrteszt:**
+`tools/tests/test_e13_r04_typography_foundations_scope.py` — a brief-revízió
+előtt 4/5 cella piros, utána 5/5 zöld; a valódi brief-parserrel és
+scope-audittal őrzi az exact új fájlt, a testvérút tiltását és a célzott
+gate-tagságot.
