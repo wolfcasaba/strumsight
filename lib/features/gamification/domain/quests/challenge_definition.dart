@@ -79,6 +79,16 @@ final class StrumPatternChallenge extends DailyChallengeDefinition {
     'name': name,
   };
 
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StrumPatternChallenge &&
+          _patternEquals(other.pattern, pattern) &&
+          other.name == name;
+
+  @override
+  int get hashCode => Object.hash(Object.hashAll(pattern), name);
+
   factory StrumPatternChallenge.fromJson(Map<String, Object?> object) {
     final patternRaw = object['pattern'];
     if (patternRaw is! List<Object?> ||
@@ -146,6 +156,17 @@ final class ChordChangeChallenge extends DailyChallengeDefinition {
         toChordId: _requireString(object, 'toChordId'),
         beats: _requireInt(object, 'beats'),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChordChangeChallenge &&
+          other.fromChordId == fromChordId &&
+          other.toChordId == toChordId &&
+          other.beats == beats;
+
+  @override
+  int get hashCode => Object.hash(fromChordId, toChordId, beats);
 }
 
 /// A challenge to play a rhythm pattern at a target tempo. The pattern is one
@@ -179,6 +200,16 @@ final class RhythmChallenge extends DailyChallengeDefinition {
         contentId: _requireString(object, 'contentId'),
         targetBpm: _requireInt(object, 'targetBpm'),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RhythmChallenge &&
+          other.contentId == contentId &&
+          other.targetBpm == targetBpm;
+
+  @override
+  int get hashCode => Object.hash(contentId, targetBpm);
 }
 
 /// A challenge to play a specific section of an installed song for a given
@@ -224,6 +255,17 @@ final class SongSectionChallenge extends DailyChallengeDefinition {
         sectionId: _requireString(object, 'sectionId'),
         repetitions: _requireInt(object, 'repetitions'),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SongSectionChallenge &&
+          other.songId == songId &&
+          other.sectionId == sectionId &&
+          other.repetitions == repetitions;
+
+  @override
+  int get hashCode => Object.hash(songId, sectionId, repetitions);
 }
 
 /// A challenge to hit a target strum-tempo window on a rhythm content ID.
@@ -260,6 +302,16 @@ final class TimingChallenge extends DailyChallengeDefinition {
         contentId: _requireString(object, 'contentId'),
         targetWindowMs: _requireInt(object, 'targetWindowMs'),
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TimingChallenge &&
+          other.contentId == contentId &&
+          other.targetWindowMs == targetWindowMs;
+
+  @override
+  int get hashCode => Object.hash(contentId, targetWindowMs);
 }
 
 Map<String, Object?> _requireObject(Object? value, String field) {
@@ -284,4 +336,12 @@ StrumDirection _directionFromName(String name) {
     if (direction.name == name) return direction;
   }
   throw ArgumentError.value(name, 'StrumDirection', 'is not supported');
+}
+
+bool _patternEquals(List<StrumDirection> left, List<StrumDirection> right) {
+  if (left.length != right.length) return false;
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) return false;
+  }
+  return true;
 }
