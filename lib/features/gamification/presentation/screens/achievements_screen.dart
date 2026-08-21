@@ -11,10 +11,12 @@ class AchievementsScreen extends StatefulWidget {
     super.key,
     required this.definitions,
     required this.progressByAchievement,
+    required this.onAchievementSelected,
   });
 
   final List<AchievementDefinition> definitions;
   final Map<String, AchievementProgress> progressByAchievement;
+  final ValueChanged<String> onAchievementSelected;
 
   @override
   State<AchievementsScreen> createState() => _AchievementsScreenState();
@@ -61,7 +63,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: AchievementCategory.values
+              children: _filterableCategories
                   .map(
                     (category) => ChoiceChip(
                       key: Key('achievement-filter-category-${category.name}'),
@@ -85,6 +87,7 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
                 AchievementTile(
                   definition: definition,
                   progress: widget.progressByAchievement[definition.id],
+                  onSelected: widget.onAchievementSelected,
                 ),
                 const SizedBox(height: 12),
               ],
@@ -125,6 +128,18 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
       })
       .toList(growable: false);
 }
+
+const _filterableCategories = <AchievementCategory>[
+  AchievementCategory.consistency,
+  AchievementCategory.practice,
+  AchievementCategory.songs,
+  AchievementCategory.rhythm,
+  AchievementCategory.chords,
+  AchievementCategory.technique,
+  AchievementCategory.analysis,
+  AchievementCategory.exploration,
+  AchievementCategory.personalBest,
+];
 
 class _EmptyAchievementsState extends StatelessWidget {
   @override

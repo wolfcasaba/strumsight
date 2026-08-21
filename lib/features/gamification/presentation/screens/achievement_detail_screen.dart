@@ -11,11 +11,26 @@ enum AchievementEvidenceReasonCode {
 }
 
 final class AchievementEvidence {
-  const AchievementEvidence({
+  AchievementEvidence({
     required this.reason,
     required this.current,
     required this.target,
-  });
+  }) {
+    if (!current.isFinite || current < 0) {
+      throw ArgumentError.value(
+        current,
+        'current',
+        'must be finite and nonnegative',
+      );
+    }
+    if (!target.isFinite || target <= 0) {
+      throw ArgumentError.value(
+        target,
+        'target',
+        'must be finite and positive',
+      );
+    }
+  }
 
   final AchievementEvidenceReasonCode reason;
   final num current;
@@ -51,11 +66,12 @@ class AchievementDetailScreen extends StatelessWidget {
     if (content == null) return _notFound(context, l10n);
     final percent = achievementPercent(progress);
     final completedAt = progress?.completedAt;
-    final completion = completedAt == null
+    final formattedCompletedAt = completedAt == null
         ? null
-        : l10n.achievementUnlockedOn(
-            MaterialLocalizations.of(context).formatMediumDate(completedAt!),
-          );
+        : MaterialLocalizations.of(context).formatMediumDate(completedAt);
+    final completion = formattedCompletedAt == null
+        ? null
+        : l10n.achievementUnlockedOn(formattedCompletedAt);
     return Scaffold(
       appBar: AppBar(title: Text(l10n.achievementsTitle)),
       body: SafeArea(
@@ -64,7 +80,7 @@ class AchievementDetailScreen extends StatelessWidget {
           children: [
             Semantics(
               container: true,
-              label: completion == null
+              label: formattedCompletedAt == null
                   ? l10n.achievementTileSemanticsInProgress(
                       achievementSemanticsDescription(
                         content.accessibilityDescription,
@@ -76,9 +92,7 @@ class AchievementDetailScreen extends StatelessWidget {
                         content.accessibilityDescription,
                       ),
                       percent,
-                      MaterialLocalizations.of(
-                        context,
-                      ).formatMediumDate(completedAt!),
+                      formattedCompletedAt,
                     ),
               child: ExcludeSemantics(
                 child: Column(

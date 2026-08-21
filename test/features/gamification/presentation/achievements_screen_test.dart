@@ -119,6 +119,35 @@ void main() {
         handle.dispose();
       },
     );
+
+    testWidgets(
+      'category filters expose real categories but never the audit marker or locked hidden details',
+      (tester) async {
+        await _pumpAchievements(
+          tester,
+          definitions: definitions,
+          progress: progress(),
+        );
+
+        expect(
+          find.byKey(const Key('achievement-filter-category-practice')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(
+            const Key('achievement-filter-category-accessibilityNeutral'),
+          ),
+          findsNothing,
+        );
+
+        await tester.tap(
+          find.byKey(const Key('achievement-filter-category-consistency')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('A secret achievement'), findsNothing);
+        expect(find.text('Balanced practice week'), findsNothing);
+      },
+    );
   });
 
   testWidgets(
@@ -170,7 +199,7 @@ void main() {
     await _pumpDetail(
       tester,
       achievementId: 'practice_starter',
-      evidence: const AchievementEvidence(
+      evidence: AchievementEvidence(
         reason: AchievementEvidenceReasonCode.measuredProgress,
         current: 3,
         target: 5,
@@ -178,6 +207,28 @@ void main() {
     );
 
     expect(find.text('Measured progress: 3 of 5.'), findsOneWidget);
+  });
+
+  test('A4 — evidence rejects invalid aggregate measurements', () {
+    final invalidEvidence = <({num current, num target})>[
+      (current: double.nan, target: 5),
+      (current: double.infinity, target: 5),
+      (current: -1, target: 5),
+      (current: 1, target: double.nan),
+      (current: 1, target: double.infinity),
+      (current: 1, target: 0),
+    ];
+
+    for (final values in invalidEvidence) {
+      expect(
+        () => AchievementEvidence(
+          reason: AchievementEvidenceReasonCode.measuredProgress,
+          current: values.current,
+          target: values.target,
+        ),
+        throwsArgumentError,
+      );
+    }
   });
 
   test('A4 — evidence contract is closed to IDs, payloads, and user text', () {
@@ -246,6 +297,37 @@ void main() {
     expect(find.text('Achievement not found'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'visible tiles have one button action that returns their exact ID',
+    (tester) async {
+      String? selectedId;
+      final handle = tester.ensureSemantics();
+      await _pumpAchievements(
+        tester,
+        definitions: definitions,
+        progress: progress(),
+        onAchievementSelected: (id) => selectedId = id,
+      );
+
+      await _scrollUntilText(tester, 'First valid session');
+      final tile = find.bySemanticsLabel(
+        'Achievement: first valid practice session. 60% complete.',
+      );
+      expect(tile, findsOneWidget);
+      expect(
+        tester.getSemantics(tile),
+        matchesSemantics(
+          label: 'Achievement: first valid practice session. 60% complete.',
+          isButton: true,
+          hasTapAction: true,
+        ),
+      );
+      await tester.tap(tile);
+      expect(selectedId, 'first_valid_session');
+      handle.dispose();
+    },
+  );
 
   group('A7 + A8 — localized, accessible responsive UI', () {
     testWidgets(
@@ -350,6 +432,7 @@ Future<void> _pumpAchievements(
   required List<AchievementDefinition> definitions,
   required Map<String, AchievementProgress> progress,
   double textScale = 1,
+  ValueChanged<String> onAchievementSelected = _ignoreAchievementSelection,
 }) => tester.pumpWidget(
   MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -359,10 +442,13 @@ Future<void> _pumpAchievements(
       child: AchievementsScreen(
         definitions: definitions,
         progressByAchievement: progress,
+        onAchievementSelected: onAchievementSelected,
       ),
     ),
   ),
 );
+
+void _ignoreAchievementSelection(String _) {}
 
 Future<void> _pumpDetail(
   WidgetTester tester, {

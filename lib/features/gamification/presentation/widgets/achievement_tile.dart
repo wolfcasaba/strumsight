@@ -8,10 +8,12 @@ class AchievementTile extends StatelessWidget {
     super.key,
     required this.definition,
     required this.progress,
+    required this.onSelected,
   });
 
   final AchievementDefinition definition;
   final AchievementProgress? progress;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -38,12 +40,13 @@ class AchievementTile extends StatelessWidget {
     if (content == null) return const SizedBox.shrink();
     final percent = achievementPercent(progress);
     final completedAt = progress?.completedAt;
-    final completion = completedAt == null
+    final formattedCompletedAt = completedAt == null
         ? null
-        : l10n.achievementUnlockedOn(
-            MaterialLocalizations.of(context).formatMediumDate(completedAt!),
-          );
-    final semantics = completion == null
+        : MaterialLocalizations.of(context).formatMediumDate(completedAt);
+    final completion = formattedCompletedAt == null
+        ? null
+        : l10n.achievementUnlockedOn(formattedCompletedAt);
+    final semantics = formattedCompletedAt == null
         ? l10n.achievementTileSemanticsInProgress(
             achievementSemanticsDescription(content.accessibilityDescription),
             percent,
@@ -51,32 +54,37 @@ class AchievementTile extends StatelessWidget {
         : l10n.achievementTileSemanticsUnlocked(
             achievementSemanticsDescription(content.accessibilityDescription),
             percent,
-            MaterialLocalizations.of(context).formatMediumDate(completedAt!),
+            formattedCompletedAt,
           );
 
     return Semantics(
       container: true,
+      button: true,
       label: semantics,
+      onTap: () => onSelected(definition.id),
       child: ExcludeSemantics(
         child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  content.title,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                Text(content.description),
-                const SizedBox(height: 12),
-                Text(l10n.achievementProgress(percent)),
-                if (completion != null) ...[
+          child: InkWell(
+            onTap: () => onSelected(definition.id),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    content.title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 4),
-                  Text(completion),
+                  Text(content.description),
+                  const SizedBox(height: 12),
+                  Text(l10n.achievementProgress(percent)),
+                  if (completion != null) ...[
+                    const SizedBox(height: 4),
+                    Text(completion),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -115,7 +123,11 @@ String localizedAchievementCategory(
     l10n.achievementCategoryAccessibilityNeutral,
 };
 
-_AchievementContent? localizedAchievementContent(
+/// Resolves the catalog's closed localization keys for presentation.
+///
+/// Returns null for an unknown key so callers can fail closed without exposing
+/// partially localized achievement content.
+AchievementContent? localizedAchievementContent(
   AppLocalizations l10n,
   AchievementDefinition definition,
 ) {
@@ -250,11 +262,12 @@ _AchievementContent? localizedAchievementContent(
       accessibilityDescription == null) {
     return null;
   }
-  return _AchievementContent(title, description, accessibilityDescription);
+  return AchievementContent(title, description, accessibilityDescription);
 }
 
-final class _AchievementContent {
-  const _AchievementContent(
+/// Localized presentation strings for one known achievement definition.
+final class AchievementContent {
+  const AchievementContent(
     this.title,
     this.description,
     this.accessibilityDescription,

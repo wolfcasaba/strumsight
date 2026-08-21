@@ -297,6 +297,15 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   13/13 zöld; `tools/round-gate.sh
   test/features/gamification/presentation/achievements_screen_test.dart` →
   zöld (format, analyze, célzott test, architecture).
+- **Javító kör RED/GREEN:** az új detail-callback regressziós cella a régi
+  kódon `AchievementsScreen.onAchievementSelected` hiányával fordításkor
+  piros lett. A javítás után a célzott `flutter test
+  test/features/gamification/presentation/achievements_screen_test.dart` →
+  **16/16 zöld**: exact-ID callback + button semantics, explicit valós
+  category/audit-marker/hidden mátrix, valamint NaN/infinity/negatív/zero
+  evidence validáció. A végső `tools/round-gate.sh
+  test/features/gamification/presentation/achievements_screen_test.dart` →
+  **zöld** (format, analyze, 16 célzott teszt, architecture, secrets).
 
 ## 11. Review — a Claude tölti ki
 
