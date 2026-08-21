@@ -17,9 +17,12 @@ Capture recipe:
    ratio 1, uses `StrumSightApp` for the five shell destinations, and renders
    the production `TunerScreen` and `OnboardingScreen` directly.
 3. Before mounting a screen, the capture test loads the existing Poppins
-   (Regular through ExtraBold) and Montserrat font assets with `FontLoader`.
-   This makes the raster use the application's readable production typography
-   instead of the Ahem test-font fallback; it adds no asset or pubspec change.
+   (Regular through ExtraBold), Montserrat and Material Icons bundle assets
+   with `FontLoader`. It also derives the active Flutter SDK root from
+   `Platform.resolvedExecutable` and loads its licensed Roboto Regular, Medium
+   and Bold material fonts. This makes the raster use the production
+   typography and icons instead of the Ahem test-font fallback or square icon
+   placeholders; it adds no asset or pubspec change.
 4. It replaces microphone engines and preference storage with the existing
    in-memory test fakes. Live receives a deterministic C/downstroke frame and
    Tuner receives a deterministic in-tune A reading; no network or platform

@@ -319,7 +319,9 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   ellenőriz.
 - `test/ui/ui_baseline_screenshot_test.dart` — exact hét PNG dekódolás,
   pozitív byte/pixelméret és portrait validátor; külön, opt-in capture-út a
-  production screen-widgetekhez.
+  production screen-widgetekhez, bundle Material Icons-szal és az aktív
+  Flutter SDK-ból determinisztikusan töltött Roboto Regular/Medium/Bold
+  material fontokkal.
 - `docs/ui/README.md` — corpus-használat és a 390×844, in-memory fake-es
   capture recipe; kimondja, hogy a corpus nem design-jóváhagyás.
 - `docs/ui/migration-status.md` — a teljes screen-állomány legacy státusza és
@@ -351,15 +353,26 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   token-adósság dokumentumban szerepelnek.
 - **F4 capture és manuális review:** `flutter test --update-goldens
   --dart-define=CAPTURE_UI_BASELINE=true
-  test/ui/ui_baseline_screenshot_test.dart` → `1 passed, 1 skipped`. A capture
-  előtt a meglévő Poppins (Regular–ExtraBold) és Montserrat assetek
-  `FontLoader`-rel töltődnek be; új asset vagy `pubspec.yaml` változtatás nem
-  történt. A hét regenerált PNG-t (`live`, `tuner`, `analyze`, `learn`,
-  `library`, `settings`, `onboarding`) egyenként kézzel megnyitottam: a
-  production szöveg olvasható Poppins/Montserrat tipográfiával látszik.
-- **F5:** a Tuner és onboarding 390×844 corpus-képen a jobb felső
-  render-overflow figyelmeztető sáv külön P1, képernyőszintű leletként,
-  a screenshot-fájlokkal evidenciázva bekerült az accessibility backlogba.
+  test/ui/ui_baseline_screenshot_test.dart` → `2 passed, 1 skipped`. A capture
+  előtt a meglévő Poppins (Regular–ExtraBold), Montserrat és Material Icons
+  bundle assetek `FontLoader`-rel töltődnek be. A Material 3 body family
+  ténylegesen Roboto, ezért a teszt az aktív Flutter SDK rootját
+  `Platform.resolvedExecutable`-ből vezeti le, és onnan tölti be a
+  Roboto-Regular.ttf, Roboto-Medium.ttf és Roboto-Bold.ttf fájlokat. Új asset
+  vagy `pubspec.yaml` változtatás nem történt. A hét regenerált PNG-t (`live`,
+  `tuner`, `analyze`, `learn`, `library`, `settings`, `onboarding`) egyenként
+  kézzel megnyitottam: nincs Ahem-blokk, négyzetes Material ikon vagy piros
+  debug banner.
+- **F5:** a korábbi Tuner/onboarding jobb felső piros átlós sáv nem production
+  render-overflow volt, hanem a közvetlen capture wrapper debug bannerje. A
+  wrapper most kikapcsolja a bannert; ezt nem rögzítjük production layout
+  hibaként az accessibility backlogban.
+- **F6 RED → GREEN:** a megőrzött WIP első céltesztje reprodukálhatóan piros
+  volt: `Expected: 'Poppins'`, `Actual: 'Roboto'` a production body family
+  mérésén. A javított, nem skipelt wrapper-contract test a body `Roboto` és
+  heading `Montserrat` family-ket, a pontos három Roboto SDK-fájlnevet és
+  létezésüket méri; `flutter test test/ui/ui_baseline_screenshot_test.dart`
+  → `2 passed, 1 skipped`.
 - **Végső gate:** `tools/round-gate.sh test/ui/ui_inventory_test.dart
   test/ui/ui_baseline_screenshot_test.dart` → exit 0; format (1735 fájl, 0
   változás), analyze, mindkét célteszt, architecture, secrets és l10n zöld.
