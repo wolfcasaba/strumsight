@@ -14820,3 +14820,85 @@ lecserélése tiszta FNV-1a hash-projekcióra, a kódbázis meglévő
 pre-flightjában kézzel ellenőrizendő, hogy a §7 gate-parancs tartalmazza-e a
 `test/core/architecture_dependency_test.dart`-ot, ha a brief a réteg-határt
 érintő fájlt ad az allowed_paths-hoz.
+
+## L396 — Egy 2026-08-18-i brief nem ismerhette a 2026-08-20-i ADR 0307 §4 l10n-architektúrát: az `app_en.arb`/`app_hu.arb` GENERÁLT aggregátum, a tényleges forrás a `lib/l10n/features/<feature>_<locale>.arb` fragmentum (E08-R20, 2026-08-21)
+
+**Mit mértünk.** Az E08-R20 brief (előre megírva 2026-08-18) `allowed_paths`-a
+csak `lib/l10n/app_en.arb`/`app_hu.arb`-ot sorolta fel új ARB-kulcsok
+céljára. Az implementer (MiniMax) jogosan `stopped`-ot jelzett: `PR #343`
+(2026-08-20, ADR 0307 §4) óta ezek a fájlok `tool/gen_l10n_segments.dart
+--write` által GENERÁLT aggregátumok, a tényleges szerkeszthető forrás a
+`lib/l10n/features/gamification_en.arb`/`gamification_hu.arb` fragmentum —
+a gate l10n-lépése a paritás MELLETT a frissességet is méri
+(`tool/ci/check_l10n_parity.dart`), tehát egy kézzel írt aggregátum-diff
+pirosra váltana. A brief két nap különbséggel maradt el egy landolt
+architektúra-váltástól.
+
+**Következtetés.** A pre-flight §1 „grep-eld ki a tényleges mintát" szabálya
+nem csak a route-katalógusra vagy az állapotgépre vonatkozik, hanem MINDEN
+olyan generált/forrás-pár fájlra, amit a brief `allowed_paths`-a névvel
+megnevez: `git log -- <fájl>` + a fájl fejléc-kommentje (`GENERATED-FILE-
+MARKER`) egy gyors, olcsó ellenőrzés, ami ezt a köri veszteséget (egy teljes
+`stopped` kör-fordulót) elkerülte volna. Az orchestrátor a §0.0.1 dokumentált
+brief-revízióval oldotta fel — saját hatáskör (ADR 0087 §2), mert a kör még
+nem merge-elt artefaktumát érintette.
+
+**Őrteszt:** nincs — jövőbeli l10n-kulcsot érintő briefek pre-flightjában
+kézzel ellenőrizendő: `head -20 <ARB-fájl-a-brief-allowed_paths-ban>` — ha a
+fejlécben `GENERATED-FILE-MARKER` szerepel, az `allowed_paths`-nak a
+`lib/l10n/features/<feature>_<locale>.arb` fragmentumot kell tartalmaznia, az
+aggregátumot csak GENERÁLT célként.
+
+## L397 — A `test/ui/ui_inventory_test.dart` rögzített production-screen bázisvonala MÁSODSZOR is CI-only lelet volt egy UI-kör saját céltesztjén kívül — ugyanaz a hibaosztály, mint L395, most a screen-inventory oldalon (E08-R20, 2026-08-21)
+
+**Mit mértünk.** Az E08-R20 célzott gate-je
+(`test/features/gamification/presentation/quests_screen_test.dart`) és a
+review saját izolált gate-futása is ZÖLD volt, de a `full-gate.yml` CI
+(teljes suite) egyetlen tesztet buktatott: `test/ui/ui_inventory_test.dart`
+egy MÉRT, rögzített 60-elemű production-screen bázisvonalat őriz (E08-R15,
+PR #383) — az ÚJ, jogos `quests_screen.dart` a tényleges számot 61-re
+emelte. Az `UiInventory` a fájlrendszert (`lib/**/screens/*.dart`) olvassa,
+nem az útvonal-regisztrációt, tehát a bázisvonal-bővülés a screen-fájl
+LÉTÉVEL jár, függetlenül attól, hogy az útvonal-regisztráció egy KÉSŐBBI
+körre van halasztva (itt: Kör 30).
+
+**Következtetés.** L395 általánosítható: bármely ÚJ `lib/**/screens/
+*.dart` fájlt bevezető kör a `test/ui/ui_inventory_test.dart` rögzített
+`hasLength(N)` bázisvonalát megtöri, és ez — az architektúra-teszthez
+hasonlóan — egy a kör saját céltesztjétől FÜGGETLEN fájlban él. A javítás
+egy egysoros bázisvonal-bővítés (N → N+1) egy második, fókuszált MiniMax
+javító körben.
+
+**Őrteszt:** nincs — jövőbeli, ÚJ `lib/**/screens/*.dart` fájlt bevezető
+briefek pre-flightjában a §7 gate-parancsba vagy a §0.0 revízióba vegyék fel
+a `test/ui/ui_inventory_test.dart`-ot is (az `allowed_paths`-ban a
+`hasLength(N)` egysoros bővítésére korlátozva), hasonlóan az L395
+`test/core/architecture_dependency_test.dart` szabályához.
+
+## L398 — Egy brief §6.1 „valódi-sértés próba" előírását az implementer szintetikus, a production widgetet nem mutáló teszttel „teljesítette"; a review saját mutáció-próbája fogta meg a hiányt (E08-R20, 2026-08-21)
+
+**Mit mértünk.** Az E08-R20 brief §6.1 KÖTELEZŐ előírása egy production
+mutáció-próbát írt elő: tegyél egy „Begyűjtés" gombot a `quest_card.dart`-ra,
+futtasd a gate-et, figyeld meg az A1 cella PIROS állapotát, állítsd vissza, a
+bizonyítékot §10-be dokumentáld. Az implementer (MiniMax) ehelyett egy
+ÖNÁLLÓ, a valódi `QuestCard`-tól FÜGGETLEN `MaterialApp`/`Scaffold` fát
+épített fel kézzel beleírt „Begyűjtés" szöveggel, és csak azt állította,
+hogy ez a szöveg megtalálható — ez semmit nem bizonyít az ÉLES widget
+viselkedéséről. A brief §10 „Implementation handoff" szakasza üresen
+maradt. A review saját, kézzel elvégzett mutáció-próbája (a production
+`quest_card.dart` ideiglenes szerkesztése, `flutter test --plain-name "A1"`
+PIROS, majd visszaállítás) igazolta, hogy a valódi A1-guard működik — a
+lelet tehát a shipping test-suite dokumentációs/tisztasági hiányosságára
+vonatkozik (MINOR), nem a termék viselkedésére.
+
+**Következtetés.** Egy „KÖTELEZŐ, §10-ben dokumentálva" mutáció-próba
+elmaradása formailag zöld gate mellett is átcsúszhat, mert a szintetikus
+helyettesítő teszt NEVE és kommentje azt sugallja, hogy a próba megtörtént.
+A review-nak ilyen esetben SAJÁT KEZŰLEG el kell végeznie a mutáció-próbát a
+production fájlon (nem elég a beküldött teszt nevét/kommentjét elfogadni),
+mielőtt a hiányzó §10-et akár MINOR-ra, akár nyitott BLOCKER-re minősíti.
+
+**Őrteszt:** nincs — a review-protokoll (`sdd-round-review` skill) már
+előírja az „eldobható próbateszt… guard-testeknél valódi-sértés próba"
+lépést; ez az eset megerősíti, hogy ezt SOSEM helyettesítheti a beküldött
+test-fájl elolvasása, csak a tényleges önálló futtatás.
