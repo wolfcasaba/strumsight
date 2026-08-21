@@ -14766,3 +14766,25 @@ scope-bővítés formájában rokon, nem a widgettípus-csere contractjában.
 őrzi az exact új fájlt, a testvérút tiltását, a célzott gate-tagságot és a
 mért `Card`-ütközés dokumentálását. A teljes tooling suite a javításon 714
 passed, 1 skipped és 610 subtests passed eredménnyel zárt.
+
+## L394 — Friss klónban a generált l10n első gate-je átmenetileg stale lehet, ezért a változatlan-HEAD ismétlés diagnosztikai bizonyíték, nem product-fix (E08-R18, 2026-08-21)
+
+**Mit mértünk.** Két egymástól független, friss E08-R18 review-klónban a
+`tools/prepare-flutter-generated.sh` sikeres lefutása után a
+`tools/round-gate.sh test/features/gamification/application/weekly_quest_generator_test.dart`
+első futása 38, már korábban létező achievement-localization getter hiányával
+állt meg. Ugyanazon klónban, változatlan `HEAD`-en és product diff nélkül a
+második teljes gate zöld lett; a format által látott Dart-fájlok száma 1771-ről
+1773-ra nőtt. A jelenség tehát kétszer reprodukálódott, és nem az E08-R18 új,
+lokalizációt nem érintő production kódjához kötődött.
+
+**Következtetés.** Egy friss klón első, generált outputot fogyasztó analyzer-
+hibáját nem szabad azonnal termékregressziónak vagy zöld eredménynek minősíteni.
+Előbb ellenőrizni kell a tracked diffet és a generált fájlkészletet, majd
+ugyanazon változatlan HEAD-en a teljes gate-et újra kell futtatni. Csak a
+második, teljes, zöld futás fogadható el; egyetlen részcella vagy kézi analyzer
+nem helyettesíti. A generátor/gate javítása külön governance-kör, mert az
+E08-R18 allowlistje nem enged mérce- vagy tooling-módosítást.
+
+**Őrteszt:** nincs — a reprodukció két izolált klón teljes gate-naplója és a
+1771→1773 fájlszám-eltérés; a tooling javítása védett mérce-scope.

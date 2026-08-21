@@ -9590,3 +9590,40 @@ merge megőrizte a történetet, force-push és self-duplicate lánc nélkül. E
 success; a landoló kombinált-HEAD gate-je 6/6 zöld. Implementer Terra
 (`gpt-5.6-terra`), orchestrátor/reviewer Sol (`gpt-5.6-sol`). Pontos következő
 E08 kör: **E08-R18 — Heti quest és consistency objective**.
+
+## ✅ E08-R18 KÉSZ — Rugalmas heti quest és consistency objective
+
+PR [#394](https://github.com/wolfcasaba/strumsight/pull/394), squash
+`29c27ab2`, ADR
+[0386](adr/0386-flexible-weekly-quest-projection.md). A Terra implementáció
+pure, caller-fed snapshotból állít elő legfeljebb egy kötelező heti questet.
+A target az elérhető heti percekkel `ceil` szerint skálázódik; active-days
+objective-nél az elérhető nap és az öt napos cap is érvényesül. Nulla nap vagy
+perc üres eredmény, improvement candidate pedig explicit mérés nélkül
+fail-closed. A négy objective-kind párosítása típusos, a választás a napi
+generátorral közös UTF-8/FNV-1a szerződést használja, a rollover nem tartalmaz
+felhasználói szöveget.
+
+Az első független Sol review két MAJOR leletet mért. A korábbi progress scalar
+volt, ezért egy kiszűrt improvement objective négy unitja átkerülhetett egy
+új active-days replacementre (`Expected 0, Actual 4`). Emellett a kötelező
+3/7 napos végpontok és a `0..7` inputhatár nem voltak közvetlenül őrizve. Az
+orchestrátor a még nem merge-elt ADR/brief contractot stable
+`previousQuestId`-val pontosította; egy Terra javító kör után csak same-ID
+quest örökli a `max(previous, observed)` értéket, cross-ID replacement csak a
+saját observed progresszét kapja. A célzott suite a 3/4/5/6/7 mátrixot,
+`-1/8` elutasítást és az ID-kötést is méri.
+
+A független re-review-ban a cap `5 → 7` mutációja `Expected 5, Actual 6`, az
+unconditional progress-transfer pedig `Expected 0, Actual 4` hibával vitte
+pirosra a shipping cellákat. Restore után 14/14 célzott teszt és a teljes
+helyi kör-gate zöld; correctness **APPROVED**, high-risk security review
+**PASS**. A két-slot landoló a közben merge-elt E13-R05 fölé konfliktus nélkül
+rebase-elt, kombinált-HEAD gate-et futtatott, majd új exact-SHA CI-t kért.
+Exact `c131c47e`: Full Gate
+[32472133400](https://github.com/wolfcasaba/strumsight/actions/runs/32472133400)
+és Router CI
+[32472092472](https://github.com/wolfcasaba/strumsight/actions/runs/32472092472)
+success. Implementer Terra (`gpt-5.6-terra`), orchestrátor/reviewer Sol
+(`gpt-5.6-sol`). Pontos következő E08 kör: **E08-R19 — Challenge V2 és legacy
+DailyChallenge migráció**.

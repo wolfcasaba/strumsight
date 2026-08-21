@@ -14,7 +14,7 @@ szerződéseken — a cron exportált env-je egyiket sem írhatja felül:
 |---|---|---|
 | orchestrátor / reviewer / heal | **Claude Sonnet 5, `--effort high`** | `PIPELINE_MODEL`/`PIPELINE_EFFORT` script-default (`tools/round-pipeline.sh`) |
 | rotáció | **`claude`** | commitolt `docs/execution/orchestrator-rotation` |
-| implementer | **`minimax`** (MiniMax-M3, `~/.claude-minimax`, saját API-kulcs) | a queue MINDEN nyitott sora (65 sor: 44 pending + 18 prepared + 3 hold) |
+| implementer | **`minimax`** (MiniMax-M3, `~/.claude-minimax`, saját API-kulcs) | a queue MINDEN nyitott sora (64 sor: 43 pending + 18 prepared + 3 hold) |
 | slot | **1 sáv** | commitolt `docs/execution/pipeline-slots` |
 | Codex-oldal | **kizárva** | `fallback_engine` default `none` → `orchestrator_available` a `terra`/`sol` széket ezen méri |
 
@@ -44,10 +44,46 @@ subtests passed**; az egyetlen piros
 környezeté, nem a diffé — ezen a dobozon nincs `gh` CLI, a változtatás előtt
 ugyanígy piros volt, a Router CI futóján zöld.
 
-Pontos következő teendő: a lánc újraindítása az új felállással, a queue első
-`pending` sorával — **E08-R18 (Heti quest és consistency objective)**; a
+A PR nyitva léte alatt a boxon futó lánc még a RÉGI (Sol/Terra) felállással
+lezárta az **E08-R18**-at (PR #394) — a `done` sor motorja ezért `terra`,
+történeti tényként; a base-merge ezt megőrizte, és csak a NYITOTT sorok
+állnak `minimax`-ra. Mérés a merge után, a friss main fölött:
+`python3 -m pytest tools/tests -q` → **713 passed, 1 skipped, 610 subtests
+passed** (az egyetlen piros a `gh` CLI hiánya ezen a konténeren, a diff előtt
+is ugyanaz; a Router CI futóján zöld).
+
+Pontos következő teendő: nincs kézi indítás — a lánc minden firingen
+`git fetch origin main` + `merge --ff-only` (`main_sync_strategy`), tehát a
+következő cron-firing már ezzel a felállással veszi ki a queue első `pending`
+sorát: **E08-R19 — Challenge V2 és legacy DailyChallenge migráció**; a
 Chapter 13 ága változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
-HEAL-bejegyzést).
+HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh list`
+— egy megmaradt `.pipeline/engine-override=terra` minden queue-sort felülírna.
+
+## ✅ E08-R18 KÉSZ — Rugalmas heti quest és consistency objective — PR #394 (2026-08-21, L394)
+
+A pure, caller-fed heti generátor az elérhető percekkel egészértékűen skáláz,
+az aktívnap-célt 3/4/5/6/7 napnál rendre 3/4/5/5/5-re korlátozza, és nulla
+elérhetőségre nem gyárt kötelező questet. A négy típusos objective közül
+stabil UTF-8/FNV-1a sorrenddel választ; improvement mérés nélkül fail-closed,
+a rollover pedig nyelvfüggetlen, strukturált tényprojekció.
+
+Az első Sol review két MAJOR rést talált. A scalar previous progress eltérő
+replacement objective-re átvihető volt, a 3/7 availability-végpontok és a
+`0..7` inputhatár pedig nem voltak közvetlenül őrizve. Egy Terra javító kör
+után a progress stable quest ID-hoz kötött: same-ID esetén monoton maximum,
+cross-ID esetben csak az új objective saját observed értéke számít. A cap és
+az unconditional progress-transfer valódi mutációi pirosak; correctness
+**APPROVED**, security **PASS**.
+
+Exact `c131c47e`: Full Gate
+[32472133400](https://github.com/wolfcasaba/strumsight/actions/runs/32472133400)
+és Router CI
+[32472092472](https://github.com/wolfcasaba/strumsight/actions/runs/32472092472)
+success. PR [#394](https://github.com/wolfcasaba/strumsight/pull/394), squash
+`29c27ab2`, ADR [0386](docs/adr/0386-flexible-weekly-quest-projection.md).
+Pontos következő E08 kör: **E08-R19 — Challenge V2 és legacy DailyChallenge
+migráció**.
 
 ## 🔧 [HEAL E13-R05/H3] Component Catalog scope helyreállítva (2026-08-21, L393)
 
@@ -3816,12 +3852,12 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-21):** `main` @ `a2ea758d` — E08-R17
-determinisztikus, capability-safe napi quest generátor, PR
-[#391](https://github.com/wolfcasaba/strumsight/pull/391), squash-merge.
+**Aktuális állapot (2026-08-21):** `main` @ `29c27ab2` — E08-R18 rugalmas
+heti quest és consistency objective, PR
+[#394](https://github.com/wolfcasaba/strumsight/pull/394), squash-merge.
 Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
-`e96feef3`: Full Gate 32465903185 + Router CI 32465903321 success;
-correctness APPROVED, security PASS. Következő E08 kör: **E08-R18**.
+`c131c47e`: Full Gate 32472133400 + Router CI 32472092472 success;
+correctness APPROVED, security PASS. Következő E08 kör: **E08-R19**.
 
 **Aktuális állapot (2026-08-21):** `main` @ `6e80a441` — E13-R03 semantic
 színek és három theme, PR
@@ -4349,14 +4385,14 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E08-R17 — Napi quest generátor** (PR
-[#391](https://github.com/wolfcasaba/strumsight/pull/391), squash `a2ea758d`,
-[ADR 0384](docs/adr/0384-deterministic-capability-safe-daily-quest-generation.md)).
-Offline, caller-fed, determinisztikus kiválasztás; capability fail-closed
-szűrés; planned-rest optional út; 1–3-as korlát és local fallback. A két MAJOR
-review-lelet a shipping-katalógus contracttal és a három izolált capability-
-poollal zárult. Correctness APPROVED, security PASS. Exact `e96feef3`: Full
-Gate 32465903185 + Router CI 32465903321 success. Részletesen:
+**E08-R18 — Heti quest és consistency objective** (PR
+[#394](https://github.com/wolfcasaba/strumsight/pull/394), squash `29c27ab2`,
+[ADR 0386](docs/adr/0386-flexible-weekly-quest-projection.md)). Pure,
+caller-fed heti projekció; availability-arányos egész target; öt napos
+aktívnap-cap; stabil FNV-választás; improvement fail-closed; same-ID monoton,
+cross-ID izolált progress; típusos rollover. A két MAJOR review-lelet egy Terra
+javító körben zárult. Correctness APPROVED, security PASS. Exact `c131c47e`:
+Full Gate 32472133400 + Router CI 32472092472 success. Részletesen:
 `docs/handoff-archive.md`.
 
 **E13-R03 — Semantic colors and three themes** (PR
@@ -5119,8 +5155,8 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör: E08-R18 — Heti quest és consistency
-objective** (`docs/rounds/e08-r18-weekly-quest-and-consistency.md`,
+**Pontos következő E08 termékkör: E08-R19 — Challenge V2 és legacy
+DailyChallenge migráció** (`docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md`,
 engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
 Az önálló Chapter 13 sáv következő köre E13-R05.
 
