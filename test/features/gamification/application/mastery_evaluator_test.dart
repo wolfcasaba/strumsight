@@ -203,6 +203,55 @@ void main() {
       expect(after.badge, badge);
     });
 
+    test('A5 monotonicity: achieved progress survives a SMALLER subsequent '
+        'batch (caller may not forward the full cumulative history)', () {
+      // First batch: three qualifying sessions, milestone achieved with
+      // `evidenceSessionCount = 3` and a non-trivial badge. This is the
+      // exact reproduction the reviewer ran: 3 qualifying sessions in the
+      // locked state, then a 1-element fresh batch arrives later.
+      final first = evaluator.evaluate(
+        milestone: milestone,
+        previous: null,
+        evidence: <MasteryEvidence>[
+          session(id: 's1', observedAt: now),
+          session(id: 's2', observedAt: now.add(const Duration(minutes: 5))),
+          session(id: 's3', observedAt: now.add(const Duration(minutes: 10))),
+        ],
+        now: now,
+      );
+      expect(first.isAchieved, isTrue);
+      expect(first.evidenceSessionCount, 3);
+      final badge = first.badge!;
+      final achievedAt = first.achievedAt!;
+
+      // A SMALLER fresh batch: a single qualifying session, distinctly
+      // fewer than the locked `evidenceSessionCount = 3`. The caller is
+      // not required to forward the full cumulative history on every
+      // call (brief §5.4, ADR 0388 5. döntés) — this is a legitimate
+      // and common shape (e.g. only the latest session is forwarded,
+      // or an older session has been dropped by a catalog/version
+      // change). The evaluator MUST NOT throw and MUST keep the
+      // locked achievement intact.
+      final smallerBatch = <MasteryEvidence>[
+        session(id: 's3', observedAt: now.add(const Duration(minutes: 10))),
+      ];
+
+      final after = evaluator.evaluate(
+        milestone: milestone,
+        previous: first,
+        evidence: smallerBatch,
+        now: now.add(const Duration(days: 1)),
+      );
+
+      expect(after.isAchieved, isTrue);
+      expect(after.achievedAt, achievedAt);
+      expect(after.badge, badge);
+      // Monotonicity: the count is clamped to the previously-locked
+      // value, never allowed to regress for an already-achieved
+      // progress.
+      expect(after.evidenceSessionCount, 3);
+    });
+
     test('A6: evidence with mismatched difficulty is excluded', () {
       // Three samples: one beginner (wrong difficulty), two device-origin
       // at the right difficulty and tempo. Distinct qualifying sessions

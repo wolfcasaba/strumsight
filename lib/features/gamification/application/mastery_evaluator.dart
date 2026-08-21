@@ -50,8 +50,18 @@ final class MasteryEvaluator {
 
     if (previous != null && previous.isAchieved && previous.badge != null) {
       // Monotonic achievement: keep the prior achievedAt/badge regardless of
-      // a weaker fresh batch. `evidenceSessionCount` is clamped up only.
-      return previous.advanceTo(evidenceSessionCount: distinctCount);
+      // a weaker OR SMALLER fresh batch. The caller is not required to pass
+      // the full cumulative evidence history on every call (e.g. it may only
+      // forward the most-recent session, or an older session may be dropped
+      // by a later catalog/version change). A smaller fresh batch MUST NOT
+      // crash the evaluator and MUST NOT regress the locked achievement:
+      // `evidenceSessionCount` is clamped to the previously-stored value
+      // before delegating to `advanceTo`, whose monotonicity guard stays in
+      // place for non-achieved callers (brief §6 A5, ADR 0388 5. döntés).
+      final clamped = distinctCount > previous.evidenceSessionCount
+          ? distinctCount
+          : previous.evidenceSessionCount;
+      return previous.advanceTo(evidenceSessionCount: clamped);
     }
 
     if (distinctCount >= milestone.minEvidenceSessions &&
