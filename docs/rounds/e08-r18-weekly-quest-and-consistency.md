@@ -51,6 +51,26 @@ missed-day ág visszamenőleg elvehetne felhasználói haladást. A magas kocká
 termék-contractból ered, nem security-pathból; ezért kötelező a független Sol
 correctness- és security-review.
 
+## 0.0.1 Review-revízió — objective-azonosság és availability-végpontok
+
+A `6300f497` implementáció független próbatesztje kimérte, hogy a puszta
+`previousCompletedUnits` nem hordozza, MELYIK questhez tartozik. Ha az
+improvement candidate measurement-hiány miatt kiesett, a generator active-days
+replacementet választott, és annak progresszére vitte át a korábbi `4` unitot
+(`Expected: 0`, `Actual: 4`). Ez téves completion/reward alap lehet.
+
+A korábbi progressz ezért stabil `previousQuestId`-hez kötött. Csak akkor
+vehető be a `max(previous, observed)` projekcióba, ha az ID az aktuálisan
+kiválasztott candidate ID-jával egyezik; eltérő replacement kizárólag a saját
+friss `observedCompletedUnits` értékével indul. Pozitív previous progress ID
+nélkül invalid input. Ugyanazon candidate ID mellett a csökkentett idő/nap
+változatlanul megőrzi a progresszt — ez az A3 plan-edit cella.
+
+A Chapter 9 kötelező 3-day és 7-day availability cellái az első körben nem az
+active-days targetet mérték. Az A1 ezért a 4/5/6 küszöbhármas mellett explicit
+`3 nap → target 3` és `7 nap → target 5` végpontot is mér; a snapshot
+`availableDays` tartománya pontosan `0..7`, a `-1` és `8` konstrukciós hiba.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -165,10 +185,12 @@ felül `min(scaledTarget, availableDays, 5)`; más kindnál legalább 1, ha van
 elérhető idő. A mért félidős referencia:
 `python3 -c 'import math; print(math.ceil(6*180/360))'` → `3`.
 
-A progress `max(previousCompletedUnits, observedCompletedUnits)`; tervedit,
-kihagyott nap vagy kisebb új target nem vonhat le belőle. A completion
-`progress >= target` összehasonlítás, ezért a korán teljesített quest kész
-marad célcsökkentés után is.
+A progress azonos `previousQuestId` mellett
+`max(previousCompletedUnits, observedCompletedUnits)`; tervedit, kihagyott nap
+vagy kisebb új target nem vonhat le belőle. Más candidate ID-ra váltó
+replacement nem örököl progresszt. A completion `progress >= target`
+összehasonlítás, ezért az azonos questen korán teljesített cél kész marad
+célcsökkentés után is.
 
 ### 5.6 Típusmátrix és measurement fail-closed
 
@@ -184,9 +206,9 @@ candidate-hiánynál ad üres eredményt.
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | A generált heti objective SOHA nem követel 7 (vagy 6+) egymást követő kötelező napot | `weekly_quest_generator_test.dart` — felső korlát cella |
+| A1 | A generált heti objective SOHA nem követel 7 (vagy 6+) egymást követő kötelező napot; a 3- és 7-napos availability végpont is explicit | `weekly_quest_generator_test.dart` — 3/4/5/6/7 active-days mátrix + `availableDays` -1/8 rejection |
 | A2 | Csökkentett heti idő esetén a cél arányosan kisebb | `weekly_quest_generator_test.dart` — skálázás-mátrix |
-| A3 | Hét közbeni tervváltozás után a már elért haladás VÁLTOZATLAN | `weekly_quest_generator_test.dart` — regresszió-cella |
+| A3 | Hét közbeni tervváltozás után ugyanazon quest ID már elért haladása VÁLTOZATLAN; más replacement ID nem örökli | `weekly_quest_generator_test.dart` — same-ID monotonic + cross-ID isolation cella |
 | A4 | A cél magyarázható: a küldetés visszaadja a származtatás bemeneteit | `weekly_quest_generator_test.dart` |
 | A5 | A generálás determinisztikus (hét + profil + katalógus-verzió) | `weekly_quest_generator_test.dart` |
 | A6 | A négy objective-típus (aktív napok / terv-blokk / mód-diverzitás / javulás) mind támogatott | `weekly_quest_generator_test.dart` — típus-mátrix |
@@ -207,6 +229,7 @@ candidate-hiánynál ad üres eredményt.
 | Valamely kind rossz típusos `QuestObjective`-vel fogadható el | **A6** négy kind + invalid cross-wiring mátrix |
 | Az application réteg kész angol rollover mondatot ad | **A7** exact típusprojekció + source-owner cella |
 | A kihagyott nap levonást okoz | **A8** |
+| A filtered improvement progressze átkerül az active-days replacementre | **A3/A8 cross-ID isolation** |
 | Measurement nélkül improvement candidate marad eligible | **A9** |
 | A caller listája vagy a generált projection módosítható | **A10** |
 

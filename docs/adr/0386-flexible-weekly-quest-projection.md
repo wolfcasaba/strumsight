@@ -50,9 +50,13 @@ lokalizációs határt és idő előtt összekötné a domain tényeket a felül
    kötelező nap nem jöhet létre. Más kindnál a pozitív elérhető idő legalább
    egy unitot ad. Nulla elérhető nap vagy perc nem gyárt kötelező questet.
 
-5. **A progress monoton.** A kimeneti progress
-   `max(previousCompletedUnits, observedCompletedUnits)`. A target új tervre
-   csökkenhet, de progress nem; a completion kizárólag `progress >= target`.
+5. **A progress quest-azonosságon belül monoton.** A snapshot a korábbi
+   progresszt stabil `previousQuestId`-vel együtt adja. Ha ez az ID az
+   aktuálisan kiválasztott candidate ID-ja, a kimeneti progress
+   `max(previousCompletedUnits, observedCompletedUnits)`; eltérő replacement
+   csak a saját `observedCompletedUnits` értékével indul. Pozitív previous
+   progress ID nélkül invalid input. A target új tervre csökkenhet, de azonos
+   quest progressze nem; a completion kizárólag `progress >= target`.
    Kihagyott napból nincs negatív delta, levonás vagy büntetés.
 
 6. **Measurement fail-closed.** Improvement candidate csak explicit elérhető
@@ -65,7 +69,10 @@ lokalizációs határt és idő előtt összekötné a domain tényeket a felül
    szégyenítés és localization key kitalálása nincs ebben a rétegben; a
    későbbi WeeklyRecap UI ARB-ból jelenít meg.
 
-8. **Nincs új persistence schema.** A generált heti quest a meglévő
+8. **Az availability hét-tartomány.** `availableDays` csak `0..7` lehet; a
+   3- és 7-napos végpontot a shipping active-days targeten külön mérjük.
+
+9. **Nincs új persistence schema.** A generált heti quest a meglévő
    `QuestDefinition` weekly cadence-ét használja; a skálázási/progress/
    rollover adatok application projectionök. Perzisztencia- és UI-wiring
    külön kör marad.
@@ -80,9 +87,10 @@ ez a purity és a későbbi adapterek tesztelhetőségének ára.
 
 ## Mérce
 
-Az E08-R18 brief A1–A10 cellái mérik a 4/5/6 aktívnap-cap hármast, a
+Az E08-R18 brief A1–A10 cellái mérik a 3/4/5/6/7 aktívnap-mátrixot, a
 360→180 perces 6→3 skálázási referenciát, a `max(previous, observed)`
-monotonitást, a kipinnelt seedet, a négy kind cross-wiringját, a measurement
-fail-closed ágat, az immutable nézeteket és a nyelvfüggetlen rollover
-projekciót. A reviewer valódi-sértésként 7-re lazítja az aktívnap-capet; az A1
-cellának pirosra kell váltania, restore után a teljes kör-gate zöld.
+same-ID monotonitást és a cross-ID isolationt, a kipinnelt seedet, a négy kind
+cross-wiringját, a measurement fail-closed ágat, az immutable nézeteket és a
+nyelvfüggetlen rollover projekciót. A reviewer valódi-sértésként 7-re lazítja
+az aktívnap-capet; az A1 cellának pirosra kell váltania, restore után a teljes
+kör-gate zöld.
