@@ -245,4 +245,42 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+- `lib/features/gamification/application/achievement_index.dart` — új,
+  immutable event-kind → achievement index; a compound és sequence objektív
+  összes érintett event-kindjét indexeli, az unknown objective-eket pedig
+  diagnosztikai fail-closed ágon tartja.
+- `lib/features/gamification/application/achievement_evaluator.dart` — új,
+  caller-supplied immutable evidence/result/diagnostic contract, count,
+  distinct, threshold, sequence és compound projekció; repository-szintű
+  `appendIfAbsent` receipt-dedup, event-időbélyeges, nulla-XP
+  `achievementUnlocked` receipt, history rebuild és inkluzív, caller-anchored
+  30 napos backfill.
+- `lib/features/gamification/public.dart` — az evaluator és index publikus
+  exportjai.
+- `test/features/gamification/application/achievement_evaluator_test.dart` —
+  A1–A8, index-scan, unknown/missing-metric fail-closed, tier, sequence,
+  compound, 29/30/31 napos backfill és immutable collection cellák.
+
+**TDD-bizonyíték.** Az első
+`flutter test test/features/gamification/application/achievement_evaluator_test.dart`
+RED volt: `AchievementEvaluator`, `AchievementEvaluationEvidence` és a
+diagnosztikai contract még nem létezett. Az implementáció után a célzott
+teszt 9/9 zöld.
+
+**Valódi-sértés próba.** A repository-dedupot ideiglenes process-local
+completed-setre cseréltem, majd a kötelező gate-et futtattam. A célzott
+tesztben az A2 restart cella piros lett: várt `empty`, tényleges
+`[AchievementUnlock]`; a restore után a ledger `appendIfAbsent` ága van
+visszaállítva. A szándékos mutáció további receipt-/timestamp-függő cellákat
+is pirosra vitt, ezért nem maradhatott a fán.
+
+**Futtatott végső gate.**
+`tools/round-gate.sh test/features/gamification/application/achievement_evaluator_test.dart`
+— exit 0; `format`, `analyze`, a 9 tesztes célzott test, `architecture`,
+`secrets` (3111 fájl, 0 finding) és `l10n` (1503 üzenet) mind zöld.
+
+**Eltérés / nem futtatott ellenőrzés.** Nincs scope-eltérés. A teljes Flutter
+suite, randomizált property gate és APK a brief/AGENTS szerint CI-orchestrator
+feladat; implementerként nem indítottam CI-t, PR-t vagy push-t.
+
 ## 11. Review — a Claude tölti ki
