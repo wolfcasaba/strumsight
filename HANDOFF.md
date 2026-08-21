@@ -1,5 +1,27 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R03 KÉSZ — Semantic colors and three themes — PR #386 (2026-08-21, L381–L383)
+
+Az új, 23 mezős `SsColorScheme`, a névvel ellátott state overlayek és az
+`SsThemeBehavior` egyetlen contractban adják a Dark Studio, Warm Light és
+High Contrast témát. A confidence-, offline-, local-AI- és cloud-AI
+állapotok páronként külön ikonmarkert kapnak, ezért jelentésük nem csak
+színből olvasható. A Component Catalogban a három téma fejlesztői kapcsolóval
+ellenőrizhető; a production theme-mode wiring és a legacy olvasási út
+változatlan maradt.
+
+Az első független Sol review két MAJOR leletet talált: a kontraszt-CLI a WCAG
+sRGB 2,4-es hatványa helyett köbözött, a marker-tesztek pedig nem buktatták az
+azonos ikonokra rontást. Egy Terra javító kör után canonical luminancia-vektor
+és két all-same marker őr zárja ezeket; correctness **APPROVED**, security
+**PASS**. Exact `3fc36778`: Full Gate
+[32451933445](https://github.com/wolfcasaba/strumsight/actions/runs/32451933445)
+és Router CI
+[32451919508](https://github.com/wolfcasaba/strumsight/actions/runs/32451919508)
+success. PR [#386](https://github.com/wolfcasaba/strumsight/pull/386), squash
+`6e80a441`. Következő Chapter 13 kör: **E13-R04 — Typography and text-scale
+resilience**.
+
 ## ✅ E08-R15 KÉSZ — Privacy-safe Achievement UI és 60-screen baseline — PR #383 (2026-08-21, L377/L380)
 
 A caller-fed achievement lista és detail UI all/unlocked/in-progress/category
@@ -3615,6 +3637,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-21):** `main` @ `6e80a441` — E13-R03 semantic
+színek és három theme, PR
+[#386](https://github.com/wolfcasaba/strumsight/pull/386), squash-merge.
+Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
+`3fc36778`: Full Gate 32451933445 + Router CI 32451919508 success;
+correctness APPROVED, security PASS. Következő Chapter 13 kör: **E13-R04**.
+
 **Aktuális állapot (2026-08-21):** `main` @ `22f5e1a0` — E08-R15
 privacy-safe Achievement UI, PR
 [#383](https://github.com/wolfcasaba/strumsight/pull/383), squash-merge.
@@ -4133,6 +4162,16 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E13-R03 — Semantic colors and three themes** (PR
+[#386](https://github.com/wolfcasaba/strumsight/pull/386), squash `6e80a441`,
+[ADR 0381](docs/adr/0381-semantic-theme-and-accessibility-contract.md)). A
+23 mezős semantic color contract, state overlayek, három `ThemeData`, külön
+High Contrast behavior és nem-csak-szín marker contract elkészült. Két MAJOR
+review-lelet egy Terra javító körben zárva; a canonical WCAG-vektor és az
+all-same ikonmutációk piros bizonyítékot adtak. Végső correctness APPROVED,
+security PASS. Exact `3fc36778`: Full Gate 32451933445 + Router CI
+32451919508 success. Részletesen: `docs/handoff-archive.md`.
 
 **E08-R15 — Achievement UI és részletes evidence** (PR
 [#383](https://github.com/wolfcasaba/strumsight/pull/383), squash `22f5e1a0`,
@@ -4887,10 +4926,10 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 **Pontos következő E08 termékkör: E08-R16 — Quest domain, objective és
 lifecycle** (`docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md`,
 engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
-Az önálló Chapter 13 sáv következő köre továbbra is E13-R03.
+Az önálló Chapter 13 sáv következő köre E13-R04.
 
-**Pontos következő Chapter 13 kör: E13-R03 — Semantic colors and themes**
-(`docs/rounds/e13-r03-semantic-colors-and-themes.md`, engine a queue-ban
+**Pontos következő Chapter 13 kör: E13-R04 — Typography and text-scale
+resilience** (`docs/rounds/e13-r04-typography-and-text-scale.md`, engine a queue-ban
 `terra`). Az E08 terméksáv önálló queue-ja ettől függetlenül halad; ezt a
 session nem indítja el. A governance-sáv következő sora, **E99-R23**, jelenleg
 `hold`.

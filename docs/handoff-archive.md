@@ -9457,3 +9457,42 @@ regressziós teszt méri. Exact-SHA `2d75d8b1`: Full Gate
 + Router CI [31915639663](https://github.com/wolfcasaba/strumsight/actions/runs/31915639663)
 success; a post-merge célzott gate a friss `main`-en szintén zöld (7/7).
 Mindkét generator flag továbbra is `false`; production hívó nincs.
+
+## ✅ E13-R03 KÉSZ — Semantic colors and three themes
+
+PR [#386](https://github.com/wolfcasaba/strumsight/pull/386), squash
+`6e80a441`, ADR
+[0381](adr/0381-semantic-theme-and-accessibility-contract.md). A
+pre-flight az ADR 0273 egyetlen színforrását megtartva rögzítette a 23 mezős
+semantic contractot, a névvel ellátott state overlayeket, a három témát és a
+High Contrast külön viselkedését. Új hex nem került a design systembe; a
+production theme-mode wiring változatlan maradt.
+
+A Terra implementáció elkészítette a Dark Studio, Warm Light és High Contrast
+`ThemeData`-t, az `SsThemeBehavior` extensiont, valamint a confidence-,
+offline-, local-AI- és cloud-AI állapotok páronként külön ikonmarkereit. A
+Component Catalog ténylegesen megjeleníti ezeket és fejlesztői témaváltót ad.
+A futtatható kontraszt-tool a normál szöveg 4,5:1 és a fontos nem-szöveges
+határ 3:1 küszöbét ellenőrzi.
+
+Az első független Sol correctness review két MAJOR leletet talált. A
+kontraszt-tool a szabványos sRGB 2,4-es hatványa helyett köbözött, az eredeti
+marker-tesztek pedig átengedték volna a négy azonos ikont. Egy Terra javító
+kör után `math.pow(..., 2.4)`, canonical `0xFF948D82` luminancia-vektor,
+páronkénti contract-őr és widget-szintű ikonőr zárja a hibákat. A reviewer a
+hatvány 3-ra és minden marker azonos ikonra rontásával külön-külön pirosra
+vitte a célzott suite-okat; a végső correctness review **APPROVED**, a
+security review **PASS**.
+
+A konfliktusmentes upstream rebase után a `round-land` első kombinált gate-je
+38 hiányzó E08-R15 lokalizációs getter miatt állt meg: a tracked ARB már
+frissült, a gitignore-olt generált `AppLocalizations` még nem. A
+`tools/prepare-flutter-generated.sh` újrafuttatása után a teljes helyi kör-gate
+7/7 zöld lett, a safe force-push pedig csak patch-id ekvivalens rebase-elt
+történetet publikált. Exact `3fc36778`: Full Gate
+[32451933445](https://github.com/wolfcasaba/strumsight/actions/runs/32451933445)
+és Router CI
+[32451919508](https://github.com/wolfcasaba/strumsight/actions/runs/32451919508)
+success. Implementer: Terra (`gpt-5.6-terra`); orchestrátor és független
+reviewer: Sol (`gpt-5.6-sol`). Pontos következő Chapter 13 kör:
+**E13-R04 — Typography and text-scale resilience**.

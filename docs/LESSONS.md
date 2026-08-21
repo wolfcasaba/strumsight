@@ -14483,3 +14483,52 @@ implementernek `docs/adr/**` alá. A téves allowlist-bővítés visszavonása u
 a self-heal őr 5/5, a folytató scope-audit 4/4 zöld lett.
 
 **Őrteszt:** `tools/tests/test_e08_r15_ui_inventory_scope.py::E08R15UiInventoryScopeTest::test_allowed_paths_add_exact_transactional_baseline_gap`
+
+## L381 — A küszöbteszt nem bizonyítja a WCAG sRGB-transzformációt (E13-R03, 2026-08-21)
+
+**Mért snag.** Az első implementáció helyesen tesztelte a 4,5:1 küszöb
+alatti/rajta/fölötte cellákat, de a színcsatorna linearizálásakor a WCAG 2,4-es
+hatványa helyett köbözött. A küszöbcellák idealizált luminanciákat adtak a
+ratio-függvénynek, ezért nem jártak át a hibás RGB → luminancia úton, és mind
+zöldek maradtak. A reviewer canonical `0xFF948D82` vektora ezzel szemben
+`0.2695735834450039` helyett `0.1943756414277682` értéket mért, tehát pirosra
+vitte a valódi hibát.
+
+**Javítás és szabály.** Kontrasztküszöbhöz két külön bizonyíték kell: a
+below/at/above döntési cellák és legalább egy nem triviális, kipinnelt sRGB
+vektor a teljes channel-linearization út ellenőrzésére. A javítás
+`math.pow(..., 2.4)`-et használ; a reviewer 3-as hatványra visszarontása a
+canonical cellát újra pirosra vitte.
+
+**Őrteszt:** `test/core/design_system/themes/contrast_test.dart` — „uses the WCAG sRGB relative luminance transform”.
+
+## L382 — A nem-null és darabszám nem bizonyít páronként külön accessibility markert (E13-R03, 2026-08-21)
+
+**Mért snag.** Az eredeti contract-teszt minden marker ikonját nem-nullnak
+várta, a widgetteszt pedig négy marker widgetet számolt. A reviewer mind a
+négy állapotot ugyanarra az `Icons.help_outline` ikonra rontotta, és a suite
+8/8 zöld maradt: a jelenlétet mérte, a színtől független
+megkülönböztethetőséget nem.
+
+**Javítás és szabály.** Ha több szemantikai állapot külön shape/icon csatornája
+termékhatár, a tesztnek páronkénti egyediséget kell kérnie, és a widgetnek a
+contract konkrét markereit kell renderelnie. Az új contract- és widgetteszt
+all-same mutációnál egyaránt `expected 4, actual 1` hibával piros.
+
+**Őrteszt:** `test/core/design_system/themes/ss_color_scheme_test.dart` — a status marker contract és Component Catalog icon-egyediség cellái.
+
+## L383 — Upstream rebase után a gitignore-olt Flutter outputot újra kell generálni a kombinált gate előtt (E13-R03, 2026-08-21)
+
+**Mért snag.** A round worktree generált Flutter outputja a rebase előtt
+friss volt. A `round-land` ezután konfliktusmentesen beépítette az E08-R15 új
+ARB kulcsait, de a gitignore-olt `AppLocalizations` fájlokat nem generálta
+újra; a kombinált gate analyzer-lépése emiatt 38 hiányzó getterrel állt meg.
+Ugyanazon rebased HEAD-en a `tools/prepare-flutter-generated.sh`, majd a
+változatlan `tools/round-gate.sh` 7/7 zöld eredményt adott.
+
+**Javítás és szabály.** A generated előfeltételt nem elég a worktree
+létrehozásakor elkészíteni: minden upstreamet beépítő rebase/merge után,
+közvetlenül a kombinált gate előtt újra kell futtatni. Ez környezeti
+helyreállítás, nem tracked forrás- vagy gate-módosítás.
+
+**Őrteszt:** nincs — gitignore-olt, upstreamfüggő környezeti előfeltétel; a reprodukció a `.pipeline/land-E13-R03.log` 38 analyzer hibája, majd ugyanazon HEAD-en prepare + 7/7 zöld gate.
