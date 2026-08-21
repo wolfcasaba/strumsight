@@ -1,19 +1,20 @@
 # E08-R17 — Review
 
 Brief: `docs/rounds/e08-r17-daily-quest-generator.md`  
-Diff: `6e4dba07...6e5b7193`  
+Diff: `6e4dba07...a8980cab`  
 Reviewer: független Codex / `gpt-5.6-sol` · Dátum: 2026-08-21  
 Verdikt: **CHANGES REQUIRED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
 
-A production implementáció scope-ja és dependency-határa helyes, az izolált
-round-gate 6/6 zöld. Az előírt `Random()` és fordított kamera-szűrés mutációk
-célzottan pirosak. Két másik, contractot sértő mutáció azonban változatlanul
-zöld maradt: a capability-tengelyek összekötése és a shipping default
-katalógus teljes kiürítése. A merge F1/F2 tartós regressziói nélkül tilos.
+A `a8980cab` Terra javítócommit közvetlen shipping-katalógus contractot és
+három availability-cellát adott; az izolált round-gate 9/9 zöld, a default
+katalógus kiürítése most célzottan piros, tehát F2 lezárult. F1 azonban nyitva
+maradt: az `account → cloud` hibás kötés továbbra is zöld, mert a négy eligible
+candidate közül a háromelemes limit épp az account questet vágja le. Ez nyitott
+MAJOR a Codex/Terra javító kör után, ezért H4 és merge-tilalom.
 
 ## Acceptance criteria
 
@@ -21,7 +22,7 @@ katalógus teljes kiürítése. A merge F1/F2 tartós regressziói nélkül tilo
 |---|---|---|---|
 | A1 | Teljes snapshot determinisztikus, kipinnelt seed | ✅ | 100 iteráció + két golden FNV kulcs; `Random()` mutáció piros |
 | A2 | 1–3 elem és legalább egy short | ✅ | 0/1/3/4 cellák és immutability cella zöld |
-| A3 | Kamera/fiók/felhő külön fail-closed | ❌ | all-false cella zöld, de kamera→account mutáció is zöld (F1) |
+| A3 | Kamera/fiók/felhő külön fail-closed | ❌ | három külön cella van, de az account→cloud mutáció zöld marad (F1) |
 | A4 | Nincs permission/gateway hívás | ✅ | csak `dart:convert` és gamification-internal importok; nincs plugin/network |
 | A5 | Planned rest optional + rest-eligible | ✅ | A5 cella zöld |
 | A6 | Terv érintetlen | ✅ | scope-audit 5/5 allowed, nincs practice-generator diff/import |
@@ -30,7 +31,7 @@ katalógus teljes kiürítése. A merge F1/F2 tartós regressziói nélkül tilo
 
 ## Scope-audit és jelzés
 
-A wrapper-jelzés: `status=done`, `continuations=0`, `scope_audit=ok`,
+A kezdeti wrapper-jelzés: `status=done`, `continuations=0`, `scope_audit=ok`,
 `scope_audit_base=6e4dba07`, `scope_audit_changed=5`. A jelzett
 `dirty_files=1` kivizsgálásakor mind az implementer-klón, mind az izolált
 review-klón `git status --short` kimenete üres volt.
@@ -41,23 +42,31 @@ Kézi audit az izolált klónban:
 Legacy scope audit OK (6e4dba0724ce..6e5b719342cd, 5 changed path(s), 0 generated/ignored)
 ```
 
+A javító wrapper `status=done`, `continuations=0`, `scope_audit=ok`,
+`scope_audit_base=a5de4ea5`, `scope_audit_changed=1`. Az izolált re-review
+auditja a fixer fázisra 1/1 engedélyezett útvonalat, a teljes implementer
+ágra 7 változott útvonalból 2 generated/ignored review-jelentést és 0
+sértést mért.
+
 ## Megállapítások
 
 ### F1 — MAJOR — Az availability-teszt nem különíti el a capability-tengelyeket
 
 - **Fájl:** `test/features/gamification/application/daily_quest_generator_test.dart:97-111`
-- **Probléma:** az A3 cella mindhárom availability flaget egyszerre állítja
-  `false`-ra. Eldobható mutációval a kamera ágat
-  `snapshot.cameraAvailable` helyett `snapshot.accountAvailable` értékre
-  kötöttem; a célzott suite továbbra is 6/6 zöld lett.
+- **Probléma:** az első review all-false cellája után a javító három külön
+  shipping-catalog cellát adott, de mindegyik négy objective-et tesz eligible
+  poolba a háromelemes limit előtt. Eldobható `account → cloud` mutációnál az
+  account quest hibásan eligible, de a stabil rendezés a negyedik helyre teszi,
+  ezért az account-unavailable cella továbbra is zöld.
 - **Hatás:** egy későbbi wiring-regresszió kameraquestet engedhet kamera nélkül,
   ha a fiók elérhető; a jelen mérce ezt nem fogja meg.
-- **Kötelező javítás:** capabilitynként külön cella, ahol pontosan az adott
-  tengely false, a másik kettő true; az adott quest kizárt, a másik kettő
-  elérhető marad. A shipping default katalógust használó út is mérje ezt.
+- **Kötelező javítás:** a generator-mappingot axis-onként olyan izolált
+  candidate poollal mérd (short local + pontosan a vizsgált capability quest),
+  ahol a max-3 truncation nem rejtheti el a hibásan eligible elemet. A
+  shipping default metadata exact mappingját a már zöld F2 cella őrzi.
 - **Ellenőrzés:** kamera→account, account→cloud és cloud→camera mutációk
   egyenként a saját cellájukat pirosra viszik.
-- **Státusz:** OPEN.
+- **Státusz:** OPEN az `a8980cab` javító kör után; H4.
 
 ### F2 — MAJOR — A shipping default katalógust egyetlen teszt sem méri
 
@@ -74,7 +83,9 @@ Legacy scope audit OK (6e4dba0724ce..6e5b719342cd, 5 changed path(s), 0 generate
   factoryval futtass.
 - **Ellenőrzés:** a factory kiürítése és bármely capability-metaadat
   felcserélése célzottan piros.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`a8980cab`). A production factory közvetlenül mért exact
+  ID-, short-, rest- és capability-contractja zöld; a factory kiürítése a
+  cellát pirosra viszi.
 
 ### N1 — NOTE — A 64 bites FNV signed `int` goldenje runtime-contract
 
@@ -85,24 +96,29 @@ parity mérés indokolt.
 
 ## Gate-bizonyíték
 
-Izolált klón: `/tmp/review-e08-r17`, exact `6e5b7193`.
+Első izolált klón: `/tmp/review-e08-r17`, exact `6e5b7193`. Javítás utáni
+izolált klón: `/tmp/review-e08-r17-fix1`, exact `a8980cab`.
 
 | Gate | Eredmény |
 |---|---|
 | scope-audit | OK, 5/5 implementer path allowed |
 | format | 1767 fájl, 0 változás |
 | analyze | No issues found |
-| célzott teszt | 6/6 zöld |
+| célzott teszt | első review 6/6; fixer re-review 9/9 zöld |
 | architecture | OK, 12 allowlisted deviation |
 | secrets | 3169 fájl, 0 finding |
 | l10n | 1532 message parity |
 | előírt FNV mutáció | PIROS az A1 cellán |
 | előírt kamera-negálás | PIROS az A3 cellán |
-| kamera→account mutáció | hibásan ZÖLD, F1 |
-| default katalógus kiürítése | hibásan ZÖLD, F2 |
+| kamera→account mutáció | fixer után PIROS |
+| account→cloud mutáció | fixer után hibásan ZÖLD, F1 nyitott |
+| cloud→camera mutáció | fixer után PIROS |
+| default katalógus kiürítése | fixer után PIROS, F2 zárt |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint F1 és F2 nyitott MAJOR lelet mellett merge tilos. A
-következő lépés egy Terra javító kör ugyanazon a branchen, majd friss izolált
-re-review és exact-SHA CI.
+Az ADR 0052 szerint F1 nyitott MAJOR lelet mellett merge tilos. Mivel a
+nevesített Terra/Codex javító kör (`a8980cab`) után is nyitott maradt, az
+ADR 0087 H4 megállási pont teljesül. További implementer-dispatch, CI vagy
+merge ebben a sessionben nincs; a self-heal/humán folytatás reprodukciója az
+F1 `account → cloud` mutációja.

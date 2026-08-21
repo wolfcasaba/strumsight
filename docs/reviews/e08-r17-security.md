@@ -1,7 +1,7 @@
 # E08-R17 — Security review
 
 Brief: `docs/rounds/e08-r17-daily-quest-generator.md`  
-Reviewed head: `6e5b7193`  
+Reviewed head: `a8980cab`  
 Reviewer: független Codex / `gpt-5.6-sol` security reviewer · 2026-08-21  
 Verdikt: **PASS**
 
@@ -13,7 +13,8 @@ A high-risk minősítés oka a permission/cloud capability határ. A generator
 pure caller-fed snapshotot kap; nem importál Fluttert, Riverpodot, permission
 plugint, authot, hálózati klienst vagy storage-ot. A hiányzó capability
 fail-closed kizárás, a planned-rest eredmény optional. Security blocker nincs;
-a correctness review két tesztbizonyíték-rése ettől függetlenül merge-blokkoló.
+a correctness review megmaradt F1 tesztbizonyíték-rése ettől függetlenül
+merge-blokkoló H4.
 
 ## Határellenőrzések
 
@@ -31,9 +32,10 @@ stabil kulcs; a generator nem továbbítja és nem perzisztálja.
 
 ### N1 — NOTE — A capability-axis regressziót tartósan külön kell mérni
 
-A correctness F1 mutációja bizonyítja, hogy az all-false cella nem különíti el
-a három tengelyt. Ez jelenleg nem production security sértés, mert a kód
-helyesen mapel, de a javító teszt szükséges a határ tartós őrzéséhez.
+A correctness F1 re-review bizonyítja, hogy az `account → cloud` hibás kötést
+a max-3 truncation elrejti. Ez jelenleg nem production security sértés, mert a
+kód helyesen mapel, de izolált candidate-pool teszt szükséges a határ tartós
+őrzéséhez.
 
 ### N2 — NOTE — Scope és dependency
 
@@ -43,9 +45,10 @@ production fájl csak gamification-internal domain/infrastructure típust és
 
 ## Gate és mutációs bizonyíték
 
-Az exact `6e5b7193` izolált klónjában a round-gate 6/6 zöld, secret scan
-0 finding. Az unseeded Random és kamera-negálás mutáció piros; restore után a
-klón tiszta és a célzott suite 6/6 zöld.
+Az exact `a8980cab` izolált re-review klónjában a round-gate 6 gate-lépése és
+9/9 célzott tesztje zöld, secret scan 0 finding. A default katalógus kiürítése
+és két capability-axis mutáció piros; az account→cloud mutáció correctness
+teszthiányként zöld marad. Restore után a klón tiszta.
 
 ## Döntés
 
