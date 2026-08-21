@@ -1,5 +1,27 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 [HEAL E13-R04/H3] Typography compatibility scope helyreállítva — PR #388 (2026-08-21, L384)
+
+Az E13-R04 pre-flight ADR 0383 §D3-a az `SsTypography` tényleges
+`ThemeData`-extension regisztrációját írja elő. A meglévő
+`test/core/design_system/foundations_test.dart` ezzel szemben közvetlenül az
+extension nélküli `AppTheme.dark()`/`light()` eredménnyel várta egyenlőnek a
+legacy adaptert, de ez a teszt nem szerepelt a kör allowlistjében vagy célzott
+gate-jében. A Terra implementer helyesen `stopped` jelzést adott production
+módosítás nélkül; a halt B osztályú brief-scope hiány volt.
+
+A self-heal az E13-R04 briefet exact egyetlen meglévő fájllal bővítette:
+`test/core/design_system/foundations_test.dart` bekerült az `allowed_paths`
+és `gate_tests` listába, valamint az A8 kompatibilitási cellába. A folytatott
+product kör ugyanabban a commitban őrzi a legacy theme-forrás paritását és
+méri az új extensiont; más design-system tesztút nem nyílt meg. A regressziós
+`tools/tests/test_e13_r04_typography_foundations_scope.py` a revízió előtt
+4/5 piros, utána 5/5 zöld; a teljes tooling suite 704 passed, 1 skipped és
+604 subtest passed. Branch: `heal/E13-R04-H3-1`, PR
+[#388](https://github.com/wolfcasaba/strumsight/pull/388). Router CI success
+az exact végső SHA-n és squash-merge a `fixed` jelzés előfeltétele. A következő
+Chapter 13 kör változatlanul **E13-R04**, a meglévő product-ág folytatásával.
+
 ## ✅ E13-R03 KÉSZ — Semantic colors and three themes — PR #386 (2026-08-21, L381–L383)
 
 Az új, 23 mezős `SsColorScheme`, a névvel ellátott state overlayek és az
