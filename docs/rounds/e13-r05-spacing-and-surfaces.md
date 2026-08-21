@@ -293,3 +293,6 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   a kör-orchestrátor CI/merge kapuja.
 
 ## 11. Review — a Claude tölti ki
+
+Első független Sol review: **CHANGES REQUIRED**, 0 BLOCKER / 6 MAJOR.
+Részletes leletlista: [`docs/reviews/e13-r05-review.md`](../reviews/e13-r05-review.md).
