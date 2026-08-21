@@ -1,14 +1,15 @@
 # E13-R01 — UI baseline inventory és screenshot corpus
 
-- **Státusz:** PREPARED — E13-R01/H3 self-heal scope-revízió után
-  (2026-08-21, `main @ 6aad0bff`; eredeti brief: `main @ 17670d4f`)
+- **Státusz:** IN PROGRESS — pre-flight mérve és commitolásra kész
+  (2026-08-21, `main @ 30c78d9a`; eredeti brief: `main @ 17670d4f`)
 - **Típus:** **Chapter 13 program-nyitó kör** (UI/UX Design System)
 - **Kör-azonosító:** `E13-R01`. Az `E13` a **FEJEZETET** jelöli, nem epicet
   (az epicek E01–E10) — mint az `E99` és az `E14`.
 - **Branch:** `<motor>/e13-r01-ui-baseline-inventory`
 - **Előfeltétel:** a Chapter 13 a repóban (`e90edaa2`)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a baseline-kör nem hoz architekturális döntést.
+- **Előre kiosztott ADR:** [0376](../adr/0376-ui-baseline-inventory-contract.md)
+  — a baseline mérési és screenshot-corpus szerződése.
 
 ## 0.0 Pre-flight revízió (ADR 0112 self-heal, E13-R01/H3, 2026-08-21)
 
@@ -67,6 +68,37 @@ az E99-R08 review-report mentesség és az E07-R25 Vision evidence contract nem.
 > (képernyők, hex-találatok), mert az Epic 7 közben új képernyőket ad hozzá.
 > A brief §2 értékei `main @ 17670d4f`-en készültek. Eltérésnél §0.0 revízió.
 
+## 0.1 Aktuális orchestrátor pre-flight (2026-08-21, `main @ 30c78d9a`)
+
+**Avuló tények újramérve.** A `find lib/features -type f -name
+'*_screen.dart' | sort` parancs **58** production screen-fájlt ad: az eredeti
+51-es baseline óta hét új képernyő került a fába. A
+`rg -l 'Color\(0x[0-9A-Fa-f]+' lib/features | sort` továbbra is **9** fájlt
+ad. A `lib/core/theme/` változatlanul négy fájlt tartalmaz,
+`lib/core/design_system/` és `docs/ui/` továbbra sem létezik. A központi
+`AppRoutes` katalógusban és az éles `GoRouter` regisztrációban egyaránt **40**
+route van; a flag-gelt route-csoportok tényleges inputjai az
+`app_router.dart`-ban visszakeresett nyolc `FeatureFlags` mező. A brief nem ír
+elő acceptance-célstátuszt vagy erőforrás-tulajdonlás-változást, ezért az
+input→státusz és `.acquire(` mérés erre a read-only baseline-körre nem
+alkalmazható.
+
+**Brief-lint és scope.** A kapott strict lint-jelentés nem tartalmaz leletet;
+az aktuális briefre futtatott `python3 tools/brief-lint.py --brief
+docs/rounds/e13-r01-ui-baseline-inventory.md --level strict` szintén tiszta,
+a `tools/gateguard-scan.py` pedig nem talált védett mérce-útvonalat. A H3
+self-heal exact hét PNG + egy validátor scope-ja változatlanul szükséges és
+elégséges; `lib/**` nem nyílik meg.
+
+**Visszakeresett előzmény.** A kötelező, először szűkített, majd teljes
+korpuszos RAG-futtatás az [ADR 0059](../adr/0059-central-route-catalogue-and-validated-navigation.md)
+központi route-katalógusát, az **L371** exact screenshot-corpus scope-leckét
+és az E13-R01/H3 lezárt haltot hozta fel. Az index `6aad0bff` commiton állt,
+azaz két committal elavult volt a `30c78d9a` HEAD-hez képest; ezért a találatok
+csak előzményként szolgálnak, az aktuális számokat közvetlenül a kódból mértük.
+Az ADR-számot a foglaló adta: `tools/round-slots.py reserve-adr --round
+E13-R01` → **0376**.
+
 ```ai-router
 schema_version = 1
 risk = "normal"
@@ -111,15 +143,16 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 A jelenlegi felület, route-ok, komponensek és accessibility-állapot
 **dokumentált baseline-ja — módosítás nélkül** (SDD Ch13 Kör 1).
 
-## 2. Jelenlegi állapot — mért tények (`main @ 17670d4f`)
+## 2. Jelenlegi állapot — mért tények (`main @ 30c78d9a`)
 
 | mérés | érték |
 |---|---|
 | `lib/core/design_system/` | **nem létezik** — a Kör 2 hozza létre |
 | `lib/core/theme/` | `app_colors.dart`, `app_palette.dart`, `app_theme.dart`, `theme_mode_provider.dart` |
-| `*_screen.dart` a `lib/features` alatt | **51** |
+| `*_screen.dart` a `lib/features` alatt | **58** |
 | közvetlen `Color(0x…)` a feature-ökben | **9 fájl** |
 | `docs/ui/` | **nem létezik** |
+| `AppRoutes` / regisztrált `GoRoute` | **40 / 40** |
 
 A Ch13 §2 kanonikus színalapjai (`#D98A46` copper, dark/light felületek,
 confidence-színek) **nem cserélendők le** — a fejezet feladata, hogy
@@ -203,7 +236,7 @@ körök sorrendezhessenek.
 |---|---|---|
 | A1 | **Nulla `lib/**` módosítás** | `git diff --stat` |
 | A2 | Az inventár determinisztikus (kétszeri futtatás azonos kimenet) | `ui_inventory_test.dart` |
-| A3 | Minden production képernyő szerepel az inventárban | a mért 51 `*_screen.dart` lefedve |
+| A3 | Minden production képernyő szerepel az inventárban | a mért 58 `*_screen.dart` lefedve |
 | A4 | A route-térkép tartalmazza a legacy ↔ cél párokat és a deep-link kockázatot | review |
 | A5 | A token-adósság mérve (hex, spacing, TextStyle, duplikátumok, cross-feature import) | `token-debt.md` |
 | A6 | Az accessibility-leletek prioritással szerepelnek | `accessibility-findings.md` |
@@ -275,5 +308,82 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   képet megnyitja, és a production-widget capture recipe-t is ellenőrzi.
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Fájlonkénti összefoglaló
+
+- `tool/ui_inventory.dart` — rendezett, read-only production screen,
+  reusable widget/view és overlay-forrás inventár; a 58/96/16 mért baseline-t
+  Markdownként is kiadja.
+- `test/ui/ui_inventory_test.dart` — kétszeri kimenet-azonosságot, a 58
+  production screenet, rendezést, test-tree kizárást és immutable eredményt
+  ellenőriz.
+- `test/ui/ui_baseline_screenshot_test.dart` — exact hét PNG dekódolás,
+  pozitív byte/pixelméret és portrait validátor; külön, opt-in capture-út a
+  production screen-widgetekhez, bundle Material Icons-szal és az aktív
+  Flutter SDK-ból determinisztikusan töltött Roboto Regular/Medium/Bold
+  material fontokkal.
+- `docs/ui/README.md` — corpus-használat és a 390×844, in-memory fake-es
+  capture recipe; kimondja, hogy a corpus nem design-jóváhagyás.
+- `docs/ui/migration-status.md` — a teljes screen-állomány legacy státusza és
+  a generátor canonical inventory-hivatkozása.
+- `docs/ui/baseline/route-map.md` — mind a 40 jelenlegi route célroute-ja,
+  flag/redirect/deep-link kockázata.
+- `docs/ui/baseline/token-debt.md` — mért hex-, spacing-, TextStyle- és
+  komponensadósság.
+- `docs/ui/baseline/accessibility-findings.md` — prioritásos text-scale,
+  overlay-, compact-layout- és nem-szín-alapú állapot-audit backlog.
+- `docs/ui/baseline/screenshots/{live,tuner,analyze,learn,library,settings,onboarding}-compact-portrait.png`
+  — a hét név szerinti production-widget, compact-portrait baseline.
+
+### Futtatott bizonyítás
+
+- **F1 RED:** a független review friss izolált klónban a korábbi
+  `testWidgets` struktúrát reprodukálhatóan 10 perc után timeoutolónak mérte
+  a `decodeImageFromList` várakozásán. A `tester.runAsync` önmagában ugyanígy
+  nem oldotta fel. **GREEN:** a validátor immár plain `test` aszinkron
+  környezetben, explicit 10 másodperces időkorláttal fut; a közvetlen célteszt
+  `1 passed` eredményt adott, a végső gate screenshot-tesztje is zöld lett.
+- **F2:** az `AppRoutes` 40 konstansát és a route-map 40 current-route sorát
+  tételesen újraellenőriztem; a corrected
+  `/song-trainer/result/:songId` sor a `songId` path-paraméter és a typed
+  `SongTrainerResult` `extra` kettős contractját dokumentálja.
+- **F3:** a dokumentált exact `rg -o` mérések a végső HEAD-en: direct
+  `Color(0x…)` 28 occurrence / 9 file, `TextStyle(` 174 occurrence,
+  `SizedBox(`/`EdgeInsets.` 817 occurrence. A parancsok és a mért egységek a
+  token-adósság dokumentumban szerepelnek.
+- **F4 capture és manuális review:** `flutter test --update-goldens
+  --dart-define=CAPTURE_UI_BASELINE=true
+  test/ui/ui_baseline_screenshot_test.dart` → `2 passed, 1 skipped`. A capture
+  előtt a meglévő Poppins (Regular–ExtraBold), Montserrat és Material Icons
+  bundle assetek `FontLoader`-rel töltődnek be. A Material 3 body family
+  ténylegesen Roboto, ezért a teszt az aktív Flutter SDK rootját
+  `Platform.resolvedExecutable`-ből vezeti le, és onnan tölti be a
+  Roboto-Regular.ttf, Roboto-Medium.ttf és Roboto-Bold.ttf fájlokat. Új asset
+  vagy `pubspec.yaml` változtatás nem történt. A hét regenerált PNG-t (`live`,
+  `tuner`, `analyze`, `learn`, `library`, `settings`, `onboarding`) egyenként
+  kézzel megnyitottam: nincs Ahem-blokk, négyzetes Material ikon vagy piros
+  debug banner.
+- **F5:** a korábbi Tuner/onboarding jobb felső piros átlós sáv nem production
+  render-overflow volt, hanem a közvetlen capture wrapper debug bannerje. A
+  wrapper most kikapcsolja a bannert; ezt nem rögzítjük production layout
+  hibaként az accessibility backlogban.
+- **F6 RED → GREEN:** a megőrzött WIP első céltesztje reprodukálhatóan piros
+  volt: `Expected: 'Poppins'`, `Actual: 'Roboto'` a production body family
+  mérésén. A javított, nem skipelt wrapper-contract test a body `Roboto` és
+  heading `Montserrat` family-ket, a pontos három Roboto SDK-fájlnevet és
+  létezésüket méri; `flutter test test/ui/ui_baseline_screenshot_test.dart`
+  → `2 passed, 1 skipped`.
+- **Végső gate:** `tools/round-gate.sh test/ui/ui_inventory_test.dart
+  test/ui/ui_baseline_screenshot_test.dart` → exit 0; format (1735 fájl, 0
+  változás), analyze, mindkét célteszt, architecture, secrets és l10n zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- `lib/**` nem módosult. CI-dispatch, PR, push és APK-build nem futott: ezek
+  az orchestrátor/reviewer feladatai és ezen implementer-javító kör scope-ján
+  kívül vannak.
+- A normál corpus-teszt szándékosan nem pixel-golden összehasonlítás; a
+  hordozható szerkezeti invariánsokat méri. A corpus eredetét a capture-recept
+  és a hét manuális megnyitás bizonyítja.
 
 ## 11. Review — a Claude tölti ki
