@@ -1,28 +1,29 @@
 # E13-R03 — Független review
 
 Brief: `docs/rounds/e13-r03-semantic-colors-and-themes.md`
-Diff: `8fc99a6c..93742cc2`
+Diff: `8fc99a6c..bbe721af`
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-21
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-Nyitott BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 0
+Nyitott BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-A scope és a 7/7 lokális gate zöld, de a kontraszt-tool nem a WCAG sRGB
-képletét implementálja, a színtől független status-marker teszt pedig egy
-egyetlen, minden állapothoz azonos ikonra rontott implementációt is zölden
-enged. Mindkettő közvetlenül a kör A1/A2, illetve A5 szerződését érinti.
+A Terra javító commit (`bbe721af`) lezárta mindkét MAJOR leletet. A kontraszt-
+tool a pontos sRGB `2.4` hatványt használja és canonical vektor őrzi; a négy
+status marker egyediségét contract- és widget-szinten is teszt méri. A friss
+izolált reviewer-klón gate-je 7/7 zöld, a két korábbi hibás implementáció
+külön-külön célzottan pirosra vitte a megfelelő tesztet.
 
 ## Acceptance criteria
 
 | # | Teljesült | Bizonyíték |
 |---|---|---|
-| A1 | ❌ | F1: a tool köböz, nem `2.4` hatványt számol; a canonical-vector reviewer teszt piros |
-| A2 | ❌ | ugyanaz a hibás linearizálás minősíti a non-text párt is |
+| A1 | ✅ | canonical `0xFF948D82` sRGB vektor + alatta/rajta/fölötte küszöbteszt; köbözés-mutáció piros |
+| A2 | ✅ | ugyanaz a javított WCAG számítás méri a mindhárom theme `borderStrong` párját |
 | A3 | ✅ | mindhárom theme-ben `confidenceLow != danger`; célzott teszt zöld |
 | A4 | ✅ | `offline != danger`, `syncPending != warning`; célzott teszt zöld |
-| A5 | ❌ | F2: az összes marker azonos ikonra rontva a teljes célzott suite továbbra is 8/8 zöld |
+| A5 | ✅ | négy páronként külön ikon; all-same reviewer-mutáció két tesztcellát pirosra vitt |
 | A6 | ✅ | forrásreferenciák `AppColors`/`AppPalette`; nincs új `Color(0x...)` a semantic theme-fájlokban |
 | A7 | ✅ | a production diffben nincs hardkódolt hex; scope-audit 10 útvonalat engedett |
 | A8 | ✅ | mindhárom `ThemeData` létrejön, értékegyenlőség és extensionök tesztelve |
@@ -31,8 +32,8 @@ enged. Mindkettő közvetlenül a kör A1/A2, illetve A5 szerződését érinti.
 
 `python3 tools/scope-audit.py --repo /tmp/review-e13-r03-YAwnlK/repo
 --brief docs/rounds/e13-r03-semantic-colors-and-themes.md --base
-8fc99a6c...` → `Legacy scope audit OK`, 10 módosított útvonal, 0
-generated/ignored.
+8fc99a6c...` → `Legacy scope audit OK`, 12 módosított útvonal, 2
+generated/ignored review-jelentés.
 
 ## Megállapítások
 
@@ -53,7 +54,10 @@ generated/ignored.
   `contrast_test.dart`-ba canonical sRGB színvektorokat, amelyek a
   `Color.computeLuminance()` vagy kipinnelt standard eredmény ellen őrzik a
   linearizálást; az ideális luminancia-küszöb cellahármas maradjon meg.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bbe721af`) — `math.pow(..., 2.4)` és a canonical
+  luminancia-vektor őrzi. A reviewer visszarontotta a hatványt 3-ra: a
+  célzott contrast suite a várt `0.2695735834450039` / tényleges
+  `0.1943756414277682` eltéréssel piros lett.
 
 ### F2 — MAJOR — Az A5 teszt nem bizonyítja a markerek megkülönböztethetőségét
 
@@ -70,22 +74,34 @@ generated/ignored.
 - **Kötelező javítás:** a teszt kérje a négy marker ikon/shape értékének
   páronkénti egyediségét, és tartson meg legalább egy widget-szintű bizonyítékot
   arra, hogy a catalog a contractból kapott külön markereket rendereli.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bbe721af`) — a contract teszt a négy ikon halmazának
+  elemszámát, a widgetteszt a ténylegesen renderelt ikonokat méri. All-same
+  mutációnál mindkét cella piros lett (`expected 4`, `actual 1`).
+
+### N1 — NOTE — A wrapper gate-shape regexe adminisztratív láncra jelzett
+
+A javító wrapper `gate_shape=VIOLATION` értéket írt, mert az implementer a
+terminális jelzést és a read-only `git status`/`git show` parancsokat `&&`
+lánccal futtatta. A logban a kötelező `tools/round-gate.sh ...` önálló,
+csonkítatlan invokáció. A reviewer ettől függetlenül friss klónban újrafuttatta
+a teljes artefaktumot; a verdict nem támaszkodik a wrapper gate-állítására.
 
 ## Gate-bizonyíték
 
-Izolált reviewer-klón `/tmp/review-e13-r03-YAwnlK/repo`, commit `93742cc2`:
+Izolált re-review klón `/tmp/review-e13-r03-fix1-WcxbLP/repo`, commit
+`bbe721af`:
 
 - format: zöld, 1755 fájl / 0 változás;
 - analyze: zöld, 0 issue;
 - semantic color scheme: 8/8 zöld;
-- contrast: 3/3 zöld;
-- architecture, secrets (3147 fájl / 0 lelet), l10n (1503/1503): zöld;
-- összegzés: **7/7 gate zöld**, de a két eldobható falszifikáció F1/F2 szerint
-  leleplezte a hiányos mércét.
+- contrast: 4/4 zöld;
+- architecture, secrets (3149 fájl / 0 lelet), l10n (1503/1503): zöld;
+- összegzés: **7/7 gate zöld**;
+- F1 re-mutation (`2.4 -> 3`): contrast suite piros;
+- F2 re-mutation (négy marker → azonos ikon): color-scheme suite két cellája
+  piros; mindkét mutáció restore után tiszta worktree.
 
 ## Merge-döntés
 
-Az ADR 0052 szerint a két nyitott MAJOR miatt merge tilos. Ugyanaz a Terra
-implementer egy javító kört kap; utána friss izolált klónban teljes re-review
-és gate szükséges.
+A correctness review **APPROVED**. Merge csak az exact-SHA Full Gate/Router CI
+és a friss-main landolási feltételek zöld eredménye után engedett.
