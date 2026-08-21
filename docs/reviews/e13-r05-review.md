@@ -180,6 +180,12 @@ Friss re-review klón: `/tmp/review-e13-r05-fix1`, exact commit `ee12446b`:
 A teljes CI-suite/property workflow még nem futott; az exact-SHA CI és a
 friss-main landolás továbbra is merge-feltétel.
 
+Az `origin/main @ 3000e9fa` beépítése után a kombinált `914034db` HEAD-en az
+E13-R05 production-, test-, brief-, ADR- és review-fájlkészlet byte-azonos
+maradt a jóváhagyott `48ff0afa` csúccsal. Friss izolált klónban a teljes
+7 lépéses round-gate újra zöld lett (format 1778/0, analyze 0, surface 17/17,
+spacing 5/5, architecture, secrets 3189/0, l10n 1532/1532).
+
 ## Merge-döntés
 
 A correctness review **APPROVED**. Merge csak az exact-SHA Full Gate/Router CI
