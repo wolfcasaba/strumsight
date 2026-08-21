@@ -14285,3 +14285,36 @@ hanem a kör saját, név szerint kötelező deliverable-je hiányzott a briefb�
 parserrel és legacy scope-audittal rögzíti az exact 7+1 bővítést, a validátor
 `gate_tests`-tagságát és a testvérútvonal tiltását; a javítás előtt 4/5 piros,
 utána 5/5 zöld.
+
+## L372 — A katalógus azonos elemszáma nem bizonyítja a korábbi stabil ID-k megőrzését (E08-R13, review F1, 2026-08-21)
+
+**Mért hiba.** Az első E08-R13 implementáció csak azt ellenőrizte, hogy az új
+katalógus elemszáma nem kisebb a korábbiénál. Egy eldobható reviewer-teszt
+azonos méret mellett lecserélte az egyik korábbi achievement ID-t; a
+validáció ezt elfogadta, tehát már kiosztott achievement identitása
+észrevétlenül eltűnhetett volna.
+
+**Javítás és szabály.** Verziózott katalógus folytonosságát halmaztartalmazással
+kell mérni: minden korábbi ID legyen jelen az új verzióban, az eltávolítás
+helyett pedig explicit deprekáció őrizze az identitást. A javítás utáni
+független mutációs próba a retention-őr kiiktatásakor piros, restore után
+20/20 zöld lett.
+
+**Őrteszt:** `test/features/gamification/domain/achievement_catalog_test.dart`
+„catalog evolution retains every previous achievement id” cellája.
+
+## L373 — A Dart `assert` nem production-validáció; `NaN` és végtelen progressz külön finite őrt igényel (E08-R13, review F2, 2026-08-21)
+
+**Mért hiba.** A threshold és progressz tartományát constructor-assertok
+védték. A reviewer `double.infinity` küszöböt és `double.nan` progresszt adott
+be: az első érvényesnek látszott, a második pedig a rendezési összehasonlítások
+sajátossága miatt nem bukott meg megbízhatóan. Release buildben az assertok
+egyébként sem futnak.
+
+**Javítás és szabály.** Perzisztálható vagy felhasználói állítást befolyásoló
+numerikus domainértéket runtime `isFinite` és explicit tartományellenőrzés
+védjen; az assert legfeljebb fejlesztői diagnosztika. A finite-őr eldobható
+kiiktatása a re-review-ban célzottan piros lett, restore után zöld.
+
+**Őrteszt:** `test/features/gamification/domain/achievement_catalog_test.dart`
+„rejects non-finite thresholds and progress values” cellája.

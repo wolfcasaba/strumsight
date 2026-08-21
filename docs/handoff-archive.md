@@ -6,6 +6,33 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R13 — Achievement domain és katalógus (2026-08-21)
+
+PR [#376](https://github.com/wolfcasaba/strumsight/pull/376), squash
+`f9d5bbc8`, [ADR 0374](adr/0374-achievement-domain-and-catalog-contract.md).
+A domain immutable achievement-definíciót, típusos count/threshold/distinct/
+sequence/compound feltételfát és véges, monoton progresszmodellt ad. A
+default katalógus 22 stabil ID-jú elemet tartalmaz teljes EN/HU title,
+description és accessibility lokalizációval; a katalógus-verzió, tier-gráf,
+deprekáció és korábbi ID-k megőrzése runtime validált.
+
+Az első Sol correctness review két MAJOR-t reprodukált eldobható tesztekkel:
+azonos elemszám mellett egy korábbi achievement ID lecserélhető volt, illetve
+`double.infinity` küszöb és `NaN` progressz átjutott az assert-alapú
+ellenőrzésen. A Terra javító kör exact korábbi-ID halmazvalidációt és
+release-ben is futó finite/range ellenőrzést adott. A re-review a retention és
+finite őrök kiiktatásakor célzottan piros lett; a külön cycle-guard mutáció is
+piros bizonyítékot adott. Restore után 20/20 célzott teszt és a teljes
+round-gate 6/6 zöld; correctness APPROVED, security PASS.
+
+A kör alatt a `main` kétszer mozdult, ezért mindkét upstream merge után új
+kombinált-HEAD gate futott. A végső exact `679f030f` csúcson Full Gate
+[32433372231](https://github.com/wolfcasaba/strumsight/actions/runs/32433372231)
+és Router CI
+[32433323271](https://github.com/wolfcasaba/strumsight/actions/runs/32433323271)
+success. Implementer Terra (`gpt-5.6-terra`), reviewer/orchestrator Sol
+(`gpt-5.6-sol`), egy javító kör. Következő termékkör: E08-R14.
+
 ## ✅ E99-R22 (GOV-16) — Halt-főkönyv és őrteszt-konvenció (2026-08-20)
 
 PR [#375](https://github.com/wolfcasaba/strumsight/pull/375), squash
