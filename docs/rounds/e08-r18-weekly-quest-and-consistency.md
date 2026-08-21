@@ -1,15 +1,55 @@
 # E08-R18 — Heti küldetés és következetességi objective
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** READY (pre-flight revízió: 2026-08-21, kód olvasva: `main @ 3000e9fa`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 18
 - **Kör-azonosító:** `E08-R18`
 - **Branch:** `<motor>/e08-r18-weekly-quest-and-consistency`
 - **Előfeltétel:** `E08-R17` merge-elve (napi küldetés-generátor)
 - **Brief szerzője:** Claude (Opus 5)
-- **ADR:** nincs — ez a kör nem hoz kötött architekturális döntést.
+- **Előre kiosztott ADR:** `ADR 0386` — a számot a
+  `tools/round-slots.py reserve-adr --round E08-R18` foglalta; az ADR-t a Sol
+  orchestrátor írta meg a pre-flightban, az implementer a `docs/adr/**`-t nem
+  érinti.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R17 determinisztikus mag-származtatását (a heti generátor ugyanazt a mintát követi) és az R11 heti következetesség-projekcióját. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+A friss `main @ 3000e9fa` mérése az előre megírt brief három driftjét oldotta
+fel, scope-bővítés nélkül:
+
+1. Az R17 shipping contractja valóban caller-fed, immutable snapshotot és a
+   `generationEpochDay|profileSnapshotKey|catalogVersion` UTF-8/FNV-1a mintát
+   használ (`daily_quest_generator.dart`; `ADR 0384`). A heti seed ugyanez a
+   minta, de a hívó-adta `generationEpochDay` a hét stabil kezdőnapja.
+2. Az R11 tényleges heti projectionje a
+   `StreakService.weeklyConsistency(endingEpochDay, qualifiedDayHistory)`;
+   külön, egyedi, inkluzív 7 napos értéket ad és sem repositoryt, sem napi
+   streak-state-et nem olvas. A heti generátor ezt sem hívja meg: kész,
+   hívó-adta progress-számokat kap.
+3. A prózai küszöb-összefoglaló felcserélte az elfogadott/elutasított oldalt,
+   miközben a táblázat helyes volt. A mért hármas
+   `python3 -c 'm=5; print({"below": m-1, "at": m, "above": m+1})'` →
+   `4/5/6`: 4 és 5 elfogadott, 6 visszavágandó 5-re.
+
+A `WeeklyRecap`-integrációhoz application-rétegben előállított angol mondat
+ütközne az `AGENTS.md` §7 lokalizációs határával, miközben ARB-fájl nincs az
+allowlistben. A rollover ezért típusos, nyelvfüggetlen tényprojekció
+(`status`, `targetUnits`, `completedUnits`); a későbbi UI-kör lokalizálja.
+
+**Visszakeresett előzmény**, szűkített korpusszal előbb: `adr/0384` megerősítette a
+caller-fed snapshotot és a stabil FNV seedet; `adr/0382` a weekly lifecycle
+kapcsolatát; `lessons/L13` és `lessons/L241` a számolt határértékek
+újramérését. A teljes korpusz közvetlenül az R17 production kódját és tesztjét
+hozta első helyen. A keresések nem mutattak a jelen revízióval ellentétes
+elfogadott döntést.
+
+**Kockázat = high, indoklás:** a kör a már megszerzett heti progressz
+monotonitását és a nem büntető célképzést rögzíti; egy hibás plan-edit vagy
+missed-day ág visszamenőleg elvehetne felhasználói haladást. A magas kockázat
+termék-contractból ered, nem security-pathból; ezért kötelező a független Sol
+correctness- és security-review.
 
 ```ai-router
 schema_version = 1
@@ -46,8 +86,12 @@ elérhető idővel skálázódik, és a hét közbeni tervváltozás nem csökke
 
 ## 2. Jelenlegi állapot — mért tények
 
-- Az R17 determinisztikus napi generátort adott; ez a kör ugyanazt a mag-mintát heti szinten alkalmazza.
-- Az R11 külön heti következetesség-projekciót ad (hány minősített nap volt).
+- Az R17 determinisztikus napi generátort adott; seed materialja pontosan
+  `generationEpochDay|profileSnapshotKey|catalogVersion`, és 64 bites FNV-1a
+  sorrendkulcsot képez.
+- Az R11 külön heti következetesség-projekciót ad: a
+  `weeklyConsistency()` az utolsó inkluzív hét egyedi qualified napjait
+  számolja `0..7` közé, caller-fed historyból.
 - `weekly_quest_generator.dart` **nem létezik**.
 - Az `ADR 0290` §1: nincs büntető nyelv, a kihagyott nap normális.
 
@@ -74,7 +118,7 @@ csökkentett heti időnél · a már elért haladás nem csökken tervváltozás
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**` · `lib/features/practice_generator/**` · `lib/features/share/**`
 
-## 5. Kötött architekturális döntések
+## 5. Kötött architekturális döntések (ADR 0386)
 
 ### 5.1 NINCS hét egymást követő nap mint kötelező objective
 
@@ -100,8 +144,41 @@ skálázás **magyarázható**: a küldetés meg tudja mondani, milyen bemenetb�
 
 ### 5.4 A hét vége SEMLEGES: átvezető összefoglaló, nem ítélet
 
-A heti zárás tényközlő összefoglalót ad (mi teljesült, mi nem), sürgetés és
-szégyenítés nélkül, és előkészíti a `WeeklyRecap` integrációt.
+A heti zárás nyelvfüggetlen, típusos tényprojekciót ad (státusz, cél,
+teljesített egységek), nem user-facing mondatot. A későbbi `WeeklyRecap` UI
+ARB-ból lokalizál; ez a kör így sem sürgető, sem szégyenítő szöveget nem
+éget application kódba.
+
+### 5.5 Caller-fed heti snapshot és pontos skálázás (ADR 0386)
+
+A generátor nem olvas órát, repositoryt vagy tervet. A snapshot hordozza a
+heti schedule-t, a profilkulcsot, az elérhető napokat/perceket, a normál heti
+perceket, a korábbi és frissen mért completed unitokat, a verziózott
+candidate-listát és az improvement-mérés elérhetőségét.
+
+Minden candidate stabil ID-t, a négytagú `WeeklyQuestObjectiveKind` egyikét,
+típusos `QuestObjective` referenciát és pozitív `baseTargetUnits` értéket ad.
+A cél egészértékű képlete:
+`ceil(baseTargetUnits * availableMinutes / baselineWeeklyMinutes)`. Nulla
+elérhető nap vagy perc esetén nincs kötelező heti quest. Az aktívnap-cél ezen
+felül `min(scaledTarget, availableDays, 5)`; más kindnál legalább 1, ha van
+elérhető idő. A mért félidős referencia:
+`python3 -c 'import math; print(math.ceil(6*180/360))'` → `3`.
+
+A progress `max(previousCompletedUnits, observedCompletedUnits)`; tervedit,
+kihagyott nap vagy kisebb új target nem vonhat le belőle. A completion
+`progress >= target` összehasonlítás, ezért a korán teljesített quest kész
+marad célcsökkentés után is.
+
+### 5.6 Típusmátrix és measurement fail-closed
+
+Az aktívnap candidate `MetricQuestObjective(eventCount)`, a plan-blokk
+`PlanBlockQuestObjective`, a mód-diverzitás
+`MetricQuestObjective(diversityXp)`, a javulás pedig
+`MetricQuestObjective(improvementXp)`. Más párosítás konstrukciós hiba. Ha
+nincs improvement measurement, improvement candidate nem választható; a
+generator a többi alkalmas kindból determinisztikusan választ, és csak teljes
+candidate-hiánynál ad üres eredményt.
 
 ## 6. Acceptance criteria
 
@@ -113,8 +190,10 @@ szégyenítés nélkül, és előkészíti a `WeeklyRecap` integrációt.
 | A4 | A cél magyarázható: a küldetés visszaadja a származtatás bemeneteit | `weekly_quest_generator_test.dart` |
 | A5 | A generálás determinisztikus (hét + profil + katalógus-verzió) | `weekly_quest_generator_test.dart` |
 | A6 | A négy objective-típus (aktív napok / terv-blokk / mód-diverzitás / javulás) mind támogatott | `weekly_quest_generator_test.dart` — típus-mátrix |
-| A7 | A heti átvezető összefoglaló semleges nyelvű (tiltott-szó lista) | `weekly_quest_generator_test.dart` |
+| A7 | A heti átvezető nyelvfüggetlen, típusos tényprojekció; application kódban nincs user-facing mondat | `weekly_quest_generator_test.dart` — exact rollover státusz/cél/progress + forrásőr |
 | A8 | Kihagyott nap NEM jár semmilyen levonással | `weekly_quest_generator_test.dart` |
+| A9 | Measurement hiányában improvement objective nem választható, de más alkalmas objective igen | `weekly_quest_generator_test.dart` — no-measurements cella |
+| A10 | A kimeneti candidate/projection nézetek immutable-ek; a generátor clock/repository/network nélkül pure Dart | `weekly_quest_generator_test.dart` — mutation + source-owner cella |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -124,20 +203,23 @@ szégyenítés nélkül, és előkészíti a `WeeklyRecap` integrációt.
 | A haladás az új célhoz arányosítva újraszámolódik | **A3** |
 | A cél fix, függetlenül az elérhető időtől | **A2** (a skálázás-mátrix) |
 | A cél nem adja vissza a származtatás bemeneteit | **A4** |
-| Az összefoglaló sürgetést használ | **A7** |
+| A seed `DateTime.now()`-ra, `hashCode`-ra vagy rendezetlen iterationre épül | **A5** pinned seed + 100 futás |
+| Valamely kind rossz típusos `QuestObjective`-vel fogadható el | **A6** négy kind + invalid cross-wiring mátrix |
+| Az application réteg kész angol rollover mondatot ad | **A7** exact típusprojekció + source-owner cella |
 | A kihagyott nap levonást okoz | **A8** |
+| Measurement nélkül improvement candidate marad eligible | **A9** |
+| A caller listája vagy a generált projection módosítható | **A10** |
 
 **A küszöb három kötelező cellája** (a kötelező aktív napok felső korlátja a heti objective-ben (`maxRequiredDays`)):
 
 | Cella | Bemenet | Elvárt |
 |---|---|---|
-| a küszöb **alatt** | `maxRequiredDays - 1` nap | elfogadható objective |
-| **rajta** (a küszöbön) | pontosan `maxRequiredDays` (a specifikáció szerint legfeljebb 5 a 7-ből) | **MÉG elfogadható** — a korlát az ELFOGADOTT oldalhoz tartozik (inkluzív) |
-| a küszöb **fölött** | `maxRequiredDays + 1` nap | **TILOS** — a generátornak vissza kell vágnia; ezt az A1 cella méri |
+| a küszöb **alatt** | `4` nap | elfogadható objective, target `4` |
+| **rajta** (a küszöbön) | `5` nap | **MÉG elfogadható**, target `5` — a korlát inkluzív |
+| a küszöb **fölött** | `6` nap | input elfogadható, de a generált targetet **5-re kell visszavágni**; ezt az A1 cella méri |
 
-A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
-
-A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
+A hármas tömören: **4 → 4**, **5 → 5**, **6 → 5**. A határ az elfogadott
+oldalhoz tartozik; a fölötte lévő input nem hiba, hanem capped targetet ad.
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** állítsd a generátort úgy, hogy 7 aktív napot követeljen, futtasd a gate-et → az
 **A1** felső korlát cellának PIROSNAK kell lennie → állítsd vissza.
@@ -160,12 +242,13 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 ## 8. Implementációs sorrend
 
 1. A heti mag származtatása az R17 mintájára (hét + profil + katalógus-verzió).
-2. A négy objective-típus generálása.
-3. A felső korlát érvényesítése az aktív napokra.
-4. A cél skálázása az elérhető heti idővel, magyarázható bemenetekkel.
-5. A haladás megőrzése tervváltozáskor.
-6. Semleges heti átvezető összefoglaló.
-7. A `public.dart` export-sorai; a valódi-sértés próba §10-be.
+2. Az immutable caller-fed snapshot/candidate/output contract és a négy
+   objective-kind exact típusmátrixa.
+3. A skálázás, az aktívnap-cap és a nulla availability üres ága.
+4. A monotonic progress-projekció és completion.
+5. A measurement fail-closed szűrés és determinisztikus választás.
+6. A nyelvfüggetlen rollover tényprojekció.
+7. A `public.dart` egyetlen export-sora; a valódi-sértés próba §10-be.
 8. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
