@@ -163,6 +163,17 @@ final class MasteryProgress {
 
   bool get isAchieved => achievedAt != null;
 
+  /// Scaled progress in `[0, 1]` relative to the milestone's inclusive
+  /// `minEvidenceSessions` boundary. Returns 0 when the milestone is null
+  /// or already achieved above 1 (capped).
+  double progressValue(MasteryMilestone milestone) {
+    if (milestone.minEvidenceSessions <= 0) return 0;
+    final raw = evidenceSessionCount / milestone.minEvidenceSessions;
+    if (raw < 0) return 0;
+    if (raw > 1) return 1;
+    return raw;
+  }
+
   /// Returns a new state and ensures `evidenceSessionCount` only ever
   /// increases. `achievedAt`/`badge` are preserved if this progress was
   /// already achieved — passing a later observedAt would overwrite a
