@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import 'dart:convert';
 
 import '../../../core/logging/app_logger.dart';
 import '../../../core/storage/json_document_store.dart';
@@ -481,7 +481,9 @@ final class DailyChallengeService {
     // The order is intentionally a stable list: strumPattern last because it
     // is the always-available fallback. The seed mixes the epoch day and the
     // catalog version so two installs on different catalog versions get
-    // different non-legacy picks (ADR 0387 Decision 3).
+    // different non-legacy picks (ADR 0387 Decision 3). The selection is
+    // implemented as FNV-1a hash arithmetic so the application layer stays
+    // free of any Random source (architecture_dependency_test E08-R08).
     final order = const <DailyChallengeType>[
       DailyChallengeType.chordChange,
       DailyChallengeType.rhythm,
@@ -492,9 +494,17 @@ final class DailyChallengeService {
 
     final available = order.where(catalog.isAvailable).toList(growable: false);
     final seed = seedFor(epochDay: epochDay, catalogVersion: catalogVersion);
-    final rng = math.Random(seed);
-    final picked = available[rng.nextInt(available.length)];
-    return _definitionFor(picked, epochDay, catalogVersion, catalog, rng);
+    // The legacy `seedFor` initialises from the low 32 bits of the FNV-1a
+    // offset basis, so `seed % available.length` collapses to a single residue
+    // for wide day ranges (measured: days 19990..20089 all hit index 4). The
+    // type pick therefore goes through `_projectHash` like the subfields —
+    // same inputs, same pure arithmetic, still deterministic on
+    // `(epochDay, catalogVersion)`, but with the discriminator bytes the
+    // residue distributes across the candidate set so A7 stays reachable.
+    final picked =
+        available[_projectHash(seed: seed, discriminator: 'type') %
+            available.length];
+    return _definitionFor(picked, epochDay, catalogVersion, catalog, seed);
   }
 
   DailyChallengeDefinition _definitionFor(
@@ -502,15 +512,19 @@ final class DailyChallengeService {
     int epochDay,
     int catalogVersion,
     DailyChallengeContentCatalogSnapshot catalog,
-    math.Random rng,
+    int seed,
   ) {
     switch (type) {
       case DailyChallengeType.strumPattern:
         return legacyAdapter.forDay(epochDay);
       case DailyChallengeType.chordChange:
         final chordIds = catalog.chordIds();
-        final firstIndex = rng.nextInt(chordIds.length);
-        var secondIndex = rng.nextInt(chordIds.length);
+        final firstIndex =
+            _projectHash(seed: seed, discriminator: 'chord.first') %
+            chordIds.length;
+        var secondIndex =
+            _projectHash(seed: seed, discriminator: 'chord.second') %
+            chordIds.length;
         if (secondIndex == firstIndex) {
           secondIndex = (firstIndex + 1) % chordIds.length;
         }
@@ -522,25 +536,64 @@ final class DailyChallengeService {
       case DailyChallengeType.rhythm:
         final rhythmIds = catalog.rhythmIds();
         return RhythmChallenge(
-          contentId: rhythmIds[rng.nextInt(rhythmIds.length)],
-          targetBpm: 80 + rng.nextInt(60),
+          contentId:
+              rhythmIds[_projectHash(
+                    seed: seed,
+                    discriminator: 'rhythm.content',
+                  ) %
+                  rhythmIds.length],
+          targetBpm:
+              80 + _projectHash(seed: seed, discriminator: 'rhythm.bpm') % 60,
         );
       case DailyChallengeType.songSection:
         final songIds = catalog.songIds();
-        final songId = songIds[rng.nextInt(songIds.length)];
         const sections = <String>['verse', 'chorus', 'bridge', 'intro'];
         return SongSectionChallenge(
-          songId: songId,
-          sectionId: sections[rng.nextInt(sections.length)],
-          repetitions: 2 + rng.nextInt(3),
+          songId:
+              songIds[_projectHash(seed: seed, discriminator: 'song.id') %
+                  songIds.length],
+          sectionId:
+              sections[_projectHash(seed: seed, discriminator: 'song.section') %
+                  sections.length],
+          repetitions:
+              2 +
+              _projectHash(seed: seed, discriminator: 'song.repetitions') % 3,
         );
       case DailyChallengeType.timing:
         final timingIds = catalog.timingContentIds();
         return TimingChallenge(
-          contentId: timingIds[rng.nextInt(timingIds.length)],
-          targetWindowMs: 80 + rng.nextInt(80),
+          contentId:
+              timingIds[_projectHash(
+                    seed: seed,
+                    discriminator: 'timing.content',
+                  ) %
+                  timingIds.length],
+          targetWindowMs:
+              80 +
+              _projectHash(seed: seed, discriminator: 'timing.window') % 80,
         );
     }
+  }
+
+  /// 64-bit FNV-1a hash of [seed]'s 32-bit big-endian representation followed
+  /// by the UTF-8 bytes of [discriminator], masked to a 31-bit non-negative
+  /// integer. Distinct discriminators project the same seed to distinct
+  /// indices — the function used to be `Random(seed).nextInt(...)`, which the
+  /// E08-R08 architecture dependency test now forbids in the application
+  /// layer.
+  static int _projectHash({required int seed, required String discriminator}) {
+    const offsetBasis = 0xcbf29ce484222325;
+    const prime = 0x100000001b3;
+    const mask = 0xffffffffffffffff;
+    final seedBytes = seed & 0xffffffff;
+    var hash = offsetBasis;
+    for (var shift = 24; shift >= 0; shift -= 8) {
+      hash = ((hash ^ ((seedBytes >> shift) & 0xff)) * prime) & mask;
+    }
+    for (final byte in utf8.encode(discriminator)) {
+      hash = ((hash ^ byte) * prime) & mask;
+    }
+    return hash & 0x7fffffff;
   }
 }
 
