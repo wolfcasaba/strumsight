@@ -14788,3 +14788,35 @@ E08-R18 allowlistje nem enged mérce- vagy tooling-módosítást.
 
 **Őrteszt:** nincs — a reprodukció két izolált klón teljes gate-naplója és a
 1771→1773 fájlszám-eltérés; a tooling javítása védett mérce-scope.
+
+## L395 — A kör-brief két célzott teszt-útvonala nem fedte le a keresztmetsző `test/core/architecture_dependency_test.dart`-ot; a CI, nem a helyi gate, fogta meg a `Random(` sértést (E08-R19, 2026-08-21)
+
+**Mit mértünk.** Az E08-R19 brief §7 gate-parancsa (`tools/round-gate.sh
+test/features/gamification/application/daily_challenge_service_test.dart
+test/features/streak`) és a review saját izolált gate-újrafutása is
+ZÖLDET adott, miközben az implementáció (`daily_challenge_service.dart`)
+`dart:math.Random`-ot használt a gamification `application/` rétegben — ez
+sérti az E08-R08 „framework-free application layer" szabályt, amit a
+`test/core/architecture_dependency_test.dart` egy HARMADIK, a briefben nem
+szereplő útvonalon őriz. A `full-gate.yml` CI (teljes suite, ADR 0053) az
+ELSŐ mérés, ami ezt elkapta — mind a `full-gate`, mind a `Coverage` job
+pirosra vált. A review saját gate-futása ugyanazt a szűk útvonal-listát
+ismételte meg, tehát a mérce-rés a review oldalán is megismétlődött, nem
+csak az implementer briefjében.
+
+**Következtetés.** Egy kör-brief célzott gate-parancsa NEM helyettesíti a
+teljes suite-ot olyan architektúra-invariánsokra, amik réteg-szintűek (pl.
+egy egész `application/` vagy `domain/` könyvtárra vonatkozó tiltott-minta
+teszt), mert ezek egy, a kör saját céltesztjétől FÜGGETLEN fájlban élnek. A
+javítás nem a `round-gate.sh` szűkítés eltörlése (az OOM-védelem ADR 0053
+szerint indokolt), hanem hogy egy gamification `application/`- vagy
+`domain/`-réteget érintő ÚJ brief §7 gate-parancsába a szerző (a Claude
+pre-flight) vegye fel a `test/core/architecture_dependency_test.dart`-ot is,
+ha a kör a réteg-határt érintő fájlt ad hozzá. A javítás maga (a `Random`
+lecserélése tiszta FNV-1a hash-projekcióra, a kódbázis meglévő
+`dailyQuestSortKey` mintáját követve) egyetlen MiniMax javító körben megtörtént.
+
+**Őrteszt:** nincs — jövőbeli gamification `application/`/`domain/` briefek
+pre-flightjában kézzel ellenőrizendő, hogy a §7 gate-parancs tartalmazza-e a
+`test/core/architecture_dependency_test.dart`-ot, ha a brief a réteg-határt
+érintő fájlt ad az allowed_paths-hoz.
