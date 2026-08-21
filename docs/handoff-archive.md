@@ -9458,6 +9458,32 @@ regressziós teszt méri. Exact-SHA `2d75d8b1`: Full Gate
 success; a post-merge célzott gate a friss `main`-en szintén zöld (7/7).
 Mindkét generator flag továbbra is `false`; production hívó nincs.
 
+## ✅ E08-R16 KÉSZ — Quest domain, objective és lifecycle
+
+PR [#387](https://github.com/wolfcasaba/strumsight/pull/387), squash
+`1e7ed2a3`, ADR
+[0382](adr/0382-quest-objective-and-lifecycle-contract.md). A Terra
+implementáció típusos skill/block/mode/achievement objective-eket,
+verziózott napi/heti schedule-t és zárt lifecycle-ot készített. Completionkor
+a reward receipt claim nélkül, azonnal létrejön; retry ugyanazon instancen
+idempotens, expiry a progress/evidence adatot nem törli.
+
+Az első Sol correctness review két MAJOR hibát mért eldobható próbákkal. A
+definition-only receipt identity eltérő napon ugyanazt az ID-t adta, a
+persisted completed rekord pedig hamis ledger ID-val vagy a lejárati határon
+is betölthető volt. A Terra javító kör instance-derived identityt és az élő
+átmenettel azonos persistence-invariánsokat vezetett be. Az F1/F2
+visszarontások külön-külön pirosak, restore után a suite 10/10 zöld;
+correctness **APPROVED**, high-risk security review **PASS**.
+
+Exact `e4ececf4`: Full Gate
+[32454251927](https://github.com/wolfcasaba/strumsight/actions/runs/32454251927)
+és Router CI
+[32454084052](https://github.com/wolfcasaba/strumsight/actions/runs/32454084052)
+success. A kombinált upstream-HEAD helyi gate-je 6/6 zöld. Implementer Terra
+(`gpt-5.6-terra`), orchestrátor/reviewer Sol (`gpt-5.6-sol`). Pontos következő
+E08 kör: **E08-R17 — Napi quest generátor**.
+
 ## ✅ E13-R03 KÉSZ — Semantic colors and three themes
 
 PR [#386](https://github.com/wolfcasaba/strumsight/pull/386), squash

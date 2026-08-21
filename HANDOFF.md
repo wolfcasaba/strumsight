@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R16 KÉSZ — Quest domain, objective és lifecycle — PR #387 (2026-08-21, L384–L385)
+
+A framework- és IO-mentes quest domain zárt, típusos objective-vokabulárt,
+verziózott napi/heti schedule-t, ötállapotú életciklust és automatikus,
+claim nélküli reward receiptet ad. Az aktivitási felső határ exkluzív; expiry
+megőrzi a valós progress/evidence adatot. Ugyanazon quest-instance ismételt
+completionje változatlan receiptet ad, más generation day vagy cadence pedig
+külön instance identityt kap.
+
+Az első független Sol review két MAJOR leletet talált: a katalógus-ID alapú
+receipt a következő napi példány jutalmát deduplikálta volna, a persisted
+completed rekord pedig megkerülhette a receipt- és expiry-invariánst. Egy
+Terra javító kör után mindkettőt regressziós cella zárja; correctness
+**APPROVED**, security **PASS**. Exact `e4ececf4`: Full Gate
+[32454251927](https://github.com/wolfcasaba/strumsight/actions/runs/32454251927)
+és Router CI
+[32454084052](https://github.com/wolfcasaba/strumsight/actions/runs/32454084052)
+success. PR [#387](https://github.com/wolfcasaba/strumsight/pull/387), squash
+`1e7ed2a3`, ADR [0382](docs/adr/0382-quest-objective-and-lifecycle-contract.md).
+Pontos következő E08 termékkör: **E08-R17 — Napi quest generátor**.
+
 ## ✅ E13-R03 KÉSZ — Semantic colors and three themes — PR #386 (2026-08-21, L381–L383)
 
 Az új, 23 mezős `SsColorScheme`, a névvel ellátott state overlayek és az

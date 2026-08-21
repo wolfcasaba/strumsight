@@ -14532,3 +14532,37 @@ közvetlenül a kombinált gate előtt újra kell futtatni. Ez környezeti
 helyreállítás, nem tracked forrás- vagy gate-módosítás.
 
 **Őrteszt:** nincs — gitignore-olt, upstreamfüggő környezeti előfeltétel; a reprodukció a `.pipeline/land-E13-R03.log` 38 analyzer hibája, majd ugyanazon HEAD-en prepare + 7/7 zöld gate.
+
+## L384 — Ismétlődő katalóguselem receiptje a példányt, nem csak a definíciót azonosítsa (E08-R16, 2026-08-21)
+
+**Mért snag.** Az első quest-contract a ledger- és source-event ID-t csak a
+stabil `QuestDefinition.id` értékéből képezte. Két `daily_rhythm` quest
+`generationEpochDay = 20686` és `20687` schedule-lel ugyanazt a
+`quest:daily_rhythm:completion` receiptet adta. Az idempotens reward ledger
+ezért a második napi teljesítést az első retryjának nézhette volna.
+
+**Javítás és szabály.** Ismétlődő tartalomnál külön kell választani a
+katalógus-definíció és a futási példány identityjét. A receipt és a source
+event most a cadence + generation epoch day + stabil definition ID
+összetételéből származik: ugyanazon instance retryja azonos, más nap vagy
+cadence eltérő.
+
+**Őrteszt:** `test/features/gamification/domain/quest_model_test.dart` —
+„F1: each scheduled quest instance receives a distinct stable receipt identity”.
+
+## L385 — A persisted terminális állapotnak ugyanazokat az invariánsokat kell újraérvényesítenie, mint az élő átmenetnek (E08-R16, 2026-08-21)
+
+**Mért snag.** Az élő `complete()` helyesen képezte a receiptet és kizárta a
+lejárati határon történő teljesítést, de a támogatott schemaVersionből
+betöltött completed rekord tetszőleges `rewardLedgerId`-t és
+`completionAt >= expiresAt` időt is elfogadott. Az életciklus rövidzárja így
+később hiteles receiptként adhatta vissza a manipulált adatot.
+
+**Javítás és szabály.** A konstruktor/deszerializáló completed és
+archived-completed rekordnál is megköveteli a pontos instance-derived ledger
+ID-t, az UTC completion időt és a szigorú `completionAt < expiresAt`
+feltételt. A live command guardja nem helyettesíti a persistence trust-boundary
+validációját.
+
+**Őrteszt:** `test/features/gamification/domain/quest_model_test.dart` —
+„F2: persisted completed records require their instance receipt and pre-expiry completion”.
