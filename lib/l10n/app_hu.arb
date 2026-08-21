@@ -2913,6 +2913,75 @@
   },
   "weeklyPlanTitle": "Heti terv",
   "@weeklyPlanTitle": {},
+  "rewardInboxTitle": "Jutalom postaláda",
+  "@rewardInboxTitle": {},
+  "rewardInboxEmptyTitle": "Nincs várakozó jutalom",
+  "@rewardInboxEmptyTitle": {},
+  "rewardInboxEmptyBody": "Minden megszerzett jutalom ide érkezik, amikor készen állsz megnézni.",
+  "@rewardInboxEmptyBody": {},
+  "rewardInboxSeenLabel": "Megnézve",
+  "@rewardInboxSeenLabel": {},
+  "rewardInboxUnseenLabel": "Új",
+  "@rewardInboxUnseenLabel": {},
+  "rewardInboxCountSemantics": "{count, plural, =0{Nincs új jutalom} =1{1 új jutalom} other{{count} új jutalom}}",
+  "@rewardInboxCountSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEarnedXpLabel": "{xp} XP",
+  "@rewardInboxEarnedXpLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEntrySemantics": "{title}. {xp} XP. {body}",
+  "@rewardInboxEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardSummaryTitle": "Ezt szerezted",
+  "@rewardSummaryTitle": {},
+  "rewardSummaryConsolidatedLabel": "{count} jutalom együtt",
+  "@rewardSummaryConsolidatedLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryConsolidatedSemantics": "{count, plural, =1{1 jutalom} other{{count} jutalom}} összevonva egy ünneplésbe",
+  "@rewardSummaryConsolidatedSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryEntrySemantics": "{title}. {body}",
+  "@rewardSummaryEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
   "wrappedShareTooltip": "Heti összegzés megosztása",
   "wrappedTitle": "A heti pengetésem"
 }

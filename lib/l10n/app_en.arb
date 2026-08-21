@@ -3012,6 +3012,75 @@
   },
   "weeklyPlanTitle": "Weekly plan",
   "@weeklyPlanTitle": {},
+  "rewardInboxTitle": "Reward inbox",
+  "@rewardInboxTitle": {},
+  "rewardInboxEmptyTitle": "No rewards waiting",
+  "@rewardInboxEmptyTitle": {},
+  "rewardInboxEmptyBody": "Every reward you earn will land here when you are ready to look.",
+  "@rewardInboxEmptyBody": {},
+  "rewardInboxSeenLabel": "Seen",
+  "@rewardInboxSeenLabel": {},
+  "rewardInboxUnseenLabel": "New",
+  "@rewardInboxUnseenLabel": {},
+  "rewardInboxCountSemantics": "{count, plural, =0{No new rewards} =1{1 new reward} other{{count} new rewards}}",
+  "@rewardInboxCountSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEarnedXpLabel": "{xp} XP",
+  "@rewardInboxEarnedXpLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEntrySemantics": "{title}. {xp} XP. {body}",
+  "@rewardInboxEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardSummaryTitle": "You earned this",
+  "@rewardSummaryTitle": {},
+  "rewardSummaryConsolidatedLabel": "{count} rewards together",
+  "@rewardSummaryConsolidatedLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryConsolidatedSemantics": "{count, plural, =1{1 reward} other{{count} rewards}} consolidated into one celebration",
+  "@rewardSummaryConsolidatedSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryEntrySemantics": "{title}. {body}",
+  "@rewardSummaryEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
   "wrappedShareTooltip": "Share my week",
   "wrappedTitle": "My strum week"
 }
