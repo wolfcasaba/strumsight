@@ -1,6 +1,6 @@
 # E13-R04 — Tipográfia és text-scale resilience
 
-- **Státusz:** IN PROGRESS (pre-flight: 2026-08-21, `main @ 0b18afa0`)
+- **Státusz:** IN PROGRESS (pre-flight folytatva: 2026-08-21, `main @ d5701b61`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 4
 - **Kör-azonosító:** `E13-R04`
 - **Branch:** `terra/e13-r04-typography-and-text-scale`
@@ -11,6 +11,34 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd a Poppins és Montserrat
 > **tényleges** asset-elérhetőségét (`pubspec.yaml` fonts szekció), mert a §5.1
 > szerep-kiosztás erre épül. Eltérésnél §0.0 revízió.
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+- A foglaló meglévő, atomi markere és a korábbi product pre-flight commitja
+  az E13-R04-hez a `0383` számot rendeli; a kör döntéseit az
+  [`ADR 0383`](../adr/0383-typography-and-text-scale-contract.md) rögzíti.
+- A `pubspec.yaml:75-90` és a hat tényleges asset igazolja a Poppins
+  400/500/600/700/800, valamint a Montserrat család elérhetőségét. A brief
+  szerep-kiosztása emiatt változatlan.
+- A tényleges theme-hívási lánc: `SsDarkTheme`/`SsLightTheme` először a
+  `SsThemeExtensions.legacyThemeForBrightness` eredményét olvassa, majd a
+  meglévő extensionöket megőrzi. A tipográfia a már engedélyezett
+  `ss_theme_extensions.dart` fájlban mindhárom design-system témába beköthető.
+- Nincs ma `ss_typography.dart`, chord-hero komponens vagy commitolt
+  typography-teszt. A kör nem kezel állapotgépet vagy lifecycle-erőforrást,
+  így a státusz-input és erőforrás-tulajdonlási mérés nem alkalmazandó.
+- A kötelező, sorrendi **visszakeresett előzmény** vizsgálata megtörtént a szűkített
+  `lessons,halts,adr`, majd `lessons,halts`, végül a teljes korpuszon. A
+  közvetlen előzmény az [`ADR 0381`](../adr/0381-semantic-theme-and-accessibility-contract.md)
+  theme-extension szerződése; a releváns falszifikációs precedensek
+  [`lessons/L381`](../LESSONS.md) és [`lessons/L382`](../LESSONS.md). Az index
+  egy committal elavult volt, ezért az újabb H3-heal tényét közvetlenül a
+  verziózott [`lessons/L387`](../LESSONS.md) és a fenti §0.0.1 rögzíti.
+
+> **Kockázat = high, indoklás:** a Stage Mode legfontosabb zenei jelének
+> olvashatósága és a 200%-os accessibility text-scale termékhatár közvetlenül
+> sérülhet clippinggel vagy ellipszissel. A magas kockázat accessibility és
+> correctness eredetű, nem a router path-fragmentjeiből következik.
 
 ## 0.0.1 H3 scope-revízió — ADR 0112 önjavító kör, 2026-08-21
 
