@@ -23,6 +23,9 @@ allowed_paths = [
   "lib/features/gamification/presentation/screens/reward_inbox_screen.dart",
   "lib/features/gamification/presentation/widgets/reward_summary_sheet.dart",
   "lib/features/gamification/public.dart",
+  "lib/l10n/features/gamification_en.arb",
+  "lib/l10n/features/gamification_hu.arb",
+  "tool/gen_l10n_segments.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/application/celebration_coordinator_test.dart",
@@ -110,6 +113,24 @@ gomb nem csak UI-kozmetika, hanem a termék magját (a zavartalan gyakorlást) v
 a mért compassionate-UX szerződést törné el. Ezt kizárólag a §6.1 kötelező
 valódi-sértés próba (A1-re) és a küszöb-hármas cella fogja meg gépi mércével.
 
+### §0.0.1 l10n-fragment scope (mid-round revízió, Claude, 2026-08-21, mérve)
+
+Az E08-R20 §0.0.1-es analóg revízióját (L396) követve: a `lib/l10n/app_en.arb`
+és `app_hu.arb` a PR #343 (ADR 0307 §4) óta **GENERÁLT aggregátum**, nem
+kézzel szerkesztett forrás. A tényleges forrásfájl a gamification feature-höz a
+`lib/l10n/features/gamification_en.arb` és `gamification_hu.arb`
+(`tool/gen_l10n_segments.dart` egyesíti a `lib/l10n/base/` + `lib/l10n/features/`
+szegmenseket → `lib/l10n/app_<locale>.arb` → `flutter gen-l10n` →
+`lib/l10n/app_localizations_<locale>.dart`). Az első implementer-futás a kulcsokat
+a generált aggregátumba írta (rossz hely), a gate-fix commit eltávolította
+onnan (mert a `flutter gen-l10n` mindig újraírja), de a tényleges forrás
+(`features/gamification_*.arb`) üres maradt → `analyze` 11 undefined-getter
+hibát dobott a `rewardInbox*`/`rewardSummary*` getterekre. A javító kör az új
+kulcsokat a **`lib/l10n/features/gamification_{en,hu}.arb`**-be írja, majd a
+meglévő aggregátort a `tool/gen_l10n_segments.dart --write` → `flutter gen-l10n`
+szekvenciával szinkronizálja. Az `allowed_paths` és a §4 tábla ezen §0.0.1
+revízióval végleges.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -158,8 +179,11 @@ hang beállítás tiszteletben tartása.
 | `lib/features/gamification/presentation/screens/reward_inbox_screen.dart` | **ÚJ** — a postaláda |
 | `lib/features/gamification/presentation/widgets/reward_summary_sheet.dart` | **ÚJ** — az összevont összefoglaló |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
-| `lib/l10n/app_en.arb` | az ÚJ kulcsok |
-| `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
+| `lib/l10n/features/gamification_en.arb` | **ÚJ kulcsok forrása** (lásd §0.0.1) |
+| `lib/l10n/features/gamification_hu.arb` | az ÚJ kulcsok magyar forrása |
+| `tool/gen_l10n_segments.dart` | az aggregátor-generátor (ADR 0307 §4) — opcionális, ha a szegmens-tartalom változik |
+| `lib/l10n/app_en.arb` | GENERÁLT aggregátum — a szegmens-forrásból `tool/gen_l10n_segments.dart --write` állítja elő |
+| `lib/l10n/app_hu.arb` | GENERÁLT aggregátum — ua. |
 | `test/features/gamification/application/celebration_coordinator_test.dart` | a §6 cellái |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
