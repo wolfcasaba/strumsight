@@ -4885,7 +4885,7 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 ## 6. Exact next task
 
 **Pontos következő E08 termékkör: E08-R16 — Quest domain, objective és
-lifecycle** (`docs/rounds/e08-r16-quest-domain-objectives-and-lifecycle.md`,
+lifecycle** (`docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md`,
 engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
 Az önálló Chapter 13 sáv következő köre továbbra is E13-R03.
 
