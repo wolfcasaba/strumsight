@@ -1,17 +1,48 @@
 # E08-R17 — Napi küldetés-generátor
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** PREFLIGHT COMPLETE (2026-08-21, újramérve: `main @ d5701b61`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 17
 - **Kör-azonosító:** `E08-R17`
 - **Branch:** `<motor>/e08-r17-daily-quest-generator`
 - **Előfeltétel:** `E08-R16` merge-elve (quest domain)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0313` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **Foglalóval kiosztott ADR:** `ADR 0384`. Az ADR-t az orchestrátor írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R16 `quest_schedule.dart` mezőit és a `lib/features/practice_generator/` napi terv-szerződését; ellenőrizd a `lib/features/vision/` és `lib/features/analyze/` elérhetőségi (permission/capability) jelzéseit — a generátor ezekre szűr. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+### 0.0 Pre-flight mérés és brief-revízió (2026-08-21)
+
+- A kötelező `tools/round-slots.py reserve-adr --round E08-R17` futás
+  `0384`-et adott. Az előre írt `0313` már az elfogadott kör-landoló ADR,
+  ezért változatlan marad; a jelen kör döntése az új `0384` számot kapja.
+- A quest schedule tényleges mezői: `generationEpochDay`,
+  `timezoneOffsetMinutes`, pozitív `catalogVersion`, UTC `expiresAt`; az aktív
+  felső határ exkluzív (`QuestSchedule.isActiveAt`).
+- A terv tényleges pihenőnapi útja
+  `ScheduleDecisionReason.restDay.code` → `TodayPlanMode.restDay`
+  (`today_plan_controller.dart:85-93`). A generátor caller-fed, immutable
+  napi terv-pillanatképet olvas; nem szerez repositoryt és nem módosít tervet.
+- A kamera permission contract külön read-only `currentState()` és mutáló
+  `request()` metódust ad (`camera_permission.dart:88-95`). A generátor egyik
+  permission/capability gatewayt sem hívja: explicit availability booleánokat
+  kap a hívótól. Az Analyze publikus contractban nincs külön permission API.
+- **Visszakeresett előzmény:** a szűkített RAG-találatok közül az
+  `adr/0382` ([ADR 0382](../adr/0382-quest-objective-and-lifecycle-contract.md))
+  rögzíti a quest instance/schedule contractot, [L384](../LESSONS.md#l384)
+  (`lessons/L384`) pedig bizonyítja, hogy az ismétlődő katalógus-definíció és a napi példány
+  identityje nem mosható össze. Az [ADR 0352](../adr/0352-qualified-day-planned-rest-and-recovery-policy.md)
+  megerősíti, hogy a planned rest nem implicit gyakorlási kötelezettség.
+  A permission-kényszerre nem került elő ennél specifikusabb korábbi halt.
+- A `[1, 3]` határokat `python3 -c 'print(0 < 1, 1 <= 3, 4 > 3)'` számolta:
+  `True True True`; a 0/1/3/4 cellák a §6.1-ben maradnak kötelezők.
+
+**Kockázat = high, indoklás:** a kör permission- és cloud-availability
+határt modellez. Egy hibás szűrés végrehajthatatlan küldetéssel burkolt
+engedélykérést okozhat, ezért fail-closed availability-mátrix és független
+security review kötelező akkor is, ha a diff nem érint platform adaptert.
 
 ```ai-router
 schema_version = 1
@@ -51,8 +82,10 @@ determinisztikusan: ugyanaz a nap + profil + katalógus-verzió UGYANAZT a küld
 
 - Az R16 szállította a típusos objective-et és az életciklust.
 - `daily_quest_generator.dart` **nem létezik**.
-- A `lib/features/vision/` kamerát, a felhő-funkciók fiókot igényelnek — a generátornak ezekre szűrnie kell.
-- Az R11 bevezette a tervezett pihenőnapot — a generátornak ezt tisztelnie kell.
+- A kamera jelenlegi olvasási contractja `CameraPermissionGateway.currentState()`;
+  a `request()` külön, explicit user-action út, amelyet a generátor nem hívhat.
+- Az R11 pihenőnapját a production út
+  `ScheduleDecisionReason.restDay.code` → `TodayPlanMode.restDay` alakban adja.
 
 ## 3. Scope
 
@@ -66,7 +99,7 @@ determinisztikus mag (seed) · tartalék (fallback) küldetés üres katalógusr
 - A terv MÓDOSÍTÁSA — a generátor olvas, nem ír (§5.3).
 - Heti küldetés (Kör 18), challenge (Kör 19), felület (Kör 20).
 - Engedélykérés kiváltása a generátorból — abszolút tilos.
-- `docs/adr/**` — az ADR 0313-at a Claude írja.
+- `docs/adr/**` — az ADR 0384-et az orchestrátor írja a pre-flightban.
 
 ## 4. Engedélyezett fájlok
 
@@ -79,13 +112,31 @@ determinisztikus mag (seed) · tartalék (fallback) küldetés üres katalógusr
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**` · `lib/features/practice_generator/**` (a terv ÉRINTETLEN)
 
-## 5. Kötött architekturális döntések (ADR 0313)
+## 5. Kötött architekturális döntések (ADR 0384)
+
+### 5.0 Típusos bemenet és kimenet
+
+A generátor egy immutable, caller-fed napi snapshotot kap: explicit schedule,
+stabil profile snapshot key, opcionális terv-objective-ek, planned-rest jelző,
+valamint kamera/fiók/felhő availability booleánok. A snapshot előállítása és a
+gatewayk meghívása scope-on kívüli composition feladat; a generátor nem olvas
+órát, repositoryt, permission plugint vagy hálózatot.
+
+A katalóguselem a stabil objective és reward mellett hordozza a szükséges
+capabilityket, a rövidség és a pihenőnapi alkalmasság jelzőjét. A generált
+eredmény a verziózott `QuestDefinition` mellett explicit `isOptional`
+metaadatot ad; planned rest esetén ez mindig igaz. A visszaadott lista és a
+katalógus nézete nem módosítható.
 
 ### 5.1 DETERMINISZTIKUS: nap + profil-pillanatkép + katalógus-verzió → ugyanaz a küldetés
 
-A generálás tiszta függvény ezen a három bemeneten. A magot (seed) ezekből
-származtatjuk, és **dokumentáljuk**. Így a küldetés az app újraindítása után sem változik,
-és a támogatás reprodukálni tudja.
+A generálás tiszta függvény a teljes snapshoton. A stabil seed material a
+`generationEpochDay`, a profile snapshot key és a `catalogVersion` egyértelmű,
+UTF-8 reprezentációja; a rendezési kulcs ehhez és a stabil katalógus-ID-hoz
+kötött, dokumentált 64 bites FNV-1a hash. Nem használható a Dart
+`String.hashCode`, mert annak cross-runtime stabilitása nem contract. Így
+ugyanaz a snapshot app-újraindítás után sem változik, és a támogatás
+reprodukálni tudja.
 
 **NEM elfogadható gyengítés:** `Random()` mag nélkül vagy `DateTime.now()` a generálásban.
 A felhasználó a nap közepén más küldetést kapna, mint reggel.
@@ -119,12 +170,12 @@ hibától.
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | Ugyanaz a nap + profil + katalógus-verzió 100 futtatásra AZONOS küldetés-halmazt ad | `daily_quest_generator_test.dart` — determinizmus-cella |
+| A1 | Ugyanaz a teljes immutable snapshot 100 futtatásra AZONOS, azonos sorrendű küldetés-halmazt ad; a seednek kipinnelt golden értéke van | `daily_quest_generator_test.dart` — determinizmus + golden-seed cella |
 | A2 | A halmaz mérete a `[1, 3]` sávban van, és van benne legalább egy RÖVID objective | `daily_quest_generator_test.dart` — méret-hármas |
 | A3 | Nem elérhető kamera/fiók/felhő esetén az azt igénylő küldetés NEM generálódik | `daily_quest_generator_test.dart` — elérhetőség-mátrix |
-| A4 | A generátor SEMMILYEN engedélykérést nem vált ki | `daily_quest_generator_test.dart` + review |
+| A4 | A generátor SEMMILYEN gatewayt vagy engedélykérést nem birtokol/hív; API-ja csak caller-fed adatokból áll | `daily_quest_generator_test.dart` + import/API review |
 | A5 | Tervezett pihenőnapon opcionális, nem kötelező küldetés jön létre | `daily_quest_generator_test.dart` |
-| A6 | A terv fájljai ÉRINTETLENEK | `git diff --stat` |
+| A6 | A terv fájljai ÉRINTETLENEK, és a generátor csak a practice-generator `public.dart` határát használhatja, ha onnan típust importál | gépi scope-audit + import review |
 | A7 | Üres katalógus / új felhasználó esetén is van végrehajtható tartalék küldetés | `daily_quest_generator_test.dart` |
 | A8 | A determinisztikus mag származtatása DOKUMENTÁLT (a §10-ben és kódkommentben) | review |
 
@@ -138,6 +189,9 @@ hibától.
 | Pihenőnapon kötelező gyakorlás generálódik | **A5** |
 | Üres katalógusnál üres lista | **A7** |
 | Négy objective generálódik | **A2** (a méret-hármas felső cellája) |
+| `String.hashCode` vagy más runtime-függő seed kerül be | **A1** golden-seed cella |
+| Planned-rest eredményről lemarad az optional metaadat | **A5** |
+| A visszaadott lista vagy katalógus módosítható | **A2/A7** immutability cella |
 
 **A küszöb három kötelező cellája** (a napi objective-ek száma (a specifikált `[1, 3]` sáv)):
 
@@ -147,12 +201,15 @@ hibától.
 | **rajta** (a küszöbön) | pontosan 1, illetve pontosan 3 objective (a sáv két vége) | **ELFOGADVA** — a sáv MINDKÉT vége inkluzív |
 | a küszöb **fölött** | 4 objective | **NEM elfogadható** — a generátornak vágnia kell 3-ra |
 
-A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
+A hármas tömören: **alatt** → fallbackkel korrigál · **rajta** → elfogad · **fölött** → háromra vág.
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
 
-**Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** cseréld a determinisztikus magot `Random()`-ra, futtasd a gate-et → az **A1**
-determinizmus-cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próbák (KÖTELEZŐK, §10-ben dokumentálva):** (1) cseréld a
+stabil FNV seedet `Random()`-ra, futtasd a célzott tesztet → az **A1**
+determinizmus/golden cellának PIROSNAK kell lennie; (2) fordítsd meg a kamera
+availability ellenőrzését → az **A3** mátrix legyen PIROS; majd mindkét
+mutációt állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
