@@ -1,17 +1,58 @@
 # E13-R05 — Spacing, radius, elevation és surface primitívek
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 903e7a7d`)
+- **Státusz:** IN PROGRESS (pre-flight: 2026-08-21, `main @ 1281dc40`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 5
 - **Kör-azonosító:** `E13-R05`
-- **Branch:** `<motor>/e13-r05-spacing-and-surfaces`
+- **Branch:** `terra/e13-r05-spacing-and-surfaces`
 - **Előfeltétel:** `E13-R04` merge-elve (tipográfia)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a Ch13 §9.5 geometriája adott.
+- **Előre kiosztott ADR:** `0385` — a foglaló adta az E13-R05-nek.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R02
 > `foundations/ss_spacing.dart` és `ss_radius.dart` TÉNYLEGES konstansait — ez a
 > kör ezekre épít felületi primitíveket, nem definiálja újra őket. Eltérésnél
 > §0.0 revízió.
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+- A `tools/round-slots.py reserve-adr --round E13-R05` atomi foglalása a
+  `0385` számot adta; a felület-hierarchia, az inset-kezelés és a mérce
+  döntéseit az [`ADR 0385`](../adr/0385-surface-hierarchy-and-geometry-contract.md)
+  rögzíti. Az ADR orchestrátor pre-flight artefaktum, nem része az implementer
+  fázisbaseline utáni scope-jának (`lessons/L380`).
+- A tényleges foundation contract változatlanul
+  `SsSpacing.values == [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]` és
+  `SsRadius.values == [6, 10, 16, 20, 28, 999]`; ezért a kör ezeket nem
+  definiálja újra. A `python3 -c`-vel számolt 4 dp határcellák: `2`, `4`,
+  illetve `8 / 12 / 16` dp.
+- A tényleges szemantikai színút már létezik:
+  `SsColorScheme.surface`, `surfaceRaised`, `surfaceSunken`, `border` és
+  `borderStrong`. A legacy paletta jelenleg a `surfaceRaised` értékét a
+  `surface` értékével azonosan adja, ezért a kör a szintek vizuális
+  megkülönböztetését a saját, központosított elevation/surface contractjában
+  oldja meg, új hex szín és `lib/core/theme/**` módosítás nélkül.
+- A Chapter 13 Kör 5 kötelező háromtémás surface-mátrixa, token-unit cellája,
+  nagy text-scale és nested-surface próbája a már engedélyezett két tesztfájlban
+  kap explicit acceptance-cellát. A „golden” itt determinisztikus vizuális
+  contract-mátrix: témánként a feloldott háttér, border és shadow értékét méri,
+  új PNG corpus nélkül. Ez a brief dokumentált pontosítása a Chapter 13
+  bináris golden megfogalmazásához; scope-bővítés nincs.
+- A nyers `EdgeInsets`/radius lint az engedélyezett `spacing_grid_test.dart`
+  source-contract cellája: a kör nem módosítja a védett architecture-gate-et.
+  A compact/medium/expanded screen padding a meglévő spacing tokenekhez kötött
+  publikus contractként kerül dokumentálásra.
+- A kör nem kezel státuszreducert vagy lifecycle-erőforrást; célállapot-input
+  és resource-acquire hívási lánc ezért nem alkalmazandó.
+- A kötelező, sorrendi **visszakeresett előzmény** vizsgálata a szűkített
+  `lessons,halts,adr`, majd
+  `lessons,halts`, végül a teljes korpuszon megtörtént. Közvetlen előzmény az
+  [`ADR 0381`](../adr/0381-semantic-theme-and-accessibility-contract.md) és az
+  E13-R02/R03/R04 merge-tény; a legfontosabb scope-precedens
+  [`lessons/L387`](../LESSONS.md), amely szerint egy integráció meglévő
+  contract-fogyasztóját is fel kell mérni. Itt nincs ilyen új, listán kívüli
+  owner: a surface-primitívek újak, a katalógus és mindkét célzott teszt exact
+  scope-ban van. A teljes korpuszos találatok ezen felül nem adtak relevánsabb
+  előzményt.
 
 ```ai-router
 schema_version = 1
@@ -129,6 +170,11 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | A5 | A `SsHeroCard` nem importál feature-logikát | architektúra-guard |
 | A6 | A primitívek mindhárom témában renderelnek kivétel nélkül | `ss_surface_test.dart` |
 | A7 | Nincs hardkódolt geometriai literál az új kódban | `grep` a diffben |
+| A8 | A High Contrast surface-szinteket erős border is megkülönbözteti | `ss_surface_test.dart` |
+| A9 | A dark/light/high-contrast × base/raised/overlay/modal vizuális contract-mátrix háttér-, border- és shadow-értékei determinisztikusak | `ss_surface_test.dart` |
+| A10 | Nested surface 2.0 text scale-en renderel kivétel és overflow nélkül | `ss_surface_test.dart` |
+| A11 | Compact/medium/expanded padding rendre a 16/24/32 dp `SsSpacing` tokenre oldódik | `spacing_grid_test.dart` |
+| A12 | A source-contract elutasítja a nyers `EdgeInsets`- és `BorderRadius.circular` geometriai literált az új primitivekben | `spacing_grid_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -140,6 +186,11 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | A primitív figyelmen kívül hagyja az inseteket | A4 |
 | A hero kártya maga olvassa a felismerés-állapotot | A5 |
 | Nyers `BorderRadius.circular(9)` | A7 |
+| High Contrast ugyanazt a gyenge bordert használja, mint a normál téma | **A8** |
+| Bármelyik téma/szint feloldása kézzel megadott háttérre vagy shadow-ra változik | **A9** |
+| Nested card fix magasságot kap és 2.0 text scale-en overflowol | **A10** |
+| Expanded padding 28 dp-re csúszik | **A11** |
+| A production primitive `EdgeInsets.all(16)`-ot használ token helyett | **A12** |
 
 **A rács három kötelező cellája** (a küszöb: a 4dp osztó):
 
