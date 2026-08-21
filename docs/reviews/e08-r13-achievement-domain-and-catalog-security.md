@@ -2,7 +2,7 @@
 
 Brief: `docs/rounds/e08-r13-achievement-domain-and-catalog.md`  
 Reviewer: Codex / `gpt-5.6-sol` · Dátum: 2026-08-21  
-Verdikt: **PASS — a correctness review két külön MAJOR integritási lelete nyitva**
+Verdikt: **PASS**
 
 ## Összegzés
 
@@ -20,15 +20,17 @@ sentinel fail-closed. A secret scan 3104 fájlon 0 leletet adott.
 - Nincs expression string, `eval`, dinamikus tool/action vagy külső provider.
 - Nincs hálózati, fájl-I/O, SharedPreferences, Dio/http vagy platform import az
   új production fájlokban.
-- A high-risk adat-integritási kockázatokat a correctness review F1/F2 méri;
-  ezek merge-blokkolók, de nem új remote-exploit/privacy útvonalak.
+- A high-risk adat-integritási kockázatokat a correctness review F1/F2 mérte;
+  a `c088c26c` javító commit mindkettőt runtime őrrel és mutáció-érzékeny
+  regressziós cellával lezárta.
 
 ## Megállapítások
 
 ### N1 — NOTE — Az ID-retention correctness lelet tartós adat integritását érinti
 
-A `previousCatalog` eltűnő ID-t ma nem jelez. Ezt a correctness review F1
-MAJOR-ként blokkolja; a security review nem duplikálja külön súlyossággal.
+A `previousCatalog` eltűnő ID-ját az első review nem látta jelzettnek. A
+`c088c26c` óta a `previousAchievementMissing` fail-closed kód őrzi; a
+reviewer az őr kikapcsolásával a regressziós cellát pirosra vitte.
 
 ### N2 — NOTE — A katalógus nincs külső inputhoz kötve ebben a körben
 
@@ -39,5 +41,4 @@ kötelező futtatni.
 
 ## Döntés
 
-Security/privacy szempontból PASS. A PR a correctness report két MAJOR
-leletének zárása előtt ettől függetlenül nem merge-elhető.
+Security/privacy szempontból PASS; nincs nyitott security BLOCKER/MAJOR.

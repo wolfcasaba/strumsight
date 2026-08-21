@@ -1,41 +1,40 @@
 # E08-R13 — Review
 
 Brief: `docs/rounds/e08-r13-achievement-domain-and-catalog.md`  
-Diff: `731f52c5...c3812906`  
+Diff: `731f52c5...c088c26c`
 Reviewer: Codex / `gpt-5.6-sol` · Dátum: 2026-08-21  
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-Az implementáció scope-ja tiszta, a célzott round-gate 6/6 zöld, és a
-tier-ciklus őre valódi production-mutatással bizonyítottan érzékeny. Két
-domain-integritási rés azonban zöld maradt a szállított tesztek mellett: egy
-korábban kiadott ID azonos elemszámú katalóguscserével eltűnhet, továbbá a
-nem véges objective/progress számok érvényesnek látszanak. Mindkettő javító
-kört igényel.
+Az első review két domain-integritási rést reprodukált. A `c088c26c` javító
+commit külön runtime őrökkel és regressziós cellákkal lezárta mindkettőt. A
+friss, izolált re-review scope-ja tiszta, a célzott round-gate 6/6 zöld, és a
+tier-ciklus, az ID-retention, valamint a progress finite őre is valódi
+production-mutatással bizonyítottan érzékeny.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
 | A1 | 20–30 stabil, explicit ID | ✅ | 22 elem, exact ID-lista; 19/20/21 és 29/30/31 cellák |
-| A2 | Típusos objective; unknown fail-closed | ⚠️ | unknown sentinel elutasítva, de nem véges támogatott threshold elfogadva (F2) |
+| A2 | Típusos objective; unknown fail-closed | ✅ | unknown sentinel + zero/negative/infinity/NaN runtime cellák; F2 FIXED |
 | A3 | Tier-gráf körmentes | ✅ | A→B→A teszt; `_containsTierCycle` hívásának ideiglenes `false` rontása pirosra vitte A3-at |
 | A4 | Minden kulcs mindkét locale-ban | ✅ | 1503 kulcsos l10n parity + A4 |
 | A5 | Nincs beégetett emberi szöveg | ✅ | lowerCamel key-őr + locale-membership |
-| A6 | Deprecated achievement megmarad | ❌ | a shipping deprecated elem megvan, de az előző ID eltávolítását a validátor nem tiltja (F1) |
+| A6 | Deprecated achievement megmarad | ✅ | shipping deprecated elem + azonos méretű ID-replacement tiltás; F1 FIXED |
 | A7 | Elemszám-változás verzióemelést igényel | ✅ | 20→21 azonos/növelt verzió cellák |
 | A8 | Rövid, felolvasható kulcs minden definíción | ✅ | title/description/semantics kulcs mindkét locale-ban |
 
 ## Scope-audit
 
-`python3 tools/scope-audit.py --repo /tmp/review-e08-r13-a2CFaI --brief
+`python3 tools/scope-audit.py --repo /tmp/review-e08-r13-fix-BWwAo4 --brief
 docs/rounds/e08-r13-achievement-domain-and-catalog.md --base 731f52c5...`:
 
 ```text
-Legacy scope audit OK (731f52c50a04..c3812906fc0a, 11 changed path(s), 0 generated/ignored)
+Legacy scope audit OK (731f52c50a04..c088c26c5784, 13 changed path(s), 2 generated/ignored)
 ```
 
 Engedélyezett fájlokon kívüli implementer-változás: nincs.
@@ -60,7 +59,10 @@ Engedélyezett fájlokon kívüli implementer-változás: nincs.
   maradhat bent. Add hozzá a reprodukáló azonos-méretű replacement cellát.
 - **Ellenőrzés:** a fenti cella piros a régi kódon, zöld a javításon; a
   shipping `legacy_first_step` teszt maradjon zöld.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`c088c26c`) — `previousAchievementMissing` + azonos
+  elemszámú replacement cella. Reviewer-mutatás: a guardot `false &&`-dal
+  kikapcsolva a cella `Expected: false, Actual: true` hibával piros; restore
+  után zöld.
 
 ### F2 — MAJOR — Nem véges számok és release-ben kikapcsolt assertok gyengítik a domain-validációt
 
@@ -83,7 +85,9 @@ Engedélyezett fájlokon kívüli implementer-változás: nincs.
   nulla/negatív/non-finite bemenetre és NaN-es advance-re.
 - **Ellenőrzés:** a két reviewer-cella és az új határmátrix zöld; release-ben
   kikapcsolható assert nem az egyetlen őr.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`c088c26c`) — runtime factory-őrök és 0/negatív/
+  infinity/NaN cellák. Reviewer-mutatás: a progress konstruktor finite őrét
+  kikapcsolva a cella NaN-ra objektumot adott és piros lett; restore után zöld.
 
 ### N1 — NOTE — A completion timestamp stabilitását az R14-nek külön kell pinnelnie
 
@@ -105,10 +109,21 @@ Engedélyezett fájlokon kívüli implementer-változás: nincs.
 | secrets | 3104 fájl, 0 lelet | ✅ |
 | l10n | aggregate freshness + parity, 1503 üzenet | ✅ |
 | A3 mutáció | production cycle-őr kikapcsolva → A3 piros; restore → zöld | ✅ |
-| reviewer adversarial | ID-removal, infinity threshold, NaN progress | ❌ 3/3 reprodukált piros |
+| F1/F2 re-review | ID-removal + numeric/progress runtime cellák | ✅ 20/20 |
+| F1/F2 mutáció | retention guard / finite guard kikapcsolva → saját cella piros; restore → zöld | ✅ |
 | CI | még nem dispatch-elve | ⏳ javítás után |
+
+### Wrapper gate-shape diagnosztika
+
+A javító wrapper `gate_shape=VIOLATION`-t írt, de a napló mért tényleges gate
+invokációja tiszta volt (`tools/round-gate.sh test/...`, pipeline és `&&`
+nélkül), és teljes zöld kimenettel zárt. A regex három, a naplóba bemásolt
+dokumentációs/diagnosztikai mondatra illeszkedett, amelyek szövegesen
+említették a tiltott `round-gate.sh &&` mintát. A reviewer ezért nem fogadta
+el bemondásra a wrapper gate-jét: friss klónban saját kezűleg újrafuttatta a
+teljes round-gate-et, amely 6/6 zöld lett.
 
 ## Merge-döntés
 
-Két MAJOR nyitva, ezért merge tilos. Ugyanazzal a Terra motorral javítókör,
-majd friss izolált re-review és teljes exact-SHA CI szükséges.
+Nincs nyitott BLOCKER vagy MAJOR. Merge csak a végső review-commit utáni
+exact-SHA Full Gate + Router CI és freshness-ellenőrzés után engedett.

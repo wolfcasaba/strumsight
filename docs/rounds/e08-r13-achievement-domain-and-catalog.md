@@ -346,3 +346,8 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - A teljes suite, randomizált property gate, CI-dispatch, PR és merge implementer-scope-on kívül van.
 
 ## 11. Review — a Claude tölti ki
+
+Correctness: [`docs/reviews/e08-r13-achievement-domain-and-catalog-review.md`](../reviews/e08-r13-achievement-domain-and-catalog-review.md)
+— **APPROVED** (`c088c26c`, két MAJOR javítva).
+Security: [`docs/reviews/e08-r13-achievement-domain-and-catalog-security.md`](../reviews/e08-r13-achievement-domain-and-catalog-security.md)
+— **PASS**, nincs nyitott security BLOCKER/MAJOR.
