@@ -1,5 +1,28 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E13-R01/H8] KÉSZ — a duplikált körtörténet tiszta recovery PR-rel helyreállt — PR #382 (2026-08-21, L376)
+
+Az E13-R01 eredeti PR-jének (`#381`, csúcs `31aab305`) története a tiszta,
+rebase-elt `87f247f8` csúcs mögé visszamerge-elte a régi pre-rebase láncot.
+A 12 nem-merge commit ezért pontosan hat, páronként azonos stabil patch-id-t
+tartalmazott. A már merge-elt H8-SELFDUP őr helyesen blokkolta a landolást;
+az eredeti PR-t force-push nélkül lezártuk, így a sérült történet auditálható
+maradt.
+
+A `heal/E13-R01-H8-1` recovery ág a jelenlegi `origin/main` fölött a hat
+egyedi, már függetlenül APPROVED E13-R01 commitot tartalmazza. A recovered fa
+byte-azonos a sérült PR fájával (`git diff --exit-code 87f247f8 31aab305` →
+0), de csak hat egyedi patch-id maradt. A valós régi-csúcs-visszamerge fixture-t
+tartalmazó `tools/tests/test_round_land.py` 13 tesztet és 3 subtestet zölden
+futtatott; a teljes E13-R01 round-gate 7/7 zöld. A Full Gate és Router CI
+exact-SHA bizonyítéka a recovery PR merge-feltétele; piros vagy eltérő SHA
+esetén nincs merge.
+
+Implementer: Terra (`gpt-5.6-terra`); független correctness reviewer és H8
+self-heal orchestrátor: Sol (`gpt-5.6-sol`). Product tartalom nem változott a
+javítás során. Következő Chapter 13 kör: **E13-R02 — Design System Foundation**,
+új sessionben.
+
 ## ✅ E08-R14 KÉSZ — Achievement evaluator és progress projection — PR #380, squash `558b1258` (2026-08-21, L374–L375)
 
 Az indexelt evaluator canonical event-historyból, stabil event-ID deduppal
