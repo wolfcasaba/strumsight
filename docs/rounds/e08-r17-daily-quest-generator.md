@@ -44,6 +44,9 @@ Kötelező review-mutációk, mindegyik a saját izolált A3-celláján:
 - account → cloud — **PIROS**;
 - cloud → camera — **PIROS**.
 
+A brief-contract tartós őre:
+`tools/tests/test_e08_r17_capability_axis_contract.py` (HEAL PR #390).
+
 ```ai-router
 schema_version = 1
 risk = "high"

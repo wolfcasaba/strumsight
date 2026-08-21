@@ -14617,3 +14617,34 @@ teljes `ThemeData`-egyenlőség külön mért eset.
 előtt 4/5 cella piros, utána 5/5 zöld; a valódi brief-parserrel és
 scope-audittal őrzi az exact új fájlt, a testvérút tiltását és a célzott
 gate-tagságot.
+
+## L388 — A capability-szűrést a kimeneti truncation előtt izolált candidate poollal kell bizonyítani (E08-R17, H4 self-heal, 2026-08-21)
+
+**Mért hiba.** A megállt E08-R17 kör `a8980cab` javítócommitja három külön
+kamera/fiók/felhő availability-cellát adott, de mindegyik a teljes shipping
+katalógust használta. Az account-unavailable cellában négy objective maradt
+eligible a háromelemes kimeneti korlát előtt. Az eldobható
+`QuestCapability.account → snapshot.cloudAvailable` mutáció ezért hibásan
+eligible-lé tette az account questet, de a stabil rendezés a negyedik helyre
+tette, a max-3 levágta, és a named A3 teszt változatlanul `All tests passed!`
+eredménnyel, `exit 0`-val zárt.
+
+**Gyökérok és javítás.** Ez B osztályú brief/mérce-contract rés, nem production
+kódhiba: a szállított mapping helyes volt, a teszt nem különítette el a
+vizsgált tengelyt a kimeneti méretkorláttól. A brief §0.0.1 revíziója ezért
+mindhárom capability-hez pontosan két entrys fixture-t köt ki (egy local
+short + csak a vizsgált kamera/fiók/felhő entry), és külön cellában tartja meg
+a teljes shipping katalógus metadata-contractját. A camera→account,
+account→cloud és cloud→camera mutációknak egyenként a saját A3-cellájukat kell
+pirosra vinniük. Az allowlist és a gate útjai nem bővültek.
+
+**Precedens-ellenőrzés.** Az L304/L358 branch-only H4 mintáit ellenőriztük, de
+azok tényleges, még nem merge-elt production kódhibát javítottak közvetlenül a
+kör ágán; itt ilyen hiba nincs. Az L387 B-osztályú brief-contract javítása a
+közelebbi precedens: a self-heal a hiányzó tartalmi mércét teszi gépileg
+kötelezővé, a product munkát a friss kör-sessionre hagyja.
+
+**Őrteszt:** `tools/tests/test_e08_r17_capability_axis_contract.py` — a régi
+briefen 6 failed / 2 passed, a revízió után 5 passed + 6 subtests passed. A
+teljes `python3 -m pytest tools/tests -q` eredménye 709 passed, 1 skipped és
+610 subtests passed.
