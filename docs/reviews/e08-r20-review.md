@@ -9,13 +9,19 @@ Verdikt: **APPROVED**
 
 BLOCKER: 0 · MAJOR: 0 · MINOR: 1 · NOTE: 1
 
-Két dispatch: (1) `docs/rounds/...md` prompttal induló implementáció jogosan
-`stopped`-ot jelzett az `app_en.arb`/`app_hu.arb` GENERÁLT-aggregátum
+Három dispatch: (1) `docs/rounds/...md` prompttal induló implementáció
+jogosan `stopped`-ot jelzett az `app_en.arb`/`app_hu.arb` GENERÁLT-aggregátum
 felismerésekor (ADR 0307 §4) — az orchestrátor §0.0.1 brief-revízióval
 felvette a tényleges forrást (`lib/l10n/features/gamification_{en,hu}.arb`)
 az `allowed_paths`-ba; (2) egy fókuszált javító-prompt (a §0.0.1 szerint) a
-kulcsokat átvitte a fragmentumba és regenerálta az aggregátumot —
-`done` jelzéssel zárt, gate zöld.
+kulcsokat átvitte a fragmentumba és regenerálta az aggregátumot — `done`
+jelzéssel zárt, célzott gate zöld; (3) az első CI-dispatch
+(`full-gate.yml`, run 32530048719) a teljes suite-ban egyetlen, a kör saját
+`gate_tests`-én kívüli tesztet buktatott (`test/ui/ui_inventory_test.dart`,
+rögzített 60-elemű production-screen bázisvonal az új `quests_screen.dart`
+miatt 61-re nőtt) — §0.0.2 brief-revízió az `allowed_paths`/`gate_tests`
+bővítésével, egysoros javító-prompt (`hasLength(60)` → `hasLength(61)`),
+`done` jelzéssel zárt, gate zöld friss izolált klónban is (lásd lent).
 
 ## Acceptance criteria
 
@@ -96,13 +102,14 @@ vonatkozik, nem a termék viselkedésére.
 
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
-| format | zöld | ✅ saját futás, `/tmp/review-e08-r20` |
+| format | zöld | ✅ saját futás, `/tmp/review-e08-r20-v2` (2. javítás utáni HEAD) |
 | analyze | zöld (0 hiba) | ✅ saját futás |
 | `test/features/gamification/presentation/quests_screen_test.dart` | 28/28 zöld | ✅ saját futás, izolált klónban |
+| `test/ui/ui_inventory_test.dart` | zöld (61 screen) | ✅ saját futás, izolált klónban |
 | architecture | zöld (12 allowlisted deviation, változatlan) | ✅ saját futás |
 | secrets | zöld (0 lelet) | ✅ saját futás |
 | l10n (paritás + frissesség) | zöld | ✅ saját futás, a fragmentum→aggregátum generálás után |
-| CI (teljes suite + property + APK) | — | dispatch a review UTÁN, merge előtt (§3.0 terv szerint) |
+| CI (teljes suite + property + APK) | 1. dispatch (32530048719) FAILURE — `ui_inventory_test.dart` | ❌ → javítva, 2. dispatch a javítás UTÁN, merge előtt |
 
 ## Merge-döntés
 
