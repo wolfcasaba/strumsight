@@ -309,5 +309,7 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 11. Review — a Claude tölti ki
 
-- Correctness: `docs/reviews/e08-r15-review.md`
-- Security/privacy: `docs/reviews/e08-r15-security.md`
+- Correctness: `docs/reviews/e08-r15-review.md` — **APPROVED** (Sol,
+  `86e12fc3` re-review)
+- Security/privacy: `docs/reviews/e08-r15-security.md` — **PASS** (Sol,
+  nincs nyitott CRITICAL/BLOCKER/MAJOR)
