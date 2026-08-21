@@ -426,7 +426,7 @@ E14-R19	docs/rounds/e14-r19-augmentation-and-balanced-recipe.md	terra	0371	prepa
 # viszont előre elkészülnek, hogy a lánc ne álljon meg brief-írásra.
 # Az `E13` a FEJEZETET jelöli, nem epicet.
 E13-R01	docs/rounds/e13-r01-ui-baseline-inventory.md	terra	nincs	done
-E13-R02	docs/rounds/e13-r02-design-system-foundation.md	terra	0273	pending
+E13-R02	docs/rounds/e13-r02-design-system-foundation.md	terra	0273	done
 E13-R03	docs/rounds/e13-r03-semantic-colors-and-themes.md	terra	nincs	pending
 E13-R04	docs/rounds/e13-r04-typography-and-text-scale.md	terra	nincs	pending
 E13-R05	docs/rounds/e13-r05-spacing-and-surfaces.md	terra	nincs	pending

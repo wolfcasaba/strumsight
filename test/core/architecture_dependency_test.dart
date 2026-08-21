@@ -731,6 +731,77 @@ import 'package:flutter/widgets.dart';
       expect(report.isClean, isFalse);
     });
   });
+
+  group('design system boundaries (E13-R02)', () {
+    test('real design system source has no feature dependency', () {
+      final designSystemDir = Directory('lib/core/design_system');
+      expect(designSystemDir.existsSync(), isTrue);
+
+      final offenders = <String>[];
+      for (final entity in designSystemDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        offenders.addAll(
+          _forbiddenDesignSystemFeatureImports(
+            entity.path,
+            entity.readAsStringSync(),
+          ),
+        );
+      }
+
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test(
+      'real production source reaches the design system only via public.dart',
+      () {
+        final libDir = Directory('lib');
+        final offenders = <String>[];
+        for (final entity in libDir.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) continue;
+          if (entity.path.contains('/core/design_system/')) continue;
+          offenders.addAll(
+            _forbiddenDesignSystemInternalImports(
+              entity.path,
+              entity.readAsStringSync(),
+            ),
+          );
+        }
+
+        expect(offenders, isEmpty, reason: offenders.join('\n'));
+      },
+    );
+
+    test(
+      'boundary parser rejects a feature import and an internal barrel bypass',
+      () {
+        expect(
+          _forbiddenDesignSystemFeatureImports(
+            'lib/core/design_system/example.dart',
+            "import 'package:strumsight/features/live/public.dart';",
+          ),
+          [
+            'lib/core/design_system/example.dart -> package:strumsight/features/live/public.dart',
+          ],
+        );
+        expect(
+          _forbiddenDesignSystemInternalImports(
+            'lib/core/widgets/example.dart',
+            "import '../design_system/foundations/ss_spacing.dart';",
+          ),
+          [
+            'lib/core/widgets/example.dart -> ../design_system/foundations/ss_spacing.dart',
+          ],
+        );
+        expect(
+          _forbiddenDesignSystemInternalImports(
+            'lib/core/widgets/example.dart',
+            "import '../design_system/public.dart';",
+          ),
+          isEmpty,
+        );
+      },
+    );
+  });
 }
 
 void _write(Directory project, String relativePath, String contents) {
@@ -763,6 +834,30 @@ const _gamificationDirectStorageImportUriMarkers = [
   'package:flutter_secure_storage/',
   'package:sqflite/',
 ];
+final _dartDirectiveUri = RegExp(
+  r'''(?:import|export|part)\s*['"]([^'"]+)['"]''',
+);
+
+List<String> _forbiddenDesignSystemFeatureImports(String path, String source) {
+  return [
+    for (final match in _dartDirectiveUri.allMatches(
+      _withoutTrivia(source, maskStrings: false),
+    ))
+      if (match.group(1) case final uri? when uri.contains('features/'))
+        '$path -> $uri',
+  ];
+}
+
+List<String> _forbiddenDesignSystemInternalImports(String path, String source) {
+  return [
+    for (final match in _dartDirectiveUri.allMatches(
+      _withoutTrivia(source, maskStrings: false),
+    ))
+      if (match.group(1) case final uri?
+          when uri.contains('design_system/') && !uri.endsWith('public.dart'))
+        '$path -> $uri',
+  ];
+}
 
 List<String> _forbiddenDomainMarkerOffenders(String path, String content) {
   final withoutComments = _withoutTrivia(content, maskStrings: false);

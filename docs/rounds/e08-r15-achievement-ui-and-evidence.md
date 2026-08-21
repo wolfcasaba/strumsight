@@ -12,6 +12,42 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R13 `hidden` mezőjének és az R14 haladás-projekciójának TÉNYLEGES felületét, valamint a `lib/features/analyze/` eredmény-modelljét (a bizonyíték-nézet NEM mutathat nyers audiót). Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0 Revízió — E08-R15/H3 self-heal (2026-08-21)
+
+**Mért gyökérok — Class B brief-tartalmi ellentmondás.** Az E13-R01
+merge-elt UI-inventory szerződése 58 production `*_screen.dart` fájlt rögzít.
+Az E08-R15 exact két új forrása,
+`achievements_screen.dart` és `achievement_detail_screen.dart`, ezt **58 →
+60** értékre emeli. PR #383 exact-SHA Full Gate futásában 5442 teszt zöld
+volt, és kizárólag `test/ui/ui_inventory_test.dart` bukott a várt 58 / mért
+60 eltéréssel. A round brief ugyanakkor sem ezt a tesztet, sem a hozzá tartozó
+baseline-dokumentációt nem engedte módosítani, ezért a kör helyesen H3-mal
+megállt.
+
+**Feloldás.** A két képernyő és az UI baseline frissítése egyetlen tranzakció:
+az inventory-őrt 60-ra kell emelni, a két exact screen útvonalát rögzíteni,
+`docs/ui/migration-status.md` számait és gamification sorát frissíteni, a
+`docs/ui/baseline/route-map.md` pedig kimondja, hogy a két presentation screen
+az E08-R30 route-wiringig nem kap új `AppRoutes`/`GoRoute` bejegyzést. Ezt a
+három fájlt **ugyanabban a product-commitban** kell módosítani, amelyben a két
+screen megjelenik; a self-heal önálló ágán tilos előre 60-ra állítani a
+baseline-t, mert ott a produkciós fa még 58 elemes, és a heal saját kapuja
+piros lenne. Az `AppRoutes` / regisztrált `GoRoute` 40 / 40 száma változatlan.
+
+Az allowlist pontosan a három mért baseline-utat kapja meg, az inventory-teszt
+pedig bekerül a kör gate-jébe. Más `docs/ui/**` vagy `test/ui/**` út nem nyílik
+meg. A regressziós őr
+`tools/tests/test_e08_r15_ui_inventory_scope.py`: a javítás előtt 4/5 cella
+piros, utána mind az öt zöld; valódi brief-parserrel és scope-audittal méri az
+exact bővítést, a testvérút tiltását és a gate-tagságot.
+
+**Visszakeresett előzmények.** Az L371 exact fájlszintű scope-bővítési mintája
+alkalmazható, de az ottani screenshot-corpus hiba más deliverable-rés volt. Az
+L225 batch-brief avulása rokon: egy később landolt testvérkör miatt a prepared
+brief mért baseline-ja elévült. A promptban adott E13-R01 round/halts találat a
+mostani 58-as őr forrását azonosítja; egyik precedens sem indokol mérce-
+gyengítést vagy könyvtárszintű allowlistet.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -25,10 +61,14 @@ allowed_paths = [
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/presentation/achievements_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
+  "docs/ui/baseline/route-map.md",
+  "docs/ui/migration-status.md",
   "docs/rounds/e08-r15-achievement-ui-and-evidence.md",
 ]
 gate_tests = [
   "test/features/gamification/presentation/achievements_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
@@ -127,7 +167,8 @@ Jól navigálható eredmény-lista és **közérthető** magyarázat: mindenki �
 
 **Benne van:** all / unlocked / in-progress / kategória szűrők · haladás és feloldási dátum ·
 a rejtett achievement részletei CSAK feloldás után · a bizonyíték-nézet az indok-kódokból
-épít közérthető magyarázatot · üres állapot új felhasználónak · validált útvonal-argumentum.
+épít közérthető magyarázatot · üres állapot új felhasználónak · validált útvonal-argumentum ·
+a két új production screen tranzakciós UI-inventory és baseline-dokumentáció frissítése.
 
 **NINCS benne (tilos):**
 
@@ -149,6 +190,9 @@ a rejtett achievement részletei CSAK feloldás után · a bizonyíték-nézet a
 | `lib/l10n/app_en.arb` | **GENERÁLT** — csak a szegmensgenerátor kimenete |
 | `lib/l10n/app_hu.arb` | **GENERÁLT** — csak a szegmensgenerátor kimenete |
 | `test/features/gamification/presentation/achievements_screen_test.dart` | a §6 cellái |
+| `test/ui/ui_inventory_test.dart` | a production screen inventory **58 → 60** frissítése és a két exact új út őrzése |
+| `docs/ui/baseline/route-map.md` | a két, R30-ig route nélküli presentation screen és deep-link kockázat rögzítése |
+| `docs/ui/migration-status.md` | a production screen száma és a gamification baseline sor tranzakciós frissítése |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` (az útvonal-regisztráció a Kör 30) · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
@@ -206,6 +250,7 @@ jelenik meg.
 | A6 | Ismeretlen azonosítóval a részletek képernyő értelmes állapotot mutat, nem omlik össze | `achievements_screen_test.dart` |
 | A7 | Minden szöveg ARB-kulcsból jön | `achievements_screen_test.dart` + review |
 | A8 | 200%-os szövegskálán nincs levágás; a szemantikus címkék teljesek | `achievements_screen_test.dart` — a11y-mátrix |
+| A9 | A production UI-inventory 60 elemes, mindkét achievement screen exact útvonala szerepel, a 40 route-os katalógus nem változik | `ui_inventory_test.dart` + baseline-doc review |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -239,7 +284,7 @@ az **A2** szivárgás-cellának PIROSNAK kell lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/gamification/presentation/achievements_screen_test.dart
+tools/round-gate.sh test/features/gamification/presentation/achievements_screen_test.dart test/ui/ui_inventory_test.dart
 ```
 
 A gate artefaktum a mérce (`tools/round-gate.sh`) — a parancssorban
@@ -261,7 +306,9 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 5. Az útvonal-argumentum validációja.
 6. a11y: szemantikus címkék, 200% szövegskála.
 7. A `public.dart` export-sorai; a valódi-sértés próba §10-be.
-8. `tools/round-gate.sh` a §7 szerint.
+8. Az inventory-teszt 60-ra és a két exact screen útvonalára frissítése;
+   `migration-status.md` és `route-map.md` szinkronizálása, új route nélkül.
+9. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 

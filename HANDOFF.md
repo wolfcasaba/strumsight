@@ -1,5 +1,49 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R02 KÉSZ — Design System Foundation és compatibility layer — PR #384 (2026-08-21, L378–L379)
+
+Az új `lib/core/design_system/public.dart` mögött megjelentek a kipinnelt
+breakpoint-, spacing-, radius-, motion- és semantics-foundationök. A
+`SsThemeExtensions` az átmeneti kompatibilitási rétegben közvetlenül a
+meglévő `AppTheme`, `AppColors` és `AppPalette` API-kra delegál, ezért nincs
+második színforrás. A Component Catalog csak a default-OFF compile-time flag
+ÉS debug-build együttes teljesülésekor hoz létre route-ot; maga a screen
+privát. Az architektúra-őr tiltja a feature-importot és a design-system
+barrel megkerülését.
+
+Implementer: Terra (`gpt-5.6-terra`), egy javító körrel. A Sol
+(`gpt-5.6-sol`) független correctness review-ja **APPROVED**, a security
+review **PASS**. A review mutációval pirosra vitte a másolt brand-színt, a
+feature-importot és a debug-kapu kivételét; a privát catalog screenre tett
+külső hivatkozás fordítási hibát adott. Exact branch-csúcs `05ec6276`: Full
+Gate [32447387921](https://github.com/wolfcasaba/strumsight/actions/runs/32447387921)
+és Router CI [32447381563](https://github.com/wolfcasaba/strumsight/actions/runs/32447381563)
+success. PR [#384](https://github.com/wolfcasaba/strumsight/pull/384), squash
+`8bd7dc98`. Következő Chapter 13 kör: **E13-R03 — Semantic colors and
+themes**.
+
+## 🔧 [HEAL E08-R15/H3] UI-inventory tranzakciós scope helyreállítva — PR #385 (2026-08-21, L377)
+
+Az E08-R15 PR #383 két új achievement presentation screennel 58-ról 60-ra
+emeli az E13-R01 production screen inventoryját. A Full Gate exact SHA-n 5442
+tesztet zölden futtatott, és kizárólag a változatlan 58-as inventory-őr bukott.
+A kör briefje nem engedte a teszt és a hozzá tartozó baseline-dokumentáció
+frissítését, ezért a H3 megállás helyes volt.
+
+A Class B self-heal nem emeli előre 60-ra a `main`-alapú Dart-tesztet, mert a
+két product screen ezen az ágon még nincs jelen. Ehelyett az E08-R15 brief
+exact három fájllal bővült: `test/ui/ui_inventory_test.dart`,
+`docs/ui/migration-status.md`, `docs/ui/baseline/route-map.md`; az inventory-
+teszt a kör második gate-tesztje. Az E08-R15 resume ugyanabban a product-
+commitban frissíti a screen countot, a két exact útvonalat és az R30-ig fennálló
+route-wiring kockázatot. Más `docs/ui/**`/`test/ui/**` út nem nyílt meg.
+
+A regressziós `tools/tests/test_e08_r15_ui_inventory_scope.py` a revízió előtt
+4/5 piros, utána 5/5 zöld. Branch: `heal/E08-R15-H3-1`; Router CI és squash-
+merge a `fixed` jelzés előfeltétele. A merge után a pontos következő kör
+változatlanul **E08-R15 — Achievement UI és részletes evidence**, a meglévő
+PR #383 folytatásával és új exact-SHA Full Gate futással.
+
 ## ✅ [HEAL E13-R01/H8] KÉSZ — a duplikált körtörténet tiszta recovery PR-rel helyreállt — PR #382 (2026-08-21, L376)
 
 Az E13-R01 eredeti PR-jének (`#381`, csúcs `31aab305`) története a tiszta,
@@ -3551,6 +3595,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-21):** `main` @ `8bd7dc98` — E13-R02 Design
+System Foundation és compatibility layer, PR
+[#384](https://github.com/wolfcasaba/strumsight/pull/384), squash-merge.
+Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
+`05ec6276`: Full Gate 32447387921 + Router CI 32447381563 success;
+correctness APPROVED, security PASS. Következő Chapter 13 kör: **E13-R03**.
+
 **Aktuális állapot (2026-08-21):** `main` @ `f9d5bbc8` — E08-R13 Achievement
 domain és katalógus, PR [#376](https://github.com/wolfcasaba/strumsight/pull/376),
 squash-merge. Implementer Terra (`gpt-5.6-terra`), reviewer Sol
@@ -4055,6 +4106,15 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E13-R02 — Design System Foundation és compatibility layer** (PR
+[#384](https://github.com/wolfcasaba/strumsight/pull/384), squash `8bd7dc98`,
+[ADR 0273](docs/adr/0273-design-system-token-source-of-truth.md)). Kipinnelt
+foundation tokenek, legacy-theme delegáló adapter, kétkapus privát Component
+Catalog és design-system architektúra-őr. Az F1/F2 MAJOR és F3 MINOR leletek
+egy Terra javító körben zárva; végső correctness APPROVED és security PASS.
+Exact `05ec6276`: Full Gate 32447387921 + Router CI 32447381563 success.
+Részletesen: `docs/handoff-archive.md`.
 
 **E08-R13 — Achievement domain és katalógus** (PR
 [#376](https://github.com/wolfcasaba/strumsight/pull/376), squash `f9d5bbc8`,
@@ -4787,12 +4847,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör: E08-R14** (Achievement evaluator és progress
-projection, SDD Chapter 9 —
-`docs/rounds/e08-r14-achievement-evaluator-and-projection.md`, engine a
-queue-ban `terra`). Az E13-R01 UI baseline inventory és screenshot corpus a
-másik sloton már fut; ezt a session nem érinti. A governance-sáv következő
-sora, **E99-R23**, jelenleg `hold`.
+**Pontos következő Chapter 13 kör: E13-R03 — Semantic colors and themes**
+(`docs/rounds/e13-r03-semantic-colors-and-themes.md`, engine a queue-ban
+`terra`). Az E08 terméksáv önálló queue-ja ettől függetlenül halad; ezt a
+session nem indítja el. A governance-sáv következő sora, **E99-R23**, jelenleg
+`hold`.
 
 **Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
 a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)

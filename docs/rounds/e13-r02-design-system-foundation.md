@@ -1,9 +1,9 @@
 # E13-R02 — Design system foundation és compatibility layer
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 17670d4f`)
+- **Státusz:** PRE-FLIGHTED (2026-08-21, kód újramérve: `main @ 15f9936f`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 2
 - **Kör-azonosító:** `E13-R02`
-- **Branch:** `<motor>/e13-r02-design-system-foundation`
+- **Branch:** `terra/e13-r02-design-system-foundation`
 - **Előfeltétel:** `E13-R01` merge-elve (baseline inventár)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** [`0273`](../adr/0273-design-system-token-source-of-truth.md)
@@ -13,6 +13,45 @@
 > `docs/ui/baseline/token-debt.md` tényleges leleteit, és a `lib/core/theme/`
 > négy fájljának TÉNYLEGES publikus felületét (`AppColors`, `AppPalette`,
 > `AppTheme`) — a §5.2 kompatibilitási adapter ezekre épül. Eltérésnél §0.0 revízió.
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+Az indításkori mérés az előre megírt brief négy elavult állítását pontosítja;
+az engedélyezett production fájllista nem tágul.
+
+1. Az E13-R01 baseline már a `main @ 15f9936f` része. A kanonikus inventory
+   **58 production screen source**-ot tart nyilván, nem 51-et. A jelenlegi
+   theme három publikus típusa változatlanul `AppColors`, `AppPalette` és
+   `AppTheme`; 44 alkalmazásforrás importálja közvetlenül a három theme-fájl
+   valamelyikét. A `lib/core/design_system/` továbbra sem létezik.
+2. A `test/core/architecture_dependency_test.dart` 854 soros, nem 467; a
+   repository-szintű `checkArchitecture` mellett körspecifikus, valódi
+   forrást bejáró őrök mintája él benne. Az új design-system őr ezt a mintát
+   követi, mert a közös `tool/check_architecture.dart` tilos zóna.
+3. Az ADR 0273 már merge-elt, elfogadott döntés (`903e7a7d`, 2026-08-15).
+   A kötelező foglaló ezért ma `0380`-at adna; új ADR létrehozása vagy a
+   merge-elt 0273 átírása tilos. Ez a kör a változatlan ADR 0273-at hajtja
+   végre.
+4. A jelenlegi `FeatureFlags` nem tartalmaz Component Catalog flaget, az
+   `lib/app/**` pedig tilos zóna. Ezért ebben a körben nincs router-wiring:
+   az új catalog screen saját, default-OFF compile-time flaget és debug-build
+   kaput ad, a route factory tiltott állapotban nem hoz létre route-ot. A
+   production app routere érintetlen; a későbbi wiring külön kör.
+
+Kipinnelt foundation értékek a Chapter 13 §8, §9 és §13 alapján:
+
+- breakpoint: `599 / 839 / 840 / 1200` dp;
+- spacing: `0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64` dp;
+- radius: `6, 10, 16, 20, 28, 999` dp;
+- motion: `80, 120, 200, 300, 700` ms, reduced-motionhoz `Duration.zero`;
+- semantics: minimum interaktív cél `48` dp, támogatott text scale `2.0`.
+
+Kötelező visszakeresett előzmény, szűkített → kockázati → teljes korpusz
+sorrendben:
+az `adr/0273` közvetlenül megerősítette az egyetlen token-forrást és a
+`public.dart` belépőt; az `adr/0002` a fokozatos kompatibilitási réteget; a
+`lessons/L190` pedig azt, hogy a barrel-őr az import célját méri. A
+Component Catalog flagre nem volt közvetlen, ennél relevánsabb előzmény.
 
 ```ai-router
 schema_version = 1
@@ -59,8 +98,9 @@ A `core/design_system` alapstruktúra létrehozása **úgy, hogy a meglévő
 
 - `lib/core/design_system/` **nem létezik** — ez a kör hozza létre.
 - `lib/core/theme/`: `app_colors.dart`, `app_palette.dart`, `app_theme.dart`,
-  `theme_mode_provider.dart` — **51 képernyő** épül rájuk.
-- `test/core/architecture_dependency_test.dart` létezik (467 sor), és
+  `theme_mode_provider.dart` — **58 production screen** marad legacy baseline,
+  és 44 alkalmazásforrás importálja közvetlenül a theme API-t.
+- `test/core/architecture_dependency_test.dart` létezik (854 sor), és
   „allowlisted dependency deviations" alapon tilt cross-feature importot.
 
 ## 3. Scope
@@ -117,7 +157,9 @@ a rendszer nem lenne újrahasznosítható, és körkörös függés keletkezne.
 
 ### 5.4 A Component Catalog FLAG mögött, nem production útvonalon
 
-Fejlesztői eszköz. Production buildben nem elérhető route.
+Fejlesztői eszköz. A default-OFF compile-time flag ÉS a debug-build kapu
+együtt szükséges; bármelyik hamis értékénél a route factory nem ad route-ot.
+Production buildben és a jelenlegi app routerből nem elérhető.
 
 ### 5.5 A kanonikus forrás SZAKASZONKÉNT dokumentált
 
@@ -126,7 +168,8 @@ A `migration-status.md` megmondja, melyik token melyik szakaszban a mérvadó
 
 ### 5.6 Nulla UI-regresszió
 
-A meglévő 51 képernyő viselkedése nem változik. Ez acceptance-cella (A6).
+A meglévő 58 production screen viselkedése nem változik. Ez acceptance-cella
+(A6).
 
 ## 6. Acceptance criteria
 
@@ -136,8 +179,8 @@ A meglévő 51 képernyő viselkedése nem változik. Ez acceptance-cella (A6).
 | A2 | A design system NEM importál `lib/features/**`-t | `architecture_dependency_test.dart` |
 | A3 | A meglévő theme API változatlanul működik | a teljes suite zöld |
 | A4 | A színforrás NEM duplikálódik (az adapter olvas, nem másol) | `foundations_test.dart` — a meglévő érték megváltoztatása átüt |
-| A5 | A Component Catalog flag mögött van, productionben nem elérhető | `component_catalog_test.dart` |
-| A6 | **Nulla UI-regresszió** — `lib/features/**` és `lib/core/theme/**` érintetlen | `git diff --stat` |
+| A5 | A Component Catalog default-OFF flag ÉS debug-build kapu mögött van; productionben és az app routerből nem elérhető | `component_catalog_test.dart` — false/true mátrix + dark/light smoke |
+| A6 | **Nulla UI-regresszió** — `lib/features/**` és `lib/core/theme/**` érintetlen | gépi scope-audit |
 | A7 | A `migration-status.md` megnevezi a kanonikus forrást szakaszonként | review |
 | A8 | A foundation konstansok a Ch13 §8/§9 értékeit adják | `foundations_test.dart` |
 
@@ -148,9 +191,10 @@ A meglévő 51 képernyő viselkedése nem változik. Ez acceptance-cella (A6).
 | A hex-értékek átmásolva az új tokenekbe | **A4** (a forrás módosítása nem üt át) |
 | A design system importál feature-t | **A2** |
 | Belső fájl importálható kívülről | A1 |
-| A katalógus production route-on | **A5** |
+| A katalógus létrejön kikapcsolt flaggel, vagy release buildben | **A5** false/true kapumátrixa |
 | A régi theme átírva | **A6** |
 | A migrációs dokumentum nem mondja meg a kanonikus forrást | A7 |
+| Bármely breakpoint, spacing, radius, motion vagy semantics érték eltér a kipinnelt táblától | **A8** (`foundations_test.dart`) |
 
 **A token-forrás három kötelező cellája** (a küszöb: a migráció szakasza):
 
@@ -195,5 +239,68 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 - **A régi theme „rendbetétele".** Csábító, és 51 képernyőt kockáztat (A6).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Implementáció
+
+- `lib/core/design_system/foundations/ss_breakpoints.dart`: kipinnelt compact,
+  medium, expanded és wide breakpointok.
+- `lib/core/design_system/foundations/ss_spacing.dart`, `ss_radius.dart`,
+  `ss_motion.dart`, `ss_semantics.dart`: a Kör 2 foundation értékei és a
+  reduced-motion feloldása.
+- `lib/core/design_system/themes/ss_theme_extensions.dart`: `SsThemeColors`
+  `ThemeExtension` adapter, amely `AppColors` és `AppPalette` értékeit olvassa.
+- `lib/core/design_system/documentation/component_catalog_screen.dart`: külön
+  compile-time `STRUMSIGHT_COMPONENT_CATALOG` flag és `kDebugMode` kapu;
+  router-wiring nincs.
+- `lib/core/design_system/public.dart`: a design system kizárólagos exportja.
+- `test/core/design_system/foundations_test.dart` és
+  `component_catalog_test.dart`: foundation, adapter, flag-mátrix és
+  dark/light smoke.
+- `test/core/architecture_dependency_test.dart`: tényleges `lib/` forrásfa
+  bejárása a feature-import és nem-public barrel import tilalmára.
+- `docs/ui/migration-status.md`: fázisonkénti kanonikus token-forrás.
+
+### Valódi-sértés próba
+
+Az adapter `brand: AppColors.primary` hivatkozását ideiglenesen
+`brand: const Color(0xFFD98A46)` másolatra cseréltem, majd futtattam:
+
+```bash
+flutter test test/core/design_system/foundations_test.dart
+```
+
+Az A4 teszt várt módon piros lett: `adapter source references legacy tokens
+without copied color literals` a bemásolt `Color(0xFFD98A46)` miatt bukott.
+Ezután a hivatkozást azonnal `AppColors.primary`-ra visszaállítottam.
+
+### Ellenőrzések
+
+- RED: `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart` — a még nem létező
+  `core/design_system/public.dart` miatt fordítási hibával bukott.
+- GREEN (célzott): `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart test/core/architecture_dependency_test.dart` — 38 teszt zöld.
+- GREEN: `tools/round-gate.sh test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart test/core/architecture_dependency_test.dart` — format, analyze, mindhárom célzott teszt és architecture zöld.
+- Az első teljes gate az analyzerben egyetlen, új `ss_motion.dart` felesleges
+  import figyelmeztetésén állt meg; az import eltávolítása után a második teljes
+  gate zöld lett.
+
+### Javító kör #1 — review és security leletek (2026-08-21)
+
+- F1: `SsThemeExtensions.legacyThemeForBrightness` dokumentált, brightness
+  alapján közvetlenül az eredeti `AppTheme.dark()` vagy `AppTheme.light()`
+  eredményét adja; nem másolja a `ThemeData` konfigurációt.
+- F2/S1: `ComponentCatalogScreen` library-private
+  `_ComponentCatalogScreen` lett. A publikus `ComponentCatalog` route factory
+  a default-OFF compile-time flaget és a debug-build kaput együtt alkalmazza;
+  a dark/light smoke ezen a kapuzott route-on keresztül pumpál.
+- F3: a publikus foundation, theme és catalog contractok rövid, a tesztekben
+  igazolt viselkedésre korlátozott API-dokumentációt kaptak.
+
+### Javító kör #1 ellenőrzések
+
+- RED: `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart` — a hiányzó
+  `SsThemeExtensions.legacyThemeForBrightness` fordítási hiba és a még publikus
+  catalog screenre mutató privacy-regresszió miatt piros volt.
+- GREEN (célzott): `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart` — 11 teszt zöld.
+- GREEN: `tools/round-gate.sh test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart test/core/architecture_dependency_test.dart` — format, analyze, a két design-system teszt és az architecture teszt zöld.
 
 ## 11. Review — a Claude tölti ki
