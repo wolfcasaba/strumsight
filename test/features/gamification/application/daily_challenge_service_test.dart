@@ -499,14 +499,11 @@ void main() {
 }
 
 class _Fixture {
-  _Fixture({
-    required DailyChallengeContentCatalog contentCatalog,
-    DateTime Function()? clock,
-  }) : _contentCatalog = contentCatalog,
-       store = InMemoryKeyValueStore(),
-       ledger = _rewardLedger(InMemoryKeyValueStore()) {
+  _Fixture({required this.contentCatalog, DateTime Function()? clock})
+    : store = InMemoryKeyValueStore(),
+      ledger = _rewardLedger(InMemoryKeyValueStore()) {
     service = _service(
-      contentCatalog: _contentCatalog,
+      contentCatalog: contentCatalog,
       store: store,
       ledger: ledger,
       clock: clock,
@@ -514,7 +511,7 @@ class _Fixture {
   }
 
   final InMemoryKeyValueStore store;
-  final DailyChallengeContentCatalog _contentCatalog;
+  final DailyChallengeContentCatalog contentCatalog;
   final RewardLedgerRepository ledger;
   late final DailyChallengeService service;
 }
