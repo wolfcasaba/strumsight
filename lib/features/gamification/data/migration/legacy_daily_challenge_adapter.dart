@@ -1,5 +1,5 @@
 import 'package:strumsight/core/music/strum.dart';
-import 'package:strumsight/features/streak/daily_challenge.dart';
+import 'package:strumsight/features/streak/public.dart';
 
 import '../../domain/quests/challenge_definition.dart';
 
