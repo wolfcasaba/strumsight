@@ -235,4 +235,61 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `lib/core/design_system/foundations/ss_elevation.dart`: a zárt
+  `base/raised/overlay/modal` hierarchia egyetlen resolverben állítja elő a
+  szemantikus hátteret, bordert, border-szélességet és rövid shadow-elevationt.
+  Dark Studio és High Contrast alatt nincs dekoratív shadow; a High Contrast
+  emelt szintjei `borderStrong`-ot kapnak.
+- `lib/core/design_system/components/surfaces/ss_surface.dart`: a szinthez
+  kötött `Material` surface, opcionális névvel ellátott `safeArea` móddal és
+  compact/medium/expanded `SsSpacing.space4/space6/space8` padding resolverrel.
+- `lib/core/design_system/components/surfaces/ss_card.dart`: raised card
+  `SsRadius.md`-vel, tokenes alap-paddinggel.
+- `lib/core/design_system/components/surfaces/ss_hero_card.dart`: caller-fed
+  overlay felület `SsRadius.lg`-vel; feature/provider/state import nélkül.
+- `lib/core/design_system/components/surfaces/ss_section.dart`: cím + tartalom
+  kompozíció, új card-réteg létrehozása nélkül.
+- `lib/core/design_system/documentation/component_catalog_screen.dart`: a
+  development-only katalógus mind a négy surface szintet megmutatja a meglévő
+  dark/light/high-contrast választóval; új felhasználói szöveget nem vezet be.
+- `lib/core/design_system/public.dart`: az új foundation és surface public
+  exportjai.
+- `test/core/design_system/surfaces/ss_surface_test.dart`: a három téma × négy
+  szint determinisztikus háttér/border/shadow mátrixa, safe-area nested eset,
+  2.0 text scale és hero-függetlenség.
+- `test/core/design_system/surfaces/spacing_grid_test.dart`: a 2/4/8–16 dp
+  küszöbcellák, a 16/24/32 dp responsive padding és a raw geometry source-őr.
+
+### TDD és valódi-sértés bizonyíték
+
+- RED: a két új surface-teszt az implementáció előtt a hiányzó
+  `SsElevation`, `SsSurface`, `SsCard`, `SsHeroCard` és `SsSection` symbolokkal
+  fordítási hibára futott.
+- GREEN (restore után): `flutter test
+  test/core/design_system/surfaces/ss_surface_test.dart
+  test/core/design_system/surfaces/spacing_grid_test.dart` → **18/18 passed**.
+- Kötelező valódi-sértés: az `ss_card.dart` ideiglenes
+  `EdgeInsets.all(13)` módosításával a
+  `flutter test test/core/design_system/surfaces/spacing_grid_test.dart` A1
+  source-contract cellája elvárt módon piros volt: a raw-inset regexp matchje
+  `true` lett a konkrét `ss_card.dart` fájlra. A tokenes `EdgeInsets.all(padding)`
+  restore után a teljes kétfájlos célzott teszt újra **18/18 passed**.
+
+### Futtatott ellenőrzések
+
+- `dart format` a kilenc módosított Dart fájlon → sikeres.
+- `flutter test test/core/design_system/component_catalog_test.dart` →
+  **8/8 passed**.
+- `git diff --check` → sikeres.
+- `tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart
+  test/core/design_system/surfaces/spacing_grid_test.dart` → **pass, exit 0**
+  (format, analyze, mindkét célzott teszt, architecture, secrets és l10n zöld).
+
+### Nem futtatott ellenőrzések
+
+- Teljes `flutter test`, property gate és CI APK: implementer scope-on kívüli,
+  a kör-orchestrátor CI/merge kapuja.
+
 ## 11. Review — a Claude tölti ki

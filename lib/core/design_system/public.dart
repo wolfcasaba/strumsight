@@ -1,6 +1,11 @@
 export 'documentation/component_catalog_screen.dart';
+export 'components/surfaces/ss_card.dart';
+export 'components/surfaces/ss_hero_card.dart';
+export 'components/surfaces/ss_section.dart';
+export 'components/surfaces/ss_surface.dart';
 export 'foundations/ss_breakpoints.dart';
 export 'foundations/ss_colors.dart';
+export 'foundations/ss_elevation.dart';
 export 'foundations/ss_motion.dart';
 export 'foundations/ss_radius.dart';
 export 'foundations/ss_semantics.dart';
