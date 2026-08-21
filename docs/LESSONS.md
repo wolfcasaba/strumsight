@@ -14368,3 +14368,32 @@ upstream-szinkronizált ágon önmagában nem implementer-scope bizonyíték.
 **Őrteszt:** nincs — a bizonyíték a három verziózott commit-tartományon
 futtatott `tools/scope-audit.py`; a scope-eszköz szemantikáját ez a lecke nem
 módosítja.
+
+## L376 — A H8-SELFDUP őr helyes blokkolása után a tiszta rebase-csúcsból új PR kell, nem a sérült publikus ág átírása (E13-R01, H8 self-heal, 2026-08-21)
+
+**Mért hiba.** Az E13-R01 landolója a friss `main` fölé helyesen rebase-elte a
+hat kör-patch-et, és `87f247f8` tiszta csúcsot készített. Az orchesztrátor
+ezután a régi pre-rebase láncot merge-elte vissza ebbe a csúcsba; a publikus
+`31aab305` ág így 12 nem-merge commitot hordozott. A `git patch-id --stable`
+mérés pontosan hat, kétszer előforduló patch-id-t adott. Ez a promptban adott
+L361 eset pontos ismétlődése; az L367 egyetlen superseded briefet őrző normal
+merge receptje nem alkalmazható, mert itt a kör összes patch-e duplikálódott.
+
+**Helyreállítás és falszifikáció.** A sérült PR #381 force-push nélkül lezárult.
+A recovery ág az aktuális `origin/main`-ről indult, majd fast-forwarddal a már
+elkészült tiszta `87f247f8` csúcsra állt. `git diff --exit-code 87f247f8
+31aab305` zöld bizonyította a faazonosságot; a recovered ágon hat nem-merge
+commit és hat egyedi patch-id maradt. A kör-gate 7/7 zöld, az ön-duplikált
+történetet valódi régi-csúcs-visszamerge fixture-rel előállító őrteszt pedig
+13 tesztet és 3 subtestet futtatott zölden.
+
+**Szabály.** Ha a H8-SELFDUP őr nem egyetlen brief-konfliktust, hanem a teljes
+kör patch-id duplikációját méri, ne merge-eld vagy cherry-pickeld a sérült
+publikus ágat, és ne írd át force-push-sal. A már bizonyított tiszta rebase-
+csúcsból nyiss új recovery PR-t, külön bizonyítsd a faazonosságot és az egyedi
+patch-id-ket, majd csak friss exact-SHA CI után merge-elj.
+
+**Őrteszt:**
+`tools/tests/test_round_land.py::RoundLandIntegrationTest::test_self_duplicated_branch_history_is_rejected_before_rebase`
+— a rebase után visszamerge-elt régi csúcsot H8-SELFDUP-pal, gate és merge
+előtt blokkolja.
