@@ -2,6 +2,8 @@
 library;
 
 export 'application/activity_event_ingestor.dart';
+export 'application/achievement_evaluator.dart';
+export 'application/achievement_index.dart';
 export 'application/profile_projector.dart';
 export 'application/reward_eligibility_policy.dart';
 export 'application/reward_policy_engine.dart';

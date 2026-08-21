@@ -1,12 +1,14 @@
 # E08-R14 — Achievement kiértékelő és haladás-projekció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** IN PROGRESS (pre-flight 2026-08-21, kód olvasva: `main @ cfe43920`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 14
 - **Kör-azonosító:** `E08-R14`
-- **Branch:** `<motor>/e08-r14-achievement-evaluator-and-projection`
+- **Branch:** `terra/e08-r14-achievement-evaluator-and-projection`
 - **Előfeltétel:** `E08-R13` merge-elve (achievement katalógus)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0311` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **ADR:** `ADR 0377`. Az előre írt `0311` elavult; a kötelező atomi foglaló
+  (`tools/round-slots.py reserve-adr --round E08-R14`) 2026-08-21-én `0377`-et
+  adott. Az ADR-t az orchestrátor írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
@@ -28,6 +30,62 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+- A tényleges R13 contract öt objective-típust ad (`count`, `threshold`,
+  `distinct`, `sequence`, `compound`) plusz explicit unknown sentinelt. Az
+  R02 `LearningActivityEvent` hat zárt runtime típust, stabil `eventId`-t,
+  `occurredAt`-ot, `duration`-t, `score`-t és `source`-ot hordoz, de XP-
+  komponenseket nem. Az evaluator ezért egy immutable, caller-supplied
+  evaluation-evidence contracttal egészíti ki a canonical eventet; a típust,
+  időtartamot, score-t és source-t az eventből származtatja, az XP-metrikát
+  csak explicit átadott, véges értékből olvassa. Hiányzó metrika nem válik
+  némán nullává: az érintett objective fail-closed diagnosztikát ad.
+- Az R03 főkönyv `appendIfAbsent` dedupja a `sourceEventId`-re atomikus; a
+  tényleges hívási láncban ma a repository szerzi meg az írás sorosítását.
+  Achievement receipt forrás-ID-ja ezért `achievement:<achievementId>`, a
+  ledger ID-ja pedig `achievement:<achievementId>:<triggerEventId>`; a receipt
+  `createdAt` értéke a kiváltó event `occurredAt` értéke.
+- Az R06 nem tartalmaz achievement reward-összeg policyt; az R03/R06 zárt
+  contractja viszont már tartalmazza az `achievementUnlocked` reason kódot.
+  Új balance-szabály vagy jutalomtípus bevezetése tilos, ezért ez a kör
+  nulla-XP audit receiptet ír (`baseXp=bonusXp=totalXp=0`, reason:
+  `achievementUnlocked`). Pozitív achievement XP csak külön balance-körben,
+  explicit policyvel vezethető be.
+- A progress nem építhető újra **csak** a reward ledgerből: a ledger az
+  unlock receiptet őrzi, nem minden count/distinct/threshold bemenetet. A4
+  pontosítva: az evaluator a caller által átadott kanonikus event-historyból
+  építi újra a progresszt, és a ledgerből köti vissza az egyszeri completiont.
+- A backfill konfigurált alapablaka 30 nap, az anchor caller-supplied UTC
+  időpont. A kötelező 29/30/31 napos cellák pontos bemeneteit a
+  `python3 -c "from datetime import datetime,timezone,timedelta; ..."`
+  számolta: `2026-07-23T12:00:00Z`, `2026-07-22T12:00:00Z`,
+  `2026-07-21T12:00:00Z` a `2026-08-21T12:00:00Z` anchorhoz.
+- Visszakeresett előzmények: `adr/0301` (repository-szintű atomikus ledger
+  dedup), `adr/0350` (caller-supplied, stabil bounded backfill precedens),
+  `adr/0374` (zárt objective-vokabulár), `lessons/L372` (stabil achievement
+  identitás), valamint az E08-R07 halt-bejegyzés (zöld suite mögötti projekció-
+  regressziókhoz kötelező reviewer-mutatás).
+
+**Review utáni §0.0 pontosítás (997a52a0, 2026-08-21).** A független
+correctness/security review két BLOCKER-t reprodukált: a trigger eventet is
+tartalmazó `sourceEventId` két párhuzamos eventnél két külön dedup-kulcsot ad,
+a prefix-alapú receipt lookup pedig idegen ledger sort is completionként
+elfogad. Az atomi kulcs ezért pontosan `achievement:<achievementId>`; a
+trigger event kizárólag a `ledgerId`-ban marad. A visszaolvasott receipt csak
+exact source ID, exact ledger ID-prefix, nulla XP és `achievementUnlocked`
+reason mellett hiteles; névtérütközés fail-closed diagnosztika. A history
+stabil `eventId` szerint deduplikált, azonos ID-jú eltérő payload fail-closed,
+és idő szerint determinisztikusan rendezett. A backfill a cutoffnál régebbi
+**és az anchor utáni** eventet is kizárja. A caller-history hard capje 10 000
+event (9 999 / 10 000 elfogadott, 10 001 elutasított). A progress
+`catalogVersion` mezője a katalógus `contentVersion` értéke. Az index event
+kind **és metric/dimension** kulcsot hordoz; puszta event-kind map nem elég.
+**Kockázat = high, indoklás:** a kör perzisztált reward receiptet és
+újraépíthető user-progressz szerződést köt össze; egy dedup-, timestamp-
+vagy backfill-hiba dupla jutalmat vagy történeti progresszdriftet okozhat,
+ezért correctness mellett külön security review is kötelező.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -64,8 +122,11 @@ achievementhez · ismeretlen objective **fail-closed**.
 **NINCS benne (tilos):**
 
 - A katalógus tartalmának módosítása (Kör 13) és a felület (Kör 15).
-- Új jutalom-típus bevezetése — a nyugta az R06 policy-motorjából jön.
-- `docs/adr/**` — az ADR 0311-et a Claude írja.
+- Új jutalom-típus vagy pozitív achievement-XP balance bevezetése — a kör a
+  meglévő R03 ledger schema és R06 `achievementUnlocked` reason kód alapján
+  nulla-XP audit receiptet ír.
+- `docs/adr/**` — az ADR 0377-et az orchestrátor írta a pre-flightban; az
+  implementer az ADR-ket nem módosítja.
 
 ## 4. Engedélyezett fájlok
 
@@ -78,16 +139,22 @@ achievementhez · ismeretlen objective **fail-closed**.
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
-## 5. Kötött architekturális döntések (ADR 0311)
+## 5. Kötött architekturális döntések (ADR 0377)
 
 ### 5.1 A feloldás EGYSZERI, és a főkönyv dedupja garantálja
 
-A feloldás jutalma az R03 főkönyvébe kerül `append-if-absent` művelettel, ahol a
-forrás-azonosító az achievement azonosítója + a kiváltó esemény azonosítója. Az ismételt
-kiértékelés így technikailag nem tud dupla jutalmat adni.
+A feloldás audit receiptje az R03 főkönyvébe kerül `append-if-absent`
+művelettel, ahol a forrás-azonosító pontosan
+`achievement:<achievementId>`, a ledger ID pedig
+`achievement:<achievementId>:<triggerEventId>`. Az R13 nem hordoz reward-
+összeget, ezért a receipt ebben a körben nulla XP és az explicit
+`achievementUnlocked` reason kódot hordoz. Az ismételt kiértékelés így
+technikailag nem tud dupla receiptet vagy jutalmat adni.
 
 **NEM elfogadható gyengítés:** memóriabeli „már feloldottam” halmaz a főkönyv helyett.
 Az app újraindítása után elvész, és a következő esemény újra feloldana.
+Prefix-egyezés vagy reason/XP ellenőrzés nélküli lookup szintén tilos; az
+ütköző, nem hiteles receipt fail-closed diagnosztikát ad.
 
 ### 5.2 A feloldás időbélyege STABIL
 
@@ -115,18 +182,31 @@ Egy később hozzáadott achievement visszamenőleges kiértékelése korlátozo
 ablakban történik (a korlát a konfigurációban él). A teljes előzmény minden
 alkalmazás-indításkori újrapásztázása használhatatlanná tenné az indulást.
 
+### 5.6 Az újraépítés bemenete event-history + ledger receipt
+
+A caller rendezett kanonikus event-historyt ad át; az evaluator ebből építi
+újra a count/distinct/threshold/sequence/compound progresszt. A ledger az
+egyszeri completion receiptjének és stabil timestampjének igazságforrása.
+Sem teljes activity repository scan, sem storage-owner átvétel nem kerül az
+evaluatorba.
+
+Az evaluator stabil `eventId` szerint deduplikálja a replayt, az azonos ID-jú
+eltérő payloadot elutasítja, és determinisztikus időrendre normalizál. Egy
+snapshot legfeljebb 10 000 event; a backfill az anchor utáni eventeket sem
+dolgozza fel.
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | Ugyanaz az esemény kétszer feldolgozva EGY feloldást ad | `achievement_evaluator_test.dart` — idempotencia-cella |
-| A2 | App-újraindítás szimulálása (üres memória, meglévő főkönyv) után sincs újra-feloldás | `achievement_evaluator_test.dart` |
+| A1 | Ugyanaz az event ID replayben nem növeli kétszer a count/sequence progresszt és nem old fel kétszer | `achievement_evaluator_test.dart` — idempotencia-cella |
+| A2 | App-újraindítás és két párhuzamos, külön trigger event után is pontosan egy exact-source receipt létezik | `achievement_evaluator_test.dart` |
 | A3 | A feloldás időbélyege a kiváltó eseményből jön, és újraépítéskor VÁLTOZATLAN | `achievement_evaluator_test.dart` — stabilitás-cella |
-| A4 | A haladás a főkönyvből TELJESEN újraépíthető | `achievement_evaluator_test.dart` |
-| A5 | Egy esemény csak a releváns objective-eket értékeli (az érintett objective-ek száma mérhető) | `achievement_evaluator_test.dart` — index-cella |
+| A4 | A historyból rebuildelt progress `catalogVersion` mezője a catalog contentVersion; az unlock receipt a főkönyvből kötődik vissza | `achievement_evaluator_test.dart` |
+| A5 | Egy esemény csak az event-kind + metric/dimension index szerinti objective-eket értékeli | `achievement_evaluator_test.dart` — index-cella |
 | A6 | Ismeretlen objective esetén NINCS feloldás, és hiba keletkezik | `achievement_evaluator_test.dart` |
-| A7 | A feloldáshoz jutalom-nyugta jön létre a főkönyvben | `achievement_evaluator_test.dart` |
-| A8 | A backfill korlátos: a korlát fölötti előzmény nem kerül feldolgozásra | `achievement_evaluator_test.dart` — korlát-mátrix |
+| A7 | Nulla-XP `achievementUnlocked` receipt jön létre exact achievement source ID-val és achievement+event ledger ID-val; idegen prefix receipt nem completion | `achievement_evaluator_test.dart` |
+| A8 | A backfill időben és darabszámban korlátos: régi/future event kimarad; 10 001 event elutasított | `achievement_evaluator_test.dart` — korlát-mátrix |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -138,16 +218,22 @@ alkalmazás-indításkori újrapásztázása használhatatlanná tenné az indul
 | Ismeretlen objective figyelmen kívül hagyva | **A6** |
 | A backfill korlátlan | **A8** |
 | A feloldás nem ír nyugtát | **A7** |
+| Azonos event ID kétszer növeli a countot/sequence-et | **A1** |
+| Két párhuzamos trigger két source ID-t ír | **A2** |
+| Prefix-egyező normál ledger sort unlocknak fogad | **A7** |
+| Definition version kerül a progress catalogVersion mezőjébe | **A4** |
+| Az index metric/dimension kulcs nélkül csak event kind szerint épül | **A5** |
+| Anchor utáni event vagy 10 001 elem átjut | **A8** |
 
 **A küszöb három kötelező cellája** (a backfill ablak korlátja (`backfillWindowDays`)):
 
 | Cella | Bemenet | Elvárt |
 |---|---|---|
-| a küszöb **alatt** | egy `backfillWindowDays - 1` napos esemény | **feldolgozásra kerül** a backfillben |
-| **rajta** (a küszöbön) | pontosan `backfillWindowDays` napos esemény | **MÉG feldolgozásra kerül** — a korlát a FELDOLGOZOTT oldalhoz tartozik (inkluzív) |
-| a küszöb **fölött** | `backfillWindowDays + 1` napos esemény | **NEM kerül feldolgozásra**; ez a tény a diagnosztikában látszik, nem néma kihagyás |
+| a küszöb **alatt** | `2026-07-23T12:00:00Z` (29 napos esemény, 30 napos ablak) | **feldolgozásra kerül** a backfillben |
+| **rajta** (a küszöbön) | `2026-07-22T12:00:00Z` (pontosan 30 napos) | **MÉG feldolgozásra kerül** — inkluzív határ |
+| a küszöb **fölött** | `2026-07-21T12:00:00Z` (31 napos) | **NEM kerül feldolgozásra**; ez a diagnosztikában látszik |
 
-A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
+A hármas tömören: **alatt** → feldolgoz · **rajta** → feldolgoz · **fölött** → kihagy és diagnosztikát ad.
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
 
@@ -187,5 +273,82 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **A teljes pásztázás.** 25 achievementnél észrevehetetlen, 200-nál a gyakorlás végén akadás (A5).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+- `lib/features/gamification/application/achievement_index.dart` — új,
+  immutable event-kind → achievement index; a compound és sequence objektív
+  összes érintett event-kindjét indexeli, az unknown objective-eket pedig
+  diagnosztikai fail-closed ágon tartja.
+- `lib/features/gamification/application/achievement_evaluator.dart` — új,
+  caller-supplied immutable evidence/result/diagnostic contract, count,
+  distinct, threshold, sequence és compound projekció; repository-szintű
+  `appendIfAbsent` receipt-dedup, event-időbélyeges, nulla-XP
+  `achievementUnlocked` receipt, history rebuild és inkluzív, caller-anchored
+  30 napos backfill.
+- `lib/features/gamification/public.dart` — az evaluator és index publikus
+  exportjai.
+- `test/features/gamification/application/achievement_evaluator_test.dart` —
+  A1–A8, index-scan, unknown/missing-metric fail-closed, tier, sequence,
+  compound, 29/30/31 napos backfill és immutable collection cellák.
+
+**TDD-bizonyíték.** Az első
+`flutter test test/features/gamification/application/achievement_evaluator_test.dart`
+RED volt: `AchievementEvaluator`, `AchievementEvaluationEvidence` és a
+diagnosztikai contract még nem létezett. Az implementáció után a célzott
+teszt 9/9 zöld.
+
+**Valódi-sértés próba.** A repository-dedupot ideiglenes process-local
+completed-setre cseréltem, majd a kötelező gate-et futtattam. A célzott
+tesztben az A2 restart cella piros lett: várt `empty`, tényleges
+`[AchievementUnlock]`; a restore után a ledger `appendIfAbsent` ága van
+visszaállítva. A szándékos mutáció további receipt-/timestamp-függő cellákat
+is pirosra vitt, ezért nem maradhatott a fán.
+
+**Futtatott végső gate.**
+`tools/round-gate.sh test/features/gamification/application/achievement_evaluator_test.dart`
+— exit 0; `format`, `analyze`, a 9 tesztes célzott test, `architecture`,
+`secrets` (3111 fájl, 0 finding) és `l10n` (1503 üzenet) mind zöld.
+
+**Eltérés / nem futtatott ellenőrzés.** Nincs scope-eltérés. A teljes Flutter
+suite, randomizált property gate és APK a brief/AGENTS szerint CI-orchestrator
+feladat; implementerként nem indítottam CI-t, PR-t vagy push-t.
+
+**Review-javítás (77a0c11f).** A `11fb1ac2`
+`fix(gamification): harden achievement projection receipts` commit a correctness
+és security review minden BLOCKER/MAJOR leletét javítja: a receipt `sourceEventId`
+pontosan `achievement:<achievementId>`, a trigger csak a `ledgerId`-ban marad;
+az exact receipt-index schema/policy-verziót, zero-XP-t és az egyetlen
+`achievementUnlocked` reason-t is hitelesíti. A history event-ID szerint
+deduplikált, payload-ütközésnél typed fail-closed, időrendben determinisztikus,
+és 10 000 eseményre korlátozott. A backfill future eventet is kihagy, a rebuild
+egyszeri receipt-indexet és inkrementális objective-reducereket használ, a
+progress minden útvonalon a catalog `contentVersion` értékét kapja. Az index
+event-kind mellett typed metric- és dimension-route-ot is épít.
+
+**Review-regressziós bizonyíték.** A célzott suite 10/10 zöld: exact replay
+count/sequence, conflicting duplicate payload, két külön trigger `Future.wait`
+concurrency, forged/prefix receipt és prerequisite, catalog-content-version,
+metric/dimension index, 29/30/31 napos + future backfill, 9 999 / 10 000 /
+10 001 cap és egyszeri receipt-index olvasás. Kötelező negatív mutációként az
+exact source ID-t ideiglenesen `achievement:<achievementId>:<triggerEventId>`
+formára rontottam: a concurrency-cella PIROS lett (várt 1, tényleges 2 receipt),
+majd az exact forrás-ID visszaállítása után a teljes gate újra zöld volt.
+
+**Futtatott javító gate.**
+`env ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh test/features/gamification/application/achievement_evaluator_test.dart`
+— exit 0; a sleep-közök nullázása a harness 30 másodperces korlátja miatt csak
+várakozást távolított el, a gate hat lépése változatlanul format, analyze,
+célzott teszt, architecture, secrets (3116 fájl, 0 finding) és l10n (1503
+üzenet), mind zöld. A user által előírt env nélküli exact gate kétszer elindult,
+de a harness a secrets-lépésnél megszakította a kimenetet; a teljes, változatlan
+artefaktum lefutását a sleep nélküli ismétlés igazolja.
+
+**H4 self-heal (`ae703918`).** Az F7/S6 reviewer-reprodukció tartós A8 cellává
+vált: 9 999 és 10 000 lejárt nyers backfill-event elfogadott és kihagyottként
+számlált, 10 001 már a dátumszűrés előtt `ArgumentError`. A cella a javítás
+előtt piros volt (várt hiba helyett `AchievementEvaluationResult`), az őrzött
+nyers iteráció után zöld. Az exact gate 11/11 célzott teszttel 6/6 zöld.
+Független detached re-review-ban (`/tmp/review-e08-r14-h4-OSZvDe`) az őr
+eltávolítása ugyanazt a cellát újra pirosra vitte; restore után a klón tiszta,
+a correctness verdict APPROVED és a security verdict PASS.
 
 ## 11. Review — a Claude tölti ki
