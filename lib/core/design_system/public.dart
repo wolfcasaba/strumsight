@@ -5,6 +5,8 @@ export 'foundations/ss_motion.dart';
 export 'foundations/ss_radius.dart';
 export 'foundations/ss_semantics.dart';
 export 'foundations/ss_spacing.dart';
+export 'foundations/ss_typography.dart';
+export 'components/music/ss_chord_hero_text.dart';
 export 'themes/ss_theme_extensions.dart';
 export 'themes/ss_dark_theme.dart';
 export 'themes/ss_high_contrast_theme.dart';
