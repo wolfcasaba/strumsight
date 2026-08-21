@@ -30,7 +30,7 @@ class RewardSummaryFeedback {
 /// The sheet never offers a "claim" button — the reward is already
 /// credited in the ledger (ADR 0389 §1 / brief §5.2).
 class RewardSummarySheet extends StatelessWidget {
-  const RewardSummarySheet({
+  RewardSummarySheet({
     super.key,
     required this.summary,
     this.feedback = const RewardSummaryFeedback(),

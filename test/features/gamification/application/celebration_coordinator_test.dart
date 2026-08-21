@@ -335,17 +335,17 @@ void main() {
             now: t0,
           );
           final summaries = coordinator.drain(state: state, now: t0).$2;
-          final event = summaries.single.events.single;
+          final firstEvent = summaries.single.events.single;
           // Every field the widget needs to render statically is present and
           // unchanged — no information is dropped when reduced motion is on.
-          expect(event.id, equals('a7'));
-          expect(event.kind, equals(RewardKind.levelUp));
-          expect(event.titleKey, equals('level.title'));
-          expect(event.bodyKey, equals('level.body'));
-          expect(event.earnedXp, equals(42));
-          expect(event.earnedAt, equals(t0));
-          expect(event.sourceLedgerId, equals('ledger-1'));
-          expect(event.crossedLevelNumbers, equals(<int>[3, 4, 5]));
+          expect(firstEvent.id, equals('a7'));
+          expect(firstEvent.kind, equals(RewardKind.levelUp));
+          expect(firstEvent.titleKey, equals('level.title'));
+          expect(firstEvent.bodyKey, equals('level.body'));
+          expect(firstEvent.earnedXp, equals(42));
+          expect(firstEvent.earnedAt, equals(t0));
+          expect(firstEvent.sourceLedgerId, equals('ledger-1'));
+          expect(firstEvent.crossedLevelNumbers, equals(<int>[3, 4, 5]));
           expect(summaries.single.totalXp, equals(42));
           expect(summaries.single.count, equals(1));
         },

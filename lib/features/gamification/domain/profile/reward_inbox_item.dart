@@ -161,13 +161,9 @@ final class RewardInboxItem {
 
   /// Returns a copy with [seen] set to the supplied value. Keeps the type
   /// fully immutable.
-  RewardInboxItem markSeen({required bool isSeen}) =>
-      isSeen == seen ? this : RewardInboxItem(
-        id: id,
-        event: event,
-        addedAt: addedAt,
-        seen: isSeen,
-      );
+  RewardInboxItem markSeen({required bool isSeen}) => isSeen == seen
+      ? this
+      : RewardInboxItem(id: id, event: event, addedAt: addedAt, seen: isSeen);
 
   Map<String, Object?> toJson() => <String, Object?>{
     'schemaVersion': rewardInboxItemSchemaVersion,
@@ -182,14 +178,16 @@ final class RewardInboxItem {
       throw ArgumentError.value(json, 'json', 'must be an object');
     }
     final addedAtRaw = json['addedAt'];
-    final addedAt = addedAtRaw is String
-        ? (DateTime.tryParse(addedAtRaw) ??
-              throw ArgumentError.value(
-                addedAtRaw,
-                'addedAt',
-                'must be ISO 8601',
-              ))
-        : (throw ArgumentError.value(addedAtRaw, 'addedAt', 'must be a string'));
+    final DateTime addedAt;
+    if (addedAtRaw is String) {
+      final parsed = DateTime.tryParse(addedAtRaw);
+      if (parsed == null) {
+        throw ArgumentError.value(addedAtRaw, 'addedAt', 'must be ISO 8601');
+      }
+      addedAt = parsed;
+    } else {
+      throw ArgumentError.value(addedAtRaw, 'addedAt', 'must be a string');
+    }
     final seenRaw = json['seen'];
     if (seenRaw is! bool) {
       throw ArgumentError.value(seenRaw, 'seen', 'must be a boolean');
@@ -252,10 +250,16 @@ RewardEvent _eventFromJson(Object? json) {
   }
   final kind = RewardKind.values.byName(kindRaw);
   final earnedAtRaw = json['earnedAt'];
-  final earnedAt = earnedAtRaw is String
-      ? (DateTime.tryParse(earnedAtRaw) ??
-            throw ArgumentError.value(earnedAtRaw, 'earnedAt', 'must be ISO 8601'))
-      : (throw ArgumentError.value(earnedAtRaw, 'earnedAt', 'must be a string'));
+  final DateTime earnedAt;
+  if (earnedAtRaw is String) {
+    final parsed = DateTime.tryParse(earnedAtRaw);
+    if (parsed == null) {
+      throw ArgumentError.value(earnedAtRaw, 'earnedAt', 'must be ISO 8601');
+    }
+    earnedAt = parsed;
+  } else {
+    throw ArgumentError.value(earnedAtRaw, 'earnedAt', 'must be a string');
+  }
   final crossedRaw = json['crossedLevelNumbers'];
   if (crossedRaw is! List<Object?>) {
     throw ArgumentError.value(

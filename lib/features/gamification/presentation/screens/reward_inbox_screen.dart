@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:strumsight/features/gamification/application/celebration_coordinator.dart';
 import 'package:strumsight/features/gamification/domain/profile/reward_inbox_item.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 

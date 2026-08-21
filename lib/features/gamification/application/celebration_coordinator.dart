@@ -47,6 +47,19 @@ final class CelebrationState {
   /// Total number of items the user has not seen yet.
   int get unseenCount => inbox.length;
 
+  /// Returns a new state with the supplied fields replaced.
+  CelebrationState copyWith({
+    List<RewardInboxItem>? inbox,
+    List<RewardEvent>? pendingBatch,
+    List<CelebrationSummary>? pendingSummaries,
+    DateTime? batchStartedAt,
+  }) => CelebrationState(
+    inbox: inbox ?? this.inbox,
+    pendingBatch: pendingBatch ?? this.pendingBatch,
+    pendingSummaries: pendingSummaries ?? this.pendingSummaries,
+    batchStartedAt: batchStartedAt ?? this.batchStartedAt,
+  );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -129,29 +142,31 @@ enum CelebrationRouting {
   postWindowDeflected,
 }
 
+/// Public inbox entry record returned alongside the state — a value type so
+/// the side-channel can be declared public without leaking private types.
+final class RoutedInboxEntry {
+  const RoutedInboxEntry(this.item, this.routing);
+  final RewardInboxItem item;
+  final CelebrationRouting routing;
+}
+
 /// Side-channel carried by [CelebrationCoordinator.apply] alongside the
 /// returned state — records which inbox entries were just appended and
 /// which summaries (if any) were just closed by the call.
 final class CelebrationSideEffects {
   const CelebrationSideEffects({
-    this.routedToInbox = const <_RoutedInboxEntry>[],
+    this.routedToInbox = const <RoutedInboxEntry>[],
     this.closedSummaries = const <CelebrationSummary>[],
   });
 
   /// Every inbox entry the call just produced, with the routing reason.
-  final List<_RoutedInboxEntry> routedToInbox;
+  final List<RoutedInboxEntry> routedToInbox;
 
   /// Every [CelebrationSummary] the call closed during the transition.
   final List<CelebrationSummary> closedSummaries;
 
   bool get hasAnyEffect =>
       routedToInbox.isNotEmpty || closedSummaries.isNotEmpty;
-}
-
-class _RoutedInboxEntry {
-  const _RoutedInboxEntry(this.item, this.routing);
-  final RewardInboxItem item;
-  final CelebrationRouting routing;
 }
 
 /// Deterministic, side-effect-free reward celebration coordinator
@@ -178,8 +193,7 @@ final class CelebrationCoordinator {
   /// are consolidated into a single summary (brief §6.1). A negative or
   /// zero window is rejected — the threshold triplet requires a positive
   /// window to be meaningful.
-  const CelebrationCoordinator({required this.batchWindow})
-    : assert(batchWindow > Duration.zero, 'batchWindow must be positive');
+  const CelebrationCoordinator({required this.batchWindow});
 
   /// The inclusive consolidation window (brief §6.1).
   final Duration batchWindow;
@@ -200,17 +214,34 @@ final class CelebrationCoordinator {
     // §5.1 — active session defers every event to the inbox, no popup.
     if (isActiveSession) {
       final item = RewardInboxItem(id: event.id, event: event, addedAt: now);
-      final next = state.copyWith(
-        inbox: <RewardInboxItem>[...state.inbox, item],
-        pendingBatch: const <RewardEvent>[],
-        batchStartedAt: null,
+      // If a pending batch is open from a prior inactive moment (brief §6.1
+      // fölött — "a második a postaládába kerül, ha közben gyakorlás indult"),
+      // close it as a summary first; the user will see it at session end.
+      final closedSummaries = <CelebrationSummary>[];
+      final carriedBatch = state.pendingBatch;
+      final carriedStart = state.batchStartedAt;
+      var workingState = state;
+      if (carriedBatch.isNotEmpty) {
+        closedSummaries.add(_closeSummary(carriedBatch, carriedStart!, now));
+        workingState = workingState.copyWith(
+          pendingBatch: const <RewardEvent>[],
+          batchStartedAt: null,
+          pendingSummaries: <CelebrationSummary>[
+            ...workingState.pendingSummaries,
+            ...closedSummaries,
+          ],
+        );
+      }
+      final next = workingState.copyWith(
+        inbox: <RewardInboxItem>[...workingState.inbox, item],
       );
       return (
         next,
         CelebrationSideEffects(
-          routedToInbox: <_RoutedInboxEntry>[
-            _RoutedInboxEntry(item, CelebrationRouting.activeSessionDeflected),
+          routedToInbox: <RoutedInboxEntry>[
+            RoutedInboxEntry(item, CelebrationRouting.activeSessionDeflected),
           ],
+          closedSummaries: closedSummaries,
         ),
       );
     }
