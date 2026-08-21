@@ -196,6 +196,10 @@ attempt_selfheal
                 PIPELINE_TEST_NOW=str(now),
                 PIPELINE_ORCH_ROTATION_FILE="/dev/null",
                 PIPELINE_ORCH_ROTATION="alternate",
+                # 2026-08-21 óta a script-default `none` (a GPT-kvóta
+                # elfogyott); ez a cella ÉPPEN az örökölt Terra-fallback
+                # gépezetét méri, ezért explicit env-vel éleszti fel.
+                PIPELINE_FALLBACK_ENGINE="terra",
                 PIPELINE_FALLBACK_CODEX_HOME=str(terra_config),
                 CODEX_BIN="true",
                 DISPATCH_KIND=str(dispatch_kind),

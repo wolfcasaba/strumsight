@@ -73,6 +73,10 @@ class RoundPipelineFallbackTest(unittest.TestCase):
                 PATH=f"{bin_dir}:{environment['PATH']}",
                 PIPELINE_SCRIPT=str(script),
                 PIPELINE_STATE_DIR=str(state_dir),
+                # 2026-08-21 óta a script-default `none` (a GPT-kvóta
+                # elfogyott); az ADR 0115 fallback GÉPEZETÉT ez a cella méri,
+                # ezért explicit env-vel éleszti fel a Codex-oldalt.
+                PIPELINE_FALLBACK_ENGINE="terra",
                 CLAUDE_BIN=str(bin_dir / "fake-claude"),
                 CODEX_BIN=str(bin_dir / "fake-codex"),
                 FAKE_CLAUDE_BIN=str(bin_dir / "fake-claude"),
@@ -99,23 +103,24 @@ class RoundPipelineFallbackTest(unittest.TestCase):
             self.assertIn("pipeline-E03-R09-fallback:", events)
             # A Claude-session indító parancsa EXPLICIT effort-szintet visz —
             # nem a session-defaultra bízzuk. Az érték user-döntés
-            # (2026-08-06: Sonnet 5 + max), a szerződés az, hogy a driver
+            # (2026-08-21: Sonnet 5 + high), a szerződés az, hogy a driver
             # átadja, és hogy az operátor env-vel felülírhatja.
             claude_launch = next(
                 line for line in events.splitlines() if "fake-claude" in line
             )
-            self.assertIn("--effort max", claude_launch)
+            self.assertIn("--effort high", claude_launch)
 
 
 class SessionConfigTest(unittest.TestCase):
     """A kör- és önjavító session modell/effort-beállítása mérhető szerződés.
 
-    User-döntés 2026-08-06: a kör-orchestrátor **Sonnet 5**, **max** efforton,
-    és az önjavító session ugyanezt ÖRÖKLI (egy env állítja mindkettőt). A
-    spórolás így a modell-szinten történik, az ítélet minőségét a maximális
-    effort tartja — az orchestrátor tervez, review-z és merge-kaput őriz, ott a
-    hibás ítélet ára a legnagyobb. Korábbi állapot: Opus 4.8 + medium
-    (2026-08-04, keretkímélés).
+    User-döntés 2026-08-21 („sonett 5 High orchestrator és minimax
+    implementer"): a kör-orchestrátor **Sonnet 5**, **high** efforton, és az
+    önjavító session ugyanezt ÖRÖKLI (egy env állítja mindkettőt). A GPT-kvóta
+    elfogyott, tehát a Codex-oldal kiesett a székből: az EGYETLEN orchestrátor
+    a Claude, ezért a keretét nem égetheti a `max`. Korábbi állapotok: Opus 4.8
+    + medium (2026-08-04, keretkímélés), Sonnet 5 + max (2026-08-06, amikor a
+    Codex-oldal még osztozott a munkán).
     """
 
     def _config(self, kind: str, env: dict | None = None) -> str:
@@ -133,10 +138,10 @@ class SessionConfigTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
         return completed.stdout.strip()
 
-    def test_round_orchestrator_runs_sonnet_5_at_max_effort(self) -> None:
+    def test_round_orchestrator_runs_sonnet_5_at_high_effort(self) -> None:
         self.assertEqual(
             self._config("round", {"PIPELINE_MODEL": "", "PIPELINE_EFFORT": ""}),
-            "model=claude-sonnet-5 effort=max",
+            "model=claude-sonnet-5 effort=high",
         )
 
     def test_selfheal_follows_the_orchestrator_model_and_effort(self) -> None:
@@ -145,7 +150,7 @@ class SessionConfigTest(unittest.TestCase):
         # csak infrastruktúra-diagnózist.
         self.assertEqual(
             self._config("heal", {"PIPELINE_SELFHEAL_MODEL": "", "PIPELINE_EFFORT": ""}),
-            "model=claude-sonnet-5 effort=max",
+            "model=claude-sonnet-5 effort=high",
         )
 
     def test_selfheal_model_stays_operator_overridable(self) -> None:
@@ -154,7 +159,7 @@ class SessionConfigTest(unittest.TestCase):
                 "heal",
                 {"PIPELINE_SELFHEAL_MODEL": "claude-sonnet-5", "PIPELINE_EFFORT": ""},
             ),
-            "model=claude-sonnet-5 effort=max",
+            "model=claude-sonnet-5 effort=high",
         )
 
     def test_env_overrides_stay_operator_controllable(self) -> None:

@@ -111,19 +111,22 @@ claude_bin=${CLAUDE_BIN:-claude}
 # Visszakapcsolás egyetlen env-vel: PIPELINE_MODEL=claude-opus-4-8.
 claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 
-# Effort: MAX (user-döntés 2026-08-06, harmadik lépés: az implementer visszaáll
-# a MiniMax M3-ra — az UNLIMITED, tehát az előfizetést már csak az orchestrátor
-# terheli, és a legdrágább ítéletek (terv, review, merge-kapu) megkapják a
-# maximumot. Az M3 mért gyengéit gépi őrök fogják, nem az orchestrátor éber-
-# sége (docs/execution/implementer-preamble-minimax.md).
+# Effort: HIGH (user-döntés 2026-08-21: „sonett 5 High orchestrator és minimax
+# implementer"). A GPT-kvóta elfogyott, tehát a Codex-oldal (Sol/Terra) kiesett,
+# és az EGYETLEN orchestrátor/reviewer a Claude — a keretét ezért nem égetheti a
+# `max`. A 2026-08-06-i `max` azért volt vállalható, mert akkor a Codex-oldal
+# még osztozott a munkán; most a `high` a mérce-tartó szint, amiből több kör fér
+# egy 5 órás ablakba. Az implementer változatlanul a MiniMax M3 (saját
+# API-kulcs, NEM a Claude-keret), mért gyengéit gépi őrök fogják, nem az
+# orchestrátor ébersége (docs/execution/implementer-preamble-minimax.md).
 # A CLI elfogadott szintjei: low | medium | high | xhigh | max (mérve:
-# `claude --help`, 2.1.223). Visszaemelés: PIPELINE_EFFORT=max.
+# `claude --help`, 2.1.223). Visszaemelés egyetlen env-vel: PIPELINE_EFFORT=max.
 # Az önjavító session ugyanazt a modellt kapja, mint a kör-orchestrátor — ez a
 # „minden rétegben" követelmény (user-döntés 2026-08-06). A heal-kör ítéletet hoz
 # (gyökérok-osztályozás, motorválasztás, mércét-nem-gyengítjük határ), ezért nem
 # ereszthető lejjebb az orchestrátornál; ha valaha külön kell állítani, arra való
 # a PIPELINE_SELFHEAL_MODEL.
-claude_effort=${PIPELINE_EFFORT:-max}
+claude_effort=${PIPELINE_EFFORT:-high}
 heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
 
 # A telefonos Code-lista MÉRT szabálya (2026-08-07). Egy futó Claude-session
@@ -175,7 +178,14 @@ esac
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
 # CODEX_HOME-ban él, ahol a default model gpt-5.6-terra.
-fallback_engine=${PIPELINE_FALLBACK_ENGINE:-terra}   # terra | none
+#
+# user-döntés 2026-08-21: a default `none`. A ChatGPT Pro keret ELFOGYOTT, tehát
+# a Codex-oldal (Terra ÉS Sol — közös auth) nem futtatható. Ez a kapcsoló a
+# Codex-oldal EGYETLEN kapuja: az `orchestrator_available` a `terra`/`sol`
+# ágban ezt nézi, tehát `none` mellett a lánc soha nem ad munkát halott
+# motornak — inkább kivárja a Claude-ablakot (a régi, kvóta-tudatos halt-út).
+# Visszakapcsolás, ha a Codex-előfizetés újraéled: PIPELINE_FALLBACK_ENGINE=terra.
+fallback_engine=${PIPELINE_FALLBACK_ENGINE:-none}   # terra | none
 codex_bin=${CODEX_BIN:-codex}
 codex_home=${PIPELINE_FALLBACK_CODEX_HOME:-$HOME/.codex-terra}
 fallback_label="Terra (gpt-5.6-terra)"
@@ -191,6 +201,14 @@ fallback_label="Terra (gpt-5.6-terra)"
 # a közös ELŐFIZETÉS-keretet a user e döntéssel tudatosan vállalta, épp a
 # keret elégetése a cél. Lejárat után feloldás: PIPELINE_ORCH_ROTATION env,
 # vagy az alábbi default visszaállítása `alternate`-re.
+#
+# LEZÁRVA 2026-08-21 (user-döntés: „lejárt a GPT kvóta"): a Pro-keret elfogyott,
+# a Sol-pin megszűnt. A rotáció-fájl és a script-default `claude`, a Codex-oldalt
+# a `fallback_engine=none` zárja ki. A Sol gépezete (modell-ID, címke, a `sol`
+# ág az `orchestrator_available`/`orchestrator_conflicts_with_implementer`
+# függvényekben) SZÁNDÉKOSAN MARAD: a nyilvántartás `sol` sora és a mérő cellák
+# élnek, hogy egy esetleges Codex-újraéledés egyetlen fájl átírásával
+# visszakapcsolható legyen.
 sol_model=${PIPELINE_SOL_MODEL:-gpt-5.6-sol}
 sol_label="Sol ($sol_model)"
 claude_block_file="$state_dir/claude-blocked-until"
@@ -208,10 +226,12 @@ claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json
 # A rotáció ezért PROAKTÍV, nem reaktív: a körök felén eleve a Terra vezényel,
 # így egyik motor kerete sem merül ki. A fallback (ADR 0115) megmarad alatta
 # védőhálónak.
-# user-döntés 2026-08-20: a default `sol` — a lejáró Pro-keret égetéséig
-# MINDEN kört a Sol vezényel (a fenti Sol-blokk indoklásával). A korábbi
-# default az `alternate` volt (ADR 0222); env-vel bármikor visszaállítható.
-orch_rotation=${PIPELINE_ORCH_ROTATION:-sol}   # sol | alternate | claude | terra
+# user-döntés 2026-08-21 (a GPT-kvóta elfogyott): a default `claude` — a
+# Codex-oldal (Sol ÉS Terra) nem futtatható, tehát nincs kinek rotálni, és az
+# `alternate` minden második kört egy halott motorra ültetne. A korábbi
+# defaultok: `alternate` (ADR 0222, 2026-08-11), majd `sol` (2026-08-20,
+# Pro-keret égetése); env-vel és a commitolt fájllal bármikor visszaállítható.
+orch_rotation=${PIPELINE_ORCH_ROTATION:-claude}   # sol | alternate | claude | terra
 # A rotáció USER-DÖNTÉS, és a döntés a REPÓBAN utazik: a commitolt
 # docs/execution/orchestrator-rotation fájl ERŐSEBB az env-nél
 # (file > env > script-default). MÉRT ok (E99-R14 lecke): a cron

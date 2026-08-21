@@ -33,6 +33,13 @@ ROOT = Path(__file__).resolve().parents[2]
 DRIVER = ROOT / "tools" / "round-pipeline.sh"
 REGISTRY_PATH = ROOT / "docs" / "execution" / "engine-registry.tsv"
 
+# A Codex-oldal ÉLESZTŐ kapcsolója. 2026-08-21 óta a driver script-defaultja
+# `fallback_engine=none` (user-döntés: „lejárt a GPT kvóta"), és az
+# `orchestrator_available` ezen méri a `terra`/`sol` szék elérhetőségét. A D1/D2
+# gépezet változatlan, ezért az azt mérő cellák EXPLICIT env-vel élesztik fel a
+# Codex-oldalt — a mérce nem gyengül, csak a default mozdult.
+CODEX_SIDE_ALIVE = {"PIPELINE_FALLBACK_ENGINE": "terra"}
+
 
 def driver(*args: str, state: Path, **env: str) -> subprocess.CompletedProcess:
     # P1-fix (2026-08-20): a commitolt docs/execution/orchestrator-rotation
@@ -88,7 +95,7 @@ class PerRoundRotationTest(unittest.TestCase):
 
             first = driver(
                 "--next-orchestrator", "E06-R23", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(first.stdout.strip(), "terra", first.stderr)
             # az ELSŐ dispatch rögzít, és a globális léptető-fájl is frissül —
@@ -97,7 +104,7 @@ class PerRoundRotationTest(unittest.TestCase):
 
             second = driver(
                 "--next-orchestrator", "E06-R23", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(
                 second.stdout.strip(),
@@ -114,13 +121,15 @@ class PerRoundRotationTest(unittest.TestCase):
             # E06-R23-hoz nincs rögzítés — csak E06-R24-et kérünk, ami ÚJ kör
             result = driver(
                 "--next-orchestrator", "E06-R24", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(result.stdout.strip(), "claude", result.stderr)
 
-    def test_the_sol_default_pins_every_new_round_to_sol(self) -> None:
-        """USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): rotáció-env nélkül az
-        ÚJ kör a Solhoz rögzül, és a második dispatch is azt kapja vissza.
+    def test_the_claude_default_pins_every_new_round_to_claude(self) -> None:
+        """USER-DÖNTÉS 2026-08-21 („lejárt a GPT kvóta"): rotáció-env nélkül
+        az ÚJ kör a Claude-hoz rögzül, és a második dispatch is azt kapja
+        vissza — a rögzítés GÉPEZETE (D1) a defaulttól független, csak a
+        rögzített érték más, mert a Codex-oldal nem futtatható.
 
         A DEFAULT mérése nem támaszkodhat az ambiens `PIPELINE_*`
         override-okra (mért szivárgás: E99-R14 H3), ezért ez a cella
@@ -145,13 +154,13 @@ class PerRoundRotationTest(unittest.TestCase):
             state = Path(name)
             (state / "orchestrator-last").write_text("claude\n", encoding="utf-8")
             first = hermetic("--next-orchestrator", "E08-R07", state=state)
-            self.assertEqual(first.stdout.strip(), "sol", first.stderr)
+            self.assertEqual(first.stdout.strip(), "claude", first.stderr)
             self.assertEqual(
                 (state / "orchestrator-round" / "E08-R07").read_text(encoding="utf-8").strip(),
-                "sol",
+                "claude",
             )
             second = hermetic("--next-orchestrator", "E08-R07", state=state)
-            self.assertEqual(second.stdout.strip(), "sol", second.stderr)
+            self.assertEqual(second.stdout.strip(), "claude", second.stderr)
 
 
 class ResumeImplementerFromBranchTest(unittest.TestCase):
@@ -323,7 +332,9 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             # oszt kvótát a claude-dal SEM, terra-val SEM.
             (state / "orchestrator-round").mkdir()
             (state / "orchestrator-round" / "E06-R23").write_text("terra\n", encoding="utf-8")
-            result = driver("--resume-orchestrator", "E06-R23", "minimax", state=state)
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "minimax", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(result.stdout.strip(), "terra", result.stderr)
 
     def test_a_sol_pin_facing_a_terra_implementer_is_kept(self) -> None:
@@ -336,7 +347,9 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             state = Path(name)
             (state / "orchestrator-round").mkdir()
             (state / "orchestrator-round" / "E08-R07").write_text("sol\n", encoding="utf-8")
-            result = driver("--resume-orchestrator", "E08-R07", "terra", state=state)
+            result = driver(
+                "--resume-orchestrator", "E08-R07", "terra", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(result.stdout.strip(), "sol", result.stderr)
 
     def test_on_conflict_the_orchestrator_flips_not_the_implementer(self) -> None:
@@ -348,7 +361,9 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             state = Path(name)
             (state / "orchestrator-round").mkdir()
             (state / "orchestrator-round" / "E06-R23").write_text("claude\n", encoding="utf-8")
-            result = driver("--resume-orchestrator", "E06-R23", "sonnet-impl", state=state)
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "sonnet-impl", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(
                 result.stdout.strip(),
                 "terra",
@@ -443,7 +458,9 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             (state / "claude-blocked-until").write_text(
                 f"{int(time.time()) + 3600}\n", encoding="utf-8"
             )
-            result = driver("--resume-orchestrator", "E06-R23", "minimax", state=state)
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "minimax", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(
                 result.stdout.strip(),
                 "terra",

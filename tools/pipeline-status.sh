@@ -131,12 +131,12 @@ print(" ".join(value.split())[:500])
     fi
     echo
     echo "--- orchestrátor/review-motor (ADR 0222 rotáció + 0115 fallback) ---"
-    if [ "${PIPELINE_FALLBACK_ENGINE:-terra}" = "none" ]; then
+    if [ "${PIPELINE_FALLBACK_ENGINE:-none}" = "none" ]; then
       echo "  Claude (fallback KIKAPCSOLVA — nincs kinek rotálni)"
     else
       printf '  következő kört vezényli: %s · rotáció: %s · előző: %s\n' \
         "$(bash "$repo_root/tools/round-pipeline.sh" --next-orchestrator 2>/dev/null | tail -1)" \
-        "${PIPELINE_ORCH_ROTATION:-alternate}" \
+        "${PIPELINE_ORCH_ROTATION:-claude}" \
         "$(head -1 "$state_dir/orchestrator-last" 2>/dev/null || echo '—')"
       if [ -f "$claude_block_file" ] \
         && [ "$(date +%s)" -lt "$(cat "$claude_block_file" 2>/dev/null || echo 0)" ]; then

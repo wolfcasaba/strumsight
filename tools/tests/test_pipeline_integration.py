@@ -123,15 +123,21 @@ class PipelineIntegrationTest(unittest.TestCase):
 
         for round_id, brief, engine, _adr, _status in open_rounds:
             with self.subTest(round=round_id):
-                # USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): a lejáró ChatGPT
-                # Pro előfizetés maradék ~90%-át el kell fogyasztani, ezért a
-                # nyitott sorok explicit `terra` pint kaptak — erre az
-                # időszakra a mért szabály FELFÜGGESZTVE. A carve-out szűk: a
-                # `terra` a pin egyértelmű jele (a mért szabály sosem ad
-                # `terra`-t, csak `minimax`/`codex`-et), tehát a szabály a
-                # nem-pinelt sorokra változatlanul mér.
-                if engine == "terra":
-                    continue
+                # USER-DÖNTÉS 2026-08-21 („lejárt a GPT kvóta"): a
+                # Codex-oldal (`codex`/`terra`/`sol`, mind a gpt-5.6-* család,
+                # közös elfogyott előfizetés) NEM futtatható, tehát a mért
+                # szabály `codex` ága erre az időszakra FELFÜGGESZTVE — az
+                # egyetlen elérhető implementer a `minimax`.
+                #
+                # A cella ettől NEM lesz vak, mert két dolgot továbbra is mér:
+                #   (a) nyitott sor Codex-oldali motort NEM nevezhet meg (lásd
+                #       a ciklus utáni assertet) — egy új `codex`/`terra` sor
+                #       azonnal pirosra vált;
+                #   (b) a pin CSAK `codex` → `minimax` irányba mozdulhat: ahol
+                #       a mért szabály `minimax`-ot ad, ott `minimax`-nak KELL
+                #       állnia, tehát a szabály minimax-ága változatlanul él.
+                # A Codex-előfizetés újraéledésekor ez a carve-out törlendő, és
+                # a nyitott sorokat a mért szabály szerint kell visszaosztani.
                 text = (ROOT / brief).read_text()
                 risk = re.search(r'^risk\s*=\s*"(\w+)"', text, re.M)
                 self.assertIsNotNone(risk, f"{brief}: nincs risk mező")
@@ -145,11 +151,22 @@ class PipelineIntegrationTest(unittest.TestCase):
                     if any(segment in p for segment in ("/domain/", "/application/", "/data/"))
                 )
                 expected = "minimax" if (risk.group(1) == "normal" or ui > core) else "codex"
-                self.assertEqual(
+                self.assertIn(
                     engine,
-                    expected,
-                    f"{round_id}: risk={risk.group(1)} UI/ARB={ui} core={core} → {expected}",
+                    {"minimax"} if expected == "minimax" else {"minimax", "codex"},
+                    f"{round_id}: risk={risk.group(1)} UI/ARB={ui} core={core} → {expected}; "
+                    "a Codex-kimaradás alatt a pin CSAK codex→minimax irányba mozdulhat",
                 )
+
+        # (a) A kimaradás alatt egyetlen NYITOTT sor sem nevezhet meg
+        # Codex-oldali motort — ez a carve-out fail-closed párja.
+        codex_side = {row[0]: row[2] for row in open_rounds if row[2] in {"codex", "terra", "sol"}}
+        self.assertEqual(
+            codex_side,
+            {},
+            "a GPT-kvóta elfogyott (user-döntés 2026-08-21): nyitott sor nem mehet "
+            "Codex-oldali motorra — a mezőny egyetlen elérhető implementere a `minimax`",
+        )
 
     def test_prompt_has_one_initial_auto_dispatch_and_budget_preserving_resume(self) -> None:
         prompt = (ROOT / "docs" / "execution" / "pipeline-orchestrator-prompt.md").read_text()
@@ -1364,6 +1381,10 @@ class PipelineIntegrationTest(unittest.TestCase):
             # A commitolt rotáció-fájl (P1-fix, 2026-08-20) erősebb az
             # env-nél — az env-szemantika méréséhez üresre irányítjuk.
             env["PIPELINE_ORCH_ROTATION_FILE"] = "/dev/null"
+            # 2026-08-21 óta a script-default `fallback_engine=none` (a GPT
+            # kvóta elfogyott), az ADR 0115 gépezete viszont változatlan —
+            # ezért ez a cella EXPLICIT env-vel éleszti fel a Codex-oldalt.
+            env["PIPELINE_FALLBACK_ENGINE"] = "terra"
             block = state / "claude-blocked-until"
 
             default = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
@@ -1384,10 +1405,14 @@ class PipelineIntegrationTest(unittest.TestCase):
             self.assertTrue(expired_file_cleaned, "a lejárt zárlatot a driver takarítja")
             self.assertEqual(switched_off.stdout.strip(), "claude")
 
-    def test_the_default_orchestrator_is_the_sol_pin(self) -> None:
-        # USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): rotáció-env nélkül a
-        # review-t a Sol viszi, és ezt a Claude-zárlat sem billenti át — a
-        # Sol nem a Claude-keretből fogyaszt.
+    def test_the_default_orchestrator_is_claude_even_under_a_block(self) -> None:
+        # USER-DÖNTÉS 2026-08-21 („lejárt a GPT kvóta"): rotáció-env nélkül a
+        # review-t a Claude viszi, és ezt a Claude-zárlat SEM billenti át egy
+        # Codex-oldali székre — az `fallback_engine=none` default alatt nincs
+        # hová billenni, a lánc inkább kivárja a Claude-ablakot (a régi,
+        # kvóta-tudatos halt-út). Az átbillenés gépezetét a fenti
+        # `test_orchestrator_falls_back_to_terra_only_while_claude_is_blocked`
+        # méri, explicit `PIPELINE_FALLBACK_ENGINE=terra` mellett.
         script = ROOT / "tools" / "round-pipeline.sh"
         with tempfile.TemporaryDirectory() as directory_name:
             state = Path(directory_name)
@@ -1402,8 +1427,8 @@ class PipelineIntegrationTest(unittest.TestCase):
             (state / "claude-blocked-until").write_text("4102444800\n")
             blocked = self.run_command(["bash", str(script), "--orchestrator-engine"], env=env)
 
-            self.assertEqual(default.stdout.strip(), "sol")
-            self.assertEqual(blocked.stdout.strip(), "sol")
+            self.assertEqual(default.stdout.strip(), "claude")
+            self.assertEqual(blocked.stdout.strip(), "claude")
 
     def test_only_real_quota_messages_trigger_the_engine_switch(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"

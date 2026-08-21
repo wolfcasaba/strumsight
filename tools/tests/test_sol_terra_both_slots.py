@@ -1,9 +1,21 @@
-"""„Mind a két sloton a Sol orchestrátor és a Terra implementer dolgozzon."
+"""A kért slotszám és az önjavító ülés motorja — a repóban utazó user-döntés.
 
-User-döntés 2026-08-20 (a PR #351 Sol-pin kiterjesztése). Két mérhető
-következménye van, és mindkettőt ez a fájl őrzi:
+TÖRTÉNET. Az eredeti döntés (2026-08-20, PR #351 Sol-pin kiterjesztése): „mind
+a két sloton a Sol orchestrátor és a Terra implementer dolgozzon" — ez akkor
+volt vállalható, amikor MINDKÉT slot a Codex-oldali Pro-keretből ment, tehát a
+Claude-előfizetést egyik sem terhelte.
 
-1. **A slotszám is a repóban utazik.** A rotációnál MÉRVE (E99-R14 lecke) volt,
+HATÁLYOS DÖNTÉS (2026-08-21, „lejárt a GPT kvóta"): a Codex-oldal kiesett, az
+orchestrátor/reviewer MINDEN sávon a Claude Sonnet 5 (`--effort high`), az
+implementer a `minimax`. Két párhuzamos sáv így ugyanabból az előfizetésből
+enne, és épp az a hibaosztály jönne vissza, ami az ADR 0222 rotációt kikényszer-
+ítette (a negyedik kör nekimegy a falnak → H-NOSIGNAL halt → önjavító kör, ami
+szintén a keretből megy). Ezért a kért slotszám **1** — user-döntés, ugyanazon
+a fájl > env > script-default szerződésen.
+
+A fájl két mérhető következményt őriz:
+
+1. **A slotszám a repóban utazik.** A rotációnál MÉRVE (E99-R14 lecke) volt,
    hogy a cron exportált env-je némán felülírja a git-en érkező user-döntést.
    A `PIPELINE_SLOTS` pontosan ugyanez az osztály: a lánc egysávosra eshet
    vissza anélkül, hogy ez bárhol látszana. Ezért a commitolt
@@ -12,20 +24,23 @@ következménye van, és mindkettőt ez a fájl őrzi:
    A RAM-fedezet őre (`effective_slots`, ADR 0171 §1) VÁLTOZATLAN — a fájl a
    KÉRT slotszámot mondja meg, nem a tényleges párhuzamot.
 
-2. **Az önjavító kör is slotot foglal**, tehát a Sol-pin alatt az sem mehet a
-   Claude-keretből: a heal-ülést a Sol vezényli, a rögzített heal-identitás
+2. **Az önjavító kör is slotot foglal**, tehát a Sol-pin alatt az sem mehetett
+   a Claude-keretből: a heal-ülést a Sol vezényelte, a rögzített heal-identitás
    pedig a nyilvántartás `sol` sora, hogy az utolsó kísérlet motorváltása
-   (ADR 0307 §2) MÉRHETŐEN más modellre váltson. Pin nélkül minden marad a
-   régi, kvóta-tudatos Claude→Terra úton — azt a `test_selfheal_escalation.py`
-   méri, explicit env-pinnel.
+   (ADR 0307 §2) MÉRHETŐEN más modellre váltson. Pin nélkül — és 2026-08-21 óta
+   ez az élő út — minden marad a régi, kvóta-tudatos Claude→Terra bitre; azt a
+   `test_selfheal_escalation.py` méri, explicit env-pinnel.
 
+A Sol-ülés GÉPEZETE szándékosan mérve marad a Codex-kimaradás alatt is (a
+nyilvántartás `sol` sora, a `fallback` paraméterrel felélesztett cellák): egy
+esetleges Codex-újraéledéskor egyetlen fájl átírásával visszakapcsolható.
 A Sol↔Terra függetlenség kulcsa változatlanul a MODELL-azonosság: a `sol` sor
 implementernek választva ütközik a sol-orchestrátorral (`H-INDEP`,
 fail-closed), a `terra` sor nem.
 
-Visszaálláskor (a Pro-előfizetés lejárta után) a `docs/execution/pipeline-slots`
-fájlt és a `test_the_committed_slots_file_value_is_two` cellát EGYÜTT kell
-átírni — ugyanaz a szerződés, mint a rotáció-fájlnál.
+A slotszám megváltoztatásakor a `docs/execution/pipeline-slots` fájlt és a
+`test_the_committed_slots_file_value_is_one` cellát EGYÜTT kell átírni —
+ugyanaz a szerződés, mint a rotáció-fájlnál.
 """
 
 import datetime as dt
@@ -59,9 +74,11 @@ def run_driver(*arguments: str, **environment_overrides: str) -> subprocess.Comp
 class SlotDecisionTest(unittest.TestCase):
     """A kért slotszám feloldása: file > env > script-default."""
 
-    def test_the_committed_slots_file_value_is_two(self) -> None:
-        # A user-döntés maga: mind a két sáv dolgozzon.
-        self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "2")
+    def test_the_committed_slots_file_value_is_one(self) -> None:
+        # A user-döntés maga (2026-08-21): egy sáv dolgozzon, mert a
+        # Codex-oldal kiesésével MINDEN sáv orchestrátora a Claude, és két
+        # párhuzamos session ugyanabból az előfizetésből enne.
+        self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "1")
 
     def test_the_committed_file_overrides_the_operator_env(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -91,7 +108,7 @@ class SlotDecisionTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "2")
+        self.assertEqual(result.stdout.strip(), "1")
 
     def test_without_a_file_the_env_semantics_stay_measurable(self) -> None:
         for wanted in ("1", "2", "4"):
@@ -212,6 +229,11 @@ class SelfhealSeatTest(unittest.TestCase):
         *,
         attempts: int,
         rotation: str | None,
+        # 2026-08-21 óta a driver script-defaultja `none` (a GPT-kvóta
+        # elfogyott), a Sol-ülés GÉPEZETE viszont változatlan — az azt mérő
+        # cellák ezért explicit `terra` értékkel élesztik fel a Codex-oldalt,
+        # a fail-safe cella pedig ugyanezen a paraméteren adja a `none`-t.
+        fallback: str = "terra",
     ) -> tuple[subprocess.CompletedProcess, Path, Path]:
         now = int(time.time())
         halted_at = dt.datetime.fromtimestamp(now - 60, tz=dt.timezone.utc).isoformat()
@@ -270,6 +292,7 @@ attempt_selfheal
             PIPELINE_ENGINE_REGISTRY=str(registry),
             PIPELINE_SELFHEAL_MAX="3",
             PIPELINE_TEST_NOW=str(now),
+            PIPELINE_FALLBACK_ENGINE=fallback,
             SEAT=str(seat),
             LAUNCHED_ENGINE=str(launched_engine),
         )
@@ -330,13 +353,9 @@ attempt_selfheal
         # sem indítható, tehát a heal nem maradhat motor nélkül.
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
-            os.environ["PIPELINE_FALLBACK_ENGINE"] = "none"
-            try:
-                completed, seat, _launched = self.run_attempt(
-                    state, attempts=0, rotation="sol"
-                )
-            finally:
-                del os.environ["PIPELINE_FALLBACK_ENGINE"]
+            completed, seat, _launched = self.run_attempt(
+                state, attempts=0, rotation="sol", fallback="none"
+            )
 
             self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
             self.assertEqual(seat.read_text(encoding="utf-8").strip(), "claude")
