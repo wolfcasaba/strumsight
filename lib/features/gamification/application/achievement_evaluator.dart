@@ -199,8 +199,17 @@ final class AchievementEvaluator {
     }
     final cutoff = anchor.subtract(Duration(days: backfillWindowDays));
     final retained = <AchievementEvaluationEvidence>[];
+    var inputCount = 0;
     var skipped = 0;
     for (final evidence in history) {
+      inputCount++;
+      if (inputCount > achievementEvaluatorHistoryLimit) {
+        throw ArgumentError.value(
+          inputCount,
+          'history',
+          'must contain at most $achievementEvaluatorHistoryLimit events',
+        );
+      }
       final occurredAt = evidence.event.occurredAt;
       if (occurredAt.isBefore(cutoff) || occurredAt.isAfter(anchor)) {
         skipped++;

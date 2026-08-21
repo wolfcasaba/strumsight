@@ -371,6 +371,36 @@ void main() {
         );
       },
     );
+
+    test('A8: backfill caps raw history before date filtering', () async {
+      final anchor = _date(21, month: 8);
+      for (final count in <int>[9999, 10000]) {
+        final history = List<AchievementEvaluationEvidence>.generate(
+          count,
+          (index) => _evidence('expired-$count-$index', at: _date(21)),
+        );
+
+        final result = await AchievementEvaluator(
+          catalog: _catalog(id: 'backfill_cap_$count', objective: _count(1)),
+          ledger: _Ledger(),
+        ).backfill(history: history, anchor: anchor);
+
+        expect(result.skippedBackfillEventCount, count);
+        expect(result.unlocked, isEmpty);
+      }
+
+      final tooLarge = List<AchievementEvaluationEvidence>.generate(
+        10001,
+        (index) => _evidence('expired-too-large-$index', at: _date(21)),
+      );
+      await expectLater(
+        AchievementEvaluator(
+          catalog: _catalog(id: 'backfill_too_large', objective: _count(1)),
+          ledger: _Ledger(),
+        ).backfill(history: tooLarge, anchor: anchor),
+        throwsArgumentError,
+      );
+    });
   });
 }
 
