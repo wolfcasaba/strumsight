@@ -273,4 +273,45 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `quest_objective.dart`: zárt, JSON-képes skill-tag / `BlockId` /
+  `PracticeMode` / `AchievementMetric` objective-vokabulár; ismeretlen type
+  explicit sentinel, amelyet a definition fail-closed elutasít.
+- `quest_schedule.dart`: verziózott generálási nap, eredeti timezone-offset,
+  pozitív katalógusverzió és UTC lejárati instant; az aktivitási felső határ
+  exkluzív.
+- `quest_definition.dart`: napi/heti, verziózott definition és runtime
+  validált, pozitív automatikus reward-paraméterek.
+- `quest_progress.dart`: immutable, ötállapotú transition-result modell;
+  completionkor azonnali, determinisztikus `quest:<id>:completion` receipt;
+  idempotens újra-completion; expiry a progress/evidence mezőket változatlanul
+  őrzi.
+- `public.dart`: a négy quest domain contract exportja.
+- `quest_model_test.dart`: A1–A9 és a három expiry-határ tesztje.
+
+### TDD- és ellenőrzési bizonyíték
+
+- RED: `flutter test test/features/gamification/domain/quest_model_test.dart`
+  a production contractok hiányában fordítási hibával állt meg
+  (`QuestProgress`, `QuestDefinition`, `QuestObjective` és lifecycle típusok
+  nem találhatók).
+- GREEN: ugyanaz a célzott teszt a contractok elkészülte után `8` teszttel
+  zölden futott.
+- Formázás: `dart format` a négy új domain fájlon, a public barrelen és a
+  célteszten — `Formatted 6 files (5 changed)`.
+- Kötelező valódi-sértés próba: a completion-eredmény automatikus receiptjét
+  ideiglenesen eltávolítva a teljes `tools/round-gate.sh
+  test/features/gamification/domain/quest_model_test.dart` futásban format és
+  analyze zöld volt, a célteszt A1/A2 és A9 cellája piros lett (2 failure:
+  `Actual: <null>` receipt). A receiptet ezután visszaállítottam.
+- Végső round-gate: `tools/round-gate.sh
+  test/features/gamification/domain/quest_model_test.dart` — 6/6 zöld
+  (format, analyze, célteszt, architecture, secrets, l10n).
+
+### Eltérés és nem futtatott ellenőrzés
+
+- Nincs scope-eltérés. Backend, CI, PR és merge nem futott: nem implementer
+  feladat.
+
 ## 11. Review — a Claude tölti ki
