@@ -1,5 +1,29 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 [HEAL E13-R05/H3] Component Catalog scope helyreállítva (2026-08-21, L393)
+
+Az E13-R05 javított `SsCard` kompozíciója helyesen egyetlen, az `SsSurface`
+által birtokolt `Material`-réteget használ. A meglévő
+`test/core/design_system/component_catalog_test.dart` route- és dark/light
+smoke cellái azonban még legacy `Card` widgetet vártak. A PR #392 exact
+`03788441` Full Gate-je emiatt 5519 zöld teszt mellett háromszor
+`Found 0 widgets with type "Card"` hibát adott; a teszt nem szerepelt a kör
+allowlistjében vagy célzott gate-jében. Ez B osztályú brief-scope hiány volt,
+nem product- vagy gate-hiba.
+
+A self-heal az E13-R05 briefet exact egyetlen meglévő fájllal bővítette:
+`test/core/design_system/component_catalog_test.dart` bekerült az
+`allowed_paths` és `gate_tests` listába, valamint az A8 tranzakciós
+acceptance-cellába. A folytatott product körnek meg kell őriznie a route-kaput
+és a két téma smoke contractját, miközben `SsCard`-ot és pontosan egy
+`Material`-leszármazottat mér. Más design-system tesztút nem nyílt meg. A
+regressziós `tools/tests/test_e13_r05_component_catalog_scope.py` a revízió
+előtt 4/5 piros, utána 5/5 zöld; a teljes tooling suite 714 passed, 1 skipped
+és 610 subtests passed. Branch: `heal/E13-R05-H3-1`; az exact-SHA Router CI és
+a zöld squash-merge a `fixed` jelzés előfeltétele. A pontos következő Chapter
+13 kör változatlanul **E13-R05**, a meglévő product-ág revideált scope-pal
+történő folytatásával.
+
 ## ✅ E08-R17 KÉSZ — Determinisztikus, capability-safe napi quest generátor — PR #391 (2026-08-21, L388/L392)
 
 Az offline, caller-fed generátor a nap + profil-pillanatkép + katalógusverzió
