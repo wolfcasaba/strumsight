@@ -94,21 +94,66 @@ void main() {
       );
     });
 
-    test('A3: excludes every unavailable capability without requesting it', () {
-      final generated = DailyQuestGenerator(catalog: _catalog()).generate(
-        _snapshot(
-          cameraAvailable: false,
-          accountAvailable: false,
-          cloudAvailable: false,
-        ),
-      );
-      final ids = generated.map((quest) => quest.definition.id).toSet();
+    test('A3: camera unavailability only excludes the camera quest', () {
+      final ids = _shippingCapabilityQuestIds(cameraAvailable: false);
 
       expect(ids, isNot(contains('daily_camera')));
-      expect(ids, isNot(contains('daily_account')));
-      expect(ids, isNot(contains('daily_cloud')));
-      expect(ids, contains('daily_rhythm'));
+      expect(ids, contains('daily_account'));
+      expect(ids, contains('daily_cloud'));
     });
+
+    test('A3: account unavailability only excludes the account quest', () {
+      final ids = _shippingCapabilityQuestIds(accountAvailable: false);
+
+      expect(ids, contains('daily_camera'));
+      expect(ids, isNot(contains('daily_account')));
+      expect(ids, contains('daily_cloud'));
+    });
+
+    test('A3: cloud unavailability only excludes the cloud quest', () {
+      final ids = _shippingCapabilityQuestIds(cloudAvailable: false);
+
+      expect(ids, contains('daily_camera'));
+      expect(ids, contains('daily_account'));
+      expect(ids, isNot(contains('daily_cloud')));
+    });
+
+    test(
+      'F2: the shipping default catalog has the contracted quest metadata',
+      () {
+        final entries = defaultDailyQuestCatalog().entries;
+        final expectedCapabilities = <String, Set<QuestCapability>>{
+          'daily_rhythm': const <QuestCapability>{},
+          'daily_chords': const <QuestCapability>{},
+          'daily_camera': const <QuestCapability>{QuestCapability.camera},
+          'daily_account': const <QuestCapability>{QuestCapability.account},
+          'daily_cloud': const <QuestCapability>{QuestCapability.cloud},
+          'daily_recovery': const <QuestCapability>{},
+        };
+
+        expect(
+          entries.map((entry) => entry.id).toList(growable: false),
+          expectedCapabilities.keys.toList(growable: false),
+        );
+        expect(
+          entries.map((entry) => entry.id).toSet(),
+          hasLength(entries.length),
+        );
+        expect(
+          entries.where((entry) => entry.isShort).map((entry) => entry.id),
+          unorderedEquals(<String>['daily_rhythm', 'daily_recovery']),
+        );
+        expect(
+          entries
+              .where((entry) => entry.isRestEligible)
+              .map((entry) => entry.id),
+          <String>['daily_recovery'],
+        );
+        for (final entry in entries) {
+          expect(entry.requiredCapabilities, expectedCapabilities[entry.id]);
+        }
+      },
+    );
 
     test('A5: planned rest only returns optional rest-eligible quests', () {
       final generated = DailyQuestGenerator(
@@ -161,6 +206,7 @@ DailyQuestGenerationSnapshot _snapshot({
   bool accountAvailable = true,
   bool cloudAvailable = true,
   bool isNewProfile = false,
+  List<QuestObjective>? objectives,
 }) => DailyQuestGenerationSnapshot(
   schedule: QuestSchedule(
     schemaVersion: questScheduleSchemaVersion,
@@ -170,13 +216,34 @@ DailyQuestGenerationSnapshot _snapshot({
     expiresAt: DateTime.utc(2026, 8, 22),
   ),
   profileSnapshotKey: profileSnapshotKey,
-  plannedObjectives: hasPlan ? _objectives() : null,
+  plannedObjectives: hasPlan ? objectives ?? _objectives() : null,
   plannedRest: plannedRest,
   cameraAvailable: cameraAvailable,
   accountAvailable: accountAvailable,
   cloudAvailable: cloudAvailable,
   isNewProfile: isNewProfile,
 );
+
+Set<String> _shippingCapabilityQuestIds({
+  bool cameraAvailable = true,
+  bool accountAvailable = true,
+  bool cloudAvailable = true,
+}) => DailyQuestGenerator(catalog: defaultDailyQuestCatalog())
+    .generate(
+      _snapshot(
+        cameraAvailable: cameraAvailable,
+        accountAvailable: accountAvailable,
+        cloudAvailable: cloudAvailable,
+        objectives: <QuestObjective>[
+          SkillTagQuestObjective('rhythm'),
+          SkillTagQuestObjective('camera'),
+          SkillTagQuestObjective('account'),
+          SkillTagQuestObjective('cloud'),
+        ],
+      ),
+    )
+    .map((quest) => quest.definition.id)
+    .toSet();
 
 DailyQuestCatalog _catalog({List<String>? ids}) {
   final entries = <DailyQuestCatalogEntry>[
