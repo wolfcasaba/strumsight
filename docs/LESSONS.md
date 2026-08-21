@@ -14254,3 +14254,34 @@ korábbi sorban áll, nem kapu. A végső `ee053ba8` branch-HEAD-en a
 
 **Őrteszt:** nincs — ez orchestration-parancssorrend; a végső exact-SHA CI és
 a megismételt diff-check a konkrét kört mérte.
+
+## L371 — A „screenshot corpus” szöveges cél nem végrehajtható exact képfájl- és validátor-scope nélkül (E13-R01, H3 self-heal, 2026-08-21)
+
+**Mért hiba.** A Chapter 13 Kör 1 feladata név szerint a Live, Tuner, Analyze,
+Learn, Library, Settings és onboarding compact-portrait referencia képét kéri,
+a kötelező teszt pedig előírja, hogy a baseline screenshotok megnyithatók és
+nem üresek (`docs/sdd/13-chapter-13-ui-ux-design-system.md:6159–6172`). Az
+E13-R01 brief `allowed_paths` listája csak Markdown-inventárt, az
+`ui_inventory.dart` generátort és annak tesztjét engedte; PNG és corpus-teszt
+egy sem szerepelt benne. A pre-flight ezért helyesen H3-mal állt meg
+implementer-dispatch előtt.
+
+**Javítás és szabály.** Egy screenshot-baseline kör briefje név szerint sorolja
+fel minden commitolandó kép útvonalát és az mindig futó szerkezeti validátort.
+Itt hét exact `docs/ui/baseline/screenshots/*-compact-portrait.png` és az egy
+`test/ui/ui_baseline_screenshot_test.dart` került scope-ba; a könyvtár egésze,
+`lib/**` és egy nyolcadik, nem kért kép tiltott maradt. A validátor ténylegesen
+dekódol, pozitív byte- és pixelméretet és portrait alakot mér; a vizuális
+hitelességet külön, mind a hét fájl megnyitásával végzett review adja. Így az
+SDD szerződése teljesül anélkül, hogy platformfüggő pixel-golden gate-et vagy
+alkalmazáskód-módosítást vezetnénk be.
+
+A visszakeresett precedensek közül az E07-R29/L327 exact scope-bővítési mintája
+alkalmazható. Az E99-R08 review-report mentessége és az E07-R25 Vision evidence
+contract más gyökérokú: itt nem generált reviewer-artefaktum és nem domain-port,
+hanem a kör saját, név szerint kötelező deliverable-je hiányzott a briefből.
+
+**Őrteszt:** `tools/tests/test_e13_r01_screenshot_scope.py` — a valódi brief
+parserrel és legacy scope-audittal rögzíti az exact 7+1 bővítést, a validátor
+`gate_tests`-tagságát és a testvérútvonal tiltását; a javítás előtt 4/5 piros,
+utána 5/5 zöld.
