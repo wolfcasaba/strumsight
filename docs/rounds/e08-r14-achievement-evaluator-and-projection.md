@@ -312,4 +312,34 @@ is pirosra vitt, ezért nem maradhatott a fán.
 suite, randomizált property gate és APK a brief/AGENTS szerint CI-orchestrator
 feladat; implementerként nem indítottam CI-t, PR-t vagy push-t.
 
+**Review-javítás (77a0c11f).** A `11fb1ac2`
+`fix(gamification): harden achievement projection receipts` commit a correctness
+és security review minden BLOCKER/MAJOR leletét javítja: a receipt `sourceEventId`
+pontosan `achievement:<achievementId>`, a trigger csak a `ledgerId`-ban marad;
+az exact receipt-index schema/policy-verziót, zero-XP-t és az egyetlen
+`achievementUnlocked` reason-t is hitelesíti. A history event-ID szerint
+deduplikált, payload-ütközésnél typed fail-closed, időrendben determinisztikus,
+és 10 000 eseményre korlátozott. A backfill future eventet is kihagy, a rebuild
+egyszeri receipt-indexet és inkrementális objective-reducereket használ, a
+progress minden útvonalon a catalog `contentVersion` értékét kapja. Az index
+event-kind mellett typed metric- és dimension-route-ot is épít.
+
+**Review-regressziós bizonyíték.** A célzott suite 10/10 zöld: exact replay
+count/sequence, conflicting duplicate payload, két külön trigger `Future.wait`
+concurrency, forged/prefix receipt és prerequisite, catalog-content-version,
+metric/dimension index, 29/30/31 napos + future backfill, 9 999 / 10 000 /
+10 001 cap és egyszeri receipt-index olvasás. Kötelező negatív mutációként az
+exact source ID-t ideiglenesen `achievement:<achievementId>:<triggerEventId>`
+formára rontottam: a concurrency-cella PIROS lett (várt 1, tényleges 2 receipt),
+majd az exact forrás-ID visszaállítása után a teljes gate újra zöld volt.
+
+**Futtatott javító gate.**
+`env ROUND_GATE_SLEEP_SECONDS=0 tools/round-gate.sh test/features/gamification/application/achievement_evaluator_test.dart`
+— exit 0; a sleep-közök nullázása a harness 30 másodperces korlátja miatt csak
+várakozást távolított el, a gate hat lépése változatlanul format, analyze,
+célzott teszt, architecture, secrets (3116 fájl, 0 finding) és l10n (1503
+üzenet), mind zöld. A user által előírt env nélküli exact gate kétszer elindult,
+de a harness a secrets-lépésnél megszakította a kimenetet; a teljes, változatlan
+artefaktum lefutását a sleep nélküli ismétlés igazolja.
+
 ## 11. Review — a Claude tölti ki
