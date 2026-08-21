@@ -52,7 +52,6 @@ gyengítést vagy könyvtárszintű allowlistet.
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "docs/adr/0378-achievement-presentation-and-privacy-safe-evidence.md",
   "lib/features/gamification/presentation/screens/achievements_screen.dart",
   "lib/features/gamification/presentation/screens/achievement_detail_screen.dart",
   "lib/features/gamification/presentation/widgets/achievement_tile.dart",
@@ -182,7 +181,6 @@ a két új production screen tranzakciós UI-inventory és baseline-dokumentáci
 
 | Útvonal | Indok |
 |---|---|
-| `docs/adr/0378-achievement-presentation-and-privacy-safe-evidence.md` | pre-flight döntés — caller-fed UI, zárt evidence és hidden fail-closed szerződés |
 | `lib/features/gamification/presentation/screens/achievements_screen.dart` | **ÚJ** — a lista, szűrőkkel |
 | `lib/features/gamification/presentation/screens/achievement_detail_screen.dart` | **ÚJ** — a részletek és a bizonyíték |
 | `lib/features/gamification/presentation/widgets/achievement_tile.dart` | **ÚJ** — a listaelem |
@@ -196,7 +194,7 @@ a két új production screen tranzakciós UI-inventory és baseline-dokumentáci
 | `docs/ui/baseline/route-map.md` | a két, R30-ig route nélküli presentation screen és deep-link kockázat rögzítése |
 | `docs/ui/migration-status.md` | a production screen száma és a gamification baseline sor tranzakciós frissítése |
 
-**Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` (az útvonal-regisztráció a Kör 30) · `docs/adr/**` az exact `ADR 0378` kivételével · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
+**Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` (az útvonal-regisztráció a Kör 30) · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
 ## 5. Kötött architekturális döntések (ADR 0378)
 
