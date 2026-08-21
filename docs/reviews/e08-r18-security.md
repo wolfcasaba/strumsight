@@ -3,7 +3,21 @@
 - **Reviewer:** Codex `gpt-5.6-sol`
 - **Dátum:** 2026-08-21
 - **Kockázat:** high — progress-integritás és nem büntető célképzés
-- **Verdikt:** PASS (security/privacy finding nincs)
+- **Verdikt:** PASS a javítás után (1 MAJOR integritási finding lezárva)
+
+## Független security finding
+
+### S1 — MAJOR — Cross-objective progress/reward integrity
+
+Az első `6300f497` implementáció unkeyed `previousCompletedUnits` értéke egy
+measurement-szűrés után kiválasztott másik objective-re is átkerülhetett. A
+független security-review ezt a correctness F1-t reward-integritási findingként
+is megerősítette: false completion későbbi XP/reward alap lehetett.
+
+**Státusz:** FIXED (`ef717615`). A snapshot stable `previousQuestId`-t kér;
+same-ID esetben monotonic max, cross-ID esetben csak a replacement saját
+observed progressze számít. Pozitív previous progress ID nélkül elutasított.
+A shipping regresszió zöld, az unconditional-max reviewer-mutáció piros.
 
 ## Ellenőrzött határok
 
@@ -19,6 +33,6 @@
 
 ## Megjegyzés
 
-A correctness review F1 progress-identity lelete integritási hiba, de nem
-titkossági, authorization- vagy privacy-sérülés. A merge ettől függetlenül az
-F1/F2 javításáig tilos.
+A javítás után nincs nyitott security/privacy finding. Titkossági,
+authorization-, privacy-, secret-, hálózat- vagy resource-ownership sérülés a
+diffben nem volt.

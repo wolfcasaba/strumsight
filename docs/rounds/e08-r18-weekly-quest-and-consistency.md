@@ -331,4 +331,9 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   → exit 0: format 0 changes; analyze no issues; all 14 targeted tests passed;
   architecture dependencies OK; secrets stage passed.
 
-## 11. Review — a Claude tölti ki
+## 11. Review — Sol, 2026-08-21
+
+Első verdict: CHANGES REQUIRED (2 MAJOR). A Terra `ef717615` javítása után a
+független correctness re-review **APPROVED**, a security re-review **PASS**.
+Részletes bizonyíték: `docs/reviews/e08-r18-review.md` és
+`docs/reviews/e08-r18-security.md`.
