@@ -6,8 +6,9 @@
 - **Branch:** `<motor>/e08-r22-reward-inbox-and-celebration`
 - **Előfeltétel:** `E08-R21` merge-elve (mastery kiértékelő)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0316` — a szám FOGLALT. Az ADR-t a Claude írja meg a
-  kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
+- **Előre kiosztott ADR:** `ADR 0316` — STALE, lásd §0.0 (a foglaló a tényleges
+  szabad számot, `ADR 0389`-et adta). Az ADR-t a Claude írja meg a kör
+  indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R07 „átlépett szintek listája” kimenetét (a több szintlépés összevonása erre épül) és a `lib/features/live/` gyakorlás-közbeni állapotjelzését — a „zenélés közben nincs felugró” szabály ezt kérdezi. Eltérésnél
@@ -32,6 +33,82 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight revízió (Claude, 2026-08-21)
+
+**ADR-szám csere.** Az előre kiosztott `ADR 0316` a foglaló szerint már
+elfogyott — `docs/adr/` a `0388`-ig tart, a `0316` egy korábbi, független kör
+alatt régen elkelt (ugyanaz a mintázat, mint az E08-R21/H0-nál, ahol a
+`0315` bizonyult ütközőnek). `tools/round-slots.py reserve-adr --round
+E08-R22` a tényleges szabad számot adta: **`ADR 0389`**. A brief további
+részében és a §11 review-ban az `ADR 0316` hivatkozás mindenütt `ADR 0389`-re
+értendő; az ADR fájl `docs/adr/0389-reward-inbox-and-celebration-coordinator.md`
+néven készül.
+
+**1. Elérhetetlen cél-státusz — mért bemenetek:**
+
+- **„Aktív gyakorlás" bemenet MÉRVE reachable.** `PracticeSessionState.isActive`
+  (`lib/features/practice/domain/model/practice_session_state.dart`) igaz
+  `countIn`/`running`/`paused`/`finishing` státuszra, exportálva a
+  `practice/public.dart`-ban (`PracticeSessionState`, `PracticeSessionStatus`).
+  A koordinátor ezt **caller-fed** bemenetként kapja (bool vagy a típus
+  maga), NEM importálja a Riverpod providert — az application-réteg
+  (`celebration_coordinator.dart`) a többi gamification application-fájl
+  mintáját követi (pure Dart, Flutter-mentes, ld. `reward_policy_engine.dart`,
+  `profile_projector.dart`).
+- **R07 „átlépett szintek" lista MÉRVE reachable.**
+  `ProfileProjection.crossedLevels` (`profile_projector.dart:104`, típus
+  `List<LevelDefinition>`) — a §5.3 összevonás ezen a listán dolgozik.
+- **Reduced motion MÉRVE reachable, meglévő precedenssel.** Nincs külön
+  domain-szintű settings-provider; a meglévő minta
+  (`lib/features/gamification/presentation/widgets/streak_status_card.dart:16`)
+  közvetlenül `MediaQuery.disableAnimationsOf(context)`-tal olvassa a
+  widget-rétegben — a `reward_summary_sheet.dart`/`reward_inbox_screen.dart`
+  ugyanezt a mintát követi.
+- **Haptika/hang beállítás NEM reachable ma — brief-rés, feloldva.**
+  `grep -rln "haptic\|Haptic\|soundEnabled" lib/features/settings/` **0
+  találat**: nincs élő, olvasható haptika/hang-beállítás provider (a
+  beállítások képernyő maga Kör 27, a brief §3 szerint is jövőbeli). A §5.4
+  „a haptika és a hang külön kapcsolható" ezért **caller-fed bool
+  paraméterként** (`hapticsEnabled`, `soundEnabled`) modellezendő a
+  koordinátoron/összefoglalón — a valódi settings-wiring Kör 27 dolga, nem
+  ennek a körnek a rése. Ez ugyanaz a caller-fed minta, mint az ADR 0353
+  „caller-fed compassionate" streak-előírás.
+
+**2. Erőforrás-tulajdonlás — MÉRVE.** A jutalom főkönyvi írása
+(`RewardLedgerRepository.appendIfAbsent`) MA is a kiértékelőkben történik
+(`grep -rln "appendIfAbsent" lib/features/gamification/` →
+`achievement_evaluator.dart`, `daily_challenge_service.dart` — az
+alkalmazás-réteg evaluatorai, NEM a koordinátor). A §5.2/A3 tehát nem azt
+követeli meg, hogy a koordinátor írjon a főkönyvbe, hanem hogy a
+postaláda-elem sose előzze meg a HÍVÓ oldali, már megtörtént főkönyvi írást —
+a koordinátor ezt egy már-jóváírt jutalom-eseményt hordozó, típusos bemeneten
+méri, nem saját IO-val.
+
+**Visszakeresett előzmény** (ADR 0312, szűkített korpusszal előbb):
+`halts/E08-R20` (Quest/Challenge UI — „no-claim, no popup-spam" ugyanabban a
+family-ben, valódi-sértés próbával igazolt A1-mintájú megszakítás-mátrix),
+`halts/E08-R19` (Challenge V2 — idempotens jutalom, katalógus-verzió pin),
+`halts/E07-R08` (Practice capability adapter — precedens a gyakorlási állapot
+public contracton át olvasására), `adr/0290` (Együttérző széria és idempotens
+beváltás — a §5.2 „nincs beváltás" szabály forrása), `adr/0301` (Reward
+ledger append-only idempotency), `adr/0377` (Achievement evaluator: ledgerhez
+kötött projekció), `adr/0333` (Activity outbox: megbízható, korlátos
+feldolgozás — caller-fed minta precedense), és a SDD-forrás
+`docs/sdd/09-epic-08-gamification.md:2905` (Kör 22 eredeti terve). Nem talált
+a fentiekkel ellentétes elfogadott döntést.
+
+**Kockázat = high, indoklás:** a `risk = "high"` a brief eredeti besorolása
+szerint marad, bár egyik `allowed_paths` sem egyezik a router
+`high_risk_path_fragments` listájával (auth, credential, crypto, migration,
+payment, secret, upload, vision, …). Az indok tartalmi: ez a kör az ADR 0290
+§1/§5.2 (nincs sürgető/lejáró szöveg, nincs beváltás-gomb) MÁSODIK
+felhasználó-szembeni kirakata a Quest/Challenge UI (E08-R20) után, ÉS az
+egyetlen felület, ami a hangszeres gyakorlás MEGSZAKÍTÁSÁNAK tilalmát (§5.1)
+kényszeríti ki — egy visszacsúszó „csak egy kis toast" vagy egy „Begyűjtés"
+gomb nem csak UI-kozmetika, hanem a termék magját (a zavartalan gyakorlást) vagy
+a mért compassionate-UX szerződést törné el. Ezt kizárólag a §6.1 kötelező
+valódi-sértés próba (A1-re) és a küszöb-hármas cella fogja meg gépi mércével.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -70,7 +147,7 @@ hang beállítás tiszteletben tartása.
 - Beváltás-mechanika a postaládában (§5.2) — abszolút tilos.
 - Jutalom-számítás a felületen (ADR 0290 §2).
 - A beállítások képernyő (Kör 27) — itt csak a meglévő beállítások OLVASÁSA történik.
-- `docs/adr/**` — az ADR 0316-ot a Claude írja.
+- `docs/adr/**` — az ADR 0389-et (§0.0) a Claude írja.
 
 ## 4. Engedélyezett fájlok
 
@@ -87,7 +164,7 @@ hang beállítás tiszteletben tartása.
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
-## 5. Kötött architekturális döntések (ADR 0316)
+## 5. Kötött architekturális döntések (ADR 0389, §0.0)
 
 ### 5.1 ZENÉLÉS KÖZBEN NINCS FELUGRÓ — soha
 
