@@ -309,4 +309,55 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Fájlonkénti összefoglaló
+
+- `tool/ui_inventory.dart` — rendezett, read-only production screen,
+  reusable widget/view és overlay-forrás inventár; a 58/96/16 mért baseline-t
+  Markdownként is kiadja.
+- `test/ui/ui_inventory_test.dart` — kétszeri kimenet-azonosságot, a 58
+  production screenet, rendezést, test-tree kizárást és immutable eredményt
+  ellenőriz.
+- `test/ui/ui_baseline_screenshot_test.dart` — exact hét PNG dekódolás,
+  pozitív byte/pixelméret és portrait validátor; külön, opt-in capture-út a
+  production screen-widgetekhez.
+- `docs/ui/README.md` — corpus-használat és a 390×844, in-memory fake-es
+  capture recipe; kimondja, hogy a corpus nem design-jóváhagyás.
+- `docs/ui/migration-status.md` — a teljes screen-állomány legacy státusza és
+  a generátor canonical inventory-hivatkozása.
+- `docs/ui/baseline/route-map.md` — mind a 40 jelenlegi route célroute-ja,
+  flag/redirect/deep-link kockázata.
+- `docs/ui/baseline/token-debt.md` — mért hex-, spacing-, TextStyle- és
+  komponensadósság.
+- `docs/ui/baseline/accessibility-findings.md` — prioritásos text-scale,
+  overlay-, compact-layout- és nem-szín-alapú állapot-audit backlog.
+- `docs/ui/baseline/screenshots/{live,tuner,analyze,learn,library,settings,onboarding}-compact-portrait.png`
+  — a hét név szerinti production-widget, compact-portrait baseline.
+
+### Futtatott bizonyítás
+
+- RED: az új inventory teszt a hiányzó `tool/ui_inventory.dart` importtal
+  fordítási hibával állt meg; az implementáció után zöld lett.
+- Screenshot capture: `flutter test --update-goldens
+  --dart-define=CAPTURE_UI_BASELINE=true
+  test/ui/ui_baseline_screenshot_test.dart` → 1 passed, 1 skipped. A hét PNG
+  elkészült, és mind a hét fájlt kézzel megnyitottam.
+- Valódi-sértés próba: a `..sort()` eltávolítása után
+  `flutter test test/ui/ui_inventory_test.dart` PIROS lett: az első elem
+  `streak_screen.dart` volt az elvárt rendezett `ai_tutor/...` helyett.
+  A rendezés visszaállítása után a célteszt újra zöld.
+- Záró gate: `tools/round-gate.sh test/ui/ui_inventory_test.dart
+  test/ui/ui_baseline_screenshot_test.dart` → zöld. Az első gate-futtatás
+  szándékolatlanul formázatlan `ui_inventory_test.dart` miatt a format lépésen
+  megállt; `dart format` után a teljes, változatlan gate újrafutott és zölden
+  zárt.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- `lib/**` nem módosult. CI-dispatch, PR, push és APK-build nem futott: ezek
+  az orchestrátor/reviewer feladatai és ezen implementer-kör scope-ján kívül
+  vannak.
+- A normál corpus-teszt szándékosan nem pixel-golden összehasonlítás; a
+  hordozható szerkezeti invariánsokat méri. A corpus eredetét a capture-recept
+  és a hét manuális megnyitás bizonyítja.
+
 ## 11. Review — a Claude tölti ki
