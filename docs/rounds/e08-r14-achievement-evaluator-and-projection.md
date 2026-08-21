@@ -44,8 +44,8 @@ native_gate = false
   némán nullává: az érintett objective fail-closed diagnosztikát ad.
 - Az R03 főkönyv `appendIfAbsent` dedupja a `sourceEventId`-re atomikus; a
   tényleges hívási láncban ma a repository szerzi meg az írás sorosítását.
-  Achievement receipt forrás-ID-ja ezért
-  `achievement:<achievementId>:<triggerEventId>`, és a receipt
+  Achievement receipt forrás-ID-ja ezért `achievement:<achievementId>`, a
+  ledger ID-ja pedig `achievement:<achievementId>:<triggerEventId>`; a receipt
   `createdAt` értéke a kiváltó event `occurredAt` értéke.
 - Az R06 nem tartalmaz achievement reward-összeg policyt; az R03/R06 zárt
   contractja viszont már tartalmazza az `achievementUnlocked` reason kódot.
@@ -67,6 +67,21 @@ native_gate = false
   `adr/0374` (zárt objective-vokabulár), `lessons/L372` (stabil achievement
   identitás), valamint az E08-R07 halt-bejegyzés (zöld suite mögötti projekció-
   regressziókhoz kötelező reviewer-mutatás).
+
+**Review utáni §0.0 pontosítás (997a52a0, 2026-08-21).** A független
+correctness/security review két BLOCKER-t reprodukált: a trigger eventet is
+tartalmazó `sourceEventId` két párhuzamos eventnél két külön dedup-kulcsot ad,
+a prefix-alapú receipt lookup pedig idegen ledger sort is completionként
+elfogad. Az atomi kulcs ezért pontosan `achievement:<achievementId>`; a
+trigger event kizárólag a `ledgerId`-ban marad. A visszaolvasott receipt csak
+exact source ID, exact ledger ID-prefix, nulla XP és `achievementUnlocked`
+reason mellett hiteles; névtérütközés fail-closed diagnosztika. A history
+stabil `eventId` szerint deduplikált, azonos ID-jú eltérő payload fail-closed,
+és idő szerint determinisztikusan rendezett. A backfill a cutoffnál régebbi
+**és az anchor utáni** eventet is kizárja. A caller-history hard capje 10 000
+event (9 999 / 10 000 elfogadott, 10 001 elutasított). A progress
+`catalogVersion` mezője a katalógus `contentVersion` értéke. Az index event
+kind **és metric/dimension** kulcsot hordoz; puszta event-kind map nem elég.
 **Kockázat = high, indoklás:** a kör perzisztált reward receiptet és
 újraépíthető user-progressz szerződést köt össze; egy dedup-, timestamp-
 vagy backfill-hiba dupla jutalmat vagy történeti progresszdriftet okozhat,
@@ -130,6 +145,7 @@ achievementhez · ismeretlen objective **fail-closed**.
 
 A feloldás audit receiptje az R03 főkönyvébe kerül `append-if-absent`
 művelettel, ahol a forrás-azonosító pontosan
+`achievement:<achievementId>`, a ledger ID pedig
 `achievement:<achievementId>:<triggerEventId>`. Az R13 nem hordoz reward-
 összeget, ezért a receipt ebben a körben nulla XP és az explicit
 `achievementUnlocked` reason kódot hordoz. Az ismételt kiértékelés így
@@ -137,6 +153,8 @@ technikailag nem tud dupla receiptet vagy jutalmat adni.
 
 **NEM elfogadható gyengítés:** memóriabeli „már feloldottam” halmaz a főkönyv helyett.
 Az app újraindítása után elvész, és a következő esemény újra feloldana.
+Prefix-egyezés vagy reason/XP ellenőrzés nélküli lookup szintén tilos; az
+ütköző, nem hiteles receipt fail-closed diagnosztikát ad.
 
 ### 5.2 A feloldás időbélyege STABIL
 
@@ -172,18 +190,23 @@ egyszeri completion receiptjének és stabil timestampjének igazságforrása.
 Sem teljes activity repository scan, sem storage-owner átvétel nem kerül az
 evaluatorba.
 
+Az evaluator stabil `eventId` szerint deduplikálja a replayt, az azonos ID-jú
+eltérő payloadot elutasítja, és determinisztikus időrendre normalizál. Egy
+snapshot legfeljebb 10 000 event; a backfill az anchor utáni eventeket sem
+dolgozza fel.
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | Ugyanaz az esemény kétszer feldolgozva EGY feloldást ad | `achievement_evaluator_test.dart` — idempotencia-cella |
-| A2 | App-újraindítás szimulálása (üres memória, meglévő főkönyv) után sincs újra-feloldás | `achievement_evaluator_test.dart` |
+| A1 | Ugyanaz az event ID replayben nem növeli kétszer a count/sequence progresszt és nem old fel kétszer | `achievement_evaluator_test.dart` — idempotencia-cella |
+| A2 | App-újraindítás és két párhuzamos, külön trigger event után is pontosan egy exact-source receipt létezik | `achievement_evaluator_test.dart` |
 | A3 | A feloldás időbélyege a kiváltó eseményből jön, és újraépítéskor VÁLTOZATLAN | `achievement_evaluator_test.dart` — stabilitás-cella |
-| A4 | A haladás a caller-supplied kanonikus event-historyból teljesen újraépíthető; az unlock receipt a főkönyvből kötődik vissza | `achievement_evaluator_test.dart` |
-| A5 | Egy esemény csak a releváns objective-eket értékeli (az érintett objective-ek száma mérhető) | `achievement_evaluator_test.dart` — index-cella |
+| A4 | A historyból rebuildelt progress `catalogVersion` mezője a catalog contentVersion; az unlock receipt a főkönyvből kötődik vissza | `achievement_evaluator_test.dart` |
+| A5 | Egy esemény csak az event-kind + metric/dimension index szerinti objective-eket értékeli | `achievement_evaluator_test.dart` — index-cella |
 | A6 | Ismeretlen objective esetén NINCS feloldás, és hiba keletkezik | `achievement_evaluator_test.dart` |
-| A7 | A feloldáshoz nulla-XP, `achievementUnlocked` audit receipt jön létre a főkönyvben, stabil achievement+event source ID-val | `achievement_evaluator_test.dart` |
-| A8 | A backfill korlátos: a korlát fölötti előzmény nem kerül feldolgozásra | `achievement_evaluator_test.dart` — korlát-mátrix |
+| A7 | Nulla-XP `achievementUnlocked` receipt jön létre exact achievement source ID-val és achievement+event ledger ID-val; idegen prefix receipt nem completion | `achievement_evaluator_test.dart` |
+| A8 | A backfill időben és darabszámban korlátos: régi/future event kimarad; 10 001 event elutasított | `achievement_evaluator_test.dart` — korlát-mátrix |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -195,6 +218,12 @@ evaluatorba.
 | Ismeretlen objective figyelmen kívül hagyva | **A6** |
 | A backfill korlátlan | **A8** |
 | A feloldás nem ír nyugtát | **A7** |
+| Azonos event ID kétszer növeli a countot/sequence-et | **A1** |
+| Két párhuzamos trigger két source ID-t ír | **A2** |
+| Prefix-egyező normál ledger sort unlocknak fogad | **A7** |
+| Definition version kerül a progress catalogVersion mezőjébe | **A4** |
+| Az index metric/dimension kulcs nélkül csak event kind szerint épül | **A5** |
+| Anchor utáni event vagy 10 001 elem átjut | **A8** |
 
 **A küszöb három kötelező cellája** (a backfill ablak korlátja (`backfillWindowDays`)):
 

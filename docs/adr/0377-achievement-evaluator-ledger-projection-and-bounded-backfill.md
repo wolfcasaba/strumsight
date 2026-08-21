@@ -52,10 +52,13 @@ history storage tulajdonlást.
    event-historyt.
 
 4. **Az unlock receipt stabil és repository-szinten idempotens.** A receipt
-   `sourceEventId` és `ledgerId` értéke
-   `achievement:<achievementId>:<triggerEventId>`, `createdAt` értéke a
-   kiváltó event `occurredAt` értéke. Az evaluator minden unlock-kísérletet a
-   `RewardLedgerRepository.appendIfAbsent` műveleten vezet át; memóriabeli
+   `sourceEventId` értéke pontosan `achievement:<achievementId>`, a
+   `ledgerId` értéke `achievement:<achievementId>:<triggerEventId>`,
+   `createdAt` értéke a kiváltó event `occurredAt` értéke. Így két párhuzamos,
+   külön trigger ugyanazon atomikus repository-kulcson versenyez. A
+   visszaolvasás csak exact source ID, exact ledger-ID prefix, nulla XP és
+   `achievementUnlocked` reason mellett tekinti hitelesnek a receiptet;
+   ütköző normál/malformed entry fail-closed diagnosztika. Memóriabeli
    completed-set nem lehet dedup igazságforrás.
 
 5. **Ez a kör nulla-XP achievement receiptet ír.** Mivel nincs elfogadott
@@ -76,10 +79,20 @@ history storage tulajdonlást.
 
 8. **A backfill caller-anchored, inkluzív és korlátos.** Az alapablak 30 nap;
    az anchor explicit UTC időpont, nem `DateTime.now()`. A cutoffon lévő event
-   még feldolgozható, a cutoffnál régebbi event kimarad és számlált
-   diagnosztikát ad. A 29/30/31 napos mátrix kötelező. A bemeneti history
-   caller-supplied snapshot; az evaluator nem pásztáz teljes tárolót app-
-   indulásonként.
+   még feldolgozható, a cutoffnál régebbi és az anchor utáni event kimarad és
+   számlált diagnosztikát ad. A 29/30/31 napos mátrix kötelező. A bemeneti
+   history caller-supplied snapshot; az evaluator nem pásztáz teljes tárolót
+   app-indulásonként.
+
+9. **A history replay-biztos, determinisztikus és darabszám szerint is
+   bounded.** Stabil `eventId`-nként egy payload számít; exact replay kimarad,
+   azonos ID-jú eltérő payload fail-closed. A normalizált sorrend
+   `occurredAt`, majd stabil event ID. Egy snapshot hard capje 10 000 event:
+   9 999 és 10 000 elfogadott, 10 001 elutasított. A progress
+   `catalogVersion` mezője mindig a katalógus `contentVersion` értéke. A
+   rebuild nem másolhat növekvő prefixeket és nem pásztázhatja a teljes
+   ledgert objective-enként; egy snapshoton lineáris event-pass és egyszeri
+   receipt-index épül.
 
 ## Következmények
 
