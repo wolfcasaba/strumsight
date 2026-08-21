@@ -295,4 +295,31 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### E08-R13 implementation (Terra, 2026-08-20)
+
+| Fájl | Változás |
+|---|---|
+| `achievement_definition.dart` | Stabil lower-snake-case ID, immutable definíció, a zárt count/threshold/distinct/sequence/compound objective-vokabulár és fail-closed unknown sentinel. |
+| `achievement_catalog.dart` | Immutable katalógus, stabil típusos validációs report, méret-, locale-kulcs-, tier-gráf- és content-version ellenőrzés. |
+| `achievement_progress.dart` | Verziózott, nem csökkenő, mellékhatásmentes progress értéktípus. |
+| `default_achievement_catalog.dart` | 22 gondozott, stabil azonosítójú achievement; egy retained `legacy_first_step` elem deprecated jelöléssel. |
+| `public.dart` | Csak achievement domain- és default-catalog exportok. |
+| `gamification_{en,hu}.arb` | Az új title/description/semantics kulcsok elsődleges feature-szegmensei. |
+| `app_{en,hu}.arb` | Kizárólag `gen_l10n_segments.dart --write` determinisztikus generált kimenete. |
+| `achievement_catalog_test.dart` | A1–A8 célzott cellák, 19/20/21 és 29/30/31 inkluzív méretcellák, unknown sentinel, A→B→A tier-kör és objective-vokabulár. |
+
+#### Futott parancsok és tényleges eredmények
+
+- `flutter test test/features/gamification/domain/achievement_catalog_test.dart` a még hiányzó domain API-val: **PIROS**, a várt hiányzó achievement típusok compile-hibájával (TDD RED).
+- `dart format ...achievement_definition.dart ...achievement_progress.dart ...achievement_catalog.dart ...default_achievement_catalog.dart ...public.dart ...achievement_catalog_test.dart`: **ZÖLD**, 6 fájlból 4 formázott módosítás.
+- `dart run tool/gen_l10n_segments.dart --write`: **ZÖLD**, `en` és `hu` aggregátum írva.
+- `flutter test test/features/gamification/domain/achievement_catalog_test.dart`: **ZÖLD**, 16 teszt.
+- Valódi A3 sértéspróba: az A→B→A fixture elutasítási elvárását ideiglenesen `isTrue`-ra fordítottam; `flutter test ... --plain-name 'A3: rejects an A to B to A tier cycle'`: **PIROS** (`Expected: true`, `Actual: <false>`), majd az elvárást tisztán `isFalse`-ra visszaállítottam.
+
+#### Eltérések és nem futtatott ellenőrzések
+
+- Nincs funkcionális eltérés a brieftől.
+- `tools/round-gate.sh test/features/gamification/domain/achievement_catalog_test.dart`: **ZÖLD** — format, analyze, a 16 célzott teszt, architecture, secrets és l10n mind zöld; a l10n parity 1503 üzenetet mért.
+- A teljes suite, randomizált property gate, CI-dispatch, PR és merge implementer-scope-on kívül van.
+
 ## 11. Review — a Claude tölti ki
