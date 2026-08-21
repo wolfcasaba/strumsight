@@ -11,66 +11,6 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R16 állapotgépét és az R19 napi példány-szerződését; ellenőrizd a `lib/app/routing/app_route.dart` TÉNYLEGES típusos útvonal-mintáját — a CTA arra épül. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
-## 0.0 Pre-flight revízió — 2026-08-21
-
-A friss `main @ 9bea06df` mérése nem mutatott driftet a brief tartalmi
-előírásaihoz képest; a lenti mérések a §1 (elérhetetlen cél-státusz) és §2
-(erőforrás-tulajdonlás) kötelező pre-flight ellenőrzései, és megerősítik a
-brief eredeti tervét.
-
-1. **A cél-státusz elérhető.** `QuestStatus.completed`
-   (`lib/features/gamification/domain/quests/quest_progress.dart:644`) az
-   egyetlen input, ami produkálja: `QuestProgress.active(...).complete(at:)`,
-   ha `status == active` ÉS `definition.schedule.isActiveAt(at)` — ez NEM az
-   átmenettábla feltételezése, hanem a tényleges `complete()` metódus
-   mért ága (quest_progress.dart:724). Az A1 acceptance-cella tehát valódi,
-   elérhető állapotot mér.
-2. **Erőforrás-tulajdonlás: nem alkalmazható.** A kör felülete nem szerez
-   lease-t, lock-ot, handle-t vagy subscription-t (`grep -rn "\.acquire("
-   lib/features/gamification/` nulla találat) — a `quests_screen.dart` egy
-   tisztán megjelenítő widget, ugyanazt a mintát követi, mint a meglévő
-   `achievements_screen.dart` és `weekly_consistency_card.dart`: már
-   kiszámolt `QuestProgress`/`DailyChallengeInstance` objektumokat kap
-   konstruktor-paraméterként, Riverpod-providert vagy repository-hívást a
-   `lib/features/gamification/presentation/` réteg ma sehol nem tartalmaz
-   (mérve: `find lib/features/gamification -iname "*provider*"` → 0 találat).
-   Ez megerősíti az 5.4 „a felület nem számol" szabályt: a képernyő
-   csak a már eldöntött `status`/`reward` mezőket jeleníti meg.
-3. **Az útvonal-katalógus mért, nem feltételezett.** `lib/app/routing/
-   app_route.dart` jelenleg NEM tartalmaz `quests`/`quest` bejegyzést — a
-   brief §2/§3 állítása (az útvonal-regisztráció a Kör 30-ban lesz) friss.
-   Nincs meglévő, névvel ellátott „típusos CTA" sealed-class minta máshol az
-   appban (`grep -rn "sealed class.*CallToAction\|sealed class.*RouteAction"
-   lib/` → 0 találat); a „típusos" itt azt jelenti, hogy a CTA az `AppRoutes`
-   konstansaira épül string-literál helyett, a konkrét CTA-modell tervezése
-   (pl. egy `quest_card.dart`-on belüli sealed osztály) az engedélyezett
-   fájlokon belüli implementer-döntés, nem brief-rés.
-
-**Visszakeresett előzmény** (`node tools/knowledge-rag.mjs`, szűkített
-korpusszal előbb): `adr/0382` (Quest objective- és életciklus-szerződés — a
-Kör 17/18 generátora dönt, a Kör 20 felülete **csak megjeleníti** a már
-eldöntött completion/reward állapotot — pontosan az 5.1/5.4 szabály forrása),
-`adr/0387` (Challenge V2 példány-azonosítás és idempotens jutalom-kulcs — a
-`challenge_card.dart` ugyanezt a már lezárt `DailyChallengeInstance`-t kapja,
-nem számol újra). A teljes korpuszos kiegészítő kérdés egy jövőbeli, még nem
-induló Chapter 13 kört is felszínre hozott: `docs/rounds/
-e13-r32-gamification-ui.md` (PREPARED, `lib/features/gamification/` teljes
-fát engedélyező, tág `allowed_paths`) egy későbbi, szélesebb gamifikációs
-felület-egységesítést tervez ugyanezen a könyvtáron — mivel ez a kör MA nincs
-dispatch-elve (nem in-flight, `.pipeline/inflight/` üres rá), nincs
-átfedés-kockázat a jelen körrel; a jövőbeli implementernek kell majd a
-meglévő `quests_screen.dart`-tal számolnia. Nem talált a fentiekkel
-ellentétes elfogadott döntést.
-
-**Kockázat = high, indoklás:** a `risk = "high"` a brief eredeti besorolása
-szerint marad, bár a diff maga nem érint titkot, hitelesítést, kamerát,
-migrációt vagy fizetést (a router `high_risk_path_fragments` listájából
-egyik sem egyezik). Az indok tartalmi: a felület az ADR 0290 §1 (nincs
-sürgető/szégyenítő lejárati szöveg) és §5.1 (nincs beváltás-gomb) egyetlen
-felhasználó-szembeni kirakata — egy visszacsúszó „Begyűjtés" gomb vagy
-visszaszámláló közvetlenül a mért compassionate-UX szerződést törné el, és
-csak a §6.1 valódi-sértés próba (KÖTELEZŐ) fogja meg gépi mércével.
-
 ```ai-router
 schema_version = 1
 risk = "high"
