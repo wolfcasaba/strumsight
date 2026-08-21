@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔧 [HEAL E08-R15/H3] UI-inventory tranzakciós scope helyreállítva — PR pending (2026-08-21, L377)
+## 🔧 [HEAL E08-R15/H3] UI-inventory tranzakciós scope helyreállítva — PR #385 (2026-08-21, L377)
 
 Az E08-R15 PR #383 két új achievement presentation screennel 58-ról 60-ra
 emeli az E13-R01 production screen inventoryját. A Full Gate exact SHA-n 5442
