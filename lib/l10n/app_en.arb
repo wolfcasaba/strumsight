@@ -20,12 +20,46 @@
   "achievementBalancedPracticeWeekDescription": "Complete measured practice, song, and analysis sessions.",
   "achievementBalancedPracticeWeekSemantics": "Achievement: balanced measured practice week.",
   "achievementBalancedPracticeWeekTitle": "Balanced practice week",
+  "achievementCategoryAccessibilityNeutral": "All learners",
+  "achievementCategoryAnalysis": "Analysis",
+  "achievementCategoryChords": "Chords",
+  "achievementCategoryConsistency": "Consistency",
+  "achievementCategoryExploration": "Exploration",
+  "achievementCategoryPersonalBest": "Personal best",
+  "achievementCategoryPractice": "Practice",
+  "achievementCategoryRhythm": "Rhythm",
+  "achievementCategorySongs": "Songs",
+  "achievementCategoryTechnique": "Technique",
+  "achievementEmptyBody": "Your measured practice milestones will appear here.",
+  "achievementEmptyTitle": "No achievements yet",
+  "achievementEvidenceCompletionRecorded": "This measured milestone is complete.",
+  "achievementEvidenceMeasuredProgress": "Measured progress: {current} of {target}.",
+  "@achievementEvidenceMeasuredProgress": {
+    "placeholders": {
+      "current": {
+        "type": "num"
+      },
+      "target": {
+        "type": "num"
+      }
+    }
+  },
+  "achievementEvidenceTitle": "Why this progress",
+  "achievementEvidenceUnavailable": "Measured evidence is not available yet.",
+  "achievementFilterAll": "All",
+  "achievementFilterCategory": "Category",
+  "achievementFilterInProgress": "In progress",
+  "achievementFilterUnlocked": "Unlocked",
   "achievementFirstValidSessionDescription": "Complete your first valid practice session.",
   "achievementFirstValidSessionSemantics": "Achievement: first valid practice session.",
   "achievementFirstValidSessionTitle": "First valid session",
+  "achievementHiddenBody": "Keep practising to reveal this achievement.",
+  "achievementHiddenTitle": "A secret achievement",
   "achievementLegacyFirstStepDescription": "A retained first-session milestone from an earlier catalog.",
   "achievementLegacyFirstStepSemantics": "Retained achievement: first session milestone.",
   "achievementLegacyFirstStepTitle": "First step",
+  "achievementNotFoundBody": "This achievement is unavailable.",
+  "achievementNotFoundTitle": "Achievement not found",
   "achievementPlanFirstBlockDescription": "Complete one measured plan block.",
   "achievementPlanFirstBlockSemantics": "Achievement: first measured plan block.",
   "achievementPlanFirstBlockTitle": "First plan block",
@@ -44,6 +78,14 @@
   "achievementPracticeStarterDescription": "Complete five valid practice sessions.",
   "achievementPracticeStarterSemantics": "Achievement: five valid practice sessions.",
   "achievementPracticeStarterTitle": "Practice starter",
+  "achievementProgress": "Progress: {percent}%",
+  "@achievementProgress": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "achievementRhythmBuilderOneDescription": "Reach a measured practice score of 0.7.",
   "achievementRhythmBuilderOneSemantics": "Achievement: measured practice score of 0.7.",
   "achievementRhythmBuilderOneTitle": "Rhythm builder I",
@@ -68,15 +110,49 @@
   "achievementSourceExplorerDescription": "Use three distinct measured activity sources.",
   "achievementSourceExplorerSemantics": "Achievement: three distinct measured activity sources.",
   "achievementSourceExplorerTitle": "Source explorer",
+  "achievementTileSemanticsInProgress": "{description}. {percent}% complete.",
+  "@achievementTileSemanticsInProgress": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "achievementTileSemanticsUnlocked": "{description}. {percent}% complete. Unlocked on {date}.",
+  "@achievementTileSemanticsUnlocked": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "achievementTutorFirstCheckinDescription": "Complete one measured tutor check-in.",
   "achievementTutorFirstCheckinSemantics": "Achievement: first measured tutor check-in.",
   "achievementTutorFirstCheckinTitle": "First tutor check-in",
+  "achievementUnlockedOn": "Unlocked on {date}",
+  "@achievementUnlockedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "achievementVisionFirstObservationDescription": "Complete one measured vision observation.",
   "achievementVisionFirstObservationSemantics": "Achievement: first measured vision observation.",
   "achievementVisionFirstObservationTitle": "First vision observation",
   "achievementXpFirstHundredDescription": "Reach 100 measured total XP from a practice event.",
   "achievementXpFirstHundredSemantics": "Achievement: 100 measured total XP from practice.",
   "achievementXpFirstHundredTitle": "First hundred XP",
+  "achievementsTitle": "Achievements",
   "actionShare": "Share",
   "adaptiveSuggestionApply": "Apply",
   "adaptiveSuggestionChordError": "Focus on chord changes in the next attempt.",

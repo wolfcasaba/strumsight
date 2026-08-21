@@ -133,5 +133,63 @@
   "achievementXpFirstHundredSemantics": "Achievement: 100 measured total XP from practice.",
   "achievementLegacyFirstStepTitle": "First step",
   "achievementLegacyFirstStepDescription": "A retained first-session milestone from an earlier catalog.",
-  "achievementLegacyFirstStepSemantics": "Retained achievement: first session milestone."
+  "achievementLegacyFirstStepSemantics": "Retained achievement: first session milestone.",
+  "achievementsTitle": "Achievements",
+  "achievementFilterAll": "All",
+  "achievementFilterUnlocked": "Unlocked",
+  "achievementFilterInProgress": "In progress",
+  "achievementFilterCategory": "Category",
+  "achievementCategoryConsistency": "Consistency",
+  "achievementCategoryPractice": "Practice",
+  "achievementCategorySongs": "Songs",
+  "achievementCategoryRhythm": "Rhythm",
+  "achievementCategoryChords": "Chords",
+  "achievementCategoryTechnique": "Technique",
+  "achievementCategoryAnalysis": "Analysis",
+  "achievementCategoryExploration": "Exploration",
+  "achievementCategoryPersonalBest": "Personal best",
+  "achievementCategoryAccessibilityNeutral": "All learners",
+  "achievementHiddenTitle": "A secret achievement",
+  "achievementHiddenBody": "Keep practising to reveal this achievement.",
+  "achievementProgress": "Progress: {percent}%",
+  "@achievementProgress": {
+    "placeholders": {
+      "percent": {"type": "int"}
+    }
+  },
+  "achievementUnlockedOn": "Unlocked on {date}",
+  "@achievementUnlockedOn": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "achievementTileSemanticsInProgress": "{description}. {percent}% complete.",
+  "@achievementTileSemanticsInProgress": {
+    "placeholders": {
+      "description": {"type": "String"},
+      "percent": {"type": "int"}
+    }
+  },
+  "achievementTileSemanticsUnlocked": "{description}. {percent}% complete. Unlocked on {date}.",
+  "@achievementTileSemanticsUnlocked": {
+    "placeholders": {
+      "description": {"type": "String"},
+      "percent": {"type": "int"},
+      "date": {"type": "String"}
+    }
+  },
+  "achievementEmptyTitle": "No achievements yet",
+  "achievementEmptyBody": "Your measured practice milestones will appear here.",
+  "achievementNotFoundTitle": "Achievement not found",
+  "achievementNotFoundBody": "This achievement is unavailable.",
+  "achievementEvidenceTitle": "Why this progress",
+  "achievementEvidenceMeasuredProgress": "Measured progress: {current} of {target}.",
+  "@achievementEvidenceMeasuredProgress": {
+    "placeholders": {
+      "current": {"type": "num"},
+      "target": {"type": "num"}
+    }
+  },
+  "achievementEvidenceCompletionRecorded": "This measured milestone is complete.",
+  "achievementEvidenceUnavailable": "Measured evidence is not available yet."
 }
