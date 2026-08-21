@@ -13,7 +13,7 @@ void main() {
       final second = UiInventory(repository).render();
 
       expect(first.toMarkdown(), second.toMarkdown());
-      expect(first.screenPaths, hasLength(60));
+      expect(first.screenPaths, hasLength(61));
       expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
       expect(
         first.screenPaths,

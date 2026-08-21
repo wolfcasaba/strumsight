@@ -11,6 +11,110 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R16 állapotgépét és az R19 napi példány-szerződését; ellenőrizd a `lib/app/routing/app_route.dart` TÉNYLEGES típusos útvonal-mintáját — a CTA arra épül. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0 Pre-flight revízió — 2026-08-21
+
+A friss `main @ 9bea06df` mérése nem mutatott driftet a brief tartalmi
+előírásaihoz képest; a lenti mérések a §1 (elérhetetlen cél-státusz) és §2
+(erőforrás-tulajdonlás) kötelező pre-flight ellenőrzései, és megerősítik a
+brief eredeti tervét.
+
+1. **A cél-státusz elérhető.** `QuestStatus.completed`
+   (`lib/features/gamification/domain/quests/quest_progress.dart:644`) az
+   egyetlen input, ami produkálja: `QuestProgress.active(...).complete(at:)`,
+   ha `status == active` ÉS `definition.schedule.isActiveAt(at)` — ez NEM az
+   átmenettábla feltételezése, hanem a tényleges `complete()` metódus
+   mért ága (quest_progress.dart:724). Az A1 acceptance-cella tehát valódi,
+   elérhető állapotot mér.
+2. **Erőforrás-tulajdonlás: nem alkalmazható.** A kör felülete nem szerez
+   lease-t, lock-ot, handle-t vagy subscription-t (`grep -rn "\.acquire("
+   lib/features/gamification/` nulla találat) — a `quests_screen.dart` egy
+   tisztán megjelenítő widget, ugyanazt a mintát követi, mint a meglévő
+   `achievements_screen.dart` és `weekly_consistency_card.dart`: már
+   kiszámolt `QuestProgress`/`DailyChallengeInstance` objektumokat kap
+   konstruktor-paraméterként, Riverpod-providert vagy repository-hívást a
+   `lib/features/gamification/presentation/` réteg ma sehol nem tartalmaz
+   (mérve: `find lib/features/gamification -iname "*provider*"` → 0 találat).
+   Ez megerősíti az 5.4 „a felület nem számol" szabályt: a képernyő
+   csak a már eldöntött `status`/`reward` mezőket jeleníti meg.
+3. **Az útvonal-katalógus mért, nem feltételezett.** `lib/app/routing/
+   app_route.dart` jelenleg NEM tartalmaz `quests`/`quest` bejegyzést — a
+   brief §2/§3 állítása (az útvonal-regisztráció a Kör 30-ban lesz) friss.
+   Nincs meglévő, névvel ellátott „típusos CTA" sealed-class minta máshol az
+   appban (`grep -rn "sealed class.*CallToAction\|sealed class.*RouteAction"
+   lib/` → 0 találat); a „típusos" itt azt jelenti, hogy a CTA az `AppRoutes`
+   konstansaira épül string-literál helyett, a konkrét CTA-modell tervezése
+   (pl. egy `quest_card.dart`-on belüli sealed osztály) az engedélyezett
+   fájlokon belüli implementer-döntés, nem brief-rés.
+
+**Visszakeresett előzmény** (`node tools/knowledge-rag.mjs`, szűkített
+korpusszal előbb): `adr/0382` (Quest objective- és életciklus-szerződés — a
+Kör 17/18 generátora dönt, a Kör 20 felülete **csak megjeleníti** a már
+eldöntött completion/reward állapotot — pontosan az 5.1/5.4 szabály forrása),
+`adr/0387` (Challenge V2 példány-azonosítás és idempotens jutalom-kulcs — a
+`challenge_card.dart` ugyanezt a már lezárt `DailyChallengeInstance`-t kapja,
+nem számol újra). A teljes korpuszos kiegészítő kérdés egy jövőbeli, még nem
+induló Chapter 13 kört is felszínre hozott: `docs/rounds/
+e13-r32-gamification-ui.md` (PREPARED, `lib/features/gamification/` teljes
+fát engedélyező, tág `allowed_paths`) egy későbbi, szélesebb gamifikációs
+felület-egységesítést tervez ugyanezen a könyvtáron — mivel ez a kör MA nincs
+dispatch-elve (nem in-flight, `.pipeline/inflight/` üres rá), nincs
+átfedés-kockázat a jelen körrel; a jövőbeli implementernek kell majd a
+meglévő `quests_screen.dart`-tal számolnia. Nem talált a fentiekkel
+ellentétes elfogadott döntést.
+
+**Kockázat = high, indoklás:** a `risk = "high"` a brief eredeti besorolása
+szerint marad, bár a diff maga nem érint titkot, hitelesítést, kamerát,
+migrációt vagy fizetést (a router `high_risk_path_fragments` listájából
+egyik sem egyezik). Az indok tartalmi: a felület az ADR 0290 §1 (nincs
+sürgető/szégyenítő lejárati szöveg) és §5.1 (nincs beváltás-gomb) egyetlen
+felhasználó-szembeni kirakata — egy visszacsúszó „Begyűjtés" gomb vagy
+visszaszámláló közvetlenül a mért compassionate-UX szerződést törné el, és
+csak a §6.1 valódi-sértés próba (KÖTELEZŐ) fogja meg gépi mércével.
+
+### 0.0.1 Kör közbeni revízió — `stopped` után, 2026-08-21
+
+Az implementer az első dispatch után jogosan `stopped`-ot jelzett: a
+`lib/l10n/app_en.arb`/`app_hu.arb` **2026-08-20 óta (ADR 0307 §4, PR #343)
+GENERÁLT aggregátum**, nem kézzel szerkeszthető forrás — a tényleges,
+szerkeszthető forrás a `lib/l10n/features/gamification_en.arb`/
+`gamification_hu.arb` fragmentum, amit a `tool/gen_l10n_segments.dart --write`
+állít elő az aggregátumba. A brief eredeti (2026-08-18-i) allowed_paths-a ezt
+a 2026-08-20-i architektúra-váltást még nem ismerte — mérve, nem
+feltételezve (`tool/gen_l10n_segments.dart` fejléckommentje +
+`git log -- lib/l10n/features/gamification_en.arb`). Ez a kör saját, még nem
+merge-elt artefaktuma, tehát a feloldás az orchestrátor önálló hatásköre
+(ADR 0087 §2 első bekezdés) — NEM H3: a `tool/` (egyes szám) különbözik a
+tiltott `tools/**`-tól, a fragmentum a gamifikációs feature saját l10n-forrása.
+
+**Revízió:** az `allowed_paths` és a §4 tábla kiegészül a
+`lib/l10n/features/gamification_en.arb`/`gamification_hu.arb` fragmentumokkal.
+Az implementáció menete: (1) az ÚJ kulcsok a fragmentumba kerülnek (NEM az
+aggregátumba kézzel), (2) `dart run tool/gen_l10n_segments.dart --write`
+regenerálja az `app_en.arb`/`app_hu.arb`-ot, (3) a gate l10n-lépése
+(paritás+frissesség) méri az eredményt. Az aggregátum fájlok maradnak az
+`allowed_paths`-on (a generátor odaírja őket), de tartalmuk mostantól a
+fragmentumból származik.
+
+### 0.0.2 Kör közbeni revízió — CI (`full-gate.yml`) piros, 2026-08-21
+
+A célzott gate (`round-gate.sh test/features/gamification/presentation/
+quests_screen_test.dart`) és a review-klón zöld volt, de a CI **teljes**
+suite-ja (ADR 0053) egy a kör saját gate-parancsán KÍVÜLI, cross-cutting
+invariánst fogott: `test/ui/ui_inventory_test.dart` egy MÉRT, rögzített
+60-elemű production-screen bázisvonalat (E08-R15, PR #383) ellenőriz
+(`expect(first.screenPaths, hasLength(60))`) — az ÚJ, jogos
+`quests_screen.dart` a tényleges számot 61-re emelte, ezt a CI log mérte
+(`Which: has length of <61>`). Ugyanaz a hibaosztály, mint az E08-R19
+`architecture_dependency_test.dart` lelete: a kör saját `gate_tests`-e nem
+fedi a keresztmetsző invariánst, csak a teljes suite. Az `UiInventory` a
+fájlrendszert (`lib/**/screens/*.dart`) olvassa, nem az útvonal-regisztrációt
+— a bázisvonal-bővülés a screen-fájl LÉTÉVEL jár, a Kör 30 útvonal-
+regisztrációjától függetlenül.
+
+**Revízió:** az `allowed_paths` kiegészül a `test/ui/ui_inventory_test.dart`
+fájllal, KIZÁRÓLAG a `hasLength(60)` → `hasLength(61)` egysoros bázisvonal-
+frissítés céljából — más sor a fájlban nem változhat.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -19,13 +123,17 @@ allowed_paths = [
   "lib/features/gamification/presentation/widgets/quest_card.dart",
   "lib/features/gamification/presentation/widgets/challenge_card.dart",
   "lib/features/gamification/public.dart",
+  "lib/l10n/features/gamification_en.arb",
+  "lib/l10n/features/gamification_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/presentation/quests_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e08-r20-quest-and-challenge-ui.md",
 ]
 gate_tests = [
   "test/features/gamification/presentation/quests_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
@@ -77,9 +185,12 @@ nélkül · offline és üres állapot.
 | `lib/features/gamification/presentation/widgets/quest_card.dart` | **ÚJ** — a küldetés-kártya |
 | `lib/features/gamification/presentation/widgets/challenge_card.dart` | **ÚJ** — a kihívás-kártya |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
-| `lib/l10n/app_en.arb` | az ÚJ kulcsok |
-| `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
+| `lib/l10n/features/gamification_en.arb` | **a tényleges forrás** — az ÚJ kulcsok (0.0.1 revízió) |
+| `lib/l10n/features/gamification_hu.arb` | **a tényleges forrás** — az ÚJ kulcsok magyar párja (0.0.1 revízió) |
+| `lib/l10n/app_en.arb` | GENERÁLT — `tool/gen_l10n_segments.dart --write` írja, kézzel nem szerkesztendő |
+| `lib/l10n/app_hu.arb` | GENERÁLT — `tool/gen_l10n_segments.dart --write` írja, kézzel nem szerkesztendő |
 | `test/features/gamification/presentation/quests_screen_test.dart` | a §6 cellái |
+| `test/ui/ui_inventory_test.dart` | **CSAK a `hasLength(60)` → `hasLength(61)` sor** — 0.0.2 revízió |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
