@@ -55,6 +55,16 @@ native_gate = false
   determinisztikus aggregátum. Az allowlist ezért név szerint tartalmazza a
   két forrásszegmenst és a generátor két kimenetét; közvetlen aggregate-edit
   tilos. A kötelező első lépés `dart run tool/gen_l10n_segments.dart --write`.
+- **STOP-feloldás (Terra session `01a02243-…`).** A generátor által frissített
+  `lib/l10n/app_localizations*.dart` és locale-specifikus Dart fájlok
+  gitignore-olt Flutter build-outputok, nem tracked kör-diffek. Ezeket a friss
+  klón kötelező `tools/prepare-flutter-generated.sh` előfeltétele és a
+  `gen_l10n_segments.dart --write` utáni `flutter gen-l10n` állítja elő; nem
+  kerülnek az `allowed_paths` listába, nem stage-elhetők és nem commitolhatók.
+  A tracked scope változatlan: két feature-szegmens + két generált ARB-
+  aggregátum. A wrapper scope-auditja a megálláskor `ok` volt, 9 engedélyezett
+  tracked útvonallal; ezért ez nem H3, hanem a brief build-output határának
+  dokumentált pontosítása.
 - Az Analyze mért modellje `TimelineChord`, `TimelineStrum`, confidence és
   opcionális ML-diagnosztika listákat hordoz. Ezek UI-evidenceként való
   átadása a privacy-határ megsértése lenne; a kör tesztje import- és
