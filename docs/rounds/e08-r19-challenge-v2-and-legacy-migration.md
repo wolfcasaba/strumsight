@@ -6,12 +6,51 @@
 - **Branch:** `<motor>/e08-r19-challenge-v2-and-legacy-migration`
 - **Előfeltétel:** `E08-R18` merge-elve (heti küldetés)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0314` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **Előre kiosztott ADR:** `ADR 0387` — a szám FOGLALT. Az ADR-t a Claude írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/features/streak/daily_challenge.dart` (63 sor) TÉNYLEGES determinisztikus generálását és a `test/features/streak/daily_challenge_test.dart`-ot — a legacy minta-generátort változatlanul be kell csomagolni. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+A friss `main @ 0fb00aaf` mérése két driftet oldott fel, scope-bővítés nélkül:
+
+1. **ADR-szám.** A brief 2026-08-18-i előírása (`ADR 0314`) időközben elavult:
+   `0314-gate-step-taxonomy.md` egy korábbi, független körben már lefoglalta
+   ezt a számot. `tools/round-slots.py reserve-adr --round E08-R19` a
+   TÉNYLEGES szabad számot adta: **`ADR 0387`**. A brief minden `ADR 0314`
+   hivatkozása erre cserélve (fejléc, §3 tilos-zóna sor, §5 címsor); az ADR
+   fájl `docs/adr/0387-challenge-v2-legacy-wrap-and-single-reward-instance.md`
+   néven íródott meg, a §5 döntéseit formalizálva.
+2. **A §6.1 küszöb-táblázat `epochDayOf`-hivatkozása pontatlan.** A
+   `epochDayOf` NEM a `daily_challenge.dart`-ban él (az csak egy `int
+   epochDay` bemenetet fogad a `DailyChallenge.forDay`-ben), hanem a
+   `StreakLogic.epochDayOf` (`lib/features/streak/streak_logic.dart:18`) —
+   helyi éjfél alapú képlet, amit minden ma élő hívó (streak/progress/learn
+   képernyők) használ. A táblázat SORTARTALMA (a küszöb inkluzív oldala)
+   helyes marad, csak a forrás-hivatkozás pontosított: a szolgáltatás a
+   hívó-adta epoch-napot fogadja bemenetként (nem maga számol
+   `DateTime.now()`-ból), byte-azonos a `StreakLogic.epochDayOf`
+   szemantikájával — [[L362]] mérten figyelmeztet egy UTC-only képzés
+   pozitív időzónás hamis küszöb-ágára, ezért a hívó felelőssége (ezen a
+   körön kívül) a helyes `epochDayOf` meghívása, a szolgáltatás csak a kapott
+   `int`-et használja. Részletek: ADR 0387 Kontextus 1. pont.
+
+**Visszakeresett előzmény** (`node tools/knowledge-rag.mjs`, szűkített
+korpusszal előbb): `lessons/L362` (helyi-midnight epoch-nap képzés —
+közvetlenül a fenti 2. pontra), `lessons/L384` (ismétlődő katalóguselem
+receiptje a példányt azonosítsa, ne csak a definíciót — az A3 idempotencia-
+kulcs tervezésébe beépítve, ADR 0387 Döntés 2), `adr/0116` (legacy adapter
+HÍVJA, nem reprodukálja a forrást — ugyanaz a minta, mint a jelen kör §5.1,
+ADR 0387 Döntés 1). A teljes korpuszos kiegészítő kérdés nem mutatott a
+fentiekkel ellentétes elfogadott döntést.
+
+**Kockázat = high, indoklás (változatlan a brief eredeti besorolásától):** a
+kör a jutalom-főkönyv idempotenciáját és a legacy pengetés-minta
+bitre-azonosságát érinti — egy hibás adapter vagy dedup-kulcs vagy a
+felhasználó megszokott napi mintáját törné el, vagy dupla jutalmat adna.
 
 ```ai-router
 schema_version = 1
@@ -67,7 +106,7 @@ aktív kihívás nem cserélődik.
 - A `lib/features/streak/daily_challenge.dart` MÓDOSÍTÁSA — becsomagoljuk, nem írjuk át.
 - A `test/features/streak/daily_challenge_test.dart` átírása — elbukása `blocked`.
 - Felület (Kör 20), hálózat.
-- `docs/adr/**` — az ADR 0314-et a Claude írja.
+- `docs/adr/**` — az ADR 0387-et a Claude írja.
 
 ## 4. Engedélyezett fájlok
 
@@ -81,7 +120,7 @@ aktív kihívás nem cserélődik.
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**` · `lib/features/streak/**` (a legacy generátor ÉRINTETLEN)
 
-## 5. Kötött architekturális döntések (ADR 0314)
+## 5. Kötött architekturális döntések (ADR 0387)
 
 ### 5.1 A legacy minta BITRE AZONOS marad
 
