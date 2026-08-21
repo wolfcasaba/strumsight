@@ -5,11 +5,20 @@ Diff: `git diff 44ed0a50...e5ebd025` (pre-flight base → implementer HEAD)
 ADR: docs/adr/0387-challenge-v2-legacy-wrap-and-single-reward-instance.md
 Reviewer: Claude Sonnet 5 (`--effort high`) · Dátum: 2026-08-21
 Engine: minimax (MiniMax-M3)
-Verdikt: **APPROVED**
+Verdikt: **CHANGES REQUIRED** (frissítve — CI a célzott gate-nél szélesebb kört mért)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+BLOCKER: 1 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+
+**Frissítés (CI-dispatch után, 2026-08-21 20:03 UTC):** a `full-gate.yml`
+CI-futás (run `32520931415`, head `5ac468f9`) a `Coverage` és a `full-gate`
+jobban is PIROSAT jelzett — a TELJES suite (5531+1 teszt) futtatta a
+`test/core/architecture_dependency_test.dart`-ot, amit sem a brief §7
+célzott gate-parancsa, sem az én saját izolált gate-futásom nem tartalmazott
+(csak `test/features/gamification/application/daily_challenge_service_test.dart`
++ `test/features/streak`-et futtattunk). Ez a mérce-rés a saját review-om
+hibája is, nem csak az implementeré — lásd F2.
 
 ## Acceptance criteria
 
@@ -44,6 +53,38 @@ engedélyezett listája (5 fájl) + a brief saját fájlja
 fájl nincs.
 
 ## Megállapítások
+
+### F2 — BLOCKER — `dart:math.Random` az application rétegben (E08-R08 szabály megszegve)
+
+- **Fájl:** `lib/features/gamification/application/daily_challenge_service.dart:495` (és `seedFor`/`_generateDefinition`/`_definitionFor` a `math.Random` importon és hívásain át, 1., 393-396., 495-496. sor)
+- **Probléma:** a `test/core/architecture_dependency_test.dart` „gamification
+  application stays framework-free … (E08-R08)" tesztje TILTJA a `"Random("`
+  literál előfordulását a `lib/features/gamification/application/**` fákban
+  (a domain réteg ugyanezt a szabályt kapja egy másik teszttől). A
+  `daily_challenge_service.dart` `math.Random(seed)`-et példányosít és
+  `.nextInt(...)`-et hív a típus- és tartalom-választáshoz — ez pontosan a
+  tiltott minta. A helyi `round-gate.sh` (a brief §7 parancsa) ezt NEM fogta
+  meg, mert csak a kör két célzott teszt-útvonalát futtatta, nem a teljes
+  suite-ot (`test/core/architecture_dependency_test.dart` egy harmadik
+  útvonalon él) — a CI (ADR 0053, teljes suite) fogta meg.
+- **Hatás:** a CI (`full-gate.yml`) PIROS mindkét jobban (`full-gate`,
+  `Coverage`) — merge blokkolva (ADR 0052).
+- **Kötelező javítás:** a típus- és tartalom-választást a kódbázisban már
+  bevett, tiszta FNV-1a hash-alapú determinisztikus mintára kell váltani
+  (lásd `daily_quest_generator.dart:172` `dailyQuestSortKey` — string
+  seed-anyagot UTF-8-ként hasheli, `dart:math` import NÉLKÜL), NEM egy
+  átnevezett/elrejtett `Random`-hívásra. A `seedFor` már számol egy FNV-1a-szerű
+  64 bites hasht — ezt kell közvetlenül indexképzésre használni (pl. `hash %
+  candidates.length`, a beat/bpm/repetitions almezőkhöz további bájtok
+  keverésével a hash állapotba), `import 'dart:math'` és minden `Random(`
+  hívás törlésével az application rétegből.
+- **Ellenőrzés:** `flutter test test/core/architecture_dependency_test.dart`
+  ZÖLD, és a kör saját teszt-szvitje (`daily_challenge_service_test.dart`)
+  VÁLTOZATLANUL zöld (a determinisztikus kimenet ugyanazokra a bemenetekre —
+  a teszt nem konkrét indexet vár, hanem típus-lefedettséget/elérhetőséget,
+  úgyhogy egy más hash-függvény nem tör tesztet, de a mérést újra kell
+  futtatni a javítás UTÁN is).
+- **Státusz:** OPEN — javító kör dispatch-elve.
 
 ### F1 — NOTE — `RewardReason.questCompleted` mint legközelebbi illeszkedés
 
@@ -98,6 +139,8 @@ ugyanezen a néven). A fenti gate-eredmények mind a PUSH UTÁNI, valódi
 
 ## Merge-döntés
 
-ADR 0052 szerint: minden önállóan futtatott gate ZÖLD, scope-audit OK, nincs
-nyitott BLOCKER/MAJOR → **merge engedélyezett**, a CI-dispatch (teljes suite +
-randomizált property + APK) zöldje után.
+ADR 0052 szerint: a CI (`full-gate.yml`, run `32520931415`) PIROS (F2
+BLOCKER) → **merge tilos**, amíg F2 nyitva van. Javító kör dispatch-elve
+(egy MiniMax javító kör, motor-eszkaláció a jelenlegi MOTOR-FELÁLLÁS alatt
+szintén `minimax`, mivel a Codex-oldal nem elérhető). A javítás után a
+gate-eket és a CI-t újra kell futtatni, és ezt a jelentést frissíteni kell.
