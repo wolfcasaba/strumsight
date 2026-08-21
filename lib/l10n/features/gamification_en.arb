@@ -324,5 +324,50 @@
       "description": {"type": "String"}
     }
   },
-  "challengeUnavailableBody": "Install chords, rhythms, or songs to unlock today's challenge."
+  "challengeUnavailableBody": "Install chords, rhythms, or songs to unlock today's challenge.",
+  "rewardInboxTitle": "Reward inbox",
+  "rewardInboxEmptyTitle": "No rewards yet",
+  "rewardInboxEmptyBody": "Your measured practice rewards will appear here.",
+  "rewardInboxSeenLabel": "Seen",
+  "rewardInboxUnseenLabel": "New",
+  "rewardInboxCountSemantics": "{count, plural, =0{No new rewards} =1{1 new reward} other{{count} new rewards}}",
+  "@rewardInboxCountSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardInboxEarnedXpLabel": "{xp, plural, =0{0 XP earned} =1{1 XP earned} other{{xp} XP earned}}",
+  "@rewardInboxEarnedXpLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "rewardInboxEntrySemantics": "{title}. {body}. Earned {xp} experience points.",
+  "@rewardInboxEntrySemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "xp": {"type": "int"},
+      "body": {"type": "String"}
+    }
+  },
+  "rewardSummaryTitle": "Session rewards",
+  "rewardSummaryConsolidatedLabel": "{count, plural, =0{No rewards this session} =1{1 reward consolidated} other{{count} rewards consolidated}}",
+  "@rewardSummaryConsolidatedLabel": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardSummaryConsolidatedSemantics": "{count, plural, =0{No rewards to celebrate this session} =1{1 reward consolidated for this session} other{{count} rewards consolidated for this session}}",
+  "@rewardSummaryConsolidatedSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardSummaryEntrySemantics": "{title}. {body}",
+  "@rewardSummaryEntrySemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "body": {"type": "String"}
+    }
+  }
 }
