@@ -117,13 +117,13 @@ final class MasteryEvaluator {
   }
 
   num _bestMetric(List<MasteryEvidence> samples) {
-    var best = num.nan;
+    num? best;
     for (final sample in samples) {
       final value = sample.metricValue;
       if (!value.isFinite) continue;
-      if (best.isNaN || value > best) best = value;
+      if (best == null || value > best) best = value;
     }
-    return best;
+    return best ?? double.nan;
   }
 
   /// Timestamp of completion: the observed-at of the `minEvidenceSessions`-th

@@ -36,12 +36,12 @@ enum MasteryDifficulty {
 /// Inclusive BPM bounds for a milestone's tempo scope. Evidence whose tempo
 /// falls outside `[minBpm, maxBpm]` is not comparable (brief §6 A6).
 final class MasteryTempoRange {
-  factory MasteryTempoRange({required num minBpm, required num maxBpm})
-    : _ = _validateRange(minBpm, maxBpm),
-      _minBpm = minBpm,
-      _maxBpm = maxBpm;
+  factory MasteryTempoRange({required num minBpm, required num maxBpm}) {
+    _validateRange(minBpm, maxBpm);
+    return MasteryTempoRange._(minBpm, maxBpm);
+  }
 
-  const MasteryTempoRange._raw(this._minBpm, this._maxBpm);
+  const MasteryTempoRange._(this._minBpm, this._maxBpm);
 
   final num _minBpm;
   final num _maxBpm;
@@ -56,7 +56,7 @@ final class MasteryTempoRange {
   }
 }
 
-MasteryTempoRange _validateRange(num minBpm, num maxBpm) {
+void _validateRange(num minBpm, num maxBpm) {
   if (!minBpm.isFinite || !maxBpm.isFinite) {
     throw ArgumentError.value(
       '$minBpm..$maxBpm',
@@ -78,7 +78,6 @@ MasteryTempoRange _validateRange(num minBpm, num maxBpm) {
       'minBpm must not exceed maxBpm',
     );
   }
-  return MasteryTempoRange._raw(minBpm, maxBpm);
 }
 
 /// Immutable definition of a mastery milestone. Mastery progress is evidence-
