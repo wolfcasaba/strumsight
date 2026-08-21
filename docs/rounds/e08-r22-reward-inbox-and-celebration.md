@@ -267,4 +267,68 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Round:** `E08-R22` · **Engine:** MiniMax M3 (autonomous) · **Branch:** `minimax/e08-r22-reward-inbox-and-celebration` · **Commit tip:** a §8 szerinti sorrendben, fájlonkénti commitok (4 db production-commit + 1 teszt-commit + 1 gate-fix-commit). A gate utolsó futása: `tools/round-gate.sh test/features/gamification/application/celebration_coordinator_test.dart` — minden lépés zöld (format / analyze / test / architecture / secrets / l10n).
+
+### §6 / §6.1 cellák → mérő tesztek (L09 — csak LEFUTTATOTT bizonyíték)
+
+| Cell | Bizonyíték (test név + fájl) | Parancs |
+|---|---|---|
+| **A1** megszakítás-mátrix | `A1 — active session: no celebration, ever (§5.1)` × 3 + `A1 — szigorú megszakítás-mátrix (valódi-sértés próba)` | `flutter test test/features/gamification/application/celebration_coordinator_test.dart` (lásd lent) |
+| **A2** összevonás | `A2 — session end: multiple rewards consolidate into ONE summary` | ua. |
+| **A3** sorrend-cella | `A3 — reward must already be in the ledger before it reaches the coordinator` × 2 | ua. |
+| **A4** nincs lejárat/begyűjtés | `A4 — no expiry, no claim field on RewardInboxItem (§5.2)` (a `RewardInboxItem.toJson()` kulcsai között nincs `expiresAt`/`claimedAt`/`claimState`) | ua. |
+| **A5** háttér/bezárt folyamat | `A5 — background / closed-app rewards still surface in the inbox` | ua. |
+| **A6** determinisztikus prioritás | `A6 — deterministic priority order (§5.3)` × 2 (mindkét beszúrási irányból azonos eredmény) | ua. |
+| **A7** reduced motion | `A7 — reduced motion: information preserved, animation dropped (§5.4)` (a `CelebrationSummary.events` minden mezőt tartalmaz, nincs csonkítás) | ua. |
+| **A8** postaláda tartós | `A8 — inbox survives app restart via JSON round-trip` × 2 | ua. |
+| §6.1 **alatt** (window-1) | `alatt (window - 1): the two events are CONSOLIDATED into one summary` | ua. |
+| §6.1 **rajta** (pontosan window) | `rajta (exactly window): the boundary belongs to ÖSSZEVONÁS (inclusive)` | ua. |
+| §6.1 **fölött** (window+1) | `fölött (window + 1): the two events become SEPARATE summaries` | ua. |
+| §6.1 **fölött + gyakorlás indult** | `fölött + közben gyakorlás indult: the second event goes to the INBOX` | ua. |
+
+**Végső futás:** `tools/round-gate.sh test/features/gamification/application/celebration_coordinator_test.dart` (előtérben, csonkítatlanul) → `MINDEN GATE ZÖLD` — 18/18 teszt zöld (`All tests passed!`), analyze 0 issues, l10n parity OK (en → hu, 1572 message).
+
+### §6.1 valódi-sértés próba (KÖTELEZŐ) — LEFUTTATVA
+
+A brief §6.1 előírja, hogy a §10-ben dokumentáljam egy „engedd meg a felugrót aktív gyakorlás közben” típusú szándékos regresszió tényleges, gépi bizonyítékát. A próba menete:
+
+1. **Mentés** az eredeti koordinátorról: `cp lib/.../celebration_coordinator.dart /tmp/cc-original.dart`.
+2. **Mutáció** (sed-del): `if (isActiveSession)` → `if (false)` a 215. soron. Ez a `CelebrationCoordinator.apply` aktív-session-specifikus ágát deaktiválja — az aktív gyakorlás közben bejövő jutalom a továbbiakban az inaktív ágra esik, és batch-be gyűlik, ahonnan a drain summary-t csinál.
+3. **Gate futtatás**: a `format` lépés zöld maradt, az **`analyze` lépés PIROS (dead_code warning, `celebration_coordinator.dart:215:16`)** — a gépi elemző maga jelzi, hogy az aktív-session-ág elérhetetlenné vált. Ezzel a lépéssel a gate már itt megáll, de a `flutter test` egyedüli futtatása (ami a §6.1 szövege szerint a „futtasd a gate-et” mércéje) az alábbi A1-cellákat váltotta PIROSRA:
+   - `A1: active session routes the reward to the inbox, not a summary` — `Expected: an object with length of <1> · Actual: []`
+   - `A1: ten sequential events during an active session all stay in the inbox` — `Expected: an object with length of <10> · Actual: []`
+   - `A1: switching from active → inactive during a session starts a fresh batch` — `Expected: an object with length of <1> · Actual: []`
+   - `A1 — szigorú megszakítás-mátrix (valódi-sértés próba) A1 real-violation: strict contract — active session produces zero summaries` — `Expected: empty · Actual: [Instance of 'CelebrationSummary']`
+   - 3 kaszkád A3/A8/§6.1 fölött+session failure (mert az aktív-session-ág a megszakítás nélküli `pendingBatch` zárást is elbukta).
+4. **Visszaállítás**: `cp /tmp/cc-original.dart lib/.../celebration_coordinator.dart` → `if (isActiveSession)` ismét a helyén (215. sor).
+5. **Gate újrafuttatás**: `MINDEN GATE ZÖLD`, 18/18 teszt zöld.
+
+A lépéssor a fenti táblázat `A1 megszakítás-mátrix` sorában van dokumentálva — a mutáció NEM maradt a fán (`git status` tiszta, az utolsó commit `63c38abb E08-R22: gate fix — celebration_coordinator closes pending batch when session becomes active; l10n segment regen`).
+
+### Implementált scope (a §4 engedélyezett listán)
+
+- `lib/features/gamification/domain/profile/reward_inbox_item.dart` — domain: `RewardKind`, `RewardEvent`, `RewardInboxItem` (nincs expiry/claim, `seen` csak megjelenítési állapot), `rewardPriorityIndex`, JSON round-trip.
+- `lib/features/gamification/application/celebration_coordinator.dart` — application: `CelebrationCoordinator` (caller-fed `isActiveSession`, inkluzív `batchWindow`), `CelebrationState` (immutable, `copyWith`), `CelebrationSummary` (priority-sorted), `RoutedInboxEntry`, `CelebrationSideEffects`, `CelebrationRouting`.
+- `lib/features/gamification/presentation/widgets/reward_summary_sheet.dart` — `RewardSummarySheet` + `RewardSummaryFeedback` (caller-fed `hapticsEnabled`/`soundEnabled`); reduced-motion esetén `AnimatedSize(duration: Duration.zero)`, tartalom nem csonkolt.
+- `lib/features/gamification/presentation/screens/reward_inbox_screen.dart` — postaláda lista; `seen` flag állítása koppintásra, NINCS „Begyűjtés” gomb, NINCS lejárat.
+- `lib/features/gamification/public.dart` — 3 új export-sor (`celebration_coordinator.dart`, `reward_inbox_item.dart`, `reward_summary_sheet.dart`, `reward_inbox_screen.dart`).
+- `lib/l10n/app_en.arb` + `lib/l10n/app_hu.arb` — 12 új kulcs (`rewardInboxTitle`, `rewardInboxEmptyTitle/Body`, `rewardInboxSeen/UnseenLabel`, `rewardInboxCountSemantics`, `rewardInboxEarnedXpLabel`, `rewardInboxEntrySemantics`, `rewardSummaryTitle`, `rewardSummaryConsolidatedLabel/Semantics`, `rewardSummaryEntrySemantics`) + magyar párjaik, placeholder-defs a parity-check-hez.
+- `test/features/gamification/application/celebration_coordinator_test.dart` — 18 teszt, minden §6/§6.1 cellát fed.
+
+### Szándékosan NEM tettem (a brief „NINCS benne” listája + a §0.0 rögzített brief-rés)
+
+- Nem nyúltam a `RewardLedgerRepository.appendIfAbsent`-hez — az ADR 0389 §1 / §0.0 rögzíti, hogy a koordinátor nem ír a főkönyvbe.
+- Nem hoztam létre `Begyűjtés` gombot vagy lejárat-mezőt (ADR 0290 §2 tiltja).
+- Nem implementáltam settings providert a haptikához/handhez — caller-fed bool a §0.0 rögzítés szerint (Kör 27-é a wiring).
+- Nem módosítottam `docs/adr/0389-…md` — az ADR TILOS ZÓNA, a §0.0 szerinti szöveggel készült.
+- Nem bővítettem az `allowed_paths` listát — minden új fájl azon belül van.
+
+### Reviewer-prioritás
+
+1. A `CelebrationCoordinator.apply` aktív-session-ág: itt érvényesül az A1 megszakítás-mátrix, és itt zárja be az új implementation a korábbi inaktív batch-et (a §6.1 „fölött + közben gyakorlás indult” cella kiszolgálója).
+2. A `rewardPriorityIndex` + `_priorityCompare` — az A6 prioritás-mátrix kizárólagos forrása.
+3. A `RewardInboxItem` API surface — A4 lejárat/begyűjtés-mentesség; a `toJson` kulcsait lefedi az A4 teszt.
+4. A `reward_summary_sheet.dart` reduced-motion ága — A7 statikus render.
+
+
 ## 11. Review — a Claude tölti ki
