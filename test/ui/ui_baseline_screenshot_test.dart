@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/live/engine/mock_strum_engine.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
@@ -37,7 +38,14 @@ const _productionFontAssets = <String, List<String>>{
     'assets/fonts/Poppins-ExtraBold.ttf',
   ],
   'Montserrat': <String>['assets/fonts/Montserrat.ttf'],
+  'MaterialIcons': <String>['fonts/MaterialIcons-Regular.otf'],
 };
+
+const _materialRobotoFontFileNames = <String>[
+  'Roboto-Regular.ttf',
+  'Roboto-Medium.ttf',
+  'Roboto-Bold.ttf',
+];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +91,44 @@ void main() {
   );
 
   testWidgets(
+    'direct capture wrappers keep the production font, theme, and banner contract',
+    (tester) async {
+      expect(_productionFontAssets['MaterialIcons'], const <String>[
+        'fonts/MaterialIcons-Regular.otf',
+      ]);
+
+      await tester.pumpWidget(_directCaptureApp(home: const SizedBox()));
+
+      final captureApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+      final productionTheme = AppTheme.dark();
+      expect(captureApp.debugShowCheckedModeBanner, isFalse);
+      expect(productionTheme.textTheme.bodyLarge?.fontFamily, 'Roboto');
+      expect(productionTheme.textTheme.headlineLarge?.fontFamily, 'Montserrat');
+      expect(
+        captureApp.theme?.textTheme.bodyLarge?.fontFamily,
+        productionTheme.textTheme.bodyLarge?.fontFamily,
+      );
+      expect(
+        captureApp.theme?.textTheme.headlineLarge?.fontFamily,
+        productionTheme.textTheme.headlineLarge?.fontFamily,
+      );
+
+      expect(_materialRobotoFontFileNames, const <String>[
+        'Roboto-Regular.ttf',
+        'Roboto-Medium.ttf',
+        'Roboto-Bold.ttf',
+      ]);
+      for (final fontFile in _materialRobotoFontFiles()) {
+        expect(
+          fontFile.existsSync(),
+          isTrue,
+          reason: '${fontFile.path} must exist in the active Flutter SDK',
+        );
+      }
+    },
+  );
+
+  testWidgets(
     'captures the seven fixed production-widget baseline states',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -93,7 +139,7 @@ void main() {
       final tunerEngine = FakeTunerEngine();
       addTearDown(strumEngine.dispose);
       addTearDown(tunerEngine.dispose);
-      await _loadProductionFonts();
+      await tester.runAsync(_loadProductionFonts);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
@@ -133,11 +179,7 @@ void main() {
             ...preferenceOverrides(),
             tunerEngineProvider.overrideWithValue(tunerEngine),
           ],
-          child: const MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: TunerScreen(),
-          ),
+          child: _directCaptureApp(home: const TunerScreen()),
         ),
       );
       await tester.pumpAndSettle();
@@ -152,11 +194,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: preferenceOverrides(),
-          child: const MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: OnboardingScreen(),
-          ),
+          child: _directCaptureApp(home: const OnboardingScreen()),
         ),
       );
       await tester.pumpAndSettle();
@@ -169,6 +207,14 @@ void main() {
 Future<void> _capture(WidgetTester tester, String path) =>
     expectLater(find.byType(MaterialApp), matchesGoldenFile('../../$path'));
 
+Widget _directCaptureApp({required Widget home}) => MaterialApp(
+  debugShowCheckedModeBanner: false,
+  theme: AppTheme.dark(),
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: home,
+);
+
 Future<void> _loadProductionFonts() async {
   for (final entry in _productionFontAssets.entries) {
     final loader = FontLoader(entry.key);
@@ -177,4 +223,37 @@ Future<void> _loadProductionFonts() async {
     }
     await loader.load();
   }
+
+  final robotoLoader = FontLoader('Roboto');
+  for (final fontFile in _materialRobotoFontFiles()) {
+    robotoLoader.addFont(fontFile.readAsBytes().then(ByteData.sublistView));
+  }
+  await robotoLoader.load();
+}
+
+List<File> _materialRobotoFontFiles() {
+  final materialFontsDirectory = Directory(
+    '${_activeFlutterSdkRoot().path}/bin/cache/artifacts/material_fonts',
+  );
+  return _materialRobotoFontFileNames
+      .map((fileName) => File('${materialFontsDirectory.path}/$fileName'))
+      .toList(growable: false);
+}
+
+Directory _activeFlutterSdkRoot() {
+  final resolvedExecutable = File(
+    Platform.resolvedExecutable,
+  ).resolveSymbolicLinksSync();
+  final separator = Platform.pathSeparator;
+  final flutterCacheMarker =
+      '$separator'
+      'bin$separator'
+      'cache$separator';
+  final markerIndex = resolvedExecutable.indexOf(flutterCacheMarker);
+  if (markerIndex == -1) {
+    throw StateError(
+      'Cannot derive Flutter SDK root from $resolvedExecutable.',
+    );
+  }
+  return Directory(resolvedExecutable.substring(0, markerIndex));
 }
