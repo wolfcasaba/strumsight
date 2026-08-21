@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔧 [HEAL E13-R04/H3] Typography compatibility scope helyreállítva — PR #388 (2026-08-21, L384)
+## 🔧 [HEAL E13-R04/H3] Typography compatibility scope helyreállítva — PR #388 (2026-08-21, L387)
 
 Az E13-R04 pre-flight ADR 0383 §D3-a az `SsTypography` tényleges
 `ThemeData`-extension regisztrációját írja elő. A meglévő
@@ -21,6 +21,27 @@ méri az új extensiont; más design-system tesztút nem nyílt meg. A regresszi
 [#388](https://github.com/wolfcasaba/strumsight/pull/388). Router CI success
 az exact végső SHA-n és squash-merge a `fixed` jelzés előfeltétele. A következő
 Chapter 13 kör változatlanul **E13-R04**, a meglévő product-ág folytatásával.
+
+## ✅ E08-R16 KÉSZ — Quest domain, objective és lifecycle — PR #387 (2026-08-21, L384–L385)
+
+A framework- és IO-mentes quest domain zárt, típusos objective-vokabulárt,
+verziózott napi/heti schedule-t, ötállapotú életciklust és automatikus,
+claim nélküli reward receiptet ad. Az aktivitási felső határ exkluzív; expiry
+megőrzi a valós progress/evidence adatot. Ugyanazon quest-instance ismételt
+completionje változatlan receiptet ad, más generation day vagy cadence pedig
+külön instance identityt kap.
+
+Az első független Sol review két MAJOR leletet talált: a katalógus-ID alapú
+receipt a következő napi példány jutalmát deduplikálta volna, a persisted
+completed rekord pedig megkerülhette a receipt- és expiry-invariánst. Egy
+Terra javító kör után mindkettőt regressziós cella zárja; correctness
+**APPROVED**, security **PASS**. Exact `e4ececf4`: Full Gate
+[32454251927](https://github.com/wolfcasaba/strumsight/actions/runs/32454251927)
+és Router CI
+[32454084052](https://github.com/wolfcasaba/strumsight/actions/runs/32454084052)
+success. PR [#387](https://github.com/wolfcasaba/strumsight/pull/387), squash
+`1e7ed2a3`, ADR [0382](docs/adr/0382-quest-objective-and-lifecycle-contract.md).
+Pontos következő E08 termékkör: **E08-R17 — Napi quest generátor**.
 
 ## ✅ E13-R03 KÉSZ — Semantic colors and three themes — PR #386 (2026-08-21, L381–L383)
 
