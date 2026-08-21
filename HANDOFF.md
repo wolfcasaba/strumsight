@@ -1,5 +1,27 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R13 KÉSZ — Achievement domain és lokalizált katalógus — PR #376, squash `f9d5bbc8` (2026-08-21, L372–L373)
+
+A gamification feature 22 stabil ID-jú, EN/HU lokalizált achievementből álló
+verziózott katalógust kapott. A domain típusosan kezeli a count, threshold,
+distinct, sequence és compound feltételeket; runtime validáció őrzi az
+egyedi ID-kat, a tier-ciklus mentességét, a teljes lokalizációt, a korábbi
+verzió ID-folytonosságát és a véges, monoton progresszértékeket. A
+deprekáció megőrzi a már kiosztott achievement identitását.
+
+Implementer Terra (`gpt-5.6-terra`), orchestrátor/reviewer Sol
+(`gpt-5.6-sol`). Az első független review két MAJOR leletet talált: azonos
+elemszám mellett eltűnhetett egy korábbi ID, továbbá `NaN`/végtelen küszöb és
+progressz átjuthatott. Egy Terra javító kör után correctness **APPROVED** és
+security **PASS**; a cycle-, retention- és finite-őr eldobható mutációi
+célzottan pirosak, restore után 20/20 teszt zöld. Exact `679f030f`: Full Gate
+[32433372231](https://github.com/wolfcasaba/strumsight/actions/runs/32433372231)
+és Router CI
+[32433323271](https://github.com/wolfcasaba/strumsight/actions/runs/32433323271)
+success. Döntés: [ADR 0374](docs/adr/0374-achievement-domain-and-catalog-contract.md).
+Következő termékkör: **E08-R14 — Achievement evaluator és progress
+projection**; a másik sloton E13-R01 fut.
+
 ## ✅ [HEAL E13-R01/H3] KÉSZ — a hét screenshot és corpus-validátor exact scope-ja helyreállt — PR #377, squash `c505b26f` (2026-08-21, L371)
 
 A Chapter 13 Kör 1 név szerint hét compact-portrait referencia screenshotot
@@ -3488,6 +3510,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-21):** `main` @ `f9d5bbc8` — E08-R13 Achievement
+domain és katalógus, PR [#376](https://github.com/wolfcasaba/strumsight/pull/376),
+squash-merge. Implementer Terra (`gpt-5.6-terra`), reviewer Sol
+(`gpt-5.6-sol`). Exact `679f030f`: Full Gate 32433372231 + Router CI
+32433323271 success; correctness APPROVED, security PASS. Következő
+termékkör: **E08-R14**; E13-R01 a másik sloton fut.
+
 **Aktuális állapot (2026-08-20):** `main` @ `6a8d0b72` — E08-R11 Qualified
 day, planned rest és recovery policy, PR
 [#363](https://github.com/wolfcasaba/strumsight/pull/363), squash-merge.
@@ -3985,6 +4014,15 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R13 — Achievement domain és katalógus** (PR
+[#376](https://github.com/wolfcasaba/strumsight/pull/376), squash `f9d5bbc8`,
+[ADR 0374](docs/adr/0374-achievement-domain-and-catalog-contract.md)). 22
+stabil ID-jú lokalizált achievement, típusos feltétel-fa, verzió-/deprekáció-
+és progressz-invariánsok. Két MAJOR lelet egy Terra javító körben zárva;
+végső correctness APPROVED és security PASS. Exact `679f030f`: Full Gate
+32433372231 + Router CI 32433323271 success. Részletesen:
+`docs/handoff-archive.md`.
 
 **E99-R20 — GOV-14 kör-landolás automatizálás** (PR
 [#361](https://github.com/wolfcasaba/strumsight/pull/361), squash `5ad15b5f`,
@@ -4708,13 +4746,12 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A self-heal által feloldott következő kör: E13-R01** (UI baseline inventory
-és screenshot corpus, SDD Chapter 13 —
-`docs/rounds/e13-r01-ui-baseline-inventory.md`, engine a queue-ban `terra`).
-Friss sessionben indul a merge-elt scope-revízióból; ez a self-heal nem végzi
-el a kör tartalmi munkáját. A másik sloton futó E08-R13-at ez a javítás nem
-érinti; annak következő termékköre E08-R14. A governance-sáv következő sora,
-**E99-R23**, jelenleg `hold`.
+**Pontos következő termékkör: E08-R14** (Achievement evaluator és progress
+projection, SDD Chapter 9 —
+`docs/rounds/e08-r14-achievement-evaluator-and-projection.md`, engine a
+queue-ban `terra`). Az E13-R01 UI baseline inventory és screenshot corpus a
+másik sloton már fut; ezt a session nem érinti. A governance-sáv következő
+sora, **E99-R23**, jelenleg `hold`.
 
 **Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
 a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)
