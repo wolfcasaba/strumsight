@@ -259,4 +259,37 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosított fájlok
+
+- `lib/features/gamification/application/weekly_quest_generator.dart`: caller-fed,
+  immutable heti snapshot/candidate contract; UTF-8/FNV-1a ordering; availability
+  scaling; 5 napos active-days cap; monoton progress; measurement fail-closed
+  szűrés; nyelvfüggetlen rollover facts.
+- `lib/features/gamification/public.dart`: a heti generator public exportja.
+- `test/features/gamification/application/weekly_quest_generator_test.dart`:
+  A1–A10 coverage, beleértve a 4/5/6 cap-hármast, 6×180/360=3 skálázást,
+  cross-wiringokat, pinned seedet, immutabilityt és a valódi-sértés őrt.
+
+### Futtatott parancsok és eredmények
+
+- `git status --short` → tiszta baseline.
+- `dart format lib/features/gamification/application/weekly_quest_generator.dart lib/features/gamification/public.dart test/features/gamification/application/weekly_quest_generator_test.dart`
+  → 3 fájl, 2 formázott változtatással; a későbbi gate-format 0 változást talált.
+- `dart format lib/features/gamification/application/weekly_quest_generator.dart test/features/gamification/application/weekly_quest_generator_test.dart`
+  → a teljes cross-wiring mátrix és unique-ID fail-closed ellenőrzése után 2
+  fájl, 1 formázott változtatással; az utána futtatott gate-format ismét zöld.
+- `node -e "…FNV-1a…"` → a `20686|profile_alpha|7|weekly_active` pinned key
+  értéke `-1830493033626131184`.
+- `tools/round-gate.sh test/features/gamification/application/weekly_quest_generator_test.dart`
+  (restored implementation) → format zöld, analyze zöld, célzott teszt 11/11
+  zöld, architecture zöld; a gate a secrets lépést is elindította.
+- Valódi-sértés: az active-days cap ideiglenesen `7`, majd ugyanaz a
+  `tools/round-gate.sh …` → A1 PIROS: a 6 napos bemenetnél `Expected: <5>`,
+  `Actual: <6>`; a cap visszaállítva `5`-re.
+
+### Eltérés és nem futtatott ellenőrzés
+
+- Nincs scope-eltérés. CI-dispatch, PR és merge nem futott: ezek a Claude
+  orchestrátor feladatai.
+
 ## 11. Review — a Claude tölti ki
