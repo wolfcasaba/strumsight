@@ -1,16 +1,47 @@
 # E13-R04 — Tipográfia és text-scale resilience
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 903e7a7d`)
+- **Státusz:** IN PROGRESS (pre-flight: 2026-08-21, `main @ 0b18afa0`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 4
 - **Kör-azonosító:** `E13-R04`
-- **Branch:** `<motor>/e13-r04-typography-and-text-scale`
+- **Branch:** `terra/e13-r04-typography-and-text-scale`
 - **Előfeltétel:** `E13-R03` merge-elve (szemantikai színek)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a Ch13 §9.4 scale-je adott.
+- **Előre kiosztott ADR:** `0383` — a foglaló adta az E13-R04-nek.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd a Poppins és Montserrat
 > **tényleges** asset-elérhetőségét (`pubspec.yaml` fonts szekció), mert a §5.1
 > szerep-kiosztás erre épül. Eltérésnél §0.0 revízió.
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+- A foglaló (`tools/round-slots.py reserve-adr --round E13-R04`) a `0383`
+  számot adta; a kör döntéseit az
+  [`ADR 0383`](../adr/0383-typography-and-text-scale-contract.md) rögzíti.
+- A `pubspec.yaml:75-90` és a hat tényleges asset igazolja a Poppins
+  400/500/600/700/800, valamint a Montserrat család elérhetőségét. A brief
+  szerep-kiosztása emiatt változatlan.
+- A tényleges theme-hívási lánc: `SsDarkTheme`/`SsLightTheme` először a
+  `SsThemeExtensions.legacyThemeForBrightness` eredményét olvassa, majd a
+  meglévő extensionöket megőrzi. Ezért a tipográfia a már engedélyezett
+  `ss_theme_extensions.dart` fájlban, a legacy adapter eredményéhez adva
+  mindhárom design-system témába beköthető; nincs szükség fájllista-tágításra.
+- Nincs ma `ss_typography.dart`, chord-hero komponens vagy typography-teszt;
+  az új API ezért nem migrál lezárt feature-viselkedést. A kör nem kezel
+  állapotgépet vagy lifecycle-erőforrást, így a státusz-input és
+  erőforrás-tulajdonlási pre-flight szabály nem alkalmazandó.
+- Kötelező visszakeresés: **nincs releváns előzmény** közvetlen, korábbi
+  tipográfiai döntésként a szűkített `lessons,halts,adr`, majd
+  `lessons,halts`, végül a teljes korpusz keresése alapján. A releváns
+  módszertani találat
+  [`lessons/L382`](../LESSONS.md): a hozzáférhetőségi contractot valódi
+  rontással kell falszifikálni. Az E13-R04 ezért megtartja a fix magasságú
+  komponens kötelező piros mutációját.
+
+> **Kockázat = high, indoklás:** a Stage Mode legfontosabb zenei jelének
+> olvashatósága és a 200%-os accessibility text scale termékhatár; egy
+> látszólag zöld, de clippinget vagy ellipszist engedő contract közvetlenül
+> kizárná a nagy szöveget igénylő felhasználót. A magas kockázat ezért
+> accessibility/correctness okú, nem a router path-fragmentjeiből ered.
 
 ```ai-router
 schema_version = 1
@@ -119,6 +150,19 @@ sajátot.
 
 A Ch13 §9.4 mért szabálya: a magyar címek hosszabbak. A fixture-ök ezt
 tükrözik.
+
+### 5.7 Kötött integrációs szerződés
+
+- Az `SsTypography` immutable `ThemeExtension`, a Chapter 13 §9.4 mind a
+  tizenegy tokenjével.
+- A design-system Dark Studio, Warm Light és High Contrast `ThemeData`
+  eredményében a tipográfia ténylegesen lekérhető extensionként; puszta
+  statikus style-katalógus nem elegendő.
+- A metrika értékét és egységét a production API nem törő szóközzel kapcsolja
+  össze; két, egymástól független `Text` widget nem elfogadható.
+- A chord hero egyetlen teljes címkét renderel, a platform text scale-t
+  megtartja, és csak helyhiánynál skáláz le. `ellipsis`, karakterlevágás vagy
+  a text scale felülírása nem elfogadható.
 
 ## 6. Acceptance criteria
 
