@@ -1,19 +1,18 @@
 # E13-R02 — Független review
 
 Brief: `docs/rounds/e13-r02-design-system-foundation.md`
-Diff: `e33bff50..2f3b51d2`
+Diff: `e33bff50..2bf8d6f2`
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-21
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 1 · NOTE: 1
+Nyitott BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-A Terra implementáció scope-ja tiszta és a független kör-gate 8/8 zöld, de
-két explicit szerződés tartalmilag hiányos. A kompatibilitási réteg az előírt
-három legacy API közül csak az `AppColors`/`AppPalette` párost olvassa, az
-`AppTheme`-et nem. A Component Catalog route factory kapui jók, de a barrelből
-publikusan elérhető screen közvetlen konstruktorral megkerüli őket.
+A Terra javító commit (`2bf8d6f2`) lezárta mindhárom leletet. A
+kompatibilitási réteg közvetlenül delegál az `AppTheme.dark/light` API-ra, a
+catalog screen library-private, a publikus API-k dokumentáltak. A friss
+reviewer-klón kör-gate-je ismét 8/8 zöld.
 
 ## Acceptance criteria
 
@@ -21,9 +20,9 @@ publikusan elérhető screen közvetlen konstruktorral megkerüli őket.
 |---|---|---|
 | A1 | ✅ | `public.dart` + a valós `lib/` fát bejáró guard; belső-import parser próba zöld |
 | A2 | ✅ | feature-import valódi-sértés: `ss_spacing.dart -> features/live/public.dart` két tesztet pirosra vitt |
-| A3 | ⚠️ | legacy fájl érintetlen, de teljes suite csak CI-ben lesz bizonyítva |
+| A3 | ✅ | legacy fájl érintetlen; a lokális teljes analyze zöld, a teljes suite CI-kapu marad |
 | A4 | ✅ | másolt `Color(0xFFD98A46)` reviewer-mutáció pirosra vitte a foundation tesztet |
-| A5 | ❌ | F2: a publikus screen közvetlenül renderel kikapcsolt kapuk mellett |
+| A5 | ✅ | a screen private; debug-kapu mutációja piros, publikus konstruktor-próba nem fordul |
 | A6 | ✅ | scope-audit: 13 changed, 0 generated/ignored, nincs theme/feature/app diff |
 | A7 | ✅ | `migration-status.md` három fázisra megnevezi a kanonikus forrást |
 | A8 | ✅ | a kipinnelt breakpoint/spacing/radius/motion/semantics cella zöld |
@@ -46,7 +45,9 @@ docs/rounds/e13-r02-design-system-foundation.md --base e33bff50...` →
 - **Kötelező javítás:** adj dokumentált, tesztelt adapter API-t, amely
   brightness alapján közvetlenül `AppTheme.light()`/`AppTheme.dark()`
   eredményét adja; ne másolja a ThemeData konfigurációját.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`2bf8d6f2`) — `legacyThemeForBrightness` közvetlenül
+  `AppTheme.dark()`/`AppTheme.light()` eredményét adja; a reviewer tesztje
+  mindkét brightness értéket és a forrást is ellenőrizte.
 
 ### F2 — MAJOR — A publikus catalog screen megkerüli a két kaput
 
@@ -60,7 +61,10 @@ docs/rounds/e13-r02-design-system-foundation.md --base e33bff50...` →
 - **Kötelező javítás:** a screen legyen library-private; csak a kapuzott route
   factory legyen publikus. A dark/light smoke a sikeresen kapuzott route-on
   keresztül pumpáljon, ne közvetlen screen konstruktorral.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`2bf8d6f2`) — `_ComponentCatalogScreen` library-private.
+  A reviewer barrel-próbája `ComponentCatalogScreen` használatára
+  `Method not found` fordítási hibát adott; a debug-kapu ideiglenes kivétele
+  pirosra vitte a `(true,false)` cellát.
 
 ### F3 — MINOR — Az új publikus szerződések dokumentálatlanok
 
@@ -70,7 +74,8 @@ docs/rounds/e13-r02-design-system-foundation.md --base e33bff50...` →
   teszi a publikus contract dokumentálását.
 - **Kötelező javítás:** rövid, tesztben igazolt doc-comment a publikus
   típusokra és belépőkre; ne állíts többet a teszteknél.
-- **Státusz:** OPEN.
+- **Státusz:** FIXED (`2bf8d6f2`) — minden exportált foundation típus, a
+  theme extension és a catalog factory teszttel igazolt doc-commentet kapott.
 
 ### N1 — NOTE — A wrapper `gate_shape=VIOLATION` jelzése álpozitív
 
@@ -80,17 +85,17 @@ review friss klónban újrafuttatta az egész artefaktumot.
 
 ## Gate-bizonyíték
 
-`/tmp/review-e13-r02`, commit `2f3b51d2`:
+`/tmp/review-e13-r02-fix1`, commit `2bf8d6f2`:
 
 - format: zöld, 1748 fájl / 0 változás;
 - analyze: zöld, 0 issue;
 - foundations: 3/3 zöld;
-- component catalog: 7/7 zöld;
+- component catalog: 8/8 zöld;
 - architecture test: 28/28 zöld;
 - architecture/secrets/l10n: zöld;
 - összegzés: **8/8 gate zöld**.
 
 ## Merge-döntés
 
-Merge tilos F1 és F2 lezárásáig. A javító commit után friss izolált klónban
-teljes gate, leletenkénti re-review és high-risk security re-review kötelező.
+A correctness review **APPROVED**. Merge csak az exact-SHA Full Gate/Router CI
+és a friss-main landolási feltételek zöld eredménye után engedett.

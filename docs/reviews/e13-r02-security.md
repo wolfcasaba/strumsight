@@ -1,20 +1,19 @@
 # E13-R02 — Security review
 
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-21
-Kockázat: `high` · Verdikt: **FAIL**
+Kockázat: `high` · Verdikt: **PASS**
 
 ## Összegzés
 
-CRITICAL: 0 · BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+Nyitott CRITICAL: 0 · BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
 ### S1 — MAJOR — Development-only catalog kapu megkerülhető
 
-A `ComponentCatalogScreen` publikus konstruktorát a design-system barrel
-exportálja. A reviewer reprodukálta, hogy `(catalogEnabled: false,
-debugBuild: false)` mellett a factory helyesen `null`, de a screen közvetlenül
-production route-ba tehető és renderel. Javítás: library-private screen,
-kizárólag publikus, kétkapus route factory; a tesztek is ezen át jussanak a
-widgethez.
+A `2bf8d6f2` javítás a screent library-private
+`_ComponentCatalogScreen`-né tette; csak a kétkapus route factory publikus.
+A re-review barrel-próbája a korábbi közvetlen konstrukcióra fordítási hibát
+adott, a debug-kapu ideiglenes kivétele pedig a `(true,false)` tesztcellát
+pirosra vitte. **Státusz: FIXED.**
 
 ### N1 — NOTE — Nincs új adat-, hálózati vagy platform-hozzáférés
 
@@ -25,4 +24,4 @@ talált.
 
 ## Döntés
 
-Security PASS csak S1 javítása és a kapumátrix friss reviewer-próbája után.
+Security review: **PASS**. Nincs nyitott CRITICAL/BLOCKER/MAJOR/MINOR.
