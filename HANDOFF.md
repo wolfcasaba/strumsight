@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ [HEAL E13-R01/H3] KÉSZ — a hét screenshot és corpus-validátor exact scope-ja helyreállt (2026-08-21, L371)
+## ✅ [HEAL E13-R01/H3] KÉSZ — a hét screenshot és corpus-validátor exact scope-ja helyreállt — PR #377, squash `c505b26f` (2026-08-21, L371)
 
 A Chapter 13 Kör 1 név szerint hét compact-portrait referencia screenshotot
 (Live, Tuner, Analyze, Learn, Library, Settings, onboarding) és azok
@@ -18,6 +18,15 @@ is megnyitja. A `tools/tests/test_e13_r01_screenshot_scope.py` a javítás előt
 4/5 piros, utána 5/5 zöld, és bizonyítja, hogy egy nyolcadik testvérkép továbbra
 is scope-sértés. Következő érintett SDD-kör: **E13-R01 — UI baseline inventory
 és screenshot corpus**, friss sessionben, a javított briefből.
+
+Branch: `heal/E13-R01-H3-1`; javítási commit: `27e5fc51`; PR:
+[#377](https://github.com/wolfcasaba/strumsight/pull/377). A célzott őr
+5/5 zöld, strict és open/base brief-lint leletmentes, a teljes tooling-suite
+694 passed / 1 skipped / 605 subtest. Izolált klónban a broad screenshot-
+directory grant 2/5 cellát pirosra vitt, restore után 5/5 zöld és tiszta fa.
+Az exact `27e5fc51` Router CI
+[32432394840](https://github.com/wolfcasaba/strumsight/actions/runs/32432394840)
+success; Dart/native fájl nem változott, ezért APK/Full Gate nem volt kapu.
 
 ## ✅ E99-R22 (GOV-16) KÉSZ — ismétlődő halt-osztályok őrteszt-főkönyve — PR #375, squash `ebff600c` (2026-08-20, L370)
 
