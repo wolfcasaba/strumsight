@@ -245,4 +245,36 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+- `lib/features/gamification/infrastructure/default_quest_catalog.dart`:
+  típusos, stabil azonosítójú napi quest-katalógust, capability-követelményt és
+  lokális alap-katalógust vezet be; a katalógus nézete nem módosítható.
+- `lib/features/gamification/application/daily_quest_generator.dart`:
+  caller-fed snapshotból, gateway-, óra-, repository- és hálózathívás nélkül
+  szűr, majd legfeljebb három questet választ. A rendezés seedje pontosan
+  `generationEpochDay|profileSnapshotKey|catalogVersion`; a seed és a stabil
+  catalog-ID UTF-8 bytejaira alkalmazott 64-bites FNV-1a adja a sorrendet.
+  Hiányzó terv, új profil, üres/alkalmatlan katalógus vagy rövid objective
+  hiánya a helyi, rövid fallbackhez vezet. Planned rest esetén csak
+  rest-eligible, `isOptional = true` eredmény jöhet létre.
+- `lib/features/gamification/public.dart`: exportálja a napi quest generátor
+  és katalógus publikus contractját.
+- `test/features/gamification/application/daily_quest_generator_test.dart`:
+  A1–A3, A5 és A7 mércék: 100 futásos determinisztika és golden FNV érték,
+  0/1/3/4 határ, rövid objective, immutable nézetek, capability-mátrix,
+  pihenőnap és fallback.
+
+Futtatott parancsok és tényleges eredmény:
+
+- `dart format lib/features/gamification/application/daily_quest_generator.dart lib/features/gamification/infrastructure/default_quest_catalog.dart lib/features/gamification/public.dart test/features/gamification/application/daily_quest_generator_test.dart` → 4 fájl formázva, 0 további változás.
+- `flutter test test/features/gamification/application/daily_quest_generator_test.dart` → `6` teszt zöld.
+- Valódi-sértés 1: a stabil FNV kulcsot `Random().nextInt(...)`-re cserélve
+  ugyanaz a célzott teszt A1-ben piros lett (eltérő quest-sorrend); visszaállítva.
+- Valódi-sértés 2: a kamera availability ellenőrzését megfordítva ugyanaz a
+  célzott teszt A3-ban piros lett (`daily_camera` bekerült); visszaállítva.
+- Kötelező gate: `tools/round-gate.sh test/features/gamification/application/daily_quest_generator_test.dart` → format, analyze, célzott teszt (6/6), architecture, secrets és l10n mind zöld.
+
+Nem futtatott ellenőrzés: a teljes suite, randomizált property gate és APK
+CI-orchestrátor feladat; CI-dispatch, PR és merge implementer-scope-on kívül
+maradt. Eltérés nincs.
+
 ## 11. Review — a Claude tölti ki
