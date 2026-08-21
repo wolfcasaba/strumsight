@@ -1,12 +1,12 @@
 # E08-R16 — Quest domain, objective és életciklus
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** READY (pre-flight revízió 2026-08-21, mérve: `main @ 5967831a`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 16
 - **Kör-azonosító:** `E08-R16`
 - **Branch:** `<motor>/e08-r16-quest-domain-objective-and-lifecycle`
 - **Előfeltétel:** `E08-R15` merge-elve (achievement felület)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0312` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **Pre-flight ADR:** `ADR 0382` — az atomi foglaló adta. Az ADR-t az orchestrátor írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
@@ -31,6 +31,79 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight revíziók — 2026-08-21
+
+### 0.0.1 Aktuális kódmérés és végrehajtható típusszerződés
+
+A dispatch előtti mérés az aktuális `main @ 5967831a` állapoton a következőt
+találta:
+
+- `lib/features/gamification/domain/quests/` és quest-státuszt előállító
+  reducer ma nincs; ezért nincs elérhetetlen, örökölt cél-státusz vagy
+  erőforrás-acquire lánc, amelyhez a körnek igazodnia kellene;
+- az R13 objektív-metika pontos típusa az `AchievementMetric`, stabil kódjai:
+  `eventCount`, `durationSeconds`, `score`, `baseXp`, `durationXp`,
+  `qualityXp`, `improvementXp`, `diversityXp`, `totalXp`;
+- a practice-generator publikus szerződése exportálja a stabil `BlockId`-t,
+  a practice feature publikus szerződése pedig a `PracticeMode`-ot; a quest
+  ezekre a két `public.dart` határon keresztül hivatkozik, belső feature-import
+  nélkül;
+- az R03 `RewardLedgerEntry` és `RewardReason.questCompleted` már létezik.
+  A domain nem végez repository-I/O-t: a sikeres completion eredménye
+  kötelezően és azonnal tartalmazza a determinisztikus ledger entry-t, így
+  completion nem reprezentálható reward nélkül. A későbbi application-hívó
+  ezt az R03 idempotens repositoryba írja; külön `claim()` állapot vagy API
+  nincs.
+
+A quest objective zárt sealed vokabulárja ezért négy konkrét hivatkozás:
+validált stabil skill-tag, `BlockId`, `PracticeMode`, illetve
+`AchievementMetric`; az explicit `UnknownQuestObjective` csak a fail-closed
+decode/validáció mérésére létezik, érvényes definícióban nem fogadható el.
+
+Az ütemezés `generationEpochDay` egész napazonosítót,
+`timezoneOffsetMinutes` értéket, pozitív `catalogVersion`-t és UTC
+`expiresAt` instantot tárol. Az aktivitási intervallum felső határa exkluzív:
+`now < expiresAt` aktív, `now >= expiresAt` lejárt.
+
+Az állapotgép definiált élei: `active → completed|expired|replaced`, továbbá
+`completed|expired|replaced → archived`; az `archived` terminális. Minden
+sikeres él stabil reason code-ot ad, minden más él típusos failure. A
+`complete` parancs idempotens kivétel az élképzés alól: ismételve az eredeti
+completion időt és ugyanazt a determinisztikus ledger ID-t adja vissza, új
+jutalmat nem hoz létre.
+
+### 0.0.2 ADR-szám, visszakeresett előzmény és brief-helyesbítések
+
+Az előre írt `0312` nem foglalható ehhez a körhöz: a repositoryban már az
+elfogadott `docs/adr/0312-knowledge-rag.md` viseli. A kötelező
+`tools/round-slots.py reserve-adr --round E08-R16` futás `0382`-et adott;
+ezért e kör saját döntési artefaktuma
+`docs/adr/0382-quest-objective-and-lifecycle-contract.md`. A brief minden
+korábbi `0312` kör-ADR hivatkozását ez a revízió írja felül; a merge-elt ADR
+0312 változatlan marad.
+
+A kötelező, szűkített RAG-keresések releváns előzményei: `adr/0073`
+(determinista, tiszta state machine), `adr/0374` (zárt, típusos objective és
+fail-closed unknown), valamint `lessons/L20` (egy átmenettábla önmagában nem
+bizonyít elérhető inpututat). A teljes korpuszos keresés elsődlegesen ezt a
+briefet és a mai public barrel-t hozta vissza. Az index friss, a mért HEAD-del
+azonos (`5967831a`).
+
+A korábbi rövid küszöbmondat felcserélte az acceptance irányát; ezt a §6.1
+helyesbíti: lejárat előtt completion elfogadott, a határon és utána completion
+elutasított, az expiry viszont elfogadott. A Chapter 9 kötelező
+„completion idempotency” ellenőrzése külön A9 cellát kapott.
+
+Az ADR 0290 nem tilt általánosan minden claim fogalmat: idempotens claimet és
+UI-oldali jutalomszámítás-tilalmat mond ki. E kör szigorúbb, claim nélküli
+quest-szerződésének normatív forrása a Chapter 9 Kör 16 és az ADR 0382.
+
+**Kockázat = high, indoklás:** a completion egyszerre változtat tartós
+quest-életciklust és állít elő jutalom-főkönyvi receiptet. Hibás
+idempotenciával duplikált XP, hibás expiryvel elvesző reward vagy részleges
+haladás keletkezhet; ezért a correctness review mellett a külön security
+review is kötelező.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -54,7 +127,8 @@ invariáns: a **jutalom automatikusan jár**, nem beváltáshoz (claim) kötött
 - Az R13 típusos objective-mintát adott az achievementeknek; a quest ugyanezt a mintát követi, de saját életciklussal.
 - `lib/features/gamification/domain/quests/` **nem létezik**.
 - A `lib/features/practice_generator/` (Epic 7) terv-blokkjai adják a `planBlock` hivatkozást.
-- Az `ADR 0290` §2: a beváltás idempotens, és a felület nem számol jutalmat.
+- Az `ADR 0290` §2: az esetleges beváltás idempotens, és a felület nem számol
+  jutalmat; e kör Chapter 9 szerződése ennél szigorúbb, quest-claimet nem enged.
 
 ## 3. Scope
 
@@ -67,7 +141,7 @@ katalógus-verzió és lejárat tárolása · a teljesítés és a jutalom KÜL�
 
 - A generálás (Kör 17/18), a challenge (Kör 19), a felület (Kör 20).
 - Beváltás-mechanika (claim) bevezetése — a §5.1 tiltja.
-- `docs/adr/**` — az ADR 0312-t a Claude írja.
+- `docs/adr/**` — az ADR 0382-t az orchestrátor írja.
 
 ## 4. Engedélyezett fájlok
 
@@ -82,15 +156,18 @@ katalógus-verzió és lejárat tárolása · a teljesítés és a jutalom KÜL�
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
-## 5. Kötött architekturális döntések (ADR 0312)
+## 5. Kötött architekturális döntések (ADR 0382)
 
 ### 5.1 A jutalom AUTOMATIKUS — nincs beváltás (claim)
 
-A teljesített küldetés jutalma azonnal a főkönyvbe kerül. A felhasználónak
+A teljesített küldetés domain-eredménye azonnal tartalmazza a determinisztikus,
+R03-kompatibilis főkönyvi bejegyzést. A felhasználónak
 nem kell megnyitnia a képernyőt, nem kell gombot nyomnia, és a jutalom nem jár le.
 
 **NEM elfogadható gyengítés:** „claim” gomb, akár csak animáció kedvéért. A beváltás-alapú
-minta elveszi a jutalmat attól, aki nem nyitja meg a felületet — az ADR 0290 §2 tiltja.
+minta elveszi a jutalmat attól, aki nem nyitja meg a felületet — a Chapter 9
+Kör 16 és az ADR 0382 tiltja; az ADR 0290 ehhez az idempotens ledger- és
+UI-oldali nem-számítási alapot adja.
 
 ### 5.2 A LEJÁRAT SEMLEGES — nem törli a gyakorlás eredményét
 
@@ -127,6 +204,7 @@ enélkül nem eldönthető, hogy egy küldetés még aktív-e, és a lejárat ó
 | A6 | Az objective típusos; ismeretlen hivatkozás hibát ad | `quest_model_test.dart` |
 | A7 | Az ütemezés tárolja a generálási napot, az időzóna-eltolást, a katalógus-verziót és a lejáratot | `quest_model_test.dart` — round-trip |
 | A8 | A modell verziózott; ismeretlen `schemaVersion` hibát ad | `quest_model_test.dart` |
+| A9 | A completion ismétlése ugyanazt a completion-időt és ledger ID-t adja, új jutalmat nem hoz létre | `quest_model_test.dart` — idempotencia-cella |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -138,6 +216,7 @@ enélkül nem eldönthető, hogy egy küldetés még aktív-e, és a lejárat ó
 | Az objective szabad szöveg | **A6** |
 | Az időzóna-eltolás nem tárolódik | **A7** |
 | Az átmenet néma `bool` | **A5** |
+| Az ismételt completion új receiptet vagy új időpontot hoz létre | **A9** |
 
 **A küszöb három kötelező cellája** (a lejárati időpont (`expiresAt`) — a küldetés aktivitásának határa):
 
@@ -147,11 +226,17 @@ enélkül nem eldönthető, hogy egy küldetés még aktív-e, és a lejárat ó
 | **rajta** (a küszöbön) | pontosan `expiresAt` | a küldetés **MÁR lejárt** — a lejárati időpont a LEJÁRT oldalhoz tartozik (exkluzív felső határ az aktivitásra) |
 | a küszöb **fölött** | `expiresAt + 1s` | lejárt; a haladás és a gyakorlási eredmény érintetlen |
 
-A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
+A hármas tömören: **alatt** → completion elfogadott, expiry elutasított ·
+**rajta** → completion elutasított, expiry elfogadott · **fölötte** →
+completion elutasított, expiry elfogadott.
 
-A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
+A lejárt oldal a határon **inkluzív** — a fenti táblázat „rajta” sora mondja
+ki, melyik oldal nyer. A három kiszámolt UTC fixture:
+`2026-08-21T23:59:59Z / 2026-08-22T00:00:00Z / 2026-08-22T00:00:01Z`.
 
-**Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** kösd a jutalmat beváltáshoz (a főkönyv-írás csak a `claim()` hívásban történjen),
+**Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** távolítsd el a
+completion eredményéből az automatikus ledger entry létrehozását (mintha csak
+egy későbbi `claim()` adná),
 futtasd a gate-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
