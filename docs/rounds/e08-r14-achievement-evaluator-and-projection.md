@@ -342,4 +342,13 @@ célzott teszt, architecture, secrets (3116 fájl, 0 finding) és l10n (1503
 de a harness a secrets-lépésnél megszakította a kimenetet; a teljes, változatlan
 artefaktum lefutását a sleep nélküli ismétlés igazolja.
 
+**H4 self-heal (`ae703918`).** Az F7/S6 reviewer-reprodukció tartós A8 cellává
+vált: 9 999 és 10 000 lejárt nyers backfill-event elfogadott és kihagyottként
+számlált, 10 001 már a dátumszűrés előtt `ArgumentError`. A cella a javítás
+előtt piros volt (várt hiba helyett `AchievementEvaluationResult`), az őrzött
+nyers iteráció után zöld. Az exact gate 11/11 célzott teszttel 6/6 zöld.
+Független detached re-review-ban (`/tmp/review-e08-r14-h4-OSZvDe`) az őr
+eltávolítása ugyanazt a cellát újra pirosra vitte; restore után a klón tiszta,
+a correctness verdict APPROVED és a security verdict PASS.
+
 ## 11. Review — a Claude tölti ki

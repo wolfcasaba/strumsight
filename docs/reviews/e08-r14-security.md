@@ -1,17 +1,18 @@
 # E08-R14 — Security review
 
 Brief: `docs/rounds/e08-r14-achievement-evaluator-and-projection.md`  
-Reviewed head: `6bec75b0`
+Reviewed head: `ae703918`
 Reviewer: független Codex / `gpt-5.6-sol` security reviewer · 2026-08-21  
-Verdikt: **FAIL**
+Verdikt: **PASS**
 
 ## Összegzés
 
-CRITICAL: 0 · BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 2
+CRITICAL: 0 · BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2
 
-S1–S5 a Terra javítócommitjában lezárult. A merge továbbra is tilos, mert a
-backfill nyers bemeneti capje megkerülhető, így az erőforrás-használati
-védelmi szerződés caller-controlled historyval nem teljesül.
+S1–S5 a Terra javítócommitjában, S6 az exact `ae703918` H4 self-heal
+commitban lezárult. A backfill a 10 001. nyers elemnél, még dátumszűrés és
+rebuild előtt fail-fast `ArgumentError`-t ad; a független mutációs próba az őr
+nélkül célzottan piros, restore után zöld.
 
 ## Leletek
 
@@ -64,7 +65,10 @@ több ablakon kívüli rekordot adhat át; a függvény az összeset feldolgozza
 majd sikerrel tér vissza. Az izolált reviewer-cella 10 001 egyedi lejárt
 eventre `ArgumentError` helyett `AchievementEvaluationResult`-ot kapott.
 
-**Státusz:** OPEN. A nyers history capet a dátumszűrés előtt kell őrizni.
+**Státusz:** RESOLVED (`ae703918`). A 9 999/10 000/10 001 permanens cella a
+nyers historyt méri, és az őr a dátumszűrés előtt fut. Az őr eltávolításakor a
+10 001 lejárt esemény ismét sikeresen átjutott, tehát a regresszió valóban
+megkülönbözteti a hibás implementációt.
 
 ### N1 — NOTE — Privacy/network
 
@@ -76,6 +80,7 @@ A diff kizárólag a brief engedélyezett útvonalait érinti; a worktree tiszta
 
 ## Kötelező re-review
 
-Az exact-source concurrency, malformed receipt, duplicate ID, future-window és
-lineáris receipt-index regressziói zöldek. S6 a Terra javítóköre után is nyitott
-MAJOR, ezért ADR 0087 H4: további implementer- és CI-dispatch nélkül halt.
+Az exact-source concurrency, malformed receipt, duplicate ID, future-window,
+lineáris receipt-index és raw-backfill-cap regressziók az exact `ae703918`
+detached klónban 11/11 zöldek. A scope-audit 2 engedélyezett útvonalat mért,
+a teljes round-gate 6/6 zöld, új security lelet nincs. Verdikt: **PASS**.

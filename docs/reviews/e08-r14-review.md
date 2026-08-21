@@ -1,19 +1,19 @@
 # E08-R14 — Review
 
 Brief: `docs/rounds/e08-r14-achievement-evaluator-and-projection.md`  
-Diff: `77a0c11f...6bec75b0`
+Diff: `77a0c11f...ae703918`
 Reviewer: Codex / `gpt-5.6-sol` · Dátum: 2026-08-21  
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-A Terra javítása F1–F6-ot és S1–S5-öt lezárta; a javítás utáni célzott
-implementer-suite és a független round-gate 6/6 zöld. A merge mégis tilos:
-egy új eldobható reviewer-cella bizonyítja, hogy a `backfill` a dátumszűrés
-előtt nem alkalmazza a 10 000-es nyers bemeneti hard capet. Ez az A8 explicit
-10 001-es falszifikációs cellájának kijátszható változata, ezért MAJOR.
+A H4 self-heal az F7/S6 leletet tartós 9 999/10 000/10 001 nyers-backfill
+regresszióval lezárta. Az exact `ae703918` commit független, eldobható klónban
+futtatott scope-auditja zöld, a round-gate 6/6 zöld, és a nyers input őrének
+eltávolítása az új A8 cellát célzottan pirosra váltja. F1–F7 és S1–S6 zárt;
+új correctness lelet nincs.
 
 ## Acceptance criteria
 
@@ -26,15 +26,16 @@ előtt nem alkalmazza a 10 000-es nyers bemeneti hard capet. Ez az A8 explicit
 | A5 | Event kind + metric/dimension index | ✅ | típusos metric/dimension index-cellák zöldek |
 | A6 | Unknown objective fail-closed | ✅ | célzott A6 cella zöld |
 | A7 | Hiteles, exact achievement receipt | ✅ | exact receipt + forged-prefix fail-closed cellák zöldek |
-| A8 | Bounded backfill | ❌ | 10 001 lejárt nyers event dátumszűrés után üres listává válik és nem dob hibát |
+| A8 | Bounded backfill | ✅ | 9 999/10 000 lejárt nyers event elfogadott; 10 001 a dátumszűrés előtt `ArgumentError` |
 
 ## Scope-audit és jelzés
 
-`python3 tools/scope-audit.py --repo /home/ubuntu/ss-terra-e08-r14 --brief
-docs/rounds/e08-r14-achievement-evaluator-and-projection.md --base 77a0c11f`:
+`python3 tools/scope-audit.py --repo . --brief
+docs/rounds/e08-r14-achievement-evaluator-and-projection.md --base 89e38bdf` az
+exact `ae703918` detached review-klónban:
 
 ```text
-Legacy scope audit OK (77a0c11f...6bec75b0, 4 changed path(s), 0 generated/ignored)
+Legacy scope audit OK (89e38bdf...ae703918, 2 changed path(s), 0 generated/ignored)
 ```
 
 A javító wrapper `status=done`, `continuations=0`, `scope_audit=ok`. A jelzett
@@ -127,7 +128,10 @@ pipe és kézi lánc nélkül; a prompt/preambulum idézett tiltásaira illeszke
 - **Kötelező javítás:** a nyers `history` méretét a dátumszűrés előtt, egyszer
   és legfeljebb 10 001 elem materializálásával/őrzött iterációval ellenőrizni;
   a 9 999/10 000/10 001 hármast a `backfill` API-ra is rögzíteni.
-- **Státusz:** OPEN.
+- **Státusz:** RESOLVED (`ae703918`). A nyers iteráció számlálója a
+  dátumszűrés előtt, a 10 001. elemnél áll meg. A tartós A8 cella 9 999 és
+  10 000 lejárt eseményt elfogad, 10 001-et elutasít; az őr eldobható
+  eltávolítása ugyanezt a cellát pirosra váltotta.
 
 ### N1 — NOTE — Az első reviewer-gate rossz CWD-ből indult
 
@@ -138,21 +142,23 @@ invokációs hiba, nem köri kódhiba és nem CI-attempt.
 
 ## Gate-bizonyíték
 
-Izolált javítás utáni klón: `/tmp/review-e08-r14-fix-sol-w4GRjt`.
+Izolált H4 re-review klón: `/tmp/review-e08-r14-h4-OSZvDe`, exact
+`ae70391862557f06dd4264214ec74d3ad8c3620f`.
 
 | Gate | Eredmény |
 |---|---|
-| scope-audit | OK, 4/4 allowed |
+| scope-audit | OK, 2/2 H4 paths allowed |
 | format | 1735 fájl, 0 változás |
 | analyze | No issues found |
-| célzott teszt | 10/10 zöld |
+| célzott teszt | 11/11 zöld |
 | architecture | OK, 12 allowlisted deviation |
 | secrets | 3116 fájl, 0 finding |
 | l10n | 1503 message parity |
-| javítási reviewer próbák | F1–F6 regressziói zöldek; az új nyers-backfill-cap próba szándékosan piros |
+| H4 mutációs próba | a nyers input őr eltávolításakor az új A8 cella piros; restore után 1/1 zöld és tiszta klón |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint merge tilos. A Terra javítóköre után F7 MAJOR nyitott
-maradt, ezért az ADR 0087 H4 megállási pontja érvényes; további implementer-
-dispatch, CI-dispatch és merge ebben a sessionben tilos.
+Az F7/S6 H4 akadály lezárult, a kör branch tartalmilag review-kész. Az L304 és
+L358 mért mintája szerint a fix közvetlenül a még nem merge-elt E08-R14 ágra
+kerül; a következő friss kör-session feladata a szokásos PR, exact-SHA CI és
+ADR 0052 szerinti zöld-kapus merge.
