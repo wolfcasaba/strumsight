@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R17 KÉSZ — Determinisztikus, capability-safe napi quest generátor — PR #391 (2026-08-21, L388/L392)
+
+Az offline, caller-fed generátor a nap + profil-pillanatkép + katalógusverzió
+stabil FNV-1a seedjéből választ legfeljebb három, legalább egy rövid questet.
+Kamera-, fiók- és cloud-hiány esetén fail-closed szűr, planned rest napon csak
+opcionális rest-eligible eredményt ad, üres katalógusra, hiányzó tervre és új
+profilra pedig local fallbacket készít. Permission-, repository-, óra- vagy
+hálózathívást nem birtokol.
+
+Az első Sol review két MAJOR mércerést talált. A Terra javító kör közvetlen
+shipping-katalógus contractot adott, a H4 self-heal utáni második javítás pedig
+camera/account/cloud tengelyenként két-entrys candidate poollal zárta a
+truncation által elfedett regressziót. Mindhárom cross-wiring mutáció célzottan
+piros; correctness **APPROVED**, security **PASS**. Exact `e96feef3`: Full
+Gate [32465903185](https://github.com/wolfcasaba/strumsight/actions/runs/32465903185)
+és Router CI
+[32465903321](https://github.com/wolfcasaba/strumsight/actions/runs/32465903321)
+success. PR [#391](https://github.com/wolfcasaba/strumsight/pull/391), squash
+`a2ea758d`, ADR [0384](docs/adr/0384-deterministic-capability-safe-daily-quest-generation.md).
+Pontos következő E08 kör: **E08-R18 — Heti quest és consistency objective**.
+
 ## ✅ E13-R04 KÉSZ — Accessible typography és text-scale resilience — PR #389 (2026-08-21, L389–L391)
 
 Az immutable `SsTypography` a Chapter 13 teljes Poppins/Montserrat scale-jét
@@ -3722,6 +3743,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-21):** `main` @ `a2ea758d` — E08-R17
+determinisztikus, capability-safe napi quest generátor, PR
+[#391](https://github.com/wolfcasaba/strumsight/pull/391), squash-merge.
+Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
+`e96feef3`: Full Gate 32465903185 + Router CI 32465903321 success;
+correctness APPROVED, security PASS. Következő E08 kör: **E08-R18**.
+
 **Aktuális állapot (2026-08-21):** `main` @ `6e80a441` — E13-R03 semantic
 színek és három theme, PR
 [#386](https://github.com/wolfcasaba/strumsight/pull/386), squash-merge.
@@ -4247,6 +4275,16 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R17 — Napi quest generátor** (PR
+[#391](https://github.com/wolfcasaba/strumsight/pull/391), squash `a2ea758d`,
+[ADR 0384](docs/adr/0384-deterministic-capability-safe-daily-quest-generation.md)).
+Offline, caller-fed, determinisztikus kiválasztás; capability fail-closed
+szűrés; planned-rest optional út; 1–3-as korlát és local fallback. A két MAJOR
+review-lelet a shipping-katalógus contracttal és a három izolált capability-
+poollal zárult. Correctness APPROVED, security PASS. Exact `e96feef3`: Full
+Gate 32465903185 + Router CI 32465903321 success. Részletesen:
+`docs/handoff-archive.md`.
 
 **E13-R03 — Semantic colors and three themes** (PR
 [#386](https://github.com/wolfcasaba/strumsight/pull/386), squash `6e80a441`,
@@ -5008,13 +5046,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör: E08-R16 — Quest domain, objective és
-lifecycle** (`docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md`,
+**Pontos következő E08 termékkör: E08-R18 — Heti quest és consistency
+objective** (`docs/rounds/e08-r18-weekly-quest-and-consistency.md`,
 engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
-Az önálló Chapter 13 sáv következő köre E13-R04.
+Az önálló Chapter 13 sáv következő köre E13-R05.
 
-**Pontos következő Chapter 13 kör: E13-R04 — Typography and text-scale
-resilience** (`docs/rounds/e13-r04-typography-and-text-scale.md`, engine a queue-ban
+**Pontos következő Chapter 13 kör: E13-R05 — Spacing, radius, elevation és
+surface primitives** (`docs/rounds/e13-r05-spacing-and-surfaces.md`, engine a queue-ban
 `terra`). Az E08 terméksáv önálló queue-ja ettől függetlenül halad; ezt a
 session nem indítja el. A governance-sáv következő sora, **E99-R23**, jelenleg
 `hold`.

@@ -9556,3 +9556,37 @@ történetet publikált. Exact `3fc36778`: Full Gate
 success. Implementer: Terra (`gpt-5.6-terra`); orchestrátor és független
 reviewer: Sol (`gpt-5.6-sol`). Pontos következő Chapter 13 kör:
 **E13-R04 — Typography and text-scale resilience**.
+
+## ✅ E08-R17 KÉSZ — Napi quest generátor
+
+PR [#391](https://github.com/wolfcasaba/strumsight/pull/391), squash
+`a2ea758d`, ADR
+[0384](adr/0384-deterministic-capability-safe-daily-quest-generation.md). A
+Terra implementáció offline, caller-fed snapshotból generál napi questeket.
+A stabil FNV-1a rendezési kulcs a generation epoch day, a profile snapshot key
+és a catalog version összetételéből készül. A halmaz 1–3 elemű és mindig
+tartalmaz short objective-et; kamera-, fiók- vagy cloud-hiány esetén az adott
+quest fail-closed kiesik. Planned rest csak optional, rest-eligible eredményt,
+üres katalógus, hiányzó terv vagy új profil local fallbacket kap.
+
+Az első független Sol review F1/F2 MAJOR leletet talált. A capability-cellák
+nem különítették el a három tengelyt, a shipping default katalógust pedig
+semmi sem mérte közvetlenül. Az első Terra javítás exact ID-, egyediség-,
+short-, rest- és capability-contractot adott, de a max-3 truncation továbbra
+is elfedte az account→cloud mutációt. A H4 self-heal revideálta a briefet; a
+második Terra javítás camera/account/cloud tengelyenként pontosan két entrys
+poolt használ. A reviewer mindhárom cross-wiring mutációt a saját A3-celláján
+pirosra vitte; restore után 9/9 zöld és tiszta klón maradt. Correctness
+**APPROVED**, high-risk security review **PASS**.
+
+A két-slot landolás első rebase-e a brief mechanikus main-wins feloldása miatt
+megváltoztatta a pre-flight commit patch-id-jét, a safe-force-push pedig három
+remote-only commitnál megállt. A publikus PR-csúcsról indított normal upstream
+merge megőrizte a történetet, force-push és self-duplicate lánc nélkül. Exact
+`e96feef3`: Full Gate
+[32465903185](https://github.com/wolfcasaba/strumsight/actions/runs/32465903185)
+és Router CI
+[32465903321](https://github.com/wolfcasaba/strumsight/actions/runs/32465903321)
+success; a landoló kombinált-HEAD gate-je 6/6 zöld. Implementer Terra
+(`gpt-5.6-terra`), orchestrátor/reviewer Sol (`gpt-5.6-sol`). Pontos következő
+E08 kör: **E08-R18 — Heti quest és consistency objective**.

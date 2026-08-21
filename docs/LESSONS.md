@@ -14707,3 +14707,27 @@ dokumentációs adatot vesztett.
 **Őrteszt:** nincs — a mért bizonyíték a `safe-force-push` exit 3 listája és
 a `git diff backup/e13-r04-rebased-5c2a3645 55832396` brief-diffje; az L367 és
 L376 meglévő landolási őrei változatlanok.
+
+## L392 — A patch-id őr a merge commitot és a main-wins brief-feloldással átalakult pre-flightot remote-onlynak látja (E08-R17, 2026-08-21)
+
+**Mért snag.** Az E08-R17 `round-land` a publikus `1961bbf0` csúcsot a friss
+`1281dc40` main fölé rebase-elte, a saját brief konfliktusát szabályosan a
+main javára oldotta, és a kombinált gate 6/6 zöld lett. A
+`safe-force-push.sh` mégis exit 3-mal megállt: a két korábbi upstream merge
+commitot (`327b7471`, `1961bbf0`) patch-id nélkül, a `6e4dba07` pre-flightot
+pedig a main-wins brief-feloldás miatt megváltozott patch-id-vel remote-onlynak
+látta. A remote csúcs visszamerge-elése a rebase-elt láncba duplikálta volna a
+hat ekvivalens product/review patch-et, és a következő landolást H8-SELFDUP-pal
+blokkolta volna.
+
+**Javítás és szabály.** A publikus PR-csúcsról friss klón készült; ezen normál
+`merge --no-ff origin/main` őrizte meg a remote commitokat és a teljes briefet.
+A kombinált gate újra 6/6 zöld, a normál push fast-forward, az új exact
+`e96feef3` Full Gate és Router CI success lett; a második landoló rebase nélkül
+merge-elt. Remote-only listánál merge commit vagy main-wins brief-konfliktus
+esetén ne merge-eld vissza a régi csúcsot a rebase-elt történetbe: a publikus
+csúcsról készíts normal-merge recoveryt, majd minden kaput új SHA-n futtass.
+
+**Őrteszt:** nincs — a reprodukció a `.pipeline/land-E08-R17.log`
+safe-force-push exit 3 listája; az L391 az azonos recovery-mintát független
+E13-R04 előforduláson rögzíti.
