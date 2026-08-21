@@ -55,10 +55,46 @@ is ugyanaz; a Router CI futóján zöld).
 Pontos következő teendő: nincs kézi indítás — a lánc minden firingen
 `git fetch origin main` + `merge --ff-only` (`main_sync_strategy`), tehát a
 következő cron-firing már ezzel a felállással veszi ki a queue első `pending`
-sorát: **E08-R20 — Quest and Challenge UI**; a Chapter 13 ága változatlanul
-**E13-R05** (a revideált scope-pal, lásd a lenti HEAL-bejegyzést). Boxon
-egyszer ellenőrizendő: `tools/engine-profile.sh list` — egy megmaradt
-`.pipeline/engine-override=terra` minden queue-sort felülírna.
+sorát: **E08-R21 — Mastery milestone domain és evaluator**; a Chapter 13 ága
+változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
+HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
+list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
+felülírna.
+
+## ✅ E08-R20 KÉSZ — Quest és kihívás felület — PR #397, squash `684e6334` (2026-08-21, L396–L398)
+
+Áttekinthető napi/heti quest- és kihívás-élmény: `quests_screen.dart` +
+`quest_card.dart`/`challenge_card.dart`. Beváltás (claim) gomb NINCS — a
+teljesített küldetés jutalma automatikusan látszik (R16 §5.1); a lejárati
+szöveg semleges, nincs visszaszámláló (ADR 0290 §1); a Start/Continue CTA
+típusos (`QuestRouteAction` sealed hierarchia — `QuestStartPracticeAction`/
+`QuestContinuePracticeAction`/`QuestTryLiveAction`/`QuestUnavailableAction`),
+sosem szabad szöveges route; nem elérhető tartalomnál a CTA letiltott. Az
+útvonal-REGISZTRÁCIÓ változatlanul a Kör 30-ra van halasztva.
+
+Három dispatch volt szükséges, mindhárom mért, valódi ok miatt (nem
+implementer-hibából): (1) az implementer jogosan `stopped`-ot jelzett, mert
+`lib/l10n/app_en.arb`/`app_hu.arb` 2026-08-20 óta (ADR 0307 §4, PR #343)
+GENERÁLT aggregátum — a brief 2026-08-18-i, nem ismerhette a váltást; §0.0.1
+brief-revízió a tényleges forrást (`lib/l10n/features/gamification_{en,hu}.arb`)
+vette fel az `allowed_paths`-ba (L396). (2) A célzott gate zöld volt, de az
+első CI-dispatch (`full-gate.yml`) egyetlen, a kör saját `gate_tests`-én
+kívüli tesztet buktatott: `test/ui/ui_inventory_test.dart` rögzített
+60-elemű production-screen bázisvonala az ÚJ, jogos `quests_screen.dart`
+miatt 61-re nőtt — ugyanaz a hibaosztály, mint az E08-R19
+`architecture_dependency_test.dart` lelete (L395), most a screen-inventory
+oldalon (L397); §0.0.2 brief-revízió + egysoros javító kör zárta.
+
+A review saját mutáció-próbája (ideiglenes „Begyűjtés" gomb a production
+`quest_card.dart`-on, `flutter test --plain-name "A1"` → PIROS, majd
+visszaállítás) igazolta, hogy az A1 no-claim-button guard valódi, működő
+védelem — a brief §6.1 KÖTELEZŐ próbáját az implementer egy szintetikus,
+a production widgetet NEM mutáló teszttel „teljesítette", és a §10 handoff
+üresen maradt (L398, MINOR, nem blokkolt). 0 BLOCKER/MAJOR, review APPROVED.
+
+Mindkét CI (`full-gate.yml` + `router-ci.yml`) zöld a pontos merge-jelölt
+SHA-n (`f9a5ea4e`); a merge utáni `main`-en független gate-újrafutás
+(`format+analyze+2×test+architecture+secrets+l10n`) szintén zöld.
 
 ## ✅ E08-R19 KÉSZ — Challenge V2 és legacy napi kihívás migráció — PR #396, squash `a100ff9b` (2026-08-21)
 
