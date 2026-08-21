@@ -1,18 +1,18 @@
 # E13-R04 — Független review
 
 Brief: `docs/rounds/e13-r04-typography-and-text-scale.md`
-Diff: `d01b2f28..b2bf3c96`
+Diff: `d01b2f28..21a3ca58`
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-21
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-Nyitott BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+Nyitott BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-A tipográfiai contract, a theme-integráció, a text-scale layout és a legacy
-forrásparitás célzott gate-je zöld. A független semantics-próba azonban a
-Stage Mode kritikus chord nevét kétszer találta ugyanabban a semantics
-csomópontban, ezért az accessibility contract javításig nem merge-elhető.
+A Terra javító commit (`21a3ca58`) lezárta az F1 MAJOR leletet: a chord hero
+külső semantics-e kizárja a gyermek duplikált labeljét, és exact regressziós
+cella méri az egyetlen teljes chord nevet. A friss izolált re-review gate 8/8
+zöld, a javítás visszarontása célzottan piros.
 
 ## Acceptance criteria
 
@@ -51,7 +51,9 @@ csomópontban, ezért az accessibility contract javításig nem merge-elhető.
   forrás (`excludeSemantics: true` vagy egyenértékű megoldás), és kerüljön
   production regressziós cella a `ss_typography_test.dart` fájlba, amely az
   egyetlen exact chord labelt méri.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`21a3ca58`) — `excludeSemantics: true` és exact
+  semantics-label cella. A reviewer a javítást visszarontotta; a teszt a
+  `Cmaj7#11\nCmaj7#11` tényleges értékkel piros lett.
 
 ### N1 — NOTE — A független gate első hívása hibás cwd-ből indult
 
@@ -61,20 +63,22 @@ artefaktum 8/8 zöld lett; a hibás invokáció nem kód- vagy gate-hiba.
 
 ## Gate-bizonyíték
 
-Izolált review-klón `/tmp/review-e13-r04-sol-FLzC4P/repo`, commit
-`b2bf3c96`:
+Első izolált review-klón `/tmp/review-e13-r04-sol-FLzC4P/repo`, commit
+`b2bf3c96`, majd friss re-review klón
+`/tmp/review-e13-r04-fix1-7Uu9kE/repo`, commit `21a3ca58`:
 
 - scope-audit: 9 útvonal, 0 sértés;
 - format: 1768 fájl, 0 változás;
 - analyze: 0 issue;
-- typography: 6/6 zöld;
+- typography: 7/7 zöld;
 - text-scale overflow: 5/5 zöld;
 - foundations compatibility: 3/3 zöld;
 - architecture, secrets (3171 fájl / 0 lelet), l10n (1532/1532): zöld;
 - fix-height, ellipsis, normál szóköz és hiányzó extension mutációk: mind piros;
-- exact semantics-label próbateszt: piros, F1-et reprodukálta.
+- F1 re-mutation (`excludeSemantics` eltávolítása): az új exact-label cella
+  piros, tényleges `Cmaj7#11\nCmaj7#11`; restore után tiszta diff.
 
 ## Merge-döntés
 
-Az F1 MAJOR nyitva van, ezért merge tilos. Terra javító kör és független
-re-review szükséges; exact-SHA CI csak jóváhagyott csúcson lehet merge-evidencia.
+A correctness review **APPROVED**. Merge csak az exact-SHA Full Gate/Router CI
+és a friss-main landolási feltételek zöld eredménye után engedett.
