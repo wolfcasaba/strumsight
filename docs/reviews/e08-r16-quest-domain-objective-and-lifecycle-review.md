@@ -1,31 +1,31 @@
 # E08-R16 — Quest domain, objective és életciklus — Review
 
 Brief: `docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md`
-Diff: `eff75b3bd6a7..c7fb235edbb7`
+Diff: `eff75b3bd6a7..8085a3b00846`
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-21
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-A formai kapuk zöldek, a scope tiszta, és az aktív állapotból induló happy
-path megfelel a briefnek. Két perzisztencia-/idempotencia-hiba azonban
-eldobható negatív teszttel reprodukálható: az ismétlődő quest-példányok ledger
-azonosítója ütközik, illetve a persisted completed rekord hamis receipt-ID-t
-és lejárati határon létrejött completiont is elfogad.
+A Terra javító commit (`8085a3b0`) lezárta mindkét MAJOR leletet. Az instance
+identity cadence + generation epoch day + stabil definition ID összetételű;
+a deszerializálás ugyanazt a receipt-ID- és expiry-invariánst ellenőrzi, mint
+az élő completion. A friss izolált re-review scope-ja tiszta, a gate 6/6, a
+célzott suite 10/10 zöld, és mindkét őr valódi visszarontásra piros lett.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| A1–A2 | Claim nélküli automatikus receipt | ⚠️ részben | A happy path zöld, de F1 miatt egy későbbi napi példány receiptje ütközik. |
+| A1–A2 | Claim nélküli automatikus receipt | ✅ | A1/A2 + F1 instance-identity cella. |
 | A3 | Expiry megőrzi a haladást/evidence-t | ✅ | `quest_model_test.dart` A3; `expire()` változatlanul viszi tovább a két mezőt. |
 | A4–A5 | Zárt élek és reason code | ✅ | A4/A5 mátrix; undefined élek typed failure-t adnak. |
 | A6 | Típusos, fail-closed objective | ✅ | A6; unknown sentinel a definitionben elutasított. |
 | A7 | Schedule mezők round-tripje | ✅ | A7/A8 schedule round-trip. |
-| A8 | Ismeretlen schemaVersion elutasítása | ⚠️ részben | A verzió elutasított, de F2 szerint a támogatott verzió szemantikai invariánsai nem fail-closedak. |
-| A9 | Ismételt completion azonos receiptet ad | ⚠️ részben | Egy példányon belül zöld; F1 szerint két külön napi példány között tévesen ugyanaz. |
+| A8 | Ismeretlen schemaVersion elutasítása | ✅ | A8 + F2 támogatott-verziós szemantikai negatív cellák. |
+| A9 | Ismételt completion azonos receiptet ad | ✅ | Ugyanazon instance retry azonos; más nap/cadence eltérő. |
 
 ## Scope-audit
 
@@ -56,7 +56,8 @@ eff75b3bd6a761c9dfcbfefcc4c8686f1e557db8` → **OK**, 7 változott útvonal,
   Ugyanazon instance retryja maradjon azonos, eltérő instance legyen eltérő.
 - **Ellenőrzés:** két külön generation day/cadence → eltérő ID; ugyanazon
   instance ismételt completion → azonos ID.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`8085a3b0`) — két generation day és daily/weekly eltérő,
+  azonos instance retry változatlan; a visszarontott identity-cella piros.
 
 ### F2 — MAJOR — A persisted completion megkerüli a receipt- és expiry-invariánst
 
@@ -79,7 +80,9 @@ eff75b3bd6a761c9dfcbfefcc4c8686f1e557db8` → **OK**, 7 változott útvonal,
   rekordnál ugyanez maradjon kötelező.
 - **Ellenőrzés:** a két fenti negatív cella, plusz valid completed és archived
   completed teljes JSON round-trip.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`8085a3b0`) — completed és archived-completed valid
+  round-trip; hamis ID és `completionAt >= expiresAt` elutasított. A validáció
+  eldobható kikapcsolása az F2 cellát pirosra vitte.
 
 ### N1 — NOTE — A következő generátorkör előtt mérni kell az objective target-alakját
 
@@ -97,11 +100,11 @@ brief scope-ja H2-t okozna.
 | Scope audit | 7 changed, 0 violation | ✅ |
 | Format | 1757 fájl, 0 változás | ✅ |
 | Analyze | No issues found | ✅ |
-| Célzott teszt | 8/8 zöld az eredeti suite-ban | ✅ |
+| Célzott teszt | 10/10 zöld a javított suite-ban | ✅ |
 | Architecture | OK, 12 allowlisted deviation | ✅ |
 | Secret | 3152 fájl, 0 lelet | ✅ |
 | L10n | EN/HU 1532 message, zöld | ✅ |
-| Review negatív próbák | 3/3 célzottan piros | ✅ |
+| Review negatív próbák | eredetileg 3/3 piros; javítás után F1 és F2 visszarontása külön piros | ✅ |
 | CI | még nem indult a javítás előtti SHA-ra | ⏳ |
 
 A wrapper `gate_shape=VIOLATION` mezője hamis pozitív: a naplóba beillesztett
@@ -113,5 +116,14 @@ zölden.
 
 ## Merge-döntés
 
-Az ADR 0052 szerint merge tilos, amíg F1 és F2 OPEN. Egy Terra javítókör
-következik ugyanazon a branchen, majd friss izolált re-review és exact-SHA CI.
+Correctness szempontból **APPROVED**. Az ADR 0052 szerinti merge csak a friss
+review/security report commitot is tartalmazó exact-SHA Full Gate és Router CI
+success után engedett.
+
+## Re-review megjegyzés
+
+A friss klón első gate-je az analyzer alatt 38, már generált
+achievement-l10n metódust átmenetileg nem látott, miközben a generált Dart
+fájlok közvetlen ellenőrzése már tartalmazta őket. Ugyanabban a tiszta klónban,
+tracked módosítás nélkül megismételt exact gate 6/6 zöld lett. Ez generált
+előfeltétel/analyzer cache verseny, nem a kör diffjének piros kódútja.

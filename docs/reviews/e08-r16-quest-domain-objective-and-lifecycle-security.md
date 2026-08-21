@@ -1,17 +1,17 @@
 # E08-R16 — Security review
 
 Brief: `docs/rounds/e08-r16-quest-domain-objective-and-lifecycle.md`
-Reviewed commit: `c7fb235edbb7`
+Reviewed commit: `8085a3b00846`
 Reviewer: independent Codex Sol security reviewer · Dátum: 2026-08-21
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **PASS**
 
 ## Összegzés
 
-CRITICAL: 0 · BLOCKER: 0 · MAJOR: 2 · MINOR: 0 · NOTE: 0
+CRITICAL: 0 · BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0
 
 A review nem talált secret-, privacy-, hálózati vagy tiltott import problémát.
-A persisted quest progress trust boundary azonban két, a correctness review F2
-leletével egyező MAJOR hibát tartalmaz.
+A Terra `8085a3b0` javítása lezárta a persisted quest progress két trust-boundary
+leletét és az instance identity ütközését.
 
 ## Megállapítások
 
@@ -28,7 +28,8 @@ leletével egyező MAJOR hibát tartalmaz.
 - **Kötelező javítás:** completed és completed eredetű archived rekordnál a
   dekódolt ID pontosan egyezzen az instance-derived determinisztikus ID-val;
   eltérés fail-closed.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`8085a3b0`) — exact instance-derived ID ellenőrzés és
+  hamis persisted ID negatív cella.
 
 ### S2 — MAJOR — Lejárat utáni persisted completion receiptet ad
 
@@ -42,7 +43,8 @@ leletével egyező MAJOR hibát tartalmaz.
 - **Kötelező javítás:** completed és completed eredetű archived rekord csak
   `completionAt < schedule.expiresAt` mellett érvényes; határon és utána
   `ArgumentError`.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`8085a3b0`) — `completionAt < expiresAt` validáció
+  completed és archived-completed rekordokra, határ/utána negatív cellával.
 
 ## Ellenőrzések
 
@@ -54,5 +56,5 @@ leletével egyező MAJOR hibát tartalmaz.
 
 ## Merge-döntés
 
-S1 és S2 zárásáig merge tilos. A correctness review F1 ismétlődő-instance
-identity ütközését ugyanabban a Terra javítókörben kell rendezni.
+Security/privacy szempontból **PASS**. Merge csak a correctness approval és a
+friss exact-SHA CI-k után engedett.
