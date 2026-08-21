@@ -71,6 +71,30 @@ felhasználó-szembeni kirakata — egy visszacsúszó „Begyűjtés" gomb vagy
 visszaszámláló közvetlenül a mért compassionate-UX szerződést törné el, és
 csak a §6.1 valódi-sértés próba (KÖTELEZŐ) fogja meg gépi mércével.
 
+### 0.0.1 Kör közbeni revízió — `stopped` után, 2026-08-21
+
+Az implementer az első dispatch után jogosan `stopped`-ot jelzett: a
+`lib/l10n/app_en.arb`/`app_hu.arb` **2026-08-20 óta (ADR 0307 §4, PR #343)
+GENERÁLT aggregátum**, nem kézzel szerkeszthető forrás — a tényleges,
+szerkeszthető forrás a `lib/l10n/features/gamification_en.arb`/
+`gamification_hu.arb` fragmentum, amit a `tool/gen_l10n_segments.dart --write`
+állít elő az aggregátumba. A brief eredeti (2026-08-18-i) allowed_paths-a ezt
+a 2026-08-20-i architektúra-váltást még nem ismerte — mérve, nem
+feltételezve (`tool/gen_l10n_segments.dart` fejléckommentje +
+`git log -- lib/l10n/features/gamification_en.arb`). Ez a kör saját, még nem
+merge-elt artefaktuma, tehát a feloldás az orchestrátor önálló hatásköre
+(ADR 0087 §2 első bekezdés) — NEM H3: a `tool/` (egyes szám) különbözik a
+tiltott `tools/**`-tól, a fragmentum a gamifikációs feature saját l10n-forrása.
+
+**Revízió:** az `allowed_paths` és a §4 tábla kiegészül a
+`lib/l10n/features/gamification_en.arb`/`gamification_hu.arb` fragmentumokkal.
+Az implementáció menete: (1) az ÚJ kulcsok a fragmentumba kerülnek (NEM az
+aggregátumba kézzel), (2) `dart run tool/gen_l10n_segments.dart --write`
+regenerálja az `app_en.arb`/`app_hu.arb`-ot, (3) a gate l10n-lépése
+(paritás+frissesség) méri az eredményt. Az aggregátum fájlok maradnak az
+`allowed_paths`-on (a generátor odaírja őket), de tartalmuk mostantól a
+fragmentumból származik.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -79,6 +103,8 @@ allowed_paths = [
   "lib/features/gamification/presentation/widgets/quest_card.dart",
   "lib/features/gamification/presentation/widgets/challenge_card.dart",
   "lib/features/gamification/public.dart",
+  "lib/l10n/features/gamification_en.arb",
+  "lib/l10n/features/gamification_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/presentation/quests_screen_test.dart",
@@ -137,8 +163,10 @@ nélkül · offline és üres állapot.
 | `lib/features/gamification/presentation/widgets/quest_card.dart` | **ÚJ** — a küldetés-kártya |
 | `lib/features/gamification/presentation/widgets/challenge_card.dart` | **ÚJ** — a kihívás-kártya |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
-| `lib/l10n/app_en.arb` | az ÚJ kulcsok |
-| `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
+| `lib/l10n/features/gamification_en.arb` | **a tényleges forrás** — az ÚJ kulcsok (0.0.1 revízió) |
+| `lib/l10n/features/gamification_hu.arb` | **a tényleges forrás** — az ÚJ kulcsok magyar párja (0.0.1 revízió) |
+| `lib/l10n/app_en.arb` | GENERÁLT — `tool/gen_l10n_segments.dart --write` írja, kézzel nem szerkesztendő |
+| `lib/l10n/app_hu.arb` | GENERÁLT — `tool/gen_l10n_segments.dart --write` írja, kézzel nem szerkesztendő |
 | `test/features/gamification/presentation/quests_screen_test.dart` | a §6 cellái |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
