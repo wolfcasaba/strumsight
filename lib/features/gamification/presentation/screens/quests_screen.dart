@@ -130,7 +130,6 @@ class QuestsScreen extends StatelessWidget {
   }
 
   Widget _buildQuestCard(BuildContext context, QuestViewProjection projection) {
-    final l10n = AppLocalizations.of(context);
     final title = _projectTitle(projection);
     return QuestCard(
       key: ValueKey<String>('quest-card-${projection.definition.id}'),

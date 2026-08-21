@@ -164,7 +164,7 @@ class QuestCard extends StatelessWidget {
                 if (showExpiry) ...[
                   const SizedBox(height: 8),
                   Text(
-                    _expiryLabel(l10n, definition.schedule),
+                    _expiryLabel(l10n, context, definition.schedule),
                     key: const Key('quest-expiry-label'),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
@@ -230,7 +230,11 @@ class QuestCard extends StatelessWidget {
     };
   }
 
-  String _expiryLabel(AppLocalizations l10n, QuestSchedule schedule) {
+  String _expiryLabel(
+    AppLocalizations l10n,
+    BuildContext context,
+    QuestSchedule schedule,
+  ) {
     if (!schedule.isActiveAt(now)) {
       return l10n.questExpiredBadge;
     }
@@ -255,11 +259,7 @@ class QuestCard extends StatelessWidget {
       definition.reward.totalXp,
     );
     if (progress.status == QuestStatus.completed) {
-      return l10n.questCompletedSemantics(title) +
-          ' ' +
-          progressSemantics +
-          ' ' +
-          rewardSemantics;
+      return '${l10n.questCompletedSemantics(title)} $progressSemantics $rewardSemantics';
     }
     if (!contentAvailable) {
       return '$title. $progressSemantics $rewardSemantics ${l10n.questUnavailableBody}';
