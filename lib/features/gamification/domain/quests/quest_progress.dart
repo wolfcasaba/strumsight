@@ -107,7 +107,7 @@ final class QuestProgress {
     final completed = _copyWith(
       status: QuestStatus.completed,
       completionAt: completedAt,
-      rewardLedgerId: _ledgerIdFor(definition.id),
+      rewardLedgerId: _ledgerIdFor(definition),
     );
     return QuestTransitionResult._success(
       progress: completed,
@@ -230,7 +230,7 @@ final class QuestProgress {
     }
     return RewardLedgerEntry(
       ledgerId: ledgerId,
-      sourceEventId: 'quest:${definition.id}',
+      sourceEventId: _sourceEventIdFor(definition),
       createdAt: completedAt,
       schemaVersion: rewardLedgerEntrySchemaVersion,
       policyVersion: definition.reward.policyVersion,
@@ -267,6 +267,18 @@ final class QuestProgress {
         'completion and reward receipt must be recorded together',
       );
     }
+    if (hasCompletion) {
+      if (rewardLedgerId != _ledgerIdFor(definition)) {
+        throw ArgumentError(
+          'a completion must use its deterministic quest instance receipt ID',
+        );
+      }
+      if (!completionAt!.isBefore(definition.schedule.expiresAt)) {
+        throw ArgumentError(
+          'a completion must be recorded before the quest expiry boundary',
+        );
+      }
+    }
     if (status == QuestStatus.replaced && replacementReason == null) {
       throw ArgumentError('a replacement must record its reason');
     }
@@ -280,7 +292,14 @@ final class QuestProgress {
   }
 }
 
-String _ledgerIdFor(String questId) => 'quest:$questId:completion';
+String _ledgerIdFor(QuestDefinition definition) =>
+    '${_instanceIdentityFor(definition)}:completion';
+
+String _sourceEventIdFor(QuestDefinition definition) =>
+    _instanceIdentityFor(definition);
+
+String _instanceIdentityFor(QuestDefinition definition) =>
+    'quest:${definition.cadence.name}:${definition.schedule.generationEpochDay}:${definition.id}';
 
 int _requireInt(Map<String, Object?> object, String field) {
   final value = object[field];

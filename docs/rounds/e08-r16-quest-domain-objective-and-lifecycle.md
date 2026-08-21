@@ -284,11 +284,16 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - `quest_definition.dart`: napi/heti, verziózott definition és runtime
   validált, pozitív automatikus reward-paraméterek.
 - `quest_progress.dart`: immutable, ötállapotú transition-result modell;
-  completionkor azonnali, determinisztikus `quest:<id>:completion` receipt;
-  idempotens újra-completion; expiry a progress/evidence mezőket változatlanul
-  őrzi.
+  completionkor azonnali, determinisztikus, instance-azonos `quest:<cadence>:<generationEpochDay>:<id>:completion`
+  receipt és azonos instance-derived source event ID; idempotens
+  újra-completion; expiry a progress/evidence mezőket változatlanul őrzi.
 - `public.dart`: a négy quest domain contract exportja.
 - `quest_model_test.dart`: A1–A9 és a három expiry-határ tesztje.
+- E08-R16 review-javítás: F1 regressziós cella két külön generation day
+  receipt- és source-event-ID-ját eltérőnek, ugyanazon instance retryját
+  változatlannak méri. F2 minden támogatott completed és archived-completed
+  JSON alakra valid round-tripet, hamis receipt ID-t és `completionAt >=
+  expiresAt` sérülést fail-closed `ArgumentError`-ral mér.
 
 ### TDD- és ellenőrzési bizonyíték
 
@@ -308,6 +313,11 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - Végső round-gate: `tools/round-gate.sh
   test/features/gamification/domain/quest_model_test.dart` — 6/6 zöld
   (format, analyze, célteszt, architecture, secrets, l10n).
+- Review-javítás RED: `flutter test
+  test/features/gamification/domain/quest_model_test.dart` — a módosítás
+  előtt 3 várt hiba (A1/A2 receipt identity, F1 instance-ütközés, F2
+  perzisztált receipt/expiry-invariáns hiánya).
+- Review-javítás GREEN: ugyanaz a célzott teszt a javítás után 10/10 zöld.
 
 ### Eltérés és nem futtatott ellenőrzés
 

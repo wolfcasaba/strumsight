@@ -21,7 +21,10 @@ void main() {
         expect(completed.receipt!.reasonCodes, const <RewardReason>[
           RewardReason.questCompleted,
         ]);
-        expect(completed.receipt!.ledgerId, 'quest:daily_rhythm:completion');
+        expect(
+          completed.receipt!.ledgerId,
+          'quest:daily:20686:daily_rhythm:completion',
+        );
         expect(
           completed.progress.completionAt,
           expiresAt.subtract(const Duration(seconds: 1)),
@@ -178,6 +181,67 @@ void main() {
       },
     );
 
+    test(
+      'F1: each scheduled quest instance receives a distinct stable receipt identity',
+      () {
+        final first = _progress(
+          generationEpochDay: 20686,
+        ).complete(at: expiresAt.subtract(const Duration(seconds: 1)));
+        final next = _progress(
+          generationEpochDay: 20687,
+        ).complete(at: expiresAt.subtract(const Duration(seconds: 1)));
+        final weekly = _progress(
+          cadence: QuestCadence.weekly,
+        ).complete(at: expiresAt.subtract(const Duration(seconds: 1)));
+        final retry = first.progress.complete(
+          at: expiresAt.subtract(const Duration(minutes: 1)),
+        );
+
+        expect(first.receipt!.ledgerId, isNot(next.receipt!.ledgerId));
+        expect(first.receipt!.ledgerId, isNot(weekly.receipt!.ledgerId));
+        expect(
+          first.receipt!.sourceEventId,
+          isNot(next.receipt!.sourceEventId),
+        );
+        expect(
+          first.receipt!.sourceEventId,
+          isNot(weekly.receipt!.sourceEventId),
+        );
+        expect(retry.receipt!.ledgerId, first.receipt!.ledgerId);
+        expect(retry.receipt!.sourceEventId, first.receipt!.sourceEventId);
+      },
+    );
+
+    test(
+      'F2: persisted completed records require their instance receipt and pre-expiry completion',
+      () {
+        final completed = _progress()
+            .complete(at: expiresAt.subtract(const Duration(seconds: 1)))
+            .progress;
+        final archived = completed.archive().progress;
+
+        for (final progress in <QuestProgress>[completed, archived]) {
+          final json = progress.toJson();
+
+          expect(QuestProgress.fromJson(json).toJson(), json);
+          expect(
+            () => QuestProgress.fromJson(<String, Object?>{
+              ...json,
+              'rewardLedgerId': 'attacker-controlled-receipt',
+            }),
+            throwsArgumentError,
+          );
+          expect(
+            () => QuestProgress.fromJson(<String, Object?>{
+              ...json,
+              'completionAt': expiresAt.toIso8601String(),
+            }),
+            throwsArgumentError,
+          );
+        }
+      },
+    );
+
     test('expiry boundary is exclusive for active quests', () {
       final progress = _progress();
 
@@ -205,24 +269,33 @@ void main() {
 QuestProgress _progress({
   int completedUnits = 0,
   List<String> practiceResultIds = const <String>[],
+  int generationEpochDay = 20686,
+  QuestCadence cadence = QuestCadence.daily,
 }) => QuestProgress.active(
-  definition: _definition(),
+  definition: _definition(
+    cadence: cadence,
+    generationEpochDay: generationEpochDay,
+  ),
   completedUnits: completedUnits,
   practiceResultIds: practiceResultIds,
 );
 
-QuestDefinition _definition({QuestObjective? objective}) => QuestDefinition(
+QuestDefinition _definition({
+  QuestObjective? objective,
+  int generationEpochDay = 20686,
+  QuestCadence cadence = QuestCadence.daily,
+}) => QuestDefinition(
   id: 'daily_rhythm',
   schemaVersion: questDefinitionSchemaVersion,
-  cadence: QuestCadence.daily,
+  cadence: cadence,
   objective: objective ?? PracticeModeQuestObjective(PracticeMode.rhythmOnly),
-  schedule: _schedule(),
+  schedule: _schedule(generationEpochDay: generationEpochDay),
   reward: QuestReward(baseXp: 25, bonusXp: 0, policyVersion: 1),
 );
 
-QuestSchedule _schedule() => QuestSchedule(
+QuestSchedule _schedule({int generationEpochDay = 20686}) => QuestSchedule(
   schemaVersion: questScheduleSchemaVersion,
-  generationEpochDay: 20686,
+  generationEpochDay: generationEpochDay,
   timezoneOffsetMinutes: 120,
   catalogVersion: 4,
   expiresAt: DateTime.utc(2026, 8, 22),
