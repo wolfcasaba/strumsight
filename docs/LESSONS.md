@@ -14318,3 +14318,33 @@ kiiktatása a re-review-ban célzottan piros lett, restore után zöld.
 
 **Őrteszt:** `test/features/gamification/domain/achievement_catalog_test.dart`
 „rejects non-finite thresholds and progress values” cellája.
+
+## L374 — A history hard capet a nyers caller-inputon, minden szűrés előtt kell érvényesíteni (E08-R14, F7/S6, H4 self-heal, 2026-08-21)
+
+**Mért hiba.** Az achievement evaluator `backfill` útvonala előbb a 30 napos
+ablakra szűrte a caller-supplied historyt, és csak az így kapott `retained`
+listát adta a 10 000-es capet őrző `rebuild`-nek. A független reviewer 10 001
+egyedi, de lejárt eseményt adott át: mind kiesett a dátumszűrésen, ezért várt
+`ArgumentError` helyett sikeres `AchievementEvaluationResult` érkezett. A
+névleges cap így nem korlátozta sem a nyers iterációt, sem a caller által
+kikényszeríthető munkát.
+
+**Javítás és regresszió.** A `backfill` most a nyers iteráció elemeit számlálja,
+és a 10 001. elemnél, még timestamp-vizsgálat és rebuild előtt fail-fast
+`ArgumentError`-t ad. A permanens 9 999/10 000/10 001 cella kifejezetten
+lejárt eseményeket használ: az első kettő elfogadott és kihagyottként számlált,
+a harmadik elutasított. Az őr eldobható eltávolítása ugyanazt a cellát pirosra
+vitte az eredeti hibaüzenettel; restore után a teljes round-gate 6/6 és a
+célzott suite 11/11 zöld lett.
+
+**Szabály.** Darabszám- vagy memóriahatárt mindig azon az inputrétegen őrizz,
+amelynek erőforrás-használatát korlátozni akarod. Filter, dedup vagy más
+transzformáció UTÁNI `.length` csak a kimenet méretét bizonyítja, a nyers
+bemenetét nem. H4 routingnál előbb mérd meg, hogy a hibás fájl létezik-e
+`main`-en: itt csak a még nem merge-elt E08-R14 ágon létezett, ezért az
+L304/L358 szabály szerint a fix plain push-sal a körágra került; a self-heal
+nem másolta át a teljes, még review alatt álló feature-t egy `main`-alapú heal
+ágra.
+
+**Őrteszt:** `test/features/gamification/application/achievement_evaluator_test.dart`
+„A8: backfill caps raw history before date filtering”.
