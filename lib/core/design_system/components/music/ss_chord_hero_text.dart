@@ -22,6 +22,7 @@ final class SsChordHeroText extends StatelessWidget {
 
     return Semantics(
       label: chordName,
+      excludeSemantics: true,
       child: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.center,

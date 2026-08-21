@@ -267,7 +267,9 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   tovább változatlan theme-builderrel.
 - `lib/core/design_system/components/music/ss_chord_hero_text.dart`: egyetlen,
   teljes chord labelt renderel; platform text scale-t hagyja érvényesülni és
-  csak a rendelkezésre álló szélességhez használ `BoxFit.scaleDown`-t.
+  csak a rendelkezésre álló szélességhez használ `BoxFit.scaleDown`-t. A
+  külső `Semantics` kizárja a gyermek szemantikáját, így pontosan egy chord
+  label marad a képernyőolvasónak.
 - `lib/core/design_system/public.dart`: a typography és chord-hero public
   exportjai.
 - `test/core/design_system/typography/*` és `foundations_test.dart`: token,
@@ -283,11 +285,18 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 - GREEN: `flutter test test/core/design_system/typography/ss_typography_test.dart test/core/design_system/typography/text_scale_overflow_test.dart test/core/design_system/foundations_test.dart`
   14 teszttel zöld volt az adapterbekötés után.
 - Végső gate: `tools/round-gate.sh test/core/design_system/typography/ss_typography_test.dart test/core/design_system/typography/text_scale_overflow_test.dart test/core/design_system/foundations_test.dart`
-  teljesen zöld; a strukturált eredmény `outcome: pass`, `exit_code: 0`.
+  teljesen zöld volt a semantics javítás után: format 1768 fájl (0 változás),
+  analyze 0 issue, typography 7/7, text-scale 5/5, foundations 3/3,
+  architecture, secrets (3173 fájl / 0 lelet) és l10n (1532/1532) zöld.
 - Valódi-sértés: az `SsChordHeroText` `FittedBox`-a köré ideiglenesen
   `SizedBox(height: 88)` került. A
   `flutter test test/core/design_system/typography/ss_typography_test.dart`
   célzott A1 cellája piros lett: `Expected: a value greater than <88.0>`,
   `Actual: <88.0>`. A fix magasságot azonnal eltávolítottuk.
+- Review F1 RED: az exact semantics cella a javítás előtt piros volt:
+  `Expected: 'Cmaj7#11'`, `Actual: 'Cmaj7#11\\nCmaj7#11'`.
+- Review F1 GREEN: `flutter test
+  test/core/design_system/typography/ss_typography_test.dart` a
+  `excludeSemantics: true` javítás után 7 teszttel zöld.
 
 ## 11. Review — a Claude tölti ki

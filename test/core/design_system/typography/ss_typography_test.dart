@@ -116,6 +116,14 @@ void main() {
       expect(find.text('Cmaj7#11'), findsOneWidget);
     },
   );
+
+  testWidgets('chord hero exposes exactly one complete semantics label', (
+    tester,
+  ) async {
+    await _pumpChordHero(tester, width: 320, textScale: 1);
+
+    expect(tester.getSemantics(find.byType(SsChordHeroText)).label, 'Cmaj7#11');
+  });
 }
 
 Future<void> _pumpChordHero(
