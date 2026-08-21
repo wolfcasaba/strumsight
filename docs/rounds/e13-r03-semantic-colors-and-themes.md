@@ -243,4 +243,41 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Módosítások
+
+- `foundations/ss_colors.dart`: a teljes, 23 mezős `SsColorScheme`, névvel
+  ellátott interaction overlayek, High Contrast viselkedési extension és a
+  színtől független ikon-marker contract.
+- `themes/ss_{dark,light,high_contrast}_theme.dart`: a három önálló
+  `ThemeData`, a legacy palettát olvasó extensionökkel.
+- `tool/ui_contrast_check.dart`: közös sRGB-kontraszt-számítás és CLI.
+- `component_catalog_screen.dart`: development-only, ikon-alapú háromtéma
+  kapcsoló és négy status marker.
+- A két új célzott teszt méri a szemantikai invariánsokat, a High Contrast
+  viselkedést, a marker-contractot, a catalogot és a kontrasztküszöböket.
+
+### Futtatott ellenőrzések
+
+- `flutter test test/core/design_system/themes/ss_color_scheme_test.dart
+  test/core/design_system/themes/contrast_test.dart` → 11 teszt zöld.
+- A meglévő catalog/foundation regresszióval együtt:
+  `flutter test test/core/design_system/foundations_test.dart
+  test/core/design_system/component_catalog_test.dart
+  test/core/design_system/themes/ss_color_scheme_test.dart
+  test/core/design_system/themes/contrast_test.dart` → 21 teszt zöld.
+- Valódi-sértés próba: a `contrast_test.dart` tesztben ideiglenesen
+  `textPrimary: canvas` mutációra `isTrue` elvárást állítottam. A futás a várt
+  `Expected: true / Actual: <false>` hibával piros lett; az elvárást
+  `isFalse`-ra visszaállítottam.
+- `tools/round-gate.sh test/core/design_system/themes/ss_color_scheme_test.dart
+  test/core/design_system/themes/contrast_test.dart` → format, analyze, mindkét
+  célzott teszt, architecture, secrets és l10n zöld.
+
+### Eltérések és nem futtatott ellenőrzések
+
+- Az első gate-kísérletben az analyzer az új CLI `print` hívását jelezte;
+  `stdout.writeln`-re cserélve a végső gate zöld.
+- Teljes Flutter suite, property gate és APK/CI nem helyben fut: ezek a
+  következő orchestrátor-fázis merge-kapui.
+
 ## 11. Review — a Claude tölti ki
