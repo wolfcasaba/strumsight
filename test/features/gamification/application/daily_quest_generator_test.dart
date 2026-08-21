@@ -94,28 +94,37 @@ void main() {
       );
     });
 
-    test('A3: camera unavailability only excludes the camera quest', () {
-      final ids = _shippingCapabilityQuestIds(cameraAvailable: false);
+    test('A3-camera: camera unavailability excludes its isolated quest', () {
+      final ids = _isolatedCapabilityQuestIds(
+        capability: QuestCapability.camera,
+        cameraAvailable: false,
+        accountAvailable: true,
+        cloudAvailable: true,
+      );
 
-      expect(ids, isNot(contains('daily_camera')));
-      expect(ids, contains('daily_account'));
-      expect(ids, contains('daily_cloud'));
+      expect(ids, <String>['daily_rhythm']);
     });
 
-    test('A3: account unavailability only excludes the account quest', () {
-      final ids = _shippingCapabilityQuestIds(accountAvailable: false);
+    test('A3-account: account unavailability excludes its isolated quest', () {
+      final ids = _isolatedCapabilityQuestIds(
+        capability: QuestCapability.account,
+        cameraAvailable: true,
+        accountAvailable: false,
+        cloudAvailable: true,
+      );
 
-      expect(ids, contains('daily_camera'));
-      expect(ids, isNot(contains('daily_account')));
-      expect(ids, contains('daily_cloud'));
+      expect(ids, <String>['daily_rhythm']);
     });
 
-    test('A3: cloud unavailability only excludes the cloud quest', () {
-      final ids = _shippingCapabilityQuestIds(cloudAvailable: false);
+    test('A3-cloud: cloud unavailability excludes its isolated quest', () {
+      final ids = _isolatedCapabilityQuestIds(
+        capability: QuestCapability.cloud,
+        cameraAvailable: true,
+        accountAvailable: true,
+        cloudAvailable: false,
+      );
 
-      expect(ids, contains('daily_camera'));
-      expect(ids, contains('daily_account'));
-      expect(ids, isNot(contains('daily_cloud')));
+      expect(ids, <String>['daily_rhythm']);
     });
 
     test(
@@ -224,26 +233,42 @@ DailyQuestGenerationSnapshot _snapshot({
   isNewProfile: isNewProfile,
 );
 
-Set<String> _shippingCapabilityQuestIds({
-  bool cameraAvailable = true,
-  bool accountAvailable = true,
-  bool cloudAvailable = true,
-}) => DailyQuestGenerator(catalog: defaultDailyQuestCatalog())
-    .generate(
-      _snapshot(
-        cameraAvailable: cameraAvailable,
-        accountAvailable: accountAvailable,
-        cloudAvailable: cloudAvailable,
-        objectives: <QuestObjective>[
-          SkillTagQuestObjective('rhythm'),
-          SkillTagQuestObjective('camera'),
-          SkillTagQuestObjective('account'),
-          SkillTagQuestObjective('cloud'),
-        ],
-      ),
-    )
-    .map((quest) => quest.definition.id)
-    .toSet();
+List<String> _isolatedCapabilityQuestIds({
+  required QuestCapability capability,
+  required bool cameraAvailable,
+  required bool accountAvailable,
+  required bool cloudAvailable,
+}) {
+  final capabilityQuestId = switch (capability) {
+    QuestCapability.camera => 'daily_camera',
+    QuestCapability.account => 'daily_account',
+    QuestCapability.cloud => 'daily_cloud',
+  };
+  return DailyQuestGenerator(
+        catalog: DailyQuestCatalog(
+          entries: <DailyQuestCatalogEntry>[
+            _entry('daily_rhythm', isShort: true),
+            _entry(
+              capabilityQuestId,
+              capabilities: <QuestCapability>{capability},
+            ),
+          ],
+        ),
+      )
+      .generate(
+        _snapshot(
+          cameraAvailable: cameraAvailable,
+          accountAvailable: accountAvailable,
+          cloudAvailable: cloudAvailable,
+          objectives: <QuestObjective>[
+            SkillTagQuestObjective('rhythm'),
+            SkillTagQuestObjective(_skillTagFor(capabilityQuestId)),
+          ],
+        ),
+      )
+      .map((quest) => quest.definition.id)
+      .toList(growable: false);
+}
 
 DailyQuestCatalog _catalog({List<String>? ids}) {
   final entries = <DailyQuestCatalogEntry>[
