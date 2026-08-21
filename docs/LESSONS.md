@@ -14532,3 +14532,88 @@ közvetlenül a kombinált gate előtt újra kell futtatni. Ez környezeti
 helyreállítás, nem tracked forrás- vagy gate-módosítás.
 
 **Őrteszt:** nincs — gitignore-olt, upstreamfüggő környezeti előfeltétel; a reprodukció a `.pipeline/land-E13-R03.log` 38 analyzer hibája, majd ugyanazon HEAD-en prepare + 7/7 zöld gate.
+
+## L384 — Ismétlődő katalóguselem receiptje a példányt, nem csak a definíciót azonosítsa (E08-R16, 2026-08-21)
+
+**Mért snag.** Az első quest-contract a ledger- és source-event ID-t csak a
+stabil `QuestDefinition.id` értékéből képezte. Két `daily_rhythm` quest
+`generationEpochDay = 20686` és `20687` schedule-lel ugyanazt a
+`quest:daily_rhythm:completion` receiptet adta. Az idempotens reward ledger
+ezért a második napi teljesítést az első retryjának nézhette volna.
+
+**Javítás és szabály.** Ismétlődő tartalomnál külön kell választani a
+katalógus-definíció és a futási példány identityjét. A receipt és a source
+event most a cadence + generation epoch day + stabil definition ID
+összetételéből származik: ugyanazon instance retryja azonos, más nap vagy
+cadence eltérő.
+
+**Őrteszt:** `test/features/gamification/domain/quest_model_test.dart` —
+„F1: each scheduled quest instance receives a distinct stable receipt identity”.
+
+## L385 — A persisted terminális állapotnak ugyanazokat az invariánsokat kell újraérvényesítenie, mint az élő átmenetnek (E08-R16, 2026-08-21)
+
+**Mért snag.** Az élő `complete()` helyesen képezte a receiptet és kizárta a
+lejárati határon történő teljesítést, de a támogatott schemaVersionből
+betöltött completed rekord tetszőleges `rewardLedgerId`-t és
+`completionAt >= expiresAt` időt is elfogadott. Az életciklus rövidzárja így
+később hiteles receiptként adhatta vissza a manipulált adatot.
+
+**Javítás és szabály.** A konstruktor/deszerializáló completed és
+archived-completed rekordnál is megköveteli a pontos instance-derived ledger
+ID-t, az UTC completion időt és a szigorú `completionAt < expiresAt`
+feltételt. A live command guardja nem helyettesíti a persistence trust-boundary
+validációját.
+
+**Őrteszt:** `test/features/gamification/domain/quest_model_test.dart` —
+„F2: persisted completed records require their instance receipt and pre-expiry completion”.
+
+## L386 — Párhuzamos zárásnál a git-notes refet is össze kell fésülni, nem csak a main ágat (E08-R16, 2026-08-21)
+
+**Mért snag.** Az E08-R16 note-ja lokálisan elkészült, de a
+`git push origin 'refs/notes/*'` non-fast-forward hibával leállt: a másik
+slot közben új remote notes-commitot publikált. A normál push helyesen nem
+írta felül a másik kör auditnyomát.
+
+**Javítás és szabály.** A merge-zár alatt a remote notes-refet külön temp
+refbe kell fetch-elni, majd `git notes merge`-dzsel egyesíteni és csak ezután
+pusholni. A main-branch merge-zár önmagában nem frissíti a lokális
+`refs/notes/commits` állapotát.
+
+**Őrteszt:** nincs — a reprodukció a remote által visszautasított
+non-fast-forward notes-push; a javított fetch + notes-merge + push ugyanazon
+zár alatt fast-forwarddal zárt (`f9985417..f21adc47`).
+
+## L387 — Egy ThemeData-integráció scope-ja a meglévő adapter-kompatibilitási tesztet is magában foglalja (E13-R04, H3 self-heal, 2026-08-21)
+
+**Mért hiba.** Az E13-R04 pre-flightja az ADR 0383 §D3-ban kötött szerződéssé
+tette, hogy az `SsTypography` a
+`SsThemeExtensions.legacyThemeForBrightness` által visszaadott `ThemeData`
+extensionjei közé kerüljön. A meglévő
+`test/core/design_system/foundations_test.dart:41-50` ugyanakkor közvetlen
+`equals(AppTheme.dark())` és `equals(AppTheme.light())` objektumegyenlőséget
+várt. A helyes extension-regisztráció ezt a cellát a teljes CI-ban
+szükségképpen pirosra vinné, de az eredeti brief sem az allowlistben, sem a
+célzott gate-ben nem tartalmazta a tesztet. Az implementer ezért helyesen
+`stopped` jelzést adott production módosítás nélkül.
+
+**Gyökérok és javítás.** Ez B osztályú tranzakciós scope-hiány: a production
+adapter engedélyezése önmagában nem elég, ha annak korábbi kompatibilitási
+contractja egy másik, meglévő tesztben él. A brief exact egyetlen úttal,
+`test/core/design_system/foundations_test.dart`-tal bővült az
+`allowed_paths` és `gate_tests` listában is. A folytatott product kör ugyanabban
+a commitban őrzi meg a legacy szín-/theme-forrás paritását és cseréli le a
+túl erős teljes-objektum egyenlőséget olyan kompatibilitási állításra, amely
+az új typography extension tényleges jelenlétét is méri. Más design-system
+tesztút nem nyílt meg; a self-heal nem implementálta előre a product kódot.
+
+**Precedens-ellenőrzés.** Az L246 ugyanennek az absztrakt hibának a korábbi
+adapteres esete: egy port vagy integrációs pont engedélyezése mellett annak
+konkrét adaptere/contractja is scope. Az E13-R02 előzmények a compatibility
+layer forrásparitását bizonyítják, de a mostani, új extension miatt elavuló
+teljes `ThemeData`-egyenlőség külön mért eset.
+
+**Őrteszt:**
+`tools/tests/test_e13_r04_typography_foundations_scope.py` — a brief-revízió
+előtt 4/5 cella piros, utána 5/5 zöld; a valódi brief-parserrel és
+scope-audittal őrzi az exact új fájlt, a testvérút tiltását és a célzott
+gate-tagságot.

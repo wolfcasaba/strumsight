@@ -12,36 +12,25 @@
 > **tényleges** asset-elérhetőségét (`pubspec.yaml` fonts szekció), mert a §5.1
 > szerep-kiosztás erre épül. Eltérésnél §0.0 revízió.
 
-## 0.0 Pre-flight revízió — 2026-08-21
+## 0.0.1 H3 scope-revízió — ADR 0112 önjavító kör, 2026-08-21
 
-- A foglaló (`tools/round-slots.py reserve-adr --round E13-R04`) a `0383`
-  számot adta; a kör döntéseit az
-  [`ADR 0383`](../adr/0383-typography-and-text-scale-contract.md) rögzíti.
-- A `pubspec.yaml:75-90` és a hat tényleges asset igazolja a Poppins
-  400/500/600/700/800, valamint a Montserrat család elérhetőségét. A brief
-  szerep-kiosztása emiatt változatlan.
-- A tényleges theme-hívási lánc: `SsDarkTheme`/`SsLightTheme` először a
-  `SsThemeExtensions.legacyThemeForBrightness` eredményét olvassa, majd a
-  meglévő extensionöket megőrzi. Ezért a tipográfia a már engedélyezett
-  `ss_theme_extensions.dart` fájlban, a legacy adapter eredményéhez adva
-  mindhárom design-system témába beköthető; nincs szükség fájllista-tágításra.
-- Nincs ma `ss_typography.dart`, chord-hero komponens vagy typography-teszt;
-  az új API ezért nem migrál lezárt feature-viselkedést. A kör nem kezel
-  állapotgépet vagy lifecycle-erőforrást, így a státusz-input és
-  erőforrás-tulajdonlási pre-flight szabály nem alkalmazandó.
-- Kötelező visszakeresés: **nincs releváns előzmény** közvetlen, korábbi
-  tipográfiai döntésként a szűkített `lessons,halts,adr`, majd
-  `lessons,halts`, végül a teljes korpusz keresése alapján. A releváns
-  módszertani találat
-  [`lessons/L382`](../LESSONS.md): a hozzáférhetőségi contractot valódi
-  rontással kell falszifikálni. Az E13-R04 ezért megtartja a fix magasságú
-  komponens kötelező piros mutációját.
+A megállt kör `54b32ed0` pre-flight commitja által lefoglalt ADR 0383 §D3
+kötelezővé teszi, hogy az `SsTypography` a
+`SsThemeExtensions.legacyThemeForBrightness` által visszaadott `ThemeData`
+extensionjei közé kerüljön. A meglévő
+`test/core/design_system/foundations_test.dart:41-50` ezzel szemben közvetlen
+`equals(AppTheme.dark())` és `equals(AppTheme.light())` objektumegyenlőséget
+vár. A helyes integráció ezért a teljes CI-ban ezt a már létező tesztet
+szükségképpen pirosra vinné, miközben az eredeti brief nem engedte módosítani.
 
-> **Kockázat = high, indoklás:** a Stage Mode legfontosabb zenei jelének
-> olvashatósága és a 200%-os accessibility text scale termékhatár; egy
-> látszólag zöld, de clippinget vagy ellipszist engedő contract közvetlenül
-> kizárná a nagy szöveget igénylő felhasználót. A magas kockázat ezért
-> accessibility/correctness okú, nem a router path-fragmentjeiből ered.
+Ez B osztályú, tranzakciós brief-hiány, nem production- vagy gate-hiba. Az
+allowlist és a célzott gate pontosan a
+`test/core/design_system/foundations_test.dart` fájllal bővül. A product kör
+ugyanabban a commitban köteles úgy frissíteni a kompatibilitási cellát, hogy a
+legacy szín- és theme-forrásokra vonatkozó állítások megmaradjanak, miközben a
+három design-system theme-ben ténylegesen ellenőrzi az `SsTypography`
+extensiont. Más `test/core/design_system/**` út nem nyílik meg; a self-heal
+production Dart-kódot nem visz előre.
 
 ```ai-router
 schema_version = 1
@@ -53,12 +42,14 @@ allowed_paths = [
   "lib/core/design_system/public.dart",
   "test/core/design_system/typography/ss_typography_test.dart",
   "test/core/design_system/typography/text_scale_overflow_test.dart",
+  "test/core/design_system/foundations_test.dart",
   "docs/ui/typography.md",
   "docs/rounds/e13-r04-typography-and-text-scale.md",
 ]
 gate_tests = [
   "test/core/design_system/typography/ss_typography_test.dart",
   "test/core/design_system/typography/text_scale_overflow_test.dart",
+  "test/core/design_system/foundations_test.dart",
 ]
 native_gate = false
 ```
@@ -108,6 +99,7 @@ tesztek · heading-hierarchia dokumentálása.
 | `components/music/ss_chord_hero_text.dart` | **ÚJ** — adaptív akkordnév |
 | `public.dart` | az export bővítése |
 | `test/…/typography/*_test.dart` (2) | a §6 cellái |
+| `test/core/design_system/foundations_test.dart` | a legacy adapter és az új typography extension közös kompatibilitási cellája |
 | `docs/ui/typography.md` | **ÚJ** — heading-hierarchia és használat |
 | `docs/rounds/e13-r04-…md` | a §10 handoff |
 
@@ -175,6 +167,7 @@ tükrözik.
 | A5 | Hosszú magyar fixture 1.0 / 1.3 / 2.0 scale-en elfér | `text_scale_overflow_test.dart` |
 | A6 | Nincs ad hoc `TextStyle` az új kódban | `grep` a diffben |
 | A7 | A heading-hierarchia dokumentált és semantics-kompatibilis | `docs/ui/typography.md` |
+| A8 | A legacy theme-források megmaradnak, és mindhárom design-system theme-ből lekérhető az `SsTypography` extension | `foundations_test.dart` + `ss_typography_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -202,7 +195,7 @@ kritikus komponens magasságát → az **A1** cellának PIROSNAK kell lennie →
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/core/design_system/typography/ss_typography_test.dart test/core/design_system/typography/text_scale_overflow_test.dart
+tools/round-gate.sh test/core/design_system/typography/ss_typography_test.dart test/core/design_system/typography/text_scale_overflow_test.dart test/core/design_system/foundations_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
@@ -214,11 +207,13 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 1. `ss_typography.dart` — a Ch13 §9.4 scale-je.
 2. A `ThemeExtension` bekötése.
-3. `ss_chord_hero_text.dart` — adaptív méretezés, ellipszis NÉLKÜL.
-4. Hosszú magyar fixture-ök + a három text-scale cella.
-5. `docs/ui/typography.md` — heading-hierarchia.
-6. A valódi-sértés próba, §10-be dokumentálva.
-7. `tools/round-gate.sh` a §7 szerint.
+3. A meglévő `foundations_test.dart` kompatibilitási cellájának tranzakciós
+   frissítése: legacy forrásparitás + typography-extension regisztráció.
+4. `ss_chord_hero_text.dart` — adaptív méretezés, ellipszis NÉLKÜL.
+5. Hosszú magyar fixture-ök + a három text-scale cella.
+6. `docs/ui/typography.md` — heading-hierarchia.
+7. A valódi-sértés próba, §10-be dokumentálva.
+8. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 
