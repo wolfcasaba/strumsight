@@ -1,5 +1,24 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 [HEAL E08-R14/H4] KÉSZ — a nyers achievement-backfill cap a dátumszűrés előtt érvényesül (2026-08-21, L374)
+
+Az E08-R14 független review-ja 10 001, egyedi, de lejárt eseménnyel
+reprodukálta, hogy a 10 000-es history-cap csak a dátumszűrés utáni üres
+listát védi: várt `ArgumentError` helyett sikeres
+`AchievementEvaluationResult` érkezett. A javítás a nyers iteráció 10 001.
+eleménél, még szűrés és rebuild előtt fail-fast hibát ad. A permanens A8
+regresszió 9 999 és 10 000 lejárt eseményt elfogad, 10 001-et elutasít.
+
+A hibás evaluator még nem létezett `main`-en, ezért az L304/L358 H4-minta
+szerint a termékjavítás közvetlenül a megállt kör saját ágára került:
+`terra/e08-r14-achievement-evaluator-and-projection`, fix `ae703918`, végső
+review-HEAD `af6f2fce`. Független detached re-review: correctness **APPROVED**,
+security **PASS**, scope-audit 2/2 engedélyezett útvonal, round-gate 6/6 zöld,
+célzott suite 11/11. Az input-őr eldobható eltávolítása az új cellát pirosra
+vitte; restore után zöld és tiszta volt a klón. A teljes CI/PR/merge nem a
+self-heal feladata: a következő friss E08-R14 session az `af6f2fce` ágról
+folytatja a szokásos exact-SHA CI és zöld-kapus landolást.
+
 ## ✅ E08-R13 KÉSZ — Achievement domain és lokalizált katalógus — PR #376, squash `f9d5bbc8` (2026-08-21, L372–L373)
 
 A gamification feature 22 stabil ID-jú, EN/HU lokalizált achievementből álló
