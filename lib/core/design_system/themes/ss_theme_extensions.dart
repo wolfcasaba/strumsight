@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../foundations/ss_typography.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_theme.dart';
@@ -63,6 +64,8 @@ final class SsThemeColors extends ThemeExtension<SsThemeColors> {
 
 /// Compatibility accessors for the legacy theme contracts during migration.
 abstract final class SsThemeExtensions {
+  static const typography = SsTypography.standard();
+
   /// Returns extension colors for [brightness] from the legacy color sources.
   static SsThemeColors forBrightness(Brightness brightness) {
     final palette = brightness == Brightness.dark
@@ -79,8 +82,13 @@ abstract final class SsThemeExtensions {
     );
   }
 
-  /// Returns the existing legacy [AppTheme] for [brightness] without copying it.
+  /// Returns the legacy [AppTheme] while preserving its extensions.
   static ThemeData legacyThemeForBrightness(Brightness brightness) {
-    return brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
+    final legacy = brightness == Brightness.dark
+        ? AppTheme.dark()
+        : AppTheme.light();
+    return legacy.copyWith(
+      extensions: [...legacy.extensions.values, typography],
+    );
   }
 }

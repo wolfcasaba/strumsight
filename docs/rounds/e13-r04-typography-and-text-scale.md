@@ -1,16 +1,44 @@
 # E13-R04 — Tipográfia és text-scale resilience
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 903e7a7d`)
+- **Státusz:** IN PROGRESS (pre-flight folytatva: 2026-08-21, `main @ d5701b61`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 4
 - **Kör-azonosító:** `E13-R04`
-- **Branch:** `<motor>/e13-r04-typography-and-text-scale`
+- **Branch:** `terra/e13-r04-typography-and-text-scale`
 - **Előfeltétel:** `E13-R03` merge-elve (szemantikai színek)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a Ch13 §9.4 scale-je adott.
+- **Előre kiosztott ADR:** `0383` — a foglaló adta az E13-R04-nek.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** ellenőrizd a Poppins és Montserrat
 > **tényleges** asset-elérhetőségét (`pubspec.yaml` fonts szekció), mert a §5.1
 > szerep-kiosztás erre épül. Eltérésnél §0.0 revízió.
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+- A foglaló meglévő, atomi markere és a korábbi product pre-flight commitja
+  az E13-R04-hez a `0383` számot rendeli; a kör döntéseit az
+  [`ADR 0383`](../adr/0383-typography-and-text-scale-contract.md) rögzíti.
+- A `pubspec.yaml:75-90` és a hat tényleges asset igazolja a Poppins
+  400/500/600/700/800, valamint a Montserrat család elérhetőségét. A brief
+  szerep-kiosztása emiatt változatlan.
+- A tényleges theme-hívási lánc: `SsDarkTheme`/`SsLightTheme` először a
+  `SsThemeExtensions.legacyThemeForBrightness` eredményét olvassa, majd a
+  meglévő extensionöket megőrzi. A tipográfia a már engedélyezett
+  `ss_theme_extensions.dart` fájlban mindhárom design-system témába beköthető.
+- Nincs ma `ss_typography.dart`, chord-hero komponens vagy commitolt
+  typography-teszt. A kör nem kezel állapotgépet vagy lifecycle-erőforrást,
+  így a státusz-input és erőforrás-tulajdonlási mérés nem alkalmazandó.
+- A kötelező, sorrendi **visszakeresett előzmény** vizsgálata megtörtént a szűkített
+  `lessons,halts,adr`, majd `lessons,halts`, végül a teljes korpuszon. A
+  közvetlen előzmény az [`ADR 0381`](../adr/0381-semantic-theme-and-accessibility-contract.md)
+  theme-extension szerződése; a releváns falszifikációs precedensek
+  [`lessons/L381`](../LESSONS.md) és [`lessons/L382`](../LESSONS.md). Az index
+  egy committal elavult volt, ezért az újabb H3-heal tényét közvetlenül a
+  verziózott [`lessons/L387`](../LESSONS.md) és a fenti §0.0.1 rögzíti.
+
+> **Kockázat = high, indoklás:** a Stage Mode legfontosabb zenei jelének
+> olvashatósága és a 200%-os accessibility text-scale termékhatár közvetlenül
+> sérülhet clippinggel vagy ellipszissel. A magas kockázat accessibility és
+> correctness eredetű, nem a router path-fragmentjeiből következik.
 
 ## 0.0.1 H3 scope-revízió — ADR 0112 önjavító kör, 2026-08-21
 
@@ -143,6 +171,19 @@ sajátot.
 A Ch13 §9.4 mért szabálya: a magyar címek hosszabbak. A fixture-ök ezt
 tükrözik.
 
+### 5.7 Kötött integrációs szerződés
+
+- Az `SsTypography` immutable `ThemeExtension`, a Chapter 13 §9.4 mind a
+  tizenegy tokenjével.
+- A design-system Dark Studio, Warm Light és High Contrast `ThemeData`
+  eredményében a tipográfia ténylegesen lekérhető extensionként; puszta
+  statikus style-katalógus nem elegendő.
+- A metrika értékét és egységét a production API nem törő szóközzel kapcsolja
+  össze; két, egymástól független `Text` widget nem elfogadható.
+- A chord hero egyetlen teljes címkét renderel, a platform text scale-t
+  megtartja, és csak helyhiánynál skáláz le. `ellipsis`, karakterlevágás vagy
+  a text scale felülírása nem elfogadható.
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
@@ -212,5 +253,50 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   lokalizált buildben látszik (A5).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Implementáció
+
+- `lib/core/design_system/foundations/ss_typography.dart`: az immutable,
+  teljes Chapter 13 scale-t tartalmazó `ThemeExtension`, Poppins/Montserrat szerepekkel, tabular
+  metric feature-rel, viewport-alapú chord design-size helperrel és nem törő
+  metric label helperrel.
+- `lib/core/design_system/themes/ss_theme_extensions.dart`: a legacy
+  `AppTheme` adapter szín- és theme-forrásai változatlanok; a visszaadott
+  `ThemeData` a meglévő extensionöket megőrizve kapja a közös typography
+  extensiont. Dark Studio, Warm Light és High Contrast ezt az adaptert viszi
+  tovább változatlan theme-builderrel.
+- `lib/core/design_system/components/music/ss_chord_hero_text.dart`: egyetlen,
+  teljes chord labelt renderel; platform text scale-t hagyja érvényesülni és
+  csak a rendelkezésre álló szélességhez használ `BoxFit.scaleDown`-t. A
+  külső `Semantics` kizárja a gyermek szemantikáját, így pontosan egy chord
+  label marad a képernyőolvasónak.
+- `lib/core/design_system/public.dart`: a typography és chord-hero public
+  exportjai.
+- `test/core/design_system/typography/*` és `foundations_test.dart`: token,
+  font-feature, non-breaking metric label, theme-extension, 1.0/1.3/2.0/2.5
+  Hungarian fixture és legacy-forrásparitás cellák.
+- `docs/ui/typography.md`: token-hierarchia és heading-semantics használat.
+
+### Futtatott bizonyíték
+
+- RED: `flutter test test/core/design_system/typography/ss_typography_test.dart test/core/design_system/typography/text_scale_overflow_test.dart test/core/design_system/foundations_test.dart`
+  az adapterbekötés előtt piros volt: mindhárom design-system theme-ből hiányzott
+  az `SsTypography` extension.
+- GREEN: `flutter test test/core/design_system/typography/ss_typography_test.dart test/core/design_system/typography/text_scale_overflow_test.dart test/core/design_system/foundations_test.dart`
+  14 teszttel zöld volt az adapterbekötés után.
+- Végső gate: `tools/round-gate.sh test/core/design_system/typography/ss_typography_test.dart test/core/design_system/typography/text_scale_overflow_test.dart test/core/design_system/foundations_test.dart`
+  teljesen zöld volt a semantics javítás után: format 1768 fájl (0 változás),
+  analyze 0 issue, typography 7/7, text-scale 5/5, foundations 3/3,
+  architecture, secrets (3173 fájl / 0 lelet) és l10n (1532/1532) zöld.
+- Valódi-sértés: az `SsChordHeroText` `FittedBox`-a köré ideiglenesen
+  `SizedBox(height: 88)` került. A
+  `flutter test test/core/design_system/typography/ss_typography_test.dart`
+  célzott A1 cellája piros lett: `Expected: a value greater than <88.0>`,
+  `Actual: <88.0>`. A fix magasságot azonnal eltávolítottuk.
+- Review F1 RED: az exact semantics cella a javítás előtt piros volt:
+  `Expected: 'Cmaj7#11'`, `Actual: 'Cmaj7#11\\nCmaj7#11'`.
+- Review F1 GREEN: `flutter test
+  test/core/design_system/typography/ss_typography_test.dart` a
+  `excludeSemantics: true` javítás után 7 teszttel zöld.
 
 ## 11. Review — a Claude tölti ki

@@ -28,7 +28,7 @@ void main() {
   });
 
   test(
-    'theme compatibility adapter reads the legacy color sources and themes',
+    'theme compatibility adapter preserves legacy sources and registers typography',
     () {
       final dark = SsThemeExtensions.forBrightness(Brightness.dark);
       final light = SsThemeExtensions.forBrightness(Brightness.light);
@@ -39,14 +39,42 @@ void main() {
       expect(dark.surface, same(AppPalette.dark.surface));
       expect(light.canvas, same(AppPalette.light.bg));
       expect(light.textPrimary, same(AppPalette.light.ink));
+      final darkLegacy = AppTheme.dark();
+      final lightLegacy = AppTheme.light();
+      final darkAdapter = SsThemeExtensions.legacyThemeForBrightness(
+        Brightness.dark,
+      );
+      final lightAdapter = SsThemeExtensions.legacyThemeForBrightness(
+        Brightness.light,
+      );
+
+      expect(darkAdapter.colorScheme, equals(darkLegacy.colorScheme));
+      expect(darkAdapter.textTheme, equals(darkLegacy.textTheme));
       expect(
-        SsThemeExtensions.legacyThemeForBrightness(Brightness.dark),
-        equals(AppTheme.dark()),
+        darkAdapter.scaffoldBackgroundColor,
+        equals(darkLegacy.scaffoldBackgroundColor),
+      );
+      expect(lightAdapter.colorScheme, equals(lightLegacy.colorScheme));
+      expect(lightAdapter.textTheme, equals(lightLegacy.textTheme));
+      expect(
+        lightAdapter.scaffoldBackgroundColor,
+        equals(lightLegacy.scaffoldBackgroundColor),
       );
       expect(
-        SsThemeExtensions.legacyThemeForBrightness(Brightness.light),
-        equals(AppTheme.light()),
+        darkAdapter.extension<SsTypography>(),
+        same(SsThemeExtensions.typography),
       );
+      expect(
+        lightAdapter.extension<SsTypography>(),
+        same(SsThemeExtensions.typography),
+      );
+      for (final theme in <ThemeData>[
+        SsDarkTheme.data(),
+        SsLightTheme.data(),
+        SsHighContrastTheme.data(),
+      ]) {
+        expect(theme.extension<SsTypography>(), isNotNull);
+      }
     },
   );
 
