@@ -326,5 +326,6 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 11. Review — a Claude tölti ki
 
-Első független Sol review: **CHANGES REQUIRED**, 0 BLOCKER / 6 MAJOR.
-Részletes leletlista: [`docs/reviews/e13-r05-review.md`](../reviews/e13-r05-review.md).
+Független Sol re-review: **APPROVED**, 0 nyitott BLOCKER / MAJOR. Az első
+review 6 MAJOR leletét a Terra javító commit (`ee12446b`) lezárta; részletes
+bizonyíték: [`docs/reviews/e13-r05-review.md`](../reviews/e13-r05-review.md).

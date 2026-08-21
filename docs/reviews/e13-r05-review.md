@@ -3,32 +3,32 @@
 Brief: `docs/rounds/e13-r05-spacing-and-surfaces.md`
 Diff: `12d0a846..0ffceb95`
 Reviewer: Codex Sol (`gpt-5.6-sol`) · Dátum: 2026-08-21
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-Nyitott BLOCKER: 0 · MAJOR: 6 · MINOR: 0 · NOTE: 0
+Nyitott BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-A scope és a 7 lépéses izolált round-gate zöld, de a contract tartalmi
-falszifikációja hat rést talált. A merge tilos, amíg F1–F6 nincs javítva és
-függetlenül újramérve.
+A Terra javító commit (`ee12446b`) lezárta F1–F6 minden MAJOR leletét. A friss
+izolált re-review gate 7/7 zöld; a hat reviewer-visszarontás mind a hozzá
+tartozó production regressziós cellát vitte pirosra, restore után a klón tiszta.
 
 ## Acceptance criteria
 
 | # | Teljesült | Bizonyíték |
 |---|---|---|
-| A1 | ❌ | F5: a publikus `double` padding/spacing paraméterek 13 dp-t elfogadnak |
-| A2 | ❌ | F1: a `base` szint `surfaceRaised`-re oldódik; F2: a blend-drift nem piros |
+| A1 | ✅ | fix `SsSpacing.space4/space6/space2` API; nyers `double` visszahelyezése piros |
+| A2 | ✅ | base exact `surface`; emelt szintek `surfaceRaised`-alapú canonical fixture-rel |
 | A3 | ✅ | dark shadow 0; light shadow 1/2/4, központosított resolver |
 | A4 | ✅ | `safeArea: true` egy `SafeArea`-t épít nested esetben |
 | A5 | ✅ | hero source-őr és architecture gate; nincs feature/provider import |
 | A6 | ✅ | mindhárom téma × négy szint renderel |
-| A7 | ❌ | F4: `Radius.circular(9)` rontással a source-őr zöld maradt |
-| A8 | ❌ | F3: `borderStrong` → `border` rontással a High Contrast cella zöld maradt |
-| A9 | ❌ | F2/F3: a vizuális mátrix nem pineli a helyes canonical értékeket/selectorokat |
+| A7 | ✅ | `Radius.circular(9)` rontás a source-őrt pirosra vitte |
+| A8 | ✅ | distinct `border`/`borderStrong` témán a selector-rontás piros |
+| A9 | ✅ | három téma × négy szint pinelt ARGB/border-width/shadow fixture; blend-rontás piros |
 | A10 | ✅ | nested surface 2.0 text scale-en exception nélkül renderel |
 | A11 | ✅ | 320/600/840 szélesség 16/24/32 dp tokenre oldódik |
-| A12 | ❌ | F4: a tényleges `BorderRadius.all(Radius.circular(...))` alak megkerüli a regexpet |
+| A12 | ✅ | `Radius.circular`, `BorderRadius.circular`, only/all és directional inset guardian cellák zöldek |
 
 ## Scope-audit
 
@@ -54,7 +54,8 @@ jelzése is `scope_audit=ok`; a jelzéskori `dirty_files=1` után a tényleges
 - **Kötelező javítás:** a base exact `colors.surface` legyen; az emelt szintek
   külön, explicit `surfaceRaised`-alapú úton oldódjanak. A fenti distinct-token
   regressziós cella kerüljön a production tesztbe.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ee12446b`) — distinct surface/surfaceRaised cella; a
+  base-rontás a re-review-ban piros.
 
 ### F2 — MAJOR — A „golden” mátrix nem fogja meg a vizuális blend-driftet
 
@@ -70,7 +71,8 @@ jelzése is `scope_audit=ok`; a jelzéskori `dirty_files=1` után a tényleges
 - **Kötelező javítás:** témánként és szintenként pinelt, a production
   resolverből nem visszaszámolt canonical ARGB/border/shadow fixture kell;
   legalább a `.04 → .05` rontás legyen piros.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ee12446b`) — resolverfüggetlen canonical fixture; a
+  `.04 → .05` re-mutation több theme-mátrix cellát pirosra vitt.
 
 ### F3 — MAJOR — A High Contrast border selector őre hamisan zöld
 
@@ -85,7 +87,8 @@ jelzése is `scope_audit=ok`; a jelzéskori `dirty_files=1` után a tényleges
 - **Kötelező javítás:** distinct `border`/`borderStrong` extensionnel épített
   teszttéma vagy egyenértékű semantic-selector cella kell; a fenti mutációnak
   pirosnak kell lennie.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ee12446b`) — distinct semantic színek; a
+  `borderStrong → border` re-mutation célzottan piros.
 
 ### F4 — MAJOR — A raw-radius őr nem a production konstruktoralakot figyeli
 
@@ -99,7 +102,8 @@ jelzése is `scope_audit=ok`; a jelzéskori `dirty_files=1` után a tényleges
 - **Kötelező javítás:** a source-őr fedje a `Radius.circular`, a
   `BorderRadius.circular` és az alkalmazott directional/only constructorokat;
   a 9 dp mutáció legyen piros.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ee12446b`) — a guardian a production constructoralakot
+  is fedi; `Radius.circular(9)` re-mutation piros.
 
 ### F5 — MAJOR — A komponens-API rácson kívüli spacinget fogad
 
@@ -114,7 +118,8 @@ jelzése is `scope_audit=ok`; a jelzéskori `dirty_files=1` után a tényleges
   legálissá, amelyet A1 és az ADR 0385 tilt.
 - **Kötelező javítás:** fix tokenes defaultok vagy zárt token-típusú publikus
   API szükséges; nyers `double`-lal off-grid érték ne legyen átadható.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ee12446b`) — a három primitive fix tokenes spacinget
+  használ; nyers `double padding = 13` visszahelyezése piros.
 
 ### F6 — MAJOR — Az SsCard redundáns külső Material Cardot épít
 
@@ -130,7 +135,17 @@ jelzése is `scope_audit=ok`; a jelzéskori `dirty_files=1` után a tényleges
   követelményével.
 - **Kötelező javítás:** az `SsCard` közvetlenül az egyetlen `SsSurface`-t
   kompozálja; production regressziós cella mérje az egy Material felületet.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ee12446b`) — az `SsCard` közvetlenül `SsSurface`-t ad;
+  a külső `Card` visszahelyezése két Material miatt piros.
+
+### N1 — NOTE — A javító wrapper egy köztes láncolt tesztparancsot jelzett
+
+A javító `.codex-round-status` `gate_shape=VIOLATION` értékét az implementer
+köztes `dart format ... && flutter test ...` parancsa okozta. Ez nem az
+elfogadott gate-bizonyíték: utána két exact, csonkítatlan
+`tools/round-gate.sh ...` futás zöld lett, majd a reviewer friss klónban
+ugyanazt az artefaktumot 7/7 zöldre futtatta. A processzeltérést rögzítjük;
+merge-evidenciaként kizárólag az exact artefaktumot használjuk.
 
 ## Gate-bizonyíték
 
@@ -150,10 +165,22 @@ Izolált review-klón: `/tmp/review-e13-r05`, exact commit `0ffceb95`.
 - one-Material reviewer-cella: piros, 2 descendant (F6);
 - minden reviewer-módosítás visszaállítva; a review-klón tiszta.
 
-A teljes CI-suite/property workflow még nem futott; nyitott MAJOR leletek
-mellett dispatch nem merge-evidencia.
+Friss re-review klón: `/tmp/review-e13-r05-fix1`, exact commit `ee12446b`:
+
+- fix-fázis scope-audit: 7 módosított útvonal, 0 sértés;
+- teljes kör scope-audit: 11 útvonal, 1 generated/ignored review-report,
+  0 sértés;
+- format: 1775 fájl, 0 változás; analyze: 0 issue;
+- surface suite: 17/17 zöld; spacing suite: 5/5 zöld;
+- architecture, secrets (3183 fájl / 0 lelet), l10n (1532/1532): zöld;
+- F1/F2/F3 közös resolver re-mutation: 5 célzott failure;
+- F4/F5/F6 közös geometry/API/composition re-mutation: 4 célzott failure;
+- restore után `git diff --exit-code` 0, tiszta klón.
+
+A teljes CI-suite/property workflow még nem futott; az exact-SHA CI és a
+friss-main landolás továbbra is merge-feltétel.
 
 ## Merge-döntés
 
-Az ADR 0052 szerint merge tilos. Terra javítókör, friss izolált re-review és
-exact-SHA CI szükséges.
+A correctness review **APPROVED**. Merge csak az exact-SHA Full Gate/Router CI
+és a friss-main landolási feltételek zöld eredménye után engedett.
