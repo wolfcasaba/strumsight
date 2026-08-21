@@ -1,6 +1,7 @@
 # E13-R01 — UI baseline inventory és screenshot corpus
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 17670d4f`)
+- **Státusz:** PREPARED — E13-R01/H3 self-heal scope-revízió után
+  (2026-08-21, `main @ 6aad0bff`; eredeti brief: `main @ 17670d4f`)
 - **Típus:** **Chapter 13 program-nyitó kör** (UI/UX Design System)
 - **Kör-azonosító:** `E13-R01`. Az `E13` a **FEJEZETET** jelöli, nem epicet
   (az epicek E01–E10) — mint az `E99` és az `E14`.
@@ -8,6 +9,59 @@
 - **Előfeltétel:** a Chapter 13 a repóban (`e90edaa2`)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** nincs — a baseline-kör nem hoz architekturális döntést.
+
+## 0.0 Pre-flight revízió (ADR 0112 self-heal, E13-R01/H3, 2026-08-21)
+
+**Mért gyökérok — Class B brief-tartalmi ellentmondás.** A Chapter 13 Kör 1
+feladata név szerint legalább a Live, Tuner, Analyze, Learn, Library, Settings
+és onboarding fő állapotának compact-portrait referencia screenshotját kéri,
+a kötelező teszt pedig előírja, hogy a képek megnyithatók és nem üresek
+(`docs/sdd/13-chapter-13-ui-ux-design-system.md:6159–6172`). Az eredeti brief
+ezzel szemben sem screenshot-fájlt, sem corpus-validáló tesztet nem engedett az
+`allowed_paths`-ban, és az A1 miatt `lib/**` továbbra is helyesen tiltott. A
+halt implementer-dispatch előtt történt; product diff és kör-PR nem keletkezett.
+
+**Feloldás.** A szerződést nem szűkítjük és alkalmazáskódot nem nyitunk meg.
+Az alábbi hét, név szerinti PNG és az egyetlen corpus-validáló Flutter-teszt
+kerül a scope-ba. A könyvtár egésze nem engedélyezett; további screenshothoz
+új brief-revízió kell.
+
+```
+docs/ui/baseline/screenshots/live-compact-portrait.png
+docs/ui/baseline/screenshots/tuner-compact-portrait.png
+docs/ui/baseline/screenshots/analyze-compact-portrait.png
+docs/ui/baseline/screenshots/learn-compact-portrait.png
+docs/ui/baseline/screenshots/library-compact-portrait.png
+docs/ui/baseline/screenshots/settings-compact-portrait.png
+docs/ui/baseline/screenshots/onboarding-compact-portrait.png
+test/ui/ui_baseline_screenshot_test.dart
+```
+
+A teszt a hét exact fájlt enumerálja, mindegyik PNG-t
+`decodeImageFromList`-tel ténylegesen dekódolja, pozitív byte- és
+pixelméretet, valamint compact portrait (`width < height`) képarányt követel.
+A screenshotok fix, dokumentált viewportból és offline/determinisztikus
+fake-ekkel renderelt production screen-widgetekből készülnek; a teszt normál
+gate-ben csak a commitolt corpus szerkezeti épségét méri. A képek tartalmát a
+független review mind a hét fájl megnyitásával ellenőrzi. Ez bizonyítja az SDD
+követelményét pixel-golden platformfüggés bevezetése nélkül.
+
+**Self-heal regressziós őr:**
+`tools/tests/test_e13_r01_screenshot_scope.py`. A valódi brief parserrel és
+scope-audittal méri az exact 7+1 bővítést, a screenshot-teszt gate-be kerülését
+és azt, hogy egy nyolcadik testvérkép továbbra is scope-sértés. A javítás előtt
+4/5 cella piros volt, utána mind az öt zöld.
+
+**Visszakeresett előzmény.** A kötelező
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5
+"E13-R01 screenshot corpus exact allowed_paths H3 brief scope"` lekérdezés
+elsődleges találata az **L270**: az acceptance és az `allowed_paths` belső
+ellentmondását a lint önmagában nem fogja meg, ezért pre-flightban minden
+deliverable-útvonalat keresztellenőrizni kell. Az L277/L242 találatok más
+topológiájú interface/fixture scope-rések, az E99-R16 H3 pedig tiltott
+`.github/**` mérce-út volt; egyik sem indokol tágabb feloldást. A promptban
+adott hasonló esetek közül az E07-R29/L327 exact scope-bővítési mintája illik;
+az E99-R08 review-report mentesség és az E07-R25 Vision evidence contract nem.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd újra a §2 számait
 > (képernyők, hex-találatok), mert az Epic 7 közben új képernyőket ad hozzá.
@@ -23,11 +77,20 @@ allowed_paths = [
   "docs/ui/baseline/route-map.md",
   "docs/ui/baseline/token-debt.md",
   "docs/ui/baseline/accessibility-findings.md",
+  "docs/ui/baseline/screenshots/live-compact-portrait.png",
+  "docs/ui/baseline/screenshots/tuner-compact-portrait.png",
+  "docs/ui/baseline/screenshots/analyze-compact-portrait.png",
+  "docs/ui/baseline/screenshots/learn-compact-portrait.png",
+  "docs/ui/baseline/screenshots/library-compact-portrait.png",
+  "docs/ui/baseline/screenshots/settings-compact-portrait.png",
+  "docs/ui/baseline/screenshots/onboarding-compact-portrait.png",
   "test/ui/ui_inventory_test.dart",
+  "test/ui/ui_baseline_screenshot_test.dart",
   "docs/rounds/e13-r01-ui-baseline-inventory.md",
 ]
 gate_tests = [
   "test/ui/ui_inventory_test.dart",
+  "test/ui/ui_baseline_screenshot_test.dart",
 ]
 native_gate = false
 ```
@@ -69,7 +132,8 @@ szemantikai tokenekké fejlessze őket.
 redirect- és deep-link kockázatokkal · **token-adósság** felmérése (közvetlen
 hex, hardkódolt spacing, közvetlen `TextStyle`, duplikált button/card/empty-state
 minták, cross-feature UI-importok) · semantics-, overflow- és text-scale audit
-**leletlistaként** · `docs/ui/README.md` és `migration-status.md`.
+**leletlistaként** · a §0.0 szerinti hét compact-portrait baseline screenshot és
+azok szerkezeti validátora · `docs/ui/README.md` és `migration-status.md`.
 
 **NINCS benne (tilos):**
 
@@ -88,7 +152,9 @@ minták, cross-feature UI-importok) · semantics-, overflow- és text-scale audi
 | `docs/ui/baseline/route-map.md` | **ÚJ** — jelenlegi ↔ cél route-ok |
 | `docs/ui/baseline/token-debt.md` | **ÚJ** — a mért token-adósság |
 | `docs/ui/baseline/accessibility-findings.md` | **ÚJ** — a leletlista |
+| `docs/ui/baseline/screenshots/{live,tuner,analyze,learn,library,settings,onboarding}-compact-portrait.png` | **ÚJ, hét exact fájl** — az SDD-ben név szerint kért regressziós baseline-ok |
 | `test/ui/ui_inventory_test.dart` | **ÚJ** — a generátor determinizmusa |
+| `test/ui/ui_baseline_screenshot_test.dart` | **ÚJ** — a hét exact PNG dekódolhatósága, nem-üressége és portrait alakja |
 | `docs/rounds/e13-r01-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/**` (MINDEN) · `docs/adr/**` · `docs/sdd/**` ·
@@ -115,6 +181,12 @@ A Ch13 kifejezetten kimondja: a felvett képernyőképek nem a célállapotot
 mutatják. A dokumentumnak ezt ki kell mondania, hogy senki ne tekintse
 jóváhagyott designnak.
 
+A corpus pontosan a §0.0-ban felsorolt hét compact-portrait főállapot. A
+commitolt PNG-knek valódi production screen-widgetből, fix viewporttal és
+offline/determinisztikus fake-ekkel kell készülniük; placeholder, kézzel rajzolt
+mock vagy üres felület nem fogadható el. A normál CI a hordozható strukturális
+invariánsokat méri, a reviewer pedig mind a hét képet ténylegesen megnyitja.
+
 ### 5.4 A route-térkép a MIGRÁCIÓ kockázatait is rögzíti
 
 Nem elég a jelenlegi és cél-route párokat felsorolni: a deep-link és redirect
@@ -136,7 +208,8 @@ körök sorrendezhessenek.
 | A5 | A token-adósság mérve (hex, spacing, TextStyle, duplikátumok, cross-feature import) | `token-debt.md` |
 | A6 | Az accessibility-leletek prioritással szerepelnek | `accessibility-findings.md` |
 | A7 | A dokumentum kimondja, hogy a screenshot NEM design-jóváhagyás | review |
-| A8 | A meglévő teszt-suite változatlanul zöld | `tools/round-gate.sh` |
+| A8 | A hét név szerinti compact-portrait screenshot production screenből készült, megnyitható és nem üres | `ui_baseline_screenshot_test.dart` + mind a hét PNG manuális review-ja |
+| A9 | A meglévő teszt-suite változatlanul zöld | `tools/round-gate.sh` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -148,6 +221,7 @@ körök sorrendezhessenek.
 | A route-térkép csak a jelenlegit sorolja | A4 |
 | A leletek súlyosság nélkül | A6 |
 | A screenshot designként hivatkozva | A7 |
+| Hiányzó, üres, sérült vagy nem portrait corpus-kép | **A8** |
 
 **Az inventár-teljesség három kötelező cellája** (a küszöb: a production képernyő):
 
@@ -164,7 +238,7 @@ kimenetét bejárási sorrendűvé → az **A2** cellának PIROSNAK kell lennie 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/ui/ui_inventory_test.dart
+tools/round-gate.sh test/ui/ui_inventory_test.dart test/ui/ui_baseline_screenshot_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
@@ -176,12 +250,17 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 1. `tool/ui_inventory.dart` — determinisztikus, rendezett kimenet.
 2. `test/ui/ui_inventory_test.dart` — a determinizmus cellái.
-3. `docs/ui/baseline/route-map.md` — legacy ↔ cél, kockázatokkal.
-4. `docs/ui/baseline/token-debt.md` — a mért adósság.
-5. `docs/ui/baseline/accessibility-findings.md` — prioritásos leletek.
-6. `docs/ui/README.md` + `migration-status.md`.
-7. A valódi-sértés próba, §10-be dokumentálva.
-8. `tools/round-gate.sh` a §7 szerint.
+3. `test/ui/ui_baseline_screenshot_test.dart` — a hét exact production
+   screen-state fix compact-portrait viewporttal; normál módban corpus-validálás.
+4. A hét `docs/ui/baseline/screenshots/*-compact-portrait.png` felvétele és
+   mindegyik kézi megnyitása; a viewport/fake/state recipe dokumentálása a
+   `docs/ui/README.md`-ben.
+5. `docs/ui/baseline/route-map.md` — legacy ↔ cél, kockázatokkal.
+6. `docs/ui/baseline/token-debt.md` — a mért adósság.
+7. `docs/ui/baseline/accessibility-findings.md` — prioritásos leletek.
+8. `docs/ui/README.md` + `migration-status.md`.
+9. A valódi-sértés próbák, §10-be dokumentálva.
+10. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 
@@ -191,6 +270,9 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   és minden későbbi diffet zajossá tesz (A2).
 - **A screenshot félreértése.** Ha designként hivatkoznak rá, a Ch13
   célállapota összekeveredik a jelenlegivel (A7).
+- **A corpus látszat-teljesítése.** Egy érvényes PNG lehet üres vagy kézzel
+  rajzolt mock is; ezért a strukturális A8 teszt mellett a reviewer mind a hét
+  képet megnyitja, és a production-widget capture recipe-t is ellenőrzi.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
