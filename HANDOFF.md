@@ -1,5 +1,27 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 [HEAL E08-R15/H3] UI-inventory tranzakciós scope helyreállítva — PR #385 (2026-08-21, L377)
+
+Az E08-R15 PR #383 két új achievement presentation screennel 58-ról 60-ra
+emeli az E13-R01 production screen inventoryját. A Full Gate exact SHA-n 5442
+tesztet zölden futtatott, és kizárólag a változatlan 58-as inventory-őr bukott.
+A kör briefje nem engedte a teszt és a hozzá tartozó baseline-dokumentáció
+frissítését, ezért a H3 megállás helyes volt.
+
+A Class B self-heal nem emeli előre 60-ra a `main`-alapú Dart-tesztet, mert a
+két product screen ezen az ágon még nincs jelen. Ehelyett az E08-R15 brief
+exact három fájllal bővült: `test/ui/ui_inventory_test.dart`,
+`docs/ui/migration-status.md`, `docs/ui/baseline/route-map.md`; az inventory-
+teszt a kör második gate-tesztje. Az E08-R15 resume ugyanabban a product-
+commitban frissíti a screen countot, a két exact útvonalat és az R30-ig fennálló
+route-wiring kockázatot. Más `docs/ui/**`/`test/ui/**` út nem nyílt meg.
+
+A regressziós `tools/tests/test_e08_r15_ui_inventory_scope.py` a revízió előtt
+4/5 piros, utána 5/5 zöld. Branch: `heal/E08-R15-H3-1`; Router CI és squash-
+merge a `fixed` jelzés előfeltétele. A merge után a pontos következő kör
+változatlanul **E08-R15 — Achievement UI és részletes evidence**, a meglévő
+PR #383 folytatásával és új exact-SHA Full Gate futással.
+
 ## ✅ [HEAL E13-R01/H8] KÉSZ — a duplikált körtörténet tiszta recovery PR-rel helyreállt — PR #382 (2026-08-21, L376)
 
 Az E13-R01 eredeti PR-jének (`#381`, csúcs `31aab305`) története a tiszta,

@@ -14397,3 +14397,35 @@ patch-id-ket, majd csak friss exact-SHA CI után merge-elj.
 `tools/tests/test_round_land.py::RoundLandIntegrationTest::test_self_duplicated_branch_history_is_rejected_before_rebase`
 — a rebase után visszamerge-elt régi csúcsot H8-SELFDUP-pal, gate és merge
 előtt blokkolja.
+
+## L377 — Additív inventory-baseline-t nem lehet a termékfájlok előtt zölden merge-elni; a product briefnek kell birtokolnia az atomi frissítést (E08-R15, H3 self-heal, 2026-08-21)
+
+**Mért hiba.** Az E13-R01 a `test/ui/ui_inventory_test.dart` fájlban exact 58
+production screen forrást rögzített. Az E08-R15 PR #383 két engedélyezett új
+forrást adott (`achievements_screen.dart`, `achievement_detail_screen.dart`),
+ezért az exact-SHA Full Gate 5442 zöld teszt mellett egyetlen hibával állt meg:
+várt 58, mért 60. A prepared E08-R15 brief nem engedte sem az inventory-
+tesztet, sem a számszerű migration-status és route-kockázat dokumentumát.
+
+**Tranzakciós csapda.** A halt-javaslat szó szerinti, külön heal-ágon végzett
+58→60 tesztfrissítése nem merge-elhető zölden: a `main`-alapú heal fájában a
+két product screen még nincs jelen, tehát ott a valós érték továbbra is 58.
+Az előre emelt őr saját regressziós kapuját buktatná; a product fájlok heal-
+ágra másolása pedig összekeverné az önjavítást a megállt kör végrehajtásával.
+
+**Javítás és szabály.** A B-osztályú feloldás a product brief exact
+allowlistjét bővíti a három tranzakciós baseline-úttal
+(`ui_inventory_test.dart`, `migration-status.md`, `route-map.md`), és az
+inventory-tesztet hozzáadja ugyanahhoz a round-gate híváshoz. A product kör
+így ugyanabban a commitban viszi 58→60-ra az őrt és a dokumentációt, amelyben
+a két screen megjelenik; a 40 `AppRoutes` / 40 `GoRoute` baseline változatlan,
+az új presentation screenek route-wiringja továbbra is E08-R30. Exact fájl-
+grant kell, nem `docs/ui/**` vagy `test/ui/**` könyvtárnyitás.
+
+Az L371 csak az exact scope-bővítés alakjában rokon; ott hiányzó screenshot-
+deliverable, itt később landolt product screen miatt elévült additív baseline
+volt. Az L225 batch-brief avulási osztálya közvetlenebb precedens.
+
+**Őrteszt:** `tools/tests/test_e08_r15_ui_inventory_scope.py` — a javítás előtt
+4/5 cella piros, utána 5/5 zöld; a valódi brief-parserrel és scope-audittal
+őrzi az exact három fájlt, a testvérút tiltását és az inventory gate-tagságát.
