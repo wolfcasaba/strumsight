@@ -240,4 +240,47 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Implementáció
+
+- `lib/core/design_system/foundations/ss_breakpoints.dart`: kipinnelt compact,
+  medium, expanded és wide breakpointok.
+- `lib/core/design_system/foundations/ss_spacing.dart`, `ss_radius.dart`,
+  `ss_motion.dart`, `ss_semantics.dart`: a Kör 2 foundation értékei és a
+  reduced-motion feloldása.
+- `lib/core/design_system/themes/ss_theme_extensions.dart`: `SsThemeColors`
+  `ThemeExtension` adapter, amely `AppColors` és `AppPalette` értékeit olvassa.
+- `lib/core/design_system/documentation/component_catalog_screen.dart`: külön
+  compile-time `STRUMSIGHT_COMPONENT_CATALOG` flag és `kDebugMode` kapu;
+  router-wiring nincs.
+- `lib/core/design_system/public.dart`: a design system kizárólagos exportja.
+- `test/core/design_system/foundations_test.dart` és
+  `component_catalog_test.dart`: foundation, adapter, flag-mátrix és
+  dark/light smoke.
+- `test/core/architecture_dependency_test.dart`: tényleges `lib/` forrásfa
+  bejárása a feature-import és nem-public barrel import tilalmára.
+- `docs/ui/migration-status.md`: fázisonkénti kanonikus token-forrás.
+
+### Valódi-sértés próba
+
+Az adapter `brand: AppColors.primary` hivatkozását ideiglenesen
+`brand: const Color(0xFFD98A46)` másolatra cseréltem, majd futtattam:
+
+```bash
+flutter test test/core/design_system/foundations_test.dart
+```
+
+Az A4 teszt várt módon piros lett: `adapter source references legacy tokens
+without copied color literals` a bemásolt `Color(0xFFD98A46)` miatt bukott.
+Ezután a hivatkozást azonnal `AppColors.primary`-ra visszaállítottam.
+
+### Ellenőrzések
+
+- RED: `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart` — a még nem létező
+  `core/design_system/public.dart` miatt fordítási hibával bukott.
+- GREEN (célzott): `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart test/core/architecture_dependency_test.dart` — 38 teszt zöld.
+- GREEN: `tools/round-gate.sh test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart test/core/architecture_dependency_test.dart` — format, analyze, mindhárom célzott teszt és architecture zöld.
+- Az első teljes gate az analyzerben egyetlen, új `ss_motion.dart` felesleges
+  import figyelmeztetésén állt meg; az import eltávolítása után a második teljes
+  gate zöld lett.
+
 ## 11. Review — a Claude tölti ki

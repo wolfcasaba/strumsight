@@ -5,6 +5,14 @@ sources, 96 reusable widget/view sources, and 16 dialog or bottom-sheet
 sources. All are legacy baseline entries: no Chapter 13 design-system migration
 is claimed in this round.
 
+## Canonical token source by migration phase
+
+| Phase | Canonical source | Compatibility rule |
+| --- | --- | --- |
+| E13-R02 foundation | `lib/core/theme/AppColors`, `AppPalette`, and `AppTheme` | `core/design_system` reads the legacy theme through its adapter; it does not copy color values. |
+| Later semantic color and theme migration | `core/design_system` semantic theme extensions | The legacy theme becomes an adapter only after its designated consumers migrate. |
+| Later component and screen migration | Design-system component tokens | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme. |
+
 | Source | Status |
 | --- | --- |
 | ai_tutor: practice plan preview, tutor chat, data, home, privacy, profile | legacy / migration pending |
