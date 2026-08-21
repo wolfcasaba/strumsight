@@ -14348,3 +14348,23 @@ nem másolta át a teljes, még review alatt álló feature-t egy `main`-alapú 
 
 **Őrteszt:** `test/features/gamification/application/achievement_evaluator_test.dart`
 „A8: backfill caps raw history before date filtering”.
+
+## L375 — Többfázisú körben a scope-ot implementer-fázisonként kell mérni, nem az orchestrátor- és upstream-commitokat is tartalmazó teljes ágon (E08-R14, 2026-08-21)
+
+**Mért hiba.** A végső E08-R14 ág teljes `origin/main..HEAD` auditja az
+orchestrátor pre-flight ADR-jét, a review-jelentéseket és a közben beépített
+upstream HANDOFF/LESSONS változásokat is az implementer allowlistjéhez mérte.
+Az ADR-t ezért scope-sértésnek jelölte, egy másik base pedig a már szabályosan
+örökölt upstream dokumentumokat is. Egyik kimenet sem válaszolta meg a valódi
+kérdést: nyúlt-e a Terra az engedélyezett fájlokon kívül.
+
+**Javítás és szabály.** Minden implementer-dispatch saját, commitolt base→head
+tartományát külön kell auditálni; az orchestrátor- és upstream-commitok
+eredetét a git-log bizonyítja. Itt `e5669f20..997a52a0` 5/5,
+`77a0c11f..11fb1ac2` 3/3 és `89e38bdf..ae703918` 2/2 engedélyezett útvonalat
+adott. A teljes-ág audit továbbra is hasznos leletlista, de többfázisú,
+upstream-szinkronizált ágon önmagában nem implementer-scope bizonyíték.
+
+**Őrteszt:** nincs — a bizonyíték a három verziózott commit-tartományon
+futtatott `tools/scope-audit.py`; a scope-eszköz szemantikáját ez a lecke nem
+módosítja.

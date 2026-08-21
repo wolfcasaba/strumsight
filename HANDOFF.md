@@ -1,23 +1,22 @@
 # HANDOFF — StrumSight 🎸
 
-## 🔧 [HEAL E08-R14/H4] KÉSZ — a nyers achievement-backfill cap a dátumszűrés előtt érvényesül (2026-08-21, L374)
+## ✅ E08-R14 KÉSZ — Achievement evaluator és progress projection — PR #380, squash `558b1258` (2026-08-21, L374–L375)
 
-Az E08-R14 független review-ja 10 001, egyedi, de lejárt eseménnyel
-reprodukálta, hogy a 10 000-es history-cap csak a dátumszűrés utáni üres
-listát védi: várt `ArgumentError` helyett sikeres
-`AchievementEvaluationResult` érkezett. A javítás a nyers iteráció 10 001.
-eleménél, még szűrés és rebuild előtt fail-fast hibát ad. A permanens A8
-regresszió 9 999 és 10 000 lejárt eseményt elfogad, 10 001-et elutasít.
+Az indexelt evaluator canonical event-historyból, stabil event-ID deduppal
+építi újra a count, threshold, distinct, sequence és compound progresszt. Az
+unlock exact `achievement:<id>` source-on atomikus, nulla-XP ledger receipt;
+a completion timestamp a trigger eventből jön. A caller-anchored backfill
+inkluzív 30 napos ablakot és nyers 10 000-es hard capet őriz, unknown vagy
+ütköző evidence pedig fail-closed diagnosztikát ad.
 
-A hibás evaluator még nem létezett `main`-en, ezért az L304/L358 H4-minta
-szerint a termékjavítás közvetlenül a megállt kör saját ágára került:
-`terra/e08-r14-achievement-evaluator-and-projection`, fix `ae703918`, végső
-review-HEAD `af6f2fce`. Független detached re-review: correctness **APPROVED**,
-security **PASS**, scope-audit 2/2 engedélyezett útvonal, round-gate 6/6 zöld,
-célzott suite 11/11. Az input-őr eldobható eltávolítása az új cellát pirosra
-vitte; restore után zöld és tiszta volt a klón. A teljes CI/PR/merge nem a
-self-heal feladata: a következő friss E08-R14 session az `af6f2fce` ágról
-folytatja a szokásos exact-SHA CI és zöld-kapus landolást.
+Terra implementáció, Sol correctness/security review: **APPROVED / PASS**.
+Három implementer-fázis scope-auditja zöld; a végső round-gate 6/6, a célzott
+suite 11/11. Exact `b8b25721`: Full Gate
+[32439860548](https://github.com/wolfcasaba/strumsight/actions/runs/32439860548)
+és Router CI
+[32439873084](https://github.com/wolfcasaba/strumsight/actions/runs/32439873084)
+success. Következő termékkör: **E08-R15 — Achievement UI és részletes
+evidence**, új sessionben.
 
 ## ✅ E08-R13 KÉSZ — Achievement domain és lokalizált katalógus — PR #376, squash `f9d5bbc8` (2026-08-21, L372–L373)
 

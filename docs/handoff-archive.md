@@ -6,6 +6,42 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R14 — Achievement evaluator és progress projection (2026-08-21)
+
+PR [#380](https://github.com/wolfcasaba/strumsight/pull/380), squash
+`558b1258`, [ADR 0377](adr/0377-achievement-evaluator-ledger-projection-and-bounded-backfill.md).
+Az evaluator event-kind + metric/dimension indexből választ jelölteket, stabil
+event-ID szerint deduplikálja és rendezi a historyt, majd count, threshold,
+distinct, sequence és compound objective-ekből immutable progresszt épít. Az
+unknown objective, hiányzó metrika, ütköző replay és hibás receipt fail-closed.
+
+Az unlock repository-szintű `appendIfAbsent` művelete exact
+`achievement:<achievementId>` source ID-n szerializál; a trigger event csak a
+ledger ID-ban marad. A nulla-XP `achievementUnlocked` receipt időbélyege a
+kiváltó eventből származik, ezért restart, concurrency és rebuild mellett is
+egyszeri és stabil. A caller-anchored 30 napos backfill cutoffja inkluzív,
+future és régi eventet kihagy, a nyers snapshot pedig legfeljebb 10 000 elem.
+
+Az első Sol review 2 BLOCKER és 4 MAJOR correctness/security hibát talált:
+triggerenként eltérő dedup-kulcs, forged prefix receipt, replay-infláció,
+hibás catalogVersion, future/rendezetlen/korlátlan history és hiányzó
+metric/dimension index. A Terra javító kör ezeket `11fb1ac2`-ben zárta. A
+következő re-review további MAJOR rést reprodukált: 10 001 lejárt nyers event
+a dátumszűrés miatt megkerülte a capet. A H4 self-heal `ae703918` javítása a
+nyers iteráció 10 001. eleménél fail-fast őrt és permanens 9 999/10 000/10 001
+cellát adott.
+
+A végső, upstream-szinkronizált `b8b25721` branch-HEAD-en correctness
+**APPROVED**, security **PASS**. A három implementer-fázis scope-auditja
+5/5, 3/3 és 2/2 engedélyezett útvonal; a round-gate 6/6 és a célzott suite
+11/11 zöld. Az A8 őr eldobható eltávolítása a 10 001-es cellát pirosra vitte,
+restore után 1/1 zöld és tiszta klón maradt. Exact-SHA Full Gate
+[32439860548](https://github.com/wolfcasaba/strumsight/actions/runs/32439860548)
+és Router CI
+[32439873084](https://github.com/wolfcasaba/strumsight/actions/runs/32439873084)
+success. Implementer Terra (`gpt-5.6-terra`), orchestrátor/reviewer Sol
+(`gpt-5.6-sol`). Következő termékkör: E08-R15.
+
 ## ✅ E08-R13 — Achievement domain és katalógus (2026-08-21)
 
 PR [#376](https://github.com/wolfcasaba/strumsight/pull/376), squash
