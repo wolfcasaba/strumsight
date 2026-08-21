@@ -14566,3 +14566,19 @@ validációját.
 
 **Őrteszt:** `test/features/gamification/domain/quest_model_test.dart` —
 „F2: persisted completed records require their instance receipt and pre-expiry completion”.
+
+## L386 — Párhuzamos zárásnál a git-notes refet is össze kell fésülni, nem csak a main ágat (E08-R16, 2026-08-21)
+
+**Mért snag.** Az E08-R16 note-ja lokálisan elkészült, de a
+`git push origin 'refs/notes/*'` non-fast-forward hibával leállt: a másik
+slot közben új remote notes-commitot publikált. A normál push helyesen nem
+írta felül a másik kör auditnyomát.
+
+**Javítás és szabály.** A merge-zár alatt a remote notes-refet külön temp
+refbe kell fetch-elni, majd `git notes merge`-dzsel egyesíteni és csak ezután
+pusholni. A main-branch merge-zár önmagában nem frissíti a lokális
+`refs/notes/commits` állapotát.
+
+**Őrteszt:** nincs — a reprodukció a remote által visszautasított
+non-fast-forward notes-push; a javított fetch + notes-merge + push ugyanazon
+zár alatt fast-forwarddal zárt (`f9985417..f21adc47`).
