@@ -4,16 +4,10 @@ import '../../foundations/ss_spacing.dart';
 
 /// A title and content composition that deliberately adds no card layer.
 final class SsSection extends StatelessWidget {
-  const SsSection({
-    super.key,
-    required this.title,
-    required this.child,
-    this.spacing = SsSpacing.space2,
-  });
+  const SsSection({super.key, required this.title, required this.child});
 
   final String title;
   final Widget child;
-  final double spacing;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +18,7 @@ final class SsSection extends StatelessWidget {
           header: true,
           child: Text(title, style: Theme.of(context).textTheme.titleMedium),
         ),
-        SizedBox(height: spacing),
+        const SizedBox(height: SsSpacing.space2),
         child,
       ],
     );

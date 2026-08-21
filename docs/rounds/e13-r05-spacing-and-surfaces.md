@@ -277,6 +277,37 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   `true` lett a konkrét `ss_card.dart` fájlra. A tokenes `EdgeInsets.all(padding)`
   restore után a teljes kétfájlos célzott teszt újra **18/18 passed**.
 
+### Review javítókör 1 — F1–F6 regressziós bizonyíték
+
+- **F1:** a `base` ágat ideiglenesen `colors.surfaceRaised`-re rontva a
+  distinct `surface=0xff010203` / `surfaceRaised=0xff040506` cella pirosra
+  futott; restore után a base exact `colors.surface`, az emelt szintek pedig
+  explicit `surfaceRaised`-alapú blendet használnak.
+- **F2:** `_raisedBlend` `.04 → .05` mutációja a Dark canonical fixture
+  `SsElevation.raised` ARGB-értékét elrontotta, ezért a pinned visual-contract
+  cella piros lett. A dark/light/high-contrast × négy szint fixture a
+  production resolvertől független canonical background-, border-,
+  border-width- és shadow-ARGB/elevation értékeket őriz.
+- **F3:** a High Contrast emelt ágának `borderStrong → border` mutációja a
+  distinct `0xff101112` / `0xffb0b1b2` semantic-selector cellát pirosra vitte;
+  a restore után az emelt szintek kizárólag `borderStrong`-ot kapnak.
+- **F4:** a production `Radius.circular(radius.value)` ideiglenes
+  `Radius.circular(9)` rontása a raw-geometry source-contract cellát pirosra
+  vitte. Az őr a `Radius.circular`, `BorderRadius.circular`,
+  `BorderRadius.all(Radius.circular(...))`, `BorderRadius.only(...)`, valamint
+  az `EdgeInsets` és `EdgeInsetsDirectional` alkalmazható alakjait fogja meg.
+- **F5:** az `SsCard` ideiglenes nyers `double padding = 13` publikus
+  paramétere a fixed-token public-API cellát pirosra vitte. A végleges
+  `SsCard`, `SsHeroCard` és `SsSection` nem fogad nyers spacing/padding
+  double-t; a kötött `SsSpacing.space4/space6/space2` contractot használják.
+- **F6:** a `Card` külső Material-réteg ideiglenes visszahelyezésekor a widget
+  cella két `Material` descendantot talált és piros lett. A restore után az
+  `SsCard` közvetlenül egyetlen `SsSurface` `Material` felületet épít.
+
+- Restore utáni célzott futás: `flutter test
+  test/core/design_system/surfaces/ss_surface_test.dart
+  test/core/design_system/surfaces/spacing_grid_test.dart` → **22/22 passed**.
+
 ### Futtatott ellenőrzések
 
 - `dart format` a kilenc módosított Dart fájlon → sikeres.
@@ -285,7 +316,8 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 - `git diff --check` → sikeres.
 - `tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart
   test/core/design_system/surfaces/spacing_grid_test.dart` → **pass, exit 0**
-  (format, analyze, mindkét célzott teszt, architecture, secrets és l10n zöld).
+  az F1–F6 javítás után (format, analyze, mindkét célzott teszt,
+  architecture, secrets és l10n zöld).
 
 ### Nem futtatott ellenőrzések
 

@@ -26,24 +26,57 @@ void main() {
       ]);
     });
 
-    for (final entry in themes.entries) {
-      test('${entry.key} resolves every surface level deterministically', () {
-        final first = <SsElevation, SsSurfaceStyle>{
-          for (final elevation in SsElevation.values)
-            elevation: elevation.resolve(entry.value),
-        };
-        final second = <SsElevation, SsSurfaceStyle>{
-          for (final elevation in SsElevation.values)
-            elevation: elevation.resolve(entry.value),
-        };
+    for (final fixture in _canonicalSurfaceFixtures) {
+      test('${fixture.name} pins canonical background, border, and shadow', () {
+        for (final elevation in SsElevation.values) {
+          final expected = fixture.styles[elevation]!;
+          final actual = elevation.resolve(fixture.theme);
 
-        expect(first, second);
-        expect(
-          first.values.map((style) => style.background).toSet().length,
-          SsElevation.values.length,
-        );
+          expect(
+            actual.background.toARGB32(),
+            expected.backgroundArgb,
+            reason: '$elevation',
+          );
+          expect(
+            actual.border.toARGB32(),
+            expected.borderArgb,
+            reason: '$elevation',
+          );
+          expect(
+            actual.borderWidth,
+            expected.borderWidth,
+            reason: '$elevation',
+          );
+          expect(
+            actual.shadowColor.toARGB32(),
+            expected.shadowArgb,
+            reason: '$elevation',
+          );
+          expect(
+            actual.shadowElevation,
+            expected.shadowElevation,
+            reason: '$elevation',
+          );
+        }
       });
     }
+
+    test('base resolves its exact semantic surface token', () {
+      final theme = _theme(
+        brightness: Brightness.dark,
+        colors: _colors(
+          surface: const Color(0xff010203),
+          surfaceRaised: const Color(0xff040506),
+          border: const Color(0xff070809),
+          borderStrong: const Color(0xff0a0b0c),
+        ),
+      );
+
+      expect(
+        SsElevation.base.resolve(theme).background,
+        const Color(0xff010203),
+      );
+    });
 
     test(
       'surface level controls its resolved background, border, and shadow',
@@ -79,14 +112,25 @@ void main() {
     });
 
     test(
-      'high contrast uses borderStrong and no decorative shadow above base',
+      'high contrast selects borderStrong and no decorative shadow above base',
       () {
-        final theme = SsHighContrastTheme.data();
-        final colors = theme.extension<SsColorScheme>()!;
+        final border = const Color(0xff101112);
+        final borderStrong = const Color(0xffb0b1b2);
+        final theme = _theme(
+          brightness: Brightness.dark,
+          colors: _colors(
+            surface: const Color(0xff111213),
+            surfaceRaised: const Color(0xff212223),
+            border: border,
+            borderStrong: borderStrong,
+          ),
+          highContrast: true,
+        );
 
         for (final elevation in SsElevation.values.skip(1)) {
           final style = elevation.resolve(theme);
-          expect(style.border, colors.borderStrong);
+          expect(style.border, borderStrong);
+          expect(style.border, isNot(border));
           expect(style.shadowElevation, 0);
         }
       },
@@ -199,14 +243,12 @@ void main() {
         ),
       );
 
-      final cardMaterial = tester.widget<Material>(
-        find
-            .descendant(
-              of: find.byType(SsCard),
-              matching: find.byType(Material),
-            )
-            .last,
+      final cardMaterials = find.descendant(
+        of: find.byType(SsCard),
+        matching: find.byType(Material),
       );
+      expect(cardMaterials, findsOneWidget);
+      final cardMaterial = tester.widget<Material>(cardMaterials);
       final heroMaterial = tester.widget<Material>(
         find.descendant(
           of: find.byType(SsHeroCard),
@@ -216,6 +258,23 @@ void main() {
 
       expect(_radiusOf(cardMaterial), SsRadius.md);
       expect(_radiusOf(heroMaterial), SsRadius.lg);
+    });
+
+    testWidgets('card composes exactly one material surface', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: SsDarkTheme.data(),
+          home: const Scaffold(body: SsCard(child: SizedBox())),
+        ),
+      );
+
+      expect(
+        find.descendant(
+          of: find.byType(SsCard),
+          matching: find.byType(Material),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('section composes title and content without a card layer', (
@@ -255,4 +314,151 @@ double _radiusOf(Material material) {
   final shape = material.shape! as RoundedRectangleBorder;
   final borderRadius = shape.borderRadius as BorderRadius;
   return borderRadius.topLeft.x;
+}
+
+final List<_SurfaceFixture> _canonicalSurfaceFixtures = <_SurfaceFixture>[
+  _SurfaceFixture(
+    name: 'dark',
+    theme: _theme(
+      brightness: Brightness.dark,
+      colors: _colors(
+        surface: const Color(0xff101112),
+        surfaceRaised: const Color(0xff202122),
+        border: const Color(0xff303132),
+        borderStrong: const Color(0xff606162),
+      ),
+    ),
+    styles: <SsElevation, _ExpectedSurfaceStyle>{
+      SsElevation.base: _style(0xff101112, 0xff303132, 0),
+      SsElevation.raised: _style(0xff28292a, 0xff323334, 0),
+      SsElevation.overlay: _style(0xff313233, 0xff343536, 0),
+      SsElevation.modal: _style(0xff393a3b, 0xff363738, 0),
+    },
+  ),
+  _SurfaceFixture(
+    name: 'light',
+    theme: _theme(
+      brightness: Brightness.light,
+      colors: _colors(
+        surface: const Color(0xfffefdfc),
+        surfaceRaised: const Color(0xfff0efee),
+        border: const Color(0xffa0a1a2),
+        borderStrong: const Color(0xff505152),
+      ),
+    ),
+    styles: <SsElevation, _ExpectedSurfaceStyle>{
+      SsElevation.base: _style(0xfffefdfc, 0xffa0a1a2, 0),
+      SsElevation.raised: _style(0xffefeeed, 0xff9d9e9f, 1),
+      SsElevation.overlay: _style(0xffefeeed, 0xff9a9b9c, 2),
+      SsElevation.modal: _style(0xffeeedec, 0xff969798, 4),
+    },
+  ),
+  _SurfaceFixture(
+    name: 'high contrast',
+    theme: _theme(
+      brightness: Brightness.dark,
+      colors: _colors(
+        surface: const Color(0xff111213),
+        surfaceRaised: const Color(0xff212223),
+        border: const Color(0xff101112),
+        borderStrong: const Color(0xffb0b1b2),
+      ),
+      highContrast: true,
+    ),
+    styles: <SsElevation, _ExpectedSurfaceStyle>{
+      SsElevation.base: _style(0xff111213, 0xff101112, 0, borderWidth: 2),
+      SsElevation.raised: _style(0xff292a2b, 0xffb0b1b2, 0, borderWidth: 2),
+      SsElevation.overlay: _style(0xff323334, 0xffb0b1b2, 0, borderWidth: 2),
+      SsElevation.modal: _style(0xff3a3b3c, 0xffb0b1b2, 0, borderWidth: 2),
+    },
+  ),
+];
+
+_ExpectedSurfaceStyle _style(
+  int background,
+  int border,
+  double shadowElevation, {
+  double borderWidth = 1,
+}) => _ExpectedSurfaceStyle(
+  backgroundArgb: background,
+  borderArgb: border,
+  borderWidth: borderWidth,
+  shadowArgb: 0x29000000,
+  shadowElevation: shadowElevation,
+);
+
+ThemeData _theme({
+  required Brightness brightness,
+  required SsColorScheme colors,
+  bool highContrast = false,
+}) => ThemeData(
+  brightness: brightness,
+  extensions: <ThemeExtension<Object?>>[
+    colors,
+    SsThemeBehavior(
+      borderWidth: highContrast ? 2 : 1,
+      focusRingWidth: highContrast ? 4 : 2,
+      surfaceOpacity: 1,
+      decorativeEffectsEnabled: !highContrast,
+    ),
+  ],
+);
+
+SsColorScheme _colors({
+  required Color surface,
+  required Color surfaceRaised,
+  required Color border,
+  required Color borderStrong,
+}) => SsColorScheme(
+  brand: const Color(0xff000001),
+  brandStrong: const Color(0xff000002),
+  onBrand: const Color(0xff000003),
+  canvas: const Color(0xffe0dfde),
+  surface: surface,
+  surfaceRaised: surfaceRaised,
+  surfaceSunken: const Color(0xff000004),
+  border: border,
+  borderStrong: borderStrong,
+  textPrimary: const Color(0xfff0f1f2),
+  textSecondary: const Color(0xff000005),
+  textDisabled: const Color(0xff000006),
+  success: const Color(0xff000007),
+  warning: const Color(0xff000008),
+  danger: const Color(0xff000009),
+  info: const Color(0xff00000a),
+  confidenceHigh: const Color(0xff00000b),
+  confidenceMedium: const Color(0xff00000c),
+  confidenceLow: const Color(0xff00000d),
+  offline: const Color(0xff00000e),
+  localAi: const Color(0xff00000f),
+  cloudAi: const Color(0xff000010),
+  syncPending: const Color(0xff000011),
+);
+
+final class _SurfaceFixture {
+  const _SurfaceFixture({
+    required this.name,
+    required this.theme,
+    required this.styles,
+  });
+
+  final String name;
+  final ThemeData theme;
+  final Map<SsElevation, _ExpectedSurfaceStyle> styles;
+}
+
+final class _ExpectedSurfaceStyle {
+  const _ExpectedSurfaceStyle({
+    required this.backgroundArgb,
+    required this.borderArgb,
+    required this.borderWidth,
+    required this.shadowArgb,
+    required this.shadowElevation,
+  });
+
+  final int backgroundArgb;
+  final int borderArgb;
+  final double borderWidth;
+  final int shadowArgb;
+  final double shadowElevation;
 }

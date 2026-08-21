@@ -14,12 +14,7 @@ enum SsElevation {
     final colors = theme.extension<SsColorScheme>()!;
     final behavior = theme.extension<SsThemeBehavior>()!;
     final isHighContrast = !behavior.decorativeEffectsEnabled;
-    final blend = switch (this) {
-      SsElevation.base => 0.0,
-      SsElevation.raised => _raisedBlend,
-      SsElevation.overlay => _overlayBlend,
-      SsElevation.modal => _modalBlend,
-    };
+    final blend = _blendForElevation;
     final shadowElevation = switch (this) {
       SsElevation.base => _noShadow,
       SsElevation.raised => _raisedShadow,
@@ -29,7 +24,7 @@ enum SsElevation {
     final useShadow = theme.brightness == Brightness.light && !isHighContrast;
 
     return SsSurfaceStyle(
-      background: _elevatedBackground(
+      background: _backgroundFor(
         colors: colors,
         brightness: theme.brightness,
         blend: blend,
@@ -45,16 +40,25 @@ enum SsElevation {
     );
   }
 
-  static Color _elevatedBackground({
+  Color _backgroundFor({
     required SsColorScheme colors,
     required Brightness brightness,
     required double blend,
   }) {
+    if (this == SsElevation.base) return colors.surface;
+
     final target = brightness == Brightness.dark
         ? colors.textPrimary
         : colors.canvas;
     return Color.lerp(colors.surfaceRaised, target, blend)!;
   }
+
+  double get _blendForElevation => switch (this) {
+    SsElevation.base => 0,
+    SsElevation.raised => _raisedBlend,
+    SsElevation.overlay => _overlayBlend,
+    SsElevation.modal => _modalBlend,
+  };
 }
 
 @immutable
