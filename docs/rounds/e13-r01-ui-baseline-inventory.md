@@ -1,14 +1,15 @@
 # E13-R01 — UI baseline inventory és screenshot corpus
 
-- **Státusz:** PREPARED — E13-R01/H3 self-heal scope-revízió után
-  (2026-08-21, `main @ 6aad0bff`; eredeti brief: `main @ 17670d4f`)
+- **Státusz:** IN PROGRESS — pre-flight mérve és commitolásra kész
+  (2026-08-21, `main @ 30c78d9a`; eredeti brief: `main @ 17670d4f`)
 - **Típus:** **Chapter 13 program-nyitó kör** (UI/UX Design System)
 - **Kör-azonosító:** `E13-R01`. Az `E13` a **FEJEZETET** jelöli, nem epicet
   (az epicek E01–E10) — mint az `E99` és az `E14`.
 - **Branch:** `<motor>/e13-r01-ui-baseline-inventory`
 - **Előfeltétel:** a Chapter 13 a repóban (`e90edaa2`)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a baseline-kör nem hoz architekturális döntést.
+- **Előre kiosztott ADR:** [0376](../adr/0376-ui-baseline-inventory-contract.md)
+  — a baseline mérési és screenshot-corpus szerződése.
 
 ## 0.0 Pre-flight revízió (ADR 0112 self-heal, E13-R01/H3, 2026-08-21)
 
@@ -67,6 +68,37 @@ az E99-R08 review-report mentesség és az E07-R25 Vision evidence contract nem.
 > (képernyők, hex-találatok), mert az Epic 7 közben új képernyőket ad hozzá.
 > A brief §2 értékei `main @ 17670d4f`-en készültek. Eltérésnél §0.0 revízió.
 
+## 0.1 Aktuális orchestrátor pre-flight (2026-08-21, `main @ 30c78d9a`)
+
+**Avuló tények újramérve.** A `find lib/features -type f -name
+'*_screen.dart' | sort` parancs **58** production screen-fájlt ad: az eredeti
+51-es baseline óta hét új képernyő került a fába. A
+`rg -l 'Color\(0x[0-9A-Fa-f]+' lib/features | sort` továbbra is **9** fájlt
+ad. A `lib/core/theme/` változatlanul négy fájlt tartalmaz,
+`lib/core/design_system/` és `docs/ui/` továbbra sem létezik. A központi
+`AppRoutes` katalógusban és az éles `GoRouter` regisztrációban egyaránt **40**
+route van; a flag-gelt route-csoportok tényleges inputjai az
+`app_router.dart`-ban visszakeresett nyolc `FeatureFlags` mező. A brief nem ír
+elő acceptance-célstátuszt vagy erőforrás-tulajdonlás-változást, ezért az
+input→státusz és `.acquire(` mérés erre a read-only baseline-körre nem
+alkalmazható.
+
+**Brief-lint és scope.** A kapott strict lint-jelentés nem tartalmaz leletet;
+az aktuális briefre futtatott `python3 tools/brief-lint.py --brief
+docs/rounds/e13-r01-ui-baseline-inventory.md --level strict` szintén tiszta,
+a `tools/gateguard-scan.py` pedig nem talált védett mérce-útvonalat. A H3
+self-heal exact hét PNG + egy validátor scope-ja változatlanul szükséges és
+elégséges; `lib/**` nem nyílik meg.
+
+**Visszakeresett előzmény.** A kötelező, először szűkített, majd teljes
+korpuszos RAG-futtatás az [ADR 0059](../adr/0059-central-route-catalogue-and-validated-navigation.md)
+központi route-katalógusát, az **L371** exact screenshot-corpus scope-leckét
+és az E13-R01/H3 lezárt haltot hozta fel. Az index `6aad0bff` commiton állt,
+azaz két committal elavult volt a `30c78d9a` HEAD-hez képest; ezért a találatok
+csak előzményként szolgálnak, az aktuális számokat közvetlenül a kódból mértük.
+Az ADR-számot a foglaló adta: `tools/round-slots.py reserve-adr --round
+E13-R01` → **0376**.
+
 ```ai-router
 schema_version = 1
 risk = "normal"
@@ -111,15 +143,16 @@ Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 A jelenlegi felület, route-ok, komponensek és accessibility-állapot
 **dokumentált baseline-ja — módosítás nélkül** (SDD Ch13 Kör 1).
 
-## 2. Jelenlegi állapot — mért tények (`main @ 17670d4f`)
+## 2. Jelenlegi állapot — mért tények (`main @ 30c78d9a`)
 
 | mérés | érték |
 |---|---|
 | `lib/core/design_system/` | **nem létezik** — a Kör 2 hozza létre |
 | `lib/core/theme/` | `app_colors.dart`, `app_palette.dart`, `app_theme.dart`, `theme_mode_provider.dart` |
-| `*_screen.dart` a `lib/features` alatt | **51** |
+| `*_screen.dart` a `lib/features` alatt | **58** |
 | közvetlen `Color(0x…)` a feature-ökben | **9 fájl** |
 | `docs/ui/` | **nem létezik** |
+| `AppRoutes` / regisztrált `GoRoute` | **40 / 40** |
 
 A Ch13 §2 kanonikus színalapjai (`#D98A46` copper, dark/light felületek,
 confidence-színek) **nem cserélendők le** — a fejezet feladata, hogy
@@ -203,7 +236,7 @@ körök sorrendezhessenek.
 |---|---|---|
 | A1 | **Nulla `lib/**` módosítás** | `git diff --stat` |
 | A2 | Az inventár determinisztikus (kétszeri futtatás azonos kimenet) | `ui_inventory_test.dart` |
-| A3 | Minden production képernyő szerepel az inventárban | a mért 51 `*_screen.dart` lefedve |
+| A3 | Minden production képernyő szerepel az inventárban | a mért 58 `*_screen.dart` lefedve |
 | A4 | A route-térkép tartalmazza a legacy ↔ cél párokat és a deep-link kockázatot | review |
 | A5 | A token-adósság mérve (hex, spacing, TextStyle, duplikátumok, cross-feature import) | `token-debt.md` |
 | A6 | Az accessibility-leletek prioritással szerepelnek | `accessibility-findings.md` |
