@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 [HEAL E08-R17/H4] Capability-axis mérce izolálva — PR #390 (2026-08-21, L388)
+
+Az E08-R17 független review-ja az `account → cloud` production-mutációval
+bizonyította, hogy a javító kör három availability-cellája közül az account
+teszt hamisan zöld: a shipping katalógus négy eligible candidate-jéből a
+max-3 korlát épp a hibás account questet vágta le. A production mapping helyes;
+a halt B osztályú brief/mérce-contract rés volt.
+
+A self-heal a product allowlist és gate bővítése nélkül előírta a camera,
+account és cloud tengelyek külön, két-entrys candidate poolját (local short +
+csak a vizsgált capability), a teljes shipping katalógushoz pedig megőrizte a
+külön metadata-contract cellát. Mindhárom keresztkötési mutációnak célzottan
+pirosnak kell lennie. A regressziós
+`tools/tests/test_e08_r17_capability_axis_contract.py` a régi briefen 6
+hibával piros, a revízió után 5 teszt + 6 subtest zöld; a teljes tooling suite
+709 passed, 1 skipped és 610 subtests passed. Branch:
+`heal/E08-R17-H4-1`, PR
+[#390](https://github.com/wolfcasaba/strumsight/pull/390). Az exact végső SHA
+Router CI success és squash-merge a `fixed` jelzés előfeltétele. A pontos
+következő E08 termékkör változatlanul **E08-R17**, a revideált mércével.
+
 ## 🔧 [HEAL E13-R04/H3] Typography compatibility scope helyreállítva — PR #388 (2026-08-21, L387)
 
 Az E13-R04 pre-flight ADR 0383 §D3-a az `SsTypography` tényleges
