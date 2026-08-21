@@ -1,12 +1,14 @@
 # E08-R14 — Achievement kiértékelő és haladás-projekció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** IN PROGRESS (pre-flight 2026-08-21, kód olvasva: `main @ cfe43920`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 14
 - **Kör-azonosító:** `E08-R14`
-- **Branch:** `<motor>/e08-r14-achievement-evaluator-and-projection`
+- **Branch:** `terra/e08-r14-achievement-evaluator-and-projection`
 - **Előfeltétel:** `E08-R13` merge-elve (achievement katalógus)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0311` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **ADR:** `ADR 0377`. Az előre írt `0311` elavult; a kötelező atomi foglaló
+  (`tools/round-slots.py reserve-adr --round E08-R14`) 2026-08-21-én `0377`-et
+  adott. Az ADR-t az orchestrátor írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
@@ -28,6 +30,47 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight revízió — 2026-08-21
+
+- A tényleges R13 contract öt objective-típust ad (`count`, `threshold`,
+  `distinct`, `sequence`, `compound`) plusz explicit unknown sentinelt. Az
+  R02 `LearningActivityEvent` hat zárt runtime típust, stabil `eventId`-t,
+  `occurredAt`-ot, `duration`-t, `score`-t és `source`-ot hordoz, de XP-
+  komponenseket nem. Az evaluator ezért egy immutable, caller-supplied
+  evaluation-evidence contracttal egészíti ki a canonical eventet; a típust,
+  időtartamot, score-t és source-t az eventből származtatja, az XP-metrikát
+  csak explicit átadott, véges értékből olvassa. Hiányzó metrika nem válik
+  némán nullává: az érintett objective fail-closed diagnosztikát ad.
+- Az R03 főkönyv `appendIfAbsent` dedupja a `sourceEventId`-re atomikus; a
+  tényleges hívási láncban ma a repository szerzi meg az írás sorosítását.
+  Achievement receipt forrás-ID-ja ezért
+  `achievement:<achievementId>:<triggerEventId>`, és a receipt
+  `createdAt` értéke a kiváltó event `occurredAt` értéke.
+- Az R06 nem tartalmaz achievement reward-összeg policyt; az R03/R06 zárt
+  contractja viszont már tartalmazza az `achievementUnlocked` reason kódot.
+  Új balance-szabály vagy jutalomtípus bevezetése tilos, ezért ez a kör
+  nulla-XP audit receiptet ír (`baseXp=bonusXp=totalXp=0`, reason:
+  `achievementUnlocked`). Pozitív achievement XP csak külön balance-körben,
+  explicit policyvel vezethető be.
+- A progress nem építhető újra **csak** a reward ledgerből: a ledger az
+  unlock receiptet őrzi, nem minden count/distinct/threshold bemenetet. A4
+  pontosítva: az evaluator a caller által átadott kanonikus event-historyból
+  építi újra a progresszt, és a ledgerből köti vissza az egyszeri completiont.
+- A backfill konfigurált alapablaka 30 nap, az anchor caller-supplied UTC
+  időpont. A kötelező 29/30/31 napos cellák pontos bemeneteit a
+  `python3 -c "from datetime import datetime,timezone,timedelta; ..."`
+  számolta: `2026-07-23T12:00:00Z`, `2026-07-22T12:00:00Z`,
+  `2026-07-21T12:00:00Z` a `2026-08-21T12:00:00Z` anchorhoz.
+- Visszakeresett előzmények: `adr/0301` (repository-szintű atomikus ledger
+  dedup), `adr/0350` (caller-supplied, stabil bounded backfill precedens),
+  `adr/0374` (zárt objective-vokabulár), `lessons/L372` (stabil achievement
+  identitás), valamint az E08-R07 halt-bejegyzés (zöld suite mögötti projekció-
+  regressziókhoz kötelező reviewer-mutatás).
+**Kockázat = high, indoklás:** a kör perzisztált reward receiptet és
+újraépíthető user-progressz szerződést köt össze; egy dedup-, timestamp-
+vagy backfill-hiba dupla jutalmat vagy történeti progresszdriftet okozhat,
+ezért correctness mellett külön security review is kötelező.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -64,8 +107,11 @@ achievementhez · ismeretlen objective **fail-closed**.
 **NINCS benne (tilos):**
 
 - A katalógus tartalmának módosítása (Kör 13) és a felület (Kör 15).
-- Új jutalom-típus bevezetése — a nyugta az R06 policy-motorjából jön.
-- `docs/adr/**` — az ADR 0311-et a Claude írja.
+- Új jutalom-típus vagy pozitív achievement-XP balance bevezetése — a kör a
+  meglévő R03 ledger schema és R06 `achievementUnlocked` reason kód alapján
+  nulla-XP audit receiptet ír.
+- `docs/adr/**` — az ADR 0377-et az orchestrátor írta a pre-flightban; az
+  implementer az ADR-ket nem módosítja.
 
 ## 4. Engedélyezett fájlok
 
@@ -78,13 +124,16 @@ achievementhez · ismeretlen objective **fail-closed**.
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
-## 5. Kötött architekturális döntések (ADR 0311)
+## 5. Kötött architekturális döntések (ADR 0377)
 
 ### 5.1 A feloldás EGYSZERI, és a főkönyv dedupja garantálja
 
-A feloldás jutalma az R03 főkönyvébe kerül `append-if-absent` művelettel, ahol a
-forrás-azonosító az achievement azonosítója + a kiváltó esemény azonosítója. Az ismételt
-kiértékelés így technikailag nem tud dupla jutalmat adni.
+A feloldás audit receiptje az R03 főkönyvébe kerül `append-if-absent`
+művelettel, ahol a forrás-azonosító pontosan
+`achievement:<achievementId>:<triggerEventId>`. Az R13 nem hordoz reward-
+összeget, ezért a receipt ebben a körben nulla XP és az explicit
+`achievementUnlocked` reason kódot hordoz. Az ismételt kiértékelés így
+technikailag nem tud dupla receiptet vagy jutalmat adni.
 
 **NEM elfogadható gyengítés:** memóriabeli „már feloldottam” halmaz a főkönyv helyett.
 Az app újraindítása után elvész, és a következő esemény újra feloldana.
@@ -115,6 +164,14 @@ Egy később hozzáadott achievement visszamenőleges kiértékelése korlátozo
 ablakban történik (a korlát a konfigurációban él). A teljes előzmény minden
 alkalmazás-indításkori újrapásztázása használhatatlanná tenné az indulást.
 
+### 5.6 Az újraépítés bemenete event-history + ledger receipt
+
+A caller rendezett kanonikus event-historyt ad át; az evaluator ebből építi
+újra a count/distinct/threshold/sequence/compound progresszt. A ledger az
+egyszeri completion receiptjének és stabil timestampjének igazságforrása.
+Sem teljes activity repository scan, sem storage-owner átvétel nem kerül az
+evaluatorba.
+
 ## 6. Acceptance criteria
 
 | # | Kritérium | Bizonyíték |
@@ -122,10 +179,10 @@ alkalmazás-indításkori újrapásztázása használhatatlanná tenné az indul
 | A1 | Ugyanaz az esemény kétszer feldolgozva EGY feloldást ad | `achievement_evaluator_test.dart` — idempotencia-cella |
 | A2 | App-újraindítás szimulálása (üres memória, meglévő főkönyv) után sincs újra-feloldás | `achievement_evaluator_test.dart` |
 | A3 | A feloldás időbélyege a kiváltó eseményből jön, és újraépítéskor VÁLTOZATLAN | `achievement_evaluator_test.dart` — stabilitás-cella |
-| A4 | A haladás a főkönyvből TELJESEN újraépíthető | `achievement_evaluator_test.dart` |
+| A4 | A haladás a caller-supplied kanonikus event-historyból teljesen újraépíthető; az unlock receipt a főkönyvből kötődik vissza | `achievement_evaluator_test.dart` |
 | A5 | Egy esemény csak a releváns objective-eket értékeli (az érintett objective-ek száma mérhető) | `achievement_evaluator_test.dart` — index-cella |
 | A6 | Ismeretlen objective esetén NINCS feloldás, és hiba keletkezik | `achievement_evaluator_test.dart` |
-| A7 | A feloldáshoz jutalom-nyugta jön létre a főkönyvben | `achievement_evaluator_test.dart` |
+| A7 | A feloldáshoz nulla-XP, `achievementUnlocked` audit receipt jön létre a főkönyvben, stabil achievement+event source ID-val | `achievement_evaluator_test.dart` |
 | A8 | A backfill korlátos: a korlát fölötti előzmény nem kerül feldolgozásra | `achievement_evaluator_test.dart` — korlát-mátrix |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
@@ -143,11 +200,11 @@ alkalmazás-indításkori újrapásztázása használhatatlanná tenné az indul
 
 | Cella | Bemenet | Elvárt |
 |---|---|---|
-| a küszöb **alatt** | egy `backfillWindowDays - 1` napos esemény | **feldolgozásra kerül** a backfillben |
-| **rajta** (a küszöbön) | pontosan `backfillWindowDays` napos esemény | **MÉG feldolgozásra kerül** — a korlát a FELDOLGOZOTT oldalhoz tartozik (inkluzív) |
-| a küszöb **fölött** | `backfillWindowDays + 1` napos esemény | **NEM kerül feldolgozásra**; ez a tény a diagnosztikában látszik, nem néma kihagyás |
+| a küszöb **alatt** | `2026-07-23T12:00:00Z` (29 napos esemény, 30 napos ablak) | **feldolgozásra kerül** a backfillben |
+| **rajta** (a küszöbön) | `2026-07-22T12:00:00Z` (pontosan 30 napos) | **MÉG feldolgozásra kerül** — inkluzív határ |
+| a küszöb **fölött** | `2026-07-21T12:00:00Z` (31 napos) | **NEM kerül feldolgozásra**; ez a diagnosztikában látszik |
 
-A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
+A hármas tömören: **alatt** → feldolgoz · **rajta** → feldolgoz · **fölött** → kihagy és diagnosztikát ad.
 
 A határ **a **rajta** cellához tartozik (inkluzív) — a fenti táblázat „rajta” sora mondja ki, melyik oldal nyer**.
 
