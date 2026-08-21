@@ -2731,5 +2731,188 @@
   "weeklyPlanTitle": "Heti terv",
   "@weeklyPlanTitle": {},
   "wrappedShareTooltip": "Heti összegzés megosztása",
-  "wrappedTitle": "A heti pengetésem"
+  "wrappedTitle": "A heti pengetésem",
+  "questsScreenTitle": "Küldetések",
+  "questsDailySectionTitle": "Ma",
+  "questsWeeklySectionTitle": "Ezen a héten",
+  "questsEmptyTitle": "Még nincs küldetés",
+  "questsEmptyBody": "A küldetések az első gyakorlás után jelennek meg.",
+  "questsOfflineBanner": "Elérhető kapcsolat nélkül",
+  "questsOfflineBody": "A küldetések és a napi kihívás internet nélkül is működnek.",
+  "questProgressLabel": "{current} / {target}",
+  "@questProgressLabel": {
+    "placeholders": {
+      "current": {
+        "type": "num"
+      },
+      "target": {
+        "type": "num"
+      }
+    }
+  },
+  "questProgressSemantics": "Haladás: {current} / {target}.",
+  "@questProgressSemantics": {
+    "placeholders": {
+      "current": {
+        "type": "num"
+      },
+      "target": {
+        "type": "num"
+      }
+    }
+  },
+  "questRewardLabel": "+{xp} XP",
+  "@questRewardLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "questRewardAlreadyCredited": "A jutalom már jóváírva",
+  "questRewardSemantics": "Jutalom: {xp} tapasztalati pont, már jóváírva.",
+  "@questRewardSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "questSourcePlanLabel": "A heti tervedből",
+  "questSourceSkillLabel": "Készség fókusz: {skill}",
+  "@questSourceSkillLabel": {
+    "placeholders": {
+      "skill": {
+        "type": "String"
+      }
+    }
+  },
+  "questSourceModeLabel": "Gyakorlási mód fókusz",
+  "questSourceMetricLabel": "Mért fókusz: {metric}",
+  "@questSourceMetricLabel": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "questStartCta": "Indítás",
+  "questContinueCta": "Folytatás",
+  "questStartSemantics": "Küldetés indítása: {title}.",
+  "@questStartSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "questContinueSemantics": "Küldetés folytatása: {title}.",
+  "@questContinueSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "questCompletedBadge": "Teljesítve",
+  "questCompletedBody": "A jutalom már a főkönyvedben van.",
+  "questCompletedSemantics": "A(z) {title} küldetés teljesítve. A jutalom már jóváírva.",
+  "@questCompletedSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "questExpiredBadge": "Lejárt",
+  "questUnavailableBadge": "A tartalom nincs telepítve",
+  "questUnavailableBody": "Ehhez a küldetéshez tartozó tartalom még nincs telepítve ezen az eszközön.",
+  "questExpiryToday": "Éjfélig elérhető",
+  "questExpiryWeekly": "Vasárnapig elérhető",
+  "questExpiryDate": "{date} napig elérhető",
+  "@questExpiryDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeDailyTitle": "Mai kihívás",
+  "challengeDailyBody": "Játsszd le a saját tempódban.",
+  "challengeStrumName": "Pengetés-minta: {name}",
+  "@challengeStrumName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeChordChange": "Válts {from} akkordról {to} akkordra {beats} ütem alatt",
+  "@challengeChordChange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      },
+      "beats": {
+        "type": "int"
+      }
+    }
+  },
+  "challengeRhythm": "Játszd a(z) {content} ritmust {bpm} BPM tempóban",
+  "@challengeRhythm": {
+    "placeholders": {
+      "content": {
+        "type": "String"
+      },
+      "bpm": {
+        "type": "int"
+      }
+    }
+  },
+  "challengeSongSection": "Játszd a(z) {song} dal {section} szakaszát {repetitions} alkalommal",
+  "@challengeSongSection": {
+    "placeholders": {
+      "section": {
+        "type": "String"
+      },
+      "song": {
+        "type": "String"
+      },
+      "repetitions": {
+        "type": "int"
+      }
+    }
+  },
+  "challengeTiming": "Találd el a(z) {content} {window} ms-os tempoablakát",
+  "@challengeTiming": {
+    "placeholders": {
+      "window": {
+        "type": "int"
+      },
+      "content": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeCompletedToday": "Ma teljesítve",
+  "challengeSemanticsActive": "Napi kihívás: {description}. Készen áll a játékra.",
+  "@challengeSemanticsActive": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeSemanticsCompleted": "Napi kihívás: {description}. Ma teljesítve.",
+  "@challengeSemanticsCompleted": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeUnavailableBody": "Telepíts akkordokat, ritmusokat vagy dalokat a mai kihívás feloldásához."
 }
