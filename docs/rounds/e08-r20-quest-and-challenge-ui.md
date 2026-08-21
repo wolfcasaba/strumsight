@@ -95,6 +95,26 @@ regenerálja az `app_en.arb`/`app_hu.arb`-ot, (3) a gate l10n-lépése
 `allowed_paths`-on (a generátor odaírja őket), de tartalmuk mostantól a
 fragmentumból származik.
 
+### 0.0.2 Kör közbeni revízió — CI (`full-gate.yml`) piros, 2026-08-21
+
+A célzott gate (`round-gate.sh test/features/gamification/presentation/
+quests_screen_test.dart`) és a review-klón zöld volt, de a CI **teljes**
+suite-ja (ADR 0053) egy a kör saját gate-parancsán KÍVÜLI, cross-cutting
+invariánst fogott: `test/ui/ui_inventory_test.dart` egy MÉRT, rögzített
+60-elemű production-screen bázisvonalat (E08-R15, PR #383) ellenőriz
+(`expect(first.screenPaths, hasLength(60))`) — az ÚJ, jogos
+`quests_screen.dart` a tényleges számot 61-re emelte, ezt a CI log mérte
+(`Which: has length of <61>`). Ugyanaz a hibaosztály, mint az E08-R19
+`architecture_dependency_test.dart` lelete: a kör saját `gate_tests`-e nem
+fedi a keresztmetsző invariánst, csak a teljes suite. Az `UiInventory` a
+fájlrendszert (`lib/**/screens/*.dart`) olvassa, nem az útvonal-regisztrációt
+— a bázisvonal-bővülés a screen-fájl LÉTÉVEL jár, a Kör 30 útvonal-
+regisztrációjától függetlenül.
+
+**Revízió:** az `allowed_paths` kiegészül a `test/ui/ui_inventory_test.dart`
+fájllal, KIZÁRÓLAG a `hasLength(60)` → `hasLength(61)` egysoros bázisvonal-
+frissítés céljából — más sor a fájlban nem változhat.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -108,10 +128,12 @@ allowed_paths = [
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/presentation/quests_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e08-r20-quest-and-challenge-ui.md",
 ]
 gate_tests = [
   "test/features/gamification/presentation/quests_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
@@ -168,6 +190,7 @@ nélkül · offline és üres állapot.
 | `lib/l10n/app_en.arb` | GENERÁLT — `tool/gen_l10n_segments.dart --write` írja, kézzel nem szerkesztendő |
 | `lib/l10n/app_hu.arb` | GENERÁLT — `tool/gen_l10n_segments.dart --write` írja, kézzel nem szerkesztendő |
 | `test/features/gamification/presentation/quests_screen_test.dart` | a §6 cellái |
+| `test/ui/ui_inventory_test.dart` | **CSAK a `hasLength(60)` → `hasLength(61)` sor** — 0.0.2 revízió |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
