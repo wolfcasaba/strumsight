@@ -14648,3 +14648,62 @@ kötelezővé, a product munkát a friss kör-sessionre hagyja.
 briefen 6 failed / 2 passed, a revízió után 5 passed + 6 subtests passed. A
 teljes `python3 -m pytest tools/tests -q` eredménye 709 passed, 1 skipped és
 610 subtests passed.
+
+## L389 — A kézi Semantics label nem zárja ki automatikusan a gyermek Text felolvasását (E13-R04, 2026-08-21)
+
+**Mért snag.** Az `SsChordHeroText` egy külső `Semantics(label: chordName)`
+widgetet és belül egy azonos szövegű `Text` widgetet renderelt. A vizuális és
+text-scale tesztek mind zöldek voltak, de a független reviewer
+`tester.getSemantics(find.byType(SsChordHeroText)).label` mérése
+`Cmaj7#11\nCmaj7#11` értéket adott. A Stage Mode legfontosabb zenei jele így
+minden váltáskor kétszer került volna a képernyőolvasóhoz.
+
+**Javítás és szabály.** Ha a parent semantics maga adja a teljes, kanonikus
+labelt, explicit ki kell zárnia a gyermek szemantikáját. Az
+`excludeSemantics: true` után a node exact `Cmaj7#11`; a reviewer a flag
+eltávolításával újra pirosra vitte a permanens cellát. A nem-null vagy
+`findsOneWidget` ellenőrzés itt nem bizonyít egyetlen felolvasást: az exact
+összefűzött labelt kell mérni.
+
+**Őrteszt:** `test/core/design_system/typography/ss_typography_test.dart` —
+„chord hero exposes exactly one complete semantics label”.
+
+## L390 — Az ADR-foglaló örökölt pre-flightnál nem idempotens: a meglévő marker újrahívása második számot foglal (E13-R04, 2026-08-21)
+
+**Mért snag.** A folytatott E13-R04 ágon a commitolt ADR 0383 és a
+`.pipeline/inflight/adr/0383` marker is `round=E13-R04` értéket hordozott. A
+`tools/round-slots.py reserve-adr --round E13-R04` újrahívása ennek ellenére
+0385-öt foglalt ugyanennek a körnek, mert a parancs mindig a következő szabad
+számot hozza létre; nem keres round-ID szerinti meglévő foglalást. A téves,
+e sessionben létrehozott 0385 markert eltávolítottuk, a commitolt 0383 maradt.
+
+**Javítás és szabály.** §0.2 recovery esetén először a megtalált branch ADR-
+commitját és a meglévő marker tartalmát kell felhasználni; a foglalót csak
+olyan körnél szabad hívni, amelynek valóban nincs korábbi pre-flightja. A
+foglaló atomi, de szándékosan nem idempotens round-ID szerint.
+
+**Őrteszt:** nincs — a viselkedés a foglaló jelenlegi, szándékos
+„következő szabad szám” szerződése; a workflow recovery-ellenőrzése a védelem.
+
+## L391 — A rebase mechanikus brief-feloldása eldobhat pre-flight tartalmat; remote-only blokk után a publikus csúcsról normal merge őrzi meg (E13-R04, 2026-08-21)
+
+**Mért snag.** A `round-land` az E13-R04 publikus `7b95d5dc` csúcsát a friss
+`d0a1afac` main fölé rebase-elte. A két brief-konfliktust mechanikusan
+feloldotta és a kombinált gate 8/8 zöld lett, de a safe-force-push három
+remote-only commitot jelzett (`54b32ed0`, `29276d41`, `d01b2f28`). A tiszta
+rebase-csúcs és a publikus csúcsról készült normal merge fa-diffje megmutatta,
+hogy a rebase-feloldás eldobta volna a brief §0.0 pre-flight és §5.7 kötött
+integrációs részeit; a production fa nem tért el.
+
+**Javítás és szabály.** Az L367 receptje szerint a rebase-csúcs backup refen
+megmaradt, a recovery a publikus PR-csúcsról indult és normál
+`merge --no-ff origin/main` művelettel készítette az `55832396` csúcsot. Ez
+fast-forward push-sal megőrizte a remote commitokat és a teljes briefet,
+force-push vagy ön-duplikált patch-lánc nélkül. Az új exact SHA-n Full Gate és
+Router CI újra success lett. Remote-only pre-flight/merge listánál a fa-diff
+nem puszta formalitás: megmutathatja, hogy a „tiszta” rebase valójában
+dokumentációs adatot vesztett.
+
+**Őrteszt:** nincs — a mért bizonyíték a `safe-force-push` exit 3 listája és
+a `git diff backup/e13-r04-rebased-5c2a3645 55832396` brief-diffje; az L367 és
+L376 meglévő landolási őrei változatlanok.
