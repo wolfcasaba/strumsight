@@ -299,3 +299,6 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   zöld (format, analyze, célzott test, architecture).
 
 ## 11. Review — a Claude tölti ki
+
+- Correctness: `docs/reviews/e08-r15-review.md`
+- Security/privacy: `docs/reviews/e08-r15-security.md`
