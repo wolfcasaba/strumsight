@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 abstract final class ContrastCheck {
   static const minimumTextContrast = 4.5;
@@ -36,9 +37,7 @@ abstract final class ContrastCheck {
     final normalized = channel / 255;
     return normalized <= .04045
         ? normalized / 12.92
-        : ((normalized + .055) / 1.055) *
-              ((normalized + .055) / 1.055) *
-              ((normalized + .055) / 1.055);
+        : math.pow((normalized + .055) / 1.055, 2.4).toDouble();
   }
 }
 

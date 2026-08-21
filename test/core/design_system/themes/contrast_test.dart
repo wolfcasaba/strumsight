@@ -4,6 +4,13 @@ import 'package:strumsight/core/design_system/public.dart';
 import '../../../../tool/ui_contrast_check.dart';
 
 void main() {
+  test('uses the WCAG sRGB relative luminance transform', () {
+    expect(
+      ContrastCheck.relativeLuminance(0xff948d82),
+      closeTo(0.2695735834450039, 1e-12),
+    );
+  });
+
   test('text threshold rejects below, accepts at, and accepts above 4.5:1', () {
     expect(
       ContrastCheck.meetsTextContrastForLuminances(1, 1.05 / 4.4 - .05),

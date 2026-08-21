@@ -38,10 +38,13 @@ void main() {
       expect(light.textPrimary, same(AppPalette.light.ink));
     });
 
-    test('provides icon data for every color-independent status marker', () {
-      for (final kind in SsStatusMarkerKind.values) {
-        expect(SsStatusMarkers.forKind(kind).icon, isNotNull);
-      }
+    test('gives every color-independent status marker a distinct icon', () {
+      final icons = SsStatusMarkerKind.values
+          .map(SsStatusMarkers.forKind)
+          .map((marker) => marker.icon)
+          .toSet();
+
+      expect(icons, hasLength(SsStatusMarkerKind.values.length));
     });
 
     test('copyWith preserves semantic values and lerp is endpoint stable', () {
@@ -101,7 +104,21 @@ void main() {
     ]) {
       await tester.tap(find.byIcon(icon));
       await tester.pumpAndSettle();
-      expect(find.byType(SsStatusMarker), findsNWidgets(4));
+      final markers = find.byType(SsStatusMarker);
+      expect(markers, findsNWidgets(SsStatusMarkerKind.values.length));
+
+      final renderedIcons = <IconData>{
+        for (var index = 0; index < SsStatusMarkerKind.values.length; index++)
+          tester
+              .widget<Icon>(
+                find.descendant(
+                  of: markers.at(index),
+                  matching: find.byType(Icon),
+                ),
+              )
+              .icon!,
+      };
+      expect(renderedIcons, hasLength(SsStatusMarkerKind.values.length));
     }
   });
 }

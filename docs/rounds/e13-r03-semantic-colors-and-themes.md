@@ -245,6 +245,12 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ### Módosítások
 
+- **Javító kör (F1/F2):** a kontraszt-tool WCAG sRGB linearizálása a pontos
+  `^ 2.4` hatványt használja; a canonical `#948D82` vektor rögzített
+  szabványos luminanciája ezt regressziós tesztben kényszeríti. A
+  színtől független marker-contract tesztje a négy ikon páronkénti
+  egyediségét, a catalog widget-tesztje pedig a ténylegesen renderelt ikonok
+  egyediségét is kéri.
 - `foundations/ss_colors.dart`: a teljes, 23 mezős `SsColorScheme`, névvel
   ellátott interaction overlayek, High Contrast viselkedési extension és a
   színtől független ikon-marker contract.
@@ -258,6 +264,16 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ### Futtatott ellenőrzések
 
+- Javító TDD-bizonyíték: az új canonical-vektor teszttel a javítás ELŐTT
+  `flutter test test/core/design_system/themes/contrast_test.dart
+  test/core/design_system/themes/ss_color_scheme_test.dart` → a várt F1
+  piros (`Expected: 0.2695735834450039`, `Actual: 0.1943756414277682`);
+  a javítás után ugyanez → 12 teszt zöld.
+- Javító kör kötelező gate:
+  `tools/round-gate.sh test/core/design_system/themes/ss_color_scheme_test.dart
+  test/core/design_system/themes/contrast_test.dart` → 7/7 zöld (format,
+  analyze, color-scheme teszt 8/8, contrast teszt 4/4, architecture, secrets,
+  l10n).
 - `flutter test test/core/design_system/themes/ss_color_scheme_test.dart
   test/core/design_system/themes/contrast_test.dart` → 11 teszt zöld.
 - A meglévő catalog/foundation regresszióval együtt:
