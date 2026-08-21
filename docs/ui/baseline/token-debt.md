@@ -5,10 +5,25 @@ visual defect. They identify the migration surface for later Chapter 13 rounds.
 
 | Finding | Measurement | Follow-up direction |
 | --- | ---: | --- |
-| Direct feature `Color(0x…)` files | 9 files / 26 occurrences | replace with semantic color tokens only after the compatibility layer exists |
+| Direct feature `Color(0x…)` occurrences | 28 occurrences in 9 files | replace with semantic color tokens only after the compatibility layer exists |
 | Direct `TextStyle(` construction | 174 occurrences | migrate repeated role styles to typography tokens |
-| Direct `SizedBox`/`EdgeInsets` spacing construction | 752 occurrences | establish spacing/radius tokens before systematic replacement |
-| Raw cross-feature screen/widget imports | 0 observed | keep feature boundaries on public contracts |
+| Direct `SizedBox`/`EdgeInsets` spacing construction | 817 occurrences | establish spacing/radius tokens before systematic replacement |
+| Raw cross-feature screen/widget imports | none observed in a manual import audit | keep feature boundaries on public contracts |
+
+The occurrence counters above are reproducible at the measured repository
+HEAD with these exact commands:
+
+```bash
+rg -o 'Color\(0x[0-9A-Fa-f]+' lib/features | wc -l
+rg -l 'Color\(0x[0-9A-Fa-f]+' lib/features | sort | wc -l
+rg -o 'TextStyle\(' lib/features | wc -l
+rg -o 'SizedBox\(|EdgeInsets\.' lib/features | wc -l
+```
+
+The first command measures direct-color occurrences (28); the second measures
+the affected-file unit (9), rather than counting lines. The final two commands
+measure source occurrences, not rendered token values. The cross-feature row
+is deliberately a manual boundary audit rather than an implied automated count.
 
 The nine files with direct hex colors are:
 

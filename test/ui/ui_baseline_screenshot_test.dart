@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/live/engine/mock_strum_engine.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
@@ -27,10 +28,23 @@ const _baselineScreenshots = <String>[
   'docs/ui/baseline/screenshots/onboarding-compact-portrait.png',
 ];
 
+const _productionFontAssets = <String, List<String>>{
+  'Poppins': <String>[
+    'assets/fonts/Poppins-Regular.ttf',
+    'assets/fonts/Poppins-Medium.ttf',
+    'assets/fonts/Poppins-SemiBold.ttf',
+    'assets/fonts/Poppins-Bold.ttf',
+    'assets/fonts/Poppins-ExtraBold.ttf',
+  ],
+  'Montserrat': <String>['assets/fonts/Montserrat.ttf'],
+};
+
 void main() {
-  testWidgets(
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
     'the exact compact portrait baseline corpus is decodable and non-empty',
-    (tester) async {
+    () async {
       expect(_baselineScreenshots, hasLength(7));
       expect(_baselineScreenshots.toSet(), hasLength(7));
 
@@ -64,6 +78,7 @@ void main() {
         );
       }
     },
+    timeout: const Timeout(Duration(seconds: 10)),
     skip: _captureBaseline,
   );
 
@@ -78,6 +93,7 @@ void main() {
       final tunerEngine = FakeTunerEngine();
       addTearDown(strumEngine.dispose);
       addTearDown(tunerEngine.dispose);
+      await _loadProductionFonts();
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
@@ -152,3 +168,13 @@ void main() {
 
 Future<void> _capture(WidgetTester tester, String path) =>
     expectLater(find.byType(MaterialApp), matchesGoldenFile('../../$path'));
+
+Future<void> _loadProductionFonts() async {
+  for (final entry in _productionFontAssets.entries) {
+    final loader = FontLoader(entry.key);
+    for (final assetPath in entry.value) {
+      loader.addFont(rootBundle.load(assetPath));
+    }
+    await loader.load();
+  }
+}

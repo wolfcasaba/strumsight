@@ -16,13 +16,19 @@ Capture recipe:
 2. The capture test sets a 390×844 logical-pixel viewport with device-pixel
    ratio 1, uses `StrumSightApp` for the five shell destinations, and renders
    the production `TunerScreen` and `OnboardingScreen` directly.
-3. It replaces microphone engines and preference storage with the existing
+3. Before mounting a screen, the capture test loads the existing Poppins
+   (Regular through ExtraBold) and Montserrat font assets with `FontLoader`.
+   This makes the raster use the application's readable production typography
+   instead of the Ahem test-font fallback; it adds no asset or pubspec change.
+4. It replaces microphone engines and preference storage with the existing
    in-memory test fakes. Live receives a deterministic C/downstroke frame and
    Tuner receives a deterministic in-tune A reading; no network or platform
    microphone is used.
-4. Open all seven generated PNGs before review. The ordinary corpus test only
-   verifies exact names, decodability, non-empty dimensions, and portrait
-   shape; it is not a visual design assertion.
+5. Open all seven generated PNGs before review. The ordinary corpus test runs
+   `decodeImageFromList` in a plain asynchronous test with a 10-second timeout,
+   so it verifies exact names, decodability, non-empty dimensions, and portrait
+   shape without waiting in the widget test's fake-async zone. It is not a
+   visual design assertion.
 
 The standard validation command is:
 

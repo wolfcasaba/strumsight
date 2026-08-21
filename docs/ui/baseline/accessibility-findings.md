@@ -9,6 +9,8 @@ without changing application code.
 | P0 | Live and Tuner | These microphone-owning surfaces need lifecycle-safe semantics and recovery checks after layout migration. | Preserve the existing owner boundary while testing screen-reader actions. |
 | P1 | Dialog and sheet flows | 24 `showDialog`/`showModalBottomSheet` call sites need an explicit focus-order and dismissibility audit. | Test the listed overlays with keyboard and screen reader. |
 | P1 | Compact layout | Existing small-phone guard covers selected screens, not every screen and not every dynamic state. | Expand overflow coverage around long localized copy and error states. |
+| P1 | Tuner compact layout | The 390×844 `tuner-compact-portrait.png` baseline visibly shows a render-overflow warning stripe at the upper-right edge. | Reproduce at the same compact viewport and fix in the later Tuner layout migration; do not change production code in this baseline round. |
+| P1 | Onboarding compact layout | The 390×844 `onboarding-compact-portrait.png` baseline visibly shows a render-overflow warning stripe at the upper-right edge. | Reproduce at the same compact viewport and fix in the later onboarding layout migration; do not change production code in this baseline round. |
 | P1 | Visual status | Confidence, progress, and tuning states must remain distinguishable without color. | Audit status widgets against Chapter 13 semantic-token work. |
 | P2 | Feature-local empty states | Empty-state structure is duplicated across multiple features. | Consolidate only after component contracts exist. |
 

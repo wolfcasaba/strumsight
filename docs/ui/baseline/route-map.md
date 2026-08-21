@@ -34,7 +34,7 @@ registered when their owning flag is off.
 | `/song-trainer/overview/:songId` | `/songs/:songId` | parameter mapping required |
 | `/song-trainer/setup/:songId` | `/songs/:songId/train/setup` | parameter mapping required |
 | `/song-trainer/session/:songId` | `/songs/:songId/train` | current `extra` inputs are required |
-| `/song-trainer/result` | `/songs/:songId/result/:sessionId` | current result is `extra` only |
+| `/song-trainer/result/:songId` | `/songs/:songId/result/:sessionId` | preserve the `songId` path parameter and the typed `SongTrainerResult` `extra`; either missing value makes a deep link incomplete |
 | `/tutor/home` | `/coach` | currently feature-flag gated |
 | `/tutor/chat` | `/coach/tutor/:conversationId?` | conversation ID is absent today |
 | `/tutor/profile` | `/profile` | retain account and consent boundary |
