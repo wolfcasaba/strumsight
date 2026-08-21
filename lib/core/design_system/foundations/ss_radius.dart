@@ -1,3 +1,4 @@
+/// Pinned corner-radius scale verified by the foundation tests.
 abstract final class SsRadius {
   static const double xs = 6;
   static const double sm = 10;

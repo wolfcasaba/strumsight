@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/core/theme/app_colors.dart';
 import 'package:strumsight/core/theme/app_palette.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 
 void main() {
   test('exports the pinned foundation values through the public barrel', () {
@@ -26,17 +27,28 @@ void main() {
     expect(SsSemantics.maximumTextScale, 2.0);
   });
 
-  test('theme compatibility adapter reads the legacy color sources', () {
-    final dark = SsThemeExtensions.forBrightness(Brightness.dark);
-    final light = SsThemeExtensions.forBrightness(Brightness.light);
+  test(
+    'theme compatibility adapter reads the legacy color sources and themes',
+    () {
+      final dark = SsThemeExtensions.forBrightness(Brightness.dark);
+      final light = SsThemeExtensions.forBrightness(Brightness.light);
 
-    expect(dark.brand, same(AppColors.primary));
-    expect(dark.brandStrong, same(AppColors.primaryDark));
-    expect(dark.canvas, same(AppPalette.dark.bg));
-    expect(dark.surface, same(AppPalette.dark.surface));
-    expect(light.canvas, same(AppPalette.light.bg));
-    expect(light.textPrimary, same(AppPalette.light.ink));
-  });
+      expect(dark.brand, same(AppColors.primary));
+      expect(dark.brandStrong, same(AppColors.primaryDark));
+      expect(dark.canvas, same(AppPalette.dark.bg));
+      expect(dark.surface, same(AppPalette.dark.surface));
+      expect(light.canvas, same(AppPalette.light.bg));
+      expect(light.textPrimary, same(AppPalette.light.ink));
+      expect(
+        SsThemeExtensions.legacyThemeForBrightness(Brightness.dark),
+        equals(AppTheme.dark()),
+      );
+      expect(
+        SsThemeExtensions.legacyThemeForBrightness(Brightness.light),
+        equals(AppTheme.light()),
+      );
+    },
+  );
 
   test(
     'adapter source references legacy tokens without copied color literals',
@@ -47,6 +59,9 @@ void main() {
 
       expect(source, contains('AppColors.primary'));
       expect(source, contains('AppPalette.dark'));
+      expect(source, contains('AppTheme.dark()'));
+      expect(source, contains('AppTheme.light()'));
+      expect(source, isNot(contains('ThemeData(')));
       expect(source, isNot(contains(RegExp(r'Color\(0x[0-9A-Fa-f]+\)'))));
     },
   );

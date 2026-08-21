@@ -1,3 +1,4 @@
+/// Pinned spacing scale verified by the foundation tests.
 abstract final class SsSpacing {
   static const double space0 = 0;
   static const double space1 = 4;

@@ -283,4 +283,24 @@ Ezután a hivatkozást azonnal `AppColors.primary`-ra visszaállítottam.
   import figyelmeztetésén állt meg; az import eltávolítása után a második teljes
   gate zöld lett.
 
+### Javító kör #1 — review és security leletek (2026-08-21)
+
+- F1: `SsThemeExtensions.legacyThemeForBrightness` dokumentált, brightness
+  alapján közvetlenül az eredeti `AppTheme.dark()` vagy `AppTheme.light()`
+  eredményét adja; nem másolja a `ThemeData` konfigurációt.
+- F2/S1: `ComponentCatalogScreen` library-private
+  `_ComponentCatalogScreen` lett. A publikus `ComponentCatalog` route factory
+  a default-OFF compile-time flaget és a debug-build kaput együtt alkalmazza;
+  a dark/light smoke ezen a kapuzott route-on keresztül pumpál.
+- F3: a publikus foundation, theme és catalog contractok rövid, a tesztekben
+  igazolt viselkedésre korlátozott API-dokumentációt kaptak.
+
+### Javító kör #1 ellenőrzések
+
+- RED: `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart` — a hiányzó
+  `SsThemeExtensions.legacyThemeForBrightness` fordítási hiba és a még publikus
+  catalog screenre mutató privacy-regresszió miatt piros volt.
+- GREEN (célzott): `flutter test test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart` — 11 teszt zöld.
+- GREEN: `tools/round-gate.sh test/core/design_system/foundations_test.dart test/core/design_system/component_catalog_test.dart test/core/architecture_dependency_test.dart` — format, analyze, a két design-system teszt és az architecture teszt zöld.
+
 ## 11. Review — a Claude tölti ki

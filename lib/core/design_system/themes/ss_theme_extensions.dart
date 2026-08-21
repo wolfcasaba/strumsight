@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
 import '../../theme/app_palette.dart';
+import '../../theme/app_theme.dart';
 
+/// Theme extension colors derived from the legacy palette and brand tokens.
 @immutable
 final class SsThemeColors extends ThemeExtension<SsThemeColors> {
   const SsThemeColors({
@@ -59,7 +61,9 @@ final class SsThemeColors extends ThemeExtension<SsThemeColors> {
   }
 }
 
+/// Compatibility accessors for the legacy theme contracts during migration.
 abstract final class SsThemeExtensions {
+  /// Returns extension colors for [brightness] from the legacy color sources.
   static SsThemeColors forBrightness(Brightness brightness) {
     final palette = brightness == Brightness.dark
         ? AppPalette.dark
@@ -73,5 +77,10 @@ abstract final class SsThemeExtensions {
       textSecondary: palette.muted,
       border: palette.border,
     );
+  }
+
+  /// Returns the existing legacy [AppTheme] for [brightness] without copying it.
+  static ThemeData legacyThemeForBrightness(Brightness brightness) {
+    return brightness == Brightness.dark ? AppTheme.dark() : AppTheme.light();
   }
 }

@@ -1,3 +1,4 @@
+/// Pinned motion durations and reduced-motion fallback verified by tests.
 abstract final class SsMotion {
   static const Duration instant = Duration(milliseconds: 80);
   static const Duration fast = Duration(milliseconds: 120);

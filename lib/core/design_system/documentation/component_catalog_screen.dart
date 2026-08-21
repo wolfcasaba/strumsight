@@ -1,12 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+/// Development-only route factory for the component catalog.
 abstract final class ComponentCatalog {
+  /// Default-off compile-time switch for the development catalog.
   static const bool isCompileTimeEnabled = bool.fromEnvironment(
     'STRUMSIGHT_COMPONENT_CATALOG',
     defaultValue: false,
   );
 
+  /// Creates a route only when the compile-time switch and debug build pass.
   static Route<void>? createRoute() {
     return _createRoute(
       catalogEnabled: isCompileTimeEnabled,
@@ -14,6 +17,7 @@ abstract final class ComponentCatalog {
     );
   }
 
+  /// Exercises the same two-gate route rule with explicit test inputs.
   @visibleForTesting
   static Route<void>? createRouteForTesting({
     required bool catalogEnabled,
@@ -28,13 +32,13 @@ abstract final class ComponentCatalog {
   }) {
     if (!catalogEnabled || !debugBuild) return null;
     return MaterialPageRoute<void>(
-      builder: (_) => const ComponentCatalogScreen(),
+      builder: (_) => const _ComponentCatalogScreen(),
     );
   }
 }
 
-final class ComponentCatalogScreen extends StatelessWidget {
-  const ComponentCatalogScreen({super.key});
+final class _ComponentCatalogScreen extends StatelessWidget {
+  const _ComponentCatalogScreen();
 
   @override
   Widget build(BuildContext context) {
