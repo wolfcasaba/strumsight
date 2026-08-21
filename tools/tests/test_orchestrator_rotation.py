@@ -29,6 +29,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DRIVER = ROOT / "tools" / "round-pipeline.sh"
 
+# --- A Codex-oldal ÉLESZTŐ kapcsolója (2026-08-21) -------------------------
+# A driver script-defaultja azóta `fallback_engine=none` (user-döntés: „lejárt
+# a GPT kvóta" — a ChatGPT Pro keret elfogyott, a Sol ÉS a Terra ugyanabból
+# élt), és az `orchestrator_available` PONTOSAN ezen a kapcsolón méri a
+# `terra`/`sol` szék elérhetőségét. A GÉPEZET változatlan, csak a default —
+# ezért a Codex-oldali mechanizmust mérő cellák EXPLICIT env-vel élesztik fel
+# a Codex-oldalt, a DEFAULT-ot mérő cellák pedig épp azt mérik, hogy enélkül
+# minden a Claude székben marad. Így egyik mérés sem gyengül, és a
+# Codex-előfizetés újraéledésekor a cellák változtatás nélkül érvényesek.
+CODEX_SIDE_ALIVE = {"PIPELINE_FALLBACK_ENGINE": "terra"}
+
 # A banner MÁSOLATA az éles naplóból, ANSI-vezérlőkkel együtt: a mérésnek
 # pontosan azt a bemenetet kell kapnia, amin a régi minta elhasalt.
 REAL_BANNER = (
@@ -119,27 +130,30 @@ class SessionGaugeTest(unittest.TestCase):
 
 class RotationTest(unittest.TestCase):
     """A körök felét a Terra vezényli (user-döntés 2026-08-11) — az
-    `alternate` léptetést a 2026-08-20-i Sol-pin default alatt explicit
-    env-vel mérjük (a gépezet változatlan, csak a default más)."""
+    `alternate` léptetést a 2026-08-21-i `claude` default alatt explicit
+    env-vel (`CODEX_SIDE_ALIVE`) mérjük: a gépezet változatlan, csak a
+    default más, mert a Codex-oldal kvótája elfogyott."""
 
-    def test_the_default_rotation_is_the_sol_pin(self) -> None:
-        """USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): rotáció-env nélkül
-        MINDEN kört a Sol (gpt-5.6-sol) vezényel, a globális léptető-fájl
-        állásától függetlenül."""
+    def test_the_default_rotation_is_claude(self) -> None:
+        """USER-DÖNTÉS 2026-08-21 („lejárt a GPT kvóta"): rotáció-env nélkül
+        MINDEN kört a Claude (Sonnet 5) vezényel, a globális léptető-fájl
+        állásától függetlenül — a Codex-oldal (Sol/Terra) nem futtatható,
+        tehát nincs kinek rotálni. Ez a cella a commitolt rotáció-fájlt ÉS a
+        `fallback_engine=none` script-defaultot együtt méri."""
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
             last = state / "orchestrator-last"
-            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "sol")
+            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "claude")
             last.write_text("claude\n", encoding="utf-8")
-            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "sol")
+            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "claude")
             last.write_text("terra\n", encoding="utf-8")
-            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "sol")
+            self.assertEqual(driver("--next-orchestrator", state=state).stdout.strip(), "claude")
 
     def test_the_orchestrator_alternates_between_the_two_engines(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
             last = state / "orchestrator-last"
-            alternate = {"PIPELINE_ORCH_ROTATION": "alternate"}
+            alternate = {"PIPELINE_ORCH_ROTATION": "alternate", **CODEX_SIDE_ALIVE}
             self.assertEqual(
                 driver("--next-orchestrator", state=state, **alternate).stdout.strip(),
                 "claude",
@@ -168,17 +182,21 @@ class RotationTest(unittest.TestCase):
                 state=state,
                 PIPELINE_ORCH_ROTATION="claude",
                 PIPELINE_ORCH_ROTATION_FILE=str(rotation_file),
+                # a fájl-precedenciát mérjük, nem a Codex-oldal elérhetőségét
+                **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(result.stdout.strip(), "terra", result.stderr)
 
-    def test_the_committed_rotation_file_value_is_sol(self) -> None:
-        """A jelenleg érvényes user-döntés (2026-08-20, Pro-keret égetése)
-        pinje: a commitolt fájl értéke `sol`. A lejárat utáni visszaálláskor
-        a fájllal EGYÜTT ez a cella is frissítendő."""
+    def test_the_committed_rotation_file_value_is_claude(self) -> None:
+        """A jelenleg érvényes user-döntés (2026-08-21, „lejárt a GPT kvóta")
+        pinje: a commitolt fájl értéke `claude` — az orchestrátor/reviewer a
+        Claude Sonnet 5, az implementer a `minimax`. A Codex-előfizetés
+        esetleges újraéledésekor a fájllal EGYÜTT ez a cella is frissítendő
+        (előző pin: `sol`, 2026-08-20)."""
         committed = (ROOT / "docs" / "execution" / "orchestrator-rotation").read_text(
             encoding="utf-8"
         )
-        self.assertEqual(committed.strip(), "sol")
+        self.assertEqual(committed.strip(), "claude")
 
     def test_an_invalid_rotation_file_fails_closed(self) -> None:
         """Érvénytelen commitolt érték nem eshet át némán env/defaultra."""
@@ -200,7 +218,12 @@ class RotationTest(unittest.TestCase):
             for pinned in ("claude", "terra", "sol"):
                 with self.subTest(engine=pinned):
                     result = driver(
-                        "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION=pinned
+                        "--next-orchestrator",
+                        state=state,
+                        PIPELINE_ORCH_ROTATION=pinned,
+                        # a pin gépezetét mérjük; a Codex-oldali székekhez a
+                        # kapcsoló élesztése kell (2026-08-21 default: none)
+                        **CODEX_SIDE_ALIVE,
                     )
                     self.assertEqual(result.stdout.strip(), pinned)
 
@@ -228,14 +251,14 @@ class RotationTest(unittest.TestCase):
             (state / "orchestrator-last").write_text("claude\n", encoding="utf-8")
             pinned = driver(
                 "--next-orchestrator", "E06-R23", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(pinned.stdout.strip(), "terra")
             # E06-R23 most már rögzítve van 'terra'-ra -- egy ÚJ kör
             # (E06-R24) mégis a globális léptetőt olvassa, nem E06-R23 pin-jét.
             fresh = driver(
                 "--next-orchestrator", "E06-R24", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(fresh.stdout.strip(), "claude")
 
@@ -257,7 +280,9 @@ class PreemptionTest(unittest.TestCase):
             state = Path(name)
             self.write_usage(state, pct=97, reset_in=3600)
             result = driver(
-                "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION="claude"
+                "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION="claude",
+                # a zárlat-átadás CÉLJA a Codex-oldali szék — élesztve mérjük
+                **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(result.stdout.strip(), "terra", "a zárlat felülírja a rotációt")
 
@@ -300,7 +325,9 @@ class AmbientEnvironmentLeakTest(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as name:
                 state = Path(name)
-                result = driver("--independent-engine", "terra", "terra", state=state)
+                result = driver(
+                    "--independent-engine", "terra", "terra", state=state, **CODEX_SIDE_ALIVE
+                )
                 self.assertEqual(
                     result.stdout.strip(),
                     "sonnet-impl",
@@ -320,7 +347,9 @@ class IndependenceTest(unittest.TestCase):
     def test_a_terra_led_round_swaps_the_implementer_to_claude(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
-            result = driver("--independent-engine", "terra", "terra", state=state)
+            result = driver(
+                "--independent-engine", "terra", "terra", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(result.stdout.strip(), "sonnet-impl")
 
     def test_a_claude_led_round_leaves_the_implementer_alone(self) -> None:
@@ -337,7 +366,9 @@ class IndependenceTest(unittest.TestCase):
             state = Path(name)
             for engine in ("codex", "terra"):
                 with self.subTest(engine=engine):
-                    result = driver("--independent-engine", engine, "terra", state=state)
+                    result = driver(
+                        "--independent-engine", engine, "terra", state=state, **CODEX_SIDE_ALIVE
+                    )
                     self.assertEqual(result.stdout.strip(), "sonnet-impl")
 
     def test_a_blocked_claude_budget_rules_out_the_claude_implementer(self) -> None:
@@ -372,6 +403,7 @@ class IndependenceTest(unittest.TestCase):
                 # "fixture" szó nincs a secrets-scan placeholder-listáján, ezért
                 # H7-ben (2026-08-11) jelölés nélkül lelet lett; docs/LESSONS.md L220.
                 MINIMAX_API_KEY="heal-e06-r07-h5-fixture-key",  # strumsight:allow-secret L220 fake fixture
+                **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(result.stdout.strip(), "minimax")
 

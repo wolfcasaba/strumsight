@@ -1,5 +1,54 @@
 # HANDOFF — StrumSight 🎸
 
+## 🧭 [GOV] Motorváltás: Claude Sonnet 5 (high) orchestrátor + MiniMax M3 implementer (2026-08-21)
+
+**User-döntés: „lejárt a GPT kvóta — állítsuk át a fejlesztést sonett 5 High
+orchestrátor és minimax implementer felállásra."** A ChatGPT Pro keret
+elfogyott, tehát a Codex-oldal (a **Sol** ÉS a **Terra** — közös
+`~/.codex-terra` auth) NEM futtatható. A 2026-08-20-i Sol-pin ezzel LEZÁRULT.
+
+A hatályos felállás, végig a repóban utazó (file > env > script-default)
+szerződéseken — a cron exportált env-je egyiket sem írhatja felül:
+
+| Szerep | Motor | Hordozó |
+|---|---|---|
+| orchestrátor / reviewer / heal | **Claude Sonnet 5, `--effort high`** | `PIPELINE_MODEL`/`PIPELINE_EFFORT` script-default (`tools/round-pipeline.sh`) |
+| rotáció | **`claude`** | commitolt `docs/execution/orchestrator-rotation` |
+| implementer | **`minimax`** (MiniMax-M3, `~/.claude-minimax`, saját API-kulcs) | a queue MINDEN nyitott sora (65 sor: 44 pending + 18 prepared + 3 hold) |
+| slot | **1 sáv** | commitolt `docs/execution/pipeline-slots` |
+| Codex-oldal | **kizárva** | `fallback_engine` default `none` → `orchestrator_available` a `terra`/`sol` széket ezen méri |
+
+**Miért `high` és nem `max`:** a Codex-oldal kiesésével az EGYETLEN
+orchestrátor a Claude — a 2026-08-06-i `max` akkor volt vállalható, amikor a
+Codex-oldal még osztozott a munkán. **Miért 1 slot:** a Sol-pin alatt mindkét
+sáv a Codex-keretből ment; most minden sáv orchestrátora a Claude, két
+párhuzamos session ugyanabból az előfizetésből enne, és visszahozná az
+ADR 0222-t kikényszerítő hibaosztályt (a keretnek nekifutó kör → H-NOSIGNAL
+halt → önjavító kör, ami szintén a keretből megy). **Függetlenség:** Claude
+Sonnet 5 ≠ MiniMax-M3, és a `minimax` sor külső kulcsos
+(`engine_uses_claude_quota` hamis) — mindkét mérési kulcson független.
+
+A Sol/Terra **gépezete szándékosan a helyén maradt** (registry-sorok, `sol`
+ágak a driverben, a mérő cellák a `CODEX_SIDE_ALIVE` /
+`fallback="terra"` fixture-ökkel): a Codex-előfizetés esetleges újraéledése
+fájl-átírás, nem újraépítés — a pontos visszaállási lista a
+`pipeline-orchestrator-prompt.md` MOTOR-FELÁLLÁS blokk utolsó pontja.
+
+A mérce nem gyengült. A `test_open_rounds_follow_the_measured_engine_rule`
+carve-outja szűk és fail-closed párja van: a pin CSAK `codex` → `minimax`
+irányba mozdulhat (ahol a mért szabály `minimax`-ot ad, ott `minimax`-nak KELL
+állnia), és nyitott sor Codex-oldali motort egyáltalán nem nevezhet meg.
+Mérés: `python3 -m pytest tools/tests -q` → **712 passed, 2 skipped, 610
+subtests passed**; az egyetlen piros
+(`test_test_mode_dispatch_does_not_switch_the_working_tree_off_its_branch`) a
+környezeté, nem a diffé — ezen a dobozon nincs `gh` CLI, a változtatás előtt
+ugyanígy piros volt, a Router CI futóján zöld.
+
+Pontos következő teendő: a lánc újraindítása az új felállással, a queue első
+`pending` sorával — **E08-R18 (Heti quest és consistency objective)**; a
+Chapter 13 ága változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
+HEAL-bejegyzést).
+
 ## 🔧 [HEAL E13-R05/H3] Component Catalog scope helyreállítva (2026-08-21, L393)
 
 Az E13-R05 javított `SsCard` kompozíciója helyesen egyetlen, az `SsSurface`
