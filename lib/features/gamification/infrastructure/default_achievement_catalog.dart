@@ -9,7 +9,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'first_valid_session',
       category: AchievementCategory.practice,
       keyStem: 'achievementFirstValidSession',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.practice,
         target: 1,
       ),
@@ -18,7 +18,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'practice_starter',
       category: AchievementCategory.practice,
       keyStem: 'achievementPracticeStarter',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.practice,
         target: 5,
       ),
@@ -28,7 +28,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.practice,
       keyStem: 'achievementPracticeBuilder',
       prerequisiteIds: const <String>['practice_starter'],
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.practice,
         target: 10,
       ),
@@ -38,7 +38,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.consistency,
       keyStem: 'achievementPracticeRegular',
       prerequisiteIds: const <String>['practice_builder'],
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.practice,
         target: 25,
       ),
@@ -48,7 +48,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.consistency,
       keyStem: 'achievementPracticeDevotee',
       prerequisiteIds: const <String>['practice_regular'],
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.practice,
         target: 50,
       ),
@@ -57,7 +57,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'rhythm_first_steps',
       category: AchievementCategory.rhythm,
       keyStem: 'achievementRhythmFirstSteps',
-      objective: const ThresholdAchievementObjective(
+      objective: ThresholdAchievementObjective(
         eventKind: AchievementEventKind.practice,
         metric: AchievementMetric.score,
         minimum: 0.6,
@@ -68,7 +68,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.rhythm,
       keyStem: 'achievementRhythmBuilderOne',
       prerequisiteIds: const <String>['rhythm_first_steps'],
-      objective: const ThresholdAchievementObjective(
+      objective: ThresholdAchievementObjective(
         eventKind: AchievementEventKind.practice,
         metric: AchievementMetric.score,
         minimum: 0.7,
@@ -79,7 +79,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.rhythm,
       keyStem: 'achievementRhythmBuilderTwo',
       prerequisiteIds: const <String>['rhythm_builder_one'],
-      objective: const ThresholdAchievementObjective(
+      objective: ThresholdAchievementObjective(
         eventKind: AchievementEventKind.practice,
         metric: AchievementMetric.score,
         minimum: 0.8,
@@ -90,7 +90,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.rhythm,
       keyStem: 'achievementRhythmBuilderThree',
       prerequisiteIds: const <String>['rhythm_builder_two'],
-      objective: const ThresholdAchievementObjective(
+      objective: ThresholdAchievementObjective(
         eventKind: AchievementEventKind.practice,
         metric: AchievementMetric.score,
         minimum: 0.9,
@@ -100,7 +100,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'song_first_finish',
       category: AchievementCategory.songs,
       keyStem: 'achievementSongFirstFinish',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.song,
         target: 1,
       ),
@@ -110,7 +110,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.songs,
       keyStem: 'achievementSongExplorerOne',
       prerequisiteIds: const <String>['song_first_finish'],
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.song,
         target: 5,
       ),
@@ -120,7 +120,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.songs,
       keyStem: 'achievementSongExplorerTwo',
       prerequisiteIds: const <String>['song_explorer_one'],
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.song,
         target: 10,
       ),
@@ -129,7 +129,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'analysis_first_review',
       category: AchievementCategory.analysis,
       keyStem: 'achievementAnalysisFirstReview',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.analysis,
         target: 1,
       ),
@@ -139,7 +139,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.analysis,
       keyStem: 'achievementAnalysisInsight',
       prerequisiteIds: const <String>['analysis_first_review'],
-      objective: const ThresholdAchievementObjective(
+      objective: ThresholdAchievementObjective(
         eventKind: AchievementEventKind.analysis,
         metric: AchievementMetric.score,
         minimum: 0.75,
@@ -149,7 +149,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'plan_first_block',
       category: AchievementCategory.exploration,
       keyStem: 'achievementPlanFirstBlock',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.plan,
         target: 1,
       ),
@@ -159,7 +159,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       category: AchievementCategory.exploration,
       keyStem: 'achievementPlanPathfinder',
       prerequisiteIds: const <String>['plan_first_block'],
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.plan,
         target: 10,
       ),
@@ -168,7 +168,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'tutor_first_checkin',
       category: AchievementCategory.exploration,
       keyStem: 'achievementTutorFirstCheckin',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.tutor,
         target: 1,
       ),
@@ -177,7 +177,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'vision_first_observation',
       category: AchievementCategory.accessibilityNeutral,
       keyStem: 'achievementVisionFirstObservation',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.vision,
         target: 1,
       ),
@@ -199,15 +199,15 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       hidden: true,
       objective: CompoundAchievementObjective(
         objectives: <AchievementObjective>[
-          const CountAchievementObjective(
+          CountAchievementObjective(
             eventKind: AchievementEventKind.practice,
             target: 3,
           ),
-          const CountAchievementObjective(
+          CountAchievementObjective(
             eventKind: AchievementEventKind.song,
             target: 1,
           ),
-          const CountAchievementObjective(
+          CountAchievementObjective(
             eventKind: AchievementEventKind.analysis,
             target: 1,
           ),
@@ -218,7 +218,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'xp_first_hundred',
       category: AchievementCategory.personalBest,
       keyStem: 'achievementXpFirstHundred',
-      objective: const ThresholdAchievementObjective(
+      objective: ThresholdAchievementObjective(
         eventKind: AchievementEventKind.practice,
         metric: AchievementMetric.totalXp,
         minimum: 100,
@@ -228,7 +228,7 @@ final AchievementCatalog defaultAchievementCatalog = AchievementCatalog(
       id: 'legacy_first_step',
       category: AchievementCategory.practice,
       keyStem: 'achievementLegacyFirstStep',
-      objective: const CountAchievementObjective(
+      objective: CountAchievementObjective(
         eventKind: AchievementEventKind.practice,
         target: 1,
       ),

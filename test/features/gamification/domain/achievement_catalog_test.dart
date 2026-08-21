@@ -169,6 +169,34 @@ void main() {
     );
 
     test(
+      'rejects replacing a previously issued ID at the same catalog size',
+      () {
+        final previous = AchievementCatalog(
+          contentVersion: 7,
+          definitions: _standardDefinitions(20),
+        );
+        final replacement = AchievementCatalog(
+          contentVersion: 8,
+          definitions: <AchievementDefinition>[
+            ..._standardDefinitions(19),
+            _definition(id: 'replacement_achievement'),
+          ],
+        );
+
+        final report = replacement.validate(
+          localizedKeys: localeKeys,
+          previousCatalog: previous,
+        );
+
+        expect(report.isValid, isFalse);
+        expect(
+          report.codes,
+          contains(AchievementCatalogValidationCode.previousAchievementMissing),
+        );
+      },
+    );
+
+    test(
       'A8: every curated definition has a localized spoken description key',
       () {
         for (final definition in defaultAchievementCatalog.definitions) {
@@ -204,16 +232,16 @@ void main() {
       'accepts every supported typed objective shape without mutable input',
       () {
         final objectives = <AchievementObjective>[
-          const CountAchievementObjective(
+          CountAchievementObjective(
             eventKind: AchievementEventKind.practice,
             target: 1,
           ),
-          const ThresholdAchievementObjective(
+          ThresholdAchievementObjective(
             eventKind: AchievementEventKind.song,
             metric: AchievementMetric.score,
             minimum: 0.8,
           ),
-          const DistinctAchievementObjective(
+          DistinctAchievementObjective(
             eventKind: AchievementEventKind.analysis,
             dimension: AchievementDistinctDimension.activitySource,
             target: 2,
@@ -226,7 +254,7 @@ void main() {
           ),
           CompoundAchievementObjective(
             objectives: <AchievementObjective>[
-              const CountAchievementObjective(
+              CountAchievementObjective(
                 eventKind: AchievementEventKind.vision,
                 target: 1,
               ),
@@ -253,6 +281,92 @@ void main() {
         );
       },
     );
+
+    test('rejects non-positive count and distinct targets at runtime', () {
+      for (final target in <int>[0, -1]) {
+        expect(
+          () => CountAchievementObjective(
+            eventKind: AchievementEventKind.practice,
+            target: target,
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => DistinctAchievementObjective(
+            eventKind: AchievementEventKind.practice,
+            dimension: AchievementDistinctDimension.activitySource,
+            target: target,
+          ),
+          throwsArgumentError,
+        );
+      }
+    });
+
+    test('accepts a zero threshold but rejects invalid numeric thresholds', () {
+      expect(
+        ThresholdAchievementObjective(
+          eventKind: AchievementEventKind.practice,
+          metric: AchievementMetric.score,
+          minimum: 0,
+        ).minimum,
+        0,
+      );
+      for (final minimum in <num>[
+        -1,
+        double.infinity,
+        double.negativeInfinity,
+        double.nan,
+      ]) {
+        expect(
+          () => ThresholdAchievementObjective(
+            eventKind: AchievementEventKind.practice,
+            metric: AchievementMetric.score,
+            minimum: minimum,
+          ),
+          throwsArgumentError,
+        );
+      }
+    });
+
+    test('keeps progress finite, non-negative, and monotonic at runtime', () {
+      expect(
+        AchievementProgress(
+          achievementId: 'test_achievement',
+          catalogVersion: 1,
+          value: 0,
+        ).value,
+        0,
+      );
+      for (final value in <num>[
+        -1,
+        double.infinity,
+        double.negativeInfinity,
+        double.nan,
+      ]) {
+        expect(
+          () => AchievementProgress(
+            achievementId: 'test_achievement',
+            catalogVersion: 1,
+            value: value,
+          ),
+          throwsArgumentError,
+        );
+      }
+
+      final progress = AchievementProgress(
+        achievementId: 'test_achievement',
+        catalogVersion: 1,
+        value: 1,
+      );
+      for (final value in <num>[
+        0,
+        double.infinity,
+        double.negativeInfinity,
+        double.nan,
+      ]) {
+        expect(() => progress.advanceTo(value: value), throwsArgumentError);
+      }
+    });
 
     test(
       'uses only measured event kinds, metrics, and the activity-source distinct dimension',
@@ -303,10 +417,7 @@ List<AchievementDefinition> _standardDefinitions(int count) =>
 
 AchievementDefinition _definition({
   required String id,
-  AchievementObjective objective = const CountAchievementObjective(
-    eventKind: AchievementEventKind.practice,
-    target: 1,
-  ),
+  AchievementObjective? objective,
   String titleKey = 'achievementTestTitle',
   List<String> tierPrerequisiteIds = const <String>[],
 }) => AchievementDefinition(
@@ -315,7 +426,13 @@ AchievementDefinition _definition({
   titleKey: titleKey,
   descriptionKey: 'achievementTestDescription',
   accessibilityDescriptionKey: 'achievementTestSemantics',
-  objectives: <AchievementObjective>[objective],
+  objectives: <AchievementObjective>[
+    objective ??
+        CountAchievementObjective(
+          eventKind: AchievementEventKind.practice,
+          target: 1,
+        ),
+  ],
   tierPrerequisiteIds: tierPrerequisiteIds,
   hidden: false,
   version: 1,

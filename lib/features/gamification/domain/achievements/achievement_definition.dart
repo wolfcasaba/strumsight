@@ -59,10 +59,20 @@ sealed class AchievementObjective {
 
 /// Reaches a number of events of one measured kind.
 final class CountAchievementObjective extends AchievementObjective {
-  const CountAchievementObjective({
+  factory CountAchievementObjective({
+    required AchievementEventKind eventKind,
+    required int target,
+  }) {
+    if (target < 1) {
+      throw ArgumentError.value(target, 'target', 'must be positive');
+    }
+    return CountAchievementObjective._(eventKind: eventKind, target: target);
+  }
+
+  const CountAchievementObjective._({
     required this.eventKind,
     required this.target,
-  }) : assert(target > 0);
+  });
 
   final AchievementEventKind eventKind;
   final int target;
@@ -70,11 +80,24 @@ final class CountAchievementObjective extends AchievementObjective {
 
 /// Reaches a numeric evidence threshold for one measured event kind.
 final class ThresholdAchievementObjective extends AchievementObjective {
-  const ThresholdAchievementObjective({
+  factory ThresholdAchievementObjective({
+    required AchievementEventKind eventKind,
+    required AchievementMetric metric,
+    required num minimum,
+  }) {
+    _requireFiniteNonNegative(minimum, 'minimum');
+    return ThresholdAchievementObjective._(
+      eventKind: eventKind,
+      metric: metric,
+      minimum: minimum,
+    );
+  }
+
+  const ThresholdAchievementObjective._({
     required this.eventKind,
     required this.metric,
     required this.minimum,
-  }) : assert(minimum >= 0);
+  });
 
   final AchievementEventKind eventKind;
   final AchievementMetric metric;
@@ -83,11 +106,26 @@ final class ThresholdAchievementObjective extends AchievementObjective {
 
 /// Reaches a number of distinct activity sources for one measured event kind.
 final class DistinctAchievementObjective extends AchievementObjective {
-  const DistinctAchievementObjective({
+  factory DistinctAchievementObjective({
+    required AchievementEventKind eventKind,
+    required AchievementDistinctDimension dimension,
+    required int target,
+  }) {
+    if (target < 1) {
+      throw ArgumentError.value(target, 'target', 'must be positive');
+    }
+    return DistinctAchievementObjective._(
+      eventKind: eventKind,
+      dimension: dimension,
+      target: target,
+    );
+  }
+
+  const DistinctAchievementObjective._({
     required this.eventKind,
     required this.dimension,
     required this.target,
-  }) : assert(target > 0);
+  });
 
   final AchievementEventKind eventKind;
   final AchievementDistinctDimension dimension;
@@ -221,5 +259,11 @@ void _requireStableId(String value, String name) {
 void _requireLocalizationKey(String value, String name) {
   if (!RegExp(r'^[a-z][A-Za-z0-9]*$').hasMatch(value)) {
     throw ArgumentError.value(value, name, 'must be a lowerCamelCase key');
+  }
+}
+
+void _requireFiniteNonNegative(num value, String name) {
+  if (!value.isFinite || value < 0) {
+    throw ArgumentError.value(value, name, 'must be finite and non-negative');
   }
 }

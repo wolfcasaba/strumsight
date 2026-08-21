@@ -21,6 +21,7 @@ enum AchievementCatalogValidationCode {
   tierCycle,
   missingLocalizationKey,
   contentVersionNotIncreased,
+  previousAchievementMissing,
 }
 
 /// Typed result of validating one catalog.
@@ -95,10 +96,17 @@ final class AchievementCatalog {
       codes.add(AchievementCatalogValidationCode.tierCycle);
     }
 
-    if (previousCatalog != null &&
-        previousCatalog.definitions.length != definitions.length &&
-        contentVersion <= previousCatalog.contentVersion) {
-      codes.add(AchievementCatalogValidationCode.contentVersionNotIncreased);
+    if (previousCatalog != null) {
+      if (previousCatalog.definitions.length != definitions.length &&
+          contentVersion <= previousCatalog.contentVersion) {
+        codes.add(AchievementCatalogValidationCode.contentVersionNotIncreased);
+      }
+      final currentIds = definitions.map((definition) => definition.id).toSet();
+      if (previousCatalog.definitions.any(
+        (definition) => !currentIds.contains(definition.id),
+      )) {
+        codes.add(AchievementCatalogValidationCode.previousAchievementMissing);
+      }
     }
     return AchievementCatalogValidationReport(codes);
   }

@@ -21,9 +21,7 @@ final class AchievementProgress {
         'must be positive',
       );
     }
-    if (value < 0) {
-      throw ArgumentError.value(value, 'value', 'must not be negative');
-    }
+    _requireFiniteNonNegativeValue(value);
     if (rewardLedgerEntryId != null && completedAt == null) {
       throw ArgumentError.value(
         rewardLedgerEntryId,
@@ -60,6 +58,7 @@ final class AchievementProgress {
     DateTime? completedAt,
     String? rewardLedgerEntryId,
   }) {
+    _requireFiniteNonNegativeValue(value);
     if (value < this.value) {
       throw ArgumentError.value(value, 'value', 'must not decrease progress');
     }
@@ -69,6 +68,16 @@ final class AchievementProgress {
       value: value,
       completedAt: completedAt ?? this.completedAt,
       rewardLedgerEntryId: rewardLedgerEntryId ?? this.rewardLedgerEntryId,
+    );
+  }
+}
+
+void _requireFiniteNonNegativeValue(num value) {
+  if (!value.isFinite || value < 0) {
+    throw ArgumentError.value(
+      value,
+      'value',
+      'must be finite and non-negative',
     );
   }
 }

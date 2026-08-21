@@ -322,4 +322,27 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - `tools/round-gate.sh test/features/gamification/domain/achievement_catalog_test.dart`: **ZÖLD** — format, analyze, a 16 célzott teszt, architecture, secrets és l10n mind zöld; a l10n parity 1503 üzenetet mért.
 - A teljes suite, randomizált property gate, CI-dispatch, PR és merge implementer-scope-on kívül van.
 
+### E08-R13 F1/F2 repair (Terra, 2026-08-21)
+
+| Fájl | Változás |
+|---|---|
+| `achievement_catalog.dart` | A `previousCatalog` minden korábbi ID-jának jelenlétét ellenőrzi elemszámtól és verzióemeléstől függetlenül; a hiányt a stabil `previousAchievementMissing` kóddal jelzi. |
+| `achievement_definition.dart` | A count/distinct pozitív célja és a threshold véges, nem negatív minimuma runtime `ArgumentError`-ral őrzött. |
+| `achievement_progress.dart` | A kezdeti és `advanceTo` progress véges, nem negatív és nem csökkenő runtime-invariáns. |
+| `default_achievement_catalog.dart` | A runtime-validált objective-konstruktorokhoz igazított hívások. |
+| `achievement_catalog_test.dart` | Azonos elemszámú replacement-ID regressziós cella, valamint zero/negative/infinity/NaN objective- és progress-határmátrix. |
+
+#### Futott parancsok és tényleges eredmények
+
+- `flutter test test/features/gamification/domain/achievement_catalog_test.dart` az új F1 validation code nélkül: **PIROS**, várt compile-hibával (`previousAchievementMissing` nem létezett).
+- `flutter test test/features/gamification/domain/achievement_catalog_test.dart`: **ZÖLD**, 20 teszt.
+- `dart format lib/features/gamification/domain/achievements/achievement_definition.dart lib/features/gamification/domain/achievements/achievement_catalog.dart lib/features/gamification/domain/achievements/achievement_progress.dart lib/features/gamification/infrastructure/default_achievement_catalog.dart test/features/gamification/domain/achievement_catalog_test.dart`: **ZÖLD**, 5 fájl ellenőrizve, 2 formázott változás.
+- `tools/round-gate.sh test/features/gamification/domain/achievement_catalog_test.dart`: **ZÖLD** — format, analyze, 20 célzott teszt, architecture, secrets és l10n gate lefutott.
+
+#### Eltérések és nem futtatott ellenőrzések
+
+- L10n-forrásszegmens nem változott, ezért `dart run tool/gen_l10n_segments.dart --write` nem futott.
+- N1 completion-timestamp megfigyelés változatlanul R14 pre-flightjára marad.
+- A teljes suite, randomizált property gate, CI-dispatch, PR és merge implementer-scope-on kívül van.
+
 ## 11. Review — a Claude tölti ki
