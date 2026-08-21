@@ -9365,6 +9365,43 @@ saját `allowed_paths`-ától diszjunkt fájl). Konfliktusmentes rebase +
 `practiceGeneratorEnabled` flag változatlanul `false`, nulla hívó a
 reducerre a domain rétegen kívül.
 
+## ✅ E13-R02 KÉSZ — Design System Foundation és compatibility layer
+
+PR [#384](https://github.com/wolfcasaba/strumsight/pull/384), squash
+`8bd7dc98`. A pre-flight a brief elavult 51-es screen- és 467 soros
+architecture-baseline-ja helyett 58 production screent, 854 soros
+architektúra-tesztet és 44 közvetlen legacy-theme importálót mért. Az ADR
+0273 már merge-elt döntés volt (`903e7a7d`), ezért a kör nem írta át: a brief
+§0.0 revíziója dokumentálta az eltérést és a változatlan ADR-t hajtotta végre.
+
+A Terra implementáció létrehozta a kipinnelt breakpoint-, spacing-, radius-,
+motion- és semantics-foundationöket, a `public.dart` belépőt, a legacy
+`AppTheme`/`AppColors`/`AppPalette` API-kra delegáló adaptert és a default-OFF
+compile-time flag + debug-build kettős kapuja mögötti Component Catalogot. A
+design-system architecture guard tiltja a feature-importokat és a barrel
+megkerülését; a migration-status rögzíti a fokozatos átállást.
+
+Az első független Sol review F1/F2 MAJOR és F3 MINOR leletet talált: az adapter
+nem delegált explicit módon `AppTheme`-re, a catalog screen közvetlenül
+konstruálható volt a route-kapu megkerülésével, és hiányoztak a publikus
+contract-dokumentációk. Egy Terra javító kör után az adapter közvetlenül
+`AppTheme.dark/light`-ot használ, a screen privát lett, kizárólag a kétkapus
+route factory maradt publikus, és a szerződések dokumentáltak. A végső
+correctness review **APPROVED**, a security review **PASS**.
+
+A review eldobható mutációi bizonyították, hogy a tesztek pirosra váltanak
+másolt brand-szín, feature-import és kikapcsolt debug-kapu esetén; a privát
+screen külső konstrukciója fordítási hibát adott. A célzott végső kör-gate
+8/8 zöld volt (3 foundation + 8 catalog + 28 architecture teszt). Az első
+exact-SHA CI után a `main` elmozdult az E08-R15 self-heal miatt; a
+konfliktusmentes upstream merge után az új `05ec6276` csúcson a Full Gate
+[32447387921](https://github.com/wolfcasaba/strumsight/actions/runs/32447387921)
+és a Router CI
+[32447381563](https://github.com/wolfcasaba/strumsight/actions/runs/32447381563)
+egyaránt success lett. Implementer: Terra (`gpt-5.6-terra`); orchestrátor és
+független reviewer: Sol (`gpt-5.6-sol`). Pontos következő Chapter 13 kör:
+**E13-R03 — Semantic colors and themes**.
+
 ## ✅ E07-R07 KÉSZ — Legacy Learn és Progress evidence adapterek
 
 PR [#277](https://github.com/wolfcasaba/strumsight/pull/277), squash

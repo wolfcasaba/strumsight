@@ -14429,3 +14429,37 @@ volt. Az L225 batch-brief avulási osztálya közvetlenebb precedens.
 **Őrteszt:** `tools/tests/test_e08_r15_ui_inventory_scope.py` — a javítás előtt
 4/5 cella piros, utána 5/5 zöld; a valódi brief-parserrel és scope-audittal
 őrzi az exact három fájlt, a testvérút tiltását és az inventory gate-tagságát.
+
+## L378 — Az előre kiosztott ADR-szám nem felhatalmazás egy már merge-elt ADR átírására (E13-R02, 2026-08-21)
+
+**Mért ütközés.** Az orchestrátor-prompt azt írta, hogy az E13-R02
+pre-flightban „te írod meg” az ADR 0273-at, miközben a brief és a git-történet
+egyaránt bizonyította, hogy a `docs/adr/0273-design-system-token-source-of-truth.md`
+már a `903e7a7d` commitban merge-elt, elfogadott döntés. A kötelező
+`tools/round-slots.py reserve-adr --round E13-R02` eközben már `0380`-at
+foglalt volna, tehát egy új 0273 létrehozása sem volt valós opció.
+
+**Javítás és szabály.** A merge-elt ADR-t nem írtuk át és nem hoztunk létre
+duplikált döntést. A brief §0.0 revíziója rögzítette a mért eltérést, majd a
+kör a változatlan ADR 0273-at hajtotta végre. Ha a prompt ADR-utasítása
+ütközik a git-történettel, a történet és az atomi foglaló eredménye a
+pre-flight bizonyíték; merge-elt normatív döntést csak H1 megállással lehetne
+megváltoztatni.
+
+**Őrteszt:** nincs — read-only `git log -- docs/adr/0273-…` és az atomi
+ADR-foglaló együttes pre-flight mérése zárta az ütközést.
+
+## L379 — Izolált review-klón célkönyvtára nem lehet a klónozó parancs induló munkakönyvtára (E13-R02, 2026-08-21)
+
+**Mért snag.** Az első review-klónozási kísérlet a még nem létező
+`/tmp/review-e13-r02` útvonalat adta meg egyszerre célként és processz-
+munkakönyvtárként, ezért a parancs a `git clone` előtt `ENOENT` hibával
+leállt. Repository-állapot nem változott.
+
+**Javítás és szabály.** Az izolált klónozást létező szülőből (`/tmp`) kell
+indítani, és csak a sikeres clone után szabad a célkönyvtárban futtatni a
+review-gate-et. Így a klón létrehozása és használata két explicit,
+ellenőrizhető előfeltétel marad.
+
+**Őrteszt:** nincs — az operációs rendszer könyvtár-létezési előfeltétele;
+a javított parancssorrend maga a reprodukció és a bizonyíték.
