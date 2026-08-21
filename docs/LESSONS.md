@@ -14731,3 +14731,38 @@ csúcsról készíts normal-merge recoveryt, majd minden kaput új SHA-n futtass
 **Őrteszt:** nincs — a reprodukció a `.pipeline/land-E08-R17.log`
 safe-force-push exit 3 listája; az L391 az azonos recovery-mintát független
 E13-R04 előforduláson rögzíti.
+
+## L393 — Egy katalógusban lecserélt widgettípus scope-ja a legacy finder-contractot is magában foglalja (E13-R05, H3 self-heal, 2026-08-21)
+
+**Mért hiba.** Az E13-R05 javított `SsCard` kompozíciója megszüntette a
+felesleges legacy `Card` réteget, és az `SsSurface` egyetlen `Material`-
+leszármazottját tartotta meg. A PR #392 exact `03788441` Full Gate-je mégis
+három hibával zárt (5519 passed, 3 failed, 15 skipped), mert a már létező
+`test/core/design_system/component_catalog_test.dart:50,68` a route-kapu és a
+dark/light smoke cellákban egy `Card` widgetet várt. A reprodukált tényleges
+hiba mindhárom cellában `Found 0 widgets with type "Card"`; ez a teszt sem az
+eredeti allowlistben, sem a célzott gate-ben nem szerepelt.
+
+**Gyökérok és javítás.** Ez B osztályú tranzakciós scope-hiány. Egy publikus
+komponens katalógusbeli cseréjénél nem elég a módosított screen és az új
+komponens saját tesztjeit felmérni: a screen összes pumpolóját és a lecserélt
+legacy widgettípus finder-contractjait is keresni kell. A brief exact egyetlen
+úttal, `test/core/design_system/component_catalog_test.dart`-tal bővült az
+`allowed_paths` és `gate_tests` listában. A folytatott product kör ugyanabban
+a commitban őrzi meg a compile-time/debug route-kaput és a dark/light smoke
+contractot, miközben `SsCard`-ot és pontosan egy `Material`-leszármazottat
+mér. Más design-system tesztút nem nyílt meg; a self-heal product kódot nem
+implementált előre.
+
+**Precedens-ellenőrzés.** Az L387 közvetlenül azonos scope-alak: egy helyes
+design-system integráció egy már létező, briefen kívüli kompatibilitási
+tesztet tett szükségképpen elavulttá. Az E13-R04 és E13-R02 találatok ezért
+relevánsak; az L371 additív inventory-baseline esete csak az exact
+scope-bővítés formájában rokon, nem a widgettípus-csere contractjában.
+
+**Őrteszt:**
+`tools/tests/test_e13_r05_component_catalog_scope.py` — a brief-revízió előtt
+4/5 cella piros, utána 5/5 zöld; a valódi brief-parserrel és scope-audittal
+őrzi az exact új fájlt, a testvérút tiltását, a célzott gate-tagságot és a
+mért `Card`-ütközés dokumentálását. A teljes tooling suite a javításon 714
+passed, 1 skipped és 610 subtests passed eredménnyel zárt.

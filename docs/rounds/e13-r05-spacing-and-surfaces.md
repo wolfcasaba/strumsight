@@ -13,6 +13,26 @@
 > kör ezekre épít felületi primitíveket, nem definiálja újra őket. Eltérésnél
 > §0.0 revízió.
 
+## 0.0.1 H3 scope-revízió — ADR 0112 önjavító kör, 2026-08-21
+
+A megállt PR #392 exact `03788441` Full Gate-je háromszor ugyanazt a meglévő
+contract-ütközést mérte. A javított `SsCard` a `SsSurface` egyetlen
+`Material`-rétegét használja, ezért szándékosan nincs benne legacy `Card`.
+Ezzel szemben a már létező
+`test/core/design_system/component_catalog_test.dart:50,68` három katalógus-
+cellája `find.byType(Card)` alapján pontosan egy `Card`-ot várt; a tényleges
+hiba mindháromszor `Found 0 widgets with type "Card"` volt. A product javítás
+így szükségképpen pirosra vitte a briefen és célzott gate-en kívüli tesztet.
+
+Ez B osztályú, tranzakciós brief-hiány, nem production- vagy gate-hiba. Az
+allowlist és a célzott gate pontosan a
+`test/core/design_system/component_catalog_test.dart` fájllal bővül. A
+folytatott product kör ugyanabban a commitban köteles úgy frissíteni a három
+katalógus-cellát, hogy a compile-time/debug route-kapu és a dark/light smoke
+contract megmaradjon, miközben az `SsCard` jelenlétét és annak pontosan egy
+`Material` leszármazottját méri. Más `test/core/design_system/**` út nem
+nyílik meg; a self-heal product Dart-kódot nem visz előre.
+
 ```ai-router
 schema_version = 1
 risk = "normal"
@@ -26,11 +46,13 @@ allowed_paths = [
   "lib/core/design_system/public.dart",
   "test/core/design_system/surfaces/ss_surface_test.dart",
   "test/core/design_system/surfaces/spacing_grid_test.dart",
+  "test/core/design_system/component_catalog_test.dart",
   "docs/rounds/e13-r05-spacing-and-surfaces.md",
 ]
 gate_tests = [
   "test/core/design_system/surfaces/ss_surface_test.dart",
   "test/core/design_system/surfaces/spacing_grid_test.dart",
+  "test/core/design_system/component_catalog_test.dart",
 ]
 native_gate = false
 ```
@@ -81,6 +103,7 @@ sötét témában dokumentálatlanul · `docs/adr/**`, `tools/**`, `.github/**`.
 | `documentation/component_catalog_screen.dart` | a primitívek bemutatása |
 | `public.dart` | az export bővítése |
 | `test/…/surfaces/*_test.dart` (2) | a §6 cellái |
+| `test/core/design_system/component_catalog_test.dart` | a route/smoke contract tranzakciós átállítása `Card`-ról `SsCard` + single-`Material` mérésre |
 | `docs/rounds/e13-r05-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/core/theme/**` · `lib/features/**` · `lib/app/**` ·
@@ -129,6 +152,7 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | A5 | A `SsHeroCard` nem importál feature-logikát | architektúra-guard |
 | A6 | A primitívek mindhárom témában renderelnek kivétel nélkül | `ss_surface_test.dart` |
 | A7 | Nincs hardkódolt geometriai literál az új kódban | `grep` a diffben |
+| A8 | A katalógus route/smoke contractja `SsCard`-ot és pontosan egy `Material`-réteget mér, legacy `Card`-követelmény nélkül | `component_catalog_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -140,6 +164,7 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | A primitív figyelmen kívül hagyja az inseteket | A4 |
 | A hero kártya maga olvassa a felismerés-állapotot | A5 |
 | Nyers `BorderRadius.circular(9)` | A7 |
+| Az `SsCard` visszahoz egy második, legacy `Card`/`Material` réteget | **A8** |
 
 **A rács három kötelező cellája** (a küszöb: a 4dp osztó):
 
@@ -156,7 +181,7 @@ kívüli térközt az egyik primitívbe → az **A1** cellának PIROSNAK kell le
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart test/core/design_system/surfaces/spacing_grid_test.dart
+tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart test/core/design_system/surfaces/spacing_grid_test.dart test/core/design_system/component_catalog_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
@@ -169,10 +194,12 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 1. `ss_elevation.dart` — a Ch13 §9.5 felület-hierarchiája.
 2. `ss_surface.dart` — szint + háttérszín EGYÜTT, insetekkel.
 3. `ss_card.dart`, `ss_hero_card.dart`, `ss_section.dart`.
-4. A rács-kikényszerítő teszt.
-5. Component Catalog: a primitívek mindhárom témában.
-6. A valódi-sértés próba, §10-be dokumentálva.
-7. `tools/round-gate.sh` a §7 szerint.
+4. A meglévő `component_catalog_test.dart` három `Card`-elvárásának
+   tranzakciós frissítése: route/smoke contract + `SsCard` + single `Material`.
+5. A rács-kikényszerítő teszt.
+6. Component Catalog: a primitívek mindhárom témában.
+7. A valódi-sértés próba, §10-be dokumentálva.
+8. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 
