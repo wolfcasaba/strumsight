@@ -84,3 +84,11 @@ Az exact-source concurrency, malformed receipt, duplicate ID, future-window,
 lineáris receipt-index és raw-backfill-cap regressziók az exact `ae703918`
 detached klónban 11/11 zöldek. A scope-audit 2 engedélyezett útvonalat mért,
 a teljes round-gate 6/6 zöld, új security lelet nincs. Verdikt: **PASS**.
+
+Az `origin/main @ 57d428ae` beépítése utáni `62dfffb7` merge-HEAD-en a
+független round-gate ismét 6/6 zöld. A három implementer-fázis külön
+scope-auditja 5/5, 3/3 és 2/2 engedélyezett útvonalat adott; a teljes-ág audit
+csak az orchestrátor által írt ADR-t és az upstream HANDOFF/LESSONS fájlokat
+jelölte, ezért az nem implementer-scope bizonyíték. Az A8 raw-cap őr
+eltávolítása továbbra is célzottan piros, restore után a klón tiszta. Új
+security lelet nincs; a verdict **PASS** marad.

@@ -162,3 +162,18 @@ Az F7/S6 H4 akadály lezárult, a kör branch tartalmilag review-kész. Az L304 
 L358 mért mintája szerint a fix közvetlenül a még nem merge-elt E08-R14 ágra
 kerül; a következő friss kör-session feladata a szokásos PR, exact-SHA CI és
 ADR 0052 szerinti zöld-kapus merge.
+
+## Végső upstream-szinkron re-review
+
+Az `origin/main @ 57d428ae` konfliktusmentesen beépült; a landolandó kódot
+tartalmazó merge-HEAD `62dfffb7`. Friss, eldobható
+`/tmp/review-e08-r14-final-RkT1YR` klónban a kötelező round-gate 6/6 zöld
+(format, analyze, 11/11 célzott teszt, architecture, secrets, l10n).
+
+A scope-ot implementer-fázisonként mértem, mert a teljes ág szándékosan
+tartalmaz orchestrátor-ADR-t, review-jelentéseket és az upstreamből örökölt
+HANDOFF/LESSONS fájlokat: `e5669f20..997a52a0` 5/5,
+`77a0c11f..11fb1ac2` 3/3, `89e38bdf..ae703918` 2/2 engedélyezett útvonal,
+mindhárom audit `OK`. Az A8 raw-cap őrének eldobható eltávolítása a 10 001-es
+cellát pirosra vitte (`ArgumentError` helyett sikeres result), restore után
+1/1 zöld és tiszta klón. A verdict változatlanul **APPROVED**.
