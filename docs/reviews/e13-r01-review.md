@@ -1,154 +1,117 @@
 # E13-R01 — Review
 
 Brief: `docs/rounds/e13-r01-ui-baseline-inventory.md`
-Diff: `6570b678409e..ce190827951b`
+Reviewed head: `5fc18cea1f0b`
 Reviewer: Codex Sol (független a Terra implementertől) · Dátum: 2026-08-21
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED**
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 4 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
 
-Az implementer-jelzés scope-auditja `ok` volt, és a kézi audit ugyanezt adta
-16 engedélyezett útvonalra. A végleges commit kötelező gate-je azonban izolált
-klónban reprodukálhatóan 10 perces timeouttal piros; a handoff zöld állítása
-nem támasztható alá a loggal. A dokumentációban ezen felül egy route-paraméter,
-két token-adósság számlálás és két vizuálisan megfigyelt compact-overflow
-hiányzik vagy pontatlan.
+Az első review egy BLOCKER és négy MAJOR leletet talált. A Terra két
+javítócommitja (`dc053d52`, `6a09dad7`) után mind az öt lelet lezárható.
+A friss, távoli branch-SHA-ról készített izolált klónban a teljes kör-gate
+7/7 zöld; a screenshot-capture újrafuttatása bájtszintű diff nélkül
+reprodukálta a hét képet. Mind a hét PNG-t külön megnyitottam: olvasható
+production tipográfia és Material ikonok látszanak, Ahem-blokk, négyzetes ikon
+és debug banner nincs.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
-| A1 | Nulla `lib/**` módosítás | ✅ | `git diff --name-only 6570b678..HEAD -- lib` → üres |
-| A2 | Determinisztikus inventory | ✅ | `ui_inventory_test.dart`; a reviewer eltávolította a `..sort()`-ot → a teszt PIROS lett az első elemen, visszaállítás után a klón tiszta |
+| A1 | Nulla `lib/**` módosítás | ✅ | `git diff --name-only origin/main...HEAD -- lib` → üres |
+| A2 | Determinisztikus inventory | ✅ | `ui_inventory_test.dart`; az első review sort-rontása célzottan piros volt |
 | A3 | Mind az 58 production screen szerepel | ✅ | `dart run tool/ui_inventory.dart` → 58 screen, 96 reusable widget/view, 16 overlay-forrás |
-| A4 | Legacy ↔ cél route-map és kockázatok | ❌ | F2: a 40-ből egy current path elveszti a `:songId` paramétert |
-| A5 | Token-adósság mérve | ❌ | F3: a közölt occurrence-számok nem reprodukálhatók az exact kereséssel |
-| A6 | Prioritásos accessibility-leletek | ❌ | F5: a megnyitott Tuner/onboarding corpuson látható compact overflow nincs képernyőszintű leletként rögzítve |
+| A4 | Legacy ↔ cél route-map és kockázatok | ✅ | a 40 `AppRoutes` string és a 40 current-route sor rendezett halmazkülönbsége üres; a `:songId` + typed `extra` contract rögzítve |
+| A5 | Token-adósság mérve | ✅ | exact `rg -o`: 28 color occurrence / 9 fájl, 174 `TextStyle`, 817 spacing occurrence |
+| A6 | Prioritásos accessibility-leletek | ✅ | `accessibility-findings.md`; a korábbi két piros saroksáv bizonyítottan capture-debug-banner volt, nem production overflow |
 | A7 | Screenshot nem design-jóváhagyás | ✅ | `docs/ui/README.md:3-5` |
-| A8 | Hét production-state screenshot megnyitható és nem üres | ❌ | mind a hét PNG megnyílt, de F1 miatt a strukturális teszt piros; F4 miatt a corpus Ahem-blokkokkal tér el a production tipográfiától |
-| A9 | Kötelező round-gate zöld | ❌ | izolált klón gate: lépés 1–3 zöld, lépés 4 timeout és exit 10 |
+| A8 | Hét production-state screenshot megnyitható és nem üres | ✅ | strukturális teszt zöld; hét kézi megnyitás; capture újrafuttatás után `git diff --exit-code` zöld |
+| A9 | Kötelező round-gate zöld | ✅ | izolált klón: 7/7 lépés, terminális exit 0 |
 
 ## Scope-audit
 
-`python3 tools/scope-audit.py --repo /tmp/review-e13-r01-FmVelX --brief
-docs/rounds/e13-r01-ui-baseline-inventory.md --base 6570b678...` →
-`Legacy scope audit OK (..., 16 changed path(s), 0 generated/ignored)`.
-Engedélyezett fájlokon kívüli implementer-változás nincs. A pre-flight ADR és
-brief-revízió az implementer launch-HEAD (`6570b678`) része.
+Az implementer három saját commit-tartománya külön-külön:
+
+- `6570b678..ce190827` → OK, 16/16 engedélyezett út;
+- `0fe1b9d3..dc053d52` → OK, 13/13 engedélyezett út;
+- `dc053d52..6a09dad7` → OK, 11/11 engedélyezett út.
+
+A friss `origin/main...5fc18cea` teljes branch-diff 18 utat tartalmaz:
+16 briefben engedélyezett implementer-utat, a generált/ignored review-jelentést
+és az ADR 0376-ot. Az audit egyedül az ADR-t jelzi listán kívülinek, de az ADR
+a kötelező orchestrátor pre-flight része, a `6570b678` implementer
+launch-HEAD-ben már commitolva volt; ezért ez nem implementer-scope sértés.
+Az upstream merge-ek által behozott útvonalakat egyik implementer-audit sem
+tulajdonítja a körnek.
 
 ## Megállapítások
 
-### F1 — BLOCKER — A kötelező screenshot-validátor 10 perc után timeoutol
+### F1 — BLOCKER — A kötelező screenshot-validátor 10 perc után timeoutolt
 
-- **Fájl:** `test/ui/ui_baseline_screenshot_test.dart:31-68`
-- **Probléma:** a normál corpus-teszt `testWidgets` fake-async környezetében
-  közvetlenül vár a `decodeImageFromList` future-re. A végleges `ce190827`
-  commit izolált klónjában a teszt pontosan 10:00 után `TimeoutException`-nel
-  piros. Egy eldobható `tester.runAsync(() => decodeImageFromList(bytes))`
-  próba ugyanígy timeoutolt, tehát ez önmagában nem elegendő javítás.
-- **Hatás:** A8/A9 és az ADR 0052 zöld kapuja nem teljesül; a handoff „zöld"
-  állítása hamis bizonyíték. Az implementer logja csak a gate `exec` indítását
-  tartalmazza, terminális kimenetet nem.
-- **Kötelező javítás:** tartsd meg a brief szerinti `decodeImageFromList`
-  tényleges dekódolást, de olyan binding/test-struktúrában hajtsd végre, amely
-  determinisztikusan befejeződik. Adj explicit, rövid teszt-timeoutot vagy
-  cellaszintű bizonyítást, hogy a regresszió ne 10 perc után jelezzen.
-- **Ellenőrzés:** a teljes `tools/round-gate.sh test/ui/ui_inventory_test.dart
-  test/ui/ui_baseline_screenshot_test.dart` terminális exit 0-val zárjon friss
-  izolált klónban.
-- **Státusz:** OPEN
+- **Javítás:** a corpus-dekódolás plain aszinkron `test`-ben fut explicit
+  10 másodperces timeouttal, a fake-async widget-zónán kívül.
+- **Ellenőrzés:** a célteszt és a teljes kör-gate terminális exit 0-val zárt.
+- **Státusz:** FIXED (`dc053d52`)
 
-### F2 — MAJOR — A route-map elveszíti a `songTrainerResult` path-paraméterét
+### F2 — MAJOR — A route-map elvesztette a `songTrainerResult` path-paraméterét
 
-- **Fájl:** `docs/ui/baseline/route-map.md:37`
-- **Probléma:** a baseline `/song-trainer/result`-ot ír, miközben a kanonikus
-  `AppRoutes.songTrainerResult` értéke `/song-trainer/result/:songId`
-  (`lib/app/routing/app_route.dart:30`).
-- **Hatás:** a migrációs térkép pont a deep-link/paraméter kockázatot rögzíti
-  hibásan, így A4 nem teljesül mind a 40 route-ra.
-- **Kötelező javítás:** írd át az exact current pathot és a kockázatban nevezd
-  meg a `songId` path-paraméter + `SongTrainerResult` extra kettős contractot.
-- **Ellenőrzés:** hasonlítsd össze gépileg vagy tételesen mind a 40
-  `AppRoutes` stringet a táblázat current-route oszlopával.
-- **Státusz:** OPEN
+- **Javítás:** az exact current route `/song-trainer/result/:songId`; a
+  `songId` path-paraméter és a typed `SongTrainerResult` `extra` kettős
+  contract dokumentált.
+- **Ellenőrzés:** a 40 kód-string és 40 dokumentált current route
+  halmazkülönbsége üres.
+- **Státusz:** FIXED (`dc053d52`)
 
-### F3 — MAJOR — A token-adósság „occurrence” számai nem reprodukálhatók
+### F3 — MAJOR — A token-adósság számai nem voltak reprodukálhatók
 
-- **Fájl:** `docs/ui/baseline/token-debt.md:8-10`
-- **Probléma:** az exact `rg -o 'Color\(0x[0-9A-Fa-f]+' lib/features |
-  wc -l` **28** előfordulást ad, nem 26-ot; a 26 a találatot tartalmazó sorok
-  száma. Az exact `rg -o 'SizedBox\(|EdgeInsets\.' lib/features | wc -l`
-  **817**, nem 752. A dokumentum a mérési parancsokat sem rögzíti, ezért a
-  számok jelentése nem auditálható.
-- **Hatás:** A5 mért baseline-ja pontatlan; a későbbi token-migráció hamis
-  kiinduló értékhez mérne.
-- **Kötelező javítás:** válassz és dokumentálj exact, reprodukálható queryt
-  minden számlálóhoz; az oszlopnevet igazítsd a mért egységhez (előfordulás
-  vagy érintett sor), majd frissítsd a számokat.
-- **Ellenőrzés:** a dokumentált parancsok kimenete egyezzen a táblával az
-  aktuális HEAD-en.
-- **Státusz:** OPEN
+- **Javítás:** az exact parancsok, mérési egységek és újramért 28/9,
+  174, illetve 817 érték dokumentált.
+- **Ellenőrzés:** a report készítésekor mind a négy parancs egyezett a táblával.
+- **Státusz:** FIXED (`dc053d52`)
 
-### F4 — MAJOR — A corpus nem a production tipográfiát rendereli
+### F4 — MAJOR — A corpus nem a production tipográfiát renderelte
 
-- **Fájl:** `test/ui/ui_baseline_screenshot_test.dart:70-150`,
-  `docs/ui/README.md:9-24`, hét `docs/ui/baseline/screenshots/*.png`
-- **Probléma:** mind a hét megnyitott PNG-ben a szöveg Ahem tesztfont-blokkokként
-  jelenik meg. A capture Flutter widget-testje `--use-test-fonts` alatt fut,
-  de nem tölti be a `pubspec.yaml`-ban deklarált Poppins/Montserrat app-fontot.
-  A README ezt production-screen rasterként írja le, a tipográfiai eltérést
-  nem dokumentálja.
-- **Hatás:** a Chapter 13 tipográfia-, text-scale- és overflow-baseline-ja nem
-  hasonlít a production UI-ra; szövegtördelési regressziókhoz félrevezető
-  referencia.
-- **Kötelező javítás:** a capture előtt determinisztikusan töltsd be az app
-  meglévő font assetjeit (új asset/scope nélkül), regeneráld mind a hét PNG-t,
-  és nyisd meg őket újra. A strukturális normál teszt ne regeneráljon képet.
-- **Ellenőrzés:** manuális review-ban a hét képen olvasható production betűk
-  látszanak, nem homogén Ahem téglalapok; a capture recipe továbbra is
-  offline/determinisztikus.
-- **Státusz:** OPEN
+- **Javítás:** a capture a bundle Poppins/Montserrat/Material Icons és az aktív
+  Flutter SDK Roboto Regular/Medium/Bold fontjait tölti; a wrapper a production
+  theme-et használja.
+- **Ellenőrzés:** a capture újrafuttatása 2 passed / 1 skipped, majd
+  `git diff --exit-code` zöld; mind a hét PNG kézi review-ja tiszta.
+- **Státusz:** FIXED (`6a09dad7`)
 
-### F5 — MAJOR — A látható compact overflow-k nem kerültek a leletlistába
+### F5 — MAJOR — Két piros saroksáv hibásan production overflowként szerepelt
 
-- **Fájl:** `docs/ui/baseline/accessibility-findings.md:6-13`,
-  `tuner-compact-portrait.png`, `onboarding-compact-portrait.png`
-- **Probléma:** a reviewer mind a hét képet megnyitotta; a Tuner és onboarding
-  jobb felső sarkában render-overflow figyelmeztető sáv látható. A leletlista
-  csak általánosan mondja, hogy a small-phone coverage hiányos, és azt állítja,
-  hogy egyedi flow-ról nem állít hibát.
-- **Hatás:** az előírt tényleges overflow-audit két közvetlenül megfigyelt,
-  képernyőszintű leletet elveszít; A6 nem teljesül.
-- **Kötelező javítás:** rögzítsd külön, prioritással a Tuner és onboarding
-  390×844 baseline-on megfigyelt overflow-ját, a corpus fájlt mint evidence-et
-  megadva. A production kódot ebben a körben továbbra se javítsd.
-- **Ellenőrzés:** a dokumentum képernyőnként megnevezi mindkét leletet és a
-  későbbi reprodukció viewportját.
-- **Státusz:** OPEN
+- **Javítás:** a közvetlen capture wrapper kikapcsolja a debug bannert; a
+  corpus újragenerálva, a leletlista az artifact eredetét rögzíti.
+- **Ellenőrzés:** a Tuner és onboarding képen nincs piros sáv; a wrapper-test
+  `debugShowCheckedModeBanner == false` értéket követel.
+- **Státusz:** FIXED (`6a09dad7`)
 
-### F6 — NOTE — Az A2 valódi-sértés próba működik
+### F6 — NOTE — A valódi-sértés őrök működnek
 
-- **Fájl:** `tool/ui_inventory.dart:14-23`, `test/ui/ui_inventory_test.dart:17`
-- **Bizonyíték:** a reviewer ideiglenesen eltávolította a `..sort()`-ot. A
-  célteszt az első elemen piros lett (`streak_screen.dart` az elvárt
-  `ai_tutor/...` helyett); a változtatás eldobva, a review-klón tiszta.
-- **Státusz:** FIXED (nincs production javítás; falszifikációs bizonyíték)
+- **Bizonyíték:** az első review-ban az inventory rendezés eltávolítása
+  `ui_inventory_test.dart`-ot pirosra vitte. A végső review-ban a
+  `live-compact-portrait.png` ideiglenes eltávolítása a corpus-tesztet
+  célzottan pirosra vitte (`mutation_exit=1`); restore után a klón tiszta.
+- **Státusz:** FIXED (review-bizonyíték, nincs production patch)
 
 ## Gate-bizonyíték ellenőrzése
 
-| Gate | Állított eredmény | Ellenőrizve |
-|---|---|---|
-| format | zöld | ✅ 1730 fájl, 0 változás |
-| analyze | zöld | ✅ `No issues found` |
-| `ui_inventory_test.dart` | zöld | ✅ 1 teszt; mutáció piros |
-| `ui_baseline_screenshot_test.dart` | zöld | ❌ 10 perces timeout, exit 1 |
-| architecture | zöld | ❌ a gate a piros céltesztnél fail-fast megállt |
-| CI teljes suite + property | még nem indult | ❌ |
+| Gate | Eredmény |
+|---|---|
+| format | ✅ 1735 fájl, 0 változás |
+| analyze | ✅ `No issues found` |
+| `ui_inventory_test.dart` | ✅ 1/1 |
+| `ui_baseline_screenshot_test.dart` | ✅ 2 passed / 1 skipped |
+| architecture | ✅ 12 ismert allowlisted eltérés |
+| secrets | ✅ 3120 fájl, 0 lelet |
+| l10n | ✅ 1503 EN/HU message, aggregate friss |
+| capture-reprodukció | ✅ 2 passed / 1 skipped, nulla git diff |
+| CI teljes suite + property | merge előtt exact-SHA run szükséges |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint merge tilos. F1–F5 javítására ugyanaz a Terra motor kap
-egy javító kört; utána friss izolált klónban a teljes gate, a hét PNG manuális
-review-ja és leletenkénti re-review kötelező.
+Correctness review: **APPROVED**. Nyitott BLOCKER/MAJOR nincs. Az ADR 0052
+szerinti merge csak az exact-SHA Full Gate és Router CI sikere után engedett.
