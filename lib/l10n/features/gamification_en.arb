@@ -191,5 +191,138 @@
     }
   },
   "achievementEvidenceCompletionRecorded": "This measured milestone is complete.",
-  "achievementEvidenceUnavailable": "Measured evidence is not available yet."
+  "achievementEvidenceUnavailable": "Measured evidence is not available yet.",
+  "questsScreenTitle": "Quests",
+  "questsDailySectionTitle": "Today",
+  "questsWeeklySectionTitle": "This week",
+  "questsEmptyTitle": "No quests yet",
+  "questsEmptyBody": "Quests appear once you complete a practice session.",
+  "questsOfflineBanner": "Available offline",
+  "questsOfflineBody": "Your quests and daily challenge work without a connection.",
+  "questProgressLabel": "{current} of {target}",
+  "@questProgressLabel": {
+    "placeholders": {
+      "current": {"type": "num"},
+      "target": {"type": "num"}
+    }
+  },
+  "questProgressSemantics": "Progress: {current} of {target}.",
+  "@questProgressSemantics": {
+    "placeholders": {
+      "current": {"type": "num"},
+      "target": {"type": "num"}
+    }
+  },
+  "questRewardLabel": "+{xp} XP",
+  "@questRewardLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "questRewardAlreadyCredited": "Reward already credited",
+  "questRewardSemantics": "Reward: {xp} experience points, already credited.",
+  "@questRewardSemantics": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "questSourcePlanLabel": "From your weekly plan",
+  "questSourceSkillLabel": "Skill focus: {skill}",
+  "@questSourceSkillLabel": {
+    "placeholders": {
+      "skill": {"type": "String"}
+    }
+  },
+  "questSourceModeLabel": "Practice mode focus",
+  "questSourceMetricLabel": "Measured focus: {metric}",
+  "@questSourceMetricLabel": {
+    "placeholders": {
+      "metric": {"type": "String"}
+    }
+  },
+  "questStartCta": "Start",
+  "questContinueCta": "Continue",
+  "questStartSemantics": "Start the quest {title}.",
+  "@questStartSemantics": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "questContinueSemantics": "Continue the quest {title}.",
+  "@questContinueSemantics": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "questCompletedBadge": "Completed",
+  "questCompletedBody": "The reward is already in your ledger.",
+  "questCompletedSemantics": "Quest {title} is complete. The reward is already credited.",
+  "@questCompletedSemantics": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "questExpiredBadge": "Expired",
+  "questUnavailableBadge": "Content not installed",
+  "questUnavailableBody": "This quest points to content that is not installed on this device yet.",
+  "questExpiryToday": "Available until midnight",
+  "questExpiryWeekly": "Available until Sunday",
+  "questExpiryDate": "Available until {date}",
+  "@questExpiryDate": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "challengeDailyTitle": "Today's challenge",
+  "challengeDailyBody": "Play along at your own pace.",
+  "challengeStrumName": "Strum pattern: {name}",
+  "@challengeStrumName": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "challengeChordChange": "Change from {from} to {to} within {beats} beats",
+  "@challengeChordChange": {
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"},
+      "beats": {"type": "int"}
+    }
+  },
+  "challengeRhythm": "Play the rhythm {content} at {bpm} BPM",
+  "@challengeRhythm": {
+    "placeholders": {
+      "content": {"type": "String"},
+      "bpm": {"type": "int"}
+    }
+  },
+  "challengeSongSection": "Play the {section} of {song}, {repetitions} times",
+  "@challengeSongSection": {
+    "placeholders": {
+      "section": {"type": "String"},
+      "song": {"type": "String"},
+      "repetitions": {"type": "int"}
+    }
+  },
+  "challengeTiming": "Hit the tempo window of {window} ms on {content}",
+  "@challengeTiming": {
+    "placeholders": {
+      "window": {"type": "int"},
+      "content": {"type": "String"}
+    }
+  },
+  "challengeCompletedToday": "Completed today",
+  "challengeSemanticsActive": "Daily challenge: {description}. Ready to play.",
+  "@challengeSemanticsActive": {
+    "placeholders": {
+      "description": {"type": "String"}
+    }
+  },
+  "challengeSemanticsCompleted": "Daily challenge: {description}. Completed today.",
+  "@challengeSemanticsCompleted": {
+    "placeholders": {
+      "description": {"type": "String"}
+    }
+  },
+  "challengeUnavailableBody": "Install chords, rhythms, or songs to unlock today's challenge."
 }
