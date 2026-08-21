@@ -1,0 +1,1 @@
+heal=E07-R09 halt=H-NOSIGNAL verdict=fixed lesson=L289+L290 pr=280 root_cause=selfheal-no-inflight-registration+codex-status-only-turn-end
