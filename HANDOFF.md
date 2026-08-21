@@ -55,11 +55,45 @@ is ugyanaz; a Router CI futóján zöld).
 Pontos következő teendő: nincs kézi indítás — a lánc minden firingen
 `git fetch origin main` + `merge --ff-only` (`main_sync_strategy`), tehát a
 következő cron-firing már ezzel a felállással veszi ki a queue első `pending`
-sorát: **E08-R21 — Mastery milestone domain és evaluator**; a Chapter 13 ága
+sorát: **E08-R22 — Reward inbox és celebration** (ADR 0316 előre kiosztva —
+mérd meg a foglalóval, a §1.0.1 szabály szerint); a Chapter 13 ága
 változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
 HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
+
+## ✅ E08-R21 KÉSZ — Mastery mérföldkő domain és kiértékelő — PR #398, squash `26f83265` (2026-08-21, L399)
+
+XP/ledger-mentes, több-sessionös, confidence-kapuzott, monoton mastery
+kiértékelő (ADR 0289 legszigorúbb alkalmazása). Új `lib/features/
+gamification/domain/mastery/` (`mastery_milestone.dart`, `mastery_progress.dart`,
+`mastery_badge.dart`) + `application/mastery_evaluator.dart`: session-szintű
+dedup inkluzív `minEvidenceSessions>=2` küszöbbel, `0.70`-es Vision/Analysis
+confidence-kapu (`VisionClaimGuard` pozitív-claim precedenssel egyezően,
+ADR 0388 3. döntés), és zárt mezőkészletű, privacy-safe, magyarázható
+jelvény (`toSummary()` — nincs `sessionId`, `audio`, egészségügyi mező).
+
+Az előre kiosztott `ADR 0315` a pre-flightban ütközőnek bizonyult (egy
+korábbi, független kör azóta lefoglalta, `halt-guard-ledger.md`) — a
+foglaló a tényleges szabad számot (**`ADR 0388`**) adta, a brief §0.0
+revíziója ezt dokumentálja.
+
+A review egy MAJOR-t talált és önálló próbával igazolt (L399): a monoton
+(„egyszer elért mérföldkő nem regresszál") ág egy már elért progressre
+`ArgumentError`-ral bukott, ha a friss evidence-batch KEVESEBB minősítő
+session-t tartalmazott, mint a korábban tárolt érték — a beküldött `A5`
+teszt csak azonos-vagy-nagyobb session-számú batch-csel bizonyított. Egy
+MiniMax javító kör (`99c36e90`) a hívó oldalon `max(friss, korábbi)`
+clampelést vezetett be és új tesztet adott a kisebb-batch esetre; a review
+saját, független `/tmp` klónban futtatott gate-je (21/21 zöld) és
+scope-audit-ja is megerősítette a javítást.
+
+Mindkét CI (`full-gate.yml` run 32534927662, `router-ci.yml` run
+32536016910 — utóbbi explicit `workflow_dispatch`-csel indítva, mert a
+javító kör commitjai nem érintették a `docs/rounds/**` útvonalat, tehát a
+push-trigger nem tüzelt volna a merge SHA-n) zöld a pontos merge-jelölt
+SHA-n (`6df449a5`); a merge utáni `main`-en független gate-újrafutás
+(`format+analyze+test+architecture+secrets+l10n`) szintén zöld.
 
 ## ✅ E08-R20 KÉSZ — Quest és kihívás felület — PR #397, squash `684e6334` (2026-08-21, L396–L398)
 

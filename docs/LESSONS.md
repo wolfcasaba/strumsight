@@ -14902,3 +14902,44 @@ mielőtt a hiányzó §10-et akár MINOR-ra, akár nyitott BLOCKER-re minősíti
 előírja az „eldobható próbateszt… guard-testeknél valódi-sértés próba"
 lépést; ez az eset megerősíti, hogy ezt SOSEM helyettesítheti a beküldött
 test-fájl elolvasása, csak a tényleges önálló futtatás.
+
+## L399 — Egy „monoton/immutable" garancia hívó oldala kivétellel bukhat, ha a guard csak a NÖVEKVŐ irányt engedi, és a hívó nem köteles a teljes kumulált történetet minden hívásnál visszaadni (E08-R21, 2026-08-21)
+
+**Mit mértünk.** Az E08-R21 `MasteryEvaluator.evaluate()` monoton ága
+(„egy már elért mérföldkő nem vehető vissza gyengébb friss bizonyítéktól",
+brief §5.4, ADR 0388 5. döntés) egy már elért `MasteryProgress`-re
+`previous.advanceTo(evidenceSessionCount: distinctCount)`-ot hívott, ahol
+`distinctCount` a FRISS evidence-batch-ből számolt, minősítő session-ök
+száma. Az `advanceTo` `must not regress` guardja `ArgumentError`-t dob, ha
+`distinctCount` KISEBB, mint a korábban tárolt érték. A beküldött `A5` teszt
+csak azonos-vagy-nagyobb session-számú friss batch-csel bizonyított, ezért a
+gate zölden ment át. A review saját, önálló próbája (3 minősítő session
+elérve, majd egy 1 elemű friss batch átadva `evaluate()`-nek) egyenesen
+kivétellel bukott: `Invalid argument (evidenceSessionCount): must not
+regress: 1` (`mastery_progress.dart:191`, `mastery_evaluator.dart:54`-en
+át). A hibaosztály nem hallgatólagos adatvesztés volt (a garancia
+SZÖVEGESEN nem sérült volna némán), hanem egy kivétellel a kiértékelő teljes
+egészében használhatatlanná vált minden olyan hívási mintánál, ahol a hívó
+nem a teljes kumulált evidence-történetet adja át minden alkalommal (pl.
+csak a legutóbbi session-t forwardolja, vagy egy korábbi bizonyíték egy
+katalógus-/verzióváltás miatt kiesik) — ez pontosan az a hívási minta, amit
+egy „monoton" garancia elvileg védeni hivatott.
+
+**Javítás (1 javító kör, MiniMax, `99c36e90`).** A hívó oldalon
+`clamped = max(distinctCount, previous.evidenceSessionCount)` — a guard
+maga változatlan maradt (a nem-elért ágra továbbra is helyesen tiltja a
+regressziót), csak a monoton ág hívása lett clampelve. Új teszt
+(`A5 monotonicity: … survives a SMALLER subsequent batch`) a reviewer
+pontos reprodukciós forgatókönyvét fedi.
+
+**Következtetés.** Egy „X soha nem regresszálhat" doksi-szintű garanciánál
+MINDIG mérd ki KÜLÖN a védő guard két oldalát: (1) a hívó ténylegesen
+soha nem próbál regresszálni-e (ez a normál eset, amit a beküldött tesztek
+tipikusan fednek), és (2) mi történik, ha MÉGIS megpróbál — a guard ilyenkor
+csendben clampeljen/megőrizzen, ne dobjon kivételt, hacsak a hívási
+szerződés nem explicit garantálja a monoton bemenetet. A review-próbának a
+„gyengébb ÉRTÉK" mellett a „kisebb DARABSZÁMÚ" bemenetet is ki kell
+próbálnia, ha a doménben session-/elem-számlálás a küszöb alapja.
+
+**Őrteszt:** `test/features/gamification/application/mastery_evaluator_test.dart`
+— „A5 monotonicity: achieved progress survives a SMALLER subsequent batch".
