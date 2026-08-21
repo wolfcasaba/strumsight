@@ -55,10 +55,46 @@ is ugyanaz; a Router CI futóján zöld).
 Pontos következő teendő: nincs kézi indítás — a lánc minden firingen
 `git fetch origin main` + `merge --ff-only` (`main_sync_strategy`), tehát a
 következő cron-firing már ezzel a felállással veszi ki a queue első `pending`
-sorát: **E08-R19 — Challenge V2 és legacy DailyChallenge migráció**; a
-Chapter 13 ága változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
-HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh list`
-— egy megmaradt `.pipeline/engine-override=terra` minden queue-sort felülírna.
+sorát: **E08-R20 — Quest and Challenge UI**; a Chapter 13 ága változatlanul
+**E13-R05** (a revideált scope-pal, lásd a lenti HEAL-bejegyzést). Boxon
+egyszer ellenőrizendő: `tools/engine-profile.sh list` — egy megmaradt
+`.pipeline/engine-override=terra` minden queue-sort felülírna.
+
+## ✅ E08-R19 KÉSZ — Challenge V2 és legacy napi kihívás migráció — PR #396, squash `a100ff9b` (2026-08-21)
+
+Négy új, tipizált napi kihívás-típus (akkordváltás, ritmus, dal-szakasz,
+időzítés) a meglévő, determinisztikus pengetés-minta generátor mellé — a
+legacy `DailyChallenge.forDay` VÁLTOZATLAN, az adapter HÍVJA (nem
+reprodukálja, `ADR 0387` Döntés 1). A napi példány azonosítója
+`type|catalogVersion|epochDay`; a jutalom a meglévő reward-főkönyv
+`appendIfAbsent`-jén megy át ugyanezzel a kulccsal, tehát az újrajátszás
+szabad, a jutalom egyszeres. A katalógus-verzió a generáláskor rögzül —
+egy nap közbeni app-frissítés nem cseréli ki az aznapi aktív kihívást.
+
+Az előre kiosztott `ADR 0314` a pre-flightban ütközőnek bizonyult (egy
+korábbi, független kör már lefoglalta) — a foglaló a tényleges szabad számot
+(`ADR 0387`) adta, a brief §0.0 revíziója ezt dokumentálja (mérve, nem
+`ls`-ből feltételezve, `AGENTS.md` §12).
+
+A CI (`full-gate.yml`) a saját, szűk célzású `round-gate.sh`-nál szélesebb
+kört mérve egy BLOCKER-t fogott: a `daily_challenge_service.dart`
+`dart:math.Random`-ot használt a gamification `application/` rétegben, ami
+sérti az E08-R08 „framework-free application layer" szabályt
+(`test/core/architecture_dependency_test.dart`, nincs a kör két célzott
+teszt-útvonalán, csak a teljes suite-ban). Egy MiniMax javító kör lecserélte
+tiszta FNV-1a hash-projekcióra (`_projectHash(seed, discriminator)`), a
+kódbázis meglévő `dailyQuestSortKey` mintáját követve — `dart:math` import és
+`Random(` hívás nélkül. Mindkét CI-mátrix (`full-gate.yml`, `router-ci.yml`)
+zöld a pontos merge-jelölt SHA-n (`331b8d97`); a merge utáni `main`-en
+független gate-újrafutás (`format+analyze+3×test+architecture+secrets+l10n`)
+szintén mind zöld.
+
+Lecke: a kör-brief célzott gate-parancsa (`round-gate.sh` két teszt-útvonala)
+nem fedte le a keresztmetsző architektúra-invariánsokat (`test/core/
+architecture_dependency_test.dart` egy HARMADIK útvonalon él) — ez pontosan
+azért mérce-rés, mert a saját review-gate-futásom is csak ezt a két
+útvonalat futtatta újra. Jövőbeli gamification `application/`-réteget érintő
+briefek gate-parancsába érdemes felvenni az architektúra-tesztfájlt is.
 
 ## ✅ E08-R18 KÉSZ — Rugalmas heti quest és consistency objective — PR #394 (2026-08-21, L394)
 
