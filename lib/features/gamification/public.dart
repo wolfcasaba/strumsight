@@ -9,6 +9,7 @@ export 'application/profile_projector.dart';
 export 'application/reward_eligibility_policy.dart';
 export 'application/reward_policy_engine.dart';
 export 'application/streak_service.dart';
+export 'application/weekly_quest_generator.dart';
 export 'data/activity_outbox_repository.dart';
 export 'data/local_activity_outbox_repository.dart';
 export 'data/gamification_repository.dart';
