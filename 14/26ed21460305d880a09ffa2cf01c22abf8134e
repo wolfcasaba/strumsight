@@ -1,0 +1,1 @@
+heal=E07-R04 halt=H-NOSIGNAL verdict=fixed lesson=L282 pr=271 root_cause=codex-exec-command-yield-restart-instead-of-resume
