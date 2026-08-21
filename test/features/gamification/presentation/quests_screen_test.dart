@@ -11,7 +11,6 @@ import 'package:strumsight/features/gamification/domain/quests/quest_objective.d
 import 'package:strumsight/features/gamification/domain/quests/quest_progress.dart';
 import 'package:strumsight/features/gamification/domain/quests/quest_schedule.dart';
 import 'package:strumsight/features/gamification/presentation/screens/quests_screen.dart';
-import 'package:strumsight/features/gamification/presentation/widgets/challenge_card.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/quest_card.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/l10n/app_localizations_en.dart';
