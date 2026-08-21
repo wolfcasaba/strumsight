@@ -1,7 +1,7 @@
 # E08-R15 — Security/privacy review
 
 Brief: `docs/rounds/e08-r15-achievement-ui-and-evidence.md`
-Reviewer: Codex / `gpt-5.6-sol` · Dátum: 2026-08-21
+Reviewer: Codex / `gpt-5.6-sol` · Dátum: 2026-08-21 · re-review: `dcc7eac1`
 Verdikt: **PASS**
 
 ## Összegzés
@@ -32,3 +32,10 @@ visszacsempészése az A2 cellát pirosra vitte, restore után zöld.
 
 Security/privacy PASS. Nincs nyitott CRITICAL, BLOCKER vagy MAJOR lelet; a
 merge-bar további részei az exact-SHA CI és a merge-lockos landolás.
+
+## Self-heal utáni re-review
+
+Az `86e12fc3` utáni termékdiff kizárólag az UI-inventory tesztet és két
+baseline-dokumentumot módosítja; storage-, hálózati-, Analyze-, raw audio- vagy
+session-adat útvonal nem változott. A végleges `dcc7eac1` headen a korábbi
+privacy megállapítások változatlanul zártak, ezért a verdict továbbra is PASS.

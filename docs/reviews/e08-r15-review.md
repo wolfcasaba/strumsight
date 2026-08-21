@@ -1,7 +1,7 @@
 # E08-R15 — Review
 
 Brief: `docs/rounds/e08-r15-achievement-ui-and-evidence.md`
-Diff: `a1547d45...86e12fc3`
+Diff: `origin/main@0948fc26...dcc7eac1`
 Reviewer: Codex / `gpt-5.6-sol` · Dátum: 2026-08-21
 Verdikt: **APPROVED**
 
@@ -11,9 +11,11 @@ BLOCKER: 0 · MAJOR: 0 nyitott (4 javítva) · MINOR: 0 · NOTE: 0
 
 A Terra javítókör a commitált végállapot analyzer-hibáit, a detail action
 hiányát, az audit-only kategória UI-szivárgását és a numerikus evidence-rést
-lezárta. A végleges diff friss, izolált klónban scope-tiszta és a kötelező
-kör-gate minden lépése zöld. Két eldobható valódi-sértés pirosra vitte a
-hozzájuk tartozó őrtesztet, restore után a klón tiszta és a cellák zöldek.
+lezárta. Az E08-R15/H3 folytatás a két új screenhez tranzakciósan 60-ra
+igazította az UI inventoryt és rögzítette az R30-ig fennálló route-kockázatot.
+A végleges diff friss, izolált klónban scope-tiszta és a kötelező kör-gate
+minden lépése zöld. Három eldobható valódi-sértés pirosra vitte a hozzájuk
+tartozó őrtesztet, restore után a klón tiszta és a cellák zöldek.
 
 ## Acceptance criteria
 
@@ -27,15 +29,18 @@ hozzájuk tartozó őrtesztet, restore után a klón tiszta és a cellák zölde
 | A6 | exact unknown ID safe state | ✅ | A6 widget-cella |
 | A7 | minden copy ARB | ✅ | feature-szegmens + aggregate parity |
 | A8 | nagy text scale + teljes semantics | ✅ | 1.99/2.0/2.01/3.0 mátrix; exact-ID button action |
+| A9 | 60 production screen, két exact achievement út, változatlan 40 route | ✅ | `ui_inventory_test.dart`; `migration-status.md`; `route-map.md` |
 
 ## Scope-audit
 
 ```text
-Legacy scope audit OK (34076d249b0e..86e12fc3d24c, 5 changed path(s), 0 generated/ignored)
+Legacy scope audit OK (8fce2429e853..dcc7eac13d0e, 4 changed path(s), 0 generated/ignored)
 ```
 
-Az első implementáció 10 útvonala és a javítókör 5 útvonala is kizárólag a
-brief tételes allowlistjén belül van.
+Az első implementáció 10 útvonala, az első javítókör 5 útvonala és a
+self-heal utáni inventory-javítás 4 útvonala is kizárólag a saját futásuk
+brief-baseline utáni tételes allowlistjén belül van. A pre-flight ADR nem
+implementer-scope: a self-heal ötcellás őre ezt külön zölden bizonyítja.
 
 ## Megállapítások lezárása
 
@@ -73,10 +78,20 @@ az őr kikapcsolásakor piros, restore után zöld.
 | architecture | zöld, 12 allowlisted eltérés |
 | secrets | zöld, 3123 fájl, 0 lelet |
 | l10n | zöld, 1532 en/hu üzenet |
+| self-heal scope-őr | 5/5 zöld |
+| UI-inventory mutáció | ideiglenes 61. `*_screen.dart` → piros (várt 60 / mért 61); törlés után zöld |
 | A2 mutáció | `Opacity(0)` hidden cím → piros; restore → zöld |
 | A4 mutáció | current-validáció kikapcsolása → piros; restore → zöld |
 | review-klón végállapot | `git diff --check` zöld, munkafa tiszta |
-| CI | az APPROVED review után exact-SHA-n dispatchelendő |
+| CI | a `dcc7eac1` APPROVED review commitja után exact-SHA-n dispatchelendő |
+
+## Self-heal utáni független re-review — `dcc7eac1`
+
+Az izolált klónban a 60-as inventory a két exact achievement screen útját
+külön őrzi, miközben a route-katalógus és a route-dokumentáció továbbra is
+40 bejegyzést rögzít. Egy eldobható 61. production screen a célzott tesztet
+pirosra vitte; a próba törlése után a teszt és a teljes 7 lépéses round-gate
+zöld, a munkafa tiszta. Új BLOCKER, MAJOR, MINOR vagy NOTE lelet nincs.
 
 ## Merge-döntés
 
