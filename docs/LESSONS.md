@@ -14463,3 +14463,23 @@ ellenőrizhető előfeltétel marad.
 
 **Őrteszt:** nincs — az operációs rendszer könyvtár-létezési előfeltétele;
 a javított parancssorrend maga a reprodukció és a bizonyíték.
+
+## L380 — A pre-flight ADR nem implementer-scope; fázisbaseline után kell auditálni (E08-R15, 2026-08-21)
+
+**Mért snag.** Az E08-R15 friss `main`-szinkronja után a teljes branch-diff
+scope-auditja az ADR 0378-at listán kívüli útnak jelezte. Az orchestrátor ezt
+először az ADR implementer-allowlistbe emelésével próbálta feloldani. Ettől a
+merge-elt H3 self-heal exact scope-őre azonnal piros lett: az engedélyezett
+többletben a három baseline-fájl mellett egy negyedik, nem implementer-owned
+út jelent meg (`test_allowed_paths_add_exact_transactional_baseline_gap`).
+
+**Gyökérok és szabály.** Az ADR-t az orchestrátor a pre-flight commitban írta,
+és az implementer wrapper baseline-ja ez UTÁN indult. A scope-audit tehát nem
+a teljes, upstream merge-eket és orchestrátor-artefaktumokat tartalmazó ágat
+méri egyetlen diffként, hanem minden implementer-fázist a saját rögzített
+baseline-jától: első implementáció, review-javítás, self-heal-folytatás. Az
+ADR továbbra is normatív és hivatkozott, de nem ad írási jogot az
+implementernek `docs/adr/**` alá. A téves allowlist-bővítés visszavonása után
+a self-heal őr 5/5, a folytató scope-audit 4/4 zöld lett.
+
+**Őrteszt:** `tools/tests/test_e08_r15_ui_inventory_scope.py::E08R15UiInventoryScopeTest::test_allowed_paths_add_exact_transactional_baseline_gap`

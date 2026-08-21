@@ -1,5 +1,25 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E08-R15 KÉSZ — Privacy-safe Achievement UI és 60-screen baseline — PR #383 (2026-08-21, L377/L380)
+
+A caller-fed achievement lista és detail UI all/unlocked/in-progress/category
+szűrőket, exact-ID kiválasztást, lokalizált üres/not-found állapotot és
+1.99/2.0/2.01/3.0 text-scale kompatibilitást ad. Locked hidden állapotban cím,
+leírás, progressz, kategória és evidence a widget- és semantics-fából is
+hiányzik. Az evidence contract zárt reason code-ot és runtime-validált,
+aggregált current/target értéket fogad; Analyze/session/raw audio adatot nem.
+
+Az E08-R15/H3 self-heal után a két új screen ugyanabban a termék-tranzakcióban
+emelte 58-ról 60-ra az UI inventoryt, miközben az AppRoutes/GoRoute baseline
+40 maradt az E08-R30 wiringig. Implementer Terra, reviewer/orchestrátor Sol;
+correctness **APPROVED**, security **PASS**. Exact `d4414f49`: Full Gate
+[32449877483](https://github.com/wolfcasaba/strumsight/actions/runs/32449877483)
+és Router CI
+[32449853724](https://github.com/wolfcasaba/strumsight/actions/runs/32449853724)
+success. PR [#383](https://github.com/wolfcasaba/strumsight/pull/383), squash
+`22f5e1a0`. Következő E08 termékkör: **E08-R16 — Quest domain, objective és
+lifecycle**.
+
 ## ✅ E13-R02 KÉSZ — Design System Foundation és compatibility layer — PR #384 (2026-08-21, L378–L379)
 
 Az új `lib/core/design_system/public.dart` mögött megjelentek a kipinnelt
@@ -3595,6 +3615,13 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-21):** `main` @ `22f5e1a0` — E08-R15
+privacy-safe Achievement UI, PR
+[#383](https://github.com/wolfcasaba/strumsight/pull/383), squash-merge.
+Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
+`d4414f49`: Full Gate 32449877483 + Router CI 32449853724 success;
+correctness APPROVED, security PASS. Következő E08 kör: **E08-R16**.
+
 **Aktuális állapot (2026-08-21):** `main` @ `8bd7dc98` — E13-R02 Design
 System Foundation és compatibility layer, PR
 [#384](https://github.com/wolfcasaba/strumsight/pull/384), squash-merge.
@@ -4106,6 +4133,16 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R15 — Achievement UI és részletes evidence** (PR
+[#383](https://github.com/wolfcasaba/strumsight/pull/383), squash `22f5e1a0`,
+[ADR 0378](docs/adr/0378-achievement-presentation-and-privacy-safe-evidence.md)).
+Caller-fed, hidden fail-closed lista/detail UI; zárt aggregált evidence;
+60-screen inventory és változatlan 40 route. Az első review 4 MAJOR
+correctness + 1 MAJOR privacy leletét Terra javította; a H3 self-heal utáni
+inventory-korrekció végső re-review-ja APPROVED/PASS. Exact `d4414f49`: Full
+Gate 32449877483 + Router CI 32449853724 success. Részletesen:
+`docs/handoff-archive.md`.
 
 **E13-R02 — Design System Foundation és compatibility layer** (PR
 [#384](https://github.com/wolfcasaba/strumsight/pull/384), squash `8bd7dc98`,
@@ -4846,6 +4883,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 **E04-R22 — Tutor Profile, Privacy, Data & Consent UI** — KÉSZ (PR #157, `faa3f32`, nincs új ADR — ADR 0132+0134 hatálya; MiniMax M3; ld. fejléc ✅-blokk).
 
 ## 6. Exact next task
+
+**Pontos következő E08 termékkör: E08-R16 — Quest domain, objective és
+lifecycle** (`docs/rounds/e08-r16-quest-domain-objectives-and-lifecycle.md`,
+engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
+Az önálló Chapter 13 sáv következő köre továbbra is E13-R03.
 
 **Pontos következő Chapter 13 kör: E13-R03 — Semantic colors and themes**
 (`docs/rounds/e13-r03-semantic-colors-and-themes.md`, engine a queue-ban

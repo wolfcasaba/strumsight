@@ -6,6 +6,41 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E08-R15 — Achievement UI és részletes evidence (2026-08-21)
+
+PR [#383](https://github.com/wolfcasaba/strumsight/pull/383), squash
+`22f5e1a0`, [ADR 0378](adr/0378-achievement-presentation-and-privacy-safe-evidence.md).
+A két caller-fed presentation screen all/unlocked/in-progress/category
+szűrőket, exact-ID detail feloldást, lokalizált empty/not-found állapotot és
+reszponzív, teljes semantics felületet ad. A locked hidden achievement csak
+generikus placeholderként létezik az all nézetben; valódi cím, leírás,
+progressz, kategória és evidence sem a widget-, sem a semantics-fába nem jut.
+Az evidence zárt reason enumot és véges, nem negatív current / pozitív target
+aggregátumot fogad; nincs Analyze-, timeline-, waveform-, session- vagy raw
+audio contract. A UI nem olvas storage-ot, órát vagy repositoryt, és nem számol
+jutalmat.
+
+Az első Terra implementáció utáni Sol review négy MAJOR correctness leletet
+és egy MAJOR privacy leletet zárt: analyzer-hiba, hiányzó exact-ID action,
+audit-only category filter és hiányzó finite/numerikus runtime-validáció. Az
+első javítókör után correctness APPROVED és security PASS lett. A későbbi
+exact-SHA CI 5442 zöld teszt mellett egyedül azért bukott, mert az E13-R01
+inventory 58 screent várt a két új forrással mért 60 helyett. Az E08-R15/H3
+self-heal a product briefbe tette a három exact baseline-utat; a Terra
+folytatás egy tranzakcióban emelte 60-ra a tesztet és a dokumentációt. A route
+baseline 40 marad, a wiring E08-R30 feladata.
+
+A végső izolált review-klón scope-auditja 4/4 engedélyezett korrekciós útvonal,
+a self-heal guard 5/5, a round-gate 7/7 zöld (16 achievement + 1 inventory
+teszt). Eldobható `Opacity(0)`, numerikus guard és 61. production-screen
+mutációk célzottan pirosak, restore után zöldek és a klón tiszta. Exact
+`d4414f49`: Full Gate
+[32449877483](https://github.com/wolfcasaba/strumsight/actions/runs/32449877483)
+és Router CI
+[32449853724](https://github.com/wolfcasaba/strumsight/actions/runs/32449853724)
+success. Implementer Terra (`gpt-5.6-terra`), orchestrátor/reviewer Sol
+(`gpt-5.6-sol`). Következő E08 kör: E08-R16.
+
 ## ✅ E08-R14 — Achievement evaluator és progress projection (2026-08-21)
 
 PR [#380](https://github.com/wolfcasaba/strumsight/pull/380), squash
