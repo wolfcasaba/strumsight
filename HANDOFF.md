@@ -1,5 +1,26 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R04 KÉSZ — Accessible typography és text-scale resilience — PR #389 (2026-08-21, L389–L391)
+
+Az immutable `SsTypography` a Chapter 13 teljes Poppins/Montserrat scale-jét
+theme extensionként adja mindhárom design-system témához. A metric tokenek
+tabular figures-t használnak, a value/unit helper nem törő szóközt ad, az
+adaptív `SsChordHeroText` pedig a platform text scale megtartásával és
+ellipszis nélkül skáláz le a rendelkezésre álló helyre. A hosszú magyar
+fixture 1.0/1.3/2.0/2.5 skálán renderelhető.
+
+Az első független Sol review egy MAJOR leletet reprodukált: a chord hero a
+kézi label és a gyermek `Text` miatt kétszer került a semantics fába. Egy
+Terra javító kör után `excludeSemantics: true` és exact label-regresszió zárja
+a rést; correctness **APPROVED**, security **PASS**. Exact `55832396`: Full
+Gate [32462896738](https://github.com/wolfcasaba/strumsight/actions/runs/32462896738)
+és Router CI
+[32462873685](https://github.com/wolfcasaba/strumsight/actions/runs/32462873685)
+success. PR [#389](https://github.com/wolfcasaba/strumsight/pull/389), squash
+`57d034be`, ADR [0383](docs/adr/0383-typography-and-text-scale-contract.md).
+Pontos következő Chapter 13 kör: **E13-R05 — Spacing, radius, elevation és
+surface primitives**.
+
 ## 🔧 [HEAL E08-R17/H4] Capability-axis mérce izolálva — PR #390 (2026-08-21, L388)
 
 Az E08-R17 független review-ja az `account → cloud` production-mutációval

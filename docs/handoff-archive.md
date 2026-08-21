@@ -6,6 +6,40 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E13-R04 — Tipográfia és text-scale resilience (2026-08-21)
+
+PR [#389](https://github.com/wolfcasaba/strumsight/pull/389), squash
+`57d034be`, [ADR 0383](adr/0383-typography-and-text-scale-contract.md).
+Az `SsTypography` immutable `ThemeExtension` a Chapter 13 teljes scale-jét
+névvel adja: Poppins viszi a chord-, score-, heading-, body- és CTA-szerepet,
+Montserrat tabular figures-szel a három metric szerepet. A legacy adapter a
+meglévő theme extensionöket és az `AppTheme`/`AppColors`/`AppPalette`
+forrásparitást megtartva regisztrálja a tipográfiát Dark Studio, Warm Light és
+High Contrast témában.
+
+Az `SsChordHeroText` egyetlen teljes chord labelt renderel, 80–128 logical px
+viewport-alapú design size-zal, `BoxFit.scaleDown` viselkedéssel, ellipszis és
+text-scale felülírás nélkül. A metric helper nem törő szóközzel tartja együtt
+az értéket és mértékegységet. A dokumentáció rögzíti a látható heading-
+hierarchiát és a screen-reader header használatot; a widgetmátrix hosszú magyar
+fixture-t mér 1.0, 1.3, 2.0 és 2.5 skálán.
+
+A független Sol review fix magasság-, ellipszis-, normál szóköz- és hiányzó
+theme-extension mutációval igazolta az acceptance-őröket. Egy valódi MAJOR
+leletet is talált: a chord hero semantics labelje a gyermek `Text` miatt
+`Cmaj7#11\nCmaj7#11` lett. A Terra javító commit `excludeSemantics: true`
+beállítással és exact egy-label teszttel zárta; visszarontáskor a cella ismét
+piros. Correctness **APPROVED**, security **PASS**.
+
+A H3 self-heal után három implementer-fázis scope-auditja zöld maradt. A
+végső, upstreamet is tartalmazó `55832396` csúcson Full Gate
+[32462896738](https://github.com/wolfcasaba/strumsight/actions/runs/32462896738)
+és Router CI
+[32462873685](https://github.com/wolfcasaba/strumsight/actions/runs/32462873685)
+success; a merge-záras kombinált gate 8/8 zöld. Implementer: Terra
+(`gpt-5.6-terra`), orchestrátor/reviewer: Sol (`gpt-5.6-sol`). Következő
+Chapter 13 kör: E13-R05.
+
 ## ✅ E08-R15 — Achievement UI és részletes evidence (2026-08-21)
 
 PR [#383](https://github.com/wolfcasaba/strumsight/pull/383), squash
