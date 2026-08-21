@@ -1,5 +1,29 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E99-R22 (GOV-16) KÉSZ — ismétlődő halt-osztályok őrteszt-főkönyve — PR #375, squash `ebff600c` (2026-08-20, L370)
+
+A stdlib-only, READ-ONLY `tools/halt-ledger.py` a verziókövetett
+`.pipeline/halted-*.txt` rekordokat halt-osztályonként összesíti, és a
+`docs/LESSONS.md` félkövér `**Őrteszt:**` hivatkozásai alapján `fedett`,
+`hiányzik` vagy egyszeri `nem jelölt` állapotot ad Markdown és JSON alakban.
+A figyelmeztetési határ pontosan két előfordulás; a CLI nem blokkol és valid
+futásnál mindig 0-val tér vissza. A pipeline záró rituáléja mostantól halt
+utáni leckénél gépi őrhivatkozást vagy kimondott hiányt kér.
+
+Implementer Terra (`gpt-5.6-terra`), reviewer/orchestrator Sol
+(`gpt-5.6-sol`). A független review APPROVED, 0/0/0/0 lelettel; a szóhatár
+egyszerű részszöveg-keresésre és a `>= 2` küszöb `>= 1`-re rontása célzottan
+piros lett, restore után 7/7 zöld. A végső, upstream-szinkronizált HEAD-en a
+scope-audit 5 útvonalat látott (1 generated/ignored review), sértés nélkül;
+a round-gate 6/6 zöld, a tooling gate 688 passed / 2 skipped / 606 subtest.
+Exact `ee053ba8`: Full Gate
+[32429315526](https://github.com/wolfcasaba/strumsight/actions/runs/32429315526)
+és Router CI
+[32429329475](https://github.com/wolfcasaba/strumsight/actions/runs/32429329475)
+success. Az E08-R13 már fut a másik sloton; utána a következő termékkör
+**E08-R14 — Achievement evaluator és projection**. A következő governance-kör
+**E99-R23** jelenleg `hold`.
+
 ## ✅ [HEAL E08-R13/H3] KÉSZ — az achievement-fordítások source-segment scope-ja helyreállt — PR #373 (2026-08-20, L369)
 
 Az E08-R13 brief 20–30 achievementhez új lokalizált cím-, leírás- és
@@ -4656,10 +4680,11 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**A következő SDD-lépés: E08-R12** (Streak UI V2 és recovery flow, SDD
-Chapter 9 —
-`docs/rounds/e08-r12-streak-ui-v2-and-recovery-flow.md`, engine a queue-ban
-`terra`). Friss sessionben indul; ez a session nem kezdi el.
+**Az aktív párhuzamos SDD-lépés: E08-R13** (Achievement domain és katalógus,
+SDD Chapter 9 — `docs/rounds/e08-r13-achievement-domain-and-catalog.md`,
+engine a queue-ban `terra`). Ezt a másik slot már viszi; ez a session nem
+érinti. Utána a következő termékkör **E08-R14 — Achievement evaluator és
+projection**. A governance-sáv következő sora, **E99-R23**, jelenleg `hold`.
 
 **Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
 a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)

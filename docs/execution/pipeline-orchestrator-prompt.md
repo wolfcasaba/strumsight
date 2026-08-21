@@ -583,7 +583,11 @@ frisset lát.
    pushban átírni: az a mért két-CI-futás-körönként hiba (4 perc 45 másodperc
    extra, mérve 2026-08-11…08-18).
 2. RTM (`docs/execution/06-…`) + ADR-hivatkozások, ha a kör érintette.
-3. `docs/LESSONS.md` — minden MÉRT tanulság, hivatkozható forrással.
+3. `docs/LESSONS.md` — minden MÉRT tanulság, hivatkozható forrással. Ha a kör
+   halt után zárul, az új lecke tartalmazzon egy
+   `**Őrteszt:** <útvonal>::<név>` sort, vagy egy kimondott
+   `**Őrteszt:** nincs — <indok>` sort; a régi leckék visszamenőleg nem
+   kötelesek erre.
 4. Git-notes: `git notes add -m "round={{ROUND}} verdict=pass tests=<n> lesson=<slug> engine={{ENGINE}}"`,
    majd `git push origin 'refs/notes/*'`.
 5. A frissen fetch-elt/resetelt `main` munkafán kötelezően futtasd a

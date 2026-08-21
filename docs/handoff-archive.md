@@ -6,6 +6,41 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E99-R22 (GOV-16) — Halt-főkönyv és őrteszt-konvenció (2026-08-20)
+
+PR [#375](https://github.com/wolfcasaba/strumsight/pull/375), squash
+`ebff600c`, [ADR 0315](adr/0315-halt-guard-ledger.md). A
+`tools/halt-ledger.py` a verziókövetett halt-rekordokat osztályonként
+számolja, a `docs/LESSONS.md` számozott szakaszaiban szóhatáron társítja a
+halt-kódot a gépi `**Őrteszt:**` sorokhoz, és Markdown/JSON jelentést ad. A
+legalább két előfordulású, őr nélküli osztály `hiányzik` figyelmeztetést kap;
+az egyszeri osztály `nem jelölt`, a dokumentált `nincs — <indok>` pedig
+kimondott döntésként fedett. A jelentés READ-ONLY és nem válik merge-kapuvá.
+
+A pre-flight a brief régi, 136/129-es eloszlását a tényleges verziókövetett
+10 rekordra javította (H-INDEP 4, H-GATEGUARD 2, H3 2, H8 1, H-NOSIGNAL 1).
+Az indító prompt ADR-írást kért, de az elfogadott ADR 0315 már a mainen volt,
+és a brief tiltotta a `docs/adr/**` módosítását; az örökség-szabály szerint a
+meglévő döntést használtuk fel. A Router CI D4 követelményét a már létező
+`tools/**` családi glob teljesíti workflow-módosítás nélkül.
+
+Implementer Terra (`gpt-5.6-terra`), reviewer/orchestrator Sol
+(`gpt-5.6-sol`), javító kör nélkül. A review két eldobható mutációja valódi
+piros bizonyítékot adott: `H3` egyszerű részszöveg-keresése tévesen az `H30`
+őrét vette át; a kettes küszöb egyre lazítása az egyszeri rekordot is
+`hiányzik` állapotba tette. Restore után a célzott suite 7/7 zöld. A review
+közben a main az E99-R23 pre-flighttal mozdult; normál `--no-ff` upstream
+merge után egy második friss klónban a round-gate 6/6 zöld, a tooling gate
+688 passed / 2 skipped / 606 subtest, a scope-audit 5 útvonal / 1
+generated-ignored / 0 sértés lett.
+
+Exact reviewed head `ee053ba8`: Full Gate
+[32429315526](https://github.com/wolfcasaba/strumsight/actions/runs/32429315526)
+és Router CI
+[32429329475](https://github.com/wolfcasaba/strumsight/actions/runs/32429329475)
+success. Az E08-R13 a másik sloton már fut; utána E08-R14 következik. Az
+E99-R23 governance-sor `hold` állapotban marad.
+
 ## ✅ E08-R12 — Streak UI V2 és recovery flow (2026-08-20)
 
 PR [#367](https://github.com/wolfcasaba/strumsight/pull/367), squash
