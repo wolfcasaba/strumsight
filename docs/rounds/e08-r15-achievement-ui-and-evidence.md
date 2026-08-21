@@ -271,4 +271,31 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+- **Módosított fájlok:** `achievement_tile.dart` a locked hidden elemet
+  generikus placeholderre és egyetlen kizárólagos semantics címkére zárja;
+  `achievements_screen.dart` caller-fed all/unlocked/in-progress/category
+  szűrőket és üres állapotot ad; `achievement_detail_screen.dart` exact ID
+  validációt, locked-hidden safe állapotot, completion-dátumot és a zárt,
+  aggregált evidence contractot ad. A `public.dart` a három presentation
+  contractot exportálja. Az EN/HU gamification-szegmensek és generált ARB
+  aggregátumok a UI-copyt tartalmazzák.
+- **Tesztbizonyíték:** a filter-mátrix locked hidden elemet kizár az
+  in-progress és category nézetből; a screen és detail semantics-cellák nem
+  tartalmazzák a hidden title/description/progress értékeit; a privacy-őr
+  tiltja az event/session ID-t, Analyze/timeline/waveform/payload mezőket és
+  a szabad szöveget az evidence contractból. A 1.99 / 2.0 / 2.01 / 3.0
+  text-scale cellák scrollolható ListView-t és kivételmentes futást mérnek.
+- **Lokalizáció:** `dart run tool/gen_l10n_segments.dart --write` → EN és HU
+  aggregátum írva; az `app_localizations*.dart` output ignore-olt maradt,
+  nem staged és nem commitolandó.
+- **Valódi-sértés próba:** a locked `Balanced practice week` címét ideiglenesen
+  `Opacity(0)` mögé tettem. A célzott A2 teszt piros lett, mert a title
+  widgetként megjelent; a privacy-safe `Semantics` + `ExcludeSemantics` fa
+  visszaállítása után a célzott suite ismét zöld.
+- **Ellenőrzések:** `flutter test
+  test/features/gamification/presentation/achievements_screen_test.dart` →
+  13/13 zöld; `tools/round-gate.sh
+  test/features/gamification/presentation/achievements_screen_test.dart` →
+  zöld (format, analyze, célzott test, architecture).
+
 ## 11. Review — a Claude tölti ki

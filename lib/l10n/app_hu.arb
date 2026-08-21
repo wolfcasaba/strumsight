@@ -13,12 +13,46 @@
   "achievementBalancedPracticeWeekDescription": "Teljesíts mért gyakorlási, dal- és elemzési alkalmat.",
   "achievementBalancedPracticeWeekSemantics": "Eredmény: kiegyensúlyozott mért gyakorlóhét.",
   "achievementBalancedPracticeWeekTitle": "Kiegyensúlyozott gyakorlóhét",
+  "achievementCategoryAccessibilityNeutral": "Minden tanulónak",
+  "achievementCategoryAnalysis": "Elemzés",
+  "achievementCategoryChords": "Akkordok",
+  "achievementCategoryConsistency": "Következetesség",
+  "achievementCategoryExploration": "Felfedezés",
+  "achievementCategoryPersonalBest": "Egyéni csúcs",
+  "achievementCategoryPractice": "Gyakorlás",
+  "achievementCategoryRhythm": "Ritmus",
+  "achievementCategorySongs": "Dalok",
+  "achievementCategoryTechnique": "Technika",
+  "achievementEmptyBody": "A mért gyakorlási mérföldköveid itt jelennek meg.",
+  "achievementEmptyTitle": "Még nincs eredmény",
+  "achievementEvidenceCompletionRecorded": "Ez a mért mérföldkő teljesült.",
+  "achievementEvidenceMeasuredProgress": "Mért haladás: {current} / {target}.",
+  "@achievementEvidenceMeasuredProgress": {
+    "placeholders": {
+      "current": {
+        "type": "num"
+      },
+      "target": {
+        "type": "num"
+      }
+    }
+  },
+  "achievementEvidenceTitle": "Miért itt tartasz",
+  "achievementEvidenceUnavailable": "Még nem érhető el mért bizonyíték.",
+  "achievementFilterAll": "Összes",
+  "achievementFilterCategory": "Kategória",
+  "achievementFilterInProgress": "Folyamatban",
+  "achievementFilterUnlocked": "Feloldott",
   "achievementFirstValidSessionDescription": "Teljesítsd az első érvényes gyakorlásodat.",
   "achievementFirstValidSessionSemantics": "Eredmény: első érvényes gyakorlás.",
   "achievementFirstValidSessionTitle": "Első érvényes alkalom",
+  "achievementHiddenBody": "Gyakorolj tovább az eredmény felfedéséhez.",
+  "achievementHiddenTitle": "Titkos eredmény",
   "achievementLegacyFirstStepDescription": "Egy korábbi katalógus megtartott első alkalom mérföldköve.",
   "achievementLegacyFirstStepSemantics": "Megtartott eredmény: első alkalom mérföldköve.",
   "achievementLegacyFirstStepTitle": "Első lépés",
+  "achievementNotFoundBody": "Ez az eredmény nem érhető el.",
+  "achievementNotFoundTitle": "Az eredmény nem található",
   "achievementPlanFirstBlockDescription": "Teljesíts egy mért tervblokkot.",
   "achievementPlanFirstBlockSemantics": "Eredmény: első mért tervblokk.",
   "achievementPlanFirstBlockTitle": "Első tervblokk",
@@ -37,6 +71,14 @@
   "achievementPracticeStarterDescription": "Teljesíts öt érvényes gyakorlást.",
   "achievementPracticeStarterSemantics": "Eredmény: öt érvényes gyakorlás.",
   "achievementPracticeStarterTitle": "Gyakorláskezdő",
+  "achievementProgress": "Haladás: {percent}%",
+  "@achievementProgress": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "achievementRhythmBuilderOneDescription": "Érd el a 0,7-os mért gyakorlási pontszámot.",
   "achievementRhythmBuilderOneSemantics": "Eredmény: 0,7-os mért gyakorlási pontszám.",
   "achievementRhythmBuilderOneTitle": "Ritmusépítő I",
@@ -61,15 +103,49 @@
   "achievementSourceExplorerDescription": "Használj három különböző mért aktivitásforrást.",
   "achievementSourceExplorerSemantics": "Eredmény: három különböző mért aktivitásforrás.",
   "achievementSourceExplorerTitle": "Forrás-felfedező",
+  "achievementTileSemanticsInProgress": "{description}. {percent}% kész.",
+  "@achievementTileSemanticsInProgress": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "achievementTileSemanticsUnlocked": "{description}. {percent}% kész. Feloldva: {date}.",
+  "@achievementTileSemanticsUnlocked": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "achievementTutorFirstCheckinDescription": "Teljesíts egy mért tanári bejelentkezést.",
   "achievementTutorFirstCheckinSemantics": "Eredmény: első mért tanári bejelentkezés.",
   "achievementTutorFirstCheckinTitle": "Első tanári bejelentkezés",
+  "achievementUnlockedOn": "Feloldva: {date}",
+  "@achievementUnlockedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "achievementVisionFirstObservationDescription": "Teljesíts egy mért kamerás megfigyelést.",
   "achievementVisionFirstObservationSemantics": "Eredmény: első mért kamerás megfigyelés.",
   "achievementVisionFirstObservationTitle": "Első kamerás megfigyelés",
   "achievementXpFirstHundredDescription": "Érj el 100 mért összesített XP-t egy gyakorlási eseményből.",
   "achievementXpFirstHundredSemantics": "Eredmény: 100 mért összesített XP gyakorlásból.",
   "achievementXpFirstHundredTitle": "Első száz XP",
+  "achievementsTitle": "Eredmények",
   "actionShare": "Megosztás",
   "adaptiveSuggestionApply": "Alkalmazás",
   "adaptiveSuggestionChordError": "A következő próbálkozásnál figyelj az akkordváltásokra.",

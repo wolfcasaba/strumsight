@@ -133,5 +133,63 @@
   "achievementXpFirstHundredSemantics": "Eredmény: 100 mért összesített XP gyakorlásból.",
   "achievementLegacyFirstStepTitle": "Első lépés",
   "achievementLegacyFirstStepDescription": "Egy korábbi katalógus megtartott első alkalom mérföldköve.",
-  "achievementLegacyFirstStepSemantics": "Megtartott eredmény: első alkalom mérföldköve."
+  "achievementLegacyFirstStepSemantics": "Megtartott eredmény: első alkalom mérföldköve.",
+  "achievementsTitle": "Eredmények",
+  "achievementFilterAll": "Összes",
+  "achievementFilterUnlocked": "Feloldott",
+  "achievementFilterInProgress": "Folyamatban",
+  "achievementFilterCategory": "Kategória",
+  "achievementCategoryConsistency": "Következetesség",
+  "achievementCategoryPractice": "Gyakorlás",
+  "achievementCategorySongs": "Dalok",
+  "achievementCategoryRhythm": "Ritmus",
+  "achievementCategoryChords": "Akkordok",
+  "achievementCategoryTechnique": "Technika",
+  "achievementCategoryAnalysis": "Elemzés",
+  "achievementCategoryExploration": "Felfedezés",
+  "achievementCategoryPersonalBest": "Egyéni csúcs",
+  "achievementCategoryAccessibilityNeutral": "Minden tanulónak",
+  "achievementHiddenTitle": "Titkos eredmény",
+  "achievementHiddenBody": "Gyakorolj tovább az eredmény felfedéséhez.",
+  "achievementProgress": "Haladás: {percent}%",
+  "@achievementProgress": {
+    "placeholders": {
+      "percent": {"type": "int"}
+    }
+  },
+  "achievementUnlockedOn": "Feloldva: {date}",
+  "@achievementUnlockedOn": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "achievementTileSemanticsInProgress": "{description}. {percent}% kész.",
+  "@achievementTileSemanticsInProgress": {
+    "placeholders": {
+      "description": {"type": "String"},
+      "percent": {"type": "int"}
+    }
+  },
+  "achievementTileSemanticsUnlocked": "{description}. {percent}% kész. Feloldva: {date}.",
+  "@achievementTileSemanticsUnlocked": {
+    "placeholders": {
+      "description": {"type": "String"},
+      "percent": {"type": "int"},
+      "date": {"type": "String"}
+    }
+  },
+  "achievementEmptyTitle": "Még nincs eredmény",
+  "achievementEmptyBody": "A mért gyakorlási mérföldköveid itt jelennek meg.",
+  "achievementNotFoundTitle": "Az eredmény nem található",
+  "achievementNotFoundBody": "Ez az eredmény nem érhető el.",
+  "achievementEvidenceTitle": "Miért itt tartasz",
+  "achievementEvidenceMeasuredProgress": "Mért haladás: {current} / {target}.",
+  "@achievementEvidenceMeasuredProgress": {
+    "placeholders": {
+      "current": {"type": "num"},
+      "target": {"type": "num"}
+    }
+  },
+  "achievementEvidenceCompletionRecorded": "Ez a mért mérföldkő teljesült.",
+  "achievementEvidenceUnavailable": "Még nem érhető el mért bizonyíték."
 }

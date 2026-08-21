@@ -38,5 +38,8 @@ export 'infrastructure/default_reward_policy.dart';
 export 'infrastructure/default_streak_policy.dart';
 export 'infrastructure/default_achievement_catalog.dart';
 export 'presentation/screens/streak_detail_screen.dart';
+export 'presentation/screens/achievement_detail_screen.dart';
+export 'presentation/screens/achievements_screen.dart';
+export 'presentation/widgets/achievement_tile.dart';
 export 'presentation/widgets/streak_status_card.dart';
 export 'presentation/widgets/weekly_consistency_card.dart';
