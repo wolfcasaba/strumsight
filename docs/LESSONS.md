@@ -15473,3 +15473,54 @@ egyetlen jelzőbitje bemondásra.
 mércehiba; a `tools/scope-audit.py` maga helyesen mérte azt, amit kapott
 (egy valódi untracked fájlt), a hiba az orchestrátor saját munkafa-
 higiéniájában volt.
+
+## L413 — Az L411 minta egy láncszemmel mélyebben: egy migráció-láncoló kör MÁSODIK cross-round tesztje is a `allowed_paths`-on kívül esett, mert az L411 fixe hardcode-olt maradt (E09-R03, self-heal H3, 2026-08-22)
+
+**Mért gyökérok.** Az E09-R02 self-heal ([[L411]]) a `backend/tests/
+test_migrations.py::test_downgrade_one_revision_drops_only_community_tables`
+tesztet a KÉT-migrációs világra ("`downgrade -1` a fejtől == a Community
+táblák eltűnnek, `users`/`user_settings` marad") javította ki — konkrét
+táblaneveket és egy `-1` relatív lépésszámot hardcode-olva, NEM egy
+lánc-agnosztikus ellenőrzést írva. Amikor az E09-R03 a saját, helyes
+migráció-láncolási döntésével (`e09_r03_0003.down_revision =
+"e09_r02_0002"`) egy HARMADIK lánctagot adott a fejhez, ugyanaz a minta
+törvényszerűen megismétlődött, és egy MÁSODIK fájlban is: a
+`backend/tests/community/test_profile_schema.py` két teszttje
+(`test_alembic_upgrade_head_applies_community_migration` — pinned
+`set(script_heads) == {"e09_r02_0002"}`; `test_alembic_downgrade_
+drops_community_tables` — szintén `downgrade -1`-re épült) SZINTÉN piros
+lett, és SZINTÉN nem volt az `allowed_paths`-on (`.pipeline/HALTED`,
+halt=H3, halted_at=2026-08-22T14:45:39+00:00). Az implementer (minimax,
+branch `minimax/e09-r03-public-identity-and-handle-policy`, HEAD `3cca3ddd`)
+helyesen `stopped`-öt jelzett a §10.4-ben pontosan diagnosztizálva mindhárom
+törött asszerciót, ahelyett hogy a listát csendben tágította vagy a
+teszteket felügyelet nélkül átírta volna. Reprodukálva függetlenül: `cd
+backend && .venv/bin/python -m pytest tests/test_migrations.py
+tests/community/test_profile_schema.py -q` → 3 FAILED.
+
+**Szabály.** Egy migráció-LÁNCOLÓ kör self-heal-je NE a következő
+láncszemre optimalizált, ismét hardcode-olt javítást adjon — az csak
+elhalasztja a UGYANEZT a halt-ot a KÖVETKEZŐ láncoló körre (itt: E09-R04+,
+~29 hátralévő Epic-9 kör). A tartós javítás lánc-toleráns ellenőrzésre vált:
+(1) a "head tartalmazza X-et ŐSKÉNT" mintát (`ScriptDirectory.
+walk_revisions(heads[0], "base")`-szal bejárva) a "head == X" pinned
+assertion helyett; (2) egy migráció REVERZIBILITÁSÁNAK próbáját a
+`downgrade(config, "<explicit cél-revízió>")` explicit hívással a
+`downgrade(config, "-1")` relatív hívás helyett, mert a "-1" jelentése a
+lánc hosszától függ, az explicit cél-revízió nem; (3) egy "egy lépés
+downgrade a fejtől" próbát a tábla-HALMAZ változásának mérésével (`tables_
+after < tables_at_head` + a bázis-táblák jelenléte), NEM a legutóbb
+hozzáadott tábla NEVÉNEK kimondásával, mert az minden körben más. A
+pre-flight checklistje (L411 szabálya) ettől függetlenül érvényben marad —
+ez a lecke a JAVÍTÁS ALAKJÁT pontosítja, nem a felismerés szükségességét.
+
+**Őrteszt:** `tools/tests/test_e09_r03_migration_chain_test_scope.py` —
+`audit_legacy_scope`-pal bizonyítja, hogy a valós E09-R03 brief
+`allowed_paths`-a MOST fedi mindkét fájlt
+(`backend/tests/test_migrations.py` és
+`backend/tests/community/test_profile_schema.py`), és hogy egy szomszédos,
+ehhez a körhöz nem tartozó backend-teszt fájl (`test_auth.py`) továbbra is
+hatókörön kívül marad — a self-heal fix előtti brief-tartalommal
+függetlenül reprodukálva mindkét fájlra `ok=False`, a fix utánival
+`ok=True`. Részletek: `docs/rounds/e09-r03-public-identity-and-handle-
+policy.md` §0.1, `.pipeline/HALTED` (E09-R03, H3, 2026-08-22).
