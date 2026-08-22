@@ -266,13 +266,18 @@ branch-en.
 #### Mit készített
 
 * **F1 (BLOCKER, megoldva):** a `test_swap_unique_constraint_breaks_a2`
-  párhuzamossági teszt determinisztikussá téve `threading.Barrier(2)`-vel
-  — mindkét szál `barrier.wait()`-et hív közvetlenül a
-  `service_follow(...)` előtt, így egyszerre lépnek be az
-  existence-check → INSERT ablakba. A commitolt kód a `§6.1` szándékát
-  tartja: a `community_follows` UNIQUE constraint eltávolításakor a
-  konkurens hívás KÉT sort hoz létre (a service layer re-read sem
-  találja meg a másikat, mert nincs UNIQUE).
+  párhuzamossági teszt determinisztikussá téve egy teszt-oldali
+  monkey-patch-csel, ami a `follow_service._existing_follow` függvényt
+  cseréli le egy Barrier-vel szinkronizált verzióra. A `writer()`
+  szintű Barrier nem volt elég (a service 3 SELECT-et futtat, mielőtt
+  INSERT-elne; az első szál végigment az egész existence-check →
+  INSERT → commit úton, mire a második egyáltalán a saját
+  existence-check-jéhez ért — ezért a második `_existing_follow`
+  már megtalálta az első sorát és short-circuit-ölt). A Barrier a
+  `_existing_follow` belsejébe téve mindkét szálat ugyanannál a
+  SQL-döntési pontnál tartja, így mindkettő INSERT-el, és UNIQUE
+  constraint hiányában mindkét INSERT sikeres → 2 sor a táblában
+  (a §6.1 valódi-sértés cella determinisztikusan piros).
 * **F2 (MAJOR, megoldva):** a `get_followers` és `get_following`
   endpointok felvettek egy `current_user: CurrentUser` paramétert — a
   router minden más mutáló végpontjával konzisztensen. A láthatósági
@@ -299,14 +304,25 @@ branch-en.
 A teljes javító kör 1 diff: 5 commit a branch-en, minden lelet
 konkrétan azonosítható commit message-ben.
 
-#### F1 döntés — Barrier (a preferencia)
+#### F1 döntés — `_existing_follow`-ba injektált Barrier (a preferencia)
 
 A review két utat kínált: (a) Barrier-rel determinisztikussá tenni a
 tesztet, vagy (b) kivenni a suite-ból és egyszeri manuális próbaként
-dokumentálni. Az (a) utat választottam, mert erősebb védelem (permanens
-regressziós őr) és a service layer re-read mintája (a §6 invariáns
-legszűkebb bizonyítéka) megmarad a CI-ban. A teszt most 15 egymást
-követő futtatásból 15/15 zöld (l. lent).
+dokumentálni. Az (a) utat választottam, de a service_follow belsejébe
+kellett a Barrier, nem a writer()-be — az utóbbi nem tudja garantálni,
+hogy a két szál a létezés-ellenőrzés pillanatában együtt legyen, mert
+a service_follow előtte 3 SELECT-et futtat (follower, target,
+existence_check). A megoldás: a teszt monkey-patch-csel kicseréli
+`follow_service._existing_follow`-t egy Barrier-szinkronizált verzióra,
+amiben mindkét szál a `barrier.wait()`-nél várakozik, MINDKETTŐ
+meghívja az eredeti függvényt (mindkettő `None`-t lát, mert a Barrier
+PONT az SQL-döntés előtt tartja őket), MINDKETTŐ továbblép az INSERT-re.
+UNIQUE constraint nélkül mindkét INSERT sikeres, count == 2
+determinisztikusan.
+
+15 egymást követő futtatásból 15/15 zöld (l. lent).
+
+#### §6.1 valódi-sértés próba — ténylegesen elvégzett proof
 
 #### §6.1 valódi-sértés próba — ténylegesen elvégzett manuális proof
 

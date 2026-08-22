@@ -469,21 +469,36 @@ def test_swap_unique_constraint_breaks_a2(tmp_path, monkeypatch):
 
         errors: list[Exception] = []
 
-        # Barrier(2) — both threads must arrive here before either
-        # proceeds into ``service_follow``. Without this, the OS
-        # scheduler may serialize the two starts enough that the
-        # first thread commits before the second even opens a
-        # session, and the race window collapses. With the barrier,
-        # both writers enter the existence-check → INSERT window at
-        # (as close as Python can guarantee) the same instant.
-        # Deterministically produces two rows when the UNIQUE
-        # constraint is absent (the §6.1 valódi-sértés cell).
+        # Barrier(2) injected INTO the existence-check — synchronises
+        # both threads at the moment service_follow() decides whether
+        # to INSERT or short-circuit. A Barrier at the writer() entry
+        # (the previous attempt) is too early: one thread can still
+        # finish the entire existence-check → INSERT → commit path
+        # BEFORE the second thread even GETs to the existence-check,
+        # so the second thread's check returns the first thread's
+        # committed row and the function short-circuits — count == 1
+        # even with the constraint removed. By moving the Barrier
+        # INSIDE the existence-check helper itself, both threads
+        # are guaranteed to be at the same SQL decision point.
+        # The check then runs for both, both see no row (the check
+        # is the synchronous barrier point), both INSERT, both commit
+        # (no UNIQUE constraint in this test's schema), count == 2.
+        from app.community.services import follow_service as _follow_service_module
+
+        _real_existing_follow = _follow_service_module._existing_follow
         barrier = threading.Barrier(2)
+
+        def _synced_existing_follow(db, *, follower_id, followed_id):
+            barrier.wait()
+            return _real_existing_follow(
+                db, follower_id=follower_id, followed_id=followed_id
+            )
+
+        _follow_service_module._existing_follow = _synced_existing_follow
 
         def writer():
             try:
                 with factory() as db:
-                    barrier.wait()
                     service_follow(
                         db,
                         follower_public_id=a_id,
@@ -494,16 +509,19 @@ def test_swap_unique_constraint_breaks_a2(tmp_path, monkeypatch):
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)
 
-        # Two threads race through the existence-check into the
-        # INSERT. With the constraint present, one fails (the
-        # service layer catches IntegrityError and translates to
-        # success). With the constraint removed, both succeed and
-        # land two rows.
-        threads = [threading.Thread(target=writer) for _ in range(2)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        try:
+            # Two threads race through the existence-check into the
+            # INSERT. With the constraint present, one fails (the
+            # service layer catches IntegrityError and translates to
+            # success). With the constraint removed, both succeed and
+            # land two rows.
+            threads = [threading.Thread(target=writer) for _ in range(2)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        finally:
+            _follow_service_module._existing_follow = _real_existing_follow
 
         # No errors expected — the service translates the
         # IntegrityError to a re-read success path. With the
