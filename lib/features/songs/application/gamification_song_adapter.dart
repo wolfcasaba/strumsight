@@ -393,6 +393,7 @@ class GamificationSongAdapter {
       final policyDecision = _rewardPolicy.decide(policyRequest, policyHistory);
       final entry = _buildLedgerEntry(
         eventId: eventId,
+        hashedSong: practiceKey,
         occurredAt: signal.occurredAt,
         points: policyDecision.points,
         policyVersion: policyDecision.policyVersion,
@@ -453,6 +454,7 @@ class GamificationSongAdapter {
       final policyDecision = _rewardPolicy.decide(policyRequest, policyHistory);
       final entry = _buildLedgerEntry(
         eventId: eventId,
+        hashedSong: practiceKey,
         occurredAt: signal.occurredAt,
         points: policyDecision.points,
         policyVersion: policyDecision.policyVersion,
@@ -501,6 +503,7 @@ class GamificationSongAdapter {
 
   RewardLedgerEntry _buildLedgerEntry({
     required String eventId,
+    required String hashedSong,
     required DateTime occurredAt,
     required ExperiencePoints points,
     required int policyVersion,
@@ -512,8 +515,11 @@ class GamificationSongAdapter {
         points.improvementXp +
         points.diversityXp;
     final totalXp = points.totalXp;
+    // The ledgerId carries the hashed song id (NOT the raw songId.value)
+    // so the ledger is auditable: an auditor reading the persisted row can
+    // verify the privacy boundary without seeing the song title (A5).
     return RewardLedgerEntry(
-      ledgerId: 'song-$eventId-$totalXp',
+      ledgerId: 'song/$hashedSong/$eventId/$totalXp',
       sourceEventId: eventId,
       createdAt: occurredAt,
       schemaVersion: rewardLedgerEntrySchemaVersion,
