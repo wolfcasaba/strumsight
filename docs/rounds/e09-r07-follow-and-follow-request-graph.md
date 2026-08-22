@@ -111,9 +111,9 @@ MÉRTEN azt találta, hogy NEM igényel bővítést, l. §0.0 1. pont) és `adr/
 kivétel fordításnál követ). `--corpus lessons,halts --top 5 "self-follow
 database constraint race concurrent unique index"` → nincs pontosan
 egyező korábbi halt/lecke erre a konkrét race-mintára (a legközelebbi
-találatok más körök `merged` jelzései, tartalmilag nem relevánsak) — **nincs
-releváns előzmény lelet ezen az ágon**, az ADR 0397/0398 minta-precedens
-fedezi a kockázatot.
+találatok más körök `merged` jelzései, tartalmilag nem relevánsak) —
+**nincs releváns előzmény** lelet ezen az ágon, az ADR 0397/0398
+minta-precedens fedezi a kockázatot.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
