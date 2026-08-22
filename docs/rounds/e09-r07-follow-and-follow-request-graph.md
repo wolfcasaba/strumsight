@@ -38,6 +38,7 @@ allowed_paths = [
   "backend/tests/community/test_follow_service.py",
   "test/features/community/application/relationship_controller_test.dart",
   "docs/rounds/e09-r07-follow-and-follow-request-graph.md",
+  "test/ui/ui_inventory_test.dart",
 ]
 gate_tests = [
   "test/features/community/application/relationship_controller_test.dart"
@@ -128,6 +129,17 @@ Lezáró jelzés nélkül a kör bukott. **Listán kívüli fájl kellene → `s
 és a kimenet a brief-revízió kérése, nem az `allowed_paths` csendes tágítása.
 Meglévő, ma zöld teszt elbukása → `blocked`, nem a teszt átírása.
 
+## 0.0.9 Javító kör 2 — `test/ui/ui_inventory_test.dart` (Claude, 2026-08-22)
+
+A merge SHA-n dispatch-elt `full-gate.yml` (run `32602029738`) a TELJES
+suite-tal bukott: `test/ui/ui_inventory_test.dart` egy MEGLÉVŐ, ezen a körön
+kívüli gate-teszt, ami egy kemény kódolt production-screen-számlálót ad
+(`hasLength(66)`) — a kör ÚJ `lib/features/community/presentation/screens/
+followers_screen.dart` fájlja miatt a tényleges hossz **67**. Ugyanaz a
+mintázat, mint az E09-R06 F9 lelet (HANDOFF E09-R06 bejegyzés — ott is ez a
+fájl, ugyanez az ok). A `test/ui/ui_inventory_test.dart` ezért SZŰKEN,
+KIZÁRÓLAG erre az egy számra bekerül az `allowed_paths`-ra — semmi más ezen a
+fájlon nem módosulhat.
 ## 1. Cél
 
 Idempotens, privacy-kompatibilis követési rendszer: public profilnál azonnali follow, private profilnál explicit accept/decline lifecycle.
