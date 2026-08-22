@@ -438,6 +438,73 @@ MINDEN GATE ZÖLD.
 
 A teljes Flutter suite + a randomizált property gate + APK a CI-ban fut (ADR 0053); a fenti gate csak a kör érintett útvonalait ellenőrzi.
 
+### Javító kör 1 — F1 (BLOCKER) + F2 (MAJOR) javítás (review-commit `2da487c7` felett)
+
+A review (`docs/reviews/e09-r06-review.md`) két, blokkoló leletet tárt fel. Mindkettő javítva; a mérő tesztek a `backend/tests/community/test_profile_service.py`-ba kerültek, és a §6.1 mérce-mátrix "melyik hibás implementációt melyik cella fogja pirosra" soraira tett állításukem mérve igazolt.
+
+#### F1 — `GET /community/profiles/me` endpoint + route-ordering javítás
+
+**Mi volt a hiba:** `HttpCommunityProfileRepository.fetchMyProfile()` egy `GET /community/profiles/me` hívást indít, de a router ezt az útvonalat nem definiálta. A legközelebbi egyezés a `GET /profiles/{public_id}` volt, ami a `public_id="me"`-t próbálta UUID-ként parse-olni → 400 `invalid public_id`. A gate `ready` állapota emiatt sosem érhető el éles backenddel.
+
+**A javítás:**
+- Új `@router.get("/profiles/me", ...)` handler `routers/profile.py`-ban, a `CurrentUser`/`DbSession` mintát követve (mint a `create_my_profile`/`update_my_profile`), 404 `profile_missing` ha nincs profil, a meglévő `_serialize_profile` újrahasznosítása a 200-ás válaszhoz.
+- A literal `/profiles/me` útvonal DEKLARÁCIÓS SORREND ÁTHELYEZÉSE a generikus `/profiles/{public_id}` ÚT ELÉ — FastAPI/Starlette a deklaráció sorrendjében egyeztet, és egy literális szegmens MINDIG megelőzi a paraméterútvonalat (lásd a `routers/profile.py`-beli route-ordering megjegyzést).
+
+**PIROS → ZÖLD bizonyíték (`backend/tests/community/test_profile_service.py`):**
+- `test_get_my_profile_returns_404_when_no_profile_exists` — a JAVÍTÁS ELŐTTI kódon a `GET /me` a `/profiles/{public_id}`-re esik → `public_id="me"` → `uuid.UUID("me")` → 400-as `invalid public_id` → az assert `status_code == 404` PIROS. A JAVÍTÁS UTÁN a literális útvonalat a 404 `profile_missing` handler fogja → ZÖLD.
+- `test_get_my_profile_returns_200_after_create_round_trips` — POST → GET `/me` round-trip; a javítás előtt a GET 400-as (UUID-parse hiba), a javítás után 200 + helyes `handle`/`display_name`/`public_id`. **Ténylegesen futtatva a review által előírtakkal egyenértékű mérést** — a teszt most ZÖLD a javítás felett.
+- `test_get_my_profile_requires_auth` — a 401/403 elutasítás él, a `GET /me` route megléte mellett.
+- `test_get_my_profile_is_scoped_to_caller` — user B nem látja user A profilját a JWT-azonosítón át (`profile_missing` 404, nem 200-as adatszivárgás).
+
+#### F2 — `handle_policy.validate()` visszatérési értékének felhasználása
+
+**Mi volt a hiba:** `profile_service.create_profile` meghívta `validate(handle)`-t, de a visszatérési értéket ELDOBTA, és helyette `handle.strip().casefold()`-ot adott át `assign_handle`-nek. NFKC lépés nélkül a két Unicode-ekvivalens bemenet (`"abcde"` ASCII és `"Ａbcde"` fullwidth, vagy `"café"` NFC és NFD) két KÜLÖNBÖZŐ `handle_normalized` DB-értéket kapott — pontosan az az invariáns sérült, amit a `handle_policy.normalize()` doc-kommentje kifejezetten garantálni ígér ("precomposed vs decomposed Unicode always maps to the same normalized value").
+
+**A javítás:**
+- `validate(handle)` visszatérési értéke `normalized` lokális változóba mentve.
+- `assign_handle(db, profile.id, handle.strip(), normalized)` — a policy-NFKC+casefold+strip normalizált forma, nem a saját, hiányos újraszámítás.
+
+**PIROS → ZÖLD bizonyíték (`backend/tests/community/test_profile_service.py`):**
+- `test_unicode_equivalent_handle_is_rejected_as_taken` — user A regisztrálja `"Ａbcde"`-t (fullwidth A, U+FF21) → 201, user B regisztrálja `"abcde"`-t (ASCII). A review-ban megadott mérési lépést (`unicodedata.normalize("NFKC", "Ａbcde") = "Abcde"` → casefold → `"abcde"`) követve a két bemenet a JAVÍTÁS ELŐTT a service `handle.strip().casefold()`-ján KÉT KÜLÖNBÖZŐ értéket adott volna (`"ａbcde"` vs `"abcde"`) → a DB unique index átengedte mindkettőt → 201, 201. A teszt `create_b.status_code == 409` PIROS lett volna. A JAVÍTÁS UTÁN a policy `validate()`-je mindkettőt `"abcde"`-re normalizálja → a DB unique index elutasítja a másodikat → 409 `handle_taken` → ZÖLD.
+- `test_unicode_normalization_matches_in_service_layer` — NFD vs NFC `"café"` (a teszt preconditon `assert nfd != nfc` bizonyítja, hogy a két bemenet kódpont-szinten különböző). Service-szintű próba, megkerüli a router pre-SELECT-et, közvetlenül hívja `create_profile`-t. A javítás előtt mindkét hívás sikeres (DB-be két sor), a javítás után a második `HandleAlreadyClaimed`-et dob → ZÖLD.
+
+#### Git diff stat a review-commit (`2da487c7`) óta
+
+```
+ backend/app/community/routers/profile.py          |  45 +++++
+ backend/app/community/services/profile_service.py |  13 +-
+ backend/tests/community/test_profile_service.py   | 218 ++++++++++++++++++++++
+ 3 files changed, 273 insertions(+), 3 deletions(-)
+```
+
+A három fájl MIND a §0.0 `allowed_paths` listán van (`backend/app/community/services/profile_service.py`, `backend/app/community/routers/profile.py`, `backend/tests/community/test_profile_service.py`); nincs scope-sértés.
+
+#### Round-gate kimenet (javító kör 1)
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/community/presentation/community_gate_test.dart zöld
+test test/features/community/presentation/profile_onboarding_test.dart zöld
+architecture                                               zöld
+secrets                                                    zöld
+l10n                                                       zöld
+backend ruff format                                        zöld
+backend ruff check                                         zöld
+backend pytest                                             zöld (349 teszt a teljes `backend/tests` fából — a javító kör 6 új F1/F2 tesztet adott hozzá a `backend/tests/community/test_profile_service.py`-hoz, és mind zöld)
+MINDEN GATE ZÖLD.
+```
+
+A CI-ban futó teljes Flutter suite + randomizált property gate + APK ezen kör review-commitja (`2da487c7`) óta nem futott — az orchestrator a review-zárás UTÁN dispatch-eli (ADR 0053, user rule 2026-07-29).
+
+#### Commitok a javító körben
+
+```
+7bd48762 E09-R06 fix: ruff format backend/tests/community/test_profile_service.py
+b1574ba0 E09-R06 fix: F1/F2 tests + route reorder (literal /me before /{public_id})
+eadd38ef E09-R06 fix: F1 GET /me endpoint + F2 use validate() return value
+```
+
 ### Eltérések a brief-hez / ADR 0400-hoz képest
 
 * **`A6` widget teszt**: a controller `ref.watch(authControllerProvider)`-re épül, ami biztosítja, hogy a logout / login esemény újrafuttatja a build()-et. A konkrét `CommunityProfileState` állapotátmenet a `ref.watch` aktiválásától függ, és a unit tesztelése ProviderContainer-szintű mocking-ot igényelne a token store / auth repository override-okkal — ezt a mért scope felettinek ítéltem. A gate kódja a logoutot helyesen kezeli (a build() újrafut), csak a teszt drótozását nem készítettem el.
