@@ -61,6 +61,51 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E09-R02 KÉSZ — Community backend modul és első Alembic migráció — PR [#410](https://github.com/wolfcasaba/strumsight/pull/410), squash `4fffe20e` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) MÁSODIK KÖRE KÉSZ.** A `backend/app/community/`
+modulhatár és az első Community migráció (`community_profiles` +
+`community_privacy_settings`, `e09_r02_0002` láncolva `e01_r12_0001`-re)
+létrejött: BigInteger belső PK + `Uuid` public_id, DB-szintű 1:1 unique
+constraint mindkét táblán, whitelist-only Pydantic válasz-séma (a belső `id`
+sosem szivárog), `build_community_router(settings)` factory +
+`community_readiness_failure()` — mindkettő ÖNÁLLÓAN a `community/` modulban,
+`main.py` érintetlen marad (ADR 0396 §3–4, következő kör dolga a bekötés).
+
+A kör két szakaszban futott: az első implementer-futás (`05fa154d`) H3-mal
+állt meg, mert a kör saját migráció-láncolási döntése szükségszerűen
+elrontotta a MEGLÉVŐ `test_migrations.py::test_downgrade_one_revision_removes_application_schema`
+egyetlen-migrációs feltevését, a fájl pedig nem volt az `allowed_paths`-on — lásd
+[[HEAL E09-R02/H3]] (PR #409). Ez a session a self-healt main-ről a
+munkapéldányba merge-elte, majd az implementer (minimax) elvégezte a §0.1
+szerinti tesztfelbontást: `test_downgrade_one_revision_drops_only_community_tables`
+(egy lépés a fejtől — csak a Community táblák tűnnek el) és
+`test_downgrade_to_base_removes_application_schema` (downgrade a base-ig — a
+`users`/`user_settings` is eltűnik).
+
+Független review (`docs/reviews/e09-r02-review.md`): APPROVED, 0
+BLOCKER/MAJOR/MINOR, 1 eljárási NOTE. A reviewer izolált `/tmp` klónban
+ÖNÁLLÓAN futtatta újra mind a 9 gate-cellát (zöld), a scope-auditot a
+folytatás tényleges bázisán (`9be8e613`, a self-heal beépítése után — 2
+változott fájl, 0 sértés), és elvégezte a kötelező A7 valódi-sértés próbát
+(`user_id` unique constraint eltávolítva →
+`test_duplicate_profile_for_same_user_is_rejected_by_db` PIROSRA vált →
+visszaállítva, 17/17 zöld). Az orchestrátor a saját munkakönyvtár-hibáját
+(egy ideiglenes prompt-fájl a megosztott worktree-ben, ami hamis
+`scope_audit=VIOLATION`-t okozott a `mm-round.sh` beépített auditán) felismerte
+és javította a review előtt — nem érintette a kód minőségét.
+
+CI: Full Gate
+[32575935889](https://github.com/wolfcasaba/strumsight/actions/runs/32575935889)
+és Router CI
+[32576081884](https://github.com/wolfcasaba/strumsight/actions/runs/32576081884)
+success az exact merge-elő SHA-n (`17b899a7`), a helyi HEAD-del összevetve. A
+`main` a dispatch óta nem mozdult (`a11608b8` mindkét oldalon).
+
+Pontos következő kör: **E09-R03** — a Community router bekötése
+`main.py::create_app()`-ba és a `/health/ready` végpontba (ADR 0395
+Következmények 2–3. pont, ADR 0396 §3–4), a queue soros szerint.
+
 ## ✅ [HEAL E09-R02/H3] KÉSZ — `allowed_paths` nem fedte a migráció-láncolás által tört downgrade-tesztet — PR [#409](https://github.com/wolfcasaba/strumsight/pull/409) (2026-08-22, L411)
 
 Az E09-R02 (Community backend modul + első Alembic migráció, ADR 0396) H3-mal

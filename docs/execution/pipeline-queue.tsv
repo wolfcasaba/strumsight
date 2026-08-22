@@ -411,7 +411,7 @@ E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	minimax	
 # nem az itt lefektetett `domain/application/data/presentation` réteges
 # szerkezetet.
 E09-R01	docs/rounds/e09-r01-community-baseline-and-feature-flags.md	minimax	0395	done
-E09-R02	docs/rounds/e09-r02-backend-community-module-and-migration.md	minimax	0396	pending
+E09-R02	docs/rounds/e09-r02-backend-community-module-and-migration.md	minimax	0396	done
 E09-R03	docs/rounds/e09-r03-public-identity-and-handle-policy.md	minimax	0397	pending
 E09-R04	docs/rounds/e09-r04-profile-privacy-and-audience-policy.md	minimax	0398	pending
 E09-R05	docs/rounds/e09-r05-flutter-community-domain-and-public-api.md	minimax	0399	pending
