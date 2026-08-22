@@ -1,76 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ E09-R04 KÉSZ — Profil privacy, audience és szerveroldali policy — PR [#413](https://github.com/wolfcasaba/strumsight/pull/413), squash `d3037b2d` (2026-08-22)
+## ✅ E09-R05 KÉSZ — Flutter Community domain és public API — PR [#414](https://github.com/wolfcasaba/strumsight/pull/414), squash `79865233` (2026-08-22)
 
-**EPIC 9 (COMMUNITY PLATFORM) NEGYEDIK KÖRE KÉSZ.** ADR 0398: a
-`CommunityAccessPolicy` — a jövőbeli profile/post/feed/comment read
-útvonalak KÖZPONTI, szerveroldali jogosultsági rétege. Kiértékelési
-sorrend `viewer_is_owner → blocked → visibility/audience → is_follower`
-(egy blockolt fél MINDIG `SUMMARY`-t kap, függetlenül a tényleges
-visibility-től — ADR §3, A2). `ProfileVisibility`/`CommunityAudience`
-enumok backend (`str, Enum`) + Flutter (wire-value parity) oldalon,
-`RelationshipContext` frozen dataclass (`blocked`/`is_follower`/
-`viewer_is_owner`/`is_club_member` — a mezőnevek a Kör 7/8 briefjei által
-NÉV SZERINT hivatkozott, stabil kontraktus). Új `visibility`/
-`audience_default` oszlop a `community_privacy_settings` táblán
-(`server_default="followers"`, SOHA `"public"` — A5). Privacy settings
-GET/PUT endpoint optimistic concurrency-vel (a MEGLÉVŐ `updated_at` a
-resource-version, nincs külön oszlop — A6), hívó nélküli ebben a körben
-(a bekötés Kör 5+ dolga, ADR 0397 `IdentityService` precedens). Új
-`docs/security/community-access-matrix.md` policy-mátrix dokumentum.
+**EPIC 9 (COMMUNITY PLATFORM) ÖTÖDIK KÖRE KÉSZ — az első Flutter-oldali
+Community kör.** ADR 0399: framework-független domain-fa
+(`lib/features/community/domain/{entities,value_objects,repositories}`,
+7 entitás, 5 value object, 7 repository-interfész) + a feature EGYETLEN
+belépője, `public.dart` — kézzel írt barrel (a `gen_public_barrel.dart`
+generált-registry pilotja ma kizárólag `practice_generator`, ADR 0339). A
+domain-purity guardot `test/core/architecture_dependency_test.dart` önálló
+teszt-csoportja méri (E07-R02/E08-R02 minta), nem a `tool/check_architecture.dart`
+bővítése. Pre-flight brief-revízió (§0.0 D3) tisztázta, hogy az ÚJ
+`value_objects/audience.dart` NEM duplikálhatja a Kör 4
+`policies/community_audience.dart` `ProfileVisibility`/`CommunityAudience`
+wire-enumjait — importálja őket, és kontrollált, sosem dobó
+wire-dekódolást ad hozzájuk (A3). A `CursorPage` value object explicit
+`initial`/`continued`/`haltedAfterRequest` type-state-tel különbözteti meg
+a "sosem lapozott" és a "lapozás véget ért" állapotot ([[L349]] fix).
 
-**A kör két implementer-fordulóban + egy önjavításban zárult:** (1) az
-implementer (MiniMax M3) helyesen `blocked`-ot jelzett a §6 mind a hat
-acceptance-cellájának (A1–A6) zöldje mellett is — egy, a kör hatókörén
-KÍVÜLI, MEGLÉVŐ CI-teszt (`backend/tests/test_migrations.py::
-test_downgrade_one_revision_drops_only_community_tables`) determinisztikusan
-elbukott, mert ez a kör OSZLOP-szintű migrációt ír elő (ADR §1: se új
-tábla, se a `CommunityProfile` bővítése), a teszt viszont a [[L411]]→[[L413]]
-önjavítások után is TÁBLA-halmaz szűkülést várt. **[[L415]]: az L411→L413
-minta HARMADIK láncszeme** — a végleges javítás a tesztet séma-
-pillanatkép-alapúra (tábla → oszlophalmaz) generalizálta, mind a tábla-,
-mind az oszlop-szintű migrációkat lefedve, hogy az Epic 9 hátralévő ~28
-köre egyikének se kelljen ezt megint megnyitnia. (2) Egy második,
-javító kör commitolta a fixet és a `round-gate.sh`-t végre csővezeték
-nélkül futtatta (az első futás mért folyamati leletet hagyott: a gate-et
-`| tail` mögé kötve futtatta háromszor — a review ezt is ellenőrizte és
-függetlenül, csővezeték nélkül megismételte).
+**Review (`docs/reviews/e09-r05-review.md`): APPROVED, egy javító kör
+után.** Az első review egy MAJOR leletet talált (F1): a kör hét ÚJ
+wire-facing enumja közül hat kapott tesztelt, sosem dobó `xFromWire`
+dekódert (`ReactionKind`, `ChallengeType`, `ChallengeInviteState`,
+`CommunityNotificationKind`, `ClubVisibility`, plusz az újrahasznosított
+`ProfileVisibility`/`CommunityAudience`), de a `ModerationState` — saját
+doc-kommentje szerint is backend-authoritative jel — kimaradt. A javító
+kör (`d52a10c5`) hozzáadta a hiányzó `moderationStateFromWire`/
+`moderationStateToWire` párt + három A3-tesztet, PONTOSAN a testvér-minta
+szerint. Egy NOTE (N1, nem blokkoló): a `tools/mm-round.sh`
+anti-hallucináció regex-őre hamis pozitívot adott (`cat tools/round-gate.sh
+| head -100` forráskód-olvasást tévesztett össze egy csővezetékes
+gate-futtatással) — a review a nyers session-logot gépi elemzéssel
+igazolta hamis pozitívnak.
 
-**Review (`docs/reviews/e09-r04-review.md`): APPROVED, 0 BLOCKER/MAJOR, 2
-MINOR** (mindkettő a jövőbeli router-bekötő körre halasztva, nem blokkol):
-F1 — a `resource_version` ellenőrzés Python-szintű TOCTOU, DB-szintű
-feltételes `UPDATE`/zárolás nélkül (ma nem kihasználható, a router nincs
-bekötve élő appba); F2 — `_get_or_create_settings_row` docstringje
-get-or-create szemantikát ígér, de a kód 404-et dob (a tényleges
-viselkedés helyes, csak a doc félrevezető). Három FÜGGETLEN, eldobható
-mutation-próba (block-sorrend csere, resource_version-ellenőrzés
-kikapcsolása, ORM-default `"public"`-ra írása) mindegyike a várt tesztet
-buktatta pirosra, majd zöldre a visszaállítás után. A `security-reviewer`
-subagent (risk="high") függetlenül megerősítette mindhárom invariánst,
-plusz: az enum-mezők DB-szinten korlátlan `String`-ek, de a policy `is`
-azonosság-összehasonlítása miatt egy érvénytelen DB-string fail-closed
-(`SUMMARY`/`False`), nem disclosure; a mátrix-dokumentum cellánként egyezik
-a kóddal.
-
-Gate: izolált `/tmp` klónban, saját, csővezeték nélküli futtatással
-`tools/round-gate.sh test/core/architecture_dependency_test.dart` MINDEN
-GATE ZÖLD, `backend pytest -q` **321 passed, 0 failed**. Scope-audit OK
-(`tools/scope-audit.py`, a `docs/LESSONS.md` tévedésből a round-branchbe
-került self-heal-commitja egy review-oldali javító commit-tal — `802a6656`
-— eltávolítva, mert a LESSONS.md a post-merge záró rituálé dolga). CI a
-pontos merge SHA-n (`52d84221`): `full-gate.yml` 32587961465 + `router-ci.yml`
-32587999578 mindkettő `success`. Merge `tools/round-land.sh` — mért,
-korábban sosem gyakorolt élő eset: a script `resolve_backend_python`-ja
-relatív `backend/.venv/bin/python`-t próbál, ami a `main` munkafán (ahol a
-venv TÉNYLEG a relatív útvonalon is látszik induláskor) a `env
---chdir=backend`-del kombinálva `backend/backend/.venv/...`-ra torzul —
-`ROUND_GATE_BACKEND_PYTHON=/home/ubuntu/music-theory/backend/.venv/bin/python`
-explicit env-override (a script SAJÁT, dokumentált első candidate-je,
-nem a mérce módosítása) megkerülte. **Ez egy `tools/round-gate.sh`
-környezet-felbontási hiba, amit egy jövőbeli körnek/self-healnek kell
-javítania** (a `resolve_backend_python` abszolút útvonalat számítson, ne
-relatívot, VAGY a `run_step "backend pytest"` ne `--chdir`-eljen egy már
-relatív candidate-tel) — a mérce SOSEM módosult, csak a hívási env.
+Minden review-lépés FÜGGETLENÜL, izolált `/tmp` klónban: scope-audit OK
+(25 fájl, majd a javító kör 3 fájlja, 0 generated/ignored), gate 7/7 zöld
+mindkét fordulón, a §6 kötelező valódi-sértés próba (import
+`package:flutter/foundation.dart` + `@immutable` → a SAJÁT
+architecture-guard csoport PIROS, nem csak a `flutter analyze`
+unused-import lintje → visszaállítás → zöld) FÜGGETLENÜL reprodukálva. CI
+a pontos merge SHA-n (`25ac7f75`): `full-gate.yml` 32590914358 (a
+`round-ci-plan.py` tervező adta ki — tisztán Dart-diff, natív build nem
+kell) + `router-ci.yml` 32591010189 (manuálisan `workflow_dispatch`-csel
+pontos SHA-ra kényszerítve, mert a review-only push nem érintette a
+Router CI trigger-útvonalait) mindkettő `success`. Merge
+`tools/round-land.sh`. Pontos következő kör: **E09-R06** (a
+`docs/execution/pipeline-queue.tsv` következő `pending` E09-sora).
 
 ## 🧭 [GOV] Motorváltás: Claude Sonnet 5 (high) orchestrátor + MiniMax M3 implementer (2026-08-21)
 
@@ -4729,18 +4704,16 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-22):** `main` @ `d3037b2d` — E09-R04 Profil
-privacy, audience és szerveroldali policy, PR
-[#413](https://github.com/wolfcasaba/strumsight/pull/413), squash-merge.
+**Aktuális állapot (2026-08-22):** `main` @ `79865233` — E09-R05 Flutter
+Community domain és public API, PR
+[#414](https://github.com/wolfcasaba/strumsight/pull/414), squash-merge.
 Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, egy javító
-kör (§0.1 self-heal, L415 — [[L411]]/[[L413]] mintájának harmadik
-láncszeme, `test_migrations.py` séma-pillanatképesre generalizálva).
-Review APPROVED, 0 BLOCKER/MAJOR, 2 MINOR (mindkettő a jövőbeli
-router-bekötő körre halasztva). Exact `52d84221`: `full-gate.yml`
-32587961465 + `router-ci.yml` 32587999578 success. Merge `tools/
-round-land.sh`-sal, `ROUND_GATE_BACKEND_PYTHON` explicit env-override
-mellett (mért, korábban sosem gyakorolt `resolve_backend_python`
-relatív-útvonal hiba a `main` munkafán — részletesen a fejléc ✅-blokkban).
+kör (F1 MAJOR — `ModerationState` hiányzó A3 wire-decodere, `d52a10c5`).
+Review APPROVED, 0 nyitott BLOCKER/MAJOR, 1 NOTE (a `mm-round.sh`
+`gate_shape` regex-őr hamis pozitívja, nem blokkoló). Exact `25ac7f75`:
+`full-gate.yml` 32590914358 + `router-ci.yml` 32591010189 (manuális
+`workflow_dispatch`, mert a review-only commit nem érintette a Router CI
+trigger-útvonalait) mindkettő success. Merge `tools/round-land.sh`-sal.
 Részletesen a fejléc ✅-blokkban.
 
 **Aktuális állapot (2026-08-22):** `main` @ `a8ecb9f3` — E08-R30 Epic 08
@@ -6157,31 +6130,31 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-22): E09-R05 — Flutter community
-domain és publikus API** (`docs/rounds/e09-r05-flutter-community-domain-and-public-api.md`,
-engine a queue-ban `minimax`, előre kiosztott ADR `0399`). **Az E09-R04
-(Profil privacy, audience és szerveroldali policy) KÉSZ** (PR #413, squash
-`d3037b2d`) — lásd a fejléc ✅-blokkot. Ez a kör nyitja meg a
-`lib/features/community/` feature-gyökeret (eddig csak a Kör 4
-`domain/policies/community_audience.dart` élt előre-létrehozva) —
-pre-flightban mérd meg, hogy a `CommunityAccessPolicy`/`ProfileVisibility`/
-`CommunityAudience`/`RelationshipContext` (ADR 0398,
-`backend/app/community/policies/access_policy.py`) TÉNYLEGES alakja
-egyezik-e a Kör 5 brief feltételezésével, mielőtt a domain-réteg
-kliens-oldali tükrét megírod. **Az Epic 8 (Gamification) mind a 30 köre
-KÉSZ** (E08-R30, PR #407) — az **E08-R29** (Integritás, analytics, balance
-szimuláció és CI) továbbra is `hold`-on marad. A queue-scan a legelső
-`pending` sort választja. Ez a session nem indítja el; új sessionben fut.
+**Pontos következő termékkör (2026-08-22): E09-R06 — Profile onboarding és
+szerkesztés** (`docs/rounds/e09-r06-profile-onboarding-and-editing.md`,
+engine a queue-ban `minimax`, előre kiosztott ADR `nincs`). **Az E09-R05
+(Flutter Community domain és public API) KÉSZ** (PR #414, squash
+`79865233`) — lásd a fejléc ✅-blokkot. A Kör 5 megnyitotta a
+`lib/features/community/` domain-fát (7 entitás, 5 value object, 7
+repository-interfész, `public.dart`) — a Kör 6 pre-flightjában mérd meg,
+hogy a `CommunityProfile`/`PublicUserId`/`CommunityHandle` (Kör 5,
+`lib/features/community/domain/{entities,value_objects}/`) TÉNYLEGES
+alakja (mezőnevek, `copyWith`, validáció) egyezik-e a Kör 6 brief
+feltételezésével, mielőtt az onboarding/szerkesztés UI-t és az első
+`application/`+`data/` réteget megírod — ez az ELSŐ kör, ami a Kör 5
+domain-típusokra ténylegesen ráépít. **Az Epic 8 (Gamification) mind a 30
+köre KÉSZ** (E08-R30, PR #407) — az **E08-R29** (Integritás, analytics,
+balance szimuláció és CI) továbbra is `hold`-on marad. A queue-scan a
+legelső `pending` sort választja. Ez a session nem indítja el; új
+sessionben fut.
 
-**F1/F2 nyitott MINOR-ok az E09-R04 review-ból, a router-bekötő kör (Kör
-5+) előfeltételei:** F1 — `update_privacy_settings`
-(`backend/app/community/routers/privacy.py`) optimistic-concurrency
-ellenőrzése Python-szintű TOCTOU, nincs feltételes `UPDATE ... WHERE
-updated_at = :expected` vagy sor-zárolás — a bekötő kör EGYSZERRE oldja
-meg ezt ÉS az authz-t (a router ma hívó nélküli, tehát nem kihasználható,
-de bekötéskor már az lenne). F2 — `_get_or_create_settings_row` docstringje
-get-or-create szemantikát ígér, a kód 404-et dob — triviális doc-fix,
-ugyanabban a körben javítható, ami a fájlhoz nyúl.
+**F1/F2 nyitott MINOR-ok az E09-R04 review-ból** (backend
+`update_privacy_settings` router-bekötő kör előfeltételei — Python-szintű
+TOCTOU + félrevezető docstring, `docs/handoff-archive.md` E09-R04
+szakasza), **és a Kör 5 wire-decode mintája** (minden ÚJ Community
+wire-enum kapjon `xFromWire`/`xToWire` párt a bevezetéssel EGY körben, ne
+utólag — Kör 5 F1 pontosan ezt mérte meg `ModerationState`-en) továbbra is
+a jövőbeli bekötő/data-réteg körök előfeltétele.
 
 Pre-flightban érdemes újra mérni: az Epic 9 (Community Platform) mind a 32
 körének briefje egy batchben készült (PR #405, 2026-08-22) — az E09-R01

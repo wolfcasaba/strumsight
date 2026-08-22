@@ -15612,3 +15612,67 @@ a self-heal fix előtti (E09-R03-kori) alakkal az E09-R04 migrációja ellen
 függetlenül reprodukálva PIROS, a fix utánival ZÖLD. Részletek:
 `docs/rounds/e09-r04-profile-privacy-and-audience-policy.md` §0.1,
 `docs/adr/0398-profile-privacy-audience-policy-and-access-control.md`.
+
+## L416 — `round-land.sh --gate-test` egy zászló egy útvonalra: egy space-joined többútvonal-string a kombinált-HEAD gate-et "fájl nem létezik" hibával buktatja, nem a valódi tartalmat teszteli (E09-R05, orchestrátor önhiba, 2026-08-22)
+
+**Mért gyökérok.** A `tools/round-land.sh --gate-test <útvonal>` a flaget egy
+Bash tömbbe gyűjti (`gate_tests+=("$2")`), tehát a script MINDEN egyes
+teszt-útvonalhoz KÜLÖN `--gate-test` hívást vár. Az E09-R05 landolásakor az
+orchestrátor egyetlen, space-joined stringet adott át
+(`--gate-test "test/features/community/domain/community_domain_test.dart
+test/core/architecture_dependency_test.dart"`), abból a (téves) elvárásból,
+hogy a `tools/round-gate.sh`-hoz hasonlóan a script maga is
+argumentum-listaként fogadja a több útvonalat. Az eredmény: a `flutter test`
+egyetlen, a fájlrendszeren nem létező "útvonalat" kapott
+(`Failed to load ".../community_domain_test.dart
+test/core/architecture_dependency_test.dart": Does not exist.`), a kombinált-
+HEAD gate PIROS-ra váltott, a script `blocked`-ot jelzett, és a merge-zár
+tisztán felszabadult (nem maradt csonka állapot). A rendes independent `/tmp`
+gate-futtatás UGYANAZZAL a két útvonallal, `tools/round-gate.sh`-sal, KÉT
+KÜLÖN pozicionális argumentumként átadva, mindeközben helyesen zöld volt —
+a hiba tisztán a `round-land.sh` hívási alakjában volt, nem a kódban.
+
+**Szabály.** `tools/round-land.sh` több gate-teszt-útvonalhoz annyi
+`--gate-test <útvonal>` zászlót adj át, ahány útvonal van — SOSE egy
+space-joined stringet egyetlen zászlóban. Ha a script `PIROS (kilépési kód
+1)`-et jelez egy "Does not exist" üzenettel egy olyan útvonalra, ami valós
+fájlneveket space-szel összefűzve tartalmaz, az a hívási alak hibája, nem a
+tényleges tartalomé — nézd meg a `.pipeline/land-<kör>.log`-ot (a script a
+saját stdout/stderr-jét oda irányítja át, NEM a hívó terminál/task-output
+fájljába), mielőtt a kódot gyanúsítanád.
+
+**Őrteszt:** nincs — a hívási hiba egy orchestrátor-oldali argumentum-alak
+tévesztés volt, nem a script vagy a kód hibája; a helyes hívással a landolás
+elsőre sikerült. Részletek: `.pipeline/land-E09-R05.log`.
+
+## L417 — Egy push, ami csak `docs/reviews/**`-et módosít, NEM triggereli a `router-ci.yml`-t: a Router-CI exact-SHA bizonyítékhoz manuális `workflow_dispatch` kell (E09-R05, 2026-08-22)
+
+**Mért gyökérok.** A `router-ci.yml` `on.push.paths` glob-ja
+(`tools/**`, `docs/execution/**`, `docs/rounds/**`) NEM tartalmazza a
+`docs/reviews/**`-et. Az E09-R05 review-jóváhagyó commitja
+(`25ac7f75`, csak `docs/reviews/e09-r05-review.md`-t módosította) ezért NEM
+indított új Router CI futást — a legutóbbi push-triggerelt Router CI run
+egy KORÁBBI, ősi commiton (`8f598c28`, a javító kör handoff-kiegészítése,
+ami ÉRINTETTE a `docs/rounds/**`-et) állt zölden. A pipeline-prompt
+"exact-SHA" mércéje (ADR 0086 §2, §3.0) szerint a merge SHA-n kell zöld
+Router CI evidenciának lennie — egy ŐS commit zöldje ELVILEG elfogadható
+lenne, ha bizonyítható, hogy a Router-CI-releváns fájlkészlet a két commit
+között nem változott, de a tiszta, kétségtelen bizonyíték az, ha a
+`router-ci.yml` `workflow_dispatch:` trigger-jét MANUÁLISAN a merge-jelölt
+branch-re dispatch-eled — ez a workflow tényleg támogatja
+(`on: workflow_dispatch:` a `push:` mellett), és a run `headSha`-ja
+PONTOSAN a dispatch-kori branch-csúcsra áll.
+
+**Szabály.** Mielőtt egy review-only (vagy más, a Router-CI trigger-útvonalait
+NEM érintő) commit után Router-CI exact-SHA evidenciát keresnél
+`gh run list --workflow router-ci.yml`-lel: ha a legutóbbi találat
+`headSha`-ja NEM egyezik a tényleges merge-jelölt HEAD-del, NE feltételezd,
+hogy a run "hamarosan megjelenik" — ellenőrizd a workflow `on.push.paths`
+listáját (jelenleg: `tools/**`, `docs/execution/**`, `docs/rounds/**`), és ha
+egyik sem egyezik az utolsó push megváltozott fájljaival, dispatch-eld
+manuálisan (`gh workflow run router-ci.yml --ref <branch>`) egy exact-SHA
+futásért, ahelyett hogy egy sosem megjelenő push-triggerelt run-ra várnál.
+
+**Őrteszt:** nincs — operatív/orchestrátor-oldali eljárási lecke, nem
+kód-szintű mérce. Részletek: `docs/reviews/e09-r05-review.md`, a `25ac7f75`
+és `8f598c28` közti `git diff --stat` (kizárólag `docs/reviews/e09-r05-review.md`).

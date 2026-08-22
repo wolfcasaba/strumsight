@@ -9627,3 +9627,75 @@ Exact `c131c47e`: Full Gate
 success. Implementer Terra (`gpt-5.6-terra`), orchestrátor/reviewer Sol
 (`gpt-5.6-sol`). Pontos következő E08 kör: **E08-R19 — Challenge V2 és legacy
 DailyChallenge migráció**.
+
+## ✅ E09-R04 KÉSZ — Profil privacy, audience és szerveroldali policy — PR [#413](https://github.com/wolfcasaba/strumsight/pull/413), squash `d3037b2d` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) NEGYEDIK KÖRE KÉSZ.** ADR 0398: a
+`CommunityAccessPolicy` — a jövőbeli profile/post/feed/comment read
+útvonalak KÖZPONTI, szerveroldali jogosultsági rétege. Kiértékelési
+sorrend `viewer_is_owner → blocked → visibility/audience → is_follower`
+(egy blockolt fél MINDIG `SUMMARY`-t kap, függetlenül a tényleges
+visibility-től — ADR §3, A2). `ProfileVisibility`/`CommunityAudience`
+enumok backend (`str, Enum`) + Flutter (wire-value parity) oldalon,
+`RelationshipContext` frozen dataclass (`blocked`/`is_follower`/
+`viewer_is_owner`/`is_club_member` — a mezőnevek a Kör 7/8 briefjei által
+NÉV SZERINT hivatkozott, stabil kontraktus). Új `visibility`/
+`audience_default` oszlop a `community_privacy_settings` táblán
+(`server_default="followers"`, SOHA `"public"` — A5). Privacy settings
+GET/PUT endpoint optimistic concurrency-vel (a MEGLÉVŐ `updated_at` a
+resource-version, nincs külön oszlop — A6), hívó nélküli ebben a körben
+(a bekötés Kör 5+ dolga, ADR 0397 `IdentityService` precedens). Új
+`docs/security/community-access-matrix.md` policy-mátrix dokumentum.
+
+**A kör két implementer-fordulóban + egy önjavításban zárult:** (1) az
+implementer (MiniMax M3) helyesen `blocked`-ot jelzett a §6 mind a hat
+acceptance-cellájának (A1–A6) zöldje mellett is — egy, a kör hatókörén
+KÍVÜLI, MEGLÉVŐ CI-teszt (`backend/tests/test_migrations.py::
+test_downgrade_one_revision_drops_only_community_tables`) determinisztikusan
+elbukott, mert ez a kör OSZLOP-szintű migrációt ír elő (ADR §1: se új
+tábla, se a `CommunityProfile` bővítése), a teszt viszont a [[L411]]→[[L413]]
+önjavítások után is TÁBLA-halmaz szűkülést várt. **[[L415]]: az L411→L413
+minta HARMADIK láncszeme** — a végleges javítás a tesztet séma-
+pillanatkép-alapúra (tábla → oszlophalmaz) generalizálta, mind a tábla-,
+mind az oszlop-szintű migrációkat lefedve, hogy az Epic 9 hátralévő ~28
+köre egyikének se kelljen ezt megint megnyitnia. (2) Egy második,
+javító kör commitolta a fixet és a `round-gate.sh`-t végre csővezeték
+nélkül futtatta (az első futás mért folyamati leletet hagyott: a gate-et
+`| tail` mögé kötve futtatta háromszor — a review ezt is ellenőrizte és
+függetlenül, csővezeték nélkül megismételte).
+
+**Review (`docs/reviews/e09-r04-review.md`): APPROVED, 0 BLOCKER/MAJOR, 2
+MINOR** (mindkettő a jövőbeli router-bekötő körre halasztva, nem blokkol):
+F1 — a `resource_version` ellenőrzés Python-szintű TOCTOU, DB-szintű
+feltételes `UPDATE`/zárolás nélkül (ma nem kihasználható, a router nincs
+bekötve élő appba); F2 — `_get_or_create_settings_row` docstringje
+get-or-create szemantikát ígér, de a kód 404-et dob (a tényleges
+viselkedés helyes, csak a doc félrevezető). Három FÜGGETLEN, eldobható
+mutation-próba (block-sorrend csere, resource_version-ellenőrzés
+kikapcsolása, ORM-default `"public"`-ra írása) mindegyike a várt tesztet
+buktatta pirosra, majd zöldre a visszaállítás után. A `security-reviewer`
+subagent (risk="high") függetlenül megerősítette mindhárom invariánst,
+plusz: az enum-mezők DB-szinten korlátlan `String`-ek, de a policy `is`
+azonosság-összehasonlítása miatt egy érvénytelen DB-string fail-closed
+(`SUMMARY`/`False`), nem disclosure; a mátrix-dokumentum cellánként egyezik
+a kóddal.
+
+Gate: izolált `/tmp` klónban, saját, csővezeték nélküli futtatással
+`tools/round-gate.sh test/core/architecture_dependency_test.dart` MINDEN
+GATE ZÖLD, `backend pytest -q` **321 passed, 0 failed**. Scope-audit OK
+(`tools/scope-audit.py`, a `docs/LESSONS.md` tévedésből a round-branchbe
+került self-heal-commitja egy review-oldali javító commit-tal — `802a6656`
+— eltávolítva, mert a LESSONS.md a post-merge záró rituálé dolga). CI a
+pontos merge SHA-n (`52d84221`): `full-gate.yml` 32587961465 + `router-ci.yml`
+32587999578 mindkettő `success`. Merge `tools/round-land.sh` — mért,
+korábban sosem gyakorolt élő eset: a script `resolve_backend_python`-ja
+relatív `backend/.venv/bin/python`-t próbál, ami a `main` munkafán (ahol a
+venv TÉNYLEG a relatív útvonalon is látszik induláskor) a `env
+--chdir=backend`-del kombinálva `backend/backend/.venv/...`-ra torzul —
+`ROUND_GATE_BACKEND_PYTHON=/home/ubuntu/music-theory/backend/.venv/bin/python`
+explicit env-override (a script SAJÁT, dokumentált első candidate-je,
+nem a mérce módosítása) megkerülte. **Ez egy `tools/round-gate.sh`
+környezet-felbontási hiba, amit egy jövőbeli körnek/self-healnek kell
+javítania** (a `resolve_backend_python` abszolút útvonalat számítson, ne
+relatívot, VAGY a `run_step "backend pytest"` ne `--chdir`-eljen egy már
+relatív candidate-tel) — a mérce SOSEM módosult, csak a hívási env.
