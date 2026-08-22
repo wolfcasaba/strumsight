@@ -15,15 +15,7 @@ class XpProgressBar extends StatelessWidget {
     required this.xpIntoCurrentLevel,
     required this.xpToNextLevel,
     required this.totalXp,
-  }) : assert(
-         xpIntoCurrentLevel >= 0,
-         'xpIntoCurrentLevel must not be negative',
-       ),
-       assert(
-         xpToNextLevel == null || xpToNextLevel >= 0,
-         'xpToNextLevel must be non-negative when present',
-       ),
-       assert(totalXp >= 0, 'totalXp must not be negative');
+  });
 
   /// XP accumulated in the current level. Caller-fed — the widget never
   /// reads the ledger.

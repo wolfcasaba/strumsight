@@ -15,9 +15,7 @@ class LatestHubResult {
     required this.title,
     required this.body,
     required this.earnedXp,
-  }) : assert(title.trim().isNotEmpty, 'title must not be blank'),
-       assert(body.trim().isNotEmpty, 'body must not be blank'),
-       assert(earnedXp >= 0, 'earnedXp must not be negative');
+  });
 
   final String title;
   final String body;

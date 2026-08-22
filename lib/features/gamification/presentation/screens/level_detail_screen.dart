@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:strumsight/features/gamification/domain/levels/level_definition.dart';
 import 'package:strumsight/features/gamification/domain/profile/gamification_profile.dart';
 import 'package:strumsight/features/gamification/domain/rewards/experience_points.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/level_badge.dart';
@@ -152,10 +151,7 @@ final class LevelDetailXpComponent {
     required this.body,
     required this.xp,
     required this.semantics,
-  }) : assert(title.trim().isNotEmpty, 'title must not be blank'),
-       assert(body.trim().isNotEmpty, 'body must not be blank'),
-       assert(xp >= 0, 'xp must not be negative'),
-       assert(semantics.trim().isNotEmpty, 'semantics must not be blank');
+  });
 
   final String title;
   final String body;
