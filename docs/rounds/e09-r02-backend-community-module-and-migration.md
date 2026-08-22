@@ -60,6 +60,55 @@ a legközelebbi analóg minta L97 (route-katalógus owner hiánya scope-ból) �
 ugyanaz a hibaosztály (a wiring-pont owner-je kimaradt az `allowed_paths`-ból),
 itt a §0.0 feloldotta a `main.py` teljes kizárásával, nem felvételével.
 
+## 0.1 Self-heal brief-revízió (ADR 0112 önjavító kör, 2026-08-22, halt H3)
+
+**Mért gyökérok:** `backend/tests/test_migrations.py::test_downgrade_one_revision_removes_application_schema`
+egyetlen-migrációs világot feltételez ("`downgrade -1` a fejtől == `users`/
+`user_settings` eltűnik"). A §0.0/§5 pontban kötött migráció-láncolás
+(`e09_r02_0002` `down_revision = "e01_r12_0001"`) ezt a feltevést hamissá
+teszi: `alembic downgrade -1` a fejtől MOST már csak a LEGÚJABB migrációt
+(`community_profiles`/`community_privacy_settings`) vonja vissza, a
+`users`/`user_settings` a helyén marad — ez minden, a láncot bővítő
+migrációnak szükségszerű, előre látható következménye, nem az ÚJ migráció
+hibája. A fájl nem szerepelt a lenti `allowed_paths`-on, ezért az
+implementer helyesen `blocked`-ot jelzett a §0 STOP-protokoll szerint,
+ahelyett hogy a listát csendben tágította volna.
+
+Reprodukálva függetlenül (`/home/ubuntu/ss-mm-e09-r02`, `backend/.venv`
+helyett a fő munkapéldány megosztott `backend/.venv`-jével):
+
+```
+cd backend && python -m pytest tests/test_migrations.py -q
+# FAILED test_downgrade_one_revision_removes_application_schema
+# AssertionError: assert 'users' not in {'alembic_version', 'user_settings', 'users'}
+```
+
+**Feloldás:**
+
+1. `backend/tests/test_migrations.py` felkerül az `allowed_paths`-ra (lásd
+   lent) — ez a kör saját §0.0/§5 döntésének (migráció-láncolás) egyenes
+   következménye, nem hatókör-bővítés a kör céljához képest.
+2. Az implementer a folytatásban **frissítse**
+   `test_downgrade_one_revision_removes_application_schema`-t a
+   két-migrációs valósághoz: bontsa két esetre — (a) "egy lépés downgrade a
+   fejtől csak a Community táblákat távolítja el" (`community_profiles`,
+   `community_privacy_settings` eltűnik, `users`/`user_settings` marad) és
+   (b) "downgrade a base-ig a `users`/`user_settings`-et is eltávolítja"
+   (`command.downgrade(config, "base")`, majd ugyanaz az `assert "users" not
+   in tables` / `assert "user_settings" not in tables` pár). A többi,
+   ebben a fájlban élő teszt (`test_upgrade_head_matches_current_orm_schema`,
+   `test_sqlite_runtime_enforces_foreign_key_cascade`, stb.) már ma is
+   helyesen kezeli a két-migrációs láncot (zöld, lásd fent) — csak ez az egy
+   eset feltételezett egyetlen migrációt.
+3. Ez a hibaosztály **nem** ismétlődhet meg némán: a
+   `tools/tests/test_e09_r02_migration_downgrade_test_scope.py` regressziós
+   teszt (self-heal, lásd a fájl fejlécét) rögzíti, hogy a valós brief
+   `allowed_paths`-a MOST már fedi `backend/tests/test_migrations.py`-t, és
+   hogy egy szomszédos, ehhez a körhöz nem tartozó backend-teszt fájl
+   (`backend/tests/test_auth.py`) továbbra is hatókörön kívül marad —
+   a javítás egy szűk, egyetlen fájlra szóló bővítés, nem az egész
+   `backend/tests/` könyvtár engedélyezése.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -71,6 +120,7 @@ allowed_paths = [
   "backend/alembic/versions/e09_r02_0002_community_profile.py",
   "backend/tests/community/test_profile_schema.py",
   "backend/tests/community/conftest.py",
+  "backend/tests/test_migrations.py",
   "docs/rounds/e09-r02-backend-community-module-and-migration.md",
 ]
 gate_tests = [
@@ -125,6 +175,7 @@ Hozd létre a Community backend moduláris határát és az első adatbázis-mig
 | `backend/alembic/versions/e09_r02_0002_community_profile.py` | ÚJ — az első Community migráció |
 | `backend/tests/community/test_profile_schema.py` | ÚJ — a §6 cellái |
 | `backend/tests/community/conftest.py` | ÚJ — factory-alapú tesztalkalmazás |
+| `backend/tests/test_migrations.py` | MEGLÉVŐ — §0.1 self-heal (H3): a `test_downgrade_one_revision_removes_application_schema` frissítése a két-migrációs láncra |
 
 **Tilos zóna:** `backend/app/` a `community/` és `config.py`-n kívül (auth, settings, tutor router/service/model) · `backend/alembic/versions/` a MEGLÉVŐ migráció · `lib/**` (ez a kör tisztán backend) · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`
 

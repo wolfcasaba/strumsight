@@ -61,6 +61,50 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ [HEAL E09-R02/H3] KÉSZ — `allowed_paths` nem fedte a migráció-láncolás által tört downgrade-tesztet — PR [#409](https://github.com/wolfcasaba/strumsight/pull/409) (2026-08-22, L411)
+
+Az E09-R02 (Community backend modul + első Alembic migráció, ADR 0396) H3-mal
+állt meg, MIUTÁN az implementer (minimax) már ledolgozta a modult (branch
+`minimax/e09-r02-backend-community-module-and-migration`, `05fa154d`, pushed).
+Gyökérok: a kör saját §0.0/§5 döntése (a `e09_r02_0002` migráció a MEGLÉVŐ
+`e01_r12_0001` fejére láncolódik) szükségszerűen hamissá teszi a MEGLÉVŐ
+`backend/tests/test_migrations.py::test_downgrade_one_revision_removes_application_schema`
+egyetlen-migrációs feltevését (`downgrade -1` a fejtől == `users`/
+`user_settings` eltűnik) — két láncszemmel `downgrade -1` csak a LEGÚJABB
+migrációt vonja vissza. A fájl nem szerepelt az `allowed_paths`-on, az
+implementer helyesen `blocked`-ot jelzett a STOP-protokoll szerint. Class B
+(kör-tartalom: a saját láncolási döntés kontra a `allowed_paths` hiánya),
+függetlenül reprodukálva: `cd backend && python -m pytest
+tests/test_migrations.py -q` → `AssertionError: assert 'users' not in
+{'alembic_version', 'user_settings', 'users'}`.
+
+Feloldás
+(`docs/rounds/e09-r02-backend-community-module-and-migration.md` §0.1):
+`backend/tests/test_migrations.py` szűken, egyetlen fájlként bekerült az
+`allowed_paths`-ra és a §4 táblázatba, konkrét instrukcióval a folytatáshoz —
+a downgrade-teszt bontása "egy lépés a fejtől" (csak a Community táblák
+tűnnek el) és "downgrade a base-ig" (a `users`/`user_settings` is eltűnik)
+esetekre. Regressziós védelem:
+`tools/tests/test_e09_r02_migration_downgrade_test_scope.py` —
+`audit_legacy_scope()`-ot futtatja a ténylegesen committolt brief ellen; a
+mért halt-útvonal (`git show HEAD:...`-tal visszaállított, pre-fix brief-
+tartalommal reprodukálva) RED volt a javítás előtt, GREEN utána, egy
+szomszédos backend-teszt fájl (`test_auth.py`) pedig továbbra is scope-on
+kívül marad. Teljes gate izolált heal-worktree-ben: `python3 -m pytest
+tools/tests -q` → 716 passed/1 skipped/640 subtests/0 failed. `brief-lint
+--level strict` tiszta. Router CI
+[32574365404](https://github.com/wolfcasaba/strumsight/actions/runs/32574365404)
+success az exact push SHA-n (`31573292`), amit a merge előtt a helyi HEAD-del
+összevetve igazoltam. Nincs törölt/gyengített teszt, nincs küszöb-lazítás,
+`tools/round-gate.sh`/`.github/workflows/**` érintetlen. Lecke: [[L411]].
+
+Mivel az eredeti E09-R02 implementer-munka már kész és a saját branch-én ül,
+ez a heal NEM vitte tovább a tartalmi munkát — a lánc a MEGLÉVŐ
+`minimax/e09-r02-backend-community-module-and-migration` ágon, a felfrissített
+brieffel folytatja: a `test_downgrade_one_revision_removes_application_schema`
+kétesetes felbontása még hátravan az implementer oldalán, utána a §7
+mindkét parancsa, majd review/CI/merge a szokásos rend szerint.
+
 ## ✅ E09-R01 KÉSZ — Community baseline, threat model és feature flag — PR [#408](https://github.com/wolfcasaba/strumsight/pull/408), squash `7ad4b28d` (2026-08-22)
 
 **EPIC 9 (COMMUNITY PLATFORM) ELSŐ KÖRE KÉSZ.** Alkalmazáskód-változtatás

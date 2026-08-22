@@ -15397,3 +15397,47 @@ merge mehetne.
 nem gépi kapu. Részletek: ez a session (E09-R01), a záró rituálék
 lépéssora `docs/execution/08-round-brief.md` §7 / `sdd-round-driver` skill
 §6 mellett.
+
+## L411 — Egy migráció-láncoló kör `allowed_paths`-a nem fedte a MEGLÉVŐ downgrade-tesztet, amit a saját láncolási döntése tör (E09-R02, self-heal H3, 2026-08-22)
+
+**Mért gyökérok.** Az E09-R02 brief §0.0/§5 pontja kötelezővé tette, hogy az
+új migráció (`e09_r02_0002`) a MEGLÉVŐ `e01_r12_0001` fejére láncolódjon
+(`down_revision = "e01_r12_0001"`) — ez helyes, hiszen Alembicnek egyetlen
+feje lehet. Csakhogy a meglévő
+`backend/tests/test_migrations.py::test_downgrade_one_revision_removes_application_schema`
+egyetlen-migrációs világot feltételezett: `alembic downgrade -1` a fejtől
+== `users`/`user_settings` eltűnik. Két láncszemmel ez a feltevés
+szükségszerűen hamissá válik (`downgrade -1` csak a LEGÚJABB migrációt
+vonja vissza), de a fájl nem szerepelt az `allowed_paths`-on — a §0.0
+pre-flight csak a router-regisztráció (`main.py`) korábbi hiányát vette
+észre, a downgrade-teszt csatolt feltevését nem. Az implementer helyesen
+`blocked`-ot jelzett a §0 STOP-protokoll szerint ahelyett, hogy a listát
+csendben tágította vagy a tesztet felügyelet nélkül átírta volna
+(`.pipeline/HALTED`, halt=H3, halted_at=2026-08-22T12:41:38+00:00).
+Reprodukálva függetlenül: `cd backend && python -m pytest
+tests/test_migrations.py -q` → `AssertionError: assert 'users' not in
+{'alembic_version', 'user_settings', 'users'}`.
+
+**Szabály.** Egy migráció-LÁNCOLÓ kör (`down_revision` egy MEGLÉVŐ fejre
+mutat, nem `None`-ra) pre-flightjában a `backend/alembic/versions/`
+grep-elése ÖNMAGÁBAN nem elég — a `backend/tests/test_migrations.py`
+(vagy az adott projekt ekvivalens migráció-lifecycle tesztje) downgrade-
+irányú eseteit is át kell nézni, mert egy `downgrade -1`/`downgrade N
+lépés`-alapú asszerció tipikusan az AKTUÁLIS láncot (egy migráció = egy
+teljes séma-visszaállás) feltételezi, és minden LÁNCBŐVÍTŐ kör törheti azt
+— nem a régi vagy az új migráció HIBája, hanem a lánc hosszának
+szükségszerű következménye. Ha a pre-flight ezt nem méri fel, a helyes
+javítás egy §0.1 self-heal brief-revízió: a downgrade-teszt fájl felvétele
+az `allowed_paths`-ra (szűken, csak az az egy fájl, nem a teljes
+`backend/tests/` könyvtár), és az implementer instrukciója, hogy a tesztet
+két esetre bontsa (egy lépés downgrade a fejtől vs. downgrade a base-ig).
+
+**Őrteszt:** `tools/tests/test_e09_r02_migration_downgrade_test_scope.py`
+— `audit_legacy_scope`-pal bizonyítja, hogy a valós brief `allowed_paths`-a
+MOST fedi `backend/tests/test_migrations.py`-t, és hogy egy szomszédos,
+ehhez a körhöz nem tartozó backend-teszt fájl (`test_auth.py`) továbbra is
+hatókörön kívül marad — a self-heal fix előtti brief-tartalommal
+függetlenül reprodukálva `ok=False` (`path outside allowed scope:
+backend/tests/test_migrations.py`), a fix utánival `ok=True`. Részletek:
+`docs/rounds/e09-r02-backend-community-module-and-migration.md` §0.1,
+`.pipeline/HALTED` (E09-R02, H3, 2026-08-22).
