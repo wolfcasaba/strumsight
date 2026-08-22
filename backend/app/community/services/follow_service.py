@@ -174,13 +174,9 @@ def follow(
 
     if not _is_private(target):
         # Public target — write the follow edge if missing.
-        existing = _existing_follow(
-            db, follower_id=follower.id, followed_id=target.id
-        )
+        existing = _existing_follow(db, follower_id=follower.id, followed_id=target.id)
         if existing is not None:
-            return FollowResult(
-                request_id=existing.public_id, status="following"
-            )
+            return FollowResult(request_id=existing.public_id, status="following")
         edge = CommunityFollow(
             follower_profile_id=follower.id,
             followed_profile_id=target.id,
@@ -191,13 +187,9 @@ def follow(
         except IntegrityError as exc:
             db.rollback()
             # A concurrent writer won the race — re-read and return.
-            again = _existing_follow(
-                db, follower_id=follower.id, followed_id=target.id
-            )
+            again = _existing_follow(db, follower_id=follower.id, followed_id=target.id)
             if again is not None:
-                return FollowResult(
-                    request_id=again.public_id, status="following"
-                )
+                return FollowResult(request_id=again.public_id, status="following")
             raise FollowAlreadyExists(str(exc)) from exc
         return FollowResult(request_id=edge.public_id, status="following")
 
@@ -217,9 +209,7 @@ def follow(
         existing_request.status = "requested"
         existing_request.responded_at = None
         db.flush()
-        return FollowResult(
-            request_id=existing_request.public_id, status="requested"
-        )
+        return FollowResult(request_id=existing_request.public_id, status="requested")
 
     request = CommunityFollowRequest(
         requester_profile_id=follower.id,
@@ -231,13 +221,9 @@ def follow(
         db.flush()
     except IntegrityError as exc:
         db.rollback()
-        again = _existing_request(
-            db, requester_id=follower.id, target_id=target.id
-        )
+        again = _existing_request(db, requester_id=follower.id, target_id=target.id)
         if again is not None:
-            return FollowResult(
-                request_id=again.public_id, status="requested"
-            )
+            return FollowResult(request_id=again.public_id, status="requested")
         raise FollowAlreadyExists(str(exc)) from exc
     return FollowResult(request_id=request.public_id, status="requested")
 
@@ -386,17 +372,13 @@ def unfollow(
         # not following them (or never was).
         return "noop"
 
-    edge = _existing_follow(
-        db, follower_id=follower.id, followed_id=target.id
-    )
+    edge = _existing_follow(db, follower_id=follower.id, followed_id=target.id)
     if edge is not None:
         db.delete(edge)
         db.flush()
         return "unfollowed"
 
-    request = _existing_request(
-        db, requester_id=follower.id, target_id=target.id
-    )
+    request = _existing_request(db, requester_id=follower.id, target_id=target.id)
     if request is not None and request.status == "requested":
         request.status = "cancelled"
         request.responded_at = _utcnow()
@@ -421,9 +403,7 @@ def remove_follower(
     follower = _resolve_profile_by_public_id(db, follower_public_id)
     if owner is None or follower is None:
         return None
-    edge = _existing_follow(
-        db, follower_id=follower.id, followed_id=owner.id
-    )
+    edge = _existing_follow(db, follower_id=follower.id, followed_id=owner.id)
     if edge is None:
         return None
     db.delete(edge)

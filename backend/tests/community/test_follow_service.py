@@ -360,12 +360,8 @@ def test_a2_concurrent_follow_writes_produce_one_row(session_factory):
     assert not errors, f"Concurrent writers raised: {errors}"
 
     with session_factory() as db:
-        profile_a = (
-            db.query(CommunityProfile).filter_by(public_id=a_id).one()
-        )
-        profile_b = (
-            db.query(CommunityProfile).filter_by(public_id=b_id).one()
-        )
+        profile_a = db.query(CommunityProfile).filter_by(public_id=a_id).one()
+        profile_b = db.query(CommunityProfile).filter_by(public_id=b_id).one()
         count = (
             db.query(CommunityFollow)
             .filter_by(
@@ -415,9 +411,7 @@ def test_swap_unique_constraint_breaks_a2(tmp_path, monkeypatch):
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
 
-    engine = create_engine(
-        db_url, connect_args={"check_same_thread": False}
-    )
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
     enable_sqlite_foreign_keys(engine)
 
     # Drop the production table and recreate it without the
@@ -535,12 +529,8 @@ def test_a3_private_profile_request_lifecycle(session_factory):
     unfollow) flips to cancelled; refollow after decline re-opens.
     """
     with session_factory() as db:
-        owner = _make_profile_with_visibility(
-            db, user_id=1, visibility="private"
-        )
-        requester = _make_profile_with_visibility(
-            db, user_id=2, visibility="public"
-        )
+        owner = _make_profile_with_visibility(db, user_id=1, visibility="private")
+        requester = _make_profile_with_visibility(db, user_id=2, visibility="public")
         db.commit()
         owner_id = owner.public_id
         requester_id = requester.public_id
@@ -569,9 +559,7 @@ def test_a3_private_profile_request_lifecycle(session_factory):
     assert result.status == "accepted"
 
     with session_factory() as db:
-        owner_pk = (
-            db.query(CommunityProfile).filter_by(public_id=owner_id).one().id
-        )
+        owner_pk = db.query(CommunityProfile).filter_by(public_id=owner_id).one().id
         requester_pk = (
             db.query(CommunityProfile).filter_by(public_id=requester_id).one().id
         )
@@ -666,12 +654,8 @@ def test_a3_unfollow_pending_request_cancels(session_factory):
     'cancelled' (the 'cancel' branch).
     """
     with session_factory() as db:
-        owner = _make_profile_with_visibility(
-            db, user_id=1, visibility="private"
-        )
-        requester = _make_profile_with_visibility(
-            db, user_id=2, visibility="public"
-        )
+        owner = _make_profile_with_visibility(db, user_id=1, visibility="private")
+        requester = _make_profile_with_visibility(db, user_id=2, visibility="public")
         db.commit()
         owner_id, requester_id = owner.public_id, requester.public_id
 
@@ -699,9 +683,7 @@ def test_a3_unfollow_pending_request_cancels(session_factory):
         requester_pk = (
             db.query(CommunityProfile).filter_by(public_id=requester_id).one().id
         )
-        owner_pk = (
-            db.query(CommunityProfile).filter_by(public_id=owner_id).one().id
-        )
+        owner_pk = db.query(CommunityProfile).filter_by(public_id=owner_id).one().id
         row = (
             db.query(CommunityFollowRequest)
             .filter_by(
@@ -718,12 +700,8 @@ def test_a3_decline_is_idempotent(session_factory):
     success (no exception, no state mutation).
     """
     with session_factory() as db:
-        owner = _make_profile_with_visibility(
-            db, user_id=1, visibility="private"
-        )
-        requester = _make_profile_with_visibility(
-            db, user_id=2, visibility="public"
-        )
+        owner = _make_profile_with_visibility(db, user_id=1, visibility="private")
+        requester = _make_profile_with_visibility(db, user_id=2, visibility="public")
         db.commit()
         owner_id, requester_id = owner.public_id, requester.public_id
 
@@ -765,12 +743,8 @@ def test_a4_remove_follower_does_not_block(session_factory):
     operations are independent).
     """
     with session_factory() as db:
-        owner = _make_profile_with_visibility(
-            db, user_id=1, visibility="public"
-        )
-        follower = _make_profile_with_visibility(
-            db, user_id=2, visibility="public"
-        )
+        owner = _make_profile_with_visibility(db, user_id=1, visibility="public")
+        follower = _make_profile_with_visibility(db, user_id=2, visibility="public")
         db.commit()
         owner_id = owner.public_id
         follower_id = follower.public_id
@@ -797,9 +771,7 @@ def test_a4_remove_follower_does_not_block(session_factory):
 
     # Edge is gone.
     with session_factory() as db:
-        owner_pk = (
-            db.query(CommunityProfile).filter_by(public_id=owner_id).one().id
-        )
+        owner_pk = db.query(CommunityProfile).filter_by(public_id=owner_id).one().id
         follower_pk = (
             db.query(CommunityProfile).filter_by(public_id=follower_id).one().id
         )
@@ -844,9 +816,7 @@ def _bulk_follow(
             db.query(CommunityProfile).filter_by(public_id=owner_public_id).one().id
         )
         for uid in follower_user_ids:
-            f = _make_profile_with_visibility(
-                db, user_id=uid, visibility="public"
-            )
+            f = _make_profile_with_visibility(db, user_id=uid, visibility="public")
             db.add(
                 CommunityFollow(
                     follower_profile_id=f.id,
@@ -864,13 +834,13 @@ def test_a5_cursor_pagination_no_duplicates(session_factory):
     when ``created_at`` collides — the §7 contract.
     """
     with session_factory() as db:
-        owner = _make_profile_with_visibility(
-            db, user_id=1, visibility="public"
-        )
+        owner = _make_profile_with_visibility(db, user_id=1, visibility="public")
         db.commit()
         owner_id = owner.public_id
 
-    _bulk_follow(session_factory, owner_public_id=owner_id, follower_user_ids=list(range(2, 12)))
+    _bulk_follow(
+        session_factory, owner_public_id=owner_id, follower_user_ids=list(range(2, 12))
+    )
 
     # Walk the page in 3-row steps until empty.
     seen: set[uuid.UUID] = set()
@@ -910,9 +880,7 @@ def test_a5_cursor_round_trip_with_ties(session_factory):
     from datetime import datetime, timedelta, timezone
 
     with session_factory() as db:
-        owner = _make_profile_with_visibility(
-            db, user_id=1, visibility="public"
-        )
+        owner = _make_profile_with_visibility(db, user_id=1, visibility="public")
         db.commit()
         owner_id = owner.public_id
         owner_pk = owner.id
@@ -923,9 +891,7 @@ def test_a5_cursor_round_trip_with_ties(session_factory):
     base_ts = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     with session_factory() as db:
         for i, uid in enumerate(range(2, 8)):
-            f = _make_profile_with_visibility(
-                db, user_id=uid, visibility="public"
-            )
+            f = _make_profile_with_visibility(db, user_id=uid, visibility="public")
             ts = base_ts + timedelta(microseconds=i)
             db.execute(
                 text(
