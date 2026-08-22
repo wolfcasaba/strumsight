@@ -282,8 +282,10 @@ branch-en.
   endpointok felvettek egy `current_user: CurrentUser` paramétert — a
   router minden más mutáló végpontjával konzisztensen. A láthatósági
   szűrés (Kör 8/13) továbbra is kimaradt, de a hitelesítés a router
-  saját invariánsa. Két új teszt (401 `Authorization` nélkül) +
-  egy 200-as happy-path (auth-val) a `test_follow_service.py`-ban.
+  saját invariánsa. Két új teszt (403-as `Authorization`-nélküli
+  elutasítás — a FastAPI `HTTPBearer(auto_error=True)` "no bearer
+  at all" kódja, a `test_auth.py::142` precedens szerint) + egy
+  200-as happy-path (auth-val) a `test_follow_service.py`-ban.
 * **F3 (MAJOR, megoldva):** a `relationship_repository_impl.dart`
   `unfollow()` és `removeFollower()` metódusai a `DELETE` URL-be
   fűzik az `?idempotency_key=${Uri.encodeQueryComponent(key)}` query
@@ -324,8 +326,6 @@ determinisztikusan.
 
 #### §6.1 valódi-sértés próba — ténylegesen elvégzett proof
 
-#### §6.1 valódi-sértés próba — ténylegesen elvégzett manuális proof
-
 A brief §6.1 kötelező valódi-sértés próbája a `(follower_profile_id,
 followed_profile_id)` unique constraint eltávolításával demonstrálja,
 hogy KONKURENS hívás esetén az A2 cella pirosra vált. A teszt a
@@ -341,7 +341,7 @@ cd backend
 #    ``UNIQUE (follower_profile_id, followed_profile_id)`` constraintet.
 # 2) A teszt indítása — a Barrier biztosítja, hogy a két szál
 #    egyszerre lépjen a service_follow() hívásba:
-.venv/bin/python -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 -q
+python3 -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 -q
 # 3) Elvárt: count == 2 (két sor a community_follows táblában).
 ```
 
@@ -352,11 +352,27 @@ két szál minden esetben átjut az existence-check → INSERT ablakon,
 mindkét `INSERT` sikeres (mert nincs UNIQUE), `count == 2`.
 
 ```bash
-$ cd backend
+$ cd /home/ubuntu/ss-mm-e09-r07/backend
 $ for i in $(seq 1 15); do
-    .venv/bin/python -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 -q
+    python3 -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 \
+      2>&1 | grep -E "passed|failed" | tail -1
   done
-# 15/15 green — output: 15 passed in X.XXs each
+1 passed, 4 warnings in 0.77s
+1 passed, 4 warnings in 0.75s
+1 passed, 4 warnings in 0.74s
+1 passed, 4 warnings in 0.75s
+1 passed, 4 warnings in 0.74s
+1 passed, 4 warnings in 0.75s
+1 passed, 4 warnings in 0.74s
+1 passed, 4 warnings in 0.74s
+1 passed, 4 warnings in 0.73s
+1 passed, 4 warnings in 0.75s
+1 passed, 4 warnings in 0.75s
+1 passed, 4 warnings in 0.75s
+1 passed, 4 warnings in 0.74s
+1 passed, 4 warnings in 0.74s
+1 passed, 4 warnings in 0.76s
+# 15/15 green — timing consistent ~0.74s
 ```
 
 (Azonos service layer re-read-et a teszt kódja `FollowAlreadyExists`
@@ -365,9 +381,13 @@ constraint nélküli állapotot, nem a kivétel típusa.)
 
 #### Diff statisztika
 
+A javító kör 1 kizárólag az `allowed_paths` listáján lévő fájlokat
+érinti (a `docs/reviews/e09-r07-security-review.md` reviewer-artifact,
+ami a review-commit során jött létre, a `git add -A` egyszer
+besöpörte — a javító kör 1 végén külön `git rm`-elve lett, így az
+implementer commit nem nyúlt hozzá):
+
 ```
- docs/reviews/e09-r07-security-review.md          | + (Claude review
-                                                   futtatásakor jött létre)
  backend/app/community/routers/social_graph.py    | F2 (current_user a
                                                    GET endpointokon) +
                                                    F4 (FollowAlreadyExists)
