@@ -343,6 +343,70 @@ void main() {
     });
   });
 
+  group(
+    'F1 — wire-shape compatibility (Dart encoder matches backend schema)',
+    () {
+      test(
+        'encodeUpload produces a flat wire shape — no nested `receipt` key',
+        () {
+          final receipt = SyncReceipt(
+            entry: _entry(
+              ledgerId: 'ledger-1',
+              sourceEventId: 'event-1',
+              baseXp: 10,
+              bonusXp: 0,
+            ),
+            status: LedgerEntrySyncStatus.unverified,
+          );
+          final envelope = SyncLedgerEnvelope(receipts: <SyncReceipt>[receipt]);
+
+          final json = GamificationSyncContract.encodeUpload(envelope);
+
+          // Envelope-level: schemaVersion carries the contract version, not
+          // per-receipt.
+          expect(json['schemaVersion'], gamificationSyncContractVersion);
+          expect(json['receipts'], hasLength(1));
+
+          final rawReceipts = json['receipts']! as List<Object?>;
+          final onTheWire = rawReceipts.first! as Map<String, Object?>;
+
+          // Flat: the receipt fields sit at the element root, so the
+          // backend `ReceiptUpload` (which reads each field at root) accepts
+          // it. Mirrors the backend acceptance test in
+          // `backend/tests/test_gamification_ledger.py`.
+          expect(onTheWire['ledgerId'], 'ledger-1');
+          expect(onTheWire['sourceEventId'], 'event-1');
+          expect(onTheWire['schemaVersion'], rewardLedgerEntrySchemaVersion);
+          expect(onTheWire['policyVersion'], 1);
+          expect(onTheWire['baseXp'], 10);
+          expect(onTheWire['bonusXp'], 0);
+
+          // Forbidden on the wire (these would make the backend 422):
+          // - nested `receipt` wrapper — backend would say "Extra inputs are
+          //   not permitted";
+          // - `status` — server treats every upload as `unverified` so the
+          //   field is redundant (ADR 0394 §5.3);
+          // - `totalXp` — server-computed aggregate (ADR 0394 §5.1).
+          expect(
+            onTheWire.containsKey('receipt'),
+            isFalse,
+            reason: 'Receipt must not be wrapped in a nested `receipt` object',
+          );
+          expect(
+            onTheWire.containsKey('status'),
+            isFalse,
+            reason: 'Status is server-side output, not on upload wire',
+          );
+          expect(
+            onTheWire.containsKey('totalXp'),
+            isFalse,
+            reason: 'totalXp is server-computed; clients must not send it',
+          );
+        },
+      );
+    },
+  );
+
   group('§6.1 boundary matrix', () {
     test(
       '"below threshold" — only ledgerId dedups cross-device → DUPLICATE',
