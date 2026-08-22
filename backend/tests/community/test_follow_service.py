@@ -1164,30 +1164,44 @@ def test_a7_router_followers_pagination_endpoint(client, session_factory):
 # Kör 8 / Kör 13, but authentication (a valid JWT must be present)
 # is the router's own invariant — every other endpoint in this
 # router enforces it.
+#
+# FastAPI's ``HTTPBearer(auto_error=True)`` returns 403 when the
+# Authorization header is missing entirely (the codebase-wide
+# pattern — see ``test_auth.py::142`` "no bearer at all → 403").
+# When the header IS present but the token is invalid, the
+# ``get_current_user`` resolver raises 401. Both signal an
+# authenticated-only endpoint rejecting the call; the test asserts
+# the missing-header case (the canary the F2 review required).
 
 
 def test_f2_get_followers_rejects_missing_authorization_header(client):
     """F2 — GET /community/profiles/{id}/followers with no
-    ``Authorization`` header must return 401.
+    ``Authorization`` header must return 403 (FastAPI's
+    HTTPBearer ``no bearer at all`` convention — the §F2 invariant
+    is "the endpoint is authenticated"; the status code follows
+    the codebase-wide ``HTTPBearer`` default).
     """
     response = client.get(
         "/community/profiles/00000000-0000-0000-0000-000000000001/followers"
     )
-    assert (
-        response.status_code == 401
-    ), f"expected 401 without auth, got {response.status_code}: {response.text}"
+    assert response.status_code == 403, (
+        f"F2 violated — missing Authorization header should reject; "
+        f"got {response.status_code}: {response.text}"
+    )
 
 
 def test_f2_get_following_rejects_missing_authorization_header(client):
     """F2 — GET /community/profiles/{id}/following with no
-    ``Authorization`` header must return 401.
+    ``Authorization`` header must return 403 (same convention as
+    ``test_f2_get_followers_rejects_missing_authorization_header``).
     """
     response = client.get(
         "/community/profiles/00000000-0000-0000-0000-000000000002/following"
     )
-    assert (
-        response.status_code == 401
-    ), f"expected 401 without auth, got {response.status_code}: {response.text}"
+    assert response.status_code == 403, (
+        f"F2 violated — missing Authorization header should reject; "
+        f"got {response.status_code}: {response.text}"
+    )
 
 
 def test_f2_get_following_endpoint_authenticated_round_trip(client, session_factory):
