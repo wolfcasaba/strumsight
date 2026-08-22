@@ -1,0 +1,101 @@
+{
+  "@@locale": "en",
+
+  "communityGateDisabledTitle": "Community is not available in this build",
+  "@communityGateDisabledTitle": {},
+
+  "communityGateDisabledBody": "The Community feature is hidden by configuration. The rest of StrumSight — detection, practice, settings — works as usual.",
+
+  "communityGateLoggedOutTitle": "Sign in to use Community",
+  "@communityGateLoggedOutTitle": {},
+
+  "communityGateLoggedOutBody": "Community profiles are tied to your StrumSight account so you can find people across devices.",
+
+  "communityGateLoggedOutCta": "Sign in or create an account",
+
+  "communityGateProfileMissingTitle": "Create your Community profile",
+  "@communityGateProfileMissingTitle": {},
+
+  "communityGateProfileMissingBody": "Your profile is created explicitly — StrumSight will never fill it in for you.",
+
+  "communityGateProfileMissingCta": "Create profile",
+
+  "communityGateLoadingBody": "Checking your Community profile…",
+
+  "communityGateErrorBody": "Could not load your Community profile. Pull to refresh, or check your connection.",
+
+  "communityEditCreateTitle": "Create your Community profile",
+  "@communityEditCreateTitle": {},
+
+  "communityEditEditTitle": "Edit your Community profile",
+  "@communityEditEditTitle": {},
+
+  "communityEditHandleLabel": "Handle",
+  "@communityEditHandleLabel": {},
+  "communityEditHandleHelper": "3–24 characters. Letters, digits, '_' or '-'. You can't change this later in this build.",
+  "@communityEditHandleHelper": {},
+
+  "communityEditDisplayNameLabel": "Display name",
+  "@communityEditDisplayNameLabel": {},
+  "communityEditDisplayNameHelper": "Up to 40 characters. Shown next to your handle.",
+
+  "communityEditBioLabel": "Bio",
+  "@communityEditBioLabel": {},
+  "communityEditBioHelper": "Up to 500 characters. Saved on this device only — the Community backend does not store it yet.",
+
+  "communityEditInterestLabel": "Interest tags",
+  "@communityEditInterestLabel": {},
+  "communityEditInterestHelper": "Add up to 16 tags (e.g. fingerstyle, blues). Tap a tag to remove it. Saved on this device only.",
+
+  "communityEditAddInterestCta": "Add tag",
+
+  "communityEditPrivacyTitle": "Who can see your profile",
+  "@communityEditPrivacyTitle": {},
+  "communityEditPrivacyBody": "You can change this any time once the privacy settings page is available. StrumSight's default is to keep new profiles off the public list.",
+
+  "communityEditPrivacyOptionPublic": "Public",
+  "communityEditPrivacyOptionPublicBody": "Anyone, signed in or not, can find and view your profile.",
+
+  "communityEditPrivacyOptionFollowers": "Followers",
+  "communityEditPrivacyOptionFollowersBody": "Only people you have accepted as followers can see your profile.",
+
+  "communityEditPrivacyOptionPrivate": "Private",
+  "communityEditPrivacyOptionPrivateBody": "Nobody but you can see your profile. The profile exists for you, not for discovery.",
+
+  "communityEditPrivacyAudienceLabel": "Default audience for new posts",
+  "@communityEditPrivacyAudienceLabel": {},
+
+  "communityEditSubmit": "Create profile",
+  "@communityEditSubmit": {},
+  "communityEditSubmitting": "Creating…",
+  "@communityEditSubmitting": {},
+  "communityEditUpdate": "Save changes",
+  "@communityEditUpdate": {},
+  "communityEditUpdating": "Saving…",
+  "@communityEditUpdating": {},
+
+  "communityEditHandleTaken": "This handle is already taken. Try a different one.",
+
+  "communityEditDisplayNameRequired": "Display name can't be empty.",
+
+  "communityEditHandleRequired": "Handle is required.",
+
+  "communityEditHandleTooShort": "Handle must be at least 3 characters.",
+
+  "communityEditHandleTooLong": "Handle must be at most 24 characters.",
+
+  "communityEditHandleBadChars": "Handle can only contain letters, digits, '_' or '-', and must start and end with a letter or digit.",
+
+  "communityEditHandleReserved": "That handle is reserved — pick a different one.",
+
+  "communityEditNetworkError": "Network error — your changes are still here. Try again when you're back online.",
+
+  "communityEditServerError": "Server error — please try again shortly.",
+
+  "communityEditAvatarLabel": "Profile photo",
+  "@communityEditAvatarLabel": {},
+  "communityEditAvatarNotUploaded": "Profile photo upload is not available in this build.",
+  "communityEditBadgesLabel": "Earned badges",
+  "@communityEditBadgesLabel": {},
+  "communityEditBadgesBody": "Badges are read-only in this build — they come from your practice history."
+}

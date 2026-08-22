@@ -1,0 +1,101 @@
+{
+  "@@locale": "hu",
+
+  "communityGateDisabledTitle": "A Közösség nem elérhető ebben a buildben",
+  "@communityGateDisabledTitle": {},
+
+  "communityGateDisabledBody": "A Közösség funkció konfigurációban ki van kapcsolva. A StrumSight többi része — felismerés, gyakorlás, beállítások — a szokásos módon működik.",
+
+  "communityGateLoggedOutTitle": "Jelentkezz be a Közösség használatához",
+  "@communityGateLoggedOutTitle": {},
+
+  "communityGateLoggedOutBody": "A Közösség-profilod a StrumSight-fiókodhoz kötődik, hogy eszközök között megtaláljanak az emberek.",
+
+  "communityGateLoggedOutCta": "Bejelentkezés vagy fiók létrehozása",
+
+  "communityGateProfileMissingTitle": "Hozd létre a Közösség-profilod",
+  "@communityGateProfileMissingTitle": {},
+
+  "communityGateProfileMissingBody": "A profilod explicit jóváhagyással jön létre — a StrumSight soha nem tölti ki helyetted.",
+
+  "communityGateProfileMissingCta": "Profil létrehozása",
+
+  "communityGateLoadingBody": "Közösség-profilod ellenőrzése…",
+
+  "communityGateErrorBody": "Nem sikerült betölteni a Közösség-profilodat. Húzd le a frissítéshez, vagy ellenőrizd a kapcsolatot.",
+
+  "communityEditCreateTitle": "Közösség-profilod létrehozása",
+  "@communityEditCreateTitle": {},
+
+  "communityEditEditTitle": "Közösség-profilod szerkesztése",
+  "@communityEditEditTitle": {},
+
+  "communityEditHandleLabel": "Azonosító",
+  "@communityEditHandleLabel": {},
+  "communityEditHandleHelper": "3–24 karakter. Betűk, számok, '_' vagy '-'. Ebben a buildben később nem módosítható.",
+  "@communityEditHandleHelper": {},
+
+  "communityEditDisplayNameLabel": "Megjelenő név",
+  "@communityEditDisplayNameLabel": {},
+  "communityEditDisplayNameHelper": "Max. 40 karakter. Az azonosítód mellett jelenik meg.",
+
+  "communityEditBioLabel": "Bemutatkozás",
+  "@communityEditBioLabel": {},
+  "communityEditBioHelper": "Max. 500 karakter. Csak ezen az eszközön tárolódik — a Közösség-szerver még nem menti.",
+
+  "communityEditInterestLabel": "Érdeklődési címkék",
+  "@communityEditInterestLabel": {},
+  "communityEditInterestHelper": "Adj hozzá max. 16 címkét (pl. fingerstyle, blues). Koppints egy címkére az eltávolításhoz. Csak ezen az eszközön tárolódik.",
+
+  "communityEditAddInterestCta": "Címke hozzáadása",
+
+  "communityEditPrivacyTitle": "Ki láthatja a profilodat",
+  "@communityEditPrivacyTitle": {},
+  "communityEditPrivacyBody": "Ezt később bármikor módosíthatod, amint elérhető lesz az adatvédelmi beállítások oldal. A StrumSight alapértelmezetten az új profilokat nem teszi nyilvános listába.",
+
+  "communityEditPrivacyOptionPublic": "Nyilvános",
+  "communityEditPrivacyOptionPublicBody": "Bárki — bejelentkezve vagy anélkül — megtalálhatja és megtekintheti a profilodat.",
+
+  "communityEditPrivacyOptionFollowers": "Követők",
+  "communityEditPrivacyOptionFollowersBody": "Csak azok láthatják a profilodat, akiket követőként elfogadtál.",
+
+  "communityEditPrivacyOptionPrivate": "Privát",
+  "communityEditPrivacyOptionPrivateBody": "Csak te látod a profilodat. A profil a tiéd, nem a felfedezhetőségért van.",
+
+  "communityEditPrivacyAudienceLabel": "Új bejegyzések alapértelmezett közönsége",
+  "@communityEditPrivacyAudienceLabel": {},
+
+  "communityEditSubmit": "Profil létrehozása",
+  "@communityEditSubmit": {},
+  "communityEditSubmitting": "Létrehozás…",
+  "@communityEditSubmitting": {},
+  "communityEditUpdate": "Változtatások mentése",
+  "@communityEditUpdate": {},
+  "communityEditUpdating": "Mentés…",
+  "@communityEditUpdating": {},
+
+  "communityEditHandleTaken": "Ez az azonosító már foglalt. Próbálj egy másikat.",
+
+  "communityEditDisplayNameRequired": "A megjelenő név nem lehet üres.",
+
+  "communityEditHandleRequired": "Az azonosító megadása kötelező.",
+
+  "communityEditHandleTooShort": "Az azonosító legalább 3 karakter hosszú legyen.",
+
+  "communityEditHandleTooLong": "Az azonosító legfeljebb 24 karakter hosszú lehet.",
+
+  "communityEditHandleBadChars": "Az azonosító csak betűket, számokat, '_' vagy '-' karaktert tartalmazhat, és betűvel vagy számmal kell kezdődnie és végződnie.",
+
+  "communityEditHandleReserved": "Ez az azonosító foglalt — válassz másikat.",
+
+  "communityEditNetworkError": "Hálózati hiba — a változtatásaid megmaradtak. Próbáld újra, ha online vagy.",
+
+  "communityEditServerError": "Szerverhiba — próbáld újra rövidesen.",
+
+  "communityEditAvatarLabel": "Profilkép",
+  "@communityEditAvatarLabel": {},
+  "communityEditAvatarNotUploaded": "A profilkép feltöltése ebben a buildben nem elérhető.",
+  "communityEditBadgesLabel": "Szerzett jelvények",
+  "@communityEditBadgesLabel": {},
+  "communityEditBadgesBody": "A jelvények ebben a buildben csak olvashatók — a gyakorlási előzményekből származnak."
+}

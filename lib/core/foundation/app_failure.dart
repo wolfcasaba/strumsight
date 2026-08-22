@@ -71,6 +71,19 @@ abstract final class FailureCode {
   static const String cancelled = 'cancelled';
   static const String unknown = 'unknown';
 
+  // --- community ---------------------------------------------------------
+  // E09-R06 / ADR 0400 §2 — the data layer translates HTTP 409 with
+  // ``profile_exists`` / ``handle_taken`` detail codes into these
+  // ``AppFailure`` codes so the controller can branch on a stable
+  // string without parsing the HTTP layer.
+  static const String communityProfileExists = 'community.profile_exists';
+  static const String communityHandleTaken = 'community.handle_taken';
+  static const String communityProfileMissing = 'community.profile_missing';
+  // Generic 409 — the shared ``ApiClient`` collapses the two create
+  // conflicts to this single code; the controller disambiguates by
+  // reading the pre-submit ``fetchMyProfile()`` result.
+  static const String communityConflict = 'community.conflict';
+
   // --- practice -----------------------------------------------------------
   static const String practiceContentUnsupported =
       'practice.content_unsupported';
