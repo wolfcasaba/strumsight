@@ -25,6 +25,7 @@ allowed_paths = [
   "backend/tests/community/test_access_policy.py",
   "docs/rounds/e09-r04-profile-privacy-and-audience-policy.md",
   "docs/adr/0398-profile-privacy-audience-policy-and-access-control.md",
+  "backend/tests/test_migrations.py",
 ]
 gate_tests = [
   "test/core/architecture_dependency_test.dart"
@@ -94,6 +95,82 @@ resource-verzióról; a legközelebbi releváns előzmény a
 [ADR 0291](../adr/0291-community-is-optional-and-private-by-default.md)
 (alap: a közösség nem nyilvános alapból — ezzel egyezik az A5/§5.3). Nincs
 kimondottan releváns korábbi HALT vagy LESSON erre a témára (S8 teljesítve).
+
+## 0.1 Self-heal, `blocked` jelzés után (Claude, 2026-08-22, HEAD `fd201589`)
+
+**Az implementer (`minimax`) helyesen `blocked`-ot jelzett** (nem tágította
+csendben a listát, nem írta át felügyelet nélkül a tesztet) — a §6 mind a
+HAT acceptance-cellája (A1–A6) ZÖLD, a gate 9 lépéséből 8 ZÖLD, az EGYETLEN
+PIROS egy, a Kör 4 hatókörén KÍVÜLI, MEGLÉVŐ CI-teszt:
+`backend/tests/test_migrations.py::
+test_downgrade_one_revision_drops_only_community_tables`.
+
+**Mért gyökérok — az L411→L413 minta HARMADIK láncszeme.** Az E09-R02
+self-heal ([[L411]]) ezt a tesztet a "tábla-halmaz szűkül" mérésre javította
+(`tables_after < tables_at_head`), az E09-R03 self-heal ([[L413]]) ezt
+lánc-agnosztikussá tette (magát a relációt nem, csak a hardcode-olt
+táblaneveket generalizálta) — de MINDKÉT javítás hallgatólagosan
+feltételezte, hogy MINDEN jövőbeli fejmigráció legalább egy TÁBLÁT ad
+hozzá/vesz el. Az E09-R04 (ADR 0398 §1, ez a brief §0.0 B1 pontja) egy
+OSZLOP-szintű migrációt ír elő — a `CommunityPrivacySettings`-en két új
+oszlop, se új tábla (ADR §1 kifejezetten tiltja), se a `CommunityProfile`
+bővítése (tilos zóna). Egy ilyen migráció downgrade-je a tábla-HALMAZT nem
+változtatja (`tables_after == tables_at_head`), ezért a szigorú részhalmaz-
+reláció (`<`) hamis — a teszt DETERMINISZTIKUSAN elbukik, függetlenül attól,
+hogy a downgrade helyesen visszavonta-e az oszlopokat.
+
+Reprodukálva függetlenül (implementer §10 handoff, majd az orchesztrátor
+saját, a munkapéldányban megismételt futása):
+
+```
+FAILED tests/test_migrations.py::test_downgrade_one_revision_drops_only_community_tables
+AssertionError: one-step downgrade must remove at least the head migration's own tables
+```
+
+**Miért nem H7/H1/H3, hanem önjavítás a §2 szerint:** a `backend/tests/
+test_migrations.py` a Kör 4 SAJÁT, még nem merge-elt round-branchén él —
+egy MEGLÉVŐ, megosztott (cross-round) teszt-fájl szűk, dokumentált
+bővítése ugyanaz a kategória, mint [[L411]] és [[L413]] (mindkettő
+`allowed_paths`-tágítás + célzott teszt-generalizálás volt, NEM emberi
+döntést igénylő halt) — a kör-brief `allowed_paths`-a fent bővítve.
+
+**A végleges javítás — egy néggyel LÉPÉSSEL tovább, mint [[L413]], hogy ne
+kelljen negyedszer is megismételni:** a teszt ne TÁBLA-halmazt, hanem
+TELJES séma-pillanatképet (tábla → oszlophalmaz) hasonlítson össze, és bármi
+VÁLTOZÁS (tábla ÉS/VAGY oszlop) elégséges legyen — ez egyszerre fedi a
+tábla-szintű ÉS az oszlop-szintű migrációkat, tehát az Epic 9 hátralévő
+~28 körének egyikének sem kell ezt még egyszer megnyitnia:
+
+```python
+def _schema_snapshot(engine):
+    inspector = inspect(engine)
+    return {
+        table: frozenset(col["name"] for col in inspector.get_columns(table))
+        for table in inspector.get_table_names()
+    }
+
+# ... upgrade to head, snapshot, downgrade -1, snapshot again ...
+assert snapshot_after != snapshot_at_head, (
+    "one-step downgrade must undo at least the head migration's own "
+    "schema change (a table or a column)"
+)
+assert snapshot_after.get("users") == snapshot_at_head.get("users")
+assert snapshot_after.get("user_settings") == snapshot_at_head.get("user_settings")
+```
+
+A pontos szöveg és a docstring frissítése a javító prompt része
+(`.pipeline/fix-prompt-E09-R04-*.md`) — ez a §0.1 csak a MIÉRT-et és a
+mérték-elvet rögzíti, a implementer írja a tényleges kódot.
+
+**Másodlagos, folyamati lelet ugyanebből a futásból (`gate_shape=VIOLATION`,
+mérve a raw logból, NEM doc-szöveg false-positive, ld. [[L412]]):** az
+implementer a `tools/round-gate.sh`-t HÁROMSZOR futtatta `2>&1 | tail -15`/
+`| tail -30` mögé kötve, annak ellenére, hogy ezt a brief §7, az implementer
+prompt §5 és a `docs/execution/implementer-preamble-minimax.md` §2 explicit
+tiltja (a csővezeték elrejti a kilépési kódot). A §10 handoffban közölt,
+lépésenkénti ZÖLD/PIROS táblázat emiatt NEM tekinthető önmagában
+bizonyítéknak — a javító körben a gate-et TISZTÁN, csővezeték nélkül kell
+újrafuttatni, mielőtt a `done` jelzés elmegy.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
