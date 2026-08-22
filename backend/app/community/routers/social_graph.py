@@ -434,7 +434,13 @@ def _caller_profile_public_id(db: Session, user_id: int) -> uuid.UUID:
     ).first()
     if row is None:
         raise ValueError("caller has no community profile")
-    return row[0]
+    raw = row[0]
+    if isinstance(raw, str):
+        # SQLite returns CHAR(32) UUID columns as plain strings
+        # through raw text() queries. Wrap the hex form as a UUID
+        # so the rest of the service layer sees the type it expects.
+        return uuid.UUID(hex=raw)
+    return raw
 
 
 __all__ = [

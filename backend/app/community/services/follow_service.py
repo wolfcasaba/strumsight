@@ -477,6 +477,10 @@ def list_followers(
 ) -> FollowListPage:
     """Return one page of followers of ``profile_public_id``.
 
+    "Followers of X" = rows where ``followed_profile_id = X.id``
+    (the rows that point AT X); the ``follower_profile_id`` on
+    each row is the public-id of the follower we enumerate.
+
     Ordering is ``(created_at DESC, id DESC)`` per ADR 0401 §7.
     """
     profile = _resolve_profile_by_public_id(db, profile_public_id)
@@ -484,7 +488,7 @@ def list_followers(
         return FollowListPage(public_ids=(), next_cursor=None)
     return _paginate_follows(
         db,
-        target_column=CommunityFollow.follower_profile_id,
+        target_column=CommunityFollow.followed_profile_id,
         owner_id=profile.id,
         cursor=cursor,
         limit=limit,
@@ -498,13 +502,19 @@ def list_following(
     cursor: str | None,
     limit: int,
 ) -> FollowListPage:
-    """Return one page of profiles ``profile_public_id`` follows."""
+    """Return one page of profiles ``profile_public_id`` follows.
+
+    "X follows" = rows where ``follower_profile_id = X.id``
+    (the rows that originate FROM X); the ``followed_profile_id``
+    on each row is the public-id of the followed profile we
+    enumerate.
+    """
     profile = _resolve_profile_by_public_id(db, profile_public_id)
     if profile is None:
         return FollowListPage(public_ids=(), next_cursor=None)
     return _paginate_follows(
         db,
-        target_column=CommunityFollow.followed_profile_id,
+        target_column=CommunityFollow.follower_profile_id,
         owner_id=profile.id,
         cursor=cursor,
         limit=limit,
