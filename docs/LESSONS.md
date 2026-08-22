@@ -15183,3 +15183,49 @@ konvergált HEAD-en (`180c8d40`) futtatta a kötelező CI-t/merge-et.
 tilos zóna miatt ez a session nem javíthatja; follow-up egy jövőbeli
 GOV-körnek `tools/mm-round.sh`/`tools/codex-round.sh` explicit
 process-group-kill hozzáadására a jelzés-írás UTÁNI lépésként.
+
+## L406 — Egy "pinned empty public.dart" NEM hiányosság, hanem lezárt architekturális döntés: a pre-flightnak a MERGE-ELT guard-tesztet kell megtalálnia, nem csak a fájl tartalmát (E08-R26, 2026-08-22)
+
+**Mit mértünk.** A 2026-08-18-i E08-R26 brief a `gamification_tutor_adapter.dart`-tól
+azt várta, hogy az `ai_tutor` feature "public szerződését" importálja — de
+`lib/features/ai_tutor/public.dart` tartalma két sor (`library;` + egy
+doc-comment), semmilyen exportot nem tartalmaz. Egy felületes mérés ("a
+public.dart üres, tehát a brief pontatlan, majd bővítem egy exporttal")
+tévútra vitt volna: `test/features/ai_tutor/ai_tutor_boundary_test.dart`
+(E04-R01, MÁR MERGE-ELVE) kifejezetten kipinneli, hogy ez a fájl **nem**
+tartalmazhat import/export direktívát — az üresség szándékos, végleges
+architekturális határ, nem hiányzó munka. A pre-flight csak azért fogta meg
+ezt, mert a `node tools/knowledge-rag.mjs --corpus lessons,halts --top 5`
+visszakeresés (ADR 0312 kötelező lépése) az **L139** leckét hozta fel
+("egyetlen merge-elt, listán kívüli keresztmetsző guard csak a FULL CI-ben
+bukik") — enélkül a mérés megállt volna a fájl tartalmánál, és nem kereste
+volna meg a hozzá tartozó guard-tesztet.
+
+**Általánosítható szabály.** Ha egy `public.dart` (vagy bármely határ-fájl)
+üresnek vagy hiányosnak TŰNIK a brief elvárásához képest, a mérés NEM állhat
+meg a fájl tartalmának olvasásánál — grep-eld ki, van-e hozzá tartozó,
+MÁR MERGE-ELT guard-teszt (`grep -rn "<fájlnév>" test/`), ami ezt a
+formát SZÁNDÉKOSAN kényszeríti ki. Egy pinned-empty boundary ellen írt
+adapter a helyes válasz saját, hívó-fed (caller-fed) bemeneti típus
+definiálása — ez a minta már ELFOGADOTT precedens is volt
+(`lib/features/practice_generator/data/adapter/tutor_plan_proposal_adapter.dart`,
+ami már korábban is dokumentáltan nulla importtal dolgozott az `ai_tutor`-ból)
+— tehát a "guard-teszt + élő precedens" páros együtt egyértelműen mutatja: ne
+a fájlt bővítsd, kövesd a mintát.
+
+Ugyanebben a körben egy MÁSODIK, rokon hibaosztály (**L20**, elérhetetlen
+cél-státusz) is előkerült: a brief §5.3 egy `PlanStatus.completed`
+átmenetre épített, de `grep -rn "PlanStatus\." lib/features/
+practice_generator/` megmutatta, hogy ez az érték SOHA nem kerül
+beállításra — csak a blokk-szintű `PracticeItemStatus.completed` reachable.
+A feloldás mindkét esetben ugyanaz a minta: a brief-revízió (§0.0) NE
+próbálja "helyrehozni" a hiányzó kódutat (fájlbővítés, state-machine
+módosítás — mindkettő tilos zóna is lett volna), hanem az adapter kapjon
+saját, hívó-fed jelet, ami a valós, reachable állapotra épül.
+
+**Őrteszt:** [`docs/adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md`](adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)
+§Döntés 1 és 4; a tesztoldali bizonyíték `test/features/ai_tutor/
+ai_tutor_boundary_test.dart` (a pinned guard) és
+`test/features/gamification/integration/cross_feature_reward_flow_test.dart`
+A1 valódi-sértés próbája (a produkciós tutor-adapter zéró importja miatt
+strukturálisan lehetetlen egy chat-farm XP-ágat futtatni).
