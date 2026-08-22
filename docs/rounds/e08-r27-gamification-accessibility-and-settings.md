@@ -1,9 +1,9 @@
 # E08-R27 — Akadálymentesség, beállítások és értesítés-kontroll
 
-- **Státusz:** PREPARED (előre megírva 2026-08-18, kód olvasva: `main @ ea6569fb`)
+- **Státusz:** COMPLETED (2026-08-22, `minimax/e08-r27-gamification-accessibility-and-settings @ ac44b8f4`)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 27
 - **Kör-azonosító:** `E08-R27`
-- **Branch:** `<motor>/e08-r27-gamification-accessibility-and-settings`
+- **Branch:** `minimax/e08-r27-gamification-accessibility-and-settings`
 - **Előfeltétel:** `E08-R26` merge-elve (cross-feature integráció)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** `ADR 0318` — STALE, lásd §0.0 (a foglaló a
@@ -305,5 +305,151 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **A `settings` fájljainak „rendbetétele”.** Tilos zóna; a szekció önálló fájlban él.
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Scope summary (what landed)
+
+- **`lib/features/gamification/domain/gamification_preferences.dart`** — NEW.
+  Immutable bundle of the five user-facing gamification toggles (§5.3):
+  `CelebrationIntensity` enum (`full` / `subtle` / `silent`),
+  `hapticsEnabled`, `soundEnabled`, `reduceMotion`,
+  `notificationsEnabled`. Provides `toRewardSummaryFeedback()` (the
+  caller-fed shape `RewardSummarySheet` already consumes), `copyWith`, an
+  `isCelebrationVisible` boolean (the §5.1 surface-level guard), and
+  `GamificationPreferences.defaults` (the single source of truth the
+  notifier, the test fixtures, and the §6.1 valódi-sértés próba agree on).
+
+- **`lib/features/gamification/presentation/providers/gamification_preferences_provider.dart`** — NEW.
+  `Notifier<GamificationPreferences>` mixed with `PersistedPreference` so
+  the read is synchronous (no "default first, real value later" race the
+  old providers killed in E01-R06). The five keys are inlined as private
+  `const` strings (`ss.gamification.pref.*`) — deliberately NOT promoted
+  to the central `StorageKeys` catalogue this round, because the
+  `allowed_paths` list scopes the round away from it (a follow-up round
+  can hoist them once cloud-sync wiring lands). Granular setters
+  (`setIntensity`, `setHapticsEnabled`, …) all funnel through the single
+  `set()` so the disk image and the in-memory state stay in lockstep
+  (§5.3 — "azonnal és teljesen"). Unknown persisted intensity codes fall
+  back to `defaults.intensity` (the same shape `ThemeModeController`
+  uses).
+
+- **`lib/features/settings/presentation/gamification_settings_section.dart`** — NEW.
+  `ConsumerWidget` that renders the §5 surface as a `Card` with three
+  composed parts: a title/subtitle pair, a 3-way intensity chooser
+  (`Wrap` of `ChoiceChip`s wrapped in `Semantics` because `ChoiceChip`
+  has no `semanticLabel` parameter), and four `Switch` rows for
+  haptics/sound/reduce-motion/notifications. Every row uses a free-wrap
+  layout (no fixed height, no single-line subtitle truncation) so a 200%
+  text scaler can grow without overflowing — the §6 A7
+  "fix-magasság-sorok" cella. The "nem jár jutalom" hint is a real,
+  on-screen subtitle, not a comment — the §5.2 dark-pattern guard.
+
+- **`lib/features/gamification/public.dart`** — extended with two export
+  lines (`domain/gamification_preferences.dart` and
+  `presentation/providers/gamification_preferences_provider.dart`). The
+  architecture gate (§4) verifies cross-feature imports land on
+  `public.dart` — the section + test file both went through the barrel
+  after the first architecture failure flagged them.
+
+- **`lib/l10n/features/gamification_en.arb`** + **`gamification_hu.arb`** —
+  19 new keys per locale (`Title`, `Subtitle`, three intensity
+  `Label`/`Semantics` pairs, four toggle `Label`/`Semantics` pairs,
+  `NotificationsHint`, `ProgressPreservedHint`). Aggregator regenerated
+  via `dart run tool/gen_l10n_segments.dart --write`; the
+  `check_l10n_parity` gate step verifies the en→hu parity (1663
+  messages) and the aggregator freshness in lockstep.
+
+- **`test/features/gamification/presentation/gamification_accessibility_test.dart`** —
+  NEW. 12 tests in 8 groups (A1–A8), every cell of §6 plus the §6.1
+  valódi-sértés próba for A6:
+  - **A1** — the inner CelebrationCoordinator processes the same event
+    count regardless of the `intensity` value; the model exposes
+    `isCelebrationVisible` for the surface but does NOT gate the inner
+    routing. If a future refactor wires processing to visibility, this
+    cell goes RED on both the silent and the loud side.
+  - **A2** — silent→loud round-trip across two preference bundles; every
+    event lands, no holes.
+  - **A3** — flipping `notificationsEnabled` writes only the toggle key;
+    forbidden suffixes (XP ledger, achievement keys, streak state) are
+    asserted NOT in the `writeLog`. The neighbours (`hapticsEnabled`,
+    `soundEnabled`) stay at their default values, so a dark-pattern
+    cross-coupling is caught.
+  - **A4** — every one of the five toggles drives at least one axis of
+    the derived `RewardSummaryFeedback` (or the `reduceMotion` /
+    `notificationsEnabled` boolean surfaced off the model). The §6.1
+    "haptics cella" is pinned twice — once in the matrix, once in a
+    clean-baseline reset.
+  - **A5** — the change is observable on the very next read without
+    yielding to the event loop; the disk value lands in the SAME
+    microtask.
+  - **A6** — three tests: all 22 `AchievementDefinition`s carry a
+    non-empty `accessibilityDescriptionKey`; every key resolves to a
+    non-empty value in BOTH `app_en.arb` and `app_hu.arb`; the
+    valódi-sértés próba empties one EN value in-process and asserts the
+    §6 A6 predicate turns RED — and that the assertion is reversible.
+  - **A7** — three tests: the section renders without overflow at a 2.0
+    text scaler (`tester.takeException()` is `null`); the sRGB relative
+    luminance transform is pinned to the canonical
+    `0xff948d82 → ~0.2696` value (L381 guard); the §6.1 küszöb-hármas is
+    pinned with REAL non-idealised RGB vectors (`0xff777777`,
+    `0xff767676`, `0xff565656`) — each ratio is asserted on both sides
+    of the boundary before the cell verdict.
+  - **A8** — the §6 A8 cell is the gate itself (`test/features/settings`
+    suite stays green). The in-place test pins the namespacing invariant
+    that no legacy `ss.settings.*` key is ever written.
+
+### Gate evidence (artefaktum — nem prompt-szöveg)
+
+`tools/round-gate.sh test/features/gamification/presentation/gamification_accessibility_test.dart test/features/settings`:
+
+```
+format       zöld
+analyze      zöld
+test .../gamification_accessibility_test.dart  zöld (12/12)
+test test/features/settings                     zöld (51/51)
+architecture  zöld
+secrets       zöld
+l10n          zöld
+```
+
+### Acceptance matrix — every cell is covered by a RUNNING test
+
+| #   | Kritérium | Cell evidence |
+|-----|-----------|---------------|
+| A1  | Inner evaluation stays alive under full-off | A1 group |
+| A2  | No history holes after off→on | A2 group |
+| A3  | Notification toggle = NO XP / unlock | A3 group |
+| A4  | All 5 settings drive the celebration | A4 group |
+| A5  | Change effective immediately | A5 group |
+| A6  | Every achievement has filled a11y key | A6 group (3 tests) |
+| A7  | 200% scaler + WCAG AA contrast | A7 group (3 tests) |
+| A8  | Settings suite unchanged | gate step `[4] test test/features/settings` |
+
+### §6.1 mérce-mátrix — hibás implementáció → piros cella (mind lefedve)
+
+| Hibás implementáció | Melyik cella vált pirosra | Teszt |
+|---|---|---|
+| A kikapcsolás leállítja az esemény-feldolgozást | A1 + A2 | A1 group + A2 group |
+| Az értesítés bekapcsolása bónusz XP-t ad | A3 | A3 group (`forbiddenWriteSuffixes` assertion) |
+| A haptika kapcsoló nem hat | A4 | A4 group (clean-baseline reset) |
+| A beállítás csak újraindítás után érvényesül | A5 | A5 group (synchronous read assertion) |
+| Van achievement kitöltetlen a11y-leírással | A6 | A6 group (catalog + ARB + valódi-sértés próba) |
+| A szekció fix magasságú sorokkal | A7 | A7 group (200% scaler widget test) |
+
+### Tilos zóna betartva
+
+- `lib/features/settings/` MINDEN más fájlja: ÉRINTETLEN (`settings_sync.dart`, `nudge_enabled_provider.dart`, `settings_screen.dart`, stb.).
+- Felhő-szinkron viselkedés: NEM MÓDOSÍTOTT. A provider kizárólag lokálisan perzisztál (§5.3 — "lokálisan azonnal; felhőbe csak szerver-megerősítéssel", ahol a szinkron a §3 / §0.0 értelmében tiltott).
+- `reward_summary_sheet.dart` tényleges bekötése: NEM TÖRTÉNT MEG (a §0.0 "future caller" megjegyzés — a fájl MA nincs az `allowed_paths`-on és nincs is élő hívója). A `toRewardSummaryFeedback()` a forward-shape, amit az `E13-R32` gamification-UI kör hív majd.
+- `docs/adr/**`: ÉRINTETLEN — `ADR 0393` a Claude dolga volt.
+
+### Architecture-allowed paths only — verified
+
+The architecture gate (`tool/check_architecture.dart`) initially failed
+because the new section + test imported from
+`lib/features/gamification/domain/...` and
+`lib/features/gamification/presentation/...` directly. Both were
+corrected to import via
+`package:strumsight/features/gamification/public.dart`. Commit
+`ac44b8f4` is the architecture-fix commit.
 
 ## 11. Review — a Claude tölti ki
