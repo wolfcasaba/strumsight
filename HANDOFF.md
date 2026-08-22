@@ -61,6 +61,40 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E08-R24 KÉSZ — Practice Engine és Learn integráció — PR #401, squash `dc09f5fe` (2026-08-22)
+
+A gyakorlási session és a lecke-befejezés eredménye MOST már bekötve a
+gamifikáció jutalom-láncába (esemény → outbox → jogosultság → XP →
+főkönyv): `lib/features/practice/application/gamification_practice_adapter.dart`
++ `lib/features/learn/application/gamification_lesson_adapter.dart` (mindkettő
+ÚJ, kizárólag a gamification `public.dart`-on át importál, A4 architektúra-
+guard védi). Meglévő R05/R06 kapuk (`ActivityOutcome.completed/cancelled/
+failed`, `practiceOccurrenceCount` diminishing-returns) — nincs új szabály.
+Lecke-csillagok és legjobb pontosság VÁLTOZATLANOK (`lesson_progress_repository.dart`
+a diffben nem szerepel). Migrációs kapcsoló (`GamificationDualWriteMode.off/
+dual/newOnly`) alapértéke KIKAPCSOLVA — a tényleges élő hívási pont
+(`practice_session_controller.dart`, a `learn` eredmény-képernyő) a brief
+tiltott zónájában maradt, KÉSŐBBI kör dolga. ADR: [`0390`](docs/adr/0390-practice-and-learn-gamification-adapter-boundary.md)
+(a brief előre kiosztott `0317`-e stale volt, a foglaló `0390`-et adott).
+
+**A review egy javító kört zárt (`docs/reviews/e08-r24-review.md`):** két
+BLOCKER. **F1** — a lecke-adapter `stableEventId`-je a lecke KATALÓGUS-
+azonosítójából (nem egy próbálkozás-szintű azonosítóból) számolt, tehát egy
+adott lecke ELSŐ teljesítése után minden további teljesítés örökre elveszett
+a ledger `appendIfAbsent` dedupja miatt (mérve, saját eldobható próbateszttel:
+két különböző napi teljesítés → azonos `eventId` → 1 ledger-bejegyzés a 2
+helyett). **F2** — a `GamificationLessonAdapter`/`recordLesson` nulla
+tesztlefedettséggel landolt (`practice_reward_flow_test.dart` kizárólag a
+practice adaptert gyakorolta) — ez az oka, hogy F1 zöld gate-en csúszott át.
+A javító kör (`0853ae6e`) a `stableEventId`-et egy új, caller-fed
+`attemptId` mezőből származtatja, és felvett egy teljes lecke-oldali A1/A3/
+A5/A6/A7 tesztmátrixot + egy dedikált F1-regressziós cellát. Mindkét lelet
+FIXED, saját, izolált `/tmp` klónban megismételt méréssel megerősítve
+(scope-audit + próbateszt + teljes gate 8/8 zöld).
+
+Mindkét CI (`full-gate.yml` run 32551495513, `router-ci.yml` run
+32551519892) zöld a pontos merge-jelölt SHA-n (`33733eb6`).
+
 ## ✅ E08-R23 KÉSZ — Gamification Hub és level UI — PR #400, squash `384c89df` (2026-08-22)
 
 Nem-domináló áttekintő felület: `gamification_hub_screen.dart` +
@@ -4040,6 +4074,16 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-22):** `main` @ `dc09f5fe` — E08-R24 Practice
+Engine és Learn integráció, PR
+[#401](https://github.com/wolfcasaba/strumsight/pull/401), squash-merge.
+Implementer MiniMax M3, reviewer Claude Sonnet 5. Egy javító kör (F1 lecke-
+adapter eventId BLOCKER + F2 teszthiány BLOCKER, review-jelentés:
+`docs/reviews/e08-r24-review.md`). Exact `33733eb6`: Full Gate 32551495513 +
+Router CI 32551519892 success; post-merge célzott gate a friss `main`-en is
+zöld. ADR 0390. Következő: **E08-R25** (Song Trainer és Setlist
+integráció).
+
 **Aktuális állapot (2026-08-21):** `main` @ `29c27ab2` — E08-R18 rugalmas
 heti quest és consistency objective, PR
 [#394](https://github.com/wolfcasaba/strumsight/pull/394), squash-merge.
@@ -5343,7 +5387,18 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör: E08-R19 — Challenge V2 és legacy
+**Pontos következő E08 termékkör (2026-08-22): E08-R25 — Song Trainer és
+Setlist integráció** (`docs/rounds/e08-r25-song-trainer-and-setlist-integration.md`,
+engine a queue-ban `minimax`). Ez a session nem indítja el; új sessionben fut.
+Pre-flightban mérje újra a `lib/features/song_trainer/` és
+`lib/features/setlist/` TÉNYLEGES public szerződését, és vegye figyelembe az
+E08-R24 tanulságát (lásd a fejléc ✅-blokk F1/F2): ha egy adapter session/
+próbálkozás-szintű esemény-azonosítót termel, az azonosító semmiképpen ne
+essen vissza egy statikus katalógus-id-re, és a KÉT adapter (ha ez a kör is
+kettőt ad) mindegyike kapjon SAJÁT, teljes A1/A3/A5/A6/A7-szerű
+tesztmátrixot — ne csak az egyik oldal legyen gyakorolva.
+
+**Korábbi kijelölt SDD-kör (2026-08-21, azóta lezárult): E08-R19 — Challenge V2 és legacy
 DailyChallenge migráció** (`docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md`,
 engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
 Az önálló Chapter 13 sáv következő köre E13-R05.

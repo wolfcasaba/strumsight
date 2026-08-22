@@ -15071,3 +15071,54 @@ TARTALMÁT ellenőrizze, ne csak a widget-fa struktúráját vagy típusát.
 feliratára és szemantikájára) — a reviewer saját, független próbával
 (a hibás szöveget visszaírva `flutter gen-l10n`-nel regenerálva) igazolta,
 hogy ez ténylegesen PIROSRA vált a pontosan ez ellen a regresszió ellen.
+
+## L404 — Egy session/próbálkozás-szintű eseményazonosítót SOSE származtass egy statikus katalógus-id-ből, és egy köri javasolt N adapter mindegyike kapjon SAJÁT teljes teszmátrixot (E08-R24, 2026-08-22)
+
+**Mit mértünk.** Az E08-R24 (Practice Engine és Learn integráció) két,
+strukturálisan tükör-adaptert épített: `GamificationPracticeAdapter`
+(session-alapú) és `GamificationLessonAdapter` (lecke-alapú). A practice
+oldal a `stableEventId`-et helyesen a session SAJÁT, perzisztált
+`sessionId`-jéből származtatta (ADR 0390 §4, brief §5.3: „a session-ből
+származik, nem a képernyő életciklusából"). A lecke oldal viszont a
+`stableEventId(String lessonId) => 'learn-lesson/$lessonId/v1'` mintát
+követte — a lecke KATALÓGUS-azonosítójából (`Lesson.id`, pl.
+`"lesson-blue-bird"`), ami MINDEN teljesítéskor UGYANAZ, örökre. A
+`RewardLedgerRepository.appendIfAbsent` a `sourceEventId` szerint dedupol
+(ADR 0301) — a lecke MÁSODIK (és minden további) teljesítése ezért
+csendben elveszett, azaz egy adott lecke első teljesítése után a
+felhasználó SOHA többé nem kapott XP-t ugyanazért a leckéért. A meglévő
+R06 `practiceOccurrenceCount`/`RewardPolicyHistory` mechanizmus PONTOSAN
+a nap-közötti csökkenő-hozamú (de nem nulla) ismétlés-jutalmazásra való
+— az azonosító-szintű dedup ezt a mechanizmust sose éri el, mert a
+duplikátum már a `stableEventId` szintjén elakad.
+
+A hibát a `practice_reward_flow_test.dart` — a diff EGYETLEN
+acceptance-tesztfájlja — nem fogta meg, mert KIZÁRÓLAG a
+`GamificationPracticeAdapter`-t gyakorolta; a `GamificationLessonAdapter`/
+`recordLesson` egyetlen tesztben sem volt példányosítva. A gate mind a 8
+lépésen ZÖLD volt — a hibás kódútvonal egyszerűen nulla tesztlefedettséggel
+rendelkezett.
+
+**Következtetés.** (1) Ha egy brief/ADR „a session-ből származó stabil
+azonosító" szabályt ír elő, a review-nak explicit meg kell mérnie, hogy a
+ténylegesen felhasznált mező VALÓBAN próbálkozás/session-szintű-e, nem egy
+statikus katalógus-id, KÜLÖNÖSEN, ha a hívó (ebben a körben a `learn`
+eredmény-képernyő) a brief tiltott zónájában van, tehát a mezőt egyelőre
+csak egy teszt-fixture generálja — az „egyelőre nincs éles hívó" állapot
+könnyen elrejti, hogy a mező típusa/eredete rossz. (2) Amikor egy kör N
+strukturálisan párhuzamos adaptert/komponenst ad (itt: practice + lesson),
+a review tételesen ellenőrizze, hogy MINDEGYIK saját, teljes
+acceptance-tesztmátrixot kapott — egy közös tesztfájl fejléce, ami csak
+az egyik oldalra hivatkozik explicit cellákkal, önmagában jelzi a hiányt
+(itt: a fájl fejléce „Covers... A1, A3, A5, A6, A7" volt, de a lecke-oldal
+egyik cellája sem volt jelen).
+
+**Őrteszt:** `test/features/gamification/integration/practice_reward_flow_test.dart`
+— a javító kör (`0853ae6e`) hozzáadott egy dedikált „F1 regression” cellát
+(két KÜLÖNBÖZŐ `attemptId`/`epochDay` ugyanarra a `lessonId`-ra → két
+KÜLÖNBÖZŐ `eventId` → két ledger-bejegyzés, mindkettő `totalXp > 0`) PLUSZ
+egy teljes lecke-oldali A1/A3/A5/A6/A7 mátrixot. A reviewer saját, eldobható
+próbatesztje a javítás ELŐTT megerősítette a defektust (`day1`/`day5`
+teljesítés azonos `eventId`-vel → 1 ledger-bejegyzés a 2 helyett), a javítás
+UTÁN pedig a helyes viselkedést — mindkétszer önállóan lefutva izolált
+`/tmp` klónban, nem az implementer állítására hagyatkozva.
