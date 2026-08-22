@@ -34,6 +34,7 @@ import '../../domain/repositories/community_page.dart';
 import '../../domain/repositories/social_graph_repository.dart';
 import '../../domain/value_objects/community_handle.dart';
 import '../../domain/value_objects/content_id.dart';
+import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 
 /// The single ``communityAccountClient`` provider. Built lazily so
@@ -208,8 +209,8 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
       '/community/profiles/${target.value}/follow',
       headers: const {},
     );
-    if (result is Failure<AppFailure>) {
-      throw (result as Failure<AppFailure>).error;
+    if (result is Failure) {
+      throw (result).error;
     }
   }
 
@@ -218,22 +219,13 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     required PublicUserId follower,
     required String idempotencyKey,
   }) async {
-    // The owner-public-id is the resource identifier in the path;
-    // the JWT-resolved owner matches it (the router enforces
-    // ownership, Kör 4 access-policy §6.1 A4 row).
-    // We do not have the caller's owner public-id at this layer —
-    // the controller layer composes the full path. The path the
-    // controller hands in is ``/community/profiles/{owner}/followers/{follower}``.
-    // The repository takes the owner's public-id and the follower's
-    // public-id through dedicated parameters to keep the controller
-    // contract flat.
     final ownerPublicId = await _resolveCallerPublicId();
     final result = await _client.delete(
       '/community/profiles/$ownerPublicId/followers/${follower.value}',
       headers: const {},
     );
-    if (result is Failure<AppFailure>) {
-      throw (result as Failure<AppFailure>).error;
+    if (result is Failure) {
+      throw (result).error;
     }
   }
 
@@ -247,8 +239,8 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
       data: {'idempotency_key': idempotencyKey},
       decode: _decodeVoidResponse,
     );
-    if (result is Failure<AppFailure>) {
-      throw (result as Failure<AppFailure>).error;
+    if (result is Failure) {
+      throw (result).error;
     }
   }
 
@@ -262,8 +254,8 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
       data: {'idempotency_key': idempotencyKey},
       decode: _decodeVoidResponse,
     );
-    if (result is Failure<AppFailure>) {
-      throw (result as Failure<AppFailure>).error;
+    if (result is Failure) {
+      throw (result).error;
     }
   }
 

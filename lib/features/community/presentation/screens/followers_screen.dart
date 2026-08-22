@@ -21,7 +21,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../data/repositories/relationship_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
-import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 
