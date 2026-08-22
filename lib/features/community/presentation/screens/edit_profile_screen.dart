@@ -78,9 +78,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   void initState() {
     super.initState();
     final initial = widget.initialProfile;
-    _handleController = TextEditingController(text: initial?.handle.value ?? '');
-    _displayNameController =
-        TextEditingController(text: initial?.displayName ?? '');
+    _handleController = TextEditingController(
+      text: initial?.handle.value ?? '',
+    );
+    _displayNameController = TextEditingController(
+      text: initial?.displayName ?? '',
+    );
     _bioController = TextEditingController();
     _interestTags = <String>[];
     _visibility = initial?.visibility ?? ProfileVisibility.followers;
@@ -196,11 +199,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   List<Widget> _buildInterestSection(AppLocalizations l) {
     return [
-      Text(l.communityEditInterestLabel,
-          style: Theme.of(context).textTheme.titleSmall),
+      Text(
+        l.communityEditInterestLabel,
+        style: Theme.of(context).textTheme.titleSmall,
+      ),
       const SizedBox(height: 4),
-      Text(l.communityEditInterestHelper,
-          style: Theme.of(context).textTheme.bodySmall),
+      Text(
+        l.communityEditInterestHelper,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
       const SizedBox(height: 8),
       Wrap(
         spacing: 8,
@@ -225,47 +232,69 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   List<Widget> _buildBadgesSection(AppLocalizations l) {
     return [
-      Text(l.communityEditBadgesLabel,
-          style: Theme.of(context).textTheme.titleSmall),
+      Text(
+        l.communityEditBadgesLabel,
+        style: Theme.of(context).textTheme.titleSmall,
+      ),
       const SizedBox(height: 4),
-      Text(l.communityEditBadgesBody,
-          style: Theme.of(context).textTheme.bodySmall),
+      Text(
+        l.communityEditBadgesBody,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
       const SizedBox(height: 16),
     ];
   }
 
   List<Widget> _buildPrivacySection(AppLocalizations l) {
     return [
-      Text(l.communityEditPrivacyTitle,
-          style: Theme.of(context).textTheme.titleMedium),
+      Text(
+        l.communityEditPrivacyTitle,
+        style: Theme.of(context).textTheme.titleMedium,
+      ),
       const SizedBox(height: 4),
-      Text(l.communityEditPrivacyBody,
-          style: Theme.of(context).textTheme.bodySmall),
+      Text(
+        l.communityEditPrivacyBody,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
       const SizedBox(height: 8),
-      for (final option in ProfileVisibility.values)
-        RadioListTile<ProfileVisibility>(
-          title: Text(_visibilityLabel(l, option)),
-          subtitle: Text(_visibilityBody(l, option)),
-          value: option,
-          groupValue: _visibility,
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() => _visibility = value);
-          },
+      RadioGroup<ProfileVisibility>(
+        groupValue: _visibility,
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() => _visibility = value);
+        },
+        child: Column(
+          children: [
+            for (final option in ProfileVisibility.values)
+              RadioListTile<ProfileVisibility>(
+                title: Text(_visibilityLabel(l, option)),
+                subtitle: Text(_visibilityBody(l, option)),
+                value: option,
+              ),
+          ],
         ),
+      ),
       const SizedBox(height: 8),
-      Text(l.communityEditPrivacyAudienceLabel,
-          style: Theme.of(context).textTheme.titleSmall),
-      for (final option in CommunityAudience.values)
-        RadioListTile<CommunityAudience>(
-          title: Text(_audienceLabel(l, option)),
-          value: option,
-          groupValue: _audienceDefault,
-          onChanged: (value) {
-            if (value == null) return;
-            setState(() => _audienceDefault = value);
-          },
+      Text(
+        l.communityEditPrivacyAudienceLabel,
+        style: Theme.of(context).textTheme.titleSmall,
+      ),
+      RadioGroup<CommunityAudience>(
+        groupValue: _audienceDefault,
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() => _audienceDefault = value);
+        },
+        child: Column(
+          children: [
+            for (final option in CommunityAudience.values)
+              RadioListTile<CommunityAudience>(
+                title: Text(_audienceLabel(l, option)),
+                value: option,
+              ),
+          ],
         ),
+      ),
     ];
   }
 
@@ -429,11 +458,11 @@ class _SubmitButton extends StatelessWidget {
       child: Text(
         isSubmitting
             ? (isCreate
-                ? localizations.communityEditSubmitting
-                : localizations.communityEditUpdating)
+                  ? localizations.communityEditSubmitting
+                  : localizations.communityEditUpdating)
             : (isCreate
-                ? localizations.communityEditSubmit
-                : localizations.communityEditUpdate),
+                  ? localizations.communityEditSubmit
+                  : localizations.communityEditUpdate),
       ),
     );
   }

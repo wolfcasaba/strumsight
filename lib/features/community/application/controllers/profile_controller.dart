@@ -79,10 +79,10 @@ class CommunityProfileState {
   });
 
   const CommunityProfileState.initial()
-      : status = CommunityGateStatus.disabled,
-        profile = null,
-        error = null,
-        isSubmitting = false;
+    : status = CommunityGateStatus.disabled,
+      profile = null,
+      error = null,
+      isSubmitting = false;
 
   final CommunityGateStatus status;
   final CommunityProfile? profile;
@@ -116,8 +116,7 @@ const Object _sentinel = Object();
 /// re-runs whenever any of its three dependencies change (Riverpod
 /// auto-track), so a logout / login / re-enable transition
 /// automatically re-evaluates the gate.
-class CommunityProfileController
-    extends AutoDisposeAsyncNotifier<CommunityProfileState> {
+class CommunityProfileController extends AsyncNotifier<CommunityProfileState> {
   CommunityProfileRepository get _repo =>
       ref.read(communityProfileRepositoryProvider);
 
@@ -247,9 +246,7 @@ class CommunityProfileController
   }
 
   CommunityProfileSubmitResult _onWriteFailure(AppFailure error) {
-    state = AsyncData(
-      state.value!.copyWith(isSubmitting: false, error: error),
-    );
+    state = AsyncData(state.value!.copyWith(isSubmitting: false, error: error));
     if (error is ValidationFailure &&
         error.code == FailureCode.communityConflict) {
       // 409 on create — by the controller's pre-submit
@@ -282,7 +279,8 @@ class CommunityProfileSubmitSuccess implements CommunityProfileSubmitResult {
   final CommunityProfile profile;
 }
 
-class CommunityProfileSubmitHandleTaken implements CommunityProfileSubmitResult {
+class CommunityProfileSubmitHandleTaken
+    implements CommunityProfileSubmitResult {
   const CommunityProfileSubmitHandleTaken();
 }
 
@@ -296,5 +294,7 @@ class CommunityProfileSubmitBusy implements CommunityProfileSubmitResult {
 }
 
 final communityProfileControllerProvider =
-    AsyncNotifierProvider.autoDispose<CommunityProfileController,
-        CommunityProfileState>(CommunityProfileController.new);
+    AsyncNotifierProvider.autoDispose<
+      CommunityProfileController,
+      CommunityProfileState
+    >(CommunityProfileController.new);

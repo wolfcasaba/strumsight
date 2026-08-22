@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.community import build_community_router
+
 # Importing ``handle_history`` is load-bearing: the Kör 3 schema adds
 # ``handle_display`` / ``handle_normalized`` to ``Base.metadata`` at
 # import-time (the ORM class is untouched, the columns live on the

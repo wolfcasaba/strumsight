@@ -36,24 +36,19 @@ The cells:
 from __future__ import annotations
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 
 from app.community.models.profile import CommunityProfile
 from app.community.policies.access_policy import CommunityAudience, ProfileVisibility
 from app.community.services.identity_service import HandleAlreadyClaimed
 from app.community.services.profile_service import (
-    ProfileAlreadyExists,
     create_profile,
     update_profile,
 )
-from app.database import Base
-from app.models import User
 
 # The conftest exposes the ``make_authenticated_user`` helper alongside
 # the fixtures. We import it directly so the test module can call it
 # from the service-level test (the two real-violation probes).
 from tests.community.conftest import make_authenticated_user
-
 
 # ---------------------------------------------------------------------------
 # Test data helpers
@@ -456,9 +451,7 @@ def test_service_update_profile_round_trips(community_enabled):
 
     session = session_factory()
     try:
-        profile = (
-            session.query(CommunityProfile).filter_by(id=profile_id).one()
-        )
+        profile = session.query(CommunityProfile).filter_by(id=profile_id).one()
         update_profile(session, profile, "Wolf Casaba Renamed")
         assert profile.display_name == "Wolf Casaba Renamed"
     finally:

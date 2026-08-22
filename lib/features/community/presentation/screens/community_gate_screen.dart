@@ -43,7 +43,9 @@ class CommunityGateScreen extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(localizations.communityGateProfileMissingTitle)),
+      appBar: AppBar(
+        title: Text(localizations.communityGateProfileMissingTitle),
+      ),
       body: state.when(
         loading: () => Center(
           child: Column(
@@ -92,19 +94,19 @@ class _GateBody extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     return switch (state.status) {
       CommunityGateStatus.disabled => _StatusView(
-          title: localizations.communityGateDisabledTitle,
-          body: localizations.communityGateDisabledBody,
-        ),
+        title: localizations.communityGateDisabledTitle,
+        body: localizations.communityGateDisabledBody,
+      ),
       CommunityGateStatus.loggedOut => _StatusView(
-          title: localizations.communityGateLoggedOutTitle,
-          body: localizations.communityGateLoggedOutBody,
-        ),
+        title: localizations.communityGateLoggedOutTitle,
+        body: localizations.communityGateLoggedOutBody,
+      ),
       CommunityGateStatus.profileMissing => _CtaView(
-          title: localizations.communityGateProfileMissingTitle,
-          body: localizations.communityGateProfileMissingBody,
-          ctaLabel: localizations.communityGateProfileMissingCta,
-          onCta: () => _openEditProfile(context, ref, mode: _EditMode.create),
-        ),
+        title: localizations.communityGateProfileMissingTitle,
+        body: localizations.communityGateProfileMissingBody,
+        ctaLabel: localizations.communityGateProfileMissingCta,
+        onCta: () => _openEditProfile(context, ref, mode: _EditMode.create),
+      ),
       CommunityGateStatus.ready => _ReadyView(state: state),
     };
   }
@@ -128,8 +130,12 @@ class _GateBody extends ConsumerWidget {
     );
     // Refresh on the way back so a successful create / update
     // flips the gate from ``profile-missing`` -> ``ready`` (or
-    // updates the read-only summary in the ready view).
-    if (!ref.mounted) return;
+    // updates the read-only summary in the ready view). The check
+    // is on the context's mounted property, not ``ref.mounted`` —
+    // ``ref`` belongs to ``_GateBody`` and is disposed when the
+    // widget leaves the tree; the navigator's context is the
+    // reliable liveness signal.
+    if (!context.mounted) return;
     await ref.read(communityProfileControllerProvider.notifier).refresh();
   }
 }

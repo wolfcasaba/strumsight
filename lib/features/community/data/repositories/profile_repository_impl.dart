@@ -33,8 +33,11 @@ import '../../../../features/auth/public.dart';
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/community_profile.dart';
 import '../../domain/policies/community_audience.dart';
+import '../../domain/repositories/community_page.dart';
 import '../../domain/repositories/community_profile_repository.dart';
 import '../../domain/value_objects/community_handle.dart';
+import '../../domain/value_objects/public_user_id.dart';
+import '../../domain/value_objects/audience.dart';
 import '../dto/profile_dto.dart';
 
 /// The single ``communityAccountClient`` provider. Built lazily so
@@ -77,8 +80,7 @@ final class DisabledCommunityProfileRepository
   Future<CommunityPage<CommunityProfile>> searchProfiles({
     required String query,
     required Object cursor,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<AppResult<CommunityProfile>> createProfile({
@@ -86,14 +88,12 @@ final class DisabledCommunityProfileRepository
     required String displayName,
     required ProfileVisibility visibility,
     required CommunityAudience audienceDefault,
-  }) async =>
-      _disabled;
+  }) async => _disabled;
 
   @override
   Future<AppResult<CommunityProfile>> updateProfile({
     required String displayName,
-  }) async =>
-      _disabled;
+  }) async => _disabled;
 }
 
 class HttpCommunityProfileRepository implements CommunityProfileRepository {
@@ -142,10 +142,9 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
   Future<CommunityPage<CommunityProfile>> searchProfiles({
     required String query,
     required Object cursor,
-  }) =>
-      throw UnsupportedError(
-        'CommunityProfileRepository.searchProfiles is not yet implemented',
-      );
+  }) => throw UnsupportedError(
+    'CommunityProfileRepository.searchProfiles is not yet implemented',
+  );
 
   @override
   Future<AppResult<CommunityProfile>> createProfile({
@@ -171,12 +170,14 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
       conflictCode: FailureCode.communityConflict,
     );
     return switch (result) {
-      Success(:final value) => Success(_dtoToDomain(
-            value,
-            handle: handle,
-            displayName: displayName,
-            visibility: visibility,
-          )),
+      Success(:final value) => Success(
+        _dtoToDomain(
+          value,
+          handle: handle,
+          displayName: displayName,
+          visibility: visibility,
+        ),
+      ),
       Failure(:final error) => Failure(error),
     };
   }
@@ -193,16 +194,18 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
       conflictCode: FailureCode.communityConflict,
     );
     return switch (result) {
-      Success(:final value) => Success(_dtoToDomain(
-            value,
-            // The update response carries the new display name; the
-            // handle + visibility come from the server's stored
-            // values, but the controller already knows them from the
-            // ``fetchMyProfile()`` call that bootstrapped the edit
-            // form. The repository passes the bare DTO up; the
-            // controller stitches the rest together.
-            displayName: displayName,
-          )),
+      Success(:final value) => Success(
+        _dtoToDomain(
+          value,
+          // The update response carries the new display name; the
+          // handle + visibility come from the server's stored
+          // values, but the controller already knows them from the
+          // ``fetchMyProfile()`` call that bootstrapped the edit
+          // form. The repository passes the bare DTO up; the
+          // controller stitches the rest together.
+          displayName: displayName,
+        ),
+      ),
       Failure(:final error) => Failure(error),
     };
   }
@@ -232,7 +235,9 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
       );
     }
     final visibilityValue =
-        visibility ?? profileVisibilityFromWire(null) ?? ProfileVisibility.private;
+        visibility ??
+        profileVisibilityFromWire(null) ??
+        ProfileVisibility.private;
     return dto.toDomain(
       handle: CommunityHandle(handleValue),
       displayName: displayValue,
@@ -251,9 +256,10 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
 /// The Community profile repository wired against the live
 /// ``accountApiClientProvider`` — null on a build where the account
 /// layer is disabled, the http impl otherwise.
-final communityProfileRepositoryProvider =
-    Provider<CommunityProfileRepository>((ref) {
-  final client = ref.watch(communityApiClientProvider);
-  if (client == null) return const DisabledCommunityProfileRepository();
-  return HttpCommunityProfileRepository(client);
-});
+final communityProfileRepositoryProvider = Provider<CommunityProfileRepository>(
+  (ref) {
+    final client = ref.watch(communityApiClientProvider);
+    if (client == null) return const DisabledCommunityProfileRepository();
+    return HttpCommunityProfileRepository(client);
+  },
+);

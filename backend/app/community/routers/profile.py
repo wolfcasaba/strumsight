@@ -39,7 +39,6 @@ from ..schemas.profile import (
 )
 from ..services.identity_service import HandleAlreadyClaimed
 from ..services.profile_service import (
-    ProfileAlreadyExists,
     create_profile,
     update_profile,
 )

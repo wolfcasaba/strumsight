@@ -13,8 +13,8 @@
 /// without having to know about HTTP or Dio.
 library;
 
-import '../../../core/foundation/app_failure.dart';
-import '../../../core/foundation/app_result.dart';
+import '../../../../core/foundation/app_failure.dart';
+import '../../../../core/foundation/app_result.dart';
 import '../entities/community_profile.dart';
 import '../policies/community_audience.dart';
 import '../value_objects/community_handle.dart';
@@ -126,4 +126,3 @@ class HandleTakenException implements Exception {
   @override
   String toString() => 'HandleTakenException';
 }
-
