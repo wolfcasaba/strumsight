@@ -15301,3 +15301,58 @@ anélkül, hogy a csomagkészletet is ellenőrizné; az implementer-preambulum
 (`docs/execution/implementer-preamble-minimax.md`) bővítése a jövőbeli
 javítás. Részletek: `docs/reviews/e08-r28-review.md`, HANDOFF E08-R28
 bejegyzés.
+
+## L409 — Egy "route-élesítő" brief hallgatólagosan feltételezheti, hogy a caller-fed képernyők adathoz vannak kötve — mérd meg a példányosítást, ne a screen létezését (E08-R30, 2026-08-22)
+
+**Mért snag.** Az E08-R30 (Epic 8 ZÁRÓ köre) 2026-08-18-i brief-je azt írta
+elő, hogy öt/hat MEGLÉVŐ gamifikációs képernyőt (Hub, Achievements, Quests,
+Streak V2, Reward Inbox) kell "útvonalon élesíteni" — az `allowed_paths`
+egyetlen production fájlt engedett, `lib/app/routing/app_route.dart`-ot (a
+route-string katalógus). A pre-flight mérése (`grep -rln
+"GamificationHubScreen(\|AchievementsScreen(\|…" lib/`) **nulla** találatot
+adott a screenek saját fájljain kívül — 29 korábbi kör mindegyike szándékosan
+caller-fed (tiszta, adatot csak konstruktor-paraméterként fogadó) widgetként
+építette ezeket, adat-forrás (Riverpod provider) NÉLKÜL, mert egyik korábbi
+brief sem volt a UI-bekötésről. A route-élesítéshez emiatt KÉT dolog hiányzott
+egyszerre a briefből: (1) a tényleges `GoRoute` wiring-owner fájl
+(`app_router.dart`, ismert L94/L97 mintázat), ÉS (2) egy teljes,
+korábban soha meg nem épített Riverpod-provider/DI-réteg a screenek
+adatához — miközben a brief kifejezetten TILTOTTA `lib/features/**`
+módosítását ("ez a kör útvonalat élesít és dokumentál, nem funkciót épít").
+
+**Mérés, ami a feloldást lehetővé tette.** A repository (`GamificationRepository`)
+DI-magja (`KeyValueStore`, `AppLogger`) MÁR publikus, app-szintű Riverpod
+providerekből épül (`keyValueStoreProvider` —
+`lib/core/storage/storage_providers.dart`, `appLoggerProvider` —
+`lib/core/logging/logger_provider.dart`), amiket MÁS core-kód már ma is
+használ (`persisted_preference.dart`). Ez azt jelentette, hogy a hiányzó
+ragasztó felépíthető KIZÁRÓLAG a MOST engedélyezett `app_router.dart`-ban,
+csak importokkal a tiltott `lib/features/gamification/**`/`lib/core/**` alól
+— fájlírás egyikben sem történt. Ahol a repository-nak ELVILEG SEM volt
+perzisztált adata egy screen-mezőhöz (pl. quest-progressz, achievement-
+progressz — a `GamificationRepository` interfészen nincs ilyen metódus),
+a helyes válasz dokumentált `// TODO(EXX-RYY):` no-op volt, ÚJ domain-logika
+kitalálása nélkül — ezt a review egyenként ellenőrizte (pl. a
+`RewardInboxItem` domain típus egy `RewardEvent`-et hordoz, amit a storage-
+szintű `GamificationInboxItem` nem — a no-op tehát VALÓDI hiányt jelzett, nem
+kényelmi kibúvót).
+
+**Szabály.** Mielőtt egy "route-élesítő" brief pre-flightjában elfogadod,
+hogy egy MEGLÉVŐ screen "csak" bekötésre vár: `grep -rln
+"<ScreenClassName>("` a teljes `lib/`-ben, a screen saját fájlján kívül.
+Nulla találat ÉS a screen konstruktora `required this.<data>` paramétereket
+vár (nem `ConsumerWidget`) ⇒ nincs élő adatforrás, a route-élesítés egy
+be nem épített DI-réteget is igényel. Ha az adatforrás DI-magja
+(`Provider`/`Repository`) már publikus core-providerekből építhető, a
+ragasztó a most amúgy is engedélyezendő wiring-owner fájlba (jellemzően
+`app_router.dart`) mehet §0.0 revízióval — ez NEM lista-tágítás egy
+elérhetetlen célra, mert a tényleges DI-mag már létezik és publikus. Ahol
+a perzisztált adat MAGA hiányzik, no-op + TODO + nyitott tétel a helyes
+válasz, nem új domain-szabály kitalálása a tiltott zónában.
+
+**Őrteszt:** nincs — ez egy pre-flight MÉRÉSI fegyelem (a fenti `grep`
+parancs), nem egy automatizálható gépi kapu; a review-oldali ellenőrzés
+(minden no-op callback mögött VALÓDI hiányzó publikus metódus van, nem csak
+lustaság) szintén emberi/reviewer-mérés. Részletek:
+`docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md` §0.0,
+`docs/reviews/e08-r30-review.md`.
