@@ -11,6 +11,55 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `backend/app/config.py` MA élő `database_url`/`allow_sqlite_in_prod` mezőit és a `backend/alembic/versions/` egyetlen meglévő migrációját (`e01_r12_0001_initial_account_schema.py`) — az ÚJ migráció ennek a láncnak a folytatása, revision-fejjel. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-22, ADR 0396)
+
+**Mért tény, ami a §2-t pontosítja:** a Kör 1 (E09-R01) dokumentáltan
+"alkalmazáskód-változtatás nélkül" zárult — `backend/app/main.py`
+`create_app()`-ja MA NULLA Community-hivatkozást tartalmaz. A §2 "a
+Community router feltételesen regisztrálódik a `communityEnabled` flag
+alapján (Kör 1)" mondat PONTATLAN: Kör 1 csak a nyers `config.py` flag-eket
+vezette be, router-regisztráció sehol nincs. Az egyetlen élő, feltételes
+router-regisztrációs pont a mai kódban `main.py` `create_app()` törzse
+(lásd a `diagnostics_enabled`/`tutor_enabled` ágakat) — ez a fájl **nincs**
+a lenti `allowed_paths`-on és a tilos zóna kifejezetten kizárja.
+
+**Feloldás (ADR 0396 §3–4, teljes indoklás ott):**
+
+1. A §8 5. lépése ("Feature-flag ellenőrzés az app-boot regisztrációs
+   pontban") EBBEN a körben egy `backend/app/community/__init__.py`-ban élő
+   `build_community_router(settings) -> APIRouter | None` factory —
+   **NEM** `main.py`. `backend/tests/community/conftest.py` a SAJÁT,
+   minimális `FastAPI()` példányát építi (nem `app.main.create_app`-et
+   hívja), és ezt a factoryt regisztrálja feltételesen — ez bizonyítja
+   A5-öt a modul saját határán belül.
+2. **A `main.py`-ba való éles bekötés NEM ennek a körnek az
+   acceptance-kritériuma** — az ADR 0395 Következmények 3. pontja szerint
+   ez egy jövőbeli kör dolga. Ha az implementer mégis `main.py`-t
+   módosítaná (akár csak egy `include_router` sorral), az a tilos zóna
+   megsértése (H3), nem egy hiányzó lépés pótlása.
+3. `community_postgres_ready` (ADR 0395 Következmények 2. pontja szerint
+   ennek a körnek kell döntenie) **éles gate-té válik**, de csak egy
+   önállóan tesztelhető, ma hívó nélküli `community_readiness_failure(
+   engine, settings, alembic_ini)` függvényben `backend/app/community/
+   __init__.py`-ban (ADR 0396 §4 pontos kódváz) — a `/health/ready`
+   bekötése szintén jövőbeli kör dolga (ugyanaz a `main.py`-korlát).
+4. PK/UUID séma: mindkét új tábla `id: BigInteger` (belső, sosem
+   szerializált) + `public_id: Uuid(as_uuid=True)` (natív SQLAlchemy 2.0
+   `Uuid` típus — Postgres-en natív UUID, SQLite-on `CHAR(32)`, NINCS
+   kézi string-konverzió). Pontos oszloplista és kapcsolat-irány: ADR 0396
+   §1–2.
+5. Migrációs revízió-fej: `revision = "e09_r02_0002"`,
+   `down_revision = "e01_r12_0001"` — a MA egyetlen fej folytatása.
+
+**Visszakeresett előzmény (S8, §4.9):** [ADR 0060](../adr/0060-alembic-schema-source-and-injected-engine-lifecycle.md)
+(Alembic egyetlen schema-forrás, `_readiness_failure` minta a `main.py`-ban
+— ADR 0396 ezt tükrözi a modulhatáron belül) és [ADR 0395](../adr/0395-community-baseline-feature-flags-and-threat-model-scope.md)
+(Kör 1 — a flag-ek és a `community_postgres_ready` placeholder eredete,
+Következmények 2–3. pont). Nincs a témára közvetlenül vonatkozó halt-lecke;
+a legközelebbi analóg minta L97 (route-katalógus owner hiánya scope-ból) —
+ugyanaz a hibaosztály (a wiring-pont owner-je kimaradt az `allowed_paths`-ból),
+itt a §0.0 feloldotta a `main.py` teljes kizárásával, nem felvételével.
+
 ```ai-router
 schema_version = 1
 risk = "high"
