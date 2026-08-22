@@ -13,7 +13,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
 import 'package:strumsight/features/gamification/data/local_reward_ledger_repository.dart';
 import 'package:strumsight/features/gamification/public.dart';
-import 'package:strumsight/features/learn/application/gamification_lesson_adapter.dart';
+import 'package:strumsight/features/learn/application/gamification_lesson_adapter.dart'
+    as lesson_adapter;
 import 'package:strumsight/features/practice/application/gamification_practice_adapter.dart';
 
 import '../../../core/storage/in_memory_key_value_store.dart';
@@ -24,7 +25,6 @@ const int _defaultEpochDay = 20400;
 final DateTime _defaultOccurredAt = DateTime.utc(2026, 8, 22, 12, 30);
 
 const String _defaultAttemptId = 'attempt-42';
-const String _secondAttemptId = 'attempt-43';
 
 void main() {
   group('Practice → gamification reward flow (E08-R24)', () {
@@ -277,7 +277,9 @@ void main() {
       expect(outcome.accepted, isTrue);
       expect(
         outcome.eventId,
-        GamificationLessonAdapter.stableEventId(signal.attemptId),
+        lesson_adapter.GamificationLessonAdapter.stableEventId(
+          signal.attemptId,
+        ),
       );
       // Before drain: outbox holds the record, ledger is empty.
       expect(fixture.outbox.pendingRecords(), hasLength(1));
@@ -304,7 +306,9 @@ void main() {
       expect(pending, hasLength(1));
       expect(
         pending.single.event.eventId,
-        GamificationLessonAdapter.stableEventId(signal.attemptId),
+        lesson_adapter.GamificationLessonAdapter.stableEventId(
+          signal.attemptId,
+        ),
       );
       expect(pending.single.event.source, ActivitySource.learn);
       expect(pending.single.entry.sourceEventId, pending.single.event.eventId);
@@ -337,7 +341,10 @@ void main() {
       );
       await fixture.ingestor.drain();
 
-      expect(outcome, equals(const LessonGamificationOutcome.noOp()));
+      expect(
+        outcome,
+        equals(const lesson_adapter.LessonGamificationOutcome.noOp()),
+      );
       expect(fixture.outbox.pendingRecords(), isEmpty);
       expect(fixture.ledger.readPage(limit: 10).entries, isEmpty);
     });
@@ -349,7 +356,10 @@ void main() {
       );
       await fixture.ingestor.drain();
 
-      expect(outcome, equals(const LessonGamificationOutcome.noOp()));
+      expect(
+        outcome,
+        equals(const lesson_adapter.LessonGamificationOutcome.noOp()),
+      );
       expect(fixture.outbox.pendingRecords(), isEmpty);
       expect(fixture.ledger.readPage(limit: 10).entries, isEmpty);
     });
@@ -363,7 +373,10 @@ void main() {
         );
         await fixture.ingestor.drain();
 
-        expect(outcome, equals(const LessonGamificationOutcome.noOp()));
+        expect(
+          outcome,
+          equals(const lesson_adapter.LessonGamificationOutcome.noOp()),
+        );
         expect(fixture.ledger.readPage(limit: 10).entries, isEmpty);
       },
     );
@@ -378,7 +391,10 @@ void main() {
         ),
       );
       await tooShort.ingestor.drain();
-      expect(tooShortOutcome, equals(const LessonGamificationOutcome.noOp()));
+      expect(
+        tooShortOutcome,
+        equals(const lesson_adapter.LessonGamificationOutcome.noOp()),
+      );
       expect(tooShort.ledger.readPage(limit: 10).entries, isEmpty);
 
       final valid = _LessonFixture.build();
@@ -400,7 +416,7 @@ void main() {
         'no legacy sink call', () async {
       var legacyCalls = 0;
       final fixture = _LessonFixture.build(
-        dualWriteMode: GamificationDualWriteMode.off,
+        dualWriteMode: lesson_adapter.GamificationDualWriteMode.off,
         legacySink: (signal) =>
             _countingLessonLegacySink(signal, () => legacyCalls++),
       );
@@ -410,7 +426,10 @@ void main() {
       );
       await fixture.ingestor.drain();
 
-      expect(outcome, equals(const LessonGamificationOutcome.noOp()));
+      expect(
+        outcome,
+        equals(const lesson_adapter.LessonGamificationOutcome.noOp()),
+      );
       expect(fixture.outbox.pendingRecords(), isEmpty);
       expect(fixture.ledger.readPage(limit: 10).entries, isEmpty);
       expect(legacyCalls, 0);
@@ -420,7 +439,7 @@ void main() {
         'sink exactly once', () async {
       var legacyCalls = 0;
       final fixture = _LessonFixture.build(
-        dualWriteMode: GamificationDualWriteMode.dual,
+        dualWriteMode: lesson_adapter.GamificationDualWriteMode.dual,
         legacySink: (signal) =>
             _countingLessonLegacySink(signal, () => legacyCalls++),
       );
@@ -440,7 +459,7 @@ void main() {
         'the legacy sink', () async {
       var legacyCalls = 0;
       final fixture = _LessonFixture.build(
-        dualWriteMode: GamificationDualWriteMode.newOnly,
+        dualWriteMode: lesson_adapter.GamificationDualWriteMode.newOnly,
         legacySink: (signal) =>
             _countingLessonLegacySink(signal, () => legacyCalls++),
       );
@@ -460,7 +479,7 @@ void main() {
         '(the documented happy path)', () async {
       var legacyCalls = 0;
       final fixture = _LessonFixture.build(
-        dualWriteMode: GamificationDualWriteMode.dual,
+        dualWriteMode: lesson_adapter.GamificationDualWriteMode.dual,
         legacySink: (signal) =>
             _countingLessonLegacySink(signal, () => legacyCalls++),
       );
@@ -481,7 +500,7 @@ void main() {
         // append-if-absent absorbs the second write, so the final ledger
         // count stays at one — proving the adapter does not duplicate XP.
         final fixture = _LessonFixture.build(
-          dualWriteMode: GamificationDualWriteMode.dual,
+          dualWriteMode: lesson_adapter.GamificationDualWriteMode.dual,
         );
         fixture.legacySink = (signal) async {
           await fixture.ledger.appendIfAbsent(
@@ -496,7 +515,9 @@ void main() {
         expect(entries, hasLength(1));
         expect(
           entries.single.sourceEventId,
-          GamificationLessonAdapter.stableEventId(_defaultAttemptId),
+          lesson_adapter.GamificationLessonAdapter.stableEventId(
+            _defaultAttemptId,
+          ),
         );
       },
     );
@@ -540,11 +561,15 @@ void main() {
         );
         expect(
           first.eventId,
-          GamificationLessonAdapter.stableEventId('attempt-day1'),
+          lesson_adapter.GamificationLessonAdapter.stableEventId(
+            'attempt-day1',
+          ),
         );
         expect(
           second.eventId,
-          GamificationLessonAdapter.stableEventId('attempt-day5'),
+          lesson_adapter.GamificationLessonAdapter.stableEventId(
+            'attempt-day5',
+          ),
         );
 
         // Both ledger entries landed (the second may have a reduced XP via the
@@ -554,8 +579,12 @@ void main() {
         expect(entries, hasLength(2));
         final sourceIds = entries.map((e) => e.sourceEventId).toSet();
         expect(sourceIds, <String>{
-          GamificationLessonAdapter.stableEventId('attempt-day1'),
-          GamificationLessonAdapter.stableEventId('attempt-day5'),
+          lesson_adapter.GamificationLessonAdapter.stableEventId(
+            'attempt-day1',
+          ),
+          lesson_adapter.GamificationLessonAdapter.stableEventId(
+            'attempt-day5',
+          ),
         });
         // Diminishing returns: the second occurrence's XP can be lower than
         // the first, but neither is zero (R05/R06 allows reduced, not zero).
@@ -720,7 +749,7 @@ class _Fixture {
 
 // ── lesson helpers (E08-R24 lesson-side mirror) ────────────────────────────
 
-LessonGamificationSignal _completedLessonSignal({
+lesson_adapter.LessonGamificationSignal _completedLessonSignal({
   String attemptId = _defaultAttemptId,
   String lessonId = _defaultLessonId,
   ActivityOutcome outcome = ActivityOutcome.completed,
@@ -730,7 +759,7 @@ LessonGamificationSignal _completedLessonSignal({
   double score = 0.85,
   int epochDay = _defaultEpochDay,
   DateTime? occurredAt,
-}) => LessonGamificationSignal(
+}) => lesson_adapter.LessonGamificationSignal(
   attemptId: attemptId,
   lessonId: lessonId,
   outcome: outcome,
@@ -743,10 +772,12 @@ LessonGamificationSignal _completedLessonSignal({
 );
 
 RewardLedgerEntry _syntheticLessonLedgerEntry({
-  required LessonGamificationSignal signal,
+  required lesson_adapter.LessonGamificationSignal signal,
 }) => RewardLedgerEntry(
   ledgerId: 'legacy-${signal.attemptId}',
-  sourceEventId: GamificationLessonAdapter.stableEventId(signal.attemptId),
+  sourceEventId: lesson_adapter.GamificationLessonAdapter.stableEventId(
+    signal.attemptId,
+  ),
   createdAt: signal.occurredAt,
   schemaVersion: rewardLedgerEntrySchemaVersion,
   policyVersion: 1,
@@ -757,7 +788,7 @@ RewardLedgerEntry _syntheticLessonLedgerEntry({
 );
 
 Future<void> _countingLessonLegacySink(
-  LessonGamificationSignal _,
+  lesson_adapter.LessonGamificationSignal _,
   void Function() onCall,
 ) async {
   onCall();
@@ -766,12 +797,13 @@ Future<void> _countingLessonLegacySink(
 class _LessonFixture {
   _LessonFixture._({
     required this.dualWriteMode,
-    required LessonLegacySink legacySink,
+    required lesson_adapter.LessonLegacySink legacySink,
   }) : _legacySinkImpl = legacySink;
 
   factory _LessonFixture.build({
-    GamificationDualWriteMode dualWriteMode = GamificationDualWriteMode.dual,
-    LessonLegacySink? legacySink,
+    lesson_adapter.GamificationDualWriteMode dualWriteMode =
+        lesson_adapter.GamificationDualWriteMode.dual,
+    lesson_adapter.LessonLegacySink? legacySink,
   }) {
     final store = InMemoryKeyValueStore(<String, Object>{});
     const logger = NoopAppLogger();
@@ -815,8 +847,8 @@ class _LessonFixture {
     return fixture;
   }
 
-  final GamificationDualWriteMode dualWriteMode;
-  late LessonLegacySink _legacySinkImpl;
+  final lesson_adapter.GamificationDualWriteMode dualWriteMode;
+  late lesson_adapter.LessonLegacySink _legacySinkImpl;
   late InMemoryKeyValueStore store;
   late AppLogger logger;
   late LocalRewardLedgerRepository ledger;
@@ -824,13 +856,13 @@ class _LessonFixture {
   late ActivityEventIngestor ingestor;
   late RewardEligibilityPolicy eligibility;
   late RewardPolicy rewardPolicy;
-  late LessonHistoryBuilder historyBuilder;
-  late GamificationLessonAdapter adapter;
+  late lesson_adapter.LessonHistoryBuilder historyBuilder;
+  late lesson_adapter.GamificationLessonAdapter adapter;
 
   /// Override the legacy sink AFTER construction. Used by the §6.1
   /// valódi-sértés próba, which needs a closure that captures the fixture
   /// after it has been built.
-  set legacySink(LessonLegacySink sink) {
+  set legacySink(lesson_adapter.LessonLegacySink sink) {
     _legacySinkImpl = sink;
     adapter = _buildAdapter(
       ingestor: ingestor,
@@ -842,14 +874,14 @@ class _LessonFixture {
     );
   }
 
-  static GamificationLessonAdapter _buildAdapter({
+  static lesson_adapter.GamificationLessonAdapter _buildAdapter({
     required ActivityEventIngestor ingestor,
     required RewardEligibilityPolicy eligibility,
     required RewardPolicy rewardPolicy,
-    required LessonHistoryBuilder historyBuilder,
-    required GamificationDualWriteMode dualWriteMode,
-    required LessonLegacySink legacySink,
-  }) => GamificationLessonAdapter(
+    required lesson_adapter.LessonHistoryBuilder historyBuilder,
+    required lesson_adapter.GamificationDualWriteMode dualWriteMode,
+    required lesson_adapter.LessonLegacySink legacySink,
+  }) => lesson_adapter.GamificationLessonAdapter(
     ingestor: ingestor,
     eligibility: eligibility,
     rewardPolicy: rewardPolicy,
@@ -858,15 +890,19 @@ class _LessonFixture {
     legacySink: legacySink,
   );
 
-  static Future<void> _noLegacy(LessonGamificationSignal _) async {}
+  static Future<void> _noLegacy(
+    lesson_adapter.LessonGamificationSignal _,
+  ) async {}
 
-  static LessonRewardHistorySnapshot _emptyHistory(int epochDay, String _) =>
-      const LessonRewardHistorySnapshot(
-        earnedTodayXp: 0,
-        lessonOccurrenceCount: 0,
-        uniqueSourcesToday: 1,
-        rewardedEventIds: <String>{},
-        rewardedParentIds: <String>{},
-        rewardedChildParentIds: <String>{},
-      );
+  static lesson_adapter.LessonRewardHistorySnapshot _emptyHistory(
+    int epochDay,
+    String _,
+  ) => const lesson_adapter.LessonRewardHistorySnapshot(
+    earnedTodayXp: 0,
+    lessonOccurrenceCount: 0,
+    uniqueSourcesToday: 1,
+    rewardedEventIds: <String>{},
+    rewardedParentIds: <String>{},
+    rewardedChildParentIds: <String>{},
+  );
 }
