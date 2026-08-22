@@ -17,6 +17,7 @@ enum GamificationDualWriteMode { off, dual, newOnly }
 @immutable
 final class LessonGamificationSignal {
   const LessonGamificationSignal({
+    required this.attemptId,
     required this.lessonId,
     required this.outcome,
     required this.validDuration,
@@ -30,6 +31,21 @@ final class LessonGamificationSignal {
              (validDuration >= Duration.zero),
          'validDuration must be non-negative for completed lessons',
        );
+
+  /// Caller-fed identifier of the lesson attempt. Persisted at the moment
+  /// the attempt reaches its terminal outcome; the adapter derives
+  /// [eventId] deterministically from it (ADR 0390 §4, brief §5.3) so a
+  /// result-screen reopen produces the same eventId AND a separate attempt
+  /// (same lesson, different day, different session) produces a DIFFERENT
+  /// eventId — the diminishing-returns curve is handled by the existing
+  /// [practiceOccurrenceCount]/[RewardPolicyHistory] mechanism, not by an
+  /// identifier-level dedup block.
+  ///
+  /// Today the actual lesson-result screen is out of this brief's scope;
+  /// the fixture in [practice_reward_flow_test.dart]'s lesson group
+  /// generates the id, in the same caller-fed way the practice side
+  /// generates [PracticeGamificationSignal.sessionId].
+  final String attemptId;
 
   /// The persisted lesson id. Identical to the
   /// `lesson_progress_repository.dart` key so the same canonical id drives
@@ -145,10 +161,13 @@ class GamificationLessonAdapter {
 
   static const int _schemaVersion = learningActivityEventSchemaVersion;
 
-  /// Stable event id derived from the lesson id (ADR 0390 §4). Distinct
-  /// prefix from the practice adapter so the two event streams never share
-  /// ids.
-  static String stableEventId(String lessonId) => 'learn-lesson/$lessonId/v1';
+  /// Stable event id derived from the [attemptId] (ADR 0390 §4, brief §5.3).
+  /// Distinct prefix from the practice adapter so the two event streams never
+  /// share ids. Deriving from the attempt id — NOT the lesson id — ensures
+  /// that a separate attempt of the same lesson produces a separate event,
+  /// and the result-screen reopen of the same attempt collapses to the same
+  /// event via the ledger's append-if-absent.
+  static String stableEventId(String attemptId) => 'learn-lesson/$attemptId/v1';
 
   Future<LessonGamificationOutcome> recordLesson(
     LessonGamificationSignal signal,
@@ -178,7 +197,7 @@ class GamificationLessonAdapter {
       return const LessonGamificationOutcome.noOp();
     }
 
-    final eventId = stableEventId(signal.lessonId);
+    final eventId = stableEventId(signal.attemptId);
     final event = PracticeActivityEvent(
       eventId: eventId,
       occurredAt: signal.occurredAt,
