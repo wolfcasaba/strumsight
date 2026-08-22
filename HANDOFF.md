@@ -1,51 +1,72 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ E09-R05 KÉSZ — Flutter Community domain és public API — PR [#414](https://github.com/wolfcasaba/strumsight/pull/414), squash `79865233` (2026-08-22)
+## ✅ E09-R06 KÉSZ — Profil létrehozás, szerkesztés és Community gate UI — PR [#415](https://github.com/wolfcasaba/strumsight/pull/415), squash `77bc0589` (2026-08-22)
 
-**EPIC 9 (COMMUNITY PLATFORM) ÖTÖDIK KÖRE KÉSZ — az első Flutter-oldali
-Community kör.** ADR 0399: framework-független domain-fa
-(`lib/features/community/domain/{entities,value_objects,repositories}`,
-7 entitás, 5 value object, 7 repository-interfész) + a feature EGYETLEN
-belépője, `public.dart` — kézzel írt barrel (a `gen_public_barrel.dart`
-generált-registry pilotja ma kizárólag `practice_generator`, ADR 0339). A
-domain-purity guardot `test/core/architecture_dependency_test.dart` önálló
-teszt-csoportja méri (E07-R02/E08-R02 minta), nem a `tool/check_architecture.dart`
-bővítése. Pre-flight brief-revízió (§0.0 D3) tisztázta, hogy az ÚJ
-`value_objects/audience.dart` NEM duplikálhatja a Kör 4
-`policies/community_audience.dart` `ProfileVisibility`/`CommunityAudience`
-wire-enumjait — importálja őket, és kontrollált, sosem dobó
-wire-dekódolást ad hozzájuk (A3). A `CursorPage` value object explicit
-`initial`/`continued`/`haltedAfterRequest` type-state-tel különbözteti meg
-a "sosem lapozott" és a "lapozás véget ért" állapotot ([[L349]] fix).
+**EPIC 9 (COMMUNITY PLATFORM) HATODIK KÖRE KÉSZ.** ADR 0400: a Community
+gate (disabled/logged-out/profile-missing/ready), a profil létrehozó/
+szerkesztő flow és — a pre-flightban felfedezett, ADR 0396-ban MÁR ennek
+a körnek kiosztott felelősség pótlásaként — a backend SERVICE-SZINTŰ
+profil-létrehozás (`POST`/`PUT /community/profiles/me`, `CurrentUser`/
+`DbSession` auth-lánc). A batch-elt brief (PR #405) tévesen a teljes
+`backend/**`-et tilos zónának jelölte és hamisan állította, hogy a kör
+"az ELSŐ, ami ténylegesen HTTP-n keresztül hívja" a Kör 3/4 policy-kat —
+mérve: `grep -rn "INSERT INTO community_profiles" backend/` nulla
+találat, egyetlen backend endpoint sem hozott létre profilsort. A
+pre-flight (§0.0, ADR 0400) szűken, öt névvel megadott fájlra nyitotta
+ki a tilos zónát; a `main.py`/`community/__init__.py` router-mounting és
+bármilyen új migráció VÁLTOZATLANUL tilos zóna marad — külön, még ki nem
+osztott kör dolga (`docs/reviews/e09-r04-review.md` F1/N2-vel együtt).
 
-**Review (`docs/reviews/e09-r05-review.md`): APPROVED, egy javító kör
-után.** Az első review egy MAJOR leletet talált (F1): a kör hét ÚJ
-wire-facing enumja közül hat kapott tesztelt, sosem dobó `xFromWire`
-dekódert (`ReactionKind`, `ChallengeType`, `ChallengeInviteState`,
-`CommunityNotificationKind`, `ClubVisibility`, plusz az újrahasznosított
-`ProfileVisibility`/`CommunityAudience`), de a `ModerationState` — saját
-doc-kommentje szerint is backend-authoritative jel — kimaradt. A javító
-kör (`d52a10c5`) hozzáadta a hiányzó `moderationStateFromWire`/
-`moderationStateToWire` párt + három A3-tesztet, PONTOSAN a testvér-minta
-szerint. Egy NOTE (N1, nem blokkoló): a `tools/mm-round.sh`
-anti-hallucináció regex-őre hamis pozitívot adott (`cat tools/round-gate.sh
-| head -100` forráskód-olvasást tévesztett össze egy csővezetékes
-gate-futtatással) — a review a nyers session-logot gépi elemzéssel
-igazolta hamis pozitívnak.
+**Review (`docs/reviews/e09-r06-review.md`): APPROVED, KÉT javító kör
+után.** Az első review 1 BLOCKER + 1 MAJOR leletet talált: F1 — a
+`fetchMyProfile()` egy nem-létező `GET /community/profiles/me` végpontot
+hívott (a gate `ready` állapota élesben sosem lett volna elérhető); F2 —
+a `handle_policy.validate()` NFKC-normalizált visszatérési értéke
+eldobva, Unicode-ekvivalens handle-ök (pl. fullwidth karakterek)
+ütköztek volna — egy dedikált `security-reviewer` agent FÜGGETLENÜL
+megerősítette, élesebb impersonation-szöggel. A javító kör 1 (`9592638e`)
+mindkettőt fixálta, tesztekkel (a security-reviewer pontos fullwidth/
+ASCII forgatókönyvét reprodukálva). Az ELSŐ exact-SHA CI-dispatch
+(`full-gate.yml`) ekkor PIROS lett — a TELJES suite (nem a célzott gate)
+2 ÚJ MAJOR leletet fedett fel: F9 (`ui_inventory_test.dart` elavult
+screen-számláló, 64→66, a kör 2 új production screent ad) és F10
+(`dio_factory_guard_test.dart` regex-alapú Dio-őr false positive egy
+doc-kommenten, "Dio ("-mintára illeszkedve). A javító kör 2 (`ddbd4e9e`)
+mindkettőt fixálta, egysoros javításokkal.
 
-Minden review-lépés FÜGGETLENÜL, izolált `/tmp` klónban: scope-audit OK
-(25 fájl, majd a javító kör 3 fájlja, 0 generated/ignored), gate 7/7 zöld
-mindkét fordulón, a §6 kötelező valódi-sértés próba (import
-`package:flutter/foundation.dart` + `@immutable` → a SAJÁT
-architecture-guard csoport PIROS, nem csak a `flutter analyze`
-unused-import lintje → visszaállítás → zöld) FÜGGETLENÜL reprodukálva. CI
-a pontos merge SHA-n (`25ac7f75`): `full-gate.yml` 32590914358 (a
-`round-ci-plan.py` tervező adta ki — tisztán Dart-diff, natív build nem
-kell) + `router-ci.yml` 32591010189 (manuálisan `workflow_dispatch`-csel
-pontos SHA-ra kényszerítve, mert a review-only push nem érintette a
-Router CI trigger-útvonalait) mindkettő `success`. Merge
-`tools/round-land.sh`. Pontos következő kör: **E09-R06** (a
-`docs/execution/pipeline-queue.tsv` következő `pending` E09-sora).
+Scope-audit háromszor jelzett VIOLATION-t a kör során — mindhárom
+alkalommal kis, additív, tartalmilag helyes fájlt, amit az orchesztrátor
+§0.0.x brief-revíziókkal legitimált (nem mást implementáltatott):
+`lib/core/foundation/app_failure.dart` (a projekt MEGLÉVŐ per-feature
+`FailureCode` mintája), `lib/l10n/app_{en,hu}.arb` (az ARB-aggregátum
+tartalmilag friss, `dart run tool/gen_l10n_segments.dart --check`
+igazolta — csak a generátor helyett kézzel lett átmásolva),
+`test/ui/ui_inventory_test.dart` (F9 fent). A `bio`/`skillInterests`/
+`badges`/`avatarUrl` mezők ebben a körben UI-only maradnak (nincs
+backend oszlop, nincs migráció) — egy jövőbeli migráció-hozó kör
+előfeltétele.
+
+Minden gate-futtatás FÜGGETLENÜL, izolált `/tmp` klónokban (mindkét
+javító kör után újra): scope-audit OK, format/analyze/architecture/
+secrets/l10n/backend ruff/backend pytest (349 teszt) mind zöld. A KÉT
+kötelező valódi-sértés próba (Flutter A5 dupla-submit debounce, backend
+A8 `commit_with_uniqueness_check` try/except) PIROS→ZÖLD dokumentálva. CI
+a pontos merge SHA-n (`bf2f67da`): `full-gate.yml` 32596780267 +
+`router-ci.yml` 32597616787 (manuálisan `workflow_dispatch`-csel pontos
+SHA-ra kényszerítve) mindkettő `success`.
+
+**Nyitva maradt, EMBERI döntést NEM igénylő tartozások:** F3/F4 (A6
+logout-cache és A7 2.0 text-scale golden teszt hiányzik, a kód-szint
+helyes, csak tesztekkel nincs bizonyítva); F6 (`deps.py`
+`HTTPBearer(auto_error=True)` hiányzó auth-fejlécre 403-at ad 401 helyett
+— projektszintű minta, `deps.py` tilos zóna volt ezen a körön); a
+router-mounting kör (F1 review-eredetije, ADR 0396 "Következmények" +
+E09-R04 F1/N2) továbbra is elkülönült, még ki nem osztott feladat.
+**MÉRT ADR-ütközés a queue-ban:** `docs/execution/pipeline-queue.tsv`
+E09-R07 sora `0400`-at ad előre kiosztott ADR-ként (a batch-elt PR #405
+tervéből) — ez a szám MÁR foglalt (ADR 0400, ez a kör). Az E09-R07
+pre-flightja a §1.0.1 szerint `tools/round-slots.py reserve-adr`-rel ÚJ
+számot kér, ne a queue-fájl stale értékét használja.
 
 ## 🧭 [GOV] Motorváltás: Claude Sonnet 5 (high) orchestrátor + MiniMax M3 implementer (2026-08-21)
 
@@ -4704,6 +4725,16 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-22):** `main` @ `77bc0589` — E09-R06 Profil
+létrehozás, szerkesztés és Community gate UI, PR
+[#415](https://github.com/wolfcasaba/strumsight/pull/415), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, KÉT javító
+kör (F1 BLOCKER hiányzó `GET /community/profiles/me`, F2 MAJOR NFKC-
+normalizáció eldobva, F9/F10 MAJOR a TELJES CI-suite fedte fel). Review
+APPROVED, 0 nyitott BLOCKER/MAJOR. Exact `bf2f67da`: `full-gate.yml`
+32596780267 + `router-ci.yml` 32597616787 (manuális `workflow_dispatch`)
+mindkettő success. Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-22):** `main` @ `79865233` — E09-R05 Flutter
 Community domain és public API, PR
 [#414](https://github.com/wolfcasaba/strumsight/pull/414), squash-merge.
@@ -5313,6 +5344,17 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E09-R06 — Profil létrehozás, szerkesztés és Community gate UI** (PR
+[#415](https://github.com/wolfcasaba/strumsight/pull/415), squash
+`77bc0589`, [ADR 0400](docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md)).
+Community gate (4 állapot) + profil onboarding/edit flow + backend
+service-szintű profil-létrehozás (ADR 0396-ban MÁR ennek a körnek
+kiosztott, a batch-elt brief által kihagyott felelősség). 0 nyitott
+BLOCKER/MAJOR review-lelet KÉT javító kör után (F1 BLOCKER, F2 MAJOR,
+F9/F10 MAJOR mind FIXED; F3/F4/F6 MINOR nem blokkolnak,
+`docs/reviews/e09-r06-review.md`). Exact `bf2f67da`: Full Gate 32596780267
++ Router CI 32597616787 success. Részletesen a fejléc ✅-blokkban.
 
 **E08-R30 — Epic 08 migráció, regresszió és lezárás** (PR
 [#407](https://github.com/wolfcasaba/strumsight/pull/407), squash `a8ecb9f3`,
@@ -6130,23 +6172,29 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-22): E09-R06 — Profile onboarding és
-szerkesztés** (`docs/rounds/e09-r06-profile-onboarding-and-editing.md`,
-engine a queue-ban `minimax`, előre kiosztott ADR `nincs`). **Az E09-R05
-(Flutter Community domain és public API) KÉSZ** (PR #414, squash
-`79865233`) — lásd a fejléc ✅-blokkot. A Kör 5 megnyitotta a
-`lib/features/community/` domain-fát (7 entitás, 5 value object, 7
-repository-interfész, `public.dart`) — a Kör 6 pre-flightjában mérd meg,
-hogy a `CommunityProfile`/`PublicUserId`/`CommunityHandle` (Kör 5,
-`lib/features/community/domain/{entities,value_objects}/`) TÉNYLEGES
-alakja (mezőnevek, `copyWith`, validáció) egyezik-e a Kör 6 brief
-feltételezésével, mielőtt az onboarding/szerkesztés UI-t és az első
-`application/`+`data/` réteget megírod — ez az ELSŐ kör, ami a Kör 5
-domain-típusokra ténylegesen ráépít. **Az Epic 8 (Gamification) mind a 30
-köre KÉSZ** (E08-R30, PR #407) — az **E08-R29** (Integritás, analytics,
-balance szimuláció és CI) továbbra is `hold`-on marad. A queue-scan a
-legelső `pending` sort választja. Ez a session nem indítja el; új
-sessionben fut.
+**Pontos következő termékkör (2026-08-22): E09-R07 — Follow és follow
+request social graph** (`docs/rounds/e09-r07-follow-and-follow-request-graph.md`,
+engine a queue-ban `minimax`, **előre kiosztott ADR a queue-fájlban
+`0400` — EZ A SZÁM MÁR FOGLALT** (ADR 0400 = ez a most lezárt E09-R06
+kör, `docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md`).
+**Az E09-R07 pre-flightja NE használja a queue-fájl stale `0400`
+értékét** — a §1.0.1 szerint `tools/round-slots.py reserve-adr --round
+E09-R07`-tel kérjen ÚJ számot. **Az E09-R06 (Profil létrehozás,
+szerkesztés és Community gate UI) KÉSZ** (PR #415, squash `77bc0589`) —
+lásd a fejléc ✅-blokkot. A Kör 6 kiegészítette a Kör 5 domain-fáját
+(`CommunityProfileRepository.createProfile`/`updateProfile` + 2 domain-
+kivétel) és backend service-szintű profil-írást adott — a Kör 7
+pre-flightja mérje meg, hogy a `CommunityProfile`/`CommunityRelationshipToViewer`
+(Kör 5, `domain/entities/community_profile.dart`) TÉNYLEGES alakja
+egyezik-e a Kör 7 brief follow/follow-request feltételezésével, és hogy a
+`community_follows`/`community_follow_requests` migráció TILOS zóna-e
+még ezen a körön (a Kör 6-ban nyitott precedens: a router-mounting és
+migráció külön, még ki nem osztott kör dolga marad — DE a Kör 7 SAJÁT
+brief-je dönthet másképp, ha explicit ADR-alátámasztással kiosztja
+magának). **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR
+#407) — az **E08-R29** (Integritás, analytics, balance szimuláció és CI)
+továbbra is `hold`-on marad. A queue-scan a legelső `pending` sort
+választja. Ez a session nem indítja el; új sessionben fut.
 
 **F1/F2 nyitott MINOR-ok az E09-R04 review-ból** (backend
 `update_privacy_settings` router-bekötő kör előfeltételei — Python-szintű

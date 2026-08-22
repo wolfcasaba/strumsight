@@ -15676,3 +15676,119 @@ futásért, ahelyett hogy egy sosem megjelenő push-triggerelt run-ra várnál.
 **Őrteszt:** nincs — operatív/orchestrátor-oldali eljárási lecke, nem
 kód-szintű mérce. Részletek: `docs/reviews/e09-r05-review.md`, a `25ac7f75`
 és `8f598c28` közti `git diff --stat` (kizárólag `docs/reviews/e09-r05-review.md`).
+
+## L418 — Egy backend Kör "Következmények" szakasza kioszthat felelősséget egy KÉSŐBBI, még meg sem írt kör számára — a batch-elt brief ezt könnyen elveszíti (E09-R06, orchesztrátor pre-flight, 2026-08-22)
+
+**Mért tény.** `docs/adr/0396-…md` (E09-R02, Kör 2) "Következmények"
+szakasza explicit kimondta: *"A Kör 6 (onboarding, explicit
+profil-létrehozás) a `community_profiles` sor tényleges service-szintű
+létrehozását adja; ez a kör [Kör 2] csak a modellt, a migrációt és a
+modul-boundary olvasó/teszt útját."* Az Epic 9 mind a 32 körének briefje
+EGY batchben készült (PR #405), jóval a Kör 2 megírása UTÁN — a batch-elt
+Kör 6 brief mégis `backend/**`-et teljes egészében tilos zónának
+jelölte, és a §2 "Jelenlegi állapot" tévesen azt állította, hogy a kör
+"az ELSŐ, ami ténylegesen HTTP-n keresztül hívja" a Kör 3/4 policy-kat —
+holott `grep -rn "INSERT INTO community_profiles" backend/` nulla
+találatot adott, tehát semmi nem hívta még HTTP-n azokat, és nem is
+tudta volna, mert nem volt mit hívnia.
+
+**Gyökérok.** A batch-brief-generálás (egyetlen menetben, 32 brief) nem
+kereste vissza szisztematikusan a KORÁBBAN MÁR MEGÍRT, kapcsolódó ADR-ek
+"Következmények" szakaszait olyan mondatokért, amik egy KÉSŐBBI kör
+sorszámát nevezik meg felelősként. Egy ilyen mondat könnyen csak a
+korábbi ADR szövegében marad, és a későbbi kör briefje — más forrásból,
+más gondolatmenet mentén — újraírja a scope-ot anélkül, hogy tudna róla.
+
+**Szabály.** A §1 pre-flight mérési kötelezettség ("grep-eld ki a
+hivatkozott enum-értékeket/mezőket a tényleges kódból") egy ÚJ, explicit
+alesetet kap: ha egy brief `backend/**`-et (vagy bármilyen más réteget)
+teljes egészében tilos zónának jelöl, ELLENŐRIZD, hogy a KAPCSOLÓDÓ,
+MÁR MEGÍRT ADR-ek "Következmények" szakasza nem oszt-e ki explicit
+felelősséget PONT ennek a körnek a sorszámára
+(`grep -rn "Kör <N>" docs/adr/*.md` a kör saját sorszámára). Ha igen, és
+a brief mégsem engedi a szükséges fájlokat, az egy mért brief-hiány,
+NEM egy tudatos scope-döntés — a §0.0 pre-flight-revízió feloldja
+(ADR 0087 §2, saját, még nem merge-elt brief), szűken, csak az explicit
+kiosztott felelősségre.
+
+**Őrteszt:** nincs — brief-minőségi/pre-flight-eljárási lecke, nem
+kód-szintű mérce. Részletek: `docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md`
+Kontextus szakasz, `docs/rounds/e09-r06-profile-onboarding-and-editing.md` §0.0.
+
+## L419 — Egy `validate()`-stílusú normalizáló függvény visszatérési értékének eldobása és újraszámolása NEM ekvivalens újraimplementáció — a hiányos verzió Unicode-ekvivalens bemeneteket szétválaszt (E09-R06, review F2, 2026-08-22)
+
+**Mért tény, reprodukálva.** `backend/app/community/services/profile_service.py::create_profile`
+meghívta `handle_policy.validate(handle)`-t (ami NFKC-normalizálást +
+casefold-ot + strip-et végez, és a normalizált formát adja vissza), de
+ELDOBTA a visszatérési értéket, és az `assign_handle`-nek egy SAJÁT,
+hiányos `handle.strip().casefold()` normalizációt adott át — NFKC lépés
+nélkül. `unicodedata.normalize('NFD', 'café').strip().casefold() !=
+unicodedata.normalize('NFC', 'café').strip().casefold()` (a service
+hibás útja MEGKÜLÖNBÖZTETI a két Unicode-ekvivalens formát), míg a
+policy `normalize()`-ja a kettőt UGYANARRA az értékre képezi. Egy
+független `security-reviewer` agent ugyanezt a mintát élesebb szögből
+mérte: egy fullwidth karakteres handle (`"Ａbcde"`, U+FF21) és az ASCII
+`"abcde"` a policy szerint UGYANAZ, de a hibás normalizáció mindkettőt
+sikeresen létrehozta — impersonation-vektor egy közösségi funkcióban.
+
+**Gyökérok.** A hívó látta, hogy `validate()`-nek van mellékhatása
+(kivétel dobása malformed/reserved/blocked handle-re), és azt hitte,
+elég meghívni a validáció ELVÉGZÉSÉÉRT — nem vette észre, hogy a
+függvény EGYÚTTAL a kanonikus normalizált formát is visszaadja, és hogy
+EZT a formát kell a downstream uniqueness-enforcementnek használnia, nem
+egy helyben újraszámolt, hiányos verziót.
+
+**Szabály.** Review-mérce: ha egy `validate()`/`normalize()`-stílusú
+függvény hívása után a hívó ÚJRA elvégzi (akárcsak részben) ugyanazt a
+transzformációt egy MÁSIK kódúton, ahelyett hogy a függvény visszatérési
+értékét használná, az egy önálló review-ellenőrzési pont — a két
+implementáció NEM garantáltan ekvivalens, és a divergencia tipikusan
+Unicode-normalizációs (NFKC/NFD/NFC) vagy hasonló, "ritkán tesztelt
+él" jellegű transzformációkon bukik ki, ahol a hiányos verzió a
+gyakori (ASCII) bemeneten helyesen viselkedik, csak a ritka bemeneten
+tér el — ezért egy sima manuális teszteléssel könnyen átcsúszik.
+
+**Őrteszt:** `backend/tests/community/test_profile_service.py::test_unicode_equivalent_handle_is_rejected_as_taken`
++ `test_unicode_normalization_matches_in_service_layer` (javító kör 1,
+`9592638e`).
+
+## L420 — A célzott `round-gate.sh` NEM fedi a `test/ui/ui_inventory_test.dart`-hoz és `test/tooling/*_guard_test.dart`-hoz hasonló, csak a TELJES suite-ban futó, kereszt-fájlrendszeres "screen-számláló" és "regex-őr" teszteket — új production screen vagy egy szerencsétlen doc-komment-szöveg csak a CI-ban bukik ki (E09-R06, 2026-08-22)
+
+**Mért tény.** Az E09-R06 két javító kör után zöld targeted gate-tel
+(`tools/round-gate.sh` a brief `gate_tests` listájával) rendelkezett, de
+az ELSŐ exact-SHA `full-gate.yml` CI-dispatch mégis PIROS lett: (1)
+`test/ui/ui_inventory_test.dart` egy dinamikusan felderített
+production-screen-számot pinnelt (`hasLength(64)`), és a kör 2 ÚJ
+screent adott — a szám 66-ra nőtt, de semmi a targeted gate-ben nem
+futtatta ezt a tesztet, mert nincs a brief `gate_tests` listáján (nem is
+lehetne — a teszt a teljes `lib/`-et scanneli, nem egy konkrét
+feature-t). (2) `test/tooling/dio_factory_guard_test.dart` egy
+sor-szintű regex-őr (`\bDio\s*\(`), ami a `lib/` fát soronként vizsgálja
+— egy ÚJ fájl doc-kommentjének prózai szövege ("...dart:convert / Dio
+(architecture-dependency guard...") véletlenül illeszkedett a mintára.
+
+**Gyökérok.** Ez a két tesztosztály ("stabil inventory-szám" és
+"kereszt-fájlrendszeres regex-őr") STRUKTURÁLISAN nem illeszthető be egy
+kör saját `gate_tests` listájába — nem egy feature-t tesztelnek, hanem a
+TELJES `lib/`-fa egy tulajdonságát. Emiatt minden olyan kör, ami ÚJ
+production screent ad VAGY egy doc-kommentben véletlenül egy őr
+mintájára illeszkedő szöveget ír, csak a teljes CI-suite-ban bukik meg —
+ez NEM egy hiba a kör briefjében, hanem a targeted-gate/full-suite
+kettéválasztás (ADR 0053) egy STRUKTURÁLIS, elfogadott vakfoltja.
+
+**Szabály.** Ne várd, hogy a targeted gate ("MINDEN GATE ZÖLD" a
+`round-gate.sh`-tól) egyenértékű legyen a teljes CI-suite-tal — ez a kör
+pontosan ezért kap KÖTELEZŐ exact-SHA CI-dispatchot merge előtt (ADR
+0053), nem helyettesíthető a helyi targeted gate-tel. Ha egy kör ÚJ
+`lib/features/**/presentation/screens/*_screen.dart` fájlt ad, számítson
+rá, hogy `test/ui/ui_inventory_test.dart` `hasLength(N)`-jét bővíteni
+kell — ezt a review-nak proaktívan ellenőriznie ÉRDEMES lenne (grep az
+új screen-fájlokra + a pinnelt szám összevetése), de a végső bizonyíték
+mindenképp a CI, nem a manuális számolás.
+
+**Őrteszt:** nincs — a lecke maga a "targeted gate ≠ full suite" határ
+dokumentálása, nem egy új kódmérce. Részletek:
+`docs/reviews/e09-r06-review.md` F9/F10, CI run
+[32595342705](https://github.com/wolfcasaba/strumsight/actions/runs/32595342705)
+(piros) → [32596780267](https://github.com/wolfcasaba/strumsight/actions/runs/32596780267)
+(zöld a javítás után).

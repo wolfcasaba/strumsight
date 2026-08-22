@@ -6,6 +6,54 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## ✅ E09-R05 KÉSZ — Flutter Community domain és public API — PR [#414](https://github.com/wolfcasaba/strumsight/pull/414), squash `79865233` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) ÖTÖDIK KÖRE KÉSZ — az első Flutter-oldali
+Community kör.** ADR 0399: framework-független domain-fa
+(`lib/features/community/domain/{entities,value_objects,repositories}`,
+7 entitás, 5 value object, 7 repository-interfész) + a feature EGYETLEN
+belépője, `public.dart` — kézzel írt barrel (a `gen_public_barrel.dart`
+generált-registry pilotja ma kizárólag `practice_generator`, ADR 0339). A
+domain-purity guardot `test/core/architecture_dependency_test.dart` önálló
+teszt-csoportja méri (E07-R02/E08-R02 minta), nem a `tool/check_architecture.dart`
+bővítése. Pre-flight brief-revízió (§0.0 D3) tisztázta, hogy az ÚJ
+`value_objects/audience.dart` NEM duplikálhatja a Kör 4
+`policies/community_audience.dart` `ProfileVisibility`/`CommunityAudience`
+wire-enumjait — importálja őket, és kontrollált, sosem dobó
+wire-dekódolást ad hozzájuk (A3). A `CursorPage` value object explicit
+`initial`/`continued`/`haltedAfterRequest` type-state-tel különbözteti meg
+a "sosem lapozott" és a "lapozás véget ért" állapotot ([[L349]] fix).
+
+**Review (`docs/reviews/e09-r05-review.md`): APPROVED, egy javító kör
+után.** Az első review egy MAJOR leletet talált (F1): a kör hét ÚJ
+wire-facing enumja közül hat kapott tesztelt, sosem dobó `xFromWire`
+dekódert (`ReactionKind`, `ChallengeType`, `ChallengeInviteState`,
+`CommunityNotificationKind`, `ClubVisibility`, plusz az újrahasznosított
+`ProfileVisibility`/`CommunityAudience`), de a `ModerationState` — saját
+doc-kommentje szerint is backend-authoritative jel — kimaradt. A javító
+kör (`d52a10c5`) hozzáadta a hiányzó `moderationStateFromWire`/
+`moderationStateToWire` párt + három A3-tesztet, PONTOSAN a testvér-minta
+szerint. Egy NOTE (N1, nem blokkoló): a `tools/mm-round.sh`
+anti-hallucináció regex-őre hamis pozitívot adott (`cat tools/round-gate.sh
+| head -100` forráskód-olvasást tévesztett össze egy csővezetékes
+gate-futtatással) — a review a nyers session-logot gépi elemzéssel
+igazolta hamis pozitívnak.
+
+Minden review-lépés FÜGGETLENÜL, izolált `/tmp` klónban: scope-audit OK
+(25 fájl, majd a javító kör 3 fájlja, 0 generated/ignored), gate 7/7 zöld
+mindkét fordulón, a §6 kötelező valódi-sértés próba (import
+`package:flutter/foundation.dart` + `@immutable` → a SAJÁT
+architecture-guard csoport PIROS, nem csak a `flutter analyze`
+unused-import lintje → visszaállítás → zöld) FÜGGETLENÜL reprodukálva. CI
+a pontos merge SHA-n (`25ac7f75`): `full-gate.yml` 32590914358 (a
+`round-ci-plan.py` tervező adta ki — tisztán Dart-diff, natív build nem
+kell) + `router-ci.yml` 32591010189 (manuálisan `workflow_dispatch`-csel
+pontos SHA-ra kényszerítve, mert a review-only push nem érintette a
+Router CI trigger-útvonalait) mindkettő `success`. Merge
+`tools/round-land.sh`. Pontos következő kör: **E09-R06** (a
+`docs/execution/pipeline-queue.tsv` következő `pending` E09-sora).
+
+
 ## ✅ E13-R04 — Tipográfia és text-scale resilience (2026-08-21)
 
 PR [#389](https://github.com/wolfcasaba/strumsight/pull/389), squash
