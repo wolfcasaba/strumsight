@@ -54,6 +54,21 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(value: datetime) -> datetime:
+    """Normalize a DB-roundtripped ``datetime`` to UTC-aware.
+
+    SQLite drops the tzinfo on read (it has no native tz-aware column
+    type), so a ``DateTime(timezone=True)`` value that came back from
+    ``session.get()`` is naive. The migration contract says the column
+    stores UTC, so we re-attach ``timezone.utc`` here for comparison
+    and serialization. Production PostgreSQL will keep tzinfo on the
+    round-trip; the ``replace`` is then a no-op.
+    """
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 class StalePrivacyUpdateError(Exception):
     """The client's ``resource_version`` does not match the row's
     ``updated_at`` — the row was changed by someone else.
@@ -63,7 +78,9 @@ class StalePrivacyUpdateError(Exception):
     """
 
     def __init__(self, current_updated_at: datetime) -> None:
-        super().__init__(f"stale resource_version; current={current_updated_at.isoformat()}")
+        super().__init__(
+            f"stale resource_version; current={current_updated_at.isoformat()}"
+        )
         self.current_updated_at = current_updated_at
 
 
@@ -133,9 +150,13 @@ def update_privacy_settings(
     The ``now`` parameter is required (no default clock) — same discipline
     as ``IdentityService.change_handle`` — so tests can pin the new
     ``updated_at`` deterministically. The caller commits.
+
+    The comparison normalizes both sides to UTC-aware so a row that
+    was just ``db.get()``-ed (and lost tzinfo on SQLite) still matches
+    a tz-aware payload (the canonical shape from a JSON request body).
     """
-    if payload.resource_version != settings_row.updated_at:
-        raise StalePrivacyUpdateError(settings_row.updated_at)
+    if _as_utc(payload.resource_version) != _as_utc(settings_row.updated_at):
+        raise StalePrivacyUpdateError(_as_utc(settings_row.updated_at))
     settings_row.visibility = payload.visibility.value
     settings_row.audience_default = payload.audience_default.value
     settings_row.updated_at = now
@@ -149,12 +170,14 @@ def _row_to_out(row: CommunityPrivacySettings) -> PrivacySettingsOut:
 
     Keeps the conversion in one place so the §6.1 leak-guard is structural
     — adding a field to the schema later still routes through here.
+    Normalises ``updated_at`` to UTC-aware so JSON serialisation is
+    stable across SQLite (no tzinfo) and PostgreSQL (with tzinfo).
     """
     return PrivacySettingsOut(
         public_id=row.public_id,
         visibility=row.visibility,
         audience_default=row.audience_default,
-        resource_version=row.updated_at,
+        resource_version=_as_utc(row.updated_at),
     )
 
 
@@ -223,7 +246,9 @@ def put_privacy(
         except HTTPException:
             raise
 
-        now_fn: _SupportsNow = request.app.state.clock if hasattr(request.app.state, "clock") else _utcnow
+        now_fn: _SupportsNow = (
+            request.app.state.clock if hasattr(request.app.state, "clock") else _utcnow
+        )
         try:
             updated = update_privacy_settings(db, row, payload, now=now_fn())
         except StalePrivacyUpdateError as exc:

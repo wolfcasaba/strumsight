@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -41,7 +42,10 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
-from app.community.models.profile import CommunityPrivacySettings
+from app.community.models.profile import (
+    CommunityPrivacySettings,
+    CommunityProfile,
+)
 from app.community.policies.access_policy import (
     CommunityAccessPolicy,
     CommunityAudience,
@@ -50,15 +54,15 @@ from app.community.policies.access_policy import (
     RelationshipContext,
 )
 from app.community.routers.privacy import (
-    PrivacySettingsUpdate as _RouterPrivacyUpdate,  # re-exported check
+    StalePrivacyUpdateError,
 )
 from app.community.routers.privacy import (
-    StalePrivacyUpdateError,
     router as privacy_router,
+)
+from app.community.routers.privacy import (
     update_privacy_settings as update_privacy_settings_svc,
 )
 from app.community.schemas.privacy import (
-    PrivacySettingsOut,
     PrivacySettingsUpdate,
 )
 from app.config import Settings
@@ -141,22 +145,83 @@ def client(app) -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
+def _insert_user(db: Session, user_id: int, email: str) -> None:
+    """Insert a parent ``users`` row so the FK in ``community_profiles`` is satisfied."""
+    db.execute(
+        text(
+            "INSERT INTO users (id, email, hashed_password, created_at) "
+            "VALUES (:id, :email, :password, :ts)"
+        ),
+        {
+            "id": user_id,
+            "email": email,
+            "password": "x",
+            "ts": datetime.now(timezone.utc),
+        },
+    )
+
+
+def _next_user_id(db: Session) -> int:
+    """Return a fresh, unique user id for FK-chain inserts.
+
+    Looks at the current max id in ``users`` + 1; the caller's test
+    owns the lifetime of the DB so this is safe (no concurrent writers
+    in the test scope).
+    """
+    row = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM users")).first()
+    return int(row[0]) + 1
+
+
+def _make_profile(db: Session, user_id: int) -> int:
+    """Insert a ``community_profiles`` row via the ORM and return its id."""
+    profile = CommunityProfile(user_id=user_id)
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return int(profile.id)
+
+
+@dataclass(frozen=True)
+class _RowRef:
+    """A safe, detached handle to a freshly-inserted privacy row.
+
+    The ``CommunityPrivacySettings`` ORM instance is session-bound and
+    expires all of its attributes on commit — accessing ``row.id`` or
+    ``row.public_id`` on the detached instance raises
+    ``DetachedInstanceError``. This dataclass snapshots the values
+    while the session is still alive, so callers can hold the handle
+    across ``with session_factory() as db:`` blocks.
+    """
+
+    id: int
+    public_id: uuid.UUID
+
+
 def _make_privacy_row(
     db: Session,
     *,
     visibility: str = "followers",
     audience_default: str = "followers",
     updated_at: datetime | None = None,
-) -> CommunityPrivacySettings:
-    """Insert a minimal ``community_privacy_settings`` row for tests.
+) -> _RowRef:
+    """Insert a minimal ``community_privacy_settings`` row and return
+    a detached handle.
 
-    The row's ``profile_id`` is a stand-in (the future onboarding
-    surface creates the real FK link; this round's tests only need a
-    queryable row keyed on its own ``public_id``).
+    The FK chain ``community_privacy_settings.profile_id`` →
+    ``community_profiles.id`` → ``users.id`` is fully populated here
+    so the row passes the DB-level FK constraint. The future
+    onboarding surface (Kör 6) will create both rows in one
+    transaction; this helper does the same so the FK constraint
+    passes in tests.
     """
+    user_id = _next_user_id(db)
+    _insert_user(db, user_id, f"u{user_id}@s.test")
+    db.commit()
+    profile_id = _make_profile(db, user_id)
+
     row = CommunityPrivacySettings(
         public_id=uuid.uuid4(),
-        profile_id=0,  # stand-in — see comment above
+        profile_id=profile_id,
         visibility=visibility,
         audience_default=audience_default,
     )
@@ -164,8 +229,8 @@ def _make_privacy_row(
         row.updated_at = updated_at
     db.add(row)
     db.commit()
-    db.refresh(row)
-    return row
+    # Snapshot PK + public_id while the session is still alive.
+    return _RowRef(id=int(row.id), public_id=row.public_id)
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +278,7 @@ _A1_VISIBILITIES = [
 
 @pytest.mark.parametrize("relationship", _A1_VIEWERS)
 @pytest.mark.parametrize("visibility", _A1_VISIBILITIES)
-def test_a1_evaluate_profile_access_returns_an_enum_member(
-    visibility, relationship
-):
+def test_a1_evaluate_profile_access_returns_an_enum_member(visibility, relationship):
     """A1 — every (viewer, visibility) combination yields an enum member.
 
     A future regression that introduces an early ``return None`` /
@@ -236,8 +299,6 @@ def test_a1_no_policy_less_path_in_source():
     exact failure shape that would leave a future read path without
     policy coverage).
     """
-    from pathlib import Path
-
     policy_path = (
         Path(__file__).resolve().parents[2]
         / "app"
@@ -431,14 +492,29 @@ def test_a5_server_default_for_visibility_is_followers(engine):
     explicitly would otherwise create a ``public`` profile). The
     test introspects the actual column metadata to ensure the
     server_default made it through the batch_alter_table.
+
+    SQLite's ``PRAGMA table_info`` quotes the default value with
+    ``"..."`` so we strip them before comparing.
     """
     insp = inspect(engine)
     cols = {c["name"]: c for c in insp.get_columns("community_privacy_settings")}
-    assert cols["visibility"]["default"] == "followers", (
+
+    def _strip(value: object) -> object:
+        # SQLite's ``PRAGMA table_info`` quotes the default value —
+        # sometimes with single quotes (``'followers'``), sometimes
+        # with double quotes (``"followers"``). Strip both shapes
+        # before comparing.
+        if isinstance(value, str) and len(value) >= 2:
+            first, last = value[0], value[-1]
+            if first in ("'", '"') and first == last:
+                return value[1:-1]
+        return value
+
+    assert _strip(cols["visibility"]["default"]) == "followers", (
         f"A5 — server_default for visibility is {cols['visibility']['default']!r}, "
         "expected 'followers'"
     )
-    assert cols["audience_default"]["default"] == "followers", (
+    assert _strip(cols["audience_default"]["default"]) == "followers", (
         f"A5 — server_default for audience_default is "
         f"{cols['audience_default']['default']!r}, expected 'followers'"
     )
@@ -446,7 +522,14 @@ def test_a5_server_default_for_visibility_is_followers(engine):
 
 def test_a5_visibility_never_evaluates_to_public_by_default(session_factory):
     """A5 — a freshly-created ORM row without explicit values uses followers."""
-    row = _make_privacy_row(session_factory())
+    with session_factory() as db:
+        ref = _make_privacy_row(db)
+    # Read the row back to inspect the persisted values — the
+    # ``_RowRef`` handle is detached by design, so the actual ORM
+    # attributes live in the DB.
+    with session_factory() as db:
+        row = db.get(CommunityPrivacySettings, ref.id)
+    assert row is not None
     assert row.visibility == "followers"
     assert row.audience_default == "followers"
 
@@ -499,18 +582,32 @@ def test_a6_fresh_update_succeeds_and_changes_updated_at(session_factory, clock)
     )
     with session_factory() as db:
         fresh = db.get(CommunityPrivacySettings, row.id)
-        updated = update_privacy_settings_svc(db, fresh, fresh_payload, now=clock + timedelta(seconds=1))
+        update_privacy_settings_svc(
+            db, fresh, fresh_payload, now=clock + timedelta(seconds=1)
+        )
         db.commit()
 
     with session_factory() as db:
         reread = db.get(CommunityPrivacySettings, row.id)
+        assert reread is not None
         assert reread.visibility == "public"
         assert reread.audience_default == "public"
-        assert reread.updated_at == clock + timedelta(seconds=1)
-        assert updated is reread  # the service returns the row it mutated
+        # ``db.get`` reloads via SQLite, which drops tzinfo — compare
+        # the canonical UTC-aware form on both sides.
+        from app.community.routers.privacy import _as_utc
+
+        assert _as_utc(reread.updated_at) == _as_utc(clock + timedelta(seconds=1))
+        # Compare by row identity (PK + public_id), not Python identity —
+        # ``updated`` is bound to session 2, ``reread`` to session 3,
+        # so ``is`` is always False even when they refer to the same
+        # underlying row.
+        assert reread.id == row.id
+        assert reread.public_id == row.public_id
 
 
-def test_a6_router_returns_409_on_stale_resource_version(client, session_factory, clock):
+def test_a6_router_returns_409_on_stale_resource_version(
+    client, session_factory, clock
+):
     """A6 — the HTTP layer translates the service-layer error to 409."""
     with session_factory() as db:
         row = _make_privacy_row(
@@ -561,7 +658,12 @@ def test_a6_router_accepts_fresh_update_and_returns_200(client, session_factory,
     body = response.json()
     assert body["visibility"] == "public"
     assert body["audience_default"] == "followers"
-    assert body["resource_version"] == clock.isoformat()
+    # Pydantic v2 renders UTC datetimes as ``...Z`` (Zulu); Python's
+    # ``datetime.isoformat()`` produces ``...+00:00``. Both refer to
+    # the same instant — compare by datetime, not by string.
+    assert (
+        datetime.fromisoformat(body["resource_version"].replace("Z", "+00:00")) == clock
+    )
 
 
 def test_a6_router_rejects_extra_fields(client, session_factory, clock):
@@ -609,8 +711,6 @@ def test_measure_matrix_block_before_visibility_is_enforced_in_code():
     swap that "happens to give the right answer for the visible cells"
     would still be caught here).
     """
-    from pathlib import Path
-
     policy_path = (
         Path(__file__).resolve().parents[2]
         / "app"
