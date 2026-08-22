@@ -5709,31 +5709,41 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör (2026-08-22): E08-R28 — Ledger sync
-contract és merge** (`docs/rounds/e08-r28-ledger-sync-contract-and-merge.md`,
-engine a queue-ban `minimax`, ADR 0319 előre kiosztva — ELLENŐRIZD a
-foglalóval, az E08-R27 saját `0318`-a is stale volt egy korábbi, független
-kör miatt). Ez a session nem indítja el; új sessionben fut. Vegye figyelembe
-az E08-R27 mért tanulságait:
+**Pontos következő E08 termékkör (2026-08-22): E08-R30 — Epic 08 migráció,
+regresszió és lezárás** (`docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md`,
+engine a queue-ban `minimax`). Az **E08-R29** (Integritás, analytics, balance
+szimuláció és CI) `hold`-on marad — a queue-scan a legelső `pending` sort
+választja, ami a fájlban E08-R30 (394. sor után, 396. sor), korábban áll,
+mint az újonnan batch-elt Epic 9 sor (E09-R01, 413. sor) vagy a Chapter 13 ág
+(E13-R05, 491. sor); ezt a sorrendet a driver automatikusan tiszteletben
+tartja. Ez a session nem indítja el; új sessionben fut. Vegye figyelembe az
+E08-R28 mért tanulságait:
 
-- **F1 (MAJOR, javítva) mintája ismétlődhet:** ha egy domain-osztály egy
-  presentation-rétegbeli típust importál (`show`-val is!), az a domain fájlt
-  tranzitívan a Fluttertől teszi függővé, és ezt a `tool/check_architecture.dart`
-  CSAK a `_isSharedDomain()` allowlistjén (`lib/core/music/`,
-  `lib/core/audio/codec/`, `lib/features/practice/domain/`) belül fogja meg —
-  a `lib/features/gamification/domain/` NINCS ezen a listán. A pre-flight
-  grep-elje ki minden ÚJ domain-fájl importlistáját kézzel
-  (`grep -n "^import" <új domain fájl>` → egyik se `presentation/`-re vagy
-  Flutter/Riverpod csomagra mutasson), ne bízza a gépi gate-re.
-- **F2 (MINOR, nyitva):** a `test/features/gamification/presentation/
-  gamification_accessibility_test.dart` A1/A2 cellái ma NEM kötik be
-  ténylegesen a `GamificationPreferences`-t a `CelebrationCoordinator`-ba —
-  ha egy jövőbeli kör (feltehetően `E13-R32`) ezt a bekötést elvégzi, írjon
-  ÚJ, a bekötést ténylegesen gyakorló mutációs próbát, ne hagyatkozzon erre a
-  meglévő két tesztre mint regresszió-őrre.
-- A `reward_summary_sheet.dart` doc-kommentje még mindig „the wiring lands in
-  round 27"-t mond — ezt a tényleges bekötő kör (`E13-R32`) javítsa ki
-  egyúttal.
+- **A wire-szerződés két fele (Dart-kódoló + backend-dekódoló) KÜLÖN
+  implementer-diffben könnyen szétcsúszik, még akkor is, ha ugyanaz a kör
+  írja mindkettőt** — az E08-R28 F1 MAJOR-ja pontosan ezt mutatta: mindkét
+  oldal SAJÁT gate-je zöld volt, mert egyik sem tesztelte a MÁSIK oldal
+  tényleges kimenetét. Ha egy jövőbeli kör (a router-mounting follow-up)
+  élesíti ezt a szerződést, a pre-flight ELSŐ lépése egy kézzel futtatott
+  `LedgerUploadEnvelope.model_validate(<a Dart encodeUpload() aktuális
+  kimenete>)` ellenőrzés legyen — ne a két oldal külön-külön zöld gate-jére
+  hagyatkozzon.
+- **A `verified` ma séma-érvényességet jelent, NEM XP-újraszámolást**
+  (dedikált biztonsági review N1 lelete, `docs/reviews/e08-r28-security.md`).
+  Mielőtt bármely jövőbeli felület a `verified` mezőt bizalmi jelzésként
+  mutatná, a szervernek ténylegesen vissza kell vezetnie az XP-t a
+  forrás-eseményből — a mai `evaluate_upload` minden séma-érvényes nyugtát
+  `verified`-nek jelöl, felső XP-korlát vagy policy-alapú újraszámolás nélkül.
+- **Nincs `max_length` a nyugta-listán/id-mezőkön** most már javítva (F2),
+  de a mintázat (kliens-adatot fogadó pydantic séma felső korlát nélkül)
+  minden jövőbeli, `backend/app/`-ot bővítő körnél ellenőrizendő.
+- Egy önkezűen létrehozott ÜRES `backend/.venv` beárnyékolja a
+  `tools/round-gate.sh` közös venv-fallbackját (L408) — ha a backend gate
+  `ModuleNotFoundError`-ral hasal el, ELŐSZÖR ellenőrizd, hogy a munkapéldány
+  saját `backend/.venv`-je létezik-e és NEM üres-e.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R28 —
+Ledger sync contract és merge.** Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R27 —
 Gamification accessibility és settings.** Lásd a fejléc ✅-blokkot.
