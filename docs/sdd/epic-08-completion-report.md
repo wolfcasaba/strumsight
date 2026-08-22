@@ -106,7 +106,7 @@ re-ran them under the §7 gate and recorded the result here.
 | Scenario | Test file | Status this round |
 |---|---|---|
 | Offline app restart — local reward ledger survives and no double reward on the next session | `test/features/gamification/data/ledger_merge_policy_test.dart` (Kör 28, idempotency cell) | ✅ green |
-| Time-zone shift — epoch-day arithmetic stays integer, no DST drift | `test/features/gamification/domain/streak/streak_logic_test.dart` (epoch-day math) + `test/features/streak/streak_logic_test.dart` | ✅ green |
+| Time-zone shift — epoch-day arithmetic stays integer, no DST drift | `test/features/gamification/domain/streak_policy_test.dart` + `test/features/streak/streak_logic_test.dart` (epoch-day math) | ✅ green |
 | Clock moved backwards — `StreakService.evaluate` returns `clockAnomaly`, no broken streak | `test/features/gamification/application/streak_service_test.dart` (E08-R10) | ✅ green |
 | Multi-device replay — `_collapseGroup` de-duplicates by both `ledgerId` AND `sourceEventId` | `test/features/gamification/data/ledger_merge_policy_test.dart` (E08-R28, F1 fix) | ✅ green |
 | Planned rest day recovery — `recoveryEligible` triggers the shorter threshold only when granted | `test/features/gamification/application/streak_service_test.dart` (E08-R10 recovery cell) | ✅ green |
@@ -151,7 +151,26 @@ pass alongside the new fixture file.
 | `test/features/progress` | existing | ✅ green |
 
 The gate was run **in foreground, no pipe / no chain, no background**, as
-required by ADR 0053 / AGENTS.md §12 / `tools/round-gate.sh`.
+required by ADR 0053 / AGENTS.md §12 / `tools/round-gate.sh`. The captured
+local output for this round is preserved at `/tmp/e08-r30-gate.log`
+(120 573 bytes, exit code 0, all nine gate steps `ZÖLD`:
+
+```
+→ [1] format: ZÖLD
+→ [2] analyze: ZÖLD
+→ [3] test test/app/routing/app_router_test.dart: ZÖLD
+→ [4] test test/features/gamification: ZÖLD
+→ [5] test test/features/streak: ZÖLD
+→ [6] test test/features/progress: ZÖLD
+→ [7] architecture: ZÖLD
+→ [8] secrets: ZÖLD
+→ [9] l10n: ZÖLD
+```
+
+The full suite + randomized property gate + APK remain the CI's job per
+ADR 0053 — the local log above is the §6.1 küszöb „rajta" cella
+evidence, and the GREEN CI run URL is what A6 demands as its final
+acceptance predicate (filled by the orchestrator in §7).
 
 ---
 

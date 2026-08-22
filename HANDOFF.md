@@ -79,7 +79,7 @@ importokból.
 ÚJ:
 - `lib/app/routing/app_route.dart` — hat új konstans (`gamificationHub`,
   `achievements`, `achievementDetail`, `quests`, `streakDetail`, `rewardInbox`).
-- `lib/app/routing/app_router.dart` — hat új `GoRoute` + négy file-private
+- `lib/app/routing/app_router.dart` — hat új `GoRoute` + öt file-private
   provider (`_gamificationRepositoryProvider`, `_levelCurveProvider`,
   `_gamificationProfileProvider`, `_streakStateProvider`,
   `_rewardInboxProvider`); a meglévő útvonalak (`/streak`, `/progress`,
