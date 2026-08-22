@@ -2,13 +2,15 @@
 
 Brief: docs/rounds/e09-r06-profile-onboarding-and-editing.md
 ADR: docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md
-Diff: `git diff b89561f6...22862b18` (pre-flight commit → implementer HEAD)
+Diff: `git diff b89561f6...22862b18` (pre-flight commit → implementer HEAD; javító kör: `2da487c7...9592638e`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-22
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (javító kör 1 után, head `9592638e`)
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 1 · MINOR: 3 · NOTE: 2
+Első kör: BLOCKER: 1 · MAJOR: 1 · MINOR: 3 · NOTE: 2.
+**Javító kör 1 (`9592638e`) után: F1 és F2 FIXED, ellenőrizve. MINOR/NOTE
+(F3/F4/F6/F7/F8) nyitva maradt, nem blokkol.**
 
 Gate zöld (saját, izolált `/tmp/review-e09-r06` klónban, csővezeték nélkül,
 lásd lent). A gate ZÖLDsége NEM bizonyíték a két nyitott leletre — mindkettő
@@ -62,7 +64,7 @@ de a mintázat kockázatos, ha legközelebb nem az.
 - **Eredet:** ADR 0400 §2–3 (az orchesztrátor saját pre-flight terve) csak az ÍRÓ végpontokat specifikálta, a `fetchMyProfile()` olvasó útját nem — ez az orchesztrátor tervezési hiánya, amit az implementer nem jelzett STOP-pal, hanem egy nem-létező route-ra hivatkozva silently áthidalt.
 - **Kötelező javítás:** `GET /community/profiles/me` hozzáadása `routers/profile.py`-hoz, a `CurrentUser`/`DbSession` mintát követve (mint a `create_my_profile`/`update_my_profile`), a MEGLÉVŐ `_serialize_profile` segédfüggvény újrahasznosításával, 404 ha a hívónak nincs profilja (`profile_missing`, ugyanaz a kód, mint a PUT 404-nél).
 - **Ellenőrzés:** ÚJ backend teszt — auth-olt `GET /community/profiles/me` (a) 404 ha nincs profil, (b) 200 + a helyes `handle`/`display_name` mező ha van. ÚJ vagy bővített Flutter widget teszt, ami a `HttpCommunityProfileRepository`-t valódi (mock HTTP szerver vagy Dio interceptor) hívással teszteli, NEM csak a fake repository-t — legalább egyet, ami a route-nevet pinneli (`/community/profiles/me`, GET), hogy a jövőben egy hasonló drift azonnal pirosra váltson.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`9592638e`) — `GET /profiles/me` hozzáadva, a `{public_id}` dinamikus route ELÉ (route-ordering, FastAPI a legelső illeszkedő útvonalat választja). 4 új teszt: `test_get_my_profile_returns_404_when_no_profile_exists`, `test_get_my_profile_returns_200_after_create_round_trips`, `test_get_my_profile_requires_auth`, `test_get_my_profile_is_scoped_to_caller`. Önállóan újra lefuttatva izolált `/tmp/review-e09-r06-fix1` klónban: ZÖLD (`backend pytest` 349 teszt, gate teljes lánc zöld).
 
 ### F2 — MAJOR — a `handle_policy.validate()` NFKC-normalizált visszatérési értéke eldobva
 
@@ -80,7 +82,7 @@ de a mintázat kockázatos, ha legközelebb nem az.
 - **Megerősítve, függetlenül, a dedikált `security-reviewer` agenttal** (lásd lent) — ÉLESEBB támadási szöget adott: user1 regisztrálja `handle="abcde"`, user2 `handle="Ａbcde"` (fullwidth A, U+FF21). A policy szerint a kettő UGYANAZ a handle (mindkettő NFKC-normalizáltan `"abcde"`), de a service hibás normalizációja miatt mindkét `create_profile` hívás SIKERES — két, a policy szerint azonos handle-t viselő profil él egyszerre. Közösségi funkcióban ez egy confusable-karakteres megszemélyesítési (impersonation) vektor, nem csak egy elméleti Unicode-édge-case.
 - **Kötelező javítás:** `normalized = validate(handle)` — a visszatérési értéket kell átadni `assign_handle(db, profile.id, handle.strip(), normalized)`-nek, NEM újraszámolni.
 - **Ellenőrzés:** ÚJ backend teszt — két profil-létrehozási kísérlet ugyanazon handle NFD/NFC (vagy fullwidth/ASCII) formájával → a MÁSODIK 409 `handle_taken`-t kapjon (jelenleg mindkettő sikerülne).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`9592638e`) — `normalized = validate(handle)` most átadva `assign_handle`-nek. 2 új teszt: `test_unicode_equivalent_handle_is_rejected_as_taken` (a security-reviewer PONTOS fullwidth/ASCII forgatókönyve — user A `"Ａbcde"`, user B `"abcde"` → 409 `handle_taken`) és `test_unicode_normalization_matches_in_service_layer` (NFD/NFC pár, service-szinten, `pytest.raises(HandleAlreadyClaimed)`). Önállóan újra lefuttatva izolált klónban: ZÖLD.
 
 ### F6 — MINOR — hiányzó `Authorization` fejléc 403-at ad, nem 401-et
 
@@ -133,9 +135,11 @@ uniqueness-enforcement (DB-szintű, konkurens-create próba) és a
 
 ## Gate-bizonyíték ellenőrzése
 
+**Első kör (head `22862b18`), saját izolált `/tmp/review-e09-r06` klón:**
+
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
-| format | zöld | ✅ (saját, izolált `/tmp/review-e09-r06` klón, csővezeték nélkül) |
+| format | zöld | ✅ |
 | analyze | zöld | ✅ |
 | test community_gate_test.dart | zöld | ✅ |
 | test profile_onboarding_test.dart | zöld | ✅ |
@@ -144,11 +148,35 @@ uniqueness-enforcement (DB-szintű, konkurens-create próba) és a
 | l10n (parity + aggregate freshness) | zöld | ✅ — `dart run tool/gen_l10n_segments.dart --check` is önállóan lefuttatva, "aggregátum naprakész" |
 | backend ruff format/check | zöld | ✅ |
 | backend pytest | zöld (213 teszt) | ✅ |
-| CI (teljes suite + property + APK) | — | még nem dispatch-elve (F1/F2 nyitva, a javító kör UTÁN dispatch-elendő) |
+
+**Javító kör 1 UTÁN (head `9592638e`), FRISS, saját izolált
+`/tmp/review-e09-r06-fix1` klón (a fenti klóntól független, új `git clone` +
+`prepare-flutter-generated.sh`):**
+
+| Gate | Állított eredmény | Ellenőrizve |
+|---|---|---|
+| scope-audit (`tools/scope-audit.py --base 2da487c7`) | OK, 4 changed path, 0 violation | ✅ |
+| format | zöld | ✅ |
+| analyze | zöld | ✅ |
+| test community_gate_test.dart | zöld | ✅ |
+| test profile_onboarding_test.dart | zöld | ✅ |
+| architecture | zöld | ✅ |
+| secrets | zöld | ✅ |
+| l10n | zöld | ✅ |
+| backend ruff format/check | zöld | ✅ |
+| backend pytest | zöld (349 teszt, +6 F1/F2 regresszió) | ✅ |
+| F1 kód-ellenőrzés (`grep -n "@router.get" routers/profile.py`) | `/profiles/me` A `{public_id}` ELŐTT | ✅ közvetlenül olvasva |
+| F2 kód-ellenőrzés (`grep -n "normalized = validate\|assign_handle("`) | a `validate()` visszatérési értéke átadva | ✅ közvetlenül olvasva |
+| CI (teljes suite + property + APK) | — | dispatch-elendő a merge ELŐTT (Claude-oldal, ADR 0086 §2) |
 
 ## Merge-döntés
 
-**Merge TILOS**, amíg F1 (BLOCKER) és F2 (MAJOR) nyitva van (ADR 0052). A
-javító kört ugyanaz a motor (`minimax`) viszi, a findings-listával a
+**F1 (BLOCKER) és F2 (MAJOR) FIXED és independently ellenőrizve** — a merge
+útjában álló akadály elhárult (ADR 0052). Hátralévő lépés: exact-SHA CI
+dispatch (`build-apk.yml` vagy `full-gate.yml`, a `round-ci-plan.py` szerint)
+a `9592638e`-re, majd squash-merge, ha zöld. A nyitva maradt MINOR/NOTE-ok
+(F3/F4/F6/F7/F8) nem blokkolnak; F3/F4 (A6/A7 tesztlefedettség) follow-up
+tétel, F6 (403 vs 401) `deps.py`-t érintene (tilos zóna ezen a körön),
+follow-up. A javító kört ugyanaz a motor (`minimax`) vitte, a findings-listával a
 promptban — ez a lánc normál útja, nem megállási ok (user-döntés
 2026-07-31).
