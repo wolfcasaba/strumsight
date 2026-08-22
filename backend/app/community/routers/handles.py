@@ -90,18 +90,14 @@ def _session_factory(request: Request) -> Iterator[Session]:
 
 
 def _client_key(request: Request) -> str:
-    """Best-effort client key for rate limiting.
+    """Client key for rate limiting — the direct socket peer.
 
-    The endpoint is intentionally behind the Community enable flag, so
-    authenticated identity is not yet available (Kör 6 is the auth
-    surface). Until then we key by the first ``X-Forwarded-For`` value
-    when present, falling back to the FastAPI ``client`` tuple. This is
-    not a security boundary — the *real* defence against enumeration is
-    the single-handle-per-call endpoint shape, not the IP heuristic.
+    No trusted-proxy configuration exists yet (auth lands in Kör 6), so a
+    client-supplied X-Forwarded-For header MUST NOT be trusted here — it
+    would let any caller pick its own rate-limit bucket and defeat the
+    limiter entirely (measured: E09-R03 review F1, 60/60 requests bypassed
+    the 30/min limit by rotating the header).
     """
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
     if request.client is not None:
         return request.client.host
     return "unknown"
@@ -259,8 +255,8 @@ def claim_handle(
     db_gen = _session_factory(request)
     db = next(db_gen)
     try:
-        assign_handle(db, profile_id, handle, normalized)
         try:
+            assign_handle(db, profile_id, handle, normalized)
             commit_with_uniqueness_check(db)
         except HandleAlreadyClaimed:
             raise HTTPException(status_code=409, detail="handle taken") from None
@@ -309,10 +305,9 @@ def change_profile_handle(
     try:
         try:
             change_handle(db, profile_id, handle, normalized)
+            commit_with_uniqueness_check(db)
         except CooldownActive as exc:
             raise HTTPException(status_code=429, detail=str(exc)) from exc
-        try:
-            commit_with_uniqueness_check(db)
         except HandleAlreadyClaimed:
             raise HTTPException(status_code=409, detail="handle taken") from None
         return {"profile_id": profile_id, "handle": normalized, "available": True}
