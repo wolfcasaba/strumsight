@@ -61,6 +61,54 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E08-R25 KÉSZ — Song Trainer és setlist integráció — PR #402, squash `204b3798` (2026-08-22)
+
+A dalgyakorlás (szakasz/hurok, teljes dal, setlist-tétel) MOST már bekötve a
+gamifikáció jutalom-láncába: `lib/features/songs/application/gamification_song_adapter.dart`
+(ÚJ, kizárólag a gamification `public.dart`-on át importál; a `Song`
+típust a `songs` feature SAJÁT `model/song.dart`-jából olvassa, a
+`song_trainer/**`-hez nem nyúl). ADR: [`0391`](docs/adr/0391-song-gamification-adapter-standalone-bonus-and-hashed-song-id.md)
+— a pre-flight mérés megcáfolta a 2026-08-18-i brief két állítását: (1) az
+R06 `parentEventId` dedupja (ADR 0341) BINÁRIS mind-vagy-semmi — szó
+szerinti használata a reális (szakaszok-előbb) sorrendben NULLÁRA, nem
+csökkentett bónuszra ejtette volna a teljes dal jutalmát; (2) a dal
+azonosítója (bizonyos kódutakon) cím-eredetű lehet, tehát a ledgerbe
+KIZÁRÓLAG SHA-256-hashelt (16 hex karakter) alakban kerülhet. A javított
+mechanizmus: minden `RewardPolicyRequest` önálló (`parentEventId: null`),
+a bónusz-méretezés (alap egyszer + csökkentett bónusz, nem kétszeres, nem
+nulla) az adapter SAJÁT, session-hatókörű könyveléséből adódik. Két
+KÖTELEZŐ valódi-sértés próba ÁLLANDÓ regressziós tesztként megtartva
+(`song_reward_flow_test.dart` §7): Probe 1 (bookkeeping kikapcsolva →
+infláció PIROS) és Probe 2 (a `DefaultRewardPolicy`-t közvetlenül hívva,
+`parentEventId`-vel → 0 XP mérve, megerősítve a bináris-dedup állítást).
+A `songs` feature dal-haladása VÁLTOZATLAN (49/49 zöld). Az adapter MA
+NINCS BEKÖTVE egyetlen hívóból sem (nincs UI/screen ebben a körben) — a
+`security-reviewer` agent ezt függetlenül megerősítette, és rögzítette,
+hogy a session/section/setlist-azonosítók ma nyersen (nem hash-elve)
+kerülnek az `eventId`-be — ha egy jövőbeli bekötő kör cím-eredetű
+session/section-id-t adna át, ugyanaz a hibaosztály nyílna meg egy MÁSIK
+mezőn (`docs/reviews/e08-r25-review.md` F2, NOTE).
+
+**Review APPROVED, javító kör nélkül** (`docs/reviews/e08-r25-review.md`):
+0 BLOCKER/MAJOR. 1 MINOR (F1) — `hashedSongId()` belső `utf8Bytes()`
+helper-je NEM valódi UTF-8 kódolás (a `String.codeUnits`-ot `& 0xff`-fel
+maszkolja), ami elméletben nem-ASCII karaktereket tartalmazó azonosítóknál
+ütközést okozhatna — MA nem elérhető (minden tényleges `Song.id`/`SongId`
+forrás ASCII-only), triviális follow-up javítás (`utf8.encode()` a saját
+helper helyett). **Kör közbeni process-hazárd:** a MiniMax implementer
+`mm-round.sh` wrapper-je a `done` jelzés (05:14:52) UTÁN is tovább futott
+(~20 percig), egy jogos, in-scope §10-korrekciós commitot készített
+(`f7ade3e8`), majd az orchestrátor review-commitját egy `git pull --rebase`
+után saját maga push-olta vissza (`180c8d40` — TARTALMILAG azonos az
+orchestrátor eredeti `0d889cba` commitjával, csak más szülőn), és eközben
+saját maga dispatch-elt egy `gh workflow run` CI-t is (ami nem az ő
+szerepe). Az orchestrátor a folyamatot PID-del megölte (nem
+`pkill -f`-fel), tartalom-vesztés nélkül — a jelenség naplózva a
+git-notes `lesson=` mezőjében, `docs/LESSONS.md`-be is felveendő.
+
+Mindkét CI (`full-gate.yml` run 32554547623, `router-ci.yml` run
+32554548631/32554544697) zöld a pontos merge-jelölt SHA-n (`180c8d40`).
+
 ## ✅ E08-R24 KÉSZ — Practice Engine és Learn integráció — PR #401, squash `dc09f5fe` (2026-08-22)
 
 A gyakorlási session és a lecke-befejezés eredménye MOST már bekötve a
@@ -4617,6 +4665,15 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
+**E08-R25 — Song Trainer és setlist integráció** (PR
+[#402](https://github.com/wolfcasaba/strumsight/pull/402), squash `204b3798`,
+[ADR 0391](docs/adr/0391-song-gamification-adapter-standalone-bonus-and-hashed-song-id.md)).
+Session-bookkeeping alapú bónusz-méretezés (NEM a bináris R06
+`parentEventId` dedup) + SHA-256-hashelt privacy-safe dal-azonosító. 0
+BLOCKER/MAJOR review-lelet, javító kör nélkül; 1 nem-blokkoló MINOR
+follow-up (`utf8Bytes()` helper). Exact `180c8d40`: Full Gate 32554547623 +
+Router CI 32554548631/32554544697 success. Részletesen a fejléc ✅-blokkban.
+
 **E08-R18 — Heti quest és consistency objective** (PR
 [#394](https://github.com/wolfcasaba/strumsight/pull/394), squash `29c27ab2`,
 [ADR 0386](docs/adr/0386-flexible-weekly-quest-projection.md)). Pure,
@@ -5387,16 +5444,23 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör (2026-08-22): E08-R25 — Song Trainer és
-Setlist integráció** (`docs/rounds/e08-r25-song-trainer-and-setlist-integration.md`,
+**Pontos következő E08 termékkör (2026-08-22): E08-R26 — Cross-feature
+gamification integration** (`docs/rounds/e08-r26-cross-feature-gamification-integration.md`,
 engine a queue-ban `minimax`). Ez a session nem indítja el; új sessionben fut.
-Pre-flightban mérje újra a `lib/features/song_trainer/` és
-`lib/features/setlist/` TÉNYLEGES public szerződését, és vegye figyelembe az
-E08-R24 tanulságát (lásd a fejléc ✅-blokk F1/F2): ha egy adapter session/
-próbálkozás-szintű esemény-azonosítót termel, az azonosító semmiképpen ne
-essen vissza egy statikus katalógus-id-re, és a KÉT adapter (ha ez a kör is
-kettőt ad) mindegyike kapjon SAJÁT, teljes A1/A3/A5/A6/A7-szerű
-tesztmátrixot — ne csak az egyik oldal legyen gyakorolva.
+Vegye figyelembe az E08-R25 mért tanulságát (lásd a fejléc ✅-blokk): ha egy
+brief egy meglévő dedup/mechanizmust ("R06 `parentEventId`") nevez meg egy
+ÚJ viselkedés (pl. "bónusz, nem nulla") megvalósítási eszközeként, a
+pre-flight mérje ki a mechanizmus TÉNYLEGES szemantikáját a forráskódban
+(nem a leírásból/kommentből következtetve) — bináris dedup nem tud
+részleges/nemnulla bónuszt termelni. Emellett minden ledgerbe kerülő
+azonosító-jellegű mezőt (nemcsak a "fő" entitás id-jét) mérjen ki: a
+session/section/setlist-id-k E08-R25-ben nyersen mentek át, mert a kör
+scope-ja nem igényelte a hívó bekötését — ha ez a kör bedrótozza a hívót,
+mérje meg, ELŐSZÖR, hogy azok az id-k tartalom-semlegesek-e.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R25 — Song
+Trainer és Setlist integráció** (`docs/rounds/e08-r25-song-trainer-and-setlist-integration.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-21, azóta lezárult): E08-R19 — Challenge V2 és legacy
 DailyChallenge migráció** (`docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md`,
