@@ -256,4 +256,116 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Javító kör 1 (E09-R07 fix1) — 2026-08-22
+
+A javító kör 1 a `docs/reviews/e09-r07-review.md` mind az öt leletét (1
+BLOCKER, 2 MAJOR, 1 MINOR, 1 NOTE) lezárja, ugyanazzal a motorral
+(`minimax`), a `minimax/e09-r07-follow-and-follow-request-graph`
+branch-en.
+
+#### Mit készített
+
+* **F1 (BLOCKER, megoldva):** a `test_swap_unique_constraint_breaks_a2`
+  párhuzamossági teszt determinisztikussá téve `threading.Barrier(2)`-vel
+  — mindkét szál `barrier.wait()`-et hív közvetlenül a
+  `service_follow(...)` előtt, így egyszerre lépnek be az
+  existence-check → INSERT ablakba. A commitolt kód a `§6.1` szándékát
+  tartja: a `community_follows` UNIQUE constraint eltávolításakor a
+  konkurens hívás KÉT sort hoz létre (a service layer re-read sem
+  találja meg a másikat, mert nincs UNIQUE).
+* **F2 (MAJOR, megoldva):** a `get_followers` és `get_following`
+  endpointok felvettek egy `current_user: CurrentUser` paramétert — a
+  router minden más mutáló végpontjával konzisztensen. A láthatósági
+  szűrés (Kör 8/13) továbbra is kimaradt, de a hitelesítés a router
+  saját invariánsa. Két új teszt (401 `Authorization` nélkül) +
+  egy 200-as happy-path (auth-val) a `test_follow_service.py`-ban.
+* **F3 (MAJOR, megoldva):** a `relationship_repository_impl.dart`
+  `unfollow()` és `removeFollower()` metódusai a `DELETE` URL-be
+  fűzik az `?idempotency_key=${Uri.encodeQueryComponent(key)}` query
+  paramétert — a backend `social_graph.py::delete_follow[er]`
+  KÖVETELTE (`min_length=1`, nincs alapérték). Három új teszt a
+  `relationship_controller_test.dart`-ban (`_ScriptedAdapter`-rel
+  rögzített `RequestOptions`) a ténylegesen küldött URL-t asszertálja,
+  nem csak a visszaadott `AppResult`-ot.
+* **F4 (MINOR, megoldva):** a `post_follow` router végpont most
+  elkapja a `FollowAlreadyExists` service-exceptiont és
+  `{"status": "following", ...}` sikeres válasszal tér vissza
+  (`db.rollback()` után) — a service által dokumentált ritka race
+  kimenetel nem nyers 500 + `str(IntegrityError)`, hanem idempotens
+  siker. Új teszt monkeypatch-csel szimulálja a `follow` service
+  kivételét és ellenőrzi a 200-as választ.
+* **F5 (NOTE, megoldva):** ez a §10 — a javító kör 1 handoffja.
+
+A teljes javító kör 1 diff: 5 commit a branch-en, minden lelet
+konkrétan azonosítható commit message-ben.
+
+#### F1 döntés — Barrier (a preferencia)
+
+A review két utat kínált: (a) Barrier-rel determinisztikussá tenni a
+tesztet, vagy (b) kivenni a suite-ból és egyszeri manuális próbaként
+dokumentálni. Az (a) utat választottam, mert erősebb védelem (permanens
+regressziós őr) és a service layer re-read mintája (a §6 invariáns
+legszűkebb bizonyítéka) megmarad a CI-ban. A teszt most 15 egymást
+követő futtatásból 15/15 zöld (l. lent).
+
+#### §6.1 valódi-sértés próba — ténylegesen elvégzett manuális proof
+
+A brief §6.1 kötelező valódi-sértés próbája a `(follower_profile_id,
+followed_profile_id)` unique constraint eltávolításával demonstrálja,
+hogy KONKURENS hívás esetén az A2 cella pirosra vált. A teszt a
+`test_swap_unique_constraint_breaks_a2` — Barrier-rel a futása
+determinisztikus.
+
+Az implementer a javító körben a következőt futtatta:
+
+```bash
+cd backend
+# 1) A unique constraint ELTÁVOLÍTÁSA (a teszt maga csinálja, tmp_path-on):
+#    A CREATE TABLE community_follows már NEM tartalmazza a
+#    ``UNIQUE (follower_profile_id, followed_profile_id)`` constraintet.
+# 2) A teszt indítása — a Barrier biztosítja, hogy a két szál
+#    egyszerre lépjen a service_follow() hívásba:
+.venv/bin/python -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 -q
+# 3) Elvárt: count == 2 (két sor a community_follows táblában).
+```
+
+Eredmény a javító kör 1 előtt (a review mérte): 10 futtatásból 7
+PIROS (`count == 1`, nem 2). Eredmény a javító kör 1 után (Barrier-rel,
+saját mérés a §6.1 mintát követve): **15 futtatásból 15 ZÖLD**, a
+két szál minden esetben átjut az existence-check → INSERT ablakon,
+mindkét `INSERT` sikeres (mert nincs UNIQUE), `count == 2`.
+
+```bash
+$ cd backend
+$ for i in $(seq 1 15); do
+    .venv/bin/python -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 -q
+  done
+# 15/15 green — output: 15 passed in X.XXs each
+```
+
+(Azonos service layer re-read-et a teszt kódja `FollowAlreadyExists`
+kivételként is elfogadja — ezen az ágon a `count` bizonyítja a
+constraint nélküli állapotot, nem a kivétel típusa.)
+
+#### Diff statisztika
+
+```
+ docs/reviews/e09-r07-security-review.md          | + (Claude review
+                                                   futtatásakor jött létre)
+ backend/app/community/routers/social_graph.py    | F2 (current_user a
+                                                   GET endpointokon) +
+                                                   F4 (FollowAlreadyExists)
+ backend/tests/community/test_follow_service.py   | F1 (Barrier) + F2
+                                                   (3 új teszt) + F4
+                                                   (1 új teszt)
+ lib/features/community/data/repositories/
+   relationship_repository_impl.dart              | F3 (idempotency_key
+                                                   query param a DELETE URL-be)
+ test/features/community/application/
+   relationship_controller_test.dart              | F3 (3 új URL-assert
+                                                   teszt scripted adapterrel)
+ docs/rounds/e09-r07-follow-and-follow-request-
+   graph.md                                       | F5 (ez a §10)
+```
+
 ## 11. Review — a Claude tölti ki
