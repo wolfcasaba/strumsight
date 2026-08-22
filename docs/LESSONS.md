@@ -14943,3 +14943,90 @@ próbálnia, ha a doménben session-/elem-számlálás a küszöb alapja.
 
 **Őrteszt:** `test/features/gamification/application/mastery_evaluator_test.dart`
 — „A5 monotonicity: achieved progress survives a SMALLER subsequent batch".
+
+## L400 — `tools/round-land.sh` saját, squash-merge előtti kombinált-HEAD gate-je stale generált l10n-fájlon futott, ugyanazt a hamis undefined-getter hibát reprodukálva, amit egy korábbi javító kör már elhárított (E08-R22, 2026-08-22)
+
+**Mit mértünk.** Az E08-R22 review-ja két izolált `/tmp` klónban (mindkettőben
+előbb `tools/prepare-flutter-generated.sh`, majd `tools/round-gate.sh`) zölden
+igazolta a kört — beleértve egy §0.0.1 javító kört, ami pontosan az l10n
+aggregátum-vs-fragmentum hibaosztályt (L396) javította. A `tools/round-land.sh`
+mégis PIROSAN bukott `analyze`-en, szó szerint UGYANAZZAL a 11
+`undefined_getter` hibával, amit a §0.0.1 javító kör már egyszer elhárított.
+Gyökérok: a megosztott munkafán (`/home/ubuntu/music-theory`) a
+`lib/l10n/app_localizations_*.dart` (gitignore-olt, generált) egy KORÁBBI,
+a fix előtti branch-állapotból származott — a `round-land.sh` a saját
+kombinált-HEAD gate-jét a munkafa AKTUÁLIS (stale) generált fájljain futtatta,
+`flutter gen-l10n` újrafuttatása NÉLKÜL. A `sdd-round-driver` skill a
+POST-merge gate elé kötelezően előírja a `prepare-flutter-generated.sh`
+futtatását — de a `round-land.sh` SAJÁT, PRE-merge kombinált-HEAD gate-je
+elé ez nincs beágyazva, sem a scriptbe, sem az orchestrátor-workflow
+szövegébe.
+
+**Következtetés.** „A lecke önmagában, LESSONS.md-be írva, NEM elegendő
+védelem, csak a workflow SAJÁT szövegébe ágyazott lépés az" (a
+`sdd-round-driver` skill saját elve az `l10n`/`pub get` előfeltételre) —
+ez a kör megismételte ugyanezt a mintát a `round-land.sh` hívási helyén.
+A javítás egyszerű, de KÉZI maradt ebben a körben: `bash
+tools/prepare-flutter-generated.sh` a megosztott munkafán, MINDEN
+`git reset --hard origin/<round-branch>` UTÁN és `tools/round-land.sh`
+hívás ELŐTT, nem csak a post-merge gate előtt.
+
+**Őrteszt:** nincs — a `tools/round-land.sh`-t hívó jövőbeli orchestrátor-
+promptba (vagy magába a scriptbe, ha az az illetékes karbantartó döntése)
+építendő be explicit lépésként a `prepare-flutter-generated.sh` hívás a
+kombinált-HEAD gate előtt, ugyanúgy, ahogy a post-merge gate előtt már elő
+van írva.
+
+## L401 — Egy ÚJ `lib/**/screens/*.dart` fájlt bevezető kör pre-flightja nem kereste rá kifejezetten az L397 „ui_inventory bázisvonal" mintára, mert a témaszűkített RAG-lekérdezés a kör tartalmára (jutalom/ünneplés), nem a fájltípusára (screen) irányult (E08-R22, 2026-08-22)
+
+**Mit mértünk.** Az E08-R22 pre-flight §4.9 RAG-lekérdezései
+(„reward inbox celebration coordinator batching threshold…”, „no popup during
+active practice…”) nem hozták fel az L397-et — a lecke szó szerint kimondja:
+„jövőbeli, ÚJ `lib/**/screens/*.dart` fájlt bevezető briefek pre-flightjában
+vegyék fel a `test/ui/ui_inventory_test.dart`-ot is”, és ez a kör
+(`reward_inbox_screen.dart`) pontosan ilyen volt. A brief maga sem
+`allowed_paths`-ban, sem `gate_tests`-ben nem tartalmazta — a hiba csak a
+merge előtti teljes-suite CI-n derült ki, egy §0.0.2 javító kört igényelve.
+
+**Következtetés.** A téma-alapú RAG-lekérdezés (a kör TARTALMÁRA irányul) nem
+helyettesíti a fájltípus-alapú ellenőrzést (a kör milyen KATEGÓRIÁJÚ fájlt
+hoz létre). Egy `lib/**/screens/*.dart` VAGY `lib/**/widgets/*.dart` fájlt
+bevezető brief pre-flightjában — a §1 „grep-eld ki a kódból” szabály mellett
+— külön kell futtatni: `grep -c "" test/ui/ui_inventory_test.dart` és a
+`hasLength(N)` jelenlegi N-jét összevetni a `UiInventory(repository).render()`
+tényleges elemszámával a brief ÚJ screen-fájljával együtt.
+
+**Őrteszt:** nincs — a `round-brief-prep` / `sdd-round-driver` skill
+pre-flight-szakaszába építendő explicit lépés: ha az `allowed_paths` egy ÚJ
+`lib/**/screens/*.dart`-ot tartalmaz, a `test/ui/ui_inventory_test.dart`-ot
+(a `hasLength` bővítésére korlátozva) VEGYE FEL az `allowed_paths`-ba MÁR a
+pre-flightban, ne csak egy kör-közbeni CI-piros után.
+
+## L402 — Egy párhuzamos orchestrátor-session ugyanazon a körön dolgozott a `pipeline-slots=1` konfiguráció ELLENÉRE; a két session git-push-szinten békésen konvergált, de a versenyfeltétel gyökéroka nincs kivizsgálva (E08-R22, 2026-08-22)
+
+**Mit mértünk.** A kör branch-én (`minimax/e08-r22-reward-inbox-and-celebration`)
+két, egymástól független forrásból érkező review-commit ütközött
+(`69527b1f` — ez a session — és `2f987875` — egy másik, saját magát
+„parallel orchestrator session”-ként azonosító commit-üzenetben), mindkettő
+APPROVED verdikttel, majd egy harmadik ütközés (`bcaaf6f2` vs. egy másik
+„review update” commit) a `71a5dee6` merge-ben zárult. Mindkét ütközés
+automatikusan, tartalmi konfliktus nélkül (a review-jelentés fájl 2 diszjunkt
+bővítése) oldódott meg, és mindkét fél ugyanarra a végkövetkeztetésre
+jutott — de a `docs/execution/pipeline-slots` fájl a kör alatt konzisztensen
+`1`-et tartalmazott (mérve a kör elején), tehát a második session indulása
+maga a mért anomália, nem a fájl-tartalom.
+
+**Következtetés.** A gyökérok NINCS kivizsgálva ebben a körben (a
+felelősségi kör a `tools/` és a `.github/` — mindkettő tilos zóna egy
+sima SDD-kör orchestrátorának, H3 nélkül nem nyúlható). A tünet önmagában
+ártalmatlan volt (a két session konvergált, a végeredmény egyetlen,
+konzisztens PR/merge lett), de a slot-kényszerítés MEGBÍZHATÓSÁGA ezzel
+mérten megkérdőjeleződött — egy jövőbeli eset rosszabbul is végződhetne
+(pl. két session egyszerre próbál force-push-olni vagy squash-merge-elni
+ugyanarra a PR-re).
+
+**Őrteszt:** nincs — follow-up egy jövőbeli GOV/self-heal körnek: mérd meg,
+mi indította el a második orchestrátor-sessiont (`ps -ef` pillanatkép a
+firing időpontjában, `.pipeline/cron.log` + `.pipeline/inflight/` egyidejű
+tartalma), és ha a `round-pipeline.sh` cron-lock (`.pipeline/lock`) tényleg
+kizárólagos volt-e abban a pillanatban.

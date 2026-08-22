@@ -55,12 +55,61 @@ is ugyanaz; a Router CI futóján zöld).
 Pontos következő teendő: nincs kézi indítás — a lánc minden firingen
 `git fetch origin main` + `merge --ff-only` (`main_sync_strategy`), tehát a
 következő cron-firing már ezzel a felállással veszi ki a queue első `pending`
-sorát: **E08-R22 — Reward inbox és celebration** (ADR 0316 előre kiosztva —
-mérd meg a foglalóval, a §1.0.1 szabály szerint); a Chapter 13 ága
+sorát: **E08-R23 — Gamification Hub és level UI**; a Chapter 13 ága
 változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
 HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
+
+## ✅ E08-R22 KÉSZ — Jutalom-postaláda és ünneplés-koordinátor — PR #399, squash `8bbe3715` (2026-08-22)
+
+XP/beváltás-mentes, caller-fed ünneplés-koordinátor (ADR 0389, a brief
+`0316` előre kiosztott száma stale volt, a foglaló `0389`-et adott —
+ugyanaz a mintázat, mint az E08-R21/E08-R20-nál). Új
+`lib/features/gamification/domain/profile/reward_inbox_item.dart` +
+`application/celebration_coordinator.dart` (pure Dart, nincs Flutter-/
+Riverpod-/`RewardLedgerRepository`-import) + `presentation/screens/
+reward_inbox_screen.dart` + `presentation/widgets/reward_summary_sheet.dart`:
+aktív gyakorlás közben SOHA nem jelenik meg felugró (§5.1, a jutalom a
+postaládába kerül helyette), több szintlépés EGY összevont
+összefoglalóban (§5.3, determinisztikus `switch`-alapú prioritás, nem
+`Map`-bejárás), a postaláda NEM beváltás-mechanika (§5.2, nincs lejárat/
+begyűjtés-gomb), reduced motion mellett az információ TELJES marad
+(`MediaQuery.disableAnimationsOf`), haptika/hang caller-fed bool
+(élő settings-provider még nincs, Kör 27 dolga).
+
+Két mért kör-közbeni brief-revízió: **§0.0.1** — a 12 új ARB-kulcs a
+GENERÁLT aggregátumba (`lib/l10n/app_{en,hu}.arb`) került az első
+implementer-futásban a forrás-fragmentum (`lib/l10n/features/
+gamification_{en,hu}.arb`) helyett (ugyanaz a hibaosztály, mint az
+E08-R20 §0.0.1, L396) — egy javító kör a forrásba tette, az
+aggregátumot regenerálta. **§0.0.2** — a merge előtti CI (`full-gate.yml`,
+run 32538682580) a teljes suite alatt PIROS volt: `test/ui/
+ui_inventory_test.dart` a 61-es baseline-t várta, az új
+`reward_inbox_screen.dart` miatt 62 a valódi screen-szám — mechanikus
+egysoros javító kör (`hasLength(61)` → `hasLength(62)`).
+
+A review (`docs/reviews/e08-r22-review.md`) APPROVED, egy NOTE-tal (a
+wrapper `gate_shape` heurisztikája hamis pozitívot adott, mert az
+implementer a gate SCRIPTJÉNEK forrását `cat ... | head`-delte, nem
+futtatta csonkítva — a nyers log tényleges Bash-hívásai mind tiszták
+voltak). A review saját, izolált `/tmp` klónban futtatott valódi-sértés
+próbát az A1 megszakítás-őrre (`isActiveSession` ág letiltva → 7 teszt
+pirosra vált → visszaállítás → 18/18 zöld). **Mérve, jegyzésre méltó:**
+a boxon egy PÁRHUZAMOS orchestrátor-session is dolgozott ugyanezen a
+körön a `pipeline-slots=1` konfiguráció ELLENÉRE (mérve, nem
+diagnosztizálva — a két session git-push-szinten békésen konvergált,
+mindkét review APPROVED volt, a merge egyetlen, konzisztens tartalommal
+zárult) — **follow-up**: a slot-kényszerítés versenyfeltétele
+kivizsgálandó egy jövőbeli GOV-körben, mielőtt ismét bízunk benne.
+
+Mindkét CI (`full-gate.yml` run 32540666809, `router-ci.yml` run
+32540630020) zöld a pontos merge-jelölt SHA-n (`71a5dee6`); a
+`tools/round-land.sh` a squash-merge előtt saját kombinált-HEAD gate-et
+futtatott (zöld, a `tools/prepare-flutter-generated.sh` friss futása
+után — enélkül a stale generált l10n-fájlok ugyanazt a hamis
+undefined-getter hibát adták volna, amit a §0.0.1 javító kör már
+egyszer elhárított).
 
 ## ✅ E08-R21 KÉSZ — Mastery mérföldkő domain és kiértékelő — PR #398, squash `26f83265` (2026-08-21, L399)
 
