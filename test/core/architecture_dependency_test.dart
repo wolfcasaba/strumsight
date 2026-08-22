@@ -867,6 +867,108 @@ import 'package:flutter/widgets.dart';
       );
     });
   });
+
+  // E08-R26 — Cross-feature gamification adapter boundary (A6).
+  //
+  // Four new adapter files in the analyze / vision / ai_tutor /
+  // practice_generator features must import gamification ONLY through
+  // its `public.dart` barrel. They must also import their OWN source
+  // feature only through the feature's public barrels — including the
+  // nested `vision/domain/integration/public.dart` barrel for the
+  // vision adapter (ADR 0392 §0.0/3 + §0.0/6).
+  //
+  // The four adapter paths are in the brief's allowed list; this
+  // group ensures no production edit sneaks an internal import past
+  // the architecture guard.
+  group('cross-feature gamification adapter boundary — A6 (E08-R26)', () {
+    final adapters = <String>[
+      'lib/features/analyze/application/gamification_analysis_adapter.dart',
+      'lib/features/vision/application/gamification_vision_adapter.dart',
+      'lib/features/ai_tutor/application/gamification_tutor_adapter.dart',
+      'lib/features/practice_generator/application/gamification_plan_adapter.dart',
+    ];
+
+    test('each adapter reaches gamification only through public.dart', () {
+      final offenders = <String>[];
+      for (final path in adapters) {
+        final source = File(path).readAsStringSync();
+        offenders.addAll(
+          _forbiddenGamificationInternalImports(
+            path,
+            source,
+            'gamification/public.dart',
+          ),
+        );
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('each adapter reaches its OWN source feature only through '
+        'public.dart barrels', () {
+      final offenders = <String>[];
+      for (final path in adapters) {
+        final source = File(path).readAsStringSync();
+        offenders.addAll(
+          _forbiddenFeatureInternalImports(
+            path,
+            source,
+            _ownFeaturePublicMarkers(path),
+          ),
+        );
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('each adapter does NOT import any other feature\'s internals '
+        '(cross-feature bleed guard)', () {
+      final offenders = <String>[];
+      for (final path in adapters) {
+        final source = File(path).readAsStringSync();
+        offenders.addAll(
+          _forbiddenOtherFeatureImports(path, source, _ownFeature(path)),
+        );
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the boundary detector flags an internal source-feature import', () {
+      const directImport =
+          "import 'package:strumsight/features/analyze/model/analyze_result.dart';";
+      expect(
+        _forbiddenFeatureInternalImports(
+          'lib/features/analyze/application/gamification_analysis_adapter.dart',
+          directImport,
+          const <String>{
+            'analyze/public.dart',
+            'analyze/domain/integration/public.dart',
+          },
+        ),
+        <String>[
+          'lib/features/analyze/application/gamification_analysis_adapter.dart '
+              '-> package:strumsight/features/analyze/model/analyze_result.dart',
+        ],
+      );
+    });
+
+    test(
+      'the boundary detector accepts the vision nested integration barrel',
+      () {
+        const allowedImport =
+            "import 'package:strumsight/features/vision/domain/integration/public.dart';";
+        expect(
+          _forbiddenFeatureInternalImports(
+            'lib/features/vision/application/gamification_vision_adapter.dart',
+            allowedImport,
+            const <String>{
+              'vision/public.dart',
+              'vision/domain/integration/public.dart',
+            },
+          ),
+          isEmpty,
+        );
+      },
+    );
+  });
 }
 
 void _write(Directory project, String relativePath, String contents) {
@@ -1030,4 +1132,99 @@ String _withoutTrivia(String source, {required bool maskStrings}) {
     index++;
   }
   return buffer.toString();
+}
+
+// ── E08-R26 helpers ──────────────────────────────────────────────────────
+
+/// The OWN feature for an adapter path (used to decide which feature's
+/// internals are off-limits when checking imports).
+String _ownFeature(String adapterPath) {
+  // Path layout is `lib/features/<feature>/application/...`.
+  final segments = adapterPath.split('/');
+  // 0: 'lib'  1: 'features'  2: '<feature>'
+  return segments[2];
+}
+
+/// Public-barrel markers the OWN feature exposes to cross-feature
+/// consumers. The vision adapter is the special case: its nested
+/// `domain/integration/public.dart` barrel is ALSO a recognised
+/// cross-feature boundary (ADR 0392 §0.0/6).
+Set<String> _ownFeaturePublicMarkers(String adapterPath) {
+  final feature = _ownFeature(adapterPath);
+  final markers = <String>{'$feature/public.dart'};
+  if (feature == 'vision') {
+    markers.add('vision/domain/integration/public.dart');
+  }
+  return markers;
+}
+
+/// Flags any import whose target lives under `lib/features/<feature>/...`
+/// but is NOT one of [allowedMarkers] (each marker is matched as the
+/// final path segment, e.g. `'analyze/public.dart'`).
+List<String> _forbiddenFeatureInternalImports(
+  String path,
+  String source,
+  Set<String> allowedMarkers,
+) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when _isOffendingImport(
+            uri: uri,
+            feature: _ownFeature(path),
+            allowedMarkers: allowedMarkers,
+          ))
+        '$path -> $uri',
+  ];
+}
+
+/// Flags any import that targets a DIFFERENT feature's internals —
+/// i.e. any `lib/features/<otherFeature>/...` path other than the
+/// adapter's own [ownFeature]. Cross-feature imports must go through
+/// the destination feature's `public.dart` barrel.
+List<String> _forbiddenOtherFeatureImports(
+  String path,
+  String source,
+  String ownFeature,
+) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when _isCrossFeatureInternalImport(uri: uri, ownFeature: ownFeature))
+        '$path -> $uri',
+  ];
+}
+
+/// `true` when [uri] targets a file inside the same feature but is
+/// not one of the [allowedMarkers].
+bool _isOffendingImport({
+  required String uri,
+  required String feature,
+  required Set<String> allowedMarkers,
+}) {
+  if (!uri.contains('features/$feature/')) return false;
+  // Match the trailing `.../public.dart` segment regardless of prefix.
+  for (final marker in allowedMarkers) {
+    if (uri.endsWith(marker)) return false;
+  }
+  return true;
+}
+
+/// `true` when [uri] targets a file inside a DIFFERENT feature, and
+/// does NOT end in that feature's `public.dart` barrel.
+bool _isCrossFeatureInternalImport({
+  required String uri,
+  required String ownFeature,
+}) {
+  // Find the `<feature>/` segment after `features/`.
+  final match = RegExp(r'features/([^/]+)/').firstMatch(uri);
+  if (match == null) return false;
+  final feature = match.group(1);
+  if (feature == null || feature == ownFeature) return false;
+  // Must go through `<feature>/public.dart` to be allowed.
+  return !uri.endsWith('/public.dart');
 }
