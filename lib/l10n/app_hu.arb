@@ -2078,6 +2078,69 @@
   "reelHint": "Vedd fel képernyőrögzítővel és oszd meg!",
   "reelSoundToggle": "Reel hang be/ki",
   "reelTagline": "Az egyetlen app, amely látja a pengetésirányod",
+  "rewardInboxCountSemantics": "{count, plural, =0{Nincs új jutalom} =1{1 új jutalom} other{{count} új jutalom}}",
+  "@rewardInboxCountSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEarnedXpLabel": "{xp, plural, =0{0 XP szerzett} =1{1 XP szerzett} other{{xp} XP szerzett}}",
+  "@rewardInboxEarnedXpLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEmptyBody": "A mért gyakorlási jutalmak itt fognak megjelenni.",
+  "rewardInboxEmptyTitle": "Még nincs jutalom",
+  "rewardInboxEntrySemantics": "{title}. {body}. Ennyi tapasztalati pont járt: {xp}.",
+  "@rewardInboxEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardInboxSeenLabel": "Látott",
+  "rewardInboxTitle": "Jutalom postaláda",
+  "rewardInboxUnseenLabel": "Új",
+  "rewardSummaryConsolidatedLabel": "{count, plural, =0{Nincs jutalom ebben a munkamenetben} =1{1 jutalom összevonva} other{{count} jutalom összevonva}}",
+  "@rewardSummaryConsolidatedLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryConsolidatedSemantics": "{count, plural, =0{Nincs mit ünnepelni ebben a munkamenetben} =1{1 jutalom összevonva erre a munkamenetre} other{{count} jutalom összevonva erre a munkamenetre}}",
+  "@rewardSummaryConsolidatedSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryEntrySemantics": "{title}. {body}",
+  "@rewardSummaryEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardSummaryTitle": "Munkamenet jutalmai",
   "rhythmMetricAccentPositionConsistency": "Hangsúlypozíció-egyenletesség",
   "rhythmMetricBeatPhaseConsistency": "Ütemfázis-egyenletesség",
   "rhythmMetricIoiConsistency": "Ritmusegyenletesség",

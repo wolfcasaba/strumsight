@@ -324,5 +324,50 @@
       "description": {"type": "String"}
     }
   },
-  "challengeUnavailableBody": "Telepíts akkordokat, ritmusokat vagy dalokat a mai kihívás feloldásához."
+  "challengeUnavailableBody": "Telepíts akkordokat, ritmusokat vagy dalokat a mai kihívás feloldásához.",
+  "rewardInboxTitle": "Jutalom postaláda",
+  "rewardInboxEmptyTitle": "Még nincs jutalom",
+  "rewardInboxEmptyBody": "A mért gyakorlási jutalmak itt fognak megjelenni.",
+  "rewardInboxSeenLabel": "Látott",
+  "rewardInboxUnseenLabel": "Új",
+  "rewardInboxCountSemantics": "{count, plural, =0{Nincs új jutalom} =1{1 új jutalom} other{{count} új jutalom}}",
+  "@rewardInboxCountSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardInboxEarnedXpLabel": "{xp, plural, =0{0 XP szerzett} =1{1 XP szerzett} other{{xp} XP szerzett}}",
+  "@rewardInboxEarnedXpLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "rewardInboxEntrySemantics": "{title}. {body}. Ennyi tapasztalati pont járt: {xp}.",
+  "@rewardInboxEntrySemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "xp": {"type": "int"},
+      "body": {"type": "String"}
+    }
+  },
+  "rewardSummaryTitle": "Munkamenet jutalmai",
+  "rewardSummaryConsolidatedLabel": "{count, plural, =0{Nincs jutalom ebben a munkamenetben} =1{1 jutalom összevonva} other{{count} jutalom összevonva}}",
+  "@rewardSummaryConsolidatedLabel": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardSummaryConsolidatedSemantics": "{count, plural, =0{Nincs mit ünnepelni ebben a munkamenetben} =1{1 jutalom összevonva erre a munkamenetre} other{{count} jutalom összevonva erre a munkamenetre}}",
+  "@rewardSummaryConsolidatedSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardSummaryEntrySemantics": "{title}. {body}",
+  "@rewardSummaryEntrySemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "body": {"type": "String"}
+    }
+  }
 }
