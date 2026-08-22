@@ -18,6 +18,7 @@ export 'data/local_activity_outbox_repository.dart';
 export 'data/gamification_repository.dart';
 export 'data/gamification_storage_schema.dart';
 export 'data/local_gamification_repository.dart';
+export 'data/local_reward_ledger_repository.dart';
 export 'data/migration/gamification_migrator.dart';
 export 'data/migration/legacy_daily_challenge_adapter.dart';
 export 'data/migration/legacy_practice_adapter.dart';
