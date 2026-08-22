@@ -277,6 +277,99 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **A dalcím a főkönyvben.** Kényelmes a felület számára, és a Kör 28 szinkronjával a felhasználó dallistája elhagyná az eszközt (A5).
 - **A dal-haladás átvétele.** A `songs` feature saját mérőszáma; az átvétel scope-sértés és regresszió (A7).
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
+
+**Implementer:** MiniMax M3 · **Commits** (branch
+`minimax/e08-r25-song-trainer-and-setlist-integration`):
+- `9c498e44` — `feat(songs): add gamification_song_adapter` (new file, 535 lines)
+- `8ef739fd` — `test(gamification): add song_reward_flow_test` (new file, 647 lines;
+  also threads `hashedSong` into the ledger id per ADR 0391 Döntés 4)
+- `29fb53ae` — `test(gamification): add §7 valódi-sértés próbák` (210 lines added)
+
+Pre-flight (`d06a9bf8`, NOT mine) modified the brief and ADR per §0.0.
+
+### §6 acceptance cell evidence (each cell has a running test in `song_reward_flow_test.dart`)
+
+| # | Cell | Test name | Line |
+|---|---|---|---|
+| A1 | Inflation guard — three-cell matrix | `A1 (§6.1 alatt)` | 31 |
+| A1 | rajta cell | `A1 (§6.1 rajta)` (proves bonus > 0 AND < natural) | 69 |
+| A1 | fölött cell | `A1 (§6.1 fölött)` | 138 |
+| A1 | boundary (fölött vs rajta) | `A1 (§6.1 fölött → rajta boundary)` | 162 |
+| A2 | session-id namespacing | `A2: section eventId contains the sessionId` + `A2: a setlist run namespaced under setlist-item-*` | 215, 239 |
+| A3 | result-screen reopen | `A3: result-screen reopen with the same sessionId` | 283 |
+| A4 | new takeId | `A4: a different takeId (different sessionId)` | 306 |
+| A5 | privacy — no title/SongId.value/file-name in ledger | `A5 (privacy): the ledger never carries the song title, the file name, or the raw SongId` | 326 |
+| A6 | explainable tempo milestone | `A6: the tempo milestone returns the previous best and its timestamp` | 389 |
+| A7 | songs feature unchanged | enforced by `tools/round-gate.sh test/features/songs` (the brief §7 invocation); all 49 songs tests passed green in the gate | n/a |
+| A8 | offline / no network | `A8: the adapter writes only through the in-memory outbox` | 414 |
+
+### §6.1 three-cell matrix — bonus sizing
+
+Verified by the §6.1 fölött/rajta contrast (line 162): a session with **0 sections
++ full song** pays strictly MORE XP for the full-song event than a session with
+**1 section + full song**, proving the §5.1 bookkeeping actually shrinks the
+signal magnitude. The broken branch (`_BrokenBookkeepingSongAdapter`,
+Probe 1) would pay the same XP in both — the contrast test would fail.
+
+### §6.1 matrix — every broken implementation has a red test
+
+| Broken implementation | Which test goes red | Test line |
+|---|---|---|
+| Session-bookkeeping disabled (full song always natural) | `§7 Probe 1` (RED branch) | 530 |
+| `parentEventId: <section>` on full-song event | `§7 Probe 2` (RED branch) | 582 |
+| Reopen generates a new event | `A3` (production test) | 283 |
+| Title / `SongId.value` in ledger field | `A5` (production test) | 326 |
+| Milestone lacks previous-best | `A6` (production test) | 389 |
+| Adapter takes over song progress | `test/features/songs` gate (A7) | n/a |
+| Section eventId missing sessionId | `A2` (production test) | 215 |
+
+### §7 valódi-sértés próbák — both run, both verified
+
+**Probe 1 (bookkeeping off):** `_BrokenBookkeepingSongAdapter` (test file
+line 759) overrides `recordSession` to force `sectionEvents: const []` —
+this strips the §5.1 bookkeeping so the full-song event always uses the
+natural signal. The probe asserts a section-bearing session pays the
+SAME XP as a free-session full run. **Result: RED on the broken branch
+(equal XP), GREEN on the production adapter (less XP).**
+
+**Probe 2 (parentEventId binary dedup):** the test (line 582) constructs a
+`RewardPolicyRequest` with `parentEventId: sectionEventId` against a
+`RewardPolicyHistory` whose `rewardedParentIds` contains that section
+id. The R06 binary dedup zeros the full-song XP. **Result: 0 XP
+confirmed.** The production adapter avoids this branch by always
+emitting `parentEventId: null` (line 376, 437).
+
+### Gate — run in this round
+
+```bash
+tools/round-gate.sh test/features/gamification/integration/song_reward_flow_test.dart test/features/songs
+```
+
+Result: **MINDEN GATE ZÖLD** (format / analyze / 2 test paths / architecture
+/ secrets / l10n). Exit code 0. Output: 15 song-reward tests pass + 49
+songs tests pass + 0 analyzer findings + format unchanged.
+
+### §5.1 / §5.3 invariants actually implemented (file:line evidence)
+
+| Invariant | Evidence |
+|---|---|
+| Every `RewardPolicyRequest` has `parentEventId: null` | `gamification_song_adapter.dart:376` (section event), `:437` (full-song event) — comment `§5.1: every event is standalone` / `§5.1: never set on the full-song event` |
+| `practiceKey` is the SHA-256 first-16-hex digest of `songId.value` | `:267-271` `hashedSongId` uses `crypto.sha256.convert(utf8Bytes(songId))`, `:308` derived once per session, threaded into both requests at `:375` and `:436` |
+| Session-bookkeeping is adapter-internal | `:314-315` `hasSectionInSession` reads `signal.sectionEvents`; `:413-418` apply `_reducedDuration` / `_reducedScore` when reduced. No call into a gamification-layer dedup. |
+| Section / full-song eventIds are session-namespaced | `:282-284` `setlist-item-section/$setlistRunId/$sectionId/v1` and `song-section/$sessionId/$sectionId/v1`; `:296-298` `setlist-item-full/$setlistRunId/v1` and `song-full/$sessionId/v1` |
+| Privacy boundary: hashed id appears in `ledgerId` (auditable), never raw | `:520` `ledgerId: 'song/$hashedSong/$eventId/$totalXp'` — the SHA-256 first-16-hex is in the persisted row; the raw `songId.value` and the title/slug never reach the ledger. |
+| A7 — songs feature untouched | gate's `test/features/songs` path: 49/49 green |
+
+### Files in `allowed_paths` (brief §4) — touched vs not
+
+| File | Status | Commit |
+|---|---|---|
+| `lib/features/songs/application/gamification_song_adapter.dart` | NEW | `9c498e44` (initial 535 lines), `8ef739fd` (+8 lines, `hashedSong` plumbing) |
+| `test/features/gamification/integration/song_reward_flow_test.dart` | NEW | `8ef739fd` (initial 647 lines), `29fb53ae` (+210 lines, §7 probes) |
+| `docs/rounds/e08-r25-song-trainer-and-setlist-integration.md` | TOUCHED (this handoff) | this commit |
+
+Nothing else modified in this round. The pre-flight's `docs/adr/0391-...md`
+and brief changes belong to `d06a9bf8`.
 
 ## 11. Review — a Claude tölti ki
