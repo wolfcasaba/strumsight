@@ -2,7 +2,7 @@
 
 - **Round:** `E08-R30` (Epic 8, R30 — closure round)
 - **Branch:** `minimax/e08-r30-epic-08-migration-regression-and-closure`
-- **CI link:** _to be inserted by the orchestrator after dispatch — see §7_
+- **CI link:** Full Gate [32568211799](https://github.com/wolfcasaba/strumsight/actions/runs/32568211799) + Router CI [32568232753](https://github.com/wolfcasaba/strumsight/actions/runs/32568232753), both `success` on exact-SHA `7a08400f` (the pre-merge tip that includes the independent review report)
 - **Date drafted:** 2026-08-22
 
 > This report is the **numerical closure evidence** for Epic 8. The §10
@@ -174,17 +174,24 @@ acceptance predicate (filled by the orchestrator in §7).
 
 ---
 
-## 7. CI dispatch + green-run link (A6 — placeholder)
+## 7. CI dispatch + green-run link (A6)
 
-> **Implementation handoff status:** this report was drafted before the
-> orchestrator dispatched the round-branch CI. The green run link is
-> the **final acceptance predicate**, per ADR 0053 — synthetic local
-> green is NEVER "done".
->
-> The orchestrator inserts the GitHub Actions run URL here after the
-> dispatched `build-apk.yml` run on `minimax/e08-r30-epic-08-migration-regression-and-closure`
-> returns green. Until then, A6 is recorded as **⏳ pending CI dispatch**.
->
+The round-ci-plan (`tools/round-ci-plan.py`) selected `full-gate.yml`
+(pure Dart/doc diff, no native path touched) plus `router-ci.yml` (the
+diff touches `docs/rounds/**`). Both were dispatched by the orchestrator
+on the round branch's exact pre-merge tip, **`7a08400f`** (the commit that
+also carries the independent review report,
+`docs/reviews/e08-r30-review.md`):
+
+- Full Gate: [32568211799](https://github.com/wolfcasaba/strumsight/actions/runs/32568211799) — `success`
+- Router CI: [32568232753](https://github.com/wolfcasaba/strumsight/actions/runs/32568232753) — `success`
+
+Both runs' `headSha` were verified to equal `7a08400f` before being
+accepted as merge evidence (ADR 0086 §2). This is the **final acceptance
+predicate** per ADR 0053 — the local `/tmp/e08-r30-gate.log` captured
+during implementation, and the reviewer's independent local re-run, are
+supporting evidence but not the merge gate themselves.
+
 > **Valódi-sértés próba (§6.1):** a deliberately-broken CI link was
 > inserted into an early draft and then replaced with the real green
 > link by the orchestrator; the red-link → red-link-rejection → green-link
