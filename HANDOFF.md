@@ -61,6 +61,62 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E08-R26 KÉSZ — Cross-feature gamification integráció (Analysis/Vision/Tutor/Plan) — PR #403, squash `ea2e22a4` (2026-08-22)
+
+A maradék négy forrás — Analysis, Vision, AI Tutor, Practice Generator —
+MOST már bekötve a gamification jutalom-láncba: négy ÚJ, tisztán caller-fed
+adapter (`lib/features/{analyze,vision,ai_tutor,practice_generator}/
+application/gamification_*_adapter.dart`). ADR: [`0392`](docs/adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)
+— a pre-flight (Claude Sonnet 5) NÉGY ponton cáfolta meg a 2026-08-18-i brief
+feltevéseit: (1) az `ai_tutor/public.dart` boundary VÉGLEGESEN üres, egy
+merge-elt E04-R01 guard pinneli (`test/features/ai_tutor/
+ai_tutor_boundary_test.dart`, L139) — a tutor-adapter ezért ZÉRÓ szimbólumot
+importál az `ai_tutor`-ból, a beszélgetés-nulla-XP szabály (A1) strukturálisan
+garantált, nem futásidejű `if`; (2) `AnalyzeResult`-nak nincs
+`sourceHash`/`analyzerVersion` mezője — az analysis-adapter saját, hívó-fed
+jel-típust definiál ezekkel; (3) a brief `minVisionConfidence` neve szó
+szerint nem létezik — a mért megfelelő `VisionClaimGuard._minimumConfidence
+= 0.70`, ami a `vision/domain/integration/public.dart` (egy MÁSIK, szűkebb
+barrel) exportján érhető el, NEM a top-level `vision/public.dart`-on; (4) a
+`PlanStatus.completed` (teljes terv) enum-érték SEHOL nem kerül beállításra
+a mai kódban (L20 — elérhetetlen cél-státusz), csak a blokk-szintű
+`PracticeItemStatus.completed`, ami MÁR ma is a meglévő practice/song
+adapterekkel jutalmazódik — a plan-adapter ezért caller-fed
+`planCompleted: bool` jelet fogad, és nem nyúl az `active_plan_controller.dart`/
+`generation_orchestrator.dart` (tilos zóna) állapotgépéhez.
+
+A terv-bónusz (§5.3) FLAT és nem-összegző: `bonusXp` kényszerítve `0`-ra, csak
+a policy `baseXp`-je landol a ledgerben, hogy a blokkok (amik már fizettek a
+saját forrásukon) ne duplázódjanak. A Vision-adapter két esemény (`vision-base`
+mindig, `vision-technical` csak a `VisionClaimGuard` engedélye után) —
+a §6.1 küszöb-hármas (0.69/0.70/0.71) szó szerint tesztelve, a küszöb maga
+inkluzív-elfogadó. Az Analysis-adapter dedupja `(sourceHash, analyzerVersion)`
+párra épül, nem csak a hash-re — egy verzióváltás legitim új jutalom.
+
+Mérce: `tools/round-gate.sh test/features/gamification/integration/
+cross_feature_reward_flow_test.dart test/core/architecture_dependency_test.dart`
+→ **MINDEN GATE ZÖLD** (16+37 teszt), reprodukálva SAJÁT kézzel izolált
+klónban a review-ban is. Az A6 architektúra-guard mind a négy adapterre
+kiterjed, a vision-nél MINDKÉT elfogadott barrelt (top-level + `domain/
+integration/`) kezeli. Három `_Broken*Adapter` valódi-sértés próba
+(chat-farm, blokk-összegzés, hash-only dedup) — mindhárom önálló osztály, a
+VALÓDI ingestor/eligibility/policy láncon fut át, nem csonka váz. Review:
+[`docs/reviews/e08-r26-review.md`](docs/reviews/e08-r26-review.md) —
+APPROVED, 0 BLOCKER/MAJOR/MINOR, 3 NOTE (mind unwired-today, jövőbeli
+UI-wiring kör hatókörű: `analyzerVersion` hash nélkül landol a ledgerben; a
+caller-fed id-mezők nem típusos/charset-lezárt id-k; a másolt `utf8Bytes()`
+segédfüggvény — MÁR az E08-R25 dal-adapterből örökölve, nem ez a kör vezette
+be — nem valódi UTF-8, csak ASCII-bemenetre helyes). `security-reviewer`
+agent (risk="high") függetlenül: PASS.
+
+Ez a kör NEM köti be az adaptereket a hívó UI-ba (nincs is az
+`allowed_paths`-on) — a négy adapter kész, tesztelt felület, amit egy
+jövőbeli kör hív majd az Analyze/Vision result-screenekből, a plan-befejezés
+UI-jából. CI: `full-gate.yml` + `router-ci.yml` mindkettő zöld a merge SHA-n
+(`d3c4a9a0`, PR #403 squash → `ea2e22a4`). Pontos következő E08 kör:
+**E08-R27 — Gamification accessibility és settings** (queue-ban `minimax`,
+ADR 0318 előre kiosztva).
+
 ## ✅ E08-R25 KÉSZ — Song Trainer és setlist integráció — PR #402, squash `204b3798` (2026-08-22)
 
 A dalgyakorlás (szakasz/hurok, teljes dal, setlist-tétel) MOST már bekötve a
@@ -4122,6 +4178,16 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-22):** `main` @ `ea2e22a4` — E08-R26
+Cross-feature gamification integráció, PR
+[#403](https://github.com/wolfcasaba/strumsight/pull/403), squash-merge.
+Implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5. Nincs javító
+kör (0 BLOCKER/MAJOR/MINOR, 3 NOTE, review-jelentés:
+`docs/reviews/e08-r26-review.md`). Exact `d3c4a9a0`: Full Gate 32557142579 +
+Router CI 32557160705 success; post-merge célzott gate a friss `main`-en is
+zöld. ADR 0392. Következő: **E08-R27** (Gamification accessibility és
+settings).
+
 **Aktuális állapot (2026-08-22):** `main` @ `dc09f5fe` — E08-R24 Practice
 Engine és Learn integráció, PR
 [#401](https://github.com/wolfcasaba/strumsight/pull/401), squash-merge.
@@ -4664,6 +4730,17 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R26 — Cross-feature gamification integráció** (PR
+[#403](https://github.com/wolfcasaba/strumsight/pull/403), squash `ea2e22a4`,
+[ADR 0392](docs/adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)).
+Négy caller-fed adapter (Analysis/Vision/Tutor/Plan); tutor-adapter ZÉRÓ
+`ai_tutor`-importtal (pinned empty boundary, L139); plan-bónusz flat, nem
+összegző (`bonusXp` fixen 0); vision technikai haladás `VisionClaimGuard`
+mögött (0.70 küszöb, inkluzív). 0 BLOCKER/MAJOR/MINOR review-lelet, javító
+kör nélkül; 3 nem-blokkoló NOTE (mind unwired-today). `security-reviewer`
+(risk="high"): PASS. Exact `d3c4a9a0`: Full Gate 32557142579 + Router CI
+32557160705 success. Részletesen a fejléc ✅-blokkban.
 
 **E08-R25 — Song Trainer és setlist integráció** (PR
 [#402](https://github.com/wolfcasaba/strumsight/pull/402), squash `204b3798`,
@@ -5444,19 +5521,22 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör (2026-08-22): E08-R26 — Cross-feature
-gamification integration** (`docs/rounds/e08-r26-cross-feature-gamification-integration.md`,
-engine a queue-ban `minimax`). Ez a session nem indítja el; új sessionben fut.
-Vegye figyelembe az E08-R25 mért tanulságát (lásd a fejléc ✅-blokk): ha egy
-brief egy meglévő dedup/mechanizmust ("R06 `parentEventId`") nevez meg egy
-ÚJ viselkedés (pl. "bónusz, nem nulla") megvalósítási eszközeként, a
-pre-flight mérje ki a mechanizmus TÉNYLEGES szemantikáját a forráskódban
-(nem a leírásból/kommentből következtetve) — bináris dedup nem tud
-részleges/nemnulla bónuszt termelni. Emellett minden ledgerbe kerülő
-azonosító-jellegű mezőt (nemcsak a "fő" entitás id-jét) mérjen ki: a
-session/section/setlist-id-k E08-R25-ben nyersen mentek át, mert a kör
-scope-ja nem igényelte a hívó bekötését — ha ez a kör bedrótozza a hívót,
-mérje meg, ELŐSZÖR, hogy azok az id-k tartalom-semlegesek-e.
+**Pontos következő E08 termékkör (2026-08-22): E08-R27 — Gamification
+accessibility és settings** (`docs/rounds/e08-r27-gamification-accessibility-and-settings.md`,
+engine a queue-ban `minimax`, ADR 0318 előre kiosztva). Ez a session nem
+indítja el; új sessionben fut. Vegye figyelembe az E08-R26 mért tanulságát
+(lásd a fejléc ✅-blokk): ha egy jövőbeli kör az itt épített négy adaptert
+(analysis/vision/tutor/plan) bedrótozza egy hívó UI-ba, a pre-flight mérje ki
+ELŐSZÖR, hogy a hívó által átadott caller-fed id-mezők (`sessionId`,
+`sourceHash`, `analyzerVersion`, `planId`) tartalom-semlegesek-e — az
+`analyzerVersion` ma hash nélkül, nyersen landol a ledger `eventId`/
+`ledgerId`-jában (docs/reviews/e08-r26-review.md NOTE 1), a `utf8Bytes()`
+segédfüggvény (E08-R25-ből örökölve, most már két helyen duplikálva) pedig
+nem valódi UTF-8 — csak ASCII-bemenetre helyes (NOTE 3).
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R26 —
+Cross-feature gamification integration** (`docs/rounds/e08-r26-cross-feature-gamification-integration.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R25 — Song
 Trainer és Setlist integráció** (`docs/rounds/e08-r25-song-trainer-and-setlist-integration.md`,
