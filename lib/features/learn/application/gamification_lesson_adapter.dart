@@ -60,23 +60,15 @@ final class LessonGamificationSignal {
 /// feature without leaking implementation details.
 @immutable
 final class LessonGamificationOutcome {
-  const LessonGamificationOutcome._({
-    required this.eventId,
-    required this.accepted,
-    required this.dualWriteInvoked,
-  });
-
   const LessonGamificationOutcome.noOp()
     : eventId = null,
       accepted = false,
       dualWriteInvoked = false;
 
   const LessonGamificationOutcome.rewarded({
-    required String eventId,
-    required bool dualWriteInvoked,
-  }) : eventId = eventId,
-       accepted = true,
-       dualWriteInvoked = dualWriteInvoked;
+    required this.eventId,
+    required this.dualWriteInvoked,
+  }) : accepted = true;
 
   final String? eventId;
   final bool accepted;
@@ -133,12 +125,12 @@ class GamificationLessonAdapter {
     required LessonHistoryBuilder historyBuilder,
     required GamificationDualWriteMode dualWriteMode,
     required LessonLegacySink legacySink,
-  }) : _ingestor = ingestor,
-       _eligibility = eligibility,
-       _rewardPolicy = rewardPolicy,
-       _historyBuilder = historyBuilder,
-       _dualWriteMode = dualWriteMode,
-       _legacySink = legacySink;
+  }) : _ingestor = ingestor, // ignore: prefer_initializing_formals
+       _eligibility = eligibility, // ignore: prefer_initializing_formals
+       _rewardPolicy = rewardPolicy, // ignore: prefer_initializing_formals
+       _historyBuilder = historyBuilder, // ignore: prefer_initializing_formals
+       _dualWriteMode = dualWriteMode, // ignore: prefer_initializing_formals
+       _legacySink = legacySink; // ignore: prefer_initializing_formals
 
   final ActivityEventIngestor _ingestor;
   final RewardEligibilityPolicy _eligibility;

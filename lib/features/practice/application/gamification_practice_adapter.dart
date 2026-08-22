@@ -108,12 +108,6 @@ final class PracticeRewardHistorySnapshot {
 /// without leaking any ledger-internal state.
 @immutable
 final class PracticeGamificationOutcome {
-  const PracticeGamificationOutcome._({
-    required this.eventId,
-    required this.accepted,
-    required this.dualWriteInvoked,
-  });
-
   /// The adapter was a no-op — the switch is [GamificationDualWriteMode.off]
   /// or the R05 eligibility gate denied the activity. No event was enqueued,
   /// no ledger entry was written, no legacy sink was called.
@@ -126,11 +120,9 @@ final class PracticeGamificationOutcome {
   /// safely invoke [recordSavedActivity]-equivalent work asynchronously
   /// knowing the identifier is stable across reopens.
   const PracticeGamificationOutcome.rewarded({
-    required String eventId,
-    required bool dualWriteInvoked,
-  }) : eventId = eventId,
-       accepted = true,
-       dualWriteInvoked = dualWriteInvoked;
+    required this.eventId,
+    required this.dualWriteInvoked,
+  }) : accepted = true;
 
   /// The canonical event id, derived from the session id (ADR 0390 §4).
   /// `null` for [PracticeGamificationOutcome.noOp] results.
@@ -175,12 +167,12 @@ class GamificationPracticeAdapter {
     required PracticeHistoryBuilder historyBuilder,
     required GamificationDualWriteMode dualWriteMode,
     required PracticeLegacySink legacySink,
-  }) : _ingestor = ingestor,
-       _eligibility = eligibility,
-       _rewardPolicy = rewardPolicy,
-       _historyBuilder = historyBuilder,
-       _dualWriteMode = dualWriteMode,
-       _legacySink = legacySink;
+  }) : _ingestor = ingestor, // ignore: prefer_initializing_formals
+       _eligibility = eligibility, // ignore: prefer_initializing_formals
+       _rewardPolicy = rewardPolicy, // ignore: prefer_initializing_formals
+       _historyBuilder = historyBuilder, // ignore: prefer_initializing_formals
+       _dualWriteMode = dualWriteMode, // ignore: prefer_initializing_formals
+       _legacySink = legacySink; // ignore: prefer_initializing_formals
 
   final ActivityEventIngestor _ingestor;
   final RewardEligibilityPolicy _eligibility;

@@ -6,8 +6,8 @@
 // respectively, per the brief §6 evidence column.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:meta/meta.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/features/gamification/data/local_reward_ledger_repository.dart';
 import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/features/practice/application/gamification_practice_adapter.dart';
 
