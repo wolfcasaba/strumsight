@@ -41,6 +41,64 @@ gate_tests = [
 native_gate = false
 ```
 
+> **Kockázat = high, indoklás:** a `public.dart` a Community feature
+> KIZÁRÓLAGOS belépője — a Kör 6-tól épülő `data/`/`presentation/` réteg és
+> minden jövőbeli fogyasztó erre a felületre köt, tehát egy itt elkövetett
+> hiba (hiányzó export, rossz típusalak, `CommunityAudience` duplikálása a
+> már létező Kör 4 policy-enum mellett) sok jövőbeli kört érintene. A
+> `docs/adr/0399` és a domain-purity guard ezt a felületet rögzíti.
+
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-22, `main @ e77e9b06`)
+
+**S7 (brief-lint):** a fenti `**Kockázat = high, indoklás:**` sor pótolva.
+
+**S8 (brief-lint) — visszakeresés:**
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "Flutter
+community domain public API value objects entities"` és `--corpus
+lessons,halts --top 5 "wire enum unknown value handling cursor page opaque
+value object"` (majd kiegészítésként a teljes korpuszon). Találatok:
+ADR 0057 (shared-domain `public.dart` konvenció, `package:meta` kontra
+Flutter `@immutable` kérdés — ld. lent D1), ADR 0339 (generált-barrel
+registry, pilot: `practice_generator` — ld. lent D2). **Nincs közvetlenül
+alkalmazandó lecke** a cursor/enum témára (L349 egy KÖVETKEZŐ kör — Kör 6+,
+a repository-fogyasztó lapozó hurokja — kockázata, ide csak annyiban tartozik,
+hogy a `CursorPage` value objectnek A4 szerint **nem szabad** a kezdő,
+üres-oldal `cursor == null` állapotot és a "lapozás elakadt" hibát ugyanazzal
+az alakkal jelölnie — ezt a döntést a `CursorPage` API-ja explicit
+kell hordozza, nem a jövőbeli fogyasztóra hárítva).
+
+**D1 — nincs változás:** a §5.1 (`final` mezők + `const` konstruktor, se
+Flutter, se `package:meta` `@immutable`) mérve helyes — a Gamification
+domain (E08-R02) sem használ `@immutable`-t egyáltalán, tehát a bevett
+minta a teljes hiány, nem a `package:meta`-s csere. Lásd `docs/adr/0399`
+1. döntés.
+
+**D2 — nincs változás, csak megerősítés:** a `public.dart` ebben a körben
+KÉZZEL ÍRT, hagyományos barrel — a `tool/gen_public_barrel.dart` +
+`docs/adr/0339` generált-barrel regisztrációja jelenleg EGYETLEN pilot
+bejegyzést tartalmaz (`practice_generator`), és az ADR kifejezetten
+kimondja: "a nem regisztrált feature gyökér `public.dart` továbbra is teljes
+ütközési felület." A Community generált-barrel migrációja NEM ennek a
+körnek a tárgya. Lásd `docs/adr/0399` 3. döntés.
+
+**D3 — ÚJ tisztázás (a brief eredeti szövege nem tért ki rá):**
+`lib/features/community/domain/policies/community_audience.dart` (Kör 4)
+MÁR definiálja a `ProfileVisibility`/`CommunityAudience` wire-enumokat
+(3 érték: `public`/`followers`/`private`). Ez a fájl **nincs** ezen a
+körön az `allowed_paths`-on — szerkesztése tilos zóna, de OLVASÁSA
+(import) nem `allowed_paths`-sértés. A SDD Ch10 §9.1 egy korábbi,
+4-értékű vázlatot mutat (`onlyMe, followers, club, public`) — ez ADR
+0398-cal FELÜLÍRÓDOTT (a club-domain Kör 24-re halasztva,
+`is_club_member` ma `False`-default, fenntartott mező). A Kör 5
+`domain/value_objects/audience.dart` fájlja **nem definiálhat új
+`CommunityAudience`-t vagy `ProfileVisibility`-t, és nem árnyékolhatja**
+a Kör 4 típusait — importálja őket. A value object feladata: kontrollált,
+sosem dobó dekódolás ismeretlen wire-stringre (A3 — a Kör 4 fájl saját
+doc-kommentje szerint a JSON-kötés "egy jövőbeli körben" landol; ez a
+felelősség itt landol, nem a policy fájlban), és stabil, `public.dart`-on
+át exportálható típusfelület a Kör 5 entitásoknak (poszt/komment audience
+mezője). Részletek: `docs/adr/0399` 4. döntés.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
