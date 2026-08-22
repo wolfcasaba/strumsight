@@ -58,17 +58,27 @@ def _alembic_config() -> Config:
 
 
 def test_alembic_upgrade_head_applies_community_migration(tmp_path, monkeypatch):
-    """A4 — fresh DB -> ``upgrade head`` applies ``e09_r02_0002`` and creates
-    both Community tables with the expected unique constraints."""
+    """A4 — fresh DB -> ``upgrade head`` applies every Community migration in
+    the chain (the E09-R02 head ``e09_r02_0002`` must remain an ancestor of
+    the current head) and creates both Community tables with the expected
+    unique constraints. Chain-tolerant: later Community rounds appending to
+    the chain do not require rewriting this test."""
     db_path = tmp_path / "e09_r02.db"
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
     command.upgrade(_alembic_config(), "head")
 
-    script_heads = ScriptDirectory.from_config(_alembic_config()).get_heads()
-    assert set(script_heads) == {"e09_r02_0002"}, (
-        "alembic heads must include e09_r02_0002 — round E09-R02 contract"
+    config = _alembic_config()
+    script_dir = ScriptDirectory.from_config(config)
+    heads = script_dir.get_heads()
+    assert len(heads) == 1, f"single-head chain required, got {heads}"
+    # Alembic's walk_revisions(start, end) treats ``start`` as the
+    # upgrade-from endpoint — to enumerate every revision from ``base``
+    # up to the current head (inclusive), pass ``"base"`` first.
+    ancestors = {rev.revision for rev in script_dir.walk_revisions("base", heads[0])}
+    assert "e09_r02_0002" in ancestors, (
+        "e09_r02_0002 must remain an ancestor of head — round E09-R02 contract"
     )
 
     engine = create_engine(db_url)
@@ -112,14 +122,18 @@ def test_alembic_upgrade_head_applies_community_migration(tmp_path, monkeypatch)
 
 
 def test_alembic_downgrade_drops_community_tables(tmp_path, monkeypatch):
-    """A4 — ``downgrade -1`` removes the Community schema (reversible)."""
+    """A4 — downgrading all the way to ``e01_r12_0001`` removes every
+    Community migration in the chain (reversible), leaving the E01-R12
+    account baseline intact. Explicit target revision, NOT a relative step
+    count, so future Community rounds extending the chain still satisfy the
+    contract."""
     db_path = tmp_path / "e09_r02_down.db"
     db_url = f"sqlite:///{db_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
 
     config = _alembic_config()
     command.upgrade(config, "head")
-    command.downgrade(config, "-1")
+    command.downgrade(config, "e01_r12_0001")
 
     engine = create_engine(db_url)
     try:

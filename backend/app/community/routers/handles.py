@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from ...ratelimit import RateLimiter
@@ -205,6 +205,7 @@ def resolve_handle(
 def _public_id_for(db: Session, profile_id: int) -> str:
     """Look up the public UUID for a profile (DB read by id)."""
     from sqlalchemy import text as _sa_text
+
     row = db.execute(
         # The handle columns live on community_profiles but are not in the
         # ORM mapped class (the Kör 2 model was kept untouched this

@@ -1,6 +1,6 @@
 # E09-R03 — Public identity és handle policy
 
-- **Státusz:** PREPARED (előre megírva 2026-08-22, kód olvasva: `main @ db6293f4`)
+- **Státusz:** IMPLEMENTED + SELF-HEAL RESOLVED (2026-08-22, `minimax` resume) — gate zöld, awaiting reviewer
 - **Típus:** Chapter 10 (Epic 9 — Community Platform), Kör 3
 - **Kör-azonosító:** `E09-R03`
 - **Branch:** `<motor>/e09-r03-public-identity-and-handle-policy`
@@ -326,11 +326,17 @@ Implemented the brief end-to-end within the `allowed_paths` envelope:
 | Command | Exit | Note |
 |---|---|---|
 | `python -m pytest tests/community/test_handle_policy.py -q` | 0 | 75 passed, 0 failed (in-repo venv via ``$HOME/music-theory/backend/.venv/bin/python`` because the box has no local ``backend/.venv``) |
-| `python -m pytest tests/test_migrations.py tests/community/test_profile_schema.py -q` | 1 | 3 pre-existing tests broken — see §10.4 |
+| `python -m pytest tests/test_migrations.py tests/community/test_profile_schema.py -q` | 0 | **107 passed**, 0 failed — after the §0.1 self-heal fixes (see §10.4) |
+| `python -m ruff format app tests` | 0 | 5 files reformatted (mechanical line-length reflows), 47 left unchanged |
+| `python -m ruff check app tests` | 0 | All checks passed — after the unused-import / unused-variable cleanup below |
+| `tools/round-gate.sh test/core/architecture_dependency_test.dart` | 0 | MINDEN GATE ZÖLD — format / analyze / test / architecture / secrets / l10n / backend ruff format / backend ruff check / backend pytest, all green in a single foreground invocation |
 
 The first command is what §7 of the brief specifies as the standalone
 backend gate; the second is what `round-gate.sh` runs because the
-backend sáv auto-detects the touched directory. Both were executed in
+backend sáv auto-detects the touched directory; the third is the
+preambulum §3 mandatory `ruff format` step before the gate's
+`ruff format --check`; the fourth is the gate's `ruff check` step;
+the fifth is the §7 mandatory round gate. All five were executed in
 the foreground — no background dispatch.
 
 ### 10.3 Acceptance criteria — measured vs claimed
@@ -352,36 +358,50 @@ live SQLite: drops the production unique index, recreates it on
 ``handle_display``, proves A1 would go red, then cleans the duplicate
 rows and restores the production index.
 
-### 10.4 Cross-round test pollution — **HALT BLOCKER**
+### 10.4 Cross-round test pollution — **RESOLVED via §0.1 self-heal**
 
-Three pre-existing tests, written in E09-R02 against the chain
-``e01_r12_0001 → e09_r02_0002``, are now piros:
+The §10.4 HALT BLOCKER from the prior implementer run was resolved
+via the §0.1 self-heal that widened the round's `allowed_paths` to
+include both cross-round test files. The three broken tests were
+reworked to be **chain-tolerant** so the Epic 9 hátralévő ~29 köre
+does not need to revisit the same halt class on every new migration:
 
 * `tests/test_migrations.py::test_upgrade_head_matches_current_orm_schema` —
-  was failing because the ORM metadata didn't know about the new
-  columns; fixed in this round via ``Table.append_column`` on
-  ``community_profiles`` (see `models/handle_history.py` end).
+  fixed in the prior run via ``Table.append_column`` on
+  ``community_profiles`` (see `models/handle_history.py` end) so the
+  ORM metadata reflects the new handle columns.
 * `tests/test_migrations.py::test_downgrade_one_revision_drops_only_community_tables` —
-  asserts ``community_profiles`` is gone after ``downgrade -1``. The
-  new head shifts the linear chain to three revisions, so
-  ``downgrade -1`` lands on ``e09_r02_0002`` where
-  ``community_profiles`` exists. Test expectation is tied to a
-  two-revision chain.
+  generalised: instead of asserting that hardcoded E09-R02 table
+  names (`community_profiles`, `community_privacy_settings`) are gone
+  after `downgrade -1`, it now measures the **change in the table
+  set** (``tables_after < tables_at_head``) and asserts that the
+  E01-R12 account baseline (``users``, ``user_settings``) survives.
+  Chain-agnostic: future Community rounds extending the chain do not
+  require rewriting this test.
 * `tests/community/test_profile_schema.py::test_alembic_upgrade_head_applies_community_migration` —
-  asserts ``set(script_heads) == {"e09_r02_0002"}``. With the new
-  head, script_heads is ``{"e09_r02_0002", "e09_r03_0003"}``.
+  replaced the hardcoded ``set(script_heads) == {"e09_r02_0002"}``
+  head-set assertion with an ancestor walk:
+  ``walk_revisions("base", heads[0])`` collects every revision from
+  ``base`` up to the current head, and the test asserts that
+  ``e09_r02_0002`` is still in that ancestor set. Chain-tolerant.
+  Note: the §0.1 brief wrote this call as
+  ``walk_revisions(heads[0], "base")``; alembic's
+  ``ScriptDirectory.walk_revisions(start, end)`` treats ``start`` as
+  the upgrade-from endpoint, so the args were swapped in the actual
+  fix to ``walk_revisions("base", heads[0])``. This is the same
+  set-comprehension semantics, just with the parameter order
+  corrected for alembic's API.
 * `tests/community/test_profile_schema.py::test_alembic_downgrade_drops_community_tables` —
-  same root cause (chain shift).
+  replaced ``command.downgrade(config, "-1")`` with
+  ``command.downgrade(config, "e01_r12_0001")`` (explicit target
+  revision, NOT a relative step count). The Community migration (and
+  every future chain member) is fully rolled back regardless of how
+  many migrations sit on top of it.
 
-None of these files are in the round's ``allowed_paths``. Per the
-brief §0 rule, the right signal is ``blocked`` / ``stopped`` and a
-brief-revízió kérés — the cross-round migration-contract tests need a
-follow-up update (e.g. assert ``head in {"e09_r02_0002", "e09_r03_0003"}``
-and adjust the downgrade assertion to either go further or land on
-``e09_r02_0002`` explicitly).
-
-Per preambulum §4 the implementer is forbidden from touching files
-outside the list, so the test updates are out of scope for this round.
+After the four fixes plus ``ruff format`` / ``ruff check`` cleanup
+(see §10.7 below), the three-test verification command runs **107
+passed, 0 failed** in 4.3s and the full round gate is **MINDEN GATE
+ZÖLD**.
 
 ### 10.5 Files committed in this round
 
@@ -396,6 +416,24 @@ docs/rounds/e09-r03-public-identity-and-handle-policy.md  (new — this file)
 ```
 
 No file outside the ``allowed_paths`` list was modified.
+
+### 10.5a Self-heal follow-up (2026-08-22, minimax resume)
+
+Three pre-existing tests were reworked chain-tolerantly per §0.1:
+
+```
+backend/tests/community/test_profile_schema.py             (modified — ancestor walk + explicit e01_r12_0001 downgrade)
+backend/tests/test_migrations.py                           (modified — generalised one-step-downgrade table-set comparison)
+backend/tests/community/test_handle_policy.py              (modified — ruff --fix mechanical cleanup: removed 4 unused imports + 2 dead local-variable assignments; re-flowed long lines via ruff format)
+backend/app/community/models/handle_history.py             (modified — ruff format line-length reflow)
+backend/app/community/policies/handle_policy.py            (modified — ruff format line-length reflow)
+backend/app/community/routers/handles.py                   (modified — ruff format line-length reflow)
+backend/app/community/services/identity_service.py         (modified — ruff format line-length reflow)
+```
+
+All seven edits are inside the round's `allowed_paths` (the three
+`app/community/*` files were touched only by `ruff format` for
+line-length reflow — no semantic change).
 
 ### 10.6 Design notes worth flagging for the reviewer
 
@@ -438,5 +476,31 @@ No file outside the ``allowed_paths`` list was modified.
    words (e.g. ``me``) were dropped because they can never be claimed
    anyway — keeping them would mask the length-rejection cell of the
    threshold triple.
+
+7. **Alembic `walk_revisions` argument order.** The §0.1 self-heal
+   brief gave
+   ``script_dir.walk_revisions(heads[0], "base")`` to enumerate
+   ancestors of the current head. Alembic's
+   ``ScriptDirectory.walk_revisions(start, end)`` treats ``start`` as
+   the upgrade-from endpoint (lower) and ``end`` as the upgrade-to
+   target (upper) — so ``walk_revisions(head, "base")`` is interpreted
+   as "upgrade from head to base" and raises ``RangeNotAncestorError``.
+   The actual fix swaps the args to
+   ``walk_revisions("base", heads[0])``, which iterates from ``base``
+   upward to the head (inclusive) and yields every ancestor revision.
+   The set-comprehension semantics are identical to the §0.1 intent.
+
+8. **`ruff check` lint cleanup.** The prior implementer run left four
+   unused imports (``IntegrityError``, ``StaticPool``,
+   ``is_handle_available``, ``Base``) and two dead local-variable
+   assignments (``inspector`` in
+   ``test_unique_index_is_on_normalized_not_display``, ``insp`` in
+   ``test_swap_unique_index_breaks_unicode_collision_detection``) in
+   ``test_handle_policy.py``. ``ruff check --fix`` auto-fixed the four
+   imports + the import-sort issue; the two dead locals were removed
+   manually (the unused ``inspector`` block was a SQLAlchemy 1.x
+   compatibility shim that is dead code under SQLAlchemy 2.x, and the
+   unused ``insp`` was a duplicate of the ``insp_after = inspect(...)``
+   re-verification at the end of the valódi-sértés próba).
 
 ## 11. Review — a Claude tölti ki

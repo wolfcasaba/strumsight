@@ -117,12 +117,8 @@ class CommunityHandleHistory(Base):
 # test compares equal. This is the §6.1 A1 / §5.1 mechanism expressed
 # purely in metadata so the source-of-truth stays the migration file.
 _profiles_table = Base.metadata.tables["community_profiles"]
-_profiles_table.append_column(
-    Column("handle_display", String(24), nullable=True)
-)
-_profiles_table.append_column(
-    Column("handle_normalized", String(24), nullable=True)
-)
+_profiles_table.append_column(Column("handle_display", String(24), nullable=True))
+_profiles_table.append_column(Column("handle_normalized", String(24), nullable=True))
 Index(
     "ix_community_profiles_handle_normalized",
     _profiles_table.c.handle_normalized,

@@ -35,15 +35,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
+from alembic import command
 from app.community.models.profile import CommunityProfile
 from app.community.policies.handle_policy import (
     BLOCKED,
@@ -56,22 +54,22 @@ from app.community.policies.handle_policy import (
     normalize,
     validate,
 )
-from app.community.routers.handles import reset_rate_limiters, router as handles_router
+from app.community.routers.handles import reset_rate_limiters
+from app.community.routers.handles import router as handles_router
 from app.community.services.identity_service import (
-    CooldownActive,
     HANDLE_COOLDOWN,
     HANDLE_REDIRECT_WINDOW,
+    CooldownActive,
     HandleAlreadyClaimed,
     PublicIdGenerator,
     assign_handle,
     change_handle,
     commit_with_uniqueness_check,
-    is_handle_available,
     lookup_active_profile_id,
     lookup_redirect_target,
 )
 from app.config import Settings
-from app.database import Base, enable_sqlite_foreign_keys, get_db
+from app.database import enable_sqlite_foreign_keys, get_db
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
@@ -226,21 +224,20 @@ def test_unique_index_is_on_normalized_not_display(session_factory, engine):
     profiles claim handles that collide only after normalization. The
     §6.1 valódi-sértés próba is realised by this assertion.
     """
-    inspector = engine.dialect.inspector(engine) if hasattr(engine.dialect, "inspector") else None
-    # SQLAlchemy 2.x exposes ``inspect(engine)`` cleanly.
     from sqlalchemy import inspect
+
     insp = inspect(engine)
     indexes = insp.get_indexes("community_profiles")
     # Find the unique index that targets a single column.
     normalized_unique = [
-        idx for idx in indexes
-        if idx.get("unique")
-        and idx.get("column_names") == ["handle_normalized"]
+        idx
+        for idx in indexes
+        if idx.get("unique") and idx.get("column_names") == ["handle_normalized"]
     ]
     display_unique = [
-        idx for idx in indexes
-        if idx.get("unique")
-        and idx.get("column_names") == ["handle_display"]
+        idx
+        for idx in indexes
+        if idx.get("unique") and idx.get("column_names") == ["handle_display"]
     ]
     assert normalized_unique, (
         "unique index on community_profiles.handle_normalized is missing — "
@@ -326,9 +323,7 @@ def test_public_id_not_derived_from_internal_id(session_factory):
         profile_id = _make_profile(db, 1)
 
         row = db.execute(
-            text(
-                "SELECT id, public_id FROM community_profiles WHERE id = :id"
-            ),
+            text("SELECT id, public_id FROM community_profiles WHERE id = :id"),
             {"id": profile_id},
         ).first()
         assert row is not None
@@ -350,6 +345,7 @@ def test_public_id_factory_default_uses_secrets_entropy():
     exercising the helper directly.
     """
     from app.community.services.identity_service import _secrets_uuid4
+
     a = _secrets_uuid4()
     b = _secrets_uuid4()
     assert a.version == 4
@@ -556,7 +552,9 @@ def test_concurrent_change_does_not_lose_a_writer(session_factory):
 
     with session_factory() as db:
         with pytest.raises(HandleAlreadyClaimed):
-            change_handle(db, p2, "carol", "carol", now_fn=lambda: later + timedelta(seconds=1))
+            change_handle(
+                db, p2, "carol", "carol", now_fn=lambda: later + timedelta(seconds=1)
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -752,9 +750,7 @@ def test_threshold_above_max_length_rejected():
 # ---------------------------------------------------------------------------
 
 
-def test_swap_unique_index_breaks_unicode_collision_detection(
-    session_factory, engine
-):
+def test_swap_unique_index_breaks_unicode_collision_detection(session_factory, engine):
     """§6.1 valódi-sértés próba — drop the unique index on
     ``handle_normalized`` and add it on ``handle_display`` instead.
 
@@ -766,11 +762,8 @@ def test_swap_unique_index_breaks_unicode_collision_detection(
     """
     from sqlalchemy import inspect
 
-    insp = inspect(engine)
     # Drop the production unique index, recreate on the display column.
-    op_drop_index_sql = (
-        "DROP INDEX IF EXISTS ix_community_profiles_handle_normalized"
-    )
+    op_drop_index_sql = "DROP INDEX IF EXISTS ix_community_profiles_handle_normalized"
     op_create_unique_sql = (
         "CREATE UNIQUE INDEX ix_community_profiles_handle_display_bad "
         "ON community_profiles (handle_display)"
@@ -809,10 +802,7 @@ def test_swap_unique_index_breaks_unicode_collision_detection(
         # Both profiles now own handles whose normalized forms collide.
         with session_factory() as db:
             both = db.execute(
-                text(
-                    "SELECT id, handle_normalized FROM community_profiles "
-                    "ORDER BY id"
-                )
+                text("SELECT id, handle_normalized FROM community_profiles ORDER BY id")
             ).fetchall()
             normalized_values = [row[1] for row in both]
             assert normalized_values.count("alice") == 2, (
@@ -844,10 +834,7 @@ def test_swap_unique_index_breaks_unicode_collision_detection(
         # Restore the production schema.
         with engine.begin() as conn:
             conn.execute(
-                text(
-                    "DROP INDEX IF EXISTS "
-                    "ix_community_profiles_handle_display_bad"
-                )
+                text("DROP INDEX IF EXISTS ix_community_profiles_handle_display_bad")
             )
             conn.execute(
                 text(
@@ -860,9 +847,9 @@ def test_swap_unique_index_breaks_unicode_collision_detection(
         insp_after = inspect(engine)
         indexes_after = insp_after.get_indexes("community_profiles")
         normalized_unique_after = [
-            idx for idx in indexes_after
-            if idx.get("unique")
-            and idx.get("column_names") == ["handle_normalized"]
+            idx
+            for idx in indexes_after
+            if idx.get("unique") and idx.get("column_names") == ["handle_normalized"]
         ]
         assert normalized_unique_after, (
             "production unique index on handle_normalized was not restored"
