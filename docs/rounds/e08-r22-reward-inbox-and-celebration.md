@@ -29,6 +29,7 @@ allowed_paths = [
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/application/celebration_coordinator_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e08-r22-reward-inbox-and-celebration.md",
 ]
 gate_tests = [
@@ -130,6 +131,22 @@ kulcsokat a **`lib/l10n/features/gamification_{en,hu}.arb`**-be írja, majd a
 meglévő aggregátort a `tool/gen_l10n_segments.dart --write` → `flutter gen-l10n`
 szekvenciával szinkronizálja. Az `allowed_paths` és a §4 tábla ezen §0.0.1
 revízióval végleges.
+
+### §0.0.2 ui_inventory baseline scope (mid-round revízió, Claude, 2026-08-22, mérve)
+
+A merge előtti CI-dispatch (`full-gate.yml`, run 32538682580, headSha
+`2d4086b9`) a teljes `flutter test` alatt PIROS: `test/ui/
+ui_inventory_test.dart` — „production screen inventory is stable,
+sorted, and excludes test trees" — `Expected: an object with length of
+<61> · Which: has length of <62>`. Mért ok: az új
+`lib/features/gamification/presentation/screens/reward_inbox_screen.dart`
+egy valódi, produkciós képernyő, tehát a `UiInventory` gépi leltára
+helyesen 62-re nő — ugyanaz a hibaosztály, mint az E08-R20 §0.0.1
+baseline-bővítése (60→61, `docs/LESSONS.md` L396/L398). A brief
+`allowed_paths`-a a `test/ui/ui_inventory_test.dart`-tal bővül; a
+javítás a `hasLength(61)` → `hasLength(62)` mechanikus baseline-bővítés,
+ÚJ képernyő hozzáadása nélkül (nincs valódi UI-regresszió, csak a
+leltár-baseline avult el).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
