@@ -802,6 +802,71 @@ import 'package:flutter/widgets.dart';
       },
     );
   });
+
+  // E08-R24 — A4 architecture guard: the `practice` and `learn` features
+  // must NOT import any internal file from `gamification`; the only allowed
+  // entry point is `public.dart` (ADR 0390 1. döntés, brief §5.1). The
+  // generic `crossFeatureImportsMustUsePublicApi` rule above only fires on
+  // file-tree-level scans; this group adds an explicit assertion against
+  // the contracted adapter boundary so a future regression that bypasses
+  // public.dart trips the targeted test.
+  group('gamification adapter boundary — A4 (E08-R24)', () {
+    final allowedSourceRoots = <String>[
+      'lib/features/practice/',
+      'lib/features/learn/',
+    ];
+    final gamificationPublicMarker = 'gamification/public.dart';
+
+    for (final root in allowedSourceRoots) {
+      test('$root reaches gamification only through public.dart', () {
+        final sourceDir = Directory(root);
+        expect(sourceDir.existsSync(), isTrue, reason: 'missing $root');
+
+        final offenders = <String>[];
+        for (final entity in sourceDir.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) continue;
+          offenders.addAll(
+            _forbiddenGamificationInternalImports(
+              entity.path,
+              entity.readAsStringSync(),
+              gamificationPublicMarker,
+            ),
+          );
+        }
+        expect(offenders, isEmpty, reason: offenders.join('\n'));
+      });
+    }
+
+    test('the boundary detector flags a non-public gamification import', () {
+      const directImport =
+          "import 'package:strumsight/features/gamification/data/local_reward_ledger_repository.dart';";
+      expect(
+        _forbiddenGamificationInternalImports(
+          'lib/features/practice/application/gamification_practice_adapter.dart',
+          directImport,
+          gamificationPublicMarker,
+        ),
+        <String>[
+          'lib/features/practice/application/gamification_practice_adapter.dart '
+              '-> package:strumsight/features/gamification/data/'
+              'local_reward_ledger_repository.dart',
+        ],
+      );
+    });
+
+    test('the boundary detector accepts the public.dart barrel', () {
+      const allowedImport =
+          "import 'package:strumsight/features/gamification/public.dart';";
+      expect(
+        _forbiddenGamificationInternalImports(
+          'lib/features/practice/application/gamification_practice_adapter.dart',
+          allowedImport,
+          gamificationPublicMarker,
+        ),
+        isEmpty,
+      );
+    });
+  });
 }
 
 void _write(Directory project, String relativePath, String contents) {
@@ -894,6 +959,25 @@ List<String> _forbiddenGamificationPresentationStorageMarkerOffenders(
   return [
     for (final marker in _gamificationDirectStorageImportUriMarkers)
       if (withoutComments.contains(marker)) '$path contains "$marker"',
+  ];
+}
+
+/// Flags any import/export of `features/gamification/...` whose target is
+/// NOT the public.dart barrel. Used by the E08-R24 A4 architecture guard
+/// to verify the practice and learn features stay on the public surface
+/// of the gamification feature (ADR 0390 1. döntés).
+List<String> _forbiddenGamificationInternalImports(
+  String path,
+  String source,
+  String publicMarker,
+) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when uri.contains('gamification/') && !uri.endsWith(publicMarker))
+        '$path -> $uri',
   ];
 }
 
