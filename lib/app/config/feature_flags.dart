@@ -44,6 +44,11 @@ final class FeatureFlags {
     this.recognitionRecoveryEnabled = false,
     this.recognitionShadowModeEnabled = false,
     this.newLiveStageEnabled = false,
+    this.communityEnabled = false,
+    this.communityWritesEnabled = false,
+    this.communityMediaEnabled = false,
+    this.communityLeaderboardEnabled = false,
+    this.communityClubsEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -100,6 +105,23 @@ final class FeatureFlags {
       recognitionRecoveryEnabled: false,
       recognitionShadowModeEnabled: false,
       newLiveStageEnabled: false,
+      // Epic 9 Community (E09-R01, ADR 0395). The compile-time kill switch is
+      // read directly here so app_config.dart stays untouched — without a
+      // dart-define, every environment resolves to `false`, which keeps the
+      // feature completely absent from production until a deliberate flip.
+      communityEnabled: const bool.fromEnvironment('STRUMSIGHT_COMMUNITY'),
+      communityWritesEnabled: const bool.fromEnvironment(
+        'STRUMSIGHT_COMMUNITY_WRITES',
+      ),
+      communityMediaEnabled: const bool.fromEnvironment(
+        'STRUMSIGHT_COMMUNITY_MEDIA',
+      ),
+      communityLeaderboardEnabled: const bool.fromEnvironment(
+        'STRUMSIGHT_COMMUNITY_LEADERBOARD',
+      ),
+      communityClubsEnabled: const bool.fromEnvironment(
+        'STRUMSIGHT_COMMUNITY_CLUBS',
+      ),
     );
   }
 
@@ -227,6 +249,35 @@ final class FeatureFlags {
   /// It remains OFF in every environment until evaluation evidence is accepted.
   final bool newLiveStageEnabled;
 
+  /// Epic 9 master kill switch. The four sub-flags below are only honoured
+  /// when this is on; this gate is the one audit reviewers and on-call
+  /// operators reach for to pull the entire Community surface area offline
+  /// in a single build.
+  ///
+  /// Production default is OFF (ADR 0395) — a `STRUMSIGHT_COMMUNITY` define
+  /// is the only way to flip this on.
+  final bool communityEnabled;
+
+  /// Whether Community *writes* (posts, comments, follows, club actions,
+  /// challenge submissions) are accepted. Reads may already be served by
+  /// static fixtures while writes stay off. Production default OFF.
+  final bool communityWritesEnabled;
+
+  /// Whether user-uploaded *media* (images attached to posts/challenges) is
+  /// accepted. Until this is on, the surface area is text-only. Production
+  /// default OFF.
+  final bool communityMediaEnabled;
+
+  /// Whether the public *leaderboard* surfaces user ranking. The on-device
+  /// gamification ledger is unaffected — this only controls the social
+  /// visibility layer. Production default OFF.
+  final bool communityLeaderboardEnabled;
+
+  /// Whether *clubs* (membership, club-targets, club-only posts) are
+  /// reachable. Club membership is opt-in and reversible. Production default
+  /// OFF.
+  final bool communityClubsEnabled;
+
   /// The build-time rollout level. Shadow execution has an additional
   /// runtime Lab-mode gate, so it is intentionally not inferred here.
   AnalysisRolloutStage get analysisRolloutStage => audioAnalysisV2Enabled
@@ -280,7 +331,12 @@ final class FeatureFlags {
           analysisTutorIntegrationEnabled &&
       other.recognitionRecoveryEnabled == recognitionRecoveryEnabled &&
       other.recognitionShadowModeEnabled == recognitionShadowModeEnabled &&
-      other.newLiveStageEnabled == newLiveStageEnabled;
+      other.newLiveStageEnabled == newLiveStageEnabled &&
+      other.communityEnabled == communityEnabled &&
+      other.communityWritesEnabled == communityWritesEnabled &&
+      other.communityMediaEnabled == communityMediaEnabled &&
+      other.communityLeaderboardEnabled == communityLeaderboardEnabled &&
+      other.communityClubsEnabled == communityClubsEnabled;
 
   @override
   int get hashCode {
@@ -321,6 +377,11 @@ final class FeatureFlags {
       recognitionRecoveryEnabled,
       recognitionShadowModeEnabled,
       newLiveStageEnabled,
+      communityEnabled,
+      communityWritesEnabled,
+      communityMediaEnabled,
+      communityLeaderboardEnabled,
+      communityClubsEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -367,5 +428,10 @@ final class FeatureFlags {
       'analysisTutorIntegrationEnabled: $analysisTutorIntegrationEnabled, '
       'recognitionRecoveryEnabled: $recognitionRecoveryEnabled, '
       'recognitionShadowModeEnabled: $recognitionShadowModeEnabled, '
-      'newLiveStageEnabled: $newLiveStageEnabled)';
+      'newLiveStageEnabled: $newLiveStageEnabled, '
+      'communityEnabled: $communityEnabled, '
+      'communityWritesEnabled: $communityWritesEnabled, '
+      'communityMediaEnabled: $communityMediaEnabled, '
+      'communityLeaderboardEnabled: $communityLeaderboardEnabled, '
+      'communityClubsEnabled: $communityClubsEnabled)';
 }

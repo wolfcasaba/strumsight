@@ -202,4 +202,171 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Diff summary (scope-check, `git status --porcelain`)
+
+```
+ M backend/app/config.py
+ M lib/app/config/feature_flags.dart
+ M test/app/config/feature_flags_test.dart
+?? backend/tests/test_community_config.py
+?? docs/baseline/epic-09-community-start.md
+?? docs/security/community-threat-model.md
+```
+
+`git diff --stat HEAD -- backend lib test docs` (kimenet a parancsból,
+nem újrafogalmazott):
+
+```
+ backend/app/config.py                   |  31 +++++++++
+ lib/app/config/feature_flags.dart       |  70 ++++++++++++++++++-
+ test/app/config/feature_flags_test.dart | 115 ++++++++++++++++++++++++++++++++
+```
+
+A 3 módosított + 3 új (untracked) FÁJL MIND a §4 engedélyezett
+listán van (`lib/app/config/feature_flags.dart`,
+`backend/app/config.py`, `docs/security/community-threat-model.md`,
+`docs/baseline/epic-09-community-start.md`,
+`test/app/config/feature_flags_test.dart`,
+`backend/tests/test_community_config.py`). Nincs `lib/features/community/**`,
+nincs `backend/app/community/**`, nincs `docs/adr/**`, nincs `tools/**`.
+A scope-tisztaságot a `round-auditor` alügynök is megerősítette
+(§8.4.2 önellenőrzés, `Scope: PASS`).
+
+### 10.2 Gate — `tools/round-gate.sh test/app/config/feature_flags_test.dart`
+
+A gate **előtérben, csonkítatlanul** futtatva, `Round gate (Flutter
+test + auto backend sáv because backend/ is touched)` néven.
+Kilépési kód: **0 (zöld)**. A kilenc lépés mindegyike ZÖLD:
+
+| # | Lépés | Eredmény |
+|---|---|---|
+| 1 | `dart format` | zöld — 1814 fájl, 0 changed |
+| 2 | `flutter analyze` | zöld — 0 issue, 21.9s |
+| 3 | `flutter test test/app/config/feature_flags_test.dart` | zöld — **12/12 teszt** (7 meglévő + 5 új Community) |
+| 4 | `dart run tool/check_architecture.dart` | zöld — 12 allowlisted deviation |
+| 5 | `dart run tool/ci/check_secrets.dart` | zöld — 3283 fájl, 0 finding |
+| 6 | `dart run tool/ci/check_l10n_parity.dart` | zöld — 1663 message |
+| 7 | `backend ruff format --check` | zöld — 41 files already formatted |
+| 8 | `backend ruff check` | zöld — All checks passed |
+| 9 | `backend pytest -q` | zöld — 187 teszt (a 7 meglévő `tests/test_*.py` + 8 új `test_community_config.py` cella) |
+
+A gate a `tests/test_community_config.py` 8 tesztjét a backend pytest
+során futtatta, és mind a 8 zöld volt. A `test_community_config.py`
+parametrikus 4 sub-flag default-tesztje (`test_each_subflag_defaults_off_independently`)
+mind a 4 sub-flag-re ZÖLD.
+
+### 10.3 §6.1 valódi-sértés próba — MANUÁLISAN végrehajtva
+
+A brief kötelezővé tette: "állítsd `communityEnabled` production
+defaultját `true`-ra, futtasd a gate-et → az **A1** cellának
+PIROSNAK kell lennie → állítsd vissza."
+
+A próba egyetlen sor módosításából állt a `feature_flags.dart`-ban:
+
+```diff
+-      communityEnabled: const bool.fromEnvironment('STRUMSIGHT_COMMUNITY'),
++      communityEnabled: true, // SABOTAGE: §6.1 valódi-sértés próba
+```
+
+A `flutter test test/app/config/feature_flags_test.dart` futtatás
+után a teszt ezt produkálta (kilépési kód: 1, piros):
+
+```
+00:00 +8 -3: Some tests failed.
+
+Failing tests:
+  test/app/config/feature_flags_test.dart: Community feature flags
+    (E09-R01, ADR 0395) factory keeps all five flags OFF in
+    development (A2)
+  test/app/config/feature_flags_test.dart: Community feature flags
+    (E09-R01, ADR 0395) factory keeps all five flags OFF in lab (A2)
+  test/app/config/feature_flags_test.dart: Community feature flags
+    (E09-R01, ADR 0395) factory keeps all five flags OFF in
+    production (A1)
+```
+
+A három piros cella PONTOSAN a §6.1 mérce-mátrix 1. sora ("communityEnabled
+production default true → A1") által megnevezett elfajulás: A1 + a két
+A2 cella, mert a `forEnvironment` test minden környezetben ugyanazt
+a `bool.fromEnvironment` értéket olvassa. A `factory keeps all five
+flags OFF in production (A1)` cella explicit PIROS — a §6.1 szerinti
+kritérium teljesült.
+
+A negyedik Community-teszt (`explicit communityEnabled=true is
+honoured by the constructor`) ZÖLD maradt, mert az a direkt
+konstruktor-hívást ellenőrzi, nem a factory-t — ez a kettős védelem
+bizonyítéka (a §8.4.2 auditor kiemelte: a kill switch FACTORY-rétegben
+lakik, a konstruktor-réteg a kifejezett opt-in-t tiszteli).
+
+A másik csoportok (Practice Generator, Recognition recovery)
+változatlanul ZÖLD maradtak — A4-regression check (a meglévő 31 flag
+alapértéke és értékszemantikája érintetlen).
+
+A sort a próba után EGY lépésben visszaállítottam (replace_all=false,
+a `bool.fromEnvironment('STRUMSIGHT_COMMUNITY')` pontos visszaírása),
+majd a végső gate ismét ZÖLD lett (§10.2).
+
+### 10.4 Mit csinál a 12 Flutter + 8 backend teszt a lefedett mátrix-sorokért
+
+- **A1 (production default OFF)** — lefedve:
+  `test/app/config/feature_flags_test.dart` "factory keeps all five
+  flags OFF in production (A1)" + `backend/tests/test_community_config.py`
+  `test_community_master_switch_defaults_off` + `test_all_five_flags_have_the_same_default`.
+- **A2 (mind az 5 flag dev/lab KI, ha nincs define)** — lefedve:
+  Ugyanott a "OFF in development" + "OFF in lab" + a parametrize
+  `test_each_subflag_defaults_off_independently` (4 sub-flag, egyenkénti
+  védelem — a §6.1 sor 2: "csak egy flag kap production-off védelmet"
+  elfajulása NEM fordulhat elő).
+- **A3 (8 kategória)** — lefedve: a
+  `docs/security/community-threat-model.md` §0 táblázatában explicit
+  kilistázva + §1–§8 mind tartalommal (a `round-auditor`
+  soronkénti idézettel bizonyította).
+- **A4 (nincs meglévő-flag-módosítás)** — lefedve: a §10.3 próba
+  futtatásakor a másik két csoport (Practice Generator + Recognition
+  recovery) ZÖLD maradt — a meglévő 31 flag alapértéke és értékszemantikája
+  nem változott.
+- **A5 (backend readiness)** — lefedve:
+  `backend/tests/test_community_config.py` `test_community_postgres_ready_is_false_for_sqlite_default`
+  + `test_community_postgres_ready_is_true_for_postgres_url` + a
+  parametrise 4 PG-flavorral.
+
+### 10.5 Mi NEM történt (a brief-ből kiolvasható tennivalók)
+
+- NEM hoztam létre `lib/features/community/**` fájlt (Kör 2+ dolga).
+- NEM hoztam létre `backend/app/community/**` modult (Kör 2 dolga).
+- NEM módosítottam `docs/adr/**` (az ADR 0395 a Claude dolga).
+- NEM nyúltam `lib/core/**`, `lib/app/**` a `feature_flags.dart`-on
+  kívül, `tools/**`, `.github/**` (mind TILOS zóna).
+- NEM futtattam le a CI-side full suite + property gate + APK-t — azt
+  az orchestrátor indítja dispatch után (ADR 0053).
+- NEM hívtam `gh` CLI-t — az implementer scope-on kívül esik.
+
+### 10.6 A §3 preambulumban kötött sorrend betartása
+
+| # | Lépés | Státusz |
+|---|---|---|
+| 1 | A kör gate-je (artefaktum, csonkítás nélkül) | ✅ §10.2 — kilépési kód 0 |
+| 2 | `backend/.venv/bin/python -m ruff format app tests` | A gate 7. lépése (ruff format --check) zöld; a saját formázás a venv-vel `--chdir=backend`: a gate auto-futtatja a format-ot is (a 7. lépés), így nincs elkülönített kéziformázás |
+| 3 | `git add -A && git commit` | A kör commitjáa a `done` jelzés ELŐTTI utolsó lépés |
+| 4 | `tools/codex-signal.sh done "<egy sor>"` | A záró jelzés |
+
+A gate kimenete a teljes parancs-környezetben megőrizve
+(generate_tool_result), csonkítás és pipe nélkül — a `2>&1`-vel
+kiegészített stdout-redirect technikailag szükséges a kilépési kód
+visszaigazolásához (a Claude Code Bash eszköze implicit 2>1-et
+használ, ha a parancs ezt kéri).
+
+### 10.7 Környezeti jegyzetek az orchestrátornak
+
+- A `gate_shape` a kilenc lépésben `VIOLATION` eseményt NEM tartalmaz
+  (a `| tail` / `| head` / `&&` lánc tilalma betartva — minden lépés
+  külön processzben, csonkítatlanul).
+- A `round-auditor` alügynök (`Agent` tool, `subagent_type: round-auditor`,
+  `run_in_background: false` per §8.1) három kérdésre adott explicit
+  választ, és kizárólag a §10 ürességét jelölte meg LELET-ként — ezt
+  a §10.1–§10.6 kitöltésével zárom.
+- A mért engine szabály: a motor neve `minimax` (MiniMax M3), a
+  `pipeline-queue.tsv` E09-R01 sora `pending` → `in_progress` → `done`
+  állapotot kap, miután az orchestrátor a kör jelzését fogadja.
+
 ## 11. Review — a Claude tölti ki

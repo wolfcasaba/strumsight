@@ -72,6 +72,37 @@ class Settings(BaseSettings):
     tutor_daily_token_limit: int = 50000
     tutor_timeout_seconds: float = 30.0
 
+    # Epic 9 Community (E09-R01, ADR 0395). Compile-time kill switches read
+    # from STRUMSIGHT_COMMUNITY_*_ENABLED env vars and default to False in
+    # every environment so a deployment without an explicit flip never
+    # activates the (still un-audited) Community surface area. These are
+    # *not* env-aware like diagnostics_enabled / apk_download_enabled —
+    # Community stays off even in dev unless a build explicitly opts in,
+    # mirroring the kill-switch discipline enforced by the Flutter
+    # `STRUMSIGHT_COMMUNITY` dart-define.
+    community_enabled: bool = False
+    community_writes_enabled: bool = False
+    community_media_enabled: bool = False
+    community_leaderboard_enabled: bool = False
+    community_clubs_enabled: bool = False
+
+    @property
+    def community_postgres_ready(self) -> bool:
+        """Readiness placeholder for the Kör 2 PostgreSQL cut-over (E09-R02).
+
+        The full readiness predicate is the E09-R02 round's job (it must
+        reach DB-level checks, not just URL syntax). This property answers
+        the narrower question that is actually decidable today: is the
+        configured ``database_url`` pointing at a PostgreSQL connection
+        rather than SQLite? SQLite URLs always start with ``sqlite`` (the
+        dev default, see ``database_url`` above), so the property is False
+        in development and becomes True once a deploy switches to a
+        ``postgresql+psycopg://…`` URL. Until then it gates the
+        ``community_*_enabled`` deployment decision without changing the
+        default of any individual flag.
+        """
+        return not self.database_url.startswith("sqlite")
+
     @model_validator(mode="before")
     @classmethod
     def _default_lab_flags_for_environment(cls, values):
