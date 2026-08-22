@@ -356,6 +356,7 @@ _FOLLOW_LIST_MAX_LIMIT = 200
 def get_followers(
     public_id: uuid.UUID,
     request: Request,
+    current_user: CurrentUser,
     cursor: str | None = Query(default=None),
     limit: int = Query(
         default=_FOLLOW_LIST_DEFAULT_LIMIT,
@@ -363,7 +364,15 @@ def get_followers(
         le=_FOLLOW_LIST_MAX_LIMIT,
     ),
 ) -> dict[str, object]:
-    """Return one cursor-paginated page of followers."""
+    """Return one cursor-paginated page of followers.
+
+    Authenticated — the JWT must be present and valid (the §F2
+    fix; the visibility filter that decides WHICH rows the caller
+    is allowed to see remains Kör 8 / Kör 13 scope, but
+    authentication is the router's own invariant — every other
+    endpoint in this router enforces it, and a GET without auth
+    is a hole regardless of what the body says).
+    """
     db_gen = _session_factory(request)
     db = next(db_gen)
     try:
@@ -388,6 +397,7 @@ def get_followers(
 def get_following(
     public_id: uuid.UUID,
     request: Request,
+    current_user: CurrentUser,
     cursor: str | None = Query(default=None),
     limit: int = Query(
         default=_FOLLOW_LIST_DEFAULT_LIMIT,
@@ -395,7 +405,12 @@ def get_following(
         le=_FOLLOW_LIST_MAX_LIMIT,
     ),
 ) -> dict[str, object]:
-    """Return one cursor-paginated page of profiles the user follows."""
+    """Return one cursor-paginated page of profiles the user follows.
+
+    Authenticated — see the docstring on ``get_followers`` for the
+    rationale (the §F2 fix: auth at the router layer; visibility
+    filtering at the policy layer, Kör 8 / Kör 13).
+    """
     db_gen = _session_factory(request)
     db = next(db_gen)
     try:

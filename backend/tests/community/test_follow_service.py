@@ -469,9 +469,21 @@ def test_swap_unique_constraint_breaks_a2(tmp_path, monkeypatch):
 
         errors: list[Exception] = []
 
+        # Barrier(2) — both threads must arrive here before either
+        # proceeds into ``service_follow``. Without this, the OS
+        # scheduler may serialize the two starts enough that the
+        # first thread commits before the second even opens a
+        # session, and the race window collapses. With the barrier,
+        # both writers enter the existence-check → INSERT window at
+        # (as close as Python can guarantee) the same instant.
+        # Deterministically produces two rows when the UNIQUE
+        # constraint is absent (the §6.1 valódi-sértés cell).
+        barrier = threading.Barrier(2)
+
         def writer():
             try:
                 with factory() as db:
+                    barrier.wait()
                     service_follow(
                         db,
                         follower_public_id=a_id,
@@ -1094,7 +1106,7 @@ def test_a7_router_followers_pagination_endpoint(client, session_factory):
     """A7 — GET /community/profiles/{id}/followers returns the
     cursor-paginated list of follower public_ids.
     """
-    owner_id, _ = _make_user_with_headers(
+    owner_id, owner_headers = _make_user_with_headers(
         session_factory, email="owner@s.test", user_id=1, visibility="public"
     )
     _bulk_follow(
@@ -1106,6 +1118,7 @@ def test_a7_router_followers_pagination_endpoint(client, session_factory):
     response = client.get(
         f"/community/profiles/{owner_id}/followers",
         params={"limit": 2},
+        headers=owner_headers,
     )
     assert response.status_code == 200, response.text
     body = response.json()
@@ -1118,6 +1131,7 @@ def test_a7_router_followers_pagination_endpoint(client, session_factory):
     response = client.get(
         f"/community/profiles/{owner_id}/followers",
         params={"limit": 2, "cursor": body["next_cursor"]},
+        headers=owner_headers,
     )
     assert response.status_code == 200
     body2 = response.json()
@@ -1125,3 +1139,53 @@ def test_a7_router_followers_pagination_endpoint(client, session_factory):
     assert body2["next_cursor"] is None, (
         "after 4 followers, the second page must terminate"
     )
+
+
+# F2 — get_followers / get_following MUST be authenticated. The
+# brief §3 "NINCS benne" list keeps the visibility filtering for
+# Kör 8 / Kör 13, but authentication (a valid JWT must be present)
+# is the router's own invariant — every other endpoint in this
+# router enforces it.
+
+
+def test_f2_get_followers_rejects_missing_authorization_header(client):
+    """F2 — GET /community/profiles/{id}/followers with no
+    ``Authorization`` header must return 401.
+    """
+    response = client.get(
+        "/community/profiles/00000000-0000-0000-0000-000000000001/followers"
+    )
+    assert (
+        response.status_code == 401
+    ), f"expected 401 without auth, got {response.status_code}: {response.text}"
+
+
+def test_f2_get_following_rejects_missing_authorization_header(client):
+    """F2 — GET /community/profiles/{id}/following with no
+    ``Authorization`` header must return 401.
+    """
+    response = client.get(
+        "/community/profiles/00000000-0000-0000-0000-000000000002/following"
+    )
+    assert (
+        response.status_code == 401
+    ), f"expected 401 without auth, got {response.status_code}: {response.text}"
+
+
+def test_f2_get_following_endpoint_authenticated_round_trip(client, session_factory):
+    """F2 — the same GET, with a valid JWT, returns 200 and the
+    expected page envelope (no visibility filter yet — that is
+    Kör 8 / Kör 13 scope; this test confirms the auth seam is the
+    only thing the router added).
+    """
+    owner_id, owner_headers = _make_user_with_headers(
+        session_factory, email="o-following@s.test", user_id=3, visibility="public"
+    )
+    response = client.get(
+        f"/community/profiles/{owner_id}/following",
+        headers=owner_headers,
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["public_ids"] == []
+    assert body["next_cursor"] is None
