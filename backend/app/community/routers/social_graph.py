@@ -45,6 +45,7 @@ from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
 from ..services.follow_service import (
+    FollowAlreadyExists,
     FollowRequestNotFound,
     SelfFollowNotAllowed,
     accept_follow_request,
@@ -137,6 +138,22 @@ def post_follow(
         except SelfFollowNotAllowed as exc:
             db.rollback()
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FollowAlreadyExists as exc:
+            # Rare race path: the service layer raised
+            # ``FollowAlreadyExists`` because the IntegrityError→re-read
+            # path in ``follow()`` could not find the would-be-winner
+            # row to return (§6 / ADR 0401 §6 — the documented rare
+            # outcome of a concurrent INSERT that lands between the
+            # rollback and the re-read). The truthful response is the
+            # same one we would return on a successful, idempotent
+            # retry: the caller is already following / has a pending
+            # request for this target. Treated as success (the §F4
+            # fix — previously a nyers 500-as ``str(exc)``).
+            db.rollback()
+            return {
+                "request_id": str(public_id),
+                "status": "following",
+            }
         return {
             "request_id": str(result.request_id),
             "status": result.status,

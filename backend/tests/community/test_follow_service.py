@@ -1189,3 +1189,52 @@ def test_f2_get_following_endpoint_authenticated_round_trip(client, session_fact
     body = response.json()
     assert body["public_ids"] == []
     assert body["next_cursor"] is None
+
+
+# F4 — the router's post_follow MUST catch ``FollowAlreadyExists``
+# (the rare race-outcome documented in follow_service.py §6 / ADR
+# 0401 §6) and translate it to the same success shape as an
+# idempotent retry. The pre-fix behaviour was a nyers 500 with the
+# raw ``str(IntegrityError)`` in the body.
+
+
+def test_f4_post_follow_translates_follow_already_exists_to_success(
+    client, session_factory, monkeypatch
+):
+    """F4 — ``post_follow`` returns 200 with ``status: following``
+    when the underlying service raises ``FollowAlreadyExists``.
+    """
+    a_id, headers_a = _make_user_with_headers(
+        session_factory, email="f4a@s.test", user_id=10, visibility="public"
+    )
+    b_id, _ = _make_user_with_headers(
+        session_factory, email="f4b@s.test", user_id=11, visibility="public"
+    )
+
+    # Replace the service-layer ``follow`` in the router module with
+    # a stub that always raises ``FollowAlreadyExists`` — the rare
+    # race path the §6 / ADR 0401 §6 documents.
+    from app.community.routers import social_graph as router_module
+
+    def _raise_follow_already_exists(*_args, **_kwargs):
+        from app.community.services.follow_service import FollowAlreadyExists
+
+        raise FollowAlreadyExists("simulated rare race outcome")
+
+    monkeypatch.setattr(router_module, "follow", _raise_follow_already_exists)
+
+    response = client.post(
+        f"/community/profiles/{b_id}/follow",
+        json={"idempotency_key": "f4-key"},
+        headers=headers_a,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "following", (
+        f"F4 violated — expected the FollowAlreadyExists race to be "
+        f"translated to 'following', got {body!r}"
+    )
+    # The id is the target profile's public_id (we don't have the
+    # would-be-winner row in this race outcome, but the response is
+    # shaped for the client to treat as a successful retry).
+    assert body["request_id"] == str(b_id)
