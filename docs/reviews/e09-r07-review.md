@@ -117,6 +117,31 @@ Teljes jelentés: `/home/ubuntu/ss-mm-e09-r07/docs/reviews/e09-r07-security-revi
 - A `test_swap_unique_constraint_breaks_a2` tartalmilag valódi próba (nem áltesztel) — az agent ezt "valódinak" ítélte a TARTALOM alapján; a saját, ISMÉTELT futtatásom fedte fel a DETERMINIZMUS-hiányt (F1), amit egy egyszeri agent-futtatás nem láthatott.
 - A Dart `delete()` hiányzó idempotency-key query-je → **ez a jelentés F3 lelete** (az agent MINOR-nak, "nem biztonságinak" minősítette; funkcionális kontraktus-törésként MAJOR-ra emeltem, mert a follow-lifecycle egy teljes ága end-to-end törne).
 
+## Javító kör 2 — CI-only lelet (`test/ui/ui_inventory_test.dart`)
+
+Az ELSŐ CI-dispatch (`full-gate.yml`, run `32602029738`, SHA `4d4eb74e`) a
+TELJES suite-tal PIROS lett — nem a kör saját tartalma miatt, hanem egy
+MEGLÉVŐ, a körön kívüli gate-teszt (`test/ui/ui_inventory_test.dart:14`)
+kemény kódolt production-screen-számlálója (`hasLength(66)`) avult el a kör
+saját, új `followers_screen.dart` fájla miatt (tényleges hossz **67** — a CI
+log explicit kiírta). Azonos mintázat, mint az E09-R06 F9 lelet.
+
+Ez a helyi gate-futtatásokban (izolált `/tmp` klón, csak a brief §7 célzott
+tesztjeivel) NEM volt látható — csak a CI TELJES suite-ja fedte fel. A brief
+`allowed_paths`-a §0.0.9 alatt SZŰKEN bővült erre az egy fájlra (a szám
+javítása egyetlen sor), és egy 2. javító kör (`7f2e348d`) zárta: `hasLength(66)`
+→ `hasLength(67)`, semmi más nem változott a fájlon (scope-audit OK, 1 changed
+path). A gate a fix2 klónjában a saját `test/ui/ui_inventory_test.dart`
+célzott futtatással ZÖLD.
+
+Új CI-dispatch a friss exact SHA-n (`7f2e348d`): `full-gate.yml` run
+`32602989308`, `router-ci.yml` run `32602992609` — eredmény lent.
+
 ## Merge-döntés
 
-Mind az 5 lelet (1 BLOCKER + 2 MAJOR + 1 MINOR + 1 NOTE) **ZÁRVA** a javító kör 1-ben (`222a6782`), függetlenül újramérve (kód, teszt, 15×-ös determinizmus, teljes gate). Nincs nyitott BLOCKER/MAJOR. **Verdikt: APPROVED.** Következő lépés: CI-dispatch (`tools/round-ci-plan.py` szerinti workflow) exact-SHA-n, majd zöld kapu esetén squash-merge (ADR 0052).
+Mind az 5 eredeti lelet (1 BLOCKER + 2 MAJOR + 1 MINOR + 1 NOTE) **ZÁRVA** a
+javító kör 1-ben (`222a6782`), függetlenül újramérve (kód, teszt, 15×-ös
+determinizmus, teljes gate). A CI-only 6. lelet (a screen-számláló) ZÁRVA a
+javító kör 2-ben (`7f2e348d`). Nincs nyitott BLOCKER/MAJOR. **Verdikt:
+APPROVED.** Következő lépés: a friss exact-SHA CI (`7f2e348d`) zöld
+lezárása után squash-merge (ADR 0052).
