@@ -1,13 +1,13 @@
 # E08-R27 — Review
 
 Brief: docs/rounds/e08-r27-gamification-accessibility-and-settings.md
-Diff: `git diff 355b508d..70ab7f3a` (pre-flight commit → implementer HEAD, branch `minimax/e08-r27-gamification-accessibility-and-settings`)
+Diff: `git diff 355b508d..7c511c90` (pre-flight commit → javító kör HEAD, branch `minimax/e08-r27-gamification-accessibility-and-settings`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-22
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (javító kör után, ld. „Javító kör" szakasz)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 2
+BLOCKER: 0 · MAJOR: 1 (FIXED) · MINOR: 1 (OPEN, follow-up) · NOTE: 2
 
 ## Gate-bizonyíték (saját kézzel, izolált klón)
 
@@ -88,7 +88,17 @@ generated/ignored** — minden változás az `allowed_paths`-on belül.
   ne találjon `presentation/`-re vagy `package:flutter/`-re mutató sort; a
   gate (`tools/round-gate.sh …`) 12/12 maradjon zöld a módosított hívási
   helyekkel.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`7c511c90`) — a `toRewardSummaryFeedback()` a
+  domainból eltűnt, a leképezés `gamificationFeedbackFor(GamificationPreferences)`
+  néven a `gamification_preferences_provider.dart`-ba (presentation réteg)
+  került. Saját kézzel újra-klónozva (`/tmp/review-e08-r27-fix`, HEAD
+  `7c511c90`) igazolva: `grep -n "^import" lib/features/gamification/domain/gamification_preferences.dart`
+  **0 találat** (a domain fájl importmentes); a hívási helyek
+  (`gamification_accessibility_test.dart:198,206,219,229,267`) a provider
+  szintű függvényt hívják. A teljes gate ÚJRA lefuttatva, izolált klónban:
+  format/analyze/12×12 teszt/51×51 teszt/architecture/secrets/l10n mind
+  zöld. Scope-audit (`tools/scope-audit.py`, bázis `355b508d`) → OK, 11
+  változott útvonal, 1 generated/ignored (a saját review-jelentés).
 
 ### F2 — MINOR — az A1/A2 „valódi-sértés próba" nem köti be ténylegesen a preferenciát a koordinátorba
 
@@ -159,8 +169,13 @@ a revideált listán szerepelnek).
   a gépi mérce, hanem a manuális review fogta meg.
 - UI↛plugin, secret-a-logban, mic/hálózat: nem érintett terület, nincs lelet.
 
-## Következő lépés
+## Javító kör (2026-08-22, ugyanaz a branch, commit `7c511c90`)
 
-Egy javító kör (`minimax`, ugyanaz a branch) az F1 leletlistával. F2/N1/N2
-nem blokkol — dokumentálva HANDOFF/LESSONS-ban a merge után, F2 kifejezetten
-a következő UI-bekötő kör (E13-R32) pre-flightjának szól.
+Egy MiniMax javító kör az F1 leletlistával indult; a fix a §0.0.1 brief-
+revízió kötelező javítását pontosan követte. Saját kézhez újra lefuttatott
+gate + scope-audit fent. F2/N1/N2 továbbra sem blokkol — a HANDOFF a merge
+után rögzíti, F2 kifejezetten a következő UI-bekötő kör (E13-R32)
+pre-flightjának szól.
+
+**Végső döntés: APPROVED.** BLOCKER/MAJOR nyitva: 0. A kör mehet CI-dispatchra
+és mergere.
