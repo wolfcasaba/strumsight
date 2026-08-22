@@ -542,5 +542,24 @@
     }
   },
   "gamificationHubOfflineReadyLabel": "Offline is elérhető",
-  "gamificationHubAchievementsTitle": "Eredmények"
+  "gamificationHubAchievementsTitle": "Eredmények",
+  "gamificationSettingsTitle": "Játékosítás",
+  "gamificationSettingsSubtitle": "Szabd testre az ünneplés-réteg viselkedését. Az előrehaladásod mindig megmarad.",
+  "gamificationSettingsIntensityTitle": "Ünneplés intenzitása",
+  "gamificationSettingsIntensityFullLabel": "Teljes",
+  "gamificationSettingsIntensityFullSemantics": "Ünneplés intenzitása: teljes",
+  "gamificationSettingsIntensitySubtleLabel": "Visszafogott",
+  "gamificationSettingsIntensitySubtleSemantics": "Ünneplés intenzitása: visszafogott",
+  "gamificationSettingsIntensitySilentLabel": "Csendes",
+  "gamificationSettingsIntensitySilentSemantics": "Ünneplés intenzitása: csendes",
+  "gamificationSettingsHapticsLabel": "Rezgés-visszajelzés",
+  "gamificationSettingsHapticsSemantics": "Rezgés-visszajelzés kapcsoló",
+  "gamificationSettingsSoundLabel": "Hang-visszajelzés",
+  "gamificationSettingsSoundSemantics": "Hang-visszajelzés kapcsoló",
+  "gamificationSettingsReduceMotionLabel": "Mozgás csökkentése",
+  "gamificationSettingsReduceMotionSemantics": "Mozgás csökkentése kapcsoló",
+  "gamificationSettingsNotificationsLabel": "Gyakorlás-emlékeztetők",
+  "gamificationSettingsNotificationsSemantics": "Gyakorlás-emlékeztetők kapcsoló",
+  "gamificationSettingsNotificationsHint": "Az emlékeztetők be- vagy kikapcsolása soha nem változtatja meg a tapasztalati pontjaidat, az eredményeidet vagy a szériádat.",
+  "gamificationSettingsProgressPreservedHint": "A főkönyv, a széria és a mastery kiértékelés tovább fut — az ünneplés-réteg kikapcsolása csak a látható jelet rejti el."
 }
