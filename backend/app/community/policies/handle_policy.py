@@ -61,12 +61,14 @@ RESERVED: frozenset[str] = frozenset(
         "api",
         "bot",
         "service",
-        # shape-reserved
+        # shape-reserved — every entry here MUST pass ``MIN_LEN``/
+        # ``MAX_LEN`` so the reserved check is reachable. Single-letter
+        # reserved words (``me``) are dropped because they can never be
+        # claimed anyway and would mask the length-rejection test.
         "null",
         "undefined",
         "none",
         "anonymous",
-        "me",
         "you",
         "everyone",
         "all",
