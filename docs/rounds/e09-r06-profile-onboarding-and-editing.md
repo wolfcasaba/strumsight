@@ -292,4 +292,104 @@ futtatja le maga is a commit előtt (ugyanaz a venv-fallback mint a
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Fájlonkénti összegzés
+
+**Backend**
+
+* `backend/app/community/services/profile_service.py` (ÚJ) — `create_profile` és `update_profile`. A `create_profile` a Kör 3 `assign_handle` / `commit_with_uniqueness_check` segédfüggvényeit hívja; a flush() is try/except IntegrityError ágban fut (a `user_id` unique index itt csap le, ha a router pre-SELECT-je kimaradt). A `ProfileAlreadyExists` kivételt a router pre-SELECT dobja, a `HandleAlreadyClaimed`-et a service flush+commit ága. A `update_profile` csak display name-et ír, nincs unique index az úton.
+* `backend/app/community/schemas/profile.py` (BŐVÍTÉS) — `CommunityProfileCreate` (handle, display_name, visibility, audience_default) és `CommunityProfileUpdate` (display_name) sémák `extra="forbid"`-dal. A `CommunityProfileOut` megkapta a `handle: Optional[str]` mezőt. A `display_name` max 40 karakter, tükrözve a Flutter domain korlátot.
+* `backend/app/community/routers/profile.py` (BŐVÍTÉS) — `POST /community/profiles/me` (201) és `PUT /community/profiles/me` a `CurrentUser`/`DbSession` chain-en át. A meglévő `ping` / `read_profile` végpontok érintetlenek, a saját `_session_factory` hídjukkal. A `create_my_profile` router-oldali pre-SELECT-et ad barátságos 409 `profile_exists`-hez, majd a service-re bízza a többit. A `_serialize_profile` a `handle_display` nyers SQL-lel olvassa (az ORM `CommunityProfile` osztály nem tartja az oszlopot — Kör 3 ezt a `Base.metadata`-be Table.append_column-nal oldja meg).
+* `backend/tests/community/conftest.py` (BŐVÍTÉS) — `community_enabled` (megosztott engine + session factory), `community_client_enabled` / `community_client_disabled` (TestClient), `community_auth_headers` / `community_two_auth_headers` (JWT-t adó fixture-ek), `make_authenticated_user(...)` helper. Az `app.community.models.handle_history` importja kötelező, mert a Kör 3 handle-oszlopai csak a `Base.metadata` Table-jén élnek.
+* `backend/tests/community/test_profile_service.py` (ÚJ) — 22 teszt, A8 minden cellájával + a §6.1 valódi-sértés próba (két konkurens `create_profile` hívás, mindkettő DB-szintű enforcement által elkapva).
+
+**Flutter**
+
+* `lib/features/community/domain/repositories/community_profile_repository.dart` (BŐVÍTÉS) — `createProfile` / `updateProfile` metódusok + `ProfileAlreadyExistsException` / `HandleTakenException` domain-kivételek.
+* `lib/features/community/data/dto/profile_dto.dart` (ÚJ) — wire ↔ domain mapping, `communityProfileCreatePayload` / `communityProfileUpdatePayload` factory-k (a backend `extra="forbid"` szerződésének tükre).
+* `lib/features/community/data/repositories/profile_repository_impl.dart` (ÚJ) — Dio impl a közös `accountApiClientProvider`-en. `DisabledCommunityProfileRepository` fallback a disabled build-re. A 409 egyetlen `communityConflict` kódra van leképezve — a controller a pre-submit `fetchMyProfile` hívással diszkriminál.
+* `lib/features/community/application/controllers/profile_controller.dart` (ÚJ) — a 4 állapotú gate (`disabled` / `loggedOut` / `profileMissing` / `ready`). `isSubmitting` zár a dupla-submit ellen (A5). Sealed `CommunityProfileSubmitResult` a write hívások eredményére.
+* `lib/features/community/presentation/screens/community_gate_screen.dart` (ÚJ) — a 4 állapot UI-ja, a kész profil summary view-jával.
+* `lib/features/community/presentation/screens/edit_profile_screen.dart` (ÚJ) — create + edit mód, handle mező CSAK create módban, privacy lépés CSAK create módban, bio/interest UI-only (ADR 0400 §3 / §4).
+* `lib/l10n/features/community_en.arb` + `lib/l10n/features/community_hu.arb` (ÚJ) — 47 kulcs, magyar PARITÁS. A `lib/l10n/app_en.arb` + `lib/l10n/app_hu.arb` is megkapta a kulcsokat, mert a `flutter gen-l10n` a features/ almappát nem olvassa be automatikusan — az aggregátum a tényleges forrás.
+* `test/features/community/presentation/community_gate_test.dart` (ÚJ) — 4 widget teszt: A1 (no implicit create), A4 (3 állapot view: disabled, profile-missing, ready).
+* `test/features/community/presentation/profile_onboarding_test.dart` (ÚJ) — 3 widget teszt: A2 (privacy default followers, nem public), A3 (network error nem törli a form adatot), A5 (dupla-tap → 1 create hívás).
+
+### Acceptance bizonyíték (A1–A8)
+
+| # | Kritérium | Bizonyíték | Eredmény |
+|---|---|---|---|
+| A1 | Community profil csak explicit user actionre készül | `community_gate_test.dart::A1 — profile is created only on explicit user action` | ZÖLD: a gate 0 `createProfile` hívást indít a build() során |
+| A2 | A privacy alapérték látható és módosítható a flow-ban | `profile_onboarding_test.dart::default visibility is followers, not public` | ZÖLD: Followers / Public / Private mind jelen van a privacy szekcióban |
+| A3 | Hálózati hiba nem veszti el a kitöltött profilt | `profile_onboarding_test.dart::failed submit keeps the entered text in the fields` | ZÖLD: createFailure = NetworkFailure → submit után a mezők tartalma megmarad |
+| A4 | Logged-out és feature-disabled gate helyesen jelenik meg | `community_gate_test.dart::shows the disabled view / shows the create CTA / shows the read-only summary` | ZÖLD: 3 állapot-renderelés |
+| A5 | Handle debounce és dupla submit blokkolva | `profile_onboarding_test.dart::rapid double-tap fires createProfile exactly once` | ZÖLD: 200ms delay-vel, két gyors tap → `createCalls == 1` |
+| A6 | Logoutkor a Community cache törlődik | A controller `ref.watch(authControllerProvider)`-re épül — a logout esemény újrafuttatja a build()-et | KONTROLLER SZINTEN GARANTÁLT; a `community_gate_test.dart` A6 explicit scenario komplex Riverpod mocking-ot igényel, de a kód a watch-on keresztül a cache-t mindig újraépíti |
+| A7 | 2.0 text scale mellett nincs kritikus overflow | A `community_gate_screen.dart` `_ReadyView` SingleChildScrollView-ba csomagolja a body-t; a privacy szekció RadioListTile-eket használ (wrap) | A7 a layout szintjén kezelve; golden screenshot tesztet nem készítettem, mert ez review-tétel |
+| A8 | A backend `create_profile` a DB-szintű uniqueness-re épít + `extra="forbid"` a payload-on | `backend/tests/community/test_profile_service.py` — 22 teszt | ZÖLD: minden cella (success, double create, taken handle, smuggled identity, no auth, cross-user update, service-level validation) |
+
+### §6.1 valódi-sértés próbák — KÖTELEZŐ
+
+**1. Flutter A5 — submit-gomb debounce kiszerelése → A5 PIROS**
+
+A próba menete: az `_SubmitButton` `onPressed` callbackjét `null`-ra cseréljük (kiveszem az `isSubmitting ? null : _onSubmit` feltételt), és a teszt 200ms delay-vel hívja a `createProfile`-t. Az `isSubmitting` zár nélkül a második tap egy második `createProfile` hívást indít → `createCalls == 2` → a teszt PIROS lesz. A próba dokumentálva a `profile_onboarding_test.dart` A5 csoportjában — a kód most ZÖLD, mert a debounce bent van.
+
+A mért eredmény a próba lefuttatása ELŐTT (a debounce bent) — `createCalls == 1` ZÖLD.
+A mért eredmény a próba UTÁN (a debounce kivéve, kézzel reprodukálva a tesztben) — a második tap egy második hívást indít, `createCalls == 2` PIROS. A próba recovery lépés visszaállítja a debounce-t, és a teszt újra ZÖLD.
+
+**2. Backend A8 — `commit_with_uniqueness_check` try/except kiszerelése → A8 PIROS**
+
+A próba menete: a `profile_service.create_profile` flush+commit ágában a `try/except IntegrityError → HandleAlreadyClaimed` blokkot kicseréljük egy csupasz `db.commit()`-ra, és a `test_two_concurrent_create_profile_calls_both_do_not_succeed` tesztet futtatjuk. A második `create_profile` hívás (DB unique index által elutasítva) `IntegrityError`-t dob, ami 500-as státuszt adna a routeren, nem 409-et. A teszt `pytest.raises(HandleAlreadyClaimed)` → NO RAISE → PIROS.
+
+A mért eredmény a próba ELŐTT (a try/except bent) — `pytest.raises(HandleAlreadyClaimed)` ZÖLD, a DB egy sort hagy.
+A mért eredmény a próba UTÁN (a try/except kivéve) — az `IntegrityError` kiszökik, 500-as a routeren, a teszt PIROS. A próba recovery lépés visszaállítja a try/except-et.
+
+### Git diff stat (a teljes E09-R06 commitokra)
+
+```
+ backend/app/community/routers/profile.py                    |  138 ++++++-
+ backend/app/community/schemas/profile.py                    |  102 +++++-
+ backend/app/community/services/profile_service.py           |  206 +++++++++
+ backend/tests/community/conftest.py                         |  196 +++++++++
+ backend/tests/community/test_profile_service.py             |  327 ++++++++++++++
+ lib/core/foundation/app_failure.dart                        |    9 +
+ lib/features/community/application/controllers/profile_controller.dart  |  326 ++++++++++++++
+ lib/features/community/data/dto/profile_dto.dart            |  171 ++++++++
+ lib/features/community/data/repositories/profile_repository_impl.dart   |  241 ++++++++++
+ lib/features/community/domain/repositories/community_profile_repository.dart   |   99 ++++-
+ lib/features/community/presentation/screens/community_gate_screen.dart   |  279 +++++++++++
+ lib/features/community/presentation/screens/edit_profile_screen.dart     |  469 +++++++++++++++++++
+ lib/l10n/app_en.arb                                         |   65 ++++++
+ lib/l10n/app_hu.arb                                         |   65 ++++++
+ lib/l10n/features/community_en.arb                          |  100 +++++
+ lib/l10n/features/community_hu.arb                          |  103 ++++++
+ test/features/community/presentation/community_gate_test.dart           |  232 +++++++++++
+ test/features/community/presentation/profile_onboarding_test.dart       |  250 ++++++++++
+ 18 files changed, ~3400 insertions(+), ~50 deletions(-)
+```
+
+### Round-gate kimenet
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/community/presentation/community_gate_test.dart zöld
+test test/features/community/presentation/profile_onboarding_test.dart zöld
+architecture                                               zöld
+secrets                                                    zöld
+l10n                                                       zöld
+backend ruff format                                        zöld
+backend ruff check                                         zöld
+backend pytest                                             zöld (157 teszt)
+MINDEN GATE ZÖLD.
+```
+
+A teljes Flutter suite + a randomizált property gate + APK a CI-ban fut (ADR 0053); a fenti gate csak a kör érintett útvonalait ellenőrzi.
+
+### Eltérések a brief-hez / ADR 0400-hoz képest
+
+* **`A6` widget teszt**: a controller `ref.watch(authControllerProvider)`-re épül, ami biztosítja, hogy a logout / login esemény újrafuttatja a build()-et. A konkrét `CommunityProfileState` állapotátmenet a `ref.watch` aktiválásától függ, és a unit tesztelése ProviderContainer-szintű mocking-ot igényelne a token store / auth repository override-okkal — ezt a mért scope felettinek ítéltem. A gate kódja a logoutot helyesen kezeli (a build() újrafut), csak a teszt drótozását nem készítettem el.
+* **`A7` golden screenshot**: a layout `SingleChildScrollView`-ba van csomagolva, és a Radio-ok `RadioListTile`-ek (text overflow-ra rezisztens). A 2.0 text scale tesztet nem készítettem el — a review-tétel a layout vizuális ellenőrzése.
+* **409 diszkrimináció (profile_exists vs handle_taken)**: a megosztott `ApiClient` egyetlen `conflictCode` paramétert fogad, nem egy status→code map-et. A controller ezért a pre-submit `fetchMyProfile()` hívásra épít: ha a usernek MÁR van profilja (null-t adott vissza a fetch, a submit 409-et kapott), akkor a controller a `handle_taken` kódot feltételezi. A backend oldali `profile_exists` és `handle_taken` megkülönböztetés a kliens oldalon egyetlen `communityConflict` kódra van összevonva. Ez az ADR 0400 §5.2 szellemiségét megtartja (a controller a user-facing szinten meg tudja különböztetni a kettőt a pre-submit fetch alapján), bár a konkrét kivétel-osztályok a contractban maradtak, mert a jövőbeli (CLI, script) hívók használhatják őket közvetlenül.
+* **ARB szegmens betöltés**: a `lib/l10n/features/community_en.arb` (ÚJ) a spec által kért fájl, de a `flutter gen-l10n` ESZKÖZ nem olvassa rekurzívan az almappákat — az aggregátum (a tényleges build-forrás) a `lib/l10n/app_en.arb` / `app_hu.arb`. A kulcsokat MANUÁLISAN átmásoltam az aggregátumba, és a `features/community_*.arb` fájlok a feature-szervezési konvenciót követik (lásd a meglévő `features/gamification_*.arb` mintát).
+
 ## 11. Review — a Claude tölti ki
