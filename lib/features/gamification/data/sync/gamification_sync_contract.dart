@@ -44,7 +44,7 @@ final class SyncReceipt {
 
 /// An immutable, ordered set of receipts in the contract envelope shape.
 final class SyncLedgerEnvelope {
-  const SyncLedgerEnvelope({required List<SyncReceipt> receipts})
+  SyncLedgerEnvelope({required List<SyncReceipt> receipts})
     : receipts = List<SyncReceipt>.unmodifiable(receipts);
 
   final List<SyncReceipt> receipts;

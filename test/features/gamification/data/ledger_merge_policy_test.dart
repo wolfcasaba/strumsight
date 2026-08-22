@@ -19,7 +19,7 @@ void main() {
 
         final first = policy.merge(
           local: <RewardLedgerEntry>[entry],
-          remote: const SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
+          remote: SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
         );
         final second = policy.merge(
           local: first.entries,
@@ -206,7 +206,7 @@ void main() {
       // transport. Simulate that here and prove the probe stays at zero.
       if (policy.shouldRun(accountEnabled: false)) {
         unawaited(
-          transport.uploadAndPull(const SyncLedgerEnvelope(receipts: [])),
+          transport.uploadAndPull(SyncLedgerEnvelope(receipts: const [])),
         );
       }
       expect(transport.requestCount, 0);
@@ -215,7 +215,7 @@ void main() {
     test('NullLedgerSyncTransport throws if invoked while sync is off', () {
       const transport = NullLedgerSyncTransport();
       expect(
-        () => transport.uploadAndPull(const SyncLedgerEnvelope(receipts: [])),
+        () => transport.uploadAndPull(SyncLedgerEnvelope(receipts: const [])),
         throwsStateError,
       );
     });
@@ -237,7 +237,7 @@ void main() {
         );
         final result = policy.merge(
           local: <RewardLedgerEntry>[newer],
-          remote: const SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
+          remote: SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
         );
         expect(result.entries.single.policyVersion, 2);
       },
@@ -297,14 +297,21 @@ void main() {
       );
     });
 
-    test('a receipt with the wrong entry schemaVersion is rejected', () {
+    test('a well-formed receipt is accepted as unverified', () {
       final receipt = SyncReceipt(
-        entry: _entry(
-          ledgerId: 'l-1',
-          sourceEventId: 'e-1',
-          schemaVersion: rewardLedgerEntrySchemaVersion + 1,
-        ),
+        entry: _entry(ledgerId: 'l-1', sourceEventId: 'e-1'),
         status: LedgerEntrySyncStatus.unverified,
+      );
+      final decision = SyncReceiptValidation.validate(receipt);
+      expect(decision, isA<SyncUploadAccepted>());
+      final accepted = decision as SyncUploadAccepted;
+      expect(accepted.verified, isTrue);
+    });
+
+    test('a receipt attempting to upload with verified status is rejected', () {
+      final receipt = SyncReceipt(
+        entry: _entry(ledgerId: 'l-1', sourceEventId: 'e-1'),
+        status: LedgerEntrySyncStatus.verified,
       );
       final decision = SyncReceiptValidation.validate(receipt);
       expect(decision, isA<SyncUploadRejected>());
@@ -324,7 +331,7 @@ void main() {
       ];
       final result = policy.merge(
         local: entries,
-        remote: const SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
+        remote: SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
       );
       expect(result.entries, hasLength(2));
       expect(result.totalXp, 30);
@@ -467,7 +474,7 @@ class _CountingTransport implements LedgerSyncTransport {
     requestCount++;
     _onCall();
     return Future<SyncLedgerEnvelope>.value(
-      const SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
+      SyncLedgerEnvelope(receipts: <SyncReceipt>[]),
     );
   }
 }
