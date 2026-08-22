@@ -1023,7 +1023,7 @@ import 'package:flutter/widgets.dart';
         ),
         <String>['cursor_page.dart contains "DateTime.now("'],
       );
-    );
+    });
   });
 
   group('community is reachable only through public.dart (E09-R05)', () {
@@ -1047,8 +1047,7 @@ import 'package:flutter/widgets.dart';
       expect(offenders, isEmpty, reason: offenders.join('\n'));
     });
 
-    test('the boundary detector accepts the community public.dart barrel',
-        () {
+    test('the boundary detector accepts the community public.dart barrel', () {
       const allowedImport =
           "import 'package:strumsight/features/community/public.dart';";
 
@@ -1061,8 +1060,7 @@ import 'package:flutter/widgets.dart';
       );
     });
 
-    test('the boundary detector rejects a direct community internal import',
-        () {
+    test('the boundary detector rejects a direct community internal import', () {
       const directImport =
           "import 'package:strumsight/features/community/domain/entities/community_post.dart';";
 
@@ -1403,10 +1401,7 @@ List<String> _forbiddenCommunityDomainMarkerOffenders(
 /// NOT the `community/public.dart` barrel. Mirrors
 /// `_forbiddenGamificationInternalImports` for the Community side
 /// (A5, brief §6).
-List<String> _forbiddenCommunityInternalImports(
-  String path,
-  String source,
-) {
+List<String> _forbiddenCommunityInternalImports(String path, String source) {
   const publicMarker = 'community/public.dart';
   final withoutComments = _withoutTrivia(source, maskStrings: false);
   final importMatches = _dartDirectiveUri.allMatches(withoutComments);

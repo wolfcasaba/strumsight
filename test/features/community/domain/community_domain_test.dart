@@ -20,19 +20,6 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:strumsight/features/community/domain/entities/community_club.dart';
-import 'package:strumsight/features/community/domain/entities/community_comment.dart';
-import 'package:strumsight/features/community/domain/entities/community_post.dart';
-import 'package:strumsight/features/community/domain/entities/community_profile.dart';
-import 'package:strumsight/features/community/domain/entities/community_reaction.dart';
-import 'package:strumsight/features/community/domain/entities/community_challenge.dart';
-import 'package:strumsight/features/community/domain/entities/notification_item.dart';
-import 'package:strumsight/features/community/domain/policies/community_audience.dart';
-import 'package:strumsight/features/community/domain/value_objects/audience.dart';
-import 'package:strumsight/features/community/domain/value_objects/community_handle.dart';
-import 'package:strumsight/features/community/domain/value_objects/content_id.dart';
-import 'package:strumsight/features/community/domain/value_objects/cursor_page.dart';
-import 'package:strumsight/features/community/domain/value_objects/public_user_id.dart';
 import 'package:strumsight/features/community/public.dart';
 
 void main() {
@@ -113,7 +100,7 @@ void main() {
           authorId: _sampleUserId(),
           audience: CommunityAudience.public,
           body: null,
-          artifact: const UnfilledCommunityShareArtifact(),
+          artifact: UnfilledCommunityShareArtifact(),
           createdAt: DateTime.utc(2026),
           moderationState: ModerationState.visible,
           counts: CommunityPostCounts(
@@ -137,7 +124,7 @@ void main() {
           authorId: _sampleUserId(),
           audience: CommunityAudience.public,
           body: 'x' * 5000,
-          artifact: const UnfilledCommunityShareArtifact(),
+          artifact: UnfilledCommunityShareArtifact(),
           createdAt: DateTime.utc(2026),
           moderationState: ModerationState.visible,
           counts: CommunityPostCounts(
@@ -561,19 +548,3 @@ PublicUserId _sampleUserId() =>
 
 ContentId _sampleContentId() =>
     ContentId('01927fa3-7f7b-7d3c-9b2a-aabbccddee01');
-
-CommunityPost _buildSamplePost() => CommunityPost(
-  id: _sampleContentId(),
-  authorId: _sampleUserId(),
-  audience: CommunityAudience.public,
-  body: 'sample',
-  artifact: const UnfilledCommunityShareArtifact(),
-  createdAt: DateTime.utc(2026),
-  moderationState: ModerationState.visible,
-  counts: CommunityPostCounts(
-    reactionCount: 0,
-    commentCount: 0,
-    bookmarkCount: 0,
-  ),
-  viewerState: const CommunityViewerPostState.empty(),
-);

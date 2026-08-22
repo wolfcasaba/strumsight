@@ -21,8 +21,6 @@
 library;
 
 final class CursorPage {
-  const CursorPage._(this.cursor, this.isInitial);
-
   /// The empty / first-request cursor page. The Kör 6+ repository
   /// returns this for a list that was never paged, before the first
   /// server call.

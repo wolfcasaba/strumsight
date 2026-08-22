@@ -143,12 +143,18 @@ abstract base class CommunityShareArtifact {
 /// have a concrete value while Kör 10's real subtypes land. Its
 /// `schemaVersion == 0` lets the data layer recognise it as
 /// "unfilled" without an additional nullable flag.
+///
+/// The constructor is intentionally non-`const` because Dart's
+/// `DateTime.utc` is a factory (not a const constructor), and the
+/// shared sentinel epoch therefore must be computed at runtime.
 base class UnfilledCommunityShareArtifact extends CommunityShareArtifact {
-  const UnfilledCommunityShareArtifact()
-    : super(schemaVersion: 0, sourceId: '', createdAt: _epoch);
+  UnfilledCommunityShareArtifact()
+    : super(
+        schemaVersion: 0,
+        sourceId: '',
+        createdAt: DateTime.utc(1970, 1, 1),
+      );
 }
-
-final DateTime _epoch = DateTime.utc(1970, 1, 1);
 
 /// A single Community post.
 ///
