@@ -61,6 +61,87 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E08-R28 KÉSZ — Ledger sync contract, merge és verified státusz — PR #406, squash `571981b7` (2026-08-22)
+
+Offline-first, duplikációmentes szinkron-szerződés a jövőbeli fiók- és
+közösségi (Epic 9) használathoz — a legfontosabb szabály: **a szerver soha
+nem fogad el kliens-oldali összesített XP-t**. ÚJ:
+`lib/features/gamification/data/sync/{gamification_sync_contract,ledger_merge_policy}.dart`
+(verziózott nyugta-alapú fel-/letöltés, összefésülés kettős dedup-kulccsal —
+`ledgerId` ÉS `sourceEventId`), `backend/app/gamification/{schemas,service}.py`
+(a szerver saját maga összegez, `totalXp` mező NINCS a bemeneten). ADR
+[`0394`](docs/adr/0394-ledger-sync-contract-and-merge.md) — a brief előre
+kiosztott `0319`-e stale volt (a `reserve-adr` foglaló `0394`-et adott,
+ugyanaz a minta, mint az E08-R27 stale `0318`-ja).
+
+A dedup-kulcs kettőssége a lényeg: csak `ledgerId`-ra dedupolás
+duplikálna (két eszköz, két azonosító, ugyanaz az esemény), csak
+`sourceEventId`-re dedupolás adatvesztene (két legitim, eltérő eseményű
+nyugta ütköző azonosítóval összeolvadna). **Kötelező valódi-sértés próba
+saját kézzel megismételve:** a `_collapseGroup` (cross-device
+sourceEventId-összefésülés) eltávolítása a TÉNYLEGES
+`LedgerMergePolicy.merge`-ből 2/20 tesztet pirosra váltott (A1 idempotencia
++ a §6.1 „on threshold" cella) — pontosan az implementer állítása szerint;
+visszaállítva, 20/20 zöld.
+
+**Egy javító kör, F1 MAJOR + F2 MINOR, mindkettő a reviewer saját kezű
+mérésével fedve fel, nem az implementer önbevallásából:**
+
+- **F1 (MAJOR, javítva):** a Dart `encodeUpload()` és a backend
+  `ReceiptUpload` NEM ugyanazt a wire-alakot beszélték — a Dart minden
+  nyugtát `{'schemaVersion':…, 'receipt': {…, 'status':…}}` beágyazásban
+  küldött, a backend LAPOS `ReceiptUpload` listát várt. Saját kézzel,
+  pydantic `model_validate`-tel igazolva: a Dart kimenet a backend modellen
+  8 validációs hibát adott. A kör saját deklarált célja egy "szerződés" volt
+  — a két fél nem ugyanazt beszélte, holott mindkettő EBBEN a körben
+  készült. Javítás: a Dart-oldal a backend lapos alakjához igazodott
+  (`totalXp` és `status` NINCS a wire-en), plusz ÚJ, kétoldali teszt: a Dart
+  oldalon a TÉNYLEGES `encodeUpload()` kimenet kulcsait ellenőrzi, a
+  backend oldalon egy kézzel felírt, a Dart kimenetet tükröző fixture-t old
+  fel elfogadással.
+- **F2 (MINOR, javítva):** nincs `max_length` a `ledgerId`/`sourceEventId`/
+  `receipts` mezőkön (saját kézzel igazolva: 1M karakteres id és 100k elemű
+  lista is elfogadásra került) — látens DoS egy jövőbeli, bekötött útvonalon.
+  Javítás: `max_length=256`/`500`, négy határ-teszttel (fölötte/rajta mindkét
+  oldalon).
+- Köztes tooling-epizód (nem lelet): az első javító-kör futás közben az
+  implementer egy ÜRES helyi `backend/.venv`-et hozott létre (a
+  `pip install`-t helyesen blokkolta az `implementer_guard`), ami
+  beárnyékolta a `tools/round-gate.sh` már meglévő, működő fallback-ját a
+  közös `$HOME/music-theory/backend/.venv`-re — emiatt `stopped`-ot
+  jelzett. Az orchesztrátor törölte a lokális, üres venv-et (gitignore-olt,
+  önmagától létrehozott artefaktum), és egy rövid resume-prompttal
+  folytatta a kört — a tényleges F1/F2 kódjavítások érintetlenek maradtak.
+
+Dedikált biztonsági review (`risk = "high"`, `security-reviewer` agent):
+**PASS, 0 CRITICAL/BLOCKER**. Egy látens (nem blokkoló) MAJOR-t is felszínre
+hozott N1-ként: a `verified` ma kizárólag séma-érvényességet jelent, XP
+felső korlát vagy policy-újraszámolás NÉLKÜL — nincs élő fogyasztó, ami ma
+bizalmi jelzésként olvasná, de a jövőbeli router-kötő körnek explicit gátat
+kell szabnia, mielőtt bármilyen felület `verified`-et bizalmi jelzésként
+mutatna. Review: [`docs/reviews/e08-r28-review.md`](docs/reviews/e08-r28-review.md),
+[`docs/reviews/e08-r28-security.md`](docs/reviews/e08-r28-security.md).
+
+Mérce: `tools/round-gate.sh
+test/features/gamification/data/ledger_merge_policy_test.dart` +
+`python3 -m pytest backend/tests/test_gamification_ledger.py -q` — **MINDEN
+GATE ZÖLD** (9 lépés, 22 Dart + 15 backend teszt), javítás előtt és után is
+SAJÁT kézzel, izolált klónból (GitHub originből) reprodukálva. Scope-audit
+mindkétszer OK. A kör alatt a `main` egyszer mozdult (E09 round-brief batch,
+PR #405, `docs/rounds/e09-*` + `pipeline-queue.tsv`, diszjunkt fájlkör) —
+`merge --no-ff` + teljes CI-újradispatch a §0.3 szerint. Exact `dda4534b`:
+Full Gate [32565070603](https://github.com/wolfcasaba/strumsight/actions/runs/32565070603)
++ Router CI [32565071642](https://github.com/wolfcasaba/strumsight/actions/runs/32565071642)
+success; post-merge célzott gate + backend pytest a friss `main`-en
+önállóan is zöld. Ez a kör NEM köti be a HTTP-végpontot (router mounting) —
+a `backend/app/gamification/` router-szintű regisztrációja egy jövőbeli
+kör dolga. Pontos következő E08 kör: **E08-R30 — Epic 08 migráció,
+regresszió és lezárás** (queue-ban `minimax`) — az **E08-R29** (Integritás,
+analytics, balance) `hold`-on marad; a queue-scan a legelső `pending` sort
+választja, ez a §0.3-nál mérten `E08-R30`, nem az újonnan batch-elt E09-R01
+(annak ellenére, hogy fájl-sorrendben előrébb ér az E09-batch — az E08-R30
+sora korábbi a fájlban).
+
 ## ✅ E08-R27 KÉSZ — Gamification akadálymentesség és beállítások — PR #404, squash `db6293f4` (2026-08-22)
 
 A teljes gamifikációs réteg MOST már kikapcsolható, hozzáférhető és nem
@@ -4237,6 +4318,25 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-22):** `main` @ `571981b7` — E08-R28 Ledger
+sync contract és merge, PR
+[#406](https://github.com/wolfcasaba/strumsight/pull/406), squash-merge.
+Implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5. Egy javító
+kör (F1 MAJOR — a Dart `gamification_sync_contract.dart` kódoló és a
+backend `schemas.py` dekóder nem ugyanazt a wire-alakot beszélte, saját
+kézzel a Dart kimenetet a pydantic modellen keresztülfuttatva mérve; F2
+MINOR — hiányzó `max_length` korlát, látens DoS; mindkettő javítva,
+review: `docs/reviews/e08-r28-review.md` APPROVED +
+`docs/reviews/e08-r28-security.md` PASS). A kör alatt a `main` egyszer
+mozdult (E09 round-brief batch, PR #405, diszjunkt fájlkör) — `merge --no-ff`
++ teljes CI-újradispatch a kombinált HEAD-en. Exact `dda4534b`: Full Gate
+32565070603 + Router CI 32565071642 success; post-merge célzott gate a
+friss `main`-en önállóan is zöld (Dart 6/6 + backend pytest 15/15). ADR
+0394 (a brief előre kiosztott `0319`-e stale volt). Következő: **E08-R30**
+(Epic 08 migráció, regresszió és lezárás) — az **E08-R29** (Integritás,
+analytics, balance) `hold`-on marad; a queue-scan a legelső `pending` sort
+választja, ami a fájlban E08-R30, korábbi mint a most batch-elt E09-R01.
+
 **Aktuális állapot (2026-08-22):** `main` @ `db6293f4` — E08-R27
 Gamification accessibility és settings, PR
 [#404](https://github.com/wolfcasaba/strumsight/pull/404), squash-merge.
@@ -4806,6 +4906,18 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R28 — Ledger sync contract és merge** (PR
+[#406](https://github.com/wolfcasaba/strumsight/pull/406), squash `571981b7`,
+[ADR 0394](docs/adr/0394-ledger-sync-contract-and-merge.md)). Offline-first,
+duplikációmentes főkönyv-szinkron szerződés; a szerver soha nem fogad el
+kliens-oldali összesített XP-t; unió-alapú összefésülés `ledgerId` +
+`sourceEventId` kettős dedup-kulccsal; `unverified`/`verified` szerver-
+autoritatív szétválasztás. Egy javító kör (F1 MAJOR wire-shape mismatch a
+Dart-kódoló és a backend-dekódoló között + F2 MINOR hiányzó `max_length`
+korlát, mindkettő javítva; review APPROVED, dedikált biztonsági review
+PASS). Exact `dda4534b`: Full Gate 32565070603 + Router CI 32565071642
+success. Részletesen a fejléc ✅-blokkban.
 
 **E08-R26 — Cross-feature gamification integráció** (PR
 [#403](https://github.com/wolfcasaba/strumsight/pull/403), squash `ea2e22a4`,
