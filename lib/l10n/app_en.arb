@@ -1282,7 +1282,7 @@
     }
   },
   "gamificationHubLatestResultTitle": "Latest measured session",
-  "gamificationHubLevelBadgeLabel": "Skill mastery — Level {level}",
+  "gamificationHubLevelBadgeLabel": "Level {level}",
   "@gamificationHubLevelBadgeLabel": {
     "placeholders": {
       "level": {
@@ -1290,7 +1290,7 @@
       }
     }
   },
-  "gamificationHubLevelBadgeSemantics": "Skill mastery level {level}. {title}. Measured skill, not experience points.",
+  "gamificationHubLevelBadgeSemantics": "Level {level}. {title}. Level is derived from experience points.",
   "@gamificationHubLevelBadgeSemantics": {
     "placeholders": {
       "level": {
@@ -1330,8 +1330,8 @@
     }
   },
   "gamificationHubQuestsTitle": "Active quests",
-  "gamificationHubSkillSectionBody": "Skill mastery is unlocked by measured evidence — never by experience points alone.",
-  "gamificationHubSkillSectionTitle": "Skill mastery",
+  "gamificationHubSkillSectionBody": "Your level is derived from your experience points — see the components below.",
+  "gamificationHubSkillSectionTitle": "Your level",
   "gamificationHubStreakSummary": "{count, plural, =0{No rhythm today} =1{1 day of rhythm} other{{count} days of rhythm}}",
   "@gamificationHubStreakSummary": {
     "placeholders": {
@@ -1383,11 +1383,11 @@
       }
     }
   },
-  "gamificationLevelDetailCurrentBody": "Skill mastery is locked in at this level. The level only ever rises.",
+  "gamificationLevelDetailCurrentBody": "Your current level. It is derived from experience points and only ever rises.",
   "gamificationLevelDetailCurrentTitle": "Current level",
   "gamificationLevelDetailHowXpWorksBody": "Every measured session contributes five experience-point components. They reward participation, never skill.",
   "gamificationLevelDetailHowXpWorksTitle": "How experience points work",
-  "gamificationLevelDetailNextBody": "Experience points move the slider; skill mastery only crosses when measured evidence supports it.",
+  "gamificationLevelDetailNextBody": "Experience points move the slider toward the next level — there is no separate skill gate.",
   "gamificationLevelDetailNextTitle": "Next level",
   "gamificationLevelDetailSemantics": "Level details for level {level}.",
   "@gamificationLevelDetailSemantics": {

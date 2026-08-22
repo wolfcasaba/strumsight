@@ -371,13 +371,13 @@
     }
   },
   "gamificationHubTitle": "Haladásod",
-  "gamificationHubLevelBadgeLabel": "Tudásszint — {level}. szint",
+  "gamificationHubLevelBadgeLabel": "{level}. szint",
   "@gamificationHubLevelBadgeLabel": {
     "placeholders": {
       "level": {"type": "int"}
     }
   },
-  "gamificationHubLevelBadgeSemantics": "Tudásszint {level}. {title}. Mért tudás, nem tapasztalati pont.",
+  "gamificationHubLevelBadgeSemantics": "{level}. szint. {title}. A szint a tapasztalati pontokból adódik.",
   "@gamificationHubLevelBadgeSemantics": {
     "placeholders": {
       "level": {"type": "int"},
@@ -470,8 +470,8 @@
   "gamificationHubOpenLevelDetailSemantics": "Nyisd meg a szint részleteit, és tanuld meg, hogyan működnek a tapasztalati pontok.",
   "gamificationHubXpSectionTitle": "Tapasztalati pontok",
   "gamificationHubXpSectionBody": "A tapasztalati pont a részvételt jutalmazza: minden mért alkalom öt összetevővel járul hozzá. Soha nem méri közvetlenül a tudást.",
-  "gamificationHubSkillSectionTitle": "Tudásszint",
-  "gamificationHubSkillSectionBody": "A tudásszintet mért bizonyíték oldja fel — soha nem kizárólag tapasztalati pont.",
+  "gamificationHubSkillSectionTitle": "A te szinted",
+  "gamificationHubSkillSectionBody": "A szinted a tapasztalati pontjaidból adódik — lásd lent az összetevőket.",
   "gamificationLevelDetailTitle": "{level}. szint",
   "@gamificationLevelDetailTitle": {
     "placeholders": {
@@ -485,9 +485,9 @@
     }
   },
   "gamificationLevelDetailCurrentTitle": "Jelenlegi szint",
-  "gamificationLevelDetailCurrentBody": "A tudásszint ezen a szinten rögzül. A szint csak emelkedhet.",
+  "gamificationLevelDetailCurrentBody": "A jelenlegi szinted. A tapasztalati pontokból adódik, és csak emelkedhet.",
   "gamificationLevelDetailNextTitle": "Következő szint",
-  "gamificationLevelDetailNextBody": "A tapasztalati pont mozgatja a csúszkát; a tudásszint csak mért bizonyíték esetén lép át.",
+  "gamificationLevelDetailNextBody": "A tapasztalati pontok mozgatják a csúszkát a következő szint felé — nincs külön tudás-kapu.",
   "gamificationLevelDetailXpProgressLabel": "{xp} / {total} tapasztalati pont ezen a szinten",
   "@gamificationLevelDetailXpProgressLabel": {
     "placeholders": {

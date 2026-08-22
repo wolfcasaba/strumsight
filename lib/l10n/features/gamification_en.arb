@@ -371,13 +371,13 @@
     }
   },
   "gamificationHubTitle": "Your progression",
-  "gamificationHubLevelBadgeLabel": "Skill mastery — Level {level}",
+  "gamificationHubLevelBadgeLabel": "Level {level}",
   "@gamificationHubLevelBadgeLabel": {
     "placeholders": {
       "level": {"type": "int"}
     }
   },
-  "gamificationHubLevelBadgeSemantics": "Skill mastery level {level}. {title}. Measured skill, not experience points.",
+  "gamificationHubLevelBadgeSemantics": "Level {level}. {title}. Level is derived from experience points.",
   "@gamificationHubLevelBadgeSemantics": {
     "placeholders": {
       "level": {"type": "int"},
@@ -470,8 +470,8 @@
   "gamificationHubOpenLevelDetailSemantics": "Open the level details and learn how experience points work.",
   "gamificationHubXpSectionTitle": "Experience points",
   "gamificationHubXpSectionBody": "Experience points reward participation: every measured session contributes five components. They never measure skill directly.",
-  "gamificationHubSkillSectionTitle": "Skill mastery",
-  "gamificationHubSkillSectionBody": "Skill mastery is unlocked by measured evidence — never by experience points alone.",
+  "gamificationHubSkillSectionTitle": "Your level",
+  "gamificationHubSkillSectionBody": "Your level is derived from your experience points — see the components below.",
   "gamificationLevelDetailTitle": "Level {level}",
   "@gamificationLevelDetailTitle": {
     "placeholders": {
@@ -485,9 +485,9 @@
     }
   },
   "gamificationLevelDetailCurrentTitle": "Current level",
-  "gamificationLevelDetailCurrentBody": "Skill mastery is locked in at this level. The level only ever rises.",
+  "gamificationLevelDetailCurrentBody": "Your current level. It is derived from experience points and only ever rises.",
   "gamificationLevelDetailNextTitle": "Next level",
-  "gamificationLevelDetailNextBody": "Experience points move the slider; skill mastery only crosses when measured evidence supports it.",
+  "gamificationLevelDetailNextBody": "Experience points move the slider toward the next level — there is no separate skill gate.",
   "gamificationLevelDetailXpProgressLabel": "{xp} of {total} experience points in this level",
   "@gamificationLevelDetailXpProgressLabel": {
     "placeholders": {

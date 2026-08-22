@@ -212,6 +212,71 @@ void main() {
       expect(badge.runtimeType, isNot(equals(xp.runtimeType)));
       expect(findRuntimeCardinality(badge), isNot(findRuntimeCardinality(xp)));
     });
+
+    testWidgets(
+      'content probe — LevelBadge label and semantics must not mislabel the '
+      'XP-derived level as skill mastery (regression guard for review F1)',
+      (tester) async {
+        // F1 (review CHANGES REQUIRED) caught the badge claiming "Skill
+        // mastery — Level N" and "Measured skill, not experience points"
+        // while its only input was the XP-derived `currentLevel`. This
+        // probe asserts the badge's RENDERED content so a future regression
+        // that restores the false claim turns this cell red.
+        await _pumpHub(
+          tester,
+          profile: _profile(totalXp: 60),
+          activeQuestCount: 1,
+          streakCurrentDays: 1,
+          masteryUnlockedCount: 1,
+          inboxUnseenCount: 1,
+        );
+
+        final badgeLabel = tester
+            .widget<Text>(find.byKey(const Key('level-badge-label')))
+            .data!;
+        final enL10n = _english();
+        expect(badgeLabel, equals(enL10n.gamificationHubLevelBadgeLabel(1)));
+        expect(
+          badgeLabel.toLowerCase(),
+          isNot(contains('skill')),
+          reason: 'level-badge label must not claim "skill": $badgeLabel',
+        );
+        expect(
+          badgeLabel.toLowerCase(),
+          isNot(contains('mastery')),
+          reason: 'level-badge label must not claim "mastery": $badgeLabel',
+        );
+
+        final semantics = enL10n.gamificationHubLevelBadgeSemantics(
+          1,
+          'gamification.level.beginner',
+        );
+        expect(semantics.toLowerCase(), contains('level'));
+        expect(
+          semantics.toLowerCase(),
+          isNot(contains('measured skill')),
+          reason:
+              'level-badge semantics must not claim "measured skill, not '
+              'experience points": $semantics',
+        );
+        expect(
+          semantics.toLowerCase(),
+          isNot(contains('skill mastery')),
+          reason:
+              'level-badge semantics must not claim "skill mastery": '
+              '$semantics',
+        );
+
+        // The honest framing must explicitly tie the level back to XP.
+        expect(
+          semantics.toLowerCase(),
+          contains('experience points'),
+          reason:
+              'level-badge semantics must anchor the level to XP: '
+              '$semantics',
+        );
+      },
+    );
   });
 
   group('A2 — "How does it work?" explanation is reachable and lists R06', () {

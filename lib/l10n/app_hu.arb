@@ -1255,7 +1255,7 @@
     }
   },
   "gamificationHubLatestResultTitle": "Legutóbbi mért alkalom",
-  "gamificationHubLevelBadgeLabel": "Tudásszint — {level}. szint",
+  "gamificationHubLevelBadgeLabel": "{level}. szint",
   "@gamificationHubLevelBadgeLabel": {
     "placeholders": {
       "level": {
@@ -1263,7 +1263,7 @@
       }
     }
   },
-  "gamificationHubLevelBadgeSemantics": "Tudásszint {level}. {title}. Mért tudás, nem tapasztalati pont.",
+  "gamificationHubLevelBadgeSemantics": "{level}. szint. {title}. A szint a tapasztalati pontokból adódik.",
   "@gamificationHubLevelBadgeSemantics": {
     "placeholders": {
       "level": {
@@ -1303,8 +1303,8 @@
     }
   },
   "gamificationHubQuestsTitle": "Aktív küldetések",
-  "gamificationHubSkillSectionBody": "A tudásszintet mért bizonyíték oldja fel — soha nem kizárólag tapasztalati pont.",
-  "gamificationHubSkillSectionTitle": "Tudásszint",
+  "gamificationHubSkillSectionBody": "A szinted a tapasztalati pontjaidból adódik — lásd lent az összetevőket.",
+  "gamificationHubSkillSectionTitle": "A te szinted",
   "gamificationHubStreakSummary": "{count, plural, =0{Ma még nincs ritmus} =1{1 nap ritmus} other{{count} nap ritmus}}",
   "@gamificationHubStreakSummary": {
     "placeholders": {
@@ -1356,11 +1356,11 @@
       }
     }
   },
-  "gamificationLevelDetailCurrentBody": "A tudásszint ezen a szinten rögzül. A szint csak emelkedhet.",
+  "gamificationLevelDetailCurrentBody": "A jelenlegi szinted. A tapasztalati pontokból adódik, és csak emelkedhet.",
   "gamificationLevelDetailCurrentTitle": "Jelenlegi szint",
   "gamificationLevelDetailHowXpWorksBody": "Minden mért alkalom öt tapasztalati-pont összetevővel járul hozzá. A részvételt jutalmazzák, soha nem a tudást.",
   "gamificationLevelDetailHowXpWorksTitle": "Hogyan működnek a tapasztalati pontok?",
-  "gamificationLevelDetailNextBody": "A tapasztalati pont mozgatja a csúszkát; a tudásszint csak mért bizonyíték esetén lép át.",
+  "gamificationLevelDetailNextBody": "A tapasztalati pontok mozgatják a csúszkát a következő szint felé — nincs külön tudás-kapu.",
   "gamificationLevelDetailNextTitle": "Következő szint",
   "gamificationLevelDetailSemantics": "A(z) {level}. szint részletei.",
   "@gamificationLevelDetailSemantics": {

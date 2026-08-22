@@ -25,9 +25,10 @@ class LatestHubResult {
 /// The non-dominant overview screen — surfaces the gamification state
 /// without replacing the dedicated screens for quests, streaks, achievements
 /// or the reward inbox. Visual separation between XP (a progress bar) and
-/// skill mastery (a circular medallion badge) is enforced by the two
+/// the XP-derived level (a circular medallion badge) is enforced by the two
 /// dedicated widgets ([XpProgressBar], [LevelBadge]) — the Hub never
-/// collapses them into a single surface (ADR 0289, brief §5.1).
+/// collapses them into a single surface, and never mislabels the
+/// XP-derived level as skill mastery (ADR 0289, brief §5.1).
 class GamificationHubScreen extends StatelessWidget {
   const GamificationHubScreen({
     super.key,

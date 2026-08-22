@@ -3,18 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:strumsight/features/gamification/domain/levels/level_definition.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
-/// Visual surface for the SKILL-MASTERY indicator on the Hub and level-detail
-/// screens.
+/// Visual surface for the XP-derived LEVEL indicator on the Hub and
+/// level-detail screens.
 ///
 /// The badge is intentionally shaped and coloured DIFFERENTLY from the XP
 /// progress bar (ADR 0289, brief §5.1): a card with a circular medallion in
 /// the secondary container, never a progress bar. The label spells out
-/// "Skill mastery" so the two indicators can never be read as the same thing.
+/// "Level {level}" so the two indicators can never be read as the single
+/// surface — and so the level is never confused with evidence-gated mastery
+/// (mastery milestones are surfaced separately on the Hub via the
+/// `masteryUnlockedCount` tile).
 class LevelBadge extends StatelessWidget {
   const LevelBadge({super.key, required this.level});
 
   /// Caller-fed current [LevelDefinition]. The widget reads only the level
-  /// number and the localization key — it never derives skill evidence.
+  /// number and the localization key — it never derives evidence, only
+  /// renders the XP-derived level supplied by the caller.
   final LevelDefinition level;
 
   @override

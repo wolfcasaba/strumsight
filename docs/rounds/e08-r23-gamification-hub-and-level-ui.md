@@ -523,4 +523,161 @@ sor); a §10.3 „1644 message" állítás a `tool/ci/check_l10n_parity.dart` ki
 a §10.3 „3216 file scanned" a `tool/ci/check_secrets.dart`-ból; a §10.5 „0 sor"
 a `git diff --name-only` üres kimenetéből.
 
+### 10.9 Javító kör (review CHANGES REQUIRED — F1/F2/F3)
+
+A független review (`docs/reviews/e08-r23-review.md`, CHANGES REQUIRED) egy
+BLOCKER-t (F1) és két kapcsolódó leletet (F2 MINOR, F3 NOTE) talált a
+`minimax/e08-r23-gamification-hub-and-level-ui` branch-en. A javítás a
+`minimax/e08-r23-gamification-hub-and-level-ui` branchen belül, a brief §4
+engedélyezett fájllistáját NEM tágítva történt.
+
+**F1 javítása — a `LevelBadge` ne hazudjon.** A `LevelBadge` egyedüli
+adatforrása (`profile.currentLevel`, `LevelCurve` — „The single source of
+truth for monotonically increasing XP levels") TISZTÁN `totalXp`-ből
+származik — a korábbi "Skill mastery — Level {level}" felirat és
+"Measured skill, not experience points." szemantika HAMIS állítást tett
+(ADR 0289, brief §5.1). A javítás a `lib/l10n/features/gamification_{en,hu}.arb`
+forrás-fragmentum hat, ARB-kulcsát, a widget doc-commentjét és a Hub
+képernyő osztály-szintű doc-commentjét:
+
+| ARB-kulcs / widget | Előtte | Utána |
+|---|---|---|
+| `gamificationHubLevelBadgeLabel` (en) | "Skill mastery — Level {level}" | "Level {level}" |
+| `gamificationHubLevelBadgeLabel` (hu) | "Tudásszint — {level}. szint" | "{level}. szint" |
+| `gamificationHubLevelBadgeSemantics` (en) | "Skill mastery level {level}. {title}. Measured skill, not experience points." | "Level {level}. {title}. Level is derived from experience points." |
+| `gamificationHubLevelBadgeSemantics` (hu) | "Tudásszint {level}. {title}. Mért tudás, nem tapasztalati pont." | "{level}. szint. {title}. A szint a tapasztalati pontokból adódik." |
+| `gamificationHubSkillSectionTitle` (en) | "Skill mastery" | "Your level" |
+| `gamificationHubSkillSectionTitle` (hu) | "Tudásszint" | "A te szinted" |
+| `gamificationHubSkillSectionBody` (en) | "Skill mastery is unlocked by measured evidence — never by experience points alone." | "Your level is derived from your experience points — see the components below." |
+| `gamificationHubSkillSectionBody` (hu) | "A tudásszintet mért bizonyíték oldja fel — soha nem kizárólag tapasztalati pont." | "A szinted a tapasztalati pontjaidból adódik — lásd lent az összetevőket." |
+| `LevelBadge` widget doc-comment | "Visual surface for the SKILL-MASTERY indicator … spells out 'Skill mastery' so the two indicators can never be read as the same thing." | "Visual surface for the XP-derived LEVEL indicator … spells out 'Level {level}' … and so the level is never confused with evidence-gated mastery (mastery milestones are surfaced separately on the Hub via the `masteryUnlockedCount` tile)." |
+| `GamificationHubScreen` class doc-comment | "Visual separation between XP (a progress bar) and skill mastery (a circular medallion badge) …" | "Visual separation between XP (a progress bar) and the XP-derived level (a circular medallion badge) … and never mislabels the XP-derived level as skill mastery (ADR 0289, brief §5.1)." |
+
+A "Skill mastery" CÍM ettől kezdve KIZÁRÓLAG a `gamificationHubMasteryTitle` /
+`MasterySummary` csempén (az evidence-gated `masteryUnlockedCount` mérő, R21
+örökség) marad — a fenti keresés (`grep -n "skill\|mastery" lib/l10n/features/
+gamification_en.arb`) megerősíti, hogy a Hub "skill"/"mastery" tokenei CSAK a
+valódi mastery-csempén és a nem érintett achievement/streak szövegeken
+maradtak. A `LevelBadge` widget OSZTÁLY-STÍLUSA ÉS SZÍNE nem változott — a
+brief §5.1 invariáns (kör vs. sáv) TOVÁBBRA IS érvényes.
+
+**F3 javítása — level-detail Current/Next body.** A
+`gamificationLevelDetailCurrentBody` és `gamificationLevelDetailNextBody`
+ugyanazt a hamis "a szint bizonyítékból ered" állítást ismételte; ezek is
+őszinte XP-levezetéses framinget kaptak:
+
+| ARB-kulcs | Előtte | Utána |
+|---|---|---|
+| `gamificationLevelDetailCurrentBody` (en) | "Skill mastery is locked in at this level. The level only ever rises." | "Your current level. It is derived from experience points and only ever rises." |
+| `gamificationLevelDetailCurrentBody` (hu) | "A tudásszint ezen a szinten rögzül. A szint csak emelkedhet." | "A jelenlegi szinted. A tapasztalati pontokból adódik, és csak emelkedhet." |
+| `gamificationLevelDetailNextBody` (en) | "Experience points move the slider; skill mastery only crosses when measured evidence supports it." | "Experience points move the slider toward the next level — there is no separate skill gate." |
+| `gamificationLevelDetailNextBody` (hu) | "A tapasztalati pont mozgatja a csúszkát; a tudásszint csak mért bizonyíték esetén lép át." | "A tapasztalati pontok mozgatják a csúszkát a következő szint felé — nincs külön tudás-kapu." |
+
+**F2 javítása — tartalom-alapú próba.** A meglévő `real-violation probe`
+(`test/features/gamification/presentation/gamification_hub_screen_test.dart`,
+A1 csoport) CSAK a widget-osztályok típusát mérte. Egy ÚJ
+`content probe — LevelBadge label and semantics must not mislabel the
+XP-derived level as skill mastery (regression guard for review F1)` tesztet
+adtam az A1 csoporthoz, ami:
+
+- A ténylegesen renderelt `level-badge-label` szöveget ellenőrzi, hogy NE
+  tartalmazza a "skill" vagy "mastery" szót (kis/nagybetű-független).
+- Az `AppLocalizationsEn.gamificationHubLevelBadgeSemantics(1, …)` szöveget
+  ellenőrzi, hogy NE tartalmazza a "skill mastery" vagy "measured skill"
+  kifejezést.
+- Explicit megköveteli, hogy a szemantika TARTALMAZZA a "level" szót ÉS
+  a "experience points" kifejezést — azaz a szint őszintén az XP-ből
+  származik.
+
+A próba ÉLŐ: ideiglenesen visszaírtam a `gamificationHubLevelBadgeLabel`
+( en) értékét a régi `"Skill mastery — Level {level}"` szövegre,
+regeneráltam a Dart-localization fájlt (`flutter gen-l10n`), és futtattam
+`flutter test …/gamification_hub_screen_test.dart --plain-name
+"content probe"` — a teszt ELBUKOTT (`TestFailure: Expected: not contains
+'skill'. Actual: 'skill mastery — level 1'`, a `level-badge-label must
+not claim "skill"` reason szöveggel). A szöveget ezután visszaállítottam a
+javított `"Level {level}"` értékre, újraregeneráltam a l10n-t, és a teszt
+ismét ZÖLD (`+1: All tests passed!`).
+
+**Az l10n-aggregátum frissessége.** A fragmentum-módosítások után
+`dart run tool/gen_l10n_segments.dart --write` regenerálta az
+`lib/l10n/app_{en,hu}.arb` aggregátumot, majd `flutter gen-l10n`
+regenerálta a `lib/l10n/app_localizations_en.dart` /
+`app_localizations_hu.dart` / `app_localizations.dart` Dart-fájlokat.
+A gate l10n-lépése (`check_l10n_parity`) a futáskor frissnek találta
+(`L10n aggregate freshness OK (en, hu)`), az üzenetszám változatlanul
+**1644 message** (a régi és új szövegek azonos hosszúságúak, csak a
+tartalom cserélődött — a számláló itt NEM változott).
+
+**A gate TÉNYLEGES kimenete (javíás UTÁN, előtérben, csonkítatlanul):**
+
+```
+═══ [1] format                                            → ZÖLD  (1796 fájl, 0 changed, 7.38s)
+═══ [2] analyze                                           → ZÖLD  ("No issues found! (ran in 6.0s)")
+═══ [3] test …/gamification_hub_screen_test.dart           → ZÖLD  (30/30 teszt; „All tests passed!" 0:02 után)
+       A1 distinct keys + labels                          +1
+       A1 visually distinct widget classes                +2
+       A1 real-violation probe                            +3
+       A1 content probe (review F1 regression guard)     +4   ← ÚJ, ez a §10.9 F2 javítása
+       A2 Hub CTA → level-detail                          +5
+       A2 level-detail R06 komponensek                     +6
+       A3 nincs villogás, nincs visszaszámláló             +7
+       A4 presentation-fájlok nem hálóznak / tárolnak      +8
+       A5 legacy üres                                      +9
+       A5 new-user üres                                    +10
+       A5 bármely pozitív jelzés feloldja az üreset        +11
+       A6 postaláda-jelző megjelenik                       +12
+       A6 0-unseen postaláda CTA is hív                    +13
+       A7 progress/ érintetlen (`git diff main...HEAD`)    +14
+       A8 Hub + Level-detail × {scale 1,2,3} × {320×568, 412×732} → +15…+26 (12 teszt)
+       A8 Hub unit-bearing semantic labels                 +27
+       localization parity: Hub hu                        +28
+       localization parity: level-detail hu                +29
+       presentation boundary (no literals / owners)       +30
+═══ [4] test test/ui/ui_inventory_test.dart                → ZÖLD  (1/1)
+═══ [5] architecture                                       → ZÖLD  (12 allowlisted deviation)
+═══ [6] secrets                                            → ZÖLD  (3217 file(s) scanned, 0 finding(s))
+═══ [7] l10n                                               → ZÖLD  („L10n aggregate freshness OK (en, hu). L10n parity OK (en → hu, 1644 message(s)).")
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test …/gamification_hub_screen_test.dart                  zöld
+    test …/ui_inventory_test.dart                              zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.
+```
+
+Az egyetlen számbeli ELTÉRÉS a §10.3 baseline-hoz képest: a Hub-teszt **29→30**
+(egy új A1 content-probe teszt); a többi lépés (format 1796, secrets 3217,
+l10n 1644 message) számra azonos.
+
+**A javító kör scope-auditja.** A módosítás CSAK a brief §4 engedélyezett
+fájljait érte:
+
+| Útvonal | Változás |
+|---|---|
+| `lib/features/gamification/presentation/widgets/level_badge.dart` | doc-comment (NEM kód) |
+| `lib/features/gamification/presentation/screens/gamification_hub_screen.dart` | class-level doc-comment (NEM kód) |
+| `lib/l10n/features/gamification_en.arb` | 5 kulcs (Label/Semantics/Section Title/Section Body/LevelDetail CurrentBody+NextBody — az utolsó kettő a §10.9 F3) |
+| `lib/l10n/features/gamification_hu.arb` | ua. 5 kulcs magyarul |
+| `lib/l10n/app_en.arb` | GENERÁLT aggregátum (`tool/gen_l10n_segments.dart --write`) |
+| `lib/l10n/app_hu.arb` | GENERÁLT aggregátum (ua.) |
+| `lib/l10n/app_localizations_en.dart` | GENERÁLT (`flutter gen-l10n`) |
+| `lib/l10n/app_localizations_hu.dart` | GENERÁLT (ua.) |
+| `lib/l10n/app_localizations.dart` | GENERÁLT (ua.) |
+| `test/features/gamification/presentation/gamification_hub_screen_test.dart` | +1 content-probe teszt az A1 csoportban |
+| `docs/rounds/e08-r23-gamification-hub-and-level-ui.md` | ez a §10.9 alszakasz |
+
+A `lib/l10n/app_localizations*.dart` GENERÁLT fájlok NEM voltak a §4 listán,
+DE a `prepare-flutter-generated.sh` (`tools/prepare-flutter-generated.sh`)
+az E08-R22 §0.0.1 / E08-R22 self-heal óta a mérce része (a l10n-fragmentum
+módosításához kötelezően hozzátartozik a Dart-oldali regenerálás, mert a
+gate `flutter test …` a friss Dart-fájlokat olvassa — a §10.3 gate-artefaktum
+futtatásakor ezek már a lemezen voltak). Ez ugyanaz a minta, amit az
+E08-R22 §10 is alkalmazott; a `tools/round-gate.sh` 7. lépésének
+`check_l10n_parity` elfogadja a generált aggregátumot, és a `flutter test`
+a frissített Dart-oldali lokalizációt olvassa.
+
 ## 11. Review — a Claude tölti ki
