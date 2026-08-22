@@ -6,8 +6,9 @@
 - **Branch:** `<motor>/e08-r24-practice-and-learn-integration`
 - **Előfeltétel:** `E08-R23` merge-elve (Gamification Hub)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0317` — a szám FOGLALT. Az ADR-t a Claude írja meg a
-  kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
+- **Előre kiosztott ADR:** `ADR 0317` — STALE, lásd §0.0 (a foglaló a tényleges
+  szabad számot, `ADR 0390`-et adta). Az ADR-t a Claude írja meg a kör
+  indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/features/practice/` session-eredmény és a `lib/features/learn/` lecke-eredmény TÉNYLEGES public szerződését, valamint a `lib/features/learn/data/lesson_progress_repository.dart`-ot — a csillagok a saját domainjükben maradnak. Eltérésnél
@@ -42,6 +43,91 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélkül a kör bukott. **Listán kívüli fájl kellene → `stopped`**,
 és a kimenet a brief-revízió kérése, nem az `allowed_paths` csendes tágítása.
 Meglévő, ma zöld teszt elbukása → `blocked`, nem a teszt átírása.
+
+## 0.0 Pre-flight revízió (Claude, 2026-08-22)
+
+**ADR-szám korrekció:** a brief `0317`-et nevezte meg előre kiosztott
+ADR-számként (2026-08-18-i írás állapota), de `docs/adr/` mára `0389`-ig tart
+— a `0317` egy korábbi, független kör alatt régen elkelt. A kötelező
+`tools/round-slots.py reserve-adr --round E08-R24` futás **`0390`**-et adott
+(mérve); a foglaló eredménye az irányadó. Az architekturális döntéseket
+[`ADR 0390`](../adr/0390-practice-and-learn-gamification-adapter-boundary.md)
+rögzíti a lenti öt pontban.
+
+**Kockázat = high, indoklás (S7):** a `risk = "high"` a brief mérce-tartalma
+miatt áll — ez az ELSŐ kör, ami a gamifikáció jutalom-láncát (jogosultság →
+XP → főkönyv) éles felhasználói eredményforráshoz (gyakorlási session,
+lecke-befejezés) köti; egy hibás jogosultsági besorolás vagy egy nem stabil
+esemény-azonosító közvetlenül XP-duplázást vagy jogosulatlan jutalmat
+okozna — NEM azért, mert az `allowed_paths` a router
+`high_risk_path_fragments` listájából (auth, authorization, camera,
+credential, crypto, encryption, migration, payment, privacy, secret, share,
+upload, vision) bármelyiket tartalmazná — nem tartalmazza.
+
+**Kód-mérés a §2 „Jelenlegi állapot" ellen (a mérési szabály, §1 pont 1–2):**
+
+- `grep -n "class.*ActivityEvent extends" lib/features/gamification/domain/
+  activity/learning_activity_event.dart` → hat konkrét típus
+  (`PracticeActivityEvent`, `SongActivityEvent`, `AnalysisActivityEvent`,
+  `PlanActivityEvent`, `TutorActivityEvent`, `VisionActivityEvent`) — **nincs
+  külön "lecke" típus**. A megkülönböztetés az `ActivitySource` mezőn megy
+  (`practice` / `learn`); mindkét adapter `PracticeActivityEvent`-et épít
+  (ADR 0390 1. döntés).
+- `grep -rln "features/streak\|features/progress" lib/features/{practice,learn}/`
+  → a `practice` egyetlen találata
+  (`data/adapters/daily_challenge_practice_adapter.dart`) egy
+  `DailyChallenge`→`PracticeDefinition` konverzió, session-befejezéssel
+  nincs kapcsolatban; a `learn`-ben az `application/` szinten (ami MA nem is
+  létezik könyvtárként) nulla találat, a két UI-screen-találat
+  (`lesson_list_screen.dart`, `learn_screen.dart`) megjelenítési olvasás,
+  nem írás. A brief §2 „MA közvetlenül hívja" állítása tehát a UI-rétegre
+  igaz, az application-rétegre NEM — ez a kör egy önálló, egyelőre be nem
+  kötött adaptert épít (mint a R02 kanonikus esemény), a tényleges élő
+  hívási pont bekötése (`practice_session_controller.dart`, a `learn`
+  screenek) ennek a briefnek a tiltott zónájában van, tehát KÉSŐBBI kör
+  dolga — a §3 „fokozatos adapter mögé vitele" ebben a körben az adapter
+  MEGÉPÍTÉSÉT jelenti, nem a hívási pontok tényleges átkötését.
+- `find lib/features/gamification -iname "*eligib*"` →
+  `application/reward_eligibility_policy.dart` (`ActivityOutcome.completed/
+  cancelled/failed`, ADR 0338) és
+  `infrastructure/default_reward_eligibility_policy.dart` léteznek, a `A5`
+  megszakítás/részleges-session mátrixa ezekre a MEGLÉVŐ kapukra épül, új
+  gate nem kell (ADR 0390 3. döntés).
+- `grep -n "RewardLedgerEntry(" lib/features/gamification/application/*.dart`
+  → két, EGYMÁSTÓL FÜGGETLEN írási minta létezik: a
+  `daily_challenge_service.dart` közvetlenül hívja
+  `rewardLedger.appendIfAbsent()`-et (nincs R05/R06 kapu), az
+  `ActivityEventIngestor.recordSavedActivity` pedig az outbox-mintát követi
+  (ADR 0333). A brief §6 A1 explicit „esemény → outbox → jogosultság → XP →
+  főkönyv" sorrendje a MÁSODIKAT jelöli ki — ADR 0390 2. döntés.
+- `ls test/features/gamification/` → `integration/` alkönyvtár MA nem
+  létezik, az implementer hozza létre a `practice_reward_flow_test.dart`-tal
+  együtt (nincs meglévő fájl, amit felül kellene írni).
+
+**Visszakeresett előzmény (ADR 0312, §4.9):**
+
+- `adr/0329` (canonical-activity-event-contracts), `adr/0333`
+  (activity-outbox-reliable-processing), `adr/0338`
+  (reward-eligibility-policy-four-gates), `adr/0301`
+  (reward-ledger-append-only-idempotency) — mind a négy MEGLÉVŐ szerződést
+  ez a kör az adapterek mögött használja fel, egyik sem nyílik újra
+  (szűkített `lessons,halts,adr` lekérdezés, `adr/0290` emb#1, `adr/0344`
+  emb#2, `adr/0085` bm25#8 emb#7).
+- `lessons/L286` — **közvetlenül releváns**: a „mérd meg a `public.dart`-ot"
+  pre-flight utasítás a repository/provider réteget is jelenti, nem csak a
+  value-típusokat — ez erősítette meg, hogy a fenti `grep`-eket a tényleges
+  application-rétegig kell futtatni, nem elég a domain value-típusok
+  meglétét nézni.
+- `lessons/L190` — a `public.dart`-only szabály az import CÉLJÁT
+  kényszeríti ki, nem a szimbólumokat; releváns figyelmeztetés az A4
+  architektúra-guard bővítéséhez (ne engedjen „csak egy típusért" kivételt).
+- Nincs releváns korábbi HALT vagy self-heal erre a mintára (a lekérdezés
+  0 `halts`-találatot adott) — a legközelebbi analóg az `E08-R02` (R02
+  ugyanígy önálló, be nem kötött adaptert épített, hívó nélkül landolt,
+  nem HALT-olt).
+
+Az `allowed_paths` és a `gate_tests` a fentiek fényében változatlan marad —
+egyik mérés sem igényelt lista-bővítést.
 
 ## 1. Cél
 
