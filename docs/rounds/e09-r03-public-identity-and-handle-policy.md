@@ -11,6 +11,54 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 2-ben létrejött `community_profiles` tábla TÉNYLEGES oszlopneveit és a `backend/app/community/schemas/profile.py` séma-mezőit. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-22, ADR 0397)
+
+**§2 mért ellenőrzés — a `community_profiles`/`profile.py` állítások PONTOSAK.**
+`backend/app/community/models/profile.py` ma valóban a Kör 2 minimál sémáját
+hordozza (`id` BigInteger/Integer-variant PK, `public_id` `Uuid(as_uuid=True)
+unique=True nullable=False`, `user_id`, `display_name`, `created_at`) —
+kézzel grep-elve, nincs `handle` mező és nincs `policies/`/`services/`
+alkönyvtár a `backend/app/community/` fában. A §6.1 mérce-mátrix (A1: nyers
+oszlop indexelése, A2: `id` bigint stringgé alakítva) a ma élő sémán
+reprodukálható állapotot ír le.
+
+**§2 pontosítás (kisebb, nem gate-hordozó):** a "Pydantic `field_validator`"
+konvenció-hivatkozás útvonala hibás — `backend/app/schemas/auth.py` NEM
+létezik, a minta ténylegesen `backend/app/schemas.py`-ban van
+(`UserCreate._reject_passwords_over_bcrypt_byte_limit`, sor 34). A minta maga
+(egy `@field_validator` + `@classmethod`, `ValueError`-t dobó normalizáló
+metódus) érvényes referencia a handle-validációhoz, csak a fájlnév téves;
+mivel egyik acceptance-cella sem hivatkozik erre az útvonalra, ez §0.0-jegyzet,
+nem blokkoló javítás.
+
+**Visszakeresés (ADR 0312, szűkítve → teljes korpusz):** `lessons/L295`
+("A publikus policy-mező constructor-validációja nem bizonyítja, hogy a mező
+vezérli a viselkedést", emb#1) közvetlenül releváns — a `handle_policy.py`
+normalizáló/validáló mezőihez a §7 gate mellé legalább egy nem-default,
+tényleges hívási utat olvasó unit-cella kell (nem csak konstruktor-validáció),
+ezt a §6 A1/A4 cellák már mérik, de az implementer-promptban explicit
+hivatkozom rá. `adr/0396` (Kör 2 modulhatár — a `from_attributes=True` teljes
+ORM-lekérdezés elleni whitelist-mintát ez a kör is követi az availability
+válaszban). A konkurens-claim SQLite-race témára (A5) nincs közvetlen találat
+sem szűkített, sem teljes korpuszon — a §6.1 valódi-sértés próba és a §8 6.
+lépés (DB-constraint, nem app-szintű lock) pótolja az előzmény hiányát.
+
+**Kockázat = high, indoklás:** a `risk = "high"` a brief eredeti besorolása
+szerint marad, bár egyik `allowed_paths` sem egyezik szó szerint a router
+`high_risk_path_fragments` listájával (auth, authorization, camera,
+credential, crypto, encryption, migration, payment, privacy, secret, share,
+upload, vision). Az indok tartalmi: ez a kör az első publikusan
+kereshető/felfedhető identitás-felület (public handle) — egy Unicode-collision
+gyengeség impersonation-vektor (két látszólag azonos handle közül az egyik
+más felhasználót adhat ki magát), az availability endpoint pedig egy
+tervezési hiba esetén regisztrált userek enumerálására használható
+felderítő-csatorna válna (ez funkcionálisan azonos súlyú, mint egy
+`privacy`/`credential`-fragmensű útvonal, csak a fájlnévben nem jelenik meg
+szó szerint). A `backend/alembic/versions/e09_r03_0003_community_handle.py`
+maga is sémamódosítás (unique index + új tábla) éles adatbázison. Ezt a §6.1
+kötelező valódi-sértés próba (A1-re) és az A5 konkurens-claim race-teszt fogja
+gépi mércével.
+
 ```ai-router
 schema_version = 1
 risk = "high"
