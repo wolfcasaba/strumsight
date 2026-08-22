@@ -4,13 +4,15 @@ Brief: docs/rounds/e09-r06-profile-onboarding-and-editing.md
 ADR: docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md
 Diff: `git diff b89561f6...22862b18` (pre-flight commit → implementer HEAD; javító kör: `2da487c7...9592638e`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-22
-Verdikt: **APPROVED** (javító kör 1 után, head `9592638e`)
+Verdikt: CHANGES REQUIRED (F1/F2 fixed; F9/F10 a CI-dispatch fedte fel, javító kör 2 folyamatban)
 
 ## Összegzés
 
 Első kör: BLOCKER: 1 · MAJOR: 1 · MINOR: 3 · NOTE: 2.
-**Javító kör 1 (`9592638e`) után: F1 és F2 FIXED, ellenőrizve. MINOR/NOTE
-(F3/F4/F6/F7/F8) nyitva maradt, nem blokkol.**
+Javító kör 1 (`9592638e`) után: F1 és F2 FIXED, ellenőrizve. Az ELSŐ
+exact-SHA CI-dispatch (`full-gate.yml`, head `f312ad54`) PIROS lett — a
+teljes suite 2 ÚJ, gate-en-kívüli MAJOR leletet (F9, F10) fedett fel.
+MINOR/NOTE (F3/F4/F6/F7/F8) nyitva maradt, nem blokkol.
 
 Gate zöld (saját, izolált `/tmp/review-e09-r06` klónban, csővezeték nélkül,
 lásd lent). A gate ZÖLDsége NEM bizonyíték a két nyitott leletre — mindkettő
@@ -167,16 +169,39 @@ uniqueness-enforcement (DB-szintű, konkurens-create próba) és a
 | backend pytest | zöld (349 teszt, +6 F1/F2 regresszió) | ✅ |
 | F1 kód-ellenőrzés (`grep -n "@router.get" routers/profile.py`) | `/profiles/me` A `{public_id}` ELŐTT | ✅ közvetlenül olvasva |
 | F2 kód-ellenőrzés (`grep -n "normalized = validate\|assign_handle("`) | a `validate()` visszatérési értéke átadva | ✅ közvetlenül olvasva |
-| CI (teljes suite + property + APK) | — | dispatch-elendő a merge ELŐTT (Claude-oldal, ADR 0086 §2) |
+| CI `full-gate.yml` (első dispatch, head `f312ad54`) | PIROS | ❌ run [32595342705](https://github.com/wolfcasaba/strumsight/actions/runs/32595342705) — 2 hiba a TELJES suite-ból (F9/F10, lásd lent), amit a célzott `round-gate.sh` nem futtat |
+
+### F9 — MAJOR (gate) — `ui_inventory_test.dart` elavult screen-számláló
+
+- **Fájl:** `test/ui/ui_inventory_test.dart:15`
+- **Probléma:** `expect(first.screenPaths, hasLength(64))` egy dinamikusan felderített production-screen-számot pinnel; a kör 2 ÚJ screent ad (`community_gate_screen.dart`, `edit_profile_screen.dart`), a valós szám 66.
+- **Kötelező javítás:** `hasLength(64)` → `hasLength(66)`.
+- **Ellenőrzés:** a teszt önmaga a mérce (dinamikus felderítés, nincs külön próba szükséges).
+- **Státusz:** OPEN → javító kör 2 (lásd lent)
+
+### F10 — MAJOR (gate) — `dio_factory_guard_test.dart` false positive egy doc-kommenten
+
+- **Fájl:** `lib/features/community/data/dto/profile_dto.dart:11`
+- **Probléma:** a regex-alapú Dio-őr (`\bDio\s*\(`) egy doc-komment szövegére üt ("...dart:convert / Dio (architecture-dependency guard...") — nem valódi `Dio()` konstruktor-hívás.
+- **Kötelező javítás:** a komment átfogalmazása úgy, hogy ne tartalmazzon "Dio (" mintát.
+- **Ellenőrzés:** `dio_factory_guard_test.dart` önmaga a mérce.
+- **Státusz:** OPEN → javító kör 2 (lásd lent)
+
+Mindkettő `test`/`lib` fájl, amit a célzott `round-gate.sh` (csak a brief
+`gate_tests`-ét futtatja) NEM fedett le — csak a TELJES CI-suite fogta meg
+(ADR 0053 pontosan ezért kötelező). `test/ui/ui_inventory_test.dart`
+felkerült az `allowed_paths`-ra (§0.0.2 addendum); a
+`dio_factory_guard_test.dart` maga nem változik, a `profile_dto.dart`
+(már allowed) komment-javítása oldja fel.
 
 ## Merge-döntés
 
-**F1 (BLOCKER) és F2 (MAJOR) FIXED és independently ellenőrizve** — a merge
-útjában álló akadály elhárult (ADR 0052). Hátralévő lépés: exact-SHA CI
-dispatch (`build-apk.yml` vagy `full-gate.yml`, a `round-ci-plan.py` szerint)
-a `9592638e`-re, majd squash-merge, ha zöld. A nyitva maradt MINOR/NOTE-ok
+**F1 (BLOCKER) és F2 (MAJOR) FIXED és independently ellenőrizve.** F9/F10
+(mindkettő MAJOR — CI-t pirosra állítanak, tehát az ADR 0052 zöld-kapu
+alatt blokkolnak) a javító kör 2-ben javítandó, utána ÚJRA-dispatch
+kötelező (exact-SHA, ADR 0086 §2). A nyitva maradt MINOR/NOTE-ok
 (F3/F4/F6/F7/F8) nem blokkolnak; F3/F4 (A6/A7 tesztlefedettség) follow-up
 tétel, F6 (403 vs 401) `deps.py`-t érintene (tilos zóna ezen a körön),
-follow-up. A javító kört ugyanaz a motor (`minimax`) vitte, a findings-listával a
-promptban — ez a lánc normál útja, nem megállási ok (user-döntés
-2026-07-31).
+follow-up. A javító köröket ugyanaz a motor (`minimax`) vitte/viszi, a
+findings-listával a promptban — ez a lánc normál útja, nem megállási ok
+(user-döntés 2026-07-31).

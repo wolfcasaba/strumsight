@@ -37,6 +37,7 @@ allowed_paths = [
   "lib/core/foundation/app_failure.dart",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
+  "test/ui/ui_inventory_test.dart",
 ]
 gate_tests = [
   "test/features/community/presentation/community_gate_test.dart",
@@ -177,6 +178,33 @@ teljes indoklás ott):
 
 Mindkettőt a §0 STOP-protokoll szerint a javító körnek KELL fixálnia — a
 findings-listát a javító prompt tartalmazza szó szerint.
+
+## 0.0.2 CI-review-addendum (orchesztrátor, Claude Sonnet 5, 2026-08-22, head `f312ad54`)
+
+A javító kör 1 (`9592638e`) után dispatch-elt `full-gate.yml` CI run
+(`32595342705`) **PIROS** lett — 2 hiba a TELJES suite-ból, amit
+`tools/round-gate.sh` célzott futása NEM fed le (csak a CI futtatja a
+teljes `flutter test`-et, ADR 0053):
+
+1. `test/ui/ui_inventory_test.dart` — `expect(first.screenPaths,
+   hasLength(64))` egy DINAMIKUSAN felderített (nem hardcode-olt
+   útvonal-lista) production-screen-számot pinnel. A kör 2 ÚJ production
+   screent ad (`community_gate_screen.dart`, `edit_profile_screen.dart`)
+   — a valós szám 66. `test/ui/ui_inventory_test.dart` felkerült az
+   `allowed_paths`-ra (fent) — a javítás egyetlen szám cseréje
+   (`hasLength(64)` → `hasLength(66)`).
+2. `test/tooling/dio_factory_guard_test.dart` — regex-alapú őr
+   (`\bDio\s*\(`), ami a `lib/` fát soronként vizsgálja Dio-konstruktor
+   hívásért. `lib/features/community/data/dto/profile_dto.dart:11`
+   FALSE POSITIVE: a sor egy doc-komment ("...forbidden from importing
+   dart:convert / Dio (architecture-dependency guard...") — a "Dio ("
+   szövegrészlet szó szerint illeszkedik a regexre, de nem valódi
+   `Dio()` hívás. A fájl MÁR az `allowed_paths`-on van (nincs teendő a
+   scope-listán) — a javítás a komment átfogalmazása úgy, hogy ne
+   tartalmazzon "Dio (" mintát (pl. gondolatjel a zárójel helyett).
+
+Mindkettő MECHANIKUS, egysoros javítás — a javító kör 2 promptja
+tartalmazza a pontos utasítást.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
