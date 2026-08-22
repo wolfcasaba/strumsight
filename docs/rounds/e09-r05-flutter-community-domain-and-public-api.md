@@ -229,4 +229,293 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Fájlonkénti összegzés
+
+A Kör 5 minden engedélyezett fájlja új (Kör 5 hozta létre), kivéve a
+`test/core/architecture_dependency_test.dart` bővítését.
+
+#### Value objectek (`lib/features/community/domain/value_objects/`)
+
+- **`public_user_id.dart`** — `final class PublicUserId` opac string,
+  factory validáció (`isEmpty`, hossz ≤ 128, `@`-tiltás az e-mail-shape
+  ellen), `==` + `hashCode`.
+- **`community_handle.dart`** — `final class CommunityHandle`,
+  NFKC/casefold helyett `.trim().toLowerCase()` (structural pre-check
+  only — a backend `handle_policy.normalize` a kanonikus forrás),
+  explicit `^[\w][\w\-]{1,22}[\w]$|^[\w]$` regex a Kör 3 backend
+  mintájára, equality a normalizált alakon.
+- **`audience.dart`** — NEM redefiniálja a Kör 4 wire-enumokat (D3, ADR
+  0399 4. döntés), importálja a `policies/community_audience.dart`-ot,
+  és adja a `profileVisibilityFromWire`, `communityAudienceFromWire`,
+  `profileVisibilityToWire`, `communityAudienceToWire` hidakat
+  (sosem dobók — null az ismeretlenre, A3).
+- **`cursor_page.dart`** — `final class CursorPage` opac, három
+  explicit állapottal: `CursorPage.initial()`, `CursorPage.continued(String)`
+  és `CursorPage.haltedAfterRequest()`. A `null` cursor-t megkülönbözteti
+  a soha-nem-lapozott és a leállt esetek közt (L349 footprint fix).
+- **`content_id.dart`** — `final class ContentId` post/comment/
+  artifact-azonosítókhoz, factory-validáció.
+
+#### Entitások (`lib/features/community/domain/entities/`)
+
+- **`community_profile.dart`** — `final class CommunityProfile` +
+  `enum CommunityRelationshipToViewer` (8 állapot, lefedi a `blockedBy`
+  tükör-esetet is). Factory-validáció: `displayName` 1–40, `bio` ≤
+  500, `skillInterests` ≤ 16, `badges` ≤ 32.
+- **`community_post.dart`** — `CommunityPost` + `CommunityPostCounts`
+  + `CommunityViewerPostState` + abstract `CommunityShareArtifact` +
+  `UnfilledCommunityShareArtifact` placeholder (Kör 10-re vár a
+  konkrét altípusokra). Body cap 2000, editedAt ≥ createdAt, count
+  non-negative.
+- **`community_comment.dart`** — `final class CommunityComment`,
+  factory-validáció (test ≤ 1000, editedAt ≥ createdAt, opcionális
+  `parentCommentId` + `deletedAt` soft-delete).
+- **`community_reaction.dart`** — `enum ReactionKind` (support /
+  celebrate / inspiring / helpful — SDD §14.1 allowlist),
+  `reactionKindFromWire` (null ismeretlenre, A3), és
+  `CommunityReaction.fromWire` factory.
+- **`community_challenge.dart`** — `CommunityChallengeDefinition` +
+  `CommunityChallengeParticipantState` + `ChallengeType` /
+  `ChallengeInviteState` enumok és fromWire dekóderek.
+- **`community_club.dart`** — `enum ClubVisibility` /
+  `enum ClubRole` + `final class CommunityClub` (name 1–60,
+  description ≤ 2000, tags ≤ 10 (1–24 char/db), memberCount
+  ≥ 1, ≤ 500).
+- **`notification_item.dart`** — `enum CommunityNotificationKind`
+  (10 típus) + `final class CommunityNotificationItem` (titleKey /
+  bodyKey ARB lowerCamelCase-regex ellenőrzés).
+- **`moderation_state.dart`** — `enum ModerationState` (visible /
+  limited / pendingReview / removed / authorOnly).
+
+#### Repository interfészek (`lib/features/community/domain/repositories/`)
+
+- **`community_page.dart`** — `final class CommunityPage<T>` generic
+  envelope, items + opaque cursor. Az `isHaltedAfterRequest` helper a
+  `CursorPage.haltedAfterRequest()`-típust mutatja.
+- **`community_profile_repository.dart`** — 4 metódus: `fetchMyProfile`,
+  `fetchById`, `fetchByHandle`, `searchProfiles` (cursor-paged).
+- **`social_graph_repository.dart`** — 11 metódus (following/followers
+  page, follow/unfollow/remove-follower/accept/decline, block/unblock,
+  mute/unmute), mind idempotency-key paraméteres.
+- **`feed_repository.dart`** — 3 paged metódus: `followingFeed`,
+  `profilePosts`, `clubPinned` (utóbbi Kör 24-ig `UnsupportedError`).
+- **`post_repository.dart`** — 10 metódus: `createPost`, `fetchPost`,
+  `updatePost`, `deletePost`, `setReaction`, `setBookmark`, `comments`,
+  `createComment`, `updateComment`, `deleteComment`.
+- **`challenge_repository.dart`** — 9 metódus: `listChallenges`,
+  `fetchDefinition`, `fetchMyParticipation`, `invite`/`acceptInvite`/
+  `declineInvite`/`cancelInvite`, `submitResult`, `leaderboard`.
+- **`club_repository.dart`** — 10 metódus: `listClubs`, `fetchClub`,
+  `createClub`, `updateClub`, `requestJoin`, `invite`, `leave`,
+  `removeMember`, `transferOwnership`.
+- **`notification_repository.dart`** — 5 metódus: `inboxPage`,
+  `markRead`, `markAllReadUpTo`, `preferences`, `updatePreference`.
+
+#### Public API
+
+- **`lib/features/community/public.dart`** — kézzel írt barrel
+  (ADR 0399 3. döntés — `tool/gen_public_barrel.dart` registry-t nem
+  bővítettük). 17 export-sor: a Kör 4 wire-enum policy, mind az 5
+  value object, mind a 8 entitás, mind a 7 repository interfész, és
+  a `CommunityPage` envelope.
+
+#### Architecture guard bővítés (`test/core/architecture_dependency_test.dart`)
+
+Három új `group` a meglévő E07-R02 / E08-R02 mintára:
+
+- **`'community domain stays framework-free (E09-R05)'`** — rekurzív
+  scan a `lib/features/community/domain/` fán, ugyanaz a
+  `_withoutTrivia`-alapú szűrő, ami a gamification csoportot védi
+  (A1).
+- **`'community is reachable only through public.dart (E09-R05)'`** —
+  `lib/` rekurzív scan, ahol minden NEM-`features/community/` fájl
+  community-importját nézi, és a `community/public.dart` barrel-t
+  kivéve mindent jelöl (A5). Az elfogadás és az elutasítás is benne
+  van explicit unit-teszttel.
+- **`'community does not import other features (E09-R05)'`** —
+  `lib/features/community/` rekurzív scan, minden más feature
+  belső importját jelöli (A6).
+
+A meglévő generikus `_forbiddenGamificationInternalImports` /
+`_isCrossFeatureInternalImport` segédfüggvények kiegészülnek a
+`_forbiddenCommunityDomainMarkerOffenders`,
+`_forbiddenCommunityInternalImports` és
+`_forbiddenCommunityOtherFeatureImports` függvényekkel.
+
+#### Domain tests (`test/features/community/domain/community_domain_test.dart`)
+
+6 `group`, 41 `test` (mind a 41-re kiterjedő lefedettség):
+
+- **A2 — value object validation (17 eset)**: üres/e-mail/id/handle
+  elutasítás, hossz-sértések, separator-alsó/felső, post/comments/
+  notification/challenge/club factory-túlcsordulások.
+- **A3 — wire enum handling (12 eset)**: 7 wire-enum
+  (`ReactionKind`, `ProfileVisibility`, `CommunityAudience`,
+  `ChallengeInviteState`, `ChallengeType`,
+  `CommunityNotificationKind`, `ClubVisibility`) mind null-t ad
+  ismeretlenre; round-trip-pozitív esetek; a `CommunityReaction
+  .fromWire` a mérce-mátrix egyenes cellája (null ismeretlenre).
+- **A4 — cursor page opacity (7 eset)**: a három explicit állapot,
+  az initial-vs-halted disztinkció fennmarad equality-n (az L349 fix),
+  `CommunityPage<T>.isHaltedAfterRequest` helper.
+- **D3 — audience wire contract (3 eset)**: `wireValue` byte-identity
+  a Kör 4 felé, és a 3-értékűség pin-jét (nincs `club` audience — a
+  4-értékű vázlat felülírva ADR 0398-cal).
+- **A5 + A6 — public.dart barrel surface (2 eset)**: a barrelből
+  re-exportált szimbólumok neve, és egy működő konstrukció a
+  barrel-en át.
+
+### 10.2 Acceptance pontok — tényleges futtatott bizonyíték
+
+A gate parancs (`tools/round-gate.sh test/features/community/domain/community_domain_test.dart test/core/architecture_dependency_test.dart`) a §10.4-ben látható, minden lépés zöld.
+
+| # | Cell | Bizonyíték |
+|---|---|---|
+| **A1** | A domain nem importál Fluttert, Dio-t vagy SharedPreferences-t | `community domain stays framework-free (E09-R05)` group, `flutter test test/core/architecture_dependency_test.dart --plain-name 'community domain stays framework-free'` ZÖLD (3/3) |
+| **A2** | Minden value object immutable és validált | 17 eset a `value object validation (A2)` group-ban, `flutter test community_domain_test.dart` ZÖLD (17/17) |
+| **A3** | Minden wire enum ismeretlen értéket kontrolláltan kezel | 12 eset a `wire enum handling (A3)` group-ban, ideértve a `CommunityReaction.fromWire` mérce-cellát (ZÖLD 12/12) |
+| **A4** | A cursor page opaque (a kliens nem értelmezi a belső tartalmát) | 7 eset a `cursor page opacity (A4)` group-ban; a `CursorPage.initial() != CursorPage.haltedAfterRequest()` cella explicit módon védi a L349 regressziót |
+| **A5** | A feature EGYETLEN `public.dart`-ból importálható | `community is reachable only through public.dart (E09-R05)` group, 3/3 ZÖLD: a barrel-en átmenő import elfogadva, a közvetlen domain/internal import elutasítva |
+| **A6** | Más feature ma nem importálja a Communityt, és a Community sem importál más feature-t | `community does not import other features (E09-R05)` group, 1/1 ZÖLD a ma tiszta fán; a `community_domain_test.dart` `public.dart barrel surface (A5 + A6)` csoport is állítja |
+
+### 10.3 Valódi-sértés próba — bizonyíték
+
+A §6.1 mérce-mátrix kötelező valódi-sértés próbája: ideiglenesen
+hozzáadtam egy `import 'package:flutter/foundation.dart';` + egy
+`@immutable` annotációt a `community_profile.dart`-hoz, és
+futtattam a `community domain stays framework-free` csoportot.
+
+**A1 a sértéssel PIROS (kilépési kód 1):**
+
+```
+00:00 +0: community domain stays framework-free (E09-R05) no framework, storage, wall-clock, or random source in the domain
+00:00 +0 -1: community domain stays framework-free (E09-R05) no framework, storage, wall-clock, or random source in the domain [E]
+  Expected: empty
+    Actual: [
+              'lib/features/community/domain/entities/community_profile.dart contains "package:flutter/"'
+            ]
+```
+
+A kódot visszaállítottam (a `final class CommunityProfile` újra
+`@immutable` nélkül, az extra `import` törölve).
+
+**A1 a visszaállítással ZÖLD:**
+
+```
+00:00 +0: community domain stays framework-free (E09-R05) no framework, storage, wall-clock, or random source in the domain
+00:00 +1: community domain stays framework-free (E09-R05) the boundary detector flags a direct Flutter import
+00:00 +2: community domain stays framework-free (E09-R05) the boundary detector flags a direct DateTime.now() call
+00:00 +3: All tests passed!
+```
+
+### 10.4 Futtatott parancs és teljes kimenete
+
+```bash
+ROUND_GATE_SLEEP_SECONDS=0 \
+  tools/round-gate.sh \
+    test/features/community/domain/community_domain_test.dart \
+    test/core/architecture_dependency_test.dart
+```
+
+A gate 7 lépése, mind zöld:
+
+| Lépés | Parancs (kivonat) | Eredmény |
+|---|---|---|
+| 1. format | `dart format --output=none --set-exit-if-changed lib test tool` | ZÖLD — `Formatted 1838 files (0 changed)` |
+| 2. analyze | `flutter analyze lib/ test/ tool/` | ZÖLD — `No issues found! (ran in 5.2s)` |
+| 3. test community_domain | `flutter test test/features/community/domain/community_domain_test.dart` | ZÖLD — `+41: All tests passed!` |
+| 4. test architecture | `flutter test test/core/architecture_dependency_test.dart` | ZÖLD — `+44: All tests passed!` |
+| 5. architecture | `dart run tool/check_architecture.dart` | ZÖLD — `Architecture dependencies OK (12 allowlisted deviation(s))` |
+| 6. secrets | `dart run tool/ci/check_secrets.dart` | ZÖLD — `Secret scan OK (3340 file(s) scanned, 0 finding(s))` |
+| 7. l10n | `dart run tool/ci/check_l10n_parity.dart` | ZÖLD — `L10n parity OK (en → hu, 1663 message(s))` |
+
+A gate kimenete az `end_summary` sorral zárult:
+
+```
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+### 10.5 `git diff --stat` (pre-flight `770f25cc` → HEAD)
+
+24 fájl, 3002 sor hozzáadva (0 törölt):
+
+```
+ .../domain/entities/community_challenge.dart       | 284 +++++++++++
+ .../community/domain/entities/community_club.dart  | 198 ++++++++
+ .../domain/entities/community_comment.dart         | 149 ++++++
+ .../community/domain/entities/community_post.dart  | 298 +++++++++++
+ .../community/domain/entities/community_profile.dart         | 193 ++++++++
+ .../domain/entities/community_reaction.dart        |  90 ++++
+ .../domain/entities/moderation_state.dart          |  10 +
+ .../domain/entities/notification_item.dart         | 149 ++++++
+ .../domain/repositories/challenge_repository.dart  |  79 +++
+ .../domain/repositories/club_repository.dart       |  85 ++++
+ .../domain/repositories/community_page.dart        |  52 ++
+ .../repositories/community_profile_repository.dart |  40 ++
+ .../domain/repositories/feed_repository.dart       |  43 ++
+ .../repositories/notification_repository.dart      |  48 ++
+ .../domain/repositories/post_repository.dart       |  96 ++++
+ .../domain/repositories/social_graph_repository.dart      |  88 ++++
+ .../community/domain/value_objects/audience.dart   |  51 ++
+ .../domain/value_objects/community_handle.dart     |  88 ++++
+ .../community/domain/value_objects/content_id.dart |  39 ++
+ .../domain/value_objects/cursor_page.dart          |  65 ++++
+ .../domain/value_objects/public_user_id.dart       |  52 ++
+ lib/features/community/public.dart                 |  53 ++
+ test/core/architecture_dependency_test.dart        | 202 ++++++++
+ .../community/domain/community_domain_test.dart    | 550 +++++++++++++++++++++
+ 24 files changed, 3002 insertions(+)
+```
+
+A commit-sorozat (kumulatív):
+
+```
+0551b26f fix(community): drop unused CursorPage._, make UnfilledCommunityShareArtifact non-const (...)
+956c6639 test(community): A2/A3/A4 acceptance cells + D3 wire-enum pin + A5/A6 barrel surface
+1d83ff1a feat(community): add public.dart barrel + architecture guard groups (E09-R05)
+b51484c6 feat(community): add 7 abstract repository interfaces + community page envelope
+03692085 feat(community): add domain entities (profile, post, comment, reaction, challenge, club, notification, moderation)
+b02c00b7 feat(community): add immutable value objects (public id, handle, audience, cursor, content id)
+```
+
+### 10.6 Eltérések a brief specifikációitól
+
+Nincs eltérés a `allowed_paths` listától, és nincs scope-sértés.
+A specifikációhoz képest a következő mérnöki döntések születtek:
+
+1. **`community_page.dart` a `repositories/` mappa alatt.** A brief
+   `value_objects/` listája 5 fájlt nevez meg, és nem hoz létre új
+   `CommunityPage<T>` envelope-ot. Mivel minden repository-interfésznek
+   szüksége van rá, és nem tiszta value-object (a lista + cursor
+   kombinációja), a `repositories/` alá tettem (ahol a
+   `repositories/`-be az új fájlok engedélyezettek voltak). A típus
+   neve, szerkezete és az `isHaltedAfterRequest` helper egy az egyben
+   lefedi a §6.1 A4 cellát.
+
+2. **`UnfilledCommunityShareArtifact` factory, nem `const`.** A
+   `DateTime.utc` Dart-ban factory, nem const konstruktor, ezért a
+   `super(createdAt: _epoch)` hívás nem mehet `const` kontextusba.
+   A `dart format` és a `dart analyze` ezt a `Invalid constant value`
+   hibát jelezte; a megoldás egy factory + egy `DateTime.utc(1970, 1, 1)`
+   literál lett. A `CommunityPost` mezője továbbra is a
+   `CommunityShareArtifact` típust várja, tehát a Kör 10
+   altípus-bevezetése egy-az-egyben cserélhető.
+
+3. **A `final class ExperiencePoints` mintát követtem** a
+   `copyWith` megvalósításnál. A Gamification domain (E08-R02)
+   referenciája alapján a `factory + private const + copyWith` a
+   projekt stílusa. A copyWith *nem* revalidál — a factory az
+   egyetlen structural guard; ez a Kör 6+ alkalmazásrétegnek egy
+   explicit döntése (új poszt nyilván factory-n át megy, nem
+   copyWith-on).
+
+4. **A `priority`-os stringek a notification entity-n ARB key
+   formátumúak.** A `titleKey` / `bodyKey` a `r'^[a-z][A-Za-z0-9_]*$'`
+   regexszel ellenőrzött, így a Kör 6+ UI kizárólag
+   `AppLocalizations` felé tud mutatni (AGENTS.md §7).
+
+A fenti döntések egyike sem változtatja a §6 acceptance cellákat —
+minden futó teszt zöld maradt.
+
 ## 11. Review — a Claude tölti ki
