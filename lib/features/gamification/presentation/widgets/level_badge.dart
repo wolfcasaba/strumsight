@@ -98,26 +98,29 @@ class _SkillMedallion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 64,
-      height: 64,
-      alignment: Alignment.center,
+      constraints: const BoxConstraints(minWidth: 72, minHeight: 72),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.18),
         shape: BoxShape.circle,
         border: Border.all(color: outline.withValues(alpha: 0.50), width: 2),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.school_outlined, color: color, size: 22),
-          Text(
-            '$level',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: onColor,
-              fontWeight: FontWeight.w600,
+      alignment: Alignment.center,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.school_outlined, color: color, size: 22),
+            Text(
+              '$level',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: onColor,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

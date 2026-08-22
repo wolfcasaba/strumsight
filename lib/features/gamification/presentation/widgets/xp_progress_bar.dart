@@ -78,17 +78,25 @@ class XpProgressBar extends StatelessWidget {
                     child: Text(
                       l10n.gamificationHubXpSectionTitle,
                       key: const Key('xp-progress-title'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleSmall?.copyWith(
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  Text(
-                    l10n.gamificationHubXpTotalLabel(totalXp),
-                    key: const Key('xp-progress-total'),
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      l10n.gamificationHubXpTotalLabel(totalXp),
+                      key: const Key('xp-progress-total'),
+                      maxLines: 2,
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ],

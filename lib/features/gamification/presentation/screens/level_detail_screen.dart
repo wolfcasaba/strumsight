@@ -133,6 +133,8 @@ class LevelDetailScreen extends StatelessWidget {
             Text(
               l10n.gamificationLevelDetailXpTotalLabel(latestSessionXp.totalXp),
               key: const Key('level-detail-session-total'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.titleSmall?.copyWith(
                 color: theme.colorScheme.primary,
               ),
@@ -208,11 +210,16 @@ class _XpComponentRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '${component.xp} XP',
-                key: const Key('level-detail-component-value'),
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.primary,
+              Flexible(
+                child: Text(
+                  '${component.xp} XP',
+                  key: const Key('level-detail-component-value'),
+                  maxLines: 2,
+                  textAlign: TextAlign.end,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ],

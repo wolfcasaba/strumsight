@@ -208,11 +208,15 @@ class GamificationHubScreen extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        l10n.gamificationHubOfflineReadyLabel,
-                        key: const Key('gamification-hub-offline-label'),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                      Flexible(
+                        child: Text(
+                          l10n.gamificationHubOfflineReadyLabel,
+                          key: const Key('gamification-hub-offline-label'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ],
@@ -336,6 +340,8 @@ class _InboxIndicator extends StatelessWidget {
                       Text(
                         title,
                         key: const Key('gamification-hub-inbox-title'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleSmall?.copyWith(
                           color: theme.colorScheme.onPrimaryContainer,
                         ),
@@ -344,6 +350,8 @@ class _InboxIndicator extends StatelessWidget {
                       Text(
                         semantics,
                         key: const Key('gamification-hub-inbox-status'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onPrimaryContainer,
                         ),
@@ -516,10 +524,15 @@ class _LatestResultCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(
-                      '+${result!.earnedXp} XP',
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.primary,
+                    Flexible(
+                      child: Text(
+                        '+${result!.earnedXp} XP',
+                        maxLines: 2,
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
                       ),
                     ),
                   ],
