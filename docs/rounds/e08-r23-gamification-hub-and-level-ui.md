@@ -22,6 +22,8 @@ allowed_paths = [
   "lib/features/gamification/public.dart",
   "lib/l10n/features/gamification_en.arb",
   "lib/l10n/features/gamification_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "test/features/gamification/presentation/gamification_hub_screen_test.dart",
   "test/ui/ui_inventory_test.dart",
   "docs/rounds/e08-r23-gamification-hub-and-level-ui.md",
@@ -124,16 +126,32 @@ ismerhette a váltást.
 mindkét forrás-fragmentum létezik (16 288 / 16 618 bájt, utolsó módosítás
 E08-R22-ből).
 
-**Döntés:** az `allowed_paths` a generált aggregátum helyett a forrás-
-fragmentumra cserélve (lásd fent a §4 táblázatot és a router-blokkot) — ez
-**szűkítés + célfájl-csere**, nem tágítás, tehát a §2 szerint az
-orchestrátor saját hatásköre. Az implementer az új kulcsokat a
+**Döntés:** az `allowed_paths` a forrás-fragmentummal EGÉSZÜL KI (lásd fent
+a §4 táblázatot és a router-blokkot). Az implementer az új kulcsokat a
 `lib/l10n/features/gamification_{en,hu}.arb` fragmentumba veszi fel, majd
 `dart run tool/gen_l10n_segments.dart --write`-tal regenerálja az
-aggregátumot a §7 gate előtt — a generált `lib/l10n/app_{en,hu}.arb` fájl
-maga NEM kerül `allowed_paths`-ba (a `tools/round-slots.py`
-`GENERATED_PATHS` halmaza kifejezetten emiatt nem tekinti slot-ütközésnek),
-a `check_l10n_parity` gate-lépés `--check` módban ellenőrzi a szinkront.
+aggregátumot a §7 gate előtt.
+
+### 0.0.3 Önjavítás — a §0.0.2 első verziója tévesen TÖRÖLTE az aggregátumot az `allowed_paths`-ból (Claude, 2026-08-22)
+
+A §0.0.2 első írása a `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátumot
+**kicserélte** a fragmentumra (ahelyett, hogy melléje adta volna), azzal a
+téves feltételezéssel, hogy a `tools/round-slots.py` `GENERATED_PATHS`
+kizárása a scope-audit-ra (`tools/scope-audit.py`) is vonatkozik. **Mérve
+(a resume-dispatch jelzéséből):** `scope_audit=VIOLATION`,
+`scope_audit_violations=path outside allowed scope: lib/l10n/app_en.arb;
+path outside allowed scope: lib/l10n/app_hu.arb` — a `GENERATED_PATHS` a
+`round-slots.py`-ban KIZÁRÓLAG a párhuzamos-kör slot-ütközés mérésére való
+(H8 self-heal E99-R18 kommentje szerint is), a `tools/scope-audit.py` ezt
+NEM olvassa, tisztán az `allowed_paths` ellen diffel. Az E08-R20/E08-R22
+mindkét brief **mindkét** útvonalpárt (fragmentum ÉS generált aggregátum)
+felsorolta az `allowed_paths`-ban — ez volt a helyes, már kétszer bevált
+minta, amit ennek a briefnek is követnie kellett volna elsőre. **Javítás:**
+`lib/l10n/app_en.arb` és `lib/l10n/app_hu.arb` visszakerült az
+`allowed_paths`-ba a fragmentumok MELLÉ (lásd a router-blokkot), mielőtt
+bármilyen implementer-munka a hibás listával commitolt volna a fán — a
+`scope_audit=VIOLATION` jelzés commit nélkül, `stopped` állapotban állt
+meg, tehát nincs visszavonandó munka.
 
 ## 1. Cél
 
@@ -170,6 +188,8 @@ felhasználónak · a postaláda-jelző integrálása.
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
 | `lib/l10n/features/gamification_en.arb` | az ÚJ kulcsok (forrás-fragmentum, §0.0.2) |
 | `lib/l10n/features/gamification_hu.arb` | az ÚJ kulcsok magyar párja (forrás-fragmentum, §0.0.2) |
+| `lib/l10n/app_en.arb` | GENERÁLT aggregátum — `tool/gen_l10n_segments.dart --write` írja, kézzel nem szerkesztendő (§0.0.3) |
+| `lib/l10n/app_hu.arb` | GENERÁLT aggregátum — ua. (§0.0.3) |
 | `test/features/gamification/presentation/gamification_hub_screen_test.dart` | a §6 cellái |
 | `test/ui/ui_inventory_test.dart` | a rögzített production-screen bázisvonal 62→64 (§0.0.1, L397) |
 
