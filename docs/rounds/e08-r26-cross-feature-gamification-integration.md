@@ -6,7 +6,9 @@
 - **Branch:** `<motor>/e08-r26-cross-feature-gamification-integration`
 - **Előfeltétel:** `E08-R25` merge-elve (dal-integráció)
 - **Brief szerzője:** Claude (Opus 5)
-- **ADR:** nincs — ez a kör nem hoz kötött architekturális döntést.
+- **ADR:** [`0392`](../adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)
+  — a pre-flight (Claude Sonnet 5, 2026-08-22) négy mért ponton megcáfolta a
+  brief eredeti "nincs kötött döntés" állítását; lásd §0.0.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/features/analyze/`, `lib/features/vision/`, `lib/features/ai_tutor/` és `lib/features/practice_generator/` TÉNYLEGES public szerződését — a mappanevek eltérhetnek az SDD-ben szereplőktől (`tutor`, `practice_planner`); eltérésnél §0.0 revízió, NEM új mappa létrehozása. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
@@ -28,6 +30,68 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight brief-revízió (Claude Sonnet 5, 2026-08-22, `main @ 2dc9a149`) — KÖTELEZŐ OLVASNI
+
+A négy pontot az [`ADR 0392`](../adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)
+részletezi mérve; itt a végrehajtói összefoglaló. **Visszakeresés (ADR 0312):**
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "cross-feature
+gamification adapter caller-fed signal public boundary"` → ADR 0318, ADR 0390
+(a caller-fed-DTO minta korábbi precedensei); `node tools/knowledge-rag.mjs
+--corpus lessons,halts --top 5 "empty public boundary unreachable target
+status pre-flight measured input"` → **L20** (elérhetetlen cél-státusz —
+pontosan ez a hibaosztály ismétlődött a `PlanStatus.completed`-nél, lásd 4.
+pont) és **L139** (a merge-elt `ai_tutor_boundary_test.dart` guard pontosan
+azt tiltja, amit alább 1. pont mér).
+
+1. **`ai_tutor/public.dart` VÉGLEGESEN üres — pinned guard védi
+   (`test/features/ai_tutor/ai_tutor_boundary_test.dart`, E04-R01, L139).**
+   `gamification_tutor_adapter.dart` **ZÉRÓ szimbólumot importál az
+   `ai_tutor`-ból** — csak `gamification/public.dart`-ot, plusz saját,
+   hívó-fed jel-típust (a `practice_generator`
+   `data/adapter/tutor_plan_proposal_adapter.dart`-jának `TutorPlanOutline`
+   mintáját követve). A §5.1 "beszélgetés nulla XP" ebből strukturálisan
+   következik: az adapternek nincs `TutorConversation`/`TutorTurn` bemenete,
+   mert nem tudja importálni.
+2. **`AnalyzeResult`-nak nincs `sourceHash`/`analyzerVersion` mezője, és ez
+   NEM bővíthető** (`lib/features/analyze/model/analyze_result.dart` nincs az
+   `allowed_paths`-on). `gamification_analysis_adapter.dart` saját, hívó-fed
+   jel-típust definiál ezekkel a mezőkkel (a hívó — egy jövőbeli kör — tölti
+   ki); a dedup (§5.4/A4/A5) ezen a két hívó-fed mezőn dolgozik, nem az
+   `AnalyzeResult` belsejéből olvasva.
+3. **A brief `minVisionConfidence` néven hivatkozott küszöb szó szerint nem
+   létezik**, és a hozzá tartozó guard NEM a top-level `vision/public.dart`-on
+   érhető el. A mért megfelelő: `VisionClaimGuard`
+   (`lib/features/vision/domain/integration/vision_claim_guard.dart`,
+   `_minimumConfidence = 0.70`), amely a **`lib/features/vision/domain/
+   integration/public.dart`** (egy MÁSIK, szűkebb, kifejezetten
+   cross-feature-fogyasztóknak szánt barrel) exportján át érhető el —
+   `gamification_vision_adapter.dart` EZT importálja, nem a top-level
+   `vision/public.dart`-ot. A §6.1 küszöb-hármas (alatt/rajta/fölött) így a
+   `VisionClaimGuard.evaluate()` `confidence < minimumConfidence` (szigorúan
+   kisebb) feltételén dől el: `minimumConfidence` **NEM** esik bele az
+   elutasított tartományba → a "rajta" cella VAN technikai haladást kap
+   (inkluzív-elfogadás, a brief §6.1 táblája ezt már helyesen írja le, csak a
+   szimbólum-nevet és az importútvonalat kellett pontosítani). Az A6
+   architektúra-guard mindkét vision `public.dart` barrelt (top-level ÉS
+   `domain/integration/`) elfogadott boundary-ként kezeli.
+4. **`PlanStatus.completed` (a teljes tervre vonatkozó enum) ma SEHOL nem
+   kerül beállításra** (`grep -rn "PlanStatus\." lib/features/
+   practice_generator/` — csak `draft`/`active`/`paused` élek mértek) — ez az
+   L20 hibaosztály (elérhetetlen cél-státusz). Ezzel szemben a blokk/nap-szintű
+   `PracticeItemStatus.completed` (más típus) MÁR ma reachable, és ezen az úton
+   (`plan_execution_coordinator.dart` → `practice.PracticeSessionConfig`)
+   fut a blokk-végrehajtás, amit a MEGLÉVŐ `gamification_practice_adapter.dart`/
+   `gamification_song_adapter.dart` már jutalmaz — a §5.3 premisze
+   ("a blokkok már jutalmazódtak a saját forrásukon") emiatt IGAZ, csak nem a
+   `PlanStatus`-on keresztül. `gamification_plan_adapter.dart` ezért **saját,
+   hívó-fed `planCompleted: bool` jelet fogad** (a
+   `SongGamificationSignal.fullSongCompleted` mintáját követve, ADR 0391 2.
+   döntés) — NEM próbál `active_plan_controller.dart`/
+   `generation_orchestrator.dart` (tilos zóna) állapotgépéhez hozzányúlni vagy
+   onnan olvasni. Ez a kör a plan-befejezés UI-wiringját (mikor hívja meg
+   valaki `planCompleted: true`-val az adaptert) NEM végzi el — az egy
+   jövőbeli, ezen a körön kívüli feladat.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -52,6 +116,11 @@ két legfontosabb visszaélési utat: a **beszélgetés-farmolást** és a terv-
 - A tényleges mappanevek: `lib/features/analyze/`, `lib/features/vision/`, `lib/features/ai_tutor/`, `lib/features/practice_generator/` (az SDD `tutor`/`practice_planner` néven hivatkozik rájuk — a MÉRT nevek az irányadók).
 - Az R05 `EvidenceTrust` kapuja már megvan; ez a kör a forrásonkénti bizalmi szabályokat alkalmazza.
 - Az `ADR 0289`: bizonytalan bizonyíték nem old fel elsajátítottságot.
+- **Lásd §0.0** a négy mért ponthoz (ADR 0392): `ai_tutor/public.dart` pinned
+  üres; `AnalyzeResult`-nak nincs hash/verzió mezője; a Vision-küszöb valódi
+  neve `VisionClaimGuard._minimumConfidence` a `domain/integration/public.dart`
+  barrelen; `PlanStatus.completed` elérhetetlen, a blokk-szintű
+  `PracticeItemStatus.completed` viszont már reachable és jutalmazott.
 
 ## 3. Scope
 
@@ -137,13 +206,17 @@ generál hamis eseményt.
 | Az adapter belső gamification típust importál | **A6** |
 | Hiányzó feature-nél fordítási hiba | **A7** |
 
-**A küszöb három kötelező cellája** (a Vision megbízhatósági kapu (`minVisionConfidence`)):
+**A küszöb három kötelező cellája** (a Vision megbízhatósági kapu — mért
+szimbólum §0.0/3. pont: `VisionClaimGuard._minimumConfidence = 0.70`,
+`lib/features/vision/domain/integration/vision_claim_guard.dart`, a
+`domain/integration/public.dart` barrelen át importálva; a brief eredeti
+`minVisionConfidence` neve csak leíró, nem szó szerinti szimbólum):
 
 | Cella | Bemenet | Elvárt |
 |---|---|---|
-| a küszöb **alatt** | `minVisionConfidence - 0.01` | **nincs** technikai haladás; alap-XP viszont **jár** (R05 §5.1) |
-| **rajta** (a küszöbön) | pontosan `minVisionConfidence` | **VAN** technikai haladás — a küszöb az ELFOGADÓ oldalhoz tartozik (inkluzív) |
-| a küszöb **fölött** | `minVisionConfidence + 0.01` | van technikai haladás |
+| a küszöb **alatt** | `0.70 - 0.01 = 0.69` | **nincs** technikai haladás; alap-XP viszont **jár** (R05 §5.1) |
+| **rajta** (a küszöbön) | pontosan `0.70` | **VAN** technikai haladás — `VisionClaimGuard.evaluate()` a `confidence < minimumConfidence` (szigorúan kisebb) feltétellel utasít el, tehát a küszöb maga az ELFOGADÓ oldalhoz tartozik (inkluzív) |
+| a küszöb **fölött** | `0.70 + 0.01 = 0.71` | van technikai haladás |
 
 A hármas tömören: **alatt** → elutasít · **rajta** → az §6.1 tábla dönti el · **fölött** → elfogad.
 
