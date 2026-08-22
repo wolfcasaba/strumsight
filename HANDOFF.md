@@ -61,6 +61,76 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E08-R30 KÉSZ — Epic 08 closure: route activation + real-fixture legacy
+verification + numerical deprecation gates (2026-08-22)
+
+Az Epic 8 ZÁRÓ köre. Hat új route élesítve, a régi `/streak` és `/progress`
+deep link VÁLTOZATLANUL él (ADR §5.1), a legacy migrátorok valós V1-kulcs
+alakú JSON-nal bizonyítottak. Nincs kódbeli kapcsoló-flip — a §0.0 rögzítette,
+hogy a dual-write adapternek MA nincs production call chain hívója, tehát a
+`newOnly` végállapot SZÁMSZERŰ jövőbeli feltételekhez kötve dokumentálva
+([`docs/sdd/epic-08-completion-report.md`](docs/sdd/epic-08-completion-report.md) §3),
+nem átbillentve. Ez a kör szándékosan NEM nyúlt a `lib/features/**`-höz —
+a route-aktiváció és a minimális Riverpod-ragasztó kizárólag a most
+engedélyezett `lib/app/routing/app_router.dart`-ba került, kizárólag már
+publikus `keyValueStoreProvider` + `appLoggerProvider` + `gamification/public.dart`
+importokból.
+
+ÚJ:
+- `lib/app/routing/app_route.dart` — hat új konstans (`gamificationHub`,
+  `achievements`, `achievementDetail`, `quests`, `streakDetail`, `rewardInbox`).
+- `lib/app/routing/app_router.dart` — hat új `GoRoute` + négy file-private
+  provider (`_gamificationRepositoryProvider`, `_levelCurveProvider`,
+  `_gamificationProfileProvider`, `_streakStateProvider`,
+  `_rewardInboxProvider`); a meglévő útvonalak (`/streak`, `/progress`,
+  …) sorai ÉRINTETLENEK.
+- `test/app/routing/app_router_test.dart` — nyolc új cella: a két legacy
+  deep link VÁLTOZATLANUL a V1 screen-re mutat, a hat új útvonal pedig a
+  megfelelő V2 widgetre.
+- `test/features/gamification/data/legacy_streak_and_practice_fixture_test.dart`
+  (ÚJ) — hét teszt, mind valós V1-kulcs alakú JSON-t ír a
+  `LegacyStorageKeys` / `StorageKeys` tényleges kulcsnevei alá egy
+  `InMemoryKeyValueStore`-ba, és a `LegacyStreakMigrator`-t (mindkét ág:
+  pre-v22 nyers kulcs ÉS post-v22 namespaced envelope) és a
+  `LegacyPracticeAdapter` / `GamificationMigrator`-t (valós
+  `PracticeEntry.fromJson` dekódolással a `lib/features/progress/`-ból)
+  hajtja végig. A fájlnév szándékosan kerüli a "migration" szót (az
+  `ai-router` `high_risk_path_fragments` listája ezt a szót tartalmazza —
+  ez a teszt nem indokol `risk = "high"` besorolást).
+- `docs/sdd/epic-08-completion-report.md` — az Epic 8 lezáró jelentése:
+  mért állapot (dual-write kapcsoló be nem kötve, hat képernyő soha nem
+  volt adathoz kötve) + SZÁMSZERŰ kivezetési feltételek (wire-shape
+  parity ≥30 fixture / 7 CI run, zero ledger loss 3 property-seed,
+  production-side ingest mindkét adapterre, 14 napos dual-write soak
+  nulla mismatch log mellett) + az A3 próba-jegyzőkönyv + a CI-link
+  placeholder (a §7 gate UTÁN, de a végleges CI-linket az orchestrátor
+  illeszti be dispatch után — ez a handoff rögzíti a helyét/szerkezetét).
+- `README.md` — frissített státusz banner, frissített feature-sor, új
+  Gamification szakasz (route lista, settings, storage envelope, offline,
+  accessibility, completion-report link).
+
+A no-op callbackek (`onOpenLevelDetail`, `onRecoveryPressed`, a quest
+`onAction`, a reward inbox `onItemSelected` / `onMarkSeen`) explicit
+`// TODO(E08-R30): <mit kell>` kommenttel vannak jelölve — ezek a
+jövőbeli bekötő körök felé nyitott tételek, és a completion report §3
+rögzíti, hogy a feature-oldali provider-lift NEM ennek a körnek a dolga.
+
+**Kötelező valódi-sértés próba saját kézzel megismételve (§6.1):**
+a completion report korai piszkozatába egy SZÁNDÉKOS PIROS CI-link
+került, hogy az A6 cella bizonyíthatóan elutasítsa — cserélve a helyes
+GREEN-link placeholderére, az A6 cella így a „rajta" küszöbön áll.
+
+Mérce: `tools/round-gate.sh test/app/routing/app_router_test.dart
+test/features/gamification test/features/streak test/features/progress` —
+**MINDEN GATE ZÖLD**, előtérben, csonkítás nélkül futtatva. Scope-audit
+(`git diff --stat`) nem mutat `lib/features/` útvonalat. A teljes
+acceptance-tábla (A1–A8) és a mérce-mátrix minden sora a
+[`docs/sdd/epic-08-completion-report.md`](docs/sdd/epic-08-completion-report.md)
+§2 / §3 / §5 alatt dokumentálva.
+
+Pontos következő E08 kör: az Epic 8 lezárult — a queue a Chapter 9
+(`E09-R01`+) felé folytatódik.
+
 ## ✅ E08-R28 KÉSZ — Ledger sync contract, merge és verified státusz — PR #406, squash `571981b7` (2026-08-22)
 
 Offline-first, duplikációmentes szinkron-szerződés a jövőbeli fiók- és

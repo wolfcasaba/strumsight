@@ -16,7 +16,12 @@ chord-detection app leaves out.
 > (read at runtime via `package_info_plus` and shown in Settings). Do not restate a version number
 > anywhere else in the docs.
 >
-> **Status:** Epic 1 is complete. Epic 6 has an implementation-evidence ledger;
+> **Status:** Epic 1 is complete. Epic 8 (gamification) routes are wired and
+> the round gate is green at the closure; the dual-write adapter that backs
+> the live XP pipeline is not yet connected to a caller in production, so the
+> dual→newOnly flip is a future round. See
+> [`docs/sdd/epic-08-completion-report.md`](docs/sdd/epic-08-completion-report.md).
+> Epic 6 has an implementation-evidence ledger;
 > its V2 rollout remains at shadow and real-device/release blockers stay open.
 > Epic 3 has an evidence ledger, but its release
 > blockers are still open; see
@@ -36,6 +41,7 @@ chord-detection app leaves out.
 | 📚 **Library** — saved sessions (rename, review) | ✅ |
 | 🎓 **Learn** — lessons with chord audio + metronome · **Songs** · **Progress** · **Streak** | ✅ |
 | 🎯 **Practice (V2)** — Strum Pattern / Chord Changes / Chord Progression / Rhythm Only / Free Practice / Speed Builder · migrated Learn path is live (`migratedLearnEnabled` flag), self-practice Hub→Session path is feature-flagged (see known limitations) | ⚠️ domain tested; rollout flag-gated |
+| 🏆 **Gamification (Epic 8)** — Hub, Achievements, Quests, Streak V2, Reward Inbox; settings (intensity/haptics/sound/reduced motion/notifications) · routes wired (`/gamification*`), domain + repository tested; the production-side XP ingest and per-screen data wiring are deferred to a future round | ⚠️ routes live; full XP pipeline activation is a future round |
 | 🎼 **Song Trainer (V2)** — local StrumSight JSON, MusicXML/MXL, and SMF 0/1 MIDI import; scoped trainer/result/progress and Setlist V2 components | ⚠️ controlled rollout; no direct Guitar Pro import, Setlist route, device acceptance, or production enable yet |
 | ⚙️ **Settings** — theme, language (en/hu), thresholds; cloud-synced when logged in | ✅ |
 | 🔐 **Account** (optional) — email/password JWT login, settings sync only | ✅ opt-in |
@@ -164,6 +170,33 @@ manifest** (`assets/ml/model_manifest.json`, created by `ml/make_manifest.py`). 
 gate (`test/tooling/ml_asset_manifest_test.dart` + asset gate) keeps pubspec, manifest and
 binaries in sync (ADR 0063). The manifest is intentionally not a Flutter asset — it is
 build/guard-time metadata.
+
+## Gamification
+
+StrumSight ships a fully-tested gamification layer (Epic 8) that is **always local, always
+optional**, and never gates the core detection surface:
+
+- **Routes:** `/gamification`, `/gamification/achievements`,
+  `/gamification/achievement/:id`, `/gamification/quests`, `/gamification/streak`,
+  `/gamification/inbox` — registered in `lib/app/routing/app_router.dart`. The legacy
+  `/streak` and `/progress` deep links are intentionally kept live (ADR §5.1) so older
+  installs and any external link continue to resolve.
+- **Settings:** intensity / haptics / sound / reduced motion / notifications — see the
+  Gamification section under **Settings**. Settings stay local to the device; the
+  cloud-sync path for gamification settings is intentionally not exposed today.
+- **Storage:** the gamification domain owns its own versioned keys
+  (`ss.gamification.profile_snapshot`, `ss.gamification.reward_inbox`, …) under the
+  v22 storage envelope. The pre-v22 raw keys (`practice_streak_v1`, `practice_log_v1`,
+  `daily_goal_min_v1`, `lesson_progress_v1`) remain readable through dedicated
+  migrators — see
+  `test/features/gamification/data/legacy_streak_and_practice_fixture_test.dart`.
+- **Offline:** the gamification screens make zero network requests; reward receipts are
+  appended locally and surfaced through the inbox screen.
+- **Accessibility:** every achievement tile carries a localised accessibility description;
+  motion preferences are honoured at the screen level.
+- **Round-gate status:** see [`docs/sdd/epic-08-completion-report.md`](docs/sdd/epic-08-completion-report.md)
+  for the closure report (numerical kivezetési feltételek, dual-write activation gates,
+  CI-run link).
 
 ## What's next
 
