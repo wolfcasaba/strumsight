@@ -6,7 +6,8 @@
 - **Branch:** `<motor>/e08-r27-gamification-accessibility-and-settings`
 - **Előfeltétel:** `E08-R26` merge-elve (cross-feature integráció)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0318` — a szám FOGLALT. Az ADR-t a Claude írja meg a
+- **Előre kiosztott ADR:** `ADR 0318` — STALE, lásd §0.0 (a foglaló a
+  tényleges szabad számot, `ADR 0393`-at adta). Az ADR-t a Claude írja meg a
   kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
   NEM érinti (TILOS zóna).
 
@@ -21,8 +22,11 @@ allowed_paths = [
   "lib/features/gamification/presentation/providers/gamification_preferences_provider.dart",
   "lib/features/settings/presentation/gamification_settings_section.dart",
   "lib/features/gamification/public.dart",
+  "lib/l10n/features/gamification_en.arb",
+  "lib/l10n/features/gamification_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
+  "tool/gen_l10n_segments.dart",
   "test/features/gamification/presentation/gamification_accessibility_test.dart",
   "docs/rounds/e08-r27-gamification-accessibility-and-settings.md",
 ]
@@ -31,6 +35,114 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight revízió (Claude, 2026-08-22)
+
+**ADR-szám csere.** Az előre kiosztott `ADR 0318` már foglalt egy korábbi,
+független körnél (`docs/adr/0318-song-goal-public-boundary-and-caller-fed-input.md`)
+— ugyanaz a hibaosztály, mint az E08-R22 (`0316`→`0389`) és az E08-R08
+(`0139`) mért ADR-ütközése. A kötelező `tools/round-slots.py reserve-adr
+--round E08-R27` futás a tényleges szabad számot adta: **`ADR 0393`**. A
+brief további részében és a §11 review-ban minden `ADR 0318` hivatkozás
+`ADR 0393`-ra értendő; az ADR fájl
+`docs/adr/0393-gamification-accessibility-and-settings.md` néven készül.
+
+**l10n-fragment scope (ugyanaz a hibaosztály, mint E08-R20 §0.0.1 / L396 és
+E08-R22 §0.0.1).** A brief eredeti `allowed_paths`-a a `lib/l10n/app_en.arb` /
+`app_hu.arb` fájlokat jelölte az ÚJ kulcsok helyeként — ezek `PR #343` (ADR
+0307 §4) óta **GENERÁLT aggregátumok** (`tool/gen_l10n_segments.dart`
+egyesíti a `lib/l10n/base/` + `lib/l10n/features/<feature>_<locale>.arb`
+szegmenseket → `flutter gen-l10n`), NEM kézzel szerkesztendő források. A
+tényleges forrás a meglévő `lib/l10n/features/gamification_en.arb` /
+`gamification_hu.arb` szegmens (a beállítás-szekció fizikailag
+`lib/features/settings/presentation/`-ban él, de a tartalma —
+ünneplés-intenzitás, haptika, hang, mozgás, értesítés — gamifikációs
+fogalom, ugyanaz a szegmens, amit az E08-R22 is használt). Az implementer az
+ÚJ kulcsokat a `gamification_{en,hu}.arb`-ba írja, majd
+`tool/gen_l10n_segments.dart --write`-tal szinkronizálja az aggregátumot,
+mielőtt a `flutter gen-l10n`/gate lefut. A §4 tábla és az `allowed_paths` ezt
+a revíziót tükrözi (4 új sor: a két szegmens-fájl, a generátor-szkript;
+az `app_en.arb`/`app_hu.arb` az ÍRÁS CÉLJAKÉNT marad benne).
+
+**1. Elérhetetlen cél-státusz — mért bemenetek:**
+
+- **A6 (achievement a11y-metaadat) MÁR MA teljesül — regresszió-őr, nem új
+  build.** `AchievementDefinition.accessibilityDescriptionKey`
+  (`lib/features/gamification/domain/achievements/achievement_definition.dart:173`)
+  **kötelező, konstruktor-validált** mező (`_requireLocalizationKey`), és a
+  `default_achievement_catalog.dart` mind a 22 `keyStem`-hez
+  `'${keyStem}Semantics'` alakban generálja. Mért ellenőrzés: mind a 22
+  `<keyStem>Semantics` kulcs jelen van ÉS nem üres string mindkét ARB-ban
+  (`app_en.arb`, `app_hu.arb`). Az A6 cella tehát egy **valódi-sértés próbát**
+  igénylő regresszió-őr (üresítsd ki egy kulcs értékét vagy hagyj ki egy
+  `keyStem`-et → piros → állítsd vissza), NEM egy hiányzó mező pótlása — az
+  implementer NE nyúljon a `default_achievement_catalog.dart`-hoz (amúgy sincs
+  az `allowed_paths`-on).
+- **A4 (öt beállítás hat az ünneplésre) — a bizonyíték szintje MÉRVE
+  pontosítva.** `grep -rn "RewardSummarySheet(" lib/` **0 találat**: a
+  `reward_summary_sheet.dart` (ADR 0389 §6) `RewardSummaryFeedback`
+  (`hapticsEnabled`, `soundEnabled`) MA caller-fed, és **nincs élő hívója** —
+  a képernyő, ami megjelenítené, egy jövőbeli kör dolga (feltehetően az
+  önálló UI-sávban, `E13-R32` „gamification-ui", a `docs/execution/
+  pipeline-queue.tsv` szerint). Az ADR 0389 §6 szövege szerint „az éles
+  settings-wiring Kör 27 dolga" volt — ez a mondat a PROVIDER létrehozására
+  értendő, nem egy ma nem létező képernyő tényleges bekötésére, mert nincs mit
+  bekötni. Az A4 bizonyítéka ezért egy **tiszta leképezés-teszt**: a
+  `gamification_accessibility_test.dart` a `GamificationPreferences`-ből
+  előállítja a megfelelő `RewardSummaryFeedback`-öt (és a másik három
+  beállítás — intenzitás, mozgás, értesítés — analóg, e körben bevezetett
+  leképezését) és azt méri, ANÉLKÜL, hogy a `reward_summary_sheet.dart`-ot
+  vagy egy hívó képernyőt módosítana (egyik sincs az `allowed_paths`-on). A
+  `reward_summary_sheet.dart` doc-kommentje („the wiring lands in round 27")
+  emiatt MA is stale marad — nyitott tartozás, lásd alább.
+- **A settings-szinkron minta MÉRVE.** `settings_sync.dart`
+  (`lib/features/settings/providers/settings_sync.dart:296-299`): a
+  `_syncedSignature` csak a szerver `Success` válasza UTÁN áll be — ez az öt
+  ÚJ preferencia lokális tárolásának/jövőbeli szinkronjának mintája (a
+  brief §5.3 ezt a mintát idézi, de e kör `allowed_paths`-a NEM tartalmazza a
+  `settings_sync.dart`-ot, tehát a felhő-szinkron BEKÖTÉSE explicit tilos —
+  §3 szerint is; a preferenciák e körben CSAK lokálisan perzisztálnak).
+
+**2. Erőforrás-tulajdonlás — MÉRVE.** A haptika/hang caller-fed paraméter
+(`RewardSummaryFeedback`) tulajdonosa MA a leendő hívó (nincs ilyen); az
+esemény-feldolgozás (főkönyv/széria/mastery-kiértékelés) tulajdonosa
+változatlanul az `application/*_evaluator.dart`/`*_service.dart` fájlok
+(`grep -rln "appendIfAbsent" lib/features/gamification/` →
+`achievement_evaluator.dart`, `daily_challenge_service.dart`) — ezek NINCSENEK
+az `allowed_paths`-on, tehát a kikapcsolás-vizuális réteg (§5.1) nem
+érintheti/nem állíthatja le őket; a kikapcsolás kizárólag a MEGJELENÍTŐ
+rétegben (a leképezés-teszt szintjén) dönthető el.
+
+**Visszakeresett előzmény** (ADR 0312, szűkített korpusszal előbb):
+`adr/0389` (Jutalom-postaláda és ünneplés-koordinátor — a haptika/hang
+caller-fed minta és a „Kör 27 dolga" eredeti ígérete, most pontosítva),
+`halts/E08-R22` (ugyanez a caller-fed minta, ADR-szám-csere precedens),
+`adr/0290` (Együttérző széria — nincs büntető nyelv, §5.2 forrása), `adr/0289`
+(elsajátítottság mért teljesítmény), és `lessons/L381` (E13-R03 — a
+küszöbteszt ÖNMAGÁBAN nem bizonyítja a helyes WCAG sRGB→luminancia
+transzformációt; a below/at/above cellák idealizált luminanciával átjárhatók
+egy hibás — pl. köbözött — linearizáció mellett is). A §7 (A7, WCAG AA
+kontraszt) implementációja emiatt KÖTELEZŐEN a `math.pow(x, 2.4)` sRGB
+relatív luminancia transzformációt használja (NEM köbözést), és a
+below/at/above küszöb-hármas MELLÉ legalább egy kipinnelt, nem idealizált
+RGB-vektort is mér (pl. a `contrast_test.dart` mintája szerint) — a
+küszöbcellák önmagukban, idealizált luminanciával, nem fogták volna meg az
+L381 hibaosztályát. Nem talált a fentiekkel ellentétes elfogadott döntést.
+
+**Kockázat = high, indoklás:** a `risk = "high"` a brief eredeti besorolása
+szerint marad, bár egyik `allowed_paths` sem egyezik a router
+`high_risk_path_fragments` listájával (auth, authorization, camera,
+credential, crypto, encryption, migration, payment, privacy, secret, share,
+upload, vision). Az indok tartalmi, nem útvonal-alapú: ez a kör explicit
+**sötét minta elleni korlátot** kényszerít ki termékszinten (§5.2 — az
+értesítési engedély megadása tilos, hogy jutalmazzon), és az egyetlen
+felület, ahol a felhasználó a teljes gamifikációs réteget kikapcsolhatja
+ANÉLKÜL, hogy az alatta futó, már jóváírt haladás-adat elveszne (§5.1) — egy
+visszacsúszó „kis üdvözlő bónusz" az engedélyért, vagy egy, a kikapcsoláskor
+leálló esemény-feldolgozás nem UI-kozmetika, hanem egy már elfogadott
+mért compassionate-UX szerződést (ADR 0290 §1) törne el. Ezt kizárólag a §6.1
+kötelező valódi-sértés próba (A1-re) és az engedély-cella (A3) fogja meg
+gépi mércével.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -71,7 +183,10 @@ angol szöveg tartalmi ellenőrző-listán.
 - A `lib/features/settings/` többi fájljának módosítása (csak az új szekció).
 - A felhő-szinkron viselkedésének megváltoztatása.
 - Tényleges push-értesítés küldése — ez a kör a KAPCSOLÓT adja.
-- `docs/adr/**` — az ADR 0318-at a Claude írja.
+- A `reward_summary_sheet.dart` (vagy bármely képernyő, ami ténylegesen
+  meghívja) tényleges bekötése az új providerre — lásd §0.0, ez a fájl NEM
+  szerepel az engedélyezett listán, és MA nincs is élő hívója.
+- `docs/adr/**` — az ADR 0393-at a Claude írja.
 
 ## 4. Engedélyezett fájlok
 
@@ -81,13 +196,16 @@ angol szöveg tartalmi ellenőrző-listán.
 | `lib/features/gamification/presentation/providers/gamification_preferences_provider.dart` | **ÚJ** — a Riverpod provider |
 | `lib/features/settings/presentation/gamification_settings_section.dart` | **ÚJ** — a beállítás-szekció |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
-| `lib/l10n/app_en.arb` | az ÚJ kulcsok |
-| `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
+| `lib/l10n/features/gamification_en.arb` | az ÚJ kulcsok VALÓDI forrása (§0.0 — a `gamification` szegmens, NEM az `app_en.arb`) |
+| `lib/l10n/features/gamification_hu.arb` | az ÚJ kulcsok magyar párja, ugyanabban a szegmensben |
+| `lib/l10n/app_en.arb` | GENERÁLT aggregátum — a `tool/gen_l10n_segments.dart` írja újra, kézzel NEM szerkesztendő (§0.0) |
+| `lib/l10n/app_hu.arb` | GENERÁLT aggregátum, ugyanaz |
+| `tool/gen_l10n_segments.dart` | a szegmens → aggregátum generátor FUTTATÁSA (`--write`), nem szerkesztése |
 | `test/features/gamification/presentation/gamification_accessibility_test.dart` | a §6 cellái |
 
 **Tilos zóna:** `lib/features/settings/` MINDEN más fájlja · `lib/features/` többi feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**`
 
-## 5. Kötött architekturális döntések (ADR 0318)
+## 5. Kötött architekturális döntések (ADR 0393)
 
 ### 5.1 A KIKAPCSOLÁS VIZUÁLIS — a haladás NEM VÉSZ EL
 
