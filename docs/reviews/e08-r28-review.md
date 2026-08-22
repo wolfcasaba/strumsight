@@ -3,9 +3,50 @@
 Brief: `docs/rounds/e08-r28-ledger-sync-contract-and-merge.md`
 Diff: `git diff f055e97e..af7f2264` (pre-flight commit → implementer HEAD)
 Reviewer: Claude Sonnet 5 (`--effort high`) · Dátum: 2026-08-22
-Verdikt: **CHANGES REQUIRED**
+Verdikt (1. forduló): CHANGES REQUIRED
+Verdikt (javító kör után, commit `4389b508`): **APPROVED**
 
-## Összegzés
+## Frissítés a javító kör után (2026-08-22, `4389b508`)
+
+Mindkét nyitott lelet zárva, saját kézzel megismételt gate-tel + tartalmi
+ellenőrzéssel (nem csak a jelentett kimenet elfogadásával):
+
+- **F1 (MAJOR) → FIXED.** A Dart `encodeUpload()` mostantól LAPOS wire-alakot
+  termel (`json.remove('totalXp')`, nincs `receipt`-beágyazás, nincs `status`
+  mező a feltöltésen), pontosan a backend `ReceiptUpload` gyökér-mezőivel
+  egyezően. ÚJ, kétoldali teszt bizonyítja az interoperabilitást: a Dart
+  oldalon a TÉNYLEGES `encodeUpload()` kimenet kulcsait ellenőrzi
+  (`ledger_merge_policy_test.dart` „F1 — wire-shape compatibility" csoport),
+  a backend oldalon egy kézzel felírt, a Dart kimenetet tükröző fixture-t
+  old fel `LedgerUploadEnvelope.model_validate(...)`-tal, ELFOGADÁSSAL
+  (`test_f1_dart_shaped_envelope_is_accepted_by_backend`) — plusz egy
+  szomszédos teszt, ami bizonyítja, hogy a `totalXp`/`status` mezők
+  BEINJEKTÁLÁSA a lapos alakba továbbra is elutasításra kerül
+  (`test_f1_dart_shaped_envelope_rejects_injected_status_and_totalXp`).
+  Saját kézzel megismételve: a `LedgerUploadEnvelope.model_validate()` a
+  Dart oldal valós kimenetét most már hiba nélkül fogadja el.
+- **F2 (MINOR) → FIXED.** `ledgerId`/`sourceEventId` `max_length=256`,
+  `receipts` lista `max_length=500` (`schemas.py`). NÉGY új teszt: két
+  „fölötte" eset (257 karakter, 501 elem) elutasítva, egy „rajta" eset
+  (256/500, inkluzív) elfogadva — a határ mindkét oldala mérve, nem csak a
+  triviális eset.
+- **Gate-blokkoló köztes epizód (nem lelet, tooling-jegyzet):** az első
+  javító-kör futás közben az implementer egy ÜRES helyi
+  `backend/.venv`-et hozott létre (a `pip install`-t helyesen blokkolta az
+  `implementer_guard`), ami beárnyékolta a `tools/round-gate.sh` már
+  meglévő, működő fallback-ját a közös `$HOME/music-theory/backend/.venv`-re
+  — emiatt `stopped`-ot jelzett. Az orchesztrátor törölte a lokális, üres
+  venv-et (gitignore-olt, önmagától létrehozott, biztonságosan törölhető
+  artefaktum), majd egy rövid resume-prompttal folytatta a kört — a
+  tényleges F1/F2 kódjavítások ÉRINTETLENEK maradtak, csak a záró gate
+  futott le újra sikeresen utána.
+- **Független gate-újrafuttatás** (`/tmp/review-e08-r28`, friss klón,
+  `4389b508`): mind a 9 lépés zöld (format, analyze, teszt, architecture,
+  secrets, l10n, backend ruff format/check, backend pytest). Scope-audit:
+  OK (10 changed path, 2 generated/ignored — a `.dart_tool`/`pubspec.lock`
+  jellegű generált útvonalak, nem forráskód).
+
+## Összegzés (1. forduló, javítás előtt)
 
 BLOCKER: 0 · MAJOR: 1 · MINOR: 2 · NOTE: 3
 
@@ -73,4 +114,4 @@ BLOCKER: 0 · MAJOR: 1 · MINOR: 2 · NOTE: 3
 
 ## Merge-döntés
 
-**Merge TILOS**, amíg az F1 (MAJOR) nyitva van (ADR 0052). A javító kör ugyanazzal a motorral (`minimax`) megy, az F1+F2 leletlistával — a lánc normál útja, nem halt-ok (user-döntés 2026-07-31).
+**Mindkét lelet FIXED, javító kör után (`4389b508`).** Nincs nyitott BLOCKER/MAJOR. Az ADR 0052 zöld-kapus szabálya szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → **merge mehet**, a CI-run (exact HEAD SHA-n) begyűjtése után.
