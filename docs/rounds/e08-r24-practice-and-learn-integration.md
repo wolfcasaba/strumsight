@@ -340,4 +340,122 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - No new `docs/adr/**` — ADR 0390 was the pre-flight artifact, written by
   Claude in §0.0.
 
+### Javító kör #1 — F1 + F2 closure evidence (minimax, 2026-08-22)
+
+A review (`docs/reviews/e08-r24-review.md`) két BLOCKER-t tárt fel:
+
+- **F1** — `GamificationLessonAdapter` `stableEventId` a `lessonId`-ból
+  származott, így ugyanaz a lecke MÁSODIK teljesítése a ledger
+  `appendIfAbsent` dedupján csendben elnyelődött (örök XP-blokk az első
+  teljesítés után).
+- **F2** — a `GamificationLessonAdapter`/`recordLesson` nulla
+  tesztlefedettséggel landolt; a `practice_reward_flow_test.dart` kizárólag
+  a practice adaptert gyakorolta.
+
+Mindkettő ugyanabban a javító körben zárult.
+
+#### F1 javítása
+
+`LessonGamificationSignal` kapott egy `attemptId` (String) mezőt — ez a
+hívó által generált, session/attempt-szintű azonosító, analóg a practice
+oldal `sessionId` mezőjével. A `stableEventId` mostantó ebből számol,
+NEM a `lessonId`-ból:
+
+- Lásd: `lib/features/learn/application/gamification_lesson_adapter.dart`
+  - `LessonGamificationSignal` `attemptId` mező (új, kötelező,
+    `assert`-védett).
+  - `GamificationLessonAdapter.stableEventId(String attemptId)` (a
+    `lessonId` paraméter `attemptId`-re cserélve).
+  - `recordLesson` belsejében `stableEventId(signal.attemptId)` a hívás
+    (korábban `signal.lessonId`).
+
+A nap-közötti/napon-belüli csökkenő hozamot a MEGLÉVŐ
+`practiceOccurrenceCount` / `RewardPolicyHistory` mechanizmus kezeli
+(`reward_policy_engine.dart`), nem kellett új policy-logikát írni —
+pontosan a review §F1-ben leírtak szerint.
+
+#### F2 javítása
+
+A `test/features/gamification/integration/practice_reward_flow_test.dart`
+(kiterjesztve a §4 allowed_paths-on belül) új `group('Lesson →
+gamification reward flow (E08-R24)', ...)` csoportot kapott, ami a
+practice oldal A1/A3/A5/A6/A7 mátrixát tükrözi a lecke-oldalra:
+
+- 2× A1 (end-to-end lánc + outbox/ledger eventId-egyezés).
+- 1× A3 (result-screen reopen → azonos `eventId`, ledger 1 bejegyzés).
+- 4× A5 (cancelled/failed denied, too-short denied, partial-below denied,
+  partial-above pays XP).
+- 3× A6 (OFF/dual/newOnly kapcsoló-hármas).
+- 2× A7 (non-XP legacy sink + §6.1 valódi-sértés próba).
+- **1× F1 regressziós őr** (két KÜLÖNBÖZŐ napi, KÜLÖNBÖZŐ
+  `attemptId`-jú teljesítés ugyanazon a `lessonId`-on → két KÜLÖNBÖZŐ
+  `eventId`, két ledger bejegyzés, mindkettő `totalXp > 0`).
+
+A meglévő `_Fixture` minta alapján `_LessonFixture` párja készült, és a
+két adapter enum (`GamificationDualWriteMode`) névütközését `as
+lesson_adapter` import-alias-szal oldottuk fel (a típusrendszer a két
+enumot külön típusnak tekinti).
+
+#### Acceptance evidence (javító kör)
+
+| Cell | Evidence |
+|---|---|
+| F1 fix | `lesson_adapter.dart` `attemptId` mező + `stableEventId(attemptId)`; az új F1 regressziós teszt `eventId != eventId` és `ledger.length == 2` — a régi `stableEventId(lessonId)` kóddal ez a teszt PIROSRA váltana (a két attempt ugyanazt az eventId-t kapná, és a második a dedup miatt kimaradna) |
+| F2 fix | `practice_reward_flow_test.dart` új `Lesson → gamification reward flow (E08-R24)` csoport, 13 teszt, ugyanaz az A1/A3/A5/A6/A7 mátrix mint a practice oldalon |
+| A1 (lesson) | 2 cell, end-to-end, gate zöld |
+| A3 (lesson) | 1 cell, gate zöld |
+| A5 (lesson) | 4 cell (cancelled/failed/too-short/partial-below/partial-above), gate zöld |
+| A6 (lesson) | 3 cell (OFF/dual/newOnly), gate zöld |
+| A7 (lesson) | 2 cell (happy path + §6.1 valódi-sértés), gate zöld |
+| A2, A4, A8 | a korábbi §10 táblázatban már bizonyítva, a javító kör nem érintette |
+
+#### Commands actually run (javító kör)
+
+| Claim | Command run |
+|---|---|
+| A teljes §7 gate zöld (format / analyze / 3×test / architecture / secrets / l10n) | `tools/round-gate.sh test/features/gamification/integration/practice_reward_flow_test.dart test/core/architecture_dependency_test.dart test/features/learn` → minden fázis zöld (lásd lent a teljes kimenet) |
+| A kibővített practice_reward_flow_test suite 25 teszttel fut | `flutter test test/features/gamification/integration/practice_reward_flow_test.dart` → `00:00 +25: All tests passed!` (12 practice + 13 lesson) |
+| A `test/features/learn` suite zöld maradt | `flutter test test/features/learn` → `+201 ~1: All tests passed!` (megegyezik a javítás előtti számmal: A2/A8 VÁLTOZATLAN) |
+| Az A4 architektúra-guard zöld | `flutter test test/core/architecture_dependency_test.dart` → `+32: All tests passed!` |
+
+A kapu artefaktum teljes, csonkítatlan kimenete a javító kör session-naplójában
+(`gate-e08-r24-fix1.log`) megtekinthető — a fenti táblázat minden sora egy-egy
+futtatott parancs kimenetére hivatkozik, nem állításra.
+
+#### Miért nem tér vissza az F1 hiba a jövőben (önellenőrzés a `done` előtt)
+
+Az F1 regressziós teszt (a fenti `Lesson` csoport utolsó sora:
+`F1 regression: same lessonId, two different attempts on different days
+produce TWO distinct eventIds and TWO ledger entries`) KÖZVETLENÜL a régi
+implementációra lett írva:
+
+1. Két, KÜLÖNBÖZŐ `attemptId` (`'attempt-day1'`, `'attempt-day5'`).
+2. Két, KÜLÖNBÖZŐ `epochDay` (`20400`, `20404`, 4 nap eltéréssel —
+   megegyezik a review mért reprodukciójával).
+3. UGYANAZ a `lessonId`.
+
+A teszt három állítást tesz, mindhárom a régi kóddal pirosra váltana:
+
+- `first.eventId != second.eventId` — a régi `stableEventId(lessonId)`-vel
+  mindkét attempt ugyanazt az `'learn-lesson/lesson-blue-bird/v1'` eventId-t
+  kapná.
+- `ledger.length == 2` — a régi kóddal a második attempt az outbox-drainben
+  a ledger `appendIfAbsent` dedupja miatt elnyelődne.
+- `entries.every((e) => e.totalXp > 0)` — a második attempt XP-je a régi
+  kódban sosem érne a ledgerbe.
+
+A review ezt a saját izolált klónjában fogja újraellenőrizni.
+
+#### Not in this fix round
+
+- A scope a §4 allowed_paths-on belül maradt: csak a `lesson_adapter.dart`
+  és a `practice_reward_flow_test.dart` módosult (a `dart format` post-hook
+  egy további commitot hozott létre az import-alias javításáról).
+- Nincs új `test/features/gamification/integration/lesson_reward_flow_test.dart`
+  — a brief §4 listája nem tartalmazza, a javítás a meglévő fájl
+  kiterjesztésével történt (a méret ~700 sor, de a teszt-szervezés
+  ugyanazt a mintát követi).
+- Nincs `lib/features/gamification/public.dart` módosítás — a javításhoz
+  nem kellett új szimbólumot exportálni.
+
 ## 11. Review — a Claude tölti ki
