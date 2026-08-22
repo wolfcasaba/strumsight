@@ -541,5 +541,6 @@
       "xp": {"type": "int"}
     }
   },
-  "gamificationHubOfflineReadyLabel": "Offline is elérhető"
+  "gamificationHubOfflineReadyLabel": "Offline is elérhető",
+  "gamificationHubAchievementsTitle": "Eredmények"
 }

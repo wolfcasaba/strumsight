@@ -541,5 +541,6 @@
       "xp": {"type": "int"}
     }
   },
-  "gamificationHubOfflineReadyLabel": "Available offline"
+  "gamificationHubOfflineReadyLabel": "Available offline",
+  "gamificationHubAchievementsTitle": "Achievements"
 }

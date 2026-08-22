@@ -1218,6 +1218,7 @@
   "dynamicsMetricOutlierRatio": "Kiugró pengetés aránya",
   "dynamicsMetricQuietRegionRatio": "Csendes szakasz aránya",
   "dynamicsMetricStrokeStrengthCv": "Pengetéserősség-szórás",
+  "gamificationHubAchievementsTitle": "Eredmények",
   "gamificationHubEmptyLegacyBody": "A Hub új alapokra épül. A történeted itt fog újra megjelenni, amint az átépítés befejeződik.",
   "gamificationHubEmptyLegacyTitle": "Új fejezet a haladásodban",
   "gamificationHubEmptyNewBody": "A gyakorlásod itt jelenik meg, amint befejezel egy mért alkalmat.",

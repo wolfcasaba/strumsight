@@ -1245,6 +1245,7 @@
   "dynamicsMetricOutlierRatio": "Outlier stroke ratio",
   "dynamicsMetricQuietRegionRatio": "Quiet-region ratio",
   "dynamicsMetricStrokeStrengthCv": "Stroke-strength variation",
+  "gamificationHubAchievementsTitle": "Achievements",
   "gamificationHubEmptyLegacyBody": "The Hub is being rebuilt on a new foundation. Your history will keep showing here once the rebuild completes.",
   "gamificationHubEmptyLegacyTitle": "A new chapter for your progression",
   "gamificationHubEmptyNewBody": "Practice will surface here as soon as you complete a measured session.",
