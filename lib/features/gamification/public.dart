@@ -49,6 +49,8 @@ export 'domain/streak/streak_policy.dart';
 export 'domain/streak/streak_state.dart';
 export 'domain/streak/streak_transition.dart';
 export 'data/reward_ledger_repository.dart';
+export 'data/sync/gamification_sync_contract.dart';
+export 'data/sync/ledger_merge_policy.dart';
 export 'infrastructure/default_reward_eligibility_policy.dart';
 export 'infrastructure/default_reward_policy.dart';
 export 'infrastructure/default_streak_policy.dart';
