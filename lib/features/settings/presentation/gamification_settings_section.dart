@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:strumsight/features/gamification/public.dart';
 
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../gamification/domain/gamification_preferences.dart';
-import '../../gamification/presentation/providers/gamification_preferences_provider.dart';
 
 /// Settings section for the gamification layer (ADR 0393 §5).
 ///

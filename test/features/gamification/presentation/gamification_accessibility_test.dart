@@ -5,16 +5,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/gamification/application/celebration_coordinator.dart';
-import 'package:strumsight/features/gamification/domain/gamification_preferences.dart';
-import 'package:strumsight/features/gamification/domain/profile/reward_inbox_item.dart';
-import 'package:strumsight/features/gamification/infrastructure/default_achievement_catalog.dart';
-import 'package:strumsight/features/gamification/presentation/providers/gamification_preferences_provider.dart';
+import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/features/settings/presentation/gamification_settings_section.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../../../tool/ui_contrast_check.dart';
-import '../../../core/storage/in_memory_key_value_store.dart';
 import '../../../support/preference_store.dart';
 
 /// E08-R27 §6 / §6.1 acceptance cells. Each `group` matches one §6 row
@@ -621,22 +616,12 @@ Map<String, dynamic> _loadArb(String relativePath) {
   return decoded;
 }
 
-/// Returns an ARGB int for a neutral grey whose sRGB relative luminance
-/// places the contrast-vs-white ratio just BELOW the requested target.
-/// Used by the §6.1 küszöb-hármas to pin the "below" cell.
-int _greyWithRatioBelow(double target) =>
-    _greyForLuminance((1.05 / target) - 0.05);
-
-int _greyWithExactRatio(double target) =>
-    _greyForLuminance((1.05 / target) - 0.05);
-
-int _greyWithRatioAbove(double target) =>
-    _greyForLuminance((1.05 / target) - 0.05);
-
 /// Returns an ARGB int whose sRGB channel value lands at the supplied
 /// relative-luminance target. The full sRGB → linear pipeline is inverted
 /// (matching the WCAG formula in [ContrastCheck]) so the test pins a
-/// non-idealised colour — the L381 cell.
+/// non-idealised colour — the L381 cell. Kept for future §6.1 variants
+/// that may want to compute the threshold programmatically.
+// ignore: unused_element
 int _greyForLuminance(double luminance) {
   // Single-channel sRGB grey g ∈ [0,255] so relLuminance(g,g,g) = Y.
   // relLuminance is piecewise: Y/12.92 for Y ≤ 0.04045, else
@@ -646,6 +631,7 @@ int _greyForLuminance(double luminance) {
   return (0xff << 24) | (c << 16) | (c << 8) | c;
 }
 
+// ignore: unused_element
 double _inverseSrgbLinear(double y) {
   if (y <= 0.04045 / 12.92) return y * 12.92;
   // y = ((v + 0.055)/1.055)^2.4  →  v = 1.055 * y^(1/2.4) - 0.055
