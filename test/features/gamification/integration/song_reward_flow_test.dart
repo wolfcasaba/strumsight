@@ -518,6 +518,132 @@ void main() {
       );
     });
   });
+
+  // ── §7 valódi-sértés próbák ──────────────────────────────────────────
+  //
+  // Both probes exercise the broken branches the production adapter
+  // MUST avoid. They run as test cases (RED on the broken branch,
+  // asserted by the production test as GREEN). The §10 handoff records
+  // the run.
+
+  group('§7 valódi-sértés próbák (E08-R25)', () {
+    test(
+      'Probe 1 — session-bookkeeping OFF: sections + full song pay the '
+      'SAME as a free-session full song (A1 inflation cell goes RED)',
+      () async {
+        final broken = _BrokenFixture.build();
+
+        // 3 sections + full song in the SAME session.
+        final sectionSignal = _signalWithSections(
+          sessionId: 'song-section-bearing',
+          sectionCount: 3,
+          fullSongCompleted: true,
+        );
+        await broken.adapter.recordSession(sectionSignal);
+        await broken.ingestor.drain();
+        final sectionFullTotal = _totalXpFor(
+          entries: broken.ledger.readPage(limit: 20).entries,
+          eventId: GamificationSongAdapter.fullSongEventId(
+            sessionId: 'song-section-bearing',
+          ),
+        );
+
+        // 0 sections + full song in a fresh session.
+        final natural = _BrokenFixture.build();
+        final naturalSignal = _signalWithSections(
+          sessionId: 'song-natural',
+          sectionCount: 0,
+          fullSongCompleted: true,
+        );
+        await natural.adapter.recordSession(naturalSignal);
+        await natural.ingestor.drain();
+        final naturalTotal = _totalXpFor(
+          entries: natural.ledger.readPage(limit: 20).entries,
+          eventId: GamificationSongAdapter.fullSongEventId(
+            sessionId: 'song-natural',
+          ),
+        );
+
+        // The broken adapter pays identical XP for both — the §6.1 A1
+        // inflation cell. The production test asserts the inverse:
+        // section-bearing sessions pay STRICTLY LESS than a free-session
+        // full song (and STRICTLY MORE than zero).
+        expect(
+          sectionFullTotal,
+          equals(naturalTotal),
+          reason:
+              'With the bookkeeping disabled, the full-song event is '
+              'indistinguishable from a free-session full song — the '
+              'A1 inflation cell fails.',
+        );
+      },
+    );
+
+    test('Probe 2 — parentEventId-style binary dedup: the full-song event '
+        'pays ZERO XP (A1 rajta cell goes RED)', () async {
+      // The §0.0/§6.1 measurement: a literal `parentEventId: <section>`
+      // link invokes the R06 binary dedup and zeros the full-song event.
+      // The production adapter never sets `parentEventId`, so this
+      // branch is unreachable in production — but the probe proves the
+      // binary dedup IS what the R06 layer would do, and the production
+      // adapter's session-bookkeeping is the only thing keeping the
+      // bonus alive.
+      const sectionEventId = 'song-section/probe-2/intro/v1';
+      final fullEventId = GamificationSongAdapter.fullSongEventId(
+        sessionId: 'song-probe-2',
+      );
+      final eligibility = DefaultRewardEligibilityPolicy(
+        config: RewardEligibilityPolicyConfig.standard(),
+      );
+      final rewardPolicy = DefaultRewardPolicy(
+        config: RewardPolicyConfig.standard(),
+      );
+      final decision = eligibility.evaluate(
+        RewardEligibilityRequest(
+          source: ActivitySource.songTrainer,
+          outcome: ActivityOutcome.completed,
+          trust: EvidenceTrust.scored,
+          validDuration: const Duration(minutes: 3),
+          quality: 0.85,
+        ),
+      );
+
+      // Day 1 history: the section is already rewarded (and registered
+      // as a parent), so any later event that names it as parentEventId
+      // will be zeroed by the R06 dedup.
+      final history = RewardPolicyHistory(
+        epochDay: _defaultEpochDay,
+        earnedTodayXp: 0,
+        practiceOccurrenceCount: 0,
+        rewardedEventIds: {sectionEventId},
+        rewardedParentIds: {sectionEventId},
+        rewardedChildParentIds: const <String>{},
+      );
+      final request = RewardPolicyRequest(
+        eventId: fullEventId,
+        practiceKey: GamificationSongAdapter.hashedSongId('probe-song'),
+        parentEventId: sectionEventId,
+        epochDay: _defaultEpochDay,
+        source: ActivitySource.songTrainer,
+        eligibility: decision,
+        validDuration: const Duration(minutes: 3),
+        qualityScore: 0.85,
+        improvementDelta: 0,
+        uniqueSourcesToday: 1,
+      );
+
+      final policyDecision = rewardPolicy.decide(request, history);
+
+      expect(
+        policyDecision.points.totalXp,
+        equals(0),
+        reason:
+            'parentEventId binary dedup zeros the full-song event — the '
+            'production adapter avoids this branch by never setting '
+            'parentEventId on a song event.',
+      );
+    });
+  });
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -644,4 +770,88 @@ class _Fixture {
         rewardedParentIds: <String>{},
         rewardedChildParentIds: <String>{},
       );
+}
+
+/// Probe fixture for §7 Probe 1. The broken adapter strips the
+/// session-bookkeeping branch (always treats the session as
+/// section-free). The probe asserts the broken branch produces equal
+/// XP for a section-bearing session and a free-session full run — the
+/// §6.1 A1 inflation cell. The fixture class wraps the broken adapter
+/// with the standard ledger/outbox/ingestor wiring so the test can
+/// drive the same drain flow as the production tests.
+class _BrokenBookkeepingSongAdapter extends GamificationSongAdapter {
+  _BrokenBookkeepingSongAdapter({
+    required super.ingestor,
+    required super.eligibility,
+    required super.rewardPolicy,
+    required super.historyBuilder,
+  });
+
+  @override
+  Future<SongGamificationOutcome> recordSession(SongGamificationSignal signal) {
+    // Force bookkeeping OFF: pretend there are no section events in
+    // the session so the full-song event always uses the natural
+    // (full-size) signal.
+    final broken = SongGamificationSignal(
+      sessionId: signal.sessionId,
+      song: signal.song,
+      validDuration: signal.validDuration,
+      quality: signal.quality,
+      evidenceTrust: signal.evidenceTrust,
+      score: signal.score,
+      epochDay: signal.epochDay,
+      occurredAt: signal.occurredAt,
+      sectionEvents: const <SongSectionEventSignal>[],
+      fullSongCompleted: signal.fullSongCompleted,
+      setlistRunId: signal.setlistRunId,
+      setlistItemId: signal.setlistItemId,
+      tempoMilestone: signal.tempoMilestone,
+    );
+    return super.recordSession(broken);
+  }
+}
+
+class _BrokenFixture {
+  _BrokenFixture._({
+    required this.ledger,
+    required this.outbox,
+    required this.ingestor,
+    required this.adapter,
+  });
+
+  factory _BrokenFixture.build() {
+    final store = InMemoryKeyValueStore(<String, Object>{});
+    const logger = NoopAppLogger();
+    final ledger = LocalRewardLedgerRepository(store: store, logger: logger);
+    final outbox = LocalActivityOutboxRepository(
+      ledger: ledger,
+      store: store,
+      logger: logger,
+      capacity: 32,
+      maxAttempts: 3,
+    );
+    final ingestor = ActivityEventIngestor(outbox: outbox, logger: logger);
+    final eligibility = DefaultRewardEligibilityPolicy(
+      config: RewardEligibilityPolicyConfig.standard(),
+    );
+    final rewardPolicy = DefaultRewardPolicy(
+      config: RewardPolicyConfig.standard(),
+    );
+    return _BrokenFixture._(
+      ledger: ledger,
+      outbox: outbox,
+      ingestor: ingestor,
+      adapter: _BrokenBookkeepingSongAdapter(
+        ingestor: ingestor,
+        eligibility: eligibility,
+        rewardPolicy: rewardPolicy,
+        historyBuilder: _Fixture._emptyHistory,
+      ),
+    );
+  }
+
+  final LocalRewardLedgerRepository ledger;
+  final LocalActivityOutboxRepository outbox;
+  final ActivityEventIngestor ingestor;
+  final _BrokenBookkeepingSongAdapter adapter;
 }
