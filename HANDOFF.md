@@ -62,7 +62,26 @@ list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
 ## ✅ E08-R30 KÉSZ — Epic 08 closure: route activation + real-fixture legacy
-verification + numerical deprecation gates (2026-08-22)
+verification + numerical deprecation gates — PR [#407](https://github.com/wolfcasaba/strumsight/pull/407), squash `a8ecb9f3` (2026-08-22)
+
+**EPIC 8 (GAMIFICATION) LEZÁRVA — mind a 30 köre kész.** Implementer MiniMax
+M3, orchesztrátor/reviewer Claude Sonnet 5, javító kör nélkül (0
+BLOCKER/MAJOR/MINOR, 2 NOTE — `docs/reviews/e08-r30-review.md` APPROVED). A
+kör pre-flightja saját `§0.0` brief-revíziót igényelt: a 2026-08-18-i brief
+nem mérte, hogy (1) a tényleges `GoRoute` wiring `app_router.dart`-ban él, nem
+az engedélyezett `app_route.dart`-ban ([[L97]]/[[L94]] mintázat), (2) a hat új
+képernyő egyike sem volt valaha adathoz kötve (nulla példányosítás
+production kódban), (3) a „Kör 24 migrációs kapcsoló" sehol nincs élesítve
+(`dualWriteMode:` nulla találat), (4) a meglévő legacy-migrációs teszt
+idealizált `PracticeEntry`-kkel dolgozott, nem valós V1-kulcs-alakú JSON-nal.
+Az `allowed_paths` a revízióval bővült (`app_router.dart` + egy ÚJ
+fixture-teszt), a scope-audit mindkét dispatch után OK (0 sértés). Exact-SHA
+`3a6f10b3`: Full Gate
+[32569011383](https://github.com/wolfcasaba/strumsight/actions/runs/32569011383)
++ Router CI
+[32569012517](https://github.com/wolfcasaba/strumsight/actions/runs/32569012517)
+success; a reviewer saját izolált `/tmp` klónban mind a kilenc gate-lépést
+függetlenül újrafuttatta (zöld) és a scope-audit-ot is saját kézzel mérte.
 
 Az Epic 8 ZÁRÓ köre. Hat új route élesítve, a régi `/streak` és `/progress`
 deep link VÁLTOZATLANUL él (ADR §5.1), a legacy migrátorok valós V1-kulcs
@@ -129,7 +148,26 @@ acceptance-tábla (A1–A8) és a mérce-mátrix minden sora a
 §2 / §3 / §5 alatt dokumentálva.
 
 Pontos következő E08 kör: az Epic 8 lezárult — a queue a Chapter 9
-(`E09-R01`+) felé folytatódik.
+(`E09-R01`+) felé folytatódik (ellenőrizve: `pipeline-queue.tsv`-ben ez az
+első `pending` sor E08-R30 után, megelőzi a Chapter 13 E13-R05-öt).
+
+**Nyitott, EMBERI döntést NEM igénylő tartozások, EZUTÁN a bekötő kör
+dolga** (`docs/sdd/epic-08-completion-report.md` §3 + a review N1/N2):
+
+- a hat új képernyő adatvetületei jelenleg egyszeri (`Provider`, nem
+  `StreamProvider`) olvasások `app_router.dart`-ban — a Hub/Streak-
+  detail/Inbox nem frissül élőben, amíg az app-session újra nem indul;
+- `activeQuestCount`, `masteryUnlockedCount`, az achievement-progressz és a
+  napi/heti quest-listák ma hardkódolt `0`/üres értékek — nincs perzisztált
+  quest-/achievement-progressz forrás a `GamificationRepository`-ban;
+- a `RewardInboxScreen` üres marad, mert a storage-szintű
+  `GamificationInboxItem` (csak id/createdAt/viewedAt) és a domain
+  `RewardInboxItem` (a teljes `RewardEvent`-et hordozza) között nincs
+  triviális leképezés;
+- a streak-recovery gomb no-op (nincs publikus repository-metódus a
+  vásárláshoz);
+- a dual-write kapcsoló `newOnly` végállapotba állításának négy számszerű
+  feltétele a completion report §3.2-ben.
 
 ## ✅ E08-R28 KÉSZ — Ledger sync contract, merge és verified státusz — PR #406, squash `571981b7` (2026-08-22)
 
@@ -4388,6 +4426,15 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-22):** `main` @ `a8ecb9f3` — E08-R30 Epic 08
+migráció, regresszió és lezárás, PR
+[#407](https://github.com/wolfcasaba/strumsight/pull/407), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, javító kör
+nélkül (review APPROVED, 0 BLOCKER/MAJOR/MINOR, 2 NOTE). **EPIC 8 LEZÁRVA.**
+Exact `3a6f10b3`: Full Gate 32569011383 + Router CI 32569012517 success;
+`origin/main` a dispatch és a merge között nem mozdult. Részletesen a fejléc
+✅-blokkban.
+
 **Aktuális állapot (2026-08-22):** `main` @ `571981b7` — E08-R28 Ledger
 sync contract és merge, PR
 [#406](https://github.com/wolfcasaba/strumsight/pull/406), squash-merge.
@@ -4976,6 +5023,20 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E08-R30 — Epic 08 migráció, regresszió és lezárás** (PR
+[#407](https://github.com/wolfcasaba/strumsight/pull/407), squash `a8ecb9f3`,
+ADR nincs — mérce-lezáró kör, nem hozott kötött architekturális döntést).
+**EPIC 8 (GAMIFICATION) MIND A 30 KÖRE KÉSZ.** Hat új gamifikációs route
+élesítve (`app_router.dart`, minimális Riverpod-ragasztó kizárólag már
+publikus core-providerekből, `lib/features/**` érintetlen); real-shape
+legacy-fixture teszt a streak/practice migrátorokra; a be nem kötött
+dual-write „kapcsoló" mért állapota + négy számszerű jövőbeli
+aktiválási feltétel dokumentálva flip helyett. 0 BLOCKER/MAJOR/MINOR review-
+lelet (2 NOTE, `docs/reviews/e08-r30-review.md`). Exact `3a6f10b3`: Full Gate
+32569011383 + Router CI 32569012517 success; a reviewer saját izolált `/tmp`
+klónban mind a kilenc gate-lépést függetlenül újrafuttatta. Részletesen a
+fejléc ✅-blokkban.
 
 **E08-R28 — Ledger sync contract és merge** (PR
 [#406](https://github.com/wolfcasaba/strumsight/pull/406), squash `571981b7`,
@@ -5779,14 +5840,26 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör (2026-08-22): E08-R30 — Epic 08 migráció,
-regresszió és lezárás** (`docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md`,
-engine a queue-ban `minimax`). Az **E08-R29** (Integritás, analytics, balance
-szimuláció és CI) `hold`-on marad — a queue-scan a legelső `pending` sort
-választja, ami a fájlban E08-R30 (394. sor után, 396. sor), korábban áll,
-mint az újonnan batch-elt Epic 9 sor (E09-R01, 413. sor) vagy a Chapter 13 ág
-(E13-R05, 491. sor); ezt a sorrendet a driver automatikusan tiszteletben
-tartja. Ez a session nem indítja el; új sessionben fut. Vegye figyelembe az
+**Pontos következő termékkör (2026-08-22): E09-R01 — Community baseline és
+feature flags** (`docs/rounds/e09-r01-community-baseline-and-feature-flags.md`,
+engine a queue-ban `minimax`, előre kiosztott ADR `0395`). **Az Epic 8
+(Gamification) mind a 30 köre KÉSZ** (E08-R30, PR #407) — az **E08-R29**
+(Integritás, analytics, balance szimuláció és CI) továbbra is `hold`-on
+marad. A queue-scan a legelső `pending` sort választja, ami E08-R30 UTÁN az
+E09-R01 (413. sor) — ez megelőzi a Chapter 13 ág E13-R05-jét (491. sor); ezt a
+sorrendet a driver automatikusan tiszteletben tartja. Ez a session nem
+indítja el; új sessionben fut.
+
+Pre-flightban érdemes újra mérni: az Epic 9 (Community Platform) mind a 32
+körének briefje egy batchben készült (PR #405, 2026-08-22) — az E09-R01
+saját pre-flightja ellenőrizze, hogy a `main` időközbeni mozgása (E08-R29/
+R30 stb.) nem driftelt-e el olyan fájltól/enum-értéktől, amire a batch-elt
+brief hivatkozik (a §1 mérési szabály: grep-eld ki a hivatkozott
+enum-értékeket/mezőket a tényleges kódból, ne az átmenettáblát mérd).
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R30 — Epic 08
+migráció, regresszió és lezárás** (`docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot. Vegye figyelembe az
 E08-R28 mért tanulságait:
 
 - **A wire-szerződés két fele (Dart-kódoló + backend-dekódoló) KÜLÖN
