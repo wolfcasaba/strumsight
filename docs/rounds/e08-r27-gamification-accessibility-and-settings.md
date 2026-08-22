@@ -1,6 +1,6 @@
 # E08-R27 — Akadálymentesség, beállítások és értesítés-kontroll
 
-- **Státusz:** COMPLETED (2026-08-22, `minimax/e08-r27-gamification-accessibility-and-settings @ ac44b8f4`)
+- **Státusz:** CHANGES REQUESTED (2026-08-22, review: `docs/reviews/e08-r27-review.md`, F1 MAJOR — javító kör folyamatban)
 - **Típus:** Chapter 9 (Epic 8 — Gamification), Kör 27
 - **Kör-azonosító:** `E08-R27`
 - **Branch:** `minimax/e08-r27-gamification-accessibility-and-settings`
@@ -143,6 +143,57 @@ leálló esemény-feldolgozás nem UI-kozmetika, hanem egy már elfogadott
 mért compassionate-UX szerződést (ADR 0290 §1) törne el. Ezt kizárólag a §6.1
 kötelező valódi-sértés próba (A1-re) és az engedély-cella (A3) fogja meg
 gépi mércével.
+
+## 0.0.1 Javító kör (Claude, review után, 2026-08-22)
+
+A független review (`docs/reviews/e08-r27-review.md`) egy MAJOR leletet talált
+— a munkádat ugyanezen a branchen (`minimax/e08-r27-gamification-accessibility-and-settings`)
+folytatod, a meglévő commitokra építve, ÚJ commit(ok)ban.
+
+**F1 — MAJOR — a domain réteg a presentation rétegtől függ.**
+`lib/features/gamification/domain/gamification_preferences.dart:1` importálja
+a `../presentation/widgets/reward_summary_sheet.dart`-ot
+(`show RewardSummaryFeedback`), ami maga `package:flutter/material.dart`-tal
+kezdődik — a domain-osztály emiatt TRANZITÍVAN függ a Fluttertől. Az
+`AGENTS.md` §6: „Domain nem függ Fluttertől, Riverpodtól, Dio-tól vagy
+storage plugintól." Ezt a `tool/check_architecture.dart` NEM fogja meg
+(a `_isSharedDomain()` predikátum nem tartalmazza a
+`lib/features/gamification/domain/`-t) — ez GATE-RÉS, nem felmentés.
+
+**Kötelező javítás:**
+
+1. Vedd ki a `toRewardSummaryFeedback()` metódust és a fenti importot a
+   `gamification_preferences.dart`-ból — a domain fájl importlistájában
+   ezután SEM `presentation/`, SEM `package:flutter/` nem szerepelhet.
+2. Told át ugyanazt a leképezési logikát
+   (`hapticsEnabled && isCelebrationVisible`,
+   `soundEnabled && isCelebrationVisible`) a MÁR engedélyezett
+   `gamification_preferences_provider.dart`-ba (ez `presentation/providers/`
+   alatt van, tehát ott a Flutter/`RewardSummaryFeedback` import rendben
+   van) — pl. egy top-level függvényként vagy egy
+   `extension GamificationPreferencesFeedback on GamificationPreferences`
+   blokként.
+3. A `test/features/gamification/presentation/gamification_accessibility_test.dart`
+   A4 csoportjának `prefs.toRewardSummaryFeedback()` hívásait írd át az új
+   provider-szintű függvény hívására — a teszt cellák (12/12) és az elvárt
+   értékek nem változnak, csak a hívási hely.
+4. Mindhárom fájl már az `allowed_paths`-on van — a javítás NEM igényel
+   lista-bővítést.
+
+**F2 (MINOR) és N1/N2 (NOTE) nem blokkolnak, NE javítsd őket ebben a
+körben** — a review-jelentés dokumentálja follow-up-ként.
+
+**Ellenőrzés a javítás után:**
+```bash
+grep -n "^import" lib/features/gamification/domain/gamification_preferences.dart
+```
+egyetlen sora se mutasson `presentation/`-re vagy `package:flutter/`-re.
+Majd a teljes gate:
+```bash
+tools/round-gate.sh test/features/gamification/presentation/gamification_accessibility_test.dart test/features/settings
+```
+12/12 + 51/51 + architecture/format/analyze/secrets/l10n mind zöld. Commitold
+a munkádat a branchre, majd a szokásos kör-jelzéssel (`done`) zárj.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
