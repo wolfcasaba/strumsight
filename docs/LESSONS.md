@@ -15524,3 +15524,49 @@ hatókörön kívül marad — a self-heal fix előtti brief-tartalommal
 függetlenül reprodukálva mindkét fájlra `ok=False`, a fix utánival
 `ok=True`. Részletek: `docs/rounds/e09-r03-public-identity-and-handle-
 policy.md` §0.1, `.pipeline/HALTED` (E09-R03, H3, 2026-08-22).
+
+## L414 — Egy 282/282-zöld teszt-suite mellett is élt egy MAJOR biztonsági hiba: a reviewer SAJÁT mutation-próbája fogta meg, amit egyetlen teszt sem (E09-R03, 2026-08-22)
+
+**Tünet.** Az E09-R03 (Community handle policy) implementer-jelentése és a
+teljes gate zöld volt: 282/282 backend teszt, `ruff` tiszta, a Flutter-oldali
+round-gate MINDEN GATE ZÖLD. A brief §6.1 explicit "valódi-sértés próbát"
+is tartalmazott az A1 (Unicode-ütközés) cellára, és az implementer ezt le is
+futtatta (`test_swap_unique_index_breaks_unicode_collision_detection`).
+Mégis: a `security-reviewer` subagent egy önálló, a jelentett tesztkészlettől
+FÜGGETLEN mutation-próbával (a `_client_key` rate-limit-kulcs függvényt 60,
+egyenként más hamis `X-Forwarded-For` fejléccel hívta) egy MAJOR-t talált —
+a rate limiter a spoofolható fejlécen 60/60 arányban bypassolható volt, és
+**egyetlen a kör 75+ tesztje közül sem** mérte ezt, mert egyik teszt sem
+rotálta a fejlécet több hívás között.
+
+**Egy második, önálló mérés ugyanebben a körben, a reviewer saját
+próbájából:** a `normalize()` (NFKC+casefold) függvényt identity-függvényre
+cserélve a TELJES `test_handle_policy.py` suite zöld maradt — az A1
+"Unicode-ütközés" cím alatt szereplő DB-szintű tesztek (`test_unicode_
+collision_rejected_by_unique_index` stb.) a `assign_handle`-t KÖZVETLENÜL,
+már előre normalizált stringgel hívják, nem a valós HTTP-belépési ponton
+(`/claim`) RAW Unicode bemenettel — tehát a DB-unique-index enforcement
+helyesen mérve van, de a "raw input tényleg normalizálódik-e a valós
+útvonalon" tulajdonság NINCS.
+
+**Szabály.** A `docs/execution/09-review-report.md` alapelve ("a zöld gate
+NEM bizonyíték") nem elvi óvatosság, hanem ISMÉTELTEN mért tény: a review
+kötelező lépése a SAJÁT, a jelentett tesztkészlettől független
+mutation-próba (rontsd el a kódot → nézd meg, PIROSSÁ válik-e BÁRMELYIK
+teszt → ha nem, a lefedettség hiányos, függetlenül a jelentett zöld
+számoktól). Kiemelten kockázatos minta: (1) egy paraméterezett bemenet
+(rate-limit kulcs, session-azonosító, feature-flag), amit SOHA nem
+variálnak több hívás/kérés között egy teszten belül; (2) egy "unit"-szintű
+DB-teszt, ami a policy-réteg (`normalize`/`validate`) FÜGGVÉNYÉT megkerülve,
+kézzel előre kiszámolt bemenettel hívja a service-réteget — ez a policy és a
+service közötti VALÓS drótot hagyja tesztelten kívül, még ha mindkét oldal
+külön-külön helyesen tesztelt is.
+
+**Őrteszt:** a javító körben mindkét mért hiba saját, a reviewer által
+FÜGGETLENÜL (a javítás előtti kódra visszaállítva) piros-majd-zöld
+igazolással kapott regressziós tesztet kapott —
+`test_rate_limit_key_is_socket_peer_not_xff` és
+`test_duplicate_claim_returns_409_not_500`
+(`backend/tests/community/test_handle_policy.py`). Részletek:
+`docs/reviews/e09-r03-review.md` (F1, F2), `docs/reviews/e09-r03-security-
+review.md`.

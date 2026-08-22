@@ -61,6 +61,58 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E09-R03 KÉSZ — Public identity és handle policy — PR [#412](https://github.com/wolfcasaba/strumsight/pull/412), squash `607695e9` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) HARMADIK KÖRE KÉSZ.** ADR 0397 §5.1–§5.4:
+injektálható UUID public-id generátor, NFKC+casefold-normalizált handle
+egyediség DB-szinten (unique index a normalizált oszlopon, NEM app-szintű
+check-then-insert), reserved/blocked handle katalógus, egyetlen-handle-per-
+hívás rate-limitált availability endpoint (nincs enumerációs felület), és
+handle-change cooldown (14 nap) + redirect-ablak (30 nap) history táblával.
+Új fájlok: `backend/app/community/{policies/handle_policy.py,
+services/identity_service.py, models/handle_history.py,
+routers/handles.py}`, `backend/alembic/versions/e09_r03_0003_community_
+handle.py`, `backend/tests/community/test_handle_policy.py` (77 teszt).
+
+**A kör három fordulóban zárult, ez az orchestrátor-session a [[L413]] HEAL
+(#411) utáni folytatást vitte végig:** (1) a felfüggesztett minimax
+implementert a healelt brief §0.1 utasítása szerint resume-oltam
+(`9ad6cb3a`, a három lánc-toleráns cross-round tesztjavítás); (2) független
+funkcionális + **security-reviewer** review (risk=high) ÖNÁLLÓ mutation-
+próbákkal — nem csak a jelentett gate-kimenetre hagyatkozva. A review 1
+nyitott **MAJOR**-t és 3 MINOR-t talált:
+
+- **F1 (MAJOR, mérve reprodukálva):** `_client_key` (`routers/handles.py`)
+  a kliens által küldött `X-Forwarded-For` fejlécet vette rate-limit
+  kulcsnak trusted-proxy nélkül — 60 hívás, mind más hamis fejléccel, **0**
+  `rate_limited` választ kapott a 30/perces limit ellenére. A §5.3
+  "rate-limitált, nem enumerálható" kontroll ÉRDEMBEN nem működött, bár a
+  router ebben a körben még nincs bekötve `app/main.py`-ba (Kör 6 az auth).
+- **F2 (MINOR):** duplikált handle-claim 500-at adott 409 helyett — SQLite
+  az UNIQUE-sértést az `UPDATE execute()`-nál dobja, nem a `commit()`-nál, a
+  router viszont csak a `commit_with_uniqueness_check`-et csomagolta
+  `except HandleAlreadyClaimed`-be.
+
+Mindkettő egy javító körben zárult (`6d354812`, a minimax ELSŐ javító köre —
+Codex-eszkalációra nem volt szükség): `_client_key` kizárólag
+`request.client.host`-ra esik vissza, a claim/change végpontok egyetlen közös
+`try/except` alá kerültek. A reviewer MINDKÉT javítást függetlenül
+igazolta — a javítás előtti kódra visszaállítva reprodukálta a piros
+állapotot (60/60 bypass, illetve 500-as válasz), majd a javítással zöldre.
+Két MINOR follow-up nyitva marad (nem blokkol): a küszöb-hármas teszt a
+`MIN_LEN`/`MAX_LEN` konstansból, nem a brief literál 2/3/24/25 értékéből
+származtat; nincs HTTP-szintű (végpont-szintű) teszt az A1 Unicode-ütközésre,
+csak policy- és DB-szintű. Review: `docs/reviews/e09-r03-review.md` +
+`docs/reviews/e09-r03-security-review.md`.
+
+Gate mindkét fordulóban (pre-fix `9ad6cb3a`, post-fix `6d354812`/`d830a037`)
+izolált `/tmp` klónban, saját `python3.12 -m venv` + friss `pip install`:
+`tools/round-gate.sh test/core/architecture_dependency_test.dart` MINDEN
+GATE ZÖLD, `backend: ruff check`/`ruff format --check` tiszta, `backend:
+pytest -q` **282 passed, 0 failed**. Scope-audit mindkét fordulóban OK (a
+javító kör diffje 2 fájl: `handles.py` + a teszt). CI a pontos merge SHA-n
+(`d830a037`): Router CI + Full Gate (no APK) mindkettő `success`.
+
 ## ✅ [HEAL E09-R03/H3] KÉSZ — az L411 minta egy láncszemmel mélyebben: `allowed_paths` nem fedte a MÁSODIK cross-round migráció-tesztet — PR [#411](https://github.com/wolfcasaba/strumsight/pull/411), squash `2359b808` (2026-08-22, L413)
 
 Az E09-R03 (Public identity és handle policy, ADR 0397) H3-mal állt meg,
