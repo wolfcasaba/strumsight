@@ -223,3 +223,157 @@ def test_aggregate_helper_matches_evaluate_upload_output():
     out = aggregate(receipts)
     assert out.totalXp == 25
     assert len(out.receipts) == 2
+
+
+# ---------------------------------------------------------------------------
+# F1 — wire-shape compatibility: the backend decodes a Dart-equivalent
+# payload (flat, no nested `receipt`, no `status`).
+#
+# The fixture mirrors the exact JSON the Dart
+# `GamificationSyncContract.encodeUpload(...)` produces after the E08-R28
+# fix — receipt fields sit at the element root, with no nested `receipt`
+# wrapper and no `status` field. The fixture is hand-written (not generated
+# by the Dart side) so this test fails loudly if either side drifts away
+# from the shared wire shape. See the Dart-side counterpart in
+# `test/features/gamification/data/ledger_merge_policy_test.dart`
+# (group "F1 — wire-shape compatibility").
+# ---------------------------------------------------------------------------
+
+
+def test_f1_dart_shaped_envelope_is_accepted_by_backend():
+    """A payload mirroring the Dart `encodeUpload()` output (flat receipt
+    element, no nested `receipt`, no `status`) parses cleanly and routes
+    through `evaluate_upload` without rejection. Mirrors the E08-R28 fix:
+    the wire contract is now identical on both sides."""
+    dart_shaped_envelope = {
+        "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
+        "receipts": [
+            {
+                # Flat — receipt fields at the element root. No `receipt`
+                # wrapper, no `status` (server treats every upload as
+                # `unverified`, ADR 0394 §5.3).
+                "schemaVersion": 1,
+                "ledgerId": "ledger-dart-1",
+                "sourceEventId": "event-dart-1",
+                "createdAt": "2026-08-22T12:00:00+00:00",
+                "policyVersion": 1,
+                "baseXp": 10,
+                "bonusXp": 0,
+                "reasonCodes": ["baseExperience"],
+            },
+            {
+                "schemaVersion": 1,
+                "ledgerId": "ledger-dart-2",
+                "sourceEventId": "event-dart-2",
+                "createdAt": "2026-08-22T12:30:00+00:00",
+                "policyVersion": 1,
+                "baseXp": 7,
+                "bonusXp": 3,
+                "reasonCodes": ["baseExperience", "qualityBonus"],
+            },
+        ],
+    }
+
+    # Pydantic must accept the Dart-shaped payload (the very bug F1 caught
+    # pre-fix — eight validation errors against the old Dart shape).
+    envelope = LedgerUploadEnvelope.model_validate(dart_shaped_envelope)
+    assert envelope.schemaVersion == GAMIFICATION_SYNC_CONTRACT_VERSION
+    assert len(envelope.receipts) == 2
+
+    # And the service-level evaluation must agree: no rejection, total
+    # computed from baseXp+bonusXp server-side (ADR 0394 §5.1).
+    outcome = evaluate_upload(envelope)
+    assert outcome.rejected == []
+    assert outcome.download.totalXp == 20  # (10+0) + (7+3)
+    assert len(outcome.download.receipts) == 2
+
+
+def test_f1_dart_shaped_envelope_rejects_injected_status_and_totalXp():
+    """A subtle drift check: even after the wire-shape fix, a tampered
+    client could try to sneak `status: "verified"` or a `totalXp` aggregate
+    back in via the flat envelope. `extra='forbid'` on `ReceiptUpload`
+    must reject both."""
+    tampered_envelope = {
+        "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
+        "receipts": [
+            {
+                "schemaVersion": 1,
+                "ledgerId": "ledger-evil",
+                "sourceEventId": "event-evil",
+                "createdAt": "2026-08-22T12:00:00+00:00",
+                "policyVersion": 1,
+                "baseXp": 10,
+                "bonusXp": 0,
+                "reasonCodes": ["baseExperience"],
+                # Both forbidden — server-computed aggregate and
+                # server-authoritative status, respectively.
+                "totalXp": 99999,
+                "status": "verified",
+            },
+        ],
+    }
+    with pytest.raises(ValidationError):
+        LedgerUploadEnvelope.model_validate(tampered_envelope)
+
+
+# ---------------------------------------------------------------------------
+# F2 — size caps on id fields and receipts list.
+# ---------------------------------------------------------------------------
+
+
+def test_f2_ledger_id_above_max_length_is_rejected():
+    """A 257-character `ledgerId` must be rejected at the schema layer
+    (max_length=256). Without the cap, a tampered or buggy client could
+    pin the server's memory on a single oversized id (latent DoS)."""
+    body = {
+        "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
+        "receipts": [
+            _receipt(ledgerId="x" * 257, sourceEventId="e-1"),
+        ],
+    }
+    with pytest.raises(ValidationError):
+        LedgerUploadEnvelope.model_validate(body)
+
+
+def test_f2_source_event_id_above_max_length_is_rejected():
+    """Same guard for `sourceEventId` (max_length=256)."""
+    body = {
+        "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
+        "receipts": [
+            _receipt(ledgerId="l-1", sourceEventId="x" * 257),
+        ],
+    }
+    with pytest.raises(ValidationError):
+        LedgerUploadEnvelope.model_validate(body)
+
+
+def test_f2_receipts_list_above_max_length_is_rejected():
+    """A `receipts` list of 501 elements must be rejected (max_length=500).
+    Without the cap, a single upload could pin unbounded memory on the
+    server (latent DoS)."""
+    body = {
+        "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
+        "receipts": [
+            _receipt(ledgerId=f"l-{index}", sourceEventId=f"e-{index}")
+            for index in range(501)
+        ],
+    }
+    with pytest.raises(ValidationError):
+        LedgerUploadEnvelope.model_validate(body)
+
+
+def test_f2_size_caps_are_at_boundary_not_below():
+    """Boundary sanity: 256-char ids and a 500-element list must STILL
+    parse (the cap is inclusive). Mirrors the symmetric boundary tests on
+    the Dart side."""
+    boundary_envelope = {
+        "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
+        "receipts": [
+            _receipt(ledgerId="x" * 256, sourceEventId="y" * 256)
+            for _ in range(500)
+        ],
+    }
+    envelope = LedgerUploadEnvelope.model_validate(boundary_envelope)
+    assert len(envelope.receipts) == 500
+    assert all(len(r.ledgerId) == 256 for r in envelope.receipts)
+    assert all(len(r.sourceEventId) == 256 for r in envelope.receipts)
