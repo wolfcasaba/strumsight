@@ -395,6 +395,54 @@ E08-R28	docs/rounds/e08-r28-ledger-sync-contract-and-merge.md	minimax	0319	pendi
 E08-R29	docs/rounds/e08-r29-integrity-balance-and-ci-guards.md	minimax	0320	hold
 E08-R30	docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md	minimax	nincs	pending
 #
+# ===== EPIC 9 — Community Platform (Chapter 10, 32 kör) =====
+# Batch-előkészítve 2026-08-22 (user-döntés: a lánc E08 lezárása után
+# megállás nélkül folytassa Epic 9-cel, ne álljon meg epic-határon emberi
+# döntésre várva — ugyanaz a minta, mint a Ch13/Ch14 sávok előre megírt
+# briefjei). Az ADR-tartomány 0395-0419 FOGLALT a batch-íráskor mért
+# legmagasabb szám (0394, E08-R28 pre-flightja) után; a pontos szám minden
+# egyes körben a `reserve-adr` foglalóval ÚJRA ellenőrizendő a kör indítási
+# pre-flightjában — a batch-írt szám driftelhet (mérve minden korábbi
+# batchnél, pl. E08-R27/R28/R29/R30). A Chapter 13 sáv community UI körei
+# (E13-R33..R35, lásd a 3. sáv blokkját lent) erre a rétegre épülnek majd —
+# a saját pre-flightjukban kell ellenőrizniük az akkor tényleges Epic 9
+# fájlszerkezetet, mert az `E13-R33` `allowed_paths`-a ma egy egyszerűsített
+# `lib/features/community/{profile,feed,posts}/` elrendezést feltételez,
+# nem az itt lefektetett `domain/application/data/presentation` réteges
+# szerkezetet.
+E09-R01	docs/rounds/e09-r01-community-baseline-and-feature-flags.md	minimax	0395	pending
+E09-R02	docs/rounds/e09-r02-backend-community-module-and-migration.md	minimax	0396	pending
+E09-R03	docs/rounds/e09-r03-public-identity-and-handle-policy.md	minimax	0397	pending
+E09-R04	docs/rounds/e09-r04-profile-privacy-and-audience-policy.md	minimax	0398	pending
+E09-R05	docs/rounds/e09-r05-flutter-community-domain-and-public-api.md	minimax	0399	pending
+E09-R06	docs/rounds/e09-r06-profile-onboarding-and-editing.md	minimax	nincs	pending
+E09-R07	docs/rounds/e09-r07-follow-and-follow-request-graph.md	minimax	0400	pending
+E09-R08	docs/rounds/e09-r08-block-mute-and-safety-relationships.md	minimax	0401	pending
+E09-R09	docs/rounds/e09-r09-profile-search-and-discovery.md	minimax	nincs	pending
+E09-R10	docs/rounds/e09-r10-share-artifact-contracts.md	minimax	0402	pending
+E09-R11	docs/rounds/e09-r11-post-crud-and-audience-enforcement.md	minimax	0403	pending
+E09-R12	docs/rounds/e09-r12-post-composer-draft-and-outbox.md	minimax	nincs	pending
+E09-R13	docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md	minimax	0404	pending
+E09-R14	docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md	minimax	nincs	pending
+E09-R15	docs/rounds/e09-r15-reactions-and-optimistic-consistency.md	minimax	nincs	pending
+E09-R16	docs/rounds/e09-r16-comments-reply-and-mention.md	minimax	0405	pending
+E09-R17	docs/rounds/e09-r17-bookmarks-and-controlled-import.md	minimax	0406	pending
+E09-R18	docs/rounds/e09-r18-media-upload-contract-and-object-store.md	minimax	0407	pending
+E09-R19	docs/rounds/e09-r19-media-processing-privacy-and-moderation-state.md	minimax	0408	pending
+E09-R20	docs/rounds/e09-r20-notification-inbox-and-push-abstraction.md	minimax	0409	pending
+E09-R21	docs/rounds/e09-r21-challenge-and-invite-lifecycle.md	minimax	0410	pending
+E09-R22	docs/rounds/e09-r22-verified-result-submission-and-anti-cheat.md	minimax	0411	pending
+E09-R23	docs/rounds/e09-r23-leaderboards-and-opt-in-competition.md	minimax	0412	pending
+E09-R24	docs/rounds/e09-r24-club-domain-membership-and-roles.md	minimax	0413	pending
+E09-R25	docs/rounds/e09-r25-club-feed-pinned-post-and-challenge.md	minimax	nincs	pending
+E09-R26	docs/rounds/e09-r26-user-report-and-immediate-safety-flow.md	minimax	0414	pending
+E09-R27	docs/rounds/e09-r27-moderation-queue-enforcement-and-appeal.md	minimax	0415	pending
+E09-R28	docs/rounds/e09-r28-privacy-center-export-and-deletion.md	minimax	0416	pending
+E09-R29	docs/rounds/e09-r29-offline-sync-conflict-and-outbox-hardening.md	minimax	0417	pending
+E09-R30	docs/rounds/e09-r30-rate-limit-observability-and-security-hardening.md	minimax	0418	hold
+E09-R31	docs/rounds/e09-r31-accessibility-localization-and-ux-polish.md	minimax	0419	pending
+E09-R32	docs/rounds/e09-r32-integration-load-evaluation-and-release-readiness.md	minimax	nincs	pending
+#
 # ===== 2. FEJLESZTÉSI SÁV — Chapter 14 (Recognition Recovery) =====
 # User-döntés 2026-08-15: az Epic 7 MELLETT fusson egy második sáv, ami előbb a
 # felismerés IGAZMONDÁSÁT állítja helyre. Mért indok (Ch14 audit a SZÁLLÍTOTT
