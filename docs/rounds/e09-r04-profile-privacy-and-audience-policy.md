@@ -637,9 +637,10 @@ tests/community/test_profile_schema.py: 10 warnings
 exit_code=0
 ```
 
-A teljes pytest kimenetén a 288 db `.` (4×72 + 1×72 = 288 a fenti
-eloszlásból) és a `exit_code=0` a bizonyíték. A korábbi `blocked`
-futás óta ez AZ EGYETLEN `FAILED` teszt (`test_downgrade_one_revision_drops_only_community_tables`)
+A teljes pytest kimenetén a 321 db `.` (4×72 + 33 a fenti eloszlásból —
+72/72/72/72 a 22/44/67/89%-os sorokban, és 33 az utolsó, 100%-os sorban)
+és a `exit_code=0` a bizonyíték. A korábbi `blocked` futás óta ez
+AZ EGYETLEN `FAILED` teszt (`test_downgrade_one_revision_drops_only_community_tables`)
 megjavult — a `tests/test_migrations.py -v` közvetlenül is zöld:
 
 ```text
