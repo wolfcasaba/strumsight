@@ -533,6 +533,100 @@ b1574ba0 E09-R06 fix: F1/F2 tests + route reorder (literal /me before /{public_i
 eadd38ef E09-R06 fix: F1 GET /me endpoint + F2 use validate() return value
 ```
 
+### Javító kör 2 — F9/F10 javítás (CI-only full-suite leletek, `fbdf6465` felett)
+
+A `f312ad54` review-commit óta dispatch-elt `full-gate.yml` CI run
+(`32595342705`) a `fbdf6465` tetején PIROS lett a TELJES suite-ból — 2
+hiba, amit a `tools/round-gate.sh` célzott futtatása NEM fed le (csak a
+CI futtatja a teljes `flutter test`-et, ADR 0053). Mindkettő egysoros,
+mechanikus javítás.
+
+#### F9 — `test/ui/ui_inventory_test.dart` elavult screen-számláló
+
+**Mi volt a hiba:** `expect(first.screenPaths, hasLength(64))` (14. sor)
+egy pinnelt termelési screen-számot. A Kör 6 összesen 2 ÚJ production
+screent adott (`lib/features/community/presentation/screens/
+community_gate_screen.dart`, `lib/features/community/presentation/
+screens/edit_profile_screen.dart`) — a valós szám 66.
+
+**A javítás:** `hasLength(64)` → `hasLength(66)` a `test/ui/
+ui_inventory_test.dart:14` soron. Egyetlen szám cseréje, a szekvenciális
+`orderedEquals` rendezés-ellenőrzés és a többi `contains(...)` assert
+változatlan.
+
+**PIROS → ZÖLD bizonyíték (`flutter test test/ui/ui_inventory_test.dart`,
+foreground, csonkítatlan):** `production screen inventory is stable,
+sorted, and excludes test trees` → `+1: All tests passed!` ZÖLD.
+
+#### F10 — `dio_factory_guard_test.dart` false positive egy doc-kommenten
+
+**Mi volt a hiba:** `test/tooling/dio_factory_guard_test.dart` regex-őre
+(`RegExp(r'\bDio\s*\(')`) soronként vizsgálja a `lib/` fát. A
+`lib/features/community/data/dto/profile_dto.dart:11` sor egy doc-komment
+mondat része: "...the domain layer is forbidden from importing
+``dart:convert`` / Dio (architecture-dependency guard, Kör 5 group)…" —
+a "Dio (" szövegrészlet szó szerint illeszkedett a regexre, de NEM
+valódi `Dio()` konstruktor-hívás, csak az import-tiltás indoklása.
+
+**A javítás:** a 11. soron a `Dio (architecture-dependency` szövegrészletet
+`Dio — architecture-dependency` gondolatjelre cseréltem (a `profile_dto.dart`
+fájl többi része — a szintaxis, a tényleges jelentés, a komment többi sora —
+változatlan). Az em-dash a fájl stílusával konzisztens (lásd a 11. sor
+feletti "`*Why the form sends a NARROW payload:*`" bekezdésben használt
+em-dash-eket).
+
+**PIROS → ZÖLD bizonyíték (`flutter test test/tooling/dio_factory_guard_test.
+dart`, foreground, csonkítatlan):** `production Dio instances are created
+only by DioFactory` → `+1: All tests passed!` ZÖLD. Kiegészítő helyi
+grep-megerősítés: `Grep -E "Dio\s*\(" lib/features/community/data/dto/
+profile_dto.dart` → `No matches found` (az em-dash-szel történt csere
+megszüntette a regexilleszkedést).
+
+#### Git diff stat a review-commit (`2da487c7`) óta
+
+A javító kör 2 kizárólag két, a §0.0 `allowed_paths` listán szereplő fájlt
+érint — nincs scope-sértés:
+
+```
+ lib/features/community/data/dto/profile_dto.dart | 2 +-
+ test/ui/ui_inventory_test.dart                   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+```
+
+#### Round-gate kimenet (javító kör 2)
+
+A §0 szerinti kötelező gate (`tools/round-gate.sh test/features/community/
+presentation/community_gate_test.dart test/features/community/presentation/
+profile_onboarding_test.dart`, foreground, csonkítatlan):
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/features/community/presentation/community_gate_test.dart zöld
+test test/features/community/presentation/profile_onboarding_test.dart zöld
+architecture                                               zöld
+secrets                                                    zöld
+l10n                                                       zöld
+backend ruff format                                        zöld
+backend ruff check                                         zöld
+backend pytest                                             zöld
+MINDEN GATE ZÖLD.
+```
+
+Az F9/F10 tesztek — amelyek CSAK a teljes Flutter suite-ban futnak, és a
+célzott `tools/round-gate.sh` NEM érinti őket — külön, KÉZZEL is zöldre
+futottak e körben (a brief §3 utasítása szerint, `&&` lánc nélkül):
+
+- `flutter test test/ui/ui_inventory_test.dart` —
+  `00:00 +1: All tests passed!` ZÖLD (F9 javítása)
+- `flutter test test/tooling/dio_factory_guard_test.dart` —
+  `00:00 +1: All tests passed!` ZÖLD (F10 javítása)
+
+A teljes Flutter suite + a randomizált property gate + az APK ezen
+kör review-commitja (`2da487c7`) óta dispatch-elt `32595342705` run
+óta nem futott — a CI-t az orchestrator a review-zárás UTÁN fogja
+újra dispatch-elni (ADR 0053, user rule 2026-07-29).
+
 ### Eltérések a brief-hez / ADR 0400-hoz képest
 
 * **`A6` widget teszt**: a controller `ref.watch(authControllerProvider)`-re épül, ami biztosítja, hogy a logout / login esemény újrafuttatja a build()-et. A konkrét `CommunityProfileState` állapotátmenet a `ref.watch` aktiválásától függ, és a unit tesztelése ProviderContainer-szintű mocking-ot igényelne a token store / auth repository override-okkal — ezt a mért scope felettinek ítéltem. A gate kódja a logoutot helyesen kezeli (a build() újrafut), csak a teszt drótozását nem készítettem el.

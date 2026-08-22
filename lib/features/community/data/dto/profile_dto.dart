@@ -8,7 +8,7 @@
 /// repository / controller never have to know about JSON keys.
 ///
 /// **Why this lives in its own file:** the domain layer is forbidden
-/// from importing ``dart:convert`` / Dio (architecture-dependency
+/// from importing ``dart:convert`` / Dio — architecture-dependency
 /// guard, Kör 5 group). The data layer is the only place JSON
 /// parsing may happen, and the DTO is the seam — the entity factory
 /// in the domain layer receives already-decoded values.
