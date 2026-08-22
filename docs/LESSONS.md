@@ -15441,3 +15441,35 @@ függetlenül reprodukálva `ok=False` (`path outside allowed scope:
 backend/tests/test_migrations.py`), a fix utánival `ok=True`. Részletek:
 `docs/rounds/e09-r02-backend-community-module-and-migration.md` §0.1,
 `.pipeline/HALTED` (E09-R02, H3, 2026-08-22).
+
+## L412 — Az orchestrátor saját, ideiglenes prompt-fájlja a megosztott munkapéldányban hamis `scope_audit=VIOLATION`-t okoz (E09-R02 folytatás, 2026-08-22)
+
+Amikor egy folytató (nem `docs/rounds/`-beli) prompt-fájlt egy `mm-round.sh`/
+`codex-round.sh`-nak átadott kör-munkapéldányba írok (pl.
+`/home/ubuntu/ss-mm-<kör>/.pipeline-continue-<kör>.md`), a wrapper záró
+scope-auditja (`round-scope-audit.sh` → `tools/scope-audit.py`) a
+`scope_base` (a futás INDULÁSAKOR mért HEAD) és a futás VÉGI munkafa között
+minden változást néz — beleértve az UNTRACKED fájlokat is. Az orchestrátor
+saját, sosem commitolandó promptfájlja ilyenkor "path outside allowed
+scope"-ként jelenik meg, és a wrapper a valóban `done`-nal záró implementer
+futása fölé `status=stopped`-et ír (mérve: `.codex-round-status`
+`implementer_status=done` + `scope_audit=VIOLATION` egyszerre, 2026-08-22
+13:22). A valódi implementer-diff (`git diff <scope_base>..HEAD`, azaz a
+COMMITOLT változás) eközben tiszta volt — a "sértés" kizárólag az
+orchestrátor saját, a munkafán hagyott artefaktuma volt.
+
+**Szabály.** Az implementernek átadott folytató/kiegészítő promptot NE a kör
+git-munkapéldányába írd (`Write` a `ss-*` alá) — használj egy a repón kívüli
+útvonalat (pl. a session scratchpadja), vagy ha a munkapéldányba muszáj írni,
+a dispatch UTÁN, a jelzésfájl elolvasása ELŐTT töröld, és a
+`scope_audit=VIOLATION`/`status=stopped` jelzést az `implementer_status=done`
+mezővel együtt vizsgáld ki, mielőtt H3-ként elfogadnád — egy stray, saját
+kezűleg odahelyezett fájl nem a implementer hatóköri sértése. A tényleges
+scope-ítéletet mindig a `tools/scope-audit.py --repo <klón> --brief <brief>
+--base <helyes bázis>` kézi, tiszta újrafuttatása adja, sosem a wrapper
+egyetlen jelzőbitje bemondásra.
+
+**Őrteszt:** nincs — eljárási/orchestrátor-fegyelmi tanulság, nem
+mércehiba; a `tools/scope-audit.py` maga helyesen mérte azt, amit kapott
+(egy valódi untracked fájlt), a hiba az orchestrátor saját munkafa-
+higiéniájában volt.
