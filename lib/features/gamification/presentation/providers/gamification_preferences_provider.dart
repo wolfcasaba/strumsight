@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/storage/persisted_preference.dart';
 import '../../domain/gamification_preferences.dart';
+import '../widgets/reward_summary_sheet.dart' show RewardSummaryFeedback;
 
 /// Storage keys for the five gamification preferences.
 ///
@@ -94,4 +95,26 @@ class GamificationPreferencesNotifier extends Notifier<GamificationPreferences>
 final gamificationPreferencesProvider =
     NotifierProvider<GamificationPreferencesNotifier, GamificationPreferences>(
       GamificationPreferencesNotifier.new,
+    );
+
+/// Translates the [GamificationPreferences] bundle into the caller-fed
+/// [RewardSummaryFeedback] the summary sheet already consumes.
+///
+/// Kept as a TOP-LEVEL function in the provider layer (NOT a method on the
+/// domain model) because the domain must stay Flutter-free — `RewardSummaryFeedback`
+/// lives in `presentation/widgets/reward_summary_sheet.dart`, which imports
+/// `package:flutter/material.dart`. The §0.0.1 F1 MAJOR fix moved this
+/// mapping OUT of `domain/gamification_preferences.dart` so the
+/// `architecture` gate stays green and the test file can call it through
+/// the `features/gamification/public.dart` barrel.
+///
+/// The haptics / sound bits are passthroughs; the intensity is encoded via
+/// [CelebrationIntensity.silent] — `false` on BOTH channels — because the
+/// existing sheet's caller-fed model predates the richer §5 preference
+/// surface. This is the *forward* shape the future caller wired in
+/// `E13-R32` will read (the §0.0 "future caller" caveat).
+RewardSummaryFeedback gamificationFeedbackFor(GamificationPreferences prefs) =>
+    RewardSummaryFeedback(
+      hapticsEnabled: prefs.hapticsEnabled && prefs.isCelebrationVisible,
+      soundEnabled: prefs.soundEnabled && prefs.isCelebrationVisible,
     );

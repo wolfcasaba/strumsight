@@ -195,7 +195,7 @@ void main() {
 
       // Baseline: full + everything on.
       final base = c.read(gamificationPreferencesProvider);
-      final baseFb = base.toRewardSummaryFeedback();
+      final baseFb = gamificationFeedbackFor(base);
       expect(baseFb.hapticsEnabled, isTrue);
       expect(baseFb.soundEnabled, isTrue);
 
@@ -203,9 +203,9 @@ void main() {
       await c
           .read(gamificationPreferencesProvider.notifier)
           .setIntensity(CelebrationIntensity.silent);
-      final silent = c
-          .read(gamificationPreferencesProvider)
-          .toRewardSummaryFeedback();
+      final silent = gamificationFeedbackFor(
+        c.read(gamificationPreferencesProvider),
+      );
       expect(silent.hapticsEnabled, isFalse);
       expect(silent.soundEnabled, isFalse);
 
@@ -216,9 +216,9 @@ void main() {
       await c
           .read(gamificationPreferencesProvider.notifier)
           .setHapticsEnabled(false);
-      final subtleHapticsOff = c
-          .read(gamificationPreferencesProvider)
-          .toRewardSummaryFeedback();
+      final subtleHapticsOff = gamificationFeedbackFor(
+        c.read(gamificationPreferencesProvider),
+      );
       expect(subtleHapticsOff.hapticsEnabled, isFalse);
       expect(subtleHapticsOff.soundEnabled, isTrue);
 
@@ -226,9 +226,9 @@ void main() {
       await c
           .read(gamificationPreferencesProvider.notifier)
           .setSoundEnabled(false);
-      final subtleSoundOff = c
-          .read(gamificationPreferencesProvider)
-          .toRewardSummaryFeedback();
+      final subtleSoundOff = gamificationFeedbackFor(
+        c.read(gamificationPreferencesProvider),
+      );
       expect(subtleSoundOff.hapticsEnabled, isFalse);
       expect(subtleSoundOff.soundEnabled, isFalse);
 
@@ -264,9 +264,9 @@ void main() {
       await c
           .read(gamificationPreferencesProvider.notifier)
           .setHapticsEnabled(false);
-      final post = c
-          .read(gamificationPreferencesProvider)
-          .toRewardSummaryFeedback();
+      final post = gamificationFeedbackFor(
+        c.read(gamificationPreferencesProvider),
+      );
       expect(
         post.hapticsEnabled,
         isFalse,

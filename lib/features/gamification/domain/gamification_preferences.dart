@@ -1,6 +1,3 @@
-import '../presentation/widgets/reward_summary_sheet.dart'
-    show RewardSummaryFeedback;
-
 /// How loud the celebration layer should be.
 ///
 /// [full] is the loud-by-default behaviour the rest of the app was tuned
@@ -87,18 +84,6 @@ final class GamificationPreferences {
   /// probe (A1 / A2) reads this. The inner evaluation ALWAYS runs; this
   /// answer is purely about the SURFACE.
   bool get isCelebrationVisible => intensity != CelebrationIntensity.silent;
-
-  /// Translates the bundle into the caller-fed feedback the
-  /// [RewardSummaryFeedback] currently expects. The haptics / sound bits
-  /// are passthroughs; the intensity is encoded via
-  /// [CelebrationIntensity.silent] — `false` on BOTH channels — because the
-  /// existing sheet's caller-fed model predates the richer §5 preference
-  /// surface. This is the *forward* shape the future caller wired in
-  /// `E13-R32` will read (the §0.0 "future caller" caveat).
-  RewardSummaryFeedback toRewardSummaryFeedback() => RewardSummaryFeedback(
-    hapticsEnabled: hapticsEnabled && isCelebrationVisible,
-    soundEnabled: soundEnabled && isCelebrationVisible,
-  );
 
   @override
   bool operator ==(Object other) =>
