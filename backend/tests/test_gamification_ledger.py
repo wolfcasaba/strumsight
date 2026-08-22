@@ -39,7 +39,15 @@ def _receipt(**overrides):
         "reasonCodes": ["baseExperience"],
     }
     base.update(overrides)
-    return ReceiptUpload(**base)
+    # Use `model_construct` so the helper does not pre-empt pydantic's
+    # schema-layer validation — the same pattern already used in
+    # `test_a7_unknown_receipt_schema_version_is_rejected` and
+    # `test_zero_xp_receipt_with_no_reason_code_is_rejected`. Tests that
+    # need to assert a ValidationError (A2, F2) wrap the outer
+    # `LedgerUploadEnvelope.model_validate(body)` call in
+    # `pytest.raises(ValidationError)`; this helper must not short-circuit
+    # them by failing first.
+    return ReceiptUpload.model_construct(**base)
 
 
 # ---------------------------------------------------------------------------
@@ -324,11 +332,29 @@ def test_f1_dart_shaped_envelope_rejects_injected_status_and_totalXp():
 def test_f2_ledger_id_above_max_length_is_rejected():
     """A 257-character `ledgerId` must be rejected at the schema layer
     (max_length=256). Without the cap, a tampered or buggy client could
-    pin the server's memory on a single oversized id (latent DoS)."""
+    pin the server's memory on a single oversized id (latent DoS).
+
+    The receipt is hand-built as a raw dict (not via the `_receipt()`
+    helper) because these tests are exercising the schema's validation
+    path itself — pydantic must coerce the dict into a `ReceiptUpload`
+    and reject the oversize value. The helper returns an already-
+    constructed model and would short-circuit the validation we want to
+    observe. This mirrors the pattern in
+    `test_f1_dart_shaped_envelope_rejects_injected_status_and_totalXp`.
+    """
     body = {
         "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
         "receipts": [
-            _receipt(ledgerId="x" * 257, sourceEventId="e-1"),
+            {
+                "schemaVersion": 1,
+                "ledgerId": "x" * 257,
+                "sourceEventId": "e-1",
+                "createdAt": "2026-08-22T12:00:00+00:00",
+                "policyVersion": 1,
+                "baseXp": 10,
+                "bonusXp": 0,
+                "reasonCodes": ["baseExperience"],
+            },
         ],
     }
     with pytest.raises(ValidationError):
@@ -340,7 +366,16 @@ def test_f2_source_event_id_above_max_length_is_rejected():
     body = {
         "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
         "receipts": [
-            _receipt(ledgerId="l-1", sourceEventId="x" * 257),
+            {
+                "schemaVersion": 1,
+                "ledgerId": "l-1",
+                "sourceEventId": "x" * 257,
+                "createdAt": "2026-08-22T12:00:00+00:00",
+                "policyVersion": 1,
+                "baseXp": 10,
+                "bonusXp": 0,
+                "reasonCodes": ["baseExperience"],
+            },
         ],
     }
     with pytest.raises(ValidationError):
@@ -354,7 +389,16 @@ def test_f2_receipts_list_above_max_length_is_rejected():
     body = {
         "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
         "receipts": [
-            _receipt(ledgerId=f"l-{index}", sourceEventId=f"e-{index}")
+            {
+                "schemaVersion": 1,
+                "ledgerId": f"l-{index}",
+                "sourceEventId": f"e-{index}",
+                "createdAt": "2026-08-22T12:00:00+00:00",
+                "policyVersion": 1,
+                "baseXp": 10,
+                "bonusXp": 0,
+                "reasonCodes": ["baseExperience"],
+            }
             for index in range(501)
         ],
     }
@@ -369,7 +413,16 @@ def test_f2_size_caps_are_at_boundary_not_below():
     boundary_envelope = {
         "schemaVersion": GAMIFICATION_SYNC_CONTRACT_VERSION,
         "receipts": [
-            _receipt(ledgerId="x" * 256, sourceEventId="y" * 256)
+            {
+                "schemaVersion": 1,
+                "ledgerId": "x" * 256,
+                "sourceEventId": "y" * 256,
+                "createdAt": "2026-08-22T12:00:00+00:00",
+                "policyVersion": 1,
+                "baseXp": 10,
+                "bonusXp": 0,
+                "reasonCodes": ["baseExperience"],
+            }
             for _ in range(500)
         ],
     }
