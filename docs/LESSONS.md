@@ -15265,3 +15265,39 @@ külön mérlegelést igényelne (túl sok meglévő, esetleg szándékos kivét
 lehet más feature-öknél); a mostani javítás a fájlszintű importot szüntette
 meg, nem az allowlistet bővítette. Review-jelentés:
 `docs/reviews/e08-r27-review.md` F1.
+
+## L408 — Egy implementer-oldalon önkezűen létrehozott, ÜRES `backend/.venv` beárnyékolja a `tools/round-gate.sh` közös venv-fallbackját (E08-R28 fix1, 2026-08-22)
+
+**Mért snag.** A `tools/round-gate.sh` a backend-lépésekhez két candidate
+interpretert próbál sorban: `backend/.venv/bin/python` (a munkapéldányhoz
+képest relatív) ÉS `$HOME/music-theory/backend/.venv/bin/python` (a közös,
+teljes csomagkészletű fallback — a munkapéldányok saját `backend/.venv`-je
+gitignore-olt, ezért egy friss klónban sosem létezik). Az E08-R28 első
+javító körében az implementer, miután a `backend/.venv/bin/pip install`-t
+helyesen blokkolta az `implementer_guard`, ELŐTTE már lefuttatott egy
+`python3 -m venv backend/.venv`-et — ez egy ÜRES (fastapi/ruff/pydantic
+NÉLKÜLI) venv-et hozott létre a saját munkapéldányában. A relatív útvonal
+ELSŐBBSÉGET élvez a fallbackkal szemben, ezért a `round-gate.sh` ezt az
+üres, helyi venv-et választotta, `ModuleNotFoundError`-ral elhasalt, és az
+implementer ezt (tévesen) valódi blokkolónak jelezte (`stopped`, „nincs
+backend venv"), holott a közös, teljes venv változatlanul elérhető és
+használható lett volna.
+
+**Javítás és szabály.** Az orchesztrátor törölte a lokális, üres
+`backend/.venv`-et (gitignore-olt, önmagától létrehozott, biztonságosan
+törölhető artefaktum — NEM más munkája), majd egy rövid resume-prompttal
+folytatta a kört; a tényleges kódjavítások érintetlenek maradtak. **Ha a
+backend gate `ModuleNotFoundError`-ral hasal el egy munkapéldányban, ELŐSZÖR
+ellenőrizd, hogy `<munkapéldány>/backend/.venv` létezik-e és NEM üres-e**
+(`ls <munkapéldány>/backend/.venv/bin/ | wc -l` — egy valódi telepített venv
+több tucat fájlt tartalmaz, egy csak `python3 -m venv`-vel létrehozott,
+installálatlan venv csak a néhány `activate*`/`pip*` szimlinket). Ha üres,
+törlése (nem a `pip install` megkerülése) állítja helyre a közös fallbackot.
+
+**Őrteszt:** nincs — a `python3 -m venv` parancs önmagában nem tiltott
+művelet (csak a `pip install` az, helyesen), tehát egy gépi őr nem tudná
+megkülönböztetni egy legitim, feltöltött helyi venv-et egy üres csapdától
+anélkül, hogy a csomagkészletet is ellenőrizné; az implementer-preambulum
+(`docs/execution/implementer-preamble-minimax.md`) bővítése a jövőbeli
+javítás. Részletek: `docs/reviews/e08-r28-review.md`, HANDOFF E08-R28
+bejegyzés.
