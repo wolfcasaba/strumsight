@@ -1245,6 +1245,236 @@
   "dynamicsMetricOutlierRatio": "Outlier stroke ratio",
   "dynamicsMetricQuietRegionRatio": "Quiet-region ratio",
   "dynamicsMetricStrokeStrengthCv": "Stroke-strength variation",
+  "gamificationHubEmptyLegacyBody": "The Hub is being rebuilt on a new foundation. Your history will keep showing here once the rebuild completes.",
+  "gamificationHubEmptyLegacyTitle": "A new chapter for your progression",
+  "gamificationHubEmptyNewBody": "Practice will surface here as soon as you complete a measured session.",
+  "gamificationHubEmptyNewTitle": "Welcome to your progression",
+  "gamificationHubInboxIndicatorCta": "Open",
+  "gamificationHubInboxIndicatorSemantics": "{count, plural, =0{No new rewards in your inbox} =1{1 new reward in your inbox} other{{count} new rewards in your inbox}}",
+  "@gamificationHubInboxIndicatorSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubInboxIndicatorSemanticsFull": "Reward inbox. {status}. Tap to open.",
+  "@gamificationHubInboxIndicatorSemanticsFull": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "gamificationHubInboxIndicatorTitle": "Reward inbox",
+  "gamificationHubLatestResultEmptyBody": "A measured practice session will appear here once you complete one.",
+  "gamificationHubLatestResultEmptyTitle": "No measured session yet",
+  "gamificationHubLatestResultSemantics": "Latest measured session: {title}. Earned {xp} experience points.",
+  "@gamificationHubLatestResultSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubLatestResultTitle": "Latest measured session",
+  "gamificationHubLevelBadgeLabel": "Skill mastery — Level {level}",
+  "@gamificationHubLevelBadgeLabel": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubLevelBadgeSemantics": "Skill mastery level {level}. {title}. Measured skill, not experience points.",
+  "@gamificationHubLevelBadgeSemantics": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      },
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "gamificationHubMasterySummary": "{count, plural, =0{No mastery milestones yet} =1{1 mastery milestone unlocked} other{{count} mastery milestones unlocked}}",
+  "@gamificationHubMasterySummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubMasteryTitle": "Skill mastery milestones",
+  "gamificationHubOfflineReadyLabel": "Available offline",
+  "gamificationHubOpenLevelDetailCta": "How experience points work",
+  "gamificationHubOpenLevelDetailSemantics": "Open the level details and learn how experience points work.",
+  "gamificationHubQuestsSemantics": "{count, plural, =0{No active quest} =1{1 active quest in progress} other{{count} active quests in progress}}",
+  "@gamificationHubQuestsSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubQuestsSummary": "{count, plural, =0{No active quest} =1{1 active quest} other{{count} active quests}}",
+  "@gamificationHubQuestsSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubQuestsTitle": "Active quests",
+  "gamificationHubSkillSectionBody": "Skill mastery is unlocked by measured evidence — never by experience points alone.",
+  "gamificationHubSkillSectionTitle": "Skill mastery",
+  "gamificationHubStreakSummary": "{count, plural, =0{No rhythm today} =1{1 day of rhythm} other{{count} days of rhythm}}",
+  "@gamificationHubStreakSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubStreakTitle": "Practice rhythm",
+  "gamificationHubTitle": "Your progression",
+  "gamificationHubXpProgressLabel": "Experience points: {xp} of {total}",
+  "@gamificationHubXpProgressLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubXpProgressSemantics": "Experience points {xp} of {total} in the current level. Experience points measure participation, not skill.",
+  "@gamificationHubXpProgressSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubXpSaturatedLabel": "Highest configured level reached",
+  "gamificationHubXpSectionBody": "Experience points reward participation: every measured session contributes five components. They never measure skill directly.",
+  "gamificationHubXpSectionTitle": "Experience points",
+  "gamificationHubXpToNextLabel": "{xp} to the next skill level",
+  "@gamificationHubXpToNextLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubXpTotalLabel": "Total experience points: {xp}",
+  "@gamificationHubXpTotalLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailCurrentBody": "Skill mastery is locked in at this level. The level only ever rises.",
+  "gamificationLevelDetailCurrentTitle": "Current level",
+  "gamificationLevelDetailHowXpWorksBody": "Every measured session contributes five experience-point components. They reward participation, never skill.",
+  "gamificationLevelDetailHowXpWorksTitle": "How experience points work",
+  "gamificationLevelDetailNextBody": "Experience points move the slider; skill mastery only crosses when measured evidence supports it.",
+  "gamificationLevelDetailNextTitle": "Next level",
+  "gamificationLevelDetailSemantics": "Level details for level {level}.",
+  "@gamificationLevelDetailSemantics": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailTitle": "Level {level}",
+  "@gamificationLevelDetailTitle": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpComponentBaseBody": "Awarded for a measured session that crossed the trust and signal gates.",
+  "gamificationLevelDetailXpComponentBaseTitle": "Base experience",
+  "gamificationLevelDetailXpComponentDiversityBody": "Rewards expanding beyond your recent measured focus.",
+  "gamificationLevelDetailXpComponentDiversityTitle": "Diversity experience",
+  "gamificationLevelDetailXpComponentDurationBody": "Proportional to the measured, qualifying minutes within the session.",
+  "gamificationLevelDetailXpComponentDurationTitle": "Duration experience",
+  "gamificationLevelDetailXpComponentImprovementBody": "Compares this session against the recent measured baseline.",
+  "gamificationLevelDetailXpComponentImprovementTitle": "Improvement experience",
+  "gamificationLevelDetailXpComponentQualityBody": "Reflects the measured signal quality across the session.",
+  "gamificationLevelDetailXpComponentQualityTitle": "Quality experience",
+  "gamificationLevelDetailXpComponentSemantics": "{title}: {body} {xp} experience points.",
+  "@gamificationLevelDetailXpComponentSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpProgressLabel": "{xp} of {total} experience points in this level",
+  "@gamificationLevelDetailXpProgressLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpProgressSemantics": "Experience points {xp} of {total} in the current level.",
+  "@gamificationLevelDetailXpProgressSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpSaturatedSemantics": "Highest configured level reached. No further level crosses are expected.",
+  "gamificationLevelDetailXpToNextSemantics": "{xp} experience points to the next level.",
+  "@gamificationLevelDetailXpToNextSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpTotalLabel": "Total experience points this session: {xp}",
+  "@gamificationLevelDetailXpTotalLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpTotalSemantics": "Total experience points {total}.",
+  "@gamificationLevelDetailXpTotalSemantics": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "guitarCalibrationAnchorBridgeSemantic": "Bridge anchor. Drag or use volume keys to adjust.",
   "guitarCalibrationAnchorNutSemantic": "Nut anchor. Drag or use volume keys to adjust.",
   "guitarCalibrationCanvasSemantic": "Guitar geometry calibration canvas",
