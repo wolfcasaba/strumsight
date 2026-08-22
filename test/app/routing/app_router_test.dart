@@ -18,6 +18,12 @@ import 'package:strumsight/features/audio_analysis/presentation/analysis_compare
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/auth/screens/login_screen.dart';
+import 'package:strumsight/features/gamification/presentation/screens/achievement_detail_screen.dart';
+import 'package:strumsight/features/gamification/presentation/screens/achievements_screen.dart';
+import 'package:strumsight/features/gamification/presentation/screens/gamification_hub_screen.dart';
+import 'package:strumsight/features/gamification/presentation/screens/quests_screen.dart';
+import 'package:strumsight/features/gamification/presentation/screens/reward_inbox_screen.dart';
+import 'package:strumsight/features/gamification/presentation/screens/streak_detail_screen.dart';
 import 'package:strumsight/features/library/public.dart';
 import 'package:strumsight/features/library/screens/library_screen.dart';
 import 'package:strumsight/features/library/screens/session_detail_screen.dart';
@@ -25,6 +31,7 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
+import 'package:strumsight/features/progress/screens/progress_screen.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_library_screen.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
@@ -39,6 +46,7 @@ import 'package:strumsight/features/song_trainer/domain/models/tempo_map.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_asset_repository.dart';
 import 'package:strumsight/features/song_trainer/domain/repositories/song_repository.dart';
 import 'package:strumsight/features/song_trainer/presentation/screens/song_editor_screen.dart';
+import 'package:strumsight/features/streak/screens/streak_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_audio.dart';
@@ -384,6 +392,118 @@ void main() {
     container.dispose();
 
     expect(() => router.go(AppRoutes.settings), throwsFlutterError);
+  });
+
+  // E08-R30 — Epic 8 route activation. These cells prove that the six new
+  // gamification V2 routes are wired into the live router, that the legacy
+  // `/streak` and `/progress` deep links remain reachable (ADR §5.1), and
+  // that the achievement-list → achievement-detail navigation pushes a
+  // matching URL with the path parameter.
+  group('E08-R30 — gamification routes', () {
+    testWidgets('legacy /streak deep link still resolves to StreakScreen', (
+      tester,
+    ) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go(AppRoutes.streak);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.streak);
+      expect(find.byType(StreakScreen), findsOneWidget);
+    });
+
+    testWidgets('legacy /progress deep link still resolves to ProgressScreen', (
+      tester,
+    ) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go(AppRoutes.progress);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.progress);
+      expect(find.byType(ProgressScreen), findsOneWidget);
+    });
+
+    testWidgets('gamification hub route registers', (tester) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go(AppRoutes.gamificationHub);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.gamificationHub);
+      expect(find.byType(GamificationHubScreen), findsOneWidget);
+    });
+
+    testWidgets('achievements route registers with the curated catalog', (
+      tester,
+    ) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go(AppRoutes.achievements);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.achievements);
+      final screen = tester.widget<AchievementsScreen>(
+        find.byType(AchievementsScreen),
+      );
+      expect(screen.definitions, isNotEmpty);
+    });
+
+    testWidgets('achievement detail route resolves the path parameter', (
+      tester,
+    ) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go('/gamification/achievement/practice_starter');
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        harness.router.state.uri.path,
+        '/gamification/achievement/practice_starter',
+      );
+      final screen = tester.widget<AchievementDetailScreen>(
+        find.byType(AchievementDetailScreen),
+      );
+      expect(screen.achievementId, 'practice_starter');
+    });
+
+    testWidgets('quests route registers', (tester) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go(AppRoutes.quests);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.quests);
+      expect(find.byType(QuestsScreen), findsOneWidget);
+    });
+
+    testWidgets('streak detail route registers', (tester) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go(AppRoutes.streakDetail);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.streakDetail);
+      expect(find.byType(StreakDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('reward inbox route registers', (tester) async {
+      final harness = await _pumpRouter(tester, seen: true);
+
+      harness.router.go(AppRoutes.rewardInbox);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(harness.router.state.uri.path, AppRoutes.rewardInbox);
+      expect(find.byType(RewardInboxScreen), findsOneWidget);
+    });
   });
 }
 

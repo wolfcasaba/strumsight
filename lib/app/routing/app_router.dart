@@ -12,6 +12,25 @@ import '../../features/audio_analysis/presentation/analysis_timeline_screen.dart
 import '../../features/audio_analysis/presentation/controllers/overview_view_model.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/chords/screens/chord_library_screen.dart';
+import '../../features/gamification/application/streak_service.dart';
+import '../../features/gamification/data/gamification_repository.dart';
+import '../../features/gamification/data/gamification_storage_schema.dart';
+import '../../features/gamification/data/local_gamification_repository.dart';
+import '../../features/gamification/data/migration/legacy_streak_migrator.dart';
+import '../../features/gamification/domain/achievements/achievement_progress.dart';
+import '../../features/gamification/domain/levels/level_curve.dart';
+import '../../features/gamification/domain/levels/level_definition.dart';
+import '../../features/gamification/domain/profile/gamification_profile.dart';
+import '../../features/gamification/domain/profile/reward_inbox_item.dart';
+import '../../features/gamification/domain/streak/streak_state.dart';
+import '../../features/gamification/infrastructure/default_achievement_catalog.dart';
+import '../../features/gamification/presentation/screens/achievement_detail_screen.dart';
+import '../../features/gamification/presentation/screens/achievements_screen.dart';
+import '../../features/gamification/presentation/screens/gamification_hub_screen.dart';
+import '../../features/gamification/presentation/screens/quests_screen.dart';
+import '../../features/gamification/presentation/screens/reward_inbox_screen.dart';
+import '../../features/gamification/presentation/screens/streak_detail_screen.dart';
+import '../../l10n/app_localizations.dart';
 import '../../features/learn/screens/latency_calibration_screen.dart';
 import '../../features/learn/screens/lesson_list_screen.dart';
 import '../../features/library/public.dart';
@@ -45,6 +64,8 @@ import '../../features/ai_tutor/presentation/screens/tutor_privacy_screen.dart';
 import '../../features/ai_tutor/presentation/screens/tutor_profile_screen.dart';
 import '../../features/tuner/screens/tuner_screen.dart';
 import '../../features/vision/public.dart';
+import '../../core/logging/logger_provider.dart';
+import '../../core/storage/storage_providers.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
 import 'app_route.dart';
@@ -53,6 +74,90 @@ import 'route_guards.dart';
 final class _RouterRefreshNotifier extends ChangeNotifier {
   void refresh() => notifyListeners();
 }
+
+// E08-R30 — named-route handle for the achievement detail screen. Kept
+// here (not in [AppRoutes]) because it is only ever referenced from this
+// file by the achievements list callback.
+const String _achievementDetailName = 'achievement-detail';
+
+// E08-R30 — minimal Riverpod glue for the new gamification routes. These
+// providers stay file-private because the gamification feature's own
+// `presentation/providers/` directory remains out of scope for this round
+// (the registered routes only need a synchronous projection; a future round
+// can lift them into the feature once the UI binds additional inputs).
+final _gamificationRepositoryProvider = Provider<GamificationRepository>((ref) {
+  final repo = LocalGamificationRepository(
+    store: ref.watch(keyValueStoreProvider),
+    logger: ref.watch(appLoggerProvider),
+  );
+  ref.onDispose(repo.dispose);
+  return repo;
+});
+
+final _levelCurveProvider = Provider<LevelCurve>((_) {
+  return LevelCurve(<LevelDefinition>[
+    LevelDefinition(
+      number: 1,
+      levelThreshold: 0,
+      titleKey: 'gamification.level.beginner',
+    ),
+    LevelDefinition(
+      number: 2,
+      levelThreshold: 100,
+      titleKey: 'gamification.level.explorer',
+    ),
+    LevelDefinition(
+      number: 3,
+      levelThreshold: 250,
+      titleKey: 'gamification.level.consistent',
+    ),
+    LevelDefinition(
+      number: 4,
+      levelThreshold: 500,
+      titleKey: 'gamification.level.advanced',
+    ),
+  ]);
+});
+
+final _gamificationProfileProvider = Provider<GamificationProfile>((ref) {
+  final repo = ref.watch(_gamificationRepositoryProvider);
+  final curve = ref.watch(_levelCurveProvider);
+  final read = repo.readProfileSnapshot();
+  final totalXp =
+      read.status == GamificationReadStatus.available && read.value != null
+      ? read.value!.totalXp
+      : 0;
+  return GamificationProfile(
+    schemaVersion: gamificationProfileSchemaVersion,
+    totalXp: totalXp,
+    progress: curve.progressForTotalXp(totalXp),
+  );
+});
+
+final _streakStateProvider = Provider<StreakState>((ref) {
+  final store = ref.watch(keyValueStoreProvider);
+  // TODO(E08-R30): wire `LegacyStreakMigrator.migrate()` writes back to the
+  // V2 namespaced envelope once the v22 storage migration clears the legacy
+  // key. For now this is a read-only projection of the on-disk state.
+  final migrated = LegacyStreakMigrator(store).migrate();
+  return migrated ??
+      StreakState(
+        current: 0,
+        longest: 0,
+        lastQualifiedDay: -1,
+        totalQualifiedDays: 0,
+        freezes: 0,
+      );
+});
+
+final _rewardInboxProvider = Provider<List<GamificationInboxItem>>((ref) {
+  final repo = ref.watch(_gamificationRepositoryProvider);
+  final read = repo.readInbox();
+  if (read.status == GamificationReadStatus.available && read.value != null) {
+    return read.value!;
+  }
+  return const <GamificationInboxItem>[];
+});
 
 /// App router: a bottom-nav [ShellRoute] over the five tabs, plus full-screen
 /// routes pushed from those destinations.
@@ -322,6 +427,119 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ],
+      // E08-R30 — Epic 8 gamification routes. The legacy `/streak` and
+      // `/progress` deep links above remain live; these are the new
+      // canonical V2 destinations.
+      GoRoute(
+        path: AppRoutes.gamificationHub,
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) {
+            final profile = ref.watch(_gamificationProfileProvider);
+            final streakState = ref.watch(_streakStateProvider);
+            final inbox = ref.watch(_rewardInboxProvider);
+            final unseenCount = inbox
+                .where((GamificationInboxItem item) => !item.isViewed)
+                .length;
+            return GamificationHubScreen(
+              profile: profile,
+              activeQuestCount: 0,
+              streakCurrentDays: streakState.current,
+              masteryUnlockedCount: 0,
+              inboxUnseenCount: unseenCount,
+              // TODO(E08-R30): level-detail navigation needs a route
+              // constant and screen wiring beyond the current scope.
+              onOpenLevelDetail: () {},
+              onOpenInbox: () => context.push(AppRoutes.rewardInbox),
+              onOpenAchievements: () => context.push(AppRoutes.achievements),
+              onOpenStreak: () => context.push(AppRoutes.streakDetail),
+              onOpenQuests: () => context.push(AppRoutes.quests),
+              onOpenMastery: () => context.push(AppRoutes.achievements),
+            );
+          },
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.achievements,
+        builder: (context, _) => AchievementsScreen(
+          definitions: defaultAchievementCatalog.definitions,
+          // TODO(E08-R30): wire achievement progress through a future
+          // AchievementProgressRepository; this round the surface is the
+          // curated catalog definitions only.
+          progressByAchievement: const <String, AchievementProgress>{},
+          onAchievementSelected: (String id) => context.pushNamed(
+            _achievementDetailName,
+            pathParameters: <String, String>{'achievementId': id},
+          ),
+        ),
+      ),
+      GoRoute(
+        name: _achievementDetailName,
+        path: AppRoutes.achievementDetail,
+        builder: (_, state) => AchievementDetailScreen(
+          achievementId: state.pathParameters['achievementId']!,
+          definitions: defaultAchievementCatalog.definitions,
+          progressByAchievement: const <String, AchievementProgress>{},
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.quests,
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) {
+            final l10n = AppLocalizations.of(context);
+            return QuestsScreen(
+              dailyChallengeTitle: l10n.challengeDailyTitle,
+              dailyChallenge: null,
+              dailyChallengeAvailable: false,
+              dailyQuests: const <QuestViewProjection>[],
+              weeklyQuests: const <QuestViewProjection>[],
+              onAction: (_) {
+                // TODO(E08-R30): route the typed QuestRouteAction through
+                // go_router once the quest-action vocabulary is finalised.
+              },
+              now: DateTime.now(),
+            );
+          },
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.streakDetail,
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) {
+            final streakState = ref.watch(_streakStateProvider);
+            return StreakDetailScreen(
+              state: streakState,
+              // TODO(E08-R30): evaluate today's reason against the live
+              // activity stream once that stream is wired to the screen.
+              reason: StreakEvaluationReason.qualified,
+              weeklyConsistencyDays: 0,
+              onRecoveryPressed: () {
+                // TODO(E08-R30): the streak-recovery purchase flow has no
+                // public repository method yet; the button is rendered but
+                // a no-op until the next round.
+              },
+            );
+          },
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.rewardInbox,
+        builder: (_, _) => Consumer(
+          builder: (context, ref, _) => RewardInboxScreen(
+            items: const <RewardInboxItem>[],
+            onItemSelected: (_) {
+              // TODO(E08-R30): route to the source ledger detail once
+              // the reward-detail screen is built.
+            },
+            onMarkSeen: (_) {
+              // TODO(E08-R30): the inbox is backed by the domain
+              // [RewardInboxItem] (a projection of ledger entries), not
+              // the storage-shaped [GamificationInboxItem] exposed by
+              // [GamificationRepository]. Wiring the two is a future
+              // round; the screen renders an empty state today.
+            },
+          ),
+        ),
+      ),
     ],
   );
   ref.onDispose(() {
