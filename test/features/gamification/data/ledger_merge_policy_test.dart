@@ -173,8 +173,15 @@ void main() {
       final json = GamificationSyncContract.encodeUpload(envelope);
       final rawReceipts = json['receipts']! as List<Object?>;
       final onTheWire = rawReceipts.first! as Map<String, Object?>;
-      final inner = onTheWire['receipt']! as Map<String, Object?>;
-      expect(inner['status'], 'unverified');
+      // Flat wire shape — the receipt fields sit at the element root, with
+      // no nested `receipt` wrapper. The server treats every upload as
+      // `unverified` (ADR 0394 §5.3), so `status` is omitted from the wire
+      // entirely; a client that smuggles `verified` cannot surface it on
+      // the wire, because there is no wire field to surface.
+      expect(onTheWire['ledgerId'], 'l-1');
+      expect(onTheWire.containsKey('receipt'), isFalse);
+      expect(onTheWire.containsKey('status'), isFalse);
+      expect(onTheWire.containsKey('totalXp'), isFalse);
     });
 
     test('the server-returned verified flag is preserved on merge', () {
