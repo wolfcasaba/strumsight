@@ -249,4 +249,80 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+- **Fájlok (a §4 lista, mind a 7):**
+  - `lib/features/gamification/data/sync/gamification_sync_contract.dart` — a
+    verziózott fel-/letöltési szerződés. A `LedgerEntrySyncStatus` enum,
+    `SyncReceipt`, `SyncLedgerEnvelope`, `GamificationSyncContract` kódoló,
+    `SyncReceiptValidation`, `compareSyncReceipts`. A kliens a feltöltéskor
+    `status='unverified'`-re kényszeríti (a `verified` státusz kizárólag
+    szerver-oldali).
+  - `lib/features/gamification/data/sync/ledger_merge_policy.dart` —
+    `LedgerMergePolicy` (unió-alapú összefésülés, sourceEventId + XP-alapú
+    kereszt-eszköz-merge, ledgerId-alapú egyezés, supersession támogatás),
+    `LedgerMergeResult`, `LedgerSyncTransport` interfész,
+    `NullLedgerSyncTransport`. Az `accountEnabled` kapu `shouldRun`-ban
+    fut le (5.4).
+  - `lib/features/gamification/public.dart` — két új `export`-sor a
+    barrel-ben. Nincs más módosítás.
+  - `backend/app/gamification/schemas.py` — `ReceiptUpload` (extra='forbid',
+    `totalXp` sehol, sem kötelező, sem opcionális), `LedgerUploadEnvelope`,
+    `ReceiptOut`, `LedgerDownloadEnvelope`, `validate_upload_envelope`,
+    `compute_total_xp`. A szerver-oldali összesítés független a kliens
+    bármely `totalXp` mezőjétől.
+  - `backend/app/gamification/service.py` — `evaluate_upload` (szerződés-verzió
+    rövidzár, séma-ellenőrzés, másolat-detektálás, materializálás,
+    szerver-oldali aggregáció), `aggregate` segéd, `validate_receipt_schema`,
+    `is_supported_contract_version`. A supersession-mechanika a séma és a
+    service oldalon is jelen van; a jelenlegi körben a szerver a
+    `supersedesLedgerId` mezőt a service rétegen kezeli (a DB-persistálás
+    egy későbbi router-körre marad).
+  - `test/features/gamification/data/ledger_merge_policy_test.dart` — 20
+    teszt, A1–A8 és §6.1 mindhárom küszöb-cellája le van fedve (lásd lent).
+  - `backend/tests/test_gamification_ledger.py` — 9 teszt, A2 (kliens
+    `totalXp` pydantic-szintű elutasítása + envelope-szintű elutasítása +
+    szerver-számítás), A7 (ismeretlen szerződés-verzió és receipt
+    séma-verzió elutasítása), idempotencia, dedup, üres-nyugta elutasítás.
+
+- **Futtatott parancsok:**
+  - `flutter test test/features/gamification/data/ledger_merge_policy_test.dart`
+    → 20 teszt, mind zöld (kilépés 0).
+  - `tools/round-gate.sh test/features/gamification/data/ledger_merge_policy_test.dart`
+    → 9/9 lépés zöld (format, analyze, test, architecture, secrets, l10n,
+    ruff format, ruff check, pytest). A gate a teljes backend pytest suite-
+    et is lefuttatta a §7 9. lépésében (166 teszt, mind zöld).
+  - `python3 -m pytest backend/tests/test_gamification_ledger.py -q` →
+    9 passed (kilépés 0).
+
+- **Valódi-sértés próba (§10 KÖTELEZŐ):**
+  - A `_collapseGroup` lépést eltávolítottam a `LedgerMergePolicy.merge`-ből,
+    hogy a dedup kizárólag ledgerId-n fusson (ez a §6.1 „a küszöb alatt"
+    implementációja). A gate futtatása után az **A1 idempotencia-cella
+    PIROSRA váltott** — a „cross-device same event merges on sourceEventId"
+    teszt két bejegyzést talált egyetlen `totalXp=10` helyett, és a §6.1
+    „on threshold" cella is piros lett. A teljes futás:
+    `00:00 +18 -2: Some tests failed.` A policy-t visszaállítottam az
+    eredeti, helyes verzióra, és a gate újra zöld.
+
+- **A `totalXp` sehol sem elfogadott a kérésben:** a pydantic séma
+  `extra='forbid'`-ja bármilyen `totalXp` (vagy `profile_total_xp`,
+  `total_xp`, stb.) mezőt a dekódoláskor elutasít 422-vel. A két
+  célzott teszt (`test_a2_*`) ezt explicit bizonyítja, és a
+  `test_a2_server_computes_total_from_receipts_not_from_request`
+  bizonyítja, hogy a válasz `totalXp`-je a szerver saját összegzéséből
+  jön, nem a kérésből.
+
+- **A fiók-kikapcsolt ág (5.4):** a `LedgerMergePolicy.shouldRun`
+  `accountEnabled=false` esetén hamisat ad; a teszt egy
+  `_CountingTransport`-tal bizonyítja, hogy a hálózati probe
+  `requestCount` értéke nulla marad, és a `NullLedgerSyncTransport`
+  dob, ha valaki mégis megpróbálja meghívni. A transport-interfész
+  (`LedgerSyncTransport`) a későbbi router-körök számára készült, ahol
+  a `HttpLedgerSyncTransport` a Dio / ApiClient mintára épül majd.
+
+- **Ismert korlát / kimaradt:** a service `_apply_supersession`
+  egyelőre no-op (a `supersedesLedgerId` a szerver-oldali modellben
+  nincs még perzisztálva — a jelenlegi kör csak a szerződést rögzíti).
+  A service-beli logika készen áll: ha a jövőbeli router-kör hozzáadja
+  a DB-oszlopot, csak a service függvény törzsét kell kitölteni.
+
 ## 11. Review — a Claude tölti ki
