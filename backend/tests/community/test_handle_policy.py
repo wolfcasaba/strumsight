@@ -428,6 +428,39 @@ def test_availability_is_rate_limited(client):
     )
 
 
+def test_rate_limit_key_is_socket_peer_not_xff(client):
+    """F1 / E09-R03 review — the rate-limit key MUST be the socket peer,
+    NOT a client-supplied ``X-Forwarded-For`` value.
+
+    Rotating the header previously gave each request its own bucket
+    (60/60 bypassed the 30/min limit — measured during the review).
+    After the fix, ``_client_key`` returns ``request.client.host``
+    unconditionally and the header is ignored. From a single TestClient
+    the socket peer is stable, so the limiter MUST trip at the
+    documented 30/min regardless of the spoofed header value.
+    """
+    reset_rate_limiters()
+    seen_rate_limited = False
+    # 5 calls over the 30/min limit is enough to prove the bucket is
+    # shared — the pre-fix code never tripped at all.
+    for index in range(35):
+        spoofed_ip = f"203.0.113.{index % 250 + 1}"
+        response = client.get(
+            "/community/handles/availability",
+            params={"handle": f"user{index}"},
+            headers={"X-Forwarded-For": spoofed_ip},
+        )
+        assert response.status_code == 200, response.text
+        if response.json().get("reason") == "rate_limited":
+            seen_rate_limited = True
+            break
+    assert seen_rate_limited, (
+        "availability endpoint did not rate-limit after 35 calls with "
+        "rotating X-Forwarded-For — the limiter is still keyed on a "
+        "client-supplied header (F1 regression)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # A4 — reserved/blocked handles cannot be registered
 # ---------------------------------------------------------------------------
@@ -949,6 +982,46 @@ def test_claim_endpoint_rejects_reserved(client, session_factory):
     )
     assert response.status_code == 400, response.text
     assert "reserved" in response.json()["detail"]
+
+
+def test_duplicate_claim_returns_409_not_500(client, session_factory):
+    """F2 / E09-R03 review — duplicate handle claim MUST surface as
+    ``409 Conflict`` (NOT ``500 Internal Server Error``).
+
+    The unique index on ``handle_normalized`` is the enforcement. SQLite
+    raises the UNIQUE-index violation on the ``UPDATE`` inside
+    ``assign_handle``, not on the subsequent ``commit()``. The router
+    must translate the resulting ``HandleAlreadyClaimed`` to a 409
+    response at a single chokepoint — before the fix only the
+    ``commit_with_uniqueness_check`` path was wrapped, so the
+    IntegrityError-on-UPDATE path fell through to a 500.
+    """
+    with session_factory() as db:
+        _insert_user(db, 1, "u1@s.test")
+        _insert_user(db, 2, "u2@s.test")
+        db.commit()
+        p1 = _make_profile(db, 1)
+        p2 = _make_profile(db, 2)
+
+    # First claim succeeds.
+    response_first = client.post(
+        "/community/handles/claim",
+        json={"profile_id": p1, "handle": "alice"},
+    )
+    assert response_first.status_code == 201, response_first.text
+
+    # Second claim with the same normalized handle — MUST be 409, not 500.
+    response_dup = client.post(
+        "/community/handles/claim",
+        json={"profile_id": p2, "handle": "alice"},
+    )
+    assert response_dup.status_code == 409, response_dup.text
+    assert response_dup.json() == {"detail": "handle taken"}
+
+    # And the first profile still owns the handle.
+    with session_factory() as db:
+        owner = lookup_active_profile_id(db, "alice")
+        assert owner == p1
 
 
 def test_change_endpoint_records_history_with_redirect_until(client, session_factory):
