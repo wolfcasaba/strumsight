@@ -75,9 +75,9 @@ class _FollowersScreenState extends ConsumerState<FollowersScreen> {
     } on AppFailure catch (failure) {
       if (_disposed) return;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_formatFailure(failure))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_formatFailure(failure))));
       }
     }
   }
@@ -102,9 +102,9 @@ class _FollowersScreenState extends ConsumerState<FollowersScreen> {
     } on AppFailure catch (failure) {
       if (_disposed) return;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_formatFailure(failure))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_formatFailure(failure))));
       }
     } finally {
       if (mounted) {
@@ -130,25 +130,25 @@ class _FollowersScreenState extends ConsumerState<FollowersScreen> {
       body: SafeArea(
         child: _items.isEmpty
             ? const Center(child: Text('No one here yet.'))
-              : ListView.separated(
-                  itemCount: _items.length + 1,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    if (index >= _items.length) {
-                      // Tail load: kick off the next page when the
-                      // user scrolls near the bottom. The cursor's
-                      // null means the server is done.
-                      if (!_cursor.isInitial && _cursor.cursor != null) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (!_disposed) _fetchNext();
-                        });
-                      }
-                      return _Footer(isLoading: _isLoadingMore);
+            : ListView.separated(
+                itemCount: _items.length + 1,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  if (index >= _items.length) {
+                    // Tail load: kick off the next page when the
+                    // user scrolls near the bottom. The cursor's
+                    // null means the server is done.
+                    if (!_cursor.isInitial && _cursor.cursor != null) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!_disposed) _fetchNext();
+                      });
                     }
-                    final profile = _items[index];
-                    return _FollowerTile(profile: profile);
-                  },
-                ),
+                    return _Footer(isLoading: _isLoadingMore);
+                  }
+                  final profile = _items[index];
+                  return _FollowerTile(profile: profile);
+                },
+              ),
       ),
     );
   }

@@ -48,15 +48,13 @@ class _FakeSocialGraphRepository implements SocialGraphRepository {
   Future<CommunityPage<CommunityProfile>> followingPage({
     required PublicUserId userId,
     required Object cursor,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 
   @override
   Future<CommunityPage<CommunityProfile>> followersPage({
     required PublicUserId userId,
     required Object cursor,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 
   @override
   Future<ContentId> follow({
@@ -114,29 +112,25 @@ class _FakeSocialGraphRepository implements SocialGraphRepository {
   Future<void> block({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 
   @override
   Future<void> unblock({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 
   @override
   Future<void> mute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 
   @override
   Future<void> unmute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 }
 
 ProviderContainer _container(_FakeSocialGraphRepository repo) {
@@ -156,8 +150,9 @@ void main() {
       final container = _container(repo);
       addTearDown(container.dispose);
 
-      final controller =
-          container.read(communityRelationshipControllerProvider.notifier);
+      final controller = container.read(
+        communityRelationshipControllerProvider.notifier,
+      );
       final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f70');
 
       // Seed the server-known relationship as ``notRelated``.
@@ -171,7 +166,9 @@ void main() {
       expect(result, isA<CommunityRelationshipSubmitFailure>());
       expect(repo.followCalls, 1, reason: 'repository should have been called');
 
-      final state = container.read(communityRelationshipControllerProvider).value!;
+      final state = container
+          .read(communityRelationshipControllerProvider)
+          .value!;
       // After rollback, the optimistic override is cleared and the
       // server value is restored — A6.
       final view = state.relationships[target];
@@ -180,82 +177,104 @@ void main() {
         CommunityRelationshipToViewer.notRelated,
         reason: 'A6 violated — the optimistic state did not roll back',
       );
-      expect(view?.optimistic, isNull, reason: 'optimistic override should be cleared');
+      expect(
+        view?.optimistic,
+        isNull,
+        reason: 'optimistic override should be cleared',
+      );
       expect(state.isSubmitting, isFalse);
     });
   });
 
   group('A7 — public vs private follow targets', () {
-    test('follow against a notRelated target enters pendingRequestOutgoing', () async {
-      final repo = _FakeSocialGraphRepository();
-      final container = _container(repo);
-      addTearDown(container.dispose);
+    test(
+      'follow against a notRelated target enters pendingRequestOutgoing',
+      () async {
+        final repo = _FakeSocialGraphRepository();
+        final container = _container(repo);
+        addTearDown(container.dispose);
 
-      final controller =
-          container.read(communityRelationshipControllerProvider.notifier);
-      final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f71');
-      controller.seedRelationship(
-        target,
-        CommunityRelationshipToViewer.notRelated,
-      );
+        final controller = container.read(
+          communityRelationshipControllerProvider.notifier,
+        );
+        final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f71');
+        controller.seedRelationship(
+          target,
+          CommunityRelationshipToViewer.notRelated,
+        );
 
-      await controller.follow(target);
+        await controller.follow(target);
 
-      final state = container.read(communityRelationshipControllerProvider).value!;
-      // After a successful follow the optimistic value is committed
-      // as the new server-confirmed state — the Kör 8 follow-up
-      // ``fetchById`` will refine this against the actual profile
-      // visibility. The fresh-follow optimistic default is
-      // ``pendingRequestOutgoing`` because the controller does not
-      // know the target's visibility — the §5.2 contract.
-      final view = state.relationships[target];
-      expect(
-        view?.server,
-        CommunityRelationshipToViewer.pendingRequestOutgoing,
-        reason: 'A7 violated — optimistic follow must commit pending '
-            'as the new server-confirmed value',
-      );
-      expect(view?.optimistic, isNull, reason: 'optimistic cleared after commit');
-      expect(repo.followCalls, 1);
-      expect(repo.followKeys.first, isNotEmpty);
-    });
+        final state = container
+            .read(communityRelationshipControllerProvider)
+            .value!;
+        // After a successful follow the optimistic value is committed
+        // as the new server-confirmed state — the Kör 8 follow-up
+        // ``fetchById`` will refine this against the actual profile
+        // visibility. The fresh-follow optimistic default is
+        // ``pendingRequestOutgoing`` because the controller does not
+        // know the target's visibility — the §5.2 contract.
+        final view = state.relationships[target];
+        expect(
+          view?.server,
+          CommunityRelationshipToViewer.pendingRequestOutgoing,
+          reason:
+              'A7 violated — optimistic follow must commit pending '
+              'as the new server-confirmed value',
+        );
+        expect(
+          view?.optimistic,
+          isNull,
+          reason: 'optimistic cleared after commit',
+        );
+        expect(repo.followCalls, 1);
+        expect(repo.followKeys.first, isNotEmpty);
+      },
+    );
 
-    test('follow against a target that already follows you yields mutual',
-        () async {
-      final repo = _FakeSocialGraphRepository();
-      final container = _container(repo);
-      addTearDown(container.dispose);
+    test(
+      'follow against a target that already follows you yields mutual',
+      () async {
+        final repo = _FakeSocialGraphRepository();
+        final container = _container(repo);
+        addTearDown(container.dispose);
 
-      final controller =
-          container.read(communityRelationshipControllerProvider.notifier);
-      final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f72');
-      // Seed: target already follows the caller. The follow click
-      // optimistically flips to ``mutualFollow`` (the §10.2 path).
-      controller.seedRelationship(
-        target,
-        CommunityRelationshipToViewer.theyFollowYou,
-      );
+        final controller = container.read(
+          communityRelationshipControllerProvider.notifier,
+        );
+        final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f72');
+        // Seed: target already follows the caller. The follow click
+        // optimistically flips to ``mutualFollow`` (the §10.2 path).
+        controller.seedRelationship(
+          target,
+          CommunityRelationshipToViewer.theyFollowYou,
+        );
 
-      await controller.follow(target);
+        await controller.follow(target);
 
-      final state = container.read(communityRelationshipControllerProvider).value!;
-      final view = state.relationships[target];
-      expect(
-        view?.server,
-        CommunityRelationshipToViewer.mutualFollow,
-        reason: 'A7 violated — accepting a follow from an existing '
-            'follower should commit mutual as the new server value',
-      );
-      expect(view?.optimistic, isNull);
-    });
+        final state = container
+            .read(communityRelationshipControllerProvider)
+            .value!;
+        final view = state.relationships[target];
+        expect(
+          view?.server,
+          CommunityRelationshipToViewer.mutualFollow,
+          reason:
+              'A7 violated — accepting a follow from an existing '
+              'follower should commit mutual as the new server value',
+        );
+        expect(view?.optimistic, isNull);
+      },
+    );
 
     test('unfollow after a successful follow reverts to notRelated', () async {
       final repo = _FakeSocialGraphRepository();
       final container = _container(repo);
       addTearDown(container.dispose);
 
-      final controller =
-          container.read(communityRelationshipControllerProvider.notifier);
+      final controller = container.read(
+        communityRelationshipControllerProvider.notifier,
+      );
       final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f73');
       // Seed: already following.
       controller.seedRelationship(
@@ -267,40 +286,43 @@ void main() {
       expect(result, isA<CommunityRelationshipSubmitSuccess>());
       expect(repo.unfollowCalls, 1);
 
-      final state = container.read(communityRelationshipControllerProvider).value!;
+      final state = container
+          .read(communityRelationshipControllerProvider)
+          .value!;
       final view = state.relationships[target];
       expect(
         view?.server,
         CommunityRelationshipToViewer.notRelated,
-        reason: 'A7 violated — unfollow must commit notRelated as the '
+        reason:
+            'A7 violated — unfollow must commit notRelated as the '
             'new server-confirmed value',
       );
     });
 
-    test(
-      'unfollow against a pendingRequestOutgoing server value flips '
-      'to notRelated (the cancel branch — ADR 0401 §3)',
-      () async {
-        final repo = _FakeSocialGraphRepository();
-        final container = _container(repo);
-        addTearDown(container.dispose);
+    test('unfollow against a pendingRequestOutgoing server value flips '
+        'to notRelated (the cancel branch — ADR 0401 §3)', () async {
+      final repo = _FakeSocialGraphRepository();
+      final container = _container(repo);
+      addTearDown(container.dispose);
 
-        final controller =
-            container.read(communityRelationshipControllerProvider.notifier);
-        final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f74');
-        controller.seedRelationship(
-          target,
-          CommunityRelationshipToViewer.pendingRequestOutgoing,
-        );
+      final controller = container.read(
+        communityRelationshipControllerProvider.notifier,
+      );
+      final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f74');
+      controller.seedRelationship(
+        target,
+        CommunityRelationshipToViewer.pendingRequestOutgoing,
+      );
 
-        final result = await controller.unfollow(target);
-        expect(result, isA<CommunityRelationshipSubmitSuccess>());
+      final result = await controller.unfollow(target);
+      expect(result, isA<CommunityRelationshipSubmitSuccess>());
 
-        final state = container.read(communityRelationshipControllerProvider).value!;
-        final view = state.relationships[target];
-        expect(view?.server, CommunityRelationshipToViewer.notRelated);
-      },
-    );
+      final state = container
+          .read(communityRelationshipControllerProvider)
+          .value!;
+      final view = state.relationships[target];
+      expect(view?.server, CommunityRelationshipToViewer.notRelated);
+    });
   });
 
   group('controller wiring — happy path round-trip', () {
@@ -310,8 +332,9 @@ void main() {
       final container = _container(repo);
       addTearDown(container.dispose);
 
-      final controller =
-          container.read(communityRelationshipControllerProvider.notifier);
+      final controller = container.read(
+        communityRelationshipControllerProvider.notifier,
+      );
       final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f75');
       controller.seedRelationship(
         target,
@@ -321,16 +344,23 @@ void main() {
       final result = await controller.follow(target);
       expect(result, isA<CommunityRelationshipSubmitSuccess>());
 
-      final state = container.read(communityRelationshipControllerProvider).value!;
+      final state = container
+          .read(communityRelationshipControllerProvider)
+          .value!;
       final view = state.relationships[target];
       expect(
         view?.server,
         CommunityRelationshipToViewer.pendingRequestOutgoing,
-        reason: 'successful follow must commit pendingRequestOutgoing as the '
+        reason:
+            'successful follow must commit pendingRequestOutgoing as the '
             'new server value (the optimistic default for unknown-target-'
             'state; the Kör 8 follow-up resolves the actual value)',
       );
-      expect(view?.optimistic, isNull, reason: 'optimistic cleared after commit');
+      expect(
+        view?.optimistic,
+        isNull,
+        reason: 'optimistic cleared after commit',
+      );
       expect(state.isSubmitting, isFalse);
     });
   });

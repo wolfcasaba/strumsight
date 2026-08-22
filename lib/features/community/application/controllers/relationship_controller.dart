@@ -145,7 +145,9 @@ class CommunityRelationshipController
     CommunityRelationshipToViewer serverValue,
   ) {
     final current = state.value ?? const CommunityRelationshipState.initial();
-    final next = Map<PublicUserId, RelationshipView>.from(current.relationships);
+    final next = Map<PublicUserId, RelationshipView>.from(
+      current.relationships,
+    );
     next[target] = RelationshipView(server: serverValue);
     state = AsyncData(current.copyWith(relationships: next));
   }
@@ -164,11 +166,7 @@ class CommunityRelationshipController
     final previousOptimistic = view?.optimistic;
     final optimistic = _optimisticFollow(previousServer);
 
-    _writeRelationship(
-      target,
-      view,
-      optimistic: optimistic,
-    );
+    _writeRelationship(target, view, optimistic: optimistic);
     state = AsyncData(
       (state.value ?? const CommunityRelationshipState.initial()).copyWith(
         isSubmitting: true,
@@ -195,7 +193,9 @@ class CommunityRelationshipController
   /// both branches (active edge → DELETE; pending request →
   /// ``cancelled``); the controller's optimistic UI is a single
   /// ``notRelated`` for either.
-  Future<CommunityRelationshipSubmitResult> unfollow(PublicUserId target) async {
+  Future<CommunityRelationshipSubmitResult> unfollow(
+    PublicUserId target,
+  ) async {
     if (state.value?.isSubmitting ?? false) {
       return const CommunityRelationshipSubmitResult.busy();
     }
@@ -423,10 +423,15 @@ class CommunityRelationshipController
     required CommunityRelationshipToViewer optimistic,
   }) {
     final current = state.value ?? const CommunityRelationshipState.initial();
-    final next = Map<PublicUserId, RelationshipView>.from(current.relationships);
-    next[target] = (view ?? const RelationshipView(
-      server: CommunityRelationshipToViewer.notRelated,
-    )).copyWith(optimistic: optimistic);
+    final next = Map<PublicUserId, RelationshipView>.from(
+      current.relationships,
+    );
+    next[target] =
+        (view ??
+                const RelationshipView(
+                  server: CommunityRelationshipToViewer.notRelated,
+                ))
+            .copyWith(optimistic: optimistic);
     state = AsyncData(current.copyWith(relationships: next));
   }
 
@@ -435,13 +440,13 @@ class CommunityRelationshipController
     CommunityRelationshipToViewer value,
   ) {
     final current = state.value ?? const CommunityRelationshipState.initial();
-    final next = Map<PublicUserId, RelationshipView>.from(current.relationships);
+    final next = Map<PublicUserId, RelationshipView>.from(
+      current.relationships,
+    );
     next[target] = RelationshipView(server: value);
-    state = AsyncData(current.copyWith(
-      relationships: next,
-      isSubmitting: false,
-      error: null,
-    ));
+    state = AsyncData(
+      current.copyWith(relationships: next, isSubmitting: false, error: null),
+    );
   }
 
   void _rollbackOptimistic(
@@ -451,8 +456,11 @@ class CommunityRelationshipController
     CommunityRelationshipToViewer? previousOptimistic,
   ) {
     final current = state.value ?? const CommunityRelationshipState.initial();
-    final next = Map<PublicUserId, RelationshipView>.from(current.relationships);
-    next[target] = view?.copyWith(
+    final next = Map<PublicUserId, RelationshipView>.from(
+      current.relationships,
+    );
+    next[target] =
+        view?.copyWith(
           server: previousServer,
           optimistic: previousOptimistic,
           clearOptimistic: previousOptimistic == null,
@@ -461,10 +469,9 @@ class CommunityRelationshipController
           server: previousServer,
           optimistic: previousOptimistic,
         );
-    state = AsyncData(current.copyWith(
-      relationships: next,
-      isSubmitting: false,
-    ));
+    state = AsyncData(
+      current.copyWith(relationships: next, isSubmitting: false),
+    );
   }
 }
 

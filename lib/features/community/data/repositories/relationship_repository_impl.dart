@@ -58,78 +58,67 @@ final class DisabledSocialGraphRepository implements SocialGraphRepository {
   Future<CommunityPage<CommunityProfile>> followingPage({
     required PublicUserId userId,
     required Object cursor,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<CommunityPage<CommunityProfile>> followersPage({
     required PublicUserId userId,
     required Object cursor,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<ContentId> follow({
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> unfollow({
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> removeFollower({
     required PublicUserId follower,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> acceptFollowRequest({
     required ContentId requestId,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> declineFollowRequest({
     required ContentId requestId,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> block({
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> unblock({
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> mute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> unmute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 }
 
 /// Live HTTP-backed social-graph repository.
@@ -267,34 +256,33 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
       // Kör 8 scope (ADR 0401 §2). Throw explicitly so a future
       // regression that swapped this for a silent no-op would fail
       // loudly at the call site.
-      throw UnsupportedError('SocialGraphRepository.block is not yet implemented');
+      throw UnsupportedError(
+        'SocialGraphRepository.block is not yet implemented',
+      );
 
   @override
   Future<void> unblock({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      throw UnsupportedError(
-        'SocialGraphRepository.unblock is not yet implemented',
-      );
+  }) => throw UnsupportedError(
+    'SocialGraphRepository.unblock is not yet implemented',
+  );
 
   @override
   Future<void> mute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      throw UnsupportedError(
-        'SocialGraphRepository.mute is not yet implemented',
-      );
+  }) => throw UnsupportedError(
+    'SocialGraphRepository.mute is not yet implemented',
+  );
 
   @override
   Future<void> unmute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      throw UnsupportedError(
-        'SocialGraphRepository.unmute is not yet implemented',
-      );
+  }) => throw UnsupportedError(
+    'SocialGraphRepository.unmute is not yet implemented',
+  );
 
   Future<String> _resolveCallerPublicId() async {
     // The repository does not know the caller's public-id directly;
@@ -341,10 +329,7 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     // element type matches the interface — callers that want
     // full profiles compose a follow-up fetch).
     final items = publicIds.map(_placeholderProfile).toList(growable: false);
-    return CommunityPage<CommunityProfile>(
-      items: items,
-      cursor: cursorPage,
-    );
+    return CommunityPage<CommunityProfile>(items: items, cursor: cursorPage);
   }
 
   Map<String, Object?> _decodeFollowResult(Map<String, Object?> json) {
@@ -371,13 +356,11 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
 /// The Community social-graph repository wired against the live
 /// ``accountApiClientProvider`` — null on a build where the
 /// account layer is disabled, the http impl otherwise.
-final socialGraphRepositoryProvider = Provider<SocialGraphRepository>(
-  (ref) {
-    final client = ref.watch(communitySocialApiClientProvider);
-    if (client == null) return const DisabledSocialGraphRepository();
-    return HttpSocialGraphRepository(client);
-  },
-);
+final socialGraphRepositoryProvider = Provider<SocialGraphRepository>((ref) {
+  final client = ref.watch(communitySocialApiClientProvider);
+  if (client == null) return const DisabledSocialGraphRepository();
+  return HttpSocialGraphRepository(client);
+});
 
 CommunityProfile _placeholderProfile(PublicUserId userId) {
   // The follow-list wire shape carries only public_ids. The full
