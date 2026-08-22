@@ -93,6 +93,39 @@ final class ApiClient {
     }
   }
 
+  /// Sends a DELETE request whose successful response body is
+  /// intentionally ignored (E09-R07, ADR 0401 §1).
+  ///
+  /// Mirror of [post] — the existing four methods are untouched.
+  /// The idempotency key (the Kör 7 mutation contract) travels
+  /// as a query parameter because DELETE carries no JSON body —
+  /// the backend counterpart ``social_graph.py`` reads it from
+  /// ``?idempotency_key=...``.
+  Future<AppResult<void>> delete(
+    String path, {
+    Map<String, Object?> headers = const {},
+    bool requiresAuthentication = true,
+  }) async {
+    try {
+      await _dio.request<Object?>(
+        path,
+        options: Options(
+          method: 'DELETE',
+          headers: headers,
+          extra: {
+            NetworkRequestMetadata.requiresAuthentication:
+                requiresAuthentication,
+          },
+        ),
+      );
+      return const Success(null);
+    } on DioException catch (error, stackTrace) {
+      return Failure(mapNetworkFailure(error, stackTrace: stackTrace));
+    } catch (error, stackTrace) {
+      return Failure(UnknownFailure(cause: error, stackTrace: stackTrace));
+    }
+  }
+
   Future<AppResult<T>> _requestJson<T>({
     required String method,
     required String path,
