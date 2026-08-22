@@ -2,13 +2,55 @@
 
 Brief: docs/rounds/e08-r24-practice-and-learn-integration.md
 ADR: docs/adr/0390-practice-and-learn-gamification-adapter-boundary.md
-Diff: `git diff d54a7b4d...2414a373` (branch `minimax/e08-r24-practice-and-learn-integration`)
+Diff: `git diff d54a7b4d...2f94d0ee` (branch `minimax/e08-r24-practice-and-learn-integration`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-22
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (javító kör 1 után — `2f94d0ee`)
 
 ## Összegzés
 
-BLOCKER: 2 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+Első kör: BLOCKER 2 · MAJOR 0 · MINOR 0 · NOTE 1.
+Javító kör 1 (`0853ae6e`, `b06e6741`, `2f94d0ee`) után: **F1 és F2 zárva,
+saját, izolált `/tmp` klónban megismételt méréssel megerősítve.** N1
+változatlanul nyitott megfigyelés, nem blokkol.
+
+## Javító kör 1 utáni független ellenőrzés
+
+```
+git clone --branch minimax/e08-r24-practice-and-learn-integration \
+  https://github.com/wolfcasaba/strumsight.git /tmp/review-e08-r24-fix1
+python3 tools/scope-audit.py --repo /tmp/review-e08-r24-fix1 \
+  --brief docs/rounds/e08-r24-practice-and-learn-integration.md --base 68b2f091
+→ Legacy scope audit OK (68b2f091b877..2f94d0ee1df0, 3 changed path(s), 0 generated/ignored)
+```
+
+**F1 zárás — saját, eldobható újra-próbateszttel megerősítve** (nem
+commitolva, futtatás után törölve): egy `GamificationLessonAdapter`
+példányt két, KÜLÖNBÖZŐ `attemptId`-vel és `epochDay`-jel (4 nap eltérés)
+futtattam ugyanarra a `lessonId`-ra:
+```
+day1 eventId=learn-lesson/attempt-1/v1 day5 eventId=learn-lesson/attempt-5/v1 ledgerCount=2
++1: All tests passed!
+```
+A két teljesítés MOST két KÜLÖNBÖZŐ `eventId`-t termel, és a ledger MINDKÉT
+alkalommal önálló bejegyzést kapott (`totalXp > 0` mindkettőn) — a defektus
+megszűnt. A diff (`gamification_lesson_adapter.dart`) a `stableEventId`-et a
+korábbi puszta `lessonId` helyett az ÚJ, caller-fed `attemptId` mezőből
+származtatja (a practice oldal `sessionId`-mintáját követve), pontosan a
+brief §5.3 és az ADR 0390 4. döntése szerint.
+
+**F2 zárás:** a `practice_reward_flow_test.dart` egy teljes „Lesson →
+gamification reward flow" csoportot kapott (A1×2, A3, A5×4, A6×3, A7×2 —
+a practice-oldali mátrix tükre), PLUSZ egy dedikált „F1 regression" cellát
+(két különböző napi teljesítés → két különböző eventId → két ledger-
+bejegyzés, mindkettő `totalXp > 0`). `grep -rln "GamificationLessonAdapter\|
+recordLesson" test/` a javítás UTÁN már NEM üres.
+
+**Gate — saját, izolált `/tmp` klónban, a javítás UTÁNI HEAD-en:**
+```
+tools/round-gate.sh test/features/gamification/integration/practice_reward_flow_test.dart \
+  test/core/architecture_dependency_test.dart test/features/learn
+→ format/analyze/test×3/architecture/secrets/l10n — MIND ZÖLD
+```
 
 ## Acceptance criteria
 
@@ -70,7 +112,7 @@ kódút egyetlen teszt által sincs lefedve.
   A `day5` hívás `accepted=true`-t jelent (az outbox elfogadta az enqueue-t), de a **ledger végig 1 bejegyzésen marad** — a második teljesítés a drain-ben csendben eldobódik. Ez a defektus éles kód, amit a jelenlegi diff MERGE-re jelöl.
 - **Kötelező javítás:** a `LessonGamificationSignal` kapjon egy session/attempt-szintű mezőt (pl. `attemptId` vagy a `learn_screen.dart`/eredmény-képernyő által generált, a képernyő ÉLETCIKLUSÁTÓL független, de a KATALÓGUS-id-től ELTÉRŐ perzisztált azonosító — analóg a practice oldal `sessionId`-jével), és a `stableEventId` ebből (nem a puszta `lessonId`-ból) számoljon. A napon-belüli/nap-közötti csökkenő hozamot a MEGLÉVŐ `practiceOccurrenceCount` mechanizmus kezelje, ne az azonosító-szintű dedup. Mivel a ténylegesen élő hívási pont (a `learn` eredmény-képernyő) ennek a körnek a tiltott zónájában van, az attempt-id forrása ebben a körben is caller-fed maradhat (a teszt-fixture generálja) — csak ne essen vissza a puszta `lessonId`-ra.
 - **Ellenőrzés:** a fenti próbateszt (vagy ezzel ekvivalens) kerüljön be a `practice_reward_flow_test.dart`-ba (vagy egy külön lecke-specifikus fájlba, lásd F2) mint állandó regresszió-őr; a javítás után a `day5` hívásnak SAJÁT, `day1`-től ELTÉRŐ `eventId`-t kell termelnie és a ledgernek 2 bejegyzésre kell nőnie.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`0853ae6e`) — `stableEventId` mostantól az új, caller-fed `attemptId` mezőből számol, nem a puszta `lessonId`-ból. Saját, izolált `/tmp` klónban megismételt próbateszttel megerősítve (lásd fent „Javító kör 1 utáni független ellenőrzés"): két különböző attemptId/nap → két különböző eventId → két ledger-bejegyzés, mindkettő `totalXp > 0`.
 
 ### F2 — BLOCKER — A `GamificationLessonAdapter`/`recordLesson` nulla tesztlefedettséggel landol; a §10 handoff burkoltan teljes lefedettséget sugall
 
@@ -79,7 +121,7 @@ kódút egyetlen teszt által sincs lefedve.
 - **Hatás:** a brief §1 Célja kifejezetten „a KÉT legfontosabb eredmény-forrást" köti be — a LECKE-oldali A1/A3/A5/A6/A7 minden mérő cellája bizonyítatlan. Ez pontosan az a hibaosztály, amit a review-protokoll „zöld gate NEM bizonyíték" elve céloz: az F1-ben leírt súlyos, valós defektus PONTOSAN azért csúszott át zöld gate-en, mert a kódútvonal, amiben rejtőzik, nulla tesztfedettséggel rendelkezik.
 - **Kötelező javítás:** a `practice_reward_flow_test.dart`-hoz (vagy egy testvér `lesson_reward_flow_test.dart`-hoz, ha a diff mérete indokolja) kerüljön egy `GamificationLessonAdapter`-specifikus tesztcsoport, amely UGYANAZT az A1/A3/A5/A6/A7 mátrixot futtatja le, mint a practice oldalon — beleértve az F1 által leírt, nap-közötti ismétlés-cellát is.
 - **Ellenőrzés:** az új tesztcsoport a javítás UTÁN zöld; F1 fix nélkül a nap-közötti ismétlés-cella PIROSRA váltana (ez maga a kettő együttes valódi-sértés bizonyítéka).
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`0853ae6e`) — teljes „Lesson → gamification reward flow" csoport (A1×2, A3, A5×4, A6×3, A7×2 + F1 regressziós cella) került a `practice_reward_flow_test.dart`-ba. Saját, izolált `/tmp` klónban futtatott gate (`tools/round-gate.sh`, 8/8 fázis) megerősítve.
 
 ### N1 — NOTE — A §6.1 valódi-sértés próba (A7) nem szó szerint az ADR 0390-ben leírt mutáció-módszertant követi, de érvényes
 
@@ -97,10 +139,10 @@ elvégezhető ugyanazon a felületen). Nem blokkoló — a típusrendszer maga a
 elsődleges védelmet —, de érdemes a §10 handoffban pontosítani, hogy a próba
 ebben a formában futott, nem a szó szerinti brief-recept szerint.
 
-## Javító kör
+## Javító kör — lezárva
 
-F1 és F2 ugyanabban a javító körben zárható (ugyanaz a motor, `minimax`,
-1 javító kör az eszkalációs küszöb szerint). A javító prompt tartalmazza:
-F1 pontos hibaleírását + a mért próba reprodukcióját, F2 kötelező
-tesztbővítését, és hogy a javítás után a review-t ÚJRA, saját izolált
-`/tmp` klónban futtatom.
+F1 és F2 EGY javító körben zárult (`minimax`, javító kör #1, eszkalációs
+küszöb: nem lépte túl). Mindkét lelet FIXED, saját, a review-tól független,
+frissen klónozott `/tmp` másolatban megismételt méréssel megerősítve
+(scope-audit + a fenti disposable próbateszt + teljes gate 8/8 zöld). A CI-
+dispatch és a merge a szokásos zöld-kapu-lánc szerint következik.
