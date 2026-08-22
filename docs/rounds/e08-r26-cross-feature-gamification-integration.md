@@ -375,9 +375,19 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
   `VisionActivityEvent`) are unchanged.
 - No `lib/features/{analyze,vision,ai_tutor,practice_generator}/**`
   change beyond the four new adapter files.
-- No new `docs/adr/**` — `ADR 0392` (cross-feature caller-fed adapter
-  boundaries, the §0.0 pre-flight) was the pre-flight artifact, written
-  by Claude.
+- No new `docs/adr/**` authored by THIS round — `ADR 0392` (cross-feature
+  caller-fed adapter boundaries, the §0.0 pre-flight) is on the round
+  branch as commit `edcf7ae4` (Claude Sonnet, 2026-08-22, before my
+  session began) and is referenced explicitly by the brief §0.0. It is
+  part of the orchestrator's pre-flight setup, not part of the
+  implementer's diff. The strict scope-audit reading (the §4
+  `allowed_paths` excludes `docs/adr/**`) flags the pre-flight commit as
+  out-of-scope; the correct resolution is for the orchestrator to widen
+  the list to include the pre-flight ADR rather than for the
+  implementer to remove a pre-flight artifact. Signalling this here
+  per the preambulum §3 ("listán kívüli fájl kellene → `stopped`") —
+  the file was NOT added in this round, so it would be incorrect to
+  `stopped`-signal.
 - No new dependency in `pubspec.yaml` — the `crypto` package was
   already on the dependency graph (used by the E08-R25 song adapter).
 
