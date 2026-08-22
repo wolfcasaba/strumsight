@@ -69,6 +69,8 @@ allowed_paths = [
   "backend/app/community/routers/handles.py",
   "backend/alembic/versions/e09_r03_0003_community_handle.py",
   "backend/tests/community/test_handle_policy.py",
+  "backend/tests/test_migrations.py",
+  "backend/tests/community/test_profile_schema.py",
   "docs/rounds/e09-r03-public-identity-and-handle-policy.md",
 ]
 gate_tests = [
@@ -76,6 +78,74 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.1 Self-heal brief-revízió (ADR 0112, halt H3, 2026-08-22)
+
+**Visszakeresett előzmény:** `docs/LESSONS.md` L411 — ugyanez a halt-osztály
+(migráció-láncoló kör, cross-round teszt az `allowed_paths`-on kívül) az
+E09-R02 self-heal-jében; ez a kör pontosan ugyanaz a minta EGY LÁNCSZEMMEL
+MÉLYEBBEN, ezért L413 néven, a lánc-toleráns javítási utasítással bővítve
+kerül a leckék közé.
+
+**Amit az implementer helyesen jelzett `stopped`-ként (§10.4):** a kör saját
+migrációja (`e09_r03_0003.down_revision = "e09_r02_0002"`) törvényszerűen
+törte KÉT, E09-R02-ben írt cross-round tesztet, mert azok egy
+két-migrációs világot feltételeztek. Ez az L411 lecke (E09-R02 self-heal,
+ugyanez a halt-osztály) EGY LÁNCSZEMMEL MÉLYEBBEN — mért, reprodukálva,
+lásd `docs/LESSONS.md` L413.
+
+**A fenti `allowed_paths` MOST tartalmazza mindkét fájlt** —
+`backend/tests/test_migrations.py` és
+`backend/tests/community/test_profile_schema.py`. A folytatáshoz a
+felfüggesztett implementer-motor (minimax, munkapéldány
+`/home/ubuntu/ss-mm-e09-r03`, branch
+`minimax/e09-r03-public-identity-and-handle-policy`, HEAD `3cca3ddd`)
+resume-olva a KÖVETKEZŐ három hibát javítja — **chain-toleránsan**, hogy az
+Epic 9 hátralévő ~29 köre ne ismételje ugyanezt minden migrációnál:
+
+1. `backend/tests/community/test_profile_schema.py::test_alembic_upgrade_head_applies_community_migration`
+   — a `assert set(script_heads) == {"e09_r02_0002"}` sort cseréld egy
+   ANCESTOR-ellenőrzésre (NEM egy újabb hardcoded head-stringre):
+   ```python
+   config = _alembic_config()
+   script_dir = ScriptDirectory.from_config(config)
+   heads = script_dir.get_heads()
+   assert len(heads) == 1, f"single-head chain required, got {heads}"
+   ancestors = {rev.revision for rev in script_dir.walk_revisions(heads[0], "base")}
+   assert "e09_r02_0002" in ancestors, (
+       "e09_r02_0002 must remain an ancestor of head — round E09-R02 contract"
+   )
+   ```
+2. `backend/tests/community/test_profile_schema.py::test_alembic_downgrade_drops_community_tables`
+   — cseréld a `command.downgrade(config, "-1")` hívást
+   `command.downgrade(config, "e01_r12_0001")`-re (explicit cél-revízió, NEM
+   relatív lépésszám). Ez a Community migráció (és minden rá épülő későbbi
+   lánctag) teljes visszavonását bizonyítja, függetlenül attól, hány
+   migráció épül rá a jövőben.
+3. `backend/tests/test_migrations.py::test_downgrade_one_revision_drops_only_community_tables`
+   — generalizáld: NE nevezze meg konkrétan a `community_profiles` /
+   `community_privacy_settings` táblákat (azok E09-R02-specifikusak), hanem
+   mérje a tábla-halmaz VÁLTOZÁSÁT:
+   ```python
+   command.upgrade(config, "head")
+   tables_at_head = set(inspect(engine).get_table_names())
+   command.downgrade(config, "-1")
+   tables_after = set(inspect(engine).get_table_names())
+   assert tables_after < tables_at_head, (
+       "one-step downgrade must remove at least the head migration's own tables"
+   )
+   assert {"users", "user_settings"}.issubset(tables_after), (
+       "the E01-R12 account baseline must survive a single-step downgrade"
+   )
+   ```
+   (docstringet/tesztnevet igazítsd az új, chain-agnosztikus jelentéshez.)
+
+**Kör-jelzés:** a fenti három teszt javítása UTÁN futtasd újra
+`cd backend && .venv/bin/python -m pytest tests/test_migrations.py
+tests/community/test_profile_schema.py tests/community/test_handle_policy.py -q`
+— mindnek zöldnek kell lennie, majd `tools/codex-signal.sh done`. A round
+gate-je (`tools/round-gate.sh`) változatlan; a self-heal a mércét NEM
+gyengítette, csak a scope-ot és a hibás tesztfeltevést pontosította.
 
 ## 0. Kör-jelzés és STOP-protokoll
 

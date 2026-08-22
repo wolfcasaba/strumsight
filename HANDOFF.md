@@ -61,6 +61,54 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ [HEAL E09-R03/H3] KÉSZ — az L411 minta egy láncszemmel mélyebben: `allowed_paths` nem fedte a MÁSODIK cross-round migráció-tesztet — PR [#411](https://github.com/wolfcasaba/strumsight/pull/411), squash `2359b808` (2026-08-22, L413)
+
+Az E09-R03 (Public identity és handle policy, ADR 0397) H3-mal állt meg,
+MIUTÁN az implementer (minimax) már ledolgozta a kört (branch
+`minimax/e09-r03-public-identity-and-handle-policy`, `3cca3ddd`, pushed, saját
+scope 75/75 zöld). Gyökérok: a kör saját, helyes migráció-láncolási döntése
+(`e09_r03_0003.down_revision = "e09_r02_0002"`) törvényszerűen tört HÁROM,
+E09-R02-ben írt cross-round tesztasszerciót két fájlban —
+`backend/tests/test_migrations.py::test_downgrade_one_revision_drops_only_community_tables`
+és `backend/tests/community/test_profile_schema.py`
+(`test_alembic_upgrade_head_applies_community_migration` +
+`test_alembic_downgrade_drops_community_tables`) — mert az [[L411]] fixe a
+KÉT-migrációs világra hardcode-olt maradt (pinned head-string, relatív
+`downgrade -1`, konkrét tábla-nevek). Egyik fájl sem szerepelt az
+`allowed_paths`-on, az implementer helyesen `stopped`-öt jelzett a §10.4-ben
+pontosan diagnosztizálva mindhárom törött asszerciót. Class B (kör-tartalom:
+a saját láncolási döntés kontra egy MÁSIK kör régi, hardcode-olt tesztje),
+függetlenül reprodukálva: `cd backend && .venv/bin/python -m pytest
+tests/test_migrations.py tests/community/test_profile_schema.py -q` → 3
+FAILED.
+
+Feloldás (`docs/rounds/e09-r03-public-identity-and-handle-policy.md` §0.1):
+mindkét fájl szűken bekerült az `allowed_paths`-ra, és — mivel ez a MÁSODIK
+előfordulása ugyanennek a mintának — a folytatáshoz adott instrukció nem egy
+harmadik hardcode-olt javítás, hanem lánc-toleráns ellenőrzés: (1) "head
+tartalmazza X-et ŐSKÉNT" (`ScriptDirectory.walk_revisions`) a pinned
+head-string helyett; (2) `downgrade(config, "<explicit revízió>")` a relatív
+`-1` helyett; (3) a tábla-HALMAZ változásának mérése a konkrét tábla-nevek
+kimondása helyett — hogy az Epic 9 hátralévő ~29 köre közül egyik láncoló
+migráció se ismételje meg ugyanezt. Regressziós védelem:
+`tools/tests/test_e09_r03_migration_chain_test_scope.py` —
+`audit_legacy_scope()`-ot futtatja a ténylegesen committolt brief ellen;
+mindkét mért halt-útvonal RED volt a javítás előtt, GREEN utána, egy
+szomszédos backend-teszt fájl (`test_auth.py`) pedig továbbra is scope-on
+kívül marad. Teljes gate izolált heal-worktree-ben: `python3 -m pytest
+tools/tests -q` → 718 passed, 1 skipped, 639 subtests (az egyetlen skip a
+`gh` CLI hiánya ezen a konténeren, a diff előtt is ugyanaz). `brief-lint
+--level strict` tiszta (az S8 visszakeresett-előzmény jelet a §0.1 L411-
+hivatkozása zárja). Nincs törölt/gyengített teszt, nincs küszöb-lazítás,
+`tools/round-gate.sh`/`.github/workflows/**` érintetlen. Lecke: [[L413]].
+
+Mivel az eredeti E09-R03 implementer-munka már kész és a saját branch-én ül,
+ez a heal NEM vitte tovább a tartalmi munkát — a lánc a MEGLÉVŐ
+`minimax/e09-r03-public-identity-and-handle-policy` ágon, a felfrissített
+brieffel folytatja: a három tesztasszerció lánc-toleráns javítása még
+hátravan az implementer oldalán, utána a §7 mindkét parancsa, majd
+review/CI/merge a szokásos rend szerint.
+
 ## ✅ E09-R02 KÉSZ — Community backend modul és első Alembic migráció — PR [#410](https://github.com/wolfcasaba/strumsight/pull/410), squash `4fffe20e` (2026-08-22)
 
 **EPIC 9 (COMMUNITY PLATFORM) MÁSODIK KÖRE KÉSZ.** A `backend/app/community/`
