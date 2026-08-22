@@ -327,7 +327,7 @@ Probe 1) would pay the same XP in both — the contrast test would fail.
 ### §7 valódi-sértés próbák — both run, both verified
 
 **Probe 1 (bookkeeping off):** `_BrokenBookkeepingSongAdapter` (test file
-line 759) overrides `recordSession` to force `sectionEvents: const []` —
+line 782) overrides `recordSession` to force `sectionEvents: const []` —
 this strips the §5.1 bookkeeping so the full-song event always uses the
 natural signal. The probe asserts a section-bearing session pays the
 SAME XP as a free-session full run. **Result: RED on the broken branch
@@ -358,7 +358,7 @@ songs tests pass + 0 analyzer findings + format unchanged.
 | `practiceKey` is the SHA-256 first-16-hex digest of `songId.value` | `:267-271` `hashedSongId` uses `crypto.sha256.convert(utf8Bytes(songId))`, `:308` derived once per session, threaded into both requests at `:375` and `:436` |
 | Session-bookkeeping is adapter-internal | `:314-315` `hasSectionInSession` reads `signal.sectionEvents`; `:413-418` apply `_reducedDuration` / `_reducedScore` when reduced. No call into a gamification-layer dedup. |
 | Section / full-song eventIds are session-namespaced | `:282-284` `setlist-item-section/$setlistRunId/$sectionId/v1` and `song-section/$sessionId/$sectionId/v1`; `:296-298` `setlist-item-full/$setlistRunId/v1` and `song-full/$sessionId/v1` |
-| Privacy boundary: hashed id appears in `ledgerId` (auditable), never raw | `:520` `ledgerId: 'song/$hashedSong/$eventId/$totalXp'` — the SHA-256 first-16-hex is in the persisted row; the raw `songId.value` and the title/slug never reach the ledger. |
+| Privacy boundary: hashed id appears in `ledgerId` (auditable), never raw | `:522` `ledgerId: 'song/$hashedSong/$eventId/$totalXp'` — the SHA-256 first-16-hex is in the persisted row; the raw `songId.value` and the title/slug never reach the ledger. |
 | A7 — songs feature untouched | gate's `test/features/songs` path: 49/49 green |
 
 ### Files in `allowed_paths` (brief §4) — touched vs not
