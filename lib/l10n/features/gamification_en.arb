@@ -542,5 +542,24 @@
     }
   },
   "gamificationHubOfflineReadyLabel": "Available offline",
-  "gamificationHubAchievementsTitle": "Achievements"
+  "gamificationHubAchievementsTitle": "Achievements",
+  "gamificationSettingsTitle": "Gamification",
+  "gamificationSettingsSubtitle": "Tune how the celebration layer behaves. Your progress is always preserved.",
+  "gamificationSettingsIntensityTitle": "Celebration intensity",
+  "gamificationSettingsIntensityFullLabel": "Full",
+  "gamificationSettingsIntensityFullSemantics": "Celebration intensity: full",
+  "gamificationSettingsIntensitySubtleLabel": "Subtle",
+  "gamificationSettingsIntensitySubtleSemantics": "Celebration intensity: subtle",
+  "gamificationSettingsIntensitySilentLabel": "Silent",
+  "gamificationSettingsIntensitySilentSemantics": "Celebration intensity: silent",
+  "gamificationSettingsHapticsLabel": "Haptic feedback",
+  "gamificationSettingsHapticsSemantics": "Haptic feedback toggle",
+  "gamificationSettingsSoundLabel": "Sound feedback",
+  "gamificationSettingsSoundSemantics": "Sound feedback toggle",
+  "gamificationSettingsReduceMotionLabel": "Reduce motion",
+  "gamificationSettingsReduceMotionSemantics": "Reduce motion toggle",
+  "gamificationSettingsNotificationsLabel": "Practice reminders",
+  "gamificationSettingsNotificationsSemantics": "Practice reminders toggle",
+  "gamificationSettingsNotificationsHint": "Turning reminders on or off never changes your experience points, achievements, or streaks.",
+  "gamificationSettingsProgressPreservedHint": "Your ledger, streak and mastery evaluation continue running — switching the celebration layer off hides only the visual signal."
 }
