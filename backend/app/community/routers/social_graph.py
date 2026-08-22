@@ -1,10 +1,12 @@
-"""Community social-graph router — E09-R07, ADR 0401 §3, §5, §7.
+"""Community social-graph router — E09-R07, ADR 0401 §3, §5, §7; E09-R08, ADR 0402 §D2.
 
 This router exposes the follow / follow-request / follower-removal
-HTTP endpoints. It is mounted in the test app through a separate
-fixture (the brief §0.0 5. pont — the ``build_community_router``
-factory in ``community/__init__.py`` is in the §3 tilos zóna, so
-this round ships its own mount point in the test conftest).
+HTTP endpoints AND the block-first filtering that E09-R08 wires into
+``get_followers`` / ``get_following`` (the §D2 invariant). It is
+mounted in the test app through a separate fixture (the brief §0.0 5.
+pont — the ``build_community_router`` factory in
+``community/__init__.py`` is in the §3 tilos zóna, so this round ships
+its own mount point in the test conftest).
 
 Endpoints:
 
@@ -24,9 +26,11 @@ Endpoints:
 * ``DELETE /community/profiles/{public_id}/followers/{follower_id}`` —
   remove a follower. Idempotent no-op if not a follower.
 * ``GET /community/profiles/{public_id}/followers?cursor=...&limit=...`` —
-  cursor-paginated followers list.
+  cursor-paginated followers list. **E09-R08 block-first**: a
+  block between the caller and the profile owner returns ``403``;
+  otherwise blocked profiles are filtered from the page.
 * ``GET /community/profiles/{public_id}/following?cursor=...&limit=...`` —
-  cursor-paginated following list.
+  cursor-paginated following list. Same E09-R08 block-first filter.
 
 All authenticated endpoints take an ``idempotency_key`` either in
 the JSON body (POST endpoints) or as a query parameter (DELETE
@@ -44,6 +48,10 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
+from ..policies.query_filters import (
+    filter_public_ids_against_viewer_blocks,
+    is_blocked_pair,
+)
 from ..services.follow_service import (
     FollowAlreadyExists,
     FollowRequestNotFound,
@@ -389,15 +397,49 @@ def get_followers(
     authentication is the router's own invariant — every other
     endpoint in this router enforces it, and a GET without auth
     is a hole regardless of what the body says).
+
+    **E09-R08 block-first (ADR 0402 §D2):**
+
+    1. If the caller and the profile owner are connected by a
+       block edge in either direction, the endpoint returns
+       ``403`` instead of the page. This is the block-first
+       invariant — a blocked viewer must not even learn the size
+       or the first row of the page.
+    2. Otherwise, every row in the page whose owner is connected
+       to the caller by a block edge is dropped. The drop is
+       silent — the page is just shorter. The cursor is forwarded
+       verbatim so the caller never sees the dropped rows.
+
+    The check is symmetric: it does not matter who initiated the
+    block.
     """
     db_gen = _session_factory(request)
     db = next(db_gen)
     try:
+        try:
+            viewer_public_id = _caller_profile_public_id(db, current_user.id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        owner_id = _community_profile_pk(db, public_id)
+        if owner_id is None:
+            raise HTTPException(status_code=404, detail="profile not found")
+        viewer_id = _community_profile_pk(db, viewer_public_id)
+        if viewer_id is None:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        if is_blocked_pair(db, profile_id_a=viewer_id, profile_id_b=owner_id):
+            # §D2: 403 BEFORE the page is materialised — the caller
+            # learns nothing about the blocked peer's social graph.
+            raise HTTPException(status_code=403, detail="blocked")
         page = list_followers(
             db, profile_public_id=public_id, cursor=cursor, limit=limit
         )
+        filtered_ids = filter_public_ids_against_viewer_blocks(
+            db,
+            viewer_profile_id=viewer_id,
+            public_ids=page.public_ids,
+        )
         return {
-            "public_ids": [str(value) for value in page.public_ids],
+            "public_ids": [str(value) for value in filtered_ids],
             "next_cursor": page.next_cursor,
         }
     finally:
@@ -427,15 +469,36 @@ def get_following(
     Authenticated — see the docstring on ``get_followers`` for the
     rationale (the §F2 fix: auth at the router layer; visibility
     filtering at the policy layer, Kör 8 / Kör 13).
+
+    E09-R08 block-first: same §D2 invariant as ``get_followers`` —
+    caller↔owner block → ``403``; otherwise blocked profiles are
+    filtered from the page.
     """
     db_gen = _session_factory(request)
     db = next(db_gen)
     try:
+        try:
+            viewer_public_id = _caller_profile_public_id(db, current_user.id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        owner_id = _community_profile_pk(db, public_id)
+        if owner_id is None:
+            raise HTTPException(status_code=404, detail="profile not found")
+        viewer_id = _community_profile_pk(db, viewer_public_id)
+        if viewer_id is None:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        if is_blocked_pair(db, profile_id_a=viewer_id, profile_id_b=owner_id):
+            raise HTTPException(status_code=403, detail="blocked")
         page = list_following(
             db, profile_public_id=public_id, cursor=cursor, limit=limit
         )
+        filtered_ids = filter_public_ids_against_viewer_blocks(
+            db,
+            viewer_profile_id=viewer_id,
+            public_ids=page.public_ids,
+        )
         return {
-            "public_ids": [str(value) for value in page.public_ids],
+            "public_ids": [str(value) for value in filtered_ids],
             "next_cursor": page.next_cursor,
         }
     finally:
@@ -473,6 +536,31 @@ def _caller_profile_public_id(db: Session, user_id: int) -> uuid.UUID:
         # so the rest of the service layer sees the type it expects.
         return uuid.UUID(hex=raw)
     return raw
+
+
+def _community_profile_pk(db: Session, public_id: uuid.UUID) -> int | None:
+    """Resolve the internal bigint PK for a community profile public_id.
+
+    Returns ``None`` for unknown public_ids (the caller distinguishes
+    that case from "caller has no profile" so the routers can return
+    404 vs 403 correctly). The block-filter helpers
+    (``query_filters.is_blocked_pair`` / ``filter_public_ids_*``)
+    operate on internal ids (the schema's PK), so the routers must
+    bridge the path-param public_id to the internal id once per
+    request.
+    """
+    from sqlalchemy import text as _sa_text
+
+    row = db.execute(
+        _sa_text(
+            "SELECT id FROM community_profiles WHERE public_id = :pid"
+        ),
+        {"pid": str(public_id)},
+    ).first()
+    if row is None:
+        return None
+    raw = row[0]
+    return int(raw)
 
 
 __all__ = [
