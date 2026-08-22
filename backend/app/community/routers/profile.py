@@ -107,9 +107,9 @@ def read_profile(
 
 
 # ---------------------------------------------------------------------------
-# E09-R06 — authenticated write endpoints (ADR 0400 §2–3, brief §2.3)
+# E09-R06 — authenticated endpoints (ADR 0400 §2–3, brief §2.3)
 #
-# These two endpoints are the only routes in the file that REQUIRE an
+# These three endpoints are the only routes in the file that REQUIRE an
 # authenticated user. The ``CurrentUser`` dependency lifts the identity from
 # the JWT; the payload's ``user_id`` / ``profile_id`` field (if any) is
 # rejected at Pydantic-parse-time by ``extra="forbid"`` (ADR 0400 §5.4,
@@ -117,6 +117,41 @@ def read_profile(
 # pre-``SELECT`` + ``IntegrityError`` belt-and-braces on the create path
 # is the §5.3 / A8 "two concurrent create calls both succeed" guard.
 # ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/profiles/me",
+    response_model=CommunityProfileOut,
+)
+def read_my_profile(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Read the caller's own community profile.
+
+    Added in the E09-R06 review's fix round (``docs/reviews/e09-r06-review.md``
+    F1, BLOCKER). The Flutter ``HttpCommunityProfileRepository.fetchMyProfile``
+    issues ``GET /community/profiles/me`` to drive the gate's
+    ``profile-missing`` ↔ ``ready`` state transition — without this
+    endpoint every live-backend call landed on a 404 from a non-existent
+    route, which the repository mapped to ``null`` and left the gate
+    stuck on ``profileMissing`` forever.
+
+    The 404 ``profile_missing`` shape mirrors the ``PUT /profiles/me``
+    404 — the Flutter controller already treats that code as
+    "go to onboarding", so the gate state machine is uniform across the
+    create / update / read paths.
+
+    Identity is ALWAYS the JWT-resolved ``current_user``; the path has
+    no body, so the ``extra="forbid"`` payload contract does not apply
+    here.
+    """
+    profile = (
+        db.query(CommunityProfile).filter_by(user_id=current_user.id).one_or_none()
+    )
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile_missing")
+    return _serialize_profile(profile, db)
 
 
 @router.post(

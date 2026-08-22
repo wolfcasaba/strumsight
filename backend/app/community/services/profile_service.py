@@ -105,7 +105,7 @@ def create_profile(
     # malformed, reserved or blocked input; the router converts that
     # to a 400. Normalization is applied here so the
     # ``assign_handle`` argument is the canonical form.
-    validate(handle)
+    normalized = validate(handle)
 
     profile = CommunityProfile(
         user_id=user_id,
@@ -134,8 +134,15 @@ def create_profile(
 
     # Step 3 — handle. The unique index on ``handle_normalized`` is the
     # enforcement; ``assign_handle`` raises ``HandleAlreadyClaimed`` on
-    # conflict.
-    assign_handle(db, profile.id, handle.strip(), handle.strip().casefold())
+    # conflict. We MUST hand it the policy-normalized form (NFKC + casefold
+    # + strip), not a freshly-computed ``handle.strip().casefold()`` —
+    # the latter is missing the NFKC step, so two Unicode-equivalent
+    # inputs (``"abcde"`` and fullwidth ``"Ａbcde"``, or NFD- vs
+    # NFC-spelled ``"café"``) would store distinct ``handle_normalized``
+    # values and the uniqueness invariant
+    # (``handle_policy.normalize`` doc-comment) would be silently
+    # broken. Fixed in the E09-R06 review's fix round (F2 MAJOR).
+    assign_handle(db, profile.id, handle.strip(), normalized)
 
     # Step 4 — privacy row. Same transaction; a failure here rolls back
     # the profile + handle writes too.
