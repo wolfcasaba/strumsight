@@ -271,4 +271,73 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Scope summary (what landed)
+
+- **`lib/features/practice/application/gamification_practice_adapter.dart`** — NEW.
+  Caller-fed adapter that maps one finished practice session into the canonical
+  `event → eligibility → policy → ledger entry → outbox` chain. Built on top of
+  `ActivityEventIngestor`, `RewardEligibilityPolicy`, and `RewardPolicy` from
+  the gamification `public.dart` only (A4 boundary, ADR 0390 1. döntés).
+  Three-state migration switch (`GamificationDualWriteMode.off | dual |
+  newOnly`) defaults to OFF so today's behavior is preserved byte-for-byte
+  when the feature is not yet activated (A6 "alatt" cell).
+- **`lib/features/learn/application/gamification_lesson_adapter.dart`** — NEW.
+  Lesson-side mirror of the practice adapter. Pins `ActivitySource.learn`,
+  emits events only on completed lessons, never reads
+  `lesson_progress_repository.dart` (A2 / brief §5.2). Same dual-write
+  switch shape; the enum is duplicated locally to avoid the cross-feature
+  import that would break A4.
+- **`test/features/gamification/integration/practice_reward_flow_test.dart`**
+  — NEW. 12 tests end-to-end:
+  - 2× A1 (full chain end-to-end through real outbox + real ledger; outbox
+    carries the same `eventId` the ledger receives).
+  - 1× A3 (result-screen reopen → identical `eventId`, ledger stays at one
+    entry).
+  - 4× A5 (cancelled denied, failed denied, too-short denied, partial
+    below-minimum denied + partial above-minimum pays XP).
+  - 3× A6 (OFF no-op, DUAL enqueues + calls legacy, NEW-ONLY enqueues
+    without legacy call).
+  - 2× A7 (happy-path dual-write keeps XP single; the §6.1 valódi-sértés
+    próba — legacy sink that calls `appendIfAbsent` directly with the same
+    `sourceEventId` is absorbed by the ledger's append-if-absent; final
+    count stays at one).
+- **`test/core/architecture_dependency_test.dart`** — extended with an
+  `E08-R24 A4` group (4 tests): the practice and learn feature trees reach
+  gamification ONLY through `public.dart`; the detector flags a non-public
+  import and accepts the public barrel.
+
+### Acceptance evidence
+
+| Cell | Evidence (this round) |
+|---|---|
+| A1 | `practice_reward_flow_test.dart` — 2 end-to-end cells passing (gate output: `+12: All tests passed!`). |
+| A2 | `test/features/learn` suite stays green — the §7 gate output: `+201 ~1: All tests passed!` (same count as pre-round, no stars/accuracy touched). |
+| A3 | `practice_reward_flow_test.dart` — A3 reopen cell passing. |
+| A4 | `architecture_dependency_test.dart` — new E08-R24 A4 group, 4/4 tests passing. The general `crossFeatureImportsMustUsePublicApi` rule also keeps these imports clean at the file-tree level (`Architecture dependencies OK (12 allowlisted deviation(s))`). |
+| A5 | `practice_reward_flow_test.dart` — 4 cells in the §6.1 cancel/partial/too-short matrix, all passing. |
+| A6 | `practice_reward_flow_test.dart` — switch-triple cells (off / dual / new-only) all passing. |
+| A7 | `practice_reward_flow_test.dart` — both the happy-path and the §6.1 valódi-sértés próba cells passing. |
+| A8 | `test/features/learn` stayed green — confirmed by the gate output above. |
+
+### Commands actually run (igazmondás)
+
+| Claim | Command run this round |
+|---|---|
+| The 12-test reward-flow file passes. | `flutter test test/features/gamification/integration/practice_reward_flow_test.dart` → `+12: All tests passed!`. |
+| The A4 architecture guard passes. | `flutter test test/core/architecture_dependency_test.dart` → `+32: All tests passed!`. |
+| The `test/features/learn` suite stays green. | `flutter test test/features/learn` (run by the round-gate as a separate process) → `+201 ~1: All tests passed!`. |
+| The full §7 gate is green. | `tools/round-gate.sh test/features/gamification/integration/practice_reward_flow_test.dart test/core/architecture_dependency_test.dart test/features/learn` → all 8 phases green (`format`/`analyze`/`test x3`/`architecture`/`secrets`/`l10n`). |
+| The §6.1 valódi-sértés próba was actually exercised (not merely asserted). | The test fixture's `legacySink` override calls `fixture.ledger.appendIfAbsent(...)` directly with the same `sourceEventId`, runs the adapter, drains the outbox, and asserts the ledger has exactly one entry. The test PASSES today — the buggy variant would fail the `hasLength(1)` assertion. |
+
+### Not in this round (per the brief)
+
+- The actual `practice_session_controller.dart` / `learn` screen wire-up is
+  out of scope (brief §0.0). This land is the adapter, with the
+  `gamificationDualWriteEnabled` switch wired and the `ActivitySource`
+  mapping set, waiting for the future round that calls it from production.
+- No `lib/features/learn/data/**` change — the `lesson_progress_repository`
+  keeps owning the stars and the best accuracy (A2).
+- No new `docs/adr/**` — ADR 0390 was the pre-flight artifact, written by
+  Claude in §0.0.
+
 ## 11. Review — a Claude tölti ki
