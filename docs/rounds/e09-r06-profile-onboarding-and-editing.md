@@ -34,6 +34,9 @@ allowed_paths = [
   "backend/tests/community/test_profile_service.py",
   "docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md",
   "docs/rounds/e09-r06-profile-onboarding-and-editing.md",
+  "lib/core/foundation/app_failure.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
 ]
 gate_tests = [
   "test/features/community/presentation/community_gate_test.dart",
@@ -124,6 +127,56 @@ indoklással.** Összefoglalva:
 A pontos service-szerződést (`create_profile`/`update_profile` vázlat,
 hibafordítási tábla, tranzakció-sorrend) az ADR 0400 §2–3 tartalmazza —
 az implementer AZT követi, nem ismétlem meg itt szó szerint.
+
+## 0.0.1 Review-addendum (orchestrátor, Claude Sonnet 5, 2026-08-22, head `22862b18`)
+
+**Scope-audit VIOLATION, feloldva.** `tools/scope-audit.py` a
+`b89561f6..22862b18` diffen 3 listán kívüli fájlt jelzett:
+`lib/core/foundation/app_failure.dart` (4 ÚJ `FailureCode` konstans a
+Community szekcióban, a MEGLÉVŐ per-feature mintát követve — lásd a
+`--- practice ---` szekciót ugyanabban a fájlban), `lib/l10n/app_en.arb` +
+`app_hu.arb` (a `community_{en,hu}.arb` szegmensek aggregátumba kerülése —
+`dart run tool/gen_l10n_segments.dart --check` ZÖLD, tehát az aggregátum
+TARTALMILAG helyes, csak a generátor helyett kézzel lett átmásolva).
+Mindhárom **kicsi, additív, a feature működéséhez szükséges** — a
+`CommunityProfileRepository` (ADR 0400 §5) az `AppResult`/`FailureCode`
+mintát használja (a projekt LÉTEZŐ, minden feature által követett
+hibakezelési konvenciója — ADR 0400 §5 eredeti vázlata téves-en nyers
+kivétel-dobást írt elő; a tényleges implementáció a helyes, konzisztens
+mintát választotta). **§0.0.1 revízió (ADR 0087 §2, saját, még nem
+merge-elt brief):** mindhárom fájl felkerült az `allowed_paths`-ra
+(fent). A javító körnek **NEM kell** ehhez nyúlnia — ez a pont ZÁRVA.
+
+**Két, javító kört igénylő lelet a review-ból** (`docs/reviews/e09-r06-review.md`,
+teljes indoklás ott):
+
+1. **BLOCKER — hiányzó `GET /community/profiles/me`.** A
+   `HttpCommunityProfileRepository.fetchMyProfile()`
+   (`profile_repository_impl.dart`) egy `GET /community/profiles/me`
+   HTTP hívást indít, de a backend router (`routers/profile.py`) ezt az
+   útvonalat NEM definiálja — csak `POST`/`PUT /profiles/me` és
+   `GET /profiles/{public_id}` létezik. Ez az ADR 0400 saját hiánya
+   (a §2–3 csak az ÍRÓ végpontokat specifikálta), nem az implementer
+   hibája — de fixálandó, mert a gate `ready` állapota emiatt sosem
+   volna elérhető éles backenddel szemben. Javítás: `GET
+   /community/profiles/me` hozzáadása `routers/profile.py`-hoz (a
+   `CurrentUser`/`DbSession` mintát követve, 404 ha nincs profil, a
+   MEGLÉVŐ `_serialize_profile` újrahasznosításával).
+2. **MAJOR — a `handle_policy.validate()` visszatérési értéke eldobva.**
+   `profile_service.create_profile` meghívja `validate(handle)`-t
+   (NFKC + casefold normalizált formát ad vissza), de a visszatérési
+   értéket ELDOBJA, és helyette egy SAJÁT, hiányos `handle.strip().casefold()`
+   normalizációt ad át az `assign_handle`-nek (NFKC lépés nélkül). Mérve
+   (`unicodedata.normalize('NFD', 'café')` vs `'NFC'` bemenettel): a két
+   Unicode-ekvivalens bemenet a service normalizációjával KÉT KÜLÖNBÖZŐ
+   `handle_normalized` értéket kap — pontosan az az invariáns sérül, amit
+   az ADR 0397 §5.1 és a `handle_policy.normalize()` doc-kommentje
+   kifejezetten garantálni akar. Javítás: `normalized = validate(handle)`
+   — a visszatérési értéket kell átadni `assign_handle`-nek, nem
+   újraszámolni.
+
+Mindkettőt a §0 STOP-protokoll szerint a javító körnek KELL fixálnia — a
+findings-listát a javító prompt tartalmazza szó szerint.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
