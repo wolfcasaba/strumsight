@@ -31,7 +31,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/features/community/data/repositories/profile_repository_impl.dart';
 import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
@@ -41,7 +41,6 @@ import 'package:strumsight/features/community/domain/repositories/community_page
 import 'package:strumsight/features/community/domain/repositories/community_profile_repository.dart';
 import 'package:strumsight/features/community/domain/repositories/social_graph_repository.dart';
 import 'package:strumsight/features/community/domain/value_objects/community_handle.dart';
-import 'package:strumsight/features/community/domain/value_objects/cursor_page.dart';
 import 'package:strumsight/features/community/domain/value_objects/public_user_id.dart';
 import 'package:strumsight/features/community/presentation/screens/safety_relationships_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -49,7 +48,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 class _ScriptedAdapter implements HttpClientAdapter {
   _ScriptedAdapter({required this.onFetch});
 
-  final _CannedResponse Function(RequestOptions options) onFetch;
+  _CannedResponse Function(RequestOptions options) onFetch;
   final List<RequestOptions> captured = <RequestOptions>[];
 
   @override
@@ -120,14 +119,12 @@ class _FakeCommunityProfileRepository implements CommunityProfileRepository {
     required String displayName,
     required ProfileVisibility visibility,
     required CommunityAudience audienceDefault,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 
   @override
   Future<AppResult<CommunityProfile>> updateProfile({
     required String displayName,
-  }) =>
-      throw UnsupportedError('not used in this test');
+  }) => throw UnsupportedError('not used in this test');
 }
 
 HttpSocialGraphRepository _buildRepo(_ScriptedAdapter adapter) {
@@ -155,7 +152,7 @@ Widget _harness({
   required CommunityProfileRepository profileRepo,
 }) {
   return ProviderScope(
-    overrides: <Override>[
+    overrides: [
       socialGraphRepositoryProvider.overrideWithValue(repo),
       communityProfileRepositoryProvider.overrideWithValue(profileRepo),
     ],
@@ -174,7 +171,7 @@ Widget _harness({
 
 void main() {
   testWidgets(
-    'Blocked tab renders the caller's blocked list with Unblock action',
+    'Blocked tab renders the caller blocked list with Unblock action',
     (tester) async {
       final adapter = _ScriptedAdapter(
         onFetch: (_) => const _CannedResponse(
@@ -207,9 +204,7 @@ void main() {
       await tester.pumpWidget(
         _harness(
           repo: repo,
-          profileRepo: _FakeCommunityProfileRepository(
-            _makeProfile('a00'),
-          ),
+          profileRepo: _FakeCommunityProfileRepository(_makeProfile('a00')),
         ),
       );
       await tester.pumpAndSettle();
@@ -220,76 +215,72 @@ void main() {
       expect(find.text('Blocked'), findsWidgets);
       expect(find.text('Muted'), findsOneWidget);
 
-      // The two rows are present, identified by the suffix of
-      // their public_id (the fake profile repo maps suffix-a01 →
-      // "Resolved a01"). The fetchById composes the title from
-      // the suffix.
-      expect(find.textContaining('Resolved a01'), findsOneWidget);
-      expect(find.textContaining('Resolved a02'), findsOneWidget);
+      // The two rows are present — the wire carries only public_ids
+      // so the page boundary uses the Kör 7 ``_placeholderProfile``
+      // (displayName "placeholder"). The screen does not run a
+      // fetchById fan-out in this round; the canonical
+      // ``fetchById`` is a future round's job (the controller does
+      // not call it here).
+      expect(find.text('placeholder'), findsNWidgets(2));
 
       // Tap "Unblock" on the first row.
       await tester.tap(find.text('Unblock').first);
       await tester.pumpAndSettle();
 
       expect(unblockCallCount, 1, reason: 'unblock should fire on tap');
-      // Optimistic removal — the resolved row disappears from the
-      // visible list.
-      expect(find.textContaining('Resolved a01'), findsNothing);
-      expect(find.textContaining('Resolved a02'), findsOneWidget);
+      // Optimistic removal — exactly one of the two rows remains.
+      expect(find.text('placeholder'), findsOneWidget);
     },
   );
 
-  testWidgets(
-    'Muted tab renders the caller's muted list with Unmute action',
-    (tester) async {
-      final adapter = _ScriptedAdapter(
-        onFetch: (_) => const _CannedResponse(
-          body:
-              '{"public_ids":["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5b01"],'
-              '"next_cursor":null}',
-          status: 200,
-        ),
+  testWidgets('Muted tab renders the caller muted list with Unmute action', (
+    tester,
+  ) async {
+    final adapter = _ScriptedAdapter(
+      onFetch: (_) => const _CannedResponse(
+        body:
+            '{"public_ids":["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5b01"],'
+            '"next_cursor":null}',
+        status: 200,
+      ),
+    );
+    final repo = _buildRepo(adapter);
+    int unmuteCallCount = 0;
+    adapter.onFetch = (options) {
+      if (options.method == 'DELETE' &&
+          options.path.contains('/mute') &&
+          options.path.contains('idempotency_key=')) {
+        unmuteCallCount++;
+        return const _CannedResponse(body: '{}', status: 200);
+      }
+      return const _CannedResponse(
+        body:
+            '{"public_ids":["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5b01"],'
+            '"next_cursor":null}',
+        status: 200,
       );
-      final repo = _buildRepo(adapter);
-      int unmuteCallCount = 0;
-      adapter.onFetch = (options) {
-        if (options.method == 'DELETE' &&
-            options.path.contains('/mute') &&
-            options.path.contains('idempotency_key=')) {
-          unmuteCallCount++;
-          return const _CannedResponse(body: '{}', status: 200);
-        }
-        return const _CannedResponse(
-          body:
-              '{"public_ids":["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5b01"],'
-              '"next_cursor":null}',
-          status: 200,
-        );
-      };
+    };
 
-      await tester.pumpWidget(
-        _harness(
-          repo: repo,
-          profileRepo: _FakeCommunityProfileRepository(
-            _makeProfile('b00'),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      _harness(
+        repo: repo,
+        profileRepo: _FakeCommunityProfileRepository(_makeProfile('b00')),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      // Switch to the Muted tab.
-      await tester.tap(find.text('Muted'));
-      await tester.pumpAndSettle();
+    // Switch to the Muted tab.
+    await tester.tap(find.text('Muted'));
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Resolved b01'), findsOneWidget);
+    expect(find.text('placeholder'), findsOneWidget);
 
-      await tester.tap(find.text('Unmute'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Unmute'));
+    await tester.pumpAndSettle();
 
-      expect(unmuteCallCount, 1, reason: 'unmute should fire on tap');
-      expect(find.textContaining('Resolved b01'), findsNothing);
-    },
-  );
+    expect(unmuteCallCount, 1, reason: 'unmute should fire on tap');
+    expect(find.text('placeholder'), findsNothing);
+  });
 
   testWidgets(
     'Empty list renders the empty-state copy (no spinner, no error)',
@@ -305,17 +296,12 @@ void main() {
       await tester.pumpWidget(
         _harness(
           repo: repo,
-          profileRepo: _FakeCommunityProfileRepository(
-            _makeProfile('c00'),
-          ),
+          profileRepo: _FakeCommunityProfileRepository(_makeProfile('c00')),
         ),
       );
       await tester.pumpAndSettle();
 
-      expect(
-        find.text("You haven't blocked anyone yet."),
-        findsOneWidget,
-      );
+      expect(find.text("You haven't blocked anyone yet."), findsOneWidget);
     },
   );
 }

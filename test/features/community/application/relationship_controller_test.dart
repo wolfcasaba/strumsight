@@ -142,6 +142,16 @@ class _FakeSocialGraphRepository implements SocialGraphRepository {
     required PublicUserId target,
     required String idempotencyKey,
   }) => throw UnsupportedError('not used in this test');
+
+  @override
+  Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
+    required Object cursor,
+  }) => throw UnsupportedError('not used in this test');
+
+  @override
+  Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
+    required Object cursor,
+  }) => throw UnsupportedError('not used in this test');
 }
 
 ProviderContainer _container(_FakeSocialGraphRepository repo) {

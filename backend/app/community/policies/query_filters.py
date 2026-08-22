@@ -163,9 +163,7 @@ def filter_public_ids_against_viewer_blocks(
     )
     if not blocked_internal:
         return public_id_list
-    public_to_internal = resolve_profile_ids(
-        db, public_ids=public_id_list
-    )
+    public_to_internal = resolve_profile_ids(db, public_ids=public_id_list)
     blocked_public_ids = {
         public_id
         for public_id, internal_id in public_to_internal.items()

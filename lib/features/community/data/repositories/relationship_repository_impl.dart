@@ -332,13 +332,8 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
   Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
     required Object cursor,
   }) async {
-    final params = <String, Object?>{'limit': 50};
-    final cursorValue = _cursorQueryValue(cursor);
-    if (cursorValue != null) params['cursor'] = cursorValue;
-    final result = await _client.getJson<dynamic>(
-      '/community/blocked',
-      decode: _decodePage,
-    );
+    final path = _buildPagePath('/community/blocked', cursor);
+    final result = await _client.getJson<dynamic>(path, decode: _decodePage);
     return switch (result) {
       Success(:final value) => value as CommunityPage<CommunityProfile>,
       Failure(:final error) => throw error,
@@ -349,17 +344,26 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
   Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
     required Object cursor,
   }) async {
-    final params = <String, Object?>{'limit': 50};
-    final cursorValue = _cursorQueryValue(cursor);
-    if (cursorValue != null) params['cursor'] = cursorValue;
-    final result = await _client.getJson<dynamic>(
-      '/community/muted',
-      decode: _decodePage,
-    );
+    final path = _buildPagePath('/community/muted', cursor);
+    final result = await _client.getJson<dynamic>(path, decode: _decodePage);
     return switch (result) {
       Success(:final value) => value as CommunityPage<CommunityProfile>,
       Failure(:final error) => throw error,
     };
+  }
+
+  String _buildPagePath(String base, Object cursor) {
+    // Inline the limit and the optional cursor into the URL so the
+    // request hits the backend with the right query string. The
+    // shared ``api_client.dart::getJson`` does not accept a query-
+    // param map (its four endpoints all carry no params), so the
+    // only way to forward a cursor today is inline — same pattern
+    // as the Kör 7 ``unfollow`` DELETE.
+    final cursorValue = _cursorQueryValue(cursor);
+    final qs = cursorValue == null
+        ? 'limit=50'
+        : 'limit=50&cursor=$cursorValue';
+    return '$base?$qs';
   }
 
   Future<String> _resolveCallerPublicId() async {
@@ -451,10 +455,16 @@ CommunityProfile _placeholderProfile(PublicUserId userId) {
   // The placeholder is a structural seam so the page envelope
   // can satisfy ``CommunityPage<CommunityProfile>`` without
   // calling the DB on every list-fetch.
+  //
+  // E09-R08: the factory enforces a non-empty displayName — the
+  // Kör 7 ``''`` literal here would throw ``ArgumentError`` the
+  // moment ``_decodePage`` materialises a row. A short, non-empty
+  // placeholder keeps the page boundary honest; the real display
+  // name arrives via the canonical ``fetchById`` follow-up.
   return CommunityProfile(
     userId: userId,
     handle: CommunityHandle('placeholder-x1'),
-    displayName: '',
+    displayName: 'placeholder',
     visibility: ProfileVisibility.followers,
     avatarUrl: null,
     bio: null,

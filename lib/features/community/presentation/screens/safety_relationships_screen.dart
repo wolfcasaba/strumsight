@@ -20,10 +20,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_failure.dart';
-import '../../data/repositories/profile_repository_impl.dart';
 import '../../data/repositories/relationship_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
-import '../../domain/repositories/community_profile_repository.dart';
+import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 
@@ -35,9 +34,15 @@ enum SafetyTab { blocked, muted }
 /// per ADR 0402 §D6 — the screen is the single file that owns this
 /// state, including the cursor pagination, the resolved-profile
 /// cache, and the per-action unblock / unmute call sites.
-final _safetyListProvider = StateNotifierProvider.family
-    .autoDispose<_SafetyListNotifier, _SafetyListState, SafetyTab>(
-      (ref, tab) => _SafetyListNotifier(ref: ref, tab: tab),
+///
+/// Riverpod 3.3.2 removed ``FamilyNotifier`` (CHANGELOG: 114); the
+/// pattern is ``extends Notifier<StateT>`` + a constructor that
+/// captures the family arg as a field. The
+/// ``NotifierProvider.family<...>(Notifier.new)`` calls the
+/// constructor for each family entry.
+final safetyListProvider =
+    NotifierProvider.family<_SafetyListNotifier, _SafetyListState, SafetyTab>(
+      _SafetyListNotifier.new,
     );
 
 class _SafetyListState {
@@ -68,26 +73,24 @@ class _SafetyListState {
   }
 }
 
-class _SafetyListNotifier extends StateNotifier<_SafetyListState> {
-  _SafetyListNotifier({required Ref ref, required this.tab})
-    : _ref = ref,
-      super(
-        const _SafetyListState(
-          items: <CommunityProfile>[],
-          cursor: CursorPage.initial(),
-          isLoading: false,
-        ),
-      );
+class _SafetyListNotifier extends Notifier<_SafetyListState> {
+  _SafetyListNotifier(this.tab);
 
-  final Ref _ref;
+  /// The family arg — which tab this notifier instance manages.
   final SafetyTab tab;
 
   bool _disposed = false;
 
   @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
+  _SafetyListState build() {
+    ref.onDispose(() {
+      _disposed = true;
+    });
+    return const _SafetyListState(
+      items: <CommunityProfile>[],
+      cursor: CursorPage.initial(),
+      isLoading: false,
+    );
   }
 
   Future<void> loadInitial() async {
@@ -134,7 +137,7 @@ class _SafetyListNotifier extends StateNotifier<_SafetyListState> {
   }
 
   Future<void> unblock(PublicUserId target) async {
-    final repo = _ref.read(socialGraphRepositoryProvider);
+    final repo = ref.read(socialGraphRepositoryProvider);
     try {
       await repo.unblock(target: target, idempotencyKey: _newKey());
     } on AppFailure {
@@ -150,7 +153,7 @@ class _SafetyListNotifier extends StateNotifier<_SafetyListState> {
   }
 
   Future<void> unmute(PublicUserId target) async {
-    final repo = _ref.read(socialGraphRepositoryProvider);
+    final repo = ref.read(socialGraphRepositoryProvider);
     try {
       await repo.unmute(target: target, idempotencyKey: _newKey());
     } on AppFailure {
@@ -164,24 +167,10 @@ class _SafetyListNotifier extends StateNotifier<_SafetyListState> {
     );
   }
 
-  Future<List<CommunityProfile>> _fetchResolved(CursorPage cursor) async {
-    final page = await _fetch(cursor: cursor);
-    final profileRepo = _ref.read(communityProfileRepositoryProvider);
-    final resolved = <CommunityProfile>[];
-    for (final placeholder in page.items) {
-      try {
-        final full = await profileRepo.fetchById(placeholder.userId);
-        resolved.add(full);
-      } on AppFailure {
-        // Fall back to the placeholder — the screen still renders.
-        resolved.add(placeholder);
-      }
-    }
-    return resolved;
-  }
-
-  Future<CommunityPage<CommunityProfile>> _fetch({required CursorPage cursor}) async {
-    final repo = _ref.read(socialGraphRepositoryProvider);
+  Future<CommunityPage<CommunityProfile>> _fetch({
+    required CursorPage cursor,
+  }) async {
+    final repo = ref.read(socialGraphRepositoryProvider);
     return switch (tab) {
       SafetyTab.blocked => repo.blockedProfilesPage(cursor: cursor),
       SafetyTab.muted => repo.mutedProfilesPage(cursor: cursor),
@@ -260,14 +249,14 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(_safetyListProvider(widget.tab).notifier).loadInitial();
+      ref.read(safetyListProvider(widget.tab).notifier).loadInitial();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(_safetyListProvider(widget.tab));
-    final notifier = ref.read(_safetyListProvider(widget.tab).notifier);
+    final state = ref.watch(safetyListProvider(widget.tab));
+    final notifier = ref.read(safetyListProvider(widget.tab).notifier);
 
     if (state.isLoading && state.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -279,8 +268,8 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
       return Center(
         child: Text(
           widget.tab == SafetyTab.blocked
-              ? 'You haven\'t blocked anyone yet.'
-              : 'You haven\'t muted anyone yet.',
+              ? "You haven't blocked anyone yet."
+              : "You haven't muted anyone yet.",
         ),
       );
     }
@@ -302,9 +291,11 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
         }
         final profile = state.items[index];
         return ListTile(
-          title: Text(profile.displayName.isEmpty
-              ? profile.userId.value
-              : profile.displayName),
+          title: Text(
+            profile.displayName.isEmpty
+                ? profile.userId.value
+                : profile.displayName,
+          ),
           subtitle: Text(profile.handle.value),
           trailing: TextButton(
             onPressed: () async {

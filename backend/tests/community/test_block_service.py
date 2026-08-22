@@ -53,7 +53,6 @@ from app.community.services.block_service import (
     list_muted,
     mute,
     unblock,
-    unmute,
 )
 from app.community.services.follow_service import (
     follow as service_follow,
@@ -397,6 +396,7 @@ def test_a3_mute_does_not_touch_follow_graph(session_factory):
     # so a regression that introduces one would land in
     # block_service.py alone.
     import inspect
+
     from app.community.services import block_service
 
     mute_source = inspect.getsource(block_service.mute)

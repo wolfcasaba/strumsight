@@ -86,9 +86,7 @@ def _caller_profile_public_id(db: Session, user_id: int) -> uuid.UUID:
     from sqlalchemy import text as _sa_text
 
     row = db.execute(
-        _sa_text(
-            "SELECT public_id FROM community_profiles WHERE user_id = :uid"
-        ),
+        _sa_text("SELECT public_id FROM community_profiles WHERE user_id = :uid"),
         {"uid": user_id},
     ).first()
     if row is None:

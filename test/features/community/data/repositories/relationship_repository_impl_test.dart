@@ -102,10 +102,7 @@ void main() {
       // Body carries the idempotency_key as a JSON field — same
       // shape as the Kör 7 follow POST.
       expect(options.data, isA<Map<String, Object?>>());
-      expect(
-        (options.data as Map<String, Object?>)['idempotency_key'],
-        key,
-      );
+      expect((options.data as Map<String, Object?>)['idempotency_key'], key);
     });
 
     test('unblock() DELETEs with ?idempotency_key=...', () async {
@@ -137,10 +134,7 @@ void main() {
       final options = captured.single;
       expect(options.method, 'POST');
       expect(options.path, '/community/profiles/${target.value}/mute');
-      expect(
-        (options.data as Map<String, Object?>)['idempotency_key'],
-        key,
-      );
+      expect((options.data as Map<String, Object?>)['idempotency_key'], key);
     });
 
     test('unmute() DELETEs with ?idempotency_key=...', () async {
@@ -174,8 +168,7 @@ void main() {
       );
     });
 
-    test('blockedProfilesPage() GETs /community/blocked with limit',
-        () async {
+    test('blockedProfilesPage() GETs /community/blocked with limit', () async {
       final repo = _buildRepo(adapter);
 
       final page = await repo.blockedProfilesPage(
@@ -185,7 +178,7 @@ void main() {
       expect(adapter.captured, hasLength(1));
       final options = adapter.captured.single;
       expect(options.method, 'GET');
-      expect(options.path, '/community/blocked');
+      expect(options.path, '/community/blocked?limit=50');
       // The cursor-less initial request must NOT carry a cursor
       // query parameter — only the limit.
       expect(options.uri.queryParameters['limit'], '50');
@@ -204,7 +197,7 @@ void main() {
       expect(adapter.captured, hasLength(1));
       final options = adapter.captured.single;
       expect(options.method, 'GET');
-      expect(options.path, '/community/muted');
+      expect(options.path, '/community/muted?limit=50');
       expect(options.uri.queryParameters['limit'], '50');
       expect(options.uri.queryParameters.containsKey('cursor'), isFalse);
       expect(page.items, isEmpty);
@@ -214,42 +207,37 @@ void main() {
       final repo = _buildRepo(adapter);
       final token = 'next-page-token';
 
-      await repo.blockedProfilesPage(
-        cursor: CursorPage.continued(token),
-      );
+      await repo.blockedProfilesPage(cursor: CursorPage.continued(token));
 
       final options = adapter.captured.single;
       expect(options.uri.queryParameters['cursor'], token);
     });
 
-    test(
-      'blockedProfilesPage() decodes a public_ids envelope into '
-      'placeholder CommunityProfile rows',
-      () async {
-        adapter = _ScriptedAdapter(
-          onFetch: (_) => const _CannedResponse(
-            body:
-                '{"public_ids":["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa4",'
-                '"01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa5"],'
-                '"next_cursor":null}',
-            status: 200,
-          ),
-        );
-        final repo = _buildRepo(adapter);
+    test('blockedProfilesPage() decodes a public_ids envelope into '
+        'placeholder CommunityProfile rows', () async {
+      adapter = _ScriptedAdapter(
+        onFetch: (_) => const _CannedResponse(
+          body:
+              '{"public_ids":["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa4",'
+              '"01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa5"],'
+              '"next_cursor":null}',
+          status: 200,
+        ),
+      );
+      final repo = _buildRepo(adapter);
 
-        final CommunityPage<CommunityProfile> page = await repo
-            .blockedProfilesPage(cursor: const CursorPage.initial());
+      final CommunityPage<CommunityProfile> page = await repo
+          .blockedProfilesPage(cursor: const CursorPage.initial());
 
-        expect(page.items, hasLength(2));
-        expect(
-          page.items[0].userId.value,
-          '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa4',
-        );
-        expect(
-          page.items[1].userId.value,
-          '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa5',
-        );
-      },
-    );
+      expect(page.items, hasLength(2));
+      expect(
+        page.items[0].userId.value,
+        '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa4',
+      );
+      expect(
+        page.items[1].userId.value,
+        '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5fa5',
+      );
+    });
   });
 }

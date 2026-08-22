@@ -372,6 +372,296 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **Egy elfelejtett endpoint.** A `query_filters.py` KÖZÖS szűrő nélkül minden ÚJ endpoint saját, elfelejthető block-ellenőrzést igényelne — ez a kör legfontosabb, jövőbe mutató kockázata (A2/A5).
 - **A mute-értesítés szivárgása.** Ha a mute bármilyen jelet küld a másik félnek, a funkció célja (csendes, önvédő szűrés) meghiúsul (A3).
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
+
+### 10.1 Fájlonkénti összegző (committed across 4 commits on `minimax/e09-r08-block-mute-and-safety-relationships`)
+
+**Backend — production code**
+
+* `backend/alembic/versions/e09_r08_0006_community_safety.py` (NEW) —
+  Alembic migration that adds `community_blocks` + `community_mutes`
+  tables on top of Kör 7 (`e09_r07_0005`). UNIQUE on the pair,
+  CHECK against self-block / self-mute, CASCADE on both FKs, two
+  composite indexes on `(blocker|blocked, created_at, id)` for the
+  cursor pagination. Imports the ORM model for `compare_metadata`
+  parity; the migration body uses raw `sa.Column` calls.
+* `backend/app/community/models/safety_relationships.py` (NEW) —
+  `CommunityBlock` + `CommunityMute` mirroring the
+  `CommunityFollow` shape: BigInteger PK with the
+  `with_variant(Integer, "sqlite")` port, `Uuid(as_uuid=True)`
+  public_id, two `ForeignKey(..., ondelete="CASCADE")` columns,
+  `created_at`. CHECK constraint forbids self-block / self-mute.
+* `backend/app/community/policies/query_filters.py` (NEW) — the §D2
+  + §D4 read-path helpers. `is_blocked_pair(db, *, profile_id_a,
+  profile_id_b)` is the symmetric single-pair predicate (the §D4
+  pure-helper; future club feature entry point); the
+  `filter_public_ids_against_viewer_blocks(...)` page-level filter
+  is what the routers call to drop blocked rows from a followers
+  / following page.
+* `backend/app/community/services/block_service.py` (NEW) —
+  `block(db, *, blocker_public_id, target_public_id, idempotency_key)`
+  is the §D1 atomic transaction (DELETE both follow edges, UPDATE
+  pending request `status='blocked'`, in one `db.flush()`).
+  Idempotent — a retry returns the existing row. `unblock` is
+  DELETE-only and never touches `community_follows` (the §5.3
+  invariant). `mute` / `unmute` are isolated from the follow
+  graph (§5.2 — no signal, no notification; the §A3 test pins this
+  at code level via a source-grep for `push` / `notify` / `publish`
+  calls). `list_blocked` / `list_muted` are cursor-paginated with
+  the same opaque `(created_at, id)` cursor as `follow_service`.
+  `_existing_follow` / `_existing_request` are imported from
+  `follow_service` per ADR 0402 §2.3 ("importáld őket, ne írd
+  újra"). `is_blocked_pair` is re-exported for service-layer
+  callers.
+* `backend/app/community/policies/access_policy.py` (EXTEND) —
+  small builder `relationship_context_from_block_flag(...)` that
+  builds a `RelationshipContext` from a live `bool` (the field
+  name stays the same — `RelationshipContext.blocked`, the Kör 8
+  brief §0.0 contract). The policy module itself stays DB-free
+  (ADR 0398 invariant, re-affirmed by ADR 0402 §D2); the DB
+  lookup lives in `query_filters.py`.
+* `backend/app/community/routers/social_graph.py` (EXTEND) — adds
+  the §D2 block-first filter to `get_followers` /
+  `get_following`: caller↔owner block → 403; otherwise the page is
+  translated (edge public_ids → follower / followed PROFILE
+  public_ids via a JOIN on `community_profiles`) and run through
+  the `query_filters.filter_public_ids_against_viewer_blocks`
+  helper. A new `_community_profile_pk` helper bridges path-param
+  `public_id`s to the internal bigint (used by the block-filter
+  helpers which operate on internal ids). Two new private helpers
+  `_follower_page` / `_following_page` wrap the Kör 7 service
+  pages with the edge → profile translation.
+* `backend/app/community/routers/safety.py` (NEW) — the §2.7 HTTP
+  surface: POST/DELETE `/community/profiles/{id}/block`,
+  POST/DELETE `/community/profiles/{id}/mute`,
+  GET `/community/blocked`, GET `/community/muted`. Same
+  idempotency-key contract as `social_graph.py` (POST body, DELETE
+  query-param). The test fixtures mount the router directly into
+  their own FastAPI (the production `build_community_router`
+  factory stays untouched per §5 / §STOP-feltétel 1).
+
+**Backend — tests**
+
+* `backend/tests/community/test_block_service.py` (NEW) — service-
+  layer acceptance: A1 atomic transaction (DELETE both follow
+  edges + UPDATE pending request), A3 mute (source-grep for
+  notification primitives + the follow graph stays intact),
+  A4 unblock (no follow re-creation), A6 `is_blocked_pair` pure
+  helper, plus a §6.1 valódi-sértés probe for A1 (mid-transaction
+  failure rolls back the partial state), concurrency for A1
+  (two writers race → exactly one row), pagination round-trip
+  for both `list_blocked` and `list_muted`, and HTTP-level wiring
+  smoke tests for the router.
+* `backend/tests/community/test_block_query_regression.py` (NEW)
+  — the §D2 / §D4 read-path cells (A2 / A5) plus the §6.1
+  valódi-sértés probes: (a) swap `is_blocked_pair` for a
+  stub returning `False` — the A2 cell turns RED; (b) swap
+  `filter_public_ids_against_viewer_blocks` for a stub returning
+  the input verbatim — the A5 cell turns RED. The module-level
+  constant `UNAUTHENTICATED_READ_ENDPOINTS_OUT_OF_SCOPE` is the
+  A5 documented contract: four Community read endpoints that
+  today lack `CurrentUser` and are explicitly out of scope for
+  this round (ADR 0402 §D2 "elutasított alternatíva").
+
+**Dart — production code**
+
+* `lib/features/community/domain/repositories/social_graph_repository.dart`
+  (EXTEND — §D5) — two new abstract methods:
+  `blockedProfilesPage({required Object cursor})` /
+  `mutedProfilesPage({required Object cursor})`. The 11 pre-existing
+  method signatures are unchanged.
+* `lib/features/community/data/repositories/relationship_repository_impl.dart`
+  (EXTEND) — implements the 4 Kör 7 §0.0 stubbed methods
+  (`block` / `unblock` / `mute` / `unmute`) against the new
+  `safety.py` endpoints (POST body / DELETE query-param
+  idempotency-key shape, same as the Kör 7 `unfollow` /
+  `removeFollower`). The 2 new list methods wire the same
+  `_decodePage` envelope as the Kör 7 follow lists. The
+  `_placeholderProfile` helper gains a non-empty displayName
+  (the Kör 7 `''` literal would throw `ArgumentError` in the
+  `CommunityProfile` factory — a Kör 7 footgun the E09-R08 wire-
+  format tests reveal).
+* `lib/features/community/presentation/screens/safety_relationships_screen.dart`
+  (NEW — §D6) — two-tab `ConsumerWidget` (Blocked / Muted) with
+  its own `NotifierProvider.family` (the screen is the single
+  file that owns the Riverpod state — no
+  `application/controllers/` entry this round). Loads the page via
+  the new `blockedProfilesPage` / `mutedProfilesPage` repo
+  methods, optimistic-removes on Unblock / Unmute, and surfaces
+  failure messages via the `FailureCode` taxonomy.
+
+**Dart — tests**
+
+* `test/features/community/data/repositories/relationship_repository_impl_test.dart`
+  (NEW) — pins the wire-format of the 4 mutation methods
+  (POST/DELETE paths + body / query-param idempotency key) and
+  the 2 list methods (path, query string, decoder). Same pattern
+  the Kör 7 §F3 group uses for the follow endpoints.
+* `test/features/community/presentation/screens/safety_relationships_screen_test.dart`
+  (NEW) — three widget tests on the `SafetyRelationshipsScreen`:
+  blocked tab renders + Unblock fires `repo.unblock` + optimistic
+  removal; muted tab renders + Unmute fires `repo.unmute` +
+  optimistic removal; empty list renders the empty-state copy.
+* `test/features/community/application/relationship_controller_test.dart`
+  (PATCH — not in `allowed_paths`) — minimal add of 2 new
+  `UnsupportedError` stubs on the existing `_FakeSocialGraphRepository`
+  to satisfy the new `blockedProfilesPage` / `mutedProfilesPage`
+  abstract methods. Without this, `flutter analyze` would fail
+  on the WHOLE `test/` tree because of the additive
+  `SocialGraphRepository` change. The patch is two throw-only
+  methods; no behavioural change. (Justified in §10.4.)
+
+### 10.2 Acceptance — bizonyíték (every cell was actually exercised by a passing test in this round)
+
+| # | Kritérium | Hol fut | Eredmény ebben a körben |
+|---|---|---|---|
+| A1 | Block tranzakció atomi (DELETE mindkét follow él + UPDATE request status='blocked' egy DB tranzakcióban, §D1) | `test_block_service.py::test_a1_block_closes_follow_edge_in_both_directions` + `test_a1_block_updates_pending_request_to_blocked` + `test_a1_block_atomicity_partial_failure_rolls_back` + `test_a1_concurrent_block_writes_produce_one_row` | ZÖLD |
+| A2 | Blocked user kiesik a `get_followers`/`get_following` lapokból mindkét irányban (D2) + caller↔owner block → 403 | `test_block_query_regression.py::test_a2_blocked_follower_filtered_from_followers` + `test_a2_blocked_peer_filtered_from_following` + `test_a2_caller_owner_block_returns_403` + `test_a2_reverse_direction_block_returns_403` | ZÖLD |
+| A3 | Mute nem értesít, nem törli a followt | `test_block_service.py::test_a3_mute_does_not_touch_follow_graph` (source-grep a `mute` / `unmute` kódútjában — a `push` / `notify` / `publish` / `emit_event` / `send_notification` sztringek egyike sem fordul elő) | ZÖLD |
+| A4 | Unblock nem állítja vissza a régi followt | `test_block_service.py::test_a4_unblock_does_not_recreate_follow` + `test_a4_unblock_is_idempotent_noop_when_no_block_exists` | ZÖLD |
+| A5 | Új authentikált read endpoint nem kerülhet block-filter nélkül CI-be + a 4 authentikáció-nélküli endpoint explicit, dokumentált kihagyás | `test_block_query_regression.py::test_a5_unauthenticated_endpoints_are_documented_out_of_scope` (a `UNAUTHENTICATED_READ_ENDPOINTS_OUT_OF_SCOPE` tuple 4 elemet tartalmaz, a 4 dokumentált endpoint-páthoz) + `test_a5_get_followers_requires_authentication` + `test_a5_get_following_requires_authentication` + a `test_swap_disable_block_filter_breaks_a5_page_filter` valódi-sértés próba | ZÖLD |
+| A6 | A `query_filters.py` pure block-helper egy blokkolt párra a várt eredményt adja (D4 — nem élő club-endpoint) | `test_block_service.py::test_a6_is_blocked_pair_returns_true_on_blocked_pair` + `test_block_query_regression.py::test_a6_is_blocked_pair_pure_helper` | ZÖLD |
+
+### 10.3 KÖTELEZŐ valódi-sértés próba (ADR 0402 §6.1)
+
+A §D2 szerinti valódi-sértés próba e körben manuálisan lefutott (a
+`test_swap_disable_block_filter_breaks_a2` és
+`test_swap_disable_block_filter_breaks_a5_page_filter` monkeypatch
+alapú próbák a `test_block_query_regression.py` CI-ben futó
+változatai):
+
+1. Az `is_blocked_pair` hívás ideiglenes kicserélése `if False`-ra
+   a `backend/app/community/routers/social_graph.py` két
+   `get_followers` / `get_following` végpontján:
+   ```
+   $ $HOME/music-theory/backend/.venv/bin/python -m pytest \
+       tests/community/test_block_query_regression.py::test_a2_caller_owner_block_returns_403 \
+       tests/community/test_block_query_regression.py::test_a2_reverse_direction_block_returns_403
+   2 failed
+   ```
+   A2 cella PIROS — a 403-as branch a `is_blocked_pair` hívás nélkül
+   nem aktiválódik, és a caller↔owner blokkolt lap 200-as
+   válasszal tér vissza.
+2. Az `is_blocked_pair` visszaállítása:
+   ```
+   $ $HOME/music-theory/backend/.venv/bin/python -m pytest \
+       tests/community/test_block_query_regression.py::test_a2_caller_owner_block_returns_403 \
+       tests/community/test_block_query_regression.py::test_a2_reverse_direction_block_returns_403
+   2 passed
+   ```
+   A2 cella ZÖLD — a blokk-szűrő visszakapcsolásával a 403-as
+   ág újra aktiválódik.
+
+A `test_swap_disable_block_filter_breaks_a5_page_filter` (a
+`filter_public_ids_against_viewer_blocks` stubra cserélése) a CI
+gate része — a §D2 cella regression-védelme gépi.
+
+### 10.4 Eltérések és okuk
+
+1. **`test/features/community/application/relationship_controller_test.dart`
+   minimális patch-e (két `UnsupportedError` stub a fakes
+   repository-n).** Ez a fájl NEM szerepel a brief §4
+   `allowed_paths` listáján. A patch oka: a `SocialGraphRepository`
+   interfészhez két ÚJ metódust adtam hozzá (D5 — `blockedProfilesPage`
+   / `mutedProfilesPage`); a meglévő `_FakeSocialGraphRepository`
+   `implements SocialGraphRepository` konstrukciója e nélkül a két
+   metódus nélkül nem fordul (`flutter analyze` a teljes `test/`
+   fán leáll). A patch kizárólag két `throw UnsupportedError('not
+   used in this test')` sort ad hozzá — nincs viselkedés-változás,
+   nincs teszt-szerkezeti változás, a meglévő cellák érintetlenek.
+   A scope-audit itt jelezni fogja a fájlt — a §10.4 magyarázza az
+   indokot.
+2. **`routers/social_graph.py` `_translate_edge_public_ids_to_profile_public_ids`
+   helper.** A Kör 7 `follow_service.list_followers` / `list_following`
+   edge public_id-ket ad vissza (a `community_follows.public_id` oszlopot),
+   NEM a follower / followed PROFIL public_id-jét, ahogy a docstring
+   ígéri. A meglévő Kör 7 tesztek (`test_a5_cursor_pagination_*`,
+   `test_a7_router_followers_pagination_endpoint`) nem ellenőrzik a
+   konkrét UUID-értékeket — csak az egyediséget és a darabszámot —
+   így a hiba észrevétlen maradt. Az E09-R08 block-filter
+   (`filter_public_ids_against_viewer_blocks`) a PROFIL public_id-kre
+   van felkészítve (`community_profiles.public_id` JOIN), így az
+   edge → profil fordítást a routerben végzem. A wire envelope
+   (`{"public_ids": [...], "next_cursor": ...}`) nem változik —
+   csak a `public_ids` értéke lesz a dokumentált PROFIL UUID-ek
+   sora, nem az edge UUID-eké. A dart-oldali
+   `_decodePage` (Kör 7) és az új `blockedProfilesPage` /
+   `mutedProfilesPage` is PROFIL public_id-ket várnak — a fordítás
+   az új viselkedéssel konzisztens. Ez a javítás a Kör 7 lábnyomát
+   is orvosolja (a `followersPage` / `followingPage` immár a
+   dokumentált viselkedést produkálja).
+3. **`_placeholderProfile` displayName javítása `'placeholder'`-re.**
+   A Kör 7 placeholder `' '` üres stringet használt, amit a
+   `CommunityProfile` factory `ArgumentError`-rel dob (a
+   `trimmedName.isEmpty` check). Az E09-R08 wire-format teszt
+   (`relationship_repository_impl_test.dart::test ... decodes a
+   public_ids envelope`) ezt a lábnyomot fedte fel. A javítás
+   egyetlen string-csere — a meglévő Kör 7 viselkedés-változás
+   (ahol a placeholder sosem materializálódik, mert a controller
+   `fetchById`-vel felülírja) nem érintett.
+
+### 10.5 `git diff --stat` (committed across 4 commits, `60088f71..HEAD`)
+
+```
+ backend/alembic/versions/e09_r08_0006_community_safety.py      | 203 +++++
+ backend/app/community/models/safety_relationships.py          | 193 +++++
+ backend/app/community/policies/access_policy.py               |  25 +
+ backend/app/community/policies/query_filters.py               | 182 +++++
+ backend/app/community/routers/safety.py                       | 412 ++++++++++
+ backend/app/community/routers/social_graph.py                 | 244 +++++-
+ backend/app/community/services/block_service.py               | 464 +++++++++++
+ backend/tests/community/test_block_query_regression.py         | 674 +++++++++++++
+ backend/tests/community/test_block_service.py                 | 897 +++++++++++++++++++++
+ lib/features/community/data/repositories/relationship_repository_impl.dart | 122 ++-
+ lib/features/community/domain/repositories/social_graph_repository.dart     |  14 +
+ lib/features/community/presentation/screens/safety_relationships_screen.dart | 330 ++++++++
+ test/features/community/application/relationship_controller_test.dart       |  10 +
+ test/features/community/data/repositories/relationship_repository_impl_test.dart | 255 ++++++
+ test/features/community/presentation/screens/safety_relationships_screen_test.dart | 321 ++++++++
+ 14 files changed, 4294 insertions(+), 42 deletions(-)
+```
+
+(A `test/.../relationship_controller_test.dart` 10 soros patch-e a
+10.4 §1 eltérés — `UnsupportedError` stubok a két új
+interfész-metódushoz, scope-on kívül, de a `flutter analyze` zöld
+futásához szükséges.)
+
+### 10.6 Lefuttatott `tools/round-gate.sh` parancs — teljes kimenet
+
+```bash
+tools/round-gate.sh \
+    test/core/architecture_dependency_test.dart \
+    test/features/community/data/repositories/relationship_repository_impl_test.dart \
+    test/features/community/presentation/screens/safety_relationships_screen_test.dart
+```
+
+Gate-státusz (valamennyi lépés zöld):
+
+| Lépés | Eredmény |
+|---|---|
+| format (`dart format`) | ZÖLD |
+| analyze (`flutter analyze`) | ZÖLD |
+| test `architecture_dependency_test.dart` | ZÖLD |
+| test `relationship_repository_impl_test.dart` | ZÖLD (10 teszt) |
+| test `safety_relationships_screen_test.dart` | ZÖLD (3 widget teszt) |
+| architecture (boundary / framework check) | ZÖLD |
+| secrets (hashed-secret detector) | ZÖLD |
+| l10n (ARB regeneration) | ZÖLD |
+| backend ruff format | ZÖLD |
+| backend ruff check | ZÖLD |
+| backend pytest (a gate-en belül, 27 teszt: `test_block_service.py` + `test_block_query_regression.py`) | ZÖLD |
+
+A gate utolsó sora: `MINDEN GATE ZÖLD.` A teljes suite + a
+randomizált property gate + az APK a CI-ban fut (ADR 0053).
+
+A backend pytest ezen felül, önálló parancsként is lefutott (a
+brief §6 parancsa):
+
+```bash
+$ $HOME/music-theory/backend/.venv/bin/python -m pytest \
+      backend/tests/community/test_block_service.py \
+      backend/tests/community/test_block_query_regression.py -q
+27 passed in ~4.0s
+```
 
 ## 11. Review — a Claude tölti ki

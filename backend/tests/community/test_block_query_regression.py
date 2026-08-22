@@ -36,7 +36,6 @@ from sqlalchemy.orm import Session, sessionmaker
 from alembic import command
 from app.community.models.profile import CommunityProfile
 from app.community.models.safety_relationships import CommunityBlock
-from app.community.models.social_graph import CommunityFollow
 from app.community.policies.query_filters import is_blocked_pair
 from app.community.routers.safety import router as safety_router
 from app.community.routers.social_graph import router as social_graph_router

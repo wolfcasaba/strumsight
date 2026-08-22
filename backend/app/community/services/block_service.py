@@ -54,6 +54,7 @@ from sqlalchemy.orm import Session
 
 from ..models.profile import CommunityProfile
 from ..models.safety_relationships import CommunityBlock, CommunityMute
+
 # `_existing_follow` / `_existing_request` are the private helpers in
 # ``follow_service.py`` — the Kör 7 module deliberately keeps them
 # module-private so the service layer's invariants stay scoped. We
@@ -375,8 +376,7 @@ def _paginate_safety(
         if decoded is not None:
             cursor_at, cursor_id = decoded
             stmt = stmt.where(
-                tuple_(model.created_at, model.id)
-                < tuple_(cursor_at, cursor_id)
+                tuple_(model.created_at, model.id) < tuple_(cursor_at, cursor_id)
             )
 
     rows = db.execute(stmt).all()
@@ -414,7 +414,6 @@ def _paginate_safety(
 # language and avoids forcing future club code to reach into the
 # policies package directly.
 from ..policies.query_filters import is_blocked_pair  # noqa: E402,F401
-
 
 # ---------------------------------------------------------------------------
 # Internal row lookups (private to this module)

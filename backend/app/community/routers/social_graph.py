@@ -678,9 +678,7 @@ def _community_profile_pk(db: Session, public_id: uuid.UUID) -> int | None:
     from sqlalchemy import text as _sa_text
 
     row = db.execute(
-        _sa_text(
-            "SELECT id FROM community_profiles WHERE public_id = :pid"
-        ),
+        _sa_text("SELECT id FROM community_profiles WHERE public_id = :pid"),
         {"pid": public_id.hex},
     ).first()
     if row is None:
