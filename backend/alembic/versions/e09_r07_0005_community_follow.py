@@ -105,19 +105,6 @@ def upgrade() -> None:
         ["public_id"],
         unique=True,
     )
-    # The explicit named unique index backs the UniqueConstraint. The
-    # ``UniqueConstraint`` DDL would create an auto-named
-    # ``sqlite_autoindex_*`` that the §6.1 valódi-sértés próba cannot
-    # target deterministically — by creating the index here too, the
-    # regression test can drop it by name, exercise the duplicate
-    # path, and restore it. The UniqueConstraint remains in place as
-    # the contract; the index is the physical enforcement surface.
-    op.create_index(
-        "ix_community_follows_pair_unique",
-        "community_follows",
-        ["follower_profile_id", "followed_profile_id"],
-        unique=True,
-    )
     # The pagination query orders by (followed_profile_id, created_at
     # DESC, id DESC) for "followers of X" lists. The composite index
     # matches the query plan exactly so the round-gate's A5 cursor
@@ -193,15 +180,6 @@ def upgrade() -> None:
         ["public_id"],
         unique=True,
     )
-    # Explicit named unique index for the pair constraint — see the
-    # rationale on ``ix_community_follows_pair_unique``. The
-    # §6.1 valódi-sértés próba for A2 targets this name.
-    op.create_index(
-        "ix_community_follow_requests_pair_unique",
-        "community_follow_requests",
-        ["requester_profile_id", "target_profile_id"],
-        unique=True,
-    )
     # Pending-request lookups read by (target_profile_id, status);
     # accepted/declined lookups (for the caller's own history) read
     # by (requester_profile_id, created_at DESC). Two indexes, both
@@ -231,10 +209,6 @@ def downgrade() -> None:
         table_name="community_follow_requests",
     )
     op.drop_index(
-        "ix_community_follow_requests_pair_unique",
-        table_name="community_follow_requests",
-    )
-    op.drop_index(
         "ix_community_follow_requests_public_id",
         table_name="community_follow_requests",
     )
@@ -246,10 +220,6 @@ def downgrade() -> None:
     )
     op.drop_index(
         "ix_community_follows_followed_created",
-        table_name="community_follows",
-    )
-    op.drop_index(
-        "ix_community_follows_pair_unique",
         table_name="community_follows",
     )
     op.drop_index(
