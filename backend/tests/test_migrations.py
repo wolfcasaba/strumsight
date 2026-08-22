@@ -111,8 +111,14 @@ def test_upgrade_head_matches_current_orm_schema(tmp_path, monkeypatch):
         engine.dispose()
 
 
-def test_downgrade_one_revision_removes_application_schema(tmp_path, monkeypatch):
-    database_path = tmp_path / "downgrade.db"
+def test_downgrade_one_revision_drops_only_community_tables(tmp_path, monkeypatch):
+    """One-step downgrade from the current head should reverse only the most
+    recent migration (``e09_r02_0002`` — Community), leaving the baseline
+    ``users`` / ``user_settings`` tables untouched. This guards against an
+    accidental over-eager downgrade and documents the post-E09-R02 chain:
+    ``head`` -> ``e01_r12_0001`` (downgrade -1) -> ``base``.
+    """
+    database_path = tmp_path / "downgrade_one_step.db"
     database_url = f"sqlite:///{database_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", database_url)
     config = _alembic_config()
@@ -125,8 +131,34 @@ def test_downgrade_one_revision_removes_application_schema(tmp_path, monkeypatch
         tables = set(inspect(engine).get_table_names())
     finally:
         engine.dispose()
+    assert "community_profiles" not in tables
+    assert "community_privacy_settings" not in tables
+    assert "users" in tables
+    assert "user_settings" in tables
+
+
+def test_downgrade_to_base_removes_application_schema(tmp_path, monkeypatch):
+    """Downgrading all the way to ``base`` should fully reverse both
+    migrations in the chain — the Community tables AND the baseline
+    ``users`` / ``user_settings`` tables disappear.
+    """
+    database_path = tmp_path / "downgrade_base.db"
+    database_url = f"sqlite:///{database_path}"
+    monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", database_url)
+    config = _alembic_config()
+    command.upgrade(config, "head")
+
+    command.downgrade(config, "base")
+
+    engine = create_engine(database_url)
+    try:
+        tables = set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
     assert "users" not in tables
     assert "user_settings" not in tables
+    assert "community_profiles" not in tables
+    assert "community_privacy_settings" not in tables
 
 
 def test_sqlite_runtime_enforces_foreign_key_cascade(tmp_path, monkeypatch):
