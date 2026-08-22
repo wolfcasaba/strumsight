@@ -20,8 +20,8 @@ allowed_paths = [
   "lib/features/gamification/presentation/widgets/xp_progress_bar.dart",
   "lib/features/gamification/presentation/widgets/level_badge.dart",
   "lib/features/gamification/public.dart",
-  "lib/l10n/app_en.arb",
-  "lib/l10n/app_hu.arb",
+  "lib/l10n/features/gamification_en.arb",
+  "lib/l10n/features/gamification_hu.arb",
   "test/features/gamification/presentation/gamification_hub_screen_test.dart",
   "test/ui/ui_inventory_test.dart",
   "docs/rounds/e08-r23-gamification-hub-and-level-ui.md",
@@ -109,6 +109,32 @@ mért tényleges számra igazítsa **ugyanabban a commitban** — ne a `62`-t
 feltételezze vakon, mérje (`git diff --stat` + a teszt saját hibaüzenete
 kiírja a tényleges screen-listát).
 
+### 0.0.2 Kör közbeni revízió — `stopped` után, 2026-08-22
+
+Az implementer (`minimax`) jogosan `stopped`-ot jelzett: a brief eredeti
+`allowed_paths`-a a GENERÁLT aggregátumokat (`lib/l10n/app_en.arb`,
+`lib/l10n/app_hu.arb`) listázta, de **2026-08-20 óta** (PR #343, ADR 0307
+§4) ezek generált fájlok — a tényleges forrás a `lib/l10n/features/
+gamification_{en,hu}.arb` fragmentum, a `check_l10n_parity` frissesség-őr
+ebből regenerálja az aggregátumot. Ugyanaz a hibaosztály, mint az E08-R20
+§0.0.1 (L396) és az E08-R22 §0.0.1 — a brief 2026-08-18-i írása nem
+ismerhette a váltást.
+
+**Kód-mérés:** `ls lib/l10n/features/gamification_{en,hu}.arb` →
+mindkét forrás-fragmentum létezik (16 288 / 16 618 bájt, utolsó módosítás
+E08-R22-ből).
+
+**Döntés:** az `allowed_paths` a generált aggregátum helyett a forrás-
+fragmentumra cserélve (lásd fent a §4 táblázatot és a router-blokkot) — ez
+**szűkítés + célfájl-csere**, nem tágítás, tehát a §2 szerint az
+orchestrátor saját hatásköre. Az implementer az új kulcsokat a
+`lib/l10n/features/gamification_{en,hu}.arb` fragmentumba veszi fel, majd
+`dart run tool/gen_l10n_segments.dart --write`-tal regenerálja az
+aggregátumot a §7 gate előtt — a generált `lib/l10n/app_{en,hu}.arb` fájl
+maga NEM kerül `allowed_paths`-ba (a `tools/round-slots.py`
+`GENERATED_PATHS` halmaza kifejezetten emiatt nem tekinti slot-ütközésnek),
+a `check_l10n_parity` gate-lépés `--check` módban ellenőrzi a szinkront.
+
 ## 1. Cél
 
 Központi, de **nem domináló** áttekintő felület — és a legfontosabb invariáns:
@@ -142,8 +168,8 @@ felhasználónak · a postaláda-jelző integrálása.
 | `lib/features/gamification/presentation/widgets/xp_progress_bar.dart` | **ÚJ** — az XP-sáv |
 | `lib/features/gamification/presentation/widgets/level_badge.dart` | **ÚJ** — a szint-jelvény |
 | `lib/features/gamification/public.dart` | barrel-bővítés — CSAK export-sor |
-| `lib/l10n/app_en.arb` | az ÚJ kulcsok |
-| `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
+| `lib/l10n/features/gamification_en.arb` | az ÚJ kulcsok (forrás-fragmentum, §0.0.2) |
+| `lib/l10n/features/gamification_hu.arb` | az ÚJ kulcsok magyar párja (forrás-fragmentum, §0.0.2) |
 | `test/features/gamification/presentation/gamification_hub_screen_test.dart` | a §6 cellái |
 | `test/ui/ui_inventory_test.dart` | a rögzített production-screen bázisvonal 62→64 (§0.0.1, L397) |
 
