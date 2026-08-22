@@ -129,10 +129,7 @@ def test_a7_unsupported_contract_version_short_circuits_everything():
     assert outcome.accepted == []
     assert outcome.download.totalXp == 0
     assert outcome.rejected, "expected at least one rejection"
-    assert (
-        outcome.rejected[0].reason
-        == SyncRejectionReason.UNKNOWN_CONTRACT_VERSION
-    )
+    assert outcome.rejected[0].reason == SyncRejectionReason.UNKNOWN_CONTRACT_VERSION
 
 
 def test_a7_unknown_receipt_schema_version_is_rejected():
@@ -158,9 +155,7 @@ def test_a7_unknown_receipt_schema_version_is_rejected():
         for r in outcome.rejected
     )
     # The unknown-schema receipt must NOT have polluted the download.
-    assert all(
-        r.ledgerId != "future-1" for r in outcome.download.receipts
-    )
+    assert all(r.ledgerId != "future-1" for r in outcome.download.receipts)
 
 
 # ---------------------------------------------------------------------------
@@ -213,8 +208,7 @@ def test_duplicate_ledger_id_in_one_envelope_is_rejected():
     )
     outcome = evaluate_upload(envelope)
     assert any(
-        r.reason == SyncRejectionReason.DUPLICATE_LEDGER_ID
-        for r in outcome.rejected
+        r.reason == SyncRejectionReason.DUPLICATE_LEDGER_ID for r in outcome.rejected
     )
 
 

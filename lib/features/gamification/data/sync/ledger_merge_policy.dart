@@ -87,11 +87,9 @@ final class LedgerMergePolicy {
       for (final receipt in remoteReceipts) receipt.entry.ledgerId: receipt,
     };
 
-    // 2. Build the local index (deduped by ledgerId — a single device
-    //    cannot have two entries with the same ledgerId).
-    final localById = <String, RewardLedgerEntry>{
-      for (final entry in local) entry.ledgerId: entry,
-    };
+    // 2. Local entries are deduped by ledgerId (a single device cannot
+    //    legitimately have two entries with the same ledgerId), so the
+    //    list-as-index in step 3 is safe.
 
     // 3. Walk every entry by ledgerId; pick the merged form.
     final merged = <String, MergedReceipt>{};

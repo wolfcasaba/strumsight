@@ -119,9 +119,7 @@ def evaluate_upload(envelope: LedgerUploadEnvelope) -> SyncOutcome:
         )
         return SyncOutcome(
             accepted=[],
-            rejected=[
-                RejectResult(reason=warning.reason, message=warning.message)
-            ],
+            rejected=[RejectResult(reason=warning.reason, message=warning.message)],
             download=LedgerDownloadEnvelope(
                 receipts=[],
                 totalXp=0,
@@ -157,9 +155,7 @@ def evaluate_upload(envelope: LedgerUploadEnvelope) -> SyncOutcome:
         schema_errors = validate_receipt_schema(receipt)
         if schema_errors:
             for err in schema_errors:
-                rejected.append(
-                    RejectResult(reason=err.reason, message=err.message)
-                )
+                rejected.append(RejectResult(reason=err.reason, message=err.message))
             continue
         accepted.append(
             AcceptResult(

@@ -1,6 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/gamification/data/sync/gamification_sync_contract.dart';
-import 'package:strumsight/features/gamification/data/sync/ledger_merge_policy.dart';
 import 'package:strumsight/features/gamification/public.dart';
 
 void main() {
