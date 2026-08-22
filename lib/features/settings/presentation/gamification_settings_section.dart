@@ -178,12 +178,16 @@ class _IntensityChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      key: Key('gamification-settings-intensity-$label'),
-      label: Text(label),
+    return Semantics(
+      label: semanticLabel,
       selected: selected,
-      onSelected: (_) => onSelected(),
-      semanticLabel: semanticLabel,
+      button: true,
+      child: ChoiceChip(
+        key: Key('gamification-settings-intensity-$label'),
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+      ),
     );
   }
 }

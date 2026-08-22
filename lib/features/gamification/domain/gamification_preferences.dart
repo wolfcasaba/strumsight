@@ -1,4 +1,5 @@
-import '../application/celebration_coordinator.dart';
+import '../presentation/widgets/reward_summary_sheet.dart'
+    show RewardSummaryFeedback;
 
 /// How loud the celebration layer should be.
 ///

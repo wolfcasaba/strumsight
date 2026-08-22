@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/storage/persisted_preference.dart';
+import '../../../../core/storage/persisted_preference.dart';
 import '../../domain/gamification_preferences.dart';
 
 /// Storage keys for the five gamification preferences.
