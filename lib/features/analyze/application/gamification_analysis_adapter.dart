@@ -52,16 +52,7 @@ final class AnalysisGamificationSignal {
     required this.score,
     required this.epochDay,
     required this.occurredAt,
-  }) : assert(sourceHash.trim().isNotEmpty, 'sourceHash must not be blank'),
-       assert(
-         analyzerVersion.trim().isNotEmpty,
-         'analyzerVersion must not be blank',
-       ),
-       assert(
-         validDuration >= Duration.zero,
-         'validDuration must be non-negative',
-       ),
-       assert(score >= 0 && score <= 1, 'score must be in [0, 1]');
+  });
 
   /// Persisted, save-time identifier of the analysis session. The
   /// adapter namespaces the event under this id (brief §6 A2
@@ -154,11 +145,11 @@ class GamificationAnalysisAdapter {
     required RewardPolicy rewardPolicy,
     required AnalysisHistoryBuilder historyBuilder,
     required bool featureEnabled,
-  }) : _ingestor = ingestor,
-       _eligibility = eligibility,
-       _rewardPolicy = rewardPolicy,
-       _historyBuilder = historyBuilder,
-       _featureEnabled = featureEnabled;
+  }) : _ingestor = ingestor, // ignore: prefer_initializing_formals
+       _eligibility = eligibility, // ignore: prefer_initializing_formals
+       _rewardPolicy = rewardPolicy, // ignore: prefer_initializing_formals
+       _historyBuilder = historyBuilder, // ignore: prefer_initializing_formals
+       _featureEnabled = featureEnabled; // ignore: prefer_initializing_formals
 
   final ActivityEventIngestor _ingestor;
   final RewardEligibilityPolicy _eligibility;

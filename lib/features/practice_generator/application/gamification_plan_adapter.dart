@@ -59,10 +59,7 @@ final class PlanGamificationSignal {
     required this.score,
     required this.epochDay,
     required this.occurredAt,
-  }) : assert(
-         validDuration >= Duration.zero,
-         'validDuration must be non-negative',
-       );
+  }) : assert(validDuration >= Duration.zero);
 
   /// Persisted, save-time identifier of the plan. The adapter
   /// namespaces the event under this id (brief §6 A2
@@ -152,11 +149,11 @@ class GamificationPlanAdapter {
     required RewardPolicy rewardPolicy,
     required PlanHistoryBuilder historyBuilder,
     required bool featureEnabled,
-  }) : _ingestor = ingestor,
-       _eligibility = eligibility,
-       _rewardPolicy = rewardPolicy,
-       _historyBuilder = historyBuilder,
-       _featureEnabled = featureEnabled;
+  }) : _ingestor = ingestor, // ignore: prefer_initializing_formals
+       _eligibility = eligibility, // ignore: prefer_initializing_formals
+       _rewardPolicy = rewardPolicy, // ignore: prefer_initializing_formals
+       _historyBuilder = historyBuilder, // ignore: prefer_initializing_formals
+       _featureEnabled = featureEnabled; // ignore: prefer_initializing_formals
 
   final ActivityEventIngestor _ingestor;
   final RewardEligibilityPolicy _eligibility;

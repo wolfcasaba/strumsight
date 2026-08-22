@@ -127,10 +127,10 @@ class GamificationTutorAdapter {
     required RewardEligibilityPolicy eligibility,
     required RewardPolicy rewardPolicy,
     required bool featureEnabled,
-  }) : _ingestor = ingestor,
-       _eligibility = eligibility,
-       _rewardPolicy = rewardPolicy,
-       _featureEnabled = featureEnabled;
+  }) : _ingestor = ingestor, // ignore: prefer_initializing_formals
+       _eligibility = eligibility, // ignore: prefer_initializing_formals
+       _rewardPolicy = rewardPolicy, // ignore: prefer_initializing_formals
+       _featureEnabled = featureEnabled; // ignore: prefer_initializing_formals
 
   // The collaborators are intentionally unused — they are held only
   // to keep the constructor symmetric with the other adapters'

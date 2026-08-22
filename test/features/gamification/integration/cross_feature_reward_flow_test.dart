@@ -30,7 +30,9 @@ import '../../../core/storage/in_memory_key_value_store.dart';
 const int _defaultEpochDay = 20420;
 final DateTime _defaultOccurredAt = DateTime.utc(2026, 8, 22, 18, 0);
 
-const _testMetric = EvidenceMetric.fretting(FrettingMetricId.positionStability);
+final EvidenceMetric _testMetric = EvidenceMetric.fretting(
+  FrettingMetricId.positionStability,
+);
 
 VisionEvidence _evidenceWithConfidence(double confidence) {
   return VisionEvidence(
@@ -51,8 +53,8 @@ VisionEvidence _evidenceWithConfidence(double confidence) {
   );
 }
 
-AnalysisRewardHistorySnapshot _emptyAnalysisHistory(int _, String __) =>
-    const AnalysisRewardHistorySnapshot(
+AnalysisRewardHistorySnapshot _emptyAnalysisHistory(int epochDay, String key) =>
+    AnalysisRewardHistorySnapshot(
       earnedTodayXp: 0,
       analysisOccurrenceCount: 0,
       uniqueSourcesToday: 1,
@@ -61,8 +63,8 @@ AnalysisRewardHistorySnapshot _emptyAnalysisHistory(int _, String __) =>
       rewardedChildParentIds: <String>{},
     );
 
-VisionRewardHistorySnapshot _emptyVisionHistory(int _, String __) =>
-    const VisionRewardHistorySnapshot(
+VisionRewardHistorySnapshot _emptyVisionHistory(int epochDay, String key) =>
+    VisionRewardHistorySnapshot(
       earnedTodayXp: 0,
       visionOccurrenceCount: 0,
       uniqueSourcesToday: 1,
@@ -71,8 +73,8 @@ VisionRewardHistorySnapshot _emptyVisionHistory(int _, String __) =>
       rewardedChildParentIds: <String>{},
     );
 
-PlanRewardHistorySnapshot _emptyPlanHistory(int _, String __) =>
-    const PlanRewardHistorySnapshot(
+PlanRewardHistorySnapshot _emptyPlanHistory(int epochDay, String key) =>
+    PlanRewardHistorySnapshot(
       earnedTodayXp: 0,
       planOccurrenceCount: 0,
       uniqueSourcesToday: 1,
@@ -203,7 +205,7 @@ VisionGamificationSignal _visionSignal({
   String sessionId = 'vision-session-1',
   InsightCode claim = InsightCode.frettingStable,
   double confidence = 0.70,
-  VisionEvidence? evidence,
+  Object? evidence = const _Sentinel(),
   Duration validDuration = const Duration(minutes: 2),
   double? quality = 0.85,
   EvidenceTrust trust = EvidenceTrust.scored,
@@ -211,10 +213,13 @@ VisionGamificationSignal _visionSignal({
   int epochDay = _defaultEpochDay,
   DateTime? occurredAt,
 }) {
+  final resolvedEvidence = evidence is _Sentinel
+      ? _evidenceWithConfidence(confidence)
+      : evidence as VisionEvidence?;
   return VisionGamificationSignal(
     sessionId: sessionId,
     claim: claim,
-    evidence: evidence ?? _evidenceWithConfidence(confidence),
+    evidence: resolvedEvidence,
     confidence: confidence,
     validDuration: validDuration,
     quality: quality,
@@ -223,6 +228,10 @@ VisionGamificationSignal _visionSignal({
     epochDay: epochDay,
     occurredAt: occurredAt ?? _defaultOccurredAt,
   );
+}
+
+class _Sentinel {
+  const _Sentinel();
 }
 
 TutorGamificationSignal _tutorSignal({
@@ -651,19 +660,31 @@ void main() {
 }
 
 // ── §6.1 / §10 broken-probe adapters ─────────────────────────────────────
+//
+// These deliberately mirror the production adapter's surface so the
+// §6.1 valódi-sértés próba can drive the same drain flow as the
+// production tests — but they are STANDALONE classes, not subclasses,
+// so they do not depend on the production adapter's private fields.
 
-class _BrokenTutorAdapter extends GamificationTutorAdapter {
+class _BrokenTutorAdapter {
   _BrokenTutorAdapter({
-    required super.ingestor,
-    required super.eligibility,
-    required super.rewardPolicy,
-    required super.featureEnabled,
+    required this.ingestor,
+    required this.eligibility,
+    required this.rewardPolicy,
+    required this.featureEnabled,
   });
 
-  @override
+  final ActivityEventIngestor ingestor;
+  final RewardEligibilityPolicy eligibility;
+  final RewardPolicy rewardPolicy;
+  final bool featureEnabled;
+
   Future<TutorGamificationOutcome> recordConversation(
     TutorGamificationSignal signal,
   ) async {
+    if (!featureEnabled) {
+      return const TutorGamificationOutcome.noOp();
+    }
     // Hypothetical engagement-XP path: emit a fake TutorActivityEvent
     // so the ledger records positive XP. The §A1 cell requires the
     // production adapter to AVOID this branch.
@@ -694,23 +715,31 @@ class _BrokenTutorAdapter extends GamificationTutorAdapter {
   }
 }
 
-class _BrokenAggregatingPlanAdapter extends GamificationPlanAdapter {
+class _BrokenAggregatingPlanAdapter {
   _BrokenAggregatingPlanAdapter({
-    required super.ingestor,
-    required super.eligibility,
-    required super.rewardPolicy,
-    required super.historyBuilder,
-    required super.featureEnabled,
+    required this.ingestor,
+    required this.eligibility,
+    required this.rewardPolicy,
+    required this.historyBuilder,
+    required this.featureEnabled,
   });
 
-  @override
+  final ActivityEventIngestor ingestor;
+  final RewardEligibilityPolicy eligibility;
+  final RewardPolicy rewardPolicy;
+  final PlanHistoryBuilder historyBuilder;
+  final bool featureEnabled;
+
   Future<PlanGamificationOutcome> recordCompletion(
     PlanGamificationSignal signal,
   ) async {
+    if (!featureEnabled || !signal.planCompleted) {
+      return const PlanGamificationOutcome.noOp();
+    }
     // Hypothetical block-aggregating path: forwards the policy's
     // bonus components as ledger bonusXp. The §A3 cell requires the
     // production adapter to AVOID this branch.
-    final eventId = eventIdFor(signal.planId);
+    final eventId = GamificationPlanAdapter.eventIdFor(signal.planId);
     final event = PlanActivityEvent(
       eventId: eventId,
       occurredAt: signal.occurredAt,
@@ -777,19 +806,27 @@ class _BrokenAggregatingPlanAdapter extends GamificationPlanAdapter {
   }
 }
 
-class _BrokenHashOnlyAnalysisAdapter extends GamificationAnalysisAdapter {
+class _BrokenHashOnlyAnalysisAdapter {
   _BrokenHashOnlyAnalysisAdapter({
-    required super.ingestor,
-    required super.eligibility,
-    required super.rewardPolicy,
-    required super.historyBuilder,
-    required super.featureEnabled,
+    required this.ingestor,
+    required this.eligibility,
+    required this.rewardPolicy,
+    required this.historyBuilder,
+    required this.featureEnabled,
   });
 
-  @override
+  final ActivityEventIngestor ingestor;
+  final RewardEligibilityPolicy eligibility;
+  final RewardPolicy rewardPolicy;
+  final AnalysisHistoryBuilder historyBuilder;
+  final bool featureEnabled;
+
   Future<AnalysisGamificationOutcome> recordSession(
     AnalysisGamificationSignal signal,
   ) async {
+    if (!featureEnabled) {
+      return const AnalysisGamificationOutcome.noOp();
+    }
     // Hash-only dedup: ignore the analyzer version in the event id
     // so a new version of the same clip produces the SAME id, which
     // the ledger collapses. The §A5 cell requires the production

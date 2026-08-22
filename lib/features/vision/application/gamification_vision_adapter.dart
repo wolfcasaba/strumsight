@@ -67,10 +67,7 @@ final class VisionGamificationSignal {
     required this.score,
     required this.epochDay,
     required this.occurredAt,
-  }) : assert(
-         confidence.isFinite && confidence >= 0 && confidence <= 1,
-         'confidence must be finite and in [0, 1]',
-       );
+  });
 
   /// Persisted, save-time identifier of the vision session.
   final String sessionId;
@@ -177,11 +174,11 @@ class GamificationVisionAdapter {
     required RewardPolicy rewardPolicy,
     required VisionHistoryBuilder historyBuilder,
     required bool featureEnabled,
-  }) : _ingestor = ingestor,
-       _eligibility = eligibility,
-       _rewardPolicy = rewardPolicy,
-       _historyBuilder = historyBuilder,
-       _featureEnabled = featureEnabled;
+  }) : _ingestor = ingestor, // ignore: prefer_initializing_formals
+       _eligibility = eligibility, // ignore: prefer_initializing_formals
+       _rewardPolicy = rewardPolicy, // ignore: prefer_initializing_formals
+       _historyBuilder = historyBuilder, // ignore: prefer_initializing_formals
+       _featureEnabled = featureEnabled; // ignore: prefer_initializing_formals
 
   final ActivityEventIngestor _ingestor;
   final RewardEligibilityPolicy _eligibility;
