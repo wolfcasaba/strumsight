@@ -49,6 +49,17 @@ abstract final class AppRoutes {
   // `audioAnalysisV2Enabled`.
   static const String analysisCompare = '/analysis/compare';
 
+  // Gamification V2 routes (E08-R30) — the canonical Epic 8 destination
+  // surface. The legacy `/streak` and `/progress` deep links remain wired
+  // to their V1 screens above (ADR §5.1 — old routes stay live).
+  static const String gamificationHub = '/gamification';
+  static const String achievements = '/gamification/achievements';
+  static const String achievementDetail =
+      '/gamification/achievement/:achievementId';
+  static const String quests = '/gamification/quests';
+  static const String streakDetail = '/gamification/streak';
+  static const String rewardInbox = '/gamification/inbox';
+
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[
     live,
