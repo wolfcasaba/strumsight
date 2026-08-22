@@ -518,4 +518,106 @@ A specifikációhoz képest a következő mérnöki döntések születtek:
 A fenti döntések egyike sem változtatja a §6 acceptance cellákat —
 minden futó teszt zöld maradt.
 
+### 10.7 Javító kör 1 — F1 (ModerationState A3 wire decoder)
+
+A review (`docs/reviews/e09-r05-review.md`, `b545ef3b`) egy MAJOR
+leletet (F1) jelzett: `ModerationState` volt az egyetlen A3
+wire-enum testvér, amelyik nem kapott `xFromWire(String?)` dekódert
++ a teszt-csoportból kimaradt. Javítás:
+
+#### Mit javítottam
+
+- **`lib/features/community/domain/entities/moderation_state.dart`**
+  — a plain enum átalakítása enhanced enummá (`wireValue` mező,
+  snake_case: `pendingReview` → `"pending_review"`, `authorOnly` →
+  `"author_only"`), és hozzáadva a `moderationStateFromWire` /
+  `moderationStateToWire` függvényeket a testvér-dekóderek
+  mintájára (sosem dob, `null` ismeretlenre — A3).
+- **`test/features/community/domain/community_domain_test.dart`** —
+  három új cella a `'wire enum handling (A3)'` csoportban
+  (`+29/+30/+31`):
+  1. ismeretlen + üres + `null` wire-string → `null`,
+  2. minden `ModerationState.values` roundtrip
+     (`moderationStateFromWire(moderationStateToWire(v)) == v`),
+  3. a snake_case wire-form pin (`pendingReview.wireValue ==
+     "pending_review"`, `authorOnly.wireValue == "author_only"` —
+     ez véd a `state.name` véletlen használata ellen);
+  és `'moderationStateFromWire'` + `'moderationStateToWire'` a
+  `'public.dart barrel surface (A5 + A6)'` `exportedNames`
+  listájába véve.
+- **`lib/features/community/public.dart`** — nem módosult: a
+  barrel már file-level exportálja
+  `domain/entities/moderation_state.dart` (40. sor), tehát az új
+  szimbólumok automatikusan látszanak a barrel-en át. A teszt fájl
+  `package:strumsight/features/community/public.dart` importja +
+  a tesztekben való tényleges használat (`ModerationState` /
+  `moderationStateFromWire` / `moderationStateToWire` referenciák
+  a 105/129/150/327-329/334-335/351-355. sorokon) egyúttal a
+  compile-time pin a barrel-exportra — ha a barrel eldobná a
+  szimbólumot, a tesztek le se fordulnának.
+
+#### Wire-string formátum — mérnöki döntés
+
+A backend oldalon (`backend/app/community/`) nincs élő
+`ModerationState` enum, így a wire-form a Dart-oldali alapértelmezés
+lett snake_case, ahogy a brief §1 F1 javasolta (`pendingReview` →
+`"pending_review"`, `authorOnly` → `"author_only"`). Ha egy jövőbeli
+backend kör bevezet egy `ModerationState`-jellegű enumot, annak
+`.value`-ját byte-identical kell tartani a `wireValue`-val — ezt a
+3. cella (`'ModerationState wire form is snake_case'`) explicit
+módon őrzi.
+
+#### Gate — teljes kimenet
+
+```bash
+ROUND_GATE_SLEEP_SECONDS=0 \
+  tools/round-gate.sh \
+    test/features/community/domain/community_domain_test.dart \
+    test/core/architecture_dependency_test.dart
+```
+
+| Lépés | Eredmény |
+|---|---|
+| 1. format | ZÖLD — `Formatted 1838 files (0 changed) in 7.34 seconds.` |
+| 2. analyze | ZÖLD — `No issues found! (ran in 5.3s)` |
+| 3. test `community_domain_test.dart` | ZÖLD — `+44: All tests passed!` (3 új cella: +29/+30/+31, a meglévő 41 megmaradt) |
+| 4. test `architecture_dependency_test.dart` | ZÖLD — `+44: All tests passed!` |
+| 5. architecture | ZÖLD — `Architecture dependencies OK (12 allowlisted deviation(s))` |
+| 6. secrets | ZÖLD — `Secret scan OK (3341 file(s) scanned, 0 finding(s))` |
+| 7. l10n | ZÖLD — `L10n parity OK (en → hu, 1663 message(s))` |
+
+A gate `end_summary` sorral zárult: `MINDEN GATE ZÖLD`.
+
+Az új A3 cellák kimenete a targeted futtatásból:
+
+```
+00:00 +12: wire enum handling (A3) ModerationState decoder returns null for unknown wire value
+00:00 +13: wire enum handling (A3) ModerationState decoder roundtrips every allowed state
+00:00 +14: wire enum handling (A3) ModerationState wire form is snake_case (pendingReview / authorOnly)
+00:00 +15: All tests passed!
+```
+
+A `round-auditor` alügynök (szinkron, §8.4.2 kötelező önellenőrzés)
+a `done` jelzés ELŐTT futott, scope / acceptance / truthfulness
+mindhárom tengelyen `PASS` (jelentés: scope = 2 fájl, mind a
+`allowed_paths` §1 listáján; acceptance = mind a 3 A3 cella + az
+A5 barrel-pin név megvan és zöld; truthfulness = minden állítás
+mögött van konkrétan lefuttatott parancs).
+
+#### `git diff --stat b545ef3b..HEAD`
+
+```
+ .../domain/entities/moderation_state.dart          | 39 +++++++++++++++++++++-
+ .../community/domain/community_domain_test.dart    | 37 ++++++++++++++++++++
+ 2 files changed, 75 insertions(+), 1 deletion(-)
+```
+
+Commit: `d52a10c5 fix(community): add ModerationState wire decoder
++ A3 cells (E09-R05 F1)` — a review commit `b545ef3b` fölé,
+a branchen (`minimax/e09-r05-flutter-community-domain-and-public-api`).
+
+A javító kör scope-sértés nélkül, kizárólag az F1-et érintő fájlokon
+dolgozott — `public.dart` módosítása a file-level export miatt nem
+volt szükséges.
+
 ## 11. Review — a Claude tölti ki
