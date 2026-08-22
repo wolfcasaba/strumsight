@@ -23,10 +23,12 @@ allowed_paths = [
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/gamification/presentation/gamification_hub_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e08-r23-gamification-hub-and-level-ui.md",
 ]
 gate_tests = [
   "test/features/gamification/presentation/gamification_hub_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
@@ -43,6 +45,69 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélkül a kör bukott. **Listán kívüli fájl kellene → `stopped`**,
 és a kimenet a brief-revízió kérése, nem az `allowed_paths` csendes tágítása.
 Meglévő, ma zöld teszt elbukása → `blocked`, nem a teszt átírása.
+
+## 0.0 Pre-flight revízió (Claude, 2026-08-22)
+
+**Kockázat = high, indoklás:** a `risk = "high"` a brief mérce-tartalma miatt
+áll (ADR 0289 legszigorúbb, felhasználó-szembeni alkalmazása egy központi
+áttekintő felületen — az XP/készség vizuális összemosása a termék legnagyobb
+őszinteségi kockázata, L399/ADR 0388 ugyanezt a mintát mérte a mastery-jelvény
+oldalon), NEM azért, mert az `allowed_paths` a router `high_risk_path_fragments`
+listájából (auth, authorization, camera, credential, crypto, encryption,
+migration, payment, privacy, secret, share, upload, vision) bármelyiket
+tartalmazná — nem tartalmazza, a kör tisztán presentation-réteg.
+
+**ADR:** a brief saját besorolása szerint ez a kör NEM hoz kötött
+architekturális döntést (a Hub az ADR 0289/0342/0388 MEGLÉVŐ szabályait
+alkalmazza vizuálisan, új szabályt nem vezet be) — a `tools/round-slots.py
+reserve-adr` futása ezért ELMARAD; a queue `E08-R23` sorának `nincs` ADR-oszlopa
+így marad.
+
+**Kód-mérés a §2 „Jelenlegi állapot" ellen:** `wc -l
+lib/features/progress/screens/progress_screen.dart` → **516 sor**, egyezik a
+brief állításával. `grep -rn "gamification_hub_screen"
+lib/features/gamification/` → 0 találat, a fájl valóban nem létezik.
+`grep -c "hasLength(62)" test/ui/ui_inventory_test.dart` → a mai bázisvonal
+**62** (az E08-R22 §0.0.2 javítása után).
+
+**Visszakeresett előzmény (ADR 0312, §4.9):**
+- `adr/0289` (mastery-is-evidence-not-xp), `adr/0342`
+  (monotonic-level-curve-and-rebuildable-profile-projection), `adr/0388`
+  (mastery-milestone…) — a Hub e három ADR MEGLÉVŐ szabályait vetíti UI-ra,
+  új döntést egyik sem igényel (szűkített `lessons,halts,adr` lekérdezés,
+  `adr/0342` bm25#12 emb#3, `adr/0289` bm25#28 emb#2).
+- `lessons/L397` (és a mögötte álló `L395`) — **közvetlenül releváns**: a
+  `test/ui/ui_inventory_test.dart` egy rögzített production-screen
+  bázisvonalat őriz, és MÁSODSZOR is CI-only lelet volt, amikor egy UI-kör
+  új screen-t adott a fájlrendszerhez a saját célzott gate-jén kívül
+  (E08-R20, majd E08-R22 is bővítette 61→62-re). Ez a kör **két** új
+  screent ad (`gamification_hub_screen.dart`,
+  `level_detail_screen.dart`), tehát a bázisvonal 62→**64**-re nő —
+  ugyanaz a hibaosztály harmadszor is bekövetkezne, ha nem kezelném itt.
+  **Döntés:** a `test/ui/ui_inventory_test.dart` felvéve az
+  `allowed_paths`-ba (lásd lent), az implementációs sorrend egy lépéssel
+  bővül, és a §7 gate-parancs is kiegészül ezzel az útvonallal — a második
+  CI-piros-kör elkerülése a cél, nem a mérce lazítása (a fájl tartalma
+  ettől még egy MÉRT, futtatható asserttel védett bázisvonal marad).
+- `lessons/L261`/`L270`/`L246` — az `allowed_paths` és az acceptance
+  criteria/kód-valóság közti ellentmondást a brief-lint nem fogja meg, a
+  pre-flight keresztellenőrzése a védelem; ez a bővítés pontosan ezt a
+  mintát követi (BOUND kivétel egy konkrét fájlra, nem zóna-tágítás).
+
+### 0.0.1 `allowed_paths` bővítés — `test/ui/ui_inventory_test.dart`
+
+A router-blokk `allowed_paths` tömbje a fenti indoklással **egy fájllal**
+bővül:
+
+```
+"test/ui/ui_inventory_test.dart"
+```
+
+Az implementer teendője: ha (és csak ha) a saját screen-számlálása a Hub +
+level-detail felvétele után nem 64-et ad, a `hasLength(62)` asszertumot a
+mért tényleges számra igazítsa **ugyanabban a commitban** — ne a `62`-t
+feltételezze vakon, mérje (`git diff --stat` + a teszt saját hibaüzenete
+kiírja a tényleges screen-listát).
 
 ## 1. Cél
 
@@ -80,6 +145,7 @@ felhasználónak · a postaláda-jelző integrálása.
 | `lib/l10n/app_en.arb` | az ÚJ kulcsok |
 | `lib/l10n/app_hu.arb` | az ÚJ kulcsok magyar párja |
 | `test/features/gamification/presentation/gamification_hub_screen_test.dart` | a §6 cellái |
+| `test/ui/ui_inventory_test.dart` | a rögzített production-screen bázisvonal 62→64 (§0.0.1, L397) |
 
 **Tilos zóna:** `lib/features/` MINDEN más feature-e · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `backend/**` · `lib/features/progress/**`
 
@@ -151,7 +217,7 @@ az **A1** szétválasztás-cellának PIROSNAK kell lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/gamification/presentation/gamification_hub_screen_test.dart
+tools/round-gate.sh test/features/gamification/presentation/gamification_hub_screen_test.dart test/ui/ui_inventory_test.dart
 ```
 
 A gate artefaktum a mérce (`tools/round-gate.sh`) — a parancssorban
@@ -172,7 +238,9 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 5. `gamification_hub_screen.dart` — áttekintés, postaláda-jelző, üres állapotok.
 6. a11y: szemantikus címkék, 200% szövegskála.
 7. A `public.dart` export-sorai; a valódi-sértés próba §10-be.
-8. `tools/round-gate.sh` a §7 szerint.
+8. `test/ui/ui_inventory_test.dart` bázisvonal-frissítés (§0.0.1) — csak a
+   TÉNYLEGES, mért screen-számra, nem vakon.
+9. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 
