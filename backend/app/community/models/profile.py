@@ -127,5 +127,23 @@ class CommunityPrivacySettings(Base):
         onupdate=_utcnow,
         nullable=False,
     )
+    # E09-R04, ADR 0398 §1 — plain ``String`` per the project-wide
+    # ``theme_mode`` pattern (backend/app/models.py:46). The DB does NOT
+    # enforce the value set; the Pydantic / domain layer (privacy.py
+    # schema, access_policy.py enums) is the validation chokepoint.
+    # ``server_default="followers"`` keeps a populated-table migration
+    # safe — A5 invariant ("default is NEVER public").
+    visibility: Mapped[str] = mapped_column(
+        String,
+        default="followers",
+        server_default="followers",
+        nullable=False,
+    )
+    audience_default: Mapped[str] = mapped_column(
+        String,
+        default="followers",
+        server_default="followers",
+        nullable=False,
+    )
 
     profile: Mapped[CommunityProfile] = relationship(back_populates="privacy_settings")
