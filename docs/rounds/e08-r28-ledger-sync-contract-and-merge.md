@@ -6,12 +6,59 @@
 - **Branch:** `<motor>/e08-r28-ledger-sync-contract-and-merge`
 - **Előfeltétel:** `E08-R27` merge-elve (a11y és beállítások)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0319` — a szám FOGLALT. Az ADR-t a Claude írja meg a
-  kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t
-  NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** ~~`ADR 0319`~~ **`ADR 0394`** — a `0319` STALE volt
+  (a `reserve-adr` foglaló a valós állapotot mérte, ugyanaz a minta, mint az
+  E08-R27 stale `0318`-ja). Az ADR-t a Claude írja meg a kör indítási
+  pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti
+  (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `backend/` TÉNYLEGES szerkezetét (`backend/app/`, Alembic migrációk, `backend/tests/`) és a `lib/features/auth/` + `settings_sync.dart` mintáját — a fiók-kikapcsolt állapot ellenőrzése onnan jön. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight brief-revízió (2026-08-22, E08-R28 indítás)
+
+**Kockázat = high, indoklás:** a kör két ÚJ backend-fájlt hoz létre
+(`backend/app/gamification/schemas.py`, `service.py`) hálózati kérésbeérkező
+kliens-adatot fogadó API-felülettel, és a szerződés maga a jutalom-integritás
+biztonsági határa (a szerver soha nem fogadhat el kliens-oldali összesített
+XP-t — 5.1). Egyik `allowed_paths` sem illeszkedik szó szerint a
+`high_risk_path_fragments` mintáira, de a tartalmi kockázat (hamisítható
+API-bemenet + fiók-kikapcsolt hálózat-tilalom, ami a `credential`/`auth`
+osztály testvér-kockázata) indokolja a `risk = "high"`-at — dedikált
+`security-reviewer` review kötelező.
+
+**Mért kódtények (grep, a brief 2026-08-18-i olvasata óta nem driftelt):**
+- `backend/app/gamification/` **valóban nem létezik** ma (`backend/app/`
+  alatt csak `tutor/` és `routers/` van) — a brief 2. szakaszának állítása áll.
+- `RewardLedgerEntry` (`lib/features/gamification/domain/rewards/reward_ledger_entry.dart`)
+  ténylegesen két mezőt hordoz dedup-kulcsként: `ledgerId` (helyi keletkezésű
+  azonosító) ÉS `sourceEventId` (a forrás-esemény azonosítója) — a §6.1
+  küszöb-hármas ezt a két mezőt nevezi meg helyesen.
+- `RewardLedgerRepository.hasProcessedEvent`/`appendIfAbsent`
+  (`lib/features/gamification/data/reward_ledger_repository.dart`) a HELYI
+  appendet ma kizárólag `sourceEventId`-re dedupolja — ez egy más réteg
+  (helyi idempotencia), a szinkron-összefésülés (kettős kulcs) ÚJ szabály,
+  nem ütközik a meglévővel.
+- `accountEnabledProvider` (`lib/features/auth/providers/auth_providers.dart:18`)
+  a mért fiók-kikapcsolt kapu — a `settings_sync.dart` ugyanezt olvassa a
+  konstruktorban, mielőtt bármilyen listenert regisztrálna; az 5.4 szabály
+  ugyanezt a mintát várja el a ledger-szinkrontól.
+- `lib/features/gamification/public.dart` ma export-only barrel, nincs
+  `sync/` alkönyvtár — a §4 "barrel-bővítés — CSAK export-sor" instrukció a
+  jelenlegi szerkezettel konzisztens.
+
+**Visszakeresés (ADR 0312, `node tools/knowledge-rag.mjs`):**
+- **L140** (`node tools/knowledge-rag.mjs --corpus lessons,halts --top 5
+  "backend account logged out zero network requests offline sync dedup
+  idempotency"`, bm25#1 emb#2): az „offline ⇒ nincs cloud-hívás" garanciát a
+  tényleges TURN-ÚTON, gateway/transport-spy-vel kell mérni, nem egy
+  statikus képernyő-renderrel vagy egy már meglévő, más transportra épülő
+  network-probe-bal — az A5 hálózat-cellának a ledger-szinkron SAJÁT
+  transport-mockját kell hívnia, nem egy örökölt, vak probe-ot.
+- Sem a szűkített (`lessons,halts,adr`), sem a teljes korpuszos keresés nem
+  talált korábbi H-t vagy ADR-t, amely ennek a körnek a konkrét szerződését
+  (unió-alapú dedup, verified/unverified szétválasztás, policy-verzió
+  superseding) megkérdőjelezné vagy módosítaná — a brief §5 döntései állnak.
 
 ```ai-router
 schema_version = 1
@@ -71,7 +118,7 @@ hálózati kérés.
 - A `backend/` bármely más moduljának módosítása; meglévő Alembic migráció átírása.
 - Közösségi funkciók (Epic 9) — ez a kör csak a szerződést készíti elő.
 - A felismerés vagy bármely gyakorlási adat felhőbe küldése — csak jutalom-nyugták mennek.
-- `docs/adr/**` — az ADR 0319-et a Claude írja.
+- `docs/adr/**` — az ADR 0394-et (a §0.0 szerint korrigált szám) a Claude írja.
 
 ## 4. Engedélyezett fájlok
 
@@ -87,7 +134,7 @@ hálózati kérés.
 
 **Tilos zóna:** `backend/` MINDEN más fájlja (meglévő migráció, auth, settings) · `lib/features/` többi feature-e · `lib/features/gamification/` nem felsorolt fájljai · `lib/core/**` · `lib/app/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0319)
+## 5. Kötött architekturális döntések (ADR 0394)
 
 ### 5.1 A SZERVER NEM FOGAD EL KLIENS-OLDALI ÖSSZESÍTETT XP-T
 
