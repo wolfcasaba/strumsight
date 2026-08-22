@@ -8,7 +8,7 @@ totals (ADR 0394 §5.1).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 

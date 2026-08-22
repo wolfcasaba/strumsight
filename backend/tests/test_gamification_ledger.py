@@ -16,8 +16,8 @@ from pydantic import ValidationError
 
 from app.gamification.schemas import (
     GAMIFICATION_SYNC_CONTRACT_VERSION,
-    ReceiptUpload,
     LedgerUploadEnvelope,
+    ReceiptUpload,
 )
 from app.gamification.service import (
     SyncRejectionReason,

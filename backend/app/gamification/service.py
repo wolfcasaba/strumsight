@@ -12,7 +12,6 @@ of the wire (ADR 0394 §5.1).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Iterable, List, Set
 
 from .schemas import (
