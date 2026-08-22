@@ -259,4 +259,163 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Scope summary (what landed)
+
+- **`lib/features/analyze/application/gamification_analysis_adapter.dart`** — NEW.
+  Caller-fed adapter with `sourceHash` + `analyzerVersion` (§0.0/2). The
+  ledger-side event id is
+  `analysis/<sha256(sourceHash)[:16]>/<analyzerVersion>/v1` — so re-running
+  the same clip with the same analyzer version collapses to the same
+  eventId (A4) and a new analyzer version produces a fresh eventId (A5).
+  The R05 eligibility gate runs first; an `ActivitySource.analyze` event
+  with the base XP is enqueued only when the gate grants.
+  Feature-switch fallback keeps the build clean (A7).
+
+- **`lib/features/vision/application/gamification_vision_adapter.dart`** — NEW.
+  Two-event design: `vision-base/<sessionId>/v1` (always emitted when R05
+  grants base XP, the §5.2 effort reward) and
+  `vision-technical/<sessionId>/v1` (emitted only when `VisionClaimGuard.
+  evaluate()` returns `isAllowed == true`, the §5.2 technical-progress
+  reward). The guard's `confidence < _minimumConfidence` strict-less-than
+  predicate makes the threshold itself (`0.70`) the inclusive accepting
+  boundary — the §6.1 "rajta" cell fires. Imports
+  `vision/domain/integration/public.dart` for the guard and
+  `vision/public.dart` for `InsightCode` + `VisionEvidence` (both barrels
+  accepted by A6, §0.0/6).
+
+- **`lib/features/ai_tutor/application/gamification_tutor_adapter.dart`** — NEW.
+  Single `recordConversation` entry point that always returns
+  `TutorGamificationOutcome.noOp()` — the §5.1 rule "a conversation yields
+  zero XP". The `ai_tutor` public barrel is pinned empty (L139), so the
+  input signal type (`TutorGamificationSignal`) is defined entirely in
+  the adapter file (mirrors `TutorPlanOutline`, ADR 0392 §0.0/1). A
+  feature-switch fallback keeps the build clean (A7). No event ever
+  reaches the ledger — the §6.1 chat-farm cell stays GREEN.
+
+- **`lib/features/practice_generator/application/gamification_plan_adapter.dart`** — NEW.
+  Caller-fed `planCompleted: bool` signal (§0.0/4 — `PlanStatus.completed`
+  is unreachable in the current code; this adapter deliberately avoids
+  the `active_plan_controller.dart` / `generation_orchestrator.dart`
+  state-machine internals). Emits exactly one `plan-bonus/<planId>/v1`
+  event when `planCompleted == true`, with `bonusXp` FORCED TO ZERO
+  (§5.3: blocks already paid on their own source path). A small in-memory
+  `Set<String> _rewardedPlanIds` (capped at 1024) provides the fast-path
+  for the §A3 reopen test; the durable dedup is the ledger's
+  append-if-absent.
+
+- **`test/features/gamification/integration/cross_feature_reward_flow_test.dart`** — NEW.
+  16 tests end-to-end, mirroring the song / practice / lesson
+  integration-test shape:
+  - 3× A1 (chat yields zero XP, hour-long session still yields zero,
+    §6.1 valódi-sértés próba — the `_BrokenTutorAdapter` proves that a
+    hypothetical "engagement XP" branch would emit XP, but the production
+    adapter does not).
+  - 4× A2 (the §6.1 threshold triple: 0.69 alatt → no technical
+    progress, 0.70 rajta → both events, 0.71 fölött → both events, plus
+    missing-evidence fail-close).
+  - 4× A3 (plan emits one bonus event with `bonusXp == 0`; `planCompleted
+    = false` → no event; reopen collapses to noOp; §6.1 valódi-sértés
+    próba — `_BrokenAggregatingPlanAdapter` proves a hypothetical block
+    aggregator would inflate `bonusXp`).
+  - 1× A4 (same clip + same analyzer version → same eventId, no
+    double-reward).
+  - 2× A5 (new analyzer version → fresh eventId, new ledger entry;
+    §6.1 valódi-sértés próba — `_BrokenHashOnlyAnalysisAdapter` proves a
+    hash-only dedup would collapse a new version).
+  - 1× A7 (every adapter with `featureEnabled: false` → noOp, no crash).
+  - 1× A8 (none of the four adapter files import an AI / network /
+    platform package — guard by file-source scan).
+
+- **`test/core/architecture_dependency_test.dart`** — extended with an
+  `E08-R26 A6` group (5 tests): each adapter reaches gamification ONLY
+  through `public.dart`; each adapter reaches its OWN source feature
+  only through public barrels (top-level `analyze/public.dart`,
+  `vision/public.dart` + the nested `vision/domain/integration/public.dart`,
+  `ai_tutor/public.dart` (empty, allowed), `practice_generator/public.dart`);
+  no cross-feature bleed into a sibling feature's internals; the
+  detector flags a synthetic internal import and accepts the nested
+  integration barrel.
+
+### Acceptance evidence
+
+| Cell | Evidence (this round) |
+|---|---|
+| A1 | `cross_feature_reward_flow_test.dart` — `A1: a tutor conversation emits NO event` + `A1: even when the conversation runs for an hour` + `A1 valódi-sértés próba` (3 cells, all green). |
+| A2 | `cross_feature_reward_flow_test.dart` — `A2 (§6.1 alatt)`, `A2 (§6.1 rajta)`, `A2 (§6.1 fölött)`, `A2: missing evidence denies technical progress` (4 cells, all green). |
+| A3 | `cross_feature_reward_flow_test.dart` — `A3: a completed plan emits exactly ONE event`, `A3: planCompleted = false`, `A3 (reopen)`, `A3 valódi-sértés próba` (4 cells, all green). |
+| A4 | `cross_feature_reward_flow_test.dart` — `A4: same sourceHash + same analyzerVersion → same eventId` (1 cell, green). |
+| A5 | `cross_feature_reward_flow_test.dart` — `A5 (§6.1)` (new version → fresh id), `A5 valódi-sértés próba` (hash-only dedup) (2 cells, both green). |
+| A6 | `architecture_dependency_test.dart` — new `cross-feature gamification adapter boundary — A6 (E08-R26)` group, 5/5 tests passing. The general `crossFeatureImportsMustUsePublicApi` rule also keeps these imports clean at the file-tree level (gate output: `Architecture dependencies OK (12 allowlisted deviation(s))`). |
+| A7 | `cross_feature_reward_flow_test.dart` — `A7: featureEnabled = false → every adapter is a no-op` (1 cell, green). |
+| A8 | `cross_feature_reward_flow_test.dart` — `A8: the four adapter files import NO AI / network / platform package` (1 cell, green). |
+
+### Commands actually run (igazmondás, §10 kötelezettség)
+
+| Claim | Command run this round |
+|---|---|
+| The 16-test reward-flow file passes. | `flutter test test/features/gamification/integration/cross_feature_reward_flow_test.dart` → `00:00 +16: All tests passed!`. |
+| The A6 architecture guard passes (37 total tests, including the new A6 group). | `flutter test test/core/architecture_dependency_test.dart` → `00:00 +37: All tests passed!`. |
+| The full §7 gate is green (format / analyze / 2×test / architecture / secrets / l10n). | `tools/round-gate.sh test/features/gamification/integration/cross_feature_reward_flow_test.dart test/core/architecture_dependency_test.dart` → `MINDEN GATE ZÖLD`. |
+| The §6.1 valódi-sértés próba was actually exercised (not merely asserted). | Three broken-probe adapters (`_BrokenTutorAdapter`, `_BrokenAggregatingPlanAdapter`, `_BrokenHashOnlyAnalysisAdapter`) are constructed, driven through the same drain flow as the production tests, and the test asserts the broken branch DOES pay XP / DOES inflate bonus / DOES collapse a new version. Those assertions would turn RED if the broken branches became the production path. |
+| The A8 source-level guard works. | The `A8` test reads each of the four adapter files via `dart:io File`, scans them for 12 forbidden import patterns (`http`, `dio`, `google_mlkit_*`, `tflite_flutter`, `flutter_tts`, `speech_to_text`, `image_picker`, `audioplayers`, `webview_flutter`, `flutter_localizations`, `mobile_scanner`, `health`), and asserts each pattern is absent. The test passes today; adding any of those imports to any of the four adapter files would turn it RED. |
+
+### Not in this round (per the brief)
+
+- The actual UI wire-up that drives `recordSession` /
+  `recordConversation` / `recordCompletion` is out of scope — the
+  brief §0.0 explicitly excludes it (`practice_generator` plan-completion
+  UI wiring, `analyze` result-screen adapter call, `vision` result-screen
+  adapter call, and any `ai_tutor` UI integration). The adapter surface
+  is ready for the future round that calls it from production.
+- No `lib/features/gamification/**` change — the production
+  `ActivityEventIngestor`, `RewardEligibilityPolicy`, `RewardPolicy`,
+  `LocalActivityOutboxRepository`, `LocalRewardLedgerRepository`, and
+  `learning_activity_event.dart` (which already exposes
+  `AnalysisActivityEvent`, `PlanActivityEvent`, `TutorActivityEvent`,
+  `VisionActivityEvent`) are unchanged.
+- No `lib/features/{analyze,vision,ai_tutor,practice_generator}/**`
+  change beyond the four new adapter files.
+- No new `docs/adr/**` — `ADR 0392` (cross-feature caller-fed adapter
+  boundaries, the §0.0 pre-flight) was the pre-flight artifact, written
+  by Claude.
+- No new dependency in `pubspec.yaml` — the `crypto` package was
+  already on the dependency graph (used by the E08-R25 song adapter).
+
+### Decisions taken during the round
+
+- **§0.0/3 vision barrel import.** The brief said
+  `gamification_vision_adapter.dart` should import
+  `vision/domain/integration/public.dart` "instead of the top-level
+  `vision/public.dart`", but `InsightCode` and `VisionEvidence` (both
+  required by the adapter's signature) are exported by the top-level
+  barrel only. §0.0/6 explicitly accepts BOTH barrels as vision
+  boundaries, so the adapter imports the top-level barrel for the input
+  types and the nested barrel for the guard. No `InsightCode` /
+  `VisionEvidence` symbol is leaked into the gamification tree.
+- **§0.0/2 sourceHash + analyzerVersion field.** The adapter
+  constructor requires both as plain `String` fields. The brief
+  excludes any modification to `AnalyzeResult` (no `sourceHash` /
+  `analyzerVersion` field today); the caller (a future analyze-feature
+  round) is expected to compute these at save time and pass them in.
+- **§6.1 vision threshold triple (`< 0.70` / `== 0.70` / `> 0.70`).**
+  The threshold is the inclusive accepting boundary — `VisionClaimGuard`
+  uses `confidence < minimumConfidence` (strict-less-than), so `== 0.70`
+  is accepted. The test asserts both rajta (0.70) and alatt (0.69)
+  cells. This is what the brief §6.1 table says; the implementation
+  follows the measured symbol, not the brief's prose name
+  (`minVisionConfidence`).
+- **§A8 source-level guard.** The A8 cell was originally intended to
+  be enforced via the architecture guard (an import of `package:http/`
+  in an adapter file would be a `coreMustNotImportFeatures`-style
+  violation only if the file were in `core/`, which it is not). The
+  test instead scans the four adapter files for forbidden import
+  patterns via `dart:io`. This is the lightest possible enforcement
+  that catches the "no AI / network / platform call on the reward
+  path" invariant.
+
+### Javító kör — N/A (first-pass zöld)
+
+This round landed on the first pass. No javító kör was needed; the
+gate output above is the post-implementation state.
+
 ## 11. Review — a Claude tölti ki
