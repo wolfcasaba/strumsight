@@ -419,40 +419,40 @@ void main() {
       return HttpSocialGraphRepository(ApiClient(dio));
     }
 
-    test('unfollow() sends ?idempotency_key=... as a query parameter', () async {
-      final repo = buildRepo(buildAdapter());
-      final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f90');
-      final key = 'unfollow-key-42';
+    test(
+      'unfollow() sends ?idempotency_key=... as a query parameter',
+      () async {
+        final repo = buildRepo(buildAdapter());
+        final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f90');
+        final key = 'unfollow-key-42';
 
-      await repo.unfollow(
-        target: target,
-        idempotencyKey: key,
-      );
+        await repo.unfollow(target: target, idempotencyKey: key);
 
-      expect(capturedRequests, hasLength(1));
-      final options = capturedRequests.single;
-      // The repository builds the URL with the query string INLINE;
-      // Dio preserves that and exposes the parsed query through
-      // ``options.uri.queryParameters`` (it does NOT split it back
-      // out into ``options.queryParameters`` when the call site
-      // passes the query inline). Asserting the full path keeps
-      // the test honest: a regression that dropped ``?key=...``
-      // would be visible here.
-      expect(
-        options.path,
-        '/community/profiles/${target.value}/follow'
-        '?idempotency_key=$key',
-        reason: 'F3 violated — DELETE URL path is wrong',
-      );
-      expect(
-        options.uri.queryParameters['idempotency_key'],
-        key,
-        reason:
-            'F3 violated — idempotency_key missing from query '
-            'parameters (backend would answer 422)',
-      );
-      expect(options.method, 'DELETE');
-    });
+        expect(capturedRequests, hasLength(1));
+        final options = capturedRequests.single;
+        // The repository builds the URL with the query string INLINE;
+        // Dio preserves that and exposes the parsed query through
+        // ``options.uri.queryParameters`` (it does NOT split it back
+        // out into ``options.queryParameters`` when the call site
+        // passes the query inline). Asserting the full path keeps
+        // the test honest: a regression that dropped ``?key=...``
+        // would be visible here.
+        expect(
+          options.path,
+          '/community/profiles/${target.value}/follow'
+          '?idempotency_key=$key',
+          reason: 'F3 violated — DELETE URL path is wrong',
+        );
+        expect(
+          options.uri.queryParameters['idempotency_key'],
+          key,
+          reason:
+              'F3 violated — idempotency_key missing from query '
+              'parameters (backend would answer 422)',
+        );
+        expect(options.method, 'DELETE');
+      },
+    );
 
     test(
       'removeFollower() sends ?idempotency_key=... as a query parameter',
@@ -464,18 +464,15 @@ void main() {
         cannedBodies
           ..add('{"public_id":"01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f91"}')
           ..add('{}');
-        cannedStatuses..add(200)..add(200);
+        cannedStatuses
+          ..add(200)
+          ..add(200);
 
         final repo = buildRepo(adapter);
-        final follower = PublicUserId(
-          '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f92',
-        );
+        final follower = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f92');
         final key = 'remove-follower-key-99';
 
-        await repo.removeFollower(
-          follower: follower,
-          idempotencyKey: key,
-        );
+        await repo.removeFollower(follower: follower, idempotencyKey: key);
 
         expect(capturedRequests, hasLength(2));
         final meCall = capturedRequests[0];
@@ -503,29 +500,31 @@ void main() {
       },
     );
 
-    test('idempotency_key is encoded for HTTP (spaces / special chars)',
-        () async {
-      final repo = buildRepo(buildAdapter());
-      final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f93');
-      // The repository uses ``Uri.encodeQueryComponent`` on the key,
-      // so a key with reserved characters round-trips intact through
-      // the wire — the backend's ``min_length=1`` accepts anything
-      // non-empty, but a key with ``&`` or ``+`` MUST NOT corrupt
-      // the query string.
-      final key = 'k ey+&';
+    test(
+      'idempotency_key is encoded for HTTP (spaces / special chars)',
+      () async {
+        final repo = buildRepo(buildAdapter());
+        final target = PublicUserId('01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5f93');
+        // The repository uses ``Uri.encodeQueryComponent`` on the key,
+        // so a key with reserved characters round-trips intact through
+        // the wire — the backend's ``min_length=1`` accepts anything
+        // non-empty, but a key with ``&`` or ``+`` MUST NOT corrupt
+        // the query string.
+        final key = 'k ey+&';
 
-      await repo.unfollow(target: target, idempotencyKey: key);
+        await repo.unfollow(target: target, idempotencyKey: key);
 
-      final options = capturedRequests.single;
-      expect(
-        options.uri.queryParameters['idempotency_key'],
-        key,
-        reason:
-            'F3 violated — the encoded idempotency_key did not '
-            'decode back to its original value (Uri.encodeQueryComponent '
-            'must be applied)',
-      );
-    });
+        final options = capturedRequests.single;
+        expect(
+          options.uri.queryParameters['idempotency_key'],
+          key,
+          reason:
+              'F3 violated — the encoded idempotency_key did not '
+              'decode back to its original value (Uri.encodeQueryComponent '
+              'must be applied)',
+        );
+      },
+    );
   });
 }
 

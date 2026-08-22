@@ -205,10 +205,7 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     final path =
         '/community/profiles/${target.value}/follow'
         '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
-    final result = await _client.delete(
-      path,
-      headers: const {},
-    );
+    final result = await _client.delete(path, headers: const {});
     if (result is Failure) {
       throw (result).error;
     }
@@ -225,10 +222,7 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     final path =
         '/community/profiles/$ownerPublicId/followers/${follower.value}'
         '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
-    final result = await _client.delete(
-      path,
-      headers: const {},
-    );
+    final result = await _client.delete(path, headers: const {});
     if (result is Failure) {
       throw (result).error;
     }
