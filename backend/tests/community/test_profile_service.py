@@ -459,6 +459,228 @@ def test_service_update_profile_round_trips(community_enabled):
 
 
 # ---------------------------------------------------------------------------
+# F1 — GET /community/profiles/me (E09-R06 review, BLOCKER fix)
+#
+# The Flutter ``HttpCommunityProfileRepository.fetchMyProfile`` issues this
+# call to drive the gate's ``profile-missing`` ↔ ``ready`` state
+# transition. Without the route every live-backend call landed on a 404
+# from a non-existent path and the gate was stuck on ``profileMissing``
+# forever (docs/reviews/e09-r06-review.md F1).
+# ---------------------------------------------------------------------------
+
+
+def test_get_my_profile_returns_404_when_no_profile_exists(
+    community_client_enabled, community_auth_headers
+):
+    """An authenticated caller with NO profile MUST see 404 ``profile_missing``.
+
+    This is the cell that, prior to the F1 fix, always failed — the
+    route did not exist, so the response was a router-level 404 with an
+    unrelated body, which the Flutter repository mapped to ``null``.
+    The gate then stayed on ``profileMissing`` even after a successful
+    ``POST`` because the post-create re-read was also 404.
+    """
+    response = community_client_enabled.get(
+        "/community/profiles/me",
+        headers=community_auth_headers,
+    )
+    assert response.status_code == 404, (
+        f"F1 violation: GET /community/profiles/me must exist for an "
+        f"authenticated caller; got {response.status_code} "
+        f"({response.text!r}). Flutter repository would map any non-404 "
+        f"here to an exception, breaking the gate's profile-missing path."
+    )
+    assert response.json()["detail"] == "profile_missing"
+
+
+def test_get_my_profile_returns_200_after_create_round_trips(
+    community_client_enabled, community_auth_headers
+):
+    """The full round-trip: POST → GET /me returns the SAME row.
+
+    Verifies the F1 fix end-to-end — a freshly-created profile is
+    readable via the new GET endpoint, the response carries the
+    ``handle`` and ``display_name`` the POST stored, and the
+    ``public_id`` matches (so a Flutter client that caches
+    ``public_id`` from POST does not see a different value on GET).
+    """
+    create = community_client_enabled.post(
+        "/community/profiles/me",
+        json=_VALID_PAYLOAD,
+        headers=community_auth_headers,
+    )
+    assert create.status_code == 201, create.text
+    public_id = create.json()["public_id"]
+
+    read = community_client_enabled.get(
+        "/community/profiles/me",
+        headers=community_auth_headers,
+    )
+    assert read.status_code == 200, (
+        f"F1 violation: after a successful POST the GET /me must "
+        f"return 200; got {read.status_code} ({read.text!r}). The gate "
+        f"would NEVER transition to ready without this round-trip."
+    )
+    body = read.json()
+    assert body["handle"] == _VALID_PAYLOAD["handle"]
+    assert body["display_name"] == _VALID_PAYLOAD["display_name"]
+    assert body["public_id"] == public_id
+
+
+def test_get_my_profile_requires_auth(community_client_enabled):
+    """No JWT → no profile. Mirrors the POST/PUT auth-less assertion."""
+    response = community_client_enabled.get("/community/profiles/me")
+    assert response.status_code in (401, 403), response.text
+
+
+def test_get_my_profile_is_scoped_to_caller(
+    community_client_enabled, community_auth_headers, community_two_auth_headers
+):
+    """User B's GET /me MUST NOT return user A's row even after A creates one.
+
+    The 404 (not 200 + foreign row) is the contract — the JWT identity
+    is the ONLY filter, identical to the POST/PUT endpoints.
+    """
+    headers_a, _ = community_two_auth_headers
+    create = community_client_enabled.post(
+        "/community/profiles/me",
+        json=_VALID_PAYLOAD,
+        headers=headers_a,
+    )
+    assert create.status_code == 201, create.text
+
+    read_b = community_client_enabled.get(
+        "/community/profiles/me",
+        headers=community_auth_headers,
+    )
+    assert read_b.status_code == 404, (
+        f"F1 violation: user B sees user A's profile via GET /me "
+        f"({read_b.status_code} / {read_b.text!r})."
+    )
+    assert read_b.json()["detail"] == "profile_missing"
+
+
+# ---------------------------------------------------------------------------
+# F2 — Unicode-equivalent handle uniqueness (E09-R06 review, MAJOR fix)
+#
+# Prior to the fix, ``create_profile`` discarded the NFKC-normalized
+# return value of ``handle_policy.validate`` and passed
+# ``handle.strip().casefold()`` (without NFKC) to ``assign_handle``. Two
+# users could register visually-identical handles via different
+# Unicode-spellings (e.g. ASCII "abcde" and fullwidth "Ａbcde",
+# precomposed vs combining-acute "café"). The DB unique index on
+# ``handle_normalized`` then stored two distinct values — the
+# uniqueness invariant guaranteed by ``handle_policy.normalize`` was
+# silently broken (docs/reviews/e09-r06-review.md F2).
+# ---------------------------------------------------------------------------
+
+
+def test_unicode_equivalent_handle_is_rejected_as_taken(
+    community_client_enabled, community_auth_headers, community_two_auth_headers
+):
+    """The F2 proof: the same handle, two Unicode spellings, two users.
+
+    User A claims ``"Ａbcde"`` (fullwidth A, U+FF21). After
+    NFKC + casefold this is ``"abcde"`` — the same normalized value as
+    the ASCII spelling. User B then tries ``"abcde"`` and MUST see 409
+    ``handle_taken``; the DB has exactly one row.
+
+    Prior to the F2 fix both calls succeeded — ``handle.strip().casefold()``
+    on the two distinct inputs yields two distinct
+    ``handle_normalized`` values, so the unique index never fires. The
+    test is the §6.1 measure-matrix cell the bug is hidden behind.
+    """
+    headers_a, _ = community_two_auth_headers
+    # User A — fullwidth A.
+    create_a = community_client_enabled.post(
+        "/community/profiles/me",
+        json={**_VALID_PAYLOAD, "handle": "Ａbcde"},
+        headers=headers_a,
+    )
+    assert create_a.status_code == 201, (
+        f"F2 precondition: user A must be able to claim the "
+        f"fullwidth handle; got {create_a.status_code} "
+        f"({create_a.text!r}). The user-row / handle-row pipeline is "
+        f"broken upstream — investigate before debugging F2."
+    )
+
+    # User B — ASCII spelling of the same handle after NFKC + casefold.
+    create_b = community_client_enabled.post(
+        "/community/profiles/me",
+        json={**_VALID_PAYLOAD, "handle": "abcde"},
+        headers=community_auth_headers,
+    )
+    assert create_b.status_code == 409, (
+        f"F2 violation: a Unicode-equivalent handle spelling was "
+        f"accepted (status {create_b.status_code}, body "
+        f"{create_b.text!r}). Two visually-identical handles now coexist."
+    )
+    assert create_b.json()["detail"] == "handle_taken"
+
+
+def test_unicode_normalization_matches_in_service_layer(community_enabled):
+    """Service-level probe — calls ``create_profile`` directly with NFD/NFC spellings.
+
+    Exercises the F2 fix without going through the HTTP layer so a
+    regression in the router does not mask a service-layer drift (and
+    vice versa). Both spellings normalize to the same
+    ``handle_normalized``; the second ``create_profile`` MUST raise
+    ``HandleAlreadyClaimed``.
+    """
+    import unicodedata
+
+    from app.community.services.identity_service import HandleAlreadyClaimed
+
+    _, session_factory = community_enabled
+    # User A — NFD spelling ("cafe" + combining acute).
+    _, headers_a = make_authenticated_user(
+        session_factory, email="unicode-a@strumsight.app"
+    )
+    user_id_a = _extract_user_id_from_token(
+        headers_a["Authorization"].split(" ", 1)[1]
+    )
+    nfd = unicodedata.normalize("NFD", "café")
+    nfc = unicodedata.normalize("NFC", "café")
+    assert nfd != nfc, "Test inputs collapsed — pick a different example"
+
+    session = session_factory()
+    try:
+        create_profile(
+            session,
+            user_id=user_id_a,
+            handle=nfd,
+            display_name="NFD",
+            visibility=ProfileVisibility.FOLLOWERS,
+            audience_default=CommunityAudience.FOLLOWERS,
+            now=_now(),
+        )
+    finally:
+        session.close()
+
+    # User B — NFC spelling, identical visual handle.
+    _, headers_b = make_authenticated_user(
+        session_factory, email="unicode-b@strumsight.app"
+    )
+    user_id_b = _extract_user_id_from_token(
+        headers_b["Authorization"].split(" ", 1)[1]
+    )
+    session = session_factory()
+    try:
+        with pytest.raises(HandleAlreadyClaimed):
+            create_profile(
+                session,
+                user_id=user_id_b,
+                handle=nfc,
+                display_name="NFC",
+                visibility=ProfileVisibility.FOLLOWERS,
+                audience_default=CommunityAudience.FOLLOWERS,
+                now=_now(),
+            )
+    finally:
+        session.close()
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

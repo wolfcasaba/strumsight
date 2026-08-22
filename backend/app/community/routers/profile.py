@@ -73,53 +73,6 @@ def _session_factory(request: Request) -> Session:
 
 
 @router.get(
-    "/profiles/{public_id}",
-    response_model=CommunityProfileOut,
-)
-def read_profile(
-    public_id: str,
-    db: Session = Depends(_session_factory),
-) -> CommunityProfile:
-    """Read a single community profile by its public UUID.
-
-    The lookup is by ``public_id`` (UUID), NEVER by the internal ``id``
-    (BigInteger) — exposing the integer PK as a URL parameter would defeat
-    the A2 / §6.1 measure-matrix row 2 ("the response schema exposes the
-    internal ``id`` field") guard, and the test in
-    ``test_profile_schema.py::test_profile_route_only_looks_up_by_public_id``
-    pins that contract.
-
-    The endpoint exists to give the module a real HTTP exercise path; it
-    returns ``404`` when the row is missing rather than ``None`` so the
-    OpenAPI shape stays honest about the contract.
-    """
-    import uuid
-
-    try:
-        parsed = uuid.UUID(public_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="invalid public_id") from exc
-
-    profile = db.query(CommunityProfile).filter_by(public_id=parsed).one_or_none()
-    if profile is None:
-        raise HTTPException(status_code=404, detail="profile not found")
-    return profile
-
-
-# ---------------------------------------------------------------------------
-# E09-R06 — authenticated endpoints (ADR 0400 §2–3, brief §2.3)
-#
-# These three endpoints are the only routes in the file that REQUIRE an
-# authenticated user. The ``CurrentUser`` dependency lifts the identity from
-# the JWT; the payload's ``user_id`` / ``profile_id`` field (if any) is
-# rejected at Pydantic-parse-time by ``extra="forbid"`` (ADR 0400 §5.4,
-# A8 measure-matrix "payload can override the CurrentUser" row). The
-# pre-``SELECT`` + ``IntegrityError`` belt-and-braces on the create path
-# is the §5.3 / A8 "two concurrent create calls both succeed" guard.
-# ---------------------------------------------------------------------------
-
-
-@router.get(
     "/profiles/me",
     response_model=CommunityProfileOut,
 )
@@ -145,6 +98,13 @@ def read_my_profile(
     Identity is ALWAYS the JWT-resolved ``current_user``; the path has
     no body, so the ``extra="forbid"`` payload contract does not apply
     here.
+
+    IMPORTANT route-ordering note: this ``/profiles/me`` literal is
+    declared BEFORE the generic ``/profiles/{public_id}`` route below;
+    FastAPI/Starlette match in declaration order, and a path with a
+    literal segment MUST be tried before a parameter route that would
+    otherwise greedily absorb it (the §6.1 "the route reads the
+    caller's own profile, not a UUID-parse-error" contract).
     """
     profile = (
         db.query(CommunityProfile).filter_by(user_id=current_user.id).one_or_none()
@@ -152,6 +112,56 @@ def read_my_profile(
     if profile is None:
         raise HTTPException(status_code=404, detail="profile_missing")
     return _serialize_profile(profile, db)
+
+
+@router.get(
+    "/profiles/{public_id}",
+    response_model=CommunityProfileOut,
+)
+def read_profile(
+    public_id: str,
+    db: Session = Depends(_session_factory),
+) -> CommunityProfile:
+    """Read a single community profile by its public UUID.
+
+    The lookup is by ``public_id`` (UUID), NEVER by the internal ``id``
+    (BigInteger) — exposing the integer PK as a URL parameter would defeat
+    the A2 / §6.1 measure-matrix row 2 ("the response schema exposes the
+    internal ``id`` field") guard, and the test in
+    ``test_profile_schema.py::test_profile_route_only_looks_up_by_public_id``
+    pins that contract.
+
+    The endpoint exists to give the module a real HTTP exercise path; it
+    returns ``404`` when the row is missing rather than ``None`` so the
+    OpenAPI shape stays honest about the contract.
+
+    Declared AFTER ``/profiles/me`` so the literal-segment route wins the
+    match (see the route-ordering note on ``read_my_profile``).
+    """
+    import uuid
+
+    try:
+        parsed = uuid.UUID(public_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="invalid public_id") from exc
+
+    profile = db.query(CommunityProfile).filter_by(public_id=parsed).one_or_none()
+    if profile is None:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return profile
+
+
+# ---------------------------------------------------------------------------
+# E09-R06 — authenticated write endpoints (ADR 0400 §2–3, brief §2.3)
+#
+# These two endpoints are the only routes in the file that REQUIRE an
+# authenticated user. The ``CurrentUser`` dependency lifts the identity from
+# the JWT; the payload's ``user_id`` / ``profile_id`` field (if any) is
+# rejected at Pydantic-parse-time by ``extra="forbid"`` (ADR 0400 §5.4,
+# A8 measure-matrix "payload can override the CurrentUser" row). The
+# pre-``SELECT`` + ``IntegrityError`` belt-and-braces on the create path
+# is the §5.3 / A8 "two concurrent create calls both succeed" guard.
+# ---------------------------------------------------------------------------
 
 
 @router.post(
