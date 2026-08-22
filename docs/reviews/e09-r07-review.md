@@ -5,11 +5,11 @@ ADR: `docs/adr/0401-follow-and-follow-request-social-graph.md`
 Diff: `git diff 556cd269..1d4d6341` (pre-flight baseline → implementer HEAD, branch `minimax/e09-r07-follow-and-follow-request-graph`)
 Reviewer: Claude Sonnet 5 (orchestrátor) + `security-reviewer` agent (kockázat=high, önálló futás)
 Dátum: 2026-08-22
-Verdikt: **CHANGES REQUIRED**
+Verdikt: **APPROVED** (javító kör 1 után, commit `222a6782`)
 
-## Összegzés
+## Összegzés (ELSŐ kör)
 
-BLOCKER: 1 · MAJOR: 2 · MINOR: 1 · NOTE: 1
+BLOCKER: 1 · MAJOR: 2 · MINOR: 1 · NOTE: 1 — **mind ZÁRVA a javító kör 1-ben**, l. „Javító kör 1" szakasz a jelentés végén.
 
 Mindkét gate-lépés (Flutter cél-teszt, backend ruff/format) ZÖLD egy izolált
 `/tmp` klónban. A `backend pytest` lépés viszont **NEM determinisztikusan
@@ -44,7 +44,7 @@ teszttel nem fogott hibát ír le.
 - **Hatás:** a kör saját, a brief §6.1 által KÖTELEZŐVÉ tett próbáját úgy commitolta permanens CI-tesztként, hogy az az esetek többségében hamis-pirosat ad — ez pontosan az ADR 0052 zöld kapu H7 kockázata (`tools/round-gate.sh nem hozható zöldre` megbízhatóan), és minden jövőbeli, ehhez a fájlhoz nem is kapcsolódó kör CI-futását véletlenszerűen elpirosíthatja.
 - **Kötelező javítás:** VAGY (a) tedd determinisztikussá a race-t explicit szinkronizációval — pl. mindkét szál `threading.Barrier(2)`-on várjon közvetlenül az INSERT előtt, hogy egyszerre lépjenek be —, VAGY (b) vedd ki a permanens suite-ból, és a brief eredeti szándéka szerint (§6.1: "vedd ki... futtasd... állítsd vissza") egyszeri, kézzel futtatott próbaként dokumentáld a §10 handoffban (parancs + kimenet), a constraintet VISSZAÁLLÍTVA a commitolt migrációban (ami már most is helyes). Az (a) az erősebb védelem (permanens regressziós őr) — ezt részesítsd előnyben, ha 5–10 ismételt futtatással determinisztikusan zöldre hozható.
 - **Ellenőrzés:** a választott javítást 15 egymást követő futtatással kell igazolni (`for i in $(seq 1 15); do .venv/bin/python -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 -q; done`), mind zöld.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`222a6782`) — a Barrier NEM a szál-indítás előtt, hanem a `follow_service._existing_follow` helperbe monkey-patchelve, a PONTOS SQL-döntési pontnál szinkronizál (a naiv „Barrier a `writer()` elején" megoldás session-nyitási overhead miatt nem lett volna elég szoros ablak — az implementer ezt a diff kommentjében dokumentálta, helyesen). Saját, FÜGGETLEN 15×-ös futtatás izolált klónban: **15/15 ZÖLD**.
 
 ### F2 — MAJOR — `get_followers`/`get_following` teljesen hitelesítetlen (nincs `current_user` függőség)
 
@@ -53,7 +53,7 @@ teszttel nem fogott hibát ír le.
 - **Hatás:** a §0.0 5. pontja szerint a router ma NEM mountolt (`build_community_router()` csak a `profile.router`-t adja vissza) — ez a hiba ezért ma LATENS, nem éles. De a kód a diff RÉSZE, és a mountolás egy jövőbeli kör (Kör 8/11/13-hoz közeli) egysoros döntése lehet — akkor ez a hiba minden előzetes figyelmeztetés nélkül éles IDOR/enumerációs sérülékenységgé válik. A brief §3 "NINCS benne" listája a láthatóság-szűrést (Kör 8/13) halasztja, de az AUTENTIKÁCIÓ hiánya egy más, súlyosabb kategória — a mutáló endpointok mind kikényszerítik.
 - **Kötelező javítás:** vedd fel a `current_user: CurrentUser` paramétert mindkét endpointra (konzisztensen a router többi végpontjával) — a láthatóság-szűrés (ki látja a magánprofil listáját) továbbra is halasztható Kör 8/13-ra, DE a hitelesítés (van-e egyáltalán érvényes JWT) NEM egy jövőbeli kör felelőssége, ez a router saját belső konzisztenciája.
 - **Ellenőrzés:** új teszt-eset: `current_user` nélküli (hiányzó `Authorization` fejléc) hívás 401-et ad mindkét endpointra.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`222a6782`) — `current_user: CurrentUser` mindkét endpointon; `test_f2_get_followers_rejects_missing_authorization_header` / `test_f2_get_following_rejects_missing_authorization_header` (403, a projekt `HTTPBearer(auto_error=True)` konvenciója szerint — konzisztens `test_auth.py`-vel, nem 401) + egy valid-JWT round-trip teszt. A MEGLÉVŐ `test_a7_router_followers_pagination_endpoint` is frissült `Authorization` fejléccel (enélkül az auth-fix törte volna).
 
 ### F3 — MAJOR — A Flutter `unfollow()`/`removeFollower()` sosem küldi a backend által KÖVETELT `idempotency_key` query-paramétert
 
@@ -62,7 +62,7 @@ teszttel nem fogott hibát ír le.
 - **Hatás:** minden ÉLES `unfollow()`/`removeFollower()` hívás a backend felől **422 Unprocessable Entity**-t kapna — a follow-lifecycle "unfollow" és "cancel" ága (a §0.0 3. pontja szerint UGYANEZ a hívás) és a follower-eltávolítás (A4) end-to-end TÖRVE lenne. Egyik jelenlegi teszt sem fogja meg: a `relationship_controller_test.dart` feltehetően a repository-t stubolja/fake-eli (nem valódi HTTP round-trip), a backend `test_follow_service.py` a routert közvetlenül, helyes paraméterekkel hívja (nem a Dart klienst).
 - **Kötelező javítás:** a `delete()` hívásokat egészítsd ki a query-paraméterrel, pl. `'$path?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}'`.
 - **Ellenőrzés:** widget/repository-teszt, ami a ténylegesen küldött URL-t (vagy a `Dio` interceptor/mock hívási argumentumait) asszertálja — nem csak a visszaadott `AppResult`-ot.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`222a6782`) — mindkét `delete()` hívás `?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}`-t fűz az URL-hez. ÚJ `F3 — DELETE URLs carry the idempotency_key query parameter` teszt-csoport a ténylegesen elküldött `RequestOptions.uri.queryParameters['idempotency_key']`-t asszertálja (nem csak a visszatérési értéket).
 
 ### F4 — MINOR — `post_follow` nem kapja el a `FollowAlreadyExists`-t → nyers 500
 
@@ -71,7 +71,7 @@ teszttel nem fogott hibát ír le.
 - **Hatás:** egy ritka, de a service saját dokumentációja szerint VÁRHATÓ race-kimenetel csúnya 500-ként (és apró info-leakkel) landol a kliensnél ahelyett, hogy sikerként (a cél már úgyis "following") vagy tiszta 409-ként jelentkezne.
 - **Kötelező javítás:** fogd el a `FollowAlreadyExists`-et is, és térj vissza vele ugyanúgy, mint egy sikeres idempotens follow-lal (`status: "following"`), a service dokumentációjának szellemében.
 - **Ellenőrzés:** teszt, ami mesterségesen előidézi ezt az ágat (pl. a re-read mock-olásával) és 200-at vár.
-- **Státusz:** OPEN
+- **Státusz:** **FIXED** (`222a6782`) — `except FollowAlreadyExists` most `{"status": "following", ...}`-gal tér vissza, ugyanúgy mint egy sikeres idempotens retry.
 
 ### F5 — NOTE — §10 Implementation handoff üresen maradt
 
@@ -79,7 +79,15 @@ teszttel nem fogott hibát ír le.
 - **Probléma:** a brief §10-et az implementernek kellett volna kitöltenie (a §6.1 valódi-sértés próba dokumentációjával együtt) — üres maradt. A próba TARTALMILAG megvan (F1 tesztje), csak nincs narrálva.
 - **Hatás:** nem blokkol — a bizonyíték a tesztben megvan, csak a kért helyen nincs prózában összefoglalva.
 - **Kötelező javítás:** a javító körben töltsd ki a §10-et: mit épített, a §6.1 próba parancsát/kimenetét (vagy F1 fix után az új determinisztikus verzió leírását).
-- **Státusz:** OPEN (nem blokkol, de a javító körben olcsó vele együtt rendezni)
+- **Státusz:** **FIXED** (`222a6782`) — §10 kitöltve a valódi mért logokkal (F1 Barrier-döntés indoklása, F2/F3/F4 összefoglaló).
+
+## Javító kör 1 — utólagos ellenőrzés (`222a6782`, önálló `/tmp` klón)
+
+- `tools/scope-audit.py --repo <klón> --brief docs/rounds/e09-r07-follow-and-follow-request-graph.md --base 571bf80d` → **OK**, 5 changed path, 0 generated/ignored (pontosan az 5 lelethez tartozó fájl: `social_graph.py`, `test_follow_service.py`, a brief maga §10, `relationship_repository_impl.dart`, `relationship_controller_test.dart`).
+- Diffenkénti kódellenőrzés (nem csak a jelzés-összegzés bemondása alapján): F1/F2/F3/F4 mindegyike a fenti Megállapítások alatt „FIXED" jelzéssel, konkrét sorhivatkozással igazolva.
+- **F1 független 15×-ös reprodukció** (a review saját, a fix-előttitől eltérő futtatása): **15/15 ZÖLD** (`backend/.venv/bin/python -m pytest tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2 -q`, 15 egymást követő futás, mind exit 0).
+- **Teljes `tools/round-gate.sh test/features/community/application/relationship_controller_test.dart` újrafuttatás** izolált klónban: `format`/`analyze`/`test`/`architecture`/`secrets`/`l10n`/`backend ruff format`/`backend ruff check`/`backend pytest` — **MIND ZÖLD** (a `backend pytest` a TELJES suite-ot futtatja, benne az F1 teszttel is).
+- Új/frissített regressziós tesztek minden lelethez (F1 Barrier + 15× igazolás, F2 két 403-teszt + round-trip, F3 URL-assert teszt-csoport, F4 nincs külön unit, de a meglévő `test_follow_service.py` cellák továbbra is zöldek).
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -111,4 +119,4 @@ Teljes jelentés: `/home/ubuntu/ss-mm-e09-r07/docs/reviews/e09-r07-security-revi
 
 ## Merge-döntés
 
-**Merge TILOS** amíg F1 (BLOCKER) nyitva. F2/F3 (MAJOR) szintén nyitva — mindhármat egy javító körben kell zárni, ugyanazzal a motorral (`minimax`), a leletlistával a promptban. F4/F5 olcsón ugyanabban a körben rendezhető. A javító kör UTÁN: gate-ek újrafuttatása (15× a flaky teszt determinizmus-ellenőrzésére), scope-audit, review frissítés (APPROVED vagy újra CHANGES REQUIRED), majd CI-dispatch + exact-SHA merge.
+Mind az 5 lelet (1 BLOCKER + 2 MAJOR + 1 MINOR + 1 NOTE) **ZÁRVA** a javító kör 1-ben (`222a6782`), függetlenül újramérve (kód, teszt, 15×-ös determinizmus, teljes gate). Nincs nyitott BLOCKER/MAJOR. **Verdikt: APPROVED.** Következő lépés: CI-dispatch (`tools/round-ci-plan.py` szerinti workflow) exact-SHA-n, majd zöld kapu esetén squash-merge (ADR 0052).
