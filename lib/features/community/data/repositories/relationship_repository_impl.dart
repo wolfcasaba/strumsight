@@ -194,8 +194,19 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     required PublicUserId target,
     required String idempotencyKey,
   }) async {
+    // ADR 0401 §1: the DELETE idempotency key travels as a
+    // query parameter because the ``ApiClient.delete()`` transport
+    // carries no JSON body. The backend counterpart
+    // (``social_graph.py::delete_follow``) reads it from
+    // ``?idempotency_key=...`` and rejects (422) when missing.
+    // Encoding here keeps the ``api_client.dart`` delete() method
+    // an exact mirror of post() — the endpoint-specific contract
+    // lives one layer up, in the repository.
+    final path =
+        '/community/profiles/${target.value}/follow'
+        '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
     final result = await _client.delete(
-      '/community/profiles/${target.value}/follow',
+      path,
       headers: const {},
     );
     if (result is Failure) {
@@ -209,8 +220,13 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
     required String idempotencyKey,
   }) async {
     final ownerPublicId = await _resolveCallerPublicId();
+    // Same ADR 0401 §1 contract as ``unfollow`` above — the
+    // idempotency key rides the URL on DELETE, not a body.
+    final path =
+        '/community/profiles/$ownerPublicId/followers/${follower.value}'
+        '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
     final result = await _client.delete(
-      '/community/profiles/$ownerPublicId/followers/${follower.value}',
+      path,
       headers: const {},
     );
     if (result is Failure) {
