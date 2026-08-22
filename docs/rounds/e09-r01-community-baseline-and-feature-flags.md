@@ -29,6 +29,52 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight — orchestrátor kiegészítés (Claude Sonnet 5, 2026-08-22)
+
+**Kockázat = high, indoklás:** egyik `allowed_paths` sem egyezik szó szerint
+a router `high_risk_path_fragments` listájával (auth, authorization, camera,
+credential, crypto, encryption, migration, payment, privacy, secret, share,
+upload, vision), de a kör kimenete (a) egy biztonsági/threat-model dokumentum
+(`docs/security/community-threat-model.md`) egy 32 körös, személyes adatot
+(poszt, follow, média, klub) kezelő epic számára, és (b) egy globális
+production on/off kapu (`communityEnabled` és 4 alkapcsoló), amelynek rossz
+alapértéke a teljes epic teljes hátralévő részére élesítene egy még nem
+auditált felületet. A funkcionális kockázati profil megegyezik a listázott
+kategóriákéval, csak az `allowed_paths` fájlnevei nem tartalmazzák szó
+szerint a kulcsszavakat.
+
+**Visszakeresett előzmény (ADR 0312, §4.9):**
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "community
+feature flag production default kill switch"` → **ADR 0220** (Epic 6
+audio-analysis-v2 rollout boundary, bm25#1 emb#3) — a repó precedense egy
+teljes építő-epic flag-jeinek `false`-lezárására dart-define NÉLKÜL. Ez az
+E09-R01 tudatosan MÁS mechanizmust választ (dart-define/env kill switch,
+`accountEnabled`/`tutorEnabled` mintája) — az eltérés indoklása és a
+mechanizmus pontos kódszintje: **ADR 0395** (ez a kör írta). `node
+tools/knowledge-rag.mjs --corpus lessons,halts --top 5 "threat model IDOR
+audience bypass block bypass community"` → nincs közvetlenül alkalmazható
+korábbi lecke (a találatok más domain hibaosztályai: isolate lifecycle L244,
+allowlist szemantika L180, snapshot-staleness L335) — a threat model
+dokumentum tartalmi köve­telménye (§8 nyolc kategória) ezért kizárólag a
+brief §8/§3 szövegére és a jelen kör saját tervezésére támaszkodik.
+
+**Mechanizmus-pontosítás (ADR 0395 teljes részletessége ott, ez csak
+összefoglaló):** az `accountEnabled` dart-define-ját `app_config.dart`
+olvassa be, ami **nincs** az `allowed_paths`-on — az öt Community flag
+dart-define-ja (`STRUMSIGHT_COMMUNITY`, `STRUMSIGHT_COMMUNITY_WRITES`,
+`STRUMSIGHT_COMMUNITY_MEDIA`, `STRUMSIGHT_COMMUNITY_LEADERBOARD`,
+`STRUMSIGHT_COMMUNITY_CLUBS`) ezért közvetlenül a
+`FeatureFlags.forEnvironment` törzsében olvasandó (`bool.fromEnvironment`,
+`defaultValue` nélkül — mindig `false`, ha hiányzik, MINDEN környezetben),
+`app_config.dart` érintése nélkül. A backend öt mezője a `tutor_enabled`
+mintáját követi (sima `bool = False`, NEM a
+`_default_lab_flags_for_environment` env-ág), saját
+`STRUMSIGHT_COMMUNITY_*_ENABLED` env-var kulccsal soronként — az A5
+readiness placeholder egy `community_postgres_ready` csak-olvasható
+property (`database_url` sqlite-e alapján), ami MA nem gate-el semmit. Teljes
+kódrészlet és a négy alkapcsoló AND-szemantikájának dokumentálása: ADR 0395
+Döntés 1–6. pont.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
