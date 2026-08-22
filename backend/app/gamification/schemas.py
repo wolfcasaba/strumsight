@@ -47,8 +47,8 @@ class ReceiptUpload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schemaVersion: int = Field(ge=1, le=RECEIPT_SCHEMA_VERSION)
-    ledgerId: str = Field(min_length=1)
-    sourceEventId: str = Field(min_length=1)
+    ledgerId: str = Field(min_length=1, max_length=256)
+    sourceEventId: str = Field(min_length=1, max_length=256)
     createdAt: datetime
     policyVersion: int = Field(ge=1)
     baseXp: int = Field(ge=0)
@@ -69,7 +69,7 @@ class LedgerUploadEnvelope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schemaVersion: int = Field(ge=1, le=GAMIFICATION_SYNC_CONTRACT_VERSION)
-    receipts: List[ReceiptUpload]
+    receipts: List[ReceiptUpload] = Field(max_length=500)
 
     @field_validator("receipts")
     @classmethod
