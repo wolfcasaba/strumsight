@@ -15792,3 +15792,74 @@ dokumentálása, nem egy új kódmérce. Részletek:
 [32595342705](https://github.com/wolfcasaba/strumsight/actions/runs/32595342705)
 (piros) → [32596780267](https://github.com/wolfcasaba/strumsight/actions/runs/32596780267)
 (zöld a javítás után).
+
+## L421 — Egy `threading.Thread`-alapú "két szál konkurensen ír" próba szinkronizáció NÉLKÜL nem determinisztikus — a Barrier a PONTOS SQL-döntési pontnál kell, nem a szál-indítás előtt (E09-R07, 2026-08-22)
+
+**Mért tény.** Az E09-R07 §6.1 kötelező valódi-sértés próbája
+(`test_swap_unique_constraint_breaks_a2`) két `threading.Thread`-et
+indított szinkronizáció NÉLKÜL, majd azt várta, hogy MINDKETTŐ átjusson
+az existence-check → INSERT ablakon, mielőtt bármelyik commitolna. A
+reviewer (nem az implementer) izolált `/tmp` klónban, a `round-gate.sh`-
+hoz IDENTIKUS interpreterrel 10 egymást követő futtatásból **7 PIROS, 3
+ZÖLD**-et mért — a teszt maga a `backend pytest` gate-lépés RÉSZE
+(a `round-gate.sh` a TELJES suite-ot futtatja, nem csak a brief
+`gate_tests` listáját), tehát ez a nem-determinizmus BÁRMELY jövőbeli,
+ehhez a fájlhoz nem is kapcsolódó kör CI-futását véletlenszerűen
+elpirosíthatta volna.
+
+**Gyökérok.** Két szál session-nyitási/ütemezési overhead-je eltérő —
+`t.start(); t.start(); t.join(); t.join()` NEM garantálja, hogy mindkét
+szál egyszerre éri el a kritikus SQL-döntési pontot; gyakran az egyik
+szál a MÁSIK indítása előtt már be is fejezi a teljes
+existence-check→INSERT→commit láncot, a második szál existence-checkje
+ekkor MÁR látja az első sorát, és a függvény short-circuitel (`count ==
+1`, a race sosem történt meg).
+
+**Szabály.** Egy race-t bizonyító teszt szinkronizációja NEM a szál
+BELÉPÉSI pontjára kerüljön (`threading.Barrier` a `writer()` elején),
+hanem a TÉNYLEGES döntési pontra — az E09-R07 javítása a Barrier-t a
+`follow_service._existing_follow` helperbe monkey-patchelte (a
+konkurens hívások itt szinkronizálnak, közvetlenül az existence-check
+előtt), így mindkét szál garantáltan egyszerre látja a "még nincs sor"
+állapotot. Review-mérce: egy `threading`-alapú race-próbát a review
+ISMÉTELVE (10–15×) futtasson egy izolált klónban, mielőtt elfogadja —
+egyetlen zöld futás (az implementer saját, egyszeri jelentése) nem elég
+bizonyíték egy nem-determinisztikus konstrukcióra.
+
+**Őrteszt:** `backend/tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2`
+(javító kör 1, `222a6782`) — a review saját, FÜGGETLEN 15×-ös futtatása
+15/15 zöldet adott a Barrier-fix után, szemben a fix előtti 7/10
+PIROS-sal.
+
+## L422 — Az L420 által már dokumentált "targeted gate ≠ full suite" vakfolt (`ui_inventory_test.dart` screen-számláló) a reviewer saját proaktív ellenőrzése NÉLKÜL ismét csak a CI-ban bukott ki (E09-R07, 2026-08-22)
+
+**Mért tény.** Az E09-R06-ban (L420) már pontosan dokumentált minta —
+egy ÚJ `lib/features/**/presentation/screens/*_screen.dart` fájl
+elavulttá teszi a `test/ui/ui_inventory_test.dart` kemény kódolt
+`hasLength(N)`-jét — L420 explicit javasolta: "ezt a review-nak
+proaktívan ellenőriznie ÉRDEMES lenne (grep az új screen-fájlokra + a
+pinnelt szám összevetése)". Az E09-R07 review (ugyanaz az orchesztrátor-
+session, ami L420-at is írta) ezt a proaktív grep-et NEM futtatta a CI-
+dispatch ELŐTT — a hibát csak a `full-gate.yml` TELJES suite-ja fedte
+fel (run 32602029738, PIROS), egy második CI-kör árán (~10 perc +
+javító kör).
+
+**Gyökérok.** Egy dokumentált lecke (L420) MEGLÉTE önmagában nem
+garantálja az ALKALMAZÁSÁT — a review-lépéssor nem tartalmazott explicit
+"ha a diff ÚJ `*_screen.dart` fájlt ad, ellenőrizd a `ui_inventory_test.dart`
+számlálóját" tételt, ezért a lecke egy KÖVETKEZŐ, hasonló diffnél is
+könnyen kimarad, ha csak a review-jelentés prózájában él.
+
+**Szabály.** A `sdd-round-review` skill review-lépéssorába (5. lépés,
+„próbatesztek") kerüljön be explicit tétel: ha a diff ÚJ `*_screen.dart`
+fájlt ad a `lib/features/**/presentation/screens/`-hez, a review a CI-
+dispatch ELŐTT futtassa le `grep -c "_screen.dart'" test/ui/ui_inventory_test.dart`
+(vagy magát a célzott tesztet a teljes `lib/`-fán) — ez a helyi
+ellenőrzés olcsóbb, mint egy második CI-kör.
+
+**Őrteszt:** nincs — a lecke a review-FOLYAMAT hiányát dokumentálja, nem
+egy kódmérce. Részletek: `docs/reviews/e09-r07-review.md` „Javító kör 2"
+szakasz, CI run
+[32602029738](https://github.com/wolfcasaba/strumsight/actions/runs/32602029738)
+(piros) → [32603023648](https://github.com/wolfcasaba/strumsight/actions/runs/32603023648)
+(zöld a javítás után).
