@@ -15030,3 +15030,44 @@ mi indította el a második orchestrátor-sessiont (`ps -ef` pillanatkép a
 firing időpontjában, `.pipeline/cron.log` + `.pipeline/inflight/` egyidejű
 tartalma), és ha a `round-pipeline.sh` cron-lock (`.pipeline/lock`) tényleg
 kizárólagos volt-e abban a pillanatban.
+
+## L403 — Egy "valódi-sértés próba" a widget-TÍPUS/kulcs szintjén mérve átengedhet egy tartalmi (felirat/adatforrás) invariáns-sértést, amit csak a SZÖVEG tartalmának ellenőrzése fog meg (E08-R23, 2026-08-22)
+
+**Mit mértünk.** Az E08-R23 (Gamification Hub) legfontosabb invariánsa
+(ADR 0289, brief §5.1): az XP és a készség-mutató sem vizuálisan, sem
+tartalmilag nem mosódhat össze. Az implementer a `LevelBadge` widgetet
+VIZUÁLISAN helyesen különítette el az `XpProgressBar`-tól (kör medál vs
+sáv, eltérő szín/alak), és a brief §6.1 kötelező valódi-sértés próbáját is
+elvégezte — de a próba (és a fán maradó automatizált teszt,
+`gamification_hub_screen_test.dart:193-214`) KIZÁRÓLAG a két widget
+`runtimeType`-ját és egy `findRuntimeCardinality` heurisztikát hasonlított
+össze. Eközben a `LevelBadge` egyetlen bemenete, `profile.currentLevel`
+(`GamificationProfile.currentLevel => progress.currentLevel`), egy
+KIZÁRÓLAG `totalXp`-küszöbökből számolt `LevelDefinition` (`LevelCurve` —
+"the single source of truth for monotonically increasing XP levels", nincs
+mastery-bemenete), miközben a widget felirata és szemantikája explicit
+**"Skill mastery — Level {level}"** / **"Measured skill, not experience
+points"** állítást tett — egy hazug, a valós adatforrásnak ellentmondó
+tartalom. A review saját, típus-független, SZÖVEG-alapú ellenőrzéssel
+(a tényleges kód-diff `git diff` olvasásával, a `LevelDefinition`/
+`LevelCurve` doc-commentjeinek és a `GamificationProfile.currentLevel`
+getter tényleges implementációjának grep-elésével) fogta meg a hibát —
+nem a gate, ami mind a hét lépésen ZÖLD volt.
+
+**Következtetés.** A "két widget vizuálisan/típusban különbözik" próba
+NEM helyettesíti a "a két widget MÖGÖTTES ADATFORRÁSA és FELIRAT-TARTALMA
+különbözik" próbát — egy XP/mastery-elkülönítést előíró brief §6.1
+mérce-mátrixába (vagy a review-protokollba) explicit fel kell venni: (1)
+grep-eld ki, melyik domain-osztályból/gettersből ered a widgetnek átadott
+érték, és igazold hogy az EGYEZIK a felirat állításával (pl. ha a felirat
+"skill"/"mastery"/"evidence" szót használ, a bemenetnek TÉNYLEG evidence-
+gated forrásból kell jönnie, nem puszta XP-küszöbből); (2) a próbateszt
+maga a widget RENDERELT szövegének (`Text.data`, szemantika-string)
+TARTALMÁT ellenőrizze, ne csak a widget-fa struktúráját vagy típusát.
+
+**Őrteszt:** `test/features/gamification/presentation/gamification_hub_screen_test.dart`
+— a javító kör (`6c04dcf6`) hozzáadott "content probe" tesztje
+(`isNot(contains('skill'))` / `isNot(contains('mastery'))` a `LevelBadge`
+feliratára és szemantikájára) — a reviewer saját, független próbával
+(a hibás szöveget visszaírva `flutter gen-l10n`-nel regenerálva) igazolta,
+hogy ez ténylegesen PIROSRA vált a pontosan ez ellen a regresszió ellen.

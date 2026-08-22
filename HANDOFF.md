@@ -55,11 +55,44 @@ is ugyanaz; a Router CI futóján zöld).
 Pontos következő teendő: nincs kézi indítás — a lánc minden firingen
 `git fetch origin main` + `merge --ff-only` (`main_sync_strategy`), tehát a
 következő cron-firing már ezzel a felállással veszi ki a queue első `pending`
-sorát: **E08-R23 — Gamification Hub és level UI**; a Chapter 13 ága
+sorát: **E08-R24 — Practice és Learn integráció**; a Chapter 13 ága
 változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
 HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
+
+## ✅ E08-R23 KÉSZ — Gamification Hub és level UI — PR #400, squash `384c89df` (2026-08-22)
+
+Nem-domináló áttekintő felület: `gamification_hub_screen.dart` +
+`level_detail_screen.dart` + `xp_progress_bar.dart`/`level_badge.dart` —
+a `progress_screen.dart` (516 sor) marad az elsődleges napi fejlődés-
+felület, érintetlenül (A7). A Hub level/XP-haladást, questeket, sériát,
+mastery-összesítőt, legutóbbi eredményt és a postaláda-jelzőt (R22) mutatja
+egy képernyőn, "Hogyan működik?" magyarázattal (R06 öt XP-komponens),
+villogás/visszaszámláló nélkül (ADR 0290 §1), offline-projekcióból (nincs
+főkönyv-újraszámolás megnyitáskor), 200%-os szövegskálán levágás nélkül.
+
+**A review egy BLOCKER-t talált és zárt (F1, `docs/reviews/e08-r23-review.md`):**
+a `LevelBadge` — bár VIZUÁLISAN helyesen elkülönült az XP-sávtól (kör medál
+vs sáv) — a feliratában és szemantikájában **"Skill mastery"/"Measured
+skill, not experience points"**-ot állított, miközben az egyetlen bemenete
+(`profile.currentLevel`) egy kizárólag `totalXp`-küszöbökből számolt
+`LevelDefinition` (`LevelCurve` — "the single source of truth for
+monotonically increasing XP levels"), tehát a valóságban XP-derivált, nem
+mért készség-bizonyíték — pontosan az az összemosás, amit az ADR 0289 és a
+brief §5.1 a kör legfontosabb invariánsaként tilt. A hiba a §6.1 kötelező
+valódi-sértés próbán ÁTCSÚSZOTT, mert az csak a widget-TÍPUS különbségét
+mérte, nem a felirat TARTALMÁT (L403). Egy javító kör (`6c04dcf6`) az
+"Level {level}" / "a szint a tapasztalati pontokból adódik" őszinte
+framing-re cserélte a feliratokat (angolul ÉS magyarul), és egy ÚJ,
+tartalom-alapú regresszió-őr tesztet adott — ezt a reviewer saját, független
+valódi-sértés próbával igazolta (a régi hibás szöveget visszaírva a teszt
+PIROSRA váltott, majd visszaállítás).
+
+Mindkét CI (`full-gate.yml` run 32544553725, `router-ci.yml` run
+32544579114) zöld a pontos merge-jelölt SHA-n (`cad80d7f`) — a review a
+gate-et és a scope-audit-ot (`tools/scope-audit.py`) KÉTSZER, saját
+izolált `/tmp` klónokban futtatta (a javítás előtt és után is).
 
 ## ✅ E08-R22 KÉSZ — Jutalom-postaláda és ünneplés-koordinátor — PR #399, squash `8bbe3715` (2026-08-22)
 
