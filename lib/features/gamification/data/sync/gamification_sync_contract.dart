@@ -20,14 +20,19 @@ const int gamificationSyncContractVersion = 1;
 ///
 /// A receipt starts `unverified` when the client uploads it. The server flips
 /// it to `verified` after validating the receipt against its own policy. A
-/// client cannot self-promote a receipt to `verified` — the field on upload
-/// is forced to `unverified` by [_ReceiptUploadCodec].
+/// client cannot self-promote a receipt to `verified` — the in-memory guard
+/// in [SyncReceiptValidation.validate] rejects a `verified` upload before
+/// the codec ever serialises it (ADR 0394 §5.3). The upload wire envelope
+/// does NOT carry a `status` field at all (the field is server-side output
+/// only).
 enum LedgerEntrySyncStatus { unverified, verified }
 
 /// One ledger receipt in the sync envelope.
 ///
 /// The wire schema is identical to the local [RewardLedgerEntry] JSON shape,
-/// with one extra field: `supersedesLedgerId`. A receipt carrying a
+/// minus `totalXp` (which is server-computed, ADR 0394 §5.1) and minus the
+/// upload-side `status` field (server-authoritative, ADR 0394 §5.3), plus
+/// one envelope-only field: `supersedesLedgerId`. A receipt carrying a
 /// `supersedesLedgerId` replaces the referenced receipt during merge
 /// (ADR 0394 §5.5 — policy-version supersession).
 final class SyncReceipt {
@@ -52,19 +57,20 @@ final class SyncLedgerEnvelope {
 
 /// Codec for the wire envelope.
 ///
-/// Upload envelopes have `status` forced to `unverified` (clients cannot
-/// self-verify — ADR 0394 §5.3) and reject any caller-supplied status.
+/// Upload envelopes drop `status` entirely: the server treats every
+/// client-supplied receipt as `unverified` (ADR 0394 §5.3) and the field
+/// would be redundant on the wire. A caller-supplied
+/// `status == verified` is rejected earlier, by [SyncReceiptValidation
+/// .validate], before this codec runs.
 sealed class _SyncReceiptCodec {
   static Map<String, Object?> toUploadJson(SyncReceipt receipt) {
+    // Flat wire shape — the backend `ReceiptUpload` reads each of these
+    // fields at the receipt-element root (`backend/app/gamification/
+    // schemas.py`). No nested `receipt` wrapper; `totalXp` is stripped so
+    // a tampered client cannot inflate the server-side aggregate.
     final json = receipt.entry.toJson();
-    json.remove('totalXp') == null;
-    return <String, Object?>{
-      'schemaVersion': gamificationSyncContractVersion,
-      'receipt': <String, Object?>{
-        ...json,
-        'status': LedgerEntrySyncStatus.unverified.name,
-      },
-    };
+    json.remove('totalXp');
+    return json;
   }
 
   static Map<String, Object?> envelopeUpload(SyncLedgerEnvelope envelope) =>
@@ -141,9 +147,12 @@ abstract final class GamificationSyncContract {
 
   /// Encode an upload envelope.
   ///
-  /// Receipts are always serialised as `unverified`. Any caller-supplied
-  /// `status` is dropped on the floor (ADR 0394 §5.3) — the server is the
-  /// only writer of `verified`.
+  /// The wire shape is flat: each receipt element carries the receipt
+  /// fields directly at its root, with no nested `receipt` wrapper and no
+  /// `status` field. The server treats every uploaded receipt as
+  /// `unverified` (ADR 0394 §5.3), so the field would be redundant on the
+  /// wire. A caller-supplied `status == verified` is rejected upstream by
+  /// [SyncReceiptValidation.validate], before this codec runs.
   static Map<String, Object?> encodeUpload(SyncLedgerEnvelope envelope) =>
       _SyncReceiptCodec.envelopeUpload(envelope);
 
@@ -186,8 +195,10 @@ abstract final class SyncReceiptValidation {
   /// Verify a receipt conforms to the contract:
   /// - the receipt's own schema version matches the local store
   ///   (`rewardLedgerEntrySchemaVersion`);
-  /// - `status == unverified` on the wire (a verified flag on upload is
-  ///   rejected — ADR 0394 §5.3).
+  /// - the in-memory `status` is `unverified` (a verified flag on upload
+  ///   is rejected — ADR 0394 §5.3). The wire envelope no longer carries a
+  ///   `status` field, so the guard fires here, on the in-memory value,
+  ///   before the codec serialises anything.
   static SyncUploadDecision validate(SyncReceipt receipt) {
     if (receipt.entry.schemaVersion != rewardLedgerEntrySchemaVersion) {
       return const SyncUploadRejected(
