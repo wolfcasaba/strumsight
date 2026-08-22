@@ -61,6 +61,65 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E08-R27 KÉSZ — Gamification akadálymentesség és beállítások — PR #404, squash `db6293f4` (2026-08-22)
+
+A teljes gamifikációs réteg MOST már kikapcsolható, hozzáférhető és nem
+tolakodó: ÚJ `GamificationPreferences` domain-modell (intenzitás/haptika/
+hang/csökkentett mozgás/értesítés), egy szinkron-olvasású `NotifierProvider`
+(`gamification_preferences_provider.dart`, kizárólag lokális perzisztencia —
+a felhő-szinkron e körben tiltott, `settings_sync.dart` érintetlen), és egy
+ÚJ `GamificationSettingsSection` a Settingsben. ADR:
+[`0393`](docs/adr/0393-gamification-accessibility-and-settings.md) — a brief
+előre kiosztott `0318`-a stale volt (egy korábbi, független kör már foglalta,
+`tools/round-slots.py reserve-adr` adta a `0393`-at). A pre-flight (Claude
+Sonnet 5) korrigálta az `allowed_paths`-ot is: az ÚJ l10n-kulcsok a
+`lib/l10n/features/gamification_{en,hu}.arb` SZEGMENSBE tartoznak, nem a
+generált `app_{en,hu}.arb` aggregátumba (ugyanaz a hibaosztály, ami az
+E08-R20/E08-R22-ben mid-round fixet igényelt — itt előre elkerülve).
+
+A kikapcsolás VIZUÁLIS — a ledger/széria/mastery kiértékelés a preferenciáktól
+függetlenül fut (A1/A2), az értesítési engedély megadása SOSEM ad XP-t/oldja
+fel (A3, sötét-minta tilalom), mind az öt beállítás önállóan hat a leképezett
+megjelenítésre (A4), a változás azonnal érvényesül (A5), mind a 22
+achievement kitöltött a11y-leírással rendelkezik mindkét nyelven (A6,
+reverzibilis valódi-sértés próbával), és a WCAG AA kontraszt-küszöb a
+MEGLÉVŐ, L381-ben már kijavított `tool/ui_contrast_check.dart`-ot használja
+(helyes sRGB gamma-2,4 transzformáció) egy ÚJRA-implementálás helyett.
+
+Egy javító kör: **F1 MAJOR** — a review saját kézzel elkapta, hogy a domain
+`gamification_preferences.dart` egy `presentation/widgets/
+reward_summary_sheet.dart`-ból importált (`show RewardSummaryFeedback`),
+ami `package:flutter/material.dart`-tal kezdődik — a domain-osztály emiatt
+TRANZITÍVAN függött a Fluttertől (AGENTS.md §6 sértés). A
+`tool/check_architecture.dart` ezt NEM fogta meg, mert a
+`sharedDomainMustRemainFrameworkIndependent` szabály `_isSharedDomain()`
+allowlistje (`lib/core/music/`, `lib/core/audio/codec/`,
+`lib/features/practice/domain/`) nem tartalmazza a
+`lib/features/gamification/domain/`-t — GATE-LEFEDETTSÉGI RÉS, amit a
+manuális review fogott meg, nem a gépi mérce. Javítás: a leképezés
+(`gamificationFeedbackFor`) átköltözött a presentation-réteg providerbe.
+Review: [`docs/reviews/e08-r27-review.md`](docs/reviews/e08-r27-review.md) —
+APPROVED a javítás után, 0 nyitott BLOCKER/MAJOR, 1 MINOR (F2 — az A1/A2
+„valódi-sértés próba" nem köti be ténylegesen a preferenciát a
+`CelebrationCoordinator`-ba, mert ma nincs is éles bekötés; a jövőbeli
+UI-bekötő kör pre-flightjának szól) + 2 NOTE (inline storage-kulcsok
+`StorageKeys` nélkül, dokumentált indokkal; a `reward_summary_sheet.dart`
+doc-kommentje még mindig „Kör 27"-re hivatkozik, a tényleges bekötő kör
+javítja).
+
+Mérce: `tools/round-gate.sh test/features/gamification/presentation/
+gamification_accessibility_test.dart test/features/settings` → **MINDEN GATE
+ZÖLD** (12+51 teszt), a javítás ELŐTT és UTÁN is SAJÁT kézzel, izolált
+klónban reprodukálva. Scope-audit mindkétszer OK. CI a merge SHA-n
+(`a20182a6`): `full-gate.yml` (32560163642) success, `router-ci.yml`
+(32560901860, kézi `workflow_dispatch`, mert az utolsó commit csak a
+review-jelentést érintette) success. Ez a kör NEM köti be a
+`reward_summary_sheet.dart`-ot egyetlen élő hívóba sem (nincs is
+`allowed_paths`-on, és MA nincs élő hívó egyáltalán) — egy jövőbeli,
+feltehetően `E13-R32` (gamification-ui) kör dolga. Pontos következő E08 kör:
+**E08-R28 — Ledger sync contract és merge** (queue-ban `minimax`, ADR 0319
+előre kiosztva, ellenőrizendő a foglalóval).
+
 ## ✅ E08-R26 KÉSZ — Cross-feature gamification integráció (Analysis/Vision/Tutor/Plan) — PR #403, squash `ea2e22a4` (2026-08-22)
 
 A maradék négy forrás — Analysis, Vision, AI Tutor, Practice Generator —
@@ -4178,6 +4237,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-22):** `main` @ `db6293f4` — E08-R27
+Gamification accessibility és settings, PR
+[#404](https://github.com/wolfcasaba/strumsight/pull/404), squash-merge.
+Implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5. Egy javító kör
+(F1 MAJOR — a domain `gamification_preferences.dart` tranzitívan a
+Fluttertől függött egy `presentation/widgets/reward_summary_sheet.dart`
+importon át, AGENTS.md §6 sértés, a `tool/check_architecture.dart`
+allowlist-je nem fedte le a `gamification/domain/`-t; javítva: a leképezés a
+provider — presentation — rétegbe költözött, review-jelentés:
+`docs/reviews/e08-r27-review.md`, 2 NOTE + 1 MINOR follow-up nyitva). Exact
+`a20182a6`: Full Gate 32560163642 + Router CI 32560901860 (kézi
+`workflow_dispatch`, mert az utolsó commit csak a review-jelentést érintette,
+nem `docs/rounds/**`-t) success; post-merge célzott gate a friss `main`-en is
+zöld. ADR 0393 (a brief előre kiosztott `0318`-a stale volt, egy korábbi,
+független kör már foglalta). Következő: **E08-R28** (Ledger sync contract és
+merge).
+
 **Aktuális állapot (2026-08-22):** `main` @ `ea2e22a4` — E08-R26
 Cross-feature gamification integráció, PR
 [#403](https://github.com/wolfcasaba/strumsight/pull/403), squash-merge.
@@ -5521,18 +5597,34 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör (2026-08-22): E08-R27 — Gamification
-accessibility és settings** (`docs/rounds/e08-r27-gamification-accessibility-and-settings.md`,
-engine a queue-ban `minimax`, ADR 0318 előre kiosztva). Ez a session nem
-indítja el; új sessionben fut. Vegye figyelembe az E08-R26 mért tanulságát
-(lásd a fejléc ✅-blokk): ha egy jövőbeli kör az itt épített négy adaptert
-(analysis/vision/tutor/plan) bedrótozza egy hívó UI-ba, a pre-flight mérje ki
-ELŐSZÖR, hogy a hívó által átadott caller-fed id-mezők (`sessionId`,
-`sourceHash`, `analyzerVersion`, `planId`) tartalom-semlegesek-e — az
-`analyzerVersion` ma hash nélkül, nyersen landol a ledger `eventId`/
-`ledgerId`-jában (docs/reviews/e08-r26-review.md NOTE 1), a `utf8Bytes()`
-segédfüggvény (E08-R25-ből örökölve, most már két helyen duplikálva) pedig
-nem valódi UTF-8 — csak ASCII-bemenetre helyes (NOTE 3).
+**Pontos következő E08 termékkör (2026-08-22): E08-R28 — Ledger sync
+contract és merge** (`docs/rounds/e08-r28-ledger-sync-contract-and-merge.md`,
+engine a queue-ban `minimax`, ADR 0319 előre kiosztva — ELLENŐRIZD a
+foglalóval, az E08-R27 saját `0318`-a is stale volt egy korábbi, független
+kör miatt). Ez a session nem indítja el; új sessionben fut. Vegye figyelembe
+az E08-R27 mért tanulságait:
+
+- **F1 (MAJOR, javítva) mintája ismétlődhet:** ha egy domain-osztály egy
+  presentation-rétegbeli típust importál (`show`-val is!), az a domain fájlt
+  tranzitívan a Fluttertől teszi függővé, és ezt a `tool/check_architecture.dart`
+  CSAK a `_isSharedDomain()` allowlistjén (`lib/core/music/`,
+  `lib/core/audio/codec/`, `lib/features/practice/domain/`) belül fogja meg —
+  a `lib/features/gamification/domain/` NINCS ezen a listán. A pre-flight
+  grep-elje ki minden ÚJ domain-fájl importlistáját kézzel
+  (`grep -n "^import" <új domain fájl>` → egyik se `presentation/`-re vagy
+  Flutter/Riverpod csomagra mutasson), ne bízza a gépi gate-re.
+- **F2 (MINOR, nyitva):** a `test/features/gamification/presentation/
+  gamification_accessibility_test.dart` A1/A2 cellái ma NEM kötik be
+  ténylegesen a `GamificationPreferences`-t a `CelebrationCoordinator`-ba —
+  ha egy jövőbeli kör (feltehetően `E13-R32`) ezt a bekötést elvégzi, írjon
+  ÚJ, a bekötést ténylegesen gyakorló mutációs próbát, ne hagyatkozzon erre a
+  meglévő két tesztre mint regresszió-őrre.
+- A `reward_summary_sheet.dart` doc-kommentje még mindig „the wiring lands in
+  round 27"-t mond — ezt a tényleges bekötő kör (`E13-R32`) javítsa ki
+  egyúttal.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R27 —
+Gamification accessibility és settings.** Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R26 —
 Cross-feature gamification integration** (`docs/rounds/e08-r26-cross-feature-gamification-integration.md`,

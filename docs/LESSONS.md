@@ -15229,3 +15229,39 @@ ai_tutor_boundary_test.dart` (a pinned guard) és
 `test/features/gamification/integration/cross_feature_reward_flow_test.dart`
 A1 valódi-sértés próbája (a produkciós tutor-adapter zéró importja miatt
 strukturálisan lehetetlen egy chat-farm XP-ágat futtatni).
+
+## L407 — A domain-függetlenség allowlist-alapú gépi mércéje csak azt a feature-t védi, amit valaki felvett rá (E08-R27, 2026-08-22)
+
+**Mért snag.** Az `AGENTS.md` §6 projekt-szintű, feltétel nélküli szabálya:
+„Domain nem függ Fluttertől, Riverpodtól, Dio-tól vagy storage plugintól." A
+gépi őr (`tool/check_architecture.dart`) ezt MÉGSEM globálisan ellenőrzi,
+hanem egy explicit `_isSharedDomain()` allowlisten keresztül csak három
+útvonalra: `lib/core/music/`, `lib/core/audio/codec/`,
+`lib/features/practice/domain/`. Az E08-R27 implementere egy ÚJ fájlt írt
+(`lib/features/gamification/domain/gamification_preferences.dart`), ami
+`import '../presentation/widgets/reward_summary_sheet.dart' show
+RewardSummaryFeedback;`-t tartalmazott — mivel az importált fájl
+`package:flutter/material.dart`-tal kezdődik, a `show` klauzula ellenére a
+domain-osztály TRANZITÍVAN a Flutterre épült. A gate mind a 7 lépésben
+(format/analyze/teszt/architecture/secrets/l10n) ZÖLD maradt, mert a
+`gamification/domain/` nincs az allowlisten — a sértést a független review
+saját kézzel, a fájl importlistájának elolvasásával fogta meg, nem a gépi
+mérce.
+
+**Javítás és szabály.** A `toRewardSummaryFeedback()` metódus kikerült a
+domain osztályból; a leképezés `gamificationFeedbackFor(GamificationPreferences)`
+néven a presentation-réteg providerébe (`gamification_preferences_provider.dart`)
+költözött, ahol a Flutter-függés legitim. **Egy allowlist-alapú architektúra-
+gate esetén a „zöld" NEM jelenti azt, hogy egy adott domain-fájl framework-
+mentes — csak azt, hogy a fájl útvonala rajta van-e az őrzött listán.** Minden
+ÚJ `<feature>/domain/` fájl pre-flight/review-mérése ezért ne a gate
+kimenetére hagyatkozzon, hanem közvetlen paranccsal ellenőrizze:
+`grep -n "^import" <fájl>` — egyik sor se mutasson `presentation/`-re,
+`package:flutter/`-re, `package:flutter_riverpod/`-ra vagy storage-pluginre.
+
+**Őrteszt:** nincs — a `tool/check_architecture.dart`
+`_isSharedDomain()` allowlistjének bővítése minden feature domain-jére
+külön mérlegelést igényelne (túl sok meglévő, esetleg szándékos kivétel
+lehet más feature-öknél); a mostani javítás a fájlszintű importot szüntette
+meg, nem az allowlistet bővítette. Review-jelentés:
+`docs/reviews/e08-r27-review.md` F1.
