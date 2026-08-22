@@ -3,11 +3,51 @@
 Brief: docs/rounds/e08-r23-gamification-hub-and-level-ui.md
 Diff: `git diff 269f0532...minimax/e08-r23-gamification-hub-and-level-ui`
 Reviewer: Claude Sonnet 5 (`--effort high`) · Dátum: 2026-08-22
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED (javító kör után, `6c04dcf6`)
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 0 · MINOR: 1 · NOTE: 1
+BLOCKER: 1 (FIXED) · MAJOR: 0 · MINOR: 1 (FIXED) · NOTE: 1 (FIXED)
+
+## Javító kör (`6c04dcf6`, 2026-08-22) — independens re-verifikáció
+
+Mindhárom lelet (F1 BLOCKER, F2 MINOR, F3 NOTE) egy körben zárult. Saját,
+FRISS, izolált `/tmp/review-e08-r23-fix1` klónban (a fő munkafától
+függetlenül) végzett ellenőrzés:
+
+- **Kód-diff:** `LevelBadge` doc-comment + `gamificationHubLevelBadgeLabel`/
+  `Semantics` + `gamificationHubSkillSectionTitle`/`Body` +
+  `gamificationLevelDetailCurrentBody`/`NextBody` (en ÉS hu) mind az
+  ŐSZINTE "Level {level}" / "a szint a tapasztalati pontokból adódik"
+  framing-re cserélve — a "skill"/"mastery"/"measured" szó egyike sem
+  maradt a `LevelBadge`-hez kötött szövegekben, sem angolul, sem magyarul.
+- **Új F2 regresszió-őr** (`content probe` teszt, A1 csoport): a
+  `LevelBadge` RENDERELT feliratának és szemantikájának SZÖVEGÉT ellenőrzi
+  (nem csak típust/kulcsot). **Saját, független valódi-sértés próbával
+  igazolva**: a `gamificationHubLevelBadgeLabel`-t visszaírtam
+  `"Skill mastery — Level {level}"`-re, `flutter gen-l10n`-nel
+  regeneráltam, a teszt **PIROSRA váltott**
+  (`Expected: not contains 'skill' / Actual: 'skill mastery — level 1'`),
+  majd `git checkout HEAD --`-tal visszaálltam — a guard TÉNYLEGESEN véd a
+  pontosan ez ellen a regresszió ellen, nem csak állítás szerint.
+- **Scope-audit:** `tools/scope-audit.py --repo /tmp/review-e08-r23-fix1
+  --brief docs/rounds/e08-r23-gamification-hub-and-level-ui.md --base
+  269f0532` → `Legacy scope audit OK (269f0532f027..6c04dcf6f0ae, 13
+  changed path(s), 1 generated/ignored)` — engedélyezett fájlokon kívüli
+  változás nincs.
+- **Gate:** `tools/round-gate.sh
+  test/features/gamification/presentation/gamification_hub_screen_test.dart
+  test/ui/ui_inventory_test.dart` a friss klónban → `MINDEN GATE ZÖLD`
+  (format, analyze, mindkét teszt-útvonal, architecture, secrets, l10n —
+  parity OK en→hu 1644 message).
+- **A brief §5.1 vizuális-elkülönítés invariánsa érintetlen maradt:** a
+  `LevelBadge` (kör medál) és `XpProgressBar` (sáv) továbbra is eltérő
+  típus/alak/szín — csak a FELIRAT tartalma javult, a vizuális szétválasztás
+  nem sérült.
+
+A F1/F2/F3 mindegyike **FIXED**, önálló re-méréssel megerősítve — lásd az
+alábbi eredeti megállapításokat a részletekért, a "Státusz" sorok innentől
+FIXED-re frissítve.
 
 ## Acceptance criteria
 
@@ -53,7 +93,7 @@ branchre (`headSha=cd5c970d`), a review-vel párhuzamosan fut.
 - **Hatás:** Egy felhasználó (és minden accessibility/screen-reader felhasználó, mivel ez a szemantikai címke szó szerinti szövege) azt az üzenetet kapja, hogy a szintje bizonyított készség-teljesítmény, miközben az valójában tisztán az eltöltött/mért XP függvénye — ez a termék éppen azt az ígéretet szegi meg, amire az egész kör épült (ADR 0289: "az XP a részvételt méri, az elsajátítottság mért teljesítményt", "a legolcsóbb megvalósítás az XP... csakhogy... ha az elsajátítottság XP-ből származik, a felület pontosan azt hazudja, amit a felhasználó a legjobban szeretne hinni").
 - **Kötelező javítás:** a `LevelBadge` felirata/szemantikája kerüljön vissza a brief saját elnevezéséhez illő, ŐSZINTE "level/XP-szint" framing-re (pl. "Level {level}" / "Reached from experience points"), a "Skill mastery"/"Measured skill, not experience points" szöveg TÖRLENDŐ innen — a valódi skill-mastery kommunikáció maradjon a már meglévő, evidence-gated `masteryUnlockedCount` csempén és a hozzá tartozó feliratokon. A `gamificationHubSkillSectionTitle`/`Body` szekció-fejléc (ami jelenleg a `LevelBadge` fölött ül) vagy távolítandó, vagy át kell címkézni "Level" szekcióra — a "Skill mastery" cím csak a mastery-csempéhez tartozhat.
 - **Ellenőrzés:** egy ÚJ teszt-eset, ami az ARB-string TARTALMÁT (nem csak a jelenlétét) ellenőrzi — pl. `expect(l10n.gamificationHubLevelBadgeLabel(1), isNot(contains('skill', ignoreCase: true)))` vagy ezzel egyenértékű, plusz egy dokumentált valódi-sértés próba, ami a JELENLEGI hibás szöveggel mutatja, hogy egy ilyen teszt hiányában a build zöld marad (a mostani A1 teszt-csoport ezt nem fogja meg, mert csak típust/kulcsot/a label LÉTEZÉSÉT nézi, a szöveg tartalmát nem).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`6c04dcf6`)
 
 ### F2 — MINOR — a §6.1 "valódi-sértés próba" csak a widget-TÍPUS szintjén mér, nem a tartalom szintjén
 
@@ -62,13 +102,13 @@ branchre (`headSha=cd5c970d`), a review-vel párhuzamosan fut.
 - **Hatás:** a regressziós védelem szűkebb, mint amit a brief §6.1 szándéka sugall.
 - **Kötelező javítás (F1 javításával egy körben, ha belefér):** a próbateszt egészüljön ki egy tartalom-alapú asszertummal (lásd F1 "Ellenőrzés").
 - **Ellenőrzés:** az új teszt fut és PIROS-t ad, ha valaki visszaírja a "skill mastery" szöveget a `LevelBadge`-be.
-- **Státusz:** OPEN (F1 javításával egy körben zárható)
+- **Státusz:** FIXED (`6c04dcf6`)
 
 ### F3 — NOTE — a level-detail "Current level" body szövege is a hibás framing-et ismétli
 
 - **Fájl:** `lib/l10n/features/gamification_en.arb` (`gamificationLevelDetailCurrentBody` = "Skill mastery is locked in at this level. The level only ever rises."), `gamificationLevelDetailNextBody` = "Experience points move the slider; skill mastery only crosses when measured evidence supports it."
 - **Megfigyelés:** F1 javítása után ez a két string is felülvizsgálandó — jelenleg ugyanazt a hamis "a szint bizonyítékból ered" állítást ismétli a level-detail képernyőn, a magyar (`gamification_hu.arb`) párjával együtt. Nem külön BLOCKER, mert a gyökérok ugyanaz, mint F1-nél, és egy javítás mindkettőt lezárja.
-- **Státusz:** OPEN (F1 javítás részeként várt)
+- **Státusz:** FIXED (`6c04dcf6`)
 
 ## Architektúra + termékhatárok
 
@@ -76,4 +116,7 @@ branchre (`headSha=cd5c970d`), a review-vel párhuzamosan fut.
 
 ## Következő lépés
 
-Javító kör szükséges (F1 BLOCKER) — ugyanaz a motor (`minimax`), a fenti F1/F2/F3 leletlistával a promptban. A CI-dispatch (`full-gate.yml`, `cd5c970d` SHA-n) formailag zöld lehet, de az F1 tartalmi hiba miatt a merge ETTŐL FÜGGETLENÜL tilos — a review-verdikt (CHANGES REQUIRED) a döntő, nem a gate.
+Mind a három lelet FIXED, önálló re-méréssel megerősítve (lásd fent a
+„Javító kör" szakaszt). A verdikt **APPROVED** — a merge-hez a zöld
+kapu (CI a `6c04dcf6` SHA-n) hiányzik még, azt az orchestrátor dispatch-eli
+és várja meg exact-SHA-n merge előtt (ADR 0052/0086 §2).
