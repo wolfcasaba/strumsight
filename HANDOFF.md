@@ -1,5 +1,76 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R07 KÉSZ — Follow és follow request social graph — PR [#416](https://github.com/wolfcasaba/strumsight/pull/416), squash `1cc49e41` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) HETEDIK KÖRE KÉSZ.** [ADR 0401](docs/adr/0401-follow-and-follow-request-social-graph.md):
+idempotens, privacy-kompatibilis follow rendszer — public profilnál azonnali
+follow, private profilnál explicit `requested → accepted | declined |
+cancelled` request lifecycle. `community_follows`/`community_follow_requests`
+migráció DB-szintű self-follow `CHECK` és race-biztos `UNIQUE` mindkét
+táblán; `follow_service.py` (public/private lifecycle, `IntegrityError`→
+domain-kivétel fordítás, állapot-átmenet-alapú idempotencia); `social_graph.py`
+router (follow/accept/decline/unfollow/follower-removal/cursor pagination).
+Flutter: `relationship_repository_impl.dart` a MEGLÉVŐ (Kör 5, ADR 0399)
+`SocialGraphRepository` interfészt implementálja — `block`/`unblock`/`mute`/
+`unmute` `UnsupportedError`-t dob (Kör 8 előfeltétele, a Kör 6/ADR 0400
+precedens szerint, NEM csendes no-op); `relationship_controller.dart`
+optimistic (public) / pending (private) állapotgép; `followers_screen.dart`;
+`api_client.dart` egyetlen ÚJ `delete()` metódussal bővült (a `post()` pontos
+tükre, a meglévő négy metódus érintetlen).
+
+**Pre-flight mérve öt pontot revideált** (`docs/rounds/e09-r07-follow-and-follow-request-graph.md`
+§0.0, [ADR 0401](docs/adr/0401-follow-and-follow-request-social-graph.md)):
+(1) az előre kiosztott `ADR 0400` MÁR foglalt volt (E09-R06 saját ADR-je) —
+`tools/round-slots.py reserve-adr` friss `0401`-et adott; (2) a Flutter
+domain-interfész a MEGLÉVŐ `SocialGraphRepository` (Kör 5), NEM egy új
+`RelationshipRepository`; (3) nincs külön "cancel" domain-metódus/endpoint —
+a meglévő `unfollow()`/`DELETE .../follow` egyik ága fedi (a domain `**`
+NULLA diffet kapott); (4) `lib/core/network/api_client.dart`-nak nem volt
+DELETE-metódusa — szűken bekerült az `allowed_paths`-ra egyetlen additív
+`delete()`-re; (5) `backend/app/community/__init__.py::build_community_router()`
+NEM bővült — a Kör 3 (`handles.py`) precedens szerint a router tesztje önálló,
+helyi `FastAPI()`/`TestClient` fixture-t épít.
+
+**Review (`docs/reviews/e09-r07-review.md`): APPROVED, KÉT javító kör
+után.** Az első review (Claude + dedikált `security-reviewer` agent, risk=high)
+1 BLOCKER + 2 MAJOR + 1 MINOR + 1 NOTE-ot talált: **F1 BLOCKER** — a §6.1
+kötelező valódi-sértés próba (`test_swap_unique_constraint_breaks_a2`) NEM
+determinisztikus volt (10 ismételt futtatásból 7 PIROS, a két
+`threading.Thread` között nem volt szinkronizációs bariér); **F2 MAJOR** —
+`get_followers`/`get_following` teljesen hitelesítetlen volt (nincs
+`current_user` függőség, szemben a router MINDEN mutáló endpointjével) —
+ma latens (a router nincs mountolva), de éles IDOR/enumerációs kockázat lenne
+mountoláskor; **F3 MAJOR** — a Dart `unfollow()`/`removeFollower()` sosem
+küldte a backend által KÖVETELT `idempotency_key` query-paramétert (minden
+éles hívás 422-t kapott volna — egyik teszt sem fogta meg, mert egyik oldal
+sem gyakorolta a VALÓDI Dart→backend HTTP-szerződést); **F4 MINOR** —
+`post_follow` nem kapta el a `FollowAlreadyExists`-t → nyers 500.
+A javító kör 1 (`222a6782`) mind az ötöt zárta — az F1 fix a `threading.
+Barrier`-t NEM a szál-indítás elé, hanem a `follow_service._existing_follow`
+helperbe monkey-patchelte (a pontos SQL-döntési pontnál szinkronizál) —
+FÜGGETLEN 15×-ös reprodukció a reviewer oldalán: 15/15 zöld (szemben a
+fix előtti 7/10 PIROS-sal).
+
+A friss exact-SHA CI (`full-gate.yml`) a TELJES suite-tal PIROS lett — nem a
+kör tartalma miatt, hanem egy MEGLÉVŐ, körön kívüli gate-teszt
+(`test/ui/ui_inventory_test.dart:14`, kemény kódolt production-screen-szám)
+avult el a kör saját ÚJ `followers_screen.dart` fájla miatt (66→67, azonos
+minta mint az E09-R06 F9 lelet). Javító kör 2 (`7f2e348d`, `allowed_paths`
+szűken bővítve a brief §0.0.9-ben) egy sorban javította.
+
+Scope-audit mindhárom fordulóban OK. Minden gate-futtatás FÜGGETLENÜL,
+izolált `/tmp` klónokban: format/analyze/architecture/secrets/l10n/backend
+ruff/backend pytest (teljes suite) mind zöld. CI a pontos merge SHA-n
+(`f75f0007`): `full-gate.yml` 32603023648 + `router-ci.yml` 32603026921
+mindkettő `success`.
+
+**Nyitva maradt, EMBERI döntést NEM igénylő tartozás:** az E09-R08 queue-sora
+(`docs/execution/pipeline-queue.tsv`) `0401`-et ad előre kiosztott ADR-ként —
+ez a szám MOST már foglalt (ez a kör). Az E09-R08 pre-flightja a §1.0.1
+szerint `tools/round-slots.py reserve-adr`-rel ÚJ számot kér, ne a queue-fájl
+stale értékét használja — pontosan ugyanaz a minta, amit ez a kör is örökölt
+az E09-R06-tól.
+
 ## ✅ E09-R06 KÉSZ — Profil létrehozás, szerkesztés és Community gate UI — PR [#415](https://github.com/wolfcasaba/strumsight/pull/415), squash `77bc0589` (2026-08-22)
 
 **EPIC 9 (COMMUNITY PLATFORM) HATODIK KÖRE KÉSZ.** ADR 0400: a Community
@@ -4725,6 +4796,18 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-22):** `main` @ `1cc49e41` — E09-R07 Follow és
+follow request social graph, PR
+[#416](https://github.com/wolfcasaba/strumsight/pull/416), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, KÉT javító
+kör (F1 BLOCKER nem-determinisztikus valódi-sértés próba, F2/F3 MAJOR
+hitelesítetlen GET-endpoint + törött DELETE idempotency-key kontraktus, F4
+MINOR elkapatlan kivétel — mind a review 1. fordulójában; egy 3. javító kör
+a CI-only `ui_inventory_test.dart` screen-számláló driftjét zárta). Review
+APPROVED, 0 nyitott BLOCKER/MAJOR. Exact `f75f0007`: `full-gate.yml`
+32603023648 + `router-ci.yml` 32603026921 mindkettő success. Részletesen a
+fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-22):** `main` @ `77bc0589` — E09-R06 Profil
 létrehozás, szerkesztés és Community gate UI, PR
 [#415](https://github.com/wolfcasaba/strumsight/pull/415), squash-merge.
@@ -5344,6 +5427,18 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E09-R07 — Follow és follow request social graph** (PR
+[#416](https://github.com/wolfcasaba/strumsight/pull/416), squash
+`1cc49e41`, [ADR 0401](docs/adr/0401-follow-and-follow-request-social-graph.md)).
+Idempotens, privacy-kompatibilis follow rendszer (public azonnali, private
+request-lifecycle); DB-szintű self-follow CHECK + race-biztos UNIQUE. 0
+nyitott BLOCKER/MAJOR review-lelet HÁROM javító kör után (F1 BLOCKER
+nem-determinisztikus valódi-sértés próba FIXED Barrier-szinkronizációval, F2/
+F3 MAJOR auth-gap + törött idempotency-kontraktus FIXED, F4 MINOR FIXED; a 3.
+javító kör egy körön kívüli CI-only screen-számláló driftet zárt,
+`docs/reviews/e09-r07-review.md`). Exact `f75f0007`: Full Gate 32603023648 +
+Router CI 32603026921 success. Részletesen a fejléc ✅-blokkban.
 
 **E09-R06 — Profil létrehozás, szerkesztés és Community gate UI** (PR
 [#415](https://github.com/wolfcasaba/strumsight/pull/415), squash
@@ -6172,29 +6267,29 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-22): E09-R07 — Follow és follow
-request social graph** (`docs/rounds/e09-r07-follow-and-follow-request-graph.md`,
+**Pontos következő termékkör (2026-08-22): E09-R08 — Block, mute és
+safety kapcsolatkezelés** (`docs/rounds/e09-r08-block-mute-and-safety-relationships.md`,
 engine a queue-ban `minimax`, **előre kiosztott ADR a queue-fájlban
-`0400` — EZ A SZÁM MÁR FOGLALT** (ADR 0400 = ez a most lezárt E09-R06
-kör, `docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md`).
-**Az E09-R07 pre-flightja NE használja a queue-fájl stale `0400`
-értékét** — a §1.0.1 szerint `tools/round-slots.py reserve-adr --round
-E09-R07`-tel kérjen ÚJ számot. **Az E09-R06 (Profil létrehozás,
-szerkesztés és Community gate UI) KÉSZ** (PR #415, squash `77bc0589`) —
-lásd a fejléc ✅-blokkot. A Kör 6 kiegészítette a Kör 5 domain-fáját
-(`CommunityProfileRepository.createProfile`/`updateProfile` + 2 domain-
-kivétel) és backend service-szintű profil-írást adott — a Kör 7
-pre-flightja mérje meg, hogy a `CommunityProfile`/`CommunityRelationshipToViewer`
-(Kör 5, `domain/entities/community_profile.dart`) TÉNYLEGES alakja
-egyezik-e a Kör 7 brief follow/follow-request feltételezésével, és hogy a
-`community_follows`/`community_follow_requests` migráció TILOS zóna-e
-még ezen a körön (a Kör 6-ban nyitott precedens: a router-mounting és
-migráció külön, még ki nem osztott kör dolga marad — DE a Kör 7 SAJÁT
-brief-je dönthet másképp, ha explicit ADR-alátámasztással kiosztja
-magának). **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR
-#407) — az **E08-R29** (Integritás, analytics, balance szimuláció és CI)
-továbbra is `hold`-on marad. A queue-scan a legelső `pending` sort
-választja. Ez a session nem indítja el; új sessionben fut.
+`0401` — EZ A SZÁM MÁR FOGLALT** (ADR 0401 = a most lezárt E09-R07 kör,
+`docs/adr/0401-follow-and-follow-request-social-graph.md`). **Az E09-R08
+pre-flightja NE használja a queue-fájl stale `0401` értékét** — a §1.0.1
+szerint `tools/round-slots.py reserve-adr --round E09-R08`-cal kérjen ÚJ
+számot (pontosan ugyanaz a minta, amit az E09-R07 is örökölt az
+E09-R06-tól). **Az E09-R07 (Follow és follow request social graph) KÉSZ**
+(PR #416, squash `1cc49e41`) — lásd a fejléc ✅-blokkot. A Kör 7 a
+`SocialGraphRepository` (Kör 5, ADR 0399) `block`/`unblock`/`mute`/`unmute`
+négyesét `UnsupportedError`-ral hagyta (explicit Kör 8 előfeltétel) — a Kör 8
+pre-flightja mérje meg, hogy a `community_follows` tábla és a `follow_service.py`
+TÉNYLEGES alakja (ADR 0401 §4–5: `community_follow_requests` EGY sor a pár
+élettartamára, `UPDATE`-tel újrahasznosítva) egyezik-e a Kör 8 brief block-
+művelet feltételezésével ("follow kapcsolatok törlődnek" — SDD §10.5), és
+hogy a block/mute táblák/service-réteg a `follow_service.py`-ból exportált
+megosztott függvényt igényelnek-e, vagy önálló tranzakciót nyitnak ugyanazokon
+a táblákon (ADR 0401 "A visszavonás feltétele" szakasza ezt a Kör 8 döntésére
+bízza). **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR #407)
+— az **E08-R29** (Integritás, analytics, balance szimuláció és CI) továbbra
+is `hold`-on marad. A queue-scan a legelső `pending` sort választja. Ez a
+session nem indítja el; új sessionben fut.
 
 **F1/F2 nyitott MINOR-ok az E09-R04 review-ból** (backend
 `update_privacy_settings` router-bekötő kör előfeltételei — Python-szintű
