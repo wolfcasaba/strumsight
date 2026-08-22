@@ -44,6 +44,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.community.models.profile import CommunityProfile
 from app.community.policies.handle_policy import (
     BLOCKED,
     MAX_LEN,
@@ -77,24 +78,30 @@ _ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
 _ALEMBIC_DIR = _BACKEND_ROOT / "alembic"
 
 
-def _alembic_config(database_url: str | None = None) -> Config:
+def _alembic_config() -> Config:
     cfg = Config(str(_ALEMBIC_INI))
     cfg.set_main_option("script_location", str(_ALEMBIC_DIR))
-    if database_url is not None:
-        cfg.set_main_option("sqlalchemy.url", database_url)
     return cfg
 
 
 @pytest.fixture
-def engine() -> Iterator:
-    """In-memory SQLite engine with the full alembic chain applied."""
-    db_url = "sqlite://"
-    cfg = _alembic_config(db_url)
+def engine(tmp_path, monkeypatch) -> Iterator:
+    """File-based SQLite engine with the full alembic chain applied.
+
+    The migration runs through ``alembic upgrade head`` against a real
+    file-backed SQLite — in-memory + ``NullPool`` would not share the
+    schema between alembic's connection and ours.
+    """
+    db_path = tmp_path / "handles.db"
+    db_url = f"sqlite:///{db_path}"
+    monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
+
+    cfg = _alembic_config()
     command.upgrade(cfg, "head")
+
     eng = create_engine(
         db_url,
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
     )
     enable_sqlite_foreign_keys(eng)
     # Sanity-check the migration created both new artifacts.
@@ -121,7 +128,6 @@ def app(session_factory) -> Iterator[FastAPI]:
     app.include_router(handles_router)
     reset_rate_limiters()
     yield app
-    app.state.database_engine.dispose()
 
 
 @pytest.fixture
@@ -157,30 +163,12 @@ def _insert_user(db: Session, user_id: int, email: str) -> None:
 
 
 def _make_profile(db: Session, user_id: int) -> int:
-    """Insert a ``community_profiles`` row and return its internal id."""
-    db.execute(
-        text(
-            "INSERT INTO community_profiles "
-            "(id, public_id, user_id, display_name, created_at) "
-            "VALUES (:id, :pid, :uid, :dn, :ts)"
-        ),
-        {
-            "id": None,
-            "pid": str(uuid.uuid4()),
-            "uid": user_id,
-            "dn": None,
-            "ts": datetime.now(timezone.utc),
-        },
-    )
+    """Insert a ``community_profiles`` row via the ORM and return its id."""
+    profile = CommunityProfile(user_id=user_id)
+    db.add(profile)
     db.commit()
-    row = db.execute(
-        text(
-            "SELECT id FROM community_profiles WHERE user_id = :uid"
-        ),
-        {"uid": user_id},
-    ).first()
-    assert row is not None
-    return int(row[0])
+    db.refresh(profile)
+    return int(profile.id)
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +214,8 @@ def test_unicode_collision_rejected_by_unique_index(session_factory):
 
     # Second claim uses the decomposed form. The DB rejects the write.
     with session_factory() as db:
-        assign_handle(db, p2, "café", "café")
         with pytest.raises(HandleAlreadyClaimed):
-            commit_with_uniqueness_check(db)
+            assign_handle(db, p2, "café", "café")
 
 
 def test_unique_index_is_on_normalized_not_display(session_factory, engine):
@@ -281,9 +268,8 @@ def test_collision_rejected_even_when_display_looks_different(session_factory):
 
     # Case-fold collision
     with session_factory() as db:
-        assign_handle(db, p2, "ALICE", "alice")
         with pytest.raises(HandleAlreadyClaimed):
-            commit_with_uniqueness_check(db)
+            assign_handle(db, p2, "ALICE", "alice")
 
 
 # ---------------------------------------------------------------------------
@@ -530,9 +516,8 @@ def test_concurrent_claim_db_constraint_blocks_second_writer(session_factory):
     # (we hit the unique index via the profile UPDATE because we use
     # the same normalized form for the second profile).
     with session_factory() as db:
-        assign_handle(db, p2, "alice", "alice")
         with pytest.raises(HandleAlreadyClaimed):
-            commit_with_uniqueness_check(db)
+            assign_handle(db, p2, "alice", "alice")
 
     # And the first profile still owns the handle.
     with session_factory() as db:
@@ -542,26 +527,36 @@ def test_concurrent_claim_db_constraint_blocks_second_writer(session_factory):
 
 def test_concurrent_change_does_not_lose_a_writer(session_factory):
     """A5 — when two profiles try to change into the same handle,
-    one of them must lose cleanly without corrupting the table."""
+    one of them must lose cleanly without corrupting the table.
+
+    The test injects a clock into ``change_handle`` so the cooldown
+    check does NOT fire (real-time tests would race against the 14-day
+    default). After the cooldown passes, both writers race for
+    ``carol`` — the DB unique index lets one through and rejects the
+    other with ``HandleAlreadyClaimed``.
+    """
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with session_factory() as db:
         _insert_user(db, 1, "u1@s.test")
         _insert_user(db, 2, "u2@s.test")
         db.commit()
         p1 = _make_profile(db, 1)
         p2 = _make_profile(db, 2)
-        assign_handle(db, p1, "alice", "alice")
-        assign_handle(db, p2, "bob", "bob")
-        commit_with_uniqueness_check(db)
-
-    # Both profiles try to switch to "carol" in their own transactions.
-    with session_factory() as db:
-        change_handle(db, p1, "carol", "carol")
-        commit_with_uniqueness_check(db)
 
     with session_factory() as db:
-        change_handle(db, p2, "carol", "carol")
+        change_handle(db, p1, "alice", "alice", now_fn=lambda: base)
+        change_handle(db, p2, "bob", "bob", now_fn=lambda: base)
+        commit_with_uniqueness_check(db)
+
+    # Both profiles try to switch to "carol" AFTER the cooldown.
+    later = base + HANDLE_COOLDOWN + timedelta(seconds=1)
+    with session_factory() as db:
+        change_handle(db, p1, "carol", "carol", now_fn=lambda: later)
+        commit_with_uniqueness_check(db)
+
+    with session_factory() as db:
         with pytest.raises(HandleAlreadyClaimed):
-            commit_with_uniqueness_check(db)
+            change_handle(db, p2, "carol", "carol", now_fn=lambda: later + timedelta(seconds=1))
 
 
 # ---------------------------------------------------------------------------
@@ -798,13 +793,17 @@ def test_swap_unique_index_breaks_unicode_collision_detection(
         # With the regression in place, both claims succeed because the
         # display forms are different even though the policy says they're
         # the same handle. This is the §6.1 row 1 failure mode.
+        # With the regression in place, both claims succeed because the
+        # display forms differ even though the policy says they are the
+        # same handle. This is the §6.1 row 1 failure mode.
         with session_factory() as db:
-            assign_handle(db, p1, "café", "café")
+            assign_handle(db, p1, "Alice", "alice")
             commit_with_uniqueness_check(db)
         with session_factory() as db:
-            assign_handle(db, p2, "café", "café")
-            # Should NOT raise now — the index is on display, the display
-            # forms differ, the normalized collision is silently allowed.
+            assign_handle(db, p2, "ALICE", "alice")
+            # Should NOT raise now — the index is on display, the
+            # display forms differ, the normalized collision is
+            # silently allowed.
             commit_with_uniqueness_check(db)
 
         # Both profiles now own handles whose normalized forms collide.
@@ -816,11 +815,32 @@ def test_swap_unique_index_breaks_unicode_collision_detection(
                 )
             ).fetchall()
             normalized_values = [row[1] for row in both]
-            assert normalized_values.count("café") == 2, (
+            assert normalized_values.count("alice") == 2, (
                 "regression: the bad-index schema let two rows share a "
                 "normalized handle — A1 collision is not enforced"
             )
     finally:
+        # Clean up the duplicate rows BEFORE restoring the unique index,
+        # otherwise the CREATE UNIQUE INDEX fails on the violation.
+        with session_factory() as db:
+            db.execute(
+                text(
+                    "DELETE FROM community_handle_history "
+                    "WHERE profile_id IN ("
+                    "  SELECT id FROM community_profiles "
+                    "  WHERE handle_normalized = 'alice'"
+                    ")"
+                )
+            )
+            db.execute(
+                text(
+                    "UPDATE community_profiles SET "
+                    "handle_display = NULL, handle_normalized = NULL "
+                    "WHERE handle_normalized = 'alice'"
+                )
+            )
+            db.commit()
+
         # Restore the production schema.
         with engine.begin() as conn:
             conn.execute(
@@ -977,11 +997,25 @@ def test_change_endpoint_records_history_with_redirect_until(client, session_fac
             {"pid": p1},
         ).first()
         assert row is not None
-        changed_at, redirect_until = row[0], row[1]
+        # SQLite returns datetimes as ISO strings through ``text()``; coerce
+        # both sides so the arithmetic and the comparison to the
+        # ``timedelta`` constant work.
+        changed_at = _coerce_dt(row[0])
+        redirect_until = _coerce_dt(row[1])
         assert redirect_until is not None
         delta = redirect_until - changed_at
         # Allow ±2 seconds of slack for the DB round-trip.
         assert abs((delta - HANDLE_REDIRECT_WINDOW).total_seconds()) < 2, delta
+
+
+def _coerce_dt(value: object) -> datetime:
+    """Coerce a SQLite-returned datetime string to a tz-aware datetime."""
+    if isinstance(value, datetime):
+        return value
+    parsed = datetime.fromisoformat(str(value))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def test_is_handle_available_read_only_does_not_mutate(client, session_factory):

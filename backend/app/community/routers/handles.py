@@ -204,12 +204,13 @@ def resolve_handle(
 
 def _public_id_for(db: Session, profile_id: int) -> str:
     """Look up the public UUID for a profile (DB read by id)."""
+    from sqlalchemy import text as _sa_text
     row = db.execute(
         # The handle columns live on community_profiles but are not in the
         # ORM mapped class (the Kör 2 model was kept untouched this
         # round — see the brief's allowed_paths). Raw SQL is honest about
         # the surface we're touching.
-        "SELECT public_id FROM community_profiles WHERE id = :id",
+        _sa_text("SELECT public_id FROM community_profiles WHERE id = :id"),
         {"id": profile_id},
     ).first()
     if row is None:

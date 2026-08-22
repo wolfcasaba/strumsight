@@ -104,6 +104,29 @@ def _query_one(
     return db.execute(text(sql), params).first()
 
 
+def _coerce_datetime(value: object) -> datetime | None:
+    """Coerce a DB-returned datetime to ``datetime``.
+
+    SQLite returns ``DateTime`` columns as ``str`` through ``text()``
+    queries (only ORM-mapped columns get auto-conversion). The service
+    uses raw SQL, so the caller would otherwise see strings. This helper
+    normalizes both paths to a real ``datetime`` and accepts ``None``
+    for empty cells.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        parsed = datetime.fromisoformat(value)
+        # SQLite drops tzinfo on round-trip; the migration column is
+        # ``DateTime(timezone=True)`` so re-attach UTC.
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    raise TypeError(f"cannot coerce {type(value).__name__} to datetime")
+
+
 def is_handle_available(
     db: Session,
     normalized: str,
@@ -149,31 +172,42 @@ def assign_handle(
     The handle-history row is written here too (initial assignment,
     ``old_handle``/``old_normalized`` ``NULL``, ``redirect_until`` NULL)
     so the lookup path can answer "no active history row" uniformly.
+
+    The function does NOT commit. The caller commits — typically via
+    ``commit_with_uniqueness_check`` — so the ``IntegrityError`` ->
+    ``HandleAlreadyClaimed`` translation happens at a single chokepoint.
+    The UPDATE on the unique index raises ``IntegrityError`` immediately
+    on the wire, so the write *cannot* land before the rejection; we
+    catch and translate here for caller convenience.
     """
     now = _utcnow()
-    db.execute(
-        text(
-            "UPDATE community_profiles "
-            "SET handle_display = :d, handle_normalized = :n "
-            "WHERE id = :id"
-        ),
-        {"d": display, "n": normalized, "id": profile_id},
-    )
-    db.execute(
-        text(
-            "INSERT INTO community_handle_history "
-            "(id, profile_id, old_handle, old_normalized, "
-            "new_handle, new_normalized, changed_at, redirect_until) "
-            "VALUES (:id, :pid, NULL, NULL, :nh, :nn, :at, NULL)"
-        ),
-        {
-            "id": None,
-            "pid": profile_id,
-            "nh": display,
-            "nn": normalized,
-            "at": now,
-        },
-    )
+    try:
+        db.execute(
+            text(
+                "UPDATE community_profiles "
+                "SET handle_display = :d, handle_normalized = :n "
+                "WHERE id = :id"
+            ),
+            {"d": display, "n": normalized, "id": profile_id},
+        )
+        db.execute(
+            text(
+                "INSERT INTO community_handle_history "
+                "(id, profile_id, old_handle, old_normalized, "
+                "new_handle, new_normalized, changed_at, redirect_until) "
+                "VALUES (:id, :pid, NULL, NULL, :nh, :nn, :at, NULL)"
+            ),
+            {
+                "id": None,
+                "pid": profile_id,
+                "nh": display,
+                "nn": normalized,
+                "at": now,
+            },
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        raise HandleAlreadyClaimed(str(exc)) from exc
 
 
 def change_handle(
@@ -186,12 +220,18 @@ def change_handle(
 ) -> None:
     """Change a handle with cooldown enforcement + history recording.
 
-    The cooldown lookup reads the most recent ``community_handle_history``
-    row for the profile (ordered by ``changed_at DESC LIMIT 1``); if the
-    gap is shorter than ``HANDLE_COOLDOWN`` the change is rejected with
-    ``CooldownActive``. The history row's ``redirect_until`` is set to
-    ``now + HANDLE_REDIRECT_WINDOW`` so the old handle keeps resolving to
-    this profile for the redirect window (A6).
+    The cooldown lookup reads the most recent history row for the
+    profile (the initial assignment also counts — the rule is "no two
+    handle-related writes within ``HANDLE_COOLDOWN``"). If the gap from
+    the last action is shorter than ``HANDLE_COOLDOWN`` the change is
+    rejected with ``CooldownActive``. The history row's
+    ``redirect_until`` is set to ``now + HANDLE_REDIRECT_WINDOW`` so
+    the old handle keeps resolving to this profile for the redirect
+    window (A6).
+
+    Like ``assign_handle``, the function does NOT commit. The UPDATE on
+    ``community_profiles.handle_normalized`` raises ``IntegrityError``
+    immediately on conflict, and the function catches + translates.
     """
     now = (now_fn or _utcnow)()
     last = _query_one(
@@ -202,7 +242,8 @@ def change_handle(
         {"pid": profile_id},
     )
     if last is not None:
-        last_changed: datetime = last[0]
+        last_changed = _coerce_datetime(last[0])
+        assert last_changed is not None
         if now - last_changed < HANDLE_COOLDOWN:
             raise CooldownActive(
                 f"handle change cooldown active; next change allowed at "
@@ -218,32 +259,36 @@ def change_handle(
     old_display = current[0] if current else None
     old_normalized = current[1] if current else None
 
-    db.execute(
-        text(
-            "UPDATE community_profiles "
-            "SET handle_display = :d, handle_normalized = :n "
-            "WHERE id = :id"
-        ),
-        {"d": new_display, "n": new_normalized, "id": profile_id},
-    )
-    db.execute(
-        text(
-            "INSERT INTO community_handle_history "
-            "(id, profile_id, old_handle, old_normalized, "
-            "new_handle, new_normalized, changed_at, redirect_until) "
-            "VALUES (:id, :pid, :oh, :on, :nh, :nn, :at, :ru)"
-        ),
-        {
-            "id": None,
-            "pid": profile_id,
-            "oh": old_display,
-            "on": old_normalized,
-            "nh": new_display,
-            "nn": new_normalized,
-            "at": now,
-            "ru": now + HANDLE_REDIRECT_WINDOW,
-        },
-    )
+    try:
+        db.execute(
+            text(
+                "UPDATE community_profiles "
+                "SET handle_display = :d, handle_normalized = :n "
+                "WHERE id = :id"
+            ),
+            {"d": new_display, "n": new_normalized, "id": profile_id},
+        )
+        db.execute(
+            text(
+                "INSERT INTO community_handle_history "
+                "(id, profile_id, old_handle, old_normalized, "
+                "new_handle, new_normalized, changed_at, redirect_until) "
+                "VALUES (:id, :pid, :oh, :on, :nh, :nn, :at, :ru)"
+            ),
+            {
+                "id": None,
+                "pid": profile_id,
+                "oh": old_display,
+                "on": old_normalized,
+                "nh": new_display,
+                "nn": new_normalized,
+                "at": now,
+                "ru": now + HANDLE_REDIRECT_WINDOW,
+            },
+        )
+    except IntegrityError as exc:
+        db.rollback()
+        raise HandleAlreadyClaimed(str(exc)) from exc
 
 
 def lookup_active_profile_id(db: Session, normalized: str) -> int | None:
