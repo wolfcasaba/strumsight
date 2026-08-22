@@ -61,6 +61,48 @@ HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
 list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
 felülírna.
 
+## ✅ E09-R01 KÉSZ — Community baseline, threat model és feature flag — PR [#408](https://github.com/wolfcasaba/strumsight/pull/408), squash `7ad4b28d` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) ELSŐ KÖRE KÉSZ.** Alkalmazáskód-változtatás
+nélkül: öt Community feature flag (`communityEnabled` + 4 alkapcsoló,
+Flutter + backend), egy nyolc-kategóriás threat model
+(`docs/security/community-threat-model.md`), egy mért baseline leltár
+(`docs/baseline/epic-09-community-start.md`) és a backend
+`community_postgres_ready` readiness placeholder — mind az `ADR 0395`
+szerint. Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5,
+javító kör nélkül (0 BLOCKER/MAJOR, 1 MINOR, 1 NOTE —
+`docs/reviews/e09-r01-review.md` APPROVED).
+
+**Pre-flight ADR 0395 döntése:** a dart-define/env kill switch mechanizmus
+(`STRUMSIGHT_COMMUNITY*`, `defaultValue` nélkül — hiány = `false` MINDEN
+környezetben) a Flutter oldalon `FeatureFlags.forEnvironment` TÖRZSÉBEN
+olvasódik, `app_config.dart` érintése nélkül, mert az a brief
+`allowed_paths`-án kívül esik (az `accountEnabled` élő mintája
+app_config.dart-ot olvasna, de az itt tiltott zóna). A backend öt mezője a
+`tutor_enabled` mintáját követi (env-aware branch NÉLKÜL, mindig `False`
+amíg egy explicit env-var be nem kapcsolja) — NEM a
+`diagnostics_enabled`/`apk_download_enabled` nonProd-alapú mintát. A döntés
+tudatosan ELTÉR a repó ellentétes precedensétől (ADR 0220, Epic 6:
+hardcode-`false` MINDEN környezetben, dart-define NÉLKÜL, a teljes
+építő-epic alatt) — az eltérés indoklása ADR 0395 „Elutasított
+alternatívák" szakaszában.
+
+Review: saját, izolált `/tmp` klónban újrafuttatott gate (9/9 zöld,
+egyezik az implementer §10.2 táblázatával), scope-audit tiszta (7/7
+`allowed_paths`, 0 kívüli fájl), §6.1 valódi-sértés próba
+(`communityEnabled: true` szabotázs) reprodukálva. 1 MINOR: a baseline-
+doksi három mért fájlszáma (`lib/features/auth/` teszt-fájl 7→4 tényleges,
+`lib/features/learn/` 24/34→25/32 tényleges) eltér a tényleges
+`find`-kimenettől — dokumentum-only, nincs gate-hatás, nem blokkoló; a
+Kör 2 pre-flightja javítsa a §1.1 táblázatot, mielőtt rá támaszkodik. Exact
+`745a9a15`: Full Gate
+[32570982536](https://github.com/wolfcasaba/strumsight/actions/runs/32570982536)
++ Router CI
+[32571697617](https://github.com/wolfcasaba/strumsight/actions/runs/32571697617)
+success (utóbbi `workflow_dispatch`-csel manuálisan indítva, mert a review-
+commit csak `docs/reviews/**`-t érintett, ami nincs a `router-ci.yml`
+push-trigger path-listáján — az exact-SHA kapuhoz kellett).
+
 ## ✅ E08-R30 KÉSZ — Epic 08 closure: route activation + real-fixture legacy
 verification + numerical deprecation gates — PR [#407](https://github.com/wolfcasaba/strumsight/pull/407), squash `a8ecb9f3` (2026-08-22)
 
@@ -5840,15 +5882,20 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-22): E09-R01 — Community baseline és
-feature flags** (`docs/rounds/e09-r01-community-baseline-and-feature-flags.md`,
-engine a queue-ban `minimax`, előre kiosztott ADR `0395`). **Az Epic 8
-(Gamification) mind a 30 köre KÉSZ** (E08-R30, PR #407) — az **E08-R29**
-(Integritás, analytics, balance szimuláció és CI) továbbra is `hold`-on
-marad. A queue-scan a legelső `pending` sort választja, ami E08-R30 UTÁN az
-E09-R01 (413. sor) — ez megelőzi a Chapter 13 ág E13-R05-jét (491. sor); ezt a
-sorrendet a driver automatikusan tiszteletben tartja. Ez a session nem
-indítja el; új sessionben fut.
+**Pontos következő termékkör (2026-08-22): E09-R02 — Backend Community
+modul és migráció** (`docs/rounds/e09-r02-backend-community-module-and-migration.md`,
+engine a queue-ban `minimax`). **Az E09-R01 (Community baseline, threat
+model és feature flag) KÉSZ** (PR #408, squash `7ad4b28d`) — lásd a fejléc
+✅-blokkot. **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR
+#407) — az **E08-R29** (Integritás, analytics, balance szimuláció és CI)
+továbbra is `hold`-on marad. A queue-scan a legelső `pending` sort
+választja, ami E09-R01 UTÁN az E09-R02 (414. sor) — ez megelőzi a Chapter 13
+ág E13-R05-jét; ezt a sorrendet a driver automatikusan tiszteletben tartja.
+Ez a session nem indítja el; új sessionben fut. **Az E09-R02 pre-flightja
+olvassa el az ADR 0395 §5.4/Döntés-5 `community_postgres_ready`
+placeholdert** — a Kör 2 dönti el, hogy éles gate-té alakítja-e vagy
+dokumentáltan elveti, és a §1.1 baseline-táblázat három pontatlan
+fájlszámát (E09-R01 review M1 lelete) érdemes egy menetben frissítenie.
 
 Pre-flightban érdemes újra mérni: az Epic 9 (Community Platform) mind a 32
 körének briefje egy batchben készült (PR #405, 2026-08-22) — az E09-R01
