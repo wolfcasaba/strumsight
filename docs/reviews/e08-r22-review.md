@@ -1,13 +1,29 @@
 # E08-R22 — Review
 
-Brief: `docs/rounds/e08-r22-reward-inbox-and-celebration.md` (§0.0 pre-flight + §0.0.1 mid-round l10n-fragment revision)
-Diff: `git diff 241834e3..6a8c865c` (pre-flight commit → round-branch tip), branch `minimax/e08-r22-reward-inbox-and-celebration`
-Reviewer: Claude Sonnet 5 (`--effort high`) · Dátum: 2026-08-21
+Brief: `docs/rounds/e08-r22-reward-inbox-and-celebration.md` (§0.0 pre-flight + §0.0.1 l10n-fragment revision + §0.0.2 ui_inventory baseline revision)
+Diff: `git diff 241834e3..ae439d7b` (pre-flight commit → round-branch tip), branch `minimax/e08-r22-reward-inbox-and-celebration`
+Reviewer: Claude Sonnet 5 (`--effort high`) · Dátum: 2026-08-21 – 2026-08-22
 Verdikt: **APPROVED**
 
 ## Összegzés
 
 BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 1
+
+### Kör-közbeni javítás #3 — CI ui_inventory baseline (merge előtti dispatch, 2026-08-22)
+
+A review APPROVED lezárása után dispatch-elt `full-gate.yml` (run
+32538682580, headSha `2d4086b9`) a teljes `flutter test` alatt PIROS
+volt: `test/ui/ui_inventory_test.dart` — `Expected: length <61> · Which:
+has length of <62>`. Mért ok: `reward_inbox_screen.dart` egy valódi,
+produkciós képernyő, a gépi UI-leltár helyesen 62-re nő — azonos
+hibaosztály, mint az E08-R20 §0.0.1 (60→61). §0.0.2 mid-round
+brief-revízió (`7bc3561e`, `allowed_paths` bővítve
+`test/ui/ui_inventory_test.dart`-tal) + egy mechanikus javító kör
+(`ae439d7b`, egyetlen sor: `hasLength(61)` → `hasLength(62)`, semmi más
+nem módosult a fájlban). Saját, friss izolált klónban (`/tmp/review-e08-r22-2`,
+HEAD `ae439d7b`) újrafuttatott `tools/scope-audit.py` és
+`tools/round-gate.sh` mindkét célzott teszttel (`celebration_coordinator_test.dart`
++ `ui_inventory_test.dart`) zöld — lásd „Gate-bizonyíték ellenőrzése".
 
 Egy kör-közbeni javítás történt, mindkettő mérve, dokumentálva, és a
 javítás a review-independens gate-újrafutáson igazoltan zöld:
@@ -108,7 +124,7 @@ regex, follow-up a lánc-eszközök karbantartóinak, nem e kör rése).
 
 ## Gate-bizonyíték ellenőrzése
 
-Saját, izolált klón (`git clone --branch minimax/e08-r22-reward-inbox-and-celebration https://github.com/wolfcasaba/strumsight.git /tmp/review-e08-r22`, HEAD `6a8c865c`), `tools/prepare-flutter-generated.sh` után:
+**1. kör** — saját, izolált klón (`/tmp/review-e08-r22`, HEAD `6a8c865c`), `tools/prepare-flutter-generated.sh` után:
 
 | Gate | Állított eredmény | Ellenőrizve |
 |---|---|---|
@@ -119,14 +135,29 @@ Saját, izolált klón (`git clone --branch minimax/e08-r22-reward-inbox-and-cel
 | secrets | zöld (3210 file, 0 finding) | ✅ saját futás |
 | l10n | zöld (aggregate freshness OK, parity OK en→hu, 1584 message) | ✅ saját futás |
 | scope-audit | OK, 11 changed, 0 violation | ✅ saját futás (`tools/scope-audit.py`) |
-| CI (teljes suite + property + APK) | — | ⏳ merge előtt dispatch-elendő, lásd Merge-döntés |
+
+**Merge előtti CI-dispatch (`full-gate.yml`, run 32538682580, headSha `2d4086b9`):** ❌ — a teljes suite `test/ui/ui_inventory_test.dart`-on bukott (fent, §0.0.2). Javítás: `ae439d7b`.
+
+**2. kör** — friss, izolált klón (`/tmp/review-e08-r22-2`, HEAD `ae439d7b`), `tools/prepare-flutter-generated.sh` után:
+
+| Gate | Állított eredmény | Ellenőrizve |
+|---|---|---|
+| scope-audit (241834e3..ae439d7b) | OK, 13 changed, 1 generated/ignored | ✅ saját futás |
+| format | zöld | ✅ saját futás |
+| analyze | zöld | ✅ saját futás |
+| test `celebration_coordinator_test.dart` + `ui_inventory_test.dart` | mindkettő zöld | ✅ saját futás |
+| architecture | zöld (12 allowlisted deviation) | ✅ saját futás |
+| secrets | zöld (3211 file, 0 finding) | ✅ saját futás |
+| l10n | zöld (parity OK en→hu, 1584 message) | ✅ saját futás |
+| CI (teljes suite + property + APK) | — | ⏳ újra-dispatch a `ae439d7b` SHA-ra, lásd Merge-döntés |
 
 ## Merge-döntés
 
-A helyi gate mind a 6 eleme zöld, saját kézzel, izolált klónban
-igazolva; a scope-audit tiszta; az acceptance criteria mind bizonyítékkal
-zárt (beleértve a reviewer-saját A1 valódi-sértés próbáját). ADR 0052
-szerint a helyi kapu elégséges a CI-dispatch elindításához — a **teljes
-suite + randomizált property + APK/full-gate CI-futás** a merge
-előfeltétele, azt az orchestrátor a review után dispatch-eli és a merge
-SHA-ján ellenőrzi (lásd a kör-jelentésben).
+A helyi gate mind a 6+1 eleme zöld, saját kézzel, két külön izolált
+klónban igazolva (a 2. kör a `test/ui/ui_inventory_test.dart` javítást
+is lefedi); a scope-audit mindkét körben tiszta; az acceptance criteria
+mind bizonyítékkal zárt (beleértve a reviewer-saját A1 valódi-sértés
+próbáját). ADR 0052 szerint a helyi kapu elégséges a CI-dispatch
+elindításához — a **teljes suite + randomizált property + APK/full-gate
+CI-futás** a merge előfeltétele, a `ae439d7b` SHA-ra újra-dispatch-elve,
+az orchestrátor a merge SHA-ján ellenőrzi (lásd a kör-jelentésben).
