@@ -1,13 +1,40 @@
 # E09-R05 — Review
 
 Brief: `docs/rounds/e09-r05-flutter-community-domain-and-public-api.md`
-Diff: `git diff 770f25cc..34554566` (`minimax/e09-r05-flutter-community-domain-and-public-api`)
+Diff: `git diff 770f25cc..8f598c28` (`minimax/e09-r05-flutter-community-domain-and-public-api`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-22
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (javító kör 1 után, `8f598c28`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 0 · NOTE: 1
+BLOCKER: 0 · MAJOR: 1 (FIXED, `d52a10c5`) · MINOR: 0 · NOTE: 1 (nem blokkoló, nyitva marad follow-upként)
+
+## Javító kör 1 lezárása (2026-08-22, `d52a10c5` + `8f598c28`)
+
+F1 javítva: `moderation_state.dart` most `enum ModerationState` `wireValue`
+mezővel + `moderationStateFromWire`/`moderationStateToWire` pár, PONTOSAN a
+testvér-dekóderek mintájával (`null`/ismeretlen → `null`, sosem dob). Három
+új A3-teszt (`community_domain_test.dart:326-356`: unknown/empty/null →
+`null`; minden state roundtrip; a `pendingReview`/`authorOnly` snake_case
+wire-alak explicit pin) + a barrel-export-pin lista bővítve
+(`'moderationStateFromWire'`, `'moderationStateToWire'`, 533-534. sor). A
+`public.dart`-ot NEM kellett módosítani — a meglévő `export
+'domain/entities/moderation_state.dart';` sor szűrés nélküli, tehát az új
+top-level függvényeket automatikusan újraexportálja.
+
+FÜGGETLENÜL ellenőrizve, friss `/tmp/review-e09-r05-fix1` klónban
+(GitHub origin, HEAD `8f598c28`):
+
+- `python3 tools/scope-audit.py --repo ... --base b545ef3b` →
+  `Legacy scope audit OK (b545ef3bb19a..8f598c286593, 3 changed path(s), 0
+  generated/ignored)` — pontosan a 3 várt fájl (`moderation_state.dart`,
+  `community_domain_test.dart`, a brief §10 handoff-kiegészítés).
+- `tools/round-gate.sh test/features/community/domain/community_domain_test.dart
+  test/core/architecture_dependency_test.dart` → mind a 7 lépés ZÖLD
+  (format, analyze, mindkét célzott teszt, architecture, secrets, l10n).
+
+Nincs újabb nyitott BLOCKER/MAJOR. N1 (a `gate_shape` regex-őr hamis
+pozitívja) informatív follow-up marad, nem blokkol.
 
 Erős, tartalmilag fegyelmezett kör: a §0.0 D3-tisztázást (audience.dart NEM
 duplikálja a Kör 4 enumokat) az implementer pontosan követte és SAJÁT
@@ -77,7 +104,7 @@ kívüli változás: **nincs**.
   csoportjába (unknown → `null`, `null` input → `null`, minden érvényes
   érték roundtrip).
 - **Ellenőrzés:** `tools/round-gate.sh test/features/community/domain/community_domain_test.dart test/core/architecture_dependency_test.dart` — az új teszt zöld, a barrel-export-pin teszt (459. sor) tartalmazza a `moderationStateFromWire` nevet.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`d52a10c5`) — ld. "Javító kör 1 lezárása" fent
 
 ### N1 — NOTE — a `gate_shape=VIOLATION` jelzés HAMIS POZITÍV, nem valódi csővezetékes gate-futtatás
 
@@ -117,11 +144,10 @@ community-domain-and-public-api`, HEAD `34554566`), csővezeték/lánc nélkül:
 | architecture / secrets / l10n | zöld | ✅ (gate-összegzés: MINDEN GATE ZÖLD) |
 | scope-audit | OK, 25 fájl, 0 generated/ignored | ✅ (`tools/scope-audit.py` önálló futtatással) |
 | valódi-sértés próba (A1) | PIROS→ZÖLD | ✅ FÜGGETLENÜL reprodukálva: `@immutable` + `import 'package:flutter/foundation.dart'` a `community_profile.dart`-ba → `architecture_dependency_test.dart` PIROS (kilépési kód 1, a SAJÁT domain-purity csoport bukik, nem csak a `flutter analyze` unused-import lintje) → visszaállítás után újra teljes zöld gate |
-| CI (teljes suite + property + APK) | — | still pending — a Claude-oldali CI-dispatch a fix-kör UTÁN indul (F1 nyitva) |
+| CI (teljes suite + property + APK) | — | Claude-oldali dispatch a review APPROVED után, `round-ci-plan.py` szerint |
 
 ## Merge-döntés
 
-**Merge TILOS**, amíg F1 (MAJOR) nyitva van — ADR 0052 / a review-protokoll
-szerint egy nyitott MAJOR blokkol, függetlenül attól, hogy minden gate zöld.
-Következő lépés: javító kör ugyanazon a motoron (minimax), ugyanazon a
-branch-en, az F1 findings-szel.
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR →
+merge. F1 javítva és FÜGGETLENÜL ellenőrizve (`8f598c28`), nincs más nyitott
+BLOCKER/MAJOR. **A review APPROVED — a CI-dispatch és a merge mehet.**
