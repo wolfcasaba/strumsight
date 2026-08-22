@@ -15356,3 +15356,44 @@ parancs), nem egy automatizálható gépi kapu; a review-oldali ellenőrzés
 lustaság) szintén emberi/reviewer-mérés. Részletek:
 `docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md` §0.0,
 `docs/reviews/e08-r30-review.md`.
+
+## L410 — Egy `round-merge-lock.sh` alá írt `fetch+reset --hard origin/main` a záró rituálék KÖZBEN eldobja a MÁR MEGÍRT, még nem commitolt HANDOFF/RTM szerkesztést (E09-R01, 2026-08-22)
+
+**Mért snag.** A záró rituálék sorrendjében (HANDOFF §0.0/§6 + RTM sor +
+queue pending→done, mind EGY commitban, D2) a HANDOFF.md-t és az RTM-et
+Edit-tel MÁR megszerkesztettem a checkout-olt `main`-en, MIELŐTT a
+`tools/round-merge-lock.sh bash -c 'git fetch … && git checkout -q main &&
+git reset -q --hard origin/main'` parancsot futtattam volna egy "utolsó
+pillanatban ellenőrzöm, nem mozdult-e a main" szándékkal. A `reset --hard`
+a working tree-t az `origin/main`-re állítja — beleértve a MÉG NEM
+commitolt, saját szerkesztésű fájlokat is —, tehát mindkét doksi-módosítás
+NÉMÁN eltűnt (`git status --short` üres lett a reset után). A hiba csak
+azért nem lett adatvesztés, mert a szerkesztések tartalma még a beszélgetés
+kontextusában élt, és újra alkalmazhatóak voltak — egy hosszabb, kézzel írt
+HANDOFF-szakasz esetén ez visszaállíthatatlan munka-elvesztés lett volna.
+
+**Szabály.** A záró rituálék blokkjában a "mozdult-e a main" ellenőrzés
+(`git fetch origin main && git rev-parse origin/main`) és egy ESETLEGES
+resync **MINDIG a doksi-szerkesztések ELŐTT** fusson, nem közben/után —
+vagy ha egy resync szükségessége csak a szerkesztések UTÁN derül ki,
+`git status --short` kötelező ELSŐ lépés a `reset --hard` előtt, és ha az
+nem üres, a resync módja `git stash` (majd `git stash pop` a reset után),
+SOSE csupasz `reset --hard`. Ez ugyanaz a hibaosztály, mint a
+[[shared-tree-git-stash-hazard]] (auto-memory) figyelmeztetése egy MÁSIK
+parancsra (`git checkout`/`reset` felülír committalan munkát) — itt a
+`round-merge-lock.sh` wrapper ártatlan volta (csak sorosít) elfedte, hogy
+a BENNE futtatott parancs önmagában is destruktív.
+
+**Kapcsolódó, kisebb mérés ugyanebben a körben:** a `router-ci.yml`
+`on.push.paths` listája (`tools/**`, `docs/execution/**`, `docs/rounds/**`,
+`.ai/**`, a két workflow-fájl) **nem** tartalmazza `docs/reviews/**`-t — ha
+a merge előtti utolsó push csak a review-dokumentumot viszi fel (mint itt),
+a push NEM indít új Router CI futást a pontos HEAD SHA-n, és az
+exact-SHA merge-kapuhoz (ADR 0086 §2) egy kézi `gh workflow run
+router-ci.yml --ref <branch>` (`workflow_dispatch`) szükséges, mielőtt a
+merge mehetne.
+
+**Őrteszt:** nincs — mindkettő orchestrátor-oldali munkafolyamat-fegyelem,
+nem gépi kapu. Részletek: ez a session (E09-R01), a záró rituálék
+lépéssora `docs/execution/08-round-brief.md` §7 / `sdd-round-driver` skill
+§6 mellett.
