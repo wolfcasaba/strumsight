@@ -636,9 +636,7 @@ def test_unicode_normalization_matches_in_service_layer(community_enabled):
     _, headers_a = make_authenticated_user(
         session_factory, email="unicode-a@strumsight.app"
     )
-    user_id_a = _extract_user_id_from_token(
-        headers_a["Authorization"].split(" ", 1)[1]
-    )
+    user_id_a = _extract_user_id_from_token(headers_a["Authorization"].split(" ", 1)[1])
     nfd = unicodedata.normalize("NFD", "café")
     nfc = unicodedata.normalize("NFC", "café")
     assert nfd != nfc, "Test inputs collapsed — pick a different example"
@@ -661,9 +659,7 @@ def test_unicode_normalization_matches_in_service_layer(community_enabled):
     _, headers_b = make_authenticated_user(
         session_factory, email="unicode-b@strumsight.app"
     )
-    user_id_b = _extract_user_id_from_token(
-        headers_b["Authorization"].split(" ", 1)[1]
-    )
+    user_id_b = _extract_user_id_from_token(headers_b["Authorization"].split(" ", 1)[1])
     session = session_factory()
     try:
         with pytest.raises(HandleAlreadyClaimed):
