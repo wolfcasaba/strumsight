@@ -43,18 +43,17 @@ from app.community.models.social_graph import CommunityFollow, CommunityFollowRe
 from app.community.routers.social_graph import router as social_graph_router
 from app.community.services.follow_service import (
     FollowListPage,
-    FollowResult,
     accept_follow_request,
     decline_follow_request,
-    follow as service_follow,
     list_followers,
-    list_following,
     remove_follower,
     unfollow,
 )
+from app.community.services.follow_service import (
+    follow as service_follow,
+)
 from app.config import Settings
-from app.database import Base, enable_sqlite_foreign_keys, get_db
-from app.models import User
+from app.database import enable_sqlite_foreign_keys, get_db
 from app.security import create_access_token, hash_password
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
