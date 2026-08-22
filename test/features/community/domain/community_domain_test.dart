@@ -322,6 +322,41 @@ void main() {
       expect(clubVisibilityFromWire('hidden'), isNull);
       expect(clubVisibilityFromWire(null), isNull);
     });
+
+    test('ModerationState decoder returns null for unknown wire value', () {
+      expect(moderationStateFromWire('shadowbanned'), isNull);
+      expect(moderationStateFromWire(''), isNull);
+      expect(moderationStateFromWire(null), isNull);
+    });
+
+    test('ModerationState decoder roundtrips every allowed state', () {
+      for (final state in ModerationState.values) {
+        expect(moderationStateFromWire(state.wireValue), same(state));
+        expect(moderationStateToWire(state), state.wireValue);
+      }
+    });
+
+    test(
+      'ModerationState wire form is snake_case (pendingReview / authorOnly)',
+      () {
+        // The Dart identifier uses camelCase but the wire form
+        // MUST be snake_case per the §1 F1 contract (no live
+        // backend enum mirrors ModerationState yet, so the wire
+        // form is the Dart-side default). A regression that
+        // accidentally used `state.name` would surface here.
+        expect(ModerationState.pendingReview.wireValue, 'pending_review');
+        expect(ModerationState.authorOnly.wireValue, 'author_only');
+        // And the roundtrip still closes on those exact strings.
+        expect(
+          moderationStateFromWire('pending_review'),
+          same(ModerationState.pendingReview),
+        );
+        expect(
+          moderationStateFromWire('author_only'),
+          same(ModerationState.authorOnly),
+        );
+      },
+    );
   });
 
   // ─────────────────────────────────────────────────────────────────
@@ -495,6 +530,8 @@ void main() {
         'challengeTypeFromWire',
         'communityNotificationKindFromWire',
         'clubVisibilityFromWire',
+        'moderationStateFromWire',
+        'moderationStateToWire',
         // repository contracts
         'CommunityProfileRepository',
         'SocialGraphRepository',
