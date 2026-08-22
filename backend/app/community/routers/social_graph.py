@@ -138,7 +138,7 @@ def post_follow(
         except SelfFollowNotAllowed as exc:
             db.rollback()
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except FollowAlreadyExists as exc:
+        except FollowAlreadyExists:
             # Rare race path: the service layer raised
             # ``FollowAlreadyExists`` because the IntegrityError→re-read
             # path in ``follow()`` could not find the would-be-winner
