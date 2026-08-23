@@ -165,6 +165,14 @@ typedef CommunityMediaProgressCallback = void Function(int sent, int total);
 /// matches the ``AccountApiClient`` call surface (one request
 /// per composer, parallel uploads are a future round).
 class CommunityMediaUploader {
+  // The ``prefer_initializing_formals`` lint is suppressed
+  // per-line — the initialization-form sugar
+  // (``CommunityMediaUploader({required Dio dio}) :
+  // _dio = dio;``) cannot be expressed via ``this._dio`` for
+  // a library-private field (Dart rejects ``this._private``
+  // initializers), so the explicit assignment is the
+  // project-wide pattern.
+  // ignore: prefer_initializing_formals
   CommunityMediaUploader({required Dio dio}) : _dio = dio;
 
   final Dio _dio;
@@ -207,37 +215,56 @@ class CommunityMediaUploader {
     _cancelToken = CancelToken();
     _cancelled = false;
     final total = bytes.length;
-    final response = await _dio.put<dynamic>(
-      intent.signedUpload.url,
-      data: bytes,
-      options: Options(
-        method: intent.signedUpload.method,
-        headers: <String, Object?>{
-          'Content-Type': intent.signedUpload.contentType,
-        ),
-        // The progress callback fires on every chunk the
-        // socket flushes. ``total`` is the request body's full
-        // size; ``count`` is the bytes the OS has handed to
-        // the socket so far.
-        onSendProgress: (count, _, _) {
-          if (onProgress != null) {
+    // Capture the per-upload progress callback in a closure
+    // that the Dio call closes over. A null callback is
+    // honored as "no progress reporting".
+    final ProgressCallback? dioOnProgress = onProgress == null
+        ? null
+        : (int count, int totalBytes) {
             onProgress(count, total);
-          }
-        },
-      ),
-      cancelToken: _cancelToken,
-    );
-    if (_cancelled) {
-      yield const CommunityMediaUploadCancelled();
+          };
+    try {
+      final response = await _dio.put<dynamic>(
+        intent.signedUpload.url,
+        data: bytes,
+        options: Options(
+          method: intent.signedUpload.method,
+          headers: <String, Object?>{
+            'Content-Type': intent.signedUpload.contentType,
+          },
+        ),
+        cancelToken: _cancelToken,
+        // ``onSendProgress`` is a top-level argument on
+        // ``Dio.put``, NOT a field on ``Options`` (the v5
+        // API). The signature is ``(int count, int total)``.
+        onSendProgress: dioOnProgress,
+      );
+      if (_cancelled) {
+        yield const CommunityMediaUploadCancelled();
+        return;
+      }
+      yield CommunityMediaUploadProgress(sentBytes: total, totalBytes: total);
+      yield CommunityMediaUploadCompleted(
+        responseStatus: response.statusCode ?? 0,
+      );
+      return;
+    } on DioException catch (e) {
+      // The ``CancelToken`` was tripped — the A7 acceptance
+      // cell. Emit the cancelled event and return; the stream
+      // closes on the next ``return``.
+      if (_cancelled || CancelToken.isCancel(e)) {
+        yield const CommunityMediaUploadCancelled();
+        return;
+      }
+      // Other Dio errors are surfaced as upload failures —
+      // the stream emits ``CommunityMediaUploadFailed`` then
+      // closes.
+      yield CommunityMediaUploadFailed(
+        message: e.message ?? 'upload failed',
+        cause: e,
+      );
       return;
     }
-    yield CommunityMediaUploadProgress(
-      sentBytes: total,
-      totalBytes: total,
-    );
-    yield CommunityMediaUploadCompleted(
-      responseStatus: response.statusCode ?? 0,
-    );
   }
 
   /// Cancel the in-flight upload.
