@@ -58,7 +58,7 @@ from __future__ import annotations
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, fields
 
 from ..models.notification import (
     NOTIFICATION_TYPE_ALLOWLIST,

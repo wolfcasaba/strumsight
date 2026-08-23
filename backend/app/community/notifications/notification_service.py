@@ -108,7 +108,6 @@ from ..models.profile import CommunityProfile
 from ..policies.query_filters import is_blocked_pair
 from .push_gateway import NoOpPushGateway, PushGateway, PushPayload
 
-
 # ---------------------------------------------------------------------------
 # Domain exceptions.
 # ---------------------------------------------------------------------------

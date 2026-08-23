@@ -69,10 +69,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from alembic import command
 from app.community import notifications
 from app.community.models.notification import (
-    NOTIFICATION_TYPE_REACTION_SUMMARY,
     NOTIFICATION_TYPE_COMMENT,
-    CommunityNotification,
+    NOTIFICATION_TYPE_REACTION_SUMMARY,
     REACTION_BURST_WINDOW_SECONDS,
+    CommunityNotification,
 )
 from app.community.models.post import CommunityPost
 from app.community.models.profile import CommunityProfile
