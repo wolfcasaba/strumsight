@@ -41,6 +41,7 @@ from __future__ import annotations
 import importlib
 import os
 import random
+import sys
 import threading
 import uuid
 from collections.abc import Iterator
@@ -59,12 +60,11 @@ from app.community.models.reaction import (
     REACTION_KIND_ALLOWLIST,
     CommunityReaction,
 )
-from app.community.services import reaction_service
 from app.community.policies.access_policy import CommunityAudience
+from app.community.services import reaction_service
 from app.community.services.post_service import create_post
-from app.config import Settings
 from app.database import enable_sqlite_foreign_keys
-from app.security import create_access_token, hash_password
+from app.security import hash_password
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 _ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
@@ -688,10 +688,6 @@ def test_a7_no_learning_reward_event_emitted(session_factory) -> None:
     transitively.
     """
     module = importlib.import_module("app.community.services.reaction_service")
-    module_names = set(sys.modules)
-    gamification_modules = {
-        name for name in module_names if name.startswith("app.gamification")
-    }
     # The service module MUST NOT have triggered the import of a
     # gamification symbol — the E08-R26 cross-feature boundary
     # invariant is import-graph-level, not just call-site level.
@@ -821,7 +817,7 @@ def test_invalidate_event_fires_on_set_and_remove(
 
 
 # ---------------------------------------------------------------------------
-# Imports — the A7 import-graph check needs ``sys.modules``.
+# ``sys`` is imported at the top of the file — the A7 import-graph
+# check needs ``sys.modules``. The ``import sys`` lives up there
+# alongside ``importlib`` and ``os``.
 # ---------------------------------------------------------------------------
-
-import sys  # noqa: E402 — module-level for the A7 cell's module-name lookup
