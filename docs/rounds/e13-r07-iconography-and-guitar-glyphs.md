@@ -360,4 +360,128 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Létrehozott/módosított fájlok
+
+- **`lib/core/design_system/icons/ss_icons.dart`** (ÚJ) — `SsGuitarGlyphName`
+  enum (a tizennégy Ch13 §9.8 név, fordítás-idejű névhiba-védelem), `SsIconSize`
+  (24/32/48 dp, D5 szerződés: `isValidForStage`, `resolveForStage`),
+  `SsIconResolution` lezárt hierarchia (`SsResolvedGuitarGlyph` /
+  `SsResolvedMaterialIcon` / `SsFallbackIcon`, `isFallback` lekérdezhető), és
+  `SsIcons` katalógus (`resolveByName`: gitár-glyph → Material Symbols alias →
+  látható fallback).
+- **`lib/core/design_system/icons/ss_guitar_glyphs.dart`** (ÚJ) —
+  `kSsGuitarGlyphStrokeRatio` (a NEVESÍTETT, egyetlen stroke-arány),
+  `SsGuitarGlyphs.strokeWidthFor` (az egyetlen számítási hely, A9), és
+  `SsGuitarGlyphPainter` — EGY `CustomPainter` osztály mind a 14 glyph-hez
+  (switch a névre), így szerkezetileg kizárt, hogy egy glyph saját
+  `strokeWidth`-et találjon ki. A `downstrum`/`upstrum` a `strum_arrow.dart`
+  mintáját követi (szár + töltött nyílhegy), festve, nem karakterrel.
+- **`lib/core/design_system/icons/ss_icon.dart`** (ÚJ) — `SsIcon` widget két
+  factory-val: `.decorative` (const, `ExcludeSemantics`, se label, se
+  tooltip) és `.interactive` (nem const — `_requireNonEmpty` validál —,
+  `Semantics(label:, excludeSemantics: true)` + `Tooltip(excludeFromSemantics:
+  true)`, mindkét sztring hívó-oldali, üresre `ArgumentError`). A Stage-méret
+  a VALÓDI widget-úton `SsIconSize.resolveForStage`-en megy át a
+  `CustomPaint`-ba kerülés előtt. Hiányzó név esetén `_SsIconFallbackPainter`
+  (bekeretezett X, nem nulla méret) renderelődik.
+- **`lib/core/design_system/documentation/component_catalog_screen.dart`** —
+  egy `Wrap` hozzáadva a meglévő téma-váltós katalógushoz, amely mind a 14
+  `SsGuitarGlyphName` értéket `SsIcon.decorative`-ként rendereli (A8 —
+  ugyanez a felület adja a widget-tesztben is a „mindhárom témában" bizonyítékot).
+- **`lib/core/design_system/public.dart`** — a három ÚJ ikon-fájl export-ja
+  hozzáadva (ábécésorrendben az `icons/` blokk).
+- **`test/core/design_system/icons/ss_icons_test.dart`** (ÚJ) — A1, A4, A5,
+  A8, A9 cellák (lásd lent a mérce-mátrix leképezést).
+- **`test/core/design_system/icons/icon_semantics_test.dart`** (ÚJ) — A2, A3
+  cellák.
+
+### A6 — a funkcionális emoji + nyílkarakter felmérése (lelet, NEM javítás)
+
+A D7 parancsait a mai fán (`sonnet-impl/e13-r07-iconography-and-guitar-glyphs`,
+az orchestrátor `main @ 667792b6` pre-flight mérése után, az implementer
+körében a `lib/features/**`-hez nem nyúlva) reprodukálva:
+
+```bash
+grep -rcP "^(?!\s*(//|\*|/\*)).*[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}]" lib/features/ --include=*.dart | grep -v ':0$'
+grep -rcP "^(?!\s*(//|\*|/\*)).*[\x{2190}-\x{21FF}]" lib/features/ --include=*.dart | grep -v ':0$'
+```
+
+| Kategória | Előfordulás | Fájl |
+|---|---|---|
+| emoji-piktogram | **16** | **5** |
+| nyílkarakter (`↓`/`↑`/…) | **25** | **13** |
+
+Emoji fájlonként: `share/widgets/wrapped_card.dart` (1),
+`share/share_content.dart` (9), `learn/screens/learn_screen.dart` (1),
+`community/presentation/widgets/reaction_bar.dart` (4),
+`ai_tutor/presentation/widgets/tutor_message_bubble.dart` (1).
+
+Nyílkarakter fájlonként: `streak/daily_challenge.dart` (1),
+`share/screens/strum_reel_screen.dart` (2), `share/widgets/wrapped_card.dart`
+(2), `share/widgets/strum_card.dart` (3), `share/share_content.dart` (6),
+`learn/screens/learn_screen.dart` (2), `learn/widgets/lesson_score_card.dart`
+(1), `gamification/domain/quests/challenge_definition.dart` (1),
+`practice/presentation/widgets/chord_change_breakdown.dart` (1),
+`community/presentation/widgets/feed_card_registry.dart` (3),
+`song_trainer/data/migration/legacy_song_adapter.dart` (1),
+`live/widgets/strum_arrow.dart` (1),
+`live/engine/dsp/strum_direction_classifier.dart` (1).
+
+A mért érték pontosan egyezik az orchestrátor D7 alapvonalával (16/5, 25/13) —
+a `lib/features/**` a kör alatt változatlan maradt. A csere a
+képernyő-migrációs körök (Ch13 Kör 16–35) dolga.
+
+### Valódi-sértés próba (A2)
+
+`lib/core/design_system/icons/ss_icon.dart`-ban az interaktív ág
+`Semantics(label: label, ...)` sorát ideiglenesen `Semantics(label: '', ...)`-re
+cserélve, majd `flutter test test/core/design_system/icons/icon_semantics_test.dart`
+lefuttatva — az **A2** cella a vártnak megfelelően PIROSRA váltott:
+
+```
+00:00 +0: interactive icon semantics (A2) — the caller-supplied strings exposes the caller-supplied semantic label and tooltip verbatim
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞═══════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _ElementPredicateWidgetFinder:<Found 0 widgets with a semantics label named "Play the down
+strum": []>
+   Which: means none were found but one was expected
+...
+00:00 +0 -1: interactive icon semantics (A2) — the caller-supplied strings exposes the caller-supplied semantic label and tooltip verbatim [E]
+  Test failed. See exception logs above.
+```
+
+A másik három teszt (két üres-string `ArgumentError` cella + az A3 dekoratív
+cella) továbbra is zöld maradt, mert egyik sem méri az interaktív labelt — ez
+megerősíti, hogy a próba pontosan az A2 cellát találta el, nem egy szélesebb
+törést. A sort ezután visszaállítva (`label: label`), a teszt újra zöld:
+`00:00 +4: All tests passed!` (lásd a §11 gate-futást ugyanerre az
+eredményre).
+
+### Gate
+
+```
+tools/round-gate.sh test/core/design_system/icons/ss_icons_test.dart test/core/design_system/icons/icon_semantics_test.dart
+```
+
+Mind a hét lépés (`format`, `analyze`, a két célzott `test`, `architecture`,
+`secrets`, `l10n`) **ZÖLD**. Kiegészítő, nem kötelező ellenőrzésként lefutott
+a `test/core/design_system/component_catalog_test.dart` is (L387 — a
+`public.dart` bővítése a meglévő kompatibilitási tesztet is érinti):
+mind a nyolc teszt zöld, a katalógus-galéria hozzáadása nem törte a meglévő
+smoke-tesztet.
+
+### A következő köröknek
+
+- A `SsIcon.byName`-szerű dinamikus feloldás (`SsIcons.resolveByName`) ma csak
+  hat Material-aliast ismer (`play`, `pause`, `settings`, `close`, `check`,
+  `info`) — bővítendő, ha egy jövőbeli kör több Material ikonra hivatkozna
+  névvel.
+- A `lib/features/live/widgets/strum_arrow.dart` és az új
+  `SsGuitarGlyphPainter` downstrum/upstrum ága két, egymástól független
+  megvalósítás (ADR 0411 „Következmények" — szándékos, az összevonás a
+  képernyő-migrációs körök dolga).
+- Az A6 lelet (16 emoji / 5 fájl, 25 nyíl / 13 fájl) a Ch13 Kör 16–35
+  kiindulópontja — egyik érintett fájlhoz sem nyúlt ez a kör.
+
 ## 11. Review — a Claude tölti ki
