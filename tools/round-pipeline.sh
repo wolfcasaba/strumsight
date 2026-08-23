@@ -522,7 +522,11 @@ inflight_rounds() { ls "$inflight_dir" 2>/dev/null | grep -E '^[A-Z][0-9]{2}-R[0
 #   * minden más útvonal változatlanul megállítja a láncot.
 working_tree_dirt() {
   local status round slug
-  status=$(git -C "$repo_root" status --porcelain 2>/dev/null)
+  # `-uall`: a git az EGÉSZÉBEN untracked könyvtárat alapból `?? docs/`-ként
+  # vonja össze — ilyenkor a lenti, fájl-szintű szűrő nem illeszkedne, és a
+  # mentesség némán elveszne. A fájl-szintű felsorolás ezt kizárja. A guard
+  # üres/nem-üres döntése ettől NEM változik, csak a felsorolás finomsága.
+  status=$(git -C "$repo_root" status --porcelain -uall 2>/dev/null)
   [ -n "$status" ] || return 0
   for round in $(inflight_rounds); do
     slug=$(printf '%s' "$round" | tr 'A-Z' 'a-z')

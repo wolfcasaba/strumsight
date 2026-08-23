@@ -16,6 +16,7 @@ Plusz a költség-főkönyv (token → $), ami a motorválasztást méréssé te
 
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -270,3 +271,91 @@ class CostLedgerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WorkingTreeDirtTest(unittest.TestCase):
+    """A futó kör review-artefaktuma nem „ismeretlen lokális változás".
+
+    MÉRVE 2026-08-23 (E13-R06 nem indult el): a kör orchesztrátora a MEGOSZTOTT
+    fő fába írja a `docs/reviews/<kör>-review.md`-t, amit a kör LANDOLÁSA
+    commitol — addig untracked. Két sávnál emiatt amíg az egyik sáv
+    review-fázisban volt, a másik SOHA nem tudott indulni: az E13-R05 merge-e
+    (16:46:40) után a 16:50-es firing megszerezte a szabad slotot, majd
+    `piszkos munkafa`-val meghalt a futó E09-R17 review-fájlján.
+    """
+
+    def prepare(self, root: Path) -> Path:
+        subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
+        (root / "tools").mkdir()
+        shutil.copy2(ROOT / "tools" / "round-pipeline.sh", root / "tools" / "round-pipeline.sh")
+        (root / "docs" / "reviews").mkdir(parents=True)
+        subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+        subprocess.run(
+            ["git", "-C", str(root), "-c", "user.email=a@x.test", "-c", "user.name=A",
+             "commit", "-q", "-m", "init"],
+            check=True,
+        )
+        return root / "tools" / "round-pipeline.sh"
+
+    def dirt(self, script: Path, state: Path) -> str:
+        return subprocess.run(
+            ["bash", str(script), "--working-tree-dirt"],
+            capture_output=True,
+            text=True,
+            env=dict(os.environ, PIPELINE_STATE_DIR=str(state)),
+            timeout=60,
+        ).stdout.strip()
+
+    def test_an_in_flight_rounds_review_file_is_not_dirt(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name) / "repo"
+            root.mkdir()
+            script = self.prepare(root)
+            state = Path(name) / "state"
+            (state / "inflight").mkdir(parents=True)
+            (state / "inflight" / "E09-R17").write_text("round=E09-R17\n", encoding="utf-8")
+            (root / "docs" / "reviews" / "e09-r17-review.md").write_text("x\n", encoding="utf-8")
+
+            self.assertEqual(self.dirt(script, state), "")
+
+            # high-risk kör második artefaktuma ugyanígy
+            (root / "docs" / "reviews" / "e09-r17-security.md").write_text("x\n", encoding="utf-8")
+            self.assertEqual(self.dirt(script, state), "")
+
+    def test_a_review_file_of_a_round_that_is_not_running_still_blocks(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name) / "repo"
+            root.mkdir()
+            script = self.prepare(root)
+            state = Path(name) / "state"
+            (state / "inflight").mkdir(parents=True)
+            (root / "docs" / "reviews" / "e09-r17-review.md").write_text("x\n", encoding="utf-8")
+
+            self.assertIn("e09-r17-review.md", self.dirt(script, state))
+
+    def test_any_other_dirt_still_stops_the_chain(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name) / "repo"
+            root.mkdir()
+            script = self.prepare(root)
+            state = Path(name) / "state"
+            (state / "inflight").mkdir(parents=True)
+            (state / "inflight" / "E09-R17").write_text("round=E09-R17\n", encoding="utf-8")
+
+            # (a) idegen untracked fájl
+            (root / "lib_stray.dart").write_text("x\n", encoding="utf-8")
+            self.assertIn("lib_stray.dart", self.dirt(script, state))
+            (root / "lib_stray.dart").unlink()
+
+            # (b) MÓDOSÍTOTT tracked fájl ugyanabban a könyvtárban — a mentesség
+            #     csak az untracked (`??`) állapotra szól
+            tracked = root / "docs" / "reviews" / "e09-r17-review.md"
+            tracked.write_text("x\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(root), "add", str(tracked)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "-c", "user.email=a@x.test", "-c", "user.name=A",
+                 "commit", "-q", "-m", "review"],
+                check=True,
+            )
+            tracked.write_text("módosítva\n", encoding="utf-8")
+            self.assertIn("e09-r17-review.md", self.dirt(script, state))
