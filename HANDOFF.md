@@ -1,5 +1,76 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R20 KÉSZ — Notification inbox és push abstraction — PR [#434](https://github.com/wolfcasaba/strumsight/pull/434), squash `61f31c35` (2026-08-23)
+
+**A KÖZÖSSÉGI ÉRTESÍTÉS-RENDSZER ALAPJA ÁLL — tartós, kategorizált inbox +
+provider-semleges push-absztrakció, service-réteg-only.** ([ADR 0414](docs/adr/0414-notification-inbox-and-push-abstraction.md) —
+a brief előre kiosztott `0409`-e STALE marker miatt elavult, a friss atomi
+foglalás `0414`-et adott, lásd a brief §0.0.)
+
+- **`backend/app/community/notifications/push_gateway.py`** (ÚJ) — `PushPayload`
+  zárt `@dataclass(frozen=True)` (notification_id/type/title_key/body_key/
+  route_entity_type/route_entity_id), `__post_init__` allowlist-validáció +
+  `_assert_payload_is_minimal` struktúrális őr (A1); `NoOpPushGateway` az
+  egyetlen adapter ebben a körben — valódi FCM/APNs-bekötés jövőbeli kör dolga.
+- **`backend/app/community/notifications/notification_service.py`** (ÚJ) —
+  `create_notification` (dedup-kulcs UNIQUE-constraint + `IntegrityError`-alapú
+  re-read, A7; reakció-burst aggregáció 15 perces csúszó `(recipient, entity_type,
+  entity_id)` ablakban, A2), `mark_read`/`mark_all_read_up_to` (`_before_commit`
+  teszt-seam a döntő UPDATE ELŐTT, A3 — [L421](docs/LESSONS.md) Barrier-minta),
+  `list_inbox`/`get_unread_count` (`is_blocked_pair`/`list_block_pairs_for_viewer`
+  szűrés, A4 — **mindkét olvasási úton**, lásd lent), `get_related_content_id`
+  (A5, csak `post` entitásra fedett).
+- **`lib/features/community/application/controllers/notification_controller.dart`**
+  + **`.../screens/community_notifications_screen.dart`** (mindkettő ÚJ) — a Kör 5
+  (ADR 0399) MÁR élő `CommunityNotificationRepository`/`CommunityNotificationItem`
+  domain-kontraktusára épül, `UnimplementedError` default providerrel (a valódi
+  HTTP data-layer jövőbeli kör dolga, Kör 14/16 precedens).
+- **Ez a kör SZÁNDÉKOSAN service-réteg-only** (ADR 0414 D2, mérve a pre-flightban):
+  a `reaction_service.py`/`comment_service.py`-nek MA sincs élő router-hívója, a
+  `follow_service.py` router-hívója (`social_graph.py`) nincs `allowed_paths`-on
+  — a MEGLÉVŐ három szolgáltatás notification-eseményekhez kötése egy jövőbeli
+  kör dolga.
+
+**A dedikált biztonsági review (risk=high) 1 MAJOR-t reprodukált a zöld gate
+MÖGÖTT:** `get_unread_count` NEM alkalmazta az A4 block-szűrőt, amit a
+`list_inbox` igen — egy blockolt actor eseménye eltűnt a listából, de MÉGIS
+számított az unread-badge-be (badge-desync + "egy blockolt személy tett
+valamit" szivárgás). A brief §10 handoffja az A4-et PASS-nak jelentette a
+`list_inbox`-only teszt alapján. 1 javító kör zárta: `list_block_pairs_for_
+viewer` materializált halmaz + SQL `NOT IN`, új mérce-cella
+(`unread_count == visible_unread`) valódi-sértés próbával (`monkeypatch` →
+piros → automatikus revert). 1 MINOR follow-up nyitva marad (`list_inbox`
+lapozás blockolt sorokkal alul-tölthet — `docs/reviews/e09-r20-review.md` §5).
+
+**Két KORÁBBAN MÁR dokumentált, kör-idegen infrastruktúra-hiba ismét
+lecsapott, mindkettő workaround-dal megkerülve (NEM tools/-módosítás):**
+
+1. **Megosztott munkafa branch-klobberelés** ([L447](docs/LESSONS.md)) — a
+   párhuzamos E13-R08/E13-R09 sáv saját záró-rituáléja (`git checkout main` /
+   `git reset --hard origin/main`) a KÖZÖS `/home/ubuntu/music-theory` fán,
+   miközben az E09-R20 branch volt kicheckoutolva, MEGVÁLTOZTATTA a lokális
+   branch-ref-et (a commitok az originon épségben maradtak). Recovery: `git
+   reset --hard <ismert jó SHA>` a branch-refre, mielőtt bármit commitolnál a
+   megosztott fán.
+2. **`tools/round-gate.sh::resolve_backend_python()` relatív útvonal-bug**
+   ([L448](docs/LESSONS.md)) — a `backend/.venv/bin/python` jelölt CWD-relatív
+   ellenőrzéssel dől el, de a `[10] backend pytest` lépés `env
+   --chdir=backend "$backend_python"`-t hív: a repo-gyökérből futtatva (ahol
+   `backend/.venv/bin/python` LÉTEZIK) a jelölt kiválasztva, de a
+   `--chdir=backend` UTÁN a relatív útvonal `backend/backend/.venv/bin/
+   python`-ra oldódik fel — NEM LÉTEZIK (kilépési kód 127). Workaround
+   (env-változó, NEM kód-szerkesztés):
+   `ROUND_GATE_BACKEND_PYTHON=/home/ubuntu/music-theory/backend/.venv/bin/python`
+   a `round-land.sh`/`round-gate.sh` hívás elé. **A tényleges javítás MÉG
+   MINDIG nincs meg** — ez a MÁSODIK mérés ugyanarra (E09-R19 landolás, majd
+   E09-R20 landolás) — GOV/önjavító kör dolga, `tools/`-ot implementer-kör
+   nem érinthet.
+
+Review: [`docs/reviews/e09-r20-review.md`](docs/reviews/e09-r20-review.md)
+(APPROVED javító kör után) + [`docs/reviews/e09-r20-security.md`](docs/reviews/e09-r20-security.md)
+(dedikált security-reviewer, PASS 1 MAJOR reprodukálva és zárva). Exact
+`f36dfc91`: Full Gate 32668900124 + Router CI 32668896344 mind success.
+
 ## ✅ E13-R08 KÉSZ — Adaptive scaffold és primary navigation — PR [#432](https://github.com/wolfcasaba/strumsight/pull/432), squash `c96a3276` (2026-08-23)
 
 **A CHAPTER 13 NYOLCADIK KÖRE KÉSZ — az ötterületes alkalmazás-shell váza áll,
@@ -5842,6 +5913,17 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-23):** `main` @ `61f31c35` — E09-R20 Notification
+inbox és push abstraction, PR
+[#434](https://github.com/wolfcasaba/strumsight/pull/434), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, 1 javító kör
+(MAJOR-1 `get_unread_count` A4 block-szűrő hiánya, a dedikált biztonsági
+review reprodukálta a zöld gate mögött — `docs/reviews/e09-r20-security.md`).
+Review APPROVED a javító kör után, 1 MINOR follow-up nyitva
+(`docs/reviews/e09-r20-review.md` §5). Exact `f36dfc91`: Full Gate
+32668900124 + Router CI 32668896344 mind success. Részletesen a fejléc
+✅-blokkban.
+
 **Aktuális állapot (2026-08-23):** `main` @ `ff39ee0c` — E09-R14 Feed UI,
 cache és tudatos használat, PR
 [#423](https://github.com/wolfcasaba/strumsight/pull/423), squash-merge.
@@ -6552,6 +6634,23 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E09-R20 — Notification inbox és push abstraction** (PR
+[#434](https://github.com/wolfcasaba/strumsight/pull/434), squash `61f31c35`,
+[ADR 0414](docs/adr/0414-notification-inbox-and-push-abstraction.md)).
+Tartós, kategorizált community notification inbox + provider-semleges push
+gateway absztrakció, service-réteg-only (a reaction/comment/follow service
+egyike sincs élő router mögé kötve ma — a mért tény a pre-flightban). A1
+push-payload redakció zárt dataclass + strukturális őrrel, A2 reakció-burst
+aggregáció (15 perces csúszó ablak), A3 unread-race [L421](docs/LESSONS.md)
+Barrier-mintával, A4 blocked-actor szűrés (`list_inbox` ÉS
+`get_unread_count` — 1 javító kör után), A5 törölt-entitás kezelés, A6
+kategória-preferencia (Flutter), A7 dedup-kulcs. 0 nyitott BLOCKER/MAJOR 1
+javító kör után (MAJOR-1 `get_unread_count` A4-rés, a dedikált
+security-reviewer reprodukálta — `docs/reviews/e09-r20-security.md`), 1
+MINOR follow-up nyitva (`list_inbox` lapozás blockolt sorokkal alul-tölthet).
+Exact `f36dfc91`: Full Gate 32668900124 + Router CI 32668896344 mind
+success. Részletesen a fejléc ✅-blokkban.
 
 **E13-R08 — Adaptive scaffold és primary navigation** (PR
 [#432](https://github.com/wolfcasaba/strumsight/pull/432), squash `c96a3276`).
@@ -7472,14 +7571,42 @@ NEM a queue helyett olvasandó.
     akkor kerülhetnek be, ha egy kör `allowed_paths`-a felveszi a `lib/l10n/**`-t.
   - **NOTE-2 nyitva (nem blokkoló):** `isStageRoute('/song-trainer/session/')`
     üres `songId`-ra `true`-t ad (`docs/reviews/e13-r08-review.md`).
-- **Epic-9 (community) sáv — következő: `E09-R20`**, engine `minimax`
-  (a queue következő `pending` Epic-9 sora).
+- **Epic-9 (community) sáv — következő: `E09-R21` — Community challenge és
+  invite lifecycle** (`docs/rounds/e09-r21-challenge-and-invite-lifecycle.md`,
+  engine `minimax`, előre kiosztott ADR `0410` — MÉRD ÚJRA a pre-flightban,
+  a queue-oszlop nem hiteles forrás, lásd az E09-R20 pre-flight 0409→0414
+  sorszám-ütközését). Az **E09-R20 (notification inbox és push abstraction)
+  KÉSZ** — lásd a fejléc ✅-blokkot. A Kör 20 mért horgai a Kör 21-nek:
+  - A `notification_service.create_notification` KÉSZ, publikus API-val
+    (recipient/type/title_key/body_key/actor/entity/dedup_key/aggregate) —
+    a Kör 21 challenge/invite eseményei ezt hívhatják, `notification_type`
+    allowlistjét bővítve (`NOTIFICATION_TYPE_ALLOWLIST`,
+    `models/notification.py`).
+  - **Ez a kör (E09-R20) NEM kötötte be** a `reaction_service.py`/
+    `comment_service.py`/`follow_service.py` eseményeit a notification-be
+    (service-réteg-only, ADR 0414 D2) — ha a Kör 21 ÉLŐ router-hívót ad a
+    challenge/invite-nek, az az ELSŐ hely, ahol a notification-integráció
+    ténylegesen élesedhet; ne feltételezd, hogy a MEGLÉVŐ három esemény már
+    értesítést generál élesben.
+  - `get_unread_count`/`list_inbox` block-szűrése MINDKÉT úton MÉRVE és
+    zárva (`is_blocked_pair`/`list_block_pairs_for_viewer`) — ha a Kör 21 új
+    olvasási utat ad a notification-táblához, ugyanezt a szűrést alkalmazza,
+    ne csak a listázó útvonalat.
+  - **MINOR-1 nyitva:** `list_inbox` lapozása blockolt sorok jelenlétében
+    alul-tölthet (`docs/reviews/e09-r20-review.md` §5) — ha a Kör 21
+    hozzányúl a `list_inbox`-hoz, ez a jó alkalom a zárásra.
 
 **Lánc-higiéniai teendő (nem kör-blokkoló, GOV/önjavító hatáskör):** a
 `tools/round-land.sh` a merge ELŐTT nem nézi meg a head SHA CI-`conclusion`-jét,
 ezért egy `blocked` utáni azonnali újrahívás exact-SHA Full Gate nélkül
 merge-el — az E13-R08 landolásakor mérve ([L450](docs/LESSONS.md)). A `tools/**`
 a kör-sessionöknek tiltott zóna (H-GATEGUARD), tehát ezt GOV-kör javíthatja.
+
+**Második lánc-higiéniai teendő (nem kör-blokkoló, GOV/önjavító hatáskör):**
+[L448](docs/LESSONS.md) `resolve_backend_python()` relatív-útvonal bugja
+MÁSODSZOR csapott le (E09-R19 landolás után E09-R20 landoláskor is) — a
+`ROUND_GATE_BACKEND_PYTHON` workaround ismét megkerülte, de a tényleges
+javítás (a jelölt abszolutizálása) MÉG MINDIG nincs meg.
 
 ## 7. Required verification (before any "done")
 
