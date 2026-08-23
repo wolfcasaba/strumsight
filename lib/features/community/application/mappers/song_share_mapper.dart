@@ -23,6 +23,8 @@ library;
 
 import 'package:strumsight/features/songs/public.dart';
 
+import '../../../../core/music/strum.dart';
+
 import '../../domain/entities/share_artifact.dart';
 
 /// Wire encoding for one slot of the strum pattern. The Song

@@ -146,7 +146,7 @@ sealed class ShareArtifact extends CommunityShareArtifact {
 /// codes — no raw attempt events, no per-attempt DSP detail (ADR 0404
 /// §D2, brief §5.1).
 final class PracticeSummaryArtifact extends ShareArtifact {
-  const PracticeSummaryArtifact({
+  PracticeSummaryArtifact({
     required super.schemaVersion,
     required super.sourceId,
     required super.createdAt,
@@ -155,8 +155,8 @@ final class PracticeSummaryArtifact extends ShareArtifact {
     required this.attemptCount,
     required this.finishReasonCode,
     this.bestScore,
-    this.coachingCodes = const <String>[],
-  }) : _coachingCodes = List<String>.unmodifiable(coachingCodes);
+    List<String> coachingCodes = const <String>[],
+  }) : coachingCodes = List<String>.unmodifiable(coachingCodes);
 
   @override
   ShareArtifactType get type => ShareArtifactType.practiceSummary;
@@ -174,12 +174,10 @@ final class PracticeSummaryArtifact extends ShareArtifact {
   /// available. NEVER fabricated from a missing value.
   final double? bestScore;
 
-  final List<String> _coachingCodes;
-
   /// Read-only canonical coaching codes from
   /// [PracticeSessionResult.coachingSummary] (Kör 10 explicitly excludes
   /// raw per-attempt events).
-  List<String> get coachingCodes => _coachingCodes;
+  final List<String> coachingCodes;
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
@@ -192,7 +190,7 @@ final class PracticeSummaryArtifact extends ShareArtifact {
     'attemptCount': attemptCount,
     'finishReasonCode': finishReasonCode,
     'bestScore': bestScore,
-    'coachingCodes': _coachingCodes,
+    'coachingCodes': coachingCodes,
   };
 
   static PracticeSummaryArtifact fromJson(Map<String, Object?> object) {
@@ -221,7 +219,7 @@ final class PracticeSummaryArtifact extends ShareArtifact {
           other.attemptCount == attemptCount &&
           other.finishReasonCode == finishReasonCode &&
           other.bestScore == bestScore &&
-          _listEquals(other._coachingCodes, _coachingCodes);
+          _listEquals(other.coachingCodes, coachingCodes);
 
   @override
   int get hashCode => Object.hash(
@@ -233,7 +231,7 @@ final class PracticeSummaryArtifact extends ShareArtifact {
     attemptCount,
     finishReasonCode,
     bestScore,
-    Object.hashAll(_coachingCodes),
+    Object.hashAll(coachingCodes),
   );
 }
 

@@ -26,7 +26,8 @@
 // — a single default-case test would mask the failure modes.
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/features/audio_analysis/public.dart';
+import 'package:strumsight/features/audio_analysis/public.dart'
+    hide StrumDirection;
 import 'package:strumsight/features/community/application/mappers/achievement_share_mapper.dart';
 import 'package:strumsight/features/community/application/mappers/analysis_share_mapper.dart';
 import 'package:strumsight/features/community/application/mappers/practice_share_mapper.dart';
@@ -35,6 +36,8 @@ import 'package:strumsight/features/community/domain/entities/share_artifact.dar
 import 'package:strumsight/features/gamification/public.dart';
 import 'package:strumsight/features/practice/public.dart';
 import 'package:strumsight/features/songs/public.dart';
+
+import 'package:strumsight/core/music/strum.dart';
 
 void main() {
   // The shared creation timestamp across all fixture artifacts.
@@ -354,8 +357,12 @@ void main() {
       };
       final decoded = ShareArtifact.fromJson(conflict);
       expect(decoded, isA<SongResultArtifact>());
+      // The song shape has no `activeSeconds` accessor — the
+      // practice fields present in the wire payload are silently
+      // dropped (the `extra="forbid"` backend side rejects them;
+      // the Dart side does NOT surface them on the wrong subtype).
       expect(
-        () => (decoded as SongResultArtifact).coachingCodes,
+        () => (decoded as dynamic).activeSeconds,
         throwsNoSuchMethodError,
         reason:
             'songResult shape must NOT carry the practice fields '
@@ -559,13 +566,22 @@ PracticeSessionResult _practiceSessionResultFixture() {
     attempts: <PracticeAttemptResult>[
       PracticeAttemptResult(
         index: 0,
+        tempo: Tempo(96),
         metrics: PracticeMetrics(
-          tempo: MetricNotApplicable(),
+          completion: MetricNotApplicable(),
+          rhythm: MetricNotApplicable(),
+          direction: MetricNotApplicable(),
+          chord: MetricNotApplicable(),
           overall: MetricAvailable(0.85),
-          chordAccuracy: MetricNotApplicable(),
-          directionAccuracy: MetricNotApplicable(),
-          timing: MetricNotApplicable(),
+          totalTargets: 1,
+          resolvedTargets: 1,
+          maxCombo: 1,
+          scorePoints: 85,
+          meanAbsoluteOffset: Duration.zero,
+          timingBias: Duration.zero,
         ),
+        verdicts: <PracticeVerdict>[],
+        outcome: PracticeAttemptOutcome.passed,
       ),
     ],
   );

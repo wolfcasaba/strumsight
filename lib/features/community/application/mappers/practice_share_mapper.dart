@@ -27,7 +27,7 @@ import '../../domain/entities/share_artifact.dart';
 PracticeSummaryArtifact practiceSummaryFromSessionResult(
   PracticeSessionResult result, {
   required DateTime createdAt,
-  String sourceId,
+  String sourceId = '',
   int schemaVersion = shareArtifactSchemaVersion,
 }) {
   final best = result.bestAttempt;
