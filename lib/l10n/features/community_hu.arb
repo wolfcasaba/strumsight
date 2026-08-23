@@ -97,5 +97,38 @@
   "communityEditAvatarNotUploaded": "A profilkép feltöltése ebben a buildben nem elérhető.",
   "communityEditBadgesLabel": "Szerzett jelvények",
   "@communityEditBadgesLabel": {},
-  "communityEditBadgesBody": "A jelvények ebben a buildben csak olvashatók — a gyakorlási előzményekből származnak."
+  "communityEditBadgesBody": "A jelvények ebben a buildben csak olvashatók — a gyakorlási előzményekből származnak.",
+
+  "safetyBlockedMutedTitle": "Letiltottak és némítottak",
+  "@safetyBlockedMutedTitle": {},
+
+  "safetyBlockedTab": "Letiltottak",
+  "@safetyBlockedTab": {},
+
+  "safetyMutedTab": "Némítottak",
+  "@safetyMutedTab": {},
+
+  "safetyUnblock": "Letiltás feloldása",
+  "@safetyUnblock": {},
+
+  "safetyUnmute": "Némítás feloldása",
+  "@safetyUnmute": {},
+
+  "safetyEmptyBlocked": "Még nem tiltottál le senkit.",
+  "@safetyEmptyBlocked": {},
+
+  "safetyEmptyMuted": "Még senkit nem némítottál el.",
+  "@safetyEmptyMuted": {},
+
+  "safetyErrorNetwork": "Nincs hálózati kapcsolat",
+  "@safetyErrorNetwork": {},
+
+  "safetyErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra",
+  "@safetyErrorSessionExpired": {},
+
+  "safetyErrorForbidden": "Nincs jogosultságod a lista megtekintéséhez",
+  "@safetyErrorForbidden": {},
+
+  "safetyErrorInvalidInput": "Érvénytelen kérés",
+  "@safetyErrorInvalidInput": {}
 }

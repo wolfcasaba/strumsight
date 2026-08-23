@@ -83,6 +83,30 @@ class RelationshipContext:
     is_club_member: bool = False
 
 
+def relationship_context_from_block_flag(
+    *,
+    blocked: bool,
+    viewer_is_owner: bool = False,
+    is_follower: bool = False,
+    is_club_member: bool = False,
+) -> RelationshipContext:
+    """Build a ``RelationshipContext`` from the live block predicate.
+
+    E09-R08 wires the ``RelationshipContext.blocked`` field to the
+    actual ``community_blocks`` table via
+    ``query_filters.is_blocked_pair``. The routers call the DB helper
+    first, then feed the resulting ``bool`` into this builder — the
+    policy stays DB-free (ADR 0398 invariant, re-affirmed in ADR 0402
+    §D2) while the field still carries live data.
+    """
+    return RelationshipContext(
+        viewer_is_owner=viewer_is_owner,
+        blocked=blocked,
+        is_follower=is_follower,
+        is_club_member=is_club_member,
+    )
+
+
 class CommunityAccessPolicy:
     """The single read-path policy.
 
@@ -184,4 +208,5 @@ __all__ = [
     "ProfileAccessLevel",
     "ProfileVisibility",
     "RelationshipContext",
+    "relationship_context_from_block_flag",
 ]

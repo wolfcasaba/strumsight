@@ -85,4 +85,18 @@ abstract interface class SocialGraphRepository {
     required PublicUserId target,
     required String idempotencyKey,
   });
+
+  /// Paged list of profiles the CALLER (not the path-param peer)
+  /// has blocked. E09-R08 §D5 — the Blocked/Muted settings screen
+  /// needs the viewer's own block list, not the block list of a
+  /// peer.
+  Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
+    required Object cursor,
+  });
+
+  /// Paged list of profiles the CALLER has muted (symmetric to
+  /// [blockedProfilesPage]).
+  Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
+    required Object cursor,
+  });
 }

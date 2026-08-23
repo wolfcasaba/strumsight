@@ -1,25 +1,24 @@
 /// Dio-backed implementation of [SocialGraphRepository] (E09-R07,
-/// ADR 0401 §2).
+/// ADR 0401 §2; E09-R08, ADR 0402).
 ///
 /// The repository implements the **existing** ``SocialGraphRepository``
 /// contract — the Kör 5 / ADR 0399 domain interface — NOT a new
 /// ``RelationshipRepository`` (the file name is the implementation
-/// name, the interface is the pre-existing one). Of the 11 methods:
+/// name, the interface is the pre-existing one). Of the 13 methods:
 ///
 /// * The 7 follow-related methods (``followingPage`` / ``followersPage``
 ///   / ``follow`` / ``unfollow`` / ``removeFollower`` /
 ///   ``acceptFollowRequest`` / ``declineFollowRequest``) are wired
 ///   against the Kör 7 backend endpoints.
 /// * The 4 block/mute methods (``block`` / ``unblock`` / ``mute`` /
-///   ``unmute``) are Kör 8 scope; this round throws
-///   ``UnsupportedError`` for each — the same precedent as
-///   ``HttpCommunityProfileRepository.fetchById`` (E09-R06, ADR 0400).
-///   A future regression that "silently" returned ``Future.value()``
-///   for these methods would be the §2 NEM-ELFOGADHATÓ GYENGÍTÉS
-///   ("a csendes no-op implementáció sikeres Future.value() visszaadása
-///   — félrevezető sikert jelentene egy funkcionalitásra, ami nem
-///   létezik"). Throwing makes the absent implementation visible at
-///   the call site.
+///   ``unmute``) are wired in E09-R08 against
+///   ``/community/profiles/{id}/block|mute`` endpoints — same
+///   POST/DELETE idempotency-key shape as the follow endpoints.
+/// * The 2 ``blockedProfilesPage`` / ``mutedProfilesPage`` list
+///   methods were added in E09-R08 (ADR 0402 §D5) so the
+///   Blocked/Muted settings screen can render the caller's own
+///   block/mute lists. They reuse the same ``_decodePage`` /
+///   ``_placeholderProfile`` envelope as the follow lists.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -118,6 +117,16 @@ final class DisabledSocialGraphRepository implements SocialGraphRepository {
   Future<void> unmute({
     required PublicUserId target,
     required String idempotencyKey,
+  }) async => throw _disabled.error;
+
+  @override
+  Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
+    required Object cursor,
+  }) async => throw _disabled.error;
+
+  @override
+  Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
+    required Object cursor,
   }) async => throw _disabled.error;
 }
 
@@ -262,37 +271,100 @@ class HttpSocialGraphRepository implements SocialGraphRepository {
   Future<void> block({
     required PublicUserId target,
     required String idempotencyKey,
-  }) =>
-      // Kör 8 scope (ADR 0401 §2). Throw explicitly so a future
-      // regression that swapped this for a silent no-op would fail
-      // loudly at the call site.
-      throw UnsupportedError(
-        'SocialGraphRepository.block is not yet implemented',
-      );
+  }) async {
+    final result = await _client.postJson<dynamic>(
+      '/community/profiles/${target.value}/block',
+      data: {'idempotency_key': idempotencyKey},
+      decode: _decodeVoidResponse,
+    );
+    if (result is Failure) {
+      throw (result).error;
+    }
+  }
 
   @override
   Future<void> unblock({
     required PublicUserId target,
     required String idempotencyKey,
-  }) => throw UnsupportedError(
-    'SocialGraphRepository.unblock is not yet implemented',
-  );
+  }) async {
+    // ADR 0402 backend-HTTP surface — DELETE idempotency key travels
+    // as a query parameter, mirroring `unfollow` / `removeFollower`
+    // (ADR 0401 §1).
+    final path =
+        '/community/profiles/${target.value}/block'
+        '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
+    final result = await _client.delete(path, headers: const {});
+    if (result is Failure) {
+      throw (result).error;
+    }
+  }
 
   @override
   Future<void> mute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) => throw UnsupportedError(
-    'SocialGraphRepository.mute is not yet implemented',
-  );
+  }) async {
+    final result = await _client.postJson<dynamic>(
+      '/community/profiles/${target.value}/mute',
+      data: {'idempotency_key': idempotencyKey},
+      decode: _decodeVoidResponse,
+    );
+    if (result is Failure) {
+      throw (result).error;
+    }
+  }
 
   @override
   Future<void> unmute({
     required PublicUserId target,
     required String idempotencyKey,
-  }) => throw UnsupportedError(
-    'SocialGraphRepository.unmute is not yet implemented',
-  );
+  }) async {
+    final path =
+        '/community/profiles/${target.value}/mute'
+        '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
+    final result = await _client.delete(path, headers: const {});
+    if (result is Failure) {
+      throw (result).error;
+    }
+  }
+
+  @override
+  Future<CommunityPage<CommunityProfile>> blockedProfilesPage({
+    required Object cursor,
+  }) async {
+    final path = _buildPagePath('/community/blocked', cursor);
+    final result = await _client.getJson<dynamic>(path, decode: _decodePage);
+    return switch (result) {
+      Success(:final value) => value as CommunityPage<CommunityProfile>,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  @override
+  Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
+    required Object cursor,
+  }) async {
+    final path = _buildPagePath('/community/muted', cursor);
+    final result = await _client.getJson<dynamic>(path, decode: _decodePage);
+    return switch (result) {
+      Success(:final value) => value as CommunityPage<CommunityProfile>,
+      Failure(:final error) => throw error,
+    };
+  }
+
+  String _buildPagePath(String base, Object cursor) {
+    // Inline the limit and the optional cursor into the URL so the
+    // request hits the backend with the right query string. The
+    // shared ``api_client.dart::getJson`` does not accept a query-
+    // param map (its four endpoints all carry no params), so the
+    // only way to forward a cursor today is inline — same pattern
+    // as the Kör 7 ``unfollow`` DELETE.
+    final cursorValue = _cursorQueryValue(cursor);
+    final qs = cursorValue == null
+        ? 'limit=50'
+        : 'limit=50&cursor=$cursorValue';
+    return '$base?$qs';
+  }
 
   Future<String> _resolveCallerPublicId() async {
     // The repository does not know the caller's public-id directly;
@@ -383,10 +455,16 @@ CommunityProfile _placeholderProfile(PublicUserId userId) {
   // The placeholder is a structural seam so the page envelope
   // can satisfy ``CommunityPage<CommunityProfile>`` without
   // calling the DB on every list-fetch.
+  //
+  // E09-R08: the factory enforces a non-empty displayName — the
+  // Kör 7 ``''`` literal here would throw ``ArgumentError`` the
+  // moment ``_decodePage`` materialises a row. A short, non-empty
+  // placeholder keeps the page boundary honest; the real display
+  // name arrives via the canonical ``fetchById`` follow-up.
   return CommunityProfile(
     userId: userId,
     handle: CommunityHandle('placeholder-x1'),
-    displayName: '',
+    displayName: 'placeholder',
     visibility: ProfileVisibility.followers,
     avatarUrl: null,
     bio: null,

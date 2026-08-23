@@ -1,10 +1,12 @@
-"""Community social-graph router — E09-R07, ADR 0401 §3, §5, §7.
+"""Community social-graph router — E09-R07, ADR 0401 §3, §5, §7; E09-R08, ADR 0402 §D2.
 
 This router exposes the follow / follow-request / follower-removal
-HTTP endpoints. It is mounted in the test app through a separate
-fixture (the brief §0.0 5. pont — the ``build_community_router``
-factory in ``community/__init__.py`` is in the §3 tilos zóna, so
-this round ships its own mount point in the test conftest).
+HTTP endpoints AND the block-first filtering that E09-R08 wires into
+``get_followers`` / ``get_following`` (the §D2 invariant). It is
+mounted in the test app through a separate fixture (the brief §0.0 5.
+pont — the ``build_community_router`` factory in
+``community/__init__.py`` is in the §3 tilos zóna, so this round ships
+its own mount point in the test conftest).
 
 Endpoints:
 
@@ -24,14 +26,24 @@ Endpoints:
 * ``DELETE /community/profiles/{public_id}/followers/{follower_id}`` —
   remove a follower. Idempotent no-op if not a follower.
 * ``GET /community/profiles/{public_id}/followers?cursor=...&limit=...`` —
-  cursor-paginated followers list.
+  cursor-paginated followers list. **E09-R08 block-first**: a
+  block between the caller and the profile owner returns ``403``;
+  otherwise blocked profiles are filtered from the page.
 * ``GET /community/profiles/{public_id}/following?cursor=...&limit=...`` —
-  cursor-paginated following list.
+  cursor-paginated following list. Same E09-R08 block-first filter.
 
 All authenticated endpoints take an ``idempotency_key`` either in
 the JSON body (POST endpoints) or as a query parameter (DELETE
 endpoints — the Kör 5 ``api_client.dart``'s ``delete()`` does not
 carry a JSON body, ADR 0401 §1 / §3).
+
+The two GET endpoints translate the Kör 7 ``list_followers`` /
+``list_following`` return value (which is a tuple of follow-edge
+public_ids, the row's own ``public_id``) into the documented
+follower / followed PROFILE public_ids so the wire shape matches
+the documented contract and the E09-R08 block-filter can resolve
+each id back to a ``community_profiles`` row. The response
+envelope (``public_ids`` / ``next_cursor``) is unchanged.
 """
 
 from __future__ import annotations
@@ -44,6 +56,12 @@ from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
+from ..models.profile import CommunityProfile
+from ..models.social_graph import CommunityFollow
+from ..policies.query_filters import (
+    filter_public_ids_against_viewer_blocks,
+    is_blocked_pair,
+)
 from ..services.follow_service import (
     FollowAlreadyExists,
     FollowRequestNotFound,
@@ -366,6 +384,74 @@ _FOLLOW_LIST_DEFAULT_LIMIT = 50
 _FOLLOW_LIST_MAX_LIMIT = 200
 
 
+def _follower_page(
+    db: Session,
+    *,
+    owner_public_id: uuid.UUID,
+    cursor: str | None,
+    limit: int,
+) -> tuple[list[uuid.UUID], str | None]:
+    """Return the cursor-paginated FOLLOWERS page as PROFILE public_ids.
+
+    Wraps :func:`follow_service.list_followers` and translates the
+    edge-level public_ids the service returns into the
+    corresponding follower's profile public_id (via a JOIN on
+    ``community_profiles`` keyed on ``follower_profile_id``). The
+    cursor is forwarded verbatim.
+
+    Same shape contract as the wire — list of public_ids plus a
+    next_cursor — but the values are the documented profile
+    public_ids, not the Kör 7 edge public_ids.
+    """
+    page = list_followers(
+        db, profile_public_id=owner_public_id, cursor=cursor, limit=limit
+    )
+    if not page.public_ids:
+        return [], page.next_cursor
+    rows = (
+        db.query(CommunityFollow.public_id, CommunityFollow.follower_profile_id)
+        .filter(CommunityFollow.public_id.in_(list(page.public_ids)))
+        .all()
+    )
+    edge_to_follower_pk = {row[0]: row[1] for row in rows}
+    profile_public_ids = _translate_edge_public_ids_to_profile_public_ids(
+        db, edge_public_ids_to_profile_pk=edge_to_follower_pk
+    )
+    # Preserve order — the service page is ordered; we map
+    # edge-by-edge so the (created_at DESC, id DESC) ordering is
+    # preserved.
+    return profile_public_ids, page.next_cursor
+
+
+def _following_page(
+    db: Session,
+    *,
+    owner_public_id: uuid.UUID,
+    cursor: str | None,
+    limit: int,
+) -> tuple[list[uuid.UUID], str | None]:
+    """Same as :func:`_follower_page` but for the following list.
+
+    Translates ``CommunityFollow.public_id`` to the FOLLOWED
+    profile's public_id (JOIN on ``followed_profile_id``).
+    """
+    page = list_following(
+        db, profile_public_id=owner_public_id, cursor=cursor, limit=limit
+    )
+    if not page.public_ids:
+        return [], page.next_cursor
+    rows = (
+        db.query(CommunityFollow.public_id, CommunityFollow.followed_profile_id)
+        .filter(CommunityFollow.public_id.in_(list(page.public_ids)))
+        .all()
+    )
+    edge_to_followed_pk = {row[0]: row[1] for row in rows}
+    profile_public_ids = _translate_edge_public_ids_to_profile_public_ids(
+        db, edge_public_ids_to_profile_pk=edge_to_followed_pk
+    )
+    return profile_public_ids, page.next_cursor
+
+
 @router.get(
     "/profiles/{public_id}/followers",
     status_code=status.HTTP_200_OK,
@@ -389,16 +475,50 @@ def get_followers(
     authentication is the router's own invariant — every other
     endpoint in this router enforces it, and a GET without auth
     is a hole regardless of what the body says).
+
+    **E09-R08 block-first (ADR 0402 §D2):**
+
+    1. If the caller and the profile owner are connected by a
+       block edge in either direction, the endpoint returns
+       ``403`` instead of the page. This is the block-first
+       invariant — a blocked viewer must not even learn the size
+       or the first row of the page.
+    2. Otherwise, every row in the page whose owner is connected
+       to the caller by a block edge is dropped. The drop is
+       silent — the page is just shorter. The cursor is forwarded
+       verbatim so the caller never sees the dropped rows.
+
+    The check is symmetric: it does not matter who initiated the
+    block.
     """
     db_gen = _session_factory(request)
     db = next(db_gen)
     try:
-        page = list_followers(
-            db, profile_public_id=public_id, cursor=cursor, limit=limit
+        try:
+            viewer_public_id = _caller_profile_public_id(db, current_user.id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        owner_id = _community_profile_pk(db, public_id)
+        if owner_id is None:
+            raise HTTPException(status_code=404, detail="profile not found")
+        viewer_id = _community_profile_pk(db, viewer_public_id)
+        if viewer_id is None:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        if is_blocked_pair(db, profile_id_a=viewer_id, profile_id_b=owner_id):
+            # §D2: 403 BEFORE the page is materialised — the caller
+            # learns nothing about the blocked peer's social graph.
+            raise HTTPException(status_code=403, detail="blocked")
+        profile_public_ids, next_cursor = _follower_page(
+            db, owner_public_id=public_id, cursor=cursor, limit=limit
+        )
+        filtered_ids = filter_public_ids_against_viewer_blocks(
+            db,
+            viewer_profile_id=viewer_id,
+            public_ids=profile_public_ids,
         )
         return {
-            "public_ids": [str(value) for value in page.public_ids],
-            "next_cursor": page.next_cursor,
+            "public_ids": [str(value) for value in filtered_ids],
+            "next_cursor": next_cursor,
         }
     finally:
         try:
@@ -427,16 +547,37 @@ def get_following(
     Authenticated — see the docstring on ``get_followers`` for the
     rationale (the §F2 fix: auth at the router layer; visibility
     filtering at the policy layer, Kör 8 / Kör 13).
+
+    E09-R08 block-first: same §D2 invariant as ``get_followers`` —
+    caller↔owner block → ``403``; otherwise blocked profiles are
+    filtered from the page.
     """
     db_gen = _session_factory(request)
     db = next(db_gen)
     try:
-        page = list_following(
-            db, profile_public_id=public_id, cursor=cursor, limit=limit
+        try:
+            viewer_public_id = _caller_profile_public_id(db, current_user.id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        owner_id = _community_profile_pk(db, public_id)
+        if owner_id is None:
+            raise HTTPException(status_code=404, detail="profile not found")
+        viewer_id = _community_profile_pk(db, viewer_public_id)
+        if viewer_id is None:
+            raise HTTPException(status_code=404, detail="caller profile not found")
+        if is_blocked_pair(db, profile_id_a=viewer_id, profile_id_b=owner_id):
+            raise HTTPException(status_code=403, detail="blocked")
+        profile_public_ids, next_cursor = _following_page(
+            db, owner_public_id=public_id, cursor=cursor, limit=limit
+        )
+        filtered_ids = filter_public_ids_against_viewer_blocks(
+            db,
+            viewer_profile_id=viewer_id,
+            public_ids=profile_public_ids,
         )
         return {
-            "public_ids": [str(value) for value in page.public_ids],
-            "next_cursor": page.next_cursor,
+            "public_ids": [str(value) for value in filtered_ids],
+            "next_cursor": next_cursor,
         }
     finally:
         try:
@@ -473,6 +614,77 @@ def _caller_profile_public_id(db: Session, user_id: int) -> uuid.UUID:
         # so the rest of the service layer sees the type it expects.
         return uuid.UUID(hex=raw)
     return raw
+
+
+def _translate_edge_public_ids_to_profile_public_ids(
+    db: Session,
+    *,
+    edge_public_ids_to_profile_pk: dict[uuid.UUID, int],
+) -> list[uuid.UUID]:
+    """Map a list of ``CommunityFollow.public_id`` (edge) values to
+    the corresponding PROFILE public_ids on the OTHER end of each
+    edge.
+
+    The Kör 7 ``list_followers`` / ``list_following`` services
+    return ``CommunityFollow.public_id`` — the edge's own UUID —
+    not the follower's / followed profile's public_id. The wire
+    contract (and the Dart ``_decodePage``) treats them as
+    profile public_ids, so the routers translate before the
+    response. The helper is shared between ``get_followers`` and
+    ``get_following`` — the column that points to the
+    "other party's" profile is the FK carried in
+    ``edge_public_ids_to_profile_pk``.
+
+    Returns the input list's PROFILE public_ids in the same order.
+    Unknown edge public_ids (an internal mismatch — should not
+    happen because the page came from the same engine) are
+    silently dropped.
+    """
+    pk_to_profile_public_id: dict[int, uuid.UUID] = {}
+    pks = list(set(edge_public_ids_to_profile_pk.values()))
+    if pks:
+        rows = (
+            db.query(CommunityProfile.id, CommunityProfile.public_id)
+            .filter(CommunityProfile.id.in_(pks))
+            .all()
+        )
+        pk_to_profile_public_id = {row[0]: row[1] for row in rows}
+    out: list[uuid.UUID] = []
+    for edge_id in edge_public_ids_to_profile_pk:
+        profile_pk = edge_public_ids_to_profile_pk[edge_id]
+        profile_pid = pk_to_profile_public_id.get(profile_pk)
+        if profile_pid is not None:
+            out.append(profile_pid)
+    return out
+
+
+def _community_profile_pk(db: Session, public_id: uuid.UUID) -> int | None:
+    """Resolve the internal bigint PK for a community profile public_id.
+
+    Returns ``None`` for unknown public_ids (the caller distinguishes
+    that case from "caller has no profile" so the routers can return
+    404 vs 403 correctly). The block-filter helpers
+    (``query_filters.is_blocked_pair`` / ``filter_public_ids_*``)
+    operate on internal ids (the schema's PK), so the routers must
+    bridge the path-param public_id to the internal id once per
+    request.
+
+    The ``community_profiles.public_id`` column is declared
+    ``Uuid(as_uuid=True)`` and serialises to ``CHAR(32)`` (hex form,
+    no hyphens) on SQLite — same precedent as
+    ``community_privacy_settings``'s raw-insert helper in the test
+    fixtures. The query binds the hex form to match.
+    """
+    from sqlalchemy import text as _sa_text
+
+    row = db.execute(
+        _sa_text("SELECT id FROM community_profiles WHERE public_id = :pid"),
+        {"pid": public_id.hex},
+    ).first()
+    if row is None:
+        return None
+    raw = row[0]
+    return int(raw)
 
 
 __all__ = [
