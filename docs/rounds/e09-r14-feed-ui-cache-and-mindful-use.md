@@ -363,11 +363,35 @@ A 13 widget-teszttel lefedett acceptance-cella: A1 × 2, A2 × 2, A3 × 2,
 A4 × 2, A5 × 2, A6 × 1, A7 × 1 + 1 valódi-sértés-próba-teszt. Mind a 7
 acceptance-cella (A1–A7) ZÖLD, plusz az A3 valódi-sértés próba is ZÖLD.
 
+A javító kör 1 az A1 csoportban új `A1.3` cellát hozott létre
+("cache-primed post with a known artifact type rehydrates to its own
+card, not the fallback" — F2 lelet zárása), így a teljes widget-teszt
+szám 14, és az A1 csoport most 3 cellás: A1 × 3 + A2 × 2 + A3 × 2 +
+A4 × 2 + A5 × 2 + A6 × 1 + A7 × 1 + 1 valódi-sértés-próba-teszt.
+
 ### 10.5 Fájlszintű scope-check
 
 A `tools/hooks/implementer_guard.py` scope-őr a teljes munkafán
 futtatható; a `git diff` a §4 engedélyezett-listán kívüli fájlt NEM
 tartalmaz (a 6 új fájl pontosan az allowed_paths hat elemen belül van,
 a 2 javító commit csak ezeket a hat fájlt módosítja).
+
+### 10.6 Javító kör 1 — F1/F2/F3 zárás
+
+A `docs/reviews/e09-r14-review.md` reviewer-pass 2 MAJOR + 1 MINOR
+leletet hozott; mind a három a saját scope-on belül javítva:
+
+| Lelet | Javítás helye (fájl:sor) | Ellenőrzés |
+|---|---|---|
+| F1 | `lib/l10n/features/community_en.arb` + `community_hu.arb` (~25 új kulcs, valódi magyar fordítással, ICU placeholder-ek a paraméteres szövegekhez); `dart run tool/gen_l10n_segments.dart --write` → `flutter gen-l10n` (aggregát + `app_localizations*.dart`); `lib/features/community/presentation/screens/following_feed_screen.dart` (minden `_FeedLabels` konstans → `AppLocalizations.of(context)!.<kulcs>`); `lib/features/community/presentation/widgets/feed_card_registry.dart` (minden kártya-szöveg → `AppLocalizations.of(context)!.<kulcs>`); a teszt-harness `locale: const Locale('hu')` beállítása, hogy a meglévő magyar szövegre vonatkozó `find.text` assertion-ök érvényesek maradjanak | `grep -c AppLocalizations lib/features/community/presentation/screens/following_feed_screen.dart lib/features/community/presentation/widgets/feed_card_registry.dart` → mindkettő ≥ 10 (az F1 fixelt kiinduló állapot 0 volt mindkét fájlban); `flutter test test/features/community/presentation/following_feed_test.dart` → 14/14 zöld (a magyar locale-ra erőltetett harness miatt a régi magyar szövegre vonatkozó assertion-ök érvényesek maradnak) |
+| F2 | `lib/features/community/application/controllers/feed_controller.dart:715-736` (`_artifactFromEnvelope` most `ShareArtifact.fromJson(raw)` hívást próbál try/catch-ben; a try-ág a dekódolt típusos artifact-ot adja vissza, a catch `UnfilledCommunityShareArtifact()`-ra esik, megőrizve A5-öt); `test/features/community/presentation/following_feed_test.dart:777` (`_envelopeOfForTest` most `artifact.toJson()`-nal szerializálja a valódi artifact-ot — tükrözi a `_envelopeOf` alakot); új `A1.3` cella a `following_feed_test.dart`-ban | az új `A1.3` teszt (`a cache-primed post with a known artifact type rehydrates to its own card, not the fallback`) ZÖLD — `find.text('Gyakorlás összegzés')` findsOneWidget, `find.text('Ehhez a poszthoz nincs megjeleníthető tartalom.')` findsNothing; az A5 cella (`every one of the seven known artifact types renders without throwing`) TOVÁBBRA IS ZÖLD, a try/catch ág védi |
+| F3 | `lib/features/community/presentation/widgets/feed_card_registry.dart:153` (`final dynamic audience` → `final CommunityAudience audience`, a típus importálva van) | `flutter analyze lib/features/community/` → `No issues found! (ran in 4.3s)` |
+
+A javító kör 1 teljes §10 handoffja a §10.1–§10.5 cellákat NEM érinti —
+az A1–A7 acceptance-cella lefedettség és a §10.1 állapotgép-térkép,
+§10.2 numerikus bound, §10.3 valódi-sértés próba, §10.4 gate-kimenet,
+§10.5 scope-check mind változatlan maradt (ugyanaz a 14 widget-teszt
+zöld, a mérce-mátrix cellái közül most A1.3 a `cache-primed post →
+saját kártya` új állítással bővült).
 
 ## 11. Review — a Claude tölti ki
