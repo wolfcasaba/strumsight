@@ -106,6 +106,7 @@ from ..models.post import CommunityPost
 from ..models.profile import CommunityProfile
 from ..policies.access_policy import (
     CommunityAccessPolicy,
+    CommunityAudience,
     ProfileAccessLevel,
     ProfileVisibility,
     relationship_context_from_block_flag,
@@ -564,6 +565,23 @@ def create_comment(
         raise CommentPostNotFound("post not found")
     if post.moderation_state != MODERATION_STATE_VISIBLE:
         raise CommentPostNotFound("post not found")
+
+    # §6 A3 audience gate — a viewer without audience access
+    # cannot attach a comment to the post. The check mirrors
+    # ``post_service._evaluate_visibility`` (which lives in the
+    # sibling service module — we do not import it to keep the
+    # service module boundaries clean). The viewer is the owner
+    # when ``viewer_profile_id == post.profile_id``; otherwise the
+    # post's audience must be PUBLIC. The follow / club checks
+    # are Kör 7 / Kör 24 scope (not yet wired).
+    is_post_owner = author.id == post.profile_id
+    if not is_post_owner:
+        try:
+            audience_enum = CommunityAudience(post.audience)
+        except ValueError:
+            audience_enum = CommunityAudience.PRIVATE
+        if audience_enum is not CommunityAudience.PUBLIC:
+            raise CommentPostNotFound("post not visible")
 
     parent: CommunityComment | None = None
     parent_depth = -1
