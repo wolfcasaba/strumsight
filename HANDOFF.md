@@ -1,5 +1,67 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R05 KÉSZ — Spacing, radius, elevation és surface primitívek — PR [#392](https://github.com/wolfcasaba/strumsight/pull/392), squash `6635a788` (2026-08-23)
+
+**CHAPTER 13 (UI/UX DESIGN SYSTEM) ÖTÖDIK KÖRE KÉSZ — egy 2026-08-21 óta
+megállt kör folytatásaként, nem újraindításaként.** A kör terméke a
+`SsElevation` felület-hierarchia (`base → raised → overlay → modal`), az
+`SsSurface` alap-primitív (a szint és a szemantikai háttérszín EGYÜTT, insetek
+kezelésével), valamint az `SsCard`, `SsHeroCard` és `SsSection` komponensek,
+plusz a 4 dp rács gépi kikényszerítése. A geometria-szerződést az
+[ADR 0385](docs/adr/0385-surface-hierarchy-and-geometry-contract.md) rögzíti.
+
+**Miért folytatás.** A PR #392 2026-08-21-én APPROVED review és zöld célzott
+gate mellett zárult be merge NÉLKÜL: az exact `03788441` Full Gate 5519 zöld
+teszt mellett háromszor `Found 0 widgets with type "Card"` hibát adott, mert a
+helyesen egyetlen `Material`-réteget használó `SsCard` mellől eltűnt a legacy
+`Card`, amit a kör allowlistjén KÍVÜLI
+`test/core/design_system/component_catalog_test.dart` még várt (L393). A
+[HEAL E13-R05/H3](#-heal-e13-r05h3-component-catalog-scope-helyreállítva-2026-08-21-l393)
+self-heal (PR #393) ezt az egy fájlt vette fel az `allowed_paths` és
+`gate_tests` listára. Ez a session azt a nyitott munkát zárta le.
+
+**Orchestrátor pre-flight (Claude, Opus 5).** (1) `origin/main` NEM volt őse az
+ág `03788441` csúcsának — a kötelező upstream-szinkron (ADR 0087 §0.3) egyetlen
+ütközése maga a brief volt. (2) Az ütközés mindkét oldalon additív: a `§0.0`
+pre-flight (ág) és a `§0.0.1` H3 self-heal (main) EGYÜTT maradt meg. (3) A
+self-heal katalógus-cellája `A8` → **`A13`** sorszámot kapott, mert az ágon az
+`A8`…`A12` már implementált ÉS review-zott jelentéssel bírt; a main
+brief-változatának szó szerinti megőrzése öt kész acceptance-cellát törölt
+volna (L440). (4) A brief-lint `S8` lelete (hiányzó visszakeresés) a `§0.0.2`
+revízióban lezárva: L393, L420/L106/L145, L102, ADR 0273/0383/0385.
+
+**Implementer (`sonnet-impl`, claude-sonnet-5 `--effort high`).** A diff pontosan
+2 útvonal, 60 beszúrás: a katalógus-teszt három cellája `find.byType(Card)`
+helyett `find.byType(SsCard)` + a `SsCard` alá **szűkített**
+`find.descendant(… matching: Material)` `findsOneWidget` párt mér — a csupasz
+`find.byType(Material)` hamis elvárás lett volna, mert a katalógus fája
+legalább négy `Material`-t tartalmaz. A route-kapu (compile-time OFF +
+debug-gate, ADR 0273) és a dark/light smoke contract érintetlen. Mért
+mellék-lelet: a cellák `DecoratedBox`-elvárása addig SOHA nem futott le, mert
+az előtte álló `Card`-expect pirosra vitte a cellát — az implementer megmérte
+(dark → 1, light → 1), és csak a mért értéket hagyta benne (L441).
+
+**Review (Claude, Opus 5) — APPROVED**, 0 nyitott BLOCKER/MAJOR, 1 MINOR (a §10
+zárólistája a régi kétútvonalas gate-sort őrzi; a háromútvonalas gate-et a
+reviewer maga futtatta le). Izolált `/tmp` klónban az exact `2af6eca4`-en mind
+a 8 gate-lépés zöld (exit 0). Három eldobható valódi-sértés próba: második
+`Material` az `SsCard`-ban → `+5 -3` piros; az `SsCard` kivétele a
+katalógusból → `Found 0 widgets with type "SsCard"`; a route-kapu `||` → `&&`
+lazítása → `Expected: null / Actual: MaterialPageRoute` — a finder tehát nem
+vakcella, és a fejlesztői-eszköz szerződés tényleg mérve van. Részletek:
+[`docs/reviews/e13-r05-review.md`](docs/reviews/e13-r05-review.md).
+
+**Zöld kapu (exact `552c9312`).** Full Gate
+[32651317079](https://github.com/wolfcasaba/strumsight/actions/runs/32651317079)
+**success** (teljes `flutter test` + randomizált property + coverage,
+APK-építés nélkül — a CI-tervező `full-gate.yml`-t adott, `native_gate=false`),
+Router CI
+[32651318066](https://github.com/wolfcasaba/strumsight/actions/runs/32651318066)
+**success**. A landolás a merge-záron át (`tools/round-land.sh`), mert a másik
+sáv (E09-R17) párhuzamosan futott.
+
+**Következő Chapter 13 kör: E13-R06** (motion).
+
 ## ✅ E09-R16 KÉSZ — Kommentek, reply és mention — PR [#425](https://github.com/wolfcasaba/strumsight/pull/425), squash `bf767ca5` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENHATODIK KÖRE KÉSZ.** Moderálható, korlátozott

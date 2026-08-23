@@ -16669,3 +16669,72 @@ mindegyik a driver SAJÁT horgával mérve, nem kódolvasásból:
     `tools/pipeline-status.sh --heal-reset` (kísérletszámláló) és az
     `.pipeline/inflight/<kör>` törlése — enélkül a lánc a saját
     beavatkozásunkat kezdi javítani.
+
+## L440 — Egy megállt kör folytatásakor a self-heal és a kör-ág briefje ÜTKÖZHET ugyanazon az acceptance-sorszámon; a „main verzióját őrizd meg" szabály szó szerint alkalmazva kész, review-zott cellákat töröl (E13-R05, 2026-08-23)
+
+**Mért helyzet.** Az E13-R05 PR #392 APPROVED review és zöld célzott gate
+mellett zárult be merge nélkül (a full-suite-only katalógus-contract ütközés
+miatt, L393). A HEAL PR #393 a `main`-en a brief `allowed_paths`/`gate_tests`
+listáját bővítette, és a katalógus-követelményt **`A8`** sorszámon vezette be.
+A kör-ág ugyanakkor a saját `§0.0` pre-flightjában már bevezette az
+**`A8`…`A12`** cellákat (`A8` = High Contrast erős border), amelyek ekkor már
+implementálva ÉS review-zva voltak (`docs/reviews/e13-r05-review.md`
+acceptance-táblája tételesen hivatkozza őket).
+
+A folytatáskori kötelező upstream-szinkron (ADR 0087 §0.3) merge-e PONTOSAN
+egy fájlon ütközött: a kör briefjén, három hunkban — a `§0.0` vs `§0.0.1`
+szakaszon és a két acceptance-táblán. Az ADR 0087 §0.3 betű szerinti előírása
+(„az aktuális `main` brief-változatát őrizd meg") ezen a hunkon alkalmazva
+**öt kész acceptance-cellát törölt volna** (`A8`…`A12`), és a brief hazudott
+volna a kódról: a review-jelentés olyan cellákra hivatkozna, amelyek a
+briefben már nem szerepelnek.
+
+**A helyes feloldás.** Az ütközés mindkét oldalon **additív** volt, tehát a
+`main` self-heal tartalma HIÁNYTALANUL megőrizhető a kör-ág tartalmának
+elvesztése nélkül: a `§0.0` és a `§0.0.1` szakasz egymás mellé kerül, a
+self-heal cellája pedig szabad sorszámot (`A13`) kap. Az `allowed_paths`, a
+`gate_tests`, a §4 sor, a §6.1 mérce-mátrix sora, a §7 gate-hívás és a §8
+lépés a self-heal szövegével azonos maradt — csak a CÍMKE változott,
+dokumentált `§0.0.2` revízióval.
+
+**Tanulság.** A §0.3 „main nyer" szabálya a self-heal tartalmának védelmére
+való, NEM a kör-ág kész munkájának eldobására. Ha az ütközés additív, a helyes
+lépés a KETTŐ EGYESÍTÉSE + a névütközés feloldása, és nem az egyik oldal
+eldobása. Mielőtt egy brief-hunkot a `main` javára oldasz fel, mérd meg, hogy
+az ág oldalán lévő sorokra hivatkozik-e már review vagy teszt — ha igen, a
+törlés csendes regresszió.
+
+**Őrteszt:** nincs — a lelet a brief-merge emberi/orchestrátori döntési
+pontján keletkezik, nem futtatható kódban; a védelem a `§0.0.2`-höz hasonló
+dokumentált revízió, amit a `brief-lint` `S8`/`strict` szintje kér számon.
+
+## L441 — Egy tesztcellában a bukó `expect` UTÁN álló állítások SOHA nem futnak le; a korábbi javításakor ezek MÉRETLENÜL válnak élővé (E13-R05, 2026-08-23)
+
+**Mért eset.** Az E13-R05 katalógus-cellái így néztek ki:
+
+```dart
+expect(find.byType(Card), findsOneWidget);        // <- ez bukott
+expect(find.byType(DecoratedBox), findsOneWidget); // <- ez SOHA nem futott le
+```
+
+A PR #392 Full Gate-je háromszor `Found 0 widgets with type "Card"` hibát
+adott. Mivel a `flutter_test` cella az első hibás `expect`-nél megáll, a
+mögötte álló `DecoratedBox`-elvárás a bukott futásban **egyszer sem** került
+kiértékelésre — vagyis a `findsOneWidget` konstans bizonyítatlan volt, miközben
+a fájl „zöld múltjára" hivatkozva könnyen igazoltnak látszott.
+
+A javítás során az implementer ezt nem feltételezésre hagyta: ideiglenes
+`print('DecoratedBox count: ${find.byType(DecoratedBox).evaluate().length}')`
+sorral **megmérte** a tényleges darabszámot mindkét témán (dark → 1,
+light → 1), és csak a mért értéket hagyta a cellában.
+
+**Tanulság.** Ha egy tesztcellában bukó állítást javítasz, a mögötte álló
+állítások a javítás pillanatában **újonnan élővé váló, méretlen** elvárások.
+Mérd ki mindegyiket külön, mielőtt zöldnek nyilvánítod a cellát — különben a
+javítás egy második, rejtett pirosat szabadít fel, amit megint csak a teljes
+CI-suite fog megfogni (vö. L420/L106/L145).
+
+**Őrteszt:** `test/core/design_system/component_catalog_test.dart` — a
+`catalog smoke test renders for Brightness.dark/light` cellák immár mind az
+`SsCard`-szűkített `Material`-, mind a `DecoratedBox`-elvárást ténylegesen
+kiértékelik (mérve: 8/8 zöld, és a második `Material` rontása `+5 -3`-ra viszi).
