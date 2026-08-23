@@ -353,6 +353,83 @@ cella semmit sem mér. Ezért az A4 mércéje **két rétegű**:
    egy stage-location-nel felpumpálva NINCS `NavigationBar` és NINCS
    `NavigationRail` a fában; egy nem-stage locationnel PONTOSAN EGY van.
 
+### D14 — Javító kör (2026-08-23, review MAJOR-1): erőforrás-birtokló képernyő NEM mehet shell-branchbe
+
+**Mért hiba** (`docs/reviews/e13-r08-review.md` §5–6, reviewer-próba):
+a `StatefulShellRoute.indexedStack` — helyesen, az A3 miatt — életben tartja a
+meglátogatott branchek navigátorát. A `LiveScreen` viszont erőforrást birtokol
+(`live_screen.dart:58–62` wakelock `enable()`, `:165` `ref.watch(liveFrameProvider)`
+= `StreamProvider.autoDispose`, `:90–108` `dispose()` → `disable()`), ezért
+tabváltás után **nem szabadul fel**:
+
+```
+PROBE offstage LiveScreen instances after tab switch: 2
+PROBE wakelock.isHeld after tab switch: true (enableCalls=2, disableCalls=0)
+```
+
+A legacy referencia ugyanazzal a próbával ZÖLD (`/live` → `/analyze` után
+`findsNothing`, `isHeld == false`) — az invariáns valós, a `home_shell.dart`
+doc-commentje ki is mondja. A Ch13 §7.4 előírása: „mikrofon/kamera ownership
+route lifecycle-hoz kötött".
+
+**A javítás nem lehet a `LiveScreen` módosítása** — a `lib/features/**` tiltott
+zóna. A kötött szerződés ezért szerkezeti:
+
+1. **`/today` adaptere erőforrás-mentes képernyő:** `ProgressScreen`
+   (mérve: sem wakelock, sem stream-provider, sem engine). Ez szünteti meg a
+   **kettőzést** (két `LiveScreen` két branchben).
+2. **`/practice/live` kikerül a shell-branchből**, és a session-route-okhoz
+   hasonlóan **top-level** `GoRoute` lesz — így a mai mount/dispose szemantika
+   érvényben marad, a mikrofon és a wakelock elszabadul.
+3. **`AppRoutes.practiceLive` bekerül az `isStageRoute` halmazába** (a D13
+   halmaza így négyelemű). Ez a Ch13 §7.4-gyel egyező: az aktív audio-session
+   Stage, tehát nincs rajta primary navigation. **A D13 korábbi indoklása —
+   „a belépési pont ide esne, a felhasználó nav nélkül ragadna" — a 4. ponttal
+   megszűnik.**
+4. **A flag BE ágán a belépési pont `/today`:** az `initialLocation`
+   `adaptiveShellEnabled` esetén `AppRoutes.today`, és az `onboardingRedirect`
+   kapjon **opcionális, alapértelmezett** `home` paramétert
+   (`String home = AppRoutes.live`), amit a router a flag szerint ad át. Az
+   opcionális default miatt a **módosítatlan** `test/app/routing/route_guards_test.dart`
+   hét hívása változatlanul zöld marad (mérve: mind a két kötelező paramétert
+   adja meg csak).
+5. **`/live` → `/practice/live` redirect VÁLTOZATLAN** (D5). Aki régi Live
+   deep linket követ, a Live Stage-en köt ki, navigáció nélkül — ez a Ch13
+   §7.4 szerinti helyes viselkedés. A Stage-ből kivezető transport (pause /
+   finish / back-confirmation) **a Kör 9 `SsStageScaffold`-jának a dolga**,
+   nem ezé a köré; a flag defaultból KI, tehát ez nem éles hiány.
+
+**Új kötelező cella (A8), a `test/app/navigation/`-ben.** A reviewer
+próbájának két piros cellája emelendő át, a legacy referenciával EGYÜTT:
+
+| Cella | Elvárt |
+|---|---|
+| legacy referencia (flag KI) | `/live` → `/analyze` után `LiveScreen` `findsNothing`, `wakelock.isHeld == false` |
+| flag BE, `/practice/live` → tabváltás | offstage `LiveScreen` példány **0**, `wakelock.isHeld == false` |
+| flag BE, teljes shell-bejárás | a `LiveScreen` egyetlen branchben SEM marad mountolva (`skipOffstage: false`) |
+
+A `FakeScreenWakelock` (`test/support/fake_audio.dart:151`) `isHeld` /
+`enableCalls` / `disableCalls` mezői adják a mércét; a
+`fakeAudioOverrides(wakelock: …)` átadja.
+
+### D15 — Javító kör (review MINOR-1): a shell nem kerülheti meg más feature rollout-flagjét
+
+A `StatefulShellRoute` egésze csak az `adaptiveShellEnabled`-tól függ, ezért a
+flag bekapcsolása ma elérhetővé teszi a `PracticeHubScreen`-t
+`practiceEngineV2Enabled == false` mellett is, és a `TutorHomeScreen`-t
+`aiTutorEnabled == false` mellett is (bizonyíték: a
+`tab_state_restoration_test.dart` flag-halmaza csak `adaptiveShellEnabled`-et
+állít, és mégis `/practice`-re navigál). Egy **navigációs** flag nem billenthet
+át két **termék-rollout** kaput.
+
+**Kötött javítás:** a `practiceHub` branch-route kapjon `if (practiceEnabled)`,
+a `coachHome` branch-route `if (aiTutorEnabled)` őrt. A destination maga
+maradhat a nav-sávban (a branch üres-route esete kerülendő — ha a route kiesik,
+a destination is essen ki, vagy mutasson erőforrás-mentes helyettesítőt; a
+legszűkebb, teszttel lefedett változatot válaszd). A hozzá tartozó cella:
+`adaptiveShellEnabled: true` + `practiceEngineV2Enabled: false` mellett a
+`/practice` **nem** ad `PracticeHubScreen`-t.
+
 ---
 
 ## 1. Cél
