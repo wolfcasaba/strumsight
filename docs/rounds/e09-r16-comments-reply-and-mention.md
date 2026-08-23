@@ -15,6 +15,47 @@
 [`docs/adr/0407-comment-reply-and-mention.md`](../adr/0407-comment-reply-and-mention.md) —
 minden §5 architekturális döntés OTT részletezve, mérési forrásokkal együtt.
 
+## 0.0.1 Review-vezérelt scope-bővítés (Claude Sonnet 5, 2026-08-23, 1. javító kör előtt)
+
+A review (`docs/reviews/e09-r16-review.md`) 1 MAJOR (l10n) + 2 MINOR leletet
+talált, és saját méréssel (a brief `gate_tests`-én TÚLI, teljes `flutter
+test` futtatással) egy mellékhatást: `test/ui/ui_inventory_test.dart`
+hardcode-olt képernyő-számlálója (71) elavult, mert a kör ÚJ
+`comments_screen.dart`-ja a mechanikus `*_screen.dart` mintával 72-re
+emeli a tényleges számot — ugyanaz a drift-osztály, mint E09-R05...R13 és
+E09-R14 (HANDOFF). A javító kör ezért az alábbi három fájllal BŐVÍTI az
+`allowed_paths`-t (a Kör 14 F1/screen-count precedense, orchestrátor-
+irányítottan):
+
+- `lib/l10n/features/community_en.arb` — a MAJOR (5 hiányzó string) fixje
+- `lib/l10n/features/community_hu.arb` — ugyanaz, magyar fordítással
+- `test/ui/ui_inventory_test.dart` — KIZÁRÓLAG a `hasLength(71)` →
+  `hasLength(72)` egysoros bumpolása, semmi más ebben a fájlban
+
+A meglévő 8 `allowed_paths` sor változatlan marad.
+
+## 0.0.2 Review-vezérelt scope-bővítés #2 (Claude Sonnet 5, 2026-08-23, 1. javító kör UTÁN, merge ELŐTT)
+
+A javító kör (HEAD `f49351fc`) a §0.0.1 három fájlján TÚL két GENERÁLT
+aggregátum-fájlt is módosított: `lib/l10n/app_en.arb` / `app_hu.arb`. Ezek
+NEM kézzel írt, hanem a `tool/gen_l10n_segments.dart --write` által a
+`lib/l10n/features/*.arb` szegmensekből előállított, de git-be COMMITOLT
+(nem gitignore-olt) aggregátumok — a `tool/ci/check_l10n_parity.dart`
+"L10n aggregate freshness" lépése EZEKET a fájlokat veti össze a
+szegmensekkel, tehát a §0.0.1 két `community_*.arb` bővítése ELKERÜLHETETLENÜL
+igényli ezt a két aggregátum-frissítést is, különben a gate saját "l10n"
+lépése piros lenne. A `tools/scope-audit.py` ezt (helyesen) VIOLATION-nak
+mérte, mert a fájlok nem szerepeltek a §0.0.1 listáján — ez az orchestrátor
+saját mulasztása volt (a `check_l10n_parity.dart` aggregátum-mechanizmusát a
+§0.0.1 megírásakor nem mértem meg), NEM az implementer scope-sértése. Az
+`allowed_paths` ezért retroaktívan, dokumentáltan bővül két további sorral:
+
+- `lib/l10n/app_en.arb` — a `check_l10n_parity.dart` GENERÁLT aggregátuma
+- `lib/l10n/app_hu.arb` — ugyanaz, hu locale
+
+Az implementer munkáját emiatt NEM kell újraindítani — a §0.0.1+§0.0.2
+együtt fedi a ténylegesen elvégzett, szükséges diffet.
+
 **Visszakeresés (ADR 0312, §4.9, S8):**
 `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "komment
 reply mention block privacy validáció mélység-korlát"` → ADR 0402 (Kör 8,
@@ -93,6 +134,11 @@ allowed_paths = [
   "backend/tests/community/test_comment_service.py",
   "test/features/community/presentation/comments_screen_test.dart",
   "docs/rounds/e09-r16-comments-reply-and-mention.md",
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
+  "test/ui/ui_inventory_test.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
 ]
 gate_tests = [
   "test/features/community/presentation/comments_screen_test.dart"
