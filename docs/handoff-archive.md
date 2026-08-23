@@ -9747,3 +9747,817 @@ környezet-felbontási hiba, amit egy jövőbeli körnek/self-healnek kell
 javítania** (a `resolve_backend_python` abszolút útvonalat számítson, ne
 relatívot, VAGY a `run_step "backend pytest"` ne `--chdir`-eljen egy már
 relatív candidate-tel) — a mérce SOSEM módosult, csak a hívási env.
+
+---
+
+# HANDOFF §6 „Exact next task" — archivált előzmények (E13-R07 zárása, 2026-08-23)
+
+> Az E13-R07 záró rituáléja a `HANDOFF.md` §6-ját frissítette. A szakasz addigra
+> **804 sorra** hízott: minden kör hozzáfűzte a saját „Pontos következő
+> termékkör" bejegyzését, és a régiek — mind lezárult körökre mutatva, „lásd a
+> fejléc ✅-blokkot" hivatkozással — sosem kerültek ki. Az élő §6 ezért az
+> aktuális két sávot írja le; az alábbi a KORÁBBI, teljes tartalom, változatlanul.
+> A `HANDOFF.md` §6-ja előtti állapot: `main @ 98fd1168`.
+
+## 6. Exact next task
+
+**Pontos következő termékkör (2026-08-23): E09-R15 — Reakciók és
+optimista konzisztencia** (`docs/rounds/e09-r15-reactions-and-optimistic-consistency.md`,
+engine a queue-ban `minimax`, `risk = "normal"`, nincs előre kiosztott ADR).
+**Az E09-R14 (Feed UI, cache és tudatos használat) KÉSZ** (PR #423, squash
+`ff39ee0c`) — lásd a fejléc ✅-blokkot. A Kör 14 hagyott néhány mért horgot:
+
+- A `feedCacheProvider` és a `communityFeedRepositoryProvider` MA
+  `UnimplementedError`-t dobnak — a valós HTTP-repository-wiring (a
+  `feed_repository_impl.dart` + a Riverpod provider-override) egy KÉSŐBBI
+  kör hatásköre marad (ugyanaz az örökölt tartozás, mint a
+  `post_repository_impl.dart` — Kör 12 óta hiányzik). A Kör 15 (reakciók)
+  saját `reaction_controller.dart`-ja ettől független, de ha egy jövőbeli
+  kör a feedet éles HTTP-re köti be, olvassa el a Kör 14 pre-flight D6
+  pontját és a §10 handoffot.
+- A cache-rehydration mintája (`feed_controller.dart::_artifactFromEnvelope`
+  — `ShareArtifact.fromJson` try/catch-csel, sikertelen dekódolásnál
+  `UnfilledCommunityShareArtifact` fallback) egy újrahasznosítható minta,
+  ha egy jövőbeli kör hasonló lokális cache-et vezet be egy sealed
+  hierarchiájú domain-típusra.
+- Az l10n-kulcsok `followingFeed*` / `feedCard*` prefixszel kerültek be
+  (`lib/l10n/features/community_{en,hu}.arb`) — a review F1 lelete
+  (`docs/reviews/e09-r14-review.md`) figyelmeztet: MINDEN új Community
+  UI-fájl a §"Amit a review kötelezően ellenőriz" szerint
+  `AppLocalizations`-t KÖVETEL, ne induljon egyik jövőbeli kör se azzal a
+  feltevéssel, hogy az ARB-bővítés a briefen kívül eshet — ha a fájl nincs
+  az `allowed_paths`-on, az orchestrátor pre-flightban vagy a review
+  javító körében bővíti, dokumentáltan.
+- A review 1 tartalmi + 1 CI-only javító kört igényelt (F1/F2 MAJOR, F3
+  MINOR + az `ui_inventory_test.dart` baseline-drift) — lásd
+  `docs/reviews/e09-r14-review.md` a mintázat elkerüléséhez.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R14 — Feed
+UI, cache és tudatos használat**
+(`docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md`, engine a
+queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R13 —
+Following feed és cursor pagination backend**
+(`docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md`, engine
+a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R12 — Post
+composer draft és outbox** (`docs/rounds/e09-r12-post-composer-draft-and-outbox.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R10 — Share
+artifact szerződések** (`docs/rounds/e09-r10-share-artifact-contracts.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+A Kör 9 pre-flightja megerősítette:
+a `search.py` router `CurrentUser`-t vesz fel (D1), a
+`read_profile`/`get_privacy`/`handles.py` auth-hiánya VÁLTOZATLANUL nyitva
+marad (nem ennek a körnek/nem a Kör 10-nek a hatásköre). A Kör 9
+`profile_search_repository.py::ProfileSearchHit` (`handle`+`display_name`+
+`created_at`) és a HMAC-signed opaque cursor minta (`_sign_cursor`/
+`_verify_cursor`, `backend/app/community/repositories/profile_search_repository.py`)
+egy újrahasznosítható referencia egy jövőbeli, hasonlóan lapozott/
+block-szűrt listaendpointhoz (feed, member-listing) — ha a Kör 10 vagy egy
+későbbi kör saját cursor-t vezetne be, a §0.0-ban mérje meg, nem
+egyszerűbb-e ugyanezt a signed-cursor mintát újrahasznosítani sima
+base64-JSON helyett (a Kör 9 saját, javító körben tanult leckéje: az
+egyszerű base64-JSON triviálisan dekódolható és a block-szűrt/nyers sor
+összekeverése IDOR-osztályú szivárgást okozott — `docs/reviews/e09-r09-review.md`
+F4). **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR #407) —
+az **E08-R29** (Integritás, analytics, balance szimuláció és CI) továbbra is
+`hold`-on marad. A queue-scan a legelső `pending` sort választja. Ez a
+session nem indítja el; új sessionben fut.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R09 —
+Profilkeresés és biztonságos discovery** (`docs/rounds/e09-r09-profile-search-and-discovery.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E09-R08 — Block,
+mute és safety kapcsolatkezelés** (`docs/rounds/e09-r08-block-mute-and-safety-relationships.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**F1/F2 nyitott MINOR-ok az E09-R04 review-ból** (backend
+`update_privacy_settings` router-bekötő kör előfeltételei — Python-szintű
+TOCTOU + félrevezető docstring, `docs/handoff-archive.md` E09-R04
+szakasza), **és a Kör 5 wire-decode mintája** (minden ÚJ Community
+wire-enum kapjon `xFromWire`/`xToWire` párt a bevezetéssel EGY körben, ne
+utólag — Kör 5 F1 pontosan ezt mérte meg `ModerationState`-en) továbbra is
+a jövőbeli bekötő/data-réteg körök előfeltétele.
+
+Pre-flightban érdemes újra mérni: az Epic 9 (Community Platform) mind a 32
+körének briefje egy batchben készült (PR #405, 2026-08-22) — az E09-R01
+saját pre-flightja ellenőrizze, hogy a `main` időközbeni mozgása (E08-R29/
+R30 stb.) nem driftelt-e el olyan fájltól/enum-értéktől, amire a batch-elt
+brief hivatkozik (a §1 mérési szabály: grep-eld ki a hivatkozott
+enum-értékeket/mezőket a tényleges kódból, ne az átmenettáblát mérd).
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R30 — Epic 08
+migráció, regresszió és lezárás** (`docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot. Vegye figyelembe az
+E08-R28 mért tanulságait:
+
+- **A wire-szerződés két fele (Dart-kódoló + backend-dekódoló) KÜLÖN
+  implementer-diffben könnyen szétcsúszik, még akkor is, ha ugyanaz a kör
+  írja mindkettőt** — az E08-R28 F1 MAJOR-ja pontosan ezt mutatta: mindkét
+  oldal SAJÁT gate-je zöld volt, mert egyik sem tesztelte a MÁSIK oldal
+  tényleges kimenetét. Ha egy jövőbeli kör (a router-mounting follow-up)
+  élesíti ezt a szerződést, a pre-flight ELSŐ lépése egy kézzel futtatott
+  `LedgerUploadEnvelope.model_validate(<a Dart encodeUpload() aktuális
+  kimenete>)` ellenőrzés legyen — ne a két oldal külön-külön zöld gate-jére
+  hagyatkozzon.
+- **A `verified` ma séma-érvényességet jelent, NEM XP-újraszámolást**
+  (dedikált biztonsági review N1 lelete, `docs/reviews/e08-r28-security.md`).
+  Mielőtt bármely jövőbeli felület a `verified` mezőt bizalmi jelzésként
+  mutatná, a szervernek ténylegesen vissza kell vezetnie az XP-t a
+  forrás-eseményből — a mai `evaluate_upload` minden séma-érvényes nyugtát
+  `verified`-nek jelöl, felső XP-korlát vagy policy-alapú újraszámolás nélkül.
+- **Nincs `max_length` a nyugta-listán/id-mezőkön** most már javítva (F2),
+  de a mintázat (kliens-adatot fogadó pydantic séma felső korlát nélkül)
+  minden jövőbeli, `backend/app/`-ot bővítő körnél ellenőrizendő.
+- Egy önkezűen létrehozott ÜRES `backend/.venv` beárnyékolja a
+  `tools/round-gate.sh` közös venv-fallbackját (L408) — ha a backend gate
+  `ModuleNotFoundError`-ral hasal el, ELŐSZÖR ellenőrizd, hogy a munkapéldány
+  saját `backend/.venv`-je létezik-e és NEM üres-e.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R28 —
+Ledger sync contract és merge.** Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R27 —
+Gamification accessibility és settings.** Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R26 —
+Cross-feature gamification integration** (`docs/rounds/e08-r26-cross-feature-gamification-integration.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R25 — Song
+Trainer és Setlist integráció** (`docs/rounds/e08-r25-song-trainer-and-setlist-integration.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-21, azóta lezárult): E08-R19 — Challenge V2 és legacy
+DailyChallenge migráció** (`docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md`,
+engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
+Az önálló Chapter 13 sáv következő köre E13-R05.
+
+**Pontos következő Chapter 13 kör: E13-R05 — Spacing, radius, elevation és
+surface primitives** (`docs/rounds/e13-r05-spacing-and-surfaces.md`, engine a queue-ban
+`terra`). Az E08 terméksáv önálló queue-ja ettől függetlenül halad; ezt a
+session nem indítja el. A governance-sáv következő sora, **E99-R23**, jelenleg
+`hold`.
+
+**Nyitott, EMBERI döntést NEM igénylő tartozás (2026-08-20, E08-R08 review):**
+a watch-stream (`LocalGamificationRepository.watchProfileSnapshots`)
+optimistán sugározza a kért értéket, mielőtt a `JsonDocumentStore.write()`
+tényleges sikerét ellenőrizné — egy elnyelt platform-írási hiba esetén a
+figyelő a ténylegesnél frissebb (esetleg nem is perzisztált) profilt látná
+egy session erejéig. Meglévő, projektszintű kockázat öröklődik (egyetlen
+`JsonDocumentStore`-alapú írás sem különbözteti meg ma a sikeres és az
+elnyelt írást a hívó felé), NEM új regresszió — de a Kör 9/10 migráció vagy
+egy jövőbeli gamification-UI kör előtt érdemes rendezni: a stream a
+ténylegesen visszaolvasott állapotot sugározza a bemeneti érték helyett.
+Lásd `docs/reviews/e08-r08-review.md` N1.
+
+**Korábbi kijelölt SDD-kör (2026-08-20, azóta lezárult): E08-R08**
+(Gamification repository és storage schema, SDD Chapter 9). Lásd a
+fejléc ✅-blokkot.
+
+**Nyitott, EMBERI döntést NEM igénylő, de a következő pár körben érdemes
+tartozás (2026-08-20, E08-R07 review):** a `docs/reviews/e08-r07-review.md`
+F1–F3 mintája — egy zöld gate/teszt-suite mögött is lehet teszteletlen guard
+vagy garantáltan-zöld guard-teszt; a review-protokoll (mutációs próba a
+guard-on, NEM csak a mért kódon) e nélkül nem fogta volna meg. Lásd
+[[L349]]–[[L351]] a `docs/LESSONS.md`-ben — jövőbeli review-k „X sosem
+csökkenhet/gyengülhet" jellegű brief-előírásainál alkalmazzák ugyanezt a
+mintát alapból, ne csak utólag.
+
+**Korábbi kijelölt SDD-kör (2026-08-20, azóta lezárult): E08-R04** (Activity
+outbox és megbízható feldolgozás, SDD Chapter 9 —
+`docs/rounds/e08-r04-activity-outbox-and-reliable-processing.md`, engine
+`codex`, előre kiosztott ADR `0302`). Lásd a fejléc ✅-blokkot.
+
+**Nyitott, EMBERI döntést igénylő tartozás, E08-R02-ből örökölve, még
+mindig releváns:** a `docs/reviews/e08-r02-security.md` MINOR-1 lelete — az
+architektúra-guard marker-listája nem fed hálózati/fájl-IO markert
+(`dart:io`/`dart:convert`/`package:dio/`/`package:http/`). Ma nem aktív
+sértés, de az outbox (E08-R04) valódi hálózati/tárolási sink-szomszédot hoz
+a gamification domain mellé — érdemes ELŐTTE rendezni.
+
+**Nyitott, EMBERI döntést igénylő tartozások, Epic 7-ből örökölve:**
+
+- (2026-08-19, E07-R30 completion report + security review NOTE-2) a
+  `GenerationOrchestrator.generate()` továbbra is egyetlen hívásban
+  fuzionálja a validálást/javítást az aktiválással — egy jövőbeli
+  preview-confirmation / valódi rollout implementáló körnek külön kell
+  választania, mielőtt perzisztáló activation bekötődik.
+- (2026-08-19, E07-R30 completion report) `practiceGeneratorEnabled` és
+  `plannerAssistEnabled` bekapcsolása emberi release-döntés, a release gate
+  után; a teljes CI-suite/property/APK továbbra is kötelező merge-evidencia,
+  ezt a helyi golden-korpusz mérés NEM helyettesíti; valós Android-eszközös
+  offline flow és eszköz-specifikus latency/memória baseline hátravan.
+- (2026-08-19, E07-R28 pre-flightja fedte fel) az E07-R27 (PR #328)
+  `risk=high` briefje mellett a kötelező biztonsági review sosem készült el
+  (`docs/reviews/e07-r27-security.md` hiányzik) — egy jövőbeli kör vagy
+  emberi döntés pótolhatja retroaktívan.
+
+**Korábbi kijelölt SDD-kör (2026-08-19, azóta lezárult): E07-R29**
+(Accessibility, localization, privacy és safety hardening, SDD Ch8 Kör 29).
+Lásd a fejléc ✅-blokkot.
+
+**Nyitott, EMBERI döntést igénylő tartozás (2026-08-19, E07-R28 pre-flightja
+fedte fel):** az E07-R27 (PR #328) `risk=high` briefje mellett a kötelező
+biztonsági review sosem készült el (`docs/reviews/e07-r27-security.md`
+hiányzik) — egy jövőbeli kör vagy emberi döntés pótolhatja retroaktívan.
+
+**🛑 [ELAVULT, MEGOLDVA] A lánc jelenleg ÁLL...** — az alábbi bekezdés
+E99-R16/H3-ra vonatkozott; az ADR 0321 (H-GATEGUARD kör-szintű hold, ld. a
+fejléc-blokkot fentebb) és a család-glob javítás (PR #324) azóta feloldotta,
+a lánc E07-R27/R28-cal folytatódott. Megtartva történeti kontextusnak:
+
+**A következő Epic 7 SDD-lépés: E07-R26** (outcome ingestion és revision).
+Friss sessionben indul; az E07-R25 eredményét csak a szűk public boundary-kon
+át használhatja, és a nyers audio-/kamera-adat tilalma változatlan.
+
+**A soron következő SDD-lépés: E07-R22** (Chapter 8, Weekly Plan és Today
+screen). A friss session pre-flightban mérje újra az R21 preview ma még
+fixture-alapú aktiválási határát: a `GenerationOrchestrator.generate()` továbbra
+is egyetlen hívásban validál/javít/aktivál, tehát a valódi
+generation→preview bekötés továbbra is külön follow-up. A R22 csak az aktív
+tervhez tartozó használati felületét vegye fel; `practiceGeneratorEnabled` és
+`plannerAssistEnabled` flagek változatlanul `false` maradnak.
+
+**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R20 — Plan
+setup wizard és input UX** (Chapter 8, Kör 20). Lásd a fejléc ✅-blokk.
+
+**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R19 —
+Local repository, migráció és korrupcióvédelem** (Chapter 8, Kör 19). Lásd
+`docs/handoff-archive.md`.
+
+**Korábbi kijelölt SDD-kör (2026-08-18, azóta lezárult): E07-R18 —
+GenerationOrchestrator, progress és cancellation** (Chapter 8, Kör 18). Lásd §4.
+
+**Egyéb, Epic 7-től FÜGGETLEN, EMBERI döntést igénylő irányok** (az Epic 6
+completion report `docs/sdd/epic-06-completion-report.md` „Nyitott tételek"
+táblája nevezi meg, változatlan az E06-R30 óta — a GOV-30c mind az öt
+lépcsője kész az E99-R13 óta, lásd `docs/handoff-archive.md`):
+
+1. **Valódi eszközös elfogadás** — a 14 pontos Kör 30 lista + a teljes
+   `docs/manual-testing/analysis-eval-matrix.md` PENDING sorai (EVAL-01…41,
+   Epic 5 device-mátrix is még nyitott) — user-feladat, real gitáros
+   teszt.
+2. **GOV-30a** — valódi kalibrációs dataset/riport (ma `identity.v1`,
+   szintetikus).
+3. **GOV-30b** — az R29 evaluation CI-lépés bekötése (`.github/workflows/**`,
+   `tool/ci/**` — ez a fájlkör szándékosan tilos zóna minden eddigi GOV-30c
+   körben, H-GATEGUARD).
+4. **Opt-in/default-on rollout és a V1 kivezetése** — külön, jóváhagyott
+   GOV-kör, Product/User döntés (a GOV-30c lezárása óta sem lett elfogadva
+   semmilyen flag `true`-ra állítása, sem az Epic 6, sem az Epic 7 flagjeire).
+5. **GOV-05b bekötő köre** (AI Tutor `main.py` OpenAI-adapter bekötés) —
+   régóta nyitott track, brief-je még nincs megírva (ld. lent, változatlan).
+
+Egyik irány sem automatikusan folytatható a queue-ból — mindegyik vagy
+emberi döntést, vagy egy még meg nem írt briefet igényel. **A pipeline a
+következő session-ben NE találjon ki magától egy irányt** — kérdezze meg a
+usert, melyik legyen a következő SDD-kör vagy GOV-kör.
+
+> (A lenti, E06-R19-cel kezdődő szakasz a 2026-08-12 előtti GOV-05/06
+> governance-sagát rögzíti — történeti kontextusként hagyva.)
+
+**Korábbi kijelölt SDD-kör (2026-08-12, azóta lezárult): E06-R19 —
+Confidence calibration és capability resolver** (Chapter 7, Kör 19). Új
+sessionben induljon; E06-R18 lezárult.
+Pre-flightban az új technique-proxy contractot, a flag/Lab kaput és minden
+confidence-producer tényleges elérhetőségét újra mérje.
+
+> ### 🔒 Kötelező sorrend az Epic 5 után (user-döntés, 2026-08-07)
+>
+> **„várjuk meg amíg az Epic 5-tel végzünk, majd csináljuk a shipping kört
+> először, majd egy valós audio mérés, és csak ezek után lépjünk az Epic 6-ra."**
+>
+> 1. ~~**Epic 5 befejezése**~~ — ✅ **KÉSZ** (E05-R30, `d3b2caf9`).
+> 2. ~~**Az Epic 5 APK-ellenőrzése** a usernél~~ — **KIHAGYVA, user-döntés
+>    2026-08-09** („mehet a 3. 4. pont"). Mért indok: a 11 vision flag
+>    hard-kódolt `false` volt minden környezetben, tehát egy akkori APK-menet
+>    csak regressziót tudott volna mérni, a vision-t nem. A készülékes
+>    bizonyíték a GOV-05a/b/c rollout-körök device-mátrix sorain gyűlik.
+> 3. **GOV-05 — Shipping rollout.** **HÁROM körre bomlott** (orchesztrátor-
+>    döntés 2026-08-09; mért indok a 3.0 pontban):
+>    - **GOV-05a** = `E99-R01` — Practice V2 + Song Trainer V2 → ✅ **KÉSZ**
+>      (PR #205, `d958b75e`, ADR 0197).
+>    - **GOV-05b** = `E99-R02` — **AI Tutor internal rollout → ⛔ BLOKKOLT,
+>      EMBERI DÖNTÉST IGÉNYEL** (mérve 2026-08-09, lásd §3 „AI Tutor
+>      production-drótozás"). NEM indítható, amíg a döntés nincs meg.
+>    - **GOV-05c** = `E99-R03` — **Learn migráció** (`migratedLearnEnabled`).
+>      A legkockázatosabb: egy MÁR szállított feature mögött cseréli a motort.
+>      Meglévő őrök: `test/features/learn/learn_migration_parity_test.dart`,
+>      `learn_rollback_test.dart`; az `AppConfig.resolve` már kényszeríti a
+>      `practiceEngineV2Enabled` függőséget.
+> 3.0 **Miért három kör, és miért NEM tartalmazza a vision-t.** Két mérés
+>    döntötte el, mindkettő `main @ bbc95187`-en:
+>    (a) **Belépési pontok:** a flag-gated route-okra **nulla** hivatkozás
+>    mutatott a `lib/`-ben, tehát minden feature-családhoz külön UI-mozdulat
+>    kell — három család egyszerre nem lenne review-zható, és egy készülékes
+>    hiba nem lenne betudható.
+>    (b) **A vision rollout BLOKKOLT** (→ **GOV-05d**, lásd §3): az
+>    `assets/ml/model_manifest.json` `vision_models` mindkét bejegyzése
+>    (`hand_landmarker`, `pose_landmarker`) `status: "deferred"`, `sha256`
+>    csupa nulla, és a hivatkozott `.tflite` fájlok **nincsenek a repóban**
+>    (`ls assets/ml/` → négy audio `.bin` + a manifest). A
+>    `NativeHandLandmarkProvider:77` / `NativePoseLandmarkProvider:76`
+>    `deferred` bejegyzésre `AppResult.failure`-t ad, tehát a `visionEnabled`
+>    bekapcsolása egy zsákutcába futó setup-folyamatot tenne láthatóvá. A
+>    flag-flip előfeltétele a modell-binárisok beszerzése + licenc-átvezetés.
+> 4. ~~**GOV-06 — Valós-audio DSP baseline mérés.**~~ — ✅ **KÉSZ** (E99-R04,
+>    `5ceed22d`; BPM-metrikája javítva **GOV-06b, E99-R05, `c4ce2cc0`**). A
+>    meglévő shipping DSP pontossága valódi gitárfelvételeken: akkord-
+>    pontosság **67,069%** (18,832%-os baseline fölött), onset F1@50ms
+>    **67,391%**. A harmadik szám (a GOV-06 eredeti, `.strums`-alapú
+>    „BPM-MAE 45,067") **érvénytelennek bizonyult és visszavonva** (GOV-06b) —
+>    a helyette mért független (librosa) tempó-egyezés **11/82 = 13,415%**
+>    szigorú / **32/82 = 39,024%** metrikai-szint toleráns; a BPM ezen a
+>    korpuszon validált kézi annotáció híján **nem mérhető**. A korpusz
+>    (`ml/data/klangio/`, 82 felvétel) NEM verziókövetett — a mérés
+>    elkötelezett riport, nem CI-kapu; a verziókövetés nevesített follow-up.
+>    Teljes riport: [`docs/eval/real-audio-dsp-baseline.md`](docs/eval/real-audio-dsp-baseline.md).
+> 5. ~~**Csak ezután Epic 6**~~ — ✅ **FELOLDVA, user-döntés 2026-08-11**
+>    („mehet tovább az epic 6"): a 3. ÉS 4. pont lezárult (2026-08-09), az
+>    5. pont feltétele teljesült, mind a 30 Epic 6 sor `hold`→`pending`
+>    (`docs/execution/pipeline-queue.tsv`, `7d5bfd4a`). **E06-R01** (Epic 6
+>    Kör 1: V1 baseline + hat kötött ADR) ✅ **KÉSZ** — lásd a fejléc
+>    ✅-blokk. A lánc a szokásos módon folytatható, `PIPELINE_SLOTS=1`
+>    (user-döntés 2026-08-11: „nem kell dupla kör haladunk sorban").
+>
+> A GOV-05b/GOV-05c/GOV-06 briefje **szándékosan még nincs megírva**: mindegyik
+> pre-flightjának az ELŐZŐ kör utáni állapotot kell mérnie (mind ugyanazt a
+> `feature_flags.dart` / `lesson_list_screen.dart` felületet érinti, tehát az
+> előre írt fájllisták ütköznének és avulnának). Az Epic 6 queue-sorai
+> addig is `hold`-on védik a sorrendet.
+>
+> **Governance-kör azonosítás:** a GOV-körök `E99-RNN` alakot kapnak, mert a
+> `tools/ai_router/brief.py:19` és a `tools/round-pipeline.sh:278` mintája a
+> „GOV-05a" alakú nevet kiejtené a gépi kapukból. Az `E99` **nem valódi epic**.
+> A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás), a GOV-01 mintájára.
+
+0a. **Az Epic 6 lánc KÖVETKEZŐ KÖRE: E06-R02** (AnalysisDocument V2
+   domainmodell, `docs/rounds/e06-r02-analysis-document-v2-domain.md`) — a
+   queue `pending`, a pipeline a szokásos módon dispatch-eli. Az E06-R01
+   (Kör 1) ✅ **KÉSZ** (lásd a fejléc ✅-blokk); 28 további Epic 6 kör van
+   hátra (`epic-06-batch-index.md`). A queue soronként, EGYESÉVEL halad
+   (`PIPELINE_SLOTS=1`, user-döntés 2026-08-11).
+
+0b. **Ettől FÜGGETLENÜL, még nyitva: a GOV-05b bekötő köre — a backend
+   `main.py` bekötése az OpenAI-adapterre (briefje még nincs megírva).**
+   A GOV-körök a queue-n KÍVÜL futnak (kézi orchesztrálás) — ez a track
+   nem az Epic 6 lánc része, és az Epic 6 dispatch-ok nem érintik. A backend adapter
+   (E99-R07) és a Dart-oldali transport+provider-bedrótozás (E99-R06) is
+   kész; ami hátravan, a `main.py` registry/gateway-kiválasztásának bekötése
+   az `OpenAiProviderGateway`-re (ma kizárólag `FakeProviderGateway`-t épít),
+   a `RemoteTutorModelGateway` Dart-oldali élesítése (authentikált
+   `Dio`-val — a `/tutor/stream` JWT-t vár, E99-R06 review NOTE-1) és a
+   flag-rollout. A pre-flightnek az E99-R07 utáni állapotot kell mérnie.
+
+   **A user 2026-08-09-én újranyitotta a GOV-05b-t** („a négy konkrét darab is
+   csináljuk meg", provider: „open ai legyen"). A négy darabból:
+
+   | # | Darab | Állapot |
+   |---|---|---|
+   | 1 | Backend OpenAI provider-adapter | ✅ **KÉSZ** (E99-R07, PR #210, ADR 0214) |
+   | 2 | Dart konkrét `TutorStreamTransport` | ✅ **KÉSZ** (E99-R06, PR #209) |
+   | 3 | A három provider bedrótozása | ✅ **KÉSZ** (E99-R06, PR #209) |
+   | 4 | Hosztolás + OpenAI API-kulcs | **user-feladat** |
+
+   Mind a négy darab elkészült vagy user-feladatra vár — de az adapter (#1)
+   MÉG NINCS bekötve a `main.py` bootjába (E99-R07 tudatosan nem tette, ADR
+   0214 Döntés 2/OD-04): `tutor_provider` alapértéke `"fake"` marad, az
+   `aiTutorEnabled` bekapcsolása változatlanul crash-mentes, de valódi
+   OpenAI-hívás még nem érhető el éles úton. Ez a bekötés a fenti következő
+   kör dolga.
+
+   **A §6 sorrend mind az 5 pontja LEZÁRULT** (GOV-05a ✅, GOV-05c ✅, GOV-06
+   ✅ + GOV-06b ✅, Epic 6 feloldása ✅ 2026-08-11). A GOV-05b lánca ettől
+   FÜGGETLENÜL fut, és változatlanul nyitva (0b pont).
+
+   **A pipeline-lánc AKTÍV:** `docs/execution/pipeline-queue.tsv` minden
+   E05-sora `done`, E06-R01 `done`, a többi 29 E06-sor **`pending`** — a
+   lánc E06-R02-vel folytatódik, `PIPELINE_SLOTS=1` szerint egyesével.
+
+   **~~E06-R01 — Analyze V1 baseline, mérés és ADR-ek~~ — KÉSZ** (PR #211,
+   `62516a4b`, **ÚJ ADR 0215–0220**; implementer Codex/Terra, 1 forduló,
+   javító kör nélkül; lásd a fejléc ✅-blokk a teljes történetért).
+
+   **~~E99-R04 (GOV-06) — Valós-audio DSP baseline mérés~~ — KÉSZ** (PR
+   #207, `5ceed22d`, **ÚJ ADR 0199**; implementer Codex/Terra, 1 forduló,
+   javító kör nélkül; lásd a fejléc ✅-blokk a teljes történetért).
+
+   **~~E99-R03 (GOV-05c) — Learn migráció a Practice Engine V2-re~~ — KÉSZ**
+   (PR #206, `0e9d211c`, **ÚJ ADR 0198**; implementer Codex/Terra, 1
+   forduló, javító kör nélkül — a pre-flight mérése pontosan a szállított
+   módosítás alakját írta le; review APPROVED, 0 BLOCKER/MAJOR/MINOR, 1
+   NOTE, reviewer SAJÁT izolált-klón gate-újrafuttatással (10/10 zöld) +
+   SAJÁT valódi-sértés próbával függetlenül ellenőrizve; dedikált
+   security-reviewer risk=high **PASS**, 0 CRITICAL/BLOCKER/MAJOR/MINOR, 2
+   NOTE; ld. fejléc + §4).
+   **~~E99-R01 (GOV-05a) — Practice V2 + Song Trainer V2 shipping rollout~~ — KÉSZ**
+   (PR #205, `d958b75e`, **ÚJ ADR 0197**; implementer Codex/Terra, 1
+   implementációs + 1 javító forduló — az első fordulóban helyes `stopped`
+   scope-jelzés, dokumentált §0.0 R1 revízióval feloldva; review APPROVED,
+   0 BLOCKER/MAJOR, 1 MINOR + 3 NOTE; ld. fejléc).
+   **~~E05-R30 — Dataset, evaluation, minőségi kapuk és Epic 5 lezárás~~ — KÉSZ**
+   (PR #204, `d3b2caf9`, nincs új ADR — záró-kör waiver; implementer
+   Codex/Terra, egyetlen forduló, javító kör nélkül; dedikált
+   security-reviewer risk=high PASS; 1+2 MINOR mind forward-looking/lezárva,
+   7 NOTE; ld. fejléc + §4 + §5).
+   **~~E05-R29 — Device tier, performance és thermal hardening~~ — KÉSZ**
+   (PR #203, `8e7eb6f9`, **ÚJ ADR 0196**; implementer Codex/Terra, egyetlen
+   forduló, javító kör nélkül; dedikált security-reviewer risk=high PASS;
+   1 MINOR + 4 NOTE; ld. `docs/handoff-archive.md`).
+   **~~E05-R25 — Practice Engine vision integration~~ — KÉSZ**
+   (PR #199, `9b608cf`, **ÚJ ADR 0192** practice-vision-integration-contract
+   szerződésre; implementer Codex/Terra, egyetlen forduló (köztes
+   pre-flight-eredetű `stopped` önjavítva, 0 javító kör); dedikált
+   security-reviewer risk=high PASS, 1 nem-blokkoló MINOR (barrel-szimbólum-
+   rés) → E05-R26 pre-flight bemenet; ld. fejléc + §3 + §5).
+   **~~E05-R24 — Vision session controller and realtime overlay~~ — KÉSZ**
+   (PR #197, `e9257f4`, nincs új ADR; implementer Codex/Terra, 2 javító kör;
+   dedikált security-reviewer risk=high; 1 BLOCKER + 1 MAJOR + 1 MINOR pass 1,
+   1 önjavítás-eredetű BLOCKER pass 2; H5 self-heal PR #198 a queue
+   mért-motor szinkronjára; ld. §5 + `docs/handoff-archive.md`).
+   **~~E05-R23 — Feedback policy and realtime cue budget~~ — KÉSZ**
+   (PR #196, `b54490e`, **ÚJ ADR 0191** feedback-policy-és-cue-budget
+   szerződésre; implementer Codex/Terra, 1 javító kör; dedikált
+   security-reviewer risk=high; 1 BLOCKER + 2 MAJOR + 4 MINOR a javító
+   körben zárva; ld. fejléc + §5).
+   **~~E05-R22 — Vision observation fusion and evidence engine~~ — KÉSZ**
+   (PR #195, `997e7be`, **ÚJ ADR 0190** observation-fusion-és-evidence
+   szerződésre; implementer Codex/Terra, 2 javító kör; dedikált
+   security-reviewer risk=high PASS; 1 MAJOR + 2 MINOR a javító körökben
+   zárva; ld. fejléc + §5).
+   **~~E05-R21 — Audio–vision clock mapping and latency calibration~~ — KÉSZ**
+   (PR #194, `7b11f26`, **ÚJ ADR 0189** audio–vision szinkron-szerződésre;
+   implementer Codex/Terra, egyetlen forduló; APPROVED elsőre, javító kör
+   nélkül; ld. fejléc + §5).
+   **~~E05-R20 — Posture metric engine és safety policy~~ — KÉSZ**
+   (PR #193, `be38e11`, **ÚJ ADR 0188** safety-claim-guard-ra, posture-fél
+   ADR 0179 végrehajtása; implementer MiniMax M3, 1 javító kör; dedikált
+   security-reviewer risk=high, 2 MAJOR a javító körben zárva; ld. fejléc + §5).
+   **~~E05-R19 — Picking-hand stroke metric engine~~ — KÉSZ**
+   (PR #192, `a38e0e0`, nincs új ADR — ADR 0179/0181 végrehajtása;
+   implementer MiniMax M3, 1 javító kör; ld. fejléc + §5).
+   **~~E05-R18 — Fretting-hand metric engine~~ — KÉSZ**
+   (PR #191, `75f8766`, nincs új ADR — ADR 0179/0181 végrehajtása;
+   implementer MiniMax M3, 2 javító kör; ld. fejléc + §5).
+   **~~E05-R17 — Automatic guitar detector go/no-go decision~~ — KÉSZ**
+   (PR #189, `e979d41`, **ADR 0187** (új); implementer MiniMax M3, 1
+   javító kör; dedikált security-reviewer risk=high, MAJOR lelet a javító
+   körben zárva; ld. fejléc).
+   **~~E05-R16 — Guitar geometry tracking és calibration loss~~ — KÉSZ**
+   (PR #188, `6f9c0e1`, nincs új ADR — ADR 0179/0181 bővítése; implementer
+   MiniMax M3, 1 javító kör; dedikált security-reviewer risk=high, MINOR
+   lelet a javító körben zárva; ld. fejléc).
+   **~~E05-R15 — Guitar coordinate system és homography~~ — KÉSZ**
+   (PR #187, `a351ad3`, nincs új ADR; implementer MiniMax M3 (mindkét
+   javító kör); dedikált security-reviewer risk=high — innen indult
+   BLOCKER-1; ld. fejléc + §5).
+   **~~E05-R14 — Pose landmark provider és posture baseline~~ — KÉSZ**
+   (PR #185, `efa4bbe`, ADR 0186; implementer MiniMax M3 → Codex/Terra
+   (javító kör 2); dedikált security-reviewer PASS; ld. docs/handoff-archive.md + §5).
+   **~~E05-R13 — Hand track assignment és temporal smoothing~~ — KÉSZ**
+   (PR #184, `148469c`, nincs új ADR; implementer MiniMax M3; 1 javító kör;
+   dedikált security-reviewer PASS, futott a merge előtt; ld. fejléc + §5).
+   **~~E05-R12 — Hand landmark provider adapter és model manifest~~ — KÉSZ**
+   (PR #183, `f39d7b6`, ADR 0185; implementer MiniMax M3; 1 javító kör;
+   dedikált security-reviewer PASS (post-merge, orchestrátor-mulasztás
+   pótolva); ld. fejléc).
+   **~~E05-R11 — Manual guitar geometry calibration UI~~ — KÉSZ** (PR #182,
+   `113976a`, nincs új ADR; implementer MiniMax M3; 1 javító kör (3
+   BLOCKER); dedikált security-reviewer PASS; ld. fejléc + docs/handoff-archive.md).
+   **~~E05-R10 — Camera + guitar calibration domain és verziózott tárolás~~ — KÉSZ**
+   (PR #181, `39d1c29`, nincs új ADR; implementer MiniMax M3; 3 javító kör
+   (MiniMax 1 + Codex 2); dedikált security-reviewer PASS; ld. fejléc + §5).
+   **~~E05-R09 — Frame quality assessor~~ — KÉSZ** (PR #180; 1. kísérlet
+   külső GitHub-incidensbe futott, önjavító retry; ld. fejléc).
+   **~~E05-R08 — Vision setup wizard és camera profile~~ — KÉSZ** (PR #170,
+   `eff1eaf`, nincs új ADR; implementer Terra; 0 javító kör; dedikált
+   security-reviewer PASS; ld. fejléc + docs/handoff-archive.md).
+   **~~E05-R07 — Frame transform és overlay koordinátarendszer~~ — KÉSZ** (PR #169, `b5837d9`,
+   nincs új ADR; implementer Terra; 1 javító kör (overlay-mapping pótlása);
+   dedikált security-reviewer PASS, 1 carry-forward MAJOR R13/R15/R24 elé; ld. fejléc + §5).
+   **~~E05-R06 — Android camera production adapter~~ — KÉSZ** (PR #168, `a43f8c1`,
+   nincs új ADR; implementer Terra; 1 javító kör (teszt-minőség); dedikált
+   security-reviewer PASS; ld. fejléc + docs/handoff-archive.md).
+
+   _(A korábbi, Epic 4-es „exact next task" bejegyzések innentől lefelé
+   történeti maradványok — az Epic 4 lezárult E04-R24-gyel, ld. fejléc-archívum.)_
+   **~~E04-R23 — Tutor safety, injection, usage & evaluation gate~~ — KÉSZ** (PR #159, `04787fa`,
+   ADR 0177; implementer DeepSeek v4 Pro; 1 javító kör + 2 orchestrátor scope-akció; ld. fejléc + §5).
+   **~~E04-R22 — Tutor Profile, Privacy, Data & Consent UI~~ — KÉSZ** (PR #157, `faa3f32`,
+   nincs új ADR — ADR 0132+0134 hatálya; implementer MiniMax M3; ld. fejléc + §5).
+   **~~E04-R21 — Song Trainer debrief & range action integráció~~ — KÉSZ** (PR #156, `6000b57`,
+   nincs új ADR — ADR 0132+0089 hatálya; implementer Codex/Terra; a re-scoped §0.0
+   struktúra+capability+redaction szelet; korábbi H3 BLOCKER-1-et a merge-elt ADR 0176
+   oldotta fel — rebase a javított main-re; a halasztott result/range/setlist szelet
+   külön prerekvizit kört igényel; ld. fejléc + §5).
+   **~~E04-R20 — Practice & Analyze post-session tutor integráció~~ — KÉSZ** (PR #153, `3ce4afc`,
+   nincs új ADR — ADR 0132 hatálya; implementer Codex/Terra; §0.0-R1 public.dart
+   scope-narrowing az E04-R01 boundary-teszt miatt; ld. fejléc + §5).
+   **~~E04-R19 — Evidence, source & action card UI~~ — KÉSZ** (PR #152, `f0f74fb`,
+   nincs új ADR — ADR 0132+0133 hatálya; implementer MiniMax M3; első futás stalled →
+   folytató dispatch salvage; ld. fejléc + §5).
+   **~~E04-R18 — Tutor Home, Chat UI & streaming UX~~ — KÉSZ** (PR #151, `104e685`,
+   nincs új ADR — ADR 0131+0134 hatálya; implementer MiniMax M3; box-timeout salvage
+   + 2 teszt-fix javító kör #1-ben; ld. fejléc + §5).
+   **~~E04-R17 — Conversation repository, summary & inspectable memory~~ — KÉSZ** (PR #148, `1e9b2db`,
+   nincs új ADR — ADR 0134 hatálya; implementer Codex; 2 MAJOR zárva javító kör #1-ben; ld. fejléc + §5).
+   **~~E04-R16 — Tutor orchestration state machine & output validator~~ — KÉSZ** (PR #147, `df25806`,
+   ADR 0174; implementer Codex; ld. fejléc + §5).
+   **~~E04-R15 — Backend + Flutter streaming transport~~ — KÉSZ** (PR #145, `1fe91d2`,
+   ADR 0142; implementer qwen38-max; H3 self-heal #143 után; ld. a fejléc-összefoglalót és §5).
+   **~~E04-R14 — Backend tutor proxy, provider registry & usage guard~~ — KÉSZ** (PR #142, `c1c0a77`,
+   nincs új ADR — ADR 0131 hatálya; implementer qwen-coder-plus; ld. §5 archívum).
+   **~~E04-R13 — TutorModelGateway & scripted fake~~ — KÉSZ** (PR #141, `b9d2950`,
+   nincs új ADR — ADR 0131 hatálya; implementer qwen-plus; ld. a fejléc-összefoglalót és §5).
+   **~~E04-R12 — Prompt templatek, output schema & injection boundary~~ — KÉSZ** (PR #140, `c5b14e5`,
+   ADR 0141, ld. a fejléc-összefoglalót és §5).
+   **~~E04-R11 — Action proposal & confirmation~~ — KÉSZ** (PR #137, `479550f`,
+   ADR 0139, ld. §5 snapshot).
+   **~~E04-R10 — Tutor Tool contract & read-only registry~~ — KÉSZ** (PR #136, `2f7fffc`,
+   ADR 0137, ld. §5 snapshot).
+   **~~E04-R08 — Deterministic debrief coaching~~ — KÉSZ** (a queue sora, ld. archívum).
+   **~~E04-R07 — Offline knowledge index & retrieval~~ — KÉSZ** (PR #130, `8182204`,
+   ADR 0136, ld. a fejléc-összefoglalót és §5).
+   **~~E04-R06 — Knowledge schema & content pack~~ — KÉSZ** (PR #129, `f3d69ef`,
+   ADR 0135).
+   **~~E04-R05 — Context adapters & snapshot~~ — KÉSZ** (PR #128, `55d640d`).
+   **~~E04-R04 — Skill taxonomy & evidence reducer~~ — KÉSZ** (PR #127, `0d7ab1b`).
+   **~~E04-R03 — Student/guitar profile, goals & consent~~ — KÉSZ** (PR #126,
+   `06ae3f7`).
+1. **~~E03-R22 lezárási lánc~~ — KÉSZ** (PR #123, `3ae368a`, Epic 3 zárva).
+1. **Historical pipeline snapshot (superseded): ~~E03-R01~~, ~~E03-R02~~, ~~E03-R03~~, ~~E03-R04~~, ~~E03-R05 —
+   Validator, normalizer, capabilities~~, ~~E03-R06 — Legacy Song/Setlist
+   migrációs adapter~~ és ~~E03-R07 — Fájlrendszeres Song repository és
+   asset store~~ — KÉSZ, ld. §5.** Következő:
+   **E03-R08 — Legacy adatok tartós V2 migrációja**
+   ([docs/rounds/e03-r08-persistent-v2-migration.md](docs/rounds/e03-r08-persistent-v2-migration.md)).
+   A `docs/execution/pipeline-queue.tsv` E03-R08 sora `pending` — a driver
+   automatikusan folytatja (mid-epic round, nincs emberi kapu, ADR 0087 §7).
+1. **User:** §16.3 audio-regresszió + §16.4 teljesítmény-megfigyelések a friss
+   APK-val; eredmény vissza → completion report frissítése. Az APK a PR #37
+   CI-runjából tölthető
+   ([30673821431](https://github.com/wolfcasaba/strumsight/actions/runs/30673821431)).
+2. **~~E02-R20 — Epic 2 lezárás (a11y/l10n/perf audit, DoD-tábla)~~ — KÉSZ**
+   (PR #44, `4616aed`, 2026-08-01, implementer **MiniMax M3**, orchestrátor
+   **Claude Sonnet 5**, egy javító kör → **APPROVED**). **Epic 2 technikailag
+   lezárva.**
+   - **~~A rendszerszintű drótozási rés (§3)~~ — KÉSZ (E02-R21, ld. §5).**
+   - **A `migratedLearnEnabled` rollout-döntés** — mindenhol OFF, a
+     bekapcsolás feltételei (mérföldkövek, monitorozás, visszaállítási
+     útvonal) az R19 paritása alapján még **user-döntésre várnak**
+     (R20 nem hozott ebben döntést, csak dokumentált).
+   (E02-R19 progress/streak/daily-goal + Learn V2-migráció — KÉSZ: PR #43,
+   `0bdee7e`.)
+3. **A pipeline (ADR 0087, GOV-02) E02-R14…R19-et és E02-R21-et vitte
+   (utóbbit a self-heal round 10/H4 zárta le); E02-R20-at és E03-R01-et
+   SZÁNDÉKOSAN ember indította** (ADR 0087 §7 — epic-kickoff és epic-zárás
+   emberi döntési pont); E03-R02-t és E03-R03-at a user már `pending`-re
+   állította, a driver ezeken a körökön keresztül automatikusan folytatta
+   (self-heal L49/L50, majd L51 közbeiktatásával) — a
+   ([`docs/execution/pipeline-queue.tsv`](docs/execution/pipeline-queue.tsv))
+   E03-R01/R02/R03/R04/R05 sora `done`, E03-R06 sora a fájlban még
+   `pending` (a driver saját könyvelése frissíti `done`-ra a következő
+   firing-en — ez a session nem nyúl a queue-fájlhoz), E03-R07…R21
+   `pending` — a driver körönként automatikusan halad, amíg HALT nem éri.
+
+   > **Megállási szerződés (ADR 0087 §2):** az orchestrátor-session önállóan
+   > javíthatja a kör SAJÁT, még nem merge-elt briefjét/ADR-jét (§0.0
+   > revízióval); H1–H8 esetén (merged ADR, lezárt kör viselkedése, tilos zóna,
+   > túlélő BLOCKER/MAJOR, 2× piros CI, `blocked`, gate nem zöldíthető,
+   > rebase-konfliktus) a kör HALT-tal megáll.
+   >
+   > **ÖNJAVÍTÁS (ADR 0112, GOV-03, 2026-08-01 — user-döntés):** a HALT már NEM
+   > a lánc vége. A driver a következő firingen friss **önjavító sessiont**
+   > indít (`docs/execution/pipeline-selfheal-prompt.md`), amely az
+   > infrastruktúrát is javíthatja (`tools/**`, merge-elt ADR jelölt
+   > módosítás-blokkal, brief, sor-fájl), kötelező **regressziós teszttel**, a
+   > változatlan zöld kapun át merge-elve — majd feloldja a láncot. Korlátok:
+   > körönként+halt-kódonként max **3** kísérlet (`PIPELINE_SELFHEAL_MAX`), és
+   > a **mércét nem gyengítheti**: ha a teszt-fájlok száma csökken vagy a
+   > `round-gate.sh` / `.github/workflows/` változik, a driver `H-GATEGUARD`
+   > halttal EMBER elé viszi. Kikapcsolás: `PIPELINE_SELFHEAL=0`.
+   > Állapot: `tools/pipeline-status.sh` (önjavítás-blokk + kísérletszámláló).
+   >
+   > **REVIEW-MOTOR FALLBACK (ADR 0115, 2026-08-02 — user-döntés):** ha a
+   > **Claude-kvóta** kimerül, a lánc nem áll meg: ugyanazt a kör- vagy
+   > önjavító promptot a **Terra** (`codex exec`, `CODEX_HOME=~/.codex-terra`,
+   > `gpt-5.6-terra`) viszi tovább, a
+   > `docs/execution/pipeline-codex-orchestrator-preamble.md` motor-előszóval.
+   > A váltás kiváltója KIZÁRÓLAG a mért kvóta-minta a session-naplóban —
+   > minden más néma halál marad halt. A zárlat 5 óra
+   > (`.pipeline/claude-blocked-until`), visszaállítás:
+   > `tools/pipeline-status.sh --unblock-claude`; kikapcsolás:
+   > `PIPELINE_FALLBACK_ENGINE=none`. **Az implementer-routing (ADR 0088:
+   > M3 → Terra) ettől FÜGGETLEN és változatlan** — ez csak arról szól, ki
+   > vezényel és ki review-z.
+   >
+   > **E03-R05 H6 önjavító kör (2026-08-02) — KÉSZ, `outcome=fixed`:** a
+   > `router_result` egyetlen szinkron `ai-router-round.sh run` hívása a
+   > Bash-eszköz 600s-es kemény plafonjánál tovább tartó MiniMax-hívásoknál
+   > (`model_timeout_seconds=7200`) jelzés nélküli SIGTERM-mel halt meg —
+   > docs/LESSONS.md L42 pontos ismétlődése, most az `engine=auto` úton.
+   > Javítás: `engine=auto` is a már szentesített leválaszt-és-előtérben-várj
+   > mintát követi (`setsid ... & ; tools/wait-for-router.sh`); az örökölt
+   > `wait-for-round.sh` a router `progress`/`blocked` jelzéseit nem ismeri
+   > fel terminálisnak (mérve, regressziós teszttel dokumentálva), ezért egy
+   > ÚJ, dedikált poller kellett. `tools/ai-router-round.sh` és a Python
+   > router (`tools/ai_router/**`) VÁLTOZATLAN — a szükséges state-alapú
+   > állapotlekérdezés már létezett. PR #61, `3b4707f`, `router-ci` zöld.
+   > Részletek: docs/LESSONS.md L54.
+   >
+   > **E03-R05 H-GATEGUARD önjavító kör (2026-08-02) — KÉSZ, `outcome=fixed`:**
+   > a H6 heal (PR #61) UTÁN a driver `H-GATEGUARD`-dal állt le, holott a PR
+   > #61 saját diffje a mércét NEM érintette — a heal ~07:50–08:08 közötti
+   > futása KÖZBEN egy tőle FÜGGETLEN, jogos commit (`8715773`, ADR 0115)
+   > módosította a `router-ci.yml`-t, és a régi őrszem a teljes main
+   > előtte/utána állapotát hasonlította össze, nem a heal SAJÁT diffjét.
+   > Javítás: `heal_pr_number`/`heal_pr_gate_violation` a determinisztikus
+   > `heal/{ROUND}-{HALT_CODE}-{ATTEMPT}` branch-névhez tartozó, merge-elt PR
+   > SAJÁT diffjét nézi (immunis a konkurens, független commitokra); nincs
+   > megtalálható PR esetén óvatosságból a régi teljes-fingerprint marad
+   > fallback. Regressziós tesztek a VALÓDI PR #61/`3b4707f` (negatív eset) és
+   > a VALÓDI, `round-gate.sh`-t módosító `6d61e23` (pozitív eset) adatain.
+   > Részletek: docs/LESSONS.md L55.
+   >
+   > **E03-R05 H6 önjavító kör #2 (2026-08-02) — KÉSZ, `outcome=fixed`:** a
+   > H-GATEGUARD heal (PR #62) UTÁN a friss `auto` M3-hívás ÚJRA commitolt
+   > (`d0546f0`, worktree `ss-router-e03-r05-2`) a prompt "Do not commit,
+   > push..." tiltása ellenére — `security.py` helyesen hard-BLOCKolt, de a
+   > `HALTED` saját gyökérok-elmélete ("a tiltás sosincs kimondva") mérve
+   > téves volt (a `router.py:353-364` prompt élén ott áll). Ez ugyanaz a
+   > tünet, mint L49 (E03-R02) — ott a self-heal SZÁNDÉKOSAN elvetett egy
+   > `security.py`-lazítást mércegyengítésként. Javítás most: egy ÚJ,
+   > korábbi rétegen ülő kontroll, nem az elvetett lazítás újramérlegelése —
+   > `tools/ai_router/git-guard/git` PATH-shim, amit `execution.py`
+   > `run_codex()` minden M3/Terra hívás elé tesz, és ami `git commit`/
+   > `git push`-t a shell-rétegen utasít el (minden más git-alparancs
+   > változatlanul átmegy); `security.py` audit_scope-ja és hard-blockja
+   > ÉRINTETLEN. Regressziós tesztek (fix előtt RED, utána GREEN):
+   > `tools/tests/test_execution.py::test_git_guard_blocks_commit_and_push_but_passes_through_other_subcommands`,
+   > `::test_run_codex_blocks_a_model_commit_at_the_shell_layer` (a `d0546f0`
+   > mintát reprodukálja egy hamis "codex" folyamattal). Részletek:
+   > docs/LESSONS.md L56.
+   >
+   > **E03-R08 H6 önjavító kör (2026-08-02) — KÉSZ, `outcome=fixed`:** az
+   > auto-router M3 1. próbálkozása `changed_paths=0` mellett terminális
+   > `STOPPED`-ot adott vissza; `classification.py`'s catch-all-ja futott,
+   > mert egyik ismert minta (quota/429/timeout/network/credential/env) sem
+   > talált — a `HALTED` fájl innen csak ezt az egy szót tudta jelenteni,
+   > mert `execution.py`'s `run_codex()` a MiniMax CLI nyers `stdout`-ját
+   > sorról sorra JSON-ra próbálta parse-olni, és minden NEM-JSON sort
+   > (pont ahol egy szöveges self-halt üzenet állna) némán eldobott — a
+   > `CodexResult`-nak nem is volt `stdout` mezője. Class A gyökérok (a
+   > router SAJÁT diagnosztikai csatornája hiányos, nem a MiniMax-hívás
+   > tartalma). Javítás: `CodexResult.stdout` mező (az `events`/
+   > `agent_messages` MELLETT) + `router.py`'s új `_record_provider_call()`
+   > (az `_record_gate()` mintája) minden M3-/Terra-hívás után a task-state
+   > `provider_calls`-listájába teszi a nyers (20000 karakterre vágott)
+   > `stdout`/`stderr`-t, a `FailureClass`-szal együtt. Regressziós tesztek
+   > (RED a fix előtt, GREEN utána):
+   > `test_execution.py::test_run_codex_preserves_raw_stdout_for_non_jsonl_output`,
+   > `test_router.py::test_provider_call_history_persists_raw_stdout_for_stopped_diagnosis`.
+   > A `tools/tests -q` egy MÁSIK, ehhez a halthoz nem tartozó sub-teszttel
+   > (`test_epic3_brief_metadata.py`, E03-R05 brief TOML-drift) továbbra is
+   > pirosít — ez az [[L59]]-ben már dokumentált, önálló felhatalmazású
+   > önjavító kört vár, SZÁNDÉKOSAN érintetlen ebben a körben (§2 hatóköre
+   > csak a MEGÁLLT — E03-R08 — kör briefjére terjed ki). PR #67, `3725f09`.
+   > Részletek: `docs/LESSONS.md` L61.
+   >
+   > **E03-R08 H6 önjavító kör, 2. előfordulás (2026-08-02) — KÉSZ,
+   > `outcome=fixed`:** a fenti javítás után a H6 más gyökérokkal két
+   > egymást követő 5 perces cikluson (15:19, 15:29 UTC) belül ismét
+   > lecsapott: a brief `migration`-fragmenst érint, ezért a kötelező Terra
+   > high-risk review (ADR 0088 §2) szükséges, de a napi automatikus
+   > Terra-budget (`.ai/router.toml` `max_automatic_terra_calls_per_utc_day
+   > = 3`) MÉRVE (`terra-ledger.json`, `daily_count=3`) kimerült — ez csak
+   > `2026-08-03T00:00:00Z`-kor nyílik meg újra. C osztályú (külső,
+   > naptár-kapuzott) akadály, de a driver 5 percenkénti retry-ciklusa
+   > ~20-30 percen belül elhasználta volna mind a 3 önjavítási kísérletet
+   > egy olyan haltra, ami emberi döntést nem is igényelt. Javítás:
+   > `tools/round-pipeline.sh` kör-specifikus, időkorlátos "hold" — egy
+   > Terra napi-budget-kimerülésre visszavezetett `retry` után a driver
+   > `terra-budget-hold` fájlt ír (`round`, `hold_until=UTC éjfél`), és
+   > minden firing a zár után, halt-kezelés/kör-indítás ELŐTT ellenőrzi:
+   > ha a soron lévő kör megegyezik, session és önjavítási-kísérlet
+   > fogyasztása NÉLKÜL lép ki. Új, tisztán olvasó
+   > `StateStore.daily_terra_count()` (state.py) + `terra-status`
+   > alparancs (model-router.py, JSON + nemnulla exit kimerülésnél) — a
+   > driver ugyanazt a forrást kérdezi, amit `reserve_terra` a döntéséhez
+   > használ, nincs duplikált szabály. Regressziós tesztek (RED a fix
+   > előtt, GREEN utána): `test_state_store.py::
+   > test_daily_terra_count_matches_the_active_status_rule_reserve_terra_enforces`,
+   > `test_router_cli.py::
+   > test_terra_status_exits_nonzero_and_reports_the_utc_midnight_reset_once_exhausted`,
+   > `test_pipeline_integration.py::
+   > test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`.
+   > A `tools/tests -q` ezen a javításon átfutva is UGYANAZZAL a [[L59]]-ben
+   > dokumentált E03-R05 brief-TOML sub-teszttel pirosít — mérve azonosan a
+   > módosítás nélküli `main`-en is, ezen kör hatóköre kívül esik rajta.
+   > Részletek: `docs/LESSONS.md` L62.
+   >
+   > **E03-R08 H6 önjavító kör, 3. előfordulás (2026-08-02) — KÉSZ,
+   > `outcome=fixed`:** a fenti L62-hold BEVEZETVE volt (PR #68/#69), a
+   > driver mégis NÉGYSZER futott ugyanabba a Terra-budget falba egy nap
+   > alatt (14:26, 15:19–15:29, 16:05, 16:15 UTC) — `find .pipeline
+   > -iname '*hold*'` a 4. haltkor is ÜRES találatot adott. Gyökérok:
+   > `terra_hold_if_exhausted()`-ben `status_json=$(terra_status_json) ||
+   > return 0` — de a `terra-status` a DOKUMENTÁLT viselkedése szerint
+   > pontosan akkor tér vissza NEMNULLA exit-tel, amikor kimerült; a `||`
+   > ezt is lekérdezési hibaként kezelte, a függvény visszatért, mielőtt
+   > egyszer is megírta volna a hold-fájlt. A meglévő
+   > `test_terra_budget_hold_blocks_a_firing_without_spending_a_selfheal_attempt`
+   > csak az OLVASÓ függvényt (`terra_hold_active_for`) tesztelte, kézzel
+   > megírt hold-fájllal — az ÍRÓ ág sosem futott le teszt alatt. Javítás:
+   > az `|| return 0` törölve, a meglévő `[ -n "$status_json" ] || return
+   > 0` marad a valódi lekérdezési hiba (üres kimenet) védelmére. Új
+   > `--terra-hold-if-exhausted` teszthorog (a `--terra-hold-active`
+   > mintájára) + `test_pipeline_integration.py::
+   > test_terra_hold_if_exhausted_writes_the_hold_file_when_terra_status_reports_exhausted`
+   > (PATH-stub `python3`, ami a `terra-status` mért exhausted/exit-1
+   > viselkedését szimulálja) — RED a régi sorral, GREEN az újjal. A
+   > `tools/tests -q` ezen a javításon átfutva is UGYANAZZAL a [[L59]]-ben
+   > dokumentált E03-R05 brief-TOML sub-teszttel pirosít, mérve azonosan a
+   > módosítás nélküli `main`-en is; `router-ci.yml` (push-only, nem
+   > GitHub-required check) ezért erre a heal branch-re is pirosat
+   > mutatott, PR #70 a #68/#69 mintáját követve a CodeRabbit-checkkel
+   > merge-elődött. Részletek: `docs/LESSONS.md` L63.
+   >
+   > **E03-R08 H6 önjavító kör, 4. előfordulás (2026-08-02) — KÉSZ,
+   > `outcome=fixed`:** az L63-fix (PR #70, 16:27) UTÁN is jött egy 6.
+   > azonos H6 halt (16:38 UTC) — a hold-fájl megint hiányzott. Gyökérok:
+   > a hold-írás (`terra_hold_if_exhausted`) KIZÁRÓLAG `attempt_selfheal()`
+   > `retry`-ágából íródott ki, sosem a driver `halted)` ágából (a HALT
+   > ELSŐ, session előtti észlelése). A 3. előfordulás heal-köre
+   > (16:20–16:30) maga egy MÁSIK gyökérokra javított (a hold-író saját
+   > hibája) — `outcome=fixed`, nem `retry` —, ezért a `retry`-ág EBBEN a
+   > ciklusban sem futott le, a hold-fájl a fix után is üres maradt.
+   > Javítás: új `handle_round_halt()` (`tools/round-pipeline.sh`) a
+   > `halt_file` írása MELLÉ meghívja `terra_hold_if_exhausted()`-et is —
+   > a HALT ELSŐ észlelésekor, MIELŐTT bármilyen self-heal elindulna,
+   > FÜGGETLENÜL a self-heal későbbi `outcome`-jától. Az
+   > `attempt_selfheal()` retry-ágának hívása változatlanul marad
+   > (idempotens második réteg). Új `--handle-round-halt` teszthorog +
+   > `test_pipeline_integration.py::
+   > test_first_halt_detection_writes_the_terra_hold_without_waiting_for_a_selfheal_retry`
+   > — RED a hook nélkül (a hívás a case-ágból kiesve a teljes
+   > driver-folyamatba zuhan), GREEN a hookkal. A `tools/tests -q` ezen a
+   > javításon átfutva is UGYANAZZAL a [[L59]]-ben dokumentált E03-R05
+   > brief-TOML sub-teszttel pirosít, mérve azonosan a módosítás nélküli
+   > `main`-en is; `router-ci.yml` ezért erre a heal branch-re is pirosat
+   > mutatott ugyanazzal az EGY sub-teszttel, a #68/#69/#70 mintáját
+   > követve a CodeRabbit-checkkel merge-elődött. Részletek:
+   > `docs/LESSONS.md` L64.
+   >
+   > **A napi Terra-korlát eltávolítása (PR #72, `53b9637`, L65):**
+   > user-döntésre `max_automatic_terra_calls_per_utc_day = 0` mostantól
+   > korlátlant jelent — a `daily_count=3/3` fal maga szűnt meg, nem csak a
+   > driver retry-viselkedése rá. A taskonkénti 1 Terra-hívásos korlát és a
+   > magas kockázatú review kötelezettsége változatlan.
+   >
+   > **E03-R08 H6 önjavító kör, 7. előfordulás (2026-08-02 18:45 UTC) — KÉSZ,
+   > `outcome=fixed`:** a napi korlát megszűnése (fent) után az első
+   > cron-firing helyesen törölte az elavult `terra-budget-hold` fájlt, de a
+   > MELLETTE élő `.pipeline/HALTED` (a MÉG korlátozott policy alatt,
+   > `halted_at=16:58:03Z`-kor kiírva) érintetlen maradt — a driver 2.
+   > szakasza ettől függetlenül egy ÚJABB, valódi önjavító sessiont indított
+   > egy már megszűnt okra (ez a session). **1. javító kör (PR #73):**
+   > `terra_clear_stale_halt_for()` a hold-törléssel EGYÜTT, csak akkor
+   > futva, ha még LÉTEZIK hold-fájl. **MÉRT hiányosság:** élesben a
+   > hold-fájl a HALT előtti firingen már törlődött, tehát PR #73 hívási
+   > pontja SOHA nem futott le a valódi incidensen — csak a driver
+   > `outcome=fixed` standard könyvelése (a `halt_file` archiválása)
+   > oldotta fel EZT a konkrét haltot, nem az új függvény. **2. javító kör
+   > (PR #74, ugyanebben a sessionben):** `terra_clear_stale_halt_for()`
+   > mostantól ÖNÁLLÓAN kérdezi le a Terra-policy-t, és a driver főágában a
+   > hold-fájl létezésétől FÜGGETLENÜL, feltétel nélkül fut — a KÖVETKEZŐ
+   > hasonló esetben már ez fog reagálni, nem egy újabb heal-session. Új
+   > `--terra-clear-stale-halt` teszthorog + 3 regressziós teszt (RED PR #73
+   > állapota ellen, GREEN PR #74 után); `tools/tests -q` 151/151 zöld.
+   > **Biztonsági incidens a saját tesztelés közben:** a tesztek első
+   > verziója egy ismeretlen CLI-flaget hívott a pre-fix scripten, ami a
+   > TELJES driver-folyamatba esett és egy VALÓDI tmux+claude
+   > önjavító sessiont indított — azonnal észlelve és leállítva, állapot-
+   > károsodás nélkül; javítva az attempt-budget-határ biztonsági minta
+   > minden ilyen teszthez való hozzáadásával. Részletek: `docs/LESSONS.md`
+   > L66.
+4. **Kötelező pre-flight minden körhöz** (az R10 és R11 mért tanulságai):
+   minden briefben hivatkozott szimbólumot grep-elj ki; minden előírt
+   cél-státuszra mérd meg, melyik INPUT produkálja (L20); minden
+   erőforrás-előírásnál mérd ki a tényleges hívási láncot (L19).
+   **A javító kör küszöbe EGY** (user-döntés 2026-08-01, `8e719f1` — a korábbi
+   HÁROM-ról szigorítva); a második javító kört a **Codex** viszi, H4 halt
+   csak utána. **UI-kör esetén a review-nak kötelező eleme a több-belépéses
+   és a kombinált-státusz próba** — az R13 három MAJOR-ja mind ilyen volt
+   (L22). **Zöld gate mellett is mérj konkrét hívási láncot a DoD-/
+   zárójelentés-jellegű állításokra** — az R20 review 6 hamis "teljesül"
+   sort talált egy egyébként teljesen zöld gate mellett (L31).
+5. **Az E02-R08 nyitva maradt follow-upja:** a chord-confidence felvitele a
+   `LiveFrame`-be — az Analyze úton is közös, ezért külön kör; addig a Live
+   adapter `confidence: 1.0` = „nem mért".
