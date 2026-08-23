@@ -36,6 +36,7 @@ import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/repositories/community_profile_repository.dart';
 import '../../domain/value_objects/community_handle.dart';
+import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 import '../../domain/value_objects/audience.dart';
 import '../dto/profile_dto.dart';
@@ -142,9 +143,29 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
   Future<CommunityPage<CommunityProfile>> searchProfiles({
     required String query,
     required Object cursor,
-  }) => throw UnsupportedError(
-    'CommunityProfileRepository.searchProfiles is not yet implemented',
-  );
+  }) async {
+    // E09-R09 — the Kör 9 profile-search endpoint. The path is
+    // built manually because ``ApiClient.getJson`` does not
+    // accept a query-parameter map (its four endpoints all carry
+    // no params — same constraint the Kör 7 unfollow DELETE
+    // runs into, ADR 0401 §1). Encoding both ``q`` and the
+    // cursor here keeps the api_client.dart surface untouched
+    // and the wire shape aligned with the backend
+    // ``GET /community/profiles/search`` router.
+    final queryValue = Uri.encodeQueryComponent(query);
+    final params = <String>[if (queryValue.isNotEmpty) 'q=$queryValue'];
+    final cursorValue = _cursorQueryValue(cursor);
+    if (cursorValue != null) {
+      params.add('cursor=${Uri.encodeQueryComponent(cursorValue)}');
+    }
+    params.add('limit=50');
+    final path = '/community/profiles/search?${params.join('&')}';
+    final result = await _client.getJson<dynamic>(path, decode: _decodePage);
+    return switch (result) {
+      Success(:final value) => value as CommunityPage<CommunityProfile>,
+      Failure(:final error) => throw error,
+    };
+  }
 
   @override
   Future<AppResult<CommunityProfile>> createProfile({
@@ -251,6 +272,51 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
     }
     return false;
   }
+
+  /// Decode the Kör 9 ``GET /community/profiles/search`` envelope.
+  ///
+  /// The wire shape is the same shape the Kör 7
+  /// ``HttpSocialGraphRepository._decodePage`` consumes
+  /// (``{public_ids, next_cursor}``); the search endpoint does
+  /// NOT enrich the response with full profile rows (the brief
+  /// §A2 stays a thin search index — the controller
+  /// follow-up-fetches each entry through the canonical
+  /// ``fetchById`` path). Mirrors the Kör 7 placeholder
+  /// factory so the page envelope satisfies
+  /// ``CommunityPage<CommunityProfile>`` without forcing the
+  /// data layer to round-trip N rows on a 50-row page.
+  CommunityPage<CommunityProfile> _decodePage(Map<String, Object?> json) {
+    final rawIds = json['public_ids'];
+    if (rawIds is! List) {
+      throw const FormatException(
+        'community search wire: public_ids must be a list',
+      );
+    }
+    final publicIds = rawIds
+        .whereType<String>()
+        .map(PublicUserId.new)
+        .toList(growable: false);
+    final nextCursor = json['next_cursor'];
+    final cursorPage = nextCursor == null
+        ? (publicIds.isEmpty
+              ? const CursorPage.haltedAfterRequest()
+              : const CursorPage.initial())
+        : CursorPage.continued(nextCursor as String);
+    final items = publicIds.map(_placeholderProfile).toList(growable: false);
+    return CommunityPage<CommunityProfile>(items: items, cursor: cursorPage);
+  }
+
+  String? _cursorQueryValue(Object cursor) {
+    if (cursor == const CursorPage.initial()) return null;
+    if (cursor is CursorPage) {
+      return cursor.cursor;
+    }
+    throw ArgumentError.value(
+      cursor,
+      'cursor',
+      'cursor must be a CursorPage (initial / continued / haltedAfterRequest)',
+    );
+  }
 }
 
 /// The Community profile repository wired against the live
@@ -263,3 +329,26 @@ final communityProfileRepositoryProvider = Provider<CommunityProfileRepository>(
     return HttpCommunityProfileRepository(client);
   },
 );
+
+/// Build a placeholder [CommunityProfile] for a search hit.
+///
+/// The Kör 9 wire shape carries only public_ids; the canonical
+/// full profile arrives through ``fetchById``. The placeholder
+/// mirrors the Kör 7 ``HttpSocialGraphRepository._placeholderProfile``
+/// contract — a non-empty handle + display name so the page
+/// boundary satisfies ``CommunityPage<CommunityProfile>`` without
+/// throwing ``ArgumentError`` on construction.
+CommunityProfile _placeholderProfile(PublicUserId userId) {
+  return CommunityProfile(
+    userId: userId,
+    handle: CommunityHandle('placeholder-x1'),
+    displayName: 'placeholder',
+    visibility: ProfileVisibility.public,
+    avatarUrl: null,
+    bio: null,
+    skillInterests: const <String>[],
+    badges: const <String>[],
+    relationship: CommunityRelationshipToViewer.notRelated,
+    createdAt: DateTime.utc(2026),
+  );
+}
