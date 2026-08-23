@@ -46,6 +46,11 @@ import '../../../../core/logging/logger_provider.dart';
 import '../../domain/entities/community_reaction.dart';
 import '../../domain/repositories/post_repository.dart';
 import '../../domain/value_objects/content_id.dart';
+// The post-repository provider lives in the post-composer
+// controller — the Kör 5 contract owner. This round adds a
+// SECOND consumer (the reaction controller); the wiring stays in
+// one place to avoid the same provider being defined twice.
+import 'post_composer_controller.dart' show communityPostRepositoryProvider;
 
 /// The per-post reaction view the controller holds.
 ///
