@@ -70,6 +70,30 @@ pattern (ADR 0396 §1) and reuses every existing convention:
   authoritative enforcers, the column-level default is the only
   server-side constraint.
 
+* ``processing_state`` (E09-R19, ADR 0412 §D2) is a SECOND,
+  independent state machine on the same row — NOT an extension
+  of ``upload_state``. The seven-value set is
+  ``uploaded → scanning → transcoding → review → ready`` on
+  success, plus ``rejected`` and ``deleted`` terminals. The DB
+  does NOT enforce the transition set; the task-layer
+  :mod:`tasks.media_processing` is the authoritative enforcer.
+  ``upload_state`` and ``processing_state`` move independently
+  — a row may be ``upload_state="finalized"`` and
+  ``processing_state="scanning"`` at the same time. The literal
+  ``uploaded`` collides between the two machines BY DESIGN
+  (transzport vs. processing axis, ADR 0412 D2).
+
+* ``moderation_decision`` / ``moderation_confidence`` /
+  ``moderation_provider`` / ``moderation_provider_version`` /
+  ``moderated_at`` (E09-R19, ADR 0412 §D2 — A6 acceptance
+  evidence): nullable audit columns on the SAME row. The
+  provider + provider-version is the audit evidence that a
+  decision was made by a specific external model; ``decision``
+  carries the human-review verdict, ``confidence`` carries the
+  triage confidence, ``moderated_at`` is the stamp. They are
+  nullable because the moderation flow is multi-step and any
+  one of them may be set without the others.
+
 * ``retention_until`` is the cutoff the orphan-cleanup function
   scans against — every row whose state is NOT ``finalized`` AND
   whose ``retention_until`` is in the past is a candidate for
@@ -94,6 +118,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     BigInteger,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -117,6 +142,18 @@ def _utcnow() -> datetime:
 # Mirrors the Kör 11 ``moderation_state`` discipline: a plain
 # ``String`` column with ``server_default='pending'``, the value
 # set enforced at the service layer rather than the DB.
+#
+# E09-R19 / ADR 0412 §D2 — ``processing_state`` is a SECOND,
+# INDEPENDENT state machine on the same row. ``upload_state``
+# tracks the transzport pipeline (Kör 18, immutable); the new
+# ``processing_state`` tracks the content-processing pipeline
+# (Kör 19: uploaded → scanning → transcoding → review → ready /
+# rejected / deleted). The two machines move independently;
+# a media row may be ``upload_state="finalized"`` AND
+# ``processing_state="scanning"`` simultaneously. The
+# ``upload_state`` block below is INTENTIONALLY UNCHANGED —
+# adding ``processing_state`` is additive (see ADR 0412 D2 /
+# brief §0.0 D2).
 
 UPLOAD_STATE_PENDING: str = "pending"
 UPLOAD_STATE_UPLOADED: str = "uploaded"
@@ -138,6 +175,43 @@ UPLOAD_STATE_ALLOWLIST: frozenset[str] = frozenset(
 def is_allowed_upload_state(value: str) -> bool:
     """True when ``value`` is one of the five MVP upload states."""
     return value in UPLOAD_STATE_ALLOWLIST
+
+
+# --- Processing-state machine (E09-R19, ADR 0412 §D2) ------------------
+#
+# Seven-value machine, additive on the same row. The DB does NOT
+# enforce the transition set — the task / service layer does
+# (the same pattern as ``upload_state`` and ``moderation_state``).
+# The literal value set follows brief §3 / §8 verbatim. The
+# ``uploaded`` literal intentionally collides with
+# ``UPLOAD_STATE_UPLOADED`` — they are two independent axes, not
+# the same concept (transzport vs. processing pipeline); the
+# collision is documented in ADR 0412 §D2.
+
+PROCESSING_STATE_UPLOADED: str = "uploaded"
+PROCESSING_STATE_SCANNING: str = "scanning"
+PROCESSING_STATE_TRANSCODING: str = "transcoding"
+PROCESSING_STATE_REVIEW: str = "review"
+PROCESSING_STATE_READY: str = "ready"
+PROCESSING_STATE_REJECTED: str = "rejected"
+PROCESSING_STATE_DELETED: str = "deleted"
+
+PROCESSING_STATE_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        PROCESSING_STATE_UPLOADED,
+        PROCESSING_STATE_SCANNING,
+        PROCESSING_STATE_TRANSCODING,
+        PROCESSING_STATE_REVIEW,
+        PROCESSING_STATE_READY,
+        PROCESSING_STATE_REJECTED,
+        PROCESSING_STATE_DELETED,
+    }
+)
+
+
+def is_allowed_processing_state(value: str) -> bool:
+    """True when ``value`` is one of the seven processing states."""
+    return value in PROCESSING_STATE_ALLOWLIST
 
 
 class CommunityMedia(Base):
@@ -229,6 +303,48 @@ class CommunityMedia(Base):
         default=UPLOAD_STATE_PENDING,
         server_default=UPLOAD_STATE_PENDING,
     )
+    # E09-R19 / ADR 0412 §D2 — SECOND independent state machine.
+    # The two machines move independently; ``processing_state``
+    # tracks the content-processing pipeline
+    # (uploaded → scanning → transcoding → review → ready /
+    # rejected / deleted). See the docstring above.
+    processing_state: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default=PROCESSING_STATE_UPLOADED,
+        server_default=PROCESSING_STATE_UPLOADED,
+    )
+    # A6 acceptance audit columns — nullable, set during /
+    # after the moderation flow. ``moderation_decision`` carries
+    # the human-review verdict (``approved`` / ``rejected`` /
+    # similar — the literal set is the provider / human layer's
+    # choice, not the model's); ``moderation_confidence`` is the
+    # triage-side float in [0.0, 1.0]; ``moderation_provider`` is
+    # the (mock) adapter name the triage ran against;
+    # ``moderation_provider_version`` is the adapter-version
+    # string the audit log can later correlate with;
+    # ``moderated_at`` is the stamp of the LAST write (decision
+    # or confidence, whichever the moderation flow wrote last).
+    moderation_decision: Mapped[str | None] = mapped_column(
+        String(length=64),
+        nullable=True,
+    )
+    moderation_confidence: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+    moderation_provider: Mapped[str | None] = mapped_column(
+        String(length=128),
+        nullable=True,
+    )
+    moderation_provider_version: Mapped[str | None] = mapped_column(
+        String(length=64),
+        nullable=True,
+    )
+    moderated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     # Retention cutoff — the orphan-cleanup function deletes
     # every row whose state is not ``finalized`` AND whose
     # ``retention_until`` is in the past. Set at intent time to
@@ -303,16 +419,37 @@ class CommunityMedia(Base):
             "profile_id",
             "upload_state",
         ),
+        # E09-R19 — composite (profile_id, processing_state) backing
+        # the post-fetch query that filters out non-ready media
+        # (the A2 / A3 acceptance cells — only ``processing_state
+        # = 'ready'`` rows are playable). Same naming convention as
+        # the Kör 18 ``ix_community_media_profile_state`` index
+        # above; the column is the SECOND, INDEPENDENT machine so
+        # the index is independent too (ADR 0412 D2).
+        Index(
+            "ix_community_media_profile_processing",
+            "profile_id",
+            "processing_state",
+        ),
     )
 
 
 __all__ = [
     "CommunityMedia",
+    "PROCESSING_STATE_ALLOWLIST",
+    "PROCESSING_STATE_DELETED",
+    "PROCESSING_STATE_READY",
+    "PROCESSING_STATE_REJECTED",
+    "PROCESSING_STATE_REVIEW",
+    "PROCESSING_STATE_SCANNING",
+    "PROCESSING_STATE_TRANSCODING",
+    "PROCESSING_STATE_UPLOADED",
     "UPLOAD_STATE_ALLOWLIST",
     "UPLOAD_STATE_CANCELLED",
     "UPLOAD_STATE_FAILED",
     "UPLOAD_STATE_FINALIZED",
     "UPLOAD_STATE_PENDING",
     "UPLOAD_STATE_UPLOADED",
+    "is_allowed_processing_state",
     "is_allowed_upload_state",
 ]
