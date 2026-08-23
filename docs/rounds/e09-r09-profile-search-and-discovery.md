@@ -6,10 +6,9 @@
 - **Branch:** `<motor>/e09-r09-profile-search-and-discovery`
 - **Előfeltétel:** `E09-R08` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — ez a kör nem hoz új kötött architekturális döntést (tisztán UI/integráció/lezárás).
+- **Előre kiosztott ADR:** nincs — ez a kör nem hoz új kötött architekturális döntést (tisztán UI/integráció/lezárás). A pre-flight (§0.0) ezt megerősítette: a mért gap-ek meglévő szerződések (ADR 0398/0399/0402) alkalmazása, nem új struktúra.
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 `query_filters.py` TÉNYLEGES aláírását — a keresés ugyanazt a közös block/mute szűrőt hívja, nem egy párhuzamos szűrést vezet be. Eltérésnél
-> §0.0 brief-revízió, NEM csendes lista-tágítás.
+> ⚠ **Pre-flight ELVÉGEZVE (2026-08-23, Claude Sonnet 5, `main @ 5e086c10`):** a `query_filters.py` TÉNYLEGES aláírása mérve — a keresés a page-level `filter_public_ids_against_viewer_blocks` helpert hívja, nem az egyenkénti `is_blocked_pair`-t (§0.0 D2). Mérve az is, hogy a Flutter oldalon a `searchProfiles` domain-metódus és a hozzá tartozó két `UnsupportedError`-stub MÁR LÉTEZIK (E09-R05, "Kör 9" néven megcímezve) — a stubok éles bekötése enélkül a brief allowed_paths-a NEM elég a §1 célhoz (§0.0 D4, allowed_paths bővítve). Lásd a teljes §0.0 szakaszt lent — a §3/§4/§5/§8 szövege már ezt tükrözi.
 
 ```ai-router
 schema_version = 1
@@ -19,6 +18,7 @@ allowed_paths = [
   "backend/app/community/routers/search.py",
   "lib/features/community/presentation/screens/community_search_screen.dart",
   "lib/features/community/data/local/recent_search_store.dart",
+  "lib/features/community/data/repositories/profile_repository_impl.dart",
   "backend/tests/community/test_profile_search.py",
   "test/features/community/presentation/community_search_test.dart",
   "docs/rounds/e09-r09-profile-search-and-discovery.md",
@@ -28,6 +28,142 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+> **Kockázat = high, indoklás:** a kör az ELSŐ, ami a Kör 3 handle-policy
+> és a Kör 8 block/mute-szűrő állapotát egy user-vezérelt, teljes
+> userbázisra kiterjedő KERESÉSI felületen kombinálja — egy hibás
+> block-hívás (D2) vagy egy hiányzó authentikáció (D1) közvetlen
+> enumerációs/IDOR-osztályú rést nyitna (a `search.py` a MEGLÉVŐ, nem-
+> authentikált `read_profile`/`get_privacy`/`handles.py` mintáját
+> KÖVETNÉ, ha nem mérnénk ki a különbséget). A §5.2 SDD-invariáns
+> (nincs e-mail/telefon-alapú keresés) megsértése egyben adatvédelmi
+> szabályzás-sértés is, nem csak kódhiba.
+
+## 0.0 Pre-flight brief-revízió (Claude Sonnet 5, 2026-08-23, `main @ 5e086c10`)
+
+**S7 (brief-lint):** a fenti `**Kockázat = high, indoklás:**` sor pótolva — a
+router `high_risk_path_fragments` listája egyik allowed_path fájlnevében sem
+egyezik szó szerint, de a kör tartalma (teljes userbázisra kiterjedő
+authentikált keresés + block/privacy-szűrés) valódi IDOR/enumerációs
+kockázatot hordoz.
+
+**S8 (brief-lint, ADR 0312):**
+
+```
+node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "profilkeresés handle prefix search rate limit block filter"
+node tools/knowledge-rag.mjs --corpus lessons,halts --top 5 "PostgreSQL prefix index keresés teljes táblaszkennelés SQLite explain plan"
+```
+
+Releváns találat: **ADR 0402 "A visszavonás feltétele"** (bm25#2 emb#3) —
+szó szerint megnevezi, hogy a `read_profile`/`get_privacy` authentikáció-
+hiányát "egy jövőbeli kör (Kör 9/13 feed-search...)" bővítheti — ez EZ a
+kör a keresési felület tekintetében (D1 lent). Nincs közvetlenül
+alkalmazható korábbi lecke a PostgreSQL-index/SQLite-explain kérdésre —
+lásd D3 alant a mért helyettesítő döntést.
+
+**1. mérés — `query_filters.py` TÉNYLEGES felülete a hívóknak.**
+`backend/app/community/policies/query_filters.py` (tilos zóna, csak HÍVÁS)
+NÉGY függvényt exportál, nem csak `is_blocked_pair`-t:
+
+- `is_blocked_pair(db, *, profile_id_a, profile_id_b) -> bool` — pár-szintű predikátum.
+- `list_block_pairs_for_viewer(db, *, viewer_profile_id) -> set[int]` — a viewer teljes block-halmaza egy hívásból.
+- `resolve_profile_ids(db, *, public_ids) -> dict[uuid.UUID, int]` — public_id → internal id fordítás.
+- `filter_public_ids_against_viewer_blocks(db, *, viewer_profile_id, public_ids) -> list[uuid.UUID]` — **page-level** szűrő, a docstringje SZÓ SZERINT megnevezi: *"A future read endpoint... (e.g. search, feed, member listing) MUST call this helper instead of hand-rolling the block join"*.
+
+**D2 döntés:** a `profile_search_repository.py` a keresési kandidát-oldal
+összeállítása UTÁN a `filter_public_ids_against_viewer_blocks`-ot hívja
+(egy blokk-tábla-olvasás/oldal, a Kör 8 mért mintája), NEM egy
+`is_blocked_pair`-hurkot soronként. A §6.1 valódi-sértés próba ezt a
+hívást veszi ki.
+
+**2. mérés — a MA authentikálatlan Community read endpointok, és mit
+jelent ez a keresésre.** `grep`-elve: `profile.py::read_profile` (121–151.
+sor) és `privacy.py::get_privacy` (190. sor) NEM veszik fel a
+`CurrentUser`-t (nincs `current_user: CurrentUser` paraméter) —
+`handles.py::check_availability` ugyanígy authentikálatlan, csak
+rate-limitált. Ezzel szemben `social_graph.py` és `safety.py` MINDEN
+endpointja `current_user: CurrentUser`-t vesz fel.
+
+**D1 döntés:** az A2 kritérium (blocked/non-discoverable profil kiszűrése)
+ELVILEG LEHETETLEN egy fel nem oldott viewer-identitás nélkül — a
+`search.py` tehát a `social_graph.py`/`safety.py` mintáját követi
+(`CurrentUser` kötelező minden keresési endpointon), NEM a
+`read_profile`/`get_privacy` authentikálatlan mintáját. A régi három
+endpoint auth-hiánya VÁLTOZATLANUL nyitva marad — ez NEM ennek a körnek a
+hatásköre (ADR 0402 "A visszavonás feltétele" ezt már így nevezi meg).
+
+**3. mérés — nincs külön "discoverable" mező a sémában.**
+`backend/app/community/models/profile.py::CommunityPrivacySettings` két
+string mezőt visz: `visibility` (`public`/`followers`/`private`,
+`access_policy.py::ProfileVisibility`) és `audience_default` — dedikált
+`discoverable` boolean NINCS.
+
+**D3 döntés:** a brief §3/A2 "private/non-discoverable" kitétele
+`visibility == ProfileVisibility.PRIVATE`-re képeződik le: a PRIVATE
+profilok TELJESEN kimaradnak a keresési találatokból (nem csak
+SUMMARY-szintre esnek vissza, mint a `read_profile` útvonalon) — PUBLIC/
+FOLLOWERS profilok handle szerint kereshetők maradnak, a teljes-profil
+elérésük meglévő, változatlan `access_policy.py`-szabály (ezen a körön
+kívül).
+
+**4. mérés — a Flutter domain-metódus és a hozzá tartozó stub MÁR
+LÉTEZIK.** `lib/features/community/domain/repositories/community_profile_repository.dart`
+(TILOS zóna, csak olvasás) 41–49. sorában:
+
+```dart
+/// Paged profile search by handle / interest prefix
+/// (SDD §21.2, Kör 9).
+Future<CommunityPage<CommunityProfile>> searchProfiles({
+  required String query,
+  required Object cursor,
+});
+```
+
+A metódus MÁR a jelen kört ("Kör 9") nevezi meg szó szerint a
+docstringben (E09-R05, ADR 0399). Az egyetlen két implementáció —
+`DisabledCommunityProfileRepository.searchProfiles` (80–83. sor) és
+`HttpCommunityProfileRepository.searchProfiles` (142–147. sor), mindkettő
+`lib/features/community/data/repositories/profile_repository_impl.dart`-ban
+— jelenleg `UnsupportedError('...is not yet implemented')`-et dob.
+
+**D4 döntés:** `lib/features/community/data/repositories/profile_repository_impl.dart`
+FELVÉVE az `allowed_paths`-ra (szűken: csak a két `searchProfiles`
+metódustörzs + a hozzá szükséges HTTP-hívás-kód) — enélkül a
+`community_search_screen.dart`-nak nincs működő repositoryja, amit
+hívjon, a §1 cél (kereshető felület) technikailag teljesíthetetlen
+maradna. A domain-interfész (`community_profile_repository.dart`) MAGA
+NEM módosul — a szignatúrája már helyes és stabil (tilos zóna
+változatlan).
+
+**5. mérés — `ApiClient.getJson` nem vesz fel külön query-parameter
+kwargot.** `lib/core/network/api_client.dart::getJson<T>(path, {decode,
+...})` — nincs `queryParameters` paraméter. A meglévő minta
+(`relationship_repository_impl.dart`, `idempotency_key` query-param) a
+teljes útvonalat kézzel építi `Uri.encodeQueryComponent`-tel. **Ugyanez a
+varrat volt az E09-R07 F3 MAJOR gyökéroka** (a Dart oldal sosem küldte a
+backend által megkövetelt query-paramétert, egyik oldal saját gate-je sem
+fogta meg) — a `profile_repository_impl.dart::searchProfiles` bekötésekor
+a review a TÉNYLEGES kimenő request-stringet mérje a backend
+`search.py` szerződése ellen, ne a két oldal külön-külön zöld tesztjére
+hagyatkozzon.
+
+**6. mérés — a `search.py` router nincs `build_community_router`-be
+mountolva, ahogy `social_graph.py`/`safety.py`/`handles.py` sem.** A
+`backend/tests/community/conftest.py` megosztott fixture-je csak a
+`profile` routert mountolja. A `test_profile_search.py` a Kör 7 mintáját
+követi: önálló, helyi `FastAPI()`/`TestClient` fixture-t épít, nem a
+megosztott `community_client_enabled`-re támaszkodik.
+
+### Brief-revíziók összefoglalva (D1–D4, kötelező érvényűek)
+
+- **D1** — `search.py` MINDEN endpointja `CurrentUser`-t vesz fel; a régi
+  auth-hiányos endpointok érintetlenek.
+- **D2** — a block-szűrés a page-level `filter_public_ids_against_viewer_blocks`
+  hívása, nem soronkénti `is_blocked_pair`.
+- **D3** — "non-discoverable" = `visibility == PRIVATE`; FOLLOWERS/PUBLIC
+  kereshető marad.
+- **D4** — `profile_repository_impl.dart` felvéve az `allowed_paths`-ra a
+  két `searchProfiles`-stub éles bekötésére.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -52,7 +188,7 @@ Handle és érdeklődés alapján kereshető, privacy-t tiszteletben tartó prof
 
 ## 3. Scope
 
-**Benne van:** exact handle lookup + prefix keresés dokumentált minimum query hosszal · PostgreSQL keresési index (nem teljes táblaszkennelés) · private/non-discoverable és blocked profilok szűrése · rate limit + abuse monitoring a keresésre · Flutter search képernyő debounce-szal, törölhető lokális recent-search listával · Explore-javaslat CSAK explicit interest tagekből, feature flag mögött.
+**Benne van:** exact handle lookup + prefix keresés dokumentált minimum query hosszal · PostgreSQL keresési index (nem teljes táblaszkennelés) · private/non-discoverable (D3: `visibility == PRIVATE`) és blocked (D2: `filter_public_ids_against_viewer_blocks`) profilok szűrése authentikált keresőn (D1: `CurrentUser` kötelező minden `search.py` endpointon) · rate limit + abuse monitoring a keresésre · Flutter search képernyő debounce-szal, törölhető lokális recent-search listával, a MEGLÉVŐ `searchProfiles` domain-metódus éles bekötésével (D4: `profile_repository_impl.dart`) · Explore-javaslat CSAK explicit interest tagekből, feature flag mögött.
 
 **NINCS benne (tilos):**
 
@@ -70,8 +206,9 @@ Handle és érdeklődés alapján kereshető, privacy-t tiszteletben tartó prof
 | `lib/features/community/data/local/recent_search_store.dart` | ÚJ — lokális, törölhető history |
 | `backend/tests/community/test_profile_search.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/community_search_test.dart` | ÚJ |
+| `lib/features/community/data/repositories/profile_repository_impl.dart` | BŐVÍTÉS (§0.0/D4) — a MÁR LÉTEZŐ `searchProfiles` `UnsupportedError`-stub (`DisabledCommunityProfileRepository` + `HttpCommunityProfileRepository`, E09-R05 által "Kör 9"-ként megnevezve) éles bekötése; a domain-interfész NEM változik |
 
-**Tilos zóna:** `backend/app/community/policies/query_filters.py` (csak HÍVÁS, nem módosítás) · `lib/features/community/domain/**` · `docs/adr/**` · `tools/**` · `.github/**`
+**Tilos zóna:** `backend/app/community/policies/query_filters.py` (csak HÍVÁS, nem módosítás) · `lib/features/community/domain/**` (a `profile_repository_impl.dart` D4-es szűk kivétellel, MAGA a domain-interfész-fájl változatlanul tilos) · `docs/adr/**` · `tools/**` · `.github/**`
 
 ## 5. Kötött architekturális döntések
 
@@ -83,7 +220,15 @@ Kizárólag handle és opcionális interest-tag a keresési kulcs — ez a §5.2
 
 ### 5.2 A keresés a KÖZÖS block/mute-szűrőt hívja, nem párhuzamos logikát
 
-Egy második, keresés-specifikus block-ellenőrzés bevezetése elkerülhetetlenül driftelne a Kör 8 szűrőjétől.
+Egy második, keresés-specifikus block-ellenőrzés bevezetése elkerülhetetlenül driftelne a Kör 8 szűrőjétől. Konkrétan (§0.0/D2): a `filter_public_ids_against_viewer_blocks(db, *, viewer_profile_id, public_ids)` page-level helpert kell hívni, NEM egy soronkénti `is_blocked_pair`-hurkot.
+
+### 5.3 A keresés authentikált — a MA authentikálatlan olvasó endpointok mintáját NEM követi (D1)
+
+`search.py` MINDEN endpointja `CurrentUser`-t vesz fel, mert az A2 kritérium (block-szűrés) fel nem oldott viewer-identitás nélkül nem teljesíthető. Ez a `social_graph.py`/`safety.py` mintáját követi, NEM a `read_profile`/`get_privacy`/`handles.py` authentikálatlan mintáját (a régi három endpoint auth-hiánya ezen a körön kívüli, változatlan tartozás — ADR 0402 "A visszavonás feltétele").
+
+### 5.4 "Non-discoverable" = `visibility == PRIVATE` (D3)
+
+A sémában nincs külön `discoverable` mező (mérve, `CommunityPrivacySettings`) — a brief §3/A2 "private/non-discoverable" kitétele a meglévő `visibility` mezőre képeződik le: PRIVATE profil teljesen kimarad a találatokból; PUBLIC/FOLLOWERS handle szerint kereshető marad.
 
 ## 6. Acceptance criteria
 
@@ -132,17 +277,19 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 ## 8. Implementációs sorrend
 
 1. `profile_search_repository.py` — exact + prefix lookup, index-alapú terv.
-2. A közös block/mute-szűrő (Kör 8) bekötése a keresési querybe.
-3. `search.py` router — rate limit + minimum query hossz.
-4. `community_search_screen.dart` — debounce, recent-search (lokális).
-5. Explore-javaslat interest-tag alapon, feature flag mögött.
-6. A valódi-sértés próba §10-be.
+2. A közös block/mute-szűrő (`filter_public_ids_against_viewer_blocks`, §0.0/D2) bekötése a keresési querybe.
+3. `search.py` router — `CurrentUser` kötelező (§0.0/D1), rate limit + minimum query hossz, önálló helyi `FastAPI()`/`TestClient` fixture a teszthez (§0.0 6. mérés, a Kör 7/8 mintája — a megosztott `conftest.py` csak a `profile` routert mountolja).
+4. `profile_repository_impl.dart::searchProfiles` (§0.0/D4) — a MEGLÉVŐ `UnsupportedError`-stub éles HTTP-hívásra cserélése mindkét implementáción (`Disabled…`/`Http…`); a query+cursor kézzel épített útvonal-string (§0.0 5. mérés — `ApiClient.getJson` nem vesz fel `queryParameters`-t).
+5. `community_search_screen.dart` — debounce, recent-search (lokális).
+6. Explore-javaslat interest-tag alapon, feature flag mögött.
+7. A valódi-sértés próba §10-be.
 
 ## 9. Kockázatok
 
 - **A kontakt-alapú keresés kísértése.** Egy "barátok megtalálása" funkció könnyen e-mail-alapúvá csúszna — ez explicit tiltott (A1).
 - **A block-szűrő megkerülése.** Egy párhuzamos, keresés-specifikus ellenőrzés driftelne a Kör 8 közös szűrőjétől (A2).
 - **A teljes táblaszkennelés.** Növekvő userbázisnál ez performance- és DoS-kockázat egyben (A3).
+- **A query-param varrat (§0.0/D5).** A Dart→backend query-string kézzel épül; az E09-R07 F3 MAJOR pontosan ez a hibaosztály volt (a paraméter némán elmaradt, egyik oldal gate-je sem fogta meg) — a review a tényleges kimenő stringet mérje.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
