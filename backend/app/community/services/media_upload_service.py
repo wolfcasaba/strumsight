@@ -104,7 +104,7 @@ from ..models.media import (
     CommunityMedia,
 )
 from ..models.profile import CommunityProfile
-from ..storage.object_store import ObjectStore, SignedUpload
+from ..storage.object_store import ObjectMetadata, ObjectStore, SignedUpload
 
 # ---------------------------------------------------------------------------
 # Domain constants (brief §6.1 threshold-triple, §0.0 D5).
@@ -626,16 +626,11 @@ def finalize_upload(
     # in-memory fake's ``stage_object``; the production S3
     # adapter would populate it from the custom
     # ``X-Amz-Meta-Sha256`` header a future round wires.
-    if (
-        row.checksum_sha256 is not None
-        and metadata.sha256_hex is not None
-        and metadata.sha256_hex != row.checksum_sha256
-    ):
+    try:
+        _validate_checksum(row=row, metadata=metadata)
+    except MediaChecksumMismatch:
         _transition_to_failed(db, row, object_store, now)
-        raise MediaChecksumMismatch(
-            f"bucket SHA-256 {metadata.sha256_hex} does not match "
-            f"intent {row.checksum_sha256}"
-        )
+        raise
 
     # All checks pass — transition to uploaded, then finalized.
     row.upload_state = UPLOAD_STATE_UPLOADED
@@ -730,20 +725,28 @@ def cleanup_orphan_uploads(
     now: datetime,
     on_invalidate: Callable[[MediaInvalidationEvent], None] | None = None,
 ) -> int:
-    """Sweep every row whose state is NOT ``finalized`` AND
-    whose ``retention_until`` is in the past.
+    """Sweep every ``pending`` / ``uploaded`` row whose
+    ``retention_until`` is in the past.
 
     The §6 A7 acceptance cell — the orphan cleanup runs after
     the user-facing cancel; this function is the safety-net
     sweep that catches abandoned uploads the user never
     cancelled (network drop, app crash, etc.). The function is
     idempotent — re-running it after a successful sweep finds
-    zero candidates.
+    zero candidates because the swept rows are now in the
+    terminal ``cancelled`` state and excluded from the next
+    pass.
 
     Returns the number of rows swept. The bucket-side
     ``delete_object`` is called for every swept row; the
     in-memory fake's ``deleted`` list records the call so the
     A7 cell can assert the bucket-side side-effect.
+
+    Rows already in ``cancelled`` / ``failed`` / ``finalized``
+    are NOT touched — the terminal states are immutable for
+    cleanup purposes, and a finalized row's bytes are the
+    user's committed asset (a future retention-policy round
+    owns the long-tail deletion of finalized rows).
     """
     if not settings.community_media_enabled:
         return 0
@@ -751,7 +754,9 @@ def cleanup_orphan_uploads(
     candidates = (
         db.query(CommunityMedia)
         .filter(
-            CommunityMedia.upload_state != UPLOAD_STATE_FINALIZED,
+            CommunityMedia.upload_state.in_(
+                (UPLOAD_STATE_PENDING, UPLOAD_STATE_UPLOADED)
+            ),
             CommunityMedia.retention_until.isnot(None),
             CommunityMedia.retention_until <= now,
         )
@@ -787,6 +792,29 @@ def _transition_to_failed(
     db.flush()
 
 
+def _validate_checksum(
+    *, row: CommunityMedia, metadata: "ObjectMetadata"
+) -> None:
+    """Brief §6 A5 — bucket-side SHA-256 must match the
+    intent-time declaration when both are present.
+
+    Factored into a helper so the §6.1 valódi-sértés próba can
+    monkeypatch the comparison to a no-op and assert the cell
+    goes red — the probe exercises the defense-in-depth
+    discipline. The helper raises :class:`MediaChecksumMismatch`
+    on a mismatch; callers are responsible for the bucket-side
+    cleanup and the ``failed`` state transition."""
+    if (
+        row.checksum_sha256 is not None
+        and metadata.sha256_hex is not None
+        and metadata.sha256_hex != row.checksum_sha256
+    ):
+        raise MediaChecksumMismatch(
+            f"bucket SHA-256 {metadata.sha256_hex} does not match "
+            f"intent {row.checksum_sha256}"
+        )
+
+
 __all__ = [
     "MAX_LIVE_UPLOADS_PER_PROFILE",
     "MAX_UPLOAD_BYTES",
@@ -807,4 +835,13 @@ __all__ = [
     "create_upload_intent",
     "finalize_upload",
     "is_allowed_media_content_type",
+    "validate_checksum",
 ]
+
+
+# Public alias for the §6.1 valódi-sértés próba — the private
+# ``_validate_checksum`` is the implementation detail the probe
+# monkeypatches; ``validate_checksum`` is the documented entry
+# point future tests can import without reaching into private
+# state.
+validate_checksum = _validate_checksum
