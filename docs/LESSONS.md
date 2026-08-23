@@ -16964,3 +16964,55 @@ egyedül a push teszi a munkát visszaszerezhetővé.
 **Őrteszt:** nincs — folyamati (operátori) lecke, nem kódinvariáns; a
 gépi védelme az izolált munkapéldány használata, amit a
 `sdd-round-driver` skill §3 már előír.
+
+## L448 — `tools/round-gate.sh` `resolve_backend_python()` relatív candidate-je `env --chdir=backend` alatt önmagát cáfolja, KIZÁRÓLAG a megosztott fában, ahol saját `backend/.venv` létezik (E09-R19 landolás, 2026-08-23)
+
+**Mért snag.** A `tools/round-land.sh` a saját, megosztott munkafabeli
+kombinált-HEAD gate-jét futtatva a `backend pytest` lépésen elhasalt:
+`env: 'backend/.venv/bin/python': No such file or directory` (kilépési kód
+127), miközben ugyanazon a HEAD-en három FÜGGETLEN, izolált klónban
+(implementer, két reviewer) ÉS mindkét GitHub Actions CI-run (`full-gate.yml`,
+`router-ci.yml`) a backend pytest ZÖLD volt. A gyökérok: `round-gate.sh`
+`resolve_backend_python()`-ja sorban próbálja `${ROUND_GATE_BACKEND_PYTHON:-}`,
+majd a RELATÍV `backend/.venv/bin/python`-t, majd az ABSZOLÚT
+`$HOME/music-theory/backend/.venv/bin/python`-t — az első létező, futtatható
+jelöltet választja. A megosztott fában (`/home/ubuntu/music-theory`) LÉTEZIK
+egy saját, telepített `backend/.venv` (2026-07-11 óta), ezért a RELATÍV
+jelölt nyer. A `ruff format`/`ruff check` lépések ezt a relatív útvonalat
+KÖZVETLENÜL, chdir nélkül hívják — működik. A `backend pytest` lépés viszont
+`env --chdir=backend "$backend_python" -m pytest -q` alakú: az `env --chdir`
+ELŐBB vált könyvtárat `backend/`-re, és CSAK UTÁNA próbálja feloldani a
+(még mindig relatív) `backend/.venv/bin/python` útvonalat — ami ekkor
+`backend/backend/.venv/bin/python`-ra mutatna, ami nem létezik. Friss
+klónokban (implementer-munkapéldány, reviewer `/tmp` klónok, CI-checkout)
+NINCS saját `backend/.venv` (gitignore-olt), ezért a resolver rájuk sosem a
+relatív, hanem mindig az ABSZOLÚT `$HOME/music-theory/...` fallbackra esik,
+ami immunis a chdir-re — ez magyarázza, miért volt a hiba láthatatlan minden
+korábbi, izolált klónban futtatott mérésben, és miért csak a landolás
+saját, megosztott fabeli gate-futtatásán jelentkezett.
+
+**Feloldás a `tools/`-hoz nyúlás NÉLKÜL.** A script már tartalmaz egy
+dokumentált, elsőbbséget élvező override-ot pontosan erre az esetre:
+`ROUND_GATE_BACKEND_PYTHON`. A landoló hívás elé kötve, az abszolút útvonalra
+állítva a relatív/abszolút kétértelműséget megkerüli, KÓD-módosítás nélkül:
+
+```bash
+ROUND_GATE_BACKEND_PYTHON=/home/ubuntu/music-theory/backend/.venv/bin/python \
+  tools/round-land.sh --pr <szám> --round <kör> --gate-test <útvonal>
+```
+
+Ez NEM a mérce lazítása — ugyanazt a valódi, telepített venv-et futtatja,
+amit a relatív jelölt is futtatott volna, csak chdir-biztos alakban.
+
+**Nyitott GOV-tétel.** A tényleges javítás — `resolve_backend_python()`
+mindig abszolút útvonalat adjon vissza (pl. `$(cd "$(dirname
+"$candidate")" && pwd)/$(basename "$candidate")`), VAGY a pytest-sor
+`env --chdir=backend "$backend_python" ...` helyett `(cd backend &&
+"$backend_python" -m pytest -q)` alakot használjon — egy jövőbeli
+governance-kör dolga; ez a kör nem nyúlt a `tools/`-hoz (H3).
+
+**Őrteszt:** nincs — a `tools/tests/` suite ma nem futtatja
+`resolve_backend_python()`-t a megosztott fa saját `backend/.venv`-jével
+szemben (csak stub-interpreterekkel, ld. `test_qwen_implementer_hardening.py`);
+egy jövőbeli GOV-kör tehetne fel egy tesztet, ami a megosztott fa
+környezetét szimulálja (`backend/.venv` a cwd alatt + `env --chdir`).

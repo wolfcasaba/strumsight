@@ -1,5 +1,92 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R19 KÉSZ — Média feldolgozás, privacy és moderation state — PR [#431](https://github.com/wolfcasaba/strumsight/pull/431), squash `957bc00f` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENKILENCEDIK KÖRE KÉSZ.** A Kör 18
+`CommunityMedia` táblát ([ADR 0412](docs/adr/0412-media-processing-privacy-and-moderation-state.md))
+teljes feldolgozási állapotgéppé bővíti — additívan, az `upload_state` gépet
+érintetlenül hagyva: `backend/app/community/models/media.py` (MÓDOSÍTOTT,
+kizárólag additív — ÚJ `processing_state` oszlop hét literállal
+`uploaded`/`scanning`/`transcoding`/`review`/`ready`/`rejected`/`deleted`,
+plusz öt nullable audit oszlop moderation döntés/confidence/provider/
+provider-verzió/időbélyeg rögzítésére), `backend/app/community/tasks/media_processing.py`
+(ÚJ — stdlib-only JPEG EXIF/APP1-strip, kliens-deklarált codec/duration/
+resolution/frame-rate validáció, tiszta session+sor-paraméteres átmenet-
+függvények, HMAC-SHA256 playback-token sign/verify), `backend/app/community/moderation/media_moderation.py`
+(ÚJ — malware-scan + content-moderation adapter ABC + mock implementáció;
+`triage()` SOHA nem ír `rejected`-et, csak `review`-ba irányít; `resolve_review()`
+az EGYETLEN út a súlyos döntéshez), `backend/app/community/services/media_access_service.py`
+(ÚJ — önálló HMAC-SHA256 aláírt playback token, audience-ellenőrzött a
+MEGLÉVŐ `policies/access_policy.py` read-only újrafelhasználásával, rövid
+TTL, max 30 perc), `e09_r19_0013_community_media_state.py` migráció,
+`community_media_player.dart` (ÚJ — pending placeholder, nincs lejátszás
+nem-`ready` állapotban).
+
+**ADR-szám korrekció a pre-flightban.** A brief előre `0408`-at adott, de azt
+közben a bookmark-kör foglalta el — `tools/round-slots.py reserve-adr` friss
+számot adott: **[ADR 0412](docs/adr/0412-media-processing-privacy-and-moderation-state.md)**.
+
+**Kötött pre-flight döntés (D2): `models/media.py` felkerült az `allowed_paths`-ra,
+szigorúan additív korlátozással.** A brief §5 „Tilos zóna" listája már saját
+zárójeles megjegyzéssel („bővítés indokolt, nem átírás") előírta ennek a
+fájlnak az additív módosítását, de a gépi `allowed_paths` tömb kihagyta — a
+Claude ezt a pre-flightban javította, nem az implementer bővítette a listát.
+
+**D3/D6 — a kör SZÁNDÉKOSAN bekötetlen marad, a Kör 18 router-deferrálás
+mintáját folytatva.** `media_upload_service.py` (Kör 18) nem hívja
+automatikusan a `start_processing`-et finalize után, és a playback token
+NEM a bucket-oldali `ObjectStore`-on keresztül megy (az csak PUT-signinget
+definiál) — mindkettő egy jövőbeli wiring-kör nyitott horga.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5.** ZÉRÓ
+javító kör — az implementer első próbálkozása megkapta mindkét review
+APPROVED/PASS verdiktjét.
+
+**Két FÜGGETLEN review (`risk=high` miatt kötelező dedikált biztonsági review
+is), mindkettő 0 BLOCKER/0 MAJOR:** [`docs/reviews/e09-r19-review.md`](docs/reviews/e09-r19-review.md)
+(APPROVED) + [`docs/reviews/e09-r19-security.md`](docs/reviews/e09-r19-security.md)
+(PASS). Mindkettő saját, izolált klónban futtatta újra a gate-et, és saját
+kézzel elvégezte az A7 valódi-sértés próbát (kódmutáció a human-review-gate
+megkerülésére → PIROS → visszaállítás → ZÖLD), függetlenül megerősítve a
+súlyos döntés emberi-review-gate invariánsát. 2 MINOR + 6 NOTE lelet, mind
+latens a szándékosan bekötetlen pipeline mögött — a jövőbeli wiring-kör
+explicit előfeltételei: (1) a `_resolve_audience` FOLLOWERS-tengely tényleges
+bekötése + teszt, (2) az EXIF-strip EOI-marker utáni trailer-szegmensek
+kezelése vagy a limit explicit dokumentálása.
+
+**Mért tooling-hiba a landolás közben (ÖNJAVÍTÓ kör nélkül feloldva,
+`docs/LESSONS.md` L448):** a `tools/round-land.sh` saját, megosztott fabeli
+gate-futtatása a `backend pytest` lépésen `env: 'backend/.venv/bin/python':
+No such file or directory` hibával elhasalt — a `tools/round-gate.sh`
+`resolve_backend_python()`-ja a RELATÍV `backend/.venv/bin/python`
+jelöltet választja, amikor a megosztott fában (ahol saját `backend/.venv`
+létezik) fut, de az `env --chdir=backend "$backend_python" -m pytest`
+sor a chdir UTÁN próbálja feloldani ezt a relatív útvonalat (→
+`backend/backend/.venv/...`, ami nem létezik). Friss klónokban (implementer,
+mindkét reviewer, CI) ez SOSEM jelentkezik, mert ott nincs saját
+`backend/.venv`, a resolver a `$HOME/music-theory/...` ABSZOLÚT fallbackra
+esik, ami immunis a chdir-re — ezért volt mindhárom izolált gate-futtatás és
+mindkét CI-run zöld, miközben a megosztott fabeli landolás elsőre pirosra
+esett. Feloldás a `tools/`-hoz NYÚLÁS NÉLKÜL: a script saját, dokumentált
+`ROUND_GATE_BACKEND_PYTHON` override-jával (`resolve_backend_python()`
+ELSŐ candidate-je) a landoló hívás elé kötve az abszolút útvonalat kényszerítve
+(`ROUND_GATE_BACKEND_PYTHON=/home/ubuntu/music-theory/backend/.venv/bin/python
+tools/round-land.sh ...`). **Nyitott GOV-tétel:** a `resolve_backend_python()`/
+a `env --chdir=backend` sor tényleges javítása (pl. `cd backend &&
+"$backend_python" -m pytest` vagy mindig-abszolút candidate) egy jövőbeli
+governance-kör dolga — ez a kör nem nyúlt a `tools/`-hoz.
+
+**Zöld kapu (exact `9a0c5364`).** Full Gate
+[32663011671](https://github.com/wolfcasaba/strumsight/actions/runs/32663011671)
+**success**, Router CI
+[32662979279](https://github.com/wolfcasaba/strumsight/actions/runs/32662979279)
+**success**. A kör alatt a `main` egyszer mozdult (E13-R07 lezárása, PR #429,
+diszjunkt fájlkör) — `merge --no-ff` a kör-branchbe, majd teljes
+CI-újradispatch a kombinált HEAD-en. A landolás a merge-záron át
+(`tools/round-land.sh`), mert a másik sáv (E13-R08) párhuzamosan fut.
+
+**Következő Epic 9 kör: E09-R20.**
+
 ## ✅ E13-R07 KÉSZ — Ikonográfia és gitárglyph készlet — PR [#429](https://github.com/wolfcasaba/strumsight/pull/429), squash `98fd1168` (2026-08-23)
 
 **CHAPTER 13 (UI/UX DESIGN SYSTEM) HETEDIK KÖRE KÉSZ.** Egységes ikon-API és
