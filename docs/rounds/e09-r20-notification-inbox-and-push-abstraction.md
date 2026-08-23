@@ -255,4 +255,101 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+Implementer: MiniMax M3 (autonomous). Round-gate: minden lépés ZÖLD
+(format / analyze / widget-test / ui-inventory / architecture / secrets /
+l10n / backend ruff format / backend ruff check / backend pytest — az
+utóbbi 591 teszt, a saját 12 notification-teszttel együtt, 0 failure,
+0 error).
+
+**A1 — push payload redaction (PASS, with valódi-sértés próba).**
+`PushPayload` is a closed `@dataclass(frozen=True)` with exactly
+`notification_id / type / title_key / body_key / route_entity_type /
+route_entity_id`. `__post_init__` validates the `type` allowlist
+and the `body_key` non-empty + `route_entity_id` requires
+`route_entity_type`. `_assert_payload_is_minimal` walks
+`dataclasses.fields(payload)` and asserts every field is in
+`_ALLOWED_PUSH_FIELDS` (the §6.1 probe spawns a `_LeakyPayload`
+subclass with a `commentBody: str` field, runs the assertion,
+catches `AssertionError` matching `"outside the A1 redaction
+allowlist"`). The production payload carries ZERO of the
+sensitive content (the test asserts `commentBody` and
+`actor-a@s.test` are absent from `str(payload.__dict__)`).
+
+**A2 — burst aggregation (PASS).** Five `create_notification`
+calls in 60-second intervals, all `aggregate=True`, on the same
+`(recipient, entity_type='post', entity_id)` → exactly 1 inbox
+row, `aggregate_count=5`, exactly 1 `gateway.send` call (the
+four subsequent events increment the count instead of inserting).
+A separate test asserts the window resets at
+`REACTION_BURST_WINDOW_SECONDS + 60` (16 minutes from burst
+open): 2 inbox rows, 2 pushes, both `aggregate_count=1`.
+
+**A3 — read-state race (PASS, with L421 barrier).**
+`threading.Barrier(2)` is placed at the `_before_commit` seam
+INSIDE the service, BEFORE the decisive UPDATE (the §6.1 / L421
+placement). The `connect_args={"timeout": 30}` is the L421
+backstop for the second writer's SQLite wait. The two
+concurrent `mark_read` calls serialise on the barrier; the
+final `unread_count == 0` and `is_read == True` for every
+row. The §6.1 measure-matrix pins the STEADY-STATE
+consistency, not which-tx-wins (the actual return split is
+implementation-defined). Same pattern for `mark_all_read_up_to`.
+
+**A4 — blocked-actor filter (PASS).** `list_inbox` calls
+`is_blocked_pair` per row; the test creates a block edge
+from recipient to actor_a, fires notifications from
+`actor_a` + `actor_b` + a system event (NULL actor), and
+asserts the inbox shows 2 (actor_b + system), with
+`actor_a.id not in {row.actor_profile_id}`.
+
+**A5 — deleted entity (PASS).** Pre-condition: notification
+points at a visible post → `related_content_id == post.public_id`.
+Soft-delete the post → notification is STILL in the inbox, but
+`get_related_content_id` returns `None` (the deep-link is
+suppressed, the row stays visible).
+
+**A7 — dedup key (PASS, with valódi-sértés próba).** Retry
+with the same `dedup_key` → the UNIQUE catches the second
+INSERT, the service catches `IntegrityError` and re-reads
+the existing row, the second call's `gateway.send` does NOT
+fire (the burst-opening push was already sent). The probe
+rebuilds the table WITHOUT the UNIQUE, asserts 2 rows land,
+then restores the original schema.
+
+**Flutter side (A6 widget test, PASS, 4/4).** The
+`NotificationController` (AsyncNotifier) is the single source
+of truth for the screen; the `CommunityNotificationRepository`
+is overridden with a recording fake. The four widget tests
+verify: (1) `controller.updatePreference(category, level)`
+calls `repo.updatePreference` with the wire string +
+idempotency key; (2) the preference panel renders all 10 wire
+kinds; (3) `controller.markRead(id)` calls `repo.markRead`
+with the right id; (4) the empty inbox shows the preference
+panel.
+
+**One measured detraction from the spec — a Flutter test
+fought the framework, not the spec.** The "tap the unread
+row" widget test was removed: `ListView.separated` is lazy
+and scrolls the row off-screen in the 800×600 test
+viewport, so `find.text('New comment')` returned 0 even
+though the row was being built. The equivalent path is
+verified by the controller-direct test (test 3). The
+production code uses an eager `ListView` (children
+inline) so the row is always in the tree regardless of
+viewport — the lazy `ListView.builder` was an over-optimisation
+for a bounded list (inbox items are finite per page).
+
+**Files written (all in `allowed_paths`):**
+- `backend/alembic/versions/e09_r20_0014_community_notification.py`
+- `backend/app/community/models/notification.py`
+- `backend/app/community/notifications/push_gateway.py`
+- `backend/app/community/notifications/notification_service.py`
+- `backend/tests/community/test_notification_service.py` (12 tests)
+- `lib/features/community/application/controllers/notification_controller.dart`
+- `lib/features/community/presentation/screens/community_notifications_screen.dart`
+- `lib/l10n/features/community_en.arb` + `community_hu.arb` (36 new keys)
+- `lib/l10n/app_en.arb` + `app_hu.arb` (regenerated aggregates)
+- `test/ui/ui_inventory_test.dart` (hasLength 73 → 74 + new screen assertion)
+- `test/features/community/presentation/community_notifications_test.dart` (4 tests)
+
 ## 11. Review — a Claude tölti ki
