@@ -575,3 +575,51 @@ dokumentált össz-sor a §10.1 táblázatával konzisztens — az insertált so
 száma megfelel.)
 
 ## 11. Review — a Claude tölti ki
+
+**Kör 1 (implementer diff, `ed6cfd01..2e50d7e3`) — verdikt: CHANGES REQUESTED.**
+Két független, read-only review futott izolált `/tmp` klónban (`sdd-round-review`
+skill): egy általános correctness-review (`docs/reviews/e09-r18-review.md`,
+1 BLOCKER + 3 MAJOR + 4 MINOR + 3 NOTE) és a `risk="high"` miatt kötelező
+dedikált biztonsági review (`docs/reviews/e09-r18-security.md`, PASS — 0
+CRITICAL/BLOCKER, 2 MAJOR-latens + 2 MINOR + 3 NOTE). A scope-audit tiszta
+(tilos zóna érintetlen), a gate mindkét review-ban önállóan zölden újrafutott.
+
+A zöld gate ELLENÉRE mindhárom review ugyanazt a három tartalmi hibát mérte
+(a Claude saját, önállóan futtatott próbája is megerősítette, mielőtt a
+review-kat elindította):
+
+1. **BLOCKER B1 / F1 — az A2 lejárat-cella hamis zöld.** `finalize_upload` a
+   lejáratot a hardcode-olt modul-konstansból (`SIGNED_URL_EXPIRES_IN`, 5 perc)
+   számolja újra, NEM a ténylegesen kiadott `signed_url_expires_in` értékből — a
+   sor nem is tárolja a valódi `expires_at`-ot. Próba (mindhárom fél
+   függetlenül reprodukálta): 60 s-os signed URL, finalize `+90 s`-nál →
+   `FINALIZED` (elvárt: `MediaUploadExpired`). Az A2 teszt csak azért zöld,
+   mert `+5 perc`-nél mér, ami véletlenül egyezik a hardcode-olt konstanssal.
+2. **MAJOR M1 — kvóta permanens lockout.** `_live_upload_count` a terminális
+   `cancelled`/`failed` sorokat is beleszámolja — 10 megszakított feltöltés
+   után a profil véglegesen kizárva (`MediaQuotaExceeded`).
+3. **MAJOR M2/F4 — a checksum-guard (A5) inert a valódi adapterrel.**
+   `S3CompatibleObjectStore.head_object` fixen `sha256_hex=None`-t ad, a
+   `_validate_checksum` csak akkor tüzel, ha mindkét oldal nem-`None` — az A5
+   garancia kizárólag az `InMemoryObjectStore` fake-kel tart.
+4. **MAJOR M3/F3 — `_as_utc` a lokális, nem az UTC időzónát csatolja**, a
+   hivatkozott `post_service._as_utc` precedenstől eltérve — nem-UTC hoston az
+   összes lejárat/retention-összehasonlítás eltolódik (a box UTC-je maszkolja).
+5. **MAJOR F2 (dedikált biztonsági review) — a signed URL nem valódi SigV4
+   mechanizmussal korlátozza a content-type/content-length-et** (kitalált
+   `X-Amz-SignedHeaders-Content-Type/-Length` query-paraméterek, amit egy
+   valódi bucket nem ismer fel) — jelenleg ártalmatlan, mert az adapter
+   bekötetlen, de a §5.2 "explicit korlátozás" állítása a signed-URL szintjén
+   valótlan.
+
+Pozitív, megerősített határok (mindkét review egyezik): A1 flag-fail-closed
+mind a 4 belépési ponton, A3 bucket-metadata-alapú MIME (nem extension), A4
+inkluzív küszöb + defense-in-depth, A6 IDOR-védelem (`profile_id` re-check,
+uniform 404), A7 cancel+orphan-cleanup, nincs teljes-fájl pufferelés, nincs
+titok-szivárgás a signed URL-ben vagy logban.
+
+**Döntés:** javító kör indul, EGY MiniMax-kör (a §1.1 motor-eszkaláció
+küszöbe), a fenti 1–5 tétel + a MINOR m2 (redundáns unique index) és m3 (bare
+`ValueError` a hiányzó profilra) javításával. Lásd a javító kör promptját és
+a `docs/reviews/e09-r18-review.md` §"Merge-döntés" / `docs/reviews/e09-r18-security.md`
+§"Javítás iránya" szakaszait a pontos javítási irányért.
