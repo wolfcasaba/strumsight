@@ -385,12 +385,38 @@ def create_post(
         )
         if again is not None:
             return again
-        # The IntegrityError was on a DIFFERENT constraint (most
-        # likely the CHECK on a future column). Re-raise so the
-        # caller surfaces a 500 — the A2 measure-matrix is about
-        # the idempotency key specifically, not unrelated
-        # constraints.
-        raise
+        # F3 javító kör 1 — a DB-szintű UNIQUE(profile_id,
+        # idempotency_key) constraint a ``deleted_at`` értékre
+        # tekintet nélkül tüzel (SQLite-ban a constraint a sor
+        # törléséig él). Ha a kulcsot egy SOFT-DELETED sor
+        # tartja, a lookup a deleted_at IS NULL filter miatt nem
+        # találja, de az INSERT mégis ütközik. Ilyenkor a
+        # "elfogyott kulcs" szemantikát követjük: a tombstone
+        # idempotency_key-jét NULL-ra állítjuk (a NULL UNIQUE
+        # szempontjából nem ütközik), és a fresh INSERT lefut —
+        # a régi soft-deleted sor audit-trailje megmarad
+        # (deleted_at nem változik, a body/artifaact sértetlen),
+        # csak a kulcs-engedélyét adjuk át az új sornak.
+        tombstone = (
+            db.query(CommunityPost)
+            .filter(
+                CommunityPost.profile_id == author.id,
+                CommunityPost.idempotency_key == idempotency_key,
+            )
+            .one_or_none()
+        )
+        if tombstone is not None and tombstone.deleted_at is not None:
+            tombstone.idempotency_key = None
+            db.flush()
+            db.add(post)
+            db.flush()
+        else:
+            # The IntegrityError was on a DIFFERENT constraint (most
+            # likely the CHECK on a future column). Re-raise so the
+            # caller surfaces a 500 — the A2 measure-matrix is about
+            # the idempotency key specifically, not unrelated
+            # constraints.
+            raise
 
     if on_invalidate is not None:
         on_invalidate(

@@ -758,12 +758,16 @@ def test_create_after_soft_delete_with_same_idempotency_key(
     A javítás ELŐTT a service-szintű idempotencia-lekérdezés nem
     szűrt ``deleted_at IS NULL``-ra, így a create az "existing
     row" ágra futott és a törölt sort adta vissza 201-gyel. A
-    javítás UTÁN a törölt kulcs nem felel meg az élő
-    idempotencia-ablaknak, így a create új sort hoz létre.
+    javítás UTÁN a törölt kulcs a tombstone-on NULL-ra állítódik
+    (NULL a UNIQUE szempontjából nem ütközik), és a fresh INSERT
+    egy ÚJ sort hoz létre — a régi tombstone audit-trailje
+    megmarad (deleted_at nem változik).
 
-    Egy másik értelmezés (a §5.3 szellemében szigorúbb): a
-    create a törölt kulccsal is ÚJ sort hoz létre, mert a törölt
-    tartalom nem "vehető át" — ez a teszt ezt az utat szavatolja.
+    A második create tehát:
+      * public_id ≠ first_id (új sor)
+      * deleted_at IS None (nem törölt)
+      * a tombstone first_id még a táblában van, deleted_at ≠ None,
+        idempotency_key = NULL (a kulcs elengedve)
     """
     author, headers = _make_user_with_headers(
         session_factory, user_id=32, email="recreate@s.test"
@@ -785,36 +789,33 @@ def test_create_after_soft_delete_with_same_idempotency_key(
     # Re-create with the SAME idempotency_key.
     second = client.post("/community/posts", headers=headers, json=body)
     assert second.status_code == 201, second.text
-
-    # F3: a törölt sor NEM térhet vissza élő 201-ként — a második
-    # create vagy új sort ad (ez az itt szavatolt eset), vagy a
-    # meglévő törölt sorra hivatkozik, de akkor a válasz
-    # ``deleted_at`` mezője nem lehet None.
     second_body = second.json()
-    if second_body["public_id"] == first_id:
-        # Ugyanaz a sor — DE akkor a deleted_at NEM lehet None.
-        assert second_body["deleted_at"] is not None, (
-            "törölt poszt tilos, hogy deleted_at=None-ként térjen vissza"
-        )
-    else:
-        # Új sor jött létre — a régi kulcs "elfogyott".
-        assert second_body["public_id"] != first_id
 
-    # A törölt sor még mindig törölt a DB-ben.
+    # F3: az új sor public_id-ja ≠ a törölt soré (a törölt
+    # tartalom NEM tér vissza élő 201-ként), és az új sor
+    # NEM soft-deleted.
+    assert second_body["public_id"] != first_id
+    assert second_body["deleted_at"] is None
+    # A második create által mutatott public_id tényleg a DB-ben
+    # van és nem törölt.
     db: Session = session_factory()
     try:
-        deleted_row = (
+        # Az eredeti tombstone még a táblában van, deleted_at ≠ None,
+        # idempotency_key = NULL (a kulcsot a create elengedte).
+        tombstone_row = (
             db.query(CommunityPost).filter_by(public_id=uuid.UUID(first_id)).one()
         )
-        assert deleted_row.deleted_at is not None
-        # Az új sor (ha van) nem törölt.
-        if second_body["public_id"] != first_id:
-            new_row = (
-                db.query(CommunityPost)
-                .filter_by(public_id=uuid.UUID(second_body["public_id"]))
-                .one()
-            )
-            assert new_row.deleted_at is None
+        assert tombstone_row.deleted_at is not None
+        assert tombstone_row.idempotency_key is None
+
+        # Az új sor élő (deleted_at IS None) és az új kulcsot viseli.
+        new_row = (
+            db.query(CommunityPost)
+            .filter_by(public_id=uuid.UUID(second_body["public_id"]))
+            .one()
+        )
+        assert new_row.deleted_at is None
+        assert new_row.idempotency_key == "recreate-key-1"
     finally:
         db.close()
 
