@@ -121,13 +121,13 @@ sealed class ShareArtifact extends CommunityShareArtifact {
       throw ArgumentError.value(typeCode, 'type', 'is not a known artifact');
     }
     return switch (type) {
-      ShareArtifactType.practiceSummary =>
-        PracticeSummaryArtifact.fromJson(object),
+      ShareArtifactType.practiceSummary => PracticeSummaryArtifact.fromJson(
+        object,
+      ),
       ShareArtifactType.songResult => SongResultArtifact.fromJson(object),
       ShareArtifactType.originalProgression =>
         OriginalProgressionArtifact.fromJson(object),
-      ShareArtifactType.planTemplate =>
-        PlanTemplateArtifact.fromJson(object),
+      ShareArtifactType.planTemplate => PlanTemplateArtifact.fromJson(object),
       ShareArtifactType.analysisImprovement =>
         AnalysisImprovementArtifact.fromJson(object),
       ShareArtifactType.achievement => AchievementArtifact.fromJson(object),
@@ -156,7 +156,7 @@ final class PracticeSummaryArtifact extends ShareArtifact {
     required this.finishReasonCode,
     this.bestScore,
     this.coachingCodes = const <String>[],
-  })  : _coachingCodes = List<String>.unmodifiable(coachingCodes);
+  }) : _coachingCodes = List<String>.unmodifiable(coachingCodes);
 
   @override
   ShareArtifactType get type => ShareArtifactType.practiceSummary;
@@ -183,17 +183,17 @@ final class PracticeSummaryArtifact extends ShareArtifact {
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.code,
-        'schemaVersion': schemaVersion,
-        'sourceId': sourceId,
-        'createdAt': createdAt.toIso8601String(),
-        'activeSeconds': activeSeconds,
-        'pausedSeconds': pausedSeconds,
-        'attemptCount': attemptCount,
-        'finishReasonCode': finishReasonCode,
-        'bestScore': bestScore,
-        'coachingCodes': _coachingCodes,
-      };
+    'type': type.code,
+    'schemaVersion': schemaVersion,
+    'sourceId': sourceId,
+    'createdAt': createdAt.toIso8601String(),
+    'activeSeconds': activeSeconds,
+    'pausedSeconds': pausedSeconds,
+    'attemptCount': attemptCount,
+    'finishReasonCode': finishReasonCode,
+    'bestScore': bestScore,
+    'coachingCodes': _coachingCodes,
+  };
 
   static PracticeSummaryArtifact fromJson(Map<String, Object?> object) {
     return PracticeSummaryArtifact(
@@ -225,16 +225,16 @@ final class PracticeSummaryArtifact extends ShareArtifact {
 
   @override
   int get hashCode => Object.hash(
-        schemaVersion,
-        sourceId,
-        createdAt,
-        activeSeconds,
-        pausedSeconds,
-        attemptCount,
-        finishReasonCode,
-        bestScore,
-        Object.hashAll(_coachingCodes),
-      );
+    schemaVersion,
+    sourceId,
+    createdAt,
+    activeSeconds,
+    pausedSeconds,
+    attemptCount,
+    finishReasonCode,
+    bestScore,
+    Object.hashAll(_coachingCodes),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -271,16 +271,16 @@ final class SongResultArtifact extends ShareArtifact {
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.code,
-        'schemaVersion': schemaVersion,
-        'sourceId': sourceId,
-        'createdAt': createdAt.toIso8601String(),
-        'songName': songName,
-        'chords': chords,
-        'strumPattern': strumPattern,
-        'bpm': bpm,
-        'beatsPerBar': beatsPerBar,
-      };
+    'type': type.code,
+    'schemaVersion': schemaVersion,
+    'sourceId': sourceId,
+    'createdAt': createdAt.toIso8601String(),
+    'songName': songName,
+    'chords': chords,
+    'strumPattern': strumPattern,
+    'bpm': bpm,
+    'beatsPerBar': beatsPerBar,
+  };
 
   static SongResultArtifact fromJson(Map<String, Object?> object) {
     return SongResultArtifact(
@@ -310,15 +310,15 @@ final class SongResultArtifact extends ShareArtifact {
 
   @override
   int get hashCode => Object.hash(
-        schemaVersion,
-        sourceId,
-        createdAt,
-        songName,
-        Object.hashAll(chords),
-        strumPattern,
-        bpm,
-        beatsPerBar,
-      );
+    schemaVersion,
+    sourceId,
+    createdAt,
+    songName,
+    Object.hashAll(chords),
+    strumPattern,
+    bpm,
+    beatsPerBar,
+  );
 }
 
 /// The "original progression" angle on a [Song]. Same wire shape as
@@ -348,16 +348,16 @@ final class OriginalProgressionArtifact extends ShareArtifact {
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.code,
-        'schemaVersion': schemaVersion,
-        'sourceId': sourceId,
-        'createdAt': createdAt.toIso8601String(),
-        'songName': songName,
-        'chords': chords,
-        'strumPattern': strumPattern,
-        'bpm': bpm,
-        'beatsPerBar': beatsPerBar,
-      };
+    'type': type.code,
+    'schemaVersion': schemaVersion,
+    'sourceId': sourceId,
+    'createdAt': createdAt.toIso8601String(),
+    'songName': songName,
+    'chords': chords,
+    'strumPattern': strumPattern,
+    'bpm': bpm,
+    'beatsPerBar': beatsPerBar,
+  };
 
   static OriginalProgressionArtifact fromJson(Map<String, Object?> object) {
     return OriginalProgressionArtifact(
@@ -387,15 +387,15 @@ final class OriginalProgressionArtifact extends ShareArtifact {
 
   @override
   int get hashCode => Object.hash(
-        schemaVersion,
-        sourceId,
-        createdAt,
-        songName,
-        Object.hashAll(chords),
-        strumPattern,
-        bpm,
-        beatsPerBar,
-      );
+    schemaVersion,
+    sourceId,
+    createdAt,
+    songName,
+    Object.hashAll(chords),
+    strumPattern,
+    bpm,
+    beatsPerBar,
+  );
 }
 
 /// A plan template built around a [Song]. Same wire shape as
@@ -425,16 +425,16 @@ final class PlanTemplateArtifact extends ShareArtifact {
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.code,
-        'schemaVersion': schemaVersion,
-        'sourceId': sourceId,
-        'createdAt': createdAt.toIso8601String(),
-        'songName': songName,
-        'chords': chords,
-        'strumPattern': strumPattern,
-        'bpm': bpm,
-        'beatsPerBar': beatsPerBar,
-      };
+    'type': type.code,
+    'schemaVersion': schemaVersion,
+    'sourceId': sourceId,
+    'createdAt': createdAt.toIso8601String(),
+    'songName': songName,
+    'chords': chords,
+    'strumPattern': strumPattern,
+    'bpm': bpm,
+    'beatsPerBar': beatsPerBar,
+  };
 
   static PlanTemplateArtifact fromJson(Map<String, Object?> object) {
     return PlanTemplateArtifact(
@@ -464,15 +464,15 @@ final class PlanTemplateArtifact extends ShareArtifact {
 
   @override
   int get hashCode => Object.hash(
-        schemaVersion,
-        sourceId,
-        createdAt,
-        songName,
-        Object.hashAll(chords),
-        strumPattern,
-        bpm,
-        beatsPerBar,
-      );
+    schemaVersion,
+    sourceId,
+    createdAt,
+    songName,
+    Object.hashAll(chords),
+    strumPattern,
+    bpm,
+    beatsPerBar,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -510,12 +510,12 @@ final class MetricImprovement {
   final double? relativeDelta;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'metricId': metricId,
-        'directionCode': directionCode,
-        'beforeValue': beforeValue,
-        'afterValue': afterValue,
-        'relativeDelta': relativeDelta,
-      };
+    'metricId': metricId,
+    'directionCode': directionCode,
+    'beforeValue': beforeValue,
+    'afterValue': afterValue,
+    'relativeDelta': relativeDelta,
+  };
 
   static MetricImprovement fromJson(Map<String, Object?> object) {
     return MetricImprovement(
@@ -539,12 +539,12 @@ final class MetricImprovement {
 
   @override
   int get hashCode => Object.hash(
-        metricId,
-        directionCode,
-        beforeValue,
-        afterValue,
-        relativeDelta,
-      );
+    metricId,
+    directionCode,
+    beforeValue,
+    afterValue,
+    relativeDelta,
+  );
 }
 
 /// One before/after analysis comparison, surfaced as a minimal
@@ -569,12 +569,12 @@ final class AnalysisImprovementArtifact extends ShareArtifact {
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.code,
-        'schemaVersion': schemaVersion,
-        'sourceId': sourceId,
-        'createdAt': createdAt.toIso8601String(),
-        'metrics': [for (final m in _metrics) m.toJson()],
-      };
+    'type': type.code,
+    'schemaVersion': schemaVersion,
+    'sourceId': sourceId,
+    'createdAt': createdAt.toIso8601String(),
+    'metrics': [for (final m in _metrics) m.toJson()],
+  };
 
   static AnalysisImprovementArtifact fromJson(Map<String, Object?> object) {
     final rawMetrics = object['metrics'];
@@ -586,9 +586,8 @@ final class AnalysisImprovementArtifact extends ShareArtifact {
       sourceId: _requireString(object, 'sourceId'),
       createdAt: _requireIsoDate(object, 'createdAt'),
       metrics: <MetricImprovement>[
-        for (final raw in rawMetrics) MetricImprovement.fromJson(
-          _requireObject(raw),
-        ),
+        for (final raw in rawMetrics)
+          MetricImprovement.fromJson(_requireObject(raw)),
       ],
     );
   }
@@ -603,12 +602,8 @@ final class AnalysisImprovementArtifact extends ShareArtifact {
           _listEquals(other._metrics, _metrics);
 
   @override
-  int get hashCode => Object.hash(
-        schemaVersion,
-        sourceId,
-        createdAt,
-        Object.hashAll(_metrics),
-      );
+  int get hashCode =>
+      Object.hash(schemaVersion, sourceId, createdAt, Object.hashAll(_metrics));
 }
 
 // ---------------------------------------------------------------------------
@@ -648,16 +643,16 @@ final class AchievementArtifact extends ShareArtifact {
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.code,
-        'schemaVersion': schemaVersion,
-        'sourceId': sourceId,
-        'createdAt': createdAt.toIso8601String(),
-        'achievementId': achievementId,
-        'categoryCode': categoryCode,
-        'catalogVersion': catalogVersion,
-        'progressValue': progressValue,
-        'completedAt': completedAt?.toIso8601String(),
-      };
+    'type': type.code,
+    'schemaVersion': schemaVersion,
+    'sourceId': sourceId,
+    'createdAt': createdAt.toIso8601String(),
+    'achievementId': achievementId,
+    'categoryCode': categoryCode,
+    'catalogVersion': catalogVersion,
+    'progressValue': progressValue,
+    'completedAt': completedAt?.toIso8601String(),
+  };
 
   static AchievementArtifact fromJson(Map<String, Object?> object) {
     final completedRaw = object['completedAt'];
@@ -698,15 +693,15 @@ final class AchievementArtifact extends ShareArtifact {
 
   @override
   int get hashCode => Object.hash(
-        schemaVersion,
-        sourceId,
-        createdAt,
-        achievementId,
-        categoryCode,
-        catalogVersion,
-        progressValue,
-        completedAt,
-      );
+    schemaVersion,
+    sourceId,
+    createdAt,
+    achievementId,
+    categoryCode,
+    catalogVersion,
+    progressValue,
+    completedAt,
+  );
 }
 
 /// Daily challenge shared as a Community artifact. Carries the
@@ -762,17 +757,17 @@ final class ChallengeArtifact extends ShareArtifact {
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.code,
-        'schemaVersion': schemaVersion,
-        'sourceId': sourceId,
-        'createdAt': createdAt.toIso8601String(),
-        'challengeTypeCode': challengeTypeCode,
-        'challengeName': challengeName,
-        'rewardStatusCode': rewardStatusCode,
-        'completedAt': completedAt?.toIso8601String(),
-        'rewardXp': rewardXp,
-        'ledgerId': ledgerId,
-      };
+    'type': type.code,
+    'schemaVersion': schemaVersion,
+    'sourceId': sourceId,
+    'createdAt': createdAt.toIso8601String(),
+    'challengeTypeCode': challengeTypeCode,
+    'challengeName': challengeName,
+    'rewardStatusCode': rewardStatusCode,
+    'completedAt': completedAt?.toIso8601String(),
+    'rewardXp': rewardXp,
+    'ledgerId': ledgerId,
+  };
 
   static ChallengeArtifact fromJson(Map<String, Object?> object) {
     final completedRaw = object['completedAt'];
@@ -815,16 +810,16 @@ final class ChallengeArtifact extends ShareArtifact {
 
   @override
   int get hashCode => Object.hash(
-        schemaVersion,
-        sourceId,
-        createdAt,
-        challengeTypeCode,
-        challengeName,
-        rewardStatusCode,
-        completedAt,
-        rewardXp,
-        ledgerId,
-      );
+    schemaVersion,
+    sourceId,
+    createdAt,
+    challengeTypeCode,
+    challengeName,
+    rewardStatusCode,
+    completedAt,
+    rewardXp,
+    ledgerId,
+  );
 }
 
 // ---------------------------------------------------------------------------

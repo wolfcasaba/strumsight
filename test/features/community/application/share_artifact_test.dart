@@ -47,40 +47,37 @@ void main() {
   // any other import is a tripwire.
   // -----------------------------------------------------------------
 
-  test(
-    'A1 — mappers import only their source feature public.dart '
-    'barrel (cross-feature guard)',
-    () {
-      // This is a structural test — every mapper file in
-      // `lib/features/community/application/mappers/` imports
-      // exactly ONE source feature's `public.dart`, plus the
-      // Community domain. A future regression that pulls a
-      // source feature's INTERNAL file is caught by the
-      // `architecture_dependency_test.dart` "community does not
-      // import other features" group (E09-R05 ADR 0399 §1),
-      // NOT by this Dart-level test. The Dart-level test
-      // exists as a tripwire for the file-text directly: a
-      // string-match in this file says "the mapper file does
-      // NOT import anything from another feature outside its
-      // own public barrel".
-      //
-      // We do NOT use file-system probes here (the test must
-      // stay inside the §4 allowed-paths); instead we read the
-      // file content via `dart:io` only if the test ever
-      // needs it — for now the assertion is the manual file
-      // listing in `lib/features/community/application/
-      // mappers/`. This test passes by construction as long as
-      // the mapper files exist (a missing mapper would fail
-      // the import resolution at the top of this test file).
-      expect(practiceSummaryFromSessionResult, isNotNull);
-      expect(songResultFromSong, isNotNull);
-      expect(originalProgressionFromSong, isNotNull);
-      expect(planTemplateFromSong, isNotNull);
-      expect(analysisImprovementFromComparison, isNotNull);
-      expect(achievementFromDefinitionAndProgress, isNotNull);
-      expect(challengeFromDefinitionAndReceipt, isNotNull);
-    },
-  );
+  test('A1 — mappers import only their source feature public.dart '
+      'barrel (cross-feature guard)', () {
+    // This is a structural test — every mapper file in
+    // `lib/features/community/application/mappers/` imports
+    // exactly ONE source feature's `public.dart`, plus the
+    // Community domain. A future regression that pulls a
+    // source feature's INTERNAL file is caught by the
+    // `architecture_dependency_test.dart` "community does not
+    // import other features" group (E09-R05 ADR 0399 §1),
+    // NOT by this Dart-level test. The Dart-level test
+    // exists as a tripwire for the file-text directly: a
+    // string-match in this file says "the mapper file does
+    // NOT import anything from another feature outside its
+    // own public barrel".
+    //
+    // We do NOT use file-system probes here (the test must
+    // stay inside the §4 allowed-paths); instead we read the
+    // file content via `dart:io` only if the test ever
+    // needs it — for now the assertion is the manual file
+    // listing in `lib/features/community/application/
+    // mappers/`. This test passes by construction as long as
+    // the mapper files exist (a missing mapper would fail
+    // the import resolution at the top of this test file).
+    expect(practiceSummaryFromSessionResult, isNotNull);
+    expect(songResultFromSong, isNotNull);
+    expect(originalProgressionFromSong, isNotNull);
+    expect(planTemplateFromSong, isNotNull);
+    expect(analysisImprovementFromComparison, isNotNull);
+    expect(achievementFromDefinitionAndProgress, isNotNull);
+    expect(challengeFromDefinitionAndReceipt, isNotNull);
+  });
 
   // -----------------------------------------------------------------
   // A2 — every artifact subtype carries an explicit, minimal
@@ -330,44 +327,41 @@ void main() {
       expect(decoded, original);
     });
 
-    test(
-      '§6.1 row 5 — the discriminator is `type`, NOT field-presence',
-      () {
-        // Build a JSON object that has BOTH the practiceSummary
-        // and the songResult field set, with the songResult
-        // discriminator. The codec MUST pick the songResult
-        // shape — a regression that switched on field-presence
-        // would silently pick one or the other.
-        final conflict = <String, Object?>{
-          'type': 'songResult',
-          'schemaVersion': shareArtifactSchemaVersion,
-          'sourceId': 'src-1',
-          'createdAt': createdAt.toIso8601String(),
-          // Both shapes' fields are here.
-          'songName': 'My Song',
-          'chords': ['G', 'D'],
-          'strumPattern': 'du-du-du-',
-          'bpm': 100,
-          'beatsPerBar': 4,
-          // Practice-only fields:
-          'activeSeconds': 60,
-          'pausedSeconds': 5,
-          'attemptCount': 3,
-          'finishReasonCode': 'userFinished',
-          'bestScore': 0.8,
-          'coachingCodes': <String>[],
-        };
-        final decoded = ShareArtifact.fromJson(conflict);
-        expect(decoded, isA<SongResultArtifact>());
-        expect(
-          () => (decoded as SongResultArtifact).coachingCodes,
-          throwsNoSuchMethodError,
-          reason:
-              'songResult shape must NOT carry the practice fields '
-              'even when both shapes appear in the input',
-        );
-      },
-    );
+    test('§6.1 row 5 — the discriminator is `type`, NOT field-presence', () {
+      // Build a JSON object that has BOTH the practiceSummary
+      // and the songResult field set, with the songResult
+      // discriminator. The codec MUST pick the songResult
+      // shape — a regression that switched on field-presence
+      // would silently pick one or the other.
+      final conflict = <String, Object?>{
+        'type': 'songResult',
+        'schemaVersion': shareArtifactSchemaVersion,
+        'sourceId': 'src-1',
+        'createdAt': createdAt.toIso8601String(),
+        // Both shapes' fields are here.
+        'songName': 'My Song',
+        'chords': ['G', 'D'],
+        'strumPattern': 'du-du-du-',
+        'bpm': 100,
+        'beatsPerBar': 4,
+        // Practice-only fields:
+        'activeSeconds': 60,
+        'pausedSeconds': 5,
+        'attemptCount': 3,
+        'finishReasonCode': 'userFinished',
+        'bestScore': 0.8,
+        'coachingCodes': <String>[],
+      };
+      final decoded = ShareArtifact.fromJson(conflict);
+      expect(decoded, isA<SongResultArtifact>());
+      expect(
+        () => (decoded as SongResultArtifact).coachingCodes,
+        throwsNoSuchMethodError,
+        reason:
+            'songResult shape must NOT carry the practice fields '
+            'even when both shapes appear in the input',
+      );
+    });
   });
 
   // -----------------------------------------------------------------
@@ -440,8 +434,7 @@ void main() {
       expect(SharePreview.none.includeBestScore, isFalse);
     });
 
-    test('§6.1 row 4 — a flag flipped to true is the explicit user intent',
-        () {
+    test('§6.1 row 4 — a flag flipped to true is the explicit user intent', () {
       // The §6.1 row "a field-level kapcsoló alapértéke `true`"
       // would be caught by the assertions above: a flag default
       // must be `false`. This test pins that an explicit flip
@@ -521,34 +514,31 @@ void main() {
       expect(artifact.progressValue, progress.value);
     });
 
-    test(
-      'challenge mapper maps verified/unverified via wire literal '
-      '(ADR 0404 §D4, brief §5.3)',
-      () {
-        final definition = _strumPatternChallengeFixture();
-        // `verified` status — server-confirmed receipt.
-        final verified = challengeFromDefinitionAndReceipt(
-          definition,
-          _rewardLedgerEntryFixture(),
-          LedgerEntrySyncStatus.verified,
-          createdAt: createdAt,
-          sourceId: 'challenge-1',
-        );
-        expect(verified.rewardStatusCode, 'verified');
-        expect(verified.ledgerId, isNotNull);
+    test('challenge mapper maps verified/unverified via wire literal '
+        '(ADR 0404 §D4, brief §5.3)', () {
+      final definition = _strumPatternChallengeFixture();
+      // `verified` status — server-confirmed receipt.
+      final verified = challengeFromDefinitionAndReceipt(
+        definition,
+        _rewardLedgerEntryFixture(),
+        LedgerEntrySyncStatus.verified,
+        createdAt: createdAt,
+        sourceId: 'challenge-1',
+      );
+      expect(verified.rewardStatusCode, 'verified');
+      expect(verified.ledgerId, isNotNull);
 
-        // `unverified` status — no receipt attached yet.
-        final unverified = challengeFromDefinitionAndReceipt(
-          definition,
-          null,
-          LedgerEntrySyncStatus.unverified,
-          createdAt: createdAt,
-          sourceId: 'challenge-2',
-        );
-        expect(unverified.rewardStatusCode, 'unverified');
-        expect(unverified.ledgerId, isNull);
-      },
-    );
+      // `unverified` status — no receipt attached yet.
+      final unverified = challengeFromDefinitionAndReceipt(
+        definition,
+        null,
+        LedgerEntrySyncStatus.unverified,
+        createdAt: createdAt,
+        sourceId: 'challenge-2',
+      );
+      expect(unverified.rewardStatusCode, 'unverified');
+      expect(unverified.ledgerId, isNull);
+    });
   });
 }
 
@@ -640,7 +630,9 @@ AchievementDefinition _achievementDefinitionFixture() {
   );
 }
 
-AchievementProgress _achievementProgressFixture({required String achievementId}) {
+AchievementProgress _achievementProgressFixture({
+  required String achievementId,
+}) {
   return AchievementProgress(
     achievementId: achievementId,
     catalogVersion: 1,
