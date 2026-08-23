@@ -6,10 +6,7 @@ import '../components/surfaces/ss_hero_card.dart';
 import '../components/surfaces/ss_surface.dart';
 import '../foundations/ss_colors.dart';
 import '../foundations/ss_elevation.dart';
-import '../foundations/ss_motion.dart';
 import '../foundations/ss_spacing.dart';
-import '../motion/ss_beat_pulse.dart';
-import '../motion/ss_motion_scope.dart';
 import '../themes/ss_dark_theme.dart';
 import '../themes/ss_high_contrast_theme.dart';
 import '../themes/ss_light_theme.dart';
@@ -63,8 +60,6 @@ enum _CatalogTheme { dark, light, highContrast }
 final class _ComponentCatalogScreenState
     extends State<_ComponentCatalogScreen> {
   var _selectedTheme = _CatalogTheme.dark;
-  final Stopwatch _beatStopwatch = Stopwatch()..start();
-  bool? _reduceMotionOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -147,31 +142,6 @@ final class _ComponentCatalogScreenState
                         ),
                       ],
                     ),
-                    const SizedBox(height: SsSpacing.space4),
-                    SsMotionScope(
-                      appOverride: _reduceMotionOverride,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          SsBeatPulse(
-                            clock: _DemoBeatClock(_beatStopwatch),
-                            beatDuration: SsMotion.celebration,
-                          ),
-                          IconButton(
-                            onPressed: _toggleBeat,
-                            icon: Icon(
-                              _beatStopwatch.isRunning
-                                  ? Icons.pause_circle_outline
-                                  : Icons.play_circle_outline,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: _cycleReduceMotionOverride,
-                            icon: Icon(_reduceMotionOverrideIcon),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -182,49 +152,10 @@ final class _ComponentCatalogScreenState
     );
   }
 
-  IconData get _reduceMotionOverrideIcon => switch (_reduceMotionOverride) {
-    true => Icons.accessibility_new_outlined,
-    false => Icons.directions_run_outlined,
-    null => Icons.settings_suggest_outlined,
-  };
-
-  void _toggleBeat() {
-    setState(() {
-      if (_beatStopwatch.isRunning) {
-        _beatStopwatch.stop();
-      } else {
-        _beatStopwatch.start();
-      }
-    });
-  }
-
-  void _cycleReduceMotionOverride() {
-    setState(() {
-      _reduceMotionOverride = switch (_reduceMotionOverride) {
-        null => true,
-        true => false,
-        false => null,
-      };
-    });
-  }
-
   Widget _themeButton({required IconData icon, required _CatalogTheme theme}) {
     return IconButton(
       onPressed: () => setState(() => _selectedTheme = theme),
       icon: Icon(icon),
     );
   }
-}
-
-/// Dev-only demo clock: exposes a free-running [Stopwatch]'s elapsed wall
-/// time as an [SsBeatClock] position, standing in for a real playback
-/// timeline in the catalog. `null` while paused, matching the "no live
-/// timeline → no animation" rule (ADR 0274).
-final class _DemoBeatClock implements SsBeatClock {
-  const _DemoBeatClock(this._stopwatch);
-
-  final Stopwatch _stopwatch;
-
-  @override
-  Duration? get position => _stopwatch.isRunning ? _stopwatch.elapsed : null;
 }
