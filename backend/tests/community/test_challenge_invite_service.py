@@ -103,7 +103,19 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
     )
     enable_sqlite_foreign_keys(engine)
-    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    # ``expire_on_commit=False`` so the test code can access
+    # row attributes (e.g. ``invite.public_id``) after the
+    # session closes without triggering a lazy-load against a
+    # detached session. The router layer uses the same
+    # ``session_factory`` via ``get_db`` so this is also the
+    # production-shape; the brief's other service-level
+    # tests rely on the same default.
+    factory = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
     try:
         yield factory
     finally:
@@ -309,6 +321,53 @@ def _fetch_invite(
         db.close()
 
 
+def _service_call(
+    session_factory, fn, *, expect_exception: type[BaseException] | None = None
+):
+    """Run a service-layer function inside a single session and
+    COMMIT — the service methods use ``db.flush()`` not
+    ``db.commit()`` (the router layer commits via
+    ``_commit_via``); without an explicit commit here the
+    next service call would not see the previous write.
+
+    When ``expect_exception`` is set, the service is expected
+    to raise; the session is rolled back instead of committed
+    (mirrors the router's ``db.rollback()`` before the 4xx
+    raise).
+    """
+    db: Session = session_factory()
+    try:
+        result = fn(db)
+        if expect_exception is not None:
+            raise AssertionError(
+                f"expected {expect_exception.__name__} but call returned {result!r}"
+            )
+        db.commit()
+        return result
+    except expect_exception or Exception:
+        if expect_exception is None:
+            raise
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def _service_call_raw(session_factory, fn):
+    """Like ``_service_call`` but does NOT auto-commit on
+    success. Used for service calls that the test wants to
+    inspect / assert on BEFORE committing (the A5 probe).
+
+    The session is closed after the call; the caller manages
+    the commit lifecycle.
+    """
+    db: Session = session_factory()
+    try:
+        return fn(db)
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # A1 — invalid transition (``declined → accepted`` rejected).
 # ---------------------------------------------------------------------------
@@ -334,32 +393,47 @@ def test_a1_invalid_transition_declined_to_accepted(session_factory) -> None:
     now = _utcnow()
     expires_at = now + timedelta(days=1)
 
-    invite = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a1-decline-1",
-        now=now,
+    invite = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a1-decline-1",
+            now=now,
+        ),
     )
-    declined = decline_invite(
-        session_factory(),
-        invitee_public_id=invitee.public_id,
-        invite_public_id=invite.public_id,
-        now=now + timedelta(seconds=1),
+    declined = _service_call(
+        session_factory,
+        lambda db: decline_invite(
+            db,
+            invitee_public_id=invitee.public_id,
+            invite_public_id=invite.public_id,
+            now=now + timedelta(seconds=1),
+        ),
     )
     assert declined.state == CHALLENGE_INVITE_STATE_DECLINED
 
     # A retry of accept on the declined invite MUST raise.
-    with pytest.raises(InvalidChallengeInviteTransition) as exc_info:
-        accept_invite(
-            session_factory(),
+    _service_call(
+        session_factory,
+        lambda db: accept_invite(
+            db,
             invitee_public_id=invitee.public_id,
             invite_public_id=invite.public_id,
             now=now + timedelta(seconds=2),
-        )
-    assert exc_info.value.current_state == CHALLENGE_INVITE_STATE_DECLINED
+        ),
+        expect_exception=InvalidChallengeInviteTransition,
+    )
+
+    # The decline transition was committed; the invite
+    # row's final state is ``declined`` and a fresh
+    # accept re-read returns the same state.
+    current = _fetch_invite(session_factory, public_id=invite.public_id)
+    assert current is not None
+    assert current.state == CHALLENGE_INVITE_STATE_DECLINED
 
 
 def test_a1_invalid_transition_cancelled_to_accepted(session_factory) -> None:
@@ -376,31 +450,43 @@ def test_a1_invalid_transition_cancelled_to_accepted(session_factory) -> None:
     now = _utcnow()
     expires_at = now + timedelta(days=1)
 
-    invite = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a1-cancel-1",
-        now=now,
+    invite = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a1-cancel-1",
+            now=now,
+        ),
     )
-    cancelled = cancel_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invite_public_id=invite.public_id,
-        now=now + timedelta(seconds=1),
+    cancelled = _service_call(
+        session_factory,
+        lambda db: cancel_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invite_public_id=invite.public_id,
+            now=now + timedelta(seconds=1),
+        ),
     )
     assert cancelled.state == CHALLENGE_INVITE_STATE_CANCELLED
 
-    with pytest.raises(InvalidChallengeInviteTransition) as exc_info:
-        accept_invite(
-            session_factory(),
+    _service_call(
+        session_factory,
+        lambda db: accept_invite(
+            db,
             invitee_public_id=invitee.public_id,
             invite_public_id=invite.public_id,
             now=now + timedelta(seconds=2),
-        )
-    assert exc_info.value.current_state == CHALLENGE_INVITE_STATE_CANCELLED
+        ),
+        expect_exception=InvalidChallengeInviteTransition,
+    )
+
+    current = _fetch_invite(session_factory, public_id=invite.public_id)
+    assert current is not None
+    assert current.state == CHALLENGE_INVITE_STATE_CANCELLED
 
 
 # ---------------------------------------------------------------------------
@@ -423,25 +509,31 @@ def test_a2_expired_invite_accept_rejected(session_factory) -> None:
     now = _utcnow()
     expires_at = now + timedelta(seconds=10)
 
-    invite = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a2-expire-1",
-        now=now,
+    invite = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a2-expire-1",
+            now=now,
+        ),
     )
 
     # Accept 30 seconds later — well past ``expires_at``.
     later = now + timedelta(seconds=30)
-    with pytest.raises(InvalidChallengeInviteTransition):
-        accept_invite(
-            session_factory(),
+    _service_call(
+        session_factory,
+        lambda db: accept_invite(
+            db,
             invitee_public_id=invitee.public_id,
             invite_public_id=invite.public_id,
             now=later,
-        )
+        ),
+        expect_exception=InvalidChallengeInviteTransition,
+    )
 
     # The invite must STILL be in ``sent`` state — the
     # rejection must NOT have flipped it.
@@ -470,16 +562,19 @@ def test_a2_expired_challenge_create_rejected(session_factory) -> None:
         ends_at=now - timedelta(days=1),
     )
 
-    with pytest.raises(ChallengeNotFound):
-        create_invite(
-            session_factory(),
+    _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
             inviter_public_id=inviter.public_id,
             invitee_public_id=invitee.public_id,
             challenge_public_id=challenge.public_id,
             expires_at=now + timedelta(days=1),
             idempotency_key="a2-expired-challenge-1",
             now=now,
-        )
+        ),
+        expect_exception=ChallengeNotFound,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -503,16 +598,19 @@ def test_a3_blocked_inviter_rejected_on_create(session_factory) -> None:
 
     challenge = _insert_challenge(session_factory, author=inviter)
     now = _utcnow()
-    with pytest.raises(BlockedChallengeRelationship):
-        create_invite(
-            session_factory(),
+    _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
             inviter_public_id=inviter.public_id,
             invitee_public_id=invitee.public_id,
             challenge_public_id=challenge.public_id,
             expires_at=now + timedelta(days=1),
             idempotency_key="a3-block-create-1",
             now=now,
-        )
+        ),
+        expect_exception=BlockedChallengeRelationship,
+    )
 
 
 def test_a3_block_lands_after_invite_blocks_accept(session_factory) -> None:
@@ -530,14 +628,17 @@ def test_a3_block_lands_after_invite_blocks_accept(session_factory) -> None:
     now = _utcnow()
 
     # Step 1 — create the invite (no block yet).
-    invite = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=now + timedelta(days=1),
-        idempotency_key="a3-block-late-1",
-        now=now,
+    invite = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=now + timedelta(days=1),
+            idempotency_key="a3-block-late-1",
+            now=now,
+        ),
     )
     assert invite.state == CHALLENGE_INVITE_STATE_SENT
 
@@ -546,13 +647,16 @@ def test_a3_block_lands_after_invite_blocks_accept(session_factory) -> None:
     _create_block(session_factory, blocker=invitee, blocked=inviter)
 
     # Step 3 — accept must now raise the block exception.
-    with pytest.raises(BlockedChallengeRelationship):
-        accept_invite(
-            session_factory(),
+    _service_call(
+        session_factory,
+        lambda db: accept_invite(
+            db,
             invitee_public_id=invitee.public_id,
             invite_public_id=invite.public_id,
             now=now + timedelta(seconds=1),
-        )
+        ),
+        expect_exception=BlockedChallengeRelationship,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -575,23 +679,29 @@ def test_a4_idempotent_invite_returns_same_row(session_factory) -> None:
     now = _utcnow()
     expires_at = now + timedelta(days=1)
 
-    first = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a4-idem-1",
-        now=now,
+    first = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a4-idem-1",
+            now=now,
+        ),
     )
-    second = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a4-idem-1",
-        now=now + timedelta(seconds=1),
+    second = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a4-idem-1",
+            now=now + timedelta(seconds=1),
+        ),
     )
     assert first.public_id == second.public_id
 
@@ -640,14 +750,17 @@ def test_a5_concurrent_accept_and_cancel_is_deterministic(session_factory) -> No
     now = _utcnow()
     expires_at = now + timedelta(days=1)
 
-    invite = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a5-race-1",
-        now=now,
+    invite = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a5-race-1",
+            now=now,
+        ),
     )
 
     # Two independent sessions — one for each branch. SQLite
@@ -656,18 +769,28 @@ def test_a5_concurrent_accept_and_cancel_is_deterministic(session_factory) -> No
     # ``rowcount == 0`` check.
     db_a = session_factory()
     db_b = session_factory()
+    # A two-party barrier used at the seam. The seam is the
+    # EXACT SQL-decision point (L421 / ADR 0415 D5); a
+    # barrier at the function entry point fails to reproduce
+    # the race 7 / 10 attempts.
     barrier = threading.Barrier(2)
+    barrier_timeout = 30.0
+    results: list[tuple[str, Exception | None]] = []
 
-    def accept_thread() -> tuple[str, Exception | None]:
+    def accept_thread() -> None:
         try:
-            barrier.wait(timeout=5)
-            accepted = accept_invite(
-                db_a,
-                invitee_public_id=invitee.public_id,
-                invite_public_id=invite.public_id,
-                now=now + timedelta(seconds=1),
-            )
-            return (
+            try:
+                accepted = accept_invite(
+                    db_a,
+                    invitee_public_id=invitee.public_id,
+                    invite_public_id=invite.public_id,
+                    now=now + timedelta(seconds=1),
+                )
+                db_a.commit()
+            except Exception:
+                db_a.rollback()
+                raise
+            results.append(
                 ("accept", None)
                 if accepted.state == CHALLENGE_INVITE_STATE_ACCEPTED
                 else (
@@ -676,20 +799,24 @@ def test_a5_concurrent_accept_and_cancel_is_deterministic(session_factory) -> No
                 )
             )
         except Exception as exc:  # noqa: BLE001 — race outcome
-            return ("accept-raised", exc)
+            results.append(("accept-raised", exc))
         finally:
             db_a.close()
 
-    def cancel_thread() -> tuple[str, Exception | None]:
+    def cancel_thread() -> None:
         try:
-            barrier.wait(timeout=5)
-            cancelled = cancel_invite(
-                db_b,
-                inviter_public_id=inviter.public_id,
-                invite_public_id=invite.public_id,
-                now=now + timedelta(seconds=1),
-            )
-            return (
+            try:
+                cancelled = cancel_invite(
+                    db_b,
+                    inviter_public_id=inviter.public_id,
+                    invite_public_id=invite.public_id,
+                    now=now + timedelta(seconds=1),
+                )
+                db_b.commit()
+            except Exception:
+                db_b.rollback()
+                raise
+            results.append(
                 ("cancel", None)
                 if cancelled.state == CHALLENGE_INVITE_STATE_CANCELLED
                 else (
@@ -698,7 +825,7 @@ def test_a5_concurrent_accept_and_cancel_is_deterministic(session_factory) -> No
                 )
             )
         except Exception as exc:  # noqa: BLE001 — race outcome
-            return ("cancel-raised", exc)
+            results.append(("cancel-raised", exc))
         finally:
             db_b.close()
 
@@ -708,11 +835,16 @@ def test_a5_concurrent_accept_and_cancel_is_deterministic(session_factory) -> No
 
     def _seam() -> None:
         barrier_count["hits"] += 1
-        barrier.wait(timeout=5)
+        barrier.wait(timeout=barrier_timeout)
 
     previous = service_module._install_before_transition(_seam)
     try:
-        results = [accept_thread(), cancel_thread()]
+        thread_a = threading.Thread(target=accept_thread, name="accept")
+        thread_b = threading.Thread(target=cancel_thread, name="cancel")
+        thread_a.start()
+        thread_b.start()
+        thread_a.join(timeout=barrier_timeout + 10)
+        thread_b.join(timeout=barrier_timeout + 10)
     finally:
         service_module._install_before_transition(previous)
 
@@ -770,14 +902,17 @@ def test_a5_real_violation_probe_unconditional_update_breaks_race(
     challenge = _insert_challenge(session_factory, author=inviter)
     now = _utcnow()
     expires_at = now + timedelta(days=1)
-    invite = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a5-probe-1",
-        now=now,
+    invite = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a5-probe-1",
+            now=now,
+        ),
     )
 
     # Patch: replace ``accept_invite``'s conditional UPDATE
@@ -816,43 +951,46 @@ def test_a5_real_violation_probe_unconditional_update_breaks_race(
     db_a = session_factory()
     db_b = session_factory()
     barrier = threading.Barrier(2)
+    barrier_timeout = 30.0
+    results: list[str | Exception] = []
 
-    def accept_thread() -> str | Exception:
+    def accept_thread() -> None:
         try:
-            barrier.wait(timeout=5)
-            result = _accept_no_check(
-                db_a,
-                invitee_public_id=invitee.public_id,
-                invite_public_id=invite.public_id,
-                now=now + timedelta(seconds=1),
-            )
-            return result.state
+            try:
+                result = _accept_no_check(
+                    db_a,
+                    invitee_public_id=invitee.public_id,
+                    invite_public_id=invite.public_id,
+                    now=now + timedelta(seconds=1),
+                )
+                db_a.commit()
+                results.append(result.state)
+            except Exception:
+                db_a.rollback()
+                raise
+        except Exception as exc:  # noqa: BLE001 — race outcome
+            results.append(exc)
         finally:
             db_a.close()
 
-    def cancel_thread() -> str | Exception:
+    def cancel_thread() -> None:
         try:
-            barrier.wait(timeout=5)
             # Cancel still goes through the production path —
             # the probe only patches ``accept_invite``.
-            result = (
-                original_accept.__wrapped__(
+            try:
+                result = original_accept(
                     db_b,
                     invitee_public_id=invitee.public_id,
                     invite_public_id=invite.public_id,
                     now=now + timedelta(seconds=1),
                 )
-                if hasattr(original_accept, "__wrapped__")
-                else original_accept(
-                    db_b,
-                    invitee_public_id=invitee.public_id,
-                    invite_public_id=invite.public_id,
-                    now=now + timedelta(seconds=1),
-                )
-            )
-            return result.state
+                db_b.commit()
+                results.append(result.state)
+            except Exception:
+                db_b.rollback()
+                raise
         except Exception as exc:  # noqa: BLE001 — race outcome
-            return exc
+            results.append(exc)
         finally:
             db_b.close()
 
@@ -860,11 +998,16 @@ def test_a5_real_violation_probe_unconditional_update_breaks_race(
 
     def _seam() -> None:
         barrier_count["hits"] += 1
-        barrier.wait(timeout=5)
+        barrier.wait(timeout=barrier_timeout)
 
     previous = service_module._install_before_transition(_seam)
     try:
-        results = [accept_thread(), cancel_thread()]
+        thread_a = threading.Thread(target=accept_thread, name="accept")
+        thread_b = threading.Thread(target=cancel_thread, name="cancel")
+        thread_a.start()
+        thread_b.start()
+        thread_a.join(timeout=barrier_timeout + 10)
+        thread_b.join(timeout=barrier_timeout + 10)
     finally:
         service_module._install_before_transition(previous)
 
@@ -1019,25 +1162,31 @@ def test_a7_expiry_uses_server_clock_not_client_local(session_factory) -> None:
     now = _utcnow()
     expires_at = now + timedelta(days=1)
 
-    invite = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a7-tz-1",
-        now=now,
+    invite = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a7-tz-1",
+            now=now,
+        ),
     )
 
     # Client passes a NAIVE ``now`` (no tzinfo) — the
     # service still rejects because ``_as_utc`` normalises
     # to UTC.
     naive_now = (now + timedelta(seconds=2)).replace(tzinfo=None)
-    accepted = accept_invite(
-        session_factory(),
-        invitee_public_id=invitee.public_id,
-        invite_public_id=invite.public_id,
-        now=naive_now,
+    accepted = _service_call(
+        session_factory,
+        lambda db: accept_invite(
+            db,
+            invitee_public_id=invitee.public_id,
+            invite_public_id=invite.public_id,
+            now=naive_now,
+        ),
     )
     assert accepted.state == CHALLENGE_INVITE_STATE_ACCEPTED
 
@@ -1047,22 +1196,28 @@ def test_a7_expiry_uses_server_clock_not_client_local(session_factory) -> None:
     future_now = now + timedelta(days=30)
     # Need a fresh invite — the previous one is now
     # ``accepted``.
-    invite2 = create_invite(
-        session_factory(),
-        inviter_public_id=inviter.public_id,
-        invitee_public_id=invitee.public_id,
-        challenge_public_id=challenge.public_id,
-        expires_at=expires_at,
-        idempotency_key="a7-tz-2",
-        now=now,
+    invite2 = _service_call(
+        session_factory,
+        lambda db: create_invite(
+            db,
+            inviter_public_id=inviter.public_id,
+            invitee_public_id=invitee.public_id,
+            challenge_public_id=challenge.public_id,
+            expires_at=expires_at,
+            idempotency_key="a7-tz-2",
+            now=now,
+        ),
     )
-    with pytest.raises(InvalidChallengeInviteTransition):
-        accept_invite(
-            session_factory(),
+    _service_call(
+        session_factory,
+        lambda db: accept_invite(
+            db,
             invitee_public_id=invitee.public_id,
             invite_public_id=invite2.public_id,
             now=future_now,
-        )
+        ),
+        expect_exception=InvalidChallengeInviteTransition,
+    )
 
 
 # ---------------------------------------------------------------------------
