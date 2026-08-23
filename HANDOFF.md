@@ -1,5 +1,61 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R15 KÉSZ — Reakciók és optimista konzisztencia — PR [#424](https://github.com/wolfcasaba/strumsight/pull/424), squash `a8fa5add` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENÖTÖDIK KÖRE KÉSZ.** Pozitív, idempotens,
+allowlistelt (`support`/`celebrate`/`inspiring`/`helpful`) reakció szolgáltatás-
+réteg: `backend/app/community/models/reaction.py` (ÚJ `community_reactions`
+tábla, `UNIQUE(post_id, profile_id)`), `services/reaction_service.py` (ÚJ
+`set_reaction`/`remove_reaction`/`get_reaction_count`/`get_viewer_reaction`
+kvartett), migráció `e09_r15_0009`, és a Flutter oldalon egy optimista
+`ReactionController` (mutation-ID-alapú legutolsó-szándék-nyer + rollback
+hálózati hibán) + egy önálló `ReactionBar` widget. `risk = "normal"`.
+
+**Pre-flight §0.0 D2 (Claude Sonnet 5, a HTTP-router és a `PostOut`/
+`FeedPostItem` wire-projekció ebben a körben szándékosan NEM épül meg):**
+a brief SDD-ből másolt §3 scope-mondata ("post-projekció: viewer reaction +
+aggregált count", "reaction set/remove endpoint idempotensen") egyik fájlja
+sincs az `allowed_paths`-on — mérve grep-pel: sem a `PostOut`
+(`schemas/post.py`), sem a `FeedPostItem` (`schemas/feed.py`), sem az őket
+kitöltő `routers/posts.py::_row_to_out` / `routers/feed.py`, sem egy
+reaction-router fájl, sem a `backend/app/main.py` router-regisztráció nincs a
+listán. A pre-flight megmérte, hogy a §6 A1–A7 egyike SEM igényli ezt — mind
+a `reaction_service` szolgáltatás-rétegen vagy a Flutter controlleren
+mérhető —, ezért a §3 két cellája ÚGY teljesült, hogy a HTTP-router és a
+wire-projekció egy KÉSŐBBI kör hatásköre marad (a Kör 13/14 pár precedense:
+tisztán backend feed-query, majd tisztán UI valós HTTP-bekötés nélkül). A
+Flutter oldalon a `CommunityPostRepository.setReaction()` kontraktus és a
+`CommunityPost.reactionCount`/`myReaction` mezők MÁR léteztek Kör 5 óta
+(ADR 0399 §1) — a `domain/**` tilos zóna emiatt nem korlátozott semmit, amire
+a körnek ténylegesen szüksége volt.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5 (`--effort
+high`). 1 javító kör** (`docs/reviews/e09-r15-review.md`): review CHANGES
+REQUIRED elsőre, **1 MINOR** — az A5 property-teszt (`count` sosem negatív,
+200 random op) `count` változója csak az `op == 2` ágon kapott értéket, de az
+`assert count >= 0` feltétel nélkül futott minden iterációban; `seed=42`
+(dev-alapértelmezés) mellett véletlenül biztonságos (az első húzott `op`
+történetesen 2), de más seeddel (mérve: 1, 2, 12345, 999999 mind) az ELSŐ
+iteráció azonnali `UnboundLocalError`-t dobott volna — a teszt saját
+docstringjének "CI can monkeypatch seed" állítását megcáfolva. A mai
+`backend-ci.yml`-ben nincs `PROPERTY_SEED` override, tehát ez a mai gate-en
+nem volt piros, de egy jövőbeli randomizált backend property-gate alatt
+azonnal elhalt volna. A javító kör a `count = _count()`-ot minden iterációban
+feltétel nélkül futtatóra javította — a review saját kézzel, izolált
+`/tmp`-klónban öt különböző `PROPERTY_SEED` értékkel (1, 2, 12345, 999999, 42)
+újraellenőrizte. **1 NOTE külön mellékfelfedezés**: a javító kör utáni
+re-verifikáció során egy PRE-EXISTING, körön kívüli flaky teszt bukkant fel
+(`test_follow_service.py::test_swap_unique_constraint_breaks_a2`, Kör 7,
+`threading`-alapú valódi-sértés próba) — izoláltan és két következő
+teljes-suite futtatásnál zöld volt, a fájl nincs az `allowed_paths`-on és a
+kör diffje nem érinti; dokumentálva egy jövőbeli Kör 7-hez nyúló forduló
+számára. A Claude a javítást friss, izolált `/tmp`-klónban ÚJRA futtatott
+gate-tel (mind a kilenc lépés, a backend pytest a TELJES suite-ot jelentve)
+és saját kézzel futtatott scope-audittal fogadta el. Exact `b4e9c879`: Full
+Gate [32639185526](https://github.com/wolfcasaba/strumsight/actions/runs/32639185526)
++ Router CI [32639211541](https://github.com/wolfcasaba/strumsight/actions/runs/32639211541)
+mindkettő success. Részletesen `docs/reviews/e09-r15-review.md`.
+
 ## ✅ E09-R14 KÉSZ — Feed UI, cache és tudatos használat — PR [#423](https://github.com/wolfcasaba/strumsight/pull/423), squash `ff39ee0c` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENNEGYEDIK KÖRE KÉSZ.** Az első UI-fogyasztója
