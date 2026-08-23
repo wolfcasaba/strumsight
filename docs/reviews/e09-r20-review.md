@@ -5,8 +5,8 @@
 - **Review HEAD:** `24f40314` (implementer saját commitjai, alap `4e611d1e` — a pre-flight
   ADR 0414 + brief-revízió commitja)
 - **ADR:** [0414](../adr/0414-notification-inbox-and-push-abstraction.md) · **Risk:** high
-- **Verdikt:** **CHANGES REQUESTED** — 1 MAJOR (a dedikált security review zárta ki, §7),
-  0 BLOCKER, 1 MINOR follow-up (nem blokkoló, §5)
+- **Verdikt:** **APPROVED** (javító kör után, §9) — 0 BLOCKER, 0 MAJOR,
+  1 MINOR follow-up (nem blokkoló, §5)
 
 ## 1. Jelzés + handoff
 
@@ -157,3 +157,52 @@ diffet, különben follow-up. A javító kör leletlistája:
    sorok jelenlétében korai lapozás-megszakadást okozhat. Javasolt irány:
    a Kör 8 `list_block_pairs_for_viewer` előzetes lekérdezése és
    WHERE-klauzulába építése (egyszerre oldja a lapozást és az N+1-et).
+
+## 9. Javító kör után — MAJOR-1 lezárva, MINOR-1 nyitva marad (follow-up)
+
+**Javító commit:** `37ccae80` (a `24f40314` implementáció + a review-jelentés
+commitja, `5f883259`, UTÁN). Saját kézzel, izolált klónban (közvetlenül
+GitHubról, `/tmp/review-e09-r20-fix`) újra-ellenőrizve.
+
+**MAJOR-1 zárás.** A `get_unread_count` (`notification_service.py`) mostantól
+`policies.query_filters.list_block_pairs_for_viewer`-rel materializálja a
+recipient block-halmazát (EGY lekérdezés, nem N+1), és SQL `NOT IN`
+predikátummal zárja ki a blockolt actorú sorokat — a `actor_profile_id IS
+NULL` (system event) ág változatlanul látható marad. Ez ERŐSEBB megoldás,
+mint a `list_inbox` soronkénti `is_blocked_pair`-hívása (a §5 MINOR-1 N+1
+felét egyúttal megoldja a count-útvonalon). Új teszt-cella
+(`test_a4_blocked_actor_notification_excluded_from_unread_count`):
+zöld ág — 3 esemény (1 blockolt actor_a, 1 actor_b, 1 system) mellett
+`unread_count == visible_unread == 2`; **valódi-sértés próba** —
+`monkeypatch.setattr(notification_service, "list_block_pairs_for_viewer",
+lambda *_,**__: set())` (a pre-fix viselkedést szimulálva) → `broken_count
+== 3` (a blockolt sor visszaszivárog) → a `monkeypatch` fixture automatikusan
+visszaállítja a patchet a teszt végén.
+
+**Gate-újrafuttatás (saját kézzel, izolált klón, `4e611d1e..37ccae80`):**
+
+```
+tools/round-gate.sh test/features/community/presentation/community_notifications_test.dart test/ui/ui_inventory_test.dart
+```
+
+MINDEN GATE ZÖLD (format/analyze/2 Flutter-teszt/architecture/secrets/l10n/
+backend ruff format+check/backend pytest — 592 backend teszt, 0 hiba).
+
+**Scope-audit (`4e611d1e..37ccae80`):**
+
+```
+Legacy scope audit OK (4e611d1e722d..37ccae80724c, 16 changed path(s), 2 generated/ignored)
+```
+
+A 2 generated/ignored a két review-jelentés (`docs/reviews/e09-r20-{review,security}.md`)
+— a saját kötelező review-artefaktum, a §3-ban leírt állandó mentesség, nem
+sértés. A 16 fájl = a §3-ban mért 14 eredeti + a javító commit 2 érintett
+fájlja (`notification_service.py`, `test_notification_service.py`) — a
+javító commit MAGA nem hozott létre új, listán kívüli fájlt.
+
+**MINOR-1 státusza:** NYITVA marad (follow-up, dokumentálva §5-ben) — a
+javító kör nem javította (nem volt kötelező), és nem hizlalta a diffet vele.
+Egy jövőbeli kör dolga, amikor a `list_inbox` élő HTTP mögé kerül.
+
+**Végső verdikt: APPROVED.** 0 BLOCKER, 0 MAJOR. Merge engedélyezett a zöld
+CI-kapu után.
