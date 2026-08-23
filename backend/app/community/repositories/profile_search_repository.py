@@ -212,13 +212,33 @@ def search_profiles(
     has_more = len(rows) > limit
     rows = rows[:limit]
 
+    # Raw SQL on a ``Uuid`` column returns the CHAR(32) hex form
+    # on SQLite. Wrap each value in a ``UUID`` so the block-filter
+    # helper (``query_filters.filter_public_ids_against_viewer_blocks``)
+    # gets the typed input its ORM-side ``public_id.in_(...)``
+    # bind expects. The wire format on the HTTP layer is still the
+    # ``str(uuid)`` form — this conversion is local to the
+    # repository.
+    candidate_public_ids: list[uuid.UUID] = []
+    for row in rows:
+        raw = row[0]
+        if isinstance(raw, uuid.UUID):
+            candidate_public_ids.append(raw)
+        elif isinstance(raw, str):
+            candidate_public_ids.append(uuid.UUID(hex=raw))
+        else:
+            # SQLAlchemy returns whatever the driver gives — the
+            # ``Uuid`` column on PostgreSQL round-trips to a real
+            # UUID; SQLite stores CHAR(32). Both branches land
+            # here.
+            candidate_public_ids.append(uuid.UUID(str(raw)))
+
     # §D2 — block-filter via the shared helper. A second,
     # search-specific block predicate is forbidden (the §5.2
     # invariant against drift). The helper is one call against
     # the viewer's block set + a single JOIN back to the profile
     # public_ids — the round-trip cost is bounded by ``limit``,
     # not by the full user table.
-    candidate_public_ids = [row[0] for row in rows]
     filtered_public_ids = filter_public_ids_against_viewer_blocks(
         db,
         viewer_profile_id=viewer_profile_id,
