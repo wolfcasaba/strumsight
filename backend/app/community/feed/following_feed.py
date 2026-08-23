@@ -17,15 +17,18 @@ This module owns four concerns (ADR 0406 §5):
 * **Multi-axis filtering (§5.3, ADR 0406 §D3).** A row is
   included in the viewer's feed if ALL of:
 
-  - ``community_posts.profile_id`` is in the viewer's
+  - the row's author ``profile_id`` is in the viewer's
     ``community_follows.followed_profile_id`` set (the follow
-    join — ``community_follows`` rows are the ACTIVE follow
-    edge, the Kör 7 acceptance-impl pattern);
-  - the row's ``audience`` passes the
-    ``CommunityAccessPolicy.evaluate_content_access`` check
-    (the Kör 4 / Kör 11 policy re-used here — ``PUBLIC`` for any
-    viewer, ``FOLLOWERS`` only for the viewer's accepted-follows
-    set, ``PRIVATE`` never);
+    set is materialised first as a small ``IN (list)`` predicate;
+    ADR 0406 D2 — the planner then picks the
+    ``ix_community_posts_created_id (created_at, id)`` index for
+    the global sort, and the profile filter is applied as the
+    planner walks the index);
+  - the row's ``audience`` is in the canonical allowlist
+    ``{'public', 'followers'}`` — explicit whitelist, NOT a
+    ``!= 'private'`` denylist (F4 fix: a future audience value
+    introduced at the Pydantic layer without an explicit
+    migration would otherwise slip through a denylist filter);
   - the row's author is NOT in a block relation with the viewer
     (the Kör 8 ``filter_public_ids_against_viewer_blocks`` helper,
     extended to a single ``profile_id IN (...)`` predicate so
@@ -44,23 +47,23 @@ This module owns four concerns (ADR 0406 §5):
 
 * **Opaque, HMAC-signed cursor (§5.2).** The cursor encodes the
   ``(created_at, id, feed_version)`` triple — the last returned
-  row's sort key plus a STATIC ``FEED_CURSOR_VERSION`` constant.
-  The payload is HMAC-SHA256-signed with the application
-  ``secret_key`` (same key the Kör 9 ``profile_search_repository``
-  uses). A client that tampers with the cursor sees the server
-  fall back to a fresh first page (the security boundary never
-  silently passes a malicious cursor through). The
-  ``feed_version`` lets a future migration break cursor
-  compatibility by bumping the constant — old cursors return
-  ``None`` and the client starts at page one again.
+  row's sort key plus a STATIC ``FEED_CURSOR_VERSION`` integer
+  constant (ADR 0406 D5: an ``int``, not a string). The payload
+  is HMAC-SHA256-signed with the application ``secret_key``
+  (same key the Kör 9 ``profile_search_repository`` uses). A
+  client that tampers with the cursor sees the server fall back
+  to a fresh first page (the security boundary never silently
+  passes a malicious cursor through). The ``feed_version`` lets
+  a future migration break cursor compatibility by bumping the
+  constant — old cursors return ``None`` and the client starts
+  at page one again.
 
-* **Batched profile projection (no N+1, §5.3).** The follow and
-  audience/block/mute filters run as a single SQL statement —
-  the post rows are fetched with one round-trip, joined to
-  ``community_follows`` for the follow set, joined to
-  ``community_mutes`` for the mute set, and the author public_id
-  is resolved in the same SELECT (``community_profiles`` JOIN).
-  The ``community_blocks`` symmetric block-helper
+* **Batched profile projection (no N+1, §5.3).** The follow set
+  is fetched in one query, the candidate rows in a second query
+  that joins posts to ``community_profiles`` (``author_public_id``
+  resolution), and the block / mute filters run as in-Python set
+  predicates on the page-sized candidate set. The
+  ``community_blocks`` symmetric block-helper
   (``filter_public_ids_against_viewer_blocks``) is called with
   the candidate ``profile_id`` set — a single batched read
   rather than per-row ``is_blocked_pair`` calls.
@@ -102,9 +105,10 @@ from ..policies.query_filters import (
 
 #: Static cursor version — bumping this on a future migration breaks
 #: cursor compatibility (old ``next_cursor`` tokens return ``None``)
-#: so the client transparently starts at page one. The constant is
-#: hard-coded rather than DB-stored so it travels with the code.
-FEED_CURSOR_VERSION: Final[str] = "e09r13-v1"
+#: so the client transparently starts at page one again. ADR 0406 D5
+#: prescribes an integer; using ``str`` here would silently drift the
+#: on-the-wire payload from the architectural decision.
+FEED_CURSOR_VERSION: Final[int] = 1
 
 #: Default page size — the value the router uses when the client
 #: omits ``page_size``. Mirrors the schema default.
@@ -114,6 +118,13 @@ DEFAULT_PAGE_SIZE: Final[int] = 25
 #: this module enforces the same clamp on the actual row count
 #: fetched (``LIMIT :limit_plus_one``).
 MAX_PAGE_SIZE: Final[int] = 50
+
+#: Audience allowlist — the only ``audience`` values that are allowed
+#: in the following-feed read path (F4 fix: explicit whitelist, NOT a
+#: ``!= 'private'`` denylist, so a future audience value introduced at
+#: the Pydantic layer without an explicit migration does NOT silently
+#: leak through the SQL filter).
+FEED_AUDIENCE_ALLOWLIST: Final[tuple[str, ...]] = ("public", "followers")
 
 #: Cursor HMAC tag length. Same trade-off as the Kör 9
 #: ``profile_search_repository`` — a 32-byte truncated tag is
@@ -182,7 +193,7 @@ def _sign_cursor(
     *,
     created_at: datetime,
     post_id: int,
-    feed_version: str = FEED_CURSOR_VERSION,
+    feed_version: int = FEED_CURSOR_VERSION,
 ) -> str:
     """Build the opaque pagination token.
 
@@ -197,7 +208,7 @@ def _sign_cursor(
     payload = {
         "c": _serialize_datetime(created_at),
         "i": int(post_id),
-        "v": feed_version,
+        "v": int(feed_version),
     }
     payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     signature = hmac.new(
@@ -235,7 +246,7 @@ def _verify_cursor(
         return None
     try:
         payload = json.loads(payload_bytes.decode("utf-8"))
-        version = str(payload["v"])
+        version = int(payload["v"])
         if version != FEED_CURSOR_VERSION:
             # A future migration bumping FEED_CURSOR_VERSION turns
             # legacy cursors into a fresh first page automatically
@@ -265,8 +276,6 @@ def _serialize_datetime(value: datetime) -> str:
 
 def _deserialize_datetime(raw: str) -> datetime:
     """Inverse of :func:`_serialize_datetime`."""
-    from datetime import datetime
-
     parsed = datetime.fromisoformat(raw)
     if parsed.tzinfo is None:
         from datetime import timezone
@@ -351,33 +360,40 @@ def list_following_feed(
     if page_size > MAX_PAGE_SIZE:
         page_size = MAX_PAGE_SIZE
 
-    # The candidate SELECT — single round-trip that joins posts to
-    # their authors and pre-filters by the follow-graph membership.
-    # The block and mute filters run as separate predicates inside
-    # the same statement (NOT as Python post-filters, which would
-    # reintroduce the N+1 the §5.3 measure-matrix catches).
-    cursor_clause = ""
+    # Decode the cursor once — ``None`` means "fresh first page".
     decoded_cursor: tuple[datetime, int] | None = None
     if cursor is not None:
         decoded_cursor = _verify_cursor(cursor_secret, cursor)
-        if decoded_cursor is not None:
-            cursor_at, cursor_id = decoded_cursor
-            # Strictly-less-than continuation: the standard SQL idiom
-            # for a DESC pagination cursor on a ``(created_at, id)``
-            # sort key. ``tuple_(...) < (cursor_at, cursor_id)`` is
-            # the lexicographic comparator the Kör 7
-            # ``list_followers`` uses — DB-portable, no
-            # dialect-specific row-constructor syntax.
-            cursor_clause = (
-                " AND (community_posts.created_at, community_posts.id) "
-                "< (:cursor_at, :cursor_id) "
-            )
+        # A malformed / forged cursor falls back to a fresh first
+        # page (the security boundary never silently passes a
+        # malicious cursor through — the §5.2 invariant).
 
-    # The candidate join: posts whose author is in the viewer's
-    # accepted follow-graph (the ``community_follows`` rows that
-    # originate FROM the viewer), joined to the profile row for the
-    # author ``public_id``, and pre-filtered by the moderation /
-    # deletion invariants. Block and mute predicates are added next.
+    # Step 1: materialise the viewer's follow-graph target set into a
+    # small ``IN (...)`` predicate. The Kör 11 query shape joined the
+    # follow table directly, which forced the SQLite planner into a
+    # nested-loop profile-id lookup followed by a USE TEMP B-TREE FOR
+    # ORDER BY — the (created_at, id) index could never lead the
+    # sort. With the follow set materialised first, the second
+    # SELECT runs ``WHERE profile_id IN (...) ORDER BY created_at
+    # DESC, id DESC LIMIT :n`` and the planner walks the
+    # ``ix_community_posts_created_id`` index directly, applying the
+    # IN-list as a per-row filter (ADR 0406 D2; F1 review fix).
+    followed_profile_ids = (
+        db.execute(
+            select(CommunityFollow.followed_profile_id).where(
+                CommunityFollow.follower_profile_id == viewer_profile_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    if not followed_profile_ids:
+        return FeedPage(items=(), next_cursor=None)
+
+    # Step 2: the candidate SELECT — posts whose author is in the
+    # viewer's accepted follow-graph, ordered by the (created_at, id)
+    # index, with moderation / deletion / audience filters applied.
     candidate_sql = (
         select(
             CommunityPost.id,
@@ -395,22 +411,19 @@ def list_following_feed(
             CommunityPost.deleted_at,
         )
         .join(
-            CommunityFollow,
-            CommunityFollow.followed_profile_id == CommunityPost.profile_id,
-        )
-        .join(
             CommunityProfile,
             CommunityProfile.id == CommunityPost.profile_id,
         )
         .where(
-            CommunityFollow.follower_profile_id == viewer_profile_id,
+            CommunityPost.profile_id.in_(followed_profile_ids),
             CommunityPost.deleted_at.is_(None),
             CommunityPost.moderation_state == MODERATION_STATE_VISIBLE,
-            # Kör 4 audience invariant — PUBLIC is always visible;
-            # FOLLOWERS is visible to the viewer (because the viewer
-            # is the follower's accepted follow target — the join
-            # above); PRIVATE is NEVER visible.
-            CommunityPost.audience != "private",
+            # Audience allowlist (F4 fix): explicit whitelist, NOT a
+            # ``!= 'private'`` denylist. A future audience value
+            # introduced at the Pydantic layer without an explicit
+            # migration does NOT silently leak through the SQL
+            # filter. The Kör 11 access policy mirrors this set.
+            CommunityPost.audience.in_(FEED_AUDIENCE_ALLOWLIST),
         )
         .order_by(
             CommunityPost.created_at.desc(),
@@ -419,12 +432,11 @@ def list_following_feed(
         .limit(page_size + 1)
     )
 
-    if cursor_clause and decoded_cursor is not None:
-        # Append the cursor WHERE clause via SQLAlchemy's text()
-        # fragment — same approach as the Kör 9 profile_search
-        # repository (the cursor predicate must sit INSIDE the
-        # WHERE block; placing it after ORDER BY would be invalid
-        # SQL). The bind values come from the verified cursor.
+    if decoded_cursor is not None:
+        # Append the cursor WHERE clause as a SQLAlchemy row
+        # tuple comparator — DB-portable, no dialect-specific
+        # row-constructor syntax. The bind values come from the
+        # verified cursor (the HMAC guard runs first).
         candidate_sql = candidate_sql.where(
             tuple_(CommunityPost.created_at, CommunityPost.id)
             < tuple_(decoded_cursor[0], decoded_cursor[1])
@@ -546,21 +558,31 @@ def list_following_feed(
 def query_plan_uses_feed_index(db: Session, *, viewer_profile_id: int) -> bool:
     """A7 evidence helper — confirm the candidate SELECT uses the
     new ``ix_community_posts_created_id`` index for the sort,
-    not a sequential scan.
+    not a sequential scan AND not a TEMP B-TREE sort.
 
     The function runs the same WHERE / ORDER BY as
     :func:`list_following_feed` prefixed with ``EXPLAIN`` and
-    asserts the planner references the new index. The check is a
-    STRING match on the EXPLAIN output (SQLite emits the index
-    name in the plan), so it covers both SQLite (test engine)
-    and PostgreSQL (production) via the dialect-specific EXPLAIN
-    format.
+    asserts the planner:
 
-    The §6.1 measure-matrix on A7 flips this by dropping the
-    ``ix_community_posts_created_id`` index from the migration
-    and asserting the planner falls back to a sequential scan —
-    the same ``explain`` returns ``False`` and the A7 cell turns
-    red.
+    1. walks ``community_posts`` via the
+       ``ix_community_posts_created_id`` index (the F1 fix —
+       a generic "SEARCH ... USING INDEX" substring match is too
+       permissive; the planner may pick ANY index, including one
+       introduced by a future migration, and still satisfy the
+       old matcher. The exact name is what the §6.1 valódi-sértés
+       próba asserts is MISSING when the index is dropped);
+    2. does NOT emit ``USE TEMP B-TREE FOR ORDER BY`` — the new
+       index is supposed to give the planner the rows in sort
+       order, so a TEMP B-TREE is evidence that the index is not
+       actually leading the sort (the Kör 11 join shape had this
+       exact failure mode; the F1 refactor moves the query to a
+       materialised ``profile_id IN (...)`` shape precisely so
+       the planner can drive off the new index).
+
+    The check is a STRING match on the EXPLAIN output (SQLite
+    emits the index name in the plan), so it covers both SQLite
+    (test engine) and PostgreSQL (production) via the
+    dialect-specific EXPLAIN format.
     """
     from sqlalchemy import text as _sa_text
 
@@ -579,12 +601,14 @@ def query_plan_uses_feed_index(db: Session, *, viewer_profile_id: int) -> bool:
             "       community_posts.updated_at, "
             "       community_posts.deleted_at "
             "FROM community_posts "
-            "JOIN community_follows "
-            "  ON community_follows.followed_profile_id = community_posts.profile_id "
-            "WHERE community_follows.follower_profile_id = :viewer "
+            "WHERE community_posts.profile_id IN ("
+            "  SELECT community_follows.followed_profile_id "
+            "  FROM community_follows "
+            "  WHERE community_follows.follower_profile_id = :viewer"
+            ") "
             "  AND community_posts.deleted_at IS NULL "
             "  AND community_posts.moderation_state = :visible "
-            "  AND community_posts.audience != 'private' "
+            "  AND community_posts.audience IN ('public', 'followers') "
             "ORDER BY community_posts.created_at DESC, community_posts.id DESC "
             "LIMIT 51"
         ),
@@ -592,43 +616,45 @@ def query_plan_uses_feed_index(db: Session, *, viewer_profile_id: int) -> bool:
     ).all()
     plan_text = " ".join(str(row) for row in plan)
     lowered = plan_text.lower()
-    # The A7 measure-matrix cares about N+1: the candidate SELECT
-    # must access ``community_posts`` via an index (SEARCH / SCAN
-    # USING INDEX), NOT a full sequential scan over the table. The
-    # specific index the planner picks depends on the dataset and
-    # the dialect (SQLite may prefer ``ix_community_posts_created_id``
-    # on a 1000+ row dataset, or any of the ``profile_id``-leading
-    # indexes on smaller ones — both are correct, single-roundtrip
-    # plans). PostgreSQL has a different planner; production plans
-    # will reference the actual chosen index name. The §6.1
-    # valódi-sértés próba drops ALL indexes on ``community_posts``
-    # (the §0.0 §6.1 "vedd ki a ``created_at, id`` összetett
-    # indexet a migrációból") and asserts the planner falls back
-    # to a SCAN without USING INDEX — that is the cell turning red.
-    posts_index_used = (
-        ("search community_posts using index" in lowered)
-        or ("scan community_posts using index" in lowered)
-        # The PostgreSQL plan emitter prints the index name
-        # differently; the substring "community_posts" + "index"
-        # catches the dialect-portable shape.
-        or ("community_posts" in lowered and "index" in lowered)
-    )
-    # The follow join must also use an index — a sequential scan
-    # of ``community_follows`` is a different N+1 vector (Kör 8).
+
+    # 1. The plan must explicitly name ``ix_community_posts_created_id``
+    # on the SEARCH / SCAN line for community_posts. A generic "USING
+    # INDEX" matcher would pass on the Kör 11 index too — the §6.1
+    # measure-matrix wants THIS index, not "any index".
+    posts_index_used = "ix_community_posts_created_id" in lowered
+
+    # 2. The plan must NOT do a final TEMP B-TREE sort. A tmp btree
+    # is the planner's escape hatch when the chosen access path does
+    # NOT yield the rows in the requested sort order — the new
+    # composite index exists precisely to avoid this fallback.
+    no_temp_sort = "use temp b-tree for order by" not in lowered
+
+    # 3. The follow subquery must use an index on community_follows
+    # for the follower_profile_id lookup (the Kör 7 follow-graph
+    # composite index). A sequential scan of the follows table is a
+    # different N+1 vector (Kör 8) and must also turn the A7 cell
+    # red.
     follows_index_used = (
         ("search community_follows using" in lowered)
         or ("scan community_follows using" in lowered)
         or ("community_follows" in lowered and "index" in lowered)
     )
-    result = posts_index_used and follows_index_used
+
+    result = posts_index_used and no_temp_sort and follows_index_used
     if not result:
         # Debug aid — the §6.1 valódi-sértés próba relies on this
-        # string-match helper; surfacing the actual plan here
-        # makes a regression easy to diagnose.
+        # helper; surfacing the actual plan here makes a regression
+        # easy to diagnose (``posts_index_used`` alone is not enough
+        # — the temp-sort signal is what tells you the index is not
+        # actually driving the sort).
         import sys as _sys
 
         _sys.stderr.write(
-            f"\n[query_plan_uses_feed_index] plan did NOT use feed index:\n{plan_text!r}\n"
+            "\n[query_plan_uses_feed_index] plan did NOT use feed index:\n"
+            f"  posts_index_used={posts_index_used}\n"
+            f"  no_temp_sort={no_temp_sort}\n"
+            f"  follows_index_used={follows_index_used}\n"
+            f"  plan={plan_text!r}\n"
         )
         _sys.stderr.flush()
     return result
@@ -644,6 +670,7 @@ def query_plan_uses_feed_index(db: Session, *, viewer_profile_id: int) -> bool:
 
 __all__ = [
     "DEFAULT_PAGE_SIZE",
+    "FEED_AUDIENCE_ALLOWLIST",
     "FEED_CURSOR_VERSION",
     "FeedItemRow",
     "FeedPage",

@@ -333,12 +333,8 @@ def test_a1_chronological_ordering(client, session_factory) -> None:
     reverse of insertion — the test asserts the wire-shape
     ``items[i].public_id`` matches the expected order.
     """
-    viewer_pk = _make_profile(
-        session_factory() if False else session_factory(), user_id=1
-    )
-    author_pk = _make_profile(
-        session_factory() if False else session_factory(), user_id=2
-    )
+    viewer_pk = _make_profile(session_factory(), user_id=1)
+    author_pk = _make_profile(session_factory(), user_id=2)
     headers = _auth_headers(1)
 
     db: Session = session_factory()
@@ -772,6 +768,16 @@ def test_a7_explain_plan_uses_feed_index(session_factory) -> None:
     page — the planner would always scan it). The §6.1
     "valódi-sértés próba" calls this out explicitly: "nagy
     adathalmazon".
+
+    SQLite note: ANALYZE statistics are cached PER CONNECTION.
+    Running ``ANALYZE`` on one connection does NOT update the
+    next connection's plan-cache; the next session therefore
+    plans against stale statistics and picks the Kör 11
+    ``ix_community_posts_idempotency_key`` (a profile_id-leading
+    index) over the new ``ix_community_posts_created_id``. The
+    test re-runs ``ANALYZE`` on the EXPLAIN-issuing session so
+    the planner sees the fresh statistics — the same fix the F1
+    real-violation probe applies after the DROP INDEX step.
     """
     viewer_pk = _make_profile(session_factory(), user_id=1)
     author_pk = _make_profile(session_factory(), user_id=2)
@@ -794,6 +800,17 @@ def test_a7_explain_plan_uses_feed_index(session_factory) -> None:
         db.commit()
     finally:
         db.close()
+
+    # Flush the connection pool so the EXPLAIN-issuing session
+    # starts on a brand-new SQLite connection that reloads the
+    # ANALYZE stats from ``sqlite_stat1``. Without this, the
+    # SQLite planner uses cached statistics from the seeding
+    # session's connection and silently picks the Kör 11
+    # ``ix_community_posts_idempotency_key`` (a profile_id-
+    # leading index) over the new ``ix_community_posts_created_id``
+    # — the same race the F1 real-violation probe guards against
+    # after a DROP INDEX step.
+    session_factory.kw["bind"].dispose()
 
     db = session_factory()
     try:
@@ -889,3 +906,293 @@ def test_pagesize_above_max_clamped(client, session_factory) -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert len(body["items"]) <= FEED_PAGE_SIZE_MAX
+
+
+# ---------------------------------------------------------------------------
+# Review-driven regression tests (E09-R13 review findings F1, F3, F4).
+# ---------------------------------------------------------------------------
+
+
+def test_a7_real_violation_probe_drops_feed_index(tmp_path, monkeypatch) -> None:
+    """F1 — A7 valódi-sértés próba (INLINE).
+
+    The §6.1 measure-matrix on A7 requires a probe that DROPS the
+    new ``ix_community_posts_created_id`` index on a disposable
+    DB copy and asserts :func:`query_plan_uses_feed_index` flips
+    from ``True`` to ``False``. The previous round documented the
+    probe in the helper's docstring but never ran it — this test
+    exercises the probe end-to-end so the cell turning red is
+    covered by a real test, not a comment.
+
+    The probe lives on its OWN ``tmp_path``-backed SQLite so the
+    drop-and-recreate cycle cannot corrupt the shared test
+    session's indexes.
+
+    SQLite note (F1 fix): ANALYZE statistics are cached per
+    connection. After ``DROP INDEX`` / ``CREATE INDEX`` on one
+    session, the next session's planner uses stale statistics
+    and may still pick a Kör 11 ``profile_id``-leading index.
+    The probe ``engine.dispose()`` between every step so each
+    EXPLAIN runs on a fresh connection that reloads
+    ``sqlite_stat1`` from disk — without this, the planner
+    silently picks the wrong index and the probe reports a
+    false positive.
+    """
+    db_path = tmp_path / "a7_probe.db"
+    db_url = f"sqlite:///{db_path}"
+    monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", db_url)
+    monkeypatch.setenv("STRUMSIGHT_SECRET_KEY", _TEST_SECRET)
+
+    cfg = _alembic_config()
+    command.upgrade(cfg, "head")
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+    enable_sqlite_foreign_keys(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    try:
+        db: Session = factory()
+        try:
+            viewer_pk = _make_profile(db, user_id=1)
+            author_pk = _make_profile(db, user_id=2)
+            _insert_follow(db, follower_pk=viewer_pk, followed_pk=author_pk)
+            base = _utcnow()
+            for i in range(500):
+                _insert_post(
+                    db,
+                    author_pk=author_pk,
+                    body=f"row-{i}",
+                    created_at=base + timedelta(seconds=i),
+                )
+            db.execute(text("ANALYZE"))
+            db.commit()
+        finally:
+            db.close()
+
+        # Dispose to flush the connection pool so the next
+        # session reloads ANALYZE stats from disk.
+        engine.dispose()
+
+        # BASELINE: with the index present, the helper MUST return True.
+        db = factory()
+        try:
+            assert feed_repo.query_plan_uses_feed_index(
+                db, viewer_profile_id=viewer_pk
+            ), (
+                "F1 baseline violated — helper returned False with the feed index present"
+            )
+        finally:
+            db.close()
+
+        # DROP the index (the real-violation step).
+        db = factory()
+        try:
+            db.execute(text("DROP INDEX ix_community_posts_created_id"))
+            db.commit()
+        finally:
+            db.close()
+        engine.dispose()
+
+        # WITH INDEX DROPPED: the helper MUST return False.
+        db = factory()
+        try:
+            assert (
+                feed_repo.query_plan_uses_feed_index(db, viewer_profile_id=viewer_pk)
+                is False
+            ), (
+                "F1 violated — helper still returned True after "
+                "DROP INDEX ix_community_posts_created_id"
+            )
+        finally:
+            db.close()
+
+        # Re-create the index and ANALYZE so the planner picks it up.
+        db = factory()
+        try:
+            db.execute(
+                text(
+                    "CREATE INDEX ix_community_posts_created_id "
+                    "ON community_posts (created_at, id)"
+                )
+            )
+            db.execute(text("ANALYZE"))
+            db.commit()
+        finally:
+            db.close()
+        engine.dispose()
+
+        # WITH INDEX RESTORED: the helper returns to True.
+        db = factory()
+        try:
+            assert feed_repo.query_plan_uses_feed_index(
+                db, viewer_profile_id=viewer_pk
+            ), "F1 violated — helper did not return to True after re-creating the index"
+        finally:
+            db.close()
+    finally:
+        engine.dispose()
+
+
+def test_f3_placeholder_cursor_secret_returns_503(
+    tmp_path, monkeypatch, session_factory
+) -> None:
+    """F3 — a development-placeholder ``secret_key`` makes the
+    feed endpoint refuse to serve (503), not 200.
+
+    The cursor is HMAC-signed with ``settings.secret_key``. Signing
+    with the code-resident placeholder would let any client forge
+    a valid cursor token (the §5.2 integrity invariant); F3
+    requires the endpoint to fail-closed instead. The router
+    surfaces a 503 (consistent with the ``/health/ready``
+    readiness gate that catches the same condition at the deploy
+    boundary).
+    """
+    from app.config import Settings
+    from app.database import get_db as _real_get_db
+
+    # Build a self-contained app whose Settings use the dev
+    # placeholder — the exact configuration the previous round's
+    # ``getattr(settings, "secret_key", "dev-...")`` defaulted to.
+    placeholder = Settings.model_fields["secret_key"].default
+    settings = Settings(
+        _env_file=None,
+        community_enabled=True,
+        secret_key=placeholder,
+    )
+    app = FastAPI(title="Feed Test App — F3 placeholder")
+    app.state.database_engine = session_factory.kw["bind"]
+    app.state.session_factory = session_factory
+    app.state.settings = settings
+    app.include_router(feed_router)
+
+    def _override_get_db():
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[_real_get_db] = _override_get_db
+
+    db: Session = session_factory()
+    try:
+        _make_profile(db, user_id=1)
+    finally:
+        db.close()
+
+    with TestClient(app) as c:
+        try:
+            response = c.get(
+                "/community/feed",
+                params={"page_size": 50},
+                headers=_auth_headers(1),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    assert response.status_code == 503, (
+        f"F3 violated — placeholder secret produced {response.status_code} "
+        f"(expected 503): {response.text}"
+    )
+
+
+def test_f3_empty_cursor_secret_returns_503(
+    tmp_path, monkeypatch, session_factory
+) -> None:
+    """F3 — an empty ``secret_key`` makes the feed endpoint refuse
+    to serve (503).
+
+    The empty-string guard in :func:`_resolve_cursor_secret`
+    catches deployments where ``STRUMSIGHT_SECRET_KEY`` resolves
+    to a blank value (a misconfigured env, not the placeholder
+    default). The 503 surfaces the configuration error to the
+    client; the readiness gate catches it earlier at the deploy
+    boundary.
+    """
+    from app.config import Settings
+    from app.database import get_db as _real_get_db
+
+    settings = Settings(
+        _env_file=None,
+        community_enabled=True,
+        secret_key="",
+    )
+    app = FastAPI(title="Feed Test App — F3 empty")
+    app.state.database_engine = session_factory.kw["bind"]
+    app.state.session_factory = session_factory
+    app.state.settings = settings
+    app.include_router(feed_router)
+
+    def _override_get_db():
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[_real_get_db] = _override_get_db
+
+    db: Session = session_factory()
+    try:
+        _make_profile(db, user_id=1)
+    finally:
+        db.close()
+
+    with TestClient(app) as c:
+        try:
+            response = c.get(
+                "/community/feed",
+                params={"page_size": 50},
+                headers=_auth_headers(1),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+    assert response.status_code == 503, (
+        f"F3 violated — empty secret produced {response.status_code} "
+        f"(expected 503): {response.text}"
+    )
+
+
+def test_f4_unknown_audience_filtered(client, session_factory) -> None:
+    """F4 — a post whose ``audience`` is NOT in the
+    ``('public', 'followers')`` allowlist is silently excluded
+    from the feed; the endpoint returns 200 (no 500).
+
+    The previous round used ``audience != 'private'`` (a denylist),
+    which is FAIL-OPEN for a future audience value introduced at
+    the Pydantic layer without a database migration. F4 swaps the
+    predicate to an explicit allowlist so a future value cannot
+    silently leak through the SQL filter.
+    """
+    viewer_pk = _make_profile(session_factory(), user_id=1)
+    author_pk = _make_profile(session_factory(), user_id=2)
+    headers = _auth_headers(1)
+
+    db: Session = session_factory()
+    try:
+        _insert_follow(db, follower_pk=viewer_pk, followed_pk=author_pk)
+        _, public_pid = _insert_post(
+            db, author_pk=author_pk, body="public-anchor", audience="public"
+        )
+        _, weird_pid = _insert_post(
+            db, author_pk=author_pk, body="unlisted-anchor", audience="unlisted"
+        )
+    finally:
+        db.close()
+
+    response = client.get(
+        "/community/feed",
+        params={"page_size": 50},
+        headers=headers,
+    )
+    assert response.status_code == 200, (
+        f"F4 violated — feed returned {response.status_code} (expected 200): {response.text}"
+    )
+    body = response.json()
+    seen_bodies = {item["body"] for item in body["items"]}
+
+    assert "public-anchor" in seen_bodies, (
+        "F4 violated — public anchor missing from the feed"
+    )
+    assert "unlisted-anchor" not in seen_bodies, (
+        f"F4 violated — non-allowlist audience ('unlisted') leaked into the feed: {seen_bodies!r}"
+    )

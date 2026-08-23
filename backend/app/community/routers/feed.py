@@ -32,6 +32,16 @@ ADDITIONALLY clamps any value that bypassed schema validation
 endpoint without going through Pydantic still cannot trigger an
 oversized query). The §6.1 measure-matrix on the page-size
 threshold ("alatta / rajta / fölötte") is enforced at both layers.
+
+**Cursor-secret fail-closed (F3 fix).** The application
+``secret_key`` is HMAC'd into every cursor; signing with a public,
+code-resident placeholder would let any client forge a valid
+cursor. The router refuses to serve the endpoint when
+``settings.secret_key`` is missing or resolves to the dev
+placeholder — a 503 surfaces the configuration error to the
+client (the underlying readiness gate already runs on every
+``/health/ready`` request, so this is consistent with the existing
+discipline).
 """
 
 from __future__ import annotations
@@ -41,6 +51,7 @@ from collections.abc import Iterator
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from ...config import Settings
 from ...deps import CurrentUser
 from ..feed.following_feed import (
     DEFAULT_PAGE_SIZE,
@@ -53,6 +64,13 @@ from ..feed.following_feed import (
 from ..schemas.feed import FEED_PAGE_SIZE_MAX, FeedPage, FeedPageQuery, FeedPostItem
 
 router = APIRouter(prefix="/community", tags=["community-feed"])
+
+#: The Settings class' ``secret_key`` default — duplicated here so
+#: the cursor-secret check does NOT import ``app.main`` (which would
+#: create a circular import via ``app.community.routers``). The
+#: string is also asserted identical to the one in
+#: ``app.main._DEV_SECRET`` at module load.
+_DEV_SECRET_KEY_DEFAULT = Settings.model_fields["secret_key"].default
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +112,33 @@ def _resolve_viewer_profile_pk(db: Session, user_id: int) -> int:
     if row is None:
         raise ValueError("caller has no community profile")
     return int(row[0])
+
+
+def _resolve_cursor_secret(settings: Settings) -> str:
+    """Return the application ``secret_key`` or refuse to serve.
+
+    The cursor is HMAC-signed with the live ``settings.secret_key``.
+    Signing with a missing or placeholder value would let any
+    client forge a valid cursor token (the §5.2 integrity
+    invariant); F3 requires the endpoint to fail-closed in that
+    state rather than silently signing with the code-resident
+    placeholder. A 503 surfaces the configuration error to the
+    client; the underlying ``/health/ready`` gate catches the
+    same condition at the deploy boundary, so this is consistent
+    with the existing readiness discipline.
+    """
+    secret = getattr(settings, "secret_key", None)
+    if not isinstance(secret, str) or not secret.strip():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="feed cursor signing key not configured",
+        )
+    if secret == _DEV_SECRET_KEY_DEFAULT:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="feed cursor signing key is the development placeholder",
+        )
+    return secret
 
 
 def _row_to_item(row: FeedItemRow) -> FeedPostItem:
@@ -147,17 +192,22 @@ def get_following_feed(
     onboarding flow is upstream — Kör 6 / ADR 0400).
 
     The page-size and cursor parameters are validated at the
-    Pydantic / FastAPI layer (``ge=1``, ``le=FEED_PAGE_SIZE_MAX``,
-    ``max_length=512`` on the cursor). The router ADDITIONALLY
-    clamps the ``page_size`` to :data:`MAX_PAGE_SIZE` as a
-    belt-and-braces guard against a client that bypassed schema
-    validation — the §0.0 D7 fail-safe.
+    Pydantic / FastAPI layer (``ge=1``, ``max_length=512`` on the
+    cursor). The router ADDITIONALLY clamps the ``page_size`` to
+    :data:`MAX_PAGE_SIZE` as a belt-and-braces guard against a
+    client that bypassed schema validation — the §0.0 D7
+    fail-safe.
 
-    A malformed or forged cursor returns 422 (the security
-    boundary never silently passes a malicious cursor through —
-    the repository falls back to a fresh first page INTERNALLY,
-    but a cursor that fails basic shape validation is a
-    client-side bug we surface to the client).
+    A malformed or forged cursor does NOT surface to the client
+    as a 422 (F5 fix — the previous docstring was wrong): the
+    repository's ``_verify_cursor`` returns ``None`` on any
+    malformed / forged / version-mismatch input, and the
+    repository then silently serves a fresh first page (the
+    §5.2 invariant — the security boundary never raises a
+    stack-trace-bearing 500 in response to a hostile cursor).
+    This endpoint's only error responses are 404 (caller has
+    no community profile) and 503 (cursor signing key is
+    missing or holds the development placeholder — F3 fix).
     """
     db_gen = _session_factory(request)
     db = next(db_gen)
@@ -168,9 +218,7 @@ def get_following_feed(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
         settings = request.app.state.settings
-        cursor_secret = getattr(
-            settings, "secret_key", "dev-insecure-change-me-in-production"
-        )
+        cursor_secret = _resolve_cursor_secret(settings)
 
         # Validate the inbound query via the Pydantic schema — the
         # ``extra='forbid'`` discipline prevents a client from
