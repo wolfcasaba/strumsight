@@ -68,6 +68,7 @@ import '../../core/logging/logger_provider.dart';
 import '../../core/storage/storage_providers.dart';
 import '../config/app_config.dart';
 import '../home_shell.dart';
+import 'adaptive_shell_routes.dart';
 import 'app_route.dart';
 import 'route_guards.dart';
 
@@ -195,15 +196,28 @@ final routerProvider = Provider<GoRouter>((ref) {
       .read(appConfigProvider)
       .flags
       .analysisComparisonEnabled;
+  final adaptiveShellEnabled = ref
+      .read(appConfigProvider)
+      .flags
+      .adaptiveShellEnabled;
 
   final router = GoRouter(
     initialLocation: AppRoutes.live,
     refreshListenable: refreshNotifier,
     onException: (_, _, router) => router.go(AppRoutes.live),
-    redirect: (_, state) => onboardingRedirect(
-      seen: ref.read(onboardingSeenProvider),
-      location: state.uri.path,
-    ),
+    redirect: (_, state) {
+      final onboarding = onboardingRedirect(
+        seen: ref.read(onboardingSeenProvider),
+        location: state.uri.path,
+      );
+      if (onboarding != null) return onboarding;
+      if (!adaptiveShellEnabled) return null;
+      // E13-R08 (ADR 0275 §3, D8) — preserve query + fragment; jumping to a
+      // string constant would silently drop them.
+      final target = legacyRedirects[state.uri.path];
+      if (target == null) return null;
+      return state.uri.replace(path: target).toString();
+    },
     routes: [
       GoRoute(
         path: AppRoutes.welcome,
@@ -246,7 +260,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.progress,
         builder: (_, _) => const ProgressScreen(),
       ),
-      GoRoute(path: AppRoutes.songs, builder: (_, _) => const SongListScreen()),
+      // E13-R08 (D6) — when the adaptive shell owns `/songs` as a
+      // destination root below, this legacy registration is excluded to
+      // avoid a silently-shadowed duplicate path.
+      if (!adaptiveShellEnabled)
+        GoRoute(
+          path: AppRoutes.songs,
+          builder: (_, _) => const SongListScreen(),
+        ),
       GoRoute(
         path: AppRoutes.setlists,
         builder: (_, _) => const SetlistListScreen(),
@@ -269,10 +290,14 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       if (practiceEnabled) ...[
-        GoRoute(
-          path: AppRoutes.practiceHub,
-          builder: (_, _) => const PracticeHubScreen(),
-        ),
+        // E13-R08 (D6) — excluded when the adaptive shell owns `/practice`
+        // as a destination root below, to avoid a silently-shadowed
+        // duplicate path.
+        if (!adaptiveShellEnabled)
+          GoRoute(
+            path: AppRoutes.practiceHub,
+            builder: (_, _) => const PracticeHubScreen(),
+          ),
         GoRoute(
           path: AppRoutes.practiceSetup,
           builder: (_, _) => const PracticeSetupScreen(),
@@ -327,6 +352,108 @@ final routerProvider = Provider<GoRouter>((ref) {
               SongResultScreen(result: state.extra! as SongTrainerResult),
         ),
       ],
+      // E13-R08 (ADR 0275) — the five-area adaptive shell, reachable only
+      // when `adaptiveShellEnabled` is on. Every destination and target
+      // sub-route renders an EXISTING screen as a legacy adapter (D6/D11);
+      // no new screens are introduced here. Declared AFTER the legacy
+      // `/practice` and `/songs` conditionals above so that, if either ever
+      // lost its `!adaptiveShellEnabled` guard, the legacy (unshelled, no
+      // primary navigation) registration would win the first-match — a
+      // silent regression the round-8 acceptance matrix (#11) must be able
+      // to observe, not one masked by declaration order.
+      if (adaptiveShellEnabled)
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) => AdaptiveHomeShell(
+            navigationShell: navigationShell,
+            location: state.uri.path,
+          ),
+          branches: [
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.today,
+                  builder: (_, _) => const LiveScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.practiceHub,
+                  builder: (_, _) => const PracticeHubScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.practiceLive,
+                  builder: (_, _) => const LiveScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.practiceAnalyze,
+                  builder: (_, _) => const AnalyzeScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.practiceLearn,
+                  builder: (_, _) => const LessonListScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.practiceTuner,
+                  builder: (_, _) => const TunerScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.practiceMetronome,
+                  builder: (_, _) => const MetronomeScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.practiceChords,
+                  builder: (_, _) => const ChordLibraryScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.songs,
+                  builder: (_, _) => const SongListScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.songsSetlists,
+                  builder: (_, _) => const SetlistListScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.coachHome,
+                  builder: (_, _) => const TutorHomeScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: AppRoutes.profileHome,
+                  builder: (_, _) => const SettingsScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.profileLibrary,
+                  builder: (_, _) => const LibraryScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.profileSettings,
+                  builder: (_, _) => const SettingsScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.profileProgress,
+                  builder: (_, _) => const ProgressScreen(),
+                ),
+                GoRoute(
+                  path: AppRoutes.profileRewards,
+                  builder: (_, _) => const StreakScreen(),
+                ),
+              ],
+            ),
+          ],
+        ),
       if (aiTutorEnabled) ...[
         GoRoute(
           path: AppRoutes.tutorHome,

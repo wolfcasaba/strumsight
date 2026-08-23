@@ -590,4 +590,118 @@ node tools/knowledge-rag.mjs --top 5 "adaptive scaffold navigation rail app_rout
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5, `medium` effort).
+
+### Amit építettem
+
+- **`lib/core/design_system/layouts/ss_adaptive_scaffold.dart`** (ÚJ) — az
+  `SsAdaptiveLayoutMode` enum (compact/medium/expanded/wide),
+  `SsAdaptiveDestination` (data-only), és az `SsAdaptiveScaffold` widget. A
+  `modeForWidth(double)` static resolver kizárólag `SsBreakpoints`
+  tokenekből számol (nincs `600`/`840`/`1200` literál). Compact →
+  `NavigationBar`; medium → nem-extended `NavigationRail`
+  (`labelType: selected`); expanded/wide → extended `NavigationRail`
+  (`labelType: none`, `extended: true`). `showPrimaryNavigation: false` →
+  puszta `Scaffold(body: body)`, se bar, se rail. Nem importál
+  route/feature/l10n típust (D4). Exportálva a `public.dart`-ból.
+- **`lib/app/config/feature_flags.dart`** — `adaptiveShellEnabled` mind a
+  HAT bővülési ponton (D2): konstruktor-paraméter (`= false`),
+  `forEnvironment` (mindig `false`, nincs dart-define), mező, `==`,
+  `hashCode` (az `additionalBits` listába), `toString()`.
+- **`lib/app/routing/app_route.dart`** — három új destination-konstans
+  (`today`, `coachHome`, `profileHome`; a `practiceHub`/`songs` meglévő
+  konstansokat újrahasznosítja a Practice/Songs destination), tizenegy új
+  cél-alútvonal konstans (D5/D6 tábla szerint), és az
+  `adaptiveShellDestinations` lista.
+- **`lib/app/routing/adaptive_shell_routes.dart`** (ÚJ) — a `legacyRedirects`
+  `Map<String,String>` (D5, a D7 négy szerződésével — `k != v`, `values ∩
+  keys = ∅`, a kulcshalmaz pontosan a pinnelt 11), és az `isStageRoute(String)`
+  tiszta predikátum a D13 kipinnelt halmazán (a Song Trainer session
+  path-paramétert a `songTrainerSession` konstansból származtatott prefixből
+  ismeri fel, nem duplikált stringgel).
+- **`lib/app/routing/app_router.dart`** — a redirect callback előbb az
+  onboarding-redirectet nézi, utána (csak ha `adaptiveShellEnabled`) a
+  `legacyRedirects`-et, `state.uri.replace(path: target)`-tel (D8, megőrzi a
+  query-t és a fragmentet). A flag BE ágán egy
+  `StatefulShellRoute.indexedStack` öt branch-csel (D6 tábla szerinti
+  adapter-képernyők), a `legacyRedirects.values` mindegyike regisztrált cél
+  (D6 hurok-csapda ellen). A legacy `/practice` és `/songs` regisztráció
+  `!adaptiveShellEnabled` mögé kerül, hogy ne legyen duplikált path (D6). A
+  duplikáció-kizárás megbízhatóságát **szándékosan** nem a deklarációs
+  sorrendre bíztam: az új `StatefulShellRoute`-ot a `practiceEnabled` és a
+  `songs` feltételes blokkok UTÁN helyeztem el a `routes` listában, hogy ha
+  valaki a jövőben elfelejtené a `!adaptiveShellEnabled` őrt, az elsőként
+  regisztrált (legacy, shell nélküli) route győzzön a go_router
+  first-match szemantikájával — ez tette megfigyelhetővé a §6.3/1 próbát is.
+- **`lib/app/home_shell.dart`** — a meglévő `HomeShell` VÁLTOZATLAN (A7). Új
+  `AdaptiveHomeShell` widget: `public.dart`-on át importál (D4),
+  `navigationShell.currentIndex`/`goBranch` köti be (D9, nem
+  `context.go`), `showPrimaryNavigation: !isStageRoute(location)` (D13), az
+  öt címke a D10 öt meglévő ARB kulcsából (`todayPlanTitle`,
+  `practiceHubTitle`, `songLibraryTitle`, `aiTutorHomeTitle`,
+  `tutorProfileTitle`), a kötött `// TODO(E13-R16): dedicated nav ARB keys…`
+  komment mellette.
+
+### A §6.3 két valódi-sértés próbája
+
+**1. A2 (legacy redirect kihagyása).** A `/setlists` bejegyzést kivettem a
+`legacyRedirects`-ből (`adaptive_shell_routes.dart`), majd lefuttattam:
+
+```bash
+flutter test test/app/navigation/legacy_route_redirect_test.dart
+```
+
+Eredmény: **PIROS**, 4 cella bukott — `all eleven legacy routes resolve to
+their target adapter` (a `/setlists` `/setlists`-en ragadt `/songs/setlists`
+helyett), a két D8 query/fragment teszt (mindkettő a redirect-célt méri), és
+a `contract 4` / `pinned map matches production` D7-cellák (a kulcshalmaz
+szűkült). Ezután visszaállítottam a bejegyzést, `flutter test
+test/app/navigation/legacy_route_redirect_test.dart` újra **ZÖLD**.
+
+**2. A4 (anti-vakuum, L403).** A `lib/app/home_shell.dart`
+`AdaptiveHomeShell.build()`-jében a `showPrimaryNavigation:
+!isStageRoute(location)` sort `showPrimaryNavigation: true`-ra cseréltem
+(mindig mutasson navigationt), majd:
+
+```bash
+flutter test test/app/navigation/adaptive_scaffold_test.dart
+```
+
+Eredmény: **PIROS** — kifejezetten a `AdaptiveHomeShell itself (the
+production shell widget, not a re-implementation of its wiring) hides
+navigation at a stage location and shows exactly one otherwise` cella
+bukott (`NavigationRail` jelent meg egy stage-locationnél, ahol nem
+szabadna). Ez a cella egy **elkülönített** `GoRouter` +
+`StatefulShellRoute.indexedStack` teszt-harnesst épít, ami a VALÓDI
+`AdaptiveHomeShell` osztályt húzza fel egy stage-route branch-csel — nem a
+`home_shell.dart` kifejezését másolja be a tesztbe (az első verzióm ezt
+tette, és emiatt nem vette észre a mutációt; ez maga volt egy vakuum-cella,
+amit a próba futtatása közben találtam meg és javítottam). Visszaállítottam
+az eredeti sort, a teszt újra **ZÖLD**.
+
+### Döntések, amiket a §0.0 nem kötött meg
+
+- **A `StatefulShellRoute` deklarációs helye** a `routes` listában: a
+  `practiceEnabled`/`songTrainerEnabled` blokkok UTÁN, NEM közvetlenül a
+  legacy `ShellRoute` után (ahogy elsőre írtam). Indoklás fent (duplikáció
+  megfigyelhetősége).
+- **NavigationRail `labelType`:** medium módban `selected` (a kiválasztott
+  címke látszik), expanded/wide módban `none` + `extended: true` (a rail
+  saját maga rajzolja ki a címkéket, mert `extended: true` mellett a
+  Flutter-keret megköveteli a `none` `labelType`-ot).
+- **Ikonok:** Material `Icons.*` (today/fitness_center/library_music/
+  smart_toy/person), mert az acceptance-mátrix nem köti az ikonkészletet —
+  a `lucide_icons_flutter`/`ss_icons` bevezetése tartalmi döntés, később.
+
+### Gate
+
+```bash
+tools/round-gate.sh test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/navigation/tab_state_restoration_test.dart
+```
+
+MINDEN GATE ZÖLD (format, analyze, mindhárom teszt külön, architecture,
+secrets, l10n). `test/app/routing/*` és
+`test/core/architecture_dependency_test.dart` külön futtatva is zöld (A7,
+D4) — lásd a fenti transzkriptumot.
+
 ## 11. Review — a Claude tölti ki
