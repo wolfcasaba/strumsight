@@ -371,11 +371,21 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   látható fallback).
 - **`lib/core/design_system/icons/ss_guitar_glyphs.dart`** (ÚJ) —
   `kSsGuitarGlyphStrokeRatio` (a NEVESÍTETT, egyetlen stroke-arány),
-  `SsGuitarGlyphs.strokeWidthFor` (az egyetlen számítási hely, A9), és
-  `SsGuitarGlyphPainter` — EGY `CustomPainter` osztály mind a 14 glyph-hez
-  (switch a névre), így szerkezetileg kizárt, hogy egy glyph saját
-  `strokeWidth`-et találjon ki. A `downstrum`/`upstrum` a `strum_arrow.dart`
-  mintáját követi (szár + töltött nyílhegy), festve, nem karakterrel.
+  `SsGuitarGlyphs.strokeWidthFor` (az egyetlen számítási hely a
+  konstruktorhoz, A9), és `SsGuitarGlyphPainter` — EGY `CustomPainter`
+  osztály mind a 14 glyph-hez (switch a névre). **A javító kör (§10.1)
+  megcáfolta az itt korábban álló „szerkezetileg kizárt" állítást** — a
+  konstruktor egyetlen `strokeWidth` mezőt tölt fel, de az egyes
+  `_paint*` metódusok a `Paint`-jüket kézzel is összeállíthatják, és a
+  round-1 review P1 próbája (`_paintCapo`-ba injektált kézzel írt
+  `strokeWidth = 7.5`) ezt ténylegesen zöld futással bizonyította. Amit a
+  próba TÉNYLEGESEN igazol: az A9 cella most a tényleges festési hívásokat
+  (`_RecordingCanvas`) figyeli, és minden `PaintingStyle.stroke` festés
+  vonalvastagsága a megosztott aránynak (1.0× vagy a szándékosan vékonyabb
+  0.6×) kell megfeleljen — ez a cella váltja pirosra a fenti injektált
+  értéket, nem a fordítási idejű szerkezet. A `downstrum`/`upstrum` a
+  `strum_arrow.dart` mintáját követi (szár + töltött nyílhegy), festve, nem
+  karakterrel.
 - **`lib/core/design_system/icons/ss_icon.dart`** (ÚJ) — `SsIcon` widget két
   factory-val: `.decorative` (const, `ExcludeSemantics`, se label, se
   tooltip) és `.interactive` (nem const — `_requireNonEmpty` validál —,
@@ -470,6 +480,81 @@ a `test/core/design_system/component_catalog_test.dart` is (L387 — a
 `public.dart` bővítése a meglévő kompatibilitási tesztet is érinti):
 mind a nyolc teszt zöld, a katalógus-galéria hozzáadása nem törte a meglévő
 smoke-tesztet.
+
+### §10.1 — Javító kör 1 (F1 MAJOR, F2 MINOR, F3 MINOR)
+
+Alap: `docs/reviews/e13-r07-review.md` (verdikt: CHANGES REQUESTED, 1 MAJOR +
+2 MINOR + 1 NOTE). Csak `test/core/design_system/icons/ss_icons_test.dart`
+módosult; production kódhoz (`ss_guitar_glyphs.dart`, `ss_icons.dart`,
+`ss_icon.dart`) ez a kör NEM nyúlt.
+
+**F1 (MAJOR) — javítva.** Az A9 cella eddig a `SsGuitarGlyphPainter`
+konstruktorát mérte (`painter.strokeWidth == strokeWidthFor(size)`), ami a
+`name`-től függetlenül mindig ugyanaz az egy kifejezés — semmit nem mondott
+a tényleges festésről. Az új cella egy `_RecordingCanvas implements Canvas`
+teszt-duplát ad a `paint()`-nek (a `Canvas` `dart:ui`-beli deklarációja
+`abstract class Canvas`, tehát kívülről szabadon implementálható;
+`noSuchMethod` fogja fel a nem-releváns tagokat), rögzíti minden
+`drawLine`/`drawPath`/`drawRRect`/`drawCircle`/`drawArc` hívás `Paint`-jét,
+majd mind a 14 glyph-re, mind a három szerződéses méretre (24/32/48 dp)
+megméri, hogy minden `PaintingStyle.stroke` festés vonalvastagsága a
+megosztott `strokeWidth` **1.0× vagy 0.6×-osa** (a 0.6× a szándékosan
+vékonyabb hammer-on/pull-off másodlagos vonás, `ss_guitar_glyphs.dart:179,
+205` — engedélyezett). A tolerancia (`1e-5` a hányadoson) kizárólag a
+`Paint.strokeWidth` natív float32 kerekítését nyeli el (mért eltérés
+`~2.2e-8`), egy valódi hibát (a P1 próba `7.5`-öse `~2` nagyságrenddel
+nagyobb eltérést ad) nem fed el.
+
+**Mért PIROS kimenet** (a review P1 próbájának pontos reprodukciója — a
+`_paintCapo` `RRect`-jét ideiglenesen `Paint()..strokeWidth = 7.5` váltotta
+fel, majd `flutter test test/core/design_system/icons/ss_icons_test.dart`):
+
+```
+00:00 +4 -1: guitar glyphs (A9) — every painted stroke derives from the shared ratio every recorded PaintingStyle.stroke draw call uses an allowed ratio of the shared stroke width [E]
+  Expected: true
+    Actual: <false>
+  SsGuitarGlyphName.capo at 24.0 dp painted a stroke of width 7.5, which is not one of the allowed ratios {1.0, 0.6} of the shared strokeWidth (1.92)
+
+  package:matcher                                          expect
+  package:flutter_test/src/widget_tester.dart 473:18       expect
+  test/core/design_system/icons/ss_icons_test.dart 156:17  main.<fn>.<fn>
+```
+
+A cella a `capo` glyphet PONTOSAN azon az elágazáson buktatta meg, ahová az
+injekció került; a másik 13 glyph és a másik két méret (32/48 dp — mert a
+switch minden ágon lefut a `for size in […]` cikluson belül, de a hibás
+`RRect` csak a `capo` ágon szerepel) nem érintett. A hibát ezután azonnal
+visszaállítottuk (`git diff --exit-code` üres az eredeti fájlra), és a teszt
+újra zöld. A §10-ben korábban álló „szerkezetileg kizárt" mondatot a fenti
+`ss_guitar_glyphs.dart` bekezdés váltotta fel — lásd ott, mit bizonyít a
+cella ténylegesen.
+
+**F2 (MINOR) — javítva.** Az A8 három téma-cellája a `theme.brightness`
+helyett most egy explicit `dark`/`light`/`highContrast` címkéből építi a
+tesztnevet (`SsHighContrastTheme.data().brightness == Brightness.dark`, ami
+korábban a `dark` és a `highContrast` cellát azonos névre futtatta). A három
+teszt neve most páronként különböző, és pirosból egyértelműen azonosítja a
+bukott témát.
+
+**F3 (MINOR) — javítva.** Az A8 csoportba egy új, nem-widget `test()` cella
+került, amely a §F1-hez bevezetett `_RecordingCanvas`-t újrahasznosítva mind
+a 14 glyph teljes rajz-hívás-sorozatát (`callSignatures.join('|')`) rögzíti
+24 dp-n, és megméri, hogy a 14 sztring **páronként különböző**
+(`signatures.toSet().length == signatures.length`). Egy olyan implementáció,
+amely minden névre ugyanazt festené, ezen a cellán bukna, függetlenül attól,
+hogy a `switch` kimerítő.
+
+**Gate — a javító kör után:**
+
+```
+tools/round-gate.sh test/core/design_system/icons/ss_icons_test.dart test/core/design_system/icons/icon_semantics_test.dart
+```
+
+Mind a hét lépés ZÖLD; a két célzott teszt-fájl összesen **16** cellát futtat
+zölden (`ss_icons_test.dart`: 3 Stage-küszöb + 1 valódi widget-úti Stage +
+1 A9 + 3 A8 téma + 1 A8 disztinktivitás + 1 A1 + 2 A4 = 12;
+`icon_semantics_test.dart`: 4). Lásd a pontos futtatási kimenetet a kör
+`tools/codex-signal.sh done` üzenetéhez tartozó terminál-naplóban.
 
 ### A következő köröknek
 
