@@ -7,6 +7,8 @@ import '../components/surfaces/ss_surface.dart';
 import '../foundations/ss_colors.dart';
 import '../foundations/ss_elevation.dart';
 import '../foundations/ss_spacing.dart';
+import '../icons/ss_icon.dart';
+import '../icons/ss_icons.dart';
 import '../themes/ss_dark_theme.dart';
 import '../themes/ss_high_contrast_theme.dart';
 import '../themes/ss_light_theme.dart';
@@ -140,6 +142,20 @@ final class _ComponentCatalogScreenState
                           kind: SsStatusMarkerKind.cloudAi,
                           color: colors.cloudAi,
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: SsSpacing.space4),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: SsSpacing.space2,
+                      runSpacing: SsSpacing.space2,
+                      children: [
+                        for (final glyph in SsGuitarGlyphName.values)
+                          SsIcon.decorative(
+                            key: ValueKey('catalog_glyph_${glyph.name}'),
+                            name: glyph.name,
+                            color: colors.textPrimary,
+                          ),
                       ],
                     ),
                   ],
