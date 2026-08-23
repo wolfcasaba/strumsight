@@ -656,12 +656,15 @@ def edit_comment(
     moderator; the brief §3 is explicit about the asymmetry between
     edit and delete).
 
-    Optimistic concurrency (brief §0.0 D3 / A4): the caller's
-    ``resource_version`` (a ``datetime``) must match the row's
-    current ``updated_at``. The wire-shape carries this via a
-    future Pydantic schema; the service signature accepts the
-    caller-supplied token alongside the body so the test can pin
-    the A4 measure-matrix directly.
+    This is a thin wrapper around :func:`edit_comment_with_resource_version`
+    that explicitly passes ``resource_version=None`` (the production call
+    path — the wire schema is a future round's responsibility per ADR
+    0407 §D7; the ``updateComment`` domain-kontraktus does NOT carry
+    ``resourceVersion``). Keeping a separate ``edit_comment`` symbol
+    preserves the public surface for any future caller that lands here
+    before the wire schema catches up; the stale-update guard lives
+    entirely in ``edit_comment_with_resource_version`` and is exercised
+    by the §6 A4 measure-matrix test directly.
 
     Mention privacy (§5.1 / A2): the body is re-stripped through the
     same Kör 3/8/4 triplet; a newly-blocked profile's mention is
@@ -672,59 +675,16 @@ def edit_comment(
     does not pin idempotency; a future round can add it when a
     second mutation path needs the same dedup).
     """
-    viewer = _resolve_profile_by_public_id(db, viewer_public_id)
-    if viewer is None:
-        raise ValueError("viewer community profile not found")
-    comment = _resolve_comment_by_public_id(db, comment_public_id)
-    if comment is None:
-        raise CommentNotFound("comment not found")
-    if comment.deleted_at is not None:
-        raise CommentNotFound("comment not visible")
-    if comment.moderation_state != MODERATION_STATE_VISIBLE:
-        raise CommentNotFound("comment not visible")
-    # Author-only edit — A4 measure-matrix contract.
-    if comment.author_profile_id != viewer.id:
-        raise CommentNotFound("comment not found")
-    # Optimistic concurrency — caller-supplied ``resource_version``
-    # must match the row's current ``updated_at``. A mismatch raises
-    # ``StaleCommentUpdateError`` (the Kör 11 ``StalePostUpdateError``
-    # shape).
-    # NOTE: this round does not receive ``resource_version`` on the
-    # public ``edit_comment`` signature — the wire schema is a
-    # future round's responsibility (ADR 0407 §D7, the
-    # ``updateComment`` domain-kontraktus does NOT carry
-    # ``resourceVersion``). The function still accepts it as a
-    # keyword-only parameter so the §6 A4 measure-matrix test
-    # exercises the stale-update path explicitly; production callers
-    # pass ``None`` and the check is skipped.
-    # The caller-supplied token lives in the caller's call frame
-    # only — we forward-declare the parameter via ``**overrides``
-    # to keep the signature stable for future wire schemas.
-
-    cleaned_body = _strip_unresolvable_mentions(
-        db, body=body, author_profile_id=viewer.id
+    return edit_comment_with_resource_version(
+        db,
+        viewer_public_id=viewer_public_id,
+        comment_public_id=comment_public_id,
+        body=body,
+        resource_version=None,
+        now=now,
+        on_invalidate=on_invalidate,
+        idempotency_key=idempotency_key,
     )
-    _validate_body_shape(cleaned_body)
-
-    comment.body = cleaned_body
-    comment.updated_at = now
-    db.flush()
-    db.refresh(comment)
-
-    if on_invalidate is not None:
-        on_invalidate(
-            CommentInvalidationEvent(
-                post_public_id=(
-                    db.query(CommunityPost)
-                    .filter_by(id=comment.post_id)
-                    .one()
-                    .public_id
-                ),
-                comment_public_id=comment.public_id,
-                action="edit",
-            )
-        )
-    return comment
 
 
 def edit_comment_with_resource_version(
@@ -761,8 +721,16 @@ def edit_comment_with_resource_version(
         raise CommentNotFound("comment not visible")
     if comment.moderation_state != MODERATION_STATE_VISIBLE:
         raise CommentNotFound("comment not visible")
+    # Author-only edit — A4 measure-matrix contract.
     if comment.author_profile_id != viewer.id:
         raise CommentNotFound("comment not found")
+    # Optimistic concurrency — caller-supplied ``resource_version``
+    # must match the row's current ``updated_at``. A mismatch raises
+    # ``StaleCommentUpdateError`` (the Kör 11 ``StalePostUpdateError``
+    # shape). ``edit_comment`` is a thin wrapper that always passes
+    # ``resource_version=None`` here, so the guard is skipped for the
+    # production call path; the §6 A4 measure-matrix exercises this
+    # branch directly with a pinned ``resource_version``.
     if resource_version is not None and _as_utc(resource_version) != _as_utc(
         comment.updated_at
     ):
