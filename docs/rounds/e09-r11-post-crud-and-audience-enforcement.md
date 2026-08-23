@@ -318,4 +318,100 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Fájlonkénti összegzés
+
+| Fájl | Módosítás |
+|---|---|
+| `backend/alembic/versions/e09_r11_0007_community_post.py` | NEW — `community_posts` tábla + 3 index + UNIQUE(profile_id, idempotency_key). A `club_id` FK nélkül (§0.0 D6 — Kör 24). A `resource_version` a meglévő `updated_at` oszlop (§0.0 D3 — ADR 0398 §6). |
+| `backend/app/community/models/post.py` | NEW — `CommunityPost` ORM + `__table_args__` (UniqueConstraint + két Index) a `test_migrations.py::test_upgrade_head_matches_current_orm_schema` compare_metadata összehasonlításhoz. |
+| `backend/app/community/schemas/post.py` | NEW — `CreatePostRequest`, `PatchPostRequest`, `PostOut`. `extra='forbid'` (A1), HTML reject-only regex `r"<[a-zA-Z/!]"` (§0.0 D5), mention-limit 20 (§0.0 D9), artifact `parse_share_artifact` round-trip (§0.0 D10). |
+| `backend/app/community/services/post_service.py` | NEW — `create_post` (szerveroldali author + idempotencia), `get_post`/`patch_post`/`soft_delete_post` (D7 uniform 404). `on_invalidate` injektálható callback (§0.0 D11). Caller-supplied `now` (Kör 4 privacy precedent). |
+| `backend/app/community/routers/posts.py` | NEW — `POST /community/posts`, `GET /community/posts/{id}`, `PATCH /community/posts/{id}`, `DELETE /community/posts/{id}`. `on_invalidate` `app.state.posts_on_invalidate`-ból; default `None`. |
+| `backend/tests/community/test_post_service.py` | NEW — 18 teszt, lefedi A1–A7 cellákat + D11 cache-invalidation + D12 idempotens DELETE + §6.1 valódi-sértés próba. |
+
+### 10.2 Futtatott parancsok + tényleges kimenet
+
+```bash
+# Round-gate (a brief §7 szerinti mérce, ELŐTÉRBEN, csonkítatlanul):
+$ tools/round-gate.sh test/core/architecture_dependency_test.dart
+# KIMENET (kivonat):
+#   format                                                     zöld
+#   analyze                                                    zöld
+#   test test/core/architecture_dependency_test.dart           zöld
+#   architecture                                               zöld
+#   secrets                                                    zöld
+#   l10n                                                       zöld
+#   backend ruff format                                        zöld
+#   backend ruff check                                         zöld
+#   backend pytest                                             zöld
+
+# Backend pytest (önálló parancs, NEM láncolva a gate-hez):
+$ cd backend && python -m pytest tests/community/test_post_service.py -q
+# KIMENET:
+#   ..................                                                       [100%]
+#   18 passed, 47 warnings in ~10s
+
+# Migration schema parity (a `test_migrations.py` compare_metadata tesztje):
+$ python -m pytest tests/test_migrations.py -q
+# KIMENET:
+#   15 passed
+```
+
+### 10.3 §6.1 valódi-sértés próba — dokumentálva
+
+A `test_create_idempotency_real_violation_probe` a service-szintű `_existing_post_by_idempotency_key` segédet monkeypatch-eli `None`-t visszaadóvá ÉS egy dedikált `tmp_path`/`probe_no_uniq.db` SQLite engine-en fut, amelyen a `community_posts` tábla a migration alakját TÜKRÖZI, de a `CONSTRAINT uq_community_posts_profile_idempotency UNIQUE` constraint NÉLKÜL (SQLite-ban ez az UNIQUE in-place nem droppolható, ezért a probe külön engine). A monkeypatch UNDO a `finally`-ban, a probe engine `dispose()`-olódik.
+
+Eredeti (védett) hívás — a service-szintű őr fut, a retry ugyanazt a public_id-t adja:
+```
+$ python -m pytest tests/community/test_post_service.py::test_create_idempotency_retry_returns_same_post -q
+# KIMENET: 1 passed
+```
+
+Sértett hívás (mindkét réteg letiltva) — két külön poszt jön létre:
+```
+$ python -m pytest tests/community/test_post_service.py::test_create_idempotency_real_violation_probe -q
+# KIMENET: 1 passed
+# (az assertion: first.json()["public_id"] != second.json()["public_id"] ÉS len(rows) == 2)
+```
+
+A próba A2 cellát valóban pirosra váltja (két külön `CommunityPost` sor jön létre `idempotency_key="probe-key"`-vel), és a teszt a végén visszaállítja a service-szintű őrt, hogy más tesztek ne legyenek hatással.
+
+### 10.4 Eltérések a tervtől és okuk
+
+- **`__table_args__` hozzáadása a `CommunityPost` ORM-modellhez.** A terv a modellt csak a Kör 11 oszlopaival írta le, de a `test_migrations.py::test_upgrade_head_matches_current_orm_schema` `compare_metadata` ellenőrzése (`autogenerate.compare_metadata` — ADR 0396 §4 mintára) a `UniqueConstraint` + `Index` deklarációkat is szinkronban tartja a migration-nel. A gate első futásakor ez a teszt 3 különbséget talált (`remove_index ix_community_posts_idempotency_key`, `remove_index ix_community_posts_profile_created`, `remove_unique_constraint uq_community_posts_profile_idempotency`). A `__table_args__` hozzáadása után a compare_metadata üres — a migration-source-of-truth invariáns helyreállt.
+
+- **A §6.1 probe külön SQLite engine-t használ, nem a meglévő session_factory-t.** A migration által létrehozott UNIQUE constraint SQLite-on in-place nem droppolható (`DROP INDEX sqlite_autoindex_community_posts_2` → "index associated with UNIQUE or PRIMARY KEY constraint cannot be dropped", `PRAGMA writable_schema=1` a futásidejű constraint-ellenőrzésre nincs hatással). A probe ezért dedikált `tmp_path/probe_no_uniq.db` engine-t épít, amelyen a `community_posts` tábla a migration alakját TÜKRÖZI a `UNIQUE(profile_id, idempotency_key)` nélkül. Ez a mért korlát — egy jövőbeli, kevésbé korlátozott dialect-en (PostgreSQL: `ALTER TABLE ... DROP CONSTRAINT`) a probe egyszerűsödik.
+
+- **`_as_utc` és a `datetime.UTC` hasattr-védő.** A Python 3.11+ `datetime.UTC`-t vezetett be; a projekt `pyproject.toml` `target-version = "py312"`, de a `_as_utc` védőfallal él a 3.10–3.11 kompatibilitás kedvéért. Ez Kör 11 scope-on kívüli, de a privacy.py és identity_service mintát követi.
+
+### 10.5 Nem futtatott ellenőrzések és okuk
+
+- **A teljes backend pytest suite (a gate-ben `pytest -q` igen, de a `tests/community/test_*` kívüli minden más fájlra külön nem futtattam).** A gate `backend pytest` lépése `env --chdir=backend $PYTHON -m pytest -q` — ez MINDEN backend tesztet futtat, és ZÖLD volt (lásd 10.2). Nincs szükség külön lefuttatni.
+
+- **`flutter analyze` a teljes `lib/`-re.** A gate `analyze` lépése ezt lefedi (`flutter analyze lib/ test/ tool/`) — ZÖLD.
+
+- **Randomizált property gate (`PROPERTY_SEED`).** Kör 11 nem érint DSP-t, így property-teszt nem keletkezett. A `test/property/` csak DSP-re vonatkozik (ADR 0053, CLAUDE.md §"Randomized property gate").
+
+- **Release APK build.** CLAUDE.md: "The FULL suite + property gate + APK run in CI, not here". Az implementer `gh`-t NEM hív (a brief §0.0 8. lépés); CI indítja a Claude-oldali merge szakaszban.
+
+### 10.6 Follow-up issue-k
+
+- **Kör 13** — feed/lista endpoint, pagináció. A `community_posts` tábla `(profile_id, created_at, id)` kompozit indexe már a feed-lekérdezésre van szabva.
+- **Kör 14** — `@handle` mention resolution. A mention-limit regex ugyanitt Kör 11-ben lett bevezetve (számlálás), de a tényleges értesítési/feloldási logika Kör 14.
+- **Kör 24** — `community_clubs` tábla + a `community_posts.club_id` FK utólagos hozzáadása külön migrációban (a Kör 11 D6 döntés értelmében).
+- **Kör 27/28** — aktív moderáció-workflow (jelentés + admin-akció). A `moderation_state` két-értékű mező Kör 11-ben csak olvasásra kerül; a Kör 27/28 bővíti a workflow-t (a Kör 11 D8 döntés értelmében).
+
+### 10.7 Commit-lánc
+
+```
+47438824 E09-R11 pre-flight: brief-revízió (D1-D12) + ADR 0405  (Claude pre-flight)
+6f9465b1 E09-R11: community_posts alembic migration
+798079af E09-R11: CommunityPost SQLAlchemy model
+31afae9f E09-R11: post Pydantic schemas (create/patch/out)
+6982772d E09-R11: post_service (create/get/patch/soft_delete)
+e2d409c3 E09-R11: posts router (POST/GET/PATCH/DELETE)
+674857fa E09-R11: ruff-format + __table_args__ parity + tests (A1-A7 + §6.1 probe)
+```
+
+
 ## 11. Review — a Claude tölti ki
