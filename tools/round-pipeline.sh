@@ -503,6 +503,34 @@ inflight_remove() {   # $1=kör
 
 inflight_rounds() { ls "$inflight_dir" 2>/dev/null | grep -E '^[A-Z][0-9]{2}-R[0-9]{2}$' || true; }
 
+# A munkafa „ismeretlen" szennyeződése — a FUTÓ körök saját, még commitolatlan
+# review-artefaktuma NEM tartozik ide.
+#
+# MÉRVE 2026-08-23 (E13-R06 nem indult el): a kör orchesztrátora a MEGOSZTOTT fő
+# fába írja a `docs/reviews/<kör>-review.md`-t (és `risk = "high"` körön a
+# `-security.md`-t), amit majd a kör LANDOLÁSA commitol. Két sávnál ez azt
+# jelentette, hogy amíg az egyik sáv review-fázisban van, a másik SOHA nem tud
+# indulni: az E13-R05 merge-e (16:46:40) után a 16:50-es firing megszerezte a
+# szabad slotot, majd `piszkos munkafa`-val meghalt a futó E09-R17
+# `docs/reviews/e09-r17-review.md` fájlján — pedig a Ch13 sáv következő köre
+# készen állt. Ugyanez a fájlosztály a scope-auditban MÁR mentesített
+# („the reviewer's report", tools/ai_router/legacy_scope.py).
+#
+# A mentesség SZŰK, hogy a guard ne váljon vakká:
+#   * csak IN-FLIGHT kör azonosítójára illeszkedő review/security fájl,
+#   * csak `??` (untracked) állapotban — egy MÓDOSÍTOTT tracked fájl marad piszok,
+#   * minden más útvonal változatlanul megállítja a láncot.
+working_tree_dirt() {
+  local status round slug
+  status=$(git -C "$repo_root" status --porcelain 2>/dev/null)
+  [ -n "$status" ] || return 0
+  for round in $(inflight_rounds); do
+    slug=$(printf '%s' "$round" | tr 'A-Z' 'a-z')
+    status=$(printf '%s\n' "$status" | grep -vE "^\?\? docs/reviews/${slug}-[a-z]*\.md$")
+  done
+  printf '%s' "$status"
+}
+
 # Merge után NE várjunk a következő cron-firingre. A gyerek megvárja, amíg EZ a
 # folyamat elengedi a slot-zárat, és csak utána indul — különben azonnal
 # „zár foglalt"-ra futna, és a lánc-folytatás néma no-op lenne.
@@ -1948,6 +1976,11 @@ case "${1:-}" in
     esac
     exit 0
     ;;
+  --working-tree-dirt)    # a szűrt munkafa-szennyeződés (teszthorog, 2026-08-23)
+    working_tree_dirt
+    printf '\n'
+    exit 0
+    ;;
   --engine-runnable)    # $2=motor → exit 0, ha futtatható (teszthorog, 2026-08-23)
     engine_is_runnable "${2:-}"
     exit $?
@@ -2180,8 +2213,9 @@ if [ "$current_branch" != "main" ]; then
     die "a munkafa nem a main-en van ($current_branch) és nem tiszta — a lánc csak tiszta main-ről indul"
   fi
 fi
-if [ -n "$(git status --porcelain)" ]; then
-  die "piszkos munkafa — a lánc nem indul ismeretlen lokális változás fölé"
+tree_dirt=$(working_tree_dirt)
+if [ -n "$tree_dirt" ]; then
+  die "piszkos munkafa — a lánc nem indul ismeretlen lokális változás fölé: $(printf '%s' "$tree_dirt" | tr '\n' ' ')"
 fi
 # D1 (E99-R19): a main-szinkron három, ma még összemosott esetre bontása —
 # (a) azonos, (b) kizárólag LEMARADÁS (origin/main szigorúan előre van, a
