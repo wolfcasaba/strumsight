@@ -6,7 +6,76 @@
 - **Branch:** `<motor>/e09-r16-comments-reply-and-mention`
 - **Előfeltétel:** `E09-R15` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0405` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** `ADR 0405` — **ELAVULT, lásd §0.0**: a `0405` már foglalt (Kör 11, post-crud); a friss foglalás `ADR 0407`. Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+
+## 0.0 Pre-flight brief-revízió (Claude Sonnet 5, 2026-08-23, `main @ db6293f4`)
+
+**ADR-szám korrekció.** `tools/round-slots.py reserve-adr --round E09-R16` →
+`0407` (nem `0405`, ami a Kör 11 post-crud ADR-je). A kör ADR-je:
+[`docs/adr/0407-comment-reply-and-mention.md`](../adr/0407-comment-reply-and-mention.md) —
+minden §5 architekturális döntés OTT részletezve, mérési forrásokkal együtt.
+
+**Visszakeresés (ADR 0312, §4.9, S8):**
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "komment
+reply mention block privacy validáció mélység-korlát"` → ADR 0402 (Kör 8,
+`query_filters.py::is_blocked_pair` csak-hívás minta, block-first sorrend),
+ADR 0398 (Kör 4, `CommunityAccessPolicy` mezőnév-stabilitás). `--corpus
+lessons,halts --top 5 "resource_version edit conflict optimistic concurrency
+temp ID atomikus csere"` → nincs E09-R16-specifikus lecke; a resource_version
+mintát az ADR 0405 (Kör 11) kontextusa fedi, nem a lessons-korpusz. Teljes
+korpuszon kiegészítésként: a Kör 5 `post_repository.dart` (ADR 0399) MÁR
+definiálja a `comments`/`createComment`/`updateComment`/`deleteComment`
+négyest — ez az implementáció bemenete, nem újratervezendő.
+
+**Kockázat = high, indoklás:** a `risk = "high"` jogos — a mention-validáció
+(privacy-megkerülés kockázata, `A2`) és a komment-jogosultsági mátrix
+(owner/post-owner/moderator, `A3`/`A5`) mindkettő biztonsági határ; az
+`allowed_paths` `comment_policy.py` és `comment_service.py` sora a router
+`high_risk_path_fragments` "privacy" és "authorization" fogalmi köréhez
+tartozik (a fájlnév maga nem tartalmazza szó szerint egyik fragment-et sem,
+ezért a lint S7-et jelzett — ez a sor a kimondott indoklás).
+
+**Mért gap 1 — nincs élő "moderator" fogalom (pre-flight §1 rule 1,
+elérhetetlen cél-státusz).** `grep -n "role\|moderator\|is_staff\|is_admin"
+backend/app/models.py backend/app/community/models/profile.py` → 0 találat.
+Az A5 "moderator" ága ezért NEM egy DB-mezőből olvasott állapot, hanem a
+`comment_policy.py::can_delete` egy explicit, hívó-adta `is_moderator: bool`
+paramétere (ADR 0407 §D2) — a `comment_service.py` MA mindig `False`-t ad át
+(nincs admin-felület), az A5 mérce a policy-függvényt hívja közvetlenül
+`is_moderator=True`-val. Ez valódi, mérhető bemenet — nem lista-tágítás.
+
+**Mért gap 2 — a mention-validáció három MEGLÉVŐ hívás kompozíciója, nem új
+logika (pre-flight §1 rule 2, erőforrás-tulajdonlás).**
+`identity_service.py::lookup_active_profile_id` (Kör 3, handle→profil) →
+`query_filters.py::is_blocked_pair` (Kör 8, TILOS zóna, csak hívható) →
+`access_policy.py::CommunityAccessPolicy.evaluate_profile_access` (Kör 4) —
+a block-first sorrend miatt egyetlen `== ProfileAccessLevel.FULL` teszt
+elég, külön "blocked" ág írása felesleges és divergencia-kockázat (ADR 0407
+§D3). A `schemas/post.py` privát `_reject_html_tags`/`_enforce_mention_limit`
+függvényei (Kör 11) NEM importálhatók (nincs az `allowed_paths`-on, privát
+szimbólum) — a comment-modul saját, azonos mintájú validátort ír (ADR 0407
+§D3).
+
+**Mért gap 3 — nincs HTTP router/schema ebben a körben (a Kör 14/15
+precedens).** Sem `routers/comments.py`, sem `schemas/comment.py` nincs az
+`allowed_paths`-on. A kör **service-réteg-only**: a `comment_service.py`
+négy funkciója (create/edit/delete/list) közvetlenül tesztelt
+(`test_comment_service.py`), a Flutter oldal a MÁR élő
+`CommunityPostRepository` kontraktus ellen fejleszt, valós HTTP-bekötés
+NÉLKÜL (ADR 0407 §D7, HANDOFF E09-R14/R15 pre-flight §0.0 D2 azonos
+precedense). A `post_repository.dart::updateComment` NEM kap
+`resourceVersion` paramétert (domain tilos zóna, ebben a körben nem
+bővíthető) — az **A4 (edit conflict) mérce KIZÁRÓLAG a backend
+`test_comment_service.py` felelőssége**, a `comments_screen_test.dart` csak
+az A6 (temp ID atomikus csere) UI-oldalát méri.
+
+**Egyéb rögzített konvenciók (ADR 0407 részletezve):** resource_version = a
+sor `updated_at`-je, nincs külön `version` oszlop (§D1, a Kör 4/11 lezárt
+mintája); `depth: int` explicit oszlop, max 1, létrehozáskor elutasítás
+(§D4); `moderation_state` két-értékű string (`visible`/`removed`, a Kör 11
+mintája, NEM az öt-állapotú Dart enum, §D5); komment-lista cursor a Kör 8
+`list_blocked` base64 (created_at, id) mintája, NEM a Kör 13 HMAC-aláírt
+feed-cursor (§D6).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 közös block-szűrő és a Kör 3 handle-lookup TÉNYLEGES aláírását — a mention-validáció mindkettőt hívja, nem önálló ellenőrzést épít. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
