@@ -25,6 +25,7 @@ allowed_paths = [
   "test/features/practice/session/pause_recovery_test.dart",
   "test/features/practice/session/result_navigation_test.dart",
   "test/fixtures/practice/session/",
+  "test/ui/goldens/",
   "docs/rounds/e13-r21-practice-session-ui.md",
 ]
 gate_tests = [
@@ -32,6 +33,7 @@ gate_tests = [
   "test/features/practice/session/session_transitions_test.dart",
   "test/features/practice/session/pause_recovery_test.dart",
   "test/features/practice/session/result_navigation_test.dart",
+  "test/ui/goldens/e13_r21_screens_golden_test.dart",
 ]
 native_gate = false
 ```
@@ -134,6 +136,7 @@ frissítése nem tarthatja fel a feldolgozást.
 | A6 | Rossz hangolás / degradált képesség / gyenge jel külön állapot | ugyanott |
 | A7 | A beállítás validációja hibás bemenetet nem enged tovább | `setup_validation_test.dart` |
 | A8 | Portrait és landscape elrendezésben nincs túlcsordulás | `session_transitions_test.dart` |
+| A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r21_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -145,6 +148,7 @@ frissítése nem tarthatja fel a feldolgozást.
 | A konfiguráció egy mezője nem kerül át | A1 |
 | „Biztos vagy benne? Igen/Nem" kilépéskor | **A5** |
 | A gyenge jel és a rossz hangolás összevonva | A6 |
+| A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
 **Az eredmény-navigáció három kötelező cellája** (a küszöb: hányszor futhat):
 
@@ -161,8 +165,25 @@ számlálóját a widget állapotába → az **A4** cellának PIROSNAK kell lenn
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/practice/session/setup_validation_test.dart test/features/practice/session/session_transitions_test.dart test/features/practice/session/pause_recovery_test.dart test/features/practice/session/result_navigation_test.dart
+tools/round-gate.sh test/features/practice/session/setup_validation_test.dart test/features/practice/session/session_transitions_test.dart test/features/practice/session/pause_recovery_test.dart test/features/practice/session/result_navigation_test.dart test/ui/goldens/e13_r21_screens_golden_test.dart
 ```
+
+**A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
+minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
+keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
+KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+
+```bash
+~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r21_screens_golden_test.dart
+```
+
+A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
+márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
+meglévő golden-teszt mért viselkedése, az elrendezést, méretezést és színeket
+nem érinti. MIÉRT ez a kör dolga és nem az E13-R36-é: a záró vizuális
+regressziós kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt,
+hogy a képernyő eleve csúnya-e, a saját körében kell látni.
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
 `&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`

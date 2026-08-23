@@ -26,6 +26,7 @@ allowed_paths = [
   "test/features/tutor/streaming_announcement_test.dart",
   "test/features/tutor/tool_confirmation_test.dart",
   "test/features/tutor/prompt_injection_ui_test.dart",
+  "test/ui/goldens/",
   "docs/rounds/e13-r29-coach-tutor-and-debrief.md",
 ]
 gate_tests = [
@@ -33,6 +34,7 @@ gate_tests = [
   "test/features/tutor/streaming_announcement_test.dart",
   "test/features/tutor/tool_confirmation_test.dart",
   "test/features/tutor/prompt_injection_ui_test.dart",
+  "test/ui/goldens/e13_r29_screens_golden_test.dart",
 ]
 native_gate = false
 ```
@@ -138,6 +140,7 @@ tünteti fel megalapozottként (az ADR 0283 elve a coachingra).
 | A6 | A terv-módosítás diff-fel, elfogadás/elutasítás mellett jelenik meg | `tool_confirmation_test.dart` |
 | A7 | A beszélgetés tartalma nem kerül analitikába | `grep` a diffben |
 | A8 | A hiányzó bizonyíték kimondott, nem elhallgatott | `ai_mode_visibility_test.dart` |
+| A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r29_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -149,6 +152,7 @@ tünteti fel megalapozottként (az ADR 0283 elve a coachingra).
 | Token-szintű felolvasás streaming közben | **A5** |
 | A terv némán módosul | **A6** |
 | Az üzenet szövege esemény-paraméterként naplózva | **A7** |
+| A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
 **A tool-akció három kötelező cellája** (a küszöb: a megerősítés megtörtént-e):
 
@@ -165,8 +169,25 @@ kell lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/features/tutor/tool_confirmation_test.dart test/features/tutor/prompt_injection_ui_test.dart
+tools/round-gate.sh test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/features/tutor/tool_confirmation_test.dart test/features/tutor/prompt_injection_ui_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart
 ```
+
+**A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
+minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
+keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
+KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+
+```bash
+~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r29_screens_golden_test.dart
+```
+
+A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
+márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
+meglévő golden-teszt mért viselkedése, az elrendezést, méretezést és színeket
+nem érinti. MIÉRT ez a kör dolga és nem az E13-R36-é: a záró vizuális
+regressziós kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt,
+hogy a képernyő eleve csúnya-e, a saját körében kell látni.
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
 `&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`

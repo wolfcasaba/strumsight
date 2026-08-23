@@ -25,12 +25,14 @@ allowed_paths = [
   "test/features/songs/song_library_test.dart",
   "test/features/songs/song_asset_state_test.dart",
   "test/features/songs/setlist_list_test.dart",
+  "test/ui/goldens/",
   "docs/rounds/e13-r23-song-library-and-setlists.md",
 ]
 gate_tests = [
   "test/features/songs/song_library_test.dart",
   "test/features/songs/song_asset_state_test.dart",
   "test/features/songs/setlist_list_test.dart",
+  "test/ui/goldens/e13_r23_screens_golden_test.dart",
 ]
 native_gate = false
 ```
@@ -133,6 +135,7 @@ Az ADR 0275 §3 alkalmazása a Songs területre.
 | A6 | A hiányzó dal nevesítve jelenik meg a setlistben | ugyanott |
 | A7 | A legacy songs/setlists route-ok működnek | `song_library_test.dart` |
 | A8 | A keresés és a szűrés állapota megmarad visszatéréskor | ugyanott |
+| A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r23_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -144,6 +147,7 @@ Az ADR 0275 §3 alkalmazása a Songs területre.
 | A hiányzó setlist-tétel némán kimarad | **A6** |
 | A legacy route törölve | A7 |
 | A szűrő visszatéréskor nullázódik | A8 |
+| A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
 **Az eszköz-készenlét három kötelező cellája** (a küszöb: mely eszköz hiányzik):
 
@@ -160,8 +164,25 @@ vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart
+tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart test/ui/goldens/e13_r23_screens_golden_test.dart
 ```
+
+**A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
+minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
+keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
+KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+
+```bash
+~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r23_screens_golden_test.dart
+```
+
+A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
+márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
+meglévő golden-teszt mért viselkedése, az elrendezést, méretezést és színeket
+nem érinti. MIÉRT ez a kör dolga és nem az E13-R36-é: a záró vizuális
+regressziós kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt,
+hogy a képernyő eleve csúnya-e, a saját körében kell látni.
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
 `&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`

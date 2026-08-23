@@ -30,6 +30,7 @@ allowed_paths = [
   "test/features/settings/consent_center_test.dart",
   "test/features/settings/model_integrity_test.dart",
   "test/features/settings/share_redaction_test.dart",
+  "test/ui/goldens/",
   "docs/rounds/e13-r35-account-privacy-and-share.md",
 ]
 gate_tests = [
@@ -38,6 +39,7 @@ gate_tests = [
   "test/features/settings/consent_center_test.dart",
   "test/features/settings/model_integrity_test.dart",
   "test/features/settings/share_redaction_test.dart",
+  "test/ui/goldens/e13_r35_screens_golden_test.dart",
 ]
 native_gate = false
 ```
@@ -146,6 +148,7 @@ ADR 0279 következmény-központú megerősítésével.
 | A6 | Ellenőrzőösszeg-hiba esetén a modell NEM aktiválható | `model_integrity_test.dart` |
 | A7 | A megosztás alapból minimális adatot visz, tételesen felsorolva | `share_redaction_test.dart` |
 | A8 | Az export/törlés explicit, állapottal és eredménnyel | `consent_center_test.dart` |
+| A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r35_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -157,6 +160,7 @@ ADR 0279 következmény-központú megerősítésével.
 | A bejelentkezés kötelező | **A1** |
 | A megosztás alapból mindent visz | **A7** |
 | Nyers hibaüzenet a bejelentkezésnél | A2 |
+| A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
 **A modell-aktiválás három kötelező cellája** (a küszöb: az integritás
 igazolása):
@@ -174,8 +178,25 @@ lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/settings/auth_states_test.dart test/features/settings/settings_persistence_failure_test.dart test/features/settings/consent_center_test.dart test/features/settings/model_integrity_test.dart test/features/settings/share_redaction_test.dart
+tools/round-gate.sh test/features/settings/auth_states_test.dart test/features/settings/settings_persistence_failure_test.dart test/features/settings/consent_center_test.dart test/features/settings/model_integrity_test.dart test/features/settings/share_redaction_test.dart test/ui/goldens/e13_r35_screens_golden_test.dart
 ```
+
+**A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
+minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
+keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
+KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+
+```bash
+~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r35_screens_golden_test.dart
+```
+
+A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
+márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
+meglévő golden-teszt mért viselkedése, az elrendezést, méretezést és színeket
+nem érinti. MIÉRT ez a kör dolga és nem az E13-R36-é: a záró vizuális
+regressziós kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt,
+hogy a képernyő eleve csúnya-e, a saját körében kell látni.
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
 `&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`
