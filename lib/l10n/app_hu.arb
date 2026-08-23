@@ -1283,6 +1283,166 @@
   "dynamicsMetricOutlierRatio": "Kiugró pengetés aránya",
   "dynamicsMetricQuietRegionRatio": "Csendes szakasz aránya",
   "dynamicsMetricStrokeStrengthCv": "Pengetéserősség-szórás",
+  "feedCardAchievementCatalogVersion": "{id} · {category} · v{version}",
+  "@feedCardAchievementCatalogVersion": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String"
+      },
+      "version": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardAchievementCompletedAt": "Befejezve: {at}",
+  "@feedCardAchievementCompletedAt": {
+    "placeholders": {
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "@feedCardAchievementUnlocked": {},
+  "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
+  "@feedCardAnalysisImprovementMetric": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      },
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardAnalysisImprovementTitle": "Elemzés – előtte/utána",
+  "@feedCardAnalysisImprovementTitle": {},
+  "feedCardChallengeReward": "{type} · jutalom: {reward}",
+  "@feedCardChallengeReward": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "reward": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardChallengeTitle": "Napi kihívás: {name}",
+  "@feedCardChallengeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardChallengeXp": "XP: {xp}",
+  "@feedCardChallengeXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardFallbackUnfilled": "Ehhez a poszthoz nincs megjeleníthető tartalom.",
+  "@feedCardFallbackUnfilled": {},
+  "feedCardFallbackUnknown": "Ez a tartalomtípus jelenleg nem jeleníthető meg.",
+  "@feedCardFallbackUnknown": {},
+  "feedCardOriginalProgressionTitle": "{name} (saját progresszió)",
+  "@feedCardOriginalProgressionTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardPlanTemplateTitle": "Tervsablon: {name}",
+  "@feedCardPlanTemplateTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardPracticeSummaryBestScore": "Legjobb pontszám: {score}%",
+  "@feedCardPracticeSummaryBestScore": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardPracticeSummaryBody": "Aktív idő: {active}s · Szünet: {paused}s · Próbálkozások: {attempts}",
+  "@feedCardPracticeSummaryBody": {
+    "placeholders": {
+      "active": {
+        "type": "int"
+      },
+      "paused": {
+        "type": "int"
+      },
+      "attempts": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardPracticeSummaryTitle": "Gyakorlás összegzés",
+  "@feedCardPracticeSummaryTitle": {},
+  "feedCardSongBpmBeats": "{bpm} BPM · {beats}/4 · {chords}",
+  "@feedCardSongBpmBeats": {
+    "placeholders": {
+      "bpm": {
+        "type": "int"
+      },
+      "beats": {
+        "type": "int"
+      },
+      "chords": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardStrumPattern": "Strumminta: {pattern}",
+  "@feedCardStrumPattern": {
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "followingFeedEmptyState": "Még nincs poszt a feedben.",
+  "@followingFeedEmptyState": {},
+  "followingFeedEmptyStateCta": "Gyakorlás indítása",
+  "@followingFeedEmptyStateCta": {},
+  "followingFeedEndOfFeed": "Elérted a feed végét.",
+  "@followingFeedEndOfFeed": {},
+  "followingFeedErrorTitle": "A feed nem tölthető be.",
+  "@followingFeedErrorTitle": {},
+  "followingFeedLoadMore": "Továbbiak betöltése",
+  "@followingFeedLoadMore": {},
+  "followingFeedLoadingInitial": "Feed betöltése…",
+  "@followingFeedLoadingInitial": {},
+  "followingFeedLoadingMore": "Betöltés…",
+  "@followingFeedLoadingMore": {},
+  "followingFeedOfflineBanner": "Offline · a helyi másolat jelenik meg.",
+  "@followingFeedOfflineBanner": {},
+  "followingFeedPracticeNotAvailable": "A gyakorlás indítása a jövőbeli körökben érhető el.",
+  "@followingFeedPracticeNotAvailable": {},
+  "followingFeedRefresh": "Frissítés",
+  "@followingFeedRefresh": {},
+  "followingFeedRetry": "Újrapróbálkozás",
+  "@followingFeedRetry": {},
+  "followingFeedTitle": "Követési feed",
+  "@followingFeedTitle": {},
   "gamificationHubAchievementsTitle": "Eredmények",
   "gamificationHubEmptyLegacyBody": "A Hub új alapokra épül. A történeted itt fog újra megjelenni, amint az átépítés befejeződik.",
   "gamificationHubEmptyLegacyTitle": "Új fejezet a haladásodban",

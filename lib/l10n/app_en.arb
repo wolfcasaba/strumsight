@@ -1310,6 +1310,166 @@
   "dynamicsMetricOutlierRatio": "Outlier stroke ratio",
   "dynamicsMetricQuietRegionRatio": "Quiet-region ratio",
   "dynamicsMetricStrokeStrengthCv": "Stroke-strength variation",
+  "feedCardAchievementCatalogVersion": "{id} · {category} · v{version}",
+  "@feedCardAchievementCatalogVersion": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String"
+      },
+      "version": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardAchievementCompletedAt": "Completed: {at}",
+  "@feedCardAchievementCompletedAt": {
+    "placeholders": {
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "@feedCardAchievementUnlocked": {},
+  "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
+  "@feedCardAnalysisImprovementMetric": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      },
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardAnalysisImprovementTitle": "Analysis – before/after",
+  "@feedCardAnalysisImprovementTitle": {},
+  "feedCardChallengeReward": "{type} · reward: {reward}",
+  "@feedCardChallengeReward": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "reward": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardChallengeTitle": "Daily challenge: {name}",
+  "@feedCardChallengeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardChallengeXp": "XP: {xp}",
+  "@feedCardChallengeXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardFallbackUnfilled": "This post has no displayable content.",
+  "@feedCardFallbackUnfilled": {},
+  "feedCardFallbackUnknown": "This content type can't be displayed right now.",
+  "@feedCardFallbackUnknown": {},
+  "feedCardOriginalProgressionTitle": "{name} (own progression)",
+  "@feedCardOriginalProgressionTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardPlanTemplateTitle": "Plan template: {name}",
+  "@feedCardPlanTemplateTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardPracticeSummaryBestScore": "Best score: {score}%",
+  "@feedCardPracticeSummaryBestScore": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardPracticeSummaryBody": "Active: {active}s · Paused: {paused}s · Attempts: {attempts}",
+  "@feedCardPracticeSummaryBody": {
+    "placeholders": {
+      "active": {
+        "type": "int"
+      },
+      "paused": {
+        "type": "int"
+      },
+      "attempts": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardPracticeSummaryTitle": "Practice summary",
+  "@feedCardPracticeSummaryTitle": {},
+  "feedCardSongBpmBeats": "{bpm} BPM · {beats}/4 · {chords}",
+  "@feedCardSongBpmBeats": {
+    "placeholders": {
+      "bpm": {
+        "type": "int"
+      },
+      "beats": {
+        "type": "int"
+      },
+      "chords": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardStrumPattern": "Strum pattern: {pattern}",
+  "@feedCardStrumPattern": {
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "followingFeedEmptyState": "No posts in the feed yet.",
+  "@followingFeedEmptyState": {},
+  "followingFeedEmptyStateCta": "Start practice",
+  "@followingFeedEmptyStateCta": {},
+  "followingFeedEndOfFeed": "You've reached the end of the feed.",
+  "@followingFeedEndOfFeed": {},
+  "followingFeedErrorTitle": "The feed couldn't load.",
+  "@followingFeedErrorTitle": {},
+  "followingFeedLoadMore": "Load more",
+  "@followingFeedLoadMore": {},
+  "followingFeedLoadingInitial": "Loading feed…",
+  "@followingFeedLoadingInitial": {},
+  "followingFeedLoadingMore": "Loading…",
+  "@followingFeedLoadingMore": {},
+  "followingFeedOfflineBanner": "Offline · showing your local copy.",
+  "@followingFeedOfflineBanner": {},
+  "followingFeedPracticeNotAvailable": "Starting practice is available in future builds.",
+  "@followingFeedPracticeNotAvailable": {},
+  "followingFeedRefresh": "Refresh",
+  "@followingFeedRefresh": {},
+  "followingFeedRetry": "Retry",
+  "@followingFeedRetry": {},
+  "followingFeedTitle": "Following feed",
+  "@followingFeedTitle": {},
   "gamificationHubAchievementsTitle": "Achievements",
   "gamificationHubEmptyLegacyBody": "The Hub is being rebuilt on a new foundation. Your history will keep showing here once the rebuild completes.",
   "gamificationHubEmptyLegacyTitle": "A new chapter for your progression",
