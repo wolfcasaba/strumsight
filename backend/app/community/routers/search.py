@@ -212,8 +212,6 @@ def search_profiles_endpoint(
     whose owner is in a block pair with the viewer — both halves
     of the §D2 invariant.
     """
-    from ..policies.handle_policy import normalize as _normalize_handle
-
     normalized = _normalize_handle(q)
     if len(normalized) < MIN_QUERY_LENGTH:
         # F2 fix (2026-08-23) — the length check runs BEFORE the
@@ -242,7 +240,9 @@ def search_profiles_endpoint(
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         settings = request.app.state.settings
-        cursor_secret = getattr(settings, "secret_key", "dev-insecure-change-me-in-production")
+        cursor_secret = getattr(
+            settings, "secret_key", "dev-insecure-change-me-in-production"
+        )
         page = search_profiles(
             db,
             viewer_profile_id=viewer_pk,

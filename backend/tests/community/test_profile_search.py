@@ -767,9 +767,7 @@ def _decode_cursor_payload(cursor: str) -> dict[str, object]:
     return _json.loads(payload_bytes.decode("utf-8"))
 
 
-def test_f4_cursor_omits_blocked_profile_handle_and_pk(
-    client, session_factory
-):
+def test_f4_cursor_omits_blocked_profile_handle_and_pk(client, session_factory):
     """F4 — security-reviewer's specific scenario, inverted.
 
     The pre-F4 ``_encode_cursor`` was plain base64-JSON over
@@ -807,7 +805,9 @@ def test_f4_cursor_omits_blocked_profile_handle_and_pk(
     # — this is the security-reviewer's specific scenario.
     with session_factory() as db:
         viewer_pk = db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
-        blocked_pk = db.query(CommunityProfile).filter_by(public_id=blocked_pid).one().id
+        blocked_pk = (
+            db.query(CommunityProfile).filter_by(public_id=blocked_pid).one().id
+        )
         db.add(
             CommunityBlock(
                 blocker_profile_id=viewer_pk,
@@ -847,9 +847,7 @@ def test_f4_cursor_omits_blocked_profile_handle_and_pk(
     )
 
 
-def test_f4_cursor_is_hmac_opaque_not_plain_base64_json(
-    client, session_factory
-):
+def test_f4_cursor_is_hmac_opaque_not_plain_base64_json(client, session_factory):
     """F4 — the cursor is HMAC-signed, not plain base64-JSON.
 
     A regression that drops the HMAC and falls back to
@@ -939,7 +937,9 @@ def test_f4_cursor_round_trip_with_real_secret(client, session_factory):
     assert response.status_code == 200
     body1 = response.json()
     cursor = body1["next_cursor"]
-    assert cursor, "F4 setup error — expected a next_cursor (alice-two still in the queue)"
+    assert cursor, (
+        "F4 setup error — expected a next_cursor (alice-two still in the queue)"
+    )
     # Page 1 returned alice-one (the lex-first match); the
     # cursor carries the position for page 2 to resume from.
     page1_handles = [h["handle"] for h in body1["hits"]]
@@ -971,9 +971,7 @@ def test_f4_cursor_round_trip_with_real_secret(client, session_factory):
     )
 
 
-def test_f4_tampered_cursor_falls_back_to_fresh_first_page(
-    client, session_factory
-):
+def test_f4_tampered_cursor_falls_back_to_fresh_first_page(client, session_factory):
     """F4 — a tampered cursor (signature fails to verify) is
     rejected at the repository boundary, NOT silently passed
     through. The request falls back to a fresh first page.
@@ -994,10 +992,10 @@ def test_f4_tampered_cursor_falls_back_to_fresh_first_page(
     # arbitrary SQL).
     import base64
 
-    payload = base64.urlsafe_b64encode(
-        b'{"h": "alice", "id": 999999}'
-    ).decode("ascii")
-    bogus_cursor = f"{payload}.{base64.urlsafe_b64encode(b'bogus-sig-bytes-here').decode('ascii')}"
+    payload = base64.urlsafe_b64encode(b'{"h": "alice", "id": 999999}').decode("ascii")
+    bogus_cursor = (
+        f"{payload}.{base64.urlsafe_b64encode(b'bogus-sig-bytes-here').decode('ascii')}"
+    )
 
     response = client.get(
         "/community/profiles/search",
@@ -1031,9 +1029,7 @@ def test_f4_tampered_cursor_falls_back_to_fresh_first_page(
 # ---------------------------------------------------------------------------
 
 
-def test_f2_short_query_422_does_not_consume_rate_limit_slot(
-    client, session_factory
-):
+def test_f2_short_query_422_does_not_consume_rate_limit_slot(client, session_factory):
     """F2 — send 70 too-short queries (each 422) then a valid one.
 
     The pre-F2 router consumed a slot on every request, so 70

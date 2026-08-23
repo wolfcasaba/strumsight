@@ -44,6 +44,7 @@ import 'package:strumsight/features/community/domain/value_objects/public_user_i
 import 'package:strumsight/features/community/presentation/screens/community_search_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:dio/dio.dart';
+import 'dart:typed_data';
 
 // ---------------------------------------------------------------------------
 // In-memory KeyValueStore — the test seam for RecentSearchStore. Stays in this
@@ -514,7 +515,7 @@ class _F1Group {
       expect(adapter.captured, hasLength(1));
       final options = adapter.captured.single;
       expect(options.method, 'GET');
-      expect(options.path, '/community/profiles/search');
+      expect(options.uri.path, '/community/profiles/search');
       expect(options.uri.queryParameters['q'], 'ali');
       expect(options.uri.queryParameters['limit'], '50');
       expect(
@@ -524,7 +525,7 @@ class _F1Group {
       );
 
       expect(page.cursor, isA<CursorPage>());
-      final cursorPage = page.cursor as CursorPage;
+      final cursorPage = page.cursor;
       expect(cursorPage.cursor, 'opaque-token-must-not-be-decoded-by-client');
     });
 
@@ -587,7 +588,7 @@ class _F1Group {
             query: 'ali',
             cursor: const CursorPage.initial(),
           ),
-          throwsA(isA<FormatException>()),
+          throwsA(isA<NetworkFailure>()),
         );
       },
     );

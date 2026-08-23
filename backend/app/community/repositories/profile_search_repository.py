@@ -370,9 +370,15 @@ def search_profiles(
     hits = tuple(
         ProfileSearchHit(
             public_id=_coerce_uuid(row[0]),
-            handle=str(row[1]) if row[1] is not None else f"user-{_coerce_uuid(row[0]).hex[:8]}",
-            display_name=str(row[2]) if row[2] is not None else f"user-{_coerce_uuid(row[0]).hex[:8]}",
-            created_at=row[3] if isinstance(row[3], datetime) else datetime.fromisoformat(str(row[3])),
+            handle=str(row[1])
+            if row[1] is not None
+            else f"user-{_coerce_uuid(row[0]).hex[:8]}",
+            display_name=str(row[2])
+            if row[2] is not None
+            else f"user-{_coerce_uuid(row[0]).hex[:8]}",
+            created_at=row[3]
+            if isinstance(row[3], datetime)
+            else datetime.fromisoformat(str(row[3])),
         )
         for row in kept_rows
     )
