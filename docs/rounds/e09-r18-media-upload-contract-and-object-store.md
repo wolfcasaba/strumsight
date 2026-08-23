@@ -6,7 +6,7 @@
 - **Branch:** `<motor>/e09-r18-media-upload-contract-and-object-store`
 - **Előfeltétel:** `E09-R17` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0407` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** ~~`ADR 0407`~~ **ADR 0410** (a `0407`-et E09-R16 azóta elfoglalta — §0.0 D0). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 1 `communityMediaEnabled` flag TÉNYLEGES helyét — a teljes upload-pipeline ez alá a KÜLÖN flag alá kerül, nem a fő `communityEnabled` alá. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
@@ -42,6 +42,69 @@ tools/codex-signal.sh blocked "<egy sor>"
 Lezáró jelzés nélkül a kör bukott. **Listán kívüli fájl kellene → `stopped`**,
 és a kimenet a brief-revízió kérése, nem az `allowed_paths` csendes tágítása.
 Meglévő, ma zöld teszt elbukása → `blocked`, nem a teszt átírása.
+
+## 0.0 Pre-flight revízió (Claude, 2026-08-23, `main @ 4117c748`)
+
+**D0 — ADR-szám korrekció.** A fenti fejléc `ADR 0407`-e elavult (azóta
+E09-R16 — Kommentek, reply és mention — foglalta el, lásd
+`docs/adr/0407-comment-reply-and-mention.md`). A `tools/round-slots.py
+reserve-adr --round E09-R18` friss számot adott: **ADR 0410**
+(`docs/adr/0410-media-upload-contract-and-object-store.md`). Minden ezután
+következő hivatkozás `0407` helyett `0410`-re értendő.
+
+**D1 — nincs router-fájl az `allowed_paths`-on, és ez SZÁNDÉKOS.** A brief
+§4 engedélyezett fájllistája nem tartalmaz `backend/app/community/routers/media.py`-t,
+és a `backend/app/main.py` tilos zóna. Ez konzisztens a
+`docs/sdd/10-epic-09-community-platform.md` Kör 18 "Fő érintett fájlok"
+listájával (csak model/service/storage/Dart-uploader). Az A1 acceptance
+("upload-endpoint teljesen elérhetetlen" flag KI állapotban) ezért a
+**service-függvény szintjén** dől el: minden publikus
+`media_upload_service.py`-belépési pont elsőként
+`settings.community_media_enabled`-et ellenőrzi (a mező MÁR létezik,
+`backend/app/config.py:83`, nem kell hozzáadni), és flag KI esetén
+`MediaUploadDisabled` kivételt dob. A HTTP-router-bekötés egy KÉSŐBBI kör
+tartozása — ugyanaz a minta, mint a Kör 12 óta `UnimplementedError`-t dobó
+feed/post repository HTTP-integráció.
+
+**D2 — nincs S3-SDK, és a `backend/requirements.txt` NINCS az
+`allowed_paths`-on.** Mérve: a fájl kizárólag `fastapi`, `uvicorn`,
+`SQLAlchemy`, `alembic`, `pydantic[-settings]`, `email-validator`, `PyJWT`,
+`bcrypt`, `python-multipart`, `httpx`-et tartalmazza — nincs `boto3`, nincs
+`minio`. Csomagtelepítés a kör alatt tilos (implementer-preambulum §4). A
+"konkrét S3-kompatibilis adapter" ezért **kizárólag stdlibre (`hmac`,
+`hashlib`, `urllib.parse`, `datetime`) és a MÁR jelenlévő `httpx`-re**
+épülhet: az AWS SigV4 presigned-URL séma egy nyilvános, SDK nélkül
+implementálható query-string aláírási algoritmus. A `test_media_upload.py`
+egy in-memory fake `ObjectStore`-implementációt injektál a determinisztikus
+finalize-cellákhoz (méret/checksum/expiry) — nem hív valódi hálózatot.
+Részletek: `docs/adr/0410-media-upload-contract-and-object-store.md` D2.
+
+**D3 — checksum algoritmus: SHA-256.** A projekt minden meglévő
+content-hash helye (ADR 0090 asset store, signed-cursor HMAC) SHA-256-ot
+használ — a média checksum mezője ugyanezt veszi át, nincs ok új
+hash-family bevezetésére.
+
+**D4 — `public UUID + bigint PK` minta.** `CommunityMedia` `id: BigInteger`
+internal PK + `public_id: Uuid` (ADR 0396 §1 precedens) — a
+finalize/cancel/ownership-ellenőrzés a `public_id`-n keresztül azonosít,
+sosem a belső sorszámon.
+
+**D5 — `MAX_UPLOAD_BYTES` modul-szintű konstans.** A `backend/app/config.py`
+nincs az `allowed_paths`-on, tehát a küszöb egy `media_upload_service.py`-beli
+konstans, nem `Settings`-mező (egy jövőbeli kör tehetné konfigurálhatóvá).
+
+**Visszakeresés (ADR 0312, §4.9 kötelező):**
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "media
+upload signed URL object store S3"` és `--corpus lessons,halts --top 5
+"checksum ownership finalize upload validation server side"` — **nincs
+közvetlenül releváns korábbi lecke vagy halt** erre a témára (ez az ELSŐ
+objektumtár-integrációs kör a repóban). A legközelebbi releváns precedens
+nem lecke, hanem élő kód-minta: az E08-R28 F1 MAJOR (wire-szerződés két fele
+külön diffben szétcsúszhat még akkor is, ha ugyanaz a kör írja mindkettőt,
+`HANDOFF.md` §6) — itt nem áll fenn ugyanígy, mert a Dart uploader csak a
+backend ÁLTAL kiadott signed URL-t fogyasztja, nem önálló wire-kódolást
+végez, de a finalize request/response alak Dart↔Python egyezését a review-nak
+kézzel is meg kell néznie.
 
 ## 1. Cél
 
