@@ -6,7 +6,59 @@
 - **Branch:** `<motor>/e09-r10-share-artifact-contracts`
 - **Előfeltétel:** `E09-R09` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0402` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** ~~`ADR 0402`~~ → **`ADR 0404`** (ld. §0.0 — a `0402` időközben a Kör 8-é lett). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-23)
+
+**D1 — ADR-szám korrekció.** A fenti `0402` a brief megírásakor (2026-08-22)
+volt szabad; időközben a Kör 8 (`E09-R08`) foglalta le
+(`docs/adr/0402-block-mute-and-safety-relationships.md`). A
+`tools/round-slots.py reserve-adr --round E09-R10` friss számot adott:
+**`0404`** (a `0403` egy másik, még nem indult kör előjegyzett foglalása). A
+§5 alábbi "(ADR 0402)" hivatkozásait és a ténylegesen megírt ADR-fájlt
+`0404` alatt kell érteni: [`docs/adr/0404-share-artifact-contracts.md`](../adr/0404-share-artifact-contracts.md).
+
+**D2 — A négy mapper és a hét artifact-altípus leképezése rögzítve** (ADR
+0404 D1): `song_share_mapper.dart` HÁROM altípust ad (song result, original
+progression, plan template), mind a `songs/public.dart` `Song` típusából,
+külön factory-metódusokkal egy fájlban; `achievement_share_mapper.dart` KETTŐT
+(achievement + challenge), mind a `gamification/public.dart`-ból. Nincs
+ötödik mapper-fájl.
+
+**D3 — `analysis_share_mapper.dart` forrása `audio_analysis/public.dart`
+(NEM `analyze/public.dart`).** Ez két különböző feature: az `analyze` az
+eredeti klip-szintű chord/strum DSP-detektor (ezt fogyasztja a
+`strum_card.dart` `AnalyzeResult`-ja), az `audio_analysis` a V2, gazdagabb
+elemzés-feature `AnalysisComparison`/`AnalysisTrend` típusokkal (ADR 0247
+export-szerződése). Az "analysis improvement" szemantikája (két mérés közti
+javulás) az `audio_analysis` comparison/trend típusaihoz illik. A pre-flight
+által hivatkozott `strum_card.dart`/`wrapped_card.dart` a "minimalizált
+nézet" PÉLDÁJA (mennyi/milyen adat biztonságos exportálni), nem a mapperek
+tényleges bemeneti típusa.
+
+**D4 — A challenge-artifact hitelesség-mezője a `LedgerEntrySyncStatus`
+(NEM az `EvidenceTrust`).** `lib/features/gamification/data/sync/
+gamification_sync_contract.dart:28` — `enum LedgerEntrySyncStatus {
+unverified, verified }`, a `SyncReceipt.status` mezőn, E08-R28/ADR 0394-ben
+bevezetve. Az `EvidenceTrust` (`domain/activity/evidence_trust.dart`) egy
+MÁSIK, öt fokozatú aktivitás-bizonyíték tengely — nem ez a brief §5.3
+"verified/unverified reward-státusza".
+
+**Visszakeresés (ADR 0312, §4.9):**
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "share artifact schema minimal export community"`
+→ [ADR 0247](../adr/0247-analysis-export-share-and-delete-contract.md)
+(Analysis export/share/delete szerződés — allowlist-alapú, verziózott JSON,
+nyers audio/device-id/belső diagnosztika alapból kizárva — közvetlen
+precedens a D2/A5 minimalizáltsági mércéhez) és
+[ADR 0118](../adr/0118-native-json-exchange-contract.md) (natív JSON
+csereboríték: `formatVersion` a boríték verziója, KÜLÖNBÖZIK a
+`document.schemaVersion`-től — ez a kör EGY schemaVersion-t visz
+artifact-onként, a kétszintű verziózás itt nem indokolt, mert az artifact
+maga a legkülső boríték). Releváns halt/lecke a szűkített lekérdezésen nem
+került elő (`--corpus lessons,halts --top 5 "discriminated union pydantic
+unknown schema version reject"` → 0 releváns találat; a discriminated-union
+minta ÚJ ebben a backendben, `grep -rln "Discriminator\|discriminator="
+backend/app/` → 0 találat).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/features/share/widgets/{strum_card,wrapped_card}.dart` TÉNYLEGES modelljét és a gamifikáció verified/unverified reward-státusz szerződését (E08-R28) — az artifact ezekre a MEGLÉVŐ, minimalizált nézetekre épül, nem a belső repository-objektumokra. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
@@ -81,7 +133,7 @@ Minimalizált, verziózott Community export a Practice, Song, Analysis, Tutor, V
 
 **Tilos zóna:** `lib/features/practice/**`, `lib/features/songs/**`, `lib/features/audio_analysis/**`, `lib/features/gamification/**` belső (nem `public.dart`) fájljai · `lib/features/community/presentation/**` · `docs/adr/**` · `tools/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0402)
+## 5. Kötött architekturális döntések (ADR 0404, ld. §0.0 D1)
 
 ### 5.1 Az artifact MINIMÁLIS, immutable és verziózott — sosem a belső repository-objektum
 
