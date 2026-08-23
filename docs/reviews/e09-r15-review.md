@@ -3,11 +3,11 @@
 Brief: docs/rounds/e09-r15-reactions-and-optimistic-consistency.md
 Diff: `git diff 9a234d5dfaf2ee0eb80d49ce5ccbbe532ed46be2...7326680d151b` (minimax/e09-r15-reactions-and-optimistic-consistency)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-23
-Verdikt: CHANGES REQUIRED (1 MINOR — körben javítható, nem blokkolja a merge-előkészítést, javító kör dispatch-elve)
+Verdikt: **APPROVED** (javító kör 1 után — `decb861d`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 1 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 · MINOR: 1 (FIXED) · NOTE: 3
 
 ## Acceptance criteria
 
@@ -88,7 +88,11 @@ nincs kísérlet a `backend/app/community/routers/*.py`, `schemas/post.py`,
 - **Ellenőrzés:** a javítás után futtatva `PROPERTY_SEED=1 python -m pytest
   tests/community/test_reaction_service.py::test_a5_count_property_invariant_never_negative -q`
   (és néhány további seeddel) — mindnek zöldnek kell lennie, `UnboundLocalError` nélkül.
-- **Státusz:** OPEN → javító kör dispatch-elve (lásd lent).
+- **Státusz:** **FIXED** (`bb112754`) — a `count = _count()` mostantól MINDEN
+  iterációban feltétel nélkül fut (nem csak az `op == 2` ágon). SAJÁT kézzel
+  újra ellenőrizve, izolált `/tmp/review-e09-r15-fix1` klónban, négy különböző
+  `PROPERTY_SEED` értékkel (1, 2, 12345, 999999) + a dev-alapértelmezett 42-vel
+  — mind az öt futás zöld, `UnboundLocalError` egyikben sem jelentkezett.
 
 ### F2 — NOTE — Elárvult kommentblokk `sys` importra hivatkozik, ami nincs a fájlban
 
@@ -100,7 +104,7 @@ nincs kísérlet a `backend/app/community/routers/*.py`, `schemas/post.py`,
   számára.
 - **Kötelező javítás:** a komment törlése (vagy pontosítása, hogy már nincs `sys` import).
 - **Ellenőrzés:** vizuális — a `format`/`analyze`/`test` gate nem méri.
-- **Státusz:** OPEN → a javító kör mellékesen zárhatja (nem kötelező önmagában).
+- **Státusz:** **FIXED** (`bb112754`) — a javító kör mellékesen törölte.
 
 ### F3 — NOTE — `reaction_bar.dart` angol placeholder stringek, ARB nélkül (önjelzett, jelenleg nincs felhasználói hatás)
 
@@ -119,6 +123,36 @@ nincs kísérlet a `backend/app/community/routers/*.py`, `schemas/post.py`,
   commit-sorozatban — ez pontosan az E09-R14 F1 fix mintája.
 - **Ellenőrzés:** a jövőbeli bekötő kör briefjébe kerüljön be explicit acceptance-cellaként.
 - **Státusz:** NOTE — nem blokkol, nem kötelező ebben a körben javítani.
+
+### F4 — NOTE — Pre-existing flaky teszt a teljes backend suite-ban, NEM E09-R15 diffje okozza
+
+- **Fájl:** `backend/tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2`
+  (Kör 7 / E09-R07, `threading`-alapú valódi-sértés próba a follow-service A2
+  cellájára — a mi `test_a4_concurrent_toggle_consistent_viewer_state`
+  mintánkkal rokon szerkezet, saját race-ablakkal).
+- **Probléma:** a javító kör 1 UTÁNI re-verifikáció során (izolált
+  `/tmp/review-e09-r15-fix1` klón, `python -m pytest -q` a `backend/`
+  gyökérből) EGY futtatás ezt a tesztet PIROSRA hozta. Izoláltan futtatva
+  (`pytest test_follow_service.py::test_swap_unique_constraint_breaks_a2`)
+  és két KÖVETKEZŐ teljes-suite futtatásnál is zöld volt — a fájl NINCS az
+  E09-R15 `allowed_paths`-án, a diffünk egyetlen sorát sem érinti, és a
+  jelenség egy 4-ből 1 arányú, nem-determinisztikus race a MEGLÉVŐ,
+  körön kívüli tesztben.
+- **Hatás:** ha a merge előtti exact-SHA CI-dispatch pont ERRE a
+  konkrét race-re fut rá, a `full-gate.yml`/`build-apk.yml` futás pirosra
+  válthat egy olyan okból, ami NEM az E09-R15 diffjének hibája — ez H5/H7
+  szempontból megkülönböztetendő egy VALÓDI reakció-hibától. Ha ez
+  bekövetkezik, az orchesztrátor a piros run logját ELLENŐRZI (melyik teszt
+  bukott), és ha kizárólag ez a Kör 7 teszt az, újra-dispatch indokolt
+  (nem H5 — a szabály szándéka a KÖR SAJÁT hibájára vonatkozik, nem egy
+  bizonyítottan körön kívüli, pre-existing flake-re).
+- **Kötelező javítás:** NINCS ebben a körben — a fájl tilos zóna (nincs az
+  `allowed_paths`-on), és a jelenség E09-R15-től FÜGGETLEN.
+  `docs/LESSONS.md`-be egy külön, E09-R15-től független lecke kerüljön
+  (a záró rituálékban), hogy egy jövőbeli Kör 7-hez nyúló forduló mérje meg
+  és stabilizálja a race-t.
+- **Ellenőrzés:** a jövőbeli follow-service körnek szükséges saját mérése.
+- **Státusz:** NOTE — dokumentálva, nem blokkol.
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -141,11 +175,16 @@ CI (teljes suite + property + APK): ezt a review NEM futtatja — az orchestrát
 merge-előkészítés lépéseként dispatch-eli a `tools/round-ci-plan.py` által meghatározott
 workflow-t, exact-SHA-n, a javító kör UTÁN.
 
+## Javító kör 1 — zárás
+
+`bb112754` + `decb861d` (a §10.9 handoff-kiegészítés) a `minimax/e09-r15-…` branchen.
+F1 és F2 zárva, SAJÁT kézzel újraellenőrizve (lásd fent). A javító kör UTÁNI teljes
+gate SAJÁT kézzel, izolált `/tmp/review-e09-r15-fix1` klónban újrafuttatva — mind a
+kilenc lépés zöld (a backend pytest a TELJES suite-ot jelenti, a fenti F4 note szerinti
+pre-existing flake kivételével, amit két KÖVETKEZŐ újrafuttatás megcáfolt).
+
 ## Merge-döntés
 
 Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR → merge megengedett.
-Ez a kör ezt a küszöböt MÁR eléri (0 BLOCKER/MAJOR). A nyitott F1 MINOR ugyanakkor egy
-mért, valós teszt-fragilitási hiba (nem kozmetikai) — az orchesztrátor egy rövid javító
-kört dispatch-el ugyanazon a branchen a lezárás előtt, hogy a merge-elt állapot ne
-hordozzon egy önmaga docstringjével ellentmondó, seed-függő crash-kockázatot. A javítás
-UTÁN ez a jelentés APPROVED-ra frissül a javító commit sha-jával.
+0 BLOCKER/MAJOR, a nyitott F1 MINOR ZÁRVA. A kör **APPROVED**, mehet a CI-dispatch +
+exact-SHA merge útra.
