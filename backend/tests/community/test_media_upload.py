@@ -1408,7 +1408,16 @@ def test_sigv4_presign_put_signs_content_type_as_header() -> None:
       * the previously-fake
         ``X-Amz-SignedHeaders-Content-Type`` and
         ``X-Amz-SignedHeaders-Content-Length`` query params are
-        ABSENT (no bucket recognizes them — they were inert)."""
+        ABSENT (no bucket recognizes them — they were inert).
+
+    The credentials are short test-fixture strings — the
+    SigV4 computation uses the access_key_id verbatim in the
+    ``X-Amz-Credential`` scope and the secret in the HMAC
+    chain, so the URL is fully deterministic regardless of the
+    values. The values are deliberately not the AWS-documented
+    example pair so the secret-scan gate stays green (no
+    provider-token prefix, no 16-char-long credential
+    literal)."""
     from app.community.storage.object_store import _sigv4_presign_request
     from urllib.parse import parse_qs, urlparse
 
@@ -1418,8 +1427,8 @@ def test_sigv4_presign_put_signs_content_type_as_header() -> None:
         endpoint="https://example-bucket.s3.eu-central-1.amazonaws.com",
         bucket="example-bucket",
         region="eu-central-1",
-        access_key_id="AKIAIOSFODNN7EXAMPLE",
-        secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        access_key_id="aki-fixture",
+        secret_access_key="secret-fixture",
         key="profile/1/abc",
         content_type="audio/mpeg",
         max_content_length=1024,
@@ -1450,8 +1459,8 @@ def test_sigv4_presign_head_signs_only_host() -> None:
         endpoint="https://example-bucket.s3.eu-central-1.amazonaws.com",
         bucket="example-bucket",
         region="eu-central-1",
-        access_key_id="AKIAIOSFODNN7EXAMPLE",
-        secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        access_key_id="aki-fixture",
+        secret_access_key="secret-fixture",
         key="profile/1/abc",
         content_type=None,
         max_content_length=None,
