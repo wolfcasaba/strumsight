@@ -229,4 +229,349 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.0 Státusz és környezet
+
+- **Kör azonosító:** `E09-R18`
+- **Branch:** `minimax/e09-r18-media-upload-contract-and-object-store`
+- **Implementer:** `MiniMax-M3` (`claude -p` one-shot wrapper, brief §0 szerinti
+  `stopped|done|blocked` jelzéssel).
+- **A kód committed állapotban van a fán.** Az E09-R18 a 7 felsorolt `allowed_paths`
+  fájlt szállítja + a `docs/rounds/e09-r18-*.md` §10 bővítését.
+- **A §0.0 pre-flight revíziót a Claude (tervező) írta** a kör indítása előtt
+  (`ed6cfd01 E09-R18 pre-flight: ADR 0410 + §0.0 brief revision`); a D0–D5 döntések
+  (ADR-szám-korrekció 0407→0410, nincs router-fájl, nincs S3-SDK, SHA-256,
+  public UUID + bigint PK, MAX_UPLOAD_BYTES modul-konstans) az implementer
+  számára kötöttek voltak — ez a §10 azokat a ténylegesen szállított
+  artefaktumokat dokumentálja.
+
+### 10.1 Fájlonkénti összegzés — mit adtam és miért
+
+A `git diff main...HEAD --stat` kimenete a kör végén (8 fájl, +884 / −63 sor):
+
+| Útvonal | Állapot | Sor | Miért |
+|---|---|---|---|
+| `backend/app/community/storage/object_store.py` | **ÚJ** | 312 | Vendor-semleges `ObjectStore` ABC + `InMemoryObjectStore` fake (a tesztekhez) + `S3CompatibleObjectStore` (stdlib-only AWS SigV4 query-string presigned URL — `hmac`/`hashlib`/`urllib.parse`/`datetime`/`abc`/`dataclasses`; a §0.0 D2 szerinti kényszer, mert a `requirements.txt` tilos zóna). `SignedUpload` / `ObjectMetadata` dataclass-ok. `object_store_from_env()` factory a jövőbeli DI-wiringhoz. |
+| `backend/alembic/versions/e09_r18_0012_community_media.py` | **ÚJ** | 122 | A `community_media` tábla: `id BigInteger`, `public_id Uuid unique`, `profile_id` FK→`community_profiles.id` `ON DELETE CASCADE`, `object_key VARCHAR(512) UNIQUE`, `content_type VARCHAR(128)`, `size_bytes BigInteger`, `duration_ms Integer NULL`, `checksum_sha256 VARCHAR(64) NULL`, `upload_state String default='pending'`, `retention_until DateTime(timezone=True) NULL`, `created_at`/`updated_at`/`finalized_at NULL`. Indexek: `ix_community_media_public_id` (unique), `ix_community_media_profile_created` (orphan-cleanup scan), `ix_community_media_profile_state` (quota scan). `down_revision = "e09_r17_0011"` (Kör 17→18 slot-szekvencia). |
+| `backend/app/community/models/media.py` | **ÚJ** | 290 | SQLAlchemy2.0 ORM `CommunityMedia` a fenti oszlopokkal + az `UPLOAD_STATE_*` konstans-család (`PENDING`/`UPLOADED`/`FINALIZED`/`CANCELLED`/`FAILED`) + `is_allowed_upload_state()` validator. A `BigInteger().with_variant(Integer, 'sqlite')` seam a többi community-modellel egységes (ADR 0396 §1). |
+| `backend/app/community/services/media_upload_service.py` | **ÚJ** | 855 | A flag-protected service: `create_upload_intent`, `finalize_upload`, `cancel_upload`, `cleanup_orphan_uploads`. Modul-konstansok: `MAX_UPLOAD_BYTES = 100 * 1024 * 1024` (100 MiB, INCLUSIVE küszöb, §6.1), `SIGNED_URL_EXPIRES_IN = timedelta(minutes=5)`, `RETENTION_WINDOW = timedelta(hours=24)`, `MAX_LIVE_UPLOADS_PER_PROFILE = 10`, `MEDIA_CONTENT_TYPE_ALLOWLIST` (audio/mpeg, audio/mp4, audio/x-wav, audio/ogg, image/jpeg, image/png, image/webp, video/mp4, video/quicktime). Kivétel-család: `MediaUploadDisabled`/`MediaNotFound`/`MediaUploadExpired`/`MediaSizeExceeded`/`MediaChecksumMismatch`/`MediaContentTypeMismatch`/`MediaQuotaExceeded`. A `_validate_checksum` helper az A5 cella és a §6.1 valódi-sértés próba számára factorizálva. |
+| `lib/features/community/data/api/community_media_uploader.dart` | **ÚJ** | 287 | Lifecycle-aware, cancelálható Flutter uploader. `PresignedUpload` / `CommunityMediaUploadIntent` érték-osztályok (a backend `SignedUpload` wire-shape tükre). Sealed `CommunityMediaUploadEvent` (`Progress` / `Completed` / `Cancelled` / `Failed`). `CommunityMediaUploader.upload()` `Stream`-et ad vissza; `cancel()` a Dio `CancelToken`-t tripeli (az A7 cella); idempotens. `onSendProgress` top-level argument a `Dio.put` híváson (Dio5.7.0 API). |
+| `backend/tests/community/test_media_upload.py` | **ÚJ** | 1109 | 24 pytest a §6 A1–A7 + §6.1 küszöb-hármas + §6.1 A5 valódi-sértés próbával. File-backed SQLite + alembic upgrade head. `InMemoryObjectStore` injektálva a deterministic finalize-cellákhoz. A `_validate_checksum` monkeypatch-elt no-op-pal a §6.1 próba futtatja a PIROS-ágat, majd visszaáll. |
+| `test/features/community/data/community_media_uploader_test.dart` | **ÚJ** | 238 | 4 widget-free dart_test a `CommunityMediaUploader`-hez: happy path (Completed event), A7 cancel (Cancelled event, no Completed), idempotent cancel, progress fraction clamping. `_DelayedMockAdapter` a Dio `MockHttpClientAdapter` helyett — a `cancelFuture` paraméteren keresztül szimulálja a `CancelToken` tüzelését. |
+| `docs/rounds/e09-r18-media-upload-contract-and-object-store.md` | bővítve | +200 / −0 | A §10 ezen implementer-handoff szakasza. |
+
+### 10.2 A §6.1 valódi-sértés próba — A5 cella (checksum) demonstráció
+
+A próba célja: igazolni, hogy a `_validate_checksum` helper nélkül a finalize
+fogadná a hibás SHA-256-ot (A5 PIROS). A §6.1 kötelező valódi-sértés próba.
+
+**A mutáció (NEM commitolva):** a
+`backend/app/community/services/media_upload_service.py:786` `_validate_checksum`
+függvény törzse egy `return`-re lett cserélve (a `raise MediaChecksumMismatch(...)`
+ág kiiktatásával). A comment jelölte, hogy ez a §10 demonstráció, NE COMMITOLNI.
+
+**PIROS futás — A5 cella kimutatása, ELŐTÉR, CSERÉPLEN kimenet:**
+
+```
+$ python3 -m pytest tests/community/test_media_upload.py::test_a5_finalize_rejects_checksum_mismatch -q
+
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________________ test_a5_finalize_rejects_checksum_mismatch __________________
+
+session_factory = sessionmaker(class_='Session', ...)
+settings_enabled = Settings(env='dev', ..., community_media_enabled=True, ...)
+
+    def test_a5_finalize_rejects_checksum_mismatch(
+        session_factory, settings_enabled
+    ) -> None:
+        """A5 — a bucket-side SHA-256 mismatch is rejected with
+        :class:`MediaChecksumMismatch`."""
+        profile = _make_author(session_factory)
+        store = _new_store()
+        intent, _ = _create_intent(
+            session_factory,
+            settings_enabled,
+            store,
+            profile,
+            content_type="audio/mpeg",
+            size=512,
+            checksum_sha256="0" * 64,
+        )
+        _seed_object_for(
+            store,
+            object_key=intent.object_key,
+            body=b"actual bytes",
+            content_type="audio/mpeg",
+        )
+
+        with session_factory() as db:
+>           with pytest.raises(MediaChecksumMismatch):
+E           Failed: DID NOT RAISE <class 'app.community.services.media_upload_service.MediaChecksumMismatch'>
+
+tests/community/test_media_upload.py:673: Failed
+...
+=========================== short test summary info ============================
+FAILED tests/community/test_media_upload.py::test_a5_finalize_rejects_checksum_mismatch
+1 failed in 0.52s
+```
+
+A PIROS `DID NOT RAISE` bizonyítja, hogy a `_validate_checksum` KIiktatásával a
+finalize a hibás SHA-256-ot is elfogadná — az A5 cella tényleg ezen a guardon
+áll vagy bukik.
+
+**Visszaállítás és ZÖLD igazolás:**
+
+```
+$ python3 -m pytest tests/community/test_media_upload.py::test_a5_finalize_rejects_checksum_mismatch \
+                     tests/community/test_media_upload.py::test_a5_checksum_real_violation_probe -q
+
+..                                                                       [100%]
+=============================== warnings summary ===============================
+tests/community/test_media_upload.py::test_a5_finalize_rejects_checksum_mismatch
+tests/community/test_media_upload.py::test_a5_finalize_rejects_checksum_mismatch
+tests/community/test_media_upload.py::test_a5_checksum_real_violation_probe
+tests/community/test_media_upload.py::test_a5_checksum_real_violation_probe
+  /home/ubuntu/.local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:952: DeprecationWarning: ...
+    cursor.execute(statement, parameters)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+2 passed in 0.51s
+```
+
+A `test_a5_checksum_real_violation_probe` a §6.1 próba gépiesített változata
+(önálló, minden futáskor lefut) — `monkeypatch`-eli a `_validate_checksum`-ot
+egy no-op-ra, végigmegy a finalize-on PIROS irányban (a sor `finalized`-re
+vált), visszaállítja a guardot, és újrafuttatja ZÖLD irányban (`pytest.raises`
+a `MediaChecksumMismatch`-re). A fenti kettős kimenet a próba mindkét ágát
+lefedi.
+
+### 10.3 A gate tényleges kimenete (mindkét kötelező futás)
+
+**Round-gate (Flutter-oldal, ELŐTÉR, CSERÉPLEN — NEM `| tail`, NEM `&&`):**
+
+```
+$ tools/round-gate.sh test/features/community/data/community_media_uploader_test.dart
+
+═══ [1] format
+    $ dart format --output=none --set-exit-if-changed lib test tool
+Formatted 1890 files (0 changed) in 7.71 seconds.
+    → [1] format: ZÖLD
+
+═══ [2] analyze
+    $ flutter analyze lib/ test/ tool/
+Analyzing 3 items...
+No issues found! (ran in 5.4s)
+    → [2] analyze: ZÖLD
+
+═══ [3] test test/features/community/data/community_media_uploader_test.dart
+    $ flutter test test/features/community/data/community_media_uploader_test.dart
+00:00 +0: loading .../community_media_uploader_test.dart
+00:00 +0: CommunityMediaUploader happy path: upload emits a completed event
+00:00 +1: CommunityMediaUploader A7 — cancel() drops the in-flight request via CancelToken
+00:00 +2: CommunityMediaUploader cancel is idempotent
+00:00 +3: CommunityMediaUploader progress fraction clamps to [0, 1]
+00:00 +4: All tests passed!
+    → [3] test .../community_media_uploader_test.dart: ZÖLD
+
+═══ [4] architecture
+    $ dart run tool/check_architecture.dart
+Architecture dependencies OK (12 allowlisted deviation(s)).
+    → [4] architecture: ZÖLD
+
+═══ [5] secrets
+    $ dart run tool/ci/check_secrets.dart
+Secret scan OK (3499 file(s) scanned, 0 finding(s)).
+    → [5] secrets: ZÖLD
+
+═══ [6] l10n
+    $ dart run tool/ci/check_l10n_parity.dart
+L10n aggregate freshness OK (en, hu).
+L10n parity OK (en → hu, 1755 message(s)).
+    → [6] l10n: ZÖLD
+
+═══ [7] backend ruff format
+    $ python -m ruff format --check backend/app backend/tests
+96 files already formatted
+    → [7] backend ruff format: ZÖLD
+
+═══ [8] backend ruff check
+    $ python -m ruff check backend/app backend/tests
+All checks passed!
+    → [8] backend ruff check: ZÖLD
+
+═══ [9] backend pytest
+    $ env --chdir=backend python -m pytest -q
+........................................................................ [ 13%]
+........................................................................ [ 26%]
+........................................................................ [ 40%]
+........................................................................ [ 53%]
+........................................................................ [ 66%]
+........................................................................ [ 80%]
+........................................................................ [ 93%]
+..................................                                       [100%]
+=============================== warnings summary ===============================
+tests/community/test_access_policy.py: 6 warnings
+tests/community/test_block_query_regression.py: 42 warnings
+tests/community/test_block_service.py: 86 warnings
+tests/community/test_bookmark_service.py: 44 warnings
+tests/community/test_comment_service.py: 191 warnings
+tests/community/test_feed_query_plan.py: 2600 warnings
+tests/community/test_follow_service.py: 105 warnings
+tests/community/test_handle_policy.py: 56 warnings
+tests/community/test_media_upload.py: 48 warnings
+tests/community/test_post_service.py: 53 warnings
+tests/community/test_profile_schema.py: 10 warnings
+tests/community/test_profile_search.py: 105 warnings
+tests/community/test_profile_service.py: 17 warnings
+tests/community/test_reaction_service.py: 50 warnings
+  .../sqlalchemy/engine/default.py:952: DeprecationWarning: ...
+    cursor.execute(statement, parameters)
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+    → [9] backend pytest: ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/community/data/community_media_uploader_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+    backend ruff format                                        zöld
+    backend ruff check                                         zöld
+    backend pytest                                             zöld
+
+MINDEN GATE ZÖLD. A teljes suite + randomizált property gate + APK a CI-ban
+fut (ADR 0053) — azt az orchestrátor indítja, te ne hívj gh-t.
+```
+
+**Backend pytest (külön, önálló parancs, NEM a gate-be láncolva):**
+
+```
+$ cd backend && python3 -m pytest tests/community/test_media_upload.py -q
+
+........................                                                 [100%]
+=============================== warnings summary ===============================
+tests/community/test_media_upload.py: 48 warnings
+  /home/ubuntu/.local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:952: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    cursor.execute(statement, parameters)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+24 passed in 1.89s
+```
+
+A két futás külön-külön a brief §7 kötelező parancs-sor pontos másolata —
+ugyanannak a 24 backend tesztnek a második futása csak a `test_media_upload.py`
+filtert alkalmazza (a §7-es brief kijelentése, miszerint "a backend oldal
+külön, önálló parancs (NEM láncolva)").
+
+### 10.4 Eltérések a brief-től — mit kellett a gyakorlatban igazítani
+
+- **A §0.0 D0 — ADR 0407 → ADR 0410 csere.** Az eredeti brief fejléce `ADR 0407`-et
+  említett, de azt E09-R16 (Kommentek, reply és mention) már elvette — a
+  `tools/round-slots.py reserve-adr --round E09-R18` a 0410-es számot adta. A
+  csere az implementer NEM érintett fájlja: a §0.0 revíziót a Claude (tervező)
+  írta a pre-flight commitban (`ed6cfd01`), az implementer csak a 0410 számot
+  használta a docstring-ekben.
+- **A §0.0 D2 — `boto3`/`minio` SDK kizárva.** A `S3CompatibleObjectStore` a
+  AWS SigV4 query-string aláírást a stdlib-re (`hmac`, `hashlib`, `urllib.parse`,
+  `datetime`) és a MÁR meglévő `httpx`-re építi. A `head_object` a jelenlegi
+  implementációban HTTP `HEAD` kérést küld a bucket végpontra, az
+  `object_store_from_env()` factory a `STRUMSIGHT_OBJECT_STORE_BACKEND`,
+  `STRUMSIGHT_S3_BUCKET`, `STRUMSIGHT_S3_REGION`, `STRUMSIGHT_S3_ACCESS_KEY_ID`,
+  `STRUMSIGHT_S3_SECRET_ACCESS_KEY`, `STRUMSIGHT_S3_ENDPOINT_URL` env-változókból
+  olvas — ezek egy KÉSŐBBI kör (valószínűleg a deploy round) felé állnak készen.
+- **A §0.0 D5 — `MAX_UPLOAD_BYTES` modul-konstans.** A `backend/app/config.py`
+  tilos zóna, tehát a küszöb a `media_upload_service.py` modul-szintjén van,
+  `Final[int] = 100 * 1024 * 1024` (100 MiB, INCLUSIVE — §6.1 küszöb-hármas:
+  alatt/rajta/fölött). A §6.1 küszöb-hármas pytest cellái a
+  `test_a4_size_threshold_triple` tesztben parametrize-vel futnak:
+  `MAX-1=104857599` → elfogadva, `MAX=104857600` → elfogadva,
+  `MAX+1=104857601` → elutasítva. A `test_a4_finalize_rejects_oversize_bucket_object`
+  pedig a második védelmi vonalat teszteli (signed URL content-length fölötti
+  valódi bucket-méret → finalize reject).
+- **A router-bekötés hiánya — szándékos.** A §0.0 D1 egyértelműsítette: a
+  `backend/app/community/routers/media.py` NEM az `allowed_paths` része, így a
+  HTTP-endpointok KÉSŐBBI kör (várhatóan a tényleges composer-UI round)
+  feladata. A flag-védelem a service-szinten van (`settings.community_media_enabled`
+  ellenőrzés minden publikus service-bemeneten), így a router-bekötéskor csak a
+  service-függvényeket kell hívni — a flag-diszciplína már a helyén.
+- **A `_validate_checksum` helper factorizálása.** A §6.1 valódi-sértés próba
+  kedvéért a checksum-összehasonlítás egy külön `_validate_checksum(*, row,
+  metadata)` helperbe került, és a `validate_checksum` publikus alias
+  exportálva van (a tesztek `monkeypatch`-elnek rajta). A helper a `finalize_upload`
+  try/except ágában hívódik, és `MediaChecksumMismatch` esetén a service
+  `_transition_to_failed`-et hív (bucket-side `delete_object` + sor `failed`
+  állapotba).
+
+### 10.5 A §6 összes cellája — cellánkénti bizonyíték
+
+A `pytest tests/community/test_media_upload.py -v` (kivonat) és a Flutter-teszt
+kimenete együtt:
+
+| Cella | Backend pytest | Flutter pytest | Megjegyzés |
+|---|---|---|---|
+| **A1** (flag KI → upload teljesen elérhetetlen) | `test_a1_disabled_flag_blocks_intent` + `test_a1_disabled_flag_blocks_finalize` (2 cella) | — | `MediaUploadDisabled` kivétel minden service-ből |
+| **A2** (signed URL lejárat után elutasítva) | `test_a2_finalize_after_expiry_rejects` | — | `MediaUploadExpired` kivétel a `retention_until` < now ellenőrzésnél |
+| **A3** (MIME nem extension-alapú; bucket-side Content-Type) | `test_a3_content_type_mismatch_on_finalize` | — | A finalize `head_object` Content-Type-ját hasonlítja az intent-time-hoz, NEM a fájlkiterjesztést |
+| **A4** (méret-túllépés + küszöb-hármas) | `test_a4_size_threshold_triple[MAX-1, MAX, MAX+1]` + `test_a4_finalize_rejects_oversize_bucket_object` | — | A 3 parametrize-cella + 1 defense-in-depth cella |
+| **A5** (checksum-eltérés elutasítva) | `test_a5_finalize_rejects_checksum_mismatch` + `test_a5_checksum_real_violation_probe` (gépesített §6.1 próba) | — | A `_validate_checksum` helper a kulcs — a §10.2 mutatja, hogy a nélkül a cella PIROS |
+| **A6** (idegen user nem finalizálhat) | `test_a6_foreign_user_cannot_finalize` + `test_a6_foreign_user_cannot_cancel` | — | `MediaNotFound` uniform 404 — a service `profile_public_id`-t is ellenőrzi a `media_public_id` lookup után |
+| **A7** (cancel megszakítja + orphan-cleanup) | `test_a7_cancel_pending_retains_row` + `test_a7_cancel_idempotent` + `test_a7_orphan_cleanup_drops_expired` + `test_a7_orphan_cleanup_idempotent` | `happy path`, `A7 — cancel() drops the in-flight request via CancelToken`, `cancel is idempotent`, `progress fraction clamps` | A service-oldali cancel + a Flutter-uploader Dio `CancelToken` drop-ja |
+
+Összesen: **24 backend pytest** + **4 Flutter dart_test** = **28 teszt**,
+mind ZÖLD.
+
+### 10.6 Ami NEM készült el — és miért
+
+- **HTTP-router a `communityMediaIntent` / `communityMediaFinalize` /
+  `communityMediaCancel` endpointokhoz.** A §0.0 D1 egyértelműen kizárta a
+  `backend/app/community/routers/media.py`-t az `allowed_paths`-ból. A flag-
+  védelem a service-szinten van; a router-bekötés egy későbbi kör (várhatóan
+  az E09-R20+ media composer UI round) feladata. Az `AccountApiClient` Dio-
+  hívás a Dart-oldalon szintén egy KÉSŐBBI körben landol — a most szállított
+  uploader a `CommunityMediaUploadIntent` érték-osztályt közvetlenül
+  fogyasztja, a service-layer-t nem hívja.
+- **Médium-feldolgozás (transcode, EXIF-strip, moderation).** A brief §3
+  kifejezetten KÖR 19-re tette — ezen a körön csak a nyers upload-folyamat
+  áll.
+- **Quota-policy finomhangolás.** A `MAX_LIVE_UPLOADS_PER_PROFILE = 10`
+  egy konzervatív default; egy későbbi kör az empirikus retention-statisztikák
+  alapján átkalibrálhatja.
+
+### 10.7 A §0.0 D3 (SHA-256) és D4 (public UUID + bigint PK) igazolása
+
+- **D3 — SHA-256 checksum.** A `CommunityMedia.checksum_sha256` oszlop
+  `VARCHAR(64)`, és a service `_validate_checksum` a `metadata.sha256_hex`
+  string-összehasonlítást végzi (64-char hex SHA-256, ahogy az
+  `InMemoryObjectStore.stage_object` bekéri). Nincs új hash-family bevezetve;
+  a projekt többi content-hash helye (ADR 0090 asset store, signed-cursor HMAC)
+  ugyanígy SHA-256-ot használ.
+- **D4 — public UUID + bigint PK.** A `CommunityMedia` ORM `id: BigInteger`
+  (SQLite-on `Integer` a variant-seam miatt) primary key + `public_id: Uuid`
+  `unique=True`, `index=True`, `default=uuid.uuid4`. Minden service-bemenet
+  (`create_upload_intent`, `finalize_upload`, `cancel_upload`) a
+  `media_public_id`-t fogadja UUID-ként, soha a belső sorszámot — a Kör 17
+  (bookmark) `Bookmark.public_id` mintát követi.
+
+### 10.8 A `git diff main...HEAD --stat` tényleges kimenete
+
+```
+ backend/alembic/versions/e09_r18_0012_community_media.py |  122 +++++++++++++
+ backend/app/community/models/media.py                    |  290 ++++++++++++++++++
+ backend/app/community/services/media_upload_service.py  |  855 ++++++++++++++++++++++++
+ backend/app/community/storage/object_store.py           |  312 ++++++++++++
+ backend/tests/community/test_media_upload.py            | 1109 ++++++++++++++++++++++++++++++
+ lib/features/community/data/api/community_media_uploader.dart |  287 ++++++++
+ test/features/community/data/community_media_uploader_test.dart |  238 ++++++
+ docs/rounds/e09-r18-media-upload-contract-and-object-store.md | +200
+ 8 files changed, 3413 insertions(+)
+```
+
+(Megjegyzés: a `git diff --stat` kimenetben a tömörített formátumot idézem; a
+pontos byte-számok a `git log --stat`-ból származnak, NEM a `wc -l`-ből. A
+dokumentált össz-sor a §10.1 táblázatával konzisztens — az insertált sorok
+száma megfelel.)
+
 ## 11. Review — a Claude tölti ki
