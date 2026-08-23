@@ -183,13 +183,21 @@ def _resolve_profile_by_public_id(
 def _existing_post_by_idempotency_key(
     db: Session, *, profile_id: int, idempotency_key: str | None
 ) -> CommunityPost | None:
-    """Return the existing row matching ``(profile_id, idempotency_key)``.
+    """Return the existing LIVE row matching ``(profile_id, idempotency_key)``.
 
-    Returns ``None`` if no row matches — including the case where
-    the caller's key is ``None`` (the first-call path; subsequent
-    calls with the same ``None`` still return ``None`` because the
-    column allows multiple NULL rows, which is the §D4 "post WITHOUT
-    a key may be created multiple times" invariant).
+    Returns ``None`` if no LIVE row matches — including the case
+    where the caller's key is ``None`` (the first-call path;
+    subsequent calls with the same ``None`` still return ``None``
+    because the column allows multiple NULL rows, which is the §D4
+    "post WITHOUT a key may be created multiple times" invariant).
+
+    Soft-deleted rows are EXCLUDED (F3 javító kör 1, brief §5.3
+    "törölt tartalom nem tér vissza normál endpointból"): a
+    create-retry ugyanazzal a kulccsal a régi, törölt sort NEM
+    kaphatja vissza — a ``deleted_at IS NULL`` filter az élő
+    idempotencia-ablakot jelöli ki. A törölt kulcs tehát a
+    gyakorlatban "elfogy" — egy friss create ugyanazzal a kulccsal
+    új sort hozhat létre (ugyanaz a profile_id alatt).
     """
     if idempotency_key is None:
         return None
@@ -198,6 +206,7 @@ def _existing_post_by_idempotency_key(
         .filter(
             CommunityPost.profile_id == profile_id,
             CommunityPost.idempotency_key == idempotency_key,
+            CommunityPost.deleted_at.is_(None),
         )
         .one_or_none()
     )
@@ -460,6 +469,14 @@ def patch_post(
     # update timing — a side channel the §5.3 IDOR guarantee
     # forecloses).
     _evaluate_visibility(db, post=post, viewer_profile_id=viewer_profile_id)
+
+    # Owner-only PATCH (brief §3, §5.3, F1 javító kör 1): a
+    # visibility gate above only checks READ rights; PUBLIC-audience
+    # posts pass for any non-blocked viewer. PATCH must additionally
+    # check ownership — the D7 uniform 404 (PostNotFound) keeps the
+    # existence non-discoverable for a non-owner.
+    if post.profile_id != viewer_profile_id:
+        raise PostNotFound("post not found")
 
     # Optimistic concurrency (A5).
     if _as_utc(payload["resource_version"]) != _as_utc(post.updated_at):
