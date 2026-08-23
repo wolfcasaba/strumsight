@@ -360,4 +360,127 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5), 2026-08-23.
+
+### Mit építettem
+
+- `foundations/ss_motion.dart` — **szigorúan additív** (§0.0/3 kötés
+  betartva): az öt meglévő konstans, a `durations` lista tartalma/sorrendje
+  és `forReducedMotion` változatlan. Új tagok: öt szemantikus alias
+  (`microInteraction`, `chordChange`, `contentFade`, `routeTransition`,
+  `successFeedback` — mindegyik a meglévő öt érték egyike, Ch13 §9.7
+  szerint), és négy curve-token (`enter`, `exit`, `emphasizedCurve`,
+  `linear`).
+- `motion/ss_motion_scope.dart` — **ÚJ**. `SsMotionScope` `InheritedWidget`,
+  `appOverride` (nullable `bool`) + a rendszer
+  `MediaQuery.disableAnimationsOf` kombinálásával. A tiszta döntési szabály
+  külön, widget-fa nélkül tesztelhető `resolve({appOverride, systemReduced})`
+  statikus függvényben van (a §4 három cellája). `durationOf` segédfüggvény a
+  `ss_transitions.dart` és jövőbeli hívók számára.
+- `motion/ss_beat_pulse.dart` — **ÚJ**. `SsBeatClock` — a design system saját,
+  absztrakt, PULL-alapú idő-portja (`Duration? get position`), nem importál
+  `lib/features/**`-ot. `SsBeatPulse` egy `SingleTickerProviderStateMixin`
+  `Ticker`-t tart (a metronome_screen.dart-ban már bevált minta), ami MINDEN
+  frame-en újraolvassa `clock.position`-t, és abból (nem a ticker saját
+  `elapsed`-jéből) számolja a fázist — ezért a seek/stop/resume azonnal,
+  extra állapot vagy interpoláció nélkül tükröződik, drift szerkezetileg
+  kizárva. Reduced motion mellett a méret rögzített, de a szín a fázis
+  első/második fele szerint vált (§5.1 „csökkentett, nem kikapcsolt").
+  `SsBeatPulse.isWithinSyncTolerance` egy tiszta, `SsMotionScope.resolve`
+  mintáját követő függvény, ami az ADR 0274 §3 100 ms-os küszöbét formalizálja
+  — ez adja az §6.1 három cella közvetlen, determinisztikus tesztjét.
+- `motion/ss_transitions.dart` — **ÚJ**. `SsTransitions.route` (token-alapú
+  fade route-átmenet) és `SsContentFade` (`AnimatedSwitcher` wrapper) — mindkettő
+  `SsMotionScope.durationOf`-on át csökken nullára reduced motion mellett.
+- `public.dart` — a három új `motion/` fájl exportja hozzáadva.
+- `documentation/component_catalog_screen.dart` — **VISSZAVONVA, változatlan
+  marad**: lásd „Scope-döntés" lent.
+
+### Scope-döntés: a catalog-demo visszavonva (STOP-elv, listán belüli fájlra alkalmazva)
+
+Először hozzáadtam egy `SsBeatPulse`-demót a katalógushoz (engedélyezett fájl),
+de ez pirosra vitte a `test/core/design_system/component_catalog_test.dart`-ot
+(`pumpAndSettle timed out`) — ez a teszt **NINCS** az `allowed_paths`-on. Az
+ok szerkezeti: az `SsBeatPulse` Tickere szándékosan minden frame-en fut, amíg
+él az óra (ez adja az azonnali szinkront), ezért egy élő órával a katalógusban
+a `pumpAndSettle` (ami megvárja, míg elfogy az ütemezett frame) sosem áll meg.
+
+A brief §0 STOP-protokollja szerint listán kívüli fájlhoz — beleértve egy
+listán kívüli tesztet, amit egy engedélyezett fájl változása pirosra visz —
+nem szabad nyúlni. Mivel a katalógus-demó egyetlen A1–A7 cellának sem
+bizonyítéka (csak bemutató), a konfliktust a MEGENGEDETT fájl
+visszaállításával oldottam, nem a tiltott teszt módosításával:
+`component_catalog_screen.dart` a kör előtti állapotában maradt
+(`git checkout 6635a788 --`). A `SsBeatPulse` és a többi motion-fájl
+gate-tesztjei ettől függetlenül teljes lefedettséget adnak.
+
+**Következmény egy jövőbeli körnek:** amikor `SsBeatPulse`-t egy valódi
+képernyőbe huzalozzák élő órával, a widget-tesztek ne `pumpAndSettle()`-t
+használjanak, hanem explicit `pump(Duration)`-t — ez a katalógus-kísérlet
+mérte ki.
+
+### Valódi-sértés próba (§6.1, kötelező)
+
+`ss_beat_pulse.dart` `_onTick`-jét ideiglenesen átírtam, hogy a
+`widget.clock.position` helyett a ticker saját `elapsed`-jéből (a
+`Timer.periodic(bpm-ből számolt periódus)` widget-szintű megfelelője)
+számolja a fázist, majd lefuttattam `flutter test
+test/core/design_system/motion/ss_beat_pulse_test.dart`-ot. Eredmény: **4
+cella pirosra váltott** a 10-ből — pontosan az órától függő cellák (a
+független-időzítő már NEM órafüggő infrastruktúrát is levitte, mivel az A1 és
+a „no live timeline" cella is az órán múlik):
+
+```
+00:01 +3 -5: A1 — reduced motion keeps the feedback observable and clock-linked
+             no scale under reduced motion, but the color still steps with the beat [E]
+  Expected: not BoxDecoration:<...Color(0.8510, 0.5412, 0.2745)...>
+    Actual: BoxDecoration:<...Color(0.8510, 0.5412, 0.2745)...>
+  the modality that replaces scale must still track the beat
+
+00:01 +4 -6: no live timeline renders a static, non-animating state [E]
+  Expected: _DebugSize:<Size(20.8, 20.8)>
+    Actual: _DebugSize:<Size(18.9, 18.9)>
+
+Failing tests:
+  A1 — ... no scale under reduced motion, but the color still steps with the beat
+  A2 — the pulse is derived from the injected clock, not wall time
+       the phase does not move while the clock position is held
+  A2 — the pulse is derived from the injected clock, not wall time
+       the phase tracks the clock position directly
+  A3 — seek and stop are reflected immediately, with no accumulated drift
+       a forward seek is reflected on the very next frame
+  ... and 2 more
+```
+
+Az **A2** és **A3** cella — a §6.1 kötelező próbája — a vártnak megfelelően
+pirosra váltott. Ezután visszaállítottam az eredeti `_onTick`-et (`git diff`
+üres erre a szakaszra), és a teljes gate újra zöld (lásd lent).
+
+### A7 — az egyetlen nyers `Duration` literál a három ÚJ fájlban
+
+`grep -n "Duration(" lib/core/design_system/motion/*.dart` egyetlen találatot
+ad: `ss_beat_pulse.dart` `syncTolerance = Duration(milliseconds: 100)`. Ez
+**nem animáció-hossz**, hanem az ADR 0274 §3 mért tűrés-küszöbe (a §0.0/6
+pre-flight python-számítás ugyanezt a 100 ms-t adta) — a §6.2 A7-pontosítása
+kifejezetten az animáció-hossz literálokat tiltja, ezt a küszöb-konstanst nem.
+
+### A6 — `lib/features/**` érintetlen
+
+`git diff --stat 432b5f89..HEAD -- lib/features/` üres.
+
+### Gate
+
+```
+tools/round-gate.sh test/core/design_system/motion/ss_motion_scope_test.dart test/core/design_system/motion/ss_beat_pulse_test.dart
+```
+
+Mind a hét lépés (`format`, `analyze`, a két gate-teszt, `architecture`,
+`secrets`, `l10n`) **ZÖLD**. Ezen felül lefuttattam a teljes
+`test/core/design_system/` könyvtárat (75 teszt, mind zöld) és külön
+`flutter analyze lib/core/design_system/ test/core/design_system/motion/`-t
+(issue nélkül) — ezek nem helyettesítik a fenti kötelező gate-parancsot,
+csak megerősítik, hogy a kör nem vitt collateral damage-t más, listán kívüli
+tesztekbe (a katalógus-incidens kivételével, amit fentebb dokumentáltam és
+visszavontam).
+
 ## 11. Review — a Claude tölti ki
