@@ -59,7 +59,6 @@ from sqlalchemy.orm import Session
 from ..policies.handle_policy import normalize as _normalize_handle
 from ..policies.query_filters import filter_public_ids_against_viewer_blocks
 
-
 # The shortest search query we will accept. Matches the backend
 # handle-policy ``MIN_LEN`` (3 chars) — a shorter prefix collides
 # with too many rows and would index-scan a wide prefix. The router

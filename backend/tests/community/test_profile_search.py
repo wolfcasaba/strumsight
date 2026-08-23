@@ -26,7 +26,6 @@ The fixtures mirror the Kör 7 / Kör 8 pattern: own ``FastAPI()`` +
 
 from __future__ import annotations
 
-import threading
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -40,6 +39,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from app.community.models.profile import CommunityProfile
+from app.community.models.safety_relationships import CommunityBlock
 from app.community.repositories import profile_search_repository as repo
 from app.community.routers.search import reset_rate_limiters
 from app.community.routers.search import router as search_router
@@ -47,7 +47,6 @@ from app.community.services.identity_service import (
     assign_handle,
     commit_with_uniqueness_check,
 )
-from app.community.models.safety_relationships import CommunityBlock
 from app.config import Settings
 from app.database import enable_sqlite_foreign_keys, get_db
 from app.security import create_access_token, hash_password
@@ -288,10 +287,6 @@ def test_a1_search_router_source_does_not_reference_contact_keys():
 
     source = inspect.getsource(router_module)
     tree = ast.parse(source)
-    target_names = {
-        "search_profiles_endpoint",
-        "check_availability",  # not in this module but kept for completeness
-    }
     forbidden_keys = {
         "email",
         "phone",
