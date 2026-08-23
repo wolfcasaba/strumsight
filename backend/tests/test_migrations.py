@@ -130,10 +130,14 @@ def test_downgrade_one_revision_drops_only_community_tables(tmp_path, monkeypatc
 
     def _schema_snapshot(engine):
         inspector = inspect(engine)
-        return {
-            table: frozenset(column["name"] for column in inspector.get_columns(table))
-            for table in inspector.get_table_names()
-        }
+        snapshot = {}
+        for table in inspector.get_table_names():
+            columns = frozenset(
+                column["name"] for column in inspector.get_columns(table)
+            )
+            indexes = frozenset(index["name"] for index in inspector.get_indexes(table))
+            snapshot[table] = columns | indexes
+        return snapshot
 
     engine = create_engine(database_url)
     try:
