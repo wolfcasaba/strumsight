@@ -1,5 +1,76 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R06 KÉSZ — Motion rendszer és reduced motion — PR [#428](https://github.com/wolfcasaba/strumsight/pull/428), squash `011d1c47` (2026-08-23)
+
+**CHAPTER 13 (UI/UX DESIGN SYSTEM) HATODIK KÖRE KÉSZ.** Hozzáférhető
+mozgásrendszer, aminek a ritmus-animációja az **audio órából** jön, nem
+független időzítőből (ADR 0274):
+`lib/core/design_system/foundations/ss_motion.dart` (**szigorúan additív**: öt
+szemantikus duration-alias — `microInteraction`/`chordChange`/`contentFade`/
+`routeTransition`/`successFeedback` — plusz négy curve-token `enter`/`exit`/
+`emphasizedCurve`/`linear`; a kipinnelt `SsMotion.durations` lista és a
+`forReducedMotion` ÉRINTETLEN), `motion/ss_motion_scope.dart` (**ÚJ** —
+`InheritedWidget` resolver: injektált nullable `appOverride` + a rendszer
+`MediaQuery.disableAnimationsOf`, a felülbírálás MINDKÉT irányban hat),
+`motion/ss_beat_pulse.dart` (**ÚJ** — `SsBeatClock` absztrakt idő-port a design
+systemen BELÜL + az abból frame-enként pollozott pulzus), `motion/ss_transitions.dart`
+(**ÚJ** — token-alapú route-átmenet + `SsContentFade`), `public.dart`.
+
+**Motorok (ADR 0055):** tervező/reviewer **Claude Opus 5**, implementer
+**`sonnet-impl`** (Claude Sonnet 5). Két javító kör.
+
+**Pre-flight — három MÉRT brief-javítás (§0.0), ami megelőzött egy H3-at:**
+1. Az előre kiosztott **ADR 0274 MÁR MERGE-ELVE volt** (`0bf943cc`), a tartalma
+   pontosan e kör döntése → a kör NEM írt új ADR-t. A `reserve-adr` foglalta
+   `0409` felhasználatlan (a `test_adr_numbering.py` csak unicitást követel,
+   folytonosságot nem — mérve).
+2. **A brief rossz helyen kereste az órát.** A `lib/features/audio_analysis/**`
+   alatt NINCS lejátszási idővonal (csak `Stopwatch` stage-profilozás:
+   `analysis_context.dart:18`, `analysis_pipeline.dart:217`). A valódi források
+   a `song_trainer` `LocalPlaybackHandle.positions` és a
+   `metronome/beat_clock.dart` — MINDKETTŐ tilos zóna. Ezért az `SsBeatPulse`
+   a SAJÁT absztrakt portját definiálja, ahogy az ADR 0274 „Következmények"
+   szakasza eleve előírta. (`lessons/L19`, `L100` mintája.)
+3. **Scope-csapda ELŐRE elhárítva:** a listán KÍVÜLI
+   `test/core/design_system/foundations_test.dart:20-27` kipinneli az
+   `SsMotion.durations` listát → a brief kötötte, hogy az `ss_motion.dart`
+   változása szigorúan additív. Ez pontosan az E13-R05 §0.0.1 H3 hibaosztálya,
+   most kör ELEJÉN megfogva, nem self-heal körben.
+
+**Review — két MAJOR, mindkettő MÉRVE lezárva** (`docs/reviews/e13-r06-review.md`):
+- **MAJOR-1:** a brief §6.1 KÖTELEZŐ óra-szinkron hármasa **tautologikus volt** —
+  csak a tiszta `isWithinSyncTolerance(Duration)` predikátumot hívta, a widgetet
+  soha nem építette fel. Mérve: a tiltott, szabadon futó implementáción
+  **0/3 cella váltott pirosra**. Javítva: a cellák most a widgetet hajtják
+  (60/100/140 ms-mal lemaradó óra → a renderelt pont méretéből visszaszámolt
+  fázis → mért lag), és ugyanaz a rontás már **2/3** cellát visz pirosra.
+- **MAJOR-2 (regresszió, a reviewer lelet-iránya okozta):** az első javító kör
+  `_ticker.stop()`-ja néma no-opot csinált — PULL-alapú portnál semmi nem
+  ébresztette fel újra. Mérve: `PROBE_D RESUMED: false`, a pause→resume a
+  halott 16.0 méreten ragadt. Javítva a folyamatosan futó tickerrel
+  (`CircularProgressIndicator`-idióma); `PROBE_D RESUMED=true`,
+  `PROBE_E BACK_TO_LIVE=true`, a resumed 16.5 méret a 0.9-es fázis PONTOS
+  értéke. Gépi őr: két új, rebuild nélküli cella.
+- MINOR-1 (reduced-motion off-beat pixelre azonos volt a „nem játszik"
+  állapottal), MINOR-2 (`beatDuration == Duration.zero` csak `assert`-tel őrizve
+  → release `IntegerDivisionByZeroException`) — mindkettő javítva, cellával.
+
+**Zöld kapu (exact `d091e6fd`).** Full Gate
+[32656683061](https://github.com/wolfcasaba/strumsight/actions/runs/32656683061)
+**success**, Router CI
+[32656678494](https://github.com/wolfcasaba/strumsight/actions/runs/32656678494)
+**success**. Reviewer-gate izolált `/tmp` klónban: 7/7 zöld, 21 cella.
+Scope-audit: OK (9 fájl, 1 generated/ignored = a review-jelentés). A landolás a
+merge-záron át (`tools/round-land.sh`), mert a másik sáv (E09-R18) párhuzamosan fut.
+
+**Nyitott horog a következő köröknek:** az `SsBeatPulse` élő órával
+**megfogja a `pumpAndSettle`-t** (folyamatos ticker) — aki valódi képernyőbe
+huzalozza, explicit `pump(Duration)`-t használjon. A katalógus-demó emiatt
+NEM került be (a listán kívüli `component_catalog_test.dart`-ot pirosra vitte);
+egyetlen acceptance-cella sem függött tőle.
+
+**Következő Chapter 13 kör: E13-R07** (ikonográfia és gitár-glyphek).
+
 ## ✅ E09-R17 KÉSZ — Bookmark, mentett tartalom és biztonságos import — PR [#427](https://github.com/wolfcasaba/strumsight/pull/427), squash `dc6e3915` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENHETEDIK KÖRE KÉSZ.** Privát bookmark +
@@ -111,7 +182,7 @@ Router CI
 **success**. A landolás a merge-záron át (`tools/round-land.sh`), mert a másik
 sáv (E09-R17) párhuzamosan futott.
 
-**Következő Chapter 13 kör: E13-R06** (motion).
+**Következő Chapter 13 kör: E13-R07** (ikonográfia) — az E13-R06 (motion) KÉSZ, lásd a fejléc ✅-blokkot.
 
 ## ✅ E09-R16 KÉSZ — Kommentek, reply és mention — PR [#425](https://github.com/wolfcasaba/strumsight/pull/425), squash `bf767ca5` (2026-08-23)
 
