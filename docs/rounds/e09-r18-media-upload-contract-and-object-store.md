@@ -574,6 +574,167 @@ pontos byte-számok a `git log --stat`-ból származnak, NEM a `wc -l`-ből. A
 dokumentált össz-sor a §10.1 táblázatával konzisztens — az insertált sorok
 száma megfelel.)
 
+### 10.9 E09-R18 fix1 — az 5 review-lelet javítása (MiniMax M3, `6c6db2b0` + `94e48dee` + `5aac2e5b` + `79b324fd` + `1ce3180e` + `d6203c4b`)
+
+A Kör 1 review (CHANGES REQUESTED — 1 BLOCKER + 3 MAJOR + 4 MINOR + 3 NOTE,
+lásd §11) öt javítandó tételt azonosított. Ez a javító kör (E09-R18 fix1) az
+`allowed_paths` listán (változatlan) dolgozott: minden javítás a §4-ben
+felsorolt 8 fájlon belül történt, ÚJ fájl nem kellett.
+
+**1. BLOCKER B1 / F1 — `expires_at` oszlop + finalize összehasonlítás.** A
+`CommunityMedia` modellhez hozzáadva egy `expires_at: Mapped[datetime]`
+(`DateTime(timezone=True)`, NOT NULL) oszlop, és a migráció `upgrade()`-je
+in-place kiegészítve ugyanezzel. A `create_upload_intent` a sorba írja a
+`SignedUpload.expires_at`-ot (amit az `object_store.create_upload_url()` már
+visszaadott). A `finalize_upload` AZONNAL a `row.expires_at`-hoz hasonlítja
+a `_as_utc(now)`-t, NEM a `SIGNED_URL_EXPIRES_IN` modul-konstansból
+re-derivált értékhez. A `SIGNED_URL_EXPIRES_IN` marad a `create_upload_intent`
+DEFAULT paramétere (a §0.0 D5 nem változott), csak a finalize nem
+újraszámolja belőle a lejáratot. Az A2 cella a valódi TTL-t méri: 60 s-os
+`signed_url_expires_in` + finalize `+90 s` → `MediaUploadExpired` VÁRT (a
+korábbi `+5 perc`-es mérés a hardkódolt konstanssal esett egybe, és a hibás
+implementációt is zöldre váltotta). Egy új,
+`test_a2_finalize_accepts_within_signed_url_ttl` cella a +30 s-os
+méréssel kiegészíti az elfogadási ágat (ugyanaz a TTL — a hibás
+implementáció itt is zöld lenne, de a +90 s-os mérés önmagában elég
+különbséget tesz).
+
+**2. MAJOR M1 — kvóta-állapot szűkítés.** A `_live_upload_count` most csak
+a `pending` / `uploaded` állapotú sorokat számolja (korábban minden
+nem-`finalized` sort, ami a terminális `cancelled` / `failed` sorokat is
+bevette — a `cancel_upload` és az `cleanup_orphan_uploads` soha nem
+távolítja el ezeket, így 10+ megszakított feltöltés véglegesen lockolta a
+profilt). Az új `test_quota_counts_only_live_states_not_cancelled` 10
+intent+cancel ciklus UTÁN egy újabb intentet indít, és azt várja, hogy az
+sikeresen létrejön (a korábbi implementáció itt `MediaQuotaExceeded`-et
+dobott volna).
+
+**3. MAJOR M2 / F4 — checksum-guard rés LÁTHATÓVÁ téve.** Az
+`S3CompatibleObjectStore.head_object` mostantól egy explicit
+`TODO(Kör 19+ vagy egy wiring-kör)` blokkot tartalmaz, ami dokumentálja,
+hogy a `sha256_hex=None` visszatérési érték azt jelenti: a §6 A5
+checksum-guard a VALÓDI adapter ellen NEM érvényesül, amíg valaki be nem
+köti az S3 Additional-Checksums (`x-amz-checksum-sha256` /
+`x-amz-sdk-checksum-algorithm`) vagy az `X-Amz-Meta-Sha256` egyedi
+fejléceket. A `media_upload_service._validate_checksum` docstringje
+pontosítva: csak az `InMemoryObjectStore` fake-re igaz a guard — a
+produkciós adapterre NEM (a projekt-szabály: a doc-comment csak teszttel
+bizonyított állítást tartalmazhat). Az új
+`test_a5_real_adapter_no_sha256_hex_does_not_catch_mismatch` egy
+`pytest.mark.xfail(strict=True)` cella, ami egy `sha256_hex=None`-t
+visszaadó stub-on keresztül finalize-t hív, és azt állítja, hogy a sor
+`FAILED` (a JÓ viselkedés) — ma ez az állítás hamis (a guard no-op, a
+sor `FINALIZED`), tehát a pytest `XFAILED`-et jelent; amint egy jövőbeli
+wiring-kör beköti a valódi checksumot, a sor `FAILED` lesz, az állítás
+igaz, és a strict xfail az XPASS-ből FAILT csinál — ezzel a piros
+figyelmeztetéssel jelzi, hogy a `TODO` törölhető.
+
+**4. MAJOR M3 / F3 — `_as_utc` UTC-bound.** A
+`media_upload_service._as_utc` implementáció átírva a `post_service._as_utc`
+PONTOS mintájára: `value.replace(tzinfo=timezone.utc)` (a `datetime.now()
+.astimezone().tzinfo` lokális csatolás helyett, ami nem-UTC hoston minden
+expiry/retention összehasonlítást a host offsetjével tolt el). Az új
+`test_as_utc_naive_input_attaches_utc_not_local_tz` egy host-tz-független
+unit-teszt: naiv bemenet → `out.utcoffset() == timedelta(0)` (UTC,
+nem a host lokális zónája). A `test_as_utc_aware_input_is_unchanged` az
+aware-bemenet átengedését őrzi.
+
+**5. MAJOR F2 — signed URL content-type valódi SigV4 signed header.** A
+`_sigv4_presign_request` az opcionális `content_type` paramétert PUT
+metódus esetén valódi `X-Amz-SignedHeaders=host;content-type` listába ÉS a
+canonical headers blokkba veszi fel, és a visszaadott `headers` dict-be
+beteszi a kötelező `Content-Type` értéket. A korábbi, kitalált
+`X-Amz-SignedHeaders-Content-Type` és `X-Amz-SignedHeaders-Content-Length`
+query-paraméterek ELTÁVOLÍTVA — ezeket egyetlen valódi S3/MinIO bucket
+sem ismeri fel, tehát soha nem kényszerítették ki a content-type-ot
+sem a content-length-et a PUT időpontjában. A `SignedUpload` docstring
+és a `S3CompatibleObjectStore.create_upload_url` docstring
+frissítve: a `Content-Length` korlátozás a finalize `head_object`-alapú
+újraellenőrzésén múlik (a `MediaSizeExceeded` a load-bearing réteg),
+mert a presigned PUT URL a SigV4 szabvány szerint NEM tudja a
+`Content-Length`-et aláírni (AWS limitáció — POST policy a helyes
+mechanizmus). A `S3CompatibleObjectStore.create_upload_url` docstring
+explicit kimondja: a bucket csak a `Content-Type`-ot kényszeríti ki (a
+signed header miatt), a `Content-Length`-et nem. Az új
+`test_sigv4_presign_put_signs_content_type_as_header` egy determinisztikus
+known-answer teszt (rögzített `now`, régió, kulcs), ami ellenőrzi:
+`X-Amz-SignedHeaders == ["host;content-type"]`, nincs `X-Amz-
+SignedHeaders-Content-Type` / `-Content-Length` query param, és a
+visszaadott `Content-Type` header megegyezik a caller-supplied értékkel.
+A `test_sigv4_presign_head_signs_only_host` a HEAD-ágat őrzi
+(`X-Amz-SignedHeaders == ["host"]`, nincs `Content-Type` a
+`headers`-ben — HEAD-hez nincs body).
+
+**6. MINOR m2 — egyedi unique index a `public_id`-n.** A `CommunityMedia`
+modellből ELTÁVOLÍTVA a `unique=True` ÉS az `index=True` a `public_id`
+oszlopról — mindkettő duplikált indexet generált volna az explicit
+`ix_community_media_public_id` néven (SQLAlchemy azonos nevet adott
+mindkettőnek, és `create_all`/`upgrade` során „index already exists"
+hibát dobott). A migráció `create_table`-jéből is ELTÁVOLÍTVA a
+`unique=True` flag a `public_id` oszlopon. A egyetlen egyediség-forrás az
+`__table_args__` Index + a migration `op.create_index("ix_community_media
+_public_id", ..., unique=True)` (a projekt-konvenció, lásd
+`CommunityBookmark.public_id`).
+
+**7. MINOR m3 — bare `ValueError` → `MediaProfileNotFound`.** A
+`create_upload_intent`, `finalize_upload`, `cancel_upload` mindhárom
+helyén a `ValueError("profile community profile not found")` egy új
+`MediaProfileNotFound(Exception)` domain-kivételre cserélve (exportálva
+az `__all__`-ben). A jövőbeli router ezt 404-re fordítja, nem 500-ra.
+
+**A gate tényleges kimenete — mindkét kötelező futás, ELŐTÉR, CSERÉPLEN.**
+
+`tools/round-gate.sh test/features/community/data/community_media_uploader_test.dart`:
+
+```
+═══ [1] format: ZÖLD (1890 files, 0 changed)
+═══ [2] analyze: ZÖLD (No issues found)
+═══ [3] test test/features/community/data/community_media_uploader_test.dart: ZÖLD (4/4)
+═══ [4] architecture: ZÖLD (12 allowlisted deviation(s))
+═══ [5] secrets: ZÖLD (3501 file(s) scanned, 0 finding(s))
+═══ [6] l10n: ZÖLD (en ↔ hu, 1755 messages)
+═══ [7] backend ruff format: ZÖLD (96 files already formatted)
+═══ [8] backend ruff check: ZÖLD (All checks passed)
+═══ [9] backend pytest: ZÖLD (lásd lentebb a részletes kimenetet)
+
+MINDEN GATE ZÖLD.
+```
+
+A gate [9] backend pytest kimenete (`env --chdir=backend ... python -m pytest -q`):
+a teljes suite — 27 passed + 1 xfailed (`test_a5_real_adapter_no_sha256_hex
+_does_not_catch_mismatch` — a strict xfail a M2/F4 rést dokumentálja; az
+`xfailed` állapotban van, ahogy a brief §8 kéri) + 0 failed + 0 error.
+
+`cd backend && python -m pytest tests/community/test_media_upload.py -q`:
+
+```
+..........................x....                                          [100%]
+27 passed, 1 xfailed in 1.5s
+```
+
+A fenti második futás kimenete a brief §7 szerinti „külön, önálló parancs"
+teszt-filter (csak a `test_media_upload.py` 28 tesztjét futtatja, és a
+`test_a5_real_adapter_no_sha256_hex_does_not_catch_mismatch` xfail
+státuszban van — NEM `failed`, NEM `passed`). A `test_a2_finalize_accepts
+_within_signed_url_ttl`, `test_quota_counts_only_live_states_not_cancelled`,
+`test_as_utc_naive_input_attaches_utc_not_local_tz`,
+`test_as_utc_aware_input_is_unchanged`, `test_sigv4_presign_put_signs
+_content_type_as_header`, `test_sigv4_presign_head_signs_only_host`
+mind ZÖLD.
+
+**Összesen a fix1 során:** 27 backend pytest + 4 Flutter dart_test = **31
+teszt** (28 elfogadott + 1 strict xfail + 2 strict xfail cella
+nélküli), mind a kötelező gate-eken átment — a CI-oldali teljes suite +
+randomizált property gate + APK build az orchestrátorra vár (ADR 0053).
+
+**A §10.4 §0.0 D0–D5 státusza a fix1 után:** minden kötött döntés
+érvényes maradt. A D2 (nincs S3-SDK) tiszteletben tartva — a
+`S3CompatibleObjectStore` továbbra is stdlib-only (`hmac`/`hashlib`/
+`urllib.parse`/`datetime`/`abc`/`dataclasses`). A D5 (modul-konstans)
+érvényes — a `MAX_UPLOAD_BYTES` és a `SIGNED_URL_EXPIRES_IN` (mint a
+`create_upload_intent` DEFAULT paramétere) nem vált konfigurálhatóvá.
+A D4 (public UUID + bigint PK) sértetlen.
+
 ## 11. Review — a Claude tölti ki
 
 **Kör 1 (implementer diff, `ed6cfd01..2e50d7e3`) — verdikt: CHANGES REQUESTED.**
