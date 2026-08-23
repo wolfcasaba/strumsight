@@ -112,7 +112,11 @@ sealed class ShareArtifact extends CommunityShareArtifact {
   Map<String, Object?> toJson();
 
   /// Reverse of [toJson]. An unknown `type` is rejected — there is no
-  /// best-effort fallback (ADR 0404 §D3, brief §5.2).
+  /// best-effort fallback (ADR 0404 §D3, brief §5.2). Likewise, an
+  /// unknown or manipulated [schemaVersion] is rejected — the
+  /// backend discriminated union mirrors this rule
+  /// (`backend/app/community/schemas/artifacts.py::\
+  /// _validate_schema_version`).
   static ShareArtifact fromJson(Object? json) {
     final object = _requireObject(json);
     final typeCode = _requireString(object, 'type');
@@ -120,6 +124,7 @@ sealed class ShareArtifact extends CommunityShareArtifact {
     if (type == null) {
       throw ArgumentError.value(typeCode, 'type', 'is not a known artifact');
     }
+    _requireSchemaVersion(object);
     return switch (type) {
       ShareArtifactType.practiceSummary => PracticeSummaryArtifact.fromJson(
         object,
@@ -953,4 +958,30 @@ bool _listEquals<T>(List<T> left, List<T> right) {
     if (left[i] != right[i]) return false;
   }
   return true;
+}
+
+/// Validates that the wire `schemaVersion` matches the
+/// in-process constant. Mirrors the backend
+/// `_validate_schema_version` validator (ADR 0404 §D3, brief
+/// §5.2). The A3 measure-matrix relies on this check firing
+/// before any concrete `fromJson` decodes the body — a
+/// `schemaVersion=999` payload must NOT decode to a
+/// `PracticeSummaryArtifact` even when its body is otherwise
+/// valid.
+void _requireSchemaVersion(Map<String, Object?> object) {
+  final value = object['schemaVersion'];
+  if (value is! int) {
+    throw ArgumentError.value(
+      value,
+      'schemaVersion',
+      'must be an integer equal to $shareArtifactSchemaVersion',
+    );
+  }
+  if (value != shareArtifactSchemaVersion) {
+    throw ArgumentError.value(
+      value,
+      'schemaVersion',
+      'must equal $shareArtifactSchemaVersion (got $value)',
+    );
+  }
 }
