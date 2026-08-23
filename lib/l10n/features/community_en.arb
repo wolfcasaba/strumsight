@@ -130,5 +130,150 @@
   "@safetyErrorForbidden": {},
 
   "safetyErrorInvalidInput": "Invalid request",
-  "@safetyErrorInvalidInput": {}
+  "@safetyErrorInvalidInput": {},
+
+  "followingFeedTitle": "Following feed",
+  "@followingFeedTitle": {},
+
+  "followingFeedLoadingInitial": "Loading feed…",
+  "@followingFeedLoadingInitial": {},
+
+  "followingFeedEmptyState": "No posts in the feed yet.",
+  "@followingFeedEmptyState": {},
+
+  "followingFeedEmptyStateCta": "Start practice",
+  "@followingFeedEmptyStateCta": {},
+
+  "followingFeedLoadMore": "Load more",
+  "@followingFeedLoadMore": {},
+
+  "followingFeedLoadingMore": "Loading…",
+  "@followingFeedLoadingMore": {},
+
+  "followingFeedEndOfFeed": "You've reached the end of the feed.",
+  "@followingFeedEndOfFeed": {},
+
+  "followingFeedOfflineBanner": "Offline · showing your local copy.",
+  "@followingFeedOfflineBanner": {},
+
+  "followingFeedErrorTitle": "The feed couldn't load.",
+  "@followingFeedErrorTitle": {},
+
+  "followingFeedRetry": "Retry",
+  "@followingFeedRetry": {},
+
+  "followingFeedRefresh": "Refresh",
+  "@followingFeedRefresh": {},
+
+  "followingFeedPracticeNotAvailable": "Starting practice is available in future builds.",
+  "@followingFeedPracticeNotAvailable": {},
+
+  "feedCardPracticeSummaryTitle": "Practice summary",
+  "@feedCardPracticeSummaryTitle": {},
+
+  "feedCardPracticeSummaryBody": "Active: {active}s · Paused: {paused}s · Attempts: {attempts}",
+  "@feedCardPracticeSummaryBody": {
+    "placeholders": {
+      "active": {"type": "int"},
+      "paused": {"type": "int"},
+      "attempts": {"type": "int"}
+    }
+  },
+
+  "feedCardPracticeSummaryBestScore": "Best score: {score}%",
+  "@feedCardPracticeSummaryBestScore": {
+    "placeholders": {
+      "score": {"type": "int"}
+    }
+  },
+
+  "feedCardSongBpmBeats": "{bpm} BPM · {beats}/4 · {chords}",
+  "@feedCardSongBpmBeats": {
+    "placeholders": {
+      "bpm": {"type": "int"},
+      "beats": {"type": "int"},
+      "chords": {"type": "String"}
+    }
+  },
+
+  "feedCardStrumPattern": "Strum pattern: {pattern}",
+  "@feedCardStrumPattern": {
+    "placeholders": {
+      "pattern": {"type": "String"}
+    }
+  },
+
+  "feedCardOriginalProgressionTitle": "{name} (own progression)",
+  "@feedCardOriginalProgressionTitle": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "feedCardPlanTemplateTitle": "Plan template: {name}",
+  "@feedCardPlanTemplateTitle": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "feedCardAnalysisImprovementTitle": "Analysis – before/after",
+  "@feedCardAnalysisImprovementTitle": {},
+
+  "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
+  "@feedCardAnalysisImprovementMetric": {
+    "placeholders": {
+      "metric": {"type": "String"},
+      "direction": {"type": "String"},
+      "before": {"type": "String"},
+      "after": {"type": "String"}
+    }
+  },
+
+  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "@feedCardAchievementUnlocked": {},
+
+  "feedCardAchievementCatalogVersion": "{id} · {category} · v{version}",
+  "@feedCardAchievementCatalogVersion": {
+    "placeholders": {
+      "id": {"type": "String"},
+      "category": {"type": "String"},
+      "version": {"type": "int"}
+    }
+  },
+
+  "feedCardAchievementCompletedAt": "Completed: {at}",
+  "@feedCardAchievementCompletedAt": {
+    "placeholders": {
+      "at": {"type": "String"}
+    }
+  },
+
+  "feedCardChallengeTitle": "Daily challenge: {name}",
+  "@feedCardChallengeTitle": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "feedCardChallengeReward": "{type} · reward: {reward}",
+  "@feedCardChallengeReward": {
+    "placeholders": {
+      "type": {"type": "String"},
+      "reward": {"type": "String"}
+    }
+  },
+
+  "feedCardChallengeXp": "XP: {xp}",
+  "@feedCardChallengeXp": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+
+  "feedCardFallbackUnfilled": "This post has no displayable content.",
+  "@feedCardFallbackUnfilled": {},
+
+  "feedCardFallbackUnknown": "This content type can't be displayed right now.",
+  "@feedCardFallbackUnknown": {}
 }
