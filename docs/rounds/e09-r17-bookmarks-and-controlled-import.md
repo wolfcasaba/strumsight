@@ -6,7 +6,55 @@
 - **Branch:** `<motor>/e09-r17-bookmarks-and-controlled-import`
 - **Előfeltétel:** `E09-R16` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0406` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** ~~`ADR 0406`~~ → **`ADR 0408`** (§0.0 D1). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-23)
+
+**D1 — ADR-szám korrekció.** A fejléc `0406`-ot adott előre kiosztott
+ADR-ként, de azóta E09-R13 (Following feed) foglalta el, `0407`-et pedig
+E09-R16 (Kommentek) — `tools/round-slots.py reserve-adr --round E09-R17`
+friss számot adott (**0408**). Lásd `docs/adr/0408-bookmark-and-controlled-import.md`
+fejléc-jegyzete.
+
+**D2 — Erőforrás-tulajdonlás mérve: `songsProvider` nincs a `songs/public.dart`-on.**
+`grep -rln "songsRepositoryProvider" lib/` → a `SongsController.add()`
+(a helyes, új-id-t generáló belépési pont egy ÚJ `Song` perzisztálására)
+kizárólag `lib/features/songs/` belsejében használt; a feature saját
+`public.dart`-ja MA csak a `model/song.dart`-ot exportálja. A `songs/
+public.dart` bővítése kívül esik ennek a körnek az `allowed_paths`-án (egy
+másik feature-t célzó kör sosem tartalmazza — strukturális, ADR 0087 §2 H3).
+**Feloldás (ADR 0408 D1, a L286 precedens szerint — docs/LESSONS.md 10644.
+sor):** az `import_share_artifact.dart` PURE, hívó-táplált transzformátor —
+validál, és egy ÚJ `Song`-értéket épít/ad vissza, de NEM hívja
+`songsProvider`-t. A `§6 A5` cella a use-case szintjén mérhető (új
+azonosító + a bemeneti artifact-objektum mutáció-mentessége), élő
+repository nélkül — az Epic 7 R01-R08 minden adapterének bevett mintája. A
+tényleges helyi mentés bekötése egy jövőbeli kör feladata, saját
+`allowed_paths`-ban a `songs/public.dart`-tal.
+
+**D3 — "licenc/meta státusz" és "deprecated" leszűkítve a meglévő
+mezőkészletre.** `backend/app/community/schemas/artifacts.py` ma nem hordoz
+`licence`/`deprecated` mezőt (mérve: 0 találat). A validáció ebben a körben:
+`schema_version != SHARE_ARTIFACT_SCHEMA_VERSION` ⇒ ismeretlen (A4, reject);
+az A7 "deprecated, read-only fallback" ág — amíg nincs második
+schema-verzió — ugyanazt az állapotot fedi, mint az A3 tombstone-ág (a
+forrás poszt `moderation_state != "visible"`, DE a bookmark-sor megmarad).
+Lásd ADR 0408 D5.
+
+**D4 — Cursor-lapozás önálló a `bookmarks.py`-ban, nem a `feed/following_feed.py`
+HMAC-mintáját hívja.** A `feed/**` modul nincs ennek a körnek az
+`allowed_paths`-án; a bookmark-lista mindig a JWT-ből felold, hívó saját
+profiljára szűkül (nincs adversarial lapozás-kockázat), ezért egy egyszerű,
+önálló `(created_at, id)` keyset-cursor elégséges. Lásd ADR 0408 D4.
+
+**RAG-visszakeresés (§4.9, S8):** `node tools/knowledge-rag.mjs --corpus
+lessons,halts,adr --top 5` — találatok: **ADR 0176** (cross-feature import
+audit nested `public.dart` barrels), **L190** (a `public.dart`-only szabály
+a CÉLT kényszeríti ki, sosem a szimbólumokat), **L286** (a brief "mérd meg a
+public.dart-ot" utasítása a repository/provider réteget is jelenti — ÉPPEN
+ez a kör mintája, lásd D2), **E09-R15** (reakció-szolgáltatás — az idempotens
+set/remove pár közvetlen mintaadója, ADR 0408 D2). Nincs `halts` találat
+erre a konkrét körre.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 10 `plan template`/`original progression` artifact TÉNYLEGES mezőit — az import-validáció ezekre a MEGLÉVŐ schema-verziókra épül. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
