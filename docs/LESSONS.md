@@ -16887,3 +16887,80 @@ ahol a hibás (default-ra hagyatkozó) és a helyes (perzisztált-értékre ép�
 implementáció megkülönböztethető.
 
 **Őrteszt:** `backend/tests/community/test_media_upload.py`::`test_a2_finalize_rejects_expired_signed_url` (60 mp TTL + `+90 mp` finalize, a javító kör utáni alak).
+
+## L446 — Egy invariáns-cella, amely a KONSTRUKTORBAN kiszámolt mezőt méri, nem őrzi a mező FELHASZNÁLÁSÁT: a végrehajtási út hardkódolhat helyette sajátot, és a cella zöld marad (E13-R07, 2026-08-23)
+
+**Mit mértünk.** Az E13-R07 (ikonográfia) egyik kötött invariánsa
+(Ch13 §9.8 „egységes stroke", ADR 0411 §2): a tizennégy gitárglyph MINDEGYIKE
+ugyanabból a nevesített arányból (`kSsGuitarGlyphStrokeRatio`) számolja a
+vonalvastagságát. A brief §6.1 mérce-mátrixa ehhez nevesített őrt rendelt:
+„Egy glyph saját, kézzel írt `strokeWidth`-tel → **A9**".
+
+Az implementer A9 cellája ezt mérte:
+
+```dart
+final painter = SsGuitarGlyphs.painterFor(name, color: ..., size: size);
+expect(painter.strokeWidth, SsGuitarGlyphs.strokeWidthFor(size));
+```
+
+…tizennégy néven végigiterálva. Csakhogy a `SsGuitarGlyphPainter` konstruktora
+**a `name`-től függetlenül** mindig ugyanazt az egy kifejezést futtatja
+(`strokeWidth = SsGuitarGlyphs.strokeWidthFor(size)`), tehát a ciklus ugyanazt
+a konstruktort mérte tizennégyszer. A `strokeWidth` mező MEGLÉTE viszont nem
+bizonyítja, hogy a `paint()` fel is HASZNÁLJA.
+
+**A reviewer valódi-sértés próbája.** A `_paintCapo` `Paint`-jét kicserélve
+egy kézzel írt értékre (`..strokeWidth = 7.5`), a célzott teszt-fájl **minden
+cellája zöld maradt**: `00:00 +11: All tests passed!`. A brief által NEVESÍTETT
+őr tehát nem őrzött — miközben a §10 handoff kimondottan azt állította, hogy a
+hiba „szerkezetileg kizárt".
+
+**Javítás.** Nem a mezőt, hanem a KIMENETET kell megfigyelni. A javító kör egy
+`_RecordingCanvas` teszt-duplát vezetett be (`implements Canvas`, a nem
+érdekes tagokat `noSuchMethod` nyeli el), amely rögzíti a
+`drawLine`/`drawPath`/`drawRRect`/`drawCircle`/`drawArc` hívások `Paint`
+értékeit; a cella mind a 14 glyph-re, **három** szerződéses méreten (24/32/48
+dp) megméri, hogy minden `PaintingStyle.stroke` festés vonalvastagsága az
+engedélyezett arányok (`{1.0, 0.6}`) egyike a megosztott `strokeWidth`-hez
+képest — plusz `isNotEmpty`-vel kizárja a semmit nem festő painter-t is.
+Ugyanaz az injekció ezután PIROS. A három méreten mérés lényegi: egy abszolút
+dp-érték legfeljebb EGY méreten tudná véletlenül eltalálni valamelyik
+engedélyezett arányt.
+
+**Szabály.** Ha egy invariáns arról szól, hogy a végrehajtási út egy KÖZÖS
+forrásból dolgozik (közös token, közös konstans, közös factory), a cella ne a
+forrás kiszámítását mérje, hanem a végrehajtás megfigyelhető kimenetét — a
+tényleges hívásokat, a kiírt értékeket, a leadott kéréseket. A konstruktorban
+kiszámolt mező olvasása ugyanabba a hibaosztályba tartozik, mint a
+[L403](#l403) widget-típus szintű próbája és a [L443](#l443) tiszta-predikátum
+cellája: a szerkezetet méri, nem a viselkedést.
+
+**Őrteszt:** `test/core/design_system/icons/ss_icons_test.dart`::`guitar glyphs (A9) — every painted stroke derives from the shared ratio`
+
+## L447 — Az OSZTOTT munkafán (`/home/ubuntu/music-theory`) a kör-ág refje kör közben elveszhet egy párhuzamos session alatt; a kör-git-műveletek helye az IZOLÁLT munkapéldány (E13-R07, 2026-08-23)
+
+**Mit mértünk.** Az E13-R07 orchestrátora a review után az osztott munkafán
+akarta összefűzni a javító kör commitjait. A `git checkout` mérten **némán a
+`main`-re esett vissza** (`git branch --show-current` → `main`, miközben a
+következő parancs a kör-ágat feltételezte), majd egy későbbi ellenőrzésnél a
+kör-ág refje már az `origin/main` SHA-jára mutatott: a fán a
+`docs/reviews/e13-r07-review.md` nem is létezett, holott két commit-tal
+korábban létrehozták. A kör munkája csak azért maradt meg, mert **két másik
+helyen is élt**: az izolált munkapéldányban (`/home/ubuntu/ss-sonnet-impl-e13-r07`)
+és az originon.
+
+Ugyanez a hibaosztály, amit a `shared-tree-coordination` már rögzített (a
+`checkout` egy körön belül háromszor is visszabillent) — most negyedszer
+mérve, ezúttal a kör-ág refjének elvesztésével.
+
+**Szabály.** Egy kör MINDEN git-műveletét (commit, rebase, push, land) az
+IZOLÁLT munkapéldányban futtasd, ne az osztott munkafán. Az osztott fát
+kizárólag a merge-záron át, a záró rituálékhoz érintsd, és a lock-on belül
+`git fetch -q origin main && git reset -q --hard origin/main`-nal állítsd
+ismert állapotba. Ha mégis ott dolgoztál: a `git branch --show-current`-et
+MINDEN parancs előtt újra le kell mérni, és a commitokat azonnal pusholni —
+egyedül a push teszi a munkát visszaszerezhetővé.
+
+**Őrteszt:** nincs — folyamati (operátori) lecke, nem kódinvariáns; a
+gépi védelme az izolált munkapéldány használata, amit a
+`sdd-round-driver` skill §3 már előír.
