@@ -117,6 +117,29 @@ konkrét alapérték/maximum száma NEM ADR-kötött — az implementer választ
 a §10-ben dokumentálja (ugyanaz a precedens, mint az ADR 0405 D9 "numerikus
 küszöbök" pontja).
 
+**D8 — `backend/tests/test_migrations.py` FELVÉVE az `allowed_paths`-ra, szűken
+(2026-08-23, a review F1/F2 javító köre után mért regresszió miatt).** A
+review (`docs/reviews/e09-r13-review.md`) javító köre a Kör 11-től örökölt
+`test_downgrade_one_revision_drops_only_community_tables` (round-12
+migration-contract guard) tesztet PIROSRA fordította: a teszt saját
+`_schema_snapshot` helperje KIZÁRÓLAG oszlopneveket hasonlít
+(`table -> frozenset(column names)`), indexeket NEM — az F2 javítás után az
+`e09_r13_0008` migráció EGYETLEN sémaváltása egy index (nincs többé
+`feed_view_count` oszlop), ezért az egylépéses downgrade oszlop-szinten
+láthatatlan, és a teszt saját "legalább egy változás legyen" asszerciója
+hamisan bukik. Ez UGYANAZ a CI-only bump minta, mint az E09-R12 D6
+(`docs/rounds/e09-r12-post-composer-draft-and-outbox.md` §0.0 D6) — egy a
+körön KÍVÜLI, meglévő teszt hardcode-olt feltevése ütközik a kör helyes
+diffjével, és a fájl a brief megírásakor még nem volt ismert érintettként.
+A FELVÉTEL szűken: a `_schema_snapshot` helper index-neveket IS vegyen fel a
+hasonlított halmazba (`frozenset(column_names) | frozenset(index_names)`
+vagy ezzel ekvivalens), amivel a teszt saját dokumentált célja ("chain-
+agnostic… bármilyen sémaváltás") ténylegesen teljesül egy index-only
+migrációra is — ez NEM a mérce gyengítése, hanem a már dokumentáltan tágabb
+szándékú teszt tényleges, hiányzó ágának pótlása. A többi `test_migrations.py`
+teszt (`test_upgrade_head_matches_current_orm_schema`,
+`test_sqlite_runtime_enforces_foreign_key_cascade`, stb.) NEM módosul.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -126,6 +149,7 @@ allowed_paths = [
   "backend/app/community/routers/feed.py",
   "backend/alembic/versions/e09_r13_0008_community_feed_index.py",
   "backend/tests/community/test_feed_query_plan.py",
+  "backend/tests/test_migrations.py",
   "docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md",
 ]
 gate_tests = [
