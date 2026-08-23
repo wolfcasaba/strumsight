@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/design_system/public.dart';
 import '../core/notifications/nudge_service.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/settings/providers/nudge_enabled_provider.dart';
 import '../l10n/app_localizations.dart';
+import 'routing/adaptive_shell_routes.dart';
 import 'routing/app_route.dart';
 
 /// The bottom-navigation shell hosting the four top-level tabs. The current
@@ -94,6 +96,71 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The adaptive five-area shell (Today/Practice/Songs/Coach/Profile,
+/// E13-R08, ADR 0275), reachable only behind `adaptiveShellEnabled`. Every
+/// destination's label comes from an existing [AppLocalizations] key —
+/// there are no dedicated navigation strings yet (brief §0.0 D10).
+///
+/// TODO(E13-R16): dedicated nav ARB keys once l10n is in scope.
+class AdaptiveHomeShell extends StatelessWidget {
+  const AdaptiveHomeShell({
+    super.key,
+    required this.navigationShell,
+    required this.location,
+    this.showCoachDestination = true,
+  });
+
+  final StatefulNavigationShell navigationShell;
+  final String location;
+
+  /// Whether the Coach destination/branch exists (E13-R08 D15 fix round) —
+  /// mirrors the `aiTutorEnabled`-gated `StatefulShellBranch` in
+  /// `app_router.dart`. Must stay index-aligned with that branch list: the
+  /// router only registers the Coach branch when `aiTutorEnabled` is on, and
+  /// this destination is included in exactly the same order/condition so
+  /// `navigationShell.currentIndex` keeps pointing at the right branch.
+  final bool showCoachDestination;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SsAdaptiveScaffold(
+      showPrimaryNavigation: !isStageRoute(location),
+      selectedIndex: navigationShell.currentIndex,
+      onDestinationSelected: navigationShell.goBranch,
+      body: navigationShell,
+      destinations: [
+        SsAdaptiveDestination(
+          icon: const Icon(Icons.today_outlined),
+          selectedIcon: const Icon(Icons.today),
+          label: l10n.todayPlanTitle,
+        ),
+        SsAdaptiveDestination(
+          icon: const Icon(Icons.fitness_center_outlined),
+          selectedIcon: const Icon(Icons.fitness_center),
+          label: l10n.practiceHubTitle,
+        ),
+        SsAdaptiveDestination(
+          icon: const Icon(Icons.library_music_outlined),
+          selectedIcon: const Icon(Icons.library_music),
+          label: l10n.songLibraryTitle,
+        ),
+        if (showCoachDestination)
+          SsAdaptiveDestination(
+            icon: const Icon(Icons.smart_toy_outlined),
+            selectedIcon: const Icon(Icons.smart_toy),
+            label: l10n.aiTutorHomeTitle,
+          ),
+        SsAdaptiveDestination(
+          icon: const Icon(Icons.person_outline),
+          selectedIcon: const Icon(Icons.person),
+          label: l10n.tutorProfileTitle,
+        ),
+      ],
     );
   }
 }

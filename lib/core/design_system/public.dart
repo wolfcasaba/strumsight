@@ -7,6 +7,7 @@ export 'foundations/ss_breakpoints.dart';
 export 'foundations/ss_colors.dart';
 export 'foundations/ss_elevation.dart';
 export 'foundations/ss_motion.dart';
+export 'layouts/ss_adaptive_scaffold.dart';
 export 'icons/ss_guitar_glyphs.dart';
 export 'icons/ss_icon.dart';
 export 'icons/ss_icons.dart';
