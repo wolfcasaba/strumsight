@@ -58,6 +58,7 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -142,6 +143,14 @@ class CommunityReaction(Base):
             "profile_id",
             name="uq_community_reactions_post_profile",
         ),
+        # Composite (post_id) backing the count aggregation plan
+        # AND the "did viewer react" projection read. The UNIQUE
+        # constraint above already covers (post_id, profile_id),
+        # but a separate index on (post_id) alone is what the
+        # count query's planner shape hits — keeping it explicit
+        # so the planner has a stable index regardless of any
+        # future refactor of the UNIQUE backing index.
+        Index("ix_community_reactions_post", "post_id"),
     )
 
 
