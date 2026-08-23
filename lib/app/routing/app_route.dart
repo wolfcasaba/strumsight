@@ -60,6 +60,37 @@ abstract final class AppRoutes {
   static const String streakDetail = '/gamification/streak';
   static const String rewardInbox = '/gamification/inbox';
 
+  // Adaptive shell (E13-R08, ADR 0275) — five target destinations, reachable
+  // only when `adaptiveShellEnabled` is on. `practiceHub` and `songs` above
+  // are reused as the Practice and Songs destinations; `today`, `coachHome`,
+  // and `profileHome` are new paths with no legacy equivalent.
+  static const String today = '/today';
+  static const String coachHome = '/coach';
+  static const String profileHome = '/profile';
+
+  /// Adaptive shell destinations in navigation order.
+  static const List<String> adaptiveShellDestinations = <String>[
+    today,
+    practiceHub,
+    songs,
+    coachHome,
+    profileHome,
+  ];
+
+  // Adaptive shell target sub-routes (E13-R08) — each renders the same
+  // existing screen the corresponding legacy route rendered; see D6.
+  static const String practiceLive = '/practice/live';
+  static const String practiceAnalyze = '/practice/analyze';
+  static const String practiceLearn = '/practice/learn';
+  static const String practiceTuner = '/practice/tuner';
+  static const String practiceMetronome = '/practice/metronome';
+  static const String practiceChords = '/practice/chords';
+  static const String songsSetlists = '/songs/setlists';
+  static const String profileLibrary = '/profile/library';
+  static const String profileSettings = '/profile/settings';
+  static const String profileProgress = '/profile/progress';
+  static const String profileRewards = '/profile/rewards';
+
   /// Top-level destinations in the same order as the shell navigation bar.
   static const List<String> shellTabs = <String>[
     live,

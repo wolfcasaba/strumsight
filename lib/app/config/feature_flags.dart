@@ -49,6 +49,7 @@ final class FeatureFlags {
     this.communityMediaEnabled = false,
     this.communityLeaderboardEnabled = false,
     this.communityClubsEnabled = false,
+    this.adaptiveShellEnabled = false,
   });
 
   /// Derive the per-environment defaults, honoring explicit dart-defines.
@@ -122,6 +123,10 @@ final class FeatureFlags {
       communityClubsEnabled: const bool.fromEnvironment(
         'STRUMSIGHT_COMMUNITY_CLUBS',
       ),
+      // E13-R08 (ADR 0275) — the five-area adaptive shell stays off in every
+      // environment; turning it on is a user decision, not a build default,
+      // and there is deliberately no dart-define override.
+      adaptiveShellEnabled: false,
     );
   }
 
@@ -278,6 +283,12 @@ final class FeatureFlags {
   /// OFF.
   final bool communityClubsEnabled;
 
+  /// Whether the five-area (Today/Practice/Songs/Coach/Profile) adaptive
+  /// shell is reachable (ADR 0275). Defaults to OFF in every environment;
+  /// enabling it is a user decision, not a build default. The legacy shell
+  /// navigation is unaffected while this stays off.
+  final bool adaptiveShellEnabled;
+
   /// The build-time rollout level. Shadow execution has an additional
   /// runtime Lab-mode gate, so it is intentionally not inferred here.
   AnalysisRolloutStage get analysisRolloutStage => audioAnalysisV2Enabled
@@ -336,7 +347,8 @@ final class FeatureFlags {
       other.communityWritesEnabled == communityWritesEnabled &&
       other.communityMediaEnabled == communityMediaEnabled &&
       other.communityLeaderboardEnabled == communityLeaderboardEnabled &&
-      other.communityClubsEnabled == communityClubsEnabled;
+      other.communityClubsEnabled == communityClubsEnabled &&
+      other.adaptiveShellEnabled == adaptiveShellEnabled;
 
   @override
   int get hashCode {
@@ -382,6 +394,7 @@ final class FeatureFlags {
       communityMediaEnabled,
       communityLeaderboardEnabled,
       communityClubsEnabled,
+      adaptiveShellEnabled,
     ];
     if (!additionalBits.contains(true)) {
       return legacyHash;
@@ -433,5 +446,6 @@ final class FeatureFlags {
       'communityWritesEnabled: $communityWritesEnabled, '
       'communityMediaEnabled: $communityMediaEnabled, '
       'communityLeaderboardEnabled: $communityLeaderboardEnabled, '
-      'communityClubsEnabled: $communityClubsEnabled)';
+      'communityClubsEnabled: $communityClubsEnabled, '
+      'adaptiveShellEnabled: $adaptiveShellEnabled)';
 }

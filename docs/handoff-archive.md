@@ -6,6 +6,36 @@
 > Az aktuális állapot: [HANDOFF.md](HANDOFF.md) · Epic-1 zárójelentés:
 > [docs/sdd/epic-01-completion-report.md](docs/sdd/epic-01-completion-report.md)
 
+## 🗂️ Superseded HANDOFF §6 — a Kör 8 előtti „Exact next task" (E13-R08 zárásakor, 2026-08-23)
+
+### 6. Exact next task (archivált)
+
+**Két sáv fut párhuzamosan** (`docs/execution/pipeline-slots`), a kör-sorrendet
+a `docs/execution/pipeline-queue.tsv` vezeti — az alábbi a 2026-08-23-i állapot,
+NEM a queue helyett olvasandó.
+
+- **Ch13 (design system) sáv — következő: `E13-R08` — Adaptive scaffold és
+  primary navigation** (`docs/rounds/e13-r08-*.md`, engine a queue-ban
+  `sonnet-impl`). Az **E13-R07 (ikonográfia és gitárglyph készlet) KÉSZ** — lásd
+  a fejléc ✅-blokkot. A Kör 7 mért horgai a Kör 8-nak és a képernyő-migrációs
+  köröknek:
+  - Az `SsIcons.resolveByName` ma hat Material-aliast ismer (`play`, `pause`,
+    `settings`, `close`, `check`, `info`) — névvel hivatkozott új Material ikon
+    esetén bővíteni kell.
+  - Az ikon-réteg `AppLocalizations`-mentes: a semantics label és a tooltip
+    **hívó-oldali** (ADR 0411 §4). A migrációs körök adhatnak ARB-kulcsokat
+    anélkül, hogy a design system l10n-függővé válna.
+  - A `lib/features/live/widgets/strum_arrow.dart` és az új
+    `SsGuitarGlyphPainter` down/up ága két, egymástól független megvalósítás
+    (ADR 0411 „Következmények") — az összevonás a migrációs körök dolga.
+  - **A6 lelet:** 16 emoji-piktogram 5 fájlban és 25 nyílkarakter 13 fájlban
+    maradt a `lib/features/**`-ben; a csere a Ch13 Kör 16–35 hatásköre.
+- **Epic-9 (community) sáv:** a queue következő `pending` Epic-9 sora, engine
+  `minimax`.
+
+
+---
+
 ## ✅ E09-R05 KÉSZ — Flutter Community domain és public API — PR [#414](https://github.com/wolfcasaba/strumsight/pull/414), squash `79865233` (2026-08-22)
 
 **EPIC 9 (COMMUNITY PLATFORM) ÖTÖDIK KÖRE KÉSZ — az első Flutter-oldali

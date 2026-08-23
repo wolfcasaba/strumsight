@@ -19,12 +19,22 @@ bool mayLeaveEditor({
 ///
 /// Redirects are idempotent: applying this function again to any non-null
 /// result returns `null`, which prevents redirect loops.
-String? onboardingRedirect({required bool seen, required String location}) {
+///
+/// [home] is where a seen-onboarding user lands after `/welcome`. It
+/// defaults to [AppRoutes.live] so every existing caller (in particular the
+/// unmodified `test/app/routing/route_guards_test.dart`) is unaffected; the
+/// router passes [AppRoutes.today] here when `adaptiveShellEnabled` is on
+/// (brief §0.0 D14/4).
+String? onboardingRedirect({
+  required bool seen,
+  required String location,
+  String home = AppRoutes.live,
+}) {
   if (!seen && location != AppRoutes.welcome) {
     return AppRoutes.welcome;
   }
   if (seen && location == AppRoutes.welcome) {
-    return AppRoutes.live;
+    return home;
   }
   return null;
 }
