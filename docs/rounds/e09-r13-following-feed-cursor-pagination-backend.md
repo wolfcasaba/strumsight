@@ -117,6 +117,29 @@ konkrét alapérték/maximum száma NEM ADR-kötött — az implementer választ
 a §10-ben dokumentálja (ugyanaz a precedens, mint az ADR 0405 D9 "numerikus
 küszöbök" pontja).
 
+**D8 — `backend/tests/test_migrations.py` FELVÉVE az `allowed_paths`-ra, szűken
+(2026-08-23, a review F1/F2 javító köre után mért regresszió miatt).** A
+review (`docs/reviews/e09-r13-review.md`) javító köre a Kör 11-től örökölt
+`test_downgrade_one_revision_drops_only_community_tables` (round-12
+migration-contract guard) tesztet PIROSRA fordította: a teszt saját
+`_schema_snapshot` helperje KIZÁRÓLAG oszlopneveket hasonlít
+(`table -> frozenset(column names)`), indexeket NEM — az F2 javítás után az
+`e09_r13_0008` migráció EGYETLEN sémaváltása egy index (nincs többé
+`feed_view_count` oszlop), ezért az egylépéses downgrade oszlop-szinten
+láthatatlan, és a teszt saját "legalább egy változás legyen" asszerciója
+hamisan bukik. Ez UGYANAZ a CI-only bump minta, mint az E09-R12 D6
+(`docs/rounds/e09-r12-post-composer-draft-and-outbox.md` §0.0 D6) — egy a
+körön KÍVÜLI, meglévő teszt hardcode-olt feltevése ütközik a kör helyes
+diffjével, és a fájl a brief megírásakor még nem volt ismert érintettként.
+A FELVÉTEL szűken: a `_schema_snapshot` helper index-neveket IS vegyen fel a
+hasonlított halmazba (`frozenset(column_names) | frozenset(index_names)`
+vagy ezzel ekvivalens), amivel a teszt saját dokumentált célja ("chain-
+agnostic… bármilyen sémaváltás") ténylegesen teljesül egy index-only
+migrációra is — ez NEM a mérce gyengítése, hanem a már dokumentáltan tágabb
+szándékú teszt tényleges, hiányzó ágának pótlása. A többi `test_migrations.py`
+teszt (`test_upgrade_head_matches_current_orm_schema`,
+`test_sqlite_runtime_enforces_foreign_key_cascade`, stb.) NEM módosul.
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -126,6 +149,7 @@ allowed_paths = [
   "backend/app/community/routers/feed.py",
   "backend/alembic/versions/e09_r13_0008_community_feed_index.py",
   "backend/tests/community/test_feed_query_plan.py",
+  "backend/tests/test_migrations.py",
   "docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md",
 ]
 gate_tests = [
@@ -269,5 +293,389 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **Az N+1 query.** Nagy following-listánál ez azonnal performance-problémává és potenciális DoS-vektorrá válik (A7).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**Implementer:** MiniMax M3 (Claude Code harness, MiniMax endpoint).
+
+### Első menet (commit `b102268c`)
+
+1. `backend/alembic/versions/e09_r13_0008_community_feed_index.py` —
+   az új migráció:
+   * `op.create_index("ix_community_posts_created_id", ...)` —
+     `(created_at, id)` összetett index (a feed rendezési kulcsa).
+   * `op.create_index("ix_community_posts_audience_created", ...)` —
+     `(audience, created_at, id)` összetett index (a PUBLIC-discovery
+     felszínhez, Kör 14+ előkészítés).
+   * `op.add_column("community_posts", "feed_view_count", Integer NOT NULL
+     DEFAULT 0)` — a §5.3 "count-adatok batch-projekció" ígéretéhez
+     lefoglalt oszlop (Kör 13 NEM olvassa/írja; Kör 14+ comment/reaction-
+     számláló endpointok előtt).
+   * Modulszintű `Base.metadata.tables["community_posts"]` regisztráció
+     (Index + Table.append_column a `feed_view_count` oszlophoz) — a
+     `test_migrations.py` migration-contract tesztjéhez, hogy a
+     `compare_metadata(orm, db)` visszaadjon `[]`-t anélkül, hogy a
+     brief §3 tilos zónájában lévő `models/post.py`-t módosítanánk
+     (a Kör 3 `handle_history.py` mintát követi: a séma-regisztráció
+     egy külön modulban, az ORM osztály érintetlen marad).
+   * `replace_existing=True` a `Table.append_column` híváson, hogy a
+     teszt-szekvenciák (többszöri migration-import) ne dobjanak
+     `DuplicateColumnError`-t.
+   * `down_revision = "e09_r11_0007"` — közvetlenül a Kör 11
+     `community_posts` tábla migrációjára épül.
+
+2. `backend/app/community/schemas/feed.py` — wire shape:
+   * `FeedPageQuery(page_size: int | None, cursor: str | None)` —
+     `extra="forbid"`, `page_size >= 1`, cursor `max_length=512`.
+     A felső korlát (`le=FEED_PAGE_SIZE_MAX`) szándékosan NINCS
+     a Pydantic rétegben — a §6.1 fölött cella a router-oldali
+     clamp-re támaszkodik (a §0.0 D7 fail-safe; "nem 500-as hibát
+     ad, korlátoz a maximumra").
+   * `FEED_PAGE_SIZE_DEFAULT = 25` és `FEED_PAGE_SIZE_MAX = 50` —
+     a két publikus konstans (a router és a repository is innen
+     importálja).
+   * `FeedPostItem` — a Kör 11 `PostOut` alakját követi
+     (`author_public_id`, `audience`, `body`, `artifact_*`,
+     `moderation_state`, `created_at`, `resource_version`,
+     `deleted_at`), de a wire-shape commit/seed mezők nélkül.
+   * `FeedPage(items, next_cursor)` — a lapválasz borítéka.
+
+3. `backend/app/community/feed/following_feed.py` — a feed olvasási
+   út (első menet):
+   * `list_following_feed(db, *, viewer_profile_id, cursor, page_size,
+     cursor_secret) -> FeedPage` — egyetlen SQL SELECT a
+     `community_posts ⨝ community_follows ⨝ community_profiles`
+     fölött, ahol a WHERE blokk tartalmazza:
+     - follow-előfeltétel (`follower_profile_id = viewer`);
+     - törlés-szűrő (`deleted_at IS NULL`);
+     - moderation-szűrő (`moderation_state = 'visible'`);
+     - audience-szűrő (`audience != 'private'`);
+     - opcionális cursor-predikátum (`(created_at, id) < (cursor_at,
+       cursor_id)`, SQLAlchemy `tuple_(...) < tuple_(...)` — DB-
+       hordozható, nincs dialectspecifikus sor-konstruktor).
+   * A Kör 8 `filter_public_ids_against_viewer_blocks` hívása a
+     `candidate_profile_ids` halmazra (page-szintű, N+1-mentes).
+   * Saját, aszimmetrikus mute-predikátum a `community_mutes`
+     táblán (`muter_profile_id = viewer AND muted_profile_id IN
+     (candidate_set)`) — a Kör 8 `is_blocked_pair`-tól eltérően,
+     mert a mute irányfüggő (ADR 0406 §D3).
+   * `_sign_cursor` / `_verify_cursor` — HMAC-SHA256, 32-byte
+     truncated tag, `FEED_CURSOR_VERSION = "e09r13-v1"` konstans
+     a payload-ban (jövőbeli kompatibilitás-töréshez). A Kör 9
+     `profile_search_repository` mintáját követi.
+   * `query_plan_uses_feed_index(db, viewer_profile_id)` —
+     A7-evidencia: az EXPLAIN QUERY PLAN tartalmazza-e a feed
+     indexet (vagy bármely más, a SELECT-et kiszolgáló indexet —
+     SQLite-s planner-szelekció a dataset-statisztikától függ).
+   * A `_CURSOR_TAG_BYTES` modul-szintű konstans a Kör 9
+     `profile_search_repository` mintát követi.
+
+4. `backend/app/community/routers/feed.py` — HTTP felszín:
+   * `GET /community/feed` — `CurrentUser` kötelező (a feed
+     személyre szabott, a follow-graph és block/mute szűrők a
+     hívóhoz kötöttek).
+   * A `page_size` Query paraméter `ge=1` (a §6.1 alatta cella
+     422-et ad), a router-oldali clamp `min(requested,
+     FEED_PAGE_SIZE_MAX)` (a fölött cella 200 + MAX sor).
+   * A Pydantic schema validáció `extra='forbid'` (a kliens nem
+     csempészhet ismeretlen query paramétert).
+   * A cursor átmegy a Pydantic `FeedPageQuery` validáción
+     (shape-ellenőrzés), majd a repository ellenőrzi a HMAC-t.
+     A séma-hibás cursor 422 (kliens-oldali bug); a HMAC-sérült
+     cursor a repository-ban `None`-re vált és friss első
+     lapot ad (az §6 A6 cella — biztonsági határ soha nem
+     enged át hamis cursort).
+
+5. `backend/tests/community/test_feed_query_plan.py` — 12 teszt:
+   * **A1** — `test_a1_chronological_ordering` (5 post,
+     fordított beszúrási sorrend = újabb-előbb) +
+     `test_a1_no_engagement_signal_in_ordering` (a SELECT-ből
+     kimaradnak a `reaction_count` / `comment_count` /
+     `view_count` / `score` oszlopok).
+   * **A2** — `test_a2_opaque_cursor_format` (wire shape
+     `<base64>.<base64>`, payload = `(c, i, v)` triple, HMAC
+     verifies) + `test_a2_tampered_cursor_falls_back`
+     (rossz kulccsal aláírt cursor → friss első lap).
+   * **A3** — `test_a3_pagination_no_duplicates_no_gaps` (55
+     poszt, 25-ös oldalméret, teljes feed-bejárás → minden
+     poszt pontosan egyszer, semmi duplikáció, semmi hiány).
+   * **A4** — `test_a4_blocked_muted_deleted_filtered`
+     (5 szerző, 1-1 poszt; block/mute/soft-delete/
+     moderation-state kategóriánként 1-1 kieső poszt — a
+     feed csak a tisztát adja vissza).
+   * **A5** — `test_a5_followers_only_visibility` (két szerző:
+     egy követett, egy nem-követött; PUBLIC + FOLLOWERS +
+     PRIVATE posztokkal; feed = {followed-public,
+     followed-followers}, nincs private, nincs
+     nem-követett-poszt).
+   * **A6** — `test_a6_malformed_cursor_no_500` (4-féle
+     garbage cursor: nincs-dot, üres, base64-no-dot, tiszta
+     random szöveg; egyik sem 500).
+   * **A7** — `test_a7_explain_plan_uses_feed_index` (500
+     seed-sor + ANALYZE; a planner a `community_posts`
+     táblát INDEX-szel éri el — NINCS sequential scan).
+   * **Page-size threshold (3 cella):**
+     `test_pagesize_below_minimum_rejected` (0 → 422),
+     `test_pagesize_at_max_accepted` (50 → 200 + pontosan 50
+     sor), `test_pagesize_above_max_clamped` (500 → 200 + ≤ 50
+     sor, nem 422).
+
+### Javító kör (F1–F6 review-leletek, ezen commit)
+
+**Implementer:** MiniMax M3 (Claude Code harness, MiniMax endpoint).
+
+A javító kör a review `docs/reviews/e09-r13-review.md` hat leletét
+zárja (F1 BLOCKER + F2 MAJOR + F3-F6 MINOR). Minden lelet
+konkrét fájl:sor hivatkozással, és a `python3 -m pytest
+tests/community/test_feed_query_plan.py -v` parancs 16/16
+zölddel zárul (lásd "Mért értékek" lentebb).
+
+#### F1 — BLOCKER — A7 valódi-sértés próba + helper-javítás + query-refaktor
+
+A reviewer saját, önálló mérése (saját szken, 500 sor + ANALYZE,
+DROP INDEX) kimutatta: az eredeti helper a substring "index"
+ELŐFORDULÁSÁT nézte a teljes EXPLAIN-szövegben (a JOIN-alapú
+query-alak miatt a `community_follows` join is hozott "index"
+substringet), és a query maga — a `community_posts ⨝
+community_follows` join shape miatt — TEMP B-TREE FOR ORDER BY-ra
+kényszerítette a planner, így az új index a jelen query-alakkal
+MÉRVE nem adott megfigyelhető előnyt. Három kötelező javítás:
+
+1. **Helper-javítás** (`following_feed.py:query_plan_uses_feed_index`):
+   - a helper most a SPECIFIKUS `ix_community_posts_created_id`
+     index NEVÉT keresi a `community_posts`-ra vonatkozó plan-sorban
+     (nem az általános "van valahol index" mintát);
+   - ÉS ellenőrzi, hogy a plan NEM tartalmaz
+     `USE TEMP B-TREE FOR ORDER BY`-t;
+   - ÉS a `community_follows` index-használatot is nézi (a Kör 8
+     N+1 vektor ellen).
+2. **Query-refaktor** (`following_feed.py:list_following_feed`):
+   - a follow-halmaz most egy KÜLÖN lekérdezésben materializálódik
+     (`SELECT followed_profile_id FROM community_follows WHERE
+     follower_profile_id = :viewer`);
+   - a második lekérdezés `community_posts WHERE profile_id IN
+     (:followed_ids) ORDER BY created_at DESC, id DESC LIMIT :n`
+     alakú — a planner a `ix_community_posts_created_id` indexet
+     tudja vezetni a globális rendezéshez, és a profile_id IN-listát
+     menet közben alkalmazza szűrőként (NINCS TEMP B-TREE).
+3. **Inline valódi-sértés próba** (új teszt
+   `test_a7_real_violation_probe_drops_feed_index`):
+   - a teszt a `tmp_path`-on hoz létre egy eldobható DB-másolatot,
+   - feltölti 500 sorral + ANALYZE,
+   - hívja a helper-t (`query_plan_uses_feed_index` → True, BASELINE),
+   - `DROP INDEX ix_community_posts_created_id` + ANALYZE,
+   - hívja a helper-t (→ **False**, PIROS),
+   - `CREATE INDEX ix_community_posts_created_id ... ON
+     community_posts (created_at, id)` + ANALYZE,
+   - hívja a helper-t (→ True, visszaállt ZÖLD);
+   - a teszt mindhárom fázist assertálja, a tranzitív
+     "páros-színek" állítást is (a `engine.dispose()` minden fázis
+     után kényszeríti a friss connection-t, mert a SQLite
+     `sqlite_stat1` statisztikákat connection-szinten cache-eli —
+     az ANALYZE önmagában nem elég, a connection-pool frissítése is
+     kell, lásd F1 review-saját-mérés komment).
+
+A helper most a **drop-after** fázisban a `posts_index_used=False`
+ÉS `no_temp_sort=False` jelzést is kiírja a stderr-re (debug
+segédlet, lásd lentebb a teszt-kimenetet).
+
+A teszt **PIROS** eredményének parancs-kimenete (a drop utáni
+fázisból, saját futtatás):
+
+```
+[query_plan_uses_feed_index] plan did NOT use feed index:
+  posts_index_used=False
+  no_temp_sort=False
+  follows_index_used=True
+  plan="(4, 0, 0, 'SCAN community_posts') (9, 0, 0, 'LIST SUBQUERY 1')
+    (11, 9, 0, 'SEARCH community_follows USING COVERING INDEX
+     sqlite_autoindex_community_follows_1 (follower_profile_id=?)')
+    (53, 0, 0, 'USE TEMP B-TREE FOR ORDER BY')"
+.
+====================== 1 passed, 1005 warnings in 2.64s ======================
+```
+
+A PIROS sort a `SCAN community_posts` (USING INDEX nélkül) ÉS a
+`USE TEMP B-TREE FOR ORDER BY` adja — pont az a kettős jel, amit
+a §6.1 mérce-mátrix A7 sora elvár ("a `(created_at, id)` index
+vezet és nincs temp-sort"). A reCREATE-fázis után ugyanaz a teszt
+a `SCAN community_posts USING INDEX ix_community_posts_created_id`
++ nincs temp-sort tervvel tér vissza, és a helper True-t ad. A
+megfordított index → True visszaút is assertálva van — a cella
+nem "beragadt piros".
+
+#### F2 — MAJOR — Engedély nélküli séma-bővítés eltávolítása
+
+A reviewer F2 lelet: a migráció `feed_view_count` oszlopa ÉS
+`ix_community_posts_audience_created` indexe nem szerepel sem az
+ADR 0406-ban, sem a brief §5-ében — az implementer egyoldalúan
+vette fel őket "Kör 14+ előkészítés" indoklással. A javító kör
+mindkettőt ELTÁVOLÍTJA a migrációból és a `Base.metadata`
+regisztrációból is.
+
+`backend/alembic/versions/e09_r13_0008_community_feed_index.py`:
+- `op.create_index("ix_community_posts_audience_created", ...)` TÖRÖLVE
+- `op.add_column("community_posts", "feed_view_count", ...)` TÖRÖLVE
+- a `downgrade()` is csak az egyetlen megmaradó indexet droppolja
+- a fájl-végi `Base.metadata` regisztráció is csak az egyetlen
+  `ix_community_posts_created_id` indexet hozza létre
+- a `feed_view_count`-ra vonatkozó `Table.append_column` hívás TÖRÖLVE
+
+A migration most PONTOSAN EGY séma-műveletet hajt végre:
+`op.create_index("ix_community_posts_created_id", "community_posts",
+["created_at", "id"])` — az ADR 0406 D2 egyetlen kötelezettsége.
+
+> **Megjegyzés a CI-re nézve:** a `tests/test_migrations.py`
+> `test_downgrade_one_revision_drops_only_community_tables`
+> assert-ja, hogy a downgrade NEM üres — de a teszt csak az
+> OSZLOP-snapshotot ellenőrzi (`frozenset(column["name"])`), az
+> indexeket nem. Az F2 tisztítás után a teszt `assert
+> snapshot_after != snapshot_at_head` feltétele megbukik, mert az
+> egyetlen séma-művelet (egy index létrehozása) nem érint oszlopot.
+> A reviewer maga írta: "`test_migrations.py` továbbra is zöld a
+> szűkített migrációval" — ez a teszt-magatartás nem reprodukálható
+> egy tiszta klónban: az F2 tisztítás valóban breakeli. Ez a
+> megfigyelés a teszt `tests/test_migrations.py` TILOS ZÓNÁN kívül
+> eső karbantartását igényli (a snapshot-view-t ki kell egészíteni
+> index-snapshotra, vagy a tesztet el kell fogadni, hogy egy index-
+> létrehozás is "valid schema change"). A reviewer F2 findingje
+> EZT A MELLÉKHATÁST NEM JELZETT — a javító kör ezt a megfigyelést
+> a §10 handoffban dokumentálja a merge-döntéshez, de a teszt
+> MÓDOSÍTÁSA a `tests/test_migrations.py` tilos zónáján kívül esik
+> (round §4 `allowed_paths` lista). A kötelező kör-gate (a
+> `tests/community/test_feed_query_plan.py`) ZÖLD; a downstream
+> migration-contract teszt a merge-gate-orchestrátor döntési köre.
+
+#### F3 — MINOR — Cursor-secret fail-closed (nincs publikus dev-kulcs)
+
+A reviewer F3 lelet: az eredeti kód
+`getattr(settings, "secret_key", "dev-insecure-change-me-in-production")`
+fail-open — ha a `secret_key` valamiért hiányzik, a cursor a
+kódba írt publikus placeholder-rel íródik alá, és bárki hamisíthat
+érvényes cursort. A kockázat alacsony (a cursor nem jogosultsági
+token), de a fail-open minta önmagában rossz gyakorlat.
+
+Javítás (`backend/app/community/routers/feed.py`): új
+`_resolve_cursor_secret(settings) -> str` helper, ami:
+- 503-at dob, ha `settings.secret_key` nem `str` vagy üres;
+- 503-at dob, ha `settings.secret_key == Settings.model_fields[
+  "secret_key"].default` (a publikus dev-placeholder);
+- egyébként visszaadja a secret-et.
+
+A `_DEV_SECRET_KEY_DEFAULT` modul-szintű konstansként van
+deklarálva (a `Settings.model_fields["secret_key"].default` értéket
+tükrözi), hogy a router ne importálja az `app.main`-t (körkörös
+import-elkerülés). A meglévő cursor-secret viselkedés (a `secret_key`
+a `settings.secret_key`-ből jön) változatlan — csak a hiányzó/placeholder
+esetén válik fail-closed-dá.
+
+Új teszt: `test_f3_placeholder_cursor_secret_returns_503` (settings a
+dev-placeholderrel → 503) + `test_f3_empty_cursor_secret_returns_503`
+(settings `secret_key=""` → 503). Mindkettő a `tests/community/
+test_feed_query_plan.py`-ben fut, az F3 §4 `allowed_paths`
+listáján.
+
+#### F4 — MINOR — Audience-szűrés allowlist-re cserélve
+
+A reviewer F4 lelet: az eredeti kód `audience != 'private'` (denylist)
+fail-open egy jövőbeli, migráció nélkül bevezetett új audience-értékre
+(pl. `"club"`, `"unlisted"`).
+
+Javítás (`backend/app/community/feed/following_feed.py`):
+- új modul-szintű konstans:
+  `FEED_AUDIENCE_ALLOWLIST: Final[tuple[str, ...]] = ("public",
+  "followers")`;
+- a `community_posts.audience != 'private'` predikátum lecserélve
+  `community_posts.audience.in_(FEED_AUDIENCE_ALLOWLIST)`-re.
+
+Új teszt: `test_f4_unknown_audience_filtered` — beszúr egy PUBLIC
+posztot (megjelenik) és egy `audience='unlisted'` posztot (NEM jelenik
+meg), és assertálja, hogy a feed 200-zal tér vissza (nem 500).
+
+#### F5 — MINOR — A router docstring hamis 422-állításának javítása
+
+A reviewer F5 lelet: a `get_following_feed` docstring azt állította,
+hogy a malformed cursor 422-t ad. A TÉNYLEGES és a `test_a6_*
+malformed_cursor_no_500` által TESZTELT viselkedés: 200 + friss első
+lap. A doc-comment szabály (csak teszttel bizonyított állítás) ezt
+fogta meg.
+
+Javítás (`backend/app/community/routers/feed.py`): a docstring
+lecserélve a tényleges, tesztelt viselkedésre ("the repository's
+`_verify_cursor` returns `None` on any malformed / forged /
+version-mismatch input, and the repository then silently serves a
+fresh first page"), és explicit felsorolva, hogy a végpont egyetlen
+nem-200 válasza a 404 (nincs community profile) és az 503 (cursor
+signing key missing/placeholder — F3 fix).
+
+#### F6 — MINOR — `FEED_CURSOR_VERSION` típus-eltérés az ADR-től
+
+A reviewer F6 lelet: az ADR 0406 D5 explicit `int`-et ír elő (`int = 1`),
+az eredeti kód `str = "e09r13-v1"`-et használt. Funkcionálisan
+ártalmatlan (a `_verify_cursor` string-egyenlőséget vizsgál), de
+szó szerinti eltérés egy kötött architekturális döntéstől.
+
+Javítás (`backend/app/community/feed/following_feed.py:107`):
+`FEED_CURSOR_VERSION: Final[int] = 1`. Az `_sign_cursor` payload
+`"v"` mezőjét `int(feed_version)`-ként írja, a `_verify_cursor`
+`version = int(payload["v"])` formában olvassa + hasonlítja. A
+meglévő `test_a2_opaque_cursor_format` teszt (`payload["v"] ==
+feed_repo.FEED_CURSOR_VERSION`) és a `_test_sign_cursor` helper
+(`payload["v"] = feed_repo.FEED_CURSOR_VERSION`) automatikusan
+követi a típusváltást — mindkettő `int == int` összehasonlításra
+értékelődik.
+
+**Mért értékek (a javító kör eredménye):**
+
+* `python3 -m pytest tests/community/test_feed_query_plan.py -v`:
+
+  ```
+  tests/community/test_feed_query_plan.py::test_a1_chronological_ordering           PASSED
+  tests/community/test_feed_query_plan.py::test_a1_no_engagement_signal_in_ordering  PASSED
+  tests/community/test_feed_query_plan.py::test_a2_opaque_cursor_format              PASSED
+  tests/community/test_feed_query_plan.py::test_a2_tampered_cursor_falls_back        PASSED
+  tests/community/test_feed_query_plan.py::test_a3_pagination_no_duplicates_no_gaps  PASSED
+  tests/community/test_feed_query_plan.py::test_a4_blocked_muted_deleted_filtered    PASSED
+  tests/community/test_feed_query_plan.py::test_a5_followers_only_visibility         PASSED
+  tests/community/test_feed_query_plan.py::test_a6_malformed_cursor_no_500           PASSED
+  tests/community/test_feed_query_plan.py::test_a7_explain_plan_uses_feed_index      PASSED
+  tests/community/test_feed_query_plan.py::test_a7_real_violation_probe_drops_feed_index PASSED
+  tests/community/test_feed_query_plan.py::test_pagesize_below_minimum_rejected      PASSED
+  tests/community/test_feed_query_plan.py::test_pagesize_at_max_accepted             PASSED
+  tests/community/test_feed_query_plan.py::test_pagesize_above_max_clamped           PASSED
+  tests/community/test_feed_query_plan.py::test_f3_placeholder_cursor_secret_returns_503 PASSED
+  tests/community/test_feed_query_plan.py::test_f3_empty_cursor_secret_returns_503   PASSED
+  tests/community/test_feed_query_plan.py::test_f4_unknown_audience_filtered         PASSED
+
+  ====================== 16 passed, 2600 warnings in 16.39s ======================
+  ```
+
+* `python3 -m ruff check` és `python3 -m ruff format --check`: mind az
+  5 új/módosított fájlra zöld.
+
+* `tests/community/test_feed_query_plan.py::test_a7_real_violation_probe_drops_feed_index`
+  külön kimenete (a javító kör §10 handoffjába került F1 bizonyítékként):
+  a DROP INDEX fázis PIROS eredményt ad
+  (`posts_index_used=False`, `no_temp_sort=False`), a CREATE INDEX
+  visszaállítás után ZÖLD.
+
+* **Downstream megfigyelés** (a F2 tisztítás következménye):
+  `tests/test_migrations.py::test_downgrade_one_revision_drops_only_community_tables`
+  assert-os feltétele (`snapshot_after != snapshot_at_head`) most
+  megbukik, mert a snapshot csak oszlop-szintű (az indexeket nem
+  ellenőrzi), és az F2 tisztítás után a downgrade csak egy indexet
+  droppol. A teszt a `tests/test_migrations.py` tilos zónáján kívül
+  esik (round §4 `allowed_paths` listán nincs); a merge-gate-orchestrátor
+  döntési köre.
+
+**Scope-deviancia dokumentálva (javító kör):**
+
+* A javító kör a review §4 kiegészített allowed_paths listáját
+  használja, és kizárólag az 5 érintett fájlt módosítja. A
+  `tests/test_migrations.py` (az F2 tisztítás downstream hatását
+  hordozó teszt) a tilos zónában van — nem módosítjuk. A
+  §10 handoffban a downstream teszt állapotát dokumentáljuk, de
+  magát a tesztet NEM javítjuk.
+
+**Mért scope-audit (gépi):** A scope-audit a commit-olt
+fákra fut — 5 új/módosított fájl, mind a §4 allowed_paths listáján.
 
 ## 11. Review — a Claude tölti ki
