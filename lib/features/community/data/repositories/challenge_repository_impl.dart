@@ -56,50 +56,43 @@ final class DisabledCommunityChallengeRepository
   Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({
     required Object cursor,
     required int limit,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<CommunityChallengeDefinition> fetchDefinition({
     required ContentId challengeId,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<CommunityChallengeParticipantState?> fetchMyParticipation({
     required ContentId challengeId,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> invite({
     required ContentId challengeId,
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> acceptInvite({
     required ContentId challengeId,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> declineInvite({
     required ContentId challengeId,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> cancelInvite({
     required ContentId challengeId,
     required PublicUserId target,
     required String idempotencyKey,
-  }) async =>
-      throw _disabled.error;
+  }) async => throw _disabled.error;
 
   @override
   Future<void> submitResult({
@@ -159,8 +152,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
       decode: _decodeChallengeDefinition,
     );
     return switch (result) {
-      Success(:final value) =>
-        value as CommunityChallengeDefinition,
+      Success(:final value) => value as CommunityChallengeDefinition,
       Failure(:final error) => throw error,
     };
   }
@@ -174,20 +166,25 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
       decode: (json) => json,
     );
     return switch (result) {
-      Success(:final value) {
-        if (value is! Map) {
-          return null;
-        }
-        if (value['participant'] == null) {
-          return null;
-        }
-        return _decodeParticipant(
-          challengeId: challengeId,
-          json: value['participant'] as Map<String, Object?>,
-        );
-      },
+      Success(:final value) => _decodeParticipantOrNull(
+        challengeId: challengeId,
+        raw: value,
+      ),
       Failure(:final error) => throw error,
     };
+  }
+
+  CommunityChallengeParticipantState? _decodeParticipantOrNull({
+    required ContentId challengeId,
+    required Object? raw,
+  }) {
+    if (raw is! Map) return null;
+    final participantValue = raw['participant'];
+    if (participantValue == null) return null;
+    return _decodeParticipant(
+      challengeId: challengeId,
+      json: participantValue as Map<String, Object?>,
+    );
   }
 
   @override
@@ -336,9 +333,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     }
     final type = challengeTypeFromWire(typeWire);
     if (type == null) {
-      throw FormatException(
-        'community challenge wire: unknown type $typeWire',
-      );
+      throw FormatException('community challenge wire: unknown type $typeWire');
     }
     final metric = json['metric'];
     if (metric is! String || metric.isEmpty) {
