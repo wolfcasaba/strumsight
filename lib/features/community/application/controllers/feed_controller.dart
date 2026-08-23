@@ -720,13 +720,19 @@ class FeedController extends Notifier<FeedState> {
     if (typeRaw == 'unknown') {
       return UnfilledCommunityShareArtifact();
     }
-    // The Kör 14 cache is read-only — the artifact's full Kör 13 schema is
-    // a future round's job. For now, every rehydrated artifact collapses
-    // to `UnfilledCommunityShareArtifact` so the card-registry renders its
-    // fallback (A5) without crashing on a type the registry does not yet
-    // recognise. A future round that wires the full Kör 13 decoder reads
-    // `ShareArtifact.fromJson(raw)` and routes to the right subtype.
-    return UnfilledCommunityShareArtifact();
+    // F2 (review): the cache envelope persists the artifact's full wire
+    // JSON via `artifact.toJson()` for every known `ShareArtifact`
+    // subtype. Rehydrate through `ShareArtifact.fromJson` so a
+    // cache-primed post renders its real card (the offline / fallback
+    // path was always the headline feature — see §1). Any decode
+    // failure (corrupt envelope, future-flavoured type the decoder
+    // does not yet understand) collapses to `UnfilledCommunityShareArtifact`
+    // so A5's "unknown type never crashes" guarantee still holds.
+    try {
+      return ShareArtifact.fromJson(raw);
+    } on Object {
+      return UnfilledCommunityShareArtifact();
+    }
   }
 
   /// Deduplicate a freshly-fetched list against the current seen-id set.
