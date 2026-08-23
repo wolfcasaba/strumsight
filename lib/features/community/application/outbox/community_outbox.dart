@@ -257,17 +257,15 @@ abstract interface class CommunityOutbox {
 /// the shared [KeyValueStore].
 final class LocalCommunityOutbox implements CommunityOutbox {
   LocalCommunityOutbox({
-    required CommunityPostRepository repository,
+    required this._repository,
     required KeyValueStore store,
-    required AppLogger logger,
+    required this._logger,
     JsonDocumentStore? document,
-  }) : _repository = repository,
-       _logger = logger,
-       _document =
+  }) : _document =
            document ??
            JsonDocumentStore(
              store: store,
-             logger: logger,
+             logger: _logger,
              key: communityOutboxStorageKey,
              // No legacy key — the outbox is a fresh Kör 12
              // document with no pre-envelope shape. Wiring the same

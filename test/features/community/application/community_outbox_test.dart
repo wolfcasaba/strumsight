@@ -283,7 +283,6 @@ void main() {
       // the buggy path directly through the repository surface:
       // bypass the outbox's dedup by calling the repository
       // twice with distinct keys for the same logical post.
-      final store = InMemoryKeyValueStore();
       final repo = _FakeCommunityPostRepository();
       // No outbox — we exercise the repository surface directly
       // to model what the buggy retry path would put on the wire.

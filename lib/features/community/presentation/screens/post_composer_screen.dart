@@ -41,6 +41,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../application/controllers/post_composer_controller.dart';
 import '../../domain/entities/community_post.dart';
+import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
 
 /// Composer-screen labels. Kept here (not in the ARB) because the
@@ -192,8 +193,6 @@ class _ComposerBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     // Sync the text controller with the controller's body the first
     // time the data arrives. Subsequent edits flow through the
     // controller (onBodyChanged), not back into the controller via
@@ -413,7 +412,14 @@ class _StatusBanner extends StatelessWidget {
         text = _ComposerLabels.success;
       case PostComposerStatus.failure:
         background = theme.colorScheme.errorContainer;
-        text = error?.message ?? _ComposerLabels.failure;
+        // AppFailure does not carry a user-facing message — the
+        // composer maps the failure code via the ARB in a future
+        // round. For now the screen surfaces a generic banner; the
+        // structured `error.code` is logged for diagnostics.
+        final failureCode = error?.code;
+        text = failureCode != null
+            ? '${_ComposerLabels.failure} ($failureCode)'
+            : _ComposerLabels.failure;
       case PostComposerStatus.editing:
         return const SizedBox.shrink();
     }

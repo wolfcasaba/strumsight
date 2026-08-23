@@ -35,7 +35,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/storage/key_value_store.dart';
-import '../../../auth/providers/auth_providers.dart';
+import '../../../auth/public.dart';
 import '../../data/local/community_draft_store.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';

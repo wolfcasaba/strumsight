@@ -55,10 +55,7 @@ const String _legacyStorageKey = 'ss.community.drafts.v1';
 const String _documentName = 'community_draft';
 
 /// Wire literal for [CommunityAudience] in the persisted draft — the
-/// community domain already owns this string via
-/// [CommunityAudience.wireValue], so the draft just forwards it.
-typedef _AudienceWire = String;
-
+/// Wire literal for [CommunityAudience] in the persisted draft — the
 /// A versioned, persisted in-progress Community post draft.
 ///
 /// The draft holds the **submission-side** state of a single composer
@@ -272,8 +269,7 @@ SharePreview _sharePreviewFromJson(Map<String, Object?> object) {
 class CommunityDraftStore {
   /// Internal constructor — use [CommunityDraftStore.open] to bind
   /// to a real [KeyValueStore].
-  CommunityDraftStore._({required JsonObjectStore<CommunityDraft> body})
-    : _body = body;
+  CommunityDraftStore._({required this._body});
 
   /// The injected, versioned single-document store.
   final JsonObjectStore<CommunityDraft> _body;
