@@ -33,10 +33,7 @@ final class SsBeatPulse extends StatefulWidget {
     required this.clock,
     required this.beatDuration,
     this.diameter = 16,
-  }) : assert(
-         beatDuration > Duration.zero,
-         'beatDuration must be a positive musical period',
-       );
+  });
 
   /// The timeline this pulse follows. Never a locally-owned `Timer`.
   final SsBeatClock clock;
@@ -44,6 +41,11 @@ final class SsBeatPulse extends StatefulWidget {
   /// The musical period of one beat (derived from BPM by the caller). This
   /// is a tempo input, not an animation-length token — the same way [clock]
   /// itself is a caller-supplied dependency, not a design-system constant.
+  ///
+  /// A non-positive value (missing/zero tempo) is a real runtime
+  /// possibility, not just a programmer error — the caller derives it from
+  /// BPM — so it is treated as equivalent to "no live timeline" (a static
+  /// dot) rather than guarded only by an `assert` that release builds drop.
   final Duration beatDuration;
 
   final double diameter;
@@ -82,6 +84,20 @@ final class _SsBeatPulseState extends State<SsBeatPulse>
   }
 
   @override
+  void didUpdateWidget(covariant SsBeatPulse oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A stopped ticker never ticks again on its own (ADR 0274 §1: no live
+    // timeline means no animation, not a free-running one) — the caller
+    // rebuilding this widget (e.g. after its clock starts reporting a
+    // position again) is what wakes it back up.
+    if (!_ticker.isActive &&
+        widget.clock.position != null &&
+        widget.beatDuration > Duration.zero) {
+      _ticker.start();
+    }
+  }
+
+  @override
   void dispose() {
     _ticker.dispose();
     super.dispose();
@@ -89,11 +105,13 @@ final class _SsBeatPulseState extends State<SsBeatPulse>
 
   void _onTick(Duration elapsed) {
     final position = widget.clock.position;
-    if (position == null) {
+    final beatMicros = widget.beatDuration.inMicroseconds;
+    if (position == null || beatMicros <= 0) {
       if (_live) setState(() => _live = false);
+      // No live timeline: stop asking for frames instead of ticking freely.
+      _ticker.stop();
       return;
     }
-    final beatMicros = widget.beatDuration.inMicroseconds;
     final phase = (position.inMicroseconds % beatMicros) / beatMicros;
     if (!_live || phase != _phase) {
       setState(() {
@@ -114,12 +132,12 @@ final class _SsBeatPulseState extends State<SsBeatPulse>
     if (reduceMotion) {
       // No scale under reduced motion, but the color still steps with the
       // beat — quantized to the first/second half so it reads as a discrete
-      // state change (ADR 0274 §5.1), not continuous motion.
+      // state change (ADR 0274 §5.1), not continuous motion. The off-beat
+      // tone is a dimmed brand, distinct from `surfaceSunken` — otherwise the
+      // second half of every beat would be pixel-identical to "not playing".
       final onBeat = _phase < 0.5;
-      return _dot(
-        color: onBeat ? colors.brand : colors.surfaceSunken,
-        scale: 1,
-      );
+      final offBeatColor = Color.lerp(colors.surfaceSunken, colors.brand, .45)!;
+      return _dot(color: onBeat ? colors.brand : offBeatColor, scale: 1);
     }
     final scale = 1 + (1 - _phase) * 0.3;
     return _dot(color: colors.brand, scale: scale);

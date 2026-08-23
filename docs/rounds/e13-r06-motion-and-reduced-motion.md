@@ -483,4 +483,76 @@ csak megerősítik, hogy a kör nem vitt collateral damage-t más, listán kív�
 tesztekbe (a katalógus-incidens kivételével, amit fentebb dokumentáltam és
 visszavontam).
 
+## 10.1 Javító kör — `docs/reviews/e13-r06-review.md` leletei (2026-08-23)
+
+### MAJOR-1 — a három óra-szinkron cella most a WIDGETET hajtja
+
+`test/core/design_system/motion/ss_beat_pulse_test.dart` — a
+`isWithinSyncTolerance`-t közvetlenül hívó három cellát lecseréltem: mindegyik
+felépíti az `SsBeatPulse`-t egy fake órával, aminek pozíciója egy rögzített
+„valódi" pozíciótól (500 ms) 60/100/140 ms-mal tér el, renderel, a kirajzolt
+méretből visszaszámolja a fázist, abból a pozíciót, és az ebből adódó
+eltérést méri `isWithinSyncTolerance`-hoz.
+
+**Újra-rontás próba (`_onTick` → `elapsed`, ugyanaz mint a review-é):**
+lefuttatva a mért kimenet:
+
+```
+00:00 +0 -1: A3 … 60ms rendered lag from the clock: accepted [E]
+00:00 +0 -2: A3 … 100ms rendered lag sits on the threshold: accepted (inclusive bound) [E]
+00:01 +1 -5: A3 … 140ms rendered lag is over the threshold: rejected [E]
+```
+
+**Mind a három** kötelező cella pirosra váltott (a review 1 db minimumot kért),
+a fájl összesen 12/15 cellát vitt pirosra. A rontást ezután visszaállítottam
+(`git diff` a `_onTick`-re üres), a teljes gate újra zöld.
+
+### MINOR-1 — az off-beat szín megkülönböztethető a „nincs élő idővonal" színtől
+
+`ss_beat_pulse.dart` — reduced motion alatt az off-beat (`_phase >= 0.5`) most
+`Color.lerp(colors.surfaceSunken, colors.brand, .45)`-öt kap a korábbi puszta
+`surfaceSunken` helyett. Új cella:
+*„the off-beat color differs from the no-live-timeline color"* — zöld.
+
+### MINOR-2 — `beatDuration <= 0` valódi futásidejű őr
+
+A konstruktor `assert(beatDuration > Duration.zero, …)`-ját eltávolítottam
+(az assert release-ben eltűnik ÉS blokkolta volna a teszt saját
+konstrukcióját is), és a védelmet átraktam `_onTick`-be: `beatMicros <= 0`
+ugyanazt az ágat futtatja, mint a `position == null` (statikus pont, nincs
+`%` nullával). Új cella: *„a zero beatDuration renders the static
+no-live-timeline state instead of throwing"* — zöld, kivétel nélkül.
+
+### MINOR-3 — a `Ticker` megáll, ha nincs élő idővonal
+
+`_onTick`-ben `position == null || beatMicros <= 0` esetén `_ticker.stop()`;
+`didUpdateWidget`-ben, ha a ticker nem aktív és az órának időközben lett
+pozíciója, `_ticker.start()` — ez a hívó-rebuild az „ébresztő" (a brief
+kérése szerint). Két új cella: `pumpAndSettle` lezárul (a) ha sosem volt élő
+idővonal, (b) ha egy élő idővonal elnémul — mindkettő korábban `FlutterError`
+(timeout) lett volna a review PROBE_C mérése szerint.
+
+**Katalógus-demó kísérlet:** a MINOR-3 után megpróbáltam visszahozni a
+`component_catalog_screen.dart` demót egy alapból NEM-élő (el nem indított
+`Stopwatch`) órával. A `pumpAndSettle`-timeout ezzel valóban eltűnt, de a
+`component_catalog_test.dart` (listán kívüli) egy MÁSIK, a demótól
+független okból pirosra váltott: két `DecoratedBox` lett a fában (a pulzus
+`Container`-je is egy), a teszt pedig `findsOneWidget`-et vár rá. Mivel ez a
+teszt nincs a listámon, a brief §1/MINOR-3 utolsó bekezdése szerint jártam
+el: a katalógus-képernyőt VISSZAÁLLÍTOTTAM a kör előtti állapotára
+(`git checkout -- lib/core/design_system/documentation/component_catalog_screen.dart`),
+nem a tiltott tesztet módosítottam. A demó továbbra sem tér vissza — ez nem
+kötelező elem.
+
+### Gate — újra, a javítás után
+
+```
+tools/round-gate.sh test/core/design_system/motion/ss_motion_scope_test.dart test/core/design_system/motion/ss_beat_pulse_test.dart
+```
+
+Mind a hét lépés ZÖLD (format 1890/0, analyze 0 issue, a két gate-teszt
+7/7 + 15/15, architecture 12 allowlisted, secrets 3488/0, l10n en→hu 1755).
+A6 (`git diff --stat 467ef3ea..HEAD -- lib/features/` üres) és A7 (egyetlen
+`Duration(` találat, a `syncTolerance` küszöb) ismét ellenőrizve, változatlan.
+
 ## 11. Review — a Claude tölti ki

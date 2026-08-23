@@ -18,29 +18,68 @@ Widget _wrap(Widget child) {
 
 double _expectedDiameter(double phase) => 16 * (1 + (1 - phase) * 0.3);
 
+// Inverse of `_expectedDiameter`: recovers the phase the widget actually
+// rendered from the dot's on-screen size, so the threshold cells below
+// measure the WIDGET's output, not a number handed straight to the predicate.
+double _phaseFromDiameter(double diameter) => 1 - (diameter / 16 - 1) / 0.3;
+
 void main() {
   group(
-    'SsBeatPulse.isWithinSyncTolerance — A3, the three threshold cells',
+    'A3 — the three sync-tolerance threshold cells drive the real widget',
     () {
-      test('60ms lag is under the threshold: accepted', () {
-        expect(
-          SsBeatPulse.isWithinSyncTolerance(const Duration(milliseconds: 60)),
-          isTrue,
+      // The clock is fed a position that lags a known "true" position by
+      // `lagMs` — simulating staleness in what the clock reports. The dot is
+      // rendered, its phase is read back out of its on-screen size, and
+      // converted back to the position it implies. Only a widget that
+      // genuinely derives its displayed phase from `clock.position` (and not,
+      // say, a free-running ticker) reproduces `lagMs` exactly here.
+      Future<void> expectRenderedLag(
+        WidgetTester tester, {
+        required int lagMs,
+        required bool accepted,
+      }) async {
+        const beatDuration = Duration(milliseconds: 1000);
+        const truePosition = Duration(milliseconds: 500);
+        final clockPosition = truePosition - Duration(milliseconds: lagMs);
+        final clock = _FakeBeatClock(clockPosition);
+        await tester.pumpWidget(
+          _wrap(SsBeatPulse(clock: clock, beatDuration: beatDuration)),
         );
+        await tester.pump();
+
+        final size = tester.getSize(find.byKey(SsBeatPulse.dotKey));
+        final renderedPhase = _phaseFromDiameter(size.width);
+        final renderedPosition = Duration(
+          microseconds: (renderedPhase * beatDuration.inMicroseconds).round(),
+        );
+        final measuredLag = Duration(
+          microseconds:
+              (truePosition.inMicroseconds - renderedPosition.inMicroseconds)
+                  .abs(),
+        );
+
+        expect(
+          SsBeatPulse.isWithinSyncTolerance(measuredLag),
+          accepted,
+          reason: 'rendered visual lag measured as $measuredLag',
+        );
+      }
+
+      testWidgets('60ms rendered lag from the clock: accepted', (tester) async {
+        await expectRenderedLag(tester, lagMs: 60, accepted: true);
       });
 
-      test('100ms lag sits on the threshold: accepted (inclusive bound)', () {
-        expect(
-          SsBeatPulse.isWithinSyncTolerance(const Duration(milliseconds: 100)),
-          isTrue,
-        );
-      });
+      testWidgets(
+        '100ms rendered lag sits on the threshold: accepted (inclusive bound)',
+        (tester) async {
+          await expectRenderedLag(tester, lagMs: 100, accepted: true);
+        },
+      );
 
-      test('140ms lag is over the threshold: rejected', () {
-        expect(
-          SsBeatPulse.isWithinSyncTolerance(const Duration(milliseconds: 140)),
-          isFalse,
-        );
+      testWidgets('140ms rendered lag is over the threshold: rejected', (
+        tester,
+      ) async {
+        await expectRenderedLag(tester, lagMs: 140, accepted: false);
       });
     },
   );
@@ -235,5 +274,108 @@ void main() {
     final before = tester.getSize(find.byKey(SsBeatPulse.dotKey));
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.getSize(find.byKey(SsBeatPulse.dotKey)), before);
+  });
+
+  group('reduced motion off-beat is distinguishable from "not playing"', () {
+    testWidgets('the off-beat color differs from the no-live-timeline color', (
+      tester,
+    ) async {
+      final clock = _FakeBeatClock(const Duration(milliseconds: 700));
+      const beatDuration = Duration(milliseconds: 1000);
+
+      await tester.pumpWidget(
+        _wrap(
+          SsMotionScope(
+            appOverride: true,
+            child: SsBeatPulse(clock: clock, beatDuration: beatDuration),
+          ),
+        ),
+      );
+      await tester.pump();
+      // phase 0.7 -> second half of the beat -> off-beat color.
+      final offBeatColor = tester
+          .widget<Container>(find.byKey(SsBeatPulse.dotKey))
+          .decoration;
+
+      clock.position = null;
+      await tester.pump();
+      final stoppedColor = tester
+          .widget<Container>(find.byKey(SsBeatPulse.dotKey))
+          .decoration;
+
+      expect(
+        offBeatColor,
+        isNot(stoppedColor),
+        reason:
+            'a reduced-motion off-beat must not look identical to '
+            'playback being stopped',
+      );
+    });
+  });
+
+  group(
+    'beatDuration <= 0 is a real runtime guard, not just a debug assert',
+    () {
+      testWidgets(
+        'a zero beatDuration renders the static no-live-timeline state '
+        'instead of throwing',
+        (tester) async {
+          final clock = _FakeBeatClock(const Duration(milliseconds: 250));
+          await tester.pumpWidget(
+            _wrap(SsBeatPulse(clock: clock, beatDuration: Duration.zero)),
+          );
+          await tester.pump();
+
+          expect(tester.takeException(), isNull);
+          expect(
+            tester.getSize(find.byKey(SsBeatPulse.dotKey)),
+            const Size(16, 16),
+          );
+        },
+      );
+    },
+  );
+
+  group('the ticker does not run without a live timeline (ADR 0274 §1)', () {
+    testWidgets('pumpAndSettle completes when no timeline has ever been live', (
+      tester,
+    ) async {
+      final clock = _FakeBeatClock();
+      await tester.pumpWidget(
+        _wrap(
+          SsBeatPulse(
+            clock: clock,
+            beatDuration: const Duration(milliseconds: 500),
+          ),
+        ),
+      );
+
+      // A ticker that keeps requesting frames with no live timeline would
+      // make pumpAndSettle time out (`FlutterError`) — this is the exact
+      // failure the component-catalog demo hit before this fix.
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'pumpAndSettle completes once a live timeline goes quiet again',
+      (tester) async {
+        final clock = _FakeBeatClock(const Duration(milliseconds: 100));
+        await tester.pumpWidget(
+          _wrap(
+            SsBeatPulse(
+              clock: clock,
+              beatDuration: const Duration(milliseconds: 500),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byKey(SsBeatPulse.dotKey), findsOneWidget);
+
+        clock.position = null;
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }
