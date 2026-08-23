@@ -442,10 +442,11 @@ tests/community/test_reaction_service.py: 50 warnings
 A `tools/round-gate.sh test/features/community/application/reaction_controller_test.dart`
 kilenc lépésből áll (format, analyze, flutter test, architecture, secrets,
 l10n, backend ruff format, backend ruff check, backend pytest) — MIND
-ZÖLD, `GATE_EXIT=0`. A backend pytest lépés a TELJES suite-et futtatta
-(nem csak a `reaction_service.py`-t), és az is zöld volt — ez a javítás
-mellett egy erősebb visszajelzés, hogy a §10.8 implementáció nem tört
-el.
+ZÖLD, `GATE_EXIT=0`. A backend pytest lépés a TELJES backend suite-et
+futtatja (nem csak a `reaction_service.py`-t), és az is zöld volt — ez a
+javítás mellett egy erősebb visszajelzés, hogy a §10.8-ban megépített
+reakció-szolgáltatás nem töri el a meglévő közösségi tesztkészletet
+(feed, follow, post, profile, stb.).
 
 **§6 cella → teszt megfeleltetés VÁLTOZATLAN** a javító körben: F1 csak a
 meglévő `test_a5_count_property_invariant_never_negative` robusztusságát
