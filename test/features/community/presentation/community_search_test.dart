@@ -30,6 +30,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/features/community/data/local/recent_search_store.dart';
 import 'package:strumsight/features/community/data/repositories/profile_repository_impl.dart';
@@ -42,6 +43,7 @@ import 'package:strumsight/features/community/domain/value_objects/cursor_page.d
 import 'package:strumsight/features/community/domain/value_objects/public_user_id.dart';
 import 'package:strumsight/features/community/presentation/screens/community_search_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:dio/dio.dart';
 
 // ---------------------------------------------------------------------------
 // In-memory KeyValueStore — the test seam for RecentSearchStore. Stays in this
@@ -402,4 +404,194 @@ void main() {
     expect(find.text('Network error'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
   });
+
+  // F1 regression — the real wire-decode path produces DISTINCT
+  // displayName/handle rows. The pre-fix path used a single
+  // fixed-string placeholder factory; the tests below would fail
+  // on that regression.
+  _f1();
 }
+
+// ---------------------------------------------------------------------------
+// F1 regression — the Kör 9 wire decode must turn the backend
+// ``hits`` array into DISTINCT ``CommunityProfile`` rows. The
+// pre-fix path used a single fixed-string placeholder factory
+// for every hit, so the result list rendered an N-row wall of
+// identical "placeholder" / "@placeholder-x1" entries. The test
+// drives the real ``HttpCommunityProfileRepository`` through a
+// scripted Dio adapter (the same harness the Kör 7 / Kör 8
+// relationship-repository test uses), so the assertion rides
+// through the actual JSON-decode + DTO/domain conversion path.
+// ---------------------------------------------------------------------------
+
+class _CannedResponse {
+  const _CannedResponse({required this.body, required this.status});
+  final String body;
+  final int status;
+}
+
+class _ScriptedAdapter implements HttpClientAdapter {
+  _ScriptedAdapter({required this.onFetch});
+
+  final _CannedResponse Function(RequestOptions options) onFetch;
+  final List<RequestOptions> captured = <RequestOptions>[];
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    captured.add(options);
+    final canned = onFetch(options);
+    return ResponseBody.fromString(
+      canned.body,
+      canned.status,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+HttpCommunityProfileRepository _buildHttpRepo(_ScriptedAdapter adapter) {
+  final dio = Dio()..httpClientAdapter = adapter;
+  return HttpCommunityProfileRepository(ApiClient(dio));
+}
+
+class _F1Group {
+  static void run() {
+    test('F1 — searchProfiles() decodes two distinct hits into two distinct '
+        'displayName/handle pairs (no fixed placeholder)', () async {
+      const alicePublicId = '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a01';
+      const bobPublicId = '01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a02';
+      const body =
+          '''
+{
+  "public_ids": ["$alicePublicId", "$bobPublicId"],
+  "hits": [
+    {
+      "public_id": "$alicePublicId",
+      "handle": "alice-001",
+      "display_name": "Alice the First",
+      "created_at": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "public_id": "$bobPublicId",
+      "handle": "bob-002",
+      "display_name": "Bob the Second",
+      "created_at": "2026-02-02T00:00:00.000Z"
+    }
+  ],
+  "next_cursor": "opaque-token-must-not-be-decoded-by-client"
+}''';
+      final adapter = _ScriptedAdapter(
+        onFetch: (_) => const _CannedResponse(body: body, status: 200),
+      );
+      final repo = _buildHttpRepo(adapter);
+
+      final CommunityPage<CommunityProfile> page = await repo.searchProfiles(
+        query: 'ali',
+        cursor: const CursorPage.initial(),
+      );
+
+      expect(page.items, hasLength(2));
+      expect(page.items[0].userId.value, alicePublicId);
+      expect(page.items[0].handle.value, 'alice-001');
+      expect(page.items[0].displayName, 'Alice the First');
+      expect(page.items[1].userId.value, bobPublicId);
+      expect(page.items[1].handle.value, 'bob-002');
+      expect(page.items[1].displayName, 'Bob the Second');
+
+      for (final item in page.items) {
+        expect(item.displayName, isNot('placeholder'));
+        expect(item.handle.value, isNot('placeholder-x1'));
+      }
+
+      expect(adapter.captured, hasLength(1));
+      final options = adapter.captured.single;
+      expect(options.method, 'GET');
+      expect(options.path, '/community/profiles/search');
+      expect(options.uri.queryParameters['q'], 'ali');
+      expect(options.uri.queryParameters['limit'], '50');
+      expect(
+        options.uri.queryParameters.containsKey('cursor'),
+        isFalse,
+        reason: 'initial cursor must not be forwarded as a query param',
+      );
+
+      expect(page.cursor, isA<CursorPage>());
+      final cursorPage = page.cursor as CursorPage;
+      expect(cursorPage.cursor, 'opaque-token-must-not-be-decoded-by-client');
+    });
+
+    test(
+      'F1 — searchProfiles() forwards a non-initial opaque cursor verbatim',
+      () async {
+        const token = 'opaque.next.page.token';
+        const body = '''
+{
+  "public_ids": ["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a09"],
+  "hits": [
+    {
+      "public_id": "01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a09",
+      "handle": "alice-009",
+      "display_name": "Alice Nine",
+      "created_at": "2026-03-03T00:00:00.000Z"
+    }
+  ],
+  "next_cursor": null
+}''';
+        final adapter = _ScriptedAdapter(
+          onFetch: (_) => const _CannedResponse(body: body, status: 200),
+        );
+        final repo = _buildHttpRepo(adapter);
+
+        await repo.searchProfiles(
+          query: 'ali',
+          cursor: CursorPage.continued(token),
+        );
+
+        final options = adapter.captured.single;
+        expect(options.uri.queryParameters['cursor'], token);
+        expect(options.uri.queryParameters['q'], 'ali');
+      },
+    );
+
+    test(
+      'F1 — searchProfiles() throws on a malformed hit (empty display_name)',
+      () async {
+        const body = '''
+{
+  "public_ids": ["01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a10"],
+  "hits": [
+    {
+      "public_id": "01927fa3-7f7b-7d3c-9b2a-1f2c3d4e5a10",
+      "handle": "alice-010",
+      "display_name": "",
+      "created_at": "2026-04-04T00:00:00.000Z"
+    }
+  ],
+  "next_cursor": null
+}''';
+        final adapter = _ScriptedAdapter(
+          onFetch: (_) => const _CannedResponse(body: body, status: 200),
+        );
+        final repo = _buildHttpRepo(adapter);
+
+        await expectLater(
+          () => repo.searchProfiles(
+            query: 'ali',
+            cursor: const CursorPage.initial(),
+          ),
+          throwsA(isA<FormatException>()),
+        );
+      },
+    );
+  }
+}
+
+void _f1() => _F1Group.run();

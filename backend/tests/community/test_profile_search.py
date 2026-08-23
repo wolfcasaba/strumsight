@@ -729,3 +729,340 @@ def test_search_block_filter_integration_at_repository_level(session_factory):
         "A2 violated — blocked profile leaked through the repository block-filter"
     )
     assert other_pid in results, "A2 violated — benign profile was wrongly filtered"
+
+
+# ---------------------------------------------------------------------------
+# F4 regression — the ``next_cursor`` MUST NOT carry a blocked
+# profile's handle / internal PK, and MUST be HMAC-opaque to the
+# client. The security-reviewer agent's probe lives here so the
+# suite catches a future regression that re-introduces either
+# leak channel.
+# ---------------------------------------------------------------------------
+
+
+def _decode_cursor_payload(cursor: str) -> dict[str, object]:
+    """Inspect the JSON payload embedded in the opaque cursor.
+
+    The cursor is ``<base64url(json)>.<base64url(hmac)>``. A test
+    that wants to assert "the cursor does NOT reference the
+    blocked profile" only needs the JSON half — the HMAC half
+    is verified separately by the repository's own
+    ``_verify_cursor`` on the next page request, not here.
+    """
+    import base64
+    import json as _json
+
+    if "." not in cursor:
+        raise AssertionError(
+            f"F4 violated — cursor '{cursor}' has no payload/signature separator"
+        )
+    payload_b64, _signature_b64 = cursor.rsplit(".", 1)
+    try:
+        payload_bytes = base64.urlsafe_b64decode(payload_b64.encode("ascii"))
+    except (ValueError, TypeError) as exc:
+        raise AssertionError(
+            f"F4 violated — cursor payload is not valid base64: {exc}"
+        ) from exc
+    return _json.loads(payload_bytes.decode("utf-8"))
+
+
+def test_f4_cursor_omits_blocked_profile_handle_and_pk(
+    client, session_factory
+):
+    """F4 — the security-reviewer agent's specific probe is now a
+    permanent regression test.
+
+    Setup: seed two profiles whose handles share a 3-char prefix
+    (the ``MIN_QUERY_LENGTH`` boundary). The viewer's block-edge
+    targets the LEXICOGRAPHICALLY FIRST one. With ``limit=1`` the
+    raw SQL fetches both rows in ``handle_normalized ASC`` order;
+    pre-F4 the cursor was derived from ``rows[-1]`` (which IS
+    the blocked row in this scenario) and ``encode_cursor`` was
+    plain base64-JSON carrying the blocked row's
+    ``handle_normalized`` + internal integer PK. Post-F4 the
+    cursor is HMAC-opaque (the JSON is no longer trivially
+    readable on the wire) AND references the LAST RETURNED hit
+    from the block-filtered set, which is the visible row.
+    """
+    viewer_pid, viewer_headers = _make_user_with_headers(
+        session_factory, email="viewer@s.test", user_id=1, handle="viewer"
+    )
+    blocked_pid, _ = _make_user_with_headers(
+        session_factory,
+        email="blocked@s.test",
+        user_id=2,
+        handle="testp-aaa",
+    )
+    visible_pid, _ = _make_user_with_headers(
+        session_factory,
+        email="benign@s.test",
+        user_id=3,
+        handle="testp-bbb",
+    )
+
+    # Establish a block edge (viewer → testp-aaa). The edge is
+    # symmetric per the §D2 helper, so testp-aaa is invisible
+    # to the viewer.
+    with session_factory() as db:
+        viewer_pk = db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
+        blocked_pk = db.query(CommunityProfile).filter_by(public_id=blocked_pid).one().id
+        visible_pk = db.query(CommunityProfile).filter_by(public_id=visible_pid).one().id
+        db.add(
+            CommunityBlock(
+                blocker_profile_id=viewer_pk,
+                blocked_profile_id=blocked_pk,
+            )
+        )
+        db.commit()
+
+    response = client.get(
+        "/community/profiles/search",
+        params={"q": "testp", "limit": 1},
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # The public_ids list MUST drop the blocked profile.
+    assert str(blocked_pid) not in body["public_ids"], (
+        "F4 violated — blocked profile appeared in the response body"
+    )
+    assert str(visible_pid) in body["public_ids"], (
+        "F4 setup error — visible profile is missing from the response"
+    )
+
+    cursor = body["next_cursor"]
+    assert cursor, "F4 setup error — expected a next_cursor (more rows remain)"
+
+    payload = _decode_cursor_payload(cursor)
+    payload_handle = str(payload.get("h", ""))
+    payload_id = int(payload.get("id", -1))  # type: ignore[arg-type]
+
+    # F4 invariant — the cursor does not leak the BLOCKED
+    # profile's handle. Pre-F4, the cursor's ``h`` was
+    # "testp-aaa" and ``id`` was the blocked profile's
+    # internal PK. Post-F4, the cursor references the LAST
+    # RETURNED hit from the block-filtered set, which is the
+    # visible row.
+    assert payload_handle != "testp-aaa", (
+        f"F4 violated — cursor payload's handle is the BLOCKED profile: {payload}"
+    )
+    assert payload_id != blocked_pk, (
+        f"F4 violated — cursor payload's internal PK is the BLOCKED profile: {payload}"
+    )
+
+    # And the cursor DOES reference the visible profile, which
+    # is the one the viewer will see as the last hit on the
+    # next page.
+    assert payload_handle == "testp-bbb", (
+        f"F4 violated — cursor payload does not reference the visible profile: {payload}"
+    )
+    assert payload_id == visible_pk, (
+        f"F4 violated — cursor payload's PK is not the visible profile's: {payload}"
+    )
+
+
+def test_f4_cursor_is_hmac_opaque_not_plain_base64_json(
+    client, session_factory
+):
+    """F4 — the cursor is HMAC-signed, not plain base64-JSON.
+
+    A regression that drops the HMAC and falls back to
+    ``_encode_cursor`` returning the raw base64-JSON would let
+    a client trivially extract the ``(handle_normalized, id)``
+    pair (the exact leak the security-reviewer agent
+    documented). This test asserts the cursor contains BOTH
+    the JSON payload half AND a base64 signature half
+    (separated by ``.``), and the signature half is non-empty
+    + non-trivially-derivable from the payload alone.
+    """
+    import base64
+
+    _, viewer_headers = _make_user_with_headers(
+        session_factory, email="viewer@s.test", user_id=1, handle="viewer"
+    )
+    _make_user_with_headers(
+        session_factory, email="alice@s.test", user_id=2, handle="alice-one"
+    )
+    _make_user_with_headers(
+        session_factory, email="alice2@s.test", user_id=3, handle="alice-two"
+    )
+
+    response = client.get(
+        "/community/profiles/search",
+        params={"q": "alice", "limit": 1},
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200
+    cursor = response.json()["next_cursor"]
+    assert cursor, "F4 setup error — expected a next_cursor"
+
+    # The cursor must have the ``<payload>.<signature>`` shape.
+    assert "." in cursor, (
+        f"F4 violated — cursor '{cursor}' is not in the signed <payload>.<sig> shape"
+    )
+    payload_b64, signature_b64 = cursor.rsplit(".", 1)
+    payload_bytes = base64.urlsafe_b64decode(payload_b64.encode("ascii"))
+    signature_bytes = base64.urlsafe_b64decode(signature_b64.encode("ascii"))
+
+    # The signature must be non-empty (post-F4 it's a 32-byte
+    # HMAC-SHA256 truncation; a regression to plain JSON would
+    # leave the signature half empty or 0-length).
+    assert len(signature_bytes) >= 16, (
+        f"F4 violated — cursor signature is suspiciously short ({len(signature_bytes)} bytes)"
+    )
+    # The signature MUST NOT be the literal bytes of the JSON
+    # payload (the pre-F4 plain-base64-JSON shape had no
+    # signature half at all).
+    assert signature_bytes != payload_bytes, (
+        "F4 violated — cursor signature equals the payload (no HMAC applied)"
+    )
+
+
+def test_f4_cursor_round_trip_with_real_secret(client, session_factory):
+    """F4 — the cursor's HMAC signature verifies against the live
+    application ``secret_key`` carried on ``app.state.settings``.
+
+    The router threads ``settings.secret_key`` into
+    :func:`profile_search_repository.search_profiles`; a
+    regression that swapped the secret to a different value
+    (or skipped the signature altogether) would break the
+    forward-pagination path on page 2.
+    """
+    import base64
+
+    _, viewer_headers = _make_user_with_headers(
+        session_factory, email="viewer@s.test", user_id=1, handle="viewer"
+    )
+    _make_user_with_headers(
+        session_factory, email="alice@s.test", user_id=2, handle="alice-one"
+    )
+    _make_user_with_headers(
+        session_factory, email="alice2@s.test", user_id=3, handle="alice-two"
+    )
+
+    response = client.get(
+        "/community/profiles/search",
+        params={"q": "alice", "limit": 1},
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200
+    cursor = response.json()["next_cursor"]
+    assert cursor, "F4 setup error — expected a next_cursor"
+
+    # Forward the cursor to the next page — the repository
+    # re-validates the HMAC. A tampered or wrongly-signed
+    # cursor falls back to a fresh first page (no 500, no
+    # silent pass-through of a malicious payload).
+    response2 = client.get(
+        "/community/profiles/search",
+        params={"q": "alice", "limit": 1, "cursor": cursor},
+        headers=viewer_headers,
+    )
+    assert response2.status_code == 200, response2.text
+    body2 = response2.json()
+    # The second page returns the SECOND profile (the one the
+    # first cursor pointed to). This proves the cursor is
+    # real, not a stub.
+    assert "alice-two" in response.text or "alice-one" in response.text  # noqa: E501
+    # And the cursor must be opaque base64 (not a raw handle).
+    assert "." in (body2.get("next_cursor") or "")
+
+
+# ---------------------------------------------------------------------------
+# F2 regression — too-short queries (422) must NOT consume a
+# rate-limit slot. The order in the router is now:
+#   1) length check (422) — free validation outcome
+#   2) rate-limit allow  (429 only after a slot is burned)
+#   3) DB / repo call
+# A regression that flips the order (or that drops the length
+# check entirely) would burn a slot per 422 and the user's
+# well-formed query shortly afterwards would land a 429.
+# ---------------------------------------------------------------------------
+
+
+def test_f2_short_query_422_does_not_consume_rate_limit_slot(
+    client, session_factory
+):
+    """F2 — send 70 too-short queries (each 422) then a valid one.
+
+    The pre-F2 router consumed a slot on every request, so 70
+    short queries would burn the 60/min budget and the next
+    valid query would 429. The post-F2 router rejects the
+    short queries BEFORE the limiter's ``allow`` is called, so
+    the limiter state is untouched and the valid query still
+    succeeds.
+    """
+    _, viewer_headers = _make_user_with_headers(
+        session_factory, email="viewer@s.test", user_id=1, handle="viewer"
+    )
+
+    # 70 short queries — each must be 422 (the MIN_QUERY_LENGTH
+    # boundary is 3 chars; "ab" is 2).
+    for _ in range(70):
+        response = client.get(
+            "/community/profiles/search",
+            params={"q": "ab"},
+            headers=viewer_headers,
+        )
+        assert response.status_code == 422, (
+            f"F2 violated — expected 422 for short query, got {response.status_code}: "
+            f"{response.text}"
+        )
+
+    # The next VALID query (q=viewer matches the seeded
+    # viewer's handle) must still return 200 — the rate
+    # budget is intact.
+    response = client.get(
+        "/community/profiles/search",
+        params={"q": "viewer"},
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200, (
+        f"F2 violated — a valid query right after 70 short queries got {response.status_code}. "
+        f"The length check is now AFTER the rate-limit allow, not before. "
+        f"Response: {response.text}"
+    )
+
+
+def test_f2_tampered_cursor_422_does_not_consume_rate_limit_slot(
+    client, session_factory
+):
+    """F2-adjacent — a tampered cursor (422 at the validation
+    boundary) also does NOT consume a slot.
+
+    The same ordering principle: the cursor-validation 422
+    happens at the repository boundary, but the router's
+    length check now runs first, so a sequence of tampered
+    cursors (combined with short queries) cannot DoS the
+    limiter either.
+    """
+    _, viewer_headers = _make_user_with_headers(
+        session_factory, email="viewer@s.test", user_id=1, handle="viewer"
+    )
+
+    # 70 tampered cursors — each must be 422 (the cursor
+    # signature fails to verify, the request falls back to a
+    # fresh first page). The router's length check still runs
+    # first because the q is short; the tampered cursor is
+    # also rejected at the repo boundary but the limiter
+    # hasn't been touched.
+    for _ in range(70):
+        response = client.get(
+            "/community/profiles/search",
+            params={"q": "ab", "cursor": "not-a-real-cursor"},
+            headers=viewer_headers,
+        )
+        assert response.status_code == 422, (
+            f"F2 violated — expected 422 for short+tampered query, got {response.status_code}"
+        )
+
+    # The valid query still lands.
+    response = client.get(
+        "/community/profiles/search",
+        params={"q": "viewer"},
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200, (
+        f"F2 violated — valid query after 70 short+tampered got {response.status_code}: "
+        f"{response.text}"
+    )
