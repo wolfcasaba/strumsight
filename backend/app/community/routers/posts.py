@@ -133,6 +133,32 @@ def _resolve_author_public_id(db: Session, user_id: int) -> uuid.UUID:
     return raw
 
 
+def _resolve_public_id_by_profile_id(db: Session, profile_id: int) -> uuid.UUID:
+    """Return the public_id of the community profile with the given
+    internal ``profile_id``.
+
+    F2 javító kör 1: a ``_row_to_out(post, author_public_id)``
+    szerző-public_id paraméterét a poszt TÉNYLEGES szerzőjéből kell
+    feloldani, nem a hívó saját azonosítójából — máskülönben a
+    GET/PATCH válasz bármely más szerző posztját a nézőnek
+    tulajdonítaná. A profil-létezés itt garantált (a post
+    ``profile_id`` FK-ja a community_profiles táblára), így a
+    ValueError-t itt nem kell elkapni — ha mégis hiányozna, a
+    session működését tekintve az 500 lenne a helyes (a DB
+    inkonzisztens, nem a kliens hibája).
+    """
+    row = db.execute(
+        _sa_text("SELECT public_id FROM community_profiles WHERE id = :pid"),
+        {"pid": profile_id},
+    ).first()
+    if row is None:
+        raise ValueError("post references a non-existent profile")
+    raw = row[0]
+    if isinstance(raw, str):
+        return uuid.UUID(hex=raw)
+    return raw
+
+
 def _row_to_out(post, author_public_id: uuid.UUID) -> PostOut:
     """Map a ``CommunityPost`` ORM row + author public_id to ``PostOut``.
 
@@ -235,10 +261,6 @@ def get_post_endpoint(
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
             try:
-                viewer_public_id = _resolve_author_public_id(db, current_user.id)
-            except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-            try:
                 post = get_post(
                     db,
                     post_public_id=public_id,
@@ -246,7 +268,12 @@ def get_post_endpoint(
                 )
             except PostNotFound:
                 raise HTTPException(status_code=404, detail="post not found") from None
-            return _row_to_out(post, viewer_public_id)
+            # F2 javító kör 1: a válasz author_public_id mezőjét a
+            # poszt TÉNYLEGES szerzőjéből kell feloldani, nem a
+            # néző saját public_id-jából — a _row_to_out itt kapja
+            # meg a helyes azonosítót.
+            author_public_id = _resolve_public_id_by_profile_id(db, post.profile_id)
+            return _row_to_out(post, author_public_id)
         except HTTPException:
             raise
     finally:
@@ -276,10 +303,6 @@ def patch_post_endpoint(
         try:
             try:
                 viewer_internal_id = _resolve_internal_profile_id(db, current_user.id)
-            except ValueError as exc:
-                raise HTTPException(status_code=404, detail=str(exc)) from exc
-            try:
-                viewer_public_id = _resolve_author_public_id(db, current_user.id)
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
             payload_dict = payload.model_dump(exclude_unset=True)
@@ -315,7 +338,15 @@ def patch_post_endpoint(
             _commit_via(request, db)
         except HTTPException:
             raise
-        return _row_to_out(post, viewer_public_id)
+        # F2 javító kör 1: a válasz author_public_id mezőjét a
+        # poszt TÉNYLEGES szerzőjéből kell feloldani — a PATCH
+        # owner-only, így ez jellemzően a hívó saját public_id-ja,
+        # de az egységes feloldás (post.profile_id-ből) kizárja a
+        # bármilyen jövőbeli félrecsúszást (pl. ha a service a
+        # jövőben nem-tulajdonos PATCH-et is átengedne valamilyen
+        # okból, a válasz akkor is a valódi szerzőt mutatná).
+        author_public_id = _resolve_public_id_by_profile_id(db, post.profile_id)
+        return _row_to_out(post, author_public_id)
     finally:
         try:
             next(db_gen, None)
