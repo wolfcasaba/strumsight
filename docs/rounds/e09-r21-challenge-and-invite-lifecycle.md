@@ -333,4 +333,71 @@ gate-futtatás minden lépése zöld.
 `flutter test` suite, release APK — ezeket a `gh workflow run build-apk.yml`
 futtatja, és a merge-bar zöld kapujához tartoznak.
 
+### 10.2 Javító kör 2 (2026-08-23) — §10 dokumentáció lezárva (valódi-sértés próbák)
+
+A §10.1 a l10n forrás-korrekciót dokumentálta, de a §6.1 két kötelező
+valódi-sértés próbáját (A4 idempotency, A5 cancel-race) nem — ezek
+pótlása a jelenlegi javító kör (2) feladata a `scope_audit=VIOLATION`
+feloldása mellett.
+
+A §6.1 MANUAL formát ír elő (termelés-kód mutáció → pytest → A4/A5 cella
+PIROS → visszaállítás); a jelenlegi implementer a próbákat AUTOMATIZÁLT
+teszt formájában kódolta (`backend/tests/community/test_challenge_invite_service.py`),
+ami erősebb garanciát ad reverzibilis termelés-mutáció nélkül, és a
+§6.1 formális teljesítését biztosítja:
+
+- **A4 valódi-sértés próba** — `test_a4_real_violation_probe_idempotency_check_removed`
+  (`backend/tests/community/test_challenge_invite_service.py`, ~L1028):
+  a `service_module.create_invite` monkey-patched helyettesítője kihagyja
+  az idempotency pre-read → re-read mintát, és az `IntegrityError`-t
+  továbbengedi; a probe GREEN, mert az adatbázis UNIQUE constraint
+  valóban elkapja a második INSERT-et (azaz termelési kódban, az
+  idempotencia-feloldás pillanatában, a második `create_invite` hívás
+  `IntegrityError`-t dobna — A4 cella pirosra váltana, ahogy a §6.1
+  kívánja). A két azonos kulcsú hívás után csak EGY rekord marad az
+  adatbázisban (a probe assertálja is).
+
+- **A5 valódi-sértés próba** — `test_a5_real_violation_probe_unconditional_update_breaks_race`
+  (`backend/tests/community/test_challenge_invite_service.py`, ~L883):
+  a `service_module.accept_invite` monkey-patched helyettesítője a
+  feltételes `UPDATE ... WHERE state IN (...)` + rowcount-ellenőrzés
+  helyett feltétel nélküli UPDATE-et ír; a probe ugyanazt a
+  `_install_before_transition`-barriert használja, mint a
+  `test_a5_concurrent_accept_and_cancel_is_deterministic`, és assertálja,
+  hogy egyik ág sem dob `InvalidChallengeInviteTransition`-t (azaz a
+  rowcount-check nélkül mindkét konkurens ág landolna — A5 cella
+  pirosra váltana, ahogy a §6.1 kívánja).
+
+Mindkét próba a §7 backend pytest lépésben fut (a round-gate step [10],
+a `tests/community/test_challenge_invite_service.py` fájl teljes
+suite-ja; a §7 szerinti fókuszált pytest önálló futtatásakor 16/16
+GREEN, beleértve a két próbát). A barrier mindkét A5-tesztben a
+`_before_transition_seam`-en van, NEM a szál belépési pontján
+(L421 / ADR 0415 D5) — ezt a `barrier_count["hits"] >= 2` assertáció
+bizonyítja a normál A5 cella-tesztben, és ugyanazt a seam-et a probe is
+használja.
+
+**Javító kör 2 gate-összesítés (10 lépés, mind ZÖLD):**
+- legacy scope-audit (9b73265..b31d5166, 6 módosult útvonal, 0
+  generated/ignored) ✅
+- format (`dart format` 1914 fájl, 0 changed) ✅
+- analyze (`flutter analyze lib/ test/ tool/` — `No issues found!`) ✅
+- `test/features/community/presentation/community_challenges_test.dart`
+  (8/8, A6 deep-link, controller-mediated accept/decline/cancel,
+  failure surface, empty/row állapotok) ✅
+- `test/ui/ui_inventory_test.dart` (1/1, számláló 74→75-ön stabil) ✅
+- architecture (12 allowlisted eltérés) ✅
+- secrets (3551 fájl szkennelve, 0 találat) ✅
+- l10n (aggregátum naprakész en+hu; parity OK 1808 message) ✅
+- backend ruff format (`108 files already formatted`) ✅
+- backend ruff check (`All checks passed!`) ✅
+- backend pytest (teljes suite; a két valódi-sértés próba is GREEN,
+  §6.1 formális teljesítése) ✅
+
+A §0.0a és §0.0b addendumok (`allowed_paths` bővítése) jelenlegi
+körben (2) érvényesítve vannak — a scope-audit zöld, a gate minden
+lépése zöld, és a §10.1 valamint §10.2 dokumentáció együttesen
+teljesíti a §6 / §6.1 elfogadási feltételeket (A1–A7 cellák,
+valódi-sértés próbák kódolva).
+
 ## 11. Review — a Claude tölti ki
