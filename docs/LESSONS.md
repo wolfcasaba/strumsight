@@ -16845,3 +16845,45 @@ viselkedésváltoztatást kér, a következő körben a MEGVÁLTOZOTT viselkedé
 mérni kell, nem csak a lelet eltűnését.
 
 **Őrteszt:** `test/core/design_system/motion/ss_beat_pulse_test.dart`::`PROBE_D — the pulse comes alive once the clock starts reporting a position, with no pumpWidget call in between`
+
+## L445 — Egy re-derivált (nem perzisztált) küszöb-paraméter a mérés-pontnál "véletlenül" a hardkódolt defaulttal egyezhet: a teszt hamis zöld, a paraméter csendben figyelmen kívül marad (E09-R18, 2026-08-23)
+
+**Mit mértem.** Az E09-R18 briefje egy signed-URL lejárati mércét írt elő
+(A2: "lejárat után elutasított"), és a `create_upload_intent` egyedi
+`signed_url_expires_in` paramétert fogadott (a hívó rövidebb ablakot is
+kérhetett, pl. 60 mp-et). A `finalize_upload` viszont a lejáratot NEM a
+ténylegesen kiadott értékből derivált, hanem `row.created_at + SIGNED_URL_
+EXPIRES_IN` (a modul-szintű 5 perces DEFAULT konstans) alakban — a függvény
+szignatúrájában nem is volt `signed_url_expires_in` paraméter, és a sor nem
+perzisztálta a valódi `expires_at`-ot.
+
+Az A2 teszt `later = _utcnow() + timedelta(minutes=5)`-nél mért — PONTOSAN a
+hardkódolt default. A teszt zöld volt, mert az `intent`-hez adott 60 mp-es
+egyedi ablak és a finalize hardkódolt 5 perce a mérési pontnál **véletlenül
+egybeesett** (mindkettő "elég régen" volt ahhoz, hogy az 5 perces alapértelmezés
+is lejártnak lássa). A cella tehát nem azt bizonyította, amit állított — nem
+tudott különbséget tenni "a valódi TTL-t ellenőrzi" és "egy hardkódolt
+konstanst ellenőrzi" között.
+
+Saját, önállóan futtatott próbával fogtam meg pre-merge review közben (nem a
+gate, nem az implementer jelentése): 60 mp-es intent, finalize `+90 mp`-nél
+(a valódi lejárat UTÁN, de a hardkódolt 5 perces ablakon BELÜL) →
+`MediaUploadExpired` VÁRT, de a sor `FINALIZED`-re váltott. Mindhárom
+független fél (a Claude saját próbája, a correctness review, a dedikált
+security review) egymástól függetlenül ugyanerre a hibára futott.
+
+**A szabály.** Ha egy szolgáltatás egy KONFIGURÁLHATÓ időbeli/numerikus
+paramétert fogad (`signed_url_expires_in`, TTL, timeout), de az ÉRTÉKELÉS
+egy másik függvényben egy modul-szintű DEFAULT konstansból re-derivál —
+NEM a ténylegesen kiadott/perzisztált értékből —, a hiba addig rejtve marad,
+amíg a teszt a mérési pontot a DEFAULT-hoz közel választja. A gyanújel: a
+teszt `now`/mérési offszete SZÁM SZERINT egyezik egy máshol létező konstanssal
+— ez majdnem mindig azt jelenti, hogy a teszt a konstanst méri, nem a
+paramétert. Az őrzés: (1) a kiadott/konfigurált értéket PERZISZTÁLD (ne
+re-deriváld egy defaultból), (2) az acceptance-cella a mérési pontot a
+KONFIGURÁLT (nem a default) érték köré tegye, és VÁLASSZON egy olyan `now`-t,
+ami a konfigurált érték után, de a default előtt van — ez pontosan az a sáv,
+ahol a hibás (default-ra hagyatkozó) és a helyes (perzisztált-értékre épülő)
+implementáció megkülönböztethető.
+
+**Őrteszt:** `backend/tests/community/test_media_upload.py`::`test_a2_finalize_rejects_expired_signed_url` (60 mp TTL + `+90 mp` finalize, a javító kör utáni alak).

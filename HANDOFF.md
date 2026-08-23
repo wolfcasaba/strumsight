@@ -1,5 +1,93 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R18 KÉSZ — Média upload contract és objektumtár integráció — PR [#430](https://github.com/wolfcasaba/strumsight/pull/430), squash `ee741678` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENNYOLCADIK KÖRE KÉSZ.** Feature-flaggel
+(`communityMediaEnabled`/`community_media_enabled` — MÁR létező, KÜLÖN flag a
+fő `communityEnabled`-től) védett, direkt-objektumtáras médiafeltöltési
+pipeline ALAPJA: `backend/app/community/storage/object_store.py` (ÚJ —
+vendor-semleges `ObjectStore` interfész + **stdlib-only** SigV4
+`S3CompatibleObjectStore`, NINCS `boto3`/`minio` — a `requirements.txt` nincs
+az `allowed_paths`-on, ADR 0410 D2; + `InMemoryObjectStore` teszt-fake),
+`models/media.py` (ÚJ `CommunityMedia`, `public UUID + bigint PK` minta),
+`services/media_upload_service.py` (ÚJ — intent → signed URL → finalize/
+cancel, ownership/checksum/MIME/size ellenőrzés, orphan cleanup, kvóta),
+`e09_r18_0012_community_media.py` migráció, `community_media_uploader.dart`
+(ÚJ — lifecycle-aware, Dio `CancelToken`-alapú cancel, progress).
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5.
+
+**ADR-szám korrekció a pre-flightban.** A brief előre `0407`-et adott, de azt
+közben E09-R16 foglalta el — `tools/round-slots.py reserve-adr` friss számot
+adott: **[ADR 0410](docs/adr/0410-media-upload-contract-and-object-store.md)**.
+
+**Kötött szerkezeti döntés a pre-flightban (D1): NINCS router-fájl ebben a
+körben, szándékosan.** A brief `allowed_paths`-a nem tartalmaz
+`routers/media.py`-t; az A1 ("flag KI → elérhetetlen") a
+**service-függvény szinten** dől el (`settings.community_media_enabled`
+minden publikus belépési ponton) — a HTTP-bekötés egy KÉSŐBBI kör tartozása,
+ugyanaz a minta, mint a Kör 12 óta `UnimplementedError`-t dobó feed/post
+repository HTTP-integráció.
+
+**EGY javító kör, 1 BLOCKER + 4 MAJOR javítva** (`docs/reviews/e09-r18-review.md`
++ dedikált biztonsági review `docs/reviews/e09-r18-security.md`, `risk="high"`)
+— mindhárom fél (correctness review, security review, a Claude saját
+önállóan futtatott próbája) FÜGGETLENÜL reprodukálta ugyanazt a három hibát:
+
+- **BLOCKER — az A2 lejárat-cella hamis zöld volt.** `finalize_upload` a
+  lejáratot egy hardcode-olt modul-konstansból (`SIGNED_URL_EXPIRES_IN`, 5
+  perc) számolta újra, NEM a ténylegesen kiadott `signed_url_expires_in`
+  értékből — a sor nem is tárolta a valódi `expires_at`-ot. Próba: 60 mp-es
+  signed URL, finalize `+90 mp`-nél → `FINALIZED` (elvárt: `MediaUploadExpired`).
+  Javítva: `CommunityMedia.expires_at` persisted oszlop, a finalize a TÁROLT
+  értékhez hasonlít.
+- **MAJOR — kvóta permanens lockout.** A terminális `cancelled`/`failed`
+  sorok örökre beszámítottak a kvótába — 10 megszakított feltöltés után a
+  profil véglegesen kizárva. Javítva: csak `pending`/`uploaded` számít élőnek.
+- **MAJOR — a checksum-guard (A5) csendes no-op volt a valódi adapterrel**,
+  mert `S3CompatibleObjectStore.head_object` fixen `sha256_hex=None`-t adott.
+  Javítva LÁTHATÓAN: `pytest.mark.xfail(strict=True)` teszt dokumentálja a
+  rést, ami hangos `XPASS→FAIL`-ra vált, amint egy jövőbeli kör beköti a
+  valós bucket-oldali SHA-256-ot.
+- **MAJOR — `_as_utc` a LOKÁLIS időzónát csatolta, nem UTC-t** (eltérve a
+  hivatkozott `post_service._as_utc` precedenstől) — nem-UTC hoston minden
+  lejárat/retention-összehasonlítás eltolódott volna; a box UTC-je maszkolta.
+  Javítva: `timezone.utc`.
+- **MAJOR (dedikált biztonsági review) — a signed URL kitalált,
+  nem-szabványos SigV4 query-paraméterekkel próbálta korlátozni a
+  content-type/content-length-et**, amit egy valódi bucket nem ismerne fel.
+  Javítva: valódi aláírt `content-type` header (`X-Amz-SignedHeaders`); a
+  content-length-re a docstring ŐSZINTÉN kimondja, hogy presigned PUT nem
+  tudja aláírni (AWS-korlát) — a finalize `head_object`-alapú újraellenőrzés
+  a load-bearing réteg.
+
+Review APPROVED javító kör 1 után, 0 nyitott BLOCKER/MAJOR — a Claude a
+javításokat friss, izolált `/tmp`-klónokban ÚJRA futtatott gate-tel,
+scope-audittal ÉS saját, önállóan futtatott real-violation próbákkal
+fogadta el (nem az implementer önjelentésére hagyatkozva). Dedikált
+security-reviewer pass (risk=high): PASS, 0 nyitott lelet a javítás után.
+
+**Zöld kapu (exact `4bb95197`).** `full-gate.yml`
+[32659147187](https://github.com/wolfcasaba/strumsight/actions/runs/32659147187)
+**success**, `router-ci.yml`
+[32658886961](https://github.com/wolfcasaba/strumsight/actions/runs/32658886961)
+**success**. A kör alatt a `main` egyszer mozdult (E13-R06 lezárása, PR #428,
+diszjunkt fájlkör) — `merge --no-ff` + `tools/safe-force-push.sh` + teljes
+CI-újradispatch a kombinált HEAD-en, §0.3 szerint. A landolás a merge-záron
+át (`tools/round-land.sh`), mert a másik sáv (E13-R07) párhuzamosan fut.
+Post-merge `tools/round-gate.sh test/features/community/data/community_media_uploader_test.dart`
+a friss, fast-forwardolt `main`-en is zöld (6/6 Flutter-lépés).
+
+**Nyitott horog a következő köröknek:** a `S3CompatibleObjectStore` ebben a
+körben BEKÖTETLEN (a service-réteg csak az `InMemoryObjectStore` fake-et
+használja a tesztekben) — egy jövőbeli wiring-kör kösse be a valós bucket
+oldali SHA-256 kiolvasását (S3 Additional-Checksums vagy `X-Amz-Meta-Sha256`)
+és törölje az `object_store.py`-beli TODO-t + az `xfail(strict=True)` tesztet
+cserélje normál assertre. A router (`backend/app/community/routers/media.py`)
+és a `main.py`-mountolás szintén egy KÉSŐBBI kör dolga.
+
+**Következő Epic 9 kör: E09-R19** (média feldolgozás, privacy és moderation
+state).
+
 ## ✅ E13-R06 KÉSZ — Motion rendszer és reduced motion — PR [#428](https://github.com/wolfcasaba/strumsight/pull/428), squash `011d1c47` (2026-08-23)
 
 **CHAPTER 13 (UI/UX DESIGN SYSTEM) HATODIK KÖRE KÉSZ.** Hozzáférhető
