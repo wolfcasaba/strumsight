@@ -555,4 +555,70 @@ Mind a hét lépés ZÖLD (format 1890/0, analyze 0 issue, a két gate-teszt
 A6 (`git diff --stat 467ef3ea..HEAD -- lib/features/` üres) és A7 (egyetlen
 `Duration(` találat, a `syncTolerance` küszöb) ismét ellenőrizve, változatlan.
 
+## 10.2 Második javító kör — MAJOR-2 (regresszió a MINOR-3 javításából)
+
+### MAJOR-2 — a pulzus a leállás után soha nem indul újra rebuild nélkül
+
+A review PROBE_D/PROBE_E méréssel mutatta, hogy a MINOR-3 `_ticker.stop()`
++ `didUpdateWidget`-ébresztő párosa hibás feltevésen alapult: az
+`SsBeatClock` PULL-alapú port, a hívó nem garantáltan rebuildeli a widgetet
+akkor, amikor az órának újra lesz pozíciója. Ha a hívó nem rebuildel, a
+leállított `Ticker` soha többé nem kérdezi le az órát, a pulzus némán,
+véglegesen halott marad.
+
+**Javítás:** `_onTick`-ből kivettem a `_ticker.stop()` hívást, és a
+felesleges `didUpdateWidget` ébresztőt is töröltem — a `Ticker` a widget
+teljes élettartama alatt fut (`initState`-ben indul, `dispose`-ban áll le),
+pontosan úgy, ahogy a `CircularProgressIndicator` teszi. A `_onTick`
+„nincs élő idővonal" ága továbbra sem animál (`_live = false` →
+`surfaceSunken` szín, skálázás nélkül) — csak a *kérés* nem áll le, a
+*vizuális* kimenet nem változik ezen az ágon.
+
+**Két új cella** (`ss_beat_pulse_test.dart`, „MAJOR-2 regression" csoport),
+mindkettő `pumpWidget` ÚJRAHÍVÁSA NÉLKÜL méri az újraindulást:
+
+- **PROBE_D** — statikus (sosem élő) órán a `clock.position`-t élőre
+  állítja, majd `tester.pump(16ms)`-mel győződik meg róla, hogy a méret
+  megváltozott (nem ragadt a halott `Size(16, 16)`-on).
+- **PROBE_E** — élő lejátszásból `null`-ra (pause), onnan új pozícióra
+  (resume) — a fagyott mérethez képest kell elmozdulnia.
+
+**Újra-rontás próba** (a `_ticker.stop()` visszaállítva, majd a két új
+cella lefuttatva, `--plain-name "MAJOR-2"`):
+
+```
+00:00 +0 -1: … PROBE_D … [E]
+  Expected: not _DebugSize:<Size(16.0, 16.0)>
+    Actual: _DebugSize:<Size(16.0, 16.0)>
+00:01 +0 -2: … PROBE_E … [E]
+  Expected: not _DebugSize:<Size(16.0, 16.0)>
+    Actual: _DebugSize:<Size(16.0, 16.0)>
+00:01 +0 -2: Some tests failed.
+```
+
+Mindkét cella pirosra váltott a hibás (`stop()`-os) kóddal, ahogy a review
+kérte. A rontást ezután visszaállítottam a javított állapotra (`git diff`
+üres a lépés után), és a teljes gate újra lefutott.
+
+A meglévő „stopping the clock (null position) freezes the pulse" (A3) és
+„no live timeline renders a static, non-animating state" cella zöld maradt
+— a leállás továbbra is fagyasztja a pontot, csak már nem zárja ki a
+későbbi újraindulást. A korábbi MINOR-3-hoz tartozó `pumpAndSettle`-alapú
+„the ticker does not run without a live timeline" csoportot töröltem: a
+folyamatosan futó `Ticker` szándékos idióma (mint a
+`CircularProgressIndicator`-nál), így az a csoport a MOST HELYES viselkedés
+ellen tesztelt volna. `MINOR-1` és `MINOR-2` javítását nem érintettem.
+
+### Gate — harmadszor, a MAJOR-2 javítás után
+
+```
+tools/round-gate.sh test/core/design_system/motion/ss_motion_scope_test.dart test/core/design_system/motion/ss_beat_pulse_test.dart
+```
+
+Mind a hét lépés ZÖLD: format 1890/0, analyze 0 issue, `ss_motion_scope_test`
+7/7, `ss_beat_pulse_test` 14/14 (a két új PROBE_D/PROBE_E cella belépett, a
+törölt kétcellás `pumpAndSettle`-csoport pedig kikerült, a nettó cellaszám
+így változatlan maradt a MINOR-3 utáni állapothoz képest), architecture 12
+allowlisted, secrets 3488/0, l10n en→hu 1755.
+
 ## 11. Review — a Claude tölti ki
