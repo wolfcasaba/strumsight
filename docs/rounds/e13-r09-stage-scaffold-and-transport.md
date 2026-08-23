@@ -456,4 +456,144 @@ tools/round-gate.sh test/core/design_system/stage/ss_stage_scaffold_test.dart te
 (7+9+3 = 19 teszt, mind PASS) · `architecture` ZÖLD (12 allowlistelt
 eltérés, változatlan) · `secrets` ZÖLD · `l10n` ZÖLD.
 
+### Javító kör (fix1) — a review három MAJOR-ja
+
+A review (`docs/reviews/e13-r09-review.md`, 2026-08-23, Claude Opus 5,
+`CHANGES REQUESTED`) mind a hét acceptance-cella zöldsége MÖGÖTT három MAJOR-t
+mért ki eldobható próbatesztekkel. Az alábbiak ezt zárják.
+
+#### MAJOR-1 — forrás-szintű őrcella a mikrofon/kamera/felvétel ellen
+
+`ss_stage_scaffold_test.dart`-ba egy új `group('resource ownership (source
+guard, E13-R09 MAJOR-1)')` került: a két új produkciós fájlt (`ss_stage_
+scaffold.dart`, `ss_session_transport.dart`) forrásként olvassa be
+(`File(...).readAsStringSync()`), a kommenteket kiszűri (a doc-comment
+szándékosan tartalmazza a "microphone"/"camera"/"recording" szavakat — ezek
+NEM sérthetik a próbát), és hat tiltott tokenre keres a maradék kódban:
+`MethodChannel`, `wakelock`, `camera`, `record`, `microphone`, `permission`.
+A string-literálok VISZONT láthatók maradnak, mert a mutáció legjellemzőbb
+jele — a `'plugins.flutter.io/record'` csatornanév — egy string literálban
+van.
+
+**A review pontos mutációjával ellenőrizve, csonkítatlan piros kimenet.** A
+`ss_stage_scaffold.dart` `initState`-jébe ideiglenesen bekerült (majd
+`git checkout --`-tal visszaállt):
+
+```dart
+widget.onRequestScreenAwake?.call();
+final channel = MethodChannel('plugins.flutter.io/record');
+channel.invokeMethod<void>('start');
+```
+
+(a `MethodChannel` feloldásához egy ideiglenes `import 'package:flutter/
+services.dart';` is bekerült — a produkciós fájl eredetileg csak
+`material.dart`-ot importálja, ami NEM exportálja a `services.dart`-ot; ez
+önmagában is megerősíti, hogy a fájlban ma nincs platform-csatorna import).
+
+```
+00:01 +7 -1: resource ownership (source guard, E13-R09 MAJOR-1) the Stage scaffold and transport sources never mention a platform channel, wakelock, camera, recording, microphone, or permission API [E]
+  Expected: empty
+    Actual: [
+              'lib/core/design_system/layouts/ss_stage_scaffold.dart contains "MethodChannel"',
+              'lib/core/design_system/layouts/ss_stage_scaffold.dart contains "record"'
+            ]
+  SsStageScaffold/SsSessionTransport must stay presentation-only (ADR 0276) — found: lib/core/design_system/layouts/ss_stage_scaffold.dart contains "MethodChannel", lib/core/design_system/layouts/ss_stage_scaffold.dart contains "record"
+```
+
+Visszaállítás után (`git diff lib/core/design_system/layouts/
+ss_stage_scaffold.dart` üres) az egész `ss_stage_scaffold_test.dart` ismét
+zöld (9/9, a két új teszttel együtt). A produkciós kódot a MAJOR-1 javítása
+NEM módosította — csak az őr volt hiányos, nem az implementáció (a brief
+maga is így jelezte előre).
+
+#### MAJOR-2 — az A4 cellák valódi felületen mérnek
+
+A `_harness` függvényt (`ss_stage_scaffold_test.dart:15-58` volt) `_pumpStage`
+váltotta fel: a régi `MediaQuery(data: MediaQueryData(size: size, ...))`
+wrapper csak azt írta felül, amit a leszármazottak *olvasnak* — a tényleges
+teszt-felület a régi kódban mindig az alapértelmezett maradt. `_pumpStage`
+most `tester.view.physicalSize`-t és `tester.view.devicePixelRatio = 1`-et
+állít be minden pump előtt (`addTearDown(tester.view.reset)`-tel párosítva),
+így a deklarált `Size` a TÉNYLEGES layout-kényszer; a `MediaQuery` ezután csak
+a `textScaler` felülírására kell (egy `Builder`-ben az ambiens, a valódi
+felületből származó `MediaQuery.of(context)`-et `copyWith`-eli). Minden
+korábbi hívási hely (A1, A7, A6, A4, A8) átállt az új segédfüggvényre.
+
+Az A4 három cellája (800×400, 1000×500, 1200×800, mind 2.0 text scale)
+ugyanígy 9/9 zöld marad — vagyis az implementáció valóban helyes volt, csak
+korábban rossz felületen mérték (ahogy a review is jelezte: "őr-hiba, nem
+termék-hiba").
+
+#### MAJOR-3 — a rest-állapotú felirat tördelhetővé tétele
+
+`ss_session_transport.dart` `_RestIndicator`-jában a `Text(label!)` egy
+`Flexible(child: Text(label!, softWrap: true))`-ra váltott, hogy a felirat a
+rendelkezésre álló szélességhez tördelhessen ahelyett, hogy egyetlen sorként
+túlcsordulna.
+
+**RED → GREEN, csonkítatlan kimenet.** A javítás ELŐTT (a `Flexible` nélküli
+eredeti kóddal) hozzáadott két új cella (`ss_session_transport_test.dart`):
+mindkettő valódi `tester.view.physicalSize = Size(360, 640)` felületet és
+`SsSemantics.maximumTextScale` (2.0x) text scale-t állít be, a rest-ágra a
+review pontos magyar feliratával (`'Készen áll a gyakorlás megkezdésére'`).
+
+```
+00:01 +9: SsSessionTransport MAJOR-3 regression: a real-length idle label does not overflow on a narrow 360x640 phone at 2.0 text scale
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: null
+  Actual: FlutterError:<A RenderFlex overflowed by 661 pixels on the right.>
+...
+00:01 +9 -1: SsSessionTransport MAJOR-3 regression: a real-length idle label does not overflow on a narrow 360x640 phone at 2.0 text scale [E]
+  Test failed. See exception logs above.
+```
+
+Pontosan a review mért 661 pixeles túlcsordulása reprodukálódott. A
+`Flexible`+`softWrap` javítás után mindkét új cella (rest- ÉS aktív ág) zöld,
+a teljes `ss_session_transport_test.dart` 11/11 PASS.
+
+#### MINOR-1 — a „Fix magasságú Stage fejléc → A4" sor: ÚJRAMÉRVE a MAJOR-2 javítás után
+
+A review MINOR-1 lelete szerint 240 px és 500 px fix fejléc-magassággal
+VALÓDI 800×400-as landscape felületen sem lenne túlcsordulás, és az A8
+(nem az A4) venné észre a sértést. **Ezt a MAJOR-2 javítása UTÁN, a most már
+valóban valódi geometriát kényszerítő `tester.view` technikával újramértem**
+(ideiglenes, a commit előtt eltávolított próbacellákkal ugyanabban a fájlban,
+`git diff` a próba törlése után üres) — az eredmény ELTÉR a review eredeti
+állításától:
+
+- **240 px fix fejléc**, valódi `Size(800, 400)`: `exception=null` — nincs
+  túlcsordulás (megegyezik a review mérésével).
+- **500 px fix fejléc**, valódi `Size(800, 400)`: `exception=A RenderFlex
+  overflowed by 124 pixels on the bottom.` — **VAN túlcsordulás**, ellentétben
+  a review állításával.
+
+A `_WideStage` bal oszlopában a fejléc `Padding`-ja NEM `Expanded`, tehát a
+teljes oszlop-magasság (400px) mínusz a fejléc igénye (500+24 padding=524px)
+negatív marad a görgethető középső résznek — ez klasszikus `RenderFlex`
+túlcsordulás, amit a görgetés NEM tud elnyelni (a görgetés a TARTALOM
+magasságát oldja, nem a KONTÉNER hiányát). A legvalószínűbb magyarázat, hogy a
+review saját MINOR-1 mérése még a MAJOR-2-ben leírt hibás harness-szal (nem
+valódi `tester.view` felület, hanem a tesztfelület alapértelmezett
+800×600-a) készült — abban a világban 524 < 600, tényleg nem lenne
+túlcsordulás.
+
+**Következtetés:** a MAJOR-2 javítása UTÁN a §6.1 táblázat eredeti sora — „Fix
+magasságú Stage fejléc → A4" — HELYES marad: az A4 (a `tester.takeException()
+isNull` ellenőrzésen keresztül) ma ténylegesen elkapja a 400px-nél magasabb
+fix fejlécet valódi landscape geometrián. A táblázatot emiatt NEM kellett
+módosítani, és nem volt szükség új célzott cellára sem — a MAJOR-2 javítása
+saját magában orvosolta a MINOR-1 mögötti hiányt is.
+
+### Javító kör — végső gate (fix1)
+
+```bash
+tools/round-gate.sh test/core/design_system/stage/ss_stage_scaffold_test.dart test/core/design_system/stage/ss_session_transport_test.dart test/core/design_system/stage/stage_back_confirmation_test.dart
+```
+
+Lásd a §7 alatti tényleges, csonkítatlan futást lent — a fix1 után a
+`ss_stage_scaffold_test.dart` 9 tesztet (a két új MAJOR-1 cellával), a
+`ss_session_transport_test.dart` 11 tesztet (a két új MAJOR-3 cellával)
+futtat, mindegyik PASS.
+
 ## 11. Review — a Claude tölti ki

@@ -117,7 +117,10 @@ class _RestIndicator extends StatelessWidget {
           isDisabled ? Icons.block : Icons.radio_button_unchecked,
           key: ValueKey('ss-session-transport-rest-${status.name}'),
         ),
-        if (label != null) ...[const SizedBox(width: 8), Text(label!)],
+        if (label != null) ...[
+          const SizedBox(width: 8),
+          Flexible(child: Text(label!, softWrap: true)),
+        ],
       ],
     );
   }

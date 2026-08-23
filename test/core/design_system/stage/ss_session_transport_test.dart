@@ -29,6 +29,55 @@ Widget _harness(
   );
 }
 
+const _longHungarianIdleLabel = 'Készen áll a gyakorlás megkezdésére';
+
+// Review E13-R09 MAJOR-3: no cell here ever set the ACTUAL test surface, so
+// a 661px RenderFlex overflow in the rest-state label (a real, user-visible
+// break at 2.0 text scale — an accessibility setting) stayed hidden behind a
+// fully green gate. tester.view.physicalSize/devicePixelRatio makes the
+// declared narrow-phone size the real layout constraint (same technique as
+// the ss_stage_scaffold_test.dart MAJOR-2 fix).
+Future<void> _pumpNarrowTransport(
+  WidgetTester tester, {
+  required SsSessionTransportStatus status,
+  required Size size,
+  double textScale = 1,
+  String? idleLabel,
+  String? disabledLabel,
+  VoidCallback? onPause,
+  VoidCallback? onResume,
+  VoidCallback? onFinish,
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+
+  await tester.pumpWidget(
+    Builder(
+      builder: (context) => MediaQuery(
+        data: MediaQuery.of(
+          context,
+        ).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: MaterialApp(
+          home: Scaffold(
+            body: SsSessionTransport(
+              status: status,
+              pauseLabel: 'Pause',
+              resumeLabel: 'Resume',
+              finishLabel: _finishLabel,
+              idleLabel: idleLabel,
+              disabledLabel: disabledLabel,
+              onPause: onPause,
+              onResume: onResume,
+              onFinish: onFinish,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// A signature that must be pairwise distinct across all six states for A3.
 ({
   bool pauseVisible,
@@ -206,5 +255,36 @@ void main() {
             'collisions: $signatures',
       );
     });
+
+    testWidgets(
+      'MAJOR-3 regression: a real-length idle label does not overflow on a '
+      'narrow 360x640 phone at 2.0 text scale',
+      (tester) async {
+        await _pumpNarrowTransport(
+          tester,
+          status: SsSessionTransportStatus.idle,
+          size: const Size(360, 640),
+          textScale: SsSemantics.maximumTextScale,
+          idleLabel: _longHungarianIdleLabel,
+        );
+
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'MAJOR-3 regression: the active-session branch does not overflow on a '
+      'narrow 360x640 phone at 2.0 text scale',
+      (tester) async {
+        await _pumpNarrowTransport(
+          tester,
+          status: SsSessionTransportStatus.active,
+          size: const Size(360, 640),
+          textScale: SsSemantics.maximumTextScale,
+        );
+
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }
