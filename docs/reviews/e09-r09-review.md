@@ -3,11 +3,11 @@
 Brief: docs/rounds/e09-r09-profile-search-and-discovery.md
 Diff: `git diff 2e8c3810...minimax/e09-r09-profile-search-and-discovery` (2e8c3810 = pre-flight commit, already on `main`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-23
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED (javító kör 1 után, `7145eacc`)
 
 ## Összegzés
 
-BLOCKER: 2 (F1 UI placeholder, F4 cursor block-filter leak) · MAJOR: 0 · MINOR: 1 (F2) · NOTE: 2 (F3, CI-completeness)
+BLOCKER: 2 (F1 UI placeholder, F4 cursor block-filter leak) — MINDKETTŐ FIXED `7145eacc`-ban · MAJOR: 0 · MINOR: 1 (F2, FIXED) · NOTE: 2 (F3 FIXED mellékesen, CI-completeness saját mulasztás pótolva)
 
 Dedikált `security-reviewer` agent (risk=high) is lefutott — a jelentése a
 saját BLOCKER-t hozott (F4 lent). CI (`full-gate.yml` run 32612083350) PIROS
@@ -32,7 +32,7 @@ utáni exact-SHA dispatch-nek mindhármat (`full-gate.yml`, `backend-ci.yml`, é
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
 | A1 | E-mail/telefon alapján nincs keresés | ✅ | `test_a1_search_accepts_only_q_handle_prefix`, `test_a1_search_router_source_does_not_reference_contact_keys` (AST-scan) — `backend/tests/community/test_profile_search.py:217,271` |
-| A2 | Blocked + non-discoverable (PRIVATE) kimarad | ❌ | a `public_ids` válaszlista helyesen szűr (`test_a2_private_profile_excluded_from_results`, `test_a2_followers_visibility_profile_kept`, `test_a2_blocked_profile_excluded_from_results`), DE a UI a találatokat nem azonosítja (F1), ÉS a `next_cursor` a blokkolt profil handle-jét/PK-ját mégis kiszivárogtatja (F4) — az A2 invariáns a teljes válaszra (nem csak a `public_ids` mezőre) nézve jelenleg SÉRÜL |
+| A2 | Blocked + non-discoverable (PRIVATE) kimarad | ✅ (javító kör 1 után) | `public_ids`/`hits` szűrés + F1 valós UI-adat + F4 opak, kept-set-alapú cursor mind zöld; `test_f4_cursor_omits_blocked_profile_handle_and_pk` a security-reviewer pontos forgatókönyvét pinneli |
 | A3 | Index-alapú terv, nincs full scan | ✅ | `test_a3_query_plan_uses_handle_normalized_index` (EXPLAIN QUERY PLAN), `test_a3_query_plan_index_present_in_schema` — `profile_search_repository.py:280-314` |
 | A4 | Rate limit érvényesül | ✅ | `test_a4_rate_limit_blocks_burst_above_max`, `test_a4_rate_limit_resets_on_window_pass` — `search.py:75-83`; ld. F2 (MINOR) a doc/kód eltérésről |
 | A5 | Recent-search lokális, törölhető | ✅ | `recent_search_store.dart` (SharedPreferences-only, `clear`/`remove`), 2 widget test a "no server call" assertióval |
@@ -70,7 +70,7 @@ tartalmazza a `profile_repository_impl.dart`-ot). `docs/adr/**`, `tools/**`,
 - **Miért nem fogta meg egyetlen zöld teszt sem:** a widget teszt (`test/features/community/presentation/community_search_test.dart:119-167`) egy `_FakeCommunityProfileRepository`-t használ, ami VALÓDI, megkülönböztethető `CommunityProfile`-okat ad vissza (`CommunityHandle('alice-$suffix')`, `displayName: 'Alice $suffix'`) — tehát a screen renderelő logikáját helyesen teszteli, de sosem futtatja át a valódi `HttpCommunityProfileRepository._decodePage`/`_placeholderProfile` útvonalat. A backend teszt (`test_profile_search.py`) csak a `public_ids` listát ellenőrzi, sosem a UI-n megjelenő nevet. A két oldal saját zöld tesztje között pontosan az a varrat maradt fedetlen, amit a `docs/LESSONS.md` E08-R28 F1 mintája ("wire-szerződés két fele külön diffben szétcsúszik, még akkor is, ha ugyanaz a kör írja mindkettőt") már megnevez.
 - **Kötelező javítás (irány, NEM kész patch):** vagy (a) a backend `search.py` válasza bővül `handle`/`display_name` (esetleg `avatar_url`) mezőkkel — a legegyszerűbb, mert egy keresési index tipikusan ezt adja vissza, és a repository `_decodePage`-je ezekből építi a valódi `CommunityProfile`-t placeholder helyett; vagy (b) a screen/controller a kapott `public_id`-ket egy batch/soronkénti `fetchById`-lal ténylegesen feloldja megjelenítés előtt, és a placeholder csak egy rövid, explicit "loading" átmeneti állapot (nem a végleges renderelt érték). Bármelyik irányt választja a javító kör, a widget tesztnek EZUTÁN a valódi `HttpCommunityProfileRepository`-n (vagy egy azt hűen tükröző fake wire-decode-on) kell átfutnia, nem csak a jelenlegi, kézzel épített `_FakeCommunityProfileRepository`-n — különben a javítás ugyanígy fedetlen maradhat.
 - **Ellenőrzés:** egy ÚJ teszt, ami a `HttpCommunityProfileRepository.searchProfiles`-t egy mock Dio/HTTP-adapteren keresztül hívja (a valódi JSON dekódolási úton, ahogy pl. `profile_onboarding_test.dart` teszi a create/update útvonalon), és azt állítja, hogy KÉT különböző `public_id`-jű találat KÉT különböző `displayName`/`handle` értékkel tér vissza.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`7145eacc`) — a backend válasz `hits` tömbbel bővült (`public_id`+`handle`[`handle_display`]+`display_name`+`created_at`), a `_placeholderProfile` teljesen törölve, `_hitToProfile` valódi, validált decode-ot végez. Saját ellenőrzés: friss `/tmp` klónban ELOLVASVA a diffet (nem csak a signal-t) — a `HttpCommunityProfileRepository` a MEGLÉVŐ `handle_display` oszlopot használja (mérve, Kör 3 migráció, `backend/alembic/versions/e09_r03_0003_community_handle.py:63`), nem fabrikált mező. ÚJ teszt: `test/features/community/presentation/community_search_test.dart:466-530` (`_F1Group`, scriptelt Dio-adapter) — két különböző hit két különböző `displayName`/`handle`-lel dekódolva, explicit `isNot('placeholder')` asszerció.
 
 ### F4 — BLOCKER — A `next_cursor` a block-szűrt (láthatatlannak szánt) profil handle-jét és belső PK-ját szivárogtatja (dedikált `security-reviewer` agent leletje)
 
@@ -80,7 +80,8 @@ tartalmazza a `profile_repository_impl.dart`-ot). `docs/adr/**`, `tools/**`,
 - **Hatás:** a belső integer PK (`id`) MINDEN lapozott válaszban szivárog, blokk-állapottól függetlenül — szekvenciális-PK enumerációs/user-count oracle (a brief §9-ben és a review-instrukció #5 pontjában explicit megnevezett kockázat-osztály). Ez a wire-adaton közvetlenül megfigyelhető (`curl`-lal is), a Flutter-oldali placeholder-hiba (F1) NEM fedi el.
 - **Kötelező javítás (irány, NEM kész patch):** a cursor legyen opak — szerver-oldali titokkal HMAC-elt vagy titkosított, hogy a `handle_normalized`/`id` ne legyen kliens-oldalon olvasható; ÉS a cursort a BLOCK-SZŰRT, ténylegesen visszaadott utolsó sorból (nem a nyers kandidátából) származtassa, hogy egy blokkolt profil sora sose kerülhessen bele a folytonossági kulcsba.
 - **Ellenőrzés:** a security-reviewer próbájának megfelelő regressziós teszt — viewer blokkol egy profilt, `limit=1` lapozás, a dekódolt/megfejtett cursor NEM tartalmazhatja a blokkolt profil handle-jét vagy PK-ját egyik lapon sem.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`7145eacc`) — a cursor mostantól HMAC-SHA256-tal aláírt (`<base64url(json)>.<base64url(sig)>`, `_sign_cursor`/`_verify_cursor`), az alkalmazás `secret_key`-jével; hamisítás/módosítás a jelaláírás-ellenőrzésen bukik el (`_verify_cursor` `None`-t ad, a hívó friss első laphoz esik vissza). A cursor emellett a BLOCK-SZŰRT `kept_rows` utolsó eleméből épül, sosem a nyers `rows[-1]`-ből — ha az adott lapon az EGYETLEN nyers sor blokkolt, `next_cursor` most `None` (nincs folytatás-token a szivárgó adatból). ÚJ regressziós teszt: `backend/tests/community/test_profile_search.py:770-848` (`test_f4_cursor_omits_blocked_profile_handle_and_pk`) — a security-reviewer PONTOS forgatókönyve (viewer blokkolja `testp-aaa`-t, `limit=1`), asszertálja `next_cursor is None`. Kiegészítő tesztek: `:850` (opacitás — nem sima base64-JSON), `:905` (round-trip valódi titokkal), `:974` (hamisított cursor → friss első lap). Saját ellenőrzés: a diffet ELOLVASVA (`profile_search_repository.py:212-410` köre) — a `cursor_clause` az eredeti kódban ORDER BY UTÁN lett fűzve (érvénytelen SQL lett volna, ha valaha éles cursor-lapozást próbál valaki futtatni éles adatbázison — a javítás ezt is korrigálta, a WHERE blokkon belülre helyezve).
+- **Kockázat, amit a fix nyitva hagy (NEM blokkoló, follow-up):** ha egy TELJES lap (limit méretű nyers kandidáta-halmaz) mindegyike blokkolt, `next_cursor` `None` lesz, és a lapozás "véget ér", holott lehet további, nem-blokkolt találat a query-térben túl ezen a ponton. A javító kör saját tesztje (`test_f4_cursor_omits_blocked_profile_handle_and_pk` docstringje) EZT EXPLICIT, szándékos, biztonság-elsőbbségi kompromisszumként dokumentálja ("MUST NOT generate a cursor" amikor a kept-set üres) — a lapozás korai leállása a szivárgás megakadályozásának ára. Elfogadható ebben a körben (nincs olyan A-kritérium, amit sértene), de egy jövőbeli kör, ha ez élességben problémát okoz (sokat blokkoló viewer csonka találati listát lát), külön oldhatja fel (pl. a repository belsőleg lapozzon tovább, amíg legalább 1 kept-row nem kerül elő vagy a nyers kandidáták el nem fogynak).
 
 ### F2 — MINOR — A 422 (túl rövid query) válasz docstring-je hamisan állítja, hogy nem fogyaszt rate-limit slotot
 
@@ -89,13 +90,13 @@ tartalmazza a `profile_repository_impl.dart`-ot). `docs/adr/**`, `tools/**`,
 - **Hatás:** nem biztonsági regresszió (a tényleges viselkedés a KONZERVATÍVABB irányba téved — több kérés kerül limitálásra, nem kevesebb), de a téves dokumentáció félrevezetheti egy jövőbeli kört, ami erre a viselkedésre építene (pl. egy kliens retry-stratégia, ami feltételezi, hogy a 422 "ingyenes").
 - **Kötelező javítás:** vagy a docstring/kommentár igazítása a tényleges sorrendhez, vagy — ha a szándék valóban az volt, hogy a túl rövid query ne fogyasszon slotot — a hossz-ellenőrzés a rate-limit check ELÉ mozgatása.
 - **Ellenőrzés:** egy teszt, ami egy túl rövid query-t küld N-szer, majd megméri, hogy ez csökkentette-e a rendelkezésre álló burst-kvótát a következő érvényes kéréseknél.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`7145eacc`) — a hossz-ellenőrzés a rate-limit check ELÉ került (`search.py:216-229` a hívás előtt fut a `_search_limiter.allow`), a docstring/kommentár is igazítva. ÚJ teszt: `backend/tests/community/test_profile_search.py:1074` (`test_f2_tampered_cursor_422_does_not_consume_rate_limit_slot`) — 70 rövid+hamisított query után egy érvényes kérés még átmegy.
 
 ### F3 — NOTE — Holt import + öncélú `_ = x` lint-elhallgattatás
 
 - **Fájl:** `backend/app/community/routers/search.py:57` (`import uuid`), `62-64` (`lookup_active_profile_id` import), `226-228` (`_ = uuid; _ = lookup_active_profile_id`).
 - **Megfigyelés:** a modul egy jövőbeli ("exact-handle lookup endpoint") funkcióra hivatkozva tart életben két, ma nem használt importot, mesterséges `_ = x` hozzárendeléssel elhallgattatva a linter figyelmeztetését. A CLAUDE.md elve szerint ("ne tervezz hipotetikus jövőbeli igényekre") ez felesleges — ha egy jövőbeli kör szüksége lesz rá, ott importálja. Nem blokkoló, kozmetikai.
-- **Státusz:** OPEN (follow-up, nem kell ebben a körben javítani)
+- **Státusz:** FIXED (`7145eacc`, mellékesen) — a javító kör a `search.py`-t úgy írta át, hogy a holt `import uuid`/`lookup_active_profile_id` és az öncélú `_ = x` sorok is eltűntek (`ruff check` zöld maradt enélkül is).
 
 ## Gate-bizonyíték ellenőrzése
 
@@ -108,23 +109,19 @@ tartalmazza a `profile_repository_impl.dart`-ot). `docs/adr/**`, `tools/**`,
 | secrets | zöld | ✅ |
 | l10n | zöld | ✅ |
 | backend ruff format/check | zöld | ✅ |
-| backend pytest | 420 zöld | ⚠️ első futás 1 PIROS (`test_follow_service.py::test_swap_unique_constraint_breaks_a2`), 2. futás 420/420 zöld — 10×-es izolált rerun 9/10 zöld, a `main` bázison is reprodukálható flakiness. **A kör SAJÁT diffje ezt a fájlt nem érinti** (a scope-audit ezt igazolja) — ez a Kör 7 (E09-R07) `docs/LESSONS.md` L421 által már dokumentált, thread-timing-alapú, nem-determinisztikus valódi-sértés próba, NEM ehhez a körhöz tartozó regresszió. Nem blokkoló erre a körre nézve, de a lánc L421-nek egy erősebb szinkronizációt (vagy a próba kiváltását egy nem-threading alapú determinisztikus technikára) érdemes felvennie egy jövőbeli körben. |
-| CI (`full-gate.yml`, exact-SHA `d680e5e7`) | — | run 32612083350, **PIROS** — `ui_inventory_test.dart` screen-count drift (68→69), körön kívüli, mechanikus |
-| CI (`backend-ci.yml`) | — | **NEM dispatch-elve ebben a fordulóban** (saját mulasztás, ld. fent) — a javító kör utáni exact-SHA dispatch-nek ezt is le kell fednie |
-| security-reviewer (risk=high) | — | lefutott, 1 BLOCKER-t talált (F4), egyébként PASS (SQL injection, rate-limit bypass, contact-discovery, response-shape, auth, recent-search local-only mind CLEAR, evidenciával) |
+| backend pytest | — | **javító kör 1 UTÁN, saját `/tmp` klón (`7145eacc`):** teljes `round-gate.sh` rerun MINDEN lépés zöld, beleértve a backend pytest-et (az F1-es futáskori `test_follow_service.py::test_swap_unique_constraint_breaks_a2` L421-flakiness ezen a futáson nem jelentkezett). |
+| CI (`full-gate.yml`, exact-SHA `7145eacc`) | — | run 32613741715, dispatch-elve, **folyamatban** a jelentés írásakor — a merge ELŐTT kötelezően zöldnek kell lennie |
+| CI (`backend-ci.yml`, exact-SHA `7145eacc`) | — | run 32613743111, dispatch-elve (a saját korábbi mulasztás pótolva), **folyamatban** a jelentés írásakor |
+| security-reviewer (risk=high) | — | lefutott az 1. review-fordulóban, 1 BLOCKER-t talált (F4), egyébként PASS — a javító kör F4-fixét a reviewer NEM futtatta újra (a saját, kiegészített regressziós tesztje és a Claude-oldali kód-olvasás igazolja a zárást, ld. F4 Státusz) |
 
 ## Merge-döntés
 
-**Merge TILOS amíg F1 és F4 (mindkét BLOCKER) nyitva.** F2/F3 (MINOR/NOTE)
-nem blokkolnak, de F2 érdemes egy sorban javítani a javító körrel együtt,
-mivel ugyanabban a fájlban van, amit F4 amúgy is módosít. A `ui_inventory_test.dart`
-számláló-drift (CI-only, körön kívüli) egy sorban javítandó a §0.0.1 addendum
-szerint bővített `allowed_paths`-szal.
+**Mindkét BLOCKER (F1, F4) FIXED, saját kód-olvasással és a javító kör
+regressziós tesztjeivel igazolva.** F2/F3 szintén zárva, mellékesen. A
+`ui_inventory_test.dart` számláló-bump megtörtént (68→69).
 
-A javító kör a leletlistával (F1 + F4 kötelező, F2 ajánlott egy sorban, a
-`ui_inventory_test.dart` számláló-bump kötelező) a MEGLÉVŐ
-`minimax/e09-r09-profile-search-and-discovery` branch-en fut, ugyanazzal a
-motorral (MiniMax M3, egy javító kör a jóváhagyott motor-eszkaláció szerint).
-A javító kör UTÁN mindhárom workflow-t (`full-gate.yml`, `backend-ci.yml`, és
-ha a diff érinti, `router-ci.yml`) újra kell dispatch-elni a friss exact-SHA-n
-és mindnek zöldnek kell lennie merge előtt.
+**Merge a `full-gate.yml` (32613741715) és a `backend-ci.yml` (32613743111)
+exact-SHA (`7145eacc`) zöld lezárása UTÁN mehet** — mindkettő a jelentés
+írásakor még folyamatban; az orchesztrátor a merge ELŐTT mindkettőt
+kötelezően ellenőrzi (ADR 0052). `router_ci_expected=false` a jelenlegi
+diffre (`round-ci-plan.py`), tehát a Router CI-t nem kell megvárni.
