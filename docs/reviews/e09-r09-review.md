@@ -7,14 +7,32 @@ Verdikt: CHANGES REQUIRED
 
 ## Összegzés
 
-BLOCKER: 1 · MAJOR: 0 · MINOR: 1 · NOTE: 1
+BLOCKER: 2 (F1 UI placeholder, F4 cursor block-filter leak) · MAJOR: 0 · MINOR: 1 (F2) · NOTE: 2 (F3, CI-completeness)
+
+Dedikált `security-reviewer` agent (risk=high) is lefutott — a jelentése a
+saját BLOCKER-t hozott (F4 lent). CI (`full-gate.yml` run 32612083350) PIROS
+volt: a `Run Flutter quality gates` és a `Coverage` lépés is elbukott a
+MEGLÉVŐ, körön kívüli `test/ui/ui_inventory_test.dart:14` hardcode-olt
+production-screen-számláló driftjén (68→69) — a kör saját ÚJ
+`community_search_screen.dart` fájlja miatt, UGYANAZ a mintázat, mint az
+E09-R06 F9 / E09-R07 3. javító köre / E09-R08 CI-only fixe.
+
+**Saját mulasztás mérve (§3.0 tervező helyett `full-gate.yml`-t hívtam
+csak):** a `backend-ci.yml` munkafolyamat (`backend/**` útvonalakra
+triggerel) EBBEN a dispatch-ben NEM futott le — a `round-ci-plan.py` kimenete
+csak a `full-gate.yml`/`build-apk.yml` párost nevezi meg, a `backend-ci.yml`-t
+nem. A kör diffje `backend/app/community/**` + `backend/tests/community/**`
+fájlokat érint, tehát ez a workflow is a zöld kapu RÉSZE (ugyanaz az elv, mint
+a `router-ci.yml`-nél: a merge SHA-ján `success` kell legyen). A javító kör
+utáni exact-SHA dispatch-nek mindhármat (`full-gate.yml`, `backend-ci.yml`, és
+— ha a diff érinti — `router-ci.yml`) le kell fednie merge előtt.
 
 ## Acceptance criteria
 
 | # | Kritérium | Teljesült | Bizonyíték |
 |---|---|---|---|
 | A1 | E-mail/telefon alapján nincs keresés | ✅ | `test_a1_search_accepts_only_q_handle_prefix`, `test_a1_search_router_source_does_not_reference_contact_keys` (AST-scan) — `backend/tests/community/test_profile_search.py:217,271` |
-| A2 | Blocked + non-discoverable (PRIVATE) kimarad | ✅ (backend) / ❌ (UI — lásd F1) | `test_a2_private_profile_excluded_from_results`, `test_a2_followers_visibility_profile_kept`, `test_a2_blocked_profile_excluded_from_results` — a szűrés helyes, DE a találatok a UI-n megjelenítve nem az adott profilt azonosítják (F1) |
+| A2 | Blocked + non-discoverable (PRIVATE) kimarad | ❌ | a `public_ids` válaszlista helyesen szűr (`test_a2_private_profile_excluded_from_results`, `test_a2_followers_visibility_profile_kept`, `test_a2_blocked_profile_excluded_from_results`), DE a UI a találatokat nem azonosítja (F1), ÉS a `next_cursor` a blokkolt profil handle-jét/PK-ját mégis kiszivárogtatja (F4) — az A2 invariáns a teljes válaszra (nem csak a `public_ids` mezőre) nézve jelenleg SÉRÜL |
 | A3 | Index-alapú terv, nincs full scan | ✅ | `test_a3_query_plan_uses_handle_normalized_index` (EXPLAIN QUERY PLAN), `test_a3_query_plan_index_present_in_schema` — `profile_search_repository.py:280-314` |
 | A4 | Rate limit érvényesül | ✅ | `test_a4_rate_limit_blocks_burst_above_max`, `test_a4_rate_limit_resets_on_window_pass` — `search.py:75-83`; ld. F2 (MINOR) a doc/kód eltérésről |
 | A5 | Recent-search lokális, törölhető | ✅ | `recent_search_store.dart` (SharedPreferences-only, `clear`/`remove`), 2 widget test a "no server call" assertióval |
@@ -54,6 +72,16 @@ tartalmazza a `profile_repository_impl.dart`-ot). `docs/adr/**`, `tools/**`,
 - **Ellenőrzés:** egy ÚJ teszt, ami a `HttpCommunityProfileRepository.searchProfiles`-t egy mock Dio/HTTP-adapteren keresztül hívja (a valódi JSON dekódolási úton, ahogy pl. `profile_onboarding_test.dart` teszi a create/update útvonalon), és azt állítja, hogy KÉT különböző `public_id`-jű találat KÉT különböző `displayName`/`handle` értékkel tér vissza.
 - **Státusz:** OPEN
 
+### F4 — BLOCKER — A `next_cursor` a block-szűrt (láthatatlannak szánt) profil handle-jét és belső PK-ját szivárogtatja (dedikált `security-reviewer` agent leletje)
+
+- **Fájl:** `backend/app/community/repositories/profile_search_repository.py:212-258` (`search_profiles`).
+- **Probléma:** a §D2 block-szűrés (`filter_public_ids_against_viewer_blocks`) a PYTHON oldalon, a nyers kandidát-SQL UTÁN fut. A `next_cursor` viszont a NYERS `rows[-1]`-ből épül (212-214. sor: `last_h, last_id = rows[-1][1], rows[-1][2]`) — ez a sor lehet egy BLOCKOLT profil sora, amit a `public_ids` válaszlistából már kiszűrt a block-filter, de a cursor-ba MÉGIS belekerül. A `_encode_cursor` egyszerű, titkosítatlan base64-JSON (`{"h": handle_normalized, "id": internal_pk}`) — triviálisan dekódolható.
+- **Reprodukálva (a security-reviewer agent által, eldobható próbateszttel):** viewer blokkolja a `testp-aaa` (pk 2) profilt, `?q=testp&limit=1` keresés. A `public_ids` helyesen NEM tartalmazza — de a dekódolt cursor: `{'h': 'testp-aaa', 'id': 2}`, pontos egyezés a blokkolt profillal. `limit=1`-gyel egy támadó laponként végigjárva megszerzi MINDEN nem-private találat `handle_normalized` értékét ÉS belső integer PK-ját, BELEÉRTVE azokat a profilokat is, amik ŐT blokkolták (a block szimmetrikus — ez pont azt fedi fel, amit a D2 el akar rejteni: kik blokkolták a viewert, akikről a viewernek nincs is tudomása).
+- **Hatás:** a belső integer PK (`id`) MINDEN lapozott válaszban szivárog, blokk-állapottól függetlenül — szekvenciális-PK enumerációs/user-count oracle (a brief §9-ben és a review-instrukció #5 pontjában explicit megnevezett kockázat-osztály). Ez a wire-adaton közvetlenül megfigyelhető (`curl`-lal is), a Flutter-oldali placeholder-hiba (F1) NEM fedi el.
+- **Kötelező javítás (irány, NEM kész patch):** a cursor legyen opak — szerver-oldali titokkal HMAC-elt vagy titkosított, hogy a `handle_normalized`/`id` ne legyen kliens-oldalon olvasható; ÉS a cursort a BLOCK-SZŰRT, ténylegesen visszaadott utolsó sorból (nem a nyers kandidátából) származtassa, hogy egy blokkolt profil sora sose kerülhessen bele a folytonossági kulcsba.
+- **Ellenőrzés:** a security-reviewer próbájának megfelelő regressziós teszt — viewer blokkol egy profilt, `limit=1` lapozás, a dekódolt/megfejtett cursor NEM tartalmazhatja a blokkolt profil handle-jét vagy PK-ját egyik lapon sem.
+- **Státusz:** OPEN
+
 ### F2 — MINOR — A 422 (túl rövid query) válasz docstring-je hamisan állítja, hogy nem fogyaszt rate-limit slotot
 
 - **Fájl:** `backend/app/community/routers/search.py:168-186` (`search_profiles_endpoint`).
@@ -81,15 +109,22 @@ tartalmazza a `profile_repository_impl.dart`-ot). `docs/adr/**`, `tools/**`,
 | l10n | zöld | ✅ |
 | backend ruff format/check | zöld | ✅ |
 | backend pytest | 420 zöld | ⚠️ első futás 1 PIROS (`test_follow_service.py::test_swap_unique_constraint_breaks_a2`), 2. futás 420/420 zöld — 10×-es izolált rerun 9/10 zöld, a `main` bázison is reprodukálható flakiness. **A kör SAJÁT diffje ezt a fájlt nem érinti** (a scope-audit ezt igazolja) — ez a Kör 7 (E09-R07) `docs/LESSONS.md` L421 által már dokumentált, thread-timing-alapú, nem-determinisztikus valódi-sértés próba, NEM ehhez a körhöz tartozó regresszió. Nem blokkoló erre a körre nézve, de a lánc L421-nek egy erősebb szinkronizációt (vagy a próba kiváltását egy nem-threading alapú determinisztikus technikára) érdemes felvennie egy jövőbeli körben. |
-| CI (`full-gate.yml`, exact-SHA `d680e5e7`) | — | run 32612083350, dispatch-elve, folyamatban a review írásakor — a merge ELŐTT kötelezően zöldnek kell lennie |
-| security-reviewer (risk=high) | — | dedikált agent dispatch-elve, folyamatban a review írásakor |
+| CI (`full-gate.yml`, exact-SHA `d680e5e7`) | — | run 32612083350, **PIROS** — `ui_inventory_test.dart` screen-count drift (68→69), körön kívüli, mechanikus |
+| CI (`backend-ci.yml`) | — | **NEM dispatch-elve ebben a fordulóban** (saját mulasztás, ld. fent) — a javító kör utáni exact-SHA dispatch-nek ezt is le kell fednie |
+| security-reviewer (risk=high) | — | lefutott, 1 BLOCKER-t talált (F4), egyébként PASS (SQL injection, rate-limit bypass, contact-discovery, response-shape, auth, recent-search local-only mind CLEAR, evidenciával) |
 
 ## Merge-döntés
 
-**Merge TILOS amíg F1 (BLOCKER) nyitva.** F2/F3 (MINOR/NOTE) nem blokkolnak,
-de F2 érdemes egy sorban javítani a javító körrel együtt, mivel ugyanabban a
-fájlban van, amit F1 amúgy is módosít.
+**Merge TILOS amíg F1 és F4 (mindkét BLOCKER) nyitva.** F2/F3 (MINOR/NOTE)
+nem blokkolnak, de F2 érdemes egy sorban javítani a javító körrel együtt,
+mivel ugyanabban a fájlban van, amit F4 amúgy is módosít. A `ui_inventory_test.dart`
+számláló-drift (CI-only, körön kívüli) egy sorban javítandó a §0.0.1 addendum
+szerint bővített `allowed_paths`-szal.
 
-A javító kör a leletlistával (F1 kötelező, F2 ajánlott egy sorban) a MEGLÉVŐ
+A javító kör a leletlistával (F1 + F4 kötelező, F2 ajánlott egy sorban, a
+`ui_inventory_test.dart` számláló-bump kötelező) a MEGLÉVŐ
 `minimax/e09-r09-profile-search-and-discovery` branch-en fut, ugyanazzal a
 motorral (MiniMax M3, egy javító kör a jóváhagyott motor-eszkaláció szerint).
+A javító kör UTÁN mindhárom workflow-t (`full-gate.yml`, `backend-ci.yml`, és
+ha a diff érinti, `router-ci.yml`) újra kell dispatch-elni a friss exact-SHA-n
+és mindnek zöldnek kell lennie merge előtt.

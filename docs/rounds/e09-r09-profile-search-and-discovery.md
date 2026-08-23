@@ -21,6 +21,7 @@ allowed_paths = [
   "lib/features/community/data/repositories/profile_repository_impl.dart",
   "backend/tests/community/test_profile_search.py",
   "test/features/community/presentation/community_search_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e09-r09-profile-search-and-discovery.md",
 ]
 gate_tests = [
@@ -164,6 +165,19 @@ megosztott `community_client_enabled`-re támaszkodik.
   kereshető marad.
 - **D4** — `profile_repository_impl.dart` felvéve az `allowed_paths`-ra a
   két `searchProfiles`-stub éles bekötésére.
+
+### 0.0.1 Javító kör 1 előtti addendum (Claude Sonnet 5, 2026-08-23, review után)
+
+A független review (`docs/reviews/e09-r09-review.md`) 2 BLOCKER-t talált
+(F1 — a keresési eredmények placeholder-adatot jelenítenek meg, F4 — a
+dedikált security-reviewer szerint a `next_cursor` a block-szűrt profil
+handle-jét és belső PK-ját szivárogtatja). A CI (`full-gate.yml` run
+32612083350) emellett a MEGLÉVŐ, körön kívüli
+`test/ui/ui_inventory_test.dart:14` hardcode-olt production-screen-számláló
+driftjét is jelezte (68→69) — UGYANAZ a mintázat, mint az E09-R06 F9 és az
+E09-R07/E09-R08 CI-only javításai (a kör saját ÚJ
+`community_search_screen.dart` fájlja miatt). `test/ui/ui_inventory_test.dart`
+FELVÉVE az `allowed_paths`-ra (szűken: csak a számláló-érték).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
