@@ -93,7 +93,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import tuple_
+from sqlalchemy import or_, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -105,7 +105,10 @@ from ..models.notification import (
 )
 from ..models.post import CommunityPost
 from ..models.profile import CommunityProfile
-from ..policies.query_filters import is_blocked_pair
+from ..policies.query_filters import (
+    is_blocked_pair,
+    list_block_pairs_for_viewer,
+)
 from .push_gateway import NoOpPushGateway, PushGateway, PushPayload
 
 # ---------------------------------------------------------------------------
@@ -758,22 +761,45 @@ def get_unread_count(
 ) -> int:
     """Return the recipient's unread count.
 
-    The count is ``COUNT(*)`` over the unread rows for the
-    recipient. The composite index
+    The count is the number of unread rows VISIBLE to the
+    recipient — the same A4 blocked-actor filter
+    :func:`list_inbox` applies (the E09-R20 review-fix §1,
+    MAJOR-1: badge-desync mitigation). A notification whose
+    actor is in a block relationship with the recipient MUST
+    NOT be counted — a badge that ticks up while the inbox
+    shows nothing is a leak vector (the recipient would
+    learn "a blocked user did something" from the count
+    alone). System events (NULL actor) are NOT filtered —
+    they are always visible (the ``actor_profile_id IS NULL``
+    branch short-circuits the NOT IN).
+
+    The block set is materialised once via
+    :func:`policies.query_filters.list_block_pairs_for_viewer`
+    (one block-table read, not N+1), then excluded in SQL via
+    the ``NOT IN`` predicate. The composite index
     ``ix_community_notifications_recipient_unread`` backs the
-    query.
+    ``(recipient, is_read)`` filter.
     """
     recipient = _resolve_profile_by_public_id(db, recipient_public_id)
     if recipient is None:
         return 0
-    return (
-        db.query(CommunityNotification)
-        .filter(
-            CommunityNotification.recipient_profile_id == recipient.id,
-            CommunityNotification.is_read.is_(False),
-        )
-        .count()
+
+    blocked_ids = list_block_pairs_for_viewer(db, viewer_profile_id=recipient.id)
+
+    q = db.query(CommunityNotification).filter(
+        CommunityNotification.recipient_profile_id == recipient.id,
+        CommunityNotification.is_read.is_(False),
     )
+    if blocked_ids:
+        # ``actor_profile_id IS NULL`` keeps system events
+        # visible; the NOT IN excludes the blocked-actor rows.
+        q = q.filter(
+            or_(
+                CommunityNotification.actor_profile_id.is_(None),
+                CommunityNotification.actor_profile_id.notin_(blocked_ids),
+            )
+        )
+    return q.count()
 
 
 def get_related_content_id(

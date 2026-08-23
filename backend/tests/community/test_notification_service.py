@@ -830,6 +830,128 @@ def test_a4_blocked_actor_notification_hidden_from_inbox(
     )
 
 
+def test_a4_blocked_actor_notification_excluded_from_unread_count(
+    session_factory, push_gateway, monkeypatch
+) -> None:
+    """A4 read-path — the §6.1 measure-matrix cell that pins
+    ``unread_count == visible_unread`` when an actor is
+    blocked. This is the E09-R20 review-fix §1 MAJOR-1 fix:
+    ``get_unread_count`` now applies the same block filter as
+    :func:`list_inbox`, so the unread badge cannot tick up on
+    a row the inbox hides (badge-desync mitigation, a
+    "blocked user did something" leak vector).
+
+    The §6.1 valódi-sértés próba below monkey-patches
+    :func:`list_block_pairs_for_viewer` to return an empty
+    set (simulating the pre-fix code path) and asserts the
+    cell goes red — the count then includes the blocked
+    actor's row, exactly the badge-desync the fix prevents.
+    The patch is reverted after the assertion so the rest
+    of the test (and the wider suite) sees the production
+    helper.
+    """
+    recipient = _make_recipient(session_factory)
+    actor_a, actor_b = _make_two_actors(session_factory)
+    post = _create_visible_post(session_factory, author=recipient)
+    post_id_str = str(post.public_id)
+
+    # Block actor_a — the recipient never sees their events.
+    _make_block_pair(session_factory, blocker=recipient, blocked=actor_a)
+
+    # Three notifications:
+    # 1) from actor_a — INVISIBLE (blocked).
+    # 2) from actor_b — visible, unread.
+    # 3) a system event (NULL actor) — visible, unread.
+    with session_factory() as db:
+        notification_service.create_notification(
+            db,
+            recipient_public_id=recipient.public_id,
+            notification_type=NOTIFICATION_TYPE_COMMENT,
+            title_key="k1",
+            body_key=None,
+            actor_public_id=actor_a.public_id,
+            entity_type="post",
+            entity_id=post_id_str,
+            dedup_key=None,
+            aggregate=False,
+            now=_utcnow() + timedelta(seconds=1),
+            push_gateway=push_gateway,
+        )
+        notification_service.create_notification(
+            db,
+            recipient_public_id=recipient.public_id,
+            notification_type=NOTIFICATION_TYPE_COMMENT,
+            title_key="k2",
+            body_key=None,
+            actor_public_id=actor_b.public_id,
+            entity_type="post",
+            entity_id=post_id_str,
+            dedup_key=None,
+            aggregate=False,
+            now=_utcnow() + timedelta(seconds=2),
+            push_gateway=push_gateway,
+        )
+        notification_service.create_notification(
+            db,
+            recipient_public_id=recipient.public_id,
+            notification_type="security_alert",
+            title_key="k3",
+            body_key=None,
+            actor_public_id=None,
+            entity_type=None,
+            entity_id=None,
+            dedup_key=None,
+            aggregate=False,
+            now=_utcnow() + timedelta(seconds=3),
+            push_gateway=push_gateway,
+        )
+        db.commit()
+
+    # Green cell: unread_count == the count of inbox-visible
+    # unread rows. The inbox lists 2 (actor_b + system); the
+    # blocked-actor's row MUST NOT contribute to the badge.
+    with session_factory() as db:
+        page = notification_service.list_inbox(
+            db,
+            recipient_public_id=recipient.public_id,
+            cursor=None,
+            limit=10,
+        )
+        visible_unread = sum(1 for row in page.notifications if row.is_read is False)
+        count = notification_service.get_unread_count(
+            db, recipient_public_id=recipient.public_id
+        )
+    assert visible_unread == 2, (
+        f"A4 read-path pre-condition violated — "
+        f"list_inbox-visible unread = {visible_unread}, expected 2"
+    )
+    assert count == visible_unread, (
+        f"A4 read-path violated — unread badge desync: "
+        f"unread_count={count}, list_inbox-visible unread={visible_unread}"
+    )
+
+    # §6.1 valódi-sértés próba — patch the block-context
+    # helper to return an empty set, simulating the pre-fix
+    # ``get_unread_count`` (a plain ``COUNT(*)`` with no
+    # block predicate). The cell MUST go red: the count
+    # then includes the blocked actor's row.
+    monkeypatch.setattr(
+        notification_service,
+        "list_block_pairs_for_viewer",
+        lambda db, *, viewer_profile_id: set(),
+    )
+    with session_factory() as db:
+        broken_count = notification_service.get_unread_count(
+            db, recipient_public_id=recipient.public_id
+        )
+    assert broken_count == 3, (
+        f"A4 read-path real-violation probe failed to "
+        f"trigger — broken_count={broken_count}, expected 3 "
+        f"(the badge SHOULD count the blocked-actor's row "
+        f"when the filter is removed)"
+    )
+
+
 # ---------------------------------------------------------------------------
 # A5 — deleted entity.
 # ---------------------------------------------------------------------------

@@ -352,4 +352,79 @@ for a bounded list (inbox items are finite per page).
 - `test/ui/ui_inventory_test.dart` (hasLength 73 → 74 + new screen assertion)
 - `test/features/community/presentation/community_notifications_test.dart` (4 tests)
 
+### Javító kör (review)
+
+**MAJOR-1 (KÖTELEZŐ javítás — KÉSZ).** A dedikált security review
+(`docs/reviews/e09-r20-security.md` §7) reprodukálta, hogy
+`get_unread_count` (`notification_service.py:754–776` az eredeti
+implementációban) egyszerű `COUNT(*)`-ot futtat `recipient_profile_id`
++ `is_read == False` szűréssel — `is_blocked_pair` hívás NÉLKÜL — miközben
+a `list_inbox` (`notification_service.py:713–740`) minden sorra hívja a
+block-predikátumot. Eredmény: badge-desync, a „blockolt személy tett
+valamit" alacsony-fokú szivárgása.
+
+**A javítás** (`notification_service.py` `get_unread_count`, E09-R20
+review-fix commit): a függvény most a Kör 8
+`policies.query_filters.list_block_pairs_for_viewer(db,
+viewer_profile_id=recipient.id)` hívással materializálja a block-halmazt
+(egy lekérdezés, nem N+1), és SQL-szinten kizárja a blockolt
+`actor_profile_id`-értékeket a `WHERE actor_profile_id IS NULL OR
+actor_profile_id NOT IN (block_set)` klauzulával. Az `IS NULL` ág
+biztosítja, hogy a rendszer-események (NULL actor) MINDIG láthatók
+maradjanak — a NOT IN ugyanis `NULL`-ra `NULL`-t ad (ami a WHERE-ben
+`FALSE`-ként értékelődik ki), ezért az `OR` rövidzár kötelező. A
+megközelítés egyben előkészíti a `list_inbox` MINOR-1 lapozási
+folytatását is (a `WHERE`-be épített halmaz ugyanaz, mint amit a §5
+MINOR-1 javasolt irány leírt).
+
+**Új mérce-cella.** A `test_notification_service.py`
+`test_a4_blocked_actor_notification_excluded_from_unread_count` (a
+meglévő A4 teszt-osztály mellett) ugyanazt a 3 soros forgatókönyvet
+építi (blockolt `actor_a` + látható `actor_b` + rendszer-esemény NULL
+actorral), majd:
+
+1. GREEN-ág: `get_unread_count == list_inbox` látható unread sorainak
+   száma (jelen esetben 2 — `actor_b` + rendszer-esemény; a blockolt
+   `actor_a` sora NEM számít bele).
+2. §6.1 valódi-sértés próba: `monkeypatch`-eli a
+   `list_block_pairs_for_viewer`-t, hogy üres halmazt adjon vissza (a
+   pre-fix kódút szimulációja), majd ellenőrzi, hogy a cella PIROSRA
+   vált — `broken_count == 3` (a badge MOST már a blockolt sort is
+   számolná, pontosan az a badge-desync, amit a javítás megszüntet).
+
+A teljes `test_notification_service.py` suite (13 teszt, az új cellával
+együtt) zöld; a teljes backend suite (591 → 592 teszt) is zöld.
+
+**MINOR-1 (NEM javítva — follow-up).** A `list_inbox` lapozási
+alul-töltés-problémája (`has_more`/`next_cursor` a szűrés UTÁNI
+listából számol blockolt sorok jelenlétében) ebben a körben szándékosan
+NEM lett javítva. A review ezt nem blokkolónak minősítette (a kör
+service-réteg-only, ADR 0414 D2, ma nincs élő hívó; a §6
+acceptance-mátrix egyetlen cellája sem méri a több-oldalas lapozást
+blockolt sorokkal keverve), és a javítás ugyanazt a materializált
+block-halmazt használná, amit a MAJOR-1 fix már bevezetett — az
+`is_blocked_pair` soronkénti hívását SQL-szinten cserélné le. A diff
+hizlalása nélkül, önálló follow-up körként hatékonyabb: a §6.1
+measure-mátrix bővítése (két-oldalas lap, vegyes blockolt/látható
+sorok) + a `list_inbox` refaktor együtt egy önálló round. A scope-őr
+betartása mellett (a `notification_service.py` engedélyezett) a
+javasolt jövőbeli módosítás:
+
+```python
+# list_inbox jövőbeli patch (NEM a jelen körben):
+blocked_ids = list_block_pairs_for_viewer(db, viewer_profile_id=recipient.id)
+if blocked_ids:
+    base_query = base_query.filter(
+        or_(
+            CommunityNotification.actor_profile_id.is_(None),
+            CommunityNotification.actor_profile_id.notin_(blocked_ids),
+        )
+    )
+# a per-row is_blocked_pair ciklus megszűnik — a has_more/next_cursor
+# immár a limit+1 sorra korrekt.
+```
+
+A review §5 MINOR-1-es leírással összhangban (lásd
+`docs/reviews/e09-r20-review.md`).
+
 ## 11. Review — a Claude tölti ki
