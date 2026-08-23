@@ -36,6 +36,7 @@ import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/repositories/community_profile_repository.dart';
 import '../../domain/value_objects/community_handle.dart';
+import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 import '../../domain/value_objects/audience.dart';
 import '../dto/profile_dto.dart';
@@ -142,9 +143,29 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
   Future<CommunityPage<CommunityProfile>> searchProfiles({
     required String query,
     required Object cursor,
-  }) => throw UnsupportedError(
-    'CommunityProfileRepository.searchProfiles is not yet implemented',
-  );
+  }) async {
+    // E09-R09 — the Kör 9 profile-search endpoint. The path is
+    // built manually because ``ApiClient.getJson`` does not
+    // accept a query-parameter map (its four endpoints all carry
+    // no params — same constraint the Kör 7 unfollow DELETE
+    // runs into, ADR 0401 §1). Encoding both ``q`` and the
+    // cursor here keeps the api_client.dart surface untouched
+    // and the wire shape aligned with the backend
+    // ``GET /community/profiles/search`` router.
+    final queryValue = Uri.encodeQueryComponent(query);
+    final params = <String>[if (queryValue.isNotEmpty) 'q=$queryValue'];
+    final cursorValue = _cursorQueryValue(cursor);
+    if (cursorValue != null) {
+      params.add('cursor=${Uri.encodeQueryComponent(cursorValue)}');
+    }
+    params.add('limit=50');
+    final path = '/community/profiles/search?${params.join('&')}';
+    final result = await _client.getJson<dynamic>(path, decode: _decodePage);
+    return switch (result) {
+      Success(:final value) => value as CommunityPage<CommunityProfile>,
+      Failure(:final error) => throw error,
+    };
+  }
 
   @override
   Future<AppResult<CommunityProfile>> createProfile({
@@ -250,6 +271,110 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
       return error.code == FailureCode.networkBadResponse;
     }
     return false;
+  }
+
+  /// Decode the Kör 9 ``GET /community/profiles/search`` envelope.
+  ///
+  /// F1 fix (2026-08-23) — the wire shape now carries a ``hits``
+  /// list with ``public_id`` + ``handle`` + ``display_name`` +
+  /// ``created_at`` for each match, so the result list renders
+  /// real profile rows instead of identical placeholder data.
+  /// The backend repository's block-filter runs server-side; the
+  /// cursor is HMAC-signed (opaque to the client) and references
+  /// the last RETURNED hit, never a block-filtered-out row.
+  ///
+  /// The Kör 7 ``public_ids`` envelope is preserved on the wire
+  /// for the existing ``HttpSocialGraphRepository`` consumers;
+  /// the search response is a superset that adds ``hits``.
+  CommunityPage<CommunityProfile> _decodePage(Map<String, Object?> json) {
+    final rawHits = json['hits'];
+    if (rawHits is! List) {
+      throw const FormatException('community search wire: hits must be a list');
+    }
+    final hits = <CommunityProfile>[];
+    for (final entry in rawHits.whereType<Map<String, Object?>>()) {
+      hits.add(_hitToProfile(entry));
+    }
+    final nextCursor = json['next_cursor'];
+    final cursorPage = nextCursor == null
+        ? (hits.isEmpty
+              ? const CursorPage.haltedAfterRequest()
+              : const CursorPage.initial())
+        : CursorPage.continued(nextCursor as String);
+    return CommunityPage<CommunityProfile>(
+      items: List<CommunityProfile>.unmodifiable(hits),
+      cursor: cursorPage,
+    );
+  }
+
+  /// Build a domain [CommunityProfile] from one search-hit map.
+  ///
+  /// The wire guarantees a non-empty ``handle`` and
+  /// ``display_name`` (the backend's repository SQL carries
+  /// ``display_name IS NOT NULL`` + a fallback for null
+  /// ``handle_display``), so this conversion only needs to
+  /// validate the structure — the entity factory's non-empty
+  /// ``displayName`` invariant will surface a malformed wire
+  /// shape as ``ArgumentError`` at the boundary, not a silent
+  /// fallback to a placeholder string.
+  CommunityProfile _hitToProfile(Map<String, Object?> entry) {
+    final publicId = entry['public_id'];
+    final handle = entry['handle'];
+    final displayName = entry['display_name'];
+    final createdAt = entry['created_at'];
+    if (publicId is! String) {
+      throw const FormatException(
+        'community search wire: hit public_id must be a string',
+      );
+    }
+    if (handle is! String || handle.isEmpty) {
+      throw const FormatException(
+        'community search wire: hit handle must be a non-empty string',
+      );
+    }
+    if (displayName is! String || displayName.isEmpty) {
+      throw const FormatException(
+        'community search wire: hit display_name must be a non-empty string',
+      );
+    }
+    if (createdAt is! String) {
+      throw const FormatException(
+        'community search wire: hit created_at must be a string',
+      );
+    }
+    final parsed = DateTime.tryParse(createdAt);
+    if (parsed == null) {
+      throw FormatException(
+        'community search wire: unparseable created_at "$createdAt"',
+      );
+    }
+    return CommunityProfile(
+      userId: PublicUserId(publicId),
+      handle: CommunityHandle(handle),
+      displayName: displayName,
+      // The search index excludes PRIVATE profiles, so a
+      // ``public`` default is the truthful wire-state model;
+      // the screen does not branch on visibility.
+      visibility: ProfileVisibility.public,
+      avatarUrl: null,
+      bio: null,
+      skillInterests: const <String>[],
+      badges: const <String>[],
+      relationship: CommunityRelationshipToViewer.notRelated,
+      createdAt: parsed,
+    );
+  }
+
+  String? _cursorQueryValue(Object cursor) {
+    if (cursor == const CursorPage.initial()) return null;
+    if (cursor is CursorPage) {
+      return cursor.cursor;
+    }
+    throw ArgumentError.value(
+      cursor,
+      'cursor',
+      'cursor must be a CursorPage (initial / continued / haltedAfterRequest)',
+    );
   }
 }
 
