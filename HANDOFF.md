@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R16 KÉSZ — Kommentek, reply és mention — PR [#425](https://github.com/wolfcasaba/strumsight/pull/425), squash `bf767ca5` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENHATODIK KÖRE KÉSZ.** Moderálható, korlátozott
+mélységű kommentréteg biztonságos mentionnel: `backend/app/community/models/comment.py`
+(ÚJ `community_comments` tábla, `depth` oszlop max 1, `updated_at`-mint-
+resource_version), `services/comment_service.py` (create/edit/delete/list négyes,
+mention-validáció a Kör 3/8/4 hármas kompozíciójaként), `policies/comment_policy.py`
+(`can_delete` — owner/post-owner/moderator, `is_moderator: bool` EXPLICIT
+paraméter, NEM DB-mező), migráció `e09_r16_0010`, és Flutter oldalon
+`comments_screen.dart` + `comment_controller.dart` (optimista create, atomikus
+temp-ID csere). `risk = "high"` (mention privacy-megkerülés + jogosultsági
+mátrix).
+
+**Pre-flight (Claude Sonnet 5, ADR 0407):** az előre kiosztott `ADR 0405` már
+foglalt volt (Kör 11 post-crud) — friss foglalás `0407`. Három mért gap
+dokumentálva §0.0-ban: (1) nincs élő "moderator" DB-mező sehol a kódban — a
+`can_delete` explicit, hívó-adta `is_moderator: bool`-t kap (a Kör 26/27
+admin-auth kör drótozza majd valós forrásra); (2) a mention-validáció a
+MEGLÉVŐ Kör 3 (`lookup_active_profile_id`) + Kör 8 (`is_blocked_pair`,
+TILOS zóna, csak hívható) + Kör 4 (`CommunityAccessPolicy.evaluate_profile_access
+== FULL`) hármas kompozíciója, nem új logika; (3) nincs HTTP router/schema
+ebben a körben (Kör 14/15 precedens) — a kör service-réteg-only, az A4
+(edit-conflict) mérce kizárólag a backend `test_comment_service.py` felelőssége.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5 (`--effort
+high`). 1 javító kör** (`docs/reviews/e09-r16-review.md`): review CHANGES
+REQUESTED elsőre, **1 MAJOR** — `comments_screen.dart` öt hardcode-olt
+stringgel (`'Comments'`, `'No comments yet.'`, `'Load more'`, `'Write a
+comment…'`, `'Send'`) ment ki 0 `AppLocalizations` hívással — **ugyanaz a
+hibaosztály, mint az E09-R08 F1 és az E09-R14 F1** (mindkettő MAJOR volt).
+**2 MINOR** — `comment_policy.py` docstringje SIMA (nem raw) triple-quoted
+stringben `\|`-t tartalmazott, `SyntaxWarning`-ot dobva minden importnál;
+`edit_comment`/`edit_comment_with_resource_version` ~45 sort duplikált,
+az előbbit semmi nem hívta. **Mellékhatás, saját méréssel** (a brief
+`gate_tests`-én TÚLI, teljes `flutter test` futtatással): a kör ÚJ
+`comments_screen.dart`-ja miatt a `test/ui/ui_inventory_test.dart` hardcode-olt
+képernyő-számlálója (71) elavulttá vált — **ugyanaz a drift-osztály, mint
+E09-R05...R13 és E09-R14 ismételten**. A javító kör mind a négyet zárta:
+5 string valódi magyar fordítással ARB-be (`community_{en,hu}.arb` +
+a generált `app_{en,hu}.arb` aggregátum, retroaktív scope-bővítéssel, mert
+az aggregátum-frissítés mechanikusan szükséges velejárója az ARB-bővítésnek),
+a docstring `r"""`-re váltva, `edit_comment` vékony wrapperré alakítva, a
+számláló 71→72. A Claude a javítást friss, izolált `/tmp`-klónban ÚJRA
+futtatott gate-tel (10/10 lépés zöld, a `ui_inventory_test.dart` most explicit
+gate-argumentum) és scope-audittal fogadta el. **Landolási körülmény:** a
+`main` a dispatch alatt HÁROMSZOR mozdult (párhuzamos governance/pipeline-
+munka ugyanazon a boxon) — mindhárom rebase konfliktusmentes volt (docs-only
+governance-commitok), mindhárom után friss exact-SHA CI-dispatch (`full-
+gate.yml` + `router-ci.yml`) igazolta a kombinált HEAD-et a `tools/round-
+land.sh` fail-closed protokollja szerint; a landolást a SAJÁT izolált
+munkapéldányból (`ss-minimax-e09-r16`) futtattam, nem a megosztott fő fából,
+mert utóbbin egy másik aktív session commitolatlan governance-munkát végzett
+(pipeline-slots 1→2, engine-registry effort-váltás) — a megosztott fa
+zavarása nélkül. Exact `88de73c9` → merge `bf767ca5`: Full Gate
+[32647755067](https://github.com/wolfcasaba/strumsight/actions/runs/32647755067)
++ Router CI [32647756074](https://github.com/wolfcasaba/strumsight/actions/runs/32647756074)
+mindkettő success. Részletesen `docs/reviews/e09-r16-review.md`.
+
 ## ✅ E09-R15 KÉSZ — Reakciók és optimista konzisztencia — PR [#424](https://github.com/wolfcasaba/strumsight/pull/424), squash `a8fa5add` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENÖTÖDIK KÖRE KÉSZ.** Pozitív, idempotens,
