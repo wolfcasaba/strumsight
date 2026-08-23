@@ -16657,3 +16657,15 @@ mindegyik a driver SAJÁT horgával mérve, nem kódolvasásból:
 9. **A `tools/round-pipeline.sh`-t ATOMIKUSAN kell cserélni** (temp fájl +
    `os.replace`/`mv`), mert menet közben FUT — helyben csonkolva a futó bash
    félbevágott szkriptet olvasna tovább.
+10. **Rosszul induló kört NEM kilövéssel kell megállítani.** MÉRVE ugyanaznap,
+    a fenti javítás közben: a `kill` + `tmux kill-session` után a driver a
+    sessiont `H-NOSIGNAL`-nak minősítette („jelzés nélkül ért véget, exit
+    124"), a következő firing pedig ÖNJAVÍTÓ KÖRT indított rá — Opus 5 `max`
+    diagnosztizálta volna, miért halt meg a session, aminek a helyes válasza
+    „egy ember kilőtte" lett volna; ez ráadásul fogyasztott a 3-as
+    önjavítási keretből. Ha mégis kilövés kell (mert a kör eleve rossz
+    motorral indult), utána KÖTELEZŐ a támogatott takarítás:
+    `tools/pipeline-status.sh --resume` (halt feloldása + archiválás),
+    `tools/pipeline-status.sh --heal-reset` (kísérletszámláló) és az
+    `.pipeline/inflight/<kör>` törlése — enélkül a lánc a saját
+    beavatkozásunkat kezdi javítani.
