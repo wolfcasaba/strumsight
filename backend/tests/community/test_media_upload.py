@@ -1318,11 +1318,15 @@ def test_a5_real_adapter_no_sha256_hex_does_not_catch_mismatch(
     means the §6 A5 guard cannot fire even though the bucket
     contains a different body than the intent declared.
 
-    Strict ``xfail``: the test passes-by-expectation today
-    (the row transitions to ``finalized``), turning RED the
-    moment the real-adapter checksum wiring lights up. The
-    brief M2/F4 acceptance — making the gap VISIBLE rather
-    than silent — is the responsibility of this xfail."""
+    Strict ``xfail``: today the assertion FAILS (the row
+    reaches ``finalized`` because the guard was a no-op — the
+    documented gap), so pytest reports ``XFAILED``. The moment
+    the real-adapter checksum wiring lights up (S3
+    Additional-Checksums or ``X-Amz-Meta-Sha256``), the row
+    would reach ``failed`` (the guard fires), the assertion
+    PASSES, and strict xfail converts the XPASS into a
+    FAILURE — the loud red light telling the next maintainer
+    "the TODO in object_store.py can now be removed"."""
     profile = _make_author(session_factory)
     store = _Sha256HexNoneObjectStore()
     intent, _ = _create_intent(
@@ -1347,10 +1351,12 @@ def test_a5_real_adapter_no_sha256_hex_does_not_catch_mismatch(
         )
         db.commit()
         db.refresh(row)
-    # Because head_object returned sha256_hex=None, the
-    # _validate_checksum guard was a no-op — the row reaches
-    # finalized. This is the gap; the xfail makes it loud.
-    assert row.upload_state == UPLOAD_STATE_FINALIZED
+    # The good behavior we WANT (the guard catches the
+    # mismatch and the row transitions to FAILED). Today this
+    # assertion FAILS — the row is FINALIZED (the gap). The
+    # strict xfail reports XFAILED today; PASSES-with-strict-
+    # xfail (= FAIL) once the wiring lights up.
+    assert row.upload_state == UPLOAD_STATE_FAILED
 
 
 # ---------------------------------------------------------------------------
