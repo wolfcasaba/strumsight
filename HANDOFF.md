@@ -1,5 +1,45 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R12 KÉSZ — Post composer draft és outbox — PR [#421](https://github.com/wolfcasaba/strumsight/pull/421), squash `d1ccf079` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENKETTEDIK KÖRE KÉSZ.** Nincs új ADR (tiszta
+Flutter UI/integráció — a brief §5 kötött döntései a meglévő E08-R04
+gamifikáció-outbox mintára és a Kör 5 `CommunityPostRepository` interfészre
+épülnek, nem hoznak új architekturális elhatárolást). Négy új fájl: egy
+per-user, verziózott lokális draft store
+(`community_draft_store.dart`, `ss.community.drafts.v2.<userId>` — az ELSŐ
+user-id-particionált storage-kulcs a repóban), egy perzisztens, stabil-ID
+Community outbox (`community_outbox.dart`, az E08-R04 gamifikáció-outbox
+mintáját követve — a retry SOHA nem generál új idempotency-kulcsot), a teljes
+composer state machine (`post_composer_controller.dart`, editing →
+submitting → success/failure, `isSubmitting` guard a dupla-tap ellen), és a
+Material 3 composer screen. A brief `risk = "high"` minősítése jogos volt:
+audience-vezérelt, felhasználó-generált tartalom, ahol egy hibás offline-retry
+duplikált posztot, egy hibás siker-jelzés pedig privát tartalom véletlen
+kiküldését okozhatná.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. 2 javító
+kör** (`docs/reviews/e09-r12-review.md`): review CHANGES REQUIRED elsőre,
+**1 MAJOR** — a draft store egy FIKTÍV "korábbi device-wide draft store"
+migrációt állított (nem létezett — ez az ELSŐ Community draft store a
+repóban), és a hozzá tartozó `legacyKey` NEM volt user-id-particionálva
+(minden usernél ugyanaz a literál) — jelenleg holt kód (semmi nem ír rá), de
+architekturálisan pontosan azt az izolációs garanciát törte volna meg, amit a
+kör bevezetni hivatott, ha bármi valaha ír arra a megosztott kulcsra
+(kereszt-user draft-szivárgás). A testvér `community_outbox.dart` UGYANEBBEN a
+körben helyesen `legacyKey: ''`-t választott ugyanerre a helyzetre — a draft
+store ezt követte a javításban. **1 MINOR** — a `CommunityOutbox.enqueue`
+doc-comment egy nem-tesztelt `Throws StateError` állítást tett, miközben a
+tényleges kód `accepted:false`-t ad vissza; a doc-comment a valós szerződésre
+javítva. Mindkettő zárva, saját kézzel (friss `/tmp`-klón) ellenőrizve.
+**Külön, CI-only javító kör** (nem review-lelet): a `full-gate.yml` első
+futása a MEGLÉVŐ, körön kívüli `test/ui/ui_inventory_test.dart` hardcode-olt
+production-screen-számlálóját buktatta (69→70, az ÚJ `post_composer_screen.dart`
+miatt) — UGYANAZ a mintázat, mint az E09-R06/R07/R08/R09 CI-only javításai;
+a fájl a brief §0.0 D6 dokumentált bővítésével felkerült az `allowed_paths`-ra,
+a MiniMax egysoros bump-ot commitolt. Mindkét CI (Full Gate + Router CI) zöld
+az exact-SHA `882ec350`-n a merge előtt.
+
 ## ✅ E09-R11 KÉSZ — Post backend CRUD és audience enforcement — PR [#420](https://github.com/wolfcasaba/strumsight/pull/420), squash `98d7b2f6` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENEGYEDIK KÖRE KÉSZ.** [ADR 0405](docs/adr/0405-post-crud-and-audience-enforcement.md):
@@ -6591,29 +6631,41 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-23): E09-R12 — Post composer draft és
-outbox** (`docs/rounds/e09-r12-post-composer-draft-and-outbox.md`, engine a
-queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `nincs`). **Az
-E09-R11 (Post backend CRUD és audience enforcement) KÉSZ** (PR #420,
-squash `98d7b2f6`) — lásd a fejléc ✅-blokkot. A Kör 11 pre-flightja
-(§0.0 D1-D12) és review-ja hagyott néhány mért horgot a Kör 12+-nak:
+**Pontos következő termékkör (2026-08-23): E09-R13 — Following feed és
+cursor pagination backend** (`docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md`,
+engine a queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `0404` —
+**ELAVULT**: a `0404`-et már a Kör 10 megírta
+(`docs/adr/0404-share-artifact-contracts.md`), a Kör 13 pre-flightjának
+kötelező `tools/round-slots.py reserve-adr --round E09-R13`-mal ÚJ számot
+kell kérnie, ne a queue-fájl elavult értékét használja). **Az E09-R12 (Post
+composer draft és outbox) KÉSZ** (PR #421, squash `d1ccf079`) — lásd a
+fejléc ✅-blokkot. A Kör 12 hagyott egy mért horgot a Kör 13+-nak:
 
-- A `community_posts.updated_at`-alapú optimista konkurencia
-  (§0.0 D3, `patch_post`) read-compare-write, nem DB-szintű
-  compare-and-swap — a review F4 lelete tudatos WONTFIX-ként zárta (a
-  `privacy.py` Kör 4 óta öröklött korlátja); egy jövőbeli kör
-  egységesíthetné feltételes `UPDATE ... WHERE updated_at = :expected`
-  mintára a `privacy.py`/`post_service.py`/(jövő) feed service.py hármast.
-- A `posts` router NINCS bekötve a `build_community_router`-be (a Kör
-  8/10 precedense szerint) — ha a Kör 12 (composer draft/outbox) HTTP-
-  szinten hívná a Kör 11 create/patch/delete endpointjait, előbb mérje
-  meg, hogy ez a kör-e, aminek a scope-ja a bekötést hozza, vagy egy
-  későbbi (feed-aktiváló) kör.
-- Az idempotencia-kulcs jelenleg a `community_posts` táblán él (§0.0 D4)
-  — ha a Kör 12 draft/outbox mintája egy MÁSODIK endpoint idempotencia-
-  dedupot igényel, mérje meg, nem éri-e meg a SDD §19.2/§20.1 megosztott
-  `community_idempotency_records` táblát bevezetni ahelyett, hogy egy
-  HARMADIK, körön-belüli oszlop-mintát másolna.
+- A `community_draft_store.dart` bevezette az ELSŐ user-id-particionált
+  lokális storage-kulcs mintát a repóban (`ss.community.drafts.v2.<userId>`,
+  `authControllerProvider.value?.id`-vel). Ha a Kör 13 (vagy egy későbbi kör)
+  szintén per-user lokális állapotot vezetne be (pl. feed-cache, olvasatlan
+  badge), ezt a mintát hasznosítsa újra, ne találjon ki egy másikat — és
+  KÖTELEZŐEN `legacyKey: ''`-t adjon át, ha nincs valódi korábbi envelope
+  amiből migrálni kellene (a Kör 12 review F1 MAJOR lelete pontosan egy
+  fiktív legacy-migráció + nem particionált fallback-kulcs kombinációja
+  volt — `docs/reviews/e09-r12-review.md` F1).
+- A `posts` router MÉG MINDIG NINCS bekötve a `build_community_router`-be
+  (a Kör 8/10/11 precedense szerint — a Kör 12 composer csak az absztrakt
+  `CommunityPostRepository` interfészre épített, `post_repository_impl.dart`
+  még nem létezik). Ha a Kör 13 (feed) HTTP-szinten hívná a Kör 11
+  create/get/patch/delete endpointjait VAGY a Kör 12 composer valódi
+  hálózati implementációját adná, mérje meg, hogy ez a kör-e, aminek a
+  scope-ja a bekötést és a `post_repository_impl.dart`-ot hozza.
+- Bármely új production Flutter screen a `test/ui/ui_inventory_test.dart`
+  hardcode-olt számlálóját (most 70) tolja el — ez a repóban RENDSZERESEN
+  visszatérő, körön kívüli CI-only javítás (E09-R06/R07/R08/R09/R12);
+  mérje meg a pre-flightban, hoz-e a kör új screent, és ha igen, vegye fel
+  előre a fájlt az `allowed_paths`-ra (§0.0 D6 minta, `docs/rounds/e09-r12-post-composer-draft-and-outbox.md`).
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R12 — Post
+composer draft és outbox** (`docs/rounds/e09-r12-post-composer-draft-and-outbox.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R10 — Share
 artifact szerződések** (`docs/rounds/e09-r10-share-artifact-contracts.md`,
