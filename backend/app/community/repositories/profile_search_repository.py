@@ -205,7 +205,9 @@ def search_profiles(
             params["cursor_id"] = cursor_id
 
     full_sql = _sa_text(
-        sql.text.replace("LIMIT :limit_plus_one", cursor_clause + "LIMIT :limit_plus_one")
+        sql.text.replace(
+            "LIMIT :limit_plus_one", cursor_clause + "LIMIT :limit_plus_one"
+        )
     )
 
     rows = db.execute(full_sql, params).all()

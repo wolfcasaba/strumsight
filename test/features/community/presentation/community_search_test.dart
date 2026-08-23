@@ -23,9 +23,6 @@
 /// test stays hermetic (no ``SharedPreferences`` mock).
 library;
 
-import 'dart:typed_data';
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,7 +30,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
-import 'package:strumsight/core/network/api_client.dart';
 import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/features/community/data/local/recent_search_store.dart';
 import 'package:strumsight/features/community/data/repositories/profile_repository_impl.dart';

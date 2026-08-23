@@ -292,11 +292,20 @@ def test_a1_search_router_source_does_not_reference_contact_keys():
         "search_profiles_endpoint",
         "check_availability",  # not in this module but kept for completeness
     }
-    forbidden_keys = {"email", "phone", "phone_number", "location", "contact", "address"}
+    forbidden_keys = {
+        "email",
+        "phone",
+        "phone_number",
+        "location",
+        "contact",
+        "address",
+    }
 
     found_endpoints: list[str] = []
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name in {"search_profiles_endpoint"}:
+        if isinstance(node, ast.FunctionDef) and node.name in {
+            "search_profiles_endpoint"
+        }:
             found_endpoints.append(node.name)
             for arg in node.args.args + node.args.kwonlyargs:
                 if arg.arg.lower() in forbidden_keys:
@@ -381,9 +390,7 @@ def test_a2_blocked_profile_excluded_from_results(client, session_factory):
     # Establish a block edge (viewer → blocked-bob) directly via
     # the ORM row.
     with session_factory() as db:
-        viewer_pk = (
-            db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
-        )
+        viewer_pk = db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
         blocked_pk = (
             db.query(CommunityProfile).filter_by(public_id=blocked_pid).one().id
         )
@@ -608,8 +615,7 @@ def test_a6_casefold_equivalence(client, session_factory):
         assert response.status_code == 200
         body = response.json()
         assert len(body["public_ids"]) == 1, (
-            f"A6 violated — case variant '{variant}' returned "
-            f"{body['public_ids']}"
+            f"A6 violated — case variant '{variant}' returned {body['public_ids']}"
         )
 
 
@@ -632,9 +638,7 @@ def test_valodi_sertes_a2_block_filter_required(client, session_factory, monkeyp
     )
 
     with session_factory() as db:
-        viewer_pk = (
-            db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
-        )
+        viewer_pk = db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
         blocked_pk = (
             db.query(CommunityProfile).filter_by(public_id=blocked_pid).one().id
         )
@@ -651,9 +655,7 @@ def test_valodi_sertes_a2_block_filter_required(client, session_factory, monkeyp
     def _passthrough(db, *, viewer_profile_id, public_ids):
         return list(public_ids)
 
-    monkeypatch.setattr(
-        repo, "filter_public_ids_against_viewer_blocks", _passthrough
-    )
+    monkeypatch.setattr(repo, "filter_public_ids_against_viewer_blocks", _passthrough)
     try:
         response = client.get(
             "/community/profiles/search?q=blocked",
@@ -708,12 +710,8 @@ def test_search_block_filter_integration_at_repository_level(session_factory):
     )
 
     with session_factory() as db:
-        viewer_pk = (
-            db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
-        )
-        target_pk = (
-            db.query(CommunityProfile).filter_by(public_id=target_pid).one().id
-        )
+        viewer_pk = db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
+        target_pk = db.query(CommunityProfile).filter_by(public_id=target_pid).one().id
         db.add(
             CommunityBlock(
                 blocker_profile_id=viewer_pk,
@@ -733,9 +731,6 @@ def test_search_block_filter_integration_at_repository_level(session_factory):
         results = set(page.public_ids)
 
     assert target_pid not in results, (
-        "A2 violated — blocked profile leaked through the repository "
-        "block-filter"
+        "A2 violated — blocked profile leaked through the repository block-filter"
     )
-    assert other_pid in results, (
-        "A2 violated — benign profile was wrongly filtered"
-    )
+    assert other_pid in results, "A2 violated — benign profile was wrongly filtered"

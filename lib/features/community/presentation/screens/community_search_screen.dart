@@ -37,11 +37,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_failure.dart';
+import '../../../../core/storage/key_value_store.dart';
 import '../../data/local/recent_search_store.dart';
 import '../../data/repositories/profile_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
 import '../../domain/repositories/community_page.dart';
-import '../../domain/repositories/community_profile_repository.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 
