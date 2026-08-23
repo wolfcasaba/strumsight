@@ -84,20 +84,6 @@ final class _SsBeatPulseState extends State<SsBeatPulse>
   }
 
   @override
-  void didUpdateWidget(covariant SsBeatPulse oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // A stopped ticker never ticks again on its own (ADR 0274 §1: no live
-    // timeline means no animation, not a free-running one) — the caller
-    // rebuilding this widget (e.g. after its clock starts reporting a
-    // position again) is what wakes it back up.
-    if (!_ticker.isActive &&
-        widget.clock.position != null &&
-        widget.beatDuration > Duration.zero) {
-      _ticker.start();
-    }
-  }
-
-  @override
   void dispose() {
     _ticker.dispose();
     super.dispose();
@@ -108,8 +94,9 @@ final class _SsBeatPulseState extends State<SsBeatPulse>
     final beatMicros = widget.beatDuration.inMicroseconds;
     if (position == null || beatMicros <= 0) {
       if (_live) setState(() => _live = false);
-      // No live timeline: stop asking for frames instead of ticking freely.
-      _ticker.stop();
+      // The ticker keeps running (does not stop itself) so a later resume
+      // is picked up on the very next frame even if the caller never
+      // rebuilds this widget — `clock` is polled every tick, pull-style.
       return;
     }
     final phase = (position.inMicroseconds % beatMicros) / beatMicros;

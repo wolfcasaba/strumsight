@@ -336,31 +336,14 @@ void main() {
     },
   );
 
-  group('the ticker does not run without a live timeline (ADR 0274 §1)', () {
-    testWidgets('pumpAndSettle completes when no timeline has ever been live', (
-      tester,
-    ) async {
-      final clock = _FakeBeatClock();
-      await tester.pumpWidget(
-        _wrap(
-          SsBeatPulse(
-            clock: clock,
-            beatDuration: const Duration(milliseconds: 500),
-          ),
-        ),
-      );
-
-      // A ticker that keeps requesting frames with no live timeline would
-      // make pumpAndSettle time out (`FlutterError`) — this is the exact
-      // failure the component-catalog demo hit before this fix.
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    });
-
+  group('MAJOR-2 regression — the pulse resumes on its own, without a rebuild '
+      '(the ticker keeps running, matching the CircularProgressIndicator '
+      'idiom, per ADR 0274 §1 and the second review round)', () {
     testWidgets(
-      'pumpAndSettle completes once a live timeline goes quiet again',
+      'PROBE_D — the pulse comes alive once the clock starts reporting a '
+      'position, with no pumpWidget call in between',
       (tester) async {
-        final clock = _FakeBeatClock(const Duration(milliseconds: 100));
+        final clock = _FakeBeatClock();
         await tester.pumpWidget(
           _wrap(
             SsBeatPulse(
@@ -370,12 +353,54 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(find.byKey(SsBeatPulse.dotKey), findsOneWidget);
+        final dead = tester.getSize(find.byKey(SsBeatPulse.dotKey));
+        expect(dead, const Size(16, 16));
 
-        clock.position = null;
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
+        // The clock starts reporting a position — nothing rebuilds the
+        // widget; only the ticker's own frames can pick this up.
+        clock.position = const Duration(milliseconds: 100);
+        await tester.pump(const Duration(milliseconds: 16));
+        await tester.pump(const Duration(milliseconds: 16));
+
+        final afterGoingLive = tester.getSize(find.byKey(SsBeatPulse.dotKey));
+        expect(
+          afterGoingLive,
+          isNot(dead),
+          reason:
+              'a continuously running ticker must pick up the live '
+              'position on its own, without the caller rebuilding this '
+              'widget',
+        );
       },
     );
+
+    testWidgets('PROBE_E — a pause/resume mid-playback is picked up with no '
+        'pumpWidget call in between', (tester) async {
+      final clock = _FakeBeatClock(const Duration(milliseconds: 100));
+      const beatDuration = Duration(milliseconds: 500);
+      await tester.pumpWidget(
+        _wrap(SsBeatPulse(clock: clock, beatDuration: beatDuration)),
+      );
+      await tester.pump();
+
+      clock.position = null;
+      await tester.pump();
+      final frozen = tester.getSize(find.byKey(SsBeatPulse.dotKey));
+      expect(frozen, const Size(16, 16));
+
+      // Resume — again, nothing rebuilds the widget.
+      clock.position = const Duration(milliseconds: 300);
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pump(const Duration(milliseconds: 16));
+
+      final afterResume = tester.getSize(find.byKey(SsBeatPulse.dotKey));
+      expect(
+        afterResume,
+        isNot(frozen),
+        reason:
+            'resuming a live timeline must revive the pulse on its '
+            'own, without the caller rebuilding this widget',
+      );
+    });
   });
 }
