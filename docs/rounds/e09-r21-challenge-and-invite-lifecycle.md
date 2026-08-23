@@ -17,6 +17,28 @@ kimenete (adatintegritás). Egyik `allowed_paths` fájl sem egyezik szó szerint
 a router `high_risk_path_fragments` listájával, de a kockázat ettől
 függetlenül valós — safety+concurrency, nem forma szerinti kulcsszó-egyezés.
 
+## 0.0a Javító addendum (2026-08-23 23:00, `stopped` jelzés után, Claude Sonnet 5)
+
+Az implementer `stopped`-ot jelzett: az `app_en.arb`/`app_hu.arb`-ba írt
+ÚJ kulcsok a gate `l10n` lépésén (`dart run tool/ci/check_l10n_parity.dart`,
+ami a `tool/gen_l10n_segments.dart` frissességi ellenőrzését hívja) piroson
+buktak, mert ezek a fájlok **ADR 0307 §4 szerint GENERATED fájlok** — a
+tényleges kézzel szerkesztett forrás a `lib/l10n/features/<feature>_<locale>.arb`
+fragmentum, az aggregátumot a `dart run tool/gen_l10n_segments.dart --write`
+állítja elő determinisztikusan a fragmentumokból. Mérve:
+`tools/round-slots.py` `GENERATED_PATHS` halmaza pontosan `lib/l10n/app_en.arb`
+és `lib/l10n/app_hu.arb`-ot tartalmazza (93-98. sor) — ezek a scope-audit
+alól KIVÉTELEK, tehát nem is kellett volna felvenni őket az `allowed_paths`-ra.
+
+**Javítás:** az `allowed_paths` `lib/l10n/app_en.arb`/`lib/l10n/app_hu.arb`
+sorai lecserélve a tényleges forrásra:
+`lib/l10n/features/community_en.arb`/`lib/l10n/features/community_hu.arb`
+(ez a feature MÁR rendelkezik ilyen fragmentum-fájlokkal, korábbi Community
+körökből — az implementer az ÚJ `communityChallenge*` kulcsokat EZEKBE írja,
+nem az aggregátumba). Az aggregátumot a `dart run
+tool/gen_l10n_segments.dart --write` regenerálja — ez a lépés a §7 gate elé
+kerül, az implementer promptjában explicit lépésként.
+
 ## 0.0 Pre-flight brief-revízió (2026-08-23, Claude Sonnet 5)
 
 A teljes mért-tény alapú indoklás [ADR 0415](../adr/0415-community-challenge-invite-lifecycle.md)
@@ -38,7 +60,7 @@ Kontextus szakaszában. Összefoglalva:
    - `lib/features/community/data/repositories/challenge_repository_impl.dart` (ÚJ) — a Kör 5 `CommunityChallengeRepository` ELSŐ implementációja, a Kör 7 `relationship_repository_impl.dart` mintáját követve (provider a fájl alján).
    - `lib/features/community/application/controllers/challenge_controller.dart` (ÚJ) — a screen ezen keresztül éri el a repository-t, a Kör 20 `notification_controller.dart` mintáját követve.
    - `test/ui/ui_inventory_test.dart` — screen-számláló 74→75 (L420/L422 visszatérő drift-osztály, proaktív zárás ugyanabban a commitban).
-   - `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` — ÚJ `communityChallenge*` névtér (a gamifikáció MEGLÉVŐ `challenge*` kulcsaitól elkülönítve).
+   - ~~`lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`~~ **`lib/l10n/features/community_en.arb`, `lib/l10n/features/community_hu.arb`** (0.0a javítva — ezek a tényleges forrás-fragmentumok, ADR 0307 §4; az aggregátum GENERATED, `dart run tool/gen_l10n_segments.dart --write` állítja elő) — ÚJ `communityChallenge*` névtér (a gamifikáció MEGLÉVŐ `challenge*` kulcsaitól elkülönítve).
 3. **Újrahasznosítandó, MÉRT minták (ne találj ki újat):**
    - Block-ellenőrzés: `query_filters.py::is_blocked_pair(db, profile_id_a=, profile_id_b=)` write-side hívás (mint `post_service.py`), NEM a `block_service.py` bővítése (ADR 0402 §D3 horog, lásd ADR 0415 D3).
    - Rate-limit: `backend/app/ratelimit.py::RateLimiter` (mint `routers/search.py`/`routers/handles.py`), `reset_rate_limiters()` teszt-hook.
@@ -71,8 +93,8 @@ allowed_paths = [
   "backend/tests/community/test_challenge_invite_service.py",
   "test/features/community/presentation/community_challenges_test.dart",
   "test/ui/ui_inventory_test.dart",
-  "lib/l10n/app_en.arb",
-  "lib/l10n/app_hu.arb",
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
   "docs/rounds/e09-r21-challenge-and-invite-lifecycle.md",
 ]
 gate_tests = [
@@ -142,7 +164,7 @@ Aszinkron kihívás-meghívások és résztvevői állapotgép — a lejárat sz
 | `backend/tests/community/test_challenge_invite_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/community_challenges_test.dart` | ÚJ |
 | `test/ui/ui_inventory_test.dart` | screen-számláló 74→75 (§0.0 pont 2, L420/L422) |
-| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | ÚJ `communityChallenge*` kulcsok (§0.0 pont 2) |
+| `lib/l10n/features/community_en.arb`, `lib/l10n/features/community_hu.arb` | ÚJ `communityChallenge*` kulcsok a fragmentumban (§0.0a); `dart run tool/gen_l10n_segments.dart --write` regenerálja az aggregátumot (`lib/l10n/app_*.arb`, GENERATED, `tools/round-slots.py GENERATED_PATHS`) |
 
 **Tilos zóna:** `lib/features/community/domain/**` (csak-hívás, a kontraktus MÁR él, ADR 0399) · `lib/features/gamification/**` belső fájljai (csak `public.dart`) · `lib/features/practice/**`/`lib/features/songs/**` belső fájljai · `backend/app/community/policies/**` és `backend/app/community/services/block_service.py` (csak-hívás, ADR 0402 §D3, lásd ADR 0415 D3) · `docs/adr/**` · `tools/**` · `.github/**`
 
