@@ -10591,3 +10591,29 @@ confidence-producer tényleges elérhetőségét újra mérje.
 5. **Az E02-R08 nyitva maradt follow-upja:** a chord-confidence felvitele a
    `LiveFrame`-be — az Analyze úton is közös, ezért külön kör; addig a Live
    adapter `confidence: 1.0` = „nem mért".
+
+## Superseded HANDOFF §6 — a Ch13 sáv „következő: E13-R09" blokkja (E13-R09 landolásakor felváltva, 2026-08-23)
+
+- **Ch13 (design system) sáv — következő: `E13-R09` — StageScaffold és session
+  transport** (`docs/rounds/e13-r09-stage-scaffold-and-transport.md`, engine a
+  queue-ban `sonnet-impl`, előre kiosztott ADR `0276`). Az **E13-R08 (adaptive
+  scaffold és primary navigation) KÉSZ** — lásd a fejléc ✅-blokkot. A Kör 8 mért
+  horgai, amelyekre a Kör 9 ÉPÍT:
+  - **A `/practice/live` MÁR Stage route** és top-level (nem shell-branch), az
+    `isStageRoute` halmaza pedig négyelemű: `/practice/live`,
+    `/practice/session`, `/song-trainer/session/:songId`, `/vision/session`.
+    Az `SsStageScaffold` ezekre a route-okra készül.
+  - **A Stage-ből NINCS kivezető transport** — ez szándékos: a pause/finish és a
+    back-confirmation a Kör 9 tárgya (Ch13 §7.4). Amíg nincs, a flag BE ágán a
+    Live Stage-re érkező felhasználónak nincs vissza-útja. A flag defaultból KI,
+    tehát ez ma nem éles hiány, de a Kör 9 **elsődleges** feladata.
+  - **Erőforrás-birtokló képernyő nem kerülhet `IndexedStack`-be** — a Kör 8
+    MAJOR-ja ([L449](docs/LESSONS.md)) pontosan ez volt. Az `SsStageScaffold`
+    doc-commentje ígérje meg és teszt bizonyítsa, hogy a scaffold maga **nem**
+    indít mikrofont/kamerát (Ch13 Kör 9 elfogadási feltétel).
+  - **Az öt destination címkéje MEGLÉVŐ ARB kulcsokból jön** (`todayPlanTitle`,
+    `practiceHubTitle`, `songLibraryTitle`, `aiTutorHomeTitle`,
+    `tutorProfileTitle`), `TODO(E13-R16)` kommenttel — dedikált nav-kulcsok
+    akkor kerülhetnek be, ha egy kör `allowed_paths`-a felveszi a `lib/l10n/**`-t.
+  - **NOTE-2 nyitva (nem blokkoló):** `isStageRoute('/song-trainer/session/')`
+    üres `songId`-ra `true`-t ad (`docs/reviews/e13-r08-review.md`).

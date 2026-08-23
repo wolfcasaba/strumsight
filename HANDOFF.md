@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R09 KÉSZ — StageScaffold és session transport — PR [#433](https://github.com/wolfcasaba/strumsight/pull/433), squash `25d2e219` (2026-08-23)
+
+**A CHAPTER 13 KILENCEDIK KÖRE KÉSZ — áll a közös, ÉLETCIKLUS-SEMLEGES Stage
+layout a hat aktív módhoz.** ([ADR 0276](docs/adr/0276-stage-scaffold-owns-no-resources.md)
+— a döntés MÁR merge-elve volt (`a4fdfec2`), ezért ez a kör ADR-t nem írt; ez a
+minta másodszor futott az E13-R08 ADR 0275-e után.)
+
+- **`lib/core/design_system/layouts/ss_stage_scaffold.dart`** (ÚJ) — öt slot
+  (status header, hero, feedback, timeline/beat, bottom action), `SafeArea`,
+  két elrendezési stratégia (`_CompactStage` portrait: fejléc pinnelve fent,
+  hero/feedback/timeline görgethető, akciósor pinnelve lent · `_WideStage`
+  landscape VAGY `width >= SsBreakpoints.expandedMin`: kétoszlopos, az
+  akciósornak SAJÁT pinnelt oszlopa van, nem zsugorodó alsó csík).
+- **`lib/core/design_system/components/music/ss_session_transport.dart`** (ÚJ)
+  — hat állapot (idle, count-in, active, paused, finishing, disabled), a Pause
+  és a Finish mind a NÉGY aktív állapotban látható és **egyetlen tappal**
+  elérhető (nem overflow menü, nem görgetés alatt).
+- **Erőforrást NEM birtokol** — nulla mikrofon/kamera/felvétel, nulla
+  `wakelock_plus`, nulla `core/platform` import; a képernyő-ébrentartás két
+  szimmetrikus **callback** (`initState` kér, `dispose` pontosan egyszer old),
+  a mentetlen-session vissza-megerősítés pedig **hook** (`PopScope` +
+  `onPopInvokedWithResult`), amiről a szöveget és a mentést a feature dönti el.
+
+**A review a zöld kapu MÖGÖTT három MAJOR-t MÉRT** — mind a nyolc
+acceptance-cella, a teljes `tools/round-gate.sh` és a Full Gate CI is zöld volt,
+amikor eldobható mutációk kimérték, hogy a §6.1 mérce-mátrix két legfontosabb
+sora **nem fog pirosra váltani**:
+
+```
+# MAJOR-1 — autoStart, ami MethodChannel('plugins.flutter.io/record')-ot hív:
+00:01 +7: All tests passed!      ← az A1 cella zöld maradt
+
+# MAJOR-2 — a deklarált viewport INERT volt:
+PROBE P1 declared=Size(800.0, 400.0)  -> actual Scaffold size=Size(800.0, 600.0)
+PROBE P1 declared=Size(1200.0, 800.0) -> actual Scaffold size=Size(800.0, 600.0)
+
+# MAJOR-3 — VALÓDI termékhiba, 2.0 text scale mellett:
+PROBE P5 idle-label overflow exception=A RenderFlex overflowed by 661 pixels on the right.
+```
+
+- **MAJOR-1:** az A1 cella kizárólag a `wakelock_plus` csatornára tett mock
+  handlert, tehát bármely MÁS csatorna (mikrofon, kamera, recorder) hívása
+  láthatatlan volt neki — a kör egyetlen `risk = "high"` indoka maradt őrizetlen.
+  **Javítva:** forrás-szintű őrcella a két új produkciós fájlra (tiltott tokenek,
+  komment-leválasztással) + egy cella, ami **magát az őrt** méri a mutált
+  forrásrészleten. A produkciós kód változatlan maradt.
+- **MAJOR-2:** a `MediaQuery(data: MediaQueryData(size: …))` wrapper csak azt
+  írja felül, amit a leszármazottak OLVASNAK — a layout-kényszert a teszt-felület
+  adja, amit a teszt sosem állított át. A három „landscape/expanded" A4 cella
+  ugyanazt az egy 800×600-as mérést végezte háromszor. **Javítva:**
+  `tester.view.physicalSize` + `devicePixelRatio = 1` + `addTearDown(reset)`.
+  A javítás magasság-érzékenyen ÚJRAMÉRVE: egy 450 px fix alsó akciósáv
+  mutációval a `Size(800,400)` cella PIROS, az `1000×500` és az `1200×800`
+  ZÖLD marad.
+- **MAJOR-3:** a `_RestIndicator` `Text`-je `Flexible` nélkül ült egy `Row`-ban.
+  **Javítva:** `Flexible` + `softWrap`, két új cellával 360×640-es VALÓDI
+  felületen, 2.0 text scale-lel.
+
+A §6.1 mátrix másik négy sora (A2 Finish-overflow, A3 paused==active, A5
+kétszer hívó hook, A7 bent ragadó ébrentartás) **az első körben is helyesen
+pirosra váltott** — a reviewer mind a hatot saját mutációval mérte, kétszer
+(a javító kör előtt és után). A teszt-cellák száma 19 → **24**.
+
 ## ✅ E09-R20 KÉSZ — Notification inbox és push abstraction — PR [#434](https://github.com/wolfcasaba/strumsight/pull/434), squash `61f31c35` (2026-08-23)
 
 **A KÖZÖSSÉGI ÉRTESÍTÉS-RENDSZER ALAPJA ÁLL — tartós, kategorizált inbox +
@@ -5913,6 +5976,18 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-23):** `main` @ `25d2e219` — E13-R09 StageScaffold
+és session transport, PR
+[#433](https://github.com/wolfcasaba/strumsight/pull/433), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, 1 javító kör (3 MAJOR: az A1 cella csak a
+wakelock-csatornát mérte; az A4 cellák deklarált viewportja inert volt; a
+`_RestIndicator` 661 px-t csordult túl 2.0 text scale mellett). Review
+APPROVED a javító kör után, 0 nyitott BLOCKER/MAJOR
+(`docs/reviews/e13-r09-review.md`). Exact `1dc2ffba`: Full Gate
+32673268529 + Router CI 32673269395 mind success. Részletesen a fejléc
+✅-blokkban.
+
 **Aktuális állapot (2026-08-23):** `main` @ `61f31c35` — E09-R20 Notification
 inbox és push abstraction, PR
 [#434](https://github.com/wolfcasaba/strumsight/pull/434), squash-merge.
@@ -6634,6 +6709,20 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E13-R09 — StageScaffold és session transport** (PR
+[#433](https://github.com/wolfcasaba/strumsight/pull/433), squash `25d2e219`,
+[ADR 0276](docs/adr/0276-stage-scaffold-owns-no-resources.md) — már merge-elve
+volt, ez a kör ADR-t nem írt). Közös, életciklus-semleges Stage layout a hat
+aktív módhoz: `SsStageScaffold` öt slottal, safe area-val és
+portrait/landscape/expanded stratégiával, `SsSessionTransport` hat állapottal.
+A scaffold **semmilyen erőforrást nem birtokol** — az ébrentartás
+callback-kérés, a vissza-megerősítés hook. 0 nyitott BLOCKER/MAJOR 1 javító kör
+után (MAJOR-1 az A1 csatorna-szűk mércéje, MAJOR-2 az A4 inert viewportja,
+MAJOR-3 a 661 px-es valódi túlcsordulás — mind
+`docs/reviews/e13-r09-review.md`), 1 MINOR + 2 NOTE dokumentálva. Exact
+`1dc2ffba`: Full Gate 32673268529 + Router CI 32673269395 mind success.
+Részletesen a fejléc ✅-blokkban.
 
 **E09-R20 — Notification inbox és push abstraction** (PR
 [#434](https://github.com/wolfcasaba/strumsight/pull/434), squash `61f31c35`,
@@ -7548,29 +7637,32 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 a `docs/execution/pipeline-queue.tsv` vezeti — az alábbi a 2026-08-23-i állapot,
 NEM a queue helyett olvasandó.
 
-- **Ch13 (design system) sáv — következő: `E13-R09` — StageScaffold és session
-  transport** (`docs/rounds/e13-r09-stage-scaffold-and-transport.md`, engine a
-  queue-ban `sonnet-impl`, előre kiosztott ADR `0276`). Az **E13-R08 (adaptive
-  scaffold és primary navigation) KÉSZ** — lásd a fejléc ✅-blokkot. A Kör 8 mért
-  horgai, amelyekre a Kör 9 ÉPÍT:
-  - **A `/practice/live` MÁR Stage route** és top-level (nem shell-branch), az
-    `isStageRoute` halmaza pedig négyelemű: `/practice/live`,
-    `/practice/session`, `/song-trainer/session/:songId`, `/vision/session`.
-    Az `SsStageScaffold` ezekre a route-okra készül.
-  - **A Stage-ből NINCS kivezető transport** — ez szándékos: a pause/finish és a
-    back-confirmation a Kör 9 tárgya (Ch13 §7.4). Amíg nincs, a flag BE ágán a
-    Live Stage-re érkező felhasználónak nincs vissza-útja. A flag defaultból KI,
-    tehát ez ma nem éles hiány, de a Kör 9 **elsődleges** feladata.
-  - **Erőforrás-birtokló képernyő nem kerülhet `IndexedStack`-be** — a Kör 8
-    MAJOR-ja ([L449](docs/LESSONS.md)) pontosan ez volt. Az `SsStageScaffold`
-    doc-commentje ígérje meg és teszt bizonyítsa, hogy a scaffold maga **nem**
-    indít mikrofont/kamerát (Ch13 Kör 9 elfogadási feltétel).
-  - **Az öt destination címkéje MEGLÉVŐ ARB kulcsokból jön** (`todayPlanTitle`,
-    `practiceHubTitle`, `songLibraryTitle`, `aiTutorHomeTitle`,
-    `tutorProfileTitle`), `TODO(E13-R16)` kommenttel — dedikált nav-kulcsok
-    akkor kerülhetnek be, ha egy kör `allowed_paths`-a felveszi a `lib/l10n/**`-t.
-  - **NOTE-2 nyitva (nem blokkoló):** `isStageRoute('/song-trainer/session/')`
-    üres `songId`-ra `true`-t ad (`docs/reviews/e13-r08-review.md`).
+- **Ch13 (design system) sáv — következő: `E13-R10` — Async state és
+  visszajelzés komponensek** (`docs/rounds/e13-r10-async-state-components.md`,
+  engine a queue-ban `sonnet-impl`, előre kiosztott ADR `0277` — **MÉRD ÚJRA a
+  pre-flightban**: a Ch13 ADR-jei (0273–0282) az `a4fdfec2` commitban ELŐRE
+  MEG LETTEK ÍRVA és merge-elve, tehát a kör valószínűleg NEM ír ADR-t; ez a
+  minta kétszer futott már, E13-R08/0275 és E13-R09/0276). Az **E13-R09
+  (StageScaffold és session transport) KÉSZ** — lásd a fejléc ✅-blokkot. A
+  Kör 9 mért horgai, amelyekre a Kör 10 ÉPÍT:
+  - **Az `SsStageScaffold` öt slotja adat-bemenetes `Widget`** (`statusHeader`,
+    `hero`, `feedback`, `timeline`, `bottomAction`) — a Kör 10 async-állapot
+    komponensei (skeleton, empty, error, retry) ezekbe a slotokba kerülnek,
+    nem a scaffoldba.
+  - **A scaffold semmit nem birtokol, és ezt GÉPI FORRÁS-ŐR méri** (tiltott
+    tokenek: `MethodChannel`, `wakelock`, `camera`, `record`, `microphone`,
+    `permission` — `ss_stage_scaffold_test.dart`). Ha a Kör 10 komponense
+    ugyanebbe a fába kerül, ugyanez a fegyelem kötelező; az őrt bővíteni kell,
+    ha új design-system fájl születik.
+  - **Widget-tesztben a viewport csak `tester.view.physicalSize`-zal valódi**
+    ([L452](docs/LESSONS.md)) — a `MediaQuery(size:)` wrapper INERT a layoutra.
+    Minden új méret- vagy text-scale-cella ezt a mintát kövesse.
+  - **A 2.0 text scale valódi törést tud okozni** ([L453](docs/LESSONS.md)):
+    `Row`-ban álló `Text` `Flexible` nélkül 661 px-t csordult túl. Az új
+    komponensek cellái szűk (360 px) VALÓDI felületen is mérjenek.
+  - **MINOR-1 nyitva (nem blokkoló):** a brief §6.1 „fix magasságú fejléc → A4"
+    sora rossz cellához van kötve — ténylegesen az A8 (slot-sorrend) őrzi,
+    mert a középső slot `Expanded` + görgethető (`docs/reviews/e13-r09-review.md`).
 - **Epic-9 (community) sáv — következő: `E09-R21` — Community challenge és
   invite lifecycle** (`docs/rounds/e09-r21-challenge-and-invite-lifecycle.md`,
   engine `minimax`, előre kiosztott ADR `0410` — MÉRD ÚJRA a pre-flightban,

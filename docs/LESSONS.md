@@ -17127,3 +17127,112 @@ egy GOV/önjavító kör dolga: a `round-land.sh` a merge ELŐTT kérdezze le a
 `--pr` head SHA-jára a kötelező workflow-k `conclusion` mezőjét, és
 `success` hiányában lépjen ki `blocked`-dal — ekkor az újrahívás sem tudná
 átugrani a kaput.
+
+## L451 — Rebase UTÁN a gitignore-olt generált l10n elavul a munkapéldányban, és a kombinált-HEAD gate a MÁSIK kör kódján ad hamis pirosat (E13-R09 landolás, 2026-08-23)
+
+**Mit mértünk.** Az E13-R09 landolásakor a `tools/round-land.sh` a friss
+`origin/main`-re rebase-elt (a párhuzamos sáv E09-R20-a közben landolt), majd a
+kombinált-HEAD gate `analyze` lépése **36 hibával** pirosra váltott — mind a
+`lib/features/community/presentation/screens/community_notifications_screen.dart`
+fájlon, ami NEM ennek a körnek a diffje:
+
+```
+error • The getter 'communityNotificationLevelInApp' isn't defined for the type
+'AppLocalizations' • lib/features/community/presentation/screens/community_notifications_screen.dart:406:23
+```
+
+A diagnózis kétsoros méréssel dőlt el:
+
+```
+$ grep -c communityNotificationLevelInApp lib/l10n/app_en.arb          -> 2
+$ grep -c communityNotificationLevelInApp lib/l10n/app_localizations.dart -> 0
+```
+
+A kulcs BENNE van az ARB-ben, de NINCS a generált aggregátumban. A munkapéldány
+generált l10n-je a klónozáskor készült; a `lib/l10n/app_localizations*.dart`
+**gitignore-olt**, ezért a rebase — ami az ARB-t frissítette — hozzá sem nyúlt.
+
+**Miért fontos.** A hiba a MÁSIK kör frissen merge-elt kódján jelenik meg, tehát
+első ránézésre idegen defektnek, sőt az ő körük hibás merge-ének látszik. A
+valóság: tisztán lokális, generált-artefaktum elavulás. A `prepare-flutter-generated.sh`
+eddigi leckéi (L222, L228, L230) mind a FRISS KLÓN hiányzó outputjáról szólnak —
+ez a trigger más: egy már primeolt, hosszú életű munkapéldány, amelyet később
+rebase-eltek.
+
+**Szabály.** Minden olyan rebase/merge után, amely idegen `lib/l10n/*.arb`
+változást hoz be a munkapéldányba, a gate ELŐTT futtasd a munkapéldány SAJÁT
+`tools/prepare-flutter-generated.sh`-ját (argumentum nélkül — a script a
+`BASH_SOURCE`-ból számol repo-rootot, L232). Ez nem scope-tágítás és nem H7:
+build-előfeltétel, amit az orchestrátor old fel, a kör-diff érintése nélkül.
+
+**Őrteszt:** nincs — a jelenség gitignore-olt artefaktumon él, tracked teszttel
+nem fogható meg; a védelem a záró rituálé §5 lépése és ez a lecke.
+
+## L452 — Widget-tesztben a `MediaQuery(data: MediaQueryData(size: …))` NEM méretezi a layoutot: a „landscape 800×400" cella a default 800×600-on mér, és a deklarált geometria sosem áll elő (E13-R09, 2026-08-23)
+
+**Mit mértünk.** Az E13-R09 A4 acceptance-cellája három méretre ígért
+túlcsordulás-mentességet (`Size(800,400)`, `Size(1000,500)`, `Size(1200,800)`)
+2.0 text scale mellett, `MediaQuery` wrapperrel. A reviewer próbája:
+
+```
+PROBE P1 declared=Size(800.0, 400.0)  -> actual Scaffold size=Size(800.0, 600.0)
+PROBE P1 declared=Size(1000.0, 500.0) -> actual Scaffold size=Size(800.0, 600.0)
+PROBE P1 declared=Size(1200.0, 800.0) -> actual Scaffold size=Size(800.0, 600.0)
+PROBE P1 declared=Size(400.0, 800.0)  -> actual Scaffold size=Size(800.0, 600.0)
+```
+
+A `MediaQuery` wrapper csak azt írja felül, amit a leszármazottak **olvasnak**
+(`MediaQuery.sizeOf`, `orientationOf` — ezekből az ág-választás helyesen
+működött); a layout-kényszert viszont a teszt-**felület** adja. A három cella
+tehát ugyanazt az EGY mérést végezte háromszor, és a kritérium lényege — a
+helyhiányos, ALACSONY landscape viewport — sosem állt elő.
+
+**A javítás és a bizonyítéka.** `tester.view.physicalSize = size` +
+`tester.view.devicePixelRatio = 1` + `addTearDown(tester.view.reset)`; a
+`MediaQuery` marad a `textScaler`-nek. A javítás **magasság-érzékenyen**
+igazolva: egy 450 px fix magasságú alsó akciósáv mutációval
+
+- a `Size(800,400)` cella **PIROS**,
+- a `Size(1000,500)` és a `Size(1200,800)` **ZÖLD**.
+
+Egy cella, amely a nevében méretet ígér, csak akkor mérce, ha a méret
+megváltoztatása meg tudja változtatni az eredményét.
+
+**Őrteszt:** `test/core/design_system/stage/ss_stage_scaffold_test.dart` — az
+A4 cellák (`_pumpStage`, `tester.view.physicalSize`).
+
+## L453 — Egy csatorna-specifikus mock handler csak azt az EGY csatornát bizonyítja: az „ez a widget nem nyit erőforrást" invariánst forrás-szintű őr fogja meg, és az őrnek saját mérő cellája kell (E13-R09, 2026-08-23)
+
+**Mit mértünk.** Az E13-R09 legfontosabb invariánsa (ADR 0276, `risk = "high"`):
+egy prezentációs widget ne indíthasson mikrofont, kamerát vagy felvételt. Az A1
+cella egy `MethodChannel('wakelock_plus')` mock handlert regisztrált, és azt
+állította, hogy a `channelCalls` lista üres marad. A reviewer beírta a §6.1
+mátrix első sorának hibás implementációját — egy `autoStart`-ot, ami az
+`initState`-ben `MethodChannel('plugins.flutter.io/record').invokeMethod('start')`-ot
+hív —, és a teszt kimenete:
+
+```
+00:01 +7: All tests passed!
+```
+
+**Mind a hét cella zöld**, az A1 is: a mock handler egyetlen NEVESÍTETT
+csatornára szól, tehát bármely másik csatorna hívása láthatatlan. A „grep a
+diffben" bizonyíték a MAI állapotot igazolja, nem a jövőbeli regressziót.
+
+**A javítás mintája.** Forrás-szintű őrcella (a
+`test/core/architecture_dependency_test.dart` mintájára): a produkciós fájlok
+szövegében tiltott tokenek (`MethodChannel`, `wakelock`, `camera`, `record`,
+`microphone`, `permission`) — **komment-leválasztással**, hogy a garanciát LEÍRÓ
+doc-comment ne buktassa a saját ellenőrzését, de a sztring-literálok láthatóak
+maradjanak (a csatornanév a legjellemzőbb tokent éppen egy stringbe rejti).
+Mellé egy **második cella, amely magát az őrt méri** a mutált forrásrészleten:
+enélkül egy elrontott token-lista némán mindent átengedne.
+
+**Általánosan:** „X nem történik meg" invariánsra a nevesített csatorna/erőforrás
+lemockolása szűk mérce. Vagy a teljes felületet zárd (forrás-őr, tiltott import),
+vagy sorold fel kimerítően a csatornákat — és mindkét esetben mérd meg magát az
+őrt egy szándékosan hibás bemenettel.
+
+**Őrteszt:** `test/core/design_system/stage/ss_stage_scaffold_test.dart` —
+`resource ownership (source guard, E13-R09 MAJOR-1)` csoport, benne a
+`the token scan actually catches the ADR 0276 autoStart mutation` cella.
