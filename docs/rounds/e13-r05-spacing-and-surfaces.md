@@ -1,18 +1,59 @@
 # E13-R05 — Spacing, radius, elevation és surface primitívek
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 903e7a7d`)
+- **Státusz:** IN PROGRESS — folytatás (pre-flight: 2026-08-21, `main @ 1281dc40`;
+  folytatás-revízió: 2026-08-23, upstream-szinkron `main @ 0d5519bf`, §0.0.2)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 5
 - **Kör-azonosító:** `E13-R05`
-- **Branch:** `<motor>/e13-r05-spacing-and-surfaces`
+- **Branch:** `terra/e13-r05-spacing-and-surfaces`
 - **Előfeltétel:** `E13-R04` merge-elve (tipográfia)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — a Ch13 §9.5 geometriája adott.
+- **Előre kiosztott ADR:** `0385` — a foglaló adta az E13-R05-nek.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R02
 > `foundations/ss_spacing.dart` és `ss_radius.dart` TÉNYLEGES konstansait — ez a
 > kör ezekre épít felületi primitíveket, nem definiálja újra őket. Eltérésnél
 > §0.0 revízió.
 
+## 0.0 Pre-flight revízió — 2026-08-21
+
+- A `tools/round-slots.py reserve-adr --round E13-R05` atomi foglalása a
+  `0385` számot adta; a felület-hierarchia, az inset-kezelés és a mérce
+  döntéseit az [`ADR 0385`](../adr/0385-surface-hierarchy-and-geometry-contract.md)
+  rögzíti. Az ADR orchestrátor pre-flight artefaktum, nem része az implementer
+  fázisbaseline utáni scope-jának (`lessons/L380`).
+- A tényleges foundation contract változatlanul
+  `SsSpacing.values == [0, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64]` és
+  `SsRadius.values == [6, 10, 16, 20, 28, 999]`; ezért a kör ezeket nem
+  definiálja újra. A `python3 -c`-vel számolt 4 dp határcellák: `2`, `4`,
+  illetve `8 / 12 / 16` dp.
+- A tényleges szemantikai színút már létezik:
+  `SsColorScheme.surface`, `surfaceRaised`, `surfaceSunken`, `border` és
+  `borderStrong`. A legacy paletta jelenleg a `surfaceRaised` értékét a
+  `surface` értékével azonosan adja, ezért a kör a szintek vizuális
+  megkülönböztetését a saját, központosított elevation/surface contractjában
+  oldja meg, új hex szín és `lib/core/theme/**` módosítás nélkül.
+- A Chapter 13 Kör 5 kötelező háromtémás surface-mátrixa, token-unit cellája,
+  nagy text-scale és nested-surface próbája a már engedélyezett két tesztfájlban
+  kap explicit acceptance-cellát. A „golden” itt determinisztikus vizuális
+  contract-mátrix: témánként a feloldott háttér, border és shadow értékét méri,
+  új PNG corpus nélkül. Ez a brief dokumentált pontosítása a Chapter 13
+  bináris golden megfogalmazásához; scope-bővítés nincs.
+- A nyers `EdgeInsets`/radius lint az engedélyezett `spacing_grid_test.dart`
+  source-contract cellája: a kör nem módosítja a védett architecture-gate-et.
+  A compact/medium/expanded screen padding a meglévő spacing tokenekhez kötött
+  publikus contractként kerül dokumentálásra.
+- A kör nem kezel státuszreducert vagy lifecycle-erőforrást; célállapot-input
+  és resource-acquire hívási lánc ezért nem alkalmazandó.
+- A kötelező, sorrendi **visszakeresett előzmény** vizsgálata a szűkített
+  `lessons,halts,adr`, majd
+  `lessons,halts`, végül a teljes korpuszon megtörtént. Közvetlen előzmény az
+  [`ADR 0381`](../adr/0381-semantic-theme-and-accessibility-contract.md) és az
+  E13-R02/R03/R04 merge-tény; a legfontosabb scope-precedens
+  [`lessons/L387`](../LESSONS.md), amely szerint egy integráció meglévő
+  contract-fogyasztóját is fel kell mérni. Itt nincs ilyen új, listán kívüli
+  owner: a surface-primitívek újak, a katalógus és mindkét célzott teszt exact
+  scope-ban van. A teljes korpuszos találatok ezen felül nem adtak relevánsabb
+  előzményt.
 ## 0.0.1 H3 scope-revízió — ADR 0112 önjavító kör, 2026-08-21
 
 A megállt PR #392 exact `03788441` Full Gate-je háromszor ugyanazt a meglévő
@@ -32,6 +73,63 @@ katalógus-cellát, hogy a compile-time/debug route-kapu és a dark/light smoke
 contract megmaradjon, miközben az `SsCard` jelenlétét és annak pontosan egy
 `Material` leszármazottját méri. Más `test/core/design_system/**` út nem
 nyílik meg; a self-heal product Dart-kódot nem visz előre.
+
+## 0.0.2 Folytatás-revízió — 2026-08-23 (orchestrátor: Claude, motor: `sonnet-impl`)
+
+**Mért kiindulási állapot.** A kör NEM újraindul: a
+`terra/e13-r05-spacing-and-surfaces` ág `03788441` csúcsán a teljes surface-
+implementáció, az APPROVED független review
+(`docs/reviews/e13-r05-review.md` — nyitott BLOCKER 0 · MAJOR 0 · MINOR 0 ·
+NOTE 1) és a zöld célzott round-gate már megvan. A PR #392 azért zárult
+merge nélkül, mert az exact-SHA Full Gate háromszor a §0.0.1-ben leírt
+katalógus-contract ütközést mérte. Az egyetlen nyitott munka ezért a §0.0.1
+által megnyitott **A13** cella.
+
+**Upstream-szinkron (a folytatás előfeltétele).** A `03788441` ág `origin/main
+@ 0d5519bf`-et nem tartalmazta (`git merge-base --is-ancestor origin/main
+HEAD` → 1). A merge egyetlen ütközése ez a brief volt; minden más útvonal
+automatikusan egyesült. Az ütközés tartalmilag mindkét oldalon additív volt: a
+`0.0` pre-flight (ág) és a `0.0.1` H3 self-heal (main) **együtt** maradnak meg.
+
+**A13 — szándékos átszámozás, nem tartalomvesztés.** A self-heal a
+katalógus-cellát `A8`-ként vezette be, miközben az ágon az `A8`…`A12` már
+implementált ÉS review-zott jelentéssel bír (`A8` = High Contrast erős border).
+Két különböző szerződés ugyanazon a sorszámon félrevezető, ezért a self-heal
+cellája **`A13`** számot kap; a szövege, a §4 sora, a §6.1 mérce-mátrix sora,
+a §7 gate-hívása és a §8/4 lépése változatlan. A `docs/reviews/e13-r05-review.md`
+`A8`…`A12` sorai így érvényben maradnak. Ez a §2 szerinti brief-revízió, nem
+lista-tágítás: az `allowed_paths` és a `gate_tests` a self-heal által
+megnyitott listával azonos.
+
+**Visszakeresett előzmény (ADR 0312 / brief-lint S8).** Szűkítve
+(`--corpus lessons,halts,adr`, majd `lessons,halts`), végül a teljes korpuszon:
+
+- [`lessons/L393`](../LESSONS.md) — **a közvetlen előzmény**: pontosan ez a
+  kör, ez a hibaosztály. Egy katalógusban lecserélt widgettípus scope-ja a
+  legacy finder-contractot is magában foglalja.
+- [`lessons/L420`](../LESSONS.md), [`lessons/L106`](../LESSONS.md),
+  [`lessons/L145`](../LESSONS.md) — ugyanaz a hibaosztály általánosan: a
+  célzott gate NEM látja a kör-scope-on kívüli, csak a teljes suite-ban futó
+  contract-tesztet. **Mért fedezet ehhez a körhöz:** a PR #392 exact
+  `03788441` Full Gate-je 5519 zöld mellett PONTOSAN 3 hibát adott, mind a
+  három `Found 0 widgets with type "Card"` ugyanabban a fájlban — tehát a
+  teljes suite-ban nincs további, ezen kívüli sértett fogyasztó. Ez a mérés
+  határolja be a maradék kockázatot; a bizonyíték az új exact-SHA CI-futás.
+- [`lessons/L102`](../LESSONS.md) — az implementer saját `flutter test`
+  futtatása nem helyettesíti a `tools/round-gate.sh`-t (a `format` lépés
+  kimarad). A §7 hívása ezért kötelező, csővezeték nélkül.
+- [`ADR 0273`](../adr/0273-design-system-token-source-of-truth.md) — a
+  Component Catalog fejlesztői eszköz marad flag mögött: a route-kapu
+  contractja (compile-time OFF + debug-gate) NEM lazulhat.
+- [`ADR 0383`](../adr/0383-typography-and-text-scale-contract.md),
+  [`ADR 0385`](../adr/0385-surface-hierarchy-and-geometry-contract.md) — a
+  fejezet már merge-elt, illetve e körben írt geometria-szerződése.
+
+**Amit ez a folytatás NEM tesz.** Nem nyúl a már review-zott
+`lib/core/design_system/**` produkciós fájlokhoz és a két surface-teszthez,
+hacsak az A13 cella zöldre vitele meg nem követeli; az `SsCard` egyetlen
+`Material`-rétege szándékos, tehát a helyes irány a teszt-contract
+frissítése, NEM a legacy `Card` visszahozása.
 
 ```ai-router
 schema_version = 1
@@ -152,7 +250,12 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | A5 | A `SsHeroCard` nem importál feature-logikát | architektúra-guard |
 | A6 | A primitívek mindhárom témában renderelnek kivétel nélkül | `ss_surface_test.dart` |
 | A7 | Nincs hardkódolt geometriai literál az új kódban | `grep` a diffben |
-| A8 | A katalógus route/smoke contractja `SsCard`-ot és pontosan egy `Material`-réteget mér, legacy `Card`-követelmény nélkül | `component_catalog_test.dart` |
+| A8 | A High Contrast surface-szinteket erős border is megkülönbözteti | `ss_surface_test.dart` |
+| A9 | A dark/light/high-contrast × base/raised/overlay/modal vizuális contract-mátrix háttér-, border- és shadow-értékei determinisztikusak | `ss_surface_test.dart` |
+| A10 | Nested surface 2.0 text scale-en renderel kivétel és overflow nélkül | `ss_surface_test.dart` |
+| A11 | Compact/medium/expanded padding rendre a 16/24/32 dp `SsSpacing` tokenre oldódik | `spacing_grid_test.dart` |
+| A12 | A source-contract elutasítja a nyers `EdgeInsets`- és `BorderRadius.circular` geometriai literált az új primitivekben | `spacing_grid_test.dart` |
+| A13 | A katalógus route/smoke contractja `SsCard`-ot és pontosan egy `Material`-réteget mér, legacy `Card`-követelmény nélkül | `component_catalog_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -164,7 +267,12 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | A primitív figyelmen kívül hagyja az inseteket | A4 |
 | A hero kártya maga olvassa a felismerés-állapotot | A5 |
 | Nyers `BorderRadius.circular(9)` | A7 |
-| Az `SsCard` visszahoz egy második, legacy `Card`/`Material` réteget | **A8** |
+| High Contrast ugyanazt a gyenge bordert használja, mint a normál téma | **A8** |
+| Bármelyik téma/szint feloldása kézzel megadott háttérre vagy shadow-ra változik | **A9** |
+| Nested card fix magasságot kap és 2.0 text scale-en overflowol | **A10** |
+| Expanded padding 28 dp-re csúszik | **A11** |
+| A production primitive `EdgeInsets.all(16)`-ot használ token helyett | **A12** |
+| Az `SsCard` visszahoz egy második, legacy `Card`/`Material` réteget | **A13** |
 
 **A rács három kötelező cellája** (a küszöb: a 4dp osztó):
 
@@ -211,4 +319,143 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Megvalósítás
+
+- `lib/core/design_system/foundations/ss_elevation.dart`: a zárt
+  `base/raised/overlay/modal` hierarchia egyetlen resolverben állítja elő a
+  szemantikus hátteret, bordert, border-szélességet és rövid shadow-elevationt.
+  Dark Studio és High Contrast alatt nincs dekoratív shadow; a High Contrast
+  emelt szintjei `borderStrong`-ot kapnak.
+- `lib/core/design_system/components/surfaces/ss_surface.dart`: a szinthez
+  kötött `Material` surface, opcionális névvel ellátott `safeArea` móddal és
+  compact/medium/expanded `SsSpacing.space4/space6/space8` padding resolverrel.
+- `lib/core/design_system/components/surfaces/ss_card.dart`: raised card
+  `SsRadius.md`-vel, tokenes alap-paddinggel.
+- `lib/core/design_system/components/surfaces/ss_hero_card.dart`: caller-fed
+  overlay felület `SsRadius.lg`-vel; feature/provider/state import nélkül.
+- `lib/core/design_system/components/surfaces/ss_section.dart`: cím + tartalom
+  kompozíció, új card-réteg létrehozása nélkül.
+- `lib/core/design_system/documentation/component_catalog_screen.dart`: a
+  development-only katalógus mind a négy surface szintet megmutatja a meglévő
+  dark/light/high-contrast választóval; új felhasználói szöveget nem vezet be.
+- `lib/core/design_system/public.dart`: az új foundation és surface public
+  exportjai.
+- `test/core/design_system/surfaces/ss_surface_test.dart`: a három téma × négy
+  szint determinisztikus háttér/border/shadow mátrixa, safe-area nested eset,
+  2.0 text scale és hero-függetlenség.
+- `test/core/design_system/surfaces/spacing_grid_test.dart`: a 2/4/8–16 dp
+  küszöbcellák, a 16/24/32 dp responsive padding és a raw geometry source-őr.
+
+### TDD és valódi-sértés bizonyíték
+
+- RED: a két új surface-teszt az implementáció előtt a hiányzó
+  `SsElevation`, `SsSurface`, `SsCard`, `SsHeroCard` és `SsSection` symbolokkal
+  fordítási hibára futott.
+- GREEN (restore után): `flutter test
+  test/core/design_system/surfaces/ss_surface_test.dart
+  test/core/design_system/surfaces/spacing_grid_test.dart` → **18/18 passed**.
+- Kötelező valódi-sértés: az `ss_card.dart` ideiglenes
+  `EdgeInsets.all(13)` módosításával a
+  `flutter test test/core/design_system/surfaces/spacing_grid_test.dart` A1
+  source-contract cellája elvárt módon piros volt: a raw-inset regexp matchje
+  `true` lett a konkrét `ss_card.dart` fájlra. A tokenes `EdgeInsets.all(padding)`
+  restore után a teljes kétfájlos célzott teszt újra **18/18 passed**.
+
+### Review javítókör 1 — F1–F6 regressziós bizonyíték
+
+- **F1:** a `base` ágat ideiglenesen `colors.surfaceRaised`-re rontva a
+  distinct `surface=0xff010203` / `surfaceRaised=0xff040506` cella pirosra
+  futott; restore után a base exact `colors.surface`, az emelt szintek pedig
+  explicit `surfaceRaised`-alapú blendet használnak.
+- **F2:** `_raisedBlend` `.04 → .05` mutációja a Dark canonical fixture
+  `SsElevation.raised` ARGB-értékét elrontotta, ezért a pinned visual-contract
+  cella piros lett. A dark/light/high-contrast × négy szint fixture a
+  production resolvertől független canonical background-, border-,
+  border-width- és shadow-ARGB/elevation értékeket őriz.
+- **F3:** a High Contrast emelt ágának `borderStrong → border` mutációja a
+  distinct `0xff101112` / `0xffb0b1b2` semantic-selector cellát pirosra vitte;
+  a restore után az emelt szintek kizárólag `borderStrong`-ot kapnak.
+- **F4:** a production `Radius.circular(radius.value)` ideiglenes
+  `Radius.circular(9)` rontása a raw-geometry source-contract cellát pirosra
+  vitte. Az őr a `Radius.circular`, `BorderRadius.circular`,
+  `BorderRadius.all(Radius.circular(...))`, `BorderRadius.only(...)`, valamint
+  az `EdgeInsets` és `EdgeInsetsDirectional` alkalmazható alakjait fogja meg.
+- **F5:** az `SsCard` ideiglenes nyers `double padding = 13` publikus
+  paramétere a fixed-token public-API cellát pirosra vitte. A végleges
+  `SsCard`, `SsHeroCard` és `SsSection` nem fogad nyers spacing/padding
+  double-t; a kötött `SsSpacing.space4/space6/space2` contractot használják.
+- **F6:** a `Card` külső Material-réteg ideiglenes visszahelyezésekor a widget
+  cella két `Material` descendantot talált és piros lett. A restore után az
+  `SsCard` közvetlenül egyetlen `SsSurface` `Material` felületet épít.
+
+- Restore utáni célzott futás: `flutter test
+  test/core/design_system/surfaces/ss_surface_test.dart
+  test/core/design_system/surfaces/spacing_grid_test.dart` → **22/22 passed**.
+
+### A13 — a katalógus contract tranzakciós átállítása
+
+A `test/core/design_system/component_catalog_test.dart` mindhárom érintett
+cellájában (`creates the catalog only when both gates pass`, valamint a
+dark/light smoke ciklus mindkét ága) a `find.byType(Card)` helyére
+`find.byType(SsCard)` + a `SsCard` alá szűkített, pontosan egy `Material`
+leszármazottat váró `find.descendant` pár került; a route-kapu contract
+(a `is default-off` és a három `createRouteForTesting` null-cella) és a
+dark/light smoke-pumpelés érintetlen maradt.
+
+**(a) Material-szűkítés.** A katalógus fája ténylegesen legalább négy
+`Material`-t tartalmaz (`SsSurface` × 2, `SsCard`, `SsHeroCard`, plusz a
+`MaterialApp`/`Scaffold` sajátjai), ezért a csupasz `find.byType(Material)` +
+`findsOneWidget` hamis elvárás lett volna. A `find.descendant(of:
+find.byType(SsCard), matching: find.byType(Material))` pontosan a `SsCard`
+saját `SsSurface`-rétegét méri.
+
+**(b) `DecoratedBox`-mérés.** A cella futtatása előtt egy ideiglenes
+`print('DecoratedBox count: ${find.byType(DecoratedBox).evaluate().length}')`
+sorral megmértem a tényleges darabszámot mindkét témán: **dark → 1**,
+**light → 1**. A meglévő `expect(find.byType(DecoratedBox), findsOneWidget)`
+sor tehát mérve helyes volt — csak korábban sosem futott le, mert az előtte
+álló `Card`-elvárás pirosra vitte a cellát. A `print` sor eltávolítva, az
+eredeti `findsOneWidget` elvárás változatlanul megmaradt.
+
+**Valódi-sértés próba.** `lib/core/design_system/components/surfaces/ss_card.dart`
+`build()`-jában a `SsSurface`-t ideiglenesen egy külső `Card(child: ...)`
+rétegbe csomagoltam (második `Material`-réteg). Ezután mindhárom érintett
+cella pirosra futott:
+
+```
+Expected: exactly one matching candidate
+  Actual: _MaterialTypeWidgetFinder:<...found 2 widgets with type "Material":
+  [Material(type: card, ...), Material(type: canvas, ...)]>
+   Which: is too many
+```
+
+(`creates the catalog only when both gates pass`, `catalog smoke test renders
+for Brightness.dark`, `catalog smoke test renders for Brightness.light` — mind
+a három piros lett, `+5 -3`.) A `git diff --stat
+lib/core/design_system/components/surfaces/ss_card.dart` restore után üres
+kimenetet adott — a fájl bájt-azonos az eredetivel. Restore utáni futás:
+`flutter test test/core/design_system/component_catalog_test.dart` →
+**8/8 passed**.
+
+### Futtatott ellenőrzések
+
+- `dart format` a kilenc módosított Dart fájlon → sikeres.
+- `flutter test test/core/design_system/component_catalog_test.dart` →
+  **8/8 passed** (a §0.0.1/A13 tranzakciós átállítás után, a valódi-sértés
+  próba restore-ját követően).
+- `git diff --check` → sikeres.
+- `tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart
+  test/core/design_system/surfaces/spacing_grid_test.dart` → **pass, exit 0**
+  az F1–F6 javítás után (format, analyze, mindkét célzott teszt,
+  architecture, secrets és l10n zöld).
+
+### Nem futtatott ellenőrzések
+
+- Teljes `flutter test`, property gate és CI APK: implementer scope-on kívüli,
+  a kör-orchestrátor CI/merge kapuja.
+
 ## 11. Review — a Claude tölti ki
+
+Független Sol re-review: **APPROVED**, 0 nyitott BLOCKER / MAJOR. Az első
+review 6 MAJOR leletét a Terra javító commit (`ee12446b`) lezárta; részletes
+bizonyíték: [`docs/reviews/e13-r05-review.md`](../reviews/e13-r05-review.md).

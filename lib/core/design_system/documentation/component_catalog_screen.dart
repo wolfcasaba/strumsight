@@ -1,7 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../components/surfaces/ss_card.dart';
+import '../components/surfaces/ss_hero_card.dart';
+import '../components/surfaces/ss_surface.dart';
 import '../foundations/ss_colors.dart';
+import '../foundations/ss_elevation.dart';
+import '../foundations/ss_spacing.dart';
 import '../themes/ss_dark_theme.dart';
 import '../themes/ss_high_contrast_theme.dart';
 import '../themes/ss_light_theme.dart';
@@ -68,14 +73,15 @@ final class _ComponentCatalogScreenState
     return Theme(
       data: theme,
       child: Scaffold(
-        body: Center(
-          child: Card(
-            child: DecoratedBox(
-              decoration: BoxDecoration(color: colors.surface),
-              child: SizedBox(
-                width: 192,
-                height: 96,
+        body: DecoratedBox(
+          decoration: BoxDecoration(color: colors.canvas),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(SsSpacing.space4),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -94,6 +100,27 @@ final class _ComponentCatalogScreenState
                         ),
                       ],
                     ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SsSurface(
+                          elevation: SsElevation.base,
+                          child: const SizedBox(height: SsSpacing.space6),
+                        ),
+                        const SizedBox(height: SsSpacing.space2),
+                        const SsCard(child: SizedBox(height: SsSpacing.space6)),
+                        const SizedBox(height: SsSpacing.space2),
+                        const SsHeroCard(
+                          child: SizedBox(height: SsSpacing.space6),
+                        ),
+                        const SizedBox(height: SsSpacing.space2),
+                        SsSurface(
+                          elevation: SsElevation.modal,
+                          child: const SizedBox(height: SsSpacing.space6),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: SsSpacing.space4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
