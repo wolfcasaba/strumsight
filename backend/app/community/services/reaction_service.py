@@ -97,7 +97,6 @@ from ..models.reaction import (
     is_allowed_reaction_kind,
 )
 
-
 # ---------------------------------------------------------------------------
 # Domain exceptions — translated to HTTP status codes in the router layer.
 # ---------------------------------------------------------------------------

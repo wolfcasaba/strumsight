@@ -41,7 +41,6 @@ from __future__ import annotations
 import importlib
 import os
 import random
-import sys
 import threading
 import uuid
 from collections.abc import Iterator

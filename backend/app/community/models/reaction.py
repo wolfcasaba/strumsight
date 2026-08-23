@@ -52,7 +52,6 @@ sees the table as part of the expected schema.
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 
 from sqlalchemy import (
@@ -66,7 +65,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ...database import Base
-
 
 # Allowlist of reaction kinds (brief §3). Mirrors the Kör 5 wire
 # enum in ``lib/features/community/domain/entities/community_reaction.dart``
