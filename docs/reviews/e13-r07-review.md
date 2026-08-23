@@ -175,3 +175,88 @@ használná az `SsIcon`-t.
 
 Egy javító kör ugyanazzal a motorral (`sonnet-impl`), az **F1** (MAJOR),
 **F2** és **F3** (MINOR) leletekkel. Az **F4** NOTE, nem javítandó.
+
+---
+
+# Review (kör 2) — a javító kör után
+
+- **Review-alap:** `1421d823` (review 1) → `8221e727`
+- **Diff:** 2 fájl (`ss_icons_test.dart`, a brief §10) — **production kód NEM
+  változott**. Gépi scope-audit:
+  `Legacy scope audit OK (1421d823acc9..8221e727425f, 2 changed path(s), 0 generated/ignored)`.
+- **Verdikt:** **APPROVED**
+
+Az ellenőrzés friss izolált klónban futott (`/tmp/e13r07-review2`),
+ugyanazokkal az eldobható próbákkal — a cél annak MÉRÉSE, hogy a javított
+cellák tényleg falszifikálnak-e, nem a zöld megerősítése.
+
+## F1 — MAJOR → **LEZÁRVA**
+
+Az új A9 cella egy `_RecordingCanvas` teszt-duplát használ
+(`test/core/design_system/icons/ss_icons_test.dart:12-53`), amely
+`implements Canvas` és `noSuchMethod`-dal nyeli el a nem érdekes tagokat,
+miközben rögzíti a `drawLine` / `drawPath` / `drawRRect` / `drawCircle` /
+`drawArc` hívások `Paint` értékeit. A cella mind a 14 glyph-et lefesti
+**három** szerződéses méreten (24 / 32 / 48 dp), és minden
+`PaintingStyle.stroke` festésre megméri, hogy a
+`strokeWidth / painter.strokeWidth` arány az engedélyezett halmazban
+(`{1.0, 0.6}`) van-e. Emellett `isNotEmpty` cellával kizárja a semmit nem
+festő painter-t is.
+
+**Mért bizonyíték.** A review 1 PONTOSAN ugyanazt az injekcióját újra
+lefuttattam a javított fán (`_paintCapo` → `strokeWidth = 7.5`):
+
+```
+00:00 +4 -1: guitar glyphs (A9) — every painted stroke derives from the shared ratio
+             every recorded PaintingStyle.stroke draw call uses an allowed ratio
+             of the shared stroke width [E]
+00:00 +11 -1: Some tests failed.
+```
+
+Korábban ugyanez `+11: All tests passed!` volt. **A cella most falszifikál.**
+
+A három méreten mérés lényegi: egy abszolút dp-érték legfeljebb EGY méreten
+tudná véletlenül eltalálni valamelyik engedélyezett arányt, három méreten
+nem. A `{1.0, 0.6}` halmaz a mai kód két valódi arányát rögzíti (a `0.6` a
+hammer-on/pull-off szándékosan vékonyabb üreges hangjegyfeje,
+`ss_guitar_glyphs.dart:179,205`) — a felvétele tehát a viselkedés
+dokumentálása, nem a mérce lazítása: egy ÚJ arány felvétele szándékos,
+látható teszt-módosítást kíván.
+
+A §10 bizonyítatlan „szerkezetileg kizárt" mondata is javítva.
+
+## F2 — MINOR → **LEZÁRVA**
+
+Az A8 téma-cellái explicit címkéből kapják a nevüket
+(`{'dark': …, 'light': …, 'highContrast': …}`), tehát a három futás neve
+egyedi, és egy piros futásból kiderül, melyik téma bukott.
+
+## F3 — MINOR → **LEZÁRVA**
+
+Új cella: mind a 14 glyph rögzített rajz-hívás-sorozatát aláírássá fűzi, és
+megköveteli, hogy a tizennégy aláírás **páronként különbözzön**.
+
+**Mért bizonyíték.** A `fretboard` ágat ideiglenesen a `_paintCapo`-ra
+irányítva:
+
+```
+00:00 +8 -1: guitar glyphs (A8) — … every glyph paints a draw-call sequence
+             distinct from all others [E]
+  two or more of the fourteen glyphs painted the exact same draw-call sequence
+  — the gallery would render duplicate marks under different names
+```
+
+**A cella falszifikál.**
+
+## F4 — NOTE
+
+Változatlanul nyitva, szándékosan — nem ennek a körnek a dolga.
+
+## Regressziós ellenőrzés
+
+A javító kör a production kódhoz **nem nyúlt** (a diff két fájl: a teszt és a
+brief §10), tehát a review 1-ben zöldnek talált A1–A7 cellák alapja
+változatlan. A P2–P5 próbák eredménye ezért érvényben marad.
+
+**Verdikt: APPROVED** — a merge a zöld kapu (exact-SHA `full-gate.yml` +
+`router-ci.yml`) után mehet.
