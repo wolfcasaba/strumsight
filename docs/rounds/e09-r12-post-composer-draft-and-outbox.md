@@ -21,6 +21,7 @@ allowed_paths = [
   "lib/features/community/presentation/screens/post_composer_screen.dart",
   "test/features/community/application/post_composer_test.dart",
   "test/features/community/application/community_outbox_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e09-r12-post-composer-draft-and-outbox.md",
 ]
 gate_tests = [
@@ -116,6 +117,17 @@ indoklással — a választás a kör hatásköre, csak legyen mérhető
 újat.** `lib/features/community/domain/policies/community_audience.dart`
 már definiálja a `public/followers/private` hármas `wireValue`-val — a
 composer ezt importálja és mutálja, nem hoz létre saját audience-típust.
+
+**D6 — CI-only bump: `test/ui/ui_inventory_test.dart` (2026-08-23, a CI-run
+32623528738 mérése után).** A round diffje ÚJ production screent ad
+(`post_composer_screen.dart`), ami a hardcode-olt production-screen-számlálót
+69→70-re tolja el — UGYANAZ a mintázat, mint az E09-R06/R07/R08/R09 CI-only
+javításai (`docs/rounds/e09-r09-profile-search-and-discovery.md` §0.0.1). A
+brief eredeti `allowed_paths`-a ezt nem tartalmazta (a brief megírásakor még
+nem volt ismert a screen fájlneve) — most FELVÉVE, szűken: csak a
+`hasLength(69)` → `hasLength(70)` érték. Ez SDD §2 szerint a kör saját,
+még nem merge-elt artefaktumának (`allowed_paths`) dokumentált §0.0 bővítése,
+nem H3 (a fájl nem tilos zóna, csak korábban nem szerepelt a listán).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
