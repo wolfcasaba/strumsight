@@ -15,6 +15,25 @@
 [`docs/adr/0407-comment-reply-and-mention.md`](../adr/0407-comment-reply-and-mention.md) —
 minden §5 architekturális döntés OTT részletezve, mérési forrásokkal együtt.
 
+## 0.0.1 Review-vezérelt scope-bővítés (Claude Sonnet 5, 2026-08-23, 1. javító kör előtt)
+
+A review (`docs/reviews/e09-r16-review.md`) 1 MAJOR (l10n) + 2 MINOR leletet
+talált, és saját méréssel (a brief `gate_tests`-én TÚLI, teljes `flutter
+test` futtatással) egy mellékhatást: `test/ui/ui_inventory_test.dart`
+hardcode-olt képernyő-számlálója (71) elavult, mert a kör ÚJ
+`comments_screen.dart`-ja a mechanikus `*_screen.dart` mintával 72-re
+emeli a tényleges számot — ugyanaz a drift-osztály, mint E09-R05...R13 és
+E09-R14 (HANDOFF). A javító kör ezért az alábbi három fájllal BŐVÍTI az
+`allowed_paths`-t (a Kör 14 F1/screen-count precedense, orchestrátor-
+irányítottan):
+
+- `lib/l10n/features/community_en.arb` — a MAJOR (5 hiányzó string) fixje
+- `lib/l10n/features/community_hu.arb` — ugyanaz, magyar fordítással
+- `test/ui/ui_inventory_test.dart` — KIZÁRÓLAG a `hasLength(71)` →
+  `hasLength(72)` egysoros bumpolása, semmi más ebben a fájlban
+
+A meglévő 8 `allowed_paths` sor változatlan marad.
+
 **Visszakeresés (ADR 0312, §4.9, S8):**
 `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "komment
 reply mention block privacy validáció mélység-korlát"` → ADR 0402 (Kör 8,
@@ -93,6 +112,9 @@ allowed_paths = [
   "backend/tests/community/test_comment_service.py",
   "test/features/community/presentation/comments_screen_test.dart",
   "docs/rounds/e09-r16-comments-reply-and-mention.md",
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
+  "test/ui/ui_inventory_test.dart",
 ]
 gate_tests = [
   "test/features/community/presentation/comments_screen_test.dart"
