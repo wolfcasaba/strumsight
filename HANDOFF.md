@@ -1,5 +1,47 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R14 KÉSZ — Feed UI, cache és tudatos használat — PR [#423](https://github.com/wolfcasaba/strumsight/pull/423), squash `ff39ee0c` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENNEGYEDIK KÖRE KÉSZ.** Az első UI-fogyasztója
+a Kör 13 following-feed backendnek: négy ÚJ fájl — `feed_cache.dart` (bounded,
+userId-partitionált lokális cache, `ss.community.feed.v1.<userId>`, maxItems=80),
+`feed_controller.dart` (nyolcállapotú Riverpod state machine —
+initial/loading/content/refreshing/paging/offline/error/end — a
+`CommunityFeedRepository` interfészre és a cache-re épülve, valós HTTP-bekötés
+NÉLKÜL, az szándékosan egy KÉSŐBBI kör hatásköre), `feed_card_registry.dart`
+(exhaustive switch mind a hét Kör 10 artifact-típusra + fallback-kártya) és
+`following_feed_screen.dart` (pull-to-refresh scroll-pozíció-megőrzéssel,
+explicit "Továbbiak betöltése" — NINCS auto-scroll-pagination, NINCS autoplay).
+`risk = "high"` indoklás: account-cache-keveredés (privacy-osztály) + a
+§13.6 SDD no-autoplay invariáns blast radiusa.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. 1 tartalmi
+javító kör + 1 CI-only javító kör** (`docs/reviews/e09-r14-review.md`): review
+CHANGES REQUIRED elsőre, **2 MAJOR** — F1: mindkét ÚJ UI-fájl 0
+`AppLocalizations` hívással ment ki (ugyanaz a hibaosztály, mint az E09-R08
+F1, ott MAJOR volt); F2: a cache-rehydration (`_artifactFromEnvelope`)
+MINDIG `UnfilledCommunityShareArtifact`-ra bontotta a mentett artifact-ot,
+holott a `ShareArtifact.fromJson` dekóder MÁR LÉTEZETT és importálva is volt
+— minden offline/cache-megjelenítés fallback-kártyát mutatott a valódi típus
+helyett (independens probe teszttel megerősítve: `practiceCard=0
+fallbackCard=1`). **1 MINOR** (F3: `_AudienceBadge.audience` felesleges
+`dynamic` típus). A javító kör mindhárom leletet zárta — F1: 13+9
+`AppLocalizations` hívás VALÓDI magyar fordítással
+(`lib/l10n/features/community_{en,hu}.arb` bővítve, az allowed_paths
+orchestrátor-irányítottan bővítve, ugyanaz a precedens, mint az E09-R08 fix);
+F2: `ShareArtifact.fromJson` try/catch-csel, új A1.3 regressziós teszt; F3:
+típusos `CommunityAudience`. Dedikált security-reviewer pass: PASS, 0
+BLOCKER/MAJOR (cache-izoláció strukturálisan helyes, nincs injection-felület,
+nincs secret-szivárgás, a no-autoplay invariáns ténylegesen érvényesül). A
+Claude a javításokat friss, izolált `/tmp`-klónokban ÚJRA futtatott gate-tel
+és scope-audittal fogadta el, egy SAJÁT probe-teszttel igazolva az F2
+javítást. A 2. (CI-only) javító kör a `test/ui/ui_inventory_test.dart`
+hardcode-olt képernyő-számlálóját bumpolta 70→71-re (a kör ÚJ
+`following_feed_screen.dart`-ja miatt) — ugyanaz a drift-osztály, mint
+E09-R05...R13-ban ismételten, orchestrátor-oldali egysoros mechanikus
+javítás. Exact `a39d15c8`: `full-gate.yml` 32634546134 + `router-ci.yml`
+32634547312 mindkettő success. Részletesen `docs/reviews/e09-r14-review.md`.
+
 ## ✅ E09-R13 KÉSZ — Following feed és cursor pagination backend — PR [#422](https://github.com/wolfcasaba/strumsight/pull/422), squash `0907f006` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENHARMADIK KÖRE KÉSZ.** [ADR 0406](docs/adr/0406-following-feed-and-cursor-pagination.md):
@@ -5178,6 +5220,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-23):** `main` @ `ff39ee0c` — E09-R14 Feed UI,
+cache és tudatos használat, PR
+[#423](https://github.com/wolfcasaba/strumsight/pull/423), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, 1 tartalmi
+javító kör (F1 MAJOR hiányzó l10n mindkét új UI-fájlon — ugyanaz a
+hibaosztály, mint az E09-R08 F1; F2 MAJOR a cache-rehydration mindig
+fallback-kártyát adott ismert artifact-típusra is, holott a dekóder már
+létezett — independens probe teszttel megerősítve; F3 MINOR untyped
+`dynamic audience`) + 1 CI-only javító kör (`ui_inventory_test.dart`
+70→71, ugyanaz a drift-osztály, mint E09-R05...R13). Dedikált
+security-reviewer pass: PASS, 0 BLOCKER/MAJOR. Review APPROVED mindkét
+javító kör után, 0 nyitott lelet — a Claude a javításokat friss, izolált
+`/tmp`-klónokban ÚJRA futtatott gate-tel, scope-audittal ÉS saját,
+önállóan futtatott regressziós probe-teszttel fogadta el. Exact
+`a39d15c8`: `full-gate.yml` 32634546134 + `router-ci.yml` 32634547312
+mind success. Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-23):** `main` @ `0907f006` — E09-R13 Following
 feed és cursor pagination backend, PR
 [#422](https://github.com/wolfcasaba/strumsight/pull/422), squash-merge.
@@ -5871,6 +5930,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E09-R14 — Feed UI, cache és tudatos használat** (PR
+[#423](https://github.com/wolfcasaba/strumsight/pull/423), squash
+`ff39ee0c`). Az első UI-fogyasztó a Kör 13 following-feed backendre:
+8-állapotú controller, bounded userId-partitionált cache, 7-típusú
+card-registry + fallback, explicit-pagination screen (nincs autoplay,
+nincs auto-infinite-scroll). 0 nyitott BLOCKER/MAJOR/MINOR 1 tartalmi +
+1 CI-only javító kör után (F1 MAJOR hiányzó l10n; F2 MAJOR
+cache-rehydration mindig fallback-kártyát adott; F3 MINOR untyped
+audience — mind `docs/reviews/e09-r14-review.md`; a CI-only kör az
+`ui_inventory_test.dart` baseline driftjét zárta). Dedikált
+security-reviewer: PASS. Exact `a39d15c8`: Full Gate 32634546134 +
+Router CI 32634547312 mind success. Részletesen a fejléc ✅-blokkban.
 
 **E09-R13 — Following feed és cursor pagination backend** (PR
 [#422](https://github.com/wolfcasaba/strumsight/pull/422), squash
@@ -6738,43 +6810,41 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-23): E09-R14 — Feed UI, cache és
-tudatos használat** (`docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md`,
-engine a queue-ban `minimax`, nincs előre kiosztott ADR — tisztán
-UI/integráció). **Az E09-R13 (Following feed és cursor pagination backend)
-KÉSZ** (PR #422, squash `0907f006`) — lásd a fejléc ✅-blokkot. A Kör 13
-hagyott néhány mért horgot a Kör 14-nek:
+**Pontos következő termékkör (2026-08-23): E09-R15 — Reakciók és
+optimista konzisztencia** (`docs/rounds/e09-r15-reactions-and-optimistic-consistency.md`,
+engine a queue-ban `minimax`, `risk = "normal"`, nincs előre kiosztott ADR).
+**Az E09-R14 (Feed UI, cache és tudatos használat) KÉSZ** (PR #423, squash
+`ff39ee0c`) — lásd a fejléc ✅-blokkot. A Kör 14 hagyott néhány mért horgot:
 
-- A `feed` router MÉG NINCS bekötve a `build_community_router`-be (a Kör
-  5/8/10/11/12 precedense szerint — a Kör 13 a §3 tilos zónája miatt csak
-  egy self-contained teszt-app-ba mountolta). Ha a Kör 14 (feed UI) HTTP-
-  szinten hívná a `GET /community/feed` végpontot VAGY egy valódi
-  `feed_repository_impl.dart`-ot adna a Kör 5 `CommunityFeedRepository`
-  interfészére (ADR 0399 §1), mérje meg, hogy ez a kör-e, aminek a scope-ja
-  a bekötést hozza — a `post_repository_impl.dart` (Kör 12 óta szintén
-  hiányzó) ugyanezt a mintát követi, érdemes egyszerre megvizsgálni.
-- A cursor wire-alakja `<base64url(json)>.<base64url(hmac)>`, a payload
-  `(created_at, post_id, feed_version)` — a kliens ezt OPAQUE-ként kezelje,
-  ne próbálja dekódolni vagy értelmezni (`docs/adr/0406-following-feed-and-cursor-pagination.md`
-  D4/D5). Malformed/forged cursor a szerver oldalán csendben friss első
-  lapra vált (HTTP 200, NEM 422) — a kliens-oldali `feed_controller.dart`
-  ezt a válasz-alakot ("kevesebb elem, mint várt, `next_cursor: null`"
-  ELLENTÉTBEN egy explicit hibakóddal) ne tévessze össze egy hálózati
-  hibával.
-- Az oldalméret alapértéke 25, maximuma 50 (`FEED_PAGE_SIZE_DEFAULT` /
-  `FEED_PAGE_SIZE_MAX`, `backend/app/community/schemas/feed.py`) — a Kör 14
-  "Továbbiak betöltése" gombja ezt a lapméretet várja el válaszonként,
-  NEM egy nagyobb, kliens-oldali batch-et.
-- A feed a viewer SAJÁT posztjait NEM adja vissza (a `community_follows`
-  join miatt senki nem "követi saját magát") — ha a Kör 14 UX-je elvárná a
-  saját posztok megjelenését a feedben (SDD §13.2 "saját posztok
-  opcionálisan"), ez a Kör 14 saját, dokumentálandó döntése, NEM egy
-  backend-hiba.
-- A review 2 javító kört igényelt egy engedékeny mérce-helper (A7
-  index-guard) és egy nem-engedélyezett séma-bővítés miatt — lásd
-  `docs/reviews/e09-r13-review.md` F1/F2 a mintázat elkerüléséhez (kötelező
-  §6.1 valódi-sértés próbát TÉNYLEGESEN futtatni inline, nem csak
-  dokumentálni; új séma-elemet a brief §5/ADR nélkül nem hozzáadni).
+- A `feedCacheProvider` és a `communityFeedRepositoryProvider` MA
+  `UnimplementedError`-t dobnak — a valós HTTP-repository-wiring (a
+  `feed_repository_impl.dart` + a Riverpod provider-override) egy KÉSŐBBI
+  kör hatásköre marad (ugyanaz az örökölt tartozás, mint a
+  `post_repository_impl.dart` — Kör 12 óta hiányzik). A Kör 15 (reakciók)
+  saját `reaction_controller.dart`-ja ettől független, de ha egy jövőbeli
+  kör a feedet éles HTTP-re köti be, olvassa el a Kör 14 pre-flight D6
+  pontját és a §10 handoffot.
+- A cache-rehydration mintája (`feed_controller.dart::_artifactFromEnvelope`
+  — `ShareArtifact.fromJson` try/catch-csel, sikertelen dekódolásnál
+  `UnfilledCommunityShareArtifact` fallback) egy újrahasznosítható minta,
+  ha egy jövőbeli kör hasonló lokális cache-et vezet be egy sealed
+  hierarchiájú domain-típusra.
+- Az l10n-kulcsok `followingFeed*` / `feedCard*` prefixszel kerültek be
+  (`lib/l10n/features/community_{en,hu}.arb`) — a review F1 lelete
+  (`docs/reviews/e09-r14-review.md`) figyelmeztet: MINDEN új Community
+  UI-fájl a §"Amit a review kötelezően ellenőriz" szerint
+  `AppLocalizations`-t KÖVETEL, ne induljon egyik jövőbeli kör se azzal a
+  feltevéssel, hogy az ARB-bővítés a briefen kívül eshet — ha a fájl nincs
+  az `allowed_paths`-on, az orchestrátor pre-flightban vagy a review
+  javító körében bővíti, dokumentáltan.
+- A review 1 tartalmi + 1 CI-only javító kört igényelt (F1/F2 MAJOR, F3
+  MINOR + az `ui_inventory_test.dart` baseline-drift) — lásd
+  `docs/reviews/e09-r14-review.md` a mintázat elkerüléséhez.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R14 — Feed
+UI, cache és tudatos használat**
+(`docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md`, engine a
+queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R13 —
 Following feed és cursor pagination backend**
