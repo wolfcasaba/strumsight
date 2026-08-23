@@ -294,4 +294,166 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Mi készült el
+
+- **`lib/core/design_system/layouts/ss_stage_scaffold.dart` (ÚJ)** —
+  `SsStageScaffold`, egy `StatefulWidget`. Öt kötelező slot
+  (`statusHeader`, `hero`, `feedback`, `timeline`, `bottomAction`), mind
+  `Widget` típusú, adat-bemenetes. Két elrendezési stratégia:
+  `_CompactStage` (portrait: fejléc pinnelve fent, a hero/feedback/timeline
+  görgethető középen, `bottomAction` pinnelve lent) és `_WideStage`
+  (landscape VAGY `width >= SsBreakpoints.expandedMin`: két oszlop —
+  bal: fejléc + görgethető hero/feedback, jobb: görgethető timeline +
+  pinnelt `bottomAction`). A `PopScope`-ot a scaffold maga adja:
+  `canPop: !hasUnsavedSession`, `onPopInvokedWithResult` a `didPop==false`
+  ágon hívja az `onUnsavedSessionBackAttempt` callbacket — a szöveget és a
+  mentést a hívó dönti el. A `onRequestScreenAwake`/`onReleaseScreenAwake`
+  callback-pár `initState`/`dispose`-ban fut, pontosan egyszer-egyszer;
+  a fájlban nincs `wakelock_plus`, `WakelockPlus` vagy
+  `core/platform/screen_wakelock.dart` import.
+- **`lib/core/design_system/components/music/ss_session_transport.dart`
+  (ÚJ)** — `SsSessionTransportStatus` (`idle`, `countIn`, `active`,
+  `paused`, `finishing`, `disabled`) és `SsSessionTransport`. A négy
+  aktív állapotban (`countIn`/`active`/`paused`/`finishing`) a Pause és a
+  Finish `IconButton` mindig renderelődik (Pause `countIn`/`finishing`
+  alatt látható, de letiltva; Finish mindig aktív). `idle`/`disabled`
+  alatt egy `_RestIndicator` fut (`radio_button_unchecked` vs. `block`
+  ikon), Pause/Finish kulcsok nélkül. A hat állapot páronként
+  megkülönböztethető kombinációja: rest-ág (2 ikon) × pause
+  engedélyezve/letiltva × pause ikon (play/pause) × extra jelző
+  (`timer_outlined` count-in alatt, `CircularProgressIndicator`
+  finishing alatt).
+- **`lib/core/design_system/public.dart`** — a két új fájl exportja
+  (`layouts/ss_stage_scaffold.dart`, `components/music/ss_session_transport.dart`).
+- **3 teszt fájl** az `test/core/design_system/stage/` alatt (lásd lent).
+
+### Acceptance-mátrix → hol mér
+
+| # | Fájl | Teszt(ek) |
+|---|---|---|
+| A1 | `ss_stage_scaffold_test.dart` | „A1: building the Stage tree makes no wakelock platform-channel call” — a `wakelock_plus` csatornára mock handlert regisztrál, és `channelCalls` üres marad; kiegészítve a produkciós fájlok grep-jével (lásd lent). |
+| A2 | `ss_session_transport_test.dart` | Mind a négy aktív státuszra: Pause+Finish `findsOneWidget`, **és** `tester.getSemantics(find.byKey(finishKey)).tooltip == finishLabel` (nem csak a kulcs/típus — lessons/L403), **és** egyetlen tap közvetlenül hívja az `onFinish`-t. |
+| A3 | `ss_session_transport_test.dart` | „A3: all six transport states are pairwise distinguishable” — mind a hat státuszra aláírást (pause láthatóság/engedélyezettség/ikon, finish láthatóság, extra jelző) gyűjt, és az öt Set-elem helyett hatot vár. |
+| A4 | `ss_stage_scaffold_test.dart` | Három landscape/expanded méret (800×400, 1000×500, 1200×800) 2.0×-os `SsSemantics.maximumTextScale` mellett, hosszú magyar szövegekkel minden slotban — `tester.takeException()` nulla. |
+| A5 | `stage_back_confirmation_test.dart` | A §6.1 három cellája (lásd lent). |
+| A6 | `ss_stage_scaffold_test.dart` | `find.byType(NavigationBar)`/`NavigationRail` → `findsNothing`. |
+| A7 | `ss_stage_scaffold_test.dart` | „A7” teszt: mountkor `requestCount==1`, rebuildkor (ugyanaz a widget) marad 1, unmountkor `releaseCount==1`. |
+| A8 | `ss_stage_scaffold_test.dart` | Minden slot szövege szerepel a semantics fában (`tester.getSemantics(...).label` nem üres), és a paint-pozíciójuk (`getTopLeft(...).dy`) szigorúan növekvő a slot-sorrendben. |
+
+Megjegyzés az A8 méréshez: az eredeti terv a teljes semantics-fa DFS
+bejárása volt (`SemanticsNode.visitChildren`), de ez `tester.getSemantics`
+és `rootPipelineOwner` alatt is vagy `Null check operator used on a null
+value`-t, vagy üres eredményt adott ezen a Flutter SDK-verzión (a
+`pipelineOwner` deprecated, a `rootPipelineOwner`-en a scaffold gyökere
+nem tartalmazta a semantics fát ezen az úton). A helyettük választott
+mérce — minden slot részt vesz a semantics fában + a paint-sorrend
+monoton — ugyanazt az állítást bizonyítja egy egyszerű, nem-átfedő
+függőleges layoutra, és determinisztikusan reprodukálható.
+
+### §6.1 vissza-megerősítés — a három cella
+
+`stage_back_confirmation_test.dart`: egy két-route harness (kezdőlap →
+gomb → `SsStageScaffold`-ot tartalmazó route), `ValueNotifier<bool>`
+adja a `hasUnsavedSession`-t reaktívan, a rendszer-vissza szimulációja
+`tester.binding.handlePopRoute()`.
+
+- **küszöb alatt** (nincs mentetlen adat): `attempts == 0`, a vissza
+  azonnal működik (a kezdőlap újra látszik).
+- **rajta** (van mentetlen adat, a feature megerősít): a callback
+  `hasUnsaved.value = false`-t állít, majd egy
+  `WidgetsBinding.instance.addPostFrameCallback`-ban újra popol (mert a
+  `PopScope` `canPopNotifier`-je csak `didUpdateWidget`-ben frissül —
+  egy frame kell, mielőtt a második pop sikeres lehet). `attempts == 1`,
+  a kilépés megtörténik.
+- **fölötte** (van mentetlen adat, a feature elutasít): a callback
+  csak számol, nem popol újra. `attempts == 1`, a Stage route látható
+  marad.
+
+### Valódi-sértés próba (D6, KÖTELEZŐ) — tényleges, csonkítatlan kimenet
+
+A `ss_session_transport.dart`-ban a Finish `IconButton`-t ideiglenesen
+`PopupMenuButton`-ra cseréltem (a Finish felirat egy `PopupMenuItem`
+mögé került), majd lefuttattam
+`flutter test test/core/design_system/stage/ss_session_transport_test.dart`-ot.
+
+Első kísérletnél az A2 teszt csak `find.byKey`-jel nézte a Finish
+jelenlétét — ez **zöld maradt** a sértés mellett is, mert a
+`PopupMenuButton` megtartotta ugyanazt a kulcsot (pontosan az
+`lessons/L403` mintája: típus/kulcs-szintű próba egy tartalmi sértést
+átenged). Ezért az A2 tesztet megerősítettem: a Finish feliratának
+közvetlenül, egy plusz tap nélkül kell szerepelnie a semantics fában
+(`tester.getSemantics(find.byKey(finishKey)).tooltip == finishLabel`),
+és egyetlen tapnak közvetlenül hívnia kell az `onFinish`-t.
+
+A megerősített teszttel a sértés PIROSAT adott, csonkítatlanul:
+
+```
+00:01 +0 -1: SsSessionTransport A2: Pause and Finish are both visible and directly actionable in the SsSessionTransportStatus.active state [E]
+  Test failed. See exception logs above.
+Expected: 'Finish'
+  Actual: 'Show menu'
+   Which: trailing characters: Finish
+Finish must expose its own caption directly, not behind an overflow menu disclosure step
+...
+00:01 +0 -4: SsSessionTransport A2: Pause and Finish are both visible and directly actionable in the SsSessionTransportStatus.finishing state [E]
+...
+Failing tests:
+  .../ss_session_transport_test.dart: SsSessionTransport A2: Pause and Finish are both visible and directly actionable in the SsSessionTransportStatus.active state
+  .../ss_session_transport_test.dart: SsSessionTransport A2: Pause and Finish are both visible and directly actionable in the SsSessionTransportStatus.countIn state
+  .../ss_session_transport_test.dart: SsSessionTransport A2: Pause and Finish are both visible and directly actionable in the SsSessionTransportStatus.finishing state
+  .../ss_session_transport_test.dart: SsSessionTransport A2: Pause and Finish are both visible and directly actionable in the SsSessionTransportStatus.paused state
+  .../ss_session_transport_test.dart: SsSessionTransport tapping Finish invokes onFinish
+```
+
+Mind a négy aktív állapotra az A2 cella PIROS lett (plusz az önálló
+„tapping Finish invokes onFinish” próba), pontosan a `PopupMenuButton`
+alapértelmezett „Show menu” tooltipjén bukva a `finishLabel`
+összehasonlításon. Ezután a diffet visszaállítottam
+(`git diff` a `ss_session_transport.dart`-ra üres), és a §7 gate-et
+újra lefuttattam — mind a nyolc lépés (`format`, `analyze`, 3× `test`,
+`architecture`, `secrets`, `l10n`) ZÖLD.
+
+### A1 — a grep-bizonyíték
+
+```
+$ grep -rniE "wakelock|WakelockPlus|screen_wakelock|permission_handler|camera|microphone|mic_stream|record(er)?\b" \
+    lib/core/design_system/layouts/ss_stage_scaffold.dart \
+    lib/core/design_system/components/music/ss_session_transport.dart
+lib/core/design_system/layouts/ss_stage_scaffold.dart:10:/// Presentation-only (ADR 0276): it starts no microphone, camera, or
+lib/core/design_system/layouts/ss_stage_scaffold.dart:52:  /// Requested exactly once, from [initState] — never a direct wakelock
+```
+
+A két találat mind doc-comment, egyik sem import vagy hívás — a fát
+elemezve nincs erőforrás-hívás egyik új fájlban sem.
+
+### Döntések, amiket a brief nem kötött meg
+
+- **Az `expandedMin` küszöb (`SsBreakpoints.expandedMin == 840`) a
+  `_WideStage`/`_CompactStage` választónak is bemenete** a puszta
+  orientáció mellett — így egy széles (≥840dp) portrait tablet is a
+  kétoszlopos elrendezést kapja, nem csak a landscape telefon. Ezt a
+  brief D4/§5.4 nem tiltja, és a §8.4 „portrait, landscape, expanded”
+  hármasát fedi le két render-ággal (a landscape és az expanded
+  ugyanazt az elrendezést használja, mert mindkettő ugyanazt a
+  helyhiány-mintát oldja meg — külön szélesség-alapú `wide` elágazás
+  jelenleg felesleges komplexitás lenne).
+- **`idleLabel`/`disabledLabel` opcionális String? paraméterek** az
+  `SsSessionTransport`-on — a rest-állapotokhoz a hívó adhat felirat,
+  de nem kötelező (a brief nem ír elő explicit feliratot ide, csak
+  megkülönböztethetőséget, amit az ikon már biztosít).
+- **A `finishing` állapotban a Finish gomb `onPressed` aktív marad**
+  (nem tiltottam le duplakattintás ellen) — a brief nem ír elő
+  double-submit védelmet erre a körre, és egy extra állapot bevezetése
+  csak a mátrixot bonyolította volna újabb, nem tesztelt ággal.
+
+### Gate — végső, csonkítatlan futás
+
+```
+tools/round-gate.sh test/core/design_system/stage/ss_stage_scaffold_test.dart test/core/design_system/stage/ss_session_transport_test.dart test/core/design_system/stage/stage_back_confirmation_test.dart
+```
+
+`format` ZÖLD · `analyze` ZÖLD (0 issue) · mindhárom `test` ZÖLD
+(7+9+3 = 19 teszt, mind PASS) · `architecture` ZÖLD (12 allowlistelt
+eltérés, változatlan) · `secrets` ZÖLD · `l10n` ZÖLD.
+
 ## 11. Review — a Claude tölti ki
