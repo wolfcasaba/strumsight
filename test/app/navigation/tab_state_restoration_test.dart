@@ -61,6 +61,11 @@ Future<GoRouter> _pumpCompactAdaptiveRouter(WidgetTester tester) async {
             accountEnabled: false,
             diagnosticsEnabled: true,
             labModeAvailable: true,
+            // E13-R08 (D15 fix round) — the practiceHub branch-route is now
+            // gated by its own rollout flag, independent of
+            // adaptiveShellEnabled (review MINOR-1); this test needs the
+            // Practice hub reachable, so it opts in explicitly.
+            practiceEngineV2Enabled: true,
             adaptiveShellEnabled: true,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,

@@ -28,12 +28,16 @@ final String _songTrainerSessionPrefix = AppRoutes.songTrainerSession
     .first;
 
 /// Whether primary navigation must stay hidden at [location] (ADR 0275 §5,
-/// brief §0.0 D13). Deliberately narrow: only the session-style routes below
-/// qualify. `/practice/live`, `/tuner`, and `/metronome` are NOT stage routes
-/// in this round — the post-onboarding entry point resolves to one of them,
-/// and hiding navigation there would strand the user without any way to
-/// switch areas. Their Stage treatment is later-round work.
+/// brief §0.0 D13/D14). Deliberately narrow: only the session-style routes
+/// below qualify. `/tuner` and `/metronome` are NOT stage routes in this
+/// round. `/practice/live` IS a stage route as of the D14 fix round: it now
+/// lives at a top-level `GoRoute` (outside the shell branches, brief §0.0
+/// D14/2), so the mount/dispose semantics that release the microphone and
+/// screen wakelock on navigation away apply again, and hiding navigation
+/// there no longer strands the post-onboarding entry point (D14 supersedes
+/// D13's earlier reasoning — see D14/3).
 bool isStageRoute(String location) {
+  if (location == AppRoutes.practiceLive) return true;
   if (location == AppRoutes.practiceSession) return true;
   if (location == AppRoutes.visionSession) return true;
   if (!location.startsWith(_songTrainerSessionPrefix)) return false;

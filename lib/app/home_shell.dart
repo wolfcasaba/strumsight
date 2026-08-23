@@ -111,10 +111,19 @@ class AdaptiveHomeShell extends StatelessWidget {
     super.key,
     required this.navigationShell,
     required this.location,
+    this.showCoachDestination = true,
   });
 
   final StatefulNavigationShell navigationShell;
   final String location;
+
+  /// Whether the Coach destination/branch exists (E13-R08 D15 fix round) —
+  /// mirrors the `aiTutorEnabled`-gated `StatefulShellBranch` in
+  /// `app_router.dart`. Must stay index-aligned with that branch list: the
+  /// router only registers the Coach branch when `aiTutorEnabled` is on, and
+  /// this destination is included in exactly the same order/condition so
+  /// `navigationShell.currentIndex` keeps pointing at the right branch.
+  final bool showCoachDestination;
 
   @override
   Widget build(BuildContext context) {
@@ -140,11 +149,12 @@ class AdaptiveHomeShell extends StatelessWidget {
           selectedIcon: const Icon(Icons.library_music),
           label: l10n.songLibraryTitle,
         ),
-        SsAdaptiveDestination(
-          icon: const Icon(Icons.smart_toy_outlined),
-          selectedIcon: const Icon(Icons.smart_toy),
-          label: l10n.aiTutorHomeTitle,
-        ),
+        if (showCoachDestination)
+          SsAdaptiveDestination(
+            icon: const Icon(Icons.smart_toy_outlined),
+            selectedIcon: const Icon(Icons.smart_toy),
+            label: l10n.aiTutorHomeTitle,
+          ),
         SsAdaptiveDestination(
           icon: const Icon(Icons.person_outline),
           selectedIcon: const Icon(Icons.person),

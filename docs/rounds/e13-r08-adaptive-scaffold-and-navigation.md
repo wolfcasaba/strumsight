@@ -781,4 +781,92 @@ secrets, l10n). `test/app/routing/*` és
 `test/core/architecture_dependency_test.dart` külön futtatva is zöld (A7,
 D4) — lásd a fenti transzkriptumot.
 
+### Javító kör (review) — MAJOR-1 és MINOR-1
+
+A `docs/reviews/e13-r08-review.md` és a brief §0.0 D14/D15 szerint, ugyanabban
+a munkapéldányban, ugyanazon a branchen.
+
+**MAJOR-1 (mikrofon/wakelock retenció + kettőzés) — D14 öt pontja mind:**
+
+1. **`/today` adaptere `ProgressScreen`** (`app_router.dart`, `today` branch) —
+   nem `LiveScreen`. Ez szünteti meg a kettőzést (két `LiveScreen` két
+   branchben).
+2. **`/practice/live` kikerült a shell-branchből**, top-level `GoRoute` lett
+   (`app_router.dart`, a `StatefulShellRoute` elé, a session-route-okhoz
+   hasonló mintában), `if (adaptiveShellEnabled)` őrrel — a `practiceEnabled`-
+   től függetlenül regisztrált, mert ő a `/live` redirect célja (D5/D6). A
+   `LiveScreen`-nek nincs saját `Scaffold`-ja (a legacy `HomeShell` adta
+   eddig) — a route builder ezért `Scaffold(body: LiveScreen())`-et ad vissza;
+   enélkül a `StreakBadge` (`live_screen.dart:201`) `InkWell`-je
+   „No Material widget found" kivétellel bukott (ezt a gate első futása
+   PIROSRA is váltotta, l. a §10 alatti transzkriptum-hiány — javítva, majd a
+   gate újra futtatva zöldre).
+3. **`AppRoutes.practiceLive` bekerült az `isStageRoute` halmazába**
+   (`adaptive_shell_routes.dart`) — négyelemű lett.
+4. **A belépési pont flag BE ágán `/today`:** `entryLocation =
+   adaptiveShellEnabled ? AppRoutes.today : AppRoutes.live`, ez lett a
+   `GoRouter.initialLocation` ÉS a `redirect` callback `onboardingRedirect`
+   hívásának `home:` paramétere. Az `onboardingRedirect` (`route_guards.dart`)
+   kapott egy opcionális, `AppRoutes.live` alapértelmezésű `home` paramétert —
+   a **módosítatlan** `test/app/routing/route_guards_test.dart` zöld maradt
+   (ellenőrizve, l. lent).
+5. **A `/live` → `/practice/live` redirect változatlan** (`legacyRedirects`
+   térkép nem módosult).
+
+**Új A8 cella** (`test/app/navigation/adaptive_scaffold_test.dart`, `A8 —
+resource-owning screens release on destination switch` csoport, három cella):
+legacy referencia (flag KI, `/live` → `/analyze`, `LiveScreen findsNothing` +
+`wakelock.isHeld == false`) ZÖLD; flag BE, `/practice/live` → `/today`
+tabváltás: `find.byType(LiveScreen, skipOffstage: false)` **0** példány,
+`wakelock.isHeld == false`, `disableCalls >= 1`; flag BE, teljes öt-branch
+bejárás (`today/practiceHub/songs/coachHome/profileHome`): `LiveScreen`
+`skipOffstage: false` mellett is **findsNothing** egyetlen branchben sem. A
+`FakeScreenWakelock`-ot a `_pumpAdaptiveRouter` helper új `wakelock` paramétere
+adja át (`fakeAudioOverrides(wakelock: wakelock)`).
+
+**MINOR-1 (a shell megkerülte a `practiceEngineV2Enabled`/`aiTutorEnabled`
+rollout-flageket) — D15:**
+
+- A `practiceHub` `GoRoute` a Practice branchen belül `if (practiceEnabled)`
+  őrt kapott; a branch többi al-útvonala (analyze/learn/tuner/metronome/
+  chords) feltétel nélkül marad, tehát a branch sosem üres.
+- A Coach branch EGÉSZE `if (aiTutorEnabled)` őrt kapott (`app_router.dart`,
+  `branches` lista) — a `coachHome` az egyetlen útvonala, tehát csak a
+  route-ot őrizni üres branch-et hagyott volna. A `AdaptiveHomeShell` kapott
+  egy `showCoachDestination` konstruktor-paramétert (`home_shell.dart`),
+  amit az `app_router.dart` `aiTutorEnabled`-del táplál — index-szinkronban
+  tartja a `destinations` listát a feltételesen bővülő `branches` listával.
+- Két új cella (`adaptive_scaffold_test.dart`, `A1` csoport): `/practice`
+  nem ad `PracticeHubScreen`-t `practiceEngineV2Enabled: false` mellett;
+  `/coach` nem ad `TutorHomeScreen`-t `aiTutorEnabled: false` mellett.
+- A `tab_state_restoration_test.dart` flag-halmaza kapott egy explicit
+  `practiceEngineV2Enabled: true`-t (korábban hallgatólagosan a konstruktor-
+  defaultra — `false` — támaszkodott, miközben mégis `PracticeHubScreen`-t
+  várt; ez volt a MINOR-1 saját bizonyítéka a reviewtől).
+
+**Érintett meglévő cellák frissítve** (a szerkezeti változás miatt, a mércét
+igazítva a kódhoz, nem fordítva): az A1 „five destinations" cella most
+`ProgressScreen`-t vár `/today`-nál, és `practiceEngineV2Enabled: true` +
+`aiTutorEnabled: true`-t állít (mert a `/practice`/`/coach` úti célja immár
+saját flaget kér); az A4 `isStageRoute` predikátum-cella megfordítva
+`AppRoutes.practiceLive`-ra (`isTrue`, nem `isFalse`).
+
+### Kötelező záró ellenőrzés (javító kör)
+
+```bash
+tools/round-gate.sh test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/navigation/tab_state_restoration_test.dart
+```
+
+MINDEN GATE ZÖLD (format, analyze, mindhárom teszt külön — 21+8+1 cella —,
+architecture, secrets, l10n). `flutter test test/app/routing` is lefutott
+külön (D14/4 érinti az onboarding-redirectet): alapértelmezett
+párhuzamossággal a `route_guards_test.dart` sorai a compact reporter
+kimenetében nem jelentek meg (ismert reporter-limitáció sok fájl egyidejű
+futtatásánál — nem tesztbukás: az exit code mindkét futásnál 0, „All tests
+passed!"), ezért `--concurrency=1`-gyel újra lefuttatva a mind a négy fájl
+(`shell_lifecycle_test.dart`, `app_router_test.dart`,
+`onboarding_first_win_test.dart`, `route_guards_test.dart`, összesen 29 cella)
+soronként megjelent és **ZÖLD** — a `route_guards_test.dart` a D14/4 opcionális
+`home` paraméter mellett is módosítatlanul zöld maradt.
+
 ## 11. Review — a Claude tölti ki

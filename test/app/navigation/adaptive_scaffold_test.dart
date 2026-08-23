@@ -21,6 +21,7 @@ import 'package:strumsight/app/routing/adaptive_shell_routes.dart';
 import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/platform/screen_wakelock.dart';
 import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
@@ -61,7 +62,9 @@ Future<GoRouter> _pumpAdaptiveRouter(
   WidgetTester tester, {
   bool adaptiveShellEnabled = true,
   bool practiceEngineV2Enabled = false,
+  bool aiTutorEnabled = false,
   Size? size,
+  ScreenWakelock? wakelock,
 }) async {
   if (size != null) {
     tester.view.physicalSize = size;
@@ -73,7 +76,7 @@ Future<GoRouter> _pumpAdaptiveRouter(
   final container = ProviderContainer(
     overrides: [
       ...preferenceOverrides(),
-      ...fakeAudioOverrides(),
+      ...fakeAudioOverrides(wakelock: wakelock),
       strumEngineProvider.overrideWithValue(liveEngine),
       tunerEngineProvider.overrideWithValue(tunerEngine),
       onboardingSeenProvider.overrideWith(() => OnboardingController(true)),
@@ -86,6 +89,7 @@ Future<GoRouter> _pumpAdaptiveRouter(
             diagnosticsEnabled: true,
             labModeAvailable: true,
             practiceEngineV2Enabled: practiceEngineV2Enabled,
+            aiTutorEnabled: aiTutorEnabled,
             adaptiveShellEnabled: adaptiveShellEnabled,
           ),
           diagnosticsToken: AppConfig.devDiagnosticsToken,
@@ -174,12 +178,22 @@ void main() {
     testWidgets('the five destinations render their legacy adapter screens', (
       tester,
     ) async {
-      final router = await _pumpAdaptiveRouter(tester);
+      // D15 fix round — practiceHub and coachHome are gated by their own
+      // product rollout flags now, independent of adaptiveShellEnabled; both
+      // must be explicitly on for this cell to reach their screens.
+      final router = await _pumpAdaptiveRouter(
+        tester,
+        practiceEngineV2Enabled: true,
+        aiTutorEnabled: true,
+      );
 
       router.go(AppRoutes.today);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byType(LiveScreen), findsOneWidget);
+      // D14 fix round — the Today adapter is resource-free (ProgressScreen),
+      // not LiveScreen: reusing LiveScreen here duplicated the mic/wakelock
+      // owner across two branches (review MAJOR-1).
+      expect(find.byType(ProgressScreen), findsOneWidget);
 
       router.go(AppRoutes.practiceHub);
       await tester.pumpAndSettle();
@@ -256,6 +270,37 @@ void main() {
             'shadow the shelled one and drop primary navigation',
       );
     });
+
+    testWidgets(
+      'a navigation flag does not bypass another feature rollout flag: '
+      '/practice does not render PracticeHubScreen when '
+      'practiceEngineV2Enabled is off (review MINOR-1 fix, brief §0.0 D15)',
+      (tester) async {
+        final router = await _pumpAdaptiveRouter(
+          tester,
+          practiceEngineV2Enabled: false,
+        );
+
+        router.go(AppRoutes.practiceHub);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(PracticeHubScreen), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a navigation flag does not bypass another feature rollout flag: '
+      '/coach does not render TutorHomeScreen when aiTutorEnabled is off '
+      '(review MINOR-1 fix, brief §0.0 D15)',
+      (tester) async {
+        final router = await _pumpAdaptiveRouter(tester, aiTutorEnabled: false);
+
+        router.go(AppRoutes.coachHome);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(TutorHomeScreen), findsNothing);
+      },
+    );
   });
 
   group('A4 — Stage routes hide primary navigation (anti-vacuum, L403)', () {
@@ -264,10 +309,14 @@ void main() {
       expect(isStageRoute(AppRoutes.visionSession), isTrue);
       expect(isStageRoute('/song-trainer/session/abc'), isTrue);
       expect(isStageRoute('/song-trainer/session/abc/extra'), isFalse);
+      // D14 fix round — `/practice/live` is now a stage route: it moved to
+      // a top-level GoRoute (D14/2), so it no longer needs to keep primary
+      // navigation available as the post-onboarding entry point; `/today`
+      // (a resource-free adapter, D14/1) took over that role instead.
+      expect(isStageRoute(AppRoutes.practiceLive), isTrue);
 
       // Deliberately NOT stage routes this round (brief §0.0 D13) — hiding
       // navigation here would strand the post-onboarding entry point.
-      expect(isStageRoute(AppRoutes.practiceLive), isFalse);
       expect(isStageRoute(AppRoutes.tuner), isFalse);
       expect(isStageRoute(AppRoutes.metronome), isFalse);
       expect(isStageRoute(AppRoutes.today), isFalse);
@@ -484,6 +533,95 @@ void main() {
           SsAdaptiveScaffold.modeForWidth(SsBreakpoints.wideMin),
           SsAdaptiveLayoutMode.wide,
         );
+      },
+    );
+  });
+
+  group('A8 — resource-owning screens release on destination switch '
+      '(review MAJOR-1 fix, brief §0.0 D14)', () {
+    testWidgets(
+      'LEGACY REFERENCE (flag OFF): leaving Live disposes LiveScreen and '
+      'releases the screen wakelock',
+      (tester) async {
+        final wakelock = FakeScreenWakelock();
+        final router = await _pumpAdaptiveRouter(
+          tester,
+          adaptiveShellEnabled: false,
+          wakelock: wakelock,
+        );
+
+        router.go(AppRoutes.live);
+        await tester.pumpAndSettle();
+        expect(find.byType(LiveScreen), findsOneWidget);
+        expect(wakelock.isHeld, isTrue);
+
+        router.go(AppRoutes.analyze);
+        await tester.pumpAndSettle();
+        expect(find.byType(LiveScreen, skipOffstage: false), findsNothing);
+        expect(wakelock.isHeld, isFalse);
+      },
+    );
+
+    testWidgets(
+      'flag ON: leaving /practice/live (a top-level Stage route, D14/2) '
+      'disposes LiveScreen and releases the screen wakelock — 0 offstage '
+      'instances, not the pre-fix 2',
+      (tester) async {
+        final wakelock = FakeScreenWakelock();
+        final router = await _pumpAdaptiveRouter(tester, wakelock: wakelock);
+
+        router.go(AppRoutes.practiceLive);
+        await tester.pumpAndSettle();
+        expect(find.byType(LiveScreen), findsOneWidget);
+        expect(wakelock.isHeld, isTrue);
+
+        router.go(AppRoutes.today);
+        await tester.pumpAndSettle();
+        expect(
+          find.byType(LiveScreen, skipOffstage: false),
+          findsNothing,
+          reason:
+              'a StatefulShellRoute branch would keep this mounted '
+              'offstage instead of disposing it — the review MAJOR-1 bug',
+        );
+        expect(wakelock.isHeld, isFalse);
+        expect(wakelock.disableCalls, greaterThanOrEqualTo(1));
+      },
+    );
+
+    testWidgets(
+      'flag ON: LiveScreen is not left mounted in any shell branch after '
+      'a full destination walk (skipOffstage: false)',
+      (tester) async {
+        final wakelock = FakeScreenWakelock();
+        final router = await _pumpAdaptiveRouter(
+          tester,
+          practiceEngineV2Enabled: true,
+          aiTutorEnabled: true,
+          wakelock: wakelock,
+        );
+
+        for (final destination in <String>[
+          AppRoutes.today,
+          AppRoutes.practiceHub,
+          AppRoutes.songs,
+          AppRoutes.coachHome,
+          AppRoutes.profileHome,
+        ]) {
+          router.go(destination);
+          await tester.pumpAndSettle();
+        }
+
+        expect(
+          find.byType(LiveScreen, skipOffstage: false),
+          findsNothing,
+          reason:
+              'none of the five shell branches renders LiveScreen any '
+              'more (D14/1 Today adapter, D14/2 practice/live moved out); '
+              'skipOffstage:false also rules out retention in a hidden '
+              'branch, not just the currently visible one',
+        );
+        expect(wakelock.isHeld, isFalse);
       },
     );
   });

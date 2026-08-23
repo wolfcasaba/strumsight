@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -201,14 +201,21 @@ final routerProvider = Provider<GoRouter>((ref) {
       .flags
       .adaptiveShellEnabled;
 
+  // E13-R08 (brief §0.0 D14/4) — the flag BE entry point is `/today`; the
+  // KI entry point is unchanged (`/live`). `onboardingRedirect`'s `home`
+  // parameter carries the same choice so a seen-onboarding user landing on
+  // `/welcome` resolves to the right destination.
+  final entryLocation = adaptiveShellEnabled ? AppRoutes.today : AppRoutes.live;
+
   final router = GoRouter(
-    initialLocation: AppRoutes.live,
+    initialLocation: entryLocation,
     refreshListenable: refreshNotifier,
     onException: (_, _, router) => router.go(AppRoutes.live),
     redirect: (_, state) {
       final onboarding = onboardingRedirect(
         seen: ref.read(onboardingSeenProvider),
         location: state.uri.path,
+        home: entryLocation,
       );
       if (onboarding != null) return onboarding;
       if (!adaptiveShellEnabled) return null;
@@ -352,6 +359,27 @@ final routerProvider = Provider<GoRouter>((ref) {
               SongResultScreen(result: state.extra! as SongTrainerResult),
         ),
       ],
+      // E13-R08 (D14 fix round) — `/practice/live` moved OUT of the shell
+      // branches to a top-level route, exactly like the session routes
+      // below. `StatefulShellRoute.indexedStack` keeps every visited
+      // branch's Navigator alive (needed for A3's tab-state restoration),
+      // which means a resource-owning screen placed inside a branch never
+      // unmounts on tab switch — the mic stream and screen wakelock stayed
+      // live in the background (review MAJOR-1). A top-level `GoRoute`
+      // restores the normal mount/dispose semantics: leaving `/practice/live`
+      // for any other destination disposes `LiveScreen`. It is registered
+      // whenever the adaptive shell is reachable at all (independent of
+      // `practiceEnabled` — it is the legacy `/live` redirect target, D5/D6),
+      // and it is a Stage route (`isStageRoute`, D14/3): no primary
+      // navigation renders on top of it. Unlike the session screens below,
+      // `LiveScreen` has no `Scaffold` of its own — it was built to be
+      // hosted inside a shell's `Scaffold` (legacy `HomeShell`, or the
+      // now-removed shell branch) — so this adapter route supplies one.
+      if (adaptiveShellEnabled)
+        GoRoute(
+          path: AppRoutes.practiceLive,
+          builder: (_, _) => const Scaffold(body: LiveScreen()),
+        ),
       // E13-R08 (ADR 0275) — the five-area adaptive shell, reachable only
       // when `adaptiveShellEnabled` is on. Every destination and target
       // sub-route renders an EXISTING screen as a legacy adapter (D6/D11);
@@ -366,26 +394,36 @@ final routerProvider = Provider<GoRouter>((ref) {
           builder: (context, state, navigationShell) => AdaptiveHomeShell(
             navigationShell: navigationShell,
             location: state.uri.path,
+            showCoachDestination: aiTutorEnabled,
           ),
           branches: [
             StatefulShellBranch(
               routes: [
+                // E13-R08 (D14/1 fix round) — resource-free adapter. The
+                // original adapter reused `LiveScreen` (no dedicated Today
+                // screen exists yet, D11), which duplicated the mic/wakelock
+                // owner across two branches (`/today` and `/practice/live`,
+                // review MAJOR-1 manifestation 2). `ProgressScreen` owns no
+                // audio/camera resources.
                 GoRoute(
                   path: AppRoutes.today,
-                  builder: (_, _) => const LiveScreen(),
+                  builder: (_, _) => const ProgressScreen(),
                 ),
               ],
             ),
             StatefulShellBranch(
               routes: [
-                GoRoute(
-                  path: AppRoutes.practiceHub,
-                  builder: (_, _) => const PracticeHubScreen(),
-                ),
-                GoRoute(
-                  path: AppRoutes.practiceLive,
-                  builder: (_, _) => const LiveScreen(),
-                ),
+                // E13-R08 (D15 fix round) — gated by the Practice Engine V2
+                // rollout flag, matching the legacy `/practice` registration
+                // above; an adaptive-shell navigation flag must not itself
+                // grant access to a distinct product rollout. The branch
+                // keeps its other sub-routes unconditionally, so it is never
+                // left with zero routes.
+                if (practiceEnabled)
+                  GoRoute(
+                    path: AppRoutes.practiceHub,
+                    builder: (_, _) => const PracticeHubScreen(),
+                  ),
                 GoRoute(
                   path: AppRoutes.practiceAnalyze,
                   builder: (_, _) => const AnalyzeScreen(),
@@ -420,14 +458,21 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ),
               ],
             ),
-            StatefulShellBranch(
-              routes: [
-                GoRoute(
-                  path: AppRoutes.coachHome,
-                  builder: (_, _) => const TutorHomeScreen(),
-                ),
-              ],
-            ),
+            // E13-R08 (D15 fix round) — gated by the AI Tutor rollout flag,
+            // matching the legacy `/tutor/home` registration below. Unlike
+            // Practice, Coach has exactly one route, so guarding only the
+            // route (leaving an empty branch) is not an option — the whole
+            // branch is conditional, and `showCoachDestination` keeps
+            // `AdaptiveHomeShell`'s destination list in the same order.
+            if (aiTutorEnabled)
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: AppRoutes.coachHome,
+                    builder: (_, _) => const TutorHomeScreen(),
+                  ),
+                ],
+              ),
             StatefulShellBranch(
               routes: [
                 GoRoute(
