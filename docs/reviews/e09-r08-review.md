@@ -4,11 +4,11 @@ Brief: `docs/rounds/e09-r08-block-mute-and-safety-relationships.md` (§0.0 D1–
 ADR: `docs/adr/0402-block-mute-and-safety-relationships.md`
 Diff: `git diff 60088f71..62e94855` (branch `minimax/e09-r08-block-mute-and-safety-relationships`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-23
-Verdikt: **CHANGES REQUESTED**
+Verdikt: **APPROVED** (1. javító kör után, fix commit `bf5862d0`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 1 · NOTE: 5
+BLOCKER: 0 · MAJOR: 2 (mindkettő FIXED, `bf5862d0`) · MINOR: 1 (non-blocking follow-up, nyitva) · NOTE: 5
 
 Independent gate re-run (isolated `/tmp/review-e09-r08` clone, un-truncated):
 **MINDEN GATE ZÖLD** — format, analyze, all 3 gate_tests paths, architecture,
@@ -94,7 +94,14 @@ pre-existing baseline, not a new deviation this round added.
 - **Ellenőrzés:** `dart run tool/ci/check_l10n_parity.dart` (already part of
   the gate) + a manual `grep -c AppLocalizations
   safety_relationships_screen.dart` ≥ 1.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bf5862d0`) — 11 `safety*` kulcs hozzáadva
+  `lib/l10n/features/community_{en,hu}.arb`-hoz (magyar fordítással), az
+  aggregátum `lib/l10n/app_{en,hu}.arb` újragenerálva
+  (`tool/gen_l10n_segments.dart` — mechanikus, elkerülhetetlen velejárója a
+  feature-ARB szerkesztésnek, a scope-audit ezt is jelezte, elfogadva
+  ugyanazon indokkal, mint a D5 collateral). Independently verified: fresh
+  `/tmp/review-e09-r08-fix1` klón, `grep` a screen fájlban 0 hardcode-olt
+  string, 3 `AppLocalizations.of(context)` hívás; gate l10n lépés ZÖLD.
 
 ### F2 — MAJOR — Concurrent `block()`/`mute()` retry raises uncaught `IntegrityError` (500), contradicting the service's own idempotent-retry doc-claim; the concurrency test that should catch this discards thread exceptions without asserting on them
 
@@ -130,7 +137,13 @@ pre-existing baseline, not a new deviation this round added.
 - **Ellenőrzés:** the corrected `test_a1_concurrent_block_writes_produce_one_row`
   asserting `errors == []`, run 5-10× (thread races are flaky) to build
   confidence; same for an equivalent mute concurrency test if one is added.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`bf5862d0`) — `block()`/`mute()` now wrap the
+  follow/request mutation (`block`) or the mute INSERT (`mute`) in
+  `try/except IntegrityError: db.rollback(); re-read; return`, mirroring
+  `follow_service.follow()` exactly. Independently read the diff: correct.
+  The concurrency test now asserts `errors == []` at the end (previously
+  silently discarded). Implementer reported 5/5 green re-runs. Gate
+  re-verified green in a fresh isolated clone (`/tmp/review-e09-r08-fix1`).
 
 ### F3 — MINOR — Block-existence oracle: a blocked party can learn they were blocked by comparing 403 vs 404
 
@@ -227,11 +240,34 @@ folded into "Checked and clean" implicitly above — all PASS, no BLOCKER).
 mic, or plugin access in this diff (backend + Community UI only). No secret
 material added (`check_secrets.dart`: 0 findings, part of the green gate).
 
+## Javító kör (2026-08-23, ugyanaz a motor — MiniMax, ugyanazon a branchen)
+
+Prompt: `.pipeline/fix-prompt-E09-R08-1.md`. Eredmény: `done`, commit
+`bf5862d0` a review-commit (`985d2af6`) fölött. Az implementer saját gate-
+futása ismét `gate_shape=VIOLATION`-t jelzett (`| tail`/`&&` mögé rejtve) —
+a jelentést emiatt megint NEM fogadtam el bemondásra: friss, izolált
+`/tmp/review-e09-r08-fix1` klónban, csonkolatlanul újrafuttattam a teljes
+gate-et. **MINDEN GATE ZÖLD** (mind a 11 lépés, l10n-nel együtt).
+
+A scope-audit 4 fájlt jelzett a `bf5862d0` diffben:
+`lib/l10n/features/community_{en,hu}.arb` (ÉN magam engedélyeztem a
+fix-promptban, csak elfelejtettem a brief `allowed_paths` TOML-ját is
+frissíteni — saját folyamat-hiányosság, nem implementer-sértés) és
+`lib/l10n/app_{en,hu}.arb` (a `tool/gen_l10n_segments.dart` GENERÁLT
+aggregátuma a feature-ARB-okból — mechanikus, elkerülhetetlen velejárója az
+engedélyezett `community_{en,hu}.arb` szerkesztésnek, ugyanaz a minta, mint
+az első fordulói D5-collateral). Mindkettő elfogadva, nem lelet.
+
+F1 és F2 mindkét fix tartalmát önállóan elolvastam a diffben (nem csak az
+implementer önbevallására hagyatkozva) — mindkettő a review §Kötelező
+javítás pontjait pontosan követi. F3 (block-existence oracle) nyitva marad,
+non-blocking, a pre-mount kör dolga a döntés.
+
 ## Következő lépés
 
-**CHANGES REQUESTED** — F1 (i18n) and F2 (concurrent-retry error handling +
-the test that should have caught it) must be fixed before merge. F3/N1-N5
-are non-blocking follow-ups, most already tracked by this round's own §10.4
-or by the pre-existing unmounted-router posture. A fix round on the SAME
-branch, same engine (MiniMax, per AGENTS.md §15.6 "1 javító kör" rule),
-with this findings list, is the next step.
+**APPROVED.** F1 és F2 javítva és függetlenül igazolva. F3 (MINOR) és a
+NOTE-ok nyitva maradnak, non-blocking follow-upként — a legtöbbet a
+§10.4/N1 (a modul router-je még nincs mountolva élesben) már amúgy is
+védi. Következő: CI-dispatch a `bf5862d0` SHA-n (a diff `docs/rounds/**`-t
+érint, tehát a Router CI is triggerelődik — mindkettőt meg kell várni
+exact-SHA-n), majd zöld kapu esetén squash-merge.
