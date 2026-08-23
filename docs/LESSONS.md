@@ -17017,6 +17017,14 @@ szemben (csak stub-interpreterekkel, ld. `test_qwen_implementer_hardening.py`);
 egy jövőbeli GOV-kör tehetne fel egy tesztet, ami a megosztott fa
 környezetét szimulálja (`backend/.venv` a cwd alatt + `env --chdir`).
 
+**Második mérés (E09-R20 landolás, 2026-08-23).** Ugyanaz a hiba,
+ugyanazzal a jelenséggel (`round-land.sh` a megosztott fán PIROS, minden
+izolált `/tmp` klón zöld), ugyanazzal a `ROUND_GATE_BACKEND_PYTHON`
+workaround-dal megkerülve. A **nyitott GOV-tétel MÉG MINDIG nincs
+megoldva** — két egymást követő landolás (E09-R19, E09-R20) ütközött bele,
+a workaround mindkétszer tartott, de a gyökérok-javítás elmaradása immár
+mért, ismétlődő súrlódás minden megosztott-fán-landoló körnél.
+
 ---
 
 ## L449 — A tab-állapot megőrzése és az erőforrás-elengedés EGYMÁSNAK FESZÜL: a `StatefulShellRoute.indexedStack` életben tartja a meglátogatott brancheket, ezért a mikrofont/wakelockot birtokló képernyő SOHA nem szabadul fel (E13-R08, 2026-08-23)
