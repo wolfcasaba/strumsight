@@ -799,6 +799,20 @@ def test_a1_concurrent_block_writes_produce_one_row(session_factory):
     for t in threads:
         t.join()
 
+    # The DB UNIQUE constraint is the §6.1 valódi-sértés target — but
+    # the row-count assertion alone passes whether or not one thread's
+    # call raised an uncaught IntegrityError. The pre-fix bug was
+    # that this list was filled and never asserted; the fix in
+    # ``block_service.block()`` (IntegrityError → rollback → re-read)
+    # means the only legitimate exception would be an unexpected
+    # one (the second ``IntegrityError`` path raises after the
+    # re-read also misses). Assert the list is empty so a future
+    # regression cannot silently re-introduce the silent-swallow.
+    assert errors == [], (
+        f"A1 violated — concurrent block() raised {len(errors)} "
+        f"unexpected exception(s): {[type(e).__name__ for e in errors]}"
+    )
+
     with session_factory() as db:
         a_pk = db.query(CommunityProfile).filter_by(public_id=a_id).one().id
         b_pk = db.query(CommunityProfile).filter_by(public_id=b_id).one().id

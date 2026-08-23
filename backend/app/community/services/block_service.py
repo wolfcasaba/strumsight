@@ -50,6 +50,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import and_, select, tuple_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models.profile import CommunityProfile
@@ -129,26 +130,36 @@ def block(
         blocked_profile_id=target.id,
     )
     db.add(row)
+    try:
+        # D1 step 2 — both directions of the active follow edge.
+        for edge in (
+            _existing_follow(db, follower_id=blocker.id, followed_id=target.id),
+            _existing_follow(db, follower_id=target.id, followed_id=blocker.id),
+        ):
+            if edge is not None:
+                db.delete(edge)
 
-    # D1 step 2 — both directions of the active follow edge.
-    for edge in (
-        _existing_follow(db, follower_id=blocker.id, followed_id=target.id),
-        _existing_follow(db, follower_id=target.id, followed_id=blocker.id),
-    ):
-        if edge is not None:
-            db.delete(edge)
+        # D1 step 3 — any pending request in either direction.
+        now = _utcnow()
+        for req in (
+            _existing_request(db, requester_id=blocker.id, target_id=target.id),
+            _existing_request(db, requester_id=target.id, target_id=blocker.id),
+        ):
+            if req is not None and req.status == "requested":
+                req.status = "blocked"
+                req.responded_at = now
 
-    # D1 step 3 — any pending request in either direction.
-    now = _utcnow()
-    for req in (
-        _existing_request(db, requester_id=blocker.id, target_id=target.id),
-        _existing_request(db, requester_id=target.id, target_id=blocker.id),
-    ):
-        if req is not None and req.status == "requested":
-            req.status = "blocked"
-            req.responded_at = now
-
-    db.flush()
+        db.flush()
+    except IntegrityError:
+        # Concurrent writer won the race on the UNIQUE(pair) constraint.
+        # Roll back the half-applied D1 mutations, re-read, and return
+        # the existing row — the same idempotent-retry precedent as
+        # ``follow_service.follow`` (ADR 0401 §6).
+        db.rollback()
+        again = _existing_block(db, blocker_id=blocker.id, blocked_id=target.id)
+        if again is not None:
+            return again
+        raise
     return row
 
 
@@ -222,7 +233,18 @@ def mute(
         muted_profile_id=target.id,
     )
     db.add(row)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError:
+        # Concurrent writer won the race on the UNIQUE(pair) constraint.
+        # Mirror ``block()`` and ``follow_service.follow`` — rollback,
+        # re-read the existing row, return it. The state machine stays
+        # idempotent at the DB layer (the §5.2 invariant holds).
+        db.rollback()
+        again = _existing_mute(db, muter_id=muter.id, muted_id=target.id)
+        if again is not None:
+            return again
+        raise
     return row
 
 

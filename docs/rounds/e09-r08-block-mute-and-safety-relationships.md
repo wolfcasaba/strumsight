@@ -599,6 +599,29 @@ gate része — a §D2 cella regression-védelme gépi.
    egyetlen string-csere — a meglévő Kör 7 viselkedés-változás
    (ahol a placeholder sosem materializálódik, mert a controller
    `fetchById`-vel felülírja) nem érintett.
+4. **Review fixes (2026-08-23, javító kör a `985d2af6` review-commit
+   fölött).** A review (`docs/reviews/e09-r08-review.md`) két MAJOR
+   leletet azonosított: F1 (a safety screen minden felhasználói
+   stringje
+   hardcode-olt angol volt — javítva: 11 új `safety*` kulcs
+   `lib/l10n/features/community_{en,hu}.arb`-ban, valódi magyar
+   fordítással, a screen `AppLocalizations.of(context)!.<kulcs>`-ra
+   átírva; a `_formatFailure` `BuildContext` paramétert kapott, a
+   notifier `failureMessage: String?` helyett `failure: AppFailure?`-t
+   tárol, a formázás a widget `build()`-jében fut le); F2 (a
+   `block_service.block()` és `block_service.mute()` nem kapta el az
+   `IntegrityError`-t a SELECT-then-INSERT versenyhelyzetben —
+   javítva: `follow_service.follow` mintájára `try/except
+   IntegrityError`, `db.rollback()`, `_existing_*` újraolvasás, a
+   meglévő sor visszaadása; a `test_a1_concurrent_block_writes_produce_one_row`
+   szigorú `assert errors == []` ellenőrzést kapott, és 5× egymás
+   után zöld maradt — a verseny nem flaky). A javító kör a
+   `minimax/e09-r08-block-mute-and-safety-relationships` branchen,
+   a review-commit fölött landol. A `lib/l10n/app_{en,hu}.arb` az
+   `gen_l10n_segments.dart --write` aggregate refresh
+   következménye (a `community_{en,hu}.arb` új kulcsai
+   belekerülnek), nem scope-sértés — a l10n gate zöld futásának
+   előfeltétele.
 
 ### 10.5 `git diff --stat` (committed across 4 commits, `60088f71..HEAD`)
 

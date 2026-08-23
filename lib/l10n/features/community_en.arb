@@ -97,5 +97,38 @@
   "communityEditAvatarNotUploaded": "Profile photo upload is not available in this build.",
   "communityEditBadgesLabel": "Earned badges",
   "@communityEditBadgesLabel": {},
-  "communityEditBadgesBody": "Badges are read-only in this build — they come from your practice history."
+  "communityEditBadgesBody": "Badges are read-only in this build — they come from your practice history.",
+
+  "safetyBlockedMutedTitle": "Blocked & muted",
+  "@safetyBlockedMutedTitle": {},
+
+  "safetyBlockedTab": "Blocked",
+  "@safetyBlockedTab": {},
+
+  "safetyMutedTab": "Muted",
+  "@safetyMutedTab": {},
+
+  "safetyUnblock": "Unblock",
+  "@safetyUnblock": {},
+
+  "safetyUnmute": "Unmute",
+  "@safetyUnmute": {},
+
+  "safetyEmptyBlocked": "You haven't blocked anyone yet.",
+  "@safetyEmptyBlocked": {},
+
+  "safetyEmptyMuted": "You haven't muted anyone yet.",
+  "@safetyEmptyMuted": {},
+
+  "safetyErrorNetwork": "No network connection",
+  "@safetyErrorNetwork": {},
+
+  "safetyErrorSessionExpired": "Session expired — please sign in again",
+  "@safetyErrorSessionExpired": {},
+
+  "safetyErrorForbidden": "You do not have permission to view this list",
+  "@safetyErrorForbidden": {},
+
+  "safetyErrorInvalidInput": "Invalid request",
+  "@safetyErrorInvalidInput": {}
 }

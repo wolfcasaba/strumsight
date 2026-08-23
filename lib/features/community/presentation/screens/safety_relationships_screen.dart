@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_failure.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../data/repositories/relationship_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
 import '../../domain/repositories/community_page.dart';
@@ -50,25 +51,26 @@ class _SafetyListState {
     required this.items,
     required this.cursor,
     required this.isLoading,
-    this.failureMessage,
+    this.failure,
   });
 
   final List<CommunityProfile> items;
   final CursorPage cursor;
   final bool isLoading;
-  final String? failureMessage;
+  final AppFailure? failure;
 
   _SafetyListState copyWith({
     List<CommunityProfile>? items,
     CursorPage? cursor,
     bool? isLoading,
-    String? failureMessage,
+    AppFailure? failure,
+    bool clearFailure = false,
   }) {
     return _SafetyListState(
       items: items ?? this.items,
       cursor: cursor ?? this.cursor,
       isLoading: isLoading ?? this.isLoading,
-      failureMessage: failureMessage,
+      failure: clearFailure ? null : (failure ?? this.failure),
     );
   }
 }
@@ -95,7 +97,7 @@ class _SafetyListNotifier extends Notifier<_SafetyListState> {
 
   Future<void> loadInitial() async {
     if (_disposed) return;
-    state = state.copyWith(isLoading: true, failureMessage: null);
+    state = state.copyWith(isLoading: true, clearFailure: true);
     try {
       final page = await _fetch(cursor: const CursorPage.initial());
       if (_disposed) return;
@@ -106,10 +108,7 @@ class _SafetyListNotifier extends Notifier<_SafetyListState> {
       );
     } on AppFailure catch (failure) {
       if (_disposed) return;
-      state = state.copyWith(
-        isLoading: false,
-        failureMessage: _formatFailure(failure),
-      );
+      state = state.copyWith(isLoading: false, failure: failure);
     }
   }
 
@@ -118,7 +117,7 @@ class _SafetyListNotifier extends Notifier<_SafetyListState> {
     if (state.cursor.isInitial) return;
     if (state.cursor.cursor == null) return; // halted
     if (_disposed) return;
-    state = state.copyWith(isLoading: true, failureMessage: null);
+    state = state.copyWith(isLoading: true, clearFailure: true);
     try {
       final page = await _fetch(cursor: state.cursor);
       if (_disposed) return;
@@ -129,10 +128,7 @@ class _SafetyListNotifier extends Notifier<_SafetyListState> {
       );
     } on AppFailure catch (failure) {
       if (_disposed) return;
-      state = state.copyWith(
-        isLoading: false,
-        failureMessage: _formatFailure(failure),
-      );
+      state = state.copyWith(isLoading: false, failure: failure);
     }
   }
 
@@ -186,16 +182,17 @@ class _SafetyListNotifier extends Notifier<_SafetyListState> {
   }
 }
 
-String _formatFailure(AppFailure failure) {
+String _formatFailure(BuildContext context, AppFailure failure) {
+  final localizations = AppLocalizations.of(context);
   switch (failure.code) {
     case FailureCode.networkUnavailable:
-      return 'No network connection';
+      return localizations.safetyErrorNetwork;
     case FailureCode.authSessionExpired:
-      return 'Session expired — please sign in again';
+      return localizations.safetyErrorSessionExpired;
     case FailureCode.authForbidden:
-      return 'You do not have permission to view this list';
+      return localizations.safetyErrorForbidden;
     case FailureCode.validationInvalidInput:
-      return 'Invalid request';
+      return localizations.safetyErrorInvalidInput;
     default:
       // The FailureCode contract is the only thing that crosses
       // into the presentation layer — there is no English message
@@ -212,15 +209,16 @@ class SafetyRelationshipsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final localizations = AppLocalizations.of(context);
     return DefaultTabController(
       length: SafetyTab.values.length,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Blocked & muted'),
-          bottom: const TabBar(
+          title: Text(localizations.safetyBlockedMutedTitle),
+          bottom: TabBar(
             tabs: <Widget>[
-              Tab(text: 'Blocked'),
-              Tab(text: 'Muted'),
+              Tab(text: localizations.safetyBlockedTab),
+              Tab(text: localizations.safetyMutedTab),
             ],
           ),
         ),
@@ -257,19 +255,20 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
   Widget build(BuildContext context) {
     final state = ref.watch(safetyListProvider(widget.tab));
     final notifier = ref.read(safetyListProvider(widget.tab).notifier);
+    final localizations = AppLocalizations.of(context);
 
     if (state.isLoading && state.items.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (state.failureMessage != null && state.items.isEmpty) {
-      return Center(child: Text(state.failureMessage!));
+    if (state.failure != null && state.items.isEmpty) {
+      return Center(child: Text(_formatFailure(context, state.failure!)));
     }
     if (state.items.isEmpty) {
       return Center(
         child: Text(
           widget.tab == SafetyTab.blocked
-              ? "You haven't blocked anyone yet."
-              : "You haven't muted anyone yet.",
+              ? localizations.safetyEmptyBlocked
+              : localizations.safetyEmptyMuted,
         ),
       );
     }
@@ -308,11 +307,15 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
               } on AppFailure catch (failure) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(_formatFailure(failure))),
+                  SnackBar(content: Text(_formatFailure(context, failure))),
                 );
               }
             },
-            child: Text(widget.tab == SafetyTab.blocked ? 'Unblock' : 'Unmute'),
+            child: Text(
+              widget.tab == SafetyTab.blocked
+                  ? localizations.safetyUnblock
+                  : localizations.safetyUnmute,
+            ),
           ),
         );
       },
