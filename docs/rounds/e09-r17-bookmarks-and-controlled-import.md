@@ -59,6 +59,27 @@ erre a konkrét körre.
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 10 `plan template`/`original progression` artifact TÉNYLEGES mezőit — az import-validáció ezekre a MEGLÉVŐ schema-verziókra épül. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0.1 Review-vezérelt scope-bővítés (Claude Sonnet 5, 2026-08-23, CI-dispatch után)
+
+A review UTÁN dispatch-elt `full-gate.yml` (run 32651276149) KÉT job-ban
+(`full-gate`, `Coverage`) egyazon gyökérokra vezethető vissza pirosított:
+`test/ui/ui_inventory_test.dart: production screen inventory is stable,
+sorted, and excludes test trees` — `Expected: length <72>`, `Actual: length
+<73>`. A kör ÚJ Flutter-képernyőt ad
+(`lib/features/community/presentation/screens/bookmarks_screen.dart`), ami a
+Kör 14 F1 óta bevett, MECHANIKUS screen-count drift — pontosan az E09-R16
+§0.0.1 mintája (`test/ui/ui_inventory_test.dart` 71→72), most 72→73.
+
+**Feloldás:** az `allowed_paths` EGY fájllal bővül:
+
+- `test/ui/ui_inventory_test.dart` — KIZÁRÓLAG a `hasLength(72)` →
+  `hasLength(73)` egysoros bumpolása, semmi más ebben a fájlban.
+
+A meglévő 8 `allowed_paths` sor változatlan marad. Ez nem H3 (ADR 0087 §2) —
+egy MÁR dispatch-elt, saját, még nem merge-elt kör CI-bizonyítékával mért,
+mechanikus, egysoros korrekció, a §2 önálló-döntési körben ("a kör saját,
+még nem merge-elt artefaktuma").
+
 ```ai-router
 schema_version = 1
 risk = "high"
@@ -71,6 +92,7 @@ allowed_paths = [
   "backend/tests/community/test_bookmark_service.py",
   "test/features/community/application/import_share_artifact_test.dart",
   "docs/rounds/e09-r17-bookmarks-and-controlled-import.md",
+  "test/ui/ui_inventory_test.dart",
 ]
 gate_tests = [
   "test/features/community/application/import_share_artifact_test.dart"
