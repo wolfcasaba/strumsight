@@ -151,28 +151,42 @@ def downgrade() -> None:
 # the same shape on the DB side. The two definitions are guaranteed to
 # match because they share the literal column names below — if either
 # changes, the test catches it.
+#
+# The registration is guarded by idempotency checks because alembic
+# re-loads migration scripts on every ``command.upgrade`` call (it does
+# NOT cache modules in ``sys.modules``). A naive registration would
+# double-register the same Index / column on the second ``upgrade``,
+# which then breaks subsequent ``Base.metadata.create_all`` calls
+# (the duplicate Index objects surface as ``index already exists``
+# errors when SQLAlchemy tries to CREATE INDEX on a fresh DB).
 # ---------------------------------------------------------------------------
 # ruff: noqa: E402 -- imported here so the registration runs after the table is in metadata.
 from app.database import Base
 
 _community_posts_table = Base.metadata.tables["community_posts"]
-sa.Index(
-    "ix_community_posts_created_id",
-    _community_posts_table.c.created_at,
-    _community_posts_table.c.id,
-)
-sa.Index(
-    "ix_community_posts_audience_created",
-    _community_posts_table.c.audience,
-    _community_posts_table.c.created_at,
-    _community_posts_table.c.id,
-)
-_community_posts_table.append_column(
-    sa.Column(
-        "feed_view_count",
-        sa.Integer(),
-        nullable=False,
-        server_default="0",
-    ),
-    replace_existing=True,
-)
+_EXISTING_INDEX_NAMES = {idx.name for idx in _community_posts_table.indexes}
+_EXISTING_COLUMN_NAMES = {col.name for col in _community_posts_table.columns}
+
+if "ix_community_posts_created_id" not in _EXISTING_INDEX_NAMES:
+    sa.Index(
+        "ix_community_posts_created_id",
+        _community_posts_table.c.created_at,
+        _community_posts_table.c.id,
+    )
+if "ix_community_posts_audience_created" not in _EXISTING_INDEX_NAMES:
+    sa.Index(
+        "ix_community_posts_audience_created",
+        _community_posts_table.c.audience,
+        _community_posts_table.c.created_at,
+        _community_posts_table.c.id,
+    )
+if "feed_view_count" not in _EXISTING_COLUMN_NAMES:
+    _community_posts_table.append_column(
+        sa.Column(
+            "feed_view_count",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
+        ),
+        replace_existing=True,
+    )
