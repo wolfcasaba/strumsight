@@ -6,6 +6,50 @@
 - **Reviewer:** Claude Sonnet 5 (`--effort high`)
 - **Mért HEAD az 1. review-nál:** `60d8feff`
 - **Verdict (1. kör):** CHANGES REQUESTED — 1 MAJOR, 2 MINOR
+- **Mért HEAD a javító kör után:** `ff6cabb9` (4 javító commit:
+  `e777f033`/`8442c663`/`f2d7766f`/`f49351fc` + 2 orchestrátor-oldali
+  scope-bővítő commit `8406ed1f`/`ff6cabb9`, ld. §8)
+- **Verdict (2. kör):** **APPROVED**
+
+## 8. Javító kör utáni re-verifikáció (2. review-menet)
+
+Friss, izolált `/tmp` klón (`/tmp/review-e09-r16-fix1`), a HEAD `ff6cabb9`-on:
+
+```bash
+git clone --branch minimax/e09-r16-comments-reply-and-mention \
+  https://github.com/wolfcasaba/strumsight.git /tmp/review-e09-r16-fix1
+tools/round-gate.sh test/features/community/presentation/comments_screen_test.dart test/ui/ui_inventory_test.dart
+```
+
+→ **10/10 lépés ZÖLD** (a `test/ui/ui_inventory_test.dart` most explicit
+gate-argumentumként fut, a §4.2-ben mért piros MOST zöld: `hasLength(72)`).
+Külön, nem láncolt: `cd backend && python3 -m pytest
+tests/community/test_comment_service.py -q` → 21/21 zöld, **és a
+`SyntaxWarning` a warnings summary-ból eltűnt** (a docstring `r"""`-re
+váltása megerősítve).
+
+```bash
+python3 tools/scope-audit.py --repo /tmp/review-e09-r16-fix1 \
+  --brief docs/rounds/e09-r16-comments-reply-and-mention.md \
+  --base e1a2f351ce8a3fc38c9055cba48786561994670d
+```
+
+→ `Legacy scope audit OK (e1a2f351ce8a..ff6cabb93edc, 15 changed path(s), 1
+generated/ignored)` — a §0.0.1/§0.0.2 orchestrátor-oldali scope-bővítés (5
+fájl: 2 feature-ARB, 2 generált aggregátum-ARB, 1 teszt-számláló) lefedi a
+teljes diffet.
+
+**Leletenkénti zárás:**
+
+| Lelet | Zárás | Bizonyíték |
+|---|---|---|
+| MAJOR — 0 `AppLocalizations` | ZÁRVA | `comments_screen.dart` mind az 5 string `AppLocalizations.of(context).communityComments*`-re cserélve, valódi magyar fordítással (`community_hu.arb`: „Hozzászólások", „Még nincsenek hozzászólások.", „Továbbiak betöltése", „Írj egy hozzászólást…", „Küldés") |
+| MINOR — SyntaxWarning | ZÁRVA | `comment_policy.py` docstring `r"""`-re váltva, a warnings summary-ból eltűnt |
+| MINOR — `edit_comment` duplikáció | ZÁRVA | `edit_comment` most vékony wrapper (`return edit_comment_with_resource_version(..., resource_version=None, ...)`), a duplikált törzs megszűnt |
+| Mellékhatás — screen-count drift | ZÁRVA | `test/ui/ui_inventory_test.dart` `hasLength(72)`, saját kézzel is zöldre mérve |
+| NOTE — üres §10 handoff | nem blokkolt, továbbra is üres | — |
+
+Nincs új MAJOR/BLOCKER. **A kör mehet CI-dispatchra és merge-re.**
 
 ## 1. Jelzés + handoff
 
