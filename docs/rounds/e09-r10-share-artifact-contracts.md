@@ -280,14 +280,28 @@ A brief §6.1 KÖTELEZŐ valódi-sértés próbája:
 
 ### 10.4 Round commits (implementer-preambulums §2 — lépésenkénti commit)
 
+A teljes commit-sor `origin/main` fölött, a pre-flight commit
+`863f761b` után:
+
 ```
-3aac1510 E09-R10: Community sealed share artifact hierarchy (hét altípus) — ADR 0404 §D1/D2
 aa638d03 E09-R10: four share-artifact mappers (practice/song/analysis/achievement) — ADR 0404 §D1/D4/D5
 faa434fb E09-R10: backend Pydantic discriminated union (hét altípus + envelope) — ADR 0404 §D2/D3
 d334d388 E09-R10: community-share-artifacts contract doc (wire shape + deprecation rules)
 c3e8f59d E09-R10: Flutter share-artifact acceptance tests (A1-A6 + §6.1 matrix)
 aaebb1b6 E09-R10: backend share-artifact schema tests (A1-A6 + §6.1 matrix + §10 probe)
+fa3299aa E09-R10: §10 implementation handoff (sealed hierarchia + 4 mapper + backend union + tests)
+fdb841ee E09-R10: dart format apply (whitespace-only reformat after CI dart format)
+3f65969b E09-R10: analyze errors fixed (Tempo, StrumDirection import, _coachingCodes cleanup)
+1be0192a E09-R10: schemaVersion validation in fromJson (A3 cell pin)
+89766c2a E09-R10: StrictInt for schemaVersion + conflict-payload test (A4 §6.1 row 5 pin)
 ```
+
+Az első hat commit az implementer-preambulums §2 szerinti
+lépésenkénti commit-séma (sealed hierarchia → mapperek →
+backend → doc → tesztek → handoff); az utolsó négy a CI / analyze
+/ gate-iteráció eredménye (format / analyze / A3 pin / A4 pin) —
+mindegyik a §6.1 measure-matrixot erősíti, NEM új funkciót vezet
+be.
 
 ### 10.5 Saját (§8.4) önellenőrzés a `done` jelzés ELŐTT
 
