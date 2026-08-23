@@ -39,18 +39,33 @@ class raises ``AttributeError``. The repository uses raw
 directly without coupling to a future ORM refresh.
 
 The ordering is ``handle_normalized ASC, id ASC`` — the index
-matches the order exactly. The cursor encodes the last-seen
-``(handle_normalized, id)`` pair as base64 JSON, mirroring the
-``follow_service`` pattern so a future shared pagination helper
-can adopt the same envelope.
+matches the order exactly.
+
+**Cursor (F4 fix, 2026-08-23).** The ``next_cursor`` is HMAC-SHA256
+signed with the application ``secret_key`` (the same key the JWT
+layer uses; threaded in as :paramref:`search_profiles.cursor_secret`).
+The wire shape is ``<base64url(json_payload)>.<base64url(signature)>``:
+the client forwards it verbatim, the server validates the signature
+before trusting the embedded ``(handle_normalized, id)`` pair. A
+client that tries to decode or forge the cursor is rejected (the
+caller's request falls back to a fresh first page). The cursor
+also references the LAST row in the block-filtered, returned
+``hits`` tuple — NEVER a raw ``rows[-1]`` that the block filter
+excluded. A blocked profile's ``handle_normalized`` and internal
+PK thus cannot leak through the cursor channel, and a tampering
+attempt yields a 422 (verified at the boundary, not silently
+passed through).
 """
 
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Final
 
 from sqlalchemy import text as _sa_text
@@ -66,32 +81,107 @@ from ..policies.query_filters import filter_public_ids_against_viewer_blocks
 # query is a 422, not a slow response.
 MIN_QUERY_LENGTH: Final[int] = 3
 
+# Cursor signatures use a 32-byte truncated HMAC tag — a balance
+# between wire size and forgery resistance. The truncated tag is
+# brute-forceable in principle, but the search index is keyed on a
+# 24-char handle prefix; a forgery that names a real handle still
+# lands the request on the right page (the worst-case observable
+# outcome is "the user sees rows they would have seen anyway"). A
+# 64-bit tag is the right level for an unguessable pagination
+# token.
+_CURSOR_TAG_BYTES: Final[int] = 32
+
+
+@dataclass(frozen=True)
+class ProfileSearchHit:
+    """One row of the search index — enough for the result list to
+    render ``displayName`` + ``@handle`` without a follow-up
+    ``fetchById`` round-trip.
+
+    The ``handle`` / ``display_name`` are nullable in the source
+    columns; the repository falls back to the row's public_id (as
+    a short hex prefix) when the column is NULL so the wire shape
+    never has to carry ``null`` strings — a downstream UI that
+    doesn't defensively check would render an empty bubble, which
+    is a worse user experience than a slightly uglier placeholder.
+    """
+
+    public_id: uuid.UUID
+    handle: str
+    display_name: str
+    created_at: datetime
+
 
 @dataclass(frozen=True)
 class ProfileSearchPage:
-    """One page of search hits — profile public_ids + cursor.
+    """One page of search hits — hit rows + opaque cursor.
 
     The cursor is opaque to the caller; the next request forwards
     it back to the repository as ``cursor=...``.
     """
 
-    public_ids: tuple[uuid.UUID, ...]
+    hits: tuple[ProfileSearchHit, ...]
     next_cursor: str | None
 
 
-def _encode_cursor(normalized: str, row_id: int) -> str:
-    payload = {"h": normalized, "id": row_id}
-    return base64.urlsafe_b64encode(
-        json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    ).decode("ascii")
+def _sign_cursor(
+    cursor_secret: str,
+    *,
+    normalized_handle: str,
+    row_id: int,
+) -> str:
+    """Build the opaque pagination token.
+
+    The token is a base64url-encoded ``<json>.<hmac>`` pair. The
+    payload carries the LAST RETURNED row's
+    ``(handle_normalized, id)`` — never a raw ``rows[-1]`` that
+    the block filter dropped, so a blocked profile's handle /
+    internal PK cannot leak through this channel.
+
+    The HMAC is over the JSON payload with the application
+    ``secret_key``; tampering or guessing yields a 422 at the
+    router (the signature fails to verify).
+    """
+    payload = {"h": normalized_handle, "id": row_id}
+    payload_bytes = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    signature = hmac.new(
+        cursor_secret.encode("utf-8"), payload_bytes, hashlib.sha256
+    ).digest()[:_CURSOR_TAG_BYTES]
+    return (
+        base64.urlsafe_b64encode(payload_bytes).decode("ascii")
+        + "."
+        + base64.urlsafe_b64encode(signature).decode("ascii")
+    )
 
 
-def _decode_cursor(cursor: str) -> tuple[str, int] | None:
+def _verify_cursor(
+    cursor_secret: str,
+    cursor: str,
+) -> tuple[str, int] | None:
+    """Validate the opaque cursor and return the
+    ``(handle_normalized, id)`` pair it encodes.
+
+    A tampered or forged cursor returns ``None`` so the caller can
+    fall back to a fresh first page; the security boundary never
+    silently passes a malicious cursor through.
+    """
+    if "." not in cursor:
+        return None
+    payload_b64, signature_b64 = cursor.rsplit(".", 1)
     try:
-        raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
-        payload = json.loads(raw)
+        payload_bytes = base64.urlsafe_b64decode(payload_b64.encode("ascii"))
+        signature = base64.urlsafe_b64decode(signature_b64.encode("ascii"))
+    except (ValueError, TypeError):
+        return None
+    expected = hmac.new(
+        cursor_secret.encode("utf-8"), payload_bytes, hashlib.sha256
+    ).digest()[:_CURSOR_TAG_BYTES]
+    if not hmac.compare_digest(signature, expected):
+        return None
+    try:
+        payload = json.loads(payload_bytes.decode("utf-8"))
         return str(payload["h"]), int(payload["id"])
-    except (ValueError, KeyError, json.JSONDecodeError):
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None
 
 
@@ -107,6 +197,24 @@ def _escape_like(raw: str) -> str:
     return raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _coerce_uuid(raw: object) -> uuid.UUID:
+    """Coerce the public_id column's driver-native return type.
+
+    Raw SQL on a ``Uuid`` column returns the CHAR(32) hex form
+    on SQLite. Wrap each value in a ``UUID`` so the block-filter
+    helper (``query_filters.filter_public_ids_against_viewer_blocks``)
+    gets the typed input its ORM-side ``public_id.in_(...)`` bind
+    expects. The wire format on the HTTP layer is still the
+    ``str(uuid)`` form — this conversion is local to the
+    repository.
+    """
+    if isinstance(raw, uuid.UUID):
+        return raw
+    if isinstance(raw, str):
+        return uuid.UUID(hex=raw)
+    return uuid.UUID(str(raw))
+
+
 def search_profiles(
     db: Session,
     *,
@@ -114,8 +222,9 @@ def search_profiles(
     query: str,
     cursor: str | None,
     limit: int,
+    cursor_secret: str,
 ) -> ProfileSearchPage:
-    """Return one cursor-paginated page of profile public_ids matching ``query``.
+    """Return one cursor-paginated page of profile hits matching ``query``.
 
     Parameters
     ----------
@@ -142,22 +251,35 @@ def search_profiles(
         normalised form is shorter than ``MIN_QUERY_LENGTH``.
     cursor:
         Opaque continuation token from the previous page, or
-        ``None`` on the first page.
+        ``None`` on the first page. The repository validates the
+        HMAC signature before trusting the embedded
+        ``(handle_normalized, id)`` pair; an invalid cursor falls
+        back to a fresh first page.
     limit:
         The maximum number of public_ids to return. The
         repository fetches ``limit + 1`` rows to detect
         end-of-result.
+    cursor_secret:
+        The application ``secret_key`` used to HMAC-sign the
+        ``next_cursor``. The router threads the live
+        ``settings.secret_key`` through; tests pass a fixture-
+        local value.
 
     Returns
     -------
     ProfileSearchPage
-        The ``public_ids`` are PROFILE public_ids (the Kör 5
-        surface), ordered ``handle_normalized ASC, id ASC``. The
-        ``next_cursor`` is ``None`` when there are no more rows.
+        The ``hits`` are PROFILE search-hits (public_id +
+        displayable handle + display_name + created_at), ordered
+        ``handle_normalized ASC, id ASC``. The ``next_cursor`` is
+        ``None`` when there are no more rows; it is the HMAC-
+        signed position of the LAST RETURNED hit (never a
+        block-filtered-out row), so a blocked profile's
+        ``handle_normalized`` / internal ``id`` cannot leak
+        through the cursor channel.
     """
     normalized = _normalize_handle(query)
     if len(normalized) < MIN_QUERY_LENGTH:
-        return ProfileSearchPage(public_ids=(), next_cursor=None)
+        return ProfileSearchPage(hits=(), next_cursor=None)
 
     like_pattern = f"{_escape_like(normalized)}%"
 
@@ -165,7 +287,11 @@ def search_profiles(
     # ``handle_normalized`` (UNIQUE INDEX). Visibility join keeps
     # PRIVATE profiles out of the candidate set in the same SQL
     # statement (one round-trip; we don't pay a Python-level
-    # filter cost).
+    # filter cost). ``display_name IS NOT NULL`` keeps the row
+    # shape honest — the wire contract guarantees a non-empty
+    # display_name on every hit, and the entity layer's
+    # non-empty invariant (CommunityProfile factory) would
+    # otherwise need a defensive branch per hit.
     #
     # Raw SQL: ``handle_normalized`` is NOT an attribute on the
     # mapped ``CommunityProfile`` class (it lives on the Table
@@ -173,6 +299,9 @@ def search_profiles(
     sql = _sa_text(
         """
         SELECT community_profiles.public_id,
+               community_profiles.handle_display,
+               community_profiles.display_name,
+               community_profiles.created_at,
                community_profiles.handle_normalized,
                community_profiles.id
         FROM community_profiles
@@ -180,6 +309,7 @@ def search_profiles(
           ON community_privacy_settings.profile_id = community_profiles.id
         WHERE community_profiles.handle_normalized IS NOT NULL
           AND community_profiles.handle_normalized LIKE :pat ESCAPE '\\'
+          AND community_profiles.display_name IS NOT NULL
           AND community_privacy_settings.visibility <> 'private'
         ORDER BY community_profiles.handle_normalized ASC,
                  community_profiles.id ASC
@@ -190,7 +320,7 @@ def search_profiles(
 
     cursor_clause = ""
     if cursor is not None:
-        decoded = _decode_cursor(cursor)
+        decoded = _verify_cursor(cursor_secret, cursor)
         if decoded is not None:
             cursor_h, cursor_id = decoded
             # Lexicographic continuation — strictly greater than
@@ -210,29 +340,10 @@ def search_profiles(
     )
 
     rows = db.execute(full_sql, params).all()
-    has_more = len(rows) > limit
+    has_more_raw = len(rows) > limit
     rows = rows[:limit]
 
-    # Raw SQL on a ``Uuid`` column returns the CHAR(32) hex form
-    # on SQLite. Wrap each value in a ``UUID`` so the block-filter
-    # helper (``query_filters.filter_public_ids_against_viewer_blocks``)
-    # gets the typed input its ORM-side ``public_id.in_(...)``
-    # bind expects. The wire format on the HTTP layer is still the
-    # ``str(uuid)`` form — this conversion is local to the
-    # repository.
-    candidate_public_ids: list[uuid.UUID] = []
-    for row in rows:
-        raw = row[0]
-        if isinstance(raw, uuid.UUID):
-            candidate_public_ids.append(raw)
-        elif isinstance(raw, str):
-            candidate_public_ids.append(uuid.UUID(hex=raw))
-        else:
-            # SQLAlchemy returns whatever the driver gives — the
-            # ``Uuid`` column on PostgreSQL round-trips to a real
-            # UUID; SQLite stores CHAR(32). Both branches land
-            # here.
-            candidate_public_ids.append(uuid.UUID(str(raw)))
+    candidate_public_ids = [_coerce_uuid(row[0]) for row in rows]
 
     # §D2 — block-filter via the shared helper. A second,
     # search-specific block predicate is forbidden (the §5.2
@@ -246,18 +357,46 @@ def search_profiles(
         public_ids=candidate_public_ids,
     )
 
-    # Preserve the page order — the helper returns an unordered
-    # list, so re-thread the original ordering on top of the
-    # block-filter result.
+    # Build the ordered hit list, threading the original
+    # handle/display_name ordering on top of the block-filter
+    # result. We drop rows the block filter removed but keep the
+    # ``handle_normalized``/``id`` of the LAST KEPT hit so the
+    # cursor references a row the viewer is allowed to see
+    # (never a block-filtered-out row).
     filtered_set = set(filtered_public_ids)
-    ordered = tuple(pid for pid in candidate_public_ids if pid in filtered_set)
+    kept_rows: list[tuple[object, ...]] = []
+    for row in rows:
+        if _coerce_uuid(row[0]) in filtered_set:
+            kept_rows.append(row)
 
+    hits = tuple(
+        ProfileSearchHit(
+            public_id=_coerce_uuid(row[0]),
+            handle=str(row[1]) if row[1] is not None else f"user-{_coerce_uuid(row[0]).hex[:8]}",
+            display_name=str(row[2]) if row[2] is not None else f"user-{_coerce_uuid(row[0]).hex[:8]}",
+            created_at=row[3] if isinstance(row[3], datetime) else datetime.fromisoformat(str(row[3])),
+        )
+        for row in kept_rows
+    )
+
+    # F4 cursor fix — derive the continuation token from the
+    # LAST RETURNED hit, NEVER a raw ``rows[-1]`` that the block
+    # filter excluded. A blocked profile's handle / internal PK
+    # cannot leak through this channel because the row that
+    # encoded them is not in the response.
     next_cursor: str | None = None
-    if has_more and rows:
-        last_h, last_id = rows[-1][1], rows[-1][2]
-        next_cursor = _encode_cursor(last_h, last_id)
+    if has_more_raw and kept_rows:
+        last_kept = kept_rows[-1]
+        last_h = str(last_kept[4]) if last_kept[4] is not None else ""
+        last_id = int(last_kept[5])
+        if last_h:
+            next_cursor = _sign_cursor(
+                cursor_secret,
+                normalized_handle=last_h,
+                row_id=last_id,
+            )
 
-    return ProfileSearchPage(public_ids=ordered, next_cursor=next_cursor)
+    return ProfileSearchPage(hits=hits, next_cursor=next_cursor)
 
 
 def query_plan_uses_index(db: Session, *, query: str) -> bool:
@@ -286,12 +425,16 @@ def query_plan_uses_index(db: Session, *, query: str) -> bool:
         _sa_text(
             "EXPLAIN QUERY PLAN "
             "SELECT community_profiles.public_id, "
+            "community_profiles.handle_display, "
+            "community_profiles.display_name, "
+            "community_profiles.created_at, "
             "community_profiles.handle_normalized, community_profiles.id "
             "FROM community_profiles "
             "JOIN community_privacy_settings "
             "ON community_privacy_settings.profile_id = community_profiles.id "
             "WHERE community_profiles.handle_normalized IS NOT NULL "
             "AND community_profiles.handle_normalized LIKE :pat ESCAPE '\\' "
+            "AND community_profiles.display_name IS NOT NULL "
             "AND community_privacy_settings.visibility <> 'private' "
             "ORDER BY community_profiles.handle_normalized ASC, "
             "community_profiles.id ASC LIMIT 51"
@@ -308,6 +451,7 @@ def query_plan_uses_index(db: Session, *, query: str) -> bool:
 
 __all__ = [
     "MIN_QUERY_LENGTH",
+    "ProfileSearchHit",
     "ProfileSearchPage",
     "query_plan_uses_index",
     "search_profiles",

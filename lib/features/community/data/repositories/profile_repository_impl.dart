@@ -275,35 +275,94 @@ class HttpCommunityProfileRepository implements CommunityProfileRepository {
 
   /// Decode the Kör 9 ``GET /community/profiles/search`` envelope.
   ///
-  /// The wire shape is the same shape the Kör 7
-  /// ``HttpSocialGraphRepository._decodePage`` consumes
-  /// (``{public_ids, next_cursor}``); the search endpoint does
-  /// NOT enrich the response with full profile rows (the brief
-  /// §A2 stays a thin search index — the controller
-  /// follow-up-fetches each entry through the canonical
-  /// ``fetchById`` path). Mirrors the Kör 7 placeholder
-  /// factory so the page envelope satisfies
-  /// ``CommunityPage<CommunityProfile>`` without forcing the
-  /// data layer to round-trip N rows on a 50-row page.
+  /// F1 fix (2026-08-23) — the wire shape now carries a ``hits``
+  /// list with ``public_id`` + ``handle`` + ``display_name`` +
+  /// ``created_at`` for each match, so the result list renders
+  /// real profile rows instead of identical placeholder data.
+  /// The backend repository's block-filter runs server-side; the
+  /// cursor is HMAC-signed (opaque to the client) and references
+  /// the last RETURNED hit, never a block-filtered-out row.
+  ///
+  /// The Kör 7 ``public_ids`` envelope is preserved on the wire
+  /// for the existing ``HttpSocialGraphRepository`` consumers;
+  /// the search response is a superset that adds ``hits``.
   CommunityPage<CommunityProfile> _decodePage(Map<String, Object?> json) {
-    final rawIds = json['public_ids'];
-    if (rawIds is! List) {
-      throw const FormatException(
-        'community search wire: public_ids must be a list',
-      );
+    final rawHits = json['hits'];
+    if (rawHits is! List) {
+      throw const FormatException('community search wire: hits must be a list');
     }
-    final publicIds = rawIds
-        .whereType<String>()
-        .map(PublicUserId.new)
-        .toList(growable: false);
+    final hits = <CommunityProfile>[];
+    for (final entry in rawHits.whereType<Map<String, Object?>>()) {
+      hits.add(_hitToProfile(entry));
+    }
     final nextCursor = json['next_cursor'];
     final cursorPage = nextCursor == null
-        ? (publicIds.isEmpty
+        ? (hits.isEmpty
               ? const CursorPage.haltedAfterRequest()
               : const CursorPage.initial())
         : CursorPage.continued(nextCursor as String);
-    final items = publicIds.map(_placeholderProfile).toList(growable: false);
-    return CommunityPage<CommunityProfile>(items: items, cursor: cursorPage);
+    return CommunityPage<CommunityProfile>(
+      items: List<CommunityProfile>.unmodifiable(hits),
+      cursor: cursorPage,
+    );
+  }
+
+  /// Build a domain [CommunityProfile] from one search-hit map.
+  ///
+  /// The wire guarantees a non-empty ``handle`` and
+  /// ``display_name`` (the backend's repository SQL carries
+  /// ``display_name IS NOT NULL`` + a fallback for null
+  /// ``handle_display``), so this conversion only needs to
+  /// validate the structure — the entity factory's non-empty
+  /// ``displayName`` invariant will surface a malformed wire
+  /// shape as ``ArgumentError`` at the boundary, not a silent
+  /// fallback to a placeholder string.
+  CommunityProfile _hitToProfile(Map<String, Object?> entry) {
+    final publicId = entry['public_id'];
+    final handle = entry['handle'];
+    final displayName = entry['display_name'];
+    final createdAt = entry['created_at'];
+    if (publicId is! String) {
+      throw const FormatException(
+        'community search wire: hit public_id must be a string',
+      );
+    }
+    if (handle is! String || handle.isEmpty) {
+      throw const FormatException(
+        'community search wire: hit handle must be a non-empty string',
+      );
+    }
+    if (displayName is! String || displayName.isEmpty) {
+      throw const FormatException(
+        'community search wire: hit display_name must be a non-empty string',
+      );
+    }
+    if (createdAt is! String) {
+      throw const FormatException(
+        'community search wire: hit created_at must be a string',
+      );
+    }
+    final parsed = DateTime.tryParse(createdAt);
+    if (parsed == null) {
+      throw FormatException(
+        'community search wire: unparseable created_at "$createdAt"',
+      );
+    }
+    return CommunityProfile(
+      userId: PublicUserId(publicId),
+      handle: CommunityHandle(handle),
+      displayName: displayName,
+      // The search index excludes PRIVATE profiles, so a
+      // ``public`` default is the truthful wire-state model;
+      // the screen does not branch on visibility.
+      visibility: ProfileVisibility.public,
+      avatarUrl: null,
+      bio: null,
+      skillInterests: const <String>[],
+      badges: const <String>[],
+      relationship: CommunityRelationshipToViewer.notRelated,
+      createdAt: parsed,
+    );
   }
 
   String? _cursorQueryValue(Object cursor) {
@@ -329,26 +388,3 @@ final communityProfileRepositoryProvider = Provider<CommunityProfileRepository>(
     return HttpCommunityProfileRepository(client);
   },
 );
-
-/// Build a placeholder [CommunityProfile] for a search hit.
-///
-/// The Kör 9 wire shape carries only public_ids; the canonical
-/// full profile arrives through ``fetchById``. The placeholder
-/// mirrors the Kör 7 ``HttpSocialGraphRepository._placeholderProfile``
-/// contract — a non-empty handle + display name so the page
-/// boundary satisfies ``CommunityPage<CommunityProfile>`` without
-/// throwing ``ArgumentError`` on construction.
-CommunityProfile _placeholderProfile(PublicUserId userId) {
-  return CommunityProfile(
-    userId: userId,
-    handle: CommunityHandle('placeholder-x1'),
-    displayName: 'placeholder',
-    visibility: ProfileVisibility.public,
-    avatarUrl: null,
-    bio: null,
-    skillInterests: const <String>[],
-    badges: const <String>[],
-    relationship: CommunityRelationshipToViewer.notRelated,
-    createdAt: DateTime.utc(2026),
-  );
-}
