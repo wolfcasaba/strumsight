@@ -70,8 +70,9 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # Register the ORM model with ``Base.metadata`` so
 # ``alembic compare_metadata`` (round-12 migration-contract test,
@@ -79,7 +80,9 @@ import sqlalchemy as sa
 # the expected schema. The migration body itself does not rely on the
 # model class — it uses raw ``sa.Column`` calls so the schema is
 # migration-source-of-truth, not ORM-derived autogenerate.
-from app.community.models.post import CommunityPost  # noqa: F401,E402 -- side-effect import registers ORM metadata
+from app.community.models.post import (
+    CommunityPost,  # noqa: F401,E402 -- side-effect import registers ORM metadata
+)
 
 revision: str = "e09_r11_0007"
 down_revision: str | Sequence[str] | None = "e09_r08_0006"

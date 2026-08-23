@@ -38,7 +38,6 @@ from sqlalchemy.orm import Session
 from ...deps import CurrentUser
 from ..schemas.post import CreatePostRequest, PatchPostRequest, PostOut
 from ..services.post_service import (
-    CachedInvalidationEvent,
     PostNotFound,
     StalePostUpdateError,
     create_post,
@@ -232,9 +231,7 @@ def get_post_endpoint(
     try:
         try:
             try:
-                viewer_internal_id = _resolve_internal_profile_id(
-                    db, current_user.id
-                )
+                viewer_internal_id = _resolve_internal_profile_id(db, current_user.id)
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
             try:
@@ -278,9 +275,7 @@ def patch_post_endpoint(
     try:
         try:
             try:
-                viewer_internal_id = _resolve_internal_profile_id(
-                    db, current_user.id
-                )
+                viewer_internal_id = _resolve_internal_profile_id(db, current_user.id)
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
             try:
@@ -351,9 +346,7 @@ def delete_post_endpoint(
     try:
         try:
             try:
-                viewer_internal_id = _resolve_internal_profile_id(
-                    db, current_user.id
-                )
+                viewer_internal_id = _resolve_internal_profile_id(db, current_user.id)
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
             try:

@@ -77,7 +77,6 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -90,11 +89,9 @@ from ..models.profile import CommunityProfile
 from ..policies.access_policy import (
     CommunityAccessPolicy,
     CommunityAudience,
-    RelationshipContext,
     relationship_context_from_block_flag,
 )
 from ..policies.query_filters import is_blocked_pair
-
 
 # ---------------------------------------------------------------------------
 # Domain exceptions — translated to HTTP status codes in the router layer.
@@ -163,7 +160,11 @@ def _as_utc(value: datetime) -> datetime:
     round-trip; the ``replace`` is then a no-op.
     """
     if value.tzinfo is None:
-        return value.replace(tzinfo=datetime.UTC) if hasattr(datetime, "UTC") else value.replace(tzinfo=_UTC())
+        return (
+            value.replace(tzinfo=datetime.UTC)
+            if hasattr(datetime, "UTC")
+            else value.replace(tzinfo=_UTC())
+        )
     return value
 
 
@@ -176,9 +177,7 @@ def _UTC():
 def _resolve_profile_by_public_id(
     db: Session, public_id: uuid.UUID
 ) -> CommunityProfile | None:
-    return (
-        db.query(CommunityProfile).filter_by(public_id=public_id).one_or_none()
-    )
+    return db.query(CommunityProfile).filter_by(public_id=public_id).one_or_none()
 
 
 def _existing_post_by_idempotency_key(
@@ -386,9 +385,7 @@ def create_post(
 
     if on_invalidate is not None:
         on_invalidate(
-            CachedInvalidationEvent(
-                post_public_id=post.public_id, action="create"
-            )
+            CachedInvalidationEvent(post_public_id=post.public_id, action="create")
         )
     return post
 
@@ -499,9 +496,7 @@ def patch_post(
 
     if on_invalidate is not None:
         on_invalidate(
-            CachedInvalidationEvent(
-                post_public_id=post.public_id, action="patch"
-            )
+            CachedInvalidationEvent(post_public_id=post.public_id, action="patch")
         )
     return post
 
@@ -553,9 +548,7 @@ def soft_delete_post(
 
     if on_invalidate is not None:
         on_invalidate(
-            CachedInvalidationEvent(
-                post_public_id=post.public_id, action="delete"
-            )
+            CachedInvalidationEvent(post_public_id=post.public_id, action="delete")
         )
     return True
 

@@ -91,9 +91,7 @@ def _reject_html_tags(value: str | None) -> str | None:
     if value is None:
         return None
     if _HTML_TAG_START_PATTERN.search(value):
-        raise ValueError(
-            "body must not contain HTML tags or angle-bracket markup"
-        )
+        raise ValueError("body must not contain HTML tags or angle-bracket markup")
     return value
 
 
@@ -103,9 +101,7 @@ def _enforce_mention_limit(value: str | None) -> str | None:
         return None
     mentions = _MENTION_PATTERN.findall(value)
     if len(mentions) > MENTION_MAX_COUNT:
-        raise ValueError(
-            f"body exceeds the mention limit of {MENTION_MAX_COUNT}"
-        )
+        raise ValueError(f"body exceeds the mention limit of {MENTION_MAX_COUNT}")
     return value
 
 
@@ -170,9 +166,9 @@ class PatchPostRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     audience: CommunityAudience | None = None
-    body: Annotated[str, Field(min_length=1, max_length=POST_BODY_MAX_LENGTH)] | None = (
-        None
-    )
+    body: (
+        Annotated[str, Field(min_length=1, max_length=POST_BODY_MAX_LENGTH)] | None
+    ) = None
     artifact: dict[str, Any] | None = None
     resource_version: datetime
 

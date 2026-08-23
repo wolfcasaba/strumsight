@@ -82,8 +82,10 @@ from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
+    UniqueConstraint,
     Uuid,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -156,12 +158,8 @@ class CommunityPost(Base):
     )
     # Artifact columns — NULL when the post is text-only.
     artifact_type: Mapped[str | None] = mapped_column(String, nullable=True)
-    artifact_schema_version: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
-    artifact_payload: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True
-    )
+    artifact_schema_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    artifact_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     moderation_state: Mapped[str] = mapped_column(
         String,
         nullable=False,
@@ -183,6 +181,32 @@ class CommunityPost(Base):
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # The (profile_id, idempotency_key) UNIQUE constraint is the
+    # brief §0.0 D4 idempotency invariant — a retry with the same
+    # key hits the existing row. SQLite allows multiple NULLs, so a
+    # post WITHOUT a key remains allowed. The two composite indexes
+    # back the per-author read path (profile_id + created_at) and
+    # the idempotency-key collision probe (profile_id +
+    # idempotency_key).
+    __table_args__ = (
+        UniqueConstraint(
+            "profile_id",
+            "idempotency_key",
+            name="uq_community_posts_profile_idempotency",
+        ),
+        Index(
+            "ix_community_posts_profile_created",
+            "profile_id",
+            "created_at",
+            "id",
+        ),
+        Index(
+            "ix_community_posts_idempotency_key",
+            "profile_id",
+            "idempotency_key",
+        ),
     )
 
 
