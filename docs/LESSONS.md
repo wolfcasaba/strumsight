@@ -16385,3 +16385,54 @@ SZÖVEGÉBEN volt, nem a tesztelhető termékkódban. Egy jövőbeli pipeline-
 prompt-generátor kör tehetne fel egy lint-szabályt, ami ellenőrzi, hogy a
 generált `tools/mm-round.sh`/`codex-round.sh` dispatch-parancs prompt-fájl
 argumentuma a `docs/rounds/**` mintára illeszkedik.
+
+## L435 — A cache "helyesen ír, hibásan olvas vissza" hibaosztálya: a saját, meglévő dekóder nem hívva a rehydration-úton, a widget-teszt saját fixture-je pedig ELREJTETTE, mert a teszt is a placeholder-alakot írta (E09-R14, 2026-08-23)
+
+**Mit mértünk.** Az E09-R14 `feed_cache.dart`/`feed_controller.dart` a
+cache-be íráskor a teljes, valódi wire-JSON-t perzisztálta minden ismert
+`ShareArtifact`-altípusra (`artifact.toJson()`), DE a visszaolvasó
+`_artifactFromEnvelope` MINDIG `UnfilledCommunityShareArtifact()`-ra
+bontotta az eredményt, függetlenül a mentett `type` mezőtől — annak
+ellenére, hogy a hiányzó dekóder (`ShareArtifact.fromJson`) MÁR LÉTEZETT,
+MÁR IMPORTÁLVA volt ugyanabban a fájlban, és semmilyen jövőbeli körre nem
+volt szükség a bevezetéséhez. A saját widget-teszt (`following_feed_test.dart`)
+cache-priming helpere (`_envelopeOfForTest`) SZINTÉN mindig
+`{'type': 'unfilled', ...}`-et írt a cache-be — FÜGGETLENÜL attól, milyen
+artifact-tal hívták —, ezért a teszt-suite (13/13 zöld) soha nem futtatott
+végig egy VALÓDI típusú artifact-ot a cache write→read körön: a teszt maga
+is a hibát rejtő mintát reprodukálta. A review egy SAJÁT, a valós
+`_envelopeOf`-alakot kézzel tükröző probe-teszttel derítette ki
+(`practiceCard=0 fallbackCard=1` egy `PracticeSummaryArtifact`-ra).
+
+**Miért.** A hiba egy klasszikus "aszimmetrikus round-trip" minta: az ÍRÓ
+oldal (`_envelopeOf`) és az OLVASÓ oldal (`_artifactFromEnvelope`)
+függetlenül készült, mindkettő SAJÁT belső logikával, és semmilyen teszt
+nem kényszerítette ki, hogy egy VALÓS (nem placeholder) érték menjen át
+mindkét oldalon. A defenzív "ismeretlen típus → fallback" mintát (A5,
+helyes és szükséges invariáns) az implementer túl konzervatívan
+alkalmazta: MINDEN típusra fallback-elt, nem csak a ténylegesen ismeretlen/
+dekódolhatatlanra — a `try { return Decoder.fromJson(raw); } catch { return
+Fallback(); }` mintát a `if (isEverything) return Fallback();` váltotta fel.
+A gate (`round-gate.sh`) és a teljes teszt-suite ZÖLD maradt, mert a teszt
+saját fixture-je ugyanazt a rövidre-zárt feltevést hordozta, mint a
+termékkód — ugyanaz a hibaosztály, mint a docs/LESSONS.md korábbi
+"a teszt ugyanazt a hibás feltevést reprodukálja, mint a kód" mintái.
+
+**Hogyan alkalmazd.** Amikor egy kör egy MEGLÉVŐ, sealed/discriminated
+domain-hierarchiát (pl. `ShareArtifact`) tesz perzisztálhatóvá egy lokális
+cache-en/store-on keresztül: (1) a review-nak VAGY a kör saját tesztjének
+kötelezően kell legalább egy VALÓDI (nem placeholder/`unfilled`) típusú
+értéket végigfuttatnia az ÍRÁS→OLVASÁS teljes körén, és megmérnie, hogy a
+visszaolvasott érték a SAJÁT típusát (nem egy generikus fallback-et) adja
+vissza; (2) ha a cache-priming teszt-helper NEM a termékkód tényleges
+író-függvényét hívja (hanem egy saját, párhuzamos JSON-építőt), az egy
+FIGYELMEZTETŐ jel — a helper és a termékkód szétcsúszhat anélkül, hogy
+bármelyik oldal tesztje ezt észrevenné; (3) egy defenzív "ismeretlen típus
+→ fallback" ág implementálásakor mindig ellenőrizd, hogy a feltétel
+TÉNYLEGESEN az ismeretlen esetre szűkül-e (try/catch a dekóder körül), nem
+pedig MINDEN esetre lazult-e a defenzivitás jegyében.
+
+**Őrteszt:** `test/features/community/presentation/following_feed_test.dart`
+— "a cache-primed post with a known artifact type rehydrates to its own
+card, not the fallback (A1.3 — F2 regression probe)" (a javító kör
+1-ben hozzáadva, `4c3886ff`).
