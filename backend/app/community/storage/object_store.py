@@ -50,7 +50,6 @@ from urllib.parse import quote
 
 import httpx
 
-
 # ---------------------------------------------------------------------------
 # Wire value types — the only shapes crossing the ObjectStore boundary.
 # ---------------------------------------------------------------------------
@@ -186,9 +185,7 @@ class InMemoryObjectStore(ObjectStore):
         )
         self._bytes[key] = body if body is not None else b"\x00" * size
 
-    def put_bytes(
-        self, key: str, *, body: bytes, content_type: str
-    ) -> ObjectMetadata:
+    def put_bytes(self, key: str, *, body: bytes, content_type: str) -> ObjectMetadata:
         """Simulate a successful PUT — record size + SHA-256 and
         make the object visible to ``head_object``. Used when the
         test wants the upload to complete and then assert what
@@ -358,7 +355,9 @@ class S3CompatibleObjectStore(ObjectStore):
             size = 0
         return ObjectMetadata(
             size=size,
-            content_type=response.headers.get("Content-Type", "application/octet-stream"),
+            content_type=response.headers.get(
+                "Content-Type", "application/octet-stream"
+            ),
             etag=_strip_quotes(response.headers.get("ETag")),
             sha256_hex=None,
         )

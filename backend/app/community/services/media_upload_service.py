@@ -417,9 +417,7 @@ def create_upload_intent(
         # The wire-side shape — a 64-char hex SHA-256 digest.
         # An obviously-wrong value is rejected at the seam so a
         # malformed client can't trip the finalize comparison.
-        raise MediaChecksumMismatch(
-            f"checksum must be a 64-char hex SHA-256 digest"
-        )
+        raise MediaChecksumMismatch("checksum must be a 64-char hex SHA-256 digest")
 
     profile = _resolve_profile_by_public_id(db, profile_public_id)
     if profile is None:
@@ -580,9 +578,7 @@ def finalize_upload(
         row.upload_state = UPLOAD_STATE_FAILED
         row.updated_at = now
         db.flush()
-        raise MediaUploadExpired(
-            f"signed URL expired at {expires_at.isoformat()}"
-        )
+        raise MediaUploadExpired(f"signed URL expired at {expires_at.isoformat()}")
 
     metadata = object_store.head_object(row.object_key)
     if metadata is None:
@@ -616,8 +612,7 @@ def finalize_upload(
     if metadata.size > MAX_UPLOAD_BYTES:
         _transition_to_failed(db, row, object_store, now)
         raise MediaSizeExceeded(
-            f"bucket size {metadata.size} exceeds MAX_UPLOAD_BYTES "
-            f"{MAX_UPLOAD_BYTES}"
+            f"bucket size {metadata.size} exceeds MAX_UPLOAD_BYTES {MAX_UPLOAD_BYTES}"
         )
 
     # Checksum re-check (A5). When the row carries an
@@ -644,9 +639,7 @@ def finalize_upload(
 
     if on_invalidate is not None:
         on_invalidate(
-            MediaInvalidationEvent(
-                media_public_id=row.public_id, action="finalize"
-            )
+            MediaInvalidationEvent(media_public_id=row.public_id, action="finalize")
         )
     return row
 
@@ -710,9 +703,7 @@ def cancel_upload(
 
     if on_invalidate is not None:
         on_invalidate(
-            MediaInvalidationEvent(
-                media_public_id=row.public_id, action="cancel"
-            )
+            MediaInvalidationEvent(media_public_id=row.public_id, action="cancel")
         )
     return True
 
@@ -792,9 +783,7 @@ def _transition_to_failed(
     db.flush()
 
 
-def _validate_checksum(
-    *, row: CommunityMedia, metadata: "ObjectMetadata"
-) -> None:
+def _validate_checksum(*, row: CommunityMedia, metadata: "ObjectMetadata") -> None:
     """Brief §6 A5 — bucket-side SHA-256 must match the
     intent-time declaration when both are present.
 

@@ -76,10 +76,10 @@ from app.community.services.media_upload_service import (
     MediaSizeExceeded,
     MediaUploadDisabled,
     MediaUploadExpired,
+    cancel_upload,
     cleanup_orphan_uploads,
     create_upload_intent,
     finalize_upload,
-    cancel_upload,
 )
 from app.community.storage.object_store import InMemoryObjectStore
 from app.config import Settings
@@ -368,11 +368,7 @@ def test_a1_orphan_cleanup_is_noop_when_flag_off(
     )
     far_future = _utcnow() + timedelta(days=2)
     with session_factory() as db:
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         row.retention_until = _utcnow() - timedelta(seconds=1)
         db.commit()
 
@@ -463,11 +459,7 @@ def test_a3_finalize_rejects_bucket_mime_mismatch(
                 now=_utcnow(),
             )
         db.commit()
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         # The failed transition is observable in the DB —
         # the orphan-cleanup function will sweep the row on
         # the next run past retention_until.
@@ -650,11 +642,7 @@ def test_a4_finalize_rejects_oversize_bucket_object(
             )
         db.commit()
     with session_factory() as db:
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         assert row.upload_state == UPLOAD_STATE_FAILED
 
 
@@ -692,17 +680,11 @@ def test_a5_finalize_rejects_checksum_mismatch(
                 now=_utcnow(),
             )
         db.commit()
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         assert row.upload_state == UPLOAD_STATE_FAILED
 
 
-def test_a6_foreign_user_cannot_finalize(
-    session_factory, settings_enabled
-) -> None:
+def test_a6_foreign_user_cannot_finalize(session_factory, settings_enabled) -> None:
     """A6 — a foreign ``profile_public_id`` cannot finalize
     someone else's ``media_public_id`` (uniform 404, the §5.3
     IDOR discipline)."""
@@ -735,9 +717,7 @@ def test_a6_foreign_user_cannot_finalize(
             )
 
 
-def test_a6_foreign_user_cannot_cancel(
-    session_factory, settings_enabled
-) -> None:
+def test_a6_foreign_user_cannot_cancel(session_factory, settings_enabled) -> None:
     """A6 — same uniform 404 for cancel."""
     owner, foreigner = _make_two_authors(session_factory)
     store = _new_store()
@@ -800,11 +780,7 @@ def test_a7_cancel_deletes_object_and_transitions_to_cancelled(
     assert intent.object_key in store.deleted
 
     with session_factory() as db:
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         assert row.upload_state == UPLOAD_STATE_CANCELLED
 
 
@@ -833,11 +809,7 @@ def test_a7_orphan_cleanup_sweeps_abandoned_uploads(
     )
     # Move retention_until into the past.
     with session_factory() as db:
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         row.retention_until = _utcnow() - timedelta(seconds=1)
         db.commit()
 
@@ -865,11 +837,7 @@ def test_a7_orphan_cleanup_sweeps_abandoned_uploads(
     assert again == 0
 
     with session_factory() as db:
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         assert row.upload_state == UPLOAD_STATE_CANCELLED
 
 
@@ -1110,11 +1078,7 @@ def test_a5_checksum_real_violation_probe(
     # turns green again.
     # Reset the row to pending so the finalize re-checks.
     with session_factory() as db:
-        row = (
-            db.query(CommunityMedia)
-            .filter_by(public_id=intent.media_public_id)
-            .one()
-        )
+        row = db.query(CommunityMedia).filter_by(public_id=intent.media_public_id).one()
         row.upload_state = UPLOAD_STATE_PENDING
         row.finalized_at = None
         db.commit()
