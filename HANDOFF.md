@@ -1,5 +1,80 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R13 KÉSZ — Following feed és cursor pagination backend — PR [#422](https://github.com/wolfcasaba/strumsight/pull/422), squash `0907f006` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENHARMADIK KÖRE KÉSZ.** [ADR 0406](docs/adr/0406-following-feed-and-cursor-pagination.md):
+tisztán backend kör, az első, ami EGY queryben kombinálja a Kör 7 follow-gráfot,
+a Kör 8 block/mute-szűrőt és a Kör 11 post-táblát — egy időrendi, cursor-lapozott
+`GET /community/feed` végpont, nincs engagement-alapú fekete-doboz rangsor. Öt új
+fájl: `following_feed.py` (a query + HMAC-SHA256 aláírt, opaque cursor +
+`query_plan_uses_feed_index` A7-evidencia), `schemas/feed.py`, `routers/feed.py`,
+egy migráció (`e09_r13_0008`, EGYETLEN `(created_at, id)` composite index) és
+`test_feed_query_plan.py` (16 teszt, a §6/§6.1 minden cellája + a §6.1 KÖTELEZŐ
+valódi-sértés próba inline). A brief `risk = "high"` minősítése jogos volt: ez az
+ELSŐ listázó (sok sort visszaadó) Community-végpont, ahol egy hibás szűrési
+sorrend nem egy poszt, hanem SOK, a nézőre nem tartozó poszt tömeges,
+egyetlen kérésben történő kiszivárgását okozhatta volna.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. 2 javító
+kör** (`docs/reviews/e09-r13-review.md`): review CHANGES REQUIRED elsőre,
+**1 BLOCKER** — az A7 mérce-helper (`query_plan_uses_feed_index`) egy
+engedékeny "van valahol index a plan-szövegben" OR-fallback miatt ZÖLDET
+adott AKKOR IS, ha a szándékolt `(created_at, id)` index HIÁNYZOTT — a review
+saját, önállóan futtatott real-violation próbája (500 sor, `DROP INDEX`, a
+brief §6.1 KÖTELEZŐ előírása szerint, amit az implementer explicit KIHAGYOTT
+"destruktív lenne inline" indoklással) ezt PIROSNAK mérte, a helper mégis
+`True`-t adott. Súlyosabb: a mögöttes JOIN-alapú query-alak MÉG az index
+JELENLÉTÉBEN sem azt használta, és mindkét esetben `USE TEMP B-TREE FOR ORDER
+BY` futott — a kör core A7/N+1-védelem ígérete ténylegesen NEM teljesült,
+csak a mérőeszköz hibája miatt tűnt zöldnek. **1 MAJOR** — a migráció
+egyoldalúan hozzáadott egy `feed_view_count` oszlopot és egy második
+`ix_community_posts_audience_created` indexet, egyik sincs az ADR 0406-ban
+vagy a brief §5-ében ("Kör 14+ előkészítés" utólagos önindoklással — pontosan
+az a lista-tágítási minta, amit a pre-flight §1 explicit tilt). **4 MINOR**
+(cursor-secret fail-open default a publikus dev-placeholderre; audience-szűrés
+fail-open denylist a policy allowlist-mintája helyett; router docstring hamis
+422-állítása malformed cursorra, holott a tesztelt viselkedés 200; a
+`FEED_CURSOR_VERSION` string volt az ADR-kötött `int` helyett). Az 1. javító
+kör a query-alakot `WHERE profile_id IN (SELECT … FROM community_follows …)`
+formára alakította (a JOIN helyett), a helpert a pontos index-név + a
+"nincs TEMP B-TREE" ellenőrzésre szigorította, egy ÚJ inline valódi-sértés
+próbát adott (`test_a7_real_violation_probe_drops_feed_index`), eltávolította
+a nem-engedélyezett séma-elemeket, és zárta mind a 4 MINOR-t — a review saját,
+connection-pool-disposal-t is figyelembe vevő újramérésével megerősítve
+(SQLite az `ANALYZE`-statisztikát kapcsolatonként cache-eli — a review saját
+próbaszkriptje elsőre emiatt hamis negatívot adott, amíg nem alkalmazta
+ugyanazt a pool-disposal technikát, amit az implementer a saját tesztjében
+felfedezett és dokumentált). **Váratlan mellékhatás**: az 1. javítás (a
+`feed_view_count` oszlop eltávolítása) PIROSRA fordította a Kör 11-től örökölt,
+körön KÍVÜLI `test_migrations.py::test_downgrade_one_revision_drops_only_
+community_tables`-t — a teszt saját `_schema_snapshot` helpere KIZÁRÓLAG
+oszlopneveket hasonlított, indexeket nem, ezért egy immár index-only
+downgrade számára láthatatlan volt. A review saját, izolált futtatása fedezte
+fel (nem az implementer önjelentése), dokumentált §0.0 D8 `allowed_paths`-
+bővítéssel (`backend/tests/test_migrations.py`, CI-only bump minta, mint az
+E09-R06/…/R09/R12) zárva egy 2. javító körrel — a snapshot-helper ma
+index-neveket is összevet. Dedikált `security-reviewer` agent (risk=high
+kötelező): 0 BLOCKER/MAJOR (cursor-forgery ellenálló — teljes 32-byte
+HMAC-SHA256, constant-time compare, minden hibás ág fail-closed; nincs
+blocked/muted sor-kiszivárgás a cursor-csatornán; FOLLOWERS audience sosem
+szivárog nem-követőnek), a fenti 2 MINOR-t önállóan is megtalálta. Mindkét
+javító kör GATE-e és a `scope-audit.py` a review SAJÁT kezével, izolált
+`/tmp` klónokban ellenőrizve, nem az implementer önjelentésére hagyatkozva.
+Exact `21133e09`: Full Gate [32630730552](https://github.com/wolfcasaba/strumsight/actions/runs/32630730552)
++ Router CI [32631215694](https://github.com/wolfcasaba/strumsight/actions/runs/32631215694)
+mind success.
+
+**Folyamat-megjegyzés (az orchesztrátor saját hibája, a lánc önkorrekciója):**
+az implementer ELSŐ dispatch-kísérlete (session `255c4da9…`) egy `aborted_tools`
+crash-szel ért véget jelzés nélkül, munka nélkül — az orchesztrátor tévesen a
+saját (pipeline-szintű, meta-) promptját adta át az implementernek a kör-brief
+helyett; a modell ezt észlelte és megpróbálta a saját, javított prompt-fájlját
+megírni a munkapéldány GYÖKERÉBE (`allowed_paths`-on kívül), a scope-őr helyesen
+megtagadta az írást, ami az egész sessiont elvitte magával. Mivel NULLA commit
+történt, az újraindítás (UGYANAZZAL a brief-fájllal, a helyes implementer-
+prompt-mintát követve) veszteség nélkül helyre tudta állítani a kört — lásd
+`docs/LESSONS.md` az új leckéért.
+
 ## ✅ E09-R12 KÉSZ — Post composer draft és outbox — PR [#421](https://github.com/wolfcasaba/strumsight/pull/421), squash `d1ccf079` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENKETTEDIK KÖRE KÉSZ.** Nincs új ADR (tiszta
@@ -5103,6 +5178,25 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-23):** `main` @ `0907f006` — E09-R13 Following
+feed és cursor pagination backend, PR
+[#422](https://github.com/wolfcasaba/strumsight/pull/422), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, KÉT javító
+kör (F1 BLOCKER az A7 mérce-helper engedékeny "van valahol index"
+fallback-je + a JOIN-alapú query-alak, ami az index jelenlétében sem
+kerülte el a TEMP B-TREE sortot — a query `profile_id IN (subquery)`
+alakra átírva, a helper pontos index-név + "nincs TEMP B-TREE"
+ellenőrzésre szigorítva; F2 MAJOR nem-engedélyezett `feed_view_count`
+oszlop + második index eltávolítva; F3-F6 MINOR zárva; 2. javító kör egy
+a Kör 11-től örökölt, körön kívüli teszt regresszióját javította — lásd a
+fejléc ✅-blokkot). Dedikált security-reviewer pass: 0 BLOCKER/MAJOR.
+Review APPROVED mindkét javító kör után, 0 nyitott lelet — a Claude a
+javításokat friss, izolált `/tmp`-klónokban ÚJRA futtatott gate-tel,
+scope-audittal ÉS saját, önállóan futtatott real-violation próbákkal
+fogadta el, nem az implementer önjelentésére hagyatkozva. Exact `21133e09`:
+`full-gate.yml` 32630730552 + `router-ci.yml` 32631215694 mind success.
+Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-23):** `main` @ `98d7b2f6` — E09-R11 Post
 backend CRUD és audience enforcement, PR
 [#420](https://github.com/wolfcasaba/strumsight/pull/420), squash-merge.
@@ -5777,6 +5871,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E09-R13 — Following feed és cursor pagination backend** (PR
+[#422](https://github.com/wolfcasaba/strumsight/pull/422), squash
+`0907f006`, [ADR 0406](docs/adr/0406-following-feed-and-cursor-pagination.md)).
+Az első query, ami a Kör 7 follow-gráfot, a Kör 8 block/mute-szűrőt és a
+Kör 11 post-táblát egyben kombinálja — időrendi, HMAC-aláírt cursorral
+lapozott `GET /community/feed`. 0 nyitott BLOCKER/MAJOR KÉT javító kör
+után (F1 BLOCKER az A7 index-guard hamis-zöldje + a nem-hatékony
+query-alak; F2 MAJOR nem-engedélyezett séma-bővítés; F3-F6 MINOR; a 2.
+javító kör egy körön kívüli teszt regresszióját zárta — mind
+`docs/reviews/e09-r13-review.md`). Exact `21133e09`: Full Gate
+32630730552 + Router CI 32631215694 mind success. Részletesen a fejléc
+✅-blokkban.
 
 **E09-R11 — Post backend CRUD és audience enforcement** (PR
 [#420](https://github.com/wolfcasaba/strumsight/pull/420), squash
@@ -6631,37 +6738,48 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-23): E09-R13 — Following feed és
-cursor pagination backend** (`docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md`,
-engine a queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `0404` —
-**ELAVULT**: a `0404`-et már a Kör 10 megírta
-(`docs/adr/0404-share-artifact-contracts.md`), a Kör 13 pre-flightjának
-kötelező `tools/round-slots.py reserve-adr --round E09-R13`-mal ÚJ számot
-kell kérnie, ne a queue-fájl elavult értékét használja). **Az E09-R12 (Post
-composer draft és outbox) KÉSZ** (PR #421, squash `d1ccf079`) — lásd a
-fejléc ✅-blokkot. A Kör 12 hagyott egy mért horgot a Kör 13+-nak:
+**Pontos következő termékkör (2026-08-23): E09-R14 — Feed UI, cache és
+tudatos használat** (`docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md`,
+engine a queue-ban `minimax`, nincs előre kiosztott ADR — tisztán
+UI/integráció). **Az E09-R13 (Following feed és cursor pagination backend)
+KÉSZ** (PR #422, squash `0907f006`) — lásd a fejléc ✅-blokkot. A Kör 13
+hagyott néhány mért horgot a Kör 14-nek:
 
-- A `community_draft_store.dart` bevezette az ELSŐ user-id-particionált
-  lokális storage-kulcs mintát a repóban (`ss.community.drafts.v2.<userId>`,
-  `authControllerProvider.value?.id`-vel). Ha a Kör 13 (vagy egy későbbi kör)
-  szintén per-user lokális állapotot vezetne be (pl. feed-cache, olvasatlan
-  badge), ezt a mintát hasznosítsa újra, ne találjon ki egy másikat — és
-  KÖTELEZŐEN `legacyKey: ''`-t adjon át, ha nincs valódi korábbi envelope
-  amiből migrálni kellene (a Kör 12 review F1 MAJOR lelete pontosan egy
-  fiktív legacy-migráció + nem particionált fallback-kulcs kombinációja
-  volt — `docs/reviews/e09-r12-review.md` F1).
-- A `posts` router MÉG MINDIG NINCS bekötve a `build_community_router`-be
-  (a Kör 8/10/11 precedense szerint — a Kör 12 composer csak az absztrakt
-  `CommunityPostRepository` interfészre épített, `post_repository_impl.dart`
-  még nem létezik). Ha a Kör 13 (feed) HTTP-szinten hívná a Kör 11
-  create/get/patch/delete endpointjait VAGY a Kör 12 composer valódi
-  hálózati implementációját adná, mérje meg, hogy ez a kör-e, aminek a
-  scope-ja a bekötést és a `post_repository_impl.dart`-ot hozza.
-- Bármely új production Flutter screen a `test/ui/ui_inventory_test.dart`
-  hardcode-olt számlálóját (most 70) tolja el — ez a repóban RENDSZERESEN
-  visszatérő, körön kívüli CI-only javítás (E09-R06/R07/R08/R09/R12);
-  mérje meg a pre-flightban, hoz-e a kör új screent, és ha igen, vegye fel
-  előre a fájlt az `allowed_paths`-ra (§0.0 D6 minta, `docs/rounds/e09-r12-post-composer-draft-and-outbox.md`).
+- A `feed` router MÉG NINCS bekötve a `build_community_router`-be (a Kör
+  5/8/10/11/12 precedense szerint — a Kör 13 a §3 tilos zónája miatt csak
+  egy self-contained teszt-app-ba mountolta). Ha a Kör 14 (feed UI) HTTP-
+  szinten hívná a `GET /community/feed` végpontot VAGY egy valódi
+  `feed_repository_impl.dart`-ot adna a Kör 5 `CommunityFeedRepository`
+  interfészére (ADR 0399 §1), mérje meg, hogy ez a kör-e, aminek a scope-ja
+  a bekötést hozza — a `post_repository_impl.dart` (Kör 12 óta szintén
+  hiányzó) ugyanezt a mintát követi, érdemes egyszerre megvizsgálni.
+- A cursor wire-alakja `<base64url(json)>.<base64url(hmac)>`, a payload
+  `(created_at, post_id, feed_version)` — a kliens ezt OPAQUE-ként kezelje,
+  ne próbálja dekódolni vagy értelmezni (`docs/adr/0406-following-feed-and-cursor-pagination.md`
+  D4/D5). Malformed/forged cursor a szerver oldalán csendben friss első
+  lapra vált (HTTP 200, NEM 422) — a kliens-oldali `feed_controller.dart`
+  ezt a válasz-alakot ("kevesebb elem, mint várt, `next_cursor: null`"
+  ELLENTÉTBEN egy explicit hibakóddal) ne tévessze össze egy hálózati
+  hibával.
+- Az oldalméret alapértéke 25, maximuma 50 (`FEED_PAGE_SIZE_DEFAULT` /
+  `FEED_PAGE_SIZE_MAX`, `backend/app/community/schemas/feed.py`) — a Kör 14
+  "Továbbiak betöltése" gombja ezt a lapméretet várja el válaszonként,
+  NEM egy nagyobb, kliens-oldali batch-et.
+- A feed a viewer SAJÁT posztjait NEM adja vissza (a `community_follows`
+  join miatt senki nem "követi saját magát") — ha a Kör 14 UX-je elvárná a
+  saját posztok megjelenését a feedben (SDD §13.2 "saját posztok
+  opcionálisan"), ez a Kör 14 saját, dokumentálandó döntése, NEM egy
+  backend-hiba.
+- A review 2 javító kört igényelt egy engedékeny mérce-helper (A7
+  index-guard) és egy nem-engedélyezett séma-bővítés miatt — lásd
+  `docs/reviews/e09-r13-review.md` F1/F2 a mintázat elkerüléséhez (kötelező
+  §6.1 valódi-sértés próbát TÉNYLEGESEN futtatni inline, nem csak
+  dokumentálni; új séma-elemet a brief §5/ADR nélkül nem hozzáadni).
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R13 —
+Following feed és cursor pagination backend**
+(`docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md`, engine
+a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R12 — Post
 composer draft és outbox** (`docs/rounds/e09-r12-post-composer-draft-and-outbox.md`,
