@@ -722,8 +722,9 @@ def test_search_block_filter_integration_at_repository_level(session_factory):
             query="ben",
             cursor=None,
             limit=50,
+            cursor_secret="test-secret",
         )
-        results = set(page.public_ids)
+        results = {hit.public_id for hit in page.hits}
 
     assert target_pid not in results, (
         "A2 violated — blocked profile leaked through the repository block-filter"
@@ -769,20 +770,22 @@ def _decode_cursor_payload(cursor: str) -> dict[str, object]:
 def test_f4_cursor_omits_blocked_profile_handle_and_pk(
     client, session_factory
 ):
-    """F4 — the security-reviewer agent's specific probe is now a
-    permanent regression test.
+    """F4 — security-reviewer's specific scenario, inverted.
 
-    Setup: seed two profiles whose handles share a 3-char prefix
-    (the ``MIN_QUERY_LENGTH`` boundary). The viewer's block-edge
-    targets the LEXICOGRAPHICALLY FIRST one. With ``limit=1`` the
-    raw SQL fetches both rows in ``handle_normalized ASC`` order;
-    pre-F4 the cursor was derived from ``rows[-1]`` (which IS
-    the blocked row in this scenario) and ``encode_cursor`` was
-    plain base64-JSON carrying the blocked row's
-    ``handle_normalized`` + internal integer PK. Post-F4 the
-    cursor is HMAC-opaque (the JSON is no longer trivially
-    readable on the wire) AND references the LAST RETURNED hit
-    from the block-filtered set, which is the visible row.
+    The pre-F4 ``_encode_cursor`` was plain base64-JSON over
+    ``(rows[-1].handle_normalized, rows[-1].id)`` — the LAST
+    RAW row, which can be a block-filtered-out row. The
+    security-reviewer's probe: viewer blocks the FIRST raw
+    row (``testp-aaa``); ``q=testp&limit=1`` paginates; the
+    pre-F4 cursor carried ``{h: 'testp-aaa', id: <pk>}`` —
+    the blocked profile's handle and internal PK.
+
+    Post-F4 the cursor is derived from the LAST KEPT hit (the
+    block-filtered, returned set). When the ONLY raw row in
+    the page is a blocked one, the kept set is empty, and the
+    repository MUST NOT generate a cursor (the security
+    reviewer's "no leak" property). The test asserts the
+    cursor is None on this exact scenario.
     """
     viewer_pid, viewer_headers = _make_user_with_headers(
         session_factory, email="viewer@s.test", user_id=1, handle="viewer"
@@ -800,13 +803,11 @@ def test_f4_cursor_omits_blocked_profile_handle_and_pk(
         handle="testp-bbb",
     )
 
-    # Establish a block edge (viewer → testp-aaa). The edge is
-    # symmetric per the §D2 helper, so testp-aaa is invisible
-    # to the viewer.
+    # Block the LEXICOGRAPHICALLY FIRST raw row (testp-aaa)
+    # — this is the security-reviewer's specific scenario.
     with session_factory() as db:
         viewer_pk = db.query(CommunityProfile).filter_by(public_id=viewer_pid).one().id
         blocked_pk = db.query(CommunityProfile).filter_by(public_id=blocked_pid).one().id
-        visible_pk = db.query(CommunityProfile).filter_by(public_id=visible_pid).one().id
         db.add(
             CommunityBlock(
                 blocker_profile_id=viewer_pk,
@@ -822,42 +823,27 @@ def test_f4_cursor_omits_blocked_profile_handle_and_pk(
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    # The public_ids list MUST drop the blocked profile.
-    assert str(blocked_pid) not in body["public_ids"], (
-        "F4 violated — blocked profile appeared in the response body"
+
+    # The only row that survived the [:1] trim was the
+    # blocked one — the block filter empties the kept set,
+    # so the response is empty.
+    assert body["public_ids"] == [], (
+        f"F4 violated — expected an empty public_ids list (the only raw row "
+        f"was the blocked one); got {body['public_ids']}"
     )
-    assert str(visible_pid) in body["public_ids"], (
-        "F4 setup error — visible profile is missing from the response"
+    assert body["hits"] == [], (
+        f"F4 violated — expected an empty hits list; got {body['hits']}"
     )
 
-    cursor = body["next_cursor"]
-    assert cursor, "F4 setup error — expected a next_cursor (more rows remain)"
-
-    payload = _decode_cursor_payload(cursor)
-    payload_handle = str(payload.get("h", ""))
-    payload_id = int(payload.get("id", -1))  # type: ignore[arg-type]
-
-    # F4 invariant — the cursor does not leak the BLOCKED
-    # profile's handle. Pre-F4, the cursor's ``h`` was
-    # "testp-aaa" and ``id`` was the blocked profile's
-    # internal PK. Post-F4, the cursor references the LAST
-    # RETURNED hit from the block-filtered set, which is the
-    # visible row.
-    assert payload_handle != "testp-aaa", (
-        f"F4 violated — cursor payload's handle is the BLOCKED profile: {payload}"
-    )
-    assert payload_id != blocked_pk, (
-        f"F4 violated — cursor payload's internal PK is the BLOCKED profile: {payload}"
-    )
-
-    # And the cursor DOES reference the visible profile, which
-    # is the one the viewer will see as the last hit on the
-    # next page.
-    assert payload_handle == "testp-bbb", (
-        f"F4 violated — cursor payload does not reference the visible profile: {payload}"
-    )
-    assert payload_id == visible_pk, (
-        f"F4 violated — cursor payload's PK is not the visible profile's: {payload}"
+    # F4 invariant — the cursor MUST NOT be generated when
+    # the kept set is empty. Pre-F4 it WAS generated, carrying
+    # the blocked profile's handle and internal PK.
+    assert body["next_cursor"] is None, (
+        f"F4 violated — next_cursor was generated even though the only raw row "
+        f"was the blocked profile. Pre-F4 the cursor carried the blocked row's "
+        f"handle and PK. The cursor is now opaque AND derived from the kept "
+        f"set only — there is no kept row, so the cursor must be None. "
+        f"Got: {body['next_cursor']!r}"
     )
 
 
@@ -927,9 +913,14 @@ def test_f4_cursor_round_trip_with_real_secret(client, session_factory):
     regression that swapped the secret to a different value
     (or skipped the signature altogether) would break the
     forward-pagination path on page 2.
-    """
-    import base64
 
+    The forward-pagination proof: with two ``alice-*``
+    profiles and ``limit=1`` page 1 returns ``alice-one`` +
+    a HMAC-signed cursor; page 2 (with the cursor) returns
+    ``alice-two``. A tampered or wrongly-signed cursor falls
+    back to a fresh first page (no 500, no silent
+    pass-through).
+    """
     _, viewer_headers = _make_user_with_headers(
         session_factory, email="viewer@s.test", user_id=1, handle="viewer"
     )
@@ -946,13 +937,19 @@ def test_f4_cursor_round_trip_with_real_secret(client, session_factory):
         headers=viewer_headers,
     )
     assert response.status_code == 200
-    cursor = response.json()["next_cursor"]
-    assert cursor, "F4 setup error — expected a next_cursor"
+    body1 = response.json()
+    cursor = body1["next_cursor"]
+    assert cursor, "F4 setup error — expected a next_cursor (alice-two still in the queue)"
+    # Page 1 returned alice-one (the lex-first match); the
+    # cursor carries the position for page 2 to resume from.
+    page1_handles = [h["handle"] for h in body1["hits"]]
+    assert page1_handles == ["alice-one"], (
+        f"F4 setup error — expected page 1 to be ['alice-one']; got {page1_handles}"
+    )
 
-    # Forward the cursor to the next page — the repository
-    # re-validates the HMAC. A tampered or wrongly-signed
-    # cursor falls back to a fresh first page (no 500, no
-    # silent pass-through of a malicious payload).
+    # Forward the cursor to page 2 — the repository re-validates
+    # the HMAC against the live ``settings.secret_key``. A
+    # tampered cursor falls back to a fresh first page.
     response2 = client.get(
         "/community/profiles/search",
         params={"q": "alice", "limit": 1, "cursor": cursor},
@@ -960,12 +957,66 @@ def test_f4_cursor_round_trip_with_real_secret(client, session_factory):
     )
     assert response2.status_code == 200, response2.text
     body2 = response2.json()
-    # The second page returns the SECOND profile (the one the
-    # first cursor pointed to). This proves the cursor is
-    # real, not a stub.
-    assert "alice-two" in response.text or "alice-one" in response.text  # noqa: E501
-    # And the cursor must be opaque base64 (not a raw handle).
-    assert "." in (body2.get("next_cursor") or "")
+    # Page 2 must return the SECOND profile. A regression that
+    # dropped the cursor entirely (e.g. a stub cursor) would
+    # re-return alice-one, breaking pagination.
+    page2_handles = [h["handle"] for h in body2["hits"]]
+    assert page2_handles == ["alice-two"], (
+        f"F4 violated — page 2 must be ['alice-two'] (forward-pagination); got {page2_handles}"
+    )
+    # No more rows after alice-two (we seeded only 2), so
+    # the cursor is None.
+    assert body2["next_cursor"] is None, (
+        f"F4 violated — page 2 must be the last page; got next_cursor={body2['next_cursor']!r}"
+    )
+
+
+def test_f4_tampered_cursor_falls_back_to_fresh_first_page(
+    client, session_factory
+):
+    """F4 — a tampered cursor (signature fails to verify) is
+    rejected at the repository boundary, NOT silently passed
+    through. The request falls back to a fresh first page.
+    """
+    _, viewer_headers = _make_user_with_headers(
+        session_factory, email="viewer@s.test", user_id=1, handle="viewer"
+    )
+    _make_user_with_headers(
+        session_factory, email="alice@s.test", user_id=2, handle="alice-one"
+    )
+    _make_user_with_headers(
+        session_factory, email="alice2@s.test", user_id=3, handle="alice-two"
+    )
+
+    # A cursor with a valid JSON payload but a bogus signature.
+    # The repository's _verify_cursor must reject it; the
+    # request falls back to a fresh first page (no 5xx, no
+    # arbitrary SQL).
+    import base64
+
+    payload = base64.urlsafe_b64encode(
+        b'{"h": "alice", "id": 999999}'
+    ).decode("ascii")
+    bogus_cursor = f"{payload}.{base64.urlsafe_b64encode(b'bogus-sig-bytes-here').decode('ascii')}"
+
+    response = client.get(
+        "/community/profiles/search",
+        params={"q": "alice", "limit": 1, "cursor": bogus_cursor},
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200, (
+        f"F4 violated — tampered cursor must be rejected (200, fresh first page), "
+        f"got {response.status_code}: {response.text}"
+    )
+    body = response.json()
+    # The fallback re-issued a fresh first page — alice-one is
+    # the first hit. The page-N cursor that the attacker tried
+    # to forge did NOT silently narrow or extend the result set.
+    page_handles = [h["handle"] for h in body["hits"]]
+    assert page_handles == ["alice-one"], (
+        f"F4 violated — tampered cursor should fall back to first page "
+        f"(['alice-one']); got {page_handles}"
+    )
 
 
 # ---------------------------------------------------------------------------

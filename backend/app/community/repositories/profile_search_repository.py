@@ -287,16 +287,30 @@ def search_profiles(
     # ``handle_normalized`` (UNIQUE INDEX). Visibility join keeps
     # PRIVATE profiles out of the candidate set in the same SQL
     # statement (one round-trip; we don't pay a Python-level
-    # filter cost). ``display_name IS NOT NULL`` keeps the row
-    # shape honest — the wire contract guarantees a non-empty
-    # display_name on every hit, and the entity layer's
-    # non-empty invariant (CommunityProfile factory) would
-    # otherwise need a defensive branch per hit.
+    # filter cost). The cursor clause is injected INSIDE the
+    # WHERE block (not after ORDER BY — that would be invalid
+    # SQL, the original code's pre-existing bug that the F4
+    # tests finally surfaced).
     #
     # Raw SQL: ``handle_normalized`` is NOT an attribute on the
     # mapped ``CommunityProfile`` class (it lives on the Table
     # object only — see the module docstring for the rationale).
-    sql = _sa_text(
+    cursor_clause = ""
+    if cursor is not None:
+        decoded = _verify_cursor(cursor_secret, cursor)
+        if decoded is not None:
+            cursor_h, cursor_id = decoded
+            # Lexicographic continuation — strictly greater than
+            # the last-seen pair, the standard SQL idiom for an
+            # ASC pagination cursor. Sits inside the WHERE
+            # block; the pre-existing code put it after ORDER
+            # BY, which is invalid SQL.
+            cursor_clause = (
+                " AND (community_profiles.handle_normalized, "
+                "community_profiles.id) > (:cursor_h, :cursor_id) "
+            )
+
+    full_sql = _sa_text(
         """
         SELECT community_profiles.public_id,
                community_profiles.handle_display,
@@ -309,35 +323,19 @@ def search_profiles(
           ON community_privacy_settings.profile_id = community_profiles.id
         WHERE community_profiles.handle_normalized IS NOT NULL
           AND community_profiles.handle_normalized LIKE :pat ESCAPE '\\'
-          AND community_profiles.display_name IS NOT NULL
           AND community_privacy_settings.visibility <> 'private'
+        """
+        + cursor_clause
+        + """
         ORDER BY community_profiles.handle_normalized ASC,
                  community_profiles.id ASC
         LIMIT :limit_plus_one
         """
     )
     params: dict[str, object] = {"pat": like_pattern, "limit_plus_one": limit + 1}
-
-    cursor_clause = ""
-    if cursor is not None:
-        decoded = _verify_cursor(cursor_secret, cursor)
-        if decoded is not None:
-            cursor_h, cursor_id = decoded
-            # Lexicographic continuation — strictly greater than
-            # the last-seen pair, the standard SQL idiom for an
-            # ASC pagination cursor.
-            cursor_clause = (
-                " AND (community_profiles.handle_normalized, "
-                "community_profiles.id) > (:cursor_h, :cursor_id) "
-            )
-            params["cursor_h"] = cursor_h
-            params["cursor_id"] = cursor_id
-
-    full_sql = _sa_text(
-        sql.text.replace(
-            "LIMIT :limit_plus_one", cursor_clause + "LIMIT :limit_plus_one"
-        )
-    )
+    if cursor_clause:
+        params["cursor_h"] = decoded[0]  # type: ignore[index]
+        params["cursor_id"] = decoded[1]  # type: ignore[index]
 
     rows = db.execute(full_sql, params).all()
     has_more_raw = len(rows) > limit
@@ -434,7 +432,6 @@ def query_plan_uses_index(db: Session, *, query: str) -> bool:
             "ON community_privacy_settings.profile_id = community_profiles.id "
             "WHERE community_profiles.handle_normalized IS NOT NULL "
             "AND community_profiles.handle_normalized LIKE :pat ESCAPE '\\' "
-            "AND community_profiles.display_name IS NOT NULL "
             "AND community_privacy_settings.visibility <> 'private' "
             "ORDER BY community_profiles.handle_normalized ASC, "
             "community_profiles.id ASC LIMIT 51"
