@@ -1,10 +1,11 @@
 /// Following feed screen (E09-R14, brief §1 / §3 / §5 / §6).
 ///
 /// The screen is a pure projection of [FeedState]: every interactive
-/// widget calls into the controller, every visible label reads from the
-/// controller's state. The screen owns no feed-domain state of its own
-/// (the items live in the controller; the cache lives in [FeedCache];
-/// A3 / A5 invariance).
+/// widget calls into the controller, every visible label reads from
+/// `AppLocalizations.of(context)` (F1 — feed labels and per-card
+/// templates route through ARB en/hu). The screen owns no feed-domain
+/// state of its own (the items live in the controller; the cache lives
+/// in [FeedCache]; A3 / A5 invariance).
 ///
 /// **Layout (top → bottom):**
 ///
@@ -13,20 +14,14 @@
 ///    looking at stay visible while the new fetch is in flight (A7).
 /// 2. The list of [FeedCard]s, one per post.
 /// 3. A footer that renders the right thing per [FeedStatus]:
-///    * `content` / `refreshing` — an explicit "Továbbiak betöltése"
-///      button (no auto-scroll-pagination — A3).
+///    * `content` / `refreshing` — an explicit "Load more" button (no
+///      auto-scroll-pagination — A3).
 ///    * `paging` — a non‑blocking progress indicator.
-///    * `end` — an end-of-feed marker plus the "Gyakorlás indítása"
-///      CTA (A6).
-///    * `offline` — a "Kapcsolat nélküli, helyi másolat" banner.
+///    * `end` — an end-of-feed marker plus the "Start practice" CTA
+///      (A6).
+///    * `offline` — an "Offline · local copy" banner.
 ///    * `error` — an error card with a retry button (A1).
 ///    * `loading` (initial) — a centred spinner.
-///
-/// **Strings:** the screen labels are kept in this file as constants.
-/// ARB entries for the feed are a future round's scope — the Kör 14
-/// ``allowed_paths`` covers the screen file only; touching
-/// ``lib/l10n/**`` would be a scope violation. The labels stay here so
-/// a future i18n round picks them up without a screen rewrite.
 ///
 /// **No autoplay / no auto-scroll-pagination (brief §5.1, A3):** the
 /// screen has no `NotificationListener<ScrollNotification>`, no
@@ -40,25 +35,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/feed_controller.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../widgets/feed_card_registry.dart';
-
-/// Following-feed labels. Kept here (not in the ARB) because the l10n
-/// catalogue for the feed is a future round's scope.
-abstract final class _FeedLabels {
-  static const String title = 'Követési feed';
-  static const String loadingInitial = 'Feed betöltése…';
-  static const String emptyState = 'Még nincs poszt a feedben.';
-  static const String emptyStateCta = 'Gyakorlás indítása';
-  static const String loadMore = 'Továbbiak betöltése';
-  static const String loadingMore = 'Betöltés…';
-  static const String endOfFeed = 'Elérted a feed végét.';
-  static const String offlineBanner = 'Offline · a helyi másolat jelenik meg.';
-  static const String errorTitle = 'A feed nem tölthető be.';
-  static const String retry = 'Újrapróbálkozás';
-  static const String refresh = 'Frissítés';
-}
 
 /// The following-feed route.
 class FollowingFeedScreen extends ConsumerStatefulWidget {
@@ -85,12 +65,13 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(feedControllerProvider);
+    final localizations = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text(_FeedLabels.title),
+        title: Text(localizations.followingFeedTitle),
         actions: <Widget>[
           IconButton(
-            tooltip: _FeedLabels.refresh,
+            tooltip: localizations.followingFeedRefresh,
             icon: const Icon(Icons.refresh),
             onPressed: _canRefresh(state.status)
                 ? () => ref.read(feedControllerProvider.notifier).refresh()
@@ -179,13 +160,14 @@ class _LoadingInitial extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final localizations = AppLocalizations.of(context);
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text(_FeedLabels.loadingInitial),
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text(localizations.followingFeedLoadingInitial),
         ],
       ),
     );
@@ -199,6 +181,7 @@ class _ErrorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -208,14 +191,14 @@ class _ErrorCard extends StatelessWidget {
             Icon(Icons.error_outline, color: theme.colorScheme.error, size: 48),
             const SizedBox(height: 16),
             Text(
-              _FeedLabels.errorTitle,
+              localizations.followingFeedErrorTitle,
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: onRetry,
-              child: const Text(_FeedLabels.retry),
+              child: Text(localizations.followingFeedRetry),
             ),
           ],
         ),
@@ -230,6 +213,7 @@ class _OfflineBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     return Container(
       width: double.infinity,
       color: theme.colorScheme.surfaceContainerHighest,
@@ -240,7 +224,7 @@ class _OfflineBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              _FeedLabels.offlineBanner,
+              localizations.followingFeedOfflineBanner,
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -256,6 +240,7 @@ class _EndOfFeed extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       child: Column(
@@ -267,7 +252,7 @@ class _EndOfFeed extends StatelessWidget {
               Icon(Icons.check_circle_outline, color: theme.iconTheme.color),
               const SizedBox(width: 8),
               Text(
-                _FeedLabels.endOfFeed,
+                localizations.followingFeedEndOfFeed,
                 style: theme.textTheme.bodyMedium,
                 textAlign: TextAlign.center,
               ),
@@ -276,17 +261,17 @@ class _EndOfFeed extends StatelessWidget {
           const SizedBox(height: 16),
           FilledButton.icon(
             icon: const Icon(Icons.play_arrow),
-            label: const Text(_FeedLabels.emptyStateCta),
+            label: Text(localizations.followingFeedEmptyStateCta),
             onPressed: () {
               // The CTA's nav is a future round's job — for now it
               // surfaces a non-blocking message so the user sees the
               // affordance is wired.
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
+                SnackBar(
                   content: Text(
-                    'A gyakorlás indítása a jövőbeli körökben érhető el.',
+                    localizations.followingFeedPracticeNotAvailable,
                   ),
-                  duration: Duration(seconds: 2),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
@@ -381,9 +366,9 @@ class _ContentState extends State<_Content> {
             child: items.isEmpty
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: const <Widget>[
-                      SizedBox(height: 80),
-                      _EmptyState(),
+                    children: <Widget>[
+                      const SizedBox(height: 80),
+                      const _EmptyState(),
                     ],
                   )
                 : ListView.builder(
@@ -415,21 +400,25 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     return Center(
       child: Column(
         children: <Widget>[
-          Text(_FeedLabels.emptyState, style: theme.textTheme.bodyMedium),
+          Text(
+            localizations.followingFeedEmptyState,
+            style: theme.textTheme.bodyMedium,
+          ),
           const SizedBox(height: 16),
           FilledButton.icon(
             icon: const Icon(Icons.play_arrow),
-            label: const Text(_FeedLabels.emptyStateCta),
+            label: Text(localizations.followingFeedEmptyStateCta),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
+                SnackBar(
                   content: Text(
-                    'A gyakorlás indítása a jövőbeli körökben érhető el.',
+                    localizations.followingFeedPracticeNotAvailable,
                   ),
-                  duration: Duration(seconds: 2),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
@@ -455,44 +444,45 @@ class _Footer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     switch (state.status) {
       case FeedStatus.end:
         return endState ?? const _EndOfFeed();
       case FeedStatus.paging:
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
           child: Center(
             child: Column(
               children: <Widget>[
-                CircularProgressIndicator(),
-                SizedBox(height: 8),
-                Text(_FeedLabels.loadingMore),
+                const CircularProgressIndicator(),
+                const SizedBox(height: 8),
+                Text(localizations.followingFeedLoadingMore),
               ],
             ),
           ),
         );
       case FeedStatus.refreshing:
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
           child: Center(
             child: Column(
               children: <Widget>[
-                CircularProgressIndicator(),
-                SizedBox(height: 8),
-                Text(_FeedLabels.refresh),
+                const CircularProgressIndicator(),
+                const SizedBox(height: 8),
+                Text(localizations.followingFeedRefresh),
               ],
             ),
           ),
         );
       default:
-        // Content / offline: the explicit "Továbbiak betöltése"
-        // button. NO scroll-listener triggers this — A3.
+        // Content / offline: the explicit "Load more" button. NO
+        // scroll-listener triggers this — A3.
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: Center(
             child: FilledButton.icon(
               icon: const Icon(Icons.expand_more),
-              label: const Text(_FeedLabels.loadMore),
+              label: Text(localizations.followingFeedLoadMore),
               onPressed: _canLoadMore(state.cursor) ? onLoadMore : null,
             ),
           ),
