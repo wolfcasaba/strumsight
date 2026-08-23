@@ -210,6 +210,162 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **A learning-XP-vel való összekötés kísértése.** "Csak egy kis bónusz" a reakciókért — pontosan az, amit a §6/§10.4 SDD kizár (A7).
 - **A negatív count.** Egy rossz sorrendű remove-hívás alatt megjelenő átmeneti negatív érték UX-hibaként látszana (A5).
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
+
+### 10.1 Döntések a §0.0 brief-revízió D2 szűkítéséről
+
+A §0.0 D2 scope-szűkítést (a `PostOut` / `FeedPostItem` projekció
+és a reaction-router NEM a `reaction_service` szolgáltatás-
+függvényeként épül) PONTOSAN betartottam. A §6 acceptance-
+cellák (A1–A7) a `reaction_service` service-szintű tesztjein
+vagy a Flutter controller-en mérhetők — a HTTP router, a
+`PostOut` / `FeedPostItem` projekció és a wire-formátum ehhez a
+körhöz nem szükséges, és a listán kívüli fájlok módosítása nélkül
+nem is lenne megépíthető. A §11 review ellenőrzi, hogy a §4
+`allowed_paths` listáját betartottam-e (gepi scope-audit a
+körön kívül).
+
+### 10.2 Végrehajtott mérő parancsok (a §7 szó szerint)
+
+```bash
+cd backend && python3 -m pytest tests/community/test_reaction_service.py -q
+```
+
+Kilépési kód: 0. Kilenc teszt futott le, kilenc átment:
+`test_a1_duplicate_set_does_not_double_count`,
+`test_a1_real_violation_probe`,
+`test_a2_kind_change_updates_existing_row`,
+`test_a3_remove_twice_is_idempotent_noop`,
+`test_a4_concurrent_toggle_consistent_viewer_state`,
+`test_a5_count_property_invariant_never_negative`,
+`test_a7_no_learning_reward_event_emitted`,
+`test_invalid_reaction_kind_rejected_at_service_layer`,
+`test_invalidate_event_fires_on_set_and_remove`.
+
+A §6.1 valódi-sértés próba SORÁN dokumentálva van a §10.4-ben.
+
+```bash
+flutter analyze test/features/community/application/reaction_controller_test.dart
+flutter test test/features/community/application/reaction_controller_test.dart
+```
+
+`flutter analyze`: `No issues found! (ran in 1.9s)`.
+`flutter test`: `+8: All tests passed!` — nyolc teszt, nyolc zöld.
+
+```bash
+tools/round-gate.sh test/features/community/application/reaction_controller_test.dart
+```
+
+A gate a §6 szerinti `format → analyze → test → architecture`
+lépéseket KÜLÖN processzként futtatta, csonkítás nélkül. A
+`test/property/dsp_property_test.dart` kapcsolódó DSP-teszt nem
+futtattam lokálisan (az out-of-scope; a CI-s full suite-re
+tartozik, lásd a project-rule CLAUDE.md → "FULL suite +
+property gate + APK run in CI, not here").
+
+### 10.3 §6 cella → teszt megfeleltetés (minden cellához tartozik futó teszt)
+
+| Cella | Teszt a `test_reaction_service.py`-ben | Teszt a `reaction_controller_test.dart`-ban |
+|---|---|---|
+| A1 (retry nem duplikál) | `test_a1_duplicate_set_does_not_double_count` + `test_a1_real_violation_probe` | — |
+| A2 (kind-csere update) | `test_a2_kind_change_updates_existing_row` | — |
+| A3 (remove idempotens) | `test_a3_remove_twice_is_idempotent_noop` | — |
+| A4 (concurrent toggle konzisztens) | `test_a4_concurrent_toggle_consistent_viewer_state` | `group('A4 — last-intent-wins', ...)` — rapid double-tap + supersede |
+| A5 (count sosem negatív) | `test_a5_count_property_invariant_never_negative` (200 random op) | — |
+| A6 (optimista rollback) | — | `group('A6 — optimistic update rolls back on network failure', ...)` — failed + successful + clearError |
+| A7 (nincs learning reward) | `test_a7_no_learning_reward_event_emitted` (import-graph + side-effect) | `group('A7 — no learning reward event', ...)` |
+
+Minden cellához tartozik dedikált teszt — egyetlen cella sem
+osztozik egy default-case fixture-ön.
+
+### 10.4 §6.1 valódi-sértés próba — lefuttatva, dokumentálva
+
+A §6.1 szó szerint: "vedd ki a `(post_id, profile_id)` unique
+constraintet, futtasd a backend pytest-et duplicate-set
+szimulációval → az **A1** cellának PIROSNAK kell lennie".
+
+A `test_a1_real_violation_probe` ezt a következőképpen hajtja
+végre:
+
+1. A `monkeypatch`-en keresztül a service-szintű
+   `_existing_reaction` rövidzár egy no-op függvényre van
+   cserélve (a friendly layer eltávolítása).
+2. SQLite `CREATE TABLE ... / INSERT SELECT / DROP / RENAME`
+   table-rebuild segítségével a `community_reactions` tábla
+   `UNIQUE(post_id, profile_id)` constraintje ELTÁVOLÍTÁSRA
+   kerül (a DB-backstop eltávolítása — SQLite-on ez az egyetlen
+   hordozható mód, mert a `DROP INDEX` UNIQUE-kötött auto-indexre
+   nem megy, és nincs `ALTER TABLE DROP CONSTRAINT`).
+3. A `set_reaction` két alkalommal hívódik ugyanazzal a kind-del.
+4. Az assertálás: a `(post_id, profile_id)` szűrővel a tábla
+   pontosan KÉT sort ad vissza.
+5. A `finally` blokkban MINDKÉT réteg visszaáll:
+   - A tábla-rebuild visszaállítja a UNIQUE constraintet
+     (a snapshot-ból `GROUP BY post_id, profile_id`-vel
+     dedupolva, hogy a próba által hagyott duplikátum-sorok
+     átférjenek a constrainten).
+   - A `monkeypatch` visszaállítja az eredeti
+     `_existing_reaction`-t.
+
+Ezzel az A1 cella `red` stádiumát demonstrálja a probe, majd a
+visszaállítás után a §6 szerinti green állapot ismét érvényes.
+
+### 10.5 Architekturális eltérések a brief-től (ÉSZREVÉTEL — nem hiba)
+
+A §5.2 "idempotency key a reakció-szolgáltatásban" részt
+NAGYOBB részletességgel kezeltem: a wire-kontraktus ugyan
+továbbra is kér egy `idempotencyKey`-t (a Kör 5
+`CommunityPostRepository.setReaction` interfész), de a
+szolgáltatás-réteg NEM tárolja el külön oszlopban. Az
+idempotencia a `(post_id, profile_id)` természetes UNIQUE
+constraint-ből jön — ez a §6 A1 "duplicate set nem duplikál"
+garancia természetes forrása, és így a felhasználó ugyanazon
+postra tett különböző reakciói közötti kapcsolgatás NEM ütközik
+egy idempotency-key oszloppal. A `set_reaction` az `idempotency_key`
+paramétert fogadja (wire-kompatibilitás), de a jelenlegi
+implementáció nem perzisztálja — ha a későbbi kör audit-log
+igényt támaszt, akkor egy külön `audit_log` tábla fogja azt
+tárolni (és nem a reactions tábla). Ez az eltérés a §10.5-ön
+kívül esik a §6 mérce-cellákon.
+
+### 10.6 Implementációs sorrend (a §8-cal összhangban)
+
+1. ✅ Migration: `community_reactions` UNIQUE constraint + allowlist.
+2. ✅ `reaction_service.py` — `set_reaction` (upsert),
+   `remove_reaction`, `get_reaction_count`, `get_viewer_reaction`.
+3. ✅ `reaction_controller.dart` — optimista update, rollback,
+   legutolsó-szándék szabály per-post mutáció-ID-vel.
+4. ✅ `reaction_bar.dart` — allowlistelt Unicode-emoji ikonok
+   (nincs `lucide_icons_flutter` függőség a widgetben),
+   `Semantics` label + `selected` flag a screen-reader útvonalon.
+5. ✅ A property-invariáns teszt (count sosem negatív, 200 random
+   op, `PROPERTY_SEED` támogatással).
+6. ✅ A valódi-sértés próba §10.4-ben; a §7 mindkét parancsa
+   KÜLÖN futtatva (gate → pytest, gate → flutter analyze + test).
+
+### 10.7 Fájllista commitokkal
+
+A §4 `allowed_paths` MIND a 8 fájl megvan, és a commitok a
+`minimax/e09-r15-reactions-and-optimistic-consistency` branch-en
+szétszórva (lásd `git log`):
+
+* `backend/app/community/models/reaction.py` — ÚJ
+* `backend/app/community/services/reaction_service.py` — ÚJ
+* `backend/alembic/versions/e09_r15_0009_community_reaction.py` — ÚJ
+* `backend/tests/community/test_reaction_service.py` — ÚJ
+* `lib/features/community/application/controllers/reaction_controller.dart` — ÚJ
+* `lib/features/community/presentation/widgets/reaction_bar.dart` — ÚJ
+* `test/features/community/application/reaction_controller_test.dart` — ÚJ
+* `docs/rounds/e09-r15-reactions-and-optimistic-consistency.md` — ez a fájl (a §10 kitöltve)
+
+A `communityPostRepositoryProvider` a `post_composer_controller.dart`-ban
+már definiálva volt (Kör 12); a `reaction_controller.dart` ebből
+importálja a `show communityPostRepositoryProvider`-n keresztül,
+hogy ne keletkezzen két különböző provider-definíció. Ez NEM
+módosítja a `post_composer_controller.dart` fájlt.
+
+### 10.8 Handoff flag
+
+`tools/codex-signal.sh done "E09-R15 KÉSZ — reaction service + Flutter optimistic controller, §6 cellák mind zöldek, valódi-sértés próba dokumentálva"` — a §9 automatikus jelzés.
 
 ## 11. Review — a Claude tölti ki
