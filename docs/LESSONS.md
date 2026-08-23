@@ -16117,3 +16117,49 @@ commitolatlan, értékes tartalom ül egy önálló reset mellett.
 `round-merge-lock.sh` bővítés megkövetelhetné, hogy a hívó parancs maga
 tartalmazza a fetch+reset lépést az ELSŐ sorban (dokumentációs konvenció,
 nem gépi kikényszerítés).
+
+## L430 — Két hasonló nevű feature (`analyze` vs `audio_analysis`) a brief-pre-flightban forrás-összetévesztési kockázat; a `round-slots.py reserve-adr` a batch-előkészített brief KALENDÁRIUM-avulása ellen is véd, nem csak a párhuzamos-session versenyhelyzet ellen (E09-R10, 2026-08-23)
+
+**Mit mértünk.** Az E09-R10 brief pre-flightjában a `lib/features/share/
+widgets/strum_card.dart` a `analyze/public.dart` `AnalyzeResult`-ját
+fogyasztja (az EREDETI, klip-szintű chord/strum DSP-detektor), miközben a
+brief `allowed_paths`/tilos-zóna sora `lib/features/audio_analysis/**`-t
+nevez meg — egy MÁSIK, nagyobb, V2 elemzés-feature (timeline/insight/
+comparison/export réteggel, ADR 0247 export-szerződéssel). A két
+feature-név (`analyze` és `audio_analysis`) felszínesen szinonima-szerű, a
+brief saját pre-flight-instrukciója (a `strum_card.dart`/`wrapped_card.dart`
+elolvasása) pedig épp az ELSŐ, nem a MÁSODIK feature-re mutatott — egy
+felületes olvasat könnyen az `AnalyzeResult`-ot vette volna forrásnak az
+`analysis_share_mapper.dart`-hoz, ami a brief saját `allowed_paths`-ával
+ütközött volna (a mapper nem importálhatna `analyze/public.dart`-ot, mert
+az nincs a tilos-zóna listán engedélyezettként megnevezve).
+
+Ugyanebben a pre-flightban a brief előre kiosztott `ADR 0402`-je a
+brief megírása (2026-08-22) és a kör tényleges indítása (2026-08-23) között,
+egy KÖZBEEKŐ, szekvenciális kör (E09-R08) által vált foglaltá — nem
+párhuzamos-session verseny, hanem egyszerű naptári csúszás egy batch-
+előkészített brief és a tényleges indítás között. A `tools/round-slots.py
+reserve-adr --round E09-R10` ezt is helyesen `0404`-re javította.
+
+**Miért.** [[L179]]/a driver-skill §1.0.1 az ADR-szám-ütközést eddig a
+PÁRHUZAMOS session-ek versenyhelyzeteként dokumentálta (`ls docs/adr | tail`
+két session által egyszerre nézve). Ez a kör megerősíti, hogy a
+`round-slots.py reserve-adr` ugyanolyan jól, ugyanazzal az egy paranccsal
+védi a SZEKVENCIÁLIS, naptári avulást is — a batch-előkészített brief
+"Előre kiosztott ADR" mezője attól még elavulhat, hogy közben MÁS, korábban
+sorra kerülő kör felhasználta a számot, függetlenül attól, hogy volt-e
+tényleges párhuzamos futás.
+
+**Hogyan alkalmazd.** (1) Egy brief `allowed_paths`/tilos-zóna sora a
+tényleges forrás-feature neve — ha egy pre-flight-instrukció egy widget
+vagy fájl elolvasására mutat "modell-referenciaként", MINDIG ellenőrizd
+külön, hogy az adott fájl ténylegesen a `allowed_paths`-ban megnevezett
+feature-ből importál-e, ne csak témában hasonló nevű testvér-feature-ből
+(`grep -n "import.*<feature>/public.dart"` a hivatkozott fájlon). (2) A
+`tools/round-slots.py reserve-adr` hívása MINDIG kötelező, akkor is, ha
+nincs ismert párhuzamos session — egy batch-előkészített brief előre
+kiosztott száma önmagában, kalendárium-avulás miatt is elévülhet.
+
+**Őrteszt:** nincs — a feature-név-összetévesztés felismerése emberi/LLM
+olvasat, nem gépi kapu; az ADR-szám-avulás ellen már létező gépi kapu véd
+(`tools/round-slots.py reserve-adr`, `O_CREAT|O_EXCL` fájlzár).

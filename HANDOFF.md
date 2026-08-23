@@ -1,5 +1,70 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R10 KÉSZ — Share artifact szerződések — PR [#419](https://github.com/wolfcasaba/strumsight/pull/419), squash `a29e4ac8` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZEDIK KÖRE KÉSZ.** [ADR 0404](docs/adr/0404-share-artifact-contracts.md):
+sealed `ShareArtifact` hierarchia hét altípussal (practice summary, song
+result, original progression, plan template, analysis improvement,
+achievement, challenge) — minden altípus explicit, minimális mezőkkel,
+`schemaVersion`+`sourceId`+`createdAt` kötelezővel, `type`-discriminátorral
+(NEM mezőhalmazból dönt típust). Négy Flutter mapper
+(`practice_share_mapper.dart`, `song_share_mapper.dart` — 3 factory:
+song result/original progression/plan template, mind `Song`-ból —,
+`analysis_share_mapper.dart` — az `audio_analysis/public.dart`
+`AnalysisComparison`-jából, NEM az `analyze/public.dart`-ból! —,
+`achievement_share_mapper.dart` — 2 factory: achievement + challenge, mind
+gamifikációból), mindegyik kizárólag a saját forrás-feature `public.dart`
+barreljét importálja. Backend Pydantic discriminated union
+(`backend/app/community/schemas/artifacts.py`, `extra="forbid"` + `StrictInt`
+`schemaVersion` egyenlőség-ellenőrzés) — ismeretlen `type`/`schemaVersion`
+`ValidationError`-t dob, nincs csendes best-effort fallback. A challenge-
+artifact hitelesség-mezője a gamifikáció `LedgerEntrySyncStatus`-a
+(E08-R28/ADR 0394, `{unverified, verified}`), NEM az `EvidenceTrust` (egy
+másik, öt fokozatú aktivitás-bizonyíték tengely — a brief §5.3
+megfogalmazása erre a pontosításra szorult). `docs/contracts/
+community-share-artifacts.md` — a wire-shape + deprecation/back-compat
+szabályok referenciapontja.
+
+**A pre-flight (§0.0) egy ADR-szám-ütközést és két forrás-összetévesztési
+kockázatot zárt indítás előtt.** A brief előre kiosztott `ADR 0402`-je a
+brief megírása (2026-08-22) és a kör indítása (2026-08-23) között egy
+KÖZBEEKŐ, szekvenciális kör (E09-R08) által foglalttá vált —
+`tools/round-slots.py reserve-adr` friss `0404`-et adott (D1, [[L430]] —
+a foglaló nem csak párhuzamos-session versenyhelyzet, hanem naptári
+avulás ellen is véd). D3: az `analysis_share_mapper.dart` forrása
+`audio_analysis/public.dart`, NEM `analyze/public.dart` — a két
+hasonló nevű feature ([[L430]]) könnyen összetéveszthető lett volna, mert
+a brief saját pre-flight-instrukciója épp az `analyze`-t fogyasztó
+`strum_card.dart`-ra mutatott referenciaként. D4: a challenge-artifact
+hitelesség-mezője a `LedgerEntrySyncStatus`, nem az `EvidenceTrust`. D2: a
+négy mapper-fájl és a hét artifact-altípus leképezése rögzítve (nincs
+ötödik mapper-fájl, ami tilos-zóna-sértés lett volna).
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **0 javító
+kör** (`docs/reviews/e09-r10-review.md`): review APPROVED elsőre, 0
+BLOCKER/MAJOR. A review a §6.1 KÖTELEZŐ valódi-sértés próbát ÖNÁLLÓAN,
+kézzel megismételte (nem csak az implementer §10.3 állítását fogadta el):
+a `_validate_schema_version` equality-ellenőrzését eltávolította,
+`pytest`-tel megmérte, hogy az A3-cella 2 tesztje PIROSRA vált, majd
+visszaállította. Dedikált `security-reviewer` agent (a brief `risk =
+"high"` miatt kötelező): PASS, 0 BLOCKER/MAJOR — 1 MINOR (`coaching_codes`/
+`chords`/`metrics` lista-mezőknek nincs felső hossz-korlát, a skalár
+mezőkkel ellentétben — horog Kör 11-nek, amikor a post-creation endpoint
+tényleg fogyasztani kezdi) + 2 NOTE (a challenge `verified` állapot
+kliens-oldali nem-kikényszerített volta persistálás előtt; a konkrét Dart
+`fromJson` factory-k megkerülhetik az A3 schemaVersion-ellenőrzést, ha nem
+a bázis `ShareArtifact.fromJson`-on át hívják őket) — egyik sem BLOCKER/
+MAJOR, mindkettő Kör 11+/13+ bekötési horog, dokumentálva. Exact `2f2ed131`:
+Full Gate [32616408599](https://github.com/wolfcasaba/strumsight/actions/runs/32616408599)
++ Backend CI [32616411741](https://github.com/wolfcasaba/strumsight/actions/runs/32616411741)
++ Router CI [32616404016](https://github.com/wolfcasaba/strumsight/actions/runs/32616404016)
+mind success.
+
+**A round jelenleg nincs bekötve** (a security-reviewer mérése): a Dart
+entitást a `community/public.dart` nem exportálja, a backend
+`parse_share_artifact`-ot egy router sem hívja — ez Kör 11+ (poszt-CRUD)
+dolga, a fenti MINOR/NOTE horgokkal együtt.
+
 ## ✅ E09-R09 KÉSZ — Profilkeresés és biztonságos discovery — PR [#418](https://github.com/wolfcasaba/strumsight/pull/418), squash `5a1df780` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) KILENCEDIK KÖRE KÉSZ.** Handle-prefix
