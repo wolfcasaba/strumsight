@@ -17,12 +17,19 @@
 /// interaction (tap-to-play); the registry never embeds a media widget that
 /// starts on first frame. The artifact payload is rendered as plain text /
 /// icons — the user reads the post first, and chooses to open the source.
+///
+/// **i18n (F1):** every user-facing string routes through
+/// `AppLocalizations.of(context)`; per-card titles / metric lines / reward
+/// lines interpolate values via the ARB ICU placeholders (numbers,
+/// `DateTime.toIso8601String()`, pattern strings, etc.).
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
+import '../../domain/policies/community_audience.dart';
 
 /// The card-registry entry-point.
 ///
@@ -142,20 +149,25 @@ class _CardHeader extends StatelessWidget {
   }
 
   String _formatTimestamp(DateTime ts) {
-    // Stable, locale-neutral render — the screen does not own i18n labels
-    // for the feed card yet (future round); this keeps the card predictable
-    // for the widget test.
+    // Stable, locale-neutral render — the card does not own i18n labels
+    // for the timestamp itself (future round); this keeps the card
+    // predictable for the widget test.
     return ts.toIso8601String();
   }
 }
 
 class _AudienceBadge extends StatelessWidget {
   const _AudienceBadge({required this.audience});
-  final dynamic audience;
+
+  // F3 — typed `CommunityAudience` instead of `dynamic`. The single
+  // call-site (`_CardHeader`) always passes a typed value, and the
+  // compile-time check guarantees a future call-site mistake surfaces
+  // loudly instead of degrading silently to `'public'`.
+  final CommunityAudience audience;
 
   @override
   Widget build(BuildContext context) {
-    final label = audience?.wireValue?.toString() ?? 'public';
+    final label = audience.wireValue;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -212,22 +224,31 @@ class _PracticeSummaryCard extends _ArtifactCard<PracticeSummaryArtifact> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final a = artifact;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Gyakorlás összegzés', style: theme.textTheme.titleSmall),
+        Text(
+          localizations.feedCardPracticeSummaryTitle,
+          style: theme.textTheme.titleSmall,
+        ),
         const SizedBox(height: 4),
         Text(
-          'Aktív idő: ${a.activeSeconds}s · Szünet: ${a.pausedSeconds}s · '
-          'Próbálkozások: ${a.attemptCount}',
+          localizations.feedCardPracticeSummaryBody(
+            a.activeSeconds,
+            a.pausedSeconds,
+            a.attemptCount,
+          ),
           style: theme.textTheme.bodySmall,
         ),
         if (a.bestScore != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'Legjobb pontszám: ${(a.bestScore! * 100).toStringAsFixed(0)}%',
+              localizations.feedCardPracticeSummaryBestScore(
+                (a.bestScore! * 100).round(),
+              ),
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -242,6 +263,7 @@ class _SongResultCard extends _ArtifactCard<SongResultArtifact> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final a = artifact;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,13 +271,17 @@ class _SongResultCard extends _ArtifactCard<SongResultArtifact> {
         Text(a.songName, style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          '${a.bpm} BPM · ${a.beatsPerBar}/4 · ${a.chords.join(' → ')}',
+          localizations.feedCardSongBpmBeats(
+            a.bpm,
+            a.beatsPerBar,
+            a.chords.join(' → '),
+          ),
           style: theme.textTheme.bodySmall,
         ),
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
-            'Strumminta: ${a.strumPattern}',
+            localizations.feedCardStrumPattern(a.strumPattern),
             style: theme.textTheme.bodySmall,
           ),
         ),
@@ -271,23 +297,28 @@ class _OriginalProgressionCard
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final a = artifact;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          '${a.songName} (saját progresszió)',
+          localizations.feedCardOriginalProgressionTitle(a.songName),
           style: theme.textTheme.titleSmall,
         ),
         const SizedBox(height: 4),
         Text(
-          '${a.bpm} BPM · ${a.beatsPerBar}/4 · ${a.chords.join(' → ')}',
+          localizations.feedCardSongBpmBeats(
+            a.bpm,
+            a.beatsPerBar,
+            a.chords.join(' → '),
+          ),
           style: theme.textTheme.bodySmall,
         ),
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
-            'Strumminta: ${a.strumPattern}',
+            localizations.feedCardStrumPattern(a.strumPattern),
             style: theme.textTheme.bodySmall,
           ),
         ),
@@ -302,20 +333,28 @@ class _PlanTemplateCard extends _ArtifactCard<PlanTemplateArtifact> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final a = artifact;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Tervsablon: ${a.songName}', style: theme.textTheme.titleSmall),
+        Text(
+          localizations.feedCardPlanTemplateTitle(a.songName),
+          style: theme.textTheme.titleSmall,
+        ),
         const SizedBox(height: 4),
         Text(
-          '${a.bpm} BPM · ${a.beatsPerBar}/4 · ${a.chords.join(' → ')}',
+          localizations.feedCardSongBpmBeats(
+            a.bpm,
+            a.beatsPerBar,
+            a.chords.join(' → '),
+          ),
           style: theme.textTheme.bodySmall,
         ),
         Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
-            'Strumminta: ${a.strumPattern}',
+            localizations.feedCardStrumPattern(a.strumPattern),
             style: theme.textTheme.bodySmall,
           ),
         ),
@@ -331,18 +370,26 @@ class _AnalysisImprovementCard
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final a = artifact;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Elemzés – előtte/utána', style: theme.textTheme.titleSmall),
+        Text(
+          localizations.feedCardAnalysisImprovementTitle,
+          style: theme.textTheme.titleSmall,
+        ),
         const SizedBox(height: 4),
         for (final m in a.metrics)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              '${m.metricId}: ${m.directionCode} '
-              '(${m.beforeValue ?? '-'} → ${m.afterValue ?? '-'})',
+              localizations.feedCardAnalysisImprovementMetric(
+                m.metricId,
+                m.directionCode,
+                m.beforeValue?.toString() ?? '-',
+                m.afterValue?.toString() ?? '-',
+              ),
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -357,21 +404,31 @@ class _AchievementCard extends _ArtifactCard<AchievementArtifact> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final a = artifact;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text('Achievement unlocked', style: theme.textTheme.titleSmall),
+        Text(
+          localizations.feedCardAchievementUnlocked,
+          style: theme.textTheme.titleSmall,
+        ),
         const SizedBox(height: 4),
         Text(
-          '${a.achievementId} · ${a.categoryCode} · v${a.catalogVersion}',
+          localizations.feedCardAchievementCatalogVersion(
+            a.achievementId,
+            a.categoryCode,
+            a.catalogVersion,
+          ),
           style: theme.textTheme.bodySmall,
         ),
         if (a.completedAt != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              'Befejezve: ${a.completedAt!.toIso8601String()}',
+              localizations.feedCardAchievementCompletedAt(
+                a.completedAt!.toIso8601String(),
+              ),
               style: theme.textTheme.bodySmall,
             ),
           ),
@@ -386,23 +443,30 @@ class _ChallengeCard extends _ArtifactCard<ChallengeArtifact> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final a = artifact;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Napi kihívás: ${a.challengeName}',
+          localizations.feedCardChallengeTitle(a.challengeName),
           style: theme.textTheme.titleSmall,
         ),
         const SizedBox(height: 4),
         Text(
-          '${a.challengeTypeCode} · jutalom: ${a.rewardStatusCode}',
+          localizations.feedCardChallengeReward(
+            a.challengeTypeCode,
+            a.rewardStatusCode,
+          ),
           style: theme.textTheme.bodySmall,
         ),
         if (a.rewardXp != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Text('XP: ${a.rewardXp}', style: theme.textTheme.bodySmall),
+            child: Text(
+              localizations.feedCardChallengeXp(a.rewardXp!),
+              style: theme.textTheme.bodySmall,
+            ),
           ),
       ],
     );
@@ -422,9 +486,10 @@ class _FallbackCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final text = reason == _FallbackReason.unfilled
-        ? 'Ehhez a poszthoz nincs megjeleníthető tartalom.'
-        : 'Ez a tartalomtípus jelenleg nem jeleníthető meg.';
+        ? localizations.feedCardFallbackUnfilled
+        : localizations.feedCardFallbackUnknown;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(

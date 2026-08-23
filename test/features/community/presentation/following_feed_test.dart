@@ -23,11 +23,13 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/logging/app_logger.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/features/community/application/controllers/feed_controller.dart';
 import 'package:strumsight/features/community/data/local/feed_cache.dart';
 import 'package:strumsight/features/community/domain/entities/community_post.dart';
@@ -254,7 +256,21 @@ Widget _harness(_Harness h) {
       communityFeedRepositoryProvider.overrideWithValue(h.repository),
       feedCacheProvider.overrideWithValue(h.cache),
     ],
-    child: const MaterialApp(home: FollowingFeedScreen()),
+    child: const MaterialApp(
+      localizationsDelegates: <LocalizationsDelegate<dynamic>>[
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      // F1: the feed+card strings are routed through AppLocalizations;
+      // the existing widget assertions exercise the Hungarian rendering
+      // by pinning the harness to `hu` (the F1 fix added the matching
+      // community_<locale>.arb keys with real Hungarian translations).
+      locale: Locale('hu'),
+      home: FollowingFeedScreen(),
+    ),
   );
 }
 
