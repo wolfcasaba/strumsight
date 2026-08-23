@@ -1,5 +1,56 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R17 KÉSZ — Bookmark, mentett tartalom és biztonságos import — PR [#427](https://github.com/wolfcasaba/strumsight/pull/427), squash `dc6e3915` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENHETEDIK KÖRE KÉSZ.** Privát bookmark +
+kontrollált Practice/Song import: `backend/app/community/models/bookmark.py`
+(ÚJ `community_bookmarks` tábla, `UNIQUE(post_id, profile_id)`, mindkét FK
+`ON DELETE CASCADE`), `routers/bookmarks.py` (router+service EGY fájlban —
+nincs külön `bookmark_service.py` az `allowed_paths`-on; idempotens
+set/remove, önálló base64 `(created_at, id)` keyset cursor, tombstone a
+soft-delete/moderation-removed posztra), `import_share_artifact.dart` (PURE,
+hívó-táplált use-case: schema-validáció, névütközés, deprecated-fallback,
+ÚJ `Song`-ot épít, de NEM perzisztál), `bookmarks_screen.dart`.
+
+**ADR-szám ütközés a pre-flightban.** A brief előre `0406`-ot adott, de azt
+közben E09-R13 foglalta el, `0407`-et E09-R16 — `tools/round-slots.py
+reserve-adr` friss számot adott: **[ADR 0408](docs/adr/0408-bookmark-and-controlled-import.md)**.
+
+**Erőforrás-tulajdonlás mérve a pre-flightban (D1).** `songsRepositoryProvider`/
+`SongsController.add()` — az egyetlen belépési pont egy ÚJ `Song`
+perzisztálására — kizárólag `lib/features/songs/` belsejében használt; a
+feature `public.dart`-ja csak a `model/song.dart`-ot exportálja, a
+repository/provider réteget nem. Mivel a `songs/public.dart` bővítése
+kívül esik ezen kör `allowed_paths`-án (más feature-t célzó kör sosem
+tartalmazza — strukturális H3, ADR 0087 §2), a feloldás a **L286 precedens**
+(E07-R08) megismétlése: az `import_share_artifact.dart` PURE, hívó-táplált
+transzformátor maradt — épít egy ÚJ `Song`-értéket, de nem hívja a
+`songsProvider`-t. A §6 A5 cella a use-case szintjén mérhető és mérve is
+lett (élő repository nélkül). A tényleges helyi mentés bekötése egy
+jövőbeli kör dolga.
+
+**Review (Claude Sonnet 5) — APPROVED**, 0 BLOCKER/MAJOR, 2 MINOR (holt
+`_resolve_internal_profile_id` helper; a brief §3 "explicit Import action"
+scope-tétele nincs a képernyőn vizuálisan bekötve — a §8 implementációs
+terv ezt sosem írta elő, egyik A1-A7 cella sem méri, follow-up körre
+javasolva a `BookmarkOut` artifact-mezőkkel való bővítésével együtt).
+Independensen újrafuttatott gate izolált klónban: mind a 10 lépés zöld,
+`tools/scope-audit.py` OK (a diff pontosan az `allowed_paths`-t fedi).
+
+**CI-only javító kör** (a szokásos screen-count drift, mint E09-R05...R16):
+`test/ui/ui_inventory_test.dart` `hasLength(72)` → `hasLength(73)` a
+`bookmarks_screen.dart` új képernyője miatt — §0.0.1 dokumentált
+review-vezérelt scope-bővítés, EGY sor, semmi más.
+
+**Zöld kapu (exact `82013935`).** `full-gate.yml`
+[32652652934](https://github.com/wolfcasaba/strumsight/actions/runs/32652652934)
+**success**, `router-ci.yml`
+[32652091202](https://github.com/wolfcasaba/strumsight/actions/runs/32652091202)
+**success**. A landolás a merge-záron át (`tools/round-land.sh`), mert a
+másik sáv (E13/E10 lánc) párhuzamosan futott.
+
+**Következő Epic 9 kör: E09-R18** (media upload contract és object store).
+
 ## ✅ E13-R05 KÉSZ — Spacing, radius, elevation és surface primitívek — PR [#392](https://github.com/wolfcasaba/strumsight/pull/392), squash `6635a788` (2026-08-23)
 
 **CHAPTER 13 (UI/UX DESIGN SYSTEM) ÖTÖDIK KÖRE KÉSZ — egy 2026-08-21 óta

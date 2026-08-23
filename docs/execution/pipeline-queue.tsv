@@ -481,7 +481,7 @@ E09-R13	docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md	minimax	
 E09-R14	docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md	minimax	nincs	done
 E09-R15	docs/rounds/e09-r15-reactions-and-optimistic-consistency.md	minimax	nincs	done
 E09-R16	docs/rounds/e09-r16-comments-reply-and-mention.md	minimax	0405	done
-E09-R17	docs/rounds/e09-r17-bookmarks-and-controlled-import.md	minimax	0406	pending
+E09-R17	docs/rounds/e09-r17-bookmarks-and-controlled-import.md	minimax	0406	done
 E09-R18	docs/rounds/e09-r18-media-upload-contract-and-object-store.md	minimax	0407	pending
 E09-R19	docs/rounds/e09-r19-media-processing-privacy-and-moderation-state.md	minimax	0408	pending
 E09-R20	docs/rounds/e09-r20-notification-inbox-and-push-abstraction.md	minimax	0409	pending
