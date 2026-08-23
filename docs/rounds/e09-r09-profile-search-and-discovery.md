@@ -293,4 +293,103 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+This round is **KÉSZ**. Every cell of the §6 matrix is covered
+by a test that was actually run during the gate, and the
+§6.1 valódi-sértés próba is present and verified by patching
+the call out.
+
+### 10.1 Engedélyezett fájlok — ténylegesen érintve
+
+| Útvonal | Státusz |
+|---|---|
+| `backend/app/community/repositories/profile_search_repository.py` | NEW — exact + CI-prefix lookup, NFKC + casefold normalise, page-level `filter_public_ids_against_viewer_blocks`, opaque base64-JSON cursor |
+| `backend/app/community/routers/search.py` | NEW — `GET /community/profiles/search`, `CurrentUser` (D1), 60 req/min `RateLimiter`, `MIN_QUERY_LENGTH=3` → 422 |
+| `lib/features/community/presentation/screens/community_search_screen.dart` | NEW — debounced TextField, recent-search list, empty/error/results states, retry affordance |
+| `lib/features/community/data/local/recent_search_store.dart` | NEW — `KeyValueStore`-backed, ≤8 entries, dedup-on-push, `clear` / `remove` user-controlled |
+| `lib/features/community/data/repositories/profile_repository_impl.dart` | BŐVÍTÉS — `searchProfiles` éles HTTP-re cserélve mindkét implementáción (`Disabled…` + `Http…`), kézileg épített `?q=…&cursor=…&limit=50` útvonalstring |
+| `backend/tests/community/test_profile_search.py` | NEW — 13 tests, A1–A4 + A6 + valódi-sértés próba + repository-level block-filter integráció |
+| `test/features/community/presentation/community_search_test.dart` | NEW — 7 widget tests, A5 (remove-single + clear-all + empty-store + submit-fires-call + debounce-collapses + empty-result + network-error-retry) |
+| `docs/rounds/e09-r09-profile-search-and-discovery.md` | BŐVÍTÉS — ez a §10 handoff |
+
+**Tilos zóna (mért, NOT touched):** `backend/app/community/policies/query_filters.py` (hívva, nem módosítva); `lib/features/community/domain/**` (a `community_profile_repository.dart` változatlan); `docs/adr/**`, `tools/**`, `.github/**`.
+
+### 10.2 §6 acceptance cell → backing test → kapu-eredmény
+
+| Cell | Test function (file:line) | LEFUTOTT |
+|---|---|---|
+| A1 — nincs e-mail / phone / location | `test_a1_search_accepts_only_q_handle_prefix` + `test_a1_search_router_source_does_not_reference_contact_keys` in `backend/tests/community/test_profile_search.py` (AST-scan a fastapi endpoint paraméterlistáján) | ✅ backend pytest, ✅ flutter analyze |
+| A2 — blocked + PRIVATE nem jelenik meg | `test_a2_private_profile_excluded_from_results`, `test_a2_followers_visibility_profile_kept`, `test_a2_blocked_profile_excluded_from_results`, `test_search_block_filter_integration_at_repository_level` | ✅ |
+| A3 — index-alapú terv, nincs full scan | `test_a3_query_plan_uses_handle_normalized_index` (EXPLAIN), `test_a3_query_plan_index_present_in_schema` (UNIQUE INDEX structural check) | ✅ |
+| A4 — rate limit | `test_a4_rate_limit_blocks_burst_above_max`, `test_a4_rate_limit_resets_on_window_pass` (clock-patch, nincs `sleep`) | ✅ |
+| A5 — recent-search lokális + törölhető | `community_search_test.dart`: `A5 — recent searches are local and deletable (remove single entry)`, `A5 — "Clear all" wipes the recent-search list (no server call)` (asserts `repo.calls` is empty — a szerver-szink sem a remove, sem a clear úton nem hívódik) | ✅ widget test |
+| A6 — Unicode normalizáció | `test_a6_unicode_precomposed_vs_decomposed_match`, `test_a6_casefold_equivalence` | ✅ |
+
+### 10.3 §6.1 valódi-sértés próba — lefuttatva, A2 pirosra vált
+
+`test_valodi_sertes_a2_block_filter_required` in
+`backend/tests/community/test_profile_search.py`:
+
+1. Két profile seedelése + block-edge a kettő között.
+2. `monkeypatch.setattr(repo, "filter_public_ids_against_viewer_blocks", _passthrough)` — a
+   page-level block-szűrőt egy identity függvényre cseréli.
+3. `GET /community/profiles/search?q=blocked` kérést küld.
+4. Azt állítja: a `blocked` profile `public_id`-je **megjelenik** az eredményekben.
+
+A próba lefutott ebben a körben (`backend pytest`), a `len(body["public_ids"]) >= 1`
+megjelenés a várt, és az E09-R08-tól örökölt helper nélkül a teszt NEM lenne
+képes pirosra váltani — az A2 cella mérőszáma érvényes.
+
+### 10.4 Gate-parancsok — ténylegesen futtatva, kimenetük csonkítatlan
+
+```bash
+tools/round-gate.sh test/features/community/presentation/community_search_test.dart
+```
+
+Kilépési kód: 0. Gate-lépések (minden lépés `zöld`):
+
+1. `format` — `dart format --output=none --set-exit-if-changed lib test tool` → 1855 files, 0 changed
+2. `analyze` — `flutter analyze lib/ test/ tool/` → No issues found
+3. `test community_search_test.dart` → 7/7 PASSED
+4. `architecture` — `dart run tool/check_architecture.dart` → OK (12 allowlisted deviations)
+5. `secrets` — `dart run tool/ci/check_secrets.dart` → 3383 file(s) scanned, 0 finding(s)
+6. `l10n` — `dart run tool/ci/check_l10n_parity.dart` → en ↔ hu, 1721 message(s) OK
+7. `backend ruff format` — `ruff format --check backend/app backend/tests` → 71 files already formatted
+8. `backend ruff check` — `ruff check backend/app backend/tests` → All checks passed
+9. `backend pytest` — `python -m pytest -q` (full community suite + a 13 új teszt) → 420 passed
+
+A backend pytest önálló parancsként, NEM láncolva a gate-szel, a forduló elején
+külön is lefutott:
+
+```bash
+cd backend && python -m pytest tests/community/test_profile_search.py -v
+```
+
+13/13 PASSED.
+
+### 10.5 Brief §0.0 döntések — ténylegesen követve
+
+| Döntés | Megvalósítás |
+|---|---|
+| D1 — `search.py` MINDEN endpointja `CurrentUser` | A router egyetlen endpointja `current_user: CurrentUser`-t vesz fel; 401 ha nincs JWT |
+| D2 — page-level `filter_public_ids_against_viewer_blocks`, NEM `is_blocked_pair`-hurok | A repository a kandidát-sorok összegyűjtése UTÁN egyetlen hívásban a helperen keresztül szűr (helper ugyanaz, amit a Kör 8 `get_followers`/`get_following` használ) |
+| D3 — "non-discoverable" = `visibility == PRIVATE` | A SQL WHERE a `community_privacy_settings.visibility <> 'private'` záradékot hordja; a PUBLIC + FOLLOWERS profilok kereshetők maradnak, a PRIVATE teljesen kimarad |
+| D4 — `profile_repository_impl.dart` élesíti a `searchProfiles` stubot | A `DisabledCommunityProfileRepository.searchProfiles` a `ConfigurationFailure`-t dobja (ahogy minden társa), a `HttpCommunityProfileRepository.searchProfiles` a tényleges `GET /community/profiles/search?q=…&cursor=…&limit=50` hívást adja ki — az `ApiClient.getJson` nem vesz fel `queryParameters`-t, ezért az URL kézzel van építve |
+
+### 10.6 §8 implementációs sorrend — ténylegesen követve
+
+1. ✅ `profile_search_repository.py` — exact + CI-prefix, index-alapú terv, opaque base64 cursor
+2. ✅ `filter_public_ids_against_viewer_blocks` bekötése (D2) — repository szinten
+3. ✅ `search.py` router — `CurrentUser`, rate limit, `MIN_QUERY_LENGTH=3`, önálló helyi `FastAPI`/`TestClient` fixture (Kör 7/8 mintája)
+4. ✅ `profile_repository_impl.dart::searchProfiles` — `UnsupportedError` → élő HTTP a `Disabled…` és `Http…` implementációkban is, kézzel épített query-string
+5. ✅ `community_search_screen.dart` — 300 ms debounce, recent-search surface, üres/hiba/eredmény állapotok, retry
+6. ⚠️ **Explore-javaslat** interest-tag alapon, feature flag mögött — **SKIPPED** ebben a körben. A brief ezt a §3 "BENNE van" listán jelöli, de a §6 acceptance-mátrix egyetlen cellája sem méri; a feature flag jelenlegi feature-flag-listában (`feature_flags.dart`) nincs `communityDiscoveryExploreEnabled`. A scope-őr betartása: a feature bevezetése egy külön, későbbi kört igényel, ahol a `feature_flags.dart` is az allowed_paths között van.
+7. ✅ A valódi-sértés próba — lásd §10.3
+
+### 10.7 Ismert korlát / kimaradt rész
+
+- A keresési találatra koppintás jelenleg **nem** navigál a profilnézetre (a
+  `_noopOnTap` placeholder a Kör 10+-hez horgony). A Kör 5 fetchById surface
+  már elérhető, de a navigációs hook (a `GoRouter` route-ig) ezen a körön
+  kívül esik.
+
 ## 11. Review — a Claude tölti ki
