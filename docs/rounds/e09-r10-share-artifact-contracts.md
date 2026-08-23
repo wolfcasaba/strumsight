@@ -317,3 +317,17 @@ A scope, acceptance és igazmondás hármas ellenőrzése a fenti
   csak a gate-zöld pipát követően fut).
 
 ## 11. Review — a Claude tölti ki
+
+**Verdikt: APPROVED** (1 javító kör nélkül — nincs BLOCKER/MAJOR). Teljes
+jelentés: [`docs/reviews/e09-r10-review.md`](../reviews/e09-r10-review.md).
+
+- Scope-audit OK (10 fájl, mind `allowed_paths`).
+- Gate MINDEN lépés zöld (`tools/round-gate.sh` + a brief §7 önálló backend
+  pytest parancsa, izolált munkapéldányban).
+- A §6.1 valódi-sértés próbát a review önállóan, kézzel megismételte
+  (`_validate_schema_version` equality-ellenőrzés eltávolítva → 2 teszt
+  PIROSRA vált → visszaállítva → zöld) — nem csak az implementer §10.3
+  állítását fogadta el.
+- Dedikált `security-reviewer` agent (a brief `risk = "high"` miatt
+  kötelező): PASS, 0 BLOCKER/MAJOR, 1 MINOR + 2 NOTE — mind jövőbeli
+  (Kör 11+) bekötési horog, nem ennek a körnek a hiánya.
