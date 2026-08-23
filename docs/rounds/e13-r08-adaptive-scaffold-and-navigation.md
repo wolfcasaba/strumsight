@@ -869,4 +869,16 @@ passed!"), ezért `--concurrency=1`-gyel újra lefuttatva a mind a négy fájl
 soronként megjelent és **ZÖLD** — a `route_guards_test.dart` a D14/4 opcionális
 `home` paraméter mellett is módosítatlanul zöld maradt.
 
+**Javító kör 2 (MINOR-2) — `onException` a kiszámolt `entryLocation`-re
+menjen, ne fixen `/live`-ra:** az `app_router.dart:213` `onException: (_, _,
+router) => router.go(AppRoutes.live)` egysoros cserével `entryLocation`-re
+vált. Flag KI ágon `entryLocation == AppRoutes.live`, tehát bitre azonos
+viselkedés (A7-biztos); flag BE ágon `/today`-re köt ki, ahol van primary
+navigation. Új `A7` csoport (`adaptive_scaffold_test.dart`, az `A1` csoport
+után, három cella): flag KI ismeretlen URL → `/live` (változatlan); flag BE
+ismeretlen URL → `/today` + van `NavigationBar`/`NavigationRail`; flag BE +
+`practiceEngineV2Enabled: false`, `/practice` → `/today`, nem
+`/practice/live`. Gate újra lefuttatva (lásd §3 parancs), mindhárom teszt-fájl
+zöld (24+8+1 cella), `flutter test test/app/routing` is zöld (29 cella).
+
 ## 11. Review — a Claude tölti ki

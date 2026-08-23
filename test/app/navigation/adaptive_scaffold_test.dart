@@ -303,6 +303,55 @@ void main() {
     );
   });
 
+  group('A7 — onException falls back to the shell entry point, not always '
+      '/live (review MINOR-2 fix)', () {
+    testWidgets('flag OFF: an unregistered URL still lands on /live '
+        "(today's behaviour, unchanged)", (tester) async {
+      final router = await _pumpAdaptiveRouter(
+        tester,
+        adaptiveShellEnabled: false,
+      );
+
+      router.go('/does-not-exist');
+      await tester.pumpAndSettle();
+
+      expect(router.state.uri.path, AppRoutes.live);
+      expect(find.byType(LiveScreen), findsOneWidget);
+    });
+
+    testWidgets('flag ON: an unregistered URL lands on /today, with primary '
+        'navigation available — not the navigation-less /practice/live '
+        'Stage route', (tester) async {
+      final router = await _pumpAdaptiveRouter(tester);
+
+      router.go('/does-not-exist');
+      await tester.pumpAndSettle();
+
+      expect(router.state.uri.path, AppRoutes.today);
+      expect(
+        find.byType(NavigationBar).evaluate().isNotEmpty ||
+            find.byType(NavigationRail).evaluate().isNotEmpty,
+        isTrue,
+        reason:
+            'landing on the Stage route /practice/live would strand '
+            'the user with no primary navigation to leave from',
+      );
+    });
+
+    testWidgets('flag ON + practiceEngineV2Enabled: false: /practice lands on '
+        '/today, not /practice/live', (tester) async {
+      final router = await _pumpAdaptiveRouter(
+        tester,
+        practiceEngineV2Enabled: false,
+      );
+
+      router.go(AppRoutes.practiceHub);
+      await tester.pumpAndSettle();
+
+      expect(router.state.uri.path, AppRoutes.today);
+    });
+  });
+
   group('A4 — Stage routes hide primary navigation (anti-vacuum, L403)', () {
     test('isStageRoute predicate — the pinned, narrow set only', () {
       expect(isStageRoute(AppRoutes.practiceSession), isTrue);

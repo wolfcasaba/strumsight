@@ -210,7 +210,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: entryLocation,
     refreshListenable: refreshNotifier,
-    onException: (_, _, router) => router.go(AppRoutes.live),
+    onException: (_, _, router) => router.go(entryLocation),
     redirect: (_, state) {
       final onboarding = onboardingRedirect(
         seen: ref.read(onboardingSeenProvider),
