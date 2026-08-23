@@ -130,5 +130,150 @@
   "@safetyErrorForbidden": {},
 
   "safetyErrorInvalidInput": "Érvénytelen kérés",
-  "@safetyErrorInvalidInput": {}
+  "@safetyErrorInvalidInput": {},
+
+  "followingFeedTitle": "Követési feed",
+  "@followingFeedTitle": {},
+
+  "followingFeedLoadingInitial": "Feed betöltése…",
+  "@followingFeedLoadingInitial": {},
+
+  "followingFeedEmptyState": "Még nincs poszt a feedben.",
+  "@followingFeedEmptyState": {},
+
+  "followingFeedEmptyStateCta": "Gyakorlás indítása",
+  "@followingFeedEmptyStateCta": {},
+
+  "followingFeedLoadMore": "Továbbiak betöltése",
+  "@followingFeedLoadMore": {},
+
+  "followingFeedLoadingMore": "Betöltés…",
+  "@followingFeedLoadingMore": {},
+
+  "followingFeedEndOfFeed": "Elérted a feed végét.",
+  "@followingFeedEndOfFeed": {},
+
+  "followingFeedOfflineBanner": "Offline · a helyi másolat jelenik meg.",
+  "@followingFeedOfflineBanner": {},
+
+  "followingFeedErrorTitle": "A feed nem tölthető be.",
+  "@followingFeedErrorTitle": {},
+
+  "followingFeedRetry": "Újrapróbálkozás",
+  "@followingFeedRetry": {},
+
+  "followingFeedRefresh": "Frissítés",
+  "@followingFeedRefresh": {},
+
+  "followingFeedPracticeNotAvailable": "A gyakorlás indítása a jövőbeli körökben érhető el.",
+  "@followingFeedPracticeNotAvailable": {},
+
+  "feedCardPracticeSummaryTitle": "Gyakorlás összegzés",
+  "@feedCardPracticeSummaryTitle": {},
+
+  "feedCardPracticeSummaryBody": "Aktív idő: {active}s · Szünet: {paused}s · Próbálkozások: {attempts}",
+  "@feedCardPracticeSummaryBody": {
+    "placeholders": {
+      "active": {"type": "int"},
+      "paused": {"type": "int"},
+      "attempts": {"type": "int"}
+    }
+  },
+
+  "feedCardPracticeSummaryBestScore": "Legjobb pontszám: {score}%",
+  "@feedCardPracticeSummaryBestScore": {
+    "placeholders": {
+      "score": {"type": "int"}
+    }
+  },
+
+  "feedCardSongBpmBeats": "{bpm} BPM · {beats}/4 · {chords}",
+  "@feedCardSongBpmBeats": {
+    "placeholders": {
+      "bpm": {"type": "int"},
+      "beats": {"type": "int"},
+      "chords": {"type": "String"}
+    }
+  },
+
+  "feedCardStrumPattern": "Strumminta: {pattern}",
+  "@feedCardStrumPattern": {
+    "placeholders": {
+      "pattern": {"type": "String"}
+    }
+  },
+
+  "feedCardOriginalProgressionTitle": "{name} (saját progresszió)",
+  "@feedCardOriginalProgressionTitle": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "feedCardPlanTemplateTitle": "Tervsablon: {name}",
+  "@feedCardPlanTemplateTitle": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "feedCardAnalysisImprovementTitle": "Elemzés – előtte/utána",
+  "@feedCardAnalysisImprovementTitle": {},
+
+  "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
+  "@feedCardAnalysisImprovementMetric": {
+    "placeholders": {
+      "metric": {"type": "String"},
+      "direction": {"type": "String"},
+      "before": {"type": "String"},
+      "after": {"type": "String"}
+    }
+  },
+
+  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "@feedCardAchievementUnlocked": {},
+
+  "feedCardAchievementCatalogVersion": "{id} · {category} · v{version}",
+  "@feedCardAchievementCatalogVersion": {
+    "placeholders": {
+      "id": {"type": "String"},
+      "category": {"type": "String"},
+      "version": {"type": "int"}
+    }
+  },
+
+  "feedCardAchievementCompletedAt": "Befejezve: {at}",
+  "@feedCardAchievementCompletedAt": {
+    "placeholders": {
+      "at": {"type": "String"}
+    }
+  },
+
+  "feedCardChallengeTitle": "Napi kihívás: {name}",
+  "@feedCardChallengeTitle": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+
+  "feedCardChallengeReward": "{type} · jutalom: {reward}",
+  "@feedCardChallengeReward": {
+    "placeholders": {
+      "type": {"type": "String"},
+      "reward": {"type": "String"}
+    }
+  },
+
+  "feedCardChallengeXp": "XP: {xp}",
+  "@feedCardChallengeXp": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+
+  "feedCardFallbackUnfilled": "Ehhez a poszthoz nincs megjeleníthető tartalom.",
+  "@feedCardFallbackUnfilled": {},
+
+  "feedCardFallbackUnknown": "Ez a tartalomtípus jelenleg nem jeleníthető meg.",
+  "@feedCardFallbackUnknown": {}
 }
