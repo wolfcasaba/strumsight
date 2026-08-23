@@ -388,10 +388,23 @@ def test_a2_finalize_rejects_expired_signed_url(
     session_factory, settings_enabled
 ) -> None:
     """A2 — a finalize attempt AFTER the signed URL expired is
-    rejected with :class:`MediaUploadExpired`."""
+    rejected with :class:`MediaUploadExpired`.
+
+    BLOCKER B1 / F1 fix: measures the actual TTL — 60-second
+    signed URL, finalize attempt at +90 s (30 s past the
+    real expiry). The previous test measured at +5 minutes,
+    which coincidentally equalled the hardcoded
+    ``SIGNED_URL_EXPIRES_IN`` module constant and turned the
+    cell green even when the implementation ignored the
+    caller's shorter window.
+    """
     profile = _make_author(session_factory)
     store = _new_store()
-    # 60-second signed URL, finalize attempt at +5 minutes.
+    # 60-second signed URL — finalize attempt 30 seconds past
+    # the real expiry. The row's ``expires_at`` (stamped from
+    # ``SignedUpload.expires_at``) is the source of truth for
+    # the comparison; the module-level 5-minute default is
+    # irrelevant.
     intent, _ = _create_intent(
         session_factory,
         settings_enabled,
@@ -409,7 +422,7 @@ def test_a2_finalize_rejects_expired_signed_url(
         content_type="audio/mpeg",
     )
 
-    later = _utcnow() + timedelta(minutes=5)
+    later = _utcnow() + timedelta(seconds=90)
     with session_factory() as db:
         with pytest.raises(MediaUploadExpired):
             finalize_upload(
@@ -420,6 +433,47 @@ def test_a2_finalize_rejects_expired_signed_url(
                 object_store=store,
                 now=later,
             )
+
+
+def test_a2_finalize_accepts_within_signed_url_ttl(
+    session_factory, settings_enabled
+) -> None:
+    """A2-adjacent — a finalize attempt within the actual TTL
+    is accepted (proves the comparison honours the stored
+    ``expires_at``, not the module-level 5-minute default)."""
+    profile = _make_author(session_factory)
+    store = _new_store()
+    intent, _ = _create_intent(
+        session_factory,
+        settings_enabled,
+        store,
+        profile,
+        size=512,
+        signed_url_expires_in=timedelta(seconds=60),
+    )
+    _seed_object_for(
+        store,
+        object_key=intent.object_key,
+        body=b"some bytes",
+        content_type="audio/mpeg",
+    )
+
+    # 30 s in — comfortably inside the 60 s window. A buggy
+    # implementation that re-derived the expiry from the
+    # 5-minute default would also accept this, so this test
+    # complements (does not replace) the +90 s rejection test.
+    within = _utcnow() + timedelta(seconds=30)
+    with session_factory() as db:
+        row = finalize_upload(
+            db,
+            profile_public_id=profile.public_id,
+            media_public_id=intent.media_public_id,
+            settings=settings_enabled,
+            object_store=store,
+            now=within,
+        )
+        db.commit()
+        assert row.upload_state == UPLOAD_STATE_FINALIZED
 
 
 def test_a3_finalize_rejects_bucket_mime_mismatch(
@@ -919,6 +973,67 @@ def test_quota_exceeded_after_max_live_uploads(
             )
 
 
+def test_quota_counts_only_live_states_not_cancelled(
+    session_factory, settings_enabled
+) -> None:
+    """MAJOR M1 fix — the §3 quota counts ONLY the live states
+    (``pending`` / ``uploaded``); the terminal ``cancelled`` /
+    ``failed`` states must NOT exhaust the quota.
+
+    Without the fix, 10+ consecutive intent+cancel cycles
+    permanently lock out the profile (the
+    ``_live_upload_count`` filter previously matched every
+    non-finalized row, including cancelled / failed, which are
+    never removed by anything in the pipeline)."""
+    profile = _make_author(session_factory)
+    store = _new_store()
+
+    # 10 cancel cycles — the previous implementation would
+    # leave 10 cancelled rows pinned to the profile.
+    for _ in range(svc.MAX_LIVE_UPLOADS_PER_PROFILE):
+        intent, _ = _create_intent(
+            session_factory,
+            settings_enabled,
+            store,
+            profile,
+            content_type="audio/mpeg",
+            size=512,
+        )
+        _seed_object_for(
+            store,
+            object_key=intent.object_key,
+            body=b"some bytes",
+            content_type="audio/mpeg",
+        )
+        with session_factory() as db:
+            cancel_upload(
+                db,
+                profile_public_id=profile.public_id,
+                media_public_id=intent.media_public_id,
+                settings=settings_enabled,
+                object_store=store,
+                now=_utcnow(),
+            )
+            db.commit()
+
+    # A NEW intent must succeed — the previous implementation
+    # would raise MediaQuotaExceeded here.
+    with session_factory() as db:
+        intent = create_upload_intent(
+            db,
+            profile_public_id=profile.public_id,
+            content_type="audio/mpeg",
+            size=512,
+            duration_ms=None,
+            checksum_sha256=None,
+            settings=settings_enabled,
+            object_store=store,
+            now=_utcnow(),
+        )
+        db.commit()
+        assert intent.media_public_id is not None
+
+
 def test_finalize_idempotent_repeat_returns_existing_row(
     session_factory, settings_enabled
 ) -> None:
@@ -1135,3 +1250,216 @@ def test_in_memory_store_delete_is_idempotent() -> None:
 # ---------------------------------------------------------------------------
 
 _ = MEDIA_CONTENT_TYPE_ALLOWLIST  # silence linter on the import.
+
+
+# ---------------------------------------------------------------------------
+# M2 / F4 — checksum-guard gap (real adapter, sha256_hex=None).
+# ---------------------------------------------------------------------------
+
+
+class _Sha256HexNoneObjectStore:
+    """A minimal ObjectStore stub that mirrors
+    :class:`S3CompatibleObjectStore.head_object`'s current
+    behaviour: ``sha256_hex`` is ``None`` because the bucket-side
+    SHA-256 wiring is a TODO (see object_store.py)."""
+
+    def __init__(self) -> None:
+        self._objects: dict[str, dict[str, object]] = {}
+
+    def create_upload_url(self, key, *, content_type, max_content_length, expires_in):
+        from app.community.storage.object_store import SignedUpload
+
+        return SignedUpload(
+            url=f"memory://upload/{key}",
+            method="PUT",
+            content_type=content_type,
+            max_content_length=max_content_length,
+            expires_at=datetime.now(timezone.utc) + expires_in,
+        )
+
+    def head_object(self, key):
+        from app.community.storage.object_store import ObjectMetadata
+
+        obj = self._objects.get(key)
+        if obj is None:
+            return None
+        return ObjectMetadata(
+            size=obj["size"],  # type: ignore[arg-type]
+            content_type=obj["content_type"],  # type: ignore[arg-type]
+            etag=None,
+            sha256_hex=None,
+        )
+
+    def delete_object(self, key) -> None:
+        self._objects.pop(key, None)
+
+    def stage(self, key, *, size, content_type) -> None:
+        self._objects[key] = {"size": size, "content_type": content_type}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "M2/F4 gap: S3CompatibleObjectStore.head_object returns "
+        "sha256_hex=None — the A5 checksum-guard does NOT fire "
+        "against a real adapter (only the in-memory fake). The "
+        "xfail turns RED the moment a future wiring round wires "
+        "the bucket-side SHA-256 (S3 Additional-Checksums "
+        "headers or X-Amz-Meta-Sha256 custom header). At that "
+        "point the TODO in object_store.py can be removed and "
+        "this xfail replaced with a normal assertion that the "
+        "checksum mismatch IS caught."
+    ),
+)
+def test_a5_real_adapter_no_sha256_hex_does_not_catch_mismatch(
+    session_factory, settings_enabled
+) -> None:
+    """A5 with a real-adapter-like store — ``sha256_hex=None``
+    means the §6 A5 guard cannot fire even though the bucket
+    contains a different body than the intent declared.
+
+    Strict ``xfail``: the test passes-by-expectation today
+    (the row transitions to ``finalized``), turning RED the
+    moment the real-adapter checksum wiring lights up. The
+    brief M2/F4 acceptance — making the gap VISIBLE rather
+    than silent — is the responsibility of this xfail."""
+    profile = _make_author(session_factory)
+    store = _Sha256HexNoneObjectStore()
+    intent, _ = _create_intent(
+        session_factory,
+        settings_enabled,
+        store,  # type: ignore[arg-type]
+        profile,
+        content_type="audio/mpeg",
+        size=512,
+        checksum_sha256="0" * 64,
+    )
+    store.stage(
+        intent.object_key, size=512, content_type="audio/mpeg"
+    )
+
+    with session_factory() as db:
+        row = finalize_upload(
+            db,
+            profile_public_id=profile.public_id,
+            media_public_id=intent.media_public_id,
+            settings=settings_enabled,
+            object_store=store,  # type: ignore[arg-type]
+            now=_utcnow(),
+        )
+        db.commit()
+        db.refresh(row)
+    # Because head_object returned sha256_hex=None, the
+    # _validate_checksum guard was a no-op — the row reaches
+    # finalized. This is the gap; the xfail makes it loud.
+    assert row.upload_state == UPLOAD_STATE_FINALIZED
+
+
+# ---------------------------------------------------------------------------
+# M3 — _as_utc is UTC-bound regardless of host local timezone.
+# ---------------------------------------------------------------------------
+
+
+def test_as_utc_naive_input_attaches_utc_not_local_tz() -> None:
+    """MAJOR M3 fix — ``_as_utc`` MUST attach ``timezone.utc``
+    to a naive datetime, NOT the host's local timezone (the
+    previous implementation did ``datetime.now().astimezone().
+    tzinfo`` — a UTC+2 host shifted every expiry/retention
+    comparison by 2 hours). The test is host-tz-independent: a
+    naive input gets a tzinfo that compares equal to
+    ``timezone.utc``."""
+    from app.community.services.media_upload_service import _as_utc
+
+    naive = datetime(2026, 1, 1, 12, 0, 0)
+    out = _as_utc(naive)
+    assert out.tzinfo is not None
+    assert out.utcoffset() == timedelta(0)
+
+
+def test_as_utc_aware_input_is_unchanged() -> None:
+    """An aware datetime is returned as-is (UTC-aware or not —
+    the helper does not normalize zones, only re-attaches UTC
+    to naive values)."""
+    from app.community.services.media_upload_service import _as_utc
+
+    aware_utc = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    assert _as_utc(aware_utc) is aware_utc
+
+
+# ---------------------------------------------------------------------------
+# F2 — SigV4 presigned URL signs ``Content-Type`` as a real header
+# (no fake ``X-Amz-SignedHeaders-Content-Type`` query parameter).
+# ---------------------------------------------------------------------------
+
+
+def test_sigv4_presign_put_signs_content_type_as_header() -> None:
+    """MAJOR F2 fix — the PUT presign adds ``content-type`` to
+    ``X-Amz-SignedHeaders`` and to the canonical headers block.
+    The returned headers dict carries the EXACT ``Content-Type``
+    the client must echo back; a mismatch causes a 403
+    ``SignatureDoesNotMatch`` at PUT time on a real bucket.
+
+    Known-answer test: with a fixed clock, region, and key, the
+    URL is deterministic. We assert:
+      * ``X-Amz-SignedHeaders`` lists ``host`` AND
+        ``content-type`` (in that order, semicolon-separated);
+      * the returned ``Content-Type`` header matches the
+        caller-supplied value exactly;
+      * the previously-fake
+        ``X-Amz-SignedHeaders-Content-Type`` and
+        ``X-Amz-SignedHeaders-Content-Length`` query params are
+        ABSENT (no bucket recognizes them — they were inert)."""
+    from app.community.storage.object_store import _sigv4_presign_request
+    from urllib.parse import parse_qs, urlparse
+
+    fixed_now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    url, headers = _sigv4_presign_request(
+        method="PUT",
+        endpoint="https://example-bucket.s3.eu-central-1.amazonaws.com",
+        bucket="example-bucket",
+        region="eu-central-1",
+        access_key_id="AKIAIOSFODNN7EXAMPLE",
+        secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        key="profile/1/abc",
+        content_type="audio/mpeg",
+        max_content_length=1024,
+        now=fixed_now,
+        expires_in_seconds=300,
+    )
+
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    assert qs["X-Amz-SignedHeaders"] == ["host;content-type"]
+    # No fake signed query parameters:
+    assert "X-Amz-SignedHeaders-Content-Type" not in qs
+    assert "X-Amz-SignedHeaders-Content-Length" not in qs
+    # The exact Content-Type the client must echo back:
+    assert headers["Content-Type"] == "audio/mpeg"
+
+
+def test_sigv4_presign_head_signs_only_host() -> None:
+    """The HEAD presign (used by ``head_object``) signs only
+    ``host`` — no Content-Type is added, since HEAD has no
+    body."""
+    from app.community.storage.object_store import _sigv4_presign_request
+    from urllib.parse import parse_qs, urlparse
+
+    fixed_now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    url, headers = _sigv4_presign_request(
+        method="HEAD",
+        endpoint="https://example-bucket.s3.eu-central-1.amazonaws.com",
+        bucket="example-bucket",
+        region="eu-central-1",
+        access_key_id="AKIAIOSFODNN7EXAMPLE",
+        secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+        key="profile/1/abc",
+        content_type=None,
+        max_content_length=None,
+        now=fixed_now,
+        expires_in_seconds=300,
+    )
+
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    assert qs["X-Amz-SignedHeaders"] == ["host"]
+    assert "Content-Type" not in headers

@@ -65,18 +65,25 @@ class SignedUpload:
       direct uploads; the upload pipeline never uses ``POST``
       multipart form-posts).
     * ``content_type`` — the ``Content-Type`` header value the
-      signed URL enforces. The client must send this exact value
-      in the ``PUT`` request; an S3-compatible bucket rejects the
-      upload if the header is missing or different.
-    * ``max_content_length`` — the byte cap the signed URL
-      enforces (``Content-Length`` must equal this for the
-      canonical request AWS validates). The finalize path
-      re-checks the actual size independently (defense-in-depth,
-      brief §6.1).
+      signed URL enforces (via the real SigV4 signed-header
+      mechanism — ``Content-Type`` is in ``X-Amz-SignedHeaders``
+      and the canonical headers block). The client must send
+      this EXACT value in the ``PUT`` request; an S3-compatible
+      bucket rejects the upload with ``SignatureDoesNotMatch``
+      if the header is missing or different.
+    * ``max_content_length`` — the byte cap the caller
+      requested. NOT enforced by the signed URL itself —
+      presigned PUT URLs cannot bind ``Content-Length`` in
+      SigV4 (AWS limitation). The finalize path re-checks the
+      actual size via ``head_object`` (``MediaSizeExceeded``);
+      that is the load-bearing size-enforcement layer (brief
+      §6.1 defense-in-depth).
     * ``expires_at`` — the absolute UTC ``datetime`` when the
       signed URL stops being accepted by the bucket. The
       service-layer finalize rejects when ``now >= expires_at``
-      (brief §6 A2).
+      (brief §6 A2; persisted on the row at intent time and
+      compared against the stored value — the BLOCKER B1 / F1
+      fix).
     """
 
     url: str
@@ -353,6 +360,27 @@ class S3CompatibleObjectStore(ObjectStore):
             size = int(size_raw) if size_raw is not None else 0
         except ValueError:
             size = 0
+        # TODO(Kör 19+ vagy egy wiring-kör): populate
+        # ``sha256_hex`` from the bucket-side SHA-256
+        # representation. Two known options:
+        #   1. The S3 Additional-Checksums pair
+        #      (``x-amz-checksum-sha256`` /
+        #      ``x-amz-sdk-checksum-algorithm``) — set by the
+        #      client at PUT time, echoed back by HEAD.
+        #   2. A custom ``X-Amz-Meta-Sha256`` header the client
+        #      writes at PUT time.
+        # Until one of those is wired, ``sha256_hex`` is
+        # ``None`` and the §6 A5 checksum-guard in
+        # ``media_upload_service._validate_checksum`` does NOT
+        # fire against a real bucket (it requires both sides
+        # non-None). The in-memory test fake populates
+        # ``sha256_hex`` directly, so A5 is exercised there.
+        # The pytest test
+        # ``test_a5_real_adapter_no_sha256_hex_xfail`` pins
+        # this gap with a strict ``xfail`` so the moment a
+        # future wiring round lights up the bucket-side
+        # checksum, the gap is visible and the TODO can be
+        # removed.
         return ObjectMetadata(
             size=size,
             content_type=response.headers.get(
@@ -451,12 +479,21 @@ def _sigv4_presign(
 ) -> str:
     """Compute the presigned URL (AWS SigV4 query-string form).
 
-    Only the ``X-Amz-SignedHeaders=host`` set is used here — the
-    rest of the upload-time constraints (``Content-Type``,
-    ``Content-Length``) are pushed as signed query parameters so
-    the bucket enforces them at PUT time, and the
-    ``Content-Length`` cap is what the finalize path treats as
-    defense-in-depth (brief §6.1)."""
+    For PUT (the upload path), ``content-type`` is added to the
+    ``X-Amz-SignedHeaders`` list AND to the canonical headers
+    block — AWS / MinIO enforce it at request time. The
+    returned headers dict carries the exact ``Content-Type``
+    the client must echo back. ``Content-Length`` is NOT
+    enforceable on a presigned PUT URL (AWS limitation —
+    presigned POST policy is the correct mechanism for that),
+    so it is enforced only at finalize time via the bucket
+    ``head_object`` metadata (the §6.1 defense-in-depth second
+    line). MAJOR F2 fix: the previous implementation pushed
+    fake ``X-Amz-SignedHeaders-Content-Type`` and
+    ``X-Amz-SignedHeaders-Content-Length`` query parameters,
+    which AWS / MinIO do NOT recognize — the bucket never
+    enforced either constraint at PUT time. The signed-header
+    form for content-type is the real SigV4 mechanism."""
     url, _headers = _sigv4_presign_request(
         method=method,
         endpoint=endpoint,
@@ -488,15 +525,47 @@ def _sigv4_presign_request(
     expires_in_seconds: int,
 ) -> tuple[str, dict[str, str]]:
     """Compute the signed URL + the minimum headers a client
-    must send. ``content_type`` and ``max_content_length`` are
-    baked into the signed query string — that is what enforces
-    them at request time (the bucket validates the query-signed
-    constraints before accepting the body)."""
+    must send.
+
+    For PUT requests with a ``content_type``, the
+    ``Content-Type`` header is added to ``X-Amz-SignedHeaders``
+    AND to the canonical headers block — the real SigV4
+    mechanism AWS / MinIO recognize (MAJOR F2 fix: the
+    previous revision pushed fake ``X-Amz-SignedHeaders-
+    Content-Type`` / ``-Content-Length`` query parameters that
+    no bucket enforces). The returned ``headers`` dict carries
+    the exact ``Content-Type`` value the client must echo
+    back; a mismatch causes a 403 ``SignatureDoesNotMatch`` at
+    PUT time.
+
+    ``max_content_length`` (the Content-Length cap) is NOT
+    enforceable on a presigned PUT URL — AWS does not support
+    signed Content-Length on PUT presigned URLs (the POST
+    policy is the correct mechanism for that). The finalize
+    path's ``head_object`` re-reads the actual object size
+    and rejects over-cap objects (``MediaSizeExceeded``);
+    that is the load-bearing layer for the size constraint,
+    and is documented as such.
+    """
     amz_date = now.strftime("%Y%m%dT%H%M%SZ")
     date_stamp = now.strftime("%Y%m%d")
     host = _endpoint_host(endpoint)
     canonical_uri = "/" + _uri_encode(f"{bucket}/{key}", encode_slash=False)
     service = "s3"
+
+    # Build the canonical headers block. ``host`` is always
+    # signed; ``content-type`` is added when the caller wants
+    # the bucket to enforce it (PUT path, content_type is not
+    # None).
+    canonical_headers_parts: list[str] = [f"host:{host}\n"]
+    signed_header_names: list[str] = ["host"]
+    client_headers: dict[str, str] = {"Host": host}
+    if content_type is not None and method.upper() == "PUT":
+        canonical_headers_parts.append(f"content-type:{content_type}\n")
+        signed_header_names.append("content-type")
+        client_headers["Content-Type"] = content_type
+    canonical_headers = "".join(canonical_headers_parts)
+    signed_headers = ";".join(signed_header_names)
 
     # The signed query parameters are sorted lexicographically —
     # SigV4 presign puts the credentials and signature alongside
@@ -508,18 +577,14 @@ def _sigv4_presign_request(
         ),
         "X-Amz-Date": amz_date,
         "X-Amz-Expires": str(expires_in_seconds),
-        "X-Amz-SignedHeaders": "host",
+        "X-Amz-SignedHeaders": signed_headers,
     }
-    if content_type is not None:
-        # The bucket compares the request's Content-Type against
-        # the signed parameter; an exact match is required.
-        params["X-Amz-SignedHeaders-Content-Type"] = content_type
-    if max_content_length is not None:
-        params["X-Amz-SignedHeaders-Content-Length"] = str(max_content_length)
+    # Note: max_content_length is intentionally NOT pushed as a
+    # signed query parameter — presigned PUT URLs cannot bind
+    # the Content-Length header. The finalize head_object
+    # re-check is the load-bearing size-enforcement layer.
 
     canonical_query = _canonical_query_string(params)
-    canonical_headers = f"host:{host}\n"
-    signed_headers = "host"
     payload_hash = "UNSIGNED-PAYLOAD"
 
     canonical_request = (
@@ -551,12 +616,13 @@ def _sigv4_presign_request(
     signed_params["X-Amz-Signature"] = signature
     signed_query = _canonical_query_string(signed_params)
     url = f"{endpoint}{canonical_uri}?{signed_query}"
-    # The host header is required for any signed AWS request —
-    # even a presigned PUT carries it. The signed-headers list
-    # names only ``host``, so this is the only header the SDK
-    # (or our SDK-free equivalent) must echo back.
-    headers = {"Host": host}
-    return url, headers
+    # The signed-headers list names exactly the headers the
+    # client must echo back. For PUT-with-content-type that's
+    # ``host`` AND ``Content-Type``; for HEAD / DELETE it's
+    # ``host`` only. Returning the exact value (not just the
+    # header name) makes the SDK-free caller the
+    # ``Content-Type`` to use at PUT time.
+    return url, client_headers
 
 
 def _endpoint_host(endpoint: str) -> str:

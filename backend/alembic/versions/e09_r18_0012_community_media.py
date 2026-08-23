@@ -22,6 +22,14 @@ convention:
 * ``profile_id`` — FK to ``community_profiles.id`` with
   ``ondelete='CASCADE'``. A profile deletion removes its media
   rows in the same transaction (the Kör 5 follow-graph precedent).
+* ``expires_at`` — ``DateTime(timezone=True)`` NOT NULL. The
+  absolute UTC expiry of the signed URL ``create_upload_intent``
+  issued for this row — copied from ``SignedUpload.expires_at``
+  at intent time. ``finalize_upload`` compares ``now >= expires_at``
+  against this stored value (defense-in-depth — see ADR 0410
+  §5.2 / §6 A2; the BLOCKER B1 / F1 fix in this revision ensures
+  the re-check uses the ACTUAL issued TTL, not a hardcoded
+  module constant).
 * ``object_key`` — the bucket-side key the client PUTs the bytes
   to (``profile_id / public_id`` shaped — see D2 below). NOT NULL
   and unique so an upload intent can't be reused by a parallel
@@ -105,7 +113,6 @@ def upgrade() -> None:
             "public_id",
             sa.Uuid(),
             nullable=False,
-            unique=True,
         ),
         sa.Column("profile_id", _bigint, nullable=False),
         sa.Column("object_key", sa.String(length=512), nullable=False),
@@ -123,6 +130,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("finalized_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         # ``object_key`` is unique so an upload intent can't be
         # claimed by a parallel finalize from a different media
         # row. The wire-side ``public_id`` is the identity the
@@ -141,9 +149,12 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     # The wire identity the client / finalize / cancel calls
-    # carry. Unique-indexed on top of the column-level UNIQUE
-    # above so the planner has a stable shape regardless of any
-    # future refactor of the UNIQUE backing index.
+    # carry. Explicit named unique index (the project-wide
+    # pattern — same shape as ``ix_community_bookmarks_public_id``
+    # and the Kör 2–17 wire-identity indexes). m2 cleanup: this
+    # is the SINGLE source of uniqueness for ``public_id`` (no
+    # column-level ``unique=True``) — a previous revision carried
+    # both, creating two unique indexes on the same column.
     op.create_index(
         "ix_community_media_public_id",
         "community_media",

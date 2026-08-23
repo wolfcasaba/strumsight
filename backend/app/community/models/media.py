@@ -161,7 +161,11 @@ class CommunityMedia(Base):
     )
     public_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
-        unique=True,
+        # Index-only — no column-level UNIQUE: the named
+        # ``ix_community_media_public_id`` index below carries
+        # the uniqueness constraint (same project-wide pattern
+        # as ``CommunityBookmark.public_id`` — explicit named
+        # index instead of a column-level ``unique=True``).
         index=True,
         default=uuid.uuid4,
         nullable=False,
@@ -231,6 +235,19 @@ class CommunityMedia(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # The absolute UTC expiry of the signed URL actually issued
+    # for this intent — ``object_store.create_upload_url(...)``
+    # stamps this onto ``SignedUpload.expires_at`` at intent
+    # time, and ``create_upload_intent`` persists it here.
+    # ``finalize_upload`` compares ``now >= row.expires_at``,
+    # NOT a module-level re-derivation — so a caller-supplied
+    # short window (60 s) is honoured even when the module
+    # default ``SIGNED_URL_EXPIRES_IN`` is 5 minutes (the
+    # BLOCKER B1 / F1 fix; brief §6 A2 acceptance).
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=_utcnow,
@@ -258,6 +275,15 @@ class CommunityMedia(Base):
         UniqueConstraint(
             "object_key",
             name="uq_community_media_object_key",
+        ),
+        # Wire-identity unique index — replaces the removed
+        # column-level ``public_id unique=True`` (m2: avoid the
+        # duplicate unique index in the migration). Same shape
+        # as ``CommunityBookmark.ix_community_bookmarks_public_id``.
+        Index(
+            "ix_community_media_public_id",
+            "public_id",
+            unique=True,
         ),
         # Composite (profile_id, created_at, id) backing the
         # orphan-cleanup function's scan (the §6 A7 cell).

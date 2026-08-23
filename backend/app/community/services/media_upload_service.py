@@ -29,6 +29,15 @@ load-bearing guarantees the tests pin):
   via dependency injection. The service has no module-level
   reference to either implementation.
 
+* **Signed URL constraints.** The signed PUT URL binds the
+  ``Content-Type`` via the real SigV4 signed-header mechanism
+  (the bucket rejects mismatches with ``SignatureDoesNotMatch``).
+  ``Content-Length`` is NOT enforceable on a presigned PUT URL
+  (AWS limitation — POST policy is the correct mechanism);
+  the finalize path's ``head_object`` re-reads the actual
+  object size and rejects over-cap uploads (``MediaSizeExceeded``)
+  as the load-bearing second layer (brief §6.1 defense-in-depth).
+
 * **Caller-supplied clock (``now: datetime``).** Same precedent as
   ``post_service.create_post`` / ``reaction_service.set_reaction``
   — the timestamp the service uses to stamp ``created_at`` /
@@ -90,7 +99,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Final
 
 from sqlalchemy.orm import Session
@@ -202,6 +211,18 @@ class MediaNotFound(Exception):
     never-finalized all collapse to the same exception. The §5.3
     IDOR guarantee (a non-owner must NOT learn whether the row
     exists).
+    """
+
+
+class MediaProfileNotFound(Exception):
+    """The ``profile_public_id`` carried by the caller does not
+    resolve to a :class:`CommunityProfile` row.
+
+    A service-internal precondition failure — the JWT-side
+    resolution must always have a matching profile for an
+    authenticated upload. The future router maps this to a 404
+    (uniform with :class:`MediaNotFound` — the caller cannot
+    upload against a profile that does not exist).
     """
 
 
@@ -319,32 +340,42 @@ def _resolve_media_by_public_id(
 
 
 def _live_upload_count(db: Session, *, profile_id: int) -> int:
-    """Count the viewer's non-finalized media rows.
+    """Count the viewer's truly LIVE media rows.
 
     The §3 quota — ``create_upload_intent`` rejects when this
-    count exceeds ``MAX_LIVE_UPLOADS_PER_PROFILE``. The four
-    "live" states (``pending`` / ``uploaded`` / ``cancelled`` /
-    ``failed``) all count until the row is ``finalized`` —
-    matches the brief §3 "every upload that hasn't completed
-    holds quota" semantic.
+    count exceeds ``MAX_LIVE_UPLOADS_PER_PROFILE``. Only the
+    two live states (``pending`` / ``uploaded``) count toward
+    the cap; the TERMINAL ``cancelled`` / ``failed`` states
+    do NOT — they hold no bucket-side bytes and should not
+    permanently lock out the profile (MAJOR M1 fix: a series
+    of cancelled network-dropped uploads no longer exhausts
+    the quota forever).
     """
     return (
         db.query(CommunityMedia)
         .filter(
             CommunityMedia.profile_id == profile_id,
-            CommunityMedia.upload_state != UPLOAD_STATE_FINALIZED,
+            CommunityMedia.upload_state.in_(
+                (UPLOAD_STATE_PENDING, UPLOAD_STATE_UPLOADED)
+            ),
         )
         .count()
     )
 
 
 def _as_utc(value: datetime) -> datetime:
-    """Normalize a DB-roundtripped ``datetime`` to UTC-aware
-    (the ``post_service._as_utc`` precedent). SQLite drops
-    tzinfo on read; the migration stores UTC, so we re-attach
-    ``timezone.utc`` here for comparison."""
+    """Normalize a DB-roundtripped ``datetime`` to UTC-aware.
+
+    Same precedent as ``post_service._as_utc``: SQLite drops
+    tzinfo on read (no native tz-aware column type); the
+    migration stores UTC, so we re-attach ``timezone.utc``
+    here for comparison. MAJOR M3 fix: the previous
+    implementation attached the HOST LOCAL timezone, which
+    shifted every expiry/retention comparison on a non-UTC
+    host. Matches the post_service pattern exactly.
+    """
     if value.tzinfo is None:
-        return value.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        return value.replace(tzinfo=timezone.utc)
     return value
 
 
@@ -421,11 +452,13 @@ def create_upload_intent(
 
     profile = _resolve_profile_by_public_id(db, profile_public_id)
     if profile is None:
-        # The caller (router) is responsible for turning this
-        # into a 404; the service raises the same uniform shape
-        # ``post_service.create_post`` uses ("author community
-        # profile not found").
-        raise ValueError("profile community profile not found")
+        # The future router maps this to a 404 (uniform with
+        # ``MediaNotFound`` — the caller cannot upload against
+        # a profile that does not exist). MAJOR m3 cleanup:
+        # replaces the previous bare ``ValueError`` so the
+        # router doesn't translate a service-internal
+        # precondition failure into a 500.
+        raise MediaProfileNotFound("community profile not found")
 
     if _live_upload_count(db, profile_id=profile.id) >= MAX_LIVE_UPLOADS_PER_PROFILE:
         raise MediaQuotaExceeded(
@@ -459,6 +492,7 @@ def create_upload_intent(
         checksum_sha256=checksum_sha256,
         upload_state=UPLOAD_STATE_PENDING,
         retention_until=retention_until,
+        expires_at=signed_upload.expires_at,
         created_at=now,
         updated_at=now,
     )
@@ -488,12 +522,17 @@ def finalize_upload(
 
     The re-checks (brief §5.3 / A2 / A3 / A4 / A5):
 
-    * **Expiry (A2).** The intent's ``expires_at`` is recomputed
-      from the ``signed_url_expires_in`` parameter the test
-      injected — when ``now >= expires_at``, the finalize is
-      rejected with :class:`MediaUploadExpired`. The bucket's
-      signed-URL rejection is a separate, defense-in-depth
-      check.
+    * **Expiry (A2).** The row's ``expires_at`` — stamped from
+      ``SignedUpload.expires_at`` at intent time — is compared
+      against ``now``. ``now >= expires_at`` → reject with
+      :class:`MediaUploadExpired`. The bucket-side signed-URL
+      rejection is a separate, defense-in-depth check. BLOCKER
+      B1 / F1 fix: the previous implementation re-derived the
+      expiry from the module-level ``SIGNED_URL_EXPIRES_IN``
+      constant, which IGNORED any caller-supplied
+      ``signed_url_expires_in`` (e.g. a 60-second test window)
+      and silently accepted finalize attempts minutes after
+      the ACTUAL signed URL had expired.
     * **Object existence.** ``head_object`` returns ``None`` →
       the client never PUT anything. Rejected with
       :class:`MediaNotFound` (the row stays in ``pending``).
@@ -511,10 +550,12 @@ def finalize_upload(
       to ``failed``.
     * **Checksum (A5).** When the row carries an intent-time
       ``checksum_sha256`` AND the bucket reports a SHA-256
-      (the in-memory fake's ``stage_object`` populates this), the
-      two must match — a mismatch raises
-      :class:`MediaChecksumMismatch` and transitions the row to
-      ``failed``.
+      (the in-memory fake's ``stage_object`` populates this;
+      the production ``S3CompatibleObjectStore.head_object``
+      currently returns ``sha256_hex=None``, see the TODO in
+      ``object_store.py``), the two must match. The A5
+      acceptance only holds for the in-memory store today;
+      MAJOR M2/F4 documents the real-adapter gap explicitly.
 
     Ownership (brief §6 A6): a foreign profile_public_id raises
     :class:`MediaNotFound` (uniform 404, the §5.3 IDOR
@@ -537,7 +578,7 @@ def finalize_upload(
 
     profile = _resolve_profile_by_public_id(db, profile_public_id)
     if profile is None:
-        raise ValueError("profile community profile not found")
+        raise MediaProfileNotFound("community profile not found")
 
     row = _resolve_media_by_public_id(db, media_public_id)
     if row is None:
@@ -557,21 +598,16 @@ def finalize_upload(
         # revived. The user must start a fresh intent.
         raise MediaNotFound("media not found")
 
-    # Expiry check (A2). The intent stamped
-    # ``signed_upload.expires_at`` when ``create_upload_intent``
-    # ran; we re-derive the expiry here from the row's
-    # ``created_at`` + the caller-supplied ``signed_url_expires_in``
-    # so the test can drive the A2 cell deterministically with
-    # a short window.
-    expires_at = row.created_at + (
-        # The ``signed_url_expires_in`` is captured at intent
-        # time via the row's ``object_key`` uniqueness — a
-        # shorter test window cannot shrink the bucket's TTL,
-        # but the service-side re-check uses the caller's
-        # ``signed_url_expires_in`` parameter (the in-memory
-        # fake's expiries are computed from this same param).
-        SIGNED_URL_EXPIRES_IN  # default — see ADR 0410 §D2.
-    )
+    # Expiry check (A2). The row's ``expires_at`` was stamped
+    # from ``SignedUpload.expires_at`` at intent time — this is
+    # the ACTUAL signed-URL TTL the in-memory / S3 adapter
+    # computed (the caller-supplied ``signed_url_expires_in``
+    # parameter IS honoured, even when it is shorter than the
+    # module-level ``SIGNED_URL_EXPIRES_IN`` default). BLOCKER
+    # B1 / F1 fix: the previous implementation re-derived the
+    # expiry from the module constant and silently ignored the
+    # caller's shorter window.
+    expires_at = row.expires_at
     if _as_utc(now) >= _as_utc(expires_at):
         # Mark failed so the orphan-cleanup function will sweep
         # the row.
@@ -678,7 +714,7 @@ def cancel_upload(
 
     profile = _resolve_profile_by_public_id(db, profile_public_id)
     if profile is None:
-        raise ValueError("profile community profile not found")
+        raise MediaProfileNotFound("community profile not found")
 
     row = _resolve_media_by_public_id(db, media_public_id)
     if row is None:
@@ -812,6 +848,7 @@ __all__ = [
     "MediaContentTypeMismatch",
     "MediaInvalidationEvent",
     "MediaNotFound",
+    "MediaProfileNotFound",
     "MediaQuotaExceeded",
     "MediaSizeExceeded",
     "MediaUploadDisabled",
