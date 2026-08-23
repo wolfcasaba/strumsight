@@ -424,7 +424,7 @@ E09-R11	docs/rounds/e09-r11-post-crud-and-audience-enforcement.md	minimax	0403	d
 E09-R12	docs/rounds/e09-r12-post-composer-draft-and-outbox.md	minimax	nincs	done
 E09-R13	docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md	minimax	0404	done
 E09-R14	docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md	minimax	nincs	done
-E09-R15	docs/rounds/e09-r15-reactions-and-optimistic-consistency.md	minimax	nincs	pending
+E09-R15	docs/rounds/e09-r15-reactions-and-optimistic-consistency.md	minimax	nincs	done
 E09-R16	docs/rounds/e09-r16-comments-reply-and-mention.md	minimax	0405	pending
 E09-R17	docs/rounds/e09-r17-bookmarks-and-controlled-import.md	minimax	0406	pending
 E09-R18	docs/rounds/e09-r18-media-upload-contract-and-object-store.md	minimax	0407	pending

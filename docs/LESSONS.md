@@ -16436,3 +16436,103 @@ pedig MINDEN esetre lazult-e a defenzivitás jegyében.
 — "a cache-primed post with a known artifact type rehydrates to its own
 card, not the fallback (A1.3 — F2 regression probe)" (a javító kör
 1-ben hozzáadva, `4c3886ff`).
+
+## L436 — Egy randomizált property-teszt lokális változója csak az EGYIK ágon íródott, a `assert` mégis feltétel nélkül futott — a mai zöld a `PROPERTY_SEED` DEFAULT szerencséjének köszönhető, nem a teszt helyességének (E09-R15, 2026-08-23)
+
+**Mit mértünk.** Az E09-R15 `test_a5_count_property_invariant_never_negative`
+egy 200-lépéses randomizált `set`/`remove`/`count` szekvenciában a `count`
+Python-változót KIZÁRÓLAG az `else: count = _count()` ágon (`op == 2`) töltötte
+fel, de a `assert count >= 0` MINDEN iterációban, feltétel nélkül lefutott.
+`seed=42` (a repó dev-alapértelmezése, `PROPERTY_SEED` hiányában) mellett az
+ELSŐ húzott `op` VÉLETLENÜL `2` — ezért a teszt lokálisan és a mai
+`backend-ci.yml`-ben (ami NEM állít `PROPERTY_SEED`-et) mindig zöld volt. Öt
+másik seeddel (1, 2, 12345, 999999) mérve az ELSŐ iteráció `op`-ja 0 vagy 1
+lehet, és ilyenkor `count` MÉG SOHA nem kapott értéket ebben a
+függvényhívásban → azonnali `UnboundLocalError: local variable 'count'
+referenced before assignment` — a teszt SAJÁT docstringjének "CI can
+monkeypatch seed if it wants a fresh draw per run" állítását megcáfolva. A
+review saját kézhen, több seeddel futtatva fedezte fel — a zöld gate-futtatás
+(sem az implementer sajátja, sem a review első, seed=42-es köre) ezt NEM
+mutatta meg.
+
+**Miért.** A minta egy Python-specifikus csapda: egy `if/elif/else` ág CSAK
+az `else`-ben ír egy változót, de egy UTÁNA következő, a blokkon KÍVÜLI sor
+FELTÉTEL NÉLKÜL olvassa — ez csak akkor derül ki, ha a `else` ág a LEGELSŐ
+iterációban SOSEM fut le. Egy fix seed (42) mellett ez a feltétel véletlenül
+sosem teljesül, ezért a hiba HOLTAN marad a kódban, amíg valaki egy MÁSIK
+seeddel nem futtatja — pontosan az a forgatókönyv, amit a projekt HORIZON
+property-gate konvenciója (`docs/LESSONS.md`, CLAUDE.md) a `test/property/`
+Dart-tesztekre előír (`PROPERTY_SEED=${{ github.run_id }}` egy külön CI HARD
+lépésben), de a `backend/` Python pytest suite-ra MA nincs bevezetve — ez a
+kör volt az ELSŐ, amelyik egy randomizált property-tesztet hozott a backend
+oldalra, és a hiányzó backend-oldali randomizált-seed CI-lépés miatt ez a
+hibaosztály MA láthatatlan marad a gate-en.
+
+**Hogyan alkalmazd.** (1) Egy randomizált property-tesztben SOHA ne
+hagyatkozz egy `if`/`elif`/`else` ág egyikén beállított lokális változóra egy
+AZON KÍVÜLI, feltétel nélküli assertben — vagy inicializáld a változót a
+ciklus ELŐTT egy explicit kezdőértékkel, vagy (a szigorúbb, helyes megoldás)
+olvasd újra MINDEN iterációban, a mutáció UTÁN, hogy az invariáns ténylegesen
+minden lépést mérjen, ne csak a véletlenül kiválasztott olvasásokat. (2) Egy
+`PROPERTY_SEED`-alapú randomizált tesztet a review-nak KÖTELEZŐ legalább 3-4
+KÜLÖNBÖZŐ, nem-default seeddel is lefuttatnia — a `seed=42`-es zöld önmagában
+NEM bizonyíték egy randomizált teszt helyességére, csak arra, hogy AZZAL az
+egy adott véletlen-sorozattal nem bukott. (3) Ha egy kör ÚJ randomizált
+property-tesztet hoz egy olyan gate-ágra (itt: `backend pytest`), amelyiknek
+MA nincs randomizált-seed CI-lépése (a Dart `test/property/`-vel ellentétben),
+az egy DOKUMENTÁLANDÓ rés — a backend property-tesztek ma csak a fix
+`seed=42`-vel futnak CI-ban, tehát egy hasonló hiba a jövőben is átcsúszhat,
+amíg egy backend-oldali randomizált-seed CI-lépés nem épül be (ez NEM ennek a
+körnek a hatásköre — a `tools/`/`.github/` tilos zóna —, hanem egy jövőbeli,
+kifejezetten erre irányuló kör/ADR feladata).
+
+**Őrteszt:** `backend/tests/community/test_reaction_service.py::test_a5_count_property_invariant_never_negative`
+— a javító kör 1 (`bb112754`) után a review öt `PROPERTY_SEED` értékkel (1, 2,
+12345, 999999, 42) saját kézzel újrafuttatta, mind zöld, `UnboundLocalError`
+nélkül.
+
+## L437 — Egy SDD-ből szó szerint másolt brief-scope-mondat ("post projection tartalmazza a viewer reactiont") a `allowed_paths`-tól függetlenül íródott — a pre-flight grep-je fogta meg, mielőtt bármi dispatch-elve lett volna (E09-R15, 2026-08-23)
+
+**Mit mértünk.** Az E09-R15 brief §3 scope-mondata ("post-projekció: viewer
+reaction + aggregált count", "reaction set/remove endpoint idempotensen") SZÓ
+SZERINT a `docs/sdd/10-epic-09-community-platform.md` Feladatok-listájából
+származott (`node tools/knowledge-rag.mjs --top 5` megerősítette: a SDD és a
+brief ugyanazt a mondatot hordozza). A pre-flight grep-je (`PostOut` a
+`schemas/post.py`-ban, `FeedPostItem` a `schemas/feed.py`-ban, a kitöltő
+`routers/posts.py::_row_to_out` / `routers/feed.py`) megmutatta, hogy EGYIK
+fájl SINCS a brief `allowed_paths`-án — sem egy reaction-router fájl, sem a
+`backend/app/main.py` router-regisztráció. Az SDD-feladatlista a TELJES,
+több körre bontható funkciót írja le; a konkrét kör briefje (amit ugyanaz a
+Claude-session írt korábban) a HTTP-router-t és a wire-projekció-bővítést
+nem vette fel az engedélyezett fájlok közé — a scope-mondat és az
+`allowed_paths` egymástól FÜGGETLENÜL íródott, jóllehet ugyanabban a
+dokumentumban élnek.
+
+**Miért.** Egy brief §3 "Benne van" listája gyakran az SDD forrás-fejezet
+feladat-mondatait örökli szó szerint, mert azok olvashatóan összefoglalják a
+funkció TELJES ívét — de a `allowed_paths` egy KÜLÖN, később meghúzott
+döntés, ami egy adott kör KONKRÉT terjedelmét rögzíti. A két lista
+divergálhat anélkül, hogy bárki észrevenné, amíg valaki explicit grep-eli a
+scope-mondatban implikált fájlokat az `allowed_paths` ellen — pontosan azt,
+amit a brief SAJÁT pre-flight-figyelmeztetése ("olvasd újra a Kör 11
+post-projekció TÉNYLEGES mezőit... Eltérésnél §0.0 brief-revízió") előírt.
+
+**Hogyan alkalmazd.** Amikor egy brief §3 scope-mondata egy MEGLÉVŐ,
+megnevezett adatszerkezet (`PostOut`, `FeedPostItem`, egy DTO/projection)
+BŐVÍTÉSÉT ígéri: (1) grep-eld ki, MELYIK fájl(ok) definiálják és TÖLTIK KI
+azt a szerkezetet ma (a definíció ÉS a kitöltő kód gyakran KÜLÖN fájlban él —
+itt a séma `schemas/post.py`-ban, a kitöltés `routers/posts.py`-ban); (2)
+ellenőrizd, mindegyik szerepel-e az `allowed_paths`-on; (3) ha nem, MÉRD MEG,
+hogy a §6 acceptance-cellák ténylegesen IGÉNYLIK-e a bővítést, vagy a mérhető
+viselkedés a MEGLÉVŐ `allowed_paths`-on belül (jellemzően egy szolgáltatás-
+réteg függvényként) is teljesíthető — ha igen, egy §0.0 D-döntés
+DOKUMENTÁLTAN szűkíti a scope-mondatot az `allowed_paths`-hoz, a wire-szintű
+bővítést egy KÉSŐBBI kör hatáskörébe utalva; ha nem, a brief-revízió a lista
+BŐVÍTÉSE (nem a scope-mondat gyengítése). A Kör 13/14 pár (tisztán backend
+feed-query, majd tisztán UI, valós HTTP-bekötés NÉLKÜL) élő precedens erre a
+réteg-szétválasztási mintára — érdemes RÁ hivatkozni a §0.0-ban, ha
+alkalmazható.
+
+**Őrteszt:** nincs — ez egy pre-flight ELJÁRÁSI lecke (a §0.0 brief-revízió
+maga a bizonyíték, `docs/rounds/e09-r15-reactions-and-optimistic-consistency.md`
+§0.0 D2), nem egy kódba épített, gépi mércével mérhető invariáns.
