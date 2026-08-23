@@ -6,10 +6,87 @@
 - **Branch:** `<motor>/e09-r20-notification-inbox-and-push-abstraction`
 - **Előfeltétel:** `E09-R19` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0409` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** `ADR 0409` — **ELAVULT, lásd §0.0**: a `0409` marker már foglalt (stale, `round=E13-R06`); a friss foglalás `ADR 0414`. Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 block-szűrő és a Kör 15/16 esemény-forrásokat (reakció, komment) — az értesítés-generálás ezekre a MEGLÉVŐ eseményekre épül. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight brief-revízió (Claude Sonnet 5, 2026-08-23, `main @ 9538937d`)
+
+**ADR-szám korrekció.** `tools/round-slots.py reserve-adr --round E09-R20` →
+`.pipeline/inflight/adr/0409` már létezett (`round=E13-R06`, stale — az a kör
+végül `ADR 0274`-et használta, a `0409` marker orphaned maradt). Az atomi
+foglaló ezért a KÖVETKEZŐ szabad számot adta: `0414`. A kör ADR-je:
+[`docs/adr/0414-notification-inbox-and-push-abstraction.md`](../adr/0414-notification-inbox-and-push-abstraction.md) —
+minden §5 architekturális döntés OTT részletezve, mérési forrásokkal együtt.
+
+**Kockázat = high, indoklás:** a kör egy privacy-érzékeny adatszivárgási
+felületet (push-payload redakció — teljes komment-szöveg vagy privát adat NE
+kerüljön a payloadba, A1) ÉS egy keresztfelhasználós láthatósági szabályt
+(blocked actor eseménye rejtett maradjon az inboxban, A4,
+`is_blocked_pair` hívás) implementál — egyik sem szó szerinti
+`high_risk_path_fragments` egyezés, de mindkettő valódi adatvédelmi
+incidens-osztály, ugyanaz az indoklás, mint a Kör 18/19 média- és
+privacy-körök. Részletek: ADR 0414 D6.
+
+**Resource-ownership mérés (§1 pre-flight 2. szabály).** `grep -rln
+"from.*reaction_service import\|from.*comment_service import" backend/
+--include=*.py` (teszt nélkül) **0 találat** — sem `reaction_service.py`,
+sem `comment_service.py` nincs élő router mögé kötve; `follow_service.py`-t
+a `social_graph.py` router hívja, de esemény-callback seam nélkül, és a
+`social_graph.py` nincs ezen kör `allowed_paths`-án.
+`backend/app/community/__init__.py::build_community_router` saját
+docstringje szerint MAGA sincs élesben `create_app()`-ba kötve — a teljes
+Epic-9 backend (R02–R19) kizárólag `backend/tests/community/conftest.py`
+önálló test-appján keresztül tesztelt. Ez a kör ezért **service-réteg-only**
+(a Kör 15/16 precedens, ADR 0407 D7 folytatása): a `notification_service.py`
+minden acceptance-cellája (A1–A5, A7) `test_notification_service.py`
+KÖZVETLEN függvényhívással mérhető, HTTP router NÉLKÜL. A brief tilos zónája
+(reaction/comment/follow service — "csak hívás az esemény végén") emiatt
+ebben a körben NEM gyakorolható — a valódi esemény-összekötés egy jövőbeli,
+ezeket a fájlokat saját `allowed_paths`-ban listázó kör dolga. Részletek:
+ADR 0414 D2.
+
+**MÁR élő Flutter-kontraktus (Kör 5, ADR 0399 §1) — a screen ez ELLEN épül.**
+`lib/features/community/domain/repositories/notification_repository.dart` +
+`domain/entities/notification_item.dart` MÁR definiálja a
+`CommunityNotificationRepository` (inboxPage/markRead/markAllReadUpTo/
+preferences/updatePreference) és `CommunityNotificationItem`/
+`CommunityNotificationKind` (tíz rögzített wire-érték) kontraktust —
+`domain/**` tilos zóna, változatlan. `grep -rln
+"CommunityNotificationRepository" lib/` egyetlen találat (az interfész
+maga) — nincs data-layer/controller/provider, ami a Kör 14
+(`feed_controller.dart`)/Kör 16 (`comment_controller.dart`) precedense
+szerint normális ÉS ebben a körben is az: a controller a domain-interfészre
+injektálva épül, widget-teszt fake-kel override-olva, valódi HTTP data-layer
+egy KÉSŐBBI kör dolga.
+
+**Proaktív `allowed_paths` bővítés — a Kör 14/16 l10n/screen-count drift
+HARMADSZORI megelőzése.** Az eredeti brief csak a screen-fájlt sorolta fel;
+a Kör 14 (F1 javító kör) és Kör 16 (§0.0.1 javító kör) UGYANAZT a
+hibaosztályt (ÚJ `*_screen.dart` → `test/ui/ui_inventory_test.dart`
+`hasLength` drift + hiányzó ARB-kulcsok → MAJOR lelet külön javító körben)
+kétszer egymás után futtatta végig review-n. Ez a kör ELŐRE felveszi az
+alábbi négy fájlt (lásd a bővített `allowed_paths` lent) — ADR 0414 D5.
+
+**Visszakeresett előzmény (ADR 0312 §4.9):** `node tools/knowledge-rag.mjs
+--corpus lessons,halts --top 5 "unread count race condition mark-read
+aggregation"` → **L421** (threading race-próba szinkronizáció NÉLKÜL nem
+determinisztikus, 10/10 mérésből 7 piros/3 zöld) — közvetlenül alkalmazva az
+A3 próbájára, lásd lent. `--corpus lessons,halts,adr --top 5 "notification
+inbox push gateway payload redaction"` → nincs E09-R20-specifikus előzmény a
+redakció-mintára (a legközelebbi találat, ADR 0372 gate-edit policy, nem
+releváns); a MÁR élő Flutter-kontraktust (ADR 0399) a teljes-korpuszos
+`node tools/knowledge-rag.mjs --top 5 "notification inbox push gateway
+community_notifications.py alembic"` hozta elő — lásd fent.
+
+**A3 valódi-sértés próba — L421 közvetlen alkalmazása.** A konkurens
+mark-read race tesztje `threading.Barrier`-t a PONTOS SQL-döntési pont
+(az unread-count/read-state UPDATE) ELÉ tegye, NEM a szál-indítás elé
+(L421, E09-R07: szinkronizáció nélkül 10 futtatásból 7 piros/3 zöld). A
+`notification_service.py` egy teszt-only szinkronizációs hookot kap
+(`_before_commit`), ugyanazzal a mintával, mint a `reaction_service`/
+`comment_service` `on_invalidate` callbackje. Részletek: ADR 0414 D4.
 
 ```ai-router
 schema_version = 1
@@ -23,9 +100,18 @@ allowed_paths = [
   "backend/tests/community/test_notification_service.py",
   "test/features/community/presentation/community_notifications_test.dart",
   "docs/rounds/e09-r20-notification-inbox-and-push-abstraction.md",
+  # §0.0 D5 proaktív bővítés (2026-08-23, orchestrátor-irányított — a Kör
+  # 14/16 l10n/screen-count drift-osztály harmadszori megelőzése):
+  "lib/features/community/application/controllers/notification_controller.dart",
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/ui/ui_inventory_test.dart",
 ]
 gate_tests = [
-  "test/features/community/presentation/community_notifications_test.dart"
+  "test/features/community/presentation/community_notifications_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
@@ -60,7 +146,9 @@ Tartós, kategorizált közösségi értesítések és opcionális push delivery
 
 - Tényleges push-szolgáltató (FCM/APNs) bekötése — ez a kör csak az absztrakciót és egy mock/no-op adaptert ad.
 - Challenge/club-specifikus notification típus — Kör 21/24 adja hozzá a saját típusát.
-- `docs/adr/**` — az ADR 0409-et a Claude írja.
+- `docs/adr/**` — az ADR 0414-et a Claude írja.
+- **HTTP router / az esemény-generáló service-ek (`reaction_service.py`, `comment_service.py`, `follow_service.py`, `social_graph.py`) szerkesztése** — §0.0 mérés szerint egyik sincs élő router mögé kötve (a teljes Community backend R02–R19 kizárólag a test-conftest appon él), ez a kör ezért service-réteg-only: minden A1–A5/A7 cella `test_notification_service.py` KÖZVETLEN függvényhívással mérhető. A valódi esemény-összekötés egy jövőbeli kör dolga (ADR 0414 D2).
+- **Valódi HTTP-kötésű Flutter data-layer** (a `CommunityNotificationRepository` konkrét implementációja) — a Kör 14/16 mintáját követve a controller a domain-interfészre injektálva épül, widget-teszt fake-kel override-olva.
 
 ## 4. Engedélyezett fájlok
 
@@ -73,10 +161,16 @@ Tartós, kategorizált közösségi értesítések és opcionális push delivery
 | `lib/features/community/presentation/screens/community_notifications_screen.dart` | ÚJ |
 | `backend/tests/community/test_notification_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/community_notifications_test.dart` | ÚJ |
+| `lib/features/community/application/controllers/notification_controller.dart` | ÚJ — §0.0 D5, a Kör 14/16 controller-minta |
+| `lib/l10n/features/community_en.arb` | §0.0 D5 — inbox/preferencia/quiet-hours szövegek |
+| `lib/l10n/features/community_hu.arb` | §0.0 D5 — ugyanaz, magyar fordítás |
+| `lib/l10n/app_en.arb` | §0.0 D5 — a `tool/gen_l10n_segments.dart --write` GENERÁLT, de commitolt aggregátuma |
+| `lib/l10n/app_hu.arb` | §0.0 D5 — ugyanaz |
+| `test/ui/ui_inventory_test.dart` | §0.0 D5 — KIZÁRÓLAG a `hasLength(73)` → `hasLength(74)` bumpolása |
 
-**Tilos zóna:** `backend/app/community/services/reaction_service.py`, `comment_service.py`, `follow_service.py` (csak HÍVÁS az esemény végén, nem átírás) · `docs/adr/**` · `tools/**` · `.github/**`
+**Tilos zóna:** `backend/app/community/services/reaction_service.py`, `comment_service.py`, `follow_service.py`, `backend/app/community/routers/**` (§0.0 mérés szerint egyik sincs élő router mögé kötve ebben a körben — a "csak hívás az esemény végén" megjegyzés egy jövőbeli kör hatásköre, ADR 0414 D2) · `lib/features/community/domain/**` (Kör 5, ADR 0399, MÁR él a `CommunityNotificationRepository`/`CommunityNotificationItem` kontraktus) · `docs/adr/**` · `tools/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0409)
+## 5. Kötött architekturális döntések (ADR 0414)
 
 ### 5.1 A push CSAK delivery channel — a payload minimális és redacted
 
@@ -86,7 +180,7 @@ A push payload kizárólag notification ID-t, típust és route-safe entity ID-t
 
 ### 5.2 A reaction-burst AGGREGÁLT — nem öt külön push
 
-Több reakció egy dokumentált időablakon belül egyetlen összegzett notification-itemet és legfeljebb egy push-ot ad.
+Több reakció egy dokumentált időablakon belül egyetlen összegzett notification-itemet és legfeljebb egy push-ot ad. **Az időablak: 15 perc, csúszó, `(recipient_id, entity_id, entity_type)` kulcsú** (ADR 0414 D3) — a 15 percen belüli következő reakció NEM új sort hoz létre, hanem az `aggregate_count`-ot növeli. **NEM elfogadható gyengítés:** entity-kulcs nélküli, csak recipient-szintű aggregáció (összemosná két különböző poszt reakcióit).
 
 ### 5.3 Az inbox az ELSŐDLEGES igazság — a push csak trigger
 
@@ -116,10 +210,17 @@ A kliens az inboxot olvassa vissza igazságforrásként; a push elvesztése (pl.
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** adj hozzá egy `commentBody` mezőt a push-payloadhoz, futtasd a backend pytest redaction-tesztjét → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
+**A3 konkurencia-próba (ADR 0414 D4, L421):** a `threading.Barrier(2)` a
+`mark_read`/`mark_all_read_up_to` implementáció BELSEJÉBEN, a döntő
+UPDATE elé kerüljön (a service egy teszt-only `_before_commit` hookot ad
+át), NEM a szál-indítás előtt — szinkronizáció nélkül L421 szerint 10
+futtatásból csak 3 lenne zöld, tehát a próba önmagában nem lenne
+megbízható bizonyíték.
+
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/community/presentation/community_notifications_test.dart
+tools/round-gate.sh test/features/community/presentation/community_notifications_test.dart test/ui/ui_inventory_test.dart
 ```
 
 A backend oldal külön, önálló parancs (NEM láncolva):
