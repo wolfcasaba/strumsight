@@ -34,7 +34,6 @@ production ``build_community_router`` factory is not touched
 
 from __future__ import annotations
 
-import threading
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timezone
@@ -49,15 +48,15 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from app.community.models.bookmark import CommunityBookmark
-from app.community.models.post import CommunityPost
 from app.community.models.profile import CommunityProfile
 from app.community.routers.bookmarks import (
     BookmarkPostNotFound,
     BookmarkViewerNotFound,
-    list_bookmarks,
     remove_bookmark,
-    router as bookmarks_router,
     set_bookmark,
+)
+from app.community.routers.bookmarks import (
+    router as bookmarks_router,
 )
 from app.community.routers.posts import router as posts_router
 from app.config import Settings
@@ -246,10 +245,7 @@ def _soft_delete_post(
     db: Session = session_factory()
     try:
         db.execute(
-            text(
-                "UPDATE community_posts SET deleted_at = :ts "
-                "WHERE public_id = :pid"
-            ),
+            text("UPDATE community_posts SET deleted_at = :ts WHERE public_id = :pid"),
             {"ts": _utcnow().isoformat(), "pid": uuid.UUID(post_public_id).hex},
         )
         db.commit()
@@ -270,11 +266,11 @@ def test_set_bookmark_creates_one_row(client, session_factory) -> None:
     _viewer, viewer_headers = _make_user_with_headers(
         session_factory, user_id=11, email="viewer@s.test"
     )
-    pid = _create_post(client, session_factory, author=author, author_headers=author_headers)
-
-    response = client.post(
-        f"/community/bookmarks/{pid}", headers=viewer_headers
+    pid = _create_post(
+        client, session_factory, author=author, author_headers=author_headers
     )
+
+    response = client.post(f"/community/bookmarks/{pid}", headers=viewer_headers)
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["status"] == "ok"
@@ -322,9 +318,7 @@ def test_set_bookmark_idempotent_no_second_row(client, session_factory) -> None:
         db.close()
 
 
-def test_remove_bookmark_idempotent_noop_on_second(
-    client, session_factory
-) -> None:
+def test_remove_bookmark_idempotent_noop_on_second(client, session_factory) -> None:
     """A1 — second remove returns ``noop`` without raising and
     does not create a negative-count condition (the row is
     simply absent)."""
@@ -359,9 +353,7 @@ def test_remove_bookmark_idempotent_noop_on_second(
         db.close()
 
 
-def test_post_out_does_not_carry_bookmark_count(
-    client, session_factory
-) -> None:
+def test_post_out_does_not_carry_bookmark_count(client, session_factory) -> None:
     """A2 — the public ``PostOut`` projection never carries a
     bookmark-count field, even when the viewer has bookmarked
     the post. The §5.2 invariant: the bookmark count is
@@ -389,9 +381,7 @@ def test_post_out_does_not_carry_bookmark_count(
     assert "bookmarkCount" not in fields_before
 
     # The viewer bookmarks the post.
-    set_resp = client.post(
-        f"/community/bookmarks/{pid}", headers=viewer_headers
-    )
+    set_resp = client.post(f"/community/bookmarks/{pid}", headers=viewer_headers)
     assert set_resp.status_code == 200
 
     # Re-fetch the post: the field set MUST be identical. The
@@ -453,18 +443,14 @@ def test_list_bookmarks_emits_tombstone_for_soft_deleted_post(
         db.close()
 
 
-def test_set_bookmark_on_missing_post_returns_404(
-    client, session_factory
-) -> None:
+def test_set_bookmark_on_missing_post_returns_404(client, session_factory) -> None:
     """A3-adjacent — set on a non-existent post is 404 (the
     §5.3 IDOR / D7 uniform 404). The bookmark row does not land."""
     _viewer, viewer_headers = _make_user_with_headers(
         session_factory, user_id=20, email="viewer@s.test"
     )
     fake_pid = uuid.uuid4()
-    response = client.post(
-        f"/community/bookmarks/{fake_pid}", headers=viewer_headers
-    )
+    response = client.post(f"/community/bookmarks/{fake_pid}", headers=viewer_headers)
     assert response.status_code == 404, response.text
 
     db: Session = session_factory()
@@ -559,9 +545,7 @@ def test_service_remove_bookmark_returns_false_when_absent(
         db.close()
 
 
-def test_list_bookmarks_isolated_per_viewer(
-    client, session_factory
-) -> None:
+def test_list_bookmarks_isolated_per_viewer(client, session_factory) -> None:
     """A1-adjacent — the list is ALWAYS caller-scoped. Viewer A's
     bookmark is not visible to viewer B. The §5.2 invariant:
     the bookmark is private to the viewer / post pair."""
@@ -604,9 +588,7 @@ def test_list_bookmarks_isolated_per_viewer(
         db.close()
 
 
-def test_list_bookmarks_cursor_pagination_round_trip(
-    client, session_factory
-) -> None:
+def test_list_bookmarks_cursor_pagination_round_trip(client, session_factory) -> None:
     """A3-adjacent — the cursor keyset paginates the list forward
     and never skips / duplicates. The D4 cursor shape."""
     author, author_headers = _make_user_with_headers(
@@ -634,9 +616,7 @@ def test_list_bookmarks_cursor_pagination_round_trip(
 
     # Page size 2: first page returns 2, the cursor advances to the
     # last row.
-    r1 = client.get(
-        "/community/bookmarks?limit=2", headers=viewer_headers
-    )
+    r1 = client.get("/community/bookmarks?limit=2", headers=viewer_headers)
     assert r1.status_code == 200, r1.text
     body1 = r1.json()
     assert len(body1["items"]) == 2
@@ -882,16 +862,10 @@ def test_a1_idempotency_real_violation_probe(
 
         # Two distinct rows landed — A1 turned red.
         with factory() as db:
-            rows = db.execute(
-                text("SELECT id FROM community_bookmarks")
-            ).fetchall()
-            assert len(rows) == 2, (
-                "probe should have landed two rows — A1 broken"
-            )
+            rows = db.execute(text("SELECT id FROM community_bookmarks")).fetchall()
+            assert len(rows) == 2, "probe should have landed two rows — A1 broken"
     finally:
-        monkeypatch.setattr(
-            bookmarks_module, "_existing_bookmark", original_existing
-        )
+        monkeypatch.setattr(bookmarks_module, "_existing_bookmark", original_existing)
         engine.dispose()
 
 

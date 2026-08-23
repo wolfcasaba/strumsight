@@ -111,7 +111,7 @@ typedef ImportIdGenerator = String Function();
 /// opaque local id (the project standard is uuid4, but a tiny
 /// LCG is fine for an internal marker the user never sees).
 String defaultImportIdGenerator() {
-  return '${importSongIdPrefix}${_randomHex(16)}';
+  return '$importSongIdPrefix${_randomHex(16)}';
 }
 
 String _randomHex(int bytes) {

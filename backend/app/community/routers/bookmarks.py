@@ -155,7 +155,8 @@ class BookmarkOut(BaseModel):
     )
     created_at: datetime
     is_tombstone: bool = Field(
-        ..., description="True when the joined post is soft-deleted or moderation-removed."
+        ...,
+        description="True when the joined post is soft-deleted or moderation-removed.",
     )
 
 
@@ -262,9 +263,7 @@ def _commit_via(request: Request, db: Session) -> None:
     fn(db)
 
 
-def _resolve_profile_by_public_id(
-    db: Session, public_id: uuid.UUID
-):
+def _resolve_profile_by_public_id(db: Session, public_id: uuid.UUID):
     """Return the ``CommunityProfile`` row matching ``public_id``, or ``None``.
 
     Local import keeps the module's import surface tight — the
@@ -484,9 +483,7 @@ def list_bookmarks(
     # docstring for the planner rationale.
     query = (
         db.query(CommunityBookmark, CommunityPost)
-        .outerjoin(
-            CommunityPost, CommunityPost.id == CommunityBookmark.post_id
-        )
+        .outerjoin(CommunityPost, CommunityPost.id == CommunityBookmark.post_id)
         .filter(CommunityBookmark.profile_id == viewer.id)
     )
     if decoded is not None:

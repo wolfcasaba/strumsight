@@ -40,7 +40,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/foundation/app_failure.dart';
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
 
@@ -245,7 +244,7 @@ class _BookmarksScreenState extends ConsumerState<BookmarksScreen> {
     }
     return ListView.separated(
       itemCount: state.rows.length + 1,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (context, index) => const Divider(height: 1),
       itemBuilder: (context, index) {
         if (index == state.rows.length) {
           return _LoadMoreFooter(
@@ -352,7 +351,8 @@ class _LoadMoreFooter extends StatelessWidget {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    final hasMore = state.nextCursor is! CursorHalted;
+    final hasMore =
+        !state.nextCursor.isInitial && state.nextCursor.cursor != null;
     if (!hasMore) {
       return const SizedBox.shrink();
     }
@@ -370,7 +370,7 @@ class _LoadMoreFooter extends StatelessWidget {
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.failure, required this.onRetry});
-  final AppFailure failure;
+  final Object failure;
   final VoidCallback onRetry;
 
   @override
