@@ -356,7 +356,35 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
         """MÉRT eset: a kör orchestrátora 'claude'-ra billent (globális bug),
         miközben az ágon a claude-kvótát fogyasztó `sonnet-impl` commitolt.
         A helyes feloldás: az orchestrátor megy 'terra'-ra -- az implementer
-        `sonnet-impl` marad (a hívó ezt nem is adja át módosításra)."""
+        `sonnet-impl` marad (a hívó ezt nem is adja át módosításra).
+
+        2026-08-23 óta a claude-ág is MODELL-azonosságon mér (orch_pair_model),
+        pontosan úgy, ahogy a sol/terra ág mindig is -- az ütközést ezért itt
+        EXPLICIT kell előállítani: a UI-pár ugyanarra a claude-sonnet-5-re
+        mutat, amit az implementer futtat. Ez a fail-closed ág mérése; hogy a
+        MAI default (Opus 5 a Sonnet fölött) NEM ütközik, azt a következő
+        cella méri."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-round").mkdir()
+            (state / "orchestrator-round" / "E06-R23").write_text("claude\n", encoding="utf-8")
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "sonnet-impl", state=state,
+                PIPELINE_UI_ORCH_MODEL="claude-sonnet-5", **CODEX_SIDE_ALIVE
+            )
+            self.assertEqual(
+                result.stdout.strip(),
+                "terra",
+                "ütközésnél az orchestrátornak kell billennie, nem HALT_INDEP-nek vagy claude-nak",
+            )
+
+    def test_an_opus_pair_facing_the_sonnet_implementer_is_kept(self) -> None:
+        """USER-DÖNTÉS 2026-08-23 (párhuzamos UI-sáv): a 2. slot körein Opus 5
+        max orchestrátor ül a `sonnet-impl` (Sonnet 5 high) implementer fölött.
+        MÁS modell, tehát nem a saját diffjét review-zi -- a folytatásnak a
+        claude-ot kell megtartania, nem billenhet terra-ra és nem halhat
+        H-INDEP-be. A közös Claude-ELŐFIZETÉS a döntés tudatos ára, ugyanaz az
+        osztály, mint a Sol/Terra közös Pro-kerete fent."""
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
             (state / "orchestrator-round").mkdir()
@@ -364,11 +392,7 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             result = driver(
                 "--resume-orchestrator", "E06-R23", "sonnet-impl", state=state, **CODEX_SIDE_ALIVE
             )
-            self.assertEqual(
-                result.stdout.strip(),
-                "terra",
-                "ütközésnél az orchestrátornak kell billennie, nem HALT_INDEP-nek vagy claude-nak",
-            )
+            self.assertEqual(result.stdout.strip(), "claude", result.stderr)
 
     def test_a_terra_pin_facing_a_terra_model_implementer_also_flips(self) -> None:
         """A fordított ütközés: a kör orchestrátora 'terra', az ágon egy

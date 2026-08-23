@@ -128,6 +128,38 @@ claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 # a PIPELINE_SELFHEAL_MODEL.
 claude_effort=${PIPELINE_EFFORT:-high}
 heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
+# Üres, ha a heal-modellt NEM állította be explicit env — ilyenkor a heal is a
+# kör-szintű párt kapja (lásd orch_pair_model).
+heal_model_explicit=${PIPELINE_SELFHEAL_MODEL:+1}
+
+# --- Kör-szintű orchestrátor-pár (user-döntés 2026-08-23) ------------------
+# „a slot 1-en maradjon a Sonnet 5 high orchestrátor és a MiniMax implementer,
+#  a slot 2-n pedig Opus 5 max orchestrátor és Sonnet 5 high implementer, ez
+#  fogja fejleszteni az UI-t."
+#
+# A pár NEM a slot SORSZÁMÁHOZ kötődik, hanem a kör IMPLEMENTERÉHEZ — ez adja
+# ki pontosan ugyanazt a két felállást, de fail-safe módon. Ok: hogy egy kör
+# melyik fizikai slotba esik, az az időzítés esetlegessége (a driver a szabad
+# slotot adja oda); sorszám-alapú kötésnél egy UI-kör az 1-es slotba érkezve
+# Sonnet-orchestrátort kapna a Sonnet-implementer fölé — azaz a modell a saját
+# diffjét review-zná, amit a függetlenség-őr helyesen H-INDEP-re halt. A motor
+# viszont a kör sajátja (queue `engine` oszlop), tehát a párosítás mindig
+# együtt utazik a körrel.
+#
+#   sonnet-impl implementer  → Opus 5, effort max   (UI-sáv)
+#   minden más               → a globális default   (Sonnet 5, effort high)
+orch_pair_model() {    # $1=implementer motor
+  case "${1:-}" in
+    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_MODEL:-claude-opus-5}" ;;
+    *)           printf '%s' "$claude_model" ;;
+  esac
+}
+orch_pair_effort() {   # $1=implementer motor
+  case "${1:-}" in
+    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_EFFORT:-max}" ;;
+    *)           printf '%s' "$claude_effort" ;;
+  esac
+}
 
 # A telefonos Code-lista MÉRT szabálya (2026-08-07). Egy futó Claude-session
 # akkor és csak akkor jelenik meg a Claude appban, ha a session-regiszterét
@@ -958,6 +990,7 @@ run_selfheal_session() {   # $1=motor $2=tmux-név $3=prompt $4=log $5=jelzés $
 run_orchestrator_session() {
   local tmux_session="$1" prompt_file="$2" session_log="$3" signal_file="$4"
   local timeout_s="$5" label="$6" session_model="${7:-$claude_model}"
+  local session_effort="${8:-$claude_effort}"
   local blocked_until codex_prompt
   # A Codex-oldali orchestrátor alakja: Terra (default model, ADR 0115/0222)
   # vagy Sol (user-döntés 2026-08-20, explicit `-m $sol_model` UGYANABBAN a
@@ -982,7 +1015,7 @@ run_orchestrator_session() {
     log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
   else
     if run_tmux_session "$tmux_session" \
-      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir DISABLE_AUTOUPDATER=1 $claude_bin $session_mode_flag --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
+      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir DISABLE_AUTOUPDATER=1 $claude_bin $session_mode_flag --permission-mode bypassPermissions --model $session_model --effort $session_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
       "$session_log" "$signal_file" "$timeout_s" "$label" 1 \
       && [ -f "$signal_file" ]; then
       return 0
@@ -1508,8 +1541,15 @@ attempt_selfheal() {
   # Kizárólag a D1 által bevezetett valódi motorváltás fut a registry saját
   # harnessén; így az első két kísérlet Claude→Terra fallbackje bitre azonos.
   if [ "$heal_engine" = "$round_engine" ]; then
+    heal_pair_model=$heal_model
+    heal_pair_effort=$claude_effort
+    if [ -z "${heal_model_explicit:-}" ]; then
+      heal_pair_model=$(orch_pair_model "$round_engine")
+      heal_pair_effort=$(orch_pair_effort "$round_engine")
+    fi
     run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
-      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" "$heal_model"
+      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" \
+      "$heal_pair_model" "$heal_pair_effort"
   else
     run_selfheal_session "$heal_engine" "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
       "$heal_status_file" "$heal_timeout" "önjavítás $halt_round"
@@ -1677,7 +1717,23 @@ resolve_independent_engine() {   # $1=queue-motor [$2=orchestrátor]
 orchestrator_conflicts_with_implementer() {   # $1=orchestrátor(claude|terra|sol) $2=implementer motor
   local row
   case "$1" in
-    claude) engine_uses_claude_quota "$2" ;;
+    # 2026-08-23 user-döntés: a claude-ág is MODELL-azonosságon mér, nem puszta
+    # kvóta-azonosságon — ugyanazon a kulcson, ahogy a `sol` ág teszi a közös
+    # Pro-előfizetés fölött. Indok: az orchestrátor Opus 5, az implementer
+    # `sonnet-impl` (Sonnet 5) — más modell, tehát nem a saját diffjét
+    # review-zi. A KÖZÖS Claude-előfizetés vállalt kockázat (a 85%-os fék,
+    # PIPELINE_CLAUDE_SESSION_PCT_MAX, változatlanul él). Fail-closed marad:
+    # ha valaki PIPELINE_MODEL=claude-sonnet-5-re állítja vissza az
+    # orchestrátort, a `sonnet-impl` ismét ütközik.
+    claude)
+      engine_uses_claude_quota "$2" || return 1
+      row=$(engine_registry_row "$2") || return 1
+      # NEM a globális defaulthoz mérünk, hanem ahhoz a modellhez, amit ez a
+      # kör TÉNYLEGESEN kapna (orch_pair_model — ugyanaz a feloldó, ami a
+      # sessiont indítja). Fail-closed marad: ha a pár egy nap ugyanarra a
+      # modellre mutatna, mint az implementer, ez ütközést jelent.
+      [ "$(printf '%s' "$row" | cut -f4)" = "$(orch_pair_model "$2")" ]
+      ;;
     # Csak a Terra-MODELLT (gpt-5.6-terra) futtató implementer ütközik a
     # Terra orchestrátorral/reviewerrel — ugyanaz a mérés, mint
     # resolve_independent_engine-ben (2026-08-11 mért rés: a `codex` név is
@@ -1847,7 +1903,9 @@ case "${1:-}" in
     ;;
   --session-config)    # $2=round|heal → a feloldott modell + effort (teszthorog, user-döntés 2026-08-04)
     case "${2:-}" in
-      round) printf 'model=%s effort=%s\n' "$claude_model" "$claude_effort" ;;
+      # $3 = implementer motor (opcionális): a KÖRRE feloldott pár. Enélkül a
+      # globális default — a régi hívási alak bitre változatlan.
+      round) printf 'model=%s effort=%s\n' "$(orch_pair_model "${3:-}")" "$(orch_pair_effort "${3:-}")" ;;
       heal)  printf 'model=%s effort=%s\n' "$heal_model" "$claude_effort" ;;
       *) echo "használat: --session-config round|heal" >&2; exit 2 ;;
     esac
@@ -2528,7 +2586,8 @@ notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-sess
 # (az argv-önillesztés — L12 — kizárva).
 session_exit=0
 run_orchestrator_session "pipeline-$round" "$prompt_file" "$session_log" \
-  "$status_file" "$session_timeout" "$round" || session_exit=124
+  "$status_file" "$session_timeout" "$round" \
+  "$(orch_pair_model "$engine")" "$(orch_pair_effort "$engine")" || session_exit=124
 
 
 # --- 7. Kimenet osztályozása ----------------------------------------------

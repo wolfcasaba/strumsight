@@ -102,7 +102,10 @@ class RegistryTest(unittest.TestCase):
         self.assertEqual(row[1], "claude")
         self.assertEqual(row[3], "claude-sonnet-5")
         self.assertEqual((row[4], row[5]), ("-", "-"))
-        self.assertEqual(row[12], "medium", "a --effort szint a reasoning oszlopból jön")
+        # user-döntés 2026-08-23: „az implementátor pedig sonnet 5 high" — a
+        # `sonnet-impl` az UI-sáv implementere, a fölötte ülő orchestrátor
+        # Opus 5 max (orch_pair_model/orch_pair_effort a driverben).
+        self.assertEqual(row[12], "high", "a --effort szint a reasoning oszlopból jön")
 
     def test_the_minimax_engine_still_declares_its_key(self) -> None:
         row = registry_row("minimax")

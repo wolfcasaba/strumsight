@@ -69,7 +69,11 @@ class PipelineIntegrationTest(unittest.TestCase):
         self.assertIn("auto | minimax | codex", queue)
         rows = [line.split("\t") for line in queue.splitlines() if line and not line.startswith("#")]
         # `terra` a 2026-08-20-i user-döntés (Pro-keret égetése) queue-értéke.
-        self.assertTrue(all(row[2] in {"auto", "minimax", "codex", "terra"} for row in rows))
+        # `sonnet-impl` 2026-08-23-tól (user-döntés): a Chapter 13 UI-sáv
+        # implementere a natív Claude Sonnet 5, Opus 5 orchestrátor alatt.
+        self.assertTrue(
+            all(row[2] in {"auto", "minimax", "codex", "terra", "sonnet-impl"} for row in rows)
+        )
         epic3 = [row for row in rows if row[0].startswith("E03-")]
         self.assertEqual([row[0] for row in epic3], [f"E03-R{i:02d}" for i in range(1, 23)])
         self.assertTrue(all(row[4] in {"pending", "running", "done"} for row in epic3))
@@ -151,11 +155,23 @@ class PipelineIntegrationTest(unittest.TestCase):
                     if any(segment in p for segment in ("/domain/", "/application/", "/data/"))
                 )
                 expected = "minimax" if (risk.group(1) == "normal" or ui > core) else "codex"
+                allowed = {"minimax"} if expected == "minimax" else {"minimax", "codex"}
+                # USER-DÖNTÉS 2026-08-23: a Chapter 13 (UI/UX design system)
+                # sáv implementere a `sonnet-impl` (natív Claude Sonnet 5,
+                # `--effort high`), fölötte Opus 5 max orchestrátor. Indok: a
+                # MiniMax MÉRT gyengéje az invariáns-lazítás (engine-registry),
+                # a Ch13-körök mércéje viszont épp invariáns-sűrű (kontraszt-őr,
+                # text-scale mátrix, a11y-szerződés). A carve-out SZŰK: csak az
+                # E13-sávra, csak `sonnet-impl` irányba, és a Codex-oldali
+                # tiltás (lásd a ciklus utáni assertet) változatlanul él.
+                if round_id.startswith("E13-"):
+                    allowed = allowed | {"sonnet-impl"}
                 self.assertIn(
                     engine,
-                    {"minimax"} if expected == "minimax" else {"minimax", "codex"},
+                    allowed,
                     f"{round_id}: risk={risk.group(1)} UI/ARB={ui} core={core} → {expected}; "
-                    "a Codex-kimaradás alatt a pin CSAK codex→minimax irányba mozdulhat",
+                    "a Codex-kimaradás alatt a pin CSAK codex→minimax (E13-en "
+                    "codex→minimax|sonnet-impl) irányba mozdulhat",
                 )
 
         # (a) A kimaradás alatt egyetlen NYITOTT sor sem nevezhet meg

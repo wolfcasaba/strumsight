@@ -74,11 +74,21 @@ def run_driver(*arguments: str, **environment_overrides: str) -> subprocess.Comp
 class SlotDecisionTest(unittest.TestCase):
     """A kért slotszám feloldása: file > env > script-default."""
 
-    def test_the_committed_slots_file_value_is_one(self) -> None:
-        # A user-döntés maga (2026-08-21): egy sáv dolgozzon, mert a
-        # Codex-oldal kiesésével MINDEN sáv orchestrátora a Claude, és két
-        # párhuzamos session ugyanabból az előfizetésből enne.
-        self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "1")
+    def test_the_committed_slots_file_value_is_two(self) -> None:
+        # A KORÁBBI user-döntés (2026-08-21) egy sávot kért, mert a Codex-oldal
+        # kiesésével MINDEN sáv orchestrátora a Claude, és két párhuzamos
+        # session ugyanabból az előfizetésből enne.
+        #
+        # FELÜLÍRVA 2026-08-23 (user-döntés): két sáv fut. Az 1. sáv a mai pár
+        # (Sonnet 5 high orchestrátor + MiniMax implementer, „oda nem kell nagy
+        # tudás, csak kódolás folyik"), a 2. sáv a Chapter 13 UI-lánc Opus 5 max
+        # orchestrátorral és `sonnet-impl` (Sonnet 5 high) implementerrel, mert
+        # az UI-minőség a cél. A fenti kvóta-kockázat NEM szűnt meg — a döntés
+        # tudatosan vállalja; a fékje a 85%-os session-küszöb
+        # (PIPELINE_CLAUDE_SESSION_PCT_MAX), és PIPELINE_FALLBACK_ENGINE=none
+        # mellett a küszöb elérése MINDKÉT sávot megállítja (nincs Codex-oldal:
+        # a ChatGPT Pro előfizetés 2026-08-23-án elfogyott, ~egy hónapig).
+        self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "2")
 
     def test_the_committed_file_overrides_the_operator_env(self) -> None:
         with tempfile.TemporaryDirectory() as name:
@@ -108,7 +118,8 @@ class SlotDecisionTest(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "1")
+        # 2026-08-23 óta két sáv (lásd test_the_committed_slots_file_value_is_two).
+        self.assertEqual(result.stdout.strip(), "2")
 
     def test_without_a_file_the_env_semantics_stay_measurable(self) -> None:
         for wanted in ("1", "2", "4"):

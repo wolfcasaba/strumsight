@@ -2,7 +2,7 @@
 # Oszlopok TAB-bal elválasztva:
 #   round   brief                                  engine   adr    status
 # status: prepared | pending | running | done | halted
-# engine: auto | minimax | codex | terra
+# engine: auto | minimax | codex | terra | sonnet-impl
 #   auto = MiniMax-first router (2 M3 megoldási kör, szükség esetén 1 Terra)
 #   minimax|codex = örökölt, kézi reprodukciós override
 #   terra = a nyilvántartás `terra` sora (~/.codex-terra, gpt-5.6-terra)
@@ -541,35 +541,35 @@ E13-R01	docs/rounds/e13-r01-ui-baseline-inventory.md	terra	nincs	done
 E13-R02	docs/rounds/e13-r02-design-system-foundation.md	terra	0273	done
 E13-R03	docs/rounds/e13-r03-semantic-colors-and-themes.md	terra	nincs	done
 E13-R04	docs/rounds/e13-r04-typography-and-text-scale.md	terra	nincs	done
-E13-R05	docs/rounds/e13-r05-spacing-and-surfaces.md	minimax	nincs	pending
-E13-R06	docs/rounds/e13-r06-motion-and-reduced-motion.md	minimax	0274	pending
-E13-R07	docs/rounds/e13-r07-iconography-and-guitar-glyphs.md	minimax	nincs	pending
-E13-R08	docs/rounds/e13-r08-adaptive-scaffold-and-navigation.md	minimax	0275	pending
-E13-R09	docs/rounds/e13-r09-stage-scaffold-and-transport.md	minimax	0276	pending
-E13-R10	docs/rounds/e13-r10-async-state-components.md	minimax	0277	pending
-E13-R11	docs/rounds/e13-r11-actions-and-forms.md	minimax	nincs	pending
-E13-R12	docs/rounds/e13-r12-cards-badges-and-status.md	minimax	0278	pending
-E13-R13	docs/rounds/e13-r13-overlays-and-confirmations.md	minimax	0279	pending
-E13-R14	docs/rounds/e13-r14-accessibility-toolkit.md	minimax	0280	pending
-E13-R15	docs/rounds/e13-r15-localization-resilience.md	minimax	nincs	pending
-E13-R16	docs/rounds/e13-r16-launch-and-onboarding.md	minimax	0281	pending
-E13-R17	docs/rounds/e13-r17-today-practice-profile-hubs.md	minimax	nincs	pending
-E13-R18	docs/rounds/e13-r18-live-stage-ui.md	minimax	nincs	pending
-E13-R19	docs/rounds/e13-r19-tuner-and-metronome-ui.md	minimax	nincs	pending
-E13-R20	docs/rounds/e13-r20-chords-and-learning-ui.md	minimax	0282	pending
-E13-R21	docs/rounds/e13-r21-practice-session-ui.md	minimax	nincs	pending
-E13-R22	docs/rounds/e13-r22-practice-results-and-speed-builder.md	minimax	0283	pending
-E13-R23	docs/rounds/e13-r23-song-library-and-setlists.md	minimax	nincs	pending
-E13-R24	docs/rounds/e13-r24-song-import-and-editor.md	minimax	0284	pending
-E13-R25	docs/rounds/e13-r25-song-trainer-and-setlist-run.md	minimax	nincs	pending
-E13-R26	docs/rounds/e13-r26-analyze-recording-and-processing.md	minimax	0285	pending
-E13-R27	docs/rounds/e13-r27-analysis-results-ui.md	minimax	0286	pending
-E13-R28	docs/rounds/e13-r28-unified-library.md	minimax	nincs	pending
-E13-R29	docs/rounds/e13-r29-coach-tutor-and-debrief.md	minimax	0287	pending
-E13-R30	docs/rounds/e13-r30-vision-ui.md	minimax	0288	pending
-E13-R31	docs/rounds/e13-r31-progress-and-skills.md	minimax	0289	pending
-E13-R32	docs/rounds/e13-r32-gamification-ui.md	minimax	0290	pending
-E13-R33	docs/rounds/e13-r33-community-feed-and-posts.md	minimax	0291	pending
-E13-R34	docs/rounds/e13-r34-community-challenges-and-safety.md	minimax	nincs	pending
-E13-R35	docs/rounds/e13-r35-account-privacy-and-share.md	minimax	0292	pending
-E13-R36	docs/rounds/e13-r36-visual-regression-and-closure.md	minimax	nincs	pending
+E13-R05	docs/rounds/e13-r05-spacing-and-surfaces.md	sonnet-impl	nincs	pending
+E13-R06	docs/rounds/e13-r06-motion-and-reduced-motion.md	sonnet-impl	0274	pending
+E13-R07	docs/rounds/e13-r07-iconography-and-guitar-glyphs.md	sonnet-impl	nincs	pending
+E13-R08	docs/rounds/e13-r08-adaptive-scaffold-and-navigation.md	sonnet-impl	0275	pending
+E13-R09	docs/rounds/e13-r09-stage-scaffold-and-transport.md	sonnet-impl	0276	pending
+E13-R10	docs/rounds/e13-r10-async-state-components.md	sonnet-impl	0277	pending
+E13-R11	docs/rounds/e13-r11-actions-and-forms.md	sonnet-impl	nincs	pending
+E13-R12	docs/rounds/e13-r12-cards-badges-and-status.md	sonnet-impl	0278	pending
+E13-R13	docs/rounds/e13-r13-overlays-and-confirmations.md	sonnet-impl	0279	pending
+E13-R14	docs/rounds/e13-r14-accessibility-toolkit.md	sonnet-impl	0280	pending
+E13-R15	docs/rounds/e13-r15-localization-resilience.md	sonnet-impl	nincs	pending
+E13-R16	docs/rounds/e13-r16-launch-and-onboarding.md	sonnet-impl	0281	pending
+E13-R17	docs/rounds/e13-r17-today-practice-profile-hubs.md	sonnet-impl	nincs	pending
+E13-R18	docs/rounds/e13-r18-live-stage-ui.md	sonnet-impl	nincs	pending
+E13-R19	docs/rounds/e13-r19-tuner-and-metronome-ui.md	sonnet-impl	nincs	pending
+E13-R20	docs/rounds/e13-r20-chords-and-learning-ui.md	sonnet-impl	0282	pending
+E13-R21	docs/rounds/e13-r21-practice-session-ui.md	sonnet-impl	nincs	pending
+E13-R22	docs/rounds/e13-r22-practice-results-and-speed-builder.md	sonnet-impl	0283	pending
+E13-R23	docs/rounds/e13-r23-song-library-and-setlists.md	sonnet-impl	nincs	pending
+E13-R24	docs/rounds/e13-r24-song-import-and-editor.md	sonnet-impl	0284	pending
+E13-R25	docs/rounds/e13-r25-song-trainer-and-setlist-run.md	sonnet-impl	nincs	pending
+E13-R26	docs/rounds/e13-r26-analyze-recording-and-processing.md	sonnet-impl	0285	pending
+E13-R27	docs/rounds/e13-r27-analysis-results-ui.md	sonnet-impl	0286	pending
+E13-R28	docs/rounds/e13-r28-unified-library.md	sonnet-impl	nincs	pending
+E13-R29	docs/rounds/e13-r29-coach-tutor-and-debrief.md	sonnet-impl	0287	pending
+E13-R30	docs/rounds/e13-r30-vision-ui.md	sonnet-impl	0288	pending
+E13-R31	docs/rounds/e13-r31-progress-and-skills.md	sonnet-impl	0289	pending
+E13-R32	docs/rounds/e13-r32-gamification-ui.md	sonnet-impl	0290	pending
+E13-R33	docs/rounds/e13-r33-community-feed-and-posts.md	sonnet-impl	0291	pending
+E13-R34	docs/rounds/e13-r34-community-challenges-and-safety.md	sonnet-impl	nincs	pending
+E13-R35	docs/rounds/e13-r35-account-privacy-and-share.md	sonnet-impl	0292	pending
+E13-R36	docs/rounds/e13-r36-visual-regression-and-closure.md	sonnet-impl	nincs	pending
