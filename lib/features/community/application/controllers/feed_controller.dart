@@ -63,8 +63,13 @@ import '../../../../core/logging/app_logger.dart';
 import '../../../../core/logging/logger_provider.dart';
 import '../../data/local/feed_cache.dart';
 import '../../domain/entities/community_post.dart';
+import '../../domain/entities/community_reaction.dart';
+import '../../domain/entities/moderation_state.dart';
+import '../../domain/entities/share_artifact.dart';
+import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/repositories/feed_repository.dart';
+import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 
@@ -342,13 +347,16 @@ class FeedController extends Notifier<FeedState> {
         cursor: const CursorPage.initial(),
         limit: pageSize,
       );
-      // The refresh replaces the seen-id set with the new server ids; any
-      // post that disappeared between fetches is dropped, and a stale id
-      // cannot re-appear from the cache on the next append.
+      // The refresh replaces the seen-id set with the new server ids;
+      // any post that disappeared between fetches is dropped, and a
+      // stale id cannot re-appear from the cache on the next append.
+      // The seen-id set MUST be cleared BEFORE `_dedupe` so a post
+      // that disappeared server-side is allowed back in if it shows
+      // up again on a later refresh — and a post that disappeared
+      // server-side is correctly absent here.
+      _seenIds.clear();
       final newItems = _dedupe(page.items);
-      _seenIds
-        ..clear()
-        ..addAll(newItems.map((p) => p.id.value));
+      _seenIds.addAll(newItems.map((p) => p.id.value));
       await _persistCache(newItems);
       state = state.copyWith(
         status: FeedStatus.content,
@@ -477,19 +485,18 @@ class FeedController extends Notifier<FeedState> {
     CommunityPage<CommunityPost> page, {
     required bool fromCache,
   }) {
+    // Clear the seen-id set BEFORE `_dedupe` (see the refresh comment
+    // for the rationale — the order matters).
+    _seenIds.clear();
     final items = _dedupe(page.items);
-    _seenIds
-      ..clear()
-      ..addAll(items.map((p) => p.id.value));
+    _seenIds.addAll(items.map((p) => p.id.value));
     final cursorIsEnd = !page.cursor.isInitial && page.cursor.cursor == null;
     // Fire-and-forget cache persist — we do not await so the screen does
     // not block on storage; the cache is a snapshot, not the source of
     // truth.
     unawaited(_persistCache(items));
     state = FeedState(
-      status: cursorIsEnd && items.isEmpty
-          ? FeedStatus.end
-          : FeedStatus.content,
+      status: cursorIsEnd ? FeedStatus.end : FeedStatus.content,
       items: items,
       cursor: page.cursor,
       hasCache: items.isNotEmpty || fromCache,

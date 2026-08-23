@@ -73,20 +73,25 @@ class FeedCard extends StatelessWidget {
       return const _FallbackCard(reason: _FallbackReason.unfilled);
     }
     if (artifact is ShareArtifact) {
-      switch (artifact.type) {
-        case ShareArtifactType.practiceSummary:
+      // The `switch` over the Kör 10 sealed hierarchy's type
+      // discriminator narrows the runtime type — Dart's exhaustive
+      // pattern matching checks every concrete subclass at compile
+      // time, so a future concrete subtype added to `ShareArtifact`
+      // without a matching card here is a compile error.
+      switch (artifact) {
+        case PracticeSummaryArtifact():
           return _PracticeSummaryCard(artifact: artifact);
-        case ShareArtifactType.songResult:
+        case SongResultArtifact():
           return _SongResultCard(artifact: artifact);
-        case ShareArtifactType.originalProgression:
+        case OriginalProgressionArtifact():
           return _OriginalProgressionCard(artifact: artifact);
-        case ShareArtifactType.planTemplate:
+        case PlanTemplateArtifact():
           return _PlanTemplateCard(artifact: artifact);
-        case ShareArtifactType.analysisImprovement:
+        case AnalysisImprovementArtifact():
           return _AnalysisImprovementCard(artifact: artifact);
-        case ShareArtifactType.achievement:
+        case AchievementArtifact():
           return _AchievementCard(artifact: artifact);
-        case ShareArtifactType.challenge:
+        case ChallengeArtifact():
           return _ChallengeCard(artifact: artifact);
       }
     }

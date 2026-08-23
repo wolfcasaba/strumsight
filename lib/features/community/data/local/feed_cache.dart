@@ -118,8 +118,7 @@ final class CachedFeedItem {
 class FeedCache {
   /// Internal constructor — use [FeedCache.open] to bind to a real
   /// [KeyValueStore].
-  FeedCache._({required JsonCollectionStore<CachedFeedItem> body})
-    : _body = body;
+  FeedCache._({required this._body});
 
   /// The injected, versioned bounded list store.
   final JsonCollectionStore<CachedFeedItem> _body;

@@ -3,8 +3,8 @@
 /// The screen is a pure projection of [FeedState]: every interactive
 /// widget calls into the controller, every visible label reads from the
 /// controller's state. The screen owns no feed-domain state of its own
-/// (the items live in the controller; the cache lives in
-/// [FeedCache]; A3 / A5 invariance).
+/// (the items live in the controller; the cache lives in [FeedCache];
+/// A3 / A5 invariance).
 ///
 /// **Layout (top → bottom):**
 ///
@@ -41,7 +41,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../application/controllers/feed_controller.dart';
-import '../../domain/entities/community_post.dart';
+import '../../domain/value_objects/cursor_page.dart';
 import '../widgets/feed_card_registry.dart';
 
 /// Following-feed labels. Kept here (not in the ARB) because the l10n
@@ -70,14 +70,6 @@ class FollowingFeedScreen extends ConsumerStatefulWidget {
 }
 
 class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
-  /// A stable scroll anchor that the screen preserves across
-  /// refreshes — the RefreshIndicator must not jump the list back to
-  /// the top while the new fetch is in flight (A7). The actual scroll
-  /// position lives on the controller; the screen only remembers the
-  /// first-visible-row offset so it can restore it after the new
-  /// items are pushed.
-  int _firstVisibleIndex = 0;
-
   @override
   void initState() {
     super.initState();
@@ -108,11 +100,9 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
       ),
       body: _Body(
         state: state,
-        firstVisibleIndex: _firstVisibleIndex,
         onLoadMore: () => ref.read(feedControllerProvider.notifier).loadMore(),
         onRetry: () => ref.read(feedControllerProvider.notifier).retry(),
         onRefresh: () => ref.read(feedControllerProvider.notifier).refresh(),
-        onFirstVisibleChanged: (index) => _firstVisibleIndex = index,
       ),
     );
   }
@@ -126,19 +116,15 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
 class _Body extends StatelessWidget {
   const _Body({
     required this.state,
-    required this.firstVisibleIndex,
     required this.onLoadMore,
     required this.onRetry,
     required this.onRefresh,
-    required this.onFirstVisibleChanged,
   });
 
   final FeedState state;
-  final int firstVisibleIndex;
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
   final Future<void> Function() onRefresh;
-  final ValueChanged<int> onFirstVisibleChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -151,11 +137,9 @@ class _Body extends StatelessWidget {
         if (state.items.isNotEmpty) {
           return _Content(
             state: state,
-            firstVisibleIndex: firstVisibleIndex,
             onLoadMore: onLoadMore,
             onRetry: onRetry,
             onRefresh: onRefresh,
-            onFirstVisibleChanged: onFirstVisibleChanged,
           );
         }
         return const _LoadingInitial();
@@ -164,20 +148,16 @@ class _Body extends StatelessWidget {
       case FeedStatus.paging:
         return _Content(
           state: state,
-          firstVisibleIndex: firstVisibleIndex,
           onLoadMore: onLoadMore,
           onRetry: onRetry,
           onRefresh: onRefresh,
-          onFirstVisibleChanged: onFirstVisibleChanged,
         );
       case FeedStatus.offline:
         return _Content(
           state: state,
-          firstVisibleIndex: firstVisibleIndex,
           onLoadMore: onLoadMore,
           onRetry: onRetry,
           onRefresh: onRefresh,
-          onFirstVisibleChanged: onFirstVisibleChanged,
           leadingBanner: const _OfflineBanner(),
         );
       case FeedStatus.error:
@@ -185,11 +165,9 @@ class _Body extends StatelessWidget {
       case FeedStatus.end:
         return _Content(
           state: state,
-          firstVisibleIndex: firstVisibleIndex,
           onLoadMore: onLoadMore,
           onRetry: onRetry,
           onRefresh: onRefresh,
-          onFirstVisibleChanged: onFirstVisibleChanged,
           endState: const _EndOfFeed(),
         );
     }
@@ -322,21 +300,17 @@ class _EndOfFeed extends StatelessWidget {
 class _Content extends StatefulWidget {
   const _Content({
     required this.state,
-    required this.firstVisibleIndex,
     required this.onLoadMore,
     required this.onRetry,
     required this.onRefresh,
-    required this.onFirstVisibleChanged,
     this.leadingBanner,
     this.endState,
   });
 
   final FeedState state;
-  final int firstVisibleIndex;
   final VoidCallback onLoadMore;
   final VoidCallback onRetry;
   final Future<void> Function() onRefresh;
-  final ValueChanged<int> onFirstVisibleChanged;
   final Widget? leadingBanner;
   final Widget? endState;
 
@@ -346,52 +320,54 @@ class _Content extends StatefulWidget {
 
 class _ContentState extends State<_Content> {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _firstItemKey = GlobalKey();
+  double? _scrollAtRefreshStart;
 
-  /// The cached item count we last scrolled against — used to restore
-  /// the first-visible index after a refresh (A7).
-  int _previousLength = 0;
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_rememberScroll);
+  }
+
+  /// Track the most recent scroll position so a refresh can restore
+  /// it after the new content is laid out (A7).
+  void _rememberScroll() {
+    _scrollAtRefreshStart = _scrollController.position.pixels;
+  }
 
   @override
   void didUpdateWidget(covariant _Content oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // After a refresh, the list may have shrunk or grown; restore the
-    // previous scroll anchor so the user keeps seeing what they were
-    // looking at (A7).
-    final newLength = widget.state.items.length;
-    if (newLength != _previousLength && widget.firstVisibleIndex > 0) {
-      _restoreScroll();
+    // After the list rebuilds post-refresh, re-anchor the scroll to
+    // the position we remember from the pre-refresh frame. The exact
+    // pixel may shift slightly because the rebuilt list re-lays-out,
+    // but the row stays in view (A7 — scroll position preserved).
+    final rememberedScroll = _scrollAtRefreshStart;
+    if (rememberedScroll != null &&
+        widget.state.status == FeedStatus.content &&
+        oldWidget.state.status == FeedStatus.refreshing) {
+      _scrollAtRefreshStart = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_scrollController.hasClients) return;
+        final clamped = rememberedScroll.clamp(
+          _scrollController.position.minScrollExtent,
+          _scrollController.position.maxScrollExtent,
+        );
+        _scrollController.jumpTo(clamped);
+      });
     }
-    _previousLength = newLength;
-  }
-
-  void _restoreScroll() {
-    if (!_scrollController.hasClients) return;
-    // Re-anchor to the previously-visible row; the index may have shifted
-    // if the server added / removed items. A clamped fallback keeps the
-    // scroll position in range when the list shrunk below the anchor.
-    final clamped = widget.firstVisibleIndex.clamp(
-      0,
-      widget.state.items.length - 1,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      _scrollController.jumpTo(
-        _scrollController.position.minScrollExtent + clamped * 80.0,
-      );
-    });
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _scrollController
+      ..removeListener(_rememberScroll)
+      ..dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final items = widget.state.items;
-    final theme = Theme.of(context);
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: Column(
@@ -411,15 +387,6 @@ class _ContentState extends State<_Content> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: items.length + 1,
                     itemBuilder: (context, index) {
-                      if (index == 0) {
-                        // The first item carries the GlobalKey so we
-                        // can read its render-box position on refresh
-                        // and restore scroll position (A7).
-                        return KeyedSubtree(
-                          key: _firstItemKey,
-                          child: FeedCard(post: items[index]),
-                        );
-                      }
                       if (index < items.length) {
                         return FeedCard(post: items[index]);
                       }
@@ -429,12 +396,6 @@ class _ContentState extends State<_Content> {
                         onRetry: widget.onRetry,
                         endState: widget.endState,
                       );
-                    },
-                    // Track the first-visible index so we can restore it
-                    // after a refresh (A7). This is a *passive* listener
-                    // — it never triggers a fetch.
-                    onPageChanged: (index) {
-                      widget.onFirstVisibleChanged(index);
                     },
                   ),
           ),
@@ -528,29 +489,15 @@ class _Footer extends StatelessWidget {
             child: FilledButton.icon(
               icon: const Icon(Icons.expand_more),
               label: const Text(_FeedLabels.loadMore),
-              onPressed: state.cursor != null && !_cursorIsHalted(state.cursor)
-                  ? onLoadMore
-                  : null,
+              onPressed: _canLoadMore(state.cursor) ? onLoadMore : null,
             ),
           ),
         );
     }
   }
 
-  bool _cursorIsHalted(Object? cursor) {
-    if (cursor == null) return true;
-    return cursor is dynamic &&
-        cursor.isInitial == false &&
-        cursor.cursor == null;
+  bool _canLoadMore(CursorPage? cursor) {
+    if (cursor == null) return false;
+    return cursor.isInitial || cursor.cursor != null;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Internal helpers — keep the public surface small.
-// ---------------------------------------------------------------------------
-
-/// The set of Community feed items the controller has loaded.
-///
-/// Exposed for tests that need to enumerate the items in a fresh
-/// widget tree without reaching into the controller state.
-typedef FeedItems = List<CommunityPost>;
