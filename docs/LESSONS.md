@@ -16536,3 +16536,57 @@ alkalmazható.
 **Őrteszt:** nincs — ez egy pre-flight ELJÁRÁSI lecke (a §0.0 brief-revízió
 maga a bizonyíték, `docs/rounds/e09-r15-reactions-and-optimistic-consistency.md`
 §0.0 D2), nem egy kódba épített, gépi mércével mérhető invariáns.
+
+## L438 — `tools/round-land.sh` repo_root a script SAJÁT elhelyezkedéséből számol, nem a hívó cwd-jéből — ezért az izolált klónból hívva megkerüli a megosztott fő fa idegen commitolatlan munkáját (E09-R16, 2026-08-23)
+
+**Mit mértünk.** Az E09-R16 landolásakor a megosztott `/home/ubuntu/music-theory`
+fában egy MÁSIK, aktív VS Code-session (PID 3315247, governance/pipeline-
+infra munka: `pipeline-slots` 1→2, `engine-registry.tsv` effort-váltás,
+teszt-fájlok) commitolatlan módosításokat tartott a `main` ágon. A
+`tools/round-land.sh` első hívása (`/home/ubuntu/music-theory/tools/
+round-land.sh ...`-ként, a megosztott fából) `BLOCKED — a PR metaadata nem
+egyezik a mért local HEAD-del`-lel bukott, mert a script saját
+`repo_root`-ja (`$(cd "$script_dir/.." && pwd)`, a `BASH_SOURCE`-ból
+számolva) a megosztott fára mutatott, aminek a kijelölt ága `main` volt, nem
+a kör branch-e — és a `main`-en checkoutolni idegen, commitolatlan munkát
+veszélyeztetett/blokkolt volna.
+
+**A megoldás.** Ugyanaz a script a SAJÁT, izolált munkapéldányból hívva
+(`/home/ubuntu/ss-minimax-e09-r16/tools/round-land.sh ...`) a `repo_root`-ot
+a MUNKAPÉLDÁNY gyökerére számolta — ott a kör branch-e volt checkoutolva, a
+HEAD egyezett a PR head OID-jával, és a landolás (rebase → kombinált-HEAD
+gate → safe-force-push → squash-merge) a megosztott fa érintése NÉLKÜL
+lefutott. A `main` a landolás alatt HÁROMSZOR mozdult (ugyanaz a párhuzamos
+governance-session pusholt) — a `round-land.sh` mindhárom alkalommal
+helyesen `blocked`-ot jelzett új HEAD-del, a friss exact-SHA CI-dispatch
+(`full-gate.yml` + `router-ci.yml`) és az újrahívás mintája (`docs/execution/
+09-sdd-round-driver` skill §5) mindhárom kört zárta, önálló user-beavatkozás
+nélkül.
+
+**Miért.** A `tools/mm-round.sh`/`tools/codex-round.sh` MÁR dokumentálja ezt
+a mintát az implementer-dispatchhoz (`git worktree add` helyett `git clone`,
+`docs/LESSONS.md` L175/L179) — ugyanaz a `BASH_SOURCE`-alapú `repo_root`-
+számítás vonatkozik a `round-land.sh`-ra IS, csak a landolási lépésben eddig
+nem volt mérve. A megosztott fő fa több párhuzamos session (telefonos
+remote-control, governance-driver, kör-orchestrátor) között OSZTOTT
+munkaterület (`[[shared-tree-coordination]]` memória) — bármelyik git-
+művelet, ami a megosztott fa AKTUÁLIS branch-ét vagy working tree-jét
+módosítaná (checkout, reset, rebase a helyszínen), ütközhet egy másik
+session folyamatban lévő, commitolatlan munkájával.
+
+**Hogyan alkalmazd.** Kör-landoláskor `tools/round-land.sh`-t MINDIG a kör
+SAJÁT, izolált munkapéldányából hívd (`<munkapéldány>/tools/round-land.sh`),
+SOSE a megosztott fő fából — még akkor is, ha a megosztott fa épp `main`-en
+áll és "üresnek" tűnik: egy másik session bármikor commitolatlan munkát
+hagyhat ott (`git status --short` ELLENŐRZÉSE a landolás előtt kötelező, de
+maga az ellenőrzés NEM helyettesíti az izolált munkapéldány használatát,
+mert a dirty state a landolás KÖZBEN is megjelenhet). Ha a `main` a landolás
+alatt mozdul, ismételd a ciklust (fetch → CI-dispatch exact-SHA-n → várakozás
+→ `round-land.sh` újrahívás) — mindegyik forduló önmagában biztonságos, a
+script saját `BLOCKED`/exact-SHA-igénye a védőháló.
+
+**Őrteszt:** nincs — ez egy operátori/procedurális lecke a landolási
+lépéshez, nem egy kódba épített invariáns; a `round-land.sh` saját
+fail-closed `BLOCKED` jelzése (PR-metaadat-egyezés, exact-SHA CI-igény) MÁR a
+gépi őr, ezt a leckét a HELYES hívási hely (izolált klón vs. megosztott fa)
+egészíti ki.
