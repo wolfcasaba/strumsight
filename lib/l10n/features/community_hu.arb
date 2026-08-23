@@ -290,5 +290,113 @@
   "@communityCommentsComposerHint": {},
 
   "communityCommentsSend": "Küldés",
-  "@communityCommentsSend": {}
+  "@communityCommentsSend": {},
+
+  "communityNotificationsTitle": "Értesítések",
+  "@communityNotificationsTitle": {},
+
+  "communityNotificationsMarkAllRead": "Összes olvasottnak jelölése",
+  "@communityNotificationsMarkAllRead": {},
+
+  "communityNotificationsEmpty": "Még nincsenek értesítések.",
+  "@communityNotificationsEmpty": {},
+
+  "communityNotificationsPreferencesTitle": "Értesítési kategóriák",
+  "@communityNotificationsPreferencesTitle": {},
+
+  "communityNotificationsQuietHours": "Csendes időszak",
+  "@communityNotificationsQuietHours": {},
+
+  "communityNotificationsQuietHoursBody": "Az alkalmazáson belüli felugró értesítések elnémítása ezen az eszközön. A push érintetlen.",
+  "@communityNotificationsQuietHoursBody": {},
+
+  "communityNotificationsRetry": "Újra",
+  "@communityNotificationsRetry": {},
+
+  "communityNotificationErrorNetwork": "Nincs hálózati kapcsolat",
+  "@communityNotificationErrorNetwork": {},
+
+  "communityNotificationErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra",
+  "@communityNotificationErrorSessionExpired": {},
+
+  "communityNotificationErrorForbidden": "Nincs jogosultságod megtekinteni ezeket az értesítéseket",
+  "@communityNotificationErrorForbidden": {},
+
+  "communityNotificationErrorInvalidInput": "Érvénytelen kérés",
+  "@communityNotificationErrorInvalidInput": {},
+
+  "communityNotificationKindFollowRequest": "Követési kérések",
+  "@communityNotificationKindFollowRequest": {},
+
+  "communityNotificationKindFollowAccepted": "Elfogadott követések",
+  "@communityNotificationKindFollowAccepted": {},
+
+  "communityNotificationKindReactionSummary": "Reakciók",
+  "@communityNotificationKindReactionSummary": {},
+
+  "communityNotificationKindComment": "Kommentek",
+  "@communityNotificationKindComment": {},
+
+  "communityNotificationKindMention": "Megemlítések",
+  "@communityNotificationKindMention": {},
+
+  "communityNotificationKindChallengeInvite": "Kihívás meghívók",
+  "@communityNotificationKindChallengeInvite": {},
+
+  "communityNotificationKindChallengeCompleted": "Teljesített kihívások",
+  "@communityNotificationKindChallengeCompleted": {},
+
+  "communityNotificationKindClubInvite": "Klub meghívók",
+  "@communityNotificationKindClubInvite": {},
+
+  "communityNotificationKindModerationDecision": "Moderációs döntések",
+  "@communityNotificationKindModerationDecision": {},
+
+  "communityNotificationKindSecurityAlert": "Biztonsági riasztások",
+  "@communityNotificationKindSecurityAlert": {},
+
+  "communityNotificationLevelInApp": "Alkalmazáson belül",
+  "@communityNotificationLevelInApp": {},
+
+  "communityNotificationLevelPush": "Push",
+  "@communityNotificationLevelPush": {},
+
+  "communityNotificationLevelDisabled": "Ki",
+  "@communityNotificationLevelDisabled": {},
+
+  "communityNotificationCommentTitle": "Új komment",
+  "@communityNotificationCommentTitle": {},
+
+  "communityNotificationCommentBody": "Valaki kommentelt a bejegyzésednél.",
+  "@communityNotificationCommentBody": {},
+
+  "communityNotificationReactionSummaryTitle": "Új reakciók",
+  "@communityNotificationReactionSummaryTitle": {},
+
+  "communityNotificationMentionTitle": "Megemlítettek",
+  "@communityNotificationMentionTitle": {},
+
+  "communityNotificationMentionBody": "Nyisd meg a komment megtekintéséhez.",
+  "@communityNotificationMentionBody": {},
+
+  "communityNotificationFollowRequestTitle": "Új követési kérés",
+  "@communityNotificationFollowRequestTitle": {},
+
+  "communityNotificationFollowAcceptedTitle": "Követés elfogadva",
+  "@communityNotificationFollowAcceptedTitle": {},
+
+  "communityNotificationChallengeInviteTitle": "Kihívás meghívó",
+  "@communityNotificationChallengeInviteTitle": {},
+
+  "communityNotificationChallengeCompletedTitle": "Kihívás teljesítve",
+  "@communityNotificationChallengeCompletedTitle": {},
+
+  "communityNotificationClubInviteTitle": "Klub meghívó",
+  "@communityNotificationClubInviteTitle": {},
+
+  "communityNotificationModerationDecisionTitle": "Moderációs döntés",
+  "@communityNotificationModerationDecisionTitle": {},
+
+  "communityNotificationSecurityAlertTitle": "Biztonsági riasztás",
+  "@communityNotificationSecurityAlertTitle": {}
 }

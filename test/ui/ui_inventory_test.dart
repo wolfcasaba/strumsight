@@ -11,7 +11,7 @@ void main() {
     final second = UiInventory(repository).render();
 
     expect(first.toMarkdown(), second.toMarkdown());
-    expect(first.screenPaths, hasLength(73));
+    expect(first.screenPaths, hasLength(74));
     expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
     expect(
       first.screenPaths,
@@ -33,6 +33,12 @@ void main() {
       first.screenPaths,
       contains(
         'lib/features/gamification/presentation/screens/gamification_hub_screen.dart',
+      ),
+    );
+    expect(
+      first.screenPaths,
+      contains(
+        'lib/features/community/presentation/screens/community_notifications_screen.dart',
       ),
     );
     expect(

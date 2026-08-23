@@ -290,5 +290,113 @@
   "@communityCommentsComposerHint": {},
 
   "communityCommentsSend": "Send",
-  "@communityCommentsSend": {}
+  "@communityCommentsSend": {},
+
+  "communityNotificationsTitle": "Notifications",
+  "@communityNotificationsTitle": {},
+
+  "communityNotificationsMarkAllRead": "Mark all as read",
+  "@communityNotificationsMarkAllRead": {},
+
+  "communityNotificationsEmpty": "No notifications yet.",
+  "@communityNotificationsEmpty": {},
+
+  "communityNotificationsPreferencesTitle": "Notification categories",
+  "@communityNotificationsPreferencesTitle": {},
+
+  "communityNotificationsQuietHours": "Quiet hours",
+  "@communityNotificationsQuietHours": {},
+
+  "communityNotificationsQuietHoursBody": "Mute in-app toasts on this device. Push is unaffected.",
+  "@communityNotificationsQuietHoursBody": {},
+
+  "communityNotificationsRetry": "Retry",
+  "@communityNotificationsRetry": {},
+
+  "communityNotificationErrorNetwork": "No network connection",
+  "@communityNotificationErrorNetwork": {},
+
+  "communityNotificationErrorSessionExpired": "Session expired — please sign in again",
+  "@communityNotificationErrorSessionExpired": {},
+
+  "communityNotificationErrorForbidden": "You do not have permission to view these notifications",
+  "@communityNotificationErrorForbidden": {},
+
+  "communityNotificationErrorInvalidInput": "Invalid request",
+  "@communityNotificationErrorInvalidInput": {},
+
+  "communityNotificationKindFollowRequest": "Follow requests",
+  "@communityNotificationKindFollowRequest": {},
+
+  "communityNotificationKindFollowAccepted": "Accepted follows",
+  "@communityNotificationKindFollowAccepted": {},
+
+  "communityNotificationKindReactionSummary": "Reactions",
+  "@communityNotificationKindReactionSummary": {},
+
+  "communityNotificationKindComment": "Comments",
+  "@communityNotificationKindComment": {},
+
+  "communityNotificationKindMention": "Mentions",
+  "@communityNotificationKindMention": {},
+
+  "communityNotificationKindChallengeInvite": "Challenge invites",
+  "@communityNotificationKindChallengeInvite": {},
+
+  "communityNotificationKindChallengeCompleted": "Challenge completions",
+  "@communityNotificationKindChallengeCompleted": {},
+
+  "communityNotificationKindClubInvite": "Club invites",
+  "@communityNotificationKindClubInvite": {},
+
+  "communityNotificationKindModerationDecision": "Moderation decisions",
+  "@communityNotificationKindModerationDecision": {},
+
+  "communityNotificationKindSecurityAlert": "Security alerts",
+  "@communityNotificationKindSecurityAlert": {},
+
+  "communityNotificationLevelInApp": "In-app",
+  "@communityNotificationLevelInApp": {},
+
+  "communityNotificationLevelPush": "Push",
+  "@communityNotificationLevelPush": {},
+
+  "communityNotificationLevelDisabled": "Off",
+  "@communityNotificationLevelDisabled": {},
+
+  "communityNotificationCommentTitle": "New comment",
+  "@communityNotificationCommentTitle": {},
+
+  "communityNotificationCommentBody": "Someone commented on your post.",
+  "@communityNotificationCommentBody": {},
+
+  "communityNotificationReactionSummaryTitle": "New reactions",
+  "@communityNotificationReactionSummaryTitle": {},
+
+  "communityNotificationMentionTitle": "You were mentioned",
+  "@communityNotificationMentionTitle": {},
+
+  "communityNotificationMentionBody": "Open to see the comment.",
+  "@communityNotificationMentionBody": {},
+
+  "communityNotificationFollowRequestTitle": "New follow request",
+  "@communityNotificationFollowRequestTitle": {},
+
+  "communityNotificationFollowAcceptedTitle": "Follow accepted",
+  "@communityNotificationFollowAcceptedTitle": {},
+
+  "communityNotificationChallengeInviteTitle": "Challenge invite",
+  "@communityNotificationChallengeInviteTitle": {},
+
+  "communityNotificationChallengeCompletedTitle": "Challenge completed",
+  "@communityNotificationChallengeCompletedTitle": {},
+
+  "communityNotificationClubInviteTitle": "Club invite",
+  "@communityNotificationClubInviteTitle": {},
+
+  "communityNotificationModerationDecisionTitle": "Moderation decision",
+  "@communityNotificationModerationDecisionTitle": {},
+
+  "communityNotificationSecurityAlertTitle": "Security alert",
+  "@communityNotificationSecurityAlertTitle": {}
 }
