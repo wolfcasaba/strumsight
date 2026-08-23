@@ -16590,3 +16590,70 @@ lépéshez, nem egy kódba épített invariáns; a `round-land.sh` saját
 fail-closed `BLOCKED` jelzése (PR-metaadat-egyezés, exact-SHA CI-igény) MÁR a
 gépi őr, ezt a leckét a HELYES hívási hely (izolált klón vs. megosztott fa)
 egészíti ki.
+
+## L439 — Motorváltáskor a queue `engine` oszlopa NEM az utolsó szó: a kör-ág prefixe felülírja, és ezzel NÉMÁN az orchesztrátor-párt is elrontja — ellenőrző lista új motor beállításához (E13-R05 / pipeline-infra, 2026-08-23)
+
+**Mit mértünk.** A user-döntés az volt, hogy a 2. slot a Chapter 13 UI-sávot
+vigye **Opus 5 `max` orchesztrátorral és `sonnet-impl` (Sonnet 5 `high`)
+implementerrel**. A queue mind a 32 E13-sora át lett állítva `sonnet-impl`-re,
+a slot 2-re, a teszt-cellák együtt frissültek, minden zöld volt — a lánc mégis
+ezt naplózta induláskor:
+
+```
+FOLYTATÁS: a(z) E13-R05 ágán már terra commitolt — az implementer fix marad
+           (queue: sonnet-impl → terra)
+következő kör: E13-R05 · orchestrátor=claude · implementer=terra
+```
+
+és a ténylegesen elinduló process argv-je `--model claude-sonnet-5 --effort
+high` volt, **nem** Opus 5 max. **Két kár egyszerre, egyetlen okból:** az
+ADR 0242 D2 pin a kör MÁR LÉTEZŐ távoli ágának prefixéből méri az implementert
+(`terra/e13-r05-…` → `terra`, egy 2026-08-21-én félbemaradt körből), a
+queue oszlopát pedig szándékosan figyelmen kívül hagyja; az orchesztrátor-pár
+viszont (`orch_pair_model`/`orch_pair_effort`) a KÖR IMPLEMENTERÉBŐL számol,
+tehát a rossz implementer automatikusan rossz orchesztrátort is adott. Ráadásul
+a pinelt `terra` előfizetése aznap fogyott el — a dispatch menthetetlenül
+elbukott volna, kétszer egymás után (15:40 és 15:45), Opus-keret helyett
+Sonnet-keretet égetve.
+
+**A javítás.** `engine_is_runnable` + `unrunnable_engines` (ma: `codex terra
+sol`, mind a közös, elfogyott ChatGPT Pro kereten) és `resume_implementer_for`:
+a pin CÉLJA — ne keveredjenek a motorok egy körön belül — nem teljesíthető, ha
+a pinelt motor nem él, ilyenkor a queue sora lép vissza életbe, naplózva. A
+lista `${VAR-…}` (NEM `:-`) alakú: az előfizetés visszatérésekor egyetlen sor
+törlése (vagy `PIPELINE_UNRUNNABLE_ENGINES=""`) kapcsolja vissza. Mérő cellák:
+`tools/tests/test_round_resume_independence.py::DeadEnginePinTest`.
+
+**Ellenőrző lista — mire kell figyelni, ha ÚJ MOTORT állítunk be.** Sorrendben,
+mindegyik a driver SAJÁT horgával mérve, nem kódolvasásból:
+
+1. **Van-e már ág a körhöz?** `tools/round-pipeline.sh --branch-implementer <kör>`
+   → ha nem üres, a queue oszlopa NEM érvényesül. `--resume-implementer <kör>`
+   megmondja, mi lesz a runnability-őr után.
+2. **Él-e a motor?** `--engine-runnable <motor>`. Egy elfogyott előfizetés nem
+   a nyilvántartásban látszik: az `engine-profile.sh check` CSAK profilt és
+   kulcsot ellenőriz, kvótát NEM mér.
+3. **Mi lesz az orchesztrátor-pár?** `--session-config round <motor>`. A pár a
+   kör motorjához van kötve (nem a slot sorszámához) — rossz implementer =
+   rossz orchesztrátor, némán.
+4. **Ütközik-e a reviewerrel?** A claude-ág MODELL-azonosságon mér (mint a
+   sol/terra ág): Claude implementer csak MÁS Claude-modellű orchesztrátor
+   alatt megy, különben `H-INDEP`, ami **nem önjavítható** (ADR 0138).
+5. **Az `--effort` a nyilvántartás `reasoning` oszlopából jön** (claude-harness
+   motoroknál), nem a queue-ból és nem a briefből.
+6. **Kap-e egyáltalán slotot?** A sáv csak akkor kap slotot, ha a sorai a
+   nyitott sorok ELEJÉN állnak. MÉRT hiba ugyanaznap: a Ch13 blokk az E09 mögé
+   került, és mivel két egymást követő E09-kör diszjunkt LEHET, a tervező
+   mindkét slotot E09-cel töltötte fel. Mérce: `round-slots.py plan --slots N`.
+7. **A commitolt döntés-fájlok és az őket őrző teszt-cellák EGYÜTT írandók**
+   (`pipeline-slots` ↔ `test_the_committed_slots_file_value_is_*`,
+   queue-motor ↔ `test_open_rounds_follow_the_measured_engine_rule` és az
+   engedélyezett-motorok halmaza).
+8. **Commitolni ÉS pusholni kell.** Commitolatlan fa → `piszkos munkafa — a
+   lánc nem indul`; csak lokálisan commitolt változás → a D1 main-szinkron
+   VALÓDI DIVERGENCIÁNAK veszi. Egy futó kör saját, még untracked artefaktuma
+   (pl. `docs/reviews/<kör>-review.md`) ugyanígy blokkol — az a kör landolásakor
+   oldódik fel (vö. [[L438]]).
+9. **A `tools/round-pipeline.sh`-t ATOMIKUSAN kell cserélni** (temp fájl +
+   `os.replace`/`mv`), mert menet közben FUT — helyben csonkolva a futó bash
+   félbevágott szkriptet olvasna tovább.

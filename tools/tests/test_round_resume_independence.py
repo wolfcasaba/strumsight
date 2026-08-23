@@ -521,3 +521,79 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeadEnginePinTest(unittest.TestCase):
+    """A folytatás-pin nem támaszthat fel HALOTT motort (ADR 0242 D2 határa).
+
+    MÉRT ESET 2026-08-23, élesben: az E13-R05 ágán korábban a `terra`
+    commitolt, ezért a D2 pin a queue `sonnet-impl` sorát felülírta
+    `terra`-ra — miközben a ChatGPT Pro előfizetés elfogyott (user, ugyanaznap:
+    „codex terra és sol már nincs többé"). Két kár egyszerre: a dispatch
+    menthetetlenül elbukott volna a terra-híváson, ÉS az orchestrátor-pár is a
+    pinelt motorhoz igazodik, így a kör Sonnet 5 `high` vezénylést kapott a
+    szándékolt Opus 5 `max` helyett (mérve a futó process argv-jében).
+
+    A pin CÉLJA — ne keveredjenek a motorok egy körön belül — nem teljesíthető,
+    ha a pinelt motor nem él. Ilyenkor a queue sora lép vissza életbe.
+    """
+
+    def runnable(self, engine: str, **env: str) -> bool:
+        environment = dict(os.environ, **env)
+        return (
+            subprocess.run(
+                ["bash", str(DRIVER), "--engine-runnable", engine],
+                capture_output=True,
+                text=True,
+                env=environment,
+                timeout=60,
+            ).returncode
+            == 0
+        )
+
+    def test_the_codex_side_is_not_runnable_while_the_subscription_is_out(self) -> None:
+        for engine in ("codex", "terra", "sol"):
+            with self.subTest(engine=engine):
+                self.assertFalse(self.runnable(engine))
+
+    def test_the_available_engines_stay_runnable(self) -> None:
+        for engine in ("minimax", "sonnet-impl"):
+            with self.subTest(engine=engine):
+                self.assertTrue(self.runnable(engine))
+
+    def test_the_list_is_one_switch_for_the_subscription_coming_back(self) -> None:
+        # `${VAR-...}`, NEM `:-`: az EXPLICIT üres érték mindent futtathatóvá
+        # tesz. Ez a visszakapcsolás módja (~egy hónap múlva) és egyben a
+        # bizonyíték, hogy a lista nem égett bele a döntési ágba.
+        self.assertTrue(self.runnable("terra", PIPELINE_UNRUNNABLE_ENGINES=""))
+
+    def test_a_pin_on_a_dead_engine_falls_back_to_the_queue_row(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            bare = make_round_branch(root, "origin", "terra", "e13-r05-spacing-and-surfaces")
+            environment = dict(os.environ, PIPELINE_ROUND_REMOTE=str(bare))
+
+            def resume(**extra: str) -> str:
+                return subprocess.run(
+                    ["bash", str(DRIVER), "--resume-implementer", "E13-R05"],
+                    capture_output=True,
+                    text=True,
+                    env=dict(environment, **extra),
+                    timeout=60,
+                ).stdout.strip()
+
+            # A pin FORRÁSA változatlanul mér: az ág prefixe `terra`.
+            self.assertEqual(
+                subprocess.run(
+                    ["bash", str(DRIVER), "--branch-implementer", "E13-R05"],
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                    timeout=60,
+                ).stdout.strip(),
+                "terra",
+            )
+            # ...de a halott motorra a pin ELESIK (üres = a queue sora dönt).
+            self.assertEqual(resume(), "")
+            # Az előfizetés visszatérésekor ugyanaz az ág újra pinel.
+            self.assertEqual(resume(PIPELINE_UNRUNNABLE_ENGINES=""), "terra")

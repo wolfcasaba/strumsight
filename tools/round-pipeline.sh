@@ -161,6 +161,34 @@ orch_pair_effort() {   # $1=implementer motor
   esac
 }
 
+# --- Nem futtatható motorok (user-döntés 2026-08-23) -----------------------
+# „codex terra és sol már nincs többé, elfogyott az előfizetés, majd egy hónap
+# múlva." A Codex-oldal egyetlen közös ChatGPT Pro kereten ül (mind gpt-5.6-*),
+# tehát a három név EGYSZERRE esett ki. Egy helyen soroljuk, hogy az előfizetés
+# visszatérésekor egyetlen sor törlése elég legyen.
+# `${VAR-...}` (NEM `:-`): az EXPLICIT üres érték azt jelenti, hogy minden motor
+# futtatható — ez a teszthorog és egyben a visszakapcsolás módja.
+unrunnable_engines=${PIPELINE_UNRUNNABLE_ENGINES-codex terra sol}
+engine_is_runnable() {   # $1=motor neve → 0, ha futtatható
+  local name
+  for name in $unrunnable_engines; do
+    [ "$1" = "$name" ] && return 1
+  done
+  return 0
+}
+
+# A folytatás implementere a runnability-őr UTÁN. Üres kimenet = nincs pin
+# (vagy elesett), tehát a queue `engine` oszlopa dönt. Külön függvény, hogy a
+# `--resume-implementer` teszthorogról pontosan az mérhető legyen, ami a
+# dispatch-ágon fut — ne egy hasonló, párhuzamosan karbantartott másolat.
+resume_implementer_for() {   # $1=kör-azonosító
+  local pinned
+  pinned=$(resolve_branch_implementer "$1")
+  [ -n "$pinned" ] || return 0
+  engine_is_runnable "$pinned" || return 0
+  printf '%s' "$pinned"
+}
+
 # A telefonos Code-lista MÉRT szabálya (2026-08-07). Egy futó Claude-session
 # akkor és csak akkor jelenik meg a Claude appban, ha a session-regiszterét
 # ANNAK a config-dirnek az írja, amelyikben a remote-control híd fut. A híd
@@ -1911,6 +1939,15 @@ case "${1:-}" in
     esac
     exit 0
     ;;
+  --engine-runnable)    # $2=motor → exit 0, ha futtatható (teszthorog, 2026-08-23)
+    engine_is_runnable "${2:-}"
+    exit $?
+    ;;
+  --resume-implementer)    # $2=kör → a folytatás implementere a runnability-őr UTÁN
+    resume_implementer_for "${2:-}"
+    printf '\n'
+    exit 0
+    ;;
   --terra-hold-active)    # $2=kör → exit 0 ha AKTÍV Terra napi-budget hold van rá, 1 egyébként
     if terra_hold_active_for "${2:-}"; then
       exit 0
@@ -2452,6 +2489,20 @@ fi
 
 # --- 4.5 Orchestrátor-rotáció (ADR 0222/0242 D1) + reviewer-függetlenség (0138/0242 D2) ---
 resume_implementer=$(resolve_branch_implementer "$round")
+# MÉRT ESET 2026-08-23 (E13-R05, élesben): a kör ágán korábban a `terra`
+# commitolt, ezért a D2 pin a queue `sonnet-impl` sorát felülírta `terra`-ra —
+# egy olyan motorra, aminek az előfizetése elfogyott. Két kár egyszerre:
+# (a) a dispatch menthetetlenül elbukott volna a terra-híváson;
+# (b) az orchestrátor-pár is a pinelt motorhoz igazodik, így a kör Sonnet 5
+#     `high` vezénylést kapott a szándékolt Opus 5 `max` helyett.
+# A pin CÉLJA — ne keveredjenek a motorok egy körön belül — nem teljesíthető,
+# ha a pinelt motor nem él; ilyenkor a queue sora lép vissza életbe, NAPLÓZVA.
+# A függetlenség nem gyengül: a lentebbi feloldás a MÁR CSERÉLT motorra mér.
+pinned_implementer=$resume_implementer
+resume_implementer=$(resume_implementer_for "$round")
+if [ -n "$pinned_implementer" ] && [ -z "$resume_implementer" ]; then
+  log "FOLYTATÁS: a(z) $round ágán $pinned_implementer commitolt, de az a motor NEM futtatható (elfogyott előfizetés) — a pin elesik, a queue sora lép vissza: $engine"
+fi
 if [ -n "$resume_implementer" ]; then
   # ADR 0242 D2: a körhöz már tartozik távoli ág — a commitolt implementer
   # FIX (a queue `engine` oszlopát figyelmen kívül hagyjuk), a mozgatható
