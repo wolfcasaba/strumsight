@@ -346,4 +346,21 @@ A `docs/rounds/e09-r19-...md` §10 handoff kitöltése (ez a szakasz) a §10-es 
 
 ## 11. Review — a Claude tölti ki
 
-## 11. Review — a Claude tölti ki
+**Verdikt: APPROVED** (általános review) + **PASS** (dedikált biztonsági
+review, `risk=high`) — 0 BLOCKER, 0 MAJOR mindkét oldalon.
+
+- Általános review: [`docs/reviews/e09-r19-review.md`](../reviews/e09-r19-review.md)
+  — gate újra-futtatva izolált klónban (mind zöld), scope-audit a diszjunkt
+  E13-R07 merge-től elkülönítve tiszta, `models/media.py` byte-szinten
+  additív, mind a hét acceptance-cella (A1–A7) függetlenül bizonyítva, az A7
+  human-review-gate invariáns saját kódmutáció-próbával megerősítve.
+- Dedikált biztonsági review: [`docs/reviews/e09-r19-security.md`](../reviews/e09-r19-security.md)
+  — HMAC-token tamper/replay próba (6 tengely, mind elutasítva), EXIF-strip
+  próba valódi GPS-bájtokkal, blocked-user kényszer megerősítve, scope-határ
+  üres diff a 4 tiltott fájlra.
+- Két MINOR + hat NOTE lelet összesen, mind latens az ebben a körben
+  SZÁNDÉKOSAN bekötetlen pipeline mögött (ADR 0412 §D3/§D6) — egyik sem
+  merge-blokkoló. A jövőbeli wiring-kör explicit előfeltételei: (1) a
+  `_resolve_audience` FOLLOWERS-tengely tényleges bekötése + teszt
+  (biztonsági MINOR-1), (2) az EXIF-strip trailer-bájtok utáni szegmensek
+  kezelése vagy a limit explicit dokumentálása (általános review MINOR).
