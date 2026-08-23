@@ -543,7 +543,13 @@ def test_create_idempotency_real_violation_probe(tmp_path, monkeypatch) -> None:
 
 
 def test_audience_matrix_owner_and_public_viewer(client, session_factory) -> None:
-    """A3 — owner can always read; a non-follower can read PUBLIC."""
+    """A3 — owner can always read; a non-follower can read PUBLIC.
+
+    F2 javító kör 1: a válasz ``author_public_id`` mezőjét a
+    poszt TÉNYLEGES szerzőjéből kell visszaadni — sem a
+    tulajdonos, sem a nem-tulajdonos néző esetén sem
+    szivároghat át a hívó saját public_id-ja.
+    """
     author, author_headers, viewer, viewer_headers = _make_two_users(session_factory)
     create = client.post(
         "/community/posts",
@@ -561,11 +567,18 @@ def test_audience_matrix_owner_and_public_viewer(client, session_factory) -> Non
     r_author = client.get(f"/community/posts/{pid}", headers=author_headers)
     assert r_author.status_code == 200
     assert r_author.json()["public_id"] == pid
+    # F2: a tulajdonos GET-jében az author_public_id a szerzőé.
+    assert r_author.json()["author_public_id"] == str(author.public_id)
 
     # A non-follower viewer can read PUBLIC posts.
     r_viewer = client.get(f"/community/posts/{pid}", headers=viewer_headers)
     assert r_viewer.status_code == 200
     assert r_viewer.json()["public_id"] == pid
+    # F2: a nem-tulajdonos GET-jében az author_public_id a POSZT
+    # szerzőjéé, nem a néző saját azonosítója — a javítás ELŐTT
+    # ez a viewer.public_id-t adná vissza.
+    assert r_viewer.json()["author_public_id"] == str(author.public_id)
+    assert r_viewer.json()["author_public_id"] != str(viewer.public_id)
 
 
 def test_audience_matrix_followers_only_excludes_non_follower(
@@ -735,6 +748,77 @@ def test_double_delete_is_idempotent_noop(client, session_factory) -> None:
     assert d2.json()["status"] == "noop"
 
 
+def test_create_after_soft_delete_with_same_idempotency_key(
+    client, session_factory
+) -> None:
+    """F3 javító kör 1 — a törölt poszt NEM térhet vissza élő
+    201-ként akkor sem, ha ugyanazzal az ``idempotency_key``-vel
+    hívunk create-et.
+
+    A javítás ELŐTT a service-szintű idempotencia-lekérdezés nem
+    szűrt ``deleted_at IS NULL``-ra, így a create az "existing
+    row" ágra futott és a törölt sort adta vissza 201-gyel. A
+    javítás UTÁN a törölt kulcs nem felel meg az élő
+    idempotencia-ablaknak, így a create új sort hoz létre.
+
+    Egy másik értelmezés (a §5.3 szellemében szigorúbb): a
+    create a törölt kulccsal is ÚJ sort hoz létre, mert a törölt
+    tartalom nem "vehető át" — ez a teszt ezt az utat szavatolja.
+    """
+    author, headers = _make_user_with_headers(
+        session_factory, user_id=32, email="recreate@s.test"
+    )
+    body = {
+        "audience": "public",
+        "body": "first",
+        "idempotency_key": "recreate-key-1",
+    }
+    first = client.post("/community/posts", headers=headers, json=body)
+    assert first.status_code == 201, first.text
+    first_id = first.json()["public_id"]
+
+    # Soft-delete the first row.
+    deleted = client.delete(f"/community/posts/{first_id}", headers=headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["status"] == "deleted"
+
+    # Re-create with the SAME idempotency_key.
+    second = client.post("/community/posts", headers=headers, json=body)
+    assert second.status_code == 201, second.text
+
+    # F3: a törölt sor NEM térhet vissza élő 201-ként — a második
+    # create vagy új sort ad (ez az itt szavatolt eset), vagy a
+    # meglévő törölt sorra hivatkozik, de akkor a válasz
+    # ``deleted_at`` mezője nem lehet None.
+    second_body = second.json()
+    if second_body["public_id"] == first_id:
+        # Ugyanaz a sor — DE akkor a deleted_at NEM lehet None.
+        assert second_body["deleted_at"] is not None, (
+            "törölt poszt tilos, hogy deleted_at=None-ként térjen vissza"
+        )
+    else:
+        # Új sor jött létre — a régi kulcs "elfogyott".
+        assert second_body["public_id"] != first_id
+
+    # A törölt sor még mindig törölt a DB-ben.
+    db: Session = session_factory()
+    try:
+        deleted_row = (
+            db.query(CommunityPost).filter_by(public_id=uuid.UUID(first_id)).one()
+        )
+        assert deleted_row.deleted_at is not None
+        # Az új sor (ha van) nem törölt.
+        if second_body["public_id"] != first_id:
+            new_row = (
+                db.query(CommunityPost)
+                .filter_by(public_id=uuid.UUID(second_body["public_id"]))
+                .one()
+            )
+            assert new_row.deleted_at is None
+    finally:
+        db.close()
+
+
 def test_delete_by_non_owner_returns_404(client, session_factory) -> None:
     """A6 / D7 — non-owner DELETE returns 404 (existence is not leaked)."""
     author, author_headers, viewer, viewer_headers = _make_two_users(session_factory)
@@ -750,6 +834,55 @@ def test_delete_by_non_owner_returns_404(client, session_factory) -> None:
     pid = create.json()["public_id"]
     r = client.delete(f"/community/posts/{pid}", headers=viewer_headers)
     assert r.status_code == 404
+
+
+def test_patch_by_non_owner_returns_404(client, session_factory) -> None:
+    """F1 javító kör 1 — PATCH from a non-owner MUST return 404,
+    not 200 with the modified body.
+
+    A PUBLIC audience + valid ``resource_version`` is necessary
+    but not sufficient — the brief §3 / §5.3 owner-check MUST
+    additionally block non-owners. A non-owner PATCH MUST NOT
+    succeed even when all OTHER gates (visibility, resource
+    version) pass.
+
+    Companion to ``test_delete_by_non_owner_returns_404``: that
+    one covers the D7 uniform 404 on the DELETE surface; this
+    one covers the PATCH surface.
+    """
+    author, author_headers, viewer, viewer_headers = _make_two_users(session_factory)
+    create = client.post(
+        "/community/posts",
+        headers=author_headers,
+        json={
+            "audience": "public",
+            "body": "mine",
+            "idempotency_key": "non-owner-patch-1",
+        },
+    )
+    assert create.status_code == 201, create.text
+    pid = create.json()["public_id"]
+    rv = create.json()["resource_version"]
+
+    # Non-owner PATCH — even with the correct resource_version, the
+    # ownership gate must short-circuit to 404 (the §5.3 IDOR
+    # invariant). A correct implementation NEVER reaches the body
+    # write; the row is unchanged.
+    r = client.patch(
+        f"/community/posts/{pid}",
+        headers=viewer_headers,
+        json={"body": "DEFACED", "resource_version": rv},
+    )
+    assert r.status_code == 404, response_msg(r)
+
+    # Sanity: the row body is still the original author-written text.
+    # (A non-owner successful PATCH would have produced "DEFACED".)
+    db: Session = session_factory()
+    try:
+        row = db.query(CommunityPost).filter_by(public_id=uuid.UUID(pid)).one()
+        assert row.body == "mine"
+    finally:
+        db.close()
 
 
 def test_html_body_rejected_at_parse_time(client, session_factory) -> None:
