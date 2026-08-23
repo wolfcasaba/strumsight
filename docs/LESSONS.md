@@ -15863,3 +15863,119 @@ szakasz, CI run
 [32602029738](https://github.com/wolfcasaba/strumsight/actions/runs/32602029738)
 (piros) → [32603023648](https://github.com/wolfcasaba/strumsight/actions/runs/32603023648)
 (zöld a javítás után).
+
+## L423 — Az [[L422]] UGYANEZT a hibát dokumentálta EGY körrel korábban, és a KÖVETKEZŐ kör (E09-R08) — ugyanaz az orchesztrátor-persona — mégis megismételte: egy prózában élő lecke önmagában nem elég, mechanikus kapu kell (E09-R08, 2026-08-23)
+
+**Mért tény.** E09-R07 review-ja (L422) explicit leírta a gyökérokot és a
+javasolt szabályt: "ha a diff ÚJ `*_screen.dart` fájlt ad ...,
+ellenőrizd a `ui_inventory_test.dart` számlálóját a CI-dispatch ELŐTT".
+E09-R08 új `safety_relationships_screen.dart`-ot adott — és az
+orchesztrátor (ugyanaz a Claude Sonnet 5 persona, ami L422-t írta) a
+CI-dispatch ELŐTT NEM futtatta le ezt a grep-et. Az első `full-gate.yml`
+run (32607713096) PIROS lett, pontosan ugyanazzal a tünettel
+(`Expected: <67>, Actual: <68>`), egy második CI-kör + egy 2. javító kör
+árán.
+
+**Gyökérok.** Az L422 szabálya egy SKILL-fájl prózájában él
+(`sdd-round-review` §5. lépés kiegészítéseként javasolva), nem egy
+futtatható artefaktumban — egy hosszú, több-száz-soros pipeline-prompt
+és egy hosszú review-folyamat közben egy prózában megfogalmazott
+"emlékezz erre" tétel könnyen kimarad, még akkor is, ha a lecke MAGA a
+tudásbázisban létezik és a pre-flight RAG-lekérdezés (§4.9) akár meg is
+találná — a probléma nem az, hogy a lecke nem volt fellelhető, hanem
+hogy a review-folyamat nem KÉNYSZERÍTI ki a felhasználását.
+
+**Szabály.** Egy KÉTSZER megismételt, azonos gyökérokú CI-piros elég
+mért bizonyíték ahhoz, hogy a védelem szintet váltson: próza helyett
+GÉPI kapu. Javasolt hely: `tools/round-ci-plan.py` (ami a diffet MÁR
+elemzi a dispatch-döntéshez) vagy egy önálló pre-dispatch szkript —
+ha a diff `lib/features/**/presentation/screens/*_screen.dart` ÚJ
+fájlt ad, a szkript maga futtassa le `flutter test
+test/ui/ui_inventory_test.dart`-ot (vagy legalább a `hasLength(N)`
+számot vesse össze egy friss `UiInventory(...).render().screenPaths`
+számlálással) MIELŐTT a `gh workflow run` meghívásra kerül. Amíg ez a
+gépi kapu nincs megépítve, a lecke további megismétlődése VÁRHATÓ, nem
+meglepetés — a következő orchesztrátor-session NE bízzon abban, hogy az
+L420/L422/L423 prózájának elolvasása elég védelem.
+
+**Őrteszt:** nincs — a mechanikus kapu MAGA lenne az őrteszt, de az még
+nem épült meg (lásd a szabály fenti javaslatát, egy jövőbeli
+governance-kör dolga). Részletek: `docs/reviews/e09-r08-review.md`, CI
+run [32607713096](https://github.com/wolfcasaba/strumsight/actions/runs/32607713096)
+(piros) → [32608627590](https://github.com/wolfcasaba/strumsight/actions/runs/32608627590)
+(zöld a javítás után).
+
+## L424 — `tools/mm-round.sh` NEM push-ol automatikusan: az orchesztrátornak MINDEN implementer-/javító-forduló UTÁN saját kézzel kell push-olnia a munkapéldányból, MIELŐTT a shared tree-n bármit commitolna a branchre — különben forkolt, divergens history keletkezik (E09-R08, 2026-08-23)
+
+**Mért tény.** Az E09-R08 pre-flight commitját (`60088f71`) az
+orchesztrátor push-olta. Az implementer (MiniMax, `mm-round.sh`)
+4 commitot rakott a branchre (`c4cd4b80`…`62e94855`) a SAJÁT
+munkapéldányában (`/home/ubuntu/ss-minimax-e09-r08`), de a wrapper ezeket
+SOSEM push-olja (`grep -n "git push" tools/mm-round.sh` → 0 találat). Az
+orchesztrátor ezután a review-jelentést a MEGOSZTOTT `music-theory` fában
+írta meg, `git checkout <branch>; git reset --hard
+origin/<branch>`-dal — ami a `60088f71`-re ugrott vissza (mert az origin
+MÉG nem látta az implementer 4 commitját!), és a review-commit
+(`ce470cc5`) erre a STALE bázisra épült. Az eredmény: két divergens
+branch-history (a helyi munkapéldányban 60088f71→...→62e94855, az
+origin-en 60088f71→ce470cc5), amit csak egy `git cherry-pick
+ce470cc5` + `tools/safe-force-push.sh` tudott utólag egyenesbe hozni.
+
+**Gyökérok.** A leválaszt-és-várj minta (§0.1, ADR 0112) explicit
+kimondja, hogy az implementer háttérben, a saját munkapéldányában fut —
+de ebből hallgatólagosan NEM következik, hogy a munkája is automatikusan
+megjelenik origin-en. A `codex-round.sh`/`mm-round.sh` egyik sem push-ol
+— ez korábban nem okozott gondot, amíg az orchesztrátor a review/merge
+lépéseket UGYANABBAN a munkapéldányban végezte, ahol az implementer
+dolgozott. Az E09-R08-ban az orchesztrátor a review-írást a MEGOSZTOTT
+fába helyezte át (hogy a `docs/reviews/**` commit egy tiszta, ismert
+checkoutból induljon) — ez a lépés az, ami a rejtett push-hiányt
+láthatóvá (és károssá) tette.
+
+**Szabály.** Minden implementer-/javító-forduló UTÁN, MIELŐTT bármilyen
+`git checkout`/`git reset --hard origin/...` történne a megosztott fában
+egy kör branchén: `cd <munkapéldány> && git push origin <branch>` ELSŐ
+lépésként. Ha a push nem fast-forward (mert az orchesztrátor időközben
+saját commitot tett origin-re — pl. a review-t), a helyes sorrend NEM a
+force-push, hanem: a review-commitot cherry-pick-elni a munkapéldány
+FRISS HEAD-jére, majd onnan `tools/safe-force-push.sh`-sal push-olni
+(sosem sima `--force`). A pre-flight-kori push (a brief+ADR commit)
+ugyanígy veszélyes minta — érdemesebb a review-t is MINDIG a legfrissebb,
+origin-ről frissen fetch-elt HEAD-re építeni, nem egy korábbi, helyben
+tartott checkout-ra.
+
+**Őrteszt:** nincs — folyamat-lecke, nem kódmérce. Részletek: ennek a
+körnek a session-története (a fix rögzítve `985d2af6` mint a review
+commitja `62e94855` fölött, nem `60088f71` fölött).
+
+## L425 — Egy `git reset --hard origin/<branch>` a MEGOSZTOTT fában NEM CSAK a branch-váltás miatt veszélyes (lásd a git-stash hazárdot) — a SAJÁT, még commitolatlan HANDOFF/RTM/LESSONS szerkesztéseket is némán eldobja (E09-R08, 2026-08-23)
+
+**Mért tény.** A záró rituálék közben az orchesztrátor a queue-fájl
+frissítése ELŐTT egy `git fetch -q origin main && git reset -q --hard
+origin/main`-t futtatott, hogy a shared tree-t a friss merge-elt
+`main`-re állítsa — de ekkor MÁR uncommitted HANDOFF.md +
+06-requirements-traceability-matrix.md + LESSONS.md szerkesztések
+voltak a working tree-ben (a fejléc ✅-blokk, a §4/§6 frissítés, két
+teljes lecke-bejegyzés). A `--hard` a working tree-t IS visszaállítja,
+tehát mindhárom fájl szerkesztése némán elveszett — csak a `git status
+--short` UTÁNI ellenőrzés (ami csak a queue-fájl módosítását mutatta)
+fedte fel, hogy a többi edit eltűnt, és mindhármat újra kellett írni.
+
+**Gyökérok.** A `git reset --hard` a jelen sessionben korábban BIZTONSÁGOS
+volt, amikor mindig egy TISZTA checkout UTÁN futott (branch-váltáskor,
+mielőtt bármit szerkesztettem volna). A záró rituálék lépéssora viszont
+egy MÁR aktívan szerkesztett fába illesztette be — a `git status`
+ellenőrzés a reset ELŐTT elmaradt.
+
+**Szabály.** `git reset --hard` (vagy bármilyen `git checkout`/`git
+clean`) előtt MINDIG `git status --short` — ha bármilyen uncommitted
+módosítás van, VAGY commitold előbb, VAGY (ha tényleg el kell dobni)
+csak EZUTÁN reseteld. Ez ugyanaz az elővigyázatossági minta, amit a
+[[shared-tree-git-stash-hazard]] memória a stash-re már előír — a
+`reset --hard` a MÁSIK, ugyanolyan éles szélű művelet, amit a rendszer-
+prompt "In a git repository, run `git status` before any command that
+could discard uncommitted work" szabálya IS név szerint felsorol
+(`git checkout/restore/reset/clean`), és amit ez a kör egyszer mégis
+megszegett.
+
+**Őrteszt:** nincs — folyamat-lecke, nem kódmérce.

@@ -1,5 +1,65 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R08 KÉSZ — Block, mute és safety kapcsolatkezelés — PR [#417](https://github.com/wolfcasaba/strumsight/pull/417), squash `5e086c10` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) NYOLCADIK KÖRE KÉSZ.** [ADR 0402](docs/adr/0402-block-mute-and-safety-relationships.md):
+`community_blocks`/`community_mutes` tábla + `block_service.py` atomikus
+tranzakció (mindkét irányú follow-él DELETE, pending follow-request UPDATE
+`status="blocked"` — a Kör 7 `follow_service.py` MÉRT UPDATE-recycle
+mintáját követve, NEM DELETE-elve a requestet). Élő block-first szűrés
+(`is_blocked_pair`) a MA authentikált `get_followers`/`get_following`
+endpointokba kötve (a Kör 4 `CommunityAccessPolicy` ELSŐ élő bekötése) —
+caller↔owner block → 403 a lap materializálása ELŐTT, egyébként a
+hívóval blokk-kapcsolatban álló profilok kimaradnak a lapból. ÚJ
+`routers/safety.py` HTTP-felület (block/unblock/mute/unmute +
+blocked/muted lista). Flutter: a Kör 7 kódjában MÁR "Kör 8 scope"-ként
+megnevezett `SocialGraphRepository.block/unblock/mute/unmute`
+`UnsupportedError` stub négyes valódi implementációra váltva; a domain
+interfész két ÚJ metódussal bővült (`blockedProfilesPage`/
+`mutedProfilesPage`, a meglévő 11 metódus változatlan); ÚJ
+`safety_relationships_screen.dart` (Blocked/Muted lista, saját
+képernyő-kolokált Riverpod state, teljes en/hu lokalizáció).
+
+Előre kiosztott ADR (`0401`) a queue-fájlban STALE volt (a Kör 7 már
+foglalta) — friss szám (`0402`) a `round-slots.py reserve-adr`-ból. A
+pre-flight (§0.0, D1–D6) jelentős, mért revíziót hordoz: az eredeti
+`allowed_paths` NEM tartalmazta a router-fájlokat, amikbe a block-szűrést
+be kellett kötni, sem a Dart repository-implementációt — mindkettőt a
+saját elődje (Kör 7) már explicit "Kör 8 scope"-ként nevezte meg a
+shipped kódjában, csak a batch-elt brief ezt tévesen kihagyta. A
+challenge-invite tábla (Kör 21) és a klub-domain (Kör 24) még nem
+léteznek — a brief "pending challenge invite törlése"/"közös klub
+placeholder" cellái ennek megfelelően pontosítva (D3/D4).
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **1 javító
+kör** (`docs/reviews/e09-r08-review.md`): F1 MAJOR — a safety screen 0
+lokalizált stringgel indult (minden testvér Community screen
+`AppLocalizations`-t használ) → 11 kulcs `community_{en,hu}.arb`-hoz +
+aggregátum-újragenerálás; F2 MAJOR — `block()`/`mute()` nem kapta el a
+konkurrens `IntegrityError`-t (ellentétben a `follow_service.py` MÉRT
+mintájával), és a saját concurrency-tesztje NÉMÁN nyelte el a szál-kivételt
+assert nélkül (`docs/LESSONS.md` L349–L351 mintája) → mindkettő javítva,
+függetlenül újra-igazolva friss izolált klónban. **1 CI-only fix**
+(`test/ui/ui_inventory_test.dart` screen-számláló 67→68 — UGYANAZ a
+drift-osztály, ami a Kör 7-nél is egy 3. javító kört igényelt). Dedikált
+`security-reviewer` pass: PASS, nincs BLOCKER (2 MINOR/NOTE — block-létezés
+oracle 403 vs 404 között, non-blocking follow-up). Review APPROVED, 0
+nyitott BLOCKER/MAJOR. Exact `63890947`: `full-gate.yml` 32608627590 +
+`router-ci.yml` 32608635566 mindkettő success.
+
+**Mért folyamat-tanulság (a saját sessionöm hibái, nem az implementeré):**
+a `tools/mm-round.sh` NEM push-ol automatikusan — az orchesztrátornak
+minden implementer-/javító-forduló UTÁN saját kézzel kell push-olnia a
+munkapéldányból, MIELŐTT a shared tree-n bármit commitolna a branchre;
+elmulasztva ez egy forkolt, divergens branch-históriát okoz (mérve,
+`cherry-pick` + `safe-force-push.sh`-sal helyreállítva, 2×). Az implementer
+saját gate-önbevallása HÁROMSZOR jelzett `gate_shape=VIOLATION`-t (a
+`round-gate.sh` `| tail`/`&&` mögé rejtve, a promptban explicit tiltás
+ELLENÉRE) — mindhárom esetben a review saját kézzel, izolált `/tmp`
+klónban futtatta újra csonkolatlanul, és ténylegesen zöld volt (a
+csonkolás önmagában nem jelentett rejtett hibát ebben a körben, de a
+bemondást egyszer sem fogadtam el enélkül).
+
 ## ✅ E09-R07 KÉSZ — Follow és follow request social graph — PR [#416](https://github.com/wolfcasaba/strumsight/pull/416), squash `1cc49e41` (2026-08-22)
 
 **EPIC 9 (COMMUNITY PLATFORM) HETEDIK KÖRE KÉSZ.** [ADR 0401](docs/adr/0401-follow-and-follow-request-social-graph.md):
@@ -4796,6 +4856,19 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-23):** `main` @ `5e086c10` — E09-R08 Block, mute
+és safety kapcsolatkezelés, PR
+[#417](https://github.com/wolfcasaba/strumsight/pull/417), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, EGY javító
+kör (F1 MAJOR hiányzó l10n a safety screen-en, F2 MAJOR el nem kapott
+konkurrens `IntegrityError` `block()`/`mute()`-ban + a saját concurrency-
+tesztje néma kivétel-nyelése — mind a review 1. fordulójában) + egy
+CI-only fix (`ui_inventory_test.dart` screen-számláló 67→68, ugyanaz a
+drift-osztály, mint az E09-R07 3. javító köre). Dedikált security-reviewer
+pass: PASS. Review APPROVED, 0 nyitott BLOCKER/MAJOR. Exact `63890947`:
+`full-gate.yml` 32608627590 + `router-ci.yml` 32608635566 mindkettő
+success. Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-22):** `main` @ `1cc49e41` — E09-R07 Follow és
 follow request social graph, PR
 [#416](https://github.com/wolfcasaba/strumsight/pull/416), squash-merge.
@@ -6267,29 +6340,31 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-22): E09-R08 — Block, mute és
-safety kapcsolatkezelés** (`docs/rounds/e09-r08-block-mute-and-safety-relationships.md`,
-engine a queue-ban `minimax`, **előre kiosztott ADR a queue-fájlban
-`0401` — EZ A SZÁM MÁR FOGLALT** (ADR 0401 = a most lezárt E09-R07 kör,
-`docs/adr/0401-follow-and-follow-request-social-graph.md`). **Az E09-R08
-pre-flightja NE használja a queue-fájl stale `0401` értékét** — a §1.0.1
-szerint `tools/round-slots.py reserve-adr --round E09-R08`-cal kérjen ÚJ
-számot (pontosan ugyanaz a minta, amit az E09-R07 is örökölt az
-E09-R06-tól). **Az E09-R07 (Follow és follow request social graph) KÉSZ**
-(PR #416, squash `1cc49e41`) — lásd a fejléc ✅-blokkot. A Kör 7 a
-`SocialGraphRepository` (Kör 5, ADR 0399) `block`/`unblock`/`mute`/`unmute`
-négyesét `UnsupportedError`-ral hagyta (explicit Kör 8 előfeltétel) — a Kör 8
-pre-flightja mérje meg, hogy a `community_follows` tábla és a `follow_service.py`
-TÉNYLEGES alakja (ADR 0401 §4–5: `community_follow_requests` EGY sor a pár
-élettartamára, `UPDATE`-tel újrahasznosítva) egyezik-e a Kör 8 brief block-
-művelet feltételezésével ("follow kapcsolatok törlődnek" — SDD §10.5), és
-hogy a block/mute táblák/service-réteg a `follow_service.py`-ból exportált
-megosztott függvényt igényelnek-e, vagy önálló tranzakciót nyitnak ugyanazokon
-a táblákon (ADR 0401 "A visszavonás feltétele" szakasza ezt a Kör 8 döntésére
-bízza). **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR #407)
-— az **E08-R29** (Integritás, analytics, balance szimuláció és CI) továbbra
-is `hold`-on marad. A queue-scan a legelső `pending` sort választja. Ez a
-session nem indítja el; új sessionben fut.
+**Pontos következő termékkör (2026-08-23): E09-R09 — Profilkeresés és
+biztonságos discovery** (`docs/rounds/e09-r09-profile-search-and-discovery.md`,
+engine a queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `nincs` —
+a pre-flight a §1.0.1 szerint kérjen számot
+`tools/round-slots.py reserve-adr --round E09-R09`-cal). **Az E09-R08
+(Block, mute és safety kapcsolatkezelés) KÉSZ** (PR #417, squash
+`5e086c10`) — lásd a fejléc ✅-blokkot. A Kör 8 mérte, hogy
+`profile.py::read_profile`/`privacy.py::get_privacy`/`handles.py` két
+GET-je MA authentikáció nélküliek (nincs `CurrentUser`), és ezt szándékosan
+kihagyta a block-szűrésből (D2, ADR 0402) — a Kör 9 pre-flightja mérje meg,
+igényel-e a keresés/discovery felület authentikációt ezekhez (vagy a Kör 9
+saját, ÚJ endpointokat ad, amik már `CurrentUser`-esek, és a régi
+`read_profile`/`get_privacy` authentikáció-hiánya továbbra is nyitott
+follow-up marad). A Kör 8 `query_filters.py::is_blocked_pair` pure-helperje
+a Kör 9 keresési eredményekből is ki kell zárja a blokkolt profilokat — a
+Kör 9 brief-jének explicit hivatkoznia kell erre a függvényre, ne írjon
+saját, párhuzamos block-ellenőrzést. **Az Epic 8 (Gamification) mind a 30
+köre KÉSZ** (E08-R30, PR #407) — az **E08-R29** (Integritás, analytics,
+balance szimuláció és CI) továbbra is `hold`-on marad. A queue-scan a
+legelső `pending` sort választja. Ez a session nem indítja el; új
+sessionben fut.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E09-R08 — Block,
+mute és safety kapcsolatkezelés** (`docs/rounds/e09-r08-block-mute-and-safety-relationships.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
 
 **F1/F2 nyitott MINOR-ok az E09-R04 review-ból** (backend
 `update_privacy_settings` router-bekötő kör előfeltételei — Python-szintű
