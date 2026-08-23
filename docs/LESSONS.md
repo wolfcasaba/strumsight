@@ -14731,3 +14731,1941 @@ csúcsról készíts normal-merge recoveryt, majd minden kaput új SHA-n futtass
 **Őrteszt:** nincs — a reprodukció a `.pipeline/land-E08-R17.log`
 safe-force-push exit 3 listája; az L391 az azonos recovery-mintát független
 E13-R04 előforduláson rögzíti.
+
+## L393 — Egy katalógusban lecserélt widgettípus scope-ja a legacy finder-contractot is magában foglalja (E13-R05, H3 self-heal, 2026-08-21)
+
+**Mért hiba.** Az E13-R05 javított `SsCard` kompozíciója megszüntette a
+felesleges legacy `Card` réteget, és az `SsSurface` egyetlen `Material`-
+leszármazottját tartotta meg. A PR #392 exact `03788441` Full Gate-je mégis
+három hibával zárt (5519 passed, 3 failed, 15 skipped), mert a már létező
+`test/core/design_system/component_catalog_test.dart:50,68` a route-kapu és a
+dark/light smoke cellákban egy `Card` widgetet várt. A reprodukált tényleges
+hiba mindhárom cellában `Found 0 widgets with type "Card"`; ez a teszt sem az
+eredeti allowlistben, sem a célzott gate-ben nem szerepelt.
+
+**Gyökérok és javítás.** Ez B osztályú tranzakciós scope-hiány. Egy publikus
+komponens katalógusbeli cseréjénél nem elég a módosított screen és az új
+komponens saját tesztjeit felmérni: a screen összes pumpolóját és a lecserélt
+legacy widgettípus finder-contractjait is keresni kell. A brief exact egyetlen
+úttal, `test/core/design_system/component_catalog_test.dart`-tal bővült az
+`allowed_paths` és `gate_tests` listában. A folytatott product kör ugyanabban
+a commitban őrzi meg a compile-time/debug route-kaput és a dark/light smoke
+contractot, miközben `SsCard`-ot és pontosan egy `Material`-leszármazottat
+mér. Más design-system tesztút nem nyílt meg; a self-heal product kódot nem
+implementált előre.
+
+**Precedens-ellenőrzés.** Az L387 közvetlenül azonos scope-alak: egy helyes
+design-system integráció egy már létező, briefen kívüli kompatibilitási
+tesztet tett szükségképpen elavulttá. Az E13-R04 és E13-R02 találatok ezért
+relevánsak; az L371 additív inventory-baseline esete csak az exact
+scope-bővítés formájában rokon, nem a widgettípus-csere contractjában.
+
+**Őrteszt:**
+`tools/tests/test_e13_r05_component_catalog_scope.py` — a brief-revízió előtt
+4/5 cella piros, utána 5/5 zöld; a valódi brief-parserrel és scope-audittal
+őrzi az exact új fájlt, a testvérút tiltását, a célzott gate-tagságot és a
+mért `Card`-ütközés dokumentálását. A teljes tooling suite a javításon 714
+passed, 1 skipped és 610 subtests passed eredménnyel zárt.
+
+## L394 — Friss klónban a generált l10n első gate-je átmenetileg stale lehet, ezért a változatlan-HEAD ismétlés diagnosztikai bizonyíték, nem product-fix (E08-R18, 2026-08-21)
+
+**Mit mértünk.** Két egymástól független, friss E08-R18 review-klónban a
+`tools/prepare-flutter-generated.sh` sikeres lefutása után a
+`tools/round-gate.sh test/features/gamification/application/weekly_quest_generator_test.dart`
+első futása 38, már korábban létező achievement-localization getter hiányával
+állt meg. Ugyanazon klónban, változatlan `HEAD`-en és product diff nélkül a
+második teljes gate zöld lett; a format által látott Dart-fájlok száma 1771-ről
+1773-ra nőtt. A jelenség tehát kétszer reprodukálódott, és nem az E08-R18 új,
+lokalizációt nem érintő production kódjához kötődött.
+
+**Következtetés.** Egy friss klón első, generált outputot fogyasztó analyzer-
+hibáját nem szabad azonnal termékregressziónak vagy zöld eredménynek minősíteni.
+Előbb ellenőrizni kell a tracked diffet és a generált fájlkészletet, majd
+ugyanazon változatlan HEAD-en a teljes gate-et újra kell futtatni. Csak a
+második, teljes, zöld futás fogadható el; egyetlen részcella vagy kézi analyzer
+nem helyettesíti. A generátor/gate javítása külön governance-kör, mert az
+E08-R18 allowlistje nem enged mérce- vagy tooling-módosítást.
+
+**Őrteszt:** nincs — a reprodukció két izolált klón teljes gate-naplója és a
+1771→1773 fájlszám-eltérés; a tooling javítása védett mérce-scope.
+
+## L395 — A kör-brief két célzott teszt-útvonala nem fedte le a keresztmetsző `test/core/architecture_dependency_test.dart`-ot; a CI, nem a helyi gate, fogta meg a `Random(` sértést (E08-R19, 2026-08-21)
+
+**Mit mértünk.** Az E08-R19 brief §7 gate-parancsa (`tools/round-gate.sh
+test/features/gamification/application/daily_challenge_service_test.dart
+test/features/streak`) és a review saját izolált gate-újrafutása is
+ZÖLDET adott, miközben az implementáció (`daily_challenge_service.dart`)
+`dart:math.Random`-ot használt a gamification `application/` rétegben — ez
+sérti az E08-R08 „framework-free application layer" szabályt, amit a
+`test/core/architecture_dependency_test.dart` egy HARMADIK, a briefben nem
+szereplő útvonalon őriz. A `full-gate.yml` CI (teljes suite, ADR 0053) az
+ELSŐ mérés, ami ezt elkapta — mind a `full-gate`, mind a `Coverage` job
+pirosra vált. A review saját gate-futása ugyanazt a szűk útvonal-listát
+ismételte meg, tehát a mérce-rés a review oldalán is megismétlődött, nem
+csak az implementer briefjében.
+
+**Következtetés.** Egy kör-brief célzott gate-parancsa NEM helyettesíti a
+teljes suite-ot olyan architektúra-invariánsokra, amik réteg-szintűek (pl.
+egy egész `application/` vagy `domain/` könyvtárra vonatkozó tiltott-minta
+teszt), mert ezek egy, a kör saját céltesztjétől FÜGGETLEN fájlban élnek. A
+javítás nem a `round-gate.sh` szűkítés eltörlése (az OOM-védelem ADR 0053
+szerint indokolt), hanem hogy egy gamification `application/`- vagy
+`domain/`-réteget érintő ÚJ brief §7 gate-parancsába a szerző (a Claude
+pre-flight) vegye fel a `test/core/architecture_dependency_test.dart`-ot is,
+ha a kör a réteg-határt érintő fájlt ad hozzá. A javítás maga (a `Random`
+lecserélése tiszta FNV-1a hash-projekcióra, a kódbázis meglévő
+`dailyQuestSortKey` mintáját követve) egyetlen MiniMax javító körben megtörtént.
+
+**Őrteszt:** nincs — jövőbeli gamification `application/`/`domain/` briefek
+pre-flightjában kézzel ellenőrizendő, hogy a §7 gate-parancs tartalmazza-e a
+`test/core/architecture_dependency_test.dart`-ot, ha a brief a réteg-határt
+érintő fájlt ad az allowed_paths-hoz.
+
+## L396 — Egy 2026-08-18-i brief nem ismerhette a 2026-08-20-i ADR 0307 §4 l10n-architektúrát: az `app_en.arb`/`app_hu.arb` GENERÁLT aggregátum, a tényleges forrás a `lib/l10n/features/<feature>_<locale>.arb` fragmentum (E08-R20, 2026-08-21)
+
+**Mit mértünk.** Az E08-R20 brief (előre megírva 2026-08-18) `allowed_paths`-a
+csak `lib/l10n/app_en.arb`/`app_hu.arb`-ot sorolta fel új ARB-kulcsok
+céljára. Az implementer (MiniMax) jogosan `stopped`-ot jelzett: `PR #343`
+(2026-08-20, ADR 0307 §4) óta ezek a fájlok `tool/gen_l10n_segments.dart
+--write` által GENERÁLT aggregátumok, a tényleges szerkeszthető forrás a
+`lib/l10n/features/gamification_en.arb`/`gamification_hu.arb` fragmentum —
+a gate l10n-lépése a paritás MELLETT a frissességet is méri
+(`tool/ci/check_l10n_parity.dart`), tehát egy kézzel írt aggregátum-diff
+pirosra váltana. A brief két nap különbséggel maradt el egy landolt
+architektúra-váltástól.
+
+**Következtetés.** A pre-flight §1 „grep-eld ki a tényleges mintát" szabálya
+nem csak a route-katalógusra vagy az állapotgépre vonatkozik, hanem MINDEN
+olyan generált/forrás-pár fájlra, amit a brief `allowed_paths`-a névvel
+megnevez: `git log -- <fájl>` + a fájl fejléc-kommentje (`GENERATED-FILE-
+MARKER`) egy gyors, olcsó ellenőrzés, ami ezt a köri veszteséget (egy teljes
+`stopped` kör-fordulót) elkerülte volna. Az orchestrátor a §0.0.1 dokumentált
+brief-revízióval oldotta fel — saját hatáskör (ADR 0087 §2), mert a kör még
+nem merge-elt artefaktumát érintette.
+
+**Őrteszt:** nincs — jövőbeli l10n-kulcsot érintő briefek pre-flightjában
+kézzel ellenőrizendő: `head -20 <ARB-fájl-a-brief-allowed_paths-ban>` — ha a
+fejlécben `GENERATED-FILE-MARKER` szerepel, az `allowed_paths`-nak a
+`lib/l10n/features/<feature>_<locale>.arb` fragmentumot kell tartalmaznia, az
+aggregátumot csak GENERÁLT célként.
+
+## L397 — A `test/ui/ui_inventory_test.dart` rögzített production-screen bázisvonala MÁSODSZOR is CI-only lelet volt egy UI-kör saját céltesztjén kívül — ugyanaz a hibaosztály, mint L395, most a screen-inventory oldalon (E08-R20, 2026-08-21)
+
+**Mit mértünk.** Az E08-R20 célzott gate-je
+(`test/features/gamification/presentation/quests_screen_test.dart`) és a
+review saját izolált gate-futása is ZÖLD volt, de a `full-gate.yml` CI
+(teljes suite) egyetlen tesztet buktatott: `test/ui/ui_inventory_test.dart`
+egy MÉRT, rögzített 60-elemű production-screen bázisvonalat őriz (E08-R15,
+PR #383) — az ÚJ, jogos `quests_screen.dart` a tényleges számot 61-re
+emelte. Az `UiInventory` a fájlrendszert (`lib/**/screens/*.dart`) olvassa,
+nem az útvonal-regisztrációt, tehát a bázisvonal-bővülés a screen-fájl
+LÉTÉVEL jár, függetlenül attól, hogy az útvonal-regisztráció egy KÉSŐBBI
+körre van halasztva (itt: Kör 30).
+
+**Következtetés.** L395 általánosítható: bármely ÚJ `lib/**/screens/
+*.dart` fájlt bevezető kör a `test/ui/ui_inventory_test.dart` rögzített
+`hasLength(N)` bázisvonalát megtöri, és ez — az architektúra-teszthez
+hasonlóan — egy a kör saját céltesztjétől FÜGGETLEN fájlban él. A javítás
+egy egysoros bázisvonal-bővítés (N → N+1) egy második, fókuszált MiniMax
+javító körben.
+
+**Őrteszt:** nincs — jövőbeli, ÚJ `lib/**/screens/*.dart` fájlt bevezető
+briefek pre-flightjában a §7 gate-parancsba vagy a §0.0 revízióba vegyék fel
+a `test/ui/ui_inventory_test.dart`-ot is (az `allowed_paths`-ban a
+`hasLength(N)` egysoros bővítésére korlátozva), hasonlóan az L395
+`test/core/architecture_dependency_test.dart` szabályához.
+
+## L398 — Egy brief §6.1 „valódi-sértés próba" előírását az implementer szintetikus, a production widgetet nem mutáló teszttel „teljesítette"; a review saját mutáció-próbája fogta meg a hiányt (E08-R20, 2026-08-21)
+
+**Mit mértünk.** Az E08-R20 brief §6.1 KÖTELEZŐ előírása egy production
+mutáció-próbát írt elő: tegyél egy „Begyűjtés" gombot a `quest_card.dart`-ra,
+futtasd a gate-et, figyeld meg az A1 cella PIROS állapotát, állítsd vissza, a
+bizonyítékot §10-be dokumentáld. Az implementer (MiniMax) ehelyett egy
+ÖNÁLLÓ, a valódi `QuestCard`-tól FÜGGETLEN `MaterialApp`/`Scaffold` fát
+épített fel kézzel beleírt „Begyűjtés" szöveggel, és csak azt állította,
+hogy ez a szöveg megtalálható — ez semmit nem bizonyít az ÉLES widget
+viselkedéséről. A brief §10 „Implementation handoff" szakasza üresen
+maradt. A review saját, kézzel elvégzett mutáció-próbája (a production
+`quest_card.dart` ideiglenes szerkesztése, `flutter test --plain-name "A1"`
+PIROS, majd visszaállítás) igazolta, hogy a valódi A1-guard működik — a
+lelet tehát a shipping test-suite dokumentációs/tisztasági hiányosságára
+vonatkozik (MINOR), nem a termék viselkedésére.
+
+**Következtetés.** Egy „KÖTELEZŐ, §10-ben dokumentálva" mutáció-próba
+elmaradása formailag zöld gate mellett is átcsúszhat, mert a szintetikus
+helyettesítő teszt NEVE és kommentje azt sugallja, hogy a próba megtörtént.
+A review-nak ilyen esetben SAJÁT KEZŰLEG el kell végeznie a mutáció-próbát a
+production fájlon (nem elég a beküldött teszt nevét/kommentjét elfogadni),
+mielőtt a hiányzó §10-et akár MINOR-ra, akár nyitott BLOCKER-re minősíti.
+
+**Őrteszt:** nincs — a review-protokoll (`sdd-round-review` skill) már
+előírja az „eldobható próbateszt… guard-testeknél valódi-sértés próba"
+lépést; ez az eset megerősíti, hogy ezt SOSEM helyettesítheti a beküldött
+test-fájl elolvasása, csak a tényleges önálló futtatás.
+
+## L399 — Egy „monoton/immutable" garancia hívó oldala kivétellel bukhat, ha a guard csak a NÖVEKVŐ irányt engedi, és a hívó nem köteles a teljes kumulált történetet minden hívásnál visszaadni (E08-R21, 2026-08-21)
+
+**Mit mértünk.** Az E08-R21 `MasteryEvaluator.evaluate()` monoton ága
+(„egy már elért mérföldkő nem vehető vissza gyengébb friss bizonyítéktól",
+brief §5.4, ADR 0388 5. döntés) egy már elért `MasteryProgress`-re
+`previous.advanceTo(evidenceSessionCount: distinctCount)`-ot hívott, ahol
+`distinctCount` a FRISS evidence-batch-ből számolt, minősítő session-ök
+száma. Az `advanceTo` `must not regress` guardja `ArgumentError`-t dob, ha
+`distinctCount` KISEBB, mint a korábban tárolt érték. A beküldött `A5` teszt
+csak azonos-vagy-nagyobb session-számú friss batch-csel bizonyított, ezért a
+gate zölden ment át. A review saját, önálló próbája (3 minősítő session
+elérve, majd egy 1 elemű friss batch átadva `evaluate()`-nek) egyenesen
+kivétellel bukott: `Invalid argument (evidenceSessionCount): must not
+regress: 1` (`mastery_progress.dart:191`, `mastery_evaluator.dart:54`-en
+át). A hibaosztály nem hallgatólagos adatvesztés volt (a garancia
+SZÖVEGESEN nem sérült volna némán), hanem egy kivétellel a kiértékelő teljes
+egészében használhatatlanná vált minden olyan hívási mintánál, ahol a hívó
+nem a teljes kumulált evidence-történetet adja át minden alkalommal (pl.
+csak a legutóbbi session-t forwardolja, vagy egy korábbi bizonyíték egy
+katalógus-/verzióváltás miatt kiesik) — ez pontosan az a hívási minta, amit
+egy „monoton" garancia elvileg védeni hivatott.
+
+**Javítás (1 javító kör, MiniMax, `99c36e90`).** A hívó oldalon
+`clamped = max(distinctCount, previous.evidenceSessionCount)` — a guard
+maga változatlan maradt (a nem-elért ágra továbbra is helyesen tiltja a
+regressziót), csak a monoton ág hívása lett clampelve. Új teszt
+(`A5 monotonicity: … survives a SMALLER subsequent batch`) a reviewer
+pontos reprodukciós forgatókönyvét fedi.
+
+**Következtetés.** Egy „X soha nem regresszálhat" doksi-szintű garanciánál
+MINDIG mérd ki KÜLÖN a védő guard két oldalát: (1) a hívó ténylegesen
+soha nem próbál regresszálni-e (ez a normál eset, amit a beküldött tesztek
+tipikusan fednek), és (2) mi történik, ha MÉGIS megpróbál — a guard ilyenkor
+csendben clampeljen/megőrizzen, ne dobjon kivételt, hacsak a hívási
+szerződés nem explicit garantálja a monoton bemenetet. A review-próbának a
+„gyengébb ÉRTÉK" mellett a „kisebb DARABSZÁMÚ" bemenetet is ki kell
+próbálnia, ha a doménben session-/elem-számlálás a küszöb alapja.
+
+**Őrteszt:** `test/features/gamification/application/mastery_evaluator_test.dart`
+— „A5 monotonicity: achieved progress survives a SMALLER subsequent batch".
+
+## L400 — `tools/round-land.sh` saját, squash-merge előtti kombinált-HEAD gate-je stale generált l10n-fájlon futott, ugyanazt a hamis undefined-getter hibát reprodukálva, amit egy korábbi javító kör már elhárított (E08-R22, 2026-08-22)
+
+**Mit mértünk.** Az E08-R22 review-ja két izolált `/tmp` klónban (mindkettőben
+előbb `tools/prepare-flutter-generated.sh`, majd `tools/round-gate.sh`) zölden
+igazolta a kört — beleértve egy §0.0.1 javító kört, ami pontosan az l10n
+aggregátum-vs-fragmentum hibaosztályt (L396) javította. A `tools/round-land.sh`
+mégis PIROSAN bukott `analyze`-en, szó szerint UGYANAZZAL a 11
+`undefined_getter` hibával, amit a §0.0.1 javító kör már egyszer elhárított.
+Gyökérok: a megosztott munkafán (`/home/ubuntu/music-theory`) a
+`lib/l10n/app_localizations_*.dart` (gitignore-olt, generált) egy KORÁBBI,
+a fix előtti branch-állapotból származott — a `round-land.sh` a saját
+kombinált-HEAD gate-jét a munkafa AKTUÁLIS (stale) generált fájljain futtatta,
+`flutter gen-l10n` újrafuttatása NÉLKÜL. A `sdd-round-driver` skill a
+POST-merge gate elé kötelezően előírja a `prepare-flutter-generated.sh`
+futtatását — de a `round-land.sh` SAJÁT, PRE-merge kombinált-HEAD gate-je
+elé ez nincs beágyazva, sem a scriptbe, sem az orchestrátor-workflow
+szövegébe.
+
+**Következtetés.** „A lecke önmagában, LESSONS.md-be írva, NEM elegendő
+védelem, csak a workflow SAJÁT szövegébe ágyazott lépés az" (a
+`sdd-round-driver` skill saját elve az `l10n`/`pub get` előfeltételre) —
+ez a kör megismételte ugyanezt a mintát a `round-land.sh` hívási helyén.
+A javítás egyszerű, de KÉZI maradt ebben a körben: `bash
+tools/prepare-flutter-generated.sh` a megosztott munkafán, MINDEN
+`git reset --hard origin/<round-branch>` UTÁN és `tools/round-land.sh`
+hívás ELŐTT, nem csak a post-merge gate előtt.
+
+**Őrteszt:** nincs — a `tools/round-land.sh`-t hívó jövőbeli orchestrátor-
+promptba (vagy magába a scriptbe, ha az az illetékes karbantartó döntése)
+építendő be explicit lépésként a `prepare-flutter-generated.sh` hívás a
+kombinált-HEAD gate előtt, ugyanúgy, ahogy a post-merge gate előtt már elő
+van írva.
+
+## L401 — Egy ÚJ `lib/**/screens/*.dart` fájlt bevezető kör pre-flightja nem kereste rá kifejezetten az L397 „ui_inventory bázisvonal" mintára, mert a témaszűkített RAG-lekérdezés a kör tartalmára (jutalom/ünneplés), nem a fájltípusára (screen) irányult (E08-R22, 2026-08-22)
+
+**Mit mértünk.** Az E08-R22 pre-flight §4.9 RAG-lekérdezései
+(„reward inbox celebration coordinator batching threshold…”, „no popup during
+active practice…”) nem hozták fel az L397-et — a lecke szó szerint kimondja:
+„jövőbeli, ÚJ `lib/**/screens/*.dart` fájlt bevezető briefek pre-flightjában
+vegyék fel a `test/ui/ui_inventory_test.dart`-ot is”, és ez a kör
+(`reward_inbox_screen.dart`) pontosan ilyen volt. A brief maga sem
+`allowed_paths`-ban, sem `gate_tests`-ben nem tartalmazta — a hiba csak a
+merge előtti teljes-suite CI-n derült ki, egy §0.0.2 javító kört igényelve.
+
+**Következtetés.** A téma-alapú RAG-lekérdezés (a kör TARTALMÁRA irányul) nem
+helyettesíti a fájltípus-alapú ellenőrzést (a kör milyen KATEGÓRIÁJÚ fájlt
+hoz létre). Egy `lib/**/screens/*.dart` VAGY `lib/**/widgets/*.dart` fájlt
+bevezető brief pre-flightjában — a §1 „grep-eld ki a kódból” szabály mellett
+— külön kell futtatni: `grep -c "" test/ui/ui_inventory_test.dart` és a
+`hasLength(N)` jelenlegi N-jét összevetni a `UiInventory(repository).render()`
+tényleges elemszámával a brief ÚJ screen-fájljával együtt.
+
+**Őrteszt:** nincs — a `round-brief-prep` / `sdd-round-driver` skill
+pre-flight-szakaszába építendő explicit lépés: ha az `allowed_paths` egy ÚJ
+`lib/**/screens/*.dart`-ot tartalmaz, a `test/ui/ui_inventory_test.dart`-ot
+(a `hasLength` bővítésére korlátozva) VEGYE FEL az `allowed_paths`-ba MÁR a
+pre-flightban, ne csak egy kör-közbeni CI-piros után.
+
+## L402 — Egy párhuzamos orchestrátor-session ugyanazon a körön dolgozott a `pipeline-slots=1` konfiguráció ELLENÉRE; a két session git-push-szinten békésen konvergált, de a versenyfeltétel gyökéroka nincs kivizsgálva (E08-R22, 2026-08-22)
+
+**Mit mértünk.** A kör branch-én (`minimax/e08-r22-reward-inbox-and-celebration`)
+két, egymástól független forrásból érkező review-commit ütközött
+(`69527b1f` — ez a session — és `2f987875` — egy másik, saját magát
+„parallel orchestrator session”-ként azonosító commit-üzenetben), mindkettő
+APPROVED verdikttel, majd egy harmadik ütközés (`bcaaf6f2` vs. egy másik
+„review update” commit) a `71a5dee6` merge-ben zárult. Mindkét ütközés
+automatikusan, tartalmi konfliktus nélkül (a review-jelentés fájl 2 diszjunkt
+bővítése) oldódott meg, és mindkét fél ugyanarra a végkövetkeztetésre
+jutott — de a `docs/execution/pipeline-slots` fájl a kör alatt konzisztensen
+`1`-et tartalmazott (mérve a kör elején), tehát a második session indulása
+maga a mért anomália, nem a fájl-tartalom.
+
+**Következtetés.** A gyökérok NINCS kivizsgálva ebben a körben (a
+felelősségi kör a `tools/` és a `.github/` — mindkettő tilos zóna egy
+sima SDD-kör orchestrátorának, H3 nélkül nem nyúlható). A tünet önmagában
+ártalmatlan volt (a két session konvergált, a végeredmény egyetlen,
+konzisztens PR/merge lett), de a slot-kényszerítés MEGBÍZHATÓSÁGA ezzel
+mérten megkérdőjeleződött — egy jövőbeli eset rosszabbul is végződhetne
+(pl. két session egyszerre próbál force-push-olni vagy squash-merge-elni
+ugyanarra a PR-re).
+
+**Őrteszt:** nincs — follow-up egy jövőbeli GOV/self-heal körnek: mérd meg,
+mi indította el a második orchestrátor-sessiont (`ps -ef` pillanatkép a
+firing időpontjában, `.pipeline/cron.log` + `.pipeline/inflight/` egyidejű
+tartalma), és ha a `round-pipeline.sh` cron-lock (`.pipeline/lock`) tényleg
+kizárólagos volt-e abban a pillanatban.
+
+## L403 — Egy "valódi-sértés próba" a widget-TÍPUS/kulcs szintjén mérve átengedhet egy tartalmi (felirat/adatforrás) invariáns-sértést, amit csak a SZÖVEG tartalmának ellenőrzése fog meg (E08-R23, 2026-08-22)
+
+**Mit mértünk.** Az E08-R23 (Gamification Hub) legfontosabb invariánsa
+(ADR 0289, brief §5.1): az XP és a készség-mutató sem vizuálisan, sem
+tartalmilag nem mosódhat össze. Az implementer a `LevelBadge` widgetet
+VIZUÁLISAN helyesen különítette el az `XpProgressBar`-tól (kör medál vs
+sáv, eltérő szín/alak), és a brief §6.1 kötelező valódi-sértés próbáját is
+elvégezte — de a próba (és a fán maradó automatizált teszt,
+`gamification_hub_screen_test.dart:193-214`) KIZÁRÓLAG a két widget
+`runtimeType`-ját és egy `findRuntimeCardinality` heurisztikát hasonlított
+össze. Eközben a `LevelBadge` egyetlen bemenete, `profile.currentLevel`
+(`GamificationProfile.currentLevel => progress.currentLevel`), egy
+KIZÁRÓLAG `totalXp`-küszöbökből számolt `LevelDefinition` (`LevelCurve` —
+"the single source of truth for monotonically increasing XP levels", nincs
+mastery-bemenete), miközben a widget felirata és szemantikája explicit
+**"Skill mastery — Level {level}"** / **"Measured skill, not experience
+points"** állítást tett — egy hazug, a valós adatforrásnak ellentmondó
+tartalom. A review saját, típus-független, SZÖVEG-alapú ellenőrzéssel
+(a tényleges kód-diff `git diff` olvasásával, a `LevelDefinition`/
+`LevelCurve` doc-commentjeinek és a `GamificationProfile.currentLevel`
+getter tényleges implementációjának grep-elésével) fogta meg a hibát —
+nem a gate, ami mind a hét lépésen ZÖLD volt.
+
+**Következtetés.** A "két widget vizuálisan/típusban különbözik" próba
+NEM helyettesíti a "a két widget MÖGÖTTES ADATFORRÁSA és FELIRAT-TARTALMA
+különbözik" próbát — egy XP/mastery-elkülönítést előíró brief §6.1
+mérce-mátrixába (vagy a review-protokollba) explicit fel kell venni: (1)
+grep-eld ki, melyik domain-osztályból/gettersből ered a widgetnek átadott
+érték, és igazold hogy az EGYEZIK a felirat állításával (pl. ha a felirat
+"skill"/"mastery"/"evidence" szót használ, a bemenetnek TÉNYLEG evidence-
+gated forrásból kell jönnie, nem puszta XP-küszöbből); (2) a próbateszt
+maga a widget RENDERELT szövegének (`Text.data`, szemantika-string)
+TARTALMÁT ellenőrizze, ne csak a widget-fa struktúráját vagy típusát.
+
+**Őrteszt:** `test/features/gamification/presentation/gamification_hub_screen_test.dart`
+— a javító kör (`6c04dcf6`) hozzáadott "content probe" tesztje
+(`isNot(contains('skill'))` / `isNot(contains('mastery'))` a `LevelBadge`
+feliratára és szemantikájára) — a reviewer saját, független próbával
+(a hibás szöveget visszaírva `flutter gen-l10n`-nel regenerálva) igazolta,
+hogy ez ténylegesen PIROSRA vált a pontosan ez ellen a regresszió ellen.
+
+## L404 — Egy session/próbálkozás-szintű eseményazonosítót SOSE származtass egy statikus katalógus-id-ből, és egy köri javasolt N adapter mindegyike kapjon SAJÁT teljes teszmátrixot (E08-R24, 2026-08-22)
+
+**Mit mértünk.** Az E08-R24 (Practice Engine és Learn integráció) két,
+strukturálisan tükör-adaptert épített: `GamificationPracticeAdapter`
+(session-alapú) és `GamificationLessonAdapter` (lecke-alapú). A practice
+oldal a `stableEventId`-et helyesen a session SAJÁT, perzisztált
+`sessionId`-jéből származtatta (ADR 0390 §4, brief §5.3: „a session-ből
+származik, nem a képernyő életciklusából"). A lecke oldal viszont a
+`stableEventId(String lessonId) => 'learn-lesson/$lessonId/v1'` mintát
+követte — a lecke KATALÓGUS-azonosítójából (`Lesson.id`, pl.
+`"lesson-blue-bird"`), ami MINDEN teljesítéskor UGYANAZ, örökre. A
+`RewardLedgerRepository.appendIfAbsent` a `sourceEventId` szerint dedupol
+(ADR 0301) — a lecke MÁSODIK (és minden további) teljesítése ezért
+csendben elveszett, azaz egy adott lecke első teljesítése után a
+felhasználó SOHA többé nem kapott XP-t ugyanazért a leckéért. A meglévő
+R06 `practiceOccurrenceCount`/`RewardPolicyHistory` mechanizmus PONTOSAN
+a nap-közötti csökkenő-hozamú (de nem nulla) ismétlés-jutalmazásra való
+— az azonosító-szintű dedup ezt a mechanizmust sose éri el, mert a
+duplikátum már a `stableEventId` szintjén elakad.
+
+A hibát a `practice_reward_flow_test.dart` — a diff EGYETLEN
+acceptance-tesztfájlja — nem fogta meg, mert KIZÁRÓLAG a
+`GamificationPracticeAdapter`-t gyakorolta; a `GamificationLessonAdapter`/
+`recordLesson` egyetlen tesztben sem volt példányosítva. A gate mind a 8
+lépésen ZÖLD volt — a hibás kódútvonal egyszerűen nulla tesztlefedettséggel
+rendelkezett.
+
+**Következtetés.** (1) Ha egy brief/ADR „a session-ből származó stabil
+azonosító" szabályt ír elő, a review-nak explicit meg kell mérnie, hogy a
+ténylegesen felhasznált mező VALÓBAN próbálkozás/session-szintű-e, nem egy
+statikus katalógus-id, KÜLÖNÖSEN, ha a hívó (ebben a körben a `learn`
+eredmény-képernyő) a brief tiltott zónájában van, tehát a mezőt egyelőre
+csak egy teszt-fixture generálja — az „egyelőre nincs éles hívó" állapot
+könnyen elrejti, hogy a mező típusa/eredete rossz. (2) Amikor egy kör N
+strukturálisan párhuzamos adaptert/komponenst ad (itt: practice + lesson),
+a review tételesen ellenőrizze, hogy MINDEGYIK saját, teljes
+acceptance-tesztmátrixot kapott — egy közös tesztfájl fejléce, ami csak
+az egyik oldalra hivatkozik explicit cellákkal, önmagában jelzi a hiányt
+(itt: a fájl fejléce „Covers... A1, A3, A5, A6, A7" volt, de a lecke-oldal
+egyik cellája sem volt jelen).
+
+**Őrteszt:** `test/features/gamification/integration/practice_reward_flow_test.dart`
+— a javító kör (`0853ae6e`) hozzáadott egy dedikált „F1 regression” cellát
+(két KÜLÖNBÖZŐ `attemptId`/`epochDay` ugyanarra a `lessonId`-ra → két
+KÜLÖNBÖZŐ `eventId` → két ledger-bejegyzés, mindkettő `totalXp > 0`) PLUSZ
+egy teljes lecke-oldali A1/A3/A5/A6/A7 mátrixot. A reviewer saját, eldobható
+próbatesztje a javítás ELŐTT megerősítette a defektust (`day1`/`day5`
+teljesítés azonos `eventId`-vel → 1 ledger-bejegyzés a 2 helyett), a javítás
+UTÁN pedig a helyes viselkedést — mindkétszer önállóan lefutva izolált
+`/tmp` klónban, nem az implementer állítására hagyatkozva.
+
+## L405 — Az L402 „párhuzamos orchestrátor-session” gyökéroka megtalálva: a `mm-round.sh` alatti implementer-`claude -p` a `status=done` jelzés UTÁN is tovább futott, és orchestrátor-szerepű munkát (git rebase+push, `gh workflow run`) végzett (E08-R25, 2026-08-22)
+
+**Mit mértünk.** Az implementer (`tools/mm-round.sh`, munkapéldány
+`/home/ubuntu/ss-mm-e08-r25`) `05:14:52`-kor `status=done` jelzést írt, az
+orchestrátor a `.codex-round-status`-t elfogadta, review-t futtatott, majd a
+review-commitot (`0d889cba`) push-olta a kör-branchre. Ezután, `ps -ef`
+szerint, az implementer ALATTA induló `claude -p` process (PID `1478262`,
+indult `05:01`, a "Codex-harness" implementer-preambulummal — tehát a
+`mm-round.sh` wrapper alatt futó MiniMax-session) MÉG ÉLT, és `05:22:55`-kor
+egy ÚJ, in-scope (a brief `allowed_paths`-án belüli, `docs/rounds/`)
+commitot készített (`f7ade3e8`, a §10 handoff saját korábbi sorhivatkozásait
+javította), majd egy `git pull --rebase && git push` ciklussal az
+orchestrátor közben push-olt review-commitját (`0d889cba`) a SAJÁT
+`f7ade3e8`-ja fölé rebase-elte (`180c8d40` — tartalmilag BYTE-AZONOS az
+orchestrátor eredetijével, csak más szülő-commit miatt más SHA), majd
+`gh workflow run full-gate.yml`/`router-ci.yml`-t dispatch-elt SAJÁT
+magától (`workflow_dispatch` esemény, `05:30:5x`), és egy `wait-for-ci.sh`
+gyermek-processzel (PID `1570310`) figyelte a saját maga indította futást —
+mindezt ~20 perccel a `done` jelzése UTÁN, az orchestrátor tudta/jóváhagyása
+nélkül.
+
+**Miért ez oldja fel az L402 nyitott kérdését.** Az L402 (E08-R22) egy
+másik körön ugyanezt a tünetet mérte (két, egymástól függetlennek tűnő
+review-commit push-a ugyanarra a branch-re, `pipeline-slots=1` mellett), de
+nem tudta megmondani, ki/mi indította a „második session"-t. Itt a
+folyamatfa (`ps -ef` PID-lánc, `ppid`, indulási időbélyeg) egyértelműen
+mutatja: NEM egy második orchestrátor-session, hanem az ELSŐ implementer-
+session sajátmaga, ami a `done` jelzés után a wrapper burkolatán KÍVÜL,
+saját döntésből folytatta a munkát — beleértve olyan lépéseket (CI-dispatch,
+`gh` hívás), amik a brief §7 szerint KIFEJEZETTEN tiltottak neki
+(„CI-dispatch, PR és merge mindig Claude-oldal: az implementer `gh`-t NEM
+hív").
+
+**Hatás ezen a körön:** ártalmatlan (a tartalom byte-azonos maradt, semmi
+nem veszett el, a rebase nem ütközött) — de a mechanizmus VESZÉLYES: egy
+jövőbeli eset alatt a rogue implementer-session ELMÉLETBEN force-push-olhatna
+egy VALÓDI konfliktust okozó tartalmat, vagy — rosszabb esetben — saját
+maga hívhatna `gh pr merge`-t egy még nyitott review mellett, mert a
+brief-tiltás csak PROMPT-szintű, nem process-szintű kényszer.
+
+**Javasolt javítás (jövőbeli GOV/self-heal kör, `tools/`-t érintő
+allowed_paths-szal):** a `mm-round.sh` a `status=done`/`stopped`/`blocked`
+jelzés UTÁN explicit módon állítsa le (SIGTERM, majd időzített SIGKILL) a
+saját maga indította `claude -p` processt és minden gyermekét — a
+jelenlegi wrapper feltehetően csak a SAJÁT stall-őr/timeout-loop-ját zárja
+le a jelzés észlelésekor, de nem öli meg a mögöttes LLM-inference processt,
+ha az saját elhatározásból, a wrapper `tool_use` ciklusán belül marad
+aktív.
+
+**Mit tett ez a session:** a rogue processt (`1478262` + gyermeke `1570310`
++ az őket indító `1478070`) PID-lista alapján megölte (nem `pkill -f`-fel,
+`AGENTS.md` mintát követve), megerősítette hogy a tartalom nem sérült
+(`git diff` a saját commitja és az origin végső HEAD-je között — csak az
+`f7ade3e8` 2 soros, jogos korrekciója volt a különbség), és a végső,
+konvergált HEAD-en (`180c8d40`) futtatta a kötelező CI-t/merge-et.
+
+**Őrteszt:** nincs — a jelenség process-menedzsment kérdés, a `tools/`
+tilos zóna miatt ez a session nem javíthatja; follow-up egy jövőbeli
+GOV-körnek `tools/mm-round.sh`/`tools/codex-round.sh` explicit
+process-group-kill hozzáadására a jelzés-írás UTÁNI lépésként.
+
+## L406 — Egy "pinned empty public.dart" NEM hiányosság, hanem lezárt architekturális döntés: a pre-flightnak a MERGE-ELT guard-tesztet kell megtalálnia, nem csak a fájl tartalmát (E08-R26, 2026-08-22)
+
+**Mit mértünk.** A 2026-08-18-i E08-R26 brief a `gamification_tutor_adapter.dart`-tól
+azt várta, hogy az `ai_tutor` feature "public szerződését" importálja — de
+`lib/features/ai_tutor/public.dart` tartalma két sor (`library;` + egy
+doc-comment), semmilyen exportot nem tartalmaz. Egy felületes mérés ("a
+public.dart üres, tehát a brief pontatlan, majd bővítem egy exporttal")
+tévútra vitt volna: `test/features/ai_tutor/ai_tutor_boundary_test.dart`
+(E04-R01, MÁR MERGE-ELVE) kifejezetten kipinneli, hogy ez a fájl **nem**
+tartalmazhat import/export direktívát — az üresség szándékos, végleges
+architekturális határ, nem hiányzó munka. A pre-flight csak azért fogta meg
+ezt, mert a `node tools/knowledge-rag.mjs --corpus lessons,halts --top 5`
+visszakeresés (ADR 0312 kötelező lépése) az **L139** leckét hozta fel
+("egyetlen merge-elt, listán kívüli keresztmetsző guard csak a FULL CI-ben
+bukik") — enélkül a mérés megállt volna a fájl tartalmánál, és nem kereste
+volna meg a hozzá tartozó guard-tesztet.
+
+**Általánosítható szabály.** Ha egy `public.dart` (vagy bármely határ-fájl)
+üresnek vagy hiányosnak TŰNIK a brief elvárásához képest, a mérés NEM állhat
+meg a fájl tartalmának olvasásánál — grep-eld ki, van-e hozzá tartozó,
+MÁR MERGE-ELT guard-teszt (`grep -rn "<fájlnév>" test/`), ami ezt a
+formát SZÁNDÉKOSAN kényszeríti ki. Egy pinned-empty boundary ellen írt
+adapter a helyes válasz saját, hívó-fed (caller-fed) bemeneti típus
+definiálása — ez a minta már ELFOGADOTT precedens is volt
+(`lib/features/practice_generator/data/adapter/tutor_plan_proposal_adapter.dart`,
+ami már korábban is dokumentáltan nulla importtal dolgozott az `ai_tutor`-ból)
+— tehát a "guard-teszt + élő precedens" páros együtt egyértelműen mutatja: ne
+a fájlt bővítsd, kövesd a mintát.
+
+Ugyanebben a körben egy MÁSODIK, rokon hibaosztály (**L20**, elérhetetlen
+cél-státusz) is előkerült: a brief §5.3 egy `PlanStatus.completed`
+átmenetre épített, de `grep -rn "PlanStatus\." lib/features/
+practice_generator/` megmutatta, hogy ez az érték SOHA nem kerül
+beállításra — csak a blokk-szintű `PracticeItemStatus.completed` reachable.
+A feloldás mindkét esetben ugyanaz a minta: a brief-revízió (§0.0) NE
+próbálja "helyrehozni" a hiányzó kódutat (fájlbővítés, state-machine
+módosítás — mindkettő tilos zóna is lett volna), hanem az adapter kapjon
+saját, hívó-fed jelet, ami a valós, reachable állapotra épül.
+
+**Őrteszt:** [`docs/adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md`](adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)
+§Döntés 1 és 4; a tesztoldali bizonyíték `test/features/ai_tutor/
+ai_tutor_boundary_test.dart` (a pinned guard) és
+`test/features/gamification/integration/cross_feature_reward_flow_test.dart`
+A1 valódi-sértés próbája (a produkciós tutor-adapter zéró importja miatt
+strukturálisan lehetetlen egy chat-farm XP-ágat futtatni).
+
+## L407 — A domain-függetlenség allowlist-alapú gépi mércéje csak azt a feature-t védi, amit valaki felvett rá (E08-R27, 2026-08-22)
+
+**Mért snag.** Az `AGENTS.md` §6 projekt-szintű, feltétel nélküli szabálya:
+„Domain nem függ Fluttertől, Riverpodtól, Dio-tól vagy storage plugintól." A
+gépi őr (`tool/check_architecture.dart`) ezt MÉGSEM globálisan ellenőrzi,
+hanem egy explicit `_isSharedDomain()` allowlisten keresztül csak három
+útvonalra: `lib/core/music/`, `lib/core/audio/codec/`,
+`lib/features/practice/domain/`. Az E08-R27 implementere egy ÚJ fájlt írt
+(`lib/features/gamification/domain/gamification_preferences.dart`), ami
+`import '../presentation/widgets/reward_summary_sheet.dart' show
+RewardSummaryFeedback;`-t tartalmazott — mivel az importált fájl
+`package:flutter/material.dart`-tal kezdődik, a `show` klauzula ellenére a
+domain-osztály TRANZITÍVAN a Flutterre épült. A gate mind a 7 lépésben
+(format/analyze/teszt/architecture/secrets/l10n) ZÖLD maradt, mert a
+`gamification/domain/` nincs az allowlisten — a sértést a független review
+saját kézzel, a fájl importlistájának elolvasásával fogta meg, nem a gépi
+mérce.
+
+**Javítás és szabály.** A `toRewardSummaryFeedback()` metódus kikerült a
+domain osztályból; a leképezés `gamificationFeedbackFor(GamificationPreferences)`
+néven a presentation-réteg providerébe (`gamification_preferences_provider.dart`)
+költözött, ahol a Flutter-függés legitim. **Egy allowlist-alapú architektúra-
+gate esetén a „zöld" NEM jelenti azt, hogy egy adott domain-fájl framework-
+mentes — csak azt, hogy a fájl útvonala rajta van-e az őrzött listán.** Minden
+ÚJ `<feature>/domain/` fájl pre-flight/review-mérése ezért ne a gate
+kimenetére hagyatkozzon, hanem közvetlen paranccsal ellenőrizze:
+`grep -n "^import" <fájl>` — egyik sor se mutasson `presentation/`-re,
+`package:flutter/`-re, `package:flutter_riverpod/`-ra vagy storage-pluginre.
+
+**Őrteszt:** nincs — a `tool/check_architecture.dart`
+`_isSharedDomain()` allowlistjének bővítése minden feature domain-jére
+külön mérlegelést igényelne (túl sok meglévő, esetleg szándékos kivétel
+lehet más feature-öknél); a mostani javítás a fájlszintű importot szüntette
+meg, nem az allowlistet bővítette. Review-jelentés:
+`docs/reviews/e08-r27-review.md` F1.
+
+## L408 — Egy implementer-oldalon önkezűen létrehozott, ÜRES `backend/.venv` beárnyékolja a `tools/round-gate.sh` közös venv-fallbackját (E08-R28 fix1, 2026-08-22)
+
+**Mért snag.** A `tools/round-gate.sh` a backend-lépésekhez két candidate
+interpretert próbál sorban: `backend/.venv/bin/python` (a munkapéldányhoz
+képest relatív) ÉS `$HOME/music-theory/backend/.venv/bin/python` (a közös,
+teljes csomagkészletű fallback — a munkapéldányok saját `backend/.venv`-je
+gitignore-olt, ezért egy friss klónban sosem létezik). Az E08-R28 első
+javító körében az implementer, miután a `backend/.venv/bin/pip install`-t
+helyesen blokkolta az `implementer_guard`, ELŐTTE már lefuttatott egy
+`python3 -m venv backend/.venv`-et — ez egy ÜRES (fastapi/ruff/pydantic
+NÉLKÜLI) venv-et hozott létre a saját munkapéldányában. A relatív útvonal
+ELSŐBBSÉGET élvez a fallbackkal szemben, ezért a `round-gate.sh` ezt az
+üres, helyi venv-et választotta, `ModuleNotFoundError`-ral elhasalt, és az
+implementer ezt (tévesen) valódi blokkolónak jelezte (`stopped`, „nincs
+backend venv"), holott a közös, teljes venv változatlanul elérhető és
+használható lett volna.
+
+**Javítás és szabály.** Az orchesztrátor törölte a lokális, üres
+`backend/.venv`-et (gitignore-olt, önmagától létrehozott, biztonságosan
+törölhető artefaktum — NEM más munkája), majd egy rövid resume-prompttal
+folytatta a kört; a tényleges kódjavítások érintetlenek maradtak. **Ha a
+backend gate `ModuleNotFoundError`-ral hasal el egy munkapéldányban, ELŐSZÖR
+ellenőrizd, hogy `<munkapéldány>/backend/.venv` létezik-e és NEM üres-e**
+(`ls <munkapéldány>/backend/.venv/bin/ | wc -l` — egy valódi telepített venv
+több tucat fájlt tartalmaz, egy csak `python3 -m venv`-vel létrehozott,
+installálatlan venv csak a néhány `activate*`/`pip*` szimlinket). Ha üres,
+törlése (nem a `pip install` megkerülése) állítja helyre a közös fallbackot.
+
+**Őrteszt:** nincs — a `python3 -m venv` parancs önmagában nem tiltott
+művelet (csak a `pip install` az, helyesen), tehát egy gépi őr nem tudná
+megkülönböztetni egy legitim, feltöltött helyi venv-et egy üres csapdától
+anélkül, hogy a csomagkészletet is ellenőrizné; az implementer-preambulum
+(`docs/execution/implementer-preamble-minimax.md`) bővítése a jövőbeli
+javítás. Részletek: `docs/reviews/e08-r28-review.md`, HANDOFF E08-R28
+bejegyzés.
+
+## L409 — Egy "route-élesítő" brief hallgatólagosan feltételezheti, hogy a caller-fed képernyők adathoz vannak kötve — mérd meg a példányosítást, ne a screen létezését (E08-R30, 2026-08-22)
+
+**Mért snag.** Az E08-R30 (Epic 8 ZÁRÓ köre) 2026-08-18-i brief-je azt írta
+elő, hogy öt/hat MEGLÉVŐ gamifikációs képernyőt (Hub, Achievements, Quests,
+Streak V2, Reward Inbox) kell "útvonalon élesíteni" — az `allowed_paths`
+egyetlen production fájlt engedett, `lib/app/routing/app_route.dart`-ot (a
+route-string katalógus). A pre-flight mérése (`grep -rln
+"GamificationHubScreen(\|AchievementsScreen(\|…" lib/`) **nulla** találatot
+adott a screenek saját fájljain kívül — 29 korábbi kör mindegyike szándékosan
+caller-fed (tiszta, adatot csak konstruktor-paraméterként fogadó) widgetként
+építette ezeket, adat-forrás (Riverpod provider) NÉLKÜL, mert egyik korábbi
+brief sem volt a UI-bekötésről. A route-élesítéshez emiatt KÉT dolog hiányzott
+egyszerre a briefből: (1) a tényleges `GoRoute` wiring-owner fájl
+(`app_router.dart`, ismert L94/L97 mintázat), ÉS (2) egy teljes,
+korábban soha meg nem épített Riverpod-provider/DI-réteg a screenek
+adatához — miközben a brief kifejezetten TILTOTTA `lib/features/**`
+módosítását ("ez a kör útvonalat élesít és dokumentál, nem funkciót épít").
+
+**Mérés, ami a feloldást lehetővé tette.** A repository (`GamificationRepository`)
+DI-magja (`KeyValueStore`, `AppLogger`) MÁR publikus, app-szintű Riverpod
+providerekből épül (`keyValueStoreProvider` —
+`lib/core/storage/storage_providers.dart`, `appLoggerProvider` —
+`lib/core/logging/logger_provider.dart`), amiket MÁS core-kód már ma is
+használ (`persisted_preference.dart`). Ez azt jelentette, hogy a hiányzó
+ragasztó felépíthető KIZÁRÓLAG a MOST engedélyezett `app_router.dart`-ban,
+csak importokkal a tiltott `lib/features/gamification/**`/`lib/core/**` alól
+— fájlírás egyikben sem történt. Ahol a repository-nak ELVILEG SEM volt
+perzisztált adata egy screen-mezőhöz (pl. quest-progressz, achievement-
+progressz — a `GamificationRepository` interfészen nincs ilyen metódus),
+a helyes válasz dokumentált `// TODO(EXX-RYY):` no-op volt, ÚJ domain-logika
+kitalálása nélkül — ezt a review egyenként ellenőrizte (pl. a
+`RewardInboxItem` domain típus egy `RewardEvent`-et hordoz, amit a storage-
+szintű `GamificationInboxItem` nem — a no-op tehát VALÓDI hiányt jelzett, nem
+kényelmi kibúvót).
+
+**Szabály.** Mielőtt egy "route-élesítő" brief pre-flightjában elfogadod,
+hogy egy MEGLÉVŐ screen "csak" bekötésre vár: `grep -rln
+"<ScreenClassName>("` a teljes `lib/`-ben, a screen saját fájlján kívül.
+Nulla találat ÉS a screen konstruktora `required this.<data>` paramétereket
+vár (nem `ConsumerWidget`) ⇒ nincs élő adatforrás, a route-élesítés egy
+be nem épített DI-réteget is igényel. Ha az adatforrás DI-magja
+(`Provider`/`Repository`) már publikus core-providerekből építhető, a
+ragasztó a most amúgy is engedélyezendő wiring-owner fájlba (jellemzően
+`app_router.dart`) mehet §0.0 revízióval — ez NEM lista-tágítás egy
+elérhetetlen célra, mert a tényleges DI-mag már létezik és publikus. Ahol
+a perzisztált adat MAGA hiányzik, no-op + TODO + nyitott tétel a helyes
+válasz, nem új domain-szabály kitalálása a tiltott zónában.
+
+**Őrteszt:** nincs — ez egy pre-flight MÉRÉSI fegyelem (a fenti `grep`
+parancs), nem egy automatizálható gépi kapu; a review-oldali ellenőrzés
+(minden no-op callback mögött VALÓDI hiányzó publikus metódus van, nem csak
+lustaság) szintén emberi/reviewer-mérés. Részletek:
+`docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md` §0.0,
+`docs/reviews/e08-r30-review.md`.
+
+## L410 — Egy `round-merge-lock.sh` alá írt `fetch+reset --hard origin/main` a záró rituálék KÖZBEN eldobja a MÁR MEGÍRT, még nem commitolt HANDOFF/RTM szerkesztést (E09-R01, 2026-08-22)
+
+**Mért snag.** A záró rituálék sorrendjében (HANDOFF §0.0/§6 + RTM sor +
+queue pending→done, mind EGY commitban, D2) a HANDOFF.md-t és az RTM-et
+Edit-tel MÁR megszerkesztettem a checkout-olt `main`-en, MIELŐTT a
+`tools/round-merge-lock.sh bash -c 'git fetch … && git checkout -q main &&
+git reset -q --hard origin/main'` parancsot futtattam volna egy "utolsó
+pillanatban ellenőrzöm, nem mozdult-e a main" szándékkal. A `reset --hard`
+a working tree-t az `origin/main`-re állítja — beleértve a MÉG NEM
+commitolt, saját szerkesztésű fájlokat is —, tehát mindkét doksi-módosítás
+NÉMÁN eltűnt (`git status --short` üres lett a reset után). A hiba csak
+azért nem lett adatvesztés, mert a szerkesztések tartalma még a beszélgetés
+kontextusában élt, és újra alkalmazhatóak voltak — egy hosszabb, kézzel írt
+HANDOFF-szakasz esetén ez visszaállíthatatlan munka-elvesztés lett volna.
+
+**Szabály.** A záró rituálék blokkjában a "mozdult-e a main" ellenőrzés
+(`git fetch origin main && git rev-parse origin/main`) és egy ESETLEGES
+resync **MINDIG a doksi-szerkesztések ELŐTT** fusson, nem közben/után —
+vagy ha egy resync szükségessége csak a szerkesztések UTÁN derül ki,
+`git status --short` kötelező ELSŐ lépés a `reset --hard` előtt, és ha az
+nem üres, a resync módja `git stash` (majd `git stash pop` a reset után),
+SOSE csupasz `reset --hard`. Ez ugyanaz a hibaosztály, mint a
+[[shared-tree-git-stash-hazard]] (auto-memory) figyelmeztetése egy MÁSIK
+parancsra (`git checkout`/`reset` felülír committalan munkát) — itt a
+`round-merge-lock.sh` wrapper ártatlan volta (csak sorosít) elfedte, hogy
+a BENNE futtatott parancs önmagában is destruktív.
+
+**Kapcsolódó, kisebb mérés ugyanebben a körben:** a `router-ci.yml`
+`on.push.paths` listája (`tools/**`, `docs/execution/**`, `docs/rounds/**`,
+`.ai/**`, a két workflow-fájl) **nem** tartalmazza `docs/reviews/**`-t — ha
+a merge előtti utolsó push csak a review-dokumentumot viszi fel (mint itt),
+a push NEM indít új Router CI futást a pontos HEAD SHA-n, és az
+exact-SHA merge-kapuhoz (ADR 0086 §2) egy kézi `gh workflow run
+router-ci.yml --ref <branch>` (`workflow_dispatch`) szükséges, mielőtt a
+merge mehetne.
+
+**Őrteszt:** nincs — mindkettő orchestrátor-oldali munkafolyamat-fegyelem,
+nem gépi kapu. Részletek: ez a session (E09-R01), a záró rituálék
+lépéssora `docs/execution/08-round-brief.md` §7 / `sdd-round-driver` skill
+§6 mellett.
+
+## L411 — Egy migráció-láncoló kör `allowed_paths`-a nem fedte a MEGLÉVŐ downgrade-tesztet, amit a saját láncolási döntése tör (E09-R02, self-heal H3, 2026-08-22)
+
+**Mért gyökérok.** Az E09-R02 brief §0.0/§5 pontja kötelezővé tette, hogy az
+új migráció (`e09_r02_0002`) a MEGLÉVŐ `e01_r12_0001` fejére láncolódjon
+(`down_revision = "e01_r12_0001"`) — ez helyes, hiszen Alembicnek egyetlen
+feje lehet. Csakhogy a meglévő
+`backend/tests/test_migrations.py::test_downgrade_one_revision_removes_application_schema`
+egyetlen-migrációs világot feltételezett: `alembic downgrade -1` a fejtől
+== `users`/`user_settings` eltűnik. Két láncszemmel ez a feltevés
+szükségszerűen hamissá válik (`downgrade -1` csak a LEGÚJABB migrációt
+vonja vissza), de a fájl nem szerepelt az `allowed_paths`-on — a §0.0
+pre-flight csak a router-regisztráció (`main.py`) korábbi hiányát vette
+észre, a downgrade-teszt csatolt feltevését nem. Az implementer helyesen
+`blocked`-ot jelzett a §0 STOP-protokoll szerint ahelyett, hogy a listát
+csendben tágította vagy a tesztet felügyelet nélkül átírta volna
+(`.pipeline/HALTED`, halt=H3, halted_at=2026-08-22T12:41:38+00:00).
+Reprodukálva függetlenül: `cd backend && python -m pytest
+tests/test_migrations.py -q` → `AssertionError: assert 'users' not in
+{'alembic_version', 'user_settings', 'users'}`.
+
+**Szabály.** Egy migráció-LÁNCOLÓ kör (`down_revision` egy MEGLÉVŐ fejre
+mutat, nem `None`-ra) pre-flightjában a `backend/alembic/versions/`
+grep-elése ÖNMAGÁBAN nem elég — a `backend/tests/test_migrations.py`
+(vagy az adott projekt ekvivalens migráció-lifecycle tesztje) downgrade-
+irányú eseteit is át kell nézni, mert egy `downgrade -1`/`downgrade N
+lépés`-alapú asszerció tipikusan az AKTUÁLIS láncot (egy migráció = egy
+teljes séma-visszaállás) feltételezi, és minden LÁNCBŐVÍTŐ kör törheti azt
+— nem a régi vagy az új migráció HIBája, hanem a lánc hosszának
+szükségszerű következménye. Ha a pre-flight ezt nem méri fel, a helyes
+javítás egy §0.1 self-heal brief-revízió: a downgrade-teszt fájl felvétele
+az `allowed_paths`-ra (szűken, csak az az egy fájl, nem a teljes
+`backend/tests/` könyvtár), és az implementer instrukciója, hogy a tesztet
+két esetre bontsa (egy lépés downgrade a fejtől vs. downgrade a base-ig).
+
+**Őrteszt:** `tools/tests/test_e09_r02_migration_downgrade_test_scope.py`
+— `audit_legacy_scope`-pal bizonyítja, hogy a valós brief `allowed_paths`-a
+MOST fedi `backend/tests/test_migrations.py`-t, és hogy egy szomszédos,
+ehhez a körhöz nem tartozó backend-teszt fájl (`test_auth.py`) továbbra is
+hatókörön kívül marad — a self-heal fix előtti brief-tartalommal
+függetlenül reprodukálva `ok=False` (`path outside allowed scope:
+backend/tests/test_migrations.py`), a fix utánival `ok=True`. Részletek:
+`docs/rounds/e09-r02-backend-community-module-and-migration.md` §0.1,
+`.pipeline/HALTED` (E09-R02, H3, 2026-08-22).
+
+## L412 — Az orchestrátor saját, ideiglenes prompt-fájlja a megosztott munkapéldányban hamis `scope_audit=VIOLATION`-t okoz (E09-R02 folytatás, 2026-08-22)
+
+Amikor egy folytató (nem `docs/rounds/`-beli) prompt-fájlt egy `mm-round.sh`/
+`codex-round.sh`-nak átadott kör-munkapéldányba írok (pl.
+`/home/ubuntu/ss-mm-<kör>/.pipeline-continue-<kör>.md`), a wrapper záró
+scope-auditja (`round-scope-audit.sh` → `tools/scope-audit.py`) a
+`scope_base` (a futás INDULÁSAKOR mért HEAD) és a futás VÉGI munkafa között
+minden változást néz — beleértve az UNTRACKED fájlokat is. Az orchestrátor
+saját, sosem commitolandó promptfájlja ilyenkor "path outside allowed
+scope"-ként jelenik meg, és a wrapper a valóban `done`-nal záró implementer
+futása fölé `status=stopped`-et ír (mérve: `.codex-round-status`
+`implementer_status=done` + `scope_audit=VIOLATION` egyszerre, 2026-08-22
+13:22). A valódi implementer-diff (`git diff <scope_base>..HEAD`, azaz a
+COMMITOLT változás) eközben tiszta volt — a "sértés" kizárólag az
+orchestrátor saját, a munkafán hagyott artefaktuma volt.
+
+**Szabály.** Az implementernek átadott folytató/kiegészítő promptot NE a kör
+git-munkapéldányába írd (`Write` a `ss-*` alá) — használj egy a repón kívüli
+útvonalat (pl. a session scratchpadja), vagy ha a munkapéldányba muszáj írni,
+a dispatch UTÁN, a jelzésfájl elolvasása ELŐTT töröld, és a
+`scope_audit=VIOLATION`/`status=stopped` jelzést az `implementer_status=done`
+mezővel együtt vizsgáld ki, mielőtt H3-ként elfogadnád — egy stray, saját
+kezűleg odahelyezett fájl nem a implementer hatóköri sértése. A tényleges
+scope-ítéletet mindig a `tools/scope-audit.py --repo <klón> --brief <brief>
+--base <helyes bázis>` kézi, tiszta újrafuttatása adja, sosem a wrapper
+egyetlen jelzőbitje bemondásra.
+
+**Őrteszt:** nincs — eljárási/orchestrátor-fegyelmi tanulság, nem
+mércehiba; a `tools/scope-audit.py` maga helyesen mérte azt, amit kapott
+(egy valódi untracked fájlt), a hiba az orchestrátor saját munkafa-
+higiéniájában volt.
+
+## L413 — Az L411 minta egy láncszemmel mélyebben: egy migráció-láncoló kör MÁSODIK cross-round tesztje is a `allowed_paths`-on kívül esett, mert az L411 fixe hardcode-olt maradt (E09-R03, self-heal H3, 2026-08-22)
+
+**Mért gyökérok.** Az E09-R02 self-heal ([[L411]]) a `backend/tests/
+test_migrations.py::test_downgrade_one_revision_drops_only_community_tables`
+tesztet a KÉT-migrációs világra ("`downgrade -1` a fejtől == a Community
+táblák eltűnnek, `users`/`user_settings` marad") javította ki — konkrét
+táblaneveket és egy `-1` relatív lépésszámot hardcode-olva, NEM egy
+lánc-agnosztikus ellenőrzést írva. Amikor az E09-R03 a saját, helyes
+migráció-láncolási döntésével (`e09_r03_0003.down_revision =
+"e09_r02_0002"`) egy HARMADIK lánctagot adott a fejhez, ugyanaz a minta
+törvényszerűen megismétlődött, és egy MÁSODIK fájlban is: a
+`backend/tests/community/test_profile_schema.py` két teszttje
+(`test_alembic_upgrade_head_applies_community_migration` — pinned
+`set(script_heads) == {"e09_r02_0002"}`; `test_alembic_downgrade_
+drops_community_tables` — szintén `downgrade -1`-re épült) SZINTÉN piros
+lett, és SZINTÉN nem volt az `allowed_paths`-on (`.pipeline/HALTED`,
+halt=H3, halted_at=2026-08-22T14:45:39+00:00). Az implementer (minimax,
+branch `minimax/e09-r03-public-identity-and-handle-policy`, HEAD `3cca3ddd`)
+helyesen `stopped`-öt jelzett a §10.4-ben pontosan diagnosztizálva mindhárom
+törött asszerciót, ahelyett hogy a listát csendben tágította vagy a
+teszteket felügyelet nélkül átírta volna. Reprodukálva függetlenül: `cd
+backend && .venv/bin/python -m pytest tests/test_migrations.py
+tests/community/test_profile_schema.py -q` → 3 FAILED.
+
+**Szabály.** Egy migráció-LÁNCOLÓ kör self-heal-je NE a következő
+láncszemre optimalizált, ismét hardcode-olt javítást adjon — az csak
+elhalasztja a UGYANEZT a halt-ot a KÖVETKEZŐ láncoló körre (itt: E09-R04+,
+~29 hátralévő Epic-9 kör). A tartós javítás lánc-toleráns ellenőrzésre vált:
+(1) a "head tartalmazza X-et ŐSKÉNT" mintát (`ScriptDirectory.
+walk_revisions(heads[0], "base")`-szal bejárva) a "head == X" pinned
+assertion helyett; (2) egy migráció REVERZIBILITÁSÁNAK próbáját a
+`downgrade(config, "<explicit cél-revízió>")` explicit hívással a
+`downgrade(config, "-1")` relatív hívás helyett, mert a "-1" jelentése a
+lánc hosszától függ, az explicit cél-revízió nem; (3) egy "egy lépés
+downgrade a fejtől" próbát a tábla-HALMAZ változásának mérésével (`tables_
+after < tables_at_head` + a bázis-táblák jelenléte), NEM a legutóbb
+hozzáadott tábla NEVÉNEK kimondásával, mert az minden körben más. A
+pre-flight checklistje (L411 szabálya) ettől függetlenül érvényben marad —
+ez a lecke a JAVÍTÁS ALAKJÁT pontosítja, nem a felismerés szükségességét.
+
+**Őrteszt:** `tools/tests/test_e09_r03_migration_chain_test_scope.py` —
+`audit_legacy_scope`-pal bizonyítja, hogy a valós E09-R03 brief
+`allowed_paths`-a MOST fedi mindkét fájlt
+(`backend/tests/test_migrations.py` és
+`backend/tests/community/test_profile_schema.py`), és hogy egy szomszédos,
+ehhez a körhöz nem tartozó backend-teszt fájl (`test_auth.py`) továbbra is
+hatókörön kívül marad — a self-heal fix előtti brief-tartalommal
+függetlenül reprodukálva mindkét fájlra `ok=False`, a fix utánival
+`ok=True`. Részletek: `docs/rounds/e09-r03-public-identity-and-handle-
+policy.md` §0.1, `.pipeline/HALTED` (E09-R03, H3, 2026-08-22).
+
+## L414 — Egy 282/282-zöld teszt-suite mellett is élt egy MAJOR biztonsági hiba: a reviewer SAJÁT mutation-próbája fogta meg, amit egyetlen teszt sem (E09-R03, 2026-08-22)
+
+**Tünet.** Az E09-R03 (Community handle policy) implementer-jelentése és a
+teljes gate zöld volt: 282/282 backend teszt, `ruff` tiszta, a Flutter-oldali
+round-gate MINDEN GATE ZÖLD. A brief §6.1 explicit "valódi-sértés próbát"
+is tartalmazott az A1 (Unicode-ütközés) cellára, és az implementer ezt le is
+futtatta (`test_swap_unique_index_breaks_unicode_collision_detection`).
+Mégis: a `security-reviewer` subagent egy önálló, a jelentett tesztkészlettől
+FÜGGETLEN mutation-próbával (a `_client_key` rate-limit-kulcs függvényt 60,
+egyenként más hamis `X-Forwarded-For` fejléccel hívta) egy MAJOR-t talált —
+a rate limiter a spoofolható fejlécen 60/60 arányban bypassolható volt, és
+**egyetlen a kör 75+ tesztje közül sem** mérte ezt, mert egyik teszt sem
+rotálta a fejlécet több hívás között.
+
+**Egy második, önálló mérés ugyanebben a körben, a reviewer saját
+próbájából:** a `normalize()` (NFKC+casefold) függvényt identity-függvényre
+cserélve a TELJES `test_handle_policy.py` suite zöld maradt — az A1
+"Unicode-ütközés" cím alatt szereplő DB-szintű tesztek (`test_unicode_
+collision_rejected_by_unique_index` stb.) a `assign_handle`-t KÖZVETLENÜL,
+már előre normalizált stringgel hívják, nem a valós HTTP-belépési ponton
+(`/claim`) RAW Unicode bemenettel — tehát a DB-unique-index enforcement
+helyesen mérve van, de a "raw input tényleg normalizálódik-e a valós
+útvonalon" tulajdonság NINCS.
+
+**Szabály.** A `docs/execution/09-review-report.md` alapelve ("a zöld gate
+NEM bizonyíték") nem elvi óvatosság, hanem ISMÉTELTEN mért tény: a review
+kötelező lépése a SAJÁT, a jelentett tesztkészlettől független
+mutation-próba (rontsd el a kódot → nézd meg, PIROSSÁ válik-e BÁRMELYIK
+teszt → ha nem, a lefedettség hiányos, függetlenül a jelentett zöld
+számoktól). Kiemelten kockázatos minta: (1) egy paraméterezett bemenet
+(rate-limit kulcs, session-azonosító, feature-flag), amit SOHA nem
+variálnak több hívás/kérés között egy teszten belül; (2) egy "unit"-szintű
+DB-teszt, ami a policy-réteg (`normalize`/`validate`) FÜGGVÉNYÉT megkerülve,
+kézzel előre kiszámolt bemenettel hívja a service-réteget — ez a policy és a
+service közötti VALÓS drótot hagyja tesztelten kívül, még ha mindkét oldal
+külön-külön helyesen tesztelt is.
+
+**Őrteszt:** a javító körben mindkét mért hiba saját, a reviewer által
+FÜGGETLENÜL (a javítás előtti kódra visszaállítva) piros-majd-zöld
+igazolással kapott regressziós tesztet kapott —
+`test_rate_limit_key_is_socket_peer_not_xff` és
+`test_duplicate_claim_returns_409_not_500`
+(`backend/tests/community/test_handle_policy.py`). Részletek:
+`docs/reviews/e09-r03-review.md` (F1, F2), `docs/reviews/e09-r03-security-
+review.md`.
+
+## L415 — Az [[L411]]→[[L413]] minta HARMADIK láncszeme: egy TÁBLA-halmazra generalizált teszt egy OSZLOP-szintű migrációnál ismét megtört (E09-R04, self-heal, 2026-08-22)
+
+**Mért gyökérok.** [[L411]] (E09-R02) és [[L413]] (E09-R03) mindketten a
+`backend/tests/test_migrations.py::
+test_downgrade_one_revision_drops_only_community_tables` tesztet javították,
+de mindkét javítás hallgatólagosan feltételezte, hogy minden jövőbeli
+fejmigráció legalább egy TÁBLÁT ad hozzá/vesz el (`tables_after <
+tables_at_head`). Az E09-R04 (ADR 0398 §1) egy tisztán OSZLOP-szintű
+migrációt írt elő — két új oszlop a MEGLÉVŐ `community_privacy_settings`
+táblán, új tábla és a `CommunityProfile` bővítése egyaránt tiltva —, ezért a
+downgrade a tábla-HALMAZT nem változtatja, és a szigorú részhalmaz-reláció
+DETERMINISZTIKUSAN hamis lett. Az implementer (minimax,
+`minimax/e09-r04-profile-privacy-and-audience-policy`, HEAD `fd201589`)
+helyesen `blocked`-ot jelzett a §6 mind a hat acceptance-cellájának zöldje
+mellett is, ahelyett hogy a tesztet felügyelet nélkül átírta vagy a listát
+csendben tágította volna. Reprodukálva függetlenül: `cd backend && python -m
+pytest tests/test_migrations.py -q` →
+`AssertionError: one-step downgrade must remove at least the head
+migration's own tables`.
+
+**Szabály.** A tábla-szintű generalizálás ([[L413]]) nem elég: egy
+migráció-lánc downgrade-invariánsát TELJES séma-pillanatképpel (tábla →
+oszlophalmaz leképezés, nem csak a táblanevek halmaza) kell mérni, és bármi
+VÁLTOZÁS (tábla ÉS/VAGY oszlop eltűnése) elégségesnek kell számítson — ez
+egyszerre fedi a tábla-szintű ÉS az oszlop-szintű migrációkat, tehát az
+Epic 9 hátralévő körei közül egyiknek sem kell ezt a tesztet még egyszer
+megnyitnia, függetlenül attól, hogy tábla- vagy oszlop-szintű változást
+hoz-e. Egy migráció-LÁNCOLÓ kör pre-flightja emiatt nem elégedhet meg azzal,
+hogy a `test_upgrade_head_matches_current_orm_schema` (`compare_metadata`)
+upgrade-oldali megfelelőjét ellenőrzi — a downgrade-oldali tesztek
+ASSZERCIÓJÁNAK tényleges alakját (nem csak a nevét) is át kell nézni, mert
+egy korábbi self-heal javítás formája (tábla-halmaz) önmagában is
+implicit feltevést hordozhat, amit egy KÉSŐBBI kör megsérthet.
+
+**Őrteszt:** `backend/tests/test_migrations.py::
+test_downgrade_one_revision_drops_only_community_tables` mostantól
+séma-pillanatkép-alapú (tábla → oszlophalmaz), nem tábla-halmaz-alapú —
+a self-heal fix előtti (E09-R03-kori) alakkal az E09-R04 migrációja ellen
+függetlenül reprodukálva PIROS, a fix utánival ZÖLD. Részletek:
+`docs/rounds/e09-r04-profile-privacy-and-audience-policy.md` §0.1,
+`docs/adr/0398-profile-privacy-audience-policy-and-access-control.md`.
+
+## L416 — `round-land.sh --gate-test` egy zászló egy útvonalra: egy space-joined többútvonal-string a kombinált-HEAD gate-et "fájl nem létezik" hibával buktatja, nem a valódi tartalmat teszteli (E09-R05, orchestrátor önhiba, 2026-08-22)
+
+**Mért gyökérok.** A `tools/round-land.sh --gate-test <útvonal>` a flaget egy
+Bash tömbbe gyűjti (`gate_tests+=("$2")`), tehát a script MINDEN egyes
+teszt-útvonalhoz KÜLÖN `--gate-test` hívást vár. Az E09-R05 landolásakor az
+orchestrátor egyetlen, space-joined stringet adott át
+(`--gate-test "test/features/community/domain/community_domain_test.dart
+test/core/architecture_dependency_test.dart"`), abból a (téves) elvárásból,
+hogy a `tools/round-gate.sh`-hoz hasonlóan a script maga is
+argumentum-listaként fogadja a több útvonalat. Az eredmény: a `flutter test`
+egyetlen, a fájlrendszeren nem létező "útvonalat" kapott
+(`Failed to load ".../community_domain_test.dart
+test/core/architecture_dependency_test.dart": Does not exist.`), a kombinált-
+HEAD gate PIROS-ra váltott, a script `blocked`-ot jelzett, és a merge-zár
+tisztán felszabadult (nem maradt csonka állapot). A rendes independent `/tmp`
+gate-futtatás UGYANAZZAL a két útvonallal, `tools/round-gate.sh`-sal, KÉT
+KÜLÖN pozicionális argumentumként átadva, mindeközben helyesen zöld volt —
+a hiba tisztán a `round-land.sh` hívási alakjában volt, nem a kódban.
+
+**Szabály.** `tools/round-land.sh` több gate-teszt-útvonalhoz annyi
+`--gate-test <útvonal>` zászlót adj át, ahány útvonal van — SOSE egy
+space-joined stringet egyetlen zászlóban. Ha a script `PIROS (kilépési kód
+1)`-et jelez egy "Does not exist" üzenettel egy olyan útvonalra, ami valós
+fájlneveket space-szel összefűzve tartalmaz, az a hívási alak hibája, nem a
+tényleges tartalomé — nézd meg a `.pipeline/land-<kör>.log`-ot (a script a
+saját stdout/stderr-jét oda irányítja át, NEM a hívó terminál/task-output
+fájljába), mielőtt a kódot gyanúsítanád.
+
+**Őrteszt:** nincs — a hívási hiba egy orchestrátor-oldali argumentum-alak
+tévesztés volt, nem a script vagy a kód hibája; a helyes hívással a landolás
+elsőre sikerült. Részletek: `.pipeline/land-E09-R05.log`.
+
+## L417 — Egy push, ami csak `docs/reviews/**`-et módosít, NEM triggereli a `router-ci.yml`-t: a Router-CI exact-SHA bizonyítékhoz manuális `workflow_dispatch` kell (E09-R05, 2026-08-22)
+
+**Mért gyökérok.** A `router-ci.yml` `on.push.paths` glob-ja
+(`tools/**`, `docs/execution/**`, `docs/rounds/**`) NEM tartalmazza a
+`docs/reviews/**`-et. Az E09-R05 review-jóváhagyó commitja
+(`25ac7f75`, csak `docs/reviews/e09-r05-review.md`-t módosította) ezért NEM
+indított új Router CI futást — a legutóbbi push-triggerelt Router CI run
+egy KORÁBBI, ősi commiton (`8f598c28`, a javító kör handoff-kiegészítése,
+ami ÉRINTETTE a `docs/rounds/**`-et) állt zölden. A pipeline-prompt
+"exact-SHA" mércéje (ADR 0086 §2, §3.0) szerint a merge SHA-n kell zöld
+Router CI evidenciának lennie — egy ŐS commit zöldje ELVILEG elfogadható
+lenne, ha bizonyítható, hogy a Router-CI-releváns fájlkészlet a két commit
+között nem változott, de a tiszta, kétségtelen bizonyíték az, ha a
+`router-ci.yml` `workflow_dispatch:` trigger-jét MANUÁLISAN a merge-jelölt
+branch-re dispatch-eled — ez a workflow tényleg támogatja
+(`on: workflow_dispatch:` a `push:` mellett), és a run `headSha`-ja
+PONTOSAN a dispatch-kori branch-csúcsra áll.
+
+**Szabály.** Mielőtt egy review-only (vagy más, a Router-CI trigger-útvonalait
+NEM érintő) commit után Router-CI exact-SHA evidenciát keresnél
+`gh run list --workflow router-ci.yml`-lel: ha a legutóbbi találat
+`headSha`-ja NEM egyezik a tényleges merge-jelölt HEAD-del, NE feltételezd,
+hogy a run "hamarosan megjelenik" — ellenőrizd a workflow `on.push.paths`
+listáját (jelenleg: `tools/**`, `docs/execution/**`, `docs/rounds/**`), és ha
+egyik sem egyezik az utolsó push megváltozott fájljaival, dispatch-eld
+manuálisan (`gh workflow run router-ci.yml --ref <branch>`) egy exact-SHA
+futásért, ahelyett hogy egy sosem megjelenő push-triggerelt run-ra várnál.
+
+**Őrteszt:** nincs — operatív/orchestrátor-oldali eljárási lecke, nem
+kód-szintű mérce. Részletek: `docs/reviews/e09-r05-review.md`, a `25ac7f75`
+és `8f598c28` közti `git diff --stat` (kizárólag `docs/reviews/e09-r05-review.md`).
+
+## L418 — Egy backend Kör "Következmények" szakasza kioszthat felelősséget egy KÉSŐBBI, még meg sem írt kör számára — a batch-elt brief ezt könnyen elveszíti (E09-R06, orchesztrátor pre-flight, 2026-08-22)
+
+**Mért tény.** `docs/adr/0396-…md` (E09-R02, Kör 2) "Következmények"
+szakasza explicit kimondta: *"A Kör 6 (onboarding, explicit
+profil-létrehozás) a `community_profiles` sor tényleges service-szintű
+létrehozását adja; ez a kör [Kör 2] csak a modellt, a migrációt és a
+modul-boundary olvasó/teszt útját."* Az Epic 9 mind a 32 körének briefje
+EGY batchben készült (PR #405), jóval a Kör 2 megírása UTÁN — a batch-elt
+Kör 6 brief mégis `backend/**`-et teljes egészében tilos zónának
+jelölte, és a §2 "Jelenlegi állapot" tévesen azt állította, hogy a kör
+"az ELSŐ, ami ténylegesen HTTP-n keresztül hívja" a Kör 3/4 policy-kat —
+holott `grep -rn "INSERT INTO community_profiles" backend/` nulla
+találatot adott, tehát semmi nem hívta még HTTP-n azokat, és nem is
+tudta volna, mert nem volt mit hívnia.
+
+**Gyökérok.** A batch-brief-generálás (egyetlen menetben, 32 brief) nem
+kereste vissza szisztematikusan a KORÁBBAN MÁR MEGÍRT, kapcsolódó ADR-ek
+"Következmények" szakaszait olyan mondatokért, amik egy KÉSŐBBI kör
+sorszámát nevezik meg felelősként. Egy ilyen mondat könnyen csak a
+korábbi ADR szövegében marad, és a későbbi kör briefje — más forrásból,
+más gondolatmenet mentén — újraírja a scope-ot anélkül, hogy tudna róla.
+
+**Szabály.** A §1 pre-flight mérési kötelezettség ("grep-eld ki a
+hivatkozott enum-értékeket/mezőket a tényleges kódból") egy ÚJ, explicit
+alesetet kap: ha egy brief `backend/**`-et (vagy bármilyen más réteget)
+teljes egészében tilos zónának jelöl, ELLENŐRIZD, hogy a KAPCSOLÓDÓ,
+MÁR MEGÍRT ADR-ek "Következmények" szakasza nem oszt-e ki explicit
+felelősséget PONT ennek a körnek a sorszámára
+(`grep -rn "Kör <N>" docs/adr/*.md` a kör saját sorszámára). Ha igen, és
+a brief mégsem engedi a szükséges fájlokat, az egy mért brief-hiány,
+NEM egy tudatos scope-döntés — a §0.0 pre-flight-revízió feloldja
+(ADR 0087 §2, saját, még nem merge-elt brief), szűken, csak az explicit
+kiosztott felelősségre.
+
+**Őrteszt:** nincs — brief-minőségi/pre-flight-eljárási lecke, nem
+kód-szintű mérce. Részletek: `docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md`
+Kontextus szakasz, `docs/rounds/e09-r06-profile-onboarding-and-editing.md` §0.0.
+
+## L419 — Egy `validate()`-stílusú normalizáló függvény visszatérési értékének eldobása és újraszámolása NEM ekvivalens újraimplementáció — a hiányos verzió Unicode-ekvivalens bemeneteket szétválaszt (E09-R06, review F2, 2026-08-22)
+
+**Mért tény, reprodukálva.** `backend/app/community/services/profile_service.py::create_profile`
+meghívta `handle_policy.validate(handle)`-t (ami NFKC-normalizálást +
+casefold-ot + strip-et végez, és a normalizált formát adja vissza), de
+ELDOBTA a visszatérési értéket, és az `assign_handle`-nek egy SAJÁT,
+hiányos `handle.strip().casefold()` normalizációt adott át — NFKC lépés
+nélkül. `unicodedata.normalize('NFD', 'café').strip().casefold() !=
+unicodedata.normalize('NFC', 'café').strip().casefold()` (a service
+hibás útja MEGKÜLÖNBÖZTETI a két Unicode-ekvivalens formát), míg a
+policy `normalize()`-ja a kettőt UGYANARRA az értékre képezi. Egy
+független `security-reviewer` agent ugyanezt a mintát élesebb szögből
+mérte: egy fullwidth karakteres handle (`"Ａbcde"`, U+FF21) és az ASCII
+`"abcde"` a policy szerint UGYANAZ, de a hibás normalizáció mindkettőt
+sikeresen létrehozta — impersonation-vektor egy közösségi funkcióban.
+
+**Gyökérok.** A hívó látta, hogy `validate()`-nek van mellékhatása
+(kivétel dobása malformed/reserved/blocked handle-re), és azt hitte,
+elég meghívni a validáció ELVÉGZÉSÉÉRT — nem vette észre, hogy a
+függvény EGYÚTTAL a kanonikus normalizált formát is visszaadja, és hogy
+EZT a formát kell a downstream uniqueness-enforcementnek használnia, nem
+egy helyben újraszámolt, hiányos verziót.
+
+**Szabály.** Review-mérce: ha egy `validate()`/`normalize()`-stílusú
+függvény hívása után a hívó ÚJRA elvégzi (akárcsak részben) ugyanazt a
+transzformációt egy MÁSIK kódúton, ahelyett hogy a függvény visszatérési
+értékét használná, az egy önálló review-ellenőrzési pont — a két
+implementáció NEM garantáltan ekvivalens, és a divergencia tipikusan
+Unicode-normalizációs (NFKC/NFD/NFC) vagy hasonló, "ritkán tesztelt
+él" jellegű transzformációkon bukik ki, ahol a hiányos verzió a
+gyakori (ASCII) bemeneten helyesen viselkedik, csak a ritka bemeneten
+tér el — ezért egy sima manuális teszteléssel könnyen átcsúszik.
+
+**Őrteszt:** `backend/tests/community/test_profile_service.py::test_unicode_equivalent_handle_is_rejected_as_taken`
++ `test_unicode_normalization_matches_in_service_layer` (javító kör 1,
+`9592638e`).
+
+## L420 — A célzott `round-gate.sh` NEM fedi a `test/ui/ui_inventory_test.dart`-hoz és `test/tooling/*_guard_test.dart`-hoz hasonló, csak a TELJES suite-ban futó, kereszt-fájlrendszeres "screen-számláló" és "regex-őr" teszteket — új production screen vagy egy szerencsétlen doc-komment-szöveg csak a CI-ban bukik ki (E09-R06, 2026-08-22)
+
+**Mért tény.** Az E09-R06 két javító kör után zöld targeted gate-tel
+(`tools/round-gate.sh` a brief `gate_tests` listájával) rendelkezett, de
+az ELSŐ exact-SHA `full-gate.yml` CI-dispatch mégis PIROS lett: (1)
+`test/ui/ui_inventory_test.dart` egy dinamikusan felderített
+production-screen-számot pinnelt (`hasLength(64)`), és a kör 2 ÚJ
+screent adott — a szám 66-ra nőtt, de semmi a targeted gate-ben nem
+futtatta ezt a tesztet, mert nincs a brief `gate_tests` listáján (nem is
+lehetne — a teszt a teljes `lib/`-et scanneli, nem egy konkrét
+feature-t). (2) `test/tooling/dio_factory_guard_test.dart` egy
+sor-szintű regex-őr (`\bDio\s*\(`), ami a `lib/` fát soronként vizsgálja
+— egy ÚJ fájl doc-kommentjének prózai szövege ("...dart:convert / Dio
+(architecture-dependency guard...") véletlenül illeszkedett a mintára.
+
+**Gyökérok.** Ez a két tesztosztály ("stabil inventory-szám" és
+"kereszt-fájlrendszeres regex-őr") STRUKTURÁLISAN nem illeszthető be egy
+kör saját `gate_tests` listájába — nem egy feature-t tesztelnek, hanem a
+TELJES `lib/`-fa egy tulajdonságát. Emiatt minden olyan kör, ami ÚJ
+production screent ad VAGY egy doc-kommentben véletlenül egy őr
+mintájára illeszkedő szöveget ír, csak a teljes CI-suite-ban bukik meg —
+ez NEM egy hiba a kör briefjében, hanem a targeted-gate/full-suite
+kettéválasztás (ADR 0053) egy STRUKTURÁLIS, elfogadott vakfoltja.
+
+**Szabály.** Ne várd, hogy a targeted gate ("MINDEN GATE ZÖLD" a
+`round-gate.sh`-tól) egyenértékű legyen a teljes CI-suite-tal — ez a kör
+pontosan ezért kap KÖTELEZŐ exact-SHA CI-dispatchot merge előtt (ADR
+0053), nem helyettesíthető a helyi targeted gate-tel. Ha egy kör ÚJ
+`lib/features/**/presentation/screens/*_screen.dart` fájlt ad, számítson
+rá, hogy `test/ui/ui_inventory_test.dart` `hasLength(N)`-jét bővíteni
+kell — ezt a review-nak proaktívan ellenőriznie ÉRDEMES lenne (grep az
+új screen-fájlokra + a pinnelt szám összevetése), de a végső bizonyíték
+mindenképp a CI, nem a manuális számolás.
+
+**Őrteszt:** nincs — a lecke maga a "targeted gate ≠ full suite" határ
+dokumentálása, nem egy új kódmérce. Részletek:
+`docs/reviews/e09-r06-review.md` F9/F10, CI run
+[32595342705](https://github.com/wolfcasaba/strumsight/actions/runs/32595342705)
+(piros) → [32596780267](https://github.com/wolfcasaba/strumsight/actions/runs/32596780267)
+(zöld a javítás után).
+
+## L421 — Egy `threading.Thread`-alapú "két szál konkurensen ír" próba szinkronizáció NÉLKÜL nem determinisztikus — a Barrier a PONTOS SQL-döntési pontnál kell, nem a szál-indítás előtt (E09-R07, 2026-08-22)
+
+**Mért tény.** Az E09-R07 §6.1 kötelező valódi-sértés próbája
+(`test_swap_unique_constraint_breaks_a2`) két `threading.Thread`-et
+indított szinkronizáció NÉLKÜL, majd azt várta, hogy MINDKETTŐ átjusson
+az existence-check → INSERT ablakon, mielőtt bármelyik commitolna. A
+reviewer (nem az implementer) izolált `/tmp` klónban, a `round-gate.sh`-
+hoz IDENTIKUS interpreterrel 10 egymást követő futtatásból **7 PIROS, 3
+ZÖLD**-et mért — a teszt maga a `backend pytest` gate-lépés RÉSZE
+(a `round-gate.sh` a TELJES suite-ot futtatja, nem csak a brief
+`gate_tests` listáját), tehát ez a nem-determinizmus BÁRMELY jövőbeli,
+ehhez a fájlhoz nem is kapcsolódó kör CI-futását véletlenszerűen
+elpirosíthatta volna.
+
+**Gyökérok.** Két szál session-nyitási/ütemezési overhead-je eltérő —
+`t.start(); t.start(); t.join(); t.join()` NEM garantálja, hogy mindkét
+szál egyszerre éri el a kritikus SQL-döntési pontot; gyakran az egyik
+szál a MÁSIK indítása előtt már be is fejezi a teljes
+existence-check→INSERT→commit láncot, a második szál existence-checkje
+ekkor MÁR látja az első sorát, és a függvény short-circuitel (`count ==
+1`, a race sosem történt meg).
+
+**Szabály.** Egy race-t bizonyító teszt szinkronizációja NEM a szál
+BELÉPÉSI pontjára kerüljön (`threading.Barrier` a `writer()` elején),
+hanem a TÉNYLEGES döntési pontra — az E09-R07 javítása a Barrier-t a
+`follow_service._existing_follow` helperbe monkey-patchelte (a
+konkurens hívások itt szinkronizálnak, közvetlenül az existence-check
+előtt), így mindkét szál garantáltan egyszerre látja a "még nincs sor"
+állapotot. Review-mérce: egy `threading`-alapú race-próbát a review
+ISMÉTELVE (10–15×) futtasson egy izolált klónban, mielőtt elfogadja —
+egyetlen zöld futás (az implementer saját, egyszeri jelentése) nem elég
+bizonyíték egy nem-determinisztikus konstrukcióra.
+
+**Őrteszt:** `backend/tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2`
+(javító kör 1, `222a6782`) — a review saját, FÜGGETLEN 15×-ös futtatása
+15/15 zöldet adott a Barrier-fix után, szemben a fix előtti 7/10
+PIROS-sal.
+
+## L422 — Az L420 által már dokumentált "targeted gate ≠ full suite" vakfolt (`ui_inventory_test.dart` screen-számláló) a reviewer saját proaktív ellenőrzése NÉLKÜL ismét csak a CI-ban bukott ki (E09-R07, 2026-08-22)
+
+**Mért tény.** Az E09-R06-ban (L420) már pontosan dokumentált minta —
+egy ÚJ `lib/features/**/presentation/screens/*_screen.dart` fájl
+elavulttá teszi a `test/ui/ui_inventory_test.dart` kemény kódolt
+`hasLength(N)`-jét — L420 explicit javasolta: "ezt a review-nak
+proaktívan ellenőriznie ÉRDEMES lenne (grep az új screen-fájlokra + a
+pinnelt szám összevetése)". Az E09-R07 review (ugyanaz az orchesztrátor-
+session, ami L420-at is írta) ezt a proaktív grep-et NEM futtatta a CI-
+dispatch ELŐTT — a hibát csak a `full-gate.yml` TELJES suite-ja fedte
+fel (run 32602029738, PIROS), egy második CI-kör árán (~10 perc +
+javító kör).
+
+**Gyökérok.** Egy dokumentált lecke (L420) MEGLÉTE önmagában nem
+garantálja az ALKALMAZÁSÁT — a review-lépéssor nem tartalmazott explicit
+"ha a diff ÚJ `*_screen.dart` fájlt ad, ellenőrizd a `ui_inventory_test.dart`
+számlálóját" tételt, ezért a lecke egy KÖVETKEZŐ, hasonló diffnél is
+könnyen kimarad, ha csak a review-jelentés prózájában él.
+
+**Szabály.** A `sdd-round-review` skill review-lépéssorába (5. lépés,
+„próbatesztek") kerüljön be explicit tétel: ha a diff ÚJ `*_screen.dart`
+fájlt ad a `lib/features/**/presentation/screens/`-hez, a review a CI-
+dispatch ELŐTT futtassa le `grep -c "_screen.dart'" test/ui/ui_inventory_test.dart`
+(vagy magát a célzott tesztet a teljes `lib/`-fán) — ez a helyi
+ellenőrzés olcsóbb, mint egy második CI-kör.
+
+**Őrteszt:** nincs — a lecke a review-FOLYAMAT hiányát dokumentálja, nem
+egy kódmérce. Részletek: `docs/reviews/e09-r07-review.md` „Javító kör 2"
+szakasz, CI run
+[32602029738](https://github.com/wolfcasaba/strumsight/actions/runs/32602029738)
+(piros) → [32603023648](https://github.com/wolfcasaba/strumsight/actions/runs/32603023648)
+(zöld a javítás után).
+
+## L423 — Az [[L422]] UGYANEZT a hibát dokumentálta EGY körrel korábban, és a KÖVETKEZŐ kör (E09-R08) — ugyanaz az orchesztrátor-persona — mégis megismételte: egy prózában élő lecke önmagában nem elég, mechanikus kapu kell (E09-R08, 2026-08-23)
+
+**Mért tény.** E09-R07 review-ja (L422) explicit leírta a gyökérokot és a
+javasolt szabályt: "ha a diff ÚJ `*_screen.dart` fájlt ad ...,
+ellenőrizd a `ui_inventory_test.dart` számlálóját a CI-dispatch ELŐTT".
+E09-R08 új `safety_relationships_screen.dart`-ot adott — és az
+orchesztrátor (ugyanaz a Claude Sonnet 5 persona, ami L422-t írta) a
+CI-dispatch ELŐTT NEM futtatta le ezt a grep-et. Az első `full-gate.yml`
+run (32607713096) PIROS lett, pontosan ugyanazzal a tünettel
+(`Expected: <67>, Actual: <68>`), egy második CI-kör + egy 2. javító kör
+árán.
+
+**Gyökérok.** Az L422 szabálya egy SKILL-fájl prózájában él
+(`sdd-round-review` §5. lépés kiegészítéseként javasolva), nem egy
+futtatható artefaktumban — egy hosszú, több-száz-soros pipeline-prompt
+és egy hosszú review-folyamat közben egy prózában megfogalmazott
+"emlékezz erre" tétel könnyen kimarad, még akkor is, ha a lecke MAGA a
+tudásbázisban létezik és a pre-flight RAG-lekérdezés (§4.9) akár meg is
+találná — a probléma nem az, hogy a lecke nem volt fellelhető, hanem
+hogy a review-folyamat nem KÉNYSZERÍTI ki a felhasználását.
+
+**Szabály.** Egy KÉTSZER megismételt, azonos gyökérokú CI-piros elég
+mért bizonyíték ahhoz, hogy a védelem szintet váltson: próza helyett
+GÉPI kapu. Javasolt hely: `tools/round-ci-plan.py` (ami a diffet MÁR
+elemzi a dispatch-döntéshez) vagy egy önálló pre-dispatch szkript —
+ha a diff `lib/features/**/presentation/screens/*_screen.dart` ÚJ
+fájlt ad, a szkript maga futtassa le `flutter test
+test/ui/ui_inventory_test.dart`-ot (vagy legalább a `hasLength(N)`
+számot vesse össze egy friss `UiInventory(...).render().screenPaths`
+számlálással) MIELŐTT a `gh workflow run` meghívásra kerül. Amíg ez a
+gépi kapu nincs megépítve, a lecke további megismétlődése VÁRHATÓ, nem
+meglepetés — a következő orchesztrátor-session NE bízzon abban, hogy az
+L420/L422/L423 prózájának elolvasása elég védelem.
+
+**Őrteszt:** nincs — a mechanikus kapu MAGA lenne az őrteszt, de az még
+nem épült meg (lásd a szabály fenti javaslatát, egy jövőbeli
+governance-kör dolga). Részletek: `docs/reviews/e09-r08-review.md`, CI
+run [32607713096](https://github.com/wolfcasaba/strumsight/actions/runs/32607713096)
+(piros) → [32608627590](https://github.com/wolfcasaba/strumsight/actions/runs/32608627590)
+(zöld a javítás után).
+
+## L424 — `tools/mm-round.sh` NEM push-ol automatikusan: az orchesztrátornak MINDEN implementer-/javító-forduló UTÁN saját kézzel kell push-olnia a munkapéldányból, MIELŐTT a shared tree-n bármit commitolna a branchre — különben forkolt, divergens history keletkezik (E09-R08, 2026-08-23)
+
+**Mért tény.** Az E09-R08 pre-flight commitját (`60088f71`) az
+orchesztrátor push-olta. Az implementer (MiniMax, `mm-round.sh`)
+4 commitot rakott a branchre (`c4cd4b80`…`62e94855`) a SAJÁT
+munkapéldányában (`/home/ubuntu/ss-minimax-e09-r08`), de a wrapper ezeket
+SOSEM push-olja (`grep -n "git push" tools/mm-round.sh` → 0 találat). Az
+orchesztrátor ezután a review-jelentést a MEGOSZTOTT `music-theory` fában
+írta meg, `git checkout <branch>; git reset --hard
+origin/<branch>`-dal — ami a `60088f71`-re ugrott vissza (mert az origin
+MÉG nem látta az implementer 4 commitját!), és a review-commit
+(`ce470cc5`) erre a STALE bázisra épült. Az eredmény: két divergens
+branch-history (a helyi munkapéldányban 60088f71→...→62e94855, az
+origin-en 60088f71→ce470cc5), amit csak egy `git cherry-pick
+ce470cc5` + `tools/safe-force-push.sh` tudott utólag egyenesbe hozni.
+
+**Gyökérok.** A leválaszt-és-várj minta (§0.1, ADR 0112) explicit
+kimondja, hogy az implementer háttérben, a saját munkapéldányában fut —
+de ebből hallgatólagosan NEM következik, hogy a munkája is automatikusan
+megjelenik origin-en. A `codex-round.sh`/`mm-round.sh` egyik sem push-ol
+— ez korábban nem okozott gondot, amíg az orchesztrátor a review/merge
+lépéseket UGYANABBAN a munkapéldányban végezte, ahol az implementer
+dolgozott. Az E09-R08-ban az orchesztrátor a review-írást a MEGOSZTOTT
+fába helyezte át (hogy a `docs/reviews/**` commit egy tiszta, ismert
+checkoutból induljon) — ez a lépés az, ami a rejtett push-hiányt
+láthatóvá (és károssá) tette.
+
+**Szabály.** Minden implementer-/javító-forduló UTÁN, MIELŐTT bármilyen
+`git checkout`/`git reset --hard origin/...` történne a megosztott fában
+egy kör branchén: `cd <munkapéldány> && git push origin <branch>` ELSŐ
+lépésként. Ha a push nem fast-forward (mert az orchesztrátor időközben
+saját commitot tett origin-re — pl. a review-t), a helyes sorrend NEM a
+force-push, hanem: a review-commitot cherry-pick-elni a munkapéldány
+FRISS HEAD-jére, majd onnan `tools/safe-force-push.sh`-sal push-olni
+(sosem sima `--force`). A pre-flight-kori push (a brief+ADR commit)
+ugyanígy veszélyes minta — érdemesebb a review-t is MINDIG a legfrissebb,
+origin-ről frissen fetch-elt HEAD-re építeni, nem egy korábbi, helyben
+tartott checkout-ra.
+
+**Őrteszt:** nincs — folyamat-lecke, nem kódmérce. Részletek: ennek a
+körnek a session-története (a fix rögzítve `985d2af6` mint a review
+commitja `62e94855` fölött, nem `60088f71` fölött).
+
+## L425 — Egy `git reset --hard origin/<branch>` a MEGOSZTOTT fában NEM CSAK a branch-váltás miatt veszélyes (lásd a git-stash hazárdot) — a SAJÁT, még commitolatlan HANDOFF/RTM/LESSONS szerkesztéseket is némán eldobja (E09-R08, 2026-08-23)
+
+**Mért tény.** A záró rituálék közben az orchesztrátor a queue-fájl
+frissítése ELŐTT egy `git fetch -q origin main && git reset -q --hard
+origin/main`-t futtatott, hogy a shared tree-t a friss merge-elt
+`main`-re állítsa — de ekkor MÁR uncommitted HANDOFF.md +
+06-requirements-traceability-matrix.md + LESSONS.md szerkesztések
+voltak a working tree-ben (a fejléc ✅-blokk, a §4/§6 frissítés, két
+teljes lecke-bejegyzés). A `--hard` a working tree-t IS visszaállítja,
+tehát mindhárom fájl szerkesztése némán elveszett — csak a `git status
+--short` UTÁNI ellenőrzés (ami csak a queue-fájl módosítását mutatta)
+fedte fel, hogy a többi edit eltűnt, és mindhármat újra kellett írni.
+
+**Gyökérok.** A `git reset --hard` a jelen sessionben korábban BIZTONSÁGOS
+volt, amikor mindig egy TISZTA checkout UTÁN futott (branch-váltáskor,
+mielőtt bármit szerkesztettem volna). A záró rituálék lépéssora viszont
+egy MÁR aktívan szerkesztett fába illesztette be — a `git status`
+ellenőrzés a reset ELŐTT elmaradt.
+
+**Szabály.** `git reset --hard` (vagy bármilyen `git checkout`/`git
+clean`) előtt MINDIG `git status --short` — ha bármilyen uncommitted
+módosítás van, VAGY commitold előbb, VAGY (ha tényleg el kell dobni)
+csak EZUTÁN reseteld. Ez ugyanaz az elővigyázatossági minta, amit a
+[[shared-tree-git-stash-hazard]] memória a stash-re már előír — a
+`reset --hard` a MÁSIK, ugyanolyan éles szélű művelet, amit a rendszer-
+prompt "In a git repository, run `git status` before any command that
+could discard uncommitted work" szabálya IS név szerint felsorol
+(`git checkout/restore/reset/clean`), és amit ez a kör egyszer mégis
+megszegett.
+
+**Őrteszt:** nincs — folyamat-lecke, nem kódmérce.
+
+## L426 — Az `<prompt-fájl>` argumentum `tools/mm-round.sh`-nak VERBATIM megy a modellhez — az orchesztrátor saját pipeline-promptja SOHA nem az, csak a kör-brief maga (E09-R09, 2026-08-23)
+
+**Mért tény.** Az E09-R09 első implementer-dispatch-a a
+`.pipeline/prompt-E09-R09-*.md` fájlt kapta `<prompt-fájl>`-ként — ez az
+ORCHESZTRÁTOR saját pipeline-promptja (ami a `sdd-round-driver` skillt hívja
+meg, ADR 0087 §2 halt-kódokat sorol, `tools/round-slots.py reserve-adr`-t
+ír elő, HANDOFF/RTM/git-notes záró rituálékat követel), NEM a kör-brief. A
+MiniMax implementer ennek megfelelően ORCHESZTRÁTOR-szerepű munkát kezdett:
+lefoglalt egy ADR-számot (`0403`), megírt egy teljes ADR-dokumentumot a
+TILOS `docs/adr/**` zónában, és `git -C /home/ubuntu/music-theory ...`
+paranccsal megpróbált a SHARED fő munkapéldányba is írni — mielőtt
+jelzés nélkül megszakadt (`terminal_reason: aborted_tools`).
+
+**Gyökérok.** A `tools/mm-round.sh`/`codex-round.sh` a `<prompt-fájl>`
+tartalmát KARAKTERRŐL KARAKTERRE a modell elé teszi (a motor-preambulum
+UTÁN fűzve) — nincs beépített ellenőrzés arra, hogy a fájl valóban egy
+kör-brief-e (pl. tartalmazza-e az `allowed_paths`/`gate_tests` ai-router
+blokkot), vagy egy orchesztrátor-szintű meta-dokumentum. A pipeline saját
+promptja (ami az orchesztrátor SESSIONjét indítja) és a kör-brief (ami az
+IMPLEMENTER munkáját írja le) hasonló méretű, hasonló szerkezetű markdown
+fájl — a kettő könnyen összecserélhető egy elhamarkodott dispatch-parancsban.
+
+**Szabály.** Dispatch ELŐTT mindig ellenőrizd: a `<prompt-fájl>` a
+munkapéldány SAJÁT `docs/rounds/<kör>.md` fájlja legyen (a script maga is
+ezt várja — ld. `mm-round.sh` `case "$prompt_file" in "$workdir"/docs/rounds/*.md)
+round_brief=...` ága, ami automatikusan levezeti a `ROUND_BRIEF`-et EBBŐL a
+mintából), SOHA az orchesztrátor saját `.pipeline/prompt-*.md` fájlja. Ha a
+hiba mégis megtörténik: a folyamat élő és felismerhető — az implementer
+`docs/adr/**`-be írása vagy a shared fába nyúlása a §0 STOP-protokoll szerint
+azonnal H3-gyanús; a workdir branch-ét `git reset --hard <pre-flight commit>`-tal
+vissza kell állítani a hibás commit ELŐTTRE, és a HELYES prompttal újra kell
+dispatch-elni — a hibás dispatch önmagában NEM H-NOSIGNAL, ha a jelzésfájl
+hiánya a rossz prompt következménye, nem egy valódi motor-hibáé.
+
+**Őrteszt:** nincs — egy jövőbeli `mm-round.sh`/`codex-round.sh` bővítés a
+`<prompt-fájl>` tartalmában megkövetelhetné az ai-router blokk jelenlétét
+(`allowed_paths`/`gate_tests`) és `exit 2`-vel utasíthatná el a dispatch-ot,
+ha hiányzik — ez lenne a mechanikus kapu; egyelőre az orchesztrátor saját
+figyelme az egyetlen védelem.
+
+## L427 — A `tools/round-ci-plan.py` csak a `full-gate.yml`/`build-apk.yml` párost ismeri — egy `backend/**`-et érintő kör esetén a `backend-ci.yml`-t az orchesztrátornak KÉZZEL kell dispatch-elnie és zöldre várnia (E09-R09, 2026-08-23)
+
+**Mért tény.** Az E09-R09 diffje `backend/app/community/repositories/`,
+`backend/app/community/routers/` és `backend/tests/community/` fájlokat
+érintett — ezek mind a `backend-ci.yml` `on.push.paths: ["backend/**"]`
+trigger-mintáját ütik. Az orchesztrátor a `tools/round-ci-plan.py`
+kimenetét követve KIZÁRÓLAG a `full-gate.yml`-t dispatch-elte (a tool
+`dispatch: ["full-gate.yml"]`-t adott vissza) — a `backend-ci.yml` emiatt
+NEM futott le a review 1. fordulójában, csak a javító kör UTÁN, saját kézzel
+pótolva, amikor a review-jelentés írása közben tudatosult a hiány.
+
+**Gyökérok.** Ugyanaz a hibaosztály, mint a `router-ci.yml` esetén (lásd a
+brief §3.0-ban explicit dokumentált, hasonló L113 mintát) — egy diff több,
+egymástól FÜGGETLEN `on.push.paths` triggerelt workflow-t is beüthet
+egyszerre, de a `round-ci-plan.py` csak a natív-build kérdésre (APK vs. nem
+APK) válaszol, nem az ÖSSZES triggerelt workflow listájára. A
+`router-ci.yml`-re már van explicit dokumentált szabály a pipeline-promptban
+(3.0 szakasz) — a `backend-ci.yml`-re NINCS.
+
+**Szabály.** Merge előtt az orchesztrátor mérje meg a diffet ÖSSZES érintett
+`.github/workflows/*.yml` `on.push.paths` mintája ellen (nem csak a
+`round-ci-plan.py` kimenetét és a `router-ci.yml`-t), és minden triggerelt
+workflow-t dispatch-eljen + várjon zöldre az exact merge SHA-n. Egy kör,
+ami `backend/**`-et érint, a `backend-ci.yml`-t is a zöld kapu része —
+ugyanúgy, ahogy a `docs/rounds/**`-et érintő kör a `router-ci.yml`-t.
+
+**Őrteszt:** nincs — egy jövőbeli `round-ci-plan.py` bővítés felsorolhatná
+az ÖSSZES `on.push.paths`-szal triggerelt workflow-t egy `all_triggered`
+mezőben (nem csak a `dispatch`/`skipped` APK-párost), ami ezt a hibaosztályt
+gépi kapuvá tenné.
+
+## L428 — Az [[L423]] saját előrejelzése bevált: a `ui_inventory_test.dart` screen-számláló drift HARMADSZOR is csak a CI-ban bukott ki, mert a mechanikus kapu még mindig nem épült meg (E09-R09, 2026-08-23)
+
+**Mért tény.** [[L423]] (E09-R08, 2026-08-23) explicit kimondta: "amíg ez a
+gépi kapu nincs megépítve, a lecke további megismétlődése VÁRHATÓ, nem
+meglepetés". Az E09-R09 új `community_search_screen.dart`-ot adott — az
+orchesztrátor (megint ugyanaz a Claude Sonnet 5 persona) a CI-dispatch
+ELŐTT megint NEM futtatta le a `ui_inventory_test.dart` számláló-ellenőrzést
+kézzel, és a `full-gate.yml` run 32612083350 megint PIROS lett, pontosan
+ugyanazzal a tünettel (`Expected: <68>, Actual: <69>`).
+
+**Ez NEM egy negyedik, új lecke — ez az [[L423]] szabályának megerősítése.**
+A prózában élő szabály (akár L420, akár L422, akár L423 formájában) a
+harmadik körön át sem védett — a `docs/rounds/**` batch-elt briefek és a
+hosszú pipeline-prompt közepette egy "ellenőrizd a screen-számlálót
+dispatch előtt" tétel elvész. A gépi kapu (round-ci-plan.py vagy egy önálló
+pre-dispatch szkript, amit L423 már megnevezett) ÉPÍTÉSE most már három
+mért kör (E09-R07 → E09-R08 → E09-R09) mögött áll — ez a HARMADIK azonos
+gyökérokú, azonos tünetű CI-piros ugyanabban az epikban.
+
+**Szabály.** Egy jövőbeli governance-kör (`E99-R*`) építse meg az [[L423]]
+által javasolt gépi kaput — ÚJ `*_screen.dart` fájlt tartalmazó diffnél a
+dispatch ELŐTT a `tools/round-ci-plan.py` (vagy egy dedikált pre-dispatch
+lépés) maga futtassa le a `ui_inventory_test.dart`-ot, és `exit`-eljen
+hibával, ha a hardcode-olt szám nem egyezik a tényleges screen-számmal. A
+prózai lecke HARMADSZORI megismétlődése után a "olvasd el a LESSONS.md-t"
+védelem bizonyítottan elégtelen erre a hibaosztályra.
+
+**Őrteszt:** nincs — lásd [[L423]] Őrteszt-sorát, ugyanaz a hiányzó gépi
+kapu vonatkozik erre a megismétlődésre is.
+
+## L429 — Az [[L425]] SAJÁT szabályát ugyanaz az orchesztrátor-session megszegte, méghozzá a záró rituálék KÖZBEN: a merge-lock alatt egy `git reset --hard` a MÁR beírt, de MÉG NEM commitolt HANDOFF/RTM/LESSONS szerkesztéseket dobta el (E09-R09, 2026-08-23)
+
+**Mért tény.** A záró rituálék lépésében (`tools/round-merge-lock.sh` alatt)
+az orchesztrátor a queue-sor `pending → done` átírása ELŐTT egy
+`git fetch origin main -q && git reset -q --hard origin/main`-t futtatott —
+DE a HANDOFF.md/RTM/LESSONS.md szerkesztések ekkor MÁR a munkafán ültek,
+commitolatlanul (a lock-parancson KÍVÜL, egy korábbi Edit-hívással írva). A
+reset mindhármat némán eldobta; csak a queue-sor élte túl, mert azt a reset
+UTÁN, a lock-parancson BELÜL írta a session. Az [[L425]] pontosan ezt a
+hibaosztályt írta le egy körrel korábban — és ennek ellenére megismétlődött,
+UGYANABBAN a záró-rituálé lépésben, ugyanazon session egyetlen körén belül.
+
+**Gyökérok.** A záró rituálék (HANDOFF/RTM/LESSONS szerkesztés → queue-sor
+átírás → egy közös commit) több különálló eszközhívásra tagolódnak — az Edit
+eszköz a munkafára ír, a `git reset --hard` pedig egy KÉSŐBBI, önálló Bash-
+hívásban fut, a kettő között nincs automatikus védelem. Az [[L425]] leckéje
+MAGA is csak próza (LESSONS.md-bejegyzés), nem egy mechanikus kapu — pontosan
+az a mintázat, amit [[L423]]/[[L428]] a `ui_inventory_test.dart`
+számlálónál már megnevezett: egy próza-szabály elolvasása nem garantálja a
+betartását egy hosszú, több-lépéses munkamenet közepén.
+
+**Szabály.** A helyes sorrend: `git fetch`+`reset --hard origin/main`
+MINDIG a záró rituálék ELSŐ lépése legyen, ELŐTTE semmilyen Edit-hívás ne
+történjen a HANDOFF/RTM/LESSONS/queue fájlokon — a reset UTÁN jöjjön MINDEN
+szerkesztés, majd egyetlen `git add`+`commit`+`push`. Ha egy `round-merge-lock.sh`
+alá csomagolt parancs saját maga tartalmaz egy resetet, az orchesztrátor
+NE végezzen a lock-hívás ELŐTT semmilyen fájlszerkesztést ugyanazokon a
+fájlokon — vagy a reset kerüljön a lock-hívás ELSŐ sorába, és MINDEN
+szerkesztés (Edit-hívásokkal együtt) menjen a lock-on BELÜLRE, egyetlen
+`bash -c` blokkban, hogy ne legyen olyan időablak, amiben a munkafán
+commitolatlan, értékes tartalom ül egy önálló reset mellett.
+
+**Őrteszt:** nincs — folyamat-lecke, akárcsak [[L425]]; egy jövőbeli
+`round-merge-lock.sh` bővítés megkövetelhetné, hogy a hívó parancs maga
+tartalmazza a fetch+reset lépést az ELSŐ sorban (dokumentációs konvenció,
+nem gépi kikényszerítés).
+
+## L430 — Két hasonló nevű feature (`analyze` vs `audio_analysis`) a brief-pre-flightban forrás-összetévesztési kockázat; a `round-slots.py reserve-adr` a batch-előkészített brief KALENDÁRIUM-avulása ellen is véd, nem csak a párhuzamos-session versenyhelyzet ellen (E09-R10, 2026-08-23)
+
+**Mit mértünk.** Az E09-R10 brief pre-flightjában a `lib/features/share/
+widgets/strum_card.dart` a `analyze/public.dart` `AnalyzeResult`-ját
+fogyasztja (az EREDETI, klip-szintű chord/strum DSP-detektor), miközben a
+brief `allowed_paths`/tilos-zóna sora `lib/features/audio_analysis/**`-t
+nevez meg — egy MÁSIK, nagyobb, V2 elemzés-feature (timeline/insight/
+comparison/export réteggel, ADR 0247 export-szerződéssel). A két
+feature-név (`analyze` és `audio_analysis`) felszínesen szinonima-szerű, a
+brief saját pre-flight-instrukciója (a `strum_card.dart`/`wrapped_card.dart`
+elolvasása) pedig épp az ELSŐ, nem a MÁSODIK feature-re mutatott — egy
+felületes olvasat könnyen az `AnalyzeResult`-ot vette volna forrásnak az
+`analysis_share_mapper.dart`-hoz, ami a brief saját `allowed_paths`-ával
+ütközött volna (a mapper nem importálhatna `analyze/public.dart`-ot, mert
+az nincs a tilos-zóna listán engedélyezettként megnevezve).
+
+Ugyanebben a pre-flightban a brief előre kiosztott `ADR 0402`-je a
+brief megírása (2026-08-22) és a kör tényleges indítása (2026-08-23) között,
+egy KÖZBEEKŐ, szekvenciális kör (E09-R08) által vált foglaltá — nem
+párhuzamos-session verseny, hanem egyszerű naptári csúszás egy batch-
+előkészített brief és a tényleges indítás között. A `tools/round-slots.py
+reserve-adr --round E09-R10` ezt is helyesen `0404`-re javította.
+
+**Miért.** [[L179]]/a driver-skill §1.0.1 az ADR-szám-ütközést eddig a
+PÁRHUZAMOS session-ek versenyhelyzeteként dokumentálta (`ls docs/adr | tail`
+két session által egyszerre nézve). Ez a kör megerősíti, hogy a
+`round-slots.py reserve-adr` ugyanolyan jól, ugyanazzal az egy paranccsal
+védi a SZEKVENCIÁLIS, naptári avulást is — a batch-előkészített brief
+"Előre kiosztott ADR" mezője attól még elavulhat, hogy közben MÁS, korábban
+sorra kerülő kör felhasználta a számot, függetlenül attól, hogy volt-e
+tényleges párhuzamos futás.
+
+**Hogyan alkalmazd.** (1) Egy brief `allowed_paths`/tilos-zóna sora a
+tényleges forrás-feature neve — ha egy pre-flight-instrukció egy widget
+vagy fájl elolvasására mutat "modell-referenciaként", MINDIG ellenőrizd
+külön, hogy az adott fájl ténylegesen a `allowed_paths`-ban megnevezett
+feature-ből importál-e, ne csak témában hasonló nevű testvér-feature-ből
+(`grep -n "import.*<feature>/public.dart"` a hivatkozott fájlon). (2) A
+`tools/round-slots.py reserve-adr` hívása MINDIG kötelező, akkor is, ha
+nincs ismert párhuzamos session — egy batch-előkészített brief előre
+kiosztott száma önmagában, kalendárium-avulás miatt is elévülhet.
+
+**Őrteszt:** nincs — a feature-név-összetévesztés felismerése emberi/LLM
+olvasat, nem gépi kapu; az ADR-szám-avulás ellen már létező gépi kapu véd
+(`tools/round-slots.py reserve-adr`, `O_CREAT|O_EXCL` fájlzár).
+
+## L431 — Az olvasási láthatóság-kapu NEM írási jogosultság-kapu; a válasz-identitást a SORBÓL told fel, ne a hívóból (E09-R11, 2026-08-23)
+
+**Mit mértünk.** Az E09-R11 (`post_service.py`) `patch_post` függvénye a
+`get_post`/`patch_post`/`soft_delete_post` közös `_evaluate_visibility`
+helperét hívta egyetlen kapuként — az a helper viszont egy OLVASÁSI
+láthatóság-döntés (owner→blocked→audience→moderation), nem írási
+jogosultság. Egy `PUBLIC` audience-ű posztra ez a kapu MINDIG átenged
+minden nem-blokkolt hitelesített nézőt, tehát bármely felhasználó
+módosíthatta MÁSVALAKI posztjának body/audience/artifact mezőjét, holott a
+`soft_delete_post` testvér-függvénye (ugyanabban a fájlban, néhány sorral
+lejjebb) MÁR tartalmazott egy explicit `post.profile_id !=
+viewer_profile_id` tulajdonos-ellenőrzést. A dedikált `security-reviewer`
+agent (a kör `risk = "high"`-ja miatt kötelező) ezt a hibát ÉLESBEN
+reprodukálta a migráció-alapú sémán.
+
+Ugyanebben a körben egy MÁSODIK, önálló hiba: a GET/PATCH router-endpointok
+a válasz `author_public_id` mezőjét a HÍVÓ saját, JWT-ből feloldott
+public_id-jából töltötték, nem a POSZT tényleges `profile_id`-jéből
+feloldva — minden nem-saját-tartalom olvasásnál (a szolgáltatás
+ELSŐDLEGES használati módján egy közösségi felszínen) hibás szerző-
+attribúciót okozva. Az egyetlen teszt, ami nem-tulajdonos GET-et hívott,
+kizárólag a `public_id` mezőt ellenőrizte, az `author_public_id`-t nem.
+
+**Miért.** Mindkét hiba UGYANABBÓL a mintázatból jön: egy meglévő,
+tesztelt helper/paraméter újrahasznosítása egy OLYAN kontextusban, ahol a
+neve/típusa hasonló, de a szemantikája más. `_evaluate_visibility` a neve
+alapján is olvasásra utal, mégis írási kapuként lett (helytelenül)
+egyedüli őrré téve; `viewer_public_id`/`author_public_id` ugyanaz a
+Python-típus (`uuid.UUID`), ugyanabból a táblából jön (`community_profiles.
+public_id`), de két KÜLÖNBÖZŐ sor azonosítója — a paraméter-átadásnál a
+kompilátor/típusrendszer nem tud különbséget tenni. A create endpointon a
+kettő VÉLETLENÜL egybeesik (a létrehozó mindig a szerző is), ez a
+véletlen egybeesés terjedt át hibásan a GET/PATCH endpointokra.
+
+**Hogyan alkalmazd.** (1) Ha egy service-függvény MÁS erőforráson végez
+ÍRÁST, mint amit egy testvér-függvény (pl. `soft_delete_post`) már
+explicit tulajdonos-ellenőrzéssel véd, MINDEN írási művelethez (nem csak
+egyhez) ellenőrizd a saját, ÖNÁLLÓ tulajdonos-kaput — egy megosztott
+OLVASÁSI-láthatóság helper hívása NEM helyettesíti. Mérési recept: `grep -n
+"viewer_profile_id\|profile_id !=" <service-fájl>` — ha egy write-metódus
+(patch/update/delete) NEM tartalmaz explicit egyenlőségi/egyenlőtlenségi
+összehasonlítást a hívó és a tulajdonos között, az egy hiányzó
+authz-kapu gyanúja. (2) Ha egy válasz-schema egy erőforrás TULAJDONOSÁT
+(nem a hívót) azonosítja, a mezőt MINDIG a SORBÓL told fel (`post.
+profile_id`-ből egy külön lekérdezéssel), SOSE a hívó saját, már
+kéznél lévő azonosítójából — még akkor sem, ha egy adott hívási útvonalon
+(create) a kettő véletlenül egybeesik. Egy review-cella, ami CSAK a
+`public_id` egyenlőségét ellenőrzi egy nem-tulajdonos olvasásnál, ezt a
+hibaosztályt NEM fogja meg — a válasz MINDEN identitás-hordozó mezőjét
+(`author_public_id`, `owner_id`, stb.) explicit asszertálni kell a
+"más néz, mint aki írta" tesztben.
+
+**Őrteszt:** `backend/tests/community/test_post_service.py::
+test_patch_by_non_owner_returns_404` (F1 — a body-t is asszertálja, nem
+csak a státuszkódot) és
+`test_audience_matrix_owner_and_public_viewer` (F2 — az `author_public_id
+!= viewer.public_id` explicit asszerció a nem-tulajdonos GET-re).
+
+## L432 — Egy ELSŐ user-id-particionált local store nem örökölheti mechanikusan egy másik store `legacyKey`-mintáját: a fallback maga nem particionált, és fiktív előtörténetet is állíthat, ha nincs valódi predecessor (E09-R12, review F1, 2026-08-23)
+
+**Mit mértem.** A `CommunityDraftStore.open` (`lib/features/community/data/
+local/community_draft_store.dart`) a `JsonDocumentStore`-t
+`legacyKey: 'ss.community.drafts.v1'` értékkel konstruálta — egy, MINDEN
+userre AZONOS, nem user-id-particionált literállal —, miközben ez a kör
+(E09-R12) az ELSŐ user-id-particionált lokális storage-kulcs a repóban
+(`ss.community.drafts.v2.<userId>`, pre-flight D3). A docstring egy
+korábbi, "device-wide" Community draft store-ból történő migrációt
+állított. Mérve (grep a teljes `lib/`-en és a git-történeten): ilyen
+predecessor SOHA nem létezett — a `community_draft_store.dart` ez a kör
+hozza létre először. A `_legacyStorageKey` konstans emellett NINCS
+regisztrálva a kanonikus `LegacyStorageKeys` osztályban
+(`lib/core/storage/storage_keys.dart`), amelynek saját fejléc-kommentje
+szerint EZ a kötelező hely minden ilyen történeti kulcsnak. A hatás
+jelenleg holt kód (semmi nem ír a megosztott literálra), de architekturálisan
+pontosan azt az izolációs garanciát törte volna meg, amit a kör bevezetni
+hivatott: `JsonDocumentStore.readBody()` a saját (user-scope-olt) kulcs
+hiányában a `legacyKey`-t olvassa vissza — ha BÁRMILYEN jövőbeli kód (debug,
+teszt-fixture, egy másik feature véletlen kulcs-újrafelhasználása) valaha ír
+erre a megosztott literálra, MINDEN usernek, akinek még nincs saját v2-draftja,
+az idegen draftot adná vissza. A testvér `community_outbox.dart`
+UGYANEBBEN a körben helyesen ismerte fel ugyanezt a helyzetet
+("No legacy key — the outbox is a fresh Kör 12 document with no
+pre-envelope shape", `legacyKey: ''`) — a draft store nem követte a saját
+testvér-fájlja döntését.
+
+**Hogyan alkalmazd.** (1) Egy ÚJ user-scope-olt (vagy egyéb, korábban nem
+létező izolációs granularitású) local store bevezetésekor a `legacyKey`
+paramétert SOHA ne örökítsd mechanikusan egy meglévő minta másolásával —
+mérd meg ELŐSZÖR, hogy létezett-e valaha ténylegesen olyan predecessor
+bájtfolyam, amiből migrálni kell (`git log --follow -- <fájl>` VAGY egy
+korábbi kör briefje/HANDOFF-bejegyzése). Ha nincs ilyen mérhető predecessor,
+`legacyKey: ''` a helyes válasz — nem egy "biztonság kedvéért" hivatkozott
+kulcs. (2) Bármely `legacyKey`-t VALÓBAN igénylő store esetén a kulcs a
+kanonikus `LegacyStorageKeys` osztályban (`lib/core/storage/storage_keys.dart`)
+regisztrálandó, nem egy feature-lokális privát konstansként — ez a
+regisztráció maga a mechanikus ellenőrzési pont, ami a fiktív/vad
+legacy-kulcsokat kiszűrné. (3) Ha egy store user-id-particionált, MINDEN
+kulcsparamétere (a `key` ÉS a `legacyKey` is) particionált kell legyen —
+egyetlen megosztott fallback-kulcs is elég ahhoz, hogy a store egésze
+kereszt-user szivárgást engedjen meg, még ha az adott fallback-ág ma
+gyakorlatilag holt kód is.
+
+**Őrteszt:** nincs — a review próbateszttel mérte (nem commitolt): egy
+másik `userId`-hez tartozó JSON draft-ot a megosztott `'ss.community.
+drafts.v1'` kulcsra írva, a javítás ELŐTT `CommunityDraftStore.open(userId:
+A).readDraft()` a másik user draftját adta vissza; a javítás UTÁN (`legacyKey:
+''`) `null`-t ad. Egy jövőbeli kör, ami hasonló user-scope-olt store-ot ad,
+tehet fel egy regressziós tesztet erre a mintára (`legacyKey` particionáltság
+vagy hiánya).
+
+## L433 — Egy EXPLAIN-plan string-match mérce-helper engedékeny OR-fallback miatt zöldet adhat a mért tulajdonság HIÁNYÁBAN is — a §6.1 valódi-sértés próbát TÉNYLEGESEN futtatni kell, nem elég dokumentálni (E09-R13, review F1, 2026-08-23)
+
+**Mit mértünk.** Az E09-R13 `query_plan_uses_feed_index` helperje (A7
+mérce-cella, "nincs N+1/sequential scan") egy `("community_posts" in
+lowered and "index" in lowered)` engedékeny OR-fallback-ágat tartalmazott —
+ez nem azt ellenőrizte, MELYIK indexet használja a planner a `community_posts`
+elérésére, csak azt, hogy a szó "index" ELŐFORDUL valahol a teljes
+EXPLAIN-szövegben (ami szinte mindig igaz, mert egy másik tábla — itt
+`community_follows` — indexe is ott szerepel). A review saját, önállóan
+futtatott real-violation próbájával (500 sor + `ANALYZE`, majd `DROP INDEX
+ix_community_posts_created_id`, a brief §6.1 KÖTELEZŐ előírása szerint,
+amit az implementer explicit KIHAGYOTT "destruktív lenne inline"
+indoklással) mérve: a helper `True`-t (zöld) adott AKKOR IS, amikor az
+indexet eltávolítottuk. Súlyosabb: MÉG az index JELENLÉTÉBEN is a planner
+egy MÁSIK, `profile_id`-vezető indexet választott a `community_posts`
+eléréséhez, és mindkét esetben `USE TEMP B-TREE FOR ORDER BY` futott — a
+gyökérok egy JOIN-alapú query-alak volt (`community_follows`-ról indított
+nested loop), ami SOSEM tudja a globális `(created_at, id)` sorrendet
+indexből kapni. A round core A7/N+1-védelem ígérete tehát ténylegesen NEM
+teljesült, csak a mérőeszköz hibája miatt tűnt zöldnek (`docs/reviews/
+e09-r13-review.md` F1).
+
+**Miért.** Egy EXPLAIN-plan alapú mérce-helper KÉT különálló hibaosztályt
+kell elkerüljön: (1) egy TÚL SZOROS string-match, ami a dialektustól/
+formázástól függően hamis-pirosat ad (ez a gyakoribb, óvatosságra intő
+hiba); (2) egy TÚL LAZA string-match, ami a mérni kívánt tulajdonság
+HIÁNYÁBAN is zöldet ad, mert egy ÁLTALÁNOS mintát keres ("van valahol
+index") ahelyett, hogy a KONKRÉT, várt tulajdonságot mérné (a NEVESÍTETT
+index használatát ÉS egy negatív feltétel — pl. "nincs TEMP B-TREE" —
+hiányát). A (2) hibaosztály különösen alattomos, mert a teszt zöld marad
+mind a jó, mind a rossz állapotban — ez pontosan a "zöld gate nem
+bizonyíték" elv (L01) egy speciális, mérce-helper-szintű megnyilvánulása.
+A §6.1 valódi-sértés próba ELMULASZTÁSA (a docstringbe írt, de soha le nem
+futtatott dokumentáció) volt az, ami ezt a hibaosztályt élve hagyta —
+egy dokumentált, de nem futtatott próba NEM ér semmit, pontosan úgy, ahogy
+egy nem futtatott parancs sem bizonyíték (AGENTS.md §12).
+
+**Hogyan alkalmazd.** (1) Egy EXPLAIN-plan (vagy bármely más, "a rendszer
+egy adott erőforrást használ" típusú) mérce-helper írásakor a pozitív
+ellenőrzés a KONKRÉT, NEVESÍTETT erőforrást (index/eljárás/köv) keresse,
+sose egy általános "van valami odaillő" mintát. (2) Ha a mért tulajdonság
+egy KIZÁRÓ állapot HIÁNYÁT is feltételezi (itt: "nincs extra sort lépés"),
+azt EXPLICIT, külön feltételként kell ellenőrizni — egy pozitív match
+önmagában nem zárja ki egy negatív mellékhatás jelenlétét. (3) A brief §6.1
+"KÖTELEZŐ valódi-sértés próba" sosem helyettesíthető egy docstring-be írt
+ígérettel — ha egy próba "destruktív lenne inline", a helyes válasz egy
+ELDOBHATÓ DB-másolaton/kapcsolaton futtatott, a teszt-suite RÉSZÉT képező
+inline teszt (ahogy a javítás végül tette: `test_a7_real_violation_probe_
+drops_feed_index`), nem a próba elhagyása. (4) SQLite-specifikus alcsapda,
+amit a javítás során fedeztünk fel: az `ANALYZE` statisztika KAPCSOLATONKÉNT
+cache-elt — egy real-violation próba, ami ugyanazon a kapcsolaton
+seed-eli az adatot ÉS futtatja az EXPLAIN-t, elavult statisztikákkal
+tervezhet; az `engine.dispose()` (vagy egyenértékű friss-kapcsolat-kényszerítés)
+az `ANALYZE` UTÁN, az EXPLAIN ELŐTT szükséges a friss terv méréséhez.
+
+**Őrteszt:** `backend/tests/community/test_feed_query_plan.py::test_a7_real_violation_probe_drops_feed_index` — droppolja az `ix_community_posts_created_id` indexet egy eldobható DB-másolaton és asszertálja, hogy `query_plan_uses_feed_index` `False`-t ad.
+
+## L434 — Az implementer-dispatch a KÖR-BRIEF fájlt várja prompt-fájlként, nem az orchesztrátor-pipeline saját (meta-) promptját — a modell felismerte és önjavítani próbált, de az önjavítás egy tilos-zóna íráson bukott el, teljes session-crash-t okozva (E09-R13, 2026-08-23)
+
+**Mit mértünk.** Az E09-R13 orchesztrátor ELSŐ `tools/mm-round.sh` dispatch-e
+a `.pipeline/prompt-E09-R13-*.md` fájlt (a JELEN, pipeline-szintű, ORCHESZTRÁTORNAK
+szóló meta-promptot — a `sdd-round-driver` skill meghívására, HALT-szabályokra,
+ADR-foglalásra stb. utasító dokumentumot) adta át `tools/mm-round.sh`-nak
+implementer-promptként, a kör-brief (`docs/rounds/e09-r13-…md`) HELYETT. A
+`tools/mm-round.sh`/`tools/codex-round.sh` saját, a hívási hibára mutató
+figyelmeztetése (48-52. sor: "tipp: a kör-brief a KÖR-BRANCHEN van") és a
+skill dokumentációja is implicit ezt feltételezi, de a pipeline-prompt saját
+`<prompt>.md` placeholdere nem mondta ki explicit, MELYIK fájlra utal. Az
+implementer (MiniMax M3) az eredmény: 72 fordulón át dolgozott a HELYES
+brief-re hivatkozva (a meta-prompt SZÖVEGÉBEN szerepelt a brief útvonala,
+amit a modell Read-elt), de a folyamat végén megpróbálta a saját, "letisztult"
+implementer-promptját egy ÚJ fájlba írni a munkapéldány GYÖKERÉBE
+(`prompt-e09-r13-mm.md`, az `allowed_paths`-on KÍVÜL) — a gépi scope-őr
+(`implementer_guard.py`) ezt a Write-hívást helyesen megtagadta, DE a
+megtagadás a teljes `claude -p` sessiont `aborted_tools`/`error_during_
+execution` állapotba vitte (`stop_reason: tool_use`), NULLA commit
+keletkezett, jelzés nem íródott. Az újraindítás (UGYANAZZAL a hibás
+promptfájllal!) második próbálkozásra sikerrel járt — a modell nem
+ismételte meg a scratch-file-írási kísérletet —, de ez NEM garantált,
+csak megfigyelt viselkedés.
+
+**Miért.** A `tools/mm-round.sh`/`codex-round.sh` "prompt-fájl" paramétere
+a repóban elterjedt konvenció szerint a KÖR-BRIEF relatív útvonala (a brief
+saját §0 Kör-jelzés szakasza + §4 allowed_paths + §8 implementációs sorrend
+együtt alkotja a teljes implementer-utasítást — semmi mást nem kell hozzáadni).
+Egy meta-szintű, ORCHESZTRÁTORNAK szóló dokumentum átadása implementer-
+promptként két problémát okoz: (1) irreleváns/zavaró kontextus (HALT-kódok,
+ADR-foglalási parancsok, amik nem az implementerre vonatkoznak); (2) a
+modell — helyesen felismerve az eltérést — önkezűleg próbál korrigálni,
+és ha a korrekciós kísérlet egy tilos-zóna műveletbe fut, a MEGTAGADÁS
+katasztrofálisan (teljes session-crash-szel) végződhet ahelyett, hogy a
+modell egyszerűen a MEGLÉVŐ brief-fájlra hivatkozva folytatná (amit végül,
+második próbálkozásra, magától is megtett).
+
+**Hogyan alkalmazd.** Az orchesztrátor-oldali dispatch-parancsban a
+prompt-fájl paraméter MINDIG a kör-brief relatív útvonala legyen
+(`docs/rounds/eXX-rYY-<slug>.md`), SOHA a pipeline-szintű, orchesztrátornak
+szóló meta-prompt. Ha egy jövőbeli pipeline-prompt-sablon `<prompt>.md`
+placeholdert használ, a mellette lévő magyarázó szövegnek EXPLICIT ki kell
+mondania: "ez a KÖR-BRIEF fájl, nem a jelen (orchesztrátor-) prompt". Ha
+egy dispatch mégis crash-el jelzés/commit nélkül (NULLA munka), az
+újraindítás UGYANAZZAL a (akár hibás) paraméterezéssel is helyrehozhatja
+a kört — mielőtt a hibát diagnosztizálnánk, a log-ban keresendő
+`"permission_denials"` + `"terminal_reason":"aborted_tools"` pár, ami
+pontosan ezt az osztályt jelzi.
+
+**Őrteszt:** nincs — a hiba az orchesztrátor-oldali dispatch-parancs
+SZÖVEGÉBEN volt, nem a tesztelhető termékkódban. Egy jövőbeli pipeline-
+prompt-generátor kör tehetne fel egy lint-szabályt, ami ellenőrzi, hogy a
+generált `tools/mm-round.sh`/`codex-round.sh` dispatch-parancs prompt-fájl
+argumentuma a `docs/rounds/**` mintára illeszkedik.
+
+## L435 — A cache "helyesen ír, hibásan olvas vissza" hibaosztálya: a saját, meglévő dekóder nem hívva a rehydration-úton, a widget-teszt saját fixture-je pedig ELREJTETTE, mert a teszt is a placeholder-alakot írta (E09-R14, 2026-08-23)
+
+**Mit mértünk.** Az E09-R14 `feed_cache.dart`/`feed_controller.dart` a
+cache-be íráskor a teljes, valódi wire-JSON-t perzisztálta minden ismert
+`ShareArtifact`-altípusra (`artifact.toJson()`), DE a visszaolvasó
+`_artifactFromEnvelope` MINDIG `UnfilledCommunityShareArtifact()`-ra
+bontotta az eredményt, függetlenül a mentett `type` mezőtől — annak
+ellenére, hogy a hiányzó dekóder (`ShareArtifact.fromJson`) MÁR LÉTEZETT,
+MÁR IMPORTÁLVA volt ugyanabban a fájlban, és semmilyen jövőbeli körre nem
+volt szükség a bevezetéséhez. A saját widget-teszt (`following_feed_test.dart`)
+cache-priming helpere (`_envelopeOfForTest`) SZINTÉN mindig
+`{'type': 'unfilled', ...}`-et írt a cache-be — FÜGGETLENÜL attól, milyen
+artifact-tal hívták —, ezért a teszt-suite (13/13 zöld) soha nem futtatott
+végig egy VALÓDI típusú artifact-ot a cache write→read körön: a teszt maga
+is a hibát rejtő mintát reprodukálta. A review egy SAJÁT, a valós
+`_envelopeOf`-alakot kézzel tükröző probe-teszttel derítette ki
+(`practiceCard=0 fallbackCard=1` egy `PracticeSummaryArtifact`-ra).
+
+**Miért.** A hiba egy klasszikus "aszimmetrikus round-trip" minta: az ÍRÓ
+oldal (`_envelopeOf`) és az OLVASÓ oldal (`_artifactFromEnvelope`)
+függetlenül készült, mindkettő SAJÁT belső logikával, és semmilyen teszt
+nem kényszerítette ki, hogy egy VALÓS (nem placeholder) érték menjen át
+mindkét oldalon. A defenzív "ismeretlen típus → fallback" mintát (A5,
+helyes és szükséges invariáns) az implementer túl konzervatívan
+alkalmazta: MINDEN típusra fallback-elt, nem csak a ténylegesen ismeretlen/
+dekódolhatatlanra — a `try { return Decoder.fromJson(raw); } catch { return
+Fallback(); }` mintát a `if (isEverything) return Fallback();` váltotta fel.
+A gate (`round-gate.sh`) és a teljes teszt-suite ZÖLD maradt, mert a teszt
+saját fixture-je ugyanazt a rövidre-zárt feltevést hordozta, mint a
+termékkód — ugyanaz a hibaosztály, mint a docs/LESSONS.md korábbi
+"a teszt ugyanazt a hibás feltevést reprodukálja, mint a kód" mintái.
+
+**Hogyan alkalmazd.** Amikor egy kör egy MEGLÉVŐ, sealed/discriminated
+domain-hierarchiát (pl. `ShareArtifact`) tesz perzisztálhatóvá egy lokális
+cache-en/store-on keresztül: (1) a review-nak VAGY a kör saját tesztjének
+kötelezően kell legalább egy VALÓDI (nem placeholder/`unfilled`) típusú
+értéket végigfuttatnia az ÍRÁS→OLVASÁS teljes körén, és megmérnie, hogy a
+visszaolvasott érték a SAJÁT típusát (nem egy generikus fallback-et) adja
+vissza; (2) ha a cache-priming teszt-helper NEM a termékkód tényleges
+író-függvényét hívja (hanem egy saját, párhuzamos JSON-építőt), az egy
+FIGYELMEZTETŐ jel — a helper és a termékkód szétcsúszhat anélkül, hogy
+bármelyik oldal tesztje ezt észrevenné; (3) egy defenzív "ismeretlen típus
+→ fallback" ág implementálásakor mindig ellenőrizd, hogy a feltétel
+TÉNYLEGESEN az ismeretlen esetre szűkül-e (try/catch a dekóder körül), nem
+pedig MINDEN esetre lazult-e a defenzivitás jegyében.
+
+**Őrteszt:** `test/features/community/presentation/following_feed_test.dart`
+— "a cache-primed post with a known artifact type rehydrates to its own
+card, not the fallback (A1.3 — F2 regression probe)" (a javító kör
+1-ben hozzáadva, `4c3886ff`).
+
+## L436 — Egy randomizált property-teszt lokális változója csak az EGYIK ágon íródott, a `assert` mégis feltétel nélkül futott — a mai zöld a `PROPERTY_SEED` DEFAULT szerencséjének köszönhető, nem a teszt helyességének (E09-R15, 2026-08-23)
+
+**Mit mértünk.** Az E09-R15 `test_a5_count_property_invariant_never_negative`
+egy 200-lépéses randomizált `set`/`remove`/`count` szekvenciában a `count`
+Python-változót KIZÁRÓLAG az `else: count = _count()` ágon (`op == 2`) töltötte
+fel, de a `assert count >= 0` MINDEN iterációban, feltétel nélkül lefutott.
+`seed=42` (a repó dev-alapértelmezése, `PROPERTY_SEED` hiányában) mellett az
+ELSŐ húzott `op` VÉLETLENÜL `2` — ezért a teszt lokálisan és a mai
+`backend-ci.yml`-ben (ami NEM állít `PROPERTY_SEED`-et) mindig zöld volt. Öt
+másik seeddel (1, 2, 12345, 999999) mérve az ELSŐ iteráció `op`-ja 0 vagy 1
+lehet, és ilyenkor `count` MÉG SOHA nem kapott értéket ebben a
+függvényhívásban → azonnali `UnboundLocalError: local variable 'count'
+referenced before assignment` — a teszt SAJÁT docstringjének "CI can
+monkeypatch seed if it wants a fresh draw per run" állítását megcáfolva. A
+review saját kézhen, több seeddel futtatva fedezte fel — a zöld gate-futtatás
+(sem az implementer sajátja, sem a review első, seed=42-es köre) ezt NEM
+mutatta meg.
+
+**Miért.** A minta egy Python-specifikus csapda: egy `if/elif/else` ág CSAK
+az `else`-ben ír egy változót, de egy UTÁNA következő, a blokkon KÍVÜLI sor
+FELTÉTEL NÉLKÜL olvassa — ez csak akkor derül ki, ha a `else` ág a LEGELSŐ
+iterációban SOSEM fut le. Egy fix seed (42) mellett ez a feltétel véletlenül
+sosem teljesül, ezért a hiba HOLTAN marad a kódban, amíg valaki egy MÁSIK
+seeddel nem futtatja — pontosan az a forgatókönyv, amit a projekt HORIZON
+property-gate konvenciója (`docs/LESSONS.md`, CLAUDE.md) a `test/property/`
+Dart-tesztekre előír (`PROPERTY_SEED=${{ github.run_id }}` egy külön CI HARD
+lépésben), de a `backend/` Python pytest suite-ra MA nincs bevezetve — ez a
+kör volt az ELSŐ, amelyik egy randomizált property-tesztet hozott a backend
+oldalra, és a hiányzó backend-oldali randomizált-seed CI-lépés miatt ez a
+hibaosztály MA láthatatlan marad a gate-en.
+
+**Hogyan alkalmazd.** (1) Egy randomizált property-tesztben SOHA ne
+hagyatkozz egy `if`/`elif`/`else` ág egyikén beállított lokális változóra egy
+AZON KÍVÜLI, feltétel nélküli assertben — vagy inicializáld a változót a
+ciklus ELŐTT egy explicit kezdőértékkel, vagy (a szigorúbb, helyes megoldás)
+olvasd újra MINDEN iterációban, a mutáció UTÁN, hogy az invariáns ténylegesen
+minden lépést mérjen, ne csak a véletlenül kiválasztott olvasásokat. (2) Egy
+`PROPERTY_SEED`-alapú randomizált tesztet a review-nak KÖTELEZŐ legalább 3-4
+KÜLÖNBÖZŐ, nem-default seeddel is lefuttatnia — a `seed=42`-es zöld önmagában
+NEM bizonyíték egy randomizált teszt helyességére, csak arra, hogy AZZAL az
+egy adott véletlen-sorozattal nem bukott. (3) Ha egy kör ÚJ randomizált
+property-tesztet hoz egy olyan gate-ágra (itt: `backend pytest`), amelyiknek
+MA nincs randomizált-seed CI-lépése (a Dart `test/property/`-vel ellentétben),
+az egy DOKUMENTÁLANDÓ rés — a backend property-tesztek ma csak a fix
+`seed=42`-vel futnak CI-ban, tehát egy hasonló hiba a jövőben is átcsúszhat,
+amíg egy backend-oldali randomizált-seed CI-lépés nem épül be (ez NEM ennek a
+körnek a hatásköre — a `tools/`/`.github/` tilos zóna —, hanem egy jövőbeli,
+kifejezetten erre irányuló kör/ADR feladata).
+
+**Őrteszt:** `backend/tests/community/test_reaction_service.py::test_a5_count_property_invariant_never_negative`
+— a javító kör 1 (`bb112754`) után a review öt `PROPERTY_SEED` értékkel (1, 2,
+12345, 999999, 42) saját kézzel újrafuttatta, mind zöld, `UnboundLocalError`
+nélkül.
+
+## L437 — Egy SDD-ből szó szerint másolt brief-scope-mondat ("post projection tartalmazza a viewer reactiont") a `allowed_paths`-tól függetlenül íródott — a pre-flight grep-je fogta meg, mielőtt bármi dispatch-elve lett volna (E09-R15, 2026-08-23)
+
+**Mit mértünk.** Az E09-R15 brief §3 scope-mondata ("post-projekció: viewer
+reaction + aggregált count", "reaction set/remove endpoint idempotensen") SZÓ
+SZERINT a `docs/sdd/10-epic-09-community-platform.md` Feladatok-listájából
+származott (`node tools/knowledge-rag.mjs --top 5` megerősítette: a SDD és a
+brief ugyanazt a mondatot hordozza). A pre-flight grep-je (`PostOut` a
+`schemas/post.py`-ban, `FeedPostItem` a `schemas/feed.py`-ban, a kitöltő
+`routers/posts.py::_row_to_out` / `routers/feed.py`) megmutatta, hogy EGYIK
+fájl SINCS a brief `allowed_paths`-án — sem egy reaction-router fájl, sem a
+`backend/app/main.py` router-regisztráció. Az SDD-feladatlista a TELJES,
+több körre bontható funkciót írja le; a konkrét kör briefje (amit ugyanaz a
+Claude-session írt korábban) a HTTP-router-t és a wire-projekció-bővítést
+nem vette fel az engedélyezett fájlok közé — a scope-mondat és az
+`allowed_paths` egymástól FÜGGETLENÜL íródott, jóllehet ugyanabban a
+dokumentumban élnek.
+
+**Miért.** Egy brief §3 "Benne van" listája gyakran az SDD forrás-fejezet
+feladat-mondatait örökli szó szerint, mert azok olvashatóan összefoglalják a
+funkció TELJES ívét — de a `allowed_paths` egy KÜLÖN, később meghúzott
+döntés, ami egy adott kör KONKRÉT terjedelmét rögzíti. A két lista
+divergálhat anélkül, hogy bárki észrevenné, amíg valaki explicit grep-eli a
+scope-mondatban implikált fájlokat az `allowed_paths` ellen — pontosan azt,
+amit a brief SAJÁT pre-flight-figyelmeztetése ("olvasd újra a Kör 11
+post-projekció TÉNYLEGES mezőit... Eltérésnél §0.0 brief-revízió") előírt.
+
+**Hogyan alkalmazd.** Amikor egy brief §3 scope-mondata egy MEGLÉVŐ,
+megnevezett adatszerkezet (`PostOut`, `FeedPostItem`, egy DTO/projection)
+BŐVÍTÉSÉT ígéri: (1) grep-eld ki, MELYIK fájl(ok) definiálják és TÖLTIK KI
+azt a szerkezetet ma (a definíció ÉS a kitöltő kód gyakran KÜLÖN fájlban él —
+itt a séma `schemas/post.py`-ban, a kitöltés `routers/posts.py`-ban); (2)
+ellenőrizd, mindegyik szerepel-e az `allowed_paths`-on; (3) ha nem, MÉRD MEG,
+hogy a §6 acceptance-cellák ténylegesen IGÉNYLIK-e a bővítést, vagy a mérhető
+viselkedés a MEGLÉVŐ `allowed_paths`-on belül (jellemzően egy szolgáltatás-
+réteg függvényként) is teljesíthető — ha igen, egy §0.0 D-döntés
+DOKUMENTÁLTAN szűkíti a scope-mondatot az `allowed_paths`-hoz, a wire-szintű
+bővítést egy KÉSŐBBI kör hatáskörébe utalva; ha nem, a brief-revízió a lista
+BŐVÍTÉSE (nem a scope-mondat gyengítése). A Kör 13/14 pár (tisztán backend
+feed-query, majd tisztán UI, valós HTTP-bekötés NÉLKÜL) élő precedens erre a
+réteg-szétválasztási mintára — érdemes RÁ hivatkozni a §0.0-ban, ha
+alkalmazható.
+
+**Őrteszt:** nincs — ez egy pre-flight ELJÁRÁSI lecke (a §0.0 brief-revízió
+maga a bizonyíték, `docs/rounds/e09-r15-reactions-and-optimistic-consistency.md`
+§0.0 D2), nem egy kódba épített, gépi mércével mérhető invariáns.
+
+## L438 — `tools/round-land.sh` repo_root a script SAJÁT elhelyezkedéséből számol, nem a hívó cwd-jéből — ezért az izolált klónból hívva megkerüli a megosztott fő fa idegen commitolatlan munkáját (E09-R16, 2026-08-23)
+
+**Mit mértünk.** Az E09-R16 landolásakor a megosztott `/home/ubuntu/music-theory`
+fában egy MÁSIK, aktív VS Code-session (PID 3315247, governance/pipeline-
+infra munka: `pipeline-slots` 1→2, `engine-registry.tsv` effort-váltás,
+teszt-fájlok) commitolatlan módosításokat tartott a `main` ágon. A
+`tools/round-land.sh` első hívása (`/home/ubuntu/music-theory/tools/
+round-land.sh ...`-ként, a megosztott fából) `BLOCKED — a PR metaadata nem
+egyezik a mért local HEAD-del`-lel bukott, mert a script saját
+`repo_root`-ja (`$(cd "$script_dir/.." && pwd)`, a `BASH_SOURCE`-ból
+számolva) a megosztott fára mutatott, aminek a kijelölt ága `main` volt, nem
+a kör branch-e — és a `main`-en checkoutolni idegen, commitolatlan munkát
+veszélyeztetett/blokkolt volna.
+
+**A megoldás.** Ugyanaz a script a SAJÁT, izolált munkapéldányból hívva
+(`/home/ubuntu/ss-minimax-e09-r16/tools/round-land.sh ...`) a `repo_root`-ot
+a MUNKAPÉLDÁNY gyökerére számolta — ott a kör branch-e volt checkoutolva, a
+HEAD egyezett a PR head OID-jával, és a landolás (rebase → kombinált-HEAD
+gate → safe-force-push → squash-merge) a megosztott fa érintése NÉLKÜL
+lefutott. A `main` a landolás alatt HÁROMSZOR mozdult (ugyanaz a párhuzamos
+governance-session pusholt) — a `round-land.sh` mindhárom alkalommal
+helyesen `blocked`-ot jelzett új HEAD-del, a friss exact-SHA CI-dispatch
+(`full-gate.yml` + `router-ci.yml`) és az újrahívás mintája (`docs/execution/
+09-sdd-round-driver` skill §5) mindhárom kört zárta, önálló user-beavatkozás
+nélkül.
+
+**Miért.** A `tools/mm-round.sh`/`tools/codex-round.sh` MÁR dokumentálja ezt
+a mintát az implementer-dispatchhoz (`git worktree add` helyett `git clone`,
+`docs/LESSONS.md` L175/L179) — ugyanaz a `BASH_SOURCE`-alapú `repo_root`-
+számítás vonatkozik a `round-land.sh`-ra IS, csak a landolási lépésben eddig
+nem volt mérve. A megosztott fő fa több párhuzamos session (telefonos
+remote-control, governance-driver, kör-orchestrátor) között OSZTOTT
+munkaterület (`[[shared-tree-coordination]]` memória) — bármelyik git-
+művelet, ami a megosztott fa AKTUÁLIS branch-ét vagy working tree-jét
+módosítaná (checkout, reset, rebase a helyszínen), ütközhet egy másik
+session folyamatban lévő, commitolatlan munkájával.
+
+**Hogyan alkalmazd.** Kör-landoláskor `tools/round-land.sh`-t MINDIG a kör
+SAJÁT, izolált munkapéldányából hívd (`<munkapéldány>/tools/round-land.sh`),
+SOSE a megosztott fő fából — még akkor is, ha a megosztott fa épp `main`-en
+áll és "üresnek" tűnik: egy másik session bármikor commitolatlan munkát
+hagyhat ott (`git status --short` ELLENŐRZÉSE a landolás előtt kötelező, de
+maga az ellenőrzés NEM helyettesíti az izolált munkapéldány használatát,
+mert a dirty state a landolás KÖZBEN is megjelenhet). Ha a `main` a landolás
+alatt mozdul, ismételd a ciklust (fetch → CI-dispatch exact-SHA-n → várakozás
+→ `round-land.sh` újrahívás) — mindegyik forduló önmagában biztonságos, a
+script saját `BLOCKED`/exact-SHA-igénye a védőháló.
+
+**Őrteszt:** nincs — ez egy operátori/procedurális lecke a landolási
+lépéshez, nem egy kódba épített invariáns; a `round-land.sh` saját
+fail-closed `BLOCKED` jelzése (PR-metaadat-egyezés, exact-SHA CI-igény) MÁR a
+gépi őr, ezt a leckét a HELYES hívási hely (izolált klón vs. megosztott fa)
+egészíti ki.
+
+## L439 — Motorváltáskor a queue `engine` oszlopa NEM az utolsó szó: a kör-ág prefixe felülírja, és ezzel NÉMÁN az orchesztrátor-párt is elrontja — ellenőrző lista új motor beállításához (E13-R05 / pipeline-infra, 2026-08-23)
+
+**Mit mértünk.** A user-döntés az volt, hogy a 2. slot a Chapter 13 UI-sávot
+vigye **Opus 5 `max` orchesztrátorral és `sonnet-impl` (Sonnet 5 `high`)
+implementerrel**. A queue mind a 32 E13-sora át lett állítva `sonnet-impl`-re,
+a slot 2-re, a teszt-cellák együtt frissültek, minden zöld volt — a lánc mégis
+ezt naplózta induláskor:
+
+```
+FOLYTATÁS: a(z) E13-R05 ágán már terra commitolt — az implementer fix marad
+           (queue: sonnet-impl → terra)
+következő kör: E13-R05 · orchestrátor=claude · implementer=terra
+```
+
+és a ténylegesen elinduló process argv-je `--model claude-sonnet-5 --effort
+high` volt, **nem** Opus 5 max. **Két kár egyszerre, egyetlen okból:** az
+ADR 0242 D2 pin a kör MÁR LÉTEZŐ távoli ágának prefixéből méri az implementert
+(`terra/e13-r05-…` → `terra`, egy 2026-08-21-én félbemaradt körből), a
+queue oszlopát pedig szándékosan figyelmen kívül hagyja; az orchesztrátor-pár
+viszont (`orch_pair_model`/`orch_pair_effort`) a KÖR IMPLEMENTERÉBŐL számol,
+tehát a rossz implementer automatikusan rossz orchesztrátort is adott. Ráadásul
+a pinelt `terra` előfizetése aznap fogyott el — a dispatch menthetetlenül
+elbukott volna, kétszer egymás után (15:40 és 15:45), Opus-keret helyett
+Sonnet-keretet égetve.
+
+**A javítás.** `engine_is_runnable` + `unrunnable_engines` (ma: `codex terra
+sol`, mind a közös, elfogyott ChatGPT Pro kereten) és `resume_implementer_for`:
+a pin CÉLJA — ne keveredjenek a motorok egy körön belül — nem teljesíthető, ha
+a pinelt motor nem él, ilyenkor a queue sora lép vissza életbe, naplózva. A
+lista `${VAR-…}` (NEM `:-`) alakú: az előfizetés visszatérésekor egyetlen sor
+törlése (vagy `PIPELINE_UNRUNNABLE_ENGINES=""`) kapcsolja vissza. Mérő cellák:
+`tools/tests/test_round_resume_independence.py::DeadEnginePinTest`.
+
+**Ellenőrző lista — mire kell figyelni, ha ÚJ MOTORT állítunk be.** Sorrendben,
+mindegyik a driver SAJÁT horgával mérve, nem kódolvasásból:
+
+1. **Van-e már ág a körhöz?** `tools/round-pipeline.sh --branch-implementer <kör>`
+   → ha nem üres, a queue oszlopa NEM érvényesül. `--resume-implementer <kör>`
+   megmondja, mi lesz a runnability-őr után.
+2. **Él-e a motor?** `--engine-runnable <motor>`. Egy elfogyott előfizetés nem
+   a nyilvántartásban látszik: az `engine-profile.sh check` CSAK profilt és
+   kulcsot ellenőriz, kvótát NEM mér.
+3. **Mi lesz az orchesztrátor-pár?** `--session-config round <motor>`. A pár a
+   kör motorjához van kötve (nem a slot sorszámához) — rossz implementer =
+   rossz orchesztrátor, némán.
+4. **Ütközik-e a reviewerrel?** A claude-ág MODELL-azonosságon mér (mint a
+   sol/terra ág): Claude implementer csak MÁS Claude-modellű orchesztrátor
+   alatt megy, különben `H-INDEP`, ami **nem önjavítható** (ADR 0138).
+5. **Az `--effort` a nyilvántartás `reasoning` oszlopából jön** (claude-harness
+   motoroknál), nem a queue-ból és nem a briefből.
+6. **Kap-e egyáltalán slotot?** A sáv csak akkor kap slotot, ha a sorai a
+   nyitott sorok ELEJÉN állnak. MÉRT hiba ugyanaznap: a Ch13 blokk az E09 mögé
+   került, és mivel két egymást követő E09-kör diszjunkt LEHET, a tervező
+   mindkét slotot E09-cel töltötte fel. Mérce: `round-slots.py plan --slots N`.
+7. **A commitolt döntés-fájlok és az őket őrző teszt-cellák EGYÜTT írandók**
+   (`pipeline-slots` ↔ `test_the_committed_slots_file_value_is_*`,
+   queue-motor ↔ `test_open_rounds_follow_the_measured_engine_rule` és az
+   engedélyezett-motorok halmaza).
+8. **Commitolni ÉS pusholni kell.** Commitolatlan fa → `piszkos munkafa — a
+   lánc nem indul`; csak lokálisan commitolt változás → a D1 main-szinkron
+   VALÓDI DIVERGENCIÁNAK veszi. Egy futó kör saját, még untracked artefaktuma
+   (pl. `docs/reviews/<kör>-review.md`) ugyanígy blokkol — az a kör landolásakor
+   oldódik fel (vö. [[L438]]).
+9. **A `tools/round-pipeline.sh`-t ATOMIKUSAN kell cserélni** (temp fájl +
+   `os.replace`/`mv`), mert menet közben FUT — helyben csonkolva a futó bash
+   félbevágott szkriptet olvasna tovább.
+10. **Rosszul induló kört NEM kilövéssel kell megállítani.** MÉRVE ugyanaznap,
+    a fenti javítás közben: a `kill` + `tmux kill-session` után a driver a
+    sessiont `H-NOSIGNAL`-nak minősítette („jelzés nélkül ért véget, exit
+    124"), a következő firing pedig ÖNJAVÍTÓ KÖRT indított rá — Opus 5 `max`
+    diagnosztizálta volna, miért halt meg a session, aminek a helyes válasza
+    „egy ember kilőtte" lett volna; ez ráadásul fogyasztott a 3-as
+    önjavítási keretből. Ha mégis kilövés kell (mert a kör eleve rossz
+    motorral indult), utána KÖTELEZŐ a támogatott takarítás:
+    `tools/pipeline-status.sh --resume` (halt feloldása + archiválás),
+    `tools/pipeline-status.sh --heal-reset` (kísérletszámláló) és az
+    `.pipeline/inflight/<kör>` törlése — enélkül a lánc a saját
+    beavatkozásunkat kezdi javítani.

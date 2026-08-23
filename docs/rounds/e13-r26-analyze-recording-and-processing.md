@@ -25,12 +25,14 @@ allowed_paths = [
   "test/features/analyze/recording_state_test.dart",
   "test/features/analyze/processing_progress_test.dart",
   "test/features/analyze/analyze_cleanup_test.dart",
+  "test/ui/goldens/",
   "docs/rounds/e13-r26-analyze-recording-and-processing.md",
 ]
 gate_tests = [
   "test/features/analyze/recording_state_test.dart",
   "test/features/analyze/processing_progress_test.dart",
   "test/features/analyze/analyze_cleanup_test.dart",
+  "test/ui/goldens/e13_r26_screens_golden_test.dart",
 ]
 native_gate = false
 ```
@@ -138,6 +140,7 @@ feldolgozás — nem néma teljesítményesés.
 | A6 | A kevés tárhely a felvétel ELŐTT jelzett | `recording_state_test.dart` |
 | A7 | A torzítás és a csend külön, cselekvésre hívó állapot | ugyanott |
 | A8 | A degradált mód kimondja az okát | `processing_progress_test.dart` |
+| A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r26_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -149,6 +152,7 @@ feldolgozás — nem néma teljesítményesés.
 | Hibaágon nyitva marad a mikrofon | **A5** |
 | A tárhely a felvétel közben fogy el jelzés nélkül | A6 |
 | A torzítás és a csend egy „hiba" állapot | A7 |
+| A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
 **A haladásjelzés három kötelező cellája** (a küszöb: ad-e a szakasz mérhető
 haladást):
@@ -166,8 +170,25 @@ százalékot a határozatlan szakaszra → az **A3** cellának PIROSNAK kell len
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/analyze/recording_state_test.dart test/features/analyze/processing_progress_test.dart test/features/analyze/analyze_cleanup_test.dart
+tools/round-gate.sh test/features/analyze/recording_state_test.dart test/features/analyze/processing_progress_test.dart test/features/analyze/analyze_cleanup_test.dart test/ui/goldens/e13_r26_screens_golden_test.dart
 ```
+
+**A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
+minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
+keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
+KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+
+```bash
+~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r26_screens_golden_test.dart
+```
+
+A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
+márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
+meglévő golden-teszt mért viselkedése, az elrendezést, méretezést és színeket
+nem érinti. MIÉRT ez a kör dolga és nem az E13-R36-é: a záró vizuális
+regressziós kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt,
+hogy a képernyő eleve csúnya-e, a saját körében kell látni.
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
 `&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`

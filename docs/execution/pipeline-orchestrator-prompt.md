@@ -247,57 +247,63 @@ használja; új task ID-val vagy state-törléssel újrakezdeni tilos. Új
 `READY_FOR_REVIEW` után az orchestrátor commitolja a javítást és megismétli a
 független review-t. Csak a **review + CI + merge** útvonal jelezhet `done`-t.
 
-### ✅ MOTOR-FELÁLLÁS (2026-08-20, user-döntés — Pro-keret égetése a lejáratig)
+### ✅ MOTOR-FELÁLLÁS (2026-08-21, user-döntés — „lejárt a GPT kvóta")
 
-A ChatGPT Pro előfizetés **napokon belül lejár**, és a keretének ~90%-a
-megmaradt — a user döntése: „hadd fogyjon el". Amíg az előfizetés él, az
-érvényes felállás:
+A ChatGPT Pro előfizetés kerete **elfogyott**, tehát a Codex-oldal (a Sol ÉS a
+Terra — közös `~/.codex-terra` auth) NEM futtatható. Az érvényes felállás:
 
-- **Orchestrátor / reviewer / irányító: Sol** (`gpt-5.6-sol`, Codex CLI,
-  ugyanaz a `~/.codex-terra` CODEX_HOME, explicit `-m gpt-5.6-sol`; a
-  modell-ID külső forrásból megerősítve 2026-08-20: a Codex CLI GPT-5.6
-  szintjei `gpt-5.6-sol` / `gpt-5.6-terra` / `gpt-5.6-luna`, a Sol a
-  flagship) — a rotációt a **commitolt `docs/execution/orchestrator-rotation`
-  fájl** hordozza (`sol`), ami ERŐSEBB a `PIPELINE_ORCH_ROTATION` env-nél
-  (file > env > script-default): a crontab exportált env-je nem írhatja
-  felül a git-en érkező user-döntést.
-- **Implementer: `terra`** (Codex CLI, `~/.codex-terra`, `gpt-5.6-terra`) —
-  a queue MINDEN nyitott sora explicit `terra` (az ADR 0069 mért
-  motor-szétosztása erre az időszakra felfüggesztve; a queue fejléce
-  dokumentálja).
-- **Javító kör: ugyanaz a `terra`** — nincs motorváltás javításkor, és a
-  MiniMax-ra írt „EGY javító kör, utána Codex-eszkaláció" szabály tárgytalan,
-  amíg a Terra az implementer.
-- **Mind a két slot ezzel a felállással megy** (user-döntés 2026-08-20,
-  kiterjesztés): a kért slotszám a **commitolt `docs/execution/pipeline-slots`**
-  fájlban utazik (`2`), ami ERŐSEBB a `PIPELINE_SLOTS` env-nél (file > env >
-  script-default) — ugyanaz a szerződés, mint a rotáció-fájlnál, ugyanazzal a
-  mért indokkal (a cron env-je némán egysávosra vinné vissza a láncot). A
-  RAM-fedezet őre változatlan: a fájl a KÉRT sávokat mondja meg, a tényleges
-  párhuzam ettől lefelé térhet el, naplózott `SLOT-KORLÁT` sorral. Állapot:
-  `tools/pipeline-status.sh` („slot: N kért → M tényleges").
-- **Az önjavító kör is slot**, ezért az sem megy a Claude-keretből: a Sol-pin
-  alatt a heal-ülést a **Sol** vezényli, rögzített identitása a nyilvántartás
-  `sol` sora, és a harmadik (utolsó) kísérlet innen vált MÁS modellre — a
-  gyakorlatban a **Terra** (ADR 0307 §2). Pin nélkül a heal a régi,
-  kvóta-tudatos Claude→Terra úton marad.
-- **Függetlenség:** a Sol↔Terra pár a modell-azonossági kulcson mérve
-  független (két különböző modell; `orchestrator_conflicts_with_implementer`),
-  a KÖZÖS Pro-előfizetés keretét a user e döntéssel tudatosan vállalta —
-  éppen a keret elégetése a cél.
-- **A lejárat UTÁN** (a Codex-oldal auth/kvóta végleg elhal): írd át a
-  `docs/execution/orchestrator-rotation` fájlt `alternate`-re (a
-  `test_the_committed_rotation_file_value_is_sol` cellával EGYÜTT) — ezzel a
-  heal is visszaáll a Claude-útra —, döntsd el, marad-e a két slot
-  (`docs/execution/pipeline-slots` + a
-  `test_the_committed_slots_file_value_is_two` cella EGYÜTT írandó át), oszd
-  vissza a nyitott queue-sorokat a mért szabály szerint (`minimax`/`codex` →
-  de a `codex`/`terra` sorok a lejárt előfizetéssel NEM futtathatók —
-  ilyenkor `minimax`/`sonnet-impl` a mezőny), és frissítsd ezt a blokkot.
+- **Orchestrátor / reviewer / irányító: Claude Sonnet 5, `--effort high`**
+  (`PIPELINE_MODEL=claude-sonnet-5`, `PIPELINE_EFFORT=high` script-defaultok;
+  az önjavító session ugyanezt örökli). A rotációt a **commitolt
+  `docs/execution/orchestrator-rotation` fájl** hordozza (`claude`), ami
+  ERŐSEBB a `PIPELINE_ORCH_ROTATION` env-nél (file > env > script-default): a
+  crontab exportált env-je nem írhatja felül a git-en érkező user-döntést.
+  A `max` helyett `high`: a Codex-oldal kiesésével az EGYETLEN orchestrátor a
+  Claude, a keretét tehát nem égetheti a maximum.
+- **Implementer: `minimax`** (Claude Code harness, `~/.claude-minimax`,
+  `MiniMax-M3`, saját `MINIMAX_API_KEY`) — a queue MINDEN nyitott sora explicit
+  `minimax` (az ADR 0069 mért motor-szétosztása erre az időszakra
+  felfüggesztve; a queue fejléce dokumentálja). Az M3 mért gyengéit (invariánst
+  lazít) gépi őrök fogják: `docs/execution/implementer-preamble-minimax.md`.
+- **Javító kör:** a MiniMax-ra írt „EGY javító kör, utána Codex-eszkaláció"
+  szabály Codex-oldal híján tárgytalan — az eszkaláció célpontja nem
+  futtatható, tehát a javító kör is `minimax`, és a mércét gépi őr tartja.
+- **Egy slot** (user-döntés 2026-08-21): a kért slotszám a **commitolt
+  `docs/execution/pipeline-slots`** fájlban utazik (`1`), ami ERŐSEBB a
+  `PIPELINE_SLOTS` env-nél. MÉRT indok: a Sol-pin alatt mindkét sáv a
+  Codex-keretből ment, most viszont minden sáv orchestrátora a Claude — két
+  párhuzamos session ugyanabból az előfizetésből enne, és visszahozná az
+  ADR 0222-t kikényszerítő hibaosztályt (a keretnek nekifutó kör →
+  H-NOSIGNAL halt → önjavító kör, ami szintén a keretből megy). A RAM-fedezet
+  őre változatlan; állapot: `tools/pipeline-status.sh` („slot: N kért → M
+  tényleges").
+- **A Codex-oldal kizárása gépi, nem emlékezet:** a `fallback_engine` default
+  `none`, és az `orchestrator_available` a `terra`/`sol` széket PONTOSAN ezen
+  a kapcsolón méri — halott motor tehát sem kör-orchestrátorként, sem
+  folytatáskori alternatívaként, sem heal-motorként nem kaphat munkát. A lánc
+  Claude-zárlat alatt inkább KIVÁR (a régi, kvóta-tudatos halt-út).
+- **Függetlenség:** Claude Sonnet 5 (orchestrátor/reviewer) ≠ MiniMax-M3
+  (implementer), és a `minimax` sor külső kulcsos, tehát nem a Claude-keretből
+  megy (`engine_uses_claude_quota` hamis) — a pár mindkét mérési kulcson
+  független.
+- **Ha a Codex-előfizetés újraéled:** írd át a
+  `docs/execution/orchestrator-rotation` fájlt (`sol` vagy `alternate`) a
+  `test_the_committed_rotation_file_value_is_claude` cellával EGYÜTT, döntsd el
+  a slotszámot (`docs/execution/pipeline-slots` + a
+  `test_the_committed_slots_file_value_is_one` cella EGYÜTT írandó át), állítsd
+  vissza a `fallback_engine` defaultot `terra`-ra, oszd vissza a nyitott
+  queue-sorokat a mért szabály szerint (ADR 0069: `minimax`/`codex`), és
+  frissítsd ezt a blokkot. A Sol/Terra GÉPEZETE végig a helyén maradt, tehát
+  ez fájl-átírás, nem újraépítés.
 
-Ha a Sol/Terra limitre fut, a `codex_usage_limit_hold`
-(`tools/round-pipeline.sh`) tartja vissza a firingeket a reset-időig; a
-motorváltás akkor is **user-döntés**, nem automatikus.
+**LEZÁRT előző felállás (2026-08-20, Pro-keret égetése):** orchestrátor Sol
+(`gpt-5.6-sol`), implementer `terra`, két slot. A Pro-keret elfogyásával
+hatályát vesztette; a `sol` sor és a `sol` ágak a driverben szándékosan
+maradnak a visszakapcsolhatóság kedvéért.
+
+Ha a Claude session-kerete fogy, a `claude_usage_block_until` /
+`claude-blocked-until` tartja vissza a firingeket a reset-időig — motorváltás
+csak **user-döntés**, nem automatikus.
 
 ### Nevesített motor a nyilvántartásból (`minimax`, `codex`, `terra`, `sonnet-impl`, …)
 

@@ -1,6 +1,7 @@
 # E13-R05 — Spacing, radius, elevation és surface primitívek
 
-- **Státusz:** IN PROGRESS (pre-flight: 2026-08-21, `main @ 1281dc40`)
+- **Státusz:** IN PROGRESS — folytatás (pre-flight: 2026-08-21, `main @ 1281dc40`;
+  folytatás-revízió: 2026-08-23, upstream-szinkron `main @ 0d5519bf`, §0.0.2)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 5
 - **Kör-azonosító:** `E13-R05`
 - **Branch:** `terra/e13-r05-spacing-and-surfaces`
@@ -53,6 +54,82 @@
   owner: a surface-primitívek újak, a katalógus és mindkét célzott teszt exact
   scope-ban van. A teljes korpuszos találatok ezen felül nem adtak relevánsabb
   előzményt.
+## 0.0.1 H3 scope-revízió — ADR 0112 önjavító kör, 2026-08-21
+
+A megállt PR #392 exact `03788441` Full Gate-je háromszor ugyanazt a meglévő
+contract-ütközést mérte. A javított `SsCard` a `SsSurface` egyetlen
+`Material`-rétegét használja, ezért szándékosan nincs benne legacy `Card`.
+Ezzel szemben a már létező
+`test/core/design_system/component_catalog_test.dart:50,68` három katalógus-
+cellája `find.byType(Card)` alapján pontosan egy `Card`-ot várt; a tényleges
+hiba mindháromszor `Found 0 widgets with type "Card"` volt. A product javítás
+így szükségképpen pirosra vitte a briefen és célzott gate-en kívüli tesztet.
+
+Ez B osztályú, tranzakciós brief-hiány, nem production- vagy gate-hiba. Az
+allowlist és a célzott gate pontosan a
+`test/core/design_system/component_catalog_test.dart` fájllal bővül. A
+folytatott product kör ugyanabban a commitban köteles úgy frissíteni a három
+katalógus-cellát, hogy a compile-time/debug route-kapu és a dark/light smoke
+contract megmaradjon, miközben az `SsCard` jelenlétét és annak pontosan egy
+`Material` leszármazottját méri. Más `test/core/design_system/**` út nem
+nyílik meg; a self-heal product Dart-kódot nem visz előre.
+
+## 0.0.2 Folytatás-revízió — 2026-08-23 (orchestrátor: Claude, motor: `sonnet-impl`)
+
+**Mért kiindulási állapot.** A kör NEM újraindul: a
+`terra/e13-r05-spacing-and-surfaces` ág `03788441` csúcsán a teljes surface-
+implementáció, az APPROVED független review
+(`docs/reviews/e13-r05-review.md` — nyitott BLOCKER 0 · MAJOR 0 · MINOR 0 ·
+NOTE 1) és a zöld célzott round-gate már megvan. A PR #392 azért zárult
+merge nélkül, mert az exact-SHA Full Gate háromszor a §0.0.1-ben leírt
+katalógus-contract ütközést mérte. Az egyetlen nyitott munka ezért a §0.0.1
+által megnyitott **A13** cella.
+
+**Upstream-szinkron (a folytatás előfeltétele).** A `03788441` ág `origin/main
+@ 0d5519bf`-et nem tartalmazta (`git merge-base --is-ancestor origin/main
+HEAD` → 1). A merge egyetlen ütközése ez a brief volt; minden más útvonal
+automatikusan egyesült. Az ütközés tartalmilag mindkét oldalon additív volt: a
+`0.0` pre-flight (ág) és a `0.0.1` H3 self-heal (main) **együtt** maradnak meg.
+
+**A13 — szándékos átszámozás, nem tartalomvesztés.** A self-heal a
+katalógus-cellát `A8`-ként vezette be, miközben az ágon az `A8`…`A12` már
+implementált ÉS review-zott jelentéssel bír (`A8` = High Contrast erős border).
+Két különböző szerződés ugyanazon a sorszámon félrevezető, ezért a self-heal
+cellája **`A13`** számot kap; a szövege, a §4 sora, a §6.1 mérce-mátrix sora,
+a §7 gate-hívása és a §8/4 lépése változatlan. A `docs/reviews/e13-r05-review.md`
+`A8`…`A12` sorai így érvényben maradnak. Ez a §2 szerinti brief-revízió, nem
+lista-tágítás: az `allowed_paths` és a `gate_tests` a self-heal által
+megnyitott listával azonos.
+
+**Visszakeresett előzmény (ADR 0312 / brief-lint S8).** Szűkítve
+(`--corpus lessons,halts,adr`, majd `lessons,halts`), végül a teljes korpuszon:
+
+- [`lessons/L393`](../LESSONS.md) — **a közvetlen előzmény**: pontosan ez a
+  kör, ez a hibaosztály. Egy katalógusban lecserélt widgettípus scope-ja a
+  legacy finder-contractot is magában foglalja.
+- [`lessons/L420`](../LESSONS.md), [`lessons/L106`](../LESSONS.md),
+  [`lessons/L145`](../LESSONS.md) — ugyanaz a hibaosztály általánosan: a
+  célzott gate NEM látja a kör-scope-on kívüli, csak a teljes suite-ban futó
+  contract-tesztet. **Mért fedezet ehhez a körhöz:** a PR #392 exact
+  `03788441` Full Gate-je 5519 zöld mellett PONTOSAN 3 hibát adott, mind a
+  három `Found 0 widgets with type "Card"` ugyanabban a fájlban — tehát a
+  teljes suite-ban nincs további, ezen kívüli sértett fogyasztó. Ez a mérés
+  határolja be a maradék kockázatot; a bizonyíték az új exact-SHA CI-futás.
+- [`lessons/L102`](../LESSONS.md) — az implementer saját `flutter test`
+  futtatása nem helyettesíti a `tools/round-gate.sh`-t (a `format` lépés
+  kimarad). A §7 hívása ezért kötelező, csővezeték nélkül.
+- [`ADR 0273`](../adr/0273-design-system-token-source-of-truth.md) — a
+  Component Catalog fejlesztői eszköz marad flag mögött: a route-kapu
+  contractja (compile-time OFF + debug-gate) NEM lazulhat.
+- [`ADR 0383`](../adr/0383-typography-and-text-scale-contract.md),
+  [`ADR 0385`](../adr/0385-surface-hierarchy-and-geometry-contract.md) — a
+  fejezet már merge-elt, illetve e körben írt geometria-szerződése.
+
+**Amit ez a folytatás NEM tesz.** Nem nyúl a már review-zott
+`lib/core/design_system/**` produkciós fájlokhoz és a két surface-teszthez,
+hacsak az A13 cella zöldre vitele meg nem követeli; az `SsCard` egyetlen
+`Material`-rétege szándékos, tehát a helyes irány a teszt-contract
+frissítése, NEM a legacy `Card` visszahozása.
 
 ```ai-router
 schema_version = 1
@@ -67,11 +144,13 @@ allowed_paths = [
   "lib/core/design_system/public.dart",
   "test/core/design_system/surfaces/ss_surface_test.dart",
   "test/core/design_system/surfaces/spacing_grid_test.dart",
+  "test/core/design_system/component_catalog_test.dart",
   "docs/rounds/e13-r05-spacing-and-surfaces.md",
 ]
 gate_tests = [
   "test/core/design_system/surfaces/ss_surface_test.dart",
   "test/core/design_system/surfaces/spacing_grid_test.dart",
+  "test/core/design_system/component_catalog_test.dart",
 ]
 native_gate = false
 ```
@@ -122,6 +201,7 @@ sötét témában dokumentálatlanul · `docs/adr/**`, `tools/**`, `.github/**`.
 | `documentation/component_catalog_screen.dart` | a primitívek bemutatása |
 | `public.dart` | az export bővítése |
 | `test/…/surfaces/*_test.dart` (2) | a §6 cellái |
+| `test/core/design_system/component_catalog_test.dart` | a route/smoke contract tranzakciós átállítása `Card`-ról `SsCard` + single-`Material` mérésre |
 | `docs/rounds/e13-r05-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/core/theme/**` · `lib/features/**` · `lib/app/**` ·
@@ -175,6 +255,7 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | A10 | Nested surface 2.0 text scale-en renderel kivétel és overflow nélkül | `ss_surface_test.dart` |
 | A11 | Compact/medium/expanded padding rendre a 16/24/32 dp `SsSpacing` tokenre oldódik | `spacing_grid_test.dart` |
 | A12 | A source-contract elutasítja a nyers `EdgeInsets`- és `BorderRadius.circular` geometriai literált az új primitivekben | `spacing_grid_test.dart` |
+| A13 | A katalógus route/smoke contractja `SsCard`-ot és pontosan egy `Material`-réteget mér, legacy `Card`-követelmény nélkül | `component_catalog_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -191,6 +272,7 @@ Prezentációs komponens. Az akkord/confidence adat kívülről jön.
 | Nested card fix magasságot kap és 2.0 text scale-en overflowol | **A10** |
 | Expanded padding 28 dp-re csúszik | **A11** |
 | A production primitive `EdgeInsets.all(16)`-ot használ token helyett | **A12** |
+| Az `SsCard` visszahoz egy második, legacy `Card`/`Material` réteget | **A13** |
 
 **A rács három kötelező cellája** (a küszöb: a 4dp osztó):
 
@@ -207,7 +289,7 @@ kívüli térközt az egyik primitívbe → az **A1** cellának PIROSNAK kell le
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart test/core/design_system/surfaces/spacing_grid_test.dart
+tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart test/core/design_system/surfaces/spacing_grid_test.dart test/core/design_system/component_catalog_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
@@ -220,10 +302,12 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 1. `ss_elevation.dart` — a Ch13 §9.5 felület-hierarchiája.
 2. `ss_surface.dart` — szint + háttérszín EGYÜTT, insetekkel.
 3. `ss_card.dart`, `ss_hero_card.dart`, `ss_section.dart`.
-4. A rács-kikényszerítő teszt.
-5. Component Catalog: a primitívek mindhárom témában.
-6. A valódi-sértés próba, §10-be dokumentálva.
-7. `tools/round-gate.sh` a §7 szerint.
+4. A meglévő `component_catalog_test.dart` három `Card`-elvárásának
+   tranzakciós frissítése: route/smoke contract + `SsCard` + single `Material`.
+5. A rács-kikényszerítő teszt.
+6. Component Catalog: a primitívek mindhárom témában.
+7. A valódi-sértés próba, §10-be dokumentálva.
+8. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 

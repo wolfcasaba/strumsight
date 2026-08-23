@@ -111,20 +111,83 @@ claude_bin=${CLAUDE_BIN:-claude}
 # Visszakapcsolás egyetlen env-vel: PIPELINE_MODEL=claude-opus-4-8.
 claude_model=${PIPELINE_MODEL:-claude-sonnet-5}
 
-# Effort: MAX (user-döntés 2026-08-06, harmadik lépés: az implementer visszaáll
-# a MiniMax M3-ra — az UNLIMITED, tehát az előfizetést már csak az orchestrátor
-# terheli, és a legdrágább ítéletek (terv, review, merge-kapu) megkapják a
-# maximumot. Az M3 mért gyengéit gépi őrök fogják, nem az orchestrátor éber-
-# sége (docs/execution/implementer-preamble-minimax.md).
+# Effort: HIGH (user-döntés 2026-08-21: „sonett 5 High orchestrator és minimax
+# implementer"). A GPT-kvóta elfogyott, tehát a Codex-oldal (Sol/Terra) kiesett,
+# és az EGYETLEN orchestrátor/reviewer a Claude — a keretét ezért nem égetheti a
+# `max`. A 2026-08-06-i `max` azért volt vállalható, mert akkor a Codex-oldal
+# még osztozott a munkán; most a `high` a mérce-tartó szint, amiből több kör fér
+# egy 5 órás ablakba. Az implementer változatlanul a MiniMax M3 (saját
+# API-kulcs, NEM a Claude-keret), mért gyengéit gépi őrök fogják, nem az
+# orchestrátor ébersége (docs/execution/implementer-preamble-minimax.md).
 # A CLI elfogadott szintjei: low | medium | high | xhigh | max (mérve:
-# `claude --help`, 2.1.223). Visszaemelés: PIPELINE_EFFORT=max.
+# `claude --help`, 2.1.223). Visszaemelés egyetlen env-vel: PIPELINE_EFFORT=max.
 # Az önjavító session ugyanazt a modellt kapja, mint a kör-orchestrátor — ez a
 # „minden rétegben" követelmény (user-döntés 2026-08-06). A heal-kör ítéletet hoz
 # (gyökérok-osztályozás, motorválasztás, mércét-nem-gyengítjük határ), ezért nem
 # ereszthető lejjebb az orchestrátornál; ha valaha külön kell állítani, arra való
 # a PIPELINE_SELFHEAL_MODEL.
-claude_effort=${PIPELINE_EFFORT:-max}
+claude_effort=${PIPELINE_EFFORT:-high}
 heal_model=${PIPELINE_SELFHEAL_MODEL:-$claude_model}
+# Üres, ha a heal-modellt NEM állította be explicit env — ilyenkor a heal is a
+# kör-szintű párt kapja (lásd orch_pair_model).
+heal_model_explicit=${PIPELINE_SELFHEAL_MODEL:+1}
+
+# --- Kör-szintű orchestrátor-pár (user-döntés 2026-08-23) ------------------
+# „a slot 1-en maradjon a Sonnet 5 high orchestrátor és a MiniMax implementer,
+#  a slot 2-n pedig Opus 5 max orchestrátor és Sonnet 5 high implementer, ez
+#  fogja fejleszteni az UI-t."
+#
+# A pár NEM a slot SORSZÁMÁHOZ kötődik, hanem a kör IMPLEMENTERÉHEZ — ez adja
+# ki pontosan ugyanazt a két felállást, de fail-safe módon. Ok: hogy egy kör
+# melyik fizikai slotba esik, az az időzítés esetlegessége (a driver a szabad
+# slotot adja oda); sorszám-alapú kötésnél egy UI-kör az 1-es slotba érkezve
+# Sonnet-orchestrátort kapna a Sonnet-implementer fölé — azaz a modell a saját
+# diffjét review-zná, amit a függetlenség-őr helyesen H-INDEP-re halt. A motor
+# viszont a kör sajátja (queue `engine` oszlop), tehát a párosítás mindig
+# együtt utazik a körrel.
+#
+#   sonnet-impl implementer  → Opus 5, effort max   (UI-sáv)
+#   minden más               → a globális default   (Sonnet 5, effort high)
+orch_pair_model() {    # $1=implementer motor
+  case "${1:-}" in
+    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_MODEL:-claude-opus-5}" ;;
+    *)           printf '%s' "$claude_model" ;;
+  esac
+}
+orch_pair_effort() {   # $1=implementer motor
+  case "${1:-}" in
+    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_EFFORT:-max}" ;;
+    *)           printf '%s' "$claude_effort" ;;
+  esac
+}
+
+# --- Nem futtatható motorok (user-döntés 2026-08-23) -----------------------
+# „codex terra és sol már nincs többé, elfogyott az előfizetés, majd egy hónap
+# múlva." A Codex-oldal egyetlen közös ChatGPT Pro kereten ül (mind gpt-5.6-*),
+# tehát a három név EGYSZERRE esett ki. Egy helyen soroljuk, hogy az előfizetés
+# visszatérésekor egyetlen sor törlése elég legyen.
+# `${VAR-...}` (NEM `:-`): az EXPLICIT üres érték azt jelenti, hogy minden motor
+# futtatható — ez a teszthorog és egyben a visszakapcsolás módja.
+unrunnable_engines=${PIPELINE_UNRUNNABLE_ENGINES-codex terra sol}
+engine_is_runnable() {   # $1=motor neve → 0, ha futtatható
+  local name
+  for name in $unrunnable_engines; do
+    [ "$1" = "$name" ] && return 1
+  done
+  return 0
+}
+
+# A folytatás implementere a runnability-őr UTÁN. Üres kimenet = nincs pin
+# (vagy elesett), tehát a queue `engine` oszlopa dönt. Külön függvény, hogy a
+# `--resume-implementer` teszthorogról pontosan az mérhető legyen, ami a
+# dispatch-ágon fut — ne egy hasonló, párhuzamosan karbantartott másolat.
+resume_implementer_for() {   # $1=kör-azonosító
+  local pinned
+  pinned=$(resolve_branch_implementer "$1")
+  [ -n "$pinned" ] || return 0
+  engine_is_runnable "$pinned" || return 0
+  printf '%s' "$pinned"
+}
 
 # A telefonos Code-lista MÉRT szabálya (2026-08-07). Egy futó Claude-session
 # akkor és csak akkor jelenik meg a Claude appban, ha a session-regiszterét
@@ -175,7 +238,14 @@ esac
 # Orchestrátor-fallback (ADR 0115, user-döntés 2026-08-02: „a lényeg, hogy a
 # pipeline ne szakadjon meg — a Terra vegye át a review-munkát"). A Terra saját
 # CODEX_HOME-ban él, ahol a default model gpt-5.6-terra.
-fallback_engine=${PIPELINE_FALLBACK_ENGINE:-terra}   # terra | none
+#
+# user-döntés 2026-08-21: a default `none`. A ChatGPT Pro keret ELFOGYOTT, tehát
+# a Codex-oldal (Terra ÉS Sol — közös auth) nem futtatható. Ez a kapcsoló a
+# Codex-oldal EGYETLEN kapuja: az `orchestrator_available` a `terra`/`sol`
+# ágban ezt nézi, tehát `none` mellett a lánc soha nem ad munkát halott
+# motornak — inkább kivárja a Claude-ablakot (a régi, kvóta-tudatos halt-út).
+# Visszakapcsolás, ha a Codex-előfizetés újraéled: PIPELINE_FALLBACK_ENGINE=terra.
+fallback_engine=${PIPELINE_FALLBACK_ENGINE:-none}   # terra | none
 codex_bin=${CODEX_BIN:-codex}
 codex_home=${PIPELINE_FALLBACK_CODEX_HOME:-$HOME/.codex-terra}
 fallback_label="Terra (gpt-5.6-terra)"
@@ -191,6 +261,14 @@ fallback_label="Terra (gpt-5.6-terra)"
 # a közös ELŐFIZETÉS-keretet a user e döntéssel tudatosan vállalta, épp a
 # keret elégetése a cél. Lejárat után feloldás: PIPELINE_ORCH_ROTATION env,
 # vagy az alábbi default visszaállítása `alternate`-re.
+#
+# LEZÁRVA 2026-08-21 (user-döntés: „lejárt a GPT kvóta"): a Pro-keret elfogyott,
+# a Sol-pin megszűnt. A rotáció-fájl és a script-default `claude`, a Codex-oldalt
+# a `fallback_engine=none` zárja ki. A Sol gépezete (modell-ID, címke, a `sol`
+# ág az `orchestrator_available`/`orchestrator_conflicts_with_implementer`
+# függvényekben) SZÁNDÉKOSAN MARAD: a nyilvántartás `sol` sora és a mérő cellák
+# élnek, hogy egy esetleges Codex-újraéledés egyetlen fájl átírásával
+# visszakapcsolható legyen.
 sol_model=${PIPELINE_SOL_MODEL:-gpt-5.6-sol}
 sol_label="Sol ($sol_model)"
 claude_block_file="$state_dir/claude-blocked-until"
@@ -208,10 +286,12 @@ claude_stats_cache=${PIPELINE_CLAUDE_STATS_CACHE:-$HOME/.claude/stats-cache.json
 # A rotáció ezért PROAKTÍV, nem reaktív: a körök felén eleve a Terra vezényel,
 # így egyik motor kerete sem merül ki. A fallback (ADR 0115) megmarad alatta
 # védőhálónak.
-# user-döntés 2026-08-20: a default `sol` — a lejáró Pro-keret égetéséig
-# MINDEN kört a Sol vezényel (a fenti Sol-blokk indoklásával). A korábbi
-# default az `alternate` volt (ADR 0222); env-vel bármikor visszaállítható.
-orch_rotation=${PIPELINE_ORCH_ROTATION:-sol}   # sol | alternate | claude | terra
+# user-döntés 2026-08-21 (a GPT-kvóta elfogyott): a default `claude` — a
+# Codex-oldal (Sol ÉS Terra) nem futtatható, tehát nincs kinek rotálni, és az
+# `alternate` minden második kört egy halott motorra ültetne. A korábbi
+# defaultok: `alternate` (ADR 0222, 2026-08-11), majd `sol` (2026-08-20,
+# Pro-keret égetése); env-vel és a commitolt fájllal bármikor visszaállítható.
+orch_rotation=${PIPELINE_ORCH_ROTATION:-claude}   # sol | alternate | claude | terra
 # A rotáció USER-DÖNTÉS, és a döntés a REPÓBAN utazik: a commitolt
 # docs/execution/orchestrator-rotation fájl ERŐSEBB az env-nél
 # (file > env > script-default). MÉRT ok (E99-R14 lecke): a cron
@@ -938,6 +1018,7 @@ run_selfheal_session() {   # $1=motor $2=tmux-név $3=prompt $4=log $5=jelzés $
 run_orchestrator_session() {
   local tmux_session="$1" prompt_file="$2" session_log="$3" signal_file="$4"
   local timeout_s="$5" label="$6" session_model="${7:-$claude_model}"
+  local session_effort="${8:-$claude_effort}"
   local blocked_until codex_prompt
   # A Codex-oldali orchestrátor alakja: Terra (default model, ADR 0115/0222)
   # vagy Sol (user-döntés 2026-08-20, explicit `-m $sol_model` UGYANABBAN a
@@ -962,7 +1043,7 @@ run_orchestrator_session() {
     log "a Claude stats-cache aktív kvótazárlatot jelez — a kört a $fallback_label viszi"
   else
     if run_tmux_session "$tmux_session" \
-      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir DISABLE_AUTOUPDATER=1 $claude_bin $session_mode_flag --permission-mode bypassPermissions --model $session_model --effort $claude_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
+      "CLAUDE_CONFIG_DIR=$pipeline_claude_config_dir DISABLE_AUTOUPDATER=1 $claude_bin $session_mode_flag --permission-mode bypassPermissions --model $session_model --effort $session_effort 'Pipeline $label — olvasd el es kovesd pontosan a promptot ebbol a fajlbol: $prompt_file'" \
       "$session_log" "$signal_file" "$timeout_s" "$label" 1 \
       && [ -f "$signal_file" ]; then
       return 0
@@ -1488,8 +1569,15 @@ attempt_selfheal() {
   # Kizárólag a D1 által bevezetett valódi motorváltás fut a registry saját
   # harnessén; így az első két kísérlet Claude→Terra fallbackje bitre azonos.
   if [ "$heal_engine" = "$round_engine" ]; then
+    heal_pair_model=$heal_model
+    heal_pair_effort=$claude_effort
+    if [ -z "${heal_model_explicit:-}" ]; then
+      heal_pair_model=$(orch_pair_model "$round_engine")
+      heal_pair_effort=$(orch_pair_effort "$round_engine")
+    fi
     run_orchestrator_session "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
-      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" "$heal_model"
+      "$heal_status_file" "$heal_timeout" "önjavítás $halt_round" \
+      "$heal_pair_model" "$heal_pair_effort"
   else
     run_selfheal_session "$heal_engine" "heal-$halt_round-$attempts" "$prompt_file" "$heal_log" \
       "$heal_status_file" "$heal_timeout" "önjavítás $halt_round"
@@ -1657,7 +1745,23 @@ resolve_independent_engine() {   # $1=queue-motor [$2=orchestrátor]
 orchestrator_conflicts_with_implementer() {   # $1=orchestrátor(claude|terra|sol) $2=implementer motor
   local row
   case "$1" in
-    claude) engine_uses_claude_quota "$2" ;;
+    # 2026-08-23 user-döntés: a claude-ág is MODELL-azonosságon mér, nem puszta
+    # kvóta-azonosságon — ugyanazon a kulcson, ahogy a `sol` ág teszi a közös
+    # Pro-előfizetés fölött. Indok: az orchestrátor Opus 5, az implementer
+    # `sonnet-impl` (Sonnet 5) — más modell, tehát nem a saját diffjét
+    # review-zi. A KÖZÖS Claude-előfizetés vállalt kockázat (a 85%-os fék,
+    # PIPELINE_CLAUDE_SESSION_PCT_MAX, változatlanul él). Fail-closed marad:
+    # ha valaki PIPELINE_MODEL=claude-sonnet-5-re állítja vissza az
+    # orchestrátort, a `sonnet-impl` ismét ütközik.
+    claude)
+      engine_uses_claude_quota "$2" || return 1
+      row=$(engine_registry_row "$2") || return 1
+      # NEM a globális defaulthoz mérünk, hanem ahhoz a modellhez, amit ez a
+      # kör TÉNYLEGESEN kapna (orch_pair_model — ugyanaz a feloldó, ami a
+      # sessiont indítja). Fail-closed marad: ha a pár egy nap ugyanarra a
+      # modellre mutatna, mint az implementer, ez ütközést jelent.
+      [ "$(printf '%s' "$row" | cut -f4)" = "$(orch_pair_model "$2")" ]
+      ;;
     # Csak a Terra-MODELLT (gpt-5.6-terra) futtató implementer ütközik a
     # Terra orchestrátorral/reviewerrel — ugyanaz a mérés, mint
     # resolve_independent_engine-ben (2026-08-11 mért rés: a `codex` név is
@@ -1827,10 +1931,21 @@ case "${1:-}" in
     ;;
   --session-config)    # $2=round|heal → a feloldott modell + effort (teszthorog, user-döntés 2026-08-04)
     case "${2:-}" in
-      round) printf 'model=%s effort=%s\n' "$claude_model" "$claude_effort" ;;
+      # $3 = implementer motor (opcionális): a KÖRRE feloldott pár. Enélkül a
+      # globális default — a régi hívási alak bitre változatlan.
+      round) printf 'model=%s effort=%s\n' "$(orch_pair_model "${3:-}")" "$(orch_pair_effort "${3:-}")" ;;
       heal)  printf 'model=%s effort=%s\n' "$heal_model" "$claude_effort" ;;
       *) echo "használat: --session-config round|heal" >&2; exit 2 ;;
     esac
+    exit 0
+    ;;
+  --engine-runnable)    # $2=motor → exit 0, ha futtatható (teszthorog, 2026-08-23)
+    engine_is_runnable "${2:-}"
+    exit $?
+    ;;
+  --resume-implementer)    # $2=kör → a folytatás implementere a runnability-őr UTÁN
+    resume_implementer_for "${2:-}"
+    printf '\n'
     exit 0
     ;;
   --terra-hold-active)    # $2=kör → exit 0 ha AKTÍV Terra napi-budget hold van rá, 1 egyébként
@@ -2374,6 +2489,20 @@ fi
 
 # --- 4.5 Orchestrátor-rotáció (ADR 0222/0242 D1) + reviewer-függetlenség (0138/0242 D2) ---
 resume_implementer=$(resolve_branch_implementer "$round")
+# MÉRT ESET 2026-08-23 (E13-R05, élesben): a kör ágán korábban a `terra`
+# commitolt, ezért a D2 pin a queue `sonnet-impl` sorát felülírta `terra`-ra —
+# egy olyan motorra, aminek az előfizetése elfogyott. Két kár egyszerre:
+# (a) a dispatch menthetetlenül elbukott volna a terra-híváson;
+# (b) az orchestrátor-pár is a pinelt motorhoz igazodik, így a kör Sonnet 5
+#     `high` vezénylést kapott a szándékolt Opus 5 `max` helyett.
+# A pin CÉLJA — ne keveredjenek a motorok egy körön belül — nem teljesíthető,
+# ha a pinelt motor nem él; ilyenkor a queue sora lép vissza életbe, NAPLÓZVA.
+# A függetlenség nem gyengül: a lentebbi feloldás a MÁR CSERÉLT motorra mér.
+pinned_implementer=$resume_implementer
+resume_implementer=$(resume_implementer_for "$round")
+if [ -n "$pinned_implementer" ] && [ -z "$resume_implementer" ]; then
+  log "FOLYTATÁS: a(z) $round ágán $pinned_implementer commitolt, de az a motor NEM futtatható (elfogyott előfizetés) — a pin elesik, a queue sora lép vissza: $engine"
+fi
 if [ -n "$resume_implementer" ]; then
   # ADR 0242 D2: a körhöz már tartozik távoli ág — a commitolt implementer
   # FIX (a queue `engine` oszlopát figyelmen kívül hagyjuk), a mozgatható
@@ -2508,7 +2637,8 @@ notify "▶ $round indul" "motor=$engine · ADR=$adr · friss orchestrátor-sess
 # (az argv-önillesztés — L12 — kizárva).
 session_exit=0
 run_orchestrator_session "pipeline-$round" "$prompt_file" "$session_log" \
-  "$status_file" "$session_timeout" "$round" || session_exit=124
+  "$status_file" "$session_timeout" "$round" \
+  "$(orch_pair_model "$engine")" "$(orch_pair_effort "$engine")" || session_exit=124
 
 
 # --- 7. Kimenet osztályozása ----------------------------------------------

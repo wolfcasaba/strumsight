@@ -19,14 +19,131 @@ allowed_paths = [
   "HANDOFF.md",
   "README.md",
   "lib/app/routing/app_route.dart",
+  "lib/app/routing/app_router.dart",
   "test/app/routing/app_router_test.dart",
+  "test/features/gamification/data/legacy_streak_and_practice_fixture_test.dart",
   "docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md",
 ]
 gate_tests = [
   "test/app/routing/app_router_test.dart",
+  "test/features/gamification/data/legacy_streak_and_practice_fixture_test.dart",
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight revízió (Claude, 2026-08-22)
+
+**Mért tény 1 — az `app_route.dart` ÖNMAGÁBAN nem elegendő az A1-hez.**
+`lib/app/routing/app_route.dart` csak az `AppRoutes` útvonal-string-katalógus;
+a tényleges `GoRoute(...)` regisztráció a **másik** fájlban,
+`lib/app/routing/app_router.dart`-ban él (mérve: `grep -n "GoRoute("
+lib/app/routing/app_router.dart` 60+ találat, egyik sem gamifikációs). Ez
+pontosan a projekt saját, korábban kétszer mért mintája —
+[[L97]] (E03-R17) és [[L94]] (E03-R16): egy route-ot élesítő kör scope-ja a
+katalógus- ÉS a wiring-owner fájlt EGYÜTT kell tartalmazza, különben az új
+route nem regisztrálható. A `app_router.dart` fentebb bekerült az
+`allowed_paths`-ba — **CSAK a gamifikációs GoRoute-bejegyzések hozzáadása**,
+a meglévő útvonalak (`/streak`, `/progress` stb.) sorai NEM módosíthatók
+(§5.1 változatlan).
+
+**Mért tény 2 — a beallow-olt hét képernyő EGYIKE sincs éles adathoz kötve.**
+Az öt (ténylegesen hat: `AchievementsScreen` + `AchievementDetailScreen` a
+két achievement-útvonal) új képernyő mind tiszta, caller-fed widget
+(`required this.profile`, `required this.definitions`, `required
+this.onAchievementSelected`, …) — egyikük sem `ConsumerWidget`, ellentétben a
+MA már routolt `StreakScreen`-nel
+(`lib/features/streak/screens/streak_screen.dart:18`, `extends
+ConsumerWidget`). Mérve: `grep -rln "GamificationHubScreen(\|AchievementsScreen(\|QuestsScreen(\|StreakDetailScreen(\|RewardInboxScreen(\|AchievementDetailScreen("
+lib/` **nulla** találatot ad a saját screen-fájljukon kívül — soha senki nem
+példányosítja őket. A `lib/features/gamification/presentation/providers/`
+alatt is csak EGY provider létezik
+(`gamificationPreferencesProvider`, beállítás-kapcsolók) — nincs
+profil/achievement/quest/streak/inbox provider sehol.
+
+**Feloldás — a hiányzó integrációs ragasztó a MOST engedélyezett
+`app_router.dart`-ban épül, NEM a tiltott `lib/features/gamification/**`
+alatt.** Ez nem lista-tágítás egy elérhetetlen célra, hanem a tényleges
+DI-mag már publikus: `lib/core/storage/storage_providers.dart` exportálja a
+`keyValueStoreProvider`-t (`Provider<KeyValueStore>`, main.dart tölti fel),
+`lib/core/logging/logger_provider.dart` az `appLoggerProvider`-t — ugyanezt a
+párt használja már ma is pl. `lib/core/storage/persisted_preference.dart`.
+`LocalGamificationRepository({required KeyValueStore store, required
+AppLogger logger})` ebből a két, MÁR publikus providerből megépíthető
+`app_router.dart` tetején, egy ott deklarált Riverpod-providerrel (pl.
+`Provider<GamificationRepository>` + az öt képernyőhöz szükséges
+`FutureProvider`/`StreamProvider` vetületek, a `watchProfileSnapshots()` már
+publikus stream-metódust felhasználva) — importként a `gamification/public.dart`
+és a két core-provider fájl, **fájl-írás egyik esetben sem történik a
+`lib/core/**`/`lib/features/gamification/**` alatt**, csak import.
+
+Az öt/hat képernyő callbackjeire (`onAchievementSelected`,
+`onItemSelected`/`onMarkSeen`, `onRecoveryPressed`): ahol a `public.dart`
+már exportál egyenes megfelelőt (pl. `GamificationRepository.readInbox()` +
+`replaceInbox(...)` az inbox mark-seen-hez), azt hívd meg közvetlenül,
+ÚJ üzleti logika nélkül. Ahol nincs kész, egyenes megfelelő (pl. streak
+„recovery" akció) — hagyd dokumentáltan no-op-nak egy `// TODO(E08-R30):`
+komenttel, és vedd fel a completion reportba nyitott tételként; **ne
+találj ki új domain-szabályt** a tiltott zóna megkerülésére. Ez a
+`app_router.dart`-beli ragasztó a route-elérhetőség BIZONYÍTÉKA erre a
+körre — egy jövőbeli kör átköltöztetheti a feature saját
+`presentation/providers/` alá, ha a konzisztencia azt kívánja (nyitott
+tétel, nem ennek a körnek a dolga).
+
+**Mért tény 3 — a „Kör 24 migrációs kapcsoló" MA sehol nincs élesítve.**
+`grep -rn "dualWriteMode:" lib/ --include=*.dart` **nulla** találatot ad —
+a `GamificationDualWriteMode` enum (két, névileg azonos, külön definíció:
+`lib/features/practice/application/gamification_practice_adapter.dart:21` és
+`lib/features/learn/application/gamification_lesson_adapter.dart:9`) és a
+két adaptert használó `GamificationPracticeAdapter`/`GamificationLessonAdapter`
+osztály MA egyetlen production hívási láncban sincs példányosítva — a
+E08-R24 kör pre-flightja saját maga rögzítette, hogy a tényleges hívási pont
+bekötése (`practice_session_controller.dart`, a `learn` screenek) egy
+KÉSŐBBI kör dolga, ami még nem történt meg. **Nincs tehát élő „off/dual"
+állás, amit „végállapotba" lehetne állítani** — a kapcsoló ma nem kapcsoló,
+hanem egy be nem kötött, önmagában tesztelt adapter-paraméter, és mindkét
+adapter otthona (`lib/features/practice/**`, `lib/features/learn/**`)
+ennek a körnek a tiltott zónája.
+
+**Revízió (§3 scope 3. pontja és §6 A5 helyett):** ez a kör NEM állít semmilyen
+kódbeli kapcsolót „végállapotba" — ehelyett a completion reportban rögzíti
+(a) a fenti mért, jelenlegi (be nem kötött) állapotot, és (b) a tényleges
+bekötés + `newOnly` váltás SZÁMSZERŰ feltételeit egy jövőbeli kör számára
+(pl. hány nap hibamentes `dual` üzem, milyen wire-shape egyezés-bizonyíték —
+lásd az E08-R28 F1 tanulságát, `docs/reviews/e08-r28-review.md`). Az A5 cella
+bizonyítéka tehát a completion report számszerű feltétel-szakasza, NEM egy
+ténylegesen átbillentett flag.
+
+**Mért tény 4 — a legacy migráció meglévő tesztje idealizált mintaadattal
+dolgozik, nem a valós V1 kulcsformátummal (A2 kockázat).**
+`test/features/gamification/data/legacy_practice_migration_test.dart` kézzel
+épített `PracticeEntry(...)` objektumokkal dolgozik; a valós legacy
+kulcsokra (`grep -rln "practice_streak_v1\|practice_log_v1\|daily_goal_min_v1\|lesson_progress_v1"
+test/ lib/`) **csak** a `lib/core/storage/storage_keys.dart` deklaráció
+talál — egyetlen teszt sem olvas be ilyen alakú nyers JSON-t. A
+`LegacyStreakMigrator` (`lib/features/gamification/data/migration/legacy_streak_migrator.dart`)
+pedig KIFEJEZETTEN nyers `KeyValueStore`-ot olvas (`_store.readString(StorageKeys.streak)`,
+majd fallback `LegacyStorageKeys.streak`) — és **nulla** dedikált tesztje van
+ma. Az `ADR 0351` szerint a core v22 storage-migráció a nyers
+`practice_streak_v1`-et már át is költözteti `ss.streak.state` envelope-ba,
+és törli a régi kulcsot, tehát a real-fixture tesztnek MINDKÉT ágat
+(pre-v22 nyers kulcs ÉS post-v22 namespaced envelope) fedni kell.
+
+**Feloldás:** a fentebb `allowed_paths`-ba felvett ÚJ tesztfájl
+(`test/features/gamification/data/legacy_streak_and_practice_fixture_test.dart`)
+valós alakú nyers JSON-t ír egy fake `KeyValueStore`-ba a
+`LegacyStorageKeys`/`StorageKeys` tényleges kulcsnevei alatt, és ezen
+keresztül futtatja a `LegacyStreakMigrator`-t (mindkét ág), valamint a
+`GamificationMigrator`/`LegacyPracticeAdapter`-t a meglévő, publikus
+`lib/features/progress/` olvasó-osztályokból (nem módosítva, csak
+importálva) származó, valós formátumú `PracticeEntry`-kkel. **Fájlnév
+szándékosan kerüli a "migration" szót** — az `ai-router`
+`high_risk_path_fragments` listája ezt a szót tartalmazza, és a fájl
+tisztán olvasó/ellenőrző teszt, nem indokol `risk = "high"` besorolást.
+
+**A2 acceptance evidence pontosítása:** a §6 A2 sora bizonyítéka mostantól
+KIFEJEZETTEN ez az új tesztfájl + a meglévő
+`legacy_practice_migration_test.dart` együttes zöld futása, nem csak az
+utóbbi.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -55,11 +172,16 @@ dokumentációval és a legacy kód **kivezetési tervével**.
 
 ## 3. Scope
 
-**Benne van:** az ÚJ képernyők útvonalainak élesítése (Hub, achievements, quests, streak V2, postaláda) ·
-a Kör 24 migrációs kapcsoló végállapotba állítása · a legacy migrációk ellenőrzése VALÓS
-fixture-ökkel · offline újraindítás, időzóna, óra-visszaállítás és több eszközös összefésülés
-próba · a `README.md` gamifikáció / adatvédelem / offline szakaszai · a kettős írás és a legacy
-adapter **kivezetési feltételeinek** dokumentálása · az Epic completion report.
+**Benne van:** az ÚJ képernyők útvonalainak élesítése (Hub, achievements, quests, streak V2, postaláda),
+**a §0.0-ban mért, hiányzó minimális repository-ragasztóval együtt** (kizárólag `app_router.dart`-ban,
+már publikus core-providerekből) · **a §0.0 szerint pontosított** Kör 24 migrációs kapcsoló
+tétele: mivel a kapcsoló ma sehol nincs élesítve (mérve, §0.0), ez a kör a jelenlegi mért
+állapotot és a jövőbeli bekötés SZÁMSZERŰ feltételeit dokumentálja, kódbeli flip nélkül · a legacy
+migrációk ellenőrzése VALÓS fixture-ökkel (§0.0 ÚJ tesztfájl) · offline újraindítás, időzóna,
+óra-visszaállítás és több eszközös összefésülés próba (a MEGLÉVŐ, korábbi körökből örökölt teszt-
+lefedettségre támaszkodva, futtatva és a completion reportban idézve) · a `README.md` gamifikáció /
+adatvédelem / offline szakaszai · a kettős írás és a legacy adapter **kivezetési feltételeinek**
+dokumentálása · az Epic completion report.
 
 **NINCS benne (tilos):**
 
@@ -76,7 +198,9 @@ adapter **kivezetési feltételeinek** dokumentálása · az Epic completion rep
 | `HANDOFF.md` | a kötelező állapot-frissítés |
 | `README.md` | a gamifikáció / adatvédelem / offline szakaszok |
 | `lib/app/routing/app_route.dart` | az ÚJ képernyők útvonalainak élesítése — CSAK hozzáadás |
+| `lib/app/routing/app_router.dart` | **ÚJ (§0.0)** — a tényleges `GoRoute` wiring-owner ([[L97]]/[[L94]] mintázat) + a repository-hoz kötő minimális Riverpod-ragasztó, kizárólag már publikus `keyValueStoreProvider`/`appLoggerProvider`/`gamification/public.dart` importokból |
 | `test/app/routing/app_router_test.dart` | az új útvonalak cellái |
+| `test/features/gamification/data/legacy_streak_and_practice_fixture_test.dart` | **ÚJ (§0.0)** — valós V1-kulcs-alakú fixture-teszt az A2-höz |
 
 **Tilos zóna:** `lib/features/**` (MINDEN feature) · `lib/core/**` · `backend/**` · `tools/**` · `.github/**` · `docs/adr/**` · `docs/sdd/` minden más fájlja
 

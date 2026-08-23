@@ -1109,9 +1109,87 @@
   "calibrationTap": "KOPP",
   "calibrationTitle": "Időzítés-kalibráció",
   "calibrationUnstable": "A koppintások szórtak — próbáld újra a megbízható eredményhez.",
+  "challengeChordChange": "Válts {from} akkordról {to} akkordra {beats} ütem alatt",
+  "@challengeChordChange": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      },
+      "beats": {
+        "type": "int"
+      }
+    }
+  },
+  "challengeCompletedToday": "Ma teljesítve",
+  "challengeDailyBody": "Játszd le a saját tempódban.",
+  "challengeDailyTitle": "Mai kihívás",
   "challengePlayAlong": "Játssz vele",
+  "challengeRhythm": "Játszd a(z) {content} ritmust {bpm} BPM tempóban",
+  "@challengeRhythm": {
+    "placeholders": {
+      "content": {
+        "type": "String"
+      },
+      "bpm": {
+        "type": "int"
+      }
+    }
+  },
+  "challengeSemanticsActive": "Napi kihívás: {description}. Készen áll a játékra.",
+  "@challengeSemanticsActive": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeSemanticsCompleted": "Napi kihívás: {description}. Ma teljesítve.",
+  "@challengeSemanticsCompleted": {
+    "placeholders": {
+      "description": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeSongSection": "Játszd a(z) {song} dal {section} szakaszát {repetitions} alkalommal",
+  "@challengeSongSection": {
+    "placeholders": {
+      "section": {
+        "type": "String"
+      },
+      "song": {
+        "type": "String"
+      },
+      "repetitions": {
+        "type": "int"
+      }
+    }
+  },
+  "challengeStrumName": "Pengetés-minta: {name}",
+  "@challengeStrumName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "challengeTiming": "Találd el a(z) {content} {window} ms-os tempoablakát",
+  "@challengeTiming": {
+    "placeholders": {
+      "window": {
+        "type": "int"
+      },
+      "content": {
+        "type": "String"
+      }
+    }
+  },
   "challengeTitle": "Mai kihívás",
   "challengeTryInLive": "Próbáld ki az Élő nézetben",
+  "challengeUnavailableBody": "Telepíts akkordokat, ritmusokat vagy dalokat a mai kihívás feloldásához.",
   "chordDiagramSemantics": "{chord} akkordábra, fogás: {fingering}",
   "chordGroupFavorites": "Kedvencek",
   "chordGroupMajor": "Dúr",
@@ -1130,6 +1208,81 @@
   "chordLibraryTitle": "Akkordtár",
   "commonCancel": "Mégse",
   "commonClose": "Bezárás",
+  "communityCommentsComposerHint": "Írj egy hozzászólást…",
+  "@communityCommentsComposerHint": {},
+  "communityCommentsEmpty": "Még nincsenek hozzászólások.",
+  "@communityCommentsEmpty": {},
+  "communityCommentsLoadMore": "Továbbiak betöltése",
+  "@communityCommentsLoadMore": {},
+  "communityCommentsSend": "Küldés",
+  "@communityCommentsSend": {},
+  "communityCommentsTitle": "Hozzászólások",
+  "@communityCommentsTitle": {},
+  "communityEditAddInterestCta": "Címke hozzáadása",
+  "communityEditAvatarLabel": "Profilkép",
+  "@communityEditAvatarLabel": {},
+  "communityEditAvatarNotUploaded": "A profilkép feltöltése ebben a buildben nem elérhető.",
+  "communityEditBadgesBody": "A jelvények ebben a buildben csak olvashatók — a gyakorlási előzményekből származnak.",
+  "communityEditBadgesLabel": "Szerzett jelvények",
+  "@communityEditBadgesLabel": {},
+  "communityEditBioHelper": "Max. 500 karakter. Csak ezen az eszközön tárolódik — a Közösség-szerver még nem menti.",
+  "communityEditBioLabel": "Bemutatkozás",
+  "@communityEditBioLabel": {},
+  "communityEditCreateTitle": "Közösség-profilod létrehozása",
+  "@communityEditCreateTitle": {},
+  "communityEditDisplayNameHelper": "Max. 40 karakter. Az azonosítód mellett jelenik meg.",
+  "communityEditDisplayNameLabel": "Megjelenő név",
+  "@communityEditDisplayNameLabel": {},
+  "communityEditDisplayNameRequired": "A megjelenő név nem lehet üres.",
+  "communityEditEditTitle": "Közösség-profilod szerkesztése",
+  "@communityEditEditTitle": {},
+  "communityEditHandleBadChars": "Az azonosító csak betűket, számokat, '_' vagy '-' karaktert tartalmazhat, és betűvel vagy számmal kell kezdődnie és végződnie.",
+  "communityEditHandleHelper": "3–24 karakter. Betűk, számok, '_' vagy '-'. Ebben a buildben később nem módosítható.",
+  "@communityEditHandleHelper": {},
+  "communityEditHandleLabel": "Azonosító",
+  "@communityEditHandleLabel": {},
+  "communityEditHandleRequired": "Az azonosító megadása kötelező.",
+  "communityEditHandleReserved": "Ez az azonosító foglalt — válassz másikat.",
+  "communityEditHandleTaken": "Ez az azonosító már foglalt. Próbálj egy másikat.",
+  "communityEditHandleTooLong": "Az azonosító legfeljebb 24 karakter hosszú lehet.",
+  "communityEditHandleTooShort": "Az azonosító legalább 3 karakter hosszú legyen.",
+  "communityEditInterestHelper": "Adj hozzá max. 16 címkét (pl. fingerstyle, blues). Koppints egy címkére az eltávolításhoz. Csak ezen az eszközön tárolódik.",
+  "communityEditInterestLabel": "Érdeklődési címkék",
+  "@communityEditInterestLabel": {},
+  "communityEditNetworkError": "Hálózati hiba — a változtatásaid megmaradtak. Próbáld újra, ha online vagy.",
+  "communityEditPrivacyAudienceLabel": "Új bejegyzések alapértelmezett közönsége",
+  "@communityEditPrivacyAudienceLabel": {},
+  "communityEditPrivacyBody": "Ezt később bármikor módosíthatod, amint elérhető lesz az adatvédelmi beállítások oldal. A StrumSight alapértelmezetten az új profilokat nem teszi nyilvános listába.",
+  "communityEditPrivacyOptionFollowers": "Követők",
+  "communityEditPrivacyOptionFollowersBody": "Csak azok láthatják a profilodat, akiket követőként elfogadtál.",
+  "communityEditPrivacyOptionPrivate": "Privát",
+  "communityEditPrivacyOptionPrivateBody": "Csak te látod a profilodat. A profil a tiéd, nem a felfedezhetőségért van.",
+  "communityEditPrivacyOptionPublic": "Nyilvános",
+  "communityEditPrivacyOptionPublicBody": "Bárki — bejelentkezve vagy anélkül — megtalálhatja és megtekintheti a profilodat.",
+  "communityEditPrivacyTitle": "Ki láthatja a profilodat",
+  "@communityEditPrivacyTitle": {},
+  "communityEditServerError": "Szerverhiba — próbáld újra rövidesen.",
+  "communityEditSubmit": "Profil létrehozása",
+  "@communityEditSubmit": {},
+  "communityEditSubmitting": "Létrehozás…",
+  "@communityEditSubmitting": {},
+  "communityEditUpdate": "Változtatások mentése",
+  "@communityEditUpdate": {},
+  "communityEditUpdating": "Mentés…",
+  "@communityEditUpdating": {},
+  "communityGateDisabledBody": "A Közösség funkció konfigurációban ki van kapcsolva. A StrumSight többi része — felismerés, gyakorlás, beállítások — a szokásos módon működik.",
+  "communityGateDisabledTitle": "A Közösség nem elérhető ebben a buildben",
+  "@communityGateDisabledTitle": {},
+  "communityGateErrorBody": "Nem sikerült betölteni a Közösség-profilodat. Húzd le a frissítéshez, vagy ellenőrizd a kapcsolatot.",
+  "communityGateLoadingBody": "Közösség-profilod ellenőrzése…",
+  "communityGateLoggedOutBody": "A Közösség-profilod a StrumSight-fiókodhoz kötődik, hogy eszközök között megtaláljanak az emberek.",
+  "communityGateLoggedOutCta": "Bejelentkezés vagy fiók létrehozása",
+  "communityGateLoggedOutTitle": "Jelentkezz be a Közösség használatához",
+  "@communityGateLoggedOutTitle": {},
+  "communityGateProfileMissingBody": "A profilod explicit jóváhagyással jön létre — a StrumSight soha nem tölti ki helyetted.",
+  "communityGateProfileMissingCta": "Profil létrehozása",
+  "communityGateProfileMissingTitle": "Hozd létre a Közösség-profilod",
+  "@communityGateProfileMissingTitle": {},
   "ddSuggestEasy": "Nehéz? Próbáld Easy módban!",
   "ddSuggestFull": "Ez megy! Próbáld a teljes leckét!",
   "ddSwitch": "Váltás",
@@ -1140,6 +1293,416 @@
   "dynamicsMetricOutlierRatio": "Kiugró pengetés aránya",
   "dynamicsMetricQuietRegionRatio": "Csendes szakasz aránya",
   "dynamicsMetricStrokeStrengthCv": "Pengetéserősség-szórás",
+  "feedCardAchievementCatalogVersion": "{id} · {category} · v{version}",
+  "@feedCardAchievementCatalogVersion": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "category": {
+        "type": "String"
+      },
+      "version": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardAchievementCompletedAt": "Befejezve: {at}",
+  "@feedCardAchievementCompletedAt": {
+    "placeholders": {
+      "at": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardAchievementUnlocked": "Achievement unlocked",
+  "@feedCardAchievementUnlocked": {},
+  "feedCardAnalysisImprovementMetric": "{metric}: {direction} ({before} → {after})",
+  "@feedCardAnalysisImprovementMetric": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      },
+      "direction": {
+        "type": "String"
+      },
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardAnalysisImprovementTitle": "Elemzés – előtte/utána",
+  "@feedCardAnalysisImprovementTitle": {},
+  "feedCardChallengeReward": "{type} · jutalom: {reward}",
+  "@feedCardChallengeReward": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "reward": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardChallengeTitle": "Napi kihívás: {name}",
+  "@feedCardChallengeTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardChallengeXp": "XP: {xp}",
+  "@feedCardChallengeXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardFallbackUnfilled": "Ehhez a poszthoz nincs megjeleníthető tartalom.",
+  "@feedCardFallbackUnfilled": {},
+  "feedCardFallbackUnknown": "Ez a tartalomtípus jelenleg nem jeleníthető meg.",
+  "@feedCardFallbackUnknown": {},
+  "feedCardOriginalProgressionTitle": "{name} (saját progresszió)",
+  "@feedCardOriginalProgressionTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardPlanTemplateTitle": "Tervsablon: {name}",
+  "@feedCardPlanTemplateTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardPracticeSummaryBestScore": "Legjobb pontszám: {score}%",
+  "@feedCardPracticeSummaryBestScore": {
+    "placeholders": {
+      "score": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardPracticeSummaryBody": "Aktív idő: {active}s · Szünet: {paused}s · Próbálkozások: {attempts}",
+  "@feedCardPracticeSummaryBody": {
+    "placeholders": {
+      "active": {
+        "type": "int"
+      },
+      "paused": {
+        "type": "int"
+      },
+      "attempts": {
+        "type": "int"
+      }
+    }
+  },
+  "feedCardPracticeSummaryTitle": "Gyakorlás összegzés",
+  "@feedCardPracticeSummaryTitle": {},
+  "feedCardSongBpmBeats": "{bpm} BPM · {beats}/4 · {chords}",
+  "@feedCardSongBpmBeats": {
+    "placeholders": {
+      "bpm": {
+        "type": "int"
+      },
+      "beats": {
+        "type": "int"
+      },
+      "chords": {
+        "type": "String"
+      }
+    }
+  },
+  "feedCardStrumPattern": "Strumminta: {pattern}",
+  "@feedCardStrumPattern": {
+    "placeholders": {
+      "pattern": {
+        "type": "String"
+      }
+    }
+  },
+  "followingFeedEmptyState": "Még nincs poszt a feedben.",
+  "@followingFeedEmptyState": {},
+  "followingFeedEmptyStateCta": "Gyakorlás indítása",
+  "@followingFeedEmptyStateCta": {},
+  "followingFeedEndOfFeed": "Elérted a feed végét.",
+  "@followingFeedEndOfFeed": {},
+  "followingFeedErrorTitle": "A feed nem tölthető be.",
+  "@followingFeedErrorTitle": {},
+  "followingFeedLoadMore": "Továbbiak betöltése",
+  "@followingFeedLoadMore": {},
+  "followingFeedLoadingInitial": "Feed betöltése…",
+  "@followingFeedLoadingInitial": {},
+  "followingFeedLoadingMore": "Betöltés…",
+  "@followingFeedLoadingMore": {},
+  "followingFeedOfflineBanner": "Offline · a helyi másolat jelenik meg.",
+  "@followingFeedOfflineBanner": {},
+  "followingFeedPracticeNotAvailable": "A gyakorlás indítása a jövőbeli körökben érhető el.",
+  "@followingFeedPracticeNotAvailable": {},
+  "followingFeedRefresh": "Frissítés",
+  "@followingFeedRefresh": {},
+  "followingFeedRetry": "Újrapróbálkozás",
+  "@followingFeedRetry": {},
+  "followingFeedTitle": "Követési feed",
+  "@followingFeedTitle": {},
+  "gamificationHubAchievementsTitle": "Eredmények",
+  "gamificationHubEmptyLegacyBody": "A Hub új alapokra épül. A történeted itt fog újra megjelenni, amint az átépítés befejeződik.",
+  "gamificationHubEmptyLegacyTitle": "Új fejezet a haladásodban",
+  "gamificationHubEmptyNewBody": "A gyakorlásod itt jelenik meg, amint befejezel egy mért alkalmat.",
+  "gamificationHubEmptyNewTitle": "Üdv a haladásodban",
+  "gamificationHubInboxIndicatorCta": "Megnyitás",
+  "gamificationHubInboxIndicatorSemantics": "{count, plural, =0{Nincs új jutalom a postaládában} =1{1 új jutalom a postaládában} other{{count} új jutalom a postaládában}}",
+  "@gamificationHubInboxIndicatorSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubInboxIndicatorSemanticsFull": "Jutalom postaláda. {status}. Koppints a megnyitáshoz.",
+  "@gamificationHubInboxIndicatorSemanticsFull": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "gamificationHubInboxIndicatorTitle": "Jutalom postaláda",
+  "gamificationHubLatestResultEmptyBody": "Egy mért gyakorlási alkalom itt fog megjelenni, amint befejezel egyet.",
+  "gamificationHubLatestResultEmptyTitle": "Még nincs mért alkalom",
+  "gamificationHubLatestResultSemantics": "Legutóbbi mért alkalom: {title}. {xp} tapasztalati pont.",
+  "@gamificationHubLatestResultSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubLatestResultTitle": "Legutóbbi mért alkalom",
+  "gamificationHubLevelBadgeLabel": "{level}. szint",
+  "@gamificationHubLevelBadgeLabel": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubLevelBadgeSemantics": "{level}. szint. {title}. A szint a tapasztalati pontokból adódik.",
+  "@gamificationHubLevelBadgeSemantics": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      },
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "gamificationHubMasterySummary": "{count, plural, =0{Még nincs tudás mérföldkő} =1{1 tudás mérföldkő feloldva} other{{count} tudás mérföldkő feloldva}}",
+  "@gamificationHubMasterySummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubMasteryTitle": "Tudás mérföldkövek",
+  "gamificationHubOfflineReadyLabel": "Offline is elérhető",
+  "gamificationHubOpenLevelDetailCta": "Hogyan működnek a tapasztalati pontok?",
+  "gamificationHubOpenLevelDetailSemantics": "Nyisd meg a szint részleteit, és tanuld meg, hogyan működnek a tapasztalati pontok.",
+  "gamificationHubQuestsSemantics": "{count, plural, =0{Nincs aktív küldetés} =1{1 aktív küldetés folyamatban} other{{count} aktív küldetés folyamatban}}",
+  "@gamificationHubQuestsSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubQuestsSummary": "{count, plural, =0{Nincs aktív küldetés} =1{1 aktív küldetés} other{{count} aktív küldetés}}",
+  "@gamificationHubQuestsSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubQuestsTitle": "Aktív küldetések",
+  "gamificationHubSkillSectionBody": "A szinted a tapasztalati pontjaidból adódik — lásd lent az összetevőket.",
+  "gamificationHubSkillSectionTitle": "A te szinted",
+  "gamificationHubStreakSummary": "{count, plural, =0{Ma még nincs ritmus} =1{1 nap ritmus} other{{count} nap ritmus}}",
+  "@gamificationHubStreakSummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubStreakTitle": "Gyakorlási ritmus",
+  "gamificationHubTitle": "Haladásod",
+  "gamificationHubXpProgressLabel": "Tapasztalati pontok: {xp} / {total}",
+  "@gamificationHubXpProgressLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubXpProgressSemantics": "Tapasztalati pontok {xp} / {total} a jelenlegi szinten. A tapasztalati pont a részvételt méri, nem a tudást.",
+  "@gamificationHubXpProgressSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubXpSaturatedLabel": "Elérted a legmagasabb beállított szintet",
+  "gamificationHubXpSectionBody": "A tapasztalati pont a részvételt jutalmazza: minden mért alkalom öt összetevővel járul hozzá. Soha nem méri közvetlenül a tudást.",
+  "gamificationHubXpSectionTitle": "Tapasztalati pontok",
+  "gamificationHubXpToNextLabel": "{xp} a következő tudásszintig",
+  "@gamificationHubXpToNextLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationHubXpTotalLabel": "Összes tapasztalati pont: {xp}",
+  "@gamificationHubXpTotalLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailCurrentBody": "A jelenlegi szinted. A tapasztalati pontokból adódik, és csak emelkedhet.",
+  "gamificationLevelDetailCurrentTitle": "Jelenlegi szint",
+  "gamificationLevelDetailHowXpWorksBody": "Minden mért alkalom öt tapasztalati-pont összetevővel járul hozzá. A részvételt jutalmazzák, soha nem a tudást.",
+  "gamificationLevelDetailHowXpWorksTitle": "Hogyan működnek a tapasztalati pontok?",
+  "gamificationLevelDetailNextBody": "A tapasztalati pontok mozgatják a csúszkát a következő szint felé — nincs külön tudás-kapu.",
+  "gamificationLevelDetailNextTitle": "Következő szint",
+  "gamificationLevelDetailSemantics": "A(z) {level}. szint részletei.",
+  "@gamificationLevelDetailSemantics": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailTitle": "{level}. szint",
+  "@gamificationLevelDetailTitle": {
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpComponentBaseBody": "A bizalmi és jelminőségi kapun átjutott mért alkalomért jár.",
+  "gamificationLevelDetailXpComponentBaseTitle": "Alap tapasztalat",
+  "gamificationLevelDetailXpComponentDiversityBody": "A közelmúltbeli mért fókuszodon túli terjeszkedést jutalmazza.",
+  "gamificationLevelDetailXpComponentDiversityTitle": "Változatosság tapasztalat",
+  "gamificationLevelDetailXpComponentDurationBody": "A mért, minősített percekkel arányos az alkalmon belül.",
+  "gamificationLevelDetailXpComponentDurationTitle": "Időtartam tapasztalat",
+  "gamificationLevelDetailXpComponentImprovementBody": "Az aktuális alkalmat a közelmúlt mért alapvonalához hasonlítja.",
+  "gamificationLevelDetailXpComponentImprovementTitle": "Fejlődés tapasztalat",
+  "gamificationLevelDetailXpComponentQualityBody": "Az alkalom során mért jelminőséget tükrözi.",
+  "gamificationLevelDetailXpComponentQualityTitle": "Minőség tapasztalat",
+  "gamificationLevelDetailXpComponentSemantics": "{title}: {body} {xp} tapasztalati pont.",
+  "@gamificationLevelDetailXpComponentSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpProgressLabel": "{xp} / {total} tapasztalati pont ezen a szinten",
+  "@gamificationLevelDetailXpProgressLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpProgressSemantics": "Tapasztalati pontok {xp} / {total} a jelenlegi szinten.",
+  "@gamificationLevelDetailXpProgressSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpSaturatedSemantics": "Elérted a legmagasabb beállított szintet. További szintlépés nem várható.",
+  "gamificationLevelDetailXpToNextSemantics": "{xp} tapasztalati pont a következő szintig.",
+  "@gamificationLevelDetailXpToNextSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpTotalLabel": "Alkalom szerzett tapasztalati pontjai: {xp}",
+  "@gamificationLevelDetailXpTotalLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationLevelDetailXpTotalSemantics": "Összesen {total} tapasztalati pont.",
+  "@gamificationLevelDetailXpTotalSemantics": {
+    "placeholders": {
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gamificationSettingsHapticsLabel": "Rezgés-visszajelzés",
+  "gamificationSettingsHapticsSemantics": "Rezgés-visszajelzés kapcsoló",
+  "gamificationSettingsIntensityFullLabel": "Teljes",
+  "gamificationSettingsIntensityFullSemantics": "Ünneplés intenzitása: teljes",
+  "gamificationSettingsIntensitySilentLabel": "Csendes",
+  "gamificationSettingsIntensitySilentSemantics": "Ünneplés intenzitása: csendes",
+  "gamificationSettingsIntensitySubtleLabel": "Visszafogott",
+  "gamificationSettingsIntensitySubtleSemantics": "Ünneplés intenzitása: visszafogott",
+  "gamificationSettingsIntensityTitle": "Ünneplés intenzitása",
+  "gamificationSettingsNotificationsHint": "Az emlékeztetők be- vagy kikapcsolása soha nem változtatja meg a tapasztalati pontjaidat, az eredményeidet vagy a szériádat.",
+  "gamificationSettingsNotificationsLabel": "Gyakorlás-emlékeztetők",
+  "gamificationSettingsNotificationsSemantics": "Gyakorlás-emlékeztetők kapcsoló",
+  "gamificationSettingsProgressPreservedHint": "A főkönyv, a széria és a mastery kiértékelés tovább fut — az ünneplés-réteg kikapcsolása csak a látható jelet rejti el.",
+  "gamificationSettingsReduceMotionLabel": "Mozgás csökkentése",
+  "gamificationSettingsReduceMotionSemantics": "Mozgás csökkentése kapcsoló",
+  "gamificationSettingsSoundLabel": "Hang-visszajelzés",
+  "gamificationSettingsSoundSemantics": "Hang-visszajelzés kapcsoló",
+  "gamificationSettingsSubtitle": "Szabd testre az ünneplés-réteg viselkedését. Az előrehaladásod mindig megmarad.",
+  "gamificationSettingsTitle": "Játékosítás",
   "guitarCalibrationAnchorBridgeSemantic": "Híd horgony. Húzd vagy használd a hangerőgombokat.",
   "guitarCalibrationAnchorNutSemantic": "Felső nyereg horgony. Húzd vagy használd a hangerőgombokat.",
   "guitarCalibrationCanvasSemantic": "Gitár geometria kalibrációs vászon",
@@ -1891,16 +2454,206 @@
   "progressThisWeek": "Ezen a héten (perc)",
   "progressTitle": "Haladás",
   "progressTotalPractice": "Összes gyakorlás",
+  "questCompletedBadge": "Teljesítve",
+  "questCompletedBody": "A jutalom már a főkönyvedben van.",
+  "questCompletedSemantics": "A(z) {title} küldetés teljesítve. A jutalom már jóváírva.",
+  "@questCompletedSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "questContinueCta": "Folytatás",
+  "questContinueSemantics": "Küldetés folytatása: {title}.",
+  "@questContinueSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "questExpiredBadge": "Lejárt",
+  "questExpiryDate": "{date} napig elérhető",
+  "@questExpiryDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "questExpiryToday": "Éjfélig elérhető",
+  "questExpiryWeekly": "Vasárnapig elérhető",
+  "questProgressLabel": "{current} / {target}",
+  "@questProgressLabel": {
+    "placeholders": {
+      "current": {
+        "type": "num"
+      },
+      "target": {
+        "type": "num"
+      }
+    }
+  },
+  "questProgressSemantics": "Haladás: {current} / {target}.",
+  "@questProgressSemantics": {
+    "placeholders": {
+      "current": {
+        "type": "num"
+      },
+      "target": {
+        "type": "num"
+      }
+    }
+  },
+  "questRewardAlreadyCredited": "A jutalom már jóváírva",
+  "questRewardLabel": "+{xp} XP",
+  "@questRewardLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "questRewardSemantics": "Jutalom: {xp} tapasztalati pont, már jóváírva.",
+  "@questRewardSemantics": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "questSourceMetricLabel": "Mért fókusz: {metric}",
+  "@questSourceMetricLabel": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "questSourceModeLabel": "Gyakorlási mód fókusz",
+  "questSourcePlanLabel": "A heti tervedből",
+  "questSourceSkillLabel": "Készség fókusz: {skill}",
+  "@questSourceSkillLabel": {
+    "placeholders": {
+      "skill": {
+        "type": "String"
+      }
+    }
+  },
+  "questStartCta": "Indítás",
+  "questStartSemantics": "Küldetés indítása: {title}.",
+  "@questStartSemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "questUnavailableBadge": "A tartalom nincs telepítve",
+  "questUnavailableBody": "Ehhez a küldetéshez tartozó tartalom még nincs telepítve ezen az eszközön.",
+  "questsDailySectionTitle": "Ma",
+  "questsEmptyBody": "A küldetések az első gyakorlás után jelennek meg.",
+  "questsEmptyTitle": "Még nincs küldetés",
+  "questsOfflineBanner": "Elérhető kapcsolat nélkül",
+  "questsOfflineBody": "A küldetések és a napi kihívás internet nélkül is működnek.",
+  "questsScreenTitle": "Küldetések",
+  "questsWeeklySectionTitle": "Ezen a héten",
   "reelButton": "Lejátszás reelként",
   "reelHint": "Vedd fel képernyőrögzítővel és oszd meg!",
   "reelSoundToggle": "Reel hang be/ki",
   "reelTagline": "Az egyetlen app, amely látja a pengetésirányod",
+  "rewardInboxCountSemantics": "{count, plural, =0{Nincs új jutalom} =1{1 új jutalom} other{{count} új jutalom}}",
+  "@rewardInboxCountSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEarnedXpLabel": "{xp, plural, =0{0 XP szerzett} =1{1 XP szerzett} other{{xp} XP szerzett}}",
+  "@rewardInboxEarnedXpLabel": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxEmptyBody": "A mért gyakorlási jutalmak itt fognak megjelenni.",
+  "rewardInboxEmptyTitle": "Még nincs jutalom",
+  "rewardInboxEntrySemantics": "{title}. {body}. Ennyi tapasztalati pont járt: {xp}.",
+  "@rewardInboxEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "xp": {
+        "type": "int"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardInboxSeenLabel": "Látott",
+  "rewardInboxTitle": "Jutalom postaláda",
+  "rewardInboxUnseenLabel": "Új",
+  "rewardSummaryConsolidatedLabel": "{count, plural, =0{Nincs jutalom ebben a munkamenetben} =1{1 jutalom összevonva} other{{count} jutalom összevonva}}",
+  "@rewardSummaryConsolidatedLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryConsolidatedSemantics": "{count, plural, =0{Nincs mit ünnepelni ebben a munkamenetben} =1{1 jutalom összevonva erre a munkamenetre} other{{count} jutalom összevonva erre a munkamenetre}}",
+  "@rewardSummaryConsolidatedSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardSummaryEntrySemantics": "{title}. {body}",
+  "@rewardSummaryEntrySemantics": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      },
+      "body": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardSummaryTitle": "Munkamenet jutalmai",
   "rhythmMetricAccentPositionConsistency": "Hangsúlypozíció-egyenletesség",
   "rhythmMetricBeatPhaseConsistency": "Ütemfázis-egyenletesség",
   "rhythmMetricIoiConsistency": "Ritmusegyenletesség",
   "rhythmMetricLongestStableIoiStreak": "Leghosszabb stabil ritmussorozat",
   "rhythmMetricSubdivisionConsistency": "Felbontás-egyenletesség",
   "rhythmMetricSwingRatio": "Hosszú-rövid időarány",
+  "safetyBlockedMutedTitle": "Letiltottak és némítottak",
+  "@safetyBlockedMutedTitle": {},
+  "safetyBlockedTab": "Letiltottak",
+  "@safetyBlockedTab": {},
+  "safetyEmptyBlocked": "Még nem tiltottál le senkit.",
+  "@safetyEmptyBlocked": {},
+  "safetyEmptyMuted": "Még senkit nem némítottál el.",
+  "@safetyEmptyMuted": {},
+  "safetyErrorForbidden": "Nincs jogosultságod a lista megtekintéséhez",
+  "@safetyErrorForbidden": {},
+  "safetyErrorInvalidInput": "Érvénytelen kérés",
+  "@safetyErrorInvalidInput": {},
+  "safetyErrorNetwork": "Nincs hálózati kapcsolat",
+  "@safetyErrorNetwork": {},
+  "safetyErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra",
+  "@safetyErrorSessionExpired": {},
+  "safetyMutedTab": "Némítottak",
+  "@safetyMutedTab": {},
+  "safetyUnblock": "Letiltás feloldása",
+  "@safetyUnblock": {},
+  "safetyUnmute": "Némítás feloldása",
+  "@safetyUnmute": {},
   "setlistAddSong": "Dal hozzáadása",
   "setlistDelete": "Szettlista törlése",
   "setlistEmptyDetail": "Adj dalokat a szetthez a + gombbal.",

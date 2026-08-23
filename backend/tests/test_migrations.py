@@ -111,14 +111,65 @@ def test_upgrade_head_matches_current_orm_schema(tmp_path, monkeypatch):
         engine.dispose()
 
 
-def test_downgrade_one_revision_removes_application_schema(tmp_path, monkeypatch):
-    database_path = tmp_path / "downgrade.db"
+def test_downgrade_one_revision_drops_only_community_tables(tmp_path, monkeypatch):
+    """One-step downgrade from the current head must reverse at least the head
+    migration's own schema change — a table addition/removal *or* a column
+    addition/removal — while leaving the E01-R12 account baseline
+    (``users``, ``user_settings``) intact at the column-set level.
+
+    Chain-agnostic: this test compares a full schema snapshot
+    (``table -> frozenset(column names)``) across the downgrade rather than
+    the raw table set, so future Community rounds that only adjust columns
+    (a valid ADR 0398 §1 migration shape) do not require rewriting it.
+    """
+    database_path = tmp_path / "downgrade_one_step.db"
     database_url = f"sqlite:///{database_path}"
     monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", database_url)
     config = _alembic_config()
     command.upgrade(config, "head")
 
-    command.downgrade(config, "-1")
+    def _schema_snapshot(engine):
+        inspector = inspect(engine)
+        snapshot = {}
+        for table in inspector.get_table_names():
+            columns = frozenset(
+                column["name"] for column in inspector.get_columns(table)
+            )
+            indexes = frozenset(index["name"] for index in inspector.get_indexes(table))
+            snapshot[table] = columns | indexes
+        return snapshot
+
+    engine = create_engine(database_url)
+    try:
+        snapshot_at_head = _schema_snapshot(engine)
+        command.downgrade(config, "-1")
+        snapshot_after = _schema_snapshot(engine)
+    finally:
+        engine.dispose()
+    assert snapshot_after != snapshot_at_head, (
+        "one-step downgrade must undo at least the head migration's own "
+        "schema change (a table or a column)"
+    )
+    assert snapshot_after.get("users") == snapshot_at_head.get("users"), (
+        "the E01-R12 users table shape must survive a single-step downgrade"
+    )
+    assert snapshot_after.get("user_settings") == snapshot_at_head.get(
+        "user_settings"
+    ), "the E01-R12 user_settings table shape must survive a single-step downgrade"
+
+
+def test_downgrade_to_base_removes_application_schema(tmp_path, monkeypatch):
+    """Downgrading all the way to ``base`` should fully reverse both
+    migrations in the chain — the Community tables AND the baseline
+    ``users`` / ``user_settings`` tables disappear.
+    """
+    database_path = tmp_path / "downgrade_base.db"
+    database_url = f"sqlite:///{database_path}"
+    monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", database_url)
+    config = _alembic_config()
+    command.upgrade(config, "head")
+
+    command.downgrade(config, "base")
 
     engine = create_engine(database_url)
     try:
@@ -127,6 +178,8 @@ def test_downgrade_one_revision_removes_application_schema(tmp_path, monkeypatch
         engine.dispose()
     assert "users" not in tables
     assert "user_settings" not in tables
+    assert "community_profiles" not in tables
+    assert "community_privacy_settings" not in tables
 
 
 def test_sqlite_runtime_enforces_foreign_key_cascade(tmp_path, monkeypatch):

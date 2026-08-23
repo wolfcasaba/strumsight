@@ -1,5 +1,1596 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R16 KÉSZ — Kommentek, reply és mention — PR [#425](https://github.com/wolfcasaba/strumsight/pull/425), squash `bf767ca5` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENHATODIK KÖRE KÉSZ.** Moderálható, korlátozott
+mélységű kommentréteg biztonságos mentionnel: `backend/app/community/models/comment.py`
+(ÚJ `community_comments` tábla, `depth` oszlop max 1, `updated_at`-mint-
+resource_version), `services/comment_service.py` (create/edit/delete/list négyes,
+mention-validáció a Kör 3/8/4 hármas kompozíciójaként), `policies/comment_policy.py`
+(`can_delete` — owner/post-owner/moderator, `is_moderator: bool` EXPLICIT
+paraméter, NEM DB-mező), migráció `e09_r16_0010`, és Flutter oldalon
+`comments_screen.dart` + `comment_controller.dart` (optimista create, atomikus
+temp-ID csere). `risk = "high"` (mention privacy-megkerülés + jogosultsági
+mátrix).
+
+**Pre-flight (Claude Sonnet 5, ADR 0407):** az előre kiosztott `ADR 0405` már
+foglalt volt (Kör 11 post-crud) — friss foglalás `0407`. Három mért gap
+dokumentálva §0.0-ban: (1) nincs élő "moderator" DB-mező sehol a kódban — a
+`can_delete` explicit, hívó-adta `is_moderator: bool`-t kap (a Kör 26/27
+admin-auth kör drótozza majd valós forrásra); (2) a mention-validáció a
+MEGLÉVŐ Kör 3 (`lookup_active_profile_id`) + Kör 8 (`is_blocked_pair`,
+TILOS zóna, csak hívható) + Kör 4 (`CommunityAccessPolicy.evaluate_profile_access
+== FULL`) hármas kompozíciója, nem új logika; (3) nincs HTTP router/schema
+ebben a körben (Kör 14/15 precedens) — a kör service-réteg-only, az A4
+(edit-conflict) mérce kizárólag a backend `test_comment_service.py` felelőssége.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5 (`--effort
+high`). 1 javító kör** (`docs/reviews/e09-r16-review.md`): review CHANGES
+REQUESTED elsőre, **1 MAJOR** — `comments_screen.dart` öt hardcode-olt
+stringgel (`'Comments'`, `'No comments yet.'`, `'Load more'`, `'Write a
+comment…'`, `'Send'`) ment ki 0 `AppLocalizations` hívással — **ugyanaz a
+hibaosztály, mint az E09-R08 F1 és az E09-R14 F1** (mindkettő MAJOR volt).
+**2 MINOR** — `comment_policy.py` docstringje SIMA (nem raw) triple-quoted
+stringben `\|`-t tartalmazott, `SyntaxWarning`-ot dobva minden importnál;
+`edit_comment`/`edit_comment_with_resource_version` ~45 sort duplikált,
+az előbbit semmi nem hívta. **Mellékhatás, saját méréssel** (a brief
+`gate_tests`-én TÚLI, teljes `flutter test` futtatással): a kör ÚJ
+`comments_screen.dart`-ja miatt a `test/ui/ui_inventory_test.dart` hardcode-olt
+képernyő-számlálója (71) elavulttá vált — **ugyanaz a drift-osztály, mint
+E09-R05...R13 és E09-R14 ismételten**. A javító kör mind a négyet zárta:
+5 string valódi magyar fordítással ARB-be (`community_{en,hu}.arb` +
+a generált `app_{en,hu}.arb` aggregátum, retroaktív scope-bővítéssel, mert
+az aggregátum-frissítés mechanikusan szükséges velejárója az ARB-bővítésnek),
+a docstring `r"""`-re váltva, `edit_comment` vékony wrapperré alakítva, a
+számláló 71→72. A Claude a javítást friss, izolált `/tmp`-klónban ÚJRA
+futtatott gate-tel (10/10 lépés zöld, a `ui_inventory_test.dart` most explicit
+gate-argumentum) és scope-audittal fogadta el. **Landolási körülmény:** a
+`main` a dispatch alatt HÁROMSZOR mozdult (párhuzamos governance/pipeline-
+munka ugyanazon a boxon) — mindhárom rebase konfliktusmentes volt (docs-only
+governance-commitok), mindhárom után friss exact-SHA CI-dispatch (`full-
+gate.yml` + `router-ci.yml`) igazolta a kombinált HEAD-et a `tools/round-
+land.sh` fail-closed protokollja szerint; a landolást a SAJÁT izolált
+munkapéldányból (`ss-minimax-e09-r16`) futtattam, nem a megosztott fő fából,
+mert utóbbin egy másik aktív session commitolatlan governance-munkát végzett
+(pipeline-slots 1→2, engine-registry effort-váltás) — a megosztott fa
+zavarása nélkül. Exact `88de73c9` → merge `bf767ca5`: Full Gate
+[32647755067](https://github.com/wolfcasaba/strumsight/actions/runs/32647755067)
++ Router CI [32647756074](https://github.com/wolfcasaba/strumsight/actions/runs/32647756074)
+mindkettő success. Részletesen `docs/reviews/e09-r16-review.md`.
+
+## ✅ E09-R15 KÉSZ — Reakciók és optimista konzisztencia — PR [#424](https://github.com/wolfcasaba/strumsight/pull/424), squash `a8fa5add` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENÖTÖDIK KÖRE KÉSZ.** Pozitív, idempotens,
+allowlistelt (`support`/`celebrate`/`inspiring`/`helpful`) reakció szolgáltatás-
+réteg: `backend/app/community/models/reaction.py` (ÚJ `community_reactions`
+tábla, `UNIQUE(post_id, profile_id)`), `services/reaction_service.py` (ÚJ
+`set_reaction`/`remove_reaction`/`get_reaction_count`/`get_viewer_reaction`
+kvartett), migráció `e09_r15_0009`, és a Flutter oldalon egy optimista
+`ReactionController` (mutation-ID-alapú legutolsó-szándék-nyer + rollback
+hálózati hibán) + egy önálló `ReactionBar` widget. `risk = "normal"`.
+
+**Pre-flight §0.0 D2 (Claude Sonnet 5, a HTTP-router és a `PostOut`/
+`FeedPostItem` wire-projekció ebben a körben szándékosan NEM épül meg):**
+a brief SDD-ből másolt §3 scope-mondata ("post-projekció: viewer reaction +
+aggregált count", "reaction set/remove endpoint idempotensen") egyik fájlja
+sincs az `allowed_paths`-on — mérve grep-pel: sem a `PostOut`
+(`schemas/post.py`), sem a `FeedPostItem` (`schemas/feed.py`), sem az őket
+kitöltő `routers/posts.py::_row_to_out` / `routers/feed.py`, sem egy
+reaction-router fájl, sem a `backend/app/main.py` router-regisztráció nincs a
+listán. A pre-flight megmérte, hogy a §6 A1–A7 egyike SEM igényli ezt — mind
+a `reaction_service` szolgáltatás-rétegen vagy a Flutter controlleren
+mérhető —, ezért a §3 két cellája ÚGY teljesült, hogy a HTTP-router és a
+wire-projekció egy KÉSŐBBI kör hatásköre marad (a Kör 13/14 pár precedense:
+tisztán backend feed-query, majd tisztán UI valós HTTP-bekötés nélkül). A
+Flutter oldalon a `CommunityPostRepository.setReaction()` kontraktus és a
+`CommunityPost.reactionCount`/`myReaction` mezők MÁR léteztek Kör 5 óta
+(ADR 0399 §1) — a `domain/**` tilos zóna emiatt nem korlátozott semmit, amire
+a körnek ténylegesen szüksége volt.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5 (`--effort
+high`). 1 javító kör** (`docs/reviews/e09-r15-review.md`): review CHANGES
+REQUIRED elsőre, **1 MINOR** — az A5 property-teszt (`count` sosem negatív,
+200 random op) `count` változója csak az `op == 2` ágon kapott értéket, de az
+`assert count >= 0` feltétel nélkül futott minden iterációban; `seed=42`
+(dev-alapértelmezés) mellett véletlenül biztonságos (az első húzott `op`
+történetesen 2), de más seeddel (mérve: 1, 2, 12345, 999999 mind) az ELSŐ
+iteráció azonnali `UnboundLocalError`-t dobott volna — a teszt saját
+docstringjének "CI can monkeypatch seed" állítását megcáfolva. A mai
+`backend-ci.yml`-ben nincs `PROPERTY_SEED` override, tehát ez a mai gate-en
+nem volt piros, de egy jövőbeli randomizált backend property-gate alatt
+azonnal elhalt volna. A javító kör a `count = _count()`-ot minden iterációban
+feltétel nélkül futtatóra javította — a review saját kézzel, izolált
+`/tmp`-klónban öt különböző `PROPERTY_SEED` értékkel (1, 2, 12345, 999999, 42)
+újraellenőrizte. **1 NOTE külön mellékfelfedezés**: a javító kör utáni
+re-verifikáció során egy PRE-EXISTING, körön kívüli flaky teszt bukkant fel
+(`test_follow_service.py::test_swap_unique_constraint_breaks_a2`, Kör 7,
+`threading`-alapú valódi-sértés próba) — izoláltan és két következő
+teljes-suite futtatásnál zöld volt, a fájl nincs az `allowed_paths`-on és a
+kör diffje nem érinti; dokumentálva egy jövőbeli Kör 7-hez nyúló forduló
+számára. A Claude a javítást friss, izolált `/tmp`-klónban ÚJRA futtatott
+gate-tel (mind a kilenc lépés, a backend pytest a TELJES suite-ot jelentve)
+és saját kézzel futtatott scope-audittal fogadta el. Exact `b4e9c879`: Full
+Gate [32639185526](https://github.com/wolfcasaba/strumsight/actions/runs/32639185526)
++ Router CI [32639211541](https://github.com/wolfcasaba/strumsight/actions/runs/32639211541)
+mindkettő success. Részletesen `docs/reviews/e09-r15-review.md`.
+
+## ✅ E09-R14 KÉSZ — Feed UI, cache és tudatos használat — PR [#423](https://github.com/wolfcasaba/strumsight/pull/423), squash `ff39ee0c` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENNEGYEDIK KÖRE KÉSZ.** Az első UI-fogyasztója
+a Kör 13 following-feed backendnek: négy ÚJ fájl — `feed_cache.dart` (bounded,
+userId-partitionált lokális cache, `ss.community.feed.v1.<userId>`, maxItems=80),
+`feed_controller.dart` (nyolcállapotú Riverpod state machine —
+initial/loading/content/refreshing/paging/offline/error/end — a
+`CommunityFeedRepository` interfészre és a cache-re épülve, valós HTTP-bekötés
+NÉLKÜL, az szándékosan egy KÉSŐBBI kör hatásköre), `feed_card_registry.dart`
+(exhaustive switch mind a hét Kör 10 artifact-típusra + fallback-kártya) és
+`following_feed_screen.dart` (pull-to-refresh scroll-pozíció-megőrzéssel,
+explicit "Továbbiak betöltése" — NINCS auto-scroll-pagination, NINCS autoplay).
+`risk = "high"` indoklás: account-cache-keveredés (privacy-osztály) + a
+§13.6 SDD no-autoplay invariáns blast radiusa.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. 1 tartalmi
+javító kör + 1 CI-only javító kör** (`docs/reviews/e09-r14-review.md`): review
+CHANGES REQUIRED elsőre, **2 MAJOR** — F1: mindkét ÚJ UI-fájl 0
+`AppLocalizations` hívással ment ki (ugyanaz a hibaosztály, mint az E09-R08
+F1, ott MAJOR volt); F2: a cache-rehydration (`_artifactFromEnvelope`)
+MINDIG `UnfilledCommunityShareArtifact`-ra bontotta a mentett artifact-ot,
+holott a `ShareArtifact.fromJson` dekóder MÁR LÉTEZETT és importálva is volt
+— minden offline/cache-megjelenítés fallback-kártyát mutatott a valódi típus
+helyett (independens probe teszttel megerősítve: `practiceCard=0
+fallbackCard=1`). **1 MINOR** (F3: `_AudienceBadge.audience` felesleges
+`dynamic` típus). A javító kör mindhárom leletet zárta — F1: 13+9
+`AppLocalizations` hívás VALÓDI magyar fordítással
+(`lib/l10n/features/community_{en,hu}.arb` bővítve, az allowed_paths
+orchestrátor-irányítottan bővítve, ugyanaz a precedens, mint az E09-R08 fix);
+F2: `ShareArtifact.fromJson` try/catch-csel, új A1.3 regressziós teszt; F3:
+típusos `CommunityAudience`. Dedikált security-reviewer pass: PASS, 0
+BLOCKER/MAJOR (cache-izoláció strukturálisan helyes, nincs injection-felület,
+nincs secret-szivárgás, a no-autoplay invariáns ténylegesen érvényesül). A
+Claude a javításokat friss, izolált `/tmp`-klónokban ÚJRA futtatott gate-tel
+és scope-audittal fogadta el, egy SAJÁT probe-teszttel igazolva az F2
+javítást. A 2. (CI-only) javító kör a `test/ui/ui_inventory_test.dart`
+hardcode-olt képernyő-számlálóját bumpolta 70→71-re (a kör ÚJ
+`following_feed_screen.dart`-ja miatt) — ugyanaz a drift-osztály, mint
+E09-R05...R13-ban ismételten, orchestrátor-oldali egysoros mechanikus
+javítás. Exact `a39d15c8`: `full-gate.yml` 32634546134 + `router-ci.yml`
+32634547312 mindkettő success. Részletesen `docs/reviews/e09-r14-review.md`.
+
+## ✅ E09-R13 KÉSZ — Following feed és cursor pagination backend — PR [#422](https://github.com/wolfcasaba/strumsight/pull/422), squash `0907f006` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENHARMADIK KÖRE KÉSZ.** [ADR 0406](docs/adr/0406-following-feed-and-cursor-pagination.md):
+tisztán backend kör, az első, ami EGY queryben kombinálja a Kör 7 follow-gráfot,
+a Kör 8 block/mute-szűrőt és a Kör 11 post-táblát — egy időrendi, cursor-lapozott
+`GET /community/feed` végpont, nincs engagement-alapú fekete-doboz rangsor. Öt új
+fájl: `following_feed.py` (a query + HMAC-SHA256 aláírt, opaque cursor +
+`query_plan_uses_feed_index` A7-evidencia), `schemas/feed.py`, `routers/feed.py`,
+egy migráció (`e09_r13_0008`, EGYETLEN `(created_at, id)` composite index) és
+`test_feed_query_plan.py` (16 teszt, a §6/§6.1 minden cellája + a §6.1 KÖTELEZŐ
+valódi-sértés próba inline). A brief `risk = "high"` minősítése jogos volt: ez az
+ELSŐ listázó (sok sort visszaadó) Community-végpont, ahol egy hibás szűrési
+sorrend nem egy poszt, hanem SOK, a nézőre nem tartozó poszt tömeges,
+egyetlen kérésben történő kiszivárgását okozhatta volna.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. 2 javító
+kör** (`docs/reviews/e09-r13-review.md`): review CHANGES REQUIRED elsőre,
+**1 BLOCKER** — az A7 mérce-helper (`query_plan_uses_feed_index`) egy
+engedékeny "van valahol index a plan-szövegben" OR-fallback miatt ZÖLDET
+adott AKKOR IS, ha a szándékolt `(created_at, id)` index HIÁNYZOTT — a review
+saját, önállóan futtatott real-violation próbája (500 sor, `DROP INDEX`, a
+brief §6.1 KÖTELEZŐ előírása szerint, amit az implementer explicit KIHAGYOTT
+"destruktív lenne inline" indoklással) ezt PIROSNAK mérte, a helper mégis
+`True`-t adott. Súlyosabb: a mögöttes JOIN-alapú query-alak MÉG az index
+JELENLÉTÉBEN sem azt használta, és mindkét esetben `USE TEMP B-TREE FOR ORDER
+BY` futott — a kör core A7/N+1-védelem ígérete ténylegesen NEM teljesült,
+csak a mérőeszköz hibája miatt tűnt zöldnek. **1 MAJOR** — a migráció
+egyoldalúan hozzáadott egy `feed_view_count` oszlopot és egy második
+`ix_community_posts_audience_created` indexet, egyik sincs az ADR 0406-ban
+vagy a brief §5-ében ("Kör 14+ előkészítés" utólagos önindoklással — pontosan
+az a lista-tágítási minta, amit a pre-flight §1 explicit tilt). **4 MINOR**
+(cursor-secret fail-open default a publikus dev-placeholderre; audience-szűrés
+fail-open denylist a policy allowlist-mintája helyett; router docstring hamis
+422-állítása malformed cursorra, holott a tesztelt viselkedés 200; a
+`FEED_CURSOR_VERSION` string volt az ADR-kötött `int` helyett). Az 1. javító
+kör a query-alakot `WHERE profile_id IN (SELECT … FROM community_follows …)`
+formára alakította (a JOIN helyett), a helpert a pontos index-név + a
+"nincs TEMP B-TREE" ellenőrzésre szigorította, egy ÚJ inline valódi-sértés
+próbát adott (`test_a7_real_violation_probe_drops_feed_index`), eltávolította
+a nem-engedélyezett séma-elemeket, és zárta mind a 4 MINOR-t — a review saját,
+connection-pool-disposal-t is figyelembe vevő újramérésével megerősítve
+(SQLite az `ANALYZE`-statisztikát kapcsolatonként cache-eli — a review saját
+próbaszkriptje elsőre emiatt hamis negatívot adott, amíg nem alkalmazta
+ugyanazt a pool-disposal technikát, amit az implementer a saját tesztjében
+felfedezett és dokumentált). **Váratlan mellékhatás**: az 1. javítás (a
+`feed_view_count` oszlop eltávolítása) PIROSRA fordította a Kör 11-től örökölt,
+körön KÍVÜLI `test_migrations.py::test_downgrade_one_revision_drops_only_
+community_tables`-t — a teszt saját `_schema_snapshot` helpere KIZÁRÓLAG
+oszlopneveket hasonlított, indexeket nem, ezért egy immár index-only
+downgrade számára láthatatlan volt. A review saját, izolált futtatása fedezte
+fel (nem az implementer önjelentése), dokumentált §0.0 D8 `allowed_paths`-
+bővítéssel (`backend/tests/test_migrations.py`, CI-only bump minta, mint az
+E09-R06/…/R09/R12) zárva egy 2. javító körrel — a snapshot-helper ma
+index-neveket is összevet. Dedikált `security-reviewer` agent (risk=high
+kötelező): 0 BLOCKER/MAJOR (cursor-forgery ellenálló — teljes 32-byte
+HMAC-SHA256, constant-time compare, minden hibás ág fail-closed; nincs
+blocked/muted sor-kiszivárgás a cursor-csatornán; FOLLOWERS audience sosem
+szivárog nem-követőnek), a fenti 2 MINOR-t önállóan is megtalálta. Mindkét
+javító kör GATE-e és a `scope-audit.py` a review SAJÁT kezével, izolált
+`/tmp` klónokban ellenőrizve, nem az implementer önjelentésére hagyatkozva.
+Exact `21133e09`: Full Gate [32630730552](https://github.com/wolfcasaba/strumsight/actions/runs/32630730552)
++ Router CI [32631215694](https://github.com/wolfcasaba/strumsight/actions/runs/32631215694)
+mind success.
+
+**Folyamat-megjegyzés (az orchesztrátor saját hibája, a lánc önkorrekciója):**
+az implementer ELSŐ dispatch-kísérlete (session `255c4da9…`) egy `aborted_tools`
+crash-szel ért véget jelzés nélkül, munka nélkül — az orchesztrátor tévesen a
+saját (pipeline-szintű, meta-) promptját adta át az implementernek a kör-brief
+helyett; a modell ezt észlelte és megpróbálta a saját, javított prompt-fájlját
+megírni a munkapéldány GYÖKERÉBE (`allowed_paths`-on kívül), a scope-őr helyesen
+megtagadta az írást, ami az egész sessiont elvitte magával. Mivel NULLA commit
+történt, az újraindítás (UGYANAZZAL a brief-fájllal, a helyes implementer-
+prompt-mintát követve) veszteség nélkül helyre tudta állítani a kört — lásd
+`docs/LESSONS.md` az új leckéért.
+
+## ✅ E09-R12 KÉSZ — Post composer draft és outbox — PR [#421](https://github.com/wolfcasaba/strumsight/pull/421), squash `d1ccf079` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENKETTEDIK KÖRE KÉSZ.** Nincs új ADR (tiszta
+Flutter UI/integráció — a brief §5 kötött döntései a meglévő E08-R04
+gamifikáció-outbox mintára és a Kör 5 `CommunityPostRepository` interfészre
+épülnek, nem hoznak új architekturális elhatárolást). Négy új fájl: egy
+per-user, verziózott lokális draft store
+(`community_draft_store.dart`, `ss.community.drafts.v2.<userId>` — az ELSŐ
+user-id-particionált storage-kulcs a repóban), egy perzisztens, stabil-ID
+Community outbox (`community_outbox.dart`, az E08-R04 gamifikáció-outbox
+mintáját követve — a retry SOHA nem generál új idempotency-kulcsot), a teljes
+composer state machine (`post_composer_controller.dart`, editing →
+submitting → success/failure, `isSubmitting` guard a dupla-tap ellen), és a
+Material 3 composer screen. A brief `risk = "high"` minősítése jogos volt:
+audience-vezérelt, felhasználó-generált tartalom, ahol egy hibás offline-retry
+duplikált posztot, egy hibás siker-jelzés pedig privát tartalom véletlen
+kiküldését okozhatná.
+
+**Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. 2 javító
+kör** (`docs/reviews/e09-r12-review.md`): review CHANGES REQUIRED elsőre,
+**1 MAJOR** — a draft store egy FIKTÍV "korábbi device-wide draft store"
+migrációt állított (nem létezett — ez az ELSŐ Community draft store a
+repóban), és a hozzá tartozó `legacyKey` NEM volt user-id-particionálva
+(minden usernél ugyanaz a literál) — jelenleg holt kód (semmi nem ír rá), de
+architekturálisan pontosan azt az izolációs garanciát törte volna meg, amit a
+kör bevezetni hivatott, ha bármi valaha ír arra a megosztott kulcsra
+(kereszt-user draft-szivárgás). A testvér `community_outbox.dart` UGYANEBBEN a
+körben helyesen `legacyKey: ''`-t választott ugyanerre a helyzetre — a draft
+store ezt követte a javításban. **1 MINOR** — a `CommunityOutbox.enqueue`
+doc-comment egy nem-tesztelt `Throws StateError` állítást tett, miközben a
+tényleges kód `accepted:false`-t ad vissza; a doc-comment a valós szerződésre
+javítva. Mindkettő zárva, saját kézzel (friss `/tmp`-klón) ellenőrizve.
+**Külön, CI-only javító kör** (nem review-lelet): a `full-gate.yml` első
+futása a MEGLÉVŐ, körön kívüli `test/ui/ui_inventory_test.dart` hardcode-olt
+production-screen-számlálóját buktatta (69→70, az ÚJ `post_composer_screen.dart`
+miatt) — UGYANAZ a mintázat, mint az E09-R06/R07/R08/R09 CI-only javításai;
+a fájl a brief §0.0 D6 dokumentált bővítésével felkerült az `allowed_paths`-ra,
+a MiniMax egysoros bump-ot commitolt. Mindkét CI (Full Gate + Router CI) zöld
+az exact-SHA `882ec350`-n a merge előtt.
+
+## ✅ E09-R11 KÉSZ — Post backend CRUD és audience enforcement — PR [#420](https://github.com/wolfcasaba/strumsight/pull/420), squash `98d7b2f6` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENEGYEDIK KÖRE KÉSZ.** [ADR 0405](docs/adr/0405-post-crud-and-audience-enforcement.md):
+`community_posts` — az első valódi "tartalom" endpoint-felszín, ami egyszerre
+köti be a Kör 4 `CommunityAccessPolicy` audience-döntését és a Kör 8
+`is_blocked_pair` block-ellenőrzését. Create/get/patch/delete, szerveroldali
+author (a JWT subjectből, sosem a body-ból), `UNIQUE(profile_id,
+idempotency_key)`-alapú idempotens create, `updated_at`-et resource-version
+tokenként újrahasznosító optimista konkurencia (a Kör 4 `privacy.py`
+precedense — nincs külön verzió-oszlop), soft delete, HTML/script
+reject-only body-validáció, `club_id` FK nélküli nullable mező (Kör 24
+scope), kétértékű `moderation_state` aktív workflow nélkül (Kör 27/28
+scope), a Kör 10 `parse_share_artifact` szerződését hívó (nem újradefiniáló)
+artifact-mezők.
+
+**A pre-flight (§0.0, D1-D12) 12 döntést rögzített indítás előtt** — a
+legfontosabbak: az ADR-szám `0403`→`0405` korrekció (D1); a
+`CommunityAccessPolicy.evaluate_content_access`/`is_blocked_pair` TÉNYLEGES
+aláírásának mérése, nem új párhuzamos audience-logika (D2); az
+idempotencia-kulcs a `community_posts` táblán él, mert a SDD-javasolt
+megosztott `community_idempotency_records` tábla új modell-fájlt igényelne,
+ami nincs az `allowed_paths`-on (D4); egységes 404 MINDEN "nem látható"
+ágra (nem-létező ID, blocked, audience-kizárt, soft-deleted, moderált) — a
+`social_graph.py` follower-lista 403-mintájától TUDATOSAN eltérve, mert egy
+poszt közvetlen ID-s olvasásánál a 403 önmagában elárulná a létezést (D7).
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **1 javító
+kör** (`docs/reviews/e09-r11-review.md`): review CHANGES REQUIRED elsőre,
+**2 BLOCKER** — F1: a `patch_post` NEM ellenőrizte a tulajdonost — a
+`_evaluate_visibility` egy OLVASÁSI láthatóság-kaput valósít meg (owner→
+blocked→audience), nem írási jogosultságot, tehát egy PUBLIC posztra bármely
+nem-blokkolt hitelesített felhasználó átjutott és módosíthatta a
+body/audience/artifact mezőket — a dedikált `security-reviewer` agent (a
+brief `risk = "high"` miatt kötelező) ÉLESBEN reprodukálta a defacement-et a
+migráció-alapú sémán; F2 (Claude saját olvasása találta): a GET/PATCH válasz
+`author_public_id` mezője a NÉZŐ saját public_id-ját adta a poszt tényleges
+szerzője helyett — minden nem-saját-poszt olvasásnál hibás szerző-
+attribúciót okozva (a szolgáltatás ELSŐDLEGES használati módján, egy
+közösségi felszínen). Mindkettőt az egyetlen teszt rejtette el, ami
+nem-tulajdonos GET-et/PATCH-et hívott: csak a `public_id`-t ellenőrizte,
+nem az `author_public_id`-t, és PATCH-re egyáltalán nem volt nem-tulajdonos
+teszt (csak DELETE-re). **2 MINOR** — F3: törölt poszt visszatért a
+create-idempotencia-retry útvonalon (a DB-szintű UNIQUE constraint a
+`deleted_at`-tól függetlenül tüzelt; javítva: a tombstone `idempotency_key`
+mezőjének felszabadításával, az audit-trail megőrzésével); F4: a PATCH
+optimista-konkurencia read-compare-write, nem DB-szintű compare-and-swap —
+tudatos WONTFIX ebben a körben (a Kör 4 `privacy.py` öröklött korlátja, nem
+ÚJ regresszió), follow-up jegyezve. Mind F1-F3 ÚJ regressziós teszttel zárva
+(a non-owner PATCH teszt a sértetlen body-t is asszertálja, nem csak a
+státuszkódot). Review APPROVED javító kör 1 után — a Claude a javítást NEM
+az implementer önjelentésére hagyatkozva fogadta el: friss, izolált
+`/tmp`-klónban újra lefuttatta a teljes gate-et és a scope-auditot, és a
+diffet sor szerint elolvasta. Exact `49631b97`: Full Gate
+[32620211936](https://github.com/wolfcasaba/strumsight/actions/runs/32620211936)
++ Backend CI [32620213409](https://github.com/wolfcasaba/strumsight/actions/runs/32620213409)
++ Router CI [32620214253](https://github.com/wolfcasaba/strumsight/actions/runs/32620214253)
+mind success.
+
+**A round jelenleg nincs bekötve** (a Kör 8/10 precedense szerint): a
+`build_community_router` factory nem mountolja a `posts` routert — ez Kör
+13+ (feed) dolga, amikor a valódi HTTP-felszín aktiválódik.
+
+## ✅ E09-R10 KÉSZ — Share artifact szerződések — PR [#419](https://github.com/wolfcasaba/strumsight/pull/419), squash `a29e4ac8` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZEDIK KÖRE KÉSZ.** [ADR 0404](docs/adr/0404-share-artifact-contracts.md):
+sealed `ShareArtifact` hierarchia hét altípussal (practice summary, song
+result, original progression, plan template, analysis improvement,
+achievement, challenge) — minden altípus explicit, minimális mezőkkel,
+`schemaVersion`+`sourceId`+`createdAt` kötelezővel, `type`-discriminátorral
+(NEM mezőhalmazból dönt típust). Négy Flutter mapper
+(`practice_share_mapper.dart`, `song_share_mapper.dart` — 3 factory:
+song result/original progression/plan template, mind `Song`-ból —,
+`analysis_share_mapper.dart` — az `audio_analysis/public.dart`
+`AnalysisComparison`-jából, NEM az `analyze/public.dart`-ból! —,
+`achievement_share_mapper.dart` — 2 factory: achievement + challenge, mind
+gamifikációból), mindegyik kizárólag a saját forrás-feature `public.dart`
+barreljét importálja. Backend Pydantic discriminated union
+(`backend/app/community/schemas/artifacts.py`, `extra="forbid"` + `StrictInt`
+`schemaVersion` egyenlőség-ellenőrzés) — ismeretlen `type`/`schemaVersion`
+`ValidationError`-t dob, nincs csendes best-effort fallback. A challenge-
+artifact hitelesség-mezője a gamifikáció `LedgerEntrySyncStatus`-a
+(E08-R28/ADR 0394, `{unverified, verified}`), NEM az `EvidenceTrust` (egy
+másik, öt fokozatú aktivitás-bizonyíték tengely — a brief §5.3
+megfogalmazása erre a pontosításra szorult). `docs/contracts/
+community-share-artifacts.md` — a wire-shape + deprecation/back-compat
+szabályok referenciapontja.
+
+**A pre-flight (§0.0) egy ADR-szám-ütközést és két forrás-összetévesztési
+kockázatot zárt indítás előtt.** A brief előre kiosztott `ADR 0402`-je a
+brief megírása (2026-08-22) és a kör indítása (2026-08-23) között egy
+KÖZBEEKŐ, szekvenciális kör (E09-R08) által foglalttá vált —
+`tools/round-slots.py reserve-adr` friss `0404`-et adott (D1, [[L430]] —
+a foglaló nem csak párhuzamos-session versenyhelyzet, hanem naptári
+avulás ellen is véd). D3: az `analysis_share_mapper.dart` forrása
+`audio_analysis/public.dart`, NEM `analyze/public.dart` — a két
+hasonló nevű feature ([[L430]]) könnyen összetéveszthető lett volna, mert
+a brief saját pre-flight-instrukciója épp az `analyze`-t fogyasztó
+`strum_card.dart`-ra mutatott referenciaként. D4: a challenge-artifact
+hitelesség-mezője a `LedgerEntrySyncStatus`, nem az `EvidenceTrust`. D2: a
+négy mapper-fájl és a hét artifact-altípus leképezése rögzítve (nincs
+ötödik mapper-fájl, ami tilos-zóna-sértés lett volna).
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **0 javító
+kör** (`docs/reviews/e09-r10-review.md`): review APPROVED elsőre, 0
+BLOCKER/MAJOR. A review a §6.1 KÖTELEZŐ valódi-sértés próbát ÖNÁLLÓAN,
+kézzel megismételte (nem csak az implementer §10.3 állítását fogadta el):
+a `_validate_schema_version` equality-ellenőrzését eltávolította,
+`pytest`-tel megmérte, hogy az A3-cella 2 tesztje PIROSRA vált, majd
+visszaállította. Dedikált `security-reviewer` agent (a brief `risk =
+"high"` miatt kötelező): PASS, 0 BLOCKER/MAJOR — 1 MINOR (`coaching_codes`/
+`chords`/`metrics` lista-mezőknek nincs felső hossz-korlát, a skalár
+mezőkkel ellentétben — horog Kör 11-nek, amikor a post-creation endpoint
+tényleg fogyasztani kezdi) + 2 NOTE (a challenge `verified` állapot
+kliens-oldali nem-kikényszerített volta persistálás előtt; a konkrét Dart
+`fromJson` factory-k megkerülhetik az A3 schemaVersion-ellenőrzést, ha nem
+a bázis `ShareArtifact.fromJson`-on át hívják őket) — egyik sem BLOCKER/
+MAJOR, mindkettő Kör 11+/13+ bekötési horog, dokumentálva. Exact `2f2ed131`:
+Full Gate [32616408599](https://github.com/wolfcasaba/strumsight/actions/runs/32616408599)
++ Backend CI [32616411741](https://github.com/wolfcasaba/strumsight/actions/runs/32616411741)
++ Router CI [32616404016](https://github.com/wolfcasaba/strumsight/actions/runs/32616404016)
+mind success.
+
+**A round jelenleg nincs bekötve** (a security-reviewer mérése): a Dart
+entitást a `community/public.dart` nem exportálja, a backend
+`parse_share_artifact`-ot egy router sem hívja — ez Kör 11+ (poszt-CRUD)
+dolga, a fenti MINOR/NOTE horgokkal együtt.
+
+## ✅ E09-R09 KÉSZ — Profilkeresés és biztonságos discovery — PR [#418](https://github.com/wolfcasaba/strumsight/pull/418), squash `5a1df780` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) KILENCEDIK KÖRE KÉSZ.** Handle-prefix
+profilkeresés (`GET /community/profiles/search`, `CurrentUser` kötelező —
+§0.0/D1) index-alapú tervvel (`handle_normalized` UNIQUE INDEX, EXPLAIN QUERY
+PLAN-nal igazolva), a Kör 8 közös `filter_public_ids_against_viewer_blocks`
+page-level helperrel bekötve (§0.0/D2 — nem soronkénti `is_blocked_pair`),
+PRIVATE-profil teljes kizárással (§0.0/D3: "non-discoverable" =
+`visibility == PRIVATE`, nincs külön mező a sémában). Flutter
+`community_search_screen.dart` (debounce, törölhető lokális recent-search
+lista), a Kör 5 (`E09-R05`, ADR 0399) óta "Kör 9"-ként megnevezett
+`CommunityProfileRepository.searchProfiles` `UnsupportedError`-stub éles HTTP-
+bekötése (§0.0/D4). Előre kiosztott ADR nincs (a kör nem hoz új kötött
+architekturális döntést, tisztán meglévő szerződések alkalmazása).
+
+**A pre-flight (§0.0) egy MÉRT scope-gapet talált és zárt indítás előtt:** a
+Flutter `searchProfiles` domain-metódus és a hozzá tartozó két
+`UnsupportedError`-stub MÁR LÉTEZETT (Kör 5 által "Kör 9"-ként megcímezve),
+de a brief eredeti `allowed_paths`-a NEM tartalmazta a
+`profile_repository_impl.dart`-ot — enélkül a keresés technikailag
+teljesíthetetlen lett volna. §0.0 D1-D4 pontosan méri az öt gap-et (auth,
+block-filter hívási pont, "discoverable" mező hiánya, a Flutter stub, az
+`ApiClient.getJson` query-param hiánya) és a §3/§4/§5/§8 szöveget ehhez
+igazítja.
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **1 javító
+kör** (`docs/reviews/e09-r09-review.md`): **2 BLOCKER** — F1: a keresési
+találatok a Flutter oldalon MINDEN sorra ugyanazt a fabrikált
+`displayName: 'placeholder'` / `handle: 'placeholder-x1'` értéket
+jelenítették meg (a widget teszt egy valódi adatot visszaadó fake
+repository-t használt, sosem futtatva át a valódi HTTP-decode útvonalat) —
+javítva: a backend válasz `hits` tömbbel bővült (`handle_display`+
+`display_name`+`created_at`), a Dart oldal ebből épít valódi
+`CommunityProfile`-t; F4 (**dedikált `security-reviewer` agent lelete**): a
+`next_cursor` a NYERS (block-szűrés ELŐTTI) utolsó sorból épült, tehát egy
+blokkolt profil handle-je és belső integer PK-ja a pagination-csatornán át
+kiszivárgott a `public_ids` listából való helyes kizárás ELLENÉRE — javítva:
+HMAC-SHA256-tal aláírt, opak cursor, a block-szűrt `kept_rows` utolsó
+eleméből származtatva (ha egy teljes lap mindegyike blokkolt, a lapozás
+inkább None-cursorral áll meg, mint hogy szivárogtasson — dokumentált,
+szándékos biztonság-elsőbbségi tradeoff). **1 MINOR** (F2 — a 422 docstring
+tévesen állította, hogy nem fogyaszt rate-limit slotot; javítva: a
+hossz-ellenőrzés a limiter ELÉ került) + **1 CI-only fix**
+(`test/ui/ui_inventory_test.dart` screen-számláló 68→69, UGYANAZ a
+drift-osztály mint az E09-R06/R07/R08). Mindhárom lelet ÚJ regressziós
+teszttel zárva (F4 a security-reviewer pontos forgatókönyvét pinneli).
+Review APPROVED javító kör 1 után. Exact `90dd39d9`: `full-gate.yml`
+32613840729 + `backend-ci.yml` 32613842345 mindkettő success (a
+`round-ci-plan.py` nem ismeri a `backend-ci.yml`-t, ezt az orchesztrátor
+külön, kézzel dispatch-elte a diff `backend/**` érintettsége miatt — ld.
+alább a folyamat-tanulságot).
+
+**Mért folyamat-tanulságok (a saját sessionöm hibái, nem az implementeré):**
+
+1. **Az implementer első dispatch-a a HIBÁS promptot kapta** — az
+   orchesztrátor saját (pipeline-oldali) meta-promptját adta át
+   `mm-round.sh`-nak a kör-brief helyett. Az implementer ennek megfelelően
+   ORCHESZTRÁTOR-szerepű munkát kezdett (saját ADR-t foglalt és írt egy,
+   a briefben explicit tiltott `docs/adr/**` fájlba, majd a SHARED fő
+   munkapéldányba is megpróbált írni), mielőtt jelzés nélkül lefagyott.
+   Felismerve → a workdir branch-e visszaállítva a pre-flight commitra, a
+   megosztott fába szivárgott (nem commitolt) fájl törölve, a HELYES
+   prompt (a kör-brief fájlja magában a munkapéldányban) újra
+   dispatch-elve. A `tools/mm-round.sh` a `<prompt-fájl>` argumentumot
+   VERBATIM adja át a modellnek — ez mindig a kör-brief legyen, SOHA az
+   orchesztrátor saját pipeline-promptja.
+2. **A CI-terv (`round-ci-plan.py`) nem ismeri a `backend-ci.yml`-t** — csak
+   a `full-gate.yml`/`build-apk.yml` párost nevezi meg. Egy `backend/**`-et
+   érintő kör (mint ez) esetén ezt a workflow-t az orchesztrátornak KÉZZEL
+   kell dispatch-elnie és zöldre várnia, a `router-ci.yml`-hez hasonlóan —
+   a szerszám ezt (még) nem teszi meg helyette.
+3. **Ugyanaz a session megismételte a saját L425-mintázatát** — a záró
+   rituálék közben egy `git reset --hard origin/main`-t futtatott a
+   merge-lock-on BELÜL, miután MÁR beírta a HANDOFF/RTM/LESSONS
+   szerkesztéseket, de MIELŐTT commitolta volna azokat — a reset némán
+   eldobta mindhármat (csak a queue-sor élte túl, mert azt a reset UTÁN
+   írta). Újra kellett írni. A helyes sorrend: reset ELŐSZÖR, utána MINDEN
+   szerkesztés, commit legvégül — a reset SOSEM mehet a szerkesztés és a
+   commit közé.
+
+## ✅ E09-R08 KÉSZ — Block, mute és safety kapcsolatkezelés — PR [#417](https://github.com/wolfcasaba/strumsight/pull/417), squash `5e086c10` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) NYOLCADIK KÖRE KÉSZ.** [ADR 0402](docs/adr/0402-block-mute-and-safety-relationships.md):
+`community_blocks`/`community_mutes` tábla + `block_service.py` atomikus
+tranzakció (mindkét irányú follow-él DELETE, pending follow-request UPDATE
+`status="blocked"` — a Kör 7 `follow_service.py` MÉRT UPDATE-recycle
+mintáját követve, NEM DELETE-elve a requestet). Élő block-first szűrés
+(`is_blocked_pair`) a MA authentikált `get_followers`/`get_following`
+endpointokba kötve (a Kör 4 `CommunityAccessPolicy` ELSŐ élő bekötése) —
+caller↔owner block → 403 a lap materializálása ELŐTT, egyébként a
+hívóval blokk-kapcsolatban álló profilok kimaradnak a lapból. ÚJ
+`routers/safety.py` HTTP-felület (block/unblock/mute/unmute +
+blocked/muted lista). Flutter: a Kör 7 kódjában MÁR "Kör 8 scope"-ként
+megnevezett `SocialGraphRepository.block/unblock/mute/unmute`
+`UnsupportedError` stub négyes valódi implementációra váltva; a domain
+interfész két ÚJ metódussal bővült (`blockedProfilesPage`/
+`mutedProfilesPage`, a meglévő 11 metódus változatlan); ÚJ
+`safety_relationships_screen.dart` (Blocked/Muted lista, saját
+képernyő-kolokált Riverpod state, teljes en/hu lokalizáció).
+
+Előre kiosztott ADR (`0401`) a queue-fájlban STALE volt (a Kör 7 már
+foglalta) — friss szám (`0402`) a `round-slots.py reserve-adr`-ból. A
+pre-flight (§0.0, D1–D6) jelentős, mért revíziót hordoz: az eredeti
+`allowed_paths` NEM tartalmazta a router-fájlokat, amikbe a block-szűrést
+be kellett kötni, sem a Dart repository-implementációt — mindkettőt a
+saját elődje (Kör 7) már explicit "Kör 8 scope"-ként nevezte meg a
+shipped kódjában, csak a batch-elt brief ezt tévesen kihagyta. A
+challenge-invite tábla (Kör 21) és a klub-domain (Kör 24) még nem
+léteznek — a brief "pending challenge invite törlése"/"közös klub
+placeholder" cellái ennek megfelelően pontosítva (D3/D4).
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **1 javító
+kör** (`docs/reviews/e09-r08-review.md`): F1 MAJOR — a safety screen 0
+lokalizált stringgel indult (minden testvér Community screen
+`AppLocalizations`-t használ) → 11 kulcs `community_{en,hu}.arb`-hoz +
+aggregátum-újragenerálás; F2 MAJOR — `block()`/`mute()` nem kapta el a
+konkurrens `IntegrityError`-t (ellentétben a `follow_service.py` MÉRT
+mintájával), és a saját concurrency-tesztje NÉMÁN nyelte el a szál-kivételt
+assert nélkül (`docs/LESSONS.md` L349–L351 mintája) → mindkettő javítva,
+függetlenül újra-igazolva friss izolált klónban. **1 CI-only fix**
+(`test/ui/ui_inventory_test.dart` screen-számláló 67→68 — UGYANAZ a
+drift-osztály, ami a Kör 7-nél is egy 3. javító kört igényelt). Dedikált
+`security-reviewer` pass: PASS, nincs BLOCKER (2 MINOR/NOTE — block-létezés
+oracle 403 vs 404 között, non-blocking follow-up). Review APPROVED, 0
+nyitott BLOCKER/MAJOR. Exact `63890947`: `full-gate.yml` 32608627590 +
+`router-ci.yml` 32608635566 mindkettő success.
+
+**Mért folyamat-tanulság (a saját sessionöm hibái, nem az implementeré):**
+a `tools/mm-round.sh` NEM push-ol automatikusan — az orchesztrátornak
+minden implementer-/javító-forduló UTÁN saját kézzel kell push-olnia a
+munkapéldányból, MIELŐTT a shared tree-n bármit commitolna a branchre;
+elmulasztva ez egy forkolt, divergens branch-históriát okoz (mérve,
+`cherry-pick` + `safe-force-push.sh`-sal helyreállítva, 2×). Az implementer
+saját gate-önbevallása HÁROMSZOR jelzett `gate_shape=VIOLATION`-t (a
+`round-gate.sh` `| tail`/`&&` mögé rejtve, a promptban explicit tiltás
+ELLENÉRE) — mindhárom esetben a review saját kézzel, izolált `/tmp`
+klónban futtatta újra csonkolatlanul, és ténylegesen zöld volt (a
+csonkolás önmagában nem jelentett rejtett hibát ebben a körben, de a
+bemondást egyszer sem fogadtam el enélkül).
+
+## ✅ E09-R07 KÉSZ — Follow és follow request social graph — PR [#416](https://github.com/wolfcasaba/strumsight/pull/416), squash `1cc49e41` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) HETEDIK KÖRE KÉSZ.** [ADR 0401](docs/adr/0401-follow-and-follow-request-social-graph.md):
+idempotens, privacy-kompatibilis follow rendszer — public profilnál azonnali
+follow, private profilnál explicit `requested → accepted | declined |
+cancelled` request lifecycle. `community_follows`/`community_follow_requests`
+migráció DB-szintű self-follow `CHECK` és race-biztos `UNIQUE` mindkét
+táblán; `follow_service.py` (public/private lifecycle, `IntegrityError`→
+domain-kivétel fordítás, állapot-átmenet-alapú idempotencia); `social_graph.py`
+router (follow/accept/decline/unfollow/follower-removal/cursor pagination).
+Flutter: `relationship_repository_impl.dart` a MEGLÉVŐ (Kör 5, ADR 0399)
+`SocialGraphRepository` interfészt implementálja — `block`/`unblock`/`mute`/
+`unmute` `UnsupportedError`-t dob (Kör 8 előfeltétele, a Kör 6/ADR 0400
+precedens szerint, NEM csendes no-op); `relationship_controller.dart`
+optimistic (public) / pending (private) állapotgép; `followers_screen.dart`;
+`api_client.dart` egyetlen ÚJ `delete()` metódussal bővült (a `post()` pontos
+tükre, a meglévő négy metódus érintetlen).
+
+**Pre-flight mérve öt pontot revideált** (`docs/rounds/e09-r07-follow-and-follow-request-graph.md`
+§0.0, [ADR 0401](docs/adr/0401-follow-and-follow-request-social-graph.md)):
+(1) az előre kiosztott `ADR 0400` MÁR foglalt volt (E09-R06 saját ADR-je) —
+`tools/round-slots.py reserve-adr` friss `0401`-et adott; (2) a Flutter
+domain-interfész a MEGLÉVŐ `SocialGraphRepository` (Kör 5), NEM egy új
+`RelationshipRepository`; (3) nincs külön "cancel" domain-metódus/endpoint —
+a meglévő `unfollow()`/`DELETE .../follow` egyik ága fedi (a domain `**`
+NULLA diffet kapott); (4) `lib/core/network/api_client.dart`-nak nem volt
+DELETE-metódusa — szűken bekerült az `allowed_paths`-ra egyetlen additív
+`delete()`-re; (5) `backend/app/community/__init__.py::build_community_router()`
+NEM bővült — a Kör 3 (`handles.py`) precedens szerint a router tesztje önálló,
+helyi `FastAPI()`/`TestClient` fixture-t épít.
+
+**Review (`docs/reviews/e09-r07-review.md`): APPROVED, KÉT javító kör
+után.** Az első review (Claude + dedikált `security-reviewer` agent, risk=high)
+1 BLOCKER + 2 MAJOR + 1 MINOR + 1 NOTE-ot talált: **F1 BLOCKER** — a §6.1
+kötelező valódi-sértés próba (`test_swap_unique_constraint_breaks_a2`) NEM
+determinisztikus volt (10 ismételt futtatásból 7 PIROS, a két
+`threading.Thread` között nem volt szinkronizációs bariér); **F2 MAJOR** —
+`get_followers`/`get_following` teljesen hitelesítetlen volt (nincs
+`current_user` függőség, szemben a router MINDEN mutáló endpointjével) —
+ma latens (a router nincs mountolva), de éles IDOR/enumerációs kockázat lenne
+mountoláskor; **F3 MAJOR** — a Dart `unfollow()`/`removeFollower()` sosem
+küldte a backend által KÖVETELT `idempotency_key` query-paramétert (minden
+éles hívás 422-t kapott volna — egyik teszt sem fogta meg, mert egyik oldal
+sem gyakorolta a VALÓDI Dart→backend HTTP-szerződést); **F4 MINOR** —
+`post_follow` nem kapta el a `FollowAlreadyExists`-t → nyers 500.
+A javító kör 1 (`222a6782`) mind az ötöt zárta — az F1 fix a `threading.
+Barrier`-t NEM a szál-indítás elé, hanem a `follow_service._existing_follow`
+helperbe monkey-patchelte (a pontos SQL-döntési pontnál szinkronizál) —
+FÜGGETLEN 15×-ös reprodukció a reviewer oldalán: 15/15 zöld (szemben a
+fix előtti 7/10 PIROS-sal).
+
+A friss exact-SHA CI (`full-gate.yml`) a TELJES suite-tal PIROS lett — nem a
+kör tartalma miatt, hanem egy MEGLÉVŐ, körön kívüli gate-teszt
+(`test/ui/ui_inventory_test.dart:14`, kemény kódolt production-screen-szám)
+avult el a kör saját ÚJ `followers_screen.dart` fájla miatt (66→67, azonos
+minta mint az E09-R06 F9 lelet). Javító kör 2 (`7f2e348d`, `allowed_paths`
+szűken bővítve a brief §0.0.9-ben) egy sorban javította.
+
+Scope-audit mindhárom fordulóban OK. Minden gate-futtatás FÜGGETLENÜL,
+izolált `/tmp` klónokban: format/analyze/architecture/secrets/l10n/backend
+ruff/backend pytest (teljes suite) mind zöld. CI a pontos merge SHA-n
+(`f75f0007`): `full-gate.yml` 32603023648 + `router-ci.yml` 32603026921
+mindkettő `success`.
+
+**Nyitva maradt, EMBERI döntést NEM igénylő tartozás:** az E09-R08 queue-sora
+(`docs/execution/pipeline-queue.tsv`) `0401`-et ad előre kiosztott ADR-ként —
+ez a szám MOST már foglalt (ez a kör). Az E09-R08 pre-flightja a §1.0.1
+szerint `tools/round-slots.py reserve-adr`-rel ÚJ számot kér, ne a queue-fájl
+stale értékét használja — pontosan ugyanaz a minta, amit ez a kör is örökölt
+az E09-R06-tól.
+
+## ✅ E09-R06 KÉSZ — Profil létrehozás, szerkesztés és Community gate UI — PR [#415](https://github.com/wolfcasaba/strumsight/pull/415), squash `77bc0589` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) HATODIK KÖRE KÉSZ.** ADR 0400: a Community
+gate (disabled/logged-out/profile-missing/ready), a profil létrehozó/
+szerkesztő flow és — a pre-flightban felfedezett, ADR 0396-ban MÁR ennek
+a körnek kiosztott felelősség pótlásaként — a backend SERVICE-SZINTŰ
+profil-létrehozás (`POST`/`PUT /community/profiles/me`, `CurrentUser`/
+`DbSession` auth-lánc). A batch-elt brief (PR #405) tévesen a teljes
+`backend/**`-et tilos zónának jelölte és hamisan állította, hogy a kör
+"az ELSŐ, ami ténylegesen HTTP-n keresztül hívja" a Kör 3/4 policy-kat —
+mérve: `grep -rn "INSERT INTO community_profiles" backend/` nulla
+találat, egyetlen backend endpoint sem hozott létre profilsort. A
+pre-flight (§0.0, ADR 0400) szűken, öt névvel megadott fájlra nyitotta
+ki a tilos zónát; a `main.py`/`community/__init__.py` router-mounting és
+bármilyen új migráció VÁLTOZATLANUL tilos zóna marad — külön, még ki nem
+osztott kör dolga (`docs/reviews/e09-r04-review.md` F1/N2-vel együtt).
+
+**Review (`docs/reviews/e09-r06-review.md`): APPROVED, KÉT javító kör
+után.** Az első review 1 BLOCKER + 1 MAJOR leletet talált: F1 — a
+`fetchMyProfile()` egy nem-létező `GET /community/profiles/me` végpontot
+hívott (a gate `ready` állapota élesben sosem lett volna elérhető); F2 —
+a `handle_policy.validate()` NFKC-normalizált visszatérési értéke
+eldobva, Unicode-ekvivalens handle-ök (pl. fullwidth karakterek)
+ütköztek volna — egy dedikált `security-reviewer` agent FÜGGETLENÜL
+megerősítette, élesebb impersonation-szöggel. A javító kör 1 (`9592638e`)
+mindkettőt fixálta, tesztekkel (a security-reviewer pontos fullwidth/
+ASCII forgatókönyvét reprodukálva). Az ELSŐ exact-SHA CI-dispatch
+(`full-gate.yml`) ekkor PIROS lett — a TELJES suite (nem a célzott gate)
+2 ÚJ MAJOR leletet fedett fel: F9 (`ui_inventory_test.dart` elavult
+screen-számláló, 64→66, a kör 2 új production screent ad) és F10
+(`dio_factory_guard_test.dart` regex-alapú Dio-őr false positive egy
+doc-kommenten, "Dio ("-mintára illeszkedve). A javító kör 2 (`ddbd4e9e`)
+mindkettőt fixálta, egysoros javításokkal.
+
+Scope-audit háromszor jelzett VIOLATION-t a kör során — mindhárom
+alkalommal kis, additív, tartalmilag helyes fájlt, amit az orchesztrátor
+§0.0.x brief-revíziókkal legitimált (nem mást implementáltatott):
+`lib/core/foundation/app_failure.dart` (a projekt MEGLÉVŐ per-feature
+`FailureCode` mintája), `lib/l10n/app_{en,hu}.arb` (az ARB-aggregátum
+tartalmilag friss, `dart run tool/gen_l10n_segments.dart --check`
+igazolta — csak a generátor helyett kézzel lett átmásolva),
+`test/ui/ui_inventory_test.dart` (F9 fent). A `bio`/`skillInterests`/
+`badges`/`avatarUrl` mezők ebben a körben UI-only maradnak (nincs
+backend oszlop, nincs migráció) — egy jövőbeli migráció-hozó kör
+előfeltétele.
+
+Minden gate-futtatás FÜGGETLENÜL, izolált `/tmp` klónokban (mindkét
+javító kör után újra): scope-audit OK, format/analyze/architecture/
+secrets/l10n/backend ruff/backend pytest (349 teszt) mind zöld. A KÉT
+kötelező valódi-sértés próba (Flutter A5 dupla-submit debounce, backend
+A8 `commit_with_uniqueness_check` try/except) PIROS→ZÖLD dokumentálva. CI
+a pontos merge SHA-n (`bf2f67da`): `full-gate.yml` 32596780267 +
+`router-ci.yml` 32597616787 (manuálisan `workflow_dispatch`-csel pontos
+SHA-ra kényszerítve) mindkettő `success`.
+
+**Nyitva maradt, EMBERI döntést NEM igénylő tartozások:** F3/F4 (A6
+logout-cache és A7 2.0 text-scale golden teszt hiányzik, a kód-szint
+helyes, csak tesztekkel nincs bizonyítva); F6 (`deps.py`
+`HTTPBearer(auto_error=True)` hiányzó auth-fejlécre 403-at ad 401 helyett
+— projektszintű minta, `deps.py` tilos zóna volt ezen a körön); a
+router-mounting kör (F1 review-eredetije, ADR 0396 "Következmények" +
+E09-R04 F1/N2) továbbra is elkülönült, még ki nem osztott feladat.
+**MÉRT ADR-ütközés a queue-ban:** `docs/execution/pipeline-queue.tsv`
+E09-R07 sora `0400`-at ad előre kiosztott ADR-ként (a batch-elt PR #405
+tervéből) — ez a szám MÁR foglalt (ADR 0400, ez a kör). Az E09-R07
+pre-flightja a §1.0.1 szerint `tools/round-slots.py reserve-adr`-rel ÚJ
+számot kér, ne a queue-fájl stale értékét használja.
+
+## 🧭 [GOV] Motorváltás: Claude Sonnet 5 (high) orchestrátor + MiniMax M3 implementer (2026-08-21)
+
+**User-döntés: „lejárt a GPT kvóta — állítsuk át a fejlesztést sonett 5 High
+orchestrátor és minimax implementer felállásra."** A ChatGPT Pro keret
+elfogyott, tehát a Codex-oldal (a **Sol** ÉS a **Terra** — közös
+`~/.codex-terra` auth) NEM futtatható. A 2026-08-20-i Sol-pin ezzel LEZÁRULT.
+
+A hatályos felállás, végig a repóban utazó (file > env > script-default)
+szerződéseken — a cron exportált env-je egyiket sem írhatja felül:
+
+| Szerep | Motor | Hordozó |
+|---|---|---|
+| orchestrátor / reviewer / heal | **Claude Sonnet 5, `--effort high`** | `PIPELINE_MODEL`/`PIPELINE_EFFORT` script-default (`tools/round-pipeline.sh`) |
+| rotáció | **`claude`** | commitolt `docs/execution/orchestrator-rotation` |
+| implementer | **`minimax`** (MiniMax-M3, `~/.claude-minimax`, saját API-kulcs) | a queue MINDEN nyitott sora (64 sor: 43 pending + 18 prepared + 3 hold) |
+| slot | **1 sáv** | commitolt `docs/execution/pipeline-slots` |
+| Codex-oldal | **kizárva** | `fallback_engine` default `none` → `orchestrator_available` a `terra`/`sol` széket ezen méri |
+
+**Miért `high` és nem `max`:** a Codex-oldal kiesésével az EGYETLEN
+orchestrátor a Claude — a 2026-08-06-i `max` akkor volt vállalható, amikor a
+Codex-oldal még osztozott a munkán. **Miért 1 slot:** a Sol-pin alatt mindkét
+sáv a Codex-keretből ment; most minden sáv orchestrátora a Claude, két
+párhuzamos session ugyanabból az előfizetésből enne, és visszahozná az
+ADR 0222-t kikényszerítő hibaosztályt (a keretnek nekifutó kör → H-NOSIGNAL
+halt → önjavító kör, ami szintén a keretből megy). **Függetlenség:** Claude
+Sonnet 5 ≠ MiniMax-M3, és a `minimax` sor külső kulcsos
+(`engine_uses_claude_quota` hamis) — mindkét mérési kulcson független.
+
+A Sol/Terra **gépezete szándékosan a helyén maradt** (registry-sorok, `sol`
+ágak a driverben, a mérő cellák a `CODEX_SIDE_ALIVE` /
+`fallback="terra"` fixture-ökkel): a Codex-előfizetés esetleges újraéledése
+fájl-átírás, nem újraépítés — a pontos visszaállási lista a
+`pipeline-orchestrator-prompt.md` MOTOR-FELÁLLÁS blokk utolsó pontja.
+
+A mérce nem gyengült. A `test_open_rounds_follow_the_measured_engine_rule`
+carve-outja szűk és fail-closed párja van: a pin CSAK `codex` → `minimax`
+irányba mozdulhat (ahol a mért szabály `minimax`-ot ad, ott `minimax`-nak KELL
+állnia), és nyitott sor Codex-oldali motort egyáltalán nem nevezhet meg.
+Mérés: `python3 -m pytest tools/tests -q` → **712 passed, 2 skipped, 610
+subtests passed**; az egyetlen piros
+(`test_test_mode_dispatch_does_not_switch_the_working_tree_off_its_branch`) a
+környezeté, nem a diffé — ezen a dobozon nincs `gh` CLI, a változtatás előtt
+ugyanígy piros volt, a Router CI futóján zöld.
+
+A PR nyitva léte alatt a boxon futó lánc még a RÉGI (Sol/Terra) felállással
+lezárta az **E08-R18**-at (PR #394) — a `done` sor motorja ezért `terra`,
+történeti tényként; a base-merge ezt megőrizte, és csak a NYITOTT sorok
+állnak `minimax`-ra. Mérés a merge után, a friss main fölött:
+`python3 -m pytest tools/tests -q` → **713 passed, 1 skipped, 610 subtests
+passed** (az egyetlen piros a `gh` CLI hiánya ezen a konténeren, a diff előtt
+is ugyanaz; a Router CI futóján zöld).
+
+Pontos következő teendő: nincs kézi indítás — a lánc minden firingen
+`git fetch origin main` + `merge --ff-only` (`main_sync_strategy`), tehát a
+következő cron-firing már ezzel a felállással veszi ki a queue első `pending`
+sorát: **E08-R24 — Practice és Learn integráció**; a Chapter 13 ága
+változatlanul **E13-R05** (a revideált scope-pal, lásd a lenti
+HEAL-bejegyzést). Boxon egyszer ellenőrizendő: `tools/engine-profile.sh
+list` — egy megmaradt `.pipeline/engine-override=terra` minden queue-sort
+felülírna.
+
+## ✅ E09-R03 KÉSZ — Public identity és handle policy — PR [#412](https://github.com/wolfcasaba/strumsight/pull/412), squash `607695e9` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) HARMADIK KÖRE KÉSZ.** ADR 0397 §5.1–§5.4:
+injektálható UUID public-id generátor, NFKC+casefold-normalizált handle
+egyediség DB-szinten (unique index a normalizált oszlopon, NEM app-szintű
+check-then-insert), reserved/blocked handle katalógus, egyetlen-handle-per-
+hívás rate-limitált availability endpoint (nincs enumerációs felület), és
+handle-change cooldown (14 nap) + redirect-ablak (30 nap) history táblával.
+Új fájlok: `backend/app/community/{policies/handle_policy.py,
+services/identity_service.py, models/handle_history.py,
+routers/handles.py}`, `backend/alembic/versions/e09_r03_0003_community_
+handle.py`, `backend/tests/community/test_handle_policy.py` (77 teszt).
+
+**A kör három fordulóban zárult, ez az orchestrátor-session a [[L413]] HEAL
+(#411) utáni folytatást vitte végig:** (1) a felfüggesztett minimax
+implementert a healelt brief §0.1 utasítása szerint resume-oltam
+(`9ad6cb3a`, a három lánc-toleráns cross-round tesztjavítás); (2) független
+funkcionális + **security-reviewer** review (risk=high) ÖNÁLLÓ mutation-
+próbákkal — nem csak a jelentett gate-kimenetre hagyatkozva. A review 1
+nyitott **MAJOR**-t és 3 MINOR-t talált:
+
+- **F1 (MAJOR, mérve reprodukálva):** `_client_key` (`routers/handles.py`)
+  a kliens által küldött `X-Forwarded-For` fejlécet vette rate-limit
+  kulcsnak trusted-proxy nélkül — 60 hívás, mind más hamis fejléccel, **0**
+  `rate_limited` választ kapott a 30/perces limit ellenére. A §5.3
+  "rate-limitált, nem enumerálható" kontroll ÉRDEMBEN nem működött, bár a
+  router ebben a körben még nincs bekötve `app/main.py`-ba (Kör 6 az auth).
+- **F2 (MINOR):** duplikált handle-claim 500-at adott 409 helyett — SQLite
+  az UNIQUE-sértést az `UPDATE execute()`-nál dobja, nem a `commit()`-nál, a
+  router viszont csak a `commit_with_uniqueness_check`-et csomagolta
+  `except HandleAlreadyClaimed`-be.
+
+Mindkettő egy javító körben zárult (`6d354812`, a minimax ELSŐ javító köre —
+Codex-eszkalációra nem volt szükség): `_client_key` kizárólag
+`request.client.host`-ra esik vissza, a claim/change végpontok egyetlen közös
+`try/except` alá kerültek. A reviewer MINDKÉT javítást függetlenül
+igazolta — a javítás előtti kódra visszaállítva reprodukálta a piros
+állapotot (60/60 bypass, illetve 500-as válasz), majd a javítással zöldre.
+Két MINOR follow-up nyitva marad (nem blokkol): a küszöb-hármas teszt a
+`MIN_LEN`/`MAX_LEN` konstansból, nem a brief literál 2/3/24/25 értékéből
+származtat; nincs HTTP-szintű (végpont-szintű) teszt az A1 Unicode-ütközésre,
+csak policy- és DB-szintű. Review: `docs/reviews/e09-r03-review.md` +
+`docs/reviews/e09-r03-security-review.md`.
+
+Gate mindkét fordulóban (pre-fix `9ad6cb3a`, post-fix `6d354812`/`d830a037`)
+izolált `/tmp` klónban, saját `python3.12 -m venv` + friss `pip install`:
+`tools/round-gate.sh test/core/architecture_dependency_test.dart` MINDEN
+GATE ZÖLD, `backend: ruff check`/`ruff format --check` tiszta, `backend:
+pytest -q` **282 passed, 0 failed**. Scope-audit mindkét fordulóban OK (a
+javító kör diffje 2 fájl: `handles.py` + a teszt). CI a pontos merge SHA-n
+(`d830a037`): Router CI + Full Gate (no APK) mindkettő `success`.
+
+## ✅ [HEAL E09-R03/H3] KÉSZ — az L411 minta egy láncszemmel mélyebben: `allowed_paths` nem fedte a MÁSODIK cross-round migráció-tesztet — PR [#411](https://github.com/wolfcasaba/strumsight/pull/411), squash `2359b808` (2026-08-22, L413)
+
+Az E09-R03 (Public identity és handle policy, ADR 0397) H3-mal állt meg,
+MIUTÁN az implementer (minimax) már ledolgozta a kört (branch
+`minimax/e09-r03-public-identity-and-handle-policy`, `3cca3ddd`, pushed, saját
+scope 75/75 zöld). Gyökérok: a kör saját, helyes migráció-láncolási döntése
+(`e09_r03_0003.down_revision = "e09_r02_0002"`) törvényszerűen tört HÁROM,
+E09-R02-ben írt cross-round tesztasszerciót két fájlban —
+`backend/tests/test_migrations.py::test_downgrade_one_revision_drops_only_community_tables`
+és `backend/tests/community/test_profile_schema.py`
+(`test_alembic_upgrade_head_applies_community_migration` +
+`test_alembic_downgrade_drops_community_tables`) — mert az [[L411]] fixe a
+KÉT-migrációs világra hardcode-olt maradt (pinned head-string, relatív
+`downgrade -1`, konkrét tábla-nevek). Egyik fájl sem szerepelt az
+`allowed_paths`-on, az implementer helyesen `stopped`-öt jelzett a §10.4-ben
+pontosan diagnosztizálva mindhárom törött asszerciót. Class B (kör-tartalom:
+a saját láncolási döntés kontra egy MÁSIK kör régi, hardcode-olt tesztje),
+függetlenül reprodukálva: `cd backend && .venv/bin/python -m pytest
+tests/test_migrations.py tests/community/test_profile_schema.py -q` → 3
+FAILED.
+
+Feloldás (`docs/rounds/e09-r03-public-identity-and-handle-policy.md` §0.1):
+mindkét fájl szűken bekerült az `allowed_paths`-ra, és — mivel ez a MÁSODIK
+előfordulása ugyanennek a mintának — a folytatáshoz adott instrukció nem egy
+harmadik hardcode-olt javítás, hanem lánc-toleráns ellenőrzés: (1) "head
+tartalmazza X-et ŐSKÉNT" (`ScriptDirectory.walk_revisions`) a pinned
+head-string helyett; (2) `downgrade(config, "<explicit revízió>")` a relatív
+`-1` helyett; (3) a tábla-HALMAZ változásának mérése a konkrét tábla-nevek
+kimondása helyett — hogy az Epic 9 hátralévő ~29 köre közül egyik láncoló
+migráció se ismételje meg ugyanezt. Regressziós védelem:
+`tools/tests/test_e09_r03_migration_chain_test_scope.py` —
+`audit_legacy_scope()`-ot futtatja a ténylegesen committolt brief ellen;
+mindkét mért halt-útvonal RED volt a javítás előtt, GREEN utána, egy
+szomszédos backend-teszt fájl (`test_auth.py`) pedig továbbra is scope-on
+kívül marad. Teljes gate izolált heal-worktree-ben: `python3 -m pytest
+tools/tests -q` → 718 passed, 1 skipped, 639 subtests (az egyetlen skip a
+`gh` CLI hiánya ezen a konténeren, a diff előtt is ugyanaz). `brief-lint
+--level strict` tiszta (az S8 visszakeresett-előzmény jelet a §0.1 L411-
+hivatkozása zárja). Nincs törölt/gyengített teszt, nincs küszöb-lazítás,
+`tools/round-gate.sh`/`.github/workflows/**` érintetlen. Lecke: [[L413]].
+
+Mivel az eredeti E09-R03 implementer-munka már kész és a saját branch-én ül,
+ez a heal NEM vitte tovább a tartalmi munkát — a lánc a MEGLÉVŐ
+`minimax/e09-r03-public-identity-and-handle-policy` ágon, a felfrissített
+brieffel folytatja: a három tesztasszerció lánc-toleráns javítása még
+hátravan az implementer oldalán, utána a §7 mindkét parancsa, majd
+review/CI/merge a szokásos rend szerint.
+
+## ✅ E09-R02 KÉSZ — Community backend modul és első Alembic migráció — PR [#410](https://github.com/wolfcasaba/strumsight/pull/410), squash `4fffe20e` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) MÁSODIK KÖRE KÉSZ.** A `backend/app/community/`
+modulhatár és az első Community migráció (`community_profiles` +
+`community_privacy_settings`, `e09_r02_0002` láncolva `e01_r12_0001`-re)
+létrejött: BigInteger belső PK + `Uuid` public_id, DB-szintű 1:1 unique
+constraint mindkét táblán, whitelist-only Pydantic válasz-séma (a belső `id`
+sosem szivárog), `build_community_router(settings)` factory +
+`community_readiness_failure()` — mindkettő ÖNÁLLÓAN a `community/` modulban,
+`main.py` érintetlen marad (ADR 0396 §3–4, következő kör dolga a bekötés).
+
+A kör két szakaszban futott: az első implementer-futás (`05fa154d`) H3-mal
+állt meg, mert a kör saját migráció-láncolási döntése szükségszerűen
+elrontotta a MEGLÉVŐ `test_migrations.py::test_downgrade_one_revision_removes_application_schema`
+egyetlen-migrációs feltevését, a fájl pedig nem volt az `allowed_paths`-on — lásd
+[[HEAL E09-R02/H3]] (PR #409). Ez a session a self-healt main-ről a
+munkapéldányba merge-elte, majd az implementer (minimax) elvégezte a §0.1
+szerinti tesztfelbontást: `test_downgrade_one_revision_drops_only_community_tables`
+(egy lépés a fejtől — csak a Community táblák tűnnek el) és
+`test_downgrade_to_base_removes_application_schema` (downgrade a base-ig — a
+`users`/`user_settings` is eltűnik).
+
+Független review (`docs/reviews/e09-r02-review.md`): APPROVED, 0
+BLOCKER/MAJOR/MINOR, 1 eljárási NOTE. A reviewer izolált `/tmp` klónban
+ÖNÁLLÓAN futtatta újra mind a 9 gate-cellát (zöld), a scope-auditot a
+folytatás tényleges bázisán (`9be8e613`, a self-heal beépítése után — 2
+változott fájl, 0 sértés), és elvégezte a kötelező A7 valódi-sértés próbát
+(`user_id` unique constraint eltávolítva →
+`test_duplicate_profile_for_same_user_is_rejected_by_db` PIROSRA vált →
+visszaállítva, 17/17 zöld). Az orchestrátor a saját munkakönyvtár-hibáját
+(egy ideiglenes prompt-fájl a megosztott worktree-ben, ami hamis
+`scope_audit=VIOLATION`-t okozott a `mm-round.sh` beépített auditán) felismerte
+és javította a review előtt — nem érintette a kód minőségét.
+
+CI: Full Gate
+[32575935889](https://github.com/wolfcasaba/strumsight/actions/runs/32575935889)
+és Router CI
+[32576081884](https://github.com/wolfcasaba/strumsight/actions/runs/32576081884)
+success az exact merge-elő SHA-n (`17b899a7`), a helyi HEAD-del összevetve. A
+`main` a dispatch óta nem mozdult (`a11608b8` mindkét oldalon).
+
+Pontos következő kör: **E09-R03** — a Community router bekötése
+`main.py::create_app()`-ba és a `/health/ready` végpontba (ADR 0395
+Következmények 2–3. pont, ADR 0396 §3–4), a queue soros szerint.
+
+## ✅ [HEAL E09-R02/H3] KÉSZ — `allowed_paths` nem fedte a migráció-láncolás által tört downgrade-tesztet — PR [#409](https://github.com/wolfcasaba/strumsight/pull/409) (2026-08-22, L411)
+
+Az E09-R02 (Community backend modul + első Alembic migráció, ADR 0396) H3-mal
+állt meg, MIUTÁN az implementer (minimax) már ledolgozta a modult (branch
+`minimax/e09-r02-backend-community-module-and-migration`, `05fa154d`, pushed).
+Gyökérok: a kör saját §0.0/§5 döntése (a `e09_r02_0002` migráció a MEGLÉVŐ
+`e01_r12_0001` fejére láncolódik) szükségszerűen hamissá teszi a MEGLÉVŐ
+`backend/tests/test_migrations.py::test_downgrade_one_revision_removes_application_schema`
+egyetlen-migrációs feltevését (`downgrade -1` a fejtől == `users`/
+`user_settings` eltűnik) — két láncszemmel `downgrade -1` csak a LEGÚJABB
+migrációt vonja vissza. A fájl nem szerepelt az `allowed_paths`-on, az
+implementer helyesen `blocked`-ot jelzett a STOP-protokoll szerint. Class B
+(kör-tartalom: a saját láncolási döntés kontra a `allowed_paths` hiánya),
+függetlenül reprodukálva: `cd backend && python -m pytest
+tests/test_migrations.py -q` → `AssertionError: assert 'users' not in
+{'alembic_version', 'user_settings', 'users'}`.
+
+Feloldás
+(`docs/rounds/e09-r02-backend-community-module-and-migration.md` §0.1):
+`backend/tests/test_migrations.py` szűken, egyetlen fájlként bekerült az
+`allowed_paths`-ra és a §4 táblázatba, konkrét instrukcióval a folytatáshoz —
+a downgrade-teszt bontása "egy lépés a fejtől" (csak a Community táblák
+tűnnek el) és "downgrade a base-ig" (a `users`/`user_settings` is eltűnik)
+esetekre. Regressziós védelem:
+`tools/tests/test_e09_r02_migration_downgrade_test_scope.py` —
+`audit_legacy_scope()`-ot futtatja a ténylegesen committolt brief ellen; a
+mért halt-útvonal (`git show HEAD:...`-tal visszaállított, pre-fix brief-
+tartalommal reprodukálva) RED volt a javítás előtt, GREEN utána, egy
+szomszédos backend-teszt fájl (`test_auth.py`) pedig továbbra is scope-on
+kívül marad. Teljes gate izolált heal-worktree-ben: `python3 -m pytest
+tools/tests -q` → 716 passed/1 skipped/640 subtests/0 failed. `brief-lint
+--level strict` tiszta. Router CI
+[32574365404](https://github.com/wolfcasaba/strumsight/actions/runs/32574365404)
+success az exact push SHA-n (`31573292`), amit a merge előtt a helyi HEAD-del
+összevetve igazoltam. Nincs törölt/gyengített teszt, nincs küszöb-lazítás,
+`tools/round-gate.sh`/`.github/workflows/**` érintetlen. Lecke: [[L411]].
+
+Mivel az eredeti E09-R02 implementer-munka már kész és a saját branch-én ül,
+ez a heal NEM vitte tovább a tartalmi munkát — a lánc a MEGLÉVŐ
+`minimax/e09-r02-backend-community-module-and-migration` ágon, a felfrissített
+brieffel folytatja: a `test_downgrade_one_revision_removes_application_schema`
+kétesetes felbontása még hátravan az implementer oldalán, utána a §7
+mindkét parancsa, majd review/CI/merge a szokásos rend szerint.
+
+## ✅ E09-R01 KÉSZ — Community baseline, threat model és feature flag — PR [#408](https://github.com/wolfcasaba/strumsight/pull/408), squash `7ad4b28d` (2026-08-22)
+
+**EPIC 9 (COMMUNITY PLATFORM) ELSŐ KÖRE KÉSZ.** Alkalmazáskód-változtatás
+nélkül: öt Community feature flag (`communityEnabled` + 4 alkapcsoló,
+Flutter + backend), egy nyolc-kategóriás threat model
+(`docs/security/community-threat-model.md`), egy mért baseline leltár
+(`docs/baseline/epic-09-community-start.md`) és a backend
+`community_postgres_ready` readiness placeholder — mind az `ADR 0395`
+szerint. Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5,
+javító kör nélkül (0 BLOCKER/MAJOR, 1 MINOR, 1 NOTE —
+`docs/reviews/e09-r01-review.md` APPROVED).
+
+**Pre-flight ADR 0395 döntése:** a dart-define/env kill switch mechanizmus
+(`STRUMSIGHT_COMMUNITY*`, `defaultValue` nélkül — hiány = `false` MINDEN
+környezetben) a Flutter oldalon `FeatureFlags.forEnvironment` TÖRZSÉBEN
+olvasódik, `app_config.dart` érintése nélkül, mert az a brief
+`allowed_paths`-án kívül esik (az `accountEnabled` élő mintája
+app_config.dart-ot olvasna, de az itt tiltott zóna). A backend öt mezője a
+`tutor_enabled` mintáját követi (env-aware branch NÉLKÜL, mindig `False`
+amíg egy explicit env-var be nem kapcsolja) — NEM a
+`diagnostics_enabled`/`apk_download_enabled` nonProd-alapú mintát. A döntés
+tudatosan ELTÉR a repó ellentétes precedensétől (ADR 0220, Epic 6:
+hardcode-`false` MINDEN környezetben, dart-define NÉLKÜL, a teljes
+építő-epic alatt) — az eltérés indoklása ADR 0395 „Elutasított
+alternatívák" szakaszában.
+
+Review: saját, izolált `/tmp` klónban újrafuttatott gate (9/9 zöld,
+egyezik az implementer §10.2 táblázatával), scope-audit tiszta (7/7
+`allowed_paths`, 0 kívüli fájl), §6.1 valódi-sértés próba
+(`communityEnabled: true` szabotázs) reprodukálva. 1 MINOR: a baseline-
+doksi három mért fájlszáma (`lib/features/auth/` teszt-fájl 7→4 tényleges,
+`lib/features/learn/` 24/34→25/32 tényleges) eltér a tényleges
+`find`-kimenettől — dokumentum-only, nincs gate-hatás, nem blokkoló; a
+Kör 2 pre-flightja javítsa a §1.1 táblázatot, mielőtt rá támaszkodik. Exact
+`745a9a15`: Full Gate
+[32570982536](https://github.com/wolfcasaba/strumsight/actions/runs/32570982536)
++ Router CI
+[32571697617](https://github.com/wolfcasaba/strumsight/actions/runs/32571697617)
+success (utóbbi `workflow_dispatch`-csel manuálisan indítva, mert a review-
+commit csak `docs/reviews/**`-t érintett, ami nincs a `router-ci.yml`
+push-trigger path-listáján — az exact-SHA kapuhoz kellett).
+
+## ✅ E08-R30 KÉSZ — Epic 08 closure: route activation + real-fixture legacy
+verification + numerical deprecation gates — PR [#407](https://github.com/wolfcasaba/strumsight/pull/407), squash `a8ecb9f3` (2026-08-22)
+
+**EPIC 8 (GAMIFICATION) LEZÁRVA — mind a 30 köre kész.** Implementer MiniMax
+M3, orchesztrátor/reviewer Claude Sonnet 5, javító kör nélkül (0
+BLOCKER/MAJOR/MINOR, 2 NOTE — `docs/reviews/e08-r30-review.md` APPROVED). A
+kör pre-flightja saját `§0.0` brief-revíziót igényelt: a 2026-08-18-i brief
+nem mérte, hogy (1) a tényleges `GoRoute` wiring `app_router.dart`-ban él, nem
+az engedélyezett `app_route.dart`-ban ([[L97]]/[[L94]] mintázat), (2) a hat új
+képernyő egyike sem volt valaha adathoz kötve (nulla példányosítás
+production kódban), (3) a „Kör 24 migrációs kapcsoló" sehol nincs élesítve
+(`dualWriteMode:` nulla találat), (4) a meglévő legacy-migrációs teszt
+idealizált `PracticeEntry`-kkel dolgozott, nem valós V1-kulcs-alakú JSON-nal.
+Az `allowed_paths` a revízióval bővült (`app_router.dart` + egy ÚJ
+fixture-teszt), a scope-audit mindkét dispatch után OK (0 sértés). Exact-SHA
+`3a6f10b3`: Full Gate
+[32569011383](https://github.com/wolfcasaba/strumsight/actions/runs/32569011383)
++ Router CI
+[32569012517](https://github.com/wolfcasaba/strumsight/actions/runs/32569012517)
+success; a reviewer saját izolált `/tmp` klónban mind a kilenc gate-lépést
+függetlenül újrafuttatta (zöld) és a scope-audit-ot is saját kézzel mérte.
+
+Az Epic 8 ZÁRÓ köre. Hat új route élesítve, a régi `/streak` és `/progress`
+deep link VÁLTOZATLANUL él (ADR §5.1), a legacy migrátorok valós V1-kulcs
+alakú JSON-nal bizonyítottak. Nincs kódbeli kapcsoló-flip — a §0.0 rögzítette,
+hogy a dual-write adapternek MA nincs production call chain hívója, tehát a
+`newOnly` végállapot SZÁMSZERŰ jövőbeli feltételekhez kötve dokumentálva
+([`docs/sdd/epic-08-completion-report.md`](docs/sdd/epic-08-completion-report.md) §3),
+nem átbillentve. Ez a kör szándékosan NEM nyúlt a `lib/features/**`-höz —
+a route-aktiváció és a minimális Riverpod-ragasztó kizárólag a most
+engedélyezett `lib/app/routing/app_router.dart`-ba került, kizárólag már
+publikus `keyValueStoreProvider` + `appLoggerProvider` + `gamification/public.dart`
+importokból.
+
+ÚJ:
+- `lib/app/routing/app_route.dart` — hat új konstans (`gamificationHub`,
+  `achievements`, `achievementDetail`, `quests`, `streakDetail`, `rewardInbox`).
+- `lib/app/routing/app_router.dart` — hat új `GoRoute` + öt file-private
+  provider (`_gamificationRepositoryProvider`, `_levelCurveProvider`,
+  `_gamificationProfileProvider`, `_streakStateProvider`,
+  `_rewardInboxProvider`); a meglévő útvonalak (`/streak`, `/progress`,
+  …) sorai ÉRINTETLENEK.
+- `test/app/routing/app_router_test.dart` — nyolc új cella: a két legacy
+  deep link VÁLTOZATLANUL a V1 screen-re mutat, a hat új útvonal pedig a
+  megfelelő V2 widgetre.
+- `test/features/gamification/data/legacy_streak_and_practice_fixture_test.dart`
+  (ÚJ) — hét teszt, mind valós V1-kulcs alakú JSON-t ír a
+  `LegacyStorageKeys` / `StorageKeys` tényleges kulcsnevei alá egy
+  `InMemoryKeyValueStore`-ba, és a `LegacyStreakMigrator`-t (mindkét ág:
+  pre-v22 nyers kulcs ÉS post-v22 namespaced envelope) és a
+  `LegacyPracticeAdapter` / `GamificationMigrator`-t (valós
+  `PracticeEntry.fromJson` dekódolással a `lib/features/progress/`-ból)
+  hajtja végig. A fájlnév szándékosan kerüli a "migration" szót (az
+  `ai-router` `high_risk_path_fragments` listája ezt a szót tartalmazza —
+  ez a teszt nem indokol `risk = "high"` besorolást).
+- `docs/sdd/epic-08-completion-report.md` — az Epic 8 lezáró jelentése:
+  mért állapot (dual-write kapcsoló be nem kötve, hat képernyő soha nem
+  volt adathoz kötve) + SZÁMSZERŰ kivezetési feltételek (wire-shape
+  parity ≥30 fixture / 7 CI run, zero ledger loss 3 property-seed,
+  production-side ingest mindkét adapterre, 14 napos dual-write soak
+  nulla mismatch log mellett) + az A3 próba-jegyzőkönyv + a CI-link
+  placeholder (a §7 gate UTÁN, de a végleges CI-linket az orchestrátor
+  illeszti be dispatch után — ez a handoff rögzíti a helyét/szerkezetét).
+- `README.md` — frissített státusz banner, frissített feature-sor, új
+  Gamification szakasz (route lista, settings, storage envelope, offline,
+  accessibility, completion-report link).
+
+A no-op callbackek (`onOpenLevelDetail`, `onRecoveryPressed`, a quest
+`onAction`, a reward inbox `onItemSelected` / `onMarkSeen`) explicit
+`// TODO(E08-R30): <mit kell>` kommenttel vannak jelölve — ezek a
+jövőbeli bekötő körök felé nyitott tételek, és a completion report §3
+rögzíti, hogy a feature-oldali provider-lift NEM ennek a körnek a dolga.
+
+**Kötelező valódi-sértés próba saját kézzel megismételve (§6.1):**
+a completion report korai piszkozatába egy SZÁNDÉKOS PIROS CI-link
+került, hogy az A6 cella bizonyíthatóan elutasítsa — cserélve a helyes
+GREEN-link placeholderére, az A6 cella így a „rajta" küszöbön áll.
+
+Mérce: `tools/round-gate.sh test/app/routing/app_router_test.dart
+test/features/gamification test/features/streak test/features/progress` —
+**MINDEN GATE ZÖLD**, előtérben, csonkítás nélkül futtatva. Scope-audit
+(`git diff --stat`) nem mutat `lib/features/` útvonalat. A teljes
+acceptance-tábla (A1–A8) és a mérce-mátrix minden sora a
+[`docs/sdd/epic-08-completion-report.md`](docs/sdd/epic-08-completion-report.md)
+§2 / §3 / §5 alatt dokumentálva.
+
+Pontos következő E08 kör: az Epic 8 lezárult — a queue a Chapter 9
+(`E09-R01`+) felé folytatódik (ellenőrizve: `pipeline-queue.tsv`-ben ez az
+első `pending` sor E08-R30 után, megelőzi a Chapter 13 E13-R05-öt).
+
+**Nyitott, EMBERI döntést NEM igénylő tartozások, EZUTÁN a bekötő kör
+dolga** (`docs/sdd/epic-08-completion-report.md` §3 + a review N1/N2):
+
+- a hat új képernyő adatvetületei jelenleg egyszeri (`Provider`, nem
+  `StreamProvider`) olvasások `app_router.dart`-ban — a Hub/Streak-
+  detail/Inbox nem frissül élőben, amíg az app-session újra nem indul;
+- `activeQuestCount`, `masteryUnlockedCount`, az achievement-progressz és a
+  napi/heti quest-listák ma hardkódolt `0`/üres értékek — nincs perzisztált
+  quest-/achievement-progressz forrás a `GamificationRepository`-ban;
+- a `RewardInboxScreen` üres marad, mert a storage-szintű
+  `GamificationInboxItem` (csak id/createdAt/viewedAt) és a domain
+  `RewardInboxItem` (a teljes `RewardEvent`-et hordozza) között nincs
+  triviális leképezés;
+- a streak-recovery gomb no-op (nincs publikus repository-metódus a
+  vásárláshoz);
+- a dual-write kapcsoló `newOnly` végállapotba állításának négy számszerű
+  feltétele a completion report §3.2-ben.
+
+## ✅ E08-R28 KÉSZ — Ledger sync contract, merge és verified státusz — PR #406, squash `571981b7` (2026-08-22)
+
+Offline-first, duplikációmentes szinkron-szerződés a jövőbeli fiók- és
+közösségi (Epic 9) használathoz — a legfontosabb szabály: **a szerver soha
+nem fogad el kliens-oldali összesített XP-t**. ÚJ:
+`lib/features/gamification/data/sync/{gamification_sync_contract,ledger_merge_policy}.dart`
+(verziózott nyugta-alapú fel-/letöltés, összefésülés kettős dedup-kulccsal —
+`ledgerId` ÉS `sourceEventId`), `backend/app/gamification/{schemas,service}.py`
+(a szerver saját maga összegez, `totalXp` mező NINCS a bemeneten). ADR
+[`0394`](docs/adr/0394-ledger-sync-contract-and-merge.md) — a brief előre
+kiosztott `0319`-e stale volt (a `reserve-adr` foglaló `0394`-et adott,
+ugyanaz a minta, mint az E08-R27 stale `0318`-ja).
+
+A dedup-kulcs kettőssége a lényeg: csak `ledgerId`-ra dedupolás
+duplikálna (két eszköz, két azonosító, ugyanaz az esemény), csak
+`sourceEventId`-re dedupolás adatvesztene (két legitim, eltérő eseményű
+nyugta ütköző azonosítóval összeolvadna). **Kötelező valódi-sértés próba
+saját kézzel megismételve:** a `_collapseGroup` (cross-device
+sourceEventId-összefésülés) eltávolítása a TÉNYLEGES
+`LedgerMergePolicy.merge`-ből 2/20 tesztet pirosra váltott (A1 idempotencia
++ a §6.1 „on threshold" cella) — pontosan az implementer állítása szerint;
+visszaállítva, 20/20 zöld.
+
+**Egy javító kör, F1 MAJOR + F2 MINOR, mindkettő a reviewer saját kezű
+mérésével fedve fel, nem az implementer önbevallásából:**
+
+- **F1 (MAJOR, javítva):** a Dart `encodeUpload()` és a backend
+  `ReceiptUpload` NEM ugyanazt a wire-alakot beszélték — a Dart minden
+  nyugtát `{'schemaVersion':…, 'receipt': {…, 'status':…}}` beágyazásban
+  küldött, a backend LAPOS `ReceiptUpload` listát várt. Saját kézzel,
+  pydantic `model_validate`-tel igazolva: a Dart kimenet a backend modellen
+  8 validációs hibát adott. A kör saját deklarált célja egy "szerződés" volt
+  — a két fél nem ugyanazt beszélte, holott mindkettő EBBEN a körben
+  készült. Javítás: a Dart-oldal a backend lapos alakjához igazodott
+  (`totalXp` és `status` NINCS a wire-en), plusz ÚJ, kétoldali teszt: a Dart
+  oldalon a TÉNYLEGES `encodeUpload()` kimenet kulcsait ellenőrzi, a
+  backend oldalon egy kézzel felírt, a Dart kimenetet tükröző fixture-t old
+  fel elfogadással.
+- **F2 (MINOR, javítva):** nincs `max_length` a `ledgerId`/`sourceEventId`/
+  `receipts` mezőkön (saját kézzel igazolva: 1M karakteres id és 100k elemű
+  lista is elfogadásra került) — látens DoS egy jövőbeli, bekötött útvonalon.
+  Javítás: `max_length=256`/`500`, négy határ-teszttel (fölötte/rajta mindkét
+  oldalon).
+- Köztes tooling-epizód (nem lelet): az első javító-kör futás közben az
+  implementer egy ÜRES helyi `backend/.venv`-et hozott létre (a
+  `pip install`-t helyesen blokkolta az `implementer_guard`), ami
+  beárnyékolta a `tools/round-gate.sh` már meglévő, működő fallback-ját a
+  közös `$HOME/music-theory/backend/.venv`-re — emiatt `stopped`-ot
+  jelzett. Az orchesztrátor törölte a lokális, üres venv-et (gitignore-olt,
+  önmagától létrehozott artefaktum), és egy rövid resume-prompttal
+  folytatta a kört — a tényleges F1/F2 kódjavítások érintetlenek maradtak.
+
+Dedikált biztonsági review (`risk = "high"`, `security-reviewer` agent):
+**PASS, 0 CRITICAL/BLOCKER**. Egy látens (nem blokkoló) MAJOR-t is felszínre
+hozott N1-ként: a `verified` ma kizárólag séma-érvényességet jelent, XP
+felső korlát vagy policy-újraszámolás NÉLKÜL — nincs élő fogyasztó, ami ma
+bizalmi jelzésként olvasná, de a jövőbeli router-kötő körnek explicit gátat
+kell szabnia, mielőtt bármilyen felület `verified`-et bizalmi jelzésként
+mutatna. Review: [`docs/reviews/e08-r28-review.md`](docs/reviews/e08-r28-review.md),
+[`docs/reviews/e08-r28-security.md`](docs/reviews/e08-r28-security.md).
+
+Mérce: `tools/round-gate.sh
+test/features/gamification/data/ledger_merge_policy_test.dart` +
+`python3 -m pytest backend/tests/test_gamification_ledger.py -q` — **MINDEN
+GATE ZÖLD** (9 lépés, 22 Dart + 15 backend teszt), javítás előtt és után is
+SAJÁT kézzel, izolált klónból (GitHub originből) reprodukálva. Scope-audit
+mindkétszer OK. A kör alatt a `main` egyszer mozdult (E09 round-brief batch,
+PR #405, `docs/rounds/e09-*` + `pipeline-queue.tsv`, diszjunkt fájlkör) —
+`merge --no-ff` + teljes CI-újradispatch a §0.3 szerint. Exact `dda4534b`:
+Full Gate [32565070603](https://github.com/wolfcasaba/strumsight/actions/runs/32565070603)
++ Router CI [32565071642](https://github.com/wolfcasaba/strumsight/actions/runs/32565071642)
+success; post-merge célzott gate + backend pytest a friss `main`-en
+önállóan is zöld. Ez a kör NEM köti be a HTTP-végpontot (router mounting) —
+a `backend/app/gamification/` router-szintű regisztrációja egy jövőbeli
+kör dolga. Pontos következő E08 kör: **E08-R30 — Epic 08 migráció,
+regresszió és lezárás** (queue-ban `minimax`) — az **E08-R29** (Integritás,
+analytics, balance) `hold`-on marad; a queue-scan a legelső `pending` sort
+választja, ez a §0.3-nál mérten `E08-R30`, nem az újonnan batch-elt E09-R01
+(annak ellenére, hogy fájl-sorrendben előrébb ér az E09-batch — az E08-R30
+sora korábbi a fájlban).
+
+## ✅ E08-R27 KÉSZ — Gamification akadálymentesség és beállítások — PR #404, squash `db6293f4` (2026-08-22)
+
+A teljes gamifikációs réteg MOST már kikapcsolható, hozzáférhető és nem
+tolakodó: ÚJ `GamificationPreferences` domain-modell (intenzitás/haptika/
+hang/csökkentett mozgás/értesítés), egy szinkron-olvasású `NotifierProvider`
+(`gamification_preferences_provider.dart`, kizárólag lokális perzisztencia —
+a felhő-szinkron e körben tiltott, `settings_sync.dart` érintetlen), és egy
+ÚJ `GamificationSettingsSection` a Settingsben. ADR:
+[`0393`](docs/adr/0393-gamification-accessibility-and-settings.md) — a brief
+előre kiosztott `0318`-a stale volt (egy korábbi, független kör már foglalta,
+`tools/round-slots.py reserve-adr` adta a `0393`-at). A pre-flight (Claude
+Sonnet 5) korrigálta az `allowed_paths`-ot is: az ÚJ l10n-kulcsok a
+`lib/l10n/features/gamification_{en,hu}.arb` SZEGMENSBE tartoznak, nem a
+generált `app_{en,hu}.arb` aggregátumba (ugyanaz a hibaosztály, ami az
+E08-R20/E08-R22-ben mid-round fixet igényelt — itt előre elkerülve).
+
+A kikapcsolás VIZUÁLIS — a ledger/széria/mastery kiértékelés a preferenciáktól
+függetlenül fut (A1/A2), az értesítési engedély megadása SOSEM ad XP-t/oldja
+fel (A3, sötét-minta tilalom), mind az öt beállítás önállóan hat a leképezett
+megjelenítésre (A4), a változás azonnal érvényesül (A5), mind a 22
+achievement kitöltött a11y-leírással rendelkezik mindkét nyelven (A6,
+reverzibilis valódi-sértés próbával), és a WCAG AA kontraszt-küszöb a
+MEGLÉVŐ, L381-ben már kijavított `tool/ui_contrast_check.dart`-ot használja
+(helyes sRGB gamma-2,4 transzformáció) egy ÚJRA-implementálás helyett.
+
+Egy javító kör: **F1 MAJOR** — a review saját kézzel elkapta, hogy a domain
+`gamification_preferences.dart` egy `presentation/widgets/
+reward_summary_sheet.dart`-ból importált (`show RewardSummaryFeedback`),
+ami `package:flutter/material.dart`-tal kezdődik — a domain-osztály emiatt
+TRANZITÍVAN függött a Fluttertől (AGENTS.md §6 sértés). A
+`tool/check_architecture.dart` ezt NEM fogta meg, mert a
+`sharedDomainMustRemainFrameworkIndependent` szabály `_isSharedDomain()`
+allowlistje (`lib/core/music/`, `lib/core/audio/codec/`,
+`lib/features/practice/domain/`) nem tartalmazza a
+`lib/features/gamification/domain/`-t — GATE-LEFEDETTSÉGI RÉS, amit a
+manuális review fogott meg, nem a gépi mérce. Javítás: a leképezés
+(`gamificationFeedbackFor`) átköltözött a presentation-réteg providerbe.
+Review: [`docs/reviews/e08-r27-review.md`](docs/reviews/e08-r27-review.md) —
+APPROVED a javítás után, 0 nyitott BLOCKER/MAJOR, 1 MINOR (F2 — az A1/A2
+„valódi-sértés próba" nem köti be ténylegesen a preferenciát a
+`CelebrationCoordinator`-ba, mert ma nincs is éles bekötés; a jövőbeli
+UI-bekötő kör pre-flightjának szól) + 2 NOTE (inline storage-kulcsok
+`StorageKeys` nélkül, dokumentált indokkal; a `reward_summary_sheet.dart`
+doc-kommentje még mindig „Kör 27"-re hivatkozik, a tényleges bekötő kör
+javítja).
+
+Mérce: `tools/round-gate.sh test/features/gamification/presentation/
+gamification_accessibility_test.dart test/features/settings` → **MINDEN GATE
+ZÖLD** (12+51 teszt), a javítás ELŐTT és UTÁN is SAJÁT kézzel, izolált
+klónban reprodukálva. Scope-audit mindkétszer OK. CI a merge SHA-n
+(`a20182a6`): `full-gate.yml` (32560163642) success, `router-ci.yml`
+(32560901860, kézi `workflow_dispatch`, mert az utolsó commit csak a
+review-jelentést érintette) success. Ez a kör NEM köti be a
+`reward_summary_sheet.dart`-ot egyetlen élő hívóba sem (nincs is
+`allowed_paths`-on, és MA nincs élő hívó egyáltalán) — egy jövőbeli,
+feltehetően `E13-R32` (gamification-ui) kör dolga. Pontos következő E08 kör:
+**E08-R28 — Ledger sync contract és merge** (queue-ban `minimax`, ADR 0319
+előre kiosztva, ellenőrizendő a foglalóval).
+
+## ✅ E08-R26 KÉSZ — Cross-feature gamification integráció (Analysis/Vision/Tutor/Plan) — PR #403, squash `ea2e22a4` (2026-08-22)
+
+A maradék négy forrás — Analysis, Vision, AI Tutor, Practice Generator —
+MOST már bekötve a gamification jutalom-láncba: négy ÚJ, tisztán caller-fed
+adapter (`lib/features/{analyze,vision,ai_tutor,practice_generator}/
+application/gamification_*_adapter.dart`). ADR: [`0392`](docs/adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)
+— a pre-flight (Claude Sonnet 5) NÉGY ponton cáfolta meg a 2026-08-18-i brief
+feltevéseit: (1) az `ai_tutor/public.dart` boundary VÉGLEGESEN üres, egy
+merge-elt E04-R01 guard pinneli (`test/features/ai_tutor/
+ai_tutor_boundary_test.dart`, L139) — a tutor-adapter ezért ZÉRÓ szimbólumot
+importál az `ai_tutor`-ból, a beszélgetés-nulla-XP szabály (A1) strukturálisan
+garantált, nem futásidejű `if`; (2) `AnalyzeResult`-nak nincs
+`sourceHash`/`analyzerVersion` mezője — az analysis-adapter saját, hívó-fed
+jel-típust definiál ezekkel; (3) a brief `minVisionConfidence` neve szó
+szerint nem létezik — a mért megfelelő `VisionClaimGuard._minimumConfidence
+= 0.70`, ami a `vision/domain/integration/public.dart` (egy MÁSIK, szűkebb
+barrel) exportján érhető el, NEM a top-level `vision/public.dart`-on; (4) a
+`PlanStatus.completed` (teljes terv) enum-érték SEHOL nem kerül beállításra
+a mai kódban (L20 — elérhetetlen cél-státusz), csak a blokk-szintű
+`PracticeItemStatus.completed`, ami MÁR ma is a meglévő practice/song
+adapterekkel jutalmazódik — a plan-adapter ezért caller-fed
+`planCompleted: bool` jelet fogad, és nem nyúl az `active_plan_controller.dart`/
+`generation_orchestrator.dart` (tilos zóna) állapotgépéhez.
+
+A terv-bónusz (§5.3) FLAT és nem-összegző: `bonusXp` kényszerítve `0`-ra, csak
+a policy `baseXp`-je landol a ledgerben, hogy a blokkok (amik már fizettek a
+saját forrásukon) ne duplázódjanak. A Vision-adapter két esemény (`vision-base`
+mindig, `vision-technical` csak a `VisionClaimGuard` engedélye után) —
+a §6.1 küszöb-hármas (0.69/0.70/0.71) szó szerint tesztelve, a küszöb maga
+inkluzív-elfogadó. Az Analysis-adapter dedupja `(sourceHash, analyzerVersion)`
+párra épül, nem csak a hash-re — egy verzióváltás legitim új jutalom.
+
+Mérce: `tools/round-gate.sh test/features/gamification/integration/
+cross_feature_reward_flow_test.dart test/core/architecture_dependency_test.dart`
+→ **MINDEN GATE ZÖLD** (16+37 teszt), reprodukálva SAJÁT kézzel izolált
+klónban a review-ban is. Az A6 architektúra-guard mind a négy adapterre
+kiterjed, a vision-nél MINDKÉT elfogadott barrelt (top-level + `domain/
+integration/`) kezeli. Három `_Broken*Adapter` valódi-sértés próba
+(chat-farm, blokk-összegzés, hash-only dedup) — mindhárom önálló osztály, a
+VALÓDI ingestor/eligibility/policy láncon fut át, nem csonka váz. Review:
+[`docs/reviews/e08-r26-review.md`](docs/reviews/e08-r26-review.md) —
+APPROVED, 0 BLOCKER/MAJOR/MINOR, 3 NOTE (mind unwired-today, jövőbeli
+UI-wiring kör hatókörű: `analyzerVersion` hash nélkül landol a ledgerben; a
+caller-fed id-mezők nem típusos/charset-lezárt id-k; a másolt `utf8Bytes()`
+segédfüggvény — MÁR az E08-R25 dal-adapterből örökölve, nem ez a kör vezette
+be — nem valódi UTF-8, csak ASCII-bemenetre helyes). `security-reviewer`
+agent (risk="high") függetlenül: PASS.
+
+Ez a kör NEM köti be az adaptereket a hívó UI-ba (nincs is az
+`allowed_paths`-on) — a négy adapter kész, tesztelt felület, amit egy
+jövőbeli kör hív majd az Analyze/Vision result-screenekből, a plan-befejezés
+UI-jából. CI: `full-gate.yml` + `router-ci.yml` mindkettő zöld a merge SHA-n
+(`d3c4a9a0`, PR #403 squash → `ea2e22a4`). Pontos következő E08 kör:
+**E08-R27 — Gamification accessibility és settings** (queue-ban `minimax`,
+ADR 0318 előre kiosztva).
+
+## ✅ E08-R25 KÉSZ — Song Trainer és setlist integráció — PR #402, squash `204b3798` (2026-08-22)
+
+A dalgyakorlás (szakasz/hurok, teljes dal, setlist-tétel) MOST már bekötve a
+gamifikáció jutalom-láncába: `lib/features/songs/application/gamification_song_adapter.dart`
+(ÚJ, kizárólag a gamification `public.dart`-on át importál; a `Song`
+típust a `songs` feature SAJÁT `model/song.dart`-jából olvassa, a
+`song_trainer/**`-hez nem nyúl). ADR: [`0391`](docs/adr/0391-song-gamification-adapter-standalone-bonus-and-hashed-song-id.md)
+— a pre-flight mérés megcáfolta a 2026-08-18-i brief két állítását: (1) az
+R06 `parentEventId` dedupja (ADR 0341) BINÁRIS mind-vagy-semmi — szó
+szerinti használata a reális (szakaszok-előbb) sorrendben NULLÁRA, nem
+csökkentett bónuszra ejtette volna a teljes dal jutalmát; (2) a dal
+azonosítója (bizonyos kódutakon) cím-eredetű lehet, tehát a ledgerbe
+KIZÁRÓLAG SHA-256-hashelt (16 hex karakter) alakban kerülhet. A javított
+mechanizmus: minden `RewardPolicyRequest` önálló (`parentEventId: null`),
+a bónusz-méretezés (alap egyszer + csökkentett bónusz, nem kétszeres, nem
+nulla) az adapter SAJÁT, session-hatókörű könyveléséből adódik. Két
+KÖTELEZŐ valódi-sértés próba ÁLLANDÓ regressziós tesztként megtartva
+(`song_reward_flow_test.dart` §7): Probe 1 (bookkeeping kikapcsolva →
+infláció PIROS) és Probe 2 (a `DefaultRewardPolicy`-t közvetlenül hívva,
+`parentEventId`-vel → 0 XP mérve, megerősítve a bináris-dedup állítást).
+A `songs` feature dal-haladása VÁLTOZATLAN (49/49 zöld). Az adapter MA
+NINCS BEKÖTVE egyetlen hívóból sem (nincs UI/screen ebben a körben) — a
+`security-reviewer` agent ezt függetlenül megerősítette, és rögzítette,
+hogy a session/section/setlist-azonosítók ma nyersen (nem hash-elve)
+kerülnek az `eventId`-be — ha egy jövőbeli bekötő kör cím-eredetű
+session/section-id-t adna át, ugyanaz a hibaosztály nyílna meg egy MÁSIK
+mezőn (`docs/reviews/e08-r25-review.md` F2, NOTE).
+
+**Review APPROVED, javító kör nélkül** (`docs/reviews/e08-r25-review.md`):
+0 BLOCKER/MAJOR. 1 MINOR (F1) — `hashedSongId()` belső `utf8Bytes()`
+helper-je NEM valódi UTF-8 kódolás (a `String.codeUnits`-ot `& 0xff`-fel
+maszkolja), ami elméletben nem-ASCII karaktereket tartalmazó azonosítóknál
+ütközést okozhatna — MA nem elérhető (minden tényleges `Song.id`/`SongId`
+forrás ASCII-only), triviális follow-up javítás (`utf8.encode()` a saját
+helper helyett). **Kör közbeni process-hazárd:** a MiniMax implementer
+`mm-round.sh` wrapper-je a `done` jelzés (05:14:52) UTÁN is tovább futott
+(~20 percig), egy jogos, in-scope §10-korrekciós commitot készített
+(`f7ade3e8`), majd az orchestrátor review-commitját egy `git pull --rebase`
+után saját maga push-olta vissza (`180c8d40` — TARTALMILAG azonos az
+orchestrátor eredeti `0d889cba` commitjával, csak más szülőn), és eközben
+saját maga dispatch-elt egy `gh workflow run` CI-t is (ami nem az ő
+szerepe). Az orchestrátor a folyamatot PID-del megölte (nem
+`pkill -f`-fel), tartalom-vesztés nélkül — a jelenség naplózva a
+git-notes `lesson=` mezőjében, `docs/LESSONS.md`-be is felveendő.
+
+Mindkét CI (`full-gate.yml` run 32554547623, `router-ci.yml` run
+32554548631/32554544697) zöld a pontos merge-jelölt SHA-n (`180c8d40`).
+
+## ✅ E08-R24 KÉSZ — Practice Engine és Learn integráció — PR #401, squash `dc09f5fe` (2026-08-22)
+
+A gyakorlási session és a lecke-befejezés eredménye MOST már bekötve a
+gamifikáció jutalom-láncába (esemény → outbox → jogosultság → XP →
+főkönyv): `lib/features/practice/application/gamification_practice_adapter.dart`
++ `lib/features/learn/application/gamification_lesson_adapter.dart` (mindkettő
+ÚJ, kizárólag a gamification `public.dart`-on át importál, A4 architektúra-
+guard védi). Meglévő R05/R06 kapuk (`ActivityOutcome.completed/cancelled/
+failed`, `practiceOccurrenceCount` diminishing-returns) — nincs új szabály.
+Lecke-csillagok és legjobb pontosság VÁLTOZATLANOK (`lesson_progress_repository.dart`
+a diffben nem szerepel). Migrációs kapcsoló (`GamificationDualWriteMode.off/
+dual/newOnly`) alapértéke KIKAPCSOLVA — a tényleges élő hívási pont
+(`practice_session_controller.dart`, a `learn` eredmény-képernyő) a brief
+tiltott zónájában maradt, KÉSŐBBI kör dolga. ADR: [`0390`](docs/adr/0390-practice-and-learn-gamification-adapter-boundary.md)
+(a brief előre kiosztott `0317`-e stale volt, a foglaló `0390`-et adott).
+
+**A review egy javító kört zárt (`docs/reviews/e08-r24-review.md`):** két
+BLOCKER. **F1** — a lecke-adapter `stableEventId`-je a lecke KATALÓGUS-
+azonosítójából (nem egy próbálkozás-szintű azonosítóból) számolt, tehát egy
+adott lecke ELSŐ teljesítése után minden további teljesítés örökre elveszett
+a ledger `appendIfAbsent` dedupja miatt (mérve, saját eldobható próbateszttel:
+két különböző napi teljesítés → azonos `eventId` → 1 ledger-bejegyzés a 2
+helyett). **F2** — a `GamificationLessonAdapter`/`recordLesson` nulla
+tesztlefedettséggel landolt (`practice_reward_flow_test.dart` kizárólag a
+practice adaptert gyakorolta) — ez az oka, hogy F1 zöld gate-en csúszott át.
+A javító kör (`0853ae6e`) a `stableEventId`-et egy új, caller-fed
+`attemptId` mezőből származtatja, és felvett egy teljes lecke-oldali A1/A3/
+A5/A6/A7 tesztmátrixot + egy dedikált F1-regressziós cellát. Mindkét lelet
+FIXED, saját, izolált `/tmp` klónban megismételt méréssel megerősítve
+(scope-audit + próbateszt + teljes gate 8/8 zöld).
+
+Mindkét CI (`full-gate.yml` run 32551495513, `router-ci.yml` run
+32551519892) zöld a pontos merge-jelölt SHA-n (`33733eb6`).
+
+## ✅ E08-R23 KÉSZ — Gamification Hub és level UI — PR #400, squash `384c89df` (2026-08-22)
+
+Nem-domináló áttekintő felület: `gamification_hub_screen.dart` +
+`level_detail_screen.dart` + `xp_progress_bar.dart`/`level_badge.dart` —
+a `progress_screen.dart` (516 sor) marad az elsődleges napi fejlődés-
+felület, érintetlenül (A7). A Hub level/XP-haladást, questeket, sériát,
+mastery-összesítőt, legutóbbi eredményt és a postaláda-jelzőt (R22) mutatja
+egy képernyőn, "Hogyan működik?" magyarázattal (R06 öt XP-komponens),
+villogás/visszaszámláló nélkül (ADR 0290 §1), offline-projekcióból (nincs
+főkönyv-újraszámolás megnyitáskor), 200%-os szövegskálán levágás nélkül.
+
+**A review egy BLOCKER-t talált és zárt (F1, `docs/reviews/e08-r23-review.md`):**
+a `LevelBadge` — bár VIZUÁLISAN helyesen elkülönült az XP-sávtól (kör medál
+vs sáv) — a feliratában és szemantikájában **"Skill mastery"/"Measured
+skill, not experience points"**-ot állított, miközben az egyetlen bemenete
+(`profile.currentLevel`) egy kizárólag `totalXp`-küszöbökből számolt
+`LevelDefinition` (`LevelCurve` — "the single source of truth for
+monotonically increasing XP levels"), tehát a valóságban XP-derivált, nem
+mért készség-bizonyíték — pontosan az az összemosás, amit az ADR 0289 és a
+brief §5.1 a kör legfontosabb invariánsaként tilt. A hiba a §6.1 kötelező
+valódi-sértés próbán ÁTCSÚSZOTT, mert az csak a widget-TÍPUS különbségét
+mérte, nem a felirat TARTALMÁT (L403). Egy javító kör (`6c04dcf6`) az
+"Level {level}" / "a szint a tapasztalati pontokból adódik" őszinte
+framing-re cserélte a feliratokat (angolul ÉS magyarul), és egy ÚJ,
+tartalom-alapú regresszió-őr tesztet adott — ezt a reviewer saját, független
+valódi-sértés próbával igazolta (a régi hibás szöveget visszaírva a teszt
+PIROSRA váltott, majd visszaállítás).
+
+Mindkét CI (`full-gate.yml` run 32544553725, `router-ci.yml` run
+32544579114) zöld a pontos merge-jelölt SHA-n (`cad80d7f`) — a review a
+gate-et és a scope-audit-ot (`tools/scope-audit.py`) KÉTSZER, saját
+izolált `/tmp` klónokban futtatta (a javítás előtt és után is).
+
+## ✅ E08-R22 KÉSZ — Jutalom-postaláda és ünneplés-koordinátor — PR #399, squash `8bbe3715` (2026-08-22)
+
+XP/beváltás-mentes, caller-fed ünneplés-koordinátor (ADR 0389, a brief
+`0316` előre kiosztott száma stale volt, a foglaló `0389`-et adott —
+ugyanaz a mintázat, mint az E08-R21/E08-R20-nál). Új
+`lib/features/gamification/domain/profile/reward_inbox_item.dart` +
+`application/celebration_coordinator.dart` (pure Dart, nincs Flutter-/
+Riverpod-/`RewardLedgerRepository`-import) + `presentation/screens/
+reward_inbox_screen.dart` + `presentation/widgets/reward_summary_sheet.dart`:
+aktív gyakorlás közben SOHA nem jelenik meg felugró (§5.1, a jutalom a
+postaládába kerül helyette), több szintlépés EGY összevont
+összefoglalóban (§5.3, determinisztikus `switch`-alapú prioritás, nem
+`Map`-bejárás), a postaláda NEM beváltás-mechanika (§5.2, nincs lejárat/
+begyűjtés-gomb), reduced motion mellett az információ TELJES marad
+(`MediaQuery.disableAnimationsOf`), haptika/hang caller-fed bool
+(élő settings-provider még nincs, Kör 27 dolga).
+
+Két mért kör-közbeni brief-revízió: **§0.0.1** — a 12 új ARB-kulcs a
+GENERÁLT aggregátumba (`lib/l10n/app_{en,hu}.arb`) került az első
+implementer-futásban a forrás-fragmentum (`lib/l10n/features/
+gamification_{en,hu}.arb`) helyett (ugyanaz a hibaosztály, mint az
+E08-R20 §0.0.1, L396) — egy javító kör a forrásba tette, az
+aggregátumot regenerálta. **§0.0.2** — a merge előtti CI (`full-gate.yml`,
+run 32538682580) a teljes suite alatt PIROS volt: `test/ui/
+ui_inventory_test.dart` a 61-es baseline-t várta, az új
+`reward_inbox_screen.dart` miatt 62 a valódi screen-szám — mechanikus
+egysoros javító kör (`hasLength(61)` → `hasLength(62)`).
+
+A review (`docs/reviews/e08-r22-review.md`) APPROVED, egy NOTE-tal (a
+wrapper `gate_shape` heurisztikája hamis pozitívot adott, mert az
+implementer a gate SCRIPTJÉNEK forrását `cat ... | head`-delte, nem
+futtatta csonkítva — a nyers log tényleges Bash-hívásai mind tiszták
+voltak). A review saját, izolált `/tmp` klónban futtatott valódi-sértés
+próbát az A1 megszakítás-őrre (`isActiveSession` ág letiltva → 7 teszt
+pirosra vált → visszaállítás → 18/18 zöld). **Mérve, jegyzésre méltó:**
+a boxon egy PÁRHUZAMOS orchestrátor-session is dolgozott ugyanezen a
+körön a `pipeline-slots=1` konfiguráció ELLENÉRE (mérve, nem
+diagnosztizálva — a két session git-push-szinten békésen konvergált,
+mindkét review APPROVED volt, a merge egyetlen, konzisztens tartalommal
+zárult) — **follow-up**: a slot-kényszerítés versenyfeltétele
+kivizsgálandó egy jövőbeli GOV-körben, mielőtt ismét bízunk benne.
+
+Mindkét CI (`full-gate.yml` run 32540666809, `router-ci.yml` run
+32540630020) zöld a pontos merge-jelölt SHA-n (`71a5dee6`); a
+`tools/round-land.sh` a squash-merge előtt saját kombinált-HEAD gate-et
+futtatott (zöld, a `tools/prepare-flutter-generated.sh` friss futása
+után — enélkül a stale generált l10n-fájlok ugyanazt a hamis
+undefined-getter hibát adták volna, amit a §0.0.1 javító kör már
+egyszer elhárított).
+
+## ✅ E08-R21 KÉSZ — Mastery mérföldkő domain és kiértékelő — PR #398, squash `26f83265` (2026-08-21, L399)
+
+XP/ledger-mentes, több-sessionös, confidence-kapuzott, monoton mastery
+kiértékelő (ADR 0289 legszigorúbb alkalmazása). Új `lib/features/
+gamification/domain/mastery/` (`mastery_milestone.dart`, `mastery_progress.dart`,
+`mastery_badge.dart`) + `application/mastery_evaluator.dart`: session-szintű
+dedup inkluzív `minEvidenceSessions>=2` küszöbbel, `0.70`-es Vision/Analysis
+confidence-kapu (`VisionClaimGuard` pozitív-claim precedenssel egyezően,
+ADR 0388 3. döntés), és zárt mezőkészletű, privacy-safe, magyarázható
+jelvény (`toSummary()` — nincs `sessionId`, `audio`, egészségügyi mező).
+
+Az előre kiosztott `ADR 0315` a pre-flightban ütközőnek bizonyult (egy
+korábbi, független kör azóta lefoglalta, `halt-guard-ledger.md`) — a
+foglaló a tényleges szabad számot (**`ADR 0388`**) adta, a brief §0.0
+revíziója ezt dokumentálja.
+
+A review egy MAJOR-t talált és önálló próbával igazolt (L399): a monoton
+(„egyszer elért mérföldkő nem regresszál") ág egy már elért progressre
+`ArgumentError`-ral bukott, ha a friss evidence-batch KEVESEBB minősítő
+session-t tartalmazott, mint a korábban tárolt érték — a beküldött `A5`
+teszt csak azonos-vagy-nagyobb session-számú batch-csel bizonyított. Egy
+MiniMax javító kör (`99c36e90`) a hívó oldalon `max(friss, korábbi)`
+clampelést vezetett be és új tesztet adott a kisebb-batch esetre; a review
+saját, független `/tmp` klónban futtatott gate-je (21/21 zöld) és
+scope-audit-ja is megerősítette a javítást.
+
+Mindkét CI (`full-gate.yml` run 32534927662, `router-ci.yml` run
+32536016910 — utóbbi explicit `workflow_dispatch`-csel indítva, mert a
+javító kör commitjai nem érintették a `docs/rounds/**` útvonalat, tehát a
+push-trigger nem tüzelt volna a merge SHA-n) zöld a pontos merge-jelölt
+SHA-n (`6df449a5`); a merge utáni `main`-en független gate-újrafutás
+(`format+analyze+test+architecture+secrets+l10n`) szintén zöld.
+
+## ✅ E08-R20 KÉSZ — Quest és kihívás felület — PR #397, squash `684e6334` (2026-08-21, L396–L398)
+
+Áttekinthető napi/heti quest- és kihívás-élmény: `quests_screen.dart` +
+`quest_card.dart`/`challenge_card.dart`. Beváltás (claim) gomb NINCS — a
+teljesített küldetés jutalma automatikusan látszik (R16 §5.1); a lejárati
+szöveg semleges, nincs visszaszámláló (ADR 0290 §1); a Start/Continue CTA
+típusos (`QuestRouteAction` sealed hierarchia — `QuestStartPracticeAction`/
+`QuestContinuePracticeAction`/`QuestTryLiveAction`/`QuestUnavailableAction`),
+sosem szabad szöveges route; nem elérhető tartalomnál a CTA letiltott. Az
+útvonal-REGISZTRÁCIÓ változatlanul a Kör 30-ra van halasztva.
+
+Három dispatch volt szükséges, mindhárom mért, valódi ok miatt (nem
+implementer-hibából): (1) az implementer jogosan `stopped`-ot jelzett, mert
+`lib/l10n/app_en.arb`/`app_hu.arb` 2026-08-20 óta (ADR 0307 §4, PR #343)
+GENERÁLT aggregátum — a brief 2026-08-18-i, nem ismerhette a váltást; §0.0.1
+brief-revízió a tényleges forrást (`lib/l10n/features/gamification_{en,hu}.arb`)
+vette fel az `allowed_paths`-ba (L396). (2) A célzott gate zöld volt, de az
+első CI-dispatch (`full-gate.yml`) egyetlen, a kör saját `gate_tests`-én
+kívüli tesztet buktatott: `test/ui/ui_inventory_test.dart` rögzített
+60-elemű production-screen bázisvonala az ÚJ, jogos `quests_screen.dart`
+miatt 61-re nőtt — ugyanaz a hibaosztály, mint az E08-R19
+`architecture_dependency_test.dart` lelete (L395), most a screen-inventory
+oldalon (L397); §0.0.2 brief-revízió + egysoros javító kör zárta.
+
+A review saját mutáció-próbája (ideiglenes „Begyűjtés" gomb a production
+`quest_card.dart`-on, `flutter test --plain-name "A1"` → PIROS, majd
+visszaállítás) igazolta, hogy az A1 no-claim-button guard valódi, működő
+védelem — a brief §6.1 KÖTELEZŐ próbáját az implementer egy szintetikus,
+a production widgetet NEM mutáló teszttel „teljesítette", és a §10 handoff
+üresen maradt (L398, MINOR, nem blokkolt). 0 BLOCKER/MAJOR, review APPROVED.
+
+Mindkét CI (`full-gate.yml` + `router-ci.yml`) zöld a pontos merge-jelölt
+SHA-n (`f9a5ea4e`); a merge utáni `main`-en független gate-újrafutás
+(`format+analyze+2×test+architecture+secrets+l10n`) szintén zöld.
+
+## ✅ E08-R19 KÉSZ — Challenge V2 és legacy napi kihívás migráció — PR #396, squash `a100ff9b` (2026-08-21)
+
+Négy új, tipizált napi kihívás-típus (akkordváltás, ritmus, dal-szakasz,
+időzítés) a meglévő, determinisztikus pengetés-minta generátor mellé — a
+legacy `DailyChallenge.forDay` VÁLTOZATLAN, az adapter HÍVJA (nem
+reprodukálja, `ADR 0387` Döntés 1). A napi példány azonosítója
+`type|catalogVersion|epochDay`; a jutalom a meglévő reward-főkönyv
+`appendIfAbsent`-jén megy át ugyanezzel a kulccsal, tehát az újrajátszás
+szabad, a jutalom egyszeres. A katalógus-verzió a generáláskor rögzül —
+egy nap közbeni app-frissítés nem cseréli ki az aznapi aktív kihívást.
+
+Az előre kiosztott `ADR 0314` a pre-flightban ütközőnek bizonyult (egy
+korábbi, független kör már lefoglalta) — a foglaló a tényleges szabad számot
+(`ADR 0387`) adta, a brief §0.0 revíziója ezt dokumentálja (mérve, nem
+`ls`-ből feltételezve, `AGENTS.md` §12).
+
+A CI (`full-gate.yml`) a saját, szűk célzású `round-gate.sh`-nál szélesebb
+kört mérve egy BLOCKER-t fogott: a `daily_challenge_service.dart`
+`dart:math.Random`-ot használt a gamification `application/` rétegben, ami
+sérti az E08-R08 „framework-free application layer" szabályt
+(`test/core/architecture_dependency_test.dart`, nincs a kör két célzott
+teszt-útvonalán, csak a teljes suite-ban). Egy MiniMax javító kör lecserélte
+tiszta FNV-1a hash-projekcióra (`_projectHash(seed, discriminator)`), a
+kódbázis meglévő `dailyQuestSortKey` mintáját követve — `dart:math` import és
+`Random(` hívás nélkül. Mindkét CI-mátrix (`full-gate.yml`, `router-ci.yml`)
+zöld a pontos merge-jelölt SHA-n (`331b8d97`); a merge utáni `main`-en
+független gate-újrafutás (`format+analyze+3×test+architecture+secrets+l10n`)
+szintén mind zöld.
+
+Lecke: a kör-brief célzott gate-parancsa (`round-gate.sh` két teszt-útvonala)
+nem fedte le a keresztmetsző architektúra-invariánsokat (`test/core/
+architecture_dependency_test.dart` egy HARMADIK útvonalon él) — ez pontosan
+azért mérce-rés, mert a saját review-gate-futásom is csak ezt a két
+útvonalat futtatta újra. Jövőbeli gamification `application/`-réteget érintő
+briefek gate-parancsába érdemes felvenni az architektúra-tesztfájlt is.
+
+## ✅ E08-R18 KÉSZ — Rugalmas heti quest és consistency objective — PR #394 (2026-08-21, L394)
+
+A pure, caller-fed heti generátor az elérhető percekkel egészértékűen skáláz,
+az aktívnap-célt 3/4/5/6/7 napnál rendre 3/4/5/5/5-re korlátozza, és nulla
+elérhetőségre nem gyárt kötelező questet. A négy típusos objective közül
+stabil UTF-8/FNV-1a sorrenddel választ; improvement mérés nélkül fail-closed,
+a rollover pedig nyelvfüggetlen, strukturált tényprojekció.
+
+Az első Sol review két MAJOR rést talált. A scalar previous progress eltérő
+replacement objective-re átvihető volt, a 3/7 availability-végpontok és a
+`0..7` inputhatár pedig nem voltak közvetlenül őrizve. Egy Terra javító kör
+után a progress stable quest ID-hoz kötött: same-ID esetén monoton maximum,
+cross-ID esetben csak az új objective saját observed értéke számít. A cap és
+az unconditional progress-transfer valódi mutációi pirosak; correctness
+**APPROVED**, security **PASS**.
+
+Exact `c131c47e`: Full Gate
+[32472133400](https://github.com/wolfcasaba/strumsight/actions/runs/32472133400)
+és Router CI
+[32472092472](https://github.com/wolfcasaba/strumsight/actions/runs/32472092472)
+success. PR [#394](https://github.com/wolfcasaba/strumsight/pull/394), squash
+`29c27ab2`, ADR [0386](docs/adr/0386-flexible-weekly-quest-projection.md).
+Pontos következő E08 kör: **E08-R19 — Challenge V2 és legacy DailyChallenge
+migráció**.
+
+## 🔧 [HEAL E13-R05/H3] Component Catalog scope helyreállítva (2026-08-21, L393)
+
+Az E13-R05 javított `SsCard` kompozíciója helyesen egyetlen, az `SsSurface`
+által birtokolt `Material`-réteget használ. A meglévő
+`test/core/design_system/component_catalog_test.dart` route- és dark/light
+smoke cellái azonban még legacy `Card` widgetet vártak. A PR #392 exact
+`03788441` Full Gate-je emiatt 5519 zöld teszt mellett háromszor
+`Found 0 widgets with type "Card"` hibát adott; a teszt nem szerepelt a kör
+allowlistjében vagy célzott gate-jében. Ez B osztályú brief-scope hiány volt,
+nem product- vagy gate-hiba.
+
+A self-heal az E13-R05 briefet exact egyetlen meglévő fájllal bővítette:
+`test/core/design_system/component_catalog_test.dart` bekerült az
+`allowed_paths` és `gate_tests` listába, valamint az A8 tranzakciós
+acceptance-cellába. A folytatott product körnek meg kell őriznie a route-kaput
+és a két téma smoke contractját, miközben `SsCard`-ot és pontosan egy
+`Material`-leszármazottat mér. Más design-system tesztút nem nyílt meg. A
+regressziós `tools/tests/test_e13_r05_component_catalog_scope.py` a revízió
+előtt 4/5 piros, utána 5/5 zöld; a teljes tooling suite 714 passed, 1 skipped
+és 610 subtests passed. Branch: `heal/E13-R05-H3-1`; az exact-SHA Router CI és
+a zöld squash-merge a `fixed` jelzés előfeltétele. A pontos következő Chapter
+13 kör változatlanul **E13-R05**, a meglévő product-ág revideált scope-pal
+történő folytatásával.
+
 ## ✅ E08-R17 KÉSZ — Determinisztikus, capability-safe napi quest generátor — PR #391 (2026-08-21, L388/L392)
 
 Az offline, caller-fed generátor a nap + profil-pillanatkép + katalógusverzió
@@ -3743,12 +5334,190 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-21):** `main` @ `a2ea758d` — E08-R17
-determinisztikus, capability-safe napi quest generátor, PR
-[#391](https://github.com/wolfcasaba/strumsight/pull/391), squash-merge.
+**Aktuális állapot (2026-08-23):** `main` @ `ff39ee0c` — E09-R14 Feed UI,
+cache és tudatos használat, PR
+[#423](https://github.com/wolfcasaba/strumsight/pull/423), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, 1 tartalmi
+javító kör (F1 MAJOR hiányzó l10n mindkét új UI-fájlon — ugyanaz a
+hibaosztály, mint az E09-R08 F1; F2 MAJOR a cache-rehydration mindig
+fallback-kártyát adott ismert artifact-típusra is, holott a dekóder már
+létezett — independens probe teszttel megerősítve; F3 MINOR untyped
+`dynamic audience`) + 1 CI-only javító kör (`ui_inventory_test.dart`
+70→71, ugyanaz a drift-osztály, mint E09-R05...R13). Dedikált
+security-reviewer pass: PASS, 0 BLOCKER/MAJOR. Review APPROVED mindkét
+javító kör után, 0 nyitott lelet — a Claude a javításokat friss, izolált
+`/tmp`-klónokban ÚJRA futtatott gate-tel, scope-audittal ÉS saját,
+önállóan futtatott regressziós probe-teszttel fogadta el. Exact
+`a39d15c8`: `full-gate.yml` 32634546134 + `router-ci.yml` 32634547312
+mind success. Részletesen a fejléc ✅-blokkban.
+
+**Aktuális állapot (2026-08-23):** `main` @ `0907f006` — E09-R13 Following
+feed és cursor pagination backend, PR
+[#422](https://github.com/wolfcasaba/strumsight/pull/422), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, KÉT javító
+kör (F1 BLOCKER az A7 mérce-helper engedékeny "van valahol index"
+fallback-je + a JOIN-alapú query-alak, ami az index jelenlétében sem
+kerülte el a TEMP B-TREE sortot — a query `profile_id IN (subquery)`
+alakra átírva, a helper pontos index-név + "nincs TEMP B-TREE"
+ellenőrzésre szigorítva; F2 MAJOR nem-engedélyezett `feed_view_count`
+oszlop + második index eltávolítva; F3-F6 MINOR zárva; 2. javító kör egy
+a Kör 11-től örökölt, körön kívüli teszt regresszióját javította — lásd a
+fejléc ✅-blokkot). Dedikált security-reviewer pass: 0 BLOCKER/MAJOR.
+Review APPROVED mindkét javító kör után, 0 nyitott lelet — a Claude a
+javításokat friss, izolált `/tmp`-klónokban ÚJRA futtatott gate-tel,
+scope-audittal ÉS saját, önállóan futtatott real-violation próbákkal
+fogadta el, nem az implementer önjelentésére hagyatkozva. Exact `21133e09`:
+`full-gate.yml` 32630730552 + `router-ci.yml` 32631215694 mind success.
+Részletesen a fejléc ✅-blokkban.
+
+**Aktuális állapot (2026-08-23):** `main` @ `98d7b2f6` — E09-R11 Post
+backend CRUD és audience enforcement, PR
+[#420](https://github.com/wolfcasaba/strumsight/pull/420), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, EGY javító
+kör (F1 BLOCKER `patch_post` hiányzó tulajdonos-ellenőrzés — dedikált
+security-reviewer lelete, élesben reprodukálva; F2 BLOCKER hibás
+`author_public_id` GET/PATCH válaszban — Claude saját olvasása találta; F3
+MINOR törölt poszt visszatért idempotencia-retry-n; F4 MINOR PATCH
+read-compare-write, tudatos WONTFIX). Dedikált security-reviewer pass: 1
+BLOCKER (F1), javítva és függetlenül megerősítve. Review APPROVED javító
+kör 1 után, 0 nyitott BLOCKER/MAJOR — a Claude a javítást friss, izolált
+`/tmp`-klónban ÚJRA futtatott gate-tel és scope-audittal fogadta el, nem az
+implementer önjelentésére hagyatkozva. Exact `49631b97`: `full-gate.yml`
+32620211936 + `backend-ci.yml` 32620213409 + `router-ci.yml` 32620214253
+mind success. Részletesen a fejléc ✅-blokkban.
+
+**Aktuális állapot (2026-08-23):** `main` @ `5a1df780` — E09-R09
+Profilkeresés és biztonságos discovery, PR
+[#418](https://github.com/wolfcasaba/strumsight/pull/418), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, EGY javító
+kör (F1 BLOCKER placeholder keresési találatok, F4 BLOCKER — dedikált
+security-reviewer lelete — cursor block-filter leak; F2 MINOR rate-limit
+sorrend) + egy CI-only fix (`ui_inventory_test.dart` screen-számláló 68→69,
+ugyanaz a drift-osztály, mint az E09-R06/R07/R08). Dedikált security-reviewer
+pass: 1 BLOCKER (F4), javítva. Review APPROVED javító kör 1 után, 0 nyitott
+BLOCKER/MAJOR. Exact `90dd39d9`: `full-gate.yml` 32613840729 +
+`backend-ci.yml` 32613842345 mindkettő success (a `router-ci.yml`-t a
+`round-ci-plan.py` NEM várta el erre a diffre). Részletesen a fejléc
+✅-blokkban.
+
+**Aktuális állapot (2026-08-23):** `main` @ `5e086c10` — E09-R08 Block, mute
+és safety kapcsolatkezelés, PR
+[#417](https://github.com/wolfcasaba/strumsight/pull/417), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, EGY javító
+kör (F1 MAJOR hiányzó l10n a safety screen-en, F2 MAJOR el nem kapott
+konkurrens `IntegrityError` `block()`/`mute()`-ban + a saját concurrency-
+tesztje néma kivétel-nyelése — mind a review 1. fordulójában) + egy
+CI-only fix (`ui_inventory_test.dart` screen-számláló 67→68, ugyanaz a
+drift-osztály, mint az E09-R07 3. javító köre). Dedikált security-reviewer
+pass: PASS. Review APPROVED, 0 nyitott BLOCKER/MAJOR. Exact `63890947`:
+`full-gate.yml` 32608627590 + `router-ci.yml` 32608635566 mindkettő
+success. Részletesen a fejléc ✅-blokkban.
+
+**Aktuális állapot (2026-08-22):** `main` @ `1cc49e41` — E09-R07 Follow és
+follow request social graph, PR
+[#416](https://github.com/wolfcasaba/strumsight/pull/416), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, KÉT javító
+kör (F1 BLOCKER nem-determinisztikus valódi-sértés próba, F2/F3 MAJOR
+hitelesítetlen GET-endpoint + törött DELETE idempotency-key kontraktus, F4
+MINOR elkapatlan kivétel — mind a review 1. fordulójában; egy 3. javító kör
+a CI-only `ui_inventory_test.dart` screen-számláló driftjét zárta). Review
+APPROVED, 0 nyitott BLOCKER/MAJOR. Exact `f75f0007`: `full-gate.yml`
+32603023648 + `router-ci.yml` 32603026921 mindkettő success. Részletesen a
+fejléc ✅-blokkban.
+
+**Aktuális állapot (2026-08-22):** `main` @ `77bc0589` — E09-R06 Profil
+létrehozás, szerkesztés és Community gate UI, PR
+[#415](https://github.com/wolfcasaba/strumsight/pull/415), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, KÉT javító
+kör (F1 BLOCKER hiányzó `GET /community/profiles/me`, F2 MAJOR NFKC-
+normalizáció eldobva, F9/F10 MAJOR a TELJES CI-suite fedte fel). Review
+APPROVED, 0 nyitott BLOCKER/MAJOR. Exact `bf2f67da`: `full-gate.yml`
+32596780267 + `router-ci.yml` 32597616787 (manuális `workflow_dispatch`)
+mindkettő success. Részletesen a fejléc ✅-blokkban.
+
+**Aktuális állapot (2026-08-22):** `main` @ `79865233` — E09-R05 Flutter
+Community domain és public API, PR
+[#414](https://github.com/wolfcasaba/strumsight/pull/414), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, egy javító
+kör (F1 MAJOR — `ModerationState` hiányzó A3 wire-decodere, `d52a10c5`).
+Review APPROVED, 0 nyitott BLOCKER/MAJOR, 1 NOTE (a `mm-round.sh`
+`gate_shape` regex-őr hamis pozitívja, nem blokkoló). Exact `25ac7f75`:
+`full-gate.yml` 32590914358 + `router-ci.yml` 32591010189 (manuális
+`workflow_dispatch`, mert a review-only commit nem érintette a Router CI
+trigger-útvonalait) mindkettő success. Merge `tools/round-land.sh`-sal.
+Részletesen a fejléc ✅-blokkban.
+
+**Aktuális állapot (2026-08-22):** `main` @ `a8ecb9f3` — E08-R30 Epic 08
+migráció, regresszió és lezárás, PR
+[#407](https://github.com/wolfcasaba/strumsight/pull/407), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, javító kör
+nélkül (review APPROVED, 0 BLOCKER/MAJOR/MINOR, 2 NOTE). **EPIC 8 LEZÁRVA.**
+Exact `3a6f10b3`: Full Gate 32569011383 + Router CI 32569012517 success;
+`origin/main` a dispatch és a merge között nem mozdult. Részletesen a fejléc
+✅-blokkban.
+
+**Aktuális állapot (2026-08-22):** `main` @ `571981b7` — E08-R28 Ledger
+sync contract és merge, PR
+[#406](https://github.com/wolfcasaba/strumsight/pull/406), squash-merge.
+Implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5. Egy javító
+kör (F1 MAJOR — a Dart `gamification_sync_contract.dart` kódoló és a
+backend `schemas.py` dekóder nem ugyanazt a wire-alakot beszélte, saját
+kézzel a Dart kimenetet a pydantic modellen keresztülfuttatva mérve; F2
+MINOR — hiányzó `max_length` korlát, látens DoS; mindkettő javítva,
+review: `docs/reviews/e08-r28-review.md` APPROVED +
+`docs/reviews/e08-r28-security.md` PASS). A kör alatt a `main` egyszer
+mozdult (E09 round-brief batch, PR #405, diszjunkt fájlkör) — `merge --no-ff`
++ teljes CI-újradispatch a kombinált HEAD-en. Exact `dda4534b`: Full Gate
+32565070603 + Router CI 32565071642 success; post-merge célzott gate a
+friss `main`-en önállóan is zöld (Dart 6/6 + backend pytest 15/15). ADR
+0394 (a brief előre kiosztott `0319`-e stale volt). Következő: **E08-R30**
+(Epic 08 migráció, regresszió és lezárás) — az **E08-R29** (Integritás,
+analytics, balance) `hold`-on marad; a queue-scan a legelső `pending` sort
+választja, ami a fájlban E08-R30, korábbi mint a most batch-elt E09-R01.
+
+**Aktuális állapot (2026-08-22):** `main` @ `db6293f4` — E08-R27
+Gamification accessibility és settings, PR
+[#404](https://github.com/wolfcasaba/strumsight/pull/404), squash-merge.
+Implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5. Egy javító kör
+(F1 MAJOR — a domain `gamification_preferences.dart` tranzitívan a
+Fluttertől függött egy `presentation/widgets/reward_summary_sheet.dart`
+importon át, AGENTS.md §6 sértés, a `tool/check_architecture.dart`
+allowlist-je nem fedte le a `gamification/domain/`-t; javítva: a leképezés a
+provider — presentation — rétegbe költözött, review-jelentés:
+`docs/reviews/e08-r27-review.md`, 2 NOTE + 1 MINOR follow-up nyitva). Exact
+`a20182a6`: Full Gate 32560163642 + Router CI 32560901860 (kézi
+`workflow_dispatch`, mert az utolsó commit csak a review-jelentést érintette,
+nem `docs/rounds/**`-t) success; post-merge célzott gate a friss `main`-en is
+zöld. ADR 0393 (a brief előre kiosztott `0318`-a stale volt, egy korábbi,
+független kör már foglalta). Következő: **E08-R28** (Ledger sync contract és
+merge).
+
+**Aktuális állapot (2026-08-22):** `main` @ `ea2e22a4` — E08-R26
+Cross-feature gamification integráció, PR
+[#403](https://github.com/wolfcasaba/strumsight/pull/403), squash-merge.
+Implementer MiniMax M3, orchestrátor/reviewer Claude Sonnet 5. Nincs javító
+kör (0 BLOCKER/MAJOR/MINOR, 3 NOTE, review-jelentés:
+`docs/reviews/e08-r26-review.md`). Exact `d3c4a9a0`: Full Gate 32557142579 +
+Router CI 32557160705 success; post-merge célzott gate a friss `main`-en is
+zöld. ADR 0392. Következő: **E08-R27** (Gamification accessibility és
+settings).
+
+**Aktuális állapot (2026-08-22):** `main` @ `dc09f5fe` — E08-R24 Practice
+Engine és Learn integráció, PR
+[#401](https://github.com/wolfcasaba/strumsight/pull/401), squash-merge.
+Implementer MiniMax M3, reviewer Claude Sonnet 5. Egy javító kör (F1 lecke-
+adapter eventId BLOCKER + F2 teszthiány BLOCKER, review-jelentés:
+`docs/reviews/e08-r24-review.md`). Exact `33733eb6`: Full Gate 32551495513 +
+Router CI 32551519892 success; post-merge célzott gate a friss `main`-en is
+zöld. ADR 0390. Következő: **E08-R25** (Song Trainer és Setlist
+integráció).
+
+**Aktuális állapot (2026-08-21):** `main` @ `29c27ab2` — E08-R18 rugalmas
+heti quest és consistency objective, PR
+[#394](https://github.com/wolfcasaba/strumsight/pull/394), squash-merge.
 Implementer Terra (`gpt-5.6-terra`), reviewer Sol (`gpt-5.6-sol`). Exact
-`e96feef3`: Full Gate 32465903185 + Router CI 32465903321 success;
-correctness APPROVED, security PASS. Következő E08 kör: **E08-R18**.
+`c131c47e`: Full Gate 32472133400 + Router CI 32472092472 success;
+correctness APPROVED, security PASS. Következő E08 kör: **E08-R19**.
 
 **Aktuális állapot (2026-08-21):** `main` @ `6e80a441` — E13-R03 semantic
 színek és három theme, PR
@@ -4276,14 +6045,123 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E08-R17 — Napi quest generátor** (PR
-[#391](https://github.com/wolfcasaba/strumsight/pull/391), squash `a2ea758d`,
-[ADR 0384](docs/adr/0384-deterministic-capability-safe-daily-quest-generation.md)).
-Offline, caller-fed, determinisztikus kiválasztás; capability fail-closed
-szűrés; planned-rest optional út; 1–3-as korlát és local fallback. A két MAJOR
-review-lelet a shipping-katalógus contracttal és a három izolált capability-
-poollal zárult. Correctness APPROVED, security PASS. Exact `e96feef3`: Full
-Gate 32465903185 + Router CI 32465903321 success. Részletesen:
+**E09-R14 — Feed UI, cache és tudatos használat** (PR
+[#423](https://github.com/wolfcasaba/strumsight/pull/423), squash
+`ff39ee0c`). Az első UI-fogyasztó a Kör 13 following-feed backendre:
+8-állapotú controller, bounded userId-partitionált cache, 7-típusú
+card-registry + fallback, explicit-pagination screen (nincs autoplay,
+nincs auto-infinite-scroll). 0 nyitott BLOCKER/MAJOR/MINOR 1 tartalmi +
+1 CI-only javító kör után (F1 MAJOR hiányzó l10n; F2 MAJOR
+cache-rehydration mindig fallback-kártyát adott; F3 MINOR untyped
+audience — mind `docs/reviews/e09-r14-review.md`; a CI-only kör az
+`ui_inventory_test.dart` baseline driftjét zárta). Dedikált
+security-reviewer: PASS. Exact `a39d15c8`: Full Gate 32634546134 +
+Router CI 32634547312 mind success. Részletesen a fejléc ✅-blokkban.
+
+**E09-R13 — Following feed és cursor pagination backend** (PR
+[#422](https://github.com/wolfcasaba/strumsight/pull/422), squash
+`0907f006`, [ADR 0406](docs/adr/0406-following-feed-and-cursor-pagination.md)).
+Az első query, ami a Kör 7 follow-gráfot, a Kör 8 block/mute-szűrőt és a
+Kör 11 post-táblát egyben kombinálja — időrendi, HMAC-aláírt cursorral
+lapozott `GET /community/feed`. 0 nyitott BLOCKER/MAJOR KÉT javító kör
+után (F1 BLOCKER az A7 index-guard hamis-zöldje + a nem-hatékony
+query-alak; F2 MAJOR nem-engedélyezett séma-bővítés; F3-F6 MINOR; a 2.
+javító kör egy körön kívüli teszt regresszióját zárta — mind
+`docs/reviews/e09-r13-review.md`). Exact `21133e09`: Full Gate
+32630730552 + Router CI 32631215694 mind success. Részletesen a fejléc
+✅-blokkban.
+
+**E09-R11 — Post backend CRUD és audience enforcement** (PR
+[#420](https://github.com/wolfcasaba/strumsight/pull/420), squash
+`98d7b2f6`, [ADR 0405](docs/adr/0405-post-crud-and-audience-enforcement.md)).
+Az első valódi "tartalom" endpoint-felszín — create/get/patch/delete
+posztokra, szerveroldali author, `UNIQUE(profile_id, idempotency_key)`
+idempotencia, `updated_at`-alapú optimista konkurencia, egységes 404
+minden IDOR-érzékeny ágra. 0 nyitott BLOCKER/MAJOR EGY javító kör után (F1
+BLOCKER `patch_post` hiányzó tulajdonos-ellenőrzés — security-reviewer
+élesben reprodukálta; F2 BLOCKER hibás `author_public_id` a válaszban; F3
+MINOR törölt poszt idempotencia-retry-n visszatérve; F4 MINOR tudatos
+WONTFIX — mind `docs/reviews/e09-r11-review.md`). Exact `49631b97`: Full
+Gate 32620211936 + Backend CI 32620213409 + Router CI 32620214253 mind
+success. Részletesen a fejléc ✅-blokkban.
+
+**E09-R07 — Follow és follow request social graph** (PR
+[#416](https://github.com/wolfcasaba/strumsight/pull/416), squash
+`1cc49e41`, [ADR 0401](docs/adr/0401-follow-and-follow-request-social-graph.md)).
+Idempotens, privacy-kompatibilis follow rendszer (public azonnali, private
+request-lifecycle); DB-szintű self-follow CHECK + race-biztos UNIQUE. 0
+nyitott BLOCKER/MAJOR review-lelet HÁROM javító kör után (F1 BLOCKER
+nem-determinisztikus valódi-sértés próba FIXED Barrier-szinkronizációval, F2/
+F3 MAJOR auth-gap + törött idempotency-kontraktus FIXED, F4 MINOR FIXED; a 3.
+javító kör egy körön kívüli CI-only screen-számláló driftet zárt,
+`docs/reviews/e09-r07-review.md`). Exact `f75f0007`: Full Gate 32603023648 +
+Router CI 32603026921 success. Részletesen a fejléc ✅-blokkban.
+
+**E09-R06 — Profil létrehozás, szerkesztés és Community gate UI** (PR
+[#415](https://github.com/wolfcasaba/strumsight/pull/415), squash
+`77bc0589`, [ADR 0400](docs/adr/0400-profile-onboarding-service-and-community-gate-ui.md)).
+Community gate (4 állapot) + profil onboarding/edit flow + backend
+service-szintű profil-létrehozás (ADR 0396-ban MÁR ennek a körnek
+kiosztott, a batch-elt brief által kihagyott felelősség). 0 nyitott
+BLOCKER/MAJOR review-lelet KÉT javító kör után (F1 BLOCKER, F2 MAJOR,
+F9/F10 MAJOR mind FIXED; F3/F4/F6 MINOR nem blokkolnak,
+`docs/reviews/e09-r06-review.md`). Exact `bf2f67da`: Full Gate 32596780267
++ Router CI 32597616787 success. Részletesen a fejléc ✅-blokkban.
+
+**E08-R30 — Epic 08 migráció, regresszió és lezárás** (PR
+[#407](https://github.com/wolfcasaba/strumsight/pull/407), squash `a8ecb9f3`,
+ADR nincs — mérce-lezáró kör, nem hozott kötött architekturális döntést).
+**EPIC 8 (GAMIFICATION) MIND A 30 KÖRE KÉSZ.** Hat új gamifikációs route
+élesítve (`app_router.dart`, minimális Riverpod-ragasztó kizárólag már
+publikus core-providerekből, `lib/features/**` érintetlen); real-shape
+legacy-fixture teszt a streak/practice migrátorokra; a be nem kötött
+dual-write „kapcsoló" mért állapota + négy számszerű jövőbeli
+aktiválási feltétel dokumentálva flip helyett. 0 BLOCKER/MAJOR/MINOR review-
+lelet (2 NOTE, `docs/reviews/e08-r30-review.md`). Exact `3a6f10b3`: Full Gate
+32569011383 + Router CI 32569012517 success; a reviewer saját izolált `/tmp`
+klónban mind a kilenc gate-lépést függetlenül újrafuttatta. Részletesen a
+fejléc ✅-blokkban.
+
+**E08-R28 — Ledger sync contract és merge** (PR
+[#406](https://github.com/wolfcasaba/strumsight/pull/406), squash `571981b7`,
+[ADR 0394](docs/adr/0394-ledger-sync-contract-and-merge.md)). Offline-first,
+duplikációmentes főkönyv-szinkron szerződés; a szerver soha nem fogad el
+kliens-oldali összesített XP-t; unió-alapú összefésülés `ledgerId` +
+`sourceEventId` kettős dedup-kulccsal; `unverified`/`verified` szerver-
+autoritatív szétválasztás. Egy javító kör (F1 MAJOR wire-shape mismatch a
+Dart-kódoló és a backend-dekódoló között + F2 MINOR hiányzó `max_length`
+korlát, mindkettő javítva; review APPROVED, dedikált biztonsági review
+PASS). Exact `dda4534b`: Full Gate 32565070603 + Router CI 32565071642
+success. Részletesen a fejléc ✅-blokkban.
+
+**E08-R26 — Cross-feature gamification integráció** (PR
+[#403](https://github.com/wolfcasaba/strumsight/pull/403), squash `ea2e22a4`,
+[ADR 0392](docs/adr/0392-cross-feature-gamification-adapter-caller-fed-boundaries.md)).
+Négy caller-fed adapter (Analysis/Vision/Tutor/Plan); tutor-adapter ZÉRÓ
+`ai_tutor`-importtal (pinned empty boundary, L139); plan-bónusz flat, nem
+összegző (`bonusXp` fixen 0); vision technikai haladás `VisionClaimGuard`
+mögött (0.70 küszöb, inkluzív). 0 BLOCKER/MAJOR/MINOR review-lelet, javító
+kör nélkül; 3 nem-blokkoló NOTE (mind unwired-today). `security-reviewer`
+(risk="high"): PASS. Exact `d3c4a9a0`: Full Gate 32557142579 + Router CI
+32557160705 success. Részletesen a fejléc ✅-blokkban.
+
+**E08-R25 — Song Trainer és setlist integráció** (PR
+[#402](https://github.com/wolfcasaba/strumsight/pull/402), squash `204b3798`,
+[ADR 0391](docs/adr/0391-song-gamification-adapter-standalone-bonus-and-hashed-song-id.md)).
+Session-bookkeeping alapú bónusz-méretezés (NEM a bináris R06
+`parentEventId` dedup) + SHA-256-hashelt privacy-safe dal-azonosító. 0
+BLOCKER/MAJOR review-lelet, javító kör nélkül; 1 nem-blokkoló MINOR
+follow-up (`utf8Bytes()` helper). Exact `180c8d40`: Full Gate 32554547623 +
+Router CI 32554548631/32554544697 success. Részletesen a fejléc ✅-blokkban.
+
+**E08-R18 — Heti quest és consistency objective** (PR
+[#394](https://github.com/wolfcasaba/strumsight/pull/394), squash `29c27ab2`,
+[ADR 0386](docs/adr/0386-flexible-weekly-quest-projection.md)). Pure,
+caller-fed heti projekció; availability-arányos egész target; öt napos
+aktívnap-cap; stabil FNV-választás; improvement fail-closed; same-ID monoton,
+cross-ID izolált progress; típusos rollover. A két MAJOR review-lelet egy Terra
+javító körben zárult. Correctness APPROVED, security PASS. Exact `c131c47e`:
+Full Gate 32472133400 + Router CI 32472092472 success. Részletesen:
 `docs/handoff-archive.md`.
 
 **E13-R03 — Semantic colors and three themes** (PR
@@ -5046,8 +6924,141 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő E08 termékkör: E08-R18 — Heti quest és consistency
-objective** (`docs/rounds/e08-r18-weekly-quest-and-consistency.md`,
+**Pontos következő termékkör (2026-08-23): E09-R15 — Reakciók és
+optimista konzisztencia** (`docs/rounds/e09-r15-reactions-and-optimistic-consistency.md`,
+engine a queue-ban `minimax`, `risk = "normal"`, nincs előre kiosztott ADR).
+**Az E09-R14 (Feed UI, cache és tudatos használat) KÉSZ** (PR #423, squash
+`ff39ee0c`) — lásd a fejléc ✅-blokkot. A Kör 14 hagyott néhány mért horgot:
+
+- A `feedCacheProvider` és a `communityFeedRepositoryProvider` MA
+  `UnimplementedError`-t dobnak — a valós HTTP-repository-wiring (a
+  `feed_repository_impl.dart` + a Riverpod provider-override) egy KÉSŐBBI
+  kör hatásköre marad (ugyanaz az örökölt tartozás, mint a
+  `post_repository_impl.dart` — Kör 12 óta hiányzik). A Kör 15 (reakciók)
+  saját `reaction_controller.dart`-ja ettől független, de ha egy jövőbeli
+  kör a feedet éles HTTP-re köti be, olvassa el a Kör 14 pre-flight D6
+  pontját és a §10 handoffot.
+- A cache-rehydration mintája (`feed_controller.dart::_artifactFromEnvelope`
+  — `ShareArtifact.fromJson` try/catch-csel, sikertelen dekódolásnál
+  `UnfilledCommunityShareArtifact` fallback) egy újrahasznosítható minta,
+  ha egy jövőbeli kör hasonló lokális cache-et vezet be egy sealed
+  hierarchiájú domain-típusra.
+- Az l10n-kulcsok `followingFeed*` / `feedCard*` prefixszel kerültek be
+  (`lib/l10n/features/community_{en,hu}.arb`) — a review F1 lelete
+  (`docs/reviews/e09-r14-review.md`) figyelmeztet: MINDEN új Community
+  UI-fájl a §"Amit a review kötelezően ellenőriz" szerint
+  `AppLocalizations`-t KÖVETEL, ne induljon egyik jövőbeli kör se azzal a
+  feltevéssel, hogy az ARB-bővítés a briefen kívül eshet — ha a fájl nincs
+  az `allowed_paths`-on, az orchestrátor pre-flightban vagy a review
+  javító körében bővíti, dokumentáltan.
+- A review 1 tartalmi + 1 CI-only javító kört igényelt (F1/F2 MAJOR, F3
+  MINOR + az `ui_inventory_test.dart` baseline-drift) — lásd
+  `docs/reviews/e09-r14-review.md` a mintázat elkerüléséhez.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R14 — Feed
+UI, cache és tudatos használat**
+(`docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md`, engine a
+queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R13 —
+Following feed és cursor pagination backend**
+(`docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md`, engine
+a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R12 — Post
+composer draft és outbox** (`docs/rounds/e09-r12-post-composer-draft-and-outbox.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R10 — Share
+artifact szerződések** (`docs/rounds/e09-r10-share-artifact-contracts.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+A Kör 9 pre-flightja megerősítette:
+a `search.py` router `CurrentUser`-t vesz fel (D1), a
+`read_profile`/`get_privacy`/`handles.py` auth-hiánya VÁLTOZATLANUL nyitva
+marad (nem ennek a körnek/nem a Kör 10-nek a hatásköre). A Kör 9
+`profile_search_repository.py::ProfileSearchHit` (`handle`+`display_name`+
+`created_at`) és a HMAC-signed opaque cursor minta (`_sign_cursor`/
+`_verify_cursor`, `backend/app/community/repositories/profile_search_repository.py`)
+egy újrahasznosítható referencia egy jövőbeli, hasonlóan lapozott/
+block-szűrt listaendpointhoz (feed, member-listing) — ha a Kör 10 vagy egy
+későbbi kör saját cursor-t vezetne be, a §0.0-ban mérje meg, nem
+egyszerűbb-e ugyanezt a signed-cursor mintát újrahasznosítani sima
+base64-JSON helyett (a Kör 9 saját, javító körben tanult leckéje: az
+egyszerű base64-JSON triviálisan dekódolható és a block-szűrt/nyers sor
+összekeverése IDOR-osztályú szivárgást okozott — `docs/reviews/e09-r09-review.md`
+F4). **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR #407) —
+az **E08-R29** (Integritás, analytics, balance szimuláció és CI) továbbra is
+`hold`-on marad. A queue-scan a legelső `pending` sort választja. Ez a
+session nem indítja el; új sessionben fut.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R09 —
+Profilkeresés és biztonságos discovery** (`docs/rounds/e09-r09-profile-search-and-discovery.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E09-R08 — Block,
+mute és safety kapcsolatkezelés** (`docs/rounds/e09-r08-block-mute-and-safety-relationships.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**F1/F2 nyitott MINOR-ok az E09-R04 review-ból** (backend
+`update_privacy_settings` router-bekötő kör előfeltételei — Python-szintű
+TOCTOU + félrevezető docstring, `docs/handoff-archive.md` E09-R04
+szakasza), **és a Kör 5 wire-decode mintája** (minden ÚJ Community
+wire-enum kapjon `xFromWire`/`xToWire` párt a bevezetéssel EGY körben, ne
+utólag — Kör 5 F1 pontosan ezt mérte meg `ModerationState`-en) továbbra is
+a jövőbeli bekötő/data-réteg körök előfeltétele.
+
+Pre-flightban érdemes újra mérni: az Epic 9 (Community Platform) mind a 32
+körének briefje egy batchben készült (PR #405, 2026-08-22) — az E09-R01
+saját pre-flightja ellenőrizze, hogy a `main` időközbeni mozgása (E08-R29/
+R30 stb.) nem driftelt-e el olyan fájltól/enum-értéktől, amire a batch-elt
+brief hivatkozik (a §1 mérési szabály: grep-eld ki a hivatkozott
+enum-értékeket/mezőket a tényleges kódból, ne az átmenettáblát mérd).
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R30 — Epic 08
+migráció, regresszió és lezárás** (`docs/rounds/e08-r30-epic-08-migration-regression-and-closure.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot. Vegye figyelembe az
+E08-R28 mért tanulságait:
+
+- **A wire-szerződés két fele (Dart-kódoló + backend-dekódoló) KÜLÖN
+  implementer-diffben könnyen szétcsúszik, még akkor is, ha ugyanaz a kör
+  írja mindkettőt** — az E08-R28 F1 MAJOR-ja pontosan ezt mutatta: mindkét
+  oldal SAJÁT gate-je zöld volt, mert egyik sem tesztelte a MÁSIK oldal
+  tényleges kimenetét. Ha egy jövőbeli kör (a router-mounting follow-up)
+  élesíti ezt a szerződést, a pre-flight ELSŐ lépése egy kézzel futtatott
+  `LedgerUploadEnvelope.model_validate(<a Dart encodeUpload() aktuális
+  kimenete>)` ellenőrzés legyen — ne a két oldal külön-külön zöld gate-jére
+  hagyatkozzon.
+- **A `verified` ma séma-érvényességet jelent, NEM XP-újraszámolást**
+  (dedikált biztonsági review N1 lelete, `docs/reviews/e08-r28-security.md`).
+  Mielőtt bármely jövőbeli felület a `verified` mezőt bizalmi jelzésként
+  mutatná, a szervernek ténylegesen vissza kell vezetnie az XP-t a
+  forrás-eseményből — a mai `evaluate_upload` minden séma-érvényes nyugtát
+  `verified`-nek jelöl, felső XP-korlát vagy policy-alapú újraszámolás nélkül.
+- **Nincs `max_length` a nyugta-listán/id-mezőkön** most már javítva (F2),
+  de a mintázat (kliens-adatot fogadó pydantic séma felső korlát nélkül)
+  minden jövőbeli, `backend/app/`-ot bővítő körnél ellenőrizendő.
+- Egy önkezűen létrehozott ÜRES `backend/.venv` beárnyékolja a
+  `tools/round-gate.sh` közös venv-fallbackját (L408) — ha a backend gate
+  `ModuleNotFoundError`-ral hasal el, ELŐSZÖR ellenőrizd, hogy a munkapéldány
+  saját `backend/.venv`-je létezik-e és NEM üres-e.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R28 —
+Ledger sync contract és merge.** Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R27 —
+Gamification accessibility és settings.** Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R26 —
+Cross-feature gamification integration** (`docs/rounds/e08-r26-cross-feature-gamification-integration.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E08-R25 — Song
+Trainer és Setlist integráció** (`docs/rounds/e08-r25-song-trainer-and-setlist-integration.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+**Korábbi kijelölt SDD-kör (2026-08-21, azóta lezárult): E08-R19 — Challenge V2 és legacy
+DailyChallenge migráció** (`docs/rounds/e08-r19-challenge-v2-and-legacy-migration.md`,
 engine a queue-ban `terra`). Ez a session nem indítja el; új sessionben fut.
 Az önálló Chapter 13 sáv következő köre E13-R05.
 

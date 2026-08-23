@@ -24,6 +24,7 @@ allowed_paths = [
   "test/features/progress_v2/mastery_evidence_test.dart",
   "test/features/progress_v2/metric_migration_test.dart",
   "test/features/progress_v2/chart_semantics_test.dart",
+  "test/ui/goldens/",
   "docs/rounds/e13-r31-progress-and-skills.md",
 ]
 gate_tests = [
@@ -31,6 +32,7 @@ gate_tests = [
   "test/features/progress_v2/mastery_evidence_test.dart",
   "test/features/progress_v2/metric_migration_test.dart",
   "test/features/progress_v2/chart_semantics_test.dart",
+  "test/ui/goldens/e13_r31_screens_golden_test.dart",
 ]
 native_gate = false
 ```
@@ -128,6 +130,7 @@ Nem javasol olyan gyakorlatot, aminek az előfeltétele hiányzik.
 | A6 | Az offline fejlődés látható (helyi adat) | `dashboard_states_test.dart` |
 | A7 | Az ajánlás nem sérti a képesség-előfeltételeket | `mastery_evidence_test.dart` |
 | A8 | A diagramnak szöveges összegzése, a gráfnak lineáris alternatívája van | `chart_semantics_test.dart` |
+| A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r31_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -139,6 +142,7 @@ Nem javasol olyan gyakorlatot, aminek az előfeltétele hiányzik.
 | Trend két adatpontból | **A4** |
 | A verzióváltás hirtelen javulásként | **A5** |
 | Előfeltétel nélküli gyakorlat ajánlása | A7 |
+| A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
 **A trend három kötelező cellája** (a küszöb: a minimális adatpont-szám, **5**):
 
@@ -155,8 +159,25 @@ elsajátítottságot az XP-ből → az **A1** cellának PIROSNAK kell lennie →
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/progress_v2/dashboard_states_test.dart test/features/progress_v2/mastery_evidence_test.dart test/features/progress_v2/metric_migration_test.dart test/features/progress_v2/chart_semantics_test.dart
+tools/round-gate.sh test/features/progress_v2/dashboard_states_test.dart test/features/progress_v2/mastery_evidence_test.dart test/features/progress_v2/metric_migration_test.dart test/features/progress_v2/chart_semantics_test.dart test/ui/goldens/e13_r31_screens_golden_test.dart
 ```
+
+**A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
+minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
+keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
+KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+
+```bash
+~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r31_screens_golden_test.dart
+```
+
+A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
+márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
+meglévő golden-teszt mért viselkedése, az elrendezést, méretezést és színeket
+nem érinti. MIÉRT ez a kör dolga és nem az E13-R36-é: a záró vizuális
+regressziós kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt,
+hogy a képernyő eleve csúnya-e, a saját körében kell látni.
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
 `&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`

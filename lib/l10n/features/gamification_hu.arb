@@ -191,5 +191,375 @@
     }
   },
   "achievementEvidenceCompletionRecorded": "Ez a mért mérföldkő teljesült.",
-  "achievementEvidenceUnavailable": "Még nem érhető el mért bizonyíték."
+  "achievementEvidenceUnavailable": "Még nem érhető el mért bizonyíték.",
+  "questsScreenTitle": "Küldetések",
+  "questsDailySectionTitle": "Ma",
+  "questsWeeklySectionTitle": "Ezen a héten",
+  "questsEmptyTitle": "Még nincs küldetés",
+  "questsEmptyBody": "A küldetések az első gyakorlás után jelennek meg.",
+  "questsOfflineBanner": "Elérhető kapcsolat nélkül",
+  "questsOfflineBody": "A küldetések és a napi kihívás internet nélkül is működnek.",
+  "questProgressLabel": "{current} / {target}",
+  "@questProgressLabel": {
+    "placeholders": {
+      "current": {"type": "num"},
+      "target": {"type": "num"}
+    }
+  },
+  "questProgressSemantics": "Haladás: {current} / {target}.",
+  "@questProgressSemantics": {
+    "placeholders": {
+      "current": {"type": "num"},
+      "target": {"type": "num"}
+    }
+  },
+  "questRewardLabel": "+{xp} XP",
+  "@questRewardLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "questRewardAlreadyCredited": "A jutalom már jóváírva",
+  "questRewardSemantics": "Jutalom: {xp} tapasztalati pont, már jóváírva.",
+  "@questRewardSemantics": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "questSourcePlanLabel": "A heti tervedből",
+  "questSourceSkillLabel": "Készség fókusz: {skill}",
+  "@questSourceSkillLabel": {
+    "placeholders": {
+      "skill": {"type": "String"}
+    }
+  },
+  "questSourceModeLabel": "Gyakorlási mód fókusz",
+  "questSourceMetricLabel": "Mért fókusz: {metric}",
+  "@questSourceMetricLabel": {
+    "placeholders": {
+      "metric": {"type": "String"}
+    }
+  },
+  "questStartCta": "Indítás",
+  "questContinueCta": "Folytatás",
+  "questStartSemantics": "Küldetés indítása: {title}.",
+  "@questStartSemantics": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "questContinueSemantics": "Küldetés folytatása: {title}.",
+  "@questContinueSemantics": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "questCompletedBadge": "Teljesítve",
+  "questCompletedBody": "A jutalom már a főkönyvedben van.",
+  "questCompletedSemantics": "A(z) {title} küldetés teljesítve. A jutalom már jóváírva.",
+  "@questCompletedSemantics": {
+    "placeholders": {
+      "title": {"type": "String"}
+    }
+  },
+  "questExpiredBadge": "Lejárt",
+  "questUnavailableBadge": "A tartalom nincs telepítve",
+  "questUnavailableBody": "Ehhez a küldetéshez tartozó tartalom még nincs telepítve ezen az eszközön.",
+  "questExpiryToday": "Éjfélig elérhető",
+  "questExpiryWeekly": "Vasárnapig elérhető",
+  "questExpiryDate": "{date} napig elérhető",
+  "@questExpiryDate": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "challengeDailyTitle": "Mai kihívás",
+  "challengeDailyBody": "Játszd le a saját tempódban.",
+  "challengeStrumName": "Pengetés-minta: {name}",
+  "@challengeStrumName": {
+    "placeholders": {
+      "name": {"type": "String"}
+    }
+  },
+  "challengeChordChange": "Válts {from} akkordról {to} akkordra {beats} ütem alatt",
+  "@challengeChordChange": {
+    "placeholders": {
+      "from": {"type": "String"},
+      "to": {"type": "String"},
+      "beats": {"type": "int"}
+    }
+  },
+  "challengeRhythm": "Játszd a(z) {content} ritmust {bpm} BPM tempóban",
+  "@challengeRhythm": {
+    "placeholders": {
+      "content": {"type": "String"},
+      "bpm": {"type": "int"}
+    }
+  },
+  "challengeSongSection": "Játszd a(z) {song} dal {section} szakaszát {repetitions} alkalommal",
+  "@challengeSongSection": {
+    "placeholders": {
+      "section": {"type": "String"},
+      "song": {"type": "String"},
+      "repetitions": {"type": "int"}
+    }
+  },
+  "challengeTiming": "Találd el a(z) {content} {window} ms-os tempoablakát",
+  "@challengeTiming": {
+    "placeholders": {
+      "window": {"type": "int"},
+      "content": {"type": "String"}
+    }
+  },
+  "challengeCompletedToday": "Ma teljesítve",
+  "challengeSemanticsActive": "Napi kihívás: {description}. Készen áll a játékra.",
+  "@challengeSemanticsActive": {
+    "placeholders": {
+      "description": {"type": "String"}
+    }
+  },
+  "challengeSemanticsCompleted": "Napi kihívás: {description}. Ma teljesítve.",
+  "@challengeSemanticsCompleted": {
+    "placeholders": {
+      "description": {"type": "String"}
+    }
+  },
+  "challengeUnavailableBody": "Telepíts akkordokat, ritmusokat vagy dalokat a mai kihívás feloldásához.",
+  "rewardInboxTitle": "Jutalom postaláda",
+  "rewardInboxEmptyTitle": "Még nincs jutalom",
+  "rewardInboxEmptyBody": "A mért gyakorlási jutalmak itt fognak megjelenni.",
+  "rewardInboxSeenLabel": "Látott",
+  "rewardInboxUnseenLabel": "Új",
+  "rewardInboxCountSemantics": "{count, plural, =0{Nincs új jutalom} =1{1 új jutalom} other{{count} új jutalom}}",
+  "@rewardInboxCountSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardInboxEarnedXpLabel": "{xp, plural, =0{0 XP szerzett} =1{1 XP szerzett} other{{xp} XP szerzett}}",
+  "@rewardInboxEarnedXpLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "rewardInboxEntrySemantics": "{title}. {body}. Ennyi tapasztalati pont járt: {xp}.",
+  "@rewardInboxEntrySemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "xp": {"type": "int"},
+      "body": {"type": "String"}
+    }
+  },
+  "rewardSummaryTitle": "Munkamenet jutalmai",
+  "rewardSummaryConsolidatedLabel": "{count, plural, =0{Nincs jutalom ebben a munkamenetben} =1{1 jutalom összevonva} other{{count} jutalom összevonva}}",
+  "@rewardSummaryConsolidatedLabel": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardSummaryConsolidatedSemantics": "{count, plural, =0{Nincs mit ünnepelni ebben a munkamenetben} =1{1 jutalom összevonva erre a munkamenetre} other{{count} jutalom összevonva erre a munkamenetre}}",
+  "@rewardSummaryConsolidatedSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardSummaryEntrySemantics": "{title}. {body}",
+  "@rewardSummaryEntrySemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "body": {"type": "String"}
+    }
+  },
+  "gamificationHubTitle": "Haladásod",
+  "gamificationHubLevelBadgeLabel": "{level}. szint",
+  "@gamificationHubLevelBadgeLabel": {
+    "placeholders": {
+      "level": {"type": "int"}
+    }
+  },
+  "gamificationHubLevelBadgeSemantics": "{level}. szint. {title}. A szint a tapasztalati pontokból adódik.",
+  "@gamificationHubLevelBadgeSemantics": {
+    "placeholders": {
+      "level": {"type": "int"},
+      "title": {"type": "String"}
+    }
+  },
+  "gamificationHubXpProgressLabel": "Tapasztalati pontok: {xp} / {total}",
+  "@gamificationHubXpProgressLabel": {
+    "placeholders": {
+      "xp": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "gamificationHubXpProgressSemantics": "Tapasztalati pontok {xp} / {total} a jelenlegi szinten. A tapasztalati pont a részvételt méri, nem a tudást.",
+  "@gamificationHubXpProgressSemantics": {
+    "placeholders": {
+      "xp": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "gamificationHubXpTotalLabel": "Összes tapasztalati pont: {xp}",
+  "@gamificationHubXpTotalLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "gamificationHubXpToNextLabel": "{xp} a következő tudásszintig",
+  "@gamificationHubXpToNextLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "gamificationHubXpSaturatedLabel": "Elérted a legmagasabb beállított szintet",
+  "gamificationHubInboxIndicatorTitle": "Jutalom postaláda",
+  "gamificationHubInboxIndicatorSemantics": "{count, plural, =0{Nincs új jutalom a postaládában} =1{1 új jutalom a postaládában} other{{count} új jutalom a postaládában}}",
+  "@gamificationHubInboxIndicatorSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "gamificationHubInboxIndicatorCta": "Megnyitás",
+  "gamificationHubInboxIndicatorSemanticsFull": "Jutalom postaláda. {status}. Koppints a megnyitáshoz.",
+  "@gamificationHubInboxIndicatorSemanticsFull": {
+    "placeholders": {
+      "status": {"type": "String"}
+    }
+  },
+  "gamificationHubQuestsTitle": "Aktív küldetések",
+  "gamificationHubQuestsSummary": "{count, plural, =0{Nincs aktív küldetés} =1{1 aktív küldetés} other{{count} aktív küldetés}}",
+  "@gamificationHubQuestsSummary": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "gamificationHubQuestsSemantics": "{count, plural, =0{Nincs aktív küldetés} =1{1 aktív küldetés folyamatban} other{{count} aktív küldetés folyamatban}}",
+  "@gamificationHubQuestsSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "gamificationHubStreakTitle": "Gyakorlási ritmus",
+  "gamificationHubStreakSummary": "{count, plural, =0{Ma még nincs ritmus} =1{1 nap ritmus} other{{count} nap ritmus}}",
+  "@gamificationHubStreakSummary": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "gamificationHubMasteryTitle": "Tudás mérföldkövek",
+  "gamificationHubMasterySummary": "{count, plural, =0{Még nincs tudás mérföldkő} =1{1 tudás mérföldkő feloldva} other{{count} tudás mérföldkő feloldva}}",
+  "@gamificationHubMasterySummary": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "gamificationHubLatestResultTitle": "Legutóbbi mért alkalom",
+  "gamificationHubLatestResultEmptyTitle": "Még nincs mért alkalom",
+  "gamificationHubLatestResultEmptyBody": "Egy mért gyakorlási alkalom itt fog megjelenni, amint befejezel egyet.",
+  "gamificationHubLatestResultSemantics": "Legutóbbi mért alkalom: {title}. {xp} tapasztalati pont.",
+  "@gamificationHubLatestResultSemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "xp": {"type": "int"}
+    }
+  },
+  "gamificationHubEmptyLegacyTitle": "Új fejezet a haladásodban",
+  "gamificationHubEmptyLegacyBody": "A Hub új alapokra épül. A történeted itt fog újra megjelenni, amint az átépítés befejeződik.",
+  "gamificationHubEmptyNewTitle": "Üdv a haladásodban",
+  "gamificationHubEmptyNewBody": "A gyakorlásod itt jelenik meg, amint befejezel egy mért alkalmat.",
+  "gamificationHubOpenLevelDetailCta": "Hogyan működnek a tapasztalati pontok?",
+  "gamificationHubOpenLevelDetailSemantics": "Nyisd meg a szint részleteit, és tanuld meg, hogyan működnek a tapasztalati pontok.",
+  "gamificationHubXpSectionTitle": "Tapasztalati pontok",
+  "gamificationHubXpSectionBody": "A tapasztalati pont a részvételt jutalmazza: minden mért alkalom öt összetevővel járul hozzá. Soha nem méri közvetlenül a tudást.",
+  "gamificationHubSkillSectionTitle": "A te szinted",
+  "gamificationHubSkillSectionBody": "A szinted a tapasztalati pontjaidból adódik — lásd lent az összetevőket.",
+  "gamificationLevelDetailTitle": "{level}. szint",
+  "@gamificationLevelDetailTitle": {
+    "placeholders": {
+      "level": {"type": "int"}
+    }
+  },
+  "gamificationLevelDetailSemantics": "A(z) {level}. szint részletei.",
+  "@gamificationLevelDetailSemantics": {
+    "placeholders": {
+      "level": {"type": "int"}
+    }
+  },
+  "gamificationLevelDetailCurrentTitle": "Jelenlegi szint",
+  "gamificationLevelDetailCurrentBody": "A jelenlegi szinted. A tapasztalati pontokból adódik, és csak emelkedhet.",
+  "gamificationLevelDetailNextTitle": "Következő szint",
+  "gamificationLevelDetailNextBody": "A tapasztalati pontok mozgatják a csúszkát a következő szint felé — nincs külön tudás-kapu.",
+  "gamificationLevelDetailXpProgressLabel": "{xp} / {total} tapasztalati pont ezen a szinten",
+  "@gamificationLevelDetailXpProgressLabel": {
+    "placeholders": {
+      "xp": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "gamificationLevelDetailXpProgressSemantics": "Tapasztalati pontok {xp} / {total} a jelenlegi szinten.",
+  "@gamificationLevelDetailXpProgressSemantics": {
+    "placeholders": {
+      "xp": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "gamificationLevelDetailXpTotalSemantics": "Összesen {total} tapasztalati pont.",
+  "@gamificationLevelDetailXpTotalSemantics": {
+    "placeholders": {
+      "total": {"type": "int"}
+    }
+  },
+  "gamificationLevelDetailXpToNextSemantics": "{xp} tapasztalati pont a következő szintig.",
+  "@gamificationLevelDetailXpToNextSemantics": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "gamificationLevelDetailXpSaturatedSemantics": "Elérted a legmagasabb beállított szintet. További szintlépés nem várható.",
+  "gamificationLevelDetailHowXpWorksTitle": "Hogyan működnek a tapasztalati pontok?",
+  "gamificationLevelDetailHowXpWorksBody": "Minden mért alkalom öt tapasztalati-pont összetevővel járul hozzá. A részvételt jutalmazzák, soha nem a tudást.",
+  "gamificationLevelDetailXpComponentBaseTitle": "Alap tapasztalat",
+  "gamificationLevelDetailXpComponentBaseBody": "A bizalmi és jelminőségi kapun átjutott mért alkalomért jár.",
+  "gamificationLevelDetailXpComponentDurationTitle": "Időtartam tapasztalat",
+  "gamificationLevelDetailXpComponentDurationBody": "A mért, minősített percekkel arányos az alkalmon belül.",
+  "gamificationLevelDetailXpComponentQualityTitle": "Minőség tapasztalat",
+  "gamificationLevelDetailXpComponentQualityBody": "Az alkalom során mért jelminőséget tükrözi.",
+  "gamificationLevelDetailXpComponentImprovementTitle": "Fejlődés tapasztalat",
+  "gamificationLevelDetailXpComponentImprovementBody": "Az aktuális alkalmat a közelmúlt mért alapvonalához hasonlítja.",
+  "gamificationLevelDetailXpComponentDiversityTitle": "Változatosság tapasztalat",
+  "gamificationLevelDetailXpComponentDiversityBody": "A közelmúltbeli mért fókuszodon túli terjeszkedést jutalmazza.",
+  "gamificationLevelDetailXpComponentSemantics": "{title}: {body} {xp} tapasztalati pont.",
+  "@gamificationLevelDetailXpComponentSemantics": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "body": {"type": "String"},
+      "xp": {"type": "int"}
+    }
+  },
+  "gamificationLevelDetailXpTotalLabel": "Alkalom szerzett tapasztalati pontjai: {xp}",
+  "@gamificationLevelDetailXpTotalLabel": {
+    "placeholders": {
+      "xp": {"type": "int"}
+    }
+  },
+  "gamificationHubOfflineReadyLabel": "Offline is elérhető",
+  "gamificationHubAchievementsTitle": "Eredmények",
+  "gamificationSettingsTitle": "Játékosítás",
+  "gamificationSettingsSubtitle": "Szabd testre az ünneplés-réteg viselkedését. Az előrehaladásod mindig megmarad.",
+  "gamificationSettingsIntensityTitle": "Ünneplés intenzitása",
+  "gamificationSettingsIntensityFullLabel": "Teljes",
+  "gamificationSettingsIntensityFullSemantics": "Ünneplés intenzitása: teljes",
+  "gamificationSettingsIntensitySubtleLabel": "Visszafogott",
+  "gamificationSettingsIntensitySubtleSemantics": "Ünneplés intenzitása: visszafogott",
+  "gamificationSettingsIntensitySilentLabel": "Csendes",
+  "gamificationSettingsIntensitySilentSemantics": "Ünneplés intenzitása: csendes",
+  "gamificationSettingsHapticsLabel": "Rezgés-visszajelzés",
+  "gamificationSettingsHapticsSemantics": "Rezgés-visszajelzés kapcsoló",
+  "gamificationSettingsSoundLabel": "Hang-visszajelzés",
+  "gamificationSettingsSoundSemantics": "Hang-visszajelzés kapcsoló",
+  "gamificationSettingsReduceMotionLabel": "Mozgás csökkentése",
+  "gamificationSettingsReduceMotionSemantics": "Mozgás csökkentése kapcsoló",
+  "gamificationSettingsNotificationsLabel": "Gyakorlás-emlékeztetők",
+  "gamificationSettingsNotificationsSemantics": "Gyakorlás-emlékeztetők kapcsoló",
+  "gamificationSettingsNotificationsHint": "Az emlékeztetők be- vagy kikapcsolása soha nem változtatja meg a tapasztalati pontjaidat, az eredményeidet vagy a szériádat.",
+  "gamificationSettingsProgressPreservedHint": "A főkönyv, a széria és a mastery kiértékelés tovább fut — az ünneplés-réteg kikapcsolása csak a látható jelet rejti el."
 }

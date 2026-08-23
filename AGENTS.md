@@ -569,30 +569,39 @@ A driver ezt automatikusan feloldja, mielőtt a kört elindítaná:
 
 A döntés kívülről lekérdezhető: `tools/round-pipeline.sh --independent-engine <motor>`.
 
-> **Ideiglenes felállás (user-döntés 2026-08-20, Pro-keret égetése):** a
-> lejáró ChatGPT Pro előfizetés maradékának elfogyasztásáig MINDEN kör
-> orchestrátora/reviewere a **Sol** (`gpt-5.6-sol`; a rotációt a commitolt
-> `docs/execution/orchestrator-rotation` fájl hordozza — file > env >
-> script-default), implementere a **`terra`** (`gpt-5.6-terra`, a
-> queue nyitott sorai). A függetlenség mérési kulcsa változatlanul a
-> modell-azonosság — a Sol↔Terra pár e szerint független, a közös
-> előfizetés-keret a döntés tudatos ára. A fenti tábla az `alternate`
-> rotáció gépezete: env-pin alatt mérhető, és a lejárat utáni visszaállás
-> után újra ez az érvényes út. Részletek: HANDOFF (2026-08-20 GOV-bejegyzés)
-> és a `pipeline-orchestrator-prompt.md` MOTOR-FELÁLLÁS blokkja.
+> **HATÁLYOS FELÁLLÁS (user-döntés 2026-08-21, „lejárt a GPT kvóta"):** a
+> ChatGPT Pro keret elfogyott, tehát a Codex-oldal (**Sol ÉS Terra**, közös
+> auth) NEM futtatható. MINDEN kör orchestrátora/reviewere a **Claude
+> Sonnet 5 `--effort high`** (`PIPELINE_MODEL`/`PIPELINE_EFFORT`
+> script-default), implementere a **`minimax`** (MiniMax-M3,
+> `~/.claude-minimax`, saját `MINIMAX_API_KEY` — tehát NEM a Claude-keretből
+> megy); a queue MINDEN nyitott sora explicit `minimax`. A rotációt a
+> commitolt [`docs/execution/orchestrator-rotation`](docs/execution/orchestrator-rotation)
+> fájl hordozza (`claude`; file > env > script-default), a Codex-oldalt pedig
+> a `fallback_engine=none` script-default zárja ki — az `orchestrator_available`
+> a `terra`/`sol` széket pontosan ezen a kapcsolón méri. A függetlenség
+> mérési kulcsa változatlan: Claude Sonnet 5 ≠ MiniMax-M3, és a `minimax` sor
+> külső kulcsos (`engine_uses_claude_quota` hamis) — a fenti tábla
+> `minimax` sora tehát élő. Előző, LEZÁRT felállás: Sol-pin + `terra`
+> implementer (2026-08-20, a Pro-keret égetése). A Sol GÉPEZETE (registry-sor,
+> `sol` ágak a driverben, mérő cellák) szándékosan marad, hogy a Codex-oldal
+> esetleges újraéledése egyetlen fájl átírása legyen.
 >
-> **Kiterjesztés (user-döntés 2026-08-20): MIND A KÉT SLOT ezzel a
-> felállással megy.** A kért slotszám a commitolt
+> **Slotszám (user-döntés 2026-08-21): EGY sáv.** A kért slotszám a commitolt
 > [`docs/execution/pipeline-slots`](docs/execution/pipeline-slots) fájlban
-> utazik (`2`), ami erősebb a `PIPELINE_SLOTS` env-nél (file > env >
-> script-default, fail-closed érvénytelen értékre) — ugyanaz a szerződés és
-> ugyanaz a mért indok, mint a rotáció-fájlnál. A RAM-fedezet őre (ADR 0171
-> §1) változatlan: a fájl a KÉRT sávokat mondja meg, a tényleges párhuzam
-> ettől lefelé térhet el, naplózott `SLOT-KORLÁT` sorral. Az **önjavító kör
-> is slotot foglal**, ezért a Sol-pin alatt azt is a Sol vezényli (rögzített
-> identitása a nyilvántartás `sol` sora), és az utolsó heal-kísérlet innen
-> vált más modellre — a gyakorlatban a Terrára (ADR 0307 §2). Pin nélkül a
-> heal bitre a régi, kvóta-tudatos Claude→Terra úton marad.
+> utazik (`1`), ami erősebb a `PIPELINE_SLOTS` env-nél (file > env >
+> script-default, fail-closed érvénytelen értékre). MÉRT indok: a Sol-pin
+> alatt mindkét sáv a Codex-keretből ment, most viszont MINDEN sáv
+> orchestrátora a Claude — két párhuzamos session ugyanabból az
+> előfizetésből enne, és épp az az ADR 0222-t kikényszerítő hibaosztály
+> jönne vissza (a keretnek nekifutó kör → H-NOSIGNAL halt → önjavító kör,
+> ami szintén a keretből megy). A RAM-fedezet őre (ADR 0171 §1) változatlan:
+> a fájl a KÉRT sávokat mondja meg, a tényleges párhuzam ettől lefelé térhet
+> el, naplózott `SLOT-KORLÁT` sorral. Az **önjavító kör is slotot foglal**,
+> és pin nélkül a régi, kvóta-tudatos Claude→Terra bitre marad (ADR 0307 §2)
+> — Codex-oldal híján a gyakorlatban végig a Claude-úton. Részletek:
+> HANDOFF (2026-08-21 GOV-bejegyzés) és a
+> `pipeline-orchestrator-prompt.md` MOTOR-FELÁLLÁS blokkja.
 
 A `H-INDEP` és a `H-GATEGUARD` **nem önjavítható** — az önjavító session
 kvótazárlat alatt maga is Terra, tehát körben oldaná fel. Ezekre emberi döntés

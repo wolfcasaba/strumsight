@@ -802,6 +802,307 @@ import 'package:flutter/widgets.dart';
       },
     );
   });
+
+  // E08-R24 — A4 architecture guard: the `practice` and `learn` features
+  // must NOT import any internal file from `gamification`; the only allowed
+  // entry point is `public.dart` (ADR 0390 1. döntés, brief §5.1). The
+  // generic `crossFeatureImportsMustUsePublicApi` rule above only fires on
+  // file-tree-level scans; this group adds an explicit assertion against
+  // the contracted adapter boundary so a future regression that bypasses
+  // public.dart trips the targeted test.
+  group('gamification adapter boundary — A4 (E08-R24)', () {
+    final allowedSourceRoots = <String>[
+      'lib/features/practice/',
+      'lib/features/learn/',
+    ];
+    final gamificationPublicMarker = 'gamification/public.dart';
+
+    for (final root in allowedSourceRoots) {
+      test('$root reaches gamification only through public.dart', () {
+        final sourceDir = Directory(root);
+        expect(sourceDir.existsSync(), isTrue, reason: 'missing $root');
+
+        final offenders = <String>[];
+        for (final entity in sourceDir.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) continue;
+          offenders.addAll(
+            _forbiddenGamificationInternalImports(
+              entity.path,
+              entity.readAsStringSync(),
+              gamificationPublicMarker,
+            ),
+          );
+        }
+        expect(offenders, isEmpty, reason: offenders.join('\n'));
+      });
+    }
+
+    test('the boundary detector flags a non-public gamification import', () {
+      const directImport =
+          "import 'package:strumsight/features/gamification/data/local_reward_ledger_repository.dart';";
+      expect(
+        _forbiddenGamificationInternalImports(
+          'lib/features/practice/application/gamification_practice_adapter.dart',
+          directImport,
+          gamificationPublicMarker,
+        ),
+        <String>[
+          'lib/features/practice/application/gamification_practice_adapter.dart '
+              '-> package:strumsight/features/gamification/data/'
+              'local_reward_ledger_repository.dart',
+        ],
+      );
+    });
+
+    test('the boundary detector accepts the public.dart barrel', () {
+      const allowedImport =
+          "import 'package:strumsight/features/gamification/public.dart';";
+      expect(
+        _forbiddenGamificationInternalImports(
+          'lib/features/practice/application/gamification_practice_adapter.dart',
+          allowedImport,
+          gamificationPublicMarker,
+        ),
+        isEmpty,
+      );
+    });
+  });
+
+  // E08-R26 — Cross-feature gamification adapter boundary (A6).
+  //
+  // Four new adapter files in the analyze / vision / ai_tutor /
+  // practice_generator features must import gamification ONLY through
+  // its `public.dart` barrel. They must also import their OWN source
+  // feature only through the feature's public barrels — including the
+  // nested `vision/domain/integration/public.dart` barrel for the
+  // vision adapter (ADR 0392 §0.0/3 + §0.0/6).
+  //
+  // The four adapter paths are in the brief's allowed list; this
+  // group ensures no production edit sneaks an internal import past
+  // the architecture guard.
+  group('cross-feature gamification adapter boundary — A6 (E08-R26)', () {
+    final adapters = <String>[
+      'lib/features/analyze/application/gamification_analysis_adapter.dart',
+      'lib/features/vision/application/gamification_vision_adapter.dart',
+      'lib/features/ai_tutor/application/gamification_tutor_adapter.dart',
+      'lib/features/practice_generator/application/gamification_plan_adapter.dart',
+    ];
+
+    test('each adapter reaches gamification only through public.dart', () {
+      final offenders = <String>[];
+      for (final path in adapters) {
+        final source = File(path).readAsStringSync();
+        offenders.addAll(
+          _forbiddenGamificationInternalImports(
+            path,
+            source,
+            'gamification/public.dart',
+          ),
+        );
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('each adapter reaches its OWN source feature only through '
+        'public.dart barrels', () {
+      final offenders = <String>[];
+      for (final path in adapters) {
+        final source = File(path).readAsStringSync();
+        offenders.addAll(
+          _forbiddenFeatureInternalImports(
+            path,
+            source,
+            _ownFeaturePublicMarkers(path),
+          ),
+        );
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('each adapter does NOT import any other feature\'s internals '
+        '(cross-feature bleed guard)', () {
+      final offenders = <String>[];
+      for (final path in adapters) {
+        final source = File(path).readAsStringSync();
+        offenders.addAll(
+          _forbiddenOtherFeatureImports(path, source, _ownFeature(path)),
+        );
+      }
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the boundary detector flags an internal source-feature import', () {
+      const directImport =
+          "import 'package:strumsight/features/analyze/model/analyze_result.dart';";
+      expect(
+        _forbiddenFeatureInternalImports(
+          'lib/features/analyze/application/gamification_analysis_adapter.dart',
+          directImport,
+          const <String>{
+            'analyze/public.dart',
+            'analyze/domain/integration/public.dart',
+          },
+        ),
+        <String>[
+          'lib/features/analyze/application/gamification_analysis_adapter.dart '
+              '-> package:strumsight/features/analyze/model/analyze_result.dart',
+        ],
+      );
+    });
+
+    test(
+      'the boundary detector accepts the vision nested integration barrel',
+      () {
+        const allowedImport =
+            "import 'package:strumsight/features/vision/domain/integration/public.dart';";
+        expect(
+          _forbiddenFeatureInternalImports(
+            'lib/features/vision/application/gamification_vision_adapter.dart',
+            allowedImport,
+            const <String>{
+              'vision/public.dart',
+              'vision/domain/integration/public.dart',
+            },
+          ),
+          isEmpty,
+        );
+      },
+    );
+  });
+
+  // E09-R05: Community enters as a new feature-domain root. Per
+  // ADR 0399 §1 / §5.1 the Community domain MUST stay
+  // framework-free; the cross-feature boundary uses public.dart as
+  // the SOLE cross-feature entry point. The test groups here mirror
+  // the E07-R02 / E08-R02 minimal pattern: a recursive scan of the
+  // domain tree plus explicit boundary tests against the cross-
+  // feature import shape. Running the same scan without a new
+  // `tool/check_architecture.dart` entry keeps this round inside
+  // its `allowed_paths` (ADR 0399 2. döntés).
+  group('community domain stays framework-free (E09-R05)', () {
+    test(
+      'no framework, storage, wall-clock, or random source in the domain',
+      () {
+        final domainDir = Directory('lib/features/community/domain');
+        expect(domainDir.existsSync(), isTrue);
+
+        final offenders = <String>[];
+        for (final entity in domainDir.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) continue;
+          offenders.addAll(
+            _forbiddenCommunityDomainMarkerOffenders(
+              entity.path,
+              entity.readAsStringSync(),
+            ),
+          );
+        }
+
+        expect(offenders, isEmpty, reason: offenders.join('\n'));
+      },
+    );
+
+    test('the boundary detector flags a direct Flutter import', () {
+      const directImport = "import 'package:flutter/foundation.dart';";
+
+      expect(
+        _forbiddenCommunityDomainMarkerOffenders(
+          'community_profile.dart',
+          directImport,
+        ),
+        <String>['community_profile.dart contains "package:flutter/"'],
+      );
+    });
+
+    test('the boundary detector flags a direct DateTime.now() call', () {
+      const directCall = 'final now = DateTime.now();';
+
+      expect(
+        _forbiddenCommunityDomainMarkerOffenders(
+          'cursor_page.dart',
+          directCall,
+        ),
+        <String>['cursor_page.dart contains "DateTime.now("'],
+      );
+    });
+  });
+
+  group('community is reachable only through public.dart (E09-R05)', () {
+    test('everywhere under lib/ imports community only via public.dart', () {
+      final libDir = Directory('lib');
+      final offenders = <String>[];
+      for (final entity in libDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        // Skip the community feature itself — its INTERNAL imports
+        // of its own domain are legal (community may import its own
+        // entities / value objects).
+        if (entity.path.contains('/features/community/')) continue;
+        offenders.addAll(
+          _forbiddenCommunityInternalImports(
+            entity.path,
+            entity.readAsStringSync(),
+          ),
+        );
+      }
+
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+
+    test('the boundary detector accepts the community public.dart barrel', () {
+      const allowedImport =
+          "import 'package:strumsight/features/community/public.dart';";
+
+      expect(
+        _forbiddenCommunityInternalImports(
+          'lib/features/analyze/application/example.dart',
+          allowedImport,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('the boundary detector rejects a direct community internal import', () {
+      const directImport =
+          "import 'package:strumsight/features/community/domain/entities/community_post.dart';";
+
+      expect(
+        _forbiddenCommunityInternalImports(
+          'lib/features/analyze/application/example.dart',
+          directImport,
+        ),
+        <String>[
+          'lib/features/analyze/application/example.dart -> '
+              'package:strumsight/features/community/domain/entities/'
+              'community_post.dart',
+        ],
+      );
+    });
+  });
+
+  group('community does not import other features (E09-R05)', () {
+    test('community stays one-way, gated by public.dart as outgoing only', () {
+      // The community feature does not need to import anything from
+      // another feature today (A6, brief §6). If a future round
+      // introduces such an import, this test will catch it and the
+      // team can decide whether the cross-feature boundary needs a
+      // gateway adapter (E08-R26-style). Today the test passes as
+      // long as no community file imports a non-self feature path.
+      final communityDir = Directory('lib/features/community');
+      expect(communityDir.existsSync(), isTrue);
+
+      final offenders = <String>[];
+      for (final entity in communityDir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        offenders.addAll(
+          _forbiddenCommunityOtherFeatureImports(
+            entity.path,
+            entity.readAsStringSync(),
+          ),
+        );
+      }
+
+      expect(offenders, isEmpty, reason: offenders.join('\n'));
+    });
+  });
 }
 
 void _write(Directory project, String relativePath, String contents) {
@@ -897,6 +1198,25 @@ List<String> _forbiddenGamificationPresentationStorageMarkerOffenders(
   ];
 }
 
+/// Flags any import/export of `features/gamification/...` whose target is
+/// NOT the public.dart barrel. Used by the E08-R24 A4 architecture guard
+/// to verify the practice and learn features stay on the public surface
+/// of the gamification feature (ADR 0390 1. döntés).
+List<String> _forbiddenGamificationInternalImports(
+  String path,
+  String source,
+  String publicMarker,
+) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when uri.contains('gamification/') && !uri.endsWith(publicMarker))
+        '$path -> $uri',
+  ];
+}
+
 /// Returns [source] with `//` and `/* */` comments always omitted, and
 /// string-literal contents (single/double/triple-quoted) omitted only when
 /// [maskStrings] is true. String and comment boundaries are always parsed
@@ -946,4 +1266,167 @@ String _withoutTrivia(String source, {required bool maskStrings}) {
     index++;
   }
   return buffer.toString();
+}
+
+// ── E08-R26 helpers ──────────────────────────────────────────────────────
+
+/// The OWN feature for an adapter path (used to decide which feature's
+/// internals are off-limits when checking imports).
+String _ownFeature(String adapterPath) {
+  // Path layout is `lib/features/<feature>/application/...`.
+  final segments = adapterPath.split('/');
+  // 0: 'lib'  1: 'features'  2: '<feature>'
+  return segments[2];
+}
+
+/// Public-barrel markers the OWN feature exposes to cross-feature
+/// consumers. The vision adapter is the special case: its nested
+/// `domain/integration/public.dart` barrel is ALSO a recognised
+/// cross-feature boundary (ADR 0392 §0.0/6).
+Set<String> _ownFeaturePublicMarkers(String adapterPath) {
+  final feature = _ownFeature(adapterPath);
+  final markers = <String>{'$feature/public.dart'};
+  if (feature == 'vision') {
+    markers.add('vision/domain/integration/public.dart');
+  }
+  return markers;
+}
+
+/// Flags any import whose target lives under `lib/features/<feature>/...`
+/// but is NOT one of [allowedMarkers] (each marker is matched as the
+/// final path segment, e.g. `'analyze/public.dart'`).
+List<String> _forbiddenFeatureInternalImports(
+  String path,
+  String source,
+  Set<String> allowedMarkers,
+) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when _isOffendingImport(
+            uri: uri,
+            feature: _ownFeature(path),
+            allowedMarkers: allowedMarkers,
+          ))
+        '$path -> $uri',
+  ];
+}
+
+/// Flags any import that targets a DIFFERENT feature's internals —
+/// i.e. any `lib/features/<otherFeature>/...` path other than the
+/// adapter's own [ownFeature]. Cross-feature imports must go through
+/// the destination feature's `public.dart` barrel.
+List<String> _forbiddenOtherFeatureImports(
+  String path,
+  String source,
+  String ownFeature,
+) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when _isCrossFeatureInternalImport(uri: uri, ownFeature: ownFeature))
+        '$path -> $uri',
+  ];
+}
+
+/// `true` when [uri] targets a file inside the same feature but is
+/// not one of the [allowedMarkers].
+bool _isOffendingImport({
+  required String uri,
+  required String feature,
+  required Set<String> allowedMarkers,
+}) {
+  if (!uri.contains('features/$feature/')) return false;
+  // Match the trailing `.../public.dart` segment regardless of prefix.
+  for (final marker in allowedMarkers) {
+    if (uri.endsWith(marker)) return false;
+  }
+  return true;
+}
+
+/// `true` when [uri] targets a file inside a DIFFERENT feature, and
+/// does NOT end in that feature's `public.dart` barrel.
+bool _isCrossFeatureInternalImport({
+  required String uri,
+  required String ownFeature,
+}) {
+  // Find the `<feature>/` segment after `features/`.
+  final match = RegExp(r'features/([^/]+)/').firstMatch(uri);
+  if (match == null) return false;
+  final feature = match.group(1);
+  if (feature == null || feature == ownFeature) return false;
+  // Must go through `<feature>/public.dart` to be allowed.
+  return !uri.endsWith('/public.dart');
+}
+
+// ── E09-R05 helpers ─────────────────────────────────────────────────────
+
+/// Forbidden import-URI markers for the Community domain
+/// (E09-R05 ADR 0399 §1). Mirrors the gamification marker set
+/// (E08-R02) — adding a Community-specific storage plugin
+/// (`flutter_secure_storage`) would also belong here, but the
+/// backend JWT path is delivered through the central `auth` feature.
+const _communityImportUriMarkers = [
+  'package:flutter/',
+  'package:flutter_riverpod/',
+  'package:riverpod/',
+  'package:shared_preferences/',
+  'package:flutter_secure_storage/',
+  'package:sqflite/',
+  'dart:ui',
+];
+
+/// Flags any forbidden framework marker in [path]'s [content] — the
+/// E09-R05 analog of `_forbiddenGamificationDomainMarkerOffenders`.
+List<String> _forbiddenCommunityDomainMarkerOffenders(
+  String path,
+  String content,
+) {
+  final withoutComments = _withoutTrivia(content, maskStrings: false);
+  final withoutCommentsAndStrings = _withoutTrivia(content, maskStrings: true);
+  return [
+    for (final marker in _communityImportUriMarkers)
+      if (withoutComments.contains(marker)) '$path contains "$marker"',
+    for (final marker in _callMarkers)
+      if (withoutCommentsAndStrings.contains(marker))
+        '$path contains "$marker"',
+  ];
+}
+
+/// Flags any cross-feature import of the Community feature that is
+/// NOT the `community/public.dart` barrel. Mirrors
+/// `_forbiddenGamificationInternalImports` for the Community side
+/// (A5, brief §6).
+List<String> _forbiddenCommunityInternalImports(String path, String source) {
+  const publicMarker = 'community/public.dart';
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when uri.contains('community/') && !uri.endsWith(publicMarker))
+        '$path -> $uri',
+  ];
+}
+
+/// Flags any import from a Community file that targets another
+/// feature's internals (A6, brief §6). The Community feature today
+/// has no cross-feature consumer — any such import lands here as a
+/// tripwire.
+List<String> _forbiddenCommunityOtherFeatureImports(
+  String path,
+  String source,
+) {
+  final withoutComments = _withoutTrivia(source, maskStrings: false);
+  final importMatches = _dartDirectiveUri.allMatches(withoutComments);
+  return [
+    for (final match in importMatches)
+      if (match.group(1) case final uri?
+          when _isCrossFeatureInternalImport(uri: uri, ownFeature: 'community'))
+        '$path -> $uri',
+  ];
 }

@@ -25,12 +25,14 @@ allowed_paths = [
   "test/features/tuner/tuner_ui_mapping_test.dart",
   "test/features/tuner/tuner_route_cleanup_test.dart",
   "test/features/metronome/metronome_beat_sync_test.dart",
+  "test/ui/goldens/",
   "docs/rounds/e13-r19-tuner-and-metronome-ui.md",
 ]
 gate_tests = [
   "test/features/tuner/tuner_ui_mapping_test.dart",
   "test/features/tuner/tuner_route_cleanup_test.dart",
   "test/features/metronome/metronome_beat_sync_test.dart",
+  "test/ui/goldens/e13_r19_screens_golden_test.dart",
 ]
 native_gate = false
 ```
@@ -135,6 +137,7 @@ lapot.
 | A5 | A referenciahang és az audio-fókusz a route elhagyásakor felszabadul | `tuner_route_cleanup_test.dart` |
 | A6 | A tap tempo kiugró-kezelése változatlan | a meglévő tesztek zöldek |
 | A7 | 2.0 text scale és landscape mellett nincs túlcsordulás | `tuner_ui_mapping_test.dart` |
+| A8 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r19_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -146,6 +149,7 @@ lapot.
 | A referenciahang tovább szól kilépés után | **A5** |
 | A kiugró tap tempo átírása | A6 |
 | Fix magasságú hangoló-fejléc | A7 |
+| A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A8** |
 
 **A „hangolt" tartomány három kötelező cellája** (a küszöb: **±5 cent**):
 
@@ -162,8 +166,25 @@ kell lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/tuner/tuner_ui_mapping_test.dart test/features/tuner/tuner_route_cleanup_test.dart test/features/metronome/metronome_beat_sync_test.dart
+tools/round-gate.sh test/features/tuner/tuner_ui_mapping_test.dart test/features/tuner/tuner_route_cleanup_test.dart test/features/metronome/metronome_beat_sync_test.dart test/ui/goldens/e13_r19_screens_golden_test.dart
 ```
+
+**A golden-felvétel (A8) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
+minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
+keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
+KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+
+```bash
+~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r19_screens_golden_test.dart
+```
+
+A keletkezett PNG-ket **commitolni kell** — enélkül az A8 nem teljesült. A
+márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
+meglévő golden-teszt mért viselkedése, az elrendezést, méretezést és színeket
+nem érinti. MIÉRT ez a kör dolga és nem az E13-R36-é: a záró vizuális
+regressziós kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt,
+hogy a képernyő eleve csúnya-e, a saját körében kell látni.
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
 `&&`-lánc vagy bármilyen szűrés (L09); a `flutter analyze` és `flutter test`

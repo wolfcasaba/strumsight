@@ -33,6 +33,13 @@ ROOT = Path(__file__).resolve().parents[2]
 DRIVER = ROOT / "tools" / "round-pipeline.sh"
 REGISTRY_PATH = ROOT / "docs" / "execution" / "engine-registry.tsv"
 
+# A Codex-oldal ÉLESZTŐ kapcsolója. 2026-08-21 óta a driver script-defaultja
+# `fallback_engine=none` (user-döntés: „lejárt a GPT kvóta"), és az
+# `orchestrator_available` ezen méri a `terra`/`sol` szék elérhetőségét. A D1/D2
+# gépezet változatlan, ezért az azt mérő cellák EXPLICIT env-vel élesztik fel a
+# Codex-oldalt — a mérce nem gyengül, csak a default mozdult.
+CODEX_SIDE_ALIVE = {"PIPELINE_FALLBACK_ENGINE": "terra"}
+
 
 def driver(*args: str, state: Path, **env: str) -> subprocess.CompletedProcess:
     # P1-fix (2026-08-20): a commitolt docs/execution/orchestrator-rotation
@@ -88,7 +95,7 @@ class PerRoundRotationTest(unittest.TestCase):
 
             first = driver(
                 "--next-orchestrator", "E06-R23", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(first.stdout.strip(), "terra", first.stderr)
             # az ELSŐ dispatch rögzít, és a globális léptető-fájl is frissül —
@@ -97,7 +104,7 @@ class PerRoundRotationTest(unittest.TestCase):
 
             second = driver(
                 "--next-orchestrator", "E06-R23", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(
                 second.stdout.strip(),
@@ -114,13 +121,15 @@ class PerRoundRotationTest(unittest.TestCase):
             # E06-R23-hoz nincs rögzítés — csak E06-R24-et kérünk, ami ÚJ kör
             result = driver(
                 "--next-orchestrator", "E06-R24", state=state,
-                PIPELINE_ORCH_ROTATION="alternate",
+                PIPELINE_ORCH_ROTATION="alternate", **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(result.stdout.strip(), "claude", result.stderr)
 
-    def test_the_sol_default_pins_every_new_round_to_sol(self) -> None:
-        """USER-DÖNTÉS 2026-08-20 (Pro-keret égetése): rotáció-env nélkül az
-        ÚJ kör a Solhoz rögzül, és a második dispatch is azt kapja vissza.
+    def test_the_claude_default_pins_every_new_round_to_claude(self) -> None:
+        """USER-DÖNTÉS 2026-08-21 („lejárt a GPT kvóta"): rotáció-env nélkül
+        az ÚJ kör a Claude-hoz rögzül, és a második dispatch is azt kapja
+        vissza — a rögzítés GÉPEZETE (D1) a defaulttól független, csak a
+        rögzített érték más, mert a Codex-oldal nem futtatható.
 
         A DEFAULT mérése nem támaszkodhat az ambiens `PIPELINE_*`
         override-okra (mért szivárgás: E99-R14 H3), ezért ez a cella
@@ -145,13 +154,13 @@ class PerRoundRotationTest(unittest.TestCase):
             state = Path(name)
             (state / "orchestrator-last").write_text("claude\n", encoding="utf-8")
             first = hermetic("--next-orchestrator", "E08-R07", state=state)
-            self.assertEqual(first.stdout.strip(), "sol", first.stderr)
+            self.assertEqual(first.stdout.strip(), "claude", first.stderr)
             self.assertEqual(
                 (state / "orchestrator-round" / "E08-R07").read_text(encoding="utf-8").strip(),
-                "sol",
+                "claude",
             )
             second = hermetic("--next-orchestrator", "E08-R07", state=state)
-            self.assertEqual(second.stdout.strip(), "sol", second.stderr)
+            self.assertEqual(second.stdout.strip(), "claude", second.stderr)
 
 
 class ResumeImplementerFromBranchTest(unittest.TestCase):
@@ -323,7 +332,9 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             # oszt kvótát a claude-dal SEM, terra-val SEM.
             (state / "orchestrator-round").mkdir()
             (state / "orchestrator-round" / "E06-R23").write_text("terra\n", encoding="utf-8")
-            result = driver("--resume-orchestrator", "E06-R23", "minimax", state=state)
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "minimax", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(result.stdout.strip(), "terra", result.stderr)
 
     def test_a_sol_pin_facing_a_terra_implementer_is_kept(self) -> None:
@@ -336,24 +347,52 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             state = Path(name)
             (state / "orchestrator-round").mkdir()
             (state / "orchestrator-round" / "E08-R07").write_text("sol\n", encoding="utf-8")
-            result = driver("--resume-orchestrator", "E08-R07", "terra", state=state)
+            result = driver(
+                "--resume-orchestrator", "E08-R07", "terra", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(result.stdout.strip(), "sol", result.stderr)
 
     def test_on_conflict_the_orchestrator_flips_not_the_implementer(self) -> None:
         """MÉRT eset: a kör orchestrátora 'claude'-ra billent (globális bug),
         miközben az ágon a claude-kvótát fogyasztó `sonnet-impl` commitolt.
         A helyes feloldás: az orchestrátor megy 'terra'-ra -- az implementer
-        `sonnet-impl` marad (a hívó ezt nem is adja át módosításra)."""
+        `sonnet-impl` marad (a hívó ezt nem is adja át módosításra).
+
+        2026-08-23 óta a claude-ág is MODELL-azonosságon mér (orch_pair_model),
+        pontosan úgy, ahogy a sol/terra ág mindig is -- az ütközést ezért itt
+        EXPLICIT kell előállítani: a UI-pár ugyanarra a claude-sonnet-5-re
+        mutat, amit az implementer futtat. Ez a fail-closed ág mérése; hogy a
+        MAI default (Opus 5 a Sonnet fölött) NEM ütközik, azt a következő
+        cella méri."""
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
             (state / "orchestrator-round").mkdir()
             (state / "orchestrator-round" / "E06-R23").write_text("claude\n", encoding="utf-8")
-            result = driver("--resume-orchestrator", "E06-R23", "sonnet-impl", state=state)
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "sonnet-impl", state=state,
+                PIPELINE_UI_ORCH_MODEL="claude-sonnet-5", **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(
                 result.stdout.strip(),
                 "terra",
                 "ütközésnél az orchestrátornak kell billennie, nem HALT_INDEP-nek vagy claude-nak",
             )
+
+    def test_an_opus_pair_facing_the_sonnet_implementer_is_kept(self) -> None:
+        """USER-DÖNTÉS 2026-08-23 (párhuzamos UI-sáv): a 2. slot körein Opus 5
+        max orchestrátor ül a `sonnet-impl` (Sonnet 5 high) implementer fölött.
+        MÁS modell, tehát nem a saját diffjét review-zi -- a folytatásnak a
+        claude-ot kell megtartania, nem billenhet terra-ra és nem halhat
+        H-INDEP-be. A közös Claude-ELŐFIZETÉS a döntés tudatos ára, ugyanaz az
+        osztály, mint a Sol/Terra közös Pro-kerete fent."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            (state / "orchestrator-round").mkdir()
+            (state / "orchestrator-round" / "E06-R23").write_text("claude\n", encoding="utf-8")
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "sonnet-impl", state=state, **CODEX_SIDE_ALIVE
+            )
+            self.assertEqual(result.stdout.strip(), "claude", result.stderr)
 
     def test_a_terra_pin_facing_a_terra_model_implementer_also_flips(self) -> None:
         """A fordított ütközés: a kör orchestrátora 'terra', az ágon egy
@@ -443,7 +482,9 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
             (state / "claude-blocked-until").write_text(
                 f"{int(time.time()) + 3600}\n", encoding="utf-8"
             )
-            result = driver("--resume-orchestrator", "E06-R23", "minimax", state=state)
+            result = driver(
+                "--resume-orchestrator", "E06-R23", "minimax", state=state, **CODEX_SIDE_ALIVE
+            )
             self.assertEqual(
                 result.stdout.strip(),
                 "terra",
@@ -480,3 +521,79 @@ class ResumeOrchestratorConflictTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeadEnginePinTest(unittest.TestCase):
+    """A folytatás-pin nem támaszthat fel HALOTT motort (ADR 0242 D2 határa).
+
+    MÉRT ESET 2026-08-23, élesben: az E13-R05 ágán korábban a `terra`
+    commitolt, ezért a D2 pin a queue `sonnet-impl` sorát felülírta
+    `terra`-ra — miközben a ChatGPT Pro előfizetés elfogyott (user, ugyanaznap:
+    „codex terra és sol már nincs többé"). Két kár egyszerre: a dispatch
+    menthetetlenül elbukott volna a terra-híváson, ÉS az orchestrátor-pár is a
+    pinelt motorhoz igazodik, így a kör Sonnet 5 `high` vezénylést kapott a
+    szándékolt Opus 5 `max` helyett (mérve a futó process argv-jében).
+
+    A pin CÉLJA — ne keveredjenek a motorok egy körön belül — nem teljesíthető,
+    ha a pinelt motor nem él. Ilyenkor a queue sora lép vissza életbe.
+    """
+
+    def runnable(self, engine: str, **env: str) -> bool:
+        environment = dict(os.environ, **env)
+        return (
+            subprocess.run(
+                ["bash", str(DRIVER), "--engine-runnable", engine],
+                capture_output=True,
+                text=True,
+                env=environment,
+                timeout=60,
+            ).returncode
+            == 0
+        )
+
+    def test_the_codex_side_is_not_runnable_while_the_subscription_is_out(self) -> None:
+        for engine in ("codex", "terra", "sol"):
+            with self.subTest(engine=engine):
+                self.assertFalse(self.runnable(engine))
+
+    def test_the_available_engines_stay_runnable(self) -> None:
+        for engine in ("minimax", "sonnet-impl"):
+            with self.subTest(engine=engine):
+                self.assertTrue(self.runnable(engine))
+
+    def test_the_list_is_one_switch_for_the_subscription_coming_back(self) -> None:
+        # `${VAR-...}`, NEM `:-`: az EXPLICIT üres érték mindent futtathatóvá
+        # tesz. Ez a visszakapcsolás módja (~egy hónap múlva) és egyben a
+        # bizonyíték, hogy a lista nem égett bele a döntési ágba.
+        self.assertTrue(self.runnable("terra", PIPELINE_UNRUNNABLE_ENGINES=""))
+
+    def test_a_pin_on_a_dead_engine_falls_back_to_the_queue_row(self) -> None:
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            bare = make_round_branch(root, "origin", "terra", "e13-r05-spacing-and-surfaces")
+            environment = dict(os.environ, PIPELINE_ROUND_REMOTE=str(bare))
+
+            def resume(**extra: str) -> str:
+                return subprocess.run(
+                    ["bash", str(DRIVER), "--resume-implementer", "E13-R05"],
+                    capture_output=True,
+                    text=True,
+                    env=dict(environment, **extra),
+                    timeout=60,
+                ).stdout.strip()
+
+            # A pin FORRÁSA változatlanul mér: az ág prefixe `terra`.
+            self.assertEqual(
+                subprocess.run(
+                    ["bash", str(DRIVER), "--branch-implementer", "E13-R05"],
+                    capture_output=True,
+                    text=True,
+                    env=environment,
+                    timeout=60,
+                ).stdout.strip(),
+                "terra",
+            )
+            # ...de a halott motorra a pin ELESIK (üres = a queue sora dönt).
+            self.assertEqual(resume(), "")
+            # Az előfizetés visszatérésekor ugyanaz az ág újra pinel.
+            self.assertEqual(resume(PIPELINE_UNRUNNABLE_ENGINES=""), "terra")
