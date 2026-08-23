@@ -190,3 +190,94 @@ spacing 5/5, architecture, secrets 3189/0, l10n 1532/1532).
 
 A correctness review **APPROVED**. Merge csak az exact-SHA Full Gate/Router CI
 és a friss-main landolási feltételek zöld eredménye után engedett.
+
+---
+
+# E13-R05 — Folytatás-review (A13 katalógus-contract)
+
+Brief: `docs/rounds/e13-r05-spacing-and-surfaces.md` (§0.0.1 + §0.0.2)
+Diff: `a212b8fb..2af6eca4` · Implementer: `sonnet-impl` (claude-sonnet-5)
+Reviewer: Claude (Opus 5), orchestrátor-szék · Dátum: 2026-08-23
+Verdikt: **APPROVED**
+
+## Összegzés
+
+Nyitott BLOCKER: 0 · MAJOR: 0 · MINOR: 1 · NOTE: 0
+
+A folytatás egyetlen nyitott munkája a §0.0.1 által megnyitott **A13** cella
+volt: a `component_catalog_test.dart` három `find.byType(Card)` elvárásának
+átállítása `SsCard` + a `SsCard` alá szűkített, pontosan egy `Material`
+leszármazott mérésére. A diff pontosan ennyi (2 útvonal, 60 beszúrás), a
+produkciós Dart-kódhoz nem nyúlt, és a `wrapper` gépi scope-auditja
+`scope_audit=ok` (base `a212b8fb`, 2 módosított útvonal).
+
+## Acceptance criteria
+
+| # | Teljesült | Bizonyíték |
+|---|---|---|
+| A13 | ✅ | `find.byType(SsCard)` + `find.descendant(of: SsCard, matching: Material)` `findsOneWidget` mindhárom cellában; reviewer-mutáció pirosra viszi (lásd P1) |
+| route-kapu (ADR 0273) | ✅ | a `default-off` és a három `createRouteForTesting` null-cella érintetlen; P3 bizonyítja, hogy tényleg fog |
+| dark/light smoke | ✅ | mindkét téma cellája zöld, a pumpelés változatlan |
+| A1–A12 | ✅ (változatlan) | az előző review-ban lezárva; a folytatás nem nyúlt hozzájuk |
+
+## Scope-audit
+
+Wrapper: `scope_audit=ok`, `scope_audit_base=a212b8fb…`, `scope_audit_changed=2`.
+Ténylegesen módosított útvonalak:
+`test/core/design_system/component_catalog_test.dart` és
+`docs/rounds/e13-r05-spacing-and-surfaces.md` (§10) — mindkettő az
+`allowed_paths` listán. Listán kívüli fájl nincs. A jelzéskori `dirty_files=1`
+után a tényleges `git status --short` üres volt (a jelzésfájl maga) — nem
+maradt el nem fogadott diff.
+
+## Gate-bizonyíték (független, izolált klón)
+
+Klón: `/tmp/review-e13-r05-cont`, exact commit `2af6eca4`,
+`tools/prepare-flutter-generated.sh` után. A §7 szerinti **háromútvonalas**
+gate csővezeték nélkül, teljes kimenettel:
+
+- `[1] format` 1885 fájl / 0 változás — zöld
+- `[2] analyze` `No issues found!` — zöld
+- `[3] ss_surface_test.dart` **17/17** — zöld
+- `[4] spacing_grid_test.dart` **5/5** — zöld
+- `[5] component_catalog_test.dart` **8/8** — zöld
+- `[6] architecture` OK (12 allowlisted deviation) — zöld
+- `[7] secrets` 3482 fájl / 0 lelet — zöld
+- `[8] l10n` parity OK (en → hu, 1755 üzenet) — zöld
+
+`MINDEN GATE ZÖLD`, **exit 0**.
+
+## Valódi-sértés próbák (reviewer, eldobható)
+
+| # | Rontás | Mért eredmény |
+|---|---|---|
+| **P1** | `SsCard.build()` `SsSurface`-e külső `Card(...)` rétegbe csomagolva (második `Material`) | mindhárom cella PIROS, `+5 -3`; `Found 2 widgets with type "Material" descending from …` / `is too many` |
+| **P2** | az `SsCard` kivéve a katalógus-képernyőről | mindhárom cella PIROS, `Found 0 widgets with type "SsCard"` — a finder **nem vakcella** |
+| **P3** | a route-kapu `\|\|` → `&&` lazítása | a `default-off` és két null-cella PIROS, `Expected: null / Actual: MaterialPageRoute<void>` — az ADR 0273 fejlesztői-eszköz szerződés tényleg mérve van |
+
+Minden rontás visszaállítva; `git diff --exit-code` 0, a review-klón tiszta.
+
+## Megállapítások
+
+### M1 — MINOR — a §10 „Futtatott ellenőrzések" a RÉGI, kétútvonalas gate-sort őrzi
+
+- **Fájl:** `docs/rounds/e13-r05-spacing-and-surfaces.md` §10
+- **Mit mértem:** a §10 zárólistája továbbra is a javítókör
+  `tools/round-gate.sh <ss_surface_test> <spacing_grid_test>` hívását rögzíti,
+  a §7 által előírt **háromútvonalas** (a `component_catalog_test.dart`-ot is
+  tartalmazó) futást nem vezeti át a zárólistába.
+- **Miért nem MAJOR:** a háromútvonalas gate ténylegesen lefutott (az
+  implementer logja tartalmazza a pontos hívást, és a wrapper `gate_shape=ok`
+  jelzést adott), a §10 A13-szakasza pedig külön dokumentálja a
+  `component_catalog_test.dart` 8/8-át. Ettől függetlenül a fenti,
+  reviewer-oldali izolált klónban **magam is lefuttattam** a teljes
+  háromútvonalas gate-et, exit 0-val — a mérce tehát nem az implementer
+  jelentésén nyugszik. Dokumentációs pontatlanság, nem mérce-hiány.
+- **Javasolt kezelés:** nem blokkol; a következő, e fájlt érintő kör
+  frissítheti a sort.
+
+## Merge-döntés
+
+A correctness review **APPROVED** (0 nyitott BLOCKER/MAJOR). A merge feltétele
+változatlanul az exact-SHA `full-gate.yml` **és** `router-ci.yml` zöldje a
+merge SHA-ján (ADR 0086 §2, ADR 0171 §3), valamint a friss-main landolás.
