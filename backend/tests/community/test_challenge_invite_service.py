@@ -667,9 +667,13 @@ def test_a5_concurrent_accept_and_cancel_is_deterministic(session_factory) -> No
                 invite_public_id=invite.public_id,
                 now=now + timedelta(seconds=1),
             )
-            return ("accept", None) if accepted.state == CHALLENGE_INVITE_STATE_ACCEPTED else (
-                "accept-unexpected",
-                AssertionError(f"unexpected accept state: {accepted.state}"),
+            return (
+                ("accept", None)
+                if accepted.state == CHALLENGE_INVITE_STATE_ACCEPTED
+                else (
+                    "accept-unexpected",
+                    AssertionError(f"unexpected accept state: {accepted.state}"),
+                )
             )
         except Exception as exc:  # noqa: BLE001 — race outcome
             return ("accept-raised", exc)
@@ -685,9 +689,13 @@ def test_a5_concurrent_accept_and_cancel_is_deterministic(session_factory) -> No
                 invite_public_id=invite.public_id,
                 now=now + timedelta(seconds=1),
             )
-            return ("cancel", None) if cancelled.state == CHALLENGE_INVITE_STATE_CANCELLED else (
-                "cancel-unexpected",
-                AssertionError(f"unexpected cancel state: {cancelled.state}"),
+            return (
+                ("cancel", None)
+                if cancelled.state == CHALLENGE_INVITE_STATE_CANCELLED
+                else (
+                    "cancel-unexpected",
+                    AssertionError(f"unexpected cancel state: {cancelled.state}"),
+                )
             )
         except Exception as exc:  # noqa: BLE001 — race outcome
             return ("cancel-raised", exc)
@@ -777,9 +785,7 @@ def test_a5_real_violation_probe_unconditional_update_breaks_race(
     # filter and the rowcount check).
     original_accept = service_module.accept_invite
 
-    def _accept_no_check(
-        db, *, invitee_public_id, invite_public_id, now
-    ):
+    def _accept_no_check(db, *, invitee_public_id, invite_public_id, now):
         # Replicate the visibility / block guards so the
         # probe does not crash on a missing row.
         invite_row = (
@@ -829,16 +835,20 @@ def test_a5_real_violation_probe_unconditional_update_breaks_race(
             barrier.wait(timeout=5)
             # Cancel still goes through the production path —
             # the probe only patches ``accept_invite``.
-            result = original_accept.__wrapped__(
-                db_b,
-                invitee_public_id=invitee.public_id,
-                invite_public_id=invite.public_id,
-                now=now + timedelta(seconds=1),
-            ) if hasattr(original_accept, "__wrapped__") else original_accept(
-                db_b,
-                invitee_public_id=invitee.public_id,
-                invite_public_id=invite.public_id,
-                now=now + timedelta(seconds=1),
+            result = (
+                original_accept.__wrapped__(
+                    db_b,
+                    invitee_public_id=invitee.public_id,
+                    invite_public_id=invite.public_id,
+                    now=now + timedelta(seconds=1),
+                )
+                if hasattr(original_accept, "__wrapped__")
+                else original_accept(
+                    db_b,
+                    invitee_public_id=invitee.public_id,
+                    invite_public_id=invite.public_id,
+                    now=now + timedelta(seconds=1),
+                )
             )
             return result.state
         except Exception as exc:  # noqa: BLE001 — race outcome
@@ -912,20 +922,15 @@ def test_a4_real_violation_probe_idempotency_check_removed(
             CommunityChallengeInvite,
             CHALLENGE_INVITE_STATE_SENT,
         )
+
         inviter_row = (
-            db.query(CommunityProfile)
-            .filter_by(public_id=inviter_public_id)
-            .one()
+            db.query(CommunityProfile).filter_by(public_id=inviter_public_id).one()
         )
         invitee_row = (
-            db.query(CommunityProfile)
-            .filter_by(public_id=invitee_public_id)
-            .one()
+            db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one()
         )
         challenge_row = (
-            db.query(CommunityChallenge)
-            .filter_by(public_id=challenge_public_id)
-            .one()
+            db.query(CommunityChallenge).filter_by(public_id=challenge_public_id).one()
         )
         invite = CommunityChallengeInvite(
             challenge_id=challenge_row.id,
@@ -948,9 +953,7 @@ def test_a4_real_violation_probe_idempotency_check_removed(
             raise
         return invite
 
-    monkeypatch.setattr(
-        service_module, "create_invite", _create_no_idempotency
-    )
+    monkeypatch.setattr(service_module, "create_invite", _create_no_idempotency)
 
     # First create — succeeds.
     first = _create_no_idempotency(

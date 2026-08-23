@@ -148,9 +148,7 @@ class InvalidChallengeInviteTransition(Exception):
     """
 
     def __init__(self, current_state: str) -> None:
-        super().__init__(
-            f"invalid invite transition; current_state={current_state!r}"
-        )
+        super().__init__(f"invalid invite transition; current_state={current_state!r}")
         self.current_state = current_state
 
 
@@ -271,31 +269,21 @@ def _UTC():
 def _resolve_challenge_by_public_id(
     db: Session, public_id: uuid.UUID
 ) -> CommunityChallenge | None:
-    return (
-        db.query(CommunityChallenge)
-        .filter_by(public_id=public_id)
-        .one_or_none()
-    )
+    return db.query(CommunityChallenge).filter_by(public_id=public_id).one_or_none()
 
 
 def _resolve_invite_by_public_id(
     db: Session, public_id: uuid.UUID
 ) -> CommunityChallengeInvite | None:
     return (
-        db.query(CommunityChallengeInvite)
-        .filter_by(public_id=public_id)
-        .one_or_none()
+        db.query(CommunityChallengeInvite).filter_by(public_id=public_id).one_or_none()
     )
 
 
 def _resolve_profile_by_internal_id(
     db: Session, internal_id: int
 ) -> CommunityProfile | None:
-    return (
-        db.query(CommunityProfile)
-        .filter_by(id=internal_id)
-        .one_or_none()
-    )
+    return db.query(CommunityProfile).filter_by(id=internal_id).one_or_none()
 
 
 def _existing_invite_by_idempotency_key(
@@ -437,10 +425,14 @@ def create_invite(
     ``created_at`` / ``updated_at`` (Kör 11 caller-supplied
     clock precedent).
     """
-    inviter = db.query(CommunityProfile).filter_by(public_id=inviter_public_id).one_or_none()
+    inviter = (
+        db.query(CommunityProfile).filter_by(public_id=inviter_public_id).one_or_none()
+    )
     if inviter is None:
         raise ValueError("inviter community profile not found")
-    invitee = db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    invitee = (
+        db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    )
     if invitee is None:
         raise ValueError("invitee community profile not found")
     if inviter.id == invitee.id:
@@ -560,7 +552,9 @@ def accept_invite(
     # Authorization: only the invitee may accept. A
     # non-invitee viewer must not learn the invite's state
     # from a 409-vs-200 split — the D7 uniform 404 applies.
-    invitee = db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    invitee = (
+        db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    )
     if invitee is None:
         raise ChallengeInviteNotFound("invite not found")
     if invite.invitee_profile_id != invitee.id:
@@ -582,9 +576,7 @@ def accept_invite(
         # A2 / A7 — server-time expiry. The row's
         # ``expires_at`` is the contract; a clock skew on
         # the client must not extend the window.
-        raise InvalidChallengeInviteTransition(
-            current_state=invite.state
-        )
+        raise InvalidChallengeInviteTransition(current_state=invite.state)
 
     # Race-test seam (L421, D5) — the seam sits
     # IMMEDIATELY before the conditional UPDATE so the
@@ -597,9 +589,7 @@ def accept_invite(
         update(CommunityChallengeInvite)
         .where(
             CommunityChallengeInvite.id == invite.id,
-            CommunityChallengeInvite.state.in_(
-                list(INVITE_SOURCE_STATES_FOR_ACCEPT)
-            ),
+            CommunityChallengeInvite.state.in_(list(INVITE_SOURCE_STATES_FOR_ACCEPT)),
         )
         .values(
             state=CHALLENGE_INVITE_STATE_ACCEPTED,
@@ -674,7 +664,9 @@ def decline_invite(
     invite = _resolve_invite_by_public_id(db, invite_public_id)
     if invite is None:
         raise ChallengeInviteNotFound("invite not found")
-    invitee = db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    invitee = (
+        db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    )
     if invitee is None or invite.invitee_profile_id != invitee.id:
         raise ChallengeInviteNotFound("invite not found")
 
@@ -684,9 +676,7 @@ def decline_invite(
         update(CommunityChallengeInvite)
         .where(
             CommunityChallengeInvite.id == invite.id,
-            CommunityChallengeInvite.state.in_(
-                list(INVITE_SOURCE_STATES_FOR_DECLINE)
-            ),
+            CommunityChallengeInvite.state.in_(list(INVITE_SOURCE_STATES_FOR_DECLINE)),
         )
         .values(
             state=CHALLENGE_INVITE_STATE_DECLINED,
@@ -729,7 +719,9 @@ def cancel_invite(
     invite = _resolve_invite_by_public_id(db, invite_public_id)
     if invite is None:
         raise ChallengeInviteNotFound("invite not found")
-    inviter = db.query(CommunityProfile).filter_by(public_id=inviter_public_id).one_or_none()
+    inviter = (
+        db.query(CommunityProfile).filter_by(public_id=inviter_public_id).one_or_none()
+    )
     if inviter is None or invite.inviter_profile_id != inviter.id:
         # D7 uniform 404 — a non-inviter viewer must not
         # learn the invite's state from a 409-vs-200 split.
@@ -741,9 +733,7 @@ def cancel_invite(
         update(CommunityChallengeInvite)
         .where(
             CommunityChallengeInvite.id == invite.id,
-            CommunityChallengeInvite.state.in_(
-                list(INVITE_SOURCE_STATES_FOR_CANCEL)
-            ),
+            CommunityChallengeInvite.state.in_(list(INVITE_SOURCE_STATES_FOR_CANCEL)),
         )
         .values(
             state=CHALLENGE_INVITE_STATE_CANCELLED,
@@ -778,7 +768,9 @@ def fetch_invite_for_invitee(
     invite = _resolve_invite_by_public_id(db, invite_public_id)
     if invite is None:
         raise ChallengeInviteNotFound("invite not found")
-    invitee = db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    invitee = (
+        db.query(CommunityProfile).filter_by(public_id=invitee_public_id).one_or_none()
+    )
     if invitee is None or invite.invitee_profile_id != invitee.id:
         raise ChallengeInviteNotFound("invite not found")
     return invite

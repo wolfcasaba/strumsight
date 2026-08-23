@@ -200,9 +200,7 @@ class ChallengeInviteOut(BaseModel):
     responded_at: datetime | None = None
 
 
-def _invite_to_out_from_session(
-    db: Session, invite
-) -> ChallengeInviteOut:
+def _invite_to_out_from_session(db: Session, invite) -> ChallengeInviteOut:
     """Map a ``CommunityChallengeInvite`` ORM row + session to its
     wire shape, resolving the FK public_ids through the
     request-scoped session.
@@ -212,8 +210,12 @@ def _invite_to_out_from_session(
     query, never carried on the ORM relationship.
     """
     challenge_pub = _resolve_challenge_public_id_from_session(db, invite)
-    inviter_pub = _resolve_profile_public_id_by_internal_id(db, invite.inviter_profile_id)
-    invitee_pub = _resolve_profile_public_id_by_internal_id(db, invite.invitee_profile_id)
+    inviter_pub = _resolve_profile_public_id_by_internal_id(
+        db, invite.inviter_profile_id
+    )
+    invitee_pub = _resolve_profile_public_id_by_internal_id(
+        db, invite.invitee_profile_id
+    )
     return ChallengeInviteOut(
         public_id=invite.public_id,
         challenge_public_id=challenge_pub,
@@ -227,9 +229,7 @@ def _invite_to_out_from_session(
     )
 
 
-def _resolve_challenge_public_id_from_session(
-    db: Session, invite
-) -> uuid.UUID:
+def _resolve_challenge_public_id_from_session(db: Session, invite) -> uuid.UUID:
     """Resolve the challenge public_id from the request session."""
     from sqlalchemy import text as _sa_text
 

@@ -244,12 +244,8 @@ class CommunityChallenge(Base):
     metric: Mapped[str] = mapped_column(String(length=64), nullable=False)
     difficulty: Mapped[int] = mapped_column(Integer, nullable=False)
     # Server-authoritative window — A7 / §5.2.
-    starts_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    ends_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # Schema version — bumped when the wire shape evolves
     # beyond v1 (mirrors the post's ``artifact_schema_version``
     # precedent).
@@ -258,9 +254,7 @@ class CommunityChallenge(Base):
     )
     # Reserved for Kör 24 club integration (D7) — nullable,
     # no FK.
-    club_id: Mapped[str | None] = mapped_column(
-        String(length=64), nullable=True
-    )
+    club_id: Mapped[str | None] = mapped_column(String(length=64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -339,9 +333,7 @@ class CommunityChallengeParticipant(Base):
     )
     # Personal best metric — the Kör 22 surface. NULL until
     # the participant has submitted a verified result.
-    best_metric_value: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
+    best_metric_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
