@@ -279,9 +279,7 @@ def set_reaction(
         # perspective.
         raise ReactionPostNotFound("post not found")
 
-    existing = _existing_reaction(
-        db, post_id=post.id, profile_id=viewer.id
-    )
+    existing = _existing_reaction(db, post_id=post.id, profile_id=viewer.id)
     if existing is not None:
         if existing.kind == kind:
             # Same kind — no-op. Return the existing row without
@@ -323,9 +321,7 @@ def set_reaction(
         # path); if the kind matches the existing row, return it
         # unchanged (the A1 idempotent retry path).
         db.rollback()
-        again = _existing_reaction(
-            db, post_id=post.id, profile_id=viewer.id
-        )
+        again = _existing_reaction(db, post_id=post.id, profile_id=viewer.id)
         if again is None:
             # The IntegrityError was on a DIFFERENT constraint
             # (most likely the FK on a future column). Re-raise
@@ -401,9 +397,7 @@ def remove_reaction(
         # idempotent delete semantic.
         return False
 
-    existing = _existing_reaction(
-        db, post_id=post.id, profile_id=viewer.id
-    )
+    existing = _existing_reaction(db, post_id=post.id, profile_id=viewer.id)
     if existing is None:
         # Already removed — no transition, no event. §6 A3.
         return False
@@ -442,9 +436,7 @@ def get_reaction_count(
     if post is None:
         return 0
     return (
-        db.query(CommunityReaction)
-        .filter(CommunityReaction.post_id == post.id)
-        .count()
+        db.query(CommunityReaction).filter(CommunityReaction.post_id == post.id).count()
     )
 
 
@@ -471,9 +463,7 @@ def get_viewer_reaction(
     post = _resolve_post_by_public_id(db, post_public_id)
     if post is None:
         return None
-    existing = _existing_reaction(
-        db, post_id=post.id, profile_id=viewer.id
-    )
+    existing = _existing_reaction(db, post_id=post.id, profile_id=viewer.id)
     if existing is None:
         return None
     return existing.kind

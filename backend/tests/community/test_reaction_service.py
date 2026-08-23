@@ -266,9 +266,7 @@ def test_a1_duplicate_set_does_not_double_count(session_factory) -> None:
     assert again_kind == "support"
 
     with session_factory() as db:
-        count = reaction_service.get_reaction_count(
-            db, post_public_id=post.public_id
-        )
+        count = reaction_service.get_reaction_count(db, post_public_id=post.public_id)
     assert count == 1, f"A1 violated — count={count}, expected 1"
 
 
@@ -307,9 +305,7 @@ def test_a1_real_violation_probe(session_factory, monkeypatch) -> None:
     def _no_existing(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(
-        reaction_service, "_existing_reaction", _no_existing
-    )
+    monkeypatch.setattr(reaction_service, "_existing_reaction", _no_existing)
 
     # Rebuild the ``community_reactions`` table WITHOUT the
     # ``UNIQUE(post_id, profile_id)`` constraint. The original
@@ -342,8 +338,7 @@ def test_a1_real_violation_probe(session_factory, monkeypatch) -> None:
         "DROP TABLE community_reactions_probe_backup",
         # 5. Recreate the standalone (post_id) index that the
         #    migration ships.
-        "CREATE INDEX ix_community_reactions_post "
-        "ON community_reactions (post_id)",
+        "CREATE INDEX ix_community_reactions_post ON community_reactions (post_id)",
     ]
     restore_sql = [
         # Mirror the Kör 15 migration's CREATE TABLE exactly.
@@ -375,8 +370,7 @@ def test_a1_real_violation_probe(session_factory, monkeypatch) -> None:
         "FROM community_reactions_probe_backup "
         "GROUP BY post_id, profile_id",
         "DROP TABLE community_reactions_probe_backup",
-        "CREATE INDEX ix_community_reactions_post "
-        "ON community_reactions (post_id)",
+        "CREATE INDEX ix_community_reactions_post ON community_reactions (post_id)",
     ]
 
     with engine.begin() as conn:
@@ -426,9 +420,7 @@ def test_a1_real_violation_probe(session_factory, monkeypatch) -> None:
         with engine.begin() as conn:
             for stmt in restore_sql:
                 conn.execute(text(stmt))
-        monkeypatch.setattr(
-            reaction_service, "_existing_reaction", original_existing
-        )
+        monkeypatch.setattr(reaction_service, "_existing_reaction", original_existing)
 
 
 def test_a2_kind_change_updates_existing_row(session_factory) -> None:
@@ -468,18 +460,12 @@ def test_a2_kind_change_updates_existing_row(session_factory) -> None:
     assert second_kind == "celebrate"
 
     with session_factory() as db:
-        count = reaction_service.get_reaction_count(
-            db, post_public_id=post.public_id
-        )
+        count = reaction_service.get_reaction_count(db, post_public_id=post.public_id)
     assert count == 1, "count is invariant under a kind change"
 
     # ``created_at`` must NOT have moved; only ``updated_at`` advances.
     with session_factory() as db:
-        row = (
-            db.query(CommunityReaction)
-            .filter_by(id=first_id)
-            .one()
-        )
+        row = db.query(CommunityReaction).filter_by(id=first_id).one()
         row_created_at = row.created_at
     assert row_created_at == first_created_at, (
         "created_at must NOT advance on a kind change"
@@ -529,9 +515,7 @@ def test_a3_remove_twice_is_idempotent_noop(session_factory) -> None:
     assert second is False, "second remove is a no-op"
 
     with session_factory() as db:
-        count = reaction_service.get_reaction_count(
-            db, post_public_id=post.public_id
-        )
+        count = reaction_service.get_reaction_count(db, post_public_id=post.public_id)
     assert count == 0, f"A3 violated — count={count}, expected 0"
 
     # Same probe: even when the post never had a reaction at all,
@@ -607,8 +591,7 @@ def test_a4_concurrent_toggle_consistent_viewer_state(
             .count()
         )
     assert rows == 1, (
-        f"A4 violated — concurrent toggles produced {rows} rows, "
-        "expected exactly one"
+        f"A4 violated — concurrent toggles produced {rows} rows, expected exactly one"
     )
 
     with session_factory() as db:
@@ -707,21 +690,16 @@ def test_a7_no_learning_reward_event_emitted(session_factory) -> None:
     module = importlib.import_module("app.community.services.reaction_service")
     module_names = set(sys.modules)
     gamification_modules = {
-        name
-        for name in module_names
-        if name.startswith("app.gamification")
+        name for name in module_names if name.startswith("app.gamification")
     }
     # The service module MUST NOT have triggered the import of a
     # gamification symbol — the E08-R26 cross-feature boundary
     # invariant is import-graph-level, not just call-site level.
     gamification_in_module = [
-        name
-        for name in dir(module)
-        if "gamification" in name.lower()
+        name for name in dir(module) if "gamification" in name.lower()
     ]
     assert gamification_in_module == [], (
-        f"reaction_service exposes a gamification symbol: "
-        f"{gamification_in_module}"
+        f"reaction_service exposes a gamification symbol: {gamification_in_module}"
     )
 
     # And a concrete write MUST NOT trigger a side-effect import.
