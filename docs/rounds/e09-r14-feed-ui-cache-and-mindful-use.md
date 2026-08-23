@@ -372,9 +372,16 @@ A4 × 2 + A5 × 2 + A6 × 1 + A7 × 1 + 1 valódi-sértés-próba-teszt.
 ### 10.5 Fájlszintű scope-check
 
 A `tools/hooks/implementer_guard.py` scope-őr a teljes munkafán
-futtatható; a `git diff` a §4 engedélyezett-listán kívüli fájlt NEM
-tartalmaz (a 6 új fájl pontosan az allowed_paths hat elemen belül van,
-a 2 javító commit csak ezeket a hat fájlt módosítja).
+futtatható; a javító kör 1 diffje (`git diff 29fcc44d..HEAD
+--name-only`) pontosan az allowed_paths lista 9 elemét módosítja
+(feed_cache.dart érintetlen maradt — F1/F2/F3 nem igényelte; a
+review.md és a többi review/commit a javító kör előtti bázisból jön,
+nem a fix1 scope része). Az ai-router a javító kör 1-re az eredeti 6
+fájl mellé 4 ÚJ ARB-fájlt vett fel (`lib/l10n/features/community_en.arb`
++ `community_hu.arb` + `lib/l10n/app_en.arb` + `app_hu.arb`), tehát az
+allowed_paths a fix1 során 10 elemre bővült, és a tényleges fix1 diff
+9 fájlt érint (feed_cache.dart-ot kihagyva, mert F1/F2/F3 nem nyúlt
+hozzá).
 
 ### 10.6 Javító kör 1 — F1/F2/F3 zárás
 
