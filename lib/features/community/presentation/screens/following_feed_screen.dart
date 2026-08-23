@@ -357,6 +357,10 @@ class _ContentState extends State<_Content> {
     }
   }
 
+  // PROBE — REMOVED. The real-violation probe (§6.1) lived here
+  // temporarily and was reverted; the A3 widget test is the durable
+  // guarantee that no scroll-driven auto-paging ever returns.
+
   @override
   void dispose() {
     _scrollController

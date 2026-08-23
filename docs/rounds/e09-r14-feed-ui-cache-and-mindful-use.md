@@ -248,6 +248,115 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **A cache-keveredés account-váltáskor.** Egy másik user korábbi feedje átmenetileg megjelenne (A2).
 - **A crash ismeretlen artifact-típuson.** Egy jövőbeli, még be nem vezetett poszt-típus a teljes feedet ledöntené fallback nélkül (A5).
 
-## 10. Implementation handoff — az implementer tölti ki
+## 10. Implementation handoff
+
+### 10.1 Állapotgép térkép
+
+| Állapot | Melyik esemény váltja ki |
+|---|---|
+| initial | a `FeedController.build()` hívása (első provider-read a screenről) |
+| loading | `load()` meghívása — a cache olvasva, a repository hívás folyamatban |
+| content | a repository első oldala sikeresen megérkezett (`_absorbPage`), vagy `loadMore`/`refresh` sikeres lezárult |
+| refreshing | `refresh()` meghívása — a lista változatlan, a háttérben új oldalak jönnek (A7) |
+| paging | `loadMore()` meghívása — a lista változatlan, a háttérben a következő oldal jön |
+| offline | `load`/`refresh` megbukott ÉS a cache-ban volt snapshot — a lista látszik, banner jelzi |
+| error | `load`/`refresh`/`loadMore` megbukott ÉS a cache üres — hiba-kártya + retry gomb (A1) |
+| end | a repository `CursorPage.haltedAfterRequest()`-ot adott vissza — az "Elérted a feed végét." marker + CTA (A6) |
+
+A controller a nyolc állapotot az `initial` → `loading` → `content` alapgörbén kívül mindenhol explicit őrzi (`if (current.status == loading/refreshing/paging) return;` minden állapotváltó metódus elején), így a duplikált `load`/`refresh`/`loadMore` hívás második alkalma NEM gyújt újabb repository-kérést.
+
+### 10.2 Numerikus bound
+
+| Paraméter | Érték | Indoklás |
+|---|---|---|
+| feed-cache `maxItems` | **80** | 4 oldalnyi utolsó-látott feed (20-as oldalmérettel = 80) — elég egy offline újra-betöltéshez, és messze a per-document preferencia-plafon alatt marad. A szerveroldali per-page limit (Kör 13, ADR 0406) ettől FÜGGETLEN bound. |
+| default page-size | **20** | a Kör 13 szerver-kapuja — a tesztek ezt használják, a `load`/`refresh`/`loadMore` explicit paraméterként is elfogadja. |
+
+### 10.3 Valódi-sértés próba eredménye
+
+A §6.1 szerinti kötelező valódi-sértés próbát lefuttattam: a
+`following_feed_screen.dart` `_ContentState`-jéhez ideiglenesen hozzáadtam
+egy `_scrollController.addListener(_autoPageOnScroll)` hívást, ahol
+`_autoPageOnScroll` a `position.pixels >= maxScrollExtent - 200` esetén
+meghívja a `widget.onLoadMore()`-t — pontosan a §5.1 / §13.6 tiltott
+minta.
+
+**Próba előtti állapot** (gyári kód, scroll-listener nélkül) —
+`flutter test --plain-name "scroll listener"` kimenete:
+```
+00:00 +0: A3 — no autoplay, no auto-scroll-pagination the rendered widget tree
+             never installs a scroll listener that triggers loadMore
+00:01 +1: A3 — no autoplay, no auto-scroll-pagination no video / audio widget
+             is auto-started — every card is inert on load
+00:01 +2: Real-violation probe for A3 a future regression that installs a
+             scroll-listener auto-pagination would surface as a second
+             repository call after a drag
+00:01 +3: All tests passed!
+```
+A `A3 — no autoplay, no auto-scroll-pagination` cella ZÖLD: a
+scroll-listener hiányában a drag nem triggerel `loadMore`-t.
+
+**Próba közbeni állapot** (scroll-listener aktív) — ugyanaz a parancs:
+```
+00:00 +0: A3 — no autoplay, no auto-scroll-pagination the rendered widget tree
+             never installs a scroll listener that triggers loadMore
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: an object with length of <1>
+  Actual: [CursorPage:CursorPage.initial, CursorPage:CursorPage.continued(cursor-1)]
+   Which: has length of <2>
+no auto-scroll-pagination
+#4      main.<anonymous closure>.<anonymous closure>
+        (file://.../following_feed_test.dart:408:9)
+00:01 +0 -1: A3 — no autoplay, no auto-scroll-pagination the rendered widget
+              tree never installs a scroll listener that triggers loadMore [E]
+  Test failed.
+```
+
+A scroll-listenert a próba után ELTÁVOLÍTOTTAM (`initState` és `dispose`
+visszaállítva, `_autoPageOnScroll` törölve); a §10 végleges kódjában a
+scroll-listener kizárólag a `_rememberScroll` (A7 — scroll-pozíció
+megőrzése), nincs auto-paging callback.
+
+A fenti kimenetek a saját, körön belüli futtatásból származnak — a
+review-lelet a saját `git diff` alapján ellenőrizheti, hogy a próba
+nyoma nincs a végleges kódban.
+
+### 10.4 Lefuttatott parancsok és kimenetük
+
+**Gate (cikk-cakk `flutter analyze && flutter test` lánc NÉLKÜL, a
+`tools/round-gate.sh` szétbontva futtatja a `format → analyze → test →
+architecture → secrets → l10n` lépéseket):**
+
+```
+$ tools/round-gate.sh test/features/community/presentation/following_feed_test.dart
+═══ [1] format                                          → ZÖLD
+═══ [2] analyze                                         → ZÖLD
+═══ [3] test test/features/community/presentation/following_feed_test.dart  → ZÖLD
+═══ [4] architecture                                    → ZÖLD
+═══ [5] secrets                                         → ZÖLD
+═══ [6] l10n                                            → ZÖLD
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test ...following_feed_test.dart                           zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A 13 widget-teszttel lefedett acceptance-cella: A1 × 2, A2 × 2, A3 × 2,
+A4 × 2, A5 × 2, A6 × 1, A7 × 1 + 1 valódi-sértés-próba-teszt. Mind a 7
+acceptance-cella (A1–A7) ZÖLD, plusz az A3 valódi-sértés próba is ZÖLD.
+
+### 10.5 Fájlszintű scope-check
+
+A `tools/hooks/implementer_guard.py` scope-őr a teljes munkafán
+futtatható; a `git diff` a §4 engedélyezett-listán kívüli fájlt NEM
+tartalmaz (a 6 új fájl pontosan az allowed_paths hat elemen belül van,
+a 2 javító commit csak ezeket a hat fájlt módosítja).
 
 ## 11. Review — a Claude tölti ki
