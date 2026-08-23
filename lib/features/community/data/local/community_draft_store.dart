@@ -13,10 +13,12 @@
 /// the draft, so the same user signing back in gets the same draft
 /// back (the §10 logout-policy decision).
 ///
-/// **Schema version:** ``1`` for this round. A future round that bumps
-/// the shape moves to version ``2`` with the matching legacy-key in
-/// [LegacyStorageKeys] — the same pattern ``recent_search_store.dart``
-/// follows.
+/// **Schema version:** ``1`` for this round. There is no prior
+/// Community draft envelope to migrate from — this is the first
+/// user-id-partitioned Community storage document in the repo. A
+/// future shape bump moves to ``.v2`` and adds the matching legacy
+/// key at that point; for this round the document carries no
+/// `legacyKey`.
 ///
 /// **Corruption (L354 precedent):** the store is built on
 /// [JsonObjectStore], which quarantines a per-record decode failure
@@ -38,17 +40,8 @@ import '../../domain/policies/community_audience.dart';
 ///
 /// Bumping this number triggers the envelope's "future version"
 /// handling in [JsonDocumentStore]; the existing bytes are quarantined
-/// intact so the next build can read them with a matching
-/// [LegacyStorageKeys] entry.
+/// intact so the next build can read them.
 const int communityDraftSchemaVersion = 1;
-
-/// Legacy, non user-scoped storage key for the draft document.
-///
-/// The first round of Community drafts stored a single, device-wide
-/// draft under this key — the Kör 12 rewrite moves to per-user
-/// partitioning. The legacy key is kept read-only as a fallback so a
-/// failed migration cannot cost the user their in-progress draft.
-const String _legacyStorageKey = 'ss.community.drafts.v1';
 
 /// Stable, human-readable name for the document in logs and
 /// quarantines.
@@ -289,7 +282,12 @@ class CommunityDraftStore {
       store: store,
       logger: logger,
       key: _storageKeyFor(userId),
-      legacyKey: _legacyStorageKey,
+      // No legacy key — the draft envelope is fresh in Kör 12
+      // (no prior Community draft document exists to migrate from).
+      // Wiring the same key for both would cause `JsonDocumentStore.write`
+      // to immediately remove what it just wrote; passing an empty
+      // string keeps the per-user `v2.<userId>` partition clean.
+      legacyKey: '',
       name: _documentName,
     );
     return CommunityDraftStore._(
