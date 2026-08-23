@@ -237,9 +237,12 @@ abstract interface class CommunityOutbox {
   /// resulting record's idempotencyKey is taken from the draft —
   /// the draft is the source of truth for the post's identity.
   ///
-  /// Throws [StateError] when a pending record with the same
-  /// idempotency key already exists; the composer treats that as
-  /// "the post is already queued, don't submit again".
+  /// When a pending record with the same idempotency key already
+  /// exists, the call is a no-op and returns
+  /// [CommunityOutboxEnqueueResult] with ``accepted: false`` and the
+  /// ``record`` of the existing pending entry (the brief §5.2
+  /// "stable ID across retries" invariant). The composer treats that
+  /// outcome as "the post is already queued, don't submit again".
   Future<CommunityOutboxEnqueueResult> enqueue({required CommunityDraft draft});
 
   /// Process every pending record at most once. Each record is
