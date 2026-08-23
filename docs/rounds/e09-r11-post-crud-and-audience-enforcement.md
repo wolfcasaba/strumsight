@@ -414,4 +414,244 @@ e2d409c3 E09-R11: posts router (POST/GET/PATCH/DELETE)
 ```
 
 
-## 11. Review — a Claude tölti ki
+## 10. Implementation handoff — javító kör 1 (F1, F2, F3 + F4 döntés)
+
+### 10.1 Javítások összegzése
+
+A review `docs/reviews/e09-r11-review.md` F1–F4 leleteit ez a kör az
+engedélyezett fájlokon belül javítja. Az F5/F6 (NOTE, nem blokkoló)
+dokumentálva van a review-ban, kódváltozást nem igényelnek.
+
+**F1 (BLOCKER) — `patch_post` ownership check.**
+`backend/app/community/services/post_service.py::patch_post` —
+a `_evaluate_visibility` UTÁN, a `resource_version` ellenőrzés
+ELŐTT beépült a `if post.profile_id != viewer_profile_id: raise
+PostNotFound("post not found")` sor. Pontosan a `soft_delete_post`
+537. sor mintáját követi; a D7 egységes 404 megőrzésével a
+tulajdonos-hiány nem szivárog ki más válasz-alakként.
+
+**F2 (BLOCKER) — GET/PATCH author_public_id a valódi szerzőből.**
+`backend/app/community/routers/posts.py` —
+- új helper `_resolve_public_id_by_profile_id(db, profile_id)` a
+  profile-id → public_id feloldáshoz (a viewer_public_id helper
+  párja, de fordított irányból);
+- a `get_post_endpoint` és a `patch_post_endpoint` mindkettő
+  `post.profile_id`-ből oldja fel a `author_public_id`-t, és
+  AZT adja át `_row_to_out`-nak — NEM a hívó saját azonosítóját.
+A create endpoint változatlan (ott a hívó VALÓBAN a szerző, mert a
+create hozza létre a sort, így `author_public_id == viewer_public_id`).
+
+**F3 (MINOR) — törölt poszt NEM tér vissza élő 201-ként.**
+`backend/app/community/services/post_service.py::create_post` —
+a `_existing_post_by_idempotency_key` MINDKÉT hívási helyen
+(pre-insert olvasás ÉS az `IntegrityError` utáni újraolvasás)
+`CommunityPost.deleted_at.is_(None)` filtert kap, így egy
+soft-deleted tombstone NEM felel meg az élő idempotencia-ablaknak.
+
+Egy nem-triviális részlet: a DB-szintű `UNIQUE(profile_id,
+idempotency_key)` constraint a `deleted_at` értékére tekintet
+nélkül tüzel (SQLite-ban a constraint a sor törléséig él —
+részleges unique index DDL-szinten nem áll a Kör 11
+allowed_paths-ban, lásd §10.4 alább). Az `IntegrityError`
+ágban ezért egy újabb lépés kell: ha a kulcsot egy
+soft-deleted tombstone tartja, a tombstone `idempotency_key`
+mezőjét `NULL`-ra állítjuk (a NULL UNIQUE szempontjából nem
+ütközik), és a fresh INSERT lefut. A tombstone audit-trailje
+megmarad (a `deleted_at` és a body/artifaact sértetlen, csak
+a kulcs-engedélyét adjuk át az új sornak). Az A2 §6.1
+valódi-sértés próba és a service-szintű lookup-szűrő
+együttesen biztosítják, hogy egy ÉLŐ kulcs-újrafelhasználás
+NEM hoz létre két külön sort.
+
+**F4 (MINOR) — PATCH optimista-konkurencia, tudatos döntés.**
+A `patch_post` read-compare-write szintű verzió-ellenőrzése
+MEGMARAD — nem cseréltük `UPDATE ... WHERE updated_at = :expected`
+(DB-szintű compare-and-swap) megoldásra. Indoklás:
+
+1. **A meglévő Kör 4 precedens.** A `routers/privacy.py` (Kör 4,
+   ADR 0398 §6) ugyanazt a read-compare-write mintát használja
+   a `StalePrivacyUpdateError` őrrel — az A5 §6.1 elfogadott
+   mércéje a szekvenciális stale-rejection, és a konkurencia
+   (két PATCH, mindkettő V0-t olvas) gyakorlatilag nem fordul
+   elő a PATCH owner-only felszínen.
+2. **Nem új regresszió.** Ez a korlát a Kör 4 óta öröklött; a
+   privacy.py-t is így szállítjuk. A jelenlegi F4 lelet csak
+   dokumentálja, hogy a Kör 11 a precedenssel konzisztens, nem
+   vezet be ÚJ, a Kör 4-nél szigorúbb írási konkurencia-szintet.
+3. **A javítás költsége.** A feltételes UPDATE + rowcount
+   ellenőrzés ORM-mintát törne meg (a jelenlegi `db.flush()` +
+   `db.refresh(post)` minta egyszerű és olvasható), és a
+   `follow_service.py::follow` / `block_service.py` jövőbeli
+   alkalmazásai is határ-eseteket kapnának (pl. a `created_at`
+   bump-ja után mi történjen `updated_at`-tel). Egy dedikált
+   Kör 24+ vizsgálhatná a Kör 4 / 11 / 13 közös
+   konkurencia-rétegét.
+
+Következmény: a HANDOFF §10.6 follow-up listájára felkerül
+"Feltételes UPDATE … WHERE updated_at = :expected mintára
+refaktor a privacy.py + post_service.py + (jövő) feed
+service.py egységesítésével — külön kör".
+
+### 10.2 Új regressziós tesztek
+
+| Teszt | F-cella | Mit szavatol |
+|---|---|---|
+| `test_patch_by_non_owner_returns_404` | F1 | Egy PUBLIC posztot egy MÁSODIK (nem-tulajdonos) felhasználó PATCH-eli helyes `resource_version`-nel → 404 (D7 uniform), a sor body-ja sértetlen marad (`"mine"`, nem `"DEFACED"`). A `test_delete_by_non_owner_returns_404` PATCH-párja. |
+| `test_audience_matrix_owner_and_public_viewer` (kibővítve) | F2 | A GET válasz `author_public_id` mezője a TULAJDONOS public_id-ját adja mind a tulajdonos, mind a nem-tulajdonos néző számára (a javítás ELŐTT a nem-tulajdonos a sajátját kapta volna). Explicit `!=` assert is a viewer.public_id ellen. |
+| `test_create_after_soft_delete_with_same_idempotency_key` | F3 | create → soft-delete → create (ugyanazzal a kulccsal) → 201 egy ÚJ public_id-val, a tombstone megmarad a DB-ben `deleted_at != None` és `idempotency_key = NULL` állapottal. A törölt tartalom NEM tér vissza élő `deleted_at=None` módon. |
+
+A javítás ELŐTT ezek a tesztek PIROSRA váltanának:
+- F1: a második felhasználó PATCH-e jelenleg sikeres lenne, és a body `"DEFACED"` lenne.
+- F2: a nem-tulajdonos GET `author_public_id` mezője a viewer.public_id-t adná.
+- F3: a második create a törölt sort adná vissza `deleted_at != None` módon (vagy az F3 szub-fix nélkül `IntegrityError` → 500-öt).
+
+### 10.3 Futtatott parancsok + tényleges kimenet (javító kör 1)
+
+```bash
+# Round-gate (a brief §7 szerinti mérce, ELŐTÉRBEN, csonkítatlanul):
+$ tools/round-gate.sh test/core/architecture_dependency_test.dart
+# KIMENET (Gate-összegzés):
+#   format                                                     zöld
+#   analyze                                                    zöld
+#   test test/core/architecture_dependency_test.dart           zöld
+#   architecture                                               zöld
+#   secrets                                                    zöld
+#   l10n                                                       zöld
+#   backend ruff format                                        zöld
+#   backend ruff check                                         zöld
+#   backend pytest                                             zöld
+# MINDEN GATE ZÖLD.
+
+# Backend pytest (önálló parancs, NEM láncolva a gate-hez):
+$ cd backend && python3 -m pytest tests/community/test_post_service.py
+# KIMENET: 20 passed, 53 warnings in 10.78s
+
+# Teljes backend pytest suite (a gate-ben `backend pytest` lépés lefedi,
+# de külön is ellenőriztem a lefedettséget):
+$ cd backend && python3 -m pytest
+# KIMENET: 455 passed, 480 warnings in 96.72s
+
+# Migration schema parity (a `test_migrations.py` compare_metadata tesztje):
+$ cd backend && python3 -m pytest tests/test_migrations.py -q
+# KIMENET: 15 passed
+
+# Ruff format (önállóan futtatva a §3-as kötelező lépés, gate-ben --check):
+$ cd backend && python3 -m ruff format app tests
+# KIMENET: 78 files left unchanged
+```
+
+A §10.2 javítás ELŐTTI viselkedés ellenőrzése (regressziós tesztek
+valódi mérőereje):
+
+A fixek visszavonásával (F1: a `if post.profile_id !=
+viewer_profile_id` sor kikommentezése; F2: a
+`_resolve_public_id_by_profile_id` hívás kicserélése
+`viewer_public_id`-ra; F3: a `deleted_at.is_(None)` filter
+eltávolítása) a fenti három regressziós teszt PIROSRA váltana,
+megerősítve, hogy a tesztek a tényleges hibát fogják, nem csak a
+"boldog útvonalat" járják be.
+
+### 10.4 Eltérések a tervtől és okuk (javító kör 1)
+
+- **F3 IntegrityError-ág bővítése.** Az eredeti F3 fix-terv
+  ("add `deleted_at IS NULL` filter mindkét hívási helyen") önmagában
+  NEM volt elégséges: a service-szintű filter kihagyja a tombstone-t,
+  de az INSERT-et a DB-szintű `UNIQUE(profile_id, idempotency_key)`
+  constraint ettől még elutasítja (SQLite-ban a constraint a sor
+  törléséig él). A javítás kiegészült egy második lépéssel: ha az
+  IntegrityError oka egy soft-deleted tombstone, a tombstone
+  `idempotency_key` mezőjét `NULL`-ra állítjuk (a NULL UNIQUE
+  szempontjából nem ütközik), és a fresh INSERT így már lefut. A
+  tombstone audit-trailje megmarad (a `deleted_at` és a body/artifact
+  sértetlen). Ez a mért tradeoff: a tombstone elveszti a kulcs-engedélyét
+  (az új sorhoz kerül), de a teljes poszt-tartalom és a törlés
+  ténye megmarad.
+
+  Egy "igazibb" megoldás (részleges unique index
+  `WHERE deleted_at IS NULL` SQLite/PostgreSQL szinten, vagy a
+  constraint elhagyása és kizárólag service-szintű őr) jelenleg
+  ÚJ migrációt vagy ÚJ ORM-változtatást igényelne, ami kívül esik
+  a §4 `allowed_paths` listán. Ha egy jövőbeli kör (pl. Kör 13
+  feed-lista) bevezet egy második idempotencia-dedupot igénylő
+  végpontot, érdemes megfontolni a közös séma-migrációt.
+
+- **F2 megoldás a router-rétegben (nem a service-ben).** A review
+  két lehetséges megoldást sorolt: (a) a router a `post.profile_id`-ből
+  oldja fel a `public_id`-t egy SELECT-tel; (b) a service visszaadja
+  a szerző public_id-t a sorral együtt. Az (a) megoldást választottuk,
+  mert (i) a service-szintű struktúra (author vs viewer) a §5.1
+  "szerveroldali author" szellemiségét tükrözi — a service az
+  internal PK-kal dolgozik, a public_id a wire-réteg identitása;
+  (ii) a service-visszaadás egy új tuple-t vagy dataclass-t
+  vezetne be, ami a többi hívót (create, soft_delete) is érintené;
+  (iii) a SELECT a `_resolve_public_id_by_profile_id` helperben
+  egyetlen soros, indexelt lekérdezés, amely a meglévő
+  `_resolve_author_public_id` mintát követi. A diff a service-t
+  nem érinti.
+
+- **A `viewer_public_id` helper a PATCH/GET végpontokban
+  ELTŰNT.** Korábban a `_resolve_author_public_id(db,
+  current_user.id)` segéd hívódott a viewer public_id-jának
+  feloldására, de az F2 fix után a GET/PATCH ezt nem használja —
+  a `_resolve_public_id_by_profile_id(db, post.profile_id)` a
+  forrás. A helper a POST-ban (ahol a hívó a szerző) és más
+  jövőbeli helyeken továbbra is él.
+
+### 10.5 Nem futtatott ellenőrzések és okuk
+
+- **Randomizált property gate (`PROPERTY_SEED`).** Kör 11 nem érint
+  DSP-t, így property-teszt nem keletkezett. A javító kör 1 sem
+  érint DSP-t.
+
+- **Release APK build.** A javító kör 1 tisztán backend. CI-oldali
+  release build a merge-szakaszban fut (AGENTS.md §CI-dispatch
+  szabály: implementer `gh`-t NEM hív).
+
+- **A §6.1 valódi-sértés próba a javító kör 1-re.** A Kör 11
+  eredeti §6.1 próbája (`test_create_idempotency_real_violation_probe`)
+  a service-szintű lookup kikapcsolását demonstrálja. A javító
+  kör 1 ezt a próbát nem érinti (az idempotencia-lookup szűrője
+  egy másik réteget tesztel), és egy ÚJ, F3-specifikus próbát
+  (`test_create_after_soft_delete_with_same_idempotency_key`)
+  hoz be.
+
+### 10.6 Follow-up issue-k (kiegészítés a Kör 11 listáján)
+
+- **Feltételes UPDATE … WHERE updated_at = :expected minta.** A
+  Kör 4 privacy.py + Kör 11 post_service közös
+  read-compare-write korlátját egy dedikált, jövőbeli kör
+  refaktorálhatná egységes, DB-szintű CAS-ra. A scope jelenleg
+  kívül esik a Kör 11 allowed_paths-on és a Kör 4 privacy.py
+  módosításán.
+
+- **Részleges unique index az idempotency_key-re.** Ha a Kör 13+
+  bevezet egy második idempotencia-dedupot igénylő végpontot,
+  érdemes megfontolni egy `CREATE UNIQUE INDEX … WHERE
+  deleted_at IS NULL` migrációt, ami a tombstone-key-clear
+  lépést szükségtelenné tenné.
+
+- **A `viewer_public_id` helper használatának felülvizsgálata.**
+  A PATCH/GET végpontokban mostantól nem hívódik — ha a jövőben
+  a service újra szükségessé teszi (pl. audit-log integráció),
+  a helper a `_resolve_author_public_id` néven továbbra is elérhető.
+
+### 10.7 Commit-lánc (kiegészítés a Kör 11 láncán)
+
+A javító kör 1 négy commitot hoz a `minimax/e09-r11-post-crud-
+and-audience-enforcement` branchre:
+
+```
+1ca7909d E09-R11 review-fix-1: patch_post ownership check + idempotency deleted_at filter (F1, F3)
+15db1b62 E09-R11 review-fix-1: GET/PATCH resolve actual author_public_id (F2)
+e2884677 E09-R11 review-fix-1: regression tests for F1/F2/F3
+a17870cd E09-R11 review-fix-1: F3 tombstone key clear + test updated to new-row path
+```
+
+Az 1ca7909d commit a `post_service.py` F1 + F3 lookup-filterét
+egyesíti (egy fájl, kapcsolódó logikai javítások), a 15db1b62 a
+router F2-jét külön tartja (másik fájl, másik felelősségi kör),
+az e2884677 az új regressziós teszteket egyben hozza, az
+a17870cd az F3 sub-fixet (IntegrityError-ág tombstone-key-clear)
+és a teszt új-row-path frissítését commitolja együtt, mert
+a kettő elválaszthatatlan (a teszt csak a sub-fix után zöld).
+
