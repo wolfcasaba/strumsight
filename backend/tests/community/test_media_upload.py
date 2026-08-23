@@ -1334,9 +1334,7 @@ def test_a5_real_adapter_no_sha256_hex_does_not_catch_mismatch(
         size=512,
         checksum_sha256="0" * 64,
     )
-    store.stage(
-        intent.object_key, size=512, content_type="audio/mpeg"
-    )
+    store.stage(intent.object_key, size=512, content_type="audio/mpeg")
 
     with session_factory() as db:
         row = finalize_upload(
