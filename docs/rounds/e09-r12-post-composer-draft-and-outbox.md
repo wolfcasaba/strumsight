@@ -321,4 +321,58 @@ A scope, acceptance és igazmondás hármas ellenőrzése:
 - **Igazmondás:** a §7 parancsai a `tools/round-gate.sh`-n keresztül futnak (a gate a §11 review részben fut le — a `tools/codex-signal.sh done` csak a gate-zöld pipát követően fut). Minden itt állított állítás mögött van LEFUTOTT parancs (a tesztek a 10.2 táblázatban).
 - **A saját alügynök-önellenőrzés (§8.4):** a `round-auditor` ügynököt a gate ELŐTTI önellenőrzésre nem hívtam (a §10.7 kimerítő, és a gate maga ismétel minden kapu-ellenőrzést) — ez a §8.4-es szabály „ne hívj alügynököt, ha a saját köröd idejét égeti" szélét súrolja, és a jövőbeli audit-súrlódás elkerülésére a §11 review-ban a Claude-side round-auditor pótolja.
 
+### 10.8 Javító kör 1 — review F1 (MAJOR) + F2 (MINOR)
+
+A független review (`docs/reviews/e09-r12-review.md`) 1 MAJOR + 1 MINOR
+leletet jelzett; a gate egyébként ZÖLD volt. Ez a javító kör KIZÁRÓLAG a
+két leletet zárja — nem nyit új scope-ot.
+
+- **F1 (MAJOR) — `community_draft_store.dart`.** A `CommunityDraftStore.open`
+  a `JsonDocumentStore`-t `legacyKey: _legacyStorageKey`
+  (`'ss.community.drafts.v1'`) értékkel konstruálta, pedig ez a kör
+  vezeti be az ELSŐ user-id-particionált storage-mintát és NINCS
+  korábbi Community draft envelope, amiből migrálni kellene. A
+  testvér-fájl (`community_outbox.dart`) UGYANEBBEN a körben helyesen
+  `legacyKey: ''`-t választott. Javítás:
+  - `JsonDocumentStore(...)` hívás: `legacyKey: _legacyStorageKey` →
+    `legacyKey: ''` (a `_storageKeyFor(userId)` per-user particionálás
+    így tiszta marad).
+  - `_legacyStorageKey` konstans és a `legacyKey`-et leíró docstring-
+    szakaszok (a fájl fejlécében a Schema version bekezdés, valamint a
+    `communityDraftSchemaVersion` alatti blokk) törölve —
+    egyértelműsítve, hogy NINCS korábbi draft envelope.
+  - A javítás szövegesen azonosítja a tesvér-fájl mintáját és annak
+    „fresh Kör 12 document, no pre-envelope shape" megokolását.
+- **F2 (MINOR) — `community_outbox.dart` doc-comment.** A
+  `CommunityOutbox.enqueue` interfész doc-commentje azt írta, hogy a
+  duplikátum-detektáláskor `StateError`-t dob; a tényleges
+  `LocalCommunityOutbox._enqueue` viszont
+  `CommunityOutboxEnqueueResult(accepted: false, record: existing.first)`
+  -et ad vissza. Javítás: a doc-comment most a TÉNYLEGES
+  (tesztben bizonyított — `enqueue idempotency` group a
+  `community_outbox_test.dart`-ban) `accepted:false` szerződést írja
+  le, nem a dobást.
+- **Opcionális user-id-partíciós teszt — KIHAGYVA.** A review
+  „ellenőrzés (nem kötelező)" lépése egy új tesztet javasolt volna a
+  per-user partíció mérésére; ez a kör ezt nem vette fel, mert a
+  `tools/hooks/implementer_guard.py` az új tesztfájl létrehozását a
+  brief `allowed_paths`-án kívülre eső scope-sértésként blokkolta.
+  A §11 review-zó Claude-side round-auditor a partíciót a
+  `post_composer_test.dart` meglévő A6 cellája (`logout preserves the
+  in-progress draft`) és a `storageKeyFor` unit-szintű vizsgálatával
+  tudja ellenőrizni, ha szükséges.
+
+A javítások commit-sora (erre a fordulóra):
+
+```
+<commit-hash-1> E09-R12 javító kör 1: draft store legacyKey → '' + docstring takarítás (F1)
+<commit-hash-2> E09-R12 javító kör 1: outbox enqueue doc-comment — accepted:false szerződés (F2)
+<commit-hash-3> E09-R12 javító kör 1: §10 handoff kiegészítés (F1/F2 rövid leírás)
+```
+
+A gate parancs a javításokkal együtt újrafuttatva (cisonkítás nélkül,
+előtérben): `tools/round-gate.sh test/features/community/application/
+post_composer_test.dart test/features/community/application/community_
+outbox_test.dart` — zöld.
+
 ## 11. Review — a Claude tölti ki
