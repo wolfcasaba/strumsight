@@ -16163,3 +16163,61 @@ kiosztott száma önmagában, kalendárium-avulás miatt is elévülhet.
 **Őrteszt:** nincs — a feature-név-összetévesztés felismerése emberi/LLM
 olvasat, nem gépi kapu; az ADR-szám-avulás ellen már létező gépi kapu véd
 (`tools/round-slots.py reserve-adr`, `O_CREAT|O_EXCL` fájlzár).
+
+## L431 — Az olvasási láthatóság-kapu NEM írási jogosultság-kapu; a válasz-identitást a SORBÓL told fel, ne a hívóból (E09-R11, 2026-08-23)
+
+**Mit mértünk.** Az E09-R11 (`post_service.py`) `patch_post` függvénye a
+`get_post`/`patch_post`/`soft_delete_post` közös `_evaluate_visibility`
+helperét hívta egyetlen kapuként — az a helper viszont egy OLVASÁSI
+láthatóság-döntés (owner→blocked→audience→moderation), nem írási
+jogosultság. Egy `PUBLIC` audience-ű posztra ez a kapu MINDIG átenged
+minden nem-blokkolt hitelesített nézőt, tehát bármely felhasználó
+módosíthatta MÁSVALAKI posztjának body/audience/artifact mezőjét, holott a
+`soft_delete_post` testvér-függvénye (ugyanabban a fájlban, néhány sorral
+lejjebb) MÁR tartalmazott egy explicit `post.profile_id !=
+viewer_profile_id` tulajdonos-ellenőrzést. A dedikált `security-reviewer`
+agent (a kör `risk = "high"`-ja miatt kötelező) ezt a hibát ÉLESBEN
+reprodukálta a migráció-alapú sémán.
+
+Ugyanebben a körben egy MÁSODIK, önálló hiba: a GET/PATCH router-endpointok
+a válasz `author_public_id` mezőjét a HÍVÓ saját, JWT-ből feloldott
+public_id-jából töltötték, nem a POSZT tényleges `profile_id`-jéből
+feloldva — minden nem-saját-tartalom olvasásnál (a szolgáltatás
+ELSŐDLEGES használati módján egy közösségi felszínen) hibás szerző-
+attribúciót okozva. Az egyetlen teszt, ami nem-tulajdonos GET-et hívott,
+kizárólag a `public_id` mezőt ellenőrizte, az `author_public_id`-t nem.
+
+**Miért.** Mindkét hiba UGYANABBÓL a mintázatból jön: egy meglévő,
+tesztelt helper/paraméter újrahasznosítása egy OLYAN kontextusban, ahol a
+neve/típusa hasonló, de a szemantikája más. `_evaluate_visibility` a neve
+alapján is olvasásra utal, mégis írási kapuként lett (helytelenül)
+egyedüli őrré téve; `viewer_public_id`/`author_public_id` ugyanaz a
+Python-típus (`uuid.UUID`), ugyanabból a táblából jön (`community_profiles.
+public_id`), de két KÜLÖNBÖZŐ sor azonosítója — a paraméter-átadásnál a
+kompilátor/típusrendszer nem tud különbséget tenni. A create endpointon a
+kettő VÉLETLENÜL egybeesik (a létrehozó mindig a szerző is), ez a
+véletlen egybeesés terjedt át hibásan a GET/PATCH endpointokra.
+
+**Hogyan alkalmazd.** (1) Ha egy service-függvény MÁS erőforráson végez
+ÍRÁST, mint amit egy testvér-függvény (pl. `soft_delete_post`) már
+explicit tulajdonos-ellenőrzéssel véd, MINDEN írási művelethez (nem csak
+egyhez) ellenőrizd a saját, ÖNÁLLÓ tulajdonos-kaput — egy megosztott
+OLVASÁSI-láthatóság helper hívása NEM helyettesíti. Mérési recept: `grep -n
+"viewer_profile_id\|profile_id !=" <service-fájl>` — ha egy write-metódus
+(patch/update/delete) NEM tartalmaz explicit egyenlőségi/egyenlőtlenségi
+összehasonlítást a hívó és a tulajdonos között, az egy hiányzó
+authz-kapu gyanúja. (2) Ha egy válasz-schema egy erőforrás TULAJDONOSÁT
+(nem a hívót) azonosítja, a mezőt MINDIG a SORBÓL told fel (`post.
+profile_id`-ből egy külön lekérdezéssel), SOSE a hívó saját, már
+kéznél lévő azonosítójából — még akkor sem, ha egy adott hívási útvonalon
+(create) a kettő véletlenül egybeesik. Egy review-cella, ami CSAK a
+`public_id` egyenlőségét ellenőrzi egy nem-tulajdonos olvasásnál, ezt a
+hibaosztályt NEM fogja meg — a válasz MINDEN identitás-hordozó mezőjét
+(`author_public_id`, `owner_id`, stb.) explicit asszertálni kell a
+"más néz, mint aki írta" tesztben.
+
+**Őrteszt:** `backend/tests/community/test_post_service.py::
+test_patch_by_non_owner_returns_404` (F1 — a body-t is asszertálja, nem
+csak a státuszkódot) és
+`test_audience_matrix_owner_and_public_viewer` (F2 — az `author_public_id
+!= viewer.public_id` explicit asszerció a nem-tulajdonos GET-re).

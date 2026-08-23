@@ -1,5 +1,67 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R11 KÉSZ — Post backend CRUD és audience enforcement — PR [#420](https://github.com/wolfcasaba/strumsight/pull/420), squash `98d7b2f6` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) TIZENEGYEDIK KÖRE KÉSZ.** [ADR 0405](docs/adr/0405-post-crud-and-audience-enforcement.md):
+`community_posts` — az első valódi "tartalom" endpoint-felszín, ami egyszerre
+köti be a Kör 4 `CommunityAccessPolicy` audience-döntését és a Kör 8
+`is_blocked_pair` block-ellenőrzését. Create/get/patch/delete, szerveroldali
+author (a JWT subjectből, sosem a body-ból), `UNIQUE(profile_id,
+idempotency_key)`-alapú idempotens create, `updated_at`-et resource-version
+tokenként újrahasznosító optimista konkurencia (a Kör 4 `privacy.py`
+precedense — nincs külön verzió-oszlop), soft delete, HTML/script
+reject-only body-validáció, `club_id` FK nélküli nullable mező (Kör 24
+scope), kétértékű `moderation_state` aktív workflow nélkül (Kör 27/28
+scope), a Kör 10 `parse_share_artifact` szerződését hívó (nem újradefiniáló)
+artifact-mezők.
+
+**A pre-flight (§0.0, D1-D12) 12 döntést rögzített indítás előtt** — a
+legfontosabbak: az ADR-szám `0403`→`0405` korrekció (D1); a
+`CommunityAccessPolicy.evaluate_content_access`/`is_blocked_pair` TÉNYLEGES
+aláírásának mérése, nem új párhuzamos audience-logika (D2); az
+idempotencia-kulcs a `community_posts` táblán él, mert a SDD-javasolt
+megosztott `community_idempotency_records` tábla új modell-fájlt igényelne,
+ami nincs az `allowed_paths`-on (D4); egységes 404 MINDEN "nem látható"
+ágra (nem-létező ID, blocked, audience-kizárt, soft-deleted, moderált) — a
+`social_graph.py` follower-lista 403-mintájától TUDATOSAN eltérve, mert egy
+poszt közvetlen ID-s olvasásánál a 403 önmagában elárulná a létezést (D7).
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **1 javító
+kör** (`docs/reviews/e09-r11-review.md`): review CHANGES REQUIRED elsőre,
+**2 BLOCKER** — F1: a `patch_post` NEM ellenőrizte a tulajdonost — a
+`_evaluate_visibility` egy OLVASÁSI láthatóság-kaput valósít meg (owner→
+blocked→audience), nem írási jogosultságot, tehát egy PUBLIC posztra bármely
+nem-blokkolt hitelesített felhasználó átjutott és módosíthatta a
+body/audience/artifact mezőket — a dedikált `security-reviewer` agent (a
+brief `risk = "high"` miatt kötelező) ÉLESBEN reprodukálta a defacement-et a
+migráció-alapú sémán; F2 (Claude saját olvasása találta): a GET/PATCH válasz
+`author_public_id` mezője a NÉZŐ saját public_id-ját adta a poszt tényleges
+szerzője helyett — minden nem-saját-poszt olvasásnál hibás szerző-
+attribúciót okozva (a szolgáltatás ELSŐDLEGES használati módján, egy
+közösségi felszínen). Mindkettőt az egyetlen teszt rejtette el, ami
+nem-tulajdonos GET-et/PATCH-et hívott: csak a `public_id`-t ellenőrizte,
+nem az `author_public_id`-t, és PATCH-re egyáltalán nem volt nem-tulajdonos
+teszt (csak DELETE-re). **2 MINOR** — F3: törölt poszt visszatért a
+create-idempotencia-retry útvonalon (a DB-szintű UNIQUE constraint a
+`deleted_at`-tól függetlenül tüzelt; javítva: a tombstone `idempotency_key`
+mezőjének felszabadításával, az audit-trail megőrzésével); F4: a PATCH
+optimista-konkurencia read-compare-write, nem DB-szintű compare-and-swap —
+tudatos WONTFIX ebben a körben (a Kör 4 `privacy.py` öröklött korlátja, nem
+ÚJ regresszió), follow-up jegyezve. Mind F1-F3 ÚJ regressziós teszttel zárva
+(a non-owner PATCH teszt a sértetlen body-t is asszertálja, nem csak a
+státuszkódot). Review APPROVED javító kör 1 után — a Claude a javítást NEM
+az implementer önjelentésére hagyatkozva fogadta el: friss, izolált
+`/tmp`-klónban újra lefuttatta a teljes gate-et és a scope-auditot, és a
+diffet sor szerint elolvasta. Exact `49631b97`: Full Gate
+[32620211936](https://github.com/wolfcasaba/strumsight/actions/runs/32620211936)
++ Backend CI [32620213409](https://github.com/wolfcasaba/strumsight/actions/runs/32620213409)
++ Router CI [32620214253](https://github.com/wolfcasaba/strumsight/actions/runs/32620214253)
+mind success.
+
+**A round jelenleg nincs bekötve** (a Kör 8/10 precedense szerint): a
+`build_community_router` factory nem mountolja a `posts` routert — ez Kör
+13+ (feed) dolga, amikor a valódi HTTP-felszín aktiválódik.
+
 ## ✅ E09-R10 KÉSZ — Share artifact szerződések — PR [#419](https://github.com/wolfcasaba/strumsight/pull/419), squash `a29e4ac8` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZEDIK KÖRE KÉSZ.** [ADR 0404](docs/adr/0404-share-artifact-contracts.md):
@@ -5001,6 +5063,22 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-23):** `main` @ `98d7b2f6` — E09-R11 Post
+backend CRUD és audience enforcement, PR
+[#420](https://github.com/wolfcasaba/strumsight/pull/420), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, EGY javító
+kör (F1 BLOCKER `patch_post` hiányzó tulajdonos-ellenőrzés — dedikált
+security-reviewer lelete, élesben reprodukálva; F2 BLOCKER hibás
+`author_public_id` GET/PATCH válaszban — Claude saját olvasása találta; F3
+MINOR törölt poszt visszatért idempotencia-retry-n; F4 MINOR PATCH
+read-compare-write, tudatos WONTFIX). Dedikált security-reviewer pass: 1
+BLOCKER (F1), javítva és függetlenül megerősítve. Review APPROVED javító
+kör 1 után, 0 nyitott BLOCKER/MAJOR — a Claude a javítást friss, izolált
+`/tmp`-klónban ÚJRA futtatott gate-tel és scope-audittal fogadta el, nem az
+implementer önjelentésére hagyatkozva. Exact `49631b97`: `full-gate.yml`
+32620211936 + `backend-ci.yml` 32620213409 + `router-ci.yml` 32620214253
+mind success. Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-23):** `main` @ `5a1df780` — E09-R09
 Profilkeresés és biztonságos discovery, PR
 [#418](https://github.com/wolfcasaba/strumsight/pull/418), squash-merge.
@@ -5659,6 +5737,20 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E09-R11 — Post backend CRUD és audience enforcement** (PR
+[#420](https://github.com/wolfcasaba/strumsight/pull/420), squash
+`98d7b2f6`, [ADR 0405](docs/adr/0405-post-crud-and-audience-enforcement.md)).
+Az első valódi "tartalom" endpoint-felszín — create/get/patch/delete
+posztokra, szerveroldali author, `UNIQUE(profile_id, idempotency_key)`
+idempotencia, `updated_at`-alapú optimista konkurencia, egységes 404
+minden IDOR-érzékeny ágra. 0 nyitott BLOCKER/MAJOR EGY javító kör után (F1
+BLOCKER `patch_post` hiányzó tulajdonos-ellenőrzés — security-reviewer
+élesben reprodukálta; F2 BLOCKER hibás `author_public_id` a válaszban; F3
+MINOR törölt poszt idempotencia-retry-n visszatérve; F4 MINOR tudatos
+WONTFIX — mind `docs/reviews/e09-r11-review.md`). Exact `49631b97`: Full
+Gate 32620211936 + Backend CI 32620213409 + Router CI 32620214253 mind
+success. Részletesen a fejléc ✅-blokkban.
 
 **E09-R07 — Follow és follow request social graph** (PR
 [#416](https://github.com/wolfcasaba/strumsight/pull/416), squash
@@ -6499,14 +6591,35 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-23): E09-R10 — Share artifact
-szerződések** (`docs/rounds/e09-r10-share-artifact-contracts.md`, engine a
-queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `0402` — EZ A SZÁM
-STALE: az E09-R08 már foglalta, a pre-flight a §1.0.1 szerint kérjen FRISS
-számot `tools/round-slots.py reserve-adr --round E09-R10`-zal, ugyanaz a
-mintázat, mint az E09-R07/R08 saját stale-ADR mérésénél). **Az E09-R09
-(Profilkeresés és biztonságos discovery) KÉSZ** (PR #418, squash
-`5a1df780`) — lásd a fejléc ✅-blokkot. A Kör 9 pre-flightja megerősítette:
+**Pontos következő termékkör (2026-08-23): E09-R12 — Post composer draft és
+outbox** (`docs/rounds/e09-r12-post-composer-draft-and-outbox.md`, engine a
+queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `nincs`). **Az
+E09-R11 (Post backend CRUD és audience enforcement) KÉSZ** (PR #420,
+squash `98d7b2f6`) — lásd a fejléc ✅-blokkot. A Kör 11 pre-flightja
+(§0.0 D1-D12) és review-ja hagyott néhány mért horgot a Kör 12+-nak:
+
+- A `community_posts.updated_at`-alapú optimista konkurencia
+  (§0.0 D3, `patch_post`) read-compare-write, nem DB-szintű
+  compare-and-swap — a review F4 lelete tudatos WONTFIX-ként zárta (a
+  `privacy.py` Kör 4 óta öröklött korlátja); egy jövőbeli kör
+  egységesíthetné feltételes `UPDATE ... WHERE updated_at = :expected`
+  mintára a `privacy.py`/`post_service.py`/(jövő) feed service.py hármast.
+- A `posts` router NINCS bekötve a `build_community_router`-be (a Kör
+  8/10 precedense szerint) — ha a Kör 12 (composer draft/outbox) HTTP-
+  szinten hívná a Kör 11 create/patch/delete endpointjait, előbb mérje
+  meg, hogy ez a kör-e, aminek a scope-ja a bekötést hozza, vagy egy
+  későbbi (feed-aktiváló) kör.
+- Az idempotencia-kulcs jelenleg a `community_posts` táblán él (§0.0 D4)
+  — ha a Kör 12 draft/outbox mintája egy MÁSODIK endpoint idempotencia-
+  dedupot igényel, mérje meg, nem éri-e meg a SDD §19.2/§20.1 megosztott
+  `community_idempotency_records` táblát bevezetni ahelyett, hogy egy
+  HARMADIK, körön-belüli oszlop-mintát másolna.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R10 — Share
+artifact szerződések** (`docs/rounds/e09-r10-share-artifact-contracts.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
+
+A Kör 9 pre-flightja megerősítette:
 a `search.py` router `CurrentUser`-t vesz fel (D1), a
 `read_profile`/`get_privacy`/`handles.py` auth-hiánya VÁLTOZATLANUL nyitva
 marad (nem ennek a körnek/nem a Kör 10-nek a hatásköre). A Kör 9

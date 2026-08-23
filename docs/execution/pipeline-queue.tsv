@@ -420,7 +420,7 @@ E09-R07	docs/rounds/e09-r07-follow-and-follow-request-graph.md	minimax	0401	done
 E09-R08	docs/rounds/e09-r08-block-mute-and-safety-relationships.md	minimax	0401	done
 E09-R09	docs/rounds/e09-r09-profile-search-and-discovery.md	minimax	nincs	done
 E09-R10	docs/rounds/e09-r10-share-artifact-contracts.md	minimax	0402	done
-E09-R11	docs/rounds/e09-r11-post-crud-and-audience-enforcement.md	minimax	0403	pending
+E09-R11	docs/rounds/e09-r11-post-crud-and-audience-enforcement.md	minimax	0403	done
 E09-R12	docs/rounds/e09-r12-post-composer-draft-and-outbox.md	minimax	nincs	pending
 E09-R13	docs/rounds/e09-r13-following-feed-cursor-pagination-backend.md	minimax	0404	pending
 E09-R14	docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md	minimax	nincs	pending
