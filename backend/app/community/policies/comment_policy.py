@@ -1,4 +1,4 @@
-"""Comment ownership / moderation policy — E09-R16, ADR 0407 §D2.
+r"""Comment ownership / moderation policy — E09-R16, ADR 0407 §D2.
 
 This module is the SINGLE source of truth for "may this caller delete
 this comment?" — the comment-side equivalent of the Kör 4
