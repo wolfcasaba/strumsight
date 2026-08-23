@@ -1416,8 +1416,9 @@ def test_sigv4_presign_put_signs_content_type_as_header() -> None:
     example pair so the secret-scan gate stays green (no
     provider-token prefix, no 16-char-long credential
     literal)."""
-    from app.community.storage.object_store import _sigv4_presign_request
     from urllib.parse import parse_qs, urlparse
+
+    from app.community.storage.object_store import _sigv4_presign_request
 
     fixed_now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     url, headers = _sigv4_presign_request(
@@ -1448,8 +1449,9 @@ def test_sigv4_presign_head_signs_only_host() -> None:
     """The HEAD presign (used by ``head_object``) signs only
     ``host`` — no Content-Type is added, since HEAD has no
     body."""
-    from app.community.storage.object_store import _sigv4_presign_request
     from urllib.parse import parse_qs, urlparse
+
+    from app.community.storage.object_store import _sigv4_presign_request
 
     fixed_now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     url, headers = _sigv4_presign_request(
