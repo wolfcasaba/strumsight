@@ -6,6 +6,25 @@ Diff: `git diff 831f77ef..0221996f` (branch `minimax/e09-r17-bookmarks-and-contr
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-23
 Verdikt: **APPROVED**
 
+## Javító kör #1 (2026-08-23, CI-dispatch után, merge ELŐTT)
+
+`full-gate.yml` (run 32651276149) mindkét jobja (`full-gate`, `Coverage`)
+ugyanarra a gyökérokra vezethető vissza pirosított:
+`test/ui/ui_inventory_test.dart` a production screen-inventory méretét
+`hasLength(72)`-re rögzítette, a kör ÚJ képernyője
+(`bookmarks_screen.dart`) miatt viszont a tényleges lista mérete 73 (mérve a
+CI logban: `Which: has length of <73>`). Brief §0.0.1 dokumentált
+scope-bővítéssel felvette az `allowed_paths`-ba a fájlt (kizárólag erre a
+célra); a javító kör (HEAD `9fb0f830`) EGY sort módosított
+(`hasLength(72)` → `hasLength(73)`), semmi mást — ellenőrizve:
+`git diff 0091cc38..9fb0f830` = 1 fájl, 1 sor.
+
+Friss izolált klón (`/tmp/review-e09-r17-2`, `9fb0f830`): `tools/round-gate.sh
+test/features/community/application/import_share_artifact_test.dart
+test/ui/ui_inventory_test.dart` → mind a 10 lépés zöld.
+`tools/scope-audit.py --base 831f77ef` → OK, 10 changed path(s), 1
+generated/ignored (a saját review-jelentés).
+
 ## Összegzés
 
 BLOCKER: 0 · MAJOR: 0 · MINOR: 2 · NOTE: 1
