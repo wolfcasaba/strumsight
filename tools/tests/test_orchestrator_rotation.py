@@ -264,7 +264,14 @@ class RotationTest(unittest.TestCase):
 
 
 class PreemptionTest(unittest.TestCase):
-    """Egy ~85 perces kört nem indítunk a keret maradék néhány százalékán."""
+    """A preempció gépezete, USER-DÖNTÉS 2026-08-23 óta 100%-os küszöbbel.
+
+    A korábbi 85% azt védte, hogy egy ~85 perces kör ne induljon el a keret
+    maradék néhány százalékán. A user ezt feloldotta („hagyd menni; kedden
+    visszaáll, 2 napig elfut a kerettel"), ezért az alapértelmezés 100: a
+    gépezet változatlanul él, csak a TELJESEN elfogyott keretnél lép be. Hogy
+    a mechanizmus maga nem sérült, azt az explicit küszöböt adó cella méri.
+    """
 
     @staticmethod
     def write_usage(state: Path, pct: int, reset_in: int) -> None:
@@ -275,16 +282,38 @@ class PreemptionTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def test_a_nearly_spent_budget_hands_the_round_to_terra(self) -> None:
+    def test_a_fully_spent_budget_hands_the_round_to_terra(self) -> None:
         with tempfile.TemporaryDirectory() as name:
             state = Path(name)
-            self.write_usage(state, pct=97, reset_in=3600)
+            self.write_usage(state, pct=100, reset_in=3600)
             result = driver(
                 "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION="claude",
                 # a zárlat-átadás CÉLJA a Codex-oldali szék — élesztve mérjük
                 **CODEX_SIDE_ALIVE,
             )
             self.assertEqual(result.stdout.strip(), "terra", "a zárlat felülírja a rotációt")
+
+    def test_a_nearly_spent_budget_no_longer_preempts(self) -> None:
+        """USER-DÖNTÉS 2026-08-23: 97% mellett a kör MEGY, nem áll félre."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            self.write_usage(state, pct=97, reset_in=3600)
+            result = driver(
+                "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION="claude",
+                **CODEX_SIDE_ALIVE,
+            )
+            self.assertEqual(result.stdout.strip(), "claude")
+
+    def test_the_old_threshold_is_one_env_away(self) -> None:
+        """A gépezet ép: az explicit 85-ös küszöb visszahozza a régi viselkedést."""
+        with tempfile.TemporaryDirectory() as name:
+            state = Path(name)
+            self.write_usage(state, pct=97, reset_in=3600)
+            result = driver(
+                "--next-orchestrator", state=state, PIPELINE_ORCH_ROTATION="claude",
+                PIPELINE_CLAUDE_SESSION_PCT_MAX="85", **CODEX_SIDE_ALIVE,
+            )
+            self.assertEqual(result.stdout.strip(), "terra")
 
     def test_a_healthy_budget_keeps_claude_in_the_chair(self) -> None:
         with tempfile.TemporaryDirectory() as name:

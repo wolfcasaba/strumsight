@@ -84,8 +84,9 @@ class SlotDecisionTest(unittest.TestCase):
         # tudás, csak kódolás folyik"), a 2. sáv a Chapter 13 UI-lánc Opus 5 max
         # orchestrátorral és `sonnet-impl` (Sonnet 5 high) implementerrel, mert
         # az UI-minőség a cél. A fenti kvóta-kockázat NEM szűnt meg — a döntés
-        # tudatosan vállalja; a fékje a 85%-os session-küszöb
-        # (PIPELINE_CLAUDE_SESSION_PCT_MAX), és PIPELINE_FALLBACK_ENGINE=none
+        # tudatosan vállalja; a fék a session-küszöb
+        # (PIPELINE_CLAUDE_SESSION_PCT_MAX — user-döntés 2026-08-23 óta 100,
+        # azaz „vidd el a keret végéig"), és PIPELINE_FALLBACK_ENGINE=none
         # mellett a küszöb elérése MINDKÉT sávot megállítja (nincs Codex-oldal:
         # a ChatGPT Pro előfizetés 2026-08-23-án elfogyott, ~egy hónapig).
         self.assertEqual(SLOTS_FILE.read_text(encoding="utf-8").strip(), "2")

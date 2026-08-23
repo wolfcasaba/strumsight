@@ -314,7 +314,16 @@ round_remote=${PIPELINE_ROUND_REMOTE:-origin}
 # körben, csak a székeket cserélik.
 orch_swap_engine=${PIPELINE_ORCH_SWAP_ENGINE:-sonnet-impl}
 claude_usage_file="$state_dir/claude-usage"
-claude_session_pct_max=${PIPELINE_CLAUDE_SESSION_PCT_MAX:-85}
+# USER-DÖNTÉS 2026-08-23: „nem akarom, hogy kikapcsoljon, ha a keret eléri a
+# 85%-os féket — hagyd menni; kedden visszaáll, 2 napig elfut a kerettel."
+# 85 → 100: a preempció gépezete MEGMARAD (a küszöb egyetlen szám), de csak a
+# TELJESEN elfogyott keretnél lép be, ahol amúgy sem indulhatna semmi. Az ár,
+# amit a döntés tudatosan vállal: egy kör elindulhat a maradék néhány
+# százalékon, és MENET KÖZBEN halhat meg — az ilyen session H-NOSIGNAL-t hagy,
+# amire a lánc önjavítót indítana, ami maga is Claude-keretet kér. A régi,
+# óvatos viselkedés egyetlen env-vel visszajön: PIPELINE_CLAUDE_SESSION_PCT_MAX=85
+# (101 = a fék teljes kikapcsolása).
+claude_session_pct_max=${PIPELINE_CLAUDE_SESSION_PCT_MAX:-100}
 # Melyik motor vigye a SOROS munkadarabot. A kör-indítási ág írja át; az
 # önjavítás Claude-elsőbbséggel indul (ritka, és a zárlatokat így is nézi).
 orchestrator_preference=claude
