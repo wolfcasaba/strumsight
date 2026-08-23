@@ -5,7 +5,9 @@
 - **Reviewelt HEAD:** `f1add05c` (implementáció) a `6f35030b` pre-flight fölött
 - **Implementer:** `sonnet-impl` (Claude Sonnet 5) · **Reviewer:** Claude (Opus 5)
 - **Dátum:** 2026-08-23
-- **Verdikt:** **CHANGES REQUESTED** — 1 MAJOR, 1 MINOR, 2 NOTE
+- **Verdikt:** **APPROVED** (`495e9f62`) — két javító kör után minden lelet zárva.
+  Az eredeti verdikt CHANGES REQUESTED volt (1 MAJOR, 1 MINOR, 2 NOTE); a
+  zárás leletenkénti bizonyítéka a §10-ben.
 
 ---
 
@@ -227,10 +229,70 @@ vagy felhasználói adatot — tisztán navigáció. Külön security-reviewer f
 ezért nem indokolt; az **egyetlen** adatvédelmi vonatkozású felszín a
 **MAJOR-1 mikrofon-retenciója**, amit ez a jelentés fent kezel.
 
-## 9. Merge-döntés
+## 9. MINOR-2 — a javító kör verifikációja közben MÉRT új lelet
 
-**CHANGES REQUESTED.** A MAJOR-1 nyitva → merge tilos. A javító kör a lánc
-normál útja: ugyanaz a motor (`sonnet-impl`), a fenti leletlistával.
+**Hol:** `app_router.dart:213` (a `26598d7b` állapotban).
 
-A fix-kör után: a gate + a CI **újra** dispatch-elendő (a kód változik), és
-ez a jelentés leletenként frissítendő.
+Az első javító kör a `/practice/live`-ot — helyesen — top-level **Stage**
+route-tá tette (D14/2–3), tehát nincs rajta primary navigation. Csakhogy az
+`onException` továbbra is fixen a `/live`-ra ment, ami a flag BE ágán
+`/practice/live`-ra redirectel. Következmény: **bármely nem regisztrált vagy
+rollout-flaggel kizárt URL egy navigáció nélküli képernyőn hagyta a
+felhasználót**, ahonnan a Kör 9 `SsStageScaffold`-ja előtt nincs kivezető út.
+
+Mért bizonyíték (reviewer-próba, `adaptiveShellEnabled: true`,
+`practiceEngineV2Enabled: false`):
+
+```
+PROBE2 /practice with practiceEngineV2Enabled=false landed on: /practice/live
+PROBE2 /coach with aiTutorEnabled=false landed on: /practice/live
+```
+
+**Javítva** a második javító körben (`495e9f62`): `onException` a már
+kiszámolt `entryLocation`-re megy. A7-biztos, mert a flag KI ágán
+`entryLocation == AppRoutes.live`.
+
+## 10. Leletek zárása — leletenkénti bizonyíték
+
+Két javító kör: `26598d7b` (MAJOR-1 + MINOR-1) és `495e9f62` (MINOR-2).
+
+**Saját gate-újrafuttatás friss `/tmp` klónban a `26598d7b`-n:** mind a nyolc
+lépés zöld (format, analyze, három teszt, architecture, secrets, l10n),
+kilépési kód 0. A `495e9f62` egyetlen production sora + három cella; a
+végleges, rebase-elt HEAD-en a kaput a `tools/round-land.sh` kombinált-HEAD
+gate-je futtatta.
+
+**Reviewer-próba a `495e9f62`-n** (`zz_reviewer_probe_test.dart`, 7 cella,
+merge előtt törölve) — **All tests passed**:
+
+```
+LEGACY REFERENCE (flag OFF) still holds                              ZÖLD
+PROBE2 entry location: /today
+PROBE2 LiveScreen instances at entry: 0
+PROBE2 offstage LiveScreen after leaving /practice/live: 0
+PROBE2 wakelock.isHeld: false (enable=1 disable=1)
+PROBE2 /live redirected to: /practice/live
+PROBE2 /practice with practiceEngineV2Enabled=false landed on: /today
+PROBE2 /coach with aiTutorEnabled=false landed on: /today
+PROBE2 flag OFF unknown URL → /live
+PROBE2 flag ON unknown URL → /today
+```
+
+| Lelet | Zárás | Bizonyíték | Tartozik-e hozzá cella, ami a hibát PIROSRA fogta volna? |
+|---|---|---|---|
+| **MAJOR-1** | ✅ | `/today` adaptere `ProgressScreen` (erőforrás-mentes) → a kettőzés megszűnt; `/practice/live` top-level Stage → mount/dispose visszaáll: 0 offstage példány, `isHeld=false`, **`enable=1 disable=1` kiegyensúlyozva** | **IGEN** — `adaptive_scaffold_test.dart` új **A8** csoport három cellája, a **legacy referenciával együtt** és `skipOffstage: false`-szal (enélkül az `IndexedStack` rejtett gyereke nem látszana, és a cella vakuum lenne) |
+| **MINOR-1** | ✅ | `if (practiceEnabled)` a `practiceHub` branch-route-on, a Coach **teljes branch**-e `if (aiTutorEnabled)` mögött (egyelemű branch nem maradhat üresen), és a `showCoachDestination: aiTutorEnabled` **index-igazítva** tartja a nav-sávot a branch-listával | **IGEN** — cellák `practiceEngineV2Enabled: false` és `aiTutorEnabled: false` mellett |
+| **MINOR-2** | ✅ | `onException` → `entryLocation` | **IGEN** — három cella: flag KI ismeretlen URL → `/live` (A7), flag BE → `/today` **navigációval**, és a rollout-flaggel kizárt `/practice` → `/today` |
+| **NOTE-1** | ✅ tárgytalan | a `/practice/live` Stage-gé válásával az `isStageRoute` produkciós hívási úton is élő lett | — |
+| **NOTE-2** | nyitva (nem blokkol) | `isStageRoute('/song-trainer/session/')` üres `songId`-ra `true` — ilyen URL-t a `GoRoute` sem illesztene | — |
+
+**A7 külön ellenőrizve:** a `test/app/routing/**` végig **módosítatlan**
+(a `route_guards.dart` új `home` paramétere opcionális, alapértelmezett
+`AppRoutes.live`), és a `flutter test test/app/routing` zöld. A flag KI ágán
+mért viselkedés — belépési pont, ismeretlen URL, Live dispose — bitre a mai.
+
+## 11. Merge-döntés
+
+**APPROVED.** Nyitott BLOCKER/MAJOR nincs; az egyetlen nyitott elem a NOTE-2,
+ami nem blokkol. A zöld kapu (ADR 0052) minden eleme külön ellenőrizve a
+merge SHA-ján.
