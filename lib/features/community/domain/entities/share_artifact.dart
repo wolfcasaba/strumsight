@@ -483,8 +483,12 @@ final class PlanTemplateArtifact extends ShareArtifact {
 /// (ADR 0404 §D2). The Community surface shows the per-metric verdicts
 /// — not the underlying raw measurement samples, not the comparison's
 /// internal session IDs (those stay private).
-final class _MetricImprovement {
-  const _MetricImprovement({
+///
+/// Exposed publicly so the `analysis_share_mapper.dart` can build
+/// entries without crossing the file-private boundary. The wire
+/// shape is minimal — no waveform, no landmark, no raw sample.
+final class MetricImprovement {
+  const MetricImprovement({
     required this.metricId,
     required this.directionCode,
     required this.beforeValue,
@@ -513,8 +517,8 @@ final class _MetricImprovement {
         'relativeDelta': relativeDelta,
       };
 
-  static _MetricImprovement fromJson(Map<String, Object?> object) {
-    return _MetricImprovement(
+  static MetricImprovement fromJson(Map<String, Object?> object) {
+    return MetricImprovement(
       metricId: _requireString(object, 'metricId'),
       directionCode: _requireString(object, 'directionCode'),
       beforeValue: _nullableDouble(object, 'beforeValue'),
@@ -526,7 +530,7 @@ final class _MetricImprovement {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is _MetricImprovement &&
+      other is MetricImprovement &&
           other.metricId == metricId &&
           other.directionCode == directionCode &&
           other.beforeValue == beforeValue &&
@@ -553,15 +557,15 @@ final class AnalysisImprovementArtifact extends ShareArtifact {
     required super.schemaVersion,
     required super.sourceId,
     required super.createdAt,
-    required List<_MetricImprovement> metrics,
-  }) : _metrics = List<_MetricImprovement>.unmodifiable(metrics);
+    required List<MetricImprovement> metrics,
+  }) : _metrics = List<MetricImprovement>.unmodifiable(metrics);
 
   @override
   ShareArtifactType get type => ShareArtifactType.analysisImprovement;
 
-  final List<_MetricImprovement> _metrics;
+  final List<MetricImprovement> _metrics;
 
-  List<_MetricImprovement> get metrics => _metrics;
+  List<MetricImprovement> get metrics => _metrics;
 
   @override
   Map<String, Object?> toJson() => <String, Object?>{
@@ -581,8 +585,8 @@ final class AnalysisImprovementArtifact extends ShareArtifact {
       schemaVersion: _requireInt(object, 'schemaVersion'),
       sourceId: _requireString(object, 'sourceId'),
       createdAt: _requireIsoDate(object, 'createdAt'),
-      metrics: <_MetricImprovement>[
-        for (final raw in rawMetrics) _MetricImprovement.fromJson(
+      metrics: <MetricImprovement>[
+        for (final raw in rawMetrics) MetricImprovement.fromJson(
           _requireObject(raw),
         ),
       ],
