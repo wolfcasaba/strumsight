@@ -269,7 +269,11 @@ final class LocalCommunityOutbox implements CommunityOutbox {
              store: store,
              logger: logger,
              key: communityOutboxStorageKey,
-             legacyKey: communityOutboxStorageKey,
+             // No legacy key — the outbox is a fresh Kör 12
+             // document with no pre-envelope shape. Wiring the same
+             // key for both would cause `JsonDocumentStore.write`
+             // to immediately remove what it just wrote.
+             legacyKey: '',
              name: _documentName,
              bodyKey: _bodyKey,
            );
