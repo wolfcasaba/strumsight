@@ -55,11 +55,11 @@ from app.community.models.comment import (
     COMMENT_BODY_MAX_LENGTH,
     CommunityComment,
 )
-from app.community.services.comment_service import CommentNotFound
 from app.community.models.post import CommunityPost
 from app.community.models.profile import CommunityProfile
 from app.community.policies import comment_policy
 from app.community.services import comment_service, identity_service, post_service
+from app.community.services.comment_service import CommentNotFound
 from app.community.services.identity_service import assign_handle
 from app.database import enable_sqlite_foreign_keys
 from app.security import hash_password
@@ -382,7 +382,6 @@ def test_a1_depth_triple_above_threshold_rejected(session_factory) -> None:
             now=_utcnow(),
         )
         db.commit()
-        reply_id = reply.id
         reply_depth = reply.depth
 
     assert reply_depth == 1
