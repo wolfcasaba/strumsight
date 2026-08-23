@@ -1,0 +1,1 @@
+round=E07-R25 verdict=pass tests=FullGate+RouterCI lesson=L319,L321 engine=minimax

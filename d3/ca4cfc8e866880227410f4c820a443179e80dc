@@ -1,0 +1,1 @@
+round=e07-r14 verdict=pass tests=442 (24 allocator + 5 policy + property gate) lesson=extend-today
