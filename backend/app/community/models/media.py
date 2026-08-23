@@ -161,12 +161,14 @@ class CommunityMedia(Base):
     )
     public_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
-        # Index-only — no column-level UNIQUE: the named
-        # ``ix_community_media_public_id`` index below carries
-        # the uniqueness constraint (same project-wide pattern
+        # No column-level UNIQUE / index: the named
+        # ``ix_community_media_public_id`` index in
+        # ``__table_args__`` carries BOTH the uniqueness
+        # constraint AND the index (same project-wide pattern
         # as ``CommunityBookmark.public_id`` — explicit named
-        # index instead of a column-level ``unique=True``).
-        index=True,
+        # index instead of column-level flags). Setting either
+        # ``unique=True`` or ``index=True`` here would collide
+        # with the explicit Index on the same name.
         default=uuid.uuid4,
         nullable=False,
     )
