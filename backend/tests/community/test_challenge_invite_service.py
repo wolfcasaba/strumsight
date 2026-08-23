@@ -59,7 +59,6 @@ from app.community.services import challenge_invite_service as service_module
 from app.community.services.challenge_invite_service import (
     BlockedChallengeRelationship,
     ChallengeInviteNotFound,
-    ChallengeInviteRateLimited,
     ChallengeNotFound,
     InvalidChallengeInviteTransition,
     accept_invite,
@@ -1062,8 +1061,8 @@ def test_a4_real_violation_probe_idempotency_check_removed(
         now,
     ):
         from app.community.models.challenge import (
-            CommunityChallengeInvite,
             CHALLENGE_INVITE_STATE_SENT,
+            CommunityChallengeInvite,
         )
 
         inviter_row = (

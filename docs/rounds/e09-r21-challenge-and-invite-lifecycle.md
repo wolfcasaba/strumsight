@@ -283,4 +283,54 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Javító kör (2026-08-23, `stopped` után) — l10n forrás-korrekció
+
+**Probléma:** az előző implementer a 17 új `communityChallenge*` kulcsot az
+`app_en.arb` / `app_hu.arb` aggregátumba írta, holott ADR 0307 §4 szerint
+ezek GENERATED fájlok — a `dart run tool/gen_l10n_segments.dart` határozza
+meg a tartalmukat a `lib/l10n/features/community_<locale>.arb` fragmentumokból.
+A gate `l10n` lépése emiatt `aggregátum elavult` hibát jelzett.
+
+**Megoldás:**
+1. A 17 kulcs (`communityChallengeTitle`, `…Empty`, `…ListHeader`,
+   `…Accept`, `…Decline`, `…Cancel`, `…InviteAction`, `…DeepLinkPractice`,
+   `…DeepLinkSong`, `…MetricLabel` (placeholder: `metric:String`),
+   `…WindowLabel` (placeholders: `startsAt:String`, `endsAt:String`),
+   `…ErrorNetwork`, `…ErrorSessionExpired`, `…ErrorForbidden`,
+   `…ErrorRateLimited`, `…ErrorConflict`, `…ErrorInvalidInput`)
+   átkerült a `lib/l10n/features/community_en.arb` és `…_hu.arb`
+   fragmentumok VÉGÉRE — a meglévő `communityNotificationSecurityAlertTitle`
+   bejegyzés után, azonos formázással (két szóköz indent, üres sor a
+   bejegyzések között, utolsó blokkon nincs vessző).
+2. `dart run tool/gen_l10n_segments.dart --write` deterministikusan
+   újraírta az aggregátumot a fragmentumokból (most már 17 kulcs × 2
+   locale = 34 bejegyzés, és a kulcs-sorrend ismét alfabetikus).
+3. `dart run tool/gen_l10n_segments.dart --check` → `[en] aggregátum
+   naprakész`, `[hu] aggregátum naprakész`.
+4. `dart run tool/ci/check_l10n_parity.dart` → `L10n parity OK
+   (en → hu, 1808 message(s))`.
+
+**Plusz gate-oldali auto-fix:** a round-gate első futásakor a `backend ruff
+check` 2 hibát jelzett a `backend/tests/community/test_challenge_invite_service.py`
+fájlban (F401 unused import `ChallengeInviteRateLimited`, I001 import-sorrend)
+— mindkettő a `--fix` kapcsolóval automatikusan javítva lett; a második
+gate-futtatás minden lépése zöld.
+
+**Végső gate (10 lépés, mind ZÖLD):**
+- format · analyze · community_challenges_test.dart (8/8) ·
+  ui_inventory_test.dart (1/1) · architecture · secrets · l10n ·
+  backend ruff format · backend ruff check · backend pytest (teljes suite).
+
+**Módosított fájlok:**
+- `lib/l10n/features/community_en.arb` (+68 sor)
+- `lib/l10n/features/community_hu.arb` (+68 sor)
+- `lib/l10n/app_en.arb` (GENERATED, regenerálva)
+- `lib/l10n/app_hu.arb` (GENERATED, regenerálva)
+- `backend/tests/community/test_challenge_invite_service.py` (ruff --fix)
+- `docs/rounds/e09-r21-challenge-and-invite-lifecycle.md` (ez a §10)
+
+**Kimaradt (a CI-ra bízva, ADR 0053):** randomizált property gate, teljes
+`flutter test` suite, release APK — ezeket a `gh workflow run build-apk.yml`
+futtatja, és a merge-bar zöld kapujához tartoznak.
+
 ## 11. Review — a Claude tölti ki
