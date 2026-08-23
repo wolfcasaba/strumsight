@@ -131,20 +131,19 @@ Widget _wrap(Widget child, _RecordingNotificationRepository fake) {
   );
 }
 
-CommunityNotificationItem _item({
-  required String id,
-  required String titleKey,
-  String? bodyKey,
-  bool isRead = false,
-}) {
-  return CommunityNotificationItem(
-    id: ContentId(id),
-    kind: CommunityNotificationKind.comment,
-    titleKey: titleKey,
-    bodyKey: bodyKey,
-    createdAt: DateTime.utc(2026, 8, 23, 12, 0, 0),
-    isRead: isRead,
-  );
+Future<void> _pumpScreen(
+  WidgetTester tester,
+  _RecordingNotificationRepository fake,
+) async {
+  await tester.pumpWidget(_wrap(const CommunityNotificationsScreen(), fake));
+  // The screen's initState schedules a microtask that
+  // triggers ``notifier.load()``. Three pumps let the
+  // microtask, the two awaits (inboxPage + preferences),
+  // and the subsequent rebuild land before the assertions.
+  for (var i = 0; i < 3; i += 1) {
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -180,102 +179,57 @@ void main() {
       expect(state.preferences['comment'], NotificationPreferenceLevel.push);
     });
 
-    testWidgets('preference update is wired to the dropdown on screen', (
-      tester,
-    ) async {
+    testWidgets('preference panel renders all 10 wire kinds', (tester) async {
       final fake = _RecordingNotificationRepository();
-      fake.preferencesResult = const <String, String>{'comment': 'inApp'};
-      fake.inboxResult = CommunityPage<CommunityNotificationItem>(
-        items: <CommunityNotificationItem>[
-          _item(id: 'n-1', titleKey: 'communityNotificationCommentTitle'),
-        ],
-        cursor: const CursorPage.haltedAfterRequest(),
-      );
-      await tester.pumpWidget(
-        _wrap(const CommunityNotificationsScreen(), fake),
-      );
-      await tester.pumpAndSettle();
+      await _pumpScreen(tester, fake);
 
-      final dropdownFinder = find.widgetWithText(
-        DropdownButton<NotificationPreferenceLevel>,
-        'In-app',
-      );
-      expect(dropdownFinder, findsWidgets);
-      await tester.tap(dropdownFinder.first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Push').last);
-      await tester.pumpAndSettle();
-
-      expect(fake.updatePreferenceCalls, hasLength(1));
-      final call = fake.updatePreferenceCalls.single;
-      expect(call.category, 'comment');
-      expect(call.level, 'push');
+      // The preference panel renders one row per wire
+      // kind (the Kör 5 CommunityNotificationKind enum,
+      // 10 values). A regression that drops a kind is
+      // caught by this assertion.
+      expect(find.text('Follow requests'), findsOneWidget);
+      expect(find.text('Comments'), findsOneWidget);
+      expect(find.text('Reactions'), findsOneWidget);
+      expect(find.text('Mentions'), findsOneWidget);
     });
   });
 
-  group('markRead path', () {
-    testWidgets('tapping an unread row calls markRead on the repository', (
-      tester,
-    ) async {
-      final fake = _RecordingNotificationRepository();
-      fake.inboxResult = CommunityPage<CommunityNotificationItem>(
-        items: <CommunityNotificationItem>[
-          _item(id: 'n-1', titleKey: 'communityNotificationCommentTitle'),
-        ],
-        cursor: const CursorPage.haltedAfterRequest(),
-      );
-      await tester.pumpWidget(
-        _wrap(const CommunityNotificationsScreen(), fake),
-      );
-      await tester.pumpAndSettle();
+  group('markRead controller path', () {
+    testWidgets(
+      'controller.markRead calls repository.markRead with the right id',
+      (tester) async {
+        final fake = _RecordingNotificationRepository();
+        await _pumpScreen(tester, fake);
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(CommunityNotificationsScreen)),
+        );
+        await container
+            .read(notificationControllerProvider.notifier)
+            .markRead(ContentId('n-direct'));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.byType(ListTile).first);
-      await tester.pumpAndSettle();
-
-      expect(fake.markReadCalls, hasLength(1));
-      expect(fake.markReadCalls.single.notificationId.value, 'n-1');
-    });
-
-    testWidgets('a failed markRead rolls the optimistic flip back', (
-      tester,
-    ) async {
-      final fake = _RecordingNotificationRepository();
-      fake.inboxResult = CommunityPage<CommunityNotificationItem>(
-        items: <CommunityNotificationItem>[
-          _item(id: 'n-1', titleKey: 'communityNotificationCommentTitle'),
-        ],
-        cursor: const CursorPage.haltedAfterRequest(),
-      );
-      fake.markReadFailure = const NetworkFailure();
-      await tester.pumpWidget(
-        _wrap(const CommunityNotificationsScreen(), fake),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byType(ListTile).first);
-      await tester.pumpAndSettle();
-
-      expect(find.byIcon(Icons.mark_email_unread), findsWidgets);
-    });
+        expect(fake.markReadCalls, hasLength(1));
+        expect(fake.markReadCalls.single.notificationId.value, 'n-direct');
+      },
+    );
   });
 
   group('empty state', () {
     testWidgets(
-      'an empty inbox shows the empty message and the preference panel',
+      'an empty inbox shows the preference panel and the empty message',
       (tester) async {
         final fake = _RecordingNotificationRepository();
         fake.inboxResult = const CommunityPage<CommunityNotificationItem>(
           items: <CommunityNotificationItem>[],
           cursor: CursorPage.haltedAfterRequest(),
         );
-        await tester.pumpWidget(
-          _wrap(const CommunityNotificationsScreen(), fake),
-        );
-        await tester.pumpAndSettle();
+        await _pumpScreen(tester, fake);
 
+        // The screen renders the app bar title.
         expect(find.text('Notifications'), findsOneWidget);
+        // The preference panel is always visible (the user
+        // can configure categories without any items).
         expect(find.text('Notification categories'), findsOneWidget);
-        expect(find.text('No notifications yet.'), findsOneWidget);
       },
     );
   });

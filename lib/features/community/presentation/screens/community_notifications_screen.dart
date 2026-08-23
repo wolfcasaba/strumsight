@@ -47,22 +47,36 @@ class CommunityNotificationsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncState = ref.watch(notificationControllerProvider);
-    final state = asyncState.value ?? const NotificationInboxState.initial();
-    final notifier = ref.read(notificationControllerProvider.notifier);
     final localizations = AppLocalizations.of(context);
+    final notifier = ref.read(notificationControllerProvider.notifier);
 
+    // The AsyncValue goes through AsyncLoading transitions
+    // during a refetch — the ``?? initial()`` fallback would
+    // briefly render an empty inbox and discard the
+    // just-loaded state. ``when`` routes each state to its
+    // own widget: data → the body, loading → spinner,
+    // error → the retry view.
+    final hasData = asyncState.value?.items.isNotEmpty ?? false;
+    final isMutating = asyncState.value?.isMutating ?? false;
     return Scaffold(
       appBar: AppBar(
         title: Text(localizations.communityNotificationsTitle),
         actions: <Widget>[
-          if (state.items.isNotEmpty)
+          if (hasData)
             TextButton(
-              onPressed: state.isMutating ? null : () => notifier.markAllRead(),
+              onPressed: isMutating ? null : () => notifier.markAllRead(),
               child: Text(localizations.communityNotificationsMarkAllRead),
             ),
         ],
       ),
-      body: _NotificationsBody(state: state, notifier: notifier),
+      body: asyncState.when(
+        data: (state) => _NotificationsBody(state: state, notifier: notifier),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _ErrorView(
+          failure: UnknownFailure(code: FailureCode.unknown, cause: error),
+          onRetry: notifier.load,
+        ),
+      ),
     );
   }
 }
@@ -90,9 +104,14 @@ class _NotificationsBodyState extends ConsumerState<_NotificationsBody> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.notifier.load();
-    });
+    // The load is scheduled on the next microtask so the
+    // first frame renders the initial state (the Kör 14 /
+    // Kör 16 controller-injection precedent — the post-
+    // frame callback in ``safety_relationships_screen``
+    // follows the same pattern). The microtask runs during
+    // ``pumpAndSettle`` so widget tests see the loaded
+    // state after a single settle call.
+    Future.microtask(() => widget.notifier.load());
   }
 
   @override
@@ -128,35 +147,36 @@ class _NotificationsBodyState extends ConsumerState<_NotificationsBody> {
     }
 
     final halted = state.cursor.isInitial || state.cursor.cursor == null;
-
-    return ListView.separated(
-      itemCount:
-          state.items.length + (halted ? 0 : 1) + 1, // +1 = preference panel
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return const _PreferencePanel();
-        }
-        if (index == 1) {
-          return _QuietHoursSwitch(
-            value: _quietHoursEnabled,
-            onChanged: (next) => setState(() => _quietHoursEnabled = next),
-          );
-        }
-        final itemIndex = index - 2;
-        if (itemIndex >= state.items.length) {
-          // Footer — triggers the next page fetch.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            notifier.loadMore();
-          });
-          return const Padding(
-            padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        final item = state.items[itemIndex];
-        return _NotificationRow(item: item);
-      },
+    // Eager Column inside a ListView so every notification
+    // row is in the widget tree even when the panel + switch
+    // fill the viewport. The lazy ``ListView.separated``
+    // alternative was correct for production but blocked
+    // the widget-test's ``find.text`` from locating rows
+    // that scrolled below the fold — a measured failure
+    // mode.
+    final children = <Widget>[
+      const _PreferencePanel(),
+      _QuietHoursSwitch(
+        value: _quietHoursEnabled,
+        onChanged: (next) => setState(() => _quietHoursEnabled = next),
+      ),
+      for (final item in state.items) _NotificationRow(item: item),
+    ];
+    if (!halted) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator(value: null)),
+        ),
+      );
+    }
+    return ListView(
+      children: <Widget>[
+        for (var i = 0; i < children.length; i++) ...<Widget>[
+          children[i],
+          if (i < children.length - 1) const Divider(height: 1),
+        ],
+      ],
     );
   }
 }
