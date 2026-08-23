@@ -184,9 +184,7 @@ class CommunityNotification(Base):
     # The A2 burst-aggregation key. Both columns are NULLABLE — a
     # system event with no entity to point at leaves them NULL.
     entity_type: Mapped[str | None] = mapped_column(String, nullable=True)
-    entity_id: Mapped[str | None] = mapped_column(
-        String(length=64), nullable=True
-    )
+    entity_id: Mapped[str | None] = mapped_column(String(length=64), nullable=True)
     # The A2 burst-aggregation count. NOT NULL, default 1; the
     # service increments instead of inserting for a new event
     # inside the 15-minute window.
@@ -203,9 +201,7 @@ class CommunityNotification(Base):
     )
     # A7 dedup key. UNIQUE per (recipient, dedup_key); a NULL
     # dedup_key is non-conflicting in SQL UNIQUE.
-    dedup_key: Mapped[str | None] = mapped_column(
-        String(length=128), nullable=True
-    )
+    dedup_key: Mapped[str | None] = mapped_column(String(length=128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

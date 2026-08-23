@@ -108,9 +108,7 @@ class PushPayload:
             raise ValueError("push title_key must be a non-empty string")
         if self.body_key is not None and not self.body_key:
             # An empty string is a bug — the column allows NULL, not "".
-            raise ValueError(
-                "push body_key must be None or a non-empty string"
-            )
+            raise ValueError("push body_key must be None or a non-empty string")
         if self.route_entity_id is not None and not self.route_entity_type:
             # An entity id without a type would land in an
             # undisplayable state on the client; reject it at the
@@ -125,9 +123,7 @@ class PushPayload:
 # MUST NOT be added without running the §6.1 valódi-sértés próba
 # in ``test_notification_service.py``. The frozenset is the
 # structural mirror of the A1 cell.
-_ALLOWED_PUSH_FIELDS: frozenset[str] = frozenset(
-    {f.name for f in fields(PushPayload)}
-)
+_ALLOWED_PUSH_FIELDS: frozenset[str] = frozenset({f.name for f in fields(PushPayload)})
 
 
 def _assert_payload_is_minimal(payload: object) -> None:

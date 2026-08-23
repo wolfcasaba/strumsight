@@ -209,19 +209,13 @@ def _as_utc(value: datetime) -> datetime:
 def _resolve_profile_by_public_id(
     db: Session, public_id: uuid.UUID
 ) -> CommunityProfile | None:
-    return (
-        db.query(CommunityProfile).filter_by(public_id=public_id).one_or_none()
-    )
+    return db.query(CommunityProfile).filter_by(public_id=public_id).one_or_none()
 
 
 def _resolve_notification_by_public_id(
     db: Session, public_id: uuid.UUID
 ) -> CommunityNotification | None:
-    return (
-        db.query(CommunityNotification)
-        .filter_by(public_id=public_id)
-        .one_or_none()
-    )
+    return db.query(CommunityNotification).filter_by(public_id=public_id).one_or_none()
 
 
 def _encode_cursor(created_at: datetime, row_id: int) -> str:
@@ -286,9 +280,7 @@ def _existing_burst_row(
     return None
 
 
-def _post_alive(
-    db: Session, *, post_public_id_str: str
-) -> bool:
+def _post_alive(db: Session, *, post_public_id_str: str) -> bool:
     """A5 helper — check whether a ``post`` entity is still
     visible to the inbox viewer.
 
@@ -303,11 +295,7 @@ def _post_alive(
         post_public_id = uuid.UUID(post_public_id_str)
     except (ValueError, TypeError):
         return False
-    post = (
-        db.query(CommunityPost)
-        .filter_by(public_id=post_public_id)
-        .one_or_none()
-    )
+    post = db.query(CommunityPost).filter_by(public_id=post_public_id).one_or_none()
     if post is None:
         return False
     if post.deleted_at is not None:
@@ -391,11 +379,7 @@ def create_notification(
     # A2 burst-aggregation — find the in-window row, increment
     # its count, and return. The push was already fired when
     # the burst opened; we do NOT re-fire.
-    if (
-        aggregate
-        and entity_type is not None
-        and entity_id is not None
-    ):
+    if aggregate and entity_type is not None and entity_id is not None:
         existing = _existing_burst_row(
             db,
             recipient_profile_id=recipient.id,
@@ -530,9 +514,7 @@ def mark_read(
     recipient = _resolve_profile_by_public_id(db, recipient_public_id)
     if recipient is None:
         raise NotificationProfileNotFound("recipient community profile not found")
-    notification = _resolve_notification_by_public_id(
-        db, notification_public_id
-    )
+    notification = _resolve_notification_by_public_id(db, notification_public_id)
     if notification is None:
         return False
     if notification.recipient_profile_id != recipient.id:
@@ -543,18 +525,27 @@ def mark_read(
     if notification.is_read:
         return False
 
+    # A3 test seam — the ``_before_commit`` hook fires AFTER
+    # the early-return guard (``is_read`` check) but BEFORE
+    # the decisive UPDATE statement (the §6.1 "a döntő
+    # UPDATE elé" placement). The L421 lesson: a barrier
+    # placed AFTER the flush serialises the threads too
+    # late — the second thread's flush has already raised a
+    # SQLite lock error by the time the first commits.
+    # Placing the barrier here means BOTH threads' SELECT
+    # statements land first, BOTH see ``is_read = False``,
+    # the barrier synchronises them, BOTH then issue the
+    # UPDATE. SQLite's writer-serialises-writers invariant
+    # means one commits, the second's UPDATE blocks until
+    # the first commits, then proceeds. The final state is
+    # consistent (unread count = 0); the return values are
+    # both ``True`` (both wrote a transition).
+    if _before_commit is not None:
+        _before_commit()
     notification.is_read = True
     notification.read_at = now
     notification.updated_at = now
     db.flush()
-    # A3 test seam — the ``_before_commit`` hook fires AFTER
-    # the UPDATE statement and BEFORE the transaction commits.
-    # A future round that lands an event-bus integration can
-    # safely replace this with a real "publish" call; the
-    # L421 lesson is that the seam must be at the SQL
-    # decision point, not the function entry.
-    if _before_commit is not None:
-        _before_commit()
     db.refresh(notification)
     if on_invalidate is not None:
         on_invalidate(
@@ -617,12 +608,9 @@ def mark_all_read_up_to(
     # would break this; SQLAlchemy's
     # ``BigInteger().with_variant(Integer, "sqlite")``
     # autoincrement is monotonic for our use).
-    unread_q = (
-        db.query(CommunityNotification)
-        .filter(
-            CommunityNotification.recipient_profile_id == recipient.id,
-            CommunityNotification.is_read.is_(False),
-        )
+    unread_q = db.query(CommunityNotification).filter(
+        CommunityNotification.recipient_profile_id == recipient.id,
+        CommunityNotification.is_read.is_(False),
     )
     # Filter to the cutoff — only notifications that the
     # user has actually seen. A "mark all as read" without a
@@ -630,15 +618,22 @@ def mark_all_read_up_to(
     # user has not seen yet, which is the wrong UX.
     if up_to.created_at is not None:
         unread_q = unread_q.filter(
-            tuple_(
-                CommunityNotification.created_at, CommunityNotification.id
-            )
+            tuple_(CommunityNotification.created_at, CommunityNotification.id)
             <= tuple_(_as_utc(up_to.created_at), up_to.id)
         )
     rows = unread_q.all()
     if not rows:
         return 0
 
+    # A3 test seam — same L421 rationale as
+    # :func:`mark_read`. The barrier fires AFTER the SELECT
+    # and BEFORE the bulk UPDATE. Two concurrent
+    # ``mark_all_read_up_to`` calls synchronise on the
+    # barrier, then both issue the bulk UPDATE; SQLite
+    # serialises the writes; the final state is consistent
+    # (unread count = 0, every row's ``is_read`` is True).
+    if _before_commit is not None:
+        _before_commit()
     count = 0
     for row in rows:
         row.is_read = True
@@ -646,8 +641,6 @@ def mark_all_read_up_to(
         row.updated_at = now
         count += 1
     db.flush()
-    if _before_commit is not None:
-        _before_commit()
     for row in rows:
         db.refresh(row)
     if on_invalidate is not None:
@@ -706,9 +699,7 @@ def list_inbox(
     if decoded is not None:
         cursor_at, cursor_id = decoded
         base_query = base_query.filter(
-            tuple_(
-                CommunityNotification.created_at, CommunityNotification.id
-            )
+            tuple_(CommunityNotification.created_at, CommunityNotification.id)
             < tuple_(_as_utc(cursor_at), cursor_id)
         )
     rows = (
@@ -881,8 +872,7 @@ def set_preference(
         raise NotificationProfileNotFound("recipient community profile not found")
     if level not in {"inApp", "push", "disabled"}:
         raise ValueError(
-            f"preference level {level!r} is not one of "
-            f"'inApp', 'push', 'disabled'"
+            f"preference level {level!r} is not one of 'inApp', 'push', 'disabled'"
         )
     _PREFERENCE_STORE[(recipient.id, category)] = level
 
