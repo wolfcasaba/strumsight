@@ -16738,3 +16738,40 @@ CI-suite fog megfogni (vö. L420/L106/L145).
 `catalog smoke test renders for Brightness.dark/light` cellák immár mind az
 `SsCard`-szűkített `Material`-, mind a `DecoratedBox`-elvárást ténylegesen
 kiértékelik (mérve: 8/8 zöld, és a második `Material` rontása `+5 -3`-ra viszi).
+
+## L442 — Egy MÁSIK feature-be importáló use-case-nél a repository/provider-réteg hiánya a `public.dart`-on strukturális, nem véletlen — a L286 minta MÁSODSZOR mérve, most a `songs` feature-nél (E09-R17, 2026-08-23)
+
+**Mért eset.** Az E09-R17 brief-je szerint az `import_share_artifact.dart`
+egy Community share-artifactból (plan template / original progression) egy
+ÚJ, lokálisan mentett `Song`-ot hoz létre a `songs` feature `public.dart`-ján
+keresztül. A pre-flight `grep -rln "songsRepositoryProvider" lib/` paranccsal
+megmérte: a `songsRepositoryProvider`/`SongsController.add()` — az EGYETLEN
+belépési pont egy ÚJ `Song` perzisztálására — kizárólag a `lib/features/songs/`
+mappán BELÜL használt; a feature saját `public.dart`-ja csak a
+`model/song.dart`-ot exportálja (a `Song` TÍPUST, nem az író-réteget).
+
+Ez PONTOSAN az L286 (E07-R08, docs/LESSONS.md 10644. sor) mintája — ott a
+Practice Engine repository/provider rétege hiányzott a `practice/public.dart`-ról,
+itt a Songs repository/provider rétege a `songs/public.dart`-ról. Két
+FÜGGETLEN feature, két FÜGGETLEN körben, UGYANAZ a hiányosság-osztály — ez
+megerősíti, hogy ez nem egyedi hiba egy adott feature-ben, hanem STRUKTURÁLIS
+minta ebben a kódbázisban: egy feature `public.dart`-ja tipikusan a DOMAIN
+value-típusokat exportálja, de a repository/provider (író-) réteget NEM,
+hacsak egy korábbi kör explicit ok miatt fel nem vette.
+
+**Tanulság.** Mielőtt egy "X feature-be importáló/mentő use-case" jellegű
+körben feltételeznéd, hogy a cél-feature repository/provider rétege elérhető
+a `public.dart`-on: MÉRD MEG (`grep -rln "<RepositoryProvider>" lib/`), NE
+következtess a value-típus exportjából. Ha hiányzik, az NEM automatikusan
+`allowed_paths`-bővítést vagy H3-haltot igényel — a bevett feloldás (ha a
+projektben már van rá precedens, mint az Epic 7 R01-R08 minden adaptere)
+a PURE, hívó-táplált transzformátor: a use-case validál és egy ÚJ értéket
+épít/ad vissza, de nem hívja az írót; a tényleges perzisztálás bekötése egy
+KÉSŐBBI, a cél-feature `public.dart`-ját explicit érintő körre marad.
+
+**Őrteszt:** `test/features/community/application/import_share_artifact_test.dart`
+— az `A5 — the source artifact identity is preserved through the call` cella
++ a `§6.1 — A5 probe` mérik, hogy a use-case NEM mutálja a bemenetet és NEM
+ér hozzá élő repository-hoz (a teszt egyáltalán nem ProviderScope-ol
+`songsProvider`-t, tehát egy jövőbeli, véletlen `songsProvider`-hívás
+compile-time hibát adna, mert a teszt nem adna Riverpod-kontextust hozzá).
