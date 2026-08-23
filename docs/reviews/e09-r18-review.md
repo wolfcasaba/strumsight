@@ -176,3 +176,55 @@ nyitva-blokkoló osztály. A javító körnek: (1) perzisztálni a valódi `expi
 (`pending`/`uploaded`) állapotokra szűkíteni, (3) `_as_utc`-t valódi UTC-re
 javítani, (4) az A5 valódi-adapter no-opját legalább egy elbukó guard-teszttel
 láthatóvá tenni.
+
+---
+
+## Javító kör 1 (`84df6646..a3316bda`) — re-review — **APPROVED**
+
+Független, READ-ONLY re-review izolált klónban (`/tmp/review-e09-r18-fix1`,
+Claude Opus). A dedikált biztonsági review (`docs/reviews/e09-r18-security.md`)
+F1–F4 leletei ugyanazok a hibák, mint a fenti B1/M1–M3 — a javítás mindkettőt
+lezárja, plusz a security review F2-jét (kitalált SigV4 query-paraméterek).
+
+**Mind CLOSED, kódszintű file:line-bizonyítékkal, önállóan újrafuttatva:**
+
+- **B1/F1 (expiry hamis zöld) — CLOSED.** `CommunityMedia.expires_at`
+  persisted NOT NULL oszlop (`models/media.py:249`, migráció `:133`),
+  `create_upload_intent` a `signed_upload.expires_at`-ot írja a sorba
+  (`:495`), `finalize_upload` a TÁROLT `row.expires_at`-hoz hasonlít
+  (`:610-611`), nem hardcode-olt konstansból derivál. Reprodukálva: 60 s TTL
+  + `+90 s` finalize → `MediaUploadExpired` (a régi, hamis-zöld `+5 perc`-es
+  mérés eltávolítva, `+90 s`-ra cserélve — ERŐSÍTÉS, nem gyengítés).
+- **M1 (kvóta lockout) — CLOSED.** `_live_upload_count` csak
+  `PENDING`/`UPLOADED`-et számol (`:358-360`); 10×cancel + 11. intent
+  sikeres teszttel igazolva.
+- **M2/F4 (checksum inert) — CLOSED (dokumentáltan, `xfail`-lel).**
+  `test_a5_real_adapter_no_sha256_hex_does_not_catch_mismatch`
+  (`@pytest.mark.xfail(strict=True)`, `test_media_upload.py:1300`) a KÍVÁNT
+  viselkedést állítja (`row == FAILED`) — ma `XFAILED`, a valódi wiring
+  napján hangos `XPASS→FAIL`-ra vált. `object_store.py` explicit TODO a
+  `sha256_hex=None` mellett.
+- **M3/F3 (`_as_utc` rossz tz) — CLOSED.** `value.replace(tzinfo=timezone.utc)`
+  (`:377-379`), a `post_service._as_utc` mintája.
+- **F2 (kitalált SigV4 paraméterek) — CLOSED.** A content-type most VALÓDI
+  aláírt SigV4 header (`content-type;host` a signed-headers listában +
+  canonical headers, `object_store.py:563-580`); a content-length-re a
+  docstring ŐSZINTÉN kimondja, hogy presigned PUT nem tudja aláírni (AWS-
+  korlát), a finalize `head_object` size-check a load-bearing réteg.
+  Determinisztikus known-answer tesztek hozzáadva.
+- **m2/m3 MINOR — CLOSED.** Egyetlen unique index a `public_id`-n; dedikált
+  `MediaProfileNotFound` a bare `ValueError` helyett mindhárom belépési
+  ponton.
+
+**Regresszió-ellenőrzés: PASS** — nincs törölt/gyengített acceptance-teszt,
+nincs megfordított assert-irány, a Dart uploader/teszt változatlan (egyik
+lelet sem érintette). **Scope: PASS** — 6 fájl, mind az `allowed_paths`-on,
+tilos zóna érintetlen. **Gate:** `round-gate.sh` 9/9 zöld + backend pytest
+30 passed + 1 xfailed (helyesen `XFAILED`, nem `passed`/`failed`).
+
+2 új NOTE (nem blokkoló, dokumentum-konzisztencia): elavult migráció-
+docstring (`e09_r18_0012:17-19` még a régi `unique=True`-t írja le) és egy
+elavult teszt-név hivatkozás egy TODO-kommentben (`object_store.py:379`).
+
+**Végső döntés: APPROVED, 0 nyitott BLOCKER/MAJOR.** A teljes suite +
+randomizált property gate + APK a CI-ban zárja a merge-bart (ADR 0053).

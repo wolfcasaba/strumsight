@@ -784,3 +784,11 @@ küszöbe), a fenti 1–5 tétel + a MINOR m2 (redundáns unique index) és m3 (
 `ValueError` a hiányzó profilra) javításával. Lásd a javító kör promptját és
 a `docs/reviews/e09-r18-review.md` §"Merge-döntés" / `docs/reviews/e09-r18-security.md`
 §"Javítás iránya" szakaszait a pontos javítási irányért.
+
+**Javító kör 1 (`84df6646..a3316bda`) — végső verdikt: APPROVED.** Mindkét
+review (correctness + dedikált security) 0 nyitott BLOCKER/MAJOR-t igazol,
+kódszintű file:line-bizonyítékkal, önállóan újrafuttatott gate-tel
+(`round-gate.sh` 9/9 zöld + backend pytest 30 passed + 1 xfailed). Részletek:
+`docs/reviews/e09-r18-review.md` „Javító kör 1 — re-review — APPROVED" +
+`docs/reviews/e09-r18-security.md` „Javító kör 1 — utókövetés". Következő
+lépés: CI-dispatch (`full-gate.yml` + `router-ci.yml`) és merge.

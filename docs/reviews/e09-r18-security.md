@@ -220,3 +220,16 @@ Az F1 latens elfogadást egy eldobható pytest bizonyította a gyári fixtúrák
 (60 s intent + finalize `+90 s` → `FINALIZED`). A klón nem módosult (a repro
 fájl törölve). A többi lelet kód-olvasásból + a precedens (`post_service._as_utc`)
 összevetéséből.
+
+---
+
+## Javító kör 1 (`84df6646..a3316bda`) — utókövetés
+
+Az F1/F2/F3/F4 mind zárva a javító körben (a részletes kódszintű bizonyíték
+`docs/reviews/e09-r18-review.md` „Javító kör 1 — re-review — APPROVED"
+szakaszában): `expires_at` perzisztált oszlop + a finalize a tárolt értéket
+nézi (F1), valódi SigV4 signed header a content-type-ra (F2), `_as_utc`
+`timezone.utc`-t csatol (F3), a checksum-rés `xfail(strict=True)`-fel
+dokumentáltan látható, nem néma (F4). Új CRITICAL/BLOCKER/MAJOR nem
+keletkezett a javításban. Ez a dedikált biztonsági review záró állapota:
+**PASS, 0 nyitott lelet.**
