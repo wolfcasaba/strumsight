@@ -330,6 +330,43 @@ void main() {
         expect(find.text('Fixture body text.'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'a cache-primed post with a known artifact type rehydrates to its '
+      'own card, not the fallback (A1.3 — F2 regression probe)',
+      (tester) async {
+        final h = _buildHarness();
+        // Prime the cache with a post whose artifact is a real
+        // `PracticeSummaryArtifact` — the same wire shape the
+        // production `_envelopeOf` persists.
+        final post = _post(
+          id: 'cached-practice-1',
+          artifact: _practiceArtifact(),
+        );
+        await h.cache.write(<CachedFeedItem>[
+          CachedFeedItem(
+            postId: post.id.value,
+            envelope: _envelopeOfForTest(post),
+          ),
+        ]);
+        // Force the offline path — the repository throws so
+        // `_artifactFromEnvelope` is the only way the card gets a
+        // typed artifact back.
+        h.repository.nextThrow = const NetworkFailure(
+          code: FailureCode.networkUnavailable,
+        );
+        await tester.pumpWidget(_harness(h));
+        await tester.pumpAndSettle();
+
+        // The PracticeSummary card title is on screen — NOT the
+        // fallback card text.
+        expect(find.text('Gyakorlás összegzés'), findsOneWidget);
+        expect(
+          find.text('Ehhez a poszthoz nincs megjeleníthető tartalom.'),
+          findsNothing,
+        );
+      },
+    );
   });
 
   group('A2 — cache is per-user; account switch never leaks', () {
@@ -790,6 +827,27 @@ Map<String, Object?> _envelopeOfForTest(CommunityPost post) {
       'bookmarkCount': post.counts.bookmarkCount,
     },
     'viewerState': <String, Object?>{'bookmarkedAt': null, 'myReaction': null},
-    'artifact': <String, Object?>{'type': 'unfilled', 'schemaVersion': 0},
+    // F2: mirror the production `_envelopeOf` shape — serialise the real
+    // artifact via `toJson()` (or the unfilled stub when the post has no
+    // concrete artifact) so the cache round-trip exercises the same wire
+    // shape the controller would persist. The previous hardcoded
+    // `'unfilled'` here meant no test ever proved that a known-type
+    // artifact rehydrates to its own card.
+    'artifact': _artifactEnvelopeForTest(post.artifact),
+  };
+}
+
+Object? _artifactEnvelopeForTest(CommunityShareArtifact artifact) {
+  if (artifact is UnfilledCommunityShareArtifact) {
+    return <String, Object?>{'type': 'unfilled', 'schemaVersion': 0};
+  }
+  if (artifact is ShareArtifact) {
+    return artifact.toJson();
+  }
+  return <String, Object?>{
+    'type': 'unknown',
+    'schemaVersion': artifact.schemaVersion,
+    'sourceId': artifact.sourceId,
+    'createdAt': artifact.createdAt.toIso8601String(),
   };
 }
