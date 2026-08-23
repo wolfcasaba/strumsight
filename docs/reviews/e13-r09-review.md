@@ -5,7 +5,10 @@
 - **Reviewer:** Claude Opus 5 (orchestrátor), read-only, izolált klón:
   `/tmp/review-e13-r09`
 - **Dátum:** 2026-08-23
-- **Verdikt:** **CHANGES REQUESTED** — 3 MAJOR (mind MÉRVE), 1 MINOR, 2 NOTE
+- **Verdikt (első kör, `2f3b7c14`):** CHANGES REQUESTED — 3 MAJOR (mind MÉRVE),
+  1 MINOR, 2 NOTE
+- **Verdikt a javító kör után (`5d93f098`): ✅ APPROVED** — mind a három MAJOR
+  és a MINOR-1 lezárva, leletenként ÚJRA MÉRVE (lásd §7)
 
 ## 1. Jelzés, scope, gate
 
@@ -198,3 +201,37 @@ Mind eldobható volt, a jelentés megírásakor törölve
 `zz_probe_test.dart` (P1–P3), `zz_probe4_test.dart` (P4),
 `zz_probe5_test.dart` (P5), valamint öt produkciós mutáció, mindegyik
 `git checkout --`-ral visszaállítva.
+
+## 7. Javító kör (fix1, `5d93f098`) — leletenkénti újramérés
+
+Friss, független klón (`/tmp/review2-e13-r09`, közvetlenül az originról),
+`tools/prepare-flutter-generated.sh`, majd a TELJES mutáció-mátrix újrafuttatva.
+
+| Lelet | Javítás | **Újramérés** |
+|---|---|---|
+| **MAJOR-1** | forrás-szintű őrcella a két új produkciós fájlra (tiltott tokenek: `MethodChannel`, `wakelock`, `camera`, `record`, `microphone`, `permission`), komment-leválasztással, **plusz egy cella, ami magát az őrt méri** a mutált forrásrészleten | ✅ **RED** — az `autoStart`+mikrofon mutáció most `resource ownership (source guard, E13-R09 MAJOR-1)` cellán bukik. A produkciós kód változatlan maradt, ahogy kértük |
+| **MAJOR-2** | a harness `tester.view.physicalSize` + `devicePixelRatio = 1` + `addTearDown(tester.view.reset)`; a `MediaQuery` már csak a `textScaler`-t adja | ✅ **RED, és MAGASSÁG-ÉRZÉKENYEN** — egy 450 px fix alsó akciósáv mutációval a `Size(800,400)` cella PIROS, a `Size(1000,500)` és a `Size(1200,800)` ZÖLD marad. Ez pontosan azt bizonyítja, hogy a deklarált méret MOST a valódi layout-kényszer (a javítás előtt mind a három azonos 800×600-on futott) |
+| **MAJOR-3** | `Flexible(child: Text(label!, softWrap: true))` a `_RestIndicator`-ban, + két új cella (rest- és aktív ág) 360×640-es VALÓDI felületen, 2.0 text scale-lel | ✅ **RED** a `Flexible` visszavételére; a 661 px-es túlcsordulás megszűnt |
+| **MINOR-1** | a §10 kimondja, hogy a „fix magasságú fejléc" sort ténylegesen az A8 őrzi | ✅ dokumentálva |
+| NOTE-1, NOTE-2 | szándékosan érintetlen | — |
+
+**Regresszió-ellenőrzés — a korábban is jó négy sor változatlanul piros:**
+
+| §6.1 sor | Cella | Újramérés |
+|---|---|---|
+| Finish overflow menübe | A2 | RED ✅ (mind a négy aktív cella) |
+| paused == active | A3 | RED ✅ |
+| a vissza-hook kétszer hív | A5 | RED ✅ |
+| az ébrentartás bent ragad | A7 | RED ✅ |
+
+**Saját gate-futtatás a javított kódon** (`/tmp/review2-e13-r09`, csonkítatlan):
+mind a **8 lépés ZÖLD** — `format`, `analyze` (0 issue), `test` 9 + 11 + 3 = **24
+cella PASS** (a kör elején 19 volt), `architecture` (12 allowlistelt eltérés,
+változatlan), `secrets`, `l10n`.
+
+**Scope a javító körben:** `scope_audit=ok`, 4 útvonal
+(`ss_session_transport.dart`, a két teszt, a brief §10) — a szűkített lista
+betartva, produkciós scaffold-változtatás nélkül.
+
+**Merge-döntés: ✅ APPROVED.** Nyitott BLOCKER/MAJOR nincs. A merge feltétele
+már csak az exact-SHA CI zöldje a `5d93f098`-on (Full Gate + Router CI).
