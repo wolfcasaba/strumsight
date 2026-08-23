@@ -368,4 +368,88 @@ módosítja a `post_composer_controller.dart` fájlt.
 
 `tools/codex-signal.sh done "E09-R15 KÉSZ — reaction service + Flutter optimistic controller, §6 cellák mind zöldek, valódi-sértés próba dokumentálva"` — a §9 automatikus jelzés.
 
+### 10.9 Javító kör 1 — review F1 (MINOR) és F2 (NOTE)
+
+**Review-leletek:** F1 (MINOR — `test_a5_count_property_invariant_never_negative`
+seed-függő `UnboundLocalError`-kockázat) és F2 (NOTE — elárvult `sys`-import
+kommentblokk). Mindkettő a `backend/tests/community/test_reaction_service.py`
+fájlban, az `allowed_paths`-on belül. F3 (NOTE — ARB stringek) ebben a
+körben nem javítandó, ahogy a review is jelzi.
+
+**F1 javítás — `count` mérése MINDEN iterációban, a (potenciális) mutáció
+UTÁN.** Az eredeti kód az `else: count = _count()` ágra korlátozta a
+hozzárendelést, miközben az `assert count >= 0` feltétel nélkül futott —
+ez a kombináció `UnboundLocalError`-t dobott, amikor az első iteráció
+`op`-ja nem `2` volt (mérve `seed=1`, `2`, `12345`, `999999`). A javítás
+a `_count()` hívást kiemeli az `else` ágból, és a ciklusmag végére teszi,
+így minden iteráció friss `count`-ot kap, és az invariáns ténylegesen
+MINDEN mutáció UTÁN mér (ahogy a brief §6 A5 szó szerinti előírása kéri —
+"a count property-invariánsként sosem negatív"), nem csak a véletlenül
+`op==2`-t húzó olvasásoknál. A docstring komment is frissítve, hogy
+magyarázza az új olvasatot.
+
+**F2 javítás — a `test_reaction_service.py` végén lévő, `sys`-importra
+hivatkozó kommentblokk (818–822. sor) törölve.** A `ruff --fix` commit
+(`6cca7b85`) már eltávolította a nem használt `sys` importot; a
+magyarázó komment elárvult, és megtévesztő volt.
+
+**Mért bizonyíték — a javítás UTÁN LEFUTTATOTT parancsok kimenete:**
+
+A négy `PROPERTY_SEED`-es célzott hívás (mind a javított
+`test_a5_count_property_invariant_never_negative` teszten):
+
+```bash
+$ cd backend && PROPERTY_SEED=1 python3 -m pytest \
+    tests/community/test_reaction_service.py::test_a5_count_property_invariant_never_negative -q
+.                                                                        [100%]
+=============================== warnings summary ===============================
+tests/community/test_reaction_service.py: 18 warnings
+  /home/ubuntu/.local/lib/python3.12/site-packages/sqlalchemy/engine/default.py:952: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    cursor.execute(statement, parameters)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+# EXIT=0   (egy . = 1 passed; NINCS UnboundLocalError, NINCS FAILED)
+
+$ cd backend && PROPERTY_SEED=2 python3 -m pytest \
+    tests/community/test_reaction_service.py::test_a5_count_property_invariant_never_negative -q
+.                                                                        [100%]
+# (warnings summary azonos, EXIT=0)
+
+$ cd backend && PROPERTY_SEED=12345 python3 -m pytest \
+    tests/community/test_reaction_service.py::test_a5_count_property_invariant_never_negative -q
+.                                                                        [100%]
+# (warnings summary azonos, EXIT=0)
+
+$ cd backend && PROPERTY_SEED=999999 python3 -m pytest \
+    tests/community/test_reaction_service.py::test_a5_count_property_invariant_never_negative -q
+.                                                                        [100%]
+# (warnings summary azonos, EXIT=0)
+```
+
+A teljes `test_reaction_service.py` suite (kilenc teszt):
+
+```bash
+$ cd backend && python3 -m pytest tests/community/test_reaction_service.py -q
+.........                                                                [100%]
+=============================== warnings summary ===============================
+tests/community/test_reaction_service.py: 50 warnings
+  (ua. DeprecationWarning, mint fent)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+# EXIT=0   (kilenc . = 9 passed; 0 failed)
+```
+
+A `tools/round-gate.sh test/features/community/application/reaction_controller_test.dart`
+kilenc lépésből áll (format, analyze, flutter test, architecture, secrets,
+l10n, backend ruff format, backend ruff check, backend pytest) — MIND
+ZÖLD, `GATE_EXIT=0`. A backend pytest lépés a TELJES suite-et futtatta
+(nem csak a `reaction_service.py`-t), és az is zöld volt — ez a javítás
+mellett egy erősebb visszajelzés, hogy a §10.8 implementáció nem tört
+el.
+
+**§6 cella → teszt megfeleltetés VÁLTOZATLAN** a javító körben: F1 csak a
+meglévő `test_a5_count_property_invariant_never_negative` robusztusságát
+javítja, új acceptance-cella nem jött létre, a §6.1 mérce-mátrix
+érintetlen.
+
 ## 11. Review — a Claude tölti ki

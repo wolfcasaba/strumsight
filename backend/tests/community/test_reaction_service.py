@@ -652,8 +652,12 @@ def test_a5_count_property_invariant_never_negative(session_factory) -> None:
             )
 
     # 200 ops; the brief §6 A5 wording is "the count property-
-    # invariant is never negative". The pre/post count of every
-    # mutation must be ``>= 0``.
+    # invariant is never negative". After every (potential) mutation
+    # we read the aggregated count fresh and assert it stays ``>= 0``.
+    # Reading ``_count()`` unconditionally — even on op==2 (no-op read)
+    # — guarantees the assert is bound to a value produced INSIDE the
+    # current iteration, so the test is robust to any draw order and
+    # never raises ``UnboundLocalError`` on the very first iteration.
     for _ in range(200):
         op = rng.randint(0, 2)
         viewer_index = rng.randrange(len(viewers))
@@ -661,8 +665,9 @@ def test_a5_count_property_invariant_never_negative(session_factory) -> None:
             _set(viewer_index, rng.choice(kinds))
         elif op == 1:
             _remove(viewer_index)
-        else:
-            count = _count()
+        # op == 2 is a pure read — no mutation, but we still re-read
+        # below so the invariant check fires uniformly every iteration.
+        count = _count()
         assert count >= 0, "A5 violated — count went negative"
 
     # Final assertion — the steady-state count is the sum of
@@ -813,10 +818,3 @@ def test_invalidate_event_fires_on_set_and_remove(
     assert actions == ["set", "remove"], (
         f"expected exactly one set + one remove event; got {actions}"
     )
-
-
-# ---------------------------------------------------------------------------
-# ``sys`` is imported at the top of the file — the A7 import-graph
-# check needs ``sys.modules``. The ``import sys`` lives up there
-# alongside ``importlib`` and ``os``.
-# ---------------------------------------------------------------------------
