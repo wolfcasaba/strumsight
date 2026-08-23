@@ -1,5 +1,67 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R08 KÉSZ — Adaptive scaffold és primary navigation — PR [#432](https://github.com/wolfcasaba/strumsight/pull/432), squash `c96a3276` (2026-08-23)
+
+**A CHAPTER 13 NYOLCADIK KÖRE KÉSZ — az ötterületes alkalmazás-shell váza áll,
+flag mögött, alapértelmezetten KIKAPCSOLVA.** ([ADR 0275](docs/adr/0275-five-area-shell-behind-a-flag.md) —
+a döntés MÁR merge-elve volt (`a4fdfec2`), ezért ez a kör ADR-t nem írt.)
+
+- **`lib/core/design_system/layouts/ss_adaptive_scaffold.dart`** (ÚJ) — négy módú
+  resolver (`compact`/`medium`/`expanded`/`wide`) KIZÁRÓLAG a meglévő
+  `SsBreakpoints` tokenekből; compact → `NavigationBar`, medium → nem-extended
+  `NavigationRail`, expanded/wide → extended rail; `showPrimaryNavigation: false`
+  → puszta `Scaffold`. **Tiszta layout-primitív:** nulla feature-, route- és
+  `AppLocalizations`-import (a design-system határőrt az E13-R02 óta gép méri).
+- **`lib/app/config/feature_flags.dart`** — egyetlen új flag,
+  `adaptiveShellEnabled`, defaultból KI, a `forEnvironment` MINDEN környezetben
+  `false`-t ad, dart-define override nincs. A flag mind a **HAT** bővülési
+  ponton szerepel (konstruktor, `forEnvironment`, mező, `==`,
+  `hashCode`/`additionalBits`, `toString()`) — a brief eredeti „három bővülési
+  pont" állítása a pre-flightban mérve hibásnak bizonyult.
+- **`lib/app/routing/`** — öt destination (`/today`, `/practice`, `/songs`,
+  `/coach`, `/profile`) + tizenegy cél-alútvonal, mind **meglévő képernyő
+  adapterként** (új képernyő és új ARB kulcs nélkül);
+  `StatefulShellRoute.indexedStack` öt branchcsel; `legacyRedirects` a Ch13 §7.5
+  tizenegy legacy route-jára, **query- és fragment-megőrzéssel**
+  (`uri.replace(path:)`); `isStageRoute` predikátum a kipinnelt session-halmazon.
+- **A flag KI ágán minden bitre a mai** — a `test/app/routing/**` módosítatlanul
+  zöld; az `onboardingRedirect` új `home` paramétere opcionális, alapértelmezett.
+
+**A review a zöld kapu MÖGÖTT talált MAJOR-t.** Mind a hét acceptance-cella, a
+teljes `tools/round-gate.sh` és a Full Gate CI is zöld volt, amikor egy
+eldobható reviewer-próba kimérte: a `StatefulShellRoute.indexedStack` — amit
+ÉPPEN az A3 (tab-állapot megőrzése) követelt meg — életben tartja a
+meglátogatott brancheket, ezért a `LiveScreen` tabváltás után sem unmountol, és
+**a mikrofon-stream meg a képernyő-wakelock aktív marad**, miközben a
+felhasználó másik területen van:
+
+```
+PROBE offstage LiveScreen instances after tab switch: 2
+PROBE wakelock.isHeld after tab switch: true (enableCalls=2, disableCalls=0)
+```
+
+A legacy referencia ugyanazzal a próbával zöld volt. A javítás — mivel a
+`lib/features/**` tiltott zóna — **szerkezeti**: a `/today` erőforrás-mentes
+adaptert kapott (`ProgressScreen`), a `/practice/live` top-level **Stage**
+route lett (ahol a mount/dispose szemantika érvényben marad), és ezzel az
+`isStageRoute` a produkciós hívási úton is élővé vált. Két további lelet:
+a shell megkerülte a `practiceEngineV2Enabled`/`aiTutorEnabled` **termék-rollout**
+kaput (MINOR-1), és az `onException` a flag BE ágán minden ismeretlen URL-t egy
+navigáció NÉLKÜLI Stage-képernyőn hagyott (MINOR-2, a verifikáció közben mérve).
+Mindhárom zárva, mindhez tartozik cella, ami a hibát PIROSRA fogta volna —
+az új **A8** csoport a legacy referenciával és `skipOffstage: false`-szal mér,
+hogy ne legyen vakuum. Részletek: [`docs/reviews/e13-r08-review.md`](docs/reviews/e13-r08-review.md).
+
+**Mérce.** Exact `c96a3276`: Full Gate
+[32666196726](https://github.com/wolfcasaba/strumsight/actions/runs/32666196726)
++ Router CI **mindkettő success**; a merge-elt `main`-en a `tools/round-gate.sh`
+is zöld (8/8). Scope-audit OK. **Mért folyamathiba (L450):** a landoló a rebase
+után helyesen `blocked`-dal kért friss exact-SHA CI-t, de az orchestrátor a
+kilépési kódot tranziens hibának nézte és azonnal újrahívta — a második hívás
+merge-elt, exact-SHA Full Gate NÉLKÜL. A merge SHA-ján utólag futtatott mindkét
+workflow zöld, tehát a merge-elt artefaktum igazolt; ami sérült, az a SORREND
+(ADR 0086 §2). Tanulságok: [L449](docs/LESSONS.md), [L450](docs/LESSONS.md).
+
 ## ✅ E09-R19 KÉSZ — Média feldolgozás, privacy és moderation state — PR [#431](https://github.com/wolfcasaba/strumsight/pull/431), squash `957bc00f` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) TIZENKILENCEDIK KÖRE KÉSZ.** A Kör 18
@@ -6491,6 +6553,19 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
+**E13-R08 — Adaptive scaffold és primary navigation** (PR
+[#432](https://github.com/wolfcasaba/strumsight/pull/432), squash `c96a3276`).
+Az ötterületes (Today/Practice/Songs/Coach/Profile) shell váza flag mögött,
+alapértelmezetten KIKAPCSOLVA: `SsAdaptiveScaffold` négy módú resolver a
+meglévő `SsBreakpoints` tokenekből, öt destination + tizenegy cél-alútvonal
+legacy képernyő-adapterként, `StatefulShellRoute.indexedStack` tab-stack
+megőrzéssel, tizenegy legacy redirect query+fragment megőrzéssel, és Stage
+route-okon elrejtett primary navigation. 0 nyitott BLOCKER/MAJOR két javító kör
+után (MAJOR-1 mikrofon/wakelock retenció az `indexedStack` alatt; MINOR-1
+rollout-flag megkerülés; MINOR-2 navigáció nélküli `onException` fallback —
+mind `docs/reviews/e13-r08-review.md`). Exact `c96a3276`: Full Gate 32666196726
++ Router CI success. Részletesen a fejléc ✅-blokkban.
+
 **E09-R14 — Feed UI, cache és tudatos használat** (PR
 [#423](https://github.com/wolfcasaba/strumsight/pull/423), squash
 `ff39ee0c`). Az első UI-fogyasztó a Kör 13 following-feed backendre:
@@ -7374,24 +7449,37 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 a `docs/execution/pipeline-queue.tsv` vezeti — az alábbi a 2026-08-23-i állapot,
 NEM a queue helyett olvasandó.
 
-- **Ch13 (design system) sáv — következő: `E13-R08` — Adaptive scaffold és
-  primary navigation** (`docs/rounds/e13-r08-*.md`, engine a queue-ban
-  `sonnet-impl`). Az **E13-R07 (ikonográfia és gitárglyph készlet) KÉSZ** — lásd
-  a fejléc ✅-blokkot. A Kör 7 mért horgai a Kör 8-nak és a képernyő-migrációs
-  köröknek:
-  - Az `SsIcons.resolveByName` ma hat Material-aliast ismer (`play`, `pause`,
-    `settings`, `close`, `check`, `info`) — névvel hivatkozott új Material ikon
-    esetén bővíteni kell.
-  - Az ikon-réteg `AppLocalizations`-mentes: a semantics label és a tooltip
-    **hívó-oldali** (ADR 0411 §4). A migrációs körök adhatnak ARB-kulcsokat
-    anélkül, hogy a design system l10n-függővé válna.
-  - A `lib/features/live/widgets/strum_arrow.dart` és az új
-    `SsGuitarGlyphPainter` down/up ága két, egymástól független megvalósítás
-    (ADR 0411 „Következmények") — az összevonás a migrációs körök dolga.
-  - **A6 lelet:** 16 emoji-piktogram 5 fájlban és 25 nyílkarakter 13 fájlban
-    maradt a `lib/features/**`-ben; a csere a Ch13 Kör 16–35 hatásköre.
-- **Epic-9 (community) sáv:** a queue következő `pending` Epic-9 sora, engine
-  `minimax`.
+- **Ch13 (design system) sáv — következő: `E13-R09` — StageScaffold és session
+  transport** (`docs/rounds/e13-r09-stage-scaffold-and-transport.md`, engine a
+  queue-ban `sonnet-impl`, előre kiosztott ADR `0276`). Az **E13-R08 (adaptive
+  scaffold és primary navigation) KÉSZ** — lásd a fejléc ✅-blokkot. A Kör 8 mért
+  horgai, amelyekre a Kör 9 ÉPÍT:
+  - **A `/practice/live` MÁR Stage route** és top-level (nem shell-branch), az
+    `isStageRoute` halmaza pedig négyelemű: `/practice/live`,
+    `/practice/session`, `/song-trainer/session/:songId`, `/vision/session`.
+    Az `SsStageScaffold` ezekre a route-okra készül.
+  - **A Stage-ből NINCS kivezető transport** — ez szándékos: a pause/finish és a
+    back-confirmation a Kör 9 tárgya (Ch13 §7.4). Amíg nincs, a flag BE ágán a
+    Live Stage-re érkező felhasználónak nincs vissza-útja. A flag defaultból KI,
+    tehát ez ma nem éles hiány, de a Kör 9 **elsődleges** feladata.
+  - **Erőforrás-birtokló képernyő nem kerülhet `IndexedStack`-be** — a Kör 8
+    MAJOR-ja ([L449](docs/LESSONS.md)) pontosan ez volt. Az `SsStageScaffold`
+    doc-commentje ígérje meg és teszt bizonyítsa, hogy a scaffold maga **nem**
+    indít mikrofont/kamerát (Ch13 Kör 9 elfogadási feltétel).
+  - **Az öt destination címkéje MEGLÉVŐ ARB kulcsokból jön** (`todayPlanTitle`,
+    `practiceHubTitle`, `songLibraryTitle`, `aiTutorHomeTitle`,
+    `tutorProfileTitle`), `TODO(E13-R16)` kommenttel — dedikált nav-kulcsok
+    akkor kerülhetnek be, ha egy kör `allowed_paths`-a felveszi a `lib/l10n/**`-t.
+  - **NOTE-2 nyitva (nem blokkoló):** `isStageRoute('/song-trainer/session/')`
+    üres `songId`-ra `true`-t ad (`docs/reviews/e13-r08-review.md`).
+- **Epic-9 (community) sáv — következő: `E09-R20`**, engine `minimax`
+  (a queue következő `pending` Epic-9 sora).
+
+**Lánc-higiéniai teendő (nem kör-blokkoló, GOV/önjavító hatáskör):** a
+`tools/round-land.sh` a merge ELŐTT nem nézi meg a head SHA CI-`conclusion`-jét,
+ezért egy `blocked` utáni azonnali újrahívás exact-SHA Full Gate nélkül
+merge-el — az E13-R08 landolásakor mérve ([L450](docs/LESSONS.md)). A `tools/**`
+a kör-sessionöknek tiltott zóna (H-GATEGUARD), tehát ezt GOV-kör javíthatja.
 
 ## 7. Required verification (before any "done")
 

@@ -17016,3 +17016,106 @@ governance-kör dolga; ez a kör nem nyúlt a `tools/`-hoz (H3).
 szemben (csak stub-interpreterekkel, ld. `test_qwen_implementer_hardening.py`);
 egy jövőbeli GOV-kör tehetne fel egy tesztet, ami a megosztott fa
 környezetét szimulálja (`backend/.venv` a cwd alatt + `env --chdir`).
+
+---
+
+## L449 — A tab-állapot megőrzése és az erőforrás-elengedés EGYMÁSNAK FESZÜL: a `StatefulShellRoute.indexedStack` életben tartja a meglátogatott brancheket, ezért a mikrofont/wakelockot birtokló képernyő SOHA nem szabadul fel (E13-R08, 2026-08-23)
+
+**Mit mértünk.** Az E13-R08 az adaptív öt-területes shellt vezette be
+`StatefulShellRoute.indexedStack`-kel, mert az A3 acceptance-cella a tab-stack
+megőrzését követelte. A kör **mind a hét acceptance-cellája zöld volt**, a
+`tools/round-gate.sh` mind a nyolc lépése zöld, a Full Gate CI is zöld — a
+review mégis MAJOR-t mért egy eldobható próbateszttel:
+
+```
+PROBE offstage LiveScreen instances after tab switch: 2
+PROBE wakelock.isHeld after tab switch: true (enableCalls=2, disableCalls=0)
+```
+
+A legacy referencia UGYANAZZAL a próbával zöld volt (`/live` → `/analyze` után
+`findsNothing`, `isHeld == false`) — az invariánst a `lib/app/home_shell.dart`
+doc-commentje szó szerint ki is mondta: *„switching tabs disposes the previous
+screen (so the Live engine + wakelock stop when you leave Live)"*.
+
+**A gyökérok nem hanyagság, hanem szerződés-ütközés.** Az `indexedStack`
+ÉPPEN AZÁLTAL őrzi meg a tab-stacket, hogy a branch navigátorát mountolva
+hagyja. A `LiveScreen` viszont `initState`-ben wakelockot fog
+(`live_screen.dart:58–62`) és `build`-ban egy `StreamProvider.autoDispose`
+mikrofon-streamet figyel (`:165`) — mindkettőt a `dispose()` engedné el. Nincs
+unmount → nincs `dispose()` → nincs elengedés. A két követelmény ugyanabban a
+körben, egymás mellett, mindkettő „teljesítve", és a hiba **a kettő között**
+él (vö. [L22](#l22)).
+
+**Súlyosbító részlet:** a brief adapter-táblája a `LiveScreen`-t KÉT branchhez
+rendelte (`/today` és `/practice/live`), ezért két példány élt egyszerre — a
+próba `2`-t mért. A kettőzést a brief okozta, nem az implementer.
+
+**A javítás szerkezeti volt, nem viselkedési** (a `lib/features/**` tiltott
+zóna volt, tehát a `LiveScreen` nem is lett volna módosítható): erőforrás-birtokló
+képernyő **nem kerülhet shell-branchbe** — a `/today` erőforrás-mentes
+adaptert kapott, a `/practice/live` pedig top-level **Stage** route lett, ahol a
+mount/dispose szemantika érvényben marad. Ezzel az `isStageRoute` predikátum
+egyúttal élővé is vált a produkciós hívási úton.
+
+**Következmény a jövő köreire.** Ha egy kör `IndexedStack`-alapú
+állapot-megőrzést vezet be, tételesen mérd ki, MELYIK képernyő birtokol
+erőforrást (mikrofon, kamera, wakelock, stream, timer) — és azt tartsd a
+megőrzött fán KÍVÜL. A Ch13 §7.4 ezt már előírta (*„mikrofon/kamera ownership
+route lifecycle-hoz kötött"*), csak nem volt gépi mércéje.
+
+**Őrteszt:** `test/app/navigation/adaptive_scaffold_test.dart`::`A8 — resource-owning screens release on destination switch`
+— három cella, és mindkét anti-vakuum elem KÖTELEZŐ benne:
+(1) a **legacy referencia** (flag KI) ugyanabban a fájlban, különben nem
+derül ki, hogy a cella egyáltalán tud-e pirosat mutatni; (2)
+`find.byType(LiveScreen, skipOffstage: false)` — `skipOffstage` nélkül az
+`IndexedStack` elrejtett gyereke NEM látszik, és a cella néma vakuum lenne
+(vö. [L403](#l403)).
+
+---
+
+## L450 — A `tools/round-land.sh` `blocked` kimenete NEM újrapróbálható hiba: az azonnali újrahívás átugorja az exact-SHA CI-kaput, és merge-el (E13-R08 landolás, 2026-08-23)
+
+**Mit mértünk.** Az E13-R08 landolásakor a `main` időközben mozdult (a
+párhuzamos E09-R19 landolt). A `tools/round-land.sh` első hívása helyesen
+rebase-elt, lefuttatta a kombinált-HEAD gate-et, safe-force-pusholt az új
+`1a6efddd` HEAD-re, és **`blocked`-dal kilépett** (exit 1), a `round-land.sh:224`
+szerinti üzenettel: *„a rebase új HEAD-et képzett; exact-SHA CI-dispatch
+szükséges a merge előtt"*.
+
+Az orchestrátor a **kilépési kódot tranziens hibának nézte** (a kimenetet egy
+`| tail` csővezetékbe irányította, ami üresen tért vissza — vö.
+[L09](#l09)), és **azonnal újrahívta** a landolót. A második hívásban már
+`landed_head == starting_head` volt, tehát a `:224` blokk nem futott le, és a
+script egyenesen a `gh pr merge --squash`-ra ment.
+
+**A mért következmény:** a PR #432 a `1a6efddd` HEAD-en merge-elődött, amelyen
+**egyetlen Full Gate futás sem volt** — a legutóbbi zöld Full Gate három
+commit-tal és egy rebase-szel korábbi SHA-n (`f1add05c`) állt. A merge tehát
+igazolatlan exact-SHA CI-vel történt (ADR 0086 §2 megsértése), noha a
+kombinált-HEAD lokális gate zöld volt.
+
+**Az utólagos helyreállítás.** A merge SHA-ján (`c96a3276`) azonnal
+dispatch-elt Full Gate + a push-triggerelt Router CI **mindkettő `success`**,
+és a merge-elt `main`-en futtatott `tools/round-gate.sh` is zöld — a merge-elt
+ARTEFAKTUM tehát igazolt. Ami sérült, az a **sorrend**: az igazolás a merge
+UTÁN született, nem előtte.
+
+**A tanulság két rétegű.**
+
+1. **Operátori:** a `round-land.sh` `blocked` kimenete **döntést kér**, nem
+   újrapróbálást. A kilépési kódot MINDIG a kiírt indokkal együtt olvasd — a
+   `| tail`-be irányított kimenet pontosan ezt az indokot nyelte el (L09 megint,
+   most a landolóra). A helyes lépéssor: `blocked` → CI-dispatch az ÚJ HEAD-re →
+   `tools/wait-for-ci.sh` → csak a változatlan, igazolt HEAD-en hívd újra.
+2. **Gépezeti:** a `round-land.sh` a CI-t **nem ellenőrzi maga** — a
+   `grep -n "gh run\|conclusion"` a scriptben nulla találatot ad. A kapu tehát
+   emberi/ügynöki fegyelemre támaszkodik ott, ahol egy `gh run list --json
+   headSha,conclusion` hívás fail-closed módon el tudná dönteni. Amíg ez így
+   van, a `blocked` utáni újrahívás mindig ugyanígy át fog csúszni.
+
+**Őrteszt:** nincs — a `tools/**` ennek a körnek tiltott zónája volt, és a
+mérce nem módosulhat attól, akit mér (H-GATEGUARD, ADR 0112/0138). A javítás
+egy GOV/önjavító kör dolga: a `round-land.sh` a merge ELŐTT kérdezze le a
+`--pr` head SHA-jára a kötelező workflow-k `conclusion` mezőjét, és
+`success` hiányában lépjen ki `blocked`-dal — ekkor az újrahívás sem tudná
+átugrani a kaput.
