@@ -443,6 +443,59 @@ E09-R30	docs/rounds/e09-r30-rate-limit-observability-and-security-hardening.md	m
 E09-R31	docs/rounds/e09-r31-accessibility-localization-and-ux-polish.md	minimax	0419	pending
 E09-R32	docs/rounds/e09-r32-integration-load-evaluation-and-release-readiness.md	minimax	nincs	pending
 #
+# ===== EPIC 10 — Offline AI (Chapter 11, 32 kör) =====
+# Batch-előkészítve 2026-08-22 (user-döntés: ha az Epic 9 elkészül, a lánc NE
+# álljon meg, hanem folytassa Epic 10-zel — ugyanaz a minta, mint az Epic
+# 8→9 átmenetnél). Az ADR-tartomány 0420-0442 FOGLALT a batch-íráskor mért
+# legmagasabb szám (0406, valós) és az Epic 9 saját reservált tartomány
+# (0395-0419, driftelhet) után; a pontos szám minden egyes körben a
+# `reserve-adr` foglalóval ÚJRA ellenőrizendő a kör indítási pre-flightjában.
+#
+# HAT kör (`E10-R06`, `E10-R07`, `E10-R13`, `E10-R27`, `E10-R28`, `E10-R29`,
+# `E10-R32`) `hold`-on indul: ezek natív Android buildet/instrumentation-
+# tesztet, VALÓDI fizikai eszközt, VALÓDI letöltött modell-súlyokat vagy
+# emberi licenc-döntést igényelnek — egyik sem elérhető ezen a dev/CI boxon
+# (nincs Android SDK, nincs device-farm). A briefek TELJESEN elő vannak
+# készítve (nem stub), csak a dispatch vár emberi/infra jóváhagyásra — lásd
+# az egyes brief `## 0.0 MIÉRT hold` szakaszát a pontos feloldási feltételért.
+# A többi 26 kör `pending`, és ahol a SDD eredeti fájllistája natív/hardver-
+# függő fájlt is tartalmazott, a brief SZŰKÍTETTE a scope-ot a Dart/Python-
+# oldali, fake/fixture-alapú szerződésre — a natív pár nyitott tartozásként
+# dokumentált (nem hallgatólagosan elejtve), a megfelelő `hold` kör mellett
+# veendő fel egy jövőbeli native-infrastruktúra körben.
+E10-R01	docs/rounds/e10-r01-offline-ai-baseline-and-adr-framework.md	minimax	nincs	pending
+E10-R02	docs/rounds/e10-r02-local-ai-domain-contracts.md	minimax	0420	pending
+E10-R03	docs/rounds/e10-r03-execution-modes-and-routing-policy.md	minimax	0421	pending
+E10-R04	docs/rounds/e10-r04-device-benchmark-harness.md	minimax	nincs	pending
+E10-R05	docs/rounds/e10-r05-model-candidates-and-evaluation-corpus.md	minimax	nincs	pending
+E10-R06	docs/rounds/e10-r06-runtime-bakeoff-spike.md	minimax	nincs	hold
+E10-R07	docs/rounds/e10-r07-runtime-adr-and-plugin-skeleton.md	minimax	0422	hold
+E10-R08	docs/rounds/e10-r08-signed-model-package-and-verifier.md	minimax	0423	pending
+E10-R09	docs/rounds/e10-r09-model-download-and-offline-import.md	minimax	0424	pending
+E10-R10	docs/rounds/e10-r10-activation-rollback-and-storage-quota.md	minimax	0425	pending
+E10-R11	docs/rounds/e10-r11-device-capability-and-tier-resolver.md	minimax	0426	pending
+E10-R12	docs/rounds/e10-r12-local-ai-resource-coordinator.md	minimax	0427	pending
+E10-R13	docs/rounds/e10-r13-native-model-lifecycle-and-process-isolation.md	minimax	0428	hold
+E10-R14	docs/rounds/e10-r14-token-streaming-and-cancellation.md	minimax	0429	pending
+E10-R15	docs/rounds/e10-r15-tokenizer-and-generation-profiles.md	minimax	nincs	pending
+E10-R16	docs/rounds/e10-r16-context-token-budgeter.md	minimax	0430	pending
+E10-R17	docs/rounds/e10-r17-conversation-repository-and-memory.md	minimax	0431	pending
+E10-R18	docs/rounds/e10-r18-knowledge-package-and-lexical-retrieval.md	minimax	0432	pending
+E10-R19	docs/rounds/e10-r19-local-embedding-runtime-and-index.md	minimax	0433	pending
+E10-R20	docs/rounds/e10-r20-hybrid-retrieval-and-provenance.md	minimax	0434	pending
+E10-R21	docs/rounds/e10-r21-prompt-assembly-and-injection-boundary.md	minimax	0435	pending
+E10-R22	docs/rounds/e10-r22-structured-output-and-tool-calling.md	minimax	0436	pending
+E10-R23	docs/rounds/e10-r23-local-tutor-model-gateway.md	minimax	0437	pending
+E10-R24	docs/rounds/e10-r24-gateway-routing-integration.md	minimax	0438	pending
+E10-R25	docs/rounds/e10-r25-safety-preflight-and-output-guardrails.md	minimax	0439	pending
+E10-R26	docs/rounds/e10-r26-bilingual-evaluation.md	minimax	nincs	pending
+E10-R27	docs/rounds/e10-r27-performance-thermal-and-battery-policy.md	minimax	0440	hold
+E10-R28	docs/rounds/e10-r28-lifecycle-and-crash-recovery.md	minimax	0441	hold
+E10-R29	docs/rounds/e10-r29-model-export-and-package-build-pipeline.md	minimax	nincs	hold
+E10-R30	docs/rounds/e10-r30-backend-manifest-and-release-channel.md	minimax	0442	pending
+E10-R31	docs/rounds/e10-r31-offline-ai-settings-and-model-manager-ui.md	minimax	nincs	pending
+E10-R32	docs/rounds/e10-r32-integration-device-matrix-and-epic-closure.md	minimax	nincs	hold
+#
 # ===== 2. FEJLESZTÉSI SÁV — Chapter 14 (Recognition Recovery) =====
 # User-döntés 2026-08-15: az Epic 7 MELLETT fusson egy második sáv, ami előbb a
 # felismerés IGAZMONDÁSÁT állítja helyre. Mért indok (Ch14 audit a SZÁLLÍTOTT
