@@ -228,8 +228,25 @@ docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md --base 29fcc44d` →
 `OK (9 changed path(s), 0 generated/ignored)` — pontosan a bővített
 `allowed_paths` (5 eredeti + 4 ARB fájl) elemei, listán kívüli fájl nincs.
 
+## Javító kör 2 — CI-only baseline bump (2026-08-23, `ef9e9a1a`)
+
+Az első `full-gate.yml` dispatch (`4ede6232`-n) **PIROS lett**: a TELJES
+CI-suite (ADR 0053 — a round-gate.sh csak a brief célzott tesztjét futtatja,
+a teljes suite-ot a CI) elkapta a `test/ui/ui_inventory_test.dart`
+hardcode-olt képernyő-számláló driftjét (`Expected: hasLength(70), Actual:
+hasLength(71)`) — ugyanaz a hibaosztály, mint E09-R05...R13-ban ismételten
+(a kör új `following_feed_screen.dart`-ja bővíti a valódi számot, a
+baseline nem az `allowed_paths` része, mert a fájl körön kívüli, meglévő
+mérce). Orchestrátor-oldali, egysoros, mechanikus javítás (`ef9e9a1a`),
+lokálisan ellenőrizve (`flutter test test/ui/ui_inventory_test.dart` zöld)
+— nem production kód, nem a kör tartalmi scope-ja, ugyanaz a precedens,
+mint az E09-R07 fix2 / E09-R06 fix / E08-R22/R23 baseline-bump commitjai
+(mind "Ralph (autonomous)" orchestrátor-identitással, nem implementer-
+dispatch-csel).
+
 ## Merge-döntés
 
-**Nincs nyitott BLOCKER/MAJOR/MINOR.** Minden gate zöld a javító kör 1
-után, önállóan ellenőrizve. ADR 0052 szerint → **squash-merge mehet a CI
-(teljes suite + property + APK) zöld futása után.**
+**Nincs nyitott BLOCKER/MAJOR/MINOR.** Minden gate zöld a javító kör 1 és a
+CI-only javító kör 2 után, önállóan ellenőrizve. ADR 0052 szerint →
+**squash-merge mehet a CI (teljes suite + property + APK) zöld futása
+után** — újra-dispatch-elve az `ef9e9a1a` HEAD-re.
