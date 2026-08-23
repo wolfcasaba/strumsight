@@ -16775,3 +16775,73 @@ KÉSŐBBI, a cél-feature `public.dart`-ját explicit érintő körre marad.
 ér hozzá élő repository-hoz (a teszt egyáltalán nem ProviderScope-ol
 `songsProvider`-t, tehát egy jövőbeli, véletlen `songsProvider`-hívás
 compile-time hibát adna, mert a teszt nem adna Riverpod-kontextust hozzá).
+
+## L443 — Egy „küszöb-cella", amely csak a küszöböt formalizáló TISZTA predikátumot hívja, nem őrzi a viselkedést: a tiltott implementáción is zöld marad (E13-R06, 2026-08-23)
+
+**Mit mértem.** Az E13-R06 briefje kötelezővé tett egy három cellás
+óra-szinkron mércét (60 ms elfogadva / 100 ms elfogadva, inkluzív / 140 ms
+elutasítva). Az implementer ezt úgy valósította meg, hogy bevezetett egy tiszta
+`SsBeatPulse.isWithinSyncTolerance(Duration)` függvényt (`lag <= syncTolerance`,
+ahol a `syncTolerance` egy 100 ms-os konstans UGYANABBAN a fájlban), és a három
+cella KIZÁRÓLAG ezt hívta — a widgetet soha nem építette fel. A gate zölden
+futott, a handoff a próbát dokumentáltan elvégezte, és a lelet így is átment
+volna.
+
+A review átírta a `_onTick`-et szabadon futó időzítőre (`final position =
+elapsed;`) — pontosan arra, amit az ADR 0274 tilt —, és a három kötelező cella
+**mind a három ZÖLD maradt** (`00:00 +3: All tests passed!`). Ugyanez a rontás a
+fájl TÖBBI celláját 6/10-ben pirosra vitte: a *szabályt* (óra-vezéreltség) tehát
+jól őrizték, csak azt az egy dolgot nem, amiért a hármas létezett — a **küszöböt
+magát** semmi nem mérte renderelt lag ellen.
+
+**A javítás mércéje.** A cellák most a WIDGETET hajtják: a fake óra a „valódi"
+pozíciótól 60/100/140 ms-mal lemaradva jelent, a renderelt pont méretéből egy
+inverz függvény visszaszámolja a fázist, abból a pozíciót, és AZT méri a
+tűréshez. Ugyanaz a rontás most **2/3** cellát visz pirosra (`+0 -2`).
+
+**A szabály.** Ha egy acceptance-cella bemenete egy SZÁM, amit közvetlenül a
+küszöböt formalizáló függvénynek adunk át, a cella önmagát bizonyítja. A brief
+szövege itt egyértelmű volt („60 ms **eltérés az órától**"), a megvalósítás
+mégis a kényelmes irányba csúszott. Kör-briefben ezért a numerikus cellához írd
+oda, hogy a bemenetnek a MÉRT RENDSZEREN kell átmennie, ne csak a predikátumon —
+és a review valódi-sértés próbája NE csak a fájl egészét nézze („hány cella lett
+piros"), hanem cellánként, mert a fájl-szintű pirosodás elrejti a tautologikus
+cellát.
+
+**Őrteszt:** `test/core/design_system/motion/ss_beat_pulse_test.dart`::`A3 — the three sync-tolerance threshold cells drive the real widget`
+
+## L444 — Egy PULL-alapú (frame-enként pollozott) port mellett a „ne pörögjön feleslegesen" optimalizáció néma no-op: a leállított ticker soha nem indul újra (E13-R06, 2026-08-23)
+
+**Mit mértem.** Az E13-R06 review első köre MINOR-ként kifogásolta, hogy az
+`SsBeatPulse` `Ticker`-e élő idővonal nélkül is fut, és `_ticker.stop()`-ot
+javasolt (az ADR 0274 §1 „nincs élő idővonal → nem animál" szövegére hivatkozva).
+Az implementer pontosan ezt tette, és `didUpdateWidget`-ben tervezett ébresztőt.
+
+A második review-kör lemérte a következményt. Az `SsBeatClock` **pull-alapú**:
+a widget minden frame-en lekérdezi a `position`-t. Ha a ticker leáll, semmi nem
+kérdezi meg többé — a `didUpdateWidget` pedig CSAK akkor fut, ha a HÍVÓ újraépíti
+a widgetet, amit egy per-frame pollozott óra nem garantál:
+
+```
+PROBE_D (az óra élővé válik, rebuild NÉLKÜL)
+  dead=Size(16.0,16.0)  afterGoingLive=Size(16.0,16.0)   RESUMED: false
+PROBE_E (pause → resume, rebuild nélkül)
+  live=Size(20.3,20.3)  afterResume=Size(16.0,16.0)  ← a 16.0 a HALOTT méret
+```
+
+A komponens lényegi funkciója az első szünet után csendben megszűnt, **zöld gate
+mellett** — a meglévő „stopping the clock freezes the pulse" cella ezt nem fogta
+meg, mert az a fagyást mérte, nem az újraindulást.
+
+**A szabály — kettős.** (1) Egy port irányát (PULL vs PUSH) a rá épülő
+életciklus-optimalizáció ELŐTT kell tisztázni: pull-alapú forrásnál a
+„ne kérdezz, amíg nincs mit" csak akkor helyes, ha van FÜGGETLEN ébresztő jel;
+enélkül a leállítás végleges. A folyamatosan futó `Ticker` bevett Flutter-idióma
+(a `CircularProgressIndicator` pontosan így viselkedik), és a helyes viselkedés
+előbbre való a frame-takarékosságnál. (2) **A reviewer lelet-iránya is lelet
+lehet:** ezt a MAJOR-t a review SAJÁT első köri javaslata okozta. Egy „javasolt
+irány" ugyanúgy tartozik falszifikációval, mint egy implementáció — ha a review
+viselkedésváltoztatást kér, a következő körben a MEGVÁLTOZOTT viselkedést is
+mérni kell, nem csak a lelet eltűnését.
+
+**Őrteszt:** `test/core/design_system/motion/ss_beat_pulse_test.dart`::`PROBE_D — the pulse comes alive once the clock starts reporting a position, with no pumpWidget call in between`
