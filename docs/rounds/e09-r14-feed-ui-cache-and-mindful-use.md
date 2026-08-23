@@ -128,6 +128,17 @@ allowed_paths = [
   "lib/features/community/presentation/widgets/feed_card_registry.dart",
   "test/features/community/presentation/following_feed_test.dart",
   "docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md",
+  # Javító kör 1 bővítés (docs/reviews/e09-r14-review.md F1, 2026-08-23,
+  # orchestrátor-irányított — ugyanaz a precedens, mint az E09-R08 F1 fix):
+  # a két új UI-fájl 0 AppLocalizations hívással ment ki, a project-szintű
+  # i18n-szabály (CLAUDE.md) megsértése.
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
+  # A fenti feature-ARB szerkesztés mechanikus, elkerülhetetlen velejárója:
+  # a `tool/gen_l10n_segments.dart --write` ezt regenerálja (ugyanaz a
+  # collateral-elfogadás, mint az E09-R08 fix).
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
 ]
 gate_tests = [
   "test/features/community/presentation/following_feed_test.dart"
