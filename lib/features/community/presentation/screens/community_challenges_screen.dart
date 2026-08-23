@@ -318,7 +318,10 @@ class _ErrorView extends StatelessWidget {
         return localizations.communityChallengeErrorSessionExpired;
       case FailureCode.authForbidden:
         return localizations.communityChallengeErrorForbidden;
-      case FailureCode.communityRateLimited:
+      case FailureCode.networkServer:
+        // 429 (rate-limited) maps to ``networkServer`` in the
+        // shared mapper; the A4 / §5.3 invariant lands on
+        // this branch.
         return localizations.communityChallengeErrorRateLimited;
       case FailureCode.communityConflict:
         return localizations.communityChallengeErrorConflict;

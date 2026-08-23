@@ -46,16 +46,16 @@ class _RecordingChallengeRepository implements CommunityChallengeRepository {
     ({ContentId challengeId, PublicUserId target, String idempotencyKey})
   >
   inviteCalls =
-      <({ContentId challengeId, PublicUserId target, String idempotencyKey})>{};
+      <({ContentId challengeId, PublicUserId target, String idempotencyKey})>[];
   final List<({ContentId inviteId, String idempotencyKey})> acceptCalls =
-      <({ContentId inviteId, String idempotencyKey})>{};
+      <({ContentId inviteId, String idempotencyKey})>[];
   final List<({ContentId inviteId, String idempotencyKey})> declineCalls =
-      <({ContentId inviteId, String idempotencyKey})>{};
+      <({ContentId inviteId, String idempotencyKey})>[];
   final List<({ContentId inviteId, PublicUserId target, String idempotencyKey})>
   cancelCalls =
-      <({ContentId inviteId, PublicUserId target, String idempotencyKey})>{};
+      <({ContentId inviteId, PublicUserId target, String idempotencyKey})>[];
   final List<({Object cursor, int limit})> listCalls =
-      <({Object cursor, int limit})>{};
+      <({Object cursor, int limit})>[];
 
   CommunityPage<CommunityChallengeDefinition> listResult =
       const CommunityPage<CommunityChallengeDefinition>(

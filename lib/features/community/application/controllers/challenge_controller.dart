@@ -41,7 +41,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/logging/app_logger.dart';
 import '../../../../core/logging/logger_provider.dart';
-import '../../data/repositories/challenge_repository_impl.dart';
 import '../../domain/entities/community_challenge.dart';
 import '../../domain/repositories/challenge_repository.dart';
 import '../../domain/value_objects/content_id.dart';
