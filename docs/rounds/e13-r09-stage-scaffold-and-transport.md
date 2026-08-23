@@ -33,6 +33,115 @@ gate_tests = [
 native_gate = false
 ```
 
+## 0.0 Pre-flight revízió (Claude, 2026-08-23) — MÉRT eltérések
+
+Az előre megírt brief (2026-08-15, `93a6c19a`) mért állításai elavulhattak. Az
+alábbi nyolc pont a **mai** `main @ b26b8ccb` mérése. Ahol a §2–§9 ennek
+ellentmondana, **ez a szakasz az erősebb**.
+
+> **Kockázat = high, indoklás:** az `allowed_paths` egyetlen eleme sem érinti a
+> router `high_risk_path_fragments` listáját (csak `lib/core/design_system/**`
+> és a hozzá tartozó tesztek), a magas besorolás mégis indokolt: a kör tétje
+> pontosan az, hogy egy **prezentációs widget** ne nyithasson mikrofont,
+> kamerát vagy felvételt. Egy `autoStart`-szerű kényelmi paraméter itt csendes,
+> a hívási helyről nem látható adatgyűjtést telepítene minden olyan fába
+> (katalógus, előnézet, teszt), ahová a layoutot beteszik — ez adatvédelmi,
+> nem esztétikai hibaosztály (ADR 0276 Kontextus). A besorolás tehát marad
+> `high`, és az A1 cella a gépi mércéje.
+
+### D1 — Az ADR 0276 MÁR MEG VAN ÍRVA és MERGE-ELVE → ez a kör ADR-t NEM ír
+
+```
+$ git log --oneline -1 -- docs/adr/0276-stage-scaffold-owns-no-resources.md
+a4fdfec2 docs(ch13): E13-R07..R13 briefek + ADR 0275-0279
+$ git cat-file -e origin/main:docs/adr/0276-stage-scaffold-owns-no-resources.md && echo MERGED
+MERGED
+```
+
+A fejléc „a Claude írja meg a kör indításakor" sora ezzel **tárgytalan**: egy
+már merge-elt ADR újraírása H1 lenne. Az ADR szövege ellenőrizve — a négy
+kötött döntése szó szerint fedi a §5.1–5.5-öt, tehát nincs divergencia, amit
+fel kellene oldani. Új ADR-számot sem foglalunk (`round-slots.py reserve-adr`
+hívása szándékosan elmarad: új normatív döntés nem születik). A `docs/adr/**`
+marad a **tilos zónában**. Ugyanez a minta futott az E13-R08-nál (ADR 0275,
+szintén `a4fdfec2`).
+
+### D2 — Erőforrás-tulajdonlás: mérve, a §5.1 állítása ÁLL
+
+A brief ⚠ pre-flight kérdésére (melyik réteg birtokolja ma a mikrofon/kamera
+életciklust) a **tényleges hívási lánc** mérése — nem a réteg-diagram:
+
+| Erőforrás | Ki szerzi meg MA | Hely |
+|---|---|---|
+| mikrofon | `createMicCapture(ref, AudioOwner.live/tuner/analyzeRecorder)` | `lib/features/live/providers/live_providers.dart:12`, `lib/features/tuner/providers/tuner_providers.dart:13`, `lib/features/analyze/providers/analyze_providers.dart:135` |
+| kamera | `coordinator.acquire(...)` | `lib/features/vision/application/vision_session_controller.dart:157`, `.../vision_setup_controller.dart:163` |
+| felvétel | `ClipRecorder`, `AnalysisRecorder` | `lib/features/analyze/engine/clip_recorder.dart`, `lib/features/audio_analysis/data/capture/analysis_recorder.dart` |
+| képernyő-ébrentartás | `screenWakelockProvider` → `enable()/disable()` | `lib/features/live/screens/live_screen.dart:61-62,81,92,124-127` |
+
+A `lib/core/design_system/**` fa alatt **egyetlen** erőforrás-hívás sincs. A
+§5.1 tehát nem revideálandó: a Stage layout ma sem birtokol semmit, és nem is
+veheti át.
+
+### D3 — A7 kötése: az ébrentartás CALLBACK, nem `ScreenWakelock`-import
+
+Mérve: a `lib/core/design_system/**` fa nem-Flutter importjai kizárólag saját
+relatív design-system fájlok + egyetlen `../../theme/app_colors.dart`;
+`core/platform` importja **nincs**. Az `SsStageScaffold` ezért két szimmetrikus
+hookot kap (pl. `VoidCallback? onRequestScreenAwake` / `onReleaseScreenAwake`):
+`initState`-ben kér, `dispose`-ban **pontosan egyszer** old. A
+`wakelock_plus`, a `WakelockPlus` és a `core/platform/screen_wakelock.dart`
+importja a scaffoldban **TILOS** — az birtoklás lenne (ADR 0276 2. döntés), és
+egy katalógus-oldal is ébren tartaná a képernyőt.
+
+### D4 — A6 mércéje kipinnelve
+
+`SsAdaptiveScaffold(showPrimaryNavigation: false)` ma puszta
+`Scaffold(body: body)`-t ad (`lib/core/design_system/layouts/ss_adaptive_scaffold.dart:74-76`).
+Az A6 cella ezért így mér: a Stage fában **nincs** `NavigationBar` és **nincs**
+`NavigationRail` (`find.byType`, mindkettőre `findsNothing`).
+
+### D5 — A5 idiómája kipinnelve
+
+A repó a `PopScope` + `canPop` + `onPopInvokedWithResult(didPop, result)`
+alakot használja (`lib/features/practice/presentation/screens/practice_session_screen.dart:102-105`)
+— az elavult `onPopInvoked` NEM. A scaffold `canPop`-ja a „van-e mentetlen
+adat" bemenetből számol, a hook a `didPop == false` ágon hívódik, és a §6.1
+három cellája ezt méri.
+
+### D6 — A valódi-sértés próba a PRODUKCIÓS widgetet mutálja
+
+`lessons/L398` (E08-R20): egy implementer a §6.1 próbát önálló, a produkciós
+widgettől független `MaterialApp`-fával „teljesítette" — az semmit nem
+bizonyít. `lessons/L403` (E08-R23): a típus/kulcs szintű próba átengedett egy
+tartalmi sértést. A próba tehát csak akkor érvényes, ha (a) a Finish tényleg
+átkerül overflow menübe a `ss_session_transport.dart`-ban, (b) a §7 gate
+tényleg PIROSAT ad az **A2**-re, (c) a diff visszaáll, és (d) a §10 a
+tényleges, csonkítatlan piros kimenetet idézi. Az A2 cella a Finish/Pause
+**feliratát/semantics-címkéjét** is nézze, ne csak a widget-típust.
+
+### D7 — Visszakeresett előzmény (S8, ADR 0312 §4.1)
+
+`node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "…"`:
+
+- `adr/0276` (bm25#1 emb#1) — a kör kötött döntései; lásd D1.
+- `lessons/L449` (E13-R08, 2026-08-23) — a `StatefulShellRoute.indexedStack`
+  életben tartja az erőforrást birtokló képernyőt, ezért a mikrofon és a
+  wakelock tabváltás után is aktív maradt. **Mind a hét acceptance-cella, a
+  teljes gate és a CI zöld volt** — a MAJOR-t egy eldobható próbateszt mérte
+  ki. Ebből erre a körre: a zöld kapu nem bizonyítja az A1/A7-et, ezért a
+  cellák a **hívásszámot** mérjék (enable/disable, hook-hívás), ne a látszatot.
+- `adr/0074` — a mikrofon-életciklus státusz-vezérelt és a feature-é; ott a
+  `_pause()` nem zárta a subscriptiont, azaz a „csendben nyitva maradó
+  erőforrás" ebben a repóban MÉRT hibaosztály.
+- `lessons/L398`, `lessons/L403` — lásd D6.
+
+### D8 — Az `SsSemantics` tokenek használandók
+
+`lib/core/design_system/foundations/ss_semantics.dart`:
+`minimumInteractiveDimension = 48`, `maximumTextScale = 2.0`. Az A4 cella a
+`SsSemantics.maximumTextScale` tokent használja, ne beírt `2.0` literált; a
+minta a meglévő `test/core/design_system/typography/text_scale_overflow_test.dart`.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
