@@ -392,11 +392,57 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   test/core/design_system/surfaces/ss_surface_test.dart
   test/core/design_system/surfaces/spacing_grid_test.dart` → **22/22 passed**.
 
+### A13 — a katalógus contract tranzakciós átállítása
+
+A `test/core/design_system/component_catalog_test.dart` mindhárom érintett
+cellájában (`creates the catalog only when both gates pass`, valamint a
+dark/light smoke ciklus mindkét ága) a `find.byType(Card)` helyére
+`find.byType(SsCard)` + a `SsCard` alá szűkített, pontosan egy `Material`
+leszármazottat váró `find.descendant` pár került; a route-kapu contract
+(a `is default-off` és a három `createRouteForTesting` null-cella) és a
+dark/light smoke-pumpelés érintetlen maradt.
+
+**(a) Material-szűkítés.** A katalógus fája ténylegesen legalább négy
+`Material`-t tartalmaz (`SsSurface` × 2, `SsCard`, `SsHeroCard`, plusz a
+`MaterialApp`/`Scaffold` sajátjai), ezért a csupasz `find.byType(Material)` +
+`findsOneWidget` hamis elvárás lett volna. A `find.descendant(of:
+find.byType(SsCard), matching: find.byType(Material))` pontosan a `SsCard`
+saját `SsSurface`-rétegét méri.
+
+**(b) `DecoratedBox`-mérés.** A cella futtatása előtt egy ideiglenes
+`print('DecoratedBox count: ${find.byType(DecoratedBox).evaluate().length}')`
+sorral megmértem a tényleges darabszámot mindkét témán: **dark → 1**,
+**light → 1**. A meglévő `expect(find.byType(DecoratedBox), findsOneWidget)`
+sor tehát mérve helyes volt — csak korábban sosem futott le, mert az előtte
+álló `Card`-elvárás pirosra vitte a cellát. A `print` sor eltávolítva, az
+eredeti `findsOneWidget` elvárás változatlanul megmaradt.
+
+**Valódi-sértés próba.** `lib/core/design_system/components/surfaces/ss_card.dart`
+`build()`-jában a `SsSurface`-t ideiglenesen egy külső `Card(child: ...)`
+rétegbe csomagoltam (második `Material`-réteg). Ezután mindhárom érintett
+cella pirosra futott:
+
+```
+Expected: exactly one matching candidate
+  Actual: _MaterialTypeWidgetFinder:<...found 2 widgets with type "Material":
+  [Material(type: card, ...), Material(type: canvas, ...)]>
+   Which: is too many
+```
+
+(`creates the catalog only when both gates pass`, `catalog smoke test renders
+for Brightness.dark`, `catalog smoke test renders for Brightness.light` — mind
+a három piros lett, `+5 -3`.) A `git diff --stat
+lib/core/design_system/components/surfaces/ss_card.dart` restore után üres
+kimenetet adott — a fájl bájt-azonos az eredetivel. Restore utáni futás:
+`flutter test test/core/design_system/component_catalog_test.dart` →
+**8/8 passed**.
+
 ### Futtatott ellenőrzések
 
 - `dart format` a kilenc módosított Dart fájlon → sikeres.
 - `flutter test test/core/design_system/component_catalog_test.dart` →
-  **8/8 passed**.
+  **8/8 passed** (a §0.0.1/A13 tranzakciós átállítás után, a valódi-sértés
+  próba restore-ját követően).
 - `git diff --check` → sikeres.
 - `tools/round-gate.sh test/core/design_system/surfaces/ss_surface_test.dart
   test/core/design_system/surfaces/spacing_grid_test.dart` → **pass, exit 0**

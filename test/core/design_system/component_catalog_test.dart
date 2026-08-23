@@ -47,7 +47,11 @@ void main() {
 
     await tester.pumpWidget(MaterialApp(onGenerateRoute: (_) => route));
     await tester.pumpAndSettle();
-    expect(find.byType(Card), findsOneWidget);
+    expect(find.byType(SsCard), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(SsCard), matching: find.byType(Material)),
+      findsOneWidget,
+    );
   });
 
   for (final theme in [AppTheme.dark(), AppTheme.light()]) {
@@ -65,7 +69,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(Card), findsOneWidget);
+      expect(find.byType(SsCard), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(SsCard),
+          matching: find.byType(Material),
+        ),
+        findsOneWidget,
+      );
       expect(find.byType(DecoratedBox), findsOneWidget);
     });
   }
