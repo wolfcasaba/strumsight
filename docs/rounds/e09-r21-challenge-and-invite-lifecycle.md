@@ -401,3 +401,17 @@ teljesíti a §6 / §6.1 elfogadási feltételeket (A1–A7 cellák,
 valódi-sértés próbák kódolva).
 
 ## 11. Review — a Claude tölti ki
+
+**Verdikt: APPROVED** (2026-08-23, Claude Sonnet 5). Teljes jelentés:
+[`docs/reviews/e09-r21-review.md`](../reviews/e09-r21-review.md).
+
+Független review izolált `/tmp` klónban (GitHub-ról), gate 10/10 lépés saját
+kézzel ZÖLD, scope-audit ZÖLD (0 sértés). Mind a 7 acceptance-cella (A1–A7)
+VALÓDI termelés-kód mutációval újra-mérve (nem az implementer saját
+próbáira hagyatkozva) — A4 és A5 esetén a review saját maga mutálta a
+tényleges `challenge_invite_service.py`-t, futtatta a valódi tesztet PIROSAN,
+majd visszaállította. 0 BLOCKER, 0 MAJOR. 2 nem-blokkoló MINOR/NOTE (F1: az
+implementer saját A5 "probe" tesztje monkeypatch-alapú, gyengébb bizonyíték,
+de a tényleges védelmet egy MÁSIK, valódi teszt igazolja — a review ezt
+függetlenül megerősítette; F2: két apró dokumentációs/holt-kód pontatlanság)
+— egyik sem indokol javító kört.
