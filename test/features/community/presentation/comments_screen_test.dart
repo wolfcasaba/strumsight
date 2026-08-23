@@ -24,6 +24,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -40,6 +41,7 @@ import 'package:strumsight/features/community/domain/value_objects/content_id.da
 import 'package:strumsight/features/community/domain/value_objects/cursor_page.dart';
 import 'package:strumsight/features/community/domain/value_objects/public_user_id.dart';
 import 'package:strumsight/features/community/presentation/screens/comments_screen.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 class _FakeCommunityPostRepository implements CommunityPostRepository {
   _FakeCommunityPostRepository();
@@ -222,7 +224,21 @@ Widget _wrap({
 }) {
   return ProviderScope(
     overrides: [communityPostRepositoryProvider.overrideWithValue(fakeRepo)],
-    child: MaterialApp(home: child),
+    child: MaterialApp(
+      // The screen reads its labels through AppLocalizations.of(context)
+      // (the §6 F1 l10n fix — every user-facing string goes through ARB
+      // en/hu). The test pins the English locale so `find.text('Send')`
+      // and similar text-based assertions resolve to the English copy.
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      home: child,
+    ),
   );
 }
 

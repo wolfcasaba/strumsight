@@ -22,6 +22,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/comment_controller.dart';
 import '../../domain/entities/community_comment.dart';
 import '../../domain/value_objects/content_id.dart';
@@ -60,9 +61,10 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(commentControllerProvider);
+    final localizations = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Comments')),
+      appBar: AppBar(title: Text(localizations.communityCommentsTitle)),
       body: SafeArea(
         child: Column(
           children: [
@@ -125,8 +127,9 @@ class _CommentsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     if (rows.isEmpty) {
-      return const Center(child: Text('No comments yet.'));
+      return Center(child: Text(localizations.communityCommentsEmpty));
     }
     return ListView.builder(
       itemCount: rows.length + (hasMore ? 1 : 0),
@@ -179,6 +182,7 @@ class _LoadMoreRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Center(
@@ -188,7 +192,10 @@ class _LoadMoreRow extends StatelessWidget {
                 width: 24,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : TextButton(onPressed: onPressed, child: const Text('Load more')),
+            : TextButton(
+                onPressed: onPressed,
+                child: Text(localizations.communityCommentsLoadMore),
+              ),
       ),
     );
   }
@@ -216,6 +223,7 @@ class _DraftComposer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     final canSubmit = !state.isSubmitting && state.draftBody.trim().isNotEmpty;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -252,9 +260,9 @@ class _DraftComposer extends StatelessWidget {
                   controller: controller,
                   readOnly: state.isSubmitting,
                   onChanged: onChanged,
-                  decoration: const InputDecoration(
-                    hintText: 'Write a comment…',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    hintText: localizations.communityCommentsComposerHint,
+                    border: const OutlineInputBorder(),
                   ),
                   minLines: 1,
                   maxLines: 4,
@@ -269,7 +277,7 @@ class _DraftComposer extends StatelessWidget {
                         width: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Send'),
+                    : Text(localizations.communityCommentsSend),
               ),
             ],
           ),

@@ -275,5 +275,20 @@
   "@feedCardFallbackUnfilled": {},
 
   "feedCardFallbackUnknown": "This content type can't be displayed right now.",
-  "@feedCardFallbackUnknown": {}
+  "@feedCardFallbackUnknown": {},
+
+  "communityCommentsTitle": "Comments",
+  "@communityCommentsTitle": {},
+
+  "communityCommentsEmpty": "No comments yet.",
+  "@communityCommentsEmpty": {},
+
+  "communityCommentsLoadMore": "Load more",
+  "@communityCommentsLoadMore": {},
+
+  "communityCommentsComposerHint": "Write a comment…",
+  "@communityCommentsComposerHint": {},
+
+  "communityCommentsSend": "Send",
+  "@communityCommentsSend": {}
 }

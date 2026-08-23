@@ -275,5 +275,20 @@
   "@feedCardFallbackUnfilled": {},
 
   "feedCardFallbackUnknown": "Ez a tartalomtípus jelenleg nem jeleníthető meg.",
-  "@feedCardFallbackUnknown": {}
+  "@feedCardFallbackUnknown": {},
+
+  "communityCommentsTitle": "Hozzászólások",
+  "@communityCommentsTitle": {},
+
+  "communityCommentsEmpty": "Még nincsenek hozzászólások.",
+  "@communityCommentsEmpty": {},
+
+  "communityCommentsLoadMore": "Továbbiak betöltése",
+  "@communityCommentsLoadMore": {},
+
+  "communityCommentsComposerHint": "Írj egy hozzászólást…",
+  "@communityCommentsComposerHint": {},
+
+  "communityCommentsSend": "Küldés",
+  "@communityCommentsSend": {}
 }
