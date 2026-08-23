@@ -16221,3 +16221,55 @@ test_patch_by_non_owner_returns_404` (F1 — a body-t is asszertálja, nem
 csak a státuszkódot) és
 `test_audience_matrix_owner_and_public_viewer` (F2 — az `author_public_id
 != viewer.public_id` explicit asszerció a nem-tulajdonos GET-re).
+
+## L432 — Egy ELSŐ user-id-particionált local store nem örökölheti mechanikusan egy másik store `legacyKey`-mintáját: a fallback maga nem particionált, és fiktív előtörténetet is állíthat, ha nincs valódi predecessor (E09-R12, review F1, 2026-08-23)
+
+**Mit mértem.** A `CommunityDraftStore.open` (`lib/features/community/data/
+local/community_draft_store.dart`) a `JsonDocumentStore`-t
+`legacyKey: 'ss.community.drafts.v1'` értékkel konstruálta — egy, MINDEN
+userre AZONOS, nem user-id-particionált literállal —, miközben ez a kör
+(E09-R12) az ELSŐ user-id-particionált lokális storage-kulcs a repóban
+(`ss.community.drafts.v2.<userId>`, pre-flight D3). A docstring egy
+korábbi, "device-wide" Community draft store-ból történő migrációt
+állított. Mérve (grep a teljes `lib/`-en és a git-történeten): ilyen
+predecessor SOHA nem létezett — a `community_draft_store.dart` ez a kör
+hozza létre először. A `_legacyStorageKey` konstans emellett NINCS
+regisztrálva a kanonikus `LegacyStorageKeys` osztályban
+(`lib/core/storage/storage_keys.dart`), amelynek saját fejléc-kommentje
+szerint EZ a kötelező hely minden ilyen történeti kulcsnak. A hatás
+jelenleg holt kód (semmi nem ír a megosztott literálra), de architekturálisan
+pontosan azt az izolációs garanciát törte volna meg, amit a kör bevezetni
+hivatott: `JsonDocumentStore.readBody()` a saját (user-scope-olt) kulcs
+hiányában a `legacyKey`-t olvassa vissza — ha BÁRMILYEN jövőbeli kód (debug,
+teszt-fixture, egy másik feature véletlen kulcs-újrafelhasználása) valaha ír
+erre a megosztott literálra, MINDEN usernek, akinek még nincs saját v2-draftja,
+az idegen draftot adná vissza. A testvér `community_outbox.dart`
+UGYANEBBEN a körben helyesen ismerte fel ugyanezt a helyzetet
+("No legacy key — the outbox is a fresh Kör 12 document with no
+pre-envelope shape", `legacyKey: ''`) — a draft store nem követte a saját
+testvér-fájlja döntését.
+
+**Hogyan alkalmazd.** (1) Egy ÚJ user-scope-olt (vagy egyéb, korábban nem
+létező izolációs granularitású) local store bevezetésekor a `legacyKey`
+paramétert SOHA ne örökítsd mechanikusan egy meglévő minta másolásával —
+mérd meg ELŐSZÖR, hogy létezett-e valaha ténylegesen olyan predecessor
+bájtfolyam, amiből migrálni kell (`git log --follow -- <fájl>` VAGY egy
+korábbi kör briefje/HANDOFF-bejegyzése). Ha nincs ilyen mérhető predecessor,
+`legacyKey: ''` a helyes válasz — nem egy "biztonság kedvéért" hivatkozott
+kulcs. (2) Bármely `legacyKey`-t VALÓBAN igénylő store esetén a kulcs a
+kanonikus `LegacyStorageKeys` osztályban (`lib/core/storage/storage_keys.dart`)
+regisztrálandó, nem egy feature-lokális privát konstansként — ez a
+regisztráció maga a mechanikus ellenőrzési pont, ami a fiktív/vad
+legacy-kulcsokat kiszűrné. (3) Ha egy store user-id-particionált, MINDEN
+kulcsparamétere (a `key` ÉS a `legacyKey` is) particionált kell legyen —
+egyetlen megosztott fallback-kulcs is elég ahhoz, hogy a store egésze
+kereszt-user szivárgást engedjen meg, még ha az adott fallback-ág ma
+gyakorlatilag holt kód is.
+
+**Őrteszt:** nincs — a review próbateszttel mérte (nem commitolt): egy
+másik `userId`-hez tartozó JSON draft-ot a megosztott `'ss.community.
+drafts.v1'` kulcsra írva, a javítás ELŐTT `CommunityDraftStore.open(userId:
+A).readDraft()` a másik user draftját adta vissza; a javítás UTÁN (`legacyKey:
+''`) `null`-t ad. Egy jövőbeli kör, ami hasonló user-scope-olt store-ot ad,
+tehet fel egy regressziós tesztet erre a mintára (`legacyKey` particionáltság
+vagy hiánya).
