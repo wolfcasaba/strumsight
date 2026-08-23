@@ -1,10 +1,13 @@
 # E13-R06 review — Motion rendszer és reduced motion
 
 - **Kör:** `E13-R06` · **Branch:** `sonnet-impl/e13-r06-motion-and-reduced-motion`
-- **Reviewed HEAD:** `9f47f2e0` (implementer: `sonnet-impl` / Claude Sonnet 5)
+- **Reviewed HEAD:** `9f47f2e0` → javító kör 1: `0ceb213b` → javító kör 2: **`580440a4`**
+  (implementer: `sonnet-impl` / Claude Sonnet 5)
 - **Reviewer:** Claude (Opus 5), orchestrátor — read-only, production kódot nem írtam
 - **Dátum:** 2026-08-23
-- **Verdikt (1. kör):** **CHANGES REQUESTED** — 1 MAJOR, 3 MINOR, 2 NOTE
+- **Verdikt (1. kör):** CHANGES REQUESTED — 1 MAJOR, 3 MINOR, 2 NOTE
+- **Verdikt (2. kör):** CHANGES REQUESTED — 1 új MAJOR (regresszió, lásd §7)
+- **VÉGSŐ VERDIKT (3. kör, HEAD `580440a4`):** ✅ **APPROVED** — lásd §8
 
 ---
 
@@ -258,3 +261,111 @@ vissza; a NOTE-ok nem blokkolnak.
 A javítás után: friss `/tmp` klón + gate újrafuttatás, leletenkénti zárás-
 ellenőrzés, és **új exact-SHA CI-dispatch** (a jelenlegi `32654826904` /
 `32654820364` futás a javítással elavul).
+
+---
+
+## 7. Második review-kör — javító kör 1 (`0ceb213b`), friss `/tmp` klón
+
+### Lezárt leletek
+
+| Lelet | Zárás | Mért bizonyíték |
+|---|---|---|
+| **MAJOR-1** | ✅ | A három cella most a WIDGETET hajtja: a fake óra a „valódi" pozíciótól 60/100/140 ms-mal lemaradva jelent, a renderelt pont méretéből `_phaseFromDiameter` visszaszámolja a fázist, abból a pozíciót, és AZT méri a `syncTolerance`-hoz. Ugyanaz a rontás (`_onTick` → `elapsed`), ami előtte **0/3** cellát vitt pirosra, most **2/3**-at visz (`+0 -2` a 60 ms és a 100 ms cellán). Valódi őr. |
+| **MINOR-1** | ✅ | `Color.lerp(surfaceSunken, brand, .45)` az off-beat tónus; új cella méri, hogy az off-beat dekoráció ≠ a nem-élő dekoráció. |
+| **MINOR-2** | ✅ | Az `assert` helyett futásidejű őr: `beatMicros <= 0` a nem-élő ággal ekvivalens. Új cella: `Duration.zero` mellett statikus 16×16 pont, `takeException()` null. |
+
+### 🔴 MAJOR-2 (ÚJ) — a MINOR-3 javítása néma regressziót okozott
+
+**Ezt a leletet a saját 1. köri lelet-irányom okozta**, nem az implementer:
+a `_ticker.stop()`-ot kértem anélkül, hogy végiggondoltam volna, mi ébreszti
+fel egy PULL-alapú portnál. Az `SsBeatClock` szerződése az, hogy a widget
+**minden frame-en lekérdezi** a `position`-t; ha a ticker leáll, semmi nem
+kérdezi meg többé, és a `didUpdateWidget` csak a HÍVÓ újraépítésekor fut —
+amit egy per-frame pollozott óra nem garantál.
+
+**Mérés (`/tmp/review2-e13-r06`, HEAD `0ceb213b`):**
+
+```
+PROBE_D  (az óra élővé válik, rebuild NÉLKÜL)
+  dead=Size(16.0, 16.0)  afterGoingLive=Size(16.0, 16.0)   RESUMED: false
+PROBE_E  (pause → resume lejátszás közben, rebuild nélkül)
+  live=Size(20.3, 20.3)  afterResume=Size(16.0, 16.0)
+  → a 16.0 a HALOTT statikus méret: a resume után is halott marad
+```
+
+Néma no-op: a komponens lényegi funkciója az első szünet után csendben
+megszűnik, zöld gate mellett.
+
+**A MINOR-3-at ezzel NOTE-tá minősítem vissza.** Az ADR 0274 §1 („nincs élő
+idővonal → nem animál") **vizuális** előírás, amit a statikus pont ága
+teljesít; a folyamatosan futó `Ticker` bevett Flutter-idióma folyamatos
+animációra (a `CircularProgressIndicator` pontosan így viselkedik, és ugyanígy
+fogja meg a `pumpAndSettle`-t). A helyes viselkedés fontosabb, mint a
+frame-takarékosság.
+
+---
+
+## 8. Harmadik review-kör — javító kör 2 (`580440a4`) — ✅ APPROVED
+
+### MAJOR-2 zárása — mérve, friss `/tmp/review3-e13-r06` klónban
+
+A `_ticker.stop()` és a `didUpdateWidget` ébresztő eltávolítva; a ticker
+folyamatosan fut és minden frame-en pollozza az órát. Ugyanaz a két próba:
+
+```
+PROBE_D dead=Size(16.0, 16.0) afterGoingLive=Size(20.3, 20.3)  RESUMED=true
+PROBE_E live=Size(20.3, 20.3) paused=Size(16.0, 16.0) resumed=Size(16.5, 16.5)
+        BACK_TO_LIVE=true
+```
+
+A `16.5` nem tetszőleges: a 900 ms-os pozíció fázisa 0.9, és
+`16 * (1 + (1 - 0.9) * 0.3) = 16.48` — a renderelt méret tehát a helyes
+fázist tükrözi, nem csak „valami mozgást". ✅
+
+Az implementer a regressziót **gépi őrré** is tette: két új cella
+(`PROBE_D` / `PROBE_E` néven) rebuild nélkül méri az újraindulást, és a §10.2
+szerint a hibás (`stop()`-os) kóddal pirosra váltak. A leletnek van tehát
+tesztje, ami a hibát elkapta volna.
+
+Változatlanul zöld: az A3 „stopping the clock freezes the pulse" és a „no live
+timeline renders a static, non-animating state" cella — a leállás továbbra is
+fagyaszt, csak már nem zárja ki az újraindulást.
+
+### Gate — saját kézzel, izolált klónban, a VÉGLEGES HEAD-en
+
+```
+tools/round-gate.sh test/core/design_system/motion/ss_motion_scope_test.dart \
+                    test/core/design_system/motion/ss_beat_pulse_test.dart
+```
+
+Mind a hét lépés **ZÖLD**, összesen **21 cella** (7 + 14):
+format · analyze (`No issues found!`) · scope-teszt 7/7 · pulse-teszt 14/14 ·
+architecture (12 allowlisted) · secrets (3488 fájl, 0 finding) · l10n (en→hu,
+1755 üzenet).
+
+### Scope-audit a végleges HEAD-en
+
+```
+python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e13-r06 \
+  --brief docs/rounds/e13-r06-motion-and-reduced-motion.md --base 467ef3ea
+→ Legacy scope audit OK (467ef3ea5544..580440a42ead, 9 changed path(s), 1 generated/ignored)
+```
+
+A `1 generated/ignored` maga ez a review-jelentés — állandó, kód szintű
+mentesség (`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`), nem
+sértés.
+
+### Nyitott leletek
+
+**Nincs nyitott BLOCKER vagy MAJOR.** A megmaradt NOTE-ok (NOTE-1 export-sorrend,
+NOTE-2 katalógus-demó, NOTE-3 = a visszaminősített MINOR-3) nem blokkolnak.
+
+### Próbatesztek takarítása
+
+Mindhárom reviewer-klón (`/tmp/review-e13-r06`, `/tmp/review2-`, `/tmp/review3-`)
+izolált volt; a közös munkafát egyik sem érintette. Minden próbafájl törölve és
+minden ideiglenes rontás visszaállítva — a három klónban `git status --short`
+0 piszkos fájlt adott.
+
+**Merge-döntés: ENGEDVE**, a zöld kapu (ADR 0052) többi eleme — teljes CI-suite,
+randomizált property gate, exact-SHA Router CI — a PR-en igazolva.
