@@ -406,7 +406,9 @@ def test_a1_depth_triple_above_threshold_rejected(session_factory) -> None:
             .filter(CommunityComment.post_id == post.id)
             .count()
         )
-    assert count == 2, f"A1 violated — expected 2 comments (parent + reply), got {count}"
+    assert count == 2, (
+        f"A1 violated — expected 2 comments (parent + reply), got {count}"
+    )
 
 
 def test_a1_real_violation_probe_depth_guard_bypassed(
@@ -474,17 +476,9 @@ def test_a1_real_violation_probe_depth_guard_bypassed(
         on_invalidate=None,
         idempotency_key=None,
     ):
-        author = (
-            db.query(CommunityProfile)
-            .filter_by(public_id=author_public_id)
-            .one()
-        )
+        author = db.query(CommunityProfile).filter_by(public_id=author_public_id).one()
         post = db.query(CommunityPost).filter_by(public_id=post_public_id).one()
-        parent = (
-            db.query(CommunityComment)
-            .filter_by(public_id=parent_public_id)
-            .one()
-        )
+        parent = db.query(CommunityComment).filter_by(public_id=parent_public_id).one()
         cleaned = comment_service._strip_unresolvable_mentions(
             db, body=body, author_profile_id=author.id
         )
@@ -638,7 +632,9 @@ def test_a2_mention_privacy_real_violation_probe(session_factory, monkeypatch) -
     def _identity_strip(db, *, body, author_profile_id):
         return body
 
-    monkeypatch.setattr(comment_service, "_strip_unresolvable_mentions", _identity_strip)
+    monkeypatch.setattr(
+        comment_service, "_strip_unresolvable_mentions", _identity_strip
+    )
 
     try:
         with session_factory() as db:
@@ -669,9 +665,7 @@ def test_a3_audience_gate_private_post_rejects_comment(session_factory) -> None:
     service layer.
     """
     author, viewer, _target, _handles = _make_three_profiles(session_factory)
-    post = _create_visible_post(
-        session_factory, author=author, audience="private"
-    )
+    post = _create_visible_post(session_factory, author=author, audience="private")
 
     with session_factory() as db:
         with pytest.raises(comment_service.CommentPostNotFound):
@@ -730,15 +724,13 @@ def test_a4_stale_resource_version_rejected(session_factory) -> None:
                 resource_version=initial_updated_at,
                 now=_utcnow(),
             )
-    assert _as_utc_for_test(exc_info.value.current_updated_at) > _as_utc_for_test(initial_updated_at)
+    assert _as_utc_for_test(exc_info.value.current_updated_at) > _as_utc_for_test(
+        initial_updated_at
+    )
 
     # The body remains at v2 — the stale write did NOT land.
     with session_factory() as db:
-        row = (
-            db.query(CommunityComment)
-            .filter_by(public_id=initial.public_id)
-            .one()
-        )
+        row = db.query(CommunityComment).filter_by(public_id=initial.public_id).one()
     assert row.body == "v2"
 
 
@@ -1066,7 +1058,9 @@ def test_a8_mention_cap_rejected(session_factory, monkeypatch) -> None:
     def _identity_strip(db, *, body, author_profile_id):
         return body
 
-    monkeypatch.setattr(comment_service, "_strip_unresolvable_mentions", _identity_strip)
+    monkeypatch.setattr(
+        comment_service, "_strip_unresolvable_mentions", _identity_strip
+    )
 
     body = " ".join(f"@user{i}" for i in range(21))
     try:
