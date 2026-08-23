@@ -1,13 +1,13 @@
 # E09-R14 — Review
 
 Brief: `docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md`
-Diff: `git diff ae555d82...144a4208` (branch `minimax/e09-r14-feed-ui-cache-and-mindful-use`)
+Diff: `git diff ae555d82...d85f940b` (branch `minimax/e09-r14-feed-ui-cache-and-mindful-use`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-23
-Verdikt: **CHANGES REQUIRED** (javító kör 1 szükséges — mindkét lelet a kör SAJÁT scope-ján belül javítható)
+Verdikt: **APPROVED** (javító kör 1 után, `d85f940b`) — lásd a §"Javító kör 1 zárása" szakaszt a jelentés végén.
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 1 · NOTE: 2
+BLOCKER: 0 · MAJOR: 2 (mindkettő ZÁRVA javító kör 1-ben) · MINOR: 1 (ZÁRVA) · NOTE: 2
 
 Independent gate re-run (isolated `/tmp/review-e09-r14` clone cloned from
 `origin/minimax/e09-r14-feed-ui-cache-and-mindful-use` @ `144a4208`,
@@ -98,7 +98,16 @@ listán-kívüli fájl.**
 - **Ellenőrzés:** `dart run tool/ci/check_l10n_parity.dart` (already in the
   gate) + `grep -c AppLocalizations following_feed_screen.dart
   feed_card_registry.dart` ≥ 1 each.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`d85f940b`, commitok `d2522dea`/`b87574cb`/`c0237b83`)
+  — independently verified in a fresh `/tmp/review-e09-r14-fix1` clone:
+  `grep -c AppLocalizations` → 8 (`following_feed_screen.dart`) / 9
+  (`feed_card_registry.dart`), 0 remaining hardcoded Hungarian strings
+  (`grep` for the original literals returns nothing), real Hungarian
+  translations added to `lib/l10n/features/community_hu.arb` (not
+  machine-transliterated — spot-checked), ICU placeholders used correctly
+  for parameterised strings, aggregate regenerated via
+  `tool/gen_l10n_segments.dart --write`. Gate l10n step ZÖLD (1750 messages,
+  en↔hu parity).
 
 ### F2 — MAJOR — Cache rehydration silently discards the artifact type on every offline/cached render, even though the correct wire data is persisted and a working decoder already exists in-repo
 
@@ -142,7 +151,18 @@ listán-kívüli fájl.**
   known artifact type (e.g. `PracticeSummaryArtifact`) renders its real
   card (not the fallback) when the feed falls back to the offline/cached
   path — add to the existing A1 group or a new A1.3 cell.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`d85f940b`, commit `37d31037` + test `4c3886ff`) —
+  independently read the fix: `_artifactFromEnvelope` now calls
+  `ShareArtifact.fromJson(raw)` inside a try/catch, falling back to
+  `UnfilledCommunityShareArtifact()` only on decode failure — exactly the
+  prescribed patch. New test `following_feed_test.dart:335` ("a
+  cache-primed post with a known artifact type rehydrates to its own
+  card, not the fallback — A1.3") asserts
+  `find.text('Gyakorlás összegzés')` (the practice-summary card), not the
+  fallback copy. Independently re-ran the full gate in a fresh clone: 14
+  tests green (was 13), including the new A1.3 cell; A5 (unknown type →
+  fallback) still green, confirming the try/catch preserves that
+  guarantee.
 
 ### F3 — MINOR — `_AudienceBadge.audience` is untyped (`dynamic`), losing compile-time safety for no documented reason
 
@@ -159,8 +179,9 @@ listán-kívüli fájl.**
   `final CommunityAudience audience` (already imported).
 - **Ellenőrzés:** `flutter analyze` stays green (a type-safe signature is
   strictly narrower, no call site breaks).
-- **Státusz:** OPEN (elfogadható egyben javítani F1/F2-vel, nem hizlalja
-  érdemben a diffet)
+- **Státusz:** FIXED (`d85f940b`, commit `c0237b83`) — `_AudienceBadge`
+  now declares `final CommunityAudience audience;`. `flutter analyze`
+  ZÖLD in the independent gate re-run.
 
 ## Biztonsági review (risk=high, dedikált pass)
 
@@ -195,11 +216,20 @@ nem fetch-el); nyers kivétel/stacktrace sosem jut widgetbe.
 | l10n (aggregate freshness + parity) | zöld | ✅ (megjegyzés: ez a lépés csak a MEGLÉVŐ ARB-k szimmetriáját nézi, F1 emiatt csúszott át rajta) |
 | CI (teljes suite + property + APK) | — | a javító kör után dispatch-elve |
 
+## Javító kör 1 zárása (2026-08-23, `d85f940b`)
+
+Mind a 3 lelet (F1 MAJOR, F2 MAJOR, F3 MINOR) FIXED, egyenként
+függetlenül ellenőrizve fenti (fájl:sor + parancskimenet). Gate újra
+lefuttatva egy friss `/tmp/review-e09-r14-fix1` klónban, csonkítatlanul:
+**MINDEN GATE ZÖLD** (format, analyze, 14/14 teszt — 1 új az F2 A1.3
+cellához —, architecture, secrets, l10n). Scope-audit:
+`tools/scope-audit.py --repo /tmp/review-e09-r14-fix1 --brief
+docs/rounds/e09-r14-feed-ui-cache-and-mindful-use.md --base 29fcc44d` →
+`OK (9 changed path(s), 0 generated/ignored)` — pontosan a bővített
+`allowed_paths` (5 eredeti + 4 ARB fájl) elemei, listán kívüli fájl nincs.
+
 ## Merge-döntés
 
-**Merge TILOS amíg F1/F2 nyitva** (ADR 0052 — minden gate zöld ÉS nincs
-nyitott BLOCKER/MAJOR → merge; itt 2 nyitott MAJOR van). Javító kör 1
-(MiniMax, ugyanaz a branch) dispatch-elve F1+F2+F3 leletlistával; F1
-`allowed_paths` bővítést igényel (`lib/l10n/features/community_{en,hu}.arb`)
-— orchestrátor-irányított, dokumentált, ugyanaz a precedens, mint az
-E09-R08 fix.
+**Nincs nyitott BLOCKER/MAJOR/MINOR.** Minden gate zöld a javító kör 1
+után, önállóan ellenőrizve. ADR 0052 szerint → **squash-merge mehet a CI
+(teljes suite + property + APK) zöld futása után.**
