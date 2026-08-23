@@ -1,13 +1,33 @@
 # E09-R12 — Review
 
 Brief: docs/rounds/e09-r12-post-composer-draft-and-outbox.md
-Diff: `git diff 6e710a0d..785b44b7` (branch `minimax/e09-r12-post-composer-draft-and-outbox`)
+Diff: `git diff 6e710a0d..ae455794` (branch `minimax/e09-r12-post-composer-draft-and-outbox`)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-23
-Verdikt: CHANGES REQUIRED
+Verdikt: **APPROVED** (javító kör 1 után)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 1
+Első kör: BLOCKER: 0 · MAJOR: 1 · MINOR: 1 · NOTE: 1.
+Javító kör 1 után: mindkét nyitott lelet (F1 MAJOR, F2 MINOR) zárva; F3 NOTE
+nem blokkolt eleve.
+
+### Javító kör 1 zárás
+
+- **F1 (MAJOR) → FIXED** — `82c450ee`: `CommunityDraftStore.open` mostantól
+  `legacyKey: ''`-t ad át; a fiktív migrációs docstring törölve. Saját kézzel
+  ellenőrizve a `82c450ee` diffjén: a `_legacyStorageKey` konstans és minden
+  hivatkozása eltűnt, a `JsonDocumentStore` konstruktor híváson a `legacyKey`
+  paraméter `''`.
+- **F2 (MINOR) → FIXED** — `ca58b9fc`: a `CommunityOutbox.enqueue` doc-comment
+  most a tényleges `accepted:false`/`record: existing.first` szerződést írja
+  le a hamis `Throws StateError` állítás helyett.
+- Gate **saját kézzel újrafuttatva** egy friss `/tmp/review-e09-r12-fix1`
+  klónban a `ae455794` HEAD-en: format/analyze/2 test/architecture/secrets/l10n
+  mind ZÖLD (15/15 teszt).
+- Scope-audit **saját kézzel újrafuttatva**: `Legacy scope audit OK
+  (6e710a0d3729..ae4557944120, 8 changed path(s), 1 generated/ignored)` — a
+  8. változott útvonal a §10 handoff-kiegészítés, a review-fájl a kanonikus
+  generated/ignored kivétel alá esik.
 
 ## Acceptance criteria
 
@@ -87,7 +107,7 @@ függetlenül megerősíti.
   draftja>)`, majd `CommunityDraftStore.open(userId: A).readDraft()` — a
   javítás ELŐTT ez B draftját adja vissza A-nak; a javítás UTÁN `null`-t ad
   (a store a sajátjától eltérő kulcsot nem olvassa).
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`82c450ee`) — `legacyKey: ''`, fiktív migrációs docstring törölve, saját kézzel ellenőrizve.
 
 ### F2 — MINOR — Doc-comment olyan viselkedést állít, amit a kód nem tesz
 
@@ -110,7 +130,7 @@ függetlenül megerősíti.
 - **Ellenőrzés:** nincs külön teszt szükséges — a meglévő
   `enqueue idempotency` teszt (`community_outbox_test.dart`) már a helyes
   viselkedést méri; a javítás csak a szöveget igazítja hozzá.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ca58b9fc`) — doc-comment a tényleges `accepted:false` szerződésre cserélve.
 
 ### F3 — NOTE — A composer-screen stringjei hardcode-oltak, nem ARB-en keresztül mennek
 
@@ -142,8 +162,22 @@ függetlenül megerősíti.
 | l10n | zöld | ✅ |
 | CI (teljes suite + property + APK) | — | a review nem dispatch-elt CI-t; az orchestrátor a review lezárása UTÁN indítja |
 
+## Gate-bizonyíték ellenőrzése — javító kör 1 után (`ae455794`)
+
+| Gate | Állított eredmény | Ellenőrizve |
+|---|---|---|
+| format | zöld | ✅ (saját `/tmp/review-e09-r12-fix1` klón, `tools/round-gate.sh` teljes kimenet) |
+| analyze | zöld (0 issue) | ✅ |
+| test post_composer_test.dart (9 teszt) | zöld | ✅ |
+| test community_outbox_test.dart (6 teszt) | zöld | ✅ |
+| architecture | zöld | ✅ |
+| secrets | zöld | ✅ |
+| l10n | zöld | ✅ |
+| scope-audit | OK (8 changed, 1 generated/ignored) | ✅ |
+
 ## Merge-döntés
 
-**Nem mehet merge-re jelenleg** — F1 (MAJOR) nyitva. A javítás triviális
-(`legacyKey: ''` + docstring-korrekció, egy-két soros diff, nem hizlalja a
-kört) — a MiniMax egy javító körben lezárhatja F1-et és F2-t egyszerre.
+**APPROVED.** F1 (MAJOR) és F2 (MINOR) zárva, saját kézzel ellenőrzött
+javítással; F3 (NOTE) eleve nem blokkolt. Nincs nyitott BLOCKER/MAJOR. Az
+ADR 0052 zöld kapuja (CI teljes suite + property + APK) az orchestrátor
+dispatch-e után adja a végső evidenciát a merge-hez.
