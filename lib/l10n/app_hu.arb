@@ -1355,6 +1355,55 @@
   "@communityNotificationsRetry": {},
   "communityNotificationsTitle": "Értesítések",
   "@communityNotificationsTitle": {},
+  "communityChallengeTitle": "Kihívások",
+  "@communityChallengeTitle": {},
+  "communityChallengeEmpty": "Jelenleg nincs aktív kihívás.",
+  "@communityChallengeEmpty": {},
+  "communityChallengeListHeader": "Nyílt kihívások",
+  "@communityChallengeListHeader": {},
+  "communityChallengeAccept": "Elfogad",
+  "@communityChallengeAccept": {},
+  "communityChallengeDecline": "Elutasít",
+  "@communityChallengeDecline": {},
+  "communityChallengeCancel": "Meghívás visszavonása",
+  "@communityChallengeCancel": {},
+  "communityChallengeInviteAction": "Meghívás a kihívásra",
+  "@communityChallengeInviteAction": {},
+  "communityChallengeDeepLinkPractice": "Gyakorlás megnyitása",
+  "@communityChallengeDeepLinkPractice": {},
+  "communityChallengeDeepLinkSong": "Dal megnyitása",
+  "@communityChallengeDeepLinkSong": {},
+  "communityChallengeMetricLabel": "Mérték: {metric}",
+  "@communityChallengeMetricLabel": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "communityChallengeWindowLabel": "Ablak: {startsAt} – {endsAt}",
+  "@communityChallengeWindowLabel": {
+    "placeholders": {
+      "startsAt": {
+        "type": "String"
+      },
+      "endsAt": {
+        "type": "String"
+      }
+    }
+  },
+  "communityChallengeErrorNetwork": "A kihívások nem tölthetők be — ellenőrizd a kapcsolatot.",
+  "@communityChallengeErrorNetwork": {},
+  "communityChallengeErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra.",
+  "@communityChallengeErrorSessionExpired": {},
+  "communityChallengeErrorForbidden": "Ehhez a kihíváshoz nincs jogosultságod.",
+  "@communityChallengeErrorForbidden": {},
+  "communityChallengeErrorRateLimited": "Túl sok meghívás — lassíts egy pillanatra.",
+  "@communityChallengeErrorRateLimited": {},
+  "communityChallengeErrorConflict": "Ezt a meghívást már kezelték.",
+  "@communityChallengeErrorConflict": {},
+  "communityChallengeErrorInvalidInput": "Érvénytelen meghívás-kérés.",
+  "@communityChallengeErrorInvalidInput": {},
   "ddSuggestEasy": "Nehéz? Próbáld Easy módban!",
   "ddSuggestFull": "Ez megy! Próbáld a teljes leckét!",
   "ddSwitch": "Váltás",

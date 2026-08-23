@@ -1382,6 +1382,55 @@
   "@communityNotificationsRetry": {},
   "communityNotificationsTitle": "Notifications",
   "@communityNotificationsTitle": {},
+  "communityChallengeTitle": "Challenges",
+  "@communityChallengeTitle": {},
+  "communityChallengeEmpty": "No active challenges yet.",
+  "@communityChallengeEmpty": {},
+  "communityChallengeListHeader": "Open challenges",
+  "@communityChallengeListHeader": {},
+  "communityChallengeAccept": "Accept",
+  "@communityChallengeAccept": {},
+  "communityChallengeDecline": "Decline",
+  "@communityChallengeDecline": {},
+  "communityChallengeCancel": "Cancel invite",
+  "@communityChallengeCancel": {},
+  "communityChallengeInviteAction": "Invite to challenge",
+  "@communityChallengeInviteAction": {},
+  "communityChallengeDeepLinkPractice": "Open practice",
+  "@communityChallengeDeepLinkPractice": {},
+  "communityChallengeDeepLinkSong": "Open song",
+  "@communityChallengeDeepLinkSong": {},
+  "communityChallengeMetricLabel": "Metric: {metric}",
+  "@communityChallengeMetricLabel": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "communityChallengeWindowLabel": "Window: {startsAt} – {endsAt}",
+  "@communityChallengeWindowLabel": {
+    "placeholders": {
+      "startsAt": {
+        "type": "String"
+      },
+      "endsAt": {
+        "type": "String"
+      }
+    }
+  },
+  "communityChallengeErrorNetwork": "Could not load challenges — check your connection.",
+  "@communityChallengeErrorNetwork": {},
+  "communityChallengeErrorSessionExpired": "Session expired — please sign in again.",
+  "@communityChallengeErrorSessionExpired": {},
+  "communityChallengeErrorForbidden": "You cannot interact with this challenge.",
+  "@communityChallengeErrorForbidden": {},
+  "communityChallengeErrorRateLimited": "Too many invites — please slow down.",
+  "@communityChallengeErrorRateLimited": {},
+  "communityChallengeErrorConflict": "This invite has already been handled.",
+  "@communityChallengeErrorConflict": {},
+  "communityChallengeErrorInvalidInput": "Invalid invite request.",
+  "@communityChallengeErrorInvalidInput": {},
   "ddSuggestEasy": "Tough one — try Easy mode?",
   "ddSuggestFull": "You're nailing it — try the full lesson?",
   "ddSwitch": "Switch",
