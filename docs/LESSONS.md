@@ -16273,3 +16273,115 @@ A).readDraft()` a másik user draftját adta vissza; a javítás UTÁN (`legacyK
 ''`) `null`-t ad. Egy jövőbeli kör, ami hasonló user-scope-olt store-ot ad,
 tehet fel egy regressziós tesztet erre a mintára (`legacyKey` particionáltság
 vagy hiánya).
+
+## L433 — Egy EXPLAIN-plan string-match mérce-helper engedékeny OR-fallback miatt zöldet adhat a mért tulajdonság HIÁNYÁBAN is — a §6.1 valódi-sértés próbát TÉNYLEGESEN futtatni kell, nem elég dokumentálni (E09-R13, review F1, 2026-08-23)
+
+**Mit mértünk.** Az E09-R13 `query_plan_uses_feed_index` helperje (A7
+mérce-cella, "nincs N+1/sequential scan") egy `("community_posts" in
+lowered and "index" in lowered)` engedékeny OR-fallback-ágat tartalmazott —
+ez nem azt ellenőrizte, MELYIK indexet használja a planner a `community_posts`
+elérésére, csak azt, hogy a szó "index" ELŐFORDUL valahol a teljes
+EXPLAIN-szövegben (ami szinte mindig igaz, mert egy másik tábla — itt
+`community_follows` — indexe is ott szerepel). A review saját, önállóan
+futtatott real-violation próbájával (500 sor + `ANALYZE`, majd `DROP INDEX
+ix_community_posts_created_id`, a brief §6.1 KÖTELEZŐ előírása szerint,
+amit az implementer explicit KIHAGYOTT "destruktív lenne inline"
+indoklással) mérve: a helper `True`-t (zöld) adott AKKOR IS, amikor az
+indexet eltávolítottuk. Súlyosabb: MÉG az index JELENLÉTÉBEN is a planner
+egy MÁSIK, `profile_id`-vezető indexet választott a `community_posts`
+eléréséhez, és mindkét esetben `USE TEMP B-TREE FOR ORDER BY` futott — a
+gyökérok egy JOIN-alapú query-alak volt (`community_follows`-ról indított
+nested loop), ami SOSEM tudja a globális `(created_at, id)` sorrendet
+indexből kapni. A round core A7/N+1-védelem ígérete tehát ténylegesen NEM
+teljesült, csak a mérőeszköz hibája miatt tűnt zöldnek (`docs/reviews/
+e09-r13-review.md` F1).
+
+**Miért.** Egy EXPLAIN-plan alapú mérce-helper KÉT különálló hibaosztályt
+kell elkerüljön: (1) egy TÚL SZOROS string-match, ami a dialektustól/
+formázástól függően hamis-pirosat ad (ez a gyakoribb, óvatosságra intő
+hiba); (2) egy TÚL LAZA string-match, ami a mérni kívánt tulajdonság
+HIÁNYÁBAN is zöldet ad, mert egy ÁLTALÁNOS mintát keres ("van valahol
+index") ahelyett, hogy a KONKRÉT, várt tulajdonságot mérné (a NEVESÍTETT
+index használatát ÉS egy negatív feltétel — pl. "nincs TEMP B-TREE" —
+hiányát). A (2) hibaosztály különösen alattomos, mert a teszt zöld marad
+mind a jó, mind a rossz állapotban — ez pontosan a "zöld gate nem
+bizonyíték" elv (L01) egy speciális, mérce-helper-szintű megnyilvánulása.
+A §6.1 valódi-sértés próba ELMULASZTÁSA (a docstringbe írt, de soha le nem
+futtatott dokumentáció) volt az, ami ezt a hibaosztályt élve hagyta —
+egy dokumentált, de nem futtatott próba NEM ér semmit, pontosan úgy, ahogy
+egy nem futtatott parancs sem bizonyíték (AGENTS.md §12).
+
+**Hogyan alkalmazd.** (1) Egy EXPLAIN-plan (vagy bármely más, "a rendszer
+egy adott erőforrást használ" típusú) mérce-helper írásakor a pozitív
+ellenőrzés a KONKRÉT, NEVESÍTETT erőforrást (index/eljárás/köv) keresse,
+sose egy általános "van valami odaillő" mintát. (2) Ha a mért tulajdonság
+egy KIZÁRÓ állapot HIÁNYÁT is feltételezi (itt: "nincs extra sort lépés"),
+azt EXPLICIT, külön feltételként kell ellenőrizni — egy pozitív match
+önmagában nem zárja ki egy negatív mellékhatás jelenlétét. (3) A brief §6.1
+"KÖTELEZŐ valódi-sértés próba" sosem helyettesíthető egy docstring-be írt
+ígérettel — ha egy próba "destruktív lenne inline", a helyes válasz egy
+ELDOBHATÓ DB-másolaton/kapcsolaton futtatott, a teszt-suite RÉSZÉT képező
+inline teszt (ahogy a javítás végül tette: `test_a7_real_violation_probe_
+drops_feed_index`), nem a próba elhagyása. (4) SQLite-specifikus alcsapda,
+amit a javítás során fedeztünk fel: az `ANALYZE` statisztika KAPCSOLATONKÉNT
+cache-elt — egy real-violation próba, ami ugyanazon a kapcsolaton
+seed-eli az adatot ÉS futtatja az EXPLAIN-t, elavult statisztikákkal
+tervezhet; az `engine.dispose()` (vagy egyenértékű friss-kapcsolat-kényszerítés)
+az `ANALYZE` UTÁN, az EXPLAIN ELŐTT szükséges a friss terv méréséhez.
+
+**Őrteszt:** `backend/tests/community/test_feed_query_plan.py::test_a7_real_violation_probe_drops_feed_index` — droppolja az `ix_community_posts_created_id` indexet egy eldobható DB-másolaton és asszertálja, hogy `query_plan_uses_feed_index` `False`-t ad.
+
+## L434 — Az implementer-dispatch a KÖR-BRIEF fájlt várja prompt-fájlként, nem az orchesztrátor-pipeline saját (meta-) promptját — a modell felismerte és önjavítani próbált, de az önjavítás egy tilos-zóna íráson bukott el, teljes session-crash-t okozva (E09-R13, 2026-08-23)
+
+**Mit mértünk.** Az E09-R13 orchesztrátor ELSŐ `tools/mm-round.sh` dispatch-e
+a `.pipeline/prompt-E09-R13-*.md` fájlt (a JELEN, pipeline-szintű, ORCHESZTRÁTORNAK
+szóló meta-promptot — a `sdd-round-driver` skill meghívására, HALT-szabályokra,
+ADR-foglalásra stb. utasító dokumentumot) adta át `tools/mm-round.sh`-nak
+implementer-promptként, a kör-brief (`docs/rounds/e09-r13-…md`) HELYETT. A
+`tools/mm-round.sh`/`tools/codex-round.sh` saját, a hívási hibára mutató
+figyelmeztetése (48-52. sor: "tipp: a kör-brief a KÖR-BRANCHEN van") és a
+skill dokumentációja is implicit ezt feltételezi, de a pipeline-prompt saját
+`<prompt>.md` placeholdere nem mondta ki explicit, MELYIK fájlra utal. Az
+implementer (MiniMax M3) az eredmény: 72 fordulón át dolgozott a HELYES
+brief-re hivatkozva (a meta-prompt SZÖVEGÉBEN szerepelt a brief útvonala,
+amit a modell Read-elt), de a folyamat végén megpróbálta a saját, "letisztult"
+implementer-promptját egy ÚJ fájlba írni a munkapéldány GYÖKERÉBE
+(`prompt-e09-r13-mm.md`, az `allowed_paths`-on KÍVÜL) — a gépi scope-őr
+(`implementer_guard.py`) ezt a Write-hívást helyesen megtagadta, DE a
+megtagadás a teljes `claude -p` sessiont `aborted_tools`/`error_during_
+execution` állapotba vitte (`stop_reason: tool_use`), NULLA commit
+keletkezett, jelzés nem íródott. Az újraindítás (UGYANAZZAL a hibás
+promptfájllal!) második próbálkozásra sikerrel járt — a modell nem
+ismételte meg a scratch-file-írási kísérletet —, de ez NEM garantált,
+csak megfigyelt viselkedés.
+
+**Miért.** A `tools/mm-round.sh`/`codex-round.sh` "prompt-fájl" paramétere
+a repóban elterjedt konvenció szerint a KÖR-BRIEF relatív útvonala (a brief
+saját §0 Kör-jelzés szakasza + §4 allowed_paths + §8 implementációs sorrend
+együtt alkotja a teljes implementer-utasítást — semmi mást nem kell hozzáadni).
+Egy meta-szintű, ORCHESZTRÁTORNAK szóló dokumentum átadása implementer-
+promptként két problémát okoz: (1) irreleváns/zavaró kontextus (HALT-kódok,
+ADR-foglalási parancsok, amik nem az implementerre vonatkoznak); (2) a
+modell — helyesen felismerve az eltérést — önkezűleg próbál korrigálni,
+és ha a korrekciós kísérlet egy tilos-zóna műveletbe fut, a MEGTAGADÁS
+katasztrofálisan (teljes session-crash-szel) végződhet ahelyett, hogy a
+modell egyszerűen a MEGLÉVŐ brief-fájlra hivatkozva folytatná (amit végül,
+második próbálkozásra, magától is megtett).
+
+**Hogyan alkalmazd.** Az orchesztrátor-oldali dispatch-parancsban a
+prompt-fájl paraméter MINDIG a kör-brief relatív útvonala legyen
+(`docs/rounds/eXX-rYY-<slug>.md`), SOHA a pipeline-szintű, orchesztrátornak
+szóló meta-prompt. Ha egy jövőbeli pipeline-prompt-sablon `<prompt>.md`
+placeholdert használ, a mellette lévő magyarázó szövegnek EXPLICIT ki kell
+mondania: "ez a KÖR-BRIEF fájl, nem a jelen (orchesztrátor-) prompt". Ha
+egy dispatch mégis crash-el jelzés/commit nélkül (NULLA munka), az
+újraindítás UGYANAZZAL a (akár hibás) paraméterezéssel is helyrehozhatja
+a kört — mielőtt a hibát diagnosztizálnánk, a log-ban keresendő
+`"permission_denials"` + `"terminal_reason":"aborted_tools"` pár, ami
+pontosan ezt az osztályt jelzi.
+
+**Őrteszt:** nincs — a hiba az orchesztrátor-oldali dispatch-parancs
+SZÖVEGÉBEN volt, nem a tesztelhető termékkódban. Egy jövőbeli pipeline-
+prompt-generátor kör tehetne fel egy lint-szabályt, ami ellenőrzi, hogy a
+generált `tools/mm-round.sh`/`codex-round.sh` dispatch-parancs prompt-fájl
+argumentuma a `docs/rounds/**` mintára illeszkedik.
