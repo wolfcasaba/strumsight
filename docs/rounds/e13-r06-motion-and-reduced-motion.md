@@ -1,13 +1,16 @@
 # E13-R06 — Motion rendszer és reduced motion
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 903e7a7d`)
+- **Státusz:** IN PROGRESS (előre megírva 2026-08-15; pre-flight revízió:
+  2026-08-23, kód mérve `main @ 467ef3ea`, orchestrátor: Claude, motor:
+  `sonnet-impl` — lásd §0.0)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 6
 - **Kör-azonosító:** `E13-R06`
-- **Branch:** `<motor>/e13-r06-motion-and-reduced-motion`
-- **Előfeltétel:** `E13-R05` merge-elve (felületi primitívek)
+- **Branch:** `sonnet-impl/e13-r06-motion-and-reduced-motion`
+- **Előfeltétel:** `E13-R05` merge-elve (felületi primitívek) — teljesült,
+  squash `6635a788`
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** [`0274`](../adr/0274-motion-driven-by-the-audio-clock.md)
-  — **a Claude írja meg a kör indításakor; a `docs/adr/` a TILOS zónában van.**
+  — **MÁR MERGE-ELVE** (`0bf943cc`), a kör NEM ír új ADR-t (§0.0/1).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** mérd fel, MELYIK óra a mérvadó a
 > jelenlegi lejátszási/analízis útvonalon (a `lib/features/audio_analysis/`
@@ -34,6 +37,152 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+**Kockázat = high, indoklás:** az `allowed_paths` egyetlen eleme sem illeszkedik
+a router `high_risk_path_fragments` listájára (nincs auth/crypto/upload/…), a
+`high` szint mégis MARAD, két mért okból. (1) Az **A1** nem kozmetikai cella,
+hanem akadálymentességi garancia: a csökkentett mozgást kérő felhasználótól a
+beat-visszajelzés **funkcionális információ**, tehát az „animáció ki" alakú
+implementáció információvesztés, nem stílusdöntés. (2) Az **A4** erőforrás-
+életciklus cella, pontosan a [`lessons/L244`](../LESSONS.md) hibaosztálya: ott
+a fake runnerrel mért `cancel`-takarítás ZÖLD gate mellett is átengedett egy
+valódi MAJOR-t, amit kizárólag a `risk = "high"` dedikált biztonsági review
+valódi erőforrást mozgató próbája fogott meg. Következmény: ezen a körön a
+`security-reviewer` futtatása kötelező.
+
+## 0.0 Pre-flight revízió — 2026-08-23 (orchestrátor: Claude, motor: `sonnet-impl`)
+
+### 1. ADR: a `0274` már merge-elve van — a kör nem ír újat
+
+A `docs/adr/0274-motion-driven-by-the-audio-clock.md` **létezik és merge-elve
+van** (`0bf943cc — docs(ch13): E13-R03..R06 briefek + ADR 0274`), a tartalma
+pedig pontosan ennek a körnek a döntése (audio óra, ≤ 100 ms inkluzív küszöb,
+csak-olvasás). A fejléc korábbi „a Claude írja meg a kör indításakor" mondata
+ezért elavult; új szöveg írása ugyanarra a számra két divergens ADR-t adna,
+ami rosszabb, mint az újrahasznosítás. A `tools/round-slots.py reserve-adr
+--round E13-R06` atomi foglalása a `0409`-et adta (a `0274` már lemezen volt);
+ez a szám **felhasználatlan marad**. Mérve: a
+`tools/tests/test_adr_numbering.py` csak `test_adr_numbers_are_unique` és
+filename-konvenció cellát tartalmaz, **folytonosságot nem követel**, tehát a
+kihagyott szám nem visz gate-et pirosra. Az ADR orchestrátori pre-flight
+artefaktum, nem az implementer scope-ja ([`lessons/L380`](../LESSONS.md)) — a
+`docs/adr/**` a TILOS zónában marad.
+
+### 2. A brief KÖTELEZŐ óra-mérése: az `audio_analysis` NEM idővonal-forrás
+
+A fejléc pre-flight doboza a mérvadó órát a `lib/features/audio_analysis/`
+alatt kereste. **Mérve, ott nincs lejátszási idővonal.** Az egyetlen `elapsed`
+fogalom ott `Stopwatch`-alapú stage-profilozás:
+`engine/analysis_context.dart:18`, `engine/analysis_pipeline.dart:217`,
+`application/shadow_analysis_runner.dart:85`. A tényleges idővonal-források
+máshol vannak:
+
+| Forrás | Hol | Mit ad |
+|---|---|---|
+| `LocalPlaybackHandle.positions` | `lib/features/song_trainer/data/playback/local_backing_audio_player.dart:16` | `Stream<Duration>` az `audioplayers.onPositionChanged`-ből, `seek`/`pause`/`resume`/`setRate` mellett |
+| `BeatClock.beatsAt(double secs)` | `lib/features/metronome/beat_clock.dart:20` | fázis-őrző beat-leképezés — **nem óra-forrás**: a fal-időt BEMENETKÉNT kapja |
+
+Mindkettő `lib/features/**` alatt van, ami a §3 TILOS zónája. Ez nem ütközés,
+hanem az ADR 0274 „Következmények" szakaszának szó szerinti előírása: *„A
+design system függ egy absztrakt óra-interfésztől (nem a konkrét
+analízis-rétegtől), amit a hívó ad meg."* Ezért:
+
+- az `SsBeatPulse` a **saját, absztrakt idő-forrás portját** definiálja a
+  design systemen belül (injektálható, teszttel hajtható), és a hívó huzalozza
+  rá a fenti források egyikét egy KÉSŐBBI körben;
+- a design system **nem importál `lib/features/**`-ot**, és `import
+  'package:strumsight/features/...'` sor a diffben tilos;
+- az §5.2 és a fejléc-doboz `lib/features/audio_analysis/` hivatkozása
+  **útvonal-hibaként javítva**: a tiltás változatlanul él, de az idővonal nem
+  ott lakik. Az §5.3 („csak OLVASSA") és az **A6** ettől függetlenül érvényes.
+
+Ez az [`lessons/L19`](../LESSONS.md) és [`lessons/L100`](../LESSONS.md) szabály
+alkalmazása: az erőforrás-/forrás-tulajdonlást a TÉNYLEGES hívási láncon
+mértem, nem a réteg-diagramból.
+
+### 3. Scope-csapda ELŐRE elhárítva: a `foundations_test.dart` kipinneli az `SsMotion`-t
+
+`test/core/design_system/foundations_test.dart:20-27` **kipinneli** az
+`SsMotion.durations` értékét PONTOSAN az öt jelenlegi elemre, és a
+`SsMotion.forReducedMotion(true) == Duration.zero` cellát. Ez a fájl **NINCS**
+az `allowed_paths`-on, a lista tágítása pedig nem az orchestrátor hatásköre.
+
+Az E13-R05 ugyanezt a hibaosztályt már megfizette (§0.0.1: a `SsCard` javítása
+a listán kívüli `component_catalog_test.dart` három celláját vitte pirosra →
+H3 self-heal kör). Itt ELŐRE zárom:
+
+> **KÖTÖTT:** az `ss_motion.dart` változása **szigorúan additív**. A meglévő öt
+> konstans (`instant` 80, `fast` 120, `standard` 200, `emphasized` 300,
+> `celebration` 700), a `durations` lista **tartalma és sorrendje**, valamint a
+> `forReducedMotion` viselkedése **változatlan marad**. Az új szemantikus
+> duration-aliasok és a curve-készlet ÚJ tagok; a `durations` listába **tilos**
+> bármit hozzáfűzni vagy abból elvenni.
+
+**Falszifikáció:** ha az implementer mégis módosítja a `durations` listát, a
+`test/core/design_system/foundations_test.dart` PIROSRA vált. Ez **STOP-ok**
+(§0 `stopped` jelzés + jelentés), **nem** lista-tágítás.
+
+### 4. A reduced motion két forrása MÁR LÉTEZIK — az app-szintű a TILOS zónában van
+
+Mérve, ma két, egymástól független forrás él:
+
+- **rendszer:** `MediaQuery.disableAnimationsOf(context)` — élő használat:
+  `lib/features/gamification/presentation/widgets/reward_summary_sheet.dart:60`
+  és `.../streak_status_card.dart:16`;
+- **alkalmazás-szintű:** `GamificationPreferences.reduceMotion`
+  (`lib/features/gamification/domain/gamification_preferences.dart:54`),
+  amelynek SAJÁT doc-commentje mondja ki, hogy *„Independent of
+  [MediaQuery.disableAnimationsOf]"*.
+
+Az app-szintű forrás `lib/features/**` alatt van → TILOS zóna. Ezért az
+`SsMotionScope` az alkalmazás-szintű felülbírálást **injektált, nullable
+értékként** kapja (`bool? appOverride`), és **nem** olvassa a gamification
+réteget. Az **A5** pontos jelentése: `appOverride != null` esetén az
+**felülírja** a rendszer-beállítást (mindkét irányban — `true` bekapcsolja a
+csökkentett mozgást rendszer-`false` mellett is, és `false` KIKAPCSOLJA
+rendszer-`true` mellett is); `appOverride == null` esetén a rendszer dönt. A
+huzalozás egy későbbi kör dolga.
+
+### 5. Ticker-tulajdonlás mérve
+
+A mai `AnimationController`/`Ticker` tulajdonosok kivétel nélkül képernyő-`State`
+osztályok (`lib/features/metronome/screens/metronome_screen.dart:44`,
+`lib/features/share/screens/strum_reel_screen.dart:82`,
+`lib/features/learn/screens/learn_screen.dart:92`,
+`lib/features/analyze/screens/analyze_screen.dart:374`) —
+`SingleTickerProviderStateMixin`-nel. Az `SsBeatPulse` tehát a SAJÁT `State`-jében
+birtokolja és `dispose`-olja a controllerét; a `lib/features/**` alatti
+tulajdonosokat nem érinti. A prompt §1 „elérhetetlen cél-státusz" szabálya
+**nem alkalmazandó**: ez a kör nem tartalmaz reducert, állapotgépet vagy
+státusz-enumot.
+
+### 6. Az óra-szinkron küszöb cellái (`python3 -c`-vel számolva)
+
+```
+lag=60ms   th=100ms  60 <= 100  -> True   -> elfogadva
+lag=100ms  th=100ms  100 <= 100 -> True   -> elfogadva (a határ INKLUZÍV)
+lag=140ms  th=100ms  140 <= 100 -> False  -> ELUTASÍTVA (a cella PIROS)
+```
+
+A határtól vett távolság mindkét irányban 40 ms, tehát egyik cella sem ül a
+lebegőpontos zajban. A `<=` reláció kötött: `<` használata a 100 ms-os cellát
+hamisan pirosra vinné (ADR 0274 §3).
+
+### 7. Visszakeresett előzmény (ADR 0312 §4.1, szűkítve-először ADR 0331)
+
+Lefuttatva `--corpus lessons,halts,adr`, majd `--corpus lessons,halts`, végül a
+teljes korpuszon. A releváns találatok és a hatásuk erre a briefre:
+
+| Találat | Mit mond | Hol hat |
+|---|---|---|
+| [`adr/0274`](../adr/0274-motion-driven-by-the-audio-clock.md) | audio óra, ≤100 ms inkluzív, csak-olvasás, absztrakt óra-interfész | §0.0/1–2, §5.2 |
+| [`adr/0273`](../adr/0273-design-system-token-source-of-truth.md) | egy token-forrás: a design system olvas, nem másol | §0.0/3 additív szabály |
+| [`lessons/L122`](../LESSONS.md) | szinkron fake-óra + aszinkron `StreamController`: a listenerben felfegyverzett timer a ROSSZ `now`-hoz köt; két `advance()` await nélkül elcsúszik | **A3** cellái: az idő-forrás legyen szinkron hajtható, vagy minden léptetés külön `await`/`pump` | 
+| [`lessons/L306`](../LESSONS.md) | a widget „most" fogalma injektált referenciaórából jön, sosem fordítás-idejű konstansból | `SsBeatPulse` idő-port |
+| [`lessons/L19`](../LESSONS.md), [`lessons/L100`](../LESSONS.md) | erőforrás-tulajdonlás a tényleges hívási láncon mérve, nem réteg-diagramból | §0.0/2 és /5 |
+| [`lessons/L244`](../LESSONS.md) | CSAK fake runnerrel mért cleanup ZÖLD gate mellett is átenged valódi lifecycle MAJOR-t | **A4** valódi próbája + `risk = high` indoklás |
+| [`lessons/L380`](../LESSONS.md) | az ADR orchestrátori pre-flight artefaktum, nem implementer-scope | §0.0/1 |
+| [`lessons/L387`](../LESSONS.md) + E13-R05 §0.0.1 | egy contract-változás listán KÍVÜLI fogyasztóját is fel kell mérni, különben H3 | §0.0/3 |
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -156,6 +305,28 @@ lag, **100 ms**):
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** cseréld a pulzus
 forrását független `Timer`-re → az **A2** és **A3** cellának PIROSNAK kell
 lennie → állítsd vissza.
+
+### 6.2 A pre-flight revízióból következő cella-pontosítások (§0.0)
+
+- **A4 — valódi próba, nem flag-állítás** ([`lessons/L244`](../LESSONS.md)):
+  nem elég egy `disposed == true` mezőt mérni. A cella építsen fel valódi
+  widget-fát, majd `dispose` után **léptesse tovább az injektált idő-forrást**,
+  és bizonyítsa, hogy (a) nem érkezik további frame/`setState`, és (b) a teszt
+  végén nincs élő `Ticker` — a `flutter_test` a `dispose`-olatlan
+  `AnimationController`-t „A Ticker was still active" hibával bukja, ez a cella
+  gépi őre.
+- **A5 — a felülbírálás MINDKÉT irányban hat** (§0.0/4): `appOverride = true` +
+  rendszer `false` → csökkentett; `appOverride = false` + rendszer `true` →
+  **nem** csökkentett; `appOverride = null` → a rendszer dönt. Három cella.
+- **A7 — a nyers-`Duration` tiltás a diff ÚJ soraira vonatkozik**, és az
+  `ss_motion.dart` token-definícióira NEM (ott a literál maga a token-forrás,
+  ADR 0273). A `motion/` alatti három ÚJ fájlban nem lehet nyers
+  `Duration(...)` literál animáció-hosszra: a `SsMotion` tokenjeiből kell jönnie.
+- **A1 falszifikációja kimondva:** a `if (reduceMotion) return child;` alakú
+  implementációnak PIROSRA kell vinnie az A1 celláját — a cella tehát azt mérje,
+  hogy csökkentett mozgás mellett a beat-visszajelzés **más modalitásban
+  megfigyelhető marad** (pl. a feloldott szín/opacitás-lépcső az óra fázisával
+  együtt VÁLTOZIK), nem csak azt, hogy a widget kirajzolódik.
 
 ## 7. Kötelező ellenőrzések
 
