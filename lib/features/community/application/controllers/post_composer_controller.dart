@@ -38,6 +38,7 @@ import '../../../../core/storage/key_value_store.dart';
 import '../../../auth/providers/auth_providers.dart';
 import '../../data/local/community_draft_store.dart';
 import '../../domain/entities/community_post.dart';
+import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/repositories/post_repository.dart';
 import '../outbox/community_outbox.dart';
@@ -168,7 +169,14 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
   @override
   Future<PostComposerState> build() async {
     final sourceArtifactJson = ref.read(composerSourceArtifactProvider);
-    final draft = ref.read(communityDraftStoreProvider).readDraft();
+    // Wait for the auth provider to settle before reading the
+    // draft — otherwise the draft store would bind to userId 0
+    // (the "logged-out" placeholder) and miss the persisted draft.
+    // A4 — the user's draft must hydrate correctly on the first
+    // build, before any UI mutation.
+    await ref.read(authControllerProvider.future);
+    final store = ref.read(communityDraftStoreProvider);
+    final draft = store.readDraft();
     if (draft == null) {
       return PostComposerState.initial(sourceArtifactJson: sourceArtifactJson);
     }
@@ -284,10 +292,7 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
         next.copyWith(
           status: PostComposerStatus.failure,
           isSubmitting: false,
-          lastError: const AppFailure(
-            code: FailureCode.networkUnavailable,
-            message: 'A poszt nem került elküldésre — próbáld újra.',
-          ),
+          lastError: const NetworkFailure(code: FailureCode.networkUnavailable),
         ),
       );
     } on AppFailure catch (failure) {
@@ -310,7 +315,7 @@ class PostComposerController extends AsyncNotifier<PostComposerState> {
         next.copyWith(
           status: PostComposerStatus.failure,
           isSubmitting: false,
-          lastError: AppFailure(
+          lastError: UnknownFailure(
             code: FailureCode.unknown,
             cause: error,
             stackTrace: stackTrace,

@@ -31,6 +31,7 @@ import '../../../../core/logging/app_logger.dart';
 import '../../../../core/storage/json_document_store.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../domain/entities/community_post.dart';
+import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
 
 /// Document schema version of the Community draft envelope.
@@ -318,7 +319,18 @@ class CommunityDraftStore {
   /// The current draft for this user, or ``null`` when there is no
   /// in-progress draft (fresh install, just submitted, or after an
   /// explicit clear).
-  CommunityDraft? readDraft() => _body.read();
+  ///
+  /// A persisted draft whose [CommunityDraft.body] is empty AND
+  /// whose source artifact carries no identity is treated as "no
+  /// draft" — `clearDraft` writes such a sentinel rather than
+  /// removing the document (the JsonObjectStore API has no `remove`
+  /// surface), so this normalization is what callers actually want.
+  CommunityDraft? readDraft() {
+    final draft = _body.read();
+    if (draft == null) return null;
+    if (draft.isEmpty) return null;
+    return draft;
+  }
 
   /// Persist [draft] for this user. Throws [StorageException] on a
   /// platform write refusal (the [KeyValueStore] contract) — the
