@@ -41,7 +41,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from pydantic import ValidationError as PydanticValidationError
 
 # ---------------------------------------------------------------------------
@@ -78,8 +78,7 @@ def _validate_schema_version(value: int) -> int:
     """
     if not isinstance(value, int):
         raise ValueError(
-            "schema_version must be an integer, "
-            f"got {type(value).__name__}."
+            f"schema_version must be an integer, got {type(value).__name__}."
         )
     if value != SHARE_ARTIFACT_SCHEMA_VERSION:
         raise ValueError(
@@ -96,7 +95,7 @@ class _BaseShareArtifact(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: int
+    schema_version: StrictInt
     source_id: str = Field(..., min_length=1, max_length=128)
     created_at: datetime
 

@@ -190,9 +190,7 @@ def test_unknown_type_rejected():
 def test_practice_summary_field_matrix():
     """A2 — PracticeSummaryArtifact whitelists exactly the documented
     field set, NO others (A5 / §6.1 row 1/2)."""
-    artifact = PracticeSummaryArtifact.model_validate(
-        _practice_summary_payload()
-    )
+    artifact = PracticeSummaryArtifact.model_validate(_practice_summary_payload())
     dumped = artifact.model_dump()
     assert set(dumped.keys()) == {
         "type",
@@ -380,10 +378,21 @@ def test_discriminator_is_type_not_field_presence():
     NOT the field set.
 
     A conflict payload that contains BOTH the practice and the song
-    field set, with the songResult discriminator, MUST decode to a
-    ``SongResultArtifact`` — a regression that switched on
-    field-presence would silently pick one or the other (and may
-    even accept the wrong shape on a future schema bump)."""
+    field set, with the songResult discriminator, MUST be rejected
+    by ``extra="forbid"`` — the §6.1 "mezők jelenlétéből
+    következtet típusra" failure mode is the SILENT best-effort
+    decode, which we forbid in both directions:
+
+    * the Pydantic ``extra="forbid"`` rejects the practice fields
+      on a song-shape payload (this test), AND
+    * the Dart `ShareArtifact.fromJson` decodes via the
+      ``type`` literal ONLY (the Dart-side companion test).
+
+    A regression that switched on field-presence would silently
+    accept the wrong shape (and may even accept the wrong shape
+    on a future schema bump) — the explicit rejection is the
+    §6.1 cell.
+    """
     conflict = _song_payload(
         "songResult",
         # Insert practice-only fields:
@@ -394,13 +403,8 @@ def test_discriminator_is_type_not_field_presence():
         best_score=0.8,
         coaching_codes=[],
     )
-    envelope = parse_share_artifact({"artifact": conflict})
-    assert isinstance(envelope.artifact, SongResultArtifact)
-    # The song-shape attribute is set; the practice-only fields
-    # are NOT accessible as attributes on the song shape (no
-    # silent "best_effort" pass-through).
-    assert envelope.artifact.bpm == 96
-    assert not hasattr(envelope.artifact, "active_seconds")
+    with pytest.raises(ValidationError):
+        parse_share_artifact({"artifact": conflict})
 
 
 # ---------------------------------------------------------------------------
