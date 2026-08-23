@@ -11,6 +11,113 @@
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 13 cursor-szerződést és a Kör 10 artifact-típusokat — a card-registry ezekre a MEGLÉVŐ típusokra épül, ismeretlen artifact-típusra fallback-kártyát ad, nem hibázik. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0 Pre-flight brief-revízió (Claude Sonnet 5, 2026-08-23)
+
+**Kockázat = high, indoklás:** a `risk = "high"` jogos annak
+ellenére, hogy egyik `allowed_paths` elem sem tartalmazza szó szerint a
+router high-risk-fragmenslistát (`auth, authorization, camera, credential,
+crypto, encryption, migration, payment, privacy, secret, share, upload,
+vision`) — két, egymástól független termékinvariáns forog kockán: (1) a
+lokális feed-cache accountonkénti izolációja (§5.2, A2) egy privacy-osztályú
+hiba (egy másik user korábbi feedjének átmeneti megjelenése account-váltás
+után klasszikus adat-keveredés, ugyanaz a hibaosztály, mint egy hitelesítési
+scope-hiba, csak kliens-oldalon); (2) a §5.1/§13.6 "nincs autoplay, nincs
+kötelező végtelen görgetés" SDD-invariáns — ez a brief §6.1 mérce-mátrixa
+szerint a legkönnyebben "visszacsúszó" minta, és egy UI-library-alapértelmezés
+(automatikus infinite-scroll) csendben felülírhatja explicit kódmódosítás
+nélkül is (pl. egy widget default paramétere). Mindkettő UI-rétegbeli, de a
+blast radius (minden feed-fogyasztó felhasználó) és a néma-bukás jellege
+(a hiba teszt nélkül észrevétlen marad) indokolja a `high` besorolást.
+
+**Visszakeresett előzmények (S8, ADR 0312 §4.9-sorrend szerint):**
+- `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "feed UI cache offline mindful use no autoplay infinite scroll"` →
+  legjobb releváns találat: **ADR 0406** (Kör 13, `bm25#1 emb#1`)
+  "Következmények" szakasza — a mute-szűrés ÚJ helperje kifejezetten "Kör 14
+  feed UI/cache"-t nevezi meg mint egy jövőbeli fogyasztót, és a
+  `FEED_CURSOR_VERSION` statikus konstans / opaque cursor kezelés a §0.0
+  D5-ben leírt szerződés, amit ez a kör OPAQUE-ként kell kezeljen (nem
+  dekódolhatja). Nincs korábbi lecke/halt közvetlenül a "no-autoplay" vagy
+  "account-scoped cache" témára — ez az ELSŐ kör, ami mindkettőt bevezeti a
+  Community modulban; a `SharePreview` "minden flag off by default" mintája
+  (Kör 10, `share_artifact.dart` D5) egy analóg, konzervatív-alapérték
+  precedens, de nem azonos kérdés.
+- `node tools/knowledge-rag.mjs --corpus lessons,halts --top 5 "user-scoped local cache bounded storage account switch mixing"` →
+  nincs közvetlenül releváns lecke/halt a szűkített korpuszon; a legközelebbi
+  találat a `docs/execution/` sablon-szakaszaiból jött, tartalmi egyezés
+  nélkül.
+- Teljes korpuszos kiegészítő lekérdezés (`"feed cache account isolation no
+  autoplay infinite scroll Flutter"`) a `lib/features/community/data/local/
+  community_draft_store.dart` (Kör 12 — a userId-partitionált storage-key
+  minta, ld. lent) és a `lib/features/progress/data/practice_log_repository.dart`
+  (a `maxEntries`-bounded `JsonCollectionStore` minta) találatokat hozta —
+  mindkettő a §0.0 D1/D2 alatt konkrét mintaként be van építve.
+- Ezen felül **nincs releváns előzmény**.
+
+**D1 — A feed-cache a Kör 12 userId-partitionált storage-key mintáját
+követi, nem definiál újat.** Grep-elve (`lib/features/community/data/local/
+community_draft_store.dart`): a Kör 12 draft-store storage-kulcsa
+`'ss.community.drafts.v2.$userId'` alakú — ez az ELSŐ user-id-partitionált
+kulcs a repóban (a fájl saját dokumentációja szerint). A Kör 14 feed-cache
+kulcsa kövesse ugyanezt a mintát (pl. `'ss.community.feed.v1.<userId>'`),
+NEM egy globális, nem-partitionált kulcsot — az A2 acceptance cella
+(account-izoláció) pontosan ezt a mintát méri.
+
+**D2 — A "bounded" cache a Kör 7 `PracticeLogRepository.maxEntries` +
+`JsonCollectionStore(maxItems: …)` mintáját követi.** Grep-elve
+(`lib/features/progress/data/practice_log_repository.dart`): egy dokumentált
+`static const int maxEntries` konstans + a store-primitíven átadott
+`maxItems` paraméter tartja a dokumentumot korlátos méreten. A konkrét
+bound-értéket az implementer választja és a §10-ben dokumentálja — a brief
+nem köti meg egy konkrét számhoz, mert ez nem egy mérce-hármassal ellenőrzött
+numerikus élérték, hanem egy tervezési paraméter; a szerver oldali
+oldalméret-korlát (HANDOFF §6, a Kör 13 backend konstansa) egy FÜGGETLEN,
+válaszonkénti korlát, a kliens-cache bound egy FÜGGETLEN, offline-megőrzési
+döntés.
+
+**D3 — Erőforrás-tulajdonlás ellenőrzés: nincs a körben lease/lock/handle/
+subscription jellegű erőforrás, a §1 "2." pre-flight-szabály N/A.** A kör
+egy read-modell (controller + lokális cache + UI) — a `grep -rn "\.acquire("
+lib/` ellenőrzés 0 találatot ad a `lib/features/community/` fán, és a kör
+nem vezet be újat.
+
+**D4 — "Elérhetetlen cél-státusz" ellenőrzés (§1 "1." szabály): N/A, a
+feed-controller állapotgépe ÚJ, nincs meglévő reducer/enum, aminek az
+átmenettábláját a kód felülírná.** A brief §3 nyolc állapotot sorol fel
+(initial/loading/content/refreshing/paging/offline/error/end) — ezek egyike
+sem egy meglévő kódban már létező enum-érték, tehát a §1 mérési szabály
+("melyik INPUT produkálja") ezen a körön nem egy meglévő táblát ellenőriz,
+hanem az implementer §10 dokumentációjának kell rögzítenie, melyik átmenetet
+melyik esemény váltja ki (ez NEM egy előre kimért tény, hanem a kör saját
+tervezési döntése — a review ezt fogja ellenőrizni a §6.1 mérce-mátrix
+mentén).
+
+**D5 — A `CommunityFeedRepository.followingFeed` kontraktus MEGERŐSÍTVE
+grep-pel, a cursor típusa `Object`, nem `String?`.** Grep-elve
+(`lib/features/community/domain/repositories/feed_repository.dart`):
+`Future<CommunityPage<CommunityPost>> followingFeed({required Object cursor,
+required int limit})` — a hívó az ELSŐ laphoz `CursorPage.initial()`-t ad át
+(nem `null`-t), a folytatáshoz a `CommunityPage.cursor` mezőt (egy
+`CursorPage`) adja vissza a következő híváshoz. A `feed_controller.dart`
+ezt a típus-állapotot (initial vs. continued vs. halted-after-request,
+`cursor_page.dart`) kezelje, ne egy nyers nullable string cursort — a
+Kör 13 backend a wire-formátumot (`<base64url(json)>.<base64url(hmac)>`)
+egy `String` mezőben adja, de ezt a Flutter-oldali `CursorPage` már
+becsomagolja, a kliens-domain réteg NEM dekódolja (ADR 0406 D4/D5, a fenti
+S8 találat).
+
+**D6 — Nincs `feed_repository_impl.dart` és nincs provider-wiring fájl ebben
+a körben — ez a brief §4 engedélyezett-listája szerint SZÁNDÉKOS.** A
+HANDOFF §6 (E09-R13 hagyatéka) megerősíti: a `feed` router MÉG NINCS
+bekötve a `build_community_router`-be, és nincs `feed_repository_impl.dart`
+sem. A kör négy ÚJ fájlja (`feed_cache.dart`, `feed_controller.dart`,
+`feed_card_registry.dart`, `following_feed_screen.dart`) a
+`CommunityFeedRepository` INTERFÉSZÉRE épül — a widget-teszt egy fake/mock
+implementációt ad át, a valós HTTP-bekötés egy KÉSŐBBI kör hatásköre
+(pontosan úgy, mint a `post_repository_impl.dart` hiánya is örökölt,
+dokumentált tartozás). Ez NEM hiányzó scope, hanem a brief §1 cél
+("Reszponzív, hozzáférhető feed... — ez a kör az első UI-fogyasztója")
+tudatos határa.
+
 ```ai-router
 schema_version = 1
 risk = "high"
