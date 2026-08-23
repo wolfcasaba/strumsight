@@ -30,14 +30,28 @@ fragmentum, az aggregátumot a `dart run tool/gen_l10n_segments.dart --write`
 és `lib/l10n/app_hu.arb`-ot tartalmazza (93-98. sor) — ezek a scope-audit
 alól KIVÉTELEK, tehát nem is kellett volna felvenni őket az `allowed_paths`-ra.
 
-**Javítás:** az `allowed_paths` `lib/l10n/app_en.arb`/`lib/l10n/app_hu.arb`
-sorai lecserélve a tényleges forrásra:
-`lib/l10n/features/community_en.arb`/`lib/l10n/features/community_hu.arb`
+**Javítás:** az `allowed_paths`-ra felkerül a tényleges kézzel szerkesztett
+forrás: `lib/l10n/features/community_en.arb`/`lib/l10n/features/community_hu.arb`
 (ez a feature MÁR rendelkezik ilyen fragmentum-fájlokkal, korábbi Community
 körökből — az implementer az ÚJ `communityChallenge*` kulcsokat EZEKBE írja,
 nem az aggregátumba). Az aggregátumot a `dart run
 tool/gen_l10n_segments.dart --write` regenerálja — ez a lépés a §7 gate elé
 kerül, az implementer promptjában explicit lépésként.
+
+**0.0b javítás (2026-08-23 23:11, MÁSODIK `stopped` jelzés után):** a fenti
+0.0a javítás TÉVESEN vette ki az `app_en.arb`/`app_hu.arb`-ot az
+`allowed_paths`-ból — a `tools/round-slots.py` `GENERATED_PATHS` halmaza
+KIZÁRÓLAG a párhuzamos kör-ütemezés slot-ütközés-detektálásából veszi ki
+ezt a két fájlt, a ténylegesen futó `tools/scope-audit.py`-nak NINCS
+generated-path kivétele (`grep -n "GENERATED" tools/scope-audit.py` → 0
+találat) — a scope-audit minden, a diffben ténylegesen módosult fájlt az
+`allowed_paths` ellen mér, függetlenül attól, hogy kézzel írták-e vagy
+generálták. Az implementer helyesen futtatta a `--write`-ot, de ez a
+`scope_audit=VIOLATION` jelzést váltotta ki (`path outside allowed scope:
+lib/l10n/app_en.arb`/`app_hu.arb`). **Végleges javítás:** mindkét fájl-pár
+szerepel az `allowed_paths`-on — a fragmentum (kézzel szerkesztett forrás)
+ÉS az aggregátum (a `--write` által legálisan, a kör saját diffjeként
+módosított generált kimenet).
 
 ## 0.0 Pre-flight brief-revízió (2026-08-23, Claude Sonnet 5)
 
@@ -95,6 +109,8 @@ allowed_paths = [
   "test/ui/ui_inventory_test.dart",
   "lib/l10n/features/community_en.arb",
   "lib/l10n/features/community_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "docs/rounds/e09-r21-challenge-and-invite-lifecycle.md",
 ]
 gate_tests = [
@@ -164,7 +180,8 @@ Aszinkron kihívás-meghívások és résztvevői állapotgép — a lejárat sz
 | `backend/tests/community/test_challenge_invite_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/community_challenges_test.dart` | ÚJ |
 | `test/ui/ui_inventory_test.dart` | screen-számláló 74→75 (§0.0 pont 2, L420/L422) |
-| `lib/l10n/features/community_en.arb`, `lib/l10n/features/community_hu.arb` | ÚJ `communityChallenge*` kulcsok a fragmentumban (§0.0a); `dart run tool/gen_l10n_segments.dart --write` regenerálja az aggregátumot (`lib/l10n/app_*.arb`, GENERATED, `tools/round-slots.py GENERATED_PATHS`) |
+| `lib/l10n/features/community_en.arb`, `lib/l10n/features/community_hu.arb` | ÚJ `communityChallenge*` kulcsok a fragmentumban (§0.0a) |
+| `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb` | GENERATED — `dart run tool/gen_l10n_segments.dart --write` regenerálja a fragmentumokból; a `scope-audit.py`-nak NINCS generated-kivétele, tehát explicit listaelem kell (§0.0b) |
 
 **Tilos zóna:** `lib/features/community/domain/**` (csak-hívás, a kontraktus MÁR él, ADR 0399) · `lib/features/gamification/**` belső fájljai (csak `public.dart`) · `lib/features/practice/**`/`lib/features/songs/**` belső fájljai · `backend/app/community/policies/**` és `backend/app/community/services/block_service.py` (csak-hívás, ADR 0402 §D3, lásd ADR 0415 D3) · `docs/adr/**` · `tools/**` · `.github/**`
 
