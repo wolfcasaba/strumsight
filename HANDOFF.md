@@ -1,5 +1,85 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R09 KÉSZ — Profilkeresés és biztonságos discovery — PR [#418](https://github.com/wolfcasaba/strumsight/pull/418), squash `5a1df780` (2026-08-23)
+
+**EPIC 9 (COMMUNITY PLATFORM) KILENCEDIK KÖRE KÉSZ.** Handle-prefix
+profilkeresés (`GET /community/profiles/search`, `CurrentUser` kötelező —
+§0.0/D1) index-alapú tervvel (`handle_normalized` UNIQUE INDEX, EXPLAIN QUERY
+PLAN-nal igazolva), a Kör 8 közös `filter_public_ids_against_viewer_blocks`
+page-level helperrel bekötve (§0.0/D2 — nem soronkénti `is_blocked_pair`),
+PRIVATE-profil teljes kizárással (§0.0/D3: "non-discoverable" =
+`visibility == PRIVATE`, nincs külön mező a sémában). Flutter
+`community_search_screen.dart` (debounce, törölhető lokális recent-search
+lista), a Kör 5 (`E09-R05`, ADR 0399) óta "Kör 9"-ként megnevezett
+`CommunityProfileRepository.searchProfiles` `UnsupportedError`-stub éles HTTP-
+bekötése (§0.0/D4). Előre kiosztott ADR nincs (a kör nem hoz új kötött
+architekturális döntést, tisztán meglévő szerződések alkalmazása).
+
+**A pre-flight (§0.0) egy MÉRT scope-gapet talált és zárt indítás előtt:** a
+Flutter `searchProfiles` domain-metódus és a hozzá tartozó két
+`UnsupportedError`-stub MÁR LÉTEZETT (Kör 5 által "Kör 9"-ként megcímezve),
+de a brief eredeti `allowed_paths`-a NEM tartalmazta a
+`profile_repository_impl.dart`-ot — enélkül a keresés technikailag
+teljesíthetetlen lett volna. §0.0 D1-D4 pontosan méri az öt gap-et (auth,
+block-filter hívási pont, "discoverable" mező hiánya, a Flutter stub, az
+`ApiClient.getJson` query-param hiánya) és a §3/§4/§5/§8 szöveget ehhez
+igazítja.
+
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5. **1 javító
+kör** (`docs/reviews/e09-r09-review.md`): **2 BLOCKER** — F1: a keresési
+találatok a Flutter oldalon MINDEN sorra ugyanazt a fabrikált
+`displayName: 'placeholder'` / `handle: 'placeholder-x1'` értéket
+jelenítették meg (a widget teszt egy valódi adatot visszaadó fake
+repository-t használt, sosem futtatva át a valódi HTTP-decode útvonalat) —
+javítva: a backend válasz `hits` tömbbel bővült (`handle_display`+
+`display_name`+`created_at`), a Dart oldal ebből épít valódi
+`CommunityProfile`-t; F4 (**dedikált `security-reviewer` agent lelete**): a
+`next_cursor` a NYERS (block-szűrés ELŐTTI) utolsó sorból épült, tehát egy
+blokkolt profil handle-je és belső integer PK-ja a pagination-csatornán át
+kiszivárgott a `public_ids` listából való helyes kizárás ELLENÉRE — javítva:
+HMAC-SHA256-tal aláírt, opak cursor, a block-szűrt `kept_rows` utolsó
+eleméből származtatva (ha egy teljes lap mindegyike blokkolt, a lapozás
+inkább None-cursorral áll meg, mint hogy szivárogtasson — dokumentált,
+szándékos biztonság-elsőbbségi tradeoff). **1 MINOR** (F2 — a 422 docstring
+tévesen állította, hogy nem fogyaszt rate-limit slotot; javítva: a
+hossz-ellenőrzés a limiter ELÉ került) + **1 CI-only fix**
+(`test/ui/ui_inventory_test.dart` screen-számláló 68→69, UGYANAZ a
+drift-osztály mint az E09-R06/R07/R08). Mindhárom lelet ÚJ regressziós
+teszttel zárva (F4 a security-reviewer pontos forgatókönyvét pinneli).
+Review APPROVED javító kör 1 után. Exact `90dd39d9`: `full-gate.yml`
+32613840729 + `backend-ci.yml` 32613842345 mindkettő success (a
+`round-ci-plan.py` nem ismeri a `backend-ci.yml`-t, ezt az orchesztrátor
+külön, kézzel dispatch-elte a diff `backend/**` érintettsége miatt — ld.
+alább a folyamat-tanulságot).
+
+**Mért folyamat-tanulságok (a saját sessionöm hibái, nem az implementeré):**
+
+1. **Az implementer első dispatch-a a HIBÁS promptot kapta** — az
+   orchesztrátor saját (pipeline-oldali) meta-promptját adta át
+   `mm-round.sh`-nak a kör-brief helyett. Az implementer ennek megfelelően
+   ORCHESZTRÁTOR-szerepű munkát kezdett (saját ADR-t foglalt és írt egy,
+   a briefben explicit tiltott `docs/adr/**` fájlba, majd a SHARED fő
+   munkapéldányba is megpróbált írni), mielőtt jelzés nélkül lefagyott.
+   Felismerve → a workdir branch-e visszaállítva a pre-flight commitra, a
+   megosztott fába szivárgott (nem commitolt) fájl törölve, a HELYES
+   prompt (a kör-brief fájlja magában a munkapéldányban) újra
+   dispatch-elve. A `tools/mm-round.sh` a `<prompt-fájl>` argumentumot
+   VERBATIM adja át a modellnek — ez mindig a kör-brief legyen, SOHA az
+   orchesztrátor saját pipeline-promptja.
+2. **A CI-terv (`round-ci-plan.py`) nem ismeri a `backend-ci.yml`-t** — csak
+   a `full-gate.yml`/`build-apk.yml` párost nevezi meg. Egy `backend/**`-et
+   érintő kör (mint ez) esetén ezt a workflow-t az orchesztrátornak KÉZZEL
+   kell dispatch-elnie és zöldre várnia, a `router-ci.yml`-hez hasonlóan —
+   a szerszám ezt (még) nem teszi meg helyette.
+3. **Ugyanaz a session megismételte a saját L425-mintázatát** — a záró
+   rituálék közben egy `git reset --hard origin/main`-t futtatott a
+   merge-lock-on BELÜL, miután MÁR beírta a HANDOFF/RTM/LESSONS
+   szerkesztéseket, de MIELŐTT commitolta volna azokat — a reset némán
+   eldobta mindhármat (csak a queue-sor élte túl, mert azt a reset UTÁN
+   írta). Újra kellett írni. A helyes sorrend: reset ELŐSZÖR, utána MINDEN
+   szerkesztés, commit legvégül — a reset SOSEM mehet a szerkesztés és a
+   commit közé.
+
 ## ✅ E09-R08 KÉSZ — Block, mute és safety kapcsolatkezelés — PR [#417](https://github.com/wolfcasaba/strumsight/pull/417), squash `5e086c10` (2026-08-23)
 
 **EPIC 9 (COMMUNITY PLATFORM) NYOLCADIK KÖRE KÉSZ.** [ADR 0402](docs/adr/0402-block-mute-and-safety-relationships.md):
@@ -4856,6 +4936,20 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-23):** `main` @ `5a1df780` — E09-R09
+Profilkeresés és biztonságos discovery, PR
+[#418](https://github.com/wolfcasaba/strumsight/pull/418), squash-merge.
+Implementer MiniMax M3, orchesztrátor/reviewer Claude Sonnet 5, EGY javító
+kör (F1 BLOCKER placeholder keresési találatok, F4 BLOCKER — dedikált
+security-reviewer lelete — cursor block-filter leak; F2 MINOR rate-limit
+sorrend) + egy CI-only fix (`ui_inventory_test.dart` screen-számláló 68→69,
+ugyanaz a drift-osztály, mint az E09-R06/R07/R08). Dedikált security-reviewer
+pass: 1 BLOCKER (F4), javítva. Review APPROVED javító kör 1 után, 0 nyitott
+BLOCKER/MAJOR. Exact `90dd39d9`: `full-gate.yml` 32613840729 +
+`backend-ci.yml` 32613842345 mindkettő success (a `router-ci.yml`-t a
+`round-ci-plan.py` NEM várta el erre a diffre). Részletesen a fejléc
+✅-blokkban.
+
 **Aktuális állapot (2026-08-23):** `main` @ `5e086c10` — E09-R08 Block, mute
 és safety kapcsolatkezelés, PR
 [#417](https://github.com/wolfcasaba/strumsight/pull/417), squash-merge.
@@ -6340,27 +6434,35 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-**Pontos következő termékkör (2026-08-23): E09-R09 — Profilkeresés és
-biztonságos discovery** (`docs/rounds/e09-r09-profile-search-and-discovery.md`,
-engine a queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `nincs` —
-a pre-flight a §1.0.1 szerint kérjen számot
-`tools/round-slots.py reserve-adr --round E09-R09`-cal). **Az E09-R08
-(Block, mute és safety kapcsolatkezelés) KÉSZ** (PR #417, squash
-`5e086c10`) — lásd a fejléc ✅-blokkot. A Kör 8 mérte, hogy
-`profile.py::read_profile`/`privacy.py::get_privacy`/`handles.py` két
-GET-je MA authentikáció nélküliek (nincs `CurrentUser`), és ezt szándékosan
-kihagyta a block-szűrésből (D2, ADR 0402) — a Kör 9 pre-flightja mérje meg,
-igényel-e a keresés/discovery felület authentikációt ezekhez (vagy a Kör 9
-saját, ÚJ endpointokat ad, amik már `CurrentUser`-esek, és a régi
-`read_profile`/`get_privacy` authentikáció-hiánya továbbra is nyitott
-follow-up marad). A Kör 8 `query_filters.py::is_blocked_pair` pure-helperje
-a Kör 9 keresési eredményekből is ki kell zárja a blokkolt profilokat — a
-Kör 9 brief-jének explicit hivatkoznia kell erre a függvényre, ne írjon
-saját, párhuzamos block-ellenőrzést. **Az Epic 8 (Gamification) mind a 30
-köre KÉSZ** (E08-R30, PR #407) — az **E08-R29** (Integritás, analytics,
-balance szimuláció és CI) továbbra is `hold`-on marad. A queue-scan a
-legelső `pending` sort választja. Ez a session nem indítja el; új
-sessionben fut.
+**Pontos következő termékkör (2026-08-23): E09-R10 — Share artifact
+szerződések** (`docs/rounds/e09-r10-share-artifact-contracts.md`, engine a
+queue-ban `minimax`, előre kiosztott ADR a queue-fájlban `0402` — EZ A SZÁM
+STALE: az E09-R08 már foglalta, a pre-flight a §1.0.1 szerint kérjen FRISS
+számot `tools/round-slots.py reserve-adr --round E09-R10`-zal, ugyanaz a
+mintázat, mint az E09-R07/R08 saját stale-ADR mérésénél). **Az E09-R09
+(Profilkeresés és biztonságos discovery) KÉSZ** (PR #418, squash
+`5a1df780`) — lásd a fejléc ✅-blokkot. A Kör 9 pre-flightja megerősítette:
+a `search.py` router `CurrentUser`-t vesz fel (D1), a
+`read_profile`/`get_privacy`/`handles.py` auth-hiánya VÁLTOZATLANUL nyitva
+marad (nem ennek a körnek/nem a Kör 10-nek a hatásköre). A Kör 9
+`profile_search_repository.py::ProfileSearchHit` (`handle`+`display_name`+
+`created_at`) és a HMAC-signed opaque cursor minta (`_sign_cursor`/
+`_verify_cursor`, `backend/app/community/repositories/profile_search_repository.py`)
+egy újrahasznosítható referencia egy jövőbeli, hasonlóan lapozott/
+block-szűrt listaendpointhoz (feed, member-listing) — ha a Kör 10 vagy egy
+későbbi kör saját cursor-t vezetne be, a §0.0-ban mérje meg, nem
+egyszerűbb-e ugyanezt a signed-cursor mintát újrahasznosítani sima
+base64-JSON helyett (a Kör 9 saját, javító körben tanult leckéje: az
+egyszerű base64-JSON triviálisan dekódolható és a block-szűrt/nyers sor
+összekeverése IDOR-osztályú szivárgást okozott — `docs/reviews/e09-r09-review.md`
+F4). **Az Epic 8 (Gamification) mind a 30 köre KÉSZ** (E08-R30, PR #407) —
+az **E08-R29** (Integritás, analytics, balance szimuláció és CI) továbbra is
+`hold`-on marad. A queue-scan a legelső `pending` sort választja. Ez a
+session nem indítja el; új sessionben fut.
+
+**Korábbi kijelölt SDD-kör (2026-08-23, azóta lezárult): E09-R09 —
+Profilkeresés és biztonságos discovery** (`docs/rounds/e09-r09-profile-search-and-discovery.md`,
+engine a queue-ban `minimax`). Lásd a fejléc ✅-blokkot.
 
 **Korábbi kijelölt SDD-kör (2026-08-22, azóta lezárult): E09-R08 — Block,
 mute és safety kapcsolatkezelés** (`docs/rounds/e09-r08-block-mute-and-safety-relationships.md`,

@@ -15979,3 +15979,141 @@ could discard uncommitted work" szabálya IS név szerint felsorol
 megszegett.
 
 **Őrteszt:** nincs — folyamat-lecke, nem kódmérce.
+
+## L426 — Az `<prompt-fájl>` argumentum `tools/mm-round.sh`-nak VERBATIM megy a modellhez — az orchesztrátor saját pipeline-promptja SOHA nem az, csak a kör-brief maga (E09-R09, 2026-08-23)
+
+**Mért tény.** Az E09-R09 első implementer-dispatch-a a
+`.pipeline/prompt-E09-R09-*.md` fájlt kapta `<prompt-fájl>`-ként — ez az
+ORCHESZTRÁTOR saját pipeline-promptja (ami a `sdd-round-driver` skillt hívja
+meg, ADR 0087 §2 halt-kódokat sorol, `tools/round-slots.py reserve-adr`-t
+ír elő, HANDOFF/RTM/git-notes záró rituálékat követel), NEM a kör-brief. A
+MiniMax implementer ennek megfelelően ORCHESZTRÁTOR-szerepű munkát kezdett:
+lefoglalt egy ADR-számot (`0403`), megírt egy teljes ADR-dokumentumot a
+TILOS `docs/adr/**` zónában, és `git -C /home/ubuntu/music-theory ...`
+paranccsal megpróbált a SHARED fő munkapéldányba is írni — mielőtt
+jelzés nélkül megszakadt (`terminal_reason: aborted_tools`).
+
+**Gyökérok.** A `tools/mm-round.sh`/`codex-round.sh` a `<prompt-fájl>`
+tartalmát KARAKTERRŐL KARAKTERRE a modell elé teszi (a motor-preambulum
+UTÁN fűzve) — nincs beépített ellenőrzés arra, hogy a fájl valóban egy
+kör-brief-e (pl. tartalmazza-e az `allowed_paths`/`gate_tests` ai-router
+blokkot), vagy egy orchesztrátor-szintű meta-dokumentum. A pipeline saját
+promptja (ami az orchesztrátor SESSIONjét indítja) és a kör-brief (ami az
+IMPLEMENTER munkáját írja le) hasonló méretű, hasonló szerkezetű markdown
+fájl — a kettő könnyen összecserélhető egy elhamarkodott dispatch-parancsban.
+
+**Szabály.** Dispatch ELŐTT mindig ellenőrizd: a `<prompt-fájl>` a
+munkapéldány SAJÁT `docs/rounds/<kör>.md` fájlja legyen (a script maga is
+ezt várja — ld. `mm-round.sh` `case "$prompt_file" in "$workdir"/docs/rounds/*.md)
+round_brief=...` ága, ami automatikusan levezeti a `ROUND_BRIEF`-et EBBŐL a
+mintából), SOHA az orchesztrátor saját `.pipeline/prompt-*.md` fájlja. Ha a
+hiba mégis megtörténik: a folyamat élő és felismerhető — az implementer
+`docs/adr/**`-be írása vagy a shared fába nyúlása a §0 STOP-protokoll szerint
+azonnal H3-gyanús; a workdir branch-ét `git reset --hard <pre-flight commit>`-tal
+vissza kell állítani a hibás commit ELŐTTRE, és a HELYES prompttal újra kell
+dispatch-elni — a hibás dispatch önmagában NEM H-NOSIGNAL, ha a jelzésfájl
+hiánya a rossz prompt következménye, nem egy valódi motor-hibáé.
+
+**Őrteszt:** nincs — egy jövőbeli `mm-round.sh`/`codex-round.sh` bővítés a
+`<prompt-fájl>` tartalmában megkövetelhetné az ai-router blokk jelenlétét
+(`allowed_paths`/`gate_tests`) és `exit 2`-vel utasíthatná el a dispatch-ot,
+ha hiányzik — ez lenne a mechanikus kapu; egyelőre az orchesztrátor saját
+figyelme az egyetlen védelem.
+
+## L427 — A `tools/round-ci-plan.py` csak a `full-gate.yml`/`build-apk.yml` párost ismeri — egy `backend/**`-et érintő kör esetén a `backend-ci.yml`-t az orchesztrátornak KÉZZEL kell dispatch-elnie és zöldre várnia (E09-R09, 2026-08-23)
+
+**Mért tény.** Az E09-R09 diffje `backend/app/community/repositories/`,
+`backend/app/community/routers/` és `backend/tests/community/` fájlokat
+érintett — ezek mind a `backend-ci.yml` `on.push.paths: ["backend/**"]`
+trigger-mintáját ütik. Az orchesztrátor a `tools/round-ci-plan.py`
+kimenetét követve KIZÁRÓLAG a `full-gate.yml`-t dispatch-elte (a tool
+`dispatch: ["full-gate.yml"]`-t adott vissza) — a `backend-ci.yml` emiatt
+NEM futott le a review 1. fordulójában, csak a javító kör UTÁN, saját kézzel
+pótolva, amikor a review-jelentés írása közben tudatosult a hiány.
+
+**Gyökérok.** Ugyanaz a hibaosztály, mint a `router-ci.yml` esetén (lásd a
+brief §3.0-ban explicit dokumentált, hasonló L113 mintát) — egy diff több,
+egymástól FÜGGETLEN `on.push.paths` triggerelt workflow-t is beüthet
+egyszerre, de a `round-ci-plan.py` csak a natív-build kérdésre (APK vs. nem
+APK) válaszol, nem az ÖSSZES triggerelt workflow listájára. A
+`router-ci.yml`-re már van explicit dokumentált szabály a pipeline-promptban
+(3.0 szakasz) — a `backend-ci.yml`-re NINCS.
+
+**Szabály.** Merge előtt az orchesztrátor mérje meg a diffet ÖSSZES érintett
+`.github/workflows/*.yml` `on.push.paths` mintája ellen (nem csak a
+`round-ci-plan.py` kimenetét és a `router-ci.yml`-t), és minden triggerelt
+workflow-t dispatch-eljen + várjon zöldre az exact merge SHA-n. Egy kör,
+ami `backend/**`-et érint, a `backend-ci.yml`-t is a zöld kapu része —
+ugyanúgy, ahogy a `docs/rounds/**`-et érintő kör a `router-ci.yml`-t.
+
+**Őrteszt:** nincs — egy jövőbeli `round-ci-plan.py` bővítés felsorolhatná
+az ÖSSZES `on.push.paths`-szal triggerelt workflow-t egy `all_triggered`
+mezőben (nem csak a `dispatch`/`skipped` APK-párost), ami ezt a hibaosztályt
+gépi kapuvá tenné.
+
+## L428 — Az [[L423]] saját előrejelzése bevált: a `ui_inventory_test.dart` screen-számláló drift HARMADSZOR is csak a CI-ban bukott ki, mert a mechanikus kapu még mindig nem épült meg (E09-R09, 2026-08-23)
+
+**Mért tény.** [[L423]] (E09-R08, 2026-08-23) explicit kimondta: "amíg ez a
+gépi kapu nincs megépítve, a lecke további megismétlődése VÁRHATÓ, nem
+meglepetés". Az E09-R09 új `community_search_screen.dart`-ot adott — az
+orchesztrátor (megint ugyanaz a Claude Sonnet 5 persona) a CI-dispatch
+ELŐTT megint NEM futtatta le a `ui_inventory_test.dart` számláló-ellenőrzést
+kézzel, és a `full-gate.yml` run 32612083350 megint PIROS lett, pontosan
+ugyanazzal a tünettel (`Expected: <68>, Actual: <69>`).
+
+**Ez NEM egy negyedik, új lecke — ez az [[L423]] szabályának megerősítése.**
+A prózában élő szabály (akár L420, akár L422, akár L423 formájában) a
+harmadik körön át sem védett — a `docs/rounds/**` batch-elt briefek és a
+hosszú pipeline-prompt közepette egy "ellenőrizd a screen-számlálót
+dispatch előtt" tétel elvész. A gépi kapu (round-ci-plan.py vagy egy önálló
+pre-dispatch szkript, amit L423 már megnevezett) ÉPÍTÉSE most már három
+mért kör (E09-R07 → E09-R08 → E09-R09) mögött áll — ez a HARMADIK azonos
+gyökérokú, azonos tünetű CI-piros ugyanabban az epikban.
+
+**Szabály.** Egy jövőbeli governance-kör (`E99-R*`) építse meg az [[L423]]
+által javasolt gépi kaput — ÚJ `*_screen.dart` fájlt tartalmazó diffnél a
+dispatch ELŐTT a `tools/round-ci-plan.py` (vagy egy dedikált pre-dispatch
+lépés) maga futtassa le a `ui_inventory_test.dart`-ot, és `exit`-eljen
+hibával, ha a hardcode-olt szám nem egyezik a tényleges screen-számmal. A
+prózai lecke HARMADSZORI megismétlődése után a "olvasd el a LESSONS.md-t"
+védelem bizonyítottan elégtelen erre a hibaosztályra.
+
+**Őrteszt:** nincs — lásd [[L423]] Őrteszt-sorát, ugyanaz a hiányzó gépi
+kapu vonatkozik erre a megismétlődésre is.
+
+## L429 — Az [[L425]] SAJÁT szabályát ugyanaz az orchesztrátor-session megszegte, méghozzá a záró rituálék KÖZBEN: a merge-lock alatt egy `git reset --hard` a MÁR beírt, de MÉG NEM commitolt HANDOFF/RTM/LESSONS szerkesztéseket dobta el (E09-R09, 2026-08-23)
+
+**Mért tény.** A záró rituálék lépésében (`tools/round-merge-lock.sh` alatt)
+az orchesztrátor a queue-sor `pending → done` átírása ELŐTT egy
+`git fetch origin main -q && git reset -q --hard origin/main`-t futtatott —
+DE a HANDOFF.md/RTM/LESSONS.md szerkesztések ekkor MÁR a munkafán ültek,
+commitolatlanul (a lock-parancson KÍVÜL, egy korábbi Edit-hívással írva). A
+reset mindhármat némán eldobta; csak a queue-sor élte túl, mert azt a reset
+UTÁN, a lock-parancson BELÜL írta a session. Az [[L425]] pontosan ezt a
+hibaosztályt írta le egy körrel korábban — és ennek ellenére megismétlődött,
+UGYANABBAN a záró-rituálé lépésben, ugyanazon session egyetlen körén belül.
+
+**Gyökérok.** A záró rituálék (HANDOFF/RTM/LESSONS szerkesztés → queue-sor
+átírás → egy közös commit) több különálló eszközhívásra tagolódnak — az Edit
+eszköz a munkafára ír, a `git reset --hard` pedig egy KÉSŐBBI, önálló Bash-
+hívásban fut, a kettő között nincs automatikus védelem. Az [[L425]] leckéje
+MAGA is csak próza (LESSONS.md-bejegyzés), nem egy mechanikus kapu — pontosan
+az a mintázat, amit [[L423]]/[[L428]] a `ui_inventory_test.dart`
+számlálónál már megnevezett: egy próza-szabály elolvasása nem garantálja a
+betartását egy hosszú, több-lépéses munkamenet közepén.
+
+**Szabály.** A helyes sorrend: `git fetch`+`reset --hard origin/main`
+MINDIG a záró rituálék ELSŐ lépése legyen, ELŐTTE semmilyen Edit-hívás ne
+történjen a HANDOFF/RTM/LESSONS/queue fájlokon — a reset UTÁN jöjjön MINDEN
+szerkesztés, majd egyetlen `git add`+`commit`+`push`. Ha egy `round-merge-lock.sh`
+alá csomagolt parancs saját maga tartalmaz egy resetet, az orchesztrátor
+NE végezzen a lock-hívás ELŐTT semmilyen fájlszerkesztést ugyanazokon a
+fájlokon — vagy a reset kerüljön a lock-hívás ELSŐ sorába, és MINDEN
+szerkesztés (Edit-hívásokkal együtt) menjen a lock-on BELÜLRE, egyetlen
+`bash -c` blokkban, hogy ne legyen olyan időablak, amiben a munkafán
+commitolatlan, értékes tartalom ül egy önálló reset mellett.
+
+**Őrteszt:** nincs — folyamat-lecke, akárcsak [[L425]]; egy jövőbeli
+`round-merge-lock.sh` bővítés megkövetelhetné, hogy a hívó parancs maga
+tartalmazza a fetch+reset lépést az ELSŐ sorban (dokumentációs konvenció,
+nem gépi kikényszerítés).
