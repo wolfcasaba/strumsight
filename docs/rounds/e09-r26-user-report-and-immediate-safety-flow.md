@@ -108,6 +108,26 @@ javító kör csak az ARB-kulcsok helyét korrigálja (a §0.0b fenti diff a
 korábbi, hibás app_{en,hu}.arb-kísérletet már törölte a `477848c8`
 commitban).
 
+## 0.0c Második pre-flight javítás — a mechanikus scope-audit nem ismeri a "generált következmény" kivételt (2026-08-24, a 2. implementer-STOP után)
+
+A §0.0b javítás UTÁN az implementer helyesen a `community_{en,hu}.arb`
+forrásba vette fel a kulcsokat, majd lefuttatta a generátort — ez, ahogy a
+§0.0b előre jelezte, megváltoztatta `lib/l10n/app_{en,hu}.arb`-ot is. A
+`gate_shape=VIOLATION` / `scope_audit=VIOLATION` jelzés (`080a4cee`,
+`path outside allowed scope: lib/l10n/app_en.arb; ... app_hu.arb`) viszont
+megmutatta: **a mechanikus `tools/scope-audit.py` szó szerint az
+`allowed_paths` listát diffeli a változott fájlokkal — nincs beépített
+kivétele "ez csak egy generált következmény" esetekre**, a §0.0b szöveges
+indoklása a scope-audit szempontjából nem elég. A Kör 8 tényleges,
+merge-elt diffje (`git show --stat 5e086c10`) igazolja: OTT is landolt
+`lib/l10n/app_{en,hu}.arb` a diffben — a helyes olvasat tehát nem az, hogy
+a scope-audit átengedi a generált fájlt dokumentálatlanul, hanem hogy
+EXPLICIT fel kell venni az `allowed_paths`-ra, akkor is, ha "csak" egy
+generátor futtatja át. **Javítás:** `lib/l10n/app_en.arb` és
+`lib/l10n/app_hu.arb` VISSZAKERÜLT az `allowed_paths`-ra (lásd fent), a
+`community_{en,hu}.arb` MELLETT (nem helyette) — mind a 4 ARB fájl
+engedélyezett. Ugyanígy a §4 táblázat.
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 `safety_relationships_screen.dart` TÉNYLEGES widget-struktúráját — a report bottom sheet ugyanabból a képernyő-családból nyílik, konzisztens biztonsági UX-szel. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
@@ -122,6 +142,8 @@ allowed_paths = [
   "lib/features/community/presentation/dialogs/report_content_sheet.dart",
   "lib/l10n/features/community_en.arb",
   "lib/l10n/features/community_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "backend/tests/community/test_report_service.py",
   "test/features/community/presentation/report_content_sheet_test.dart",
   "docs/rounds/e09-r26-user-report-and-immediate-safety-flow.md",
@@ -171,8 +193,10 @@ Könnyen elérhető report, hide, mute és block folyamat minden releváns tarta
 | `backend/app/community/routers/reports.py` | ÚJ |
 | `backend/alembic/versions/e09_r26_0019_community_report.py` | ÚJ |
 | `lib/features/community/presentation/dialogs/report_content_sheet.dart` | ÚJ |
-| `lib/l10n/features/community_en.arb` | BŐVÍTÉS — §0.0/§0.0b: kategória-címkék + self-harm safety copy kulcsa (FORRÁS-fragmentum, nem a generált `app_en.arb`) |
+| `lib/l10n/features/community_en.arb` | BŐVÍTÉS — §0.0/§0.0b: kategória-címkék + self-harm safety copy kulcsa (FORRÁS-fragmentum) |
 | `lib/l10n/features/community_hu.arb` | BŐVÍTÉS — §0.0b, EN-nel párban |
+| `lib/l10n/app_en.arb` | BŐVÍTÉS — §0.0c: a `gen_l10n_segments --write` generált aggregate-je; a mechanikus scope-audit nem ismeri a "generált következmény" kivételt, tehát explicit listázva (Kör 8 precedens szerint ez is a diffben landolt) |
+| `lib/l10n/app_hu.arb` | BŐVÍTÉS — §0.0c, EN-nel párban |
 | `backend/tests/community/test_report_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/report_content_sheet_test.dart` | ÚJ |
 

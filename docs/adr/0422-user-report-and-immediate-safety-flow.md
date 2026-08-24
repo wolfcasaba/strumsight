@@ -94,6 +94,12 @@ felsorolva, de a kör explicit szükséglete miatt, dokumentáltan bekerül, és
 ettől kezdve NEM esik a H3 (tilos zóna) alá (ADR 0087 §2, a pipeline-prompt
 4. szakasza).
 
+**Javítva (§0.0c):** a mechanikus `tools/scope-audit.py` a generált
+`app_{en,hu}.arb` változását is `allowed_paths`-hiányként jelzi — a
+"generált következmény, nem scope-sértés" szöveges indoklás nem helyettesíti
+az explicit listázást. Mind a négy ARB fájl (2 forrás-fragmentum + 2
+generált aggregate) az `allowed_paths`-on van.
+
 ### D2 — A reportoló-identitás perzisztencia- és válasz-határa
 
 `community_reports.reporter_profile_id` (FK `community_profiles.id`,
