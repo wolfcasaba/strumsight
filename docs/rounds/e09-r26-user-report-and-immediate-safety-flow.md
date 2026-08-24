@@ -218,4 +218,90 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+> **Round:** E09-R26 — User report and immediate safety flow
+> **Branch:** `minimax/e09-r26-user-report-and-immediate-safety-flow`
+> **Implementer:** MiniMax M3
+> **ADR:** 0422 (Claude — pre-flight)
+
+### 10.1 Scope delivered
+
+| Engedélyezett útvonal | Státusz | Megjegyzés |
+|---|---|---|
+| `backend/app/community/models/report.py` | ✅ NEW | `CommunityReport` ORM — `target_type` / `target_id` / `category` / `reporter_profile_id` (internal-only, never exposed) / `extra_metadata_json` (evidence only for copyright/privacy) / `dedup_key` (UNIQUE) / `target_deleted_at_submit` |
+| `backend/app/community/services/report_service.py` | ✅ NEW | Idempotent `submit_report`, `RateLimitExceeded` (12/hour), `InvalidCategory` (§6 A5), `target_exists` (§6 A4), `build_sanitized_response` (§5.1 wire-shape), in-process rate limiter |
+| `backend/app/community/routers/reports.py` | ✅ NEW | `POST /community/reports` — 200 sanitized, 400 missing key, 404 no profile, 422 unknown category, 429 rate limit |
+| `backend/alembic/versions/e09_r26_0019_community_report.py` | ✅ NEW | `community_reports` table — BigInteger PK + Uuid public_id + CASCADE reporter FK + `uq_community_reports_dedup_key` + `uq_community_reports_reporter_target_category` (structural backstop) + 3 indexes |
+| `lib/features/community/presentation/dialogs/report_content_sheet.dart` | ✅ NEW | Bottom sheet, two phases (compose + thanks), `ReportRepository` contract, immediate safety shortcuts (§5.2), `self_harm_concern` triggers approved-safety-copy helper (§5.3), localized via ARB |
+| `backend/tests/community/test_report_service.py` | ✅ NEW | 21 tests — A1 (×3 — dataclass / source-level grep / HTTP wire + valódi-sértés próba), A2 (×3 — idempotent / different category lands 2 / concurrent), A4 (×3 — active target / soft-deleted / unknown + helper), A5 (×3 — empty / unknown / snapshot), A6 (×3 — cap / per-reporter / 429 router), evidence metadata, router smoke (×2) |
+| `test/features/community/presentation/report_content_sheet_test.dart` | ✅ NEW | 11 tests — A3 (×4 — thanks transition / hide forwards / block forwards / no-author skips mute+block), §5.3 self-harm helper, A7 (×2 — labels + title semantics), submit-disabled, A5 wire values, failure path, hu locale |
+| `lib/l10n/app_en.arb` + `lib/l10n/app_hu.arb` | ✅ | Added `reportSheet*` keys (32 EN / 32 HU) — required for the sheet to compile (allowed_paths include these) |
+
+### 10.2 Acceptance-matrix evidence (each cell ran green)
+
+| # | Kritérium | Evidence file:cell |
+|---|---|---|
+| A1 | Target response NEVER carries reporter identity | `test_report_service.py::test_a1_*` (×3) + `test_a1_real_violation_probe` |
+| A2 | Duplikált report idempotens | `test_report_service.py::test_a2_duplicate_submit_same_target_category_idempotent` + concurrent test |
+| A3 | Report után azonnali hide/mute/block | `report_content_sheet_test.dart::test_a3_*` (×4) |
+| A4 | Törölt target kontrolláltan | `test_report_service.py::test_a4_*` (×3) + helper |
+| A5 | Érvénytelen kategória elutasított | `test_report_service.py::test_a5_*` (×3) + `test_a5_router_returns_422` |
+| A6 | Rate limit | `test_report_service.py::test_a6_*` (×3) |
+| A7 | Sheet accessible | `report_content_sheet_test.dart::test_a7_*` (×2) |
+
+### 10.3 Files actually committed (run via `git show --stat`)
+
+```
+47656f4d E09-R26: community_reports model and migration (ADR 0414)
+79cf2a53 E09-R26: report_service with idempotent submit, sanitized response (ADR 0414)
+a864f93a E09-R26: reports router with sanitized response (ADR 0414)
+c4079cef E09-R26: backend tests for report service (A1, A2, A4, A5, A6 cells)
+ea10581e E09-R26: report_content_sheet Flutter widget + ARB keys
+0c8b0c9c E09-R26: widget tests for report content sheet (A3, A7 cells)
+```
+
+### 10.4 Brief §6.1 valódi-sértés próba (mandatory)
+
+The §6.1 measure-matrix row **"A target moderation-jelzésében szerepel a reportoló ID-je → A1 cell goes red"** is enforced by **three layered guards** in `test_report_service.py`:
+
+1. `test_a1_response_dataclass_has_no_reporter_field` — structural: the dataclass has no reporter-identity field, so a wire-shape leak cannot be expressed without breaking the type.
+2. `test_a1_build_sanitized_response_never_reads_reporter` — runtime + source-level: the function never reads the reporter column AND the response dict has no `reporter_*` keys.
+3. `test_a1_real_violation_probe_patching_response_shape_fails_red` — the canary itself: any future patch that adds the reporter identity to the function body will trip the source-level grep in this test, failing A1 BEFORE the wire-shape assertion can be reached.
+
+The valódi-sértés was manually verified during implementation: temporarily uncommenting a `reporter_profile_id` reference inside `build_sanitized_response`'s body caused `test_a1_build_sanitized_response_never_reads_reporter` to fail with the §5.1 invariant message — confirming the test infrastructure is sensitive to the regression.
+
+### 10.5 Architectural decisions — from the brief + ADR 0422
+
+1. **Reporter identity never leaks** (§5.1). Enforced at three layers:
+   - **Model layer:** `CommunityReport` exposes no `reporter_public_id` property; the internal FK is the only reporter reference.
+   - **Service layer:** `ReportSubmissionResult` dataclass has no reporter-identity field. `build_sanitized_response` never reads the reporter column.
+   - **Router layer:** `post_report` returns the sanitized envelope only.
+
+2. **Immediate safety shortcuts** (§5.2). The Flutter sheet stays open across the compose → thanks transition. The thanks phase renders hide / mute / block actions as `FilledButton.tonalIcon`s with explicit `Key`s (`report-action-hide`, `report-action-mute`, `report-action-block`, `report-action-done`) so the host screen can wire them up.
+
+3. **Self-harm approved-safety-copy** (§5.3). The `self_harm_concern` category renders a single ARB-localized helper line (`reportSheetSelfHarmHelper`). The text mentions emergency services explicitly. No ad-hoc copy. Verified by `test_self_harm_category_shows_the_approved_safety_copy_helper_line`.
+
+4. **Idempotency** (§6 A2). Two layers: a `UNIQUE(dedup_key)` constraint catches the race, AND a structural `UNIQUE(reporter_profile_id, target_type, target_id, category)` constraint backstops any future dedup-key format change.
+
+5. **Rate limiting** (§6 A6). 12 reports / hour per reporter, in-process (the brief §3 calls this out as engineer-side). The router maps `RateLimitExceeded` to HTTP 429. The test fixture clears state between tests.
+
+6. **Deleted-target handling** (§6 A4). Reports against deleted or unknown targets still land — the moderation queue needs the row. The `target_deleted_at_submit` flag tells the queue the target was gone at submit time.
+
+### 10.6 Out-of-scope reminders
+
+- **The moderation queue is Kör 27.** This round only persists the row; no workflow runs against it. The Kör 27 dispatcher will join `community_reports.target_type + target_id` to the live target table.
+- **`docs/adr/**` is NOT touched by this round** — the ADR is Claude's pre-flight scope.
+
+### 10.7 Self-verification notes
+
+- Backend: `cd backend && python -m pytest tests/community/test_report_service.py -q` → **21 passed**.
+- Frontend: `flutter test test/features/community/presentation/report_content_sheet_test.dart` → **11 passed**.
+- Flutter analyze on the sheet file: **no issues found** (only `prefer_initializing_formals` info-level lint on the recording fake).
+- Migration contract: `e09_r26_0019_community_report` is a strict superset of the model's expected schema.
+
+### 10.8 Known follow-ups (intentionally NOT in this round)
+
+- **Distributed rate limiter.** In-process only; a Redis- or DB-backed implementation belongs to a future ops round.
+- **Per-target-type router registration.** The router currently accepts `target_type in {"post", "comment"}`; a future round that adds `club_post` / `profile` will extend the set.
+- **Moderation queue UI.** Kör 27.
+
 ## 11. Review — a Claude tölti ki
