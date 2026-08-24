@@ -499,4 +499,96 @@ A **brief §8 a terved** — nincs külön task-lista, ne írj sajátot.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Státusz:** KÉSZ (2026-08-24, Claude Sonnet 5 mint implementer).
+
+### Mit épült
+
+| Fájl | Tartalom |
+|---|---|
+| `test/l10n/arb_parity_test.dart` | Fragmentum-szintű en/hu kulcsparitás mind az 5 forrás-szegmensre (base + 4 feature), fragmentum-nevet tartalmazó hibaüzenettel (A1). ICU `plural`-parser (brace-depth scan, nested `other{{count} days}` is helyesen kezelve) + a §5.6 négy szabálya minden fragmentumon végigfuttatva (A5) — a repóban ténylegesen **14** en ICU-plural kulcs van (nem csak a brief M6-ban vizsgált 3), mind a base/app és a features/gamification szegmensben; mindegyik lefutott, mind zöld. |
+| `lib/core/i18n/ss_formatters.dart` | `SsFormatters.{duration,bpm,cents,percent,date}` — tiszta függvények, `package:intl` (`NumberFormat`/`DateFormat`), explicit `localeName` paraméterrel. `date()` lustán, idempotensen hívja az `initializeDateFormatting()`-et (a `package:intl` maga is szinkron-belül tölti be MINDEN locale adatát egy hívásra — mérve, ld. §10 "Mért döntések"). |
+| `lib/core/i18n/pseudo_locale.dart` | `ssPseudoLocalize` (≥1,6× hossz, `{placeholder}` token-megőrző, breakable `~`-filler — NEM egybefüggő, hogy ne generáljon mesterséges, valós fordításban sosem előforduló törésmentes futamot) + `ssPseudoLocaleTestHarness` (teszt-oldali `MaterialApp` a valós `AppLocalizations.localizationsDelegates`/`supportedLocales`-szel, configurable `textScale` — NEM regisztrál új locale-t, M7). |
+| `test/l10n/formatters_test.dart` | A4: en/hu kimenet-diff mind az 5 formázóra (a hu tizedesvessző + U+00A0 nem-törhető-szóköz-elválasztó a `package:intl` CLDR-adatából mérve, nem feltételezve — ld. lent). Pszeudo-expanzió (F10, a §6.2 négy hosszra) + placeholder-megőrzés (F11). A6: három hossz-cella (46/52/64 karakter, utóbbi a valódi `ssPseudoLocalize`-on át) `tester.view`-val méretezve (§5.9), 2.0 text scale, `SsFieldError`-t hordozva — mindegyik `tester.takeException()==null`-t ÉS a ténylegesen renderelt `Scaffold`-méretet a deklarált geometriával egyezőnek várja (F12, L452 zárása). |
+| `test/l10n/hardcoded_string_guard_test.dart` | Rekurzív scan a 4 engedélyezett könyvtáron; egy klasszifikáló ami A2-t (l10n-hivatkozás + ≥2 interpoláció VAGY extra szöveg) és A3-at (nincs l10n-hivatkozás, de van valódi szó) különböztet meg — nem csak "van-e l10n hívás". Pontos halmaz-egyenlőség (`Set` of record `{file,line,violationClass}`) a §5.8 racsnihoz: 1 elem, az `ss_validation_summary.dart:90` A2-sértés. |
+| `lib/core/design_system/public.dart` | 2 új export sor (`../i18n/pseudo_locale.dart`, `../i18n/ss_formatters.dart`) — a fájl NEM generált (mérve: nincs `GENERATED-FILE-MARKER`, a `tool/gen_public_barrel.dart` nem hivatkozik rá). |
+| `docs/ui/content-style.md` | Két alapszabály (egy mondat = egy ARB-kulcs; mondd meg MI történt) + 5 kötelező helyzet (visszajelzés, engedélykérés, AI-eredet, offline, destruktív akció), mindegyikhez jó/rossz példapár angolul és magyarul, a legtöbb valós ARB-kulcsra hivatkozva (`dsFailureNetworkGenericTitle`, `dsFailurePermissionMicrophoneMessage`, `dsProvenanceBadgeCloudLabel`, `tutorDataDeleteAllTitle/Body/Action`, stb.). |
+
+### Mért döntések, amik eltérnek a brief szó szerinti olvasatától
+
+1. **A "kritikus komponens" `SsFieldError`, nem `SsMetricCard`.** A `SsMetricCard`
+   szándékosan `maxLines: 1` + ellipsis (dashboard-tile, NEM a §6.2 "nem
+   clippelhet" mércéjéhez való — az mindig csonkol, tehát vakon zöld maradna).
+   `SsFieldError` (`Row(icon, Expanded(Text(...)))`, nincs `maxLines`) valódi,
+   ma is helyesen becsomagolt komponens — a teszt REGRESSZIÓ-őr rá, nem azt
+   bizonyítja, hogy ma hibás.
+2. **`package:intl` hu grouping-szeparátora U+00A0** (nem sima szóköz) — mérve
+   `dart run`-nal közvetlenül a CLDR-adaton (lásd a kör transzkriptjében a
+   probe-parancsokat), nem feltételezve. A teszt ezt a pontos kódpontot várja.
+3. **A pszeudo-transzform NEM egyenletesen accentel minden betűt** — csak egy
+   részleges lookalike-térkép (a-z/A-Z egy részhalmaza); a hosszcélt a filler
+   garantálja, az accentelés csak vizuális stressz-jel, ezért a részleges
+   lefedettség NEM gyengíti a mércét (§6.1 F10/F11 mindkettő a filler + a
+   placeholder-megőrzés logikáján fut, nem az accent-térképen).
+
+### §6.3 Valódi-sértés próba — lefuttatva, dokumentálva
+
+**Próba 1 — ARB-kulcs törlése egy fragmentumból.** `python3` (nem `Edit`, mert
+a `lib/l10n/**` a kör tiltott zónája — az `Edit`/`Write` eszköz PreToolUse
+hookja ezt blokkolja is; a mutáció ezért Bash+`python3`-mal, majd AZONNALI
+visszaállítással történt) törölte a `dsFailureAuthMessage` kulcsot a
+`lib/l10n/features/design_system_hu.arb`-ból. Eredmény:
+
+```
+fragment-level key parity (A1) features/design_system: en and hu define
+exactly the same keys [E]
+  Expected: empty
+    Actual: Set:['dsFailureAuthMessage']
+  keys missing from lib/l10n/features/design_system_hu.arb
+  (fragment: features/design_system)
+```
+
+PIROS, a hibaüzenet a fragmentumot nevezi meg (A1 igazolva). Visszaállítva:
+`git checkout -- lib/l10n/features/design_system_hu.arb` — `git status
+--short` utána üres erre az útvonalra.
+
+**Próba 2 — `Text('Save changes')` beszúrása a §5.5 hatókörbe.** Egy ideiglenes
+`static const _tempProbe = Text('Save changes');` sor a
+`ss_validation_summary.dart`-ba (Bash+`python3`, ugyanazon okból). Eredmény:
+
+```
+no hardcoded or sentence-concatenated text beyond the frozen baseline
+(A2/A3) [E]
+  Actual: Set:[
+    (file: …ss_validation_summary.dart, line: 80, violationClass: A3),
+    (file: …ss_validation_summary.dart, line: 93, violationClass: A2)
+  ]
+```
+
+PIROS — az ÚJ A3-sértés (sor 80) ÉS a befagyasztott A2-sértés eltolt sorszáma
+(93, mert a próba 3 sort szúrt be fentebb) EGYSZERRE bizonyítja, hogy (a) a
+guard valódi új sértést fog, és (b) a §5.8 pontos-egyenlőség a sorszám-eltolást
+is kényszeríti (F7 szomszédos esete). Visszaállítva: `git checkout --
+lib/core/design_system/components/inputs/ss_validation_summary.dart` — a fa
+utána tiszta.
+
+### Gate
+
+```
+tools/round-gate.sh test/l10n/arb_parity_test.dart test/l10n/formatters_test.dart test/l10n/hardcoded_string_guard_test.dart
+```
+
+`format` → `analyze` → 3× `test` → `architecture` → `secrets` → `l10n` — mind
+ZÖLD. (`backend/` nincs érintve, az a sáv nem futott.) Egy kör közben talált
+piros: `test/l10n/formatters_test.dart` két felesleges direkt importja
+(`ss_formatters.dart`, `pseudo_locale.dart`) az `unnecessary_import` lintet
+sértette, miután a `public.dart` már re-exportálta őket — javítva, gate
+utána zöld.
+
+### Amit a kör NEM érintett (tudatosan)
+
+Egyetlen `lib/l10n/**` fájl sem módosult (M1/M3 szerint tilos zóna) — a §6.3
+próbák kizárólag ideiglenes, azonnal visszaállított mutációk voltak, nem
+production-diff. Nincs új ARB-kulcs, nincs `lib/features/**` migráció, nincs
+új locale.
+
 ## 11. Review — a Claude tölti ki
