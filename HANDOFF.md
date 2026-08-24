@@ -1,5 +1,60 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R12 KÉSZ — Kártyák, badge-ek, insight és status komponensek — PR [#439](https://github.com/wolfcasaba/strumsight/pull/439), squash `376b8a1d` (2026-08-24)
+
+Hét új design-system komponens: `SsMetricCard`, `SsInsightCard`,
+`SsCoachActionCard`, `SsContentCard`, `SsModelStatusCard`, `SsProvenanceBadge`,
+`SsStatusBadge` + Component Catalog állapot-mátrix. **ADR
+[0278](docs/adr/0278-ai-provenance-is-visible.md)** (a Ch13 ADR-jei előre
+merge-elve érkeztek `a4fdfec2`-ben — a kör ADR-t NEM írt, a `docs/adr/**` végig
+tilos zóna maradt; a foglalótól kapott `0419` felhasználatlan). Implementer
+**`sonnet-impl`** (Claude Sonnet 5), orchesztrátor/reviewer **Claude Opus 5**.
+
+**Review: APPROVED egy javító kör után** — 1. forduló **4 MAJOR + 2 MINOR + 3
+NOTE**, mind **teljes zöld gate és zöld CI MELLETT**. A négy MAJOR:
+
+- **F1** — a `syncPending` badge a SAJÁT háttérszínével írt (`SsColorScheme.syncPending`
+  = `palette.track` = ugyanaz, amit a séma `surfaceSunken`-ként használ):
+  `ratio=1.01` a sötét ÉS a magas kontrasztú témában, azaz a „Szinkronizálás
+  függőben" jelzés helyén a felhasználó **üres helyet** látott.
+- **F2** — a provenance-felirat `2.18–2.72:1` a világos témában, a projekt saját
+  4.5:1-es mércéje alatt — épp azon a feliraton, amit az ADR 0278 §1 adatvédelmi
+  ténynek nevez. Ugyanez az `SsCoachActionCard.actionLabel`-en is (`colors.brand`).
+- **F3** — a felirat levágódott `textScale ≥ 2.0`-n (a `SsSemantics.maximumTextScale`
+  a TÁMOGATOTT tartomány), és az A1 cella végig zöld maradt, mert
+  `find.byType`/`find.text` jelenlét-alapú volt ([L460](docs/LESSONS.md)).
+- **F4** — AI-eredetű insight-kártya provenance NÉLKÜL is kirendelhető volt, és a
+  kör saját A1 cellája ezt **bebetonozta** (`findsNothing`) — [L457](docs/LESSONS.md) osztály.
+
+**A javító kör mind a hatot zárta**, a tilos zónához nyúlás nélkül: a badge-ek
+ikonja+felirata `colors.textPrimary`-ből fest (a státusz-token szöveget többé nem
+fest), `Flexible` + `maxLines: 1` + `ellipsis` az overflow ellen,
+`SsInsightCard.provenance` **`required`**, opcionális provenance-slot a
+coach-kártyán, F6 dokumentált döntés. **Négy új kötelező őr**, köztük egy
+21 cellás kontraszt-tulajdonságcella (3 téma × [5 status + 2 provenance] a
+KIRENDELT `Text.style.color`-ral) és egy 16 cellás geometria-cella.
+
+**A zárást nem bemondásra fogadtam el**, hanem visszamutálva magam mértem:
+P1 (`textPrimary` → `syncPending`) **15 cella PIROS**; P2 (`Flexible` törölve)
+**5 cella PIROS**, pontosan azok, amiket az 1. kör mért; P3 (provenance nélküli
+insight-kártya) **fordítási időben PIROS** — az F4 sértése futásidőben már nem is
+*kifejezhető*.
+
+**A gyökérok a pre-flight volt, nem az implementer:** a §0.0/D4 utasította, hogy
+a badge „a SZÍNT a `syncPending` tokenből veszi" — egy háttérnek szánt tokent
+irányított előtérbe. A briefbe helyesbítő blokk került, hogy egy későbbi kör ne
+olvassa normatív igazságként ([L466](docs/LESSONS.md)).
+
+Exact `6f6a301a`: Full Gate
+[32726253397](https://github.com/wolfcasaba/strumsight/actions/runs/32726253397)
++ Router CI [32726247193](https://github.com/wolfcasaba/strumsight/actions/runs/32726247193)
+success. Saját `tools/round-gate.sh` a merge-elt HEAD-en: **10/10 zöld**.
+Scope-audit `origin/main` bázison **OK** (17 útvonal). Landolás a merge-záron át
+(`tools/round-land.sh`), mert az E09-R25 sáv párhuzamosan futott. A branch a fix1
+után sem volt naprakész — `merge --no-ff origin/main` hozta be azt az ÚJABB
+`brief-lint.py`-t (S9), amivel a briefet újramérve **nincs lelet**
+([L467](docs/LESSONS.md): a scope-audit bázisválasztása).
+
 ## ✅ E09-R24 KÉSZ — Klub domain, tagság és szerepkörök — PR [#441](https://github.com/wolfcasaba/strumsight/pull/441), squash `2f95ad97` (2026-08-24)
 
 **A kör tartalma zölden landolt, de NEM az orchesztrátor-session landolta.**
