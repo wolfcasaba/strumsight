@@ -90,7 +90,6 @@ from ..models.leaderboard import CommunityLeaderboardOptIn
 from ..models.profile import CommunityProfile
 from ..models.social_graph import CommunityFollow
 
-
 # The handle lives on ``community_profiles.handle_display`` —
 # a raw column added by the Kör 3 ``handle_history`` migration
 # that is NOT a mapped attribute on :class:`CommunityProfile`.

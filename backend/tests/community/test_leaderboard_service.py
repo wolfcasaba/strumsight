@@ -64,7 +64,6 @@ from app.community.models.leaderboard import CommunityLeaderboardOptIn
 from app.community.models.profile import CommunityProfile
 from app.community.models.social_graph import CommunityFollow
 from app.community.routers.leaderboards import router as leaderboards_router
-from app.community.services import leaderboard_service as service_module
 from app.community.services.challenge_invite_service import (
     accept_invite,
     create_invite,
