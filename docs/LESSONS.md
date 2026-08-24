@@ -17835,3 +17835,93 @@ végig egy olyan környezetben, ahol `backend/.venv` a repo gyökerén relatíva
 elérhető ÉS `env --chdir` közbeiktatva fut; egy jövőbeli javító kör adhat
 regressziós tesztet (`resolve_backend_python` unit-szintű próbája két
 munkakönyvtárból hívva, `ROUND_GATE_BACKEND_PYTHON` nélkül).
+
+## L469 — A `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum: a pre-flight, amely ide íratja az új kulcsot, nem teljesíthető előírást ad (E13-R13, 2026-08-24)
+
+**Mit mértünk.** Az E13-R13 pre-flight §0.0/D5-e előírta, hogy az új microcopy a
+`lib/l10n/app_{en,hu}.arb`-ba kerüljön, és a fájlok a brief `allowed_paths`
+listáján is szerepeltek. Az implementer megpróbálta (7+7 kulcs), és a
+`tools/round-gate.sh` `[7] l10n` lépése **pirosra váltott**:
+
+```
+L10n aggregate freshness failed … futtasd: `dart run tool/gen_l10n_segments.dart --write`
+```
+
+A két fájl **generált aggregátum** (ADR 0307) a `lib/l10n/base/**` és
+`lib/l10n/features/<feature>_{en,hu}.arb` fragmentumokból. A valódi forrás a
+`lib/l10n/features/design_system_{en,hu}.arb` lett volna — ami **nem** volt a
+listán, tehát a szabályos szerkesztés scope-ütközés.
+
+**A tanulság kettős.** (1) A brief `allowed_paths`-ában szereplő útvonal nem
+bizonyítja, hogy az a fájl **szerkeszthető forrás** — a generált aggregátumok
+listára vétele önmagában nem teljesíthető előírás. Pre-flightban a
+„hova írjuk a stringet" kérdést a **generátor** felől kell mérni
+(`grep -rn "<fájl>" tool/ tools/`), nem a fájl létezéséből. (2) Az implementer
+helyesen tett, amikor NEM a listán kívüli fragmenst szerkesztette, hanem az
+API-t alakította úgy, hogy ne kelljen új kulcs — a microcopy hívó-oldali
+`String` paraméter lett, a design system meglévő mintája szerint
+(`SsButton.label`).
+
+**Őrteszt:** nincs — a lecke a pre-flight MÓDSZERÉRŐL szól (a generátor felől
+mérj), nem egy kódbeli invariánsról; a `[7] l10n` gate-lépés a tünetet már ma
+is elkapja.
+
+## L470 — A `round-land.sh` első, `blocked` kimenetének elolvasása NÉLKÜLI újrahívás átugorja a rebase utáni exact-SHA CI-t (E13-R13, 2026-08-24)
+
+**Mit mértünk.** Az E13-R13 merge-e előtt a `main` mozdult (az E09-R25 landolt).
+A `tools/round-land.sh` első invokációja **exit 1**-gyel tért vissza — ez az
+ADR 0087 §4.1 szerinti `blocked` ág: a landoló rebase-elt, lefuttatta a
+kombinált-HEAD gate-et, biztonságosan pusholt, és **új exact-SHA CI-dispatch-t
+kért**, szándékosan merge NÉLKÜL. Az orchesztrátor a kimenetet
+`2>&1 | tail -40`-gyel csővezetékezte, ami **üresen** jött vissza, és a
+kimenet elolvasása helyett **újrahívta** a landolót — a második invokáció
+merge-elt.
+
+Következmény: a ténylegesen merge-elt PR-head (`d0857f41`) SHA-ján
+**Full Gate soha nem futott**; a zöld futás a rebase ELŐTTI `46bd3797`-en volt.
+A merge-kapu exact-SHA követelménye tehát formálisan sérült.
+
+**Enyhítő tények (utólag mérve):** a landoló a push előtt lefuttatta a
+kombinált-HEAD gate-et; a másik kör fájlhalmaza diszjunkt volt
+(`backend/**` + `lib/features/community/**` vs. `lib/core/design_system/**`);
+és a merge-elt `main`-en (`9b3a5d5d`) a `tools/round-gate.sh` utólag **7/7
+zöld** lett.
+
+**Szabály.** A `round-land.sh` kimenetét **soha ne csővezetékezd** (L09 ugyanaz
+az osztály: a `| tail` elrejti a kilépési kódot ÉS a kimenetet) — írd fájlba
+(`> out 2>&1`) vagy hagyd csonkítatlanul, és a **nem-nulla kilépési kódot
+diagnosztizáld**, mielőtt újrahívnád. A landoló újrahívása nem retry: a
+protokoll szerint a két invokáció KÖZÉ egy exact-SHA CI-dispatch tartozik.
+
+**Őrteszt:** nincs — a lecke az orchesztrátor eljárásáról szól; a landoló maga
+helyesen viselkedett (a `blocked` ág lefutott), a hiba a kimenet
+elhallgattatása volt.
+
+## L471 — A javító kör MINOR-javítása visszabonthat egy BLOCKER-szintű invariánst, és csak a review KONTROLL-cellája fogja meg (E13-R13, 2026-08-24)
+
+**Mit mértünk.** Az E13-R13 1. fordulójában a MINOR-1 az volt, hogy egy dobó
+`onConfirm` után a megerősítő felület két **halott** gombbal maradt nyitva. A
+fix1 ezt úgy javította, hogy a `catch` ágban visszaállította az őrt
+(`if (mounted) setState(() => _confirmed = false)`). A két LAP ugyanebben a
+körben kapott egy tartós, `show()`-closure-be zárt őrt is — a **`SsDialog`
+viszont nem**, mert a `SsDialog.show` a nyers `onConfirm`-ot adta tovább.
+
+Eredmény: a `SsDialog` a destruktív visszahívást **korlátlanul** futtatta
+(mérve: **3 hívás** három koppintásra, átméretezés nélkül), holott a fix1
+ELŐTT pontosan 1-et. A javítás tehát a legdrágább szerződésen (ADR 0279 §5.5,
+„a második lefutás adatvesztés") **rontott**.
+
+**A lelet forrása.** A kör saját új cellája a „dobás + reszponzív alakváltás"
+utat mérte, ami csak a lapokra vonatkozik — a `SsDialog` útjára nem volt cella.
+A regressziót a reviewer eldobható próbatesztjének **KONTROLL-ága** hozta elő:
+ugyanaz a `SsDialog`-kontroll, amely az 1. fordulóban `calls=1`-et adott
+(bizonyítva, hogy a MAJOR-3 a lapokra jellemző), a fix1 után `calls=2`-t adott.
+
+**Szabály.** A javító kör után a review **ne csak a lezárt leleteket mérje
+újra, hanem a korábbi mérés KONTROLL-ágait is** — a kontroll épp azért volt
+zöld, mert ott állt a helyes viselkedés, és ha az billen el, azt semmilyen
+lelet-fókuszú újramérés nem veszi észre. Ha egy MINOR javítása ugyanahhoz az
+invariánshoz nyúl, mint egy BLOCKER/MAJOR, a javítást **minden** felületre
+egyszerre kell kiterjeszteni, és a gépi őrnek is minden felületet fednie kell.
+
+**Őrteszt:** `test/core/design_system/overlays/ss_confirmation_test.dart`::„BLOCKER-1 (fix2) — a throwing onConfirm, retried with UP TO THREE un-resized confirm taps, must run the destructive callback exactly once on every confirmation surface"

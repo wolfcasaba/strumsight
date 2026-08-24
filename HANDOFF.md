@@ -1,5 +1,78 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R13 KÉSZ — Overlay, dialog, bottom sheet és confirmation rendszer — PR [#445](https://github.com/wolfcasaba/strumsight/pull/445), squash `9b3a5d5d` (2026-08-24)
+
+Öt új design-system overlay komponens: `SsOverlayHost`, `SsDialog`,
+`SsConfirmationSheet`, `SsToolConfirmationSheet`, `SsSideSheet` + Component
+Catalog overlay-mátrix. Normatív forrás **ADR
+[0279](docs/adr/0279-consequence-first-confirmations.md)** — a Ch13 ADR-jei
+előre merge-elve érkeztek, ezért a kör **ADR-t NEM írt** (a foglalótól kapott
+`0421` felhasználatlan; `docs/adr/**` végig tilos zóna). Ugyanaz a minta, mint
+az E13-R12 `0278`-ánál. Implementer **`sonnet-impl`** (Claude Sonnet 5),
+orchesztrátor/reviewer **Claude Opus 5**.
+
+**A host a Flutter SAJÁT `showGeneralDialog`/`ModalRoute` gépezetére épül**, nem
+kézi `Overlay.insert`-re: a `ModalBarrier` adja a `BlockSemantics`-ot (§5.4), a
+`Navigator` a fókusz-csapdát és a visszaállítást. Az implementer P3 mutációja
+(nyers `Overlay.insert`) mérhetően pirosra váltotta az A4/A5/A7 cellákat — a
+döntés tehát bizonyítottan helyes.
+
+**Review: APPROVED KÉT javító kör után** — 1. forduló **1 BLOCKER + 3 MAJOR +
+3 MINOR + 3 NOTE**, mind **teljes zöld gate ÉS zöld CI mellett**. A gyökérok
+egyetlen mért tény: a `flutter_test` alapfelülete **800×600 dp @ textScale 1.0**
+— szélesebb, mint bármely telefon, és a kör mind a 21 cellája ezen futott.
+
+- **BLOCKER-1** — a tool-lap nem görgethető (`Scrollable` a részfában = 0):
+  411×891 @ `textScale 2.0`-n (= `SsSemantics.maximumTextScale`, a TÁMOGATOTT
+  tartomány teteje) a `leaves-device` és a `recording` sor ÉS mindkét gomb a
+  képernyőn kívülre esett; **már @1.0-n is a confirm** (R=471 > 411).
+  ADR 0279 §5.2 + §5.3.
+- **MAJOR-1** — 915×412 (fekvő telefon) @1.0: Cancel/Confirm látható hányad **0%**.
+- **MAJOR-2** — a destruktív gomb felirata **levágódik** (`Clip.antiAlias`, nem
+  ellipszis) → a gomb nem nevezi meg a műveletet (§5.1).
+- **MAJOR-3** — a `_confirmed` őr a `State`-ben volt, a `showSheetSurface`
+  widget-TÍPUST vált az `expandedMin` átlépésekor → új `State` → a destruktív
+  visszahívás **kétszer** fut (§5.5 = adatvesztés).
+
+**A fix1 a geometriát lezárta, de ÚJ BLOCKER-t vezetett be:** a MINOR-1
+javítása (a `catch` ágban újra-élesítés) a `SsDialog`-ra **tartós őr nélkül**
+került rá, mert a `SsDialog.show` a nyers `onConfirm`-ot adta tovább — dobó
+`onConfirm` mellett a destruktív visszahívás **korlátlanul** futott (mérve:
+**3 hívás**, átméretezés nélkül). **A leletet a reviewer KONTROLL-cellája hozta
+elő** (`calls` 1 → 2), nem a fő cella — kontroll nélkül ez zöld gate-tel
+merge-elődött volna. A fix2 a `SsDialog.show`-nak is megadta a `show()`-closure
+őrt: mindhárom felület **pontosan 1** hívás.
+
+**A zárást nem bemondásra fogadtam el**, hanem eldobható próbatesztekkel
+visszamértem izolált `/tmp` klónban: geometria **6/6** `exception: none`, minden
+gomb-rect a képernyőn belül (max R=387 < 411, max B=867 < 891); az
+exactly-once mindhárom felületen 1; a reshape-próba 1/1.
+
+**37 gépi cella** (7 + 30), köztük az **A9 geometria-mátrix**: 3 felület ×
+{411×891, 915×412} × {textScale 1.0, 2.0}, a **kirendelt geometriára** mérve
+(`takeException() == null` + a gomb-rect a képernyőn belül), nem
+`findsOneWidget`-re.
+
+**A pre-flight §0.0 négy mért korlátot rögzített**, amelyek közül kettő
+megmentette a kört: a **listán KÍVÜLI** `component_catalog_test.dart` a zárt
+katalóguson `SsCard == 1` és `DecoratedBox == 1`-et rögzít (ezért az
+overlay-mátrix csak nyitó-gombokból áll), és a `TutorToolPermission` mindössze
+`{readLocal, computeLocal}` — ezért a komponens **saját** négy-dimenziós
+prezentációs modellt kapott, különben az A2 elérhetetlen státuszt mért volna.
+**Egy pre-flight állításom viszont TÉVES volt** (D5): a
+`lib/l10n/app_{en,hu}.arb` **generált aggregátum**, nem kézzel szerkeszthető —
+az implementer helyesen tért el tőle ([L469](docs/LESSONS.md)).
+
+Exact `46bd3797`: Full Gate
+[32742011580](https://github.com/wolfcasaba/strumsight/actions/runs/32742011580)
++ Router CI [32742072084](https://github.com/wolfcasaba/strumsight/actions/runs/32742072084)
+success. **Figyelmeztetés a landolásról:** a landoló a mozdult `main` miatt
+`d0857f41`-re rebase-elt, és arra a SHA-ra Full Gate **nem futott** — az
+orchesztrátor a landoló első (`blocked`) kimenetét nem olvasta el, és
+újrahívta. Utólagos ellenőrzés a merge-elt `main`-en (`9b3a5d5d`):
+`tools/round-gate.sh` **7/7 zöld** + Full Gate dispatch. Lecke:
+[L470](docs/LESSONS.md).
+
 ## ✅ E09-R25 KÉSZ — Club feed, pinned post és club challenge — PR [#446](https://github.com/wolfcasaba/strumsight/pull/446), squash `4725447b` (2026-08-24)
 
 Klub-scope-olt feed + pinned-post + club-challenge lifecycle, a Kör 13
