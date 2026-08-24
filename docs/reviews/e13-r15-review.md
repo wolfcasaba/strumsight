@@ -5,7 +5,7 @@
 - **Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
 - **Reviewer:** Claude (Opus 5) — read-only, izolált `/tmp/review-e13-r15` klón
 - **Verdikt (1. forduló):** **CHANGES REQUESTED** — 3 MAJOR, 0 BLOCKER
-- **Verdikt (2. forduló, javító kör után):** lásd §7
+- **Verdikt (2. forduló, javító kör után):** **APPROVED** — 0 nyitott BLOCKER/MAJOR, 1 új MINOR (F6) follow-upra (§7)
 
 ---
 
@@ -229,6 +229,125 @@ képernyő-körök viszont jellemzően `12:30` alakot várnak majd. Érdemes a
   dispatch-elni, exact-SHA — ADR 0086 §2);
 - **3 nyitott MAJOR → merge TILOS.**
 
-## 7. Második forduló — a javító kör után
+## 7. Második forduló — a javító kör után (`8f84ff3a`)
 
-*(a javító kör commitja után töltve)*
+**Verdikt: APPROVED** — 0 nyitott BLOCKER/MAJOR. 1 új MINOR (F6) follow-upra.
+
+A javító kör diffje 4 fájl (`docs/rounds/…md`, `ss_formatters.dart`,
+`formatters_test.dart`, `hardcoded_string_guard_test.dart`) —
+**production-kód nem változott**, a javítás végig a mércén történt.
+
+### 7.1 Amit ebben a fordulóban magam futtattam
+
+| Ellenőrzés | Eredmény |
+|---|---|
+| `tools/round-gate.sh` FRISS `/tmp/review2-e13-r15` klónban | **GATE_EXIT=0** — 54 + **17** + 1 = 72 cella (a +1 az F3 falszifikációs cellája), architecture OK, secret scan OK, L10n aggregate freshness OK, parity OK (1838) |
+| `scope-audit.py --base 7908dda2` | **OK** — 9 útvonal, 1 generated/ignored (a saját review-jelentésem, állandó mentesség) |
+| P1 / P2 / P3 próbák ÚJRAFUTTATVA | lásd 7.2 |
+
+> **A `scope_audit=VIOLATION` a jelzésfájlban NEM implementer-hiba.** A
+> sértésként jelentett `.fix-prompt.md` a **saját dispatch-segédfájlom** volt,
+> amit a munkapéldányba másoltam; sosem lett commitolva (`git ls-files` nem
+> ismeri), az implementer diffje végig a listán belül maradt. A fájl törlése
+> után az audit **OK**. Tanulság a láncnak: a javító-prompt a munkapéldányon
+> KÍVÜL éljen (`/tmp/...`), a wrapper abszolút útvonalon úgyis megtalálja.
+
+### 7.2 Leletenkénti zárás — MÉRVE, nem bemondásra
+
+**F1 — ZÁRVA.** Ugyanaz a P1 próba, ami a javítás előtt zöld volt:
+
+```dart
+Text('$count ' + l10n.dsFieldErrorSemanticPrefix)
+```
+```
+(file: …/ss_validation_summary.dart, line: 116, violationClass: A2)
+00:00 +0 -1: Some tests failed.
+```
+
+A `_textPropertyPattern` most `prefix`/`suffix` csoporttal fogja a literál
+**körüli** `l10n.x +` / `+ l10n.x` operandust, és a `_classify` ezt a literál
+tartalmától függetlenül A2-nek minősíti.
+
+**F2 — ZÁRVA.** Ugyanaz a P2 próba, `dart format` UTÁN (tehát a repóban
+ténylegesen előálló, korábban láthatatlan alakon):
+
+```
+  Widget build(BuildContext context) => const Text(
+    'Save changes',
+    textAlign: TextAlign.center,
+    …
+```
+```
+(file: …/ss_validation_summary.dart, line: 114, violationClass: A3)
+00:00 +0 -1: Some tests failed.
+```
+
+A szkennelés a fájl EGÉSZÉN fut, hossz- és sortörés-őrző komment-kiszűréssel
+(`_stripComments`), a sorszám a találat offsetjéből (`_lineOf`) — a jelentett
+114-es sor a formázott fájlban tényleg a literál sora, tehát a racsni
+sorszámai továbbra is használhatók.
+
+**F3 — ZÁRVA.** A javítás a hordozót nem cserélte le, hanem egy közbeiktatott
+`Column`-nal adott a `RenderFlex`-nek **függőleges fő tengelyt**, amin a
+`Scaffold` bounded body-magassága ténylegesen kikényszerül; plusz bekerült egy
+**falszifikációs cella** (200 karakter → `takeException()` `isNotNull`).
+
+Saját, független próbám (P3): a **production** `SsFieldError` Row-ját
+`SizedBox(height: 40)`-be zártam — vagyis szimuláltam egy valódi
+clipping-regressziót a komponensben:
+
+```
+00:01 +16 -1: A6 … falsifiability proof … [E]
+00:01 +16 -1: Some tests failed.
+```
+
+A suite **pirosra váltott** a komponens megváltoztatására — tehát a cellák nem
+üresek többé. (Tisztán, a próba visszaállítása után: `00:01 +18: All tests
+passed!`.)
+
+**F4 — ZÁRVA.** A doc-comment már kimondja a mellékhatást:
+
+> „…so each is testable in isolation; [date] is not otherwise pure — its first
+> call lazily writes the memoized `_dateSymbolsReady` module global…"
+
+**F5 — rögzítve** a brief §10-ében, kód-változtatás nélkül (ahogy kértük).
+
+### 7.3 F6 — ÚJ MINOR (follow-up, nem merge-blokkoló)
+
+**Az A6 mechanizmus flex-TÚLCSORDULÁST mér, nem belső CSONKOLÁST.**
+
+A fenti P3 próbában a három küszöb-cella (46 / 52 / 64 karakter) **átment**,
+miközben a komponens a 40 px-es dobozban láthatóan csonkolt — a suite csak a
+falszifikációs cellán bukott el. Vagyis: egy olyan regresszió, amely a
+szöveget `maxLines`/`ellipsis`/kötött magasság mögé **csendben elrejti**, a
+három küszöb-cellán ma átcsúszna.
+
+Ez nem a javítás hibája: a `RenderFlex` overflow-jelentés a rendelkezésre álló
+gépi jelzés, és a kör ezt korrektül, dokumentáltan használja. A teljesebb
+mérce (`RenderParagraph.didExceedMaxLines`, azaz „a szöveg nem lett
+elliptizálva") külön technika, és a `SsMetricCard`-szerű, **szándékosan**
+csonkoló komponensekre nézve önálló terméki döntést igényel — ezért
+follow-up, nem ennek a körnek a scope-ja.
+
+**Javasolt hely:** a Ch13 következő komponens-köre, vagy egy önálló
+„truncation audit" kör.
+
+### 7.4 Acceptance criteria — végállás
+
+| # | Állás | Bizonyíték |
+|---|---|---|
+| A1 | ✅ | 5 fragmentum-cella; fragmentum-néven mutató hibaüzenet |
+| A2 | ✅ | F1 + F2 zárva, saját próbákkal újramérve |
+| A3 | ✅ | F2 zárva; a `dart format`-tördelt alak most PIROS |
+| A4 | ✅ | en/hu kimenet-diff mind az 5 formázóra, mért CLDR-értékekkel |
+| A5 | ✅ | 14 en ICU-plural kulcs × 3 szabály-cella + noun-stabilitás |
+| A6 | ✅ (F6 follow-uppal) | falszifikációs cella + saját regresszió-szimuláció pirosat adott |
+| A7 | ✅ | mind az 5 microcopy helyzet, jó/rossz példapárral en+hu |
+
+### 7.5 Merge-kapu
+
+- gate friss izolált klónban: **zöld** (`GATE_EXIT=0`, 72 cella);
+- scope-audit: **OK**;
+- 0 nyitott BLOCKER/MAJOR → **merge engedélyezett**, amint az exact-SHA
+  `full-gate.yml` + `router-ci.yml` a végleges (rebase utáni) HEAD-en zöld.
+
