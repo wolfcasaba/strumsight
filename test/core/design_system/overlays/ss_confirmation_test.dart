@@ -470,6 +470,112 @@ void main() {
     });
   });
 
+  group('BLOCKER-1 (fix2) — a throwing onConfirm, retried with UP TO THREE '
+      'un-resized confirm taps, must run the destructive callback exactly '
+      'once on every confirmation surface (ADR 0279 §5.5) — fix1 durably '
+      'guarded the two sheets via a show()-closure but left SsDialog.show '
+      'passing the raw onConfirm through, so a failed confirm re-armed a '
+      'callback with no guard behind it at all', () {
+    testWidgets('SsDialog: exactly 1 call', (tester) async {
+      var confirmCalls = 0;
+      await tester.pumpWidget(
+        _dialogHarness(
+          confirmLabel: 'Delete session',
+          onConfirm: () {
+            confirmCalls++;
+            throw StateError('backend unreachable');
+          },
+        ),
+      );
+      await tester.tap(find.byKey(_openDialogKey));
+      await tester.pumpAndSettle();
+
+      final confirmButton = find.byKey(const ValueKey('ss-dialog-confirm'));
+      for (var i = 0; i < 3; i++) {
+        if (confirmButton.evaluate().isEmpty) break;
+        await tester.tap(confirmButton, warnIfMissed: false);
+        await tester.pumpAndSettle();
+        tester.takeException();
+      }
+
+      expect(
+        confirmCalls,
+        1,
+        reason:
+            'the destructive callback must run exactly once no matter how '
+            'many times a failed confirm is retried, with no resize '
+            'involved (§5.5)',
+      );
+    });
+
+    testWidgets('SsConfirmationSheet: exactly 1 call', (tester) async {
+      var confirmCalls = 0;
+      await tester.pumpWidget(
+        _confirmationHarness(
+          confirmLabel: 'Delete session',
+          onConfirm: () {
+            confirmCalls++;
+            throw StateError('backend unreachable');
+          },
+        ),
+      );
+      await tester.tap(find.byKey(_openSheetKey));
+      await tester.pumpAndSettle();
+
+      final confirmButton = find.byKey(
+        const ValueKey('ss-confirmation-confirm'),
+      );
+      for (var i = 0; i < 3; i++) {
+        if (confirmButton.evaluate().isEmpty) break;
+        await tester.tap(confirmButton, warnIfMissed: false);
+        await tester.pumpAndSettle();
+        tester.takeException();
+      }
+
+      expect(
+        confirmCalls,
+        1,
+        reason:
+            'the destructive callback must run exactly once no matter how '
+            'many times a failed confirm is retried, with no resize '
+            'involved (§5.5)',
+      );
+    });
+
+    testWidgets('SsToolConfirmationSheet: exactly 1 call', (tester) async {
+      var confirmCalls = 0;
+      await tester.pumpWidget(
+        _toolHarness(
+          onConfirm: () {
+            confirmCalls++;
+            throw StateError('backend unreachable');
+          },
+        ),
+      );
+      await tester.tap(find.byKey(_openToolKey));
+      await tester.pumpAndSettle();
+
+      final confirmButton = find.byKey(
+        const ValueKey('ss-tool-confirmation-confirm'),
+      );
+      for (var i = 0; i < 3; i++) {
+        if (confirmButton.evaluate().isEmpty) break;
+        await tester.tap(confirmButton, warnIfMissed: false);
+        await tester.pumpAndSettle();
+        tester.takeException();
+      }
+
+      expect(
+        confirmCalls,
+        1,
+        reason:
+            'the destructive callback must run exactly once no matter how '
+            'many times a failed confirm is retried, with no resize '
+            'involved (§5.5)',
+      );
+    });
+  });
+
   group('A9 — every confirmation surface keeps its critical content and '
       'buttons fully on-screen at the supported width and text-scale range '
       '(§5.1–§5.3) — measured on the rendered geometry, not merely '
