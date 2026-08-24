@@ -1,15 +1,77 @@
 # E09-R24 — Klub domain, tagság és szerepkörök
 
-- **Státusz:** PREPARED (előre megírva 2026-08-22, kód olvasva: `main @ db6293f4`)
+- **Státusz:** PREPARED (előre megírva 2026-08-22, kód olvasva: `main @ db6293f4`) → pre-flight revideálva 2026-08-24, kód újra-olvasva `main @ 0e12cd90`
 - **Típus:** Chapter 10 (Epic 9 — Community Platform), Kör 24
 - **Kör-azonosító:** `E09-R24`
 - **Branch:** `<motor>/e09-r24-club-domain-membership-and-roles`
 - **Előfeltétel:** `E09-R23` merge-elve
-- **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0413` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Brief szerzője:** Claude (Opus 5); pre-flight revízió: Claude Sonnet 5
+- **Előre kiosztott ADR:** ~~`ADR 0413`~~ **`ADR 0420`** — a `0413` MÁR foglalt. `tools/round-slots.py reserve-adr --round E09-R24` friss számot adott. Lásd [ADR 0420](../adr/0420-club-domain-membership-and-roles.md) a teljes döntéskörért.
+
+**Kockázat = high, indoklás:** a kör egy szerveroldali permission-rendszert
+(owner/moderator/member) és tagság-lifecycle-t vezet be, amelynek elsődleges
+kockázata, hogy (a) egy owner nélkül maradó klub moderálhatatlanná válna
+(A1), (b) egy kliensoldali "bízunk benne" jogosultság-ellenőrzés lehetővé
+tenné egy member számára más tagok role-jának módosítását (A2), és (c) a
+Kör 8 block-invariáns megkerülhetővé válna egy klub-specifikus párhuzamos
+ellenőrzés bevezetésével (A6). Egyik `allowed_paths` fájl sem egyezik szó
+szerint a router `high_risk_path_fragments` listájával, de a kockázat
+ettől függetlenül valós — jogosultság-eszkaláció és safety-regresszió, nem
+forma szerinti kulcsszó-egyezés.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 block-szűrő TÉNYLEGES aláírását — a klub-tagságnak is ugyanazt a közös szűrőt kell hívnia, nem egy klub-specifikus párhuzamos ellenőrzést. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight brief-revízió (2026-08-24, Claude Sonnet 5)
+
+A teljes mért-tény alapú indoklás [ADR 0420](../adr/0420-club-domain-membership-and-roles.md)
+Kontextus/Döntés szakaszában. Összefoglalva:
+
+1. **A Flutter klub-domain MÁR él (Kör 5, ADR 0399), TILOS zóna, csak-hívás.**
+   `community_club.dart`/`club_repository.dart` már definiálja a kliens-
+   kontraktust — a backend wire-formátumnak ehhez kell igazodnia, nem
+   fordítva:
+   - `ClubVisibility` **HÁROM** állapot: `private`, `discoverable`, `public`
+     (nem csak private/public).
+   - `ClubRole` **HÁROM** állapot: `owner`, `moderator`, `member`.
+   - `kCommunityClubMaxMembers = 500` MÁR ki van mérve — a §6.1 küszöb-
+     hármas ezt az ÉRTÉKET tükrözi (`MAX_CLUB_MEMBERS = 500` a backendben),
+     nem egy önkényes új számot (ADR 0420 D3).
+   - `transferOwnership` doksi-kommentje szerint a régi owner role-ja
+     PONTOSAN `member`-re vált — a lenti §6 A8 sora javítva (ADR 0420 D4).
+   - Minden mutáló repository-hívás `idempotencyKey`-t visz — a service a
+     Kör 20/21 DB-unique + `IntegrityError`-újraolvasás mintát követi (ADR
+     0420 D5), NEM új mechanizmust.
+   - A metódus neve `requestJoin` — `private` klubnál függő kérés, amit
+     owner/moderator fogad el; `discoverable`/`public` klubnál azonnali
+     tagság (ADR 0420 D6). Az elfogadás-hívás a `club_service.py`-ban él,
+     HTTP router nélkül is elfogadható ebben a körben.
+   - `community_clubs` PK/public-id a MEGSZOKOTT mintát követi: belső
+     `id: BigInteger` + külső `public_id: Uuid(as_uuid=True), unique=True`
+     (ADR 0420 D1).
+2. **Informatív, NEM ennek a körnek a feladata:** a `community_posts.club_id`
+   (BigInteger, Kör 11) és a `community_challenges.club_id` (String, Kör 21)
+   típus-eltérése — a feloldás a Kör 25 (klub-feed/klub-challenge FK) dolga,
+   erre az ADR-re hivatkozva (ADR 0420 D2).
+3. **Nincs önálló create-screen.** A §3 "create képernyő" szövege pontatlan
+   — az `allowed_paths` a mérvadó: NINCS `club_create_screen.dart`, a
+   létrehozás UI a `club_list_screen.dart`-ba épül (ADR 0420 D7).
+4. **Újrahasznosítandó, MÉRT minták (ne találj ki újat):**
+   - Block-ellenőrzés: `query_filters.py::is_blocked_pair(db, profile_id_a=,
+     profile_id_b=)` és `filter_public_ids_against_viewer_blocks(...)`
+     write-side ÉS read-side hívás, NEM a `query_filters.py` bővítése
+     (tilos zóna, csak-hívás).
+   - Idempotency: DB unique constraint + előzetes olvasás + `IntegrityError`
+     → rollback + újraolvasás (mint `post_service.py::_existing_post_by_idempotency_key`,
+     ADR 0415).
+   - A3 duplikált-join valódi-sértés próba: ELSŐDLEGESEN a DB UNIQUE
+     constraint méri (két egymást követő hívás, a második ütközik) — ez NEM
+     igényel threading-et. Ha mégis konkurens race-tesztet ír az implementer,
+     a `threading.Barrier`-t a PONTOS SQL-döntési pont elé kell tenni, NEM a
+     szál-indítás elé (L421 — 10-ből 7 piros szinkronizáció nélkül mérve).
+5. **Migráció-lánc ellenőrizve.** `ls backend/alembic/versions/ | sort |
+   tail -1` → `e09_r23_0017_...` — a brief `e09_r24_0018_community_club.py`
+   fájlneve és `down_revision = "e09_r23_0017"` helyes, folytonos illesztés.
 
 ```ai-router
 schema_version = 1
@@ -106,7 +168,7 @@ Két blokkoló fél egy közös klubban sem lát egymástól tartalmat — a Kö
 | A5 | Member removal helyes jogosultsággal (owner/moderator) | `test_club_service.py` |
 | A6 | Blockolt tagok nem látják egymás tartalmát közös klubban | `test_club_service.py` |
 | A7 | Membership/invite limitek konfigurációból érvényesülnek | `test_club_service.py` |
-| A8 | Ownership transfer sikeres, a régi owner role-ja `member`-re vagy `moderator`-ra vált | `test_club_service.py` |
+| A8 | Ownership transfer sikeres, a régi owner role-ja PONTOSAN `member`-re vált (§0.0 pont 1, ADR 0420 D4 — a Flutter `transferOwnership` kontraktus doksi-kommentje ezt rögzíti) | `test_club_service.py` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -129,6 +191,17 @@ Két blokkoló fél egy közös klubban sem lát egymástól tartalmat — a Kö
 A hármas tömören: **alatt** → elfogad · **rajta** → elfogad (az utolsó szabad hely) · **fölött** → elutasít.
 
 A határ `MAX_CLUB_MEMBERS` a záró, még elfogadott taglétszám — az ezt meghaladó join utasítódik el.
+
+**`MAX_CLUB_MEMBERS = 500`** (§0.0 pont 1, ADR 0420 D3 — a Flutter
+`kCommunityClubMaxMembers` MÁR élő értékének szerveroldali tükrözése, nem
+önkényes új szám):
+
+```bash
+python3 -c "MAX=500; print('alatt', MAX-1); print('rajta', MAX); print('fölött', MAX)"
+# alatt   499 → elfogad
+# rajta   500 → elfogad (az 500. tag az utolsó szabad hely)
+# fölött  500 + 1 újabb join → elutasít
+```
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** vedd ki a kötelező-transfer ellenőrzést az owner-leave endpointból, futtasd a backend pytest-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
 
