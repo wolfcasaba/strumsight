@@ -243,3 +243,21 @@ vonal.
   round.
 
 ## 11. Review — a Claude tölti ki
+
+```ai-router
+schema_version = 1
+risk = "high"
+allowed_paths = [
+  "backend/app/community/models/moderation.py",
+  "backend/app/community/moderation/case_service.py",
+  "backend/app/community/routers/moderation.py",
+  "backend/alembic/versions/e09_r27_0020_community_moderation.py",
+  "docs/operations/community-moderation-runbook.md",
+  "backend/tests/community/test_moderation_case_service.py",
+  "docs/rounds/e09-r27-moderation-queue-enforcement-and-appeal.md",
+]
+gate_tests = [
+  "test/core/architecture_dependency_test.dart"
+]
+native_gate = false
+```

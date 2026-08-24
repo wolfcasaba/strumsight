@@ -66,7 +66,6 @@ from app.community.models.moderation import (
     MODERATION_CASE_STATE_PENDING_REVIEW,
     MODERATION_CASE_STATE_REMOVED,
     MODERATION_CASE_STATE_VISIBLE,
-    MODERATION_CASE_STATES,
     CommunityModerationAction,
     CommunityModerationCase,
     CommunityModerator,
@@ -84,12 +83,10 @@ from app.community.moderation.case_service import (
     AppealAlreadySubmitted,
     AutomationCannotEnforce,
     InvalidStateTransition,
-    NotAModerator,
     apply_moderator_decision,
     compute_priority_score,
     content_visibility_for_state,
     get_or_create_case,
-    is_moderator,
     record_automation_signal,
     resolve_appeal,
     submit_appeal,
@@ -311,9 +308,7 @@ class TestAuthScope:
         # 404 lookup, so the 403 must come first regardless of the
         # case's existence.
         random_id = uuid.uuid4()
-        resp = client.get(
-            f"/community/moderation/cases/{random_id}", headers=headers
-        )
+        resp = client.get(f"/community/moderation/cases/{random_id}", headers=headers)
         assert resp.status_code == 403, resp.text
 
     def test_non_moderator_gets_403_on_decision(self, client, session_factory):
@@ -324,7 +319,6 @@ class TestAuthScope:
         _grant_moderator(session_factory, user_id=2)
         post_id = _make_post(session_factory, author_user_id=2)
 
-        mod_headers = _moderator_headers(2)
         # Open a case via the moderator's automation-signal endpoint
         # so we have a case to target.
         # First, get_or_create via the service layer.
@@ -356,9 +350,7 @@ class TestAuthScope:
     def test_moderator_can_list_empty_queue(self, client, session_factory):
         _make_profile(session_factory, user_id=1, email="mod@s.test")
         _grant_moderator(session_factory, user_id=1)
-        resp = client.get(
-            "/community/moderation/cases", headers=_moderator_headers(1)
-        )
+        resp = client.get("/community/moderation/cases", headers=_moderator_headers(1))
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert body == {"cases": [], "count": 0}
@@ -394,9 +386,7 @@ class TestStateMachine:
                 MODERATION_CASE_STATE_AUTHOR_ONLY,
             }
         )
-        assert ALLOWED_TRANSITIONS[
-            MODERATION_CASE_STATE_PENDING_REVIEW
-        ] == frozenset(
+        assert ALLOWED_TRANSITIONS[MODERATION_CASE_STATE_PENDING_REVIEW] == frozenset(
             {
                 MODERATION_CASE_STATE_VISIBLE,
                 MODERATION_CASE_STATE_LIMITED,
@@ -405,12 +395,14 @@ class TestStateMachine:
             }
         )
         assert MODERATION_CASE_STATE_REMOVED in ALLOWED_TRANSITIONS
-        assert MODERATION_CASE_STATE_VISIBLE in ALLOWED_TRANSITIONS[
-            MODERATION_CASE_STATE_REMOVED
-        ]
-        assert MODERATION_CASE_STATE_AUTHOR_ONLY in ALLOWED_TRANSITIONS[
-            MODERATION_CASE_STATE_REMOVED
-        ]
+        assert (
+            MODERATION_CASE_STATE_VISIBLE
+            in ALLOWED_TRANSITIONS[MODERATION_CASE_STATE_REMOVED]
+        )
+        assert (
+            MODERATION_CASE_STATE_AUTHOR_ONLY
+            in ALLOWED_TRANSITIONS[MODERATION_CASE_STATE_REMOVED]
+        )
         assert ALLOWED_TRANSITIONS[MODERATION_CASE_STATE_AUTHOR_ONLY] == frozenset(
             {MODERATION_CASE_STATE_VISIBLE, MODERATION_CASE_STATE_REMOVED}
         )
@@ -622,9 +614,7 @@ class TestAuditImmutability:
             db.commit()
 
             action = (
-                db.query(CommunityModerationAction)
-                .filter_by(case_id=case.id)
-                .one()
+                db.query(CommunityModerationAction).filter_by(case_id=case.id).one()
             )
             assert action.action_type == ACTION_TYPE_AUTOMATION_SIGNAL
             assert action.actor_type == "automation"
@@ -654,9 +644,7 @@ class TestAutomationCannotEnforce:
         """The allowlist blocks the ``removed`` destination
         structurally — not by a soft check after the fact."""
         assert MODERATION_CASE_STATE_REMOVED not in AUTOMATION_ALLOWED_TO_STATES
-        assert (
-            MODERATION_CASE_STATE_AUTHOR_ONLY not in AUTOMATION_ALLOWED_TO_STATES
-        )
+        assert MODERATION_CASE_STATE_AUTHOR_ONLY not in AUTOMATION_ALLOWED_TO_STATES
 
         post_id = _make_post(session_factory, author_user_id=10)
         with session_factory() as db:
@@ -676,9 +664,7 @@ class TestAutomationCannotEnforce:
             db.commit()
             assert case.state == MODERATION_CASE_STATE_PENDING_REVIEW
 
-    def test_automation_cannot_be_called_with_to_state_param(
-        self, session_factory
-    ):
+    def test_automation_cannot_be_called_with_to_state_param(self, session_factory):
         """The D4 structural gát — :func:`record_automation_signal`
         has NO ``to_state`` keyword argument. The function's
         signature alone prevents the caller from asking for
@@ -777,11 +763,7 @@ class TestAppealFlow:
     def test_appeal_submitted_once_succeeds(self, session_factory):
         case_id = self._setup_removed_case(session_factory)
         with session_factory() as db:
-            case = (
-                db.query(CommunityModerationCase)
-                .filter_by(public_id=case_id)
-                .one()
-            )
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
             case = submit_appeal(
                 db,
                 case,
@@ -795,11 +777,7 @@ class TestAppealFlow:
     def test_second_appeal_raises(self, session_factory):
         case_id = self._setup_removed_case(session_factory)
         with session_factory() as db:
-            case = (
-                db.query(CommunityModerationCase)
-                .filter_by(public_id=case_id)
-                .one()
-            )
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
             submit_appeal(
                 db,
                 case,
@@ -822,11 +800,7 @@ class TestAppealFlow:
         """The appeal-upheld flow reverts the case to ``visible``."""
         case_id = self._setup_removed_case(session_factory)
         with session_factory() as db:
-            case = (
-                db.query(CommunityModerationCase)
-                .filter_by(public_id=case_id)
-                .one()
-            )
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
             submit_appeal(
                 db,
                 case,
@@ -850,11 +824,7 @@ class TestAppealFlow:
     def test_resolve_overturned_keeps_state(self, session_factory):
         case_id = self._setup_removed_case(session_factory)
         with session_factory() as db:
-            case = (
-                db.query(CommunityModerationCase)
-                .filter_by(public_id=case_id)
-                .one()
-            )
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
             submit_appeal(
                 db,
                 case,
@@ -969,9 +939,7 @@ class TestReporterIdentityNotLeaked:
         assert "reporter_public_id" not in field_names
         assert "reporter_user_id" not in field_names
 
-    def test_case_detail_endpoint_no_reporter_field(
-        self, client, session_factory
-    ):
+    def test_case_detail_endpoint_no_reporter_field(self, client, session_factory):
         _make_profile(session_factory, user_id=10, email="mod@s.test")
         _grant_moderator(session_factory, user_id=10)
         post_id = _make_post(session_factory, author_user_id=10)
@@ -997,9 +965,7 @@ class TestReporterIdentityNotLeaked:
             assert "reporter_profile_id" not in action
             assert "reporter_public_id" not in action
 
-    def test_automation_signal_action_has_no_actor_user_id(
-        self, session_factory
-    ):
+    def test_automation_signal_action_has_no_actor_user_id(self, session_factory):
         """An automation action's ``actor_user_id`` is NULL —
         the actor has no user identity, only a provider name."""
         post_id = _make_post(session_factory, author_user_id=10)
@@ -1017,9 +983,7 @@ class TestReporterIdentityNotLeaked:
             )
             db.commit()
             action = (
-                db.query(CommunityModerationAction)
-                .filter_by(case_id=case.id)
-                .one()
+                db.query(CommunityModerationAction).filter_by(case_id=case.id).one()
             )
             assert action.actor_type == "automation"
             assert action.actor_user_id is None
@@ -1063,9 +1027,7 @@ class TestRealViolationProbeA4:
         def bad_mapping(*, confidence: float) -> str:
             return MODERATION_CASE_STATE_REMOVED
 
-        monkeypatch.setattr(
-            case_service, "_automation_to_state", bad_mapping
-        )
+        monkeypatch.setattr(case_service, "_automation_to_state", bad_mapping)
 
         post_id = _make_post(session_factory, author_user_id=10)
         with session_factory() as db:
@@ -1083,7 +1045,10 @@ class TestRealViolationProbeA4:
                     provider_version="test",
                     now=_now(),
                 )
-            assert "removed" in str(exc.value).lower() or "automation" in str(exc.value).lower()
+            assert (
+                "removed" in str(exc.value).lower()
+                or "automation" in str(exc.value).lower()
+            )
 
     def test_widened_allowlist_and_mapping_still_caught(
         self, session_factory, monkeypatch
@@ -1101,7 +1066,8 @@ class TestRealViolationProbeA4:
         cell is intact."""
 
         monkeypatch.setattr(
-            case_service, "_automation_to_state",
+            case_service,
+            "_automation_to_state",
             lambda *, confidence: MODERATION_CASE_STATE_REMOVED,
         )
         monkeypatch.setattr(
@@ -1167,10 +1133,7 @@ class TestRealViolationProbeA1:
             # no CommunityModerator row exists for user 1, so
             # the real ``is_moderator`` would return False.
             assert (
-                db.query(CommunityModerator)
-                .filter_by(user_id=1)
-                .one_or_none()
-                is None
+                db.query(CommunityModerator).filter_by(user_id=1).one_or_none() is None
             )
 
 
@@ -1293,11 +1256,7 @@ class TestRealViolationProbeA3:
 
     def test_no_public_mutation_api_on_actions(self):
         """The structural gát — no update / delete / modify function."""
-        public_names = {
-            name
-            for name in dir(case_service)
-            if not name.startswith("_")
-        }
+        public_names = {name for name in dir(case_service) if not name.startswith("_")}
         forbidden = public_names & {"update_action", "delete_action", "modify_action"}
         assert not forbidden, (
             f"case_service must NOT expose mutation API on actions: {forbidden}"
@@ -1346,9 +1305,7 @@ class TestPriorityScore:
             # not fire (three different categories is the cleanest
             # way to get three distinct rows for the same reporter
             # / target).
-            reporter_profile = (
-                db.query(CommunityProfile).filter_by(user_id=1).one()
-            )
+            reporter_profile = db.query(CommunityProfile).filter_by(user_id=1).one()
             for category in ("spam", "harassment", "hate_speech"):
                 db.add(
                     CommunityReport(
@@ -1356,9 +1313,7 @@ class TestPriorityScore:
                         target_type="post",
                         target_id=str(post_id),
                         category=category,
-                        dedup_key=(
-                            f"{reporter_profile.id}:post:{post_id}:{category}"
-                        ),
+                        dedup_key=(f"{reporter_profile.id}:post:{post_id}:{category}"),
                     )
                 )
             db.commit()
@@ -1368,9 +1323,7 @@ class TestPriorityScore:
         assert new_score > base_score
         # Each report contributes
         # ``PRIORITY_WEIGHT_REPORT_COUNT`` (5) per the formula.
-        assert (
-            new_score - base_score
-        ) >= 3 * case_service.PRIORITY_WEIGHT_REPORT_COUNT
+        assert (new_score - base_score) >= 3 * case_service.PRIORITY_WEIGHT_REPORT_COUNT
 
 
 # ===========================================================================
@@ -1390,9 +1343,7 @@ class TestEndToEnd:
         post_id = _make_post(session_factory, author_user_id=10)
 
         # 1. List — empty queue.
-        resp = client.get(
-            "/community/moderation/cases", headers=_moderator_headers(10)
-        )
+        resp = client.get("/community/moderation/cases", headers=_moderator_headers(10))
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
 
@@ -1407,9 +1358,7 @@ class TestEndToEnd:
             case_id = case.public_id
 
         # 3. List — one case.
-        resp = client.get(
-            "/community/moderation/cases", headers=_moderator_headers(10)
-        )
+        resp = client.get("/community/moderation/cases", headers=_moderator_headers(10))
         assert resp.status_code == 200
         body = resp.json()
         assert body["count"] == 1
@@ -1421,11 +1370,7 @@ class TestEndToEnd:
         # Direct ``visible → removed`` is correctly rejected by the
         # :data:`case_service.ALLOWED_TRANSITIONS` graph.
         with session_factory() as db:
-            case = (
-                db.query(CommunityModerationCase)
-                .filter_by(public_id=case_id)
-                .one()
-            )
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
             record_automation_signal(
                 db,
                 case,

@@ -87,7 +87,6 @@ from ..models.moderation import (
     CommunityModerator,
 )
 
-
 # ---------------------------------------------------------------------------
 # Module-level state machine — D3.
 #
@@ -309,14 +308,9 @@ def is_moderator(db: Session, user_id: int) -> bool:
     ``role`` / ``is_admin`` column to ``User`` / ``CommunityProfile``,
     so this table is the unique source of truth.
     """
-    row = (
-        db.execute(
-            select(CommunityModerator.id).where(
-                CommunityModerator.user_id == user_id
-            )
-        )
-        .first()
-    )
+    row = db.execute(
+        select(CommunityModerator.id).where(CommunityModerator.user_id == user_id)
+    ).first()
     return row is not None
 
 
@@ -325,7 +319,9 @@ def is_moderator(db: Session, user_id: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _target_author_profile_id(db: Session, target_type: str, target_id: str) -> int | None:
+def _target_author_profile_id(
+    db: Session, target_type: str, target_id: str
+) -> int | None:
     """Resolve the target's owner-profile ``id`` for the D8
     account-history computation.
 
@@ -482,15 +478,19 @@ def get_or_create_case(
     case" exception lives at the ``apply_moderator_decision`` /
     ``record_automation_signal`` call sites, not here.
     """
-    existing = db.execute(
-        select(CommunityModerationCase)
-        .where(
-            CommunityModerationCase.target_type == target_type,
-            CommunityModerationCase.target_id == target_id,
-            CommunityModerationCase.is_open.is_(True),
+    existing = (
+        db.execute(
+            select(CommunityModerationCase)
+            .where(
+                CommunityModerationCase.target_type == target_type,
+                CommunityModerationCase.target_id == target_id,
+                CommunityModerationCase.is_open.is_(True),
+            )
+            .order_by(CommunityModerationCase.opened_at.desc())
         )
-        .order_by(CommunityModerationCase.opened_at.desc())
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if existing is not None:
         return existing
 
@@ -570,9 +570,7 @@ def record_automation_signal(
 
     from_state = case.state
     if from_state not in ALLOWED_TRANSITIONS:
-        raise InvalidStateTransition(
-            f"case in unknown state: {from_state!r}"
-        )
+        raise InvalidStateTransition(f"case in unknown state: {from_state!r}")
     if to_state not in ALLOWED_TRANSITIONS[from_state]:
         # The caller asked for an illegal transition; map that to
         # the D3 / A2 cell. An automation that wants ``removed``
@@ -587,9 +585,7 @@ def record_automation_signal(
         # próba monkey-patches this allowlist to ``{"removed",
         # "limited", "pending_review"}`` and asserts the A4 cell
         # goes red.
-        raise AutomationCannotEnforce(
-            f"automation cannot transition into {to_state!r}"
-        )
+        raise AutomationCannotEnforce(f"automation cannot transition into {to_state!r}")
 
     case.state = to_state
     case.priority_score = compute_priority_score(
@@ -642,13 +638,9 @@ def apply_moderator_decision(
     case is NOT modified.
     """
     if not is_moderator(db, moderator_user_id):
-        raise NotAModerator(
-            f"user {moderator_user_id} is not a moderator"
-        )
+        raise NotAModerator(f"user {moderator_user_id} is not a moderator")
     if to_state not in MODERATION_CASE_STATES:
-        raise InvalidStateTransition(
-            f"unknown to_state: {to_state!r}"
-        )
+        raise InvalidStateTransition(f"unknown to_state: {to_state!r}")
 
     from_state = case.state
 
@@ -771,9 +763,7 @@ def resolve_appeal(
             f"verdict must be 'upheld' or 'overturned', got {verdict!r}"
         )
     if not is_moderator(db, resolver_user_id):
-        raise NotAModerator(
-            f"user {resolver_user_id} is not a moderator"
-        )
+        raise NotAModerator(f"user {resolver_user_id} is not a moderator")
     if case.appeal_state != APPEAL_STATE_SUBMITTED:
         raise NoOpenAppeal(
             f"case {case.public_id} has no live appeal (state={case.appeal_state!r})"
@@ -842,7 +832,9 @@ def content_visibility_for_state(state: str, *, viewer_is_author: bool) -> str:
     if state == MODERATION_CASE_STATE_PENDING_REVIEW:
         return VISIBILITY_FULL
     if state == MODERATION_CASE_STATE_REMOVED:
-        return VISIBILITY_HIDDEN_EXCEPT_AUTHOR if viewer_is_author else VISIBILITY_HIDDEN
+        return (
+            VISIBILITY_HIDDEN_EXCEPT_AUTHOR if viewer_is_author else VISIBILITY_HIDDEN
+        )
     if state == MODERATION_CASE_STATE_AUTHOR_ONLY:
         return VISIBILITY_HIDDEN_EXCEPT_AUTHOR
     raise ValueError(f"unknown case state: {state!r}")
@@ -900,11 +892,15 @@ def get_case_by_public_id(
     """Resolve a case row by its wire-visible ``public_id``. Used by
     the router before every write.
     """
-    return db.execute(
-        select(CommunityModerationCase).where(
-            CommunityModerationCase.public_id == public_id
+    return (
+        db.execute(
+            select(CommunityModerationCase).where(
+                CommunityModerationCase.public_id == public_id
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
 
 def list_case_actions(
@@ -923,9 +919,7 @@ def list_case_actions(
     )
 
 
-def list_open_cases(
-    db: Session, *, limit: int = 100
-) -> list[CommunityModerationCase]:
+def list_open_cases(db: Session, *, limit: int = 100) -> list[CommunityModerationCase]:
     """Return the queue — open cases ordered by priority, then
     opened_at. Used by the ``GET /moderation/cases`` endpoint.
     """

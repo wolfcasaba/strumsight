@@ -36,7 +36,10 @@ from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
-from ..moderation import case_service
+from ..models.moderation import (
+    MODERATION_CASE_STATES,
+    CommunityModerationCase,
+)
 from ..moderation.case_service import (
     AppealAlreadySubmitted,
     AutomationCannotEnforce,
@@ -48,17 +51,12 @@ from ..moderation.case_service import (
     NotAModerator,
     apply_moderator_decision,
     get_case_by_public_id,
-    get_or_create_case,
     is_moderator,
     list_case_actions,
     list_open_cases,
     record_automation_signal,
     resolve_appeal,
     submit_appeal,
-)
-from ..models.moderation import (
-    MODERATION_CASE_STATES,
-    CommunityModerationCase,
 )
 
 router = APIRouter(prefix="/community/moderation", tags=["community-moderation"])
@@ -532,7 +530,9 @@ def post_automation_signal(
     the automation NEVER holds a JWT.
     """
     confidence_raw = payload.get("confidence")
-    if not isinstance(confidence_raw, (int, float)) or not (0.0 <= confidence_raw <= 1.0):
+    if not isinstance(confidence_raw, (int, float)) or not (
+        0.0 <= confidence_raw <= 1.0
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="confidence must be a number in [0.0, 1.0]",
