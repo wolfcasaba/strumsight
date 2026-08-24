@@ -1,13 +1,15 @@
 # E13-R14 — Accessibility foundation audit és semantics toolkit
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 6adea220`)
+- **Státusz:** READY (pre-flight lemérve 2026-08-24, `main @ b93fbdc0`; eredetileg
+  előre megírva 2026-08-15, kód olvasva: `main @ 6adea220`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 14
 - **Kör-azonosító:** `E13-R14`
-- **Branch:** `<motor>/e13-r14-accessibility-toolkit`
+- **Branch:** `sonnet-impl/e13-r14-accessibility-toolkit`
 - **Előfeltétel:** `E13-R13` merge-elve (overlay-rendszer)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** [`0280`](../adr/0280-accessibility-contract-and-live-region-budget.md)
-  — **a Claude írja meg a kör indításakor; a `docs/adr/` a TILOS zónában van.**
+  — **MÁR MERGE-ELVE (2026-08-15); a kör ADR-t NEM ír, lásd §0.0/D1. A
+  `docs/adr/` végig TILOS zóna.**
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az R01
 > `docs/ui/baseline/accessibility-findings.md` prioritásos leletlistáját — a §3
@@ -34,6 +36,140 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 Pre-flight revízió (Claude Opus 5, 2026-08-24, `main @ b93fbdc0`)
+
+**Kockázat = high, indoklás:** a kör a képernyőolvasó-felület (élő régió,
+semantics-címkék) **szerződését** vezeti be, és a StrumSight fő használati módja
+(Stage Mode / Live) másodpercenként sokszor frissülő felismerés. Egy naiv élő
+régió a felolvasót használó felhasználónak **használhatatlanná teszi** a fő
+funkciót (ADR 0280 „Kontextus"), miközben minden egyes bejelentés önmagában
+helyes — vagyis a hiba a gépi zöld mellett is fennállhat. A router
+`high_risk_path_fragments` listájából egyetlen fragmentum sem illeszkedik az
+`allowed_paths`-ra (nincs auth/crypto/upload/payment útvonal); a `high` besorolás
+tehát **hozzáférhetőségi hozzáférés-vesztés** kockázata miatt áll, nem
+adat-/hálózat-kitettség miatt. A `security-reviewer` ezért ebben a körben
+**nem kötelező**; a review-t az `sdd-round-review` protokoll viszi.
+
+### D1 — Az ADR 0280 MÁR LÉTEZIK és merge-elve van: a kör ADR-t NEM ír
+
+Mérve: `docs/adr/0280-accessibility-contract-and-live-region-budget.md` a
+`main`-en van (dátum 2026-08-15, `Kör: E13-R14`), és a szövege a §5.1–§5.5
+döntéseivel **pontról pontra egyezik** (költségvetés 1000 ms inkluzív, tuner
+cents + strum-irány felolvasható, nincs csak-szín, ≥ 48 dp, a gépi teszt nem
+elégséges). A Ch13 ADR-jei (0273–0282) előre, az `a4fdfec2`-ben lettek
+merge-elve. A foglalótól kapott `0423` szám **felhasználatlan marad**.
+`docs/adr/**` végig TILOS zóna — az ADR bármilyen módosítása **H1**. Ez a
+minta most **ötödször** fut (E13-R08/0275, R09/0276, R10/0277, R12/0278,
+R13/0279).
+
+### D2 — Új ARB-kulcs TILOS: az A2/A6 MEGLÉVŐ, mért kulcsokból épül
+
+`lib/l10n/app_{en,hu}.arb` **generált aggregátum** (ADR 0307 §4,
+`tool/gen_l10n_segments.dart` fejléc); a forrás a `lib/l10n/base/app_<locale>.arb`
+és a `lib/l10n/features/<feature>_<locale>.arb`. **Egyik sincs az
+`allowed_paths`-on**, tehát új felolvasó-szöveg kulcs felvétele scope-sértés →
+`stopped` jelzés. Nem is kell: a szükséges szövegek MINDKÉT nyelven léteznek:
+
+| Kulcs | Forrás-fragmentum | en | hu |
+|---|---|---|---|
+| `tunerCentsFlat` | `features/tuner_{en,hu}.arb` | `{cents} cents flat` | `{cents} centtel mély` |
+| `tunerCentsSharp` | `features/tuner_{en,hu}.arb` | `{cents} cents sharp` | `{cents} centtel magas` |
+| `tunerInTune` | `app_{en,hu}.arb` (base) | `In tune` | megvan |
+| `strumDown` | `app_{en,hu}.arb` (base) | `Down` | `Le` |
+| `strumUp` | `app_{en,hu}.arb` (base) | `Up` | `Fel` |
+
+A design system **importálhatja** az `AppLocalizations`-t — mérve: 11 meglévő
+DS-fájl teszi (pl. `components/feedback/ss_status_badge.dart`,
+`components/overlays/ss_dialog.dart`). A `screen_reader_copy_test.dart` tehát
+`AppLocalizations.delegate.load(Locale('en'))` és `Locale('hu')` mellett mérje a
+szerződés-építőket, és **követelje meg, hogy a két nyelv kimenete különbözzön**
+(különben egy angolra drótozott implementáció is zöld maradna → A6).
+
+### D3 — A1: a három cellának a VALÓDI bejelentési utat kell hajtania (L443)
+
+[L443](../LESSONS.md) mért hibaosztálya: az E13-R06-ban a küszöb-cellák csak egy
+tiszta `isWithinSyncTolerance(Duration)` predikátumot hívtak, a widgetet soha nem
+építették fel — a tiltott implementáción is zöld maradt. **Ugyanez itt tilos:**
+az A1 celláinak az `SsLiveRegion` tényleges bejelentés-kibocsátását kell mérniük
+(a felépített widget/vezérlő által kiadott bejelentések listáját), injektált
+órával. Egy önmagában hívott `SsLiveRegion.isWithinBudget(...)` predikátum
+**nem** teljesíti az A1-et.
+
+A §6.1 három cellája `python3`-mal kiszámolva, hogy ne maradjon értelmezési rés
+(küszöb `gap = 1000 ms`, a határ inkluzív, azaz `delta >= 1000` → bejelenthető):
+
+| Cella | Pontos bemenet (idő ms, érték) | Elvárt bejelentés-szám | Mit ejt ki |
+|---|---|---|---|
+| küszöb ALATT | `(0,'C')`, `(400,'G')`, `(800,'D')` | **1** (`t=0 → 'C'`) | minden kereten bejelentő implementáció |
+| küszöbÖN | `(0,'C')`, `(1000,'G')` | **2** | szigorú `>` összehasonlítás (`delta > 1000`) |
+| küszöb FÖLÖTT | `(0,'C')`, `(2500,'G')`, `(5000,'D')` | **3** | fix-ütemű throttle, ami a ritka változást is elnyeli |
+| **érdemi változás** | `(0,'C')`, `(2500,'C')` | **1** | dedup nélküli, csak időre néző implementáció |
+
+A negyedik sor a §5.1 „csak **érdemi** változásnál szólal meg" felének gépi
+mércéje — enélkül az azonos akkordnév ismételt bejelentése átmenne.
+
+**Valódi-sértés próba (a §6.1-ben már kötelező, itt pontosítva):** a
+költségvetés-ellenőrzés kivétele után az A1 **„küszöb ALATT"** cellájának
+pirosnak kell lennie, a tényleges hibaüzenettel a §10-ben. [L453](../LESSONS.md)
+szerint az őrnek saját mérő cellája kell — a próba szövegét ne parafrazeáld,
+másold be.
+
+### D4 — A5: a 48 dp cella MÉRJEN, ne a konstansot ismételje
+
+Mérve, hogy a kritikus komponensek MÁR a nevesített konstanst használják, tehát
+a kör **nem javít komponenst** (mind TILOS zóna, csak olvasható/pumpálható):
+
+- `components/actions/ss_button.dart:122` — `minHeight: SsSemantics.minimumInteractiveDimension`
+- `components/actions/ss_icon_button.dart:62-63` — `minWidth`/`minHeight` ugyanaz
+- `components/inputs/ss_switch_row.dart:45`, `components/inputs/ss_choice.dart:105`,
+  `components/cards/ss_coach_action_card.dart:70` — ugyanaz
+- `SsSemantics.minimumInteractiveDimension == 48` (`foundations/ss_semantics.dart:3`),
+  már pinnelve: `test/core/design_system/foundations_test.dart:26`
+
+A `tap_target_test.dart` ezért a **felépített** komponensek tényleges méretét
+mérje (`tester.getSize(...)` ≥ 48), ne a konstans újra-assertálásával — a §6.1
+„44 dp-s érintési cél" hibás implementációját csak így fogja pirosra. A viewportot
+**kizárólag** `tester.view.physicalSize` méretezi ([L452](../LESSONS.md)); a
+`MediaQuery(size:)` inert, a `textScaler` viszont helyesen megy `MediaQuery`-n át.
+
+### D5 — A8: a csökkentett mozgás API MÁR LÉTEZIK
+
+`motion/ss_motion_scope.dart`: `SsMotionScope.reduceMotionOf(context)`,
+`SsMotionScope.durationOf(context, base)` (reduced esetén `Duration.zero`) és a
+tiszta `SsMotionScope.resolve(appOverride:, systemReduced:)`. Az A8 cellája ezt
+használja, ÚJ mozgás-API nélkül: reduced motion mellett a **semantics-visszajelzés
+megmarad**, csak a mozgás terjedelme esik nullára (ADR 0274 §5.1).
+
+### D6 — Visszakeresett előzmények (ADR 0312, brief-lint S8)
+
+Szűkített korpuszon (`lessons,halts,adr`) és teljes korpuszon is lefuttatva:
+
+- [`adr/0280`](../adr/0280-accessibility-contract-and-live-region-budget.md) — a kör
+  normatív forrása; **már merge-elve** (D1).
+- [`adr/0381`](../adr/0381-semantic-theme-and-accessibility-contract.md) — az
+  E13-R03 szemantikus téma-/accessibility-szerződése, amire a §5.4 épít.
+- `lessons/L443` (E13-R06) — küszöb-cella tiszta predikátumon = nem őrzi a
+  viselkedést → **D3**.
+- `lessons/L453` (E13-R09) — az invariáns-őrnek saját mérő cellája kell → **D3**
+  valódi-sértés próba.
+- `lessons/L452` (E13-R11) — widget-teszt viewport csak `tester.view.physicalSize`
+  → **D4**.
+- `lessons/L460` (E13-R11) — jelenlét ≠ láthatóság; ne `find.byType` jelenléttel
+  őrizz láthatósági invariánst → az A3/A4 celláira is áll.
+- `lessons/L393` (E13-R05) — egy DS-változás a MEGLÉVŐ, listán kívüli teszt-
+  szerződéseket is érinti; ez a kör azonban **nem módosít komponenst** (D4),
+  tehát a `component_catalog_test.dart` exact-count csapdája nem aktiválódik.
+- `lessons/L122` (E04-R13) — szinkron fake-óra + aszinkron stream: a timer a
+  rossz `now`-hoz köthet. Az A1 óra-injekciója ezért **szinkron, determinisztikus**
+  legyen (a bejelentések listája a hívás után azonnal olvasható).
+
+### D7 — `gate_tests` és CI
+
+A `gate_tests` három útvonala változatlan; a kör **nem** módosít meglévő
+komponenst, ezért a `component_catalog_test.dart` NEM kerül be negyediknek
+(ellentétben az E13-R12-vel). `native_gate = false`, a diff tisztán
+Dart + dokumentum → a CI-tervet a `tools/round-ci-plan.py` dönti el.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -141,18 +277,25 @@ Minden interaktív elem semantics labelje kötelező a szerződésben.
 | Csak angol felolvasó-szöveg | A6 |
 | A dokumentum a gépi tesztet elégségesnek mondja | A7 |
 
-**Az élő régió három kötelező cellája** (a küszöb: két bejelentés közti
-minimális szünet, **1000 ms**):
+**Az élő régió kötelező cellái** (a küszöb: két bejelentés közti minimális
+szünet, **1000 ms**, a határ INKLUZÍV; a pontos bemeneteket a §0.0/D3 számolta
+ki `python3`-mal — azokat használd, ne közelítsd):
 
-| Cella | Bemenet | Elvárt |
+| Cella | Pontos bemenet (idő ms, érték) | Elvárt bejelentés-szám |
 |---|---|---|
-| a küszöb alatt | 400 ms-onként érkező változás | **egy** bejelentés, a többi összevonva |
-| rajta (a küszöbön) | pontosan **1000 ms** eltéréssel érkező változás | **bejelentve** (a határ inkluzív) |
-| a küszöb fölött | 2500 ms-onként érkező változás | minden változás bejelentve |
+| a küszöb alatt | `(0,'C')`, `(400,'G')`, `(800,'D')` | **1** (`t=0 → 'C'`) |
+| rajta (a küszöbön) | `(0,'C')`, `(1000,'G')` | **2** (a határ inkluzív) |
+| a küszöb fölött | `(0,'C')`, `(2500,'G')`, `(5000,'D')` | **3** |
+| érdemi változás | `(0,'C')`, `(2500,'C')` | **1** (azonos érték nem szólal meg újra) |
+
+A celláknak a felépített `SsLiveRegion` **tényleges bejelentés-kibocsátását**
+kell mérniük injektált órával — egy önmagában hívott tiszta predikátum NEM
+teljesíti az A1-et (§0.0/D3, `docs/LESSONS.md` L443).
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** vedd ki a
-költségvetés-ellenőrzést az élő régióból → az **A1** cellának PIROSNAK kell
-lennie → állítsd vissza.
+költségvetés-ellenőrzést az élő régióból → az **A1 „a küszöb alatt"** cellájának
+PIROSNAK kell lennie → a tényleges hibaüzenetet szó szerint másold a §10-be →
+állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
