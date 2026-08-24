@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E13-R14/H-NOSIGNAL] KÉSZ — az elakadás-őr egy KÉSZ kört ejtett el: néma, de ÉLŐ session ébresztése a kill előtt — PR [#447](https://github.com/wolfcasaba/strumsight/pull/447) (2026-08-24, L472)
+
+**A halt.** Az E13-R14 orchestrátor-sessionre 15:51:11-kor **kívülről érkezett
+megszakítás** a `tools/wait-for-round.sh … 540` előtérbe tett hívása közben
+(naplóban: `tool_result is_error=true` „The user doesn't want to proceed with
+this tool use…" + `[Request interrupted by user for tool use]`), **követő prompt
+nélkül**. A session ettől üres prompton állt: a tmux-session élt, a
+Claude-process élt, a panel néma maradt. A driver minden ellenőrzése
+„rendben"-t adott, így a 20 perces elakadás-őr 16:11:39-kor megölte a sessiont
+és H-NOSIGNAL-t jelzett — **miközben az implementer 16:03:33-kor `status=done`-nal
+befejezte a kört** (`head=845d3c93`, 27/27 új teszt). A lánc egy **kész kört
+ejtett el**.
+
+**A gyökérok nem a megszakítás** (az a repón kívül van: a driver `tmux send-keys`-e
+csak az indítás, a párhuzamos E09-R26 session nem hívott tmuxot, a
+`claude-session-watch.service` nem küld billentyűt), **hanem a helyreállítás
+hiánya**: az őrnek volt felismerése, de nem volt mentése. Egy üres prompton álló
+interaktív session önmagától sosem indul újra — csak kívülről, és a driver
+kezében ott az eszköz, amivel elindította.
+
+**A javítás.** `run_tmux_session` elakadás-ága korlátos **ELAKADÁS-ÉBRESZTŐ**-t
+kapott: néma panel + a pane-en ÉLŐ interaktív Claude-process (ugyanaz a
+`ps -t <pane_tty> -o comm=` mérés, amit a driver már használ) → beküld egy
+folytatás-promptot, és a következő teljes elakadás-ablakot adja a válaszra.
+A stall-referencia a napló mtime-ja ÉS az utolsó ébresztés közül a későbbi — a
+naplófájlt (a bizonyítékot) nem írjuk át hamis mtime-mal. **Az őr nem gyengült:**
+a keret kimerülése után a `break`/kill változatlanul lecsap, csak nem az ELSŐ
+néma ablak dönt. Keret: `PIPELINE_ORCH_STALL_NUDGES` (alap `1`), `0` = a javítás
+előtti viselkedés. A `codex exec` panel a promptot argv-ből kapja, oda stdin-re
+küldött szöveg nem ér el → ott a minta nem illeszkedik, a viselkedés változatlan.
+**Ár (tudatos):** egy valóban menthetetlen session halála egy elakadás-ablakkal
+(alapon 20 perc) később következik be.
+
+**Mérce.** `tools/tests/test_round_pipeline_stall_nudge.py`, 3 cella (ébresztés
+és jelzés → `RESULT_EXIT=0`; kimerített keret → az őr ugyanúgy öl, pontosan EGY
+ébresztés után; `NUDGES=0` → a javítás előtti viselkedés). **RED/GREEN mérve:**
+a javítás ELŐTT (`origin/main` driverrel) az első két cella PIROS, UTÁNA mind
+zöld. Teljes router-suite **740 passed, 1 skipped**. A meglévő E05-R17
+stall-guard regresszió szerkesztés nélkül zöld. Nincs Dart-változás → a
+CI-bizonyíték a **Router CI**.
+
+**A kör maga NEM veszett el:** az E13-R14 implementer-munkapéldány
+(`/home/ubuntu/ss-sonnet-impl-e13-r14`, branch
+`sonnet-impl/e13-r14-accessibility-toolkit`, `head=845d3c93`, `gate_shape=VIOLATION`)
+érintetlen; a kör a lánc feloldása után újraindul és onnan folytatható.
+
 ## ✅ E13-R13 KÉSZ — Overlay, dialog, bottom sheet és confirmation rendszer — PR [#445](https://github.com/wolfcasaba/strumsight/pull/445), squash `9b3a5d5d` (2026-08-24)
 
 Öt új design-system overlay komponens: `SsOverlayHost`, `SsDialog`,

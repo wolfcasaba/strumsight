@@ -17925,3 +17925,63 @@ invariánshoz nyúl, mint egy BLOCKER/MAJOR, a javítást **minden** felületre
 egyszerre kell kiterjeszteni, és a gépi őrnek is minden felületet fednie kell.
 
 **Őrteszt:** `test/core/design_system/overlays/ss_confirmation_test.dart`::„BLOCKER-1 (fix2) — a throwing onConfirm, retried with UP TO THREE un-resized confirm taps, must run the destructive callback exactly once on every confirmation surface"
+
+## L472 — Az elakadás-őr a néma panelt HALOTT munkának vette: egy kívülről megszakított, de ÉLŐ session megölése egy KÉSZ kört ejtett el (E13-R14, H-NOSIGNAL önjavítás, 2026-08-24)
+
+**Mit mértünk.** Az E13-R14 orchestrátor-session (`4615efa7-db7b-4d79-aeae-588f69d28921.jsonl`)
+15:48:46-kor előtérbe tette a `tools/wait-for-round.sh /home/ubuntu/ss-sonnet-impl-e13-r14 540`
+hívást. 15:51:11-kor **kívülről érkezett rá egy megszakítás** — a naplóban egymás
+után a `tool_result` `is_error=true` „The user doesn't want to proceed with this
+tool use…" és a `[Request interrupted by user for tool use]` sor —, **követő
+prompt nélkül**. Ettől kezdve a session üres prompton állt; a `.pipeline/session-E13-R14-20260824T154006.log`
+mtime-ja 15:51-en megállt.
+
+A megszakítás forrása a repón KÍVÜL van (nem a driver: a `tmux send-keys` egyetlen
+hívása az indítás; a párhuzamos E09-R26 session eszközhívásai között nincs tmux-parancs;
+a `claude-session-watch.service` nem küld billentyűt). A repóban mérhető és
+javítható hiba nem a megszakítás volt, hanem ami utána történt.
+
+**A rés.** A driver minden akkori ellenőrzése „rendben"-t adott — jelzésfájl nincs,
+kvóta-minta nincs, a tmux-session él, a pane-en a Claude-process él —, így a
+20 perces elakadás-őr (L174 óta) 16:11:39-kor megölte a sessiont és H-NOSIGNAL-t
+jelzett. Közben az implementer **16:03:33-kor `status=done`-nal befejezte a kört**
+(`/home/ubuntu/ss-sonnet-impl-e13-r14/.codex-round-status`, `head=845d3c93`,
+27/27 új teszt). A lánc tehát egy **kész kört ejtett el**, mert senki nem szólt az
+üres prompton álló sessionhöz.
+
+**A szabály.** Az elakadás-őrnek volt **felismerése**, de nem volt **helyreállítása**.
+Egy üres prompton álló interaktív session önmagától sosem indul újra — csak
+kívülről éleszthető, és a driver kezében pont ott van az eszköz (`tmux send-keys`),
+amivel elindította. Ha egy őr terminális ága egy MÉG MENTHETŐ állapotot is megöl,
+az őr nem szigorú, hanem pontatlan: előbb a legolcsóbb helyreállítást kell
+megpróbálni, és csak utána ölni.
+
+**A javítás.** `run_tmux_session` elakadás-ága korlátos **ELAKADÁS-ÉBRESZTŐ**-t kapott:
+néma panel + a pane-en ÉLŐ interaktív Claude-process (ugyanaz a `ps -t <pane_tty> -o comm=`
+mérés, amit a driver már használ) → beküld egy folytatás-promptot, és a következő
+teljes elakadás-ablakot adja a válaszra. A referencia a napló mtime-ja ÉS az utolsó
+ébresztés közül a későbbi — a naplófájlt (a bizonyítékot) nem írjuk át hamis mtime-mal.
+Az ébresztés-keret `PIPELINE_ORCH_STALL_NUDGES` (alap: 1); `0` a javítás előtti
+viselkedést adja. **Az őr nem gyengült:** a keret kimerülése után a `break`/kill
+változatlanul lecsap — csak nem az ELSŐ néma ablak dönt. A `codex exec` panel a
+promptot argv-ből kapja, oda stdin-re küldött szöveg nem ér el, ezért ott a minta
+nem illeszkedik és a viselkedés változatlan.
+
+**Ár.** Egy valóban menthetetlen session halála egy elakadás-ablakkal (alapon
+20 perc) később következik be. Ez az ár tudatos: az E13-R14-ben a másik oldalon egy
+teljes, zölden befejezett kör állt.
+
+**Őrteszt:** `tools/tests/test_round_pipeline_stall_nudge.py` — három cella:
+(1) néma, de élő panel → ébresztés megy be és a kör jelez (`RESULT_EXIT=0`, nincs kill);
+(2) kimerített keret → az őr ugyanúgy öl, pontosan EGY ébresztés után;
+(3) `PIPELINE_ORCH_STALL_NUDGES=0` → a javítás előtti viselkedés.
+A javítás ELŐTT az (1) és (2) cella PIROS (mérve `origin/main` `tools/round-pipeline.sh`-sal:
+„ELAKADÁS: a(z) nudge-probe … leállítjuk" már az első néma ablakban), UTÁNA zöld.
+
+**NOTE (nem ez okozta a haltot, de mérve).** A `tools/wait-for-round.sh` baseline-markere
+(`.wait-for-round-baseline`) ÜRESEN maradhat, ha az első híváskor még nincs
+`signalled_at` a jelzésfájlban (mérve: 0 bájt, 15:48). Üres baseline mellett a
+`[ -z "$baseline" ]` ág MINDEN terminális státuszt azonnal elfogad — egy kör után
+bent maradt üres marker egy KÖVETKEZŐ kör friss hívásának is elavult `done`-t
+adhatna vissza. Az E13-R14-nél ez véletlenül a helyes eredményt adta (a `done` ezé a
+köré volt), ezért itt nem javítottuk — külön kör tárgya.
