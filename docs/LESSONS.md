@@ -17710,3 +17710,80 @@ Külön cella köti a predikátumot a CI igazságához: ha a `tool/ui_inventory.
 képernyő-szabálya vagy a teszt `hasLength(...)` alakja megváltozik, a teszt
 pirosra vált, hogy az `S9` ne avuljon el némán. A korpusz-cella pedig azt
 állítja, hogy egyetlen már lefutott kör sem kap visszamenőleg leletet.
+
+## L466 — Ha a pre-flight egy MEGLÉVŐ tokent ÚJ szerepbe állít (háttér → előtér), a szerepet is meg kell mérni: az `SsColorScheme.syncPending` előtérbe irányítva `ratio=1.01`, azaz láthatatlan badge (E13-R12, 2026-08-24)
+
+**Mérve.** Az E13-R12 §0.0/D4 pre-flight-revízió — helyesen felmérve, hogy
+`local`/`cloud` következtetési-hely típus ma nem létezik — kimondta, hogy a
+badge-ek a MEGLÉVŐ tokenekből olvassanak, és külön utasította: a `syncPending`
+badge „ikonját a badge-fájl adja meg, de a SZÍNT a `syncPending` tokenből
+veszi". A token LÉTEZETT, tehát a pre-flight grep-je zöld volt — csak épp
+`SsColorScheme.syncPending` értéke `palette.track`, **ugyanaz**, amit a séma
+`surfaceSunken`-ként, azaz HÁTTÉRKÉNT használ. Előtérbe irányítva a badge a
+saját kártyahátterével íródott:
+
+```
+PROBE light  status.syncPending: ratio=1.21
+PROBE dark   status.syncPending: ratio=1.01      ← a DEFAULT téma
+PROBE highContrast status.syncPending: ratio=1.01
+```
+
+A felhasználó a „Szinkronizálás függőben" jelzés helyén **üres helyet** látott,
+mindhárom témában. Az implementer betűre követte a briefet; a hiba a
+pre-flighté.
+
+**A hibaosztály.** A pre-flight két mérési szabálya (elérhetetlen cél-státusz,
+erőforrás-tulajdonlás) azt kérdezi: *létezik-e* az, amire a brief hivatkozik.
+Itt minden létezett. A meg nem mért kérdés az volt, hogy a token az ÚJ
+szerepében is helytálló-e. Egy szín-token nem önmagában „jó" vagy „rossz" —
+csak egy adott előtér/háttér PÁRBAN az; a `track` háttérként kifogástalan.
+
+**Következmény.** Ha a pre-flight egy meglévő tokent (színt, méretet, küszöböt)
+olyan szerepbe állít, amelyben ma NEM használatos, a §0.0 revízió mérje meg a
+szerepet is — színnél a tényleges kontrasztot a tényleges háttér ellen —, ne
+csak a létezést. Ugyanez fordítva: ha a review egy ilyen leletet talál, a brief
+hibás sorát is helyesbíteni kell (a kör saját, még nem merge-elt artefaktuma,
+ADR 0087 §2), különben egy későbbi kör normatív igazságként olvassa.
+
+**Őrteszt:** `test/core/design_system/cards/ss_badges_test.dart`::`fix1/F1+F2 — every badge label meets the project 4.5:1 text-contrast floor, against the surface it actually renders on, in every theme` — 21 cella (3 téma × [5 `SsStatusBadgeKind` + 2 `SsProvenanceKind`]), a KIRENDELT `Text.style.color`-ral és a tényleges `SsElevation.raised` háttérrel, nem a token feltételezett értékével. Valódi-sértés próbával mérve: a `textPrimary` → `syncPending` visszamutálás **15 cellát** vált pirosra.
+
+## L467 — A `scope-audit.py` bázisa a felolvasztott `origin/main` legyen, ne a merge ELŐTTI elágazási pont — különben a már merge-elt idegen munka „listán kívüli útvonalnak" látszik, és hamis H3-at szül (E13-R12, 2026-08-24)
+
+**Mérve.** Az E13-R12 folytatásakor a kör-branchbe ADR 0087 §0.3 szerint be
+kellett olvasztani az `origin/main`-t (E09-R23/R24). A scope-auditot előbb a
+merge ELŐTTI elágazási pontról futtattam:
+
+```
+$ python3 tools/scope-audit.py --repo <klón> --brief <brief> --base 69679bb5
+Legacy scope audit FAILED (69679bb5794a..933aa285bbef, 48 changed path(s), 3 generated/ignored)
+- path outside allowed scope: backend/app/community/services/club_service.py
+- protected path changed: docs/execution/pipeline-queue.tsv
+… (28 sor)
+```
+
+Egyetlen felsorolt útvonal sem a köré volt: mind az E09-R23/R24 **már
+merge-elt** munkája, beleértve egy „protected path changed" sort is. Ugyanaz a
+diff az `origin/main` bázisáról:
+
+```
+$ python3 tools/scope-audit.py --repo <klón> --brief <brief> --base 2c0f9842
+Legacy scope audit OK (2c0f9842ef7e..933aa285bbef, 17 changed path(s), 1 generated/ignored)
+```
+
+**Miért fontos.** A `VIOLATION` az ADR 0138 szerint automatikusan legalább
+MAJOR, a „tilos zóna" pedig H3 halt-ok. Egy folytatáskori orchesztrátor, aki a
+rossz bázisról mér, pontosan azt a hamis-H3 mintát futtatja újra, amit már
+kétszer mértünk (E99-R08 a saját review-jelentésre, E99-R19 a brief
+`allowed_paths`-ában FELSOROLT fájlra). A kör hozzájárulása definíció szerint a
+`main`-hez képesti diff — az upstream-merge behozta commitok nem a kör
+változtatásai.
+
+**Következmény.** Az `--base` mindig a **felolvasztott** `origin/main` SHA-ja
+legyen (`git rev-parse origin/main` a merge után), nem a `merge-base`. Ha
+mégis a fork-pontról mérsz, a kimenetet a merge-elt upstream ismeretében
+olvasd, és NE jelezz H3-at olyan útvonalra, amelyet nem a kör commitjai
+érintettek — a `git log --oneline <base>..HEAD` megmutatja, melyik commit hozta.
+
+**Őrteszt:** nincs — ez orchesztrátori mérési sorrend, nem kódviselkedés; a
+véletlen ismétlést a fenti két parancs-kimenet szembeállítása zárja.
+
