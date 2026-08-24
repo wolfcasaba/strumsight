@@ -1,6 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../../l10n/app_localizations.dart';
+import '../../foundation/app_failure.dart';
+import '../components/feedback/failure_presentation.dart';
+import '../components/feedback/ss_async_state.dart';
+import '../components/feedback/ss_empty_state.dart';
+import '../components/feedback/ss_failure_state.dart';
+import '../components/feedback/ss_permission_state.dart';
 import '../components/surfaces/ss_card.dart';
 import '../components/surfaces/ss_hero_card.dart';
 import '../components/surfaces/ss_surface.dart';
@@ -158,6 +165,8 @@ final class _ComponentCatalogScreenState
                           ),
                       ],
                     ),
+                    const SizedBox(height: SsSpacing.space4),
+                    const _AsyncFeedbackShowcase(),
                   ],
                 ),
               ),
@@ -172,6 +181,76 @@ final class _ComponentCatalogScreenState
     return IconButton(
       onPressed: () => setState(() => _selectedTheme = theme),
       icon: Icon(icon),
+    );
+  }
+}
+
+/// Demonstrates the Ch13 Kör 10 feedback state matrix — empty, failure,
+/// permission, and the offline cached-content overlay (ADR 0277).
+///
+/// English-only: the catalog is a dev-only surface with no localized product
+/// copy of its own (D7); [lookupAppLocalizations] resolves the mapping
+/// without depending on a `Localizations` ancestor.
+final class _AsyncFeedbackShowcase extends StatelessWidget {
+  const _AsyncFeedbackShowcase();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    final offlinePresentation = SsFailurePresentation.from(
+      l10n,
+      const NetworkFailure(code: FailureCode.networkUnavailable),
+    );
+    final permissionPresentation = SsFailurePresentation.from(
+      l10n,
+      const PermissionFailure(
+        code: FailureCode.permissionMicrophoneDenied,
+        retryable: false,
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 120,
+          child: SsAsyncState(
+            status: SsAsyncStatus.offline,
+            content: const Center(child: Text('Cached content stays visible')),
+            skeleton: const Center(child: CircularProgressIndicator()),
+            loadingSemanticLabel: 'Loading',
+            emptyState: const SizedBox(),
+            failureState: const SizedBox(),
+            permissionState: const SizedBox(),
+            blockedState: const SizedBox(),
+            offlineBanner: const Text('You are offline'),
+            syncPendingBanner: const Text('Syncing…'),
+            degradedBanner: const Text('Degraded mode'),
+          ),
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsEmptyState(
+          icon: Icons.library_music_outlined,
+          title: 'No songs yet',
+          message: 'Add your first song to build a setlist.',
+          actionLabel: 'Add a song',
+          onAction: () {},
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsFailureState(
+          presentation: offlinePresentation,
+          onRetry: () {},
+          onContinueOffline: () {},
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsPermissionState(
+          kind: SsPermissionKind.microphone,
+          rationale: 'StrumSight needs the microphone to hear you play.',
+          consequence: 'Without it, chord detection cannot run.',
+          presentation: permissionPresentation,
+          onOpenSettings: () {},
+        ),
+      ],
     );
   }
 }
