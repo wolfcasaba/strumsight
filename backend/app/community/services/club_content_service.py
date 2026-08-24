@@ -58,8 +58,8 @@ from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
+    ForeignKeyConstraint,
     Integer,
-    MetaData,
     Table,
     delete,
     func,
@@ -68,6 +68,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session as SASession
 
+from ...database import Base
 from ..models.challenge import (
     CHALLENGE_TYPE_CLUB,
     CommunityChallenge,
@@ -164,34 +165,37 @@ CLUB_CHALLENGE_END_AUTHORIZED_ROLES: Final[frozenset[str]] = frozenset(
 # Defined here with SQLAlchemy ``Table`` so the service module
 # owns the schema-side definition in a single file (no new
 # ``models/`` file is created). The table is registered against
-# a PRIVATE ``MetaData`` (NOT ``Base.metadata``) so the migration-
-# contract guard (``test_upgrade_head_matches_current_orm_schema``)
-# does NOT detect the new table — the production alembic
-# migration that ships the table for real is a follow-up round
-# (the §10 implementation handoff flags this gap).
+# the project-wide ``Base.metadata`` so the migration-contract
+# guard (``test_upgrade_head_matches_current_orm_schema``) sees
+# the new table as part of the expected schema — the round-12
+# drift guard is the load-bearing invariant the E09-R25 review
+# flagged. The matching production migration lives in
+# ``backend/alembic/versions/e09_r25_0019_community_club_pinned_posts.py``.
 # ---------------------------------------------------------------------------
 
 
-_pinned_metadata = MetaData()
+# SQLite-shared variant — same BigInteger / Integer-on-SQLite seam as
+# the rest of the community module (ADR 0396 §1).
+_bigint = BigInteger().with_variant(Integer(), "sqlite")
 
-# NOTE: the columns below are plain BigInteger — the FK
-# constraints are added via raw SQL in the test fixture (and
-# will be added in the production alembic migration). Defining
-# the Table on a PRIVATE ``MetaData`` (not ``Base.metadata``)
-# keeps the migration-contract guard (``test_upgrade_head_
-# matches_current_orm_schema``) green — it does NOT see the
-# new table until the production migration lands. The §10
-# handoff flags this gap.
 community_club_pinned_posts = Table(
     "community_club_pinned_posts",
-    _pinned_metadata,
-    Column("club_id", BigInteger().with_variant(Integer, "sqlite"), primary_key=True),
-    Column("post_id", BigInteger().with_variant(Integer, "sqlite"), primary_key=True),
+    Base.metadata,
+    Column("club_id", _bigint, primary_key=True),
+    Column("post_id", _bigint, primary_key=True),
     Column("pinned_at", DateTime(timezone=True), nullable=False),
-    Column(
-        "pinned_by_profile_id",
-        BigInteger().with_variant(Integer, "sqlite"),
-        nullable=False,
+    Column("pinned_by_profile_id", _bigint, nullable=False),
+    ForeignKeyConstraint(
+        ["club_id"],
+        ["community_clubs.id"],
+        ondelete="CASCADE",
+        name="fk_community_club_pinned_posts_club",
+    ),
+    ForeignKeyConstraint(
+        ["post_id"],
+        ["community_posts.id"],
+        ondelete="CASCADE",
+        name="fk_community_club_pinned_posts_post",
     ),
 )
 

@@ -21,10 +21,11 @@ regression cases:
   two consecutive pages.
 
 The fixtures follow the Kör 22 / Kör 23 / Kör 24 pattern — own
-SQLite engine + alembic upgrade head + a manual
-``Base.metadata.create_all`` step for the inline
-``community_club_pinned_posts`` table (the §10 handoff flags
-that the production migration is a follow-up round).
+SQLite engine + alembic upgrade head. The inline
+``community_club_pinned_posts`` table now ships with its own
+alembic migration (E09-R25 follow-up — the §0.0d addendum) and is
+registered on the project-wide ``Base.metadata``, so the fixture
+relies on the alembic upgrade alone to materialise it.
 """
 
 from __future__ import annotations
@@ -95,12 +96,14 @@ def _alembic_config() -> Config:
 def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
     """File-backed SQLite engine with the full alembic chain applied.
 
-    After the alembic upgrade, the fixture calls
-    ``Base.metadata.create_all`` to materialise the inline
-    ``community_club_pinned_posts`` table that the service
-    module declares. The production migration that ships the
-    table for real is a follow-up round (the §10 handoff
-    documents this gap).
+    The fixture runs ``alembic upgrade head`` against a private
+    SQLite database; the migration chain — including the E09-R25
+    ``e09_r25_0019_community_club_pinned_posts`` migration — is the
+    sole schema-authoritative source. The inline
+    ``community_club_pinned_posts`` table is registered on the
+    project-wide ``Base.metadata`` so the migration-contract guard
+    (``test_upgrade_head_matches_current_orm_schema``) sees it as
+    part of the expected schema (the §0.0d review addendum).
     """
     db_path = tmp_path / "club_content.db"
     db_url = f"sqlite:///{db_path}"
@@ -113,23 +116,6 @@ def session_factory(tmp_path, monkeypatch) -> Iterator[sessionmaker[Session]]:
         connect_args={"check_same_thread": False},
     )
     enable_sqlite_foreign_keys(engine)
-    # The pinned table is registered against a PRIVATE
-    # ``MetaData`` in the service module — its creation is
-    # the extra ``create_all`` step below. The table is NOT
-    # in ``Base.metadata`` so the migration-contract guard
-    # (``test_upgrade_head_matches_current_orm_schema``)
-    # does not see it — the production migration is a
-    # follow-up round (§10 handoff flags this).
-    #
-    # FK constraints are omitted from the inline Table so the
-    # private MetaData does not depend on Base.metadata's
-    # tables. The production alembic migration will declare
-    # the FKs as part of the new table (with CASCADE delete
-    # matching the Kör 24 club-membership FK semantics).
-    svc._pinned_metadata.create_all(
-        bind=engine,
-        tables=[svc.community_club_pinned_posts],
-    )
     factory = sessionmaker(
         bind=engine,
         autoflush=False,
