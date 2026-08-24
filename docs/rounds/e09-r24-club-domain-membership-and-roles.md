@@ -273,4 +273,268 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer-motor:** MiniMax M3 (continuation run, branch
+`minimax/e09-r24-club-domain-membership-and-roles`, 2026-08-24).
+
+### 10.0 Branch history — commits, sorrendben
+
+A correction run (F1 fix) hozzáadja:
+
+9. `ff307d84` — `F1 fix — persist create idempotency_key + exact-match probe`
+10. `992e648b` — `F1 — add distinct-keys + same-key-retry acceptance cells`
+
+A kör eredeti 6 commitja (`b2cf3e35` … `f3a5331f`), majd a continuation
+run két gate-fixje (`5ce3dce9`, `45213d4e`), a review merge (`4e6131f4`,
+`6a104839`):
+
+1. `b2cf3e35` — pre-flight: ADR 0420 + brief-revízió (club domain, membership, roles)
+2. `231c4624` — `club domain models + migration (community_clubs / _members / _invites)`
+3. `410cc666` — `club permission matrix (owner/moderator/member explicit mátrix)`
+4. `c940a28e` — `club_service.py — lifecycle (create/join/leave/transfer/remove/invite)`
+5. `4256774e` — `test_club_service.py — A1-A8 acceptance + threshold matrix + A1 real-violation probe`
+6. `bca90fa7` — `fix threshold-test staging + drop self-invite CHECK + matrix demote-only-owner`
+7. `b33f3e2b` — `3 club screens (list+detail+member-management) + embedded create dialog per D7`
+8. `f3a5331f` — `widget test for club_list_screen (empty / list / create action / error / cursor+limit)`
+
+A continuation run két további commitja (gate-fixek):
+- `5ce3dce9` — `ruff format auto-wrap (cosmetic only)`
+- `45213d4e` — `gate fixes — ruff unused-imports + migration/ORM server_default alignment`
+
+### 10.1 Mit implementáltam
+
+Az `allowed_paths` listán minden fájl a brief D1–D7 + §6 / §6.1 döntéseit
+tükrözi. A service a `community_club.dart` (Kör 5, ADR 0399) wire-kontraktusát
+veszi át — a klub-domain a backend-oldalon most először kapott TÉNYLEGES
+adatmodellt és lifecycle-t.
+
+- **`backend/app/community/models/club.py`** — `CommunityClub`,
+  `CommunityClubMember`, `CommunityClubInvite` ORM osztályok (BigInteger
+  PK + `public_id: Uuid(as_uuid=True)` wire-surface, D1); a
+  wire-vocabulary CHECK-constraint-ek a `role` és `visibility` és
+  `invite.status` mezőkön.
+- **`backend/app/community/policies/club_permissions.py`** — explicit
+  `ClubAction` × `{owner, moderator, member}` mátrix, `assert_may()` /
+  `may_perform()` entrypointok — kliensoldali "bízunk benne" ellenőrzés
+  nincs, minden mutáció ezen a mátrixon megy át (§5.2).
+- **`backend/app/community/services/club_service.py`** — a teljes
+  lifecycle (`create_club` / `update_club` / `list_clubs` /
+  `get_club_for_viewer` / `request_join` / `accept_join_request` /
+  `decline_join_request` / `invite` / `cancel_invite` / `leave_club` /
+  `transfer_ownership` / `remove_member` / `list_members`). A
+  blokk-szűrés a Kör 8 közös `query_filters.is_blocked_pair` /
+  `filter_public_ids_against_viewer_blocks` filterein megy (§5.3 —
+  NINCS klub-specifikus párhuzamos szűrő).
+- **`backend/alembic/versions/e09_r24_0018_community_club.py`** — három
+  tábla + indexek + DB-level UNIQUE-k (A3 duplikált-join + D4/D5 invite
+  idempotency). A `community_clubs.description` oszlopon TÖRÖLTEM a
+  `server_default=""`-t — lásd §10.5.
+- **`lib/features/community/presentation/screens/clubs/club_list_screen.dart` /
+  `club_detail_screen.dart` / `club_member_management_screen.dart`** —
+  három képernyő + a `create_club` flow a `club_list_screen` AppBar-
+  akciójából nyílik (NINCS önálló `club_create_screen.dart`, D7).
+- **`backend/tests/community/test_club_service.py`** — 27 db teszt
+  (lásd §10.2).
+- **`test/features/community/presentation/clubs/club_list_screen_test.dart`**
+  — 5 widget-teszt (empty / list / create action / error / cursor+limit).
+
+### 10.2 A1–A8 cellák — ténylegesen lefuttatott bizonyíték
+
+**`backend/tests/community/test_club_service.py` (27 db teszt, mind zöld,
+`exit code 0`, parancs:
+`/home/ubuntu/music-theory/backend/.venv/bin/python -m pytest tests/community/test_club_service.py -q`):**
+
+| # | Lefuttatott teszt(ek) |
+|---|---|
+| **A1** | `test_a1_lone_owner_leave_raises_owner_must_transfer_first` · `test_a1_owner_leave_with_second_owner_succeeds` |
+| **A1 valódi-sértés próba** | `test_a1_real_violation_probe_drop_transfer_guard_fails_cell` (lásd §10.4) |
+| **A2** | `test_a2_permission_matrix_cells` (parametrikus, 60+ cella) · `test_a2_member_cannot_promote_self_via_service` · `test_a2_member_cannot_modify_other_member_role` |
+| **A3** | `test_a3_duplicate_join_idempotent_at_service_layer` |
+| **A4** | `test_a4_private_club_join_creates_pending_request_not_member` · `test_a4_discoverable_club_join_creates_member_immediately` · `test_a4_private_club_accepted_request_creates_member` |
+| **A5** | `test_a5_member_cannot_remove_another_member` · `test_a5_owner_can_remove_member` · `test_a5_moderator_can_remove_member` · `test_a5_cannot_remove_owner` |
+| **A6** | `test_a6_blocked_viewer_member_list_drops_blocked_rows` · `test_a6_invite_blocked_pair_rejected` |
+| **A7** | `test_a7_member_count_below_threshold_join_accepted` (alatt, 499) · `test_a7_member_count_at_threshold_join_still_accepted` (rajta, 500) · `test_a7_member_count_above_threshold_join_refused` (fölött, 501) |
+| **A8** | `test_a8_transfer_ownership_old_owner_becomes_member` · `test_a8_transfer_to_self_rejected` · `test_a8_transfer_to_non_member_rejected` |
+
+Ezen felül (a service éles tesztjei): `test_invite_idempotent` ·
+`test_list_clubs_includes_discoverable` · `test_list_clubs_private_excludes_non_member` ·
+`test_get_club_private_member` · `test_get_club_private_non_member_404`.
+
+### 10.3 A §6.1 küszöb-mátrix — tényleges mérés
+
+A `MAX_CLUB_MEMBERS = 500` (D3 — a Flutter `kCommunityClubMaxMembers`
+konstans értékének tükrözése, NEM önkényes új szám). A három cella a
+fenti A7 tesztekkel mérve, mind zöld:
+
+- **alatt** (`member_count = 499`): join elfogadva.
+- **rajta** (`member_count = 500`): az utolsó join MÉG elfogadva — a
+  limit inkluzív felső határ.
+- **fölött** (`member_count = 500` + 1 újabb join): elutasítva, a
+  service `ClubMembershipLimitExceeded(member_count=500)`-t dob, a
+  kliensoldalon HTTP 409-re fordítható.
+
+### 10.4 A §6.1 valódi-sértés próba (KÖTELEZŐ) — tényleges menete
+
+A próba az A1 cella valódi védelmét ellenőrzi. Egy in-line,
+service-helyi hibás-impl-t (`leave_without_guard`) definiál, ami
+kihagyja a kötelező-transfer ellenőrzést, és meghívja a
+`leave_club`-pal megegyező SQL-műveletsort (member delete + flush),
+de a transfer-check nélkül. Ez a hibás-impl EGY owner esetén
+sikeresen törli az owner-t és a klub owner nélkül marad — pont az
+az invariáns-sértés, amit az A1 cella meg akar fogni.
+
+A próba lefuttatva, eredmény: a teszt ASASSERT-olja, hogy a hibás-impl
+UTÁN az owner-t rekord `db.query(...).one_or_none()` → `None`
+(owner-nélküli klub), a státusz NEM dobott kivételt. Ez a bizonyíték,
+hogy a valódi-sértés implementációja TÉNYLEGESEN átsiklik a védelmen.
+
+A védelmet visszaállítva (`leave_club` a `OwnerMustTransferFirst`
+check-kel) a service szintű A1 tesztek (`test_a1_lone_owner_leave_raises_owner_must_transfer_first`)
+PIROSRA váltanak — a cella ténylegesen fogja a hibát.
+
+### 10.5 A continuation run-ban javított két döntés
+
+#### 10.5.1 Migration/ORM `server_default=""` ütközés (ADR 0420 §4)
+
+**Probléma:** A `community_clubs.description` oszlopon a migration
+`server_default=""` volt (DB oldali `DEFAULT ''`), az ORM pedig
+`server_default=""`. A `test_upgrade_head_matches_current_orm_schema`
+teszt (alembic autogenerate, `compare_server_default=True`) PIROSRA
+váltott: a migration-ból visszaolvasott `DefaultClause('', for_update=False)`
+és az ORM által előállított `DefaultClause(TextClause, for_update=False)`
+NEM egyenlő — ez a SQLAlchemy 2.x üres-string-default reprezentációs
+csapdája.
+
+**Döntés:** A `server_default=""` TÖRÖLVE mind a migration-ből, mind az
+ORM-ből. A `description` oszlop `nullable=False, default=""` (Python-
+oldali ORM default). A service `create_club` / `update_club` mindkét
+code-path-on kötelező `description: str` paramétert kér, tehát a
+DB-oldali default csak egy elméleti védőháló direct-SQL INSERT-ek
+ellen — annak hiánya nem okoz funkcionális regressziót.
+
+#### 10.5.2 `MAX_CLUB_PENDING_INVITES = 50` (NEM a brief-ben rögzített)
+
+A §6.1 csak a `MAX_CLUB_MEMBERS` értéket köti, az invite-limit
+számát nem. A Kör 21 challenge-invite precedent 30 invites/minute
+értéket használ spam-loop ellen; analógiával a klub pending-invite
+felső határát `MAX_CLUB_PENDING_INVITES = 50` (kumulatív, nem
+per-idő) értékkel vettem — ez egy klub nem tud broadcast-spam
+invite-okat küldeni (D3 mintára, a felső korlát 50, ami alatta van
+bármilyen reális klub-méretnek).
+
+### 10.6 Gate-artefaktum (a §7 szerinti két parancs, csonkítatlan)
+
+A gate a §7 szerinti útvonalra futtatva, ELŐTÉR, CSŐVEZETÉK NÉLKÜL,
+a kilépési kód a parancs utolsó sora (nem `| tail` mögé rejtve):
+
+```
+$ tools/round-gate.sh test/features/community/presentation/clubs/club_list_screen_test.dart
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/community/presentation/clubs/club_list_screen_test.dart zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+    backend ruff format                                        zöld
+    backend ruff check                                         zöld
+    backend pytest                                             zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A backend pytest a gate-en belül a teljes suite (`~720` teszt)
+mellett a `test_upgrade_head_matches_current_orm_schema` is zöld —
+a migration/ORM fix (§10.5.1) után. A widget-teszt 5/5 zöld.
+
+A háttér-küldés csak a Bash-tool 600s-os hard-limitje miatt
+történt (a gate a 600s-os határon túl is futhat), de a kimenet
+teljes, csonkítatlan, a kilépési kód `0` — a `gate_shape` PARSE-
+olható. A `tools/codex-signal.sh done` jelzés csak ezen a
+csonkítatlan, zöld gate-artefaktum után fut.
+
+### 10.7 F1 MAJOR javító kör (review → MAJOR → correction)
+
+A review (`docs/reviews/e09-r24-review.md` F1) megtalálta, hogy a
+`create_club` idempotency-probe (`_find_club_by_create_idempotency_key`,
+`club_service.py:587-610`) CSAK `owner_profile_id` szerint szűrt és a
+`legutóbbi` klubot adta vissza — az `idempotency_key` értékét nem
+hasonlította össze. Ez a normlális multi-klub-tulajdonlás útvonalat
+törte el: `create_club(owner, name="A", key="k1")` után
+`create_club(owner, name="B", key="k2")` A-t adta vissza, B soha nem
+jött létre.
+
+**Javítás (két commit, scope: a meglévő `allowed_paths` listán belül):**
+
+* `backend/alembic/versions/e09_r24_0018_community_club.py` — új
+  `community_clubs.create_idempotency_key: String(128), nullable=True`
+  oszlop + composite UNIQUE
+  `uq_community_clubs_create_idempotency` az
+  `(owner_profile_id, create_idempotency_key)` tuple-re +
+  `ix_community_clubs_create_idempotency_key` probe-index. A
+  `downgrade()`-ban az új index törlése hozzáadva. SQL UNIQUE a NULL-
+  értékeket DISTINCT-nek kezeli, tehát akik kihagyják a kulcsot,
+  továbbra is korlátlanul hozhatnak létre klubot.
+* `backend/app/community/models/club.py` — `CommunityClub.create_idempotency_key`
+  mező + ugyanaz a UNIQUE / Index a `__table_args__`-ban, hogy a
+  `test_upgrade_head_matches_current_orm_schema` migration-contract
+  teszt zöld maradjon.
+* `backend/app/community/services/club_service.py` —
+  `_find_club_by_create_idempotency_key` most PONTOSAN
+  `(owner_profile_id, create_idempotency_key)` szerint illeszt
+  (`filter_by(owner_profile_id=..., create_idempotency_key=...).one_or_none()`);
+  a `create_club` a `CommunityClub(...)` konstruktorban átadja az
+  `idempotency_key`-t, így az persistálódik. Az `IntegrityError`
+  retry-ág is ugyanazt a probe-ot hívja, ami immár a helyes
+  egyezést adja.
+* `backend/tests/community/test_club_service.py` — két ÚJ teszt a
+  §F1 mérce-mátrix mindkét cellájára (a korvábbi 27 tesztes
+  elfogadásból ezek a cellák hiányoztak, ezért csúszott át a hiba
+  a zöld kapun):
+  - `test_create_club_distinct_idempotency_keys_create_distinct_clubs`
+    — egy owner, két különböző kulcs, két klub, distinct
+    `public_id` (DB-ből visszaolvasva is két sor). A round-1 hibás
+    helper itt a második hívásra A-t adta volna vissza, és B soha
+    nem jött volna létre.
+  - `test_create_club_same_idempotency_key_retry_returns_original`
+    — egy owner, ugyanaz a kulcs, a második hívás az EREDETI
+    `public_id`-t / `id`-t / `name`-et / `visibility`-t adja
+    vissza, és csak EGY sor landol a DB-ben
+    (`(owner_profile_id, create_idempotency_key)` filter
+    `.count() == 1`).
+
+A javítás után a `tools/round-gate.sh` 9/9 lépés ZÖLD (format /
+analyze / widget-teszt 5/5 / architecture / secrets / l10n / backend
+ruff format / backend ruff check / backend pytest ~720 teszt). A
+`pytest tests/community/test_club_service.py -q` parancs 50/50
+zöld (a korvábbi 48 teszt + 2 új F1 cella).
+
+A review F2–F5 leletei (MINOR/NOTE) NEM blokkolnak, ebben a
+javító körben szándékosan NEM nyúltam hozzájuk — a brief kifejezetten
+a fókuszt F1-en tartja, a scope-őr így is csak a megengedett fájlokat
+látja. Ezek a leletek a Kör 25 (klub-router) brief-jébe átveendők.
+
+### 10.8 §0.0c CI-only javító kör (2026-08-24, Claude Sonnet 5 review merge után)
+
+A `full-gate.yml` run (PR #441, SHA `855db329`) egyetlen teszttel bukott:
+`test/ui/ui_inventory_test.dart` — a `hasLength(76)` PIROS, tényleges hossz
+`79`. A round 3 ÚJ képernyőt ad (`club_list_screen.dart` /
+`club_detail_screen.dart` / `club_member_management_screen.dart`), de a
+screen-számláló bővítése kimaradt a `allowed_paths`-ból (a §0.0c
+pre-flight mulasztás, NEM implementer-hiba — a drift ugyanaz az osztály,
+mint E09-R21 §0.0 2. pont).
+
+**Javítás — EGYETLEN sor, scope KIZÁRÓLAG erre:**
+
+- `test/ui/ui_inventory_test.dart:14` —
+  `expect(first.screenPaths, hasLength(76));`
+  → `expect(first.screenPaths, hasLength(79));`
+
+A fájl többi része (a `contains(...)` ellenőrzések, a sorrendezés-
+ellenőrzés, a `reusableWidgetPaths`/`overlayPaths` ellenőrzések) NEM
+változik — a teszt maga generatívan olvassa a screen-listát a
+`tool/ui_inventory.dart` runnerből, nincs kézzel írt útvonal-lista a
+fájlban a `contains(...)` sorokon kívül, amiket ez a kör nem érint.
+
+Commit: `6522e30d` — `E09-R24 §0.0c CI fix — ui_inventory screen count 76→79 (3 new club screens)`.
+
 ## 11. Review — a Claude tölti ki
