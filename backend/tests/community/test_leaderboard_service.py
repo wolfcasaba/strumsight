@@ -1228,3 +1228,98 @@ def test_own_rank_returns_null_when_opted_out(session_factory) -> None:
         ),
     )
     assert entry is None
+
+
+def test_own_rank_friends_challenge_returns_self_even_without_self_follow(
+    session_factory,
+) -> None:
+    """F1 (review) — on a ``friends``-type challenge, the viewer's
+    own rank MUST be returned even if the viewer does NOT follow
+    themselves and no one follows them. The pre-fix behaviour was
+    that ``get_own_rank`` would always return ``None`` for a
+    legitimate opt-in, verified participant on a friends-scope
+    challenge, because the follow-graph filter required a
+    self-follow edge that the UI never creates.
+
+    The pre-fix probe (per §10 valódi-sértés próba) was: assert
+    ``entry is None`` after the fix, document that assertion
+    failing under the old code (the test is structured so the
+    post-fix expected value is the new behaviour, and the
+    pre-fix value would be ``None`` — verified by running the
+    test against ``git show 1d4bb87d:backend/app/community/
+    services/leaderboard_service.py`` in §10).
+    """
+    author, _ = _make_user_with_headers(
+        session_factory, user_id=120, email="author120@s.test"
+    )
+    viewer, _ = _make_user_with_headers(
+        session_factory,
+        user_id=121,
+        email="viewer121@s.test",
+        display_name="Self Lookup",
+        handle="self_lookup",
+    )
+    # A second opt-in, verified participant that the viewer also
+    # does NOT follow — the projection must contain the viewer's
+    # own row (with the fix) and not the other one. This proves
+    # the fix targets the self-lookup, not the friends-scope
+    # filter at large.
+    other, _ = _make_user_with_headers(
+        session_factory, user_id=122, email="other122@s.test"
+    )
+    challenge = _insert_challenge(
+        session_factory, author=author, challenge_type=CHALLENGE_TYPE_FRIENDS
+    )
+    viewer_row = _create_participant(
+        session_factory, challenge=challenge, participant=viewer
+    )
+    other_row = _create_participant(
+        session_factory, challenge=challenge, participant=other
+    )
+    _set_opt_in(session_factory, profile=viewer)
+    _set_opt_in(session_factory, profile=other)
+    # Viewer has a higher metric_value — they should be rank 1.
+    _insert_verified_result(
+        session_factory,
+        participant=viewer_row,
+        metric_value=700,
+        source_event_id="evt-f1-viewer",
+    )
+    _insert_verified_result(
+        session_factory,
+        participant=other_row,
+        metric_value=400,
+        source_event_id="evt-f1-other",
+    )
+    # Explicit assertion that no follow edge is created — the
+    # whole point of the fix is that the viewer does not need
+    # to follow themselves (or anyone) to see their own rank on
+    # a friends-scope challenge.
+    db: Session = session_factory()
+    try:
+        follow_count = (
+            db.query(CommunityFollow)
+            .filter(
+                CommunityFollow.follower_profile_id == viewer.id,
+            )
+            .count()
+        )
+        assert follow_count == 0
+    finally:
+        db.close()
+
+    entry = _service_call(
+        session_factory,
+        lambda db: get_own_rank(
+            db,
+            challenge_public_id=challenge.public_id,
+            viewer_profile_public_id=viewer.public_id,
+        ),
+    )
+    # Post-fix: the viewer's own row is found, with the correct
+    # rank (1 — viewer is the highest metric, and the other
+    # participant is excluded by the friends-scope follow filter).
+    assert entry is not None
+    assert entry.public_id == viewer.public_id
+    assert entry.rank == 1
+    assert entry.metric_value == 700

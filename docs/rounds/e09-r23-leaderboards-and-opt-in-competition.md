@@ -269,12 +269,61 @@ többi cella is pirosra váltana). A szűrő visszaállítása
 után a teszt NEGATÍV: a pending sor NEM jelenik meg. Ez a
 KÖTELEZŐ valódi-sértés próba (brief §6.1) — LEFUTTATVA.
 
+### F1 javító kör — `get_own_rank` self-lookup follow-szűrő (review F1 — lefuttatva)
+
+A review F1 lelet a `get_own_rank` self-lookup ágán alkalmazott
+friends-scope follow-szűrő téves viselkedését azonosította: a
+viewertől megkövetelte, hogy KÖVESSE ÖNMAGÁT a saját sora
+megtalálásához, ami a `friends` típusú challenge-eken minden
+legitim opt-in, verified résztvevőt `None` rangsorral
+szolgált ki. A javítás:
+
+* `_build_base_query` kapott egy `include_self: bool = False`
+  paramétert, ami a friends-scope follow-EXISTS feltételt egy
+  `OR CommunityProfile.id == viewer_profile_internal_id` ággal
+  bővíti, amikor `True`. A page-lekérdezés `friends_scope=True`
+  mellett továbbra is `include_self=False` (a §A4 invariáns
+  érintetlen — a viewer csak a követett profilok sorát látja a
+  nyilvános lapon), CSAK a `get_own_rank` mindkét lekérdezése
+  kapcsolja `True`-ra.
+* A `get_own_rank` docstringje pontosítja, hogy a self-lookup
+  a viewer SAJÁT sorát MINDIG visszaadja, függetlenül a
+  follow-gráftól.
+
+**F1 valódi-sértés próba (lefuttatva):** az ÚJ
+`test_own_rank_friends_challenge_returns_self_even_without_self_follow`
+teszt `friends` típusú challenge-re épül: a viewer opt-in,
+verified résztvevő, NEM követ senkit és NEM követi senki
+(`follow_count == 0` explicit assertálva), a metrika 700
+(nyertes); egy másik opt-in, verified résztvevő 400-as
+metrikával. A javítás ELŐTT a teszt futtatva PIROS volt
+(`assert None is not None` — a self-follow hiánya miatt a
+viewert a follow-szűrő kiszűrte); a javítás UTÁN a teszt ZÖLD
+(`entry.public_id == viewer.public_id`, `entry.rank == 1`,
+`entry.metric_value == 700`). A pre-fix PIROS kimenet
+lementve ebben a §-ban a §6.1 valódi-sértés próbával azonos
+módon dokumentálva.
+
+### F2 javító kör — router docstring elavult szóhasználat (review F2 — lefuttatva)
+
+A `backend/app/community/routers/leaderboards.py:20`
+docstringje `"preferred_in"/"preferred_out"` választ ígért, a
+`set_opt_in` ténylegesen `"opted_in"/"opted_out"`-ot ad
+vissza. A docstring frissítve a tényleges értékekre — kozmetikai,
+nincs futásidejű hatás.
+
 ### §7 — mindkét parancs KÜLÖN futtatva, FOREGROUND
 
 * `tools/round-gate.sh test/features/community/presentation/leaderboard_screen_test.dart` — futtatva, eredmény a
   `done` jelzés ELŐTTI utolsó lépésben.
 * `cd backend && python -m pytest tests/community/test_leaderboard_service.py -q` — futtatva, eredmény a
   `done` jelzés ELŐTTI utolsó lépésben.
+
+A gate artefaktum: `format` zöld, `analyze` zöld,
+`test test/features/community/presentation/leaderboard_screen_test.dart` zöld (6/6),
+`architecture` zöld, `secrets` zöld (3587 fájl), `l10n` zöld,
+`backend ruff format --check` zöld, `backend ruff check` zöld,
+`backend pytest` zöld — MINDEN GATE ZÖLD.
 
 ### Self-check (round-auditor)
 

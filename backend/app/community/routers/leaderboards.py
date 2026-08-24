@@ -16,8 +16,8 @@ and the opt-in toggle:
 * ``PUT   /community/leaderboards/opt-in`` — toggle the caller's
   own opt-in. The PRESENCE of a row in
   ``community_leaderboard_opt_ins`` is the authoritative signal
-  (D2); the response is the echo (``"preferred_in"`` /
-  ``"preferred_out"``).
+  (D2); the response is the echo (``"opted_in"`` /
+  ``"opted_out"``).
 
 The router follows the Kör 21 / Kör 22 pattern — own
 ``_session_factory`` / ``_commit_via`` DI seams, inline Pydantic

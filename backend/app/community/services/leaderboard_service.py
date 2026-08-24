@@ -251,6 +251,7 @@ def _build_base_query(
     challenge_id: int,
     viewer_profile_internal_id: int,
     friends_scope: bool,
+    include_self: bool = False,
 ) -> Any:
     """Build the verified-only leaderboard query.
 
@@ -263,6 +264,15 @@ def _build_base_query(
     * §A4 / §D4 — for ``type='friends'``, the follow-graph
       filter (``follower = viewer``)
     * the ``challenge_id`` predicate (per-challenge leaderboard)
+
+    ``include_self`` is the self-lookup escape hatch — when
+    ``True`` AND ``friends_scope`` is ``True``, the follow-graph
+    filter is widened with an ``OR CommunityProfile.id =
+    viewer_profile_internal_id`` clause so the viewer can
+    always find their OWN row regardless of whether the follow
+    graph contains a self-follow edge (which the UI never
+    creates). The §A4 invariant for the public page query is
+    untouched — only the ``get_own_rank`` self-lookup sets this.
     """
     opt_in_exists = (
         select(CommunityLeaderboardOptIn.id)
@@ -321,7 +331,21 @@ def _build_base_query(
             )
             .exists()
         )
-        stmt = stmt.where(friends_exists)
+        if include_self:
+            # The self-lookup branch (get_own_rank) MUST see the
+            # viewer's own row even if the viewer does not follow
+            # themselves — the friends-scope filter, applied to
+            # the viewer's own profile, would otherwise require a
+            # self-follow edge that the UI never creates, and a
+            # legitimate opt-in verified participant would always
+            # get ``None`` back for their own rank.
+            friends_filter = or_(
+                friends_exists,
+                CommunityProfile.id == viewer_profile_internal_id,
+            )
+        else:
+            friends_filter = friends_exists
+        stmt = stmt.where(friends_filter)
 
     return stmt
 
@@ -532,6 +556,7 @@ def get_own_rank(
         challenge_id=challenge.id,
         viewer_profile_internal_id=viewer_profile.id,
         friends_scope=friends_scope,
+        include_self=True,
     ).where(CommunityProfile.public_id == viewer_profile_public_id)
 
     row = db.execute(stmt.limit(1)).first()
@@ -548,10 +573,16 @@ def get_own_rank(
     ) = row
 
     # Absolute rank — count rows STRICTLY PRECEDING this row.
+    # The rank-count must use the SAME projection as the self-lookup
+    # (include_self=True) so the viewer's own row sits inside the
+    # same friends-scope envelope — otherwise the rank would be
+    # measured against a different set than the one the row was
+    # found in.
     rank_count_stmt = _build_base_query(
         challenge_id=challenge.id,
         viewer_profile_internal_id=viewer_profile.id,
         friends_scope=friends_scope,
+        include_self=True,
     ).where(
         _strictly_precedes_predicate(
             metric_value=metric_value,
