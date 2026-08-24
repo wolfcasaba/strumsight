@@ -14,8 +14,10 @@ import '../../icons/ss_icons.dart';
 /// tooltip and the button semantics itself: the descendant `IconButton`'s
 /// own semantics are excluded entirely (`excludeSemantics: true`, the same
 /// technique [SsIcon.interactive] uses for its own glyph), and this widget's
-/// single [Semantics] node carries `button: true` and [semanticLabel]
-/// instead — never `image`.
+/// single [Semantics] node (`container: true`, its own accessibility
+/// boundary rather than merging into whatever ancestor happens to be
+/// nearby) carries `button: true` and [semanticLabel] instead — never
+/// `image`.
 final class SsIconButton extends StatelessWidget {
   SsIconButton({
     super.key,
@@ -50,6 +52,7 @@ final class SsIconButton extends StatelessWidget {
       message: tooltip,
       excludeFromSemantics: true,
       child: Semantics(
+        container: true,
         button: true,
         label: semanticLabel,
         enabled: onPressed != null,
