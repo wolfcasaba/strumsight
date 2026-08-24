@@ -19,10 +19,15 @@ enum SsStatusBadgeKind {
   confidenceLow,
 }
 
-/// A small icon+text status marker (§5.2), reading its colour from the
-/// EXISTING [SsColorScheme] tokens (ADR 0273) — [SsStatusBadgeKind.syncPending]
-/// has no [SsStatusMarkerKind] of its own (§0.0/D4), so its icon is defined
-/// here while its colour still comes from [SsColorScheme.syncPending].
+/// A small icon+text status marker (§5.2). The icon and label paint from
+/// [SsColorScheme.textPrimary] — a readable text token, not the per-kind
+/// status token (fix1/F1, fix1/F2): [SsColorScheme.syncPending] is itself a
+/// SURFACE token (`palette.track`, reused as [SsColorScheme.surfaceSunken]),
+/// so painting it as foreground text made the sync-pending badge blend into
+/// its own card background, and the other status tokens fall below the
+/// project's 4.5:1 text-contrast floor in at least one theme. The status
+/// token is not used for text painting at all any more; distinctness between
+/// kinds is carried by icon+label alone (§5.2, A2).
 final class SsStatusBadge extends StatelessWidget {
   const SsStatusBadge({super.key, required this.l10n, required this.kind});
 
@@ -34,30 +39,25 @@ final class SsStatusBadge extends StatelessWidget {
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
 
-    final (icon, color, label) = switch (kind) {
+    final (icon, label) = switch (kind) {
       SsStatusBadgeKind.offline => (
         SsStatusMarkers.forKind(SsStatusMarkerKind.offline).icon,
-        colors.offline,
         l10n.dsStatusBadgeOffline,
       ),
       SsStatusBadgeKind.syncPending => (
         Icons.sync_outlined,
-        colors.syncPending,
         l10n.dsStatusBadgeSyncPending,
       ),
       SsStatusBadgeKind.confidenceHigh => (
         SsStatusMarkers.forKind(SsStatusMarkerKind.confidence).icon,
-        colors.confidenceHigh,
         l10n.dsStatusBadgeConfidenceHigh,
       ),
       SsStatusBadgeKind.confidenceMedium => (
         SsStatusMarkers.forKind(SsStatusMarkerKind.confidence).icon,
-        colors.confidenceMedium,
         l10n.dsStatusBadgeConfidenceMedium,
       ),
       SsStatusBadgeKind.confidenceLow => (
         SsStatusMarkers.forKind(SsStatusMarkerKind.confidence).icon,
-        colors.confidenceLow,
         l10n.dsStatusBadgeConfidenceLow,
       ),
     };
@@ -69,9 +69,16 @@ final class SsStatusBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: color),
+          Icon(icon, size: 16, color: colors.textPrimary),
           const SizedBox(width: SsSpacing.space1),
-          Text(label, style: typography.labelLarge.copyWith(color: color)),
+          Flexible(
+            child: Text(
+              label,
+              style: typography.labelLarge.copyWith(color: colors.textPrimary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );

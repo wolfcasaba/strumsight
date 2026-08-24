@@ -17,7 +17,11 @@ enum SsProvenanceKind { local, cloud }
 /// §5.1): whether audio or data left the device is a privacy fact, not a
 /// cosmetic detail. Meaning is carried by icon AND text together, never by
 /// colour alone (§5.2) — [SsProvenanceKind.local] and [SsProvenanceKind.cloud]
-/// resolve to different icons AND different [l10n]-sourced labels.
+/// resolve to different icons AND different [l10n]-sourced labels. Both paint
+/// from [SsColorScheme.textPrimary] rather than [SsColorScheme.localAi]/
+/// [SsColorScheme.cloudAi] (fix1/F2): those status tokens fall below the
+/// project's 4.5:1 text-contrast floor for this exact privacy-relevant label
+/// in the light theme (2.18–2.72:1, measured).
 final class SsProvenanceBadge extends StatelessWidget {
   const SsProvenanceBadge({super.key, required this.l10n, required this.kind});
 
@@ -29,15 +33,13 @@ final class SsProvenanceBadge extends StatelessWidget {
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
 
-    final (markerKind, color, label) = switch (kind) {
+    final (markerKind, label) = switch (kind) {
       SsProvenanceKind.local => (
         SsStatusMarkerKind.localAi,
-        colors.localAi,
         l10n.dsProvenanceBadgeLocalLabel,
       ),
       SsProvenanceKind.cloud => (
         SsStatusMarkerKind.cloudAi,
-        colors.cloudAi,
         l10n.dsProvenanceBadgeCloudLabel,
       ),
     };
@@ -52,10 +54,17 @@ final class SsProvenanceBadge extends StatelessWidget {
           Icon(
             SsStatusMarkers.forKind(markerKind).icon,
             size: 16,
-            color: color,
+            color: colors.textPrimary,
           ),
           const SizedBox(width: SsSpacing.space1),
-          Text(label, style: typography.labelLarge.copyWith(color: color)),
+          Flexible(
+            child: Text(
+              label,
+              style: typography.labelLarge.copyWith(color: colors.textPrimary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
