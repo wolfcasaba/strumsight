@@ -3,10 +3,68 @@
 - **Státusz:** PREPARED (előre megírva 2026-08-22, kód olvasva: `main @ db6293f4`)
 - **Típus:** Chapter 10 (Epic 9 — Community Platform), Kör 26
 - **Kör-azonosító:** `E09-R26`
-- **Branch:** `<motor>/e09-r26-user-report-and-immediate-safety-flow`
+- **Branch:** `minimax/e09-r26-user-report-and-immediate-safety-flow`
 - **Előfeltétel:** `E09-R25` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0414` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** ~~`ADR 0414`~~ **`ADR 0422`** — a `0414` szám MÁR
+  FOGLALT (Kör 20, `docs/adr/0414-notification-inbox-and-push-abstraction.md`,
+  merge-elve) — a §0.0 pre-flight `tools/round-slots.py reserve-adr` friss
+  számot adott. Az ADR-t a Claude írta meg a kör indítási pre-flightjában
+  ([`docs/adr/0422-user-report-and-immediate-safety-flow.md`](../adr/0422-user-report-and-immediate-safety-flow.md));
+  az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+
+## 0.0 Pre-flight brief-revízió (2026-08-24, Claude Sonnet 5, `main @ 9b3a5d5d`)
+
+**Kockázat = high, indoklás:** a `risk = "high"` besorolás nem egy
+`allowed_paths`-beli `high_risk_path_fragments` kulcsszóból fakad — a
+kockázat forrása maga a domain: egy PII-jellegű, retaliation-kockázatú
+azonosító (reporter identity) kezelése ÉS egy self-harm safety-copy
+routing. Mindkettő a kötelező `security-reviewer` subagent bevonását
+indokolja (AGENTS.md §15). Részletek: [ADR 0422](../adr/0422-user-report-and-immediate-safety-flow.md)
+"Kockázat = high, indoklás" szakasza.
+
+**Visszakeresés (ADR 0312, §4.9):** `node tools/knowledge-rag.mjs --corpus
+lessons,halts --top 5 "reporter identity never leaks to target moderation
+response"` → **L431** (E09-R11) — egy megosztott OLVASÁSI láthatóság-helper
+íróként/válasz-szűrőként újrahasznosítva IDOR-t nyitott, a válasz-identitást
+"a SORBÓL told fel, ne a hívóból"; **L414** (E09-R03) — egy 282/282-zöld
+suite mellett is élt MAJOR biztonsági hiba, amit csak egy a jelentett
+teszttől FÜGGETLEN mutation-próba fogott meg. Mindkettő közvetlenül a §6.1
+valódi-sértés próbát indokolja — nem elég pozitív teszttel lefedni az A1-et.
+
+**Mért tények a pre-flightban (ADR 0422 Kontextus 1–6):**
+
+1. Az előre kiosztott `0414` ADR-szám MÁR FOGLALT — javítva `0422`-re
+   (fent).
+2. Nincs előre álló kategorikus enum-minta a community modellek között —
+   a `category` mező a `reaction.py::kind` mintáját követi (plain `String`
+   + modul-szintű allowlist, ADR 0398 §1). Kezdő kategória-lista és a
+   self-harm/copyright különleges kezelése: ADR 0422 D4.
+3. `CommunityPost`/`CommunityComment` `deleted_at` nullable tombstone-t
+   visz, NEM `status` enumot — a "törölt target" (A4) erre épül, a report
+   ELFOGADOTT marad soft-deleted targetre is (ADR 0422 D5), csak egy
+   SOHA nem létezett `target_id` utasítandó el.
+4. A rate-limit kulcs (A6) az authentikált hívó BELSŐ profil-id-je, NEM IP
+   — a Kör 21 (`challenge_invite_service.py`) mintáját követi, nem a
+   Kör 3 (`handles.py`) authentikáció-előtti IP-mintáját (ADR 0422 D6).
+5. **`lib/l10n/app_en.arb` és `lib/l10n/app_hu.arb` FELVÉVE az
+   `allowed_paths`-ra** (lásd lent, `ai-router` blokk) — a self-harm safety
+   copy és a lokalizált kategória-címkék az EGYETLEN szankcionált útvonala
+   (CLAUDE.md: "every user-facing string goes through ARB →
+   AppLocalizations"); ezek nélkül az implementer vagy hardkódolna
+   (konvenció-sértés), vagy STOP-olna egy a kör saját scope-jából fakadó,
+   előre elhárítható akadályon. A generált `app_localizations*.dart`
+   gitignore-olt, nem kerül a listára.
+6. Nincs előre jóváhagyott self-harm copy-készlet a repóban — ez a kör
+   hozza létre az ELSŐ, egyetlen kanonikus EN/HU string-párt (ADR 0422 D7);
+   egy jövőbeli, jogi/szakmai lektorálást hozó kör a TARTALMAT cserélheti,
+   a szerkezetet (egyetlen forrás) nem.
+7. A2 idempotencia a Kör 20 (`community_notifications`, ADR 0414)
+   `dedup_key` mintáját követi (szerver-oldali, determinisztikus kulcs +
+   `UNIQUE` + `IntegrityError`-elkapás → meglévő sor visszaadása), NEM egy
+   kliens-küldött `idempotency_key` body-mezőt (ADR 0422 D8).
+
+Részletes indoklás, elutasított alternatívák: [ADR 0422](../adr/0422-user-report-and-immediate-safety-flow.md).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 `safety_relationships_screen.dart` TÉNYLEGES widget-struktúráját — a report bottom sheet ugyanabból a képernyő-családból nyílik, konzisztens biztonsági UX-szel. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
@@ -20,6 +78,8 @@ allowed_paths = [
   "backend/app/community/routers/reports.py",
   "backend/alembic/versions/e09_r26_0019_community_report.py",
   "lib/features/community/presentation/dialogs/report_content_sheet.dart",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "backend/tests/community/test_report_service.py",
   "test/features/community/presentation/report_content_sheet_test.dart",
   "docs/rounds/e09-r26-user-report-and-immediate-safety-flow.md",
@@ -69,12 +129,20 @@ Könnyen elérhető report, hide, mute és block folyamat minden releváns tarta
 | `backend/app/community/routers/reports.py` | ÚJ |
 | `backend/alembic/versions/e09_r26_0019_community_report.py` | ÚJ |
 | `lib/features/community/presentation/dialogs/report_content_sheet.dart` | ÚJ |
+| `lib/l10n/app_en.arb` | BŐVÍTÉS — §0.0 D5: kategória-címkék + self-harm safety copy kulcsa |
+| `lib/l10n/app_hu.arb` | BŐVÍTÉS — §0.0 D5, EN-nel párban |
 | `backend/tests/community/test_report_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/report_content_sheet_test.dart` | ÚJ |
 
 **Tilos zóna:** `backend/app/community/moderation/**` (Kör 27 dolga) · `docs/adr/**` · `tools/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0414)
+## 5. Kötött architekturális döntések (ADR 0422)
+
+**A §5.1–5.3 alatti safety-invariánsok mellett az ADR 0422 D2–D8 további
+KÖTÖTT döntéseket rögzít** (category allowlist + kezdő lista, dedup-kulcs
+mechanizmus, rate-limit kulcs, törölt-target kezelés, self-harm copy
+forrása, reporter-identitás válasz-határa) — ezek a §0.0 pre-flight
+mérésének eredményei, az implementer ezeket köti, nem tervezi újra.
 
 ### 5.1 A reportoló SZEMÉLYE SOSEM szivárog a target-hez
 
