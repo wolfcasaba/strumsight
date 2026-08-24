@@ -5,11 +5,18 @@ import '../../../l10n/app_localizations.dart';
 import '../../foundation/app_failure.dart';
 import '../components/actions/ss_button.dart';
 import '../components/actions/ss_icon_button.dart';
+import '../components/ai/ss_model_status_card.dart';
+import '../components/ai/ss_provenance_badge.dart';
+import '../components/cards/ss_coach_action_card.dart';
+import '../components/cards/ss_content_card.dart';
+import '../components/cards/ss_insight_card.dart';
+import '../components/cards/ss_metric_card.dart';
 import '../components/feedback/failure_presentation.dart';
 import '../components/feedback/ss_async_state.dart';
 import '../components/feedback/ss_empty_state.dart';
 import '../components/feedback/ss_failure_state.dart';
 import '../components/feedback/ss_permission_state.dart';
+import '../components/feedback/ss_status_badge.dart';
 import '../components/inputs/ss_choice.dart';
 import '../components/inputs/ss_switch_row.dart';
 import '../components/inputs/ss_text_field.dart';
@@ -176,6 +183,8 @@ final class _ComponentCatalogScreenState
                     const _AsyncFeedbackShowcase(),
                     const SizedBox(height: SsSpacing.space4),
                     const _ActionsAndFormsShowcase(),
+                    const SizedBox(height: SsSpacing.space4),
+                    const _CardsAndStatusShowcase(),
                   ],
                 ),
               ),
@@ -332,6 +341,97 @@ final class _ActionsAndFormsShowcase extends StatelessWidget {
               fieldLabel: 'Song title',
               message: 'Song title is required',
             ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Demonstrates the Ch13 Kör 12 card/badge/status matrix — the metric,
+/// insight, coach-action, general-content, and model-status cards, plus the
+/// provenance and status badges (ADR 0278). No skeleton demo and no extra
+/// `SsCard`/`DecoratedBox` here (§0.0/D3 — the catalog's exact-count guard
+/// already owns the tree's one `SsCard` and one `DecoratedBox`).
+///
+/// English-only for the same reason as the other showcases (D7).
+final class _CardsAndStatusShowcase extends StatelessWidget {
+  const _CardsAndStatusShowcase();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: SsSpacing.space2,
+          runSpacing: SsSpacing.space2,
+          children: [
+            const SsMetricCard(
+              label: 'Practice streak',
+              value: 12,
+              unit: 'days',
+            ),
+            const SsMetricCard(
+              label: 'Accuracy',
+              value: 87,
+              unit: '%',
+              density: SsCardDensity.compact,
+            ),
+          ],
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsInsightCard(
+          l10n: l10n,
+          title: 'Your G-to-C transition is slowing you down',
+          message: 'Three of your last five sessions paused there.',
+          provenance: SsProvenanceKind.local,
+          action: SsCardAction(label: 'Practice this', onPressed: () {}),
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsCoachActionCard(
+          title: 'Ready for a tempo check?',
+          message: 'Your strum timing has been steady for a week.',
+          actionLabel: 'Start tempo check',
+          onAction: () {},
+          onDismiss: () {},
+          dismissSemanticLabel: 'Dismiss suggestion',
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsContentCard(
+          title: 'Setlist synced',
+          message: 'Your Friday setlist is ready offline.',
+          icon: Icons.library_music_outlined,
+          actions: [
+            SsCardAction(label: 'Open', onPressed: () {}),
+            SsCardAction(label: 'Share', onPressed: () {}),
+          ],
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsModelStatusCard(
+          l10n: l10n,
+          title: 'Chord detector',
+          message: 'Running fully on this device.',
+          provenance: SsProvenanceKind.local,
+          statusBadges: const [
+            SsStatusBadgeKind.offline,
+            SsStatusBadgeKind.confidenceHigh,
+          ],
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        Wrap(
+          spacing: SsSpacing.space3,
+          runSpacing: SsSpacing.space2,
+          children: [
+            SsProvenanceBadge(l10n: l10n, kind: SsProvenanceKind.local),
+            SsProvenanceBadge(l10n: l10n, kind: SsProvenanceKind.cloud),
+            SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.offline),
+            SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.syncPending),
+            SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.confidenceHigh),
+            SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.confidenceMedium),
+            SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.confidenceLow),
           ],
         ),
       ],
