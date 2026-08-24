@@ -922,6 +922,101 @@ def test_evidence_categories_persist_metadata(session_factory):
     assert by_category["spam"].extra_metadata_json is None
 
 
+def test_extra_metadata_oversize_payload_rejected_not_truncated(session_factory):
+    """F2 — an ``extra_metadata`` payload whose JSON-encoded length
+    exceeds :data:`EXTRA_METADATA_MAX_ENCODED_LEN` is rejected with
+    :class:`InvalidExtraMetadata` instead of being silently truncated
+    to invalid JSON.
+
+    The §6.1 measure-matrix valódi-sértés: a 3000-char payload under
+    the OLD ``encoded[:2048]`` behavior would land in the DB as a
+    half-quoted JSON string — the new behavior raises an explicit
+    error the router maps to HTTP 400.
+    """
+    from app.community.services.report_service import (
+        EXTRA_METADATA_MAX_ENCODED_LEN,
+        InvalidExtraMetadata,
+    )
+
+    reporter_pid = _make_profile(session_factory, user_id=1)
+    author_pid = _make_profile(session_factory, user_id=2)
+    post_pid = _make_post(session_factory, author_public_id=author_pid)
+
+    # Build a payload that JSON-encodes to > EXTRA_METADATA_MAX_ENCODED_LEN.
+    big_value = "x" * (EXTRA_METADATA_MAX_ENCODED_LEN + 100)
+    oversize_metadata = {"source_url": big_value}
+
+    with session_factory() as db:
+        with pytest.raises(InvalidExtraMetadata):
+            submit_report(
+                db,
+                reporter_public_id=reporter_pid,
+                target_type="post",
+                target_id=str(post_pid),
+                category="copyright",
+                extra_metadata=oversize_metadata,
+            )
+
+
+def test_extra_metadata_too_many_keys_rejected(session_factory):
+    """F2 — an ``extra_metadata`` dict with more than
+    :data:`EXTRA_METADATA_MAX_KEYS` keys is rejected with
+    :class:`InvalidExtraMetadata`. The cheap key-count cap fires
+    BEFORE the JSON encoder, so a pathologically wide dict cannot
+    even reach the encoder.
+    """
+    from app.community.services.report_service import (
+        EXTRA_METADATA_MAX_KEYS,
+        InvalidExtraMetadata,
+    )
+
+    reporter_pid = _make_profile(session_factory, user_id=1)
+    author_pid = _make_profile(session_factory, user_id=2)
+    post_pid = _make_post(session_factory, author_public_id=author_pid)
+
+    too_many_keys = {f"k{index}": index for index in range(EXTRA_METADATA_MAX_KEYS + 1)}
+
+    with session_factory() as db:
+        with pytest.raises(InvalidExtraMetadata):
+            submit_report(
+                db,
+                reporter_public_id=reporter_pid,
+                target_type="post",
+                target_id=str(post_pid),
+                category="copyright",
+                extra_metadata=too_many_keys,
+            )
+
+
+def test_extra_metadata_at_limit_accepted(session_factory):
+    """F2 — boundary: a payload exactly at the encoded-length cap
+    (and exactly at the key-count cap) is accepted. The cap is
+    inclusive.
+    """
+    from app.community.services.report_service import EXTRA_METADATA_MAX_KEYS
+
+    reporter_pid = _make_profile(session_factory, user_id=1)
+    author_pid = _make_profile(session_factory, user_id=2)
+    post_pid = _make_post(session_factory, author_public_id=author_pid)
+
+    # Exactly EXTRA_METADATA_MAX_KEYS keys, each with a tiny value —
+    # well under the encoded-length cap.
+    at_limit_keys = {f"k{index}": "v" for index in range(EXTRA_METADATA_MAX_KEYS)}
+
+    with session_factory() as db:
+        result = submit_report(
+            db,
+            reporter_public_id=reporter_pid,
+            target_type="post",
+            target_id=str(post_pid),
+            category="copyright",
+            extra_metadata=at_limit_keys,
+        )
+        db.commit()
+
+    assert result.deduplicated is False
+
+
 # ---------------------------------------------------------------------------
 # HTTP router smoke — the §D2 / §0.0 backend HTTP-felület smoke tests.
 # ---------------------------------------------------------------------------
