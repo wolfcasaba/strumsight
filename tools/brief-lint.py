@@ -43,6 +43,10 @@ if str(REPO_ROOT) not in sys.path:
 from tools.ai_router.brief import BriefMetadataError, load_brief  # noqa: E402
 
 GATE_ARTIFACT = "tools/round-gate.sh"
+# A determinisztikus képernyő-leltár tesztje (S9). A `tool/ui_inventory.dart`
+# a `lib/features/**` fa `_screen.dart` végű fájljait számolja, a teszt pedig
+# EGZAKT `hasLength(...)`-et állít rájuk — minden ÚJ képernyő elmozdítja.
+UI_INVENTORY_TEST = "test/ui/ui_inventory_test.dart"
 FENCE = re.compile(r"^```(?:bash|sh)?[ \t]*\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
 HEADING_TASK_ID = re.compile(r"(?im)^#\s*(E\d{2}-R\d{2})\b")
 # A gate futtatását elrejtő parancsalakok. MÉRVE: a MiniMax M3 háromszor tette
@@ -448,6 +452,57 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                 f"gate_tests-en kívül {len(non_test_paths)} fájl); valószínűleg "
                 "összevonható a szomszédjával — futtasd a `tools/brief-merge-plan.py` "
                 "elemzést, és mérlegeld az egyesítést",
+            )
+        )
+
+    # S9 — képernyő-leltár drift (E09-R24 H-NOSIGNAL önjavítás, ADR 0112,
+    # 2026-08-24). MÉRT ok: a `test/ui/ui_inventory_test.dart` EGZAKT
+    # képernyőszámot állít (`screenPaths, hasLength(N)`), a `tool/ui_inventory.dart`
+    # pedig a `lib/features/**` fa `_screen.dart` végű fájljait számolja. Egy ÚJ
+    # képernyőt létrehozó kör tehát MINDIG elmozdítja a számot — és ha a brief
+    # `allowed_paths`-a nem engedi a leltártesztet, az implementer hozzá sem
+    # nyúlhat: a kör a ~17 perces exact-SHA Full Gate-en bukik.
+    #
+    # Az E09-R24 mért ára: `full-gate` 32713670226 FAILURE (`855db329`,
+    # hasLength(76) vs 79) → diagnózis → `§0.0c` brief-revízió → EGY TELJES
+    # javító implementer-kör az egysoros szám-emelésért → `full-gate`
+    # 32716654207 (success). ~60 perc újramunka egy 4 órás időkeretben — ez
+    # vitte a sessiont a H-NOSIGNAL-ig.
+    #
+    # A hibaosztály PRECEDENSES (E08-R15/H3 PR #383, E09-R21 §0.0), de a
+    # védelem eddig csak KÖRSPECIFIKUS, utólagos regressziós tesztekben élt,
+    # ezért a következő kört nem védte. A kör saját commit-üzenete (`863a8ac3`)
+    # ki is mondja: „my own pre-flight missed applying it here despite having
+    # read that exact precedent". Ez a lelet teszi általánossá, a pre-flight
+    # szintjén, ahol még olcsó javítani.
+    #
+    # A LÉTEZÉS-feltétel a hamis riasztás elleni mérce: a MÓDOSÍTOTT képernyő
+    # nem mozdítja a számot. MÉRVE a 343 brief korpuszán: a feltétel nélkül 39
+    # lelet (36 már zölden merge-elt körre — mind hamis), a feltétellel 0 hamis
+    # és 4 valódi (`e09-r25`, `e09-r28`, `e09-r29`, `e10-r31`, mind `pending`).
+    # STRICT, nem base — a meglévő briefek nem válhatnak visszamenőleg
+    # CI-pirossá (ugyanaz az elv, mint az S6/S7/S8 esetében).
+    new_screens = sorted(
+        path
+        for path in metadata.allowed_paths
+        if path.startswith("lib/features/")
+        and path.endswith("_screen.dart")
+        and not (repo / path).exists()
+    )
+    if new_screens and not (
+        UI_INVENTORY_TEST in metadata.allowed_paths and UI_INVENTORY_TEST in metadata.gate_tests
+    ):
+        listed = ", ".join(f"`{path}`" for path in new_screens)
+        findings.append(
+            Finding(
+                "strict",
+                "S9",
+                f"a kör {len(new_screens)} ÚJ képernyőt hoz létre ({listed}), de a "
+                f"`{UI_INVENTORY_TEST}` nem szerepel egyszerre az `allowed_paths`-ban "
+                "ÉS a `gate_tests`-ben — a leltár egzakt `hasLength(...)` száma "
+                "elmozdul, és az exact-SHA Full Gate pirosra vált (mérve: E08-R15 "
+                "PR #383, E09-R24 full-gate 32713670226); vedd fel mindkét listára, "
+                "és a szám-emelés a kör saját munkája legyen",
             )
         )
 
