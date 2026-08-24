@@ -1,6 +1,6 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ [HEAL E09-R26/H-NOSIGNAL] KÉSZ — a kill UTÁNI világ: a §0.2 létrán nem volt fok a KÉSZ, jóváhagyott körre — PR [#PRNUM](https://github.com/wolfcasaba/strumsight/pull/PRNUM) (2026-08-24, L474)
+## ✅ [HEAL E09-R26/H-NOSIGNAL] KÉSZ — a kill UTÁNI világ: a §0.2 létrán nem volt fok a KÉSZ, jóváhagyott körre — PR [#449](https://github.com/wolfcasaba/strumsight/pull/449) (2026-08-24, L474)
 
 Az E09-R26 orchestrátor-sessionje 17:48-kor `API Error: Server error
 mid-response`-ba futott, üres prompton némult el, és 18:08:49-kor a 20 perces
