@@ -384,4 +384,143 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Fájlonként, mit épített
+
+- `components/feedback/ss_status_badge.dart` — **ÚJ.** `SsStatusBadgeKind
+  { offline, syncPending, confidenceHigh, confidenceMedium, confidenceLow }`
+  + `SsStatusBadge(l10n, kind)`: ikon+szöveg sor, `SsColorScheme`/
+  `SsStatusMarkers` MEGLÉVŐ tokenjeiből (`syncPending` ikonja saját, a színe a
+  `syncPending` tokenből, §0.0/D4). Nincs `DecoratedBox`/`Material` — csak
+  `Row(Icon, Text)`, `Semantics(container:true, excludeSemantics:true)`-be
+  csomagolva.
+- `components/ai/ss_provenance_badge.dart` — **ÚJ.** `SsProvenanceKind
+  { local, cloud }` + `SsProvenanceBadge(l10n, kind)`, ugyanaz a minta, a
+  `localAi`/`cloudAi` tokenekből.
+- `components/cards/ss_content_card.dart` — **ÚJ.** `SsCardDensity
+  { compact, expanded }`, `SsCardAction(label, onPressed, icon)`, és a
+  KÖZÖS `SsCardActionRegion(actions, child)` — a §5.3/§6.1 akció-szám
+  szabály EGYETLEN helye (0 akció → nincs tap target; 1 → `InkWell`
+  az egész felületen; 2+ → a felület nem kattintható, a gombok saját
+  `SsButton`-ként jelennek meg alul). `SsContentCard` maga ezt hívja, cím +
+  opcionális üzenet + opcionális ikon + `actions` felett.
+- `components/cards/ss_metric_card.dart` — **ÚJ.** `SsMetricCard(label,
+  value, unit, onTap?, width, density)`, Montserrat/tabular a
+  `SsTypography.metric{Large,Small}`-ból OLVASVA (nem hardkódolva, §0.0/D5),
+  `SsTypography.metricLabel(value, unit)` az érték+egység összefűzésre.
+  Fix szélesség (KPI-csempe minta) + a label/metric sorok explicit,
+  `SsTypography`-ból SZÁMOLT magassággal (`fontSize * height`) —
+  `SsMetricCardSkeleton` UGYANAZOKKAL a konstansokkal épül, ezért a két
+  állapot mérete garantáltan egyezik (nem csak várhatóan).
+- `components/cards/ss_insight_card.dart` — **ÚJ.** Ikon+cím+üzenet, opcionális
+  `provenance` (mindig kirendelve, ha nem null — §0.0/D4, ADR 0278 §1) és
+  opcionális egyetlen `action` (a közös `SsCardActionRegion`-t hívja).
+- `components/cards/ss_coach_action_card.dart` — **ÚJ.** Egy fő `onAction`
+  (a teljes felület kattintható) + opcionális `onDismiss` `SsIconButton`-ként
+  `Stack`/`Positioned`-del RÁHELYEZVE — a Flutter saját hit-test/gesture-arena
+  sorrendje (a felül lévő, `opaque` widget nyeri a gesztust) garantálja, hogy
+  a dismiss-koppintás NEM buborékol fel az `onAction`-höz (A4), kézi
+  workaround nélkül.
+- `components/ai/ss_model_status_card.dart` — **ÚJ.** Cím + opcionális üzenet
+  + a `provenance` badge (kötelező, mindig kirendelve) + opcionális
+  `statusBadges` lista + opcionális egyetlen `action` (közös
+  `SsCardActionRegion`).
+- `documentation/component_catalog_screen.dart` — `_CardsAndStatusShowcase`
+  hozzáadva (mind a hét komponens bemutatva); **nincs** benne új `SsCard`,
+  `DecoratedBox` vagy skeleton-demó (§0.0/D3).
+- `public.dart` — a hét új komponens exportja.
+- `lib/l10n/features/design_system_{en,hu}.arb` — 7 új `ds…` kulcs
+  (`dsProvenanceBadgeLocalLabel/CloudLabel`,
+  `dsStatusBadgeOffline/SyncPending/ConfidenceHigh/Medium/Low`).
+- `lib/l10n/app_{en,hu}.arb` — a `--write` generált frissítés, commitolva.
+- `test/core/design_system/cards/ss_cards_test.dart`,
+  `test/core/design_system/cards/ss_badges_test.dart` — **ÚJ**, lásd lent.
+
+### A1–A8 teljesítése, mérő teszttel
+
+| # | Kritérium | Teszt |
+|---|---|---|
+| A1 | AI-eredet mindig látható, alapállapotban | `ss_badges_test.dart` — `A1` csoport: `SsModelStatusCard` és `SsInsightCard` provenance-e a BÁZIS fában (nincs extra interakció), plusz egy negatív eset (nincs `provenance` → nincs badge) |
+| A2 | Egy badge sem csak színnel jelölt | `ss_badges_test.dart` — `A2` csoport: minden `SsStatusBadgeKind`/`SsProvenanceKind` egyedi `(icon, text)` párt ad (a `Set<(IconData,String)>.add` false-t adna vissza egy colour-only implementációnál); külön teszt igazolja, hogy a két confidence-szélsőérték UGYANAZT az ikont, de SOHA nem ugyanazt a szöveget adja |
+| A3 | A kártya háttere csak 1 fő akciónál kattintható | `ss_cards_test.dart` — `A3` csoport, mindhárom cella (`SsContentCard`, 0/1/2 akció); a 2-akciós cella EGZAKT `findsNWidgets(2)`-t vár (csak a gombok `InkWell`-jei, háttér nem) |
+| A4 | Beágyazott akció nem váltja ki a kártya-akciót | `ss_cards_test.dart` — `A4` csoport, `SsCoachActionCard`: a dismiss-koppintás csak `onDismiss`-t hívja, a háttér-koppintás csak `onAction`-t |
+| A5 | A skeleton tartja a geometriát, nincs a semanticsben | `ss_cards_test.dart` — `A5` csoport: `SsMetricCardSkeleton` mérete egyezik `SsMetricCard`-dal (compact ÉS expanded), és a szemantikafába semmit nem ad hozzá |
+| A6 | Hosszú magyar cím nem csordul túl, compact/expanded | `ss_cards_test.dart` — `A6` csoport, `SsContentCard`, 220px széles konténerben, mindkét sűrűségre; `tester.takeException()` `isNull` |
+| A7 | Nincs `lib/features/**` import | `architecture` gate-lépés (`tool/check_architecture.dart`) — ZÖLD, és a hét új fájl egyike sem szerepel az engedélyezett-eltérés listán (ellenőrizve: `grep` a `check_architecture.dart`-ban nulla találat) |
+| A8 | Minden új szöveg ARB-n megy át | `l10n` gate-lépés (`tool/ci/check_l10n_parity.dart`) — ZÖLD, 1838 üzenet en→hu paritásban; a 7 új `ds…` kulcs mindkét ARB-fragmentumban jelen van, a kártya-specifikus szövegek (cím/üzenet/actionLabel) hívó-oldali stringek (ugyanaz a minta, mint `SsEmptyState`/`SsButton.destructiveSemanticHint`) |
+
+### Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+Mutáció: `ss_content_card.dart` `SsCardActionRegion.build`-jában a 2+ akciós
+ágban a `child`-ot ideiglenesen `InkWell(onTap: actions.first.onPressed,
+child: child)`-be csomagoltam — pontosan a tiltott minta ("a kártya
+InkWell-be, két gombbal").
+
+PIROS kimenet (`flutter test test/core/design_system/cards/ss_cards_test.dart`):
+
+```
+Expected: exactly 2 matching candidates
+  Actual: _DescendantWidgetFinder:<Found 3 widgets with type "InkWell" descending
+from widgets with type "SsContentCard": [InkWell, InkWell, InkWell]>
+   Which: is too many
+...
+00:01 +2 -1: A3 — the card background is tappable only at exactly one action two or
+more actions: the background is not tappable — only the explicit buttons are
+(exactly one InkWell per button, none for the background) [E]
+```
+
+A többi 7 teszt (A4–A6, a másik két A3-cella) zölden futott a mutáció alatt is
+— csak a célzott cella vált pirosra, ahogy a §6.1 mátrix előírja.
+
+Visszaállítás: a `child,` sor visszakerült (a `InkWell`-be csomagolás
+törölve); ezután `flutter test test/core/design_system/cards/ss_cards_test.dart`
+újra `+10: All tests passed!`.
+
+### `dart run tool/gen_l10n_segments.dart --write` — tényleges kimenet
+
+```
+Running build hooks...Running build hooks...[GenerationOutcome(en).locale] aggregátum írva
+[GenerationOutcome(hu).locale] aggregátum írva
+```
+
+(A ténylegesen módosult `AppLocalizations` Dart-osztályokat a `flutter
+gen-l10n` generálja — ez gitignore-olt, futtatva lett a lokális teszthez, de
+nem esik a commit alá.)
+
+### `tools/round-gate.sh` — tényleges kimenet (összegzés)
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/core/design_system/cards/ss_cards_test.dart      zöld
+    test test/core/design_system/cards/ss_badges_test.dart     zöld
+    test test/core/design_system/component_catalog_test.dart   zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A `component_catalog_test.dart` (fagyott őr, §0.0/D3) is zöld maradt — az
+exact-count állítások (1 `SsCard`, 1 `Material` alatta, 1 `DecoratedBox`)
+nem sérültek.
+
+### Amit NEM csináltam meg, és miért
+
+- **Skeleton csak `SsMetricCard`-hoz.** A többi kártya (`SsContentCard`,
+  `SsInsightCard`, `SsCoachActionCard`, `SsModelStatusCard`) nem kapott saját
+  skeleton-változatot: az A5 bizonyítéka egy pontos geometria-egyezés, és
+  ehhez EGY reprezentatív, fix-méretű kártya (a metrika-csempe) elég — a
+  többinél a tartalom-vezérelt magasság (hosszú szöveg, változó akció-szám)
+  miatt a "pontos" skeleton-magasság vagy új geometria-konstansokat igényelt
+  volna kártyánként (kockázat: font-metrika alapú becslés, §5.4 kockázata),
+  vagy scope-on kívüli új absztrakciót. A brief §8/6 lépése "a kártyafájlokban"
+  többes számot használ, de az A6/A5 bizonyíték-oszlopa (§6) egyetlen
+  `ss_cards_test.dart`-ot ír elő — ez teljesül.
+- **`SsContentCard`/`SsCoachActionCard` badge-eket nem kap.** A brief §3 nem
+  írja elő, hogy MINDEN kártyatípus hordozzon badge-et; a badge-integrációt
+  ott adtam hozzá, ahol az ADR 0278 ténylegesen releváns (AI-eredetű tartalom:
+  `SsInsightCard`, `SsModelStatusCard`).
+
 ## 11. Review — a Claude tölti ki
