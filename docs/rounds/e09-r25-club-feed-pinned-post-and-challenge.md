@@ -107,12 +107,68 @@ strukturális, nem véletlen") — mindkettő pontosan erre a körre alkalmazand
    érték az implementer választása, dokumentálva a §10-ben — nem szükséges
    `Settings`-bővítés.
 
+## 0.0d Post-implementáció javító addendum (2026-08-24, review, Claude Sonnet 5)
+
+Az implementáció (§10.5/§10.7) MÉRT, dokumentált ismert korlátként hagyta,
+hogy a `community_club_pinned_posts` junction tábla NINCS alembic
+migrációban — a tábla egy PRIVÁT `MetaData`-n (`_pinned_metadata`) él, hogy
+a `test_upgrade_head_matches_current_orm_schema` drift-őr ne vegye észre.
+Ez éles adatbázison `alembic upgrade head` UTÁN is hiányzó táblát jelent —
+a `pin_post`/`unpin_post`/`list_club_pinned` (A3/A4) egy valódi deploy-on
+"no such table" hibával bukna. Ez NEM elfogadható "következő kör" korlát,
+mert a §3 scope explicit tartalmazza a "pinned post reláció maximum
+konfigurált darabszámmal" elemet — a tábla-perzisztencia MAGA a feature,
+nem egy opcionális kiegészítés.
+
+**Javítás — `allowed_paths` bővítve** (ADR 0087 §2 önjavítható eset,
+brief-revízió, nem tilos-zóna feloldás — a widening egy MÁR ismert,
+precedenses fájltípus, minden korábbi Epic-9 kör ugyanígy ad egy
+`backend/alembic/versions/eXX_rYY_00NN_*.py` migrációt, nem ad-hoc
+kerülőút, lásd az E09-R24 §0.0c pontos precedensét):
+
+- `backend/alembic/versions/e09_r25_0019_community_club_pinned_posts.py` —
+  ÚJ migráció, `down_revision = "e09_r24_0018"` (a lánc jelenlegi feje,
+  mérve: `ls backend/alembic/versions | sort | tail -1`). Az `upgrade()`
+  a `community_club_pinned_posts` táblát hozza létre PONTOSAN a
+  `club_content_service.py` inline `Table`-jének oszlopaival (`club_id`
+  BigInteger, `post_id` BigInteger, `pinned_at` DateTime(timezone=True)
+  NOT NULL, `pinned_by_profile_id` BigInteger NOT NULL), összetett PRIMARY
+  KEY-vel `(club_id, post_id)`-n, és FK-kal `community_clubs.id`
+  (`ondelete="CASCADE"`) / `community_posts.id` (`ondelete="CASCADE"`)
+  irányban — a projekt-szintű cascade-on-delete konvenciót követve
+  (`community_club_members`/`community_challenge_invites` precedens). A
+  `downgrade()` a táblát dobja.
+- A `community_club_pinned_posts` `Table` deklarációja
+  `club_content_service.py`-ban KÖLTÖZZÖN a privát `_pinned_metadata`-ról a
+  projekt `Base.metadata`-jára (`from ...database import Base`,
+  `Table(..., Base.metadata, ...)` vagy ezzel ekvivalens) — a drift-őr
+  ELKERÜLÉSE volt a hiba, nem a célja; a helyes állapot az, hogy a
+  migráció-kontraktus teszt TÉNYLEG összeveti az ORM-deklarált sémát az
+  alembic-fejjel, és zölden talál egyezést, nem azért zöld, mert a tábla
+  láthatatlan neki.
+- A backend teszt fixture-ben (`test_club_content_service.py`,
+  `svc._pinned_metadata.create_all(...)` hívás) az ÚJ elhelyezés után a
+  tábla már a `Base.metadata`-n keresztül materializálódik a többi
+  Community táblával együtt — a kézi `create_all(tables=[...])` extra
+  lépés valószínűleg feleslegessé válik, de ha az implementer megtartja
+  (pl. SQLite in-memory fixture gyorsítás miatt), az nem hiba, amíg a
+  tábla ÉS a migráció is a `Base.metadata`-n él.
+- Zöld gate ÚJRA igazolandó mindkét oldalon (§7), PLUSZ a migráció-
+  kontraktus teszt explicit lefuttatva és zöld (mérve:
+  `backend/tests/test_migrations.py::test_upgrade_head_matches_current_orm_schema`,
+  önálló paranccsal, NEM láncolva a §7 két parancsához):
+
+  ```bash
+  cd backend && python -m pytest tests/test_migrations.py -q
+  ```
+
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
   "backend/app/community/feed/club_feed.py",
   "backend/app/community/services/club_content_service.py",
+  "backend/alembic/versions/e09_r25_0019_community_club_pinned_posts.py",
   "lib/features/community/presentation/screens/clubs/club_detail_screen.dart",
   "backend/tests/community/test_club_content_service.py",
   "test/features/community/presentation/clubs/club_detail_screen_test.dart",
