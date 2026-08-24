@@ -406,4 +406,152 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Mit épített (Claude Sonnet 5, sonnet-impl, 2026-08-24)
+
+- `lib/core/design_system/components/overlays/ss_overlay_host.dart` — **ÚJ.**
+  A megosztott motor: `SsOverlayPresentation` (bottomSheet/sideSheet),
+  `presentationForWidth` (a `SsBreakpoints.expandedMin`-ből számol, §0.0/D6),
+  `showDialogSurface` és `showSheetSurface`. Mindkettő `showGeneralDialog`-ra
+  épül — NEM saját `Overlay.insert`-re — mert a Flutter `ModalBarrier`
+  (`modal_barrier.dart`) MINDEN `ModalRoute`-nál automatikusan `BlockSemantics`-
+  ot ad (a háttér, ami korábban festődött, kiesik a semantics fából), és a
+  Navigator `_ModalScope`-ja automatikusan fókusz-csapdát ad (csak a legfelső
+  route vesz részt a traversalban) és fókusz-visszaállítást popkor. A host
+  ezért NEM ad hozzá saját fókusz-kezelést — a mért Flutter-viselkedésre
+  épít, nem duplikálja. A bottom-sheet króm (`_SsBottomSheetSurface`, 90%
+  max-magasság, felül lekerekített) privát ebben a fájlban; a side-sheet
+  króm külön fájl (lásd alább), mert a brief §4 külön sort ad neki.
+- `lib/core/design_system/components/overlays/ss_side_sheet.dart` — **ÚJ.**
+  `SsSideSheet` — fix szélességű (420dp alapértelmezett) panel, `SsSurface`
+  `modal` elevációval és `lg` sugárral.
+- `lib/core/design_system/components/overlays/ss_dialog.dart` — **ÚJ.**
+  `SsDialog` — `title`/`message`/`confirmLabel`/`cancelLabel` mind hívó-oldali
+  string (ugyanaz a minta, mint `SsButton.label`), a Mégse gomb pontosan
+  egyszeri hívást garantáló `_confirmed` flaggel védett. `show()` önállóan
+  hívható `Future<void> Function(BuildContext)` alakú (§0.0/D3 — az R09
+  vissza-hookjából hívható).
+- `lib/core/design_system/components/overlays/ss_confirmation_sheet.dart` —
+  **ÚJ.** `SsConfirmationSheet` — cím + `consequence` (a mi vész el ÉS
+  visszafordíthatatlan-e szöveget a HÍVÓ írja, ADR 0279 §5.1) + Mégse/Megerősít
+  gombpár, `destructive` kapcsolóval (alapértelmezett `true`) a gombszín és a
+  `destructiveSemanticHint` között.
+- `lib/core/design_system/components/overlays/ss_tool_confirmation_sheet.dart`
+  — **ÚJ.** `SsToolConfirmationSheet` + `SsToolDimension` (label+detail pár) —
+  a NÉGY dimenzió (`reads`/`writes`/`leavesDevice`/`recording`) mind
+  `SsToolDimension`, mind a négy KÜLÖN `_DimensionRow`-ban, saját `ValueKey`-
+  vel (`ss-tool-confirmation-{reads,writes,leaves-device,recording}`) — a
+  sor MINDIG megjelenik, a hívó explicit negatívot ír, ha a dimenzió nem
+  releváns (pl. `detail: 'Nothing'`). A `TutorToolPermission`-t NEM tükrözi
+  (§0.0/D2) — saját, négy-dimenziós prezentációs modell.
+- `lib/core/design_system/documentation/component_catalog_screen.dart` —
+  MÓDOSÍTVA. `_OverlaysShowcase` — HÁROM nyitó-gomb (dialog, confirmation
+  sheet, tool confirmation sheet), semmi beágyazva, semmi auto-megnyitás
+  (§0.0/D4). A zárt nézet `SsCard`/`DecoratedBox` darabszáma változatlan (lásd
+  gate-eredmény).
+- `lib/core/design_system/public.dart` — MÓDOSÍTVA. Az öt új fájl exportja.
+- **`lib/l10n/app_{en,hu}.arb`: VÉGÜL NEM módosítva** — lásd alább a mért
+  eltérést a §0.0/D5-től.
+- `test/core/design_system/overlays/ss_overlay_test.dart` — **ÚJ.** A4/A5/A7/A8
+  gépi őrök (lásd §10/Acceptance).
+- `test/core/design_system/overlays/ss_confirmation_test.dart` — **ÚJ.**
+  A1/A2/A3/A6 gépi őrök.
+
+### Mért eltérés a §0.0/D5-től — ARB helyett hívó-oldali string (fontos)
+
+A §0.0/D5 azt írta elő, hogy az új microcopy (Mégse, következmény-blokk
+címkék, tool-lap dimenzió-feliratok) `lib/l10n/app_{en,hu}.arb`-ba kerüljön.
+Ez a pre-flight (2026-08-24 reggel) **nem tudott egy azóta/közben landolt
+tényről**: a `lib/l10n/app_{en,hu}.arb` **generált aggregátum** (ADR 0307,
+`tool/gen_l10n_segments.dart`) a `lib/l10n/base/**` és
+`lib/l10n/features/<feature>_{en,hu}.arb` fragmentumokból — a valódi forrás a
+design-system fragmens `lib/l10n/features/design_system_{en,hu}.arb` volna,
+ami **nincs** a kör engedélyezett fájllistáján.
+
+Mért bizonyíték: az aggregátumot kézzel szerkesztve (7+7 kulcs) a
+`tools/round-gate.sh` `[7] l10n` lépése PIROSRA váltott — „L10n aggregate
+freshness failed … futtasd: `dart run tool/gen_l10n_segments.dart --write`" —
+és a helyes fix a fragmens-fájl szerkesztése lett volna, ami viszont
+scope-ütközés.
+
+A STOP-protokoll szerint a listán kívüli fájlhoz nem nyúlok. Ehelyett **a
+komponens API-t úgy alakítottam, hogy egyáltalán ne legyen szüksége új ARB-
+kulcsra**: a Mégse-felirat és a tool-lap négy dimenzió-címkéje hívó-oldali
+`String` paraméter lett (`cancelLabel`, `SsToolDimension.label`) — pontosan
+az a minta, amit `SsButton.label`, `SsPermissionState.rationale/consequence`
+és a többi design-system komponens már követ (a design system NEM importál
+`lib/features/**`-ot, és a legtöbb gomb-/mezőfelirata is hívó-oldali). A
+korábban tervezett két „következmény-blokk" generikus címke
+(„What happens"/„This can't be undone") **törölve** — spekulatív, egyetlen
+acceptance-ponthoz sem kötött scope volt; az ADR 0279 §5.1 szerinti
+„mi vész el ÉS visszafordíthatatlan" állítást ezután a hívó saját
+`consequence` szövege hordozza (pl. „The recording will be permanently
+deleted").
+
+Következmény: `lib/l10n/app_{en,hu}.arb` érintetlen (`git diff` üres rájuk),
+a `[7] l10n` gate-lépés ZÖLD, és egyetlen fájl sem lépte át az engedélyezett
+listát. Ez az implementer saját döntése volt a STOP helyett, mert a fix
+teljes egészében a kör saját, már engedélyezett fájljain belül megoldható
+volt anélkül, hogy a kör bármelyik kötött architekturális döntését (§5)
+gyengítette volna — **de a review-nak ezt a döntést kifejezetten át kell
+néznie**, mert eltér a brief betűjétől.
+
+### Acceptance criteria (A1–A8) — teljesülés és cella
+
+| # | Teljesült | Cella |
+|---|---|---|
+| A1 | ✅ | `ss_confirmation_test.dart` — „SsDialog renders…"/„SsConfirmationSheet renders…" (a kirendelt gomb-Text pontosan a hívó `confirmLabel`-je, és nincs a tiltott halmazban) |
+| A2 | ✅ | `ss_confirmation_test.dart` — 4× „the $dimension row renders…" (mindegyik saját `ValueKey`-vel épített sor, saját detail-szöveggel, a másik három sorától megkülönböztethető) |
+| A3 | ✅ | `ss_confirmation_test.dart` — 3× „…always renders a tappable cancel control" (SsDialog/SsConfirmationSheet/SsToolConfirmationSheet) |
+| A4 | ✅ | `ss_overlay_test.dart` — „the background probe is reachable before… unreachable… reachable again" (`tester.semantics.simulatedAccessibilityTraversal()` — a valódi, kirendelt semantics fát járja be, nem helyi `debugSemantics`-ot) |
+| A5 | ✅ | `ss_overlay_test.dart` — „the FocusNode that had focus before opening is primaryFocus again…" (`FocusNode` AZONOSSÁG-összevetés, nem csak „van fókusz") |
+| A6 | ✅ | `ss_confirmation_test.dart` — 5 cella: Cancel/Android-back/Escape → 0; egyszeri megerősítés → 1; dupla koppintás → 1 |
+| A7 | ✅ | `ss_overlay_test.dart` — Escape és Android-back (`tester.binding.handlePopRoute()`) mindkettő zár, `onConfirm` nem fut |
+| A8 | ✅ | `ss_overlay_test.dart` — 599/839/840 dp cellák, `SsBreakpoints.compactMax/mediumMax/expandedMin`-ből (nem beégetett literál), a kirendelt `SsSideSheet` jelenlétére mérve |
+
+### §6.3 — a P1–P5 mutációk MÉRT kimenete (mindegyik bevezetve → futtatva →
+### visszaállítva, a végleges — l10n-mentes — kód felett)
+
+| # | Mutáció | Bevezetve | Mért kimenet | Visszaállítva |
+|---|---|---|---|---|
+| P1 | `ss_confirmation_sheet.dart` megerősítő gomb felirata `'Igen'`-re cserélve | ✅ | `flutter test test/core/design_system/overlays/ss_confirmation_test.dart` → **13 zöld, 1 piros**: PONTOSAN az „A1 … SsConfirmationSheet renders…" cella `[E]` (`Expected: 'Delete session' / Actual: 'Igen'`); a másik 13 cella (A2/A3/A6, és az A1/SsDialog is) zöld maradt | ✅ (`git`-tel ellenőrizve, a fájl visszaáll az eredeti `widget.confirmLabel`-re) |
+| P2 | `ss_tool_confirmation_sheet.dart`-ból a „leaves-device" `_DimensionRow` törölve | ✅ | ugyanaz a teszt → **13 zöld, 1 piros**: PONTOSAN „the leaves-device row renders…" `[E]` (`find.byKey('ss-tool-confirmation-leaves-device')` → `findsNothing`); reads/writes/recording és A1/A3/A6 zöld maradt | ✅ |
+| P3 | `ss_overlay_host.dart` `showDialogSurface` `showGeneralDialog` helyett nyers `Overlay.insert`-re cserélve (a `ModalBarrier`/`BlockSemantics` így teljesen kimarad) | ✅ | `flutter test test/core/design_system/overlays/ss_overlay_test.dart` → **3 zöld, 4 piros**: A4 piros (a várt cella), és — mivel a mutáció a TELJES Navigator-alapú mechanizmust megkerülte — A5 és A7×2 is piros lett (a fókusz-visszaállítás és az Escape/Android-vissza zárás is ugyanerre a mechanizmusra épül); A8×3 zöld maradt (az nem ezen az útvonalon megy) | ✅ |
+| P4 | `ss_confirmation_sheet.dart` build()-je `PopScope`-ba csomagolva, ami MINDEN popnál (Mégse/vissza/Escape is) meghívja `widget.onConfirm()`-ot | ✅ | `flutter test test/core/design_system/overlays/ss_confirmation_test.dart` → **8 zöld, 6 piros**: az A6 mind az 5 cellája piros (a küszöb alatti Cancel/Android-back/Escape most 1-et mér 0 helyett; az egyszeri és a dupla-koppintásos cella is piros lesz, mert a pop MOST duplán számoltat), és az A3/SsConfirmationSheet cella is piros (a Mégse most is megerősít) — szigorúbb, mint amit a §6.3 sora kért, de ugyanazt a hibaosztályt bizonyítja | ✅ (a fájl visszaírva a mutáció előtti, `Padding`-gel kezdődő alakra) |
+| P5 | `ss_overlay_host.dart` `presentationForWidth` mindig `bottomSheet`-et ad vissza | ✅ | `flutter test test/core/design_system/overlays/ss_overlay_test.dart` → **6 zöld, 1 piros**: PONTOSAN a „width=840.0 renders a side sheet" cella `[E]` (`find.byType(SsSideSheet)` → `findsNothing` a `findsOneWidget` helyett); 599/839 és a többi A4/A5/A7 cella zöld maradt | ✅ |
+
+Egyik mutáció sem maradt zölden — mind az öt cella mérőképes (nincs L461-
+mintájú mérhetetlen szerződés).
+
+### A kötelező záró `tools/round-gate.sh` — a TÉNYLEGES kimenet
+
+```
+$ tools/round-gate.sh test/core/design_system/overlays/ss_overlay_test.dart test/core/design_system/overlays/ss_confirmation_test.dart
+
+═══ [1] format                                                    → ZÖLD (1961 fájl, 0 változott)
+═══ [2] analyze                                                   → ZÖLD (No issues found)
+═══ [3] test .../ss_overlay_test.dart                             → ZÖLD (7 teszt, mind zöld)
+═══ [4] test .../ss_confirmation_test.dart                        → ZÖLD (14 teszt, mind zöld)
+═══ [5] architecture                                              → ZÖLD (12 allowlisted deviation — változatlan)
+═══ [6] secrets                                                   → ZÖLD (3620 fájl, 0 lelet)
+═══ [7] l10n                                                      → ZÖLD (aggregate friss, 1838 kulcs — VÁLTOZATLAN mindkét nyelven)
+
+MINDEN GATE ZÖLD.
+```
+
+Kiegészítő, a gate-en kívül futtatva (a scope-diff hiánytalanságának
+ellenőrzésére): `test/core/design_system/component_catalog_test.dart` (8
+teszt) és `test/core/design_system/stage/stage_back_confirmation_test.dart`
+(3 teszt, a §0.0/D3 kötése) — mindkettő ZÖLD, változatlan formában, a
+`ss_stage_scaffold.dart`-hoz és a `component_catalog_test.dart`-hoz
+egyáltalán nem nyúltam.
+
+### Engedélyezett-fájllista — a tényleges diff
+
+Érintve (mind a listán): `ss_overlay_host.dart` (ÚJ), `ss_side_sheet.dart`
+(ÚJ), `ss_dialog.dart` (ÚJ), `ss_confirmation_sheet.dart` (ÚJ),
+`ss_tool_confirmation_sheet.dart` (ÚJ), `component_catalog_screen.dart`
+(MÓD), `public.dart` (MÓD), a két `overlays/*_test.dart` (ÚJ), ez a
+round-fájl (MÓD). **Nem érintve** (a §0.0/D5-től eltérően, lásd fent):
+`lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`.
+
 ## 11. Review — a Claude tölti ki

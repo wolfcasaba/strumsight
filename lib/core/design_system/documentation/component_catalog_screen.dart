@@ -22,6 +22,9 @@ import '../components/inputs/ss_switch_row.dart';
 import '../components/inputs/ss_text_field.dart';
 import '../components/inputs/ss_validation_summary.dart';
 import '../components/inputs/ss_value_slider.dart';
+import '../components/overlays/ss_confirmation_sheet.dart';
+import '../components/overlays/ss_dialog.dart';
+import '../components/overlays/ss_tool_confirmation_sheet.dart';
 import '../components/surfaces/ss_card.dart';
 import '../components/surfaces/ss_hero_card.dart';
 import '../components/surfaces/ss_surface.dart';
@@ -185,6 +188,8 @@ final class _ComponentCatalogScreenState
                     const _ActionsAndFormsShowcase(),
                     const SizedBox(height: SsSpacing.space4),
                     const _CardsAndStatusShowcase(),
+                    const SizedBox(height: SsSpacing.space4),
+                    const _OverlaysShowcase(),
                   ],
                 ),
               ),
@@ -435,6 +440,78 @@ final class _CardsAndStatusShowcase extends StatelessWidget {
             SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.confidenceMedium),
             SsStatusBadge(l10n: l10n, kind: SsStatusBadgeKind.confidenceLow),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Demonstrates the Ch13 Kör 13 overlay matrix — opening buttons ONLY
+/// (§0.0/D4): the closed catalog screen is pinned to exactly one [SsCard]
+/// and one [DecoratedBox] by a test file outside this round's allowed
+/// list, so nothing here may render an overlay surface embedded, and
+/// nothing here may auto-open. Each button pushes its overlay through the
+/// same `show` entry point a real feature screen would call; once open, the
+/// overlay content is outside what that guard test measures.
+///
+/// English-only for the same reason as the other showcases (D7).
+final class _OverlaysShowcase extends StatelessWidget {
+  const _OverlaysShowcase();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: SsSpacing.space2,
+      runSpacing: SsSpacing.space2,
+      children: [
+        SsButton(
+          label: 'Open dialog',
+          onPressed: () => SsDialog.show(
+            context,
+            title: 'Discard unsaved changes?',
+            message: 'Your edits since the last save will be lost.',
+            confirmLabel: 'Discard changes',
+            cancelLabel: 'Cancel',
+            onConfirm: () {},
+          ),
+        ),
+        SsButton(
+          label: 'Open confirmation sheet',
+          onPressed: () => SsConfirmationSheet.show(
+            context,
+            title: 'Delete this session?',
+            consequence:
+                'The recording and its chord timeline will be removed.',
+            confirmLabel: 'Delete session',
+            cancelLabel: 'Cancel',
+            onConfirm: () {},
+          ),
+        ),
+        SsButton(
+          label: 'Open tool confirmation sheet',
+          onPressed: () => SsToolConfirmationSheet.show(
+            context,
+            actionLabel: 'Update practice plan',
+            summary: 'The AI wants to adjust next week\'s practice plan.',
+            reads: const SsToolDimension(
+              label: 'Reads',
+              detail: 'Your last 5 practice sessions',
+            ),
+            writes: const SsToolDimension(
+              label: 'Writes',
+              detail: 'Your practice plan for next week',
+            ),
+            leavesDevice: const SsToolDimension(
+              label: 'Leaves this device',
+              detail: 'Nothing',
+            ),
+            recording: const SsToolDimension(
+              label: 'Starts recording',
+              detail: 'None',
+            ),
+            cancelLabel: 'Cancel',
+            onConfirm: () {},
+          ),
         ),
       ],
     );
