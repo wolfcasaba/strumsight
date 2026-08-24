@@ -333,7 +333,17 @@ The §6.1 measure-matrix row **"A target moderation-jelzésében szerepel a repo
 2. `test_a1_build_sanitized_response_never_reads_reporter` — runtime + source-level: the function never reads the reporter column AND the response dict has no `reporter_*` keys.
 3. `test_a1_real_violation_probe_patching_response_shape_fails_red` — the canary itself: any future patch that adds the reporter identity to the function body will trip the source-level grep in this test, failing A1 BEFORE the wire-shape assertion can be reached.
 
-The valódi-sértés was manually verified during implementation: temporarily uncommenting a `reporter_profile_id` reference inside `build_sanitized_response`'s body caused `test_a1_build_sanitized_response_never_reads_reporter` to fail with the §5.1 invariant message — confirming the test infrastructure is sensitive to the regression.
+**Live probe executed (re-verified at continuation-prompt end):** temporarily added a `"reporter_public_id": "PROBE_LEAK"` key to the dict returned by `build_sanitized_response` (the §6.1 measure-matrix row's "moderation-jelzés Pydantic sémája" — the wire-shape helper the router uses to build the target-facing response). Ran `pytest tests/community/test_report_service.py -q -k a1` → exactly the two runtime A1 cells turned RED with the §5.1 invariant message:
+
+```
+FAILED tests/community/test_report_service.py::test_a1_build_sanitized_response_never_reads_reporter
+  AssertionError: A1 violated — wire shape leaks {'reporter_public_id'}
+FAILED tests/community/test_report_service.py::test_a1_http_response_carries_no_reporter_identity
+  AssertionError: A1 violated — HTTP response leaks reporter identity:
+  {'reporter_public_id'}; full body: {... 'reporter_public_id': 'PROBE_LEAK'}
+```
+
+The structural canary (`test_a1_response_dataclass_has_no_reporter_field`) and the source-grep canary (`test_a1_real_violation_probe_patching_response_shape_fails_red`) stayed green because the probe added a key with the value `"PROBE_LEAK"` (no `reporter_profile_id` source-reference) — by design, the runtime wire-shape assertion catches this exact attack vector BEFORE the structural / source-grep guards can speak. After restoring the original 6-key response dict, all 4 A1 tests pass (4/4 green).
 
 ### 10.5 Architectural decisions — from the brief + ADR 0422
 
