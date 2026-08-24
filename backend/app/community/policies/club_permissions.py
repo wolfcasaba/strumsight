@@ -151,14 +151,19 @@ def may_perform(
         ClubAction.CANCEL_INVITE,
         ClubAction.ACCEPT_JOIN_REQUEST,
     ):
+        # Promoting a member is moderator+; demoting a moderator
+        # is OWNER-ONLY (the §5.3 invariant — a moderator cannot
+        # demote another moderator).
+        if action is ClubAction.DEMOTE_TO_MEMBER:
+            if actor_role != CLUB_ROLE_OWNER:
+                return False
+            return target_role in (None, CLUB_ROLE_MODERATOR)
         if actor_role not in (CLUB_ROLE_OWNER, CLUB_ROLE_MODERATOR):
             return False
         # The target must be a member (or no target for invite /
         # accept — those operate on a pending row, not a member row).
         if action is ClubAction.PROMOTE_TO_MODERATOR:
             return target_role in (None, CLUB_ROLE_MEMBER)
-        if action is ClubAction.DEMOTE_TO_MEMBER:
-            return target_role in (None, CLUB_ROLE_MODERATOR)
         return True
 
     # --- Membership lifecycle (the actor's own relationship).

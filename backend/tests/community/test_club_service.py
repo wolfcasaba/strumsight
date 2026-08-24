@@ -394,6 +394,8 @@ def test_a1_owner_leave_with_second_owner_succeeds(session_factory) -> None:
     owner = _make_profile_by_id(session_factory, user_id=3)
     new_owner = _make_profile_by_id(session_factory, user_id=4)
     club = _create_club(session_factory, owner=owner)
+    # new_owner must be a member before transfer_ownership.
+    _add_member(session_factory, club=club, profile=new_owner)
     # Hand the new_owner the club via transfer.
     _service_call(
         session_factory,
@@ -908,12 +910,19 @@ def _stage_club_at_member_count(
     club: CommunityClub,
     target_count: int,
 ) -> None:
-    """Bulk-insert ``target_count`` membership rows directly so the
-    test can stage a club at ``MAX_CLUB_MEMBERS`` without writing
-    500 service-layer calls."""
+    """Bulk-insert membership rows directly so the test can stage
+    a club at the desired count.
+
+    ``target_count`` is the TOTAL member count (the owner counts
+    as the first member — the Kör 24 ``create_club`` materialises
+    the owner-membership row in the same transaction). The helper
+    stages ``target_count - 1`` additional members on top.
+    """
+    if target_count <= 0:
+        raise ValueError("target_count must be positive")
     db: Session = session_factory()
     try:
-        for i in range(target_count):
+        for i in range(target_count - 1):
             user_id = 1000 + i
             profile = _make_profile(db, user_id=user_id)
             row = CommunityClubMember(
@@ -961,34 +970,42 @@ def test_a7_member_count_below_threshold_join_accepted(
 def test_a7_member_count_at_threshold_join_still_accepted(
     session_factory,
 ) -> None:
-    """A7 cell 2 — ``member_count = MAX_CLUB_MEMBERS`` → az
-    UTOLSÓ join MÉG elfogadva — a limit inkluzív felső határ.
+    """A7 cell 2 — the join that brings the count to
+    ``MAX_CLUB_MEMBERS`` (= 500) is still accepted. The
+    ``rajta`` cell is the LANDING state — the joiner IS the
+    500th member and the limit is inclusive.
     """
     owner = _make_profile_by_id(session_factory, user_id=82)
     joiner = _make_profile_by_id(session_factory, user_id=83)
     club = _create_club(session_factory, owner=owner)
+    # Stage at MAX - 1 = 499 (the owner counts, so total =
+    # 499 BEFORE the join).
     _stage_club_at_member_count(
         session_factory,
         club=club,
-        target_count=MAX_CLUB_MEMBERS,
+        target_count=MAX_CLUB_MEMBERS - 1,
     )
-    # The owner counts as a member, so staging at exactly
-    # MAX_CLUB_MEMBERS already includes the owner — the join
-    # is the 501st member and the service refuses. (The
-    # test demonstrates the strict reading: "rajta" = the
-    # membership row is at the boundary, the JOIN itself
-    # would put the count OVER.)
+    member, _ = _service_call(
+        session_factory,
+        lambda db: svc.request_join(
+            db,
+            actor_profile_id=joiner.id,
+            club_public_id=club.public_id,
+            idempotency_key="at-1",
+            now=_utcnow(),
+        ),
+    )
+    assert member is not None
+    # Confirm: the joiner is the LAST free spot (count = MAX
+    # AFTER the join).
     db: Session = session_factory()
     try:
-        with pytest.raises(svc.ClubMembershipLimitExceeded):
-            svc.request_join(
-                db,
-                actor_profile_id=joiner.id,
-                club_public_id=club.public_id,
-                idempotency_key="at-1",
-                now=_utcnow(),
-            )
-        db.rollback()
+        count = (
+            db.query(CommunityClubMember)
+            .filter_by(club_id=club.id)
+            .count()
+        )
+        assert count == MAX_CLUB_MEMBERS
     finally:
         db.close()
 

@@ -405,7 +405,6 @@ def list_clubs(
     # same helper the Kör 8 / Kör 21 readers use).
     if not rows:
         return []
-    owner_public_ids = [uuid.UUID(str(club.owner_profile_id)) for club in rows]
     owner_internal_ids = [
         club.owner_profile_id for club in rows
     ]
@@ -424,12 +423,6 @@ def list_clubs(
             for club in rows
             if club.owner_profile_id not in blocked_internal
         ]
-    # The owner_public_ids local is here to keep the
-    # ``filter_public_ids_against_viewer_blocks`` helper reachable
-    # — the A6 invariant reads "all club-content reads go through
-    # the Kör 8 helper", and we honour that even when the owner-id
-    # resolution happens via the FK chain.
-    _ = owner_public_ids
     return rows
 
 

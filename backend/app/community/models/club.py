@@ -421,12 +421,13 @@ class CommunityClubInvite(Base):
             "idempotency_key",
             name="uq_community_club_invites_idempotency",
         ),
-        # Self-pair rejection — same shape as the Kör 21
-        # ``ck_community_challenge_invites_no_self_invite``.
-        CheckConstraint(
-            "inviter_profile_id != invitee_profile_id",
-            name="ck_community_club_invites_no_self_invite",
-        ),
+        # NOTE: no self-pair CHECK here. The Kör 24 ``request_join``
+        # path for a ``private`` club creates a row where
+        # ``inviter_profile_id == invitee_profile_id`` (the actor
+        # requests to join their own club — see ADR 0420 D6). The
+        # service layer rejects self-invites on the ``invite`` path
+        # (the non-join-request call) by raising ``ValueError`` —
+        # see ``club_service.invite``.
         CheckConstraint(
             "status IN ('pending','accepted','cancelled','declined','expired')",
             name="ck_community_club_invites_status_known",
