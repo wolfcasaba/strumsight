@@ -247,7 +247,16 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 **Implementer-motor:** MiniMax M3 (continuation run, branch
 `minimax/e09-r24-club-domain-membership-and-roles`, 2026-08-24).
 
-### 10.0 Branch history — 6 commits, sorrendben
+### 10.0 Branch history — commits, sorrendben
+
+A correction run (F1 fix) hozzáadja:
+
+9. `ff307d84` — `F1 fix — persist create idempotency_key + exact-match probe`
+10. `992e648b` — `F1 — add distinct-keys + same-key-retry acceptance cells`
+
+A kör eredeti 6 commitja (`b2cf3e35` … `f3a5331f`), majd a continuation
+run két gate-fixje (`5ce3dce9`, `45213d4e`), a review merge (`4e6131f4`,
+`6a104839`):
 
 1. `b2cf3e35` — pre-flight: ADR 0420 + brief-revízió (club domain, membership, roles)
 2. `231c4624` — `club domain models + migration (community_clubs / _members / _invites)`
@@ -413,5 +422,66 @@ történt (a gate a 600s-os határon túl is futhat), de a kimenet
 teljes, csonkítatlan, a kilépési kód `0` — a `gate_shape` PARSE-
 olható. A `tools/codex-signal.sh done` jelzés csak ezen a
 csonkítatlan, zöld gate-artefaktum után fut.
+
+### 10.7 F1 MAJOR javító kör (review → MAJOR → correction)
+
+A review (`docs/reviews/e09-r24-review.md` F1) megtalálta, hogy a
+`create_club` idempotency-probe (`_find_club_by_create_idempotency_key`,
+`club_service.py:587-610`) CSAK `owner_profile_id` szerint szűrt és a
+`legutóbbi` klubot adta vissza — az `idempotency_key` értékét nem
+hasonlította össze. Ez a normlális multi-klub-tulajdonlás útvonalat
+törte el: `create_club(owner, name="A", key="k1")` után
+`create_club(owner, name="B", key="k2")` A-t adta vissza, B soha nem
+jött létre.
+
+**Javítás (két commit, scope: a meglévő `allowed_paths` listán belül):**
+
+* `backend/alembic/versions/e09_r24_0018_community_club.py` — új
+  `community_clubs.create_idempotency_key: String(128), nullable=True`
+  oszlop + composite UNIQUE
+  `uq_community_clubs_create_idempotency` az
+  `(owner_profile_id, create_idempotency_key)` tuple-re +
+  `ix_community_clubs_create_idempotency_key` probe-index. A
+  `downgrade()`-ban az új index törlése hozzáadva. SQL UNIQUE a NULL-
+  értékeket DISTINCT-nek kezeli, tehát akik kihagyják a kulcsot,
+  továbbra is korlátlanul hozhatnak létre klubot.
+* `backend/app/community/models/club.py` — `CommunityClub.create_idempotency_key`
+  mező + ugyanaz a UNIQUE / Index a `__table_args__`-ban, hogy a
+  `test_upgrade_head_matches_current_orm_schema` migration-contract
+  teszt zöld maradjon.
+* `backend/app/community/services/club_service.py` —
+  `_find_club_by_create_idempotency_key` most PONTOSAN
+  `(owner_profile_id, create_idempotency_key)` szerint illeszt
+  (`filter_by(owner_profile_id=..., create_idempotency_key=...).one_or_none()`);
+  a `create_club` a `CommunityClub(...)` konstruktorban átadja az
+  `idempotency_key`-t, így az persistálódik. Az `IntegrityError`
+  retry-ág is ugyanazt a probe-ot hívja, ami immár a helyes
+  egyezést adja.
+* `backend/tests/community/test_club_service.py` — két ÚJ teszt a
+  §F1 mérce-mátrix mindkét cellájára (a korvábbi 27 tesztes
+  elfogadásból ezek a cellák hiányoztak, ezért csúszott át a hiba
+  a zöld kapun):
+  - `test_create_club_distinct_idempotency_keys_create_distinct_clubs`
+    — egy owner, két különböző kulcs, két klub, distinct
+    `public_id` (DB-ből visszaolvasva is két sor). A round-1 hibás
+    helper itt a második hívásra A-t adta volna vissza, és B soha
+    nem jött volna létre.
+  - `test_create_club_same_idempotency_key_retry_returns_original`
+    — egy owner, ugyanaz a kulcs, a második hívás az EREDETI
+    `public_id`-t / `id`-t / `name`-et / `visibility`-t adja
+    vissza, és csak EGY sor landol a DB-ben
+    (`(owner_profile_id, create_idempotency_key)` filter
+    `.count() == 1`).
+
+A javítás után a `tools/round-gate.sh` 9/9 lépés ZÖLD (format /
+analyze / widget-teszt 5/5 / architecture / secrets / l10n / backend
+ruff format / backend ruff check / backend pytest ~720 teszt). A
+`pytest tests/community/test_club_service.py -q` parancs 50/50
+zöld (a korvábbi 48 teszt + 2 új F1 cella).
+
+A review F2–F5 leletei (MINOR/NOTE) NEM blokkolnak, ebben a
+javító körben szándékosan NEM nyúltam hozzájuk — a brief kifejezetten
+a fókuszt F1-en tartja, a scope-őr így is csak a megengedett fájlokat
+látja. Ezek a leletek a Kör 25 (klub-router) brief-jébe átveendők.
 
 ## 11. Review — a Claude tölti ki
