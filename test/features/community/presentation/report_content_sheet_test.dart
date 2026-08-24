@@ -17,7 +17,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,10 +26,7 @@ import 'package:strumsight/l10n/app_localizations.dart';
 /// Recording fake — captures every repository call so the test can
 /// assert the wire shape.
 class _RecordingReportRepository implements ReportRepository {
-  _RecordingReportRepository({
-    ReportSubmissionOutcome? submitOutcome,
-    this.submitShouldFail = false,
-  }) : _submitOutcome = submitOutcome;
+  _RecordingReportRepository({this.submitShouldFail = false});
 
   final List<
     ({
