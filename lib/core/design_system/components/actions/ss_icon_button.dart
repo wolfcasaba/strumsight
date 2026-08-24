@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../foundations/ss_semantics.dart';
 import '../../icons/ss_icon.dart';
+import '../../icons/ss_icons.dart';
 
 /// A tappable icon-only control.
 ///

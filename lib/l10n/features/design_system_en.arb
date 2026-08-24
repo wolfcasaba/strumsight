@@ -19,5 +19,8 @@
   "dsFailureStorageMessage": "StrumSight couldn't read or save data on this device.",
   "dsFailureStorageTitle": "Storage problem",
   "dsFailureUnknownMessage": "An unexpected problem occurred. Please try again.",
-  "dsFailureUnknownTitle": "Something went wrong"
+  "dsFailureUnknownTitle": "Something went wrong",
+  "dsFieldErrorSemanticPrefix": "Error",
+  "dsValidationSummarySemanticLabel": "Form validation summary",
+  "dsValidationSummaryTitle": "Please fix the highlighted fields"
 }
