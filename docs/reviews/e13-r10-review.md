@@ -4,7 +4,8 @@
 - **Implementer:** Claude Sonnet 5 (`sonnet-impl`), commit `0f338e77` + `138621d4`
 - **Reviewer:** Claude Opus 5 (orchestrátor), READ-ONLY — production kódot nem írtam
 - **Review-alap:** `de1167c6..138621d4` (a pre-flight commit óta)
-- **Verdikt:** **CHANGES REQUESTED** — 1 MAJOR nyitva
+- **Verdikt:** **APPROVED** (a javító kör után, `eca4f513`) — lásd a §8-at.
+  Az első kör verdiktje CHANGES REQUESTED volt (1 MAJOR, 2 MINOR).
 
 ---
 
@@ -182,3 +183,61 @@ mind a négy állítás IGAZ. A fájl a gate futtatása előtt **törölve**
 
 **CHANGES REQUESTED.** A javító kör a lánc normál útja (ADR 0087 §2,
 user-döntés 2026-07-31): ugyanaz a motor kapja meg az F1–F3 listát.
+
+---
+
+## 8. Javító kör — újraellenőrzés (`eca4f513`, 2026-08-24)
+
+**Verdikt: APPROVED.** Mindhárom lelet zárva; a zárást leletenként mértem.
+
+### 8.1 Leletenkénti zárás
+
+| Lelet | Zárás | A hibát PIROSRA fogó cella |
+|---|---|---|
+| **F1 MAJOR** | `ss_permission_state.dart` megkapta a teljes callback-készletet (mind a négy `SsFailureActionKind`), és a gomb `if (_callbackFor(action.kind) case final onPressed?)` mintaillesztés mögé került — az `onPressed` így **konstrukció szerint** nem lehet `null`. | „an action the mapping produced but the caller left unwired renders no button at all" |
+| **F2 MINOR** | `ss_failure_state.dart` ugyanezt a mintát kapta; a doc-comment mindkét irányt kimondja. | ugyanaz a cella |
+| **F3 MINOR** | `ss_async_state.dart` osztály-doksija kimondja a **kötött magasságú ős** követelményét, néven nevezve a `SingleChildScrollView` esetet és a kiutakat. | a P3 próbatesztem mérése (a doksi állítása igazolt) |
+
+### 8.2 Valódi-sértés próba a ZÁRÁSRA (nem bemondás)
+
+Az izolált klónban visszaállítottam az F1 hibás alakját (feltétel nélküli
+gomb-építés, `onPressed: _callbackFor(...)`), és lefuttattam az őr-cellákat:
+
+```
+00:01 +11 -1: ... an action the mapping produced but the caller left unwired
+              renders no button at all — never a permanently disabled one [E]
+Some tests failed.
+```
+
+→ az őr **valóban mér**. A mutációt visszaállítottam
+(`git status --porcelain` üres), majd a teljes kaput lefuttattam.
+
+> Megjegyzés: a három új cellából a mutációra egy vált pirosra — ez helyes,
+> a másik kettő (teljesen bekötött hívó, illetve az élő `contactSupport`)
+> szándékosan más állítást mér, és a hibás alak mellett is igaz.
+
+### 8.3 Kapu — saját kézzel, izolált klónban, `eca4f513`
+
+```
+format  zöld   analyze zöld   architecture zöld   secrets zöld (3569 fájl)
+test failure_presentation  zöld (12/12)
+test async_state           zöld (12/12 — 9 eredeti + 3 új őr)
+l10n    zöld — aggregate freshness OK (en, hu), parity 1828 üzenet
+backend ruff format / ruff check / pytest  zöld  (az upstream E09-R21 miatt)
+MINDEN GATE ZÖLD
+```
+
+### 8.4 Upstream-szinkron (§0.3)
+
+A branch a review közben beépítette az `origin/main`-t (`56a68678`, E09-R21
+merge). Az ARB-aggregátum a **generált** fájl, ezért a tiszta szöveges merge
+önmagában nem bizonyíték: újrafuttattam a generátort
+(`dart run tool/gen_l10n_segments.dart --write`) → **nulla diff**, azaz a merge
+eredménye tényleg a két fragmentum determinisztikus uniója. Az `l10n`
+freshness-lépés zöldje ezt megerősíti.
+
+### 8.5 A NOTE-ok sorsa
+
+`N1` (módosítható `actions` lista) és `N2` (katalógus skeleton-demó) nyitva
+maradt — egyik sem blokkol, és a javításuk hizlalná a diffet. `N1` egy
+későbbi design-system kör olcsó takarítása.
