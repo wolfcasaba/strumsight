@@ -619,6 +619,12 @@ CLAUDE_SESSION_RESET_PATTERN='resets [0-9]{1,2}(:[0-9]{2})?(am|pm)? \(UTC\)'
 # neveket fedi, a régi `claude-code` alakot is megtartva.
 CLAUDE_PROCESS_COMM_PATTERN='^claude([.-][A-Za-z0-9_-]+)?$'
 
+# Az ELAKADÁS-ÉBRESZTŐ szövege (ADR 0112 önjavító kör, 2026-08-24). Ez megy be
+# `tmux send-keys`-szel egy néma, de élő interaktív Claude-panelbe, mielőtt a
+# driver megölné a sessiont. Szándékosan EGYETLEN sor és tisztán ASCII: a
+# send-keys argumentumként adja át, aposztróf/újsor a beírást törné.
+STALL_NUDGE_TEXT=${PIPELINE_ORCH_STALL_NUDGE_TEXT:-'FOLYTASD (elakadas-ebreszto): a sessiont kulso megszakitas allitotta le, kor-jelzes nem szuletett. Ellenorizd az implementer jelzesfajljat (tools/wait-for-round.sh <munkapeldany> 540), es folytasd a kor protokolljat ott, ahol abbamaradt.'}
+
 # A Codex/Terra fallback-ágon futó `codex exec` process MÉRT neve: `codex`
 # (mérve `/proc/<pid>/comm` mintavétellel, 2026-08-15, E99-R13 H-NOSIGNAL
 # önjavítás). Natív (Rust) ELF bináris ezen a boxon
@@ -767,6 +773,7 @@ run_tmux_session() {
   local fallback_process_pattern="${8:-}"
   local deadline pinger_pid claude_started_at claude_limit_seen=0 pane_tty
   local stall_seconds log_age
+  local nudge_budget nudges_sent=0 last_nudge_at=0 stall_reference nudge_tty
 
   # TESZT-BIZTOSÍTÉK (ADR 0138, MÉRVE 2026-08-05). A `tools/tests/` teljes
   # firinget futtató esetei izolált `PIPELINE_STATE_DIR`-t kapnak, de a
@@ -817,6 +824,7 @@ run_tmux_session() {
   deadline=$(( $(date +%s) + timeout_s ))
   claude_started_at=$(date +%s)
   stall_seconds=${PIPELINE_ORCH_STALL_SECONDS:-$(( ${PIPELINE_ORCH_STALL_MINUTES:-20} * 60 ))}
+  nudge_budget=${PIPELINE_ORCH_STALL_NUDGES:-1}
   while [ ! -f "$signal_file" ]; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       log "időkorlát lejárt ($label) — a tmux-sessiont leállítjuk"
@@ -879,11 +887,52 @@ run_tmux_session() {
     # megbízhatóan elakadást jelez — ugyanaz a minta, mint az implementer
     # oldali MM_STALL_MINUTES (tools/mm-round.sh), csak log-mtime alapon,
     # mert ez a session interaktív (nincs stream-json esemény, ami írna).
+    #
+    # ELAKADÁS-ÉBRESZTŐ (mérve E13-R14 H-NOSIGNAL, önjavítás 2026-08-24): a
+    # néma panel NEM mindig halott munka. Az E13-R14 orchestrátor-sessionje
+    # 15:48:46-kor előtérbe tette a `tools/wait-for-round.sh … 540` hívást,
+    # 15:51:11-kor viszont KÍVÜLRŐL érkezett rá egy megszakítás (a
+    # `4615efa7…` naplóban: "The user doesn't want to proceed with this tool
+    # use" + "[Request interrupted by user for tool use]") — követő prompt
+    # nélkül. A session, a tmux és a Claude-process is ÉLT, csak üres
+    # prompton állt, ezért egyetlen fenti ellenőrzés sem kapta el, a panel
+    # pedig nem írt többet. Közben az implementer 16:03:33-kor `status=done`
+    # jelzéssel BEFEJEZTE a kört — a driver mégis 16:11:39-kor megölte a
+    # sessiont és H-NOSIGNAL-t jelzett, elejtve egy kész kört.
+    #
+    # Egy üres prompton álló interaktív session önmagától sosem indul újra:
+    # csak KÍVÜLRŐL éleszthető. Ezért a felismerés (fent) mellé egy korlátos
+    # ÉBRESZTÉS kerül: ha a panel néma, de a pane-en még ÉL egy interaktív
+    # Claude-process, a driver előbb beküld egy folytatás-promptot, és csak a
+    # következő teljes elakadás-ablak letelte után öl. Az őr így nem szűnik
+    # meg — a `break` továbbra is a terminális ág —, csak nem az ELSŐ néma
+    # ablak dönt. Az ébresztés-keret 0-ra állítva a régi viselkedést adja.
     if [ -f "$session_log" ]; then
-      log_age=$(( $(date +%s) - $(stat -c %Y "$session_log" 2>/dev/null || date +%s) ))
+      # A referencia a napló mtime-ja ÉS az utolsó ébresztés közül a
+      # későbbi: egy ébresztés után az őr teljes új ablakot ad a válaszra,
+      # anélkül hogy a naplófájlt (a bizonyítékot) hamis mtime-mal írnánk át.
+      stall_reference=$(stat -c %Y "$session_log" 2>/dev/null || date +%s)
+      [ "$last_nudge_at" -gt "$stall_reference" ] && stall_reference=$last_nudge_at
+      log_age=$(( $(date +%s) - stall_reference ))
       if [ "$log_age" -ge "$stall_seconds" ]; then
-        log "ELAKADÁS: a(z) $label session-naplója $(( stall_seconds / 60 )) perce nem változott (élő tmux-session, jelzés nélkül) — leállítjuk, nem várjuk ki a teljes időkorlátot"
-        break
+        nudge_tty=$(tmux list-panes -t "$tmux_session" -F '#{pane_tty}' 2>/dev/null | head -n 1)
+        # Csak interaktív Claude-panelt van értelme ébreszteni: annak van
+        # prompt-doboza. A `codex exec` a promptot argv-ből kapja, stdin-re
+        # küldött szöveg nem éri el — ott a minta nem illeszkedik, tehát a
+        # viselkedés változatlanul az azonnali `break`.
+        if [ "$nudges_sent" -lt "$nudge_budget" ] \
+          && [ -n "$nudge_tty" ] \
+          && ps -t "${nudge_tty#/dev/pts/}" -o comm= 2>/dev/null \
+            | grep -qE "$CLAUDE_PROCESS_COMM_PATTERN"; then
+          nudges_sent=$(( nudges_sent + 1 ))
+          last_nudge_at=$(date +%s)
+          log "ELAKADÁS-ÉBRESZTŐ ($nudges_sent/$nudge_budget): a(z) $label panelje $(( stall_seconds / 60 )) perce néma, de a Claude-process ÉL — folytatás-prompt megy be, még nem öljük meg a sessiont"
+          # fd 9 (a lánc-zár) lezárása, mint a többi tmux-hívásnál (2026-08-18).
+          ( exec 9>&-; tmux send-keys -t "$tmux_session" "$STALL_NUDGE_TEXT" Enter ) 2>/dev/null || true
+        else
+          log "ELAKADÁS: a(z) $label session-naplója $(( stall_seconds / 60 )) perce nem változott (élő tmux-session, jelzés nélkül) — leállítjuk, nem várjuk ki a teljes időkorlátot"
+          break
+        fi
       fi
     fi
     sleep 30
