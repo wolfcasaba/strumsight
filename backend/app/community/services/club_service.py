@@ -75,12 +75,11 @@ guarantees the routers and the tests pin):
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, func, select, tuple_
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -97,7 +96,6 @@ from ..models.club import (
     CommunityClub,
     CommunityClubInvite,
     CommunityClubMember,
-    is_allowed_club_role,
     is_allowed_club_visibility,
 )
 from ..models.profile import CommunityProfile
@@ -110,7 +108,6 @@ from ..policies.query_filters import (
     filter_public_ids_against_viewer_blocks,
     is_blocked_pair,
 )
-
 
 # ---------------------------------------------------------------------------
 # Domain exceptions — translated to HTTP status codes in the (future)

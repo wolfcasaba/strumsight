@@ -39,38 +39,32 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 from alembic.config import Config
-from fastapi import FastAPI
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command as alembic_command
-
 from app.community.models.club import (
     CLUB_ROLE_MEMBER,
     CLUB_ROLE_MODERATOR,
     CLUB_ROLE_OWNER,
     CLUB_VISIBILITY_DISCOVERABLE,
     CLUB_VISIBILITY_PRIVATE,
-    CLUB_VISIBILITY_PUBLIC,
     MAX_CLUB_MEMBERS,
     CommunityClub,
-    CommunityClubInvite,
     CommunityClubMember,
 )
 from app.community.models.profile import CommunityProfile
 from app.community.models.safety_relationships import CommunityBlock
 from app.community.policies.club_permissions import (
     ClubAction,
-    assert_may,
     may_perform,
 )
 from app.community.services import club_service as svc
-from app.config import Settings
 from app.database import enable_sqlite_foreign_keys
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]

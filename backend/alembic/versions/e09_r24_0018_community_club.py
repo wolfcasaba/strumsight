@@ -95,11 +95,20 @@ def upgrade() -> None:
         sa.Column("public_id", sa.Uuid(), nullable=False),
         # Name is short (≤ 60 chars in the Flutter factory).
         sa.Column("name", sa.String(length=60), nullable=False),
+        # No ``server_default`` on ``description`` — the column is
+        # ``NOT NULL`` and the service always sets the value
+        # explicitly (the ``create_club`` / ``update_club`` paths
+        # accept ``description: str`` as a required arg). The empty-
+        # string default is a Python-side ``default=""`` on the ORM
+        # for ORM-managed inserts. A DB-level ``DEFAULT ''`` would
+        # also be redundant; we deliberately omit it so the migration
+        # and the ORM column declaration agree on schema (alembic's
+        # autogenerate-compare on this column is a known empty-string
+        # trap — see ADR 0420 §4).
         sa.Column(
             "description",
             sa.String(length=2000),
             nullable=False,
-            server_default="",
         ),
         # ``visibility`` is one of the three ``ClubVisibility`` wire
         # values (private / discoverable / public).

@@ -176,11 +176,18 @@ class CommunityClub(Base):
     # cap mirrors the request-layer cap so the DB-level guard is a
     # defensive bound, not the primary validator.
     name: Mapped[str] = mapped_column(String(length=60), nullable=False)
+    # ``server_default`` is deliberately NOT declared on the ORM side:
+    # the migration sets it on the DB column, and SQLAlchemy's
+    # autogenerate comparison would otherwise detect a representation
+    # mismatch for the empty-string default (TextClause vs the
+    # raw-``''`` DefaultClause alembic reads back from the DB). The
+    # Python-side ``default=""`` is enough for ORM-managed inserts —
+    # the service always sets ``description`` explicitly on every
+    # code path, so the DB default is a defensive backstop only.
     description: Mapped[str] = mapped_column(
         String(length=2000),
         nullable=False,
         default="",
-        server_default="",
     )
     visibility: Mapped[str] = mapped_column(
         String(length=16),
