@@ -1,0 +1,311 @@
+# E13-R11 — Kör-review (Action, input és form komponenskészlet)
+
+- **Kör:** `E13-R11` · **Branch:** `sonnet-impl/e13-r11-actions-and-forms`
+- **Implementer:** Claude Sonnet 5 (`sonnet-impl`), `bb76f230`…`517f185a` (7 commit)
+- **Reviewer:** Claude Opus 5 (orchestrátor), READ-ONLY — production kódot nem írtam
+- **Review-alap:** `bf2184e5..517f185a` (a pre-flight commit óta)
+- **Verdikt:** **APPROVED** (a javító kör után, `2d3e91aa`) — lásd a §9-et.
+  Az első kör verdiktje **CHANGES REQUESTED** volt (1 MAJOR, 1 MINOR). A MAJOR
+  **nem implementációs hiba, hanem VAKON HAGYOTT ŐR** volt: a kör zászlós
+  invariánsának (§5.1) nevesített falszifikációja MÉRVE nem váltotta pirosra a
+  celláját. A javító kör **production kódot nem érintett**.
+
+---
+
+## 1. Jelzés és handoff
+
+`.codex-round-status`: `status=done`, `head=517f185a`, `scope_audit=ok`,
+`dirty_files=1`, `gate_shape=VIOLATION`.
+
+Mindkét gyanús mezőt kimértem, egyik sem valódi lelet:
+
+- **`dirty_files=1`** — a jelzés pillanatában még nem commitolt §10 handoff. A
+  kilépés utáni `git status --short` a munkapéldányon **üres**, a `head` a
+  legutolsó committal egyezik. Nincs elveszett munka.
+- **`gate_shape=VIOLATION`** — **FALSE POSITIVE, az őré, nem a köré.** Az őr
+  (`tools/mm-round.sh:381-384`) a `round-gate\.sh[^\n]*(\| *(tail|head)|&&)`
+  regexet illeszti a TELJES logra. A kör két TÉNYLEGES gate-hívása szabályos:
+
+  ```
+  tools/round-gate.sh test/core/design_system/forms/ss_button_test.dart \
+    test/core/design_system/forms/ss_inputs_test.dart \
+    test/property/design_system/slider_numeric_sync_test.dart \
+    test/core/design_system/component_catalog_test.dart
+  ```
+
+  (kétszer, csővezeték és `&&` NÉLKÜL). Az őrt egy READ-ONLY vizsgálódás
+  sütötte el: `grep -n "analyze" .../tools/round-gate.sh | head -20` — a
+  gate-szkript OLVASÁSA, nem futtatása. A minta a `.sh`-t követő `| head`-re
+  illeszkedik, függetlenül attól, hogy a sor a gate-et futtatja-e.
+  → **NOTE-1** (lentebb), a kör mércéjét nem érinti.
+
+A brief §10 handoffja **őszinte és mérésekkel alátámasztott**: dokumentálja a
+két menet közben talált saját hibát (`SsIconButton` szemantika-határ, `SsButton`
+2.0 text-scale túlcsordulás), a valódi-sértés próbát, és — kimondva — az A4
+cellák átfogalmazását is (lásd MINOR-1).
+
+## 2. Gate — SAJÁT kézzel újrafuttatva
+
+Izolált klón (`/tmp/review-e13-r11`, `517f185a`), csonkítatlan kimenet,
+`GATE_EXIT=0`:
+
+```
+format                                                     zöld
+analyze                                                    zöld
+test test/core/design_system/forms/ss_button_test.dart     zöld
+test test/core/design_system/forms/ss_inputs_test.dart     zöld
+test test/property/design_system/slider_numeric_sync_test.dart zöld
+test test/core/design_system/component_catalog_test.dart   zöld
+architecture                                               zöld (12 allowlisted deviation)
+secrets                                                    zöld (3580 fájl, 0 lelet)
+l10n                                                       zöld — aggregate freshness OK (en, hu), parity 1831 üzenet
+```
+
+A **negyedik** útvonal a pre-flight §0.0/D3 miatt került a gate-be, és a
+katalógus-bővítés mellett zöld maradt — a D3 exact-count csapdája (1 `SsCard`,
+1 `Material`, 1 `DecoratedBox`) nem sült el.
+
+## 3. Scope
+
+```
+$ python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e13-r11 \
+    --brief docs/rounds/e13-r11-actions-and-forms.md --base bf2184e53523
+Legacy scope audit OK (bf2184e53523..517f185a6b0d, 17 changed path(s), 0 generated/ignored)
+```
+
+Mind a 17 útvonal a brief `allowed_paths` listáján. A tilos zóna
+(`lib/features/**`, `lib/core/theme/**`, `docs/adr/**`, `tools/**`,
+`.github/**`) érintetlen. **Scope: OK.**
+
+## 4. Leletek
+
+| # | Súly | Hol | Mit |
+|---|---|---|---|
+| MAJOR-1 | MAJOR | `test/core/design_system/forms/ss_inputs_test.dart:18-49` | Az **A1** mindkét cellája ZÖLD marad a brief §6.1-ben nevesített falszifikáció alatt (`labelText` → `hintText`) |
+| MINOR-1 | MINOR | `test/…/ss_inputs_test.dart:99-118` | Az **A4** „48 dp padló" cellája vak: a `ConstrainedBox` törlése nem váltja pirosra |
+| NOTE-1 | NOTE | `tools/mm-round.sh:382` | A `gate_shape` őr egy `grep … round-gate.sh | head` OLVASÁSRA is elsül (nem a kör dolga) |
+
+### MAJOR-1 — Az A1 őre VAK a saját nevesített sértésére
+
+**A szerződés.** A brief §5.1 a kör zászlós döntése („A placeholder nem
+label… **NEM elfogadható gyengítés:** csak `hintText` »mert letisztultabb«"),
+és a §6.1 mérce-mátrix első sora nevesítve rendel hozzá őrt:
+
+| Hibás implementáció | Melyik cella vált PIROSRA |
+|---|---|
+| Csak `hintText`, label nélkül | **A1** |
+
+**A mérés.** A `/tmp/review-e13-r11` izolált klónban EGYETLEN sort mutáltam
+(`ss_text_field.dart:60`), pontosan a mátrix által leírt sértést:
+
+```dart
+-        labelText: label,
++        hintText: label,
+```
+
+Eredmény: **`flutter test …/ss_inputs_test.dart` → exit 0, „All tests
+passed!"** — az A1 mindkét cellája zöld maradt.
+
+**A gyökérok** (eldobható próbateszttel kimérve, ugyanabban a klónban):
+
+```
+PROBE find.text(label) after typing -> 1 match(es)
+PROBE   -> nearest ancestor opacity = 0.0
+PROBE decoration.labelText = null
+PROBE decoration.hintText  = Song title
+```
+
+1. A `hintText` `Text` widgetje **BENNE MARAD a fában** gépelés után is, csak
+   `Opacity(0.0)` alá kerül. A `find.text()` a LÁTHATATLAN maradékot is
+   megtalálja — az `A1` első cellája tehát „a label a fában van"-t mér, nem
+   „a label LÁTSZIK"-ot, miközben a cella saját `reason`-je pont az utóbbit
+   állítja (`'a real label never disappears once typing starts — a hintText
+   would have'`).
+2. A második cella (`find.bySemanticsLabel`) is zöld marad: a Flutter a
+   `hintText`-et is beemeli a mező semantics-labeljébe, tehát a felolvasós
+   cella sem különbözteti meg a két esetet.
+
+Ez pontosan a `lessons/L403` (a próba a widget JELENLÉTÉT méri, nem a
+tartalmat/viselkedést) és a `lessons/L446` (az őr nem azt méri, amit állít)
+mintája — a brief §0.0/D8 mindkettőt előre nevesítette.
+
+**Miért MAJOR:** a kör legerősebben megfogalmazott architekturális döntése
+gépi őr nélkül marad; egy jövőbeli „letisztultabb" refaktor csendben
+visszateheti a placeholdert, és minden teszt zöld marad. Az implementáció maga
+HELYES (`labelText` + `FloatingLabelBehavior.always`) — kizárólag az őr vak.
+
+**Javasolt irány** (nem kész patch, a javító kör dolga): a cella a
+LÁTHATÓSÁGOT vagy a TULAJDONSÁGOT mérje, ne a fában-létet. Két olcsó,
+egymást kiegészítő alak:
+- tulajdonság-szint: `tester.widget<TextField>(find.byType(TextField))
+  .decoration!.labelText` egyenlő a `label`-lel (és a `hintText` NEM hordozza);
+- vizuális szint: a megtalált label-`Text` legközelebbi `Opacity`/
+  `FadeTransition` őse ne 0 legyen gépelés után.
+
+A javítás után a fenti mutációt (`labelText` → `hintText`) újra le kell
+futtatni, és PIROSNAK kell lennie — ezt a javító kör §10-be írja be mért
+kimenettel.
+
+### MINOR-1 — Az A4 „48 dp padló" cellája vak (az érdemi invariáns viszont őrzött)
+
+**A mérés.** Ugyanabban a klónban töröltem a padlót
+(`ss_switch_row.dart:44-47`, a `ConstrainedBox(minHeight:
+SsSemantics.minimumInteractiveDimension)`): a teszt **zöld maradt (exit 0)**.
+A `SsSwitchRow` ugyanis a `Switch` saját, M3-alapértelmezett `padded` érintési
+célja + a sor `space2` paddingja miatt amúgy is ~64 dp — a padló sosem
+aktiválódik, tehát a törlése láthatatlan.
+
+Ez a brief §6.1 „három kötelező cella (küszöb: 48 dp)" előírásának gyenge
+pontja: az implementer a §10-ben **kimondottan és mérésekkel** átfogalmazta a
+44/48/56 dp cellákat (mert a tényleges komponensen 44 dp-s sor nem áll elő) —
+a reinterpretáció indoklása helytálló, de a maradék két cella egyike sem fogja
+meg a padló eltűnését.
+
+**Miért csak MINOR:** a §5.4 ÉRDEMI invariánsát (a TELJES sor érinthető, nem
+csak a kapcsoló) őrzi cella, és ezt is kimértem — a „csak a `Switch`
+kapcsolható" mutáció alatt
+
+```
+Expected: true
+  Actual: <false>
+00:02 +7 -1: Some tests failed.
+```
+
+→ **PIROS**, tehát az akadálymentességi kockázat valódi őre működik. A padló
+ezen felül redundáns védelem, aminek az elvesztése sem rontaná a mért
+érintési célt.
+
+**Javasolt irány:** a padló-cella a `SsSwitchRow`-t olyan tartalommal mérje,
+ahol a `Switch` intrinsic magassága NEM dominál (pl. a padló közvetlen
+mérése egy `Switch` nélküli, minimális összeállításon), vagy a cella mondja ki
+a jelentésében, hogy a padló redundáns — de akkor a §6.1 három-cellás
+küszöb-előírását a brief §0.0-jában kell hozzáigazítani. Follow-up körre is
+halasztható.
+
+### NOTE-1 — A `gate_shape` őr false positive-ja
+
+Lásd a §1-et. A `tools/` a kör tilos zónája, tehát ez **nem ebben a körben**
+javítandó (ADR 0087 §4) — a lánc-infrastruktúra dolga. A mért minta:
+egy `grep -n "…" tools/round-gate.sh | head -20` alakú OLVASÁS `VIOLATION`-t
+ad, ami a jövőben elfedheti a VALÓDI csővezeték-sértést (riasztás-fáradás).
+
+## 5. Acceptance criteria — tételesen
+
+| # | Kritérium | Bizonyíték | Állapot |
+|---|---|---|---|
+| A1 | Tartós label minden mezőn | `ss_inputs_test.dart:18-49` — **de a nevesített sértés alatt is zöld** | ❌ **MAJOR-1** (az implementáció helyes, az őr vak) |
+| A2 | A loading gomb mérete változatlan, nincs dupla beküldés | 3 cella; sajátkezű mutáció (`Opacity` → `if (!loading)`) → **PIROS**: `Expected: Size(217.2, 48.0) Actual: Size(66.0, 48.0)` | ✅ |
+| A3 | Csúszka ↔ numerikus bevitel MINDIG szinkron | `slider_numeric_sync_test.dart` — 100 próba, próbánként 4 állítás, MINDKÉT valódi callback (`Slider.onChanged`, `TextField.onSubmitted`), exakt egyenlőség; az implementer valódi-sértés próbája (`_round(parsed) + 1`) mérten PIROS | ✅ |
+| A4 | A kapcsoló teljes sora érinthető (≥ 48 dp) | „teljes sor" cella sajátkezű mutáció alatt **PIROS**; a „48 dp padló" cella viszont vak | ⚠️ **MINOR-1** |
+| A5 | A destruktív gomb semanticsban is elkülönül | `ss_button_test.dart` — `data.hint == 'This cannot be undone'`, `isButton`, és a nem-destruktív ág hint NÉLKÜL | ✅ |
+| A6 | 2.0 text scale mellett nincs túlcsordulás | `tester.view.physicalSize = Size(360,1200)` (D7/L452 helyesen), 7 komponens, `takeException() == null`; menet közben VALÓDI hibát fogott (`SsButton` `Row` túlcsordulás → `Flexible`) | ✅ |
+| A7 | A fókusz-bejárás a vizuális sorrendet követi | `nextFocus()` × 2, monoton `dy` | ✅ |
+| A8 | Minden új szöveg ARB-n át (en + hu) | 3 új kulcs a **fragmentumban** (`design_system_{en,hu}.arb`), aggregátum `--write`-tal regenerálva; gate `l10n`: freshness OK + parity 1831 üzenet. Hardkódolt user-facing string a 7 új fájlban: **0** | ✅ |
+| A9 (pre-flight D5) | Az `SsIconButton` gomb-, nem kép-semantics | `SsIcon.decorative` + saját `Semantics(container: true, button: true)`; menet közben VALÓDI hibát fogott (határ nélkül a `getSemantics` egy külső ősre csúszott) | ✅ |
+
+## 6. Architektúra és termékhatárok (AGENTS.md §5–§6)
+
+- **Erőforrás-tulajdonlás:** a 7 új fájl egyike sem említ `MethodChannel`-t,
+  `wakelock`-ot, kamerát, mikrofont, felvételt vagy engedélyt — a komponensek
+  tisztán prezentációsak. (Az E13-R09 forrás-őre két fájlra van kötve, a jelen
+  kör fájljaira nem terjed ki; kézzel ellenőrizve.)
+- **`core ↛ feature`:** nincs `features/` import. A `public.dart` mind a 7 új
+  fájlt exportálja.
+- **Lokalizáció:** a design system csak a SAJÁT keretszövegét birtokolja
+  (3 ARB-kulcs); a konkrét üzenetek hívó-oldaliak (`SsValidationIssue.message`,
+  `destructiveSemanticHint`, `SsIconButton` label/tooltip) — ugyanaz a
+  tulajdonlási szabály, mint az ADR 0411 §4-ben.
+- **Deprecation-tisztaság:** az `analyze` info-szintű leletei is javítva
+  (`IgnorePointer.ignoringSemantics`, `Radio.groupValue`/`onChanged` →
+  `RadioGroup`, `SemanticsData.hasFlag` → `flagsCollection`).
+
+## 7. Próbatesztek (eldobhatók — mind visszaállítva)
+
+Mind a `/tmp/review-e13-r11` izolált klónban futott; a klón a próbák után
+`git status --porcelain` szerint **tiszta**.
+
+| Próba | Mutáció | Várt | Mért |
+|---|---|---|---|
+| P1 | `SsSwitchRow`: a 48 dp `ConstrainedBox` törlése | PIROS | **ZÖLD** → MINOR-1 |
+| P2 | `SsSwitchRow`: csak a `Switch` kapcsolható, a sor nem | PIROS | **PIROS** ✅ |
+| P3 | `SsTextField`: `labelText` → `hintText` | PIROS | **ZÖLD** → MAJOR-1 |
+| P4 | `SsButton`: a felirat kikerül a fából loading alatt | PIROS | **PIROS** ✅ |
+| P5 | diagnosztika a P3 gyökérokára (`find.text` + ős-`Opacity`) | — | `opacity = 0.0`, `labelText = null` |
+
+## 8. Verdikt (első kör)
+
+**CHANGES REQUESTED.** A MAJOR-1 zárásáig nincs merge. A javító kör hatóköre
+**egyetlen fájl** (`test/core/design_system/forms/ss_inputs_test.dart`) — a
+production kód helyes, nem kell hozzányúlni.
+
+---
+
+## 9. Javító kör (`2d3e91aa`) — leletenkénti zárás, SAJÁT méréssel
+
+A javító kör diffje **2 fájl, 182 beszúrás** — `ss_inputs_test.dart` és a brief
+§10. **Production kód: 0 sor** (a review kikötése). Scope-audit a friss
+HEAD-en: `Legacy scope audit OK (bf2184e53523..2d3e91aa3261, 18 changed
+path(s), 1 generated/ignored)` — az 1 ignorált a saját review-jelentésem
+(állandó mentesség).
+
+### MAJOR-1 — **ZÁRVA** ✅
+
+Az A1 csoport első két cellája most a TULAJDONSÁGOT és a LÁTHATÓSÁGOT méri:
+
+1. `TextField.decoration!.labelText == label` **ÉS** `decoration!.hintText != label`;
+2. a label-`Text` egyetlen `Opacity`/`FadeTransition` őse sem lehet `<= 0`.
+
+**Nem a jelentést fogadtam el, hanem újramértem** — friss klón a `2d3e91aa`-n,
+ugyanaz a mutáció, amivel a leletet nyitottam (`ss_text_field.dart:60`,
+`labelText:` → `hintText:`):
+
+```
+R2 exit=1
+00:00 +0: A1 — … the label is carried by labelText, not merely hintText (§5.1)
+Expected: 'Song title'
+  Actual: <null>
+00:02 +8 -1: Some tests failed.
+```
+
+A §6.1 mátrix által nevesített sértés tehát **PIROSRA váltja az A1-et**.
+Mutáció visszaállítva, a klón `git status --porcelain` szerint tiszta.
+
+### MINOR-1 — **ELFOGADVA (b) opcióval**
+
+A padló-cella továbbra sem bukik a `ConstrainedBox` törlésére (újramérve a
+`2d3e91aa`-n: `R3 exit=0`), de a javító kör a §10-ben **kimondja**, hogy a
+padló redundáns, és megnevezi a 48 dp tényleges őrét (a `Switch` saját
+`padded` érintési célja + a teljes-soros cella, ami mutáció alatt PIROS). Ez a
+javító prompt (b) ága, elfogadva.
+
+### NOTE-2 (ÚJ, nem blokkoló) — a láthatósági cella időzítés-függő
+
+A javító kör második (vizuális) cellája a fenti R2 mutáció alatt **nem** bukott
+meg — az A1 csoportot az ELSŐ, tulajdonság-szintű cella vitte pirosra. A
+gyökérokot kimértem (eldobható próba, `2d3e91aa` + `hintText` mutáció):
+
+```
+PROBE3 [after single pump()]     matches=1 opacityAncestors=[1.0, 1.0, 1.0, 1.0, 1.0]
+PROBE3 [after pumpAndSettle()]   matches=1 opacityAncestors=[0.0, 1.0, 1.0, 1.0, 1.0]
+```
+
+A cella `await tester.pump()`-ot hív (EGY frame), a `hintText` elhalványulási
+animációja viszont ekkor még nem futott le — az opacity még `1.0`. Egy
+`pumpAndSettle()` mellett `0.0`, és a cella harapna.
+
+**Miért csak NOTE:** az A1 acceptance-kritériumnak a tulajdonság-szintű
+cellában **van** működő, mért őre, tehát a §6.1 szerződés teljesül; a vizuális
+cella ezen felüli, redundáns védelem (ugyanaz a mérlegelés, mint a MINOR-1-nél).
+Egysoros follow-up: `pump()` → `pumpAndSettle()`.
+
+## 10. Zöld kapu (ADR 0052) — mind SAJÁT szemmel
+
+| Kapu | Bizonyíték |
+|---|---|
+| `tools/round-gate.sh` (9 lépés) | izolált klón, `2d3e91aa`, **`GATE_EXIT=0`**, csonkítatlan |
+| Full Gate CI (teljes suite + randomizált property + coverage) | run `32684626536`, `headSha=2d3e91aa…`, **success** |
+| Router CI | run `32684623149`, `headSha=2d3e91aa…`, **success** |
+| Scope-audit | `OK`, 18 útvonal, 0 sértés |
+| Review | ez a jelentés — nyitott BLOCKER/MAJOR: **nincs** |
+
+**Verdikt: APPROVED — merge engedélyezve.**

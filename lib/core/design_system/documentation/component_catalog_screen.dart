@@ -3,11 +3,18 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../foundation/app_failure.dart';
+import '../components/actions/ss_button.dart';
+import '../components/actions/ss_icon_button.dart';
 import '../components/feedback/failure_presentation.dart';
 import '../components/feedback/ss_async_state.dart';
 import '../components/feedback/ss_empty_state.dart';
 import '../components/feedback/ss_failure_state.dart';
 import '../components/feedback/ss_permission_state.dart';
+import '../components/inputs/ss_choice.dart';
+import '../components/inputs/ss_switch_row.dart';
+import '../components/inputs/ss_text_field.dart';
+import '../components/inputs/ss_validation_summary.dart';
+import '../components/inputs/ss_value_slider.dart';
 import '../components/surfaces/ss_card.dart';
 import '../components/surfaces/ss_hero_card.dart';
 import '../components/surfaces/ss_surface.dart';
@@ -167,6 +174,8 @@ final class _ComponentCatalogScreenState
                     ),
                     const SizedBox(height: SsSpacing.space4),
                     const _AsyncFeedbackShowcase(),
+                    const SizedBox(height: SsSpacing.space4),
+                    const _ActionsAndFormsShowcase(),
                   ],
                 ),
               ),
@@ -249,6 +258,81 @@ final class _AsyncFeedbackShowcase extends StatelessWidget {
           consequence: 'Without it, chord detection cannot run.',
           presentation: permissionPresentation,
           onOpenSettings: () {},
+        ),
+      ],
+    );
+  }
+}
+
+/// Demonstrates the Ch13 Kör 11 action/input state matrix — button
+/// variants, an icon button, a labelled text field, a full-row switch, a
+/// segmented choice, a tempo slider paired with its exact numeric field, and
+/// a validation summary.
+///
+/// English-only for the same reason as [_AsyncFeedbackShowcase] (D7): the
+/// catalog is a dev-only surface, [lookupAppLocalizations] resolves the
+/// validation summary's generic copy without depending on a
+/// `Localizations` ancestor.
+final class _ActionsAndFormsShowcase extends StatelessWidget {
+  const _ActionsAndFormsShowcase();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: SsSpacing.space2,
+          runSpacing: SsSpacing.space2,
+          children: [
+            SsButton(label: 'Save changes', onPressed: () {}),
+            SsButton(
+              label: 'Delete song',
+              variant: SsButtonVariant.destructive,
+              destructiveSemanticHint: 'This cannot be undone',
+              onPressed: () {},
+            ),
+            SsIconButton(
+              iconName: 'close',
+              semanticLabel: 'Close',
+              tooltip: 'Close',
+              onPressed: () {},
+            ),
+          ],
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        const SsTextField(label: 'Song title'),
+        const SizedBox(height: SsSpacing.space2),
+        SsSwitchRow(label: 'Metronome click', value: true, onChanged: (_) {}),
+        const SizedBox(height: SsSpacing.space2),
+        SsChoice<String>(
+          options: const [
+            SsChoiceOption(value: 'up', label: 'Up'),
+            SsChoiceOption(value: 'down', label: 'Down'),
+          ],
+          value: 'up',
+          onChanged: (_) {},
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsValueSlider(
+          label: 'Tempo',
+          value: 120,
+          min: 40,
+          max: 220,
+          unitLabel: 'BPM',
+          onChanged: (_) {},
+        ),
+        const SizedBox(height: SsSpacing.space2),
+        SsValidationSummary(
+          l10n: l10n,
+          issues: const [
+            SsValidationIssue(
+              fieldLabel: 'Song title',
+              message: 'Song title is required',
+            ),
+          ],
         ),
       ],
     );
