@@ -198,9 +198,7 @@ def assert_may(
         target_role=target_role,
         is_self=is_self,
     ):
-        raise ClubPermissionDenied(
-            f"role={actor_role!r} may not {action.value}"
-        )
+        raise ClubPermissionDenied(f"role={actor_role!r} may not {action.value}")
 
 
 class ClubPermissionDenied(Exception):

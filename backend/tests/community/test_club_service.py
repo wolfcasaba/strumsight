@@ -347,12 +347,8 @@ def test_a1_real_violation_probe_drop_transfer_guard_fails_cell(
     # probe strips that branch out (and the transfer-check in
     # general) so the leave lands.
     def leave_without_guard(db, *, actor_profile_id, club_public_id, now):
-        actor = (
-            db.query(CommunityProfile).filter_by(id=actor_profile_id).one()
-        )
-        club_row = (
-            db.query(CommunityClub).filter_by(public_id=club_public_id).one()
-        )
+        actor = db.query(CommunityProfile).filter_by(id=actor_profile_id).one()
+        club_row = db.query(CommunityClub).filter_by(public_id=club_public_id).one()
         member = (
             db.query(CommunityClubMember)
             .filter_by(club_id=club_row.id, profile_id=actor.id)
@@ -503,7 +499,9 @@ def test_a1_owner_leave_with_second_owner_succeeds(session_factory) -> None:
             ClubAction.TRANSFER_OWNERSHIP,
             None,
             False,
-        ) if False else (CLUB_ROLE_OWNER, ClubAction.TRANSFER_OWNERSHIP, None, True),
+        )
+        if False
+        else (CLUB_ROLE_OWNER, ClubAction.TRANSFER_OWNERSHIP, None, True),
     ],
 )
 def test_a2_permission_matrix_cells(role, action, target_role, expected):
@@ -1000,11 +998,7 @@ def test_a7_member_count_at_threshold_join_still_accepted(
     # AFTER the join).
     db: Session = session_factory()
     try:
-        count = (
-            db.query(CommunityClubMember)
-            .filter_by(club_id=club.id)
-            .count()
-        )
+        count = db.query(CommunityClubMember).filter_by(club_id=club.id).count()
         assert count == MAX_CLUB_MEMBERS
     finally:
         db.close()
@@ -1078,9 +1072,7 @@ def test_a8_transfer_ownership_old_owner_becomes_member(
             .filter_by(club_id=club.id, profile_id=new_owner.id)
             .one()
         )
-        club_row = (
-            db.query(CommunityClub).filter_by(id=club.id).one()
-        )
+        club_row = db.query(CommunityClub).filter_by(id=club.id).one()
         assert old_row.role == CLUB_ROLE_MEMBER, (
             "D4 invariant broken — old owner must be plain member"
         )

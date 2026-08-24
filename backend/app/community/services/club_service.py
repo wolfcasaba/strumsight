@@ -138,9 +138,7 @@ class ClubMembershipLimitExceeded(Exception):
     """
 
     def __init__(self, member_count: int) -> None:
-        super().__init__(
-            f"club roster is full ({member_count}/{MAX_CLUB_MEMBERS})"
-        )
+        super().__init__(f"club roster is full ({member_count}/{MAX_CLUB_MEMBERS})")
         self.member_count = member_count
 
 
@@ -226,11 +224,7 @@ def _UTC():
 def _resolve_club_by_public_id(
     db: Session, public_id: uuid.UUID
 ) -> CommunityClub | None:
-    return (
-        db.query(CommunityClub)
-        .filter_by(public_id=public_id)
-        .one_or_none()
-    )
+    return db.query(CommunityClub).filter_by(public_id=public_id).one_or_none()
 
 
 def _resolve_member(
@@ -289,9 +283,7 @@ def _ensure_not_blocked_pair(
         profile_id_a=actor_profile_id,
         profile_id_b=target_profile_id,
     ):
-        raise BlockedClubRelationship(
-            "actor and target are in a block relationship"
-        )
+        raise BlockedClubRelationship("actor and target are in a block relationship")
 
 
 # ---------------------------------------------------------------------------
@@ -381,13 +373,8 @@ def list_clubs(
             CommunityClub.deleted_at.is_(None),
             # Private clubs require membership; the rest are
             # visible to anyone.
-            (
-                CommunityClub.visibility != CLUB_VISIBILITY_PRIVATE
-            ) | (
-                CommunityClub.id.in_(
-                    select(member_club_ids_subq.c.club_id)
-                )
-            ),
+            (CommunityClub.visibility != CLUB_VISIBILITY_PRIVATE)
+            | (CommunityClub.id.in_(select(member_club_ids_subq.c.club_id))),
         )
         .order_by(CommunityClub.created_at.desc(), CommunityClub.id.desc())
         .limit(limit)
@@ -405,9 +392,7 @@ def list_clubs(
     # same helper the Kör 8 / Kör 21 readers use).
     if not rows:
         return []
-    owner_internal_ids = [
-        club.owner_profile_id for club in rows
-    ]
+    owner_internal_ids = [club.owner_profile_id for club in rows]
     blocked_internal = {
         pid
         for pid in owner_internal_ids
@@ -418,11 +403,7 @@ def list_clubs(
         )
     }
     if blocked_internal:
-        rows = [
-            club
-            for club in rows
-            if club.owner_profile_id not in blocked_internal
-        ]
+        rows = [club for club in rows if club.owner_profile_id not in blocked_internal]
     return rows
 
 
@@ -552,11 +533,7 @@ def create_club(
     if len(description) > 2000:
         raise ValueError("description must be at most 2000 characters")
 
-    owner = (
-        db.query(CommunityProfile)
-        .filter_by(id=owner_profile_id)
-        .one_or_none()
-    )
+    owner = db.query(CommunityProfile).filter_by(id=owner_profile_id).one_or_none()
     if owner is None:
         raise ValueError("owner profile not found")
 
@@ -678,11 +655,7 @@ def update_club(
 
 
 def _public_id_for_internal(db: Session, internal_id: int) -> uuid.UUID:
-    row = (
-        db.query(CommunityProfile.public_id)
-        .filter_by(id=internal_id)
-        .one_or_none()
-    )
+    row = db.query(CommunityProfile.public_id).filter_by(id=internal_id).one_or_none()
     if row is None:
         raise ValueError("profile not found")
     return row[0]
@@ -717,11 +690,7 @@ def request_join(
     Returns ``(member_row_or_None, invite_row_or_None)`` — exactly
     one is non-None for any successful call.
     """
-    actor = (
-        db.query(CommunityProfile)
-        .filter_by(id=actor_profile_id)
-        .one_or_none()
-    )
+    actor = db.query(CommunityProfile).filter_by(id=actor_profile_id).one_or_none()
     if actor is None:
         raise ValueError("actor profile not found")
     club = _resolve_club_by_public_id(db, club_public_id)
@@ -882,9 +851,7 @@ def accept_join_request(
     if invite is None:
         raise ClubInviteNotFound("invite not found")
     if invite.status != "pending":
-        raise InvalidClubTransition(
-            f"invite is in status {invite.status!r}"
-        )
+        raise InvalidClubTransition(f"invite is in status {invite.status!r}")
 
     actor_role = get_member_role(
         db,
@@ -934,11 +901,7 @@ def accept_join_request(
 
 
 def _club_public_id_for_invite(db: Session, club_id: int) -> uuid.UUID:
-    row = (
-        db.query(CommunityClub.public_id)
-        .filter_by(id=club_id)
-        .one_or_none()
-    )
+    row = db.query(CommunityClub.public_id).filter_by(id=club_id).one_or_none()
     if row is None:
         raise ClubNotFound("club not found")
     return row[0]
@@ -964,9 +927,7 @@ def decline_join_request(
     if invite is None:
         raise ClubInviteNotFound("invite not found")
     if invite.status != "pending":
-        raise InvalidClubTransition(
-            f"invite is in status {invite.status!r}"
-        )
+        raise InvalidClubTransition(f"invite is in status {invite.status!r}")
     club_pub = _club_public_id_for_invite(db, invite.club_id)
     actor_role = get_member_role(
         db,
@@ -1005,11 +966,7 @@ def leave_club(
     the same transaction) — Kör 24 does not bundle them into a
     single call so the error path is explicit.
     """
-    actor = (
-        db.query(CommunityProfile)
-        .filter_by(id=actor_profile_id)
-        .one_or_none()
-    )
+    actor = db.query(CommunityProfile).filter_by(id=actor_profile_id).one_or_none()
     if actor is None:
         raise ValueError("actor profile not found")
     club = _resolve_club_by_public_id(db, club_public_id)
@@ -1036,9 +993,7 @@ def leave_club(
             or 0
         )
         if owner_count <= 1:
-            raise OwnerMustTransferFirst(
-                "owner must transfer ownership before leaving"
-            )
+            raise OwnerMustTransferFirst("owner must transfer ownership before leaving")
 
     db.delete(member)
     db.flush()
@@ -1069,21 +1024,13 @@ def transfer_ownership(
     The whole sequence is in a single transaction; partial
     failure leaves the club in its prior state.
     """
-    actor = (
-        db.query(CommunityProfile)
-        .filter_by(id=actor_profile_id)
-        .one_or_none()
-    )
+    actor = db.query(CommunityProfile).filter_by(id=actor_profile_id).one_or_none()
     if actor is None:
         raise ValueError("actor profile not found")
     if new_owner_profile_id == actor.id:
-        raise SelfRoleMutationNotAllowed(
-            "cannot transfer ownership to yourself"
-        )
+        raise SelfRoleMutationNotAllowed("cannot transfer ownership to yourself")
     new_owner = (
-        db.query(CommunityProfile)
-        .filter_by(id=new_owner_profile_id)
-        .one_or_none()
+        db.query(CommunityProfile).filter_by(id=new_owner_profile_id).one_or_none()
     )
     if new_owner is None:
         raise ValueError("new owner profile not found")
@@ -1107,9 +1054,7 @@ def transfer_ownership(
     if actor_member is None or actor_member.role != CLUB_ROLE_OWNER:
         raise ClubPermissionDenied("actor is not the owner member")
     if new_member is None:
-        raise ClubMemberNotFound(
-            "new owner must be an existing member of the club"
-        )
+        raise ClubMemberNotFound("new owner must be an existing member of the club")
 
     # D4 — old owner flips to ``member`` (NOT moderator).
     actor_member.role = CLUB_ROLE_MEMBER
@@ -1160,9 +1105,7 @@ def remove_member(
     if target_role is None:
         raise ClubMemberNotFound("target not a member")
     if target_role == CLUB_ROLE_OWNER:
-        raise OwnerMustTransferFirst(
-            "cannot remove the owner — transfer first"
-        )
+        raise OwnerMustTransferFirst("cannot remove the owner — transfer first")
     assert_may(
         actor_role=actor_role,
         action=ClubAction.REMOVE_MEMBER,
@@ -1305,9 +1248,7 @@ def cancel_invite(
     if invite is None:
         raise ClubInviteNotFound("invite not found")
     if invite.status != "pending":
-        raise InvalidClubTransition(
-            f"invite is in status {invite.status!r}"
-        )
+        raise InvalidClubTransition(f"invite is in status {invite.status!r}")
     club_pub = _club_public_id_for_invite(db, invite.club_id)
     actor_role = get_member_role(
         db,
@@ -1323,9 +1264,7 @@ def cancel_invite(
         CLUB_ROLE_MODERATOR,
     )
     if not (is_inviter or is_moderator_plus):
-        raise ClubPermissionDenied(
-            "only the inviter or a moderator+ may cancel"
-        )
+        raise ClubPermissionDenied("only the inviter or a moderator+ may cancel")
     _ = ClubAction.CANCEL_INVITE  # the matrix entrypoint
     invite.status = "cancelled"
     invite.responded_at = now
