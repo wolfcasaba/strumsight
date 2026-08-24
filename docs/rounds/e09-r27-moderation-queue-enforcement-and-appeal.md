@@ -6,10 +6,78 @@
 - **Branch:** `<motor>/e09-r27-moderation-queue-enforcement-and-appeal`
 - **Előfeltétel:** `E09-R26` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0415` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** ~~`ADR 0415`~~ **`ADR 0425`** — a `0415` szám MÁR
+  FOGLALT (`docs/adr/0415-community-challenge-invite-lifecycle.md`,
+  merge-elve) — a §0.0 pre-flight `tools/round-slots.py reserve-adr` friss
+  számot adott. Az ADR-t a Claude írta meg a kör indítási pre-flightjában
+  ([`docs/adr/0425-moderation-queue-enforcement-and-appeal.md`](../adr/0425-moderation-queue-enforcement-and-appeal.md));
+  az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 19 `media_moderation.py` és a Kör 26 `report_service.py` TÉNYLEGES kimeneti alakját — a queue ezekből táplálkozik, nem újradefiniálja a triage-jelzéseket. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight brief-revízió (2026-08-24, Claude Sonnet 5, `main @ 4222800f`)
+
+**Kockázat = high, indoklás:** a `risk = "high"` besorolás nem egy
+`allowed_paths`-beli `high_risk_path_fragments` kulcsszóból fakad (a
+brief-lint S7 ezt jelezte) — a kockázat forrása maga a domain: ez a kör
+vezeti be az ELSŐ site-wide admin/moderator jogosultsági réteget, és egy
+visszavonhatatlan account-enforcement audit-láncot épít. Mindkettő a
+kötelező `security-reviewer` subagent bevonását indokolja (AGENTS.md §15).
+Részletek: [ADR 0425](../adr/0425-moderation-queue-enforcement-and-appeal.md)
+"Kockázat = high, indoklás" szakasza.
+
+**Visszakeresett előzmény (ADR 0312, §4.9):** `node tools/knowledge-rag.mjs --corpus
+lessons,halts,adr --top 5 "moderation queue enforcement appeal admin
+scope"` → **ADR 0407 §D2** (bm25#2 emb#13, döntő találat — lásd lent).
+`node tools/knowledge-rag.mjs --corpus lessons,halts --top 5 "immutable
+audit event chain admin authorization scope new"` → nincs közvetlenül ide
+vágó lecke a `community_moderation_actions` append-only mintára; a
+legközelebbi analóg a Kör 19 `media_moderation.py` audit-oszlop mintája,
+ami ADR-szinten (0412 §D5) már dokumentált.
+
+**Mért tények a pre-flightban (ADR 0425 Kontextus 1–9):**
+
+1. Az előre kiosztott `0415` ADR-szám MÁR FOGLALT — javítva `0425`-re
+   (fent).
+2. `grep -rn "role\|moderator\|is_staff\|is_admin" backend/app/models.py
+   backend/app/community/models/profile.py` → **0 találat** — sem a
+   `User`, sem a `CommunityProfile` modellen nincs admin/moderator mező.
+   Az ADR 0407 §D2 (`comment_policy.py::can_delete(is_moderator=...)`)
+   ezt EXPLICIT a "Kör 26/27 admin-auth kör" döntésére bízta — **ez a
+   kör az**. A valódi forrás: ÚJ `community_moderators` tábla
+   (`backend/app/community/models/moderation.py`, engedélyezett fájl),
+   `User`/`CommunityProfile`/`deps.py`/`security.py` módosítása NÉLKÜL
+   (ADR 0425 D1 — mindegyik a tilos zónában van).
+3. A Kör 19 `media_moderation.py::triage()`/`resolve_review()`
+   szétválasztása (ADR 0412 §D5) élő precedens: az automatika sosem írhat
+   közvetlenül súlyos végállapotot. Ez a kör ugyanezt a mintát a
+   case-állapotgépre és az account-enforcementre vetíti
+   (`record_automation_signal` vs. `apply_moderator_decision`, ADR 0425
+   D4) — a §6.1 kötelező valódi-sértés próba pontos alanya.
+4. `docs/sdd/10-epic-09-community-platform.md` §18.1 az öt-értékű
+   `ModerationState` Dart enum forrása
+   (`visible/limited/pendingReview/removed/authorOnly`) — Python oldalon
+   snake_case string-értékek, plain-`String` + modul-szintű allowlist
+   (ADR 0398 §1 minta, ADR 0425 D3).
+5. Az alembic-lánc feje `e09_r26_0019` — az új migráció
+   `down_revision="e09_r26_0019"`, `revision="e09_r27_0020"` (a fájlnév
+   már ezt viseli).
+6. A `community_reports` `(target_type, target_id, created_at, id)`
+   composite index (Kör 26) kifejezetten erre a queue-ra épült
+   (`report.py:52-54`) — a `reporter_profile_id` retaliation-határa (ADR
+   0422 D2) öröklődik: SOHA nem kerülhet target-néző/moderator-néző
+   válasz-sémába (ADR 0425 D7/D8).
+7. A queue-priority három bemeneti jele (report-signal, automation-triage,
+   account-history) rögzített, a súlyozás az implementer mérnöki döntése
+   — egyik acceptance cella sem méri a priority-t számszerűen, tehát nincs
+   hozzá cellahármas-kötelezettség (ADR 0425 D8).
+8. A `content_visibility_for_state` (A6) tiszta függvény, ezt a kör NEM
+   köti be a `feed.py`/`posts.py` route-okba (egyik sincs az
+   `allowed_paths`-on) — ugyanaz a deferred-wiring minta, mint a Kör 19
+   triage-seam vagy a Kör 18 `object_store.py` port (ADR 0425 D7).
+
+Részletes indoklás, elutasított alternatívák: [ADR 0425](../adr/0425-moderation-queue-enforcement-and-appeal.md).
 
 ```ai-router
 schema_version = 1
