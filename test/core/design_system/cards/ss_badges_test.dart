@@ -181,7 +181,7 @@ void main() {
 
       for (final kind in SsStatusBadgeKind.values) {
         testWidgets(
-          '${themeEntry.key} — SsStatusBadgeKind.$kind label meets 4.5:1',
+          '${themeEntry.key} — SsStatusBadgeKind.${kind.name} label meets 4.5:1',
           (tester) async {
             await tester.pumpWidget(
               _wrap(
@@ -209,7 +209,7 @@ void main() {
 
       for (final kind in SsProvenanceKind.values) {
         testWidgets(
-          '${themeEntry.key} — SsProvenanceKind.$kind label meets 4.5:1',
+          '${themeEntry.key} — SsProvenanceKind.${kind.name} label meets 4.5:1',
           (tester) async {
             await tester.pumpWidget(
               _wrap(

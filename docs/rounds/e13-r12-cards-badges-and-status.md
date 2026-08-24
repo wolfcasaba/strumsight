@@ -640,7 +640,40 @@ vegyes-pipeline fogyasztó megjelenik, az a kör hozza majd az `unknown` érték
 
 ### Kötelező zárás — tényleges parancsok
 
-(a `round-gate.sh` és a `dart run tool/gen_l10n_segments.dart --write`
-tényleges kimenete lent, a §10 fő szakaszában lévő mintát követve)
+```
+$ dart run tool/gen_l10n_segments.dart --write
+Running build hooks...Running build hooks...[GenerationOutcome(en).locale] aggregátum írva
+[GenerationOutcome(hu).locale] aggregátum írva
+```
+
+(nulla diff utána — a fix1 kör egyetlen ARB-fragmentumot sem érintett, csak a
+`lib/`/`test/` Dart-fájlokat és ezt a briefet.)
+
+```
+$ tools/round-gate.sh test/core/design_system/cards/ss_cards_test.dart \
+    test/core/design_system/cards/ss_badges_test.dart \
+    test/core/design_system/component_catalog_test.dart
+
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/core/design_system/cards/ss_cards_test.dart      zöld
+    test test/core/design_system/cards/ss_badges_test.dart     zöld
+    test test/core/design_system/component_catalog_test.dart   zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+`ss_badges_test.dart` **+44** teszttel fut le (a korábbi 7 A1/A2-cella közül a
+harmadik A1-cella lecserélve/megfordítva F4 szerint, plusz 27 új F1+F2
+kontraszt-cella és 16 új F3 geometria-cella). `ss_cards_test.dart` a
+meglévő **+10**-zel zöld (az A4 két cellája `l10n:`-t kapott a §10.1/F5 miatt,
+az állítások nem változtak). `component_catalog_test.dart` a fagyott
+exact-count őrökkel is zöld maradt — az `SsCoachActionCard` `provenance`
+paramétere és az `SsInsightCard` kötelező `provenance`-a nem adott új
+`SsCard`/`Material`/`DecoratedBox`-ot a katalógusba.
 
 ## 11. Review — a Claude tölti ki
