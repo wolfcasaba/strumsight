@@ -554,4 +554,119 @@ egyáltalán nem nyúltam.
 round-fájl (MÓD). **Nem érintve** (a §0.0/D5-től eltérően, lásd fent):
 `lib/l10n/app_en.arb`, `lib/l10n/app_hu.arb`.
 
+## Javító kör (fix1, 2026-08-24) — `docs/reviews/e13-r13-review.md`
+## 1 BLOCKER + 3 MAJOR leletének zárása
+
+A review (`34dc6380` felett, CHANGES REQUESTED) négy leletet talált — mind a
+teljes zöld gate mellett, mert a `flutter_test` alapértelmezett felülete
+(800×600 dp @ textScale 1.0) szélesebb, mint bármely telefon, és a kör
+egyetlen cellája sem lépett ki erről. Ez a javító kör (ugyanazon a
+munkapéldányon, `sonnet-impl/e13-r13-overlays-and-confirmations` ágon) a
+négy leletet és a három hozzájuk kötött MINOR-t zárja. **Nem nyúltam**
+`ss_overlay_host.dart`-hoz — a fix a három confirmation-widgeten belül
+oldható meg.
+
+### Melyik lelet, melyik javítás, melyik cella
+
+| Lelet | Javítás | Fájl | Cella |
+|---|---|---|---|
+| **BLOCKER-1** — a lap nem görgethető, a két adatvédelmi dimenzió és mindkét gomb lecsúszik | A törzs `Flexible` + `SingleChildScrollView`-ba került, a gombsor a görgethető területen KÍVÜL, a Column aljára rögzítve | mindhárom widget | A9 (mindhárom felület, mindhárom cellacsoport) — a tool-lapnál kifejezetten a „…leaves-device/recording are reachable by scrolling the body" cella |
+| **MAJOR-1** — a Mégse elérhetetlen fekvő telefonon | ugyanaz a görgethető-törzs + rögzített-gombsor szerkezet — a gombsor a `Column` utolsó, nem-flexibilis gyermeke, ezért mindig a host által adott magasságon (a side-sheet esetén a teljes viewport-magasságon) BELÜL marad | mindhárom widget | A9 — „SsDialog/SsConfirmationSheet/SsToolConfirmationSheet 915x412 @ textScale=…: Cancel and Confirm stay on-screen" (mind a 6 cella) |
+| **MAJOR-2** — a destruktív gomb felirata levágódik | a kézzel írt `Row(mainAxisAlignment: end, [gomb, SizedBox, gomb])` helyett Flutter beépített `OverflowBar`-ja: a próba-layout minden gombot a TELJES elérhető szélességre (nem felezve) korlátoz, így a belső `SsButton`-`Flexible(Text(ellipsis))` ténylegesen tud ellipszizálni; ha a kettő EGYÜTT nem fér ki, a bar függőlegesen egymás alá rendezi őket (mindkettő továbbra is a teljes szélességre korlátozva, tehát SOHA nem nyúlhat túl vízszintesen) | mindhárom widget | A9 (`tester.takeException()` == null minden cellában — nincs `RenderFlex overflowed`) |
+| **MAJOR-3** — a „pontosan egyszer" őr nem tartós, reszponzív alakváltásnál kétszer fut | az egyszeri-őr KIKERÜLT a `State`-ből: a `show()` statikus metódus egy `confirmed` `bool`-t zár a saját closure-jébe, és ezzel csomagolja be a hívó `onConfirm`-ját (`guardedOnConfirm`), MIELŐTT átadná a widgetnek — ez a closure túléli a bottom-sheet↔side-sheet alakváltás okozta `State`-újrainflálást, mert nem a `State`-hez, hanem a `show()` hívás élettartamához kötött | `ss_confirmation_sheet.dart`, `ss_tool_confirmation_sheet.dart` (a `ss_dialog.dart` `showDialogSurface`-e sosem vált alakot — ő maradt a kontroll, nem módosítva ebben a pontban) | `ss_confirmation_test.dart` A6 új cellája: „a throwing onConfirm followed by a responsive reshape past expandedMin does not let a second tap run the destructive callback again" |
+| MINOR-1 — zsákutca sikertelen `onConfirm` után | `_handleConfirm` `try/catch`-be került: ha `widget.onConfirm()` dob, a helyi `_confirmed` visszaáll `false`-ra (a gombok újra aktívak lesznek — Mégse vagy újrapróbálkozás), majd a kivétel újra-dobódik (a `FlutterError` zónába kerül, ugyanúgy, mint korábban) | mindhárom widget | ugyanaz az új A6-cella (a lap NEM pattan be a sikertelen próbálkozás után — `findsOneWidget` marad) |
+| MINOR-2 — `SsToolDimension.detail` üres lehetett | konstruktor-`assert(detail != '')` | `ss_tool_confirmation_sheet.dart` | fordítási/futásidejű assert — nincs külön widget-cella (a meglévő A2 fixtűrök mind nem-üres `detail`-lel dolgoznak, tehát nem volt tautologikusak; az assert magát a jövőbeli hívó-oldali hibát zárja ki) |
+| MINOR-3 — a tool-lap az egyetlen felület `destructiveSemanticHint` nélkül | `SsToolConfirmationSheet` kapott egy `destructive` mezőt (alap `true`, ugyanaz a minta, mint a másik két felületen); a Megerősít gomb `variant`-ja és `destructiveSemanticHint`-je ettől függ | `ss_tool_confirmation_sheet.dart` | nincs önálló új cella ebben a körben (a meglévő A1/A3 cellák zöldek maradtak; a `destructiveSemanticHint` szerződést a másik két felület A1-mintája már bizonyítja azonos szerkezetben) |
+
+### A méret/textScale-mátrix — PIROS a javítás ELŐTT, ZÖLD utána
+
+A `ss_confirmation_test.dart`-ba felvett **A9** csoport 6 cellát mér
+(`SsDialog`/`SsConfirmationSheet` × {411×891, 915×412} × {textScale 1.0, 2.0}
+— mindkettő Cancel+Confirm on-screen) és 4 cellát a `SsToolConfirmationSheet`-
+re (ugyanaz a 4 méret/scale kombináció, Cancel+Confirm mindig on-screen ÉS a
+leaves-device/recording sor `tester.ensureVisible()` utáni on-screen —
+lásd indoklás lent), plusz egy önálló A6-cella a MAJOR-3 reprodukálására.
+A mérés mindenhol a **kirendelt** `getRect()`-en fut, nem `findsOneWidget`-en.
+
+**A javítás ELŐTTI kódon (a jelenlegi HEAD, mielőtt a widget-fájlokhoz
+nyúltam volna) lefuttatva** — `flutter test
+test/core/design_system/overlays/ss_confirmation_test.dart`:
+
+```
++18 -9: Some tests failed.
+```
+
+A 9 piros cella pontosan a négy lelet aláírása:
+
+```
+[E] A6 … a throwing onConfirm followed by a responsive reshape past expandedMin
+    does not let a second tap run the destructive callback again   (MAJOR-3)
+[E] A9 … SsDialog 411x891 @ textScale=1.0: Cancel and Confirm stay on-screen        (BLOCKER-1/MAJOR-2)
+[E] A9 … SsToolConfirmationSheet 411x891 @ textScale=1.0: … stay on-screen         (BLOCKER-1)
+[E] A9 … SsDialog 411x891 @ textScale=2.0: … stay on-screen                        (MAJOR-2)
+[E] A9 … SsConfirmationSheet 411x891 @ textScale=2.0: … stay on-screen             (MAJOR-2)
+[E] A9 … SsToolConfirmationSheet 411x891 @ textScale=2.0: … stay on-screen         (BLOCKER-1)
+[E] A9 … SsToolConfirmationSheet 915x412 @ textScale=1.0: … stay on-screen         (MAJOR-1/BLOCKER-1)
+[E] A9 … SsConfirmationSheet 915x412 @ textScale=2.0: … stay on-screen             (MAJOR-1/MAJOR-2)
+[E] A9 … SsToolConfirmationSheet 915x412 @ textScale=2.0: … stay on-screen         (MAJOR-1/BLOCKER-1)
+```
+
+(A `SsDialog`/`SsConfirmationSheet` 915×412 cellái a javítás előtt is zölden
+maradtak — a review saját MAJOR-1 mérése is kifejezetten a Mégse gombra
+vonatkozott, nem minden méret/felület kombinációra; a fenti 9 piros cella
+együtt lefedi mind a négy leletet.)
+
+**Fontos módszertani megjegyzés a tool-lap „leaves-device"/„recording" sorára:**
+az ELSŐ próbálkozásom a sorok STATIKUS `getRect()`-jét kérte számon
+görgetés nélkül — ez azonban `textScale=2.0`-n a PORTRÉ (411×891) felületen
+is pirosra váltott a JAVÍTÁS UTÁNI kódon is (`leaves-device` rect
+`y=949…1157` a 891 magas képernyőn), mert 2×-es szövegmérettel a cím +
+összegzés + négy dimenzió-sor + gombsor VALÓBAN nem fér ki 891 dp-be
+görgetés nélkül sem — ez fizikai korlát, nem hiba. A BLOCKER-1 eredeti
+panasza nem az volt, hogy a tartalom MINDIG azonnal látható legyen, hanem
+hogy `Scrollable` a részfában **nulla** volt, tehát a tartalom **semmilyen
+módon nem volt elérhető**. A cellát ezért `tester.ensureVisible()`-re
+cseréltem (ez a legközelebbi `Scrollable` ősig görget, amíg a cél látszik) —
+a régi (Scrollable nélküli) fán ez néma no-op, tehát a rá épülő
+`getRect`-ellenőrzés PIROS marad; a javított fán ténylegesen görget, és a
+sor elérhetővé válik. A Cancel/Confirm ellenőrzés a görgetés NÉLKÜLI,
+statikus `getRect()`-en maradt, mert azok a gombsor rögzített, nem-görgethető
+részén vannak — nekik MINDIG azonnal, görgetés nélkül kell látszaniuk
+(§5.3).
+
+**A javítás UTÁNI kódon** (a jelen commit): mind a 27 cella (7 régi A1–A6 +
+1 új A6-cella a MAJOR-3-hoz + a hat A9-Dialog/Sheet cella + négy
+A9-ToolConfirmationSheet cella, azaz A9 összesen 6+4=10 cella +
+`ss_overlay_test.dart` 7 cellája) ZÖLD — lásd a záró gate kimenetét lent.
+
+### A kötelező záró `tools/round-gate.sh` — a TÉNYLEGES kimenet (fix1)
+
+```
+$ tools/round-gate.sh test/core/design_system/overlays/ss_overlay_test.dart test/core/design_system/overlays/ss_confirmation_test.dart
+
+═══ [1] format                                                    → ZÖLD (1961 fájl, 0 változott)
+═══ [2] analyze                                                   → ZÖLD (No issues found)
+═══ [3] test .../ss_overlay_test.dart                             → ZÖLD (7 teszt, mind zöld)
+═══ [4] test .../ss_confirmation_test.dart                        → ZÖLD (27 teszt, mind zöld)
+═══ [5] architecture                                              → ZÖLD (12 allowlisted deviation — változatlan)
+═══ [6] secrets                                                   → ZÖLD (3628 fájl, 0 lelet)
+═══ [7] l10n                                                      → ZÖLD (aggregate friss, 1838 kulcs — VÁLTOZATLAN mindkét nyelven)
+
+MINDEN GATE ZÖLD.
+```
+
+Kiegészítő, a gate-en kívül futtatva (a tilos zóna épségének
+ellenőrzésére): `test/core/design_system/component_catalog_test.dart` (8
+teszt, ZÖLD) és `test/core/design_system/stage/stage_back_confirmation_test.dart`
+(3 teszt, ZÖLD) — egyikhez sem nyúltam, mindkettő változatlan.
+
+### Engedélyezett-fájllista — a fix1 tényleges diffje
+
+Módosítva: `ss_dialog.dart`, `ss_confirmation_sheet.dart`,
+`ss_tool_confirmation_sheet.dart` (mindhárom a §4 listáján), a
+`test/…/overlays/ss_confirmation_test.dart` (a §4 „2 tesztfájl" során), és ez
+a round-fájl. **Nem érintve**: `ss_overlay_host.dart`, `ss_side_sheet.dart`,
+`ss_overlay_test.dart`, `component_catalog_screen.dart`, `public.dart`,
+`lib/l10n/**` — a fix nem igényelte a host vagy a katalógus módosítását.
+
 ## 11. Review — a Claude tölti ki

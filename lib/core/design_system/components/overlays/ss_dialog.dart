@@ -78,7 +78,14 @@ class _SsDialogState extends State<SsDialog> {
     // lands, before the pop animation even starts.
     if (_confirmed) return;
     setState(() => _confirmed = true);
-    widget.onConfirm();
+    try {
+      widget.onConfirm();
+    } catch (_) {
+      // A failed onConfirm must not leave two permanently dead buttons
+      // (MINOR-1) — re-enable so the caller can retry or cancel.
+      if (mounted) setState(() => _confirmed = false);
+      rethrow;
+    }
     Navigator.of(context).maybePop();
   }
 
@@ -94,26 +101,49 @@ class _SsDialogState extends State<SsDialog> {
     return SsSurface(
       elevation: SsElevation.modal,
       radius: SsSurfaceRadius.lg,
-      child: Padding(
-        padding: const EdgeInsets.all(SsSpacing.space6),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.title,
-              style: typography.titleLarge.copyWith(color: colors.textPrimary),
-            ),
-            const SizedBox(height: SsSpacing.space2),
-            Text(
-              widget.message,
-              style: typography.bodyMedium.copyWith(
-                color: colors.textSecondary,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The body scrolls independently of the action row below (BLOCKER-1)
+          // — on a short/landscape viewport or at maximumTextScale, the title
+          // and message must never push the buttons off-screen.
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                SsSpacing.space6,
+                SsSpacing.space6,
+                SsSpacing.space6,
+                0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    widget.title,
+                    style: typography.titleLarge.copyWith(
+                      color: colors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: SsSpacing.space2),
+                  Text(
+                    widget.message,
+                    style: typography.bodyMedium.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: SsSpacing.space6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(SsSpacing.space6),
+            child: OverflowBar(
+              spacing: SsSpacing.space2,
+              overflowSpacing: SsSpacing.space2,
+              alignment: MainAxisAlignment.end,
+              overflowAlignment: OverflowBarAlignment.end,
               children: [
                 SsButton(
                   key: const ValueKey('ss-dialog-cancel'),
@@ -121,7 +151,6 @@ class _SsDialogState extends State<SsDialog> {
                   variant: SsButtonVariant.tertiary,
                   onPressed: _confirmed ? null : _handleCancel,
                 ),
-                const SizedBox(width: SsSpacing.space2),
                 SsButton(
                   key: const ValueKey('ss-dialog-confirm'),
                   label: widget.confirmLabel,
@@ -135,8 +164,8 @@ class _SsDialogState extends State<SsDialog> {
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

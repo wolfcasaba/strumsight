@@ -407,5 +407,202 @@ void main() {
         expect(confirmCalls, 1);
       },
     );
+
+    testWidgets('a throwing onConfirm followed by a responsive reshape past '
+        'expandedMin does not let a second tap run the destructive callback '
+        'again (ADR 0279 §5.5, the exactly-once guard must survive the '
+        'bottom-sheet/side-sheet subtree swap)', (tester) async {
+      var confirmCalls = 0;
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _confirmationHarness(
+          confirmLabel: 'Delete session',
+          onConfirm: () {
+            confirmCalls++;
+            throw StateError('backend unreachable');
+          },
+        ),
+      );
+      await tester.tap(find.byKey(_openSheetKey));
+      await tester.pumpAndSettle();
+
+      final confirmButton = find.byKey(
+        const ValueKey('ss-confirmation-confirm'),
+      );
+      await tester.tap(confirmButton);
+      await tester.pump();
+
+      expect(
+        tester.takeException(),
+        isNotNull,
+        reason:
+            'the synthetic "backend unreachable" throw is expected on '
+            'the first tap',
+      );
+      expect(confirmCalls, 1);
+      expect(
+        find.byType(SsConfirmationSheet),
+        findsOneWidget,
+        reason: 'a failed confirm must not pop the sheet (MINOR-1)',
+      );
+
+      // Below expandedMin the host renders a bottom sheet; above it, a
+      // side sheet — a different widget subtree, which used to reset a
+      // State-owned "confirmed" guard back to false (MAJOR-3).
+      tester.view.physicalSize = const Size(1000, 700);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('ss-confirmation-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        confirmCalls,
+        1,
+        reason:
+            'the destructive callback must run exactly once even after a '
+            'responsive reshape re-enables the confirm button (ADR 0279 '
+            '§5.5)',
+      );
+    });
+  });
+
+  group('A9 — every confirmation surface keeps its critical content and '
+      'buttons fully on-screen at the supported width and text-scale range '
+      '(§5.1–§5.3) — measured on the rendered geometry, not merely '
+      'findsOneWidget', () {
+    const portraitPhone = Size(411, 891);
+    const landscapePhone = Size(915, 412);
+    final textScales = <double>[1.0, SsSemantics.maximumTextScale];
+
+    Future<void> setSurface(
+      WidgetTester tester,
+      Size size,
+      double textScale,
+    ) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      tester.platformDispatcher.textScaleFactorTestValue = textScale;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    }
+
+    void expectOnScreen(
+      WidgetTester tester,
+      Size screen,
+      ValueKey<String> key,
+    ) {
+      final rect = tester.getRect(find.byKey(key));
+      final onScreen =
+          rect.left >= -0.5 &&
+          rect.top >= -0.5 &&
+          rect.right <= screen.width + 0.5 &&
+          rect.bottom <= screen.height + 0.5;
+      expect(
+        onScreen,
+        isTrue,
+        reason:
+            '${key.value} rect $rect must be fully inside the '
+            '${screen.width}x${screen.height} screen — findsOneWidget '
+            'alone does not prove visibility',
+      );
+    }
+
+    for (final size in [portraitPhone, landscapePhone]) {
+      for (final scale in textScales) {
+        final label =
+            '${size.width.toInt()}x${size.height.toInt()} @ '
+            'textScale=$scale';
+
+        testWidgets('SsDialog $label: Cancel and Confirm stay on-screen', (
+          tester,
+        ) async {
+          await setSurface(tester, size, scale);
+          await tester.pumpWidget(
+            _dialogHarness(confirmLabel: 'Delete session', onConfirm: () {}),
+          );
+          await tester.tap(find.byKey(_openDialogKey));
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          expectOnScreen(tester, size, const ValueKey('ss-dialog-cancel'));
+          expectOnScreen(tester, size, const ValueKey('ss-dialog-confirm'));
+        });
+
+        testWidgets(
+          'SsConfirmationSheet $label: Cancel and Confirm stay on-screen',
+          (tester) async {
+            await setSurface(tester, size, scale);
+            await tester.pumpWidget(
+              _confirmationHarness(
+                confirmLabel: 'Delete session',
+                onConfirm: () {},
+              ),
+            );
+            await tester.tap(find.byKey(_openSheetKey));
+            await tester.pumpAndSettle();
+
+            expect(tester.takeException(), isNull);
+            expectOnScreen(
+              tester,
+              size,
+              const ValueKey('ss-confirmation-cancel'),
+            );
+            expectOnScreen(
+              tester,
+              size,
+              const ValueKey('ss-confirmation-confirm'),
+            );
+          },
+        );
+
+        testWidgets(
+          'SsToolConfirmationSheet $label: Cancel and Confirm always stay '
+          'on-screen, and leaves-device/recording are reachable by '
+          'scrolling the body (BLOCKER-1 — the body must have a real '
+          'Scrollable ancestor, not just render the row somewhere off-tree)',
+          (tester) async {
+            await setSurface(tester, size, scale);
+            await tester.pumpWidget(_toolHarness(onConfirm: () {}));
+            await tester.tap(find.byKey(_openToolKey));
+            await tester.pumpAndSettle();
+
+            expect(tester.takeException(), isNull);
+            // Cancel and Confirm are pinned outside the scrollable body —
+            // they must be on-screen immediately, with no scrolling.
+            expectOnScreen(
+              tester,
+              size,
+              const ValueKey('ss-tool-confirmation-cancel'),
+            );
+            expectOnScreen(
+              tester,
+              size,
+              const ValueKey('ss-tool-confirmation-confirm'),
+            );
+
+            // The two most privacy-critical rows may legitimately require a
+            // scroll on a short/landscape viewport at maximumTextScale —
+            // what BLOCKER-1 forbids is there being NO way to reach them at
+            // all (the old tree had zero Scrollable ancestors). ensureVisible
+            // scrolls the nearest Scrollable until the target is on-screen;
+            // on the old tree (no Scrollable) it is a no-op and the
+            // assertion below stays red.
+            for (final key in const [
+              'ss-tool-confirmation-leaves-device',
+              'ss-tool-confirmation-recording',
+            ]) {
+              await tester.ensureVisible(find.byKey(ValueKey(key)));
+              await tester.pumpAndSettle();
+              expectOnScreen(tester, size, ValueKey(key));
+            }
+          },
+        );
+      }
+    }
   });
 }

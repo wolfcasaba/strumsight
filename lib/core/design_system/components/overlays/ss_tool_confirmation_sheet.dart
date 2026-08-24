@@ -16,7 +16,13 @@ import 'ss_overlay_host.dart';
 /// (§5.2).
 @immutable
 final class SsToolDimension {
-  const SsToolDimension({required this.label, required this.detail});
+  const SsToolDimension({required this.label, required this.detail})
+    : assert(
+        detail != '',
+        'SsToolDimension.detail must not be empty — pass an explicit '
+        'negative such as "Nothing" or "None" when the dimension does not '
+        'apply (§5.2), never a blank row',
+      );
 
   final String label;
   final String detail;
@@ -45,6 +51,7 @@ final class SsToolConfirmationSheet extends StatefulWidget {
     required this.recording,
     required this.cancelLabel,
     required this.onConfirm,
+    this.destructive = true,
   });
 
   /// Names the action AND is the confirm button's label (§5.1) — e.g.
@@ -61,6 +68,12 @@ final class SsToolConfirmationSheet extends StatefulWidget {
   final String cancelLabel;
   final VoidCallback onConfirm;
 
+  /// When true (the default), the confirm button renders in the destructive
+  /// variant with a semantics hint — an AI-initiated tool action is
+  /// consequential by construction (§5.2), same treatment as
+  /// [SsConfirmationSheet] and [SsDialog].
+  final bool destructive;
+
   /// Presents an [SsToolConfirmationSheet] adaptively sized to [context]'s
   /// current width (§5.6).
   static Future<void> show(
@@ -73,7 +86,17 @@ final class SsToolConfirmationSheet extends StatefulWidget {
     required SsToolDimension recording,
     required String cancelLabel,
     required VoidCallback onConfirm,
+    bool destructive = true,
   }) {
+    // The exactly-once guard lives here, OUTSIDE any State (§5.5, MAJOR-3) —
+    // see the identical comment on SsConfirmationSheet.show for why.
+    var confirmed = false;
+    void guardedOnConfirm() {
+      if (confirmed) return;
+      confirmed = true;
+      onConfirm();
+    }
+
     return SsOverlayHost.showSheetSurface<void>(
       context: context,
       barrierLabel: cancelLabel,
@@ -85,7 +108,8 @@ final class SsToolConfirmationSheet extends StatefulWidget {
         leavesDevice: leavesDevice,
         recording: recording,
         cancelLabel: cancelLabel,
-        onConfirm: onConfirm,
+        onConfirm: guardedOnConfirm,
+        destructive: destructive,
       ),
     );
   }
@@ -101,7 +125,14 @@ class _SsToolConfirmationSheetState extends State<SsToolConfirmationSheet> {
   void _handleConfirm() {
     if (_confirmed) return;
     setState(() => _confirmed = true);
-    widget.onConfirm();
+    try {
+      widget.onConfirm();
+    } catch (_) {
+      // A failed onConfirm must not leave two permanently dead buttons
+      // (MINOR-1) — re-enable so the caller can retry or cancel.
+      if (mounted) setState(() => _confirmed = false);
+      rethrow;
+    }
     Navigator.of(context).maybePop();
   }
 
@@ -114,49 +145,76 @@ class _SsToolConfirmationSheetState extends State<SsToolConfirmationSheet> {
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
 
-    return Padding(
-      padding: const EdgeInsets.all(SsSpacing.space6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            widget.actionLabel,
-            style: typography.titleLarge.copyWith(color: colors.textPrimary),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The body scrolls independently of the action row below
+        // (BLOCKER-1) — on a short/landscape viewport or at
+        // maximumTextScale, the four consequence dimensions (the most
+        // privacy-critical content on this sheet) must never be pushed
+        // off-screen ahead of the buttons.
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              SsSpacing.space6,
+              SsSpacing.space6,
+              SsSpacing.space6,
+              0,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.actionLabel,
+                  style: typography.titleLarge.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: SsSpacing.space2),
+                Text(
+                  widget.summary,
+                  style: typography.bodyMedium.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: SsSpacing.space4),
+                _DimensionRow(
+                  key: const ValueKey('ss-tool-confirmation-reads'),
+                  dimension: widget.reads,
+                  colors: colors,
+                  typography: typography,
+                ),
+                _DimensionRow(
+                  key: const ValueKey('ss-tool-confirmation-writes'),
+                  dimension: widget.writes,
+                  colors: colors,
+                  typography: typography,
+                ),
+                _DimensionRow(
+                  key: const ValueKey('ss-tool-confirmation-leaves-device'),
+                  dimension: widget.leavesDevice,
+                  colors: colors,
+                  typography: typography,
+                ),
+                _DimensionRow(
+                  key: const ValueKey('ss-tool-confirmation-recording'),
+                  dimension: widget.recording,
+                  colors: colors,
+                  typography: typography,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: SsSpacing.space2),
-          Text(
-            widget.summary,
-            style: typography.bodyMedium.copyWith(color: colors.textSecondary),
-          ),
-          const SizedBox(height: SsSpacing.space4),
-          _DimensionRow(
-            key: const ValueKey('ss-tool-confirmation-reads'),
-            dimension: widget.reads,
-            colors: colors,
-            typography: typography,
-          ),
-          _DimensionRow(
-            key: const ValueKey('ss-tool-confirmation-writes'),
-            dimension: widget.writes,
-            colors: colors,
-            typography: typography,
-          ),
-          _DimensionRow(
-            key: const ValueKey('ss-tool-confirmation-leaves-device'),
-            dimension: widget.leavesDevice,
-            colors: colors,
-            typography: typography,
-          ),
-          _DimensionRow(
-            key: const ValueKey('ss-tool-confirmation-recording'),
-            dimension: widget.recording,
-            colors: colors,
-            typography: typography,
-          ),
-          const SizedBox(height: SsSpacing.space6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+        ),
+        Padding(
+          padding: const EdgeInsets.all(SsSpacing.space6),
+          child: OverflowBar(
+            spacing: SsSpacing.space2,
+            overflowSpacing: SsSpacing.space2,
+            alignment: MainAxisAlignment.end,
+            overflowAlignment: OverflowBarAlignment.end,
             children: [
               SsButton(
                 key: const ValueKey('ss-tool-confirmation-cancel'),
@@ -164,16 +222,21 @@ class _SsToolConfirmationSheetState extends State<SsToolConfirmationSheet> {
                 variant: SsButtonVariant.tertiary,
                 onPressed: _confirmed ? null : _handleCancel,
               ),
-              const SizedBox(width: SsSpacing.space2),
               SsButton(
                 key: const ValueKey('ss-tool-confirmation-confirm'),
                 label: widget.actionLabel,
+                variant: widget.destructive
+                    ? SsButtonVariant.destructive
+                    : SsButtonVariant.primary,
+                destructiveSemanticHint: widget.destructive
+                    ? widget.summary
+                    : null,
                 onPressed: _confirmed ? null : _handleConfirm,
               ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -49,6 +49,19 @@ final class SsConfirmationSheet extends StatefulWidget {
     required VoidCallback onConfirm,
     bool destructive = true,
   }) {
+    // The exactly-once guard lives here, OUTSIDE any State (§5.5, MAJOR-3):
+    // `showSheetSurface` swaps the bottom-sheet/side-sheet subtree — and
+    // therefore recreates SsConfirmationSheet's State — whenever the width
+    // crosses SsBreakpoints.expandedMin, which would otherwise reset a
+    // State-owned flag and let a resize re-arm the destructive callback.
+    // This closure survives that subtree swap because show() itself does not.
+    var confirmed = false;
+    void guardedOnConfirm() {
+      if (confirmed) return;
+      confirmed = true;
+      onConfirm();
+    }
+
     return SsOverlayHost.showSheetSurface<void>(
       context: context,
       barrierLabel: cancelLabel,
@@ -57,7 +70,7 @@ final class SsConfirmationSheet extends StatefulWidget {
         consequence: consequence,
         confirmLabel: confirmLabel,
         cancelLabel: cancelLabel,
-        onConfirm: onConfirm,
+        onConfirm: guardedOnConfirm,
         destructive: destructive,
       ),
     );
@@ -73,9 +86,19 @@ class _SsConfirmationSheetState extends State<SsConfirmationSheet> {
   void _handleConfirm() {
     // Exactly-once guard (§5.5/A6): a second tap that lands before the pop
     // animation removes the button is a no-op, not a second callback run.
+    // The durable guard against a responsive-reshape re-arm lives one level
+    // up, in show()'s closure (MAJOR-3) — this local flag only disables the
+    // buttons for the current State's lifetime.
     if (_confirmed) return;
     setState(() => _confirmed = true);
-    widget.onConfirm();
+    try {
+      widget.onConfirm();
+    } catch (_) {
+      // A failed onConfirm must not leave two permanently dead buttons
+      // (MINOR-1) — re-enable so the caller can retry or cancel.
+      if (mounted) setState(() => _confirmed = false);
+      rethrow;
+    }
     Navigator.of(context).maybePop();
   }
 
@@ -88,25 +111,50 @@ class _SsConfirmationSheetState extends State<SsConfirmationSheet> {
     final colors = Theme.of(context).extension<SsColorScheme>()!;
     final typography = Theme.of(context).extension<SsTypography>()!;
 
-    return Padding(
-      padding: const EdgeInsets.all(SsSpacing.space6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            widget.title,
-            style: typography.titleLarge.copyWith(color: colors.textPrimary),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The body scrolls independently of the action row below (BLOCKER-1)
+        // — on a short/landscape viewport or at maximumTextScale, the
+        // consequence text must never push the buttons off-screen.
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              SsSpacing.space6,
+              SsSpacing.space6,
+              SsSpacing.space6,
+              0,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.title,
+                  style: typography.titleLarge.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: SsSpacing.space4),
+                Text(
+                  widget.consequence,
+                  key: const ValueKey('ss-confirmation-consequence-detail'),
+                  style: typography.bodyMedium.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: SsSpacing.space4),
-          Text(
-            widget.consequence,
-            key: const ValueKey('ss-confirmation-consequence-detail'),
-            style: typography.bodyMedium.copyWith(color: colors.textPrimary),
-          ),
-          const SizedBox(height: SsSpacing.space6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+        ),
+        Padding(
+          padding: const EdgeInsets.all(SsSpacing.space6),
+          child: OverflowBar(
+            spacing: SsSpacing.space2,
+            overflowSpacing: SsSpacing.space2,
+            alignment: MainAxisAlignment.end,
+            overflowAlignment: OverflowBarAlignment.end,
             children: [
               SsButton(
                 key: const ValueKey('ss-confirmation-cancel'),
@@ -114,7 +162,6 @@ class _SsConfirmationSheetState extends State<SsConfirmationSheet> {
                 variant: SsButtonVariant.tertiary,
                 onPressed: _confirmed ? null : _handleCancel,
               ),
-              const SizedBox(width: SsSpacing.space2),
               SsButton(
                 key: const ValueKey('ss-confirmation-confirm'),
                 label: widget.confirmLabel,
@@ -128,8 +175,8 @@ class _SsConfirmationSheetState extends State<SsConfirmationSheet> {
               ),
             ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
