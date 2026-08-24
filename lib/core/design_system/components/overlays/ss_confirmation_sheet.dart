@@ -95,7 +95,11 @@ class _SsConfirmationSheetState extends State<SsConfirmationSheet> {
       widget.onConfirm();
     } catch (_) {
       // A failed onConfirm must not leave two permanently dead buttons
-      // (MINOR-1) — re-enable so the caller can retry or cancel.
+      // (MINOR-1) — re-enable so the caller can retry or cancel. This only
+      // re-arms the BUTTON; the durable exactly-once guard on the CALLBACK
+      // itself lives one level up, in show()'s closure (§5.5, MAJOR-3) — a
+      // retry tap here calls widget.onConfirm() again, but that's the
+      // closure-guarded wrapper, which is already permanently a no-op.
       if (mounted) setState(() => _confirmed = false);
       rethrow;
     }

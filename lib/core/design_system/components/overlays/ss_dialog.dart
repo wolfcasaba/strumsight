@@ -51,6 +51,19 @@ final class SsDialog extends StatefulWidget {
     required VoidCallback onConfirm,
     bool destructive = true,
   }) {
+    // The exactly-once guard lives here, OUTSIDE any State (§5.5, BLOCKER-1
+    // in the fix2 review) — a failed onConfirm re-enables the State-owned
+    // `_confirmed` flag below so the caller can retry the TAP, but that must
+    // never let the destructive CALLBACK itself run a second time. This
+    // closure survives State disposal/recreation because show() itself does
+    // not — same pattern as SsConfirmationSheet.show / SsToolConfirmationSheet.show.
+    var confirmed = false;
+    void guardedOnConfirm() {
+      if (confirmed) return;
+      confirmed = true;
+      onConfirm();
+    }
+
     return SsOverlayHost.showDialogSurface<void>(
       context: context,
       barrierLabel: cancelLabel,
@@ -59,7 +72,7 @@ final class SsDialog extends StatefulWidget {
         message: message,
         confirmLabel: confirmLabel,
         cancelLabel: cancelLabel,
-        onConfirm: onConfirm,
+        onConfirm: guardedOnConfirm,
         destructive: destructive,
       ),
     );
@@ -82,7 +95,12 @@ class _SsDialogState extends State<SsDialog> {
       widget.onConfirm();
     } catch (_) {
       // A failed onConfirm must not leave two permanently dead buttons
-      // (MINOR-1) — re-enable so the caller can retry or cancel.
+      // (MINOR-1) — re-enable so the caller can retry or cancel. This only
+      // re-arms the BUTTON; the durable exactly-once guard on the CALLBACK
+      // itself lives one level up, in show()'s closure (§5.5, BLOCKER-1 in
+      // the fix2 review) — a retry tap here calls widget.onConfirm() again,
+      // but that's the closure-guarded wrapper, which is now permanently a
+      // no-op regardless of how many times the button is re-tapped.
       if (mounted) setState(() => _confirmed = false);
       rethrow;
     }
