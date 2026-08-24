@@ -1,42 +1,47 @@
 # HANDOFF — StrumSight 🎸
 
-## ✅ [HEAL E09-R26/H-NOSIGNAL] KÉSZ — a kill UTÁNI világ: a §0.2 létrán nem volt fok a KÉSZ, jóváhagyott körre — PR [#449](https://github.com/wolfcasaba/strumsight/pull/449) (2026-08-24, L474)
+## ✅ E09-R26 KÉSZ — Felhasználói report és azonnali safety flow — PR [#451](https://github.com/wolfcasaba/strumsight/pull/451), squash `df0ad3dd` (2026-08-24)
 
-Az E09-R26 orchestrátor-sessionje 17:48-kor `API Error: Server error
-mid-response`-ba futott, üres prompton némult el, és 18:08:49-kor a 20 perces
-elakadás-őr megölte (H-NOSIGNAL). **Az L472 ébresztője nem hiányzott, csak nem
-ért oda:** a javítás 16:44:41-kor került a munkafába, az E09-R26 drivere viszont
-15:15:07-kor indult, tehát a `run_tmux_session` törzsét még a javítás előtti
-fájlból olvasta be. Az ébresztő a saját tesztjével (3 zöld) helyesen működik —
-ez időzítés, nem kódhiba.
+Report/hide/mute/block az ELSŐ darabja: `community_reports` tábla (target
+type/id, category, opcionális detail, reporter, `dedup_key`), `report_service`
+idempotens submit-tal (azonos target/category triple → 1 sor) és sanitizált
+válasszal — a reporter személye SOSEM kerül a target válaszaiba (A1, kétszer
+mérve: saját teszt + a security-reviewer független mutation-próbája), Flutter
+`report_content_sheet` lokalizált kategóriákkal, self-harm concern jóváhagyott
+safety-copy routinggal, és a submit UTÁNI azonnali hide/mute/block választóval.
+ADR [0422](docs/adr/0422-user-report-and-immediate-safety-flow.md) (az előre
+kiosztott `0414` szám a §0.0 brief-revízióval `0422`-re változott — a régi
+számra öt fájlban maradt docstring-hivatkozást a javító kör törölte, F3).
+Implementer **MiniMax M3**, orchesztrátor/reviewer **Claude Sonnet 5**.
 
-**A repóban mérhető rés a kill UTÁNI világ volt.** A kör a kill pillanatában
-készen állt: a `minimax/e09-r26-user-report-and-immediate-safety-flow` ág
-`520be629` csúcsán 24 commit, 15 fájl, **4210 sor**, a review verdiktje
-**APPROVED** (0 nyitott lelet), a Full Gate `32758663469` **zölden pontosan
-ezen a head SHA-n** — csak a PR hiányzott. A queue-sor `pending` maradt, a §0.2
-örökség-létra viszont csak „kész review **nyitott leletekkel**" és „commitolt
-pre-flight" fokot ismert, a kifutása pedig „indíts tisztán" — az E09-R26
-állapota egyik nevesített fokra sem illett, tehát a lánc újrakezdhetett volna
-egy már jóváhagyott, zölden mért kört.
+**Ez a session a §0.2 örökség-létra ÚJ `REVIEW-APPROVED` fokán folytatta,
+nem kezdte újra.** A kört egy korábbi, `API Error`-ba futó session
+17:48–18:08 között elveszítette PR nélkül, holott 24 commit, a review már
+**APPROVED** volt (0 nyitott lelet), és a Full Gate zölden állt a régi
+`520be629` head SHA-n (részletesen: `docs/handoff-archive.md`, a felváltott
+heal-blokk). A driver §0.2 létrája időközben megkapta a hiányzó fokot
+(`tools/round-resume-probe.sh` → `REVIEW-APPROVED`), a `resume-state-E09-R26.md`
+ezt jelezte, és a jelen session — implementer-dispatch NÉLKÜL — egyenesen a
+merge-lépésnél vette fel a kört: §0.3 upstream-szinkron (két kör, `main`
+E13-R14 óta mozdult: `28a53b1a` majd `6d0a2324` merge-commit), PR #451, ÚJ
+exact-SHA CI-mérés a friss merge SHA-n (a régi zöldje NEM mentesített) — Full
+Gate [32764316892](https://github.com/wolfcasaba/strumsight/actions/runs/32764316892)
++ Router CI [32764303470](https://github.com/wolfcasaba/strumsight/actions/runs/32764303470)
+mind success —, majd a megosztott `tools/round-land.sh` (két sáv fut
+párhuzamosan, `docs/execution/pipeline-slots` = 2) végezte a rebase +
+kombinált-HEAD gate + safe-force-push + squash-merge láncot.
 
-**A javítás.** Új READ-ONLY szonda (`tools/round-resume-probe.sh`) méri a kör
-hagyaték-állapotát (kör-ág az originon, head SHA, a review **utolsó** verdiktje
-Unicode-érzékenyen, hagyaték-munkapéldányok) és négy állapot egyikébe sorol:
-`NINCS` / `PRE-FLIGHT` / `REVIEW-NYITOTT` / `REVIEW-APPROVED`. A driver
-`{{RESUME_STATE}}`-ként injektálja a promptba (a `{{BRIEF_LINT}}` idiómája), a
-§0.2 pedig megkapta a hiányzó **`REVIEW-APPROVED`** fokot: se újrakezdés, se
-újraimplementálás — a kör a **merge-lépésnél** folytatódik.
+**Review: 1 javító kör, F1–F3 MINOR zárva, 0 nyitott lelet a merge után**
+(`docs/reviews/e09-r26-review.md`, végső döntés APPROVED). F1: `target_id`
+malformed-UUID 404 helyett 400-at ad (explicit validáció a `target_exists`
+hívás ELŐTT). F2: `extra_metadata` méret/kulcsszám-korlát KÓDOLÁS előtt
+(`InvalidExtraMetadata` explicit dobás csonkítás helyett — a régi kód
+érvénytelen JSON-t is termelhetett volna a Kör 27 moderation-queue-nak).
+F3: öt fájl docstring-je a téves `ADR 0414`-ről a helyes `ADR 0422`-re.
+Security review (risk=high, kötelező): **PASS**, 0 BLOCKER/CRITICAL/MAJOR.
 
-**A mérce nem gyengült:** a `REVIEW-APPROVED` NEM merge-engedély — a teljes
-CI-kapu (Full Gate + Router CI) újra kell fusson a §0.3 upstream-szinkron utáni
-**merge SHA-n** (a régi SHA zöldje nem mentesít, L113), és az orchestrátor saját
-nyitott-lelet mérése felülírja a besorolást. Őrteszt:
-`tools/tests/test_round_resume_probe.py` — **10 cella, a fixture a valódi mért
-ágnév és a `520be629` review verdikt-sorai**; a javítás előtt mind piros.
-
-**A következő E09-R26 firing tehát a merge-lépésnél veszi fel a kört**, nem
-kezdi újra.
+**Nyitva, NEM ez a kör tárgya:** a moderation-queue tényleges feldolgozása —
+Kör 27.
 
 
 ## ✅ E13-R14 KÉSZ — Accessibility foundation audit és semantics toolkit — PR [#448](https://github.com/wolfcasaba/strumsight/pull/448), squash `838865d3` (2026-08-24)
@@ -6693,6 +6698,21 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-24):** `main` @ `df0ad3dd` — E09-R26 Felhasználói
+report és azonnali safety flow, PR
+[#451](https://github.com/wolfcasaba/strumsight/pull/451), squash-merge.
+Implementer `minimax` (MiniMax M3), orchesztrátor/reviewer Claude Sonnet 5,
+**1 javító kör** (F1–F3 MINOR: malformed UUID 400, extra_metadata méret/kulcs
+korlát kódolás előtt, ADR 0414→0422 docstring-javítás öt fájlban) — review
+APPROVED 0 nyitott lelet, security review PASS. A kör egy korábban PR nélkül
+elveszített, de már APPROVED session munkájából folytatódott (§0.2
+`REVIEW-APPROVED` fok, `tools/round-resume-probe.sh`) — implementer-dispatch
+NÉLKÜL, egyenesen a merge-lépésnél: §0.3 upstream-szinkron (2 kör),
+PR #451, ÚJ exact-SHA CI-mérés a merge SHA-n. Exact `6d0a2324`: Full Gate
+32764316892 + Router CI 32764303470 mind success, majd
+`tools/round-land.sh` (megosztott merge-lock, 2 párhuzamos sáv) squash-merge.
+Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-24):** `main` @ `838865d3` — E13-R14 Accessibility
 foundation audit és semantics toolkit, PR
 [#448](https://github.com/wolfcasaba/strumsight/pull/448), squash-merge.
@@ -7452,6 +7472,20 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E09-R26 — Felhasználói report és azonnali safety flow** (PR
+[#451](https://github.com/wolfcasaba/strumsight/pull/451), squash `df0ad3dd`,
+ADR [0422](docs/adr/0422-user-report-and-immediate-safety-flow.md)). Report/
+hide/mute/block folyamat ELSŐ darabja: `community_reports` tábla + idempotens
+`report_service` + sanitizált router-válasz (reporter identitás sosem
+szivárog — A1 kétszer mérve), Flutter `report_content_sheet` lokalizált
+kategóriákkal és self-harm safety-copy routinggal, submit utáni azonnali
+hide/mute/block. **1 javító kör** (F1: malformed `target_id` 404 helyett 400;
+F2: `extra_metadata` méret/kulcsszám-korlát kódolás ELŐTT, nem utólagos
+csonkítás; F3: 5 fájl `ADR 0414`→`0422` docstring-javítás), 0 nyitott lelet a
+merge után. Security review (risk=high): PASS, 0 BLOCKER/MAJOR. Exact
+`6d0a2324`: Full Gate 32764316892 + Router CI 32764303470 mind success.
+Részletesen a fejléc ✅-blokkban.
 
 **E13-R14 — Accessibility foundation audit és semantics toolkit** (PR
 [#448](https://github.com/wolfcasaba/strumsight/pull/448), squash `838865d3`,
@@ -8415,8 +8449,15 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > üres, tehát a kör ADR-t nem kap kiosztva; ha a pre-flight mégis normatív
 > döntést talál, az `tools/round-slots.py reserve-adr`-rel foglalandó, NEM
 > `ls docs/adr | tail`-lel).
-> Az Epic-9 sáv az E09-R26-tal halad tovább (ez a kör a jelen session alatt
-> párhuzamosan futott).
+> Az Epic-9 sáv az **E09-R27 — Moderation queue enforcement és appeal**
+> (`docs/rounds/e09-r27-moderation-queue-enforcement-and-appeal.md`, engine a
+> queue-ban `minimax`, előre kiosztott ADR **`0415`**) körrel halad tovább —
+> az E09-R26 (Felhasználói report és safety flow) KÉSZ, lásd a fejléc
+> ✅-blokkot. A Kör 26 mért horga, amire a Kör 27 ÉPÍT: a
+> `community_reports.extra_metadata` oszlop most már EXPLICIT
+> méret/kulcsszám-korláttal védett kódolás ELŐTT (F2 javítás) — a
+> moderation-queue biztonságosan futtathat `json.loads`-ot rajta, nincs
+> csonkított-érvénytelen JSON kockázat.
 
 **A Kör 14 mért horgai, amelyekre a Kör 15 ÉPÍT — a pre-flight NE derítse fel
 újra:**

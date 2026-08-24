@@ -18139,3 +18139,37 @@ felülírja a szonda besorolását. Ami elmarad, az kizárólag a fölösleges
 VALÓDI mért adat: az `minimax/e09-r26-user-report-and-immediate-safety-flow`
 ágnév és a `520be629` review-fájl szó szerinti verdikt-sorai. A javítás előtt
 mind a 10 piros volt.
+
+## L475 — A `REVIEW-APPROVED` §0.2 fok élesben validálva; a hagyaték-munkapéldány saját branch-e is elavulhat az originhoz képest (E09-R26 landolása, 2026-08-24)
+
+**Mit mértünk.** Az L474 javítása (a §0.2 örökség-létra új `REVIEW-APPROVED`
+foka) ezen a session-en élesben futott le először: a `resume-state-E09-R26.md`
+`ÁLLAPOT: REVIEW-APPROVED`-ot jelentett, a session implementer-dispatch
+NÉLKÜL, egyenesen a merge-lépésnél vette fel a kört — §0.3 upstream-szinkron,
+PR [#451](https://github.com/wolfcasaba/strumsight/pull/451), új exact-SHA
+CI-mérés, `tools/round-land.sh` squash-merge. A fix a tervezett módon
+működött: 22+ commit, egy teljes review-ciklus és egy javító kör NEM lett
+elejtve újrakezdéssel.
+
+**Egy addicionális, kisebb rés, amit a fenti mérés mellékesen fedett fel.**
+A §0.2 hagyaték-munkapéldány (`/home/ubuntu/ss-minimax-e09-r26`) SAJÁT
+branch-e egy committal **elmaradt** az origin azonos nevű branch-étől — a
+kör-jelentésben hivatkozott `520be629` review-approval commit MÁR csak az
+originon volt meg, a helyi klón HEAD-je még a korábbi `28a53b1a` merge-en
+állt. A `resume-state-*.md` a **origin**-t méri (`git -C <munkapéldány>
+log`/`ls-remote` az originra megy), nem a helyi munkapéldány checked-out
+állapotát — a két forrás emiatt szét tud válni, ha a munkapéldányban valaki
+(pl. a review-t záró korábbi session) commitolt és pusholt, de a helyi
+working-tree branch-mutatót nem mozdította előre utána. **Következmény, ha
+figyelmen kívül marad:** a §0.3 upstream-merge egy RÉGEBBI branch-csúcsra
+futna, és a review-approval commit csendben kimaradna a végleges HEAD-ből.
+**A javítás egyszerű és már alkalmazott mintázat:** a hagyaték-munkapéldányban
+mindig `git fetch origin && git reset --hard origin/<branch>` az ELSŐ lépés,
+MIELŐTT bármilyen `git log`/ártalmi állapotot a helyi HEAD-ről olvasnánk —
+ne csak a `resume-state-*.md` jelentésre hagyatkozz, a saját munkapéldány
+frissessége külön mérendő tény.
+
+**Őrteszt:** nincs — egyszeri, kézi mérés (a hagyaték-munkapéldány
+1-commit-elmaradása); a `fetch && reset --hard origin/<branch>` lépés
+felvétele a `sdd-round-driver` skill §0.2 szövegébe GOV-hatáskör, nem
+kör-hatáskör (a skill a `tools/`-hoz hasonlóan nem szerkeszthető kör közben).
