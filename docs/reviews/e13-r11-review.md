@@ -4,9 +4,11 @@
 - **Implementer:** Claude Sonnet 5 (`sonnet-impl`), `bb76f230`…`517f185a` (7 commit)
 - **Reviewer:** Claude Opus 5 (orchestrátor), READ-ONLY — production kódot nem írtam
 - **Review-alap:** `bf2184e5..517f185a` (a pre-flight commit óta)
-- **Verdikt:** **CHANGES REQUESTED** — 1 MAJOR, 1 MINOR. A MAJOR **nem
-  implementációs hiba, hanem VAKON HAGYOTT ŐR**: a kör zászlós invariánsának
-  (§5.1) nevesített falszifikációja MÉRVE nem váltja pirosra a celláját.
+- **Verdikt:** **APPROVED** (a javító kör után, `2d3e91aa`) — lásd a §9-et.
+  Az első kör verdiktje **CHANGES REQUESTED** volt (1 MAJOR, 1 MINOR). A MAJOR
+  **nem implementációs hiba, hanem VAKON HAGYOTT ŐR** volt: a kör zászlós
+  invariánsának (§5.1) nevesített falszifikációja MÉRVE nem váltotta pirosra a
+  celláját. A javító kör **production kódot nem érintett**.
 
 ---
 
@@ -230,8 +232,80 @@ Mind a `/tmp/review-e13-r11` izolált klónban futott; a klón a próbák után
 | P4 | `SsButton`: a felirat kikerül a fából loading alatt | PIROS | **PIROS** ✅ |
 | P5 | diagnosztika a P3 gyökérokára (`find.text` + ős-`Opacity`) | — | `opacity = 0.0`, `labelText = null` |
 
-## 8. Verdikt
+## 8. Verdikt (első kör)
 
 **CHANGES REQUESTED.** A MAJOR-1 zárásáig nincs merge. A javító kör hatóköre
 **egyetlen fájl** (`test/core/design_system/forms/ss_inputs_test.dart`) — a
 production kód helyes, nem kell hozzányúlni.
+
+---
+
+## 9. Javító kör (`2d3e91aa`) — leletenkénti zárás, SAJÁT méréssel
+
+A javító kör diffje **2 fájl, 182 beszúrás** — `ss_inputs_test.dart` és a brief
+§10. **Production kód: 0 sor** (a review kikötése). Scope-audit a friss
+HEAD-en: `Legacy scope audit OK (bf2184e53523..2d3e91aa3261, 18 changed
+path(s), 1 generated/ignored)` — az 1 ignorált a saját review-jelentésem
+(állandó mentesség).
+
+### MAJOR-1 — **ZÁRVA** ✅
+
+Az A1 csoport első két cellája most a TULAJDONSÁGOT és a LÁTHATÓSÁGOT méri:
+
+1. `TextField.decoration!.labelText == label` **ÉS** `decoration!.hintText != label`;
+2. a label-`Text` egyetlen `Opacity`/`FadeTransition` őse sem lehet `<= 0`.
+
+**Nem a jelentést fogadtam el, hanem újramértem** — friss klón a `2d3e91aa`-n,
+ugyanaz a mutáció, amivel a leletet nyitottam (`ss_text_field.dart:60`,
+`labelText:` → `hintText:`):
+
+```
+R2 exit=1
+00:00 +0: A1 — … the label is carried by labelText, not merely hintText (§5.1)
+Expected: 'Song title'
+  Actual: <null>
+00:02 +8 -1: Some tests failed.
+```
+
+A §6.1 mátrix által nevesített sértés tehát **PIROSRA váltja az A1-et**.
+Mutáció visszaállítva, a klón `git status --porcelain` szerint tiszta.
+
+### MINOR-1 — **ELFOGADVA (b) opcióval**
+
+A padló-cella továbbra sem bukik a `ConstrainedBox` törlésére (újramérve a
+`2d3e91aa`-n: `R3 exit=0`), de a javító kör a §10-ben **kimondja**, hogy a
+padló redundáns, és megnevezi a 48 dp tényleges őrét (a `Switch` saját
+`padded` érintési célja + a teljes-soros cella, ami mutáció alatt PIROS). Ez a
+javító prompt (b) ága, elfogadva.
+
+### NOTE-2 (ÚJ, nem blokkoló) — a láthatósági cella időzítés-függő
+
+A javító kör második (vizuális) cellája a fenti R2 mutáció alatt **nem** bukott
+meg — az A1 csoportot az ELSŐ, tulajdonság-szintű cella vitte pirosra. A
+gyökérokot kimértem (eldobható próba, `2d3e91aa` + `hintText` mutáció):
+
+```
+PROBE3 [after single pump()]     matches=1 opacityAncestors=[1.0, 1.0, 1.0, 1.0, 1.0]
+PROBE3 [after pumpAndSettle()]   matches=1 opacityAncestors=[0.0, 1.0, 1.0, 1.0, 1.0]
+```
+
+A cella `await tester.pump()`-ot hív (EGY frame), a `hintText` elhalványulási
+animációja viszont ekkor még nem futott le — az opacity még `1.0`. Egy
+`pumpAndSettle()` mellett `0.0`, és a cella harapna.
+
+**Miért csak NOTE:** az A1 acceptance-kritériumnak a tulajdonság-szintű
+cellában **van** működő, mért őre, tehát a §6.1 szerződés teljesül; a vizuális
+cella ezen felüli, redundáns védelem (ugyanaz a mérlegelés, mint a MINOR-1-nél).
+Egysoros follow-up: `pump()` → `pumpAndSettle()`.
+
+## 10. Zöld kapu (ADR 0052) — mind SAJÁT szemmel
+
+| Kapu | Bizonyíték |
+|---|---|
+| `tools/round-gate.sh` (9 lépés) | izolált klón, `2d3e91aa`, **`GATE_EXIT=0`**, csonkítatlan |
+| Full Gate CI (teljes suite + randomizált property + coverage) | run `32684626536`, `headSha=2d3e91aa…`, **success** |
+| Router CI | run `32684623149`, `headSha=2d3e91aa…`, **success** |
+| Scope-audit | `OK`, 18 útvonal, 0 sértés |
+| Review | ez a jelentés — nyitott BLOCKER/MAJOR: **nincs** |
+
+**Verdikt: APPROVED — merge engedélyezve.**
