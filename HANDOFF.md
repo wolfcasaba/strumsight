@@ -61,11 +61,16 @@ visszatért volna.** A `base` CI-kapu szintje bizonyítottan változatlan
 piros, UTÁNA zöld; teljes router-suite **737 passed, 1 skipped**. Lecke:
 [L465](docs/LESSONS.md).
 
-**Nyitott, e körön kívüli tétel:** a `docs/rounds/e09-r25`, `e09-r28`,
-`e09-r29`, `e10-r31` briefek `allowed_paths`/`gate_tests` listája MÉG NEM
-tartalmazza a leltártesztet — az `S9` most már minden dispatch előtt kiírja
-teendőként, a javítás az adott kör `§0.0` pre-flightjának hatásköre (a
-self-heal szándékosan NEM nyúlt idegen körök briefjéhez).
+**Nyitott, e körön kívüli tétel — a merge UTÁN újramérve:** a fenti négyes a
+merge ELŐTTI állapot. A PR #441 landolása után az `e09-r25` **kiesett a
+listából**, mert az egyetlen "új" képernyője (`club_detail_screen.dart`) épp
+ebben a körben jött létre — az `e09-r25` már csak MÓDOSÍTJA, a leltár száma
+tehát nem mozdul, és az `S9` helyesen néma rá. A friss `main`-en mérve az
+`S9` **hármat** jelöl: `e09-r28`, `e09-r29`, `e10-r31`. Ez nem hiba, hanem a
+szabály lényege: a predikátum a fa AKTUÁLIS állapotához képest dönt, ezért a
+teendőlista körről körre magától szűkül. A javítás az adott kör `§0.0`
+pre-flightjának hatásköre — a self-heal szándékosan NEM nyúlt idegen körök
+briefjéhez (heal-prompt §2).
 
 
 ## ✅ E09-R23 KÉSZ — Leaderboards és opt-in versenynézet — PR [#440](https://github.com/wolfcasaba/strumsight/pull/440), squash `60aea065` (2026-08-24)
