@@ -1208,6 +1208,55 @@
   "chordLibraryTitle": "Akkordtár",
   "commonCancel": "Mégse",
   "commonClose": "Bezárás",
+  "communityChallengeAccept": "Elfogad",
+  "@communityChallengeAccept": {},
+  "communityChallengeCancel": "Meghívás visszavonása",
+  "@communityChallengeCancel": {},
+  "communityChallengeDecline": "Elutasítás",
+  "@communityChallengeDecline": {},
+  "communityChallengeDeepLinkPractice": "Gyakorlás megnyitása",
+  "@communityChallengeDeepLinkPractice": {},
+  "communityChallengeDeepLinkSong": "Dal megnyitása",
+  "@communityChallengeDeepLinkSong": {},
+  "communityChallengeEmpty": "Jelenleg nincs aktív kihívás.",
+  "@communityChallengeEmpty": {},
+  "communityChallengeErrorConflict": "Ezt a meghívást már kezelték.",
+  "@communityChallengeErrorConflict": {},
+  "communityChallengeErrorForbidden": "Ehhez a kihíváshoz nincs jogosultságod.",
+  "@communityChallengeErrorForbidden": {},
+  "communityChallengeErrorInvalidInput": "Érvénytelen meghívás-kérés.",
+  "@communityChallengeErrorInvalidInput": {},
+  "communityChallengeErrorNetwork": "A kihívások nem tölthetők be — ellenőrizd a kapcsolatot.",
+  "@communityChallengeErrorNetwork": {},
+  "communityChallengeErrorRateLimited": "Túl sok meghívás — lassíts egy pillanatra.",
+  "@communityChallengeErrorRateLimited": {},
+  "communityChallengeErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra.",
+  "@communityChallengeErrorSessionExpired": {},
+  "communityChallengeInviteAction": "Meghívás a kihívásra",
+  "@communityChallengeInviteAction": {},
+  "communityChallengeListHeader": "Nyílt kihívások",
+  "@communityChallengeListHeader": {},
+  "communityChallengeMetricLabel": "Mérték: {metric}",
+  "@communityChallengeMetricLabel": {
+    "placeholders": {
+      "metric": {
+        "type": "String"
+      }
+    }
+  },
+  "communityChallengeTitle": "Kihívások",
+  "@communityChallengeTitle": {},
+  "communityChallengeWindowLabel": "Ablak: {startsAt} – {endsAt}",
+  "@communityChallengeWindowLabel": {
+    "placeholders": {
+      "startsAt": {
+        "type": "String"
+      },
+      "endsAt": {
+        "type": "String"
+      }
+    }
+  },
   "communityCommentsComposerHint": "Írj egy hozzászólást…",
   "@communityCommentsComposerHint": {},
   "communityCommentsEmpty": "Még nincsenek hozzászólások.",
