@@ -9,7 +9,7 @@ ADR 0399 entity has been wire-side for three rounds; this round gives it
 a persisted shape). Three new tables:
 
 * ``community_clubs`` — one row per club definition (name, description,
-  visibility, owner).
+  visibility, owner, create_idempotency_key).
 * ``community_club_members`` — one row per (club, profile) join with
   the role (owner / moderator / member). The DB-level UNIQUE on
   ``(club_id, profile_id)`` is the A3 (duplicate-join) enforcement.
@@ -26,11 +26,16 @@ guarantees the service and the tests pin):
   list the known values as a defensive safety net; the service is the
   canonical allowlist.
 
-* **Idempotency (A3, D5).** The composite UNIQUE on
+* **Idempotency (A3, D5, F1).** The composite UNIQUE on
   ``community_club_members`` ``(club_id, profile_id)`` is the
   §A3 duplicate-join enforcement. ``community_club_invites`` has a
   UNIQUE on the (club, inviter, invitee, idempotency_key) tuple —
   the §D4 idempotency surface (mirrors the Kör 21 invite precedent).
+  ``community_clubs`` carries a nullable ``create_idempotency_key``
+  column with a composite UNIQUE on
+  ``(owner_profile_id, create_idempotency_key)`` — the §F1
+  create-side idempotency surface (the Kör 24 round 1 helper only
+  filtered by owner, breaking the multi-club-ownership path).
 
 * **Cascade on profile / club delete.** A profile hard-delete cleans up
   its membership / invite / ownership rows in the same transaction
@@ -122,6 +127,19 @@ def upgrade() -> None:
         # profile delete cleans up the club row when the owner is
         # hard-deleted.
         sa.Column("owner_profile_id", _bigint, nullable=False),
+        # §F1 fix — persist the create ``idempotency_key`` so the
+        # probe can match on ``(owner_profile_id, key)`` exactly
+        # (the Kör 24 round 1 helper only filtered by owner and
+        # returned the most-recent club, breaking the
+        # multi-club-ownership path). Mirrors the invite-side
+        # ``community_club_invites.idempotency_key`` shape: nullable
+        # String(128); the composite UNIQUE allows multiple NULLs
+        # so callers that omit the key are never blocked.
+        sa.Column(
+            "create_idempotency_key",
+            sa.String(length=128),
+            nullable=True,
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
@@ -135,6 +153,16 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "public_id",
             name="uq_community_clubs_public_id",
+        ),
+        # §F1 — create-idempotency surface (the D5 pattern, club-
+        # side). The probe helper ``_find_club_by_create_idempotency_key``
+        # matches on this tuple exactly. SQL UNIQUE treats NULLs
+        # as distinct, so omitting ``create_idempotency_key``
+        # (NULL) does NOT block the owner's subsequent clubs.
+        sa.UniqueConstraint(
+            "owner_profile_id",
+            "create_idempotency_key",
+            name="uq_community_clubs_create_idempotency",
         ),
         # DB-level safety net for the wire vocabulary.
         sa.CheckConstraint(
@@ -162,6 +190,12 @@ def upgrade() -> None:
         "ix_community_clubs_owner",
         "community_clubs",
         ["owner_profile_id"],
+    )
+    # §F1 — the create-idempotency probe index.
+    op.create_index(
+        "ix_community_clubs_create_idempotency_key",
+        "community_clubs",
+        ["owner_profile_id", "create_idempotency_key"],
     )
 
     # ---------------------------------------------------------------------
@@ -368,6 +402,10 @@ def downgrade() -> None:
     op.drop_table("community_club_members")
 
     # Clubs last.
+    op.drop_index(
+        "ix_community_clubs_create_idempotency_key",
+        table_name="community_clubs",
+    )
     op.drop_index(
         "ix_community_clubs_owner",
         table_name="community_clubs",

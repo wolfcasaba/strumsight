@@ -27,12 +27,16 @@ guarantees the service and the tests pin):
   CHECK lists the known values as a defensive safety net; the
   service / migration-authority is the canonical allowlist.
 
-* **Idempotency (A3, D5).** ``community_club_members`` has a UNIQUE
+* **Idempotency (A3, D5, F1).** ``community_club_members`` has a UNIQUE
   on ``(club_id, profile_id)`` — the §A3 duplicate-join enforcement.
   ``community_club_invites`` has a UNIQUE on
   ``(club_id, inviter_profile_id, invitee_profile_id,
   idempotency_key)`` — the §D4 idempotency surface (mirrors the Kör 21
-  invite precedent).
+  invite precedent). ``community_clubs`` carries a nullable
+  ``create_idempotency_key`` with a composite UNIQUE on
+  ``(owner_profile_id, create_idempotency_key)`` — the §F1
+  create-side idempotency surface (the Kör 24 round 1 helper only
+  filtered by owner, breaking the multi-club-ownership path).
 
 * **Cascade on profile delete.** A profile hard-delete cleans up its
   membership / invite / ownership rows in the same transaction
@@ -204,6 +208,18 @@ class CommunityClub(Base):
         ForeignKey("community_profiles.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # §F1 — create-side idempotency surface. The
+    # ``_find_club_by_create_idempotency_key`` helper matches on
+    # ``(owner_profile_id, create_idempotency_key)`` exactly;
+    # the composite UNIQUE in ``__table_args__`` enforces the
+    # constraint at the DB layer. Nullable: callers that omit
+    # the key still pass through (NULL is distinct in SQL UNIQUE
+    # semantics, so an owner can own multiple clubs that were
+    # created without an idempotency key).
+    create_idempotency_key: Mapped[str | None] = mapped_column(
+        String(length=128),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -225,6 +241,16 @@ class CommunityClub(Base):
             "public_id",
             name="uq_community_clubs_public_id",
         ),
+        # §F1 — create-side idempotency surface. The probe
+        # helper matches on this tuple exactly; the UNIQUE
+        # also gives the DB layer a guarantee that two distinct
+        # create calls with the same key for the same owner
+        # cannot land two rows.
+        UniqueConstraint(
+            "owner_profile_id",
+            "create_idempotency_key",
+            name="uq_community_clubs_create_idempotency",
+        ),
         # DB-level safety net for the wire vocabulary (the service
         # is the canonical allowlist; the CHECK is a defensive
         # backstop).
@@ -245,6 +271,12 @@ class CommunityClub(Base):
         Index(
             "ix_community_clubs_owner",
             "owner_profile_id",
+        ),
+        # §F1 — the create-idempotency probe index.
+        Index(
+            "ix_community_clubs_create_idempotency_key",
+            "owner_profile_id",
+            "create_idempotency_key",
         ),
     )
 

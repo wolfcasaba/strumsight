@@ -551,6 +551,7 @@ def create_club(
         description=description,
         visibility=visibility,
         owner_profile_id=owner.id,
+        create_idempotency_key=idempotency_key,
         created_at=now,
         updated_at=now,
         deleted_at=None,
@@ -592,21 +593,23 @@ def _find_club_by_create_idempotency_key(
 ) -> CommunityClub | None:
     """Lookup helper for the create-idempotency path.
 
-    Kör 24 does not store the create ``idempotency_key`` on the
-    club row (that would couple the §5.2 idempotency surface to
-    the wire-shape unnecessarily). Instead, we use a deterministic
-    probe: same owner + same key → return the most recently
-    created club for that owner. The §A3 / D5 guarantee is
-    delivered via the membership UNIQUE on ``(club_id,
-    profile_id)`` for the duplicate-join case.
+    Returns the existing club whose ``(owner_profile_id,
+    create_idempotency_key)`` tuple matches the call — the §F1
+    composite UNIQUE is the DB-layer enforcement. The match is
+    EXACT on the key value, not "most recent for this owner" —
+    the round 1 helper that did the latter silently returned the
+    owner's prior club on every subsequent create and broke the
+    multi-club-ownership path.
     """
     if idempotency_key is None:
         return None
     return (
         db.query(CommunityClub)
-        .filter_by(owner_profile_id=owner_profile_id)
-        .order_by(CommunityClub.created_at.desc(), CommunityClub.id.desc())
-        .first()
+        .filter_by(
+            owner_profile_id=owner_profile_id,
+            create_idempotency_key=idempotency_key,
+        )
+        .one_or_none()
     )
 
 
