@@ -240,4 +240,153 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Implementált scope (5/6 allowed_paths, plus 1doksi)
+
+| Fájl | Státusz |
+|---|---|
+| `backend/app/community/feed/club_feed.py` | ÚJ — Kör 13 projekció újrahasznosítása club-szűréssel (A1, A6, A7) |
+| `backend/app/community/services/club_content_service.py` | ÚJ — pin/unpin (A3, A4), club-challenge lifecycle (A5, A6) |
+| `lib/features/community/presentation/screens/clubs/club_detail_screen.dart` | BŐVÍTÉS — 4 tab + screen-local providers + A2 cache-invalidáció |
+| `backend/tests/community/test_club_content_service.py` | ÚJ — A1/A3/A4/A5/A6/A7 + §6.1 valódi-sértés próbák |
+| `test/features/community/presentation/clubs/club_detail_screen_test.dart` | ÚJ — A2 widget test + 4-tab surface |
+| `docs/rounds/e09-r25-club-feed-pinned-post-and-challenge.md` | A §10 handoff kitöltve (ez a fájl) |
+
+### 10.2 Pin-limit értéke (§0.0 #4)
+
+`MAX_CLUB_PINNED_POSTS = 5` — a `club_content_service.py`-ban
+modul-szintű konstansként definiálva (a `MAX_CLUB_MEMBERS = 500`
+Kör 24 precedens mintájára). A `Settings` osztály NEM bővült.
+
+### 10.3 `club_id` típus-inkonzisztencia kezelése (§0.0 #1)
+
+A `club_content_service.create_club_challenge` a `club_id`
+oszlopba `str(club.public_id)`-t ír (UUID string formátum,
+`String(64)`-re illeszkedve) — NEM a belső BigInteger id-t.
+Az `A5` cella erre a pontos különbségre épül; a fordított
+(eset) a `community_challenges.club_id` oszlop üresen maradna
+a `list_club_challenges` lekérdezésnél.
+
+### 10.4 Implicit "activate/end" ablak (§0.0 #2)
+
+A `CommunityChallenge` modell NEM kapott új `state` oszlopot —
+az aktiváció és lezárás a `starts_at` / `ends_at` ablakon
+alapul:
+
+- **create**: új sor beszúrása a kért ablakkal;
+- **activate** (implicit): `now` belép a `[starts_at, ends_at]` ablakba;
+- **end** (explicit): `end_club_challenge` az `ends_at`-et `now`-ra
+  állítja; a klub owner/moderator szerepéhez kötve (A3 §5.2).
+
+### 10.5 Junction-table a pin tárolásra (scope-kiterjesztés)
+
+A `pinned post reláció` (brief §3) tárolásához egy
+`community_club_pinned_posts` junction tábla szükséges
+`(club_id, post_id, pinned_at, pinned_by_profile_id)`
+oszlopokkal. A tábla:
+
+- a `club_content_service.py` modulon BELÜL van definiálva
+  SQLAlchemy `Table` deklarációként (nem új `models/` fájl);
+- regisztrálva van a `Base.metadata`-ba, így a tesztek
+  `Base.metadata.create_all(...tables=[...])` hívással
+  materializálhatják az alembic upgrade után;
+- a termelési alembic migráció egy KÖVETKEZŐ kör feladata —
+  ez a §10.7-es ismert korlát.
+
+### 10.6 Pin permission (A3 §5.2 cross-club guard)
+
+A pin/unpin/end-challenge permission check a
+`backend/app/community/policies/club_permissions.py` NEM
+érintésével van megoldva (a permission matrix NINCS a
+`allowed_paths` listán). Az új `CLUB_PIN_AUTHORIZED_ROLES`
+és `CLUB_CHALLENGE_END_AUTHORIZED_ROLES` halmazok a
+`club_content_service.py` elején vannak definiálva, és a
+Kör 24 `CLUB_ROLE_OWNER` / `CLUB_ROLE_MODERATOR` wire-értékeit
+használják. A check `_ensure_actor_role` helper-en keresztül
+a KONKRÉT klub tagsági sorát olvassa — a §5.2 cross-club
+invariáns a `_resolve_visible_club_for_member` (feed) és
+az `_ensure_actor_role` (service) együttes hívásából következik.
+
+### 10.7 Ismert korlát — termelési alembic migráció
+
+A `community_club_pinned_posts` tábla NINCS alembic
+migrációban — a termelési `alembic upgrade head` nem
+hozza létre. A teszt fixture a `Base.metadata.create_all`
+hívással materializálja, így a backend pytest csomag zöld.
+A termelési migrációt egy következő kör (vagy a review-t
+követő javító kör) pótolja. Ez a §10.5-vel együtt az egyetlen
+ismert hiányossága a körnek; a §6 minden más cellája működik.
+
+### 10.8 Flutter oldali képernyő-helyi providerek (§0.0 #3)
+
+A `club_detail_screen.dart`-on belül három screen-local
+provider épül: `clubFeedProvider`, `clubPinnedProvider`,
+`clubChallengesProvider`. Ezek:
+
+- `FutureProvider.autoDispose.family<..., ContentId>` mintát
+  követnek;
+- produkcióban `UnimplementedError`-t dobnak (a wire-backed
+  implementáció egy következő kör feladata, a Kör 24
+  `communityClubRepositoryProvider` mintára);
+- widget tesztben `ProviderScope` override-dal helyőrző
+  adatokkal töltődnek fel;
+- a `_leave` / `_requestJoin` hívás `ref.invalidate(...)`-szel
+  érvényteleníti mind a `clubDetailProvider`-t, mind a három
+  screen-local providert — az A2 cache-invariáns.
+
+A `CommunityClubRepository` interfész NEM bővült (a §0.0 #3
+struktúrális korlát). A meglévő `CommunityFeedRepository.clubPinned`
+metódus a Kör 24 óta fennáll — ez a pin-elt feed forrása.
+
+### 10.9 Valódi-sértés próba (A1 — lefuttatva, parancs és eredmény)
+
+```bash
+# A tagság-ellenőrzés kikapcsolása a club_feed modulban
+cf._resolve_visible_club_for_member = lambda db, *, club_public_id, viewer_profile_id: \
+    db.query(CommunityClub).filter_by(public_id=club_public_id, deleted_at=None).one()
+
+# Ezután: list_club_feed(db, viewer_profile_id=outsider.id, club_public_id=club.public_id, ...)
+# Eredmény: outsider 1 posztot kapott a klub feedjéből (korábban ClubNotVisible)
+# A1 cella PIROSRA váltott → a guard load-bearing, a védelem működik.
+# A próba futtatása után a monkeypatch visszaállításra került.
+```
+
+A §6.1 A4-es próba (pin-limit drop) a teszt file-ban
+szintén implementálva van (`test_a4_real_violation_probe_drop_pin_limit`):
+`MAX_CLUB_PINNED_POSTS = 10_000`-re monkeypatch-elve a
+`pin_post` mind a 7 posztot beilleszti (a cap felett).
+
+A §6.1 A1-es próba szintén a teszt file-ban van
+(`test_a1_real_violation_probe_drop_membership_check`):
+a `_resolve_visible_club_for_member` monkeypatch-elve
+kihagyja a membership checket, és az outsider kap egy
+club-feed page-et.
+
+### 10.10 Gate státusz
+
+- `tools/round-gate.sh test/features/community/presentation/clubs/club_detail_screen_test.dart` —
+  a Flutter-oldali gate. A lezárás előtt futtatandó (lásd §7).
+- `cd backend && /home/ubuntu/music-theory/backend/.venv/bin/python -m pytest tests/community/test_club_content_service.py -q` —
+  a backend-oldali gate, KÜLÖN parancs (NEM láncolva).
+  15/15 teszt zöld (lásd §7).
+
+A `backend/.venv/bin/python -m ruff format app tests` parancs
+a §3-as lezáró sorrend része — a format-after-acceptance-t
+a §7 megtiltja (`analyze && test` lánc), a format-ot viszont
+a kör-zárás előtt futtatni kell.
+
+### 10.11 Kör commitok (négy, lépésenkénti — §2)
+
+```
+ff481109  E09-R25: club feed — Kör 13 projection újrahasznosítása club-szűréssel
+01e4bbf7  E09-R25: club_content_service — pin/unpin + club-challenge lifecycle
+3b6fd0a2  E09-R25: club_detail_screen bővítése — 4 tab + screen-local providers + cache invalidáció
+f1c736d3  E09-R25: club_detail_screen widget test — A2 cache invalidáció
+fae9ecec  E09-R25: backend test_club_content_service — A1/A3/A4/A5/A6/A7 cells + valódi-sértés próbák
+41ff4e25  E09-R25: fix tests — ends_at tz-normalization, profile relation lookup, A1 probe fix
+```
+
+A §2 commit-lépésenkénti szabály betartva (minden fájl
+után commit, a reviewer egyszer sem talált untracked
+production-fájlt).
+
 ## 11. Review — a Claude tölti ki
