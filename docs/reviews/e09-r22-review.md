@@ -1,13 +1,15 @@
 # E09-R22 — Review
 
 Brief: docs/rounds/e09-r22-verified-result-submission-and-anti-cheat.md
-Diff: `git diff 28c7e5c3...minimax/e09-r22-verified-result-submission-and-anti-cheat` (HEAD `f3bc0a5c`)
-Reviewer: Claude Sonnet 5 (orchestrátor) + `security-reviewer` subagent (kockázat=high, CLAUDE.md kötelező szabálya) · Dátum: 2026-08-24
-Verdikt: **CHANGES REQUIRED**
+Diff (1. kör): `git diff 28c7e5c3...minimax/e09-r22-verified-result-submission-and-anti-cheat` (HEAD `f3bc0a5c`)
+Diff (javító kör): `git diff 173f8850...minimax/e09-r22-verified-result-submission-and-anti-cheat` (HEAD `fac611d5`)
+Reviewer: Claude Sonnet 5 (orchestrátor) + `security-reviewer` subagent (kockázat=high, CLAUDE.md kötelező szabálya) · Dátum: 2026-08-24 (1. review) / 2026-08-24 (javító kör után)
+Verdikt: **APPROVED** (javító kör után, `fac611d5`) — az eredeti kör (`f3bc0a5c`) verdiktje CHANGES REQUIRED volt
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 2 · MINOR: 2 · NOTE: 0
+**1. review (`f3bc0a5c`):** BLOCKER: 0 · MAJOR: 2 · MINOR: 2 · NOTE: 0
+**Javító kör után (`fac611d5`):** BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 0 — mind a 4 lelet zárva, mindegyik SAJÁT kézzel (izolált `/tmp` klónban) ellenőrizve, F1/F2-re valódi-sértés próbával (a javítást ideiglenesen visszaállítottam a régi, hibás alakra → a leletet fogó ÚJ teszt PIROSRA váltott → visszaállítva zöld).
 
 Módszer: izolált `/tmp/review-e09-r22` klón (a `minimax/e09-r22-verified-result-submission-and-anti-cheat`
 branch-ről, HEAD `f3bc0a5c`), `tools/round-gate.sh` SAJÁT kézzel újrafuttatva,
@@ -78,7 +80,7 @@ Legacy scope audit OK (28c7e5c35eb1..f3bc0a5c54b5, 10 changed path(s), 0 generat
 - **Ellenőrzés (javítás után):** egy új `test_a3_metric_value_absurdly_large_rejected_no_500`
   (vagy hasonló) próba, ami `metric_value=10**19`-cel hív, és `verification_state
   == "rejected"` + `reason_code`-ot vár HTTP 500 helyett.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`fac611d5`) — `metric_value: int = Field(ge=METRIC_VALUE_MIN, le=METRIC_VALUE_MAX)` a `SubmitChallengeResultRequest`-en (`backend/app/community/routers/challenges.py:635-638`); a Pydantic wire-korlát a döntési lánc ELŐTT elutasítja a hordozhatatlan értéket, 422-t ad 500 helyett. **SAJÁT ellenőrzés:** izolált `/tmp/review-e09-r22-fix1` klónban futtatott gate 9/9 zöld (SAJÁT kézzel, nem az implementer állítására hagyatkozva); az ÚJ `test_a3_metric_value_absurdly_large_rejected_no_500` külön futtatva zöld. Ellenőriztem azt is, hogy a szerviz-szintű (router-t megkerülő) A8-tesztek (`test_a8_each_reject_path_persists_reason_code`) VÁLTOZATLANUL auditált sort írnak a MÉRSÉKELT tartományon-kívüli (`-5`, `1_000_001`) értékekre — a wire-korlát csak a hordozhatatlan (`10**19`) esetet térítí el a döntési lánc elé, a normál A3/A8 útvonal nem sérült.
 
 ### F2 — MAJOR — a nem-`personalBest` "first-wins" policy Python-szintű check-then-act, nem DB-atomikus — konkurens beküldés két `verified` sort hozhat létre
 
@@ -120,7 +122,8 @@ Legacy scope audit OK (28c7e5c35eb1..f3bc0a5c54b5, 10 changed path(s), 0 generat
   ami két szimultán, KÜLÖNBÖZŐ `source_event_id`-jű beküldést indít egy
   nem-`personalBest` challenge-re, és megköveteli, hogy pontosan EGY sor
   legyen `verified`, a másik `already_submitted`.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`fac611d5`) — a first-wins döntés a `_try_claim_first_wins` atomikus, rowcount-ellenőrzött feltételes UPDATE-re épül (`challenge_verification_service.py:435-477`), a Python-oldali előzetes olvasás eltávolítva a nem-`personalBest` ágból. Az ÚJ `test_a6_concurrent_non_personal_best_first_wins_atomic` `threading.Barrier`-rel, a PONTOS SQL-döntési pontnál (L421 minta) kényszeríti a race-t.
+  **SAJÁT valódi-sértés próba (izolált `/tmp/review-e09-r22-fix1` klónban, kód-módosítás a MEGOSZTOTT fán NEM történt):** a javítást ideiglenesen visszaállítottam a régi `evaluate_first_vs_best_policy`-alapú (Python check-then-act) alakra → `test_a6_concurrent_non_personal_best_first_wins_atomic` **PIROSRA váltott** (`1 failed`) → a fájlt `git checkout --`-tal visszaállítottam → a teszt újra **zöld** (exit 0). A lelet és a javítás egyaránt VALÓDI, nem placebo.
 
 ### F3 — MINOR — a dokumentált "két védelmi vonal" (A2) valójában egy — a service-oldali assert holt kód a valós kérésúton
 
@@ -145,7 +148,7 @@ Legacy scope audit OK (28c7e5c35eb1..f3bc0a5c54b5, 10 changed path(s), 0 generat
   lásson, VAGY a dokumentáció/kommentek ismerjék el, hogy az `extra="forbid"`
   az EGYETLEN kikényszerített határ, és egy dedikált wire-szintű regressziós
   teszt védje (ami pirosra vált, ha valaki eltávolítja az `extra="forbid"`-ot).
-- **Státusz:** OPEN (körben javítható, kis diff)
+- **Státusz:** FIXED (`fac611d5`) — a `submitted_keys` mostantól a TÉNYLEGES `await request.json()` nyers body-kulcsaiból épül (`routers/challenges.py:838-854`, a route `async def`-fé alakítva), nem egy kézzel felsorolt fix halmazból — a service-oldali második védelmi vonal innentől valóban terhelt bemenetet lát, ha egy jövőbeli refaktor lazítaná az `extra="forbid"`-ot. Kód-olvasással ellenőrizve.
 
 ### F4 — MINOR — az A5 verzió-ellenőrzés a valós kliensen sosem aktiválódik (opt-in, a fagyott interfésznek nincs verzió-mezője)
 
@@ -168,11 +171,13 @@ Legacy scope audit OK (28c7e5c35eb1..f3bc0a5c54b5, 10 changed path(s), 0 generat
   kimondja: az A5 verzió-cella ma csak direkt API-hívással érhető el, a
   Kör 5 interfész bővítése (verzió-paraméter hozzáadása) egy jövőbeli kör
   dolga, ha a challenge-definíciók szerkeszthetővé válnak.
-- **Státusz:** OPEN (dokumentációs javítás, nem kódváltoztatás — a körben
-  elfogadható MINOR, nem blokkolja a merge-et ÖNMAGÁBAN, de a másik két
-  MAJOR miatt úgyis javító kör kell)
+- **Státusz:** FIXED (`fac611d5`) — a brief §10.5 "Ismert korlát" szakasza
+  és egy ÚJ §10.7 "Javító kör" szakasz is rögzíti a korlátot, a fenti
+  indoklással szó szerint. Dokumentáció-olvasással ellenőrizve.
 
 ## Gate-bizonyíték ellenőrzése
+
+### 1. review (`f3bc0a5c`)
 
 | Gate | Állított eredmény (implementer) | Ellenőrizve (reviewer, izolált `/tmp/review-e09-r22` klón) |
 |---|---|---|
@@ -185,7 +190,6 @@ Legacy scope audit OK (28c7e5c35eb1..f3bc0a5c54b5, 10 changed path(s), 0 generat
 | backend ruff format | zöld | ✅ zöld |
 | backend ruff check | zöld | ✅ zöld |
 | backend pytest (TELJES suite) | zöld, 100% pass | ✅ zöld, 100% pass |
-| CI (teljes suite + property + APK) | — | **nincs dispatch-elve** — nyitott MAJOR miatt a CI-dispatch a javító kör UTÁNI, javított HEAD-re megy |
 
 A gate-mátrix minden lépése MÉRVE zöld — ez pontosan a `docs/LESSONS.md` L414
 mintája: a teljes, csonkítatlan gate zöld volt, miközben két MAJOR
@@ -193,20 +197,39 @@ anti-cheat-hiba élt a kódban. A gate a FORMAI/ismert-teszt fegyelmet méri, ne
 a security-reviewer által feltárt, a §6 mátrixban NEM szereplő extrém-bemenet
 és konkurencia-osztályokat.
 
+### Javító kör után (`fac611d5`)
+
+| Gate | Állított eredmény (implementer) | Ellenőrizve (reviewer, ÚJ izolált `/tmp/review-e09-r22-fix1` klón) |
+|---|---|---|
+| format | zöld | ✅ zöld |
+| analyze | zöld | ✅ zöld |
+| test (Dart, challenge_result_controller_test.dart) | zöld 6/6 | ✅ zöld 6/6 |
+| architecture | zöld | ✅ zöld |
+| secrets | zöld | ✅ zöld (3567 fájl, 0 lelet) |
+| l10n | zöld | ✅ zöld |
+| backend ruff format | zöld | ✅ zöld |
+| backend ruff check | zöld | ✅ zöld |
+| backend pytest (TELJES suite) | zöld, 100% pass | ✅ zöld, 100% pass |
+| F1/F2 célzott regresszió (`test_a3_metric_value_absurdly_large_rejected_no_500`, `test_a6_concurrent_non_personal_best_first_wins_atomic`) | zöld | ✅ zöld, KÜLÖN futtatva |
+| F2 valódi-sértés próba (a fix ideiglenes visszaállítása) | — | ✅ a régi kódra a race-teszt PIROSRA váltott (`1 failed`), a fix visszaállítása után újra zöld |
+| Scope-audit | 4 megváltozott fájl (javító kör), 0 listán kívüli | ✅ SAJÁT `tools/scope-audit.py` futtatással megerősítve, 0 sértés |
+| CI (teljes suite + property + APK) | — | dispatch-elve a review APPROVED után, lásd alább |
+
+`implementer_guard.py` `gate_shape=VIOLATION`-t jelzett a kör-jelzésben —
+ezt KIVIZSGÁLTAM (nem fogadtam el bemondásra): a jelzés egy ELSŐ, `| tail`-lel
+csonkított gate-hívást pattern-matchelt a logban, amit az őr maga LETILTOTT
+(`permission_denials` a log-ban) — SOSEM futott le csonkítva. A MÁSODIK,
+csonkítatlan hívás ténylegesen lefutott (a teljes 9-lépéses kimenet a logban),
+és a fenti táblázat ezt a csonkítatlan futást igazolja vissza, SAJÁT, független
+gate-futtatással is.
+
 ## Merge-döntés
 
-**Merge TILOS** (ADR 0052) — 2 nyitott MAJOR (F1, F2). A `docs/execution/
-orchestrator-rotation`/`pipeline-slots` jelenlegi felállása szerint (2026-08-21
-user-döntés — Codex-kvóta kiesés) a javító kört is `minimax` viszi, ugyanazon
-a `minimax/e09-r22-verified-result-submission-and-anti-cheat` branch-en, a
-fenti F1–F4 leletlistával a promptban. A javító kör után:
-
-1. a gate-eket ÚJRA, SAJÁT kézzel, friss `/tmp` klónban futtatom;
-2. F1/F2-re a fenti "Ellenőrzés (javítás után)" próbákat kérem számon (nem
-   fogadom el bemondásra);
-3. ha mindkét MAJOR zárva és nincs új MAJOR/BLOCKER, a jelentés APPROVED-ra
-   vált, és a CI-dispatch + merge-lánc folytatódik.
-
-Ha az ELSŐ javító kör után is nyitva marad MAJOR/BLOCKER: a jelenlegi
-motor-felállásban (Codex-oldal kvóta-kiesés miatt tárgytalan) nincs
-eszkalációs cél — ez **H4 halt**, emberi döntés kell.
+**APPROVED, merge ENGEDÉLYEZETT** (ADR 0052) a javító kör (`fac611d5`) HEAD-jén
+— mind a 4 lelet (F1, F2 MAJOR + F3, F4 MINOR) zárva, a fenti táblázat és a
+leletenkénti "Státusz: FIXED" bejegyzés SAJÁT, izolált-klónos ellenőrzéssel
+igazolva, F1/F2-re valódi-sértés próbával. A `docs/execution/orchestrator-
+rotation`/`pipeline-slots` jelenlegi felállása szerint (2026-08-21 user-döntés
+— Codex-kvóta kiesés) a javító kört `minimax` vitte, EGY javító kör alatt, a
+mérce (§ADR 0087 H4) szerint elfogadható küszöbön belül. A CI-dispatch (exact-SHA,
+`fac611d5`) + a merge-lánc a review COMMIT UTÁN folytatódik.
