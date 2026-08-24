@@ -547,4 +547,95 @@ test/core/design_system/component_catalog_test.dart` — MINDEN GATE ZÖLD
 architecture 12 allowlisted deviation, secrets 0 lelet, l10n aggregate friss,
 en→hu parity 1831 üzenet).
 
+### MAJOR-1 zárása — az A1 őr vaksága a `hintText` sértésre
+
+A review (`docs/reviews/e13-r11-review.md`) mérte: az A1 első cellája
+(`find.text('Song title')` gépelés UTÁN) a `hintText`-sértést ([`ss_text_field.
+dart:60`](../../lib/core/design_system/components/inputs/ss_text_field.dart))
+NEM fogta pirosra — a Flutter a hidegen maradt `hintText`-widgetet
+`Opacity(0.0)` alá rejti gépelés után, de a FÁBAN hagyja, és a
+`find.bySemanticsLabel` is a `hintText`-et is a mező semantics-labeljébe
+emeli, tehát mindkét eredeti cella vak volt a jelenlét-alapú mérésre.
+
+Javítás — az A1 csoport ELSŐ két tesztje most a TULAJDONSÁGOT és a
+LÁTHATÓSÁGOT méri, nem a fában-létet:
+
+1. **tulajdonság-szint** (`ss_inputs_test.dart` A1, "the label is carried by
+   labelText, not merely hintText"): `TextField.decoration!.labelText ==
+   label` ÉS `decoration!.hintText != label`.
+2. **vizuális szint** (A1, "the label stays VISIBLE... once the user starts
+   typing"): a megtalált label-`Text` minden `Opacity`/`FadeTransition` őse
+   `opacity > 0` gépelés UTÁN — egyetlen `opacity <= 0` ős is bukás.
+
+**A zárás mért bizonyítéka** — a brief által előírt mutáció
+(`ss_text_field.dart:60`, `labelText: label,` → `hintText: label,`),
+`flutter test test/core/design_system/forms/ss_inputs_test.dart`:
+
+```
+00:00 +0: A1 — every field carries a persistent label, not just a hint
+    the label is carried by labelText, not merely hintText (§5.1)
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞═══════════════════════
+Expected: 'Song title'
+  Actual: <null>
+   Which: not an <Instance of 'String'>
+a persistent label is exposed through InputDecoration.labelText — a
+hintText-only field would leave this null
+...
+00:02 +8 -1: Some tests failed.
+```
+
+Az ELSŐ, tulajdonság-szintű cella az ELSŐ próbán PIROSRA váltott (a
+`labelText` mutáció után `null`, nem `'Song title'`) — pontosan a §6.1
+mátrix által nevesített sértésen. A mutációt visszaállítottam
+(`git diff` a fájlon üres), majd a teszt újra futtatva mind a 9 eset zöld
+(`00:01 +9: All tests passed!`).
+
+### MINOR-1 zárása — a 48 dp padló-cella redundanciája (§6.1)
+
+A review mérte: a `ConstrainedBox(minHeight: SsSemantics.
+minimumInteractiveDimension)` törlése ([`ss_switch_row.dart`](../../lib/core/
+design_system/components/inputs/ss_switch_row.dart)) mellett a padló-cella
+(A4, "minimal content (no subtitle) still meets the 48 dp floor") zöld
+maradt — mert a `Switch` M3 `padded` alapértelmezett érintési célja +
+a sor `space2` függőleges paddingja már önmagában ~64 dp-re tolja a sort
+(lásd fent, "Az érintési cél három cellája" — ugyanez a mérés).
+
+**(b) választva**, mivel a §6.1 44/48/56 dp cellái a review korábbi mérése
+szerint SEM reprodukálhatók a TÉNYLEGES `SsSwitchRow`-on olyan
+összeállítással, ahol a `Switch` intrinsic mérete nem dominálna — a `Switch`
+minimális mérete M3-ban fixen ~48 dp, ezt a komponens nem tudja alákerülni
+anélkül, hogy a `Switch`-et magát cserélnénk le. A padló-cella tehát a
+TÉNYLEGES komponensen szerkezetileg nem tud önálló, nem-redundáns őrré válni.
+
+A cella `reason:` paramétere és a teszt fölötti kommentár most EXPLICITEN
+kimondja a redundanciát, és megnevezi, MELYIK cellák őrzik ténylegesen a
+48 dp érintési célt:
+
+- `SsSwitchRow` "tapping the far edge of the row (away from the visible
+  switch) still toggles it" — bizonyítja, hogy a TELJES sor (nem csak a
+  `Switch` thumb) az aktív érintési felület;
+- `SsSwitchRow` "a disabled row (onChanged: null) does not toggle on tap" —
+  bizonyítja, hogy a kiterjesztett felület nem szivárog `onChanged: null`
+  esetén;
+- a `Switch` saját M3 `padded` alapértelmezett célja (nem a design system
+  kódja, hanem a Flutter SDK-é) önmagában garantálja a ≥48 dp-t azon az
+  ágon, ahol a sor amúgy is dominálna.
+
+A padló-cella emiatt DEFENSE-IN-DEPTH marad (arra az esetre, ha a `Switch`
+alapértelmezett célja valaha 48 dp alá csökkenne), nem az elsődleges őr —
+ezt a teszt `reason`-je és a kommentár most kimondja, a §6.1 három-cellás
+előírásának megfelelően.
+
+### Javító kör (fix1) — gate újrafuttatva
+
+`tools/round-gate.sh test/core/design_system/forms/ss_button_test.dart
+test/core/design_system/forms/ss_inputs_test.dart
+test/property/design_system/slider_numeric_sync_test.dart
+test/core/design_system/component_catalog_test.dart` — MINDEN GATE ZÖLD a
+teszt-only javítás után is (format, analyze 0 lelet, mind a négy teszt-
+útvonal — `ss_inputs_test.dart` most 9 esettel a korábbi 8 helyett az A1
+csoport felbontása miatt —, architecture 12 allowlisted deviation, secrets
+0 lelet, l10n változatlan). Production kód nem változott (`git diff` a
+`lib/` fán üres).
+
 ## 11. Review — a Claude tölti ki

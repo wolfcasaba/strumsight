@@ -16,25 +16,83 @@ void main() {
   });
 
   group('A1 — every field carries a persistent label, not just a hint', () {
-    testWidgets('the label stays visible once the user starts typing (§5.1)', (
-      tester,
-    ) async {
-      await tester.pumpWidget(_wrap(const SsTextField(label: 'Song title')));
+    testWidgets(
+      'the label is carried by labelText, not merely hintText (§5.1)',
+      (tester) async {
+        await tester.pumpWidget(_wrap(const SsTextField(label: 'Song title')));
 
-      expect(find.text('Song title'), findsOneWidget);
+        final decoration = tester
+            .widget<TextField>(find.byType(TextField))
+            .decoration!;
 
-      await tester.enterText(find.byType(TextField), 'Wonderwall');
-      await tester.pump();
+        expect(
+          decoration.labelText,
+          'Song title',
+          reason:
+              'a persistent label is exposed through InputDecoration.'
+              'labelText — a hintText-only field would leave this null',
+        );
+        expect(
+          decoration.hintText,
+          isNot('Song title'),
+          reason:
+              'the label text must not ALSO be smuggled in through '
+              'hintText — hintText vanishes once typing starts',
+        );
+      },
+    );
 
-      expect(
-        find.text('Song title'),
-        findsOneWidget,
-        reason:
-            'a real label never disappears once typing starts — a '
-            'hintText would have',
-      );
-      expect(find.text('Wonderwall'), findsOneWidget);
-    });
+    testWidgets(
+      'the label stays VISIBLE (not just present in the tree) once the '
+      'user starts typing (§5.1)',
+      (tester) async {
+        await tester.pumpWidget(_wrap(const SsTextField(label: 'Song title')));
+
+        expect(find.text('Song title'), findsOneWidget);
+
+        await tester.enterText(find.byType(TextField), 'Wonderwall');
+        await tester.pump();
+
+        final labelFinder = find.text('Song title');
+        expect(
+          labelFinder,
+          findsOneWidget,
+          reason:
+              'a real label never disappears once typing starts — a '
+              'hintText would have',
+        );
+
+        // A hintText remnant stays IN THE TREE after typing too (Flutter
+        // fades it out via Opacity/FadeTransition rather than removing it)
+        // — presence alone doesn't distinguish a real label from a hidden
+        // hint, so assert it is actually opaque on screen.
+        final hiddenAncestors = find
+            .ancestor(
+              of: labelFinder,
+              matching: find.byWidgetPredicate(
+                (widget) => widget is Opacity || widget is FadeTransition,
+              ),
+            )
+            .evaluate()
+            .where((element) {
+              final widget = element.widget;
+              final opacity = widget is Opacity
+                  ? widget.opacity
+                  : (widget as FadeTransition).opacity.value;
+              return opacity <= 0.0;
+            });
+        expect(
+          hiddenAncestors,
+          isEmpty,
+          reason:
+              'the label Text is in the tree but hidden behind a zero-'
+              'opacity ancestor — that is a faded-out hintText remnant, '
+              'not a persistent label',
+        );
+
+        expect(find.text('Wonderwall'), findsOneWidget);
+      },
+    );
 
     testWidgets('the label is exposed to a screen reader too', (tester) async {
       final handle = tester.ensureSemantics();
@@ -97,6 +155,18 @@ void main() {
       });
 
       group('touch target height boundary (§6.1 — the 48 dp threshold)', () {
+        // This cell is REDUNDANT on the actual SsSwitchRow render (docs/
+        // rounds/e13-r11-actions-and-forms.md §10, "MINOR-1 zárása"):
+        // removing the row's own `ConstrainedBox(minHeight: 48)` floor
+        // does NOT turn it red, because the Switch's M3 `padded` default
+        // touch target plus the row's space2 padding already put minimal
+        // content at ~64 dp — well above the 48 dp floor. It is kept as a
+        // defense-in-depth regression check (in case the Switch's own
+        // default target ever shrinks); the 48 dp guarantee for the WHOLE
+        // row is actually enforced by the two tests above ("tapping the
+        // far edge... still toggles it" and "a disabled row... does not
+        // toggle"), which fail if the full-row InkWell wiring regresses to
+        // switch-thumb-only.
         testWidgets(
           'minimal content (no subtitle) still meets the 48 dp floor',
           (tester) async {
@@ -113,6 +183,11 @@ void main() {
             expect(
               tester.getSize(find.byType(SsSwitchRow)).height,
               greaterThanOrEqualTo(SsSemantics.minimumInteractiveDimension),
+              reason:
+                  'redundant on the actual component (the Switch\'s own '
+                  'M3 padded target already exceeds 48 dp) — kept as a '
+                  'defense-in-depth floor; see §10 "MINOR-1 zárása" for '
+                  'which cells actually guard the 48 dp touch target',
             );
           },
         );
