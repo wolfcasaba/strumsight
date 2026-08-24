@@ -451,3 +451,20 @@ módosított — csak olvasta/pumpálta őket a tesztekben, a §0.0/D2 és D4
 előírása szerint.
 
 ## 11. Review — a Claude tölti ki
+
+**Verdikt: ✅ APPROVED** — nincs BLOCKER, nincs MAJOR. Teljes jelentés:
+[`docs/reviews/e13-r14-review.md`](../reviews/e13-r14-review.md).
+
+- A gate **saját kézzel újrafuttatva** izolált `/tmp` klónban: mind a 8 lépés
+  zöld, kilépési kód 0 — a §10.4 állítása igaz.
+- `tools/scope-audit.py --base origin/main` → `scope_audit=ok`, 9 útvonal.
+  (A `--base 5be0a3a3` négy „sértése" a §0.3 upstream-merge `origin/main`-ből
+  hozott fájlja, nem a kör munkája — **nem H3**.)
+- Mind a 8 acceptance-kritérium tételes bizonyítékkal áll.
+- A két kötelező **valódi-sértés próbát a reviewer is lefuttatta**: a
+  költségvetés kivétele az A1 „below the threshold" celláját ÉS a felépített
+  widget celláját pirosra váltotta (a §10.3 üzenetével szó szerint egyezve);
+  az angolra drótozott `tunerAccuracyLabel` az A6 celláját váltotta pirosra.
+  Mindkét mutáció visszaállítva.
+- 4 MINOR + 3 NOTE **follow-upra** (teszt-higiénia és jövőbeli
+  karbantarthatóság; egyik sem érint acceptance-pontot).
