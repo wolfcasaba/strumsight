@@ -1,4 +1,4 @@
-"""Add the Community report table (E09-R26, ADR 0414 §5.1).
+"""Add the Community report table (E09-R26, ADR 0422 §5.1).
 
 Revision ID: e09_r26_0019
 Revises: e09_r25_0019
@@ -9,7 +9,7 @@ user-report workflow (brief §1, §3, §5). The table has two
 UNIQUE constraints — both load-bearing:
 
 * ``uq_community_reports_dedup_key`` — the §6 A2 dedup key
-  ``f"{reporter_public_id}:{target_type}:{target_id}:{category}"``.
+  ``f"{reporter_profile_id}:{target_type}:{target_id}:{category}"``.
   Two concurrent submits on the same triple cannot both land; the
   service layer reads the existing row and short-circuits the second
   writer to success (same precedent as ``CommunityBlock`` /
