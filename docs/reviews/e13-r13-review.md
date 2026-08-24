@@ -238,6 +238,93 @@ semleges. **Nem lelet.**
    `takeException()` == null), nem `findsOneWidget`-re. Ennek a mátrixnak a
    javítás ELŐTTI kódon PIROSNAK kell lennie.
 
-## 7. 2. forduló — a javító kör után
+## 7. 2. forduló (fix1, `ffdecc22`) — a geometria zárva, de ÚJ BLOCKER
 
-*(A javító kör után tölti ki a reviewer.)*
+**A fix1 a hét leletből hatot lezárt**, a tilos zónához nyúlás nélkül: a
+lap/párbeszéd törzse görgethető lett, a gombsor a görgethető területen KÍVÜLRE
+került (`OverflowBar`), és a két LAP `show()`-closure őrt kapott
+(`guardedOnConfirm`).
+
+**A zárást nem bemondásra fogadtam el** — saját próbateszttel újramértem
+(`zz_review_probe2`, 411×891, a kirendelt rect-ek):
+
+```
+scale=1.0 és 2.0 × {SsDialog, SsConfirmationSheet, SsToolConfirmationSheet}
+→ exception: none MIND A HATBAN; minden gomb a képernyőn belül
+  (max R=387 < 411, max B=867 < 891)
+```
+
+Az 1. forduló ugyanezen a próbán 4 túlnyúlást és 5 képernyőn kívüli gombot
+mért — a geometria-osztály (BLOCKER-1, MAJOR-1, MAJOR-2) tehát **zárva**.
+
+### BLOCKER-1 (2. forduló) — a fix1 ÚJ regressziót vezetett be a §5.5-re
+
+**A `SsDialog` a destruktív visszahívást KORLÁTLANUL sokszor futtatja.**
+
+A fix1 a MINOR-1-et úgy oldotta meg, hogy a `catch` ágban **visszaállítja** az
+őrt (`ss_dialog.dart:79-86`, `if (mounted) setState(() => _confirmed = false)`),
+**de a `SsDialog.show()` nem kapta meg** azt a closure-őrt, amit a két lap igen
+— a `show` a nyers `onConfirm`-ot adta tovább (`ss_dialog.dart:62`). Így minden
+sikertelen megerősítés újra élesítette a gombot, tartós őr nélkül.
+
+**Saját mérésem (`zz_review_probe4`, `ffdecc22`, ÁTMÉRETEZÉS NÉLKÜL,
+411×891 @1.0, dobó `onConfirm`, max 3 koppintás):**
+
+```
+RESULT | SsDialog                | destructive callback ran 3 time(s)   <== BLOCKER
+RESULT | SsConfirmationSheet     | destructive callback ran 1 time(s)   ✓
+RESULT | SsToolConfirmationSheet | destructive callback ran 1 time(s)   ✓
+```
+
+A fix1 **ELŐTT** a `SsDialog` 1 hívást adott — a javítás tehát pont a
+legdrágább szerződésen rontott. A kör saját új cellája
+(`ss_confirmation_test.dart:411`) csak a „dobás + reszponzív alakváltás" utat
+méri, ami **csak a lapokra** vonatkozik; a `SsDialog` útjára (dobás → azonnali
+újra-élesítés, átméretezés NÉLKÜL) nem volt cella.
+
+**A lelet a reviewer KONTROLL-cellájából jött elő**, nem a fő cellából: a
+`zz_review_probe3` `SsDialog`-kontrollja `calls=1`-ről `calls=2`-re változott a
+fix1 után. Kontroll nélkül ez a regresszió zöld gate-tel merge-elődött volna.
+
+## 8. 3. forduló (fix2, `80b680d4`) — **APPROVED**
+
+A fix2 a `SsDialog.show()`-nak megadta ugyanazt a `show()`-closure őrt
+(`guardedOnConfirm`), és felvett egy gépi őrt **mindhárom** felületre.
+
+**Újramérve, saját próbateszttel (`80b680d4`):**
+
+```
+RESULT | SsDialog                | destructive callback ran 1 time(s)   ✓
+RESULT | SsConfirmationSheet     | destructive callback ran 1 time(s)   ✓
+RESULT | SsToolConfirmationSheet | destructive callback ran 1 time(s)   ✓
+FINAL (reshape-próba) SsConfirmationSheet calls=1 | SsDialog calls=1     ✓
+geometria: 6/6 exception: none, minden gomb a képernyőn belül            ✓
+```
+
+**Leletenkénti zárás:**
+
+| Lelet | Állapot | Az őr |
+|---|---|---|
+| BLOCKER-1 (1. f.) — nem görgethető lap | ZÁRVA | A9 × 12 cella (3 felület × 2 méret × 2 szövegméret), a `leaves-device`/`recording` görgetéssel elérhetőségével |
+| MAJOR-1 — fekvő telefon, Mégse 0% | ZÁRVA | A9 `915×412` cellák |
+| MAJOR-2 — levágott gombfelirat | ZÁRVA | A9 `takeException() == null` + rect-ek |
+| MAJOR-3 — alakváltás nullázza az őrt | ZÁRVA | `ss_confirmation_test.dart:411` reshape-cella |
+| **BLOCKER-1 (2. f.) — `SsDialog` 3× fut** | **ZÁRVA** | „fix2 — 3× un-resized confirm tap" cella, **mindhárom** felületre |
+| MINOR-1/2/3 | ZÁRVA | a fix1/fix2 cellái |
+| NOTE-1/2/3 | tudomásul véve, jövőbeli kör |
+
+**Független gate-futtatás izolált `/tmp/rev3-e13r13` klónban, `80b680d4`-en:**
+
+```
+[1] format ZÖLD (1961 fájl, 0 változott)   [2] analyze ZÖLD (No issues found)
+[3] ss_overlay_test.dart ZÖLD (7 cella)    [4] ss_confirmation_test.dart ZÖLD (30 cella)
+[5] architecture ZÖLD (12 allowlisted)     [6] secrets ZÖLD (3628 fájl, 0 lelet)
+[7] l10n ZÖLD (aggregate friss, 1838 kulcs mindkét nyelven)
+MINDEN GATE ZÖLD.
+```
+
+Scope-audit `origin/main` bázison: **OK**, 11 útvonal, 0 sértés.
+A `component_catalog_test.dart` (§0.0/D4) és a `stage_back_confirmation_test.dart`
+(§0.0/D3) érintetlen és zöld.
+
+**Verdikt: APPROVED** — nyitott BLOCKER/MAJOR nincs.
