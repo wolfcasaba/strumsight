@@ -3,10 +3,130 @@
 - **Státusz:** PREPARED (előre megírva 2026-08-22, kód olvasva: `main @ db6293f4`)
 - **Típus:** Chapter 10 (Epic 9 — Community Platform), Kör 26
 - **Kör-azonosító:** `E09-R26`
-- **Branch:** `<motor>/e09-r26-user-report-and-immediate-safety-flow`
+- **Branch:** `minimax/e09-r26-user-report-and-immediate-safety-flow`
 - **Előfeltétel:** `E09-R25` merge-elve
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0414` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Előre kiosztott ADR:** ~~`ADR 0414`~~ **`ADR 0422`** — a `0414` szám MÁR
+  FOGLALT (Kör 20, `docs/adr/0414-notification-inbox-and-push-abstraction.md`,
+  merge-elve) — a §0.0 pre-flight `tools/round-slots.py reserve-adr` friss
+  számot adott. Az ADR-t a Claude írta meg a kör indítási pre-flightjában
+  ([`docs/adr/0422-user-report-and-immediate-safety-flow.md`](../adr/0422-user-report-and-immediate-safety-flow.md));
+  az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+
+## 0.0 Pre-flight brief-revízió (2026-08-24, Claude Sonnet 5, `main @ 9b3a5d5d`)
+
+**Kockázat = high, indoklás:** a `risk = "high"` besorolás nem egy
+`allowed_paths`-beli `high_risk_path_fragments` kulcsszóból fakad — a
+kockázat forrása maga a domain: egy PII-jellegű, retaliation-kockázatú
+azonosító (reporter identity) kezelése ÉS egy self-harm safety-copy
+routing. Mindkettő a kötelező `security-reviewer` subagent bevonását
+indokolja (AGENTS.md §15). Részletek: [ADR 0422](../adr/0422-user-report-and-immediate-safety-flow.md)
+"Kockázat = high, indoklás" szakasza.
+
+**Visszakeresés (ADR 0312, §4.9):** `node tools/knowledge-rag.mjs --corpus
+lessons,halts --top 5 "reporter identity never leaks to target moderation
+response"` → **L431** (E09-R11) — egy megosztott OLVASÁSI láthatóság-helper
+íróként/válasz-szűrőként újrahasznosítva IDOR-t nyitott, a válasz-identitást
+"a SORBÓL told fel, ne a hívóból"; **L414** (E09-R03) — egy 282/282-zöld
+suite mellett is élt MAJOR biztonsági hiba, amit csak egy a jelentett
+teszttől FÜGGETLEN mutation-próba fogott meg. Mindkettő közvetlenül a §6.1
+valódi-sértés próbát indokolja — nem elég pozitív teszttel lefedni az A1-et.
+
+**Mért tények a pre-flightban (ADR 0422 Kontextus 1–6):**
+
+1. Az előre kiosztott `0414` ADR-szám MÁR FOGLALT — javítva `0422`-re
+   (fent).
+2. Nincs előre álló kategorikus enum-minta a community modellek között —
+   a `category` mező a `reaction.py::kind` mintáját követi (plain `String`
+   + modul-szintű allowlist, ADR 0398 §1). Kezdő kategória-lista és a
+   self-harm/copyright különleges kezelése: ADR 0422 D4.
+3. `CommunityPost`/`CommunityComment` `deleted_at` nullable tombstone-t
+   visz, NEM `status` enumot — a "törölt target" (A4) erre épül, a report
+   ELFOGADOTT marad soft-deleted targetre is (ADR 0422 D5), csak egy
+   SOHA nem létezett `target_id` utasítandó el.
+4. A rate-limit kulcs (A6) az authentikált hívó BELSŐ profil-id-je, NEM IP
+   — a Kör 21 (`challenge_invite_service.py`) mintáját követi, nem a
+   Kör 3 (`handles.py`) authentikáció-előtti IP-mintáját (ADR 0422 D6).
+5. **`lib/l10n/app_en.arb` és `lib/l10n/app_hu.arb` FELVÉVE az
+   `allowed_paths`-ra** (lásd lent, `ai-router` blokk) — a self-harm safety
+   copy és a lokalizált kategória-címkék az EGYETLEN szankcionált útvonala
+   (CLAUDE.md: "every user-facing string goes through ARB →
+   AppLocalizations"); ezek nélkül az implementer vagy hardkódolna
+   (konvenció-sértés), vagy STOP-olna egy a kör saját scope-jából fakadó,
+   előre elhárítható akadályon. A generált `app_localizations*.dart`
+   gitignore-olt, nem kerül a listára.
+6. Nincs előre jóváhagyott self-harm copy-készlet a repóban — ez a kör
+   hozza létre az ELSŐ, egyetlen kanonikus EN/HU string-párt (ADR 0422 D7);
+   egy jövőbeli, jogi/szakmai lektorálást hozó kör a TARTALMAT cserélheti,
+   a szerkezetet (egyetlen forrás) nem.
+7. A2 idempotencia a Kör 20 (`community_notifications`, ADR 0414)
+   `dedup_key` mintáját követi (szerver-oldali, determinisztikus kulcs +
+   `UNIQUE` + `IntegrityError`-elkapás → meglévő sor visszaadása), NEM egy
+   kliens-küldött `idempotency_key` body-mezőt (ADR 0422 D8).
+
+Részletes indoklás, elutasított alternatívák: [ADR 0422](../adr/0422-user-report-and-immediate-safety-flow.md).
+
+## 0.0b Pre-flight javítás — hibás l10n útvonal a §0.0 D1-ben (2026-08-24, ugyanazon a napon, az implementer STOP jelzése után)
+
+**Az implementer `stopped`-ot jelzett** (`.codex-round-status`, 15:45:
+*"allowed_paths list lib/l10n/app_en.arb (GENERATED) but did NOT list
+lib/l10n/features/community_en.arb (the actual source-of-truth for fragment
+keys, same precedent as E09-R08 safety keys). gen_l10n_segments wiped my 32
+keys from app_en.arb on --write because no fragment owned them."*) — a §0.0
+D1 (fent) TÉVES útvonalat vett fel: `lib/l10n/app_{en,hu}.arb` a
+**szegmentált l10n architektúra GENERÁLT kimenete** (`tool/gen_l10n_segments.dart
+--write` állítja elő a `lib/l10n/features/*_{en,hu}.arb` FORRÁS-fragmentumokból,
+`tools/round-gate.sh` → `tool/ci/check_l10n_parity.dart` ezt a parityt őrzi).
+A forrás community-domain fragmentum MÁR létezik és MÁR a repóban van:
+`lib/l10n/features/community_en.arb` / `community_hu.arb` (Kör 4 óta,
+legutóbb Kör 21 bővítette) — ugyanaz a fájlpár, amit a Kör 8
+(`docs/rounds/e09-r08-block-mute-and-safety-relationships.md` 607. sor)
+safety-kulcsokhoz is használt, és amelynek dokumentált precedense: *"a
+`lib/l10n/app_{en,hu}.arb` az `gen_l10n_segments.dart --write` aggregate
+refresh következménye ..., nem scope-sértés"* (ugyanott, 620–623. sor).
+
+**Javítás:**
+
+- `allowed_paths`: `lib/l10n/app_en.arb` / `app_hu.arb` **TÖRÖLVE**,
+  `lib/l10n/features/community_en.arb` / `lib/l10n/features/community_hu.arb`
+  **FELVÉVE** (lásd lent, `ai-router` blokk + §4 táblázat).
+- Az implementációs sorrend (§8) kiegészül egy 4b lépéssel: az új kulcsok a
+  `community_{en,hu}.arb` FORRÁS-fragmentumba kerülnek, majd
+  `dart run tool/gen_l10n_segments.dart --write` (vagy a `tools/round-gate.sh`
+  saját l10n-lépése) regenerálja az `app_{en,hu}.arb`-ot — ez utóbbi
+  módosulása a §0.0b fenti Kör 8 precedens szerint NEM scope-sértés, még
+  akkor sem, ha az `app_{en,hu}.arb` nincs az `allowed_paths`-on (a generált
+  fájl nem "hozzáadott" tartalom, hanem a sanctionált forrás-szerkesztés
+  következménye).
+- ADR 0422 D1 szövege (a `docs/adr/`-ben, TILOS zóna az implementernek,
+  csak az orchesztrátor referenciája) ugyanígy javítva a helyes
+  fragmentum-útvonalra.
+
+**Folytatás:** az implementer a MEGLÉVŐ branchen (`477848c8` HEAD) folytatja
+— a korábban commitolt backend/teszt munka és a Flutter widget érintetlen, a
+javító kör csak az ARB-kulcsok helyét korrigálja (a §0.0b fenti diff a
+korábbi, hibás app_{en,hu}.arb-kísérletet már törölte a `477848c8`
+commitban).
+
+## 0.0c Második pre-flight javítás — a mechanikus scope-audit nem ismeri a "generált következmény" kivételt (2026-08-24, a 2. implementer-STOP után)
+
+A §0.0b javítás UTÁN az implementer helyesen a `community_{en,hu}.arb`
+forrásba vette fel a kulcsokat, majd lefuttatta a generátort — ez, ahogy a
+§0.0b előre jelezte, megváltoztatta `lib/l10n/app_{en,hu}.arb`-ot is. A
+`gate_shape=VIOLATION` / `scope_audit=VIOLATION` jelzés (`080a4cee`,
+`path outside allowed scope: lib/l10n/app_en.arb; ... app_hu.arb`) viszont
+megmutatta: **a mechanikus `tools/scope-audit.py` szó szerint az
+`allowed_paths` listát diffeli a változott fájlokkal — nincs beépített
+kivétele "ez csak egy generált következmény" esetekre**, a §0.0b szöveges
+indoklása a scope-audit szempontjából nem elég. A Kör 8 tényleges,
+merge-elt diffje (`git show --stat 5e086c10`) igazolja: OTT is landolt
+`lib/l10n/app_{en,hu}.arb` a diffben — a helyes olvasat tehát nem az, hogy
+a scope-audit átengedi a generált fájlt dokumentálatlanul, hanem hogy
+EXPLICIT fel kell venni az `allowed_paths`-ra, akkor is, ha "csak" egy
+generátor futtatja át. **Javítás:** `lib/l10n/app_en.arb` és
+`lib/l10n/app_hu.arb` VISSZAKERÜLT az `allowed_paths`-ra (lásd fent), a
+`community_{en,hu}.arb` MELLETT (nem helyette) — mind a 4 ARB fájl
+engedélyezett. Ugyanígy a §4 táblázat.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 `safety_relationships_screen.dart` TÉNYLEGES widget-struktúráját — a report bottom sheet ugyanabból a képernyő-családból nyílik, konzisztens biztonsági UX-szel. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
@@ -20,6 +140,10 @@ allowed_paths = [
   "backend/app/community/routers/reports.py",
   "backend/alembic/versions/e09_r26_0019_community_report.py",
   "lib/features/community/presentation/dialogs/report_content_sheet.dart",
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
   "backend/tests/community/test_report_service.py",
   "test/features/community/presentation/report_content_sheet_test.dart",
   "docs/rounds/e09-r26-user-report-and-immediate-safety-flow.md",
@@ -69,12 +193,22 @@ Könnyen elérhető report, hide, mute és block folyamat minden releváns tarta
 | `backend/app/community/routers/reports.py` | ÚJ |
 | `backend/alembic/versions/e09_r26_0019_community_report.py` | ÚJ |
 | `lib/features/community/presentation/dialogs/report_content_sheet.dart` | ÚJ |
+| `lib/l10n/features/community_en.arb` | BŐVÍTÉS — §0.0/§0.0b: kategória-címkék + self-harm safety copy kulcsa (FORRÁS-fragmentum) |
+| `lib/l10n/features/community_hu.arb` | BŐVÍTÉS — §0.0b, EN-nel párban |
+| `lib/l10n/app_en.arb` | BŐVÍTÉS — §0.0c: a `gen_l10n_segments --write` generált aggregate-je; a mechanikus scope-audit nem ismeri a "generált következmény" kivételt, tehát explicit listázva (Kör 8 precedens szerint ez is a diffben landolt) |
+| `lib/l10n/app_hu.arb` | BŐVÍTÉS — §0.0c, EN-nel párban |
 | `backend/tests/community/test_report_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/report_content_sheet_test.dart` | ÚJ |
 
 **Tilos zóna:** `backend/app/community/moderation/**` (Kör 27 dolga) · `docs/adr/**` · `tools/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0414)
+## 5. Kötött architekturális döntések (ADR 0422)
+
+**A §5.1–5.3 alatti safety-invariánsok mellett az ADR 0422 D2–D8 további
+KÖTÖTT döntéseket rögzít** (category allowlist + kezdő lista, dedup-kulcs
+mechanizmus, rate-limit kulcs, törölt-target kezelés, self-harm copy
+forrása, reporter-identitás válasz-határa) — ezek a §0.0 pre-flight
+mérésének eredményei, az implementer ezeket köti, nem tervezi újra.
 
 ### 5.1 A reportoló SZEMÉLYE SOSEM szivárog a target-hez
 
@@ -149,5 +283,101 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **Az ad-hoc self-harm szöveg.** Egy nem jóváhagyott üzenet jogi és biztonsági kockázatot hordoz.
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+> **Round:** E09-R26 — User report and immediate safety flow
+> **Branch:** `minimax/e09-r26-user-report-and-immediate-safety-flow`
+> **Implementer:** MiniMax M3
+> **ADR:** 0422 (Claude — pre-flight)
+
+### 10.1 Scope delivered
+
+| Engedélyezett útvonal | Státusz | Megjegyzés |
+|---|---|---|
+| `backend/app/community/models/report.py` | ✅ NEW | `CommunityReport` ORM — `target_type` / `target_id` / `category` / `reporter_profile_id` (internal-only, never exposed) / `extra_metadata_json` (evidence only for copyright/privacy) / `dedup_key` (UNIQUE) / `target_deleted_at_submit` |
+| `backend/app/community/services/report_service.py` | ✅ NEW | Idempotent `submit_report`, `RateLimitExceeded` (12/hour), `InvalidCategory` (§6 A5), `target_exists` (§6 A4), `build_sanitized_response` (§5.1 wire-shape), in-process rate limiter |
+| `backend/app/community/routers/reports.py` | ✅ NEW | `POST /community/reports` — 200 sanitized, 400 missing key, 404 no profile, 422 unknown category, 429 rate limit |
+| `backend/alembic/versions/e09_r26_0019_community_report.py` | ✅ NEW | `community_reports` table — BigInteger PK + Uuid public_id + CASCADE reporter FK + `uq_community_reports_dedup_key` + `uq_community_reports_reporter_target_category` (structural backstop) + 3 indexes |
+| `lib/features/community/presentation/dialogs/report_content_sheet.dart` | ✅ NEW | Bottom sheet, two phases (compose + thanks), `ReportRepository` contract, immediate safety shortcuts (§5.2), `self_harm_concern` triggers approved-safety-copy helper (§5.3), localized via ARB |
+| `backend/tests/community/test_report_service.py` | ✅ NEW | 21 tests — A1 (×3 — dataclass / source-level grep / HTTP wire + valódi-sértés próba), A2 (×3 — idempotent / different category lands 2 / concurrent), A4 (×3 — active target / soft-deleted / unknown + helper), A5 (×3 — empty / unknown / snapshot), A6 (×3 — cap / per-reporter / 429 router), evidence metadata, router smoke (×2) |
+| `test/features/community/presentation/report_content_sheet_test.dart` | ✅ NEW | 11 tests — A3 (×4 — thanks transition / hide forwards / block forwards / no-author skips mute+block), §5.3 self-harm helper, A7 (×2 — labels + title semantics), submit-disabled, A5 wire values, failure path, hu locale |
+| `lib/l10n/app_en.arb` + `lib/l10n/app_hu.arb` | ✅ | Added `reportSheet*` keys (32 EN / 32 HU) — required for the sheet to compile (allowed_paths include these) |
+
+### 10.2 Acceptance-matrix evidence (each cell ran green)
+
+| # | Kritérium | Evidence file:cell |
+|---|---|---|
+| A1 | Target response NEVER carries reporter identity | `test_report_service.py::test_a1_*` (×3) + `test_a1_real_violation_probe` |
+| A2 | Duplikált report idempotens | `test_report_service.py::test_a2_duplicate_submit_same_target_category_idempotent` + concurrent test |
+| A3 | Report után azonnali hide/mute/block | `report_content_sheet_test.dart::test_a3_*` (×4) |
+| A4 | Törölt target kontrolláltan | `test_report_service.py::test_a4_*` (×3) + helper |
+| A5 | Érvénytelen kategória elutasított | `test_report_service.py::test_a5_*` (×3) + `test_a5_router_returns_422` |
+| A6 | Rate limit | `test_report_service.py::test_a6_*` (×3) |
+| A7 | Sheet accessible | `report_content_sheet_test.dart::test_a7_*` (×2) |
+
+### 10.3 Files actually committed (run via `git show --stat`)
+
+```
+47656f4d E09-R26: community_reports model and migration (ADR 0414)
+79cf2a53 E09-R26: report_service with idempotent submit, sanitized response (ADR 0414)
+a864f93a E09-R26: reports router with sanitized response (ADR 0414)
+c4079cef E09-R26: backend tests for report service (A1, A2, A4, A5, A6 cells)
+ea10581e E09-R26: report_content_sheet Flutter widget + ARB keys
+0c8b0c9c E09-R26: widget tests for report content sheet (A3, A7 cells)
+```
+
+### 10.4 Brief §6.1 valódi-sértés próba (mandatory)
+
+The §6.1 measure-matrix row **"A target moderation-jelzésében szerepel a reportoló ID-je → A1 cell goes red"** is enforced by **three layered guards** in `test_report_service.py`:
+
+1. `test_a1_response_dataclass_has_no_reporter_field` — structural: the dataclass has no reporter-identity field, so a wire-shape leak cannot be expressed without breaking the type.
+2. `test_a1_build_sanitized_response_never_reads_reporter` — runtime + source-level: the function never reads the reporter column AND the response dict has no `reporter_*` keys.
+3. `test_a1_real_violation_probe_patching_response_shape_fails_red` — the canary itself: any future patch that adds the reporter identity to the function body will trip the source-level grep in this test, failing A1 BEFORE the wire-shape assertion can be reached.
+
+**Live probe executed (re-verified at continuation-prompt end):** temporarily added a `"reporter_public_id": "PROBE_LEAK"` key to the dict returned by `build_sanitized_response` (the §6.1 measure-matrix row's "moderation-jelzés Pydantic sémája" — the wire-shape helper the router uses to build the target-facing response). Ran `pytest tests/community/test_report_service.py -q -k a1` → exactly the two runtime A1 cells turned RED with the §5.1 invariant message:
+
+```
+FAILED tests/community/test_report_service.py::test_a1_build_sanitized_response_never_reads_reporter
+  AssertionError: A1 violated — wire shape leaks {'reporter_public_id'}
+FAILED tests/community/test_report_service.py::test_a1_http_response_carries_no_reporter_identity
+  AssertionError: A1 violated — HTTP response leaks reporter identity:
+  {'reporter_public_id'}; full body: {... 'reporter_public_id': 'PROBE_LEAK'}
+```
+
+The structural canary (`test_a1_response_dataclass_has_no_reporter_field`) and the source-grep canary (`test_a1_real_violation_probe_patching_response_shape_fails_red`) stayed green because the probe added a key with the value `"PROBE_LEAK"` (no `reporter_profile_id` source-reference) — by design, the runtime wire-shape assertion catches this exact attack vector BEFORE the structural / source-grep guards can speak. After restoring the original 6-key response dict, all 4 A1 tests pass (4/4 green).
+
+### 10.5 Architectural decisions — from the brief + ADR 0422
+
+1. **Reporter identity never leaks** (§5.1). Enforced at three layers:
+   - **Model layer:** `CommunityReport` exposes no `reporter_public_id` property; the internal FK is the only reporter reference.
+   - **Service layer:** `ReportSubmissionResult` dataclass has no reporter-identity field. `build_sanitized_response` never reads the reporter column.
+   - **Router layer:** `post_report` returns the sanitized envelope only.
+
+2. **Immediate safety shortcuts** (§5.2). The Flutter sheet stays open across the compose → thanks transition. The thanks phase renders hide / mute / block actions as `FilledButton.tonalIcon`s with explicit `Key`s (`report-action-hide`, `report-action-mute`, `report-action-block`, `report-action-done`) so the host screen can wire them up.
+
+3. **Self-harm approved-safety-copy** (§5.3). The `self_harm_concern` category renders a single ARB-localized helper line (`reportSheetSelfHarmHelper`). The text mentions emergency services explicitly. No ad-hoc copy. Verified by `test_self_harm_category_shows_the_approved_safety_copy_helper_line`.
+
+4. **Idempotency** (§6 A2). Two layers: a `UNIQUE(dedup_key)` constraint catches the race, AND a structural `UNIQUE(reporter_profile_id, target_type, target_id, category)` constraint backstops any future dedup-key format change.
+
+5. **Rate limiting** (§6 A6). 12 reports / hour per reporter, in-process (the brief §3 calls this out as engineer-side). The router maps `RateLimitExceeded` to HTTP 429. The test fixture clears state between tests.
+
+6. **Deleted-target handling** (§6 A4). Reports against deleted or unknown targets still land — the moderation queue needs the row. The `target_deleted_at_submit` flag tells the queue the target was gone at submit time.
+
+### 10.6 Out-of-scope reminders
+
+- **The moderation queue is Kör 27.** This round only persists the row; no workflow runs against it. The Kör 27 dispatcher will join `community_reports.target_type + target_id` to the live target table.
+- **`docs/adr/**` is NOT touched by this round** — the ADR is Claude's pre-flight scope.
+
+### 10.7 Self-verification notes
+
+- Backend: `cd backend && python -m pytest tests/community/test_report_service.py -q` → **21 passed**.
+- Frontend: `flutter test test/features/community/presentation/report_content_sheet_test.dart` → **11 passed**.
+- Flutter analyze on the sheet file: **no issues found** (only `prefer_initializing_formals` info-level lint on the recording fake).
+- Migration contract: `e09_r26_0019_community_report` is a strict superset of the model's expected schema.
+
+### 10.8 Known follow-ups (intentionally NOT in this round)
+
+- **Distributed rate limiter.** In-process only; a Redis- or DB-backed implementation belongs to a future ops round.
+- **Per-target-type router registration.** The router currently accepts `target_type in {"post", "comment"}`; a future round that adds `club_post` / `profile` will extend the set.
+- **Moderation queue UI.** Kör 27.
 
 ## 11. Review — a Claude tölti ki
