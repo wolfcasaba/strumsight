@@ -150,6 +150,20 @@ tilos** (`ss_colors.dart` a tilos zónában, ADR 0273 egy-token-forrás). A
 `syncPending`-hez nincs `SsStatusMarkerKind` — annak ikonját a badge-fájl
 adja meg, de a SZÍNT a `syncPending` tokenből veszi.
 
+> **D4 HELYESBÍTÉS (review 2. kör, 2026-08-24 — az előző mondat MÉRVE HIBÁS).**
+> Az utolsó mondat („a SZÍNT a `syncPending` tokenből veszi") egy HÁTTÉRNEK
+> szánt tokent irányított előtérbe: az `SsColorScheme.syncPending` értéke
+> `palette.track`, ugyanaz, amit a séma `surfaceSunken`-ként használ — a badge
+> így a saját kártyahátterével íródott (`ratio=1.01` a sötét és a magas
+> kontrasztú témában). Ezt a review F1-ként mérte, a fix1 pedig zárta: a
+> badge-ek ikonja ÉS felirata `colors.textPrimary`-ből fest, a per-kind
+> státusz-token szöveget/ikont NEM fest többé (§10.1/F1+F2). A kötelezettség
+> többi része (saját prezentációs enum, MEGLÉVŐ tokenek, új színtoken felvétele
+> tilos) változatlanul érvényes — `textPrimary` is meglévő `SsColorScheme`
+> token, tehát az ADR 0273 egy-token-forrás szabálya sérülés nélkül teljesül.
+> A hibát a pre-flight vétette, nem az implementer; azért javítjuk itt, hogy
+> egy későbbi kör ne olvassa normatív igazságként.
+
 ### D5 — A metrika-tipográfia MÁR token; a `SsMetricCard` olvassa, nem definiálja
 
 ```

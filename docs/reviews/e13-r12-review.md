@@ -233,6 +233,92 @@ zónához (`ss_colors.dart`, `lib/core/theme/**`, `docs/adr/**`) nem kell nyúln
 igazolom** (a javított alakot visszamutálva az új celláknak PIROSRA kell
 váltaniuk).
 
-## 4. Review — 2. kör
+## 4. Review — 2. kör (fix1 után): **APPROVED**
 
-(a javító kör után töltöm ki)
+- **Review-HEAD:** `933aa285` (a fix1 négy commitja + az `origin/main`
+  beolvasztása, ADR 0087 §0.3)
+- **Fix1 commitok:** `d0957944` (F1/F2/F3) · `464fece4` (F4/F5 + `actionLabel`) ·
+  `c4198fda` + `51b1d9b5` (§10.1 handoff, őr-elnevezések)
+- **Dátum:** 2026-08-24 · **Reviewer:** Claude Opus 5 (orchesztrátor)
+- Friss, izolált klón (`/tmp/e13r12-review2`), minden mérés ott készült; a
+  munkapéldányhoz a review nem nyúlt.
+
+### 4.1 Freshness — a branch a fix1 UTÁN sem volt naprakész
+
+A fix1 a régi bázison készült, ezért review előtt beolvasztottam az
+`origin/main`-t (`2c0f9842`, E09-R23/R24). Konfliktus nélkül ment; az
+`git merge-base --is-ancestor origin/main HEAD` **0**. Ez nem formalitás: a
+merge hozta be azt az ÚJABB `tools/brief-lint.py`-t (S9, E09-R24 heal),
+amellyel a kör briefjét a pre-flight még nem mérhette — lásd 4.3.
+
+### 4.2 A kapu — SAJÁT, független újrafuttatás a merge-elt HEAD-en
+
+`tools/round-gate.sh test/…/ss_cards_test.dart test/…/ss_badges_test.dart`,
+exit **0**, **10/10 ZÖLD**: format · analyze · `ss_cards_test.dart` ·
+`ss_badges_test.dart` · architecture · secrets · l10n · backend ruff format ·
+backend ruff check · backend pytest.
+
+### 4.3 Scope és brief-lint
+
+| Mérés | Eredmény |
+|---|---|
+| `scope-audit.py --base 2c0f9842` (= `origin/main`) | **OK** — 17 útvonal, 1 generated/ignored (a saját review-fájlom), mind az `allowed_paths`-on |
+| `brief-lint.py --level strict` a **merge utáni, újabb** linterrel | **nincs lelet** (az S9 képernyő-leltár-ellenőrzést is beleértve) |
+| Tilos zóna | `docs/adr/**`, `lib/features/**`, `lib/core/theme/**`, `tools/**`, `.github/**` — mind érintetlen |
+
+> A `--base 69679bb5` (a merge ELŐTTI elágazási pont) `FAILED`-et ad, de az
+> **mérési műtermék**: onnan nézve a már merge-elt E09-R23/R24 munkája is
+> „változott útvonalnak" látszik. A kör tényleges hozzájárulását az
+> `origin/main` bázis méri.
+
+### 4.4 A leletek zárása — mindegyik SAJÁT valódi-sértés próbával igazolva
+
+A javított alakot visszamutáltam, és megköveteltem, hogy az új őr PIROSRA
+váltson. Minden mutáció után `git status` = **0 piszkos fájl**.
+
+| Próba | Mutáció | Eredmény |
+|---|---|---|
+| **P1 → F1+F2** | a badge felirata/ikonja ismét a saját státusz-tokenjéből fest (`textPrimary` → `syncPending`) | **PIROS**, exit 1 — a kontraszt-csoport **15 cellája** bukik (5 `SsStatusBadgeKind` × 3 téma) |
+| **P2 → F3** | a `Flexible` + `maxLines: 1` + `ellipsis` törölve a provenance-badge-ből | **PIROS**, exit 1 — **5 cella** bukik, PONTOSAN azok, amelyeket az 1. kör mért: 320@2.0, 320@2.5, 200@1.3, 200@2.0, 200@2.5 |
+| **P3 → F4** | `SsInsightCard` provenance NÉLKÜL megkonstruálva (eldobható teszt, a javított kód ellen) | **PIROS FORDÍTÁSI IDŐBEN** — `Error: Required named parameter 'provenance' must be provided.` |
+
+**A P3 a legerősebb zárás, amit ez a lelet kaphatott:** az F4 sértése futásidőben
+nem is *kifejezhető* többé — a típusrendszer fogja meg, nem egy cella, amit egy
+későbbi kör átírhatna. A régi, rést betonozó A1-cella („nincs provenance → nincs
+badge") eltűnt; a helyén a `SsProvenanceKind.values`-en végigfutó invariáns-cella
+áll (`ss_badges_test.dart:80-99`).
+
+| Lelet | Zárás | Ítélet |
+|---|---|---|
+| **F1** MAJOR | ikon+felirat `colors.textPrimary`-ből; a `syncPending` token szöveget nem fest | **ZÁRVA** (P1) |
+| **F2** MAJOR | ugyanaz mindkét badge-en **és** az `SsCoachActionCard.actionLabel`-jén (`colors.brand` → `textPrimary`, a copper 2.72:1 volt) | **ZÁRVA** (P1) |
+| **F3** MAJOR | `Flexible` + `maxLines: 1` + `TextOverflow.ellipsis`; a `Wrap` véges szélesség-korlátja a keretrendszer forrásából igazolva | **ZÁRVA** (P2) |
+| **F4** MAJOR | `required SsProvenanceKind provenance`, feltétel nélküli kirendelés, nulla fogyasztó volt érintve | **ZÁRVA** (P3) |
+| **F5** MINOR | opcionális `provenance`-slot az `SsCoachActionCard`-on, indoklással (nem minden coach-javaslat modell-eredetű), a katalógus demonstrálja | **ZÁRVA** |
+| **F6** MINOR | marad zárt kétértékű; indoklás a §10.1-ben (nulla vegyes-pipeline fogyasztó, a biztonságos default-irány áll) | **ZÁRVA — a döntést elfogadom** |
+
+**NOTE-1 zárva:** a kontraszt-fedettség hiánya volt az oka, hogy F1/F2 zöld
+kapu mellett átcsúszhatott — az új `fix1/F1+F2` csoport most **21 cellával**
+(3 téma × [5 status + 2 provenance]) fedi le pontosan azokat a tokeneket,
+amelyeket a `contrast_test.dart` nem lát. NOTE-2 és NOTE-3 nyitva marad,
+nem blokkoló.
+
+### 4.5 Amit ebben a körben ÉN mértem újra, és rendben van
+
+- **A2** — a három confidence-fokozat ugyanazt az ikont ÉS (fix1 után) ugyanazt
+  a színt kapja; a megkülönböztetést kizárólag a FELIRAT hordozza. Ez a §5.2-nek
+  megfelel („ikon **vagy** szöveg"), és színvakság mellett is egyértelmű.
+- **A7/A8** — architecture zöld; a 7 komponens nulla `lib/features/**` importot
+  tartalmaz; az ARB-kulcsok a fragmentumban, en+hu paritással, `l10n` gate zöld.
+- **D4 HELYESBÍTVE** — a pre-flight §0.0/D4 utolsó mondata („a SZÍNT a
+  `syncPending` tokenből veszi") MÉRVE hibás volt, és pontosan ez okozta F1-et.
+  A briefbe helyesbítő blokk került (a kör saját, még nem merge-elt
+  artefaktuma, ADR 0087 §2), hogy egy későbbi kör ne olvassa normatív
+  igazságként. Az implementert ezért nem érte marasztalás.
+
+### 4.6 Verdikt
+
+**APPROVED.** Nyitott BLOCKER/MAJOR: **nincs**. A négy MAJOR mindegyike a kör
+saját, engedélyezett fájljain belül zárult, tilos zóna érintése nélkül, és
+mindegyikhez tartozik olyan gépi őr, amely a hibát PIROSRA fogta volna —
+ezt nem bemondásra fogadtam el, hanem visszamutálva magam mértem.
