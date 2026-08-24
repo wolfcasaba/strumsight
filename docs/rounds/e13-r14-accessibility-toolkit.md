@@ -331,4 +331,123 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** `sonnet-impl` (Claude Sonnet 5).
+
+### 10.1 Mit épített
+
+- `lib/core/design_system/foundations/ss_semantics.dart` — bővítve:
+  `liveRegionAnnouncementGap` (1000 ms konstans), `tunerAccuracyLabel(l10n,
+  {cents, inTune})` és `strumDirectionLabel(l10n, {isDown})` (a
+  `cents_gauge.dart` már meglévő kerekítési logikáját tükrözi, DS-szintű,
+  újrafelhasználható „szerződés-építő"-ként).
+- `lib/core/design_system/accessibility/ss_live_region.dart` (**ÚJ**) —
+  `SsLiveRegion extends ChangeNotifier`: `report(value, {at})` csak akkor
+  jelent be, ha (a) az érték eltér az utoljára bejelentettől ÉS (b) a
+  bejelentés óta `liveRegionAnnouncementGap` (1000 ms, inkluzív határ) telt
+  el. A küszöb alatt érkező olvasat ELDOBÓDIK (nem sorba áll) — az utolsó
+  BEJELENTETT értékhez hasonlítunk, nem az utoljára LÁTOTTHOZ. Emellett
+  `SsLiveRegionAnnouncer` widget (`Semantics(liveRegion: true, ...)`), ami a
+  kontroller aktuális bejelentését adja tovább a képernyőolvasónak.
+- `lib/core/design_system/accessibility/ss_tap_target.dart` (**ÚJ**) —
+  `SsTapTarget.meetsMinimum(Size)`: mért `Size`-t (pl. `tester.getSize(...)`)
+  hasonlít `SsSemantics.minimumInteractiveDimension`-höz mindkét tengelyen;
+  nem `flutter_test`-függő, tiszta `dart:ui` check.
+- `lib/core/design_system/public.dart` — a két új accessibility-fájl exportja.
+- `docs/ui/accessibility.md` (**ÚJ**) — a gépi szerződés összefoglalója +
+  kimondott állítás, hogy a gépi teszt SZÜKSÉGES, DE NEM ELÉGSÉGES + 8 pontos
+  kézi TalkBack/VoiceOver ellenőrzőlista.
+
+### 10.2 Melyik cella melyik acceptance-pontot méri
+
+| Cella (fájl) | A# | Mit bizonyít |
+|---|---|---|
+| `semantics_contract_test.dart` — A1 csoport (4 mátrix-cella + 1 épített widget-cella) | A1 | `SsLiveRegion.report`/`.announcements` a TÉNYLEGES kibocsátást méri, a §6.1 4 sorával pontosan (1/2/3/1 bejelentés) + egy `testWidgets` cella, ami a `SsLiveRegionAnnouncer` widgetet pumpálja és a szemantika-fát olvassa (`find.bySemanticsLabel`) |
+| `semantics_contract_test.dart` — A3 csoport | A3 | `SsStatusBadge` minden `kind`-jére a VALÓDI szemantika-címkét méri (`find.bySemanticsLabel`, nem csak az Icon/Text widgetet) + `tunerAccuracyLabel` három állapotának egyedisége |
+| `semantics_contract_test.dart` — A4 csoport | A4 | `SsIconButton` üres label ⇒ `throwsArgumentError`; destruktív `SsButton` `matchesSemantics(label:, hint:, ...)` egy node-on; `SsCoachActionCard` dismiss-gombjának saját címkéje |
+| `semantics_contract_test.dart` — A8 csoport | A8 | `SsMotionScope(appOverride: true)` mellett `durationOf(...) == Duration.zero`, DE az `SsLiveRegion` bejelentése és a szemantika-címke változatlanul megjelenik |
+| `tap_target_test.dart` (6 cella) | A5 | Az 5, §0.0/D4-ben nevesített komponens (`SsButton`, `SsIconButton`, `SsSwitchRow`, `SsChoice` radio, `SsCoachActionCard` dismiss) FELÉPÍTETT méretét `tester.getSize(...)` méri, `SsTapTarget.meetsMinimum`-mal — nem a konstans újra-assertálása. Viewport kizárólag `tester.view.physicalSize`; a `textScaler` külön cellában `MediaQuery`-n megy át. |
+| `screen_reader_copy_test.dart` (8 cella) | A2, A6 | `AppLocalizations.delegate.load(Locale('en'\|'hu'))` mellett a `tunerAccuracyLabel`/`strumDirectionLabel` szerződés-építőket méri; az A6 csoport KIFEJEZETTEN megköveteli, hogy a hu kimenet eltérjen az en-től (`isNot`) |
+| `docs/ui/accessibility.md` | A7 | Explicit szakasz: „What the automated tests cannot tell you" — kimondja, hogy a zöld `flutter test` szükséges, de nem elégséges bizonyíték, és 8 pontos kézi TalkBack/VoiceOver ellenőrzőlistát ad |
+
+### 10.3 Valódi-sértés próba (§6.1 kötelező)
+
+A `ss_live_region.dart`-ból ideiglenesen kivettem a küszöb-ellenőrzést (csak
+a dedup maradt):
+
+```dart
+bool report(String value, {required Duration at}) {
+  if (value == _lastAnnouncedValue) return false;
+  // TEMP — real-violation proof (§10), budget check removed on purpose.
+  _lastAnnouncedValue = value;
+  _lastAnnouncedAt = at;
+  _announcements.add(value);
+  notifyListeners();
+  return true;
+}
+```
+
+Ezután lefuttatva KIZÁRÓLAG az A1 „below the threshold" cellát:
+
+```
+flutter test test/accessibility/semantics_contract_test.dart --plain-name "below the threshold: rapid readings collapse into the first one"
+```
+
+A tényleges hibaüzenet (szó szerint):
+
+```
+00:00 +0 -1: A1 — the live region honours the announcement budget (ADR 0280 §2) below the threshold: rapid readings collapse into the first one [E]
+  Expected: ['C']
+    Actual: ['C', 'G', 'D']
+     Which: at location [1] is ['C', 'G', 'D'] which longer than expected
+
+  package:matcher                                        expect
+  package:flutter_test/src/widget_tester.dart 473:18     expect
+  test/accessibility/semantics_contract_test.dart 27:11  main.<fn>.<fn>
+```
+
+A küszöb-ellenőrzést utána visszaállítottam (`git diff` a végén tiszta —
+nincs elhagyott TEMP-kód), és a teljes `semantics_contract_test.dart` újra
+zöld (13/13).
+
+### 10.4 A kötelező gate eredménye
+
+```
+tools/round-gate.sh test/accessibility/semantics_contract_test.dart test/accessibility/tap_target_test.dart test/accessibility/screen_reader_copy_test.dart
+```
+
+Minden lépés ZÖLD, csonkítatlan futás:
+
+```
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/accessibility/semantics_contract_test.dart       zöld
+    test test/accessibility/tap_target_test.dart               zöld
+    test test/accessibility/screen_reader_copy_test.dart       zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+```
+
+(`test/accessibility/semantics_contract_test.dart`: 13/13 teszt zöld;
+`tap_target_test.dart`: 6/6; `screen_reader_copy_test.dart`: 8/8.)
+
+### 10.5 Scope
+
+Csak az `allowed_paths` 9 útvonala módosult/jött létre (`git status
+--porcelain`):
+
+```
+ M lib/core/design_system/foundations/ss_semantics.dart
+ M lib/core/design_system/public.dart
+?? docs/ui/accessibility.md
+?? lib/core/design_system/accessibility/
+?? test/accessibility/
+```
+
+Komponens-fájlt (`ss_button.dart`, `ss_icon_button.dart`,
+`ss_switch_row.dart`, `ss_choice.dart`, `ss_coach_action_card.dart`,
+`ss_status_badge.dart`), ARB-forrást vagy `docs/adr/**`-t a kör NEM
+módosított — csak olvasta/pumpálta őket a tesztekben, a §0.0/D2 és D4
+előírása szerint.
+
 ## 11. Review — a Claude tölti ki
