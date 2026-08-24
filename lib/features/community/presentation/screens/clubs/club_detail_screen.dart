@@ -90,11 +90,6 @@ const String _l10nClubChallengesPrefix = 'Difficulty';
 
 const String _l10nClubAboutEmpty = 'No description.';
 
-/// First-page size for the screen-local feed provider. Mirrors the
-/// Kör 13 / Kör 25 default page size so the call site doesn't
-/// have to negotiate a constant.
-const int _kClubFeedPageSize = 25;
-
 /// FutureProvider for a single club fetch.
 final clubDetailProvider = FutureProvider.autoDispose
     .family<CommunityClub, ContentId>((ref, clubId) async {
@@ -282,13 +277,13 @@ class _Body extends ConsumerWidget {
             ],
           ),
         ),
-        const Expanded(
+        Expanded(
           child: TabBarView(
             children: <Widget>[
-              _ClubFeedTab(),
-              _ClubChallengesTab(),
-              _ClubMembersTab(),
-              _ClubAboutTab(),
+              _ClubFeedTab(clubId: clubId),
+              _ClubChallengesTab(clubId: clubId),
+              const _ClubMembersTab(),
+              const _ClubAboutTab(),
             ],
           ),
         ),
@@ -334,97 +329,86 @@ class _Body extends ConsumerWidget {
 
 /// Feed tab — pinned posts at the top, then recent posts.
 class _ClubFeedTab extends ConsumerWidget {
-  const _ClubFeedTab();
+  const _ClubFeedTab({required this.clubId});
+
+  final ContentId clubId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pinned = ref.watch(_pinnedFamily);
-    final feed = ref.watch(_feedFamily);
+    final pinnedAsync = ref.watch(clubPinnedProvider(clubId));
+    final feedAsync = ref.watch(clubFeedProvider(clubId));
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        Text(
+        const Text(
           _l10nClubFeedPinnedHeader,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        if (pinned.isEmpty)
-          const Text(_l10nClubFeedEmpty)
-        else
-          for (final post in pinned) ListTile(title: Text(post.body)),
+        ...pinnedAsync.when(
+          data: (pinned) => pinned.isEmpty
+              ? <Widget>[const Text(_l10nClubFeedEmpty)]
+              : <Widget>[
+                  for (final post in pinned)
+                    ListTile(title: Text(post.body ?? '')),
+                ],
+          loading: () => const <Widget>[CircularProgressIndicator()],
+          error: (_, _) => const <Widget>[Text(_l10nClubFeedEmpty)],
+        ),
         const SizedBox(height: 16),
-        Text(
+        const Text(
           _l10nClubFeedRecentHeader,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        if (feed.items.isEmpty)
-          const Text(_l10nClubFeedEmpty)
-        else
-          for (final post in feed.items) ListTile(title: Text(post.body)),
+        ...feedAsync.when(
+          data: (feed) => feed.items.isEmpty
+              ? <Widget>[const Text(_l10nClubFeedEmpty)]
+              : <Widget>[
+                  for (final post in feed.items)
+                    ListTile(title: Text(post.body ?? '')),
+                ],
+          loading: () => const <Widget>[CircularProgressIndicator()],
+          error: (_, _) => const <Widget>[Text(_l10nClubFeedEmpty)],
+        ),
       ],
     );
   }
-
-  // Local family bindings — the screen-local providers are
-  // .family keyed by ContentId; the tabs receive the parent
-  // screen's clubId via a ProviderScope override at the top
-  // of the route. For test simplicity the placeholder uses a
-  // null-keyed family via a const ContentId so the widget tree
-  // can render without a ParameterNotFoundException.
-  List<CommunityPost> get pinned => const <CommunityPost>[];
-  CommunityPagePlaceholder<CommunityPost> get feed =>
-      const CommunityPagePlaceholder<CommunityPost>(items: <CommunityPost>[]);
-
-  ProviderListenable<List<CommunityPost>> get _pinnedFamily => _nullKeyedPinned;
-  ProviderListenable<CommunityPagePlaceholder<CommunityPost>> get _feedFamily =>
-      _nullKeyedFeed;
 }
-
-// Final fall-through provider hooks — the screen's
-// ProviderScope overrides the screen-local providers with a
-// fixed-keyed stub so the widget tree renders deterministically
-// in tests. The overrides point at the same family keys the
-// parent screen uses (see ``_FamilyForTest``).
-final _nullKeyedPinned = FutureProvider<List<CommunityPost>>(
-  (ref) async => const <CommunityPost>[],
-);
-final _nullKeyedFeed = FutureProvider<CommunityPagePlaceholder<CommunityPost>>(
-  (ref) async =>
-      const CommunityPagePlaceholder<CommunityPost>(items: <CommunityPost>[]),
-);
 
 /// Challenges tab — active challenges of the club.
 class _ClubChallengesTab extends ConsumerWidget {
-  const _ClubChallengesTab();
+  const _ClubChallengesTab({required this.clubId});
+
+  final ContentId clubId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final challenges = ref.watch(_nullKeyedChallenges);
+    final challengesAsync = ref.watch(clubChallengesProvider(clubId));
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        if (challenges.isEmpty)
-          const Text(_l10nClubChallengesEmpty)
-        else
-          for (final c in challenges)
-            ListTile(
-              title: Text(
-                '${c.metric} • ${_l10nClubChallengesPrefix} ${c.difficulty}',
-              ),
-              subtitle: Text(
-                '${c.startsAt.toIso8601String()} → ${c.endsAt.toIso8601String()}',
-              ),
-            ),
+        ...challengesAsync.when(
+          data: (challenges) => challenges.isEmpty
+              ? const <Widget>[Text(_l10nClubChallengesEmpty)]
+              : <Widget>[
+                  for (final c in challenges)
+                    ListTile(
+                      title: Text(
+                        '${c.metric} • $_l10nClubChallengesPrefix ${c.difficulty}',
+                      ),
+                      subtitle: Text(
+                        '${c.startsAt.toIso8601String()} → ${c.endsAt.toIso8601String()}',
+                      ),
+                    ),
+                ],
+          loading: () => const <Widget>[CircularProgressIndicator()],
+          error: (_, _) => const <Widget>[Text(_l10nClubChallengesEmpty)],
+        ),
       ],
     );
   }
 }
-
-final _nullKeyedChallenges =
-    FutureProvider<List<CommunityChallengeSummaryPlaceholder>>(
-      (ref) async => const <CommunityChallengeSummaryPlaceholder>[],
-    );
 
 /// Members tab — the screen-local placeholder; the production
 /// surface reuses the ``ClubMemberManagementScreen`` push from
@@ -457,19 +441,9 @@ class _ClubAboutTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: <Widget>[
-        const SizedBox(height: 8),
-        Builder(
-          builder: (context) {
-            // The about tab reads from the parent screen's
-            // data — the placeholder text in the absence of a
-            // description matches the Kör 24 empty-state shape.
-            return const Text(_l10nClubAboutEmpty);
-          },
-        ),
-      ],
+    return const Padding(
+      padding: EdgeInsets.all(16),
+      child: Text(_l10nClubAboutEmpty),
     );
   }
 }
