@@ -332,7 +332,9 @@ def test_a1_non_member_cannot_list_club_feed(session_factory) -> None:
         db.close()
 
 
-def test_a1_real_violation_probe_drop_membership_check(session_factory, monkeypatch) -> None:
+def test_a1_real_violation_probe_drop_membership_check(
+    session_factory, monkeypatch
+) -> None:
     """§6.1 valódi-sértés próba for A1 — drop the membership
     probe and assert a non-member now receives a feed page
     (the A1 cell turns RED). The probe demonstrates the gate
@@ -768,9 +770,7 @@ def test_a7_club_feed_pagination_is_stable(session_factory) -> None:
         page1_post_ids = {item.post_id for item in page1.items}
         page2_post_ids = {item.post_id for item in page2.items}
         assert page1_post_ids.isdisjoint(page2_post_ids)
-        assert page1_post_ids | page2_post_ids == {
-            post.id for post in posts
-        }
+        assert page1_post_ids | page2_post_ids == {post.id for post in posts}
         # Total rows = sum of pages; no row was lost.
         assert len(page1_post_ids | page2_post_ids) == len(posts)
     finally:

@@ -585,9 +585,7 @@ def list_club_feed(
             else datetime.fromisoformat(str(last_kept.created_at))
         )
         last_id = int(last_kept.id)
-        next_cursor = _sign_cursor(
-            cursor_secret, created_at=last_at, post_id=last_id
-        )
+        next_cursor = _sign_cursor(cursor_secret, created_at=last_at, post_id=last_id)
 
     return ClubFeedPage(items=items, next_cursor=next_cursor)
 

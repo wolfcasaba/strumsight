@@ -267,9 +267,7 @@ def _resolve_member(
 def _resolve_profile_by_public_id(
     db: SASession, public_id: uuid.UUID
 ) -> CommunityProfile | None:
-    return (
-        db.query(CommunityProfile).filter_by(public_id=public_id).one_or_none()
-    )
+    return db.query(CommunityProfile).filter_by(public_id=public_id).one_or_none()
 
 
 def _resolve_post_by_public_id(
@@ -281,9 +279,7 @@ def _resolve_post_by_public_id(
 def _resolve_challenge_by_public_id(
     db: SASession, public_id: uuid.UUID
 ) -> CommunityChallenge | None:
-    return (
-        db.query(CommunityChallenge).filter_by(public_id=public_id).one_or_none()
-    )
+    return db.query(CommunityChallenge).filter_by(public_id=public_id).one_or_none()
 
 
 def _ensure_actor_role(
@@ -303,15 +299,11 @@ def _ensure_actor_role(
     ``ClubRole`` wire values; the caller can use it for
     fine-grained logic (e.g. only-owner paths).
     """
-    member = _resolve_member(
-        db, club_id=club.id, profile_id=actor_profile_id
-    )
+    member = _resolve_member(db, club_id=club.id, profile_id=actor_profile_id)
     if member is None:
         raise ClubPinForbidden("actor is not a member of this club")
     if member.role not in allowed_roles:
-        raise ClubPinForbidden(
-            f"actor role={member.role!r} is not authorised"
-        )
+        raise ClubPinForbidden(f"actor role={member.role!r} is not authorised")
     return member.role
 
 
@@ -330,9 +322,7 @@ def _ensure_actor_is_member(
     owner / moderator check is layered on top of this in
     :func:`_ensure_actor_role`.
     """
-    member = _resolve_member(
-        db, club_id=club.id, profile_id=actor_profile_id
-    )
+    member = _resolve_member(db, club_id=club.id, profile_id=actor_profile_id)
     if member is None:
         raise ClubChallengeActorNotMember("actor is not a member of this club")
 
@@ -376,9 +366,11 @@ def _current_pinned_count(db: SASession, *, club_id: int) -> int:
     present round keeps the table lean — there is at most
     :data:`MAX_CLUB_PINNED_POSTS` rows per club anyway.
     """
-    stmt = select(func.count()).select_from(
-        community_club_pinned_posts
-    ).where(community_club_pinned_posts.c.club_id == club_id)
+    stmt = (
+        select(func.count())
+        .select_from(community_club_pinned_posts)
+        .where(community_club_pinned_posts.c.club_id == club_id)
+    )
     result = db.execute(stmt).scalar()
     return int(result or 0)
 
@@ -460,9 +452,7 @@ def list_club_pinned(
         filter_public_ids_against_viewer_blocks,
     )
 
-    author_public_ids = [
-        _coerce_uuid(row.author_public_id) for row in rows
-    ]
+    author_public_ids = [_coerce_uuid(row.author_public_id) for row in rows]
     allowed_author_public_ids = set(
         filter_public_ids_against_viewer_blocks(
             db,
@@ -532,9 +522,7 @@ def pin_post(
         raise ClubPinPostNotEligible("post not found")
 
     if not _is_post_eligible_for_pin(post, club_id=club.id):
-        raise ClubPinPostNotEligible(
-            "post is not eligible for pinning in this club"
-        )
+        raise ClubPinPostNotEligible("post is not eligible for pinning in this club")
 
     # Idempotent: an existing pin is a successful re-read. We do
     # NOT decrement the count on re-pin — the §A4 invariant is
@@ -676,9 +664,7 @@ def _coerce_uuid(raw: object) -> uuid.UUID:
     return uuid.UUID(str(raw))
 
 
-def _profile_public_id_for_post(
-    db: SASession, post: CommunityPost
-) -> uuid.UUID:
+def _profile_public_id_for_post(db: SASession, post: CommunityPost) -> uuid.UUID:
     """Return the ``public_id`` of the post's author profile.
 
     The Kör 11 ``CommunityPost`` model has NO back-relationship
@@ -686,9 +672,7 @@ def _profile_public_id_for_post(
     query (per the model docstring). The helper performs the
     direct lookup.
     """
-    author = (
-        db.query(CommunityProfile).filter_by(id=post.profile_id).one()
-    )
+    author = db.query(CommunityProfile).filter_by(id=post.profile_id).one()
     return author.public_id
 
 
@@ -731,9 +715,7 @@ def create_club_challenge(
     if actor is None:
         raise ClubChallengeNotVisible("actor community profile not found")
 
-    _ensure_actor_is_member(
-        db, club=club, actor_profile_id=actor.id
-    )
+    _ensure_actor_is_member(db, club=club, actor_profile_id=actor.id)
 
     if is_blocked_pair(
         db,
@@ -796,15 +778,11 @@ def list_club_challenges(
     if club is None:
         raise ClubChallengeNotVisible("club not found")
 
-    viewer = (
-        db.query(CommunityProfile).filter_by(id=viewer_profile_id).one_or_none()
-    )
+    viewer = db.query(CommunityProfile).filter_by(id=viewer_profile_id).one_or_none()
     if viewer is None:
         raise ClubChallengeNotVisible("viewer community profile not found")
 
-    member = _resolve_member(
-        db, club_id=club.id, profile_id=viewer.id
-    )
+    member = _resolve_member(db, club_id=club.id, profile_id=viewer.id)
     if member is None:
         raise ClubChallengeNotVisible("viewer is not a member of this club")
 
@@ -911,9 +889,7 @@ def end_club_challenge(
     if club is None:
         raise ClubChallengeNotVisible("club not found")
 
-    _ensure_actor_is_member(
-        db, club=club, actor_profile_id=actor_profile_id
-    )
+    _ensure_actor_is_member(db, club=club, actor_profile_id=actor_profile_id)
     _ensure_actor_role(
         db,
         club=club,
