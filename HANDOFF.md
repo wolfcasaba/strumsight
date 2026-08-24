@@ -1,5 +1,73 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R24 KÉSZ — Klub domain, tagság és szerepkörök — PR [#441](https://github.com/wolfcasaba/strumsight/pull/441), squash `2f95ad97` (2026-08-24)
+
+**A kör tartalma zölden landolt, de NEM az orchesztrátor-session landolta.**
+A session a 4 órás abszolút időkorlátnál jelzés nélkül meghalt
+(`H-NOSIGNAL`, exit 124), miközben a `tools/round-land.sh` épp futott — a
+landolást és a gyökérok javítását az ADR 0112 **önjavító kör** végezte.
+Klub-domain: szerver-autoritatív `owner`/`admin`/`member` szerepmátrix,
+owner-less-club invariáns, idempotens tagság-életciklus, a Kör-8
+block-filter újrafelhasználva. **ADR [0420](docs/adr/0420-club-domain-membership-and-roles.md)**
+(az előre kiosztott `0413` foglalt volt; implementer **MiniMax M3**,
+orchesztrátor/reviewer **Claude Sonnet 5**). Review: **APPROVED** javító kör
+után — 1 MAJOR (F1: klub-létrehozás nem volt idempotens), 3 MINOR + 4 NOTE
+follow-upként. Exact `f29fe61e`: Full Gate
+[32716654207](https://github.com/wolfcasaba/strumsight/actions/runs/32716654207)
++ Router CI [32716627760](https://github.com/wolfcasaba/strumsight/actions/runs/32716627760)
+success; a landolás előtt a scope-ot függetlenül újramértem (11 változott
+fájl, mind az `allowed_paths`-on belül, semmi kívül).
+
+### 🔧 Önjavító kör — a képernyő-leltár drift MOST MÁR pre-dispatch bukik: PR [#442](https://github.com/wolfcasaba/strumsight/pull/442), squash `30467aad`
+
+**Mért gyökérok.** A 240 perces keretből 198 perc blokkoló várakozás volt,
+ebből **~60 perc EGYETLEN elkerülhető újramunka**: a
+`test/ui/ui_inventory_test.dart` egzakt `hasLength(76)` állítása a kör három
+új klub-képernyőjétől 79-re mozdult, de a dispatchelt `allowed_paths` a
+leltártesztet nem engedte — így az implementer hozzá sem nyúlhatott, és a
+Full Gate a `855db329` SHA-n pirosra váltott
+([32713670226](https://github.com/wolfcasaba/strumsight/actions/runs/32713670226)).
+Ezt követte a `§0.0c` brief-revízió, EGY TELJES javító implementer-kör az
+egysoros szám-emelésért, és a Full Gate újrafuttatása. A kör ~4 óra 10 percet
+igényelt, 4 óra állt rendelkezésre.
+
+**A `wait-for-ci.sh` auto-háttérbe kerülését külön megmértem és KIZÁRTAM**
+mint okot: a CI valóban 17p40s-ig futott, és a várakozás 4 másodpercen belül
+észlelte a befejezést — a mechanizmus helyesen működik.
+
+**Ugyanez a hibaosztály az ELŐZŐ körben (E09-R23, `hasLength(75)`) is
+elsült**, és korábban az E08-R15/H3-ban (PR #383) — a védelem viszont eddig
+csak KÖRSPECIFIKUS, utólag írt regressziós tesztekben élt, ezért a következő
+kört sosem védte. Az E09-R24 saját commit-üzenete (`863a8ac3`) ki is mondja:
+*„my own pre-flight missed applying it here despite having read that exact
+precedent"* — a precedens elolvasása nem elég, gépi őr kell.
+
+**A javítás:** új `S9` **strict** lelet a `tools/brief-lint.py`-ban, ami a
+`round-pipeline.sh` `write_brief_lint` **pre-dispatch** hívásán át a kör
+pre-flightjának teendőlistájába kerül. A predikátum a CI igazságához kötött
+(`tool/ui_inventory.dart`: `lib/features/**` + `_screen.dart`): akkor lő, ha
+az `allowed_paths` MÉG NEM LÉTEZŐ ilyen fájlt enged (tehát a kör létrehozza),
+és a `test/ui/ui_inventory_test.dart` nem szerepel egyszerre az
+`allowed_paths`-ban ÉS a `gate_tests`-ben.
+
+**Hamis riasztás mérve** a 343 briefes korpuszon: a létezés-feltétel nélkül 39
+lelet (36 már zölden merge-elt körre — mind hamis), a feltétellel **0 hamis**
+és 4 valódi: `e09-r25`, `e09-r28`, `e09-r29`, `e10-r31` (mind `pending`).
+**Az `e09-r25` a sor KÖVETKEZŐ E09 köre — ugyanez a halt egy körön belül
+visszatért volna.** A `base` CI-kapu szintje bizonyítottan változatlan
+(kilépési kód a javítás előtt és után is 2).
+
+**Őrteszt:** `tools/tests/test_brief_ui_inventory_scope.py` — a fix ELŐTT
+piros, UTÁNA zöld; teljes router-suite **737 passed, 1 skipped**. Lecke:
+[L465](docs/LESSONS.md).
+
+**Nyitott, e körön kívüli tétel:** a `docs/rounds/e09-r25`, `e09-r28`,
+`e09-r29`, `e10-r31` briefek `allowed_paths`/`gate_tests` listája MÉG NEM
+tartalmazza a leltártesztet — az `S9` most már minden dispatch előtt kiírja
+teendőként, a javítás az adott kör `§0.0` pre-flightjának hatásköre (a
+self-heal szándékosan NEM nyúlt idegen körök briefjéhez).
+
+
 ## ✅ E09-R23 KÉSZ — Leaderboards és opt-in versenynézet — PR [#440](https://github.com/wolfcasaba/strumsight/pull/440), squash `60aea065` (2026-08-24)
 
 **Verified, opt-in challenge-ranglista él** — a projekció KIZÁRÓLAG
