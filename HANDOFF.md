@@ -1,5 +1,57 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R10 KÉSZ — Aszinkron állapotkomponensek — PR [#436](https://github.com/wolfcasaba/strumsight/pull/436), squash `b11ab2ed` (2026-08-24)
+
+**A Ch13 feedback-készlete él** — `SsAsyncState` (9 státusz), `SsSkeleton`,
+`SsEmptyState`, `SsFailureState`, `SsPermissionState`, és a
+`failure_presentation.dart` mapping. Kötött döntések: **ADR
+[0277](docs/adr/0277-failure-presentation-model.md)** — **nem ebben a körben
+íródott, már merge-elve volt** (`a4fdfec2`), ezért a kör ADR-t nem írt és a
+`docs/adr/**` tilos zóna maradt (ugyanaz a minta, mint E13-R09/D1; a foglalótól
+kapott `0416` felhasználatlan). Implementer **Claude Sonnet 5** (`sonnet-impl`),
+orchesztrátor/reviewer **Claude Opus 5**.
+
+**A pre-flight két elérhetetlen célt fogott meg, mielőtt bármi elindult.**
+(1) A brief §5.1 „a bemenet mindig failure-**kód**" előírása mellett az **A4
+mérhetetlen**: a `permanentlyDenied` és a `denied` ág AZONOS kódot hordoz
+(`FailureCode.permissionMicrophoneDenied`), és KIZÁRÓLAG az
+`AppFailure.retryable` bool különbözteti meg őket (mérve a tényleges
+leképezésen: `lib/core/platform/microphone_permission.dart:25-39`,
+`lib/core/camera/camera_permission.dart:24-38`) — a mapping bemenete ezért az
+`AppFailure` **érték** lett, `code` + `retryable`, a `cause`/`stackTrace` be sem
+lép a modellbe. (2) Az ARB-forrás a **fragmentum**
+(`lib/l10n/features/design_system_{en,hu}.arb`, ÚJ), az aggregátum generált
+(ADR 0307 §4) — ez a NEGYEDIK mérés ugyanerre a hibaosztályra
+([L365](docs/LESSONS.md), [L369](docs/LESSONS.md), [L396](docs/LESSONS.md),
+[L454](docs/LESSONS.md)), és a párhuzamos E09-R21 KÉTSZER futott bele
+`stopped`-dal ugyanaznap.
+
+**Review: 1 MAJOR teljesen zöld gate + zöld CI mellett.** A `SsPermissionState`
+a `permission.unavailable` **elérhető** úton (`MicrophonePermissionState.unavailable.failure!`)
+kirendelt egy `contactSupport` gombot `onPressed == null`-lal, amit a hívó nem
+is tudott bekötni (nem volt ilyen paraméter) — látható, örökre halott vezérlő,
+szemben az ADR 0277 §5.3/§5.5-tel. **Miért csúszott át:** az A3/A4 a
+prezentációs MODELLT mérte (`hasAction`), sosem a kirendelt gomb
+`onPressed`-jét ([L457](docs/LESSONS.md)). A javító kör mindhárom leletet
+zárta (F2: ugyanez `SsFailureState`-ben; F3: az offline-ág `Expanded`-je kötött
+magasságú őst kíván — most a publikus doksiban), és a reviewer a zárást
+valódi-sértés próbával mérte: a hibás alak visszaállítva az őr-cella PIROS,
+majd visszaállítva a kapu zöld.
+
+Gate zöld az `ad3ac4e8` merge-előtti SHA-n: Full Gate
+[32678739926](https://github.com/wolfcasaba/strumsight/actions/runs/32678739926)
+✅ · Router CI ✅. Landolás a merge-záron át (`tools/round-land.sh`), mert a
+másik sáv (E09-R21/R22) párhuzamosan futott. Landolás közben mért,
+`tools/`-hoz nyúlás nélkül feloldott két tooling-hiba: [L451](docs/LESSONS.md)
+ismét (elavult gitignore-olt generált l10n → 25 hamis analyze-hiba a
+kombinált-HEAD gate-en) és [L455](docs/LESSONS.md) ismét
+(`safe-force-push` elutasítás merge-commitokra) — az utóbbi feloldása ezúttal
+**nem** force-push volt, hanem a `main` beolvasztása a branchbe, így a push
+fast-forward maradt és a lander rebase-e is elmaradt ([L458](docs/LESSONS.md)).
+Részletek: [review](docs/reviews/e13-r10-review.md).
+
+**Következő Chapter 13 kör: E13-R11.**
+
 ## ✅ E09-R21 KÉSZ — Community challenge és invite lifecycle — PR [#435](https://github.com/wolfcasaba/strumsight/pull/435), squash `56a68678` (2026-08-24)
 
 **Az aszinkron challenge-meghívás állapotgép él** — `draft → sent →

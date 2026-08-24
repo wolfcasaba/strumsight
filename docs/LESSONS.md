@@ -17304,3 +17304,119 @@ bypass-olnád a scriptet.
 (`tools/tests/test_safe_force_push.py`, ha létezik) a NEM-merge remote-only
 esetet fedi; egy merge-commit-eldobó rebase-forgatókönyv szintetikus tesztje
 follow-up. Amíg nincs, a fenti tartalom-mérési recept a kötelező kézi lépés.
+
+## L456 — Az orchestrátor SAJÁT prompt-fájlja a munkapéldány gyökerében hamis `scope_audit=VIOLATION`-t vált ki, és a `done` jelzést `stopped`-ra fordítja (E13-R10, 2026-08-24)
+
+**Mit mértünk.** Az E13-R10 implementere hibátlanul végzett (15 fájl, mind az
+`allowed_paths`-on), és `done`-t jelzett. A wrapper jelzésfájlja mégis ezt adta:
+
+```
+status=stopped
+implementer_status=done
+scope_audit=VIOLATION
+scope_audit_changed=16
+scope_audit_violations=path outside allowed scope: .pipeline-prompt-e13-r10.md
+```
+
+A 16. „módosult" útvonal az **orchestrátor** által a munkapéldány gyökerébe
+írt prompt-fájl volt — untracked, egyetlen commitban sem szerepelt. A
+scope-audit a diffben megjelenő MINDEN útvonalat méri, és nem tudja, hogy ez
+nem az implementer műve. A kör így egy tökéletes futás után `stopped`-ra
+fordult, ami az `H3`/`H6` felé mutató, teljesen hamis jel.
+
+**A javítás (mérve, ugyanabban a körben).** A prompt-fájl a repón KÍVÜL él; a
+burkolók abszolút útvonalat is elfogadnak. A javító kört így indítottuk:
+
+```bash
+setsid tools/mm-round.sh /home/ubuntu/ss-sonnet-impl-e13-r10 \
+  /tmp/.../scratchpad/fix-prompt-e13-r10.md /tmp/mm-e13-r10-fix.log
+```
+
+→ a javító kör jelzése tiszta `done` lett, `scope_audit` sértés nélkül. A
+kimozgatás után az eredeti futás is tisztán mért:
+`Legacy scope audit OK (…, 15 changed path(s), 0 generated/ignored)`.
+
+**Amit ebből tanulunk.** A munkapéldány NEM az orchestrátor firkalapja: minden
+saját artefaktum (prompt, findings-lista, jegyzet) a repón kívülre megy, vagy —
+ha a körhöz tartozik — commitolt fájlként a branchre (mint a
+`docs/reviews/eXX-rYY-review.md`, aminek van kód szintű mentessége). Egy
+`scope_audit=VIOLATION` láttán az ELSŐ lépés a sértő útvonal megnézése: ha a
+sajátod, a kör diffje attól még tiszta lehet.
+
+**Őrteszt:** nincs — a gépi őr a `tools/scope-audit.py`-ba vagy a burkolókba
+kívánna kivételt, azok pedig ennek a körnek a tilos zónája (a mércét nem
+módosíthatja az, akit mér, ADR 0112/0138). A védelem a driver-oldali szokás,
+amit ez a lecke rögzít.
+
+## L457 — A zöld acceptance-cella a prezentációs MODELLT mérheti, miközben a felhasználó a WIDGET-et látja: egy elérhető úton halott gomb így csúszik át teljes zöld kapun (E13-R10, 2026-08-24)
+
+**Mit mértünk.** Az E13-R10 A3/A4 cellái a `SsFailurePresentation.hasAction(...)`
+predikátumot mérték, és helyesen zöldek voltak. A független review mégis MAJOR
+leletet talált eldobható próbateszttel:
+
+```
+P0 MicrophonePermissionState.unavailable.failure!
+   → PermissionFailure(code: 'permission.unavailable', retryable: false)
+   → a mapping actions = [contactSupport]            (elérhető, valós bemenet)
+P1 SsPermissionState ezzel kirendeli a gombot, és annak onPressed == null
+   — a widgetnek NINCS onContactSupport paramétere, tehát a hívó sem tudja
+     bekötni: látható, örökre halott vezérlő
+```
+
+A modell szintjén tehát „van következő lépés" (`actions` nem üres, ahogy a
+doc-comment ígérte), a felületen viszont nincs — pontosan az a hamis remény,
+amit az ADR 0277 §5.3 és §5.5 tilt. Ugyanez enyhébben a `SsFailureState`-ben:
+bekötetlen callback → letiltott gomb.
+
+**Amit ebből tanulunk.** Ha egy acceptance-kritérium arról szól, mit LÁT és mit
+TUD megtenni a felhasználó, akkor a cella a **kirendelt widgetet** mérje, ne a
+mögötte álló adatmodellt. A modell-szintű predikátum (`hasAction`) a
+leképezést bizonyítja, a felhasználói ígéretet nem. A két réteg között
+elfér egy teljes hibaosztály — és a gate zöld marad fölötte.
+
+**A zárás mércéje.** A javító kör invariánsa: *kirendelt akciógomb `onPressed`-je
+soha nem `null`; amit a komponens nem tud bekötni, ahhoz nem is épül gomb.*
+A reviewer a zárást valódi-sértés próbával mérte (a feltétel nélküli
+gomb-építést visszaállítva `00:01 +11 -1: … [E] Some tests failed`), majd
+visszaállította.
+
+**Őrteszt:** `test/core/design_system/feedback/async_state_test.dart::Javító kör F1/F2 — an assigned action button is never a dead control`
+(három cella: teljesen bekötött hívó minden akció-fajtára · a
+`permission.unavailable` út pontosan egy ÉLŐ akciót kínál és a tap hív ·
+bekötetlen callbackhez NEM épül gomb).
+
+## L458 — `safe-force-push` merge-commit-elutasítás után a helyes feloldás a `main` BEOLVASZTÁSA, nem a történet átírása — így a lander rebase-e is elmarad (E13-R10 landolás, 2026-08-24)
+
+**Mit mértünk.** Az [L455](#l455) hibaosztálya megismétlődött: a
+`tools/round-land.sh` belső rebase-e linearizálta az E13-R10 branchet, majd a
+`tools/safe-force-push.sh` `exit 3`-mal elutasította a pusht, mert a remote-on
+két **merge-commit** volt, amiknek rebase után nincs patch-id-ekvivalensük:
+
+```
+safe-force-push: MEGTAGADVA — a(z) origin/…-on olyan commit van, ami nálunk
+nincs (és nincs rebaseelt ekvivalense):
+  3a3dd160 Merge remote-tracking branch 'origin/main' into sonnet-impl/e13-r10-…
+  9b5b29fb Merge remote-tracking branch 'origin/main' into sonnet-impl/e13-r10-…
+```
+
+A „építsd be őket (pl. cherry-pick)" előírás itt tárgytalan: a TARTALMUK már
+benne van a rebaseelt vonalban (a rebase-elt HEAD tartalmazta az aktuális
+`origin/main`-t, és a fája csak a másik sáv doksijaival tért el).
+
+**A feloldás (mérve).** Nem írtuk át a történetet (ADR 0087 §0.3: „publikus
+branch történetét nem írod át és nem force-push-olod"). Helyette: a remote
+állapotra visszaállás, `git merge --no-ff origin/main`, normál (fast-forward)
+push, exact-SHA CI-újradispatch, és CSAK EZUTÁN a lander. Mivel a branch ekkor
+MÁR tartalmazta az aktuális `main`-t, a lander **nem rebase-elt**, és
+egyenesen squash-merge-elt (`LAND_EXIT=0`).
+
+**Amit ebből tanulunk.** Ha a landoló rebase-e `safe-force-push exit 3`-ba
+fut merge-commitok miatt, ne a force-push protokollt erőltesd: állítsd vissza a
+branchet a remote-ra, olvaszd be a `main`-t, futtass friss exact-SHA CI-t, és
+hívd újra a landert egy olyan HEAD-en, ami már tartalmazza a `main`-t. Ez
+mindkét szabályt megtartja (nincs történet-átírás, van exact-SHA evidencia), és
+mellékesen kiveszi a rebase-lépést a landolásból.
+
+**Őrteszt:** nincs — a gépi őr a `tools/round-land.sh`/`safe-force-push.sh`
+viselkedését módosítaná, ami a kör tilos zónája (ADR 0112 §3); a lecke a
+driver-oldali eljárást rögzíti.
