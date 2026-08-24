@@ -439,7 +439,7 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 | # | Kritérium | Teszt |
 |---|---|---|
-| A1 | AI-eredet mindig látható, alapállapotban | `ss_badges_test.dart` — `A1` csoport: `SsModelStatusCard` és `SsInsightCard` provenance-e a BÁZIS fában (nincs extra interakció), plusz egy negatív eset (nincs `provenance` → nincs badge) |
+| A1 | AI-eredet mindig látható, alapállapotban | `ss_badges_test.dart` — `A1` csoport: `SsModelStatusCard` és `SsInsightCard` provenance-e a BÁZIS fában (nincs extra interakció); **fix1/F4 után** a harmadik cella a `SsProvenanceKind.values`-en fut végig és azt méri, hogy `SsInsightCard` MINDIG visel provenance-badge-et (a típus `provenance` mezője `required`, nincs mód badge nélküli konstrukcióra) |
 | A2 | Egy badge sem csak színnel jelölt | `ss_badges_test.dart` — `A2` csoport: minden `SsStatusBadgeKind`/`SsProvenanceKind` egyedi `(icon, text)` párt ad (a `Set<(IconData,String)>.add` false-t adna vissza egy colour-only implementációnál); külön teszt igazolja, hogy a két confidence-szélsőérték UGYANAZT az ikont, de SOHA nem ugyanazt a szöveget adja |
 | A3 | A kártya háttere csak 1 fő akciónál kattintható | `ss_cards_test.dart` — `A3` csoport, mindhárom cella (`SsContentCard`, 0/1/2 akció); a 2-akciós cella EGZAKT `findsNWidgets(2)`-t vár (csak a gombok `InkWell`-jei, háttér nem) |
 | A4 | Beágyazott akció nem váltja ki a kártya-akciót | `ss_cards_test.dart` — `A4` csoport, `SsCoachActionCard`: a dismiss-koppintás csak `onDismiss`-t hívja, a háttér-koppintás csak `onAction`-t |
@@ -522,5 +522,125 @@ nem sérültek.
   írja elő, hogy MINDEN kártyatípus hordozzon badge-et; a badge-integrációt
   ott adtam hozzá, ahol az ADR 0278 ténylegesen releváns (AI-eredetű tartalom:
   `SsInsightCard`, `SsModelStatusCard`).
+
+## 10.1 Javító kör (fix1) — F1–F6 zárás, az implementer tölti ki
+
+A review (`docs/reviews/e13-r12-review.md`, 2026-08-24, review-HEAD `91b0fc72`)
+4 MAJOR + 2 MINOR leletet mért, mindet a kör saját, engedélyezett fájljain
+belül. A tilos zóna (`ss_colors.dart`, `lib/core/theme/**`, `docs/adr/**`)
+egyikhez sem kellett nyúlni.
+
+### F1 + F2 — a badge-ek szövege/ikonja szöveg-tokenből fest
+
+`ss_status_badge.dart` és `ss_provenance_badge.dart`: a `(icon, color, label)`
+hármasból a `color` ág törölve; az `Icon` és a `Text` mindkét fájlban
+`colors.textPrimary`-t használ, a per-kind státusz-token (`syncPending`,
+`offline`, `confidenceHigh/Medium/Low`, `localAi`, `cloudAi`) egyáltalán nem
+fest szöveget/ikont többé. Ez egyszerre zárja F1-et (a `syncPending` badge
+saját háttérszínével írt szövege) és F2-t (a provenance-felirat 2.18–2.72:1
+aránya a világos témában): a `textPrimary` az adott felszín szélső, legjobb
+kontrasztú tokenje, ezért a legnagyobb biztonsági margóval old meg mindkét
+leletet — mérve (Python-replika a `ContrastCheck` WCAG-képletéből,
+`SsElevation.raised` háttér ellenében):
+
+```
+textPrimary vs raised   light=17.25  dark=13.04  highContrast=13.04
+textSecondary vs raised light=5.82   dark=4.98   highContrast=4.98
+```
+
+Mindkettő jóval a 4.5:1 küszöb felett van; a `textPrimary`-t választottam a
+nagyobb margó miatt (a `dark`/`highContrast` `textSecondary`-arány 4.98,
+azaz csak ~10%-os tartalék lenne).
+
+**Ugyanez a hiba az `SsCoachActionCard.actionLabel`-jén is előfordult**
+(`colors.brand`, a review F2 zárása kifejezetten kérte ennek megmérését): a
+márka-copper `2.72:1` a világos témában. A `brandStrong` (`primaryDark`)
+SEM elég (`4.18`/`3.89` — szintén 4.5 alatt), ezért az `actionLabel` is
+`colors.textPrimary`-ra váltott.
+
+**Kötelező új őr:** `ss_badges_test.dart` új csoportja —
+`fix1/F1+F2 — every badge label meets the project 4.5:1 text-contrast floor`
+— mindhárom témában (`SsLightTheme`, `SsDarkTheme`, `SsHighContrastTheme`),
+minden `SsStatusBadgeKind`-re ÉS `SsProvenanceKind`-re lekéri a KIRENDELT
+`Text.style.color`-t és a `SsElevation.raised.resolve(theme).background`-ot,
+és `ContrastCheck.meetsTextContrast`-tal állítja a ≥4.5:1-et — a tényleges
+festett színnel, nem a token feltételezett értékével.
+
+### F3 — a badge felirata nem csordul túl `textScale ≥ 2.0`-n
+
+`ss_status_badge.dart` és `ss_provenance_badge.dart`: a `Text` most
+`Flexible`-be csomagolva, `maxLines: 1` + `TextOverflow.ellipsis`-szel. A
+Flutter 3.44.2 `RenderWrap` a horizontális `Wrap`-ben is VÉGES
+(`BoxConstraints(maxWidth: constraints.maxWidth)`) szélesség-korlátot ad a
+gyermekeinek — ellenőrizve a keretrendszer forrásában
+(`~/flutter/packages/flutter/lib/src/rendering/wrap.dart:740`) —, ezért a
+`Flexible` a `SsModelStatusCard`/katalógus `Wrap`-be ágyazott badge-eknél sem
+dob "unbounded width" `RenderFlex`-kivételt.
+
+**Kötelező új őr:** `ss_badges_test.dart` új csoportja —
+`fix1/F3 — a badge label never overflows the surface it is constrained to`
+— `SsStatusBadge(syncPending)` és `SsProvenanceBadge(local)`, magyar
+felirattal, egy `SizedBox`-ba (`320`/`200` dp) ágyazva, a `textScale`
+`1/1.3/2/2.5` létrán: `tester.takeException()` `isNull`, és a felirat
+kirendelt `Rect`-jének jobb éle a konténer jobb élén BELÜL marad
+(`tester.getRect`, nem `find.text`/`find.byType` jelenlét-alapú állítás).
+
+### F4 — `SsInsightCard.provenance` kötelező
+
+`ss_insight_card.dart`: `SsProvenanceKind? provenance` →
+`required SsProvenanceKind provenance`; az `if (provenance != null)` ág
+törölve, a badge feltétel nélkül kirendelődik. Nulla fogyasztó volt érintve
+(`grep -rn "SsInsightCard" lib/` a design-system-en kívül → üres) — a
+katalógus hívása már eleve átadott egy `provenance`-t, nem kellett módosítani.
+
+**A régi, betonozó A1-cella törölve/megfordítva:** `ss_badges_test.dart` A1
+csoportjának harmadik cellája most a `SsProvenanceKind.values`-en fut végig,
+és minden értékre azt állítja, hogy `SsInsightCard` badge-et rendel ki — az
+invariánst méri ("AI-tartalom MINDIG visel provenance-t"), nem a modell
+viselkedését ("ha átadva, megjelenik").
+
+### F5 — `SsCoachActionCard` opcionális `provenance` slotot kap (MINOR, indoklás)
+
+**Döntés:** opcionális (`SsProvenanceKind? provenance`), NEM kötelező —
+ellentétben az `SsInsightCard`-dal. Indoklás: az `SsInsightCard` osztály-doksija
+szó szerint "An AI-derived observation" — MINDEN példánya AI-tartalom, ezért ott
+a `required` a helyes zárás. A `SsCoachActionCard` doksija "A coach-suggested
+next step" — ez nem mindig modell-eredetű (pl. szabályalapú emlékeztető, mint
+"gyakorolj ma is"), ezért a `required` itt HAMIS megkötés lenne (a hívót arra
+kényszerítené, hogy nem-AI javaslatokhoz is `local`/`cloud`-ot találjon ki —
+pont az F6-ban elutasított "tippelés" hiba, csak megfordítva). Az opcionális
+slot viszont MOST bekerült (nem halasztva egy jövőbeli körre): amikor a
+javaslat TÉNYLEG modell-eredetű, a hívó átadja, és a badge feltétel nélkül
+kirendelődik — ugyanaz a "nincs elrejtés" garancia, amíg a mező nem `null`.
+Konstruktor: `required this.l10n` (a `SsProvenanceBadge` felirata ebből jön,
+a kártya korábban nem is vett át `l10n`-t) + `this.provenance` (opcionális).
+A katalógus-bemutató most `provenance: SsProvenanceKind.cloud`-dal hívja (ADR
+0278 Kontextusa a coach-réteget nevezi meg felhő-hívóként), demonstrálva a
+kirendelt badge-et; a két `ss_cards_test.dart`-beli A4-cella `l10n:`
+paramétert kapott (a konstruktor most megköveteli).
+
+**Ha egy jövőbeli kör `lib/features/**`-ből hívja a coach-réteget:** azon a
+hívási helyen kell eldönteni, minden egyes javaslat AI- vagy szabály-eredetű-e,
+és ennek megfelelően átadni vagy kihagyni a `provenance`-t — ez már nem
+design-system, hanem feature-szintű döntés, amit ez a kör nem tud helyette
+meghozni (nulla fogyasztó van ma).
+
+### F6 — `SsProvenanceKind` marad zárt kétértékű (MINOR, indoklás)
+
+**Döntés:** NEM kap `unknown` értéket ebben a körben. Indoklás: ma nulla
+fogyasztó van (`SsInsightCard`/`SsModelStatusCard`/`SsCoachActionCard` egyike
+sem hív vegyes/gyorsítótárazott pipeline-t), és egy `unknown` érték hozzáadása
+ma spekulatív jövő-tervezés lenne olyan eset ellen, ami még nem létezik
+(a projekt konvenciója: ne tervezzünk hipotetikus jövőbeli igényre). A
+biztonságos irány már MOST is áll: nincs olyan default, amely felhő-tartalmat
+helyinek jelölne (`SsModelStatusCard.provenance`/`SsInsightCard.provenance`
+mindkettő kötelező, nincs hallgatólagos `local`-ra esés). Amikor az első valódi
+vegyes-pipeline fogyasztó megjelenik, az a kör hozza majd az `unknown` értéket
+— saját ikonnal, ARB-kulccsal (en+hu) és A2-cellával, ahogy az F6 lelet előírja.
+
+### Kötelező zárás — tényleges parancsok
+
+(a `round-gate.sh` és a `dart run tool/gen_l10n_segments.dart --write`
+tényleges kimenete lent, a §10 fő szakaszában lévő mintát követve)
 
 ## 11. Review — a Claude tölti ki
