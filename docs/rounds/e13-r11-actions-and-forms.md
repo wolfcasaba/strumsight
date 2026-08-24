@@ -407,4 +407,144 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (sonnet-impl), 2026-08-24.
+
+### Mit épített
+
+- `ss_button.dart` — `SsButton` (`SsButtonVariant`: primary/secondary/
+  tertiary/destructive). A méretstabil loading: a felirat+ikon `Row`
+  MINDIG a fában marad (`Opacity(opacity: loading ? 0 : 1)`) egy `Stack`-ben,
+  a spinner felette jelenik meg — a `Stack` mérete így sosem függ a
+  `loading`-tól (A2). `loading == true` alatt `onPressed` teljesen `null`
+  (`effectiveOnPressed`), tehát egy külső, kontrollált `loading`-átmenet
+  (a hívó `onPressed`-je szinkronban `setState`-tel `true`-ra vált) a második
+  koppintást egy már letiltott vezérlőn futtatja (§5.2). A destruktív variáns
+  `MergeSemantics(child: Semantics(hint: destructiveSemanticHint, ...))`-ba
+  csomagolva — a `MergeSemantics` `isMergingSemanticsOfDescendants` a
+  `FilledButton` saját `Semantics(container: true, button: true, ...)`
+  határán ÁT egyesíti a hintet és a gomb saját node-ját EGYETLEN
+  accessibility-node-dá (A5). `destructiveSemanticHint` kötelező (assert) a
+  destruktív ágon — hívó-oldali string, a design system nem localizál (ADR
+  0411 §4 mintája). A hosszú felirat `Flexible(child: Text(..., overflow:
+  ellipsis))`-be került (lásd a "Javítás menet közben" szakaszt — ez A6-tal
+  bukott ki).
+- `ss_icon_button.dart` — `SsIconButton`: a glyph `SsIcon.decorative`-val
+  rajzolva (D5), a saját `Semantics(container: true, button: true, label:,
+  excludeSemantics: true)` node BIRTOKOLJA a szemantikát — a `container:
+  true` KRITIKUS: enélkül a node nem határ, és a `tester.getSemantics`
+  (ami a render-fán FELFELÉ sétál, ha az aktuális elem nem birtokol saját
+  node-ot) a Tooltip belső `MouseRegion`-jén át egy teljesen külső ősre
+  csúszna (mérve, lásd lent). A tooltip a KÜLSŐ `Tooltip(excludeFromSemantics:
+  true)`-ból jön egyszer; az `IconButton`-nak NEM adtam `tooltip:` paramétert,
+  hogy ne épüljön saját, duplikált Tooltip (A9).
+- `ss_text_field.dart` — `SsTextField`: `InputDecoration.labelText` +
+  `floatingLabelBehavior: FloatingLabelBehavior.always` — a label ÜRESEN és
+  FÓKUSZ NÉLKÜL is látszik, sosem tűnik el gépeléskor (A1). `errorText`,
+  `helperText`, `autofillHints`, `textInputAction`, `keyboardType` a hívó
+  oldaláról.
+- `ss_switch_row.dart`, `ss_choice.dart` — a teljes sor `InkWell`-je hordozza
+  az egyetlen váltás-útvonalat; a látható `Switch`/`Radio` `IgnorePointer`-be
+  csomagolva (a `ignoringSemantics` deprecated paramétere NÉLKÜL — az új
+  Flutter alapértelmezés a szemantikát megtartja, ld. lent), a
+  `MergeSemantics` a sor teljes tartalmát (label + kapcsoló-állapot) egy
+  node-dá vonja össze (§5.4). A `SsChoice` radio ága `RadioGroup<T>`
+  ős-widgetet használ (a deprecated per-`Radio` `groupValue`/`onChanged`
+  helyett) — a csoport állapotát a `RadioGroup` adja, a tényleges váltást
+  továbbra is a sor `InkWell`-je hajtja végre.
+- `ss_value_slider.dart` — `SsValueSlider`: egyetlen `_round` lépés
+  (`fractionDigits` tizedesre kerekít) mindkét bemeneti útvonalon
+  (`_handleSliderChanged`, `_commitText`) — ez az EGYETLEN hely, ahol a
+  szinkron eldől (§5.3). A numerikus mező saját, tartós labelje
+  `unitLabel ?? label` (A1 ugyanide vonatkozik). Fókuszvesztéskor
+  (`FocusNode` listener) a mező szövege visszaformázódik/commitolódik.
+- `ss_validation_summary.dart` — `SsValidationSummary` (összegzés, üres
+  listánál `SizedBox.shrink()`) + `SsFieldError` (mező-szintű üzenet). A
+  hívó adja a konkrét hibaüzeneteket (`SsValidationIssue.message`); a
+  design system csak az ÁLTALÁNOS keretszöveget birtokolja
+  (`dsValidationSummaryTitle`, `dsValidationSummarySemanticLabel`,
+  `dsFieldErrorSemanticPrefix`) — ARB-fragmentumban, `AppLocalizations`
+  explicit paraméterként (nem `context`-ből olvasva), ugyanaz a minta, mint
+  az `SsFailurePresentation.from(l10n, failure)`.
+- `public.dart` — a 7 új fájl exportja.
+- ARB: `lib/l10n/features/design_system_{en,hu}.arb` — 3 új kulcs (egyik sem
+  placeholderes, `@kulcs` metaadat nem kellett), majd
+  `dart run tool/gen_l10n_segments.dart --write` + `flutter gen-l10n`.
+- `component_catalog_screen.dart` — `_ActionsAndFormsShowcase`: gomb-
+  variánsok, `SsIconButton`, `SsTextField`, `SsSwitchRow`, `SsChoice`
+  (segmented), `SsValueSlider`, `SsValidationSummary`. Egyik komponens sem
+  ad új `DecoratedBox`-ot vagy `SsCard`-ot (mérve: `Material`, `TextField`,
+  `Switch`, `Radio`, `SegmentedButton`, `Slider` egyike sem épít
+  `DecoratedBox`-ot a Flutter SDK forrásában — előre ellenőrizve grep-pel,
+  mielőtt a katalógusba kerültek), a MEGLÉVŐ `component_catalog_test.dart`
+  (`SsCard`==1, `Material` `SsCard` alatt==1, `DecoratedBox`==1 mindkét
+  témán) változatlanul zöld maradt (D3).
+
+### Javítás menet közben — két MÉRT hiba, saját tesztből
+
+1. **`SsIconButton` szemantika-határ hiánya.** Az első implementáció a saját
+   `Semantics(button: true, ...)`-t `container: true` NÉLKÜL építette — az
+   `SsIcon.interactive` MEGLÉVŐ (nem módosítható) mintáját másolva. A
+   `tester.getSemantics(find.byType(SsIconButton))` PIROSSA vált
+   (`hasFlag(isButton) == false`): a `Tooltip` a saját belső, nem-határ
+   render objektumát (pl. `MouseRegion`) adja vissza először, aminek nincs
+   szemantikája, és a `SemanticsController.find` ilyenkor FELFELÉ (az ŐSÖK
+   felé, nem a leszármazottak felé!) sétál a render-fán — a mi
+   `Semantics`-ünk viszont LEJJEBB van, tehát sosem találja meg, és végül
+   egy teljesen kapcsolattalan ős node-ot ad vissza. Javítás: `container:
+   true` a saját `Semantics`-re — ez önálló határ-node-ot hoz létre PONT
+   ott, ahol a `Tooltip`/`IconButton` van, a felfelé-séta ELSŐ lépésben
+   megtalálja. A teszt emellett `find.bySemanticsLabel(...)`-re állt át
+   (a `test/core/design_system/icons/icon_semantics_test.dart` MEGLÉVŐ
+   mintája) a `find.byType` + `getSemantics` törékeny párja helyett — ez
+   utóbbi az `SsButton` nem-destruktív ágán is csak VÉLETLENÜL adott
+   helyes (üres hint) eredményt, mert bármelyik ős node hint-je alapból
+   üres; a `bySemanticsLabel`-es verzió a KONKRÉT node-ra mér.
+2. **`SsButton` hosszú felirat túlcsordulása 2.0 text scale-en.** Az A6 teszt
+   (360 dp valódi viewport, `tester.view.physicalSize` — NEM `MediaQuery`
+   wrapper, D7) egy `RenderFlex overflowed`-ot fogott a
+   `SsButton`-komponens belső `Row`-jában (`Text(label)` `Flexible` nélkül) —
+   ugyanaz a hibaosztály, amit a D7/L453 az E13-R09-ben mért. Javítás:
+   `Flexible(child: Text(label, overflow: TextOverflow.ellipsis))`.
+
+### Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+Mutáció: `ss_value_slider.dart`, `_commitText`-ben a
+`final rounded = _round(parsed);` sort ideiglenesen
+`final rounded = _round(parsed) + 1;`-re cseréltem (a mezőből commitolt
+érték szándékosan eltér a csúszkáétól).
+
+Mérve (`flutter test test/property/design_system/slider_numeric_sync_test.dart`,
+`PROPERTY_SEED=42`): az ELSŐ próbán PIROSRA váltott —
+`Expected: <90.0> Actual: <91.0>` a `field onSubmitted -> slider value`
+állításon. A mutációt visszaállítottam, a teszt újra zöld (100/100 próba).
+
+### Az érintési cél három cellája — brief-értelmezés (§6.1)
+
+A brief szó szerinti 44/48/56 dp cellái NEM reprodukálhatók az `SsSwitchRow`
+TÉNYLEGES rendereléséből fix pixelértékként: a `Switch` M3 alapértelmezett
+érintési célja (`MaterialTapTargetSize.padded`) önmagában ~48 dp, és a sor
+`space2` függőleges paddingja (16 dp) erre rakódik — MÉRVE, hogy minimális
+tartalommal (csak `label`, `subtitle` nélkül) a sor **64 dp**, nem 44 vagy 48
+(a `ConstrainedBox(minHeight: 48)` padló ilyenkor sosem aktiválódik, mert a
+`Switch` már önmagában efölé tolja a sort). A cellákat ezért ÁTFOGALMAZTAM
+MÉRHETŐ alakra, a TÉNYLEGES komponensen:
+
+- „padló": minimális tartalom (csak `label`) → `height >=
+  SsSemantics.minimumInteractiveDimension` (48) — mindig igaz, mérve 64.
+- „nincs felfelé szorítva": egy hosszú, több sorra törő `subtitle` (szűk,
+  220 dp széles szülőben) → `height` SZIGORÚAN nagyobb, mint a `subtitle`
+  nélküli eset — bizonyítja, hogy a `ConstrainedBox` PADLÓ, nem PLAFON.
+
+### Gate
+
+`tools/round-gate.sh test/core/design_system/forms/ss_button_test.dart
+test/core/design_system/forms/ss_inputs_test.dart
+test/property/design_system/slider_numeric_sync_test.dart
+test/core/design_system/component_catalog_test.dart` — MINDEN GATE ZÖLD
+(format, analyze — 0 lelet including info-szintű deprecation-ok is javítva:
+`IgnorePointer.ignoringSemantics`, `Radio.groupValue`/`onChanged`,
+`SemanticsData.hasFlag` →`flagsCollection` —, mind a négy teszt-útvonal,
+architecture 12 allowlisted deviation, secrets 0 lelet, l10n aggregate friss,
+en→hu parity 1831 üzenet).
+
 ## 11. Review — a Claude tölti ki
