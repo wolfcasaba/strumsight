@@ -1,0 +1,1 @@
+round=12 verdict=pass tests=49 lesson=randomized-gate-caught-2-real-bugs-deterministic-suite-missed(tail-spikes,slow-rake-split);property-generator-must-match-domain(guitar-voicings)
