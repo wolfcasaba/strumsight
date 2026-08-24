@@ -579,6 +579,29 @@ write_brief_lint() {   # $1=kör $2=brief → a jelentés útvonala a stdouton
   [ -f "$report" ] && printf '%s\n' "$report" || printf '%s\n' "nincs"
 }
 
+# A kör MÉRT hagyaték-állapota (ADR 0112 önjavító kör, E09-R26, 2026-08-24).
+# Ugyanaz az idióma, mint a brief-lint: a session nem a saját belátásából
+# találgatja, hagyott-e egy korábbi, megölt session megőrzendő munkát —
+# megméretlenül kapja meg. A MÉRT ok: az E09-R26 sessionjét a 20 perces
+# elakadás-őr megölte, miközben a kör KÉSZ volt (review APPROVED, 0 nyitott
+# lelet, Full Gate zölden a head SHA-n, PR nélkül) — a §0.2 létrán viszont
+# nem volt fok erre az állapotra, tehát a `pending` queue-sor újrafutásán
+# 4210 sor és egy teljes review-ciklus veszhetett volna el.
+write_resume_state() {   # $1=kör → a jelentés útvonala a stdouton
+  local round="$1" report="$state_dir/resume-state-$1.md" state
+  if [ ! -x "$repo_root/tools/round-resume-probe.sh" ]; then printf '%s\n' "nincs"; return 0; fi
+  "$repo_root/tools/round-resume-probe.sh" --round "$round" --repo "$repo_root" \
+    --out "$report" >/dev/null 2>&1 || { printf '%s\n' "nincs"; return 0; }
+  state=$(grep -m1 '^ÁLLAPOT: ' "$report" 2>/dev/null | cut -d' ' -f2-)
+  case "$state" in
+    REVIEW-APPROVED)
+      log "HAGYATÉK: a(z) $round ága JÓVÁHAGYOTT review-val áll — a kör a merge-lépésnél folytatódik, NEM indul újra ($report)" ;;
+    REVIEW-NYITOTT|PRE-FLIGHT)
+      log "hagyaték: $round — $state, megőrzendő munka van az ágon ($report)" ;;
+  esac
+  [ -f "$report" ] && printf '%s\n' "$report" || printf '%s\n' "nincs"
+}
+
 # --- Friss headless orchestrátor-session futtatása -------------------------
 # Az orchestrátor és az önjavító kör ugyanazt a mechanikát használja: tmux-ban
 # futó agent (így látszik a telefonos Code-listában), 30 percenkénti életjel, és
@@ -2665,6 +2688,7 @@ trap 'inflight_remove "$active_inflight"' EXIT
 inflight_add "$round" "$brief"
 
 brief_lint_report=$(write_brief_lint "$round" "$brief")
+resume_state_report=$(write_resume_state "$round")
 
 # Kimaradás-mód (2026-08-06): ha a GitHub Actions incidensben van, a CI-evidencia
 # NEM megszerezhető. Ilyenkor a kör ne várjon órákig egy sosem induló futásra —
@@ -2714,6 +2738,7 @@ sed -e "s|{{ROUND}}|$round|g" \
     -e "s|{{ENGINE}}|$engine|g" \
     -e "s|{{ADR}}|$adr|g" \
     -e "s|{{BRIEF_LINT}}|$brief_lint_report|g" \
+    -e "s|{{RESUME_STATE}}|$resume_state_report|g" \
     -e "s|{{CI_NOTE}}|$ci_note|g" \
     -e "s|{{STATUS_FILE}}|$status_file|g" \
     -e "s|{{ROUTER_STATUS_FILE}}|$router_status_file|g" \
