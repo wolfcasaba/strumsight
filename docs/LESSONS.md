@@ -17420,3 +17420,41 @@ mellékesen kiveszi a rebase-lépést a landolásból.
 **Őrteszt:** nincs — a gépi őr a `tools/round-land.sh`/`safe-force-push.sh`
 viselkedését módosítaná, ami a kör tilos zónája (ADR 0112 §3); a lecke a
 driver-oldali eljárást rögzíti.
+
+## L459 — `safe-force-push.sh` nem `cd`-l a saját repójába: abszolút útvonalról hívva a MEGOSZTOTT fán fut, és hamis „MEGTAGADVA"-t ad (E09-R22 landolás, 2026-08-24)
+
+**Mit mértünk.** Rebase után a `tools/safe-force-push.sh minimax/e09-r22-…`
+hívás (abszolút path-ról, `/home/ubuntu/ss-mm-e09-r22/tools/safe-force-push.sh`)
+`exit 3`-mal **MEGTAGADVA**-t adott, felsorolva a kör MINDEN commitját
+"nincs rebaseelt ekvivalense" indokkal — pedig `git patch-id` kézzel
+futtatva a `/home/ubuntu/ss-mm-e09-r22` klónban minden pár tökéletesen
+egyezett. A script **nem tartalmaz `cd`-t és nem `git -C`-vel hív** — a
+`git fetch`/`git log`/`git push` a HÍVÓ folyamat AKTUÁLIS munkakönyvtárára
+megy. Az ágens-harness minden Bash-hívás UTÁN a munkakönyvtárat a session
+alap-repójára (`/home/ubuntu/music-theory`, a MEGOSZTOTT fő fa, `main`
+ágon) állítja vissza — a script tehát a `main` ág HEAD-jét hasonlította a
+kör branch remote-jához, ahol értelemszerűen MINDEN kör-commit "nálunk
+nincs".
+
+**A feloldás.** A scriptet `cd <munkapéldány> && tools/safe-force-push.sh
+<branch>` alakban KELL hívni, EGYETLEN Bash-hívásban (a `cd` és a script
+hívása között a munkakönyvtár nem reset-elődik) — sosem abszolút útvonalon,
+külön hívásból. Ugyanez a hívási minta érvényes minden más, nem
+`git -C`-t/saját `cd`-t tartalmazó `tools/`-scriptre, amit a landolási
+folyamat munkapéldány-kontextusban futtat (`round-gate.sh`,
+`prepare-flutter-generated.sh` MÁR maga számolja ki a saját útját
+`BASH_SOURCE`-ból, ezért AZOK argumentum-alapon helyesen működnek
+abszolút hívásból is — csak a `safe-force-push.sh` MOST mért hibaosztálya
+egyedi).
+
+**Amit ebből tanulunk.** Egy "MEGTAGADVA"/konfliktus-jelzésű script-kimenet
+NEM automatikusan a script SAJÁT, dokumentált logikájának találata — ha a
+hívás körülménye (itt: a harness CWD-reset szokása) eltér a script
+implicit feltevésétől (itt: "a hívó már a repóban áll"), a jelzés hamis
+lehet. Kétség esetén reprodukáld a script BELSŐ parancsait kézzel, EXPLICIT
+`git -C <repo>`-val — ha az eltér a script saját (CWD-függő) eredményétől,
+a hívási mód a gyanús, nem a git-állapot.
+
+**Őrteszt:** nincs — a `tools/safe-force-push.sh`-t módosítani (pl. saját
+`cd`/`git -C` hozzáadása) a kör tilos zónája (ADR 0112 §3, `tools/**`); a
+lecke a hívási mintát rögzíti a driver/orchesztrátor oldalán.

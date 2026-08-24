@@ -1,5 +1,56 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R22 KÉSZ — Verified result submission és anti-cheat — PR [#437](https://github.com/wolfcasaba/strumsight/pull/437), squash `206d6993` (2026-08-24)
+
+**A challenge-eredmény szerveroldali, idempotens ellenőrzése és anti-cheat védelme él** —
+a szerver SOHA nem fogad el kliens-oldali `verified`/`rank` állítást (a §5.1 elv,
+ugyanaz, mint az E08-R28 ledger-szinkron `totalXp`-tilalma). **ADR
+[0417](docs/adr/0417-verified-result-submission-and-anti-cheat.md)**
+(a queue-ban előre kiosztott `0411` MÁR foglalt volt E09-R08 alatt — a
+pre-flight friss számot mért; implementer **MiniMax M3**, orchesztrátor/reviewer
+**Claude Sonnet 5**).
+
+**Pre-flight bővítette az `allowed_paths`-ot két, MÁR meglévő fájllal**:
+`backend/app/community/routers/challenges.py` (ÚJ `POST .../results` endpoint)
+és `lib/features/community/data/repositories/challenge_repository_impl.dart`
+(a `submitResult` `UnimplementedError`-stubja valódi HTTP-hívásra cserélve) —
+enélkül a funkció nem lett volna végponttól-végpontig működő (ADR 0415 §D6 és
+a Kör 21 repo-impl docstringje explicit ezt a kört jelölte ki a bekötésre).
+A pre-flight további két mért téves feltevést javított: az `active`
+invite-állapot ma elérhetetlen (0 hozzárendelés-hely a kódban), tehát a
+"participant-állapot" ellenőrzés olvasás-only; a "server-issued nonce" a
+Kör 5 fagyott `submitResult` interfészen NEM megy át, szerver-belső TTL-es
+bekönyvelés.
+
+**A review (risk=high, `security-reviewer` subagent kötelezően bevonva) a zöld
+gate MÖGÖTT 2 MAJOR-t mért, SAJÁT, az implementer tesztkészletétől FÜGGETLEN
+mutation-próbákkal** (`docs/LESSONS.md` L414 mintája): **F1** — egy extrém
+(`10**19`) `metric_value` az audit-insertnél `OverflowError`-ral 500-at dobott
+`IntegrityError` helyett (A8-sértés: a reject-döntéshez nem tartozott auditált
+sor); **F2** — a nem-`personalBest` "first-wins" policy Python-oldali
+check-then-act volt, két konkurens beküldés (más-más `source_event_id`-vel)
+két `verified` sort hozhatott létre. A javító kör mindkettőt zárta (F1: wire-
+szintű Pydantic `Field(ge=, le=)` korlát a döntési lánc elé; F2: atomikus,
+rowcount-ellenőrzött feltételes UPDATE a Python-oldali előzetes olvasás
+helyett) + 2 MINOR-t (F3: a service-oldali "második védelmi vonal" holt kód
+volt, a nyers body-kulcsokból építve javítva; F4: az A5 verzió-cella a
+fagyott kliens-interfészről sosem érhető el, dokumentálva). **A reviewer
+SAJÁT valódi-sértés próbával mérte F1/F2 zárását** — a fixet ideiglenesen
+visszaállítva a régi, hibás alakra, az új regressziós teszt PIROSRA váltott,
+majd visszaállítás után zöld.
+
+Landolás közben a kombinált-HEAD gate első futása 25 hamis `analyze`-hibával
+PIROS lett (elavult, gitignore-olt generált l10n a rebase után, a
+[L451](docs/LESSONS.md) recidívája — egy párhuzamos Ch13-sáv új l10n-kulcsokat
+mergelt) — `tools/prepare-flutter-generated.sh` a munkafán feloldotta. A
+`tools/safe-force-push.sh` első hívása hamis "MEGTAGADVA"-t adott, mert
+abszolút útvonalról, a MEGOSZTOTT fő fa CWD-jéből futott ([L459](docs/LESSONS.md),
+a script nem `cd`-l saját magába) — `cd`-vel a munkapéldányba javítva.
+
+Gate zöld a `d94faff8` merge-előtti SHA-n: Full Gate ✅ · Router CI ✅.
+Post-merge gate a friss `main`-en (`206d6993`) is zöld. Részletek:
+[review](docs/reviews/e09-r22-review.md).
+
 ## ✅ E13-R10 KÉSZ — Aszinkron állapotkomponensek — PR [#436](https://github.com/wolfcasaba/strumsight/pull/436), squash `b11ab2ed` (2026-08-24)
 
 **A Ch13 feedback-készlete él** — `SsAsyncState` (9 státusz), `SsSkeleton`,
