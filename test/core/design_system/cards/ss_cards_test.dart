@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/l10n/app_localizations.dart';
 
 Widget _wrap(Widget child, {double width = 320}) => MaterialApp(
   theme: SsLightTheme.data(),
@@ -12,6 +13,8 @@ Widget _wrap(Widget child, {double width = 320}) => MaterialApp(
 );
 
 void main() {
+  final l10n = lookupAppLocalizations(const Locale('en'));
+
   group('A3 — the card background is tappable only at exactly one action', () {
     testWidgets('zero actions: no tap target exists anywhere on the card', (
       tester,
@@ -109,6 +112,7 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           SsCoachActionCard(
+            l10n: l10n,
             title: 'Ready for a tempo check?',
             message: 'Your strum timing has been steady for a week.',
             actionLabel: 'Start tempo check',
@@ -135,6 +139,7 @@ void main() {
         await tester.pumpWidget(
           _wrap(
             SsCoachActionCard(
+              l10n: l10n,
               title: 'Ready for a tempo check?',
               message: 'Your strum timing has been steady for a week.',
               actionLabel: 'Start tempo check',

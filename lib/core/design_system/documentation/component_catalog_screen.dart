@@ -392,9 +392,11 @@ final class _CardsAndStatusShowcase extends StatelessWidget {
         ),
         const SizedBox(height: SsSpacing.space2),
         SsCoachActionCard(
+          l10n: l10n,
           title: 'Ready for a tempo check?',
           message: 'Your strum timing has been steady for a week.',
           actionLabel: 'Start tempo check',
+          provenance: SsProvenanceKind.cloud,
           onAction: () {},
           onDismiss: () {},
           dismissSemanticLabel: 'Dismiss suggestion',
