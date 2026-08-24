@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/design_system/public.dart';
-import 'package:strumsight/core/i18n/pseudo_locale.dart';
-import 'package:strumsight/core/i18n/ss_formatters.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Locale-aware formatter output (A4) and pseudo-locale overflow resilience
