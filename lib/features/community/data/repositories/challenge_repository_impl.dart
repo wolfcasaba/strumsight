@@ -1,5 +1,5 @@
 /// Dio-backed implementation of [CommunityChallengeRepository]
-/// (E09-R21, ADR 0415).
+/// (E09-R21, ADR 0415; E09-R22, ADR 0417).
 ///
 /// The repository implements the **existing**
 /// ``CommunityChallengeRepository`` contract from Kör 5 (ADR 0399)
@@ -15,9 +15,12 @@
 ///   ``community_challenges_screen`` can render the screen from
 ///   real backend data.
 /// * The 2 result / leaderboard methods (``submitResult`` /
-///   ``leaderboard``) raise ``UnimplementedError`` — Kör 22 / 23
-///   scope, the Kör 21 ``allowed_paths`` does not include their
-///   wire surfaces (the §0.0 D6 / ADR 0415 §D6 scope-shrink).
+///   ``leaderboard``) raise ``UnimplementedError`` (Kör 23 scope) or,
+///   for ``submitResult``, hit the Kör 22 service layer
+///   (the wire surface is in the Kör 22 ``allowed_paths`` — the
+///   §0.0 D6 / ADR 0415 §D6 scope-shrink is now partial: the Kör
+///   22 surface ships the verified-receipt side; the leaderboard
+///   read is Kör 23).
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -101,9 +104,26 @@ final class DisabledCommunityChallengeRepository
     required String sourceEventId,
     required String idempotencyKey,
   }) async {
-    throw UnimplementedError(
-      'submitResult is Kör 22 scope; the Kör 21 surface is invite-only.',
+    // The server-computed ``verification_state`` is NOT returned
+    // here — the repository contract is ``Future<void>`` (a
+    // successful HTTP round-trip is the contract). The
+    // controller layer surfaces a SEPARATE pending-verification
+    // state to the UI (§5.3 / §A7 — the local success is not
+    // deleted by an upload failure). The §A7 wire flow is
+    // exercised by ``challenge_result_controller_test.dart``.
+    final result = await _client.postJson<dynamic>(
+      '/community/challenges/${challengeId.value}/results',
+      data: <String, Object?>{
+        'metric_value': metricValue,
+        'source_event_id': sourceEventId,
+        'idempotency_key': idempotencyKey,
+      },
+      decode: _decodeResult,
     );
+    return switch (result) {
+      Success() => null,
+      Failure(:final error) => throw error,
+    };
   }
 
   @override
@@ -113,10 +133,9 @@ final class DisabledCommunityChallengeRepository
     required int limit,
   }) async {
     throw UnimplementedError(
-      'leaderboard is Kör 23 scope; the Kör 21 surface is invite-only.',
+      'leaderboard is Kör 23 scope; the Kör 22 surface is result-submit only.',
     );
   }
-}
 
 /// Live HTTP-backed challenge repository.
 class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
@@ -272,6 +291,28 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
   }
 
   // ---- internal ----------------------------------------------------------
+
+  /// Decode the Kör 22 verified-receipt wire shape.
+  ///
+  /// The repository's ``submitResult`` returns ``Future<void>`` —
+  /// a successful HTTP round-trip is the contract. The decoder
+  /// only asserts the response shape; the controller pulls the
+  /// decision from its OWN application state (a SEPARATE
+  /// pending-verification layer, §A7 / §5.3).
+  void _decodeResult(Map<String, Object?> json) {
+    final state = json['verification_state'];
+    if (state is! String) {
+      throw const FormatException(
+        'community challenge result wire: verification_state must be a string',
+      );
+    }
+    final reason = json['reason_code'];
+    if (reason != null && reason is! String) {
+      throw const FormatException(
+        'community challenge result wire: reason_code must be a string',
+      );
+    }
+  }
 
   String? _cursorQueryValue(Object cursor) {
     if (cursor == const CursorPage.initial()) return null;

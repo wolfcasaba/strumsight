@@ -1,6 +1,8 @@
-"""Community challenge invite router — E09-R21, ADR 0415.
+"""Community challenge invite router — E09-R21, ADR 0415; E09-R22,
+ADR 0417.
 
-The HTTP surface for the challenge invite lifecycle:
+The HTTP surface for the challenge invite lifecycle AND the
+verified-result submission:
 
 * ``POST   /community/challenges/{challenge_public_id}/invites`` —
   create (or recycle) an invite. Server-side inviter (the JWT
@@ -16,21 +18,26 @@ The HTTP surface for the challenge invite lifecycle:
 * ``DELETE /community/challenges/invites/{invite_public_id}`` —
   cancel an outgoing invite (inviter-only). Same conditional
   UPDATE shape — the D5 race-test cell.
+* ``POST   /community/challenges/{challenge_public_id}/results`` —
+  submit (or replay) a verified result (E09-R22). Server-side
+  decision — the client never carries a ``verified`` / ``rank``
+  field. The §6 acceptance-criterion surface (ADR 0417 D7).
 
 There is NO "challenge definition creation" endpoint in this
 round (the §0.0 D6 scope-shrink / ADR 0415 §D6): the router
-only exposes the invite-lifecycle endpoints. The
-``community_challenges`` rows are seeded by the test fixtures
-or by a future round's admin surface; the service is still
-the single chokepoint for all writes.
+only exposes the invite-lifecycle endpoints and the result
+endpoint. The ``community_challenges`` rows are seeded by the
+test fixtures or by a future round's admin surface; the
+service is still the single chokepoint for all writes.
 
 All authenticated endpoints take ``idempotency_key`` either in
 the JSON body (POST endpoints) or as a query parameter
 (DELETE endpoints — the Kör 7 ``api_client.dart``'s ``delete()``
 does not carry a JSON body, ADR 0401 §1 / §3). The body-side
-``inviter_id`` / ``invitee_id`` / ``invite_id`` fields are NOT
-carried by the Pydantic schemas (``extra='forbid'`` rejects any
-smuggled value).
+``inviter_id`` / ``invitee_id`` / ``invite_id`` / ``verified`` /
+``rank`` / ``verification_state`` fields are NOT carried by the
+Pydantic schemas (``extra='forbid'`` rejects any smuggled value
+— the §A2 belt-and-braces invariant).
 
 The router is mounted by the test fixtures directly into a
 self-contained ``FastAPI()`` — the production
@@ -46,7 +53,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
@@ -60,6 +67,12 @@ from ..services.challenge_invite_service import (
     cancel_invite,
     create_invite,
     decline_invite,
+)
+from ..services.challenge_verification_service import (
+    ChallengeInviteNotFound as _ResultChallengeInviteNotFound,
+    ChallengeNotFound as _ResultChallengeNotFound,
+    ChallengeParticipantNotFound as _ChallengeParticipantNotFound,
+    submit_result,
 )
 
 router = APIRouter(prefix="/community/challenges", tags=["community-challenges"])
@@ -568,6 +581,271 @@ def delete_cancel_invite(
         except HTTPException:
             raise
         return _invite_to_out_from_session(db, invite)
+    finally:
+        try:
+            next(db_gen, None)
+        except StopIteration:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# E09-R22 — verified-result submission (ADR 0417 D7).
+#
+# Inline Pydantic request / response models — same shape as the
+# Kör 21 invite router (the §0.0 D6 Kör 21 consistency rule).
+# ``extra='forbid'`` is the FIRST line of defense against
+# client-issued ``verified`` / ``rank`` fields (§A2 §5.1); the
+# service-level ``assert_no_client_issued_trust_state`` is the
+# SECOND (the §6.1 belt-and-braces probe).
+# ---------------------------------------------------------------------------
+
+
+class SubmitChallengeResultRequest(BaseModel):
+    """Body shape for ``POST /community/challenges/{id}/results``.
+
+    Only the ``metric_value`` / ``source_event_id`` /
+    ``idempotency_key`` travel on the wire — the
+    ``verification_state`` / ``verified`` / ``rank`` /
+    ``decision_at`` fields are server-computed (D1, §5.1). The
+    ``extra='forbid'`` rejects any smuggled trust state.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    metric_value: int
+    source_event_id: str = Field(min_length=1, max_length=128)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+    # The version the client submitted (the Kör 5 wire entity
+    # carries ``version`` — the A5 measure-matrix asserts the
+    # service rejects when the client's version differs from
+    # the server's). A null/missing field defaults to the
+    # server-fetched version on a fresh submission, but the
+    # server explicitly rejects mismatches when the field is
+    # supplied (the §A5 path).
+    submitted_version: int | None = Field(default=None)
+
+
+class ChallengeResultOut(BaseModel):
+    """Wire shape for a single ``CommunityChallengeResult`` row.
+
+    The internal ``id`` is NEVER serialised (the §6.1 leak-
+    guard). The ``verification_state`` is the server's
+    authoritative decision; the ``reason_code`` is the
+    §A8 audit trail (a terminal-state row's structured reason).
+    """
+
+    public_id: uuid.UUID
+    challenge_public_id: uuid.UUID
+    participant_public_id: uuid.UUID
+    source_event_id: str
+    idempotency_key: str | None
+    metric_value: int
+    verification_state: str
+    reason_code: str | None
+    nonce_expires_at: datetime
+    submitted_at: datetime
+    decided_at: datetime | None
+
+
+def _resolve_participant_public_id_from_session(
+    db: Session, result_row
+) -> uuid.UUID:
+    """Resolve the actor's community profile public_id from the
+    request session, walking ``result → participant → profile``.
+
+    The ``result_row`` is a :class:`CommunityChallengeResult` ORM
+    row; its ``participant_id`` is the FK to
+    :class:`CommunityChallengeParticipant`, whose
+    ``participant_profile_id`` is the FK to
+    :class:`CommunityProfile` (whose ``public_id`` is the
+    wire-public actor identity).
+    """
+    from sqlalchemy import text as _sa_text
+
+    profile_row = db.execute(
+        _sa_text(
+            "SELECT profile.public_id "
+            "FROM community_challenge_results r "
+            "JOIN community_challenge_participants cp "
+            "ON cp.id = r.participant_id "
+            "JOIN community_profiles profile "
+            "ON profile.id = cp.participant_profile_id "
+            "WHERE r.id = :rid"
+        ),
+        {"rid": result_row.id},
+    ).first()
+    if profile_row is None:
+        raise ValueError("result references a non-existent participant profile")
+    raw = profile_row[0]
+    if isinstance(raw, str):
+        return uuid.UUID(hex=raw)
+    return raw
+
+
+def _result_to_out_from_session(db: Session, result_row) -> ChallengeResultOut:
+    """Map a ``CommunityChallengeResult`` ORM row + session to its
+    wire shape, resolving the FK public_ids through the
+    request-scoped session.
+
+    Mirrors ``_invite_to_out_from_session``.
+    """
+    from sqlalchemy import text as _sa_text
+
+    challenge_pub_row = db.execute(
+        _sa_text(
+            "SELECT public_id FROM community_challenges "
+            "WHERE id = :id"
+        ),
+        {"id": _resolve_challenge_internal_id_from_result(db, result_row)},
+    ).first()
+    if challenge_pub_row is None:
+        raise ValueError("result references a non-existent challenge")
+    challenge_pub_raw = challenge_pub_row[0]
+    challenge_pub = (
+        uuid.UUID(hex=challenge_pub_raw)
+        if isinstance(challenge_pub_raw, str)
+        else challenge_pub_raw
+    )
+
+    participant_pub = _resolve_participant_public_id_from_session(
+        db, result_row
+    )
+    return ChallengeResultOut(
+        public_id=result_row.public_id,
+        challenge_public_id=challenge_pub,
+        participant_public_id=participant_pub,
+        source_event_id=result_row.source_event_id,
+        idempotency_key=result_row.idempotency_key,
+        metric_value=result_row.metric_value,
+        verification_state=result_row.verification_state,
+        reason_code=result_row.reason_code,
+        nonce_expires_at=result_row.nonce_expires_at,
+        submitted_at=result_row.submitted_at,
+        decided_at=result_row.decided_at,
+    )
+
+
+def _resolve_challenge_internal_id_from_result(db: Session, result_row) -> int:
+    """Translate ``result_row`` → ``community_challenges.id`` via the
+    participant row."""
+    from sqlalchemy import text as _sa_text
+
+    challenge_id_row = db.execute(
+        _sa_text(
+            "SELECT challenge_id FROM community_challenge_participants "
+            "WHERE id = :pid"
+        ),
+        {"pid": result_row.participant_id},
+    ).first()
+    if challenge_id_row is None:
+        raise ValueError("result references a non-existent participant row")
+    return challenge_id_row[0]
+
+
+# ---------------------------------------------------------------------------
+# POST /community/challenges/{challenge_public_id}/results
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/{challenge_public_id}/results",
+    status_code=status.HTTP_200_OK,
+)
+def post_submit_result(
+    challenge_public_id: uuid.UUID,
+    request: Request,
+    current_user: CurrentUser,
+    payload: SubmitChallengeResultRequest,
+) -> ChallengeResultOut:
+    """Submit (or replay) a verified challenge result.
+
+    Body shape::
+
+        {
+          "metric_value": <int, 0..1_000_000>,
+          "source_event_id": "<string, 1..128>",
+          "idempotency_key": "<string, 1..128>" or null,
+          "submitted_version": <int> | null   // A5 measure-matrix
+        }
+
+    The response carries the result's wire shape (public_id,
+    ``verification_state`` computed server-side, ``reason_code``
+    structured audit). Replays of the same ``source_event_id``
+    hit the §A1 idempotency surface — the row is returned as-is
+    regardless of the new request.
+
+    The endpoint NEVER accepts a client-issued ``verified`` /
+    ``rank`` / ``verification_state`` field — the Pydantic
+    ``extra='forbid'`` rejects it at the body level (§A2 first
+    defense), the service-level
+    :func:`assert_no_client_issued_trust_state` rejects it
+    at the service level (§A2 second defense).
+    """
+    db_gen = _session_factory(request)
+    db = next(db_gen)
+    try:
+        try:
+            try:
+                actor_public_id = _resolve_caller_profile_public_id(
+                    db, current_user.id
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+            # The service needs the ACTOR PROFILE internal_id, not
+            # the public_id — resolve it through the same session
+            # so the lookup is request-bound. The column is
+            # stored as 32-char hex (no dashes) in SQLite — the
+            # helper above returns a ``uuid.UUID`` object whose
+            # ``.hex`` matches the stored format.
+            from sqlalchemy import text as _sa_text
+
+            actor_row = db.execute(
+                _sa_text(
+                    "SELECT id FROM community_profiles WHERE public_id = :pid"
+                ),
+                {"pid": actor_public_id.hex},
+            ).first()
+            if actor_row is None:
+                raise HTTPException(
+                    status_code=404, detail="caller has no community profile"
+                )
+            actor_profile_id = actor_row[0]
+
+            submitted_keys: set[str] = {
+                "metric_value",
+                "source_event_id",
+                "idempotency_key",
+            }
+            if payload.submitted_version is not None:
+                submitted_keys.add("submitted_version")
+            try:
+                result = submit_result(
+                    db,
+                    actor_profile_id=actor_profile_id,
+                    challenge_public_id=challenge_public_id,
+                    submitted_version=payload.submitted_version
+                    if payload.submitted_version is not None
+                    else 0,
+                    source_event_id=payload.source_event_id,
+                    metric_value=payload.metric_value,
+                    idempotency_key=payload.idempotency_key,
+                    submitted_payload_keys=submitted_keys,
+                    now=_now(),
+                )
+            except _ResultChallengeNotFound as exc:
+                db.rollback()
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except _ChallengeParticipantNotFound as exc:
+                db.rollback()
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            except _ResultChallengeInviteNotFound as exc:
+                db.rollback()
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
+            _commit_via(request, db)
+        except HTTPException:
+            raise
+        return _result_to_out_from_session(db, result)
     finally:
         try:
             next(db_gen, None)
