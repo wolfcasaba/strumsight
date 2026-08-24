@@ -8,10 +8,11 @@ import '../../foundations/ss_spacing.dart';
 /// where an accidental miss makes a setting toggle unreliably.
 ///
 /// The visible [Switch] never receives pointer events directly
-/// (`IgnorePointer(ignoringSemantics: false, ...)`): every tap anywhere in
-/// the row — including visually over the switch — goes through the same
-/// [InkWell], so there is exactly one code path that can flip [value] and no
-/// risk of the row and the switch double-toggling each other.
+/// (wrapped in [IgnorePointer], which preserves its semantics by default):
+/// every tap anywhere in the row — including visually over the switch —
+/// goes through the same [InkWell], so there is exactly one code path that
+/// can flip [value] and no risk of the row and the switch double-toggling
+/// each other.
 /// [MergeSemantics] combines the label and the switch's own `toggled`
 /// semantics into one accessible node spanning the whole row.
 ///
@@ -64,7 +65,6 @@ final class SsSwitchRow extends StatelessWidget {
                   ),
                   const SizedBox(width: SsSpacing.space2),
                   IgnorePointer(
-                    ignoringSemantics: false,
                     child: Switch(
                       value: value,
                       onChanged: onChanged == null ? null : (_) {},

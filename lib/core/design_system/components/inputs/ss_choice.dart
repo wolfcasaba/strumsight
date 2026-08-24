@@ -76,52 +76,58 @@ final class SsChoice<T> extends StatelessWidget {
 
   /// Each radio gets the same full-row touch target as [SsSwitchRow] (§5.4):
   /// the row's [InkWell] owns every tap, and the visible [Radio] never
-  /// receives pointer events directly.
+  /// receives pointer events directly. The group's selection state is
+  /// supplied through a [RadioGroup] ancestor rather than per-[Radio]
+  /// `groupValue`/`onChanged` (the latter pair is deprecated as of Flutter
+  /// 3.32) — each [Radio] only declares its own [SsChoiceOption.value].
   Widget _buildRadios(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final option in options)
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onChanged == null ? null : () => onChanged!(option.value),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minHeight: SsSemantics.minimumInteractiveDimension,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: SsSpacing.space4,
-                    vertical: SsSpacing.space2,
+    return RadioGroup<T>(
+      groupValue: value,
+      onChanged: onChanged == null
+          ? (_) {}
+          : (selected) {
+              if (selected != null) onChanged!(selected);
+            },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final option in options)
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onChanged == null
+                    ? null
+                    : () => onChanged!(option.value),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: SsSemantics.minimumInteractiveDimension,
                   ),
-                  child: MergeSemantics(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            option.label,
-                            style: theme.textTheme.bodyLarge,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: SsSpacing.space4,
+                      vertical: SsSpacing.space2,
+                    ),
+                    child: MergeSemantics(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              option.label,
+                              style: theme.textTheme.bodyLarge,
+                            ),
                           ),
-                        ),
-                        IgnorePointer(
-                          ignoringSemantics: false,
-                          child: Radio<T>(
-                            value: option.value,
-                            groupValue: value,
-                            onChanged: onChanged == null ? null : (_) {},
-                          ),
-                        ),
-                      ],
+                          IgnorePointer(child: Radio<T>(value: option.value)),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
