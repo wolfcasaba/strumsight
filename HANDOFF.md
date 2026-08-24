@@ -1,5 +1,82 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R15 KÉSZ — Lokalizációs resilience és content style — PR [#450](https://github.com/wolfcasaba/strumsight/pull/450), squash `d21d225f` (2026-08-24)
+
+Az en–hu felület **törésbiztonsága gépi őrökké** vált: fragmentum-szintű
+ARB-paritás (a hibaüzenet a `lib/l10n/{base,features}/*.arb` fájlt nevezi meg,
+nem csak azt, hogy „valahol hiányzik"), **nyelvhelyes** magyar többes szám,
+locale-tudatos formázók (`SsFormatters.{duration,bpm,cents,percent,date}`),
+pszeudo-lokalizációs teszt-mód (`ssPseudoLocalize` ≥1,6×, placeholder-őrző),
+beégetett-szöveg/mondat-összefűzés guard racsnival, és a
+`docs/ui/content-style.md` microcopy-útmutató. Normatív forrás **ADR
+[0424](docs/adr/0424-localization-resilience-contract.md)** — a kör ADR-t
+KAPOTT (a Ch13 R12–R14 mintájától eltérően: a Ch13 ADR-blokkban
+(0273–0289) nincs lokalizációs döntés, a foglaló `0424`-et adott).
+Implementer **`sonnet-impl`** (Claude Sonnet 5), orchesztrátor/reviewer
+**Claude Opus 5**. 72 gépi cella. **1 javító kör.**
+
+**A pre-flight fogta meg a kör végrehajthatatlanságát — implementer-futás és
+halt nélkül.** A brief 2026-08-15-én készült; az azóta merge-elt **ADR 0307
+§4** óta a `lib/l10n/app_{en,hu}.arb` **generált aggregátum**, a brief viszont
+pontosan ezeket sorolta fel ARB-írás céljára. Ez a hibaosztály **negyedszer**
+ütött (L365 E08-R12, L369 E08-R13 H3 self-heal, L396 E08-R20).
+
+A feloldás **szűkítés volt, nem tágítás** — és ez tudatosan tér el a §6-ban
+hagyott javaslattól („a brief `allowed_paths`-ának a FRAGMENTUMOKAT kell
+felsorolnia"): a fragmentumok felvétele **tágítás, azaz H3**, ami az
+orchestrátor hatáskörén kívül esik (ADR 0087 §2). Mérve viszont az is, hogy
+**nem volt mit felvenni**: a paritás minden szinten teljes (aggregátum
+1838/1838, mind az 5 szegmens 1:1), tehát nulla pótolandó hiány. A kör így
+**egyetlen ARB-fájlt sem szerkesztett** — és ezt a gate `L10n aggregate
+freshness OK` lépése függetlenül is igazolja.
+
+**A magyar nyelvtan mérve felülírta a brief szó szerinti olvasatát.** A
+`{count} nap` **helyes** magyar (számnév után a főnév egyes számban marad); egy
+naiv „a hu tükrözze az en ICU-pluralját" őr három nyelvtanilag helyes kulcsot
+(`streakV2{Current,Longest,Total}Semantics`) váltott volna pirosra. Az A5
+ezért négy nyelvhelyességi szabályt mér, köztük egy pozitív cellát: a hu
+kimenet `count=1` és `count=3` mellett csak a számjegyben térhet el.
+
+**A review három MAJOR-t talált ZÖLD gate mellett — mindhárom üres vagy vak
+cella volt** (`docs/reviews/e13-r15-review.md`), és mindhárom saját
+valódi-sértés próbával kimérve:
+
+- **F1** — az A2 guard nem látta a `'$count ' + l10n.x` alakot, vagyis pontosan
+  azt, amit a brief §5.1 és az ADR 0424 §2.3 **néven nevez**. A `_classify`
+  csak a string-literál belsejét nézte; a `+` utáni operandust soha.
+- **F2** (a súlyosabb) — a guard sor-alapú volt, és **a gate SAJÁT `dart
+  format` lépése** írta át a detektált sértést nem detektálttá. Mérve
+  ugyanazon a sértésen: egysoros `Text('Save changes')` → PIROS; ugyanaz két
+  szokványos argumentummal, `dart format` után → **ZÖLD**. Vagyis minden
+  beégetett szöveg, amit a formázó tördel (a valós komponens-kód többsége),
+  átcsúszott.
+- **F3** — az A6 három küszöb-cellája (46/52/64 karakter) **üres** volt: a
+  hordozó `SsFieldError` (`Row` + `Expanded`) szerkezetileg képtelen
+  túlcsordulni — mérve **4000 karakteren is** `takeException() == null`.
+
+A javító kör mindhármat zárta, és **production kódot nem érintett**: a
+javítás végig a mércén történt. A guard most a fájl EGÉSZÉN fut,
+hossz- és sortörés-őrző komment-kiszűréssel (a racsni sorszámai maradnak
+helyesek); az A6 egy közbeiktatott `Column`-nal ad a `RenderFlex`-nek
+függőleges fő tengelyt, plusz **falszifikációs cellát** kapott. A reviewer
+mindhárom próbáját ÚJRAFUTTATTA: F1 → PIROS (A2), F2 → PIROS (A3), és egy
+szimulált clipping-regresszió a production `SsFieldError`-on szintén PIROSRA
+váltotta a suite-ot.
+
+1 új MINOR follow-upra (**F6**): az A6 flex-**túlcsordulást** mér, nem belső
+**csonkolást** — egy `maxLines`/ellipsis mögé rejtett szöveg ma átmenne a három
+küszöb-cellán.
+
+**Landolás négy fordulóban, párhuzamos sáv mellett.** Az E09-R26 sávja közben
+háromszor mozdította a `main`-t, ezért a `tools/round-land.sh` háromszor kért
+új exact-SHA CI-t (ez a §4.1 NORMÁL útja, nem hiba). Egy fordulóban a
+kombinált-HEAD gate **pirosat** adott — a hiba az E09-R26 fájljában
+(`report_content_sheet.dart`, hiányzó `reportSheetCategory*` getterek) volt,
+azaz a munkapéldány **gitignore-olt, elavult** `app_localizations.dart`-ja;
+`tools/prepare-flutter-generated.sh` után zöld. Nem H5/H7/H8: a kulcsok a
+merge-elt ARB-forrásban végig megvoltak. Exact `5111a147`: Full Gate
+32769578246 + Router CI 32769567169 mind success.
+
 ## ✅ E09-R26 KÉSZ — Felhasználói report és azonnali safety flow — PR [#451](https://github.com/wolfcasaba/strumsight/pull/451), squash `df0ad3dd` (2026-08-24)
 
 Report/hide/mute/block az ELSŐ darabja: `community_reports` tábla (target
@@ -6698,6 +6775,22 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-24):** `main` @ `d21d225f` — E13-R15 Lokalizációs
+resilience és content style, PR
+[#450](https://github.com/wolfcasaba/strumsight/pull/450), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** (3 MAJOR, mind ZÖLD
+gate mellett: az A2 guard vak volt a `'$count ' + l10n.x` alakra; a guard
+sor-alapú volt, így a gate SAJÁT `dart format` lépése rejtette el a beégetett
+szöveget; az A6 három küszöb-cellája üres volt, mert a hordozó 4000 karakteren
+sem csordult túl — a javítás **production kódot nem érintett**). Review
+APPROVED a javító kör után, 0 nyitott BLOCKER/MAJOR, 1 MINOR (F6) follow-upra
+(`docs/reviews/e13-r15-review.md`). ADR
+[0424](docs/adr/0424-localization-resilience-contract.md) a pre-flight
+commitban. Exact `5111a147`: Full Gate 32769578246 + Router CI 32769567169
+mind success. Post-merge `tools/round-gate.sh` a friss `main`-en (`d21d225f`)
+zöld. Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-24):** `main` @ `df0ad3dd` — E09-R26 Felhasználói
 report és azonnali safety flow, PR
 [#451](https://github.com/wolfcasaba/strumsight/pull/451), squash-merge.
@@ -7472,6 +7565,24 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E13-R15 — Lokalizációs resilience és content style** (PR
+[#450](https://github.com/wolfcasaba/strumsight/pull/450), squash `d21d225f`,
+ADR [0424](docs/adr/0424-localization-resilience-contract.md)). Fragmentum-
+szintű ARB-paritás fájlra mutató hibaüzenettel, **nyelvhelyes** magyar
+többes-szám mérce (a `{count} nap` HELYES — a tükrözés-őr 3 helyes kulcsot
+bukatott volna), `SsFormatters` (`package:intl`, tiszta függvények),
+`ssPseudoLocalize` teszt-mód, A2/A3 guard racsnival (1 befagyasztott sértés:
+`ss_validation_summary.dart:90`, a hívási hely scope-on kívül), és
+`docs/ui/content-style.md`. **A kör egyetlen ARB-fájlt sem szerkesztett** — a
+pre-flight mérte, hogy a paritás már teljes (1838/1838, mind az 5 szegmens
+1:1), és hogy a brief a GENERÁLT aggregátumot sorolta fel forrásként (ADR 0307
+§4; L365/L369/L396 negyedik ismétlése). **1 javító kör** (3 MAJOR, mind zöld
+gate mögött: `+`-összefűzés vak folt, `dart format`-tal elrejtett beégetett
+szöveg, üres A6 küszöb-cellák), 0 nyitott lelet a merge után, 1 MINOR (F6:
+az A6 túlcsordulást mér, nem csonkolást) follow-upra. Exact `5111a147`: Full
+Gate 32769578246 + Router CI 32769567169 mind success. Részletesen a fejléc
+✅-blokkban.
 
 **E09-R26 — Felhasználói report és azonnali safety flow** (PR
 [#451](https://github.com/wolfcasaba/strumsight/pull/451), squash `df0ad3dd`,
@@ -8442,13 +8553,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-> **Frissítve 2026-08-24 (E13-R14 után).** A **Ch13 sáv következő köre:
-> `E13-R15` — Lokalizációs ellenálló-képesség**
-> (`docs/rounds/e13-r15-localization-resilience.md`, engine a queue-ban
-> `sonnet-impl`, előre kiosztott ADR **`nincs`** — a queue `adr` oszlopa
-> üres, tehát a kör ADR-t nem kap kiosztva; ha a pre-flight mégis normatív
-> döntést talál, az `tools/round-slots.py reserve-adr`-rel foglalandó, NEM
-> `ls docs/adr | tail`-lel).
+> **Frissítve 2026-08-24 (E13-R15 után).** A **Ch13 sáv következő köre:
+> `E13-R16` — Launch és onboarding**
+> (`docs/rounds/e13-r16-launch-and-onboarding.md`, engine a queue-ban
+> `sonnet-impl`, előre kiosztott ADR **`0281`** — a queue `adr` oszlopa
+> szerint ez a kör KAP kiosztott ADR-t, tehát a pre-flight NE foglaljon újat,
+> és a `0281` (permission primer és honest first win) már a `main`-en van:
+> olvasd el, ne írd újra).
 > Az Epic-9 sáv az **E09-R27 — Moderation queue enforcement és appeal**
 > (`docs/rounds/e09-r27-moderation-queue-enforcement-and-appeal.md`, engine a
 > queue-ban `minimax`, előre kiosztott ADR **`0415`**) körrel halad tovább —
@@ -8459,17 +8570,35 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > moderation-queue biztonságosan futtathat `json.loads`-ot rajta, nincs
 > csonkított-érvénytelen JSON kockázat.
 
-**A Kör 14 mért horgai, amelyekre a Kör 15 ÉPÍT — a pre-flight NE derítse fel
+**A Kör 15 mért horgai, amelyekre a Kör 16 ÉPÍT — a pre-flight NE derítse fel
 újra:**
 
-- **Az ARB-forrás a fragmentum, az aggregátum GENERÁLT.** A
-  `lib/l10n/app_{en,hu}.arb` generált aggregátum (ADR 0307 §4,
-  `tool/gen_l10n_segments.dart`); a forrás a `lib/l10n/base/app_<locale>.arb`
-  és a `lib/l10n/features/<feature>_<locale>.arb`. Egy lokalizációs körnek ez
-  **közvetlenül a tárgya** — a brief `allowed_paths`-ának a FRAGMENTUMOKAT
-  kell felsorolnia, és a gate ELŐTT `dart run tool/gen_l10n_segments.dart
-  --write` kell. Ez a hibaosztály már kétszer ütött ([L469](docs/LESSONS.md),
-  E13-R13; E13-R14/§0.0 D2, ahol a kör a kulcsfelvételt KIKERÜLTE).
+- **Ha a kör ÚJ ARB-kulcsot vesz fel, a brief `allowed_paths`-ának a
+  FRAGMENTUMOT kell felsorolnia** (`lib/l10n/features/<feature>_{en,hu}.arb`),
+  mert a `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum (ADR 0307 §4,
+  `tool/gen_l10n_segments.dart`). Ez a hibaosztály **négyszer** ütött
+  (L365, L369, L396, [L478](docs/LESSONS.md)). **Az orchestrátor ezt a
+  pre-flightban NEM tudja megjavítani**: a fragmentum felvétele *tágítás*,
+  azaz H3 (ADR 0087 §2) — csak *szűkíteni* lehet. Vagyis a brief-írónak kell
+  helyesen felsorolnia; ha nem tette, a kör vagy ARB-írás nélkül teljesíthető
+  (mint az R15), vagy H3 halt. **Az onboarding-kör (R16) minden bizonnyal
+  ÚJ szöveget kér** → a briefjében a fragmentum-útvonalnak benne kell lennie,
+  KÜLÖN a generált aggregátumtól.
+- **`SsFormatters` és `ssPseudoLocalize` már létezik** (`lib/core/i18n/`,
+  exportálva a `design_system/public.dart`-ból): időtartam (tizedes perc!),
+  BPM, cents, százalék, dátum — `package:intl`, tiszta függvények, explicit
+  `localeName`. Ne írj újat; `m:ss` alakú időtartamhoz viszont KELL egy új
+  formázó (F5 NOTE).
+- **Az A2/A3 beégetett-szöveg guard ÉL** a
+  `design_system/{components,accessibility,layouts,motion}/**` fákon, pontos
+  halmaz-egyenlőségű racsnival. Egy új komponens automatikusan a hatókörbe
+  kerül. Ha egy új kör beégetett szöveget hagy bent, a gate PIROS — a
+  `frozenViolations` bővítése csak akkor legitim, ha a hívási hely a kör
+  `allowed_paths`-án kívül van, és az indok a listában szerepel.
+- **Az A6 clipping-mérce túlcsordulást mér, nem csonkolást** (F6 MINOR): egy
+  `maxLines`/ellipsis mögé rejtett szöveg átmegy. Ha az onboarding-kör
+  szöveg-hosszra érzékeny, a `RenderParagraph.didExceedMaxLines` alapú mérce a
+  következő lépés.
 - **A design system IMPORTÁLHATJA az `AppLocalizations`-t** — mérve 9 DS-fájl
   teszi (8 `components/`+`documentation/`, és az E13-R14 óta a
   `foundations/ss_semantics.dart` is). Nem kell hívó-oldali `String`
