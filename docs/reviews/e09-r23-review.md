@@ -4,11 +4,11 @@ Brief: docs/rounds/e09-r23-leaderboards-and-opt-in-competition.md
 ADR: docs/adr/0418-leaderboards-and-opt-in-competition.md
 Diff: `git diff origin/main...minimax/e09-r23-leaderboards-and-opt-in-competition`
 Reviewer: Claude Sonnet 5 (orchestrátor) + `security-reviewer` subagent (risk=high) · Dátum: 2026-08-24
-Verdikt: CHANGES REQUIRED (1 MINOR)
+Verdikt: **APPROVED** (javító kör után, `c4edb7b1`)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 0 · MINOR: 1 · NOTE: 2
+BLOCKER: 0 · MAJOR: 0 · MINOR: 1 (ZÁRVA `c4edb7b1`) · NOTE: 2 (F2 ZÁRVA, F3 nem blokkoló megfigyelés)
 
 Gate-újrafuttatás SAJÁT kézzel, izolált klónban (`/tmp/review-e09-r23`,
 HEAD `1d4bb87d`): **minden gate zöld** (format, analyze, célzott Flutter-teszt,
@@ -17,6 +17,39 @@ architecture, secrets, l10n, backend ruff format+check, TELJES backend pytest
 security-review-e09-r23`) SAJÁT mutation-próbákkal (nem az implementer
 tesztkészletére hagyatkozva) ellenőrizte az A1/A3/A4/A6 invariánsokat és a
 scope-ot — mindegyik ÁLLTA a próbát, ld. lent.
+
+## Javító kör (`c4edb7b1`) — F1/F2 zárása
+
+**F1 zárva.** `_build_base_query` egy `include_self: bool = False` paramétert
+kapott — `get_own_rank` mindkét lekérdezésén (a sor-keresés ÉS a rank-számláló
+query) `include_self=True`-val hívja, ami a follow-EXISTS feltételt egy
+`OR CommunityProfile.id = viewer_profile_internal_id` ággal bővíti. A publikus
+lap-lekérdezés (`get_leaderboard_page`) VÁLTOZATLANUL `include_self` nélkül fut
+— az A4 invariáns ott nem sérül. **Reviewer saját valódi-sértés próbája:** a
+fix ELŐTTI (`1d4bb87d`) service-fájlt visszahelyeztem egy izolált klónba, az ÚJ
+`test_own_rank_friends_challenge_returns_self_even_without_self_follow` teszt
+PIROSAT adott (`FAILED`), majd a fix visszaállítása után ZÖLD — a teszt
+TÉNYLEG méri a hibát, nem véletlenül zöld. A régi
+`test_own_rank_returns_null_when_opted_out` (opt-out eset) VÁLTOZATLANUL zöld
+maradt — a fix nem tágította a láthatóságot máshol.
+
+**F2 zárva.** A `leaderboards.py` docstring `"preferred_in"/"preferred_out"` →
+`"opted_in"/"opted_out"`-ra javítva, egyezik a `set_opt_in` tényleges
+visszatérési értékével.
+
+**Gate újrafuttatva SAJÁT kézzel, MÁSODIK izolált klónban**
+(`/tmp/review-e09-r23-fix1`, HEAD `c4edb7b1`): minden gate zöld (format,
+analyze, célzott Flutter-teszt, architecture, secrets, l10n, backend ruff
+format+check, TELJES backend pytest — 647 teszt, 0 hiba, 13/13 zöld a
+`test_leaderboard_service.py`-ban). Scope-audit `--base c8c0a3fa` (a review-
+commit utáni bázis) → **OK**, 4 changed path.
+
+**Folyamat-jegyzet (nem érinti a kód-verdiktet):** az első javító-kör dispatch
+egy MELLÉKESEN, a munkapéldány SAJÁT git fájába helyezett leletlista-fájl
+(`.pipeline-findings-E09-R23.md`, az orchestrátor saját hibája, NEM az
+implementeré) miatt hamis `scope_audit=VIOLATION`/`stopped` jelzést kapott — a
+fájl eltávolítása után a scope-audit tisztán `OK`-t adott, az implementer
+tényleges commitja (`c4edb7b1`) mindvégig csak a 4 releváns fájlt érintette.
 
 ## Acceptance criteria
 
@@ -63,7 +96,7 @@ saját pre-flight-artefaktumom, nem az implementer diffje. A
 - **Ellenőrzés:** egy ÚJ teszt-eset (`friends` típusú challenge, opt-in,
   verified résztvevő, `get_own_rank` a résztvevő saját public_id-jével hívva)
   a javítás ELŐTT PIROS, utána ZÖLD.
-- **Státusz:** OPEN — javító kör dispatch-elve.
+- **Státusz:** **FIXED** (`c4edb7b1`) — reviewer saját visszasértés-próbával megerősítve.
 
 ### F2 — NOTE — Router docstring elavult szóhasználat
 
@@ -73,7 +106,7 @@ saját pre-flight-artefaktumom, nem az implementer diffje. A
 - **Hatás:** kozmetikai, nincs futásidejű hatás.
 - **Javítás:** a docstring frissítése a tényleges értékekre (a javító körrel
   egyszerre elvégezhető, nem növeli érdemben a diffet).
-- **Státusz:** OPEN — javító körben javasolt, nem blokkol.
+- **Státusz:** **FIXED** (`c4edb7b1`).
 
 ### F3 — NOTE — Nem-`friends` scope-ok teljes opt-in halmaza mindenki számára olvasható
 
@@ -98,11 +131,12 @@ saját pre-flight-artefaktumom, nem az implementer diffje. A
 | secrets | zöld (3586 fájl) | ✅ |
 | l10n | zöld | ✅ |
 | backend ruff format+check | zöld | ✅ |
-| backend pytest (teljes, 646 teszt) | zöld | ✅ |
-| CI (teljes suite + property + APK) | — | dispatch a fix-kör után |
+| backend pytest (teljes, 646→647 teszt a javító kör után) | zöld | ✅ |
+| CI (teljes suite + property + APK) | — | dispatch review után, merge előtt |
 
 ## Merge-döntés
 
-Az ADR 0052 szerint: nyitott MINOR (F1) van, tehát a javító kör a lánc NORMÁL
-útja (user-döntés 2026-07-31) — MiniMax M3 dispatch-elve a leletlistával
-(F1 + F2). Merge csak a javítás + friss gate + CI zöld UTÁN.
+Az ADR 0052 szerint: minden gate zöld ÉS nincs nyitott BLOCKER/MAJOR/MINOR →
+merge. F1 és F2 zárva (`c4edb7b1`), reviewer saját kézzel megerősítve két
+izolált klónban. CI-dispatch az exact-SHA `c4edb7b1`-en következik; merge
+csak a CI zöld futása UTÁN.
