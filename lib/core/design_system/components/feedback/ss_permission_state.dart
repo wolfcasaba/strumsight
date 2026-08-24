@@ -22,6 +22,11 @@ const _iconByKind = {
 ///
 /// [rationale] and [consequence] are supplied by the caller: only the screen
 /// asking for the permission knows why it needs it.
+///
+/// Accepts the same full set of [SsFailureActionKind] callbacks as
+/// [SsFailureState]. A callback left null for an action [presentation]
+/// produced means no button is built for that action at all — a dead
+/// (permanently disabled) control is never rendered.
 final class SsPermissionState extends StatelessWidget {
   const SsPermissionState({
     super.key,
@@ -31,6 +36,8 @@ final class SsPermissionState extends StatelessWidget {
     required this.presentation,
     this.onRetry,
     this.onOpenSettings,
+    this.onContinueOffline,
+    this.onContactSupport,
   });
 
   final SsPermissionKind kind;
@@ -39,6 +46,8 @@ final class SsPermissionState extends StatelessWidget {
   final SsFailurePresentation presentation;
   final VoidCallback? onRetry;
   final VoidCallback? onOpenSettings;
+  final VoidCallback? onContinueOffline;
+  final VoidCallback? onContactSupport;
 
   @override
   Widget build(BuildContext context) {
@@ -75,22 +84,25 @@ final class SsPermissionState extends StatelessWidget {
             ),
             const SizedBox(height: SsSpacing.space4),
             for (final action in presentation.actions)
-              Padding(
-                padding: const EdgeInsets.only(top: SsSpacing.space2),
-                child: FilledButton(
-                  key: ValueKey('ss-permission-state-${action.kind.name}'),
-                  onPressed: switch (action.kind) {
-                    SsFailureActionKind.retry => onRetry,
-                    SsFailureActionKind.openSettings => onOpenSettings,
-                    SsFailureActionKind.continueOffline ||
-                    SsFailureActionKind.contactSupport => null,
-                  },
-                  child: Text(action.label),
+              if (_callbackFor(action.kind) case final onPressed?)
+                Padding(
+                  padding: const EdgeInsets.only(top: SsSpacing.space2),
+                  child: FilledButton(
+                    key: ValueKey('ss-permission-state-${action.kind.name}'),
+                    onPressed: onPressed,
+                    child: Text(action.label),
+                  ),
                 ),
-              ),
           ],
         ),
       ),
     );
   }
+
+  VoidCallback? _callbackFor(SsFailureActionKind kind) => switch (kind) {
+    SsFailureActionKind.retry => onRetry,
+    SsFailureActionKind.openSettings => onOpenSettings,
+    SsFailureActionKind.continueOffline => onContinueOffline,
+    SsFailureActionKind.contactSupport => onContactSupport,
+  };
 }

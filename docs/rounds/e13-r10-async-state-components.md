@@ -440,4 +440,72 @@ retryable: true)'`) és az A7 cella is (a locale-eltérés eltűnt, mert a
 test/core/design_system/feedback/async_state_test.dart` — MINDEN GATE ZÖLD
 (format, analyze, mindkét teszt, architecture, secrets, l10n).
 
+### Javító kör — review-leletek zárása (`docs/reviews/e13-r10-review.md`)
+
+**F1 (MAJOR) — `ss_permission_state.dart`.** A `continueOffline`/`contactSupport`
+ágon beégetett `onPressed: null`-t adott a widget, és nem is volt hozzá
+callback-paraméter — halott gomb egy elérhető úton
+(`MicrophonePermissionState.unavailable.failure!` → mapping `[contactSupport]`
+→ kirendelt, örökre letiltott gomb). Javítás: `SsPermissionState` megkapta a
+`SsFailureState`-tel azonos teljes callback-készletet
+(`onContinueOffline`, `onContactSupport` is), és a `for` ciklus egy
+`_callbackFor` switch + `if (_callbackFor(action.kind) case final onPressed?)`
+mintaillesztéssel csak azokra az akciókra épít gombot, amelyekhez VAN bekötött
+callback — nincs több beégetett `null`.
+
+**F2 (MINOR) — `ss_failure_state.dart`.** Ugyanaz a hiba enyhébb formában: ha
+a mapping előállított egy akciót, de a hívó nem adott hozzá callbacket,
+letiltott gomb jelent meg. Javítás: azonos minta — a `for` ciklus most a
+`SsFailureState`-ben is kihagyja azt az akciót, amelyhez a hívó nem adott
+callbacket (korábban minden `presentation.actions` elemre épített gombot,
+függetlenül a callback meglététől).
+
+**Kötött invariáns mindkettőre:** egy kirendelt akciógomb `onPressed`-je SOHA
+nem `null` — vagy a komponens tud bekötni egy akció-fajtát és a gomb ÉL, vagy
+nem tud, és akkor nem épül gomb. Ezt három ŐR-cella zárja
+(`async_state_test.dart`, „Javító kör F1/F2" csoport):
+
+1. *„fully wired … never render an action button with a null onPressed"* —
+   mind a négy `SsFailureActionKind`-ra (retry/openSettings/continueOffline/
+   contactSupport, egy-egy reprezentatív valós `AppFailure`-lel), teljesen
+   bekötött `SsFailureState` ÉS `SsPermissionState` mellett minden kirendelt
+   `FilledButton.onPressed` nem `null`. **RED-bizonyíték:** a régi
+   `SsPermissionState` konstruktorral (az `onContinueOffline`/
+   `onContactSupport` paraméterek hozzáadása ELŐTT) ez a teszt fordítási
+   hibával bukik (`No named parameter with the name 'onContinueOffline'`) —
+   mérve: a widget fájlokat ideiglenesen `git checkout HEAD --`-del a
+   javítás előtti állapotra visszaállítottam, lefuttattam, majd
+   visszaállítottam a javítást.
+2. *„permission.unavailable renders exactly one LIVE action…"* — a
+   `MicrophonePermissionState.unavailable.failure!` valódi presentationjével
+   rendert `SsPermissionState` pontosan egy `FilledButton`-t ad
+   (`ss-permission-state-contactSupport`), `onPressed` nem `null`, és tap
+   meghívja a callbacket. Ez a §5.5 „minden állapotnak van következő lépése"
+   előírását a régi kód ellen bizonyítja: a régi kódon ez a gomb létezett,
+   de `onPressed == null` volt (F1 pontosan ezt írta le).
+3. *„an action the mapping produced but the caller left unwired renders no
+   button at all"* — `permanentlyDenied` presentation, callback NÉLKÜL
+   hívott `SsFailureState`/`SsPermissionState`: `find.byType(FilledButton)`
+   `findsNothing`. Ez a régi `SsFailureState`-en pirosra váltott volna (a
+   régi kód mindig épített gombot, `onPressed: null`-lal).
+
+**F3 (MINOR) — `ss_async_state.dart`.** Az `offline`/`syncPending`/`degraded`
+`_CachedContentBanner`-je `Expanded`-et használ, ami kötött magasságú szülőt
+kíván — korlátlan magasságban (pl. közvetlenül egy `SingleChildScrollView`
+gyermekeként) dob. A viselkedést NEM változtattam (a komponens változatlanul
+`Scaffold`-body-szerű, bounded-height környezetet vár — ez már a §0 katalógus-
+demóban is így kellett kezelni, `SizedBox`-ba csomagolva), hanem a korlátot
+kimondtam a `SsAsyncState` osztály doc-commentjében: bounded-height ancestor
+kell, és `SingleChildScrollView` közvetlen gyermekeként dob. Az állítás igaz
+a meglévő teszt-lefedettség mellett (minden `async_state_test.dart` eset
+`Scaffold(body: …)`-ban, tehát bounded magasságban fut) — nem vezettem be új,
+tesztben nem bizonyított állítást.
+
+**Gate újra (javító kör után):** `tools/round-gate.sh
+test/core/design_system/feedback/failure_presentation_test.dart
+test/core/design_system/feedback/async_state_test.dart` — MINDEN GATE ZÖLD
+(format, analyze, `failure_presentation_test.dart` 12/12, `async_state_test.dart`
+12/12 — a 9 eredeti + 3 új ŐR-cella —, architecture 12 allowlisted deviation,
+secrets 0 lelet, l10n aggregate friss, en→hu parity 1828 üzenet).
+
 ## 11. Review — a Claude tölti ki

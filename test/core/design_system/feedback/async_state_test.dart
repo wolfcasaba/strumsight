@@ -251,4 +251,143 @@ void main() {
       });
     }
   });
+
+  group('Javító kör F1/F2 — an assigned action button is never a dead '
+      'control', () {
+    final representativeFailures = <SsFailureActionKind, AppFailure>{
+      SsFailureActionKind.retry: const AudioFailure(),
+      SsFailureActionKind.openSettings: const PermissionFailure(
+        code: FailureCode.permissionMicrophoneDenied,
+        retryable: false,
+      ),
+      SsFailureActionKind.continueOffline: const NetworkFailure(),
+      SsFailureActionKind.contactSupport: const UnknownFailure(),
+    };
+
+    testWidgets(
+      'fully wired SsFailureState and SsPermissionState never render an '
+      'action button with a null onPressed, for every SsFailureActionKind',
+      (tester) async {
+        for (final entry in representativeFailures.entries) {
+          final presentation = SsFailurePresentation.from(en, entry.value);
+          expect(
+            presentation.hasAction(entry.key),
+            isTrue,
+            reason: entry.key.name,
+          );
+
+          await pumpThemed(
+            tester,
+            themes['dark']!,
+            Column(
+              children: [
+                SsFailureState(
+                  presentation: presentation,
+                  onRetry: () {},
+                  onOpenSettings: () {},
+                  onContinueOffline: () {},
+                  onContactSupport: () {},
+                ),
+                SsPermissionState(
+                  kind: SsPermissionKind.microphone,
+                  rationale: 'StrumSight needs the mic.',
+                  consequence: 'Without it, chord detection cannot run.',
+                  presentation: presentation,
+                  onRetry: () {},
+                  onOpenSettings: () {},
+                  onContinueOffline: () {},
+                  onContactSupport: () {},
+                ),
+              ],
+            ),
+          );
+
+          final buttons = tester.widgetList<FilledButton>(
+            find.byType(FilledButton),
+          );
+          expect(buttons, isNotEmpty, reason: entry.key.name);
+          for (final button in buttons) {
+            expect(button.onPressed, isNotNull, reason: entry.key.name);
+          }
+        }
+      },
+    );
+
+    testWidgets(
+      'permission.unavailable renders exactly one LIVE action, and tapping '
+      'it invokes the caller callback (§5.5 — every state has a next step)',
+      (tester) async {
+        final failure = MicrophonePermissionState.unavailable.failure!;
+        final presentation = SsFailurePresentation.from(en, failure);
+        expect(presentation.actions, hasLength(1));
+        expect(
+          presentation.hasAction(SsFailureActionKind.contactSupport),
+          isTrue,
+        );
+
+        var tapped = false;
+        await pumpThemed(
+          tester,
+          themes['dark']!,
+          SsPermissionState(
+            kind: SsPermissionKind.microphone,
+            rationale: 'StrumSight needs the mic to hear you play.',
+            consequence: 'Without it, chord detection cannot run.',
+            presentation: presentation,
+            onContactSupport: () => tapped = true,
+          ),
+        );
+
+        expect(find.byType(FilledButton), findsOneWidget);
+        final button = tester.widget<FilledButton>(
+          find.byKey(const ValueKey('ss-permission-state-contactSupport')),
+        );
+        expect(button.onPressed, isNotNull);
+
+        await tester.tap(
+          find.byKey(const ValueKey('ss-permission-state-contactSupport')),
+        );
+        expect(tapped, isTrue);
+      },
+    );
+
+    testWidgets(
+      'an action the mapping produced but the caller left unwired renders '
+      'no button at all — never a permanently disabled one',
+      (tester) async {
+        final failure = MicrophonePermissionState.permanentlyDenied.failure!;
+        final presentation = SsFailurePresentation.from(en, failure);
+        expect(
+          presentation.hasAction(SsFailureActionKind.openSettings),
+          isTrue,
+        );
+
+        await pumpThemed(
+          tester,
+          themes['dark']!,
+          Column(
+            children: [
+              SsFailureState(presentation: presentation),
+              SsPermissionState(
+                kind: SsPermissionKind.microphone,
+                rationale: 'StrumSight needs the mic.',
+                consequence: 'Without it, chord detection cannot run.',
+                presentation: presentation,
+              ),
+            ],
+          ),
+        );
+
+        expect(find.byType(FilledButton), findsNothing);
+        expect(
+          find.byKey(const ValueKey('ss-failure-state-openSettings')),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const ValueKey('ss-permission-state-openSettings')),
+          findsNothing,
+        );
+      },
+    );
+  });
 }

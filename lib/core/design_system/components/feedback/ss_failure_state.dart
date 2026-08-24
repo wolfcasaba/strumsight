@@ -6,9 +6,11 @@ import '../../foundations/ss_typography.dart';
 import 'failure_presentation.dart';
 
 /// Renders an [SsFailurePresentation] — title, message and exactly the
-/// actions the mapping decided (§5.1, §5.3). A callback left null for an
-/// action the presentation never produced is simply never invoked: no
-/// [SsFailureActionKind.retry] entry means no retry button is built at all.
+/// actions the mapping decided (§5.1, §5.3). No [SsFailureActionKind.retry]
+/// entry means no retry button is built at all — and the same holds the
+/// other way round: if the mapping DID produce an action but the caller left
+/// its callback null, that button is skipped too. A rendered button's
+/// `onPressed` is never null; there is no permanently disabled control.
 final class SsFailureState extends StatelessWidget {
   const SsFailureState({
     super.key,
@@ -57,11 +59,12 @@ final class SsFailureState extends StatelessWidget {
               alignment: WrapAlignment.center,
               children: [
                 for (final action in presentation.actions)
-                  FilledButton(
-                    key: ValueKey('ss-failure-state-${action.kind.name}'),
-                    onPressed: _callbackFor(action.kind),
-                    child: Text(action.label),
-                  ),
+                  if (_callbackFor(action.kind) case final onPressed?)
+                    FilledButton(
+                      key: ValueKey('ss-failure-state-${action.kind.name}'),
+                      onPressed: onPressed,
+                      child: Text(action.label),
+                    ),
               ],
             ),
           ],

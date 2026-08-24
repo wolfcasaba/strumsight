@@ -20,6 +20,14 @@ enum SsAsyncStatus {
 /// mounted under a banner (§5.2). Every other status replaces it outright.
 /// All slots are required: a caller cannot wire up [SsAsyncState] without
 /// deciding what every one of them looks like.
+///
+/// The [offline]/[syncPending]/[degraded] layout lays [content] out below
+/// its banner with `Expanded`, so it requires a **bounded-height** ancestor
+/// (a `Scaffold` body, an `Expanded`/`Flexible` slot in a `Column`, a sized
+/// box). Placing [SsAsyncState] directly inside an unbounded-height ancestor
+/// — e.g. as the direct child of a `SingleChildScrollView` — throws for
+/// those three statuses. Give it a fixed height (or wrap it in `Expanded`
+/// inside a bounded `Column`) when embedding it in a scrollable screen.
 final class SsAsyncState extends StatelessWidget {
   const SsAsyncState({
     super.key,
