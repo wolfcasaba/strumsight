@@ -515,6 +515,25 @@ def get_or_create_case(
 # ---------------------------------------------------------------------------
 
 
+def _automation_to_state(*, confidence: float) -> str:
+    """Map automation ``confidence`` to a destination case state.
+
+    Extracted as a private helper so the §6.1 valódi-sértés próba
+    can monkey-patch the mapping (a bad implementation could widen
+    the set; the explicit ``AUTOMATION_ALLOWED_TO_STATES`` guard
+    in :func:`record_automation_signal` must still catch it).
+
+    The default mapping is intentionally narrow — ``confidence``
+    is an audit signal, not a decision basis. High confidence
+    routes to human review (``pending_review``); low confidence
+    routes to ``limited`` visibility. The Kör 19 ADR 0412 §D5
+    precedent — the triage function NEVER writes a final state.
+    """
+    if confidence >= 0.8:
+        return MODERATION_CASE_STATE_PENDING_REVIEW
+    return MODERATION_CASE_STATE_LIMITED
+
+
 def record_automation_signal(
     db: Session,
     case: CommunityModerationCase,
@@ -527,15 +546,17 @@ def record_automation_signal(
     """Record an automation signal against ``case``.
 
     **NO ``to_state`` parameter** (D4 / A4). The destination state
-    is computed inside the function body:
-
-    * ``confidence >= 0.8`` → ``pending_review``.
-    * ``confidence < 0.8`` → ``limited``.
+    is computed inside the function body via
+    :func:`_automation_to_state` — a small, isolated helper that
+    maps ``confidence`` to ``{limited, pending_review}``.
 
     The destination is ALWAYS one of
     :data:`AUTOMATION_ALLOWED_TO_STATES`. A future maintainer who
     tries to widen the set will fail the A4 measure-matrix cell:
-    the function literally cannot reach a CLOSED state.
+    the function literally cannot reach a CLOSED state — the
+    explicit guard at the end of this function raises
+    :class:`AutomationCannotEnforce` if the computed ``to_state``
+    falls outside :data:`AUTOMATION_ALLOWED_TO_STATES`.
 
     The function NEVER writes a row of ``action_type =
     "moderator_decision"``. The audit row is
@@ -545,11 +566,7 @@ def record_automation_signal(
     if not (0.0 <= confidence <= 1.0):
         raise ValueError(f"confidence out of range: {confidence!r}")
 
-    to_state = (
-        MODERATION_CASE_STATE_PENDING_REVIEW
-        if confidence >= 0.8
-        else MODERATION_CASE_STATE_LIMITED
-    )
+    to_state = _automation_to_state(confidence=confidence)
 
     from_state = case.state
     if from_state not in ALLOWED_TRANSITIONS:

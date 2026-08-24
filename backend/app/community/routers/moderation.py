@@ -127,16 +127,21 @@ def _case_summary(case: CommunityModerationCase) -> dict[str, object]:
     }
 
 
-def _action_summary(action) -> dict[str, object]:
+def _action_summary(action, case_public_id: uuid.UUID) -> dict[str, object]:
     """Build the §6 A7 wire shape for an action audit row.
 
     The ``actor_user_id`` field is the user who CARRIED OUT the
     moderation action (a moderator), NOT the reporter. The reporter
     identity (Kör 26 ``CommunityReport``) is never joined in here.
+
+    ``case_public_id`` is passed in by the caller because
+    :class:`CommunityModerationAction` deliberately has no
+    ``relationship()`` back to the case row (no extra join — the
+    audit row carries the case's ``id`` as a plain FK only).
     """
     summary = ModerationActionSummary(
         action_public_id=action.public_id,
-        case_public_id=action.case.public_id,
+        case_public_id=case_public_id,
         action_type=action.action_type,
         from_state=action.from_state,
         to_state=action.to_state,
@@ -253,7 +258,7 @@ def get_case(
         actions = list_case_actions(db, case)
         return {
             "case": _case_summary(case),
-            "actions": [_action_summary(a) for a in actions],
+            "actions": [_action_summary(a, case.public_id) for a in actions],
         }
     finally:
         try:
