@@ -1,4 +1,6 @@
 export 'documentation/component_catalog_screen.dart';
+export 'accessibility/ss_live_region.dart';
+export 'accessibility/ss_tap_target.dart';
 export 'components/actions/ss_button.dart';
 export 'components/actions/ss_icon_button.dart';
 export 'components/ai/ss_model_status_card.dart';
