@@ -22,6 +22,33 @@ forma szerinti kulcsszó-egyezés.
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 block-szűrő TÉNYLEGES aláírását — a klub-tagságnak is ugyanazt a közös szűrőt kell hívnia, nem egy klub-specifikus párhuzamos ellenőrzést. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
+## 0.0c CI-only javító addendum (2026-08-24, review + CI után, Claude Sonnet 5)
+
+A `full-gate.yml` run (PR #441, SHA `855db329`) egyetlen teszttel bukott:
+`test/ui/ui_inventory_test.dart` — `expect(first.screenPaths, hasLength(76))`
+PIROS, tényleges hossz `79`. A round 3 ÚJ képernyőt ad
+(`club_list_screen.dart`/`club_detail_screen.dart`/
+`club_member_management_screen.dart`), de a screen-számláló bővítése
+kimaradt a `allowed_paths`-ból — ugyanaz a mért drift-osztály, mint az
+E09-R21 brief §0.0 2. pontjában (`docs/rounds/e09-r21-challenge-and-invite-lifecycle.md`,
+"screen-számláló 74→75") — ott EXPLICIT `allowed_paths`-tag volt, itt a
+pre-flight (aláírásom) elmulasztotta felvenni, holott ugyanezt a mintát már
+olvastam a pre-flight során. Ez az én mulasztásom, nem az implementeré — a
+gate lokálisan csak a brief §7 szerinti szűk útvonalat futtatta
+(`club_list_screen_test.dart`), a `ui_inventory_test.dart` csak a TELJES
+CI-suite-ban fut le, ott bukott elsőként most.
+
+**Javítás — `allowed_paths` bővítve** (ADR 0087 §2 önjavítható eset, brief-
+revízió, nem tilos-zóna feloldás — a widening egy MÁR ismert, precedenses
+minta, nem ad-hoc kerülőút):
+
+- `test/ui/ui_inventory_test.dart` — a `hasLength(76)` → `hasLength(79)`
+  bump, KIZÁRÓLAG a számláló-konstans, semmi más a fájlban nem változik
+  (a teszt maga generatíven olvassa a screen-listát, nincs kézzel írt
+  útvonal-lista a fájlban a `contains(...)` sorokon kívül, amiket ez a kör
+  nem érint). Az EGYETLEN `ai-router` blokk (lentebb, a §0.0 pre-flight
+  után) frissítve — a parser csak egy blokkot fogad el brief-enként.
+
 ## 0.0 Pre-flight brief-revízió (2026-08-24, Claude Sonnet 5)
 
 A teljes mért-tény alapú indoklás [ADR 0420](../adr/0420-club-domain-membership-and-roles.md)
@@ -86,10 +113,12 @@ allowed_paths = [
   "lib/features/community/presentation/screens/clubs/club_member_management_screen.dart",
   "backend/tests/community/test_club_service.py",
   "test/features/community/presentation/clubs/club_list_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e09-r24-club-domain-membership-and-roles.md",
 ]
 gate_tests = [
-  "test/features/community/presentation/clubs/club_list_screen_test.dart"
+  "test/features/community/presentation/clubs/club_list_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
