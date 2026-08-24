@@ -1,5 +1,44 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E09-R26/H-NOSIGNAL] KÉSZ — a kill UTÁNI világ: a §0.2 létrán nem volt fok a KÉSZ, jóváhagyott körre — PR [#PRNUM](https://github.com/wolfcasaba/strumsight/pull/PRNUM) (2026-08-24, L474)
+
+Az E09-R26 orchestrátor-sessionje 17:48-kor `API Error: Server error
+mid-response`-ba futott, üres prompton némult el, és 18:08:49-kor a 20 perces
+elakadás-őr megölte (H-NOSIGNAL). **Az L472 ébresztője nem hiányzott, csak nem
+ért oda:** a javítás 16:44:41-kor került a munkafába, az E09-R26 drivere viszont
+15:15:07-kor indult, tehát a `run_tmux_session` törzsét még a javítás előtti
+fájlból olvasta be. Az ébresztő a saját tesztjével (3 zöld) helyesen működik —
+ez időzítés, nem kódhiba.
+
+**A repóban mérhető rés a kill UTÁNI világ volt.** A kör a kill pillanatában
+készen állt: a `minimax/e09-r26-user-report-and-immediate-safety-flow` ág
+`520be629` csúcsán 24 commit, 15 fájl, **4210 sor**, a review verdiktje
+**APPROVED** (0 nyitott lelet), a Full Gate `32758663469` **zölden pontosan
+ezen a head SHA-n** — csak a PR hiányzott. A queue-sor `pending` maradt, a §0.2
+örökség-létra viszont csak „kész review **nyitott leletekkel**" és „commitolt
+pre-flight" fokot ismert, a kifutása pedig „indíts tisztán" — az E09-R26
+állapota egyik nevesített fokra sem illett, tehát a lánc újrakezdhetett volna
+egy már jóváhagyott, zölden mért kört.
+
+**A javítás.** Új READ-ONLY szonda (`tools/round-resume-probe.sh`) méri a kör
+hagyaték-állapotát (kör-ág az originon, head SHA, a review **utolsó** verdiktje
+Unicode-érzékenyen, hagyaték-munkapéldányok) és négy állapot egyikébe sorol:
+`NINCS` / `PRE-FLIGHT` / `REVIEW-NYITOTT` / `REVIEW-APPROVED`. A driver
+`{{RESUME_STATE}}`-ként injektálja a promptba (a `{{BRIEF_LINT}}` idiómája), a
+§0.2 pedig megkapta a hiányzó **`REVIEW-APPROVED`** fokot: se újrakezdés, se
+újraimplementálás — a kör a **merge-lépésnél** folytatódik.
+
+**A mérce nem gyengült:** a `REVIEW-APPROVED` NEM merge-engedély — a teljes
+CI-kapu (Full Gate + Router CI) újra kell fusson a §0.3 upstream-szinkron utáni
+**merge SHA-n** (a régi SHA zöldje nem mentesít, L113), és az orchestrátor saját
+nyitott-lelet mérése felülírja a besorolást. Őrteszt:
+`tools/tests/test_round_resume_probe.py` — **10 cella, a fixture a valódi mért
+ágnév és a `520be629` review verdikt-sorai**; a javítás előtt mind piros.
+
+**A következő E09-R26 firing tehát a merge-lépésnél veszi fel a kört**, nem
+kezdi újra.
+
+
 ## ✅ E13-R14 KÉSZ — Accessibility foundation audit és semantics toolkit — PR [#448](https://github.com/wolfcasaba/strumsight/pull/448), squash `838865d3` (2026-08-24)
 
 A design system accessibility-szabályai **egyetlen gépi szerződéssé** álltak

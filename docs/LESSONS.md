@@ -18070,3 +18070,72 @@ precedens arra, hogy a burkoló strukturáltan olvassa a saját artefaktumait).
 zónája (ADR 0087 §4); az őrcellát az önjavító kör írja meg a fenti
 fájl:sor-hivatkozás alapján. A megismétlődést addig a fenti kinyerő
 parancs zárja.
+
+## L474 — Az elakadás-őr kill-je után a §0.2 örökség-létrán NEM volt fok a KÉSZ, jóváhagyott körre: a `pending` queue-sor újrafutása 4210 sort ejtett volna el (E09-R26, H-NOSIGNAL önjavítás, 2026-08-24)
+
+**Mit mértünk.** Az E09-R26 orchestrátor-session (`.pipeline/session-E09-R26-20260824T151508.log`)
+17:48-kor `API Error: Server error mid-response`-ba futott a Router CI kézi
+dispatch-e közben, és — pontosan az L472/L174 mintája szerint — üres prompton
+némult el. A driver 18:08:49-kor a 20 perces elakadás-őrrel megölte, és
+H-NOSIGNAL-t jelzett.
+
+Az ébresztő **nem hiányzott, csak nem ért oda**: az L472 javítása
+16:44:41-kor került a munkafába (`git reflog`: `reset: moving to origin/main`),
+az E09-R26 drivere viszont **15:15:07-kor indult**, tehát a `run_tmux_session`
+függvénytörzsét még a javítás ELŐTTI fájlból olvasta be. A merge-elt ébresztő
+a saját tesztjével (`tools/tests/test_round_pipeline_stall_nudge.py`, 3 zöld)
+helyesen működik — a már futó driver-processre viszont visszamenőleg nem hat.
+Ez időzítés, nem kódhiba.
+
+**A rés — ez viszont a repóban volt.** A kör a kill pillanatában **készen állt**.
+Mérve a `minimax/e09-r26-user-report-and-immediate-safety-flow` ág `520be629`
+csúcsán: 24 commit az `origin/main` felett, 15 fájl, 4210 beszúrt sor;
+`docs/reviews/e09-r26-review.md` → „**VÉGSŐ DÖNTÉS: APPROVED.** Squash-merge
+mehet." és „**Nyitott lelet a merge után: 0.**"; Full Gate (no APK)
+`32758663469` → `conclusion=success` **pontosan ezen a head SHA-n**. Egyetlen
+dolog hiányzott: a PR — a session a `gh pr create` előtt halt meg.
+
+A queue-sor `pending` maradt, tehát a lánc újra sorra veszi a kört. A
+`docs/execution/pipeline-orchestrator-prompt.md` §0.2 örökség-létrája viszont
+csak **két** hagyaték-esetet nevezett meg — „kész review **nyitott
+leletekkel**" (→ javító kör) és „commitolt pre-flight" (→ ADR/brief
+újrahasznosítás) —, a kifutása pedig „Ha csak félkész, jelöletlen munka van:
+hagyd, és **indíts tisztán**". Az E09-R26 állapota **egyik nevesített fokra sem
+illett**: a legspecifikusabb fok kifejezetten a NYITOTT leletekhez volt kötve,
+itt pedig nulla nyitott lelet volt. Egy újrainduló session tehát jogszerűen
+eshetett a kifutásra, és tisztán újrakezdhetett egy már jóváhagyott, zölden
+mért kört — 4210 sor és egy teljes review-ciklus, ADR 0422 divergens
+újraírásának kockázatával.
+
+**A szabály.** Egy őr terminális ága **állapotot hoz létre**, nem csak
+megszakít. Amíg a felismerés (L472: ne ölj, ha még menthető) és a
+helyreállítás (ébresztő) a *session* életét védi, addig a kill **utáni** világ
+— a `pending` queue-sor újrafutása — a *munka* életét dönti el. Ha az
+örökség-létra nem sorolja be az összes elérhető hagyaték-állapotot, a
+legvalószínűbb kifutás („indíts tisztán") a legdrágábbat választja. És az
+E06-R23 tanulsága szerint egy PRÓZAI §0.2-utasítás, aminek a felderítése a
+session belátására van bízva, nem véd: a besorolást **mérni** kell.
+
+**A javítás.** Új, READ-ONLY szonda: `tools/round-resume-probe.sh` — megméri a
+kör ágát az originon (határhelyes kör-azonosító: az `e09-r2` nem prefixelheti
+az `e09-r26`-ot), a head SHA-t, a commit-távolságot, a review **utolsó**
+verdiktjét (Unicode-érzékenyen, `VÉGSŐ DÖNTÉS`-re is, és a korpuszban mért
+`~~CHANGES REQUIRED~~ → APPROVED` javító-köri írásmódot a sor VÉGI találat
+dönti el) és a hagyaték-munkapéldányokat, majd négy állapot egyikébe sorol:
+`NINCS` / `PRE-FLIGHT` / `REVIEW-NYITOTT` / `REVIEW-APPROVED`. A driver
+`write_resume_state()`-tel futtatja és `{{RESUME_STATE}}`-ként a promptba
+injektálja — pontosan a `{{BRIEF_LINT}}` idiómája szerint —, a §0.2 létra
+pedig megkapta a hiányzó `REVIEW-APPROVED` fokot: **se újrakezdés, se
+újraimplementálás, a kör a merge-lépésnél folytatódik.**
+
+**A mérce nem gyengült.** A `REVIEW-APPROVED` besorolás NEM merge-engedély: a
+teljes CI-kapu (Full Gate + Router CI) újra kell fusson a §0.3 upstream-szinkron
+után kapott **merge SHA-n** — a korábbi zöld futás a RÉGI SHA-n nem mentesít
+(L113) —, és ha az orchestrátor saját mérése nyitott leletet talál, az
+felülírja a szonda besorolását. Ami elmarad, az kizárólag a fölösleges
+újrakezdés.
+
+**Őrteszt:** `tools/tests/test_round_resume_probe.py` (10 cella) — a fixture a
+VALÓDI mért adat: az `minimax/e09-r26-user-report-and-immediate-safety-flow`
+ágnév és a `520be629` review-fájl szó szerinti verdikt-sorai. A javítás előtt
+mind a 10 piros volt.
