@@ -69,7 +69,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session as SASession
 
-from ..database import Base
+from ...database import Base
 from ..models.challenge import (
     CHALLENGE_TYPE_CLUB,
     CommunityChallenge,
@@ -548,7 +548,7 @@ def pin_post(
     if existing is not None:
         return PinnedPostRow(
             post_public_id=post.public_id,
-            author_public_id=post.profile.public_id if post.profile else _profile_public_id_for_post(db, post),
+            author_public_id=_profile_public_id_for_post(db, post),
             body=post.body,
             pinned_at=_as_utc(existing.pinned_at),
         )
@@ -581,11 +581,7 @@ def pin_post(
 
     return PinnedPostRow(
         post_public_id=post.public_id,
-        author_public_id=(
-            post.profile.public_id
-            if post.profile is not None
-            else _profile_public_id_for_post(db, post)
-        ),
+        author_public_id=_profile_public_id_for_post(db, post),
         body=post.body,
         pinned_at=_as_utc(now),
     )
@@ -685,14 +681,11 @@ def _profile_public_id_for_post(
 ) -> uuid.UUID:
     """Return the ``public_id`` of the post's author profile.
 
-    The ``community_posts.profile`` relationship is the same
-    ad-hoc join the Kör 11 / Kör 13 feed uses (per the model
-    docstring). If the relationship is unloaded on the row,
-    the helper falls back to a direct ``CommunityProfile``
-    query.
+    The Kör 11 ``CommunityPost`` model has NO back-relationship
+    to ``CommunityProfile`` — the foreign-key join is ad-hoc per
+    query (per the model docstring). The helper performs the
+    direct lookup.
     """
-    if post.profile is not None:
-        return post.profile.public_id
     author = (
         db.query(CommunityProfile).filter_by(id=post.profile_id).one()
     )

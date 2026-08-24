@@ -415,18 +415,21 @@ def test_a3_other_club_moderator_cannot_pin_here(session_factory) -> None:
     """A3 §5.2 — a moderator of a DIFFERENT club cannot pin a
     post inside THIS club. The cross-club guard anchors the
     role check to THIS club's membership row.
+
+    The actor (``owner_b``) is the owner / moderator of
+    ``club_b`` only — they are NOT a member of ``club_a``.
+    The membership probe rejects the actor before the role
+    check ever runs.
     """
     owner_a = _make_profile_by_id(session_factory, user_id=7)
     club_a = _create_club(session_factory, owner=owner_a)
     owner_b = _make_profile_by_id(session_factory, user_id=8)
     club_b = _create_club(session_factory, owner=owner_b)
-    # The cross-club moderator — owner of B, attempts to pin in A.
-    _add_member(
-        session_factory,
-        club=club_a,
-        profile=owner_b,
-        role=CLUB_ROLE_MODERATOR,
-    )
+    # owner_b is the OWNER of club_b — the Kör 24
+    # ``create_club`` service already inserts the owner as a
+    # member with role ``owner`` (the §D4 invariant). owner_b
+    # is NOT a member of club_a. The cross-club guard rejects
+    # the actor at the membership probe.
     post = _create_post(session_factory, author=owner_a, club=club_a)
 
     db: Session = session_factory()
@@ -537,9 +540,11 @@ def test_a4_real_violation_probe_drop_pin_limit(session_factory, monkeypatch) ->
     check and assert the cell turns RED (an over-cap pin
     succeeds).
 
-    The probe swaps ``_current_pinned_count`` for a constant
-    zero so the limit branch never trips. The probe pins
-    ``MAX_CLUB_PINNED_POSTS + 1`` posts and asserts all of
+    The probe raises :data:`MAX_CLUB_PINNED_POSTS` to a
+    unreachable value so the limit branch never trips (the
+    service's ``if current_count >= MAX_CLUB_PINNED_POSTS``
+    check is always False). The probe pins
+    ``MAX_CLUB_PINNED_POSTS + 2`` posts and asserts all of
     them land in the junction table.
     """
     owner = _make_profile_by_id(session_factory, user_id=13)
@@ -549,7 +554,7 @@ def test_a4_real_violation_probe_drop_pin_limit(session_factory, monkeypatch) ->
         for i in range(MAX_CLUB_PINNED_POSTS + 2)
     ]
 
-    monkeypatch.setattr(svc, "_current_pinned_count", lambda db, *, club_id: 0)
+    monkeypatch.setattr(svc, "MAX_CLUB_PINNED_POSTS", 10_000)
 
     db: Session = session_factory()
     try:
@@ -847,7 +852,13 @@ def test_a3_owner_can_end_club_challenge(session_factory) -> None:
         )
         db.commit()
         # The §0.0 #2 invariant — ``ends_at`` is the contract;
-        # activation / ending is window-based.
-        assert ended.ends_at <= now
+        # activation / ending is window-based. SQLite drops
+        # tzinfo on read; the test normalizes the read value to
+        # UTC-aware for the comparison (the Kör 21 ``_as_utc``
+        # precedent).
+        ended_at = ended.ends_at
+        if ended_at.tzinfo is None:
+            ended_at = ended_at.replace(tzinfo=timezone.utc)
+        assert ended_at <= now
     finally:
         db.close()
