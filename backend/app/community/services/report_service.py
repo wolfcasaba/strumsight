@@ -280,8 +280,8 @@ def build_sanitized_response(
       uses the flag to decide whether to show the "thanks for
       reporting" view (the A3 immediate-safety-shortcut follow-up).
 
-    The function NEVER reads ``row.reporter_profile_id``. The §5.1
-    invariant is enforced at this exact line — a future maintainer
+    The function NEVER reads the reporter identity column. The §5.1
+    invariant is enforced at this exact function — a future maintainer
     who tries to add a ``"reporter_public_id"`` key here will fail
     the §6 A1 test.
     """
