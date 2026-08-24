@@ -1,5 +1,79 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R14 KÉSZ — Accessibility foundation audit és semantics toolkit — PR [#448](https://github.com/wolfcasaba/strumsight/pull/448), squash `838865d3` (2026-08-24)
+
+A design system accessibility-szabályai **egyetlen gépi szerződéssé** álltak
+össze: `SsLiveRegion` (bejelentés-költségvetés), `SsTapTarget` (érintési cél
+audit), a `SsSemantics` szerződés-építői (tuner cents, strum-irány), plusz a
+`docs/ui/accessibility.md` kézi TalkBack/VoiceOver ellenőrzőlistája. Normatív
+forrás **ADR [0280](docs/adr/0280-accessibility-contract-and-live-region-budget.md)**
+— a Ch13 ADR-jei előre merge-elve érkeztek, ezért a kör **ADR-t NEM írt** (a
+foglalótól kapott `0423` felhasználatlan; `docs/adr/**` végig tilos zóna).
+Ugyanaz a minta, mint az E13-R12 `0278`-ánál és az E13-R13 `0279`-énél — ez a
+**hatodik** ismétlés. Implementer **`sonnet-impl`** (Claude Sonnet 5),
+orchesztrátor/reviewer **Claude Opus 5**. 27 gépi cella (13 + 6 + 8).
+
+**A kör egy MEGÖLT session munkájából folytatódott.** Az E13-R14 első
+orchestrátorát a 20 perces elakadás-őr megölte (H-NOSIGNAL, PR #447 / L472) —
+**miközben az implementer 16:03:33-kor `status=done`-nal már befejezte a kört**.
+Ez a session a §0.2 örökség-ellenőrzéssel megtalálta a
+`/home/ubuntu/ss-sonnet-impl-e13-r14` munkapéldányt (pre-flight `5be0a3a3` +
+teljes implementáció `845d3c93`), **felhasználta** a commitolt pre-flightot
+(nem írta újra), és a normál review → CI → merge útvonalon zárta le. Nyitott
+leletekkel bíró review nem volt, tehát nem javító kör indult.
+
+**Az örökölt jelzésfájl két gyanús mezője kivizsgálva, egyik sem volt valódi:**
+
+- `dirty_files=1` — a fa MOST tiszta a `845d3c93` implementációs commiton, mind
+  a 9 fájl commitolva: tranziens `.ai/` burkoló-artefaktum volt a jelzés
+  pillanatában, **nincs elveszett munka**.
+- `gate_shape=VIOLATION` — **hamis pozitív**. A naplóból kinyert TÉNYLEGES
+  `Bash` hívások: a gate-futtatás a helyes, csővezeték nélküli alak; a
+  VIOLATION-t egy `cat …/tools/round-gate.sh | head -60` (a script
+  ELOLVASÁSA) váltotta ki. Új lecke: [L473](docs/LESSONS.md).
+
+**A szerződés lényege — az élő régió nem spammelhet.** A Live/Stage felismerés
+másodpercenként sokszor frissül; a naiv „minden változást bejelentünk" a
+felolvasót használó felhasználónak **használhatatlanná tenné** a fő funkciót.
+Az `SsLiveRegion.report(value, at:)` csak akkor jelent be, ha az érték eltér az
+**utoljára BEJELENTETT** (nem az utoljára LÁTOTT) értéktől, ÉS azóta eltelt
+`liveRegionAnnouncementGap` = **1000 ms, inkluzív határ**. A küszöb alatt
+érkező olvasat **eldobódik, nem sorba áll**.
+
+**Review: APPROVED első fordulóban** — nincs BLOCKER, nincs MAJOR; 4 MINOR + 3
+NOTE, mind follow-up. A reviewer nem fogadta el bemondásra a §10-et:
+
+- a gate **saját kézzel újrafuttatva** izolált `/tmp` klónban — mind a 8 lépés
+  zöld, kilépési kód 0;
+- `scope-audit.py --base origin/main` → `ok`, 9 útvonal + 1 generated/ignored
+  (a review-jelentés állandó mentessége). A `--base 5be0a3a3` négy „sértése" a
+  §0.3 upstream-merge `origin/main`-ből hozott fájlja — **nem H3**, pontosan az
+  [L467](docs/LESSONS.md) mért hibaosztálya;
+- **mindkét kötelező valódi-sértés próba a reviewer által is lefuttatva:**
+  a költségvetés kivétele az A1 „below the threshold" cellát ÉS a felépített
+  widget celláját pirosra váltotta (a §10.3 üzenetével szó szerint egyezve);
+  az angolra drótozott `tunerAccuracyLabel` az A6 cellát váltotta pirosra.
+  Mindkét mutáció visszaállítva, TEMP-kód nem maradt.
+
+**Reviewer él-próbák (a kör celláin túl, mind mérve):** `SsButton(label:'A')` =
+`64×48` (a csak-`minHeight` kötés ellenére mindkét tengely ≥ 48 — nincs lelet);
+`textScale` 1.0 → 2.0 a gombot `104.4` → `136.4` szélesre nyújtja (a skálázó
+valóban átmegy); `announcements.add(…)` → `throwsUnsupportedError`; a visszafelé
+ugró időbélyeg **nem** nyit ki bejelentést.
+
+**MINOR-ok (follow-up):** (1) `tap_target_test.dart` `setViewport` holt
+`textScale` paramétere; (2) a „textScaler travels through MediaQuery" cella
+KIZÁRÓLAG `meetsMinimum`-ot assertál, ami minden skálán igaz — a neve többet
+ígér, mint amit mér (a skálázó valóban működik, ezt a reviewer mérte meg); (3)
+a `tunerAccuracyLabel` megduplázza a `cents_gauge.dart:29-34` kerekítését, a
+tükröt semmi nem őrzi (a `cents_gauge.dart` a listán kívül van → a tuner
+migrációs körének feladata); (4) az `SsLiveRegion._announcements` korlátlanul
+nő egy folyamatos Stage Mode-használatra tervezett osztályban.
+
+**Zöld kapu:** Full Gate [`32754624167`](https://github.com/wolfcasaba/strumsight/actions/runs/32754624167)
++ Router CI [`32754624649`](https://github.com/wolfcasaba/strumsight/actions/runs/32754624649),
+mindkettő `success` az exact merge SHA-n (`9f391cdd`).
+
 ## ✅ [HEAL E13-R14/H-NOSIGNAL] KÉSZ — az elakadás-őr egy KÉSZ kört ejtett el: néma, de ÉLŐ session ébresztése a kill előtt — PR [#447](https://github.com/wolfcasaba/strumsight/pull/447) (2026-08-24, L472)
 
 **A halt.** Az E13-R14 orchestrátor-sessionre 15:51:11-kor **kívülről érkezett
@@ -6580,6 +6654,20 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-24):** `main` @ `838865d3` — E13-R14 Accessibility
+foundation audit és semantics toolkit, PR
+[#448](https://github.com/wolfcasaba/strumsight/pull/448), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **0 javító kör** — a review első
+fordulóban APPROVED (nincs BLOCKER, nincs MAJOR; 4 MINOR + 3 NOTE follow-upra,
+`docs/reviews/e13-r14-review.md`). A kör egy MEGÖLT session munkájából
+folytatódott (H-NOSIGNAL, PR #447 / [L472](docs/LESSONS.md)): a §0.2
+örökség-ellenőrzés megtalálta és FELHASZNÁLTA a commitolt pre-flightot
+(`5be0a3a3`) + implementációt (`845d3c93`). Exact `9f391cdd`: Full Gate
+32754624167 + Router CI 32754624649 mind success.
+Post-merge `tools/round-gate.sh` a friss `main`-en (`838865d3`) zöld.
+Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-24):** `main` @ `d55d1656` — E13-R11 Action, input
 és form komponenskészlet, PR
 [#438](https://github.com/wolfcasaba/strumsight/pull/438), squash-merge.
@@ -7325,6 +7413,24 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E13-R14 — Accessibility foundation audit és semantics toolkit** (PR
+[#448](https://github.com/wolfcasaba/strumsight/pull/448), squash `838865d3`,
+ADR nem íródott — a Ch13 ADR-jei már merge-elve, a `0280` 2026-08-15 óta a
+`main`-en van). A design system accessibility-szabályai **egyetlen gépi
+szerződéssé** álltak össze: `SsLiveRegion` (1000 ms bejelentés-költségvetés,
+inkluzív határ, érdemi-változás dedup), `SsTapTarget` (≥ 48 dp audit a
+FELÉPÍTETT komponens mért méretén), `SsSemantics.tunerAccuracyLabel` /
+`.strumDirectionLabel` (tuner cents + strum-irány felolvasható szövegként, en +
+hu, **új ARB-kulcs nélkül**), és `docs/ui/accessibility.md` a kimondott „a gépi
+zöld SZÜKSÉGES, DE NEM ELÉGSÉGES" szakasszal + 8 pontos kézi
+TalkBack/VoiceOver ellenőrzőlistával. 27 gépi cella (13 + 6 + 8), **0 javító
+kör**. A reviewer a gate-et saját kézzel újrafuttatta izolált `/tmp` klónban
+(8/8 zöld, exit 0) és **mindkét kötelező valódi-sértés próbát maga is
+lefuttatta**. 4 MINOR + 3 NOTE follow-upra. Új lecke:
+[L473](docs/LESSONS.md) — a `gate_shape` őr hamis pozitívja. Exact `9f391cdd`:
+Full Gate 32754624167 + Router CI 32754624649 mind success. Részletesen a
+fejléc ✅-blokkban.
 
 **E13-R11 — Action, input és form komponenskészlet** (PR
 [#438](https://github.com/wolfcasaba/strumsight/pull/438), squash `d55d1656`,
@@ -8263,119 +8369,55 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-> **Frissítve 2026-08-24 (E13-R11 után).** A **Ch13 sáv következő köre:
-> `E13-R12` — Kártyák, badge-ek és státusz-jelölők**
-> (`docs/rounds/e13-r12-cards-badges-and-status.md`, engine a queue-ban
-> `sonnet-impl`, előre kiosztott ADR `0278` — **MÉRD ÚJRA a pre-flightban:** a
-> Ch13 ADR-jei (0273–0282) az `a4fdfec2`-ben ELŐRE meg lettek írva és
-> merge-elve, tehát a kör NAGY VALÓSZÍNŰSÉGGEL nem ír ADR-t; ez a minta már
-> NÉGYSZER futott — E13-R08/0275, E13-R09/0276, E13-R10/0277, E13-R11/nincs).
-> Az Epic-9 sáv az E09-R22-vel a queue szerint halad tovább.
->
-> **A Kör 11 mért horgai, amelyekre a Kör 12 ÉPÍT — a pre-flight NE derítse
-> fel újra:**
->
-> - **Az ARB-forrás a fragmentum, az aggregátum generált.** Ha a Kör 12
->   briefje csak a `lib/l10n/app_{en,hu}.arb`-t sorolja fel, az **ötödik+1.
->   ismétlődése** ugyanannak a haltnak — a `lib/l10n/features/design_system_
->   {en,hu}.arb` MÁR LÉTEZIK (23 kulcs), oda kell írni, majd
->   `dart run tool/gen_l10n_segments.dart --write` a gate ELŐTT (§0.0/D2).
-> - **A `component_catalog_test.dart` exact-count csapdája ÉL** (1 `SsCard`,
->   1 `Material` alatta, 1 `DecoratedBox` az EGÉSZ fán), és a fájl **nem
->   szerkeszthető**. Kártyák/badge-ek katalógus-demója pontosan ebbe fut bele
->   — a Kör 12 `gate_tests`-ébe VEDD FEL negyedik útvonalként, különben a
->   törés csak a CI-ban derül ki (§0.0/D3). A `SsCard` demója **különösen**
->   kockázatos: az egyetlen engedélyezett `SsCard` már el van használva.
-> - **A hozzáférhetőségi konstansok nevesítettek:**
->   `SsSemantics.minimumInteractiveDimension` (48) és
->   `SsSemantics.maximumTextScale` (2.0) — új literál helyett ezekre hivatkozz.
-> - **Widget-tesztben a viewportot CSAK a `tester.view.physicalSize` méretezi**
->   ([L452](docs/LESSONS.md)); a `MediaQuery(size:)` INERT. A `textScaler`
->   viszont HELYESEN megy `MediaQuery`-n át.
-> - **A jelenlét ≠ láthatóság** ([L460](docs/LESSONS.md)): badge/státusz-cellát
->   ne `find.byType`/`find.text` jelenléttel őrizz, ha az invariáns
->   LÁTHATÓSÁGRÓL vagy TULAJDONSÁGRÓL szól — a Kör 11 MAJOR-ja pontosan ez volt.
-> - **A `Theme.of(context).extension<SsColorScheme>()!` a bevett minta** a
->   design-system fában (10+ merge-elt fájl) — nem lelet.
+> **Frissítve 2026-08-24 (E13-R14 után).** A **Ch13 sáv következő köre:
+> `E13-R15` — Lokalizációs ellenálló-képesség**
+> (`docs/rounds/e13-r15-localization-resilience.md`, engine a queue-ban
+> `sonnet-impl`, előre kiosztott ADR **`nincs`** — a queue `adr` oszlopa
+> üres, tehát a kör ADR-t nem kap kiosztva; ha a pre-flight mégis normatív
+> döntést talál, az `tools/round-slots.py reserve-adr`-rel foglalandó, NEM
+> `ls docs/adr | tail`-lel).
+> Az Epic-9 sáv az E09-R26-tal halad tovább (ez a kör a jelen session alatt
+> párhuzamosan futott).
 
-**Két sáv fut párhuzamosan** (`docs/execution/pipeline-slots`), a kör-sorrendet
-a `docs/execution/pipeline-queue.tsv` vezeti — az alábbi a 2026-08-23-i állapot,
-NEM a queue helyett olvasandó.
+**A Kör 14 mért horgai, amelyekre a Kör 15 ÉPÍT — a pre-flight NE derítse fel
+újra:**
 
-- **Ch13 (design system) sáv — következő: `E13-R10` — Async state és
-  visszajelzés komponensek** (`docs/rounds/e13-r10-async-state-components.md`,
-  engine a queue-ban `sonnet-impl`, előre kiosztott ADR `0277` — **MÉRD ÚJRA a
-  pre-flightban**: a Ch13 ADR-jei (0273–0282) az `a4fdfec2` commitban ELŐRE
-  MEG LETTEK ÍRVA és merge-elve, tehát a kör valószínűleg NEM ír ADR-t; ez a
-  minta kétszer futott már, E13-R08/0275 és E13-R09/0276). Az **E13-R09
-  (StageScaffold és session transport) KÉSZ** — lásd a fejléc ✅-blokkot. A
-  Kör 9 mért horgai, amelyekre a Kör 10 ÉPÍT:
-  - **Az `SsStageScaffold` öt slotja adat-bemenetes `Widget`** (`statusHeader`,
-    `hero`, `feedback`, `timeline`, `bottomAction`) — a Kör 10 async-állapot
-    komponensei (skeleton, empty, error, retry) ezekbe a slotokba kerülnek,
-    nem a scaffoldba.
-  - **A scaffold semmit nem birtokol, és ezt GÉPI FORRÁS-ŐR méri** (tiltott
-    tokenek: `MethodChannel`, `wakelock`, `camera`, `record`, `microphone`,
-    `permission` — `ss_stage_scaffold_test.dart`). Ha a Kör 10 komponense
-    ugyanebbe a fába kerül, ugyanez a fegyelem kötelező; az őrt bővíteni kell,
-    ha új design-system fájl születik.
-  - **Widget-tesztben a viewport csak `tester.view.physicalSize`-zal valódi**
-    ([L452](docs/LESSONS.md)) — a `MediaQuery(size:)` wrapper INERT a layoutra.
-    Minden új méret- vagy text-scale-cella ezt a mintát kövesse.
-  - **A 2.0 text scale valódi törést tud okozni** ([L453](docs/LESSONS.md)):
-    `Row`-ban álló `Text` `Flexible` nélkül 661 px-t csordult túl. Az új
-    komponensek cellái szűk (360 px) VALÓDI felületen is mérjenek.
-  - **MINOR-1 nyitva (nem blokkoló):** a brief §6.1 „fix magasságú fejléc → A4"
-    sora rossz cellához van kötve — ténylegesen az A8 (slot-sorrend) őrzi,
-    mert a középső slot `Expanded` + görgethető (`docs/reviews/e13-r09-review.md`).
-- **Epic-9 (community) sáv — következő: `E09-R22` — Verified result
-  submission és anti-cheat** (`docs/rounds/e09-r22-verified-result-submission-and-anti-cheat.md`,
-  engine a queue-ban `minimax`, előre kiosztott ADR `0411` — MÉRD ÚJRA a
-  pre-flightban, a queue-oszlop nem hiteles forrás, ez HÁROM egymást követő
-  körnél bukott már: E09-R20 0409→0414, E09-R21 0410→0415). Az **E09-R21
-  (Community challenge és invite lifecycle) KÉSZ** — lásd a fejléc ✅-blokkot.
-  A Kör 21 mért horgai a Kör 22-nek:
-  - A `CommunityChallengeRepository` (ADR 0399) `submitResult`/`leaderboard`
-    metódusai MÁR a Flutter domain-interfészen élnek, de a backend service
-    oldalon NINCS implementálva — a Kör 22 az ELSŐ, ami ezekhez router-hívót
-    ad. A `community_challenge_participants` tábla `best_metric_value`
-    oszlopa a Kör 21-ben mindvégig `NULL` maradt (a §3 scope explicit
-    kizárta) — a Kör 22 az első, ami ténylegesen ír bele.
-  - **Nincs publikus "challenge definíció létrehozása" endpoint** (ADR 0415
-    D6 — a Kör 21 router-je csak invite/accept/decline/cancel-t ad, a
-    teszt-fixture-ök közvetlenül a service/model rétegen át hoznak létre
-    challenge-sort). Ha a Kör 22 eredmény-beküldéshez egy MEGLÉVŐ
-    challenge-t kell megcéloznia, ugyanezt a mintát kövesse (vagy ha egy
-    create-endpoint mégis szükséges, az egy ÚJ, ebben a körben nem
-    budgetezett policy-döntés — dokumentáld §0.0 brief-revízióval).
-  - **A cancel-race mintát (ADR 0415 D5) kövesse anti-cheat védelemnél is**:
-    feltételes `UPDATE ... WHERE state IN (...)` + rowcount-ellenőrzés,
-    NEM `SELECT ... FOR UPDATE` — a kódbázisban nulla precedens van
-    pesszimista lockra. Egy konkurens duplikált eredmény-beküldés
-    ugyanezzel a mintával zárható (pl. `UPDATE ... WHERE best_metric_value
-    IS NULL OR best_metric_value < :new_value`).
-  - **A block-ellenőrzést (`is_blocked_pair`) és az idempotency-key mintát
-    (DB unique + pre-read + `IntegrityError`→rollback→újraolvasás) a Kör 21
-    ÚJRA bizonyította újrahasznosíthatónak** — a Kör 22 eredmény-beküldése
-    valószínűleg ugyanezt a két mintát igényli (idempotens submit, blockolt
-    fél eredménye ne számítson be).
-  - **MINOR-1 nyitva (nem blokkoló):** a Kör 21 implementer saját A5
-    "valódi-sértés próba" tesztje monkeypatch-alapú (nem valódi termelés-kód
-    mutáció) — ha a Kör 22 hasonló race-próbát ír, kövesse a review saját
-    mintáját (`docs/reviews/e09-r21-review.md` F1): a MODUL-attribútumot
-    cserélje monkeypatch-csel, ne egy helyi függvényt hívjon közvetlenül.
+- **Az ARB-forrás a fragmentum, az aggregátum GENERÁLT.** A
+  `lib/l10n/app_{en,hu}.arb` generált aggregátum (ADR 0307 §4,
+  `tool/gen_l10n_segments.dart`); a forrás a `lib/l10n/base/app_<locale>.arb`
+  és a `lib/l10n/features/<feature>_<locale>.arb`. Egy lokalizációs körnek ez
+  **közvetlenül a tárgya** — a brief `allowed_paths`-ának a FRAGMENTUMOKAT
+  kell felsorolnia, és a gate ELŐTT `dart run tool/gen_l10n_segments.dart
+  --write` kell. Ez a hibaosztály már kétszer ütött ([L469](docs/LESSONS.md),
+  E13-R13; E13-R14/§0.0 D2, ahol a kör a kulcsfelvételt KIKERÜLTE).
+- **A design system IMPORTÁLHATJA az `AppLocalizations`-t** — mérve 9 DS-fájl
+  teszi (8 `components/`+`documentation/`, és az E13-R14 óta a
+  `foundations/ss_semantics.dart` is). Nem kell hívó-oldali `String`
+  paraméterre kényszeríteni.
+- **A felolvasó-szöveg szerződés-építői már léteznek:**
+  `SsSemantics.tunerAccuracyLabel(l10n, cents:, inTune:)` és
+  `.strumDirectionLabel(l10n, isDown:)`. Egy lokalizációs kör ezeket bővítheti,
+  de a `cents_gauge.dart:29-34` **őrizetlen duplikátuma** (E13-R14 MINOR-3)
+  addig fennáll — ha a kör hozzáér a tuner-szövegekhez, ez a tükör a
+  legolcsóbb helyen zárható le.
+- **A `gate_shape=VIOLATION` jelzés NEM bizonyíték** ([L473](docs/LESSONS.md)):
+  a brief SAJÁT tiltó-mondata és a gate-script elolvasása is kiváltja. A
+  napló TÉNYLEGES `tool_use` Bash-parancsait nyerd ki, mielőtt javító kört
+  nyitsz rá.
+- **A `scope-audit.py` bázisa a felolvasztott `origin/main`** legyen, ne a
+  merge előtti elágazási pont ([L467](docs/LESSONS.md)) — az E13-R14-ben a
+  rossz bázis 4 hamis „listán kívüli útvonalat" adott, mind a §0.3
+  upstream-merge behozott fájlja.
 
-**Lánc-higiéniai teendő (nem kör-blokkoló, GOV/önjavító hatáskör):** a
-`tools/round-land.sh` a merge ELŐTT nem nézi meg a head SHA CI-`conclusion`-jét,
-ezért egy `blocked` utáni azonnali újrahívás exact-SHA Full Gate nélkül
-merge-el — az E13-R08 landolásakor mérve ([L450](docs/LESSONS.md)). A `tools/**`
-a kör-sessionöknek tiltott zóna (H-GATEGUARD), tehát ezt GOV-kör javíthatja.
+**Lánc-higiéniai teendők (nem kör-blokkolók, GOV/önjavító hatáskör):**
+[L473](docs/LESSONS.md) `tools/mm-round.sh:382` + `tools/codex-round.sh:333` —
+a `gate_shape` illesztés a nyers JSONL-sorra megy a kinyert `tool_use`
+parancsok helyett. [L448](docs/LESSONS.md) `resolve_backend_python()`
+relatív-útvonal bugja MÉG MINDIG nincs javítva (a `ROUND_GATE_BACKEND_PYTHON`
+workaround kerüli meg). [L450](docs/LESSONS.md) landolási exact-SHA rés. A
+`tools/**` a kör-sessionöknek tiltott zóna (H-GATEGUARD), tehát ezeket
+GOV-kör javíthatja.
 
-**Második lánc-higiéniai teendő (nem kör-blokkoló, GOV/önjavító hatáskör):**
-[L448](docs/LESSONS.md) `resolve_backend_python()` relatív-útvonal bugja
-MÁSODSZOR csapott le (E09-R19 landolás után E09-R20 landoláskor is) — a
-`ROUND_GATE_BACKEND_PYTHON` workaround ismét megkerülte, de a tényleges
-javítás (a jelölt abszolutizálása) MÉG MINDIG nincs meg.
 
 ## 7. Required verification (before any "done")
 

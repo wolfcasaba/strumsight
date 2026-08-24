@@ -17985,3 +17985,88 @@ A javítás ELŐTT az (1) és (2) cella PIROS (mérve `origin/main` `tools/round
 bent maradt üres marker egy KÖVETKEZŐ kör friss hívásának is elavult `done`-t
 adhatna vissza. Az E13-R14-nél ez véletlenül a helyes eredményt adta (a `done` ezé a
 köré volt), ezért itt nem javítottuk — külön kör tárgya.
+
+
+---
+
+## L473 — A `gate_shape` őr a NYERS naplósorra illeszt, ezért a brief SAJÁT tiltó-szövege és a gate-script elolvasása is `VIOLATION`-t ír: az E13-R14-ben a hat találatból egy sem a gate-hívás volt (E13-R14, 2026-08-24)
+
+**Mérve.** Az E13-R14 örökölt jelzésfájlja `gate_shape=VIOLATION`-t hordozott,
+miközben az implementer a kötelező gate-et a HELYES, csővezeték nélküli alakban
+futtatta. Az őr (`tools/mm-round.sh:381-384`, azonos
+`tools/codex-round.sh:332-335`):
+
+```bash
+gate_shape=ok
+if grep -qE "round-gate\.sh[^\n]*(\| *(tail|head)|&&)" "$log_file" 2>/dev/null; then
+  gate_shape=VIOLATION
+fi
+```
+
+A napló **JSONL**: egy rekord = egy FIZIKAI sor, a beágyazott sortörések `\n`
+escape-ként utaznak, tehát a `[^\n]*` sosem ér véget rekordon belül. A
+találatokat rekordtípus szerint szétválasztva:
+
+```
+$ python3 …  # a fenti regexet a nyers sorokra futtatva
+physical log lines the guard's regex matches, by record kind:
+  result                       -> 1 record(s), e.g. line 577
+  tool_result                  -> 4 record(s), e.g. line 8
+  tool_use:Bash                -> 1 record(s), e.g. line 540
+```
+
+A hat találatból **egy sem** a gate-futtatás. A `tool_use:Bash` találat
+(540. sor) a script ELOLVASÁSA volt:
+
+```
+cat /home/ubuntu/ss-sonnet-impl-e13-r14/tools/round-gate.sh | head -60
+```
+
+A négy `tool_result` a briefet visszaadó fájlolvasás — és itt a csapda
+önmagára záródik: a brief §7 **maga** írja le egymáshoz közel a gate-sort és a
+tiltását („**Tilos** `| tail`, `| head`, `&&`-lánc"), egyetlen JSON-rekordban.
+**A brief tiltó mondata váltja ki a tiltás megsértésének jelzését.** A
+TÉNYLEGES gate-hívás (548. sor) ezzel szemben NEM illeszkedik — mert helyes:
+
+```
+tools/round-gate.sh test/accessibility/semantics_contract_test.dart test/accessibility/tap_target_test.dart test/accessibility/screen_reader_copy_test.dart
+```
+
+**Miért fontos.** A `gate_shape` az L09 (csonkolt gate-kimenet = nem
+bizonyíték) gépi őre. Egy orchesztrátor, aki a `VIOLATION`-t bizonyítéknak
+veszi, fölöslegesen nyit javító kört egy hibátlan körre — a jelen esetben egy
+olyan kör fölött, amelynek mind a 8 gate-lépése zölden újrafuttatható volt. A
+hibaosztály ugyanaz, mint az [L467](#l467)-nél: **rossz bemenetre futtatott
+helyes mérés**, aminek a kimenete önmagában meggyőzőnek látszik.
+
+**Következmény.** A `gate_shape=VIOLATION` **jelzés, nem bizonyíték**. Mielőtt
+bármit építesz rá, nyerd ki a napló TÉNYLEGES `tool_use` Bash-parancsait, és
+azokon nézd meg a gate-hívás alakját:
+
+```bash
+python3 - <<'EOF'
+import json
+for line in open(LOG):
+    o = json.loads(line)
+    for c in (o.get('message') or {}).get('content') or []:
+        if isinstance(c, dict) and c.get('type') == 'tool_use' and c.get('name') == 'Bash':
+            cmd = (c.get('input') or {}).get('command', '')
+            if 'round-gate' in cmd:
+                print(cmd)
+EOF
+```
+
+Ettől függetlenül a reviewer a gate-et **amúgy is** újrafuttatja izolált
+klónban (`sdd-round-review` §2) — a `gate_shape` tehát legfeljebb sorrendet
+befolyásol, merge-döntést nem.
+
+**Javítás javasolt helye (önjavító kör dolga, a kör-orchesztrátor a
+`tools/`-hoz nem nyúlhat, ADR 0087 §4):** `tools/mm-round.sh:382` és
+`tools/codex-round.sh:333` — az illesztés ne a nyers naplósorra menjen, hanem a
+kinyert `tool_use`/`Bash` `command` mezőkre (a `round-scope-audit.sh` már
+precedens arra, hogy a burkoló strukturáltan olvassa a saját artefaktumait).
+
+**Őrteszt:** nincs — a javítás a `tools/`-ban van, ami ennek a körnek tilos
+zónája (ADR 0087 §4); az őrcellát az önjavító kör írja meg a fenti
+fájl:sor-hivatkozás alapján. A megismétlődést addig a fenti kinyerő
+parancs zárja.
