@@ -48,6 +48,7 @@ from app.community.feed.club_feed import (
 )
 from app.community.models.challenge import (
     CHALLENGE_TYPE_CLUB,
+    CommunityChallenge,
 )
 from app.community.models.club import (
     CLUB_ROLE_MEMBER,
@@ -852,5 +853,152 @@ def test_a3_owner_can_end_club_challenge(session_factory) -> None:
         if ended_at.tzinfo is None:
             ended_at = ended_at.replace(tzinfo=timezone.utc)
         assert ended_at <= now
+    finally:
+        db.close()
+
+
+def test_a3_owner_end_not_yet_started_club_challenge_raises(
+    session_factory,
+) -> None:
+    """A3 §5.2 / security-review F2 — ending a NOT-YET-STARTED
+    challenge (``now < starts_at``) raises
+    :class:`ClubChallengeNotYetStarted` instead of either
+    silently clamping ``ends_at`` or raising ``IntegrityError``.
+
+    The challenge is created with ``starts_at`` one day in the
+    future; the owner calls ``end_club_challenge`` immediately.
+    The naive ``ends_at = now`` write would violate
+    ``ck_community_challenges_window_positive`` (the constraint
+    is STRICT — ``ends_at > starts_at`` — so a zero-length
+    window via ``clamp(now, starts_at) == starts_at`` would
+    still fail). The chosen §0.0 #2-aligned behaviour is to
+    reject the call as a domain error: activation is implicit
+    on ``starts_at <= now`` (window-based semantics), so an
+    end before that point is not a valid operation.
+
+    The test asserts three things:
+
+    * the call raises :class:`ClubChallengeNotYetStarted`
+      (NOT ``IntegrityError`` — the §0.0 #2 domain semantics);
+    * the challenge row is NOT modified (the original
+      ``ends_at`` and ``starts_at`` are preserved — no
+      partial-write side effect);
+    * no cache-invalidation event fires (the operation
+      failed before any write).
+    """
+    owner = _make_profile_by_id(session_factory, user_id=25)
+    club = _create_club(session_factory, owner=owner)
+
+    future_start = _utcnow() + timedelta(days=1)
+    future_end = future_start + timedelta(days=7)
+    challenge = _service_call(
+        session_factory,
+        lambda db: create_club_challenge(
+            db,
+            actor_public_id=owner.public_id,
+            club_public_id=club.public_id,
+            metric="score",
+            difficulty=5,
+            starts_at=future_start,
+            ends_at=future_end,
+            now=_utcnow(),
+        ),
+    )
+
+    now = _utcnow()  # strictly before ``future_start``
+    assert now < future_start, "test premise: now must precede starts_at"
+
+    invalidations: list[svc.ClubCachedInvalidationEvent] = []
+
+    def _on_invalidate(event: svc.ClubCachedInvalidationEvent) -> None:
+        invalidations.append(event)
+
+    db: Session = session_factory()
+    try:
+        with pytest.raises(svc.ClubChallengeNotYetStarted):
+            end_club_challenge(
+                db,
+                actor_profile_id=owner.id,
+                club_public_id=club.public_id,
+                challenge_public_id=challenge.public_id,
+                now=now,
+                on_invalidate=_on_invalidate,
+            )
+        db.rollback()
+        # The challenge row is unmodified — the original window
+        # (``starts_at``, ``ends_at``) is preserved on the row.
+        # Re-query in this session (the ``challenge`` object came
+        # from a different session and is not in this session's
+        # identity map).
+        readback = (
+            db.query(CommunityChallenge).filter_by(public_id=challenge.public_id).one()
+        )
+        starts_at_readback = readback.starts_at
+        ends_at_readback = readback.ends_at
+        if starts_at_readback.tzinfo is None:
+            starts_at_readback = starts_at_readback.replace(tzinfo=timezone.utc)
+        if ends_at_readback.tzinfo is None:
+            ends_at_readback = ends_at_readback.replace(tzinfo=timezone.utc)
+        expected_starts_at = future_start.replace(tzinfo=timezone.utc)
+        expected_ends_at = future_end.replace(tzinfo=timezone.utc)
+        assert starts_at_readback == expected_starts_at
+        assert ends_at_readback == expected_ends_at
+        # No cache-invalidation event fired — the operation
+        # failed before any write.
+        assert invalidations == []
+    finally:
+        db.close()
+
+
+def test_a3_owner_can_end_running_club_challenge(session_factory) -> None:
+    """A3 §5.2 — when the challenge has already started
+    (``starts_at <= now < ends_at``), ``end_club_challenge``
+    still writes ``ends_at = now`` (the F2 fix does NOT change
+    the running-challenge path — only the not-yet-started path
+    gets a domain error).
+
+    This test pins the running-challenge behaviour so a future
+    refactor cannot accidentally regress it into a blanket
+    "always reject if not exact match" rewrite.
+    """
+    owner = _make_profile_by_id(session_factory, user_id=26)
+    club = _create_club(session_factory, owner=owner)
+    starts_at = _utcnow() - timedelta(hours=1)
+    ends_at = _utcnow() + timedelta(days=7)
+    challenge = _service_call(
+        session_factory,
+        lambda db: create_club_challenge(
+            db,
+            actor_public_id=owner.public_id,
+            club_public_id=club.public_id,
+            metric="score",
+            difficulty=5,
+            starts_at=starts_at,
+            ends_at=ends_at,
+            now=starts_at,
+        ),
+    )
+
+    now = _utcnow()
+    db: Session = session_factory()
+    try:
+        ended = end_club_challenge(
+            db,
+            actor_profile_id=owner.id,
+            club_public_id=club.public_id,
+            challenge_public_id=challenge.public_id,
+            now=now,
+        )
+        db.commit()
+        ended_at = ended.ends_at
+        starts_at_readback = ended.starts_at
+        if ended_at.tzinfo is None:
+            ended_at = ended_at.replace(tzinfo=timezone.utc)
+        if starts_at_readback.tzinfo is None:
+            starts_at_readback = starts_at_readback.replace(tzinfo=timezone.utc)
+        # The running-challenge path keeps ``ends_at = now``
+        # (the F2 fix does NOT change this branch).
+        assert ended_at <= now
+        assert ended_at >= starts_at_readback
     finally:
         db.close()

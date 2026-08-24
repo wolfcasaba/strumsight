@@ -64,7 +64,6 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from ..models.club import (
-    CLUB_ROLE_ALLOWLIST,
     CommunityClub,
     CommunityClubMember,
 )
@@ -600,12 +599,3 @@ __all__ = [
     "MAX_PAGE_SIZE",
     "list_club_feed",
 ]
-
-
-# Re-export of the allowed-role set — the router layer uses it for
-# the §A3 "pin/moderation permission check" branch. Re-exported here
-# (and NOT in the permission matrix module) to keep the matrix
-# closed to additions this round — the matrix file is NOT on the
-# round's ``allowed_paths`` and a future round will own a formal
-# ``ClubAction.PIN_POST`` extension.
-CLUB_PIN_AUTHORIZED_ROLES: Final[frozenset[str]] = CLUB_ROLE_ALLOWLIST

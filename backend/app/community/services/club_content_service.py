@@ -107,6 +107,18 @@ class ClubChallengeNotVisible(Exception):
     """The challenge is not visible to this caller (A5 / D7 uniform 404)."""
 
 
+class ClubChallengeNotYetStarted(Exception):
+    """The challenge has not started yet (``now < starts_at``) —
+    ending a not-yet-started challenge would violate the
+    ``ck_community_challenges_window_positive`` CHECK
+    (``ends_at > starts_at`` is strict — a zero-length window
+    would still fail). A moderator cannot end a challenge that
+    has not yet entered its window (the §0.0 #2 window-based
+    activation contract: activation is implicit on
+    ``starts_at <= now``).
+    """
+
+
 class ClubChallengeActorNotMember(Exception):
     """The actor is not a member of the club — they cannot create
     / end challenges inside it (A5 IDOR guarantee)."""
@@ -863,7 +875,7 @@ def end_club_challenge(
     now: datetime,
     on_invalidate: Callable[[ClubCachedInvalidationEvent], None] | None = None,
 ) -> CommunityChallenge:
-    """End a club challenge by setting ``ends_at = now``.
+    """End a running club challenge by setting ``ends_at = now``.
 
     §0.0 #2 — there is no separate ``state`` column on
     ``CommunityChallenge``; ending is implicit in the window
@@ -879,6 +891,18 @@ def end_club_challenge(
     challenge whose ``club_id`` matches THIS club's public_id —
     a stale public_id or a non-club challenge raises
     :class:`ClubChallengeNotVisible`.
+
+    A NOT-YET-STARTED challenge (``now < starts_at``) raises
+    :class:`ClubChallengeNotYetStarted` — the
+    ``ck_community_challenges_window_positive`` CHECK requires
+    ``ends_at > starts_at`` STRICTLY, so a clamp to
+    ``starts_at`` would still fail (a zero-length window is not
+    a valid invariant). Rejecting the call is the §0.0 #2
+    window-based semantics: activation is implicit on
+    ``starts_at <= now``, so an end before activation is a
+    conceptual no-op that the API must surface as a domain
+    error (the security review F2 — a naive ``ends_at = now``
+    would 500 on a legitimate owner / moderator call).
 
     Idempotent: ending an already-ended challenge is a successful
     no-op (the row is returned without a write).
@@ -906,11 +930,24 @@ def end_club_challenge(
         raise ClubChallengeNotVisible("challenge not found")
 
     ends_at_utc = _as_utc(challenge.ends_at)
+    starts_at_utc = _as_utc(challenge.starts_at)
     now_utc = _as_utc(now)
     if ends_at_utc <= now_utc:
         # Already ended — successful no-op (the §Kör 11
         # ``delete_post`` idempotence precedent).
         return challenge
+
+    if now_utc < starts_at_utc:
+        # §0.0 #2 / security review F2 — the challenge has not
+        # entered its window yet. Ending it would write
+        # ``ends_at = now`` with ``now < starts_at``, violating
+        # ``ck_community_challenges_window_positive``
+        # (``ends_at > starts_at`` is STRICT). Reject as a
+        # domain error — the §0.0 #2 contract says activation
+        # is implicit on ``starts_at <= now``; an end before
+        # that point is not a valid operation, not an
+        # automatic-clamp operation.
+        raise ClubChallengeNotYetStarted("challenge has not yet entered its window")
 
     challenge.ends_at = now
     challenge.updated_at = now
@@ -936,6 +973,7 @@ __all__ = [
     "ClubChallengeActorNotMember",
     "ClubChallengeEndForbidden",
     "ClubChallengeNotVisible",
+    "ClubChallengeNotYetStarted",
     "ClubChallengeRow",
     "ClubPinForbidden",
     "ClubPinLimitExceeded",
