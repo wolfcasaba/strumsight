@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R21 KÉSZ — Community challenge és invite lifecycle — PR [#435](https://github.com/wolfcasaba/strumsight/pull/435), squash `56a68678` (2026-08-24)
+
+**Az aszinkron challenge-meghívás állapotgép él** — `draft → sent →
+accepted|declined|expired|cancelled`, majd `accepted → active →
+completed|forfeited|expired`, minden átmenet szerveroldali, feltételes
+`UPDATE ... WHERE state IN (...)` + rowcount-ellenőrzéssel (nincs
+pesszimista lock). **ADR [0415](docs/adr/0415-community-challenge-invite-lifecycle.md)**
+(a queue-ban előre kiosztott `0410` MÁR foglalt volt E09-R18 alatt — a
+pre-flight friss számot mért; implementer **MiniMax M3**, orchestrátor/reviewer
+**Claude Sonnet 5**).
+
+**Pre-flight tényellenőrzés megcáfolta a brief nyitó feltevését**: a brief
+"gamifikáció E08-R19 `ChallengeV2`" hivatkozása egy SOSEM létezett típusra
+mutatott (`grep -rn "ChallengeV2"` → 0 találat a teljes repóban) — az E08-R19
+tényleges terméke `DailyChallengeType`, egy egyjátékos napi generátor,
+strukturálisan összeegyeztethetetlen. A TÉNYLEGES, MÁR élő kompatibilis
+kontraktus a Community SAJÁT E09-R05 domainje volt
+(`ChallengeInviteState`/`ChallengeType`/`CommunityChallengeDefinition`/
+`CommunityChallengeRepository`, ADR 0399) — ennek ELSŐ implementációja ez a
+kör (repository-impl + controller + screen). A pre-flight emellett két
+javító kört is igényelt egy l10n-forrás félreértés miatt: az `app_en.arb`/
+`app_hu.arb` ADR 0307 §4 szerint GENERATED fájlok (a valódi forrás
+`lib/l10n/features/community_*.arb`), DE a `tools/scope-audit.py`-nak
+nincs generated-kivétele — mindkét fájl-párt fel kellett venni az
+`allowed_paths`-ra (§0.0a/§0.0b, `docs/rounds/e09-r21-*.md`; lásd
+[L454](docs/LESSONS.md)).
+
+**Review APPROVED, 0 BLOCKER/MAJOR** — mind a 7 acceptance-cella (A1–A7)
+VALÓDI termelés-kód mutációval újra-mérve (nem az implementer saját
+próbáira hagyatkozva): A4 idempotency és A5 cancel-race a reviewer SAJÁT
+kezével mutálva → piros → visszaállítva → zöld. 2 nem-blokkoló MINOR/NOTE
+(az implementer saját A5 "probe" tesztje monkeypatch-alapú, gyengébb
+bizonyíték, mint amit a brief kért, de a tényleges védelmet egy MÁSIK,
+valódi teszt adja — a review ezt függetlenül megerősítette). Landolás
+közben a `tools/round-land.sh` belső rebase-lépése (párhuzamosan futó
+Ch13-sáv miatt mozgó `main`) új HEAD-et képzett — a `tools/safe-force-push.sh`
+elutasította (patch-id nem egyezik a merge-commitokra, szerkezeti
+korlát), a push emiatt explicit lease-szel, a pontos mért remote SHA
+ellen történt, majd új exact-SHA CI-dispatch igazolta a landolás előtt
+(ADR 0242 §5.5 szellemében, a script saját korlátján belül; lásd
+[L455](docs/LESSONS.md)).
+
+Gate zöld a `fffceaef` merge-előtti SHA-n: Full Gate ✅ · Router CI ✅.
+Post-merge gate a friss `main`-en (`56a68678`) is zöld. Részletek:
+[review](docs/reviews/e09-r21-review.md).
+
 ## ✅ E13-R09 KÉSZ — StageScaffold és session transport — PR [#433](https://github.com/wolfcasaba/strumsight/pull/433), squash `25d2e219` (2026-08-23)
 
 **A CHAPTER 13 KILENCEDIK KÖRE KÉSZ — áll a közös, ÉLETCIKLUS-SEMLEGES Stage
@@ -7663,30 +7709,42 @@ NEM a queue helyett olvasandó.
   - **MINOR-1 nyitva (nem blokkoló):** a brief §6.1 „fix magasságú fejléc → A4"
     sora rossz cellához van kötve — ténylegesen az A8 (slot-sorrend) őrzi,
     mert a középső slot `Expanded` + görgethető (`docs/reviews/e13-r09-review.md`).
-- **Epic-9 (community) sáv — következő: `E09-R21` — Community challenge és
-  invite lifecycle** (`docs/rounds/e09-r21-challenge-and-invite-lifecycle.md`,
-  engine `minimax`, előre kiosztott ADR `0410` — MÉRD ÚJRA a pre-flightban,
-  a queue-oszlop nem hiteles forrás, lásd az E09-R20 pre-flight 0409→0414
-  sorszám-ütközését). Az **E09-R20 (notification inbox és push abstraction)
-  KÉSZ** — lásd a fejléc ✅-blokkot. A Kör 20 mért horgai a Kör 21-nek:
-  - A `notification_service.create_notification` KÉSZ, publikus API-val
-    (recipient/type/title_key/body_key/actor/entity/dedup_key/aggregate) —
-    a Kör 21 challenge/invite eseményei ezt hívhatják, `notification_type`
-    allowlistjét bővítve (`NOTIFICATION_TYPE_ALLOWLIST`,
-    `models/notification.py`).
-  - **Ez a kör (E09-R20) NEM kötötte be** a `reaction_service.py`/
-    `comment_service.py`/`follow_service.py` eseményeit a notification-be
-    (service-réteg-only, ADR 0414 D2) — ha a Kör 21 ÉLŐ router-hívót ad a
-    challenge/invite-nek, az az ELSŐ hely, ahol a notification-integráció
-    ténylegesen élesedhet; ne feltételezd, hogy a MEGLÉVŐ három esemény már
-    értesítést generál élesben.
-  - `get_unread_count`/`list_inbox` block-szűrése MINDKÉT úton MÉRVE és
-    zárva (`is_blocked_pair`/`list_block_pairs_for_viewer`) — ha a Kör 21 új
-    olvasási utat ad a notification-táblához, ugyanezt a szűrést alkalmazza,
-    ne csak a listázó útvonalat.
-  - **MINOR-1 nyitva:** `list_inbox` lapozása blockolt sorok jelenlétében
-    alul-tölthet (`docs/reviews/e09-r20-review.md` §5) — ha a Kör 21
-    hozzányúl a `list_inbox`-hoz, ez a jó alkalom a zárásra.
+- **Epic-9 (community) sáv — következő: `E09-R22` — Verified result
+  submission és anti-cheat** (`docs/rounds/e09-r22-verified-result-submission-and-anti-cheat.md`,
+  engine a queue-ban `minimax`, előre kiosztott ADR `0411` — MÉRD ÚJRA a
+  pre-flightban, a queue-oszlop nem hiteles forrás, ez HÁROM egymást követő
+  körnél bukott már: E09-R20 0409→0414, E09-R21 0410→0415). Az **E09-R21
+  (Community challenge és invite lifecycle) KÉSZ** — lásd a fejléc ✅-blokkot.
+  A Kör 21 mért horgai a Kör 22-nek:
+  - A `CommunityChallengeRepository` (ADR 0399) `submitResult`/`leaderboard`
+    metódusai MÁR a Flutter domain-interfészen élnek, de a backend service
+    oldalon NINCS implementálva — a Kör 22 az ELSŐ, ami ezekhez router-hívót
+    ad. A `community_challenge_participants` tábla `best_metric_value`
+    oszlopa a Kör 21-ben mindvégig `NULL` maradt (a §3 scope explicit
+    kizárta) — a Kör 22 az első, ami ténylegesen ír bele.
+  - **Nincs publikus "challenge definíció létrehozása" endpoint** (ADR 0415
+    D6 — a Kör 21 router-je csak invite/accept/decline/cancel-t ad, a
+    teszt-fixture-ök közvetlenül a service/model rétegen át hoznak létre
+    challenge-sort). Ha a Kör 22 eredmény-beküldéshez egy MEGLÉVŐ
+    challenge-t kell megcéloznia, ugyanezt a mintát kövesse (vagy ha egy
+    create-endpoint mégis szükséges, az egy ÚJ, ebben a körben nem
+    budgetezett policy-döntés — dokumentáld §0.0 brief-revízióval).
+  - **A cancel-race mintát (ADR 0415 D5) kövesse anti-cheat védelemnél is**:
+    feltételes `UPDATE ... WHERE state IN (...)` + rowcount-ellenőrzés,
+    NEM `SELECT ... FOR UPDATE` — a kódbázisban nulla precedens van
+    pesszimista lockra. Egy konkurens duplikált eredmény-beküldés
+    ugyanezzel a mintával zárható (pl. `UPDATE ... WHERE best_metric_value
+    IS NULL OR best_metric_value < :new_value`).
+  - **A block-ellenőrzést (`is_blocked_pair`) és az idempotency-key mintát
+    (DB unique + pre-read + `IntegrityError`→rollback→újraolvasás) a Kör 21
+    ÚJRA bizonyította újrahasznosíthatónak** — a Kör 22 eredmény-beküldése
+    valószínűleg ugyanezt a két mintát igényli (idempotens submit, blockolt
+    fél eredménye ne számítson be).
+  - **MINOR-1 nyitva (nem blokkoló):** a Kör 21 implementer saját A5
+    "valódi-sértés próba" tesztje monkeypatch-alapú (nem valódi termelés-kód
+    mutáció) — ha a Kör 22 hasonló race-próbát ír, kövesse a review saját
+    mintáját (`docs/reviews/e09-r21-review.md` F1): a MODUL-attribútumot
+    cserélje monkeypatch-csel, ne egy helyi függvényt hívjon közvetlenül.
 
 **Lánc-higiéniai teendő (nem kör-blokkoló, GOV/önjavító hatáskör):** a
 `tools/round-land.sh` a merge ELŐTT nem nézi meg a head SHA CI-`conclusion`-jét,

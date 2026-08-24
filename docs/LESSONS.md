@@ -17236,3 +17236,71 @@ vagy sorold fel kimerítően a csatornákat — és mindkét esetben mérd meg m
 **Őrteszt:** `test/core/design_system/stage/ss_stage_scaffold_test.dart` —
 `resource ownership (source guard, E13-R09 MAJOR-1)` csoport, benne a
 `the token scan actually catches the ADR 0276 autoStart mutation` cella.
+
+## L454 — A `tools/round-slots.py` `GENERATED_PATHS` kivétele KIZÁRÓLAG a párhuzamos slot-ütközés-detektálásra vonatkozik, a `tools/scope-audit.py`-nak NINCS generated-kivétele (E09-R21, 2026-08-23)
+
+**Mért tény.** Az E09-R21 pre-flightja tévesen azt feltételezte, hogy mivel
+`lib/l10n/app_en.arb`/`app_hu.arb` szerepel a `tools/round-slots.py`
+`GENERATED_PATHS` halmazában (93-98. sor), ezeket a fájlokat NEM kell
+felvenni a brief `allowed_paths` listájára — hiszen "generáltak". Az
+implementer az ADR 0307 §4 szerint helyesen a `lib/l10n/features/community_*.arb`
+fragmentumokba írta az új kulcsokat, majd `dart run tool/gen_l10n_segments.dart
+--write`-tal regenerálta az aggregátumot — de ez a lépés a `scope_audit=VIOLATION`
+jelzést váltotta ki, mert `tools/scope-audit.py`-ban NINCS generated-path
+kivétel (`grep -n "GENERATED" tools/scope-audit.py` → 0 találat). A
+`GENERATED_PATHS` halmaz kizárólag a `paths_conflict`/slot-ütemezés
+logikájában szerepel (163-164. sor) — két párhuzamos kör NEM ütközik ezen a
+két fájlon, de EGY kör saját scope-auditjának ÁT KELL mennie rajtuk, ha a
+diffje ténylegesen módosítja őket.
+
+**Szabály.** Ha egy brief olyan lépést ír elő, ami egy GENERATED fájlt
+(ismerten a `tools/round-slots.py GENERATED_PATHS`-ban) ténylegesen módosít
+a kör saját diffjében (pl. egy `--write` regenerátor-hívás), az a fájl
+KÖTELEZŐEN szerepeljen az `allowed_paths`-on IS — a GENERATED_PATHS
+kivétel a slot-ütközés-detektálásra korlátozódik, nem terjed ki a
+scope-auditra. Két külön mechanizmus, két külön kivétel-listával; az egyik
+létezése nem bizonyíték a másikra.
+
+**Őrteszt:** nincs — a két mechanizmus (slot-ütközés vs. scope-audit)
+szándékosan külön él, egy közös teszt hamis biztonságot adna. A brief-lint
+egy jövőbeli S-kódja mérhetné, hogy egy brief `allowed_paths`-ából hiányzó,
+de a `GENERATED_PATHS`-ban szereplő fájl esetén a brief EXPLICIT indokolja
+a kihagyást (§0.0-ban).
+
+## L455 — `tools/safe-force-push.sh` false-positive-ot ad egy konfliktus nélküli rebase után, ha a rebase merge-commitokat dob el — a patch-id nem tud egyezni egy merge-re (E09-R21, 2026-08-23/24)
+
+**Mért tény.** A `tools/round-land.sh` belső rebase-lépése (a párhuzamos
+Ch13-sáv mozgó `main`-je miatt) linearizálta az E09-R21 branch három korábbi
+`Merge origin/main into E09-R21 (...)` commitját — ez a `git rebase`
+alapértelmezett viselkedése merge-commitokra `--rebase-merges` nélkül: csak
+a NEM-merge commitokat játssza újra az új alapra, a merge-eket eldobja. A
+resulting fát ez NEM sérti (a merge-ek tartalma a rebase ÚJ alapjában, azaz
+a friss `origin/main`-ben már benne van), de a `tools/safe-force-push.sh`
+patch-id-alapú "remote-only commit" detektálása (2. lépés) hamis pozitívot
+adott: a három eldobott merge-commit a remoteon MEGVAN, a lokális rebase-elt
+történetben NINCS ekvivalens patch-id-jük (egy merge-nek strukturálisan
+nincs egyetlen "patch"-e, amit egy patch-id azonosítana) — a script ezért
+`MEGTAGADVA`-t adott, holott a tényleges tartalom-veszteség NULLA volt
+(`git diff <utolsó pusholt SHA> <rebase-elt HEAD> --stat` csak az ÚJ
+upstream-tartalmat mutatta, semmi mást).
+
+**Szabály.** Mielőtt a `safe-force-push.sh` megtagadását egyszerű
+`--force`-szal vagy state-vesztéssel "megoldanád", MÉRD MEG a tényleges
+tartalom-különbséget: `git diff <utolsó ISMERT pusholt SHA> <új lokális HEAD>
+--stat` — ha az egyetlen különbség az újonnan felszívott upstream-tartalom
+(azaz a "remote-only" lista kizárólag OLYAN merge-commitokból áll, amiknek a
+teljes tartalma már az új rebase-alapban is benne van), a push BIZTONSÁGOS
+egy EXPLICIT, a mért pontos remote SHA-ra vett lease-szel:
+`git push --force-with-lease=<branch>:<pontos mért remote SHA> origin
+<branch>` — ez NEM azonos a script által kifejezetten TILTOTT csupasz
+`--force`-szal vagy argumentum nélküli `--force-with-lease`-szel (mindkettő
+a LOKÁLIS, esetleg elavult remote-tracking refre hagyatkozna; az explicit
+lease a FRISSEN fetchelt, mért SHA-t rögzíti). A patch-id-heurisztika
+strukturális vakfoltja (nem tud mit kezdeni egy merge-commit-tal) nem old
+fel egyedi vizsgálat nélkül — MINDEN esetben mérd a tartalmat, mielőtt
+bypass-olnád a scriptet.
+
+**Őrteszt:** nincs — a `safe-force-push.sh` saját tesztkészlete
+(`tools/tests/test_safe_force_push.py`, ha létezik) a NEM-merge remote-only
+esetet fedi; egy merge-commit-eldobó rebase-forgatókönyv szintetikus tesztje
+follow-up. Amíg nincs, a fenti tartalom-mérési recept a kötelező kézi lépés.
