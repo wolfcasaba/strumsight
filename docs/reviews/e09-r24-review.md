@@ -1,13 +1,13 @@
 # E09-R24 — Review
 
 Brief: docs/rounds/e09-r24-club-domain-membership-and-roles.md
-Diff: `git diff b2cf3e35ce3ff7715446a890e988bc20b560478b...minimax/e09-r24-club-domain-membership-and-roles` (HEAD `90447a00`)
+Diff: `git diff b2cf3e35ce3ff7715446a890e988bc20b560478b...minimax/e09-r24-club-domain-membership-and-roles` (HEAD `9dc523c8`, javító kör után)
 Reviewer: Claude Sonnet 5 · Dátum: 2026-08-24
-Verdikt: CHANGES REQUIRED
+Verdikt: APPROVED (javító kör után, ld. §Javító kör lent)
 
 ## Összegzés
 
-BLOCKER: 0 · MAJOR: 1 · MINOR: 3 · NOTE: 4
+BLOCKER: 0 · MAJOR: 0 (F1 javítva, ld. lent) · MINOR: 3 (follow-up, nem blokkol) · NOTE: 4 (nem blokkol)
 
 Gate independently re-run in an isolated clone (`/tmp/review-e09-r24`,
 `tools/prepare-flutter-generated.sh` + `tools/round-gate.sh
@@ -89,7 +89,18 @@ Engedélyezett fájlokon kívüli változás: **nincs** (`tools/scope-audit.py` 
   `public_id`s (this did not exist in the 27-test suite — its absence is why
   the bug shipped past a green gate); plus a same-key retry test asserting
   the original `public_id` is returned unchanged.
-- **Státusz:** OPEN
+- **Státusz:** FIXED (`ff307d84`, `992e648b`) — `create_idempotency_key`
+  persistált a `community_clubs` soron, composite UNIQUE
+  `(owner_profile_id, create_idempotency_key)`, a probe pontos tuple-
+  egyezésre vált (`.filter_by(...).one_or_none()`, NEM
+  `.order_by(...).first()`). Mindkét kötelező teszt megírva
+  (`test_create_club_distinct_idempotency_keys_create_distinct_clubs`,
+  `test_create_club_same_idempotency_key_retry_returns_original`) és
+  FÜGGETLENÜL újra-mérve: izolált `/tmp/review-e09-r24-fix1` klón,
+  `tools/round-gate.sh test/features/community/presentation/clubs/club_list_screen_test.dart`
+  (előtér, csővezeték nélkül) → mind a 9 lépés ZÖLD, `backend pytest` a
+  teljes suite-tal (a 2 új F1-teszttel együtt) ZÖLD. Scope-audit független
+  újramérés: `OK, 5/5 changed path(s) in allowed_paths, 0 violation`.
 
 ### F2 — MINOR — `get_member_role` has no caller-standing check and is exported
 
@@ -159,8 +170,13 @@ Engedélyezett fájlokon kívüli változás: **nincs** (`tools/scope-audit.py` 
 - **Kötelező javítás:** none this round — flag for the router round.
 - **Státusz:** NOTE, non-blocking
 
-## Következő lépés
+## Javító kör
 
-Egy javító kör (MiniMax, ugyanaz a branch) az F1 MAJOR-t zárja. F2/F3/F4/F5
-follow-up, nem blokkolják ezt a kört, de a leletek a jövőbeli router-kör
-brief-jébe (Kör 25 vagy egy klub-router kör) átveendők.
+MiniMax, ugyanaz a branch, `docs/rounds/e09-r24-club-domain-membership-and-roles.md`
+§10.7. Commitok: `4e6131f4` (origin/main merge, a review-jelentés
+behozatala), `ff307d84` (F1 fix), `992e648b` (F1 tesztek), `9dc523c8` (brief
+§10 frissítés). HEAD `9dc523c8`. F1 zárva, a fenti F1 §Státusz sor a
+bizonyíték. F2/F3/F4/F5 follow-up, nem blokkolják ezt a kört, de a leletek a
+jövőbeli router-kör brief-jébe (Kör 25 vagy egy klub-router kör) átveendők.
+
+**Verdikt: APPROVED.** Merge mehet zöld CI után (ADR 0052).
