@@ -57,6 +57,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from ...deps import CurrentUser
+from ..policies.integrity_policy import (
+    METRIC_VALUE_MAX,
+    METRIC_VALUE_MIN,
+)
 from ..services.challenge_invite_service import (
     BlockedChallengeRelationship,
     ChallengeInviteNotFound,
@@ -618,7 +622,20 @@ class SubmitChallengeResultRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    metric_value: int
+    # Wire-level bound (F1 MAJOR fix — E09-R22 review). The
+    # Pydantic ``Field`` rejects values outside the domain
+    # ``[METRIC_VALUE_MIN, METRIC_VALUE_MAX]`` BEFORE the
+    # decision chain runs, so the service's INSERT never
+    # receives an unrepresentable value (e.g. ``10**19``,
+    # which SQLite would round-trip as ``OverflowError``
+    # rather than ``IntegrityError``). This keeps the §A8
+    # audit invariant: even absurdly large payloads are
+    # caught by a deterministic wire-level rejection
+    # instead of bubbling up as an HTTP 500.
+    metric_value: int = Field(
+        ge=METRIC_VALUE_MIN,
+        le=METRIC_VALUE_MAX,
+    )
     source_event_id: str = Field(min_length=1, max_length=128)
     idempotency_key: str | None = Field(default=None, max_length=128)
     # The version the client submitted (the Kör 5 wire entity
@@ -749,7 +766,7 @@ def _resolve_challenge_internal_id_from_result(db: Session, result_row) -> int:
     "/{challenge_public_id}/results",
     status_code=status.HTTP_200_OK,
 )
-def post_submit_result(
+async def post_submit_result(
     challenge_public_id: uuid.UUID,
     request: Request,
     current_user: CurrentUser,
@@ -778,6 +795,18 @@ def post_submit_result(
     defense), the service-level
     :func:`assert_no_client_issued_trust_state` rejects it
     at the service level (§A2 second defense).
+
+    F3 MINOR fix (E09-R22 review): the ``submitted_keys``
+    forwarded to the service-level trust-state assertion are
+    derived from the ACTUAL incoming body keys (read via
+    ``request.json()`` BEFORE Pydantic strips extras), not a
+    hardcoded set derived from the Pydantic schema. With
+    ``extra='forbid'`` in production the two coincide; but
+    the raw-body approach keeps the §A2 second line of
+    defense load-bearing even if a future refactor relaxes
+    the Pydantic config to ``extra='allow'`` — the
+    service-level assertion would then correctly see the
+    forged ``verified`` / ``rank`` keys.
     """
     db_gen = _session_factory(request)
     db = next(db_gen)
@@ -806,13 +835,23 @@ def post_submit_result(
                 )
             actor_profile_id = actor_row[0]
 
-            submitted_keys: set[str] = {
-                "metric_value",
-                "source_event_id",
-                "idempotency_key",
-            }
-            if payload.submitted_version is not None:
-                submitted_keys.add("submitted_version")
+            # F3 — capture the ACTUAL incoming request-body keys
+            # so the service-level trust-state assertion sees
+            # what the client sent, not a curated subset.
+            # Starlette caches the body after the first read, so
+            # ``request.json()`` here reads the SAME bytes
+            # Pydantic just validated. If a future refactor
+            # changes ``extra='forbid'`` to ``extra='allow'`` /
+            # ``'ignore'``, this set then correctly includes the
+            # forged fields — keeping the §A2 second line of
+            # defense load-bearing.
+            try:
+                raw_body = await request.json()
+            except Exception:
+                raw_body = {}
+            if not isinstance(raw_body, dict):
+                raw_body = {}
+            submitted_keys: set[str] = set(raw_body.keys())
             try:
                 result = submit_result(
                     db,

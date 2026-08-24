@@ -1386,3 +1386,243 @@ def test_http_submit_result_happy_path(client, session_factory) -> None:
     # (mirror of the Kör 21 invite wire — the FK-resolution
     # pattern through the request-scoped session).
     assert body["participant_public_id"] == str(invitee.public_id)
+
+
+# ---------------------------------------------------------------------------
+# F1 (E09-R22 review MAJOR) — wire-level metric_value bound rejects
+# absurdly large values BEFORE the decision chain (no 500, audit-safe).
+# ---------------------------------------------------------------------------
+
+
+def test_a3_metric_value_absurdly_large_rejected_no_500(
+    client, session_factory
+) -> None:
+    """F1 — ``metric_value = 10**19`` is rejected by the wire-level
+    Pydantic ``Field(ge=0, le=1_000_000)`` bound, returning 422 (no
+    500). The §A8 audit invariant is preserved because the
+    unrepresentable value never reaches the service's INSERT path
+    — the SQLite ``OverflowError`` class cannot occur (and the
+    audit-row path is irrelevant on a wire-level rejection).
+    """
+    inviter, _ = _make_user_with_headers(
+        session_factory, user_id=600, email="inviter@s.test"
+    )
+    invitee, invitee_headers = _make_user_with_headers(
+        session_factory, user_id=601, email="invitee@s.test"
+    )
+    challenge = _insert_challenge(session_factory, author=inviter)
+    _accept_invite_via_invite_service(
+        session_factory,
+        challenge=challenge,
+        inviter=inviter,
+        invitee=invitee,
+    )
+
+    resp = client.post(
+        f"/community/challenges/{challenge.public_id}/results",
+        headers=invitee_headers,
+        json={
+            "metric_value": 10**19,
+            "source_event_id": "evt-f1-1",
+            "idempotency_key": "f1-1",
+        },
+    )
+    # Wire-level rejection — no service-side decision row created,
+    # so the response is 422 (the Pydantic-validation surface).
+    # The CRITICAL invariant is the absence of a 500 — the
+    # §A8 audit row is implicit (the request never reached the
+    # service's INSERT path).
+    assert resp.status_code == 422, (
+        f"the wire-level metric_value bound MUST reject "
+        f"absurdly large values (10**19); got {resp.status_code} "
+        f"{resp.text!r}"
+    )
+    # No CommunityChallengeResult row was created — the wire-level
+    # bound stops the request before the service runs.
+    db: Session = session_factory()
+    try:
+        rows = (
+            db.query(CommunityChallengeResult)
+            .filter_by(source_event_id="evt-f1-1")
+            .all()
+        )
+        assert len(rows) == 0
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# F2 (E09-R22 review MAJOR) — non-personalBest first-wins is enforced
+# atomically via rowcount-checked conditional UPDATE. Two concurrent
+# submissions with DIFFERENT ``source_event_id``s land exactly one
+# ``verified`` and one ``already_submitted`` (the L421 barrier
+# pattern — barrier at the SQL decision point, NOT at thread entry).
+# ---------------------------------------------------------------------------
+
+
+import threading  # noqa: E402  (clustered with the F2 fixtures)
+
+
+def test_a6_concurrent_non_personal_best_first_wins_atomic(
+    session_factory,
+) -> None:
+    """F2 — the non-personalBest first-wins policy is enforced
+    atomically by a rowcount-checked conditional UPDATE on
+    ``community_challenge_participants.best_metric_value``. Two
+    concurrent threads, each carrying a DIFFERENT
+    ``source_event_id``, both reach the conditional UPDATE (the
+    ``_before_first_wins_claim_seam()`` barrier at the SQL
+    decision point), and SQLite's row lock serializes them —
+    exactly ONE thread sees ``rowcount == 1`` (winner → verified),
+    the other sees ``rowcount == 0`` (loser →
+    ``already_submitted``).
+
+    The barrier is installed at the SQL decision point (the
+    ``_try_claim_first_wins`` call site) — NOT at thread entry —
+    so the L421 measurement rule is preserved: a barrier at
+    thread entry often completes one thread's entire submit
+    before the second thread starts, so the race never
+    happens and the test would be non-deterministic.
+    """
+    import time as _time
+
+    from app.community.services.challenge_verification_service import (
+        _install_before_first_wins_claim_seam,
+    )
+
+    inviter, _ = _make_user_with_headers(
+        session_factory, user_id=700, email="inviter@s.test"
+    )
+    invitee, _ = _make_user_with_headers(
+        session_factory, user_id=701, email="invitee@s.test"
+    )
+    challenge = _insert_challenge(
+        session_factory, author=inviter, challenge_type="friends"
+    )
+    _accept_invite_via_invite_service(
+        session_factory,
+        challenge=challenge,
+        inviter=inviter,
+        invitee=invitee,
+    )
+
+    barrier = threading.Barrier(2, timeout=10.0)
+    seam_calls = {"count": 0}
+    seam_lock = threading.Lock()
+
+    def _seam() -> None:
+        with seam_lock:
+            seam_calls["count"] += 1
+        # Sleep a brief moment to give the second thread a chance
+        # to ALSO reach the seam BEFORE either thread proceeds to
+        # the conditional UPDATE — this is the L421-pattern
+        # amplification that ensures both threads sit at the SQL
+        # decision point simultaneously.
+        _time.sleep(0.05)
+        barrier.wait()
+
+    installed = _install_before_first_wins_claim_seam(_seam)
+    try:
+        results: dict[str, CommunityChallengeResult] = {}
+        errors: dict[str, BaseException] = {}
+
+        def _submit(label: str, source_event_id: str, metric_value: int) -> None:
+            db: Session = session_factory()
+            try:
+                row = submit_result(
+                    db,
+                    actor_profile_id=invitee.id,
+                    challenge_public_id=challenge.public_id,
+                    submitted_version=1,
+                    source_event_id=source_event_id,
+                    metric_value=metric_value,
+                    idempotency_key=f"f2-{label}",
+                    submitted_payload_keys={
+                        "metric_value",
+                        "source_event_id",
+                        "idempotency_key",
+                    },
+                    now=_utcnow(),
+                )
+                db.commit()
+                results[label] = row
+            except BaseException as exc:  # noqa: BLE001
+                errors[label] = exc
+                db.rollback()
+            finally:
+                db.close()
+
+        ta = threading.Thread(
+            target=_submit,
+            args=("a", "evt-f2-a", 500),
+            name="f2-thread-a",
+        )
+        tb = threading.Thread(
+            target=_submit,
+            args=("b", "evt-f2-b", 600),
+            name="f2-thread-b",
+        )
+        ta.start()
+        tb.start()
+        ta.join(timeout=15.0)
+        tb.join(timeout=15.0)
+
+        # No thread raised an unexpected exception.
+        assert not errors, f"unexpected thread errors: {errors}"
+
+        # The barrier MUST have fired for BOTH threads — the
+        # race was forced to happen at the SQL decision point.
+        assert seam_calls["count"] == 2, (
+            f"the seam must fire twice (once per thread); got {seam_calls['count']}"
+        )
+
+        # Exactly ONE verified row, ONE rejected row with
+        # reason_code="already_submitted" — the F2 invariant.
+        states = set(r.verification_state for r in results.values())
+        codes = set(r.reason_code for r in results.values())
+        assert states == {
+            CHALLENGE_RESULT_STATE_VERIFIED,
+            CHALLENGE_RESULT_STATE_REJECTED,
+        }, f"expected one verified + one rejected; got {states}"
+        assert codes == {None, "already_submitted"}, (
+            f"expected one None + one 'already_submitted'; got {codes}"
+        )
+
+        # The participant's best_metric_value is set ONCE — to
+        # the winner's metric_value.
+        participant = _fetch_participant(
+            session_factory,
+            challenge_id=challenge.id,
+            participant_profile_id=invitee.id,
+        )
+        assert participant is not None
+        winner_value = next(
+            r.metric_value
+            for r in results.values()
+            if r.verification_state == CHALLENGE_RESULT_STATE_VERIFIED
+        )
+        assert participant.best_metric_value == winner_value
+
+        # DB has EXACTLY TWO rows — the winner's verified row +
+        # the loser's rejected row (both source_event_ids present).
+        db: Session = session_factory()
+        try:
+            rows = (
+                db.query(CommunityChallengeResult)
+                .filter_by(
+                    participant_id=participant.id,
+                )
+                .filter(
+                    CommunityChallengeResult.source_event_id.in_(
+                        ["evt-f2-a", "evt-f2-b"]
+                    )
+                )
+                .all()
+            )
+            assert len(rows) == 2
+        finally:
+            db.close()
+    finally:
+        # Always restore the seam — even on test failure — so
+        # subsequent tests are unaffected.
+        _install_before_first_wins_claim_seam(installed)

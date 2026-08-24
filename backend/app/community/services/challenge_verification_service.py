@@ -130,6 +130,51 @@ _SUBMIT_RESULT_TRUSTED_PAYLOAD_KEYS: frozenset[str] = frozenset(
 
 
 # ---------------------------------------------------------------------------
+# F2 (E09-R22 review MAJOR) — first-wins race-test seam.
+#
+# The seam sits at the BOUNDARY between the policy chain and the
+# atomic conditional UPDATE on ``community_challenge_participants.
+# best_metric_value`` (the SQL decision point for the first-wins
+# policy). A ``threading.Barrier`` here forces two concurrent
+# threads to land their conditional UPDATE simultaneously — SQLite
+# (and PostgreSQL) serializes the row lock, so exactly ONE thread
+# sees ``rowcount == 1`` (the winner); the other sees
+# ``rowcount == 0`` (loser) and lands ``rejected`` /
+# ``already_submitted``. The barrier placement is the load-bearing
+# invariant — the L421 measurement shows an entry-point barrier
+# fails to reproduce the race (one thread often completes the
+# entire submit before the second thread starts).
+# ---------------------------------------------------------------------------
+
+_BEFORE_FIRST_WINS_CLAIM_LOCK = __import__("threading").Lock()
+_before_first_wins_claim: Callable[[], None] | None = None
+
+
+def _install_before_first_wins_claim_seam(
+    hook: Callable[[], None] | None,
+) -> Callable[[], None] | None:
+    """Install (or clear) the first-wins-claim seam.
+
+    The fixture installs a ``threading.Barrier.wait`` callable
+    BEFORE the test starts and clears it on teardown. Returns
+    the previous hook so the fixture can restore it explicitly.
+    """
+    global _before_first_wins_claim
+    with _BEFORE_FIRST_WINS_CLAIM_LOCK:
+        previous = _before_first_wins_claim
+        _before_first_wins_claim = hook
+        return previous
+
+
+def _before_first_wins_claim_seam() -> None:
+    """Run the installed seam callable — no-op in production."""
+    with _BEFORE_FIRST_WINS_CLAIM_LOCK:
+        hook = _before_first_wins_claim
+    if hook is not None:
+        hook()
+
+
+# ---------------------------------------------------------------------------
 # Race-test seam (L421, D2).
 #
 # The seam sits at the BOUNDARY between the replay-probe read and
@@ -387,6 +432,51 @@ def _commit_decision(
         row.decided_at = now
 
 
+def _try_claim_first_wins(
+    db: Session,
+    *,
+    participant_id: int,
+    new_value: int,
+) -> bool:
+    """Atomically claim the first-wins slot for a NON-personalBest
+    challenge. Returns ``True`` if THIS submission won the slot
+    (``rowcount == 1``), ``False`` otherwise.
+
+    F2 MAJOR fix (E09-R22 review): the first-wins decision is no
+    longer a Python-side ``participant.best_metric_value`` check-
+    then-act. Two concurrent threads can BOTH read ``NULL`` in a
+    Python-side check, both proceed to the INSERT, and both land
+    a ``verified`` row — violating the §A6 invariant. The
+    conditional UPDATE here is rowcount-checked: the row's lock
+    serializes the two updates, so exactly ONE thread sees
+    ``rowcount == 1`` (winner), the other sees ``rowcount == 0``
+    (loser → ``already_submitted``).
+
+    Mirrors the Kör 21 conditional UPDATE on the
+    ``community_challenge_invites`` state transition — the same
+    ``WHERE id = :id AND <state-predicate>`` + rowcount-check
+    pattern. The losing thread's caller treats the rowcount-0
+    result as the FIRST-WINS-LOSS signal and lands a rejected
+    row with ``reason_code="already_submitted"``.
+
+    The helper is called BEFORE the INSERT (the §A6 winner-only
+    invariant). If the conditional UPDATE succeeds but the
+    INSERT fails (e.g. concurrent same-``source_event_id`` race),
+    the transaction is rolled back — the claim is undone.
+    """
+    from sqlalchemy import update as sa_update
+
+    result = db.execute(
+        sa_update(CommunityChallengeParticipant)
+        .where(
+            CommunityChallengeParticipant.id == participant_id,
+            CommunityChallengeParticipant.best_metric_value.is_(None),
+        )
+        .values(best_metric_value=new_value)
+    )
+    return result.rowcount == 1
+
+
 def _conditionally_update_best_metric_value(
     db: Session,
     *,
@@ -394,22 +484,29 @@ def _conditionally_update_best_metric_value(
     challenge: CommunityChallenge,
     new_value: int,
 ) -> None:
-    """Apply the §D6 best-of / first-wins policy.
+    """Apply the §D6 best-of / first-wins policy — the
+    ``personalBest`` (best-of) branch ONLY after F2.
 
     * ``personalBest``: a new BEST value supersedes the previous
       one. The service performs the conditional UPDATE inside the
-      same transaction.
-    * Every other type: the FIRST verified row wins, the
-      ``best_metric_value`` is set ONCE on the FIRST verified row
-      via the same conditional UPDATE (an UPDATE on a row whose
-      ``best_metric_value IS NULL`` covers the first-wins invariant).
-      Subsequent verified rows never reach this helper because
-      the §A6 ``evaluate_first_vs_best_policy`` rejected them
-      earlier.
+      same transaction. The F2 race-test concern (§A6
+      non-personalBest concurrent two-verified-rows) does NOT
+      touch this branch — personalBest is best-of, and two
+      concurrent submissions with the SAME ``metric_value`` is
+      already covered by the ``UNIQUE(participant_id,
+      source_event_id)`` row lock; a concurrent strictly-greater
+      value is the intended supersede flow.
+    * Every other type (NON-personalBest): the FIRST-wins slot is
+      atomically claimed in :func:`_try_claim_first_wins` BEFORE
+      the INSERT (the F2 fix). This helper is therefore NEVER
+      reached for non-personalBest — the conditional UPDATE runs
+      on the losing branch only as a no-op (best_metric_value is
+      no longer NULL).
 
     Mirrors the Kör 21 conditional UPDATE on the
     ``community_challenge_invites`` state transition (the same
-    ``WHERE id = :id AND state IN (...)`` + rowcount-check pattern).
+    ``WHERE id = :id AND state IN (...)`` + rowcount-check
+    pattern).
     """
     from sqlalchemy import update as sa_update
 
@@ -436,15 +533,14 @@ def _conditionally_update_best_metric_value(
         )
         return
 
-    # Non-personalBest: first-wins.
-    db.execute(
-        sa_update(CommunityChallengeParticipant)
-        .where(
-            CommunityChallengeParticipant.id == participant.id,
-            CommunityChallengeParticipant.best_metric_value.is_(None),
-        )
-        .values(best_metric_value=new_value)
-    )
+    # Non-personalBest: this branch should be unreachable after
+    # F2 — the atomic claim in :func:`_try_claim_first_wins` runs
+    # BEFORE the INSERT. If a future refactor accidentally calls
+    # this helper for non-personalBest, the conditional UPDATE is
+    # a no-op (best_metric_value is no longer NULL after the
+    # atomic claim). Kept as a defensive backstop — no
+    # behaviour change for the F2-fixed flow.
+    return
 
 
 def _handle_replay(
@@ -538,8 +634,18 @@ def submit_result(
        row. Reads ``invite.state`` (read-only, ADR 0417 D1).
     9. :func:`evaluate_impossible_score` — §A3 time-based
        physically-impossible detection.
-    10. :func:`evaluate_first_vs_best_policy` — §A6 first-vs-best.
-        Looks at ``participant.best_metric_value``.
+    10. **F2 MAJOR fix** — first-vs-best enforcement split per
+        challenge type:
+       * ``personalBest``: :func:`evaluate_first_vs_best_policy`
+         reads ``participant.best_metric_value`` (the
+         best-of check).
+       * Non-personalBest: :func:`_try_claim_first_wins` runs an
+         ATOMIC conditional UPDATE on
+         ``community_challenge_participants.best_metric_value``
+         ``WHERE best_metric_value IS NULL`` and uses the
+         ``rowcount`` as the source of truth. The
+         ``_before_first_wins_claim_seam()`` boundary is the
+         L421 race-test seam.
     11. INSERT or replay-handle. The dedup probe runs at the
         ``_before_dedup_seam()`` boundary, BEFORE the INSERT
         attempt.
@@ -609,6 +715,16 @@ def submit_result(
     # The chain is short-circuited: the first failing check freezes
     # the decision and subsequent checks are skipped (we want one
     # reason_code per row, not a cascade).
+    #
+    # F2 MAJOR fix (E09-R22 review): the non-personalBest
+    # first-wins policy is REMOVED from the Python-side chain.
+    # The previous ``evaluate_first_vs_best_policy`` call read
+    # ``participant.best_metric_value`` BEFORE the conditional
+    # UPDATE — two concurrent threads could both observe NULL
+    # and both proceed to the INSERT, landing TWO ``verified``
+    # rows. The atomic claim
+    # (:func:`_try_claim_first_wins`) replaces the Python-side
+    # check, with the rowcount as the source of truth.
     decision_chain = assert_no_client_issued_trust_state(
         trusted_fields={
             "metric_value": None,
@@ -640,12 +756,38 @@ def submit_result(
             ends_at=challenge.ends_at,
             now=now,
         )
+
+    # F2 — first-vs-best enforcement split per challenge type.
+    # * ``personalBest``: the existing Python-side best-of check
+    #   runs (the F2 race concern is non-personalBest-specific;
+    #   the personalBest supersede path is a separate flow that
+    #   is out of F2 scope).
+    # * Non-personalBest: the ATOMIC CLAIM via
+    #   :func:`_try_claim_first_wins` runs at the SQL decision
+    #   point. The race-test seam sits IMMEDIATELY before the
+    #   conditional UPDATE (the L421 measurement point) so the
+    #   ``threading.Barrier`` test forces both threads into the
+    #   conditional UPDATE simultaneously.
     if decision_chain.ok:
-        decision_chain = evaluate_first_vs_best_policy(
-            challenge_type=challenge.type,
-            existing_best=participant.best_metric_value,
-            submitted_value=metric_value,
-        )
+        if challenge.type == "personalBest":
+            decision_chain = evaluate_first_vs_best_policy(
+                challenge_type=challenge.type,
+                existing_best=participant.best_metric_value,
+                submitted_value=metric_value,
+            )
+        else:
+            _before_first_wins_claim_seam()
+            claimed = _try_claim_first_wins(
+                db,
+                participant_id=participant.id,
+                new_value=metric_value,
+            )
+            if not claimed:
+                decision_chain = IntegrityDecision(
+                    ok=False,
+                    code="already_submitted",
+                    reason_code="already_submitted",
+                )
 
     # INSERT boundary (L421, D2). The replay-probe ran earlier
     # at the top of the function — the seam is now between the
@@ -669,6 +811,13 @@ def submit_result(
             now=now,
         )
         _commit_decision(row, decision=decision_chain, now=now)
+        # F2 — for non-personalBest the atomic claim already
+        # mirrored ``best_metric_value = new_value`` (the winner
+        # branch). The conditional UPDATE in
+        # ``_conditionally_update_best_metric_value`` is now
+        # ``personalBest``-only; non-personalBest reverts to a
+        # no-op (the row's ``best_metric_value`` is no longer
+        # NULL after the atomic claim).
         _conditionally_update_best_metric_value(
             db,
             participant=participant,
