@@ -1238,3 +1238,129 @@ def test_get_club_private_non_member_404(session_factory) -> None:
         db.rollback()
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# §F1 — create-side idempotency fix. The two cells below were
+# missing from the round 1 acceptance suite, which is how the
+# broken ``_find_club_by_create_idempotency_key`` helper shipped
+# past a green gate.
+# ---------------------------------------------------------------------------
+
+
+def test_create_club_distinct_idempotency_keys_create_distinct_clubs(
+    session_factory,
+) -> None:
+    """§F1 — the §10.2 measure-matrix ``distinct-keys`` cell.
+
+    A single owner creates two clubs with two **different**
+    idempotency keys; both rows must exist with distinct
+    ``public_id``s. The round 1 helper filtered only by
+    ``owner_profile_id`` and returned the most-recently-created
+    club, so the second call silently returned the first club
+    instead of creating the new one.
+    """
+    owner = _make_profile_by_id(session_factory, user_id=150)
+    club_a = _service_call(
+        session_factory,
+        lambda db: svc.create_club(
+            db,
+            owner_profile_id=owner.id,
+            name="Club-A",
+            description="first club",
+            visibility=CLUB_VISIBILITY_DISCOVERABLE,
+            idempotency_key="create-key-A",
+            now=_utcnow(),
+        ),
+    )
+    club_b = _service_call(
+        session_factory,
+        lambda db: svc.create_club(
+            db,
+            owner_profile_id=owner.id,
+            name="Club-B",
+            description="second club",
+            visibility=CLUB_VISIBILITY_DISCOVERABLE,
+            idempotency_key="create-key-B",
+            now=_utcnow(),
+        ),
+    )
+    # Both clubs persisted with distinct internal + external ids.
+    assert club_a.id != club_b.id
+    assert club_a.public_id != club_b.public_id
+    # The names round-trip — the second call must NOT have returned
+    # the first club and ignored the new name.
+    assert club_a.name == "Club-A"
+    assert club_b.name == "Club-B"
+    # The DB layer actually persisted both rows (not just returned
+    # one ORM instance twice).
+    db: Session = session_factory()
+    try:
+        persisted = (
+            db.query(CommunityClub)
+            .filter_by(owner_profile_id=owner.id)
+            .order_by(CommunityClub.id.asc())
+            .all()
+        )
+    finally:
+        db.close()
+    assert {c.public_id for c in persisted} == {club_a.public_id, club_b.public_id}
+
+
+def test_create_club_same_idempotency_key_retry_returns_original(
+    session_factory,
+) -> None:
+    """§F1 — the §10.2 measure-matrix ``same-key retry`` cell.
+
+    A retry of ``create_club`` with the **same** idempotency key
+    must return the **original** row — the same ``public_id``,
+    the same ``id``, and crucially the original ``name`` /
+    ``visibility`` (the retry must not have overwritten the
+    first attempt's wire-shape via a second INSERT that the
+    broken probe then hid).
+    """
+    owner = _make_profile_by_id(session_factory, user_id=151)
+    club1 = _service_call(
+        session_factory,
+        lambda db: svc.create_club(
+            db,
+            owner_profile_id=owner.id,
+            name="Original",
+            description="first attempt",
+            visibility=CLUB_VISIBILITY_DISCOVERABLE,
+            idempotency_key="retry-key",
+            now=_utcnow(),
+        ),
+    )
+    club2 = _service_call(
+        session_factory,
+        lambda db: svc.create_club(
+            db,
+            owner_profile_id=owner.id,
+            name="Retry-Name",
+            description="retry attempt — must NOT create new",
+            visibility=CLUB_VISIBILITY_PRIVATE,
+            idempotency_key="retry-key",
+            now=_utcnow(),
+        ),
+    )
+    # Same row, not a copy.
+    assert club1.id == club2.id
+    assert club1.public_id == club2.public_id
+    # The retry did NOT overwrite the original wire-shape.
+    assert club2.name == "Original"
+    assert club2.visibility == CLUB_VISIBILITY_DISCOVERABLE
+    # And only ONE row landed in the DB.
+    db: Session = session_factory()
+    try:
+        count = (
+            db.query(CommunityClub)
+            .filter_by(
+                owner_profile_id=owner.id,
+                create_idempotency_key="retry-key",
+            )
+            .count()
+        )
+    finally:
+        db.close()
+    assert count == 1
