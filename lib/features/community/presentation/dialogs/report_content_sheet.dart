@@ -1,4 +1,4 @@
-/// User-report bottom sheet (E09-R26, ADR 0414).
+/// User-report bottom sheet (E09-R26, ADR 0422).
 ///
 /// The sheet lives at the BOTTOM of the navigation stack — same
 /// entry point as ``safety_relationships_screen``'s block / mute
