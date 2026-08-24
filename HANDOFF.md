@@ -1,5 +1,71 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R23 KÉSZ — Leaderboards és opt-in versenynézet — PR [#440](https://github.com/wolfcasaba/strumsight/pull/440), squash `60aea065` (2026-08-24)
+
+**Verified, opt-in challenge-ranglista él** — a projekció KIZÁRÓLAG
+`verification_state='verified'` sorból épül, a felhasználó explicit opt-in
+nélkül nem jelenik meg public scope-ban, és a `friends`-típusú challenge-nél
+egy TOVÁBBI, viewer-relatív `community_follows` szűrés fut, mert az invite
+egy friends-challenge-hez nem feltétlenül a viewer közvetlen follow-graph-jába
+tartozó felet ér el. **ADR [0418](docs/adr/0418-leaderboards-and-opt-in-competition.md)**
+(az előre kiosztott `0412` MÁR foglalt volt E09-R19 alatt — a pre-flight friss
+számot mért; implementer **MiniMax M3**, orchesztrátor/reviewer **Claude
+Sonnet 5**).
+
+**Pre-flight két mért téves feltevést javított, és bővítette az
+`allowed_paths`-ot két, MÁR meglévő fájllal.** (1) A brief §2 "Kör 4
+privacy-settings MA rendelkezik `leaderboard opt-in` mezővel" állítása 0
+találattal cáfolt — a `CommunityPrivacySettings` csak `visibility`+
+`audience_default` mezőt hordoz. Megoldás: önálló, e kör tulajdonában lévő
+`community_leaderboard_opt_ins` tábla, a Kör 4 táblát érintetlenül hagyva.
+(2) `lib/features/community/domain/repositories/challenge_repository.dart` +
+`data/repositories/challenge_repository_impl.dart` bekerült az
+`allowed_paths`-ba — a Kör 5-ös `leaderboard()` metódus docstringje explicit
+"Kör 23 scope"-nak jelölte a bekötést (ugyanaz a hibaosztály, mint az
+E09-R22 `challenges.py` bővítése); a metódus SZIGNATÚRÁJA fagyott maradt (két,
+e körön kívüli fake-implementer teszt-fájl védelmében), csak a teste és egy
+kolokált `LeaderboardEntry` osztály került bele.
+
+**A review (risk=high, `security-reviewer` subagent kötelezően bevonva) 1
+MINOR-t mért SAJÁT mutation-próbákkal, miközben az A1/A3/A4/A6 invariánsok
+mind álltak** (WHERE-szűrő eltávolítva → PIROS; opt-in EXISTS eltávolítva →
+PIROS; follower/followed felcserélve → PIROS). **F1** — a `get_own_rank`
+self-lookup egy `friends` típusú challenge-nél tévesen a follow-gráf szűrőt
+alkalmazta ÖNMAGÁRA, ezért egy legitim, opt-in, verified résztvevő SAJÁT
+rangja mindig `None` volt (fail-closed, NEM privacy-sérülés — a Flutter oldal
+ezt a körben nem köti be). A javító kör egy `include_self` paraméterrel
+zárta, MINDKÉT (sor-keresés + rank-számláló) lekérdezésen konzisztensen
+alkalmazva. A reviewer SAJÁT valódi-sértés próbával mérte a zárást (pre-fix
+service-fájl visszahelyezve → az ÚJ teszt PIROS → visszaállítás → ZÖLD).
+
+**Landolás közben két tooling-hiba mérve, `tools/`-hoz nyúlás nélkül
+feloldva.** [L451](docs/LESSONS.md) ismét (a `main` E13-R11 merge-e miatt
+elavult, gitignore-olt generált l10n a rebase után → hamis analyze-hiba) —
+`tools/prepare-flutter-generated.sh` a munkafán feloldotta. **ÚJ:**
+[L464](docs/LESSONS.md) — a `round-gate.sh` `resolve_backend_python()` a
+MEGOSZTOTT fő fáról futtatva a relatív `backend/.venv/bin/python`-t
+választja, ami `env --chdir=backend` alatt feloldhatatlan
+(`No such file or directory`, kilépési kód 127) — a script SAJÁT,
+dokumentált `ROUND_GATE_BACKEND_PYTHON` env-override escape-jével feloldva.
+**ÚJ:** [L463](docs/LESSONS.md) — a §0.0 pre-flight-revízió véletlenül KÉT
+` ```ai-router ` kódblokkot hagyott a briefben (az érvényes + a "történeti"
+eredeti), ami a `tools/hooks/implementer_guard.py` fail-closed
+Write/Edit-blokkolását váltotta ki az implementer ELSŐ dispatch-kísérletén
+(`blocked` jelzés) — a második blokk eltávolításával javítva.
+
+**Post-review CI egy mechanikus regisztrációs hibát fogott**, amit a kör
+lokális, szűkített gate-hívása nem fedett le: `test/ui/ui_inventory_test.dart`
+pinnelt `hasLength(75)` — az ÚJ leaderboard screen a 76. production screen.
+`allowed_paths` bővítve (own artifact), egysoros javítás + a screen útvonalára
+egy `contains(...)` assertion.
+
+Gate zöld a `cb0cda9f` merge-előtti SHA-n: Full Gate ✅ · Router CI ✅.
+Post-merge gate a friss `main`-en (`60aea065`) is zöld. Landolás a
+merge-záron át (`tools/round-land.sh`, párhuzamos E13-R12 self-heal sáv
+miatt); a `main` a kör alatt egyszer mozdult (E13-R11 merge) — rebase +
+kombinált-HEAD gate + safe-force-push, majd friss exact-SHA CI a rebase-elt
+HEAD-en. Részletek: [review](docs/reviews/e09-r23-review.md).
+
 ## ✅ E13-R11 KÉSZ — Action, input és form komponenskészlet — PR [#438](https://github.com/wolfcasaba/strumsight/pull/438), squash `d55d1656` (2026-08-24)
 
 **A Ch13 action/input készlete él** (SDD Ch13 §11.2): `SsButton` (primary /

@@ -17587,3 +17587,61 @@ riasztás-fáradás — ha minden körben elsül, a VALÓDI csővezeték-sérté
 
 **Őrteszt:** nincs — az őr a `tools/**` alatt van, ami a kör (és az önjavítás)
 tiltott zónája (ADR 0112 §3); a lecke az orchesztrátor-oldali kimérést rögzíti.
+
+## L463 — Két `ai-router` kódblokk egy briefben fail-closed blokkol MINDEN Write/Edit hívást — a §0.0 pre-flight-revízió NE hagyja bent az "eredeti, elavult" blokkot fenced-ként (E09-R23, 2026-08-24)
+
+**Mit mértem.** A §0.0 pre-flight brief-revízió szokásos mintája ("az eredeti
+szöveg történeti okból változatlanul lent marad, a §0.0 felülírja") ezen a
+körön az EREDETI `ai-router` kódblokkot is `ai-router`-fence-ként hagyta a
+fájlban, az ÚJ, érvényes blokk MELLETT. A `tools/hooks/implementer_guard.py`
+`AI_ROUTER_BLOCK` regexe (`^```ai-router[ \t]*\n(.*?)^```[ \t]*$`) pontosan
+EGY blokkot vár — két találatnál a `--repo`-audit `"a briefben nem pontosan
+egy ai-router blokk van"` hibát dob, a hook pedig fail-closed blokkol MINDEN
+Write/Edit hívást, MAGÁRA A BRIEFRE is (ami a §4 allowed_paths-on van). Az
+implementer első dispatch-kísérlete emiatt `blocked`-ot jelzett, jelentés
+nélkül tudta volna javítani saját magát.
+
+**Amit ebből tanulunk.** Egy §0.0 brief-revíziónál, ami egy MÁR meglévő
+`ai-router` blokkot cserél le, a régi blokkot vagy TÖRÖLNI kell, vagy a
+code-fence nyelvcímkéjét ÁT KELL írni (pl. ```` ```text ```` vagy sima
+idézetblokk) — a tartalom prózában megmaradhat történeti okból, csak a
+` ```ai-router ` NYELVCÍMKE nem duplikálódhat. Merge-elés előtt egyszerű
+mechanikus ellenőrzés: `grep -c '```ai-router' <brief>` pontosan `1`.
+
+**Őrteszt:** nincs — a hook `tools/hooks/`-ban van (tilos zóna), a lecke a
+pre-flight-oldali fegyelmet rögzíti; egy jövőbeli, tools/-on kívüli
+brief-lint-ellenőrzés (pl. `ADR 0171 §4` bővítése) hozzáadhatná ezt B-osztályú
+leletként.
+
+## L464 — `tools/round-gate.sh` `resolve_backend_python()` a MEGOSZTOTT fő fáról futtatva relatív `backend/.venv/bin/python`-t választ, ami `env --chdir=backend` alatt feloldhatatlan — a dokumentált `ROUND_GATE_BACKEND_PYTHON` env-override a helyes kerülőút, NEM a script szerkesztése (E09-R23, 2026-08-24)
+
+**Mit mértem.** A `tools/round-land.sh` a kombinált-HEAD gate-et a
+MEGOSZTOTT `/home/ubuntu/music-theory` fő fán futtatja (nem izolált klónban).
+A `resolve_backend_python()` jelölt-sorrendje `"${ROUND_GATE_BACKEND_PYTHON:-}"`
+→ `"backend/.venv/bin/python"` → `"$HOME/music-theory/backend/.venv/bin/python"`
+— izolált munkapéldányokban a MÁSODIK jelölt sosem létezik (nincs saját
+`backend/.venv`), ezért mindig a HARMADIK (abszolút, HOME-alapú) útvonalra
+esik vissza, ami MINDEN cwd-ből működik. A fő fán viszont a `backend/.venv/
+bin/python` (relatív) LÉTEZIK és futtatható, tehát a MÁSODIK jelölt nyer — de
+a `backend pytest` lépés `env --chdir=backend "$backend_python"`-nal hívja,
+ami ELŐBB cwd-t vált `backend/`-re, és a relatív útvonalat ONNAN próbálja
+feloldani (`backend/backend/.venv/bin/python` — nem létezik). Reprodukálva
+közvetlenül: `env --chdir=backend "backend/.venv/bin/python" -m pytest
+--version` → `env: 'backend/.venv/bin/python': No such file or directory`
+(kilépési kód 127). Két izolált klónbeli reviewer-futtatás (`/tmp/review-*`)
+és mindkét CI-futás ZÖLDET adott — a hiba KIZÁRÓLAG a fő fáról futtatott
+`round-land.sh`/`round-gate.sh` invokációnál jelentkezik.
+
+**Amit ebből tanulunk.** A `tools/round-gate.sh` a MÉRCE (H-GATEGUARD, ADR
+0112/0138) — a script NEM szerkeszthető a kör vagy a landolás közben talált
+akadály miatt. A script viszont MAGA ad egy dokumentált escape-et pontosan
+erre az esetre: `ROUND_GATE_BACKEND_PYTHON=<abszolút útvonal>` a KÖRNYEZETI
+VÁLTOZÓBAN, UGYANABBAN a shell-hívásban, ahol a `tools/round-land.sh`/
+`tools/round-gate.sh` fut (a Bash-eszköz shell-állapota NEM öröklődik két
+KÜLÖN tool-hívás között — `export` egy korábbi hívásban hatástalan a
+következőre). Ez a helyes kerülőút, nem a script átírása.
+
+**Őrteszt:** nincs — `tools/round-gate.sh` tilos zóna, a lecke az
+orchesztrátor-oldali invokációs mintát rögzíti. Egy jövőbeli, tools/-on belüli
+javítás (pl. `resolve_backend_python()` mindig `readlink -f`-fel abszolutizálja
+a relatív jelöltet, mielőtt visszaadja) a self-heal kör hatásköre.
