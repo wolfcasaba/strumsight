@@ -513,4 +513,28 @@ javító körben szándékosan NEM nyúltam hozzájuk — a brief kifejezetten
 a fókuszt F1-en tartja, a scope-őr így is csak a megengedett fájlokat
 látja. Ezek a leletek a Kör 25 (klub-router) brief-jébe átveendők.
 
+### 10.8 §0.0c CI-only javító kör (2026-08-24, Claude Sonnet 5 review merge után)
+
+A `full-gate.yml` run (PR #441, SHA `855db329`) egyetlen teszttel bukott:
+`test/ui/ui_inventory_test.dart` — a `hasLength(76)` PIROS, tényleges hossz
+`79`. A round 3 ÚJ képernyőt ad (`club_list_screen.dart` /
+`club_detail_screen.dart` / `club_member_management_screen.dart`), de a
+screen-számláló bővítése kimaradt a `allowed_paths`-ból (a §0.0c
+pre-flight mulasztás, NEM implementer-hiba — a drift ugyanaz az osztály,
+mint E09-R21 §0.0 2. pont).
+
+**Javítás — EGYETLEN sor, scope KIZÁRÓLAG erre:**
+
+- `test/ui/ui_inventory_test.dart:14` —
+  `expect(first.screenPaths, hasLength(76));`
+  → `expect(first.screenPaths, hasLength(79));`
+
+A fájl többi része (a `contains(...)` ellenőrzések, a sorrendezés-
+ellenőrzés, a `reusableWidgetPaths`/`overlayPaths` ellenőrzések) NEM
+változik — a teszt maga generatívan olvassa a screen-listát a
+`tool/ui_inventory.dart` runnerből, nincs kézzel írt útvonal-lista a
+fájlban a `contains(...)` sorokon kívül, amiket ez a kör nem érint.
+
+Commit: `6522e30d` — `E09-R24 §0.0c CI fix — ui_inventory screen count 76→79 (3 new club screens)`.
+
 ## 11. Review — a Claude tölti ki
