@@ -1,4 +1,4 @@
-"""User-report ORM model — E09-R26, ADR 0414 §5.1.
+"""User-report ORM model — E09-R26, ADR 0422 §5.1.
 
 One row per ``(reporter, target_type, target_id, category)`` quadruple.
 The row's ``public_id`` is the ONLY wire-visible identifier — the
@@ -44,7 +44,7 @@ content was copied, etc.); for other categories the column is NULL.
 The column is NEVER returned to the target party (the moderation queue
 sees it; the reporter themselves see a sanitized "thanks" view).
 
-The ``deleted_at`` column supports the §6 A4 "report against a deleted
+The ``target_deleted_at_submit`` column supports the §6 A4 "report against a deleted
 target" invariant: the row is preserved for the moderation queue but
 ``target_exists`` becomes False; the service layer surfaces a
 non-error response so the reporter's flow continues.
@@ -136,7 +136,7 @@ class CommunityReport(Base):
         nullable=True,
     )
     # Computed at INSERT time by the service layer as
-    # ``f"{reporter_public_id}:{target_type}:{target_id}:{category}"`` —
+    # ``f"{reporter_profile_id}:{target_type}:{target_id}:{category}"`` —
     # the §6 A2 dedup key. A second submit on the same triple cannot
     # land a second row (the UNIQUE catches it; the service layer
     # re-reads and returns the existing row).
