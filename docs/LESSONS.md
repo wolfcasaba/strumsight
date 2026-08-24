@@ -17985,3 +17985,157 @@ A javítás ELŐTT az (1) és (2) cella PIROS (mérve `origin/main` `tools/round
 bent maradt üres marker egy KÖVETKEZŐ kör friss hívásának is elavult `done`-t
 adhatna vissza. Az E13-R14-nél ez véletlenül a helyes eredményt adta (a `done` ezé a
 köré volt), ezért itt nem javítottuk — külön kör tárgya.
+
+
+---
+
+## L473 — A `gate_shape` őr a NYERS naplósorra illeszt, ezért a brief SAJÁT tiltó-szövege és a gate-script elolvasása is `VIOLATION`-t ír: az E13-R14-ben a hat találatból egy sem a gate-hívás volt (E13-R14, 2026-08-24)
+
+**Mérve.** Az E13-R14 örökölt jelzésfájlja `gate_shape=VIOLATION`-t hordozott,
+miközben az implementer a kötelező gate-et a HELYES, csővezeték nélküli alakban
+futtatta. Az őr (`tools/mm-round.sh:381-384`, azonos
+`tools/codex-round.sh:332-335`):
+
+```bash
+gate_shape=ok
+if grep -qE "round-gate\.sh[^\n]*(\| *(tail|head)|&&)" "$log_file" 2>/dev/null; then
+  gate_shape=VIOLATION
+fi
+```
+
+A napló **JSONL**: egy rekord = egy FIZIKAI sor, a beágyazott sortörések `\n`
+escape-ként utaznak, tehát a `[^\n]*` sosem ér véget rekordon belül. A
+találatokat rekordtípus szerint szétválasztva:
+
+```
+$ python3 …  # a fenti regexet a nyers sorokra futtatva
+physical log lines the guard's regex matches, by record kind:
+  result                       -> 1 record(s), e.g. line 577
+  tool_result                  -> 4 record(s), e.g. line 8
+  tool_use:Bash                -> 1 record(s), e.g. line 540
+```
+
+A hat találatból **egy sem** a gate-futtatás. A `tool_use:Bash` találat
+(540. sor) a script ELOLVASÁSA volt:
+
+```
+cat /home/ubuntu/ss-sonnet-impl-e13-r14/tools/round-gate.sh | head -60
+```
+
+A négy `tool_result` a briefet visszaadó fájlolvasás — és itt a csapda
+önmagára záródik: a brief §7 **maga** írja le egymáshoz közel a gate-sort és a
+tiltását („**Tilos** `| tail`, `| head`, `&&`-lánc"), egyetlen JSON-rekordban.
+**A brief tiltó mondata váltja ki a tiltás megsértésének jelzését.** A
+TÉNYLEGES gate-hívás (548. sor) ezzel szemben NEM illeszkedik — mert helyes:
+
+```
+tools/round-gate.sh test/accessibility/semantics_contract_test.dart test/accessibility/tap_target_test.dart test/accessibility/screen_reader_copy_test.dart
+```
+
+**Miért fontos.** A `gate_shape` az L09 (csonkolt gate-kimenet = nem
+bizonyíték) gépi őre. Egy orchesztrátor, aki a `VIOLATION`-t bizonyítéknak
+veszi, fölöslegesen nyit javító kört egy hibátlan körre — a jelen esetben egy
+olyan kör fölött, amelynek mind a 8 gate-lépése zölden újrafuttatható volt. A
+hibaosztály ugyanaz, mint az [L467](#l467)-nél: **rossz bemenetre futtatott
+helyes mérés**, aminek a kimenete önmagában meggyőzőnek látszik.
+
+**Következmény.** A `gate_shape=VIOLATION` **jelzés, nem bizonyíték**. Mielőtt
+bármit építesz rá, nyerd ki a napló TÉNYLEGES `tool_use` Bash-parancsait, és
+azokon nézd meg a gate-hívás alakját:
+
+```bash
+python3 - <<'EOF'
+import json
+for line in open(LOG):
+    o = json.loads(line)
+    for c in (o.get('message') or {}).get('content') or []:
+        if isinstance(c, dict) and c.get('type') == 'tool_use' and c.get('name') == 'Bash':
+            cmd = (c.get('input') or {}).get('command', '')
+            if 'round-gate' in cmd:
+                print(cmd)
+EOF
+```
+
+Ettől függetlenül a reviewer a gate-et **amúgy is** újrafuttatja izolált
+klónban (`sdd-round-review` §2) — a `gate_shape` tehát legfeljebb sorrendet
+befolyásol, merge-döntést nem.
+
+**Javítás javasolt helye (önjavító kör dolga, a kör-orchesztrátor a
+`tools/`-hoz nem nyúlhat, ADR 0087 §4):** `tools/mm-round.sh:382` és
+`tools/codex-round.sh:333` — az illesztés ne a nyers naplósorra menjen, hanem a
+kinyert `tool_use`/`Bash` `command` mezőkre (a `round-scope-audit.sh` már
+precedens arra, hogy a burkoló strukturáltan olvassa a saját artefaktumait).
+
+**Őrteszt:** nincs — a javítás a `tools/`-ban van, ami ennek a körnek tilos
+zónája (ADR 0087 §4); az őrcellát az önjavító kör írja meg a fenti
+fájl:sor-hivatkozás alapján. A megismétlődést addig a fenti kinyerő
+parancs zárja.
+
+## L474 — Az elakadás-őr kill-je után a §0.2 örökség-létrán NEM volt fok a KÉSZ, jóváhagyott körre: a `pending` queue-sor újrafutása 4210 sort ejtett volna el (E09-R26, H-NOSIGNAL önjavítás, 2026-08-24)
+
+**Mit mértünk.** Az E09-R26 orchestrátor-session (`.pipeline/session-E09-R26-20260824T151508.log`)
+17:48-kor `API Error: Server error mid-response`-ba futott a Router CI kézi
+dispatch-e közben, és — pontosan az L472/L174 mintája szerint — üres prompton
+némult el. A driver 18:08:49-kor a 20 perces elakadás-őrrel megölte, és
+H-NOSIGNAL-t jelzett.
+
+Az ébresztő **nem hiányzott, csak nem ért oda**: az L472 javítása
+16:44:41-kor került a munkafába (`git reflog`: `reset: moving to origin/main`),
+az E09-R26 drivere viszont **15:15:07-kor indult**, tehát a `run_tmux_session`
+függvénytörzsét még a javítás ELŐTTI fájlból olvasta be. A merge-elt ébresztő
+a saját tesztjével (`tools/tests/test_round_pipeline_stall_nudge.py`, 3 zöld)
+helyesen működik — a már futó driver-processre viszont visszamenőleg nem hat.
+Ez időzítés, nem kódhiba.
+
+**A rés — ez viszont a repóban volt.** A kör a kill pillanatában **készen állt**.
+Mérve a `minimax/e09-r26-user-report-and-immediate-safety-flow` ág `520be629`
+csúcsán: 24 commit az `origin/main` felett, 15 fájl, 4210 beszúrt sor;
+`docs/reviews/e09-r26-review.md` → „**VÉGSŐ DÖNTÉS: APPROVED.** Squash-merge
+mehet." és „**Nyitott lelet a merge után: 0.**"; Full Gate (no APK)
+`32758663469` → `conclusion=success` **pontosan ezen a head SHA-n**. Egyetlen
+dolog hiányzott: a PR — a session a `gh pr create` előtt halt meg.
+
+A queue-sor `pending` maradt, tehát a lánc újra sorra veszi a kört. A
+`docs/execution/pipeline-orchestrator-prompt.md` §0.2 örökség-létrája viszont
+csak **két** hagyaték-esetet nevezett meg — „kész review **nyitott
+leletekkel**" (→ javító kör) és „commitolt pre-flight" (→ ADR/brief
+újrahasznosítás) —, a kifutása pedig „Ha csak félkész, jelöletlen munka van:
+hagyd, és **indíts tisztán**". Az E09-R26 állapota **egyik nevesített fokra sem
+illett**: a legspecifikusabb fok kifejezetten a NYITOTT leletekhez volt kötve,
+itt pedig nulla nyitott lelet volt. Egy újrainduló session tehát jogszerűen
+eshetett a kifutásra, és tisztán újrakezdhetett egy már jóváhagyott, zölden
+mért kört — 4210 sor és egy teljes review-ciklus, ADR 0422 divergens
+újraírásának kockázatával.
+
+**A szabály.** Egy őr terminális ága **állapotot hoz létre**, nem csak
+megszakít. Amíg a felismerés (L472: ne ölj, ha még menthető) és a
+helyreállítás (ébresztő) a *session* életét védi, addig a kill **utáni** világ
+— a `pending` queue-sor újrafutása — a *munka* életét dönti el. Ha az
+örökség-létra nem sorolja be az összes elérhető hagyaték-állapotot, a
+legvalószínűbb kifutás („indíts tisztán") a legdrágábbat választja. És az
+E06-R23 tanulsága szerint egy PRÓZAI §0.2-utasítás, aminek a felderítése a
+session belátására van bízva, nem véd: a besorolást **mérni** kell.
+
+**A javítás.** Új, READ-ONLY szonda: `tools/round-resume-probe.sh` — megméri a
+kör ágát az originon (határhelyes kör-azonosító: az `e09-r2` nem prefixelheti
+az `e09-r26`-ot), a head SHA-t, a commit-távolságot, a review **utolsó**
+verdiktjét (Unicode-érzékenyen, `VÉGSŐ DÖNTÉS`-re is, és a korpuszban mért
+`~~CHANGES REQUIRED~~ → APPROVED` javító-köri írásmódot a sor VÉGI találat
+dönti el) és a hagyaték-munkapéldányokat, majd négy állapot egyikébe sorol:
+`NINCS` / `PRE-FLIGHT` / `REVIEW-NYITOTT` / `REVIEW-APPROVED`. A driver
+`write_resume_state()`-tel futtatja és `{{RESUME_STATE}}`-ként a promptba
+injektálja — pontosan a `{{BRIEF_LINT}}` idiómája szerint —, a §0.2 létra
+pedig megkapta a hiányzó `REVIEW-APPROVED` fokot: **se újrakezdés, se
+újraimplementálás, a kör a merge-lépésnél folytatódik.**
+
+**A mérce nem gyengült.** A `REVIEW-APPROVED` besorolás NEM merge-engedély: a
+teljes CI-kapu (Full Gate + Router CI) újra kell fusson a §0.3 upstream-szinkron
+után kapott **merge SHA-n** — a korábbi zöld futás a RÉGI SHA-n nem mentesít
+(L113) —, és ha az orchestrátor saját mérése nyitott leletet talál, az
+felülírja a szonda besorolását. Ami elmarad, az kizárólag a fölösleges
+újrakezdés.
+
+**Őrteszt:** `tools/tests/test_round_resume_probe.py` (10 cella) — a fixture a
+VALÓDI mért adat: az `minimax/e09-r26-user-report-and-immediate-safety-flow`
+ágnév és a `520be629` review-fájl szó szerinti verdikt-sorai. A javítás előtt
+mind a 10 piros volt.

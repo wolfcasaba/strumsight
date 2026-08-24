@@ -16,6 +16,7 @@ kör adatai:
 | **Implementer motor** | `{{ENGINE}}` |
 | **Előre kiosztott ADR** | `{{ADR}}` — **te írod meg a pre-flightban** |
 | **Brief-lint jelentés** | `{{BRIEF_LINT}}` — a pre-flight teendői (ADR 0171 §4) |
+| **Hagyaték-mérés** | `{{RESUME_STATE}}` — ha nem `nincs`, OLVASD EL: egy korábbi session munkája (§0.2) |
 | **CI-jegyzet** | `{{CI_NOTE}}` — ha nem `nincs`, OLVASD EL: kimaradás-mód van érvényben |
 
 Olvasd el a `HANDOFF.md`-t, az `AGENTS.md`-t és a briefet, mielőtt bármit teszel.
@@ -87,11 +88,46 @@ git -C <talált munkapéldány> log --oneline -3   # van-e kör-commit (ADR, bri
 > literálja volt — a javított minta minden epicre általánosan működik,
 > ezért törölve.
 
+**Ezt a mérést nem neked kell elvégezned: a driver már megmérte.** A
+`{{RESUME_STATE}}` fájl (ha nem `nincs`) tartalmazza a kör ágát az originon, a
+review utolsó verdiktjét, a hagyaték-munkapéldányokat és a besorolást
+(`ÁLLAPOT:`). **OLVASD EL, mielőtt bármit indítasz.** A fenti parancsok a
+kézi ellenőrzésre valók, nem a jelentés helyettesítésére.
+
+| `ÁLLAPOT` | Mit jelent | A dolgod |
+|---|---|---|
+| `NINCS` | nincs megőrzendő hagyaték | tiszta indulás, normál pre-flight |
+| `PRE-FLIGHT` | van kör-ág, de nincs review | az ADR + §0.0 brief-revízió újrahasznosítása, majd implementer |
+| `REVIEW-NYITOTT` | kész review **nyitott leletekkel** | **következő javító kör** |
+| `REVIEW-APPROVED` | kész review, **0 nyitott lelet** | **merge-lépés** — se újrakezdés, se újraimplementálás |
+
 Ha a kör branchén (lokálisan vagy az originon) már **kész review van nyitott
 leletekkel** (`docs/reviews/eXX-rYY-review.md`), akkor a dolgod NEM a kör
 újrakezdése, hanem a **következő javító kör levezénylése**: a nyitott
 leletlistával indítsd az implementert a meglévő branchen, majd frissítsd a
 review-t és folytasd a normál lépéssort (CI-újradispatch, merge).
+
+> **Új fok — `REVIEW-APPROVED` (ADR 0112 önjavító kör, E09-R26/H-NOSIGNAL,
+> 2026-08-24).** Ha a review utolsó verdiktje **APPROVED** és nincs nyitott
+> BLOCKER/MAJOR/MINOR, a kör KÉSZ. Ilyenkor **nem** kezded újra, **nem**
+> implementálod újra, és **nem** indítasz rá implementert — a kör a
+> **merge-lépésnél** folytatódik: §0.3 upstream-szinkron → PR → a teljes
+> CI-kapu ÚJRA az így kapott merge SHA-n (Full Gate + Router CI,
+> `tools/wait-for-ci.sh`) → zöld kapus squash-merge. A korábbi zöld futás a
+> RÉGI SHA-n **nem** mentesít, és ha a saját mérésed nyitott leletet talál, az
+> felülírja a besorolást: a mérce nem gyengül, csak a fölösleges újrakezdés
+> marad el.
+>
+> **Mérve:** az E09-R26 orchestrátor-sessionjét 18:08:49-kor a 20 perces
+> elakadás-őr megölte (`API Error: Server error mid-response` után üres
+> prompton némult el). A kör ekkor már kész volt: 22 commit, 15 fájl, 4210 sor,
+> `docs/reviews/e09-r26-review.md` → „VÉGSŐ DÖNTÉS: APPROVED", Full Gate
+> `32758663469` zölden a `520be629` head SHA-n — csak a PR hiányzott. A
+> queue-sor `pending` maradt, tehát a lánc újra sorra vette a kört, a §0.2
+> létrán viszont NEM volt fok erre az állapotra: a legspecifikusabb fok
+> kifejezetten a NYITOTT leletekhez volt kötve, a kifutás pedig „indíts
+> tisztán" — ez 4210 sort és egy teljes review-ciklust ejtett volna el, ADR
+> 0422 divergens újraírásának kockázatával.
 
 Ha találsz commitolt pre-flightot (ADR + §0.0 brief-revízió) egy korábbi
 munkapéldányban: **olvasd el és HASZNÁLD FEL** (fetch-eld a branchét), ne írd
