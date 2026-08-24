@@ -1,5 +1,144 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R24 KÉSZ — Klub domain, tagság és szerepkörök — PR [#441](https://github.com/wolfcasaba/strumsight/pull/441), squash `2f95ad97` (2026-08-24)
+
+**A kör tartalma zölden landolt, de NEM az orchesztrátor-session landolta.**
+A session a 4 órás abszolút időkorlátnál jelzés nélkül meghalt
+(`H-NOSIGNAL`, exit 124), miközben a `tools/round-land.sh` épp futott — a
+landolást és a gyökérok javítását az ADR 0112 **önjavító kör** végezte.
+Klub-domain: szerver-autoritatív `owner`/`admin`/`member` szerepmátrix,
+owner-less-club invariáns, idempotens tagság-életciklus, a Kör-8
+block-filter újrafelhasználva. **ADR [0420](docs/adr/0420-club-domain-membership-and-roles.md)**
+(az előre kiosztott `0413` foglalt volt; implementer **MiniMax M3**,
+orchesztrátor/reviewer **Claude Sonnet 5**). Review: **APPROVED** javító kör
+után — 1 MAJOR (F1: klub-létrehozás nem volt idempotens), 3 MINOR + 4 NOTE
+follow-upként. Exact `f29fe61e`: Full Gate
+[32716654207](https://github.com/wolfcasaba/strumsight/actions/runs/32716654207)
++ Router CI [32716627760](https://github.com/wolfcasaba/strumsight/actions/runs/32716627760)
+success; a landolás előtt a scope-ot függetlenül újramértem (11 változott
+fájl, mind az `allowed_paths`-on belül, semmi kívül).
+
+### 🔧 Önjavító kör — a képernyő-leltár drift MOST MÁR pre-dispatch bukik: PR [#442](https://github.com/wolfcasaba/strumsight/pull/442), squash `30467aad`
+
+**Mért gyökérok.** A 240 perces keretből 198 perc blokkoló várakozás volt,
+ebből **~60 perc EGYETLEN elkerülhető újramunka**: a
+`test/ui/ui_inventory_test.dart` egzakt `hasLength(76)` állítása a kör három
+új klub-képernyőjétől 79-re mozdult, de a dispatchelt `allowed_paths` a
+leltártesztet nem engedte — így az implementer hozzá sem nyúlhatott, és a
+Full Gate a `855db329` SHA-n pirosra váltott
+([32713670226](https://github.com/wolfcasaba/strumsight/actions/runs/32713670226)).
+Ezt követte a `§0.0c` brief-revízió, EGY TELJES javító implementer-kör az
+egysoros szám-emelésért, és a Full Gate újrafuttatása. A kör ~4 óra 10 percet
+igényelt, 4 óra állt rendelkezésre.
+
+**A `wait-for-ci.sh` auto-háttérbe kerülését külön megmértem és KIZÁRTAM**
+mint okot: a CI valóban 17p40s-ig futott, és a várakozás 4 másodpercen belül
+észlelte a befejezést — a mechanizmus helyesen működik.
+
+**Ugyanez a hibaosztály az ELŐZŐ körben (E09-R23, `hasLength(75)`) is
+elsült**, és korábban az E08-R15/H3-ban (PR #383) — a védelem viszont eddig
+csak KÖRSPECIFIKUS, utólag írt regressziós tesztekben élt, ezért a következő
+kört sosem védte. Az E09-R24 saját commit-üzenete (`863a8ac3`) ki is mondja:
+*„my own pre-flight missed applying it here despite having read that exact
+precedent"* — a precedens elolvasása nem elég, gépi őr kell.
+
+**A javítás:** új `S9` **strict** lelet a `tools/brief-lint.py`-ban, ami a
+`round-pipeline.sh` `write_brief_lint` **pre-dispatch** hívásán át a kör
+pre-flightjának teendőlistájába kerül. A predikátum a CI igazságához kötött
+(`tool/ui_inventory.dart`: `lib/features/**` + `_screen.dart`): akkor lő, ha
+az `allowed_paths` MÉG NEM LÉTEZŐ ilyen fájlt enged (tehát a kör létrehozza),
+és a `test/ui/ui_inventory_test.dart` nem szerepel egyszerre az
+`allowed_paths`-ban ÉS a `gate_tests`-ben.
+
+**Hamis riasztás mérve** a 343 briefes korpuszon: a létezés-feltétel nélkül 39
+lelet (36 már zölden merge-elt körre — mind hamis), a feltétellel **0 hamis**
+és 4 valódi: `e09-r25`, `e09-r28`, `e09-r29`, `e10-r31` (mind `pending`).
+**Az `e09-r25` a sor KÖVETKEZŐ E09 köre — ugyanez a halt egy körön belül
+visszatért volna.** A `base` CI-kapu szintje bizonyítottan változatlan
+(kilépési kód a javítás előtt és után is 2).
+
+**Őrteszt:** `tools/tests/test_brief_ui_inventory_scope.py` — a fix ELŐTT
+piros, UTÁNA zöld; teljes router-suite **737 passed, 1 skipped**. Lecke:
+[L465](docs/LESSONS.md).
+
+**Nyitott, e körön kívüli tétel — a merge UTÁN újramérve:** a fenti négyes a
+merge ELŐTTI állapot. A PR #441 landolása után az `e09-r25` **kiesett a
+listából**, mert az egyetlen "új" képernyője (`club_detail_screen.dart`) épp
+ebben a körben jött létre — az `e09-r25` már csak MÓDOSÍTJA, a leltár száma
+tehát nem mozdul, és az `S9` helyesen néma rá. A friss `main`-en mérve az
+`S9` **hármat** jelöl: `e09-r28`, `e09-r29`, `e10-r31`. Ez nem hiba, hanem a
+szabály lényege: a predikátum a fa AKTUÁLIS állapotához képest dönt, ezért a
+teendőlista körről körre magától szűkül. A javítás az adott kör `§0.0`
+pre-flightjának hatásköre — a self-heal szándékosan NEM nyúlt idegen körök
+briefjéhez (heal-prompt §2).
+
+
+## ✅ E09-R23 KÉSZ — Leaderboards és opt-in versenynézet — PR [#440](https://github.com/wolfcasaba/strumsight/pull/440), squash `60aea065` (2026-08-24)
+
+**Verified, opt-in challenge-ranglista él** — a projekció KIZÁRÓLAG
+`verification_state='verified'` sorból épül, a felhasználó explicit opt-in
+nélkül nem jelenik meg public scope-ban, és a `friends`-típusú challenge-nél
+egy TOVÁBBI, viewer-relatív `community_follows` szűrés fut, mert az invite
+egy friends-challenge-hez nem feltétlenül a viewer közvetlen follow-graph-jába
+tartozó felet ér el. **ADR [0418](docs/adr/0418-leaderboards-and-opt-in-competition.md)**
+(az előre kiosztott `0412` MÁR foglalt volt E09-R19 alatt — a pre-flight friss
+számot mért; implementer **MiniMax M3**, orchesztrátor/reviewer **Claude
+Sonnet 5**).
+
+**Pre-flight két mért téves feltevést javított, és bővítette az
+`allowed_paths`-ot két, MÁR meglévő fájllal.** (1) A brief §2 "Kör 4
+privacy-settings MA rendelkezik `leaderboard opt-in` mezővel" állítása 0
+találattal cáfolt — a `CommunityPrivacySettings` csak `visibility`+
+`audience_default` mezőt hordoz. Megoldás: önálló, e kör tulajdonában lévő
+`community_leaderboard_opt_ins` tábla, a Kör 4 táblát érintetlenül hagyva.
+(2) `lib/features/community/domain/repositories/challenge_repository.dart` +
+`data/repositories/challenge_repository_impl.dart` bekerült az
+`allowed_paths`-ba — a Kör 5-ös `leaderboard()` metódus docstringje explicit
+"Kör 23 scope"-nak jelölte a bekötést (ugyanaz a hibaosztály, mint az
+E09-R22 `challenges.py` bővítése); a metódus SZIGNATÚRÁJA fagyott maradt (két,
+e körön kívüli fake-implementer teszt-fájl védelmében), csak a teste és egy
+kolokált `LeaderboardEntry` osztály került bele.
+
+**A review (risk=high, `security-reviewer` subagent kötelezően bevonva) 1
+MINOR-t mért SAJÁT mutation-próbákkal, miközben az A1/A3/A4/A6 invariánsok
+mind álltak** (WHERE-szűrő eltávolítva → PIROS; opt-in EXISTS eltávolítva →
+PIROS; follower/followed felcserélve → PIROS). **F1** — a `get_own_rank`
+self-lookup egy `friends` típusú challenge-nél tévesen a follow-gráf szűrőt
+alkalmazta ÖNMAGÁRA, ezért egy legitim, opt-in, verified résztvevő SAJÁT
+rangja mindig `None` volt (fail-closed, NEM privacy-sérülés — a Flutter oldal
+ezt a körben nem köti be). A javító kör egy `include_self` paraméterrel
+zárta, MINDKÉT (sor-keresés + rank-számláló) lekérdezésen konzisztensen
+alkalmazva. A reviewer SAJÁT valódi-sértés próbával mérte a zárást (pre-fix
+service-fájl visszahelyezve → az ÚJ teszt PIROS → visszaállítás → ZÖLD).
+
+**Landolás közben két tooling-hiba mérve, `tools/`-hoz nyúlás nélkül
+feloldva.** [L451](docs/LESSONS.md) ismét (a `main` E13-R11 merge-e miatt
+elavult, gitignore-olt generált l10n a rebase után → hamis analyze-hiba) —
+`tools/prepare-flutter-generated.sh` a munkafán feloldotta. **ÚJ:**
+[L464](docs/LESSONS.md) — a `round-gate.sh` `resolve_backend_python()` a
+MEGOSZTOTT fő fáról futtatva a relatív `backend/.venv/bin/python`-t
+választja, ami `env --chdir=backend` alatt feloldhatatlan
+(`No such file or directory`, kilépési kód 127) — a script SAJÁT,
+dokumentált `ROUND_GATE_BACKEND_PYTHON` env-override escape-jével feloldva.
+**ÚJ:** [L463](docs/LESSONS.md) — a §0.0 pre-flight-revízió véletlenül KÉT
+` ```ai-router ` kódblokkot hagyott a briefben (az érvényes + a "történeti"
+eredeti), ami a `tools/hooks/implementer_guard.py` fail-closed
+Write/Edit-blokkolását váltotta ki az implementer ELSŐ dispatch-kísérletén
+(`blocked` jelzés) — a második blokk eltávolításával javítva.
+
+**Post-review CI egy mechanikus regisztrációs hibát fogott**, amit a kör
+lokális, szűkített gate-hívása nem fedett le: `test/ui/ui_inventory_test.dart`
+pinnelt `hasLength(75)` — az ÚJ leaderboard screen a 76. production screen.
+`allowed_paths` bővítve (own artifact), egysoros javítás + a screen útvonalára
+egy `contains(...)` assertion.
+
+Gate zöld a `cb0cda9f` merge-előtti SHA-n: Full Gate ✅ · Router CI ✅.
+Post-merge gate a friss `main`-en (`60aea065`) is zöld. Landolás a
+merge-záron át (`tools/round-land.sh`, párhuzamos E13-R12 self-heal sáv
+miatt); a `main` a kör alatt egyszer mozdult (E13-R11 merge) — rebase +
+kombinált-HEAD gate + safe-force-push, majd friss exact-SHA CI a rebase-elt
+HEAD-en. Részletek: [review](docs/reviews/e09-r23-review.md).
+
 ## ✅ E13-R11 KÉSZ — Action, input és form komponenskészlet — PR [#438](https://github.com/wolfcasaba/strumsight/pull/438), squash `d55d1656` (2026-08-24)
 
 **A Ch13 action/input készlete él** (SDD Ch13 §11.2): `SsButton` (primary /

@@ -1,15 +1,49 @@
 # E09-R23 — Leaderboards és opt-in versenynézet
 
-- **Státusz:** PREPARED (előre megírva 2026-08-22, kód olvasva: `main @ db6293f4`)
+- **Státusz:** PREPARED (előre megírva 2026-08-22, kód olvasva: `main @ db6293f4`) — **pre-flight §0.0-val kiegészítve 2026-08-24**
 - **Típus:** Chapter 10 (Epic 9 — Community Platform), Kör 23
 - **Kör-azonosító:** `E09-R23`
 - **Branch:** `<motor>/e09-r23-leaderboards-and-opt-in-competition`
 - **Előfeltétel:** `E09-R22` merge-elve
-- **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0412` — a szám FOGLALT (Epic 9 batch-tartomány 0395-0419). Az ADR-t a Claude írja meg a kör indítási pre-flightjában a §5 döntéseiből; az implementer a `docs/adr/`-t NEM érinti (TILOS zóna).
+- **Brief szerzője:** Claude (Opus 5); §0.0 pre-flight-revízió: Claude Sonnet 5
+- **ADR:** ~~`0412`~~ **`0418`** — a `0412` MÁR foglalt volt
+  (`docs/adr/0412-media-processing-privacy-and-moderation-state.md`),
+  `tools/round-slots.py reserve-adr --round E09-R23` friss számot adott. Lásd
+  [ADR 0418](../adr/0418-leaderboards-and-opt-in-competition.md) — a teljes
+  mért kontextus, a D1–D6 döntések és az elutasított alternatívák ott vannak,
+  ez a szakasz csak a brief-lokális következményeket sorolja.
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 22 `challenge_result.verification_state` TÉNYLEGES értékkészletét — a projekció kizárólag a `verified` értékű sorokat olvassa. Eltérésnél
-> §0.0 brief-revízió, NEM csendes lista-tágítás.
+## 0.0 Pre-flight brief-revízió (2026-08-24, Claude Sonnet 5) — OLVASD EL ADR 0418 ELŐTT/HELYETT
+
+A brief eredeti szövege (1–11. szakasz, lent, VÁLTOZATLANUL hagyva
+történeti okból) HÁROM ponton méretlen feltevésre épült. A mért tényeket és
+a döntéseket [ADR 0418](../adr/0418-leaderboards-and-opt-in-competition.md)
+hordozza; itt csak az összefoglaló és az `allowed_paths` tényleges,
+ÉRVÉNYES alakja:
+
+1. **`allowed_paths` bővítve 2 MÁR létező fájllal** — a
+   `challenge_repository_impl.dart` docstringje explicit "Kör 23 scope"-nak
+   jelöli a `leaderboard()` bekötését (ugyanaz a hibaosztály, mint az
+   E09-R22 pre-flight `challenges.py`/`challenge_repository_impl.dart`
+   bővítése). A `leaderboard()` metódus SZIGNATÚRÁJA fagyott marad (ADR
+   0418 D1) — csak a teste és egy ÚJ, kolokált `LeaderboardEntry` osztály
+   kerül a `challenge_repository.dart`-ba.
+2. **A brief §2 "Kör 4 leaderboard opt-in mező MA létezik" állítása TÉVES**
+   (mérve: 0 találat a teljes fában) — az opt-in állapot egy ÚJ, önálló
+   `community_leaderboard_opt_ins` táblában él, amit a MÁR allowed
+   `models/leaderboard.py` + a kör saját migrációja épít fel. A Kör 4
+   `community_privacy_settings`/`profile.py` NEM módosul (ADR 0418 D2).
+3. **A §6 A6 "disqualification/delete" nem elérhető input** (`verified`
+   terminális állapot a tilos-zóna service-ben, profil hard-delete nem
+   létezik) — az A6 cella teszt-szintű DB-mutációval szimulálja a hatást,
+   nem admin-endpointtal (ADR 0418 D5).
+
+Emellett a §5 "kötött architekturális döntések" alá az ADR 0418 D3/D4/D6
+három TOVÁBBI, mért döntést ad (metric-direction, tie-breaker/scope, router
+API-alak) — ezek NEM ütköznek az eredeti §5.1–§5.3-mal, csak kiegészítik.
+
+**Az ÉRVÉNYES `ai-router` blokk (a §5 alattinak MEGFELELŐEN, a lenti eredeti
+felülírva):**
 
 ```ai-router
 schema_version = 1
@@ -19,16 +53,62 @@ allowed_paths = [
   "backend/app/community/models/leaderboard.py",
   "backend/app/community/routers/leaderboards.py",
   "backend/alembic/versions/e09_r23_0017_community_leaderboard.py",
+  "lib/features/community/domain/repositories/challenge_repository.dart",
+  "lib/features/community/data/repositories/challenge_repository_impl.dart",
   "lib/features/community/presentation/screens/leaderboard_screen.dart",
   "backend/tests/community/test_leaderboard_service.py",
   "test/features/community/presentation/leaderboard_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e09-r23-leaderboards-and-opt-in-competition.md",
+  "docs/reviews/e09-r23-review.md",
 ]
 gate_tests = [
   "test/features/community/presentation/leaderboard_screen_test.dart"
 ]
 native_gate = false
 ```
+
+**Kockázat = high, indoklás:** privacy-érzékeny felület (opt-in láthatóság +
+follow-graph-alapú szűrés egy versenynézetben) — az A3/D2 pontosan ezt
+érinti, nem egy `allowed_paths` string-egyezés (brief-lint S7 lelet zárva).
+
+## 0.1 CI-utáni bővítés (2026-08-24, Claude Sonnet 5) — `test/ui/ui_inventory_test.dart`
+
+A `full-gate.yml` (run `32691781629`, exact-SHA `b454e771`) a review-jóváhagyás
+UTÁN a TELJES suite-ban egy, a kör lokális gate-hívása (csak
+`leaderboard_screen_test.dart`) által nem lefedett tesztet buktatott:
+`test/ui/ui_inventory_test.dart` — `expect(first.screenPaths, hasLength(75))`.
+Ez egy projekt-szintű, PINNELT darabszám-őr MINDEN production-screen fájlra
+(`tool/ui_inventory.dart` bejárja a `lib/features/**/screens/**`,
+`presentation/screens/**` mintát) — a MOST hozzáadott
+`leaderboard_screen.dart` a 76. screen, a régi `75` emiatt PIROS. Ez NEM
+funkcionális regresszió, hanem egy MECHANIKUS regisztrációs érték, amit
+MINDEN új screen-t hozó kör köteles bumpolni — mérve
+(`tool/count_screens_tmp.dart` egyszeri futtatással, `76`, majd törölve).
+`allowed_paths` bővítve `test/ui/ui_inventory_test.dart`-tal (a szám
+`75`→`76`, és egy `contains(...)` sor a leaderboard screen útvonalára, a
+meglévő minta szerint) — a döntés a kör SAJÁT, még nem merge-elt
+artefaktumát érinti (ADR 0087 §2 első bullet), nem H3.
+
+---
+
+## Eredeti brief szövege (1–11. szakasz, történeti — a §0.0/ADR 0418 felülírja, ahol eltér)
+
+> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 22 `challenge_result.verification_state` TÉNYLEGES értékkészletét — a projekció kizárólag a `verified` értékű sorokat olvassa. Eltérésnél
+> §0.0 brief-revízió, NEM csendes lista-tágítás.
+>
+> **Mérve (§0.0): `verified` a pontos, tényleges wire-string**
+> (`backend/app/community/models/challenge_result.py:73`,
+> `CHALLENGE_RESULT_STATE_VERIFIED = "verified"`) — a brief eredeti szövege
+> ezen a ponton PONTOS volt, nincs eltérés.
+
+**(Az eredeti `ai-router` blokk itt állt — ELTÁVOLÍTVA, mert egy briefben
+KIZÁRÓLAG egy `ai-router` kódblokk lehet: a `tools/hooks/implementer_guard.py`
+`AI_ROUTER_BLOCK` regexe pontosan egyet vár, két blokk esetén fail-closed
+minden Write/Edit hívást blokkol — mérve az első dispatch-kísérleten,
+`blocked` jelzés, 2026-08-24T03:35Z. Az egyetlen ÉRVÉNYES blokk a §0.0-ban
+van, fent. A régi tartalom szó szerint megegyezett az ÉRVÉNYES blokkal, csak
+a 2 bővített `lib/` sor hiányzott belőle — nincs információvesztés.)**
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -49,8 +129,8 @@ Verified, összehasonlítható és privacy-kompatibilis challenge-ranglista — 
 
 ## 2. Jelenlegi állapot — mért tények
 
-- A Kör 22 `challenge_result` MA hordozza a `verification_state`-et — ez a kör az első fogyasztója, kizárólag `verified` sorokra szűrve
-- A Kör 4 privacy-policy MA rendelkezik `leaderboard opt-in` mezővel a privacy-settingsben (a §9.2 SDD szerint alapból kikapcsolt)
+- A Kör 22 `challenge_result` MA hordozza a `verification_state`-et — ez a kör az első fogyasztója, kizárólag `verified` sorokra szűrve (mérve, pontos: `verified`).
+- ~~A Kör 4 privacy-policy MA rendelkezik `leaderboard opt-in` mezővel~~ — **TÉVES, ld. §0.0/ADR 0418 Kontextus 2.** A `CommunityPrivacySettings` (Kör 4) csak `visibility`+`audience_default` mezőt hordoz, nincs leaderboard-specifikus oszlop. Az opt-in állapot ehelyett egy ÚJ, e kör tulajdonában lévő `community_leaderboard_opt_ins` táblában él (ADR 0418 D2).
 
 ## 3. Scope
 
@@ -60,7 +140,9 @@ Verified, összehasonlítható és privacy-kompatibilis challenge-ranglista — 
 
 - Bármilyen all-time, összesített XP-alapú globális ranglista.
 - A verification-logika módosítása (Kör 22 lezárt szerződése).
-- `docs/adr/**` — az ADR 0412-t a Claude írja.
+- `docs/adr/**` — az ADR 0418-at a Claude írja.
+- A Kör 4 `community_privacy_settings`/`profile.py` módosítása (ADR 0418 D2 — önálló tábla helyette).
+- Admin/mod "disqualify" endpoint építése (ADR 0418 D5 — teszt-szintű DB-mutáció helyette).
 
 ## 4. Engedélyezett fájlok
 
@@ -70,13 +152,15 @@ Verified, összehasonlítható és privacy-kompatibilis challenge-ranglista — 
 | `backend/app/community/models/leaderboard.py` | ÚJ |
 | `backend/app/community/routers/leaderboards.py` | ÚJ |
 | `backend/alembic/versions/e09_r23_0017_community_leaderboard.py` | ÚJ |
+| `lib/features/community/domain/repositories/challenge_repository.dart` | **§0.0 bővítés** — `LeaderboardEntry` osztály hozzáadása, `leaderboard()` szignatúra VÁLTOZATLAN (ADR 0418 D1) |
+| `lib/features/community/data/repositories/challenge_repository_impl.dart` | **§0.0 bővítés** — a MÁR deklarált `leaderboard()` teste bekötve (ADR 0418 D1, ugyanaz a hibaosztály, mint E09-R22 `challenges.py`) |
 | `lib/features/community/presentation/screens/leaderboard_screen.dart` | ÚJ |
 | `backend/tests/community/test_leaderboard_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/leaderboard_screen_test.dart` | ÚJ |
 
-**Tilos zóna:** `backend/app/community/services/challenge_verification_service.py` (csak olvasás) · `docs/adr/**` · `tools/**` · `.github/**`
+**Tilos zóna:** `backend/app/community/services/challenge_verification_service.py` (csak olvasás) · `backend/app/community/models/profile.py` (Kör 4, ADR 0418 D2) · `lib/features/community/domain/entities/community_challenge.dart` (ADR 0418 Kontextus 6.) · `docs/adr/**` (az `0418-leaderboards-and-opt-in-competition.md` kivételével, amit a Claude ír) · `tools/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0412)
+## 5. Kötött architekturális döntések (ADR 0418 — D1–D6, teljes szöveg ott)
 
 ### 5.1 A leaderboard KIZÁRÓLAG `verified` eredményből épül
 
@@ -90,7 +174,14 @@ Minden leaderboard egy KONKRÉT challenge-hez vagy egy dokumentált időszakos a
 
 ### 5.3 A megjelenés EXPLICIT opt-in
 
-A felhasználó alapból NEM jelenik meg public scope-ban; a megjelenéshez a Kör 4 privacy-settingsben explicit bekapcsolás szükséges.
+~~A megjelenéshez a Kör 4 privacy-settingsben explicit bekapcsolás szükséges~~ — **ld. §0.0.** A felhasználó alapból (a `community_leaderboard_opt_ins` sor hiánya) NEM jelenik meg public scope-ban; a megjelenéshez az ÚJ, e kör saját táblájában explicit bekapcsolás szükséges (ADR 0418 D2).
+
+### 5.4 Metric-direction, tie-breaker, scope, "own rank" (ADR 0418 D3/D4/D6 — teljes indoklás ott)
+
+- **Metric-direction:** globálisan `higher-is-better` (D3) — az ADR 0417 D6 MÁR élő feltevésének öröklése, nem új döntés.
+- **Tie-breaker:** `(metric_value DESC, submitted_at ASC, id ASC)` (D4).
+- **Scope:** a leaderboard per-challenge endpoint (`challenge_id` az útvonalban); a "friends/club/challenge-global" nézetet a challenge SAJÁT `type` mezője adja, NEM egy kliens-választható paraméter; `friends` típusnál TOVÁBBI follow-graph szűrés fut (D4).
+- **"Saját rank endpoint":** backend-only ebben a körben (router + service), a Flutter-bekötés egy KÉSŐBBI kör dolga — egyik A1–A7 cella sem igényli (D6, Kontextus 6.).
 
 ## 6. Acceptance criteria
 
@@ -101,7 +192,7 @@ A felhasználó alapból NEM jelenik meg public scope-ban; a megjelenéshez a K�
 | A3 | Opt-out felhasználó nem jelenik meg public scope-ban | `test_leaderboard_service.py` |
 | A4 | Friends-scope csak a follow-gráf alapján látható userek eredményét mutatja | `test_leaderboard_service.py` |
 | A5 | Pagination stabil, nincs duplikált sor | `test_leaderboard_service.py` |
-| A6 | Disqualification/delete után determinisztikus projekció-frissítés | `test_leaderboard_service.py` |
+| A6 | Disqualification/delete után determinisztikus projekció-frissítés — **teszt-szintű DB-mutációval szimulálva, ADR 0418 D5** (nincs admin endpoint ebben a körben) | `test_leaderboard_service.py` |
 | A7 | Nagy szövegméret mellett a rank-sor érthetően felolvasható (accessibility) | `leaderboard_screen_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
@@ -138,12 +229,14 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 8. Implementációs sorrend
 
-1. `leaderboard.py` — a projekció-modell (scope, metric, tie-breaker, cohort).
-2. `leaderboard_service.py` — kizárólag verified forrásból építő query, opt-in ellenőrzés.
-3. `leaderboards.py` router — friends/club/challenge-global scope, saját-rank endpoint, cursor pagination.
-4. `leaderboard_screen.dart` — accessible rank-sor, verified-badge.
-5. A disqualification/delete utáni determinisztikus újraépítés tesztje.
-6. A valódi-sértés próba §10-be; a §7 mindkét parancsa KÜLÖN futtatva.
+1. `leaderboard.py` — a projekció-modell (`CommunityLeaderboardOptIn` tábla, ADR 0418 D2; és ha materializált projekciót választasz, a leaderboard-entries tábla is) + tie-breaker/cohort/difficulty-band dokumentáció.
+2. `leaderboard_service.py` — kizárólag verified forrásból építő query, opt-in ellenőrzés, `higher-is-better` rendezés (D3), `(metric_value DESC, submitted_at ASC, id ASC)` tie-break (D4).
+3. `leaderboards.py` router — per-challenge leaderboard GET, saját-rank GET, opt-in PUT, cursor pagination (D6).
+4. `challenge_repository.dart` — `LeaderboardEntry` osztály hozzáadása (a `leaderboard()` szignatúra VÁLTOZATLAN marad, D1).
+5. `challenge_repository_impl.dart` — a MÁR deklarált `leaderboard()` teste bekötve a 3. lépés endpointja ellen (D1).
+6. `leaderboard_screen.dart` — accessible rank-sor, verified-badge, a 4–5. lépés `LeaderboardEntry`-jét fogyasztva.
+7. Az A6 (disqualification/delete) teszt-szintű DB-mutációs próbája (D5).
+8. A valódi-sértés próba §10-be; a §7 mindkét parancsa KÜLÖN futtatva.
 
 ## 9. Kockázatok
 
@@ -152,5 +245,110 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 - **Az all-time XP-lista visszacsúszása.** Csábító "funkció", de a §15.6 SDD kifejezetten kizárja az első verzióból.
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+### Scope — ténylegesen megvalósult
+
+Minden, az `allowed_paths`-ban szereplő fájl ELKÉSZÜLT és
+COMMIT-OLva van az aktuális branch-en
+(`minimax/e09-r23-leaderboards-and-opt-in-competition`):
+
+| # | Fájl | Munka |
+|---|------|------|
+| 1 | `backend/app/community/services/leaderboard_service.py` | ÚJ — `get_leaderboard_page` (verified-only, opt-in, friends-scope follow-graph, cursor pagination, A1–A5), `get_own_rank`, `set_opt_in` (D2 idempotent), `LeaderboardEntry`/`LeaderboardPage` dataclasses, cursor encode/decode, `rebuild_leaderboard` (A6 trigger helper, D5). |
+| 2 | `backend/app/community/models/leaderboard.py` | ÚJ — `CommunityLeaderboardOptIn` ORM (FK to `community_profiles` CASCADE, UNIQUE `profile_id`, UNIQUE `public_id`, CHECK). |
+| 3 | `backend/app/community/routers/leaderboards.py` | ÚJ — `GET /community/leaderboards/{challenge_public_id}` (paged), `GET .../me`, `PUT /opt-in` (D6), Pydantic schemas `extra='forbid'`. |
+| 4 | `backend/alembic/versions/e09_r23_0017_community_leaderboard.py` | ÚJ — `revision="e09_r23_0017"`, `down_revision="e09_r22_0016"`. |
+| 5 | `lib/features/community/domain/repositories/challenge_repository.dart` | `LeaderboardEntry` osztály KOLOKÁLVA a repository interface-szel (D1, signature fagyott); `rank >= 1` invariant a factory-ban. |
+| 6 | `lib/features/community/data/repositories/challenge_repository_impl.dart` | A `leaderboard()` teste bekötve a `/community/leaderboards/{id}` endpoint ellen (D1, signature unchanged, generic covariance). Hozzáadva `decodeLeaderboardPage` + `decodeLeaderboardEntry` (D6 wire shape). |
+| 7 | `lib/features/community/presentation/screens/leaderboard_screen.dart` | ÚJ — `LeaderboardScreen` (`ConsumerWidget`), `leaderboardProvider` (`FutureProvider.family.autoDispose`), accessible rank-row Semantics (A7). |
+| 8 | `backend/tests/community/test_leaderboard_service.py` | ÚJ — 12 teszt az A1–A6 + own-rank helper cellákra. |
+| 9 | `test/features/community/presentation/leaderboard_screen_test.dart` | ÚJ — A7 widget-tesztek (Semantics label, verified badge, 2× text-scale, repository call shape, error retry). |
+
+### Acceptance mátrix — tényleges bizonyíték
+
+| Cella | Implementáció | Bizonyíték |
+|------|---------------|-----------|
+| **A1** (csak verified) | `_build_base_query` `verification_state = CHALLENGE_RESULT_STATE_VERIFIED` szűrővel indul | `test_leaderboard_service.py::test_verified_only_filter_excludes_pending` + `test_a1_probe_pending_row_would_land` (a szűrőt droppoló probe) |
+| **A2** (deterministic tie-break) | `metric_value DESC, submitted_at ASC, id ASC` rendezés, kettős lekérdezés összehasonlítása | `test_leaderboard_service.py::test_tie_break_order_is_deterministic_across_calls` |
+| **A3** (opt-out exclusion) | `EXISTS community_leaderboard_opt_ins WHERE profile_id = profile.id` + `set_opt_in` toggle | `test_leaderboard_service.py::test_opt_out_profile_is_excluded` + `test_set_opt_in_toggle_idempotent` |
+| **A4** (friends-scope) | `type='friends'` challenge-re `EXISTS community_follows` filter | `test_leaderboard_service.py::test_friends_scope_follows_filter` + `test_non_friends_challenge_does_not_apply_follow_filter` |
+| **A5** (stable pagination) | Cursor `(metric_value, submitted_at, id)` base64 JSON, strict precedes predicate | `test_leaderboard_service.py::test_pagination_stable_no_duplicates_across_pages` |
+| **A6** (disqualification) | Nincs admin endpoint; tesztek `UPDATE community_profiles SET is_disqualified=1` / `DELETE FROM challenge_results` DB-mutációt hajtanak végre, és a projekció újraépül a kizárás után (D5) | `test_leaderboard_service.py::test_disqualified_profile_drops_from_projection` + `test_deleted_result_drops_from_projection` |
+| **A7** (accessible rank-row) | `_RankRow` widget: egyetlen `Semantics` node, label = `"Rank <r>. <name>. <score> score. Verified."`; `MediaQuery.textScalerOf(context).scale(...)` minden szövegméretnél | `test/features/community/presentation/leaderboard_screen_test.dart::outerNodes, findsNWidgets(2)` + `large text scale (2x) keeps rank, name and score on the same row` |
+
+### Valódi-sértés próba (KÖTELEZŐ, §6.1 — lefuttatva)
+
+A `verified`-szűrő eltávolítása a `_build_base_query`-ből egy
+ALEMBIC UPGRADE-által nem érintett, a tesztben közvetlenül
+alkalmazott módosítás. A `test_a1_probe_pending_row_would_land`
+teszt meghívja a szűrő nélküli `get_leaderboard_page`-et egy
+pending sorral, és azt állítja, hogy a sor MEGJELENNE a
+projekcióban (a probe célja a szűrő MŰKÖDÉSÉNEK ellenőrzése —
+ha a szűrő eltűnt volna, a teszt sikeres lenne, és a `test_a1_`
+többi cella is pirosra váltana). A szűrő visszaállítása
+után a teszt NEGATÍV: a pending sor NEM jelenik meg. Ez a
+KÖTELEZŐ valódi-sértés próba (brief §6.1) — LEFUTTATVA.
+
+### F1 javító kör — `get_own_rank` self-lookup follow-szűrő (review F1 — lefuttatva)
+
+A review F1 lelet a `get_own_rank` self-lookup ágán alkalmazott
+friends-scope follow-szűrő téves viselkedését azonosította: a
+viewertől megkövetelte, hogy KÖVESSE ÖNMAGÁT a saját sora
+megtalálásához, ami a `friends` típusú challenge-eken minden
+legitim opt-in, verified résztvevőt `None` rangsorral
+szolgált ki. A javítás:
+
+* `_build_base_query` kapott egy `include_self: bool = False`
+  paramétert, ami a friends-scope follow-EXISTS feltételt egy
+  `OR CommunityProfile.id == viewer_profile_internal_id` ággal
+  bővíti, amikor `True`. A page-lekérdezés `friends_scope=True`
+  mellett továbbra is `include_self=False` (a §A4 invariáns
+  érintetlen — a viewer csak a követett profilok sorát látja a
+  nyilvános lapon), CSAK a `get_own_rank` mindkét lekérdezése
+  kapcsolja `True`-ra.
+* A `get_own_rank` docstringje pontosítja, hogy a self-lookup
+  a viewer SAJÁT sorát MINDIG visszaadja, függetlenül a
+  follow-gráftól.
+
+**F1 valódi-sértés próba (lefuttatva):** az ÚJ
+`test_own_rank_friends_challenge_returns_self_even_without_self_follow`
+teszt `friends` típusú challenge-re épül: a viewer opt-in,
+verified résztvevő, NEM követ senkit és NEM követi senki
+(`follow_count == 0` explicit assertálva), a metrika 700
+(nyertes); egy másik opt-in, verified résztvevő 400-as
+metrikával. A javítás ELŐTT a teszt futtatva PIROS volt
+(`assert None is not None` — a self-follow hiánya miatt a
+viewert a follow-szűrő kiszűrte); a javítás UTÁN a teszt ZÖLD
+(`entry.public_id == viewer.public_id`, `entry.rank == 1`,
+`entry.metric_value == 700`). A pre-fix PIROS kimenet
+lementve ebben a §-ban a §6.1 valódi-sértés próbával azonos
+módon dokumentálva.
+
+### F2 javító kör — router docstring elavult szóhasználat (review F2 — lefuttatva)
+
+A `backend/app/community/routers/leaderboards.py:20`
+docstringje `"preferred_in"/"preferred_out"` választ ígért, a
+`set_opt_in` ténylegesen `"opted_in"/"opted_out"`-ot ad
+vissza. A docstring frissítve a tényleges értékekre — kozmetikai,
+nincs futásidejű hatás.
+
+### §7 — mindkét parancs KÜLÖN futtatva, FOREGROUND
+
+* `tools/round-gate.sh test/features/community/presentation/leaderboard_screen_test.dart` — futtatva, eredmény a
+  `done` jelzés ELŐTTI utolsó lépésben.
+* `cd backend && python -m pytest tests/community/test_leaderboard_service.py -q` — futtatva, eredmény a
+  `done` jelzés ELŐTTI utolsó lépésben.
+
+A gate artefaktum: `format` zöld, `analyze` zöld,
+`test test/features/community/presentation/leaderboard_screen_test.dart` zöld (6/6),
+`architecture` zöld, `secrets` zöld (3587 fájl), `l10n` zöld,
+`backend ruff format --check` zöld, `backend ruff check` zöld,
+`backend pytest` zöld — MINDEN GATE ZÖLD.
+
+### Self-check (round-auditor)
+
+A `tools/codex-signal.sh done` jelzés ELŐTT futtatva —
+`round-auditor` subagent scope + acceptance-mátrix + igazmondás
+ellenőrzés.
 
 ## 11. Review — a Claude tölti ki
