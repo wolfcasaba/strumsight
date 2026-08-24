@@ -297,13 +297,11 @@ def _build_base_query(
         )
         .join(
             CommunityChallengeParticipant,
-            CommunityChallengeParticipant.id
-            == CommunityChallengeResult.participant_id,
+            CommunityChallengeParticipant.id == CommunityChallengeResult.participant_id,
         )
         .join(
             CommunityProfile,
-            CommunityProfile.id
-            == CommunityChallengeParticipant.participant_profile_id,
+            CommunityProfile.id == CommunityChallengeParticipant.participant_profile_id,
         )
         .where(
             CommunityChallengeResult.verification_state
@@ -318,8 +316,7 @@ def _build_base_query(
             select(CommunityFollow.id)
             .where(
                 and_(
-                    CommunityFollow.follower_profile_id
-                    == viewer_profile_internal_id,
+                    CommunityFollow.follower_profile_id == viewer_profile_internal_id,
                     CommunityFollow.followed_profile_id == CommunityProfile.id,
                 )
             )
@@ -330,9 +327,7 @@ def _build_base_query(
     return stmt
 
 
-def _next_page_predicate(
-    *, metric_value: int, submitted_at: datetime, row_id: int
-):
+def _next_page_predicate(*, metric_value: int, submitted_at: datetime, row_id: int):
     """Build the next-page WHERE clause for a cursor at
     ``(metric_value, submitted_at, row_id)``.
 
@@ -466,7 +461,15 @@ def get_leaderboard_page(
 
     entries: list[LeaderboardEntry] = []
     for index, row in enumerate(rows):
-        public_id_value, display_name_value, handle_value, metric_value, submitted_at, row_id, _participant_id = row
+        (
+            public_id_value,
+            display_name_value,
+            handle_value,
+            metric_value,
+            submitted_at,
+            row_id,
+            _participant_id,
+        ) = row
         entries.append(
             LeaderboardEntry(
                 public_id=public_id_value,
@@ -481,7 +484,15 @@ def get_leaderboard_page(
     next_cursor: str | None = None
     if has_more and rows:
         last = rows[-1]
-        _public_id, _display_name, _handle, metric_value, submitted_at, row_id, _participant_id = last
+        (
+            _public_id,
+            _display_name,
+            _handle,
+            metric_value,
+            submitted_at,
+            row_id,
+            _participant_id,
+        ) = last
         next_cursor = _encode_leaderboard_cursor(
             metric_value=metric_value,
             submitted_at=submitted_at,
@@ -527,7 +538,15 @@ def get_own_rank(
     row = db.execute(stmt.limit(1)).first()
     if row is None:
         return None
-    public_id_value, display_name_value, handle_value, metric_value, submitted_at, row_id, _participant_id = row
+    (
+        public_id_value,
+        display_name_value,
+        handle_value,
+        metric_value,
+        submitted_at,
+        row_id,
+        _participant_id,
+    ) = row
 
     # Absolute rank — count rows STRICTLY PRECEDING this row.
     rank_count_stmt = _build_base_query(
@@ -541,9 +560,12 @@ def get_own_rank(
             row_id=row_id,
         )
     )
-    rank = db.execute(
-        select(func.count()).select_from(rank_count_stmt.subquery())
-    ).scalar_one() + 1
+    rank = (
+        db.execute(
+            select(func.count()).select_from(rank_count_stmt.subquery())
+        ).scalar_one()
+        + 1
+    )
 
     return LeaderboardEntry(
         public_id=public_id_value,
@@ -634,8 +656,7 @@ def rebuild_leaderboard(
         select(func.count(CommunityChallengeResult.id))
         .join(
             CommunityChallengeParticipant,
-            CommunityChallengeParticipant.id
-            == CommunityChallengeResult.participant_id,
+            CommunityChallengeParticipant.id == CommunityChallengeResult.participant_id,
         )
         .where(
             CommunityChallengeResult.verification_state

@@ -214,9 +214,7 @@ def _make_profile(
         )
     elif display_name is not None:
         db.execute(
-            text(
-                "UPDATE community_profiles SET display_name = :dn WHERE id = :pid"
-            ),
+            text("UPDATE community_profiles SET display_name = :dn WHERE id = :pid"),
             {"dn": display_name, "pid": profile.id},
         )
     db.commit()
@@ -713,12 +711,8 @@ def test_a2_tie_break_stable_across_calls(session_factory) -> None:
     challenge = _insert_challenge(
         session_factory, author=author, challenge_type="dailyCommunity"
     )
-    p1_row = _create_participant(
-        session_factory, challenge=challenge, participant=p1
-    )
-    p2_row = _create_participant(
-        session_factory, challenge=challenge, participant=p2
-    )
+    p1_row = _create_participant(session_factory, challenge=challenge, participant=p1)
+    p2_row = _create_participant(session_factory, challenge=challenge, participant=p2)
     _set_opt_in(session_factory, profile=p1)
     _set_opt_in(session_factory, profile=p2)
     base = _utcnow()
@@ -839,9 +833,7 @@ def test_a3_set_opt_in_toggle_idempotent(session_factory) -> None:
     """A3 — ``set_opt_in`` toggles both directions; a second
     call with the same value is idempotent (no exception).
     """
-    _, _ = _make_user_with_headers(
-        session_factory, user_id=50, email="author50@s.test"
-    )
+    _, _ = _make_user_with_headers(session_factory, user_id=50, email="author50@s.test")
     profile, _ = _make_user_with_headers(
         session_factory, user_id=51, email="toggle@s.test"
     )
@@ -849,33 +841,25 @@ def test_a3_set_opt_in_toggle_idempotent(session_factory) -> None:
     # First opt-in.
     state1 = _service_call(
         session_factory,
-        lambda db: set_opt_in(
-            db, profile_id=profile.id, opted_in=True, now=_utcnow()
-        ),
+        lambda db: set_opt_in(db, profile_id=profile.id, opted_in=True, now=_utcnow()),
     )
     assert state1 == "opted_in"
     # Second opt-in is idempotent.
     state2 = _service_call(
         session_factory,
-        lambda db: set_opt_in(
-            db, profile_id=profile.id, opted_in=True, now=_utcnow()
-        ),
+        lambda db: set_opt_in(db, profile_id=profile.id, opted_in=True, now=_utcnow()),
     )
     assert state2 == "opted_in"
     # Opt-out flips.
     state3 = _service_call(
         session_factory,
-        lambda db: set_opt_in(
-            db, profile_id=profile.id, opted_in=False, now=_utcnow()
-        ),
+        lambda db: set_opt_in(db, profile_id=profile.id, opted_in=False, now=_utcnow()),
     )
     assert state3 == "opted_out"
     # Second opt-out is idempotent.
     state4 = _service_call(
         session_factory,
-        lambda db: set_opt_in(
-            db, profile_id=profile.id, opted_in=False, now=_utcnow()
-        ),
+        lambda db: set_opt_in(db, profile_id=profile.id, opted_in=False, now=_utcnow()),
     )
     assert state4 == "opted_out"
 
@@ -914,9 +898,7 @@ def test_a4_friends_scope_filters_by_viewer_follows(
     )
     _set_opt_in(session_factory, profile=p_followed)
     _set_opt_in(session_factory, profile=p_unfollowed)
-    _create_follow_edge(
-        session_factory, follower=viewer, followed=p_followed
-    )
+    _create_follow_edge(session_factory, follower=viewer, followed=p_followed)
     _insert_verified_result(
         session_factory,
         participant=p_followed_row,
@@ -954,21 +936,13 @@ def test_a4_non_friends_scope_has_no_follow_filter(
     author, _ = _make_user_with_headers(
         session_factory, user_id=70, email="author70@s.test"
     )
-    p1, _ = _make_user_with_headers(
-        session_factory, user_id=71, email="p71@s.test"
-    )
-    p2, _ = _make_user_with_headers(
-        session_factory, user_id=72, email="p72@s.test"
-    )
+    p1, _ = _make_user_with_headers(session_factory, user_id=71, email="p71@s.test")
+    p2, _ = _make_user_with_headers(session_factory, user_id=72, email="p72@s.test")
     challenge = _insert_challenge(
         session_factory, author=author, challenge_type="dailyCommunity"
     )
-    p1_row = _create_participant(
-        session_factory, challenge=challenge, participant=p1
-    )
-    p2_row = _create_participant(
-        session_factory, challenge=challenge, participant=p2
-    )
+    p1_row = _create_participant(session_factory, challenge=challenge, participant=p1)
+    p2_row = _create_participant(session_factory, challenge=challenge, participant=p2)
     _set_opt_in(session_factory, profile=p1)
     _set_opt_in(session_factory, profile=p2)
     # No follow edges between the viewer and either participant.
@@ -1085,21 +1059,13 @@ def test_a6_disqualification_deletes_entry_deterministically(
     author, _ = _make_user_with_headers(
         session_factory, user_id=90, email="author90@s.test"
     )
-    p1, _ = _make_user_with_headers(
-        session_factory, user_id=91, email="p91@s.test"
-    )
-    p2, _ = _make_user_with_headers(
-        session_factory, user_id=92, email="p92@s.test"
-    )
+    p1, _ = _make_user_with_headers(session_factory, user_id=91, email="p91@s.test")
+    p2, _ = _make_user_with_headers(session_factory, user_id=92, email="p92@s.test")
     challenge = _insert_challenge(
         session_factory, author=author, challenge_type="dailyCommunity"
     )
-    p1_row = _create_participant(
-        session_factory, challenge=challenge, participant=p1
-    )
-    p2_row = _create_participant(
-        session_factory, challenge=challenge, participant=p2
-    )
+    p1_row = _create_participant(session_factory, challenge=challenge, participant=p1)
+    p2_row = _create_participant(session_factory, challenge=challenge, participant=p2)
     _set_opt_in(session_factory, profile=p1)
     _set_opt_in(session_factory, profile=p2)
     _insert_verified_result(
@@ -1149,9 +1115,7 @@ def test_a6_disqualification_deletes_entry_deterministically(
     # The §D5 no-op rebuild (re-reads the projection from scratch).
     rebuild_count = _service_call(
         session_factory,
-        lambda db: rebuild_leaderboard(
-            db, challenge_public_id=challenge.public_id
-        ),
+        lambda db: rebuild_leaderboard(db, challenge_public_id=challenge.public_id),
     )
     assert rebuild_count == 1  # p2 only — p1 is now rejected
 
@@ -1180,21 +1144,13 @@ def test_a6_row_deletion_removes_entry_deterministically(
     author, _ = _make_user_with_headers(
         session_factory, user_id=100, email="author100@s.test"
     )
-    p1, _ = _make_user_with_headers(
-        session_factory, user_id=101, email="p101@s.test"
-    )
-    p2, _ = _make_user_with_headers(
-        session_factory, user_id=102, email="p102@s.test"
-    )
+    p1, _ = _make_user_with_headers(session_factory, user_id=101, email="p101@s.test")
+    p2, _ = _make_user_with_headers(session_factory, user_id=102, email="p102@s.test")
     challenge = _insert_challenge(
         session_factory, author=author, challenge_type="dailyCommunity"
     )
-    p1_row = _create_participant(
-        session_factory, challenge=challenge, participant=p1
-    )
-    p2_row = _create_participant(
-        session_factory, challenge=challenge, participant=p2
-    )
+    p1_row = _create_participant(session_factory, challenge=challenge, participant=p1)
+    p2_row = _create_participant(session_factory, challenge=challenge, participant=p2)
     _set_opt_in(session_factory, profile=p1)
     _set_opt_in(session_factory, profile=p2)
     _insert_verified_result(
@@ -1251,15 +1207,11 @@ def test_own_rank_returns_null_when_opted_out(session_factory) -> None:
     author, _ = _make_user_with_headers(
         session_factory, user_id=110, email="author110@s.test"
     )
-    p, _ = _make_user_with_headers(
-        session_factory, user_id=111, email="p111@s.test"
-    )
+    p, _ = _make_user_with_headers(session_factory, user_id=111, email="p111@s.test")
     challenge = _insert_challenge(
         session_factory, author=author, challenge_type="dailyCommunity"
     )
-    p_row = _create_participant(
-        session_factory, challenge=challenge, participant=p
-    )
+    p_row = _create_participant(session_factory, challenge=challenge, participant=p)
     # NOTE: no opt-in row for ``p``.
     _insert_verified_result(
         session_factory,

@@ -35,6 +35,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/features/community/data/repositories/challenge_repository_impl.dart';
+import 'package:strumsight/features/community/domain/entities/community_challenge.dart';
 import 'package:strumsight/features/community/domain/repositories/challenge_repository.dart';
 import 'package:strumsight/features/community/domain/repositories/community_page.dart';
 import 'package:strumsight/features/community/domain/value_objects/content_id.dart';

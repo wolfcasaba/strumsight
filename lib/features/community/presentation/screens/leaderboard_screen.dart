@@ -40,7 +40,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/repositories/challenge_repository_impl.dart';
-import '../../domain/repositories/challenge_repository.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
@@ -260,14 +259,11 @@ class _RankRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             // Verified badge — semantic icon, semantic label.
-            Semantics(
-              label: 'Verified',
-              child: Icon(
-                Icons.verified,
-                color: Theme.of(context).colorScheme.primary,
-                size: textScaler.scale(20),
-                semanticLabel: 'Verified',
-              ),
+            Icon(
+              Icons.verified,
+              color: Theme.of(context).colorScheme.primary,
+              size: textScaler.scale(20),
+              semanticLabel: 'Verified',
             ),
           ],
         ),

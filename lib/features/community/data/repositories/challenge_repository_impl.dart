@@ -294,12 +294,21 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     required Object cursor,
     required int limit,
   }) async {
-    final params = <String, Object?>{'limit': limit};
+    // The ``ApiClient.getJson`` does not accept a
+    // ``queryParameters`` arg — the cursor / limit are encoded
+    // into the path via the same pattern the Kör 21
+    // ``cancelInvite`` uses for the DELETE idempotency key.
     final cursorValue = cursorQueryValue(cursor);
-    if (cursorValue != null) params['cursor'] = cursorValue;
+    final querySegments = <String>[
+      'limit=${Uri.encodeQueryComponent('$limit')}',
+      if (cursorValue != null)
+        'cursor=${Uri.encodeQueryComponent(cursorValue)}',
+    ];
+    final path =
+        '/community/leaderboards/${challengeId.value}'
+        '?${querySegments.join('&')}';
     final result = await _client.getJson<dynamic>(
-      '/community/leaderboards/${challengeId.value}',
-      queryParameters: params,
+      path,
       decode: decodeLeaderboardPage,
     );
     return switch (result) {
