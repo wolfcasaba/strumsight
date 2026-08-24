@@ -94,13 +94,12 @@ def upgrade() -> None:
             ondelete="CASCADE",
             name="fk_community_leaderboard_opt_ins_profile",
         ),
-        sa.UniqueConstraint(
-            "public_id",
-            name="uq_community_leaderboard_opt_ins_public_id",
-        ),
         # §D2 / A3 one-row-per-profile invariant — a second
         # INSERT for the same profile raises ``IntegrityError``
-        # which the service catches (idempotent return).
+        # which the service catches (idempotent return). The
+        # ``public_id`` column's ``unique=True`` also creates a
+        # unique constraint with the SQLAlchemy-default name —
+        # both feed the model-vs-migration comparison.
         sa.UniqueConstraint(
             "profile_id",
             name="uq_community_leaderboard_opt_ins_profile",
