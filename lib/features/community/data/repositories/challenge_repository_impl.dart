@@ -33,6 +33,11 @@ import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
 
+// Re-exported for the ``leaderboard_screen.dart`` so the screen
+// reads ``LeaderboardEntry`` from a single import path.
+export '../../domain/repositories/challenge_repository.dart'
+    show LeaderboardEntry;
+
 /// The single ``communityChallengeApiClient`` provider. Built
 /// lazily so the account-disabled build never constructs the Dio
 /// client at all — the same pattern as
@@ -270,15 +275,37 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     };
   }
 
+  /// Kör 23 — verified-only leaderboard projection (ADR 0418).
+  ///
+  /// The repository hits the
+  /// ``GET /community/leaderboards/{challenge_public_id}`` endpoint
+  /// (Kör 23 D6) and decodes each row into a
+  /// :class:`LeaderboardEntry`. The projection is verified-only
+  /// (A1), opt-in (A3 / D2), and sorted by
+  /// ``(metric_value DESC, submitted_at ASC, id ASC)`` (A2 / D4).
+  /// The interface signature stays ``CommunityPage<Object>``
+  /// (D1 — the column was ``Object`` in Kör 5) and the return
+  /// value is a ``CommunityPage<LeaderboardEntry>`` — Dart generic
+  /// covariance means this is valid against the declared
+  /// ``CommunityPage<Object>`` signature.
   @override
   Future<CommunityPage<Object>> leaderboard({
     required ContentId challengeId,
     required Object cursor,
     required int limit,
   }) async {
-    throw UnimplementedError(
-      'leaderboard is Kör 23 scope; the Kör 22 surface is result-submit only.',
+    final params = <String, Object?>{'limit': limit};
+    final cursorValue = cursorQueryValue(cursor);
+    if (cursorValue != null) params['cursor'] = cursorValue;
+    final result = await _client.getJson<dynamic>(
+      '/community/leaderboards/${challengeId.value}',
+      queryParameters: params,
+      decode: decodeLeaderboardPage,
     );
+    return switch (result) {
+      Success(:final value) => value as CommunityPage<Object>,
+      Failure(:final error) => throw error,
+    };
   }
 
   // ---- internal ----------------------------------------------------------
@@ -345,6 +372,104 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     return CommunityPage<CommunityChallengeDefinition>(
       items: items,
       cursor: cursorPage,
+    );
+  }
+
+  /// Decode the Kör 23 verified-only leaderboard page wire shape.
+  ///
+  /// The backend emits ``{"entries": [...], "next_cursor": "..."}``
+  /// (D6 / §0.0 wire contract). Each row is decoded into a
+  /// :class:`LeaderboardEntry` via the colocated factory
+  /// (``rank >= 1`` invariant is enforced there). The return type
+  /// is ``CommunityPage<LeaderboardEntry>`` — Dart generic
+  /// covariance makes this a valid
+  /// ``CommunityPage<Object>`` against the declared interface
+  /// signature (D1).
+  ///
+  /// The cursor mapping mirrors the Kör 22 listChallenges pattern:
+  /// a missing ``next_cursor`` with empty ``entries`` halts the
+  /// pager; a missing ``next_cursor`` with non-empty ``entries``
+  /// resets the cursor to ``initial()`` for the next round; a
+  /// non-null ``next_cursor`` produces a ``continued()`` cursor.
+  CommunityPage<LeaderboardEntry> decodeLeaderboardPage(
+    Map<String, Object?> json,
+  ) {
+    final rawEntries = json['entries'];
+    if (rawEntries is! List) {
+      throw const FormatException(
+        'community leaderboard wire: entries must be a list',
+      );
+    }
+    final entries = rawEntries
+        .whereType<Map>()
+        .map((row) {
+          final typed = <String, Object?>{};
+          row.forEach((key, value) {
+            if (key is String) typed[key] = value;
+          });
+          return decodeLeaderboardEntry(typed);
+        })
+        .toList(growable: false);
+    final nextCursor = json['next_cursor'];
+    final cursorPage = nextCursor == null
+        ? (entries.isEmpty
+              ? const CursorPage.haltedAfterRequest()
+              : const CursorPage.initial())
+        : CursorPage.continued(nextCursor as String);
+    return CommunityPage<LeaderboardEntry>(items: entries, cursor: cursorPage);
+  }
+
+  /// Decode a single ``LeaderboardEntry`` row.
+  ///
+  /// Wire field shape (Kör 23 D6):
+  /// * ``public_id`` — string UUID
+  /// * ``rank`` — int, 1-based
+  /// * ``display_name`` — string|null
+  /// * ``handle`` — string|null
+  /// * ``metric_value`` — int
+  /// * ``submitted_at`` — ISO 8601 string
+  /// * ``verified_badge`` — bool (always true for verified-only rows)
+  LeaderboardEntry decodeLeaderboardEntry(Map<String, Object?> json) {
+    final publicIdValue = json['public_id'];
+    if (publicIdValue is! String) {
+      throw const FormatException(
+        'community leaderboard wire: public_id must be a string',
+      );
+    }
+    final rankValue = json['rank'];
+    if (rankValue is! int) {
+      throw const FormatException(
+        'community leaderboard wire: rank must be an int',
+      );
+    }
+    final metricValue = json['metric_value'];
+    if (metricValue is! int) {
+      throw const FormatException(
+        'community leaderboard wire: metric_value must be an int',
+      );
+    }
+    final submittedAtValue = json['submitted_at'];
+    if (submittedAtValue is! String) {
+      throw const FormatException(
+        'community leaderboard wire: submitted_at must be a string',
+      );
+    }
+    final verifiedBadge = json['verified_badge'];
+    if (verifiedBadge is! bool) {
+      throw const FormatException(
+        'community leaderboard wire: verified_badge must be a bool',
+      );
+    }
+    return LeaderboardEntry(
+      publicId: PublicUserId(publicIdValue),
+      rank: rankValue,
+      displayName: json['display_name'] is String
+          ? json['display_name'] as String
+          : null,
+      handle: json['handle'] is String ? json['handle'] as String : null,
+      metricValue: metricValue,
+      submittedAt: DateTime.parse(submittedAtValue),
+      verifiedBadge: verifiedBadge,
     );
   }
 
