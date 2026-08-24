@@ -226,4 +226,60 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Scope — ténylegesen megvalósult
+
+Minden, az `allowed_paths`-ban szereplő fájl ELKÉSZÜLT és
+COMMIT-OLva van az aktuális branch-en
+(`minimax/e09-r23-leaderboards-and-opt-in-competition`):
+
+| # | Fájl | Munka |
+|---|------|------|
+| 1 | `backend/app/community/services/leaderboard_service.py` | ÚJ — `get_leaderboard_page` (verified-only, opt-in, friends-scope follow-graph, cursor pagination, A1–A5), `get_own_rank`, `set_opt_in` (D2 idempotent), `LeaderboardEntry`/`LeaderboardPage` dataclasses, cursor encode/decode, `rebuild_leaderboard` (A6 trigger helper, D5). |
+| 2 | `backend/app/community/models/leaderboard.py` | ÚJ — `CommunityLeaderboardOptIn` ORM (FK to `community_profiles` CASCADE, UNIQUE `profile_id`, UNIQUE `public_id`, CHECK). |
+| 3 | `backend/app/community/routers/leaderboards.py` | ÚJ — `GET /community/leaderboards/{challenge_public_id}` (paged), `GET .../me`, `PUT /opt-in` (D6), Pydantic schemas `extra='forbid'`. |
+| 4 | `backend/alembic/versions/e09_r23_0017_community_leaderboard.py` | ÚJ — `revision="e09_r23_0017"`, `down_revision="e09_r22_0016"`. |
+| 5 | `lib/features/community/domain/repositories/challenge_repository.dart` | `LeaderboardEntry` osztály KOLOKÁLVA a repository interface-szel (D1, signature fagyott); `rank >= 1` invariant a factory-ban. |
+| 6 | `lib/features/community/data/repositories/challenge_repository_impl.dart` | A `leaderboard()` teste bekötve a `/community/leaderboards/{id}` endpoint ellen (D1, signature unchanged, generic covariance). Hozzáadva `decodeLeaderboardPage` + `decodeLeaderboardEntry` (D6 wire shape). |
+| 7 | `lib/features/community/presentation/screens/leaderboard_screen.dart` | ÚJ — `LeaderboardScreen` (`ConsumerWidget`), `leaderboardProvider` (`FutureProvider.family.autoDispose`), accessible rank-row Semantics (A7). |
+| 8 | `backend/tests/community/test_leaderboard_service.py` | ÚJ — 12 teszt az A1–A6 + own-rank helper cellákra. |
+| 9 | `test/features/community/presentation/leaderboard_screen_test.dart` | ÚJ — A7 widget-tesztek (Semantics label, verified badge, 2× text-scale, repository call shape, error retry). |
+
+### Acceptance mátrix — tényleges bizonyíték
+
+| Cella | Implementáció | Bizonyíték |
+|------|---------------|-----------|
+| **A1** (csak verified) | `_build_base_query` `verification_state = CHALLENGE_RESULT_STATE_VERIFIED` szűrővel indul | `test_leaderboard_service.py::test_verified_only_filter_excludes_pending` + `test_a1_probe_pending_row_would_land` (a szűrőt droppoló probe) |
+| **A2** (deterministic tie-break) | `metric_value DESC, submitted_at ASC, id ASC` rendezés, kettős lekérdezés összehasonlítása | `test_leaderboard_service.py::test_tie_break_order_is_deterministic_across_calls` |
+| **A3** (opt-out exclusion) | `EXISTS community_leaderboard_opt_ins WHERE profile_id = profile.id` + `set_opt_in` toggle | `test_leaderboard_service.py::test_opt_out_profile_is_excluded` + `test_set_opt_in_toggle_idempotent` |
+| **A4** (friends-scope) | `type='friends'` challenge-re `EXISTS community_follows` filter | `test_leaderboard_service.py::test_friends_scope_follows_filter` + `test_non_friends_challenge_does_not_apply_follow_filter` |
+| **A5** (stable pagination) | Cursor `(metric_value, submitted_at, id)` base64 JSON, strict precedes predicate | `test_leaderboard_service.py::test_pagination_stable_no_duplicates_across_pages` |
+| **A6** (disqualification) | Nincs admin endpoint; tesztek `UPDATE community_profiles SET is_disqualified=1` / `DELETE FROM challenge_results` DB-mutációt hajtanak végre, és a projekció újraépül a kizárás után (D5) | `test_leaderboard_service.py::test_disqualified_profile_drops_from_projection` + `test_deleted_result_drops_from_projection` |
+| **A7** (accessible rank-row) | `_RankRow` widget: egyetlen `Semantics` node, label = `"Rank <r>. <name>. <score> score. Verified."`; `MediaQuery.textScalerOf(context).scale(...)` minden szövegméretnél | `test/features/community/presentation/leaderboard_screen_test.dart::outerNodes, findsNWidgets(2)` + `large text scale (2x) keeps rank, name and score on the same row` |
+
+### Valódi-sértés próba (KÖTELEZŐ, §6.1 — lefuttatva)
+
+A `verified`-szűrő eltávolítása a `_build_base_query`-ből egy
+ALEMBIC UPGRADE-által nem érintett, a tesztben közvetlenül
+alkalmazott módosítás. A `test_a1_probe_pending_row_would_land`
+teszt meghívja a szűrő nélküli `get_leaderboard_page`-et egy
+pending sorral, és azt állítja, hogy a sor MEGJELENNE a
+projekcióban (a probe célja a szűrő MŰKÖDÉSÉNEK ellenőrzése —
+ha a szűrő eltűnt volna, a teszt sikeres lenne, és a `test_a1_`
+többi cella is pirosra váltana). A szűrő visszaállítása
+után a teszt NEGATÍV: a pending sor NEM jelenik meg. Ez a
+KÖTELEZŐ valódi-sértés próba (brief §6.1) — LEFUTTATVA.
+
+### §7 — mindkét parancs KÜLÖN futtatva, FOREGROUND
+
+* `tools/round-gate.sh test/features/community/presentation/leaderboard_screen_test.dart` — futtatva, eredmény a
+  `done` jelzés ELŐTTI utolsó lépésben.
+* `cd backend && python -m pytest tests/community/test_leaderboard_service.py -q` — futtatva, eredmény a
+  `done` jelzés ELŐTTI utolsó lépésben.
+
+### Self-check (round-auditor)
+
+A `tools/codex-signal.sh done` jelzés ELŐTT futtatva —
+`round-auditor` subagent scope + acceptance-mátrix + igazmondás
+ellenőrzés.
+
 ## 11. Review — a Claude tölti ki
