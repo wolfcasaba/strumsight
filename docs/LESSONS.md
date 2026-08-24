@@ -17458,3 +17458,132 @@ a hívási mód a gyanús, nem a git-állapot.
 **Őrteszt:** nincs — a `tools/safe-force-push.sh`-t módosítani (pl. saját
 `cd`/`git -C` hozzáadása) a kör tilos zónája (ADR 0112 §3, `tools/**`); a
 lecke a hívási mintát rögzíti a driver/orchesztrátor oldalán.
+
+## L460 — `find.text()` / `find.bySemanticsLabel()` a `hintText` LÁTHATATLAN maradékát is megtalálja: a "tartós label" invariáns jelenlét-alapú őre VAK a placeholder-sértésre (E13-R11, 2026-08-24)
+
+**Mit mértünk.** Az E13-R11 zászlós architekturális döntése (brief §5.1, SDD
+Ch13 §13.1) az volt, hogy minden mezőnek TARTÓS labelje van, és a §6.1
+mérce-mátrix első sora nevesítve rendelt hozzá őrt: „Csak `hintText`, label
+nélkül → **A1**". A kör TELJESEN ZÖLD gate-tel és zöld CI-vel érkezett a
+review-ba. A reviewer izolált klónban egyetlen sort mutált — pontosan a
+mátrix által leírt sértést (`ss_text_field.dart`):
+
+```dart
+-        labelText: label,
++        hintText: label,
+```
+
+```
+$ flutter test test/core/design_system/forms/ss_inputs_test.dart
+00:01 +8: All tests passed!          ← exit 0, PIROSNAK kellett volna lennie
+```
+
+**A gyökérok** (eldobható próbateszttel, ugyanabban a klónban):
+
+```
+PROBE find.text(label) after typing -> 1 match(es)
+PROBE   -> nearest ancestor opacity = 0.0
+PROBE decoration.labelText = null
+PROBE decoration.hintText  = Song title
+```
+
+1. A Flutter a `hintText` `Text` widgetjét gépelés után **NEM távolítja el a
+   fából**, csak `Opacity(0.0)` alá fadeli. A `find.text()` az opacitást nem
+   nézi, tehát a LÁTHATATLAN maradékot is megtalálja — a cella „a label a
+   FÁBAN van"-t mérte, miközben a saját `reason`-je az ellenkezőjét állította
+   (`'a real label never disappears once typing starts'`).
+2. A második cella (`find.bySemanticsLabel`) sem különböztet: a Flutter a
+   `hintText`-et is beemeli a mező semantics-labeljébe, ha nincs `labelText`.
+
+**A javítás.** Tulajdonság-szintű cella a jelenlét helyett:
+`tester.widget<TextField>(…).decoration!.labelText == label` **ÉS**
+`decoration!.hintText != label`. Ez a mutáción azonnal PIROS
+(`Expected: 'Song title' / Actual: <null>`).
+
+**Egy második, ugyanide tartozó mérés — a láthatósági állítás időzítés-függő.**
+A javító kör egy vizuális cellát is felvett (a label `Opacity`/`FadeTransition`
+őse ne legyen 0), de az a mutáción NEM bukott meg. Ok:
+
+```
+PROBE3 [after single pump()]    opacityAncestors=[1.0, 1.0, 1.0, 1.0, 1.0]
+PROBE3 [after pumpAndSettle()]  opacityAncestors=[0.0, 1.0, 1.0, 1.0, 1.0]
+```
+
+Egyetlen `tester.pump()` után a fade-animáció még EL SEM INDULT, tehát az
+opacity még `1.0`. Láthatóságot mérő cella `pumpAndSettle()`-t kíván.
+
+**Amit ebből tanulunk.** Ha az invariáns LÁTHATÓSÁGRÓL vagy TULAJDONSÁGRÓL
+szól, a `find.byType`/`find.text`/`find.bySemanticsLabel` **jelenlét**-alapú
+őr nem elég — a Flutter sok „eltűnő" elemet a fában hagy. A mérce vagy a
+widget TULAJDONSÁGÁT olvassa, vagy a tényleges renderelt opacitást, és
+utóbbihoz `pumpAndSettle()` kell. Ez az [[L403]] (a próba a widget típusát
+méri, nem a tartalmat) és az [[L446]] (az őr nem azt méri, amit állít)
+harmadik megjelenése.
+
+**Őrteszt:** `test/core/design_system/forms/ss_inputs_test.dart`::`A1 — every
+field carries a persistent label, not just a hint the label is carried by
+labelText, not merely hintText (§5.1)`
+
+## L461 — Egy `ConstrainedBox(minHeight:)` padló, amit a gyerek Material-vezérlő saját `padded` érintési célja amúgy is meghalad, MÉRHETETLEN: a törlése egyetlen cellát sem vált pirosra (E13-R11, 2026-08-24)
+
+**Mit mértünk.** Az E13-R11 brief §6.1-e három kötelező cellát írt elő a 48 dp
+érintési célra (44 dp → elutasítva, 48 dp → elfogadva, 56 dp → elfogadva). Az
+`SsSwitchRow` implementációja helyesen tartalmaz
+`ConstrainedBox(minHeight: SsSemantics.minimumInteractiveDimension)`-t, a
+cella pedig `height >= 48`-at állít. A reviewer törölte a `ConstrainedBox`-ot:
+
+```
+R3 exit=0
+00:01 +9: All tests passed!
+```
+
+**Az ok.** A `Switch` M3-alapértelmezett `MaterialTapTargetSize.padded` célja
+önmagában ~48 dp, és erre rakódik a sor `space2` függőleges paddingja — a sor
+minimális tartalommal is **~64 dp**, tehát a padló SOSEM aktiválódik. A brief
+44 dp-s „küszöb alatti" cellája a TÉNYLEGES komponensen elő sem állítható.
+
+**Ami viszont működik.** A §5.4 ÉRDEMI invariánsát (a TELJES sor érinthető,
+nem csak a kapcsoló) egy külön cella őrzi, és az a mutáció alatt helyesen
+PIROS: `Expected: true / Actual: <false>`.
+
+**Amit ebből tanulunk.** Egy defenzív korlát (padló/plafon), amit a gyerek
+widget saját viselkedése amúgy is teljesít, **nem őrizhető** a komponens
+végállapotának mérésével — a cella zöld marad a korlát nélkül is, és hamis
+biztonságot ad. Két helyes út van: (a) a korlátot ott mérd, ahol tényleg dönt
+(olyan összeállításon, ahol a gyerek intrinsic mérete nem dominál), vagy
+(b) MONDD KI a briefben/jelentésben, hogy a korlát redundáns, és nevezd meg,
+mi őrzi ténylegesen az invariánst. Numerikus küszöb-előírásnál a brief
+írásakor MÉRD MEG, hogy a küszöb alatti bemenet a tényleges komponensen
+előállítható-e — különben a „három kötelező cella" formálisan teljesül,
+tartalmilag nem.
+
+**Őrteszt:** nincs — a lelet MINOR, elfogadva a (b) ágon; a tényleges 48 dp-őr
+`ss_inputs_test.dart`::`tapping the far edge of the row (away from the visible
+switch) still toggles it`.
+
+## L462 — A `gate_shape` őr a gate-szkript OLVASÁSÁRA is elsül: `grep … tools/round-gate.sh | head` = hamis `VIOLATION` (E13-R11, 2026-08-24)
+
+**Mit mértünk.** Az E13-R11 implementer-jelzése `gate_shape=VIOLATION`-t
+tartalmazott, ami az L09-szabály (a gate-et csővezeték/`&&` nélkül kell
+futtatni, mert a pipe elrejti a kilépési kódot) megsértését jelzi. A kör két
+TÉNYLEGES gate-hívása szabályos volt — négy teszt-útvonal, se `| tail`, se
+`| head`, se `&&`. Az őrt egy READ-ONLY vizsgálódás sütötte el:
+
+```bash
+grep -n "analyze" /home/ubuntu/ss-sonnet-impl-e13-r11/tools/round-gate.sh | head -20
+```
+
+Az őr regexe (`tools/mm-round.sh`, `codex-round.sh`)
+`round-gate\.sh[^\n]*(\| *(tail|head)|&&)` a TELJES logra illeszkedik, és nem
+különbözteti meg a gate FUTTATÁSÁT a gate-szkript OLVASÁSÁTÓL — bármely
+`round-gate.sh`-t említő sor, amit később egy `| head` követ, `VIOLATION`-t ad.
+
+**Amit ebből tanulunk.** Egy `VIOLATION`-jelzést a merge előtt **ki kell
+mérni**, nem bemondásra elfogadni vagy elutasítani: a jelzés feldolgozásakor a
+log tényleges `Bash`-hívásait kell kilistázni (a `tool_use` eseményekből), és a
+`round-gate.sh`-val KEZDŐDŐ parancsokat vizsgálni. A hamis pozitív ára
+riasztás-fáradás — ha minden körben elsül, a VALÓDI csővezeték-sértés is
+átcsúszik.
+
+**Őrteszt:** nincs — az őr a `tools/**` alatt van, ami a kör (és az önjavítás)
+tiltott zónája (ADR 0112 §3); a lecke az orchesztrátor-oldali kimérést rögzíti.

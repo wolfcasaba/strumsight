@@ -1,5 +1,95 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R11 KÉSZ — Action, input és form komponenskészlet — PR [#438](https://github.com/wolfcasaba/strumsight/pull/438), squash `d55d1656` (2026-08-24)
+
+**A Ch13 action/input készlete él** (SDD Ch13 §11.2): `SsButton` (primary /
+secondary / tertiary / destructive, méret-stabil loading), `SsIconButton`,
+`SsTextField`, `SsSwitchRow`, `SsChoice` (radio / chip / szegmens),
+`SsValueSlider` (csúszka + pontos numerikus bevitel), `SsValidationSummary` +
+`SsFieldError`. Mind a hét a `public.dart`-on át exportálva.
+Implementer **Claude Sonnet 5** (`sonnet-impl`), orchesztrátor/reviewer
+**Claude Opus 5**. ADR nem íródott (a Ch13 ADR-jei az `a4fdfec2`-ben előre
+merge-elve — ugyanaz a minta, mint E13-R08/R09/R10).
+
+**A pre-flight három elérhetetlen célt fogott meg, mielőtt bármi elindult
+volna** (a brief 2026-08-15-i, a kód azóta elmozdult):
+
+1. **D2 — a brief determinisztikusan haltot adott volna.** Az
+   `allowed_paths` KIZÁRÓLAG a `lib/l10n/app_{en,hu}.arb`-t engedte, ami
+   2026-08-20 óta **generált aggregátum** (ADR 0307 §4). Pontosan az
+   **E08-R12/H6** felállás: az aggregátumba írt kulcsra a `--check` PIROS, a
+   `--write` pedig eldobja őket. Ötödik mérés ([L365](docs/LESSONS.md),
+   [L369](docs/LESSONS.md), [L396](docs/LESSONS.md), E09-R21 kétszer).
+   Feloldás az E13-R10 merge-elt mintájával: a kézzel írt forrás a
+   `lib/l10n/features/design_system_{en,hu}.arb` fragmentum + kötelező
+   `dart run tool/gen_l10n_segments.dart --write` a gate előtt.
+2. **D3 — a `component_catalog_test.dart` csapdája NEM volt a gate-en.** A
+   nem szerkeszthető teszt három **exact-count** állítást tesz az egész fára
+   (1 `SsCard`, 1 `Material` alatta, 1 `DecoratedBox`), és az E13-R10 már
+   MÉRT rajta (el kellett hagynia az `SsSkeleton`-demót). A brief
+   `gate_tests`-én nem szerepelt, tehát a katalógus-bővítés törése csak a CI
+   teljes suite-jában bukott volna ki — **negyedik gate-útvonalként felvéve**.
+3. **D1 — a brief „Ch13 §9.11" hivatkozása nem létező szakasz** (a §9 a
+   §9.8-cal ér véget). Valódi normatív forrás: **§11.2** (komponenslista),
+   **§13.1** (48×48 dp, fókuszsorrend, 200% text scale, „nem csak színnel
+   jelzett állapot" = az A5 gyökere), **§14** (minden string ARB-ba).
+
+A **D5** (az `SsIcon` kétfaktoros API-ja: az `interactive` gyár MAGA csomagol
+`Tooltip` + `Semantics(image:)` fába) új **A9** cellát adott — és menet közben
+valódi hibát fogott: az `SsIconButton` saját semantics-node-ja `container:
+true` nélkül nem volt HATÁR, ezért a `tester.getSemantics` a render-fán
+FELFELÉ sétálva egy külső ősre csúszott.
+
+**A review 1 MAJOR-t talált teljesen zöld gate + zöld CI mellett — és a MAJOR
+nem implementációs hiba volt, hanem VAKON HAGYOTT ŐR.** A kör zászlós
+invariánsa (§5.1 „a placeholder nem label") és a §6.1 mátrix első sora
+(„Csak `hintText`, label nélkül → **A1**") mérve NEM működött:
+
+```
+# a mátrix által nevesített sértés, izolált klónban:
+-        labelText: label,     +        hintText: label,
+$ flutter test test/core/design_system/forms/ss_inputs_test.dart
+00:01 +8: All tests passed!        ← PIROSNAK KELLETT VOLNA LENNIE
+
+# a gyökérok, eldobható próbateszttel:
+PROBE find.text(label) after typing -> 1 match(es)
+PROBE   -> nearest ancestor opacity = 0.0
+PROBE decoration.labelText = null
+```
+
+A `hintText` `Text`-je BENNE MARAD a fában `Opacity(0.0)` alatt, tehát a
+`find.text()` a LÁTHATATLAN maradékot is megtalálja; a `find.bySemanticsLabel`
+szintén zöld, mert a Flutter a `hintText`-et is a mező semantics-labeljébe
+emeli ([L460](docs/LESSONS.md)). A javító kör **production kódot nem
+érintett** — csak a mérce erősödött (tulajdonság-szintű cella:
+`decoration.labelText == label` ÉS `hintText != label`), és a zárást a
+reviewer SAJÁT méréssel igazolta: `Expected: 'Song title' / Actual: <null>`.
+
+1 MINOR (a 48 dp padló-cellája vak — a `ConstrainedBox` törlése nem vált
+pirosra, mert a `Switch` saját `padded` célja amúgy is ~64 dp-re tolja a sort;
+az ÉRDEMI „teljes sor érinthető" invariánst viszont mutáció alatt PIROS cella
+őrzi, [L461](docs/LESSONS.md)) + 2 NOTE nyitva, nem blokkoló.
+
+**Négy valódi-sértés próba** (mind izolált klónban, mind visszaállítva):
+A1 ✅ PIROS (a javítás után) · A2 ✅ PIROS (`Size(217.2,48) → Size(66,48)`) ·
+A3 ✅ PIROS (az implementer `_round(parsed) + 1` mutációja) · A4 „teljes sor"
+✅ PIROS. Az A4 padló és az A1 láthatósági cellája ZÖLD maradt — mindkettő
+dokumentálva.
+
+**A `main` a kör alatt kétszer mozdult** (E09-R22 merge, majd annak záró
+commitja) — mindkétszer `tools/round-land.sh` rebase + kombinált-HEAD gate +
+`safe-force-push`, és MINDKÉTSZER friss exact-SHA CI-dispatch. Exact
+`2f2cdabd`: Full Gate
+[32686489910](https://github.com/wolfcasaba/strumsight/actions/runs/32686489910)
++ Router CI
+[32686151220](https://github.com/wolfcasaba/strumsight/actions/runs/32686151220)
+mind **success**; a saját `round-gate.sh` ugyanezen a SHA-n 12 lépéssel zöld
+(a rebase behúzta az E09-R22 backend-sávját is).
+
+**A `gate_shape=VIOLATION` jelzés FALSE POSITIVE volt** — az őr regexe egy
+`grep -n "analyze" tools/round-gate.sh | head -20` alakú **olvasásra** sült el,
+nem a gate csővezetékes futtatására ([L462](docs/LESSONS.md)).
+
 ## ✅ E09-R22 KÉSZ — Verified result submission és anti-cheat — PR [#437](https://github.com/wolfcasaba/strumsight/pull/437), squash `206d6993` (2026-08-24)
 
 **A challenge-eredmény szerveroldali, idempotens ellenőrzése és anti-cheat védelme él** —
@@ -6125,6 +6215,18 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-24):** `main` @ `d55d1656` — E13-R11 Action, input
+és form komponenskészlet, PR
+[#438](https://github.com/wolfcasaba/strumsight/pull/438), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, 1 javító kör (1 MAJOR: az A1 őre vak volt
+a §6.1 mátrix által nevesített `hintText`-sértésre — a javítás **production
+kódot nem érintett**). Review APPROVED, 0 nyitott BLOCKER/MAJOR
+(`docs/reviews/e13-r11-review.md`), 1 MINOR + 2 NOTE dokumentálva. Exact
+`2f2cdabd`: Full Gate 32686489910 + Router CI 32686151220 mind success.
+Post-merge `tools/round-gate.sh` a friss `main`-en (`d55d1656`) zöld.
+Részletesen a fejléc ✅-blokkban.
+
 **Aktuális állapot (2026-08-23):** `main` @ `25d2e219` — E13-R09 StageScaffold
 és session transport, PR
 [#433](https://github.com/wolfcasaba/strumsight/pull/433), squash-merge.
@@ -6858,6 +6960,20 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E13-R11 — Action, input és form komponenskészlet** (PR
+[#438](https://github.com/wolfcasaba/strumsight/pull/438), squash `d55d1656`,
+ADR nem íródott — a Ch13 ADR-jei már merge-elve). A Ch13 §11.2 action/input
+készlete: `SsButton` négy variánssal és méret-stabil loadinggal, `SsIconButton`,
+`SsTextField` tartós labellel, `SsSwitchRow` teljes soros érintési céllal,
+`SsChoice`, `SsValueSlider` (csúszka + pontos numerikus bevitel, randomizált
+szinkron-property), `SsValidationSummary`. 0 nyitott BLOCKER/MAJOR 1 javító kör
+után — a MAJOR **vakon hagyott őr** volt, nem termékhiba: a §6.1 mátrix
+nevesített `hintText`-sértése zöld gate mellett átment, mert a `find.text()`
+egy `Opacity(0.0)` alatti láthatatlan maradékot is megtalál
+([L460](docs/LESSONS.md)). 1 MINOR ([L461](docs/LESSONS.md)) + 2 NOTE
+dokumentálva. Exact `2f2cdabd`: Full Gate 32686489910 + Router CI 32686151220
+mind success. Részletesen a fejléc ✅-blokkban.
 
 **E13-R09 — StageScaffold és session transport** (PR
 [#433](https://github.com/wolfcasaba/strumsight/pull/433), squash `25d2e219`,
@@ -7781,6 +7897,41 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 **E04-R22 — Tutor Profile, Privacy, Data & Consent UI** — KÉSZ (PR #157, `faa3f32`, nincs új ADR — ADR 0132+0134 hatálya; MiniMax M3; ld. fejléc ✅-blokk).
 
 ## 6. Exact next task
+
+> **Frissítve 2026-08-24 (E13-R11 után).** A **Ch13 sáv következő köre:
+> `E13-R12` — Kártyák, badge-ek és státusz-jelölők**
+> (`docs/rounds/e13-r12-cards-badges-and-status.md`, engine a queue-ban
+> `sonnet-impl`, előre kiosztott ADR `0278` — **MÉRD ÚJRA a pre-flightban:** a
+> Ch13 ADR-jei (0273–0282) az `a4fdfec2`-ben ELŐRE meg lettek írva és
+> merge-elve, tehát a kör NAGY VALÓSZÍNŰSÉGGEL nem ír ADR-t; ez a minta már
+> NÉGYSZER futott — E13-R08/0275, E13-R09/0276, E13-R10/0277, E13-R11/nincs).
+> Az Epic-9 sáv az E09-R22-vel a queue szerint halad tovább.
+>
+> **A Kör 11 mért horgai, amelyekre a Kör 12 ÉPÍT — a pre-flight NE derítse
+> fel újra:**
+>
+> - **Az ARB-forrás a fragmentum, az aggregátum generált.** Ha a Kör 12
+>   briefje csak a `lib/l10n/app_{en,hu}.arb`-t sorolja fel, az **ötödik+1.
+>   ismétlődése** ugyanannak a haltnak — a `lib/l10n/features/design_system_
+>   {en,hu}.arb` MÁR LÉTEZIK (23 kulcs), oda kell írni, majd
+>   `dart run tool/gen_l10n_segments.dart --write` a gate ELŐTT (§0.0/D2).
+> - **A `component_catalog_test.dart` exact-count csapdája ÉL** (1 `SsCard`,
+>   1 `Material` alatta, 1 `DecoratedBox` az EGÉSZ fán), és a fájl **nem
+>   szerkeszthető**. Kártyák/badge-ek katalógus-demója pontosan ebbe fut bele
+>   — a Kör 12 `gate_tests`-ébe VEDD FEL negyedik útvonalként, különben a
+>   törés csak a CI-ban derül ki (§0.0/D3). A `SsCard` demója **különösen**
+>   kockázatos: az egyetlen engedélyezett `SsCard` már el van használva.
+> - **A hozzáférhetőségi konstansok nevesítettek:**
+>   `SsSemantics.minimumInteractiveDimension` (48) és
+>   `SsSemantics.maximumTextScale` (2.0) — új literál helyett ezekre hivatkozz.
+> - **Widget-tesztben a viewportot CSAK a `tester.view.physicalSize` méretezi**
+>   ([L452](docs/LESSONS.md)); a `MediaQuery(size:)` INERT. A `textScaler`
+>   viszont HELYESEN megy `MediaQuery`-n át.
+> - **A jelenlét ≠ láthatóság** ([L460](docs/LESSONS.md)): badge/státusz-cellát
+>   ne `find.byType`/`find.text` jelenléttel őrizz, ha az invariáns
+>   LÁTHATÓSÁGRÓL vagy TULAJDONSÁGRÓL szól — a Kör 11 MAJOR-ja pontosan ez volt.
+> - **A `Theme.of(context).extension<SsColorScheme>()!` a bevett minta** a
+>   design-system fában (10+ merge-elt fájl) — nem lelet.
 
 **Két sáv fut párhuzamosan** (`docs/execution/pipeline-slots`), a kör-sorrendet
 a `docs/execution/pipeline-queue.tsv` vezeti — az alábbi a 2026-08-23-i állapot,
