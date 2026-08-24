@@ -17645,3 +17645,68 @@ következőre). Ez a helyes kerülőút, nem a script átírása.
 orchesztrátor-oldali invokációs mintát rögzíti. Egy jövőbeli, tools/-on belüli
 javítás (pl. `resolve_backend_python()` mindig `readlink -f`-fel abszolutizálja
 a relatív jelöltet, mielőtt visszaadja) a self-heal kör hatásköre.
+
+## L465 — A képernyő-leltár egzakt `hasLength()` száma minden ÚJ `_screen.dart`-nál elmozdul: ha a brief `allowed_paths`-a nem engedi a leltártesztet, a kör a ~17 perces exact-SHA Full Gate-en bukik, és a javító ciklus ~60 percet vesz el a 4 órás kerettől (E09-R24 H-NOSIGNAL önjavítás, 2026-08-24)
+
+**Mit mértem.** Az E09-R24 orchestrátor-sessionje jelzés nélkül, a 4 órás
+abszolút időkorlátnál halt meg (`H-NOSIGNAL`, exit 124). A session-napló
+(`.pipeline/session-E09-R24-20260824T065506.log`, transcript
+`fcca50e3-943f-476b-bf18-e5b980aad4e6.jsonl`) idő-elemzése szerint a 240
+percből 198 perc blokkoló várakozás volt, ebből ~60 perc EGYETLEN,
+elkerülhető újramunka:
+
+| idő | esemény |
+|---|---|
+| 09:50:26–10:07:41 | `full-gate.yml` 32713670226 a `855db329` SHA-n **FAILURE**: `test/ui/ui_inventory_test.dart` `hasLength(76)` vs a tényleges 79 |
+| ~10:08–10:10 | diagnózis + `§0.0c` brief-revízió a `main`-en (`863a8ac3`) |
+| 10:10:41–10:24:25 | EGY TELJES javító implementer-kör az egysoros szám-emelésért |
+| 10:24:50–10:42:30 | `full-gate.yml` 32716654207 újrafuttatás (success) |
+| 10:45:30–10:55:22 | `round-land.sh` elindult ~10 perc kerettel, a session a futása közben lejárt |
+
+A kör ~4 óra 10 percet igényelt, 4 óra állt rendelkezésre. A halt oka tehát
+NEM kódhiba és NEM a `wait-for-ci.sh` auto-háttérbe kerülése: azt külön
+megmértem, a CI valóban 17p40s-ig futott, és a várakozás 4 másodpercen belül
+vette észre a befejezést. Az ok BRIEF-hiba: a dispatchelt `allowed_paths`
+(`b2cf3e35`) három ÚJ `lib/features/**/*_screen.dart` fájlt engedett, de a
+determinisztikus képernyő-leltár tesztjét nem — így az implementer hozzá sem
+nyúlhatott, a szám-emelés kimaradt, és a hiba csak a CI-ben derült ki.
+
+**Amit ebből tanulunk.** A `tool/ui_inventory.dart` a `lib/features/**` fa
+`_screen.dart` végű fájljait számolja, a teszt pedig EGZAKT
+`screenPaths, hasLength(N)`-et állít — tehát minden ÚJ képernyő elmozdítja a
+számot, MÓDOSÍTÁS viszont nem. A hibaosztály precedenses (E08-R15/H3 PR #383
+`ae562c34`, ahol 5442 zöld teszt mellett egyedül a leltárteszt bukott; E09-R21
+§0.0, ahol a pre-flight elkapta 74→75), de a védelem eddig KÖRSPECIFIKUS,
+utólag írt regressziós tesztekben élt (`test_e08_r15_ui_inventory_scope.py`),
+ezért a KÖVETKEZŐ kört nem védte. Az E09-R24 saját commit-üzenete (`863a8ac3`)
+ki is mondja: *„my own pre-flight missed applying it here despite having read
+that exact precedent"* — vagyis a precedens ELOLVASÁSA nem elég, gépi őr kell.
+
+A védelem helye a `tools/brief-lint.py` **pre-dispatch** szintje
+(`round-pipeline.sh` `write_brief_lint`), ahol a `strict` lelet a kör
+pre-flightjának teendőlistájaként jelenik meg — a lint saját fejléce pontosan
+erre való: „a mért javító körök nagy része nem kódhiba, hanem BRIEF-hiba".
+
+A LÉTEZÉS-feltétel (`not (repo / path).exists()`) nem finomkodás, hanem a
+hamis riasztás elleni mérce. MÉRVE a 343 briefes korpuszon: a naiv „említ egy
+`_screen.dart`-ot" szabály **39 briefre** lőne, ebből **36 már zölden
+merge-elt** körre (azok a képernyőt módosították, nem hozták létre) — mind
+hamis riasztás. A feltétellel **0 hamis** marad, és pontosan 4 valódi lelet:
+`e09-r25`, `e09-r28`, `e09-r29`, `e10-r31` — mind `pending`. Az `e09-r25` a
+sor KÖVETKEZŐ E09 köre, tehát ugyanez a halt egy körön belül visszatért volna.
+Ez a lint saját, korábban mért elve is: „egy hamis riasztás rosszabb a hiányzó
+ellenőrzésnél: leszoktat az olvasásáról".
+
+A lelet `strict`, NEM `base`: a `base` CI-kapu szintje bizonyítottan
+változatlan (`--all --level base` kilépési kód a javítás előtt és után is 2),
+tehát a meglévő briefek nem válnak visszamenőleg pirossá.
+
+**Őrteszt:** `tools/tests/test_brief_ui_inventory_scope.py` — a mért PIROS
+cella az E09-R24 dispatchelt briefjének három valódi klub-képernyője, a mért
+ZÖLD cella a `863a8ac3` revízió; a falszifikációs cellák a MÁR LÉTEZŐ képernyő
+(nem lő), a `lib/features/**`-en kívüli képernyő (nem lő) és a csak
+`allowed_paths`-ba felvett leltárteszt (lő — a lokális gate is futtassa).
+Külön cella köti a predikátumot a CI igazságához: ha a `tool/ui_inventory.dart`
+képernyő-szabálya vagy a teszt `hasLength(...)` alakja megváltozik, a teszt
+pirosra vált, hogy az `S9` ne avuljon el némán. A korpusz-cella pedig azt
+állítja, hogy egyetlen már lefutott kör sem kap visszamenőleg leletet.
