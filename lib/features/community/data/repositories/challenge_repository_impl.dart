@@ -1,5 +1,5 @@
 /// Dio-backed implementation of [CommunityChallengeRepository]
-/// (E09-R21, ADR 0415).
+/// (E09-R21, ADR 0415; E09-R22, ADR 0417).
 ///
 /// The repository implements the **existing**
 /// ``CommunityChallengeRepository`` contract from Kör 5 (ADR 0399)
@@ -15,9 +15,9 @@
 ///   ``community_challenges_screen`` can render the screen from
 ///   real backend data.
 /// * The 2 result / leaderboard methods (``submitResult`` /
-///   ``leaderboard``) raise ``UnimplementedError`` — Kör 22 / 23
-///   scope, the Kör 21 ``allowed_paths`` does not include their
-///   wire surfaces (the §0.0 D6 / ADR 0415 §D6 scope-shrink).
+///   ``leaderboard``) raise ``UnimplementedError`` (Kör 23 scope)
+///   or, for ``submitResult``, hit the Kör 22 service layer
+///   (the wire surface is the Kör 22 ``allowed_paths``).
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -35,8 +35,9 @@ import '../../domain/value_objects/public_user_id.dart';
 
 /// The single ``communityChallengeApiClient`` provider. Built
 /// lazily so the account-disabled build never constructs the Dio
-/// client at all — the same pattern as ``communitySocialApiClient
-/// Provider`` in ``relationship_repository_impl.dart``.
+/// client at all — the same pattern as
+/// ``communitySocialApiClientProvider`` in
+/// ``relationship_repository_impl.dart``.
 final communityChallengeApiClientProvider = Provider<ApiClient?>(
   (ref) => ref.watch(accountApiClientProvider),
 );
@@ -45,7 +46,7 @@ final communityChallengeApiClientProvider = Provider<ApiClient?>(
 /// every call. Mirrors the pattern of
 /// ``DisabledSocialGraphRepository`` /
 /// ``DisabledCommunityProfileRepository`` so the controller code
-/// path is uniform across the three repository flavors.
+/// path is uniform across the three repository flavours.
 final class DisabledCommunityChallengeRepository
     implements CommunityChallengeRepository {
   const DisabledCommunityChallengeRepository();
@@ -100,22 +101,14 @@ final class DisabledCommunityChallengeRepository
     required int metricValue,
     required String sourceEventId,
     required String idempotencyKey,
-  }) async {
-    throw UnimplementedError(
-      'submitResult is Kör 22 scope; the Kör 21 surface is invite-only.',
-    );
-  }
+  }) async => throw _disabled.error;
 
   @override
   Future<CommunityPage<Object>> leaderboard({
     required ContentId challengeId,
     required Object cursor,
     required int limit,
-  }) async {
-    throw UnimplementedError(
-      'leaderboard is Kör 23 scope; the Kör 21 surface is invite-only.',
-    );
-  }
+  }) async => throw _disabled.error;
 }
 
 /// Live HTTP-backed challenge repository.
@@ -130,11 +123,11 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     required int limit,
   }) async {
     final params = <String, Object?>{'limit': limit};
-    final cursorValue = _cursorQueryValue(cursor);
+    final cursorValue = cursorQueryValue(cursor);
     if (cursorValue != null) params['cursor'] = cursorValue;
     final result = await _client.getJson<dynamic>(
       '/community/challenges',
-      decode: _decodeChallengeListPage,
+      decode: decodeChallengeListPage,
     );
     return switch (result) {
       Success(:final value) =>
@@ -149,7 +142,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
   }) async {
     final result = await _client.getJson<dynamic>(
       '/community/challenges/${challengeId.value}',
-      decode: _decodeChallengeDefinition,
+      decode: decodeChallengeDefinition,
     );
     return switch (result) {
       Success(:final value) => value as CommunityChallengeDefinition,
@@ -166,7 +159,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
       decode: (json) => json,
     );
     return switch (result) {
-      Success(:final value) => _decodeParticipantOrNull(
+      Success(:final value) => decodeParticipantOrNull(
         challengeId: challengeId,
         raw: value,
       ),
@@ -174,14 +167,14 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     };
   }
 
-  CommunityChallengeParticipantState? _decodeParticipantOrNull({
+  CommunityChallengeParticipantState? decodeParticipantOrNull({
     required ContentId challengeId,
     required Object? raw,
   }) {
     if (raw is! Map) return null;
     final participantValue = raw['participant'];
     if (participantValue == null) return null;
-    return _decodeParticipant(
+    return decodeParticipant(
       challengeId: challengeId,
       json: participantValue as Map<String, Object?>,
     );
@@ -201,7 +194,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
       },
     );
     if (result is Failure) {
-      throw (result).error;
+      throw result.error;
     }
   }
 
@@ -215,7 +208,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
       data: <String, Object?>{'idempotency_key': idempotencyKey},
     );
     if (result is Failure) {
-      throw (result).error;
+      throw result.error;
     }
   }
 
@@ -229,7 +222,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
       data: <String, Object?>{'idempotency_key': idempotencyKey},
     );
     if (result is Failure) {
-      throw (result).error;
+      throw result.error;
     }
   }
 
@@ -244,10 +237,17 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
         '?idempotency_key=${Uri.encodeQueryComponent(idempotencyKey)}';
     final result = await _client.delete(path, headers: const {});
     if (result is Failure) {
-      throw (result).error;
+      throw result.error;
     }
   }
 
+  /// Kör 22 — verified result submission (ADR 0417).
+  ///
+  /// The repository's ``submitResult`` returns ``Future<void>`` —
+  /// a successful HTTP round-trip is the contract (the controller's
+  /// separate pending-verification state is the §A7 surface; the
+  /// §5.3 "local session success stays intact on upload failure"
+  /// invariant lives in ``challenge_result_controller.dart``).
   @override
   Future<void> submitResult({
     required ContentId challengeId,
@@ -255,9 +255,19 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     required String sourceEventId,
     required String idempotencyKey,
   }) async {
-    throw UnimplementedError(
-      'submitResult is Kör 22 scope; the Kör 21 surface is invite-only.',
+    final result = await _client.postJson<dynamic>(
+      '/community/challenges/${challengeId.value}/results',
+      data: <String, Object?>{
+        'metric_value': metricValue,
+        'source_event_id': sourceEventId,
+        'idempotency_key': idempotencyKey,
+      },
+      decode: decodeResult,
     );
+    return switch (result) {
+      Success() => null,
+      Failure(:final error) => throw error,
+    };
   }
 
   @override
@@ -267,13 +277,35 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     required int limit,
   }) async {
     throw UnimplementedError(
-      'leaderboard is Kör 23 scope; the Kör 21 surface is invite-only.',
+      'leaderboard is Kör 23 scope; the Kör 22 surface is result-submit only.',
     );
   }
 
   // ---- internal ----------------------------------------------------------
 
-  String? _cursorQueryValue(Object cursor) {
+  /// Decode the Kör 22 verified-receipt wire shape.
+  ///
+  /// The repository's ``submitResult`` returns ``Future<void>`` —
+  /// a successful HTTP round-trip is the contract. The decoder
+  /// only asserts the response shape; the controller pulls the
+  /// decision from its OWN application state (a SEPARATE
+  /// pending-verification layer, §A7 / §5.3).
+  void decodeResult(Map<String, Object?> json) {
+    final state = json['verification_state'];
+    if (state is! String) {
+      throw const FormatException(
+        'community challenge result wire: verification_state must be a string',
+      );
+    }
+    final reason = json['reason_code'];
+    if (reason != null && reason is! String) {
+      throw const FormatException(
+        'community challenge result wire: reason_code must be a string',
+      );
+    }
+  }
+
+  String? cursorQueryValue(Object cursor) {
     if (cursor == const CursorPage.initial()) return null;
     if (cursor is CursorPage) {
       return cursor.cursor;
@@ -285,7 +317,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     );
   }
 
-  CommunityPage<CommunityChallengeDefinition> _decodeChallengeListPage(
+  CommunityPage<CommunityChallengeDefinition> decodeChallengeListPage(
     Map<String, Object?> json,
   ) {
     final rawItems = json['items'];
@@ -301,7 +333,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
           row.forEach((key, value) {
             if (key is String) typed[key] = value;
           });
-          return _decodeChallengeDefinition(typed);
+          return decodeChallengeDefinition(typed);
         })
         .toList(growable: false);
     final nextCursor = json['next_cursor'];
@@ -316,7 +348,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     );
   }
 
-  CommunityChallengeDefinition _decodeChallengeDefinition(
+  CommunityChallengeDefinition decodeChallengeDefinition(
     Map<String, Object?> json,
   ) {
     final idValue = json['public_id'];
@@ -375,7 +407,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
     );
   }
 
-  CommunityChallengeParticipantState _decodeParticipant({
+  CommunityChallengeParticipantState decodeParticipant({
     required ContentId challengeId,
     required Map<String, Object?> json,
   }) {
@@ -408,7 +440,7 @@ class HttpCommunityChallengeRepository implements CommunityChallengeRepository {
   }
 }
 
-/// The Community challenge repository wired against the live
+/// The community challenge repository wired against the live
 /// ``accountApiClientProvider`` — null on a build where the
 /// account layer is disabled, the http impl otherwise.
 final communityChallengeRepositoryProvider =

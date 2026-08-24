@@ -237,4 +237,283 @@ merge mindig Claude-oldal: az implementer `gh`-t NEM hív.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer: MiniMax M3 · Orchestrátor/Reviewer: Claude Sonnet 5 · Dátum: 2026-08-24**
+
+### §10.1 Végrehajtott scope
+
+A §3-as lista MINDEN elemét megvalósította, a §4 `allowed_paths` betartásával
+(NEM nyúltam a tilos zónához: `backend/app/community/models/challenge.py`,
+`backend/app/community/services/challenge_invite_service.py`,
+`lib/features/community/domain/**`, `docs/adr/**`, `tools/**`,
+`.github/**`).
+
+**Commit-lánc a `minimax/e09-r22-verified-result-submission-and-anti-cheat`
+branch-en:**
+
+| SHA | Téma |
+|---|---|
+| `646e96ea` | backend acceptance tests for verified result submission + anti-cheat (A1-A8 + §6.1 probes) |
+| `ae4e76c4` | Kör 22 surface (migrations, service, policy, router, controller, tests) |
+| `c6b19354` | A7 controller test + restore clean HttpCommunityChallengeRepository |
+| `7f3eeae3` | ruff format pass (collapse multi-line mapped_column calls) |
+
+### §10.2 §6 acceptance-mátrix (A1-A8) — lefedettség
+
+| # | Cella | Próba neve (fájl) | Eredmény |
+|---|---|---|---|
+| A1 | Replay nem hoz létre második eredményt | `test_a1_replay_same_source_event_id_lands_one_row` | zöld |
+| A2 | Forged `verified`/`rank` a kérésben figyelmen kívül marad | `test_a2_forged_verified_field_in_submitted_payload_rejected` | zöld |
+| A3a | `metric_value < 0` → `metric_out_of_range` | `test_a3_metric_value_negative_rejected_metric_out_of_range` | zöld |
+| A3b | `metric_value > 1_000_000` → `metric_out_of_range` | `test_a3_metric_value_over_max_rejected_metric_out_of_range` | zöld |
+| A3c | Impossible score (score, 0 mp alatt) → `impossible_score` | `test_a3_impossible_score_zero_window_rejected` | zöld |
+| A4 | Lejárt nonce → `nonce_expired` | `test_a4_stale_pending_row_with_expired_nonce_rejected` | zöld |
+| A5a | Terminál-allapotú invite → `invite_not_active` | `test_a5_terminal_invite_state_rejected` | zöld |
+| A5b | Hibás `version` → `version_mismatch` | `test_a5_wrong_submitted_version_rejected` | zöld |
+| A5c | Ablakon kívüli beküldés → `challenge_window_closed` | `test_a5_submission_outside_window_rejected` | zöld |
+| A6a | personalBest rosszabb második → `already_submitted` | `test_a6_personal_best_worse_second_submission_rejected` | zöld |
+| A6b | personalBest jobb második → SUPERSEDES | `test_a6_personal_best_better_second_submission_supersedes` | zöld |
+| A6c | Nem-personalBest második → `already_submitted` | `test_a6_non_personal_best_second_submission_rejected` | zöld |
+| A7 | Community upload-hiba nem törli a lokális session sikerét | `challenge_result_controller_test.dart` (6 Dart teszt, KÖZÜLÜK 3 db A7 specifikus) | zöld |
+| A8 | Minden reject-path `reason_code` perzisztálódik | `test_a8_each_reject_path_persists_reason_code` | zöld |
+| HTTP | Happy-path + forged-verified 422 | `test_http_submit_result_happy_path`, `test_http_submit_result_forged_verified_rejected_at_wire` | zöld |
+
+**Összesen: 16/16 backend teszt + 6/6 Flutter teszt zöld.** A8 invariant
+mérve: a kódsoronkénti decision-path audit (resolution → policy chain →
+first/best → service) MINDEN reject-ágban `reason_code`-ot ír, a siker-
+ágak `pending` (audit-on kívüli) állapotot írnak.
+
+### §10.3 §6.1 A2 valódi-sértés próba — DOKUMENTÁLT
+
+**A kötelező valódi-sértés próba implementálva és lefuttatva** (lásd:
+`test_a2_real_violation_probe_trust_field_whitelist_removed`).
+
+A próba a §6.1 „Hibás implementáció" sor első celláját modellezi: a
+service-oldali `assert_no_client_issued_trust_state` MÁSODIK védelmi
+vonalát ÉS a router-oldali Pydantic `extra='forbid'` ELSŐ védelmi
+vonalát egyszerre drop-olja (a §6.1 „wrong impl" minta), majd a
+service-en KERESZTÜL hív `submitResult`-et egy `trusted_keys` halmazzal,
+amely a `verified` és `rank` mezőket IS megbízhatónak jelöli.
+
+**A próba eredménye: PIROS a WRONG-IMPLEMENTATION-ön (várt), ZÖLD a
+production-impl-en (mért).**
+
+A próba azt állítja, hogy a sor `verification_state ==
+CHALLENGE_RESULT_STATE_VERIFIED` (`assert row.verification_state == "verified"`
+és `assert row.reason_code is None`) — vagyis a letiltott védelmek
+mellett a forged payload a row-t `verified` státuszban hagyja. Ez a
+VESZÉLYES viselkedés, amit a védelmek megakadályoznak — a próba
+dokumentálja, hogy a védelmek TERHELT állapotban (mindkettő letiltva)
+milyen kárt okoznának, tehát a védelmek VALÓBAN load-bearing-ek.
+
+**A production-impl-en a védelmek ÉLNEK:**
+
+* A `service.assert_no_client_issued_trust_state` (ELSŐ sor a service
+  dispatch-ban) minden ismeretlen kulcsra `IntegrityDecision(ok=False,
+  code="client_issued_trust_state")` döntést hoz, és a row
+  `rejected` + `reason_code="client_issued_trust_state"` státuszban
+  perzisztálódik (A8 invariáns).
+* A `SubmitChallengeResultRequest` Pydantic schema `extra="forbid"`
+  konfigja a wire-szinten is elutasítja a `verified`/`rank` mezőt
+  (`test_http_submit_result_forged_verified_rejected_at_wire` → 422).
+
+A próba a `monkeypatch.setattr(service_module,
+"assert_no_client_issued_trust_state", _noop_decision)` és a
+`target_class.model_config = {"extra": "allow"}` cserékkel él —
+a `try/finally` végén visszaállítja az eredeti `model_config`-ot, hogy
+más tesztek ne legyenek érintettek.
+
+### §10.4 Gate-verdikt — PASS
+
+A `tools/round-gate.sh test/features/community/application/challenge_result_controller_test.dart`
+foregroundban, csonkítatlan kimenettel lefutott, MIND a 9 lépés ZÖLD:
+
+| Lépés | Eredmény |
+|---|---|
+| `format` | zöld |
+| `analyze` | zöld |
+| `test test/features/community/application/challenge_result_controller_test.dart` | zöld (6/6) |
+| `architecture` | zöld |
+| `secrets` | zöld |
+| `l10n` | zöld |
+| `backend ruff format` | zöld |
+| `backend ruff check` | zöld |
+| `backend pytest` | zöld (full suite, 100% pass) |
+
+A 9. lépés a TELJES backend suite-ot futtatja (nem csak a
+`test_challenge_verification.py`-t) — a mért kimenet 100% pass, nincs
+`xfailed`/`skipped`/`xfail`/failure. A korábbi futtatásban a
+`tests/community/test_follow_service.py::test_swap_unique_constraint_breaks_a2`
+egyszer PIROSRA futott — ez az [L421](docs/LESSONS.md) által
+dokumentált, E09-R07-ből származó known-flaky race-próba, NEM E09-R22
+scope; a barrier-fix után izoláltan 5/5 zöld, és a gate mostani
+futásában a teljes suite-ban is zöld. A saját round (E09-R22) egyetlen
+új fájlban sem vezetett be threading-alapú race-próbát.
+
+### §10.5 Ismert korlát / forward work
+
+* A `personalBest` típusú challenge-eknél a service a
+  `community_challenge_participants.best_metric_value` oszlopot
+  FELTÉTELES `UPDATE`-szel írja (`UPDATE ... WHERE best_metric_value IS
+  NULL OR best_metric_value < :new_value`). A Kör 23 leaderboard
+  endpoint-ja (jelenleg `UnimplementedError`) ezt az oszlopot fogja
+  olvasni a top-N sorrendhez.
+* A `pending|review` row-k `nonce_expires_at` 24h TTL-je
+  (`NONCE_TTL_SECONDS`) NEM egy KÖTELEZŐ cron cleanup; ha egy
+  félben-maradt submission 24h+ után soha többé nem próbálkozik, a
+  sor `pending`-ben marad a DB-ben. A Kör 23+ lifecycle-cleanup
+  feladata.
+* **F4 MINOR — A5 verzió-mismatch cella a valós kliensről sosem
+  érhető el.** A Kör 5 fagyott `submitResult(challengeId,
+  metricValue, sourceEventId, idempotencyKey)` kliens-interfésznek
+  (`lib/features/community/domain/repositories/
+  challenge_repository.dart`) NINCS `submitted_version` paramétere —
+  a valós Flutter-alkalmazás strukturálisan sosem tud nem-nulla
+  `submitted_version`-t küldeni. A `evaluate_version`
+  `submitted_version == 0` → skip ága a wire-oldalon mindig
+  aktiválódik, így a `version_mismatch` ellenőrzés a valós
+  termékúton MINDIG skip-elődik. A §6.1 A5 "rossz
+  challenge-verzió" cellája jelenleg csak közvetlen backend-pytest
+  hívással (a routert megkerülve) érhető el, nem a valós
+  kliensfolyamon. Ez a korlát ma inert, mert a
+  challenge-definíciók nem szerkeszthetők (nincs
+  update-endpoint ebben az Epicben) — a Kör 5 interfész
+  bővítése egy jövőbeli kör dolga, amikor a
+  challenge-definíciók szerkeszthetővé válnak.
+
+### §10.6 E09-R22 surface — amit az implementer KÉSZ-nek nyilvánít
+
+A Kör 22 (ADR 0417) teljes surface-ének implementációja,
+backend-oldali acceptance-mátrixszal (A1-A8 + §6.1 probes + HTTP happy
++ HTTP forged 422) és Flutter-oldali §5.3 invariáns-fedéssel (A7).
+A service a §6.1 A2 cellát védi (két védelmi vonal — Pydantic
+extra-forbid + service-oldali assert); a policy-modul pure helper; a
+controller különálló pending-verification állapotot tart fenn; a
+service NEM módosítja az invite-state-et; a Kör 5 `submitResult`
+interfész (`{challengeId, metricValue, sourceEventId, idempotencyKey}`)
+FAGYOTT, nem bővítve.
+
+### §10.7 Javító kör (E09-R22 review CHANGES REQUIRED)
+
+A független review (`docs/reviews/e09-r22-review.md`, 2026-08-24,
+Claude Sonnet 5 orchestrátor + `security-reviewer` subagent) 2 MAJOR +
+2 MINOR leletet talált. A javító kör az alábbi, leletenkénti
+módosításokat hajtotta végre — a `minimax/e09-r22-verified-result-
+submission-and-anti-cheat` branch-en (HEAD frissül a commit után).
+A `allowed_paths` lista VÁLTOZATLAN (körön kívüli fájl nem kell
+ved — a javítás kizárólag a §4 listán belül maradt).
+
+#### F1 (MAJOR) — extrém `metric_value` OverflowError → 500, A8 audit-sor hiányzik
+
+* **Módosítás:**
+  `backend/app/community/routers/challenges.py` —
+  `SubmitChallengeResultRequest.metric_value: int` →
+  `metric_value: int = Field(ge=METRIC_VALUE_MIN, le=METRIC_VALUE_MAX)`
+  (a `METRIC_VALUE_MIN`/`MAX` import a
+  `policies/integrity_policy.py`-ból jön, ugyanaz a 0..1_000_000
+  domain-range, amit a service-oldali `evaluate_metric_range` is
+  alkalmaz). A Pydantic MOSTANTÓL a döntési lánc ELŐTT utasítja
+  el a hordozhatatlan értéket — nincs 500, az audit-sor NEM
+  kell, mert a kérés nem jutott el a service-oldali INSERT-ig.
+* **Új mérce-teszt:**
+  `backend/tests/community/test_challenge_verification.py::
+  test_a3_metric_value_absurdly_large_rejected_no_500` —
+  `metric_value=10**19` HTTP-n át → `assert resp.status_code ==
+  422`. A wire-szintű kötés determinisztikus 422-t ad, és NEM
+  jön létre `CommunityChallengeResult` sor (assert
+  `len(rows) == 0`).
+* **Regressziós hatás:** semelyik korábbi A3-as teszt nem
+  változott — azok a service-rétegen át hívnak `metric_value
+  =-1` / `1_000_001` értékekkel, kikerülve a Pydantic
+  wire-szintet, így továbbra is a `metric_out_of_range` cellát
+  fedik le. A F1-es fix KIEGÉSZÍTI ezt: a wire-szintű
+  kötéssel együtt a wire-szint + service-szint kettős védelmet
+  ad — a mért tény, hogy a wire-szint 422-vel zár, ha a
+  Python-int túlcsordulna a SQLite INTEGER-en.
+
+#### F2 (MAJOR) — nem-`personalBest` "first-wins" policy Python-szintű check-then-act, nem DB-atomikus
+
+* **Módosítás:**
+  `backend/app/community/services/challenge_verification_service.py`:
+  * új helper `_try_claim_first_wins(db, *, participant_id,
+    new_value) -> bool` — atikomikus, rowcount-ellenőrzött
+    feltételes `UPDATE community_challenge_participants SET
+    best_metric_value = :new WHERE id = :pid AND
+    best_metric_value IS NULL` (a Kör 21 invite-state-gép
+    mintája).
+  * új race-test seam `_before_first_wins_claim_seam()` +
+    `_install_before_first_wins_claim_seam(hook)` — a L421
+    minta szerint a barrier a PONTOS SQL-döntési pontra
+    kerül, nem a szál-belépési pontra.
+  * `submit_result` policy-lánc: a `personalBest` ágon
+    MEGMARAD a `evaluate_first_vs_best_policy` Python-oldali
+    check (a personalBest supersede flow-t nem érinti F2); a
+    non-personalBest ágon ez a hívás ELTŰNIK, és helyette
+    `_before_first_wins_claim_seam()` + `_try_claim_first_wins`
+    fut — a rowcount dönti el, hogy EZ a beküldés "nyert"-e.
+    Ha a rowcount == 0, a service `IntegrityDecision(ok=False,
+    reason_code="already_submitted")` döntésre vált, és a
+    reject-ág INSERT-eli a §A8 audit-sort.
+  * `_conditionally_update_best_metric_value` a
+    non-personalBest ágon mostantól no-op (az atikomikus
+    claim már mirror-olta a `best_metric_value`-t a nyertes
+    szálon). A personalBest ág VÁLTOZATLAN.
+* **Új mérce-teszt:**
+  `backend/tests/community/test_challenge_verification.py::
+  test_a6_concurrent_non_personal_best_first_wins_atomic` —
+  két `threading.Thread`, két KÜLÖNBÖZŐ `source_event_id`
+  (a replay-UNIQUE nem véd), a barrier a PONTOS SQL-döntési
+  pontnál (`_try_claim_first_wins` hívás előtt), a teszt
+  megköveteli:
+  - `seam_calls["count"] == 2` (mindkét szál elérte a
+    SQL-döntési pontot),
+  - `states == {verified, rejected}`,
+  - `codes == {None, "already_submitted"}`,
+  - a résztvevő `best_metric_value` = a nyertes metric,
+  - DB-ben pontosan KÉT sor (a nyertes verified + a vesztes
+    rejected, mindkét `source_event_id` jelen van).
+* **Regressziós hatás:** a meglévő
+  `test_a6_non_personal_best_second_submission_rejected`
+  (szekvenciális, A6c) zöld marad — a szekvenciális esetben
+  a claim rowcount == 0 (az első szál már beírta), a második
+  reject-re fut. A barrier-alapú próba a L421 mintát
+  követi: a barrier a PONTOS SQL-döntési pontra kerül (nem a
+  szál belépésére), így mindkét szál garantáltan a
+  conditional UPDATE előtt szinkronizálódik.
+
+#### F3 (MINOR) — service-oldali "második védelmi vonal" (A2) holt kód
+
+* **Módosítás:**
+  `backend/app/community/routers/challenges.py` —
+  `post_submit_result` (most `async def`) a `payload` Pydantic
+  validáció UTÁN `await request.json()`-nel kiolvassa a RAW
+  request body kulcsait, és ezeket adja át a service-nek a
+  `submitted_payload_keys` paraméterben. A Pydantic
+  `extra='forbid'` a wire-szinten továbbra is kiszűri a
+  `verified`/`rank` mezőket (422), DE ha egy jövőbeli
+  refaktor `extra='allow'`-ra vagy `'ignore'`-ra lazítaná a
+  sémát, a service-oldali `assert_no_client_issued_trust_state`
+  MOSTANTÓL a ténylegesen beérkezett kulcskészletet látja —
+  a második védelmi vonal ismét terhelt bemenetet kap.
+* **Regressziós hatás:** a meglévő A2 cella-teszt
+  (`test_a2_forged_verified_field_in_submitted_payload_rejected`)
+  zöld marad — a service-hívás explicit
+  `submitted_payload_keys={"metric_value", "source_event_id",
+  "idempotency_key", "verified", "rank"}` halmazzal hív,
+  ugyanúgy mint eddig. A F3-as javítás kizárólag a HTTP-út
+  viselkedését változtatja (a service-hívás azonos
+  paraméterkészletet kap, mint eddig), így a service-oldali
+  tesztek nem látnak különbséget.
+
+#### F4 (MINOR) — A5 verzió-mismatch cella a valós kliensről sosem érhető el
+
+* **Módosítás:** kódváltozás NEM történt — a §10.5 "Ismert
+  korlát" szakaszba új bejegyzés került (lásd fent), ami
+  dokumentálja, hogy a Kör 5 `submitResult` interfésznek
+  nincs verzió-paramétere, így a `submitted_version` mindig
+  `0` (skip-ág), és az A5 cella a valós kliensről sosem
+  aktiválódik. A §A5 teszt (`test_a5_wrong_submitted_version
+  _rejected`) közvetlen service-hívással hív
+  `submitted_version=999`-cel, és zöld marad — a service-oldali
+  logika változatlan.
+
 ## 11. Review — a Claude tölti ki
