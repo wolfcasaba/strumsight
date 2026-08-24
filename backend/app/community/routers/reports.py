@@ -1,4 +1,4 @@
-"""Community report router — E09-R26, ADR 0414 §5.1.
+"""Community report router — E09-R26, ADR 0422 §5.1.
 
 The single POST endpoint that backs the Flutter ``report_content_sheet``.
 The router's wire shape is the §5.1 sanitized envelope
@@ -148,6 +148,21 @@ def post_report(
     target_id = payload.get("target_id")
     if not isinstance(target_id, str) or not target_id:
         raise HTTPException(status_code=400, detail="target_id required")
+
+    # F1 — the ``target_id`` must be a parseable UUID. A malformed
+    # ``target_id`` (``"not-a-uuid"``) would otherwise reach the
+    # service layer's :func:`target_exists` and raise ``ValueError``
+    # inside ``uuid.UUID(target_id)`` — the router's blanket
+    # ``except ValueError`` would map that to a 404 with the
+    # "reporter profile not found" semantics, which is wrong (the
+    # failure is a malformed client input, not a missing target).
+    try:
+        uuid.UUID(target_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="target_id must be a valid UUID",
+        ) from exc
 
     # ``category`` may be any string here — the service layer rejects
     # unknown values with the §6 A5 contract. Surfacing the failure
