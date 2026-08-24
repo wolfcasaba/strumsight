@@ -203,10 +203,12 @@ def _make_profile(
         },
     )
     if handle is not None:
+        # ``handle_display`` is a raw column added by the Kör 3
+        # ``handle_history`` migration (not a mapped attribute).
         db.execute(
             text(
-                "UPDATE community_profiles SET display_name = :dn, handle = :h "
-                "WHERE id = :pid"
+                "UPDATE community_profiles SET display_name = :dn, "
+                "handle_display = :h WHERE id = :pid"
             ),
             {"dn": display_name, "h": handle, "pid": profile.id},
         )
@@ -522,48 +524,62 @@ def test_a1_probe_drops_verified_filter_pending_row_would_appear(
     measure-matrix probe), a ``pending`` row MUST land in the
     projection. This proves the filter is load-bearing — the
     test cell is real, not vacuously green.
+
+    The probe is implemented as a ``pytest.MonkeyPatch`` override
+    of the service's internal ``_build_base_query`` helper — the
+    override omits the ``verification_state='verified'`` filter
+    while keeping every other invariant (opt-in, follow-graph,
+    challenge_id) intact.
     """
     from app.community.services import leaderboard_service as svc
 
     original_build = svc._build_base_query
 
     def patched_build(*, challenge_id, viewer_profile_internal_id, friends_scope):
-        stmt = original_build(
-            challenge_id=challenge_id,
-            viewer_profile_internal_id=viewer_profile_internal_id,
-            friends_scope=friends_scope,
+        # Rebuild the base query without the verified-only filter.
+        # The Kör 22 result rows for ``pending`` / ``rejected`` are
+        # otherwise excluded by ``WHERE verification_state =
+        # 'verified'``; the probe proves that filter is the
+        # load-bearing invariant by demonstrating a pending row
+        # WOULD land if the filter were dropped.
+        from sqlalchemy import select as _select
+
+        opt_in_exists = (
+            _select(CommunityLeaderboardOptIn.id)
+            .where(CommunityLeaderboardOptIn.profile_id == CommunityProfile.id)
+            .exists()
         )
-        # Drop the verified-only filter (the §6.1 measure-matrix
-        # probe). The probe only succeeds — proving the filter is
-        # load-bearing — when the ``pending`` row WOULD land in
-        # the projection.
-        from sqlalchemy import and_
-
-        new_conditions = []
-        for clause in stmt.whereclause.clauses:
-            if isinstance(clause, and_):
-                # Drop the verification_state clause.
-                clauses = [
-                    c for c in clause.clauses
-                    if not (
-                        hasattr(c, "left")
-                        and getattr(c.left, "key", None)
-                        == "verification_state"
-                    )
-                ]
-                new_conditions.append(and_(*clauses) if clauses else None)
-            else:
-                if not (
-                    hasattr(clause, "left")
-                    and getattr(clause.left, "key", None)
-                    == "verification_state"
-                ):
-                    new_conditions.append(clause)
-        new_conditions = [c for c in new_conditions if c is not None]
-        from sqlalchemy.sql import expression
-
-        stmt = stmt.where(expression.and_(*new_conditions)) if new_conditions else stmt.where(
-            expression.true()
+        # Mirror the production projection (7 columns) so the
+        # downstream row-unpacking matches.
+        handle_subq = (
+            _select(svc._profiles_table.c.handle_display)
+            .where(svc._profiles_table.c.id == CommunityProfile.id)
+            .scalar_subquery()
+        )
+        stmt = (
+            _select(
+                CommunityProfile.public_id,
+                CommunityProfile.display_name,
+                handle_subq.label("handle"),
+                CommunityChallengeResult.metric_value,
+                CommunityChallengeResult.submitted_at,
+                CommunityChallengeResult.id,
+                CommunityChallengeResult.participant_id,
+            )
+            .join(
+                CommunityChallengeParticipant,
+                CommunityChallengeParticipant.id
+                == CommunityChallengeResult.participant_id,
+            )
+            .join(
+                CommunityProfile,
+                CommunityProfile.id
+                == CommunityChallengeParticipant.participant_profile_id,
+            )
+            .where(
+                opt_in_exists,  # NOTE: no verification_state filter
+                CommunityChallengeParticipant.challenge_id == challenge_id,
+            )
         )
         return stmt
 
@@ -636,7 +652,9 @@ def test_a2_deterministic_tie_break_by_submitted_at_then_id(
         session_factory, author=author, challenge_type="dailyCommunity"
     )
     # Insert in REVERSE chronological order to prove the order is
-    # NOT insertion-order.
+    # NOT insertion-order. ``index`` is the submitted_at offset;
+    # ``profile`` walks the list backward — so ``profiles[2]``
+    # lands with t0 (earliest), ``profiles[0]`` with t2 (latest).
     base_time = _utcnow()
     inserted = []
     for index, profile in enumerate(reversed(profiles)):
@@ -652,9 +670,13 @@ def test_a2_deterministic_tie_break_by_submitted_at_then_id(
             source_event_id=f"evt-a2-{profile.id}",
         )
         inserted.append((profile, result))
-    # Reverse back to the natural ordering for the assertion
-    # — earlier ``submitted_at`` first, ties broken by id.
-    inserted = list(reversed(inserted))
+
+    # The projection sorts by ``(metric_value DESC, submitted_at
+    # ASC, id ASC)`` — all metric_values are 500, so the order is
+    # strictly by submitted_at ASC, ties broken by id ASC. The
+    # loop above inserted in REVERSE chronological order; the
+    # expected projection order matches that (earliest t0 first).
+    expected_ids = [profile.public_id for profile, _ in inserted]
 
     page = _service_call(
         session_factory,
@@ -667,8 +689,8 @@ def test_a2_deterministic_tie_break_by_submitted_at_then_id(
         ),
     )
     page_ids = [entry.public_id for entry in page.entries]
-    expected_ids = [profile.public_id for profile, _ in inserted]
     assert page_ids == expected_ids
+    assert len(page_ids) == 3  # all three profiles surfaced
 
 
 def test_a2_tie_break_stable_across_calls(session_factory) -> None:

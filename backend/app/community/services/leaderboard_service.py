@@ -76,6 +76,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ...database import Base
 from ..models.challenge import (
     CHALLENGE_TYPE_FRIENDS,
     CommunityChallenge,
@@ -88,6 +89,15 @@ from ..models.challenge_result import (
 from ..models.leaderboard import CommunityLeaderboardOptIn
 from ..models.profile import CommunityProfile
 from ..models.social_graph import CommunityFollow
+
+
+# The handle lives on ``community_profiles.handle_display`` —
+# a raw column added by the Kör 3 ``handle_history`` migration
+# that is NOT a mapped attribute on :class:`CommunityProfile`.
+# We lift it into the leaderboard query as a correlated subquery
+# so the wire form can carry the @-prefixed handle for the Flutter
+# UI.
+_profiles_table = Base.metadata.tables["community_profiles"]
 
 
 # ---------------------------------------------------------------------------
@@ -261,11 +271,25 @@ def _build_base_query(
         .exists()
     )
 
+    # The handle is stored on ``community_profiles.handle_display``
+    # (a column added by the Kör 3 ``handle_history`` migration —
+    # ``handle_display`` is a raw column on the ``Table``, NOT a
+    # mapped attribute on :class:`CommunityProfile`). The
+    # subquery below lifts it into the projection as a scalar
+    # aliased ``handle`` — the wire shape needs the display form
+    # so the Flutter UI can show ``@handle`` when
+    # ``display_name`` is NULL.
+    handle_subq = (
+        select(_profiles_table.c.handle_display)
+        .where(_profiles_table.c.id == CommunityProfile.id)
+        .scalar_subquery()
+    )
+
     stmt = (
         select(
             CommunityProfile.public_id,
             CommunityProfile.display_name,
-            CommunityProfile.handle,
+            handle_subq.label("handle"),
             CommunityChallengeResult.metric_value,
             CommunityChallengeResult.submitted_at,
             CommunityChallengeResult.id,
