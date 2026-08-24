@@ -969,3 +969,32 @@ def test_post_reports_router_missing_idempotency_key_returns_400(
         headers=headers,
     )
     assert response.status_code == 400
+
+
+def test_post_reports_router_malformed_target_id_returns_400(client, session_factory):
+    """F1 — a malformed ``target_id`` (not a UUID) is rejected at
+    the router with HTTP 400, NOT 404. The §6.1 measure-matrix
+    valódi-sértés: a ``"not-a-uuid"`` body would otherwise leak
+    through ``uuid.UUID(target_id)`` inside ``target_exists`` and
+    surface as a 404 with the wrong semantic — the failure is a
+    malformed client input, not a missing profile.
+    """
+    _reporter_id, headers = _make_user_with_headers(
+        session_factory, email="r@s.test", user_id=42, visibility="public"
+    )
+
+    response = client.post(
+        "/community/reports",
+        json={
+            "idempotency_key": "f1-k1",
+            "target_type": "post",
+            "target_id": "not-a-uuid",
+            "category": "spam",
+        },
+        headers=headers,
+    )
+    assert response.status_code == 400, response.text
+    body = response.json()
+    assert "uuid" in body["detail"].lower(), (
+        f"F1 violated — expected 400 with UUID-related detail, got {body}"
+    )
