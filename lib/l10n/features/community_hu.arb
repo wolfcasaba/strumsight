@@ -464,5 +464,89 @@
         "type": "String"
       }
     }
-  }
+  },
+
+  "reportSheetTitle": "Tartalom bejelentése",
+  "@reportSheetTitle": {},
+
+  "reportSheetBody": "Mondd el, mi a probléma. A bejelentést nem mutatjuk meg a másik félnek.",
+  "@reportSheetBody": {},
+
+  "reportSheetCategoryLabel": "Ok",
+  "@reportSheetCategoryLabel": {},
+
+  "reportSheetCategorySpam": "Spam vagy megtévesztés",
+  "@reportSheetCategorySpam": {},
+
+  "reportSheetCategoryHarassment": "Zaklatás vagy bántalmazás",
+  "@reportSheetCategoryHarassment": {},
+
+  "reportSheetCategoryHateSpeech": "Gyűlöletbeszéd",
+  "@reportSheetCategoryHateSpeech": {},
+
+  "reportSheetCategoryViolence": "Erőszak vagy fenyegetés",
+  "@reportSheetCategoryViolence": {},
+
+  "reportSheetCategorySexualContent": "Szexuális tartalom",
+  "@reportSheetCategorySexualContent": {},
+
+  "reportSheetCategorySelfHarmConcern": "Önkárosítás (valaki más miatti aggodalom)",
+  "@reportSheetCategorySelfHarmConcern": {},
+
+  "reportSheetCategoryCopyright": "Szerzői jogsértés",
+  "@reportSheetCategoryCopyright": {},
+
+  "reportSheetCategoryPrivacy": "Adatvédelmi jogsértés",
+  "@reportSheetCategoryPrivacy": {},
+
+  "reportSheetCategoryMisinformation": "Félretájékoztatás",
+  "@reportSheetCategoryMisinformation": {},
+
+  "reportSheetCategoryOther": "Valami más",
+  "@reportSheetCategoryOther": {},
+
+  "reportSheetSubmit": "Bejelentés elküldése",
+  "@reportSheetSubmit": {},
+
+  "reportSheetSubmitting": "Küldés…",
+  "@reportSheetSubmitting": {},
+
+  "reportSheetCancel": "Mégse",
+  "@reportSheetCancel": {},
+
+  "reportSheetThanksTitle": "Bejelentés megérkezett — köszönjük",
+  "@reportSheetThanksTitle": {},
+
+  "reportSheetThanksBody": "Átnézzük. Nem kell tovább nézegetned. Mit szeretnél tenni?",
+  "@reportSheetThanksBody": {},
+
+  "reportSheetActionHide": "Elrejtés a feedből",
+  "@reportSheetActionHide": {},
+
+  "reportSheetActionMute": "Személy némítása",
+  "@reportSheetActionMute": {},
+
+  "reportSheetActionBlock": "Személy letiltása",
+  "@reportSheetActionBlock": {},
+
+  "reportSheetActionDone": "Bezárás",
+  "@reportSheetActionDone": {},
+
+  "reportSheetSelfHarmHelper": "Ha valaki közvetlen veszélyben van, hívd a helyi segélyhívót. Az itteni bejelentések a moderációs csapathoz jutnak — nem helyettesítik a vészhívást.",
+  "@reportSheetSelfHarmHelper": {},
+
+  "reportSheetSemanticsTitle": "Tartalom bejelentése párbeszédablak",
+  "@reportSheetSemanticsTitle": {},
+
+  "reportSheetSemanticsCategoryHint": "Válaszd ki a bejelentés okát",
+  "@reportSheetSemanticsCategoryHint": {},
+
+  "reportSheetErrorRateLimited": "Elérted a bejelentési limitet. Kérjük, próbáld újra egy óra múlva.",
+  "@reportSheetErrorRateLimited": {},
+
+  "reportSheetErrorInvalid": "A bejelentést nem sikerült elküldeni. Próbáld újra.",
+  "@reportSheetErrorInvalid": {},
+
+  "reportSheetErrorNetwork": "Nincs hálózati kapcsolat",
+  "@reportSheetErrorNetwork": {}
 }
