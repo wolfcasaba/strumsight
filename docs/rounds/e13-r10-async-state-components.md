@@ -349,4 +349,95 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (sonnet-impl), 2026-08-24.
+
+### Mit épített
+
+- `failure_presentation.dart` — `SsFailurePresentation.from(AppLocalizations,
+  AppFailure)`: az `AppFailure.code` (kategóriánkénti switch: permission
+  mikrofon/kamera/unavailable külön, network unavailable külön a többi
+  network-kódtól, auth és storage kategóriánként összevonva, minden más a
+  generikus „ismeretlen" ágra) → cím + üzenet, és az `AppFailure.retryable` →
+  az akciólista (`SsFailureAction`, `SsFailureActionKind`: retry /
+  openSettings / continueOffline / contactSupport). A döntési fa pontosan a
+  §6.1/D5 három cellája szerint: `!retryable && permission-kód` →
+  csak `openSettings`; `retryable` → `retry` (+ `continueOffline`, ha a kód
+  `network.unavailable`); egyébként `contactSupport`. `cause`/`stackTrace`
+  a mapping-be be sem lép (a `from` csak `.code`-ot és `.retryable`-t olvassa).
+- `ss_async_state.dart` — `SsAsyncState` + `SsAsyncStatus` (9 érték:
+  loading/content/empty/offline/syncPending/degraded/permission/failure/
+  blocked). Az `offline`/`syncPending`/`degraded` a `content`-et egy
+  `_CachedContentBanner`-en (Column + banner + Expanded content) keresztül
+  MEGTARTJA, nem cseréli le (§5.2). A `loading` ág egyetlen
+  `Semantics(label: loadingSemanticLabel)`-be csomagolja a `skeleton`
+  slotot — az egyes `SsSkeleton` dobozok nem hordoznak saját címkét.
+- `ss_skeleton.dart` — `SsSkeleton(width, height)`: `ExcludeSemantics`-be
+  csomagolt, `colors.surfaceSunken`-nel színezett doboz, a végleges geometriát
+  tartja.
+- `ss_empty_state.dart` — `SsEmptyState`: `onAction` KÖTELEZŐ (nem
+  nullable) `VoidCallback` — a típus maga zárja ki az akció nélküli üres
+  állapotot.
+- `ss_failure_state.dart` — `SsFailureState`: a `presentation.actions`
+  listából épít gombot (kulcs: `ss-failure-state-<kind>`); egy hiányzó akció
+  = nincs gomb (nem `onPressed: null`-lal letiltott gomb).
+- `ss_permission_state.dart` — `SsPermissionState`: `SsPermissionKind`
+  (microphone/camera/notification/storage) ikon-választáshoz, `rationale` +
+  `consequence` hívó-oldali (lokalizált) szöveg, az akciógombok szintén a
+  `presentation.actions`-ból.
+- `public.dart` — a 6 új fájl exportja.
+- `component_catalog_screen.dart` — `_AsyncFeedbackShowcase`: bemutatja az
+  offline cached-content overlay-t (rögzített magasságú `SizedBox`-ba zárva,
+  mert a katalógus `SingleChildScrollView`-ja végtelen magasságot ad, és az
+  `Expanded` ott hibázna), az `SsEmptyState`-et, egy `SsFailureState`-et
+  (`network.unavailable`) és egy `SsPermissionState`-et (mikrofon,
+  véglegesen megtagadva). A leképezéshez `lookupAppLocalizations(Locale('en'))`-t
+  hív — ez a generált fájl SZINKRON, `Localizations`-ős widget-fa nélkül is
+  működő függvénye, mert a meglévő `component_catalog_test.dart` (nincs az
+  engedélyezett listán, tehát nem módosítható) a katalógust
+  `localizationsDelegates` NÉLKÜLI `MaterialApp`-ban rendereli —
+  `AppLocalizations.of(context)` ott elszállt volna.
+- ARB: `lib/l10n/features/design_system_{en,hu}.arb` (20 kulcs, egyik sem
+  placeholderes, tehát `@kulcs` metaadat egyikhez sem kellett), majd
+  `dart run tool/gen_l10n_segments.dart --write` az aggregátumra és
+  `flutter gen-l10n` a generált `app_localizations*.dart`-ra.
+
+### Döntés a brief keretein belül
+
+A `component_catalog_screen.dart`-ba eredetileg tervezett `SsSkeleton`
+demót elhagytam: a `component_catalog_test.dart` (nincs az engedélyezett
+fájllistán) `expect(find.byType(DecoratedBox), findsOneWidget)`-et mér — az
+`SsSkeleton` maga is `DecoratedBox`-ot rendel, ami ezt a MEGLÉVŐ zöld tesztet
+pirosra váltotta volna (mérve, majd visszavonva). A §3 STOP-protokoll szerint
+meglévő zöld teszt elbukása `blocked` volna, nem a teszt átírása — mivel a
+teszt nincs az allowed_paths-on, nem is módosíthattam volna. A katalógus
+demó ezért `CircularProgressIndicator`-t használ helyette a loading-slot
+bemutatására; ez nem érinti egyik acceptance-cellát sem (A6 bizonyítéka
+kizárólag `async_state_test.dart`). Ugyanígy mértem, hogy az offline overlay
+`Expanded`-je rögzített magasság nélkül elszállna a katalógus végtelen
+magasságú `SingleChildScrollView`-jában — ezért `SizedBox(height: 120, …)`-ba
+csomagoltam. Mindkettőt `flutter test test/core/design_system/component_catalog_test.dart`
+(önálló futtatással, nem a kötelező gate részeként) mérve ellenőriztem: zöld
+maradt a mutáció előtt ÉS után.
+
+### Valódi-sértés próba (§6, kötelező)
+
+Mutáció: `failure_presentation.dart`, az `SsFailurePresentation.from`
+factory-ban a `message: _message(l10n, failure.code)` sort ideiglenesen
+`message: failure.toString()`-re cseréltem (a §5.1 tiltott
+`Text(error.toString())` mintája).
+
+Mérve (`flutter test test/core/design_system/feedback/failure_presentation_test.dart`):
+4 teszt vált PIROSSA — köztük pontosan az A1 cella („an unrecognised code
+gets a human message, not the code itself": `Expected: not contains
+'diagnostics.unmapped_probe'` / `Actual: 'NetworkFailure(diagnostics.unmapped_probe,
+retryable: true)'`) és az A7 cella is (a locale-eltérés eltűnt, mert a
+`toString()` nem lokalizált). A mutációt visszaállítottam
+(`message: _message(l10n, failure.code)`), a teszt újra 12/12 zöld.
+
+### Gate
+
+`tools/round-gate.sh test/core/design_system/feedback/failure_presentation_test.dart
+test/core/design_system/feedback/async_state_test.dart` — MINDEN GATE ZÖLD
+(format, analyze, mindkét teszt, architecture, secrets, l10n).
+
 ## 11. Review — a Claude tölti ki
