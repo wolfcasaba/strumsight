@@ -71,15 +71,25 @@ tényellenőrzést):**
 
 ## Döntés
 
-### D1 — ARB fájlok felvétele az `allowed_paths`-ra (szűk, indokolt bővítés)
+### D1 — ARB FORRÁS-fragmentum felvétele az `allowed_paths`-ra (szűk, indokolt bővítés)
 
-`lib/l10n/app_en.arb` és `lib/l10n/app_hu.arb` bekerül az `allowed_paths`-ba
-(brief §0.0 revízió, lásd a brief fájlban). Indoklás: a report bottom sheet
-lokalizált kategória-címkéket és a §5.3 self-harm safety copy-t visz — az
-ARB az EGYETLEN szankcionált útvonal felhasználó-néző szöveghez (CLAUDE.md).
-A generált `lib/l10n/app_localizations*.dart` gitignore-olt, nem kerül az
-`allowed_paths`-ra (nem is trackelt). Ez ugyanaz a minta, mint az ADR 0402
-D5 "szűk kivétel a domain tilos zónán" — a fájl nincs kifejezetten
+**Javítva (§0.0b, az implementer STOP jelzése után, 2026-08-24 15:45):** az
+eredeti D1 tévesen `lib/l10n/app_{en,hu}.arb`-ot (a szegmentált l10n
+architektúra GENERÁLT kimenete, `tool/gen_l10n_segments.dart --write`
+állítja elő) vette fel — a helyes, forrás-igazságú útvonal
+`lib/l10n/features/community_en.arb` / `community_hu.arb` (a Kör 8 safety-
+kulcsok is ide kerültek, `docs/rounds/e09-r08-...` 607. sor). Ez a pár
+bekerül az `allowed_paths`-ba (brief §0.0/§0.0b revízió). Indoklás: a report
+bottom sheet lokalizált kategória-címkéket és a §5.3 self-harm safety
+copy-t visz — az ARB az EGYETLEN szankcionált útvonal felhasználó-néző
+szöveghez (CLAUDE.md), és a szegmentált architektúrában a FORRÁS mindig a
+`features/*.arb`, sosem az aggregált `app_{en,hu}.arb` (amit a gate saját
+`gen_l10n_segments`/`check_l10n_parity` lépése regenerál és őriz — a
+regenerálás következtében változó `app_{en,hu}.arb` NEM scope-sértés, még
+akkor sem, ha nincs az `allowed_paths`-on, a Kör 8 dokumentált precedense
+szerint). A generált `lib/l10n/app_localizations*.dart` gitignore-olt,
+szintén nem kerül az `allowed_paths`-ra. Ez ugyanaz a minta, mint az ADR
+0402 D5 "szűk kivétel a domain tilos zónán" — a fájl nincs kifejezetten
 felsorolva, de a kör explicit szükséglete miatt, dokumentáltan bekerül, és
 ettől kezdve NEM esik a H3 (tilos zóna) alá (ADR 0087 §2, a pipeline-prompt
 4. szakasza).

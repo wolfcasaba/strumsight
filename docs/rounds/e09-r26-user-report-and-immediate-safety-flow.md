@@ -66,6 +66,48 @@ valódi-sértés próbát indokolja — nem elég pozitív teszttel lefedni az A
 
 Részletes indoklás, elutasított alternatívák: [ADR 0422](../adr/0422-user-report-and-immediate-safety-flow.md).
 
+## 0.0b Pre-flight javítás — hibás l10n útvonal a §0.0 D1-ben (2026-08-24, ugyanazon a napon, az implementer STOP jelzése után)
+
+**Az implementer `stopped`-ot jelzett** (`.codex-round-status`, 15:45:
+*"allowed_paths list lib/l10n/app_en.arb (GENERATED) but did NOT list
+lib/l10n/features/community_en.arb (the actual source-of-truth for fragment
+keys, same precedent as E09-R08 safety keys). gen_l10n_segments wiped my 32
+keys from app_en.arb on --write because no fragment owned them."*) — a §0.0
+D1 (fent) TÉVES útvonalat vett fel: `lib/l10n/app_{en,hu}.arb` a
+**szegmentált l10n architektúra GENERÁLT kimenete** (`tool/gen_l10n_segments.dart
+--write` állítja elő a `lib/l10n/features/*_{en,hu}.arb` FORRÁS-fragmentumokból,
+`tools/round-gate.sh` → `tool/ci/check_l10n_parity.dart` ezt a parityt őrzi).
+A forrás community-domain fragmentum MÁR létezik és MÁR a repóban van:
+`lib/l10n/features/community_en.arb` / `community_hu.arb` (Kör 4 óta,
+legutóbb Kör 21 bővítette) — ugyanaz a fájlpár, amit a Kör 8
+(`docs/rounds/e09-r08-block-mute-and-safety-relationships.md` 607. sor)
+safety-kulcsokhoz is használt, és amelynek dokumentált precedense: *"a
+`lib/l10n/app_{en,hu}.arb` az `gen_l10n_segments.dart --write` aggregate
+refresh következménye ..., nem scope-sértés"* (ugyanott, 620–623. sor).
+
+**Javítás:**
+
+- `allowed_paths`: `lib/l10n/app_en.arb` / `app_hu.arb` **TÖRÖLVE**,
+  `lib/l10n/features/community_en.arb` / `lib/l10n/features/community_hu.arb`
+  **FELVÉVE** (lásd lent, `ai-router` blokk + §4 táblázat).
+- Az implementációs sorrend (§8) kiegészül egy 4b lépéssel: az új kulcsok a
+  `community_{en,hu}.arb` FORRÁS-fragmentumba kerülnek, majd
+  `dart run tool/gen_l10n_segments.dart --write` (vagy a `tools/round-gate.sh`
+  saját l10n-lépése) regenerálja az `app_{en,hu}.arb`-ot — ez utóbbi
+  módosulása a §0.0b fenti Kör 8 precedens szerint NEM scope-sértés, még
+  akkor sem, ha az `app_{en,hu}.arb` nincs az `allowed_paths`-on (a generált
+  fájl nem "hozzáadott" tartalom, hanem a sanctionált forrás-szerkesztés
+  következménye).
+- ADR 0422 D1 szövege (a `docs/adr/`-ben, TILOS zóna az implementernek,
+  csak az orchesztrátor referenciája) ugyanígy javítva a helyes
+  fragmentum-útvonalra.
+
+**Folytatás:** az implementer a MEGLÉVŐ branchen (`477848c8` HEAD) folytatja
+— a korábban commitolt backend/teszt munka és a Flutter widget érintetlen, a
+javító kör csak az ARB-kulcsok helyét korrigálja (a §0.0b fenti diff a
+korábbi, hibás app_{en,hu}.arb-kísérletet már törölte a `477848c8`
+commitban).
+
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 8 `safety_relationships_screen.dart` TÉNYLEGES widget-struktúráját — a report bottom sheet ugyanabból a képernyő-családból nyílik, konzisztens biztonsági UX-szel. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
 
@@ -78,8 +120,8 @@ allowed_paths = [
   "backend/app/community/routers/reports.py",
   "backend/alembic/versions/e09_r26_0019_community_report.py",
   "lib/features/community/presentation/dialogs/report_content_sheet.dart",
-  "lib/l10n/app_en.arb",
-  "lib/l10n/app_hu.arb",
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
   "backend/tests/community/test_report_service.py",
   "test/features/community/presentation/report_content_sheet_test.dart",
   "docs/rounds/e09-r26-user-report-and-immediate-safety-flow.md",
@@ -129,8 +171,8 @@ Könnyen elérhető report, hide, mute és block folyamat minden releváns tarta
 | `backend/app/community/routers/reports.py` | ÚJ |
 | `backend/alembic/versions/e09_r26_0019_community_report.py` | ÚJ |
 | `lib/features/community/presentation/dialogs/report_content_sheet.dart` | ÚJ |
-| `lib/l10n/app_en.arb` | BŐVÍTÉS — §0.0 D5: kategória-címkék + self-harm safety copy kulcsa |
-| `lib/l10n/app_hu.arb` | BŐVÍTÉS — §0.0 D5, EN-nel párban |
+| `lib/l10n/features/community_en.arb` | BŐVÍTÉS — §0.0/§0.0b: kategória-címkék + self-harm safety copy kulcsa (FORRÁS-fragmentum, nem a generált `app_en.arb`) |
+| `lib/l10n/features/community_hu.arb` | BŐVÍTÉS — §0.0b, EN-nel párban |
 | `backend/tests/community/test_report_service.py` | ÚJ — a §6 cellái |
 | `test/features/community/presentation/report_content_sheet_test.dart` | ÚJ |
 
