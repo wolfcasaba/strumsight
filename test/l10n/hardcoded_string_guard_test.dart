@@ -22,10 +22,23 @@ const _scopeDirs = <String>[
   'lib/core/design_system/motion',
 ];
 
-/// One property context StrumSight actually uses for user-facing text.
+/// One property context StrumSight actually uses for user-facing text. Runs
+/// against the WHOLE (comment-stripped) file, not line-by-line (F2): a
+/// `dart format`-wrapped multi-arg call splits the literal onto its own
+/// line (`Text(\n  'Save changes',\n  textAlign: ...\n)`), which a
+/// single-line pattern can never see. `\s` (used between the property name
+/// and the literal) matches newlines by default, so this bridges that gap.
+/// An optional `l10n.x +` / `AppLocalizations.x +` immediately before, or
+/// `+ l10n.x` / `+ AppLocalizations.x` immediately after, the literal
+/// captures the `'$count ' + t.songs`-shaped concatenation §5.1 names by
+/// example (F1) — `_classify` treats either as A2 regardless of what the
+/// literal alone would say.
 final _textPropertyPattern = RegExp(
-  r"(Text|label|title|message|hintText|semanticLabel|tooltip|description)"
-  r"\s*[:(]\s*'([^']{3,})'",
+  r"(?:Text|label|title|message|hintText|semanticLabel|tooltip|description)"
+  r"\s*[:(]\s*"
+  r"(?<prefix>(?:(?:l10n\.\w+|AppLocalizations\.\w+)\s*\+\s*)*)"
+  r"'(?<literal>(?:[^'\\]|\\.){3,})'"
+  r"(?<suffix>(?:\s*\+\s*(?:l10n\.\w+|AppLocalizations\.\w+))*)",
 );
 
 /// `${expr}` and bare `$identifier` interpolations inside a string literal.
@@ -41,7 +54,13 @@ final _wordLikePattern = RegExp(r'[A-Za-z]{2,}');
 /// rule it broke.
 typedef _Violation = ({String file, int line, String violationClass});
 
-String? _classify(String literalContent) {
+String? _classify(String literalContent, {required bool concatenatedWithL10n}) {
+  // F1: the literal is glued to an ARB fragment via `+` at the call site —
+  // sentence concatenation regardless of what the literal alone contains
+  // (`'$count '` alone has no `l10n.` reference and would otherwise read as
+  // A3, missing the actual defect: word order baked in at the call site).
+  if (concatenatedWithL10n) return 'A2';
+
   final interpolationCount = _interpolationPattern
       .allMatches(literalContent)
       .length;
@@ -59,6 +78,70 @@ String? _classify(String literalContent) {
   return null;
 }
 
+/// Blanks out `//` and `/* */` comments (preserving length and newlines, so
+/// match offsets keep mapping onto real line numbers) without touching
+/// string-literal content, even a literal that itself contains `//` (e.g. a
+/// URL) — tracked via a minimal quote/escape-aware scan rather than a regex,
+/// since a regex can't tell "inside a string" from "inside a comment".
+String _stripComments(String source) {
+  final buffer = StringBuffer();
+  var i = 0;
+  final len = source.length;
+  while (i < len) {
+    final ch = source[i];
+    if (ch == "'" || ch == '"') {
+      final quote = ch;
+      buffer.write(ch);
+      i++;
+      while (i < len) {
+        final c = source[i];
+        if (c == r'\' && i + 1 < len) {
+          buffer.write(c);
+          buffer.write(source[i + 1]);
+          i += 2;
+          continue;
+        }
+        buffer.write(c);
+        i++;
+        if (c == quote) break;
+      }
+      continue;
+    }
+    if (ch == '/' && i + 1 < len && source[i + 1] == '/') {
+      while (i < len && source[i] != '\n') {
+        buffer.write(' ');
+        i++;
+      }
+      continue;
+    }
+    if (ch == '/' && i + 1 < len && source[i + 1] == '*') {
+      buffer.write('  ');
+      i += 2;
+      while (i < len &&
+          !(source[i] == '*' && i + 1 < len && source[i + 1] == '/')) {
+        buffer.write(source[i] == '\n' ? '\n' : ' ');
+        i++;
+      }
+      if (i < len) {
+        buffer.write('  ');
+        i += 2;
+      }
+      continue;
+    }
+    buffer.write(ch);
+    i++;
+  }
+  return buffer.toString();
+}
+
+int _lineOf(String content, int offset) {
+  var line = 1;
+  for (var i = 0; i < offset; i++) {
+    if (content.codeUnitAt(i) == 0x0A) line++;
+  }
+  return line;
+}
+
 Set<_Violation> _scan(Iterable<String> scopeDirs) {
   final violations = <_Violation>{};
   for (final dirPath in scopeDirs) {
@@ -66,17 +149,21 @@ Set<_Violation> _scan(Iterable<String> scopeDirs) {
     if (!dir.existsSync()) continue;
     for (final entity in dir.listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
-      final lines = entity.readAsLinesSync();
-      for (var i = 0; i < lines.length; i++) {
-        for (final match in _textPropertyPattern.allMatches(lines[i])) {
-          final violationClass = _classify(match.group(2)!);
-          if (violationClass == null) continue;
-          violations.add((
-            file: entity.path,
-            line: i + 1,
-            violationClass: violationClass,
-          ));
-        }
+      final stripped = _stripComments(entity.readAsStringSync());
+      for (final match in _textPropertyPattern.allMatches(stripped)) {
+        final concatenatedWithL10n =
+            match.namedGroup('prefix')!.isNotEmpty ||
+            match.namedGroup('suffix')!.isNotEmpty;
+        final violationClass = _classify(
+          match.namedGroup('literal')!,
+          concatenatedWithL10n: concatenatedWithL10n,
+        );
+        if (violationClass == null) continue;
+        violations.add((
+          file: entity.path,
+          line: _lineOf(stripped, match.start),
+          violationClass: violationClass,
+        ));
       }
     }
   }

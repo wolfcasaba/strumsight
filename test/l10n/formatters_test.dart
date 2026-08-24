@@ -104,6 +104,25 @@ void main() {
       // is the chosen carrier: a real, translated, single-line-unbounded label
       // (Row(icon, Expanded(Text(...)))) with no `maxLines`/height cap, so it
       // wraps instead of silently ellipsizing when a translation runs long.
+      //
+      // F3 fix: `SsFieldError` alone as `Scaffold(body:)` can NEVER report an
+      // overflow exception — its Row's main axis (horizontal) is fully
+      // absorbed by `Expanded`, and Row never checks its CROSS axis
+      // (vertical) for overflow, so no amount of wrapped text throws,
+      // regardless of how tall it grows (measured: even 4000 chars produced
+      // `takeException() == null`, both with and without an enclosing
+      // `SizedBox(height:)`). That made the three cells below unfalsifiable —
+      // they could never have gone red, whatever the implementation did.
+      //
+      // Adding an intervening `Column` (below, in `pumpAtSize`) fixes this
+      // without touching production code: a `Column`'s MAIN axis is vertical,
+      // so it DOES run RenderFlex's non-flex-child overflow check against the
+      // real ceiling `Scaffold` already imposes on its body (the device's
+      // screen height) — measured (see the `Column` comment below): 46/52/64
+      // chars need only 220–308px and stay far under an 852px-tall screen
+      // (no exception), while a 200-char message needs 1056px and DOES throw
+      // ("A RenderFlex overflowed by 204 pixels on the bottom"). The
+      // 'falsifiability proof' cell below exercises exactly that.
       const logicalSize = Size(393, 852); // a representative modern phone
       const devicePixelRatio = 3.0;
 
@@ -117,7 +136,13 @@ void main() {
             textScale: 2.0,
             child: Theme(
               data: SsLightTheme.data(),
-              child: SsFieldError(l10n: en, message: message),
+              // The `Column` is the F3 fix (see group comment): it gives
+              // RenderFlex a vertical main axis to enforce Scaffold's own
+              // bounded body height against, which `SsFieldError` alone does
+              // not.
+              child: Column(
+                children: [SsFieldError(l10n: en, message: message)],
+              ),
             ),
           ),
         );
@@ -126,6 +151,11 @@ void main() {
         // F12 (L452 closure): prove the declared geometry actually reached the
         // render tree — a `MediaQuery(size:)`-only setup would leave this at
         // the flutter_test default (800×600) no matter what we assert above.
+        // The `Scaffold`'s own reported size is unaffected by a descendant
+        // overflowing (overflow paints outside its box; it doesn't resize an
+        // ancestor already laid out with a bounded constraint) — this holds
+        // in the falsifiability-proof cell below too, which asserts it
+        // alongside a non-null exception.
         return tester.getSize(find.byType(Scaffold));
       }
 
@@ -166,6 +196,23 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(measuredSize, logicalSize);
       });
+
+      testWidgets(
+        'falsifiability proof: a genuinely too-long message DOES overflow '
+        'on this same carrier + context (F3)',
+        (tester) async {
+          // 200 chars is 5x the 40-char baseline — far beyond any realistic
+          // translation growth (pseudo-locale worst case is +60%, i.e. 64
+          // chars) — a deliberate stress input, not a plausible translation.
+          // Measured: needs 1056px, the Scaffold's body offers ~852px, so
+          // this overflows by 204px on the bottom. Without this cell, the
+          // three cells above could pass vacuously even if a future change
+          // made `SsFieldError` clip for real (ADR 0424 §5.9 falsifiability).
+          final measuredSize = await pumpAtSize(tester, _labelOfLength(200));
+          expect(tester.takeException(), isNotNull);
+          expect(measuredSize, logicalSize);
+        },
+      );
     },
   );
 }

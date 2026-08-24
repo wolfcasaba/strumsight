@@ -591,4 +591,145 @@ próbák kizárólag ideiglenes, azonnal visszaállított mutációk voltak, nem
 production-diff. Nincs új ARB-kulcs, nincs `lib/features/**` migráció, nincs
 új locale.
 
+### Javító kör (1.) — F1/F2/F3 MAJOR + F4 MINOR zárása
+
+**Státusz:** KÉSZ (2026-08-24, Claude Sonnet 5 mint implementer, javító kör).
+A review (`docs/reviews/e13-r15-review.md`) 3 MAJOR leletet mért valódi-sértés
+próbákkal a gate zöldje mellett. Mindhárom a mérce **vakságáról** szólt (a
+cella nem tudott pirosra váltani), nem a mérce hiányáról — az alábbi javítás
+mindhármat a saját reprodukciójával zárja.
+
+**F1 — az A2 guard vak volt a `'$x ' + l10n.y` alakra.** `_classify` mostantól
+egy `concatenatedWithL10n` jelzőt kap: a `_textPropertyPattern` (ugyanott)
+opcionális `(?:l10n\.\w+|AppLocalizations\.\w+)\s*\+\s*` prefixet ÉS
+`\s*\+\s*(?:l10n\.\w+|AppLocalizations\.\w+)` suffixet is elfogad a literál
+körül — ha bármelyik jelen van, A2, függetlenül attól, mit mondana a literál
+tartalma önmagában (a `'$count '` önmagában A3-at sem adna, hiányzik belőle az
+`l10n.` hivatkozás — pont ez volt a vakság gyökere).
+
+Saját reprodukció (Bash+`python3`, a `ss_validation_summary.dart` VÉGÉRE
+fűzve, majd `git checkout --` visszaállítva — a `lib/l10n/**`-hoz hasonlóan a
+`lib/core/design_system/**` is tilos zóna, az `Edit`/`Write` hook blokkolja):
+
+```dart
+final class _ReviewProbeP1 extends StatelessWidget {
+  const _ReviewProbeP1({required this.count, required this.l10n});
+  final int count;
+  final AppLocalizations l10n;
+  @override
+  Widget build(BuildContext context) =>
+      Text('$count ' + l10n.dsFieldErrorSemanticPrefix);
+}
+```
+
+Eredmény a JAVÍTÁS UTÁN, a javítás ELŐTTI guarddal ez zöld maradt (a review
+mérése) — MOST:
+
+```
+Actual: Set:[(file: …ss_validation_summary.dart, line: 115, violationClass: A2)]
+```
+
+PIROS — a fix elkapja. Visszaállítva: `git checkout --
+lib/core/design_system/components/inputs/ss_validation_summary.dart`, a fa
+utána tiszta erre az útvonalra.
+
+**F2 — a guard sor-alapú volt, a gate saját `format` lépése rejtette el a
+sértést.** `_scan` mostantól `readAsStringSync()`-kal a FÁJL EGÉSZÉT olvassa
+(nem `readAsLinesSync()`), egy karakter-pontos, idézőjel/escape-tudatos
+`_stripComments` szűri ki a `//` és `/* */` kommenteket (hossz- és
+sortörés-megőrző, hogy az offset→sorszám számítás ne csússzon el, és NEM nyúl
+bele string-literálba, még ha az `//`-t tartalmaz is), a mintaillesztés pedig
+a teljes, komment-mentesített tartalmon fut — a property-név és a literál
+között lévő `\s*` így a sortörésen is áthidal. A találat sorszámát
+`_lineOf(strippedContent, match.start)` számolja az offsetből (a `\n`-ek
+száma a találat előtt + 1).
+
+Saját reprodukció (ugyanúgy Bash+`python3`, ugyanazon fájl végére fűzve, majd
+visszaállítva):
+
+```dart
+final class _ReviewProbeP2 extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => const Text(
+    'Save changes',
+    textAlign: TextAlign.center,
+    overflow: TextOverflow.ellipsis,
+    maxLines: 2,
+  );
+}
+```
+
+Eredmény a JAVÍTÁS UTÁN:
+
+```
+Actual: Set:[(file: …ss_validation_summary.dart, line: 111, violationClass: A3)]
+```
+
+PIROS — a `dart format`-tal széttördelt, több-soros hívás is elkapva.
+Visszaállítva, a fa utána tiszta.
+
+A bővebb minta a §5.5 hatókörben NEM hozott elő új, korábban rejtett
+sértést a `frozenViolations` baseline-on túl — a gate a javítás után is
+egyetlen elemmel zöld (`ss_validation_summary.dart:90`, A2, változatlan).
+
+**F3 — az A6 három küszöb-cellája (46/52/64 char) szerkezetileg
+falszifikálhatatlan volt.** A `SsFieldError` hordozó (`Row(icon,
+Expanded(Text(...)))`) matematikailag képtelen `RenderFlex`-kivételt dobni:
+a főtengelyen (vízszintes) az `Expanded` mindent elnyel, a melléktengelyen
+(függőleges) pedig a `Row` sosem ellenőriz túlcsordulást — ezt a review
+4000 karakteres próbája is megerősítette (`takeException() == null`,
+`SizedBox(height: 24)`-be zárva is). A `pumpAtSize` segédfüggvény mostantól
+egy `Column`-t iktat a harness és a `SsFieldError` közé
+(`Column(children: [SsFieldError(...)])`) — a `Column` főtengelye FÜGGŐLEGES,
+tehát a `RenderFlex` a nem-flex gyermek (a `SsFieldError`, nincs `Expanded`
+körülötte a `Column`-ban) természetes magasságát TÉNYLEG összeveti a
+`Scaffold` már meglévő, képernyő-magasságra korlátozott testtel — mérve:
+46/52/64 karakter 220/264/308px-et igényel (jóval a 852px-es képernyő alatt,
+nincs kivétel), 200 karakter viszont 1056px-et (`A RenderFlex overflowed by
+204 pixels on the bottom`). Ez a mechanizmus TÖBB, mint a review saját
+`SsButton`-in-`Row` próbája (ami már 20 karakternél túlcsordul, telefon
+szélességnél használhatatlan a 46/52/64 fokozatossághoz) — mert megtartja az
+eredeti, helyes hordozó-választást (`SsFieldError`, a valódi, `maxLines`
+nélküli, forduló-kritikus komponens) ahelyett, hogy egy nem erre a célra
+szánt komponensre (gomb-címke) váltana.
+
+Új, ötödik cella zárja a §10 elvárás 2. pontját (a mérce bizonyítottan tud
+pirosra váltani): `_labelOfLength(200)` (5×-öse a 40 karakteres bázisnak,
+messze a pszeudo-locale +60%-os legrosszabb esetén túl — szándékos
+stressz-bemenet, nem valós fordítás) `takeException()`-t `isNotNull`-ra várja
+UGYANAZON a `pumpAtSize` hordozón/kontextuson, és a mérés valóban PIROS lenne
+a `Column` nélkül (a régi kód szerint) — a teszt maga bizonyítja ezt, mert
+zöld a fix UTÁN. A 46/52/64 küszöbök jelentése és a `+30%` tartalék NEM
+változott; mind a négy meglévő + az új cella megtartja a `measuredSize ==
+logicalSize` (F12/L452) igazolást — a `Scaffold` mérete független attól, hogy
+egy leszármazottja túlcsordul-e.
+
+**F4 — a doc-állítás túlment a mérten igazolton.**
+`lib/core/i18n/ss_formatters.dart:19-22` pontosítva: „Every function is
+pure" helyett most kimondja, hogy `date()` a `_dateSymbolsReady` memoizált
+modul-globálist írja első híváskor (`_ensureDateSymbols`) — a többi négy
+formázó valóban mellékhatás-mentes.
+
+**F5 — NOTE, kód-változtatás nélkül.** `duration()` tizedes percet ad
+(`Duration(seconds: 750)` → `"12,5"`), szándékos és locale-tudatos. Az `m:ss`
+alak külön formázó lesz egy jövőbeli, képernyő-specifikus körben — ez a kör
+NEM vezet be új cellát vagy formázót erre.
+
+**Gate a javítás után:**
+
+```
+tools/round-gate.sh test/l10n/arb_parity_test.dart test/l10n/formatters_test.dart test/l10n/hardcoded_string_guard_test.dart
+```
+
+`format` → `analyze` → 3× `test` → `architecture` → `secrets` → `l10n` — mind
+ZÖLD (`format`: 1972 fájl, 0 változott; `analyze`: 0 hiba; `arb_parity_test`
+54, `formatters_test` 18 — az új F3 falszifikációs cellával —, `hardcoded_
+string_guard_test` 1 cella zöld; `architecture` 12 allowlisted eltérés,
+változatlan; `secrets` 3650 fájl, 0 találat; `l10n` aggregate freshness OK
+en/hu, parity OK 1838 üzenet). Egyetlen `lib/l10n/**` fájl sem módosult
+ebben a javító körben sem — a fenti F1/F2 próbák kizárólag ideiglenes, Bash+
+`python3`-mal mutált és `git checkout --`-tal azonnal visszaállított
+`lib/core/design_system/components/inputs/ss_validation_summary.dart`
+állapotok voltak, a `git status --short` utánuk üres erre az útvonalra.
+
 ## 11. Review — a Claude tölti ki

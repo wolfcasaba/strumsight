@@ -16,9 +16,10 @@ void _ensureDateSymbols() {
 /// Locale-aware formatters for the numeric/date values StrumSight renders
 /// (practice duration, tempo, tuning offset, progress percentage, session
 /// date) — `package:intl` under the hood, never manual string building or
-/// `toString()` (ADR 0424 §5.3). Every function is pure: the locale is a
-/// required parameter, none reads `BuildContext`, so each is testable in
-/// isolation.
+/// `toString()` (ADR 0424 §5.3). The locale is always a required parameter
+/// and none reads `BuildContext`, so each is testable in isolation; [date]
+/// is not otherwise pure — its first call lazily writes the memoized
+/// `_dateSymbolsReady` module global via [_ensureDateSymbols].
 abstract final class SsFormatters {
   /// Elapsed practice time as decimal minutes (e.g. 12.5) — the decimal
   /// separator is the locale's (`.` in en, `,` in hu).
