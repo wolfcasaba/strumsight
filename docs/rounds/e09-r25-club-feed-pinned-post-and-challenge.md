@@ -5,11 +5,107 @@
 - **Kör-azonosító:** `E09-R25`
 - **Branch:** `<motor>/e09-r25-club-feed-pinned-post-and-challenge`
 - **Előfeltétel:** `E09-R24` merge-elve
-- **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** nincs — ez a kör nem hoz új kötött architekturális döntést (tisztán UI/integráció/lezárás).
+- **Brief szerzője:** Claude (Opus 5); pre-flight revízió: Claude Sonnet 5
+- **Előre kiosztott ADR:** nincs — ez a kör nem hoz új kötött architekturális döntést (tisztán UI/integráció/lezárás); a §0.0 pre-flight csak a Kör 24 ADR 0420 D1/D2 KÖTELEZŐ hivatkozását és a mért tényeket rögzíti.
+
+**Kockázat = high, indoklás:** a kör klub-tagsághoz kötött, szerveroldali
+audience-ellenőrzést vezet be a poszt- és challenge-olvasási útra (A1, A5),
+és egy klub-specifikus moderátor-jogosultságot (pin/unpin, poszt-moderáció)
+ad, amelynek elsődleges kockázata, hogy (a) egy nem-tag közvetlen ID-vel
+hozzáférne klub-tartalomhoz (A1), (b) egy klub moderátora egy MÁSIK klubban
+is pin-elhetne/moderálhatna a jogkör helytelen hatókör-ellenőrzése esetén
+(A3), és (c) egy nem-tag résztvevőként regisztrálódhatna egy
+club-challenge-ben (A5). Egyik `allowed_paths` fájl sem egyezik szó szerint
+a router `high_risk_path_fragments` listájával (nincs "auth"/"authorization"
+szó a fájlnevekben), de a kockázat ettől függetlenül valós —
+jogosultság-eszkaláció és tartalom-szivárgás, nem forma szerinti
+kulcsszó-egyezés (ugyanaz a minta, mint az E09-R24 ADR 0420 indoklása).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a Kör 13 `following_feed.py` és a Kör 21 `challenge_invite_service.py` TÉNYLEGES query-alakját — ez a kör ÚJRAHASZNÁLJA őket klub-audience-szűréssel, nem duplikál post- vagy challenge-rendszert. Eltérésnél
 > §0.0 brief-revízió, NEM csendes lista-tágítás.
+
+## 0.0 Pre-flight brief-revízió (2026-08-24, Claude Sonnet 5)
+
+**Visszakeresés** (ADR 0312 §4.9, szűkítve): [L409](../LESSONS.md) ("route-
+élesítő brief hallgatólagosan feltételezheti, hogy a caller-fed képernyők
+adathoz vannak kötve — mérd meg a példányosítást, ne a screen létezését") és
+[L442](../LESSONS.md) ("repository/provider-réteg hiánya a `public.dart`-on
+strukturális, nem véletlen") — mindkettő pontosan erre a körre alkalmazandó
+(lásd 3. pont lent). [ADR 0420](../adr/0420-club-domain-membership-and-roles.md)
+§Kontextus/2, §D2 és §Következmények **explicit előírja**, hogy EZ a kör
+(Kör 25) hivatkozzon rá a `club_id` FK-bekötésnél — lásd 1. pont.
+
+1. **`club_id` típus-inkonzisztencia — ADR 0420 D1/D2 szerint oldva fel, nem
+   új döntés.** Mérve: `community_posts.club_id` **BigInteger** (Kör 11,
+   ADR 0405) — ez a `community_clubs.id` (BigInteger belső PK, ADR 0420 D1)
+   közvetlen join-célpontja, a `club_feed.py` ezt BigInteger–BigInteger
+   egyezésként köti be. Ezzel szemben `community_challenges.club_id`
+   **String(64)** (Kör 21, ADR 0415 D7) a `community_clubs.public_id`
+   (Uuid, ADR 0420 D1) STRING-alakját tárolja — ez egyezik a Flutter
+   `CommunityChallengeDefinition.clubId: String?` mezővel
+   (`community_challenge.dart`, "Kör 24 will validate that this field is
+   non-null precisely when the type is club"). A `club_content_service.py`-
+   nak tehát a challenge létrehozásakor `str(club.public_id)`-t kell írnia
+   a `club_id` oszlopba, **NEM** a belső bigint id-t — a két `club_id`
+   oszlop ELTÉRŐ szemantikájú, összekeverésük az A5 cellát törné. Nincs
+   migráció, nincs FK-constraint hozzáadás — csak lekérdezés-szintű join
+   (a tilos zóna `models/challenge.py`/`models/post.py`-t csak HÍVni engedi,
+   szerkeszteni nem).
+
+2. **Nincs `status`/`state` oszlop a `CommunityChallenge` modellen —
+   "activate/end" ablak-alapú, nem külön mutáció.** A §3 "create/activate/
+   end" megfogalmazás NEM egy állapotgép-tranzíciót jelent — a
+   `CommunityChallenge` modellen nincs `state` mező, csak `starts_at`/
+   `ends_at`, és a tilos zóna (`models/challenge.py`, csak-hívás) kizárja
+   egy új oszlop hozzáadását is. A helyes olvasat, a MEGLÉVŐ
+   `_ensure_challenge_visible` (`challenge_invite_service.py`) ablak-
+   mintáját követve: **create** = új sor beszúrása `starts_at`/`ends_at`
+   ablakkal; **activate** NEM külön hívás, hanem az, hogy `now` belép a
+   `[starts_at, ends_at]` ablakba (a challenge a lekérdezés idejéig
+   implicit válik "aktívvá"); **end** ugyanígy implicit (`now > ends_at`),
+   VAGY — ha egy moderátori korai lezárás is kell — az `ends_at` mező
+   `now`-ra állítása a MEGLÉVŐ oszlopon (nem új mező), a jogosultságot a
+   §5.2 klub-permission-mátrixból véve (moderator+).
+
+3. **Flutter oldal: a hiányzó repository-metódusok STRUKTURÁLIS korlátozás,
+   nem hiba — kövesd a Kör 24 mintáját, ne bővítsd a domain-interfészt.**
+   Mérve: `grep -n "clubPinned" lib/features/community/domain/repositories/feed_repository.dart`
+   → **`clubPinned({clubId, cursor, limit})` MÁR LÉTEZIK** a
+   `CommunityFeedRepository`-n, a docstring szerint pontosan erre a körre
+   szánva ("Until the club feature lands... Kör 5 stub"). Ezt kell hívni a
+   Feed tab pin-elt szekciójához — **NEM** új metódust hozzáadni. Ezzel
+   szemben **nincs** általános (nem-pin-elt) klub-feed metódus, és **nincs**
+   klub-szűrt/create/activate/end challenge-metódus SEM a
+   `CommunityFeedRepository`-n, SEM a `CommunityChallengeRepository`-n, SEM
+   a `CommunityClubRepository`-n — mind a három fájl az `allowed_paths`-on
+   KÍVÜL esik (bővítésük H3). L409/L442 szerint ez STRUKTURÁLIS, nem
+   véletlen hiány: a Kör 24 saját precedenst hagyott —
+   `club_member_management_screen.dart`'s `ClubMemberRow` egy KÉPERNYŐ-
+   HELYI típus, és a tagsági lista NEM a `CommunityClubRepository`-n
+   keresztül jön ("materialises this from
+   `CommunityClubRepository.listClubsMembers` — a future surface — the
+   brief does not mandate a separate members endpoint in this round").
+   **Ugyanezt a mintát kövesd:** a Challenges tab és a Feed tab nem-
+   pin-elt szekciója (és a Members tab, ha nem a meglévő
+   `club_member_management_screen.dart`-ra navigál) KÉPERNYŐ-HELYI
+   Riverpod providerekkel épül a `club_detail_screen.dart`-on BELÜL —
+   produkcióban az `communityClubRepositoryProvider`-hez hasonlóan meg NEM
+   kötve (throw/helyőrző elfogadható), a widget-teszt override-olja fake
+   adattal. A §6 A1–A7 cellák mind a BACKEND service-tesztben
+   (`test_club_content_service.py`) mérendők — a Flutter oldal egyetlen
+   kötelező mért cellája **A2** (cache-invalidáció klub-elhagyás után), ami
+   a meglévő `clubDetailProvider`-en már bevált `ref.invalidate(...)`
+   mintát ismétli a klub-tartalom új, képernyő-helyi providereire.
+
+4. **Pin-limit "konfigurációból" — kövesd a `MAX_CLUB_MEMBERS` precedenst,
+   ne a `Settings` osztályt.** `backend/app/config.py::Settings` nem
+   tartalmaz semmilyen klub-tartalmi (pin/challenge) mezőt — a Kör 24
+   `MAX_CLUB_MEMBERS = 500` egy modul-szintű Python-konstans a `club.py`-
+   ban, NEM egy `Settings`-mező. A §6 A4 "konfigurációból" ugyanezt a
+   mintát jelenti: egy dokumentált modul-szintű konstans a
+   `club_content_service.py`-ban (pl. `MAX_CLUB_PINNED_POSTS`), a pontos
+   érték az implementer választása, dokumentálva a §10-ben — nem szükséges
+   `Settings`-bővítés.
 
 ```ai-router
 schema_version = 1
