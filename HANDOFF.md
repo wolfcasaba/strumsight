@@ -1,5 +1,57 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R25 KÉSZ — Club feed, pinned post és club challenge — PR [#446](https://github.com/wolfcasaba/strumsight/pull/446), squash `4725447b` (2026-08-24)
+
+Klub-scope-olt feed + pinned-post + club-challenge lifecycle, a Kör 13
+post-projekció és a Kör 21 challenge-invite infrastruktúra újrahasznosításával,
+klub-audience/tagság-ellenőrzéssel. Backend: `club_feed.py` (klub-szűrt feed
+olvasás), `club_content_service.py` (pin/unpin, club-challenge create/end), új
+`community_club_pinned_posts` junction tábla + alembic migráció
+(`e09_r25_0019`). Flutter: `club_detail_screen.dart` négy tabot kap
+(Feed/Challenges/Members/About), képernyő-helyi providerekkel (a Kör 24
+`communityClubRepositoryProvider` mintáját követve — repository-interfész
+bővítés helyett) és A2 cache-invalidációval klub-elhagyáskor. Implementer
+**MiniMax M3**, orchesztrátor/reviewer **Claude Sonnet 5**.
+
+**Pre-flight (§0.0, `docs/rounds/e09-r25-club-feed-pinned-post-and-challenge.md`).**
+Mért, kódból kiolvasott tények zárták le a brief homályos pontjait
+[ADR 0420](docs/adr/0420-club-domain-membership-and-roles.md) D1/D2
+hivatkozással: a `community_posts.club_id` (BigInteger, belső id) és a
+`community_challenges.club_id` (String, a klub `public_id`-ját tárolja) ELTÉRŐ
+szemantikájú; a `CommunityChallenge` modellen nincs `state` oszlop, az
+"activate/end" ablak-alapú (`starts_at`/`ends_at`); a Flutter oldal a hiányzó
+repository-metódusokat NEM interfész-bővítéssel, hanem a Kör 24
+képernyő-helyi provider mintájával oldotta fel (L409/L442).
+
+**Review: APPROVED, 2 javító kör után** — a review saját maga talált 1
+MAJOR-t (F1: a pinned-post junction tábla privát `MetaData`-n élt, KIFEJEZETTEN
+a migráció-drift-őr elkerülésére, tehát éles `alembic upgrade head` után a
+tábla hiányzott volna), majd a kötelező `security-reviewer` (risk=`high`) MÉG
+2 MAJOR-t: F2 egy hibás/félrevezető, duplikált `CLUB_PIN_AUTHORIZED_ROLES`
+konstans a `club_feed.py`-ban (`{owner,moderator,member}`-t engedett volna egy
+jövőbeli routernek), F3 az `end_club_challenge` megsérthette volna a
+`ck_community_challenges_window_positive` CHECK-et egy még el nem indult
+challenge lezárásakor. Mindhárom javítva, a gate-eket mindkét javító kör után
+SAJÁT kézzel, izolált `/tmp` klónokban újrafuttattam. 1 MINOR nyitva
+follow-upként (F4). Részletek: [`docs/reviews/e09-r25-review.md`](docs/reviews/e09-r25-review.md).
+
+**Exact `4d7bcdf3`:** Full Gate
+[32737476796](https://github.com/wolfcasaba/strumsight/actions/runs/32737476796)
+success + Router CI (2. dispatch, az 1. egy élő GitHub Actions incidens alatt
+pirosra váltott — mérve githubstatus.com API-n, 13:56–14:34 UTC "Actions delays
+in starting runs")
+[32740432975](https://github.com/wolfcasaba/strumsight/actions/runs/32740432975)
+success.
+
+**Landolási akadály, MEGKERÜLVE a tiltott fájl szerkesztése nélkül** (lásd
+[L468](docs/LESSONS.md)): a `tools/round-gate.sh::resolve_backend_python()` a
+KÖZÖS munkafán egy relatív `backend/.venv/bin/python` jelöltet választott,
+amit az `env --chdir=backend` a helytelen `backend/backend/.venv/...`
+útvonalra oldott fel (127-es kilépés). A script SAJÁT
+`ROUND_GATE_BACKEND_PYTHON` env-override hookjával (abszolút útvonal)
+sikerült a landolást megismételni — ez nem a mérce gyengítése, a tényleges
+javítás egy jövőbeli governance-/self-heal-kör dolga.
+
 ## ✅ E13-R12 KÉSZ — Kártyák, badge-ek, insight és status komponensek — PR [#439](https://github.com/wolfcasaba/strumsight/pull/439), squash `376b8a1d` (2026-08-24)
 
 Hét új design-system komponens: `SsMetricCard`, `SsInsightCard`,

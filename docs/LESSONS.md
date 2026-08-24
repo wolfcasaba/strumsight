@@ -17787,3 +17787,51 @@ olvasd, és NE jelezz H3-at olyan útvonalra, amelyet nem a kör commitjai
 **Őrteszt:** nincs — ez orchesztrátori mérési sorrend, nem kódviselkedés; a
 véletlen ismétlést a fenti két parancs-kimenet szembeállítása zárja.
 
+
+---
+
+## L468 — `round-gate.sh::resolve_backend_python()` a relatív jelöltet `env --chdir=backend` UTÁN oldja fel, ezért a közös munkafán téves `backend/backend/.venv/...` útvonalat próbál (E09-R25, 2026-08-24)
+
+**Mérve.** `tools/round-land.sh --pr 446 --round E09-R25` a kombinált-HEAD
+gate 9. lépésén (`backend pytest`) `kilépési kód 127`-tel bukott:
+
+```
+env: ‘backend/.venv/bin/python’: No such file or directory
+```
+
+A gyökérok `tools/round-gate.sh::resolve_backend_python()`-ban: a jelölt-lista
+első ELÉRHETŐ tagja a RELATÍV `backend/.venv/bin/python` (a repo gyökeréről
+nézve elérhető, mert a közös munkafán `/home/ubuntu/music-theory/backend/.venv`
+LÉTEZIK — a korábbi izolált `/tmp` review-klónokban ez a jelölt hiányzik, ezért
+ott a második, ABSZOLÚT jelöltre esik vissza, és minden korábbi review-gate
+zölden futott). A hívás viszont `run_step "backend pytest" env --chdir=backend
+"$backend_python" -m pytest -q` — az `env --chdir=DIR` ELŐSZÖR vált könyvtárat,
+és a parancs relatív útvonalát UTÁNA oldja fel, tehát `backend/.venv/bin/python`
+`backend/backend/.venv/bin/python`-ra fut, ami nem létezik.
+
+**Miért fontos.** Ez NEM a kör diffjének hibája (a `round-gate.sh` a kör
+`tilos zóna`-ja, az E09-R25 nem érintette), és nem is csak EBBEN a körben
+jelentkezne — bármely jövőbeli landolás, amely a KÖZÖS munkafán fut (nem
+izolált klónban) ÉS a `backend/.venv` már létezik ott, ugyanígy bukna a
+`backend pytest` lépésen, függetlenül attól, melyik kör landol. A review-gate
+korábbi futásai (izolált `/tmp` klónokban) ezt sosem látták, mert ott a
+relatív jelölt sosem létezett — a hiba csak a landolási lépésnél, a közös
+munkafán mutatkozik meg.
+
+**Következmény / munkakörüli megoldás (NEM a tiltott fájl szerkesztése).** A
+`resolve_backend_python()` ELSŐ jelöltje a `ROUND_GATE_BACKEND_PYTHON`
+env-változó — ezt a script MÁR támogatja pontosan erre az esetre. A landolást
+`ROUND_GATE_BACKEND_PYTHON="$HOME/music-theory/backend/.venv/bin/python"`
+(ABSZOLÚT útvonal) beállításával kell újrafuttatni — ez nem a mérce
+gyengítése (ugyanaz az interpreter, csak helyesen feloldva), és nem a tiltott
+`tools/round-gate.sh`/`round-land.sh` szerkesztése. A tényleges javítás (a
+relatív jelölt törlése VAGY a `run_step` hívás előtt abszolúttá alakítása,
+pl. `backend_python=$(readlink -f "$backend_python")`) egy jövőbeli
+governance-/self-heal-kör dolga, mivel a `tools/` a kör-orchesztrátor
+hatáskörén kívül esik.
+
+**Őrteszt:** nincs — a `tools/tests/` réteg a gate-lépéseket eddig nem futtatta
+végig egy olyan környezetben, ahol `backend/.venv` a repo gyökerén relatívan
+elérhető ÉS `env --chdir` közbeiktatva fut; egy jövőbeli javító kör adhat
+regressziós tesztet (`resolve_backend_python` unit-szintű próbája két
+munkakönyvtárból hívva, `ROUND_GATE_BACKEND_PYTHON` nélkül).
