@@ -82,25 +82,13 @@ follow-graph-alapú szűrés egy versenynézetben) — az A3/D2 pontosan ezt
 > `CHALLENGE_RESULT_STATE_VERIFIED = "verified"`) — a brief eredeti szövege
 > ezen a ponton PONTOS volt, nincs eltérés.
 
-```ai-router
-schema_version = 1
-risk = "high"
-allowed_paths = [
-  "backend/app/community/services/leaderboard_service.py",
-  "backend/app/community/models/leaderboard.py",
-  "backend/app/community/routers/leaderboards.py",
-  "backend/alembic/versions/e09_r23_0017_community_leaderboard.py",
-  "lib/features/community/presentation/screens/leaderboard_screen.dart",
-  "backend/tests/community/test_leaderboard_service.py",
-  "test/features/community/presentation/leaderboard_screen_test.dart",
-  "docs/rounds/e09-r23-leaderboards-and-opt-in-competition.md",
-]
-gate_tests = [
-  "test/features/community/presentation/leaderboard_screen_test.dart"
-]
-native_gate = false
-```
-**(A fenti blokk ELAVULT — ld. a §0.0 ÉRVÉNYES blokkját fent.)**
+**(Az eredeti `ai-router` blokk itt állt — ELTÁVOLÍTVA, mert egy briefben
+KIZÁRÓLAG egy `ai-router` kódblokk lehet: a `tools/hooks/implementer_guard.py`
+`AI_ROUTER_BLOCK` regexe pontosan egyet vár, két blokk esetén fail-closed
+minden Write/Edit hívást blokkol — mérve az első dispatch-kísérleten,
+`blocked` jelzés, 2026-08-24T03:35Z. Az egyetlen ÉRVÉNYES blokk a §0.0-ban
+van, fent. A régi tartalom szó szerint megegyezett az ÉRVÉNYES blokkal, csak
+a 2 bővített `lib/` sor hiányzott belőle — nincs információvesztés.)**
 
 ## 0. Kör-jelzés és STOP-protokoll
 
