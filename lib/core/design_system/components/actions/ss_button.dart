@@ -64,7 +64,10 @@ final class SsButton extends StatelessWidget {
           Icon(icon, size: 18),
           const SizedBox(width: SsSpacing.space2),
         ],
-        Text(label),
+        // Flexible + ellipsis rather than a bare Text: at
+        // SsSemantics.maximumTextScale a long label can otherwise outgrow
+        // a width-constrained button and overflow the Row (A6).
+        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
       ],
     );
 

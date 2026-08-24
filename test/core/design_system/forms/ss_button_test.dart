@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/design_system/public.dart';
 
@@ -118,7 +117,7 @@ void main() {
               .getSemanticsData();
           handle.dispose();
 
-          expect(data.hasFlag(SemanticsFlag.isButton), isTrue);
+          expect(data.flagsCollection.isButton, isTrue);
           expect(data.hint, 'This cannot be undone');
           expect(data.label, contains('Delete song'));
         },
@@ -139,7 +138,7 @@ void main() {
               .getSemanticsData();
           handle.dispose();
 
-          expect(data.hasFlag(SemanticsFlag.isButton), isTrue);
+          expect(data.flagsCollection.isButton, isTrue);
           expect(data.hint, isEmpty);
         },
       );
@@ -184,8 +183,8 @@ void main() {
         handle.dispose();
 
         expect(tooltipCount, 1);
-        expect(data.hasFlag(SemanticsFlag.isButton), isTrue);
-        expect(data.hasFlag(SemanticsFlag.isImage), isFalse);
+        expect(data.flagsCollection.isButton, isTrue);
+        expect(data.flagsCollection.isImage, isFalse);
         expect(data.label, 'Close');
       },
     );
