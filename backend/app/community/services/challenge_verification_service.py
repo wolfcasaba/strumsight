@@ -73,8 +73,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models.challenge import (
-    CHALLENGE_INVITE_STATE_ACCEPTED,
-    CHALLENGE_INVITE_STATE_ACTIVE,
     CommunityChallenge,
     CommunityChallengeInvite,
     CommunityChallengeParticipant,
@@ -586,9 +584,7 @@ def submit_result(
         invitee_profile_id=actor_profile_id,
     )
     if invite is None:
-        raise ChallengeInviteNotFound(
-            "caller has no invite edge for this challenge"
-        )
+        raise ChallengeInviteNotFound("caller has no invite edge for this challenge")
 
     # Replay probe (§A1 idempotent + §A4 stale-nonce) — runs FIRST,
     # BEFORE the policy chain. A1 is short-circuit by design: a

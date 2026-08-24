@@ -55,19 +55,12 @@ session-and-id pair). The service layer composes them.
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from sqlalchemy.orm import Session
-
-    from ..models.challenge import (
-        CommunityChallenge,
-        CommunityChallengeInvite,
-        CommunityChallengeParticipant,
-    )
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -142,10 +135,7 @@ def evaluate_metric_range(metric_value: int) -> IntegrityDecision:
     ``metric_value < 0`` és a ``metric_value > 1_000_000`` egyaránt
     ``reason_code="metric_out_of_range"`` döntést kap.
     """
-    if (
-        metric_value < METRIC_VALUE_MIN
-        or metric_value > METRIC_VALUE_MAX
-    ):
+    if metric_value < METRIC_VALUE_MIN or metric_value > METRIC_VALUE_MAX:
         return IntegrityDecision(
             ok=False,
             code="metric_out_of_range",
@@ -200,13 +190,10 @@ def evaluate_impossible_score(
     """
     starts_utc = _as_utc(starts_at)
     ends_utc = _as_utc(ends_at)
-    now_utc = _as_utc(now)
+    _as_utc(now)
     if metric == "score":
         window_seconds = (ends_utc - starts_utc).total_seconds()
-        if (
-            window_seconds <= IMPOSSIBLE_SCORE_MIN_WINDOW_SECONDS
-            and metric_value > 0
-        ):
+        if window_seconds <= IMPOSSIBLE_SCORE_MIN_WINDOW_SECONDS and metric_value > 0:
             return IntegrityDecision(
                 ok=False,
                 code="impossible_score",
@@ -288,9 +275,7 @@ def evaluate_window(
 # egy KÉSŐBBI kör dolga (ADR 0417 D1).
 # ---------------------------------------------------------------------------
 
-INTEGRITY_INVITE_ACTIVE_STATES: frozenset[str] = frozenset(
-    {"accepted", "active"}
-)
+INTEGRITY_INVITE_ACTIVE_STATES: frozenset[str] = frozenset({"accepted", "active"})
 
 
 def evaluate_invite_state(

@@ -131,9 +131,7 @@ class CommunityChallengeResult(Base):
     )
     # Domain-side replay surface (A1, D2). The composite
     # unique key uses ``(participant_id, source_event_id)``.
-    source_event_id: Mapped[str] = mapped_column(
-        String(length=128), nullable=False
-    )
+    source_event_id: Mapped[str] = mapped_column(String(length=128), nullable=False)
     # HTTP-szintű retry surface — same shape as the Kör 11
     # ``CommunityPost`` and Kör 21 ``CommunityChallengeInvite``
     # precedent.
@@ -146,24 +144,18 @@ class CommunityChallengeResult(Base):
     # ``kCommunityChallengeMetricMaxValue``).
     metric_value: Mapped[int] = mapped_column(Integer, nullable=False)
     # The server-authoritative verification state.
-    verification_state: Mapped[str] = mapped_column(
-        String(length=16), nullable=False
-    )
+    verification_state: Mapped[str] = mapped_column(String(length=16), nullable=False)
     # Audit reason-code — NULL on ``pending``; populated on
     # terminal states (A8). Values are short, machine-
     # readable identifiers (``metric_out_of_range``,
     # ``invite_not_active``, ``version_mismatch``,
     # ``nonce_expired``, ``already_submitted``, …).
-    reason_code: Mapped[str | None] = mapped_column(
-        String(length=64), nullable=True
-    )
+    reason_code: Mapped[str | None] = mapped_column(String(length=64), nullable=True)
     # Server-issued nonce — stamped on the row at INSERT
     # time, never returned to the client (D3). The A4 cell
     # uses ``nonce_expires_at`` directly, fabrikálva a
     # service-en keresztül.
-    nonce: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), nullable=False
-    )
+    nonce: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     # Server-side TTL. A ``pending`` / ``review`` row whose
     # döntés nem születik meg ezen idő előtt véglegesen
     # lejárt; a service a ``nonce_expires_at <= now``

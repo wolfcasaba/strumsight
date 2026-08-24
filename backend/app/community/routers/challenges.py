@@ -70,8 +70,14 @@ from ..services.challenge_invite_service import (
 )
 from ..services.challenge_verification_service import (
     ChallengeInviteNotFound as _ResultChallengeInviteNotFound,
+)
+from ..services.challenge_verification_service import (
     ChallengeNotFound as _ResultChallengeNotFound,
+)
+from ..services.challenge_verification_service import (
     ChallengeParticipantNotFound as _ChallengeParticipantNotFound,
+)
+from ..services.challenge_verification_service import (
     submit_result,
 )
 
@@ -647,9 +653,7 @@ class ChallengeResultOut(BaseModel):
     decided_at: datetime | None
 
 
-def _resolve_participant_public_id_from_session(
-    db: Session, result_row
-) -> uuid.UUID:
+def _resolve_participant_public_id_from_session(db: Session, result_row) -> uuid.UUID:
     """Resolve the actor's community profile public_id from the
     request session, walking ``result → participant → profile``.
 
@@ -692,10 +696,7 @@ def _result_to_out_from_session(db: Session, result_row) -> ChallengeResultOut:
     from sqlalchemy import text as _sa_text
 
     challenge_pub_row = db.execute(
-        _sa_text(
-            "SELECT public_id FROM community_challenges "
-            "WHERE id = :id"
-        ),
+        _sa_text("SELECT public_id FROM community_challenges WHERE id = :id"),
         {"id": _resolve_challenge_internal_id_from_result(db, result_row)},
     ).first()
     if challenge_pub_row is None:
@@ -707,9 +708,7 @@ def _result_to_out_from_session(db: Session, result_row) -> ChallengeResultOut:
         else challenge_pub_raw
     )
 
-    participant_pub = _resolve_participant_public_id_from_session(
-        db, result_row
-    )
+    participant_pub = _resolve_participant_public_id_from_session(db, result_row)
     return ChallengeResultOut(
         public_id=result_row.public_id,
         challenge_public_id=challenge_pub,
@@ -732,8 +731,7 @@ def _resolve_challenge_internal_id_from_result(db: Session, result_row) -> int:
 
     challenge_id_row = db.execute(
         _sa_text(
-            "SELECT challenge_id FROM community_challenge_participants "
-            "WHERE id = :pid"
+            "SELECT challenge_id FROM community_challenge_participants WHERE id = :pid"
         ),
         {"pid": result_row.participant_id},
     ).first()
@@ -786,9 +784,7 @@ def post_submit_result(
     try:
         try:
             try:
-                actor_public_id = _resolve_caller_profile_public_id(
-                    db, current_user.id
-                )
+                actor_public_id = _resolve_caller_profile_public_id(db, current_user.id)
             except ValueError as exc:
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -801,9 +797,7 @@ def post_submit_result(
             from sqlalchemy import text as _sa_text
 
             actor_row = db.execute(
-                _sa_text(
-                    "SELECT id FROM community_profiles WHERE public_id = :pid"
-                ),
+                _sa_text("SELECT id FROM community_profiles WHERE public_id = :pid"),
                 {"pid": actor_public_id.hex},
             ).first()
             if actor_row is None:

@@ -43,7 +43,6 @@ The §6.1 valódi-sértés próbák are exercised explicitly:
 
 from __future__ import annotations
 
-import threading
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
@@ -54,14 +53,12 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from app.community.models.challenge import (
     CHALLENGE_INVITE_STATE_ACCEPTED,
     CHALLENGE_INVITE_STATE_DECLINED,
-    CHALLENGE_INVITE_STATE_SENT,
     CommunityChallenge,
     CommunityChallengeInvite,
     CommunityChallengeParticipant,
@@ -76,13 +73,9 @@ from app.community.services import challenge_verification_service as service_mod
 from app.community.services.challenge_invite_service import (
     accept_invite,
     create_invite,
-    decline_invite,
     reset_rate_limiters,
 )
 from app.community.services.challenge_verification_service import (
-    ChallengeInviteNotFound,
-    ChallengeNotFound,
-    ChallengeParticipantNotFound,
     submit_result,
 )
 from app.config import Settings
@@ -323,10 +316,13 @@ def _create_invite(
             idempotency_key=f"r22-test-{uuid.uuid4().hex}",
             created_at=now,
             updated_at=now,
-            responded_at=now if state in {
+            responded_at=now
+            if state
+            in {
                 CHALLENGE_INVITE_STATE_ACCEPTED,
                 CHALLENGE_INVITE_STATE_DECLINED,
-            } else None,
+            }
+            else None,
         )
         db.add(row)
         db.commit()
@@ -803,9 +799,7 @@ def test_a5_terminal_invite_state_rejected(session_factory) -> None:
     # row is what we need; the invite-flow cannot land a
     # participant row when the invite is declined. So we
     # fabricate a participant row + a declined invite directly.
-    _create_participant(
-        session_factory, challenge=challenge, participant=invitee
-    )
+    _create_participant(session_factory, challenge=challenge, participant=invitee)
     _create_invite(
         session_factory,
         challenge=challenge,
@@ -883,9 +877,7 @@ def test_a5_submission_outside_window_rejected(session_factory) -> None:
         starts_at=now - timedelta(days=10),
         ends_at=now - timedelta(days=1),
     )
-    _create_participant(
-        session_factory, challenge=challenge, participant=invitee
-    )
+    _create_participant(session_factory, challenge=challenge, participant=invitee)
     # The invite that "would have been accepted" but the
     # challenge has already ended; we manually plant an
     # ``accepted`` invite to bypass the A5 invite-state path
@@ -1249,8 +1241,6 @@ def test_a2_real_violation_probe_trust_field_whitelist_removed(
 
     # Snapshot original helpers, swap in no-op versions to drop
     # BOTH defenses (the §6.1 "wrong impl" pattern).
-    original_assert = service_module.assert_no_client_issued_trust_state
-    original_pydantic_forbid = None
 
     def _noop_decision(*_args, **_kwargs):
         from app.community.policies.integrity_policy import IntegrityDecision
