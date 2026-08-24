@@ -41,7 +41,6 @@ import time
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -246,7 +245,9 @@ def _check_rate_limit(reporter_profile_id: int) -> None:
     now = time.monotonic()
     window_start = now - REPORT_RATE_LIMIT_WINDOW_SECONDS
     timestamps = [
-        ts for ts in _rate_limit_state.get(reporter_profile_id, ()) if ts >= window_start
+        ts
+        for ts in _rate_limit_state.get(reporter_profile_id, ())
+        if ts >= window_start
     ]
     if len(timestamps) >= REPORT_RATE_LIMIT_MAX:
         raise RateLimitExceeded(
@@ -377,9 +378,7 @@ def submit_report(
     # are still reported (the moderation queue needs the row), but
     # the flag is set so the queue knows the target was gone at
     # submit time.
-    target_was_present = target_exists(
-        db, target_type=target_type, target_id=target_id
-    )
+    target_was_present = target_exists(db, target_type=target_type, target_id=target_id)
 
     # Step 6 — INSERT.
     metadata_json = None

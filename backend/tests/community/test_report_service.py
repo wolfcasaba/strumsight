@@ -50,10 +50,10 @@ from app.community.models.profile import CommunityProfile
 from app.community.models.report import CommunityReport
 from app.community.routers.reports import router as reports_router
 from app.community.services.report_service import (
-    InvalidCategory,
-    RateLimitExceeded,
     REPORT_CATEGORIES,
     REPORT_RATE_LIMIT_MAX,
+    InvalidCategory,
+    RateLimitExceeded,
     build_sanitized_response,
     reset_rate_limit_state,
     submit_report,
@@ -235,14 +235,10 @@ def _make_user_with_headers(
     return public_id, {"Authorization": f"Bearer {token}"}
 
 
-def _profile_pk_from_public_id(
-    session_factory, public_id: uuid.UUID
-) -> int:
+def _profile_pk_from_public_id(session_factory, public_id: uuid.UUID) -> int:
     """Resolve a profile's internal PK from its public_id."""
     with session_factory() as db:
-        return (
-            db.query(CommunityProfile).filter_by(public_id=public_id).one().id
-        )
+        return db.query(CommunityProfile).filter_by(public_id=public_id).one().id
 
 
 def _make_post(
@@ -268,11 +264,7 @@ def _make_post(
 
 def _soft_delete_post(session_factory, *, post_public_id: uuid.UUID) -> None:
     with session_factory() as db:
-        post = (
-            db.query(CommunityPost)
-            .filter_by(public_id=post_public_id)
-            .one()
-        )
+        post = db.query(CommunityPost).filter_by(public_id=post_public_id).one()
         post.deleted_at = _now()
         db.commit()
 
@@ -303,9 +295,7 @@ def test_a1_response_dataclass_has_no_reporter_field():
 
     field_names = set(ReportSubmissionResult.__dataclass_fields__.keys())
     leakage = field_names & _FORBIDDEN_KEYS
-    assert leakage == set(), (
-        f"A1 violated — ReportSubmissionResult exposes {leakage}"
-    )
+    assert leakage == set(), f"A1 violated — ReportSubmissionResult exposes {leakage}"
 
 
 def test_a1_build_sanitized_response_never_reads_reporter(session_factory):
@@ -341,9 +331,7 @@ def test_a1_build_sanitized_response_never_reads_reporter(session_factory):
         )
         db.commit()
         row = (
-            db.query(CommunityReport)
-            .filter_by(public_id=result.report_public_id)
-            .one()
+            db.query(CommunityReport).filter_by(public_id=result.report_public_id).one()
         )
         wire = build_sanitized_response(row, deduplicated=False)
 
@@ -470,7 +458,9 @@ def test_a2_duplicate_submit_same_target_category_idempotent(session_factory):
             )
             .count()
         )
-        assert rows == 1, f"A2 violated — duplicate report landed a 2nd row (count={rows})"
+        assert rows == 1, (
+            f"A2 violated — duplicate report landed a 2nd row (count={rows})"
+        )
 
 
 def test_a2_same_target_different_category_lands_two_rows(session_factory):
@@ -502,9 +492,7 @@ def test_a2_same_target_different_category_lands_two_rows(session_factory):
     reporter_pk = _profile_pk_from_public_id(session_factory, reporter_pid)
     with session_factory() as db:
         rows = (
-            db.query(CommunityReport)
-            .filter_by(reporter_profile_id=reporter_pk)
-            .count()
+            db.query(CommunityReport).filter_by(reporter_profile_id=reporter_pk).count()
         )
         assert rows == 2, (
             f"A2 violation-mirror — same target, different categories "
@@ -553,13 +541,9 @@ def test_a2_concurrent_submits_produce_one_row(session_factory):
     reporter_pk = _profile_pk_from_public_id(session_factory, reporter_pid)
     with session_factory() as db:
         rows = (
-            db.query(CommunityReport)
-            .filter_by(reporter_profile_id=reporter_pk)
-            .count()
+            db.query(CommunityReport).filter_by(reporter_profile_id=reporter_pk).count()
         )
-        assert rows == 1, (
-            f"A2 violated — concurrent submits produced {rows} rows"
-        )
+        assert rows == 1, f"A2 violated — concurrent submits produced {rows} rows"
 
 
 # ---------------------------------------------------------------------------
@@ -589,9 +573,7 @@ def test_a4_report_against_active_target_sets_flag_false(session_factory):
     assert result.deduplicated is False
     with session_factory() as db:
         row = (
-            db.query(CommunityReport)
-            .filter_by(public_id=result.report_public_id)
-            .one()
+            db.query(CommunityReport).filter_by(public_id=result.report_public_id).one()
         )
         assert row.target_deleted_at_submit is False, (
             "A4 violated — active target flagged as deleted"
@@ -621,9 +603,7 @@ def test_a4_report_against_soft_deleted_target_sets_flag_true(session_factory):
     assert result.deduplicated is False
     with session_factory() as db:
         row = (
-            db.query(CommunityReport)
-            .filter_by(public_id=result.report_public_id)
-            .one()
+            db.query(CommunityReport).filter_by(public_id=result.report_public_id).one()
         )
         assert row.target_deleted_at_submit is True, (
             "A4 violated — soft-deleted target not flagged"
@@ -651,9 +631,7 @@ def test_a4_report_against_unknown_target_sets_flag_true(session_factory):
     assert result.deduplicated is False
     with session_factory() as db:
         row = (
-            db.query(CommunityReport)
-            .filter_by(public_id=result.report_public_id)
-            .one()
+            db.query(CommunityReport).filter_by(public_id=result.report_public_id).one()
         )
         assert row.target_deleted_at_submit is True
 
@@ -667,27 +645,23 @@ def test_a4_target_exists_helper_distinguishes_states(session_factory):
     active_target = _make_post(session_factory, author_public_id=author_pid)
 
     with session_factory() as db:
-        assert target_exists(
-            db, target_type="post", target_id=str(active_target)
-        ) is True
+        assert (
+            target_exists(db, target_type="post", target_id=str(active_target)) is True
+        )
 
     _soft_delete_post(session_factory, post_public_id=active_target)
 
     with session_factory() as db:
-        assert target_exists(
-            db, target_type="post", target_id=str(active_target)
-        ) is False
+        assert (
+            target_exists(db, target_type="post", target_id=str(active_target)) is False
+        )
 
     bogus = str(uuid.uuid4())
     with session_factory() as db:
-        assert target_exists(
-            db, target_type="post", target_id=bogus
-        ) is False
+        assert target_exists(db, target_type="post", target_id=bogus) is False
 
     with session_factory() as db:
-        assert target_exists(
-            db, target_type="unknown_type", target_id=bogus
-        ) is False
+        assert target_exists(db, target_type="unknown_type", target_id=bogus) is False
 
 
 # ---------------------------------------------------------------------------
@@ -755,8 +729,7 @@ def test_a5_report_categories_constant_is_complete():
 
 
 def test_a5_router_returns_422_for_unknown_category(client, session_factory):
-    """A5 — the router maps :class:`InvalidCategory` to HTTP 422.
-    """
+    """A5 — the router maps :class:`InvalidCategory` to HTTP 422."""
     _reporter_id, headers = _make_user_with_headers(
         session_factory, email="r@s.test", user_id=20, visibility="public"
     )
@@ -864,8 +837,7 @@ def test_a6_rate_limit_is_per_reporter(session_factory):
 
 
 def test_a6_router_returns_429_for_rate_limit(client, session_factory):
-    """A6 — the router maps :class:`RateLimitExceeded` to HTTP 429.
-    """
+    """A6 — the router maps :class:`RateLimitExceeded` to HTTP 429."""
     _r1_id, headers_r1 = _make_user_with_headers(
         session_factory, email="r1@s.test", user_id=30, visibility="public"
     )
@@ -913,9 +885,7 @@ def test_evidence_categories_persist_metadata(session_factory):
     p_copyright = _make_post(
         session_factory, author_public_id=author_pid, body="copyright post"
     )
-    p_spam = _make_post(
-        session_factory, author_public_id=author_pid, body="spam post"
-    )
+    p_spam = _make_post(session_factory, author_public_id=author_pid, body="spam post")
 
     with session_factory() as db:
         submit_report(
@@ -958,8 +928,7 @@ def test_evidence_categories_persist_metadata(session_factory):
 
 
 def test_post_reports_router_returns_sanitized_shape(client, session_factory):
-    """POST /community/reports returns the §5.1 sanitized envelope.
-    """
+    """POST /community/reports returns the §5.1 sanitized envelope."""
     _reporter_id, headers = _make_user_with_headers(
         session_factory, email="r@s.test", user_id=40, visibility="public"
     )

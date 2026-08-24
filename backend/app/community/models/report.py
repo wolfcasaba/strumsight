@@ -69,6 +69,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -152,6 +153,7 @@ class CommunityReport(Base):
     # reporter's flow continues.
     target_deleted_at_submit: Mapped[bool] = mapped_column(
         default=False,
+        server_default=text("0"),
         nullable=False,
     )
 
