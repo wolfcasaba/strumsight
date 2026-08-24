@@ -56,6 +56,7 @@ from ...deps import CurrentUser
 from ..models.report import CommunityReport
 from ..services.report_service import (
     InvalidCategory,
+    InvalidExtraMetadata,
     RateLimitExceeded,
     build_sanitized_response,
     submit_report,
@@ -208,6 +209,9 @@ def post_report(
         except InvalidCategory as exc:
             db.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except InvalidExtraMetadata as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except RateLimitExceeded as exc:
             db.rollback()
             raise HTTPException(status_code=429, detail=str(exc)) from exc

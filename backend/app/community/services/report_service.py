@@ -1,4 +1,4 @@
-"""User-report service layer — E09-R26, ADR 0414 §5.1.
+"""User-report service layer — E09-R26, ADR 0422 §5.1.
 
 The service layer for the report module is intentionally narrow:
 
@@ -93,6 +93,24 @@ EVIDENCE_CATEGORIES: frozenset[str] = frozenset({"copyright", "privacy"})
 REPORT_RATE_LIMIT_MAX = 12
 REPORT_RATE_LIMIT_WINDOW_SECONDS = 3600
 
+# ---------------------------------------------------------------------------
+# extra_metadata payload cap (brief §3, F2 review fix)
+# ---------------------------------------------------------------------------
+
+# The §3 minimal-evidence payload — a small JSON dict with a URL, a
+# date, etc. We enforce BOTH a key-count cap (a cheap pre-check that
+# bounds pathological dicts before the JSON encoder runs) AND a
+# serialized-length cap on the JSON-encoded payload. A future round
+# that widens the §3 contract should widen these caps in lockstep.
+#
+# The router is intentionally untyped (it accepts an untyped ``dict``
+# payload and forwards as-is); the service layer is the SOLE
+# enforcement point. Oversize payloads raise :class:`InvalidExtraMetadata`
+# — the router maps that to HTTP 400 — instead of being truncated to
+# invalid JSON.
+EXTRA_METADATA_MAX_KEYS = 16
+EXTRA_METADATA_MAX_ENCODED_LEN = 2048
+
 # Per-process rate-limit state. The brief §3 calls this out as the
 # "engineer-side" note — a distributed limiter (Redis / DB-backed) is
 # a future round's call. Tests get a fresh state via
@@ -116,6 +134,17 @@ def reset_rate_limit_state() -> None:
 
 class InvalidCategory(ValueError):
     """§6 A5 — empty or unknown category rejected at the service layer."""
+
+
+class InvalidExtraMetadata(ValueError):
+    """F2 — the optional ``extra_metadata`` payload exceeded the
+    service-layer cap (key count or serialized JSON length).
+
+    The service layer is the SOLE enforcement point — the router
+    accepts an untyped ``dict`` payload and forwards as-is. A too-
+    large payload is rejected explicitly (mapped to HTTP 400 by the
+    router) instead of being silently truncated to invalid JSON.
+    """
 
 
 class RateLimitExceeded(Exception):
@@ -384,12 +413,23 @@ def submit_report(
     metadata_json = None
     if extra_metadata and category in EVIDENCE_CATEGORIES:
         # The §3 minimal-evidence payload — a small JSON dict with a
-        # URL, a date, etc. We cap the size defensively (the column
-        # is TEXT but a 1 MiB report body is a DoS shape). The router
-        # enforces the same cap at the request boundary.
+        # URL, a date, etc. The F2 review fix: oversize inputs are
+        # rejected with :class:`InvalidExtraMetadata` instead of being
+        # silently truncated (``encoded[:2048]`` could leave a half-
+        # quoted string in the DB). The service layer is the SOLE
+        # enforcement point — the router is intentionally untyped and
+        # does NOT cap the body.
+        if len(extra_metadata) > EXTRA_METADATA_MAX_KEYS:
+            raise InvalidExtraMetadata(
+                f"extra_metadata has too many keys "
+                f"({len(extra_metadata)} > {EXTRA_METADATA_MAX_KEYS})"
+            )
         encoded = json.dumps(extra_metadata, separators=(",", ":"))
-        if len(encoded) > 2048:
-            encoded = encoded[:2048]
+        if len(encoded) > EXTRA_METADATA_MAX_ENCODED_LEN:
+            raise InvalidExtraMetadata(
+                f"extra_metadata serialized length {len(encoded)} "
+                f"exceeds {EXTRA_METADATA_MAX_ENCODED_LEN}"
+            )
         metadata_json = encoded
 
     row = CommunityReport(
@@ -447,7 +487,10 @@ def _existing_report(db: Session, *, dedup_key: str) -> CommunityReport | None:
 
 __all__ = [
     "EVIDENCE_CATEGORIES",
+    "EXTRA_METADATA_MAX_ENCODED_LEN",
+    "EXTRA_METADATA_MAX_KEYS",
     "InvalidCategory",
+    "InvalidExtraMetadata",
     "RateLimitExceeded",
     "REPORT_CATEGORIES",
     "REPORT_RATE_LIMIT_MAX",
