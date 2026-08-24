@@ -11,11 +11,17 @@ void main() {
     final second = UiInventory(repository).render();
 
     expect(first.toMarkdown(), second.toMarkdown());
-    expect(first.screenPaths, hasLength(75));
+    expect(first.screenPaths, hasLength(76));
     expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
     expect(
       first.screenPaths,
       contains('lib/features/live/screens/live_screen.dart'),
+    );
+    expect(
+      first.screenPaths,
+      contains(
+        'lib/features/community/presentation/screens/leaderboard_screen.dart',
+      ),
     );
     expect(
       first.screenPaths,

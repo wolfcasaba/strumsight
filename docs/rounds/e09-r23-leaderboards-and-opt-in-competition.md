@@ -58,7 +58,9 @@ allowed_paths = [
   "lib/features/community/presentation/screens/leaderboard_screen.dart",
   "backend/tests/community/test_leaderboard_service.py",
   "test/features/community/presentation/leaderboard_screen_test.dart",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e09-r23-leaderboards-and-opt-in-competition.md",
+  "docs/reviews/e09-r23-review.md",
 ]
 gate_tests = [
   "test/features/community/presentation/leaderboard_screen_test.dart"
@@ -69,6 +71,24 @@ native_gate = false
 **Kockázat = high, indoklás:** privacy-érzékeny felület (opt-in láthatóság +
 follow-graph-alapú szűrés egy versenynézetben) — az A3/D2 pontosan ezt
 érinti, nem egy `allowed_paths` string-egyezés (brief-lint S7 lelet zárva).
+
+## 0.1 CI-utáni bővítés (2026-08-24, Claude Sonnet 5) — `test/ui/ui_inventory_test.dart`
+
+A `full-gate.yml` (run `32691781629`, exact-SHA `b454e771`) a review-jóváhagyás
+UTÁN a TELJES suite-ban egy, a kör lokális gate-hívása (csak
+`leaderboard_screen_test.dart`) által nem lefedett tesztet buktatott:
+`test/ui/ui_inventory_test.dart` — `expect(first.screenPaths, hasLength(75))`.
+Ez egy projekt-szintű, PINNELT darabszám-őr MINDEN production-screen fájlra
+(`tool/ui_inventory.dart` bejárja a `lib/features/**/screens/**`,
+`presentation/screens/**` mintát) — a MOST hozzáadott
+`leaderboard_screen.dart` a 76. screen, a régi `75` emiatt PIROS. Ez NEM
+funkcionális regresszió, hanem egy MECHANIKUS regisztrációs érték, amit
+MINDEN új screen-t hozó kör köteles bumpolni — mérve
+(`tool/count_screens_tmp.dart` egyszeri futtatással, `76`, majd törölve).
+`allowed_paths` bővítve `test/ui/ui_inventory_test.dart`-tal (a szám
+`75`→`76`, és egy `contains(...)` sor a leaderboard screen útvonalára, a
+meglévő minta szerint) — a döntés a kör SAJÁT, még nem merge-elt
+artefaktumát érinti (ADR 0087 §2 első bullet), nem H3.
 
 ---
 
