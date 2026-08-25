@@ -758,4 +758,48 @@ MINDEN lépés zöld (format, analyze, mind az öt teszt-fájl — a
 `permission_primer_test.dart` immár 9/9, az új F6-cellával —, architecture,
 secrets, l10n).
 
+## 10.3 JAVÍTÓ KÖR 3 — a teljes CI-suite lelete (F8)
+
+**F8 (design system határ) — javítva.** A teljes CI-suite
+(`test/core/architecture_dependency_test.dart` „design system boundaries
+(E13-R02) real production source reaches the design system only via
+public.dart") pirosat jelzett: a kör három új képernyője
+(`first_win_stage_screen.dart`, `permission_primer_screen.dart`,
+`recovery_screen.dart`) a `core/design_system/foundations/**` és
+`core/design_system/components/feedback/**` almappákat közvetlenül
+importálta a `core/design_system/public.dart` barrel helyett. A célzott
+gate ezt nem fedte, mert az architecture-teszt nem szerepelt az öt
+gate-fájl között.
+
+Javítás: mind a három fájlban a közvetlen `foundations/ss_colors.dart`,
+`foundations/ss_spacing.dart`, `foundations/ss_typography.dart` (és a
+`permission_primer_screen.dart` esetén a
+`components/feedback/failure_presentation.dart` +
+`components/feedback/ss_permission_state.dart`) importokat egyetlen
+`core/design_system/public.dart` importra cseréltem — a `public.dart`
+már exportálta mind az öt felhasznált szimbólumot
+(`SsColorScheme`, `SsTypography`, `SsSpacing`, `SsFailurePresentation`,
+`SsPermissionState`), a hivatkozott azonosítók nem változtak. Csak import
+csere, viselkedés nem változott — a golden PNG-k bit-azonosak maradtak.
+
+**Bizonyíték:**
+
+```
+$ flutter test test/core/architecture_dependency_test.dart
+...
+00:00 +26: design system boundaries (E13-R02) real production source
+reaches the design system only via public.dart
+...
+00:01 +44: All tests passed!
+```
+
+**Gate a javító kör 3 után.** `tools/round-gate.sh` a brief-ben megadott öt
+teszttel — MINDEN lépés zöld (format, analyze, mind az öt teszt-fájl,
+architecture, secrets, l10n).
+
+A brief §2 tiltott zónáját (`test/ui/ui_inventory_test.dart`) nem
+érintettem — a `hasLength(79)` piros marad a CI teljes suite-jában, ez a
+briefben rögzített, szándékos H3-eset (tágítás, listán kívüli fájl),
+emberi/önjavító döntésre vár.
+
 ## 11. Review — a Claude tölti ki
