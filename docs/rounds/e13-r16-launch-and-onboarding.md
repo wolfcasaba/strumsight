@@ -743,8 +743,19 @@ szövege nem változott.
 
 **F5 (NOTE) — NEM javítva**, a brief szerint (§0.0/B P4, kimarad).
 
-**Gate a javító kör 2 után.** `tools/round-gate.sh` a brief-ben megadott
-öt teszttel — l. alább a futtatott parancsot és a teljes, csonkítatlan
-kimenetet.
+**Gate a javító kör 2 után.** `tools/round-gate.sh` a brief-ben megadott öt
+teszttel:
+
+```
+$ tools/round-gate.sh test/features/onboarding/bootstrap_routing_test.dart \
+    test/features/onboarding/permission_primer_test.dart \
+    test/features/onboarding/onboarding_resume_test.dart \
+    test/features/onboarding/first_win_test.dart \
+    test/ui/goldens/e13_r16_screens_golden_test.dart
+```
+
+MINDEN lépés zöld (format, analyze, mind az öt teszt-fájl — a
+`permission_primer_test.dart` immár 9/9, az új F6-cellával —, architecture,
+secrets, l10n).
 
 ## 11. Review — a Claude tölti ki
