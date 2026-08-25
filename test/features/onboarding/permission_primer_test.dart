@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/audio_providers.dart';
+import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/onboarding/screens/permission_primer_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -27,7 +27,7 @@ void main() {
           microphonePermissionGatewayProvider.overrideWithValue(gateway),
         ],
         child: MaterialApp(
-          theme: AppTheme.dark(),
+          theme: SsDarkTheme.data(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: PermissionPrimerScreen(
