@@ -45,6 +45,7 @@ class RealReferenceTonePlayer implements ReferenceTonePlayer {
 
   @override
   Future<void> dispose() async {
+    await stop();
     try {
       await _player?.dispose();
     } catch (_) {}

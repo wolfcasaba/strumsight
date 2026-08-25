@@ -25,8 +25,14 @@ class _RecordingTonePlayer implements ReferenceTonePlayer {
   @override
   Future<void> stop() async => stopCalls++;
 
+  // Mirrors `RealReferenceTonePlayer.dispose()` (review MINOR-2): disposal
+  // stops the tone first, so leaving mid-tone can never race an in-flight
+  // `play()` call past the point the player is torn down.
   @override
-  Future<void> dispose() async => disposed = true;
+  Future<void> dispose() async {
+    await stop();
+    disposed = true;
+  }
 }
 
 /// `overrideWithValue` bypasses the provider's OWN `create` body — exactly
@@ -125,6 +131,13 @@ void main() {
         tone.disposed,
         isTrue,
         reason: 'the reference tone must stop when the route is left',
+      );
+      expect(
+        tone.stopCalls,
+        1,
+        reason:
+            'disposal must stop the tone (review MINOR-2), not just tear '
+            'the player down under it',
       );
     },
   );
