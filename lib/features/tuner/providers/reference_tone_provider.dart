@@ -16,15 +16,21 @@ abstract class ReferenceTonePlayer {
 }
 
 class RealReferenceTonePlayer implements ReferenceTonePlayer {
-  final AudioPlayer _player = AudioPlayer();
+  // Lazy: the provider is watched (and this class constructed) on every
+  // Tuner build, but most visits never tap the reference-tone button —
+  // `AudioPlayer()` touches a platform channel on construction, so building
+  // it eagerly here would reach that channel on every Tuner mount, including
+  // widget/golden tests that never override this provider.
+  AudioPlayer? _player;
+  AudioPlayer get _playerOrCreate => _player ??= AudioPlayer();
 
   @override
   Future<void> play(double freqHz) async {
     if (freqHz <= 0) return;
     final wav = ChordAudio.padWav([freqHz], ms: 1500, amp: 0.3);
     try {
-      await _player.stop();
-      await _player.play(BytesSource(wav));
+      await _playerOrCreate.stop();
+      await _playerOrCreate.play(BytesSource(wav));
     } catch (_) {
       // Best-effort, mirrors `Backing._play`.
     }
@@ -33,14 +39,14 @@ class RealReferenceTonePlayer implements ReferenceTonePlayer {
   @override
   Future<void> stop() async {
     try {
-      await _player.stop();
+      await _player?.stop();
     } catch (_) {}
   }
 
   @override
   Future<void> dispose() async {
     try {
-      await _player.dispose();
+      await _player?.dispose();
     } catch (_) {}
   }
 }
