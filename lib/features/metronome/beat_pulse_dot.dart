@@ -25,24 +25,40 @@ class MetronomeBeatClockAdapter implements SsBeatClock {
 }
 
 /// The metronome's audio-clock-driven visual beat pulse (brief §0.0/R5.2,
-/// ADR 0274 — the A4 acceptance surface). Mirrors
-/// `core/design_system/motion/ss_beat_pulse.dart`'s pull-every-frame
-/// contract exactly (never a locally-owned free-running `Timer`, and the
-/// ticker is deliberately never stopped when [SsBeatClock.position] goes
-/// null — L444, a "stop when idle" optimisation would make a later resume
-/// silently never restart it) but stays palette-driven instead of reading
-/// the design system's `SsColorScheme` theme extension: `AppTheme` (the
-/// app's actual runtime theme) registers only `AppPalette` — see the E13-R18
-/// handoff / `SsChordHero`'s doc comment for the same reasoning.
+/// ADR 0274 — the A4 acceptance surface). Every rendered phase comes from
+/// [SsBeatClock.position] (never a separate BPM-derived `Timer`), read via
+/// its own ticker so the animation is smooth between the parent's per-beat
+/// rebuilds.
+///
+/// Unlike `core/design_system/motion/ss_beat_pulse.dart` (L444 — a generic
+/// consumer that must poll forever because it has no positive resume
+/// signal), [playing] here is an EXPLICIT signal from the one caller that
+/// owns transport state (`MetronomeScreen._playing`): the ticker runs only
+/// while playing and is stopped the instant it isn't, restarting the moment
+/// [playing] flips back — never a silent, permanently-idle poll. This keeps
+/// `pumpAndSettle()` terminating for every OTHER screen/route test that
+/// happens to mount a stopped metronome (the default state), which an
+/// always-on ticker would hang forever (measured while writing this round's
+/// own tests).
+///
+/// Stays palette-driven instead of reading the design system's
+/// `SsColorScheme` theme extension: `AppTheme` (the app's actual runtime
+/// theme) registers only `AppPalette` — see the E13-R18 handoff /
+/// `SsChordHero`'s doc comment for the same reasoning.
 final class BeatPulseDot extends StatefulWidget {
   const BeatPulseDot({
     super.key,
+    required this.playing,
     required this.clock,
     required this.beatDuration,
     required this.color,
     required this.mutedColor,
     this.diameter = 16,
   });
+
+  /// Whether the transport is currently running — gates whether this
+  /// widget's own ticker is active at all (see class doc).
+  final bool playing;
 
   final SsBeatClock clock;
   final Duration beatDuration;
@@ -61,12 +77,22 @@ final class _BeatPulseDotState extends State<BeatPulseDot>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
   double _phase = 0;
-  bool _live = false;
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker(_onTick)..start();
+    _ticker = createTicker(_onTick);
+    if (widget.playing) _ticker.start();
+  }
+
+  @override
+  void didUpdateWidget(covariant BeatPulseDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.playing && !oldWidget.playing) {
+      _ticker.start();
+    } else if (!widget.playing && oldWidget.playing) {
+      _ticker.stop();
+    }
   }
 
   @override
@@ -78,22 +104,14 @@ final class _BeatPulseDotState extends State<BeatPulseDot>
   void _onTick(Duration elapsed) {
     final position = widget.clock.position;
     final beatMicros = widget.beatDuration.inMicroseconds;
-    if (position == null || beatMicros <= 0) {
-      if (_live) setState(() => _live = false);
-      return;
-    }
+    if (position == null || beatMicros <= 0) return;
     final phase = (position.inMicroseconds % beatMicros) / beatMicros;
-    if (!_live || phase != _phase) {
-      setState(() {
-        _live = true;
-        _phase = phase;
-      });
-    }
+    if (phase != _phase) setState(() => _phase = phase);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_live) return _dot(color: widget.mutedColor, scale: 1);
+    if (!widget.playing) return _dot(color: widget.mutedColor, scale: 1);
     final scale = 1 + (1 - _phase) * 0.3;
     return _dot(color: widget.color, scale: scale);
   }

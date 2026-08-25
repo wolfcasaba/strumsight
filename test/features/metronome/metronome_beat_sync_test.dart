@@ -49,6 +49,7 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           BeatPulseDot(
+            playing: false,
             clock: clock,
             beatDuration: const Duration(milliseconds: 500),
             color: Colors.green,
@@ -76,6 +77,7 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           BeatPulseDot(
+            playing: true,
             clock: clock,
             beatDuration: beatDuration,
             color: Colors.green,
@@ -124,6 +126,7 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           BeatPulseDot(
+            playing: true,
             clock: clock,
             beatDuration: const Duration(milliseconds: 1000),
             color: Colors.green,

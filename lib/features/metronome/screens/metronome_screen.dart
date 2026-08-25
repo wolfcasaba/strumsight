@@ -111,52 +111,64 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     if (bpm != null) _setBpm(bpm);
   }
 
+  /// The "advanced settings" sheet (brief §5.6). NOT `SsOverlayHost.
+  /// showSheetSurface`: that helper's `_SsBottomSheetSurface` calls
+  /// `SsElevation.resolve`, which reads the `SsColorScheme`/`SsThemeBehavior`
+  /// theme extensions — registered only by `SsDarkTheme`/`SsLightTheme`, not
+  /// by `AppTheme` (the app's actual runtime theme, which registers only
+  /// `AppPalette`). Under `AppTheme` it throws a null-check error building
+  /// the sheet (measured while writing this round's own tests — see the
+  /// round handoff §10). `lib/core/design_system/components/overlays/**` is
+  /// out of this round's scope to fix, so this uses Flutter's own
+  /// `showModalBottomSheet` instead, styled from the same palette every
+  /// other migrated piece in this round uses.
   Future<void> _openAdvancedSettings(
     BuildContext context,
     AppLocalizations l10n,
   ) {
     final palette = context.palette;
-    return SsOverlayHost.showSheetSurface<void>(
+    return showModalBottomSheet<void>(
       context: context,
-      barrierLabel: l10n.metronomeAdvancedSettings,
       builder: (sheetContext) => StatefulBuilder(
-        builder: (sheetContext, setSheetState) => Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.metronomeAdvancedSettings,
-                style: TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                  color: palette.ink,
+        builder: (sheetContext, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.metronomeAdvancedSettings,
+                  style: TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    color: palette.ink,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                l10n.metronomeTimeSignature,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  color: palette.muted,
+                const SizedBox(height: 20),
+                Text(
+                  l10n.metronomeTimeSignature,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: palette.muted,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SsChoice<int>(
-                options: [
-                  for (final n in const [2, 3, 4, 6])
-                    SsChoiceOption(value: n, label: '$n/4'),
-                ],
-                value: _beatsPerBar,
-                onChanged: (v) {
-                  setState(() => _beatsPerBar = v);
-                  setSheetState(() {});
-                },
-              ),
-            ],
+                const SizedBox(height: 8),
+                SsChoice<int>(
+                  options: [
+                    for (final n in const [2, 3, 4, 6])
+                      SsChoiceOption(value: n, label: '$n/4'),
+                  ],
+                  value: _beatsPerBar,
+                  onChanged: (v) {
+                    setState(() => _beatsPerBar = v);
+                    setSheetState(() {});
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -199,6 +211,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
       hero: _bpmHero(l10n),
       // The audio-clock-bound visual pulse (A4) — never a `Timer.periodic`.
       feedback: BeatPulseDot(
+        playing: _playing,
         clock: _beatClockAdapter,
         beatDuration: beatDuration,
         color: AppColors.primary,
