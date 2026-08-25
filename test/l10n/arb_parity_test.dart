@@ -34,6 +34,11 @@ void main() {
       'lib/l10n/features/gamification_hu.arb',
     ),
     (
+      'features/onboarding',
+      'lib/l10n/features/onboarding_en.arb',
+      'lib/l10n/features/onboarding_hu.arb',
+    ),
+    (
       'features/tuner',
       'lib/l10n/features/tuner_en.arb',
       'lib/l10n/features/tuner_hu.arb',

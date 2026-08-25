@@ -1,0 +1,20 @@
+{
+  "@@locale": "en",
+  "onboardFirstWinContinueAction": "Start my first lesson",
+  "onboardFirstWinListening": "Give it a strum — we're listening",
+  "onboardFirstWinRetryAction": "Try again",
+  "onboardFirstWinSkipAction": "Skip for now",
+  "onboardFirstWinSuccessBody": "That's a clean signal — you're ready for your first real lesson.",
+  "onboardFirstWinSuccessTitle": "Nice, we heard that!",
+  "onboardFirstWinWeakBody": "Try moving closer to the microphone or finding a quieter spot, then give it another strum.",
+  "onboardFirstWinWeakTitle": "We couldn't quite hear that",
+  "onboardPrimerAllowAction": "Allow microphone",
+  "onboardPrimerConsequence": "If you say no, you can still explore the app, but chord detection won't work until you turn it on in Settings.",
+  "onboardPrimerNotNowAction": "Not now",
+  "onboardPrimerRationale": "StrumSight needs the microphone to name your chords and strums — it never leaves your phone.",
+  "onboardPrimerTitle": "One more thing before we listen",
+  "recoveryBody": "StrumSight ran into a problem and started in safe mode. Nothing was deleted.",
+  "recoveryDataSafeNotice": "Your songs, streak and settings are untouched.",
+  "recoveryRetryAction": "Try again",
+  "recoveryTitle": "Safe mode"
+}

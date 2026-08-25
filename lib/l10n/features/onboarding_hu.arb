@@ -1,0 +1,20 @@
+{
+  "@@locale": "hu",
+  "onboardFirstWinContinueAction": "Indítom az első leckét",
+  "onboardFirstWinListening": "Pengess egyet — figyelünk",
+  "onboardFirstWinRetryAction": "Próbáld újra",
+  "onboardFirstWinSkipAction": "Kihagyom most",
+  "onboardFirstWinSuccessBody": "Ez egy tiszta jel — készen állsz az első igazi leckére.",
+  "onboardFirstWinSuccessTitle": "Szép volt, halljuk!",
+  "onboardFirstWinWeakBody": "Próbálj közelebb menni a mikrofonhoz, vagy keress egy csendesebb helyet, aztán pengess újra.",
+  "onboardFirstWinWeakTitle": "Ezt nem hallottuk elég tisztán",
+  "onboardPrimerAllowAction": "Mikrofon engedélyezése",
+  "onboardPrimerConsequence": "Ha nemet mondasz, továbbra is felfedezheted az appot, de az akkordfelismerés nem működik, amíg be nem kapcsolod a Beállításokban.",
+  "onboardPrimerNotNowAction": "Most nem",
+  "onboardPrimerRationale": "A StrumSightnek szüksége van a mikrofonra, hogy megnevezze az akkordjaidat és pengetéseidet — ez sosem hagyja el a telefonodat.",
+  "onboardPrimerTitle": "Még valami, mielőtt hallgatózunk",
+  "recoveryBody": "A StrumSight problémába ütközött, ezért biztonságos módban indult. Semmi nem törlődött.",
+  "recoveryDataSafeNotice": "A dalaid, a sorozatod és a beállításaid érintetlenek.",
+  "recoveryRetryAction": "Próbáld újra",
+  "recoveryTitle": "Biztonságos mód"
+}

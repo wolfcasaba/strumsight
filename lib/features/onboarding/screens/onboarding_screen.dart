@@ -3,23 +3,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
-import '../../../core/audio/audio_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../onboarding_provider.dart';
+import 'permission_primer_screen.dart';
 
 /// First-run onboarding: three glanceable pages that teach the moat (↓/↑),
 /// tease the streak, and prime the mic permission before dropping into Live.
 /// Minimal by design (Simply Guitar's lesson: a few taps, then play). Growth =
 /// activation — convert every viral install into an active user (chunk 013).
+///
+/// SDD Ch13 Kör 16 additions: the flow is checkpointed (A6/A7), and both
+/// carousel CTAs that request the mic (`onboardFirstWin`, `onboardStart`)
+/// route THROUGH the [OnboardingStep.permission] checkpoint — the system
+/// permission dialog is never reachable without the primer having been on
+/// screen first (ADR 0281 §1/§5.1, A1). [_finish]/[_firstWin] record which
+/// completion is pending, advance the checkpoint, and let
+/// [PermissionPrimerScreen]'s `onGranted`/`onSkipped` resume it
+/// ([_onPermissionResolved]) — best-effort, exactly like the pre-checkpoint
+/// behaviour: a skip or a denial still completes onboarding, the Live screen
+/// re-requests if still ungranted. A build that resumes mid-flow (checkpoint
+/// already at [OnboardingStep.permission], e.g. the app was killed right
+/// there) has no pending completion to resume, so it defaults to the plain
+/// finish (Live tab, no forced first-win lesson) rather than guessing.
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({
-    super.key,
-    this.onDone,
-    this.onFirstWin,
-    this.primeMic,
-  });
+  const OnboardingScreen({super.key, this.onDone, this.onFirstWin});
 
   /// Where to go when finished; defaults to the Live tab (overridable in tests).
   final VoidCallback? onDone;
@@ -27,10 +36,6 @@ class OnboardingScreen extends ConsumerStatefulWidget {
   /// Where the "first win" CTA lands (chunk 017 rec #4); defaults to the Live
   /// tab with the [Lessons.firstWin] mini-lesson pushed on top.
   final VoidCallback? onFirstWin;
-
-  /// Mic-permission priming, injectable for tests (the platform channel does
-  /// not exist under flutter_test and its future never completes there).
-  final Future<void> Function()? primeMic;
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -41,29 +46,61 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _page = 0;
   bool _finishing = false;
 
+  /// Which completion to resume once the permission checkpoint resolves —
+  /// set by whichever of [_finish]/[_firstWin] requested the mic, consumed
+  /// by [_onPermissionResolved]. `null` (no carousel CTA in flight, e.g. a
+  /// build that resumed straight at [OnboardingStep.permission]) resumes as
+  /// a plain finish — see the class doc-comment.
+  Future<void> Function()? _afterPermission;
+
   @override
   void dispose() {
     _pager.dispose();
     super.dispose();
   }
 
-  /// Priming goes through the permission gateway (E01-R09 §9.1) — a screen
-  /// never calls the plugin itself.
-  Future<void> _requestMicPermission() =>
-      ref.read(microphonePermissionGatewayProvider).request();
+  /// The checkpoint read, defensive against a Riverpod-free construction
+  /// (no ancestor `ProviderScope`) — a bare layout-smoke test builds this
+  /// screen directly under a plain `MaterialApp`. A missing scope degrades
+  /// to the safe default (show the intro from the top), the same
+  /// fail-safe philosophy `OnboardingController.readSeen` already applies
+  /// to a corrupt stored value.
+  OnboardingStep _currentStep() {
+    try {
+      return ref.watch(onboardingStepProvider);
+    } on StateError {
+      return OnboardingStep.welcome;
+    }
+  }
 
+  Future<void> _advanceStep(OnboardingStep step) async {
+    try {
+      await ref.read(onboardingStepProvider.notifier).advanceTo(step);
+    } on StateError {
+      // No ProviderScope to persist into — nothing to do.
+    }
+  }
+
+  /// Either carousel CTA that wants the mic: instead of requesting it cold,
+  /// it checkpoints [OnboardingStep.permission] — the build's step-switch
+  /// then shows [PermissionPrimerScreen], which owns the ONLY call into the
+  /// permission gateway (E01-R09 §9.1, ADR 0281 §1/§5.1, A1).
   Future<void> _finish({bool requestMic = false}) async {
     if (_finishing) return;
-    _finishing = true;
-    final router = widget.onDone == null ? GoRouter.of(context) : null;
     if (requestMic) {
-      try {
-        await (widget.primeMic ?? _requestMicPermission)();
-      } catch (_) {
-        // Best-effort priming; the Live screen re-requests if still ungranted.
-      }
+      _finishing = true;
+      _afterPermission = _completeFinish;
+      await _advanceStep(OnboardingStep.permission);
+      return;
     }
+    _finishing = true;
+    await _completeFinish();
+  }
+
+  Future<void> _completeFinish() async {
+    final router = widget.onDone == null ? GoRouter.of(context) : null;
     await ref.read(onboardingSeenProvider.notifier).complete();
+    await _advanceStep(OnboardingStep.done);
     (widget.onDone ?? () => router!.go(AppRoutes.live))();
   }
 
@@ -73,17 +110,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _firstWin() async {
     if (_finishing) return;
     _finishing = true;
+    _afterPermission = _completeFirstWin;
+    await _advanceStep(OnboardingStep.permission);
+  }
+
+  Future<void> _completeFirstWin() async {
     final useDefaultNavigation = widget.onFirstWin == null;
     final router = useDefaultNavigation ? GoRouter.of(context) : null;
     final navigator = useDefaultNavigation
         ? Navigator.of(context, rootNavigator: true)
         : null;
-    try {
-      await (widget.primeMic ?? _requestMicPermission)();
-    } catch (_) {
-      // Best-effort; the lesson's mic path surfaces its own error banner.
-    }
     await ref.read(onboardingSeenProvider.notifier).complete();
+    await _advanceStep(OnboardingStep.done);
     (widget.onFirstWin ??
         () {
           router!.go(AppRoutes.live);
@@ -100,6 +138,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         })();
   }
 
+  /// Fires from the primer's `onGranted` AND `onSkipped` alike — best-effort
+  /// priming means the flow completes either way, matching the
+  /// pre-checkpoint contract (the Live screen re-requests if still
+  /// ungranted).
+  Future<void> _onPermissionResolved() {
+    final resume = _afterPermission ?? _completeFinish;
+    _afterPermission = null;
+    return resume();
+  }
+
   void _next(int lastIndex) {
     if (_page >= lastIndex) {
       _finish(requestMic: true);
@@ -113,6 +161,20 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return switch (_currentStep()) {
+      OnboardingStep.welcome => _buildWelcomeCarousel(context),
+      // Reached both from a carousel CTA (A1) and from a resumed checkpoint
+      // (A6/A7) — either way, `onGranted`/`onSkipped` resume whichever
+      // completion was pending (see the class doc-comment).
+      OnboardingStep.permission => PermissionPrimerScreen(
+        onGranted: _onPermissionResolved,
+        onSkipped: _onPermissionResolved,
+      ),
+      OnboardingStep.done => const SizedBox.shrink(),
+    };
+  }
+
+  Widget _buildWelcomeCarousel(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final pages = <_Page>[
       _Page(
@@ -200,7 +262,9 @@ class _Page extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    // A9 (golden gate, textScaler 2.0): the intro page must not overflow at
+    // a large text size — scrollable rather than clipped/cut off.
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
