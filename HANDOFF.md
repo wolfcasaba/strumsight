@@ -1,5 +1,75 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R17 KÉSZ — Today, Practice és Profile hubok — PR [#456](https://github.com/wolfcasaba/strumsight/pull/456), squash `4235f636` (2026-08-25)
+
+Az UI-05/UI-06/UI-07 cél-hubok bekötve az adaptív shell mögé (ADR 0275, a
+flag **defaultból KI**). Implementer `sonnet-impl` (Claude Sonnet 5,
+`--effort high`), orchesztrátor/reviewer Claude Opus 5.
+
+**Mi készült.**
+
+- `lib/features/today/` — **TodayHubScreen** (`/today`): egyetlen elsődleges
+  CTA négy tervállapotban (új felhasználó / terv kész / nap teljesítve / terv
+  nélkül), offline és sync-várakozó sáv a cached tartalom fölött (ADR 0277),
+  indokot adó letiltott Vision-kártya, `TodayPlanRepository` seam.
+- `lib/features/practice_hub/` — **PracticeAreaHubScreen** (`/practice`,
+  a `practiceEngineV2Enabled` kapu VÁLTOZATLAN): egy ajánlott-gyakorlás CTA,
+  négy gyors eszköz EGY érintésre, öt cél szerinti kategória-chip.
+- `lib/features/profile_hub/` — **ProfileHubScreen** (`/profile`): fiók
+  nélkül is teljes, bejelentkezési fal NÉLKÜL; valós auth- és
+  community-állapot.
+- A shell három destination-buildere átkötve; a legacy route-ok és a
+  redirect-térkép érintetlenek. 39 új l10n kulcs a `base/` FORRÁS-szegmensben
+  + regenerált aggregátum. 6 commitolt golden PNG.
+
+**Evidencia a merge SHA-n (`b1edc41c`).** Full Gate
+[32891144024](https://github.com/wolfcasaba/strumsight/actions/runs/32891144024)
++ Router CI [32891134259](https://github.com/wolfcasaba/strumsight/actions/runs/32891134259)
+mindkettő `success`; a reviewer célzott gate-je **11/11 zöld** izolált klónban
+(kétszer futtatva), `scope-audit.py` → OK.
+
+**A review nem bemondásra dolgozott.** A §6.1 mérce-mátrix **négy sorát** saját,
+eldobható valódi-sértés próbával mértem a GYÁRTÁSI kódon, és mind a négy
+PIROSRA váltott: a metronómot harmadik szint mögé téve az **A2** (ez a brief
+§6.1 KÖTELEZŐ próbája, amit az implementer teszt-lokális fán érvelt le —
+MINOR-1), két egyenrangú `FilledButton`-nal mind a négy **A1** cella,
+bejelentkezési fallal az **A3**, kitalált „7 napos" szériával az **A8**.
+Mind visszaállítva.
+
+**Két javító kör — a CI golden-pirosa ([L486](docs/LESSONS.md)).** A hat
+golden lokálisan zöld volt, a CI négyet pirosra váltott. A diagnózis **két
+hipotézist cáfolt meg mérve** (inline `Montserrat`/`w800`, majd a
+`withValues(alpha:)` — mindkettőt az E13-R16 CI-ZÖLD precedense zárta ki),
+mielőtt a tényleges gyökérokhoz ért: a `_Metric` a `ColorScheme.fromSeed`-ből
+(HCT **lebegőpontos**) származó `surfaceContainerHighest`-et festette nagy,
+egybefüggő felületre. Konstans színforrásra cserélve a CI zöld. A
+betűtípus- és eltolódás-magyarázatot **pixel-aritmetika** zárta ki: a mért
+diff (21 096 px) ≈ a két metrika-doboz TELJES területe, miközben négy rövid
+felirat glifái együtt is csak ~2-3 ezer px.
+
+**Egy lelet a javító kör DOKUMENTÁCIÓJÁBAN ([L487](docs/LESSONS.md)).** A §12
+egy **nem futott** CI-futásra hivatkozott bizonyítékként („a fix után a CI
+ismét piros maradt") — a két javító kör között nem futott CI. A következtetés
+helyes volt, a hivatkozott bizonyíték nem létezett; a reviewer korrigálta
+(`1ee36ebc`), mert a kör-doksikat a következő körök olvassák és a RAG
+indexeli.
+
+**Nyitva hagyva (follow-up, nem blokkoló).**
+
+- **MINOR-2:** az A2 négy cellájából kettő tautologikus (a `_DepthLevel`
+  teszt-fát méri, gyártási regressziótól sosem pirosodhat) — a valódi
+  védelmet a két gyártási cella adja.
+- **NOTE-1 (termék-szintű):** a `core/design_system` **19** komponense
+  `extension<SsColorScheme>()!`-t force-unwrappol, miközben a `StrumSightApp`
+  `AppTheme`-et alkalmaz — ezért **0** shippelt feature-képernyő használ
+  `SsCard`/`SsButton`-t. A Ch13 design system ma gyakorlatilag nincs
+  élesítve; ez az **E13-R36** (Ch13 zárás) vagy egy önálló ADR dolga.
+- **NOTE-2:** a Practice Hub öt kategória-chipje ugyanarra a
+  `practiceSetup` route-ra megy (szűrő-API még nincs).
+
+**Következő kör:** **E13-R18** — Live és Stage UI
+(`docs/rounds/e13-r18-live-stage-ui.md`, `sonnet-impl`, ADR `nincs`).
+
 ## ✅ [HEAL E13-R17/H3] KÉSZ — a shell-destination navigációs őr: `S10` brief-lint szabály + a Ch13 sáv három routert engedő körének eltakarítása — PR [#455](https://github.com/wolfcasaba/strumsight/pull/455) (2026-08-25, L485)
 
 Az **E13-R17** az orchestrátor pre-flightjában állt meg (**H3**),

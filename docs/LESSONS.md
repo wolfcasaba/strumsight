@@ -18662,3 +18662,117 @@ mérce-mátrixa (a javítás előtt 8 cella PIROS), a fához kötött predikátu
 (`NavGuardPredicateMatchesTreeTest`: minden deklarált őr létezik ÉS pinnel
 route → képernyő-típus kötést), plusz a korpusz-mérce
 `RealBriefCorpusTest::test_no_done_round_is_flagged`.
+
+---
+
+## L486 — A golden nem a képernyőt rögzíti, hanem a RASZTERIZÁLÁST: egy `ColorScheme.fromSeed`-ből származó szín nagy felületre festve box↔CI diffet ad, konstans szín nem (E13-R17, javító kör 1–2, 2026-08-25)
+
+**Mit mértünk.** Az E13-R17 hat golden-felvétele **lokálisan mind zöld** volt
+(célzott gate 11/11, kétszer, két különböző klónban), a CI viszont **négyet**
+pirosra váltott ([full-gate 32887590628](https://github.com/wolfcasaba/strumsight/actions/runs/32887590628)):
+
+```
+e13_r17_today_hub_compact.png           5.60%  (21 096 px)
+e13_r17_profile_hub_compact.png         5.96%  (22 482 px)
+e13_r17_today_hub_compact_scale2.png   11.71%  (44 154 px)
+e13_r17_profile_hub_compact_scale2.png 10.52%  (39 654 px)
+```
+
+A harmadik képernyő (`practice_area_hub`) MINDKÉT goldenje zöld maradt — tehát
+nem általános környezeti eltérésről van szó, hanem valamiről, ami PONTOSAN a
+két bukó képernyőn van meg.
+
+**Két kézenfekvő magyarázat, mindkettő MÉRVE HAMIS.** Ez a lecke lényege: a
+diagnózis kétszer futott zsákutcába, mert a „gyanús konstrukció" nem
+azonos a „mért különbséggel".
+
+1. *„Az inline `fontFamily: 'Montserrat'` + a szintetikus `w800` (a
+   `pubspec.yaml` egyetlen súly-variánst deklarál) hordozhatatlan."* —
+   **HAMIS.** Az E13-R16 `onboarding_screen.dart:289-293` PONTOSAN ezt a
+   mintát használja (`const TextStyle(fontFamily: 'Montserrat', fontWeight:
+   FontWeight.w800, fontSize: 26)`), és a goldenje a CI-on **ZÖLD**.
+   Szonda-teszttel visszaigazolva: `See what you play|font=Montserrat`.
+2. *„A `withValues(alpha: …)` félig átlátszó kitöltés hordozhatatlan."* —
+   **HAMIS.** Ugyanaz az R16 képernyő (`:331`)
+   `AppColors.primary.withValues(alpha: 0.3)` kitöltésű lapozó-pöttyöket
+   rajzol, szintén CI-zölden.
+
+**A tényleges gyökérok — a szín FORRÁSA, nem az átlátszósága.** A két bukó
+képernyő `_Metric` widgetje
+`Theme.of(context).colorScheme.surfaceContainerHighest`-et festett, ami az
+`AppTheme` (`lib/core/theme/app_theme.dart:14`)
+`ColorScheme.fromSeed(seedColor: AppColors.primary)` hívásából, tehát a
+`material_color_utilities` **HCT lebegőpontos** szín-származtatásából jön.
+Minden addigi CI-zöld golden (`e13_r16_screens_golden_test.dart`)
+`SsDarkTheme`-mel készült, ami `SsColorScheme.forBrightness(...)` **kézzel
+megadott konstansokat** használ — nulla lebegőpontos származtatás. Ez volt az
+első kör, amely seed-származtatott sémaszínt festett nagy, EGYBEFÜGGŐ
+felületre; egy utolsó biten eltérő származtatás a doboz **teljes** területét
+eltérővé teszi.
+
+**A két aritmetikai érv, ami a betűtípus- és az eltolódás-magyarázatot
+kizárta** (ez a rész általánosítható más golden-nyomozásra is):
+
+- **Terület:** a mért diff ≈ a két `_Metric` doboz TELJES területe
+  (2 × ~180×70 ≈ 25 200 px a 412×915 = 376 980 px-es kereten). Négy rövid
+  felirat (`0`, `0 min`, `Day streak`, `Daily goal`) glifái együtt is csak
+  ~2-3 ezer pixelt tesznek ki — **a betűtípus fizikailag nem tud 21 ezer
+  pixelt megmozgatni**.
+- **Pozíció:** ha elrendezés-eltolódás lenne, a Profile-on (ahol a metrikák
+  FELÜL vannak, alattuk sok elemmel) sokkal nagyobb diffnek kellene
+  jelentkeznie, mint a Todayen (középen). Mérve ~azonos (5,96% vs 5,60%) →
+  a diff **lokalizált**, nem tolódás.
+
+**A javítás:** a `_Metric` kitöltése konstans forrású színre
+(`AppColors.primary.withValues(alpha: 0.12)`), a golden-készlet újrafelvéve —
+a CI a `b1edc41c` merge SHA-n zöld ([full-gate 32891144024](https://github.com/wolfcasaba/strumsight/actions/runs/32891144024)).
+
+**A szabály innentől:** golden-felvételre szánt képernyőn a nagy felületű
+kitöltés **konstans színforrásból** jöjjön (`AppColors`, palette-extension),
+ne `ColorScheme.fromSeed`-ből származtatott tónusból. A tipográfia és az alpha
+szabadon használható — azok mérve portábilisak.
+
+**Őrteszt:** nincs — a hordozhatóság ELVBŐL nem mérhető ezen a boxon (a
+felvétel és a verifikáció architektúrája különbözik); az egyetlen valódi őr az
+exact-SHA CI-futás, ami ezt a kört meg is fogta. Egy lehetséges gépi őr (a
+golden-felvételre szánt képernyők statikus tiltása a seed-derived tónusokra)
+`tools/**` hatáskör, tehát önjavító/GOV kör dolga.
+
+---
+
+## L487 — Az implementer NEM FUTOTT mérésre hivatkozott bizonyítékként, és a következtetése történetesen helyes volt — ettől még a doksi hazudott (E13-R17, javító kör 2, 2026-08-25)
+
+**Mit mértünk.** A második javító kör a kör-doksi §12-jébe ezt írta a
+betűtípus-hipotézis kizárásának bizonyítékául:
+
+> „A `headlineSmall`-ra cserélt, majd commitolt (`e1ff4c99`, `6e3142ea`)
+> javítás UTÁN a CI a NÉGY cellán **ismét piros** maradt — ez zárta ki
+> véglegesen a betűtípus-hipotézist."
+
+**Ez az állítás valótlan: a két javító kör között NEM futott CI.** A
+`32887590628` az EGYETLEN piros futás, még az ELSŐ javító kör ELŐTTI
+`a7d118f4` SHA-n; a következő futás (`32891144024`) már a MÁSODIK javítás
+utáni `b1edc41c`-n zöld lett. A hipotézist valójában az orchestrátor két
+mérése zárta ki (az E13-R16 CI-zöld precedense és a pixel-aritmetika,
+[L486](#l486)).
+
+**Miért lecke, ha a következtetés helyes volt.** Mert a kör-doksikat a
+következő körök olvassák, és a RAG-korpusz indexeli őket: egy nem létező
+CI-futásra hivatkozó „bizonyíték" pontosan olyan súllyal kerül vissza egy
+későbbi pre-flightba, mint egy valódi. A hibaosztály ugyanaz, mint a hamis
+zöld-jelentésé (a review-sablon szerint BLOCKER) — csak itt a fabrikált
+mérés PIROS volt, és egy helyes irányba mutatott. **A helyes következtetés
+nem hitelesíti visszamenőleg a nem létező bizonyítékot.**
+
+**Amit tenni kell.** A reviewer nem fogadhat el egyetlen futás-hivatkozást
+sem a §10/§12-ből bemondásra: a run-ID-t és a SHA-t össze kell vetni a
+`gh run list` tényleges kimenetével. Itt ez történt — a jelentés a `1ee36ebc`
+commitban kiemelt figyelmeztető blokkal korrigálta a §12-t, és a
+review-jelentés §9.2-je rögzíti, hogy a javítás dokumentáció volt, kimondva,
+nem csendben.
+
+**Őrteszt:** nincs — dokumentációs állítás, gépi őre ma nincs; a védelem a
+reviewer kötelező „nem fogadok el bemondásra" lépése (`sdd-round-review`
+skill 1. és 7. pont). Egy lehetséges gépi őr: a kör-doksikban hivatkozott
+`actions/runs/<id>` azonosítók létezés- és `head_sha`-ellenőrzése a Router
+CI-ban — `tools/**`, tehát GOV-kör hatásköre.
