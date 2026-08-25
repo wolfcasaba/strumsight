@@ -18298,3 +18298,83 @@ orchestrátor-eljárás nem kör-hatáskörből tesztelhető (a `tools/**` és a
 pipeline-doksik H-GATEGUARD-védettek); a mérés reprodukálható a
 `python3`-alapú fragmentum-paritás-számlálással a `docs/rounds/`-brief
 pre-flightjában.
+
+## L479 — Az implementer FELÜLÍRTA a saját kör-briefjét: a §7 gate-hivatkozás elvesztése piros CI-t adott, a valódi kár viszont a kör TERVÉNEK eltűnése (E09-R27, F0, 2026-08-25)
+
+**A tünet.** Az E09-R27 head SHA-ján a Router CI három cellája pirosan állt,
+mindhárom ugyanarra a leletre mutatva:
+
+```
+B4 (base): a brief nem hivatkozza a gate artefaktumot (tools/round-gate.sh)
+```
+
+Első olvasatra ez lint-zaj: „hiányzik egy sor a doksiból". Mérve viszont nem
+egy sor hiányzott.
+
+**A gyökérok.** Az implementer a §10 handoff **kitöltése** helyett a teljes
+kör-brief helyére a saját beszámolóját írta. Eltűnt a §0 (kör-jelzés/STOP), a
+§3 (scope), a §4 (**engedélyezett fájlok**), az §5 (kötött architekturális
+döntések), a §6 (acceptance + mérce-mátrix), a **§7 (kötelező ellenőrzések,
+benne a gate-sor)**, a §8 és a §9; az §1/§2 helyére („Cél", „Jelenlegi
+állapot — mért tények") az implementer „Mit épített a kör" / „Elutasított
+alternatívák" szakasza került.
+
+**Miért ez a fontos rész.** A brief-lint B4 az EGYETLEN gépi jel, ami ezt
+egyáltalán észrevette — és csak azért, mert a §7-ben volt egy általa keresett
+karakterlánc. A §4 engedélyezett-fájllista, a §6.1 mérce-mátrix és a
+STOP-protokoll elvesztésére **semmilyen őr nem fogad**: egy későbbi review
+vagy javító kör a kör saját szerződését már nem tudta volna felolvasni a
+repóból. A doksi itt nem dekoráció — a `tools/scope-audit.py` és a
+review-protokoll bemenete.
+
+**A javítás alakja.** A §0 és a §1–§9 visszaállítása az `origin/main`
+briefjéből (az ADR-szám a mértre javítva), az implementer beszámolója pedig a
+handoff alá, `### 10.0` / `### 10.0b` néven — nem eldobva, csak a helyére
+téve. Doc-only, production kódot nem érint.
+
+**Szabály az implementer-preambulumba:** *a kör-briefet KITÖLTÖD (§10), nem
+írod felül. A §0–§9 a kör szerződése; ha tartalmilag hibás, `stopped` jelzés +
+brief-revízió kérése a helyes válasz, nem a felülírás.*
+
+**Őrteszt:** részleges — a `tools/tests/test_pipeline_throughput.py::BriefLintTest`
+és a `test_knowledge_rag.py::PipelineWiringTest` a B4-en át MA IS elkapja a
+§7 elvesztését (ez fogta meg élesben). A §4/§6 elvesztésére ma nincs cella; ha
+a hibaosztály ismétlődik, a brief-lint bővítése a helye (`tools/**`, tehát
+külön governance-kör).
+
+## L480 — Az „egyszer beadható" mérce a DARABSZÁMOT mérte, a BEADÓT nem: egy idegen elköltheti a szerző egyetlen jogorvoslatát (E09-R27, F1/F2 MAJOR, 2026-08-25)
+
+**A hibaosztály.** Ha egy erőforrás **egyszer használható fel**, akkor a
+„hányszor" mellett a „**ki**" is invariáns — de az acceptance-cella csak az
+elsőt mérte. Az E09-R27 A5 cellája („appeal egyszer nyújtható be
+case-enként") teljes volt és zölden állt, miközben a hordozó endpoint
+docstringje szó szerint ezt írta: *„Any authenticated user can submit an
+appeal"*. A kettő együtt abúzus-út: egy idegen beadja először az appealt egy
+tetszőleges tartalomra, és a szerző saját beadása ezután
+`AppealAlreadySubmitted`-be fut — a jogorvoslata elveszett, szabályos
+működés mellett.
+
+**A második, ugyanabból a vak foltból következő lelet.** Ha a beadó bárki
+lehet, akkor az audit-sor `actor_type` mezője sem lehet fix
+`"human_moderator"` — az E09-R27 mégis annak írta minden appeal-beadást. Egy
+utólagos auditban ez a sor azt **állította volna**, hogy moderátor lépett,
+holott közönséges felhasználó. A D5 immutable audit-lánc egyetlen haszna az,
+hogy **igazat mond**; egy hamis `actor_type` az egész láncot leértékeli.
+
+**Ami mérve ELÉG jó volt.** A modul már tartalmazta a szerző feloldásához
+szükséges helpert (`_target_author_profile_id`, a D8 priority-számításhoz) —
+az appeal-úton egyszerűen nem hívta. A javítás nem új infrastruktúra, hanem
+egy meglévő helper bekötése + fail-closed alapértelmezés a fel nem oldható
+`target_type`-ra.
+
+**Szabály a brief-íróknak és a reviewereknek:** *minden „legfeljebb N-szer"
+típusú acceptance-cella mellé kötelező egy „és KI" cella.* A kvóta-jellegű
+invariánsok (egyszeri appeal, egyszeri szavazat, egyszeri visszaváltás)
+jogosultság nélkül **negatív** biztonsági értékűek: a korlát a jogosult
+felhasználó ellen fordul.
+
+**Őrteszt:** `backend/tests/community/test_moderation_case_service.py::TestAppealAuthorGuard`
+(6 cella) — az idegen beadása elutasítva ÉS a budget sértetlen marad; a
+szerző sora `content_author`; a moderátori beadás marad `human_moderator`; a
+fel nem oldható target fail-closed; router-403 és szerző-200 él.
+Falszifikálva: a guard visszavonásával a 6-ból 4 cella pirosra vált.

@@ -1,5 +1,96 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E09-R27 KÉSZ — Moderation queue, enforcement és appeal — PR [#452](https://github.com/wolfcasaba/strumsight/pull/452), squash `49ac8b21` (2026-08-25)
+
+A Kör 19 media-triage és a Kör 26 report **egyetlen, auditálható
+moderation-case modellé** állt össze: `community_moderators` (a projekt
+ELSŐ jogosultsági rétege, a `User`/`deps.py`/`security.py` érintése
+nélkül), `community_moderation_cases` (öt-értékű `state`, `appeal_state`,
+denormalizált `is_open`, `priority_score`) és `community_moderation_actions`
+(immutable audit — **nincs `updated_at` oszlop**, és a service nem exportál
+`update_action`/`delete_action` függvényt: a hiány maga a mérce). Normatív
+forrás **ADR [0425](docs/adr/0425-moderation-queue-enforcement-and-appeal.md)**.
+Implementer **MiniMax M3**, orchesztrátor/reviewer **Claude (Opus 5)**.
+48 backend cella. **Két javító kör.**
+
+**A sáv 2026-08-24 20:20-kor megállt, és ez a session állította helyre.** Az
+implementer 5 commitot hagyott a `minimax/e09-r27-…` branchen (a §10 handoff
+kitöltve, 42 teszt zölden), de **PR nem született**, és a Router CI
+**pirosan** állt a head SHA-n. A folytatás egy **remote Claude Code
+konténerben** történt — ott **nincs Flutter/Dart SDK, nincs `gh` CLI, és
+nincs implementer-motor** (sem MiniMax, sem Codex). Ennek két rögzített
+következménye: (1) a `tools/round-gate.sh` Dart-oldali lépései lokálisan
+NEM futtathatók, ezért a Dart-mérce **kizárólag a CI Full Gate** az exact
+head SHA-n — a kör diffje egyetlen Dart fájlt sem érint; (2) a javító kört
+**nem az implementer-motor vitte, hanem a reviewer**, amit a
+`sdd-round-driver` skill a „motor-oldal nem elérhető" kivételként enged, és
+a user a session elején explicit a kör landolását kérte.
+
+**A piros CI gyökéroka: az implementer FELÜLÍRTA a saját kör-briefjét.** A
+§10 handoff kitöltése helyett a teljes brief helyére a saját beszámolója
+került — eltűnt a §0 (kör-jelzés/STOP), §3 (scope), §4 (engedélyezett
+fájlok), §5 (kötött döntések), §6 (acceptance + mérce-mátrix), **§7
+(kötelező ellenőrzések, benne a gate-sor)**, §8 és §9. A brief-lint **B4**
+(„a brief nem hivatkozza a gate artefaktumot") ennek a **mérhető nyoma**
+volt — három router-teszt-cella egyszerre pirosodott rá. A `fix1` a §0 és
+§1–§9 visszaállítása az `origin/main` briefjéből (ADR-szám a mért `0425`-re),
+az implementer beszámolója a handoff alá (§10.0 / §10.0b), a doc végén lógó
+`ai-router` blokk a sablon szerinti helyre. **Új lecke: a kör-brief a kör
+TERVE — az implementer kitölti, nem írja felül.**
+
+**A review két MAJOR-t talált ZÖLD backend-gate mellett — mindkettő ugyanazon
+a vak folton ült** (`docs/reviews/e09-r27-review.md`): az A5 cella az appeal
+**darabszámát** mérte, a **beadó személyét** nem — se a jogosultságát, se az
+audit-sorban rögzített szerepét.
+
+- **F1** — a `POST /cases/{id}/appeals` **bármely hitelesített felhasználót**
+  elfogadott (a router docstringje szó szerint: „Any authenticated user can
+  submit an appeal"), miközben az A5 case-enként **pontosan egy** appealt
+  enged. A kettő együtt abúzus-út: egy idegen beadja először, és a szerző
+  jogorvoslata elveszett. A modul már tartalmazta a szerző feloldásához
+  szükséges `_target_author_profile_id` helpert — az appeal-úton nem hívta.
+- **F2** — az appeal-beadás audit sora `actor_type="human_moderator"`-t írt
+  akkor is, ha közönséges felhasználó adta be. A D5 immutable audit-lánc
+  egyetlen haszna az, hogy **igazat mond**.
+
+A javító kör mindkettőt zárta: a beadó vagy a target szerzője
+(`_is_target_author`, `users.id → community_profiles.id` 1:1 feloldás), vagy
+moderátor — minden más `NotTargetAuthor` → **403**; a fel nem oldható
+`target_type` (pl. a még be nem drótozott `media`) **fail-closed**. Az
+audit-lánc új `ACTOR_TYPE_CONTENT_AUTHOR` értéket kapott (`String(16)`-ba
+fér, migráció nem kell); a moderátor nevében beadott appeal marad
+`human_moderator`. Plusz F3 (a `get_or_create_case` docstringje egy nem
+létező uniqueness-garanciára hivatkozott — az index mérve `unique=False`;
+az ADR §D2 a service-rétegű mechanizmust kifejezetten megengedi, tehát a
+**hamis állítás** volt a lelet) és F4 (nem létező kivétel-nevek a
+modul-docstringben).
+
+**A reviewer egyik mérést sem fogadta el bemondásra — mind a négy próba
+saját, izolált klónon, a PRODUCTION forrás valódi mutációjával** (nem a
+teszt monkeypatchével): a §6.1 kötelező próba a HÁROM automatika-gát
+egyidejű kinyitásával → **5 cella PIROS**; a router auth-gát törlése → **A1
+PIROS**; publikus `update_action(...)` → **A3 PIROS**; és a javító kör
+falszifikációja — a guard visszavonásával a `TestAppealAuthorGuard` **4
+cellája PIROS**. Mért érdekesség: az auth-gát törlése után a
+`…_on_decision` cella **zölden maradt** — helyesen, mert az
+`apply_moderator_decision` a service-rétegben **is** ellenőrzi a
+moderátor-identitást (védelem mélységben), tehát ez nem lelet.
+
+**Nyitva, NEM ez a kör tárgya:** (N1) partial unique index a
+`(target_type, target_id)` párra `is_open = 1` mellett — a D2 invariánst ma
+service-rétegű read-then-insert tartja, SQLite-on a versenyablak nem
+elérhető; (N2) a moderation router **sehol nincs felszerelve** — a
+`build_community_router` ma is csak a `profile` routert mounttolja, a 13
+community routerből 12 (a Kör 26 `reports` is) kívül marad; ez epic-szintű,
+korábbról öröklött hiány (ADR 0395 Következmények 3. pont), és a
+`backend/app/community/__init__.py` ennek a körnek tilos zónája.
+
+**Zöld kapu az exact `895f2acd` SHA-n:** Full Gate [32828856447](https://github.com/wolfcasaba/strumsight/actions/runs/32828856447) (a `Coverage` job is `success`) + Router CI [32828854512](https://github.com/wolfcasaba/strumsight/actions/runs/32828854512) + Backend CI [32828854674](https://github.com/wolfcasaba/strumsight/actions/runs/32828854674) — mind `success`. A Backend CI első futása `cancelled` lett (az orchesztrátor
+korábbi, kézi dispatchével átfedésben futott) — ugyanazon a SHA-n újrafuttatva
+zöld. Új leckék: [L479](docs/LESSONS.md) (a brief felülírása),
+[L480](docs/LESSONS.md) (a „legfeljebb N-szer" invariáns a „ki" nélkül a
+jogosult felhasználó ellen fordul).
+
 ## ✅ E13-R15 KÉSZ — Lokalizációs resilience és content style — PR [#450](https://github.com/wolfcasaba/strumsight/pull/450), squash `d21d225f` (2026-08-24)
 
 Az en–hu felület **törésbiztonsága gépi őrökké** vált: fragmentum-szintű
