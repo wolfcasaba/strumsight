@@ -172,6 +172,165 @@ törlése, `skip`-je, küszöb-lazítása vagy az állítás gyengítése TILOS 
 mérce meghamisítása. Ha a kör bizonyíthatóan nem cseréli le a képernyőt, a kör
 pre-flightja mondja ki ezt a mérést, és hagyja a cellákat érintetlenül.
 
+### R5 — S11 MÁSODIK mérés: van egy NYOLCADIK pin — a feloldás a típus HELYBEN tartása
+
+**Mérve (`main @ d32f11bd`, kör-pre-flight 2026-08-25):** a `LiveScreen` típust
+**kilenc** tesztfájl pinneli (`grep -rln "LiveScreen" test/`). A fenti S11-lista
+hetet sorol fel, a `test/features/live/live_screen_test.dart` a §0.0/R2 miatt
+már rajta van — a **nyolcadik**, a
+`test/features/today/hub_navigation_test.dart:234` (`find.byType(LiveScreen)`)
+azonban **NINCS a listán**: az E13-R17-tel (`4235f636`) érkezett, tehát a
+`b28bb1bf`-en végzett S11-mérés UTÁN. A `python3 tools/brief-lint.py --brief
+docs/rounds/e13-r18-live-stage-ui.md --level strict` a REVIDEÁLT briefen
+pontosan ezt az egy fájlt jelenti `S11`-ként.
+
+A felvétele az orchestrátornak **tágítás, azaz H3** ([L478](../LESSONS.md)).
+Ezért a kör az S11 szabály SAJÁT kifutóját használja („Ha a kör bizonyíthatóan
+nem cseréli le a képernyőt, a kör pre-flightja mondja ki ezt a mérést"):
+
+**KÖTELEZŐ SZŰKÍTÉS** (az orchestrátor §2 hatásköre — a lista *szűkítése*):
+
+- a `lib/features/live/screens/live_screen.dart` **útvonala** és a publikus
+  **`LiveScreen` típusnév VÁLTOZATLAN** — a migráció HELYBEN történik;
+- a kör **NEM hoz létre új `lib/features/**/*_screen.dart` fájlt**.
+
+Mért következmények:
+
+| Amit a pin megőriz | Mérés |
+|---|---|
+| mind a 9 `find.byType(LiveScreen)` cella zöld marad | a 7 felsorolt fájl ÉRINTETLEN, a listán kívüli 8.-hoz hozzá sem kell nyúlni |
+| `tool/ui_inventory.dart` képernyőszáma **84** marad | `find lib/features -name "*_screen.dart" \| wc -l` → 84 = `ui_inventory_test.dart` `hasLength(84)`; az R4 jogosultsága kihasználatlan marad |
+| `lib/app/routing/**` (listán KÍVÜL) érintetlen | `/live` (`app_router.dart:251`) és `/practice/live` ma is **top-level** GoRoute |
+
+Ha az implementer azt méri, hogy a migráció típus-átnevezés NÉLKÜL nem
+megoldható: `stopped` jelzés és jelentés — **önkezű átnevezés TILOS**.
+
+### R6 — a §7 golden-precedens hivatkozása MÉRVE HAMIS
+
+A §7 a `test/features/live/chord_timeline_golden_test.dart`-ot nevezi meg
+mintaként, „valódi kapu, nem `skip`-elt rögzítő" indoklással. **Mérve, a fájl
+73. sora:**
+
+```dart
+final _skip = Platform.environment['GOLDENS'] != '1';
+```
+
+— tehát alapértelmezésben **skip-elt**, opt-in lokális vizuális eszköz; a két
+PNG-je (`test/features/live/goldens/`) NEM CI-kapu. (Ezt a `test/ui/goldens/
+e13_r17_screens_golden_test.dart` fejléc-kommentje szó szerint ki is mondja.)
+
+**A kötelező minta helyette:** `test/ui/goldens/e13_r17_screens_golden_test.dart`
+(és a `e13_r16_…` előzménye) — `Size(412, 915)`, `devicePixelRatio = 1.0`,
+`TextScaler.linear(2.0)` a második kerethez, `AppTheme.dark()`,
+`matchesGoldenFile('goldens/<név>.png')`, a PNG-k a `test/ui/goldens/goldens/`
+alatt commitolva. Ez VALÓDI kapu: minden `flutter test` futtatja.
+
+**[L486](../LESSONS.md) (MÉRT, E13-R17, két javító kör ára):** a golden nem a
+képernyőt rögzíti, hanem a RASZTERIZÁLÁST. Egy `ColorScheme.fromSeed`-ből (HCT,
+lebegőpontos) származó szín **nagy, egybefüggő felületre** festve box↔CI diffet
+ad; konstans színforrás nem. A nagy felületeket (hero-háttér, metrika-doboz,
+jelminőség-sáv) **konstans színforrásból** fesd.
+
+### R7 — a mikrofon-lease tulajdonlása (prompt §1/2: a TÉNYLEGES hívási lánc)
+
+Nem a réteg-diagramból, hanem `grep -rn "\.acquire(" lib/`-ből mérve:
+
+- **egyetlen megszerző:** `MicCapture._doStart` →
+  `AudioSessionCoordinator.acquire` (`lib/core/audio/mic_capture.dart:82`),
+  tulajdonos `AudioOwner.live`;
+- **huzalozás:** `strumEngineProvider` (sima, NEM autoDispose `Provider`) →
+  `RealStrumEngine(mic: createMicCapture(ref, AudioOwner.live))`
+  (`live_providers.dart:11–15`);
+- **indítás/elengedés:** `liveFrameProvider` =
+  `StreamProvider.autoDispose` → `engine.start()` + `ref.onDispose(engine.stop)`
+  (`live_providers.dart:19–24`);
+- **ma mért kilépési utak:** (1) autoDispose unmountkor (navigáció),
+  (2) `_onAppLifecycle` háttér → `engine.stop()` (`live_screen.dart:86`),
+  (3) `_togglePause` → `engine.stop()` (`:123`), (4) `dispose()`.
+
+Ez megerősíti az [L100](../LESSONS.md)-at: a UI-réteg a lease-t **nem
+birtokolja**. **ADR 0276** szerint az `SsStageScaffold` sem — a huzalozás a
+feature rétegben marad; a scaffold `onRequestScreenAwake` /
+`onReleaseScreenAwake` callbackje **kérés, nem birtoklás**.
+
+**[L449](../LESSONS.md) (MÉRT, E13-R08):** erőforrás-birtokló képernyő nem
+kerülhet shell-branchbe (`IndexedStack` → nincs unmount → nincs elengedés). Az
+R5 pin ezt szerkezetileg megőrzi; az őr:
+`test/app/navigation/adaptive_scaffold_test.dart`::`A8`.
+
+**Riverpod-csapda (mért, r102):** minden provider, amely a `liveFrameProvider`-t
+`ref.watch`/`ref.listen`-eli, MAGA is `autoDispose` kell legyen — különben a
+mikrofon bekapcsolva ragad. Az A7 cella tárgya.
+
+### R8 — a kilenc állapot → MÉRT bemenet (prompt §1/1: elérhetetlen cél-státusz)
+
+**Mérve:** a `LiveFrame` (`lib/features/live/model/live_frame.dart`) **NEM
+tartalmaz állapot-enumot** — az állapotok a UI-ban származtatottak. A transport
+enum `SsSessionTransportStatus` = `{idle, countIn, active, paused, finishing,
+disabled}` (`ss_session_transport.dart:6–13`).
+
+| §3 állapot | MÉRT bemenet, ami előállítja |
+|---|---|
+| idle | `liveAsync` adat + `frame.listening == false`, nincs pause (`LiveFrame.empty`) → `SsSessionTransportStatus.idle` |
+| induló | `liveAsync.isLoading` (a `StreamProvider` az első keret előtt) |
+| hallgató | `frame.listening == true` → `active` |
+| gyenge jel | `frame.listening == true` && `frame.inputLevel` a **prezentációs** küszöb alatt (R9) |
+| nincs akkord | `frame.listening == true` && `frame.current == null`, elegendő `inputLevel` mellett |
+| degradált | `micPermissionProvider` → `false` (engedély hiányzik) → `disabled` |
+| szüneteltetett | a képernyő `_paused` állapota → `paused` |
+| záró | a Finish akció → `finishing` (lásd lent) |
+| hiba | `liveAsync.hasError` (`live_screen.dart:184`) |
+
+**Két mért figyelmeztetés:**
+
+1. **`countIn` a Live úton ELÉRHETETLEN** — a Live szabad játék, nincs
+   beszámlálás; egyetlen bemenet sem produkálja. **Acceptance-cellát NEM
+   kaphat**, és az „induló" NEM a `countIn`, hanem a `liveAsync.isLoading`.
+   (Pontosan a prompt §1/1 hibaosztálya: az enum tartalmaz olyan élt, amit a
+   tényleges út nem produkál.)
+2. **A `finishing`-hez Finish akció kell, ami ma NINCS.** A mai `_ActionBar`
+   (`live_screen.dart:251–292`) három gombja: Tuner / Pause / Metronome.
+   **ADR 0276 döntés 4** viszont kimondja, hogy a Pause ÉS a Finish minden
+   aktív állapotban látható, landscape-ben is — a migrált Stage-nek tehát
+   **Finish akciót kell kapnia** (a session lezárása és a route elhagyása). Ez
+   nem scope-tágítás: a kör kötelező ADR-jének kikényszerítése.
+
+### R9 — a gyenge-jel küszöb PREZENTÁCIÓS konstans, nem DSP
+
+Mérve: `grep -rn "inputLevel" lib/` — a Live fában egyetlen fogyasztó van
+(`live_status_bar.dart:55` → `InputLevelMeter`), **küszöb sehol**. A
+„degradált" állapotnak sincs forrása a Live fában (`grep -rni "degraded"
+lib/features/live/` → 0 találat).
+
+**KÖTÖTT ÉRTELMEZÉS:** a `frame.inputLevel` a nyers 0..1 **mikrofonszint**, NEM
+confidence. Egy megjelenítési sáv efölött **display-leképezés**, nem felismerési
+küszöb — ezért nem ütközik az **ADR 0278 §5**-tel („a confidence küszöbeit a
+felismerési réteg határozza meg, nem a felület"), és nem DSP-változás
+(AGENTS.md §9).
+
+**Ezért kötelező:** a küszöb-konstans a **UI rétegben** él
+(`lib/features/live/widgets/**` vagy az `SsSignalQualityIndicator`), és a
+`lib/features/live/engine/dsp/**` — kiemelten a `dsp_config.dart` — a körben
+**NEM módosulhat**. Ez az **A1** cella tárgya (`git diff` bizonyíték).
+
+### R10 — nincs új ADR (mért precedens)
+
+A közvetlenül analóg migrációs kör, az **E13-R17** („Előre kiosztott ADR:
+nincs", squash `4235f636`) **nem** hozott új ADR-t
+(`git log --name-only 4235f636 -- docs/adr/` → üres). A kör normatív tartalmát
+merge-elt döntések fedik: **ADR 0274** (mozgás az audio-órához kötve),
+**0276** (§4 Pause+Finish), **0278 §2/§5**, **0280 §2** (a bejelentési
+költségvetés **1000 ms**, a határ inkluzív — a fájl 28. sorával ellenőrizve) és
+az AGENTS.md §9. Új ADR merge-elt döntések fölé nem osztható, ezért a kör
+**ADR-t nem kap**, és a `docs/adr/**` a tilos zónában marad.
+
+### R11 — a §7 gate-sora a REVIDEÁLT `gate_tests` blokkhoz igazítva
+
+A revízió a `gate_tests` blokkot 5-ről **12** bejegyzésre bővítette, a §7
+parancssora viszont az eredeti ötöt tartalmazta. A §7 alább a teljes,
+commitolt `gate_tests` listát futtatja — ez a mérce **erősítése**: az R5 pin
+regressziós őrei (a hét örökség-teszt) is minden gate-futásban mérve lesznek.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -202,7 +361,10 @@ komponensekre — **a felismerési viselkedés változtatása nélkül**
 **Benne van:** `SsChordHero`, `SsStrumGlyph`, `SsBeatGrid`, `SsTempoDisplay`,
 `SsSignalQualityIndicator` · a Live elrendezés portrait / landscape / expanded
 változata · idle, induló, hallgató, gyenge jel, nincs akkord, degradált,
-szüneteltetett, záró és hiba állapotok · az accessibility-bejelentés
+szüneteltetett, záró és hiba állapotok — **a §0.0/R8 mért bemenet-táblája
+szerint** (a `countIn` a Live úton elérhetetlen, az „induló" a
+`liveAsync.isLoading`) · a **Finish akció** (ADR 0276 döntés 4 — ma nincs,
+§0.0/R8) · az accessibility-bejelentés
 **throttlingja** (a vizuális frissítés maradhat sűrűbb) · a baseline-hoz képesti
 **szándékos** eltérések dokumentálása.
 
@@ -279,6 +441,8 @@ Navigáció, háttérbe kerülés, hiba, rendszer-vissza. Ez acceptance-cella (A
 | A7 | A motor-interfész és az `autoDispose` viselkedés változatlan | a meglévő regressziós tesztek zöldek |
 | A8 | A baseline-hoz képesti eltérések szándékosként dokumentáltak | §10 |
 | A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r18_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
+| A10 | A Pause ÉS a Finish MINDEN aktív állapotban látható (`active`, `paused`, `finishing`), portrait ÉS landscape elrendezésben — ADR 0276 döntés 4 | `live_stage_test.dart` |
+| A11 | A `LiveScreen` típusnév és a `lib/features/live/screens/live_screen.dart` útvonal VÁLTOZATLAN; a kör nem hoz új `lib/features/**/*_screen.dart`-ot (§0.0/R5) | `test/ui/ui_inventory_test.dart` `hasLength(84)` érintetlenül zöld + a hét örökség-teszt érintetlenül zöld |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -292,6 +456,8 @@ Navigáció, háttérbe kerülés, hiba, rendszer-vissza. Ez acceptance-cella (A
 | Fix magasságú akkord-hero | A6 |
 | Az `autoDispose` lecserélése tartós providerre | **A7** |
 | A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
+| A Finish elrejtve/hiányzik bármely aktív állapotban (ADR 0276 döntés 4) | **A10** |
+| A `LiveScreen` típus átnevezése vagy új `*_screen.dart` (§0.0/R5) | **A11** |
 
 **A bejelentés-throttling három kötelező cellája** (a küszöb: **1000 ms**, az
 ADR 0280 §2 szerint):
@@ -309,14 +475,16 @@ jel és a „nincs akkord" állapotot → az **A2** cellának PIROSNAK kell lenn
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/live/live_stage_test.dart test/features/live/live_mic_release_test.dart test/features/live/live_announcement_throttle_test.dart test/ui/goldens/e13_r18_screens_golden_test.dart test/ui/ui_inventory_test.dart
+tools/round-gate.sh test/features/live/live_stage_test.dart test/features/live/live_mic_release_test.dart test/features/live/live_announcement_throttle_test.dart test/ui/goldens/e13_r18_screens_golden_test.dart test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/app/routing/app_router_test.dart test/app/routing/shell_lifecycle_test.dart test/features/ai_tutor/presentation/tutor_home_screen_test.dart test/features/practice/presentation/practice_routing_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
 minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
 keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
-KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
-(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+KÖTELEZŐ. Minta és futó precedens: `test/ui/goldens/e13_r17_screens_golden_test.dart`
+(valódi kapu — a §0.0/R6 mérése szerint a korábban hivatkozott
+`chord_timeline_golden_test.dart` `GOLDENS=1`-re skip-elt lokális eszköz).
+Előállítás:
 
 ```bash
 ~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r18_screens_golden_test.dart
