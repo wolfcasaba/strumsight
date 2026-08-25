@@ -308,21 +308,35 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
             MicErrorBanner(onRetry: () => ref.invalidate(liveFrameProvider)),
         ],
       ),
-      hero: SsChordHero(
-        chordLabel: chordLabel,
-        textColor: palette.ink,
-        direction: latestStrum == null
-            ? null
-            : (latestStrum.isDown
-                  ? SsStrumDirection.down
-                  : SsStrumDirection.up),
-        glyphColor: confColor,
-        confidenceTier: confTier,
-        directionSemanticLabel: latestStrum == null
-            ? null
-            : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
-                  '${(latestStrum.confidence * 100).round()}%',
-      ),
+      // Before any chord is heard, a giant placeholder glyph is worse UX
+      // than no hero at all — the timeline slot's own "Play a chord…" prompt
+      // already carries that message (§5.2, kept as a separate state).
+      hero: hasChord
+          ? SsChordHero(
+              chordLabel: chordLabel,
+              textColor: palette.ink,
+              direction: latestStrum == null
+                  ? null
+                  : (latestStrum.isDown
+                        ? SsStrumDirection.down
+                        : SsStrumDirection.up),
+              glyphColor: confColor,
+              confidenceTier: confTier,
+              directionSemanticLabel: latestStrum == null
+                  ? null
+                  : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
+                        '${(latestStrum.confidence * 100).round()}%',
+            )
+          : SizedBox(
+              height: 64,
+              child: Center(
+                child: Icon(
+                  Icons.music_note_outlined,
+                  size: 32,
+                  color: palette.muted,
+                ),
+              ),
+            ),
       feedback: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

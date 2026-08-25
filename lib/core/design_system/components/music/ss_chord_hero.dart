@@ -20,7 +20,7 @@ final class SsChordHero extends StatelessWidget {
     this.glyphColor,
     this.confidenceTier = 0,
     this.directionSemanticLabel,
-    this.placeholder = '—',
+    this.placeholder = '-',
     this.semanticLabel,
   });
 
