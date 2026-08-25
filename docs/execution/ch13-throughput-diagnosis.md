@@ -140,6 +140,19 @@ egyszer mégis: önálló GOV-kör, a Ch13 lezárása UTÁN.
 (aug. 22–24-i klónokból) és ~30 régi `~/ss-*` munkapéldány takarítható, de
 ezek nem okozói a lassulásnak.
 
+**A Codex-oldal (Sol/Terra) INERT, nem zavaró — és nem is szabad kivágni.**
+User-kérdés 2026-08-25: „kodex nincs, töröld le ha zavar". Mérve, hol lehetne
+még útban: a nyitott sorok motorja **0 codex/terra** (58 `minimax` + 20
+`sonnet-impl`), a `fallback_engine` alapértéke már a scriptben `none`, és az
+`orchestrator_preference=claude`. Az EGYETLEN pont, ahol a lemezen maradt
+`~/.codex*/auth.json` még számít, az utolsó önjavító kísérlet motorváltása —
+a kizárása viszont MÉRVE elbukik: a `test_selfheal_escalation.py` szerint a
+harmadik kísérletnek MÁS modellre kell váltania, és a kizárás után nem marad
+jelölt, azaz a próba elmarad. Az eszkaláció elvesztése rosszabb, mint egy
+esetleg kimerült kereten elköltött utolsó kísérlet, ezért a Codex-sorok
+MARADNAK. (A javítási kísérlet és a mérés: a `9ed537b5` commit és a
+visszavonása ezen az ágon.)
+
 **A pipeline-mechanika és a review-fegyelem működik.** Az R17 (kvóta-mentes
 ablakban): implementer `status=done` 34 perc alatt, review APPROVED
 0 BLOCKER / 0 MAJOR. A lánc nem lassú — a lánc ÁLL.
