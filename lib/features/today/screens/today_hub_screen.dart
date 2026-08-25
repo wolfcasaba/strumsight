@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
-import '../../../core/design_system/public.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
@@ -18,6 +18,13 @@ import '../providers/today_providers.dart';
 /// Deliberately resource-free (A4, ADR 0276): this file imports no
 /// microphone, camera, or screen-wakelock API — the primary action only
 /// *navigates* to Practice; starting a session happens on a Stage screen.
+///
+/// Styled with plain Material widgets + [AppColors] (the same convention
+/// `ProgressScreen`/`SettingsScreen` use) rather than the `core/design_system`
+/// component library: those widgets require `SsDarkTheme`/`SsLightTheme` to
+/// be the app's active `ThemeData`, which the running app does not yet wire
+/// up (`StrumSightApp` still applies `AppTheme`) — using them here would
+/// crash on first frame.
 class TodayHubScreen extends ConsumerWidget {
   const TodayHubScreen({super.key, this.now});
 
@@ -51,60 +58,57 @@ class TodayHubScreen extends ConsumerWidget {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
             if (snapshot.availability == TodayPlanAvailability.offlineCached)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: SsStatusBadge(
-                  l10n: l10n,
-                  kind: SsStatusBadgeKind.offline,
-                ),
+              _StatusBanner(
+                icon: Icons.cloud_off_outlined,
+                label: l10n.dsStatusBadgeOffline,
               ),
             if (snapshot.availability == TodayPlanAvailability.syncPending)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: SsStatusBadge(
-                  l10n: l10n,
-                  kind: SsStatusBadgeKind.syncPending,
-                ),
+              _StatusBanner(
+                icon: Icons.sync_outlined,
+                label: l10n.dsStatusBadgeSyncPending,
               ),
-            // A1 — the ONLY SsButtonVariant.primary on this screen; every
-            // other action below is secondary/tertiary.
-            SsCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    hero.title,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    hero.message,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  SsButton(
-                    label: hero.ctaLabel,
-                    onPressed: () => context.go(AppRoutes.practiceHub),
-                  ),
-                ],
+            // A1 — the ONLY primary (filled) button on this screen; every
+            // other action below is outlined/text-styled.
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hero.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      hero.message,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      key: const ValueKey('today-hub-primary-cta'),
+                      onPressed: () => context.go(AppRoutes.practiceHub),
+                      child: Text(hero.ctaLabel),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
-                  child: SsMetricCard(
+                  child: _Metric(
                     label: l10n.progressStreak,
-                    value: streak.current,
-                    unit: '',
+                    value: '${streak.current}',
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: SsMetricCard(
+                  child: _Metric(
                     label: l10n.progressDailyGoal,
-                    value: todayMinutes,
-                    unit: 'min',
+                    value: '$todayMinutes min',
                   ),
                 ),
               ],
@@ -115,10 +119,9 @@ class TodayHubScreen extends ConsumerWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 20),
-            SsButton(
-              label: l10n.todayHubViewProgressCta,
-              variant: SsButtonVariant.secondary,
+            OutlinedButton(
               onPressed: () => context.go(AppRoutes.profileProgress),
+              child: Text(l10n.todayHubViewProgressCta),
             ),
             const SizedBox(height: 20),
             _VisionCard(
@@ -180,6 +183,67 @@ final class _HeroContent {
   final String ctaLabel;
 }
 
+/// ADR 0277 §2 — offline is not error-styled: a small inline banner, the
+/// rest of the (cached) content stays fully visible beneath it.
+class _StatusBanner extends StatelessWidget {
+  const _StatusBanner({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Theme.of(context).hintColor),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'Montserrat',
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+            ),
+          ),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A7 — the disabled state names the reason instead of vanishing or being an
 /// unexplained dead tap target (§5.6). Never starts the camera itself (A4):
 /// enabled taps only *navigate* to the Vision setup/session route.
@@ -196,42 +260,45 @@ class _VisionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SsCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.camera_alt_outlined),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  l10n.todayHubVisionCardTitle,
-                  style: Theme.of(context).textTheme.titleMedium,
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.todayHubVisionCardTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              visionEnabled
+                  ? l10n.todayHubVisionCardMessage
+                  : l10n.todayHubVisionUnavailableReason,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (visionEnabled) ...[
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => context.go(
+                  visionSetupEnabled
+                      ? AppRoutes.visionSetup
+                      : AppRoutes.visionSession,
+                ),
+                child: Text(l10n.todayHubVisionCardTitle),
               ),
             ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            visionEnabled
-                ? l10n.todayHubVisionCardMessage
-                : l10n.todayHubVisionUnavailableReason,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (visionEnabled) ...[
-            const SizedBox(height: 12),
-            SsButton(
-              label: l10n.todayHubVisionCardTitle,
-              variant: SsButtonVariant.tertiary,
-              onPressed: () => context.go(
-                visionSetupEnabled
-                    ? AppRoutes.visionSetup
-                    : AppRoutes.visionSession,
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }

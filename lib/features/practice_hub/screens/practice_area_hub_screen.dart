@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
-import '../../../core/design_system/public.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 
 /// The Practice Area Hub (UI-06, SDD Ch13 §UI-06) — every practice tool's
@@ -14,6 +14,12 @@ import '../../../l10n/app_localizations.dart';
 /// `/practice/tuner`, `/practice/metronome`, `/practice/live` and
 /// `/practice/chords` — none of those routes' screens are built inline
 /// here, so no microphone or camera opens on this hub itself.
+///
+/// Styled with plain Material widgets + [AppColors] (matching
+/// `ProgressScreen`/the legacy `PracticeHubScreen`), not the
+/// `core/design_system` component library — see `today_hub_screen.dart`'s
+/// doc comment for why those widgets aren't safe under the app's current
+/// root theme.
 class PracticeAreaHubScreen extends StatelessWidget {
   const PracticeAreaHubScreen({super.key});
 
@@ -27,25 +33,30 @@ class PracticeAreaHubScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
           children: [
-            SsCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.practiceAreaHubRecommendedTitle,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.practiceAreaHubRecommendedMessage,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  SsButton(
-                    label: l10n.practiceAreaHubRecommendedCta,
-                    onPressed: () => context.go(AppRoutes.practiceSetup),
-                  ),
-                ],
+            Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.practiceAreaHubRecommendedTitle,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.practiceAreaHubRecommendedMessage,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      key: const ValueKey('practice-hub-recommended-cta'),
+                      onPressed: () => context.go(AppRoutes.practiceSetup),
+                      child: Text(l10n.practiceAreaHubRecommendedCta),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -116,7 +127,7 @@ class PracticeAreaHubScreen extends StatelessWidget {
   }
 }
 
-/// A single-tap quick tool: icon + label, tertiary weight so it never
+/// A single-tap quick tool: icon + label, text-button weight so it never
 /// competes with the hub's one primary "start recommended" action (§5.2).
 class _QuickTool extends StatelessWidget {
   const _QuickTool({
@@ -131,11 +142,10 @@ class _QuickTool extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SsButton(
-      label: label,
-      icon: icon,
-      variant: SsButtonVariant.tertiary,
+    return OutlinedButton.icon(
       onPressed: onPressed,
+      icon: Icon(icon, size: 18, color: AppColors.primary),
+      label: Text(label),
     );
   }
 }
