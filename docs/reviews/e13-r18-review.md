@@ -164,3 +164,41 @@ ezt a kettőt a hero/feedback/timeline slot különbözteti meg, nem a transport
 
 A két MINOR nem blokkolja a merge-öt; javításuk egy rövid javító körben
 történik (ugyanaz a motor, ez a leletlista), utána a CI a friss SHA-n újra fut.
+
+## 5. Javító kör — `daa5a369` (ugyanaz a motor, ez a leletlista)
+
+**VÉGSŐ DÖNTÉS: APPROVED — 0 nyitott lelet.**
+
+A javító kör 4 fájlt érintett (`+127 −2`), scope-audit
+`OK (16e07661bd65..daa5a3699765, 5 changed path(s), 1 generated/ignored)`.
+
+### 5.1 MINOR-1 — LEZÁRVA
+
+`live_screen.dart:112` — `_liveRegion.dispose()` bekerült a `dispose()`-ba, a
+`_finishTimer?.cancel()` után, a `super.dispose()` maradt utolsó.
+
+**Zárás-ellenőrzés (saját próba):** a `dispose()` sor ismételt eltávolítása
+után az új cella PIROSRA vált —
+`(5) dispose — unmounting Live disposes its SsLiveRegion, not just its listeners (review MINOR-1)`.
+A cella tehát valódi őr, nem utólagos díszlet.
+
+### 5.2 MINOR-2 — LEZÁRVA
+
+`live_screen.dart:169–194` — a tartalék-cél már a router SAJÁT szemantikáját
+tükrözi (`adaptiveShellEnabled ? today : live`, a publikus `appConfigProvider`-ből
+olvasva, a `lib/app/routing/**` érintése NÉLKÜL). Ha a belépési útvonal maga a
+`/live` — a mai, shell-flag-KI default —, a Finish **nem navigál sehová**: a
+session helyben ér véget (mikrofon + wakelock leáll, a kép `paused`-ra vált).
+
+**Zárás-ellenőrzés (saját próba):** az önkényes `context.go(AppRoutes.learn)`
+visszaállítása után az új cella PIROSRA vált —
+`Finish fallback target is the app entry route, not a fixed screen (review MINOR-2) … /live IS the entry route — Finish ends the session in place instead of hopping to Learn`.
+
+### 5.3 A javító kör utáni teljes újramérés (friss `/tmp` klón)
+
+`/tmp/review-e13-r18-fix` @ `daa5a369`: a 12 elemű `gate_tests` teljes során
+**17/17 ZÖLD** (format, analyze, 12 teszt-út, architecture, secrets, l10n).
+Az A4 mikrofon-cellák száma 4-ről 5-re nőtt, az A2/A5 cellák változatlanok —
+a mérce nem gyengült, csak bővült.
+
+**Minden próba visszaállítva**, mindkét klónban `git diff --stat` üres.
