@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/tuner/providers/reference_tone_provider.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
@@ -27,6 +28,17 @@ class _RecordingTonePlayer implements ReferenceTonePlayer {
   @override
   Future<void> dispose() async => disposed = true;
 }
+
+/// `overrideWithValue` bypasses the provider's OWN `create` body — exactly
+/// where the real provider wires `ref.onDispose(player.dispose)` — so it can
+/// never exercise autodispose teardown. Overriding with a builder that wires
+/// the same `ref.onDispose` call keeps the fake injectable while still
+/// exercising the real disposal path this test asserts on (A5).
+Override _toneOverride(ReferenceTonePlayer tone) =>
+    referenceTonePlayerProvider.overrideWith((ref) {
+      ref.onDispose(tone.dispose);
+      return tone;
+    });
 
 Widget _hostApp(Widget Function(BuildContext) openTuner) => MaterialApp(
   localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -88,7 +100,7 @@ void main() {
           overrides: [
             ...preferenceOverrides(),
             tunerEngineProvider.overrideWithValue(engine),
-            referenceTonePlayerProvider.overrideWithValue(tone),
+            _toneOverride(tone),
           ],
           child: _hostApp((_) => const TunerScreen()),
         ),

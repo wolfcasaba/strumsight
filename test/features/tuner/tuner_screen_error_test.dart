@@ -54,16 +54,28 @@ void main() {
       await tester.pumpAndSettle();
 
       engine.emitError(Exception('mic busy'));
-      await tester.pumpAndSettle();
+      // Zero-duration frames, not `pumpAndSettle` (E13-R19 migration): the
+      // migrated (deeper) widget tree needs a couple of frames to settle,
+      // and riverpod's OWN built-in error-retry (`ProviderContainer.
+      // defaultRetry`, 200ms min backoff) would otherwise get enough
+      // simulated time to fire on its own inside the settle loop — this
+      // assertion is about the app's manual Retry AFFORDANCE, not
+      // riverpod's unrelated auto-retry. `pump()` with no argument advances
+      // ZERO simulated time (only flushes microtasks + one frame), so
+      // repeating it settles the tree without ever reaching that threshold.
+      await tester.pump();
+      await tester.pump();
       expect(engine.startCalls, 1);
 
       await tester.tap(find.text('Retry'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
       expect(engine.startCalls, 2, reason: 'Retry must restart the engine');
 
       // The restarted mic works: the first reading clears the error banner.
       engine.emit(const TunerReading(note: 'A', cents: 0, frequencyHz: 440));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
 
       expect(
         find.text('Retry'),

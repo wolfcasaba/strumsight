@@ -13,6 +13,7 @@
 // the measured box↔CI diff this round must not reintroduce.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
