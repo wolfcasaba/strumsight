@@ -686,4 +686,50 @@ Lásd a §5 (Záró gate) blokk a jelen dokumentum végén — a kör
 `test/ui/goldens/` fa (199 teszt) és a `flutter analyze lib` (0 hiba)
 külön-külön ellenőrizve zöld.
 
+### 10.6 Javító kör (review MINOR-1, MINOR-2)
+
+A `docs/reviews/e13-r18-review.md` két MINOR leletét javítottam, mást nem
+érintettem.
+
+**MINOR-1 — `_liveRegion.dispose()`.** A `_LiveScreenState.dispose()`-ban a
+`_finishTimer?.cancel()` és a `_wakelock.disable()` közé bekerült
+`_liveRegion.dispose()` (`lib/features/live/screens/live_screen.dart`) — a
+meglévő sorrend-fegyelem (`super.dispose()` marad utolsó) változatlan. Az
+őrcella `test/features/live/live_mic_release_test.dart` új "(5) dispose"
+teszete: a widget-fából kiolvasott `SsLiveRegionAnnouncer.controller`
+referenciát megtartja, a `LiveScreen`-t elhagyja (Finish helyett a "Learn"
+fület nyomja meg, mint a meglévő (1) teszt), majd `addListener`-t hív rajta —
+ez a `dispose()` NÉLKÜLI kódon `ChangeNotifier` szerint NEM dobna, a javítás
+UTÁN `FlutterError`-t dob (`throwsFlutterError`). Visszaellenőriztem: a
+`_liveRegion.dispose()` sor eltávolításával ez a cella pirosra vált.
+
+**MINOR-2 — a Finish tartalék-célja a belépési útvonal, nem `/learn`.** A
+`_finish()` a 300 ms-os timer lejártakor most a router SAJÁT szemantikáját
+tükrözi: `adaptiveShellEnabled ? AppRoutes.today : AppRoutes.live`, a flaget
+a MÁR importált publikus `appConfigProvider`-en (`lib/app/config/app_config.dart`
+— NEM `lib/app/routing/**`, azt nem módosítottam) keresztül olvasva, pontosan
+úgy, ahogy a `settings_screen.dart` is teszi. Ha ez az érték `/live` (a mai
+alapbeállítás, adaptív shell KI — vagyis a `/live` maga a belépési útvonal),
+a Finish nem navigál sehová: a session ugyanúgy leáll, mint egy manuális
+Pause (`_finishing = false; _paused = true;` a befagyasztott kerettel), a
+képernyő a helyén marad. Ha a flag BE van kapcsolva (a belépés `/today`),
+a régi `context.go(...)` navigáció fut, csak a célja lett explicit levezetve
+a `AppRoutes.today`-re ahelyett, hogy önkényesen `AppRoutes.learn`-re menne.
+A `context.canPop()` ág (pl. a `/practice/live` push-olt útvonalról érkezve)
+változatlan. Az őrcella `test/features/live/live_stage_test.dart` új
+csoportja ("Finish fallback target is the app entry route…"): a flag
+alapállapotában (KI) a Finish gomb megnyomása után a `LiveScreen` a fában
+marad (`findsOneWidget`), a `finishing` marker eltűnik, és a Pause gomb
+tooltipje `l10n.liveResume`-ra vált — azaz a transport `paused` képet mutat,
+nem navigál a Learn-re.
+
+A záró gate (a fenti 12+5 cellás, csonkítatlan `tools/round-gate.sh` futás)
+TÉNYLEGES kimenete a javító kör után: **mind a 17 lépés ZÖLD** — `[1] format`,
+`[2] analyze`, a 12 megadott tesztfájl (a `live_stage_test.dart` 13→14, a
+`live_mic_release_test.dart` 5→6 cellára nőtt, a többi 10 fájl változatlan
+cellaszámmal), `[15] architecture`, `[16] secrets`, `[17] l10n`. A golden PNG
+(`e13_r18_screens_golden_test.dart`) NEM mozdult el — a Finish-változás a
+felvett alapállapotot (aktív/paused/finishing vizuális képét) nem érinti,
+újrafelvétel nem volt szükséges.
+
 ## 11. Review — a Claude tölti ki

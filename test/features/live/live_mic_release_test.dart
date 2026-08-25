@@ -7,6 +7,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
 
@@ -111,6 +112,28 @@ void main() {
       expect(r.engine.stopCalls, greaterThan(stopsBefore));
 
       await tester.pump(const Duration(milliseconds: 350));
+    },
+  );
+
+  testWidgets(
+    '(5) dispose — unmounting Live disposes its SsLiveRegion, not just its '
+    'listeners (review MINOR-1)',
+    (tester) async {
+      final r = rig();
+      await pumpLive(tester, r);
+
+      final liveRegion = tester
+          .widget<SsLiveRegionAnnouncer>(find.byType(SsLiveRegionAnnouncer))
+          .controller;
+
+      // Leave the route so `_LiveScreenState.dispose()` runs.
+      await tester.tap(find.text('Learn').first);
+      await tester.pumpAndSettle();
+
+      // A disposed ChangeNotifier throws on any further listener
+      // registration (the Flutter framework's own contract) — this is what
+      // distinguishes "disposed" from merely "no longer listened to".
+      expect(() => liveRegion.addListener(() {}), throwsFlutterError);
     },
   );
 }

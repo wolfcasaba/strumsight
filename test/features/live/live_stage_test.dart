@@ -15,6 +15,7 @@ import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
+import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:strumsight/main.dart';
 
@@ -249,4 +250,37 @@ void main() {
       }
     },
   );
+
+  group('Finish fallback target is the app entry route, not a fixed screen '
+      '(review MINOR-2)', () {
+    testWidgets(
+      'with the adaptive shell off (default), /live IS the entry route — '
+      'Finish ends the session in place instead of hopping to Learn',
+      (tester) async {
+        final engine = await _pumpLive(tester);
+        engine.emit(_frame(current: const Chord('C')));
+        await tester.pumpAndSettle();
+        final l10n = lookupAppLocalizations(const Locale('en'));
+
+        await tester.tap(find.byKey(_finishKey));
+        await tester.pump();
+        // Past the 300 ms deferred-navigation beat.
+        await tester.pump(const Duration(milliseconds: 350));
+
+        // Still on Live — no navigation to Learn (or anywhere else) fired.
+        expect(find.byType(LiveScreen), findsOneWidget);
+        // The session actually ended (same visible state as a manual
+        // Pause): the transport shows "paused", not stuck "finishing".
+        expect(
+          find.byKey(const ValueKey('ss-session-transport-finishing-marker')),
+          findsNothing,
+        );
+        expect(
+          tester.widget<IconButton>(find.byKey(_pausePauseKey)).tooltip,
+          l10n.liveResume,
+        );
+        expect(find.byKey(_finishKey), findsOneWidget);
+      },
+    );
+  });
 }

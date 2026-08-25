@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
 import '../../../core/platform/app_lifecycle.dart';
@@ -108,6 +109,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   void dispose() {
     _lifecycle.removeListener(_onAppLifecycle);
     _finishTimer?.cancel();
+    _liveRegion.dispose();
     unawaited(_wakelock.disable());
     // Stop the Lab-mode rolling capture when leaving Live (r199) — no buffering
     // once the screen is gone. Safe after unmount (touches no provider state).
@@ -156,6 +158,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   /// action the pre-migration `_ActionBar` never had). Stops the mic/wakelock
   /// immediately; the actual navigation is deferred one short beat so the
   /// `finishing` transport state gets a visible frame.
+  ///
+  /// The fallback target (when there's nothing to pop to) is the app's own
+  /// entry route, mirroring the router's own choice (`adaptiveShellEnabled
+  /// ? today : live` — read here via the same public [appConfigProvider]
+  /// other features already use, since `lib/app/routing/**` is out of scope
+  /// for this round). When that entry route IS `/live` — the default,
+  /// adaptive-shell-off configuration — Finish has nowhere to go: the
+  /// session just ends in place, same as a manual Pause (review MINOR-2).
   void _finish() {
     if (_finishing) return;
     setState(() => _finishing = true);
@@ -165,9 +175,21 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       if (!mounted) return;
       if (context.canPop()) {
         context.pop();
-      } else {
-        context.go(AppRoutes.learn);
+        return;
       }
+      final entryLocation =
+          ref.read(appConfigProvider).flags.adaptiveShellEnabled
+          ? AppRoutes.today
+          : AppRoutes.live;
+      if (entryLocation != AppRoutes.live) {
+        context.go(entryLocation);
+        return;
+      }
+      setState(() {
+        _finishing = false;
+        _paused = true;
+        _frozen = ref.read(liveFrameProvider).asData?.value;
+      });
     });
   }
 
