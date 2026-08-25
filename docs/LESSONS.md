@@ -18456,3 +18456,64 @@ scope-fegyelem feladása lenne.
 **Őrteszt:** nincs — a brief-írás oldali szabály nem kör-hatáskörből
 tesztelhető; a mérés reprodukálható az `allowed_paths` blokk `lib/l10n/`
 sorainak sáv-szintű megszámolásával (`agg` / `frag` / `base`).
+
+## L483 — Egy őr, ami KÖNYVTÁR-előtagra vak, a saját hibaosztályát engedi vissza: az `S9` brief-lint némán „tiszta" volt a teljes Ch13 sávon (E13-R16/H3 önjavítás, 2026-08-25)
+
+**Mit mértünk.** Az E13-R16 kör KÉSZ volt, minden mércéje zöld — a célzott gate
+10/10, a scope-audit 0 sértés, a Router CI success, a review APPROVED —, egyetlen
+teszt kivételével: a `test/ui/ui_inventory_test.dart:14`
+`expect(first.screenPaths, hasLength(79))` a mért **81** ellen bukott
+([full-gate 32867296946](https://github.com/wolfcasaba/strumsight/actions/runs/32867296946),
+6366 passed / 2 failed). A kör két új képernyőt hozott
+(`lib/features/onboarding/screens/permission_primer_screen.dart`,
+`first_win_stage_screen.dart`); a `lib/app/bootstrap/` alatti
+`launch_screen.dart`/`recovery_screen.dart` MÉRVE nem számít bele, mert a
+`tool/ui_inventory.dart` kizárólag a `lib/features/**` fát listázza. A javítás
+egyetlen szám lett volna, de a leltárteszt nem volt az `allowed_paths`-on, a
+felvétele pedig tágítás, azaz **H3** ([L478](#l478)) — a kör megállt.
+
+**A gyökérok nem a brief volt, hanem az őr.** Pontosan ezt a hibaosztályt írta
+meg az E09-R24 önjavítás `S9` néven a `tools/brief-lint.py`-ba (E08-R15/H3,
+E09-R21, E09-R24 precedensekkel). A predikátuma viszont csak olyan
+`allowed_paths` elemet nézett, ami **literálisan** `_screen.dart`-ra végződik.
+Az E13-R16 briefje a `lib/features/onboarding/` **KÖNYVTÁRAT** engedte, és a
+képernyőket az alá tette — az `S9` néma maradt. A `9acd14e5` sáv-szintű batch
+pre-flight commit-üzenete rögzíti is: *„tools/brief-lint.py --level strict mind
+a 20 briefen -> nincs lelet"*. Az L482 helyes eljárását követték, csak a mérőműszer
+hazudott.
+
+**Ebből a szabály:** egy őr hatókörét ahhoz kell kötni, amit a védett mérce
+TÉNYLEGESEN lát, nem ahhoz, ahogy a brief történetesen leírja. A leltár
+rekurzívan listázza a fát, tehát a könyvtár-engedély ugyanúgy „új képernyő
+engedélye", mint a fájlútvonal. Ha egy predikátum a bemenet EGYIK írásmódjára
+illeszkedik, mérd ki a többi írásmódot is a korpuszon — itt a 308 elemezhető
+briefből 23 lelet jött elő, amit a szűk alak nem látott.
+
+**A hamis riasztás elleni mérce a fa mérhető igazsága, nem tippelés.** A
+kiterjesztett `screen_capable_prefixes` kihagyja a LÉTEZŐ, de `_screen.dart`-ot
+rekurzívan nem tartó könyvtárat (mérve: `lib/features/community/domain/repositories/`
+az E09-R05 `done` körből, `lib/features/practice_generator/public/` az E99-R18
+`done` körből), és bent hagyja a még nem létezőt, amiről semmit nem lehet mérni.
+Eredmény a teljes korpuszon: **0 `done` (merge-elt) kör** kap leletet — 20
+`pending` (a teljes E13-R16…R35 sáv) és 3 `hold`.
+
+**Miért nem volt elég a lintet javítani.** A javított `S9` a pre-flightban
+riasztott volna, de a teendője — „vedd fel a leltártesztet az `allowed_paths`-ra"
+— **tágítás**, amit az orchestrátor az L478 szerint nem hajthat végre: a halt
+csak korábbra és olcsóbbra került volna, nem tűnt volna el. **A hibás mérőműszer
+javítása és a már kimért defekt eltakarítása két külön lépés** — az önjavító kör
+ezért vette fel az őrt a sáv MINDEN hátralévő briefjére (R17–R35) is,
+`allowed_paths` + `gate_tests` + §7 gate-parancs. Ez az L482 eljárásának a
+megismétlése egy MÁSIK hibaosztályra, ugyanazon a sávon.
+
+**Egy második, ebben a körben nem javított lelet (rögzítve).** A round-gate
+`architecture` lépése (`tool/check_architecture.dart`) **nem azonos** a
+`test/core/architecture_dependency_test.dart` design-system-határ mércéjével —
+az E13-R16 egy teljes javító kört veszített erre (F8, `ded7a628`). Az utóbbi
+`gate_tests`-be vétele viszont **erősítés, nem tágítás**, tehát a körök saját
+pre-flightjának hatásköre; nem kellett hozzá önjavító kör.
+
+**Őrteszt:** `tools/tests/test_brief_ui_inventory_scope.py` —
+`BriefUiInventoryDirectoryPrefixTest` (a javítás előtt 3 cella PIROS), plusz a
+korpusz-mérce `RealBriefCorpusTest::test_no_done_round_is_flagged`, ami a
+`pipeline-queue.tsv` `status` oszlopához köti a fals-pozitív határt.

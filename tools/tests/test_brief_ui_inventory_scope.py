@@ -79,6 +79,28 @@ E09_R24_NEW_SCREENS = (
 )
 E09_R24_GATE_TEST = "test/features/community/presentation/clubs/club_list_screen_test.dart"
 
+# A MÁSODIK MÉRT eset (E13-R16/H3, 2026-08-25): az `allowed_paths` KÖNYVTÁR-
+# előtagot enged, nem fájlútvonalat. Ezek a brief tényleges sorai (`5c32fb23`),
+# és ez a két képernyő az, amit a kör a könyvtár alá LÉTREHOZOTT — a leltár
+# `hasLength(79)` állítása így lett 81 a `32867296946` CI-futáson.
+E13_R16_PREFIX = "lib/features/onboarding/"
+E13_R16_EXISTING_SCREEN = "lib/features/onboarding/screens/onboarding_screen.dart"
+E13_R16_CREATED_SCREENS = (
+    "lib/features/onboarding/screens/permission_primer_screen.dart",
+    "lib/features/onboarding/screens/first_win_stage_screen.dart",
+)
+E13_R16_GATE_TEST = "test/features/onboarding/permission_primer_test.dart"
+# Az E13-R17 valódi előtagja: a kör a feature-könyvtárat is LÉTREHOZZA, tehát a
+# fáról semmit nem lehet róla mérni.
+E13_R17_MISSING_PREFIX = "lib/features/today/"
+# Falszifikáció — MÉRT `done` (merge-elt) körök könyvtár-előtagjai. Egyik alatt
+# sincs `_screen.dart` a `main`-en, tehát a leltár száma nem mozdulhat:
+# E09-R05 (`done`) és E99-R18 (`done`).
+MERGED_SCREENLESS_PREFIXES = (
+    "lib/features/community/domain/repositories/",
+    "lib/features/practice_generator/public/",
+)
+
 
 def _load_brief_lint():
     spec = importlib.util.spec_from_file_location("brief_lint", TOOLS / "brief-lint.py")
@@ -91,8 +113,18 @@ def _load_brief_lint():
 brief_lint = _load_brief_lint()
 
 
-def _make_repo(directory: Path, *, existing_screens: tuple[str, ...] = ()) -> Path:
-    """Minimális repo-váz; az `existing_screens` a MÁR LÉTEZŐ képernyőket adja."""
+def _make_repo(
+    directory: Path,
+    *,
+    existing_screens: tuple[str, ...] = (),
+    existing_dirs: tuple[str, ...] = (),
+) -> Path:
+    """Minimális repo-váz; az `existing_screens` a MÁR LÉTEZŐ képernyőket adja.
+
+    Az `existing_dirs` a képernyőt NEM tartó, de LÉTEZŐ könyvtárakat adja — ez
+    az a falszifikációs cella, ami a merge-elt körök könyvtár-előtagjait
+    (`domain/`, `public/`) hamis riasztás nélkül hagyja.
+    """
     (directory / "docs" / "rounds").mkdir(parents=True, exist_ok=True)
     (directory / "docs" / "execution").mkdir(parents=True, exist_ok=True)
     (directory / ".ai").mkdir(parents=True, exist_ok=True)
@@ -107,6 +139,12 @@ def _make_repo(directory: Path, *, existing_screens: tuple[str, ...] = ()) -> Pa
         path = directory / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("class S {}\n", encoding="utf-8")
+    for relative in existing_dirs:
+        target = directory / relative
+        target.mkdir(parents=True, exist_ok=True)
+        # Nem üres a könyvtár: a valódi `domain/`/`public/` fák is tartanak
+        # Dart-forrást — csak `_screen.dart` végűt nem.
+        (target / "contract.dart").write_text("class C {}\n", encoding="utf-8")
     return directory
 
 
@@ -119,6 +157,41 @@ def _brief_text(*, allowed_paths, gate_tests, name="e09-r24-club-domain-membersh
     paths = "\n".join(f'  "{path}",' for path in [*allowed_paths, f"docs/rounds/{name}"])
     gates = "[" + ", ".join(f'"{gate}"' for gate in gate_tests) + "]"
     return f"""# E09-R24 — Klub domain, tagság és szerepkörök
+
+A mérce artefaktuma: `tools/round-gate.sh`.
+
+**STOP-protokoll:** scope-ütközésnél állj meg.
+
+```ai-router
+schema_version = 1
+risk = "normal"
+allowed_paths = [
+{paths}
+]
+gate_tests = {gates}
+native_gate = false
+```
+
+## 9. Kör-jelzés
+
+`done` csak review + CI + merge után.
+"""
+
+
+E13_R16_BRIEF_NAME = "e13-r16-launch-and-onboarding.md"
+
+
+def _e13_r16_brief(*, allowed_paths, gate_tests) -> str:
+    """Az E13-R16 briefjének alakja: KÖNYVTÁR-előtag az `allowed_paths`-on.
+
+    A `_brief_text`-tel azonos okból nincs `dedent`, és a `B6` miatt a címsor
+    kör-azonosítója a fájlnévvel egyezik.
+    """
+    paths = "\n".join(
+        f'  "{path}",' for path in [*allowed_paths, f"docs/rounds/{E13_R16_BRIEF_NAME}"]
+    )
+    gates = "[" + ", ".join(f'"{gate}"' for gate in gate_tests) + "]"
+    return f"""# E13-R16 — Launch, recovery és onboarding migráció
 
 A mérce artefaktuma: `tools/round-gate.sh`.
 
@@ -255,6 +328,118 @@ class BriefUiInventoryScopeTest(unittest.TestCase):
         self.assertNotIn("S9", _codes(findings))
 
 
+class BriefUiInventoryDirectoryPrefixTest(unittest.TestCase):
+    """Az S9 KÖNYVTÁR-előtag vakfoltja — MÉRVE az E13-R16/H3 halton (2026-08-25).
+
+    Az eredeti predikátum kizárólag olyan `allowed_paths` elemet nézett, ami
+    LITERÁLISAN `_screen.dart`-ra végződik. Az E13-R16 briefje viszont a
+    `lib/features/onboarding/` KÖNYVTÁRAT engedte, és a két új képernyőt
+    (`permission_primer_screen.dart`, `first_win_stage_screen.dart`) az alá
+    hozta létre. Az S9 ezért NÉMA maradt — a `9acd14e5` sáv-szintű batch
+    pre-flight commit-üzenete rögzíti is, hogy a `brief-lint.py --level strict`
+    mind a 20 Ch13 briefen „nincs lelet" eredményt adott, miközben mind a 20
+    ugyanezt a halált hordozta.
+
+    A mért ár: `full-gate` 32867296946 FAILURE (6366 passed, 2 failed) — a
+    `hasLength(79)` a tényleges 81 ellen —, majd H3 halt, mert a leltárteszt
+    nem volt az `allowed_paths`-on, a felvétele pedig tágítás ([L478](../../docs/LESSONS.md)).
+    """
+
+    def _repo(self, **kwargs) -> Path:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        return _make_repo(Path(temporary.name), **kwargs)
+
+    def _lint16(self, repo: Path, *, allowed_paths, gate_tests):
+        return _lint(
+            repo,
+            _e13_r16_brief(allowed_paths=allowed_paths, gate_tests=gate_tests),
+            name=E13_R16_BRIEF_NAME,
+        )
+
+    def test_screen_holding_directory_prefix_is_a_strict_finding(self):
+        """A MÉRT PIROS cella: az E13-R16 dispatchelt briefje (`5c32fb23`)."""
+        repo = self._repo(existing_screens=(E13_R16_EXISTING_SCREEN,))
+        findings = self._lint16(
+            repo,
+            allowed_paths=(E13_R16_PREFIX, "lib/app/bootstrap/"),
+            gate_tests=[E13_R16_GATE_TEST],
+        )
+        self.assertIn("S9", _codes(findings))
+        # A szint VÁLTOZATLANUL `strict`: a router-ci a `base` szintet futtatja,
+        # tehát egyetlen meglévő brief sem válik visszamenőleg CI-pirossá.
+        self.assertEqual({"strict"}, _levels(findings, "S9"))
+        message = next(item["message"] for item in findings if item["code"] == "S9")
+        self.assertIn(INVENTORY_TEST, message)
+        # A lelet NEVEZZE MEG az előtagot — enélkül a teendő nem cselekvőképes.
+        self.assertIn(E13_R16_PREFIX, message)
+
+    def test_directory_prefix_brief_with_the_guard_is_clean(self):
+        """A ZÖLD cella: a §0.0/R6 revízió mindkét listára felveszi a leltárt."""
+        repo = self._repo(existing_screens=(E13_R16_EXISTING_SCREEN,))
+        findings = self._lint16(
+            repo,
+            allowed_paths=(E13_R16_PREFIX, "lib/app/bootstrap/", INVENTORY_TEST),
+            gate_tests=[E13_R16_GATE_TEST, INVENTORY_TEST],
+        )
+        self.assertNotIn("S9", _codes(findings))
+
+    def test_directory_prefix_in_allowed_paths_only_still_fires(self):
+        """Csak `allowed_paths` itt is kevés — a drift a lokális gate-en derüljön ki."""
+        repo = self._repo(existing_screens=(E13_R16_EXISTING_SCREEN,))
+        findings = self._lint16(
+            repo,
+            allowed_paths=(E13_R16_PREFIX, INVENTORY_TEST),
+            gate_tests=[E13_R16_GATE_TEST],
+        )
+        self.assertIn("S9", _codes(findings))
+
+    def test_not_yet_existing_feature_directory_fires(self):
+        """Az E13-R17 valódi esete: a kör magát a feature-könyvtárat is létrehozza.
+
+        A fáról ilyenkor semmit nem lehet mérni, ezért nem zárható ki, hogy
+        képernyő kerül alá — és mérve mind a 19 hátralévő Ch13 kör ilyen.
+        """
+        repo = self._repo()
+        findings = self._lint16(
+            repo,
+            allowed_paths=(E13_R17_MISSING_PREFIX,),
+            gate_tests=[E13_R16_GATE_TEST],
+        )
+        self.assertIn("S9", _codes(findings))
+
+    def test_existing_screenless_directory_prefix_does_not_fire(self):
+        """A FALSZIFIKÁCIÓS cella: MÉRT `done` körök előtagjai nem riasztanak.
+
+        `lib/features/community/domain/repositories/` (E09-R05, `done`) és
+        `lib/features/practice_generator/public/` (E99-R18, `done`) LÉTEZIK, és
+        egyetlen `_screen.dart` sincs alattuk — a leltár száma nem mozdulhat.
+        Ez az a feltétel, ami a szabályt hamis riasztás nélkül tartja.
+        """
+        repo = self._repo(existing_dirs=MERGED_SCREENLESS_PREFIXES)
+        findings = self._lint16(
+            repo,
+            allowed_paths=MERGED_SCREENLESS_PREFIXES,
+            gate_tests=[E13_R16_GATE_TEST],
+        )
+        self.assertNotIn("S9", _codes(findings))
+
+    def test_directory_prefix_outside_lib_features_does_not_fire(self):
+        """A `tool/ui_inventory.dart` KIZÁRÓLAG a `lib/features/**` fát listázza.
+
+        Az E13-R16 `lib/app/bootstrap/` alatt is hozott két képernyőt
+        (`launch_screen.dart`, `recovery_screen.dart`) — a leltár ezeket
+        MÉRVE nem számolta, a 79→81 mozgást csak a két onboarding-képernyő adta.
+        """
+        repo = self._repo()
+        findings = self._lint16(
+            repo,
+            allowed_paths=("lib/app/bootstrap/", "lib/core/widgets/"),
+            gate_tests=[E13_R16_GATE_TEST],
+        )
+        self.assertNotIn("S9", _codes(findings))
+
+
 class UiInventoryPredicateMatchesCiTest(unittest.TestCase):
     """A predikátum a CI igazságához van kötve, nem tippelve.
 
@@ -314,10 +499,47 @@ class RealBriefCorpusTest(unittest.TestCase):
                 and path.endswith("_screen.dart")
                 and path not in tracked
             ]
+            # A KÖNYVTÁR-előtag ugyanilyen valódi ok (E13-R16/H3): a kör a
+            # könyvtár alá teszi az új képernyőt, fájlútvonal nélkül.
+            screen_dirs = brief_lint.screen_capable_prefixes(repo, metadata.allowed_paths)
             self.assertTrue(
-                new_screens,
-                f"{name} S9-at kapott, de nem hoz létre új képernyőt — hamis riasztás",
+                new_screens or screen_dirs,
+                f"{name} S9-at kapott, de sem új képernyőt nem hoz létre, sem "
+                "képernyőt tartható könyvtárat nem enged — hamis riasztás",
             )
+
+    def test_no_done_round_is_flagged(self):
+        """A fals-pozitív mérce a sor MERGE-ELT állapotához kötve.
+
+        A `docs/execution/pipeline-queue.tsv` `status` oszlopa a valódi igazság
+        arról, hogy egy kör lefutott-e — a `git ls-files` csak közvetett jel. Ha
+        egy `done` kör briefje S9-et kap, a szabály visszamenőleg riaszt, tehát
+        hamis. MÉRVE 2026-08-25 a könyvtár-előtag kiterjesztés után: **0 `done`
+        kör** — a 23 lelet mind `pending` (20, a teljes Ch13 sáv) vagy `hold` (3).
+        """
+        repo = ROOT
+        status = {}
+        for line in (repo / "docs" / "execution" / "pipeline-queue.tsv").read_text(
+            encoding="utf-8"
+        ).splitlines():
+            if not line or line.startswith("#"):
+                continue
+            columns = line.split("\t")
+            if len(columns) >= 5:
+                status[Path(columns[1]).name] = columns[4].strip()
+        offenders = []
+        for brief in sorted((repo / "docs" / "rounds").glob("*.md")):
+            if status.get(brief.name) != "done":
+                continue
+            try:
+                findings = brief_lint.lint_text(
+                    brief.read_text(encoding="utf-8"), path=brief, repo=repo
+                )
+            except Exception:  # noqa: BLE001 — elemezhetetlen brief nem ennek a mércéje
+                continue
+            if "S9" in _codes(findings):
+                offenders.append(brief.name)
+        self.assertEqual([], offenders, "merge-elt kör kapott S9-et — visszamenőleges riasztás")
 
 
 if __name__ == "__main__":  # pragma: no cover
