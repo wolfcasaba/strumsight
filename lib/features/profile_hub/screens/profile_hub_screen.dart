@@ -185,11 +185,9 @@ class _Metric extends StatelessWidget {
         children: [
           Text(
             value,
-            style: const TextStyle(
-              fontFamily: 'Montserrat',
-              fontWeight: FontWeight.w800,
-              fontSize: 20,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
           ),
           Text(
             label,
