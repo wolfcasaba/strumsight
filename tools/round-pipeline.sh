@@ -146,8 +146,19 @@ heal_model_explicit=${PIPELINE_SELFHEAL_MODEL:+1}
 # viszont a kör sajátja (queue `engine` oszlop), tehát a párosítás mindig
 # együtt utazik a körrel.
 #
-#   sonnet-impl implementer  → Opus 5, effort max   (UI-sáv)
+#   sonnet-impl implementer  → Opus 5, effort high  (UI-sáv)
 #   minden más               → a globális default   (Sonnet 5, effort high)
+#
+# EFFORT max → high (user-döntés 2026-08-25, mért indokkal). A `max` effort a
+# kör MINDKÉT Claude-oldalát (Opus 5 orchestrátor/reviewer + Sonnet 5
+# implementer) UGYANARRA az előfizetésre terheli, és a heti keret lett a sáv
+# szűk keresztmetszete: az utolsó 60 pipeline-session közül 18 a heti limiten
+# halt meg, az E13-R16 körön 15,2 óra ment el emiatt
+# (docs/execution/ch13-throughput-diagnosis.md). A user döntése: az implementer
+# NEM változik (az UI-minőség a Sonnet 5-ön múlik), a megtakarítás az
+# orchestrátor-oldalról jön. A mérce nem gyengül: a kör-gate, a scope-audit, a
+# független review és az exact-SHA CI változatlan. Visszaemelés egyetlen
+# env-vel: PIPELINE_UI_ORCH_EFFORT=max.
 orch_pair_model() {    # $1=implementer motor
   case "${1:-}" in
     sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_MODEL:-claude-opus-5}" ;;
@@ -156,7 +167,7 @@ orch_pair_model() {    # $1=implementer motor
 }
 orch_pair_effort() {   # $1=implementer motor
   case "${1:-}" in
-    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_EFFORT:-max}" ;;
+    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_EFFORT:-high}" ;;
     *)           printf '%s' "$claude_effort" ;;
   esac
 }

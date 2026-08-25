@@ -158,7 +158,8 @@ class PipelineIntegrationTest(unittest.TestCase):
                 allowed = {"minimax"} if expected == "minimax" else {"minimax", "codex"}
                 # USER-DÖNTÉS 2026-08-23: a Chapter 13 (UI/UX design system)
                 # sáv implementere a `sonnet-impl` (natív Claude Sonnet 5,
-                # `--effort high`), fölötte Opus 5 max orchestrátor. Indok: a
+                # `--effort high`), fölötte Opus 5 orchestrátor (effort
+                # 2026-08-25 óta `high`, heti-keret mérés). Indok: a
                 # MiniMax MÉRT gyengéje az invariáns-lazítás (engine-registry),
                 # a Ch13-körök mércéje viszont épp invariáns-sűrű (kontraszt-őr,
                 # text-scale mátrix, a11y-szerződés). A carve-out SZŰK: csak az
