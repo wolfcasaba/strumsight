@@ -44,8 +44,11 @@ import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
 import '../../features/practice/presentation/screens/practice_session_screen.dart';
+import '../../features/practice_hub/screens/practice_area_hub_screen.dart';
+import '../../features/profile_hub/screens/profile_hub_screen.dart';
 import '../../features/progress/screens/progress_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
+import '../../features/today/screens/today_hub_screen.dart';
 import '../../features/songs/screens/setlist_list_screen.dart';
 import '../../features/songs/screens/song_list_screen.dart';
 import '../../features/streak/screens/streak_screen.dart';
@@ -410,15 +413,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           branches: [
             StatefulShellBranch(
               routes: [
-                // E13-R08 (D14/1 fix round) — resource-free adapter. The
-                // original adapter reused `LiveScreen` (no dedicated Today
-                // screen exists yet, D11), which duplicated the mic/wakelock
-                // owner across two branches (`/today` and `/practice/live`,
-                // review MAJOR-1 manifestation 2). `ProgressScreen` owns no
-                // audio/camera resources.
+                // E13-R17 — the Today Hub (UI-05) replaces the temporary
+                // ProgressScreen adapter the E13-R08 D14/1 fix round put here.
+                // It stays resource-free, same as its predecessor (A4,
+                // ADR 0276): no audio/camera import anywhere in that screen.
                 GoRoute(
                   path: AppRoutes.today,
-                  builder: (_, _) => const ProgressScreen(),
+                  builder: (_, _) => const TodayHubScreen(),
                 ),
               ],
             ),
@@ -430,10 +431,16 @@ final routerProvider = Provider<GoRouter>((ref) {
                 // grant access to a distinct product rollout. The branch
                 // keeps its other sub-routes unconditionally, so it is never
                 // left with zero routes.
+                // E13-R17 — the Practice Area Hub (UI-06) replaces the
+                // legacy PracticeHubScreen adapter here; the bare (non-shell)
+                // `/practice` registration above still renders the legacy
+                // screen unchanged. Still gated by the Practice Engine V2
+                // rollout flag (E13-R08 D15) — a navigation flag must not
+                // itself grant access to a distinct product rollout.
                 if (practiceEnabled)
                   GoRoute(
                     path: AppRoutes.practiceHub,
-                    builder: (_, _) => const PracticeHubScreen(),
+                    builder: (_, _) => const PracticeAreaHubScreen(),
                   ),
                 GoRoute(
                   path: AppRoutes.practiceAnalyze,
@@ -486,9 +493,13 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             StatefulShellBranch(
               routes: [
+                // E13-R17 — the Profile Hub (UI-07) replaces the legacy
+                // SettingsScreen adapter here. `/profile/settings` below
+                // still renders SettingsScreen unchanged (A5 legacy-route
+                // reachability); the hub itself links out to it.
                 GoRoute(
                   path: AppRoutes.profileHome,
-                  builder: (_, _) => const SettingsScreen(),
+                  builder: (_, _) => const ProfileHubScreen(),
                 ),
                 GoRoute(
                   path: AppRoutes.profileLibrary,
