@@ -43,8 +43,15 @@ final onboardingSeenProvider = NotifierProvider<OnboardingController, bool>(
 /// The onboarding flow's step-level checkpoint (SDD Ch13 Kör 16, ADR 0281 §5
 /// — the flow is resumable, and the old checkpoint state migrates). Ordinal
 /// order matters: it is the flow's linear progression AND the persisted
-/// on-disk representation (see [OnboardingStepController.readStep]).
-enum OnboardingStep { welcome, permission, firstWin, done }
+/// on-disk representation (see [OnboardingStepController.readStep]) — the
+/// exact name/index sequence is pinned by a dedicated test
+/// (`test/features/onboarding/onboarding_resume_test.dart`), so reordering
+/// or inserting a value needs a migration, not just an enum edit. Every
+/// value here must be reachable by real app input — `permission` is (both
+/// mic-requesting carousel CTAs checkpoint here before the primer shows,
+/// see `OnboardingScreen`); a step that only a test can produce does not
+/// belong in this enum (E13-R16 javító kör, F2).
+enum OnboardingStep { welcome, permission, done }
 
 /// Tracks which step of onboarding the user last reached, so a kill or
 /// interruption resumes there instead of restarting the whole flow (A6).

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
-import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
 import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/onboarding/screens/permission_primer_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -36,11 +35,11 @@ void main() {
       () {
         final aheadOfSeen = InMemoryKeyValueStore({
           StorageKeys.onboardingSeen: false,
-          OnboardingStepController.storageKey: OnboardingStep.firstWin.index,
+          OnboardingStepController.storageKey: OnboardingStep.permission.index,
         });
         expect(
           OnboardingStepController.readStep(aheadOfSeen),
-          OnboardingStep.firstWin,
+          OnboardingStep.permission,
         );
 
         final explicitWelcomeDespiteSeen = InMemoryKeyValueStore({
@@ -116,22 +115,27 @@ void main() {
       },
     );
 
-    testWidgets(
-      'a checkpoint left at the first-win step shows the Stage directly',
-      (tester) async {
-        await pumpAt(tester, OnboardingStep.firstWin);
-
-        expect(find.byType(FirstWinStageScreen), findsOneWidget);
-        expect(find.byType(PermissionPrimerScreen), findsNothing);
-      },
-    );
-
     testWidgets('a fresh (welcome) checkpoint shows the intro carousel', (
       tester,
     ) async {
       await pumpAt(tester, OnboardingStep.welcome);
 
       expect(find.text('See what you play'), findsOneWidget);
+    });
+  });
+
+  group('F3 — the persisted step order is pinned (on-disk contract)', () {
+    test('OnboardingStep names AND indices are pinned literally — the order IS '
+        'the on-disk format (advanceTo persists step.index); reordering or '
+        'inserting a value silently shifts every stored checkpoint', () {
+      expect(OnboardingStep.values.map((e) => e.name).toList(), [
+        'welcome',
+        'permission',
+        'done',
+      ]);
+      expect(OnboardingStep.welcome.index, 0);
+      expect(OnboardingStep.permission.index, 1);
+      expect(OnboardingStep.done.index, 2);
     });
   });
 }

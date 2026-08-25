@@ -4,10 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/audio_providers.dart';
 import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
+import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/features/onboarding/screens/permission_primer_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/fake_audio.dart';
+import '../../support/preference_store.dart';
 
 /// E13-R16 (ADR 0281 §1/§5.1) — the mic-permission primer. A1: no request
 /// reaches the platform before the user acts on the primer. A2: a final
@@ -176,5 +178,51 @@ void main() {
         findsOneWidget,
       );
     });
+  });
+
+  group('A1 (app-level) — the carousel goes through the primer, never a '
+      'cold request', () {
+    testWidgets(
+      'tapping the last-page mic CTA shows the primer before any request() '
+      'call reaches the gateway',
+      (tester) async {
+        final gateway = FakeMicrophonePermissionGateway(
+          state: MicrophonePermissionState.denied,
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              ...preferenceOverrides(),
+              microphonePermissionGatewayProvider.overrideWithValue(gateway),
+            ],
+            child: MaterialApp(
+              theme: SsDarkTheme.data(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const OnboardingScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Try your first win — 30 seconds'));
+        await tester.pumpAndSettle();
+
+        expect(
+          gateway.requestCalls,
+          0,
+          reason: 'the primer must be on screen before any request() call',
+        );
+        expect(find.byType(PermissionPrimerScreen), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('onboard-primer-allow')),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }

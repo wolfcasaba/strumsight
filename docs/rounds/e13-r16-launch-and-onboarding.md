@@ -576,18 +576,118 @@ teszteken, amíg nem javítottam.
 
 | # | Bizonyíték | Megjegyzés |
 |---|---|---|
-| A1 | `permission_primer_test.dart` csoport "A1" | komponens-szinten bizonyítva; a karusszel CTA-i még nem hívják (l. fent) |
+| A1 | `permission_primer_test.dart` csoport "A1" + "A1 (app-level)" | teljes (javító kör 1 — F1) |
 | A2 | `permission_primer_test.dart` csoport "A2" | teljes |
 | A3 | `first_win_test.dart` csoport "A3" + valódi-sértés próba | teljes |
 | A4 | `bootstrap_routing_test.dart` csoport "A4" | teljes |
 | A5 | `first_win_test.dart` csoport "A5" | teljes |
-| A6 | `onboarding_resume_test.dart` csoport "A6" | a checkpoint-dispatch valódi és tesztelt; a karusszel CTA-i még nem írnak `permission`/`firstWin` checkpointot |
-| A7 | `onboarding_resume_test.dart` csoport "A7" | teljes |
+| A6 | `onboarding_resume_test.dart` csoport "A6" | a karusszel CTA-i valódi bemenettel írják a `permission` checkpointot (javító kör 1 — F1/F2); `firstWin` az enumból törölve, l. §10.1 |
+| A7 | `onboarding_resume_test.dart` csoport "A7" + "F3" | teljes, a sorrend pinnelve (javító kör 1 — F3) |
 | A8 | `bootstrap_routing_test.dart` csoport "A8" | teljes |
 | A9 | `e13_r16_screens_golden_test.dart`, 10 PNG commitolva | teljes |
 
 **Gate.** `tools/round-gate.sh` a brief §7 szerinti pontos öt teszttel:
 MINDEN lépés zöld (format, analyze, mind az 5 teszt-fájl, architecture,
 secrets, l10n).
+
+---
+
+## 10.1 JAVÍTÓ KÖR 1 — a független review leletei (`docs/reviews/e13-r16-review.md`)
+
+**F1 (BLOCKER, A1) — javítva.** A karusszel mindkét mikrofon-kérő CTA-ja
+(`onboardFirstWin` az utolsó oldalon, `onboardStart` a csendes út) MOST a
+`OnboardingStep.permission` ellenőrzőponton ÁT megy: `_finish`/`_firstWin`
+eltárolja, melyik befejezést kell folytatni (`_afterPermission` mező), majd
+`_advanceStep(OnboardingStep.permission)`-t hív — ez rendereli a
+`PermissionPrimerScreen`-t. A primer `onGranted`/`onSkipped` hívása
+(`_onPermissionResolved`) folytatja az eltárolt befejezést
+(`_completeFinish`/`_completeFirstWin`) — best-effort, PONTOSAN úgy, mint a
+kör előtti implementáció: egy skip vagy egy elutasítás is befejezi az
+onboardingot (a Live újra kéri, ha még nincs megadva). A rendszer-párbeszéd
+így SOSEM érhető el a primer nélkül — az A1 mostantól app-szinten is igaz,
+nemcsak az izolált `PermissionPrimerScreen` komponens-tesztjén.
+
+A korábbi indoklás (a karusszel CTA-i azért nem köthetők be, mert
+`test/app/routing/onboarding_first_win_test.dart` egyetlen settle-ön belüli
+befejezést vár) MÉRVE téves volt: az a teszt `fakeAudioOverrides()`-t használ,
+aminek az alapértelmezése `granted`, és megadott engedélynél a primer
+`_loadCurrentState()`-je egyetlen extra képkocka nélkül, azonnal
+`onGranted`-et hív — a primer így ÁTFUTÓ no-op ebben a tesztben, a régi
+`pumpAndSettle()` VÁLTOZATLANUL leszalad. **KÖTELEZŐ BIZONYÍTÉK (a fájl a
+listán kívül van, MÓDOSÍTVA NEM lett):**
+
+```
+$ ~/flutter/bin/flutter test test/app/routing/onboarding_first_win_test.dart
+00:00 +0: default first-win survives reactive redirect during delayed persistence
+00:02 +1: All tests passed!
+```
+
+**Bővített A1 mérce.** `permission_primer_test.dart` új csoportja ("A1
+(app-level) — the carousel goes through the primer, never a cold request")
+egy `denied` gateway-vel a teljes `OnboardingScreen`-t építi fel, megnyomja a
+"Try your first win — 30 seconds" CTA-t, és állítja: `gateway.requestCalls ==
+0` marad, és a `PermissionPrimerScreen` (az "Allow" gombjával) van a
+képernyőn — tehát a rendszer-dialógushoz vezető `request()` hívás app-szinten
+sem futhat le a primer megjelenése előtt.
+
+**F2 (MAJOR, A6/A7) — javítva, szűkítéssel.** Az F1 javítása az
+`OnboardingStep.permission`-t valódi bemenettel elérhetővé tette. A
+`OnboardingStep.firstWin`-re a két felkínált út közül a **szűkítést**
+választottam, mérve: a `.firstWin` állapotot (a `FirstWinStageScreen`
+mini Stage-et) a karusszel "Try your first win" CTA-jára kötni azt
+jelentené, hogy a primer UTÁN egy MÁSODIK, interaktív képernyő
+(pontozott próba, Continue gomb) ékelődne be a befejezés elé — ez a
+`test/app/routing/onboarding_first_win_test.dart` egyetlen-settle
+elvárását STRUKTURÁLISAN sértené (a Stage nem "átfutó no-op" egy
+`granted` gateway-nél, mert egy tényleges mérési próbát vár, amit a
+teszt sosem indít el). Mivel ez a fájl a listán kívül van és nem
+módosítható, a bekötés mérve NEM lehetséges a jelen körben. Ezért:
+
+- `OnboardingStep` enumból a `firstWin` érték **törölve** —
+  `{welcome, permission, done}` (`onboarding_provider.dart:47`). A
+  `.firstWin`-et korábban semmilyen valódi bemenet nem produkálta (F1
+  mérése), csak egy kézzel beültetett teszt-checkpoint — pontosan az
+  "elérhetetlen cél-státusz" hibaosztály, amit F2 tiltott.
+  `onboarding_resume_test.dart`-ban a hozzá tartozó widget-teszt
+  ("a checkpoint left at the first-win step shows the Stage directly")
+  törölve; az "explicit checkpoint wins" teszt `firstWin.index` helyett
+  `permission.index`-et pinnel.
+- `FirstWinStageScreen`/`first_win_providers.dart`/`first_win_engine.dart`
+  VÁLTOZATLANUL a fában maradtak — VALÓDI, teljesen tesztelt komponensek
+  (`first_win_test.dart` csoport A3/A5, golden-felvétel), csak nem érhetők
+  el a checkpoint-enumon keresztül. A karusszel "Try your first win" CTA-ja
+  a primer után továbbra is közvetlenül a `LearnScreen(Lessons.firstWin)`-t
+  nyitja meg (a kör előtti byte-azonos navigáció), NEM a mini Stage-et. A
+  Stage tényleges bekötése — a "Try first win" CTA a primer UTÁN a Stage-re
+  vezessen, a Stage `onContinue`-ja pedig a Learn-lecke helyett/mellett — egy
+  KÖVETKEZŐ kör feladata, együtt az `onboarding_first_win_test.dart`
+  frissítésével (amikor az a fájl engedélyezett listára kerül).
+
+**F3 (MAJOR, A7) — javítva.** `onboarding_provider.dart:47` doc-commentje
+most kimondottan hivatkozik a pinnelt tesztre.
+`onboarding_resume_test.dart` új csoportja ("F3 — the persisted step order is
+pinned") literálisan rögzíti mind a három név-index párt
+(`welcome`=0, `permission`=1, `done`=2); egy jövőbeli beszúrás vagy átrendezés
+ezt a cellát pirosra váltja, mielőtt bármelyik eszközön tárolt checkpoint
+némán elcsúszna.
+
+**F4 (MINOR) — javítva, explicit teszttel.** A `_currentStep()`/
+`_advanceStep()` `on StateError` ága VÁLTOZATLAN maradt — a listán kívüli
+`test/core/screen_size_guard_test.dart` "Onboarding" esete `ProviderScope`
+NÉLKÜL építi fel az `OnboardingScreen`-t, tehát az "adj a hívó tesztnek
+ProviderScope-ot" út nem elérhető ebben a körben. Helyette a degradálás
+`test/features/onboarding/onboarding_test.dart`-ban explicit, saját cellával
+tesztelt: `ProviderScope` nélkül az `OnboardingScreen` a welcome-karusszelt
+mutatja kivétel nélkül (`tester.takeException()` `isNull`), nem csendes
+mellékhatásként bizonyítva, mint korábban.
+
+**F5 (NOTE) — érintetlen**, a review indoklása szerint (§0.0/B P4).
+
+**Gate a javító kör után.** `tools/round-gate.sh` a brief §7 szerinti pontos
+öt teszttel — MINDEN lépés zöld (format, analyze, mind az 5 teszt-fájl,
+architecture, secrets, l10n). A golden-PNG-k VÁLTOZATLANOK (a `.firstWin`
+szűkítés és a primer-routing egyike sem érinti a golden-tesztben közvetlenül
+példányosított `PermissionPrimerScreen`/`FirstWinStageScreen` widgeteket) —
+nem kellett újra felvenni őket.
 
 ## 11. Review — a Claude tölti ki

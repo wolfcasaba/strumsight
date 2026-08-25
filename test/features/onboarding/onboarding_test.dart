@@ -94,5 +94,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Enable mic & start'), findsOneWidget);
     });
+
+    // F4 (E13-R16 javító kör): without an ancestor ProviderScope, the
+    // checkpoint read must degrade to the welcome carousel rather than
+    // throwing — a deliberate, tested fail-safe (matching
+    // `OnboardingController.readSeen`'s own degrade-on-corrupt-value
+    // philosophy), not an incidental side effect of a bare smoke test.
+    testWidgets(
+      'without a ProviderScope, the checkpoint read degrades to the welcome '
+      'carousel instead of throwing',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: OnboardingScreen(),
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('See what you play'), findsOneWidget);
+      },
+    );
   });
 }

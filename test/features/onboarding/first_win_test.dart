@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/audio/audio_providers.dart';
 import 'package:strumsight/features/chords/chord_shape.dart';
 import 'package:strumsight/features/learn/model/lesson.dart';
 import 'package:strumsight/core/music/strum.dart';
@@ -11,6 +12,7 @@ import 'package:strumsight/features/onboarding/screens/onboarding_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../support/fake_audio.dart';
 import '../../support/preference_store.dart';
 
 /// Round 155 — the onboarding "first win" (chunk 017 rec #4): the shortest
@@ -63,15 +65,16 @@ void main() {
     var firstWin = 0;
     await tester.pumpWidget(
       ProviderScope(
-        overrides: preferenceOverrides(),
+        overrides: [
+          ...preferenceOverrides(),
+          microphonePermissionGatewayProvider.overrideWithValue(
+            FakeMicrophonePermissionGateway(),
+          ),
+        ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: OnboardingScreen(
-            onDone: () {},
-            onFirstWin: () => firstWin++,
-            primeMic: () async {},
-          ),
+          home: OnboardingScreen(onDone: () {}, onFirstWin: () => firstWin++),
         ),
       ),
     );
