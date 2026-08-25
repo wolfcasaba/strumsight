@@ -59,6 +59,8 @@ from app.community.models.moderation import (
     ACTION_TYPE_APPEAL_SUBMITTED,
     ACTION_TYPE_AUTOMATION_SIGNAL,
     ACTION_TYPE_MODERATOR_DECISION,
+    ACTOR_TYPE_CONTENT_AUTHOR,
+    ACTOR_TYPE_HUMAN_MODERATOR,
     APPEAL_STATE_RESOLVED,
     APPEAL_STATE_SUBMITTED,
     MODERATION_CASE_STATE_AUTHOR_ONLY,
@@ -83,6 +85,7 @@ from app.community.moderation.case_service import (
     AppealAlreadySubmitted,
     AutomationCannotEnforce,
     InvalidStateTransition,
+    NotTargetAuthor,
     apply_moderator_decision,
     compute_priority_score,
     content_visibility_for_state,
@@ -1431,3 +1434,183 @@ class TestEndToEnd:
         assert ACTION_TYPE_MODERATOR_DECISION in action_types
         assert ACTION_TYPE_APPEAL_SUBMITTED in action_types
         assert ACTION_TYPE_APPEAL_RESOLVED in action_types
+
+
+# ===========================================================================
+# A5 (mély) — WHO may spend the one appeal, and how the audit row labels them
+#
+# Javító kör (E09-R27 fix2). A5 grants exactly ONE appeal per case;
+# before this round the endpoint accepted any authenticated caller,
+# so a stranger could burn the author's only appeal, and every
+# appeal row was stamped ``actor_type="human_moderator"`` even when
+# an ordinary user filed it (a false claim in the D5 audit chain).
+# ===========================================================================
+
+
+class TestAppealAuthorGuard:
+    """The appeal is the target author's right of reply (D6), and A5
+    makes it single-use — so the submitter identity is load-bearing."""
+
+    def _removed_case_for_author(self, session_factory, *, author_user_id: int):
+        """A removed case over a post owned by ``author_user_id``.
+        The moderator (user 10) is a DIFFERENT account than the author."""
+        _make_moderator(session_factory, user_id=10, email="mod@s.test")
+        _make_profile(
+            session_factory, user_id=author_user_id, email=f"a{author_user_id}@s.test"
+        )
+        post_id = _make_post(session_factory, author_user_id=author_user_id)
+        with session_factory() as db:
+            case = get_or_create_case(
+                db, target_type="post", target_id=str(post_id), now=_now()
+            )
+            case = apply_moderator_decision(
+                db,
+                case,
+                to_state=MODERATION_CASE_STATE_LIMITED,
+                moderator_user_id=10,
+                reason="triage",
+                now=_now(),
+            )
+            case = apply_moderator_decision(
+                db,
+                case,
+                to_state=MODERATION_CASE_STATE_REMOVED,
+                moderator_user_id=10,
+                reason="spam",
+                now=_now(),
+            )
+            db.commit()
+            return case.public_id
+
+    def test_stranger_cannot_burn_the_authors_single_appeal(self, session_factory):
+        """The §6.1 valódi-sértés alak: a third party files first.
+
+        Without the guard this call SUCCEEDS and the author's A5
+        budget is gone — the author's own submission then raises
+        ``AppealAlreadySubmitted``. The guard must reject the
+        stranger AND leave the budget intact.
+        """
+        case_id = self._removed_case_for_author(session_factory, author_user_id=20)
+        _make_profile(session_factory, user_id=30, email="stranger@s.test")
+
+        with session_factory() as db:
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
+            with pytest.raises(NotTargetAuthor):
+                submit_appeal(
+                    db,
+                    case,
+                    submitted_by_user_id=30,
+                    reason="not mine, but I will spend it",
+                    now=_now(),
+                )
+            db.rollback()
+
+        # The budget is intact: the AUTHOR can still appeal.
+        with session_factory() as db:
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
+            assert case.appeal_state is None
+            case = submit_appeal(
+                db,
+                case,
+                submitted_by_user_id=20,
+                reason="this is not spam",
+                now=_now(),
+            )
+            db.commit()
+            assert case.appeal_state == APPEAL_STATE_SUBMITTED
+
+    def test_author_filed_appeal_is_labelled_content_author(self, session_factory):
+        """D5 audit truth — the author is not a moderator, and the
+        row must not claim otherwise."""
+        case_id = self._removed_case_for_author(session_factory, author_user_id=20)
+        with session_factory() as db:
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
+            submit_appeal(
+                db,
+                case,
+                submitted_by_user_id=20,
+                reason="mine",
+                now=_now(),
+            )
+            db.commit()
+            case_pk = case.id
+
+        with session_factory() as db:
+            row = (
+                db.query(CommunityModerationAction)
+                .filter_by(case_id=case_pk, action_type=ACTION_TYPE_APPEAL_SUBMITTED)
+                .one()
+            )
+            assert row.actor_type == ACTOR_TYPE_CONTENT_AUTHOR
+            assert row.actor_user_id == 20
+
+    def test_moderator_filing_on_behalf_stays_human_moderator(self, session_factory):
+        """A moderator filing for the author IS a staff action —
+        the label must stay ``human_moderator``."""
+        case_id = self._removed_case_for_author(session_factory, author_user_id=20)
+        with session_factory() as db:
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
+            submit_appeal(
+                db,
+                case,
+                submitted_by_user_id=10,
+                reason="filed on the author's behalf",
+                now=_now(),
+            )
+            db.commit()
+            case_pk = case.id
+
+        with session_factory() as db:
+            row = (
+                db.query(CommunityModerationAction)
+                .filter_by(case_id=case_pk, action_type=ACTION_TYPE_APPEAL_SUBMITTED)
+                .one()
+            )
+            assert row.actor_type == ACTOR_TYPE_HUMAN_MODERATOR
+
+    def test_unresolvable_target_author_fails_closed(self, session_factory):
+        """An unwired ``target_type`` must NOT become a bypass: the
+        author cannot be resolved, so only a moderator gets through."""
+        _make_moderator(session_factory, user_id=10, email="mod@s.test")
+        _make_profile(session_factory, user_id=30, email="stranger@s.test")
+        with session_factory() as db:
+            case = get_or_create_case(
+                db,
+                target_type="media",
+                target_id=str(uuid.uuid4()),
+                now=_now(),
+            )
+            db.commit()
+            case_id = case.public_id
+
+        with session_factory() as db:
+            case = db.query(CommunityModerationCase).filter_by(public_id=case_id).one()
+            with pytest.raises(NotTargetAuthor):
+                submit_appeal(
+                    db,
+                    case,
+                    submitted_by_user_id=30,
+                    reason="unwired target type",
+                    now=_now(),
+                )
+
+    def test_endpoint_returns_403_for_a_stranger(self, client, session_factory):
+        """The router seam of the same guard."""
+        case_id = self._removed_case_for_author(session_factory, author_user_id=20)
+        _make_profile(session_factory, user_id=30, email="stranger@s.test")
+        response = client.post(
+            f"/community/moderation/cases/{case_id}/appeals",
+            json={"reason": "not mine"},
+            headers=_user_auth_headers(30),
+        )
+        assert response.status_code == 403
+
+    def test_endpoint_accepts_the_author(self, client, session_factory):
+        case_id = self._removed_case_for_author(session_factory, author_user_id=20)
+        response = client.post(
+            f"/community/moderation/cases/{case_id}/appeals",
+            json={"reason": "this is not spam"},
+            headers=_user_auth_headers(20),
+        )
+        assert response.status_code == 200
+        assert response.json()["appeal_state"] == APPEAL_STATE_SUBMITTED

@@ -377,5 +377,47 @@ vonal.
 - **Sürgős spam-containment automation-path (§5.1 D4).** A
   dokumentált kivétel a runbook-ban van; a kód-részlet egy future
   round.
+- **[N1, a javító körből] Partial unique index a D2 invariánsra.** A
+  `(target_type, target_id)` párra `is_open = 1` mellett. Ma a D2-t a
+  `get_or_create_case` service-rétegű read-then-insert tartja (az ADR
+  0425 §D2 ezt kifejezetten megengedi), és az
+  `ix_community_moderation_cases_target_open` index `unique=False` —
+  tehát egy több-írós backendre váltás versenyablakot nyitna. SQLite-on
+  ma nem elérhető.
+- **[N2, a javító körből] A moderation router bekötése.** A
+  `build_community_router` ma is CSAK a `profile` routert szereli fel; a
+  13 community routerből 12 (a Kör 26 `reports` is) kívül marad. Ez
+  epic-szintű, korábbról öröklött hiány (ADR 0395 Következmények 3.
+  pont), és a `backend/app/community/__init__.py` ennek a körnek a tilos
+  zónájában van.
 
 ## 11. Review — a Claude tölti ki
+
+Teljes jelentés: [`docs/reviews/e09-r27-review.md`](../reviews/e09-r27-review.md).
+
+**Végső döntés: APPROVED**, egy javító kör után. 0 BLOCKER; 2 MAJOR + 3
+MINOR mind lezárva, 2 follow-up (N1, N2) fent dokumentálva.
+
+- **F0 (MINOR)** — az implementer a §10 kitöltése helyett FELÜLÍRTA a
+  kör-briefet; a §7 gate-hivatkozás elvesztése piros Router CI-t okozott
+  (brief-lint **B4**). A `fix1` a §0 és §1–§9 visszaállítása.
+- **F1 (MAJOR)** — az appeal-endpoint bármely hitelesített felhasználót
+  elfogadott, miközben az A5 case-enként EGY appealt enged: egy idegen
+  elköltötte volna a szerző egyetlen jogorvoslatát. A `submit_appeal`
+  most a target szerzőjéhez köti a beadót (moderátori beadás továbbra is
+  megengedett), a router **403**-at ad, a feloldhatatlan `target_type`
+  pedig **fail-closed**.
+- **F2 (MAJOR)** — az appeal-beadás audit sora `human_moderator`-t írt
+  akkor is, ha közönséges felhasználó adta be. Új
+  `ACTOR_TYPE_CONTENT_AUTHOR`; a moderátor nevében beadott appeal marad
+  `human_moderator`.
+- **F3 (MINOR)** — a `get_or_create_case` docstringje egy nem létező
+  uniqueness-garanciára hivatkozott (`unique=False` index).
+- **F4 (MINOR)** — a modul-docstring nem létező kivétel-neveket említett.
+
+**A reviewer saját mérései** (a §10.4 nem bemondásra elfogadva): a §6.1
+kötelező valódi-sértés próba függetlenül, a production forrás HÁROM
+védelmi rétegének egyidejű kinyitásával megismételve → **5 cella PIROS**;
+plusz két saját mutáció (router auth-gát törlése → A1 PIROS; publikus
+`update_action` → A3 PIROS); végül a javító kör falszifikációja: a guard
+visszavonásával a `TestAppealAuthorGuard` cellái pirosra váltanak.

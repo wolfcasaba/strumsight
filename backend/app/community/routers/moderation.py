@@ -49,6 +49,7 @@ from ..moderation.case_service import (
     ModerationCaseSummary,
     NoOpenAppeal,
     NotAModerator,
+    NotTargetAuthor,
     apply_moderator_decision,
     get_case_by_public_id,
     is_moderator,
@@ -364,9 +365,12 @@ def post_appeal(
     A5 — the appeal is one-per-case. A second submission returns
     409.
 
-    Any authenticated user can submit an appeal (the appeal is
-    the target's right of reply; the moderator identity is NOT
-    required here). The Kör 26 reporter identity is NEVER
+    The appeal is the TARGET AUTHOR'S right of reply, and A5
+    grants exactly one per case — so only the target's author (or
+    a moderator filing on their behalf) may spend it. Any other
+    authenticated caller gets 403; without that guard a stranger
+    could burn the author's single appeal. The Kör 26 reporter
+    identity is NEVER
     reflected in the response — the case row has no reporter FK
     (D2 / D7) and the appeal row carries only the submitter's
     internal ``users.id`` as ``actor_user_id`` in the action
@@ -400,6 +404,11 @@ def post_appeal(
                 now=now,
             )
             _commit_via(request, db)
+        except NotTargetAuthor as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+            ) from exc
         except AppealAlreadySubmitted as exc:
             db.rollback()
             raise HTTPException(status_code=409, detail=str(exc)) from exc

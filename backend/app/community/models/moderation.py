@@ -91,9 +91,17 @@ APPEAL_STATE_SUBMITTED: str = "submitted"
 APPEAL_STATE_RESOLVED: str = "resolved"
 
 # Actor type — D5. "automation" signals have actor_user_id NULL;
-# "human_moderator" actions always carry a non-null moderator_user_id.
+# "human_moderator" and "content_author" actions always carry a
+# non-null actor_user_id.
+#
+# ``content_author`` exists because an appeal is submitted by the
+# TARGET'S AUTHOR, who is an ordinary user — labelling that row
+# "human_moderator" would make the D5 audit chain claim a
+# moderation action was taken by staff when it was not. The audit
+# chain is only useful if the actor label is true.
 ACTOR_TYPE_AUTOMATION: str = "automation"
 ACTOR_TYPE_HUMAN_MODERATOR: str = "human_moderator"
+ACTOR_TYPE_CONTENT_AUTHOR: str = "content_author"
 
 # Action type — D5.
 ACTION_TYPE_AUTOMATION_SIGNAL: str = "automation_signal"
@@ -354,6 +362,7 @@ __all__ = [
     "ACTION_TYPE_AUTOMATION_SIGNAL",
     "ACTION_TYPE_MODERATOR_DECISION",
     "ACTOR_TYPE_AUTOMATION",
+    "ACTOR_TYPE_CONTENT_AUTHOR",
     "ACTOR_TYPE_HUMAN_MODERATOR",
     "APPEAL_STATE_RESOLVED",
     "APPEAL_STATE_SUBMITTED",

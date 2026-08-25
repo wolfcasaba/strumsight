@@ -26,14 +26,17 @@ sealed out of the module:
   The ONLY entry point to ``"removed"`` / ``"author_only"``
   states. The moderator identity is verified against the
   :class:`CommunityModerator` table inside the function body — a
-  non-moderator caller raises :class:`NotAModeratorError` (the
+  non-moderator caller raises :class:`NotAModerator` (the
   router maps that to 403).
 
 * :func:`submit_appeal` — D6, the appeal-seam. Idempotent on
   ``case.appeal_state is None``: a second submission against a
   case with an existing appeal raises
-  :class:`AppealAlreadySubmittedError`. The A5 measure-matrix
-  cell.
+  :class:`AppealAlreadySubmitted`. The A5 measure-matrix
+  cell. Because that appeal is the target author's ONE shot,
+  the function also rejects a submitter who is neither the
+  target's author nor a moderator
+  (:class:`NotTargetAuthor`).
 
 * :func:`resolve_appeal` — D6, the appeal-resolve seam. Carries
   the verdict (``"upheld"`` / ``"overturned"``); ``upheld``
@@ -73,6 +76,7 @@ from ..models.moderation import (
     ACTION_TYPE_AUTOMATION_SIGNAL,
     ACTION_TYPE_MODERATOR_DECISION,
     ACTOR_TYPE_AUTOMATION,
+    ACTOR_TYPE_CONTENT_AUTHOR,
     ACTOR_TYPE_HUMAN_MODERATOR,
     APPEAL_STATE_RESOLVED,
     APPEAL_STATE_SUBMITTED,
@@ -231,6 +235,16 @@ class NoOpenAppeal(ModerationError):
     """
 
 
+class NotTargetAuthor(ModerationError):
+    """§6 A5 / D6 — the appeal submitter is neither the target's
+    author nor a moderator.
+
+    An appeal is one-per-case (A5), so an unrelated authenticated
+    user who could submit it would BURN the author's only appeal.
+    The router maps this to 403.
+    """
+
+
 class CaseNotFound(ModerationError):
     """The case ``public_id`` does not resolve to a row."""
 
@@ -356,6 +370,33 @@ def _target_author_profile_id(
     return None
 
 
+def _profile_id_for_user(db: Session, user_id: int) -> int | None:
+    """Resolve ``users.id`` → ``community_profiles.id`` (1:1)."""
+    from ..models.profile import CommunityProfile
+
+    row = db.execute(
+        select(CommunityProfile.id).where(CommunityProfile.user_id == user_id)
+    ).first()
+    return int(row[0]) if row is not None else None
+
+
+def _is_target_author(
+    db: Session, *, target_type: str, target_id: str, user_id: int
+) -> bool:
+    """True when ``user_id`` owns the moderated target.
+
+    FAIL-CLOSED: a target whose author cannot be resolved (an
+    unwired ``target_type``, a deleted row) returns ``False``. The
+    only other way past the :func:`submit_appeal` guard is being a
+    moderator, so an unwired target type cannot be used to burn
+    someone else's single appeal.
+    """
+    author_profile_id = _target_author_profile_id(db, target_type, target_id)
+    if author_profile_id is None:
+        return False
+    return author_profile_id == _profile_id_for_user(db, user_id)
+
+
 def _report_signal(db: Session, target_type: str, target_id: str) -> int:
     """D8 #1 — the count of ``CommunityReport`` rows against this target."""
     from ..models.report import CommunityReport
@@ -471,12 +512,19 @@ def get_or_create_case(
     3. Otherwise INSERTs a fresh case in state ``visible`` with
        ``is_open=True`` and a recomputed :func:`compute_priority_score`.
 
-    The function does NOT raise on duplicate insert — a concurrent
-    call wins the ``(target_type, target_id, is_open=True)`` race
-    via the ``ix_community_moderation_cases_target_open`` index and
-    the second caller re-reads the winner. The "duplicate open
-    case" exception lives at the ``apply_moderator_decision`` /
-    ``record_automation_signal`` call sites, not here.
+    The D2 mechanism is the SERVICE-LAYER read-then-insert above —
+    ADR 0425 §D2 explicitly leaves the choice between a
+    ``UniqueConstraint`` and a service-layer query to the
+    implementer, and this module took the latter.
+    ``ix_community_moderation_cases_target_open`` is a plain
+    (``unique=False``) lookup index: it makes step 1 cheap, it does
+    NOT arbitrate a concurrent-insert race. Two simultaneous
+    callers on a multi-writer backend could therefore both insert an
+    open case for the same target; the SQLite deployment this round
+    ships against serialises writers, so the window is not
+    reachable today. Closing it for a concurrent backend needs a
+    partial unique index — a follow-up, recorded in §10.9 of the
+    round doc.
     """
     existing = (
         db.execute(
@@ -634,7 +682,7 @@ def apply_moderator_decision(
     This is the ONLY function that may write ``state in {"removed",
     "author_only"}`` (D4 / §5.1). The ``moderator_user_id`` is
     verified against :class:`CommunityModerator` here — a
-    non-moderator caller raises :class:`NotAModeratorError`, the
+    non-moderator caller raises :class:`NotAModerator`, the
     case is NOT modified.
     """
     if not is_moderator(db, moderator_user_id):
@@ -707,12 +755,32 @@ def submit_appeal(
     appeal is either in ``"submitted"`` or ``"resolved"`` state at
     that point).
 
+    Because the appeal is one-per-case, WHO may spend it matters:
+    an unrelated authenticated user submitting first would burn
+    the author's only appeal. The submitter must therefore be the
+    target's author (resolved through
+    :func:`_is_target_author`, fail-closed) or a moderator —
+    anyone else raises :class:`NotTargetAuthor`.
+
     The appeal is recorded as a :class:`CommunityModerationAction`
     row of ``action_type = "appeal_submitted"``. The
-    ``actor_user_id`` is the user's ``users.id`` (the same column
-    the moderator decisions use — there is no separate "target
-    author" identity on the case row).
+    ``actor_user_id`` is the submitter's ``users.id``; the
+    ``actor_type`` is ``"content_author"`` for an author-filed
+    appeal and ``"human_moderator"`` only when a moderator files
+    it on the author's behalf (D5 audit truth).
     """
+    submitter_is_moderator = is_moderator(db, submitted_by_user_id)
+    if not submitter_is_moderator and not _is_target_author(
+        db,
+        target_type=case.target_type,
+        target_id=case.target_id,
+        user_id=submitted_by_user_id,
+    ):
+        raise NotTargetAuthor(
+            f"user {submitted_by_user_id} is neither the author of "
+            f"{case.target_type}/{case.target_id} nor a moderator"
+        )
+
     if case.appeal_state is not None:
         raise AppealAlreadySubmitted(
             f"case {case.public_id} already has appeal_state={case.appeal_state!r}"
@@ -727,7 +795,14 @@ def submit_appeal(
         action_type=ACTION_TYPE_APPEAL_SUBMITTED,
         from_state=case.state,
         to_state=case.state,
-        actor_type=ACTOR_TYPE_HUMAN_MODERATOR,
+        # D5 audit truth: the row records WHO acted. A moderator
+        # filing on the author's behalf is a moderator action; the
+        # author filing their own appeal is not.
+        actor_type=(
+            ACTOR_TYPE_HUMAN_MODERATOR
+            if submitter_is_moderator
+            else ACTOR_TYPE_CONTENT_AUTHOR
+        ),
         actor_user_id=submitted_by_user_id,
         reason=reason,
         evidence=None,
