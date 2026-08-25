@@ -4,21 +4,35 @@
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
 - **Reviewer:** Claude Opus 5 (orchestrátor), read-only
 - **Reviewelt HEAD:** `c607f855` → javító kör 1 `7e14fe52` → javító kör 2 `e649386c`
-- **Alap:** `origin/main` @ `3848ef72`
+  → javító kör 3 `64f02585` → **upstream-merge `721ab1f0`** → javító kör 4 `6ed51720`
+- **Alap:** `origin/main` @ `3848ef72` → a §0.3 upstream-szinkron után `origin/main` @ `c064566f`
 - **Brief:** `docs/rounds/e13-r16-launch-and-onboarding.md` (§0.0 + §0.0/B)
 - **ADR:** `0281` (a `main`-en, a kör nem írt újat — helyes)
 - **Kockázat:** `high` (authorization-határ + perzisztált felhasználói adat) —
   a biztonsági/adatvédelmi átvizsgálás a §6-ban, a jelentésbe integrálva.
 
-## VÉGSŐ DÖNTÉS: **APPROVED** (`e649386c`)
+## VÉGSŐ DÖNTÉS: **APPROVED** (`6ed51720`)
 
-Két javító kör után **0 nyitott BLOCKER/MAJOR/MINOR**. Az F5 NOTE
+**Négy javító kör után 0 nyitott BLOCKER/MAJOR/MINOR.** Az F5 NOTE
 (nem-lokalizált redakció) szándékosan marad nyitva, követő körre — a §0.0/B P4
 megszorítása miatt a körben nem oldható meg.
 
-Az eredeti verdikt (`c607f855`) CHANGES REQUESTED volt: 1 BLOCKER, 2 MAJOR,
-1 MINOR, 1 NOTE; a reviewer-próbateszt a javító kör 1 után egy további MINOR-t
-(F6) talált. A zárás leletenként a §9-ben.
+A verdikt útja: az eredeti (`c607f855`) CHANGES REQUESTED volt (1 BLOCKER,
+2 MAJOR, 1 MINOR, 1 NOTE); a reviewer-próbateszt a javító kör 1 után egy
+további MINOR-t (F6) talált; a **teljes CI-suite** a javító kör 2 után két
+olyan leletet hozott (F8, F9), amit a célzott gate szerkezetileg nem fedett
+(§13). Az F9 a javító kör 3 idején **H3** volt (a célfájl a listán kívül) —
+ezt a `c064566f` önjavító kör oldotta fel, a javító kör 4 pedig lezárta
+(§15). A zárás leletenként a §9-ben és a §15-ben.
+
+| Lelet | Súly | Állapot |
+|---|---|---|
+| F1 | BLOCKER | ZÁRVA (§9) |
+| F2, F3 | MAJOR | ZÁRVA (§9) |
+| F4, F6, F7 | MINOR | ZÁRVA (§9) |
+| F8 | (CI-suite) | ZÁRVA (§13) |
+| F9 | (CI-suite, volt H3) | **ZÁRVA (§15)** |
+| F5 | NOTE | nyitva, szándékosan — követő körre |
 
 ---
 
@@ -426,3 +440,126 @@ mérce meghamisítása lenne, nem javítás.
 **Egyetlen nyitott elem az F9**, aminek a javítása pontosan **egy szám** egy
 listán kívüli fájlban (`79` → `81`). A kör ezért **H3 halttal** áll meg, nem
 merge-eléssel; a döntés az önjavító körre / emberre tartozik.
+
+> **Ez a §14 a `64f02585` HEAD állapotát rögzíti, és a történeti tény miatt
+> változatlanul marad.** Az önjavító kör azóta lefutott — a feloldás és a
+> zárás a §15-ben.
+
+---
+
+## 15. Az F9 feloldása és zárása (upstream-merge `721ab1f0` + javító kör 4 `6ed51720`)
+
+### 15.1 A H3 feloldása — nem az orchestrátor tágított, hanem az önjavító kör
+
+A §14 H3-ja azon állt, hogy a `test/ui/ui_inventory_test.dart` **nem volt** a
+brief `allowed_paths`-án, a felvétele pedig tágítás
+([ADR 0087 §2](../adr/0087-autonomous-round-pipeline.md), [L478](../LESSONS.md)).
+
+Az önjavító kör ezt a `main`-en oldotta fel — `c064566f`
+([PR #454](https://github.com/wolfcasaba/strumsight/pull/454)): a leltártesztet
+felvette az `allowed_paths`-ra **és** a `gate_tests`-be, megírta a brief
+`§0.0/R6` szakaszát, és a **gyökérokot** is javította (a `tools/brief-lint.py`
+`S9` predikátuma addig csak LITERÁLIS `*_screen.dart` útvonalat nézett, KÖNYVTÁR-
+előtagot nem — ezért maradt néma a sáv-szintű batch pre-flight).
+
+A kör-ág ezt a `§0.3` upstream-szinkronnal vette át: `git merge --no-ff
+origin/main` → **`721ab1f0`**, konfliktus nélkül. Mérve utána:
+
+```
+$ git merge-base --is-ancestor origin/main HEAD ; echo $?
+0
+$ git diff --check ; echo $?
+0
+```
+
+A merge megőrizte mindkét oldalt: a brief `§0.0/R6` (a `main`-ről) ÉS a kör
+saját `§10.1–10.3` implementation-handoffja egyaránt jelen van.
+
+**Az L345 kockázata kimérve.** Egy self-heal írhat pinnelt regressziós őrt a
+brief alakjára; ha igen, a kör saját brief-szerkesztése új scope-rést nyitna.
+Megmértem — a `tools/tests/test_brief_ui_inventory_scope.py` **szintetikus**
+brief-fixture-t épít, a valós briefet csak S9-re nézi (és az a heal óta tiszta):
+
+```
+$ python3 -m pytest tools/tests/test_brief_ui_inventory_scope.py -q
+16 passed in 43.10s
+$ python3 tools/brief-lint.py --brief docs/rounds/e13-r16-launch-and-onboarding.md --level strict
+# Brief-lint (strict) — nincs lelet
+```
+
+### 15.2 F9 — ZÁRVA
+
+**Diff a javító kör 4-ben (`721ab1f0..6ed51720`):** pontosan **két** fájl —
+`test/ui/ui_inventory_test.dart` (1 sor) és a brief (§10.3 pontosítás + §10.4).
+
+```diff
+-    expect(first.screenPaths, hasLength(79));
++    expect(first.screenPaths, hasLength(81));
+```
+
+A leltárteszt minden más állítása (`toMarkdown()` determinizmus, `orderedEquals`
+rendezettség, a `contains` cellák) **érintetlen**; a `tool/ui_inventory.dart`
+nem módosult. Kerülőút (képernyő-átnevezés/áthelyezés vagy a leltár-szabály
+lazítása) nem történt — mérve a diffen.
+
+### 15.3 Reviewer-próbateszt: az őr valódi, nem tautologikus
+
+Eldobható próba izolált klónban (`/tmp/review-e13-r16` @ `6ed51720`). A kérdés:
+a `hasLength(81)` **tényleg** figyeli-e a fát, vagy csak egy elmozdított
+konstans.
+
+| # | Injektált sértés | Elvárt | Mért |
+|---|---|---|---|
+| 4 | egy további `lib/features/onboarding/screens/zz_probe_screen.dart` | PIROS | **`Which: has length of <82>` — `Some tests failed`** ⇒ az őr él |
+
+A próba után a fájl törölve, `git status --short` üres, a teszt újra
+`+1: All tests passed!`. Az őr tehát a fa **mérhető** igazságát pinneli, nem egy
+tautológiát.
+
+### 15.4 A merge-kapu mérése a merge-jelölten (`6ed51720`)
+
+**Célzott gate — saját futtatás, izolált klónban, csővezeték nélkül**
+(`tools/round-gate.sh` a brief §7 HAT teszt-útvonalával; a hatodik a most
+felvett leltárteszt):
+
+```
+format zöld · analyze zöld · bootstrap_routing zöld · permission_primer zöld
+onboarding_resume zöld · first_win zöld · e13_r16_screens_golden zöld
+ui_inventory zöld · architecture zöld · secrets zöld · l10n zöld
+
+MINDEN GATE ZÖLD.          (GATE_EXIT=0)
+```
+
+A gate után a klón `git status --short` **üres** — a 10 golden PNG bit-azonos
+maradt, a leltárszám emelése goldent nem érintett.
+
+**Scope-audit a teljes körre** (a jelzésfájlból a kulcs ismét hiányzott, ezért
+kézzel — a kör-prompt §1.1 szerint a hiány nem bizonyíték):
+
+```
+$ python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e13-r16 \
+    --brief docs/rounds/e13-r16-launch-and-onboarding.md --base origin/main
+Legacy scope audit OK (c064566fa347..6ed517203979, 35 changed path(s), 1 generated/ignored)
+```
+
+**Jelzés-ellenőrzés:** `status=done`, `head=6ed51720`, `dirty_files=1` —
+**kivizsgálva**: a `.codex-round-status` maga (gitignore-olt); a munkafa a
+jelzés után tiszta (`git status --short` üres), commit nem maradt le.
+
+**CI a merge-jelölt SHA-ján** (a tervező `full-gate.yml`-t ír elő,
+`apk_required: false`, `router_ci_expected: true`):
+
+| Workflow | Run | headSha | Eredmény |
+|---|---|---|---|
+| `full-gate.yml` | [`32874118246`](https://github.com/wolfcasaba/strumsight/actions/runs/32874118246) | `6ed51720` | **success** |
+| `router-ci.yml` | [`32874103970`](https://github.com/wolfcasaba/strumsight/actions/runs/32874103970) | `6ed51720` | **success** |
+
+Mindkettő `headSha`-ja megegyezik a lokális HEAD-del (a néma-bukás elleni
+kötelező összevetés), és az `origin/main` a dispatch óta **nem mozdult**
+(`c064566f` → `c064566f`).
+
+### 15.5 Merge-feltétel — teljesült
+
+Az F1–F4 és F6–F9 zárva, az F5 NOTE szándékosan nyitva (követő körre). A zöld
+kapu (ADR 0052) minden eleme igazolt a merge-jelölt SHA-n. **A merge
+engedélyezett.**
