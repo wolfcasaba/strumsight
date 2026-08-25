@@ -222,3 +222,90 @@ Biztonsági lelet: **nincs**.
 
 A merge-kapu **exact-SHA**: ha a `main` a dispatch óta mozdult, újra-dispatch
 és a friss SHA-n zöld futás kell.
+
+
+---
+
+## 9. Javító körök és újra-review (2026-08-25, a review első kiadása UTÁN)
+
+### 9.1 F1 — a CI golden-piros (a review első kiadása után derült ki)
+
+Az első exact-SHA CI-futás (`a7d118f4`) **PIROS** lett:
+[full-gate 32887590628](https://github.com/wolfcasaba/strumsight/actions/runs/32887590628),
+`Coverage` és `full-gate` job, ugyanaz a négy cella:
+
+```
+e13_r17_today_hub_compact.png          5.60%  (21 096 px)
+e13_r17_profile_hub_compact.png        5.96%  (22 482 px)
+e13_r17_today_hub_compact_scale2.png  11.71%  (44 154 px)
+e13_r17_profile_hub_compact_scale2.png 10.52%  (39 654 px)
+```
+
+A `practice_area_hub` két goldenje ZÖLD; lokálisan mind a hat zöld — tehát
+**hordozhatósági** (box ↔ CI) hiba.
+
+**A diagnózis két hamis hipotézisen ment át — mindkettőt MAGAM cáfoltam:**
+
+1. *„inline `fontFamily: 'Montserrat'` + szintetikus `w800`"* — **HAMIS**:
+   az E13-R16 `onboarding_screen.dart:289-293` pontosan ezt használja, és a
+   goldenje CI-zöld (szonda-teszttel mérve: `See what you play|font=Montserrat`).
+2. *„a `withValues(alpha: …)` kitöltés"* — **HAMIS**: ugyanaz az R16 képernyő
+   (`:331`) `AppColors.primary.withValues(alpha: 0.3)` kitöltésű pöttyöket
+   rajzol, szintén CI-zölden.
+
+**A megmaradt, nem cáfolt megkülönböztető — a szín FORRÁSA:** a két bukó
+képernyő `_Metric`-je `Theme.of(context).colorScheme.surfaceContainerHighest`-et
+festett, ami az `AppTheme` (`app_theme.dart:14`)
+`ColorScheme.fromSeed(seedColor: AppColors.primary)` hívásából, tehát a
+`material_color_utilities` **HCT lebegőpontos** származtatásából jön. Minden
+addigi CI-zöld golden `SsDarkTheme`-mel készült, ami
+`SsColorScheme.forBrightness(...)` **konstansokat** használ. Ez a kör az első,
+amely seed-származtatott sémaszínt fest nagy, egybefüggő felületre.
+
+**Alátámasztó aritmetika (ez zárja ki a glifa- és az eltolódás-magyarázatot):**
+a mért diff ≈ a két `_Metric` doboz TELJES területe (2 × ~180×70 ≈ 25 200 px a
+376 980 px-es kereten); négy rövid felirat glifái együtt is csak ~2-3 ezer px.
+Eltolódás sem: a Profile-on a metrikák felül vannak (alattuk sok elem), a
+Todayen középen — eltolódásnál a Profile diffjének sokkal nagyobbnak kellene
+lennie, mérve viszont ~azonos (5,96% vs 5,60%).
+
+**A javítás két körben** (mindkettő `sonnet-impl`, ugyanaz a branch):
+
+| Kör | Commit | Változás |
+|---|---|---|
+| #1 | `6e3142ea`, `e1ff4c99` | a `_Metric` szám-stílusa téma-eredetű `headlineSmall` + `w700` (inline `Montserrat`/`w800` nélkül) — **önmagában nem a gyökérok**, de helyes egyszerűsítés, megtartva |
+| #2 | `d7c10224` | a `_Metric` kitöltése `surfaceContainerHighest.withValues(alpha: 0.3)` → **konstans** `AppColors.primary.withValues(alpha: 0.12)` — ez a tényleges javítás |
+
+Mindkét kör után a 6 golden újra felvéve és commitolva; ténylegesen csak a
+négy korábban piros PNG változott.
+
+**A mérce nem gyengült:** 0 golden-cella `skip`-elve, 0 küszöb lazítva, a
+`matchesGoldenFile` a helyén, opt-in kapcsoló nem került be. A `test/ui/goldens/`
+és a két hub-fájl mind a brief `allowed_paths`-án van.
+
+### 9.2 BLOCKER-osztályú lelet a javító kör DOKUMENTÁCIÓJÁBAN — javítva (`1ee36ebc`)
+
+A javító kör §12-je azt állította, hogy az első fix UTÁN *„a CI a NÉGY cellán
+ismét piros maradt"*, és ezt hozta a betűtípus-hipotézis kizárásának
+bizonyítékául. **Ez az állítás valótlan: a két javító kör között NEM futott
+CI** — a `32887590628` az egyetlen piros futás, még az első fix ELŐTTI
+`a7d118f4` SHA-n. A hipotézist a reviewer két mérése zárta ki (az R16
+precedens és a pixel-aritmetika).
+
+Ez a „hamis mérés-állítás" osztály (a jelentés-sablon szerint BLOCKER), még
+akkor is, ha a belőle levont következtetés történetesen helyes volt: a
+kör-doksikat a következő körök olvassák, és a RAG-korpusz is indexeli. A
+reviewer a `1ee36ebc` commitban **korrigálta** a §12-t egy kiemelt
+figyelmeztető blokkal, amely rögzíti, mi történt valójában. Production kódot
+a review nem írt — a javítás dokumentáció, a brief `allowed_paths`-án lévő
+fájlban, és itt kimondva, nem csendben.
+
+### 9.3 A verdikt változatlan
+
+A §1–§8 minden mérése (célzott gate 11/11, scope-audit OK, a négy
+valódi-sértés próba, architektúra, biztonsági szakasz) a javító körök után is
+áll; a javító körök diffje a `_Metric` két sorára + a golden PNG-kre + a
+kör-doksira korlátozódik, és nem érint egyetlen acceptance-cellát sem.
+
+**VÉGSŐ DÖNTÉS változatlanul: APPROVED**, a merge feltétele a friss exact-SHA
+CI-futás zöldje (Full Gate + Router CI) a végleges merge SHA-n.
