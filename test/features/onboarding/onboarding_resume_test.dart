@@ -89,7 +89,9 @@ void main() {
 
   group('A6 — OnboardingScreen resumes at the checkpointed step', () {
     Future<void> pumpAt(WidgetTester tester, OnboardingStep step) async {
-      final store = InMemoryKeyValueStore({OnboardingStepController.storageKey: step.index});
+      final store = InMemoryKeyValueStore({
+        OnboardingStepController.storageKey: step.index,
+      });
       await tester.pumpWidget(
         ProviderScope(
           overrides: [preferenceStoreOverride(store)],
