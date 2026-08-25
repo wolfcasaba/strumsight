@@ -169,6 +169,79 @@ def covered_by(path: str, entries) -> bool:
     return False
 
 
+def owned_existing_screens(repo: Path, allowed_paths) -> list[str]:
+    """A kör által ÁTÍRHATÓ, a fában MÁR LÉTEZŐ képernyők (S11).
+
+    Az S9 párja, ellenkező irányba: az S9 az ÚJ képernyő leltár-hatását méri, ez
+    a MEGLÉVŐ képernyő lecserélésének kifelé mutató hatását. A könyvtár-előtag
+    itt is számít (a `covered_by`/scope-audit ugyanígy dönt), de csak a
+    ténylegesen létező fájlokra bomlik le — nemlétező képernyőt senki nem pinnel.
+    """
+    screens: set[str] = set()
+    repo_root = repo.resolve()
+    for path in allowed_paths:
+        if not path.startswith("lib/"):
+            continue
+        if path.endswith("_screen.dart"):
+            if (repo / path).is_file():
+                screens.add(path)
+            continue
+        if not path.endswith("/"):
+            continue
+        directory = repo / path
+        if not directory.is_dir():
+            continue
+        for dart_file in directory.rglob("*_screen.dart"):
+            screens.add(dart_file.resolve().relative_to(repo_root).as_posix())
+    return sorted(screens)
+
+
+def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[str, list[str]]:
+    """képernyő → a briefen KÍVÜL élő tesztek, amelyek PINNELIK.
+
+    A pinnelés MÉRT alakja (E13-R17/H3): a teszt importálja a képernyő
+    forrásfájlját ÉS néven nevezi a típusát (`find.byType(LiveScreen)`,
+    `expect(..., isA<TunerScreen>())`). A kettős feltétel a hamis riasztás elleni
+    mérce: egy puszta import (pl. tranzitív barrel-behúzás) még nem pinnel
+    típust, a típusnév önmagában pedig szövegegyezés is lehet.
+    """
+    if not screens:
+        return {}
+    test_root = repo / "test"
+    if not test_root.is_dir():
+        return {}
+    repo_root = repo.resolve()
+    wanted = {
+        screen: (
+            "package:strumsight/" + screen[len("lib/") :],
+            re.compile(
+                r"\b" + re.escape(_dart_type_name_guess(PurePosixPath(screen).stem)) + r"\b"
+            ),
+        )
+        for screen in screens
+    }
+    pins: dict[str, list[str]] = {}
+    for dart_file in sorted(test_root.rglob("*_test.dart")):
+        relative = dart_file.resolve().relative_to(repo_root).as_posix()
+        # A MÉRT halt-ok az `allowed_paths` hiánya: ha a teszt nincs a listán,
+        # az implementer hozzá sem nyúlhat, és a kör H3-ban áll meg (E13-R16/F9,
+        # E13-R17/H3). A briefen MÁR szereplő teszt a kör vállalt hatóköre — hogy
+        # bekerül-e a célzott `gate_tests`-be is, az a brief szerzőjének mérlegelése,
+        # nem lint-kérdés. A lelet ezért PONTOSAN a listán kívüli pineket sorolja,
+        # és rájuk kéri mindkét listát (a kívül élő őrök szerkezetileg csak a
+        # teljes CI-suite-on futnának, azaz a lelet mindig későn érkezne).
+        if covered_by(relative, allowed_paths):
+            continue
+        try:
+            source = dart_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for screen, (import_uri, type_pattern) in wanted.items():
+            if import_uri in source and type_pattern.search(source):
+                pins.setdefault(screen, []).append(relative)
+    return {screen: sorted(found) for screen, found in sorted(pins.items())}
+
+
 def routing_scope_paths(allowed_paths) -> list[str]:
     """Azok az `allowed_paths` elemek, amelyek a ROUTER forrását engedik.
 
@@ -694,6 +767,60 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                     "átírása — cella törlése, `skip`-je vagy gyengítése TILOS. Ha a "
                     "kör bizonyíthatóan egyetlen destination buildert sem köt át, a "
                     "§0.0 mondja ki ezt a mérést",
+                )
+            )
+
+    # S11 — az örökség-képernyőt PINNELŐ, briefen kívüli tesztek (a Ch13
+    # migrációs sáv mért defektje, 2026-08-25). Az S9/S10 két KONKRÉT esetet fed
+    # (képernyő-leltár, shell-destination őr), mindkettőt UTÓLAG, HEAL-körben —
+    # miközben a hibaosztály általános: egy migrációs kör lecserél egy
+    # örökség-képernyőt, amit a fa MÁS pontján élő teszt a TÍPUSÁRA pinnel. Az őr
+    # a kör `allowed_paths`-án kívül él, a felvétele az orchestrátornak tágítás
+    # (L478) → H3, kör-megállással és emberi döntéssel.
+    #
+    # MÉRT előzmény: E13-R16/F9 (`ui_inventory_test.dart`, full-gate 32867296946)
+    # és E13-R17/H3 (`test/app/navigation/`, +33 → +30 -3) — két egymást követő
+    # kör, ugyanaz az osztály, két külön HEAL-kör ára.
+    #
+    # HAMIS RIASZTÁS elleni mércék, az S10 mintájára:
+    #   * `status == "done"` → néma (visszamenőleges riasztás tilos);
+    #   * csak a fában LÉTEZŐ képernyő számít (`owned_existing_screens`);
+    #   * a pinnelés kettős feltétele import ÉS típusnév (`outside_screen_pins`);
+    #   * a fedettség a router `_matches` előtag-szemantikájával mérve.
+    #
+    # A vállalt maradék hamis riasztás ugyanaz, mint az S10-nél: egy csak
+    # MÓDOSÍTÓ (nem lecserélő) kör feleslegesen kapja a teendőt. Az ár
+    # aszimmetrikus — néhány felsorolt teszt-fájl (a `gate_tests`-ben tiszta
+    # erősítés) szemben egy teljes H3 megállással.
+    round_status_for_s11 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    if round_status_for_s11 != "done":
+        pins = outside_screen_pins(
+            repo,
+            owned_existing_screens(repo, metadata.allowed_paths),
+            metadata.allowed_paths,
+            metadata.gate_tests,
+        )
+        if pins:
+            detail = "; ".join(
+                f"`{screen}` → " + ", ".join(f"`{test}`" for test in tests)
+                for screen, tests in pins.items()
+            )
+            findings.append(
+                Finding(
+                    "strict",
+                    "S11",
+                    "a kör olyan MEGLÉVŐ képernyőt írhat át, amelynek a típusát a "
+                    f"briefen KÍVÜL élő teszt pinneli ({detail}) — egy migrációs kör "
+                    "ezeket pirosra váltja, a felvételük viszont az orchestrátornak "
+                    "tágítás, azaz H3 (mérve: E13-R16/F9 full-gate 32867296946, "
+                    "E13-R17/H3 `test/app/navigation/` +33 → +30 -3); vedd fel a "
+                    "felsorolt teszteket az `allowed_paths`-ba ÉS a `gate_tests`-be, "
+                    "és a brief mondja ki, hogy a jogosultság PONTOSAN a lecserélt "
+                    "képernyő típusának átírása — cella törlése, `skip`-je vagy "
+                    "gyengítése TILOS. Ha a kör a képernyőt bizonyíthatóan nem "
+                    "cseréli le, a §0.0 mondja ki ezt a mérést",
                 )
             )
 

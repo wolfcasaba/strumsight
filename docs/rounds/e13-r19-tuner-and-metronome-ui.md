@@ -38,6 +38,12 @@ allowed_paths = [
   "test/features/metronome/metronome_beat_sync_test.dart",
   "test/ui/goldens/",
   "test/ui/ui_inventory_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/app/offline_network_guard_test.dart",
+  "test/app/routing/shell_lifecycle_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/ui/ui_baseline_screenshot_test.dart",
   "docs/rounds/e13-r19-tuner-and-metronome-ui.md",
 ]
 gate_tests = [
@@ -46,6 +52,12 @@ gate_tests = [
   "test/features/metronome/metronome_beat_sync_test.dart",
   "test/ui/goldens/e13_r19_screens_golden_test.dart",
   "test/ui/ui_inventory_test.dart",
+  "test/app/navigation/adaptive_scaffold_test.dart",
+  "test/app/navigation/legacy_route_redirect_test.dart",
+  "test/app/offline_network_guard_test.dart",
+  "test/app/routing/shell_lifecycle_test.dart",
+  "test/core/screen_size_guard_test.dart",
+  "test/ui/ui_baseline_screenshot_test.dart",
 ]
 native_gate = false
 ```
@@ -130,6 +142,31 @@ nem — a predikátumot ugyanez az önjavító kör javította, regressziós tes
 leltárteszt minden más állítása érintetlen marad. Kerülőút (képernyő-átnevezés
 vagy a `tool/ui_inventory.dart` szabályának lazítása) **TILOS** — az a mérce
 meghamisítása.
+
+### S11 — az örökség-képernyőt PINNELŐ, listán kívüli tesztek (2026-08-25)
+
+A kör lecserél legalább egy MEGLÉVŐ képernyőt, amelynek a TÍPUSÁT a brief
+listáján kívül élő teszt pinneli. Mérve a `tools/brief-lint.py` `S11`
+szabályával (import ÉS típusnév együtt), a `main @ b28bb1bf` fán:
+
+- `test/app/navigation/adaptive_scaffold_test.dart`
+- `test/app/navigation/legacy_route_redirect_test.dart`
+- `test/app/offline_network_guard_test.dart`
+- `test/app/routing/shell_lifecycle_test.dart`
+- `test/core/screen_size_guard_test.dart`
+- `test/ui/ui_baseline_screenshot_test.dart`
+
+Ez pontosan az a halt-osztály, amelyik az **E13-R16/F9**-et (full-gate
+32867296946, `hasLength(79)` vs 81) és az **E13-R17/H3**-at (`flutter test
+test/app/navigation/` +33 → +30 -3) megállította: az őr a listán kívül él, a
+felvétele az orchestrátornak TÁGÍTÁS ([L478](../LESSONS.md)), tehát a kör H3-ban
+áll meg, mielőtt egyetlen sor kód megszületne. A fenti fájlok ezért mostantól
+az `allowed_paths`-on ÉS a `gate_tests`-en is szerepelnek.
+
+**A jogosultság PONTOSAN a lecserélt képernyő típusának átírása.** Cella
+törlése, `skip`-je, küszöb-lazítása vagy az állítás gyengítése TILOS — az a
+mérce meghamisítása. Ha a kör bizonyíthatóan nem cseréli le a képernyőt, a kör
+pre-flightja mondja ki ezt a mérést, és hagyja a cellákat érintetlenül.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
