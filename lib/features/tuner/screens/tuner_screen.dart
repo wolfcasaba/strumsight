@@ -300,18 +300,19 @@ class _TunerFeedback extends StatelessWidget {
     final palette = context.palette;
     final brightness = Theme.of(context).brightness;
     final rounded = cents.abs().round();
+    // Direction is the primary channel on BOTH `outOfTune` and `unstable`
+    // (review MINOR-1): a big same-note jump is exactly the moment — a
+    // string being wound — when the player most needs to see which way to
+    // turn. `unstable` keeps the same direction icon/text as `outOfTune` and
+    // adds "Hold steady…" as a secondary, dimmer line rather than replacing
+    // the direction outright.
     final (icon, color, text) = switch (state) {
       TunerUiState.inTune => (
         Icons.check_circle,
         AppColors.successOn(brightness),
         l10n.tunerInTune.toUpperCase(),
       ),
-      TunerUiState.unstable => (
-        Icons.graphic_eq,
-        palette.muted,
-        l10n.tunerHoldSteady,
-      ),
-      TunerUiState.outOfTune => (
+      TunerUiState.unstable || TunerUiState.outOfTune => (
         cents >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
         AppColors.primary,
         cents >= 0
@@ -320,7 +321,7 @@ class _TunerFeedback extends StatelessWidget {
       ),
       TunerUiState.idle => (Icons.mic_none, palette.muted, ''),
     };
-    return Row(
+    final directionRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 20, color: color),
@@ -334,6 +335,22 @@ class _TunerFeedback extends StatelessWidget {
               letterSpacing: 1,
               color: color,
             ),
+          ),
+        ),
+      ],
+    );
+    if (state != TunerUiState.unstable) return directionRow;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        directionRow,
+        const SizedBox(height: 2),
+        Text(
+          l10n.tunerHoldSteady,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+            color: palette.muted,
           ),
         ),
       ],

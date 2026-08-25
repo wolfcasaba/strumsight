@@ -190,6 +190,29 @@ void main() {
       expect(find.text('IN TUNE'), findsOneWidget);
       expect(find.byIcon(Icons.check_circle), findsOneWidget);
     });
+
+    // review MINOR-1: a same-note jump past `TunerStability.jumpThreshold`
+    // (12 cents) must not blank the visible direction — that is exactly the
+    // moment (a string being wound) the player most needs it. The direction
+    // stays the primary text; "Hold steady…" is an added secondary line.
+    testWidgets(
+      'unstable: the direction stays visible as primary text, with "Hold '
+      'steady…" as a secondary line',
+      (tester) async {
+        final engine = FakeTunerEngine();
+        addTearDown(engine.dispose);
+        await pumpTuner(tester, engine);
+
+        engine.emit(const TunerReading(note: 'A', cents: 10, frequencyHz: 110));
+        await tester.pumpAndSettle();
+        engine.emit(const TunerReading(note: 'A', cents: 40, frequencyHz: 110));
+        await tester.pumpAndSettle();
+
+        expect(find.text('40 cents sharp'), findsOneWidget);
+        expect(find.byIcon(Icons.arrow_upward), findsOneWidget);
+        expect(find.text('Hold steady…'), findsOneWidget);
+      },
+    );
   });
 
   group('A7 — 2.0 text scale + landscape never overflows', () {
