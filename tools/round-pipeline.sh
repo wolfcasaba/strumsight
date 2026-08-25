@@ -1022,7 +1022,19 @@ selfheal_engine_is_available() {   # $1=registry sor → 0, ha statikusan futtat
   config=$(selfheal_engine_path "$(selfheal_engine_field "$row" 3)")
   auth_file=$(selfheal_engine_field "$row" 6)
   case "$harness" in
-    claude | codex) ;;
+    claude) ;;
+    codex)
+      # A Codex-oldal (Sol ÉS Terra) MÉRT állapota 2026-08-21 óta: az
+      # előfizetés kerete elfogyott, a `fallback_engine` alapértéke ezért
+      # `none`. Az `auth.json` viszont a lemezen MARADT (~/.codex,
+      # ~/.codex-terra), tehát a puszta fájl-létezés „elérhetőnek" mutatná a
+      # motort — és az utolsó önjavító kísérlet a motorváltással pont egy
+      # kimerült keretre költené el magát. Amíg a fallback ki van kapcsolva, a
+      # Codex-harness az önjavító swapból is ki van zárva; a visszakapcsolás
+      # EGY env: PIPELINE_FALLBACK_ENGINE=terra (user-döntés 2026-08-25:
+      # „kodex nincs, töröld le ha zavar").
+      [ "$fallback_engine" != "none" ] || return 1
+      ;;
     *) return 1 ;;
   esac
   [ -d "$config" ] || return 1
