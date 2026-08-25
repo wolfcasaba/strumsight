@@ -47,6 +47,19 @@ GATE_ARTIFACT = "tools/round-gate.sh"
 # a `lib/features/**` fa `_screen.dart` végű fájljait számolja, a teszt pedig
 # EGZAKT `hasLength(...)`-et állít rájuk — minden ÚJ képernyő elmozdítja.
 UI_INVENTORY_TEST = "test/ui/ui_inventory_test.dart"
+# A shell-destination navigációs őrök (S10). Az E13-R08 óta EZEK pinnelik, hogy
+# az adaptív shell melyik route-ja melyik képernyő-TÍPUST rendereli — az öt
+# destinationt, a tizenegy alútvonal-adaptert és a tizenegy legacy redirect
+# célját. Egy kör, amelyik a routert átírhatja, bármelyiket pirosra válthatja.
+NAV_GUARD_DIR = "test/app/navigation/"
+NAV_GUARD_TESTS = (
+    "test/app/navigation/adaptive_scaffold_test.dart",
+    "test/app/navigation/tab_state_restoration_test.dart",
+    "test/app/navigation/legacy_route_redirect_test.dart",
+)
+# A router forrása: ezt kell engednie egy briefnek ahhoz, hogy egy destination
+# builderét egyáltalán át tudja kötni.
+ROUTING_SOURCE_DIR = "lib/app/routing/"
 FENCE = re.compile(r"^```(?:bash|sh)?[ \t]*\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
 HEADING_TASK_ID = re.compile(r"(?im)^#\s*(E\d{2}-R\d{2})\b")
 # A gate futtatását elrejtő parancsalakok. MÉRVE: a MiniMax M3 háromszor tette
@@ -139,6 +152,50 @@ def screen_capable_prefixes(repo: Path, allowed_paths) -> list[str]:
             continue
         capable.append(path)
     return sorted(set(capable))
+
+
+def covered_by(path: str, entries) -> bool:
+    """A router `_matches` szemantikája: minden bejegyzés ELŐTAG.
+
+    A `tools/ai_router/security.py::_matches` így dönt a scope-auditban
+    (`path == prefix.rstrip('/') or path.startswith(prefix.rstrip('/') + '/')`),
+    ezért a lint sem tekintheti hiánynak, ha a brief a KÖNYVTÁRAT engedte a
+    fájl helyett — különben a saját mércéjétől eltérőt követelne.
+    """
+    for entry in entries:
+        prefix = entry.rstrip("/")
+        if path == prefix or path.startswith(prefix + "/"):
+            return True
+    return False
+
+
+def routing_scope_paths(allowed_paths) -> list[str]:
+    """Azok az `allowed_paths` elemek, amelyek a ROUTER forrását engedik.
+
+    Mind a könyvtár-előtag (`lib/app/routing/`), mind a konkrét fájl
+    (`lib/app/routing/app_router.dart`) idetartozik: a destination-builderek és
+    a route-konstansok is itt élnek, és mindkettő elmozdíthatja azt, amit a
+    navigációs őrök pinnelnek.
+    """
+    prefix = ROUTING_SOURCE_DIR.rstrip("/")
+    return sorted(
+        {
+            path
+            for path in allowed_paths
+            if path.rstrip("/") == prefix or path.startswith(prefix + "/")
+        }
+    )
+
+
+def existing_nav_guards(repo: Path) -> list[str]:
+    """A fában TÉNYLEGESEN meglévő navigációs őrök.
+
+    A predikátum így a repó mérhető igazságához kötött, nem egy beégetett
+    listához: ha az őr valaha átnevezésre kerül, a szabály nem követel
+    nemlétező fájlt — de a `NavGuardPredicateMatchesTreeTest` pirosra vált,
+    tehát a hiány nem marad némán.
+    """
+    return [path for path in NAV_GUARD_TESTS if (repo / path).is_file()]
 
 
 def queue_rows(repo: Path) -> list[tuple[str, str, str]]:
@@ -560,6 +617,85 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                 "és a szám-emelés a kör saját munkája legyen",
             )
         )
+
+    # S10 — a shell-destination navigációs őr (E13-R17/H3 önjavítás, ADR 0112,
+    # 2026-08-25). MÉRT ok: az E13-R08 óta a `test/app/navigation/` három őre
+    # pinneli, hogy az adaptív shell melyik route-ja melyik képernyő-TÍPUST
+    # rendereli — az öt destination (`adaptive_scaffold_test.dart:196–216`), a
+    # tizenegy alútvonal-adapter (`:223–235`), a tab-visszaállítás
+    # (`tab_state_restoration_test.dart:105,134`) és a tizenegy legacy redirect
+    # célja (`legacy_route_redirect_test.dart:156–166`). Egy kör, amelyik a
+    # `lib/app/routing/` forrását átírhatja, ezeket a TÍPUS-állításokat
+    # bármikor pirosra válthatja — az őrök viszont a kör `allowed_paths`-án
+    # kívül élnek, tehát az implementer hozzájuk sem nyúlhat: a kör H3-ban áll
+    # meg, és a felvételük az orchestrátornak TÁGÍTÁS (L478).
+    #
+    # SAJÁT MÉRÉS (az önjavító kör reprodukciója, `/tmp/ss-heal-probe-r17`,
+    # `main @ 52df92b3`): a bázis `flutter test test/app/navigation/` → `+33 All
+    # tests passed`; a shell HÁROM destination-builderét (`/today`, `/practice`,
+    # `/profile`) új hub-képernyőkre átkötve → `+30 -3 Some tests failed`, a
+    # három piros cella az `adaptive_scaffold_test.dart` A1-jében (kettő) és a
+    # `tab_state_restoration_test.dart`-ban (egy).
+    #
+    # A SÁV-SZINTŰ kiterjedés (L482 osztály): a Ch13 sáv HÚSZ hátralévő
+    # briefjéből egy sem sorolta fel a navigációs őrt, miközben három (R17,
+    # R23, R28) a routert is engedi. Körönként javítva ez három külön H3
+    # megállás, mindegyik emberi döntést kérve.
+    #
+    # A HAMIS RIASZTÁS elleni mércék:
+    #   * `status == "done"` → néma. A 18 routert engedő briefből 15 már
+    #     merge-elt, és 13 még az őr LÉTREJÖTTE (E13-R08) ELŐTT — ezek
+    #     visszamenőleges riasztások lennének (ugyanaz az elv, mint az S5/S7
+    #     `round_status != "done"` feltételénél);
+    #   * az őr LÉTEZÉSE a fában (`existing_nav_guards`) — a szabály nem
+    #     követel nemlétező fájlt;
+    #   * a fedettség a router SAJÁT `_matches` előtag-szemantikájával mérve
+    #     (`covered_by`), tehát a `test/app/navigation/` könyvtár-engedély
+    #     ugyanúgy elég, mint a három fájlútvonal.
+    #
+    # AMIT SZÁNDÉKOSAN NEM SZŰRÜNK: az E13-R16 (`done`) alakját — routert
+    # engedett, de nem destination-adaptert írt át, tehát zölden ment át őr
+    # nélkül. Egy ilyen kör MA feleslegesen kapná meg a teendőt. Ezt vállaljuk:
+    # a hamis riasztás ára két felsorolt teszt-fájl (a `gate_tests`-ben ráadásul
+    # színtiszta ERŐSÍTÉS), a hamis negatívé egy teljes H3 halt. A megkülönböztetés
+    # (átköti-e a kör valamelyik destination buildert) a brief PRÓZÁJÁBAN él,
+    # nem az `allowed_paths`-ban — gépi mércét nem lehet rá kötni.
+    routing_paths = routing_scope_paths(metadata.allowed_paths)
+    nav_guards = existing_nav_guards(repo)
+    round_status_for_s10 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    if routing_paths and nav_guards and round_status_for_s10 != "done":
+        missing = [
+            guard
+            for guard in nav_guards
+            if not (
+                covered_by(guard, metadata.allowed_paths)
+                and covered_by(guard, metadata.gate_tests)
+            )
+        ]
+        if missing:
+            listed_routing = ", ".join(f"`{path}`" for path in routing_paths)
+            listed_missing = ", ".join(f"`{path}`" for path in missing)
+            findings.append(
+                Finding(
+                    "strict",
+                    "S10",
+                    f"a kör a router forrását engedi ({listed_routing}), de a "
+                    f"shell-destination navigációs őr ({listed_missing}) nem szerepel "
+                    "egyszerre az `allowed_paths`-ban ÉS a `gate_tests`-ben — ezek az "
+                    "őrök route-onként PINNELIK a renderelt képernyő típusát, tehát "
+                    "egy destination-builder átkötése pirosra váltja őket, a "
+                    "felvételük viszont az orchestrátornak tágítás, azaz H3 (mérve: "
+                    "E13-R17 pre-flight, `flutter test test/app/navigation/` +33 → "
+                    "+30 -3 három destination átkötésével); vedd fel a "
+                    f"`{NAV_GUARD_DIR}` őrt mindkét listára, és a brief mondja ki, "
+                    "hogy a jogosultság PONTOSAN a lecserélt adapter típusának "
+                    "átírása — cella törlése, `skip`-je vagy gyengítése TILOS. Ha a "
+                    "kör bizonyíthatóan egyetlen destination buildert sem köt át, a "
+                    "§0.0 mondja ki ezt a mérést",
+                )
+            )
 
     return findings
 

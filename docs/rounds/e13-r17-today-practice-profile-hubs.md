@@ -28,6 +28,7 @@ allowed_paths = [
   "test/features/today/today_hub_test.dart",
   "test/features/today/hub_navigation_test.dart",
   "test/features/profile/profile_hub_test.dart",
+  "test/app/navigation/",
   "test/ui/goldens/",
   "test/ui/ui_inventory_test.dart",
   "docs/rounds/e13-r17-today-practice-profile-hubs.md",
@@ -36,6 +37,7 @@ gate_tests = [
   "test/features/today/today_hub_test.dart",
   "test/features/today/hub_navigation_test.dart",
   "test/features/profile/profile_hub_test.dart",
+  "test/app/navigation/",
   "test/ui/goldens/e13_r17_screens_golden_test.dart",
   "test/ui/ui_inventory_test.dart",
 ]
@@ -84,13 +86,50 @@ pirosra váltanának, ami a §0 szerint `blocked` lenne:
 viselkedést gyengíteni, cellát törölni vagy `skip`-elni **TILOS** — az a mérce
 meggyengítése, amit a gate-guard emberhez eszkalál.
 
-### R3 — keresztmetszeti tesztek (NEM kerültek listára — figyelmeztetés)
+### R3 — keresztmetszeti tesztek — a „nincs ilyen" MÉRVE HAMIS volt (javítva: H3 önjavító kör, ADR 0112, 2026-08-25)
 
-A kör fájára hivatkozó további widget-tesztek közös infrastruktúrán élnek
-(`test/app/**`, `test/core/**`, más feature-ek fái) — nincs ilyen. Ezeket a kör
-**NEM** szerkesztheti: ha egy elbukik, az `blocked` jelzés és célzott
-brief-revízió, nem csendes átírás. A körbe húzásuk a scope-fegyelem feladása
-lenne.
+> ⚠ **Ez a szakasz revideálva.** Az eredeti szöveg azt állította, hogy a kör
+> fájára hivatkozó keresztmetszeti tesztből „nincs ilyen". A H3 halt
+> pre-flightja és az önjavító kör SAJÁT reprodukciója ezt megcáfolta.
+
+**A mérés** (izolált klón `/tmp/ss-heal-probe-r17`, `main @ 52df92b3`,
+`tools/prepare-flutter-generated.sh` után; a kör MAGVA szimulálva: a shell
+HÁROM destination-builderét — `/today`, `/practice`, `/profile` — új
+hub-képernyőkre átkötve, a `practiceEnabled` kaput változatlanul hagyva):
+
+```
+~/flutter/bin/flutter test test/app/navigation/     # bázis
+→ 00:07 +33: All tests passed!
+
+~/flutter/bin/flutter test test/app/navigation/     # a három átkötés után
+→ 00:06 +30 -3: Some tests failed.
+```
+
+A három piros cella — mindhárom a kör ELKERÜLHETETLEN magja, nem
+implementációs mellékhatás:
+
+| # | Fájl | Cella | Mért hiba |
+|---|---|---|---|
+| 1 | `test/app/navigation/adaptive_scaffold_test.dart` | A1 — *the five destinations render their legacy adapter screens* | `Found 0 widgets with type "ProgressScreen"` (`/today`) |
+| 2 | `test/app/navigation/adaptive_scaffold_test.dart` | A1 — *each destination path is registered exactly once: /practice resolves to the shelled adapter…* | `PracticeHubScreen` nem található |
+| 3 | `test/app/navigation/tab_state_restoration_test.dart` | *pushing a sub-route, switching tabs, and switching back…* | `PracticeHubScreen` nem található (`:105`, `:134`) |
+
+`test/app/navigation/legacy_route_redirect_test.dart` a MÉRÉS SZERINT **zöld
+marad** (a tizenegy legacy redirect célja változatlan) — a listára a
+`test/app/navigation/` könyvtár-előtaggal együtt kerül fel, de **hozzá nyúlni
+nem kell, és nem is szabad**: ha ez pirosra vált, az valódi regresszió.
+
+**A JOGOSULTSÁG PONTOSAN** a lecserélt destination-adapter TÍPUSÁNAK átírása a
+fenti három cellában (`ProgressScreen` → az új Today-hub, `PracticeHubScreen` →
+az új Practice-terület-hub, `SettingsScreen` → az új Profile-hub). Minden más
+állítás — a primary navigation megléte (`NavigationBar`/`NavigationRail`), a
+tizenegy alútvonal-adapter, a tab-visszaállítás mechanikája, a Stage-route
+rejtés, a redirect-aciklikusság — **érintetlen marad**. Cella törlése, `skip`-je,
+küszöb-lazítása vagy a `find.byType` állítás gyengítése **TILOS**: az a mérce
+meggyengítése, amit a gate-guard emberhez eszkalál.
+
+Ami továbbra is a listán KÍVÜL van (`test/core/**`, más feature-ek fái): ha egy
+elbukik, az `blocked` jelzés és célzott brief-revízió, nem csendes átírás.
 
 ### R4 — a képernyő-leltár őre (H3 önjavító kör, ADR 0112, 2026-08-25)
 
@@ -117,6 +156,39 @@ nem — a predikátumot ugyanez az önjavító kör javította, regressziós tes
 leltárteszt minden más állítása érintetlen marad. Kerülőút (képernyő-átnevezés
 vagy a `tool/ui_inventory.dart` szabályának lazítása) **TILOS** — az a mérce
 meghamisítása.
+
+### R5 — a `/practice` destination `practiceEnabled` kapuja MARAD (döntés, H3 önjavító kör, 2026-08-25)
+
+A H3 pre-flight nyitva hagyott egy tervezési kérdést, és az önjavító körnek
+kellett eldöntenie. **A döntés: a kör NEM nyúl a kapuhoz.**
+
+**A mai állapot.** A shell `/practice` destinationje az `app_router.dart`-ban
+`if (practiceEnabled)` mögött van, és ez az E13-R08 **D15 javító körének
+szándékos** döntése volt (review MINOR-1): *„an adaptive-shell navigation flag
+must not itself grant access to a distinct product rollout."* Az
+`adaptive_scaffold_test.dart` két cellája pinneli is — köztük az A7
+(`practiceEngineV2Enabled: false` → `/practice` a `/today`-re esik).
+
+**Miért marad.** A kapu elmozdítása egy LEZÁRT kör mért viselkedésének
+megváltoztatása lenne (H2 osztály), nem adapter-csere — a saját reprodukcióm
+szerint a kapu érintetlenül hagyásával a kör magja **három** cellát vált
+pirosra, a kapu elmozdításával **négyet**. Ez a kör a Ch13 tartalmi migrációja,
+nem a shell rollout-politikájának újratárgyalása; a jogosultsága ezért PONTOSAN
+az adapter-típus átírása marad.
+
+**A nyitott termék-kérdés (átadva, nem eltemetve).** A
+`FeatureFlags.forEnvironment` mérve `practiceEngineV2Enabled: nonProd`, azaz
+**production alatt `false`**, miközben az `adaptiveShellEnabled` MINDEN
+környezetben `false`. Amikor tehát a shellt élesítik, egy ELSŐDLEGES
+nav-destination hiányozhat: a `/practice` a `/today`-re esne vissza. Ez a
+Practice **terület-hub** (navigációs felület) és a Practice **Engine V2**
+(termék-rollout) összecsúszása. A §3 „képesség-kapui" a hubon BELÜLI
+katalógus-belépőkre vonatkoznak — azok ettől függetlenül a kör dolgai.
+
+**Aki eldönti:** a shell-flag bekapcsolását vivő kör (Ch13 zárás, E13-R36) vagy
+egy önálló ADR — nem ez a kör és nem az implementer csendes választása. Az
+implementer a mai kaput **változatlanul** hagyja; ha a hub tartalma
+elérhetetlenné válna emiatt, az **`blocked` jelzés**, nem kerülőút.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -253,8 +325,12 @@ harmadik szint mögé → az **A2** cellának PIROSNAK kell lennie → állítsd
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/today/today_hub_test.dart test/features/today/hub_navigation_test.dart test/features/profile/profile_hub_test.dart test/ui/goldens/e13_r17_screens_golden_test.dart test/ui/ui_inventory_test.dart
+tools/round-gate.sh test/features/today/today_hub_test.dart test/features/today/hub_navigation_test.dart test/features/profile/profile_hub_test.dart test/app/navigation/ test/ui/goldens/e13_r17_screens_golden_test.dart test/ui/ui_inventory_test.dart
 ```
+
+A `test/app/navigation/` a §0.0/R3 szerinti shell-destination őr: a három
+átírandó cellán kívül minden állítása **zölden** kell maradjon — a
+`legacy_route_redirect_test.dart` érintetlenül.
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
 minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két

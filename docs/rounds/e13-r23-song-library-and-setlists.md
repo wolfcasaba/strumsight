@@ -27,6 +27,7 @@ allowed_paths = [
   "test/features/songs/song_library_test.dart",
   "test/features/songs/song_asset_state_test.dart",
   "test/features/songs/setlist_list_test.dart",
+  "test/app/navigation/",
   "test/ui/goldens/",
   "test/ui/ui_inventory_test.dart",
   "docs/rounds/e13-r23-song-library-and-setlists.md",
@@ -35,6 +36,7 @@ gate_tests = [
   "test/features/songs/song_library_test.dart",
   "test/features/songs/song_asset_state_test.dart",
   "test/features/songs/setlist_list_test.dart",
+  "test/app/navigation/",
   "test/ui/goldens/e13_r23_screens_golden_test.dart",
   "test/ui/ui_inventory_test.dart",
 ]
@@ -82,13 +84,35 @@ pirosra váltanának, ami a §0 szerint `blocked` lenne:
 viselkedést gyengíteni, cellát törölni vagy `skip`-elni **TILOS** — az a mérce
 meggyengítése, amit a gate-guard emberhez eszkalál.
 
-### R3 — keresztmetszeti tesztek (NEM kerültek listára — figyelmeztetés)
+### R3 — keresztmetszeti tesztek — a shell-destination őr FELVÉVE (H3 önjavító kör, ADR 0112, 2026-08-25)
 
-A kör fájára hivatkozó további widget-tesztek közös infrastruktúrán élnek
-(`test/app/**`, `test/core/**`, más feature-ek fái) — nincs ilyen. Ezeket a kör
-**NEM** szerkesztheti: ha egy elbukik, az `blocked` jelzés és célzott
-brief-revízió, nem csendes átírás. A körbe húzásuk a scope-fegyelem feladása
-lenne.
+> ⚠ **Ez a szakasz revideálva.** Az eredeti szöveg „nincs ilyen"-t állított. A
+> sáv-szintű mérés szerint ez **hamis** minden olyan Ch13 körre, amelyik a
+> routert is engedi — ez a kör ilyen (`lib/app/routing/` az `allowed_paths`-on).
+
+Az E13-R08 óta a `test/app/navigation/` **három** őre route-onként PINNELI,
+melyik képernyő-TÍPUS renderelődik: az öt destination
+(`adaptive_scaffold_test.dart:196–216`), a tizenegy alútvonal-adapter (`:223–235`),
+a tab-visszaállítás (`tab_state_restoration_test.dart`) és a tizenegy legacy
+redirect célja (`legacy_route_redirect_test.dart:156–166`). Ez a kör a **Songs
+terület** destinationjét és alútvonalát migrálja, amiket ma a
+`SongListScreen`, illetve a `SetlistListScreen` típus pinnel — a
+destination-builder átkötése tehát pirosra váltja őket.
+
+MÉRT precedens ugyanezen az őrön (E13-R17, izolált klón `main @ 52df92b3`):
+`flutter test test/app/navigation/` a bázison `+33 All tests passed`, három
+destination-builder átkötése után `+30 -3`. Az őr felvétele az orchestrátornak
+tágítás lenne, azaz H3 ([L478](../LESSONS.md)) — ezért kerül a listára MOST.
+
+**A jogosultság PONTOSAN a lecserélt adapter TÍPUSÁNAK átírása** a ténylegesen
+érintett cellákban. Minden más állítás — primary navigation megléte, a többi
+adapter, a tab-visszaállítás mechanikája, a redirect-aciklikusság — érintetlen
+marad; cella törlése, `skip`-je vagy gyengítése **TILOS**. A kör saját
+pre-flightja mérje ki (`tools/round-gate.sh … test/app/navigation/`), PONTOSAN
+melyik cellák pirosodnak — a lista tágítása nélkül, mert az őr már rajta van.
+
+Ami továbbra is a listán KÍVÜL van (`test/core/**`, más feature-ek fái): ha egy
+elbukik, az `blocked` jelzés és célzott brief-revízió, nem csendes átírás.
 
 ### R4 — a képernyő-leltár őre (H3 önjavító kör, ADR 0112, 2026-08-25)
 
@@ -245,7 +269,7 @@ vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart test/ui/goldens/e13_r23_screens_golden_test.dart test/ui/ui_inventory_test.dart
+tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart test/app/navigation/ test/ui/goldens/e13_r23_screens_golden_test.dart test/ui/ui_inventory_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
