@@ -667,4 +667,43 @@ kötés betartva). `find lib/features -name '*_screen.dart' | wc -l` → **84**
 | A7 | 2.0 text scale + landscape, nincs overflow (`tester.takeException()` null) | ZÖLD |
 | A8 | 4 golden PNG (tuner + metronome × compact/scale2) felvéve és commitolva | ZÖLD |
 
+### 10.7 Javító kör (review MINOR-1, MINOR-2)
+
+**MINOR-1 — az 1. feloldást választottam** (`lib/features/tuner/screens/tuner_screen.dart`,
+`_TunerFeedback.build`): az `unstable` ág mostantól ugyanazt az irány-ikont/
+-szöveget mutatja elsődleges sorként, mint az `outOfTune` ág (`cents`-ből
+számolt nyíl + „N cents sharp/flat"), a `Hold steady…` pedig másodlagos,
+halványabb (`palette.muted`, 12px) sorként jelenik meg alatta (`Column`).
+Indoklás: a review §5.3 próbája pontosan azt a pillanatot mérte (a kulcs
+tekerése, `TunerStability.jumpThreshold = 12` fölötti ugrás), amikor az irány
+a legfontosabb — a 2. feloldás (a hiányt cellával kikötni) ezt a hiányt
+véglegesítette volna, nem oldotta volna fel. Új teszt-cella:
+`test/features/tuner/tuner_ui_mapping_test.dart` — `'unstable: the direction
+stays visible as primary text, with "Hold steady…" as a secondary line'`
+(két emit, 10 → 40 cent ugyanazon a hangnéven, tehát `unstable`; a cella
+`'40 cents sharp'` ÉS `'Hold steady…'` együttes jelenlétét méri). A golden
+teszt (`e13_r19_screens_golden_test.dart`) `cents: 0` egyetlen leolvasást emittál
+(`inTune` állapot, nincs ugrás) — az `unstable` ág nem látszik rajta, ezért a
+golden PNG-k **nem változtak**, újrafelvétel nem szükséges (mérve: a §7 gate
+golden-lépése zöld a meglévő PNG-kkel).
+
+**MINOR-2 — a `dispose()`-os utat választottam**
+(`lib/features/tuner/providers/reference_tone_provider.dart`,
+`RealReferenceTonePlayer.dispose()`): a `dispose()` most előbb `await stop()`-ot
+hív, utána `_player?.dispose()`-t — a handoff §10.1 „mid-tone leállás" állítása
+ezzel szó szerint igazzá vált. Mivel a `_player` lusta (csak `play()`-en
+konstruálódik), a valódi `AudioPlayer`-en át a sorrendet headless tesztben nem
+lehet lefedni platform-channel-crash nélkül (lásd c0a11c24 handoffja) — ezért a
+`tuner_route_cleanup_test.dart` `_RecordingTonePlayer` fake-jét (ami az
+interfészt tükrözi) igazítottam a valódi kontraktushoz: a fake `dispose()`-a
+is előbb `stop()`-ot hív. Új assert ugyanabban a meglévő A5 cellában
+(`'leaving Tuner disposes the reference-tone player even mid-tone (A5)'`):
+`expect(tone.stopCalls, 1, …)` a `tone.disposed` mellett — ez pirosra vált,
+ha bárki a jövőben visszavágja a `stop()`-ot a `dispose()`-ból.
+
+**Gate — csonkítatlan, előtérben:** a §7 gate mind a 22 lépése ZÖLD
+(változatlan parancs). Ezen felül külön hívásban: `test/features/tuner/`
+**62/62 zöld** (61→62, az új MINOR-1 cellával), `test/features/metronome/`
+**23/23 zöld** (változatlan — a MINOR-2 javítás nem érinti a metronóm fát).
+
 ## 11. Review — a Claude tölti ki
