@@ -18411,3 +18411,39 @@ git-csapdával együtt — a
 
 **Őrteszt:** nincs — a környezet képessége nem kör-hatáskörből tesztelhető; a
 mérés reprodukálható a fenti lapon felsorolt parancsokkal.
+
+## L482 — Egy batch-ben előre megírt brief-sorozat EGY defektje a TELJES sávot megállítja: a hibaosztályt sáv-szinten kell kimérni, nem körönként (E13-R16…R36, 2026-08-25)
+
+**Mit mértünk.** Az E13-R16 pre-flightja megtalálta, hogy a brief a GENERÁLT
+`lib/l10n/app_{en,hu}.arb`-ot sorolta fel ARB-forrásként ([L478](#l478) ötödik
+előfordulása). A kör feloldása után egyetlen `awk`-os mérés a többi 19 briefen
+kimutatta, hogy **MIND ugyanezt hordozza** (`agg=2, frag=0, base=0`), és mind
+képernyő-migrációs kör, tehát mind új szöveget igényel. A lánc körönként H3-ba
+futott volna: **19 megállás sorban**, mindegyik emberi döntést kérve.
+
+**A tanulság nem a hibáról szól, hanem a MÉRÉS HATÓKÖRÉRŐL.** Az L478 egy
+körre nézve fogalmazott, és a HANDOFF §6 is csak a KÖVETKEZŐ körre jelezte
+előre a csapdát. Ha egy sáv briefjei EGY batchben, EGY sablonból, EGY napon
+készültek (itt: 2026-08-15), akkor a defektjeik is közösek — a batch a hibát
+is sokszorozza. **Egy körben talált brief-defektnél tehát az első lépés nem a
+javítás, hanem ugyanannak a mintának a lefuttatása a sáv ÖSSZES nyitott
+briefjén.** A mérés két perc; a körönkénti felfedezés 19 megállás.
+
+**Egy második, csak sáv-szinten látható defekt.** Ugyanez a vizsgálat hozta ki,
+hogy az `E13-R16…R35` MIND a `test/ui/goldens/` könyvtárba ír, a záró
+vizuális regressziós kör (`E13-R36`) viszont csak a `test/goldens/`-t engedte —
+egy olyan utat, ami a lánc végigfutása UTÁN sem létezne. A fejezet
+golden-kapuja tehát **némán semmit sem mért volna**. Ez a hibafajta
+**körönkénti** pre-flighttal elvileg sem található meg: két brief EGYMÁSHOZ
+mért viszonya a lelet, nem egyik sem önmagában.
+
+**Amit a feloldás NEM tett:** nem sablonozott. Körönként mérve dőlt el a
+forrás-szegmens a tényleges kulcs-feloldásból (`tuner` 14/14 → fragmentum;
+`practice` 236/236 → `base`), és a felvett tesztek is körönként, KIZÁRÓLAG a
+kör saját feature-fájáról kerültek a listára — a keresztmetszeti tesztek
+(`test/app/**`, `test/core/**`) szándékosan kimaradtak, mert a körbe húzásuk a
+scope-fegyelem feladása lenne.
+
+**Őrteszt:** nincs — a brief-írás oldali szabály nem kör-hatáskörből
+tesztelhető; a mérés reprodukálható az `allowed_paths` blokk `lib/l10n/`
+sorainak sáv-szintű megszámolásával (`agg` / `frag` / `base`).

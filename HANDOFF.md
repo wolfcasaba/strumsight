@@ -8644,6 +8644,13 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
+> **A Ch13 sáv MINDEN köre (R16–R36) át van pre-flightolva** (2026-08-25,
+> `9acd14e`): mind a 20 brief `§0.0` revíziót kapott, a `brief-lint --level
+> strict` mindegyiken tiszta. A sáv-szintű mérés 19 körben ugyanazt az
+> ARB-csapdát találta (L478 hibaosztály), az R36-ban pedig egy csak
+> sáv-szinten látható golden-útvonal eltérést — [L482](docs/LESSONS.md).
+> **A briefek indításra készek; körönként újra felderíteni felesleges.**
+
 > **Ha ezt REMOTE Claude Code konténerben olvasod: a lánc onnan NEM indítható.**
 > Két független blokkoló (nincs Flutter SDK; a `gh` nem hitelesít), a mért
 > részletek és az onnan mégis elvégezhető munka:
