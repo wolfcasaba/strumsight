@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E13-R17/H3] KÉSZ — a shell-destination navigációs őr: `S10` brief-lint szabály + a Ch13 sáv három routert engedő körének eltakarítása — PR [#455](https://github.com/wolfcasaba/strumsight/pull/455) (2026-08-25, L485)
+
+Az **E13-R17** az orchestrátor pre-flightjában állt meg (**H3**),
+implementer-dispatch nélkül: a brief §0.0/R3 „nincs keresztmetszeti teszt"
+állítása **mérve hamis** volt.
+
+**Saját reprodukció** (izolált klón `/tmp/ss-heal-probe-r17`, `main @ 52df92b3`,
+`tools/prepare-flutter-generated.sh` után; a kör magját szimulálva: a shell
+három destination-builderét — `/today`, `/practice`, `/profile` — új
+hub-képernyőkre átkötve, a `practiceEnabled` kaput változatlanul hagyva):
+
+```
+~/flutter/bin/flutter test test/app/navigation/   # bázis        -> +33 All tests passed
+~/flutter/bin/flutter test test/app/navigation/   # átkötés után -> +30 -3 Some tests failed
+```
+
+A három piros cella az `adaptive_scaffold_test.dart` A1-jében (kettő) és a
+`tab_state_restoration_test.dart`-ban (egy) — mind `Found 0 widgets with type
+"<LegacyScreen>"`. Az őrök a kör `allowed_paths`-án kívül élnek, a felvételük
+az orchestrátornak tágítás ([L478](docs/LESSONS.md)) → H3.
+
+**A javítás két lépése** (az [L483](docs/LESSONS.md) mintája: a hibás mérőműszer
+és a már kimért defekt két külön lépés):
+
+1. **`tools/brief-lint.py` `S10`** — ha egy brief a `lib/app/routing/` forrását
+   engedi, követelje a `test/app/navigation/` őrt az `allowed_paths`-ban ÉS a
+   `gate_tests`-ben. A fedettség a router SAJÁT `_matches` előtag-szemantikájával
+   mérve. Hamis riasztás ellen: `status != "done"` + az őr létezése a fában.
+   **MÉRVE a korpuszon:** 18 brief engedi a routert, 15 `done` (13 még az őr
+   létrejötte, az E13-R08 ELŐTT merge-elt) → a szabály pontosan a **3 `pending`**
+   briefre lő (`e13-r17`, `e13-r23`, `e13-r28`), **0 `done` körre**.
+2. **A defekt eltakarítása** mindhárom briefen: `allowed_paths` + `gate_tests` +
+   §7 gate-parancs + revideált §0.0/R3 a MÉRT cellalistával. A jogosultság
+   **PONTOSAN** a lecserélt adapter TÍPUSÁNAK átírása.
+
+**Egy tervezési döntés — átadva, nem meghozva (R17 §0.0/R5).** A `/practice`
+destination `if (practiceEnabled)` kapuja **MARAD**: elmozdítása egy lezárt kör
+(E13-R08 D15, review MINOR-1) mért viselkedését írná át (H2 osztály), és egy
+NEGYEDIK cellát is pirosra váltana. A nyitott termék-kérdés —
+`FeatureFlags.forEnvironment` szerint `practiceEngineV2Enabled: nonProd`, tehát
+production alatt egy elsődleges nav-destination hiányozhat a shell élesítésekor
+— a shell-flag bekapcsolását vivő körhöz vagy önálló ADR-hez került.
+
+**A mérce nem gyengült:** 0 teszt törölve/`skip`-elve, 0 küszöb lazítva, a
+`tools/round-gate.sh` és a `.github/workflows/` érintetlen; a `gate_tests`
+bővítése tiszta erősítés (a három navigációs őr mostantól a körök lokális
+kapujában is fut).
+
+**Evidencia:** regressziós teszt `tools/tests/test_brief_nav_guard_scope.py` — a
+javítás ELŐTT `8 failed, 9 passed` a `52df92b3` fán (`/tmp/ss-heal-red` klón),
+UTÁNA zöld; a négy brief-lint teszttel együtt **46 passed**; `brief-lint --level
+strict` mind a három revideált briefen „nincs lelet"; Router CI a merge SHA-n
+`success`.
+
+**A lánc folytatása:** az E13-R17 sorra kerül újra, a `main`-ről már a
+revideált briefet olvasva ([L484](docs/LESSONS.md): a javítás a `main`-en
+érkezik meg).
+
 ## ✅ E13-R16 KÉSZ — Launch, recovery és onboarding migráció — PR [#453](https://github.com/wolfcasaba/strumsight/pull/453), squash `8e530735` (2026-08-25)
 
 A Ch13 **első képernyő-migrációs köre**. Implementer `sonnet-impl` (Claude

@@ -18593,3 +18593,72 @@ upstream-szinkron kötelezettségét méri a folytatáskori úton; a brief-oldal
 hibaosztályt (`S9` könyvtár-előtag) pedig
 `tools/tests/test_brief_ui_inventory_scope.py::test_no_done_round_is_flagged`
 tartja zárva.
+
+## L485 — Az őr, amit a brief nem lát: a `lib/app/routing/` engedélye ÖNMAGÁBAN kevés, ha a navigációs őrök a listán kívül pinnelik a destination-adapterek TÍPUSÁT (E13-R17/H3 önjavítás, 2026-08-25)
+
+**Mit mértem.** Az E13-R17 (Today/Practice/Profile hubok) az orchestrátor
+pre-flightjában állt meg, **implementer-dispatch nélkül**: a brief §0.0/R3
+kijelentette, hogy keresztmetszeti tesztből „nincs ilyen". Saját reprodukció
+izolált klónban (`main @ 52df92b3`, `tools/prepare-flutter-generated.sh` után),
+a kör magját szimulálva — a shell három destination-builderét (`/today`,
+`/practice`, `/profile`) új hub-képernyőkre átkötve, a `practiceEnabled` kaput
+változatlanul hagyva:
+
+```
+$ ~/flutter/bin/flutter test test/app/navigation/     # bázis
+00:07 +33: All tests passed!
+$ ~/flutter/bin/flutter test test/app/navigation/     # a három átkötés után
+00:06 +30 -3: Some tests failed.
+```
+
+A három piros cella az `adaptive_scaffold_test.dart` A1-jében (kettő) és a
+`tab_state_restoration_test.dart`-ban (egy) — mind `Found 0 widgets with type
+"<LegacyScreen>"`. Az őrök a kör `allowed_paths`-án kívül élnek, a felvételük
+pedig az orchestrátornak **tágítás**, azaz H3 ([L478](#l478)).
+
+**A tanulság nem az, hogy „a brief hazudott".** A brief szerzője azt nézte
+meg, ami a kör SAJÁT feature-fájára hivatkozik (`test/features/**`) — ott
+tényleg nincs semmi, mert a hubok fája még nem létezik. Az őr viszont nem a
+képernyőre hivatkozik, hanem a **route → képernyő-TÍPUS** kötésre, és a
+`test/app/navigation/` alatt él. **A keresztmetszeti kockázatot nem a
+munkaterületről kell visszakeresni, hanem abból, hogy MIT ÍR ÁT a kör**: aki a
+routert engedi, az a route-adapterek pinjeit is elmozdíthatja.
+
+**A defekt sáv-szintű volt, a javítás is (L482 osztály).** A Ch13 sáv HÚSZ
+hátralévő briefjéből egy sem sorolta fel a navigációs őrt, miközben mérve
+**három** (R17, R23, R28) engedi a routert. Körönként javítva ez három külön
+H3 megállás, mindegyik emberi döntést kérve. A javítás ezért mindhárom briefen
+egyszerre landolt: `allowed_paths` + `gate_tests` + §7 gate-parancs +
+revideált §0.0/R3 a MÉRT cellalistával.
+
+**Két különböző hibaosztály ugyanazon a sávon — a mérőműszer csak azt találja
+meg, amire kérdeztek.** Az L483 (`S9`, képernyő-leltár) önjavítása ugyanezt a
+20 briefet nézte át pár órával korábban, és „tisztának" találta őket a saját
+kérdésére nézve. Egy sáv-szintű pre-flight tehát nem egyszeri esemény: minden
+ÚJ hibaosztálynál újra le kell futtatni a teljes sávon.
+
+**A hamis riasztás mércéje itt a sor `status` oszlopa.** 18 brief engedi a
+routert, ebből **15 `done`** — és 13 még azelőtt merge-elt, hogy az E13-R08 a
+navigációs őröket egyáltalán megírta volna. A `status != "done"` szűrő nélkül
+a szabály 15 visszamenőleges riasztást adna; vele pontosan a 3 `pending`
+briefre lő. Amit SZÁNDÉKOSAN nem szűrünk: az E13-R16 alakját (routert engedett,
+de destination-adaptert nem írt át, tehát őr nélkül is zöld volt) — a
+megkülönböztetés a brief PRÓZÁJÁBAN él, gépi mércét nem lehet rá kötni, és a
+hamis riasztás ára két felsorolt teszt-fájl, a hamis negatívé egy teljes H3.
+
+**Egy tervezési kérdés, amit az önjavítás NEM oldott meg, csak átadott.** A
+shell `/practice` destinationje `if (practiceEnabled)` mögött van (E13-R08 D15,
+szándékos), miközben `FeatureFlags.forEnvironment` szerint
+`practiceEngineV2Enabled: nonProd` — production alatt tehát egy ELSŐDLEGES
+nav-destination hiányozna a shell élesítésekor. A kapu elmozdítása egy lezárt
+kör mért viselkedésének megváltoztatása (H2 osztály) lenne, és a mérésem
+szerint egy NEGYEDIK cellát is pirosra váltana; ezért a döntés: a kör a kaput
+**változatlanul** hagyja, a kérdés a shell-flag bekapcsolását vivő körhöz (vagy
+egy önálló ADR-hez) került, a briefben kimondva. **Az önjavító kör hatásköre az
+akadály megszüntetése, nem a termékdöntés meghozatala.**
+
+**Őrteszt:** `tools/tests/test_brief_nav_guard_scope.py` — az `S10` szabály
+mérce-mátrixa (a javítás előtt 8 cella PIROS), a fához kötött predikátum-próba
+(`NavGuardPredicateMatchesTreeTest`: minden deklarált őr létezik ÉS pinnel
+route → képernyő-típus kötést), plusz a korpusz-mérce
+`RealBriefCorpusTest::test_no_done_round_is_flagged`.
