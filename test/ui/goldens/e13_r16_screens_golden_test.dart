@@ -17,8 +17,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/app/bootstrap/launch_screen.dart';
 import 'package:strumsight/app/bootstrap/recovery_screen.dart';
 import 'package:strumsight/core/audio/audio_providers.dart';
+import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
 import 'package:strumsight/core/platform/microphone_permission.dart';
-import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/onboarding/first_win_engine.dart';
 import 'package:strumsight/features/onboarding/first_win_providers.dart';
 import 'package:strumsight/features/onboarding/screens/first_win_stage_screen.dart';
@@ -50,7 +50,7 @@ Future<void> _pump(
       overrides: overrides,
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark(),
+        theme: SsDarkTheme.data(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         builder: (context, child) => MediaQuery(
