@@ -24,8 +24,17 @@ allowed_paths = [
   "lib/core/design_system/components/music/ss_tempo_display.dart",
   "lib/core/design_system/components/music/ss_signal_quality_indicator.dart",
   "lib/core/design_system/public.dart",
+  "lib/l10n/base/app_en.arb",
+  "lib/l10n/base/app_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
+  "test/features/live/chord_timeline_golden_test.dart",
+  "test/features/live/chord_timeline_test.dart",
+  "test/features/live/expected_hint_cleared_on_live_test.dart",
+  "test/features/live/live_background_test.dart",
+  "test/features/live/live_lab_panel_test.dart",
+  "test/features/live/live_screen_test.dart",
+  "test/features/live/live_widgets_test.dart",
   "test/features/live/live_stage_test.dart",
   "test/features/live/live_mic_release_test.dart",
   "test/features/live/live_announcement_throttle_test.dart",
@@ -40,6 +49,60 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 BRIEF-REVÍZIÓ — 2026-08-25, batch pre-flight (E13-R17…R35)
+
+A brief 2026-08-15-én készült; ez a pre-flight `main @ 41fbd40` ellen mért.
+**Visszakeresett előzmény:** [L478](../LESSONS.md) (a pre-flight csak szűkíthet;
+a tágítás H3), [ADR 0307 §4](../adr/0307-parallel-round-execution.md) (a
+`lib/l10n/app_*.arb` GENERÁLT aggregátum, a forrás a `base/` és a
+`features/` szegmens), [L481](../LESSONS.md) (a lánc remote konténerből nem
+indítható). A hibaosztályt a **teljes Ch13 sávon** mérte ki egy batch-vizsgálat:
+az R17–R35 MIND a generált aggregátumot sorolta fel forrásként (`agg=2, frag=0`).
+
+**Kockázat = high, indoklás:** a Live Stage a mikrofon-erőforrás (authorization) életciklusát vezérli, a jel-minőség kijelzés pedig a felismerés igazmondását közvetíti.
+
+### R1 — `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum → a FORRÁS a szegmens
+
+A kör fája ma **13** l10n-kulcsot használ, és mind feloldható: `app` = 13 kulcs.
+
+A kör ezért **nem tudott volna egyetlen szöveget sem írni** a saját listáján
+belül. Feloldás — H3 lista-tágítás, **user-engedéllyel (2026-08-25)**, a
+lehető legszűkebb alakban:
+
+- `live` → nincs saját fragmentuma, a kulcsai a `base/app_*.arb` szegmensben élnek
+
+Az aggregátum a listán MARAD, de **kizárólag generált kimenetként**
+(`dart run tool/gen_l10n_segments.dart --write`); a merge-elt precedens
+egységesen a forrást ÉS a regenerált aggregátumot is commitolja (E09-R26
+`df0ad3dd`, E13-R12 `376b8a1d`, E13-R10 `b11ab2ed`). **Új fragmentum NEM
+készül**, ezért a `test/l10n/arb_parity_test.dart` beégetett szegmens-listáját
+sem kell bővíteni — a felvett források mind szerepelnek benne.
+
+### R2 — a kör SAJÁT feature-fáján élő, ma zöld widget-tesztek (FELVÉVE)
+
+Ezek közvetlenül a migrálandó képernyőkre állítanak, tehát a migráció után
+pirosra váltanának, ami a §0 szerint `blocked` lenne:
+
+  - `test/features/live/chord_timeline_golden_test.dart`
+  - `test/features/live/chord_timeline_test.dart`
+  - `test/features/live/expected_hint_cleared_on_live_test.dart`
+  - `test/features/live/live_background_test.dart`
+  - `test/features/live/live_lab_panel_test.dart`
+  - `test/features/live/live_screen_test.dart`
+  - `test/features/live/live_widgets_test.dart`
+
+**A jogosultság szűk:** a teszteket az ÚJ widgetekre kell ráállítani. A lefedett
+viselkedést gyengíteni, cellát törölni vagy `skip`-elni **TILOS** — az a mérce
+meggyengítése, amit a gate-guard emberhez eszkalál.
+
+### R3 — keresztmetszeti tesztek (NEM kerültek listára — figyelmeztetés)
+
+A kör fájára hivatkozó további widget-tesztek közös infrastruktúrán élnek
+(`test/app/**`, `test/core/**`, más feature-ek fái) — 27 ilyen fájl van. Ezeket a kör
+**NEM** szerkesztheti: ha egy elbukik, az `blocked` jelzés és célzott
+brief-revízió, nem csendes átírás. A körbe húzásuk a scope-fegyelem feladása
+lenne.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -90,7 +153,9 @@ képernyők migrációja · `docs/adr/**`, `tools/**`, `.github/**`.
 | `components/music/ss_tempo_display.dart` | **ÚJ** |
 | `components/music/ss_signal_quality_indicator.dart` | **ÚJ** |
 | `public.dart` | az export bővítése |
-| `lib/l10n/app_{en,hu}.arb` | az állapot-szövegek |
+| `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — az állapot-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
+| `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
+| `test/features/…` (7 meglévő teszt) | ma zöld, a migrált képernyőkre állítandó — lásd §0.0 R2 |
 | `test/features/live/*_test.dart` (3) | a §6 cellái |
 | `docs/rounds/e13-r18-…md` | a §10 handoff |
 

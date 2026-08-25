@@ -20,6 +20,8 @@ allowed_paths = [
   "lib/features/community/profile/",
   "lib/features/community/feed/",
   "lib/features/community/posts/",
+  "lib/l10n/features/community_en.arb",
+  "lib/l10n/features/community_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
   "test/features/community/community_gate_test.dart",
@@ -38,6 +40,54 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 BRIEF-REVÍZIÓ — 2026-08-25, batch pre-flight (E13-R17…R35)
+
+A brief 2026-08-15-én készült; ez a pre-flight `main @ 41fbd40` ellen mért.
+**Visszakeresett előzmény:** [L478](../LESSONS.md) (a pre-flight csak szűkíthet;
+a tágítás H3), [ADR 0307 §4](../adr/0307-parallel-round-execution.md) (a
+`lib/l10n/app_*.arb` GENERÁLT aggregátum, a forrás a `base/` és a
+`features/` szegmens), [L481](../LESSONS.md) (a lánc remote konténerből nem
+indítható). A hibaosztályt a **teljes Ch13 sávon** mérte ki egy batch-vizsgálat:
+az R17–R35 MIND a generált aggregátumot sorolta fel forrásként (`agg=2, frag=0`).
+
+**Kockázat = high, indoklás:** a közösségi feed IDEGEN felhasználók tartalmát rendereli — prompt-injection és megbízhatatlan-tartalom felület.
+
+### R1 — `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum → a FORRÁS a szegmens
+
+A kör fájából `lib/features/community/profile/`, `lib/features/community/feed/`, `lib/features/community/posts/` **még nem létezik** — a képernyőket ez a kör hozza létre, tehát MINDEN szövege új.
+
+A kör ezért **nem tudott volna egyetlen szöveget sem írni** a saját listáján
+belül. Feloldás — H3 lista-tágítás, **user-engedéllyel (2026-08-25)**, a
+lehető legszűkebb alakban:
+
+- `community` → a MÁR LÉTEZŐ `features/community_*.arb` fragmentum
+
+Az aggregátum a listán MARAD, de **kizárólag generált kimenetként**
+(`dart run tool/gen_l10n_segments.dart --write`); a merge-elt precedens
+egységesen a forrást ÉS a regenerált aggregátumot is commitolja (E09-R26
+`df0ad3dd`, E13-R12 `376b8a1d`, E13-R10 `b11ab2ed`). **Új fragmentum NEM
+készül**, ezért a `test/l10n/arb_parity_test.dart` beégetett szegmens-listáját
+sem kell bővíteni — a felvett források mind szerepelnek benne.
+
+### R2 — a kör SAJÁT feature-fáján élő, ma zöld widget-tesztek (FELVÉVE)
+
+Ezek közvetlenül a migrálandó képernyőkre állítanak, tehát a migráció után
+pirosra váltanának, ami a §0 szerint `blocked` lenne:
+
+  - nincs ilyen.
+
+**A jogosultság szűk:** a teszteket az ÚJ widgetekre kell ráállítani. A lefedett
+viselkedést gyengíteni, cellát törölni vagy `skip`-elni **TILOS** — az a mérce
+meggyengítése, amit a gate-guard emberhez eszkalál.
+
+### R3 — keresztmetszeti tesztek (NEM kerültek listára — figyelmeztetés)
+
+A kör fájára hivatkozó további widget-tesztek közös infrastruktúrán élnek
+(`test/app/**`, `test/core/**`, más feature-ek fái) — nincs ilyen. Ezeket a kör
+**NEM** szerkesztheti: ha egy elbukik, az `blocked` jelzés és célzott
+brief-revízió, nem csendes átírás. A körbe húzásuk a scope-fegyelem feladása
+lenne.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -82,7 +132,8 @@ idempotencia-kulcs megjelenítése a felületen · a közösség kötelezővé t
 | `community/profile/` | belépő és nyilvános profil |
 | `community/feed/` | feed és felfedezés |
 | `community/posts/` | szerkesztő és beszélgetés |
-| `lib/l10n/app_{en,hu}.arb` | a közösségi szövegek |
+| `lib/l10n/features/community_{en,hu}.arb` | **FORRÁS** — a közösségi szövegek (`community` MÁR migrált feature) |
+| `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/community/*_test.dart` (4) | a §6 cellái |
 | `docs/rounds/e13-r33-…md` | a §10 handoff |
 

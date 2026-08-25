@@ -22,8 +22,30 @@ allowed_paths = [
   "lib/features/learn/",
   "lib/core/design_system/components/music/ss_chord_diagram.dart",
   "lib/core/design_system/public.dart",
+  "lib/l10n/base/app_en.arb",
+  "lib/l10n/base/app_hu.arb",
   "lib/l10n/app_en.arb",
   "lib/l10n/app_hu.arb",
+  "test/features/chords/chord_diagram_semantics_test.dart",
+  "test/features/chords/chord_diagram_test.dart",
+  "test/features/chords/chord_tap_to_hear_test.dart",
+  "test/features/chords/chord_tile_a11y_test.dart",
+  "test/features/chords/favorite_chords_test.dart",
+  "test/features/learn/continue_card_test.dart",
+  "test/features/learn/expected_chord_hint_test.dart",
+  "test/features/learn/latency_calibration_screen_test.dart",
+  "test/features/learn/learn_rollback_test.dart",
+  "test/features/learn/learn_screen_test.dart",
+  "test/features/learn/lesson_highway_test.dart",
+  "test/features/learn/lesson_list_screen_test.dart",
+  "test/features/learn/lesson_score_card_test.dart",
+  "test/features/learn/live_scoring_jitter_test.dart",
+  "test/features/learn/next_lesson_cta_test.dart",
+  "test/features/learn/review_r100_fixes_test.dart",
+  "test/features/learn/setlist_expected_hint_test.dart",
+  "test/features/learn/visual_offset_test.dart",
+  "test/features/learn/waltz_count_in_test.dart",
+  "test/features/learn/wrapped_prompt_test.dart",
   "test/features/chords/chord_library_test.dart",
   "test/features/chords/chord_diagram_text_test.dart",
   "test/features/learn/learning_path_test.dart",
@@ -40,6 +62,74 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 BRIEF-REVÍZIÓ — 2026-08-25, batch pre-flight (E13-R17…R35)
+
+A brief 2026-08-15-én készült; ez a pre-flight `main @ 41fbd40` ellen mért.
+**Visszakeresett előzmény:** [L478](../LESSONS.md) (a pre-flight csak szűkíthet;
+a tágítás H3), [ADR 0307 §4](../adr/0307-parallel-round-execution.md) (a
+`lib/l10n/app_*.arb` GENERÁLT aggregátum, a forrás a `base/` és a
+`features/` szegmens), [L481](../LESSONS.md) (a lánc remote konténerből nem
+indítható). A hibaosztályt a **teljes Ch13 sávon** mérte ki egy batch-vizsgálat:
+az R17–R35 MIND a generált aggregátumot sorolta fel forrásként (`agg=2, frag=0`).
+
+**Kockázat = high, indoklás:** a tanulási felület a felhasználó gyakorlási előzményét (személyes teljesítmény-adat) olvassa és írja.
+
+### R1 — `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum → a FORRÁS a szegmens
+
+A kör fája ma **65** l10n-kulcsot használ, és mind feloldható: `app` = 65 kulcs.
+
+A kör ezért **nem tudott volna egyetlen szöveget sem írni** a saját listáján
+belül. Feloldás — H3 lista-tágítás, **user-engedéllyel (2026-08-25)**, a
+lehető legszűkebb alakban:
+
+- `chords` → nincs saját fragmentuma, a kulcsai a `base/app_*.arb` szegmensben élnek
+- `learn` → nincs saját fragmentuma, a kulcsai a `base/app_*.arb` szegmensben élnek
+
+Az aggregátum a listán MARAD, de **kizárólag generált kimenetként**
+(`dart run tool/gen_l10n_segments.dart --write`); a merge-elt precedens
+egységesen a forrást ÉS a regenerált aggregátumot is commitolja (E09-R26
+`df0ad3dd`, E13-R12 `376b8a1d`, E13-R10 `b11ab2ed`). **Új fragmentum NEM
+készül**, ezért a `test/l10n/arb_parity_test.dart` beégetett szegmens-listáját
+sem kell bővíteni — a felvett források mind szerepelnek benne.
+
+### R2 — a kör SAJÁT feature-fáján élő, ma zöld widget-tesztek (FELVÉVE)
+
+Ezek közvetlenül a migrálandó képernyőkre állítanak, tehát a migráció után
+pirosra váltanának, ami a §0 szerint `blocked` lenne:
+
+  - `test/features/chords/chord_diagram_semantics_test.dart`
+  - `test/features/chords/chord_diagram_test.dart`
+  - `test/features/chords/chord_tap_to_hear_test.dart`
+  - `test/features/chords/chord_tile_a11y_test.dart`
+  - `test/features/chords/favorite_chords_test.dart`
+  - `test/features/learn/continue_card_test.dart`
+  - `test/features/learn/expected_chord_hint_test.dart`
+  - `test/features/learn/latency_calibration_screen_test.dart`
+  - `test/features/learn/learn_rollback_test.dart`
+  - `test/features/learn/learn_screen_test.dart`
+  - `test/features/learn/lesson_highway_test.dart`
+  - `test/features/learn/lesson_list_screen_test.dart`
+  - `test/features/learn/lesson_score_card_test.dart`
+  - `test/features/learn/live_scoring_jitter_test.dart`
+  - `test/features/learn/next_lesson_cta_test.dart`
+  - `test/features/learn/review_r100_fixes_test.dart`
+  - `test/features/learn/setlist_expected_hint_test.dart`
+  - `test/features/learn/visual_offset_test.dart`
+  - `test/features/learn/waltz_count_in_test.dart`
+  - `test/features/learn/wrapped_prompt_test.dart`
+
+**A jogosultság szűk:** a teszteket az ÚJ widgetekre kell ráállítani. A lefedett
+viselkedést gyengíteni, cellát törölni vagy `skip`-elni **TILOS** — az a mérce
+meggyengítése, amit a gate-guard emberhez eszkalál.
+
+### R3 — keresztmetszeti tesztek (NEM kerültek listára — figyelmeztetés)
+
+A kör fájára hivatkozó további widget-tesztek közös infrastruktúrán élnek
+(`test/app/**`, `test/core/**`, más feature-ek fái) — 14 ilyen fájl van. Ezeket a kör
+**NEM** szerkesztheti: ha egy elbukik, az `blocked` jelzés és célzott
+brief-revízió, nem csendes átírás. A körbe húzásuk a scope-fegyelem feladása
+lenne.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -83,7 +173,9 @@ módosítása · a haladás-adat sémájának törése · más képernyők migr�
 | `lib/features/learn/` | tanulási út + lecke UI |
 | `components/music/ss_chord_diagram.dart` | **ÚJ** — diagram + szöveges alternatíva |
 | `public.dart` | az export bővítése |
-| `lib/l10n/app_{en,hu}.arb` | a tartalmi szövegek |
+| `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a tartalmi szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
+| `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
+| `test/features/…` (20 meglévő teszt) | ma zöld, a migrált képernyőkre állítandó — lásd §0.0 R2 |
 | `test/features/**` (4) | a §6 cellái |
 | `docs/rounds/e13-r20-…md` | a §10 handoff |
 

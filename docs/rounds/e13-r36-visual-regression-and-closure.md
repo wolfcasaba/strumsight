@@ -17,6 +17,7 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
+  "test/ui/goldens/",
   "test/goldens/",
   "test/accessibility/",
   "tool/check_ui_architecture.dart",
@@ -32,6 +33,42 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 BRIEF-REVÍZIÓ — 2026-08-25, batch pre-flight (E13-R17…R36)
+
+A brief 2026-08-15-én készült; ez a pre-flight `main @ 41fbd40` ellen mért.
+**Visszakeresett előzmény:** [ADR 0307 §4](../adr/0307-parallel-round-execution.md)
+(generált ARB-aggregátum), [L478](../LESSONS.md) (a pre-flight csak szűkíthet),
+[L481](../LESSONS.md) (a lánc remote konténerből nem indítható). **Ez a kör az
+EGYETLEN a Ch13 sávban, amelyet az R17–R35-öt megállító ARB-csapda NEM érint** —
+a listáján nincs `lib/l10n/` útvonal.
+
+**Kockázat = high, indoklás:** a kör a `tool/check_ui_architecture.dart`
+mérce-eszközt hozza létre, és a golden-mátrix a teljes UI vizuális
+elfogadási kapuja — egy hibás vagy üres mérce itt az egész fejezet
+zöldjét hazuggá tenné.
+
+### R1 — a golden-útvonal NEM egyezett a többi körével
+
+**Mérve:** az `E13-R16 … E13-R35` MIND a **`test/ui/goldens/`** könyvtárba írja
+a felvételeit (mind a 20 brief `allowed_paths`-án ez szerepel), ez a záró kör
+viszont csak a **`test/goldens/`**-t engedte. Egyik könyvtár sem létezik ma;
+a `test/goldens/` viszont a lánc végigfutása UTÁN sem fog — vagyis a záró
+golden-mátrix egy örökre üres úton nézne, és a fejezet vizuális regressziós
+kapuja **némán semmit sem mérne**.
+
+Feloldás — user-engedéllyel (2026-08-25): a `test/ui/goldens/` felvéve. A
+`test/goldens/` a listán marad, hogy a kör oda is szervezhesse a mátrixot, ha
+úgy dönt — de a **meglévő felvételek helye a `test/ui/goldens/`**, és a
+mátrixnak ezeket kell látnia.
+
+### R2 — a `tool/check_ui_architecture.dart` MA nem létezik
+
+A kör hozza létre; a `tool/` (Dart-eszközök) NEM azonos a `tools/`
+(pipeline-szkriptek, H-GATEGUARD-védett) könyvtárral, tehát ez rendben van.
+A meglévő golden-precedens `test/features/live/chord_timeline_golden_test.dart`
+(valódi kapu, nem `skip`-elt rögzítő), az `test/accessibility/` könyvtár pedig
+már létezik.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
