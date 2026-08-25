@@ -54,7 +54,7 @@ class OnboardingStepController extends Notifier<OnboardingStep>
   /// [StorageKeys.onboardingSeen] bool (R4 measured); this key has no
   /// [StorageKeys] entry of its own because `lib/core/storage/` is out of
   /// this round's allowed paths.
-  static const String _stepKey = 'ss.onboarding.step';
+  static const String storageKey = 'ss.onboarding.step';
 
   /// Reads the checkpoint. No checkpoint on disk does NOT mean "start over":
   /// it means no step-aware build has run on this device yet, so the
@@ -62,7 +62,7 @@ class OnboardingStepController extends Notifier<OnboardingStep>
   /// already-onboarded user inherits [OnboardingStep.done] rather than being
   /// replayed through a flow they already finished (A7, R4).
   static OnboardingStep readStep(KeyValueStore store) {
-    final stored = store.readInt(_stepKey);
+    final stored = store.readInt(storageKey);
     if (stored != null &&
         stored >= 0 &&
         stored < OnboardingStep.values.length) {
@@ -80,7 +80,10 @@ class OnboardingStepController extends Notifier<OnboardingStep>
   /// mid-onboarding resumes at [step], not [OnboardingStep.welcome].
   Future<void> advanceTo(OnboardingStep step) async {
     state = step;
-    await persist(_stepKey, (store) => store.writeInt(_stepKey, step.index));
+    await persist(
+      storageKey,
+      (store) => store.writeInt(storageKey, step.index),
+    );
   }
 }
 
