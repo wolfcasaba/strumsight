@@ -73,6 +73,11 @@ gate_tests = [
   "test/app/offline_network_guard_test.dart",
   "test/core/screen_size_guard_test.dart",
   "test/features/songs/setlist_flow_test.dart",
+  "test/core/architecture_dependency_test.dart",
+  "test/l10n/hardcoded_string_guard_test.dart",
+  "test/tooling/dio_factory_guard_test.dart",
+  "test/tooling/preferences_plugin_import_guard_test.dart",
+  "test/tooling/route_literal_guard_test.dart",
 ]
 native_gate = false
 ```
@@ -195,6 +200,36 @@ az `allowed_paths`-on ÉS a `gate_tests`-en is szerepelnek.
 törlése, `skip`-je, küszöb-lazítása vagy az állítás gyengítése TILOS — az a
 mérce meghamisítása. Ha a kör bizonyíthatóan nem cseréli le a képernyőt, a kör
 pre-flightja mondja ki ezt a mérést, és hagyja a cellákat érintetlenül.
+
+### S12 — a fa-szintű őrök a kör LOKÁLIS kapujába (2026-08-25)
+
+A kör lokális kapuja eddig KIZÁRÓLAG a saját céltesztjeit futtatta, ezért a
+teljes `lib/` fát pásztázó őrök leletei szerkezetileg csak a ~17 perces
+exact-SHA Full Gate-en jelentek meg — javító kör árán. MÉRT eset: **E13-R16/F8**
+(`docs/reviews/e13-r16-review.md`), ahol mind a három új képernyő közvetlenül
+importálta a `design_system/foundations/**`-ot a `public.dart` helyett — **11
+sértés** —, és a review szó szerint rögzíti, miért nem fogta a célzott gate:
+a `tools/round-gate.sh` `architecture` lépése a `tool/check_architecture.dart`-ot
+futtatja, ami egy MÁSIK, tágabb szabálykészlet; a design-system-határ mércéje
+egy külön `test/core/` teszt, amit csak a teljes suite futtat.
+
+Ezért ez a kör mostantól a `gate_tests`-ben futtatja ezeket az őröket:
+
+- `test/core/architecture_dependency_test.dart`
+- `test/l10n/hardcoded_string_guard_test.dart`
+- `test/tooling/dio_factory_guard_test.dart`
+- `test/tooling/preferences_plugin_import_guard_test.dart`
+- `test/tooling/route_literal_guard_test.dart`
+
+A kiválasztás MÉRT, nem vaktában: a globális őrök a `Directory('lib')` teljes
+fát pásztázzák (bármelyik kör diffje elmozdíthatja őket), a szűkített őrök pedig
+csak akkor kerülnek fel, ha a kör `allowed_paths`-a metszi a pásztázott
+gyökeret.
+
+**Ezek az őrök NEM kerülnek az `allowed_paths`-ra** — és ez szándékos: a kör
+futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a kör
+SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
+gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -323,7 +358,7 @@ a szöveget ne → az **A2** cellának PIROSNAK kell lennie → állítsd vissza
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/chords/chord_library_test.dart test/features/chords/chord_diagram_text_test.dart test/features/learn/learning_path_test.dart test/features/learn/lesson_offline_test.dart test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/ui_inventory_test.dart
+tools/round-gate.sh test/features/chords/chord_library_test.dart test/features/chords/chord_diagram_text_test.dart test/features/learn/learning_path_test.dart test/features/learn/lesson_offline_test.dart test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/offline_network_guard_test.dart test/core/screen_size_guard_test.dart test/features/songs/setlist_flow_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő

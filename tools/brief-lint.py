@@ -824,6 +824,43 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                 )
             )
 
+    # S12 — a §7 gate-parancs TÜKRÖZZE a `gate_tests`-et (2026-08-25).
+    # MÉRT ok, saját hibából: az S11 sáv-szintű eltakarítása a `gate_tests`
+    # metaadatot bővítette, a §7-ben ténylegesen FUTTATOTT parancssort viszont
+    # nem — a hat brief így olyan kaput ígért, amit sosem futtatott volna. A
+    # korpuszon mérve ez nem egyedi baleset: a drift a nyitott briefek harmadát
+    # érintette. A metaadat és a futtatott parancs szétcsúszása néma: a
+    # `round-gate.sh` a parancssort futtatja, a scope-audit és a CI-terv viszont
+    # a metaadatot olvassa, tehát semmi nem hozza össze a kettőt.
+    #
+    # A szabály `strict`, `done` körre néma (a CI-kapu `--level base`, tehát ez
+    # sosem vált pirosra egy lezárt kört), és a hiányt SOROLJA, nem csak jelzi.
+    round_status_for_s12 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    if metadata.gate_tests and round_status_for_s12 != "done":
+        invocations = " ".join(
+            match.group(1)
+            for match in re.finditer(r"tools/round-gate\.sh([^\n`]*)", text)
+            if match.group(1).strip()
+        )
+        if invocations:
+            missing = [gate for gate in metadata.gate_tests if gate not in invocations]
+            if missing:
+                listed = ", ".join(f"`{gate}`" for gate in missing)
+                findings.append(
+                    Finding(
+                        "strict",
+                        "S12",
+                        f"a §7 `{GATE_ARTIFACT}` parancsa nem tartalmazza a "
+                        f"`gate_tests` minden elemét ({listed}) — a metaadatot a "
+                        "scope-audit és a CI-terv olvassa, a kaput viszont a "
+                        "PARANCSSOR futtatja, tehát a kettő szétcsúszása néma: a "
+                        "brief olyan mércét ígér, amit a kör sosem futtat. Írd át "
+                        "a §7 parancsot úgy, hogy tükrözze a `gate_tests` listát",
+                    )
+                )
+
     return findings
 
 
