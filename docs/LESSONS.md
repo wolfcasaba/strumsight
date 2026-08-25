@@ -18173,3 +18173,128 @@ frissessége külön mérendő tény.
 1-commit-elmaradása); a `fetch && reset --hard origin/<branch>` lépés
 felvétele a `sdd-round-driver` skill §0.2 szövegébe GOV-hatáskör, nem
 kör-hatáskör (a skill a `tools/`-hoz hasonlóan nem szerkeszthető kör közben).
+
+## L476 — A gate SAJÁT `dart format` lépése teszi láthatatlanná a sértést: egy sor-alapú forrás-guard szerkezetileg vak arra az alakra, amit a projekt formázója előállít (E13-R15, F2 MAJOR, 2026-08-24)
+
+**Mit mértünk.** Az E13-R15 A3 kapuja (beégetett felhasználói szöveg a design
+system komponenseiben) `readAsLinesSync()`-kal, soronként illesztett a
+`property: 'literal'` mintára. A kör teljesen zöld gate-tel és zöld CI-vel
+érkezett a review-ba. A reviewer ugyanazt a sértést háromszor mérte:
+
+```dart
+// 1) egy sorban -> PIROS, a guard működik
+Widget build(BuildContext context) => const Text('Save changes');
+//    (file: …/ss_validation_summary.dart, line: 113, violationClass: A3)
+
+// 2) UGYANAZ a sértés két szokványos argumentummal, majd a gate ELSŐ lépése:
+$ dart format lib/core/design_system/components/inputs/ss_validation_summary.dart
+  Widget build(BuildContext context) => const Text(
+    'Save changes',
+    textAlign: TextAlign.center,
+    …
+  );
+
+// 3) a formázott — azaz a repóban TÉNYLEGESEN előálló — alakon:
+00:00 +1: All tests passed!     <-- ZÖLD
+```
+
+**A tanulság nem az, hogy „a regex gyenge".** Az, hogy a mérce és a formázó
+**ugyanannak a láncnak a két lépése**, és a `format` szisztematikusan abba az
+alakba írja a kódot, amit a `test` nem lát. Minden olyan beégetett szöveg,
+amely elég argumentumot kap ahhoz, hogy a formázó tördelje — a valós
+komponens-kód többsége —, csendben átcsúszik. A guard a mai fán nem azért volt
+zöld, mert nincs sértés, hanem mert csak a legszűkebb alakot mérte.
+
+**Általánosítás minden forrás-scan alapú őrre:** a próbát azon az alakon
+futtasd, amit a `format` lépés UTÁN kapsz, ne azon, amit kézzel beírtál. A
+javítás iránya: a fájl EGÉSZÉN illessz (hossz- és sortörés-őrző
+komment-kiszűréssel, hogy a sorszámok használhatók maradjanak), ne soronként.
+
+Ez az L460 (jelenlét-alapú őr vaksága) testvér-esete: ott a *feltétel* volt
+rossz, itt a *bemenet alakja*.
+
+**Őrteszt:** `test/l10n/hardcoded_string_guard_test.dart` — a `_scan` a
+`_stripComments`-elt teljes fájlon fut; a reviewer újrafuttatott próbája a
+`dart format`-tal tördelt alakra PIROS (A3, line 114).
+
+## L477 — Egy túlcsordulás-alapú clipping-cella ÜRES, ha a hordozó szerkezetileg képtelen túlcsordulni: mérd meg a cella BUKÁSI KÉPESSÉGÉT, ne csak a zöldjét (E13-R15, F3 MAJOR, 2026-08-24)
+
+**Mit mértünk.** Az E13-R15 A6 kritériuma három számított cellát írt elő
+(46 / 52 / 64 karakter, a magyar +30% tartalék körül), mindegyik
+`expect(tester.takeException(), isNull)` alakban, a `SsFieldError` hordozón.
+Mind a három zöld volt. A reviewer nem a zöldet nézte, hanem azt kérdezte:
+**tud-e ez a cella egyáltalán pirosra váltani?**
+
+```
+P3a  SsFieldError SizedBox(height: 24) kalitkában, 2.0 text scale:
+       takeException() == null      (a kényszerített túlcsordulás SEM detektálódik)
+P3b  ugyanaz a hordozó, 4000 karakteres üzenettel, 393×852:
+       P3b exception: null
+```
+
+**Gyökérok.** A `SsFieldError` `Row(icon, SizedBox, Expanded(Text))`: az
+`Expanded` a fő (vízszintes) tengelyt teljesen felszívja, a `Row` pedig a
+KERESZTtengelyén nem futtat túlcsordulás-ellenőrzést. Nincs az a szöveghossz,
+amely `RenderFlex overflow`-t adna. A három cella tehát nem „szigorú, de
+teljesíthető" volt, hanem **falszifikálhatatlan**.
+
+**A mechanizmus jó volt, a hordozó nem** — ugyanabban a próbában mérve:
+
+```dart
+Row(children: [SsButton(label: ssPseudoLocalize('Practice reminder settings label'), …)])
+// -> A RenderFlex overflowed by 1233 pixels on the right.
+```
+
+**A minta, amit ebből átviszünk:** minden „X nem történik meg" alakú cella
+mellé kell egy **falszifikációs cella**, amely ugyanazon a hordozón és
+kontextuson egy szándékosan túlzó bemenettel a HIBÁT állítja (`isNotNull`).
+Enélkül a zöld nem bizonyíték, csak a hibamód hiánya. Az E13-R15 javító köre
+pontosan ezt kapta (egy közbeiktatott `Column` ad függőleges fő tengelyt,
+plusz egy 200 karakteres proof-cella).
+
+Rokon, de más: L452 a *geometria* elő nem állását mérte
+(`MediaQuery(size:)` nem méretez); ez itt a *hibamód* elő nem állítható-ságát.
+
+**Őrteszt:** `test/l10n/formatters_test.dart` — „falsifiability proof: a
+genuinely too-long message DOES overflow on this same carrier + context (F3)".
+
+## L478 — A pre-flight csak SZŰKÍTHET: ha egy előre megírt brief GENERÁLT artefaktumot sorol fel forrásként, a feloldás a szűkítés + „van-e egyáltalán teendő?" mérése — nem a lista tágítása (E13-R15, 2026-08-24)
+
+**Mit mértünk.** Az E13-R15 briefje 2026-08-15-én készült, és a
+`lib/l10n/app_{en,hu}.arb`-ot sorolta fel ARB-írás céljára. Az ADR 0307 §4
+(2026-08-20) óta ezek **generált aggregátumok**; a forrás a
+`lib/l10n/{base,features}/*.arb`. A kör így, szó szerint véve,
+**végrehajthatatlan** volt. Ez a hibaosztály negyedszer ütött (L365 E08-R12,
+L369 E08-R13 H3 self-heal, L396 E08-R20).
+
+**A csapda, amit el kell kerülni:** a kézenfekvő javítás a fragmentumok
+felvétele az `allowed_paths`-ba — de az **tágítás, azaz H3** (ADR 0087 §2), az
+orchestrátor hatáskörén kívül. A korábbi esetek emiatt mind haltba vagy
+self-healbe futottak.
+
+**A mérés oldotta fel, nem a szabály-értelmezés.** A pre-flight kimérte, hogy
+a paritás MÁR teljes minden szinten (aggregátum 1838/1838; mind az 5 szegmens
+1:1), tehát **nulla pótolandó hiány** van — a brief §8/2. lépése („a hiányok
+pótlása") tárgytalan. Ezért a helyes lépés a **szűkítés** volt: a két generált
+útvonal törlése az engedélyezett listáról, és a kör ARB-írás nélküli
+teljesítése (a törésbiztonsági őrök, formázók és a stílusútmutató a §1 célját
+maradéktalanul lefedik). A merge-elt gate `L10n aggregate freshness OK` lépése
+függetlenül igazolja, hogy egyetlen ARB sem lett kézzel szerkesztve.
+
+**Ebből következő szabály a brief-íróknak:** ha egy jövőbeli kör ÚJ ARB-kulcsot
+kér, a briefnek a FRAGMENTUM-útvonalat kell felsorolnia. Az orchestrátor ezt
+utólag NEM javíthatja — a helyes felsorolás a brief-írás felelőssége.
+
+**Egy második, saját hiba ugyanebből a körből.** Az orchestrátor a javító kör
+promptját a MUNKAPÉLDÁNYBA másolta (`<workdir>/.fix-prompt.md`), amitől a
+burkoló kör utáni scope-auditja `VIOLATION`-t jelentett (`path outside allowed
+scope: .fix-prompt.md`) és a jelzés `stopped`-ra váltott — holott az
+`implementer_status=done` volt, és a fájl sosem került commitba. A javító-
+prompt a munkapéldányon KÍVÜL éljen (`/tmp/...`): a `tools/mm-round.sh` a
+prompt-fájlt abszolút útvonalon oldja fel, tehát ez semmit nem korlátoz.
+
+**Őrteszt:** nincs — a `pipeline-queue`/brief-írás oldali szabály és az
+orchestrátor-eljárás nem kör-hatáskörből tesztelhető (a `tools/**` és a
+pipeline-doksik H-GATEGUARD-védettek); a mérés reprodukálható a
+`python3`-alapú fragmentum-paritás-számlálással a `docs/rounds/`-brief
+pre-flightjában.
