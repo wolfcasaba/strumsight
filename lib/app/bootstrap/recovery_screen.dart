@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/design_system/foundations/ss_colors.dart';
-import '../../core/design_system/foundations/ss_spacing.dart';
-import '../../core/design_system/foundations/ss_typography.dart';
+import '../../core/design_system/public.dart';
 import '../../l10n/app_localizations.dart';
 
 /// The in-app "safe mode" surface (ADR 0281 §3/§6, SDD Ch13 Kör 16).

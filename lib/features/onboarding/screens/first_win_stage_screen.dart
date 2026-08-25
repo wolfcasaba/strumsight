@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/design_system/foundations/ss_colors.dart';
-import '../../../core/design_system/foundations/ss_spacing.dart';
-import '../../../core/design_system/foundations/ss_typography.dart';
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../first_win_providers.dart';
 

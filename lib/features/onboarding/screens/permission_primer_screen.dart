@@ -4,11 +4,7 @@ import 'package:permission_handler/permission_handler.dart'
     show openAppSettings;
 
 import '../../../core/audio/audio_providers.dart';
-import '../../../core/design_system/components/feedback/failure_presentation.dart';
-import '../../../core/design_system/components/feedback/ss_permission_state.dart';
-import '../../../core/design_system/foundations/ss_colors.dart';
-import '../../../core/design_system/foundations/ss_spacing.dart';
-import '../../../core/design_system/foundations/ss_typography.dart';
+import '../../../core/design_system/public.dart';
 import '../../../core/platform/microphone_permission.dart';
 import '../../../l10n/app_localizations.dart';
 
