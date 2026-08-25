@@ -11,6 +11,10 @@
 
 ## 1. A LÉNYEG — a pipeline itt NEM indítható
 
+> **De nem is vagy elzárva tőle:** a `§6` hídján keresztül indítható session a
+> felhasználó SAJÁT gépén, ahol minden megvan. „Itt nem futtatható" ≠ „nem
+> vezényelhető".
+
 Két, egymástól FÜGGETLEN blokkoló. Bármelyik önmagában elég.
 
 | Blokkoló | Mért bizonyíték |
@@ -114,7 +118,58 @@ A teszt azt várja, hogy a driver a state-dir ellenőrzésnél haljon meg; itt m
 elmozdul** (a driver tovább jut), de attól még nem lesz zöld — a `gh pr list`
 403-a állítja meg. Ne vedd regressziónak, és NE gyengítsd a tesztet miatta.
 
-## 6. Mit lehet mégis érdemben csinálni innen
+## 6. A HÍD a felhasználó boxához — `env_012yGf199STmScPWnikMieeY`
+
+**Mérve 2026-08-25.** A remote konténer NEM zsákutca: van egy `bridge` típusú
+environment, ami a felhasználó SAJÁT gépén, a pipeline valódi otthonában futtat
+sessiont. Ott minden megvan, ami itt hiányzik: Flutter SDK, működő `gh`,
+implementer-profilok, és a `.pipeline/` lánc-állapot.
+
+```
+mcp__Claude_Code_Remote__list_environments →
+  env_012yGf199STmScPWnikMieeY  free-tier-arm:music-theory:0845  kind=bridge  state=active   ← EZ AZ
+  env_019dJbPTwAp7AywHnL9t7Szx  free-tier-arm:Recipewiser:a8b5   kind=bridge   (másik projekt)
+  env_011CUaPRnRYLByjSGKz4YDzE  Default                          kind=anthropic_cloud (= EZ a konténer)
+```
+
+Indítás:
+
+```
+mcp__Claude_Code_Remote__create_session(
+  environment_id = "env_012yGf199STmScPWnikMieeY",
+  title = "...", prompt = "...")
+```
+
+A repó ott: **`/home/ubuntu/music-theory`** (a `tools/*.sh` és a
+`sdd-round-driver` skill `/home/ubuntu/ss-<motor>-<kör>` munkapéldányai is
+innen indulnak).
+
+**Mért viselkedés:** a `create_session` először `connection_status:
+disconnected` + `SESSION_STATUS_PENDING` állapotot ad vissza — ez NEM hiba, a
+híd másodperceken belül felveszi (`connected`). Ha tartósan `disconnected`
+marad `computer_unreachable` hibával, a gép van offline.
+
+### A visszacsatolás a szűk keresztmetszet — tervezd bele a promptba
+
+**Nincs `list_events` tool ebben a sessionben**, tehát a gyerek-session
+kimenetét közvetlenül NEM tudom elolvasni; a `get_session` csak státuszt ad.
+Két járható út, a promptba építve:
+
+1. **A gyerek írja a jelentését a repóba és pusholja** (pl. egy `ops/`-ág vagy
+   egy `docs/` fájl) — így BÁRMELYIK session elolvassa. Ez a robusztus minta.
+2. A felhasználó látja a gyerek-sessiont a saját kliensében, és továbbítja.
+
+### Amit a hídnak adott prompt KÖTELEZŐEN tartalmazzon
+
+A gyerek a valódi fán dolgozik, ezért a korlátok nem magától értetődők:
+
+- `tools/**` NEM módosítható (H-GATEGUARD védett zóna)
+- `.pipeline/HALTED` **nem oldható fel** magától — a halt emberi döntés
+  (ADR 0087 §2, ADR 0112)
+- piszkos munkafánál semmit nem szabad eldobni, csak jelenteni
+- a `docs/execution/pipeline-queue.tsv` `hold` sorai szándékosak
+
+## 7. Mit lehet mégis érdemben csinálni innen
 
 Nem semmit — csak nem kört. Ez a session ezeket végezte el:
 

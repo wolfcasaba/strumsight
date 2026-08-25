@@ -18402,6 +18402,15 @@ kérdezhetők le (gh) — a lánc nem indul vakon`. A `gh` telepítése tehát e
 lépéssel viszi tovább, majd a lánc ismét fail-closed megáll — ez a mérce, nem a
 hiba.
 
+**A kijárat, amit MÉG UGYANEBBEN a sessionben megtaláltunk:** a
+`list_environments` egy **`bridge`** típusú környezetet mutat a felhasználó
+saját gépéhez (`env_012yGf199STmScPWnikMieeY`, `free-tier-arm:music-theory`),
+és a `create_session` ott sessiont indít — ahol van Flutter, működő `gh` és
+`.pipeline` állapot. A remote konténer tehát nem futtat, de **vezényel**. A
+szűk keresztmetszet a visszacsatolás: `list_events` tool nincs, ezért a
+gyerek-session jelentését a promptban kell a repóba íratni. Részletek és a
+kötelező prompt-korlátok: [`docs/execution/remote-container-environment.md`](execution/remote-container-environment.md) §6.
+
 **Következmény a jövőbeli remote sessionöknek:** kör-indítás helyett a
 végezhető munka a pre-flight, a sor-/lánc-konfiguráció, a `tools/tests`
 futtatása (a pypi engedélyezett, `pip install pytest` megy) és a
