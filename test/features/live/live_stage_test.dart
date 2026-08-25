@@ -11,7 +11,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/core/music/chord.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/live/model/live_frame.dart';
