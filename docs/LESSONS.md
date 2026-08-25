@@ -18776,3 +18776,101 @@ reviewer kötelező „nem fogadok el bemondásra" lépése (`sdd-round-review`
 skill 1. és 7. pont). Egy lehetséges gépi őr: a kör-doksikban hivatkozott
 `actions/runs/<id>` azonosítók létezés- és `head_sha`-ellenőrzése a Router
 CI-ban — `tools/**`, tehát GOV-kör hatásköre.
+
+---
+
+## L488 — Egy brief-revízió MÉRÉSI IDŐPONTHOZ kötött: a szomszéd kör merge-e új őrt hozhat, amit a lista már nem fed — a feloldás nem a lista tágítása, hanem a lecserélt típus HELYBEN tartása (E13-R18, 2026-08-25)
+
+**Mit mértünk.** Az E13-R18 briefjét egy ops-kör (`d32f11bd`, PR #457) az `S11`
+szabály szerint revideálta: a `LiveScreen` típust pinnelő, listán KÍVÜL élő
+teszteket felvette az `allowed_paths`-ra ÉS a `gate_tests`-re. A mérés a
+`main @ b28bb1bf` fán készült, és **hét** fájlt talált. A kör pre-flightja a
+`main @ d32f11bd` fán újramérte:
+
+```
+grep -rln "LiveScreen" test/     →  9 fájl
+```
+
+A kilencből a `test/features/live/live_screen_test.dart` a §0.0/R2 miatt már
+rajta volt a listán, hét a revízióból jött — a **nyolcadik**, a
+`test/features/today/hub_navigation_test.dart:234`, viszont **nem**: azt az
+E13-R17 (`4235f636`) hozta, ami a `b28bb1bf`-es S11-mérés UTÁN merge-elt. A
+`tools/brief-lint.py --level strict` a REVIDEÁLT briefen pontosan ezt az egy
+fájlt jelentette.
+
+**Miért nem a lista tágítása a válasz.** A felvétel az orchestrátornak
+tágítás, azaz **H3** ([L478](#l478)) — pontosan az a halt, ami az E13-R16-ot
+(`hasLength(79)` vs 81) és az E13-R17-et (`test/app/navigation/` +33 → +30 −3)
+megállította. A körnek viszont van olcsóbb kifutója, amit maga az `S11`
+szabály szövege nevez meg: *„Ha a kör a képernyőt bizonyíthatóan nem cseréli
+le, a kör pre-flightja mondja ki ezt a mérést."*
+
+**A feloldás — a típus HELYBEN tartása, mint SZŰKÍTÉS.** A pre-flight kötötté
+tette, hogy a `lib/features/live/screens/live_screen.dart` útvonala és a
+publikus `LiveScreen` típusnév változatlan marad, és a kör nem hoz új
+`lib/features/**/*_screen.dart`-ot. A szűkítés az orchestrátor saját hatásköre
+(ADR 0087 §2), és egyszerre HÁROM őrt semlegesített:
+
+| Őr | Miért maradt zöld |
+|---|---|
+| a 9 `find.byType(LiveScreen)` pin (köztük a listán KÍVÜLI 8.) | a típus nem változott |
+| `test/ui/ui_inventory_test.dart` `hasLength(84)` | a képernyőszám nem mozdult |
+| `lib/app/routing/**` (listán kívül) | `/live` és `/practice/live` ma is ugyanarra a típusra mutat |
+
+Mérve a merge-elt körön: `git diff --name-only 710d82d1..HEAD -- test/app/
+test/ui/ui_inventory_test.dart test/features/today/` → **üres**.
+
+**A tanulság általánosan.** Egy előre megírt brief-revízió mért állítása annyit
+ér, amennyi a mérés időpontjában igaz volt; egy párhuzamos sávban merge-elő kör
+új őrt tehet a fába. A kör pre-flightja ezért **újramér**, és ha a lista rövid,
+elsőként azt kérdezi: *kell-e egyáltalán hozzányúlni ahhoz, amit az őr pinnel?*
+A migráció „helyben" változata rendszerint ugyanazt a terméket adja, listatágítás
+nélkül.
+
+**Őrteszt:** `tools/tests/test_brief_nav_guard_scope.py` (az `S11` szabály és a
+`test/features/live/live_stage_test.dart`::`A11` cella együtt) — az A11 a
+típus-pint méri a kör oldaláról, az `S11` pedig a brief oldaláról jelzi, ha egy
+jövőbeli kör mégis lecserélné.
+
+---
+
+## L489 — A leválasztva indított implementer NEM örökli a motor-nyilvántartás őr-küszöbeit, és a felderítésben megszakadó futás NULLA visszanyerhetőt hagy — a védelem a korai `progress` + az inkrementális commit (E13-R18, 2026-08-25)
+
+**Mit mértünk.** Az E13-R18 első dispatchje a `tools/mm-round.sh`-t közvetlenül
+hívta, a `docs/execution/engine-registry.tsv` `sonnet-impl` sorának
+őr-küszöbei nélkül. A wrapper ilyenkor a SAJÁT alapértelmezését használja:
+
+```bash
+stall_minutes=${MM_STALL_MINUTES:-${ENGINE_STALL_MINUTES:-5}}   # tools/mm-round.sh:79
+```
+
+— vagyis **5** perc, miközben a nyilvántartás `stall_min` oszlopa erre a
+motorra **12**-t ír. A nyilvántartás értéke tehát csak akkor él, ha a HÍVÓ
+átadja; a wrapper nem olvassa ki magától.
+
+**A halál alakja.** A futás 86 fordulón át **csak olvasott** (a jelzésfájl
+végig `head=710d82d1`, `dirty_files=0`), majd
+`result: error_during_execution`, `[Request interrupted by user]`, exit 143 —
+10,5 perc, 4,8M cache-read token, 3,33 USD, és **nulla** visszanyerhető munka.
+Az elhalás pontos kiváltóját nem sikerült egyértelműen visszavezetni (a wrapper
+`killed_reason`-je üres volt, tehát nem a saját elakadás-őre lőtt), ezért a
+lecke NEM a gyökérokról szól, hanem arról, ami MÉRHETŐEN különbözött a sikeres
+újrafutásnál.
+
+**Ami a második futást megmentette.** A prompt két kikötést kapott: (1) az első
+`progress` jelzés a felderítés után AZONNAL menjen ki, ne a végén; (2) a munka
+**lépésenként** commitolódjon a branchre. A retry ugyanazon a feladaton
+**nyolc** commitot hagyott (`37c4ff21` … `5922d90f`), és a köztes
+`progress`-jelzések végig mutatták, hol tart. Egy megszakadás itt már a legutolsó
+commitról folytatható lett volna, nem nulláról.
+
+**A tanulság.** Egy hosszú, felderítés-nehéz kör a legsérülékenyebb pontján —
+az első írás ELŐTT — tud elhalni, és ott a legdrágább: a teljes kontextus-építés
+kárba vész. Két olcsó ellenszer: a motor-nyilvántartás küszöbeit a dispatch
+adja át explicit módon (`MM_STALL_MINUTES` / `MM_ROUND_TIMEOUT`), a prompt pedig
+tegye kötelezővé a korai jelzést és az inkrementális commitot. Az orchesztrátor
+így a `head=` mező mozgásából látja, él-e a kör, nem csak a log növekedéséből.
+
+**Őrteszt:** nincs — dispatch-oldali operátori szabály, a mércéje a kör-jelzés
+`head=` mezőjének mozgása. Gépi őre a `tools/` hatáskörébe esne (a küszöbök
+nyilvántartásból való kiolvasása a wrapperben), tehát GOV-kör dolga.

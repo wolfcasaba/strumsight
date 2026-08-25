@@ -1,5 +1,63 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R18 KÉSZ — Live Stage UI migráció — PR [#459](https://github.com/wolfcasaba/strumsight/pull/459), squash `cc06b7e7` (2026-08-25)
+
+A Live felület (UI-08) átállítva az `SsStageScaffold`-ra és az új zenei
+komponensekre — **a felismerési viselkedés változtatása nélkül**. Implementer
+`sonnet-impl` (Claude Sonnet 5, `--effort high`), orchesztrátor/reviewer
+Claude Opus 5.
+
+**Mi készült.**
+
+- **`LiveScreen` HELYBEN migrálva** az `SsStageScaffold` öt slotjára
+  (statusHeader / hero / feedback / timeline / bottomAction), portrait,
+  landscape és expanded elrendezésben.
+- **Öt új design-system komponens:** `SsChordHero`, `SsStrumGlyph`,
+  `SsBeatGrid`, `SsTempoDisplay`, `SsSignalQualityIndicator`.
+- **Finish akció** — az ADR 0276 döntés 4 kikényszerítése (a migráció előtti
+  `_ActionBar` csak Tuner/Pause/Metronome volt); a tartalék-cél az app
+  belépési útvonala, és ha az maga a `/live` (a mai, shell-flag-KI default),
+  a session helyben ér véget ahelyett, hogy egy önkényes képernyőre ugrana.
+- **Bejelentés-throttling** az ADR 0280 §2 költségvetésére (1000 ms, inkluzív
+  határ), a motor SAJÁT óráján — a vizuális kép közben minden változást követ.
+- **Gyenge jel és „nincs akkord" KÜLÖN állapot.** 3 új l10n kulcs a `base/`
+  FORRÁS-szegmensben + regenerált aggregátum; 2 commitolt golden PNG.
+
+**Evidencia a merge SHA-n (`1b1a1e48`).** Full Gate
+[32901984638](https://github.com/wolfcasaba/strumsight/actions/runs/32901984638)
++ Router CI [32902067828](https://github.com/wolfcasaba/strumsight/actions/runs/32902067828)
+mindkettő `success`; a reviewer célzott gate-je **17/17 zöld** izolált klónban,
+KÉTSZER (az implementáció és a javító kör után is), `scope-audit` → OK a kör
+diffjén (22 út).
+
+**A review nem bemondásra dolgozott.** ÖT valódi-sértés próba a GYÁRTÁSI kódon,
+mind PIROSRA váltott, majd visszaállítva: a gyenge jel és a „nincs akkord"
+összevonása → **A2** (ez a brief §6.1 KÖTELEZŐ próbája), a throttle kiütése →
+**A5**, a háttér-ág `engine.stop()`-jának kivétele → **A4**, és a javító kör
+után a két fix visszarontása → a hozzájuk írt új őrcellák.
+
+**A sáv H3-osztálya lezárva ([L488](docs/LESSONS.md)).** A `LiveScreen` típust
+**9** teszt pinneli; a brief revideált listája hetet fedett, a nyolcadik
+(`test/features/today/hub_navigation_test.dart`) az E13-R17-tel érkezett az
+S11-mérés UTÁN. Lista-tágítás helyett — az mindig H3 — a pre-flight a típust
+HELYBEN tartotta (`§0.0/R5`): a 9 pin, az `ui_inventory_test` `hasLength(84)`
+és a `lib/app/routing/**` így mind érintetlen maradt. Ugyanez a pre-flight
+mérve megcáfolta a brief §7 golden-precedensét (a `chord_timeline_golden_test.dart`
+`GOLDENS=1`-re **skip-elt**), és kimérte, hogy a `countIn` transport-állapot a
+Live úton elérhetetlen.
+
+**Két MINOR a javító körben lezárva (`daa5a369`).** Az `SsLiveRegion`
+(`ChangeNotifier`) nem került `dispose()`-ra; és a Finish tartalék-célja
+(`/learn`) önkényes volt — a shell-flag-KI default mellett ez volt a MINDIG
+futó ág. Mindkettőhöz új őrcella, a zárás visszarontás-próbával ellenőrizve.
+
+**Egy dispatch-tanulság ([L489](docs/LESSONS.md)).** Az első futás 86 fordulón
+át csak olvasott, majd jelzés nélkül elhalt — `dirty_files=0`, nulla
+visszanyerhető munka. A `tools/mm-round.sh` közvetlen hívása NEM örökli a
+motor-nyilvántartás őr-küszöbeit (5 perces default a 12 helyett). A retry a
+nyilvántartás értékeivel ment, és a prompt kötelezővé tette a korai `progress`
+jelzést + az inkrementális commitot: nyolc commit maradt hátra.
+
 ## ✅ E13-R17 KÉSZ — Today, Practice és Profile hubok — PR [#456](https://github.com/wolfcasaba/strumsight/pull/456), squash `4235f636` (2026-08-25)
 
 Az UI-05/UI-06/UI-07 cél-hubok bekötve az adaptív shell mögé (ADR 0275, a
