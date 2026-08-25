@@ -16,6 +16,18 @@
   "livePause": "Pause",
   "liveResume": "Resume",
   "liveTuner": "Tuner",
+  "liveFinish": "Finish",
+  "@liveFinish": {
+    "description": "Ends the current Live session and leaves the screen (ADR 0276 decision 4)."
+  },
+  "liveStarting": "Starting…",
+  "@liveStarting": {
+    "description": "Shown while the detection engine's first frame is still loading."
+  },
+  "liveWeakSignal": "Weak signal — move closer",
+  "@liveWeakSignal": {
+    "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
+  },
   "navLive": "Live",
   "navAnalyze": "Analyze",
   "navLibrary": "Library",

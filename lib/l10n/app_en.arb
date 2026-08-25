@@ -1994,15 +1994,27 @@
       }
     }
   },
+  "liveFinish": "Finish",
+  "@liveFinish": {
+    "description": "Ends the current Live session and leaves the screen (ADR 0276 decision 4)."
+  },
   "liveInputLevel": "Input level",
   "liveListening": "Listening",
   "liveNext": "Next",
   "livePause": "Pause",
   "liveResume": "Resume",
+  "liveStarting": "Starting…",
+  "@liveStarting": {
+    "description": "Shown while the detection engine's first frame is still loading."
+  },
   "liveTuner": "Tuner",
   "liveWaitingForChord": "Play a chord…",
   "@liveWaitingForChord": {
     "description": "Idle prompt shown in the Live chord timeline before any chord is detected."
+  },
+  "liveWeakSignal": "Weak signal — move closer",
+  "@liveWeakSignal": {
+    "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
   },
   "metronomeBpm": "BPM",
   "metronomeStart": "Start",

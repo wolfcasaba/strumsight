@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../model/live_frame.dart';
-import 'input_level_meter.dart';
 
-/// The slim status strip at the top of the Live screen: a listening indicator,
-/// the input-level meter, and the detected tempo + tuning reference.
+/// The slim status strip at the top of the Live screen: a listening
+/// indicator and the detected tempo + tuning reference. The input-level
+/// meter moved to the Stage feedback slot ([SsSignalQualityIndicator],
+/// E13-R18) so signal-quality feedback lives with the rest of it.
 class LiveStatusBar extends StatelessWidget {
   const LiveStatusBar({
     super.key,
@@ -52,16 +54,12 @@ class LiveStatusBar extends StatelessWidget {
           ),
         ],
         const Spacer(),
-        InputLevelMeter(level: frame.inputLevel),
-        const Spacer(),
         Flexible(
-          child: Text(
-            '${frame.bpm.round()} BPM · A=$a4'
-            '${capo > 0 ? ' · ${l10n.liveCapo(capo)}' : ''}',
-            textAlign: TextAlign.end,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: labelStyle,
+          child: SsTempoDisplay(
+            bpm: frame.bpm,
+            tuningLabel: 'A=$a4',
+            capoLabel: capo > 0 ? l10n.liveCapo(capo) : null,
+            color: palette.muted,
           ),
         ),
       ],
