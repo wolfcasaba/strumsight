@@ -160,6 +160,7 @@ void main() {
       final fake = await pumpStage(tester, onContinue: () => continued++);
       fake.emit(0.45);
       await tester.pump();
+      await tester.pump();
 
       expect(
         find.byKey(const ValueKey('onboard-first-win-continue')),
@@ -175,6 +176,7 @@ void main() {
     testWidgets('a genuine (0.85) reading offers Continue', (tester) async {
       final fake = await pumpStage(tester);
       fake.emit(0.85);
+      await tester.pump();
       await tester.pump();
 
       expect(
