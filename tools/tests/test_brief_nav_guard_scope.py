@@ -80,6 +80,14 @@ ROUTER_FILE = "lib/app/routing/app_router.dart"
 # A FALSZIFIKÁCIÓS eset: az E13-R16 (`done`) routert engedett, de nem
 # destination-adaptert írt át — zölden ment át őr nélkül. A `done` szűrő tartja
 # vissza a visszamenőleges riasztást.
+# A HEAL (E13-R17, 2026-08-25) pillanatában MÉRT, routert engedő Ch13-körök.
+# Történeti tény — a teszt a MÉG NYITOTT részhalmazára állít, nem a teljes
+# listára, különben minden merge pirosra váltaná a `main`-t.
+MEASURED_ROUTING_ROUNDS = (
+    "e13-r17-today-practice-profile-hubs.md",
+    "e13-r23-song-library-and-setlists.md",
+    "e13-r28-unified-library.md",
+)
 E13_R16_BRIEF_NAME = "e13-r16-launch-and-onboarding.md"
 
 
@@ -420,12 +428,29 @@ class RealBriefCorpusTest(unittest.TestCase):
                 continue
             if brief_lint.routing_scope_paths(metadata.allowed_paths):
                 pending_routing.append(brief.name)
+        # A HEAL pillanatában (2026-08-25, `main @ 52df92b3`) MÉRT három kör.
+        # A lista TÖRTÉNETI tény, nem élő elvárás: ahogy egy kör merge-elődik,
+        # kikerül a `pending_routing` halmazból. A korábbi, literál
+        # egyenlőség-assert ezért BE VOLT ÉPÍTVE a saját bukásába — az E13-R17
+        # merge-ekor (`4235f636` + a sor `done`-ra állítása) a `main` router-CI-je
+        # pirosra váltott, és a driver „nem indul piros main fölé" szabálya
+        # MEGÁLLÍTOTTA a láncot (chain.log, 2026-08-25T20:25:05). Egy mérce, ami
+        # a lánc normál előrehaladásától bukik, nem mérce, hanem időzített akna.
+        #
+        # A VALÓDI invariáns az utolsó assert: EGYETLEN nyitott, routert engedő
+        # Ch13-brief sem maradhat őr nélkül — ez merge-től független, és egy
+        # ÚJONNAN felvett routert engedő kört is elkap. A trió-assert ezt
+        # egészíti ki azzal, hogy a mért három kör közül a MÉG NYITOTTAK
+        # továbbra is routert engedő körként látszanak (nem veszítették el a
+        # jogosultságukat egy csendes brief-átíráskor).
+        still_open = sorted(
+            name for name in MEASURED_ROUTING_ROUNDS if status.get(name) != "done"
+        )
         self.assertEqual(
-            ["e13-r17-today-practice-profile-hubs.md",
-             "e13-r23-song-library-and-setlists.md",
-             "e13-r28-unified-library.md"],
-            sorted(pending_routing),
-            "a Ch13 sáv routert engedő köreinek listája megváltozott",
+            still_open,
+            sorted(set(pending_routing) & set(MEASURED_ROUTING_ROUNDS)),
+            "a HEAL-kor mért, MÉG NYITOTT routert engedő körök valamelyike "
+            "elvesztette a router-engedélyét a briefjében",
         )
         self.assertEqual([], [brief.name for brief in self._flagged()])
 
