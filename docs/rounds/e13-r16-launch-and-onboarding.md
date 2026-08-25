@@ -21,8 +21,6 @@ allowed_paths = [
   "lib/app/bootstrap/",
   "lib/features/onboarding/",
   "lib/app/routing/",
-  "lib/l10n/app_en.arb",
-  "lib/l10n/app_hu.arb",
   "test/features/onboarding/bootstrap_routing_test.dart",
   "test/features/onboarding/permission_primer_test.dart",
   "test/features/onboarding/onboarding_resume_test.dart",
@@ -39,6 +37,94 @@ gate_tests = [
 ]
 native_gate = false
 ```
+
+## 0.0 BRIEF-REVÍZIÓ — 2026-08-25, az indítás előtti KÖTELEZŐ pre-flight
+
+A brief 2026-08-15-én készült, `main @ 6adea220` olvasásával; ez a pre-flight
+`main @ 0f05df02` (E09-R27 után) ellen mért. **Visszakeresett előzmény**
+(`tools/knowledge-rag.mjs --corpus lessons,halts,adr`):
+[L478](../LESSONS.md) (a pre-flight csak SZŰKÍTHET), [ADR 0307 §4](../adr/0307-parallel-round-execution.md)
+(generált ARB-aggregátum), [ADR 0424](../adr/0424-localization-resilience-contract.md)
+(fragmentum-szintű paritás) és [ADR 0281](../adr/0281-permission-primer-and-honest-first-win.md)
+(a kör előre kiosztott ADR-je, a `main`-en — **ne írd újra**).
+
+**Kockázat = high, indoklás:** a kör az `authorization` határon dolgozik — a
+mikrofon **engedély**-primer és a rendszer-párbeszéd sorrendje (§5.1), valamint
+az erőforrás felszabadítása a route elhagyásakor (§5.4/A5) — továbbá a §5.5
+onboarding-állapot **migration** útja perzisztált felhasználói adatot érint.
+
+### R1 — `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum → SZŰKÍTVE
+
+A brief §4-e pontosan ezt a két fájlt sorolta fel szövegírás céljára. Mérve az
+[ADR 0307 §4](../adr/0307-parallel-round-execution.md): a körök
+`lib/l10n/features/<feature>_{en,hu}.arb` fragmentumot írnak, az `app_*.arb`
+determinisztikus unió, amit a gate frissességre ellenőriz. A fán ma öt szegmens
+él (`base/app`, `features/{community,design_system,gamification,tuner}`), a
+`tool/gen_l10n_segments.dart` pedig a `features/` könyvtárat **beolvassa** —
+regisztrálandó lista nincs. Ez a hibaosztály **ötödször** ütött (L365, L369,
+L396, [L478](../LESSONS.md)).
+
+**Elvégzett lépés (szűkítés, orchestrátor-hatáskör):** a két generált útvonal
+TÖRÖLVE az `allowed_paths`-ról és a §4 táblából. Kézzel írni őket eddig sem
+lett volna szabad; a gate `L10n aggregate freshness` lépése ezt függetlenül
+méri.
+
+### R2 — a kör ÚJ szöveget IGÉNYEL, tehát a szűkítés nem teszi teljesíthetővé → **H3**
+
+Az E13-R15-öt a mérés oldotta fel: ott a paritás minden szinten teljes volt,
+tehát nulla pótolandó hiány maradt, és a kör ARB-írás NÉLKÜL teljesült. **Itt
+ez a kiút mérve nem áll fenn.** A §5.1 primer-szöveg, a §5.2 gyenge-jel segítő
+szöveg és a §5.6 redaktált hibaüzenet MIND új, felhasználónak megjelenő
+szöveg; a képernyő ma mindössze **négy** kulcsot használ
+(`onboardFirstWin`, `onboardNext`, `onboardSkip`, `onboardStart`), amelyek a
+`lib/l10n/base/app_{en,hu}.arb`-ban élnek — az pedig szintén nincs az
+engedélyezett listán.
+
+A szó szerint vett brief tehát **végrehajthatatlan**: nincs olyan
+engedélyezett útvonal, ahová a kör egyetlen új szöveget is írhatna. A
+feloldás a FORRÁS-útvonal felvétele, ami **tágítás, azaz H3**
+([ADR 0087 §2](../adr/0087-autonomous-round-pipeline.md)) — az orchestrátor ezt
+[L478](../LESSONS.md) szerint utólag **NEM javíthatja**, a helyes felsorolás a
+brief-írás felelőssége. **A kör ezért emberi döntésig NEM indítható.**
+
+### R3 — két további, listán kívüli útvonal, amit a kör mérve érinteni fog
+
+Egyik sem javítható tágítás nélkül; a döntéshez tartoznak, nem külön leletek.
+
+1. **`test/l10n/arb_parity_test.dart`** — a `fragments` lista **beégetett** öt
+   tuple (`arb_parity_test.dart:20-39`). Egy új `features/onboarding_*.arb`
+   fragmentum mérce NÉLKÜL maradna: sem a fragmentum-szintű paritás, sem az
+   ICU-plural ellenőrzés nem futna a kör új szövegeire.
+2. **`test/features/onboarding/onboarding_test.dart`** — MA is létezik és zöld,
+   közvetlenül állít a migrálandó képernyőre (`OnboardingController`,
+   `onboardingSeenProvider`, `screens/onboarding_screen.dart` import). A brief
+   négy ÚJ teszt-fájlt sorol fel, ezt nem. A migráció után majdnem biztosan
+   pirosra vált — a §0 szerint az `blocked`, nem teszt-átírás.
+
+### R4 — az „örökség ellenőrzőpont-állapot" MÉRVE egyetlen `bool` (tiszta mérés, nem lista-változás)
+
+Az §5.5/A7 gazdagabb örökséget feltételezett. Mérve:
+
+- `lib/features/onboarding/` **két** fájl: `onboarding_provider.dart` és
+  `screens/onboarding_screen.dart`.
+- A tárolt állapot egyetlen logikai érték:
+  `StorageKeys.onboardingSeen = 'ss.onboarding.seen'`, amit
+  `OnboardingController.readSeen` olvas (hiányzó kulcs ⇒ `false`).
+- A régi `onboarding_seen_v1` → `ss.onboarding.seen` átnevezést a
+  `lib/core/storage/storage_migrator.dart:371-376` (`version: 11`,
+  `id: 'r06.onboarding_seen'`) **MÁR elvégzi** — a kör nem ezt írja meg újra.
+
+Ezért az **A7** cella így értendő: a kör BEVEZETI a lépés-szintű
+ellenőrzőpont-tárolót, és a migráció az, hogy a meglévő `true` érték
+**befejezett** onboardingként öröklődik (visszatérő felhasználónál nem indul
+újra a folyamat), a `false`/hiányzó pedig az első lépésre áll. A
+`storage_migrator.dart` **TILOS zóna** — új tároló-verzió igénye ⇒ `stopped`.
+
+### Nem lelet, de rögzítve
+
+`test/ui/goldens/` MA nem létezik (a kör hozza létre, a §4 már engedi); a
+golden-precedens `test/features/live/chord_timeline_golden_test.dart` létezik
+és valódi kapu; az ADR 0281 a `main`-en van.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -85,7 +171,7 @@ termékdöntése (az user-döntés; a kör csak a technikai lehetőséget adja m
 | `lib/app/bootstrap/` | villanásmentes indulás + biztonságos mód |
 | `lib/features/onboarding/` | a folyamat migrációja |
 | `lib/app/routing/` | az UI-01–UI-04 route-ok |
-| `lib/l10n/app_{en,hu}.arb` | a primer és a helyreállítás szövegei |
+| ~~`lib/l10n/app_{en,hu}.arb`~~ | **TÖRÖLVE a §0.0 R1 szűkítéssel** — generált aggregátum (ADR 0307 §4), kézzel nem írható |
 | `test/features/onboarding/*_test.dart` (4) | a §6 cellái |
 | `docs/rounds/e13-r16-…md` | a §10 handoff |
 
