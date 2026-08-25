@@ -1,6 +1,6 @@
 # E13-R20 — Chord Library, Learning Path és Lesson UI
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ e9a2c8b2`)
+- **Státusz:** READY (kör-indító pre-flight 2026-08-25, `main @ 886cd5b6` — §0.0/R5–R13)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 20
 - **Kör-azonosító:** `E13-R20`
 - **Branch:** `<motor>/e13-r20-chords-and-learning-ui`
@@ -231,6 +231,176 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+### R5 — az ADR `0282` MÁR A `main`-en van: olvasd el, NE írd újra
+
+A pipeline-prompt „az ADR-t te írod meg a pre-flightban" sora **elavult**. Mérve:
+
+```
+$ git log --oneline -2 -- docs/adr/0282-diagram-text-alternative-and-handedness.md
+e8f8e24b docs(ch13): E13-R18..R21 briefek + ADR 0282
+```
+
+Az ADR 0282 tehát **merge-elt döntés**, a `docs/adr/` pedig a tilos zónában van
+— újraírása [H1](../adr/0087-autonomous-round-pipeline.md) lenne. A §5 kötött
+döntései szó szerint egyeznek az ADR §Döntés hat pontjával; a kör az ADR-t
+**hivatkozza**, nem szerkeszti. (Ugyanez a minta, mint az E13-R16 `0281`-e —
+`HANDOFF.md` §6.)
+
+### R6 — a design-system komponens NEM olvashat feature-providert (A2 kivitelezése)
+
+Az ÚJ `lib/core/design_system/components/music/ss_chord_diagram.dart` a
+design system fájában él, ahol egy gépi őr tiltja a feature-függést. Mérve
+(`test/core/architecture_dependency_test.dart`, `design system boundaries
+(E13-R02)` group, `real design system source has no feature dependency`):
+
+```
+lib/core/design_system/example.dart -> package:strumsight/features/live/public.dart
+```
+
+A kezesség forrása viszont **feature-provider**:
+`lib/features/settings/providers/left_handed_provider.dart` →
+`leftHandedProvider` (mérve; a mai `ChordDiagram` a
+`lib/features/chords/widgets/chord_diagram.dart:32`-ben `ref.watch`-csal
+olvassa). Az `SsChordDiagram` ezért **nem watch-olhatja** — a kezességet és a
+fogásmintát **paraméterként** kapja, a providert a `lib/features/chords/` ill.
+`lib/features/learn/` oldali hívó olvassa. Ugyanígy: a design system a
+`lib/features/chords/chord_shape.dart` `ChordShape`-et sem importálhatja — a
+komponens a saját, feature-független bemeneti típusán dolgozik.
+
+A második őr-ág (`real production source reaches the design system only via
+public.dart`) miatt a kör feature-kódja **kizárólag**
+`lib/core/design_system/public.dart`-on át érheti el az új komponenst,
+`components/music/...` közvetlen importtal SOHA. Pontosan ez a **E13-R16/F8**
+hibaosztály (11 sértés, `docs/reviews/e13-r16-review.md`), és a §0.0/S12 óta a
+`test/core/architecture_dependency_test.dart` a kör LOKÁLIS kapujában fut, tehát
+a lelet már a célzott gate-en piros — nem a 17 perces Full Gate-en.
+
+### R7 — a szemantika-teszt ma az ADR 0282 §2 ELLENKEZŐJÉT pinneli (A2)
+
+Mérve, `test/features/chords/chord_diagram_semantics_test.dart` (a listán van,
+§0.0/R2):
+
+```dart
+testWidgets('left-handed mirroring flips the DRAWING only — the spoken '
+    'fingering stays low-E to high-E', (tester) async {
+  await pumpDiagram(tester, 'C', leftHanded: true);
+  expect(find.bySemanticsLabel('C chord diagram, fingering: x 3 2 0 1 0'), findsOneWidget);
+});
+```
+
+A `lib/features/chords/widgets/chord_diagram.dart:78-81` doc-commentje ezt a
+round-88-as döntésként rögzíti. Az **ADR 0282 §Döntés 2.** ezt VISSZAFORDÍTJA:
+balkezes módban a felolvasott húrsorrend is tükrözött.
+
+**Ez tehát NEM mérce-gyengítés, hanem a merge-elt ADR által előírt
+viselkedés-váltás** — a cellát az ÚJ elvárásra kell ráállítani (a §0.0/R2
+„ráállítás" jogosultsága), a cella törlése vagy `skip`-je továbbra is TILOS. A
+jobbkezes ág (`x 3 2 0 1 0`) és a barre-cella (`x 4 6 6 5 4`) **változatlanul
+zöld kell maradjon** — ez a §6.1 „a küszöb alatt" cellája.
+
+### R8 — ÚJ ÚTVONAL NEM KÉSZÜLHET: a részletnézetek `Navigator.push`-sal jönnek
+
+Mérve: a fán CSAK két érintett útvonal létezik —
+`AppRoutes.learn = '/learn'` → `LessonListScreen` és
+`AppRoutes.chords = '/chords'` → `ChordLibraryScreen`
+(`lib/app/routing/app_route.dart:9,19`, `app_router.dart:257,297`). **Akkord-
+és lecke-részletnézet útvonala NINCS.**
+
+A `lib/app/routing/**` a §4 tilos zónájában van, tehát új `GoRoute` vagy új
+`AppRoutes` konstans felvétele **H3** → `stopped` jelzés. A már merge-elt,
+követendő precedens ugyanebben a fában
+(`lib/features/learn/screens/lesson_list_screen.dart:242-247`):
+
+```dart
+onTap: unlocked
+    ? () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => LearnScreen(lesson: lesson)))
+```
+
+A részletnézetek tehát útvonal nélküli, feature-en belüli push-sal (vagy
+sheet/inline panellel) nyílnak. Ez a `test/tooling/route_literal_guard_test.dart`
+(`navigation calls use the central AppRoutes catalogue`, a `gate_tests`-en)
+mércéjét is tartja: nincs új útvonal-literál.
+
+### R9 — A4 SZŰKÍTÉS: letöltés-alrendszer NINCS, a mérce a VALÓDI hiányzó erőforrás
+
+Mérve a `lib/features/learn/` és `lib/features/chords/` fán:
+
+- `grep -rn "download\|Download\|offline\|Offline"` → **0 találat**;
+- `grep -rn "rootBundle\|AssetBundle"` → **0 találat**; a leckék kód-konstansok
+  (`lib/features/learn/model/lesson.dart` `Lessons`), a kíséret pedig **helyben
+  szintetizált** (`lib/features/learn/audio/chord_audio.dart` — összegzett
+  szinuszok, nem letöltött eszköz);
+- a `pubspec.yaml` `assets:` blokkja NEM tartalmaz lecke-eszközt (tutor-tudás,
+  tutor-promptok, ML-súlyok — mind becsomagolt);
+- a `test/app/offline_network_guard_test.dart` (a `gate_tests`-en) MA is azt
+  pinneli, hogy a `LessonListScreen` útvonala **nulla hálózati hívást** tesz
+  (`_expectNoNetwork`, `(route: AppRoutes.learn, type: LessonListScreen)`).
+
+**A tanulási felület tehát ma is 100%-ban offline** — „le nem töltött lecke-
+eszköz" mint állapot a kódban NEM létezik. Egy csak-a-teszt-kedvéért felvett
+letöltés-gomb **mockolt alapfunkció** lenne, amit a projekt kifejezetten tilt.
+
+A brief §5.5 / ADR 0282 §Döntés 4. mérhető magja az **ADR 0277 §Döntés 2.**
+(„az offline nem hiba-stílus, a tartalom látható marad, a képernyő nem ürül
+ki"). Az **A4 ezért a fán VALÓBAN előálló hiányzó erőforrásokra szűkül** — mindkettő
+mért, ma is elérhető bemenet:
+
+1. **nincs diagram-forma:** `ChordShapes.forLabel(label) == null`
+   (`chord_shape.dart:74`) — ma `SizedBox.shrink()`, azaz a tartalom **némán
+   eltűnik** (`chord_diagram.dart:30`);
+2. **nincs lejátszható kíséret:** a `ChordAudio` ismeretlen minőség-utótagra
+   `null` hangkészletet ad (`chord_audio.dart` `_quality` térkép).
+
+**Az A4 elvárása:** ilyen bemenetnél a képernyő (a) **működik**, nem vált
+hibaállapotra, (b) **megnevezi**, mi hiányzik, és (c) a ténylegesen elérhető
+következő lépést kínálja (pl. a lecke kíséret nélküli gyakorlása). A §6.1
+falszifikációs sora változatlan: **hiányzó eszköz → hibaállapot ⇒ A4 PIROS**;
+kiegészül azzal, hogy a **néma `shrink` (a tartalom nyom nélküli eltűnése) is
+A4 PIROS**. Kitalált letöltés-gomb az A4-et NEM teljesíti.
+
+Ez **szűkítés**, nem tágítás: sem az `allowed_paths`, sem a `gate_tests` nem
+változik, és a cella továbbra is falszifikálható.
+
+### R10 — A6 konkretizálás: mi a „gyakorlás-akció", és mi bizonyítja
+
+Mérve: az akkordtár ma tapintásra CSAK a hangot szólaltatja meg
+(`chord_library_screen.dart:29` → `ref.read(backingProvider).playChord(label)`),
+gyakorlás-indítás NINCS. A `/practice/chords` útvonal ugyanezt a
+`ChordLibraryScreen`-t építi (`app_router.dart:462`), tehát **nem** paraméterezhető
+cél.
+
+Az R8 miatt a gyakorlás-akció a meglévő, útvonal nélküli precedenst követi:
+`LearnScreen(lesson: …)` push, ahol a lecke a **megnyitott akkordból** épül
+(`Lesson(...)`, `lesson.dart:40`). Az A6 bizonyítéka ezért gépi és éles: a
+felnyomott `LearnScreen` leckéjének `chordSequence`-e a MEGNYITOTT akkordot
+tartalmazza, nem a lista elsőjét (`chordSequence`, `lesson.dart:123`).
+
+### R11 — A3 kiindulópont: a zárolás ma indoklás NÉLKÜLI (mért)
+
+`lesson_list_screen.dart:249-251`: zárolt leckére koppintva a képernyő egy
+`SnackBar(content: Text(l10n.learnLocked))`-et mutat — a feloldás módja sehol.
+A feloldási szabály `lesson_progress_provider.dart:36` `isUnlocked`: *a szint
+első leckéje, vagy az azonos szinten előtte álló lecke teljesítve*. Az A3 ezt a
+KONKRÉT feltételt kéri a felületre (melyik lecke oldja fel), és a
+`lesson_progress_provider.dart` **logikája nem módosulhat** (§3 tilalom) — a kör
+csak olvassa.
+
+### R12 — a képernyő-leltár mai száma (§0.0/R4 kivitelezése)
+
+`test/ui/ui_inventory_test.dart:14` → `expect(first.screenPaths, hasLength(84))`.
+A jogosultság PONTOSAN ennek a számnak a kör tényleges képernyőszámára emelése.
+
+### R13 — az A5 mért tárolása (a „legacy haladás megmarad" cellához)
+
+A haladás `Map<String, double>` (lecke-id → legjobb pontosság), forrása
+`lib/features/learn/data/lesson_progress_repository.dart` (`load()`/`save()`),
+olvasója `lessonProgressProvider` (`lesson_progress_provider.dart:19`, szinkron
+`build()`). Az A5 tehát úgy mérhető, hogy a teszt **előre feltöltött**
+repository-val indul, és a migrált felületen a csillagok/„folytatás" a
+korábbi értékeket mutatják. A séma (kulcsok, típus) **nem törhető** — ez a §3
+tilalma.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -325,7 +495,7 @@ Rossz paraméterezés esetén a felhasználó némán mást gyakorol.
 | A1 | A diagramnak szöveges alternatívája van (fogás-leírás) | `chord_diagram_text_test.dart` |
 | A2 | Balkezes módban a rajz ÉS a szöveg is tükrözött | ugyanott |
 | A3 | A zárolás oka megjelenik | `learning_path_test.dart` |
-| A4 | Hiányzó offline eszköz nem omlaszt, letöltést kínál | `lesson_offline_test.dart` |
+| A4 | Hiányzó erőforrás (nincs diagram-forma / nincs kíséret) nem omlaszt: a képernyő működik, megnevezi a hiányt és a valóban elérhető következő lépést kínálja — **§0.0/R9 szűkítés**, letöltés-alrendszer a fán nincs | `lesson_offline_test.dart` |
 | A5 | A meglévő haladás megmarad a migráció után | `learning_path_test.dart` |
 | A6 | A gyakorlás-akció a megnyitott akkorddal paraméterez | `chord_library_test.dart` |
 | A7 | A keresés/szűrés/kedvencek működik és állapota megmarad | ugyanott |
@@ -339,7 +509,10 @@ Rossz paraméterezés esetén a felhasználó némán mást gyakorol.
 | Csak az akkord neve semantics labelként | **A1** |
 | Balkezes rajz jobbkezes szöveggel | **A2** |
 | „Zárolva" indoklás nélkül | A3 |
-| Hiányzó eszköz → hibaállapot | **A4** |
+| Hiányzó erőforrás → hibaállapot | **A4** |
+| Hiányzó erőforrás → néma `SizedBox.shrink()` (a tartalom nyom nélkül eltűnik) | **A4** (§0.0/R9) |
+| Kitalált „Letöltés" gomb valódi letöltés-alrendszer nélkül | **A4** — a cellát NEM teljesíti (§0.0/R9) |
+| A gyakorlás a lista első akkordjával indul, nem a megnyitottal | **A6** (§0.0/R10) |
 | A haladás nullázódik | **A5** |
 | A gyakorlás mindig az első akkorddal indul | **A6** |
 | A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
