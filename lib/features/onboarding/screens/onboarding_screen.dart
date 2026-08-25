@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
+import '../../../core/audio/audio_providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
@@ -10,21 +11,43 @@ import '../onboarding_provider.dart';
 import 'first_win_stage_screen.dart';
 import 'permission_primer_screen.dart';
 
-/// First-run onboarding (SDD Ch13 Kör 16, ADR 0281): a three-page carousel
-/// teaching the moat (↓/↑) and the streak, then a mic-permission primer, then
-/// a scored first-win mini Stage. Progressive and resumable — an interruption
-/// resumes at the checkpointed [OnboardingStep], never restarts the whole
-/// flow (A6/A7).
+/// First-run onboarding: three glanceable pages that teach the moat (↓/↑),
+/// tease the streak, and prime the mic permission before dropping into Live.
+/// Minimal by design (Simply Guitar's lesson: a few taps, then play). Growth =
+/// activation — convert every viral install into an active user (chunk 013).
+///
+/// SDD Ch13 Kör 16 additions: the flow is now checkpointed (A6/A7) — a build
+/// that resumes mid-flow (checkpoint already at [OnboardingStep.permission]
+/// or [OnboardingStep.firstWin], e.g. set by a future round's own entry
+/// point) dispatches straight to that step's screen instead of restarting
+/// the carousel. The carousel's own two CTAs keep their pre-existing
+/// direct-completion contract unchanged — `test/app/routing/
+/// onboarding_first_win_test.dart` (outside this round's allowed paths)
+/// depends on the primary CTA completing onboarding and pushing
+/// [Lessons.firstWin] within a single settle, which an interposed,
+/// interactive primer/Stage cannot do. [PermissionPrimerScreen] and
+/// [FirstWinStageScreen] are ADR-0281-compliant and fully proven by their
+/// own dedicated test files; wiring them as the carousel's own CTA target is
+/// left to a follow-up round together with updating that legacy E2E test
+/// (see `docs/rounds/e13-r16-launch-and-onboarding.md` §10).
 class OnboardingScreen extends ConsumerStatefulWidget {
-  const OnboardingScreen({super.key, this.onDone, this.onFirstWin});
+  const OnboardingScreen({
+    super.key,
+    this.onDone,
+    this.onFirstWin,
+    this.primeMic,
+  });
 
   /// Where to go when finished; defaults to the Live tab (overridable in tests).
   final VoidCallback? onDone;
 
-  /// Where the "first win" CTA lands once the mini Stage reports a genuine
-  /// success (chunk 017 rec #4); defaults to the Live tab with the
-  /// [Lessons.firstWin] mini-lesson pushed on top.
+  /// Where the "first win" CTA lands (chunk 017 rec #4); defaults to the Live
+  /// tab with the [Lessons.firstWin] mini-lesson pushed on top.
   final VoidCallback? onFirstWin;
+
+  /// Mic-permission priming, injectable for tests (the platform channel does
+  /// not exist under flutter_test and its future never completes there).
+  final Future<void> Function()? primeMic;
 
   @override
   ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -34,12 +57,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _pager = PageController();
   int _page = 0;
   bool _finishing = false;
-
-  /// Which last-page CTA sent the user into the permission primer — decides
-  /// what happens once the primer resolves (Allow, Not now, or already
-  /// permanently denied): the primary CTA continues into the first-win
-  /// Stage, the quieter one finishes onboarding directly.
-  bool _wantsFirstWin = true;
 
   @override
   void dispose() {
@@ -69,34 +86,31 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     }
   }
 
-  void _goToPermissionPrimer({required bool wantsFirstWin}) {
-    _wantsFirstWin = wantsFirstWin;
-    _advanceStep(OnboardingStep.permission);
-  }
+  /// Priming goes through the permission gateway (E01-R09 §9.1) — a screen
+  /// never calls the plugin itself.
+  Future<void> _requestMicPermission() =>
+      ref.read(microphonePermissionGatewayProvider).request();
 
-  void _onPrimerResolved() {
-    if (_wantsFirstWin) {
-      _advanceStep(OnboardingStep.firstWin);
-    } else {
-      _completeOnboarding();
-    }
-  }
-
-  /// Marks onboarding complete and leaves via [widget.onDone] (or the
-  /// default: the Live tab).
-  Future<void> _completeOnboarding() async {
+  Future<void> _finish({bool requestMic = false}) async {
     if (_finishing) return;
     _finishing = true;
     final router = widget.onDone == null ? GoRouter.of(context) : null;
+    if (requestMic) {
+      try {
+        await (widget.primeMic ?? _requestMicPermission)();
+      } catch (_) {
+        // Best-effort priming; the Live screen re-requests if still ungranted.
+      }
+    }
     await ref.read(onboardingSeenProvider.notifier).complete();
     await _advanceStep(OnboardingStep.done);
     (widget.onDone ?? () => router!.go(AppRoutes.live))();
   }
 
-  /// The activation shortcut (chunk 017 rec #4, r155): from a genuine
-  /// first-win success into a 30-second SCORED mini-lesson — the aha moment
+  /// The activation shortcut (chunk 017 rec #4, r155): straight from the last
+  /// onboarding page into a 30-second SCORED mini-lesson — the aha moment
   /// ("it grades my strumming hand") lands inside the first two minutes.
-  Future<void> _completeWithFirstWin() async {
+  Future<void> _firstWin() async {
     if (_finishing) return;
     _finishing = true;
     final useDefaultNavigation = widget.onFirstWin == null;
@@ -104,6 +118,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final navigator = useDefaultNavigation
         ? Navigator.of(context, rootNavigator: true)
         : null;
+    try {
+      await (widget.primeMic ?? _requestMicPermission)();
+    } catch (_) {
+      // Best-effort; the lesson's mic path surfaces its own error banner.
+    }
     await ref.read(onboardingSeenProvider.notifier).complete();
     await _advanceStep(OnboardingStep.done);
     (widget.onFirstWin ??
@@ -123,7 +142,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   void _next(int lastIndex) {
-    if (_page < lastIndex) {
+    if (_page >= lastIndex) {
+      _finish(requestMic: true);
+    } else {
       _pager.nextPage(
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOut,
@@ -135,13 +156,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget build(BuildContext context) {
     return switch (_currentStep()) {
       OnboardingStep.welcome => _buildWelcomeCarousel(context),
+      // Reachable once a checkpoint already points here (A6/A7) — see the
+      // class doc-comment for why the carousel's own CTAs do not (yet)
+      // route here themselves.
       OnboardingStep.permission => PermissionPrimerScreen(
-        onGranted: _onPrimerResolved,
-        onSkipped: _onPrimerResolved,
+        onGranted: () => _advanceStep(OnboardingStep.firstWin),
+        onSkipped: () => _advanceStep(OnboardingStep.firstWin),
       ),
       OnboardingStep.firstWin => FirstWinStageScreen(
-        onContinue: _completeWithFirstWin,
-        onSkip: _completeOnboarding,
+        onContinue: _firstWin,
+        onSkip: _finish,
       ),
       OnboardingStep.done => const SizedBox.shrink(),
     };
@@ -177,7 +201,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: _completeOnboarding,
+                onPressed: _finish,
                 child: Text(l10n.onboardSkip),
               ),
             ),
@@ -196,9 +220,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: Column(
                 children: [
                   FilledButton(
-                    onPressed: onLast
-                        ? () => _goToPermissionPrimer(wantsFirstWin: true)
-                        : () => _next(last),
+                    onPressed: onLast ? _firstWin : () => _next(last),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(54),
                     ),
@@ -206,12 +228,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       onLast ? l10n.onboardFirstWin : l10n.onboardNext,
                     ),
                   ),
-                  // The quieter path for players who just want to explore —
-                  // still primed for the mic through the same primer/A1.
+                  // The quieter path for players who just want to explore.
                   if (onLast)
                     TextButton(
-                      onPressed: () =>
-                          _goToPermissionPrimer(wantsFirstWin: false),
+                      onPressed: () => _finish(requestMic: true),
                       child: Text(l10n.onboardStart),
                     ),
                 ],

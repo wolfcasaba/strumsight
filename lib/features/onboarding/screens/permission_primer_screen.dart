@@ -58,6 +58,13 @@ class _PermissionPrimerScreenState
     final gateway = ref.read(microphonePermissionGatewayProvider);
     final current = await gateway.currentState();
     if (!mounted) return;
+    if (current.isGranted) {
+      // Already granted (e.g. a returning user) — there is nothing left to
+      // prime, and showing the ask-UI anyway would be a pointless extra
+      // screen, not a safeguard.
+      widget.onGranted?.call();
+      return;
+    }
     setState(() => _state = current);
   }
 

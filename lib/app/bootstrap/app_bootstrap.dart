@@ -111,7 +111,8 @@ abstract final class AppBootstrap {
         stackTrace: stackTrace,
       );
       return const BootstrapFailure([
-        'Unexpected startup error (bootstrap.unknown). Please restart the app.',
+        'Bootstrap failed: unexpected startup error (bootstrap.unknown). '
+            'Please restart the app.',
       ]);
     }
   }
