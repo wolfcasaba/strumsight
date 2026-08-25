@@ -1,5 +1,75 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R19 KÉSZ — Tuner és Metronome UI migráció — PR [#460](https://github.com/wolfcasaba/strumsight/pull/460), squash `e046eaaa` (2026-08-25)
+
+A hangoló (UI-09) és a metronóm (UI-10) átállítva az `SsStageScaffold`-ra —
+**a hangmagasság-becslő és a klikk-időzítés egyetlen sorának módosítása
+nélkül**. Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5.
+
+**Mi készült.**
+
+- **`TunerScreen` és `MetronomeScreen` HELYBEN migrálva** az öt Stage-slotra
+  (statusHeader / hero / feedback / timeline / bottomAction).
+- **ÚJ `SsTunerGauge`** design-system komponens — tisztán prezentációs:
+  minden színt és a `semanticLabel`-t a hívó adja, az l10n a feature-rétegben
+  marad. A `CentsGauge` erre épül, publikus API-ja és az ADR 0280 szerinti
+  szemantikája változatlan (a semantics-teszt módosítás nélkül zöld).
+- **ÚJ `TunerUiState` + `tunerUiStateOf` tiszta leképezés és `TunerStability`**
+  — az „instabil" állapotnak NINCS mezője a becslő kimenetén, ezért a
+  származtatás a UI-rétegben él; a `lib/features/tuner/engine/**` diffje üres.
+- **Többcsatornás visszajelzés:** irány-ikon + **látható** irány-szöveg + szín
+  (a javító kör után az `unstable` ág is az irányt tartja elsődlegesnek, a
+  „Hold steady…" másodlagos sor).
+- **ÚJ tuner-tulajdonú referenciahang-lejátszó** `Provider.autoDispose`-on: a
+  route elhagyásakor a hang leáll (`dispose()` előbb `stop()`-ol) és az
+  audio-fókusz felszabadul. A megosztott, app-szintű `Backing` erre
+  alkalmatlan volt (más feature-ök használják), a `lib/features/learn/**`
+  pedig tilos zóna — a feloldás a kör saját fáján maradt.
+- **A metronóm vizuális pulzusa az AUDIO ÓRÁHOZ kötve**
+  (`MetronomeBeatClockAdapter implements SsBeatClock`, ADR 0274): az adapter
+  UGYANAZT az elapsed-értéket olvassa, amit a klikk-ütemező — a vizuális ütem
+  szerkezetileg nem tud elcsúszni a hangzótól. A haladó beállítások (ütemmutató)
+  lapra kerültek; a tap tempo kiugró-kezelése érintetlen.
+- 3 új l10n kulcs a FORRÁS-szegmensekben (`base/app_*` a metronómnak,
+  `features/tuner_*` a hangolónak) + regenerált aggregátum; **4 commitolt
+  golden PNG** (tuner + metronóm × compact és `textScale 2.0`).
+
+**Evidencia a merge SHA-n (`d6ae43f1`).** Full Gate
+[32910316117](https://github.com/wolfcasaba/strumsight/actions/runs/32910316117)
++ Router CI [32911764893](https://github.com/wolfcasaba/strumsight/actions/runs/32911764893)
+mindkettő `success`; a reviewer célzott gate-je **22/22 zöld** izolált klónban,
+KÉTSZER (az implementáció és a javító kör után is), `scope-audit` → OK
+(27, majd 5 útvonal).
+
+**A review nem bemondásra dolgozott.** Három valódi-sértés próba a GYÁRTÁSI
+kódon, mind PIROSRA váltott, majd visszaállítva: a pulzus fázisát a saját
+tickerből számolva (a `Timer.periodic`-osztály lényege) **három A4-cella**;
+az `autoDispose` eltávolítása az **A5-cella**; és egy eldobható próbateszt
+kimérte, hogy az ÚJ `unstable` állapotban a látható irány-szöveg 1 → 0
+widgetre vált (MINOR-1) — ez utóbbi olyan rés volt, amit a kör SAJÁT
+acceptance-cellái nem fedtek.
+
+**Két MINOR a javító körben lezárva (`2c3df0ee`, `e7d143eb`), mindkettő ÚJ
+őrcellával.** MINOR-1: az `unstable` ág elsődleges szövege az irány maradt.
+MINOR-2: a `ReferenceTonePlayer.stop()` halott felület volt (nincs hívója, a
+`dispose()` sem hívta) — most a `dispose()` első lépése, és a fake is ezt
+tükrözi (`stopCalls == 1`).
+
+**A típus-helyben kötés MÁSODSZOR is megspórolt egy H3-at
+([L488](docs/LESSONS.md) alkalmazása).** A pre-flight kikötötte, hogy a két
+képernyő típusneve és útvonala változatlan marad, és a kör nem hoz új
+`*_screen.dart`-ot: a **17** típus-pin, az `ui_inventory_test` `hasLength(84)`
+és a `test/app/**` + `test/core/**` + `test/features/today/**` fa így
+érintetlen maradt (mérve: a diff azokon az útvonalakon **üres**).
+
+**Két mért, a brief által nem jelzett csapda** (az implementer §10.2-je):
+az `SsBeatPulse` és az `SsOverlayHost` az `AppTheme` alatt ÖSSZEOMLIK (mindkettő
+`extension<SsColorScheme>()!`-t force-unwrappol, amit csak az `SsDarkTheme`
+regisztrál) — a feloldás a kör saját, palette-driven `BeatPulseDot`-ja és a
+`showModalBottomSheet`, a design-system fájlokhoz nyúlás nélkül. Ez ugyanaz a
+nyitott Ch13-hiány, amit az E13-R17 review NOTE-1 már megnevezett.
+
 ## ✅ E13-R18 KÉSZ — Live Stage UI migráció — PR [#459](https://github.com/wolfcasaba/strumsight/pull/459), squash `cc06b7e7` (2026-08-25)
 
 A Live felület (UI-08) átállítva az `SsStageScaffold`-ra és az új zenei
@@ -7163,6 +7233,24 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
   ha időközben elkészült, vagy jelezze egy jövőbeli session, ha még hiányzik.
 
 ## 4. Current branch
+
+**Aktuális állapot (2026-08-25):** `main` @ `e046eaaa` — E13-R19 Tuner és
+Metronome UI migráció, PR
+[#460](https://github.com/wolfcasaba/strumsight/pull/460), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** (2 MINOR, mind ZÖLD
+gate mellett: az ÚJ `unstable` állapot elnyelte az A2 látható irány-szövegét
+— ezt a reviewer eldobható próbateszttel mérte ki, mert a kör saját cellái
+nem fedték; és a `ReferenceTonePlayer.stop()` halott felület volt). Review
+APPROVED a javító kör után, 0 nyitott BLOCKER/MAJOR/MINOR
+(`docs/reviews/e13-r19-review.md`). A kör **ADR-t nem írt** — az ADR 0274
+(audio óra) és 0280 (felolvasható cents) érvényes és merge-elt. Exact
+`d6ae43f1`: Full Gate 32910316117 + Router CI 32911764893 mind success.
+A Router CI-t kézzel kellett dispatch-elni: a záró commit CSAK a
+`docs/reviews/**`-ot érintette, ami nem trigger-útvonal, tehát a merge SHA-n
+magától nem futott volna — a `workflow_dispatch` ág adta meg az exact-SHA
+bizonyítékot a mérce gyengítése nélkül. Post-merge `tools/round-gate.sh` a
+friss `main`-en zöld. Részletesen a fejléc ✅-blokkban.
 
 **Aktuális állapot (2026-08-24):** `main` @ `d21d225f` — E13-R15 Lokalizációs
 resilience és content style, PR

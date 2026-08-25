@@ -18874,3 +18874,129 @@ tegye kötelezővé a korai jelzést és az inkrementális commitot. Az orcheszt
 **Őrteszt:** nincs — dispatch-oldali operátori szabály, a mércéje a kör-jelzés
 `head=` mezőjének mozgása. Gépi őre a `tools/` hatáskörébe esne (a küszöbök
 nyilvántartásból való kiolvasása a wrapperben), tehát GOV-kör dolga.
+
+---
+
+## L490 — A reviewer klónjában a generált Flutter-előfeltételt a kör HEAD-je UTÁN kell előállítani: fordított sorrendben az `analyze` a kör SAJÁT új l10n-kulcsaira ad `undefined_getter`-t, ami hamis MAJOR-nak látszik (E13-R19, review, 2026-08-25)
+
+**Mit mértem.** Az E13-R19 review-jában a `/tmp` klónt így készítettem elő:
+
+```
+git clone --branch <kör-branch> …            # a hub lokális ref-je: 9cc5fe6b (csak a pre-flight)
+bash <klón>/tools/prepare-flutter-generated.sh   # ← IDE került, a HEAD elmozdítása ELŐTT
+git fetch origin <kör-branch> && git reset --hard FETCH_HEAD   # ad3900fb, a teljes implementáció
+tools/round-gate.sh …
+```
+
+Eredmény: a gate a **[2] analyze** lépésen PIROS, négy hibával —
+`metronomeAdvancedSettings`, `metronomeTimeSignature` (kétszer),
+`tunerHoldSteady` „isn't defined for the type 'AppLocalizations'". Ez pontosan
+úgy néz ki, mint egy valódi MAJOR: a kör hivatkozik olyan kulcsokra, amiket
+nem vett fel.
+
+**A tényleges ok.** A `lib/l10n/app_localizations*.dart` **gitignore-olt,
+generált** kimenet. A `prepare-flutter-generated.sh` azt a fát generálja le,
+amelyiken ÉPP állunk — a `9cc5fe6b`-es pre-flight commiton, ahol az új kulcsok
+még nem léteztek. A rá következő `reset --hard` a **forrásokat** cserélte le, a
+generált fájlt viszont nem érintette (nem tracked), így az elavult maradt.
+A commitolt források mindhárom kulcsot tartalmazták — mérve:
+
+```
+grep -n "metronomeAdvancedSettings\|tunerHoldSteady" lib/l10n/base/app_{en,hu}.arb \
+  lib/l10n/features/tuner_{en,hu}.arb lib/l10n/app_{en,hu}.arb   → 12 találat
+```
+
+Helyes sorrenddel (reset → prepare) ugyanaz a gate **22/22 zöld**.
+
+**A szabály.** A reviewer-klónban a sorrend kötött: **előbb a kör HEAD-je,
+utána a generálás.** Ugyanez a hibaosztály már megjelent a landolási oldalon
+(a kombinált-HEAD gate elavult `app_localizations.dart`-ja, E13-R15), csak ott
+egy MÁSIK kör fájljára mutatott — a mintázat közös: *a gitignore-olt generált
+előfeltétel nem követi a `git reset`-et*. Ha egy `undefined_getter` PONT a
+review alatt álló kör ÚJ kulcsaira jön, az elsőként vizsgálandó gyanúsított
+nem a kör, hanem a saját klón előkészítési sorrendje.
+
+**Őrteszt:** nincs — reviewer-oldali operátori sorrend; gépi őre a
+`tools/`-ban élne (a `prepare-flutter-generated.sh` a HEAD-hez kötött
+frissesség-jelzővel), ami GOV-kör hatásköre.
+
+---
+
+## L491 — A `gate_shape=VIOLATION` őr TÉVES POZITÍVOT ad: a stream-json napló egy JSON-objektuma EGYETLEN sor, ezért a `[^\n]*` a teljes prompton átível — a `cat tools/round-gate.sh | head -40` is „csonkolt gate-futásnak" látszik (E13-R19, 2026-08-25)
+
+**Mit mértem.** Az E13-R19 mindkét (implementációs és javító) futásának
+jelzésfájlja `gate_shape=VIOLATION`-t tartalmazott, miközben a gate mindkétszer
+csonkítatlanul futott. A predikátum (`tools/mm-round.sh:381`, azonos
+`tools/codex-round.sh:334`-ben):
+
+```bash
+grep -qE "round-gate\.sh[^\n]*(\| *(tail|head)|&&)" "$log_file"
+```
+
+A napló `--output-format stream-json`, ahol **egy esemény = egy sor**, és a
+`\n`-ek a JSON-ban escape-eltek. A `[^\n]*` így nem egy parancson belül
+keres, hanem a teljes eseményen — beleértve a kör-promptot, ami maga is
+tartalmazza a gate-parancsot ÉS (tiltásként) a `| tail` / `| head` / `&&`
+szövegeket.
+
+A napló tényleges Bash-tool-hívásait kigyűjtve (`tool_use` blokkok, `name ==
+"Bash"`, `round-gate` minta) **három** találat volt:
+
+```
+[1] cat tools/round-gate.sh | head -40      ← a script ELOLVASÁSA váltotta ki a VIOLATION-t
+[2] cat tools/round-gate.sh
+[3] tools/round-gate.sh test/features/tuner/tuner_ui_mapping_test.dart …   ← csonkítatlan
+```
+
+**Miért fontos.** Az őr célja valódi (a csővezeték elrejti a kilépési kódot,
+[L09](#l09)), de ebben az alakban a jelzése nem használható merge-döntéshez: az
+orchestrátornak MINDEN körben kézzel kell szétválasztania a valódi sértést a
+zajtól, és egy VALÓDI csonkolt gate-futás sem tűnne ki, mert a mező amúgy is
+`VIOLATION`.
+
+**A javítás iránya:** a predikátum a napló strukturált `tool_use` bemeneteit
+parse-olja (parancsonként), ne a nyers naplósort. Ez `tools/**` hatáskör, tehát
+GOV/önjavító kör dolga — a mérce nem módosulhat attól, akit mér (ADR 0112 §3).
+
+**Őrteszt:** nincs (a javítás helye a `tools/`); a mérés reprodukciója a fenti
+három hívás kigyűjtése a naplóból.
+
+---
+
+## L492 — Egy CSAK `docs/reviews/**`-ot érintő záró commit nem triggereli a Router CI-t, a merge-kapu viszont exact-SHA-t követel — a feloldás a `workflow_dispatch`, nem a kapu lazítása (E13-R19, 2026-08-25)
+
+**Mit mértem.** A kör utolsó commitja (`d6ae43f1`) a review APPROVED-ra
+frissítése volt, tehát kizárólag `docs/reviews/e13-r19-review.md`. A Router CI
+`on.push.paths` listája (`tools/**`, `docs/rounds/**`,
+`docs/execution/pipeline-*`, `.ai/**`, a workflow maga) ezt **nem** fedi, ezért
+a push nem indított futást:
+
+```
+router-ci futások: b353a47c success · ad3900fb success · 9cc5fe6b success
+                   d6ae43f1 → NINCS
+```
+
+A merge-kapu viszont (ADR 0086 §2, a kör-prompt §3) a **merge SHA-n** követel
+`success`-t, és a hiányzó Router-CI-run a merge SHA-n H5. A korábbi, zöld futás
+egy MÁSIK SHA-n nem mentesít.
+
+**A feloldás.** A `router-ci.yml` fejlécében ott van a `workflow_dispatch`
+trigger, és a `--ref <branch>` dispatch az ág HEAD-jén fut, tehát pontosan a
+merge SHA-n ad `success`-t:
+
+```bash
+gh workflow run router-ci.yml --ref <kör-branch>
+tools/wait-for-ci.sh <run-id> 540 60
+```
+
+**A tanulság általánosan.** Ha az utolsó commit a kör „adminisztratív farka"
+(review-frissítés, handoff-részlet), a path-filteres workflow-k
+CSENDBEN kimaradnak, és a kapu nem attól lesz zöld, hogy minden rendben van,
+hanem attól, hogy nem futott semmi. Merge előtt ezért a **run listáját a
+merge SHA-ra szűrve** kell megnézni (`--json headSha,conclusion`), nem a
+workflow „legutóbbi zöld" állapotát; hiányzó futásnál a helyes lépés a
+dispatch, nem a követelmény átértelmezése.
+
+**Őrteszt:** nincs — a mérce a merge előtti exact-SHA ellenőrzés, ami a
+kör-prompt §3-ban már kötelező; gépi őre (a merge-kapu automatikus
+SHA-egyeztetése minden elvárt workflow-ra) `tools/**` hatáskör.
