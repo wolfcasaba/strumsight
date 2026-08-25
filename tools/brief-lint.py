@@ -108,6 +108,39 @@ def _high_risk_fragments(repo: Path) -> tuple[str, ...]:
     return tuple(fragment for fragment in fragments if isinstance(fragment, str) and fragment)
 
 
+def screen_capable_prefixes(repo: Path, allowed_paths) -> list[str]:
+    """A `lib/features/` alatti KÖNYVTÁR-előtagok, amelyek alá képernyő kerülhet.
+
+    A `tool/ui_inventory.dart` REKURZÍVAN listázza a `lib/features/**` fát, ezért
+    egy könyvtár-engedély a benne LÉTREHOZOTT képernyőre is szól. Az S9 eredeti,
+    fájlútvonalra kötött predikátuma ezt nem látta — mérve az E13-R16/H3 halton
+    (2026-08-25): a brief a `lib/features/onboarding/` könyvtárat engedte, a kör
+    két képernyőt tett alá, a leltár 79→81 lett, és a lint mégis „nincs lelet"-et
+    adott a teljes Ch13 sávra (`9acd14e5`).
+
+    A hamis riasztás elleni mérce a fa MÉRHETŐ igazsága, nem tippelés:
+
+    * a LÉTEZŐ, de `_screen.dart`-ot rekurzívan NEM tartó könyvtár kimarad — a
+      leltár száma alóla nem mozdulhat (mérve: `lib/features/community/domain/
+      repositories/` az E09-R05 `done` körből, `lib/features/practice_generator/
+      public/` az E99-R18 `done` körből);
+    * a MÉG NEM LÉTEZŐ könyvtárról semmit nem lehet mérni, ezért bent marad —
+      épp ezek a Ch13 sáv új feature-fái (`lib/features/today/`, …).
+
+    MÉRVE a 308 elemezhető brief korpuszán: 23 lelet, ebből **0 `done` (merge-elt)
+    kör** — 20 `pending` (a teljes E13-R16…R35 sáv) és 3 `hold`.
+    """
+    capable: list[str] = []
+    for path in allowed_paths:
+        if not path.startswith("lib/features/") or not path.endswith("/"):
+            continue
+        directory = repo / path
+        if directory.is_dir() and not any(directory.rglob("*_screen.dart")):
+            continue
+        capable.append(path)
+    return sorted(set(capable))
+
+
 def queue_rows(repo: Path) -> list[tuple[str, str, str]]:
     """(kör, brief, státusz) hármasok a sor-fájlból, sorrendben."""
     path = repo / QUEUE_RELATIVE
@@ -482,6 +515,17 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
     # és 4 valódi (`e09-r25`, `e09-r28`, `e09-r29`, `e10-r31`, mind `pending`).
     # STRICT, nem base — a meglévő briefek nem válhatnak visszamenőleg
     # CI-pirossá (ugyanaz az elv, mint az S6/S7/S8 esetében).
+    #
+    # A KÖNYVTÁR-előtag vakfolt (E13-R16/H3 önjavítás, 2026-08-25). A fenti
+    # predikátum kizárólag LITERÁLISAN `_screen.dart`-ra végződő `allowed_paths`
+    # elemet nézett. Az E13-R16 briefje viszont a `lib/features/onboarding/`
+    # KÖNYVTÁRAT engedte, és a két új képernyőt az alá tette — az S9 néma maradt.
+    # A sáv-szintű batch pre-flight (`9acd14e5`) commit-üzenete rögzíti, hogy a
+    # `--level strict` mind a 20 Ch13 briefen „nincs lelet"-et adott, miközben
+    # mind a 20 ugyanezt a haltot hordozta. A mért ár: full-gate 32867296946
+    # FAILURE (`hasLength(79)` vs 81) → H3, mert a leltárteszt felvétele az
+    # orchestrátornak tágítás (L478). A `screen_capable_prefixes` a fa mérhető
+    # igazságával zárja ki a hamis riasztást (lásd ott a korpusz-mérést).
     new_screens = sorted(
         path
         for path in metadata.allowed_paths
@@ -489,19 +533,30 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
         and path.endswith("_screen.dart")
         and not (repo / path).exists()
     )
-    if new_screens and not (
+    screen_dirs = screen_capable_prefixes(repo, metadata.allowed_paths)
+    if (new_screens or screen_dirs) and not (
         UI_INVENTORY_TEST in metadata.allowed_paths and UI_INVENTORY_TEST in metadata.gate_tests
     ):
-        listed = ", ".join(f"`{path}`" for path in new_screens)
+        reasons = []
+        if new_screens:
+            listed = ", ".join(f"`{path}`" for path in new_screens)
+            reasons.append(f"{len(new_screens)} ÚJ képernyőt hoz létre ({listed})")
+        if screen_dirs:
+            listed_dirs = ", ".join(f"`{path}`" for path in screen_dirs)
+            reasons.append(
+                f"képernyőt tartható KÖNYVTÁR-előtagot enged ({listed_dirs}), tehát új "
+                "képernyőt is létrehozhat alatta"
+            )
         findings.append(
             Finding(
                 "strict",
                 "S9",
-                f"a kör {len(new_screens)} ÚJ képernyőt hoz létre ({listed}), de a "
+                f"a kör {' és '.join(reasons)}, de a "
                 f"`{UI_INVENTORY_TEST}` nem szerepel egyszerre az `allowed_paths`-ban "
                 "ÉS a `gate_tests`-ben — a leltár egzakt `hasLength(...)` száma "
                 "elmozdul, és az exact-SHA Full Gate pirosra vált (mérve: E08-R15 "
-                "PR #383, E09-R24 full-gate 32713670226); vedd fel mindkét listára, "
+                "PR #383, E09-R24 full-gate 32713670226, E13-R16 full-gate "
+                "32867296946); vedd fel mindkét listára, "
                 "és a szám-emelés a kör saját munkája legyen",
             )
         )

@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ [HEAL E13-R16/H3] KÉSZ — az `S9` képernyő-leltár őre KÖNYVTÁR-előtagra is lő; a Ch13 sáv 20 halálának megszüntetése — PR [#454](https://github.com/wolfcasaba/strumsight/pull/454) (2026-08-25, L483)
+
+**A halt.** Az `E13-R16` KÉSZ volt és minden mércéje zöld — célzott gate 10/10,
+scope-audit 0 sértés, Router CI success, review APPROVED —, **egyetlen teszt
+kivételével**: a `test/ui/ui_inventory_test.dart:14`
+`expect(first.screenPaths, hasLength(79))` a mért **81** ellen bukott
+([full-gate 32867296946](https://github.com/wolfcasaba/strumsight/actions/runs/32867296946),
+6366 passed / 2 failed). A kör két képernyőt hozott a
+`lib/features/onboarding/screens/` alá; a leltárteszt nem volt az
+`allowed_paths`-on, a felvétele pedig tágítás = **H3** ([L478](docs/LESSONS.md)).
+
+**A gyökérok nem a brief volt, hanem az őr.** Pontosan ezt a hibaosztályt írta
+meg az E09-R24 önjavítás `S9` néven a `tools/brief-lint.py`-ba, de a predikátuma
+csak **literálisan** `_screen.dart`-ra végződő `allowed_paths` elemet nézett. Az
+E13-R16 briefje a `lib/features/onboarding/` **KÖNYVTÁRAT** engedte → az `S9`
+néma maradt. A `9acd14e5` sáv-szintű batch pre-flight commit-üzenete rögzíti is:
+*„`--level strict` mind a 20 briefen → nincs lelet"*.
+
+**A javítás négy része.** (1) `screen_capable_prefixes()` — a `lib/features/`
+alatti könyvtár-előtag is számít, mert a `tool/ui_inventory.dart` REKURZÍVAN
+listáz; a hamis riasztás ellen a fa mérhető igazsága zár (a LÉTEZŐ, de
+`_screen.dart`-ot nem tartó könyvtár kimarad — `lib/features/community/domain/repositories/`
+az E09-R05 `done` körből, `lib/features/practice_generator/public/` az E99-R18
+`done` körből). (2) Regressziós teszt a MÉRT E13-R16 adatokkal — a javítás előtt
+**3 cella PIROS**. (3) A megállt kör briefje §0.0/**R6**: a leltárteszt az
+`allowed_paths`-ra ÉS a `gate_tests`-be; **a kör teendője ebből pontosan EGY
+szám: 79 → 81**, kerülőút (átnevezés vagy a `tool/ui_inventory.dart` lazítása)
+TILOS. (4) Ugyanez az őr az **R17–R35** (19) briefre is — enélkül a javított lint
+csak *korábbra* vinné a haltot, mert a teendője tágítás, amit az orchestrátor az
+L478 szerint nem hajthat végre.
+
+**MÉRVE a 308 elemezhető brief korpuszán:** 23 lelet, ebből **0 `done`
+(merge-elt) kör** — 20 `pending` (a teljes E13-R16…R35 sáv) és 3 `hold`.
+
+**A következő lépés a láncé:** az `E13-R16` újraindul, a friss `main`-nel
+konfliktusmentesen merge-elhető (eldobható klónban mérve a `5c32fb23` PR-csúcs
+ellen), és a `hasLength(81)` bumppal a `full-gate.yml` + `router-ci.yml` a merge
+SHA-n zöldre vihető.
+
+**Rögzítve, de ebben a körben nem javítva:** a round-gate `architecture` lépése
+(`tool/check_architecture.dart`) **nem azonos** a
+`test/core/architecture_dependency_test.dart` design-system-határ mércéjével — az
+E13-R16 egy teljes javító kört veszített erre (F8, `ded7a628`). Az utóbbi
+`gate_tests`-be vétele **erősítés, nem tágítás**, tehát a körök saját
+pre-flightjának hatásköre; nem kell hozzá önjavító kör.
+
 ## ✅ E09-R27 KÉSZ — Moderation queue, enforcement és appeal — PR [#452](https://github.com/wolfcasaba/strumsight/pull/452), squash `49ac8b21` (2026-08-25)
 
 A Kör 19 media-triage és a Kör 26 report **egyetlen, auditálható

@@ -34,6 +34,7 @@ allowed_paths = [
   "test/features/onboarding/onboarding_resume_test.dart",
   "test/features/onboarding/first_win_test.dart",
   "test/ui/goldens/",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e13-r16-launch-and-onboarding.md",
 ]
 gate_tests = [
@@ -42,6 +43,7 @@ gate_tests = [
   "test/features/onboarding/onboarding_resume_test.dart",
   "test/features/onboarding/first_win_test.dart",
   "test/ui/goldens/e13_r16_screens_golden_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
@@ -156,6 +158,39 @@ szerinti lusta migráció), vagy a `base/`-ben hagyja és csak az ÚJ kulcsokat
 listán. Ami NEM elfogadható: a `base/app_*.arb` bármely, az onboardinghoz
 nem tartozó kulcsának érintése.
 
+### R6 — a képernyő-leltár őre (H3 önjavító kör, ADR 0112, 2026-08-25)
+
+A kör **KÉSZ** volt és minden mércéje zöld — egyetlen kivétellel: a
+`test/ui/ui_inventory_test.dart:14` `expect(first.screenPaths, hasLength(79))`
+állítása a kör két új képernyője
+(`lib/features/onboarding/screens/permission_primer_screen.dart`,
+`first_win_stage_screen.dart`) miatt a mért **81**-gyel ütközött
+([full-gate 32867296946](https://github.com/wolfcasaba/strumsight/actions/runs/32867296946),
+6366 passed / 2 failed). A `tool/ui_inventory.dart` a `lib/features/**` fa
+`_screen.dart` végű fájljait számolja; a `lib/app/bootstrap/` alatti
+`launch_screen.dart`/`recovery_screen.dart` **nem** számít bele.
+
+A leltárteszt nem volt az `allowed_paths`-on: a lista a `test/ui/goldens/`
+KÖNYVTÁR-előtagot sorolta, ami a `test/ui/` fát nem fedi. A felvétele
+tágítás, azaz **H3** ([ADR 0087 §2](../adr/0087-autonomous-round-pipeline.md),
+[L478](../LESSONS.md)) — az orchestrátor nem oldhatta fel. **Az önjavító kör
+veszi fel** mindkét listára (`allowed_paths` + `gate_tests`), a §4 és a §7
+ennek megfelelően bővült.
+
+**A kör teendője ebből pontosan EGY szám:** `hasLength(79)` → `hasLength(81)`.
+Kerülőút (képernyő-átnevezés/áthelyezés vagy a `tool/ui_inventory.dart`
+szabályának lazítása) **TILOS** — az a mérce meghamisítása. A leltárteszt
+minden más állítása érintetlen marad.
+
+**A gyökérok nem ebben a briefben volt, hanem az eszközben:** a
+`tools/brief-lint.py` `S9` szabálya (amit pontosan ezért írt az E09-R24
+önjavítás) csak LITERÁLIS `*_screen.dart` útvonalat nézett az
+`allowed_paths`-on, KÖNYVTÁR-előtagot nem — ezért a `9acd14e5` sáv-szintű
+batch pre-flight mind a 20 Ch13 briefre „nincs lelet"-et kapott. Az önjavító
+kör a predikátumot is javította, regressziós teszttel
+(`tools/tests/test_brief_ui_inventory_scope.py`), és a sáv MINDEN hátralévő
+briefjére (R17–R35) felvette ugyanezt az őrt — [L483](../LESSONS.md).
+
 ### Nem lelet, de rögzítve
 
 `test/ui/goldens/` MA nem létezik (a kör hozza létre, a §4 már engedi); a
@@ -213,6 +248,7 @@ termékdöntése (az user-döntés; a kör csak a technikai lehetőséget adja m
 | `test/l10n/arb_parity_test.dart` | az ÚJ fragmentum felvétele a `fragments` listába — **pontosan egy tuple**, a meglévő 5 sor és az ellenőrző logika érintetlen |
 | `test/features/onboarding/onboarding_test.dart` | ma zöld, a migrált képernyőre állítandó; a lefedett viselkedés NEM gyengíthető |
 | `test/features/onboarding/*_test.dart` (4) | a §6 cellái |
+| `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör két ÚJ `lib/features/**/*_screen.dart`-ot hoz, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése (79 → 81), más állítás nem érinthető (§0.0/R6) |
 | `docs/rounds/e13-r16-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/features/**` az `onboarding/` KIVÉTELÉVEL ·
@@ -300,7 +336,7 @@ feltétel nélkülivé → az **A3** cellának PIROSNAK kell lennie → állíts
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/onboarding/bootstrap_routing_test.dart test/features/onboarding/permission_primer_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/first_win_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart
+tools/round-gate.sh test/features/onboarding/bootstrap_routing_test.dart test/features/onboarding/permission_primer_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/first_win_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/ui_inventory_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
