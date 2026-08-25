@@ -1,6 +1,7 @@
 # E13-R16 — Launch, recovery és onboarding migráció
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 6adea220`)
+- **Státusz:** READY (pre-flight lezárva 2026-08-25, `main @ 3848ef72` — lásd
+  §0.0 és §0.0/B; előre megírva 2026-08-15, `main @ 6adea220`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 16 — **az első képernyő-migrációs kör**
 - **Kör-azonosító:** `E13-R16`
 - **Branch:** `<motor>/e13-r16-launch-and-onboarding`
@@ -161,6 +162,110 @@ nem tartozó kulcsának érintése.
 `test/ui/goldens/` MA nem létezik (a kör hozza létre, a §4 már engedi); a
 golden-precedens `test/features/live/chord_timeline_golden_test.dart` létezik
 és valódi kapu; az ADR 0281 a `main`-en van.
+
+---
+
+## 0.0/B — A DISPATCH ELŐTTI pre-flight mérései (orchestrátor, 2026-08-25)
+
+A fenti R1–R5 az előkészítő batch mérése `main @ 0f05df02` ellen; ez a blokk a
+tényleges indítás előtt, `main @ 3848ef72` ellen mért. **Mind a négy lelet
+pontosítás vagy SZŰKÍTÉS — egyik sem tágítja az engedélyezett listát**
+([ADR 0087 §2](../adr/0087-autonomous-round-pipeline.md), [L478](../LESSONS.md)).
+
+**ADR:** a kör **nem ír új ADR-t**. A döntéseket a `main`-en lévő
+[ADR 0281](../adr/0281-permission-primer-and-honest-first-win.md) rögzíti
+(`0d65c861`), és a `docs/adr/**` a §3 tilos zónájában van. A 0,60-as küszöböt
+az ADR 0281 §2 Döntés-pontja kimondja — a brief §6.1 ezt tükrözi, nem újítja.
+
+### P1 — a 0,60-as küszöb KÖR-LOKÁLIS állandó, NEM a `confidenceThresholdProvider`
+
+*(A kör-prompt §1.1 „elérhetetlen cél-státusz" mérése: melyik BEMENET produkálja
+a cél-állapotot — a hívási úton mérve, nem a táblából olvasva.)*
+
+Mérve: `ConfidenceThresholdNotifier.defaultValue = 0.45`
+(`lib/features/settings/providers/confidence_threshold_provider.dart:10`) —
+felhasználó által állítható és perzisztált érték. A §6.1 „küszöb alatt" cellája
+**pontosan 0,45** bemenettel dolgozik.
+
+Ha tehát az „első siker" kapuja a `confidenceThresholdProvider`-t olvasná, a
+0,45-ös cella a küszöbre esne (`>=` inkluzív határ ⇒ **siker**), és az A3
+„nem siker" elvárása **elérhetetlenné** válna; ráadásul mind a három cella
+kimenetele egy felhasználói beállítástól függene.
+
+**Előírás:** a 0,60 a kör saját, `const` állandója a
+`lib/features/onboarding/` fán; az „első siker" út a
+`confidenceThresholdProvider`-t **nem olvassa**. (A `lib/features/settings/**`
+amúgy is tilos zóna.)
+
+### P2 — az A5 a kör SAJÁT fake motorján mérendő; új `AudioOwner` = tilos zóna
+
+*(A kör-prompt §1.2 „erőforrás-tulajdonlás" mérése a tényleges hívási láncon.)*
+
+Mérve — a mikrofon megszerzésének EGYETLEN útja:
+`createMicCapture(ref, AudioOwner.<x>)` (`lib/core/audio/audio_providers.dart:43`),
+és `enum AudioOwner { live, tuner, analyzeRecorder, latencyCalibration,
+diagnostics }` (`lib/core/audio/lifecycle/audio_session_lease.dart:5-11`) —
+**onboarding-variáns nincs**. Egy ilyen felvétele a `lib/core/audio/**`-ot
+írná, ami a §4 tilos zónája ⇒ `stopped`.
+
+A brief §3 ezért ír „fake átjáróval és motorral" mini Stage-et: az **A5**
+(mikrofon felszabadul a route elhagyásakor) a kör saját, onboarding-tulajdonú
+felszabadítási útján mérendő. Merge-elt minta, amit követni kell:
+`liveFrameProvider` → `ref.onDispose(engine.stop)`
+(`lib/features/live/providers/live_providers.dart:22`).
+
+Az engedély-primer NEM igényel tilos-zóna írást: a kapu
+`microphonePermissionGatewayProvider` (`lib/core/audio/audio_providers.dart:14`),
+és a MAI onboarding képernyő már ezen keresztül kér
+(`lib/features/onboarding/screens/onboarding_screen.dart:53`) — a tesztek
+`ProviderScope` override-dal fake átjárót adnak, pont ahogy a
+`MicrophonePermissionGateway` doc-commentje előírja.
+
+### P3 — `test/features/onboarding/first_win_test.dart` MA IS LÉTEZIK és zöld
+
+Az R3.2 ezt a hibaosztályt megtalálta, de csak az `onboarding_test.dart`-ra. A
+`first_win_test.dart` **szintén létező, zöld, legacy teszt** (87 sor, r155
+eredet, `36c93152`): állít a `Lessons.firstWin` szerkezetére, a
+`ChordShapes.has('Em')`-re, a `Lessons.nextAfter('first-win')` becsatornázásra
+és az onboarding utolsó oldalának CTA-jára.
+
+A §4 tehát nem „4 ÚJ teszt-fájlt" sorol: a `first_win_test.dart` **migrációs
+célpont**, és rá az R3.2 szabálya változatlanul áll — **a lefedett viselkedés
+NEM gyengíthető**, a kör a §6.1 cella-hármast és az A5-öt HOZZÁADJA, nem
+lecseréli. Ellenőrizve: `bootstrap_routing_test.dart`,
+`permission_primer_test.dart`, `onboarding_resume_test.dart` valóban nem
+léteznek (újak).
+
+### P4 — az A8/§5.6 a `BootstrapFailure` SZÖVEGÉBEN oldandó meg, a szerződés alakja NEM törhet
+
+Mérve, a mai helyreállítási út végig:
+
+1. `lib/app/bootstrap/app_bootstrap.dart:106` → `BootstrapFailure(['Bootstrap failed: $e'])`
+   — a kivétel **nyers `toString()`-je**;
+2. `lib/main.dart:57-58` → `runApp(BootstrapFailureApp(problems: problems))`;
+3. `lib/app/strumsight_app.dart:98` → `Text('• $p')` — a problémák szó szerint
+   a képernyőre kerülnek.
+
+Vagyis a §6.1 „`toString()` a helyreállítási hibán" PIROS cellája **ma tényleges
+viselkedés**, és a javítás helye (`lib/app/bootstrap/`) az engedélyezett listán
+van. A gyökér-javítás tehát scope-on belüli: a `catch` ág **redaktált,
+kód-alapú** üzenetet adjon, ne `$e`-t.
+
+**Kötött megszorítás:** a `BootstrapFailure`/`BootstrapSuccess` publikus alakja
+**forrás-kompatibilis** kell maradjon, mert két fogyasztója a tilos zónában van
+(`lib/main.dart:58`, `lib/app/strumsight_app.dart:53`). Mező **hozzáadása**
+(alapértelmezett értékkel) rendben; a `problems` típusának/nevének
+megváltoztatása vagy a konstruktor-szignatúra törése lefordíthatatlanná tenné
+két, nem szerkeszthető fájlt ⇒ `stopped`. Az ÚJ, redaktált helyreállítási
+felület a `lib/app/bootstrap/` fán éljen (route-ja a `lib/app/routing/`-ban),
+a golden- és route-teszt közvetlenül azt példányosítsa.
+
+### P5 — az `arb_parity_test.dart` `fragments` listája (pontosítás)
+
+Mérve: `test/l10n/arb_parity_test.dart:19-40`, öt tuple (`base/app`,
+`features/{community,design_system,gamification,tuner}`). A kör **pontosan egy**
+tuple-t vesz fel (`features/onboarding`), a meglévő ötöt és az ellenőrző
+logikát nem érinti — ahogy a §4 sora előírja.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
