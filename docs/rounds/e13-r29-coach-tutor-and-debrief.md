@@ -29,6 +29,7 @@ allowed_paths = [
   "test/features/tutor/tool_confirmation_test.dart",
   "test/features/tutor/prompt_injection_ui_test.dart",
   "test/ui/goldens/",
+  "test/ui/ui_inventory_test.dart",
   "docs/rounds/e13-r29-coach-tutor-and-debrief.md",
 ]
 gate_tests = [
@@ -37,6 +38,7 @@ gate_tests = [
   "test/features/tutor/tool_confirmation_test.dart",
   "test/features/tutor/prompt_injection_ui_test.dart",
   "test/ui/goldens/e13_r29_screens_golden_test.dart",
+  "test/ui/ui_inventory_test.dart",
 ]
 native_gate = false
 ```
@@ -90,6 +92,32 @@ A kör fájára hivatkozó további widget-tesztek közös infrastruktúrán él
 brief-revízió, nem csendes átírás. A körbe húzásuk a scope-fegyelem feladása
 lenne.
 
+### R4 — a képernyő-leltár őre (H3 önjavító kör, ADR 0112, 2026-08-25)
+
+A `test/ui/ui_inventory_test.dart` **repó-szintű** őr: a `tool/ui_inventory.dart`
+a `lib/features/**` fa `_screen.dart` végű fájljait számolja, a teszt pedig
+EGZAKT `hasLength(...)`-et állít rájuk. Ez a kör a(z) `lib/features/coach/`, `lib/features/tutor/` könyvtár-előtag
+alá képernyőt hoz vagy hozhat, tehát a szám **elmozdul**, és az exact-SHA Full
+Gate pirosra vált.
+
+A `test/ui/goldens/` előtag ezt **nem** fedi (az a `test/ui/` fának csak az egyik
+ága), a leltárteszt utólagos felvétele pedig tágítás, azaz **H3** — az
+orchestrátor a pre-flightban nem oldhatja fel ([L478](../LESSONS.md)). Ezért
+kerül a listára MOST, az önjavító körben.
+
+**MÉRVE (E13-R16, 2026-08-25):** pontosan ez a hiány állította meg a sáv első
+migrációs körét — [full-gate 32867296946](https://github.com/wolfcasaba/strumsight/actions/runs/32867296946)
+6366 passed / 2 failed, `hasLength(79)` a tényleges 81 ellen. A `9acd14e5`
+sáv-szintű batch pre-flight azért nem találta meg, mert a `tools/brief-lint.py`
+`S9` szabálya csak LITERÁLIS `*_screen.dart` útvonalat nézett, KÖNYVTÁR-előtagot
+nem — a predikátumot ugyanez az önjavító kör javította, regressziós teszttel
+([L483](../LESSONS.md)).
+
+**A jogosultság PONTOSAN a szám emelése** a kör tényleges képernyőszámára; a
+leltárteszt minden más állítása érintetlen marad. Kerülőút (képernyő-átnevezés
+vagy a `tool/ui_inventory.dart` szabályának lazítása) **TILOS** — az a mérce
+meghamisítása.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -137,6 +165,7 @@ módosítása · a beszélgetés-tartalom analitikába küldése · más képern
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a coaching-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/tutor/*_test.dart` (4) | a §6 cellái |
+| `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör új `lib/features/**/*_screen.dart`-ot hozhat, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése, más állítás nem érinthető (§0.0/R4) |
 | `docs/rounds/e13-r29-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/features/**` a két érintett KIVÉTELÉVEL ·
@@ -221,7 +250,7 @@ kell lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/features/tutor/tool_confirmation_test.dart test/features/tutor/prompt_injection_ui_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart
+tools/round-gate.sh test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/features/tutor/tool_confirmation_test.dart test/features/tutor/prompt_injection_ui_test.dart test/ui/goldens/e13_r29_screens_golden_test.dart test/ui/ui_inventory_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
