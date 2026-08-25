@@ -8644,6 +8644,19 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
+> **USER-DÖNTÉS 2026-08-25 — A LÁNC KIZÁRÓLAG A Ch13 (UI) SÁVOT VISZI, amíg a
+> teljes UI el nem készül (E13-R16 → E13-R36).** A sor-fájlban ezért MINDEN
+> nem-E13 `pending` sor `hold`-ra váltott (29 sor: E09-R28/R29/R31/R32 és az
+> E10 sáv nyitott sorai) — a driver csak `pending` sort admittál. Az alábbi
+> bekezdés Epic-9-re vonatkozó része ezzel **tárgytalan a lánc számára**; az
+> E09-R27 KÉSZ, a folytatása viszont a Ch13 zárásáig VÁR. Bizonyíték:
+> `tools/round-slots.py plan --slots 2` → `admitted: [E13-R16]`, minden más
+> elutasítva. Visszakapcsolás: `hold` → `pending` egyetlen commitban.
+> A `docs/rounds/e13-r16-launch-and-onboarding.md` **§0.0 pre-flight
+> brief-revíziót KAPOTT** (2026-08-25, merge `8319be6`) — négy lelettel,
+> köztük egy emberi döntéssel feloldott H3 lista-tágítással. **Olvasd el a
+> §0.0-t a kör indítása előtt; a pre-flight NE derítse fel újra.**
+
 > **Frissítve 2026-08-24 (E13-R15 után).** A **Ch13 sáv következő köre:
 > `E13-R16` — Launch és onboarding**
 > (`docs/rounds/e13-r16-launch-and-onboarding.md`, engine a queue-ban
