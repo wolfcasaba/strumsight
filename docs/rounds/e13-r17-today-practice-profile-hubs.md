@@ -552,3 +552,22 @@ csonkítás nélkül, `git status --short` üres utána. A golden gate 6/6 zöld
 `find lib/features -name '*_screen.dart' | wc -l` = 84).
 
 ## 11. Review — a Claude tölti ki
+
+**VÉGSŐ DÖNTÉS: APPROVED** — a teljes jelentés:
+[`docs/reviews/e13-r17-review.md`](../reviews/e13-r17-review.md)
+(reviewer: Claude Opus 5, read-only, izolált `/tmp/review-e13-r17` klón).
+
+- Nyitott BLOCKER **0**, MAJOR **0**; MINOR **2** (follow-up), NOTE **3**.
+- Saját célzott gate: **11/11 zöld**. Saját scope-audit: **OK**, 25 fájl,
+  0 sértés.
+- A §6.1 mátrix négy sora **saját valódi-sértés próbával** mérve — mind
+  PIROSRA vált (A2 metronóm harmadik szint mögé, A1 két egyenrangú primary,
+  A3 bejelentkezési fal, A8 kitalált statisztika), majd visszaállítva.
+- MINOR-1: a §6.1 kötelező próbáját az implementer nem a gyártási felületen
+  futtatta (teszt-lokális `_DepthLevel` fa) — a reviewer elvégezte, a mérce
+  áll, a lelet a jelentéssel lezárva.
+- MINOR-2: az A2 négy cellájából kettő tautologikus (a teszt-fát méri).
+- NOTE-1: a `core/design_system` 19 komponense ma nem használható shippelt
+  képernyőn (`StrumSightApp` `AppTheme`-et alkalmaz, az `Ss*` widgetek
+  `extension<SsColorScheme>()!`-t force-unwrappolnak) — a Ch13 záró körének
+  (E13-R36) vagy önálló ADR-nek a dolga.
