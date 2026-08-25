@@ -12,6 +12,7 @@ class LaunchScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return ColoredBox(
+      key: const ValueKey('launch-screen-background'),
       color: scheme.surface,
       child: Center(child: CircularProgressIndicator(color: scheme.primary)),
     );

@@ -83,14 +83,25 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // Scoped to ACTIONABLE labels (button text), not body copy — the
+      // reassurance "nothing was deleted" legitimately contains "delete" as
+      // a past-tense negation, not an offered action.
       const destructiveWords = ['delete', 'clear', 'reset', 'wipe', 'erase'];
-      final texts = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((t) => (t.data ?? '').toLowerCase())
-          .toList();
+      final buttonLabels = <String>[
+        for (final w in tester.widgetList<FilledButton>(
+          find.byType(FilledButton),
+        ))
+          _labelOf(w.child),
+        for (final w in tester.widgetList<TextButton>(find.byType(TextButton)))
+          _labelOf(w.child),
+        for (final w in tester.widgetList<OutlinedButton>(
+          find.byType(OutlinedButton),
+        ))
+          _labelOf(w.child),
+      ].map((s) => s.toLowerCase()).toList();
       for (final word in destructiveWords) {
         expect(
-          texts.any((t) => t.contains(word)),
+          buttonLabels.any((t) => t.contains(word)),
           isFalse,
           reason: 'safe mode must not offer a "$word" action (ADR 0281 §3)',
         );
@@ -139,7 +150,9 @@ void main() {
       );
       await tester.pump();
 
-      final coloredBox = tester.widget<ColoredBox>(find.byType(ColoredBox));
+      final coloredBox = tester.widget<ColoredBox>(
+        find.byKey(const ValueKey('launch-screen-background')),
+      );
       expect(coloredBox.color, theme.colorScheme.surface);
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
@@ -147,3 +160,5 @@ void main() {
 }
 
 void _noop() {}
+
+String _labelOf(Widget? child) => child is Text ? (child.data ?? '') : '';
