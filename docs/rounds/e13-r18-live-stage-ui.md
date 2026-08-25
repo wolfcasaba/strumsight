@@ -525,4 +525,165 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`). **Branch:** `sonnet-impl/e13-r18-live-stage-ui`.
+
+### 10.1 Mi készült el, fájlonként
+
+**Új fájlok:**
+
+- `lib/core/design_system/components/music/ss_strum_glyph.dart` — `SsStrumGlyph`,
+  generikus le/fel strum-irány glyph, a `StrumArrow` festő-logikájának
+  design-system-natív portja (saját `SsStrumDirection` enum, nincs
+  `core/music` függés). Az irány tier (0/1/2) a FORMÁT vezérli (kitöltött
+  hegy / nyitott sarok / nyitott sarok + üres pötty), nem csak a színt.
+- `lib/core/design_system/components/music/ss_chord_hero.dart` — `SsChordHero`,
+  a Stage `hero` slotjának messziről olvasható akkord-kijelzője
+  (`FittedBox(scaleDown)`, sosem fix magasság) + a `SsStrumGlyph`.
+- `lib/core/design_system/components/music/ss_beat_grid.dart` — `SsBeatGrid` +
+  `SsBeatGridSlot`, a `BeatCounter` generikus rács-motorja.
+- `lib/core/design_system/components/music/ss_tempo_display.dart` —
+  `SsTempoDisplay`, a "96 BPM · A=440 · Capo 2" olvasat.
+- `lib/core/design_system/components/music/ss_signal_quality_indicator.dart` —
+  `SsSignalQualityIndicator`, az 5-sávos szintmérő + a gyenge-jel
+  ikon+szöveg figyelmeztetés (a `defaultWeakThreshold = 0.12` PREZENTÁCIÓS
+  konstans itt él, nem a DSP-ben — §0.0/R9).
+- `test/features/live/live_stage_test.dart` — A1/A2/A3/A6/A10 cellák.
+- `test/features/live/live_mic_release_test.dart` — A4, mind a négy mért
+  kilépési út egy fájlban.
+- `test/features/live/live_announcement_throttle_test.dart` — A5, a három
+  kötelező mátrix-cella (200 ms / 1000 ms / 3000 ms).
+- `test/ui/goldens/e13_r18_screens_golden_test.dart` +
+  `test/ui/goldens/goldens/e13_r18_live_stage_{compact,compact_scale2}.png` — A9.
+
+**Módosított fájlok:**
+
+- `lib/features/live/screens/live_screen.dart` — a `build()` metódus teljesen
+  átépült `SsStageScaffold`-ra (öt slot); a `_LiveScreenState` életciklus-kódja
+  (wakelock, `_onAppLifecycle`, `dispose`, mikrofon-huzalozás) **VÁLTOZATLAN**
+  — csak a `_finish()`/`_finishing` és a `_liveRegion` mező új. A típusnév és
+  az útvonal **VÁLTOZATLAN** (§0.0/R5).
+- `lib/features/live/widgets/live_status_bar.dart` — az input-level mérő
+  kikerült (a `feedback` slotba költözött `SsSignalQualityIndicator`
+  formájában), a BPM/tuning szöveg `SsTempoDisplay`-re állt.
+- `lib/features/live/widgets/beat_counter.dart` — vékony adapter:
+  `BeatSlot`/`Strum` → `SsBeatGridSlot`, a rajzolást átadja `SsBeatGrid`-nek.
+  A saját tesztje (`live_widgets_test.dart`) változatlanul zöld — csak a
+  belső renderelő cserélődött, a `BeatSlot`-alapú publikus API nem.
+- `lib/features/live/widgets/live_lab_panel.dart` — **valódi bugfix**, nem
+  csak migráció: a fejléc-Row-ban lévő gomb ("Capture & analyze last ~60 s")
+  a Stage Wide-elrendezésének szűkebb (~262 px) oszlopában túlcsordult
+  (mérve: `test/features/live/live_lab_panel_test.dart` a Wide-ágat triggerelő
+  800×600 alap teszt-felületen). A gomb saját sorba került (cím fölött,
+  jobbra igazítva) — nulla vizuális szövegváltozás, a felirat és a
+  `find.text(...)` a tesztben változatlan.
+- `lib/core/design_system/public.dart` — az öt új export.
+- `lib/l10n/base/app_{en,hu}.arb` (FORRÁS) + `lib/l10n/app_{en,hu}.arb`
+  (GENERÁLT, `dart run tool/gen_l10n_segments.dart --write`) — három új kulcs:
+  `liveFinish`, `liveStarting`, `liveWeakSignal`.
+
+### 10.2 A1–A11 acceptance-cellák, bizonyítékkal
+
+| # | Státusz | Bizonyíték |
+|---|---|---|
+| A1 | ✅ | `git diff main -- lib/features/live/engine/` **üres** (mérve); `live_stage_test.dart` "A1" csoport — fix bemenő keret (C, down, 90%) ugyanazt a szöveget adja, mint a migráció előtt |
+| A2 | ✅ | `live_stage_test.dart` "A2" csoport, KÖTELEZŐ valódi-sértés próbával megerősítve — lásd §10.3 |
+| A3 | ✅ | `live_stage_test.dart` "A3" — 20% vs 92% konfidencia KÜLÖNBÖZŐ szemantika-szöveget ad (`SsStrumGlyph.semanticLabel`), nem csak színt |
+| A4 | ✅ | `live_mic_release_test.dart` — mind a négy mért kilépési út (navigáció, háttér, pause, Finish) leállítja a motort |
+| A5 | ✅ | `live_announcement_throttle_test.dart` — mindhárom mátrix-cella (200 ms összevon, 1000 ms határ inkluzív bejelent, 3000 ms minden változást bejelent); a vizuális szöveg minden esetben azonnal követi a keretet |
+| A6 | ✅ | `live_stage_test.dart` "A6" — portrait (412×915), landscape (915×412), expanded (1300×900), `tester.takeException()` nulla mindháromban |
+| A7 | ✅ | a meglévő regressziós tesztek (`live_widgets_test.dart`, `live_background_test.dart`, `live_mic_release_test.dart`) változatlanul zöldek — a `strumEngineProvider` (sima `Provider`) és a `liveFrameProvider` (`StreamProvider.autoDispose`) huzalozása egy sort sem változott |
+| A8 | ✅ | lásd §10.4 — a szándékos eltérések felsorolva |
+| A9 | ✅ | `test/ui/goldens/e13_r18_screens_golden_test.dart` zöld, a két PNG a diffben (`goldens/e13_r18_live_stage_compact.png`, `..._compact_scale2.png`) |
+| A10 | ✅ | `live_stage_test.dart` "A10" — mind a hat kombináció (active/paused/finishing × portrait/landscape) mutatja az `ss-session-transport-pause`/`-finish` kulcsot |
+| A11 | ✅ | `test/ui/ui_inventory_test.dart` **érintetlen**, `hasLength(84)` zöld (nincs új `*_screen.dart`); a hét S11-listás örökség-teszt + a `test/features/today/hub_navigation_test.dart` (a nyolcadik, listán kívüli pin) mind zöld, szintén érintetlenül |
+
+### 10.3 Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+Két kört futtattam, mert az első mutáció nem bizonyult valódi sértésnek —
+ez maga is dokumentálva van, mert azt mutatja, hogy az architektúra
+STRUKTURÁLISAN véd A2 ellen egy felszínes megközelítéssel szemben:
+
+1. **1. kísérlet (nem sértett):** az `isWeakSignal` kifejezést kiterjesztettem
+   `frame.current == null`-ra is (a live_screen.dart-beli döntésen). A teszt
+   **zöld maradt**, mert az `SsSignalQualityIndicator` maga is őrzi a saját
+   `isWeak` predikátumát (`listening && level < weakThreshold`) — a hívó által
+   átadott `weakLabel` önmagában nem elég a sáv megjelenítéséhez. Ez a
+   komponens saját kettős kapuzása, nem hiba a tesztben.
+2. **2. kísérlet (valódi sértés):** a `timeline` slot `ChordTimeline`
+   `events` paraméterét `isWeakSignal ? const [] : timeline`-re cseréltem —
+   azaz gyenge jelnél a filmstrip úgy tett, mintha nem lenne felismert
+   akkord. Lefuttatva:
+
+   ```
+   A2 — weak signal and "no chord" are distinct states weak signal WHILE a
+   chord is held shows the mic warning, not the "play a chord" prompt [E]
+   Expected: no matching candidates
+     Actual: _TextWidgetFinder:<Found 1 widget with text "Play a chord…": […]>
+     Which: means one was found but none were expected
+   ```
+
+   Az **A2 cella PIROSRA váltott**, pontosan a mátrix-mátrix szerint. A
+   mutációt visszaállítottam (`git diff` üres a `live_screen.dart`-on a
+   próba után), és a teljes `live_stage_test.dart` újra zöld (13/13).
+
+### 10.4 Szándékos eltérések a baseline-hoz képest (A8)
+
+1. **`SsChordHero`/`SsSessionTransport` NEM `SsChordHeroText`/`SsTypography`-n
+   keresztül él.** Mérve: `lib/app/strumsight_app.dart` a futó alkalmazást
+   `AppTheme.light()/.dark()`-kal témázza (`lib/core/theme/app_theme.dart`),
+   ami **csak** a `palette` extension-t regisztrálja — a `SsTypography`/
+   `SsColorScheme` NINCS bekötve. A `SsChordHeroText`/`SsStatusBadge` ezekre
+   `assert`-tel/`!`-lel támaszkodik, tehát élesben azonnal elszállna. A
+   `lib/core/theme/app_theme.dart` a kör tiltott zónájában van, tehát nem
+   javíthattam. Az öt új komponens ezért `context.palette` + explicit
+   `TextStyle`-t használ — pontosan azt a mintát követve, amit a
+   `ChordTimelineCard`/`LiveStatusBar` már ma is használ.
+2. **A "nincs akkord" hero NEM egy óriás placeholder-glyph.** Az első
+   verzióban egy `—` karaktert renderelt 96px-es betűmérettel — a teszt-hoston
+   (nincs betöltött márka-betűtípus) ez egy hatalmas "tofu" (hiányzó-glyph)
+   dobozra váltott a golden PNG-n. Túl azon, hogy ez a teszt-host
+   műterméke, ÖNMAGÁBAN is rossz UX egy nagy, magányos kötőjelet mutatni
+   "nincs akkord" állapotban, amikor a `timeline` slot alatta már mutatja a
+   "Play a chord…" felszólítást. A hero ezért `hasChord == false` esetén egy
+   visszafogott `Icons.music_note_outlined` ikonra vált.
+3. **A transport-státusz NEM kapcsol `idle`-re `liveAsync.isLoading` alatt.**
+   A §0.0/R8 tábla az "induló" állapotot `isLoading`-hoz köti; a transportot
+   erre gate-elve viszont minden `_togglePause()` utáni resume — ami
+   `ref.invalidate(liveFrameProvider)`-t hív, tehát rövid időre újra
+   `isLoading`-ba kerül, amíg az első új keret meg nem érkezik — ELTÜNTETTE
+   a Pause gombot (mérve: a `live_screen_test.dart` "Pause freezes the
+   display…" teszt pirosra váltott). A transport ezért csak
+   disabled/finishing/paused/active között különböztet; az "induló" állapot
+   a `statusHeader`-ben külön "Starting…" szövegként jelenik meg
+   (`l10n.liveStarting`), az `idle`/`countIn` transport-státusz a Live úton
+   így is elérhetetlen marad (a `countIn`-hez hasonlóan).
+4. **`SsStageScaffold.onRequestScreenAwake`/`onReleaseScreenAwake` NINCS
+   bekötve.** A `_LiveScreenState` már ma is (a migráció előtt is) maga
+   kezeli a wakelockot `initState`/`dispose`/`_onAppLifecycle`-ben — ez a
+   háttérbe-kerülés útját is lefedi, amit a scaffold két callbackje nem tud.
+   A kettő egyidejű bekötése duplán kapcsolná a wakelocket; a birtoklás
+   marad a feature rétegben (ADR 0276 §1), csak nem a scaffold hookján
+   keresztül.
+5. **`hasUnsavedSession: false`, mindig.** A Live szabad játék, nincs
+   menthető munkamenet-artefaktum — a `PopScope` back-gate kihasználatlan
+   marad ezen a képernyőn (más Stage módoknál, pl. Practice/Song, releváns
+   lehet, ha azok is migrálnak).
+6. **A Finish akció navigációs célja `context.pop()` ha van backstack, egyébként
+   `context.go(AppRoutes.learn)`.** A `/live` (shell tab) és a `/practice/live`
+   (top-level, pusholt) két különböző belépési útvonal a Live-ra (§0.0/R5
+   táblázat) — a `learn` egy semleges, mindig létező shell-ág, `lib/app/
+   routing/**`-et nem módosítottam.
+7. **`ChordDisplay`/`ConfidencePill` production-használata nem változott**
+   (már a migráció ELŐTT sem hívta őket a `LiveScreen` — a `ChordTimeline`
+   korábbi köre helyettesítette őket). A saját tesztjeik (`live_widgets_test.dart`)
+   érintetlenül zöldek; nem töröltem őket, mert a fájl nincs a kör hatáskörében
+   indokolt törlésre, és a törlés önmagában nem tartozna a kör scope-jához.
+
+### 10.5 A záró gate tényleges kimenete
+
+Lásd a §5 (Záró gate) blokk a jelen dokumentum végén — a kör
+`tools/round-gate.sh` futtatása előtt a teljes `test/features/live/` +
+`test/ui/goldens/` fa (199 teszt) és a `flutter analyze lib` (0 hiba)
+külön-külön ellenőrizve zöld.
+
 ## 11. Review — a Claude tölti ki
