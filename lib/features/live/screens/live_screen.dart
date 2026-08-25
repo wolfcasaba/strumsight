@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/routing/app_route.dart';
+import '../../../core/design_system/public.dart';
 import '../../../core/platform/app_lifecycle.dart';
 import '../../../core/platform/platform_providers.dart';
 import '../../../core/platform/screen_wakelock.dart';
@@ -26,9 +27,15 @@ import '../widgets/live_status_bar.dart';
 import '../../progress/public.dart';
 import '../../streak/public.dart';
 
-/// The Live "mirror": the hero screen. A horizontal chord timeline (newest
-/// chord large, previously recognised chords receding left, each with its ↓/↑
-/// strum direction) + rolling beat counter, glanceable while both hands play.
+/// The Live "mirror": the hero screen. Migrated onto [SsStageScaffold]
+/// (Ch13 §9.9, ADR 0276): a glanceable current-chord hero, a signal-quality
+/// feedback strip, the rolling chord-timeline + beat grid, and a bottom
+/// action bar carrying the mandatory Pause/Finish transport (ADR 0276
+/// decision 4) alongside Tuner/Metronome shortcuts.
+///
+/// Resource ownership is UNCHANGED by the migration (ADR 0276 §1): the
+/// wakelock and the microphone lease are still owned and released here, not
+/// by the scaffold — see [initState]/[dispose]/[_onAppLifecycle].
 class LiveScreen extends ConsumerStatefulWidget {
   const LiveScreen({super.key});
 
@@ -38,6 +45,7 @@ class LiveScreen extends ConsumerStatefulWidget {
 
 class _LiveScreenState extends ConsumerState<LiveScreen> {
   bool _paused = false;
+  bool _finishing = false;
   LiveFrame? _frozen;
   bool _practiceRecorded = false; // one streak credit per Live visit
 
@@ -53,6 +61,16 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   // Captured in initState so dispose/background never touch `ref`.
   late final ScreenWakelock _wakelock;
   late final AppLifecycleEvents _lifecycle;
+
+  // The throttled announcer for the recognised-chord narration (ADR 0280
+  // §2) — a plain field, not scaffold-owned (ADR 0276 §1): the visual
+  // widgets update every frame, only this narration is rate-limited.
+  final SsLiveRegion _liveRegion = SsLiveRegion();
+
+  // Gives the "finishing" transport state one visible frame before the
+  // route is actually left (§0.0/R8) — cancelled on dispose so a delayed
+  // callback never touches `ref`/`context` after unmount.
+  Timer? _finishTimer;
 
   @override
   void initState() {
@@ -89,6 +107,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   @override
   void dispose() {
     _lifecycle.removeListener(_onAppLifecycle);
+    _finishTimer?.cancel();
     unawaited(_wakelock.disable());
     // Stop the Lab-mode rolling capture when leaving Live (r199) — no buffering
     // once the screen is gone. Safe after unmount (touches no provider state).
@@ -129,6 +148,25 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         // and the engine restarts through the provider's own lifecycle —
         // otherwise a stale error banner lingers until the next frame.
         ref.invalidate(liveFrameProvider);
+      }
+    });
+  }
+
+  /// Ends the session and leaves the route (ADR 0276 decision 4 — the Finish
+  /// action the pre-migration `_ActionBar` never had). Stops the mic/wakelock
+  /// immediately; the actual navigation is deferred one short beat so the
+  /// `finishing` transport state gets a visible frame.
+  void _finish() {
+    if (_finishing) return;
+    setState(() => _finishing = true);
+    unawaited(ref.read(strumEngineProvider).stop());
+    unawaited(_wakelock.disable());
+    _finishTimer = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(AppRoutes.learn);
       }
     });
   }
@@ -183,57 +221,143 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // silent no-op. Not shown while paused (the engine is intentionally off).
     final micError = liveAsync.hasError && !_paused;
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: LiveStatusBar(
-                    frame: frame,
-                    a4: ref.watch(tuningReferenceProvider),
-                    capo: capo,
-                  ),
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final brightness = Theme.of(context).brightness;
+
+    // ---- Accessible announcement, throttled independently of the visual
+    // frame rate (ADR 0280 §2, §0.0/R8). ----
+    if (!_paused &&
+        frame.listening &&
+        frame.current != null &&
+        frame.engineTimeSec >= 0) {
+      final micros = (frame.engineTimeSec * 1e6).round();
+      _liveRegion.report(
+        frame.current!.transposed(-capo).label,
+        at: Duration(microseconds: micros),
+      );
+    }
+
+    // ---- Derived Stage state (§0.0/R8 — LiveFrame carries no state enum;
+    // every state below is derived from a measured input). ----
+    final isLoading = !_paused && liveAsync.isLoading;
+    final isWeakSignal =
+        !_paused &&
+        frame.listening &&
+        frame.inputLevel < SsSignalQualityIndicator.defaultWeakThreshold;
+    final hasChord = frame.current != null;
+
+    final transportStatus = !micGranted || (micError && !_paused)
+        ? SsSessionTransportStatus.disabled
+        : _finishing
+        ? SsSessionTransportStatus.finishing
+        : _paused
+        ? SsSessionTransportStatus.paused
+        : isLoading
+        ? SsSessionTransportStatus.idle
+        : SsSessionTransportStatus.active;
+
+    final latestStrum = frame.latestStrum;
+    final chordLabel = hasChord ? frame.current!.transposed(-capo).label : null;
+    final confColor = AppColors.confidence(frame.confidence, brightness);
+    final confTier = AppColors.confidenceTier(frame.confidence);
+
+    return SsStageScaffold(
+      // Live is free-play with no session artifact to save — no unsaved-data
+      // back-gate, and the wakelock stays owned by this State (ADR 0276 §1)
+      // rather than the scaffold's request/notify hooks, since it already
+      // has to track the app-lifecycle/background path those hooks don't
+      // cover.
+      statusHeader: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: LiveStatusBar(
+                  frame: frame,
+                  a4: ref.watch(tuningReferenceProvider),
+                  capo: capo,
                 ),
-                const SizedBox(width: 8),
-                const StreakBadge(),
-              ],
-            ),
-            if (!micGranted) const MicPermissionBanner(),
-            if (micGranted && micError)
-              MicErrorBanner(onRetry: () => ref.invalidate(liveFrameProvider)),
-            Expanded(
-              // The chord-timeline filmstrip: newest chord big on the right,
-              // previously recognised chords receding left, each with its
-              // own ↓/↑ strum direction. Subsumes the old big-chord + arrow +
-              // confidence-pill hero and the fingering overlay.
-              child: ChordTimeline(
-                events: timeline,
-                next: frame.next,
-                capo: capo,
-                listening: !_paused && frame.listening,
-                beat: beat,
+              ),
+              const SizedBox(width: 8),
+              const StreakBadge(),
+            ],
+          ),
+          if (!micGranted) const MicPermissionBanner(),
+          if (micGranted && micError)
+            MicErrorBanner(onRetry: () => ref.invalidate(liveFrameProvider)),
+        ],
+      ),
+      hero: SsChordHero(
+        chordLabel: chordLabel,
+        textColor: palette.ink,
+        direction: latestStrum == null
+            ? null
+            : (latestStrum.isDown
+                  ? SsStrumDirection.down
+                  : SsStrumDirection.up),
+        glyphColor: confColor,
+        confidenceTier: confTier,
+        directionSemanticLabel: latestStrum == null
+            ? null
+            : '${latestStrum.isDown ? l10n.strumDown : l10n.strumUp} '
+                  '${(latestStrum.confidence * 100).round()}%',
+      ),
+      feedback: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SsLiveRegionAnnouncer(controller: _liveRegion),
+          SsSignalQualityIndicator(
+            level: frame.inputLevel,
+            listening: !_paused && frame.listening,
+            activeColor: AppColors.primary,
+            trackColor: palette.track,
+            warningColor: AppColors.danger,
+            levelSemanticLabel: l10n.liveInputLevel,
+            weakLabel: isWeakSignal ? l10n.liveWeakSignal : null,
+          ),
+        ],
+      ),
+      timeline: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ChordTimeline(
+            events: timeline,
+            next: frame.next,
+            capo: capo,
+            listening: !_paused && frame.listening,
+            beat: beat,
+          ),
+          if (frame.bar.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: BeatCounter(
+                bar: frame.bar,
+                activeIndex: _activeSlot(frame),
               ),
             ),
-            if (frame.bar.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: BeatCounter(
-                  bar: frame.bar,
-                  activeIndex: _activeSlot(frame),
-                ),
-              ),
-            if (labMode) const LiveLabPanel(),
-            _ActionBar(
-              paused: _paused,
-              onTuner: () => context.push(AppRoutes.tuner),
-              onMetronome: () => context.push(AppRoutes.metronome),
-              onPauseToggle: _togglePause,
+          if (labMode)
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: LiveLabPanel(),
             ),
-          ],
-        ),
+        ],
+      ),
+      bottomAction: _ActionBar(
+        transportStatus: transportStatus,
+        pauseLabel: l10n.livePause,
+        resumeLabel: l10n.liveResume,
+        finishLabel: l10n.liveFinish,
+        idleLabel: isLoading ? l10n.liveStarting : null,
+        onPause: _togglePause,
+        onResume: _togglePause,
+        onFinish: _finish,
+        tunerLabel: l10n.liveTuner,
+        metronomeLabel: l10n.metronomeTitle,
+        onTuner: () => context.push(AppRoutes.tuner),
+        onMetronome: () => context.push(AppRoutes.metronome),
       ),
     );
   }
@@ -248,45 +372,70 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 }
 
+/// The Stage bottom-action slot: the mandatory Pause/Finish transport
+/// (ADR 0276 decision 4) plus the Tuner/Metronome shortcuts the pre-existing
+/// `_ActionBar` carried.
 class _ActionBar extends StatelessWidget {
   const _ActionBar({
-    required this.paused,
+    required this.transportStatus,
+    required this.pauseLabel,
+    required this.resumeLabel,
+    required this.finishLabel,
+    required this.idleLabel,
+    required this.onPause,
+    required this.onResume,
+    required this.onFinish,
+    required this.tunerLabel,
+    required this.metronomeLabel,
     required this.onTuner,
     required this.onMetronome,
-    required this.onPauseToggle,
   });
 
-  final bool paused;
+  final SsSessionTransportStatus transportStatus;
+  final String pauseLabel;
+  final String resumeLabel;
+  final String finishLabel;
+  final String? idleLabel;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
+  final VoidCallback onFinish;
+  final String tunerLabel;
+  final String metronomeLabel;
   final VoidCallback onTuner;
   final VoidCallback onMetronome;
-  final VoidCallback onPauseToggle;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _ActionButton(
-            icon: Icons.graphic_eq,
-            label: l10n.liveTuner,
-            onTap: onTuner,
-          ),
-          _ActionButton(
-            icon: paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-            label: paused ? l10n.liveResume : l10n.livePause,
-            onTap: onPauseToggle,
-            primary: true,
-          ),
-          _ActionButton(
-            icon: Icons.av_timer,
-            label: l10n.metronomeTitle,
-            onTap: onMetronome,
-          ),
-        ],
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SsSessionTransport(
+          status: transportStatus,
+          pauseLabel: pauseLabel,
+          resumeLabel: resumeLabel,
+          finishLabel: finishLabel,
+          idleLabel: idleLabel,
+          onPause: onPause,
+          onResume: onResume,
+          onFinish: onFinish,
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _ActionButton(
+              icon: Icons.graphic_eq,
+              label: tunerLabel,
+              onTap: onTuner,
+            ),
+            _ActionButton(
+              icon: Icons.av_timer,
+              label: metronomeLabel,
+              onTap: onMetronome,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -296,19 +445,15 @@ class _ActionButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.primary = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool primary;
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final fg = primary ? palette.onAccent : palette.ink;
-    final bg = primary ? AppColors.primary : palette.surface;
     return Semantics(
       button: true,
       label: label,
@@ -321,16 +466,14 @@ class _ActionButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: bg,
+                  color: palette.surface,
                   shape: BoxShape.circle,
-                  border: primary
-                      ? null
-                      : Border.all(color: palette.border, width: 1),
+                  border: Border.all(color: palette.border, width: 1),
                 ),
-                child: Icon(icon, color: fg, size: 26),
+                child: Icon(icon, color: palette.ink, size: 24),
               ),
               const SizedBox(height: 6),
               Text(
