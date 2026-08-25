@@ -6,9 +6,7 @@ import 'package:strumsight/app/bootstrap/bootstrap_result.dart';
 import 'package:strumsight/app/bootstrap/launch_screen.dart';
 import 'package:strumsight/app/bootstrap/recovery_screen.dart';
 import 'package:strumsight/app/routing/app_route.dart';
-import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/design_system/themes/ss_dark_theme.dart';
-import 'package:strumsight/core/storage/key_value_store.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
