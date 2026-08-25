@@ -114,7 +114,9 @@ class _PermissionPrimerScreenState
     final typography = Theme.of(context).extension<SsTypography>();
     return Scaffold(
       body: SafeArea(
-        child: Center(
+        // A9 (golden gate, textScaler 2.0): scrollable rather than
+        // overflowing when the primer's text grows past the viewport.
+        child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(SsSpacing.space6),
             child: Column(

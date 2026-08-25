@@ -259,7 +259,9 @@ class _Page extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    // A9 (golden gate, textScaler 2.0): the intro page must not overflow at
+    // a large text size — scrollable rather than clipped/cut off.
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
