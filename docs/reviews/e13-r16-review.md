@@ -346,3 +346,83 @@ motorral **tesztelhetően**"), és a mérés szerint a bekötés a listán kív�
 miatt e körben nem lehetséges. **A követő kör (E13-R17+) briefjének fel kell
 vennie azt a fájlt az `allowed_paths`-ra**, különben a mini Stage
 bekötése ismét H3-ba fut.
+
+---
+
+## 13. A teljes CI-suite két leletet talált, amit a célzott gate NEM fed (`68c3ad16`)
+
+A `full-gate.yml` `32867296946` futása a merge SHA-n **PIROS**:
+`6366 tests passed, 2 failed, 15 skipped`. **Mindkettő valódi regresszió**, és
+mindkettő a kör öt célzott teszt-fájlján KÍVÜL esik — a célzott gate nálam is,
+az implementernél is zöld volt. Ez a mérce-rés maga is tanulság (L→ §14).
+
+### F8 — a design system határának megsértése (scope-on BELÜL, **JAVÍTVA**)
+
+`test/core/architecture_dependency_test.dart` → *„design system boundaries
+(E13-R02) real production source reaches the design system only via
+public.dart"*. A kör MINDHÁROM új képernyője közvetlenül importálta a
+`design_system/foundations/**`-ot (és a primer a `components/feedback/**`-ot is)
+a `public.dart` helyett — 11 sértés.
+
+**Miért nem fogta a célzott gate:** a `tools/round-gate.sh` `architecture`
+lépése a `tool/check_architecture.dart`-ot futtatja („Architecture dependencies
+OK (12 allowlisted deviation(s))"), ami egy **másik**, tágabb szabálykészlet —
+az E13-R02 design-system-határ mércéje egy külön `test/core/` teszt, amit csak
+a teljes suite futtat.
+
+**Javítva** a javító kör 3-ban (`ded7a628`): mindhárom fájl `public.dart`-on át
+importál. Mind a három fájl a kör engedélyezett listáján van, tehát a javítás
+teljes egészében scope-on belüli. Saját mérésem a javítás után:
+
+```
+$ flutter test test/core/architecture_dependency_test.dart \
+    test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/ui_inventory_test.dart
+00:02 +54 -1
+```
+
+— az architecture-teszt ZÖLD, és a **10 golden PNG bit-azonos maradt** (a diff
+egyetlen `.png`-t sem érint), tehát valóban csak import-csere történt.
+
+### F9 — a képernyő-leltár számlálója (scope-on KÍVÜL, **H3**)
+
+`test/ui/ui_inventory_test.dart:14` → `expect(first.screenPaths, hasLength(79))`.
+
+A kör két új képernyőt ad a leltár hatókörébe
+(`lib/features/onboarding/screens/permission_primer_screen.dart` és
+`first_win_stage_screen.dart`), ezért a mért érték **81**. (A
+`lib/app/bootstrap/` alatti `launch_screen.dart`/`recovery_screen.dart` a
+`tool/ui_inventory.dart` szabálya szerint NEM számít bele — mérve.)
+
+Reprodukció:
+
+```
+$ flutter test test/ui/ui_inventory_test.dart
+Expected: an object with length of <79>
+```
+
+Mért új érték (eldobható próbával, `UiInventory(Directory.current).render()`):
+`SCREEN_COUNT=81`.
+
+**Ez a lelet a körön belül NEM javítható.** A `test/ui/ui_inventory_test.dart`
+NINCS a brief `allowed_paths`-án (a lista `test/ui/goldens/` **könyvtár**-előtagot
+tartalmaz, nem a `test/ui/` fát), és a felvétele **tágítás, azaz H3**
+(ADR 0087 §2; [L478](../LESSONS.md): a pre-flight csak SZŰKÍTHET). Az
+orchestrátor ezt nem oldhatja fel.
+
+**A kerülőutak kifejezetten tiltottak** és nem is kértem őket: a képernyők
+átnevezése/áthelyezése vagy a `tool/ui_inventory.dart` szabályának lazítása a
+mérce meghamisítása lenne, nem javítás.
+
+## 14. Merge-állapot
+
+**A kör MINDEN egyéb mércéje zöld**, a merge-jelölt `64f02585`-ön:
+
+- célzott gate 10/10 zöld (saját futtatás, izolált klón);
+- scope-audit ok, 0 sértés;
+- Router CI `success` (`32867354718`, a `68c3ad16` SHA-n);
+- a review 8 leletéből 7 zárva, az F5 NOTE szándékosan nyitva;
+- a teljes suite 2 leletéből az F8 javítva.
+
+**Egyetlen nyitott elem az F9**, aminek a javítása pontosan **egy szám** egy
+listán kívüli fájlban (`79` → `81`). A kör ezért **H3 halttal** áll meg, nem
+merge-eléssel; a döntés az önjavító körre / emberre tartozik.
