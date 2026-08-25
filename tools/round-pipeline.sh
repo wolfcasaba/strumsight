@@ -146,8 +146,19 @@ heal_model_explicit=${PIPELINE_SELFHEAL_MODEL:+1}
 # viszont a kör sajátja (queue `engine` oszlop), tehát a párosítás mindig
 # együtt utazik a körrel.
 #
-#   sonnet-impl implementer  → Opus 5, effort max   (UI-sáv)
+#   sonnet-impl implementer  → Opus 5, effort high  (UI-sáv)
 #   minden más               → a globális default   (Sonnet 5, effort high)
+#
+# EFFORT max → high (user-döntés 2026-08-25, mért indokkal). A `max` effort a
+# kör MINDKÉT Claude-oldalát (Opus 5 orchestrátor/reviewer + Sonnet 5
+# implementer) UGYANARRA az előfizetésre terheli, és a heti keret lett a sáv
+# szűk keresztmetszete: az utolsó 60 pipeline-session közül 18 a heti limiten
+# halt meg, az E13-R16 körön 15,2 óra ment el emiatt
+# (docs/execution/ch13-throughput-diagnosis.md). A user döntése: az implementer
+# NEM változik (az UI-minőség a Sonnet 5-ön múlik), a megtakarítás az
+# orchestrátor-oldalról jön. A mérce nem gyengül: a kör-gate, a scope-audit, a
+# független review és az exact-SHA CI változatlan. Visszaemelés egyetlen
+# env-vel: PIPELINE_UI_ORCH_EFFORT=max.
 orch_pair_model() {    # $1=implementer motor
   case "${1:-}" in
     sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_MODEL:-claude-opus-5}" ;;
@@ -156,7 +167,7 @@ orch_pair_model() {    # $1=implementer motor
 }
 orch_pair_effort() {   # $1=implementer motor
   case "${1:-}" in
-    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_EFFORT:-max}" ;;
+    sonnet-impl) printf '%s' "${PIPELINE_UI_ORCH_EFFORT:-high}" ;;
     *)           printf '%s' "$claude_effort" ;;
   esac
 }
@@ -623,7 +634,14 @@ write_resume_state() {   # $1=kör → a jelentés útvonala a stdouton
 # sessiont a 20 perces elakadás-őr lőtte le a CI-dispatch+merge közben, a kör
 # H-NOSIGNAL-t kapott és két önjavító kör kellett a feloldásához. A vak
 # védőháló rosszabb, mint a nincs: hamis biztonságot adott.
-CLAUDE_LIMIT_PATTERN='usage limit reached|Claude usage limit|out of (usage|credits)|insufficient (credit|quota)|rate.?limit(ed)? exceeded|quota exceeded|upgrade to continue|limit will reset|you.?ve (hit|reached) your (usage|session) limit|session limit reached|used 100% of your session limit|[0-9]+-hour limit reached'
+# MÉRVE 2026-08-25 (E13-R16, E09-R27): a CLI a HETI keret kimerülésekor a
+# „You've hit your weekly limit · resets 8am (UTC)" mondatot írja ki. A minta
+# `(usage|session)` csoportja erre NEM illeszkedett, ezért a kvóta-ág nem
+# lépett: az utolsó 60 pipeline-session közül 18 pontosan ezen a mondaton halt
+# meg, mindet H-NOSIGNAL-nak minősítve. Ára egyetlen körön (E13-R16, 1121 perc
+# a 90 perces medián helyett): 4 elköltött session + önjavítási kísérlet
+# 22:50–02:40 között, majd 11 óra 25 perc álló lánc kézi `--resume`-ra várva.
+CLAUDE_LIMIT_PATTERN='usage limit reached|Claude usage limit|out of (usage|credits)|insufficient (credit|quota)|rate.?limit(ed)? exceeded|quota exceeded|upgrade to continue|limit will reset|you.?ve (hit|reached) your (usage|session|weekly) limit|session limit reached|used 100% of your session limit|[0-9]+-hour limit reached|weekly limit reached'
 
 # A session-keret FOGYÁSMÉRŐJE (nem kimerülés). A bannert a CLI folyamatosan
 # frissíti, ezért belőle a kimerülés ELŐTT megtudható, hogy egy ~85 perces kör
@@ -1402,6 +1420,48 @@ codex_usage_limit_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 
   return 1
 }
 
+# --- Claude-kvóta hold (E13-R16 mérés, 2026-08-25) -------------------------
+# Ugyanaz a „csendes kihagyás" elv, mint a Terra napi-budgetnél és a Codex CLI
+# usage-limitnél, a harmadik motor-rétegre: a Claude-előfizetés kimerülése
+# KÜLSŐ, IDŐZÍTETT akadály — nincs mit javítani a repóban. A korábbi
+# viselkedés (H-NOSIGNAL → önjavító kör → megint kvótafal → lánc-HALT kézi
+# `--resume`-ig) a kísérletkeretet és a wall-clockot is elégette.
+#
+# A reset-időt a banner adja (`resets 8am (UTC)`), a parszolás a meglévő
+# `claude_session_reset_epoch`-kal történik. HETI limitnél ez alulbecsülhet (a
+# függvény napon belül/holnapra kerekít) — ez SZÁNDÉKOS és önjavító: a hold
+# lejártakor a lánc újra próbálkozik, és ha a keret még zárva van, az első
+# session újra kiírja a holdot. Egy napi egy elveszett session-indítás az ára,
+# szemben a mért 3 önjavító kísérlettel + 11 órás álló lánccal.
+claude_quota_hold_file() { printf '%s/claude-quota-hold' "$state_dir"; }
+
+claude_quota_hold_if_detected() {   # $1=kör $2=session-napló → hold, ha a naplóban kvóta-nyom van
+  local round="$1" logfile="$2" epoch
+  [ -n "$logfile" ] && [ -r "$logfile" ] || return 1
+  grep -qaEi "$CLAUDE_LIMIT_PATTERN" "$logfile" 2>/dev/null || return 1
+  epoch=$(claude_session_reset_epoch "$logfile" 2>/dev/null || true)
+  case "$epoch" in ''|*[!0-9]*) epoch=$(( $(date +%s) + claude_block_seconds )) ;; esac
+  printf 'round=%s\nhold_until=%s\n' "$round" "$epoch" > "$(claude_quota_hold_file)"
+  printf '%s\n' "$epoch" > "$claude_block_file"
+  log "Claude-kvóta kimerült — $round felfüggesztve $(date -Is -d "@$epoch")-ig (a firing-ok addig session és önjavítási kísérlet nélkül kilépnek)"
+  return 0
+}
+
+claude_quota_hold_active_for() {   # $1=kör → 0 ha AKTÍV hold van rá, 1 egyébként (lejárt/nincs/másik kör → törli a lejárt/idegen fájlt)
+  local round="$1" hold_file hold_round hold_until
+  hold_file=$(claude_quota_hold_file)
+  [ -f "$hold_file" ] || return 1
+  hold_round=$(grep -m1 '^round=' "$hold_file" | cut -d= -f2-)
+  hold_until=$(grep -m1 '^hold_until=' "$hold_file" | cut -d= -f2-)
+  case "$hold_until" in ''|*[!0-9]*) rm -f "$hold_file"; return 1 ;; esac
+  if [ "$hold_round" = "$round" ] && [ "$(date +%s)" -lt "$hold_until" ]; then
+    log "Claude-kvóta felfüggesztés aktív ($round, $(date -Is -d "@$hold_until")-ig) — a firing kihagyva, nincs session, nincs önjavítási kísérlet"
+    return 0
+  fi
+  rm -f "$hold_file"
+  return 1
+}
+
 handle_round_halt() {   # $1=kör $2=status-fájl $3=session-napló — a HALT ELSŐ észlelésekor: halt_file írás + Terra-hold determinisztikus ellenőrzés
   # Módosítás (ADR 0112 önjavító kör, 2026-08-02, E03-R08 H6 5. előfordulás,
   # lásd docs/LESSONS.md L63 folytatása): korábban a Terra napi-hold
@@ -1424,6 +1484,7 @@ handle_round_halt() {   # $1=kör $2=status-fájl $3=session-napló — a HALT E
   } > "$halt_file"
   terra_hold_if_exhausted "$round"
   codex_usage_limit_hold_if_detected "$round" "$summary"
+  claude_quota_hold_if_detected "$round" "$session_log" || true
   log "HALT ($halt_code) a(z) $round körön — $summary"
   notify "⛔ HALT ($halt_code): $round" "$summary — az önjavító kör a következő firingen indul" high
   log "az önjavítás (ADR 0112) a következő cron-firingen indul; kikapcsolva: PIPELINE_SELFHEAL=0"
@@ -2084,6 +2145,14 @@ case "${1:-}" in
       exit 1
     fi
     ;;
+  --claude-quota-hold-if-detected)    # $2=kör $3=session-napló → teszthorog (E13-R16 mérés)
+    claude_quota_hold_if_detected "${2:-}" "${3:-}"
+    exit $?
+    ;;
+  --claude-quota-hold-active)    # $2=kör → teszthorog: aktív-e a Claude-kvóta hold
+    claude_quota_hold_active_for "${2:-}"
+    exit $?
+    ;;
   --codex-usage-limit-hold-if-detected)    # $2=kör $3=szöveg → teszthorog: meghívja codex_usage_limit_hold_if_detected-et (E05-R15 H6 önjavítás)
     codex_usage_limit_hold_if_detected "${2:-}" "${3:-}"
     exit 0
@@ -2231,6 +2300,11 @@ fi
 # kihagyás" elv, más réteg: a Codex CLI ALATT futó fiók (bármelyik
 # motor-profil) tényleges upstream kvótája, nem a router belső számlálója.
 if [ -n "$active_round" ] && codex_usage_limit_hold_active_for "$active_round"; then
+  exit 0
+fi
+# Claude-előfizetés kvóta-hold (E13-R16 mérés) — a harmadik motor-réteg,
+# ugyanazzal a szerződéssel: se session, se önjavítási kísérlet a reset előtt.
+if [ -n "$active_round" ] && claude_quota_hold_active_for "$active_round"; then
   exit 0
 fi
 [ -n "$active_round" ] && terra_clear_stale_halt_for "$active_round"
@@ -2766,6 +2840,15 @@ run_orchestrator_session "pipeline-$round" "$prompt_file" "$session_log" \
 # A session KÖTELESSÉGE megírni a $status_file-t. Ha nincs, a jelentését NEM
 # fogadjuk el bemondásra — ez ugyanaz a szabály, mint az implementer-oldalon
 # (AGENTS.md §15.2): jelzés nélküli futás = bukott futás.
+if [ ! -f "$status_file" ] && claude_quota_hold_if_detected "$round" "$session_log"; then
+  # A session a Claude-kereten halt meg, nem a repón: NINCS HALT-fájl, nincs
+  # önjavító kör. A hold lejártáig a firing-ok kilépnek, utána a kör újra
+  # sorra kerül — pontosan az a viselkedés, amit a Terra/Codex holdok adnak.
+  git checkout -q main 2>/dev/null || true
+  log "KVÓTA: a(z) $round orchestrátor-sessionje a Claude-kereten halt meg — nincs HALT, a lánc a reset után folytatja"
+  notify "⏳ Claude-kvóta: $round" "a kör a keret-reset után automatikusan újraindul" high
+  exit 0
+fi
 if [ ! -f "$status_file" ]; then
   {
     echo "round=$round"
