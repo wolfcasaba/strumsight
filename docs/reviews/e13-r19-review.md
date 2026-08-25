@@ -229,4 +229,49 @@ Full Gate + Router CI zölden a merge SHA-n.
 
 ## 9. Javító kör — a leletek zárása
 
-*(a javító kör után töltendő)*
+**Javító kör:** `2c3df0ee` (MINOR-1), `e7d143eb` (MINOR-2), `b353a47c` (§10.7
+handoff). Motor: ugyanaz (`sonnet-impl`). Scope-audit a javító körre:
+`scope_audit=ok`, 5 változott útvonal.
+
+### MINOR-1 — ZÁRVA
+
+`lib/features/tuner/screens/tuner_screen.dart` `_TunerFeedback`: az
+`unstable` ág mostantól **ugyanazt az irány-ikont és irány-szöveget** kapja,
+mint az `outOfTune` (`TunerUiState.unstable || TunerUiState.outOfTune` közös
+ág), és a `Hold steady…` egy hozzáadott, halványabb MÁSODIK sor — nem
+helyettesíti az irányt. Az implementer az 1. feloldást választotta, a
+review-ban felkínált kettő közül.
+
+**Őrcella:** `tuner_ui_mapping_test.dart` új cellája („unstable: the direction
+stays visible as primary text…") két azonos hangú leolvasást ad 30 centtel
+egymástól, majd EGYSZERRE állítja a `'40 cents sharp'` szöveget, az
+`Icons.arrow_upward` ikont ÉS a `'Hold steady…'` másodlagos sort. A javítás
+ELŐTTI kódon ez a cella piros lenne (a §5.3 próbám pontosan azt mérte, hogy
+az irány-szöveg 1 → 0 widgetre vált) — tehát a lelet gépi őrt kapott, nem csak
+javítást.
+
+### MINOR-2 — ZÁRVA
+
+`reference_tone_provider.dart`: a `dispose()` első lépése immár `await stop()`,
+és csak utána jön a player teardown — ezzel a felület élővé vált, és a
+„mid-tone leállás" állítás szó szerint igaz.
+
+**Őrcella:** `tuner_route_cleanup_test.dart` A5-cellája új állítást kapott
+(`tone.stopCalls == 1`), a fake `dispose()`-a pedig a valódi sorrendet
+tükrözi. A javítás előtti kódon `stopCalls == 0` lett volna → piros.
+
+### Saját újramérés a javító kör után
+
+Friss izolált klón (`/tmp/review2-e13-r19`, `git fetch` → `reset --hard`
+b353a47c → `prepare-flutter-generated.sh` → gate): **mind a 22 lépés ZÖLD**
+(`GATE_EXIT=0`).
+
+A NOTE-1…NOTE-3 szándékosan nyitva marad (nem blokkol, és a javításuk
+fölöslegesen hizlalná a diffet); a NOTE-4 `tools/` hatáskör, GOV/önjavító kör
+dolga.
+
+## 10. VÉGSŐ DÖNTÉS: APPROVED
+
+Nincs nyitott BLOCKER, MAJOR vagy MINOR. A merge feltétele változatlanul az
+exact-SHA zöld kapu: `full-gate.yml` + `router-ci.yml` `success` a merge
+SHA-ján (ADR 0052/0086).
