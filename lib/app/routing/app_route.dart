@@ -1,6 +1,9 @@
 /// Central catalogue for every route path exposed by the application.
 abstract final class AppRoutes {
   static const String welcome = '/welcome';
+  // SDD Ch13 Kör 16 (ADR 0281 §3/§6) — the in-app safe-mode/recovery
+  // surface, distinct from the pre-first-frame `BootstrapFailureApp`.
+  static const String recovery = '/recovery';
   static const String live = '/live';
   static const String analyze = '/analyze';
   static const String learn = '/learn';

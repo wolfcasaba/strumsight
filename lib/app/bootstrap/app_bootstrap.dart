@@ -100,10 +100,19 @@ abstract final class AppBootstrap {
       );
     } on ConfigurationException catch (e) {
       return BootstrapFailure(e.problems);
-    } catch (e) {
+    } catch (e, stackTrace) {
       // An unexpected boot error is still a controlled failure screen, not a
-      // crash-before-first-frame.
-      return BootstrapFailure(['Bootstrap failed: $e']);
+      // crash-before-first-frame. The raw exception is logged for
+      // diagnostics but NEVER put in the returned problem text (ADR 0277 §1,
+      // ADR 0281 §6, E13-R16 P4) — that text reaches the screen verbatim.
+      (logger ?? createDefaultAppLogger()).error(
+        'bootstrap.unknown_error',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      return const BootstrapFailure([
+        'Unexpected startup error (bootstrap.unknown). Please restart the app.',
+      ]);
     }
   }
 

@@ -40,6 +40,7 @@ import '../../features/live/screens/live_screen.dart';
 import '../../features/metronome/screens/metronome_screen.dart';
 import '../../features/onboarding/onboarding_provider.dart';
 import '../../features/onboarding/screens/onboarding_screen.dart';
+import '../bootstrap/recovery_screen.dart';
 import '../../features/practice/presentation/screens/practice_hub_screen.dart';
 import '../../features/practice/presentation/screens/practice_result_screen.dart';
 import '../../features/practice/presentation/screens/practice_setup_screen.dart';
@@ -229,6 +230,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.welcome,
         builder: (_, _) => const OnboardingScreen(),
+      ),
+      // SDD Ch13 Kör 16 (ADR 0281 §3/§6) — the in-app safe-mode surface.
+      // `extra` carries the already-redacted problem strings; a direct hit
+      // with no `extra` (e.g. a deep link) renders with an empty list rather
+      // than crashing.
+      GoRoute(
+        path: AppRoutes.recovery,
+        builder: (_, state) => RecoveryScreen(
+          problems: (state.extra as List<String>?) ?? const <String>[],
+        ),
       ),
       ShellRoute(
         builder: (context, state, child) =>
