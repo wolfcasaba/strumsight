@@ -1956,15 +1956,27 @@
       }
     }
   },
+  "liveFinish": "Befejezés",
+  "@liveFinish": {
+    "description": "Ends the current Live session and leaves the screen (ADR 0276 decision 4)."
+  },
   "liveInputLevel": "Bemeneti szint",
   "liveListening": "Figyelek…",
   "liveNext": "Következő",
   "livePause": "Szünet",
   "liveResume": "Folytatás",
+  "liveStarting": "Indul…",
+  "@liveStarting": {
+    "description": "Shown while the detection engine's first frame is still loading."
+  },
   "liveTuner": "Hangoló",
   "liveWaitingForChord": "Pengess egy akkordot…",
   "@liveWaitingForChord": {
     "description": "Idle prompt shown in the Live chord timeline before any chord is detected."
+  },
+  "liveWeakSignal": "Gyenge jel — menj közelebb",
+  "@liveWeakSignal": {
+    "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
   },
   "metronomeBpm": "BPM",
   "metronomeStart": "Indítás",
