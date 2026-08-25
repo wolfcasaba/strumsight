@@ -1,5 +1,71 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R16 KÉSZ — Launch, recovery és onboarding migráció — PR [#453](https://github.com/wolfcasaba/strumsight/pull/453), squash `8e530735` (2026-08-25)
+
+A Ch13 **első képernyő-migrációs köre**. Implementer `sonnet-impl` (Claude
+Sonnet 5, `--effort high`), orchesztrátor/reviewer Claude Opus 5. ADR **0281**
+(már a `main`-en volt — a kör nem írt új ADR-t, és nem osztott új számot
+merge-elt döntés fölé).
+
+**Mi készült.** Bootstrap-redakció (A8: a nyers kivétel nem megy a
+felhasználónak megjelenő szövegbe); `RecoveryScreen` + `/recovery` route (A4:
+in-app biztonságos mód, adattörlő akció NÉLKÜL); villanásmentes `LaunchScreen`;
+onboarding-ellenőrzőpont (A6/A7: `OnboardingStep {welcome, permission, done}` +
+migráció a legacy `ss.onboarding.seen` boolból); `PermissionPrimerScreen`
+(A1/A2: a rendszer-párbeszéd ELŐTT indokol, végleges elutasításnál csak
+beállítás-út); „első siker" mini Stage (A3/A5: fake motorral, kör-lokális
+`kFirstWinConfidenceThreshold = 0.60`, `ref.onDispose` felszabadítással);
+golden-kapu (A9: 10 PNG = 5 képernyő × 2 keret, két valódi túlcsordulást talált
+és javított); l10n fragmentum az ADR 0307 §4 útján.
+
+**Négy javító kör** ([review](docs/reviews/e13-r16-review.md) — **APPROVED**).
+Az első verdikt CHANGES REQUESTED volt **zöld célzott gate mellett**:
+
+- **F1 BLOCKER (A1):** a karusszel a primer MEGKERÜLÉSÉVEL kért
+  rendszer-engedélyt, és a `PermissionPrimerScreen` a futó appban elérhetetlen
+  volt (az A1 teszt csak az IZOLÁLT widgetet mérte). Az implementer indoklása
+  mérve téves volt: a legacy E2E teszt fake átjárója `granted`, ahol a primer
+  átfutó no-op. Javítva, a listán kívüli `onboarding_first_win_test.dart`
+  módosítás nélkül zölden maradt.
+- **F2/F3 MAJOR:** egyetlen input által sem előállítható enum-állapot törölve;
+  a perzisztált `enum.index` sorrend-szerződéshez kipinnelt őrcella.
+- **F6 MINOR** — reviewer-próbateszttel találva: az A1 őre csak az EGYIK CTA-t
+  fedte, a másik útra injektált sértés MINDEN tesztet zölden hagyott.
+- **F8/F9** — a **teljes CI-suite** két olyan leletet hozott, amit a célzott
+  gate szerkezetileg nem fedhetett (repó-szintű invariáns-tesztek a kör hat
+  céltesztjén kívül): a design-system barrel-határ 11 sértése (javítva, a 10
+  golden bit-azonos maradt), és a képernyő-leltár `hasLength(79)` őre.
+
+**Az F9 H3 volt, és a lánc önjavító köre oldotta fel.** A leltárteszt nem
+szerepelt az `allowed_paths`-on, a felvétele pedig tágítás → a kör megállt. A
+`c064566f` HEAL (PR [#454](https://github.com/wolfcasaba/strumsight/pull/454))
+felvette a listára ÉS a `gate_tests`-be, megírta a brief §0.0/R6-ját, és a
+**gyökérokot** is javította (`tools/brief-lint.py` `S9`). A folytatás a §0.3
+upstream-szinkronnal vette át (`git merge --no-ff origin/main` → `721ab1f0`,
+konfliktus nélkül), a javító kör 4 pedig ebből pontosan **egy számot** írt át:
+`79` → `81` ([L484](docs/LESSONS.md)).
+
+**Evidencia** (merge-jelölt `14c36e90`): célzott gate **11/11 ZÖLD**
+(`GATE_EXIT=0`, izolált `/tmp` klón, csővezeték nélkül), utána a klón
+`git status --short` üres; reviewer-próba #4 (extra `_screen.dart` injektálva)
+→ `has length of <82>`, `Some tests failed` ⇒ az őr valódi; scope-audit **35
+útvonal, 0 sértés**; Full Gate
+[32875752367](https://github.com/wolfcasaba/strumsight/actions/runs/32875752367)
++ Router CI
+[32875755561](https://github.com/wolfcasaba/strumsight/actions/runs/32875755561)
+mindkettő `success` a merge SHA-n; az `origin/main` a dispatch óta nem mozdult.
+
+**Nyitva hagyva (szándékosan).** **F5 NOTE:** a redaktált bootstrap-üzenet nem
+lokalizált — a §0.0/B P4 (a `BootstrapFailure` alakja nem törhet, két
+fogyasztója tilos zónában) miatt a körben nem oldható. **A
+`FirstWinStageScreen` bekötése:** kész, bizonyított komponens, de a `lib/` fából
+még nem hivatkozott; a bekötést a listán kívüli
+`test/app/routing/onboarding_first_win_test.dart` egyetlen-settle elvárása
+blokkolja — **a következő kör briefjének fel kell vennie azt a fájlt az
+`allowed_paths`-ra** (review §12).
+
+---
+
 ## ✅ [HEAL E13-R16/H3] KÉSZ — az `S9` képernyő-leltár őre KÖNYVTÁR-előtagra is lő; a Ch13 sáv 20 halálának megszüntetése — PR [#454](https://github.com/wolfcasaba/strumsight/pull/454) (2026-08-25, L483)
 
 **A halt.** Az `E13-R16` KÉSZ volt és minden mércéje zöld — célzott gate 10/10,

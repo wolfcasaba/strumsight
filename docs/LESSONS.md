@@ -18517,3 +18517,79 @@ pre-flightjának hatásköre; nem kellett hozzá önjavító kör.
 `BriefUiInventoryDirectoryPrefixTest` (a javítás előtt 3 cella PIROS), plusz a
 korpusz-mérce `RealBriefCorpusTest::test_no_done_round_is_flagged`, ami a
 `pipeline-queue.tsv` `status` oszlopához köti a fals-pozitív határt.
+
+## L484 — Egy H3-ban megállt kör javítása a `main`-en érkezik meg, nem az ágon: az önjavító kör brief-revíziója a §0.3 upstream-merge NÉLKÜL láthatatlan, és az implementer helyesen újra ugyanazt a H3-at emelné (E13-R16, javító kör 4, 2026-08-25)
+
+**Mit mértem.** Az E13-R16 `REVIEW-NYITOTT` állapotban került vissza a láncba:
+a kör-ág (`5c32fb23`, 25 commit az `origin/main` felett) minden mércéje zöld
+volt, egyetlen nyitott elemmel — az **F9**, a `test/ui/ui_inventory_test.dart`
+`hasLength(79)` őre a kör két új képernyője miatt mért `81` ellen. Az előző
+javító kör ezt **H3**-nak minősítette, mert a célfájl nem szerepelt a brief
+`allowed_paths`-án, a felvétele pedig tágítás ([L478](docs/LESSONS.md)).
+
+A javítás időközben megérkezett — de a `main`-re, nem az ágra. A `c064566f`
+önjavító kör (PR #454) felvette a leltártesztet az `allowed_paths`-ra ÉS a
+`gate_tests`-be, megírta a brief `§0.0/R6`-ját, és a gyökérokot is javította
+([L483](docs/LESSONS.md)). **A kör-ág ebből semmit nem látott:**
+
+```
+$ git -C <kör-munkapéldány> merge-base --is-ancestor origin/main HEAD ; echo $?
+1
+$ grep -c "ui_inventory_test" docs/rounds/e13-r16-launch-and-onboarding.md   # az ágon, merge ELŐTT
+0
+```
+
+Ha a javító dispatch ezen az állapoton indul, az implementer a **régi**
+`allowed_paths`-t olvassa, és a saját STOP-protokollja szerint helyesen újra
+`stopped`/H3-at jelez — a lánc egy teljes implementer-futás árán pörögne egy
+helyben. A §0.3 upstream-szinkron nem formaság, hanem **ez** a lépés teszi a
+folytatást egyáltalán végrehajthatóvá.
+
+**A merge kockázatmentesnek mérve, nem feltételezve.** Mindkét oldal ugyanazt a
+brief-fájlt szerkesztette (a `main` a §0.0/R6-ot, az ág a §10.1–10.3
+implementation-handoffot), mégis konfliktusmentes volt, mert diszjunkt
+szakaszokat érintettek:
+
+```
+$ git merge --no-ff origin/main      # -> 721ab1f0, 24 files changed
+$ git merge-base --is-ancestor origin/main HEAD ; echo $?
+0
+$ git diff --check ; echo $?
+0
+```
+
+Ezután a kör teendője **pontosan egy szám** volt (`hasLength(79)` → `(81)`), a
+javító kör diffje két fájl (a teszt egy sora + a brief §10.3/§10.4).
+
+**Az [L345](docs/LESSONS.md) kockázatát külön kimértem, nem feltételeztem.** Egy
+self-heal írhat pinnelt regressziós őrt a brief ALAKJÁRA — ilyenkor a kör saját
+brief-szerkesztése új scope-rést nyitna. Itt nem: a heal tesztje
+(`tools/tests/test_brief_ui_inventory_scope.py`) **szintetikus** brief-fixture-t
+épít, a valós briefet csak `S9`-re nézi:
+
+```
+$ python3 -m pytest tools/tests/test_brief_ui_inventory_scope.py -q
+16 passed in 43.10s
+$ python3 tools/brief-lint.py --brief docs/rounds/e13-r16-launch-and-onboarding.md --level strict
+# Brief-lint (strict) — nincs lelet
+```
+
+**A második mért tanulság: a „javított szám" őre lehet tautologikus.** Egy
+elmozdított konstans önmagában nem bizonyítja, hogy az őr még figyeli a fát.
+Reviewer-próba izolált klónban: egy extra
+`lib/features/onboarding/screens/zz_probe_screen.dart` injektálva →
+`Which: has length of <82>`, `Some tests failed`; a próba visszaállítása után
+`+1: All tests passed!`. Az őr tehát a fa **mérhető** igazságát pinneli.
+
+**Következmény a protokollra.** A `REVIEW-NYITOTT`/H3 besorolású folytatásnál a
+sorrend kötött: **(1)** `fetch` + ancestor-mérés → **(2)** upstream-merge, ha
+nem ősi → **(3)** a heal esetleges brief-őrének kimérése → **(4)** csak ezután
+javító dispatch. A (2) kihagyása a legdrágább, mert a hibája egy teljes
+implementer-futás után derül ki, ráadásul HELYES halt formájában — tehát nem is
+látszik hibának.
+
+**Őrteszt:** `tools/tests/test_orchestrator_resume_upstream_sync.py` — a §0.3
+upstream-szinkron kötelezettségét méri a folytatáskori úton; a brief-oldali
+hibaosztályt (`S9` könyvtár-előtag) pedig
+`tools/tests/test_brief_ui_inventory_scope.py::test_no_done_round_is_flagged`
+tartja zárva.
