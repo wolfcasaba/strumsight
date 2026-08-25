@@ -8644,6 +8644,12 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
+> **Ha ezt REMOTE Claude Code konténerben olvasod: a lánc onnan NEM indítható.**
+> Két független blokkoló (nincs Flutter SDK; a `gh` nem hitelesít), a mért
+> részletek és az onnan mégis elvégezhető munka:
+> [`docs/execution/remote-container-environment.md`](docs/execution/remote-container-environment.md),
+> [L481](docs/LESSONS.md).
+
 > **USER-DÖNTÉS 2026-08-25 — A LÁNC KIZÁRÓLAG A Ch13 (UI) SÁVOT VISZI, amíg a
 > teljes UI el nem készül (E13-R16 → E13-R36).** A sor-fájlban ezért MINDEN
 > nem-E13 `pending` sor `hold`-ra váltott (29 sor: E09-R28/R29/R31/R32 és az

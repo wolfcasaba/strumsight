@@ -18378,3 +18378,36 @@ felhasználó ellen fordul.
 szerző sora `content_author`; a moderátori beadás marad `human_moderator`; a
 fel nem oldható target fail-closed; router-403 és szerző-200 él.
 Falszifikálva: a guard visszavonásával a 6-ból 4 cella pirosra vált.
+
+## L481 — A remote Claude Code konténerben a pipeline KÉT független okból nem indítható, és a `gh` telepítése csak eggyel tovább viszi a fail-closed drivert (2026-08-25)
+
+**Mit mértünk.** Egy remote sessionben a lánc indítását két, egymástól
+FÜGGETLEN blokkoló akadályozza. (1) Nincs Flutter/Dart SDK, és nem is
+telepíthető: a `storage.googleapis.com:443` CONNECT-et a hálózati policy
+**403**-mal utasítja el, a `pub.dev` sem elérhető — miközben a queue MINDEN
+nyitott sora érint Dart fájlt. (2) A `gh` CLI `apt-get install -y gh`-val
+**telepíthető** (2.45.0), de **hitelesíteni nem tud**: a `GH_TOKEN` érvénytelen,
+a REST 403, a GraphQL-ből csak egy kipinnelt PR-review halmaz szolgálódik ki.
+
+**A nem nyilvánvaló rész: a 403 a PROXYTÓL jön, nem a GitHubtól** (a hibatörzs
+Anthropic-szerzőségű, `documentation_url: docs.anthropic.com`). Ezért **érvényes
+PAT sem oldaná meg** — nincs értelme kredenciát keresni hozzá. A GitHub API
+kizárólag az `mcp__github__*` tool-okon érhető el (mérve: `actions_list` →
+`total_count: 479`), azokat viszont **csak a modell hívhatja, shell script nem**,
+tehát `gh`-shimet sem lehet rájuk építeni.
+
+**A driver helyesen viselkedik, ne „javítsd meg".** `round-pipeline.sh --dry-run`
+a telepítés előtt `HIBA: nincs gh CLI`, utána `HIBA: a nyitott PR-ek nem
+kérdezhetők le (gh) — a lánc nem indul vakon`. A `gh` telepítése tehát egyetlen
+lépéssel viszi tovább, majd a lánc ismét fail-closed megáll — ez a mérce, nem a
+hiba.
+
+**Következmény a jövőbeli remote sessionöknek:** kör-indítás helyett a
+végezhető munka a pre-flight, a sor-/lánc-konfiguráció, a `tools/tests`
+futtatása (a pypi engedélyezett, `pip install pytest` megy) és a
+doksi-karbantartás. A teljes mért képességtérkép — a két shallow-klón
+git-csapdával együtt — a
+[`docs/execution/remote-container-environment.md`](execution/remote-container-environment.md).
+
+**Őrteszt:** nincs — a környezet képessége nem kör-hatáskörből tesztelhető; a
+mérés reprodukálható a fenti lapon felsorolt parancsokkal.

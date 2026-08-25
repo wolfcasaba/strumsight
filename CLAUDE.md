@@ -75,6 +75,13 @@ music-theory/
 
 ## Critical build gotchas (learned the hard way on recipewiser-mobile)
 
+- **REMOTE Claude Code konténerben a pipeline NEM indítható** — két független
+  blokkoló: nincs Flutter/Dart SDK (a policy 403-mal tiltja a letöltést) és a
+  `gh` hitelesíteni sem tud (a 403 a PROXYTÓL jön, ezért PAT sem oldja meg).
+  A mért képességtérkép — mi megy mégis, és két shallow-klón git-csapda —:
+  [`docs/execution/remote-container-environment.md`](docs/execution/remote-container-environment.md)
+  ([L481](docs/LESSONS.md)). Az alábbi pontok a FELHASZNÁLÓ SAJÁT boxára igazak.
+
 - **Run `flutter analyze` and `flutter test` as SEPARATE calls — never chain `analyze && test`** (OOM on this box).
 - **Keep ONE win32 major across the tree** (required for `flutter test` host-compile). This is why
   `flutter_secure_storage` is pinned to **v10** (win32 ^6, matching `wakelock_plus`) — v9 pulls win32 ^5
