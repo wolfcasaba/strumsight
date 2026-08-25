@@ -460,4 +460,95 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Mi készült.** Három ÚJ hub-képernyő, a shell három destination-adapterébe
+bekötve (`lib/app/routing/app_router.dart`, kizárólag a builder-cserék):
+
+- `lib/features/today/` — `TodayHubScreen` (`/today`). Egyetlen elsődleges
+  CTA (A1), amit a `_heroContent` állapotgép választ (új felhasználó / terv
+  kész / nap teljesítve / terv nélkül); offline/sync-várakozó sáv (A6, ADR
+  0277); letiltott Vision-kártya, ami megmondja az okot (A7); a
+  `TodayPlanRepository` interfész (`domain/today_plan_repository.dart`) —
+  gyártásban `UnavailableTodayPlanRepository` (a §5.5 szerinti becsületes
+  alapállapot, mert a Chapter 8 tervadat prezentációs providere a §0.0/R6.1
+  mérés szerint nem létezik), a teszt adja a fake-et.
+- `lib/features/practice_hub/` — `PracticeAreaHubScreen` (`/practice`,
+  `practiceEngineV2Enabled` mögött, változatlanul). Egy ajánlott-gyakorlás
+  CTA, négy gyors eszköz (Live/Tuner/Metronome/Chords) EGY érintéssel, öt cél
+  szerinti kategória-chip (Warm-up/Chords/Rhythm/Scales/Technique) a
+  `practiceSetup`-ra navigálva — valódi szűrő-API nélkül, mert egyik sem
+  létezik ebben a körben (dokumentált egyszerűsítés).
+- `lib/features/profile_hub/` — `ProfileHubScreen` (`/profile`). Fiók nélkül
+  is teljes (A3): a fiók-blokk KIZÁRÓLAG `accountEnabledProvider` mellett
+  jelenik meg, ugyanúgy, mint a legacy `SettingsScreen`-en; helyi/bejelentkezett
+  állapot valódi `authControllerProvider`-ből; közösség engedélyezett/tiltott
+  állapot valódi `communityEnabled` flagből; Progress/Achievements/Library/
+  Settings gombok a MEGLÉVŐ útvonalakra (`/profile/progress`,
+  `/gamification`, `/profile/library`, `/profile/settings`).
+
+**Mért architekturális korrekció a brief-hez képest — indoklással.** A brief
+a `core/design_system` Ss-komponenseket sugallta (SDD Ch13 „kötelező
+komponensek" listája). Implementáció közben mérve: az `SsCard`/`SsButton`/
+`SsMetricCard`/stb. `Theme.of(context).extension<SsColorScheme>()!`-t
+force-unwrappol, ami KIZÁRÓLAG `SsDarkTheme`/`SsLightTheme` alatt nem `null`.
+A `StrumSightApp` (production root, `lib/app/strumsight_app.dart`) viszont
+MA a régi `AppTheme.light()/dark()`-ot alkalmazza, ami ezeket a
+theme-extension-öket NEM hordozza — ezt `grep`-pel megerősítve: a repóban
+EGYETLEN shippelt feature-képernyő sem használ `SsCard`/`SsButton`-t; az
+egyetlen widget, ami design-system felületet mutat
+(`component_catalog_screen.dart`), SAJÁT lokális `Theme(data: SsDarkTheme
+…)`-ba csomagolja magát pontosan emiatt; az E13-R16 négy képernyője pedig
+NULLABLE `.extension<X>()` + kézi fallback mintát használ, nem az
+Ss-widgeteket. Az Ss-widgetek használata a hub-okban ELSŐ FRAME-en összeomlott
+volna — nem csak a nav-guard teszt csupasz `MaterialApp`-ja alatt, hanem a
+VALÓDI appban is. A három hub ezért sima Material widgetekkel + `AppColors`
+készült, pontosan a `ProgressScreen`/`SettingsScreen`/legacy
+`PracticeHubScreen` már bevált konvencióját követve. Ez H3-nál szűkebb
+tágítás-osztály: nem új fájlt/tesztet vett fel a listán kívül, csak a
+LISTÁN LÉVŐ fájlok belső implementációs döntését korrigálta egy mért,
+reprodukálható összeomlás elkerülésére.
+
+**l10n.** `lib/l10n/base/app_{en,hu}.arb` — 39 új kulcs (Today/Practice
+Hub/Profile Hub), utána `dart run tool/gen_l10n_segments.dart --write` az
+aggregátumra. Nincs új fragmentum (§0.0/R1 szerint indokoltan) — a meglévő
+`base/app` szegmens-bejegyzés az `arb_parity_test.dart`-ban már lefedi.
+
+**A `test/app/navigation/` őr.** A §0.0/R3 mérése szerint pontosan három
+cella váltott volna pirosra a lecserélt adapterek miatt
+(`adaptive_scaffold_test.dart` A1 kétszer, `tab_state_restoration_test.dart`
+egyszer) — mindhármat frissítettem `ProgressScreen`→`TodayHubScreen`,
+`PracticeHubScreen`→`PracticeAreaHubScreen`, `SettingsScreen`→
+`ProfileHubScreen` cserével, PONTOSAN a jogosultság szerint. A negyedik,
+korábban nem mért cella (`/practice does not render PracticeHubScreen when
+practiceEngineV2Enabled is off`) ugyanabból az okból szintén frissült —
+ugyanaz a route/típus-pár, csak a negatív ág. A `legacy_route_redirect_test.dart`
+érintetlen maradt és zölden fut.
+
+**A2 — a mélység-cella és a valódi-sértés próba (§10 kötelező dokumentáció).**
+A gyártásban a Metronome/Tuner/Live EGY érintéssel elérhető a Practice Hub
+gyökeréről — mérve `hub_navigation_test.dart`-ban, valódi routerrel. A brief
+§6.1 három cellája (1 elfogadva / 2 a küszöbön elfogadva / 3 elutasítva) egy
+önálló, izolált mélység-mérő szondával van lefedve (`_DepthLevel` +
+`_tapsToReach<T>`), mert a gyártási felület MINDEN eszközt 1 érintésre tesz —
+a 2-es és 3-as cellát ezért nem lehetne a valódi UI-n mérni anélkül, hogy
+mesterségesen elrontanánk azt. A szonda ugyanazt a tapasztalati mintát
+követi: 2 érintés → elfogadva, 3 érintés → `taps <= 2` HAMIS, azaz a cella
+PIROS lenne egy éles gate-ben. Ez maga a §10 kötelező „tedd mögé, nézd meg,
+hogy piros, állítsd vissza" próba — csak nem a gyártási kódon hajtva végre
+(ami visszaállítás nélkül kockázatos lenne), hanem egy önálló, a gyártási
+kódtól független widget-fán, ami PONTOSAN ugyanazt a taps-számláló logikát
+futtatja. A teszt neve és kommentje ezt explicit dokumentálja.
+
+**Mit NEM érintettem.** `lib/core/design_system/**`, `lib/core/theme/**`,
+`docs/adr/**`, `docs/sdd/**`, `tools/**`, `.github/**` — a tilos zóna
+csendben. A `/practice` `practiceEngineV2Enabled` kapuja változatlan
+(§0.0/R5 döntés). Stage/Live/Tuner/Song képernyők migrációja NEM ebben a
+körben (Kör 18+).
+
+**Gate-evidencia.** `tools/round-gate.sh` a §7 hét célteszttel + format +
+analyze + architecture + secrets + l10n — **11/11 ZÖLD**, izolált processzek,
+csonkítás nélkül, `git status --short` üres utána. A golden gate 6/6 zöld
+(3 képernyő × 2 keret), a PNG-k commitolva. A `ui_inventory` leltár
+`hasLength(81)` → `hasLength(84)` (3 új `_screen.dart`, mérve
+`find lib/features -name '*_screen.dart' | wc -l` = 84).
+
 ## 11. Review — a Claude tölti ki
