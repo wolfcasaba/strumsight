@@ -3,18 +3,22 @@
 - **Kör:** `E13-R16` · **Branch:** `sonnet-impl/e13-r16-launch-and-onboarding`
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
 - **Reviewer:** Claude Opus 5 (orchestrátor), read-only
-- **Reviewelt HEAD:** `c607f855`
+- **Reviewelt HEAD:** `c607f855` → javító kör 1 `7e14fe52` → javító kör 2 `e649386c`
 - **Alap:** `origin/main` @ `3848ef72`
 - **Brief:** `docs/rounds/e13-r16-launch-and-onboarding.md` (§0.0 + §0.0/B)
 - **ADR:** `0281` (a `main`-en, a kör nem írt újat — helyes)
 - **Kockázat:** `high` (authorization-határ + perzisztált felhasználói adat) —
   a biztonsági/adatvédelmi átvizsgálás a §6-ban, a jelentésbe integrálva.
 
-## VÉGSŐ DÖNTÉS: **CHANGES REQUESTED**
+## VÉGSŐ DÖNTÉS: **APPROVED** (`e649386c`)
 
-1 BLOCKER, 2 MAJOR, 1 MINOR, 1 NOTE. A BLOCKER a kör **két címadó
-acceptance-cellájának egyikét** (A1) érinti, és a mérés szerint a
-kör `allowed_paths`-án belül javítható.
+Két javító kör után **0 nyitott BLOCKER/MAJOR/MINOR**. Az F5 NOTE
+(nem-lokalizált redakció) szándékosan marad nyitva, követő körre — a §0.0/B P4
+megszorítása miatt a körben nem oldható meg.
+
+Az eredeti verdikt (`c607f855`) CHANGES REQUESTED volt: 1 BLOCKER, 2 MAJOR,
+1 MINOR, 1 NOTE; a reviewer-próbateszt a javító kör 1 után egy további MINOR-t
+(F6) talált. A zárás leletenként a §9-ben.
 
 ---
 
@@ -279,3 +283,66 @@ perzisztencia-határra fókuszálva:
 
 A merge tilos, amíg az **F1 (BLOCKER)**, **F2** és **F3 (MAJOR)** nyitva van.
 Az F4 a körben javítható, az F5 követő körre rögzítve.
+
+---
+
+## 9. Zárás leletenként (javító kör 1 `7e14fe52` + javító kör 2 `e649386c`)
+
+Minden zárást **magam mértem**, izolált `/tmp/review-e13-r16` klónban.
+
+| # | Súly | Állapot | A zárás bizonyítéka |
+|---|---|---|---|
+| F1 | BLOCKER | **ZÁRVA** | Mindkét mic-kérő CTA a `permission` ellenőrzőponton át megy (`_afterPermission` + `_advanceStep`), a `primeMic`/`_requestMicPermission` közvetlen hívás **törölve**; a primer a `PermissionPrimerScreen` egyetlen kapu-hívási helye. Új app-szintű mérce + a listán kívüli `onboarding_first_win_test.dart` zölden maradt (nem módosítva). |
+| F2 | MAJOR | **ZÁRVA** | `OnboardingStep` **szűkítve**: `{welcome, permission, done}` — a `.firstWin` (amit semmilyen bemenet nem produkált) törölve. A `permission` mostantól valódi bemenettel elérhető, tehát az A6 nem üres állítás. |
+| F3 | MAJOR | **ZÁRVA** | Új őrcella: `OnboardingStep.values` **neveit ÉS indexeit** literálisan pinneli (`['welcome','permission','done']`, 0/1/2), a perzisztált formátum indoklásával. Zölden fut (gate [5]). |
+| F4 | MINOR | **ZÁRVA** | A `StateError`-degradálás kimondottan tesztelt viselkedés lett. |
+| F6 | MINOR | **ZÁRVA** | (Javító kör 1 után, reviewer-próbateszttel találva — lásd §10.) Az A1 app-szintű mérce a MÁSIK CTA-ra (`onboardStart`) is kiterjed. |
+| F7 | MINOR | **ZÁRVA** | A §10 handoff elavult, a javító kör 1 után hamissá vált bekezdése javítva. |
+| F5 | NOTE | nyitva, szándékosan | Nem-lokalizált redakció — a §0.0/B P4 miatt a körben nem oldható; követő körre rögzítve. |
+
+## 10. Reviewer-próbatesztek (eldobhatók, futtatva, visszaállítva)
+
+A guard-tesztek **valódi-sértés** próbája — nem az implementer jelentése,
+hanem saját mérés, izolált klónban. Mindhárom próba után a klón
+`git checkout`-tal visszaállítva (`git status --short` üres).
+
+| # | Injektált sértés | Elvárt | Mért |
+|---|---|---|---|
+| 1 | `_finish(requestMic: true)` → közvetlen `gateway.request()` (a `onboardStart` CTA), `7e14fe52`-n | PIROS | **`+8: All tests passed!` — ZÖLD** ⇒ **F6 lelet: az út őrizetlen volt** |
+| 2 | `_firstWin()` → közvetlen `gateway.request()`, `7e14fe52`-n | PIROS | `00:02 +7 -1: Some tests failed` — az „A1 (app-level)" cella bukott ⇒ az őr **valódi**, nem tautologikus |
+| 3 | ugyanaz mint az 1., de a javított `e649386c`-n | PIROS | `00:02 +8 -1: Some tests failed` — az ÚJ „Enable mic & start" cella bukott ⇒ **F6 zárva** |
+
+A 2. és 3. próba együtt bizonyítja, hogy az A1 mindkét belépési pontja gépi
+őrrel védett, és hogy az őrök tényleg pirosra váltanak a tiltott
+implementációtól.
+
+## 11. A merge-kapu mérése (saját futtatás)
+
+**Célzott gate a merge-jelölten (`e649386c`), izolált klónban, csővezeték
+nélkül** — `tools/round-gate.sh` a brief §7 öt teszt-útvonalával:
+
+```
+format zöld · analyze zöld · bootstrap_routing zöld · permission_primer zöld
+onboarding_resume zöld · first_win zöld · e13_r16_screens_golden zöld
+architecture zöld · secrets zöld · l10n zöld
+MINDEN GATE ZÖLD          (GATE_EXIT=0)
+```
+
+**Scope-audit a végleges HEAD-en:** `ok` (a jelzésfájl `scope_audit=ok`,
+`scope_audit_changed=2`), a teljes körre pedig OK, 34 útvonal / 1
+generated-ignored (a saját review-jelentés).
+
+**CI (a merge SHA-ján kötelező, ADR 0052 + ADR 0086 §2):** a tervező
+`full-gate.yml`-t ír elő és `router_ci_expected: true`-t
+(`docs/rounds/**` érintve) — mindkettőnek zöldnek kell lennie a merge SHA-n.
+
+## 12. Rögzített megfigyelés (nem lelet)
+
+A `FirstWinStageScreen` az F2 szűkítése után **nem hivatkozott a `lib/` fából**
+(csak a saját tesztjéből és a goldenből) — kész, bizonyított komponens, amely a
+bekötésre vár. Ez a brief §3 szándéka szerinti állapot („fake átjáróval és
+motorral **tesztelhetően**"), és a mérés szerint a bekötés a listán kívüli
+`test/app/routing/onboarding_first_win_test.dart` egyetlen-settle elvárása
+miatt e körben nem lehetséges. **A követő kör (E13-R17+) briefjének fel kell
+vennie azt a fájlt az `allowed_paths`-ra**, különben a mini Stage
+bekötése ismét H3-ba fut.
