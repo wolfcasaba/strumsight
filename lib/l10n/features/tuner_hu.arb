@@ -23,5 +23,6 @@
   "tunerTuningDadgad": "DADGAD",
   "tunerPlayReference": "Referenciahang lejátszása",
   "tunerCentsSharp": "{cents} centtel magas",
-  "tunerCentsFlat": "{cents} centtel mély"
+  "tunerCentsFlat": "{cents} centtel mély",
+  "tunerHoldSteady": "Tartsd stabilan…"
 }

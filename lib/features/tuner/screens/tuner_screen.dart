@@ -2,24 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design_system/public.dart';
+import '../../../core/music/guitar_strings.dart';
+import '../../../core/music/tuning.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/mic_error_banner.dart';
 import '../../../core/widgets/mic_permission_banner.dart';
 import '../../../l10n/app_localizations.dart';
-import '../../learn/public.dart';
 import '../../live/public.dart';
 import '../../settings/public.dart';
-import '../../../core/music/guitar_strings.dart';
 import '../model/in_tune_lock.dart';
 import '../model/tuner_reading.dart';
-import '../../../core/music/tuning.dart';
+import '../model/tuner_stability.dart';
+import '../model/tuner_ui_state.dart';
 import '../providers/pinned_string_provider.dart';
+import '../providers/reference_tone_provider.dart';
 import '../providers/tuner_providers.dart';
 import '../providers/tuner_tuning_provider.dart';
 import '../widgets/cents_gauge.dart';
 
 /// A simple chromatic tuner, pushed full-screen from the Live screen.
+/// Migrated onto [SsStageScaffold] (Ch13 §9.9): the note/gauge cluster is the
+/// hero, the multi-channel in-tune/direction readout is the feedback slot,
+/// the string chips are the timeline slot, and the reference-tone control
+/// plus the A4 readout are the bottom action.
 class TunerScreen extends ConsumerStatefulWidget {
   const TunerScreen({super.key});
 
@@ -33,6 +40,11 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
   /// on the note. Re-arms when the pitch drifts or the string changes.
   final InTuneLock _lock = InTuneLock();
 
+  /// The "unstable" state has no field on the estimator's output — derived
+  /// here in the UI layer only (brief §0.0/R5.1).
+  final TunerStability _stability = TunerStability();
+  bool _unstable = false;
+
   @override
   Widget build(BuildContext context) {
     ref.listen(tunerReadingProvider, (_, next) {
@@ -41,30 +53,44 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
       // The lock celebrates what the USER sees: in manual mode that is the
       // pinned target, not the chromatic nearest note (round 91).
       final pin = ref.read(pinnedStringProvider);
+      final targetCents = pin == null
+          ? r.cents
+          : (r.hasSignal
+                ? GuitarStrings.centsTo(
+                    pin,
+                    r.frequencyHz,
+                    a4: ref.read(tuningReferenceProvider),
+                  )
+                : r.cents);
       final inTune = pin == null
           ? r.inTune
-          : r.hasSignal &&
-                GuitarStrings.centsTo(
-                      pin,
-                      r.frequencyHz,
-                      a4: ref.read(tuningReferenceProvider),
-                    ).abs() <=
-                    TunerReading.inTuneCents;
-      final justLocked = _lock.feed(
-        inTune: inTune,
-        note: r.hasSignal ? (pin?.label ?? r.note) : '',
+          : r.hasSignal && targetCents.abs() <= TunerReading.inTuneCents;
+      final note = r.hasSignal ? (pin?.label ?? r.note) : '';
+      final unstable = _stability.feed(
+        hasSignal: r.hasSignal,
+        note: note,
+        cents: targetCents,
       );
+      final justLocked = _lock.feed(inTune: inTune, note: note);
       if (justLocked) {
         HapticFeedback.mediumImpact();
-        setState(() {}); // reflect the locked state in the pulse
+      }
+      if (justLocked || unstable != _unstable) {
+        setState(() => _unstable = unstable);
       }
     });
     // A pin must not outlive its tuning (E2 isn't a drop-D target).
     ref.listen(tunerTuningProvider, (_, next) {
       ref.read(pinnedStringProvider.notifier).reconcile(next.strings);
     });
+    // Tied to this route's lifetime: leaving Tuner drops the last listener,
+    // so Riverpod tears the player (and the reference tone still sounding)
+    // down (A5) — see `reference_tone_provider.dart`.
+    final tone = ref.watch(referenceTonePlayerProvider);
+
     final l10n = AppLocalizations.of(context);
     final palette = context.palette;
+    final brightness = Theme.of(context).brightness;
     final readingAsync = ref.watch(tunerReadingProvider);
     final reading = readingAsync.asData?.value ?? TunerReading.silent;
     final a4 = ref.watch(tuningReferenceProvider);
@@ -79,6 +105,11 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
         ? reading.inTune
         : reading.hasSignal && displayCents.abs() <= TunerReading.inTuneCents;
     final displayNote = pinned?.label ?? reading.note;
+    final state = tunerUiStateOf(
+      hasSignal: reading.hasSignal,
+      inTune: displayInTune,
+      unstable: _unstable,
+    );
     String tuningName(Tuning t) => switch (t.id) {
       'dropD' => l10n.tunerTuningDropD,
       'halfStepDown' => l10n.tunerTuningHalfStepDown,
@@ -86,169 +117,226 @@ class _TunerScreenState extends ConsumerState<TunerScreen> {
       _ => l10n.tunerTuningStandard,
     };
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l10n.tunerTitle),
-        actions: [
-          // Alternate tunings (round 89): the chips + nearest-string mapping
-          // follow the selection, so a drop-D player tunes to D2, not E2.
-          PopupMenuButton<Tuning>(
-            tooltip: l10n.tunerTuningLabel,
-            onSelected: (t) => ref.read(tunerTuningProvider.notifier).set(t),
-            itemBuilder: (context) => [
-              for (final t in Tunings.all)
-                CheckedPopupMenuItem(
-                  value: t,
-                  checked: identical(t, tuning),
-                  child: Text(tuningName(t)),
-                ),
-            ],
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    tuningName(tuning),
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Icon(Icons.arrow_drop_down, size: 20),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: Column(
+    return SsStageScaffold(
+      statusHeader: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            children: [
+              if (Navigator.canPop(context))
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              Expanded(
+                child: Text(
+                  l10n.tunerTitle,
+                  style: TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 20,
+                    color: palette.ink,
+                  ),
+                ),
+              ),
+              // Alternate tunings (round 89): the chips + nearest-string
+              // mapping follow the selection, so a drop-D player tunes to
+              // D2, not E2.
+              PopupMenuButton<Tuning>(
+                tooltip: l10n.tunerTuningLabel,
+                onSelected: (t) =>
+                    ref.read(tunerTuningProvider.notifier).set(t),
+                itemBuilder: (context) => [
+                  for (final t in Tunings.all)
+                    CheckedPopupMenuItem(
+                      value: t,
+                      checked: identical(t, tuning),
+                      child: Text(tuningName(t)),
+                    ),
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        tuningName(tuning),
+                        style: const TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Icon(Icons.arrow_drop_down, size: 20),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
           // Mic problems must never be a silent idle (parity with Live,
           // round 13): denied permission gets the settings deep-link banner;
           // a start failure (busy / platform error) gets Retry. The error
           // banner stays up through a Retry until the restarted engine
           // produces a reading (AsyncData clears hasError) or fails again.
-          if (!micGranted)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: MicPermissionBanner(),
-            ),
+          if (!micGranted) const MicPermissionBanner(),
           if (micGranted && readingAsync.hasError)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: MicErrorBanner(
-                onRetry: () => ref.invalidate(tunerReadingProvider),
-              ),
-            ),
-          Expanded(
-            child: Center(
-              child: reading.hasSignal
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AnimatedScale(
-                          scale: _lock.isLocked ? 1.08 : 1.0,
-                          duration: const Duration(milliseconds: 160),
-                          curve: Curves.easeOutBack,
-                          child: Text(
-                            displayNote,
-                            style: TextStyle(
-                              fontFamily: 'Montserrat',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 96,
-                              height: 1,
-                              color: _lock.isLocked
-                                  ? AppColors.successOn(
-                                      Theme.of(context).brightness,
-                                    )
-                                  : palette.ink,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${reading.frequencyHz.toStringAsFixed(1)} Hz',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: palette.muted,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                        CentsGauge(cents: displayCents, inTune: displayInTune),
-                        const SizedBox(height: 12),
-                        AnimatedOpacity(
-                          opacity: displayInTune ? 1 : 0,
-                          duration: const Duration(milliseconds: 150),
-                          child: Text(
-                            l10n.tunerInTune.toUpperCase(),
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 2,
-                              color: AppColors.successOn(
-                                Theme.of(context).brightness,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Text(
-                      l10n.tunerListening,
-                      style: TextStyle(color: palette.muted, fontSize: 16),
+            MicErrorBanner(onRetry: () => ref.invalidate(tunerReadingProvider)),
+        ],
+      ),
+      hero: state == TunerUiState.idle
+          ? Text(
+              l10n.tunerListening,
+              style: TextStyle(color: palette.muted, fontSize: 16),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AnimatedScale(
+                  scale: _lock.isLocked ? 1.08 : 1.0,
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeOutBack,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      displayNote,
+                      style: TextStyle(
+                        fontFamily: 'Montserrat',
+                        fontWeight: FontWeight.w800,
+                        fontSize: 96,
+                        height: 1,
+                        color: _lock.isLocked
+                            ? AppColors.successOn(brightness)
+                            : palette.ink,
+                      ),
                     ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${reading.frequencyHz.toStringAsFixed(1)} Hz',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: palette.muted,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                CentsGauge(cents: displayCents, inTune: displayInTune),
+              ],
             ),
-          ),
-          // Which string is being tuned (round 84): the selected tuning's
-          // chips; the nearest one lights copper, green once in tune.
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: _StringChips(
-              strings: tuning.strings,
-              active:
-                  pinned ??
-                  (reading.hasSignal
-                      ? GuitarStrings.nearest(
-                          reading.frequencyHz,
-                          a4: a4,
-                          strings: tuning.strings,
-                        )
-                      : null),
-              pinned: pinned,
-              inTune: displayInTune,
-              onTap: (s) => ref.read(pinnedStringProvider.notifier).toggle(s),
-            ),
-          ),
-          // Tune by EAR (round 94): with a target pinned, sound its reference
-          // tone. Works with zero mic signal — that's the point.
+      // The "hangolt" feedback is multi-channel (icon + text + colour, and a
+      // haptic already fires on lock above) — never colour alone (A3). The
+      // cents direction is spoken by `CentsGauge`'s own semantics AND shown
+      // here as visible, scalable text (A2) — a screen-reader-only label
+      // does nothing for a large-text/low-vision reader who isn't using one
+      // (brief §5.1).
+      feedback: state == TunerUiState.idle
+          ? const SizedBox.shrink()
+          : _TunerFeedback(state: state, cents: displayCents, l10n: l10n),
+      // Which string is being tuned (round 84): the selected tuning's chips;
+      // the nearest one lights copper, green once in tune.
+      timeline: _StringChips(
+        strings: tuning.strings,
+        active:
+            pinned ??
+            (reading.hasSignal
+                ? GuitarStrings.nearest(
+                    reading.frequencyHz,
+                    a4: a4,
+                    strings: tuning.strings,
+                  )
+                : null),
+        pinned: pinned,
+        inTune: displayInTune,
+        onTap: (s) => ref.read(pinnedStringProvider.notifier).toggle(s),
+      ),
+      // Tune by EAR (round 94): with a target pinned, sound its reference
+      // tone. Works with zero mic signal — that's the point.
+      bottomAction: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           if (pinned != null)
             IconButton(
               tooltip: l10n.tunerPlayReference,
               icon: const Icon(Icons.volume_up),
               color: AppColors.primary,
-              onPressed: () =>
-                  ref.read(backingProvider).playTone(pinned.frequencyHz(a4)),
+              onPressed: () => tone.play(pinned.frequencyHz(a4)),
             ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 16, top: 8),
-              child: Text(
-                l10n.tunerReference(a4),
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  letterSpacing: 0.5,
-                  color: palette.muted,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
+          Text(
+            l10n.tunerReference(a4),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 13,
+              letterSpacing: 0.5,
+              color: palette.muted,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The visible (not merely spoken) in-tune / direction readout — icon,
+/// colour and text together (A3), with the cents direction always shown as
+/// text while a signal is present (A2).
+class _TunerFeedback extends StatelessWidget {
+  const _TunerFeedback({
+    required this.state,
+    required this.cents,
+    required this.l10n,
+  });
+
+  final TunerUiState state;
+  final double cents;
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final brightness = Theme.of(context).brightness;
+    final rounded = cents.abs().round();
+    final (icon, color, text) = switch (state) {
+      TunerUiState.inTune => (
+        Icons.check_circle,
+        AppColors.successOn(brightness),
+        l10n.tunerInTune.toUpperCase(),
+      ),
+      TunerUiState.unstable => (
+        Icons.graphic_eq,
+        palette.muted,
+        l10n.tunerHoldSteady,
+      ),
+      TunerUiState.outOfTune => (
+        cents >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
+        AppColors.primary,
+        cents >= 0
+            ? l10n.tunerCentsSharp(rounded)
+            : l10n.tunerCentsFlat(rounded),
+      ),
+      TunerUiState.idle => (Icons.mic_none, palette.muted, ''),
+    };
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1,
+              color: color,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

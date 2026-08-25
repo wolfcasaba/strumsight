@@ -44,5 +44,6 @@
         "type": "int"
       }
     }
-  }
+  },
+  "tunerHoldSteady": "Hold steady…"
 }

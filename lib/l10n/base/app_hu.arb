@@ -390,6 +390,8 @@
   "metronomeTap": "Tap tempó",
   "metronomeStart": "Indítás",
   "metronomeStop": "Leállítás",
+  "metronomeAdvancedSettings": "Speciális beállítások",
+  "metronomeTimeSignature": "Ütemmutató",
   "wrappedTitle": "A heti pengetésem",
   "wrappedShareTooltip": "Heti összegzés megosztása",
   "streakSkillTitle": "A készséged",
