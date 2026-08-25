@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
+import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/public.dart';
 import '../../progress/public.dart';
@@ -176,9 +177,7 @@ class _Metric extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: AppColors.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
