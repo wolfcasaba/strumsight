@@ -30,13 +30,15 @@ import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
-import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
+import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
+import 'package:strumsight/features/profile_hub/screens/profile_hub_screen.dart';
 import 'package:strumsight/features/progress/screens/progress_screen.dart';
 import 'package:strumsight/features/settings/screens/settings_screen.dart';
 import 'package:strumsight/features/songs/screens/setlist_list_screen.dart';
 import 'package:strumsight/features/songs/screens/song_list_screen.dart';
 import 'package:strumsight/features/streak/screens/streak_screen.dart';
 import 'package:strumsight/features/ai_tutor/presentation/screens/tutor_home_screen.dart';
+import 'package:strumsight/features/today/screens/today_hub_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/features/tuner/screens/tuner_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -190,15 +192,17 @@ void main() {
       router.go(AppRoutes.today);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      // D14 fix round — the Today adapter is resource-free (ProgressScreen),
-      // not LiveScreen: reusing LiveScreen here duplicated the mic/wakelock
-      // owner across two branches (review MAJOR-1).
-      expect(find.byType(ProgressScreen), findsOneWidget);
+      // E13-R17 — the Today Hub replaces the temporary resource-free
+      // ProgressScreen adapter (D14 fix round); it stays resource-free too
+      // (A4, ADR 0276): no audio/camera import anywhere in that screen.
+      expect(find.byType(TodayHubScreen), findsOneWidget);
 
       router.go(AppRoutes.practiceHub);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byType(PracticeHubScreen), findsOneWidget);
+      // E13-R17 — the Practice Area Hub replaces the legacy
+      // PracticeHubScreen adapter here.
+      expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
 
       router.go(AppRoutes.songs);
       await tester.pumpAndSettle();
@@ -213,7 +217,9 @@ void main() {
       router.go(AppRoutes.profileHome);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.byType(SettingsScreen), findsOneWidget);
+      // E13-R17 — the Profile Hub replaces the legacy SettingsScreen adapter
+      // here; `/profile/settings` still renders SettingsScreen unchanged.
+      expect(find.byType(ProfileHubScreen), findsOneWidget);
     });
 
     testWidgets('the eleven target sub-routes render their adapter screens', (
@@ -258,7 +264,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.byType(PracticeHubScreen), findsOneWidget);
+      expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
       // The shelled registration wraps the screen in primary navigation;
       // the excluded bare legacy GoRoute would not.
       expect(
@@ -273,7 +279,7 @@ void main() {
 
     testWidgets(
       'a navigation flag does not bypass another feature rollout flag: '
-      '/practice does not render PracticeHubScreen when '
+      '/practice does not render PracticeAreaHubScreen when '
       'practiceEngineV2Enabled is off (review MINOR-1 fix, brief §0.0 D15)',
       (tester) async {
         final router = await _pumpAdaptiveRouter(
@@ -284,7 +290,7 @@ void main() {
         router.go(AppRoutes.practiceHub);
         await tester.pumpAndSettle();
 
-        expect(find.byType(PracticeHubScreen), findsNothing);
+        expect(find.byType(PracticeAreaHubScreen), findsNothing);
       },
     );
 

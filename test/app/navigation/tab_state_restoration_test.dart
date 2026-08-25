@@ -18,7 +18,7 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/onboarding/onboarding_provider.dart';
-import 'package:strumsight/features/practice/presentation/screens/practice_hub_screen.dart';
+import 'package:strumsight/features/practice_hub/screens/practice_area_hub_screen.dart';
 import 'package:strumsight/features/tuner/providers/tuner_providers.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -102,7 +102,7 @@ void main() {
 
       router.go(AppRoutes.practiceHub);
       await tester.pumpAndSettle();
-      expect(find.byType(PracticeHubScreen), findsOneWidget);
+      expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
 
       router.push(AppRoutes.practiceChords);
       await tester.pumpAndSettle();
@@ -131,7 +131,7 @@ void main() {
       // The preserved stack still pops normally: back to the hub.
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.byType(PracticeHubScreen), findsOneWidget);
+      expect(find.byType(PracticeAreaHubScreen), findsOneWidget);
     },
   );
 }
