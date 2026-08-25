@@ -574,29 +574,59 @@ csonkítás nélkül, `git status --short` üres utána. A golden gate 6/6 zöld
 
 ## 12. Javító kör (F1) — a CI golden-piros gyökeroka és a javítás
 
-**A CI-piros gyökeroka.** A `full-gate 32887590628` négy cellája
+> **REVIDEÁLVA (F1 javító kör #2).** Az eredeti §12 (alább, "1. kísérlet")
+> gyökéroka HAMIS volt — magam cáfoltam meg a saját fixem UTÁN is piros
+> maradó CI-vel. A helyes gyökérok és javítás a "2. kísérlet" alatt.
+
+### 1. kísérlet (MEGCÁFOLVA) — az inline Montserrat/w800 gyanúja
+
+**A feltételezett gyökérok.** A `full-gate 32887590628` négy cellája
 (Today/Profile hub, mindkét keretben) pixel-diffje pontosan a `_Metric`
-widget dobozának méretére lokalizált (~6,7% / ~11,7% textScale 2.0-nál) —
-mérve, dokumentálva a kör-brief F1 szakaszában. A gyanús kód mindkét
-`_Metric`-ben azonos volt: egy INLINE `TextStyle(fontFamily: 'Montserrat',
-fontWeight: FontWeight.w800, fontSize: 20)`. A `pubspec.yaml` a Montserratot
-EGYETLEN súly-variánssal deklarálja, tehát a `w800` kérést a motor
-szintetikus félkövérítéssel elégíti ki — ez a lépés box/motor-verzió szerint
-eltérő pixel-kimenetet adhat, ami pontosan a mért, box-specifikus CI-diffet
-magyarázza.
+widget dobozának méretére lokalizált (~6,7% / ~11,7% textScale 2.0-nál). A
+gyanús kód mindkét `_Metric`-ben azonos volt: egy INLINE
+`TextStyle(fontFamily: 'Montserrat', fontWeight: FontWeight.w800, fontSize:
+20)` — a feltételezés az volt, hogy a `pubspec.yaml` egyetlen Montserrat
+súly-variánsa miatt a `w800` kérést a motor szintetikus félkövérítéssel
+elégíti ki, ami box/motor-verzió szerint eltérő pixel-kimenetet ad.
+
+**Miért hamis.** A feltételezést az E13-R16 `onboarding_screen.dart:289-293`
+precedense cáfolja: PONTOSAN ugyanezt a mintát használja (`const
+TextStyle(fontFamily: 'Montserrat', fontWeight: FontWeight.w800, fontSize:
+26)`), és a goldenje a CI-on **ZÖLD**. A `headlineSmall`-ra cserélt, majd
+commitolt (`e1ff4c99`, `6e3142ea`) javítás UTÁN a CI a NÉGY cellán **ismét
+piros** maradt — ez zárta ki véglegesen a betűtípus-hipotézist.
+
+### 2. kísérlet (JAVÍTVA) — a kitöltés színforrása: seed-derived vs. konstans
+
+**A tényleges gyökérok.** A megkülönböztető nem az átlátszóság (a
+`withValues(alpha: 0.3)` maga is portábilis — lásd az R16 lapozó-pöttyök
+`AppColors.primary.withValues(alpha: 0.3)` kitöltését, szintén CI-zöld),
+hanem a szín **FORRÁSA**: mindkét `_Metric` a
+`Theme.of(context).colorScheme.surfaceContainerHighest`-et töltötte ki, ami
+az `AppTheme` (`app_theme.dart:14`) `ColorScheme.fromSeed(seedColor:
+AppColors.primary)` hívásából, tehát a `material_color_utilities` HCT
+lebegőpontos szín-származtatásából jön. Minden addigi CI-zöld golden
+(`e13_r16_screens_golden_test.dart`) `SsDarkTheme`-mel készült, ami
+`SsColorScheme.forBrightness(...)` kézzel megadott KONSTANS színeket használ
+— nulla lebegőpontos származtatás. Ez a kör volt az első, amely
+seed-származtatott sémaszínt festett nagy, egybefüggő felületre; egy utolsó
+biten eltérő lebegőpontos származtatás a doboz teljes területét eltérővé
+teszi. A mért diff (Today 21 096 px, Profile 22 482 px) nagyságrendileg
+egyezik a két `_Metric` doboz teljes területével (2 × ~180×70 ≈ 25 200 px),
+ami kizárja mind a glifa- (túl kicsi terület), mind az elrendezés-eltolódás
+(a Profile/Today diff-arány ~azonos, nem a metrika pozíciójával arányosan
+eltérő) magyarázatot.
 
 **A javítás.** Mindkét `_Metric`-ben (`lib/features/today/screens/
 today_hub_screen.dart`, `lib/features/profile_hub/screens/
-profile_hub_screen.dart`) az inline `TextStyle`-t lecseréltem
-`Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:
-FontWeight.w700)`-re — ugyanaz a minta, amit a kódbázisban már egy meglévő
-metrika-widget (`lib/features/audio_analysis/presentation/widgets/
-metric_card.dart:81`) is használ. A számjegy így a `AppTheme`-ben MÁR
-definiált, téma-eredetű `headlineSmall` stílust kapja (a téma maga társítja
-hozzá a Montserrat családot a `heading`-merge-ön keresztül, `app_theme.dart:
-26-38`), nem egy widget-lokális, kézzel megkonstruált stílust — pontosan az
-az útvonal, amit az E13-R16 golden-készlete (CI-n zöld) más képernyőkön már
-igazoltan hordozhatónak bizonyított.
+profile_hub_screen.dart`) a `BoxDecoration.color`-t
+`Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha:
+0.3)`-ról `AppColors.primary.withValues(alpha: 0.12)`-re cseréltem — konstans
+forrású szín, ugyanaz a minta, mint az R16 CI-zöld lapozó-pöttyök. A
+`profile_hub_screen.dart` korábban nem importálta az `AppColors`-t (a brief
+ezt tévesen "már importáltnak" jelezte) — az importot hozzáadtam. A
+`headlineSmall`/`w700` szám-stílus (1. kísérlet, helyesnek bizonyult)
+változatlan maradt.
 
 **Golden-frissítés.** Mind a hat golden PNG újra felvéve
 (`flutter test --update-goldens test/ui/goldens/e13_r17_screens_golden_test.dart`)
