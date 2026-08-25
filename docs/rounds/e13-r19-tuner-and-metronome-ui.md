@@ -207,6 +207,138 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+### R5 — a kör-indító pre-flight ÚJRAMÉRÉSE (2026-08-25, `main @ b266f5cc`)
+
+A fenti revíziók a `main @ 41fbd40` / `b28bb1bf` fán készültek. Ez a szakasz a
+kör tényleges indulási fáján mér újra, és elvégzi a fejlécben KÖTELEZŐVÉ tett
+hangmagasság-becslő-mérést. **Visszakeresett előzmény:**
+[L488](../LESSONS.md) (a szomszéd kör merge-e új őrt hozhat → újramérés, és a
+feloldás a típus HELYBEN tartása), [L486](../LESSONS.md) (a golden a
+RASZTERIZÁLÁST rögzíti — seed-származtatott szín nagy felületen box↔CI diffet
+ad), [L465](../LESSONS.md)/[L420](../LESSONS.md)/[L397](../LESSONS.md) (a
+képernyő-leltár egzakt száma), [L489](../LESSONS.md) (a dispatch adja át a
+motor-nyilvántartás őr-küszöbeit; korai `progress` + inkrementális commit),
+[ADR 0274](../adr/0274-motion-driven-by-the-audio-clock.md) (a ritmus-animációt
+az audio óra hajtja), [L444](../LESSONS.md) (a PULL-alapú órán a ticker
+leállítása néma no-op).
+
+#### R5.1 A hangmagasság-becslő TÉNYLEGES kimenete (a fejléc kötelező mérése)
+
+`lib/features/tuner/model/tuner_reading.dart` — az A1 cellája ERRE képez
+UI-állapotot:
+
+| Mező / getter | Típus | Mért jelentés |
+|---|---|---|
+| `note` | `String` | a legközelebbi hang neve; **üres**, ha nincs jel |
+| `cents` | `double` | −50..+50, **negatív = mély** |
+| `frequencyHz` | `double` | mért frekvencia |
+| `hasSignal` | `bool` | `note.isNotEmpty` |
+| `inTune` | `bool` | `hasSignal && cents.abs() <= inTuneCents` |
+| `TunerReading.inTuneCents` | `static const double` | **5** |
+| `TunerReading.silent` | `static const` | a nincs-jel konstans |
+
+A §6 „hangolt" cellahármasa ezzel **egyezik**: a `<=` miatt a ±5 cent
+határ INKLUZÍV, tehát a „rajta" cella elvárása (hangolt) a kód mért
+viselkedése, nem feltételezés. **Brief-revízió nem szükséges** — a §6
+változatlan.
+
+A képernyő-szintű állapotforrások (mind a mai `tuner_screen.dart`-ból mérve):
+`tunerReadingProvider` → `AsyncValue<TunerReading>` (a hiba-ág
+`readingAsync.hasError`, ma `MicErrorBanner` + `ref.invalidate`),
+`micPermissionProvider` (ma `MicPermissionBanner`), `pinnedStringProvider`
+(kézi cél), `tunerTuningProvider`, `tuningReferenceProvider` (A4 Hz),
+`InTuneLock` (`holdReadings = 6`, egyszer tüzelő „bezárult" esemény).
+
+**Az „instabil" állapotnak NINCS mezője a becslő kimenetén.** A §3-ban felsorolt
+hat állapot közül ötnek van közvetlen forrása (idle/hallgató = `!hasSignal`,
+nincs hangmagasság = `AsyncLoading`/`silent`, hangolt = `inTune`, referenciahang
+= a `pinned != null` ág). Az „instabil" ezért **kizárólag a UI-rétegben
+származtatható** (pl. az `InTuneLock` újra-élesedése vagy egy UI-oldali
+stabilitás-heurisztika a `cents` sorozatán), és a származtatás a kör
+`allowed_paths`-án belül marad. **A becslőt (`engine/dsp/**`) módosítani TILOS**
+(§3, AGENTS.md §9) — ez a §3 tiltásának megerősítése, nem tágítása.
+
+#### R5.2 A metronóm MA sem `Timer.periodic` — a mérce a PORT, nem az átírás
+
+Mért tények (`lib/features/metronome/`):
+
+- `metronome_screen.dart` ma `Ticker` (`createTicker`) + a **fázistartó**
+  `BeatClock`-ot (`beat_clock.dart`, `beatsAt/setBpm/reset`) használja; a
+  kattintás és a vizuális `_BeatDot` UGYANABBÓL a `_onTick`-ből jön.
+- A design system a portot MÁR tartalmazza: `SsBeatClock`
+  (`abstract interface class`, egyetlen tagja `Duration? get position`) és
+  `SsBeatPulse` (`lib/core/design_system/motion/ss_beat_pulse.dart`), mindkettő
+  exportálva a `public.dart`-on. `SsBeatPulse.syncTolerance = 100 ms`,
+  `SsBeatPulse.isWithinSyncTolerance(...)` tiszta függvény, `SsBeatPulse.dotKey`
+  a rögzített kulcs. Futó fogyasztói precedens:
+  `lib/features/live/widgets/beat_counter.dart`.
+
+**Amit ez a körre nézve JELENT (szűkítés):** az A4 teljesítése nem a
+metronóm időzítésének átírása (azt a §3 tiltja), hanem egy `SsBeatClock`
+**adapter** a meglévő `BeatClock`/`Ticker` fölé a `lib/features/metronome/`
+fán, és a vizuális ütem ezen keresztüli hajtása. A `metronome_beat_sync_test.dart`
+fake órája ezt az adaptert/`SsBeatClock` implementációt táplálja — nem a
+kattintás-ütemezést. **A hangzó klikk időzítése bitre változatlan marad.**
+
+⚠ [L444](../LESSONS.md): az `SsBeatClock` **pull-alapú** — a fogyasztó minden
+frame-en lekérdezi a `position`-t. Egy „ne pörögjön feleslegesen" ticker-stop
+ezen a porton néma no-op (a leállított ticker soha nem indul újra). Ne
+optimalizáld.
+
+#### R5.3 Típus-HELYBEN-tartás — SZŰKÍTÉS, három őr egyszerre semlegesítve
+
+Az `S11`-mérés a mai fán (`grep -rln` a `test/` fán) **változatlanul** a brief
+listáján lévő fájlokat adja — a szomszéd sáv NEM hozott új őrt:
+
+```
+TunerScreen      → 12 fájl   (mind az allowed_paths-on)
+MetronomeScreen  →  5 fájl   (mind az allowed_paths-on)
+CentsGauge       →  2 teszt  (mind az allowed_paths-on)
+```
+
+A kör ezért — [L488](../LESSONS.md) mintájára — **kötötten helyben migrál**:
+
+| Kötés | Mért következmény |
+|---|---|
+| `lib/features/tuner/screens/tuner_screen.dart` útvonala és a publikus `TunerScreen` típusnév VÁLTOZATLAN | a 12 `find.byType(TunerScreen)` pin zöld marad |
+| `lib/features/metronome/screens/metronome_screen.dart` + `MetronomeScreen` VÁLTOZATLAN | az 5 pin zöld marad |
+| a kör **NEM hoz új** `lib/features/**/*_screen.dart` fájlt | `test/ui/ui_inventory_test.dart` `hasLength(84)` (mért: `find lib/features -name '*_screen.dart' \| wc -l` → **84**) NEM mozdul |
+
+Ez **szűkítés**, tehát az orchestrátor saját hatásköre (ADR 0087 §2). Az
+`allowed_paths` listán a fenti őrfájlok MARADNAK (a lista szűkítése nem
+kötelező), de a várt kimenet az, hogy a kör **egyiküket sem szerkeszti**: a
+`git diff --name-only` a kör végén a `test/app/**`, `test/core/**`,
+`test/ui/ui_inventory_test.dart` és `test/features/today/**` útvonalakon
+**üres**. Ha a kör mégis szerkeszteni akarná valamelyiket, az azt jelenti, hogy
+a fenti kötést megsértette → `stopped` jelzés, nem csendes átírás.
+
+#### R5.4 Golden-szabály a mért box↔CI eltérés ellen ([L486](../LESSONS.md))
+
+Az A8 két goldenje (412×915 compact portrait + `textScaleFactor: 2.0`) a
+`test/ui/goldens/e13_r18_screens_golden_test.dart` mintáját kövesse
+(`AppTheme.dark()`, `MaterialApp` a felvétel gyökere,
+`matchesGoldenFile('goldens/<név>.png')`). **Kötelező szabály:** a felvett
+képernyők nagy, EGYBEFÜGGŐ kitöltései **konstans színforrásból** jöjjenek
+(`AppColors`, `context.palette`), NE `Theme.of(context).colorScheme.*`
+seed-származtatott tónusból (`ColorScheme.fromSeed` → HCT lebegőpont) — ez
+mérve 5–12%-os box↔CI diffet ad, ami csak az exact-SHA Full Gate-en bukik ki,
+javító kör árán. A tipográfia (`fontFamily`, szintetikus súly) és a
+`withValues(alpha:)` mérve hordozható.
+
+#### R5.5 l10n — a 19 kulcs feloldása a mai fán
+
+Mérve: a két képernyő + a `cents_gauge.dart` összesen **19** kulcsot hív; a
+`metronome*` **5** kulcs a `lib/l10n/base/app_{en,hu}.arb` szegmensben, a
+`tuner*` **14** kulcs a `lib/l10n/features/tuner_{en,hu}.arb` fragmentumban él
+— pontosan úgy, ahogy az R1 leírja. Új szöveg ugyanide megy, majd
+`dart run tool/gen_l10n_segments.dart --write` regenerálja az aggregátumot.
+
+#### R5.6 Nincs új ADR
+
+Az `ADR 0274` (audio óra) és `ADR 0280` (felolvasható cents) érvényes és
+merge-elt; a kör ezek ALKALMAZÁSA, nem új döntés. A sor-fájl `adr` oszlopa
+`nincs`, foglalás nem történt.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
