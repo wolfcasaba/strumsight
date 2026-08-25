@@ -571,3 +571,37 @@ csonkítás nélkül, `git status --short` üres utána. A golden gate 6/6 zöld
   képernyőn (`StrumSightApp` `AppTheme`-et alkalmaz, az `Ss*` widgetek
   `extension<SsColorScheme>()!`-t force-unwrappolnak) — a Ch13 záró körének
   (E13-R36) vagy önálló ADR-nek a dolga.
+
+## 12. Javító kör (F1) — a CI golden-piros gyökeroka és a javítás
+
+**A CI-piros gyökeroka.** A `full-gate 32887590628` négy cellája
+(Today/Profile hub, mindkét keretben) pixel-diffje pontosan a `_Metric`
+widget dobozának méretére lokalizált (~6,7% / ~11,7% textScale 2.0-nál) —
+mérve, dokumentálva a kör-brief F1 szakaszában. A gyanús kód mindkét
+`_Metric`-ben azonos volt: egy INLINE `TextStyle(fontFamily: 'Montserrat',
+fontWeight: FontWeight.w800, fontSize: 20)`. A `pubspec.yaml` a Montserratot
+EGYETLEN súly-variánssal deklarálja, tehát a `w800` kérést a motor
+szintetikus félkövérítéssel elégíti ki — ez a lépés box/motor-verzió szerint
+eltérő pixel-kimenetet adhat, ami pontosan a mért, box-specifikus CI-diffet
+magyarázza.
+
+**A javítás.** Mindkét `_Metric`-ben (`lib/features/today/screens/
+today_hub_screen.dart`, `lib/features/profile_hub/screens/
+profile_hub_screen.dart`) az inline `TextStyle`-t lecseréltem
+`Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:
+FontWeight.w700)`-re — ugyanaz a minta, amit a kódbázisban már egy meglévő
+metrika-widget (`lib/features/audio_analysis/presentation/widgets/
+metric_card.dart:81`) is használ. A számjegy így a `AppTheme`-ben MÁR
+definiált, téma-eredetű `headlineSmall` stílust kapja (a téma maga társítja
+hozzá a Montserrat családot a `heading`-merge-ön keresztül, `app_theme.dart:
+26-38`), nem egy widget-lokális, kézzel megkonstruált stílust — pontosan az
+az útvonal, amit az E13-R16 golden-készlete (CI-n zöld) más képernyőkön már
+igazoltan hordozhatónak bizonyított.
+
+**Golden-frissítés.** Mind a hat golden PNG újra felvéve
+(`flutter test --update-goldens test/ui/goldens/e13_r17_screens_golden_test.dart`)
+és commitolva; ténylegesen csak a négy korábban piros PNG változott — a
+`practice_area_hub` két, már zöld goldenje bájt-azonos maradt.
+
+**Gate.** `tools/round-gate.sh` a §7 alakjában — **11/11 ZÖLD**, izolált
+processzek, csonkítás nélkül.
