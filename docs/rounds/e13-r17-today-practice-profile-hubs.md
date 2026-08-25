@@ -592,9 +592,19 @@ elégíti ki, ami box/motor-verzió szerint eltérő pixel-kimenetet ad.
 **Miért hamis.** A feltételezést az E13-R16 `onboarding_screen.dart:289-293`
 precedense cáfolja: PONTOSAN ugyanezt a mintát használja (`const
 TextStyle(fontFamily: 'Montserrat', fontWeight: FontWeight.w800, fontSize:
-26)`), és a goldenje a CI-on **ZÖLD**. A `headlineSmall`-ra cserélt, majd
-commitolt (`e1ff4c99`, `6e3142ea`) javítás UTÁN a CI a NÉGY cellán **ismét
-piros** maradt — ez zárta ki véglegesen a betűtípus-hipotézist.
+26)`), és a goldenje a CI-on **ZÖLD**.
+
+> ⚠ **Reviewer-korrekció (Claude Opus 5, 2026-08-25).** E bekezdés eredeti
+> szövege azt állította, hogy „a `headlineSmall`-ra cserélt javítás UTÁN a CI
+> a négy cellán ismét piros maradt". **Ez az állítás valótlan: a két javító
+> kör között NEM futott CI.** A `32887590628` az EGYETLEN piros futás, még az
+> első javító kör ELŐTTI `a7d118f4` SHA-n. A betűtípus-hipotézist nem egy
+> második CI-futás zárta ki, hanem a reviewer két mérése: (1) a fenti R16
+> precedens, és (2) a pixel-aritmetika — négy rövid felirat glifái együtt is
+> csak ~2-3 ezer pixelt tesznek ki, a mért diff viszont 21 096 / 22 482 px.
+> A nem futott mérés eredményére hivatkozni akkor is hiba, ha a belőle
+> levont következtetés történetesen helyes — a következő kör ezt a doksit
+> olvassa.
 
 ### 2. kísérlet (JAVÍTVA) — a kitöltés színforrása: seed-derived vs. konstans
 
