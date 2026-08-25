@@ -834,8 +834,64 @@ teszttel — MINDEN lépés zöld (format, analyze, mind az öt teszt-fájl,
 architecture, secrets, l10n).
 
 A brief §2 tiltott zónáját (`test/ui/ui_inventory_test.dart`) nem
-érintettem — a `hasLength(79)` piros marad a CI teljes suite-jában, ez a
-briefben rögzített, szándékos H3-eset (tágítás, listán kívüli fájl),
-emberi/önjavító döntésre vár.
+érintettem — a `hasLength(79)` piros maradt a CI teljes suite-jában, ez a
+briefben rögzített, szándékos H3-eset volt (tágítás, listán kívüli fájl),
+amíg a javító kör 3 futott. A §0.0/R6 önjavító kör (`c064566f`) azóta a
+fájlt felvette az `allowed_paths`-ra és a `gate_tests`-be — a lezárás
+részleteit lásd §10.4.
+
+## 10.4 JAVÍTÓ KÖR 4 — F9 (a képernyő-leltár számlálója)
+
+**F9 — javítva.** Az előző javító kör (§10.3) H3-nak minősítette az F9-et,
+mert a célfájl (`test/ui/ui_inventory_test.dart`) akkor nem szerepelt az
+`allowed_paths`-on. Az önjavító kör (`c064566f`, `origin/main`, PR #454,
+`§0.0/R6`) ezt feloldotta: a fájlt felvette az `allowed_paths`-ra ÉS a
+`gate_tests`-be. A `main` már be van merge-elve az ágba (`721ab1f0`), a fájl
+tehát a scope-on belülre került.
+
+A kör két új képernyője (`permission_primer_screen.dart`,
+`first_win_stage_screen.dart`) miatt a leltár mért hossza a régi `79`
+helyett `81`. A mérés a HEAD-en (`flutter test
+test/ui/ui_inventory_test.dart`) történt, nem bemondásra:
+
+```
+$ flutter test test/ui/ui_inventory_test.dart
+...
+Expected: an object with length of <79>
+  Actual: [...]
+   Which: has length of <81>
+...
+Some tests failed.
+```
+
+Javítás: `test/ui/ui_inventory_test.dart:14` — `hasLength(79)` →
+`hasLength(81)`. A leltárteszt minden más állítása (a `toMarkdown()`
+determinizmus-cella, az `orderedEquals` rendezettség-cellák, a `contains`
+cellák) érintetlen maradt. A `tool/ui_inventory.dart`-hoz nem nyúltam.
+
+**Gate a javító kör 4 után** (a hat érintett/érzékeny teszt-fájllal, a
+`test/ui/ui_inventory_test.dart`-tal együtt):
+
+```
+$ tools/round-gate.sh test/features/onboarding/bootstrap_routing_test.dart test/features/onboarding/permission_primer_test.dart test/features/onboarding/onboarding_resume_test.dart test/features/onboarding/first_win_test.dart test/ui/goldens/e13_r16_screens_golden_test.dart test/ui/ui_inventory_test.dart
+...
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/onboarding/bootstrap_routing_test.dart  zöld
+    test test/features/onboarding/permission_primer_test.dart  zöld
+    test test/features/onboarding/onboarding_resume_test.dart  zöld
+    test test/features/onboarding/first_win_test.dart          zöld
+    test test/ui/goldens/e13_r16_screens_golden_test.dart      zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+A 10 golden PNG bit-azonos maradt — `git status --short` a gate után egyetlen
+`.png`-t sem mutatott módosítottként.
 
 ## 11. Review — a Claude tölti ki
