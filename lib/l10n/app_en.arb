@@ -2016,10 +2016,12 @@
   "@liveWeakSignal": {
     "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
   },
+  "metronomeAdvancedSettings": "Advanced settings",
   "metronomeBpm": "BPM",
   "metronomeStart": "Start",
   "metronomeStop": "Stop",
   "metronomeTap": "Tap tempo",
+  "metronomeTimeSignature": "Time signature",
   "metronomeTitle": "Metronome",
   "micErrorAction": "Retry",
   "micErrorBody": "Couldn't start the microphone. It may be in use by another app. Tap Retry.",
@@ -3640,6 +3642,7 @@
       }
     }
   },
+  "tunerHoldSteady": "Hold steady…",
   "tunerInTune": "In tune",
   "tunerListening": "Play a string…",
   "tunerPinned": "pinned target",

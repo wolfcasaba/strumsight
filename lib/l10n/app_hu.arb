@@ -1978,10 +1978,12 @@
   "@liveWeakSignal": {
     "description": "Shown next to the input-level meter when listening but the raw mic level is below the presentation threshold."
   },
+  "metronomeAdvancedSettings": "Speciális beállítások",
   "metronomeBpm": "BPM",
   "metronomeStart": "Indítás",
   "metronomeStop": "Leállítás",
   "metronomeTap": "Tap tempó",
+  "metronomeTimeSignature": "Ütemmutató",
   "metronomeTitle": "Metronóm",
   "micErrorAction": "Újra",
   "micErrorBody": "Nem sikerült elindítani a mikrofont. Lehet, hogy egy másik app használja. Koppints az Újra gombra.",
@@ -3581,6 +3583,7 @@
   },
   "tunerCentsFlat": "{cents} centtel mély",
   "tunerCentsSharp": "{cents} centtel magas",
+  "tunerHoldSteady": "Tartsd stabilan…",
   "tunerInTune": "Tiszta",
   "tunerListening": "Pendíts meg egy húrt…",
   "tunerPinned": "kitűzött cél",

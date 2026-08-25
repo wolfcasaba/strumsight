@@ -435,6 +435,8 @@
   "metronomeTap": "Tap tempo",
   "metronomeStart": "Start",
   "metronomeStop": "Stop",
+  "metronomeAdvancedSettings": "Advanced settings",
+  "metronomeTimeSignature": "Time signature",
   "wrappedTitle": "My strum week",
   "wrappedShareTooltip": "Share my week",
   "streakSkillTitle": "Your skill",

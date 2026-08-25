@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../beat_clock.dart';
+import '../beat_pulse_dot.dart';
 import '../tap_tempo.dart';
 
 /// A standalone metronome tool: set a tempo (slider, ±, or tap-tempo), pick a
 /// time signature, and play a click with an accented downbeat + a visual beat
 /// pulse. Reuses the pure-Dart synthesised click (`Metronome`). Starts stopped
 /// so widget tests advance it deterministically with `pump(Duration)`.
+///
+/// Migrated onto [SsStageScaffold] (Ch13 §9.9): the main surface keeps only
+/// BPM, the beat visualization and the transport (brief §5.6) — the time
+/// signature is an "advanced" setting behind the app-bar action, presented
+/// through the R13 overlay system ([SsOverlayHost]).
 class MetronomeScreen extends StatefulWidget {
   const MetronomeScreen({super.key});
 
@@ -27,21 +35,31 @@ class _MetronomeScreenState extends State<MetronomeScreen>
   final TapTempo _tapTempo = TapTempo(minBpm: _minBpm, maxBpm: _maxBpm);
 
   /// Phase-preserving clock: a mid-play tempo change keeps the beat position
-  /// continuous instead of rescaling all elapsed time (round 98).
+  /// continuous instead of rescaling all elapsed time (round 98). UNCHANGED
+  /// by this round (brief §0.0/R5.2, AGENTS.md §9) — the click's timing stays
+  /// bit-for-bit identical; only the visual layer is re-plumbed below.
   final BeatClock _clock = BeatClock(bpm: 100);
   late final Ticker _ticker;
+
+  /// The `SsBeatClock` PORT (brief §0.0/R5.2): reads the exact same
+  /// elapsed-seconds value the click scheduler below already tracks, so the
+  /// visual pulse can never drift from the audible click.
+  late final MetronomeBeatClockAdapter _beatClockAdapter;
 
   int _bpm = 100;
   int _beatsPerBar = 4;
   bool _playing = false;
   double _lastSecs = 0;
   int _lastBeat = -1;
-  int _currentBeat = 0; // index within the bar, for the visual pulse
+  int _currentBeat = 0; // index within the bar, for the per-bar dots
 
   @override
   void initState() {
     super.initState();
     _ticker = createTicker(_onTick);
+    _beatClockAdapter = MetronomeBeatClockAdapter(
+      () => _playing ? _lastSecs : null,
+    );
   }
 
   @override
@@ -93,98 +111,120 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     if (bpm != null) _setBpm(bpm);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.metronomeTitle)),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-          // Landscape phones lay the controls out in two columns so nothing is
-          // crowded; portrait keeps the single tall column. Either way the
-          // content scrolls when it is taller than the viewport, so there is
-          // never a vertical overflow (small portrait / short landscape).
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final landscape = constraints.maxWidth > constraints.maxHeight;
-              return SingleChildScrollView(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: IntrinsicHeight(
-                    child: landscape
-                        ? _landscapeBody(l10n)
-                        : _portraitBody(l10n),
+  /// The "advanced settings" sheet (brief §5.6). NOT `SsOverlayHost.
+  /// showSheetSurface`: that helper's `_SsBottomSheetSurface` calls
+  /// `SsElevation.resolve`, which reads the `SsColorScheme`/`SsThemeBehavior`
+  /// theme extensions — registered only by `SsDarkTheme`/`SsLightTheme`, not
+  /// by `AppTheme` (the app's actual runtime theme, which registers only
+  /// `AppPalette`). Under `AppTheme` it throws a null-check error building
+  /// the sheet (measured while writing this round's own tests — see the
+  /// round handoff §10). `lib/core/design_system/components/overlays/**` is
+  /// out of this round's scope to fix, so this uses Flutter's own
+  /// `showModalBottomSheet` instead, styled from the same palette every
+  /// other migrated piece in this round uses.
+  Future<void> _openAdvancedSettings(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
+    final palette = context.palette;
+    return showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.metronomeAdvancedSettings,
+                  style: TextStyle(
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                    color: palette.ink,
                   ),
                 ),
-              );
-            },
+                const SizedBox(height: 20),
+                Text(
+                  l10n.metronomeTimeSignature,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: palette.muted,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SsChoice<int>(
+                  options: [
+                    for (final n in const [2, 3, 4, 6])
+                      SsChoiceOption(value: n, label: '$n/4'),
+                  ],
+                  value: _beatsPerBar,
+                  onChanged: (v) {
+                    setState(() => _beatsPerBar = v);
+                    setSheetState(() {});
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  /// Single-column layout for portrait; Spacers breathe when there is room.
-  Widget _portraitBody(AppLocalizations l10n) => Column(
-    children: [
-      const Spacer(),
-      _beatDots(),
-      const SizedBox(height: 28),
-      _bpmHero(l10n),
-      const SizedBox(height: 16),
-      _tempoSlider(),
-      const SizedBox(height: 20),
-      _timeSignature(),
-      const Spacer(),
-      _actions(l10n),
-    ],
-  );
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.palette;
+    final beatDuration = Duration(microseconds: (60 / _bpm * 1e6).round());
 
-  /// Two-column layout for landscape: the hero + beat pulse on the left, the
-  /// slider / time-signature / tap+play controls on the right.
-  Widget _landscapeBody(AppLocalizations l10n) => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      Expanded(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [_beatDots(), const SizedBox(height: 24), _bpmHero(l10n)],
-        ),
-      ),
-      const SizedBox(width: 24),
-      Expanded(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _tempoSlider(),
-            const SizedBox(height: 16),
-            _timeSignature(),
-            const SizedBox(height: 20),
-            _actions(l10n),
-          ],
-        ),
-      ),
-    ],
-  );
-
-  /// Visual beat-pulse dots (one per beat in the bar).
-  Widget _beatDots() => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      for (var i = 0; i < _beatsPerBar; i++)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5),
-          child: _BeatDot(
-            active: _playing && i == _currentBeat,
-            downbeat: i == 0,
+    return SsStageScaffold(
+      statusHeader: Row(
+        children: [
+          if (Navigator.canPop(context))
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
+          Expanded(
+            child: Text(
+              l10n.metronomeTitle,
+              style: TextStyle(
+                fontFamily: 'Montserrat',
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+                color: palette.ink,
+              ),
+            ),
           ),
-        ),
-    ],
-  );
+          IconButton(
+            icon: const Icon(Icons.tune),
+            tooltip: l10n.metronomeAdvancedSettings,
+            onPressed: () => _openAdvancedSettings(context, l10n),
+          ),
+        ],
+      ),
+      hero: _bpmHero(l10n),
+      // The audio-clock-bound visual pulse (A4) — never a `Timer.periodic`.
+      feedback: BeatPulseDot(
+        playing: _playing,
+        clock: _beatClockAdapter,
+        beatDuration: beatDuration,
+        color: AppColors.primary,
+        mutedColor: palette.track,
+      ),
+      timeline: _beatDots(),
+      bottomAction: _actions(l10n),
+    );
+  }
 
-  /// Big BPM readout. FittedBox scales the number down on narrow (320px)
-  /// phones so it never forces a horizontal overflow.
+  /// Big BPM readout + the − / slider / + tempo control. FittedBox scales the
+  /// number down on narrow (320px) phones so it never forces a horizontal
+  /// overflow, at any text scale (A7).
   Widget _bpmHero(AppLocalizations l10n) => Column(
     mainAxisSize: MainAxisSize.min,
     children: [
@@ -202,41 +242,47 @@ class _MetronomeScreenState extends State<MetronomeScreen>
         ),
       ),
       Text(l10n.metronomeBpm, style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 8),
+      Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton.filledTonal(
+            onPressed: () => _setBpm(_bpm - 1),
+            icon: const Icon(Icons.remove),
+          ),
+          SizedBox(
+            width: 180,
+            child: Slider(
+              value: _bpm.toDouble(),
+              min: _minBpm.toDouble(),
+              max: _maxBpm.toDouble(),
+              onChanged: (v) => _setBpm(v.round()),
+            ),
+          ),
+          IconButton.filledTonal(
+            onPressed: () => _setBpm(_bpm + 1),
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
     ],
   );
 
-  /// − / slider / + tempo control.
-  Widget _tempoSlider() => Row(
+  /// Discrete per-bar position dots (one per beat in the bar), still driven
+  /// off the same audio-clock-derived `_currentBeat` as the click itself —
+  /// never a separate free-running timer.
+  Widget _beatDots() => Row(
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
-      IconButton.filledTonal(
-        onPressed: () => _setBpm(_bpm - 1),
-        icon: const Icon(Icons.remove),
-      ),
-      Expanded(
-        child: Slider(
-          value: _bpm.toDouble(),
-          min: _minBpm.toDouble(),
-          max: _maxBpm.toDouble(),
-          onChanged: (v) => _setBpm(v.round()),
+      for (var i = 0; i < _beatsPerBar; i++)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          child: _BeatDot(
+            active: _playing && i == _currentBeat,
+            downbeat: i == 0,
+          ),
         ),
-      ),
-      IconButton.filledTonal(
-        onPressed: () => _setBpm(_bpm + 1),
-        icon: const Icon(Icons.add),
-      ),
     ],
-  );
-
-  /// Time-signature toggle (2/4, 3/4, 4/4, 6/4).
-  Widget _timeSignature() => SegmentedButton<int>(
-    showSelectedIcon: false,
-    segments: [
-      for (final n in const [2, 3, 4, 6])
-        ButtonSegment(value: n, label: Text('$n/4')),
-    ],
-    selected: {_beatsPerBar},
-    onSelectionChanged: (s) => setState(() => _beatsPerBar = s.first),
   );
 
   /// Tap-tempo + start/stop actions.
