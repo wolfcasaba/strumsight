@@ -54,37 +54,39 @@ class LiveLabPanel extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: analyzing
-                    ? null
-                    : () => ref
-                          .read(liveLabProvider.notifier)
-                          .captureAndAnalyze(),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: palette.onAccent,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                ),
-                child: analyzing
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(
-                        l10n.labCaptureUpload,
-                        style: const TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-              ),
             ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: analyzing
+                  ? null
+                  : () =>
+                        ref.read(liveLabProvider.notifier).captureAndAnalyze(),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: palette.onAccent,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+              ),
+              child: analyzing
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      l10n.labCaptureUpload,
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+            ),
           ),
           if (labState.phase == LiveLabPhase.empty)
             Padding(

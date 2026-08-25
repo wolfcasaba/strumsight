@@ -247,14 +247,20 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         frame.inputLevel < SsSignalQualityIndicator.defaultWeakThreshold;
     final hasChord = frame.current != null;
 
+    // The transport only distinguishes disabled/finishing/paused/active — a
+    // session autostarts on mount (no `countIn`, no separate "not yet
+    // started" moment to gate on), so idle/starting/listening/weak-signal/
+    // no-chord all read as `active` here and are told apart by the hero,
+    // feedback and timeline slots instead. Gating this on `isLoading` would
+    // flicker Pause away on every resume (invalidating the stream re-enters
+    // loading until the next frame arrives) — measured while writing this
+    // round's tests.
     final transportStatus = !micGranted || (micError && !_paused)
         ? SsSessionTransportStatus.disabled
         : _finishing
         ? SsSessionTransportStatus.finishing
         : _paused
         ? SsSessionTransportStatus.paused
-        : isLoading
-        ? SsSessionTransportStatus.idle
         : SsSessionTransportStatus.active;
 
     final latestStrum = frame.latestStrum;
@@ -285,6 +291,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
               const StreakBadge(),
             ],
           ),
+          if (isLoading)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                l10n.liveStarting,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: palette.muted,
+                ),
+              ),
+            ),
           if (!micGranted) const MicPermissionBanner(),
           if (micGranted && micError)
             MicErrorBanner(onRetry: () => ref.invalidate(liveFrameProvider)),
@@ -350,7 +368,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
         pauseLabel: l10n.livePause,
         resumeLabel: l10n.liveResume,
         finishLabel: l10n.liveFinish,
-        idleLabel: isLoading ? l10n.liveStarting : null,
+        idleLabel: null,
         onPause: _togglePause,
         onResume: _togglePause,
         onFinish: _finish,

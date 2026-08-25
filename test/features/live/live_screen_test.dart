@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
@@ -43,8 +44,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // The chord-timeline hero shows the chord label, its confidence and the
-      // ↓/↑ strum direction (the moat), plus the fingering diagram.
-      expect(find.text('C'), findsOneWidget); // the hero chord label
+      // ↓/↑ strum direction (the moat), plus the fingering diagram. E13-R18:
+      // the Stage hero slot ALSO shows the current chord (glanceable
+      // from-across-the-room readout, distinct from the filmstrip's own
+      // richer hero card) — so "C" now appears twice, by design (§10).
+      expect(find.text('C'), findsWidgets); // the chord label, hero + Stage
       expect(find.textContaining('90%'), findsOneWidget); // hero confidence bar
       expect(find.byType(StrumArrow), findsWidgets); // the ↓/↑ direction
       expect(find.byType(ChordDiagram), findsOneWidget); // hero fingering
@@ -82,7 +86,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('A#'), findsOneWidget); // C shown as the fretted shape
+    expect(find.text('A#'), findsWidgets); // C shown as the fretted shape
     expect(find.text('C'), findsNothing);
     expect(find.textContaining('Capo 2'), findsOneWidget); // honest badge
 
@@ -111,16 +115,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Pause'), findsOneWidget);
-    await tester.tap(find.text('Pause'));
+    // E13-R18: Pause/Resume moved onto the mandated SsSessionTransport
+    // (ADR 0276 decision 4) — icon+tooltip, not a visible Text label.
+    final transportPause = find.byKey(
+      const ValueKey('ss-session-transport-pause'),
+    );
+    expect(transportPause, findsOneWidget);
+    expect(find.byTooltip('Pause'), findsOneWidget);
+    await tester.tap(transportPause);
     await tester.pumpAndSettle();
-    expect(find.text('Resume'), findsOneWidget);
+    expect(find.byTooltip('Resume'), findsOneWidget);
     // Pause must actually stop detection, not just freeze the display.
     expect(engine.stopCalls, greaterThan(0));
 
-    await tester.tap(find.text('Resume'));
+    await tester.tap(transportPause);
     await tester.pumpAndSettle();
-    expect(find.text('Pause'), findsOneWidget);
+    expect(find.byTooltip('Pause'), findsOneWidget);
     expect(engine.startCalls, greaterThan(0));
   });
 
