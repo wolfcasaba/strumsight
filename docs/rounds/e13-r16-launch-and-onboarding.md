@@ -520,23 +520,23 @@ primer/Stage beékelése ezt strukturálisan lehetetlenné teszi (a felhasznál�
 nem koppint át rajtuk egyetlen tap-ben).
 
 Mivel ez a fájl a §4 tilos zónáján kívül esik, NEM módosíthattam. A
-feloldás: a karusszel két CTA-ja (`_finish`/`_firstWin`) VISSZAÁLLT a
-pontosan eredeti implementációra (direkt `primeMic`/mikrofon-kérés,
-azonnali befejezés) — ez byte-szinten megegyezik a r155-ös eredetivel, csak
+feloldás ebben a körben: a karusszel két CTA-ja (`_finish`/`_firstWin`)
+VISSZAÁLLT a pontosan eredeti implementációra (direkt `primeMic`/mikrofon-kérés,
+azonnali befejezés) — ez byte-szinten megegyezett a r155-ös eredetivel, csak
 egy `_advanceStep(OnboardingStep.done)` hívással bővült (a checkpointot
 szinkronban tartja a seen-bool-lal). A `PermissionPrimerScreen` és a
 `FirstWinStageScreen` VALÓDI, teljesen tesztelt komponensek maradtak — az
 `OnboardingScreen.build()` lépés-switch-e ténylegesen megjeleníti őket,
 amikor a checkpoint már `permission`/`firstWin` állapotban van (l.
-`onboarding_resume_test.dart` A6 csoportja) —, de a karusszel CTA-i egyelőre
-NEM írják át erre a checkpointot. **Ez azt jelenti, hogy az A1 (primer a
-rendszerdialógus előtt) ma csak a `PermissionPrimerScreen` saját
-komponens-tesztjében bizonyított, a valós "Try your first win" úton a régi
-`primeMic()` közvetlen hívás fut** — ugyanúgy, mint a kör előtt. A teljes
-integráció (a karusszel CTA-i ténylegesen a primer/Stage felé
-irányítsanak) egy KÖVETKEZŐ kör feladata, együtt az
-`onboarding_first_win_test.dart` frissítésével (az a fájl akkor kerül
-engedélyezett listára). Empirikusan ellenőrizve: a fenti öt, tilos zónában
+`onboarding_resume_test.dart` A6 csoportja) —, de a karusszel CTA-i akkor még
+NEM írták át erre a checkpointot: az A1 (primer a rendszerdialógus előtt)
+ekkor csak a `PermissionPrimerScreen` saját komponens-tesztjében volt
+bizonyítva, a valós "Try your first win" úton a régi `primeMic()` közvetlen
+hívás futott. **A javító kör 1 (l. §10.1, F1) ezt feloldotta** —
+`onboarding_first_win_test.dart` időközben engedélyezett listára került, a
+karusszel mindkét CTA-ja ma a `permission` checkpointon át megy, és az A1
+app-szinten is bizonyított. Empirikusan ellenőrizve (ekkor, az eredeti
+implementációnál): a fenti öt, tilos zónában
 lévő fájl (`test/app/routing/onboarding_first_win_test.dart`,
 `test/app/app_bootstrap_test.dart`, `test/app/bootstrap_failure_app_test.dart`,
 `test/app/routing/app_router_test.dart`, `test/core/screen_size_guard_test.dart`
@@ -689,5 +689,62 @@ architecture, secrets, l10n). A golden-PNG-k VÁLTOZATLANOK (a `.firstWin`
 szűkítés és a primer-routing egyike sem érinti a golden-tesztben közvetlenül
 példányosított `PermissionPrimerScreen`/`FirstWinStageScreen` widgeteket) —
 nem kellett újra felvenni őket.
+
+---
+
+## 10.2 JAVÍTÓ KÖR 2 — reviewer-próbateszt leletei
+
+**F6 (MINOR) — javítva.** A reviewer próbatesztje azt mutatta, hogy az "A1
+(app-level)" mérce csak az `onboardFirstWin` CTA-t ("Try your first win —
+30 seconds") fedte; a testvér-CTA (`onboardStart`, "Enable mic & start", a
+csendes út a `TextButton`-on) őrizetlen maradt — egy erre visszaeső
+regressziót semmilyen mérce nem fogott volna meg.
+`permission_primer_test.dart` "A1 (app-level)" csoportja új cellát kapott,
+ami ugyanazt a mintát alkalmazza az `onboardStart` CTA-ra: `denied`
+gateway-vel felépíti a teljes `OnboardingScreen`-t, a karusszel utolsó
+oldalán megnyomja az "Enable mic & start" gombot, és állítja, hogy
+`gateway.requestCalls == 0` marad, és a `PermissionPrimerScreen` (az
+"Allow" gombjával) van a képernyőn.
+
+**Bizonyíték (RED → GREEN, eldobható rontással, visszaállítva):** a
+`_finish(requestMic: true)` hívást ideiglenesen egy hideg
+`ref.read(microphonePermissionGatewayProvider).request()` hívásra
+cseréltem az `onboardStart` `TextButton`-ban:
+
+```
+$ flutter test test/features/onboarding/permission_primer_test.dart
+00:02 +8 -1: Some tests failed.
+  A1 (app-level) — … tapping the last-page "Enable mic & start" CTA shows
+  the primer before any request() call reaches the gateway
+  Expected: <0>
+    Actual: <1>
+```
+
+→ az új cella valódi, nem tautologikus (a másik hét cella zöld maradt).
+Visszaállítás után:
+
+```
+$ flutter test test/features/onboarding/permission_primer_test.dart
+00:02 +9: All tests passed!
+```
+
+`lib/features/onboarding/screens/onboarding_screen.dart` a próba után
+byte-azonosan visszaállt (`git diff` üres) — a mai viselkedés helyes volt,
+csak a mérce hiányzott.
+
+**F7 (MINOR) — javítva.** A §10 "Fontos felfedezés a fejlesztés közben"
+bekezdése a javító kör 1 (§10.1, F1) után elavult maradt, és szó szerint
+hamis állítást tartalmazott (hogy a valós "Try your first win" úton ma is a
+régi `primeMic()` közvetlen hívás fut). A bekezdést múlt időre igazítottam,
+és egy mondatban rögzítettem, hogy a javító kör 1 ezt feloldotta — az
+`onboarding_first_win_test.dart` időközben engedélyezett listára került, a
+karusszel mindkét CTA-ja ma a `permission` checkpointon át megy. A §10.1
+szövege nem változott.
+
+**F5 (NOTE) — NEM javítva**, a brief szerint (§0.0/B P4, kimarad).
+
+**Gate a javító kör 2 után.** `tools/round-gate.sh` a brief-ben megadott
+öt teszttel — l. alább a futtatott parancsot és a teljes, csonkítatlan
+kimenetet.
 
 ## 11. Review — a Claude tölti ki

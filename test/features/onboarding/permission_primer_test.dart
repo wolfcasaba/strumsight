@@ -224,5 +224,48 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'tapping the last-page "Enable mic & start" CTA shows the primer '
+      'before any request() call reaches the gateway',
+      (tester) async {
+        final gateway = FakeMicrophonePermissionGateway(
+          state: MicrophonePermissionState.denied,
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              ...preferenceOverrides(),
+              microphonePermissionGatewayProvider.overrideWithValue(gateway),
+            ],
+            child: MaterialApp(
+              theme: SsDarkTheme.data(),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const OnboardingScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Next'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Enable mic & start'));
+        await tester.pumpAndSettle();
+
+        expect(
+          gateway.requestCalls,
+          0,
+          reason: 'the primer must be on screen before any request() call',
+        );
+        expect(find.byType(PermissionPrimerScreen), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('onboard-primer-allow')),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }
