@@ -1,6 +1,6 @@
 # E13-R17 — Today, Practice és Profile hubok
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 6adea220`)
+- **Státusz:** READY (pre-flight lefutva 2026-08-25, kód mérve: `main @ b28bb1bf` — §0.0/R6)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 17
 - **Kör-azonosító:** `E13-R17`
 - **Branch:** `<motor>/e13-r17-today-practice-profile-hubs`
@@ -189,6 +189,90 @@ katalógus-belépőkre vonatkoznak — azok ettől függetlenül a kör dolgai.
 egy önálló ADR — nem ez a kör és nem az implementer csendes választása. Az
 implementer a mai kaput **változatlanul** hagyja; ha a hub tartalma
 elérhetetlenné válna emiatt, az **`blocked` jelzés**, nem kerülőút.
+
+### R6 — indítás előtti pre-flight mérés (Claude orchestrátor, 2026-08-25, `main @ b28bb1bf`)
+
+Az R1–R5 állításai **újramérve, mind IGAZ** a mai fán. A mérés parancsai és
+kimenetei:
+
+| Állítás | Parancs | Mért eredmény |
+|---|---|---|
+| R1 — a három hub-könyvtár még nem létezik | `ls -d lib/features/{today,practice_hub,profile_hub}` | mind **MISSING** ✔ |
+| R1 — a hub-kulcsok forrása a `base/` szegmens | `ls lib/l10n/features/` | `community, design_system, gamification, onboarding, tuner` — **nincs** `today/practice_hub/profile_hub` fragmentum ✔ |
+| R1 — a `arb_parity` szegmens-listát nem kell bővíteni | `grep -n "base/app" test/l10n/arb_parity_test.dart` | `('base/app', …)` már szerepel ✔ |
+| R3 — a lecserélendő adapterek | `grep -rn "class \(ProgressScreen\|PracticeHubScreen\|SettingsScreen\)" lib/` | `lib/features/progress/screens/progress_screen.dart:19`, `lib/features/practice/presentation/screens/practice_hub_screen.dart:35`, `lib/features/settings/screens/settings_screen.dart:24` ✔ |
+| R4 — a leltár-szám elmozdul | `grep hasLength test/ui/ui_inventory_test.dart` ↔ `find lib/features -name '*_screen.dart' \| wc -l` | `hasLength(81)` ↔ **81** — ma egyezik, tehát MINDEN új `_screen.dart` elmozdítja ✔ |
+| brief-lint | `python3 tools/brief-lint.py --brief … --level strict` | **nincs lelet** ✔ |
+
+**Visszakeresés (ADR 0312, szűkítve → majd teljes korpuszon).**
+[ADR 0275](../adr/0275-five-area-shell-behind-a-flag.md) §3 (egyetlen legacy
+route sem törhet el) és §4 (aciklikus redirect-térkép) · [L485](../LESSONS.md)
+(ennek a körnek a saját H3-ja: a navigációs őrök a destination-adapterek
+TÍPUSÁT pinnelik) · [L465](../LESSONS.md)/[L483](../LESSONS.md)/[L397](../LESSONS.md)
+(a `ui_inventory` egzakt `hasLength` — háromszor mért CI-only bukás) ·
+**[L452](../LESSONS.md) — a golden-cellák szempontjából a legfontosabb**:
+widget-tesztben a `MediaQuery(data: MediaQueryData(size: …))` **NEM** méretezi a
+layoutot, a deklarált 412×915 sosem áll elő. A követendő minta a
+`tester.view.physicalSize` + `tester.view.devicePixelRatio` — pontosan ezt
+csinálja az előző kör futó precedense (lásd lent).
+
+### R6.1 — A brief kötelező pre-flight kérdése MEGVÁLASZOLVA: milyen TÉNYLEGES terv- és gamifikációs adatforrás érhető el
+
+A fejléc ⚠-blokkja ezt a mérést írta elő. Mérve, a **prezentációs rétegből
+tényleges elérhetőség** szerint (nem a réteg-diagram alapján — §1.2):
+
+| Adat | Van-e Riverpod-provider? | Mért bizonyíték |
+|---|---|---|
+| **Gyakorlási terv (Chapter 8)** | **NINCS** | `grep -rl "Provider(" lib/features/practice_generator/` → **0 találat**. A `TodayPlanController`/`ActivePlanController` létezik (`public.dart`), de egyetlen provider sem szolgáltatja őket a UI-nak. |
+| **Gamifikációs profil / questek / jutalmak (Chapter 9)** | **NINCS** (a preferencián kívül) | `find lib/features/gamification -name "*provider*.dart"` → egyetlen fájl: `presentation/providers/gamification_preferences_provider.dart` (`gamificationPreferencesProvider`). A `GamificationProfile`, quest- és reward-adat provider nélküli. |
+| Gyakorlási napló + napi cél | **VAN** | `lib/features/progress/public.dart` → `practice_log_provider.dart`, `daily_goal_provider.dart` |
+| Széria | **VAN** | `lib/features/streak/public.dart` → `providers/streak_provider.dart` |
+
+**Következmény — az §5.5 feltétele TELJESÜL:** a terv- és a gamifikációs
+adat a prezentációs rétegből ma **nem elérhető**, tehát a hubok
+**repository-interfészt** használnak, és a **teszt** adja a fake
+implementációt. Ez a brief saját, előre kimondott feloldása (§5.5), nem
+lista-tágítás.
+
+**Amit ez NEM enged meg:** az A8 változatlanul tiltja a kitalált statisztikát.
+Hiányzó adat = üres/„még nincs adat" állapot, **nem** kitalált szám. Ha az
+implementer a `progress`/`streak` VALÓS providereit olvassa, azt kizárólag a
+más feature-ök `public.dart` barreljén át teheti (import, nem szerkesztés — a
+tilos zóna érintetlen marad).
+
+### R6.2 — A4 (mikrofon/kamera) — a TÉNYLEGES erőforrás-birtoklás mérve (§1.2)
+
+A hubok tiltása így falszifikálható konkrétan; ezek a hívások **nem
+jelenhetnek meg** a három hub fájában:
+
+| Erőforrás | A mai megszerző (mért hívási lánc) |
+|---|---|
+| Mikrofon (élő stream) | `liveFrameProvider` — `lib/features/live/providers/live_providers.dart:19` (`StreamProvider.autoDispose`) |
+| Mikrofon (felvétel) | `AnalyzeController.startRecording()` — `lib/features/analyze/providers/analyze_providers.dart:162` |
+| Kamera | `coordinator.acquire(…)` — `lib/features/vision/application/vision_session_controller.dart:157`, `vision_setup_controller.dart:163` |
+| Képernyő-ébrentartás | `WakelockPlus.enable()` — `lib/core/platform/screen_wakelock.dart:21` |
+
+Az A4 `grep`-je ezt a négy aláírást keresi a kör diffjében.
+
+### R6.3 — Az A9 golden-cellák futó precedense a `test/ui/goldens/` fában
+
+A §7 a `test/features/live/chord_timeline_golden_test.dart`-ot nevezi meg
+mintaként; az **közvetlenebb és azonos szerződésű** precedens viszont az előző
+kör már merge-elt fájlja: **`test/ui/goldens/e13_r16_screens_golden_test.dart`**
+(+ 10 commitolt PNG a `test/ui/goldens/goldens/` alatt). Ez ugyanazt a két
+keretet adja (412×915 compact és ugyanaz `textScaler: 2.0` mellett), valódi
+kapuként (nem `GOLDENS=1`-re kapcsolt opt-in eszközként), és a méretezést az
+L452-nek megfelelően `tester.view.physicalSize`-zal állítja be. **Ezt kell
+követni** — ez pontosítás, nem új követelmény.
+
+### R6.4 — ADR: ez a kör NEM oszt új ADR-számot
+
+A sor-fájl (`docs/execution/pipeline-queue.tsv:450`) `adr` oszlopa `nincs`, a
+brief fejléce ugyanezt mondja (az [ADR 0275](../adr/0275-five-area-shell-behind-a-flag.md)
+érvényes), és a §3/§4 a `docs/adr/**`-ot kifejezetten **tilos zónába** teszi.
+Precedens ugyanerre a sávra: az E13-R15 szintén `nincs` ADR-rel zárult
+`done`-ként. Új ADR írása tehát a brief saját scope-ját sértené — az
+orchestrátor nem foglal számot.
 
 ## 0. Kör-jelzés és STOP-protokoll
 
