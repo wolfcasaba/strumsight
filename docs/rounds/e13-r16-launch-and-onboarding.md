@@ -21,6 +21,14 @@ allowed_paths = [
   "lib/app/bootstrap/",
   "lib/features/onboarding/",
   "lib/app/routing/",
+  "lib/l10n/features/onboarding_en.arb",
+  "lib/l10n/features/onboarding_hu.arb",
+  "lib/l10n/base/app_en.arb",
+  "lib/l10n/base/app_hu.arb",
+  "lib/l10n/app_en.arb",
+  "lib/l10n/app_hu.arb",
+  "test/l10n/arb_parity_test.dart",
+  "test/features/onboarding/onboarding_test.dart",
   "test/features/onboarding/bootstrap_routing_test.dart",
   "test/features/onboarding/permission_primer_test.dart",
   "test/features/onboarding/onboarding_resume_test.dart",
@@ -64,10 +72,11 @@ determinisztikus unió, amit a gate frissességre ellenőriz. A fán ma öt szeg
 regisztrálandó lista nincs. Ez a hibaosztály **ötödször** ütött (L365, L369,
 L396, [L478](../LESSONS.md)).
 
-**Elvégzett lépés (szűkítés, orchestrátor-hatáskör):** a két generált útvonal
-TÖRÖLVE az `allowed_paths`-ról és a §4 táblából. Kézzel írni őket eddig sem
-lett volna szabad; a gate `L10n aggregate freshness` lépése ezt függetlenül
-méri.
+**Elvégzett lépés (szűkítés, orchestrátor-hatáskör) — az R5 RÉSZBEN
+VISSZAVONTA, olvasd ott:** a két generált útvonal először törölve lett az
+`allowed_paths`-ról; a merge-elt precedens mérése után viszont a listán marad,
+`CSAK GENERÁLT KIMENET` szereppel. Kézzel írni őket változatlanul TILOS; a
+gate `L10n aggregate freshness` lépése ezt függetlenül méri.
 
 ### R2 — a kör ÚJ szöveget IGÉNYEL, tehát a szűkítés nem teszi teljesíthetővé → **H3**
 
@@ -120,6 +129,33 @@ ellenőrzőpont-tárolót, és a migráció az, hogy a meglévő `true` érték
 újra a folyamat), a `false`/hiányzó pedig az első lépésre áll. A
 `storage_migrator.dart` **TILOS zóna** — új tároló-verzió igénye ⇒ `stopped`.
 
+### R5 — a H3 FELOLDVA emberi döntéssel (2026-08-25), és a szűkítés részben visszavonva
+
+A user az R2/R3 eszkalációra **engedélyezte** a lista tágítását. A §4 és az
+`ai-router` blokk ezzel hat útvonallal bővült:
+`lib/l10n/features/onboarding_{en,hu}.arb` (ÚJ forrás-fragmentum),
+`lib/l10n/base/app_{en,hu}.arb` (a 4 meglévő `onboard*` kulcs kiköltöztetése),
+`test/l10n/arb_parity_test.dart` (egy tuple) és
+`test/features/onboarding/onboarding_test.dart`.
+
+**Az R1 szűkítése részben VISSZAVONVA — mérés alapján.** A merge-elt
+precedens egységes: minden fragmentumot érintő kör a fragmentumot **ÉS** a
+regenerált aggregátumot is commitolja, és a briefjeik az aggregátumot az
+`allowed_paths`-on tartják — E09-R26 (`df0ad3dd`), E13-R12 (`376b8a1d`),
+E13-R11 (`d55d1656`), E13-R10 (`b11ab2ed`), E09-R21, E09-R20 mind ezt a
+párost mutatja. Az aggregátum teljes törlése tehát a kör KÖTELEZŐ
+regenerálását tette volna listán kívüli sértéssé. A helyes alak nem a törlés,
+hanem a **szerep megnevezése**: az `app_*.arb` a listán marad, de kizárólag
+`dart run tool/gen_l10n_segments.dart --write` kimeneteként — kézzel írni
+TILOS, és ezt a gate `L10n aggregate freshness` lépése függetlenül méri.
+
+**Az onboarding-kulcsok kiköltöztetése megengedett, nem kötelező:** a kör
+vagy átviszi a 4 meglévő `onboard*` kulcsot a fragmentumba (az ADR 0307 §4
+szerinti lusta migráció), vagy a `base/`-ben hagyja és csak az ÚJ kulcsokat
+írja a fragmentumba. Mindkettő elfogadható; a `base/` útvonal ezért van a
+listán. Ami NEM elfogadható: a `base/app_*.arb` bármely, az onboardinghoz
+nem tartozó kulcsának érintése.
+
 ### Nem lelet, de rögzítve
 
 `test/ui/goldens/` MA nem létezik (a kör hozza létre, a §4 már engedi); a
@@ -171,7 +207,11 @@ termékdöntése (az user-döntés; a kör csak a technikai lehetőséget adja m
 | `lib/app/bootstrap/` | villanásmentes indulás + biztonságos mód |
 | `lib/features/onboarding/` | a folyamat migrációja |
 | `lib/app/routing/` | az UI-01–UI-04 route-ok |
-| ~~`lib/l10n/app_{en,hu}.arb`~~ | **TÖRÖLVE a §0.0 R1 szűkítéssel** — generált aggregátum (ADR 0307 §4), kézzel nem írható |
+| `lib/l10n/features/onboarding_{en,hu}.arb` | **FORRÁS** — a primer, a helyreállítás és az „első siker" új szövegei (ÚJ fragmentum, ADR 0307 §4) |
+| `lib/l10n/base/app_{en,hu}.arb` | a MA is itt élő 4 `onboard*` kulcs kiköltöztetése a fragmentumba (lusta migráció, ADR 0307 §4) |
+| `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
+| `test/l10n/arb_parity_test.dart` | az ÚJ fragmentum felvétele a `fragments` listába — **pontosan egy tuple**, a meglévő 5 sor és az ellenőrző logika érintetlen |
+| `test/features/onboarding/onboarding_test.dart` | ma zöld, a migrált képernyőre állítandó; a lefedett viselkedés NEM gyengíthető |
 | `test/features/onboarding/*_test.dart` (4) | a §6 cellái |
 | `docs/rounds/e13-r16-…md` | a §10 handoff |
 
