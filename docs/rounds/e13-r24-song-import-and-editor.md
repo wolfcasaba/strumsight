@@ -828,3 +828,22 @@ konstruktorának bővülésével is zöld maradt). A `format` és `analyze` els�
 próbálkozásra zöld volt.
 
 ## 11. Review — a Claude tölti ki
+
+**Verdikt: APPROVED** — 0 nyitott lelet. Teljes jelentés:
+[`docs/reviews/e13-r24-review.md`](../reviews/e13-r24-review.md).
+
+A review **két javító kört** kért; mindkét MAJOR **teljesen zöld kapu mögött**
+élt, és mindkettőt a reviewer eldobható próbatesztjei találták meg:
+
+| Lelet | Mit mértem | Állapot |
+|---|---|---|
+| **MAJOR-1** | az A7 érintési-cél cellája a `constraints` 48→32 cseréjére ÉS teljes eltávolítására is ZÖLD maradt — `tester.getSize(IconButton)` a Material `MaterialTapTargetSize.padded` miatt konstans `Size(48.0, 48.0)` (a belső `ConstrainedBox` 40×40). A cella a Material alapértelmezését mérte, nem a kör kódját ([L477](../LESSONS.md#l477); a sáv harmadik érintési-cél lelete, [L496](../LESSONS.md#l496)) | **ZÁRVA** — a cella az `IconButton.constraints`-re mér, bizonyítottan piros `32.0`-nál és `null`-nál |
+| **MAJOR-2** (a javító kör vezette be) | a `_saveCopy` hiba-ága `controller.load(id)`-t hívott, ami a **draftot is** felülírta: `"My careful rename"` → `"Legacy Song"`, `createCalls = 0` — az [ADR 0284](../adr/0284-import-preview-is-not-a-commit.md) §Döntés 4 tiltott néma munkavesztése | **ZÁRVA** — a másolat validációja a controller érintése ELŐTT fut; a draft egyik ágon sem íródik felül |
+| MINOR-1/2/3 | per-build validáció (mérve 0,53–0,65 ms), `_saveCopy` sorrend, nyers `TextStyle` | **ZÁRVA** |
+| NOTE-1/2/3 | expanded több-paneles elrendezés (follow-up), A1/A2 az application réteget méri, `DateTime.now()` a presentationben | nyitva, **nem blokkol** |
+
+**Reviewer-bizonyíték:** a `tools/round-gate.sh` **20/20 ZÖLD, 97 teszt** — HÁROM
+különböző, friss izolált `/tmp` klónban futtatva (a review minden fordulójában
+újra), nem az implementer kimenetének elfogadásával. Scope-audit:
+`OK (3b88f75792f8..08b7b13c4081, 21 changed path(s), 1 generated/ignored)`.
+
