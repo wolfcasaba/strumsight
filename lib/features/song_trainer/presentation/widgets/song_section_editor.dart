@@ -34,10 +34,26 @@ final class SongSectionEditor extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 IconButton(
+                  key: Key('song-editor-section-move-up-$index'),
+                  // ADR 0280 §Döntés 5: every reorder affordance keeps a
+                  // >= 48 dp touch target, keyboard/button reachable
+                  // without a drag gesture (L496 — this must be measured
+                  // per widget, the default constraints do not guarantee it).
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  tooltip: l10n.songEditorMoveSectionUp,
                   onPressed: index == 0 ? null : () => onMove(index, index - 1),
                   icon: const Icon(Icons.keyboard_arrow_up),
                 ),
                 IconButton(
+                  key: Key('song-editor-section-move-down-$index'),
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  tooltip: l10n.songEditorMoveSectionDown,
                   onPressed: index + 1 == sections.length
                       ? null
                       : () => onMove(index, index + 1),

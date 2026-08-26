@@ -1022,6 +1022,22 @@
   "songLibraryUndo": "Undo",
   "songImportWorking": "Preparing your import…",
   "songImportFailed": "The file could not be imported.",
+  "songImportBlockingFailure": "This file can't be imported: {code}",
+  "@songImportBlockingFailure": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songImportBlockingSemantic": "Blocking import error: {code}",
+  "@songImportBlockingSemantic": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songImportChooseFile": "Choose a file",
   "songImportCancel": "Cancel",
   "songImportPreviewTitle": "Review import",
@@ -1089,6 +1105,8 @@
   "songEditorTitleField": "Title",
   "songEditorArtistField": "Artist",
   "songEditorSections": "Sections",
+  "songEditorMoveSectionUp": "Move section up",
+  "songEditorMoveSectionDown": "Move section down",
   "songEditorMeasures": "Measures",
   "songEditorAddMeasure": "Add measure",
   "songEditorAddChord": "Add chord",
@@ -1111,6 +1129,16 @@
   "songEditorConflict": "This song changed elsewhere. Your draft was kept.",
   "songEditorInvalid": "Fix validation issues before saving.",
   "songEditorLoadFailed": "This song could not be opened.",
+  "songEditorSaveFailed": "Saving failed: {code}. Your edits are still here.",
+  "@songEditorSaveFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorReadOnlySource": "This song can't be saved in place. Save your changes as a new copy instead.",
+  "songEditorSaveCopy": "Save a copy",
   "songOverviewTitle": "Song overview",
   "songOverviewSections": "Sections",
   "songOverviewTracks": "Tracks",

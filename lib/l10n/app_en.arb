@@ -3242,10 +3242,22 @@
   "songEditorMetadata": "Metadata",
   "songEditorMeterDenominator": "Meter denominator",
   "songEditorMeterNumerator": "Meter numerator",
+  "songEditorMoveSectionDown": "Move section down",
+  "songEditorMoveSectionUp": "Move section up",
   "songEditorNewTitle": "New song",
   "songEditorNoteField": "MIDI note",
+  "songEditorReadOnlySource": "This song can't be saved in place. Save your changes as a new copy instead.",
   "songEditorRedo": "Redo",
   "songEditorSave": "Save",
+  "songEditorSaveCopy": "Save a copy",
+  "songEditorSaveFailed": "Saving failed: {code}. Your edits are still here.",
+  "@songEditorSaveFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songEditorSections": "Sections",
   "songEditorSetMeter": "Set meter",
   "songEditorSetTempo": "Set tempo",
@@ -3257,6 +3269,22 @@
   "songEditorUnsavedBody": "Save, discard, or keep editing this draft?",
   "songEditorUnsavedTitle": "Unsaved changes",
   "songFavorite": "Favorite",
+  "songImportBlockingFailure": "This file can't be imported: {code}",
+  "@songImportBlockingFailure": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songImportBlockingSemantic": "Blocking import error: {code}",
+  "@songImportBlockingSemantic": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songImportCancel": "Cancel",
   "songImportChooseFile": "Choose a file",
   "songImportConfirm": "Import song",

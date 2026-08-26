@@ -11,6 +11,7 @@ import '../../application/editor/song_editor_state.dart';
 import '../../application/editor/song_editor_controller.dart';
 import '../../application/song_trainer_providers.dart';
 import '../../domain/models/meter_map.dart';
+import '../../domain/models/song_capability.dart';
 import '../../domain/models/song_document.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_measure.dart';
@@ -19,11 +20,29 @@ import '../../domain/models/song_source.dart';
 import '../../domain/models/song_track.dart';
 import '../../domain/models/tempo_map.dart';
 import '../../domain/repositories/song_asset_repository.dart';
+import '../../domain/services/song_capability_resolver.dart';
+import '../../domain/services/song_validator.dart';
 import '../widgets/backing_asset_editor.dart';
 import '../widgets/measure_grid.dart';
 import '../widgets/song_event_editor.dart';
 import '../widgets/song_metadata_editor.dart';
 import '../widgets/song_section_editor.dart';
+
+/// A5.6/§0.0/B/R10: read-only-ness is a property of the persisted document
+/// itself, computed by the editor from the same framework-independent
+/// domain services the repository and the Library screen use — never
+/// derived from route origin, so a direct/deep-linked route gets the same
+/// answer a Library-mediated open would. A brand-new, not-yet-persisted
+/// document (`persisted == null`) is always persistable via `create`.
+bool _canPersist(SongDocument? persisted) {
+  if (persisted == null) return true;
+  final report = const SongValidator().validate(persisted);
+  final capability = const SongCapabilityResolver().resolve(
+    report: report,
+    profile: SongCapabilityProfile.persist,
+  );
+  return capability.canPersist;
+}
 
 /// Route shell for the V2 editor. Editing state lives in the controller.
 final class SongEditorScreen extends ConsumerStatefulWidget {
@@ -97,6 +116,7 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
     final controller = ref.read(songEditorControllerProvider(_id));
     final state =
         ref.watch(songEditorStateProvider(_id)).value ?? controller.state;
+    final canPersist = _canPersist(state.persisted);
     return PopScope<Object?>(
       canPop: !state.isDirty,
       onPopInvokedWithResult: (didPop, result) async {
@@ -122,7 +142,9 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
             ),
             TextButton(
               key: const Key('song-editor-save'),
-              onPressed: state.isLoaded ? controller.save : null,
+              onPressed: (state.isLoaded && canPersist)
+                  ? controller.save
+                  : null,
               child: Text(l10n.songEditorSave),
             ),
           ],
@@ -134,7 +156,7 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
           SongEditorStatus.failure when !state.isLoaded => Center(
             child: Text(l10n.songEditorLoadFailed),
           ),
-          _ => _EditorBody(id: _id, state: state),
+          _ => _EditorBody(id: _id, state: state, canPersist: canPersist),
         },
       ),
     );
@@ -184,16 +206,22 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
 }
 
 final class _EditorBody extends ConsumerWidget {
-  const _EditorBody({required this.id, required this.state});
+  const _EditorBody({
+    required this.id,
+    required this.state,
+    required this.canPersist,
+  });
 
   final SongId id;
   final SongEditorState state;
+  final bool canPersist;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final draft = state.draft!;
     final controller = ref.read(songEditorControllerProvider(id));
+    final errorColor = Theme.of(context).colorScheme.error;
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -202,6 +230,54 @@ final class _EditorBody extends ConsumerWidget {
             Text(l10n.songEditorConflict),
           if (state.status == SongEditorStatus.validationFailed)
             Text(l10n.songEditorInvalid),
+          // A5: a failed save (or other post-load operation) never discards
+          // the draft — the content below stays exactly as edited, and the
+          // failure is named with `failureCode` rather than a generic
+          // message (docs/adr/0284-import-preview-is-not-a-commit.md §4).
+          if (state.status == SongEditorStatus.failure)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Semantics(
+                label: l10n.songEditorSaveFailed(state.failureCode ?? ''),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.error_outline, color: errorColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.songEditorSaveFailed(state.failureCode ?? ''),
+                        style: TextStyle(color: errorColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // A6: a read-only source (validator-fatal persisted document) can
+          // never be updated in place — Save above is disabled and the only
+          // write path left is an explicit, new-identity copy
+          // (docs/adr/0284-import-preview-is-not-a-commit.md §5).
+          if (!canPersist)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    Icons.lock_outline,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(l10n.songEditorReadOnlySource)),
+                  TextButton(
+                    key: const Key('song-editor-save-copy'),
+                    onPressed: () => _saveCopy(controller, draft),
+                    child: Text(l10n.songEditorSaveCopy),
+                  ),
+                ],
+              ),
+            ),
           SongMetadataEditor(
             metadata: draft.metadata,
             onChanged: controller.editMetadata,
@@ -278,5 +354,44 @@ final class _EditorBody extends ConsumerWidget {
     final separator = name.lastIndexOf('.');
     if (separator <= 0 || separator == name.length - 1) return 'bin';
     return name.substring(separator + 1).toLowerCase();
+  }
+
+  /// The only write path A6 allows for a read-only source: a brand-new
+  /// document identity (fresh [SongId], `createdInApp` source) carrying the
+  /// current draft's content. `controller.startNew` detaches the persisted
+  /// pointer, so the following `save()` always calls `repository.create`
+  /// and the original stored document is never touched.
+  Future<void> _saveCopy(
+    SongEditorController controller,
+    SongDocument draft,
+  ) async {
+    final now = DateTime.now().toUtc();
+    final unique =
+        '${now.microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+    final copy = SongDocument(
+      schemaVersion: draft.schemaVersion,
+      id: SongId('editor-copy-$unique'),
+      revision: 0,
+      metadata: draft.metadata,
+      source: SongSource(
+        type: SongSourceType.createdInApp,
+        originalFileName: draft.source.originalFileName,
+        sha256: '0' * 64,
+        importedAt: now,
+        importerVersion: 'editor@1',
+      ),
+      createdAt: now,
+      updatedAt: now,
+      assets: draft.assets,
+      markers: draft.markers,
+      tracks: draft.tracks,
+      sections: draft.sections,
+      measures: draft.measures,
+      tempoMap: draft.tempoMap,
+      meterMap: draft.meterMap,
+      keyMap: draft.keyMap,
+    );
+    controller.startNew(copy);
+    await controller.save();
   }
 }
