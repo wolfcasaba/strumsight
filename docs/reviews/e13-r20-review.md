@@ -229,3 +229,101 @@ ugyanaz a motor (`sonnet-impl`), a fenti leletlistával, ugyanezen az ágon.
    commit SHA-ján — a mostani `2b949692`-es futások a javítás előtti fát mérik;
 4. ez a jelentés frissül (APPROVED vagy újra CHANGES REQUESTED) a javító
    commit SHA-jával.
+
+---
+
+## 6. Javító kör #1 — újra-ellenőrzés (`1a9e3bb3`)
+
+Mind a három lelet **ZÁRVA**, leletenként ellenőrizve:
+
+| Lelet | Javítás | Az ellenőrzés bizonyítéka |
+|---|---|---|
+| **MAJOR-1** | `constraints` → `SsSemantics.minimumInteractiveDimension` (48), `VisualDensity.compact` elhagyva, `right/bottom: 0` (nincs többé `Stack`-en kívüli, nem találati sáv) | ÚJ őr-cella: `chord_tile_a11y_test.dart` „the chord-detail open button meets the 48dp minimum touch target". **Reviewer valódi-sértés próbája:** a 28 dp-s `constraints` ideiglenes visszaállítása a cellát PIROSRA váltotta, PONTOSAN az eredeti mérettel — `ADR 0280 §Döntés 5 requires >= 48.0dp …; measured Size(40.0, 40.0)` —, majd visszaállítva zöld. A guard tehát valódi regressziós kapu, nem díszlet |
+| **MINOR-1** | a doc-comment hivatkozása `ADR 0424 §5.5` → `§2.3` | a `§2.3` létezik és tényleg a beégetett-szöveg racsni |
+| **MINOR-2** | `learnLocked` törölve mindkét `base/` forrásból + regenerált aggregátum | `grep` 0 találat; az `l10n` gate-lépés zöld |
+
+A `test/features/chords/` + `test/features/learn/` fa: **235 zöld** (a 234-ből +1 az
+új őr-cella), 0 piros.
+
+## 7. Javító kör #2 — a CI golden-bukása (L486), és a MARADÉK
+
+### 7.1 A diagnózis és a javítás
+
+Az exact-SHA CI a `2b949692` és az `1a9e3bb3` SHA-n is PIROS volt, **kizárólag**
+a `test/ui/goldens/e13_r20_screens_golden_test.dart` négy celláján. A lokális
+gate ezt szerkezetileg nem tudja elkapni: a felvétel ezen az **ARM** boxon, a
+verifikáció **x86** CI-on történik ([L486](../LESSONS.md)).
+
+A gyökérok az L486 hibaosztálya volt, **kontrollesettel is igazolva**:
+
+| Képernyő | Nagy felületű kitöltés | 1. CI (`2b949692`) |
+|---|---|---|
+| chord library | **0 db `Card(`** — nincs séma-származtatott felület | ✅ zöld (kontroll) |
+| learning path | `_LessonTile` `Card(` explicit szín NÉLKÜL → seed-származtatott `surfaceContainerLow`, 16 csempén | ❌ 5976 px |
+| chord detail | `ActionChip` explicit `backgroundColor` nélkül | ❌ 1 px |
+
+Ellenpélda ugyanazon a bukó képernyőn: a `_ContinueCard` KONSTANS színt ad
+(`AppColors.primary.withValues(alpha: 0.14)`) — és nem adott diffet.
+
+A javítás az L486 által előírt konstans színforrás
+(`context.palette.surface`/`.border`, `AppPalette.dark` **`const`** palettából),
+majd a 6 golden újrafelvétele. **Mérhetően működött:**
+
+| Golden | 1. CI | 3. CI (`e0388738`) |
+|---|---|---|
+| `learning_path_compact` | 5976 px | **8 px** |
+| `learning_path_compact_scale2` | 1992 px | ✅ **zöld** |
+| `chord_library` (×2) | ✅ zöld | ✅ zöld |
+| `chord_detail_compact` | 1 px | 1 px |
+| `chord_detail_compact_scale2` | 1 px | 1 px |
+
+### 7.2 Ami MARAD — és miért nem oldható meg ebből a körből
+
+A [full-gate 32918668534](https://github.com/wolfcasaba/strumsight/actions/runs/32918668534)
+futáson a **teljes suite és a randomizált property gate zöld**; az EGYETLEN
+piros a fenti három golden-cella, **mind `0.00%`**, 1 / 8 / 1 pixel.
+
+Ez már **nem** színforrás-kérdés (a színforrás-osztály mérhetően megszűnt:
+5976 → 8 px, és az egyik cella teljesen zöldre váltott), hanem **maradék
+cross-architektúra raszterizációs zaj**: ARM-on felvett PNG, x86-on
+verifikálva, **nulla toleranciájú** `LocalFileComparator`-ral. Az L486 ezt
+ki is mondja: *„a hordozhatóság ELVBŐL nem mérhető ezen a boxon … az egyetlen
+valódi őr az exact-SHA CI-futás"*, és ezért nincs is hozzá őrteszt.
+
+Az 1 pixeles chord-detail diff végig 1 px volt (a színjavítás előtt is), tehát
+sosem terület-jellegű: a részletnézet `size: 180`-as diagramja
+`canvas.drawCircle(..., colGap * 0.28, …)`-t rajzol — egy lebegőpontos sugár
+kerekítése a körív peremén architektúránként egyetlen pixelt elmozdíthat.
+Újrafelvétellel ez nem oldható meg: minden ARM-on készült felvétel ARM-pixeleket rögzít.
+
+**A három megmaradt út MIND az orchestrátor hatáskörén KÍVÜL van:**
+
+1. **tolerancia-komparátor** (nem-nulla pixelküszöb) — ez a MÉRCE megváltoztatása,
+   ráadásul osztott teszt-infrastruktúra; „a mérce nem módosulhat attól, akit mér";
+2. **a goldenek CI-on való felvétele** (artifact-visszatöltés) — `.github/**`,
+   azaz TILOS zóna;
+3. **a golden-készlet szűkítése / cellák `skip`-je** — a mérce meghamisítása,
+   az A9 feladása.
+
+Ezért a kör **H5-tel megáll**: nem azért, mert a kód rossz, hanem mert a zöld
+kapu egy olyan infrastrukturális réshez ért, amit csak tágabb jogosultságú
+(önjavító / emberi) döntés zárhat be.
+
+## 8. VÉGSŐ DÖNTÉS: ⛔ **HALT — H5** (CI a körön háromszor piros)
+
+**A kód-oldal KÉSZ és bizonyított:**
+
+- mind a 9 acceptance-cella teljesül, reviewer-próbákkal alátámasztva (A2/A3/A5
+  valódi-sértés próbák + a 48 dp-s guard próbája — mind pirosra vált a rontáson);
+- `tools/round-gate.sh` **22/22 zöld**, kétszer, két külön izolált `/tmp` klónban
+  (`2b949692` és `e0388738`);
+- `test/features/chords/` + `test/features/learn/`: **235 zöld**;
+- scope-audit **OK** (27 útvonal, 1 generated/ignored = ez a jelentés);
+- `router-ci.yml` a `2b949692` SHA-n **success**;
+- a CI teljes suite-ja és a randomizált property gate az `e0388738`-on **zöld**.
+
+**Merge TILOS**, amíg a három golden-cella piros (ADR 0052 — a zöld kapu nem
+lazul). A kör-branch, a review és a teljes diagnózis publikálva; a folytatás
+az önjavító kör dolga a §7.2 három útjának valamelyikével (a **2. út**, a
+goldenek CI-oldali felvétele, tűnik a szerkezetileg helyesnek — az szünteti meg
+a felvétel↔verifikáció architektúra-eltérést, ahelyett hogy a mércét lazítaná).
