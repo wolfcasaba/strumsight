@@ -12,7 +12,11 @@
 
 ## 1. Verdikt
 
-**CHANGES REQUESTED** — 1 MAJOR, 2 MINOR, 1 NOTE.
+**VÉGSŐ DÖNTÉS: APPROVED** — EGY javító kör után (`0111e6e5`, `11e93d9d`,
+`e3dab048`), **0 nyitott lelet**. A leletenkénti zárás a §8-ban, a reviewer
+SAJÁT méréseivel.
+
+Az első kör verdiktje **CHANGES REQUESTED** volt — 1 MAJOR, 2 MINOR, 1 NOTE.
 
 A MAJOR **teljesen zöld kapu mögött él**: a lokális 16-lépéses gate a
 reviewer saját, izolált klónjában is MINDEN lépésre zöld (§3), és a kör SAJÁT
@@ -224,9 +228,118 @@ a wire-payloadban maradjon-e.
 
 Mindkettő törölve; a review-klón a törlés után futtatta a teljes gate-et.
 
-## 7. Következő lépés
+## 7. Következő lépés (az első kör után)
 
 Javító kör UGYANAZZAL a motorral (`sonnet-impl`), a MAJOR-1 + MINOR-1 +
 MINOR-2 leletlistával. A javítás után: a gate ÚJRA, friss klónban; a
 `speed_ladder_test.dart` érintett cellájának záró ellenőrzése leletenként;
 exact-SHA CI ÚJRA-dispatch (a kód változik).
+
+## 8. Javító kör — leletenkénti zárás (reviewer, `e3dab048`)
+
+A javító kör három commitja: `0111e6e5` (MAJOR-1), `11e93d9d` (MINOR-1),
+`e3dab048` (MINOR-2 dokumentálás + §10.6 handoff). A diff a `420bd5f1`-hez
+képest 10 fájl, mind a listán belül:
+
+```
+Legacy scope audit OK (b3ce202714e1..e3dab0480511, 23 changed path(s), 1 generated/ignored)
+```
+
+### MAJOR-1 — ZÁRVA
+
+`speed_builder_screen.dart` mérve a javított fán:
+
+```
+grep -n "_syntheticAttempt|Record pass|speedBuilderRecordPass|PracticeAttemptResult|onRecordPass"
+→ NULLA találat
+```
+
+A `_syntheticAttempt(...)` függvény, a `PracticeAttemptResult` import, a
+„Record pass"/„Record miss" gombok és a `Start` CTA is megszűnt. Az
+állapotmentes belépő most `_UnavailableLayout` — `EmptyState`-alapú, ADR
+0277-stílusú, nem büntető állapot, amely KIMONDJA, hogy élő mérés még nincs,
+és nem kínál olyan vezérlőt, ami mérés nélkül eredményt szülne. Az aktív réteg
+már csak a kapott `SpeedBuilderState`-et rendereli.
+
+**Valódi-sértés próba (REVIEWER SAJÁT, nem bemondás).** A javított
+képernyőbe visszatettem egy `Start` CTA-t a `_UnavailableLayout`-ba, majd
+lefuttattam a kör cellájára:
+
+```
+Expected: no matching candidates
+  Actual: _TextWidgetFinder:<Found 1 widget with text "Start": [
+00:01 +2 -1: no live session → no fabricated measurement (E13-R22 review MAJOR-1)
+             with no initialState the screen never offers a Start/Record path … [E]
+00:01 +2 -1: Some tests failed.
+```
+
+Az új őrcella tehát VALÓBAN pirosra vált a visszaesésre. A mutációt
+visszaállítottam (`git checkout --`), a klón tiszta.
+
+A korábban a hibás utat PINNELŐ cella
+(`speed_ladder_test.dart:135-150`) helyére a fenti abszencia-cella került; az
+A6 két érdemi, `initialState`-tel mérő cellája (`:88`, `:113`) változatlan.
+
+### MINOR-1 — ZÁRVA
+
+```dart
+return entry.finishReasonCode !=
+    PracticeFinishReason.completedAllTargets.code;
+```
+
+A nyers literál helyett a domain stabil enum-kódja. A `presentation/`
+gate-lépés zöld, az A2 cellák változatlanul zöldek.
+
+### MINOR-2 — ZÁRVA (dokumentálás, ahogy a lelet kérte)
+
+A brief §10.5 mostantól nevesített korlátként rögzíti, hogy a sérült
+előzmény-rekord ma JELZÉS NÉLKÜL tűnik el, és hogy a jelzés a `core/storage/**`
++ practice `data/` réteget érintő, KÉSŐBBI kör dolga. A lelet nem kódjavítást
+kért — a réteg a kör listáján kívül van.
+
+### NOTE-1 — változatlan (nem blokkoló)
+
+### A gate ÚJRAFUTTATVA a javított fán — reviewer, ÚJ izolált klón
+
+`/tmp/review-e13-r22b` (friss klón `e3dab048`-ról), a brief §7 pontos
+parancsa:
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/result_confidence_test.dart    zöld
+    test test/features/practice/history_corrupt_record_test.dart zöld
+    test test/features/practice/speed_ladder_test.dart         zöld
+    test test/features/practice/reward_idempotency_test.dart   zöld
+    test test/features/practice/presentation/                  zöld
+    test test/core/screen_size_guard_test.dart                 zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/tooling/dio_factory_guard_test.dart              zöld
+    test test/tooling/preferences_plugin_import_guard_test.dart zöld
+    test test/tooling/route_literal_guard_test.dart            zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+`l10n parity: 1975 message(s)` (a javító kör előtt 1973 — a két új
+`speedBuilderUnavailable*` kulcs, `en` és `hu` FORRÁSBAN, regenerált
+aggregátummal).
+
+### Golden
+
+A Speed Builder képernyője megváltozott, ezért a két érintett PNG
+(`e13_r22_speed_builder_compact{,_scale2}.png`) újra fel lett véve a
+MERGE-KAPU architektúráján (`tools/golden-x86.sh record` + `check`, ADR 0426),
+és a diffben van. A másik négy PNG érintetlen.
+
+## 9. Merge-döntés
+
+A zöld kapu (ADR 0052) minden eleme teljesült: a lokális 16-lépéses gate a
+reviewer SAJÁT, izolált klónjában zöld, a scope-audit `OK`, a leletek zárva,
+és az exact-SHA CI a merge SHA-ján zöld (a run-link a PR-ben). **Merge
+engedélyezve.**
