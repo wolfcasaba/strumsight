@@ -578,4 +578,95 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5). Gate: 22/22 ZÖLD
+(`tools/round-gate.sh` a §7 szerinti 17 útvonallal, két külön futás — a
+második a `hardcoded_string_guard` javítás után).
+
+### Mit épített
+
+1. **ÚJ `lib/core/design_system/components/music/ss_chord_diagram.dart`
+   (`SsChordDiagram`)** — a rajz ÉS a szöveges alternatíva UGYANABBÓL a
+   forrásból: `SsChordDiagram.slotFor`/`readingOrder(frets, {mirrored})` az a
+   PONTOS leképezés, amit a festő a húrok pozicionálására használ, és amit a
+   feature-réteg a felolvasott fogás-sorrend előállítására hív. A komponens
+   nem olvas feature-providert és nem importál feature-t (paraméterben kapja
+   a `frets`/`baseFret`/`mirrored`-et); a `baseFretLabel` (pl. "4fr") szövegét
+   is a HÍVÓ adja — a design system semmilyen felhasználónak látható szöveget
+   nem birtokol (`hardcoded_string_guard_test.dart` erre valódi lelet volt
+   az első gate-futáson, ld. lent). Export: `public.dart`.
+2. **`lib/features/chords/widgets/chord_diagram.dart` migrálva** —
+   `leftHandedProvider`-t itt olvassa (a design system helyett), és a
+   `SsChordDiagram.readingOrder`-ből építi a felolvasott fogás-szöveget. **A4:
+   hiányzó fogásminta** (`ChordShapes.forLabel == null`) ma egy látható +
+   felolvasható „nincs ábra ehhez: {chord}" állapotot mutat (ikon + szöveg),
+   NEM néma `SizedBox.shrink()`-et.
+3. **ÚJ `lib/features/chords/widgets/chord_detail_view.dart`
+   (`ChordDetailView`)** — nagyobb diagram, kapcsolódó akkordok (azonos
+   alaphang, a valódi "variáció"-fogalom — egy kanonikus fogásminta van
+   akkordonként, nem több hangolás), és a gyakorlás-akció:
+   `Lessons.forChordPractice(label)` (ÚJ, additív factory a
+   `lesson.dart`-ban) → `LearnScreen`, `Navigator.push`-sal, ÚJ útvonal
+   nélkül (R8). A könyvtár-képernyő minden csempéjén egy apró sarok-ikon
+   nyitja meg (`chord-open-detail-<label>` kulccsal) — a meglévő tap
+   (lejátszás) és long-press (kedvenc) gesztus érintetlen.
+4. **`lib/features/learn/screens/lesson_list_screen.dart`** — minden lecke-
+   csempe megkapja az `unlockedBy` (előző lecke a szinten) mezőt; zárolt
+   csempénél a felirat MINDIG (nem koppintásra) az indoklást mutatja
+   (`l10n.learnLockedReason`). A régi tap→SnackBar ág halott kód volt
+   (`enabled: false` már eleve letiltja a koppintást) — eltávolítva.
+5. **ARB** — `chordDiagramUnavailable`, `chordDetailRelated`,
+   `chordDetailOpen`, `learnLockedReason` a `lib/l10n/base/app_{en,hu}.arb`
+   FORRÁSBA, `dart run tool/gen_l10n_segments.dart --write` + `flutter
+   gen-l10n` lefuttatva, mindkét kimenet commitolva.
+
+### Acceptance-mátrix
+
+| # | Teljesül | Hol |
+|---|---|---|
+| A1 | ✅ | `chord_diagram_text_test.dart` — a felolvasott szöveg `fingering:`-et tartalmaz, nem csak a névt |
+| A2 | ✅ | ugyanott, három-cellás mátrix + `chord_diagram_semantics_test.dart` frissített balkezes cellája |
+| A3 | ✅ | `learning_path_test.dart` — a zárolt csempe felirata MINDIG megnevezi az előző leckét |
+| A4 | ✅ | `lesson_offline_test.dart` + `chord_diagram_test.dart` frissített cellája |
+| A5 | ✅ | `learning_path_test.dart` — előre feltöltött repository-val a csillagok és a feloldott 3. lecke látszik |
+| A6 | ✅ | `chord_library_test.dart` — a felnyomott `LearnScreen.lesson.chordSequence == ['G']` |
+| A7 | ✅ | `chord_library_test.dart` — a keresési szöveg túléli a részletnézet megnyitását/bezárását |
+| A8 | ✅ | `learning_path_test.dart` — egyetlen lineáris `ListView`, minden szint sorban elérhető |
+| A9 | ✅ | `test/ui/goldens/e13_r20_screens_golden_test.dart` — 6 PNG (akkordtár, akkord-részlet, tanulási út × 2 keret) |
+
+### Valódi-sértés próba (KÖTELEZŐ, §6.1)
+
+A `chord_diagram.dart`-ban ideiglenesen `mirrored: false`-ra rögzítettem a
+felolvasott szöveg forrását, MIÍG a rajz (`SsChordDiagram`) továbbra is a
+valós `mirror` értéket kapta. Eredmény: **3 A2-cella vált PIROSRA**
+(`chord_diagram_semantics_test.dart` balkezes cellája + a
+`chord_diagram_text_test.dart` „at the threshold" és „above the threshold"
+cellái) — mind `Expected: exactly one matching candidate / Actual: Found 0
+widgets with a semantics label…` üzenettel, azaz a rajz és a szöveg
+elváltak. Ezután visszaállítottam (`mirrored: mirror`), és mindhárom zöldre
+váltott.
+
+### Mérve, nem a brief által jelzett csapda
+
+A `test/l10n/hardcoded_string_guard_test.dart` (a `gate_tests`-en, de nem az
+`allowed_paths`-on — csak futtatható, nem szerkeszthető) elsőre PIROSAT adott:
+a `SsChordDiagram`-ba átemelt `'${baseFret + 1}fr'` felirat a design-system
+fában (`lib/core/design_system/components/**`) A3-as (hardcoded szöveg)
+lelet lett, mert az őr KIZÁRÓLAG ezt a négy design-system alkönyvtárat
+pásztázza. Feloldás: a `baseFretLabel` szöveget a HÍVÓ (feature-réteg)
+állítja elő és adja át paraméterként — a design system egyetlen
+felhasználónak látható karakterláncot sem birtokol többé. Ugyanaz a
+komponens, más felelősség-határ.
+
+### Eltérés a brieftől
+
+- Az A6 „variációk" szava a brief §3 szövegében szerepel; mivel a
+  `ChordShape`-modell egy kanonikus fogásmintát tárol akkordonként (nincs
+  több hangolás-adat), a részletnézet ezt a KAPCSOLÓDÓ AKKORDOK (azonos
+  alaphang) listájával váltja ki — valódi, a fán meglévő adatból, nem
+  kitalált funkció.
+- Nem készült új `lib/features/**/*_screen.dart` — a `ChordDetailView` a
+  `widgets/` alatt él, ezért a `test/ui/ui_inventory_test.dart`
+  `hasLength(84)` VÁLTOZATLAN maradt (§0.0/R12 jogosultsága nem lett
+  kihasználva, mert nem volt rá szükség).
+
 ## 11. Review — a Claude tölti ki
