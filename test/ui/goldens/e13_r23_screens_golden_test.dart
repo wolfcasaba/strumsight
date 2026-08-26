@@ -16,7 +16,6 @@ import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/song_trainer/application/setlists/setlist_controller.dart';
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/domain/models/meter_map.dart';
-import 'package:strumsight/features/song_trainer/domain/models/song_asset_reference.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_document.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_instrument.dart';
