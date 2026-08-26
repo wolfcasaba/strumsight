@@ -49,7 +49,6 @@ allowed_paths = [
   "test/features/songs/trainer/playhead_loop_sync_test.dart",
   "test/features/songs/trainer/playback_only_result_test.dart",
   "test/features/songs/trainer/setlist_run_test.dart",
-  "test/fixtures/songs/trainer/",
   "test/ui/goldens/",
   "test/ui/ui_inventory_test.dart",
   "docs/rounds/e13-r25-song-trainer-and-setlist-run.md",
@@ -352,6 +351,20 @@ UI, loop és result boundary). Ezek újraírása **H1** lenne (ADR 0087 §2), é
 sávon ez a hibaosztály E13-R17…R24 között hétszer merült fel. Ezért a
 pre-flight **nem foglal** ADR-számot; ha az implementer ÚJ normatív döntést
 találna, az `stopped` jelzés, nem önkezű ADR.
+
+### B8 — `test/fixtures/songs/trainer/` TÖRÖLVE a listáról (S13, 2026-08-26 merge után)
+
+A körbe merge-elt `origin/main` (`94cef390`) hozta a `brief-lint` **S13**
+szabályát, ami pontosan a B1 hibaosztályát gépesíti: nem létező
+KÖNYVTÁR-előtag az `allowed_paths`-on. A B1 a három produkciós előtagot már
+feloldotta, de a lista negyedikként a `test/fixtures/songs/trainer/`-t is
+felsorolta — ez **sem létezik**, és a kör **nem is hozta létre**: mind a négy
+célteszt saját, fájlon belüli fixture-ökkel dolgozik.
+
+A feloldás ezért **szűkítés** (a pre-flight saját hatásköre, [L478](../LESSONS.md#l478)),
+nem útvonal-csere: a bejegyzés törölve. A kör egyetlen fájlja sem hivatkozik rá,
+tehát a törlés semmit nem tesz végrehajthatatlanná — a lista mostantól
+kizárólag olyan útvonalakat sorol, amiket a kör ténylegesen érint.
 
 ### B7 — az erőforrás-tulajdonlás MÉRT láncon (a §1/2. szabály)
 
