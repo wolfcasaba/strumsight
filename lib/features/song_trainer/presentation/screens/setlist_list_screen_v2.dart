@@ -5,6 +5,7 @@ import '../../../../l10n/app_localizations.dart';
 import '../../application/setlists/setlist_controller.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_setlist.dart';
+import '../widgets/setlist_item_availability_badge.dart';
 
 final class SetlistListScreenV2 extends StatefulWidget {
   const SetlistListScreenV2({
@@ -101,7 +102,30 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
               return Card(
                 child: ListTile(
                   title: Text(setlist.name),
-                  subtitle: Text(l10n.setlistV2ItemCount(setlist.items.length)),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(l10n.setlistV2ItemCount(setlist.items.length)),
+                      if (setlist.items.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Wrap(
+                          key: Key('setlist-readiness-${setlist.id}'),
+                          spacing: 6,
+                          children: <Widget>[
+                            for (final item in setlist.items)
+                              SetlistItemAvailabilityBadge(
+                                key: Key(
+                                  'setlist-readiness-${setlist.id}-${item.id}',
+                                ),
+                                availability: item.initialAvailability,
+                                songId: item.songId.value,
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
                   trailing: IconButton(
                     key: Key('setlist-edit-${setlist.id}'),
                     tooltip: l10n.setlistV2Edit,
@@ -251,6 +275,13 @@ final class _SetlistEditorSheetState extends State<_SetlistEditorSheet> {
               for (var index = 0; index < _items.length; index++)
                 ListTile(
                   key: Key('setlist-editor-item-${_items[index].id}'),
+                  leading: SetlistItemAvailabilityBadge(
+                    key: Key(
+                      'setlist-editor-item-availability-${_items[index].id}',
+                    ),
+                    availability: _items[index].initialAvailability,
+                    songId: _items[index].songId.value,
+                  ),
                   title: Text(_items[index].songId.value),
                   subtitle: Text(
                     l10n.setlistV2ItemSummary(

@@ -8,6 +8,7 @@ import '../../application/library/song_library_state.dart';
 import '../../application/library/song_query.dart';
 import '../../application/song_trainer_providers.dart';
 import '../../domain/models/song_source.dart';
+import '../widgets/song_source_badge.dart';
 import '../widgets/song_summary_tile.dart';
 import 'song_import_screen.dart';
 
@@ -102,7 +103,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                                 DropdownMenuItem<SongSourceType?>(
                                   value: sourceType,
                                   child: Text(
-                                    _sourceTypeLabel(l10n, sourceType),
+                                    songSourceTypeLabel(l10n, sourceType),
                                   ),
                                 ),
                             ],
@@ -160,16 +161,38 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                         itemCount: state.summaries.length,
                         itemBuilder: (context, index) {
                           final summary = state.summaries[index];
+                          final canPersist =
+                              summary.capability?.canPersist ?? true;
                           return InkWell(
                             key: ValueKey<String>(
                               'song-editor-open-${summary.documentId.value}',
                             ),
-                            onTap: () => context.push(
-                              AppRoutes.songTrainerEditor.replaceFirst(
-                                ':songId',
-                                Uri.encodeComponent(summary.documentId.value),
-                              ),
-                            ),
+                            onTap: () {
+                              if (!canPersist) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      l10n.songLibraryReadOnlySnackBar,
+                                    ),
+                                  ),
+                                );
+                                context.push(
+                                  AppRoutes.songTrainerOverview.replaceFirst(
+                                    ':songId',
+                                    Uri.encodeComponent(
+                                      summary.documentId.value,
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              context.push(
+                                AppRoutes.songTrainerEditor.replaceFirst(
+                                  ':songId',
+                                  Uri.encodeComponent(summary.documentId.value),
+                                ),
+                              );
+                            },
                             child: SongSummaryTile(
                               summary: summary,
                               isFavorite:
@@ -224,14 +247,3 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     );
   }
 }
-
-String _sourceTypeLabel(AppLocalizations l10n, SongSourceType sourceType) =>
-    switch (sourceType) {
-      SongSourceType.legacyLocal => l10n.songLibrarySourceLegacy,
-      SongSourceType.createdInApp => l10n.songLibrarySourceCreated,
-      SongSourceType.strumSightJson => l10n.songLibrarySourceNativeJson,
-      SongSourceType.musicXml => l10n.songLibrarySourceMusicXml,
-      SongSourceType.compressedMusicXml => l10n.songLibrarySourceMxl,
-      SongSourceType.midi => l10n.songLibrarySourceMidi,
-      SongSourceType.guitarPro => l10n.songLibrarySourceGuitarPro,
-    };

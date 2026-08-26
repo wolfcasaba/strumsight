@@ -3129,6 +3129,7 @@
   "setlistV2EditOverrides": "Edit item overrides",
   "setlistV2Empty": "No setlists yet.",
   "setlistV2Incomplete": "Enter a name and add at least one song.",
+  "setlistV2ItemAttention": "Needs attention",
   "setlistV2ItemCount": "{count, plural, =0{No songs} =1{1 song} other{{count} songs}}",
   "@setlistV2ItemCount": {
     "placeholders": {
@@ -3137,6 +3138,16 @@
       }
     }
   },
+  "setlistV2ItemMissingAsset": "Backing track missing — song still opens",
+  "setlistV2ItemMissingSong": "Song not found: {songId}",
+  "@setlistV2ItemMissingSong": {
+    "placeholders": {
+      "songId": {
+        "type": "String"
+      }
+    }
+  },
+  "setlistV2ItemReady": "Ready",
   "setlistV2ItemSummary": "Speed {speed}×, {loops, plural, =1{1 loop} other{{loops} loops}}",
   "@setlistV2ItemSummary": {
     "placeholders": {
@@ -3299,6 +3310,8 @@
     }
   },
   "songLibraryImport": "Import",
+  "songLibraryReadOnly": "Read-only",
+  "songLibraryReadOnlySnackBar": "This song is read-only. Opened in view mode.",
   "songLibraryRetry": "Try again",
   "songLibrarySearch": "Search songs",
   "songLibrarySort": "Sort",
@@ -3312,6 +3325,14 @@
   "songLibrarySourceMusicXml": "MusicXML",
   "songLibrarySourceMxl": "Compressed MusicXML",
   "songLibrarySourceNativeJson": "StrumSight JSON",
+  "songLibrarySourceSemantic": "Source: {source}",
+  "@songLibrarySourceSemantic": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
   "songLibraryTitle": "Song library",
   "songLibraryTrashed": "Song moved to trash",
   "songLibraryUndo": "Undo",
@@ -3321,7 +3342,16 @@
   "songNewTitle": "New song",
   "songOverviewCapabilities": "Trainer capabilities",
   "songOverviewFailure": "This song could not be loaded.",
+  "songOverviewLicense": "License: {copyright}",
+  "@songOverviewLicense": {
+    "placeholders": {
+      "copyright": {
+        "type": "String"
+      }
+    }
+  },
   "songOverviewLoading": "Loading song…",
+  "songOverviewMissingBackingAsset": "Backing track is missing. The song can still be opened — only playback is affected.",
   "songOverviewNoSections": "No marked sections",
   "songOverviewRetry": "Try again",
   "songOverviewSections": "Sections",

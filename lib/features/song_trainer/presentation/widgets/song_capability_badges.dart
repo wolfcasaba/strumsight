@@ -35,13 +35,27 @@ final class SongCapabilityBadges extends StatelessWidget {
               : l10n.songCapabilityExportUnavailable,
           color: capability.canExport ? Colors.green : Colors.orange,
         ),
+        if (!capability.canPersist)
+          _Badge(
+            key: ValueKey<String>(
+              'song-summary-readonly-${summary.documentId.value}',
+            ),
+            icon: Icons.lock_outline,
+            label: l10n.songLibraryReadOnly,
+            color: Colors.orange,
+          ),
       ],
     );
   }
 }
 
 final class _Badge extends StatelessWidget {
-  const _Badge({required this.icon, required this.label, required this.color});
+  const _Badge({
+    required this.icon,
+    required this.label,
+    required this.color,
+    super.key,
+  });
   final IconData icon;
   final String label;
   final Color color;
