@@ -977,6 +977,22 @@
   "songLibraryUndo": "Visszavonás",
   "songImportWorking": "Import előkészítése…",
   "songImportFailed": "A fájlt nem sikerült importálni.",
+  "songImportBlockingFailure": "Ez a fájl nem importálható: {code}",
+  "@songImportBlockingFailure": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songImportBlockingSemantic": "Blokkoló importhiba: {code}",
+  "@songImportBlockingSemantic": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songImportChooseFile": "Fájl kiválasztása",
   "songImportCancel": "Mégse",
   "songImportPreviewTitle": "Import ellenőrzése",
@@ -1044,6 +1060,8 @@
   "songEditorTitleField": "Cím",
   "songEditorArtistField": "Előadó",
   "songEditorSections": "Szakaszok",
+  "songEditorMoveSectionUp": "Szakasz mozgatása feljebb",
+  "songEditorMoveSectionDown": "Szakasz mozgatása lejjebb",
   "songEditorMeasures": "Ütemek",
   "songEditorAddMeasure": "Ütem hozzáadása",
   "songEditorAddChord": "Akkord hozzáadása",
@@ -1066,6 +1084,16 @@
   "songEditorConflict": "A dal máshol megváltozott. A drafted megmaradt.",
   "songEditorInvalid": "Mentés előtt javítsd a validációs hibákat.",
   "songEditorLoadFailed": "A dal nem nyitható meg.",
+  "songEditorSaveFailed": "Mentés sikertelen: {code}. A szerkesztésed megmaradt.",
+  "@songEditorSaveFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songEditorReadOnlySource": "Ez a dal nem menthető a helyén. Mentsd a módosításokat új másolatként.",
+  "songEditorSaveCopy": "Mentés másolatként",
   "songOverviewTitle": "Dal áttekintése",
   "songOverviewSections": "Szakaszok",
   "songOverviewTracks": "Sávok",

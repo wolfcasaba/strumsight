@@ -70,8 +70,48 @@ final class _SongImportScreenState extends ConsumerState<SongImportScreen> {
                   const SizedBox(height: 16),
                   Text(l10n.songImportWorking),
                 ] else ...<Widget>[
+                  // A3(b)/A4: SongImportPhase.failure is the blocking-error
+                  // producer that never reaches the preview screen. It gets
+                  // the SAME error icon + error color role + a distinct
+                  // semantic label the fatal preview path uses
+                  // (ImportWarningList), so the blocking case never reads
+                  // like an ordinary warning, and no "continue anyway"
+                  // affordance is offered next to it.
                   if (state.phase == SongImportPhase.failure)
-                    Text(l10n.songImportFailed),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Semantics(
+                        label: l10n.songImportBlockingSemantic(
+                          state.failureCode ?? l10n.songImportFailed,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Icon(
+                              Icons.error_outline,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                state.failureCode == null
+                                    ? l10n.songImportFailed
+                                    : l10n.songImportBlockingFailure(
+                                        state.failureCode!,
+                                      ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   FilledButton.icon(
                     onPressed: controller.requestSelection,
                     icon: const Icon(Icons.upload_file_outlined),

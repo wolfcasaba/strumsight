@@ -11,6 +11,7 @@ import '../../application/editor/song_editor_state.dart';
 import '../../application/editor/song_editor_controller.dart';
 import '../../application/song_trainer_providers.dart';
 import '../../domain/models/meter_map.dart';
+import '../../domain/models/song_capability.dart';
 import '../../domain/models/song_document.dart';
 import '../../domain/models/song_id.dart';
 import '../../domain/models/song_measure.dart';
@@ -19,11 +20,29 @@ import '../../domain/models/song_source.dart';
 import '../../domain/models/song_track.dart';
 import '../../domain/models/tempo_map.dart';
 import '../../domain/repositories/song_asset_repository.dart';
+import '../../domain/services/song_capability_resolver.dart';
+import '../../domain/services/song_validator.dart';
 import '../widgets/backing_asset_editor.dart';
 import '../widgets/measure_grid.dart';
 import '../widgets/song_event_editor.dart';
 import '../widgets/song_metadata_editor.dart';
 import '../widgets/song_section_editor.dart';
+
+/// A5.6/§0.0/B/R10: read-only-ness is a property of the persisted document
+/// itself, computed by the editor from the same framework-independent
+/// domain services the repository and the Library screen use — never
+/// derived from route origin, so a direct/deep-linked route gets the same
+/// answer a Library-mediated open would. A brand-new, not-yet-persisted
+/// document (`persisted == null`) is always persistable via `create`.
+bool _canPersist(SongDocument? persisted) {
+  if (persisted == null) return true;
+  final report = const SongValidator().validate(persisted);
+  final capability = const SongCapabilityResolver().resolve(
+    report: report,
+    profile: SongCapabilityProfile.persist,
+  );
+  return capability.canPersist;
+}
 
 /// Route shell for the V2 editor. Editing state lives in the controller.
 final class SongEditorScreen extends ConsumerStatefulWidget {
@@ -44,6 +63,37 @@ final class SongEditorScreen extends ConsumerStatefulWidget {
 final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   late final SongId _id;
   var _startedNewDraft = false;
+
+  // MINOR-1: `build()` reruns on every editing step (undo/redo, metadata
+  // typing, chord add — anything the `songEditorStateProvider` publishes),
+  // but `_canPersist` only depends on `state.persisted`, which changes only
+  // on load/successful save. Memoize by identity so an edit-heavy session
+  // doesn't re-run `SongValidator().validate()` on every keystroke.
+  SongDocument? _canPersistCacheKey;
+  var _canPersistCacheValue = true;
+  var _canPersistCacheComputed = false;
+
+  bool _canPersistMemo(SongDocument? persisted) {
+    if (!_canPersistCacheComputed ||
+        !identical(persisted, _canPersistCacheKey)) {
+      _canPersistCacheKey = persisted;
+      _canPersistCacheValue = _canPersist(persisted);
+      _canPersistCacheComputed = true;
+    }
+    return _canPersistCacheValue;
+  }
+
+  // MAJOR-2 (E13-R24 review §6.2): `_saveCopy` calls `controller.startNew`,
+  // which detaches `persisted` (sets it to `null`) before `save()` runs. If
+  // the repository write itself then fails — as opposed to a still-fatal
+  // copy, which `_saveCopy` now rejects before ever calling `startNew` — the
+  // controller has no public API to restore `persisted` without also
+  // overwriting `draft` (see `load`). `_canPersist(null)` is always `true`,
+  // which would silently re-enable Save on the orphaned, unpersisted copy.
+  // This screen-local flag keeps Save locked and the "Save copy" retry
+  // affordance visible until `state.persisted` is non-null again (a
+  // successful save, or a fresh load).
+  var _copyWriteFailed = false;
 
   @override
   void initState() {
@@ -97,6 +147,10 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
     final controller = ref.read(songEditorControllerProvider(_id));
     final state =
         ref.watch(songEditorStateProvider(_id)).value ?? controller.state;
+    if (state.persisted != null) _copyWriteFailed = false;
+    final canPersist = _copyWriteFailed
+        ? false
+        : _canPersistMemo(state.persisted);
     return PopScope<Object?>(
       canPop: !state.isDirty,
       onPopInvokedWithResult: (didPop, result) async {
@@ -122,7 +176,9 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
             ),
             TextButton(
               key: const Key('song-editor-save'),
-              onPressed: state.isLoaded ? controller.save : null,
+              onPressed: (state.isLoaded && canPersist)
+                  ? controller.save
+                  : null,
               child: Text(l10n.songEditorSave),
             ),
           ],
@@ -134,7 +190,12 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
           SongEditorStatus.failure when !state.isLoaded => Center(
             child: Text(l10n.songEditorLoadFailed),
           ),
-          _ => _EditorBody(id: _id, state: state),
+          _ => _EditorBody(
+            id: _id,
+            state: state,
+            canPersist: canPersist,
+            onCopyWriteFailed: () => setState(() => _copyWriteFailed = true),
+          ),
         },
       ),
     );
@@ -184,16 +245,24 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
 }
 
 final class _EditorBody extends ConsumerWidget {
-  const _EditorBody({required this.id, required this.state});
+  const _EditorBody({
+    required this.id,
+    required this.state,
+    required this.canPersist,
+    required this.onCopyWriteFailed,
+  });
 
   final SongId id;
   final SongEditorState state;
+  final bool canPersist;
+  final VoidCallback onCopyWriteFailed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final draft = state.draft!;
     final controller = ref.read(songEditorControllerProvider(id));
+    final errorColor = Theme.of(context).colorScheme.error;
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -202,6 +271,56 @@ final class _EditorBody extends ConsumerWidget {
             Text(l10n.songEditorConflict),
           if (state.status == SongEditorStatus.validationFailed)
             Text(l10n.songEditorInvalid),
+          // A5: a failed save (or other post-load operation) never discards
+          // the draft — the content below stays exactly as edited, and the
+          // failure is named with `failureCode` rather than a generic
+          // message (docs/adr/0284-import-preview-is-not-a-commit.md §4).
+          if (state.status == SongEditorStatus.failure)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Semantics(
+                label: l10n.songEditorSaveFailed(state.failureCode ?? ''),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(Icons.error_outline, color: errorColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.songEditorSaveFailed(state.failureCode ?? ''),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(color: errorColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          // A6: a read-only source (validator-fatal persisted document) can
+          // never be updated in place — Save above is disabled and the only
+          // write path left is an explicit, new-identity copy
+          // (docs/adr/0284-import-preview-is-not-a-commit.md §5).
+          if (!canPersist)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    Icons.lock_outline,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(l10n.songEditorReadOnlySource)),
+                  TextButton(
+                    key: const Key('song-editor-save-copy'),
+                    onPressed: () => _saveCopy(context, controller, draft),
+                    child: Text(l10n.songEditorSaveCopy),
+                  ),
+                ],
+              ),
+            ),
           SongMetadataEditor(
             metadata: draft.metadata,
             onChanged: controller.editMetadata,
@@ -279,4 +398,78 @@ final class _EditorBody extends ConsumerWidget {
     if (separator <= 0 || separator == name.length - 1) return 'bin';
     return name.substring(separator + 1).toLowerCase();
   }
+
+  /// The only write path A6 allows for a read-only source: a brand-new
+  /// document identity (fresh [SongId], `createdInApp` source) carrying the
+  /// current draft's content. `controller.startNew` detaches the persisted
+  /// pointer, so the following `save()` always calls `repository.create`
+  /// and the original stored document is never touched.
+  Future<void> _saveCopy(
+    BuildContext context,
+    SongEditorController controller,
+    SongDocument draft,
+  ) async {
+    final now = DateTime.now().toUtc();
+    final unique =
+        '${now.microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+    final copy = SongDocument(
+      schemaVersion: draft.schemaVersion,
+      id: SongId('editor-copy-$unique'),
+      revision: 0,
+      metadata: draft.metadata,
+      source: SongSource(
+        type: SongSourceType.createdInApp,
+        originalFileName: draft.source.originalFileName,
+        sha256: '0' * 64,
+        importedAt: now,
+        importerVersion: 'editor@1',
+      ),
+      createdAt: now,
+      updatedAt: now,
+      assets: draft.assets,
+      markers: draft.markers,
+      tracks: draft.tracks,
+      sections: draft.sections,
+      measures: draft.measures,
+      tempoMap: draft.tempoMap,
+      meterMap: draft.meterMap,
+      keyMap: draft.keyMap,
+    );
+    // MAJOR-2 (E13-R24 review §6.2): a copy carries `draft`'s exact content,
+    // so it fails the same fatal-reference check `draft` itself would fail
+    // if the user never ran the in-editor fix. Checking that HERE, before
+    // `controller.startNew` runs, means the controller — and with it the
+    // user's live, unsaved draft — is never touched on this path:
+    // `startNew` detaches `persisted`, and the controller exposes no way to
+    // restore it without also overwriting `draft` (see `load`), which is
+    // exactly the silent-data-loss bug this check exists to avoid.
+    if (!_canPersist(copy)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).songEditorInvalid),
+          ),
+        );
+      }
+      return;
+    }
+    controller.startNew(copy);
+    await controller.save();
+    // A repository failure at this point (as opposed to the still-fatal
+    // case caught above) still leaves `persisted == null` — the controller
+    // has no API to avoid that without touching the forbidden application
+    // layer. `onCopyWriteFailed` keeps Save locked and the "Save copy"
+    // retry affordance visible from the screen side instead; `draft` is
+    // untouched either way, since `save()` never rewrites it on failure.
+    if (_isFailureStatus(controller.state.status)) {
+      onCopyWriteFailed();
+    }
+  }
+
+  static bool _isFailureStatus(SongEditorStatus status) => switch (status) {
+    SongEditorStatus.validationFailed ||
+    SongEditorStatus.failure ||
+    SongEditorStatus.conflict => true,
+    _ => false,
+  };
 }

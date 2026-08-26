@@ -51,7 +51,12 @@ final class SongImportPreviewScreen extends ConsumerWidget {
             if (fatal)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(l10n.songImportFatalCannotConfirm),
+                child: Text(
+                  l10n.songImportFatalCannotConfirm,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
               ),
           ],
         ),

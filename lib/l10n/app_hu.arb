@@ -3197,10 +3197,22 @@
   "songEditorMetadata": "Metaadatok",
   "songEditorMeterDenominator": "Ütemmutató nevező",
   "songEditorMeterNumerator": "Ütemmutató számláló",
+  "songEditorMoveSectionDown": "Szakasz mozgatása lejjebb",
+  "songEditorMoveSectionUp": "Szakasz mozgatása feljebb",
   "songEditorNewTitle": "Új dal",
   "songEditorNoteField": "MIDI-hang",
+  "songEditorReadOnlySource": "Ez a dal nem menthető a helyén. Mentsd a módosításokat új másolatként.",
   "songEditorRedo": "Újra",
   "songEditorSave": "Mentés",
+  "songEditorSaveCopy": "Mentés másolatként",
+  "songEditorSaveFailed": "Mentés sikertelen: {code}. A szerkesztésed megmaradt.",
+  "@songEditorSaveFailed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songEditorSections": "Szakaszok",
   "songEditorSetMeter": "Ütemmutató beállítása",
   "songEditorSetTempo": "Tempó beállítása",
@@ -3212,6 +3224,22 @@
   "songEditorUnsavedBody": "Mented, elveted vagy tovább szerkeszted a draftot?",
   "songEditorUnsavedTitle": "Nem mentett módosítások",
   "songFavorite": "Kedvenc",
+  "songImportBlockingFailure": "Ez a fájl nem importálható: {code}",
+  "@songImportBlockingFailure": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "songImportBlockingSemantic": "Blokkoló importhiba: {code}",
+  "@songImportBlockingSemantic": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
   "songImportCancel": "Mégse",
   "songImportChooseFile": "Fájl kiválasztása",
   "songImportConfirm": "Dal importálása",
