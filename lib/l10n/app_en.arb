@@ -3527,6 +3527,8 @@
     }
   },
   "speedBuilderTitle": "Speed Builder",
+  "speedBuilderUnavailableBody": "This screen only shows a tempo ladder once it's driven by a real, measured practice session. Nothing is shown until then.",
+  "speedBuilderUnavailableTitle": "Speed Builder isn't recording yet",
   "streakAtRisk": "Play today to keep your streak alive 🔥",
   "streakBroken": "A freeze will save your streak next time you play",
   "streakDays": "{count, plural, =0{No streak yet} =1{1-day streak} other{{count}-day streak}}",

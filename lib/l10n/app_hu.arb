@@ -3482,6 +3482,8 @@
     }
   },
   "speedBuilderTitle": "Tempóépítő",
+  "speedBuilderUnavailableBody": "Ez a képernyő csak akkor mutat tempó-létrát, ha egy valódi, mért gyakorlási session vezérli. Addig semmi nem jelenik meg.",
+  "speedBuilderUnavailableTitle": "A Speed Builder még nem rögzít",
   "streakAtRisk": "Játssz ma, hogy megtartsd a sorozatod 🔥",
   "streakBroken": "Egy fagyasztás megmenti a sorozatod, amikor legközelebb játszol",
   "streakDays": "{count, plural, =0{Még nincs sorozat} =1{1 napos sorozat} other{{count} napos sorozat}}",

@@ -891,6 +891,8 @@
   "speedBuilderRecordPass": "Sikeres próba",
   "speedBuilderRecordFail": "Sikertelen próba",
   "speedBuilderFinishCta": "Befejezés",
+  "speedBuilderUnavailableTitle": "A Speed Builder még nem rögzít",
+  "speedBuilderUnavailableBody": "Ez a képernyő csak akkor mutat tempó-létrát, ha egy valódi, mért gyakorlási session vezérli. Addig semmi nem jelenik meg.",
   "speedBuilderResultTitle": "Speed Builder eredmény",
   "speedBuilderResultAttempts": "{count} próbálkozás",
   "@speedBuilderResultAttempts": {

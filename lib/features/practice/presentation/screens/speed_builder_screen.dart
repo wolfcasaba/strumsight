@@ -7,17 +7,22 @@
 /// what gets shown, never the single best-scoring attempt (A6): a lucky
 /// one-off pass at a high tempo is not "stable" unless the engine's
 /// consecutive-pass rule confirms it.
+///
+/// There is no live attempt source yet — recording a real pass/miss needs a
+/// running practice session (microphone, DSP, `PracticeObservation`), and
+/// that wiring is a later round's work. This screen never fabricates an
+/// attempt to fill that gap (E13-R22 review MAJOR-1): with no
+/// [SpeedBuilderState] to drive, it states plainly that live measurement
+/// isn't available yet (ADR 0277 — a non-punitive failure presentation) and
+/// offers no control that would produce an unmeasured result.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/widgets/empty_state.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../domain/model/practice_attempt_result.dart';
-import '../../domain/model/practice_metrics.dart';
-import '../../domain/model/practice_verdict.dart';
 import '../../domain/model/speed_builder_policy.dart';
 import '../../domain/model/speed_builder_state.dart';
-import '../../domain/model/tempo.dart';
 import '../../domain/service/speed_builder_engine.dart';
 import '../widgets/speed_builder_progress.dart';
 
@@ -31,8 +36,8 @@ class SpeedBuilderScreen extends StatefulWidget {
   final SpeedBuilderPolicy policy;
 
   /// Test-only seam (mirrors `PracticeSetupScreen.argsOverride`): drives the
-  /// screen straight into an active/finished ladder without tapping through
-  /// the setup layout. Production callers leave this null.
+  /// screen straight into an active/finished ladder without a live attempt
+  /// source. Production callers leave this null — see the library doc.
   final SpeedBuilderState? initialState;
 
   @override
@@ -43,29 +48,11 @@ class _SpeedBuilderScreenState extends State<SpeedBuilderScreen> {
   static const _engine = SpeedBuilderEngine();
 
   SpeedBuilderState? _state;
-  int _nextAttemptIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _state = widget.initialState;
-    _nextAttemptIndex = widget.initialState?.attempts.length ?? 0;
-  }
-
-  void _start() {
-    setState(() => _state = SpeedBuilderState.initial(widget.policy));
-  }
-
-  void _record({required bool pass}) {
-    final state = _state;
-    if (state == null || state.isClosed) return;
-    final attempt = _syntheticAttempt(
-      index: _nextAttemptIndex,
-      tempo: state.currentTempo,
-      pass: pass,
-    );
-    _nextAttemptIndex++;
-    setState(() => _state = _engine.record(state, attempt));
   }
 
   void _finish() {
@@ -81,112 +68,44 @@ class _SpeedBuilderScreenState extends State<SpeedBuilderScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.speedBuilderScreenTitle)),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: state == null
-              ? _SetupLayout(policy: widget.policy, onStart: _start)
-              : state.isClosed
-              ? _ResultLayout(
-                  state: state,
-                  onDone: () => Navigator.of(context).maybePop(),
-                )
-              : _ActiveLayout(
-                  state: state,
-                  onRecordPass: () => _record(pass: true),
-                  onRecordFail: () => _record(pass: false),
-                  onFinish: _finish,
-                ),
-        ),
+        child: state == null
+            ? const _UnavailableLayout()
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: state.isClosed
+                    ? _ResultLayout(
+                        state: state,
+                        onDone: () => Navigator.of(context).maybePop(),
+                      )
+                    : _ActiveLayout(state: state, onFinish: _finish),
+              ),
       ),
     );
   }
 }
 
-/// Synthesizes one attempt result for the demo ladder. `pass` picks metric
-/// values on either side of [SpeedBuilderEngine]'s own pass thresholds — the
-/// engine (not this function) decides whether the attempt actually advances
-/// the ladder.
-PracticeAttemptResult _syntheticAttempt({
-  required int index,
-  required Tempo tempo,
-  required bool pass,
-}) {
-  final metrics = PracticeMetrics(
-    completion: MetricAvailable(pass ? 0.98 : 0.5),
-    rhythm: MetricAvailable(pass ? 0.9 : 0.6),
-    direction: const MetricNotApplicable(),
-    chord: const MetricNotApplicable(),
-    overall: MetricAvailable(pass ? 0.9 : 0.6),
-    totalTargets: 8,
-    resolvedTargets: pass ? 8 : 4,
-    maxCombo: pass ? 8 : 2,
-    scorePoints: pass ? 800 : 300,
-    meanAbsoluteOffset: const Duration(milliseconds: 20),
-    timingBias: Duration.zero,
-  );
-  return PracticeAttemptResult(
-    index: index,
-    tempo: tempo,
-    metrics: metrics,
-    verdicts: const <PracticeVerdict>[],
-    outcome: pass
-        ? PracticeAttemptOutcome.passed
-        : PracticeAttemptOutcome.failed,
-  );
-}
-
-class _SetupLayout extends StatelessWidget {
-  const _SetupLayout({required this.policy, required this.onStart});
-  final SpeedBuilderPolicy policy;
-  final VoidCallback onStart;
+/// The honest "no live session yet" entry (ADR 0277): reached whenever there
+/// is no [SpeedBuilderState] to drive. Deliberately offers no "Start"
+/// affordance — starting a ladder here could only ever be closed by a
+/// fabricated attempt, which is exactly what the E13-R22 review rejected.
+class _UnavailableLayout extends StatelessWidget {
+  const _UnavailableLayout();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(l10n.speedBuilderSetupIntro),
-        const SizedBox(height: 16),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Wrap(
-              spacing: 16,
-              runSpacing: 8,
-              children: [
-                Text(
-                  l10n.speedBuilderCurrentBpm(_formatBpm(policy.startBpm.bpm)),
-                ),
-                Text(
-                  l10n.speedBuilderTargetBpm(_formatBpm(policy.targetBpm.bpm)),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-        FilledButton(
-          onPressed: onStart,
-          style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-          child: Text(l10n.speedBuilderStartCta),
-        ),
-      ],
+    return EmptyState(
+      icon: Icons.speed,
+      title: l10n.speedBuilderUnavailableTitle,
+      subtitle: l10n.speedBuilderUnavailableBody,
     );
   }
 }
 
 class _ActiveLayout extends StatelessWidget {
-  const _ActiveLayout({
-    required this.state,
-    required this.onRecordPass,
-    required this.onRecordFail,
-    required this.onFinish,
-  });
+  const _ActiveLayout({required this.state, required this.onFinish});
 
   final SpeedBuilderState state;
-  final VoidCallback onRecordPass;
-  final VoidCallback onRecordFail;
   final VoidCallback onFinish;
 
   @override
@@ -197,24 +116,6 @@ class _ActiveLayout extends StatelessWidget {
       children: [
         SpeedBuilderProgress(state: state),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton(
-                onPressed: onRecordPass,
-                child: Text(l10n.speedBuilderRecordPass),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onRecordFail,
-                child: Text(l10n.speedBuilderRecordFail),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
         TextButton(
           onPressed: onFinish,
           child: Text(l10n.speedBuilderFinishCta),

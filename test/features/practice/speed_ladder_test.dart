@@ -3,8 +3,10 @@
 // `requiredConsecutivePasses` in a row), never a lucky one-off peak
 // attempt.
 //
-// Also exercises the setup → active → result flow the round brief §3
-// requires for this screen.
+// Also guards the E13-R22 javító kör fix for review MAJOR-1: with no
+// [SpeedBuilderState] to drive, the screen must show the honest
+// "unavailable" state, never a Start/Record path that fabricates
+// measurements for the engine.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/practice/domain/model/practice_attempt_result.dart';
@@ -123,42 +125,36 @@ void main() {
     );
   });
 
-  group('the setup / active / result layout (§3)', () {
-    testWidgets(
-      'setup shows the policy and a Start CTA; Start moves to the active '
-      'layout; two consecutive passes + Finish reach a stable result',
-      (tester) async {
-        await pump(tester);
-        await tester.pumpAndSettle();
+  group(
+    'no live session → no fabricated measurement (E13-R22 review MAJOR-1)',
+    () {
+      testWidgets(
+        'with no initialState the screen never offers a Start/Record path — '
+        'it states plainly that live measurement is unavailable',
+        (tester) async {
+          await pump(tester);
+          await tester.pumpAndSettle();
 
-        expect(find.text(l10n().speedBuilderStartCta), findsOneWidget);
-        expect(find.text(l10n().speedBuilderRecordPass), findsNothing);
+          // The regression this cell guards against: a "Start" CTA that only
+          // ever leads to a screen minting fabricated PracticeAttemptResults
+          // for the real engine. Neither the entry CTA nor the record
+          // affordances it used to unlock may appear.
+          expect(find.text(l10n().speedBuilderStartCta), findsNothing);
+          expect(find.text(l10n().speedBuilderRecordPass), findsNothing);
+          expect(find.text(l10n().speedBuilderRecordFail), findsNothing);
 
-        await tester.tap(find.text(l10n().speedBuilderStartCta));
-        await tester.pumpAndSettle();
+          // The honest, ADR 0277-style unavailable state is shown instead.
+          expect(
+            find.text(l10n().speedBuilderUnavailableTitle),
+            findsOneWidget,
+          );
 
-        expect(find.text(l10n().speedBuilderRecordPass), findsOneWidget);
-        expect(find.text(l10n().speedBuilderRecordFail), findsOneWidget);
-
-        // Two consecutive passes at the same (starting) tempo reach the
-        // default `requiredConsecutivePasses` (2) and become stable.
-        await tester.tap(find.text(l10n().speedBuilderRecordPass));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(l10n().speedBuilderRecordPass));
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.text(l10n().speedBuilderFinishCta));
-        await tester.pumpAndSettle();
-
-        expect(find.text(l10n().speedBuilderResultTitle), findsOneWidget);
-        expect(
-          find.text(
-            l10n().speedBuilderHighestStable(l10n().speedBuilderNoStableBpm),
-          ),
-          findsNothing,
-          reason: 'two consecutive passes must produce a stable tempo',
-        );
-      },
-    );
-  });
+          // No result is ever produced without a real, engine-confirmed
+          // measurement.
+          expect(find.text(l10n().speedBuilderResultTitle), findsNothing);
+          expect(find.textContaining('BPM'), findsNothing);
+        },
+      );
+    },
+  );
 }
