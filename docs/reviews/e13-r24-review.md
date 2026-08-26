@@ -221,3 +221,72 @@ hizlalják); a NOTE-ok nem blokkolnak.
 A zöld kapu többi eleme készen áll: 20/20 lokális gate, scope-audit OK, és az
 exact-SHA CI (Full Gate + Router CI) a `665c9fbd`-n fut — a javító kör után
 ÚJRA kell dispatch-elni az új HEAD-re.
+
+---
+
+# 6. Javító kör #1 után — ÚJRA-REVIEW (`92a15e70`, 2026-08-26)
+
+**Verdikt: CHANGES REQUESTED (második kör)** — a négy eredeti lelet **ZÁRVA**,
+de a MINOR-2 javítása **ÚJ MAJOR-t vezetett be**.
+
+## 6.1 A zárt leletek — leletenként megmérve
+
+| Lelet | Javítás | A reviewer BIZONYÍTÉKA |
+|---|---|---|
+| **MAJOR-1** | az A7 cella a `tester.getSize` helyett az `IconButton.constraints`-re mér (a widget SAJÁT, regresszálható tulajdonsága), és megköveteli, hogy ne legyen `null` | **ZÁRVA** — friss klónban, saját próbával: `48 → 32` ⇒ `Expected: a value greater than or equal to <48.0> / Actual: <32.0>` **PIROS**; a `constraints` teljes eltávolítása ⇒ `Expected: not null / Actual: <null>` + `[<'song-editor-section-move-up-0'>] must declare an explicit minimum touch-target constraint` **PIROS**. A cella most már TUD pirosra váltani. |
+| **MAJOR-1/doc** | a hamis „the default constraints do not guarantee it" doc-comment átírva a MÉRT igazságra (a `MaterialTapTargetSize.padded` már 48×48-ra fújja, a `constraints` a *deklarált szerződés*) | **ZÁRVA** — a szöveg most azt állítja, amit a mérés mutat. |
+| **MINOR-1** | `_canPersistMemo` — `identical(persisted, _canPersistCacheKey)` szerinti memoizálás | **ZÁRVA** |
+| **MINOR-3** | mindhárom helyen `Theme.of(context).textTheme.bodyMedium?.copyWith(color: …)` | **ZÁRVA** — a hat golden változatlanul zöld (+6), tehát a token-váltás nem mozdította el a raszterizációt. |
+
+**Saját gate-futás a javított HEAD-en** (ÚJ, friss `/tmp/review2-e13-r24` klón):
+**20/20 lépés ZÖLD**, `MINDEN GATE ZÖLD`, **96 teszt** (az `editor_draft_test`
++3 → +4 az új MINOR-2 cellával).
+
+## 6.2 MAJOR-2 (ÚJ) — a MINOR-2 javítása NÉMÁN ELDOBJA a felhasználó mentetlen szerkesztéseit
+
+**Fájl:** `lib/features/song_trainer/presentation/screens/song_editor_screen.dart:417-427`
+(`_saveCopy` záró ága), a hiányzó fedezet:
+`test/features/songs/import/editor_draft_test.dart:239-336` (a MINOR-2 cella).
+
+**A javítás, ami a bajt okozza.** A `_saveCopy` most hiba esetén
+`await controller.load(id)`-t hív, hogy a szerkesztőt visszaállítsa az
+eredetire. A `load()` viszont `_publishReady(document, document)`-et publikál,
+azaz a **draftot IS** a lemezről olvasott dokumentumra állítja — a felhasználó
+minden mentetlen szerkesztése ezzel megsemmisül.
+
+**Mérve** (eldobható próbateszt a friss klónban, azóta törölve): csak olvasható,
+validátor-fatális dokumentum; a felhasználó átnevezi a dalt, majd — a fatális
+hivatkozás javítása NÉLKÜL — a „Save copy"-ra koppint:
+
+```
+PROBE before copy: draft title = My careful rename
+PROBE after  copy: draft title = Legacy Song      ← a szerkesztés ELVESZETT
+PROBE createCalls = 0                             ← és semmi nem is íródott ki
+```
+
+**Miért MAJOR.** Ez pontosan az a hibaosztály, amit a kör SAJÁT ADR-je tilt —
+[ADR 0284](../adr/0284-import-preview-is-not-a-commit.md) §Döntés 4: *„A
+piszkozat mentési hiba után is megmarad — a szerkesztett tartalom nem vész el"*
+—, és amit az A5 cella máshol gépi őrrel véd. A javítás előtti kód nem volt
+szép (a felhasználó a gazdátlan másolaton maradt), de **nem semmisítette meg a
+munkáját**; a javító kör tehát egy kényelmetlenséget cserélt néma
+munkavesztésre.
+
+**Az új MINOR-2 cella ezt nem fogja meg:** a fixture-je egy ÉRINTETLEN
+dokumentum — sosem szerkeszt a másolás előtt —, ezért csak a `persisted?.id` /
+`draft?.id` visszaállását állítja, a tartalom elvesztését nem. Zöld cella, ami
+a hibát nem látja.
+
+**Javasolt irány (NEM kész patch).** A hiba-ág csak a *persisted* mutatót
+állítsa vissza az eredetire, a **draftot hagyja érintetlenül** (a felhasználó
+munkája megmarad, a Save továbbra is zárolt, a „Save copy" újra próbálható) —
+és a bukás okát nevesítse a felületen. A cellát a próbám szerint kell
+megerősíteni: szerkesztés → sikertelen másolás → a szerkesztés MÉG MINDIG a
+draftban van.
+
+## 6.3 Merge-döntés
+
+**MAJOR-2 nyitva → merge TILOS.** Második javító kör indul ugyanazzal a
+motorral. (A Codex-eszkaláció tárgytalan: a Codex-oldal kvóta miatt nem
+futtatható — a kör-prompt §1.1 „MOTOR-FELÁLLÁS" blokkja ezt kimondja, tehát a
+javító kör is `sonnet-impl`, a mércét pedig gépi őr tartja.)
