@@ -8,10 +8,13 @@
 - **ADR:** [`0286`](../adr/0286-charts-need-a-text-alternative.md) — MÁR MERGE-ELT, a kör csak hivatkozza (§0.0/B/B0)
 - **Dátum:** 2026-08-26
 
-## VÉGSŐ DÖNTÉS: CHANGES REQUESTED
+## VÉGSŐ DÖNTÉS: APPROVED (javító kör után, `fb0be5ba`)
 
-Egy **MAJOR** (F1) nyitva → merge TILOS, amíg nem zárul. A javító kör a lánc
-normál útja (ADR 0087 §2), nem halt-ok.
+- **1. kör (`39c674b4`): CHANGES REQUESTED** — 1 MAJOR, 2 MINOR, 2 NOTE.
+- **Javító kör (`fb0be5ba`): mind a négy lelet ZÁRVA**, leletenként a SAJÁT
+  mérésemmel igazolva (§7). A gate újra 16/16 zöld, a kilenc pin 57/57.
+
+A javító kör a lánc normál útja (ADR 0087 §2), nem halt-ok.
 
 ---
 
@@ -268,3 +271,28 @@ state-szivárgás, nem e kör defektje** — a merge-kapu viszont akkor sem lazu
 4. **F4 (NOTE, opcionális):** `assert` az `SsScoreRing` `measured` ágára.
 
 F5-höz nincs teendő (tilos zóna, nem a kör defektje).
+
+---
+
+## 7. Javító kör ellenőrzése — `fb0be5ba` (2026-08-26)
+
+Friss klón (`/tmp/review-e13-r27b`), a gate ÚJRA magam futtatva:
+**16/16 ZÖLD**, a kilenc pin `[7] 57/57` — a §0.0/B/B8 additív szerződés a
+javítás után is áll. Scope-audit: `OK (71b60bc5..fb0be5ba, 33 changed path(s),
+1 generated/ignored)` — az egy ignorált útvonal a saját review-jelentésem.
+A `main` a dispatch óta nem mozdult (`37c8f1a9`).
+
+| Lelet | Zárás | Ahogyan MAGAM igazoltam |
+|---|---|---|
+| **F1** MAJOR | ✅ | `ss_event_list.dart:59` — `final boundedHeight = math.min(height, rows.length * rowExtent)`. A `ListView.builder` és az `itemExtent` MEGMARADT, `shrinkWrap` nem került be. Az ÚJRAVETT goldenen (`e13_r27_analysis_timeline_compact.png`) a ~172 px halott blokk eltűnt: az esemény-sor közvetlenül a hotspot-navigációs gombokba folyik, és az idővonal-sáv kártyája is beleférve látszik. Mindkét keret (1.0 és 2.0 textScale) újravéve, commitolva. |
+| **F2** MINOR | ✅ | ÚJ cella `timeline_virtualization_test.dart:169-186`: a delegátum-típusra zár. **Újra lefuttattam a próbámat** — ugyanaz a mohó `ListView(children: […])` csere, ami az 1. körben 5/5 zölden ment át, most PIROS: `Expected: <Instance of 'SliverChildBuilderDelegate'> / Actual: SliverChildListDelegate:<…(estimated child count: 3000)>`. A cella immár diszkriminál. Visszaállítva. |
+| **F3** MINOR | ✅ | ÚJ `_hotspotEventListRow` segéd: `final label = _hotspotSemanticsLabel(…)` **egyszer**, `label`-nek és `semanticLabel`-nek is átadva. |
+| **F4** NOTE | ✅ | `ss_score_ring.dart:42-45` — `assert(state != SsScoreRingState.measured \|\| ratio != null)`. |
+| **F5** NOTE | — | nincs teendő; a `[7] 57/57` ebben a futásban is zöld volt. |
+
+**A javító kör diffje** (`dbb140d5..fb0be5ba`): 7 fájl, +183/−23 — kizárólag a
+négy lelet és a két újravett PNG, plusz a brief §10.7 dokumentációja.
+Scope-tágítás nincs, a mérce sehol nem gyengült (F2 kifejezetten ERŐSÍTI).
+
+**Merge-feltétel, ami még hátravan:** az exact-SHA CI zöldje a `fb0be5ba`-n
+(Full Gate + Router CI). A review ettől függetlenül APPROVED.
