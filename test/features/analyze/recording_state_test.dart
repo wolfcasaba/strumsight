@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_coordinator.dart';
 import 'package:strumsight/core/audio/lifecycle/audio_session_lease.dart';
-import 'package:strumsight/core/audio/mic_capture.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/analysis_recorder.dart';
 import 'package:strumsight/features/audio_analysis/data/capture/recording_run.dart';
 import 'package:strumsight/features/audio_analysis/data/input/input_limits.dart';
@@ -114,7 +113,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: _recorder(),
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () {},
         ),
       );
@@ -141,7 +140,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: _recorder(),
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () {},
         ),
       );
@@ -167,7 +166,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: _recorder(),
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () {},
           retentionPolicy: const AudioRetentionPolicy(keepOriginal: true),
         ),
@@ -230,7 +229,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: _recorder(capture: capture),
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () {},
         ),
       );
@@ -255,7 +254,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: _recorder(capture: capture),
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () {},
         ),
       );

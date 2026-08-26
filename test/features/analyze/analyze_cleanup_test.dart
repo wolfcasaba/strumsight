@@ -43,7 +43,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: recorder,
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () {},
         ),
       );
@@ -75,7 +75,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: recorder,
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () {},
         ),
       );
@@ -106,7 +106,7 @@ void main() {
         tester,
         AnalysisRecordingScreen(
           recorder: recorder,
-          onFinished: (_, __) {},
+          onFinished: (_, _) {},
           onCancel: () => cancelled = true,
         ),
       );
@@ -141,7 +141,7 @@ void main() {
           tester,
           AnalysisRecordingScreen(
             recorder: recorder,
-            onFinished: (_, __) {},
+            onFinished: (_, _) {},
             onCancel: () {},
           ),
         );
@@ -179,7 +179,7 @@ void main() {
           tester,
           AnalysisRecordingScreen(
             recorder: recorder,
-            onFinished: (_, __) {},
+            onFinished: (_, _) {},
             onCancel: () {},
             maximumDuration: const Duration(seconds: 1),
           ),
