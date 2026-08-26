@@ -19387,3 +19387,69 @@ mostanra a szabály, nem a kivétel: **a pre-flight ELSŐ mérése legyen
 `ls -d` az `allowed_paths` minden `lib/` elemére.**
 
 **Őrteszt:** `test/features/songs/song_library_test.dart`::`search text and filtered results survive a real dispose and re-entry of the Library screen`
+
+## L500 — Egy ÉLŐ külső szolgáltatás állapotára támaszkodó teszt egy KÉSZ, APPROVED kört állított meg: a GitHub-incidens a saját őrén keresztül vált pirosra (E13-R24/H5, 2026-08-26)
+
+**Mit mértünk.** Az E13-R24 kör KÉSZ és APPROVED volt (reviewer-gate 20/20 zöld,
+97 teszt három friss izolált klónban), a merge mégis H5-tel állt meg. A merge
+SHA-n (`b30e6fbe`) a Router CI
+[32986334705](https://github.com/wolfcasaba/strumsight/actions/runs/32986334705)
+**788 passed / 4 failed** volt, és mind a négy bukás ugyanabban a fájlban,
+azonos okkal:
+
+```
+test_halted_chain_starts_selfheal_unless_it_is_switched_off
+test_selfheal_gives_up_after_the_configured_attempt_budget
+test_selfheal_registers_and_clears_its_own_inflight_marker
+test_selfheal_skips_a_round_that_already_has_an_active_heal_session
+```
+
+A `tools/round-pipeline.sh` GitHub-incidens őre (`github_actions_degraded`,
+2026-08-06) **élő HTTP-hívás** a githubstatus.com-ra, és `major_outage` alatt
+rövidre zárja a self-heal ágat („az önjavítás KIMARAD: GitHub Actions incidens
+alatt a halt oka külső"). A négy cella épp ezt az ágat méri — tehát a GitHub
+kimaradása a saját őrünkön keresztül tette pirossá a suite-ot. A kör diffje ezt
+a fájlt **nem is érintette** (scope-audit OK, a `tools/` a kör tilos zónája),
+tehát a piros oka 100%-ban külső volt.
+
+**Miért ez a hibaosztály a legdrágább.** Nem egy kört állít meg, hanem
+MINDEGYIKET: amíg a GitHub-incidens tart, a Router CI **bármelyik** kör
+merge-kapuját pirosra váltja, függetlenül attól, mit tartalmaz a diff. Ez a
+harmadik ugyanilyen alakú eset két nap alatt — [L485](#l485) osztálya
+(a nav-guard korpusz-assert a lánc SAJÁT előrehaladásától bukott, `4235f636`
+merge után) és a heti-kvóta félreosztályozás mellett. A közös nevező: **egy
+mérce, ami a fejlesztéstől FÜGGETLEN okból vált pirosra, nem mérce, hanem
+időzített akna.**
+
+**A javítás (PR #467, `19f6e684`).** A driver 2026-08-06 óta hordozza a
+kikapcsolót (`PIPELINE_STATUS_CHECK`), csak ez a suite nem használta — a
+`tools/tests/test_engine_override_ttl.py` igen, az volt a precedens. A
+`run_command` mostantól **`setdefault`**-tal állítja (nem felülírással), tehát
+egy cella, ami épp az őrt méri, továbbra is kérheti explicit `"1"`-gyel.
+
+**Reprodukció ÉLŐ incidens alatt** (izolált `/tmp/ss-red` klón, `3b88f757` fa,
+a `setdefault` nélkül):
+
+```
+python3 -m pytest tools/tests/test_pipeline_integration.py -q \
+  -k "selfheal or github or incident"
+→ 5 failed, 9 passed      # a négy mért cella + az új incidens-cella
+→ 14 passed               # a javítással
+```
+
+**A tanulság általánosan.** Egy teszt SOHA ne függjön külső szolgáltatás
+pillanatnyi állapotától. Ha a mért kód maga hív ki (státusz-API, hálózat,
+óra), akkor a suite-nak **hamisítania** kell a választ (fake bináris a PATH
+elején, injektált fixture), nem elfogadni a valóságot: különben a mérce
+zöld/piros értéke nem a diffről szól. A visszaellenőrzés egyszerű: *ha ma
+kiesne a szolgáltatás, hány cellám válna pirossá anélkül, hogy a kód
+változna?*
+
+**Őrteszt:** `tools/tests/test_pipeline_integration.py::PipelineIntegrationTest::test_the_selfheal_path_survives_a_live_github_actions_outage`
+(HAMISÍTOTT `major_outage` fake `curl`-lel — se zöld, se piros napon nem
+billen), és a párja
+`::test_a_cell_may_still_opt_into_the_live_incident_guard` (explicit
+`PIPELINE_STATUS_CHECK=1` mellett az őr visszajön, azaz a `setdefault` nem vesz
+el képességet).
+
+---

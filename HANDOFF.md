@@ -1,5 +1,75 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R24 KÉSZ — Song import, előnézet és szerkesztő UI — PR [#466](https://github.com/wolfcasaba/strumsight/pull/466), squash `30065dc2` (2026-08-26)
+
+Az UI-26–UI-28 import/szerkesztő felületek migrációja (SDD Ch13 Kör 24). A kör
+**ADR-t nem írt**: a [0284](docs/adr/0284-import-preview-is-not-a-commit.md) már
+merge-elt (2026-08-15), újraírása H1 lett volna; a foglaló adta `0429`
+kiosztott, de fel nem használt szám. A sávon ez a **hetedik** ADR nélküli kör
+egymás után (E13-R17…R24).
+
+**Amit hoz.** Mind a három felület **HELYBEN** migrálva (típusnév, útvonal,
+konstruktor-szignatúra változatlan — az `ui_inventory` diffje ÜRES, 86 → 86):
+
+- **Import folyamat** — a `failure` fázis nevesítve mutatja a hibát
+  (`Icons.error_outline` + error szín-szerep + `Semantics`), és az EGYETLEN
+  cselekvés az új próbálkozás: nincs rajta „folytasd mindenképp" affordancia.
+- **Import előnézet** — a `fatal.` előtagú lelet a megerősítést **letiltja**
+  (`FilledButton.onPressed = null`), és vizuálisan ÉS szemantikusan elkülönül a
+  sima figyelmeztetéstől. Az `ImportWorkspace` csak `confirmPreview()`-ban
+  nyílik, megszakításkor mindig zár (A1/A2).
+- **Szerkesztő** — a Save `canPersist`-tel zárolt; zárolt esetben az egyetlen
+  írási út a másolat (új `SongId`, `createdInApp` forrás), az eredeti dokumentum
+  változatlan. Mentési hiba után a piszkozat a képernyőn marad, a hiba
+  `failureCode` nevesítve. Az átrendezés fel/le gombpárral megy — húzás-widget
+  egy sincs a fán —, és minden ilyen affordancia mért mérete `>= 48,0 dp`.
+
+**A review KÉT javító kört kért, és mindkét MAJOR TELJESEN ZÖLD kapu mögött
+élt** ([review](docs/reviews/e13-r24-review.md) — **APPROVED**, 0 nyitott lelet).
+Mindkettőt a reviewer **eldobható próbatesztjei** találták meg:
+
+- **MAJOR-1** — az A7 érintési-cél cellája a `constraints` 48→32 cseréjére ÉS a
+  teljes eltávolítására is ZÖLD maradt: `tester.getSize(IconButton)` a Material
+  `MaterialTapTargetSize.padded` miatt konstans `Size(48.0, 48.0)` (a belső
+  `ConstrainedBox` 40×40). A cella a Material alapértelmezését mérte, nem a kör
+  kódját — [L477](docs/LESSONS.md#l477), és a sáv **harmadik** érintési-cél
+  lelete ([L496](docs/LESSONS.md#l496)). Javítva: a cella az
+  `IconButton.constraints`-re mér, bizonyítottan piros `32.0`-nál és `null`-nál.
+- **MAJOR-2** (a javító kör vezette be) — a `_saveCopy` hiba-ága
+  `controller.load(id)`-t hívott, ami a **draftot is** felülírta:
+  `"My careful rename"` → `"Legacy Song"`, `createCalls = 0`. Ez az
+  [ADR 0284](docs/adr/0284-import-preview-is-not-a-commit.md) §Döntés 4 tiltott
+  néma munkavesztése. Javítva: a másolat validációja a controller érintése ELŐTT
+  fut, a draft egyik ágon sem íródik felül.
+
+**Evidencia.** A reviewer `tools/round-gate.sh` futása **20/20 ZÖLD, 97 teszt** —
+HÁROM különböző, friss izolált `/tmp` klónban, nem az implementer kimenetének
+elfogadásával. A gate sora **először tartalmazta a fa-szintű őröket** (a
+`57b18ccb` PR #458 munkája): `architecture_dependency` (+44), `dio` /
+`preferences` / `route_literal` guard, plusz a NÉGY listán kívüli pin-teszt,
+amit az `S11` tett a listákra — mind zöld, azaz a helyben-migráció tartotta a
+típusneveket és útvonalakat. Scope-audit: `OK (21 changed path, 1
+generated/ignored)`.
+
+**A kör merge-e egy GITHUB-INCIDENSEN akadt meg (H5), nem a fán.** A GitHub
+Actions 15:48-tól `major_outage`; a merge SHA-n a Full Gate ~40 percig QUEUED
+maradt runner nélkül, a Router CI pedig **magától az incidenstől** lett piros:
+788 passed / **4 failed**, mind a négy a
+`tools/tests/test_pipeline_integration.py` self-heal celláiban, mert a driver
+GitHub-incidens őre (`github_actions_degraded`) ÉLŐ HTTP-hívás, és incidens
+alatt rövidre zárja épp azt az ágat, amit ezek a cellák mérnek. A kör diffje ezt
+a fájlt nem is érintette. **Gyökérok-javítás:** PR
+[#467](https://github.com/wolfcasaba/strumsight/pull/467) (`19f6e684`) — a suite
+`run_command`-ja `setdefault`-tal állítja a driver már meglévő
+`PIPELINE_STATUS_CHECK=0` kikapcsolóját, plusz két új cella (hamisított
+`major_outage` alatt is mérhető self-heal ág; explicit `"1"` visszahozza az őrt).
+A kör ága ezt a §0.3 upstream-szinkronnal vette át, és az új HEAD-en **mindkét
+kapu zöld**. Lecke: [L500](docs/LESSONS.md#l500).
+
+**Nyitva hagyva (szándékosan).** NOTE-1 expanded több-paneles elrendezés
+(follow-up), NOTE-2 az A1/A2 az application réteget méri, NOTE-3
+`DateTime.now()` a presentationben — egyik sem blokkol.
+
 ## ✅ E13-R23 KÉSZ — Song Library, Overview és Setlist lista UI — PR [#465](https://github.com/wolfcasaba/strumsight/pull/465), squash `44b42a9d` (2026-08-26)
 
 Az UI-24–UI-25 és UI-32 Songs-tartalmak migrációja (SDD Ch13 Kör 23). A kör
