@@ -1,13 +1,15 @@
 # E13-R24 — Song import, preview és editor UI
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 74f8a8ec`)
+- **Státusz:** READY (pre-flight 2026-08-26, `main @ 3b88f757` — lásd §0.0/B;
+  előre megírva 2026-08-15, kód olvasva: `main @ 74f8a8ec`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 24
 - **Kör-azonosító:** `E13-R24`
 - **Branch:** `<motor>/e13-r24-song-import-and-editor`
 - **Előfeltétel:** `E13-R23` merge-elve (dal-könyvtár)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** [`0284`](../adr/0284-import-preview-is-not-a-commit.md)
-  — **a Claude írja meg a kör indításakor; a `docs/adr/` a TILOS zónában van.**
+  — **MÁR MERGE-ELT (elfogadva, 2026-08-15): ez a kör ADR-t NEM ír** (§0.0/B/R5).
+  A foglaló `0429`-et adott: kiosztott, de fel nem használt szám.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el a TÉNYLEGES import-
 > csővezeték kimenetét (figyelmeztetés és blokkoló hiba típusai, ideiglenes
@@ -18,8 +20,15 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "lib/features/songs/import/",
-  "lib/features/songs/editor/",
+  "lib/features/song_trainer/presentation/screens/song_import_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_editor_screen.dart",
+  "lib/features/song_trainer/presentation/widgets/import_warning_list.dart",
+  "lib/features/song_trainer/presentation/widgets/song_metadata_editor.dart",
+  "lib/features/song_trainer/presentation/widgets/song_section_editor.dart",
+  "lib/features/song_trainer/presentation/widgets/song_event_editor.dart",
+  "lib/features/song_trainer/presentation/widgets/measure_grid.dart",
+  "lib/features/song_trainer/presentation/widgets/backing_asset_editor.dart",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
   "lib/l10n/app_en.arb",
@@ -40,6 +49,11 @@ gate_tests = [
   "test/features/songs/import/editor_keyboard_flow_test.dart",
   "test/ui/goldens/e13_r24_screens_golden_test.dart",
   "test/ui/ui_inventory_test.dart",
+  "test/features/song_trainer/presentation/song_import_screen_test.dart",
+  "test/features/song_trainer/presentation/song_import_preview_screen_test.dart",
+  "test/features/song_trainer/presentation/song_editor_screen_test.dart",
+  "test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart",
+  "test/app/routing/app_router_test.dart",
   "test/core/architecture_dependency_test.dart",
   "test/tooling/dio_factory_guard_test.dart",
   "test/tooling/preferences_plugin_import_guard_test.dart",
@@ -151,6 +165,187 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0/B BRIEF-REVÍZIÓ — 2026-08-26, kör-indító pre-flight (`main @ 3b88f757`)
+
+A fenti §0.0 a 2026-08-25-i sáv-szintű batch pre-flight terméke; ez a szakasz
+a kör TÉNYLEGES indítása előtt, a fán mérve írja felül. Mérés-eszközök: `find`,
+`grep -rn`, `git grep`, a `docs/rounds/e03-r1[456]-*.md` merge-elt
+`allowed_paths` blokkjai, és `tools/round-slots.py reserve-adr`.
+
+**Visszakeresett előzmény** (ADR 0312, `node tools/knowledge-rag.mjs`,
+szűkített → teljes sorrendben): [L493](../LESSONS.md#l493) + [L486](../LESSONS.md#l486)
++ [ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md) — a
+golden-raszterizációt a merge-kapu architektúráján kell felvenni (R9);
+[L488](../LESSONS.md#l488) — a listán kívüli pin-tesztek HELYBEN maradnak, a
+képernyő helyben migrál (R7); [L477](../LESSONS.md#l477) — mérd a cella BUKÁSI
+képességét, ne csak a zöldjét (R8/R10); [L463](../LESSONS.md#l463) — a briefben
+PONTOSAN EGY `ai-router` blokk lehet, ezért a fenti blokk **helyben**
+íródott át, nem mellé.
+
+### R5 — az ADR `0284` MÁR MERGE-ELT: ez a kör ADR-t NEM ír
+
+A fejléc „a Claude írja meg a kör indításakor" mondata elavult. Mérve:
+`docs/adr/0284-import-preview-is-not-a-commit.md` a fán van, státusza
+**elfogadva**, dátuma 2026-08-15, és a §5 mind a hat kötött döntése SZÓ SZERINT
+ennek az ADR-nek a Döntés 1–6 pontja. Merge-elt ADR átírása **H1** (ADR 0087 §2),
+ezért a kör ADR-t nem ír. A foglaló (`tools/round-slots.py reserve-adr --round
+E13-R24`) **`0429`**-et adott — kiosztott, de FEL NEM HASZNÁLT szám marad,
+pontosan úgy, mint az E13-R22 `0428`-a. A sávon ez a **hetedik** ADR nélküli
+kör egymás után (E13-R17…R24).
+
+### R6 — a brief KÉT megnevezett könyvtára a fán NEM LÉTEZIK (H3-osztály, útvonalcsere)
+
+```
+find lib/features/songs -type d      → application data model providers screens theory widgets
+```
+
+`lib/features/songs/import/` és `lib/features/songs/editor/` **nincs a fán** —
+az eredeti `allowed_paths` tehát **nulla létező fájlt** fedett, és a §0.0/R1
+„a képernyőket ez a kör hozza létre, tehát MINDEN szövege új" állítása MÉRVE
+hamis. Ez az [L497](../LESSONS.md#l497) hibaosztály **harmadik** előfordulása
+ugyanezen a sávon (E13-R22/R6, E13-R23/B, most R6); a `brief-lint --level
+strict` ismét „nincs lelet"-et adott.
+
+A három célfelület a `song_trainer` **presentation** rétegében él, mind a három
+LÉTEZIK és ma zöld:
+
+| Felület | Tényleges fájl | Sor |
+|---|---|---|
+| Import folyamat | `lib/features/song_trainer/presentation/screens/song_import_screen.dart` | 97 |
+| Import előnézet | `…/screens/song_import_preview_screen.dart` | 61 |
+| Szerkesztő | `…/screens/song_editor_screen.dart` | 282 |
+
+A csere a merge-elt, **user-jóváhagyott** E03-R15 és E03-R16 briefek
+`allowed_paths` literáljainak valódi RÉSZHALMAZA (mindkét lista tartalmazza
+mind a három képernyőt és mind az öt szerkesztő-widgetet; a kör az
+`application/`, `domain/`, `data/`, `app/routing/`, `public.dart` és
+`pubspec.*` bejegyzéseiket **NEM** veszi át — azok olvashatók, de nem
+írhatók). A `guitar_pro_conversion_guidance.dart` szándékosan kimarad: a
+`guitar_pro_conversion_guidance_test.dart` pinneli, és a kör nem nyúl hozzá.
+
+### R7 — négy, a listán KÍVÜLI pin-teszt: a képernyők HELYBEN migrálnak
+
+```
+grep -rln "SongImportScreen\|SongImportPreviewScreen\|SongEditorScreen" test/
+```
+
+- `test/features/song_trainer/presentation/song_import_screen_test.dart`
+- `test/features/song_trainer/presentation/song_import_preview_screen_test.dart`
+- `test/features/song_trainer/presentation/song_editor_screen_test.dart`
+- `test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart`
+- `test/app/routing/app_router_test.dart` (`findsOneWidget` a `SongEditorScreen`-re, 3 helyen)
+
+Ez az [L488](../LESSONS.md#l488) **hatodik** alkalmazása: a képernyők HELYBEN
+migrálnak — típusnév, fájl-útvonal, konstruktor-szignatúra
+(`SongImportScreen()`, `SongImportPreviewScreen({required preview})`,
+`SongEditorScreen({required songId})` + `.newDocument()`) és
+route-regisztráció **változatlan**. A pin-tesztek a `gate_tests`-be kerültek
+(futnak), de az `allowed_paths`-ra **NEM** — nem szerkeszthetők.
+
+**MÉRT, kemény pinek, amiket a migráció nem törhet el:**
+
+| Pin | Hol |
+|---|---|
+| `find.text('Choose a file')` | import screen |
+| `find.text('Import song')`, `find.text('File size: 3 bytes')` | preview |
+| **`tester.widget<FilledButton>(find.byType(FilledButton))`** — a preview-n PONTOSAN EGY `FilledButton` lehet | preview |
+| `Key('song-editor-save' \| '-measure' \| '-chord' \| '-add-chord' \| '-tempo' \| '-set-tempo' \| '-meter-numerator' \| '-set-meter' \| '-note' \| '-add-note' \| '-attach-backing')` | editor |
+
+A `find.byType(FilledButton)` pin miatt a preview megerősítő gombja `FilledButton`
+marad, és a képernyő **nem kaphat második `FilledButton`-t** (`SsButton` sem, ha
+az `FilledButton`-t épít).
+
+### R8 — a `fatal.` előtagú előnézet-figyelmeztetésnek NINCS PRODUCERE (ADR 0087 §1/1. mérési szabály)
+
+A §6.1 „blokkoló hiba" cellája ma a `song_import_preview_screen.dart:18`
+`warning.startsWith('fatal.')` predikátumára épül. Megmérve, **melyik input
+produkálja**:
+
+```
+grep -rn "fatal\." lib/features/song_trainer/   → 2 találat, MINDKETTŐ a predikátum maga
+grep -n "static const String" …/importers/*.dart → songImport.<formátum>.<kód>, egyetlen `fatal.` sem
+```
+
+**Egyetlen production importer sem ad `fatal.` előtagú probe-figyelmeztetést.**
+A `fatal.unsupported` literált KIZÁRÓLAG a pin-teszt gyártja szintetikusan. A
+valódi blokkoló út MÁS: az elemző kivétele `ImportRegistryException` →
+`SongImportController._failure(...)` → `SongImportPhase.failure` +
+`state.failureCode` (`songImport.musicXml.doctypeForbidden`,
+`songImport.midi.invalidHeader`, `songImport.native.sourceTooLarge`,
+`songImport.native.unsupportedFormatVersion`, …), illetve
+`confirmPreview()`-ban a `capability.canPersist == false` →
+`'songImport.validationFailed'`.
+
+Ezért az **A3/A4 MINDKÉT blokkoló producerre mér**, és a §6.1 táblája
+ennek megfelelően íródik át (lásd lent). A `fatal.` ág **NEM törölhető** (a pin
+rá támaszkodik), de önmagában nem elég bizonyíték.
+
+### R9 — a golden felvétele a MERGE-KAPU architektúráján (ADR 0426)
+
+A §7 `~/flutter/bin/flutter test --update-goldens` sora **elavult és tiltott**
+ezen az aarch64 boxon: pontosan ez adta az E13-R17 két vak javító körét és az
+E13-R20 **H5 haltját** ([L493](../LESSONS.md#l493), [L486](../LESSONS.md#l486)).
+Érvényes parancs:
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r24_screens_golden_test.dart
+```
+
+A PNG-k a `test/ui/goldens/goldens/` alá kerülnek (a `test/ui/goldens/`
+listaelem fedi). Minta és futó precedens:
+`test/ui/goldens/e13_r23_screens_golden_test.dart` (`AppTheme.dark()`, 412×915,
+`devicePixelRatio: 1.0`, `textScaler` 1.0 és 2.0).
+
+### R10 — az A6 „csak olvasható forrás" tengelye: a MÉRT predikátum a `canPersist`
+
+`grep -rn "canPersist" lib/features/song_trainer/presentation/` → a zár ma a
+**könyvtárban** él (`song_library_screen.dart:199-206`, E13-R23): a
+`summary.capability?.canPersist == false` sor megtekintő-módba terel a
+szerkesztő HELYETT. A `SongEditorState` **nem hordoz** capability-t, és a
+`SongEditorController.load()` **nem validál** — a szerkesztő tehát ma vakon
+szerkeszthetőnek tekint mindent, amit közvetlen route-tal (deep link) érnek el.
+
+A `canPersist` MÉRT definíciója (`song_capability_resolver.dart:53-55`):
+`final hasFatal = report.hasFatalIssue; final canPersist = !hasFatal;` — tehát
+ugyanaz a predikátum, amit a könyvtár használ. A szerkesztő ezt a saját,
+listán lévő fájljában, a merge-elt, framework-független `SongValidator` +
+`SongCapabilityResolver` domain-szolgáltatásokból számolja ki (a presentation →
+`domain/services/**` irányra a `test/core/architecture_dependency_test.dart`
+és a `tool/check_architecture.dart` **nem tartalmaz tiltó szabályt** — mérve).
+
+**Az A6 pontosan ennyit állít, többet nem:** `canPersist == false` esetén a
+Save le van tiltva, és az EGYETLEN felkínált írási út a **másolat**
+(`controller.startNew(...)` ÚJ `SongId`-val és
+`SongSource(type: SongSourceType.createdInApp)`-pal), az eredeti dokumentum
+pedig a tárolóban **változatlan** marad. A másolat érvényességéről a felület
+**nem tesz ígéretet** — a másolat mentése újra validál.
+
+### R11 — az A5 producere mérve: a `save()` a piszkozatot NEM dobja el
+
+`song_editor_controller.dart:414-424`: hiba esetén `_state.copyWith(status:
+failure|conflict, failureCode: …)` — a `draft` mező **érintetlen**. Az A5 tehát
+nem a controller javítása, hanem a **felület** dolga: a hibát nevesítve
+megmutatni ÉS a szerkesztett tartalmat a képernyőn tartani. A cella BUKÁSI
+képessége ([L477](../LESSONS.md#l477)): ha a felület a hibaágon
+`controller.discard()`-ot hívna vagy üres állapotot renderelne, az A5-nek
+pirosra kell váltania.
+
+### R12 — az A2 producere mérve: az `ImportWorkspace` CSAK a `confirmPreview()`-ban nyílik
+
+`song_import_controller.dart:135-144` — a munkakönyvtár az előnézet
+MEGERŐSÍTÉSEKOR nyílik, `_finish()` (256-296) pedig minden terminális ágon
+`_closeWorkspace`-t hív. Az A2 cellája ezért a **beinjektált**
+`workspaceRoot: () async => <temp dir>` fölött mérhető: a megszakítás után a
+temp könyvtár listája ÜRES.
+
+### R13 — a képernyő-leltár NEM mozdul: `hasLength(86)` marad
+
+A kör mind a három képernyőt HELYBEN migrálja, ÚJ `lib/features/**/*_screen.dart`
+fájlt **nem hoz létre** (R7). A `test/ui/ui_inventory_test.dart` a listán marad
+(a §0.0/R4 jogosultsága érvényben), de a **várt diffje ÜRES** — ha az implementer
+ezt a fájlt módosítani kényszerül, az azt jelenti, hogy új képernyőt hozott, ami
+a HELYBEN-migráció megsértése: `stopped` jelzés és jelentés.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -190,10 +385,16 @@ módosítása · a biztonsági ellenőrzések gyengítése · a tréner (Kör 25
 
 ## 4. Engedélyezett fájlok
 
+> **A §0.0/B/R6 felülírja az alábbi két első sort** — a `songs/import/` és
+> `songs/editor/` könyvtár a fán nem létezik; az érvényes lista a fenti
+> `ai-router` blokk.
+
 | Útvonal | Indok |
 |---|---|
-| `songs/import/` | az import és az előnézet felülete |
-| `songs/editor/` | a szerkesztő |
+| `song_trainer/presentation/screens/song_import_screen.dart` | az import folyamat felülete (§0.0/B/R6) |
+| `song_trainer/presentation/screens/song_import_preview_screen.dart` | az előnézet (§0.0/B/R6) |
+| `song_trainer/presentation/screens/song_editor_screen.dart` | a szerkesztő (§0.0/B/R6) |
+| `song_trainer/presentation/widgets/{import_warning_list,song_metadata_editor,song_section_editor,song_event_editor,measure_grid,backing_asset_editor}.dart` | a két felület saját widgetjei (a merge-elt E03-R15/R16 listák részhalmaza) |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — az import- és hibaszövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/songs/import/*_test.dart` (4) | a §6 cellái |
@@ -251,10 +452,10 @@ A szakaszok átrendezése nem köthető kizárólag húzáshoz — motorikusan k
 |---|---|---|
 | A1 | Az előnézet nem hoz létre tartós rekordot és nem publikál | `import_flow_test.dart` |
 | A2 | A megszakított import után nem marad ideiglenes fájl | ugyanott |
-| A3 | A blokkoló hiba nem kerülhető meg | `import_blocking_error_test.dart` |
-| A4 | A figyelmeztetés és a blokkoló hiba vizuálisan elkülönül | ugyanott |
-| A5 | A piszkozat mentési hiba után is megmarad | `editor_draft_test.dart` |
-| A6 | Csak olvasható forrásból csak másolat készíthető | ugyanott |
+| A3 | A blokkoló hiba nem kerülhető meg — **MINDKÉT mért producerre** (§0.0/B/R8): (a) `fatal.` előtagú előnézet-lelet → a megerősítés letiltva; (b) `SongImportPhase.failure` + `failureCode` → a felület nevesíti a hibát, és **nincs rajta „folytasd mindenképp" affordancia** | `import_blocking_error_test.dart` |
+| A4 | A figyelmeztetés és a blokkoló hiba vizuálisan ÉS szemantikusan elkülönül (külön ikon, külön szemantikai címke, külön szín-szerep) | ugyanott |
+| A5 | A piszkozat mentési hiba után is megmarad — a hiba **nevesítve látszik**, és a szerkesztett tartalom a képernyőn marad (§0.0/B/R11) | `editor_draft_test.dart` |
+| A6 | `canPersist == false` esetén a Save letiltva, és az EGYETLEN írási út a másolat (ÚJ `SongId` + `createdInApp` forrás); az eredeti dokumentum a tárolóban változatlan (§0.0/B/R10) | ugyanott |
 | A7 | Az átrendezés billentyűvel/gombbal is elvégezhető | `editor_keyboard_flow_test.dart` |
 | A8 | A mentetlen kilépés következménye szövegben megjelenik | `editor_draft_test.dart` |
 | A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r24_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
@@ -271,22 +472,40 @@ A szakaszok átrendezése nem köthető kizárólag húzáshoz — motorikusan k
 | Csak húzással átrendezhető szakaszok | **A7** |
 | A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
-**Az elemző-lelet három kötelező cellája** (a küszöb: a lelet súlyossága):
+**Az elemző-lelet három kötelező cellája — MÉRT bemenetekkel** (§0.0/B/R8; a
+„küszöb" a lelet súlyossága, a bemenet MINDIG a fán létező producer):
 
-| Cella | Bemenet | Elvárt |
+| Cella | MÉRT bemenet | Elvárt |
 |---|---|---|
-| a küszöb alatt | tájékoztató lelet | látszik, az import folytatható |
-| rajta (a küszöbön) | **figyelmeztetés** | látszik, kiemelten; az import **folytatható** megerősítéssel |
-| a küszöb fölött | **blokkoló hiba** | az import **nem folytatható** — nincs megkerülő út |
+| a küszöb alatt | `ImportProbeResult.recognized(warnings: const <String>[])` → `preview.warnings.isEmpty` | nincs lelet-régió; a megerősítés **engedélyezett** |
+| rajta (a küszöbön) | `warnings: <String>['songImport.musicXml.timingQuantized']` (valódi `MusicXmlMapWarningCode` konstans, nem `fatal.` előtagú) | a lelet **kiemelten** látszik figyelmeztetésként; a megerősítés **engedélyezett** |
+| a küszöb fölött (a) | `warnings: <String>['fatal.unsupported']` | a megerősítés **letiltva**; nincs megkerülő út |
+| a küszöb fölött (b) | `SongImportPhase.failure` + `failureCode: 'songImport.musicXml.doctypeForbidden'` | a hiba **nevesítve** látszik; a képernyőn **nulla** megerősítő/„folytasd" affordancia van |
+
+**Az A7 érintési-cél küszöbének három cellája** (küszöb: **48,0 dp**,
+ADR 0280 §Döntés 5; a cellák `python3 -c`-vel számolva: `48.0-1 = 47.0`,
+`48.0`, `48.0+8 = 56.0`):
+
+| Cella | Bemenet (az átrendező gomb mért `tester.getSize(...)`) | Elvárt |
+|---|---|---|
+| a küszöb alatt | `47.0` | a cella **PIROS** (`Expected: >= 48.0`) |
+| rajta (a küszöbön) | `48.0` | zöld — a küszöb INKLUZÍV |
+| a küszöb fölött | `56.0` | zöld |
+
+A cella a **szabályra** mérjen, ne egyetlen konkrét widgetre
+([L496](../LESSONS.md#l496)): a szerkesztő MINDEN átrendező affordanciáját
+járja végig.
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** kezeld a blokkoló
-hibát figyelmeztetésként → az **A3** cellának PIROSNAK kell lennie → állítsd
-vissza.
+hibát figyelmeztetésként (a `fatal.` ág letiltását vedd ki, illetve a `failure`
+fázisra tegyél vissza egy megerősítő gombot) → az **A3** MINDKÉT cellájának
+PIROSNAK kell lennie → állítsd vissza. A próbát a `+N -M` diffel és a piros
+cellák nevével dokumentáld.
 
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/songs/import/import_flow_test.dart test/features/songs/import/import_blocking_error_test.dart test/features/songs/import/editor_draft_test.dart test/features/songs/import/editor_keyboard_flow_test.dart test/ui/goldens/e13_r24_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/songs/import/import_flow_test.dart test/features/songs/import/import_blocking_error_test.dart test/features/songs/import/editor_draft_test.dart test/features/songs/import/editor_keyboard_flow_test.dart test/ui/goldens/e13_r24_screens_golden_test.dart test/ui/ui_inventory_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/features/song_trainer/presentation/song_editor_screen_test.dart test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart test/app/routing/app_router_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
@@ -295,8 +514,12 @@ keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
 KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
+> ⚠ **§0.0/B/R9 felülírja az alábbi parancsot.** Az `--update-goldens` ezen az
+> **aarch64** boxon TILOS (ADR 0426, [L493](../LESSONS.md#l493)): a felvétel a
+> merge-kapu **x86_64** architektúráján történik.
+
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r24_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r24_screens_golden_test.dart
 ```
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
@@ -318,9 +541,14 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 3. A lelet-súlyosság három cellája (tájékoztató / figyelmeztetés / blokkoló).
 4. A szerkesztő compact és expanded elrendezése.
 5. A piszkozat megőrzése mentési hiba után + a csak olvasható másolás.
-6. Billentyűs/gombos átrendezés.
-7. A valódi-sértés próba, §10-be dokumentálva.
-8. `tools/round-gate.sh` a §7 szerint.
+6. Billentyűs/gombos átrendezés (a meglévő fel/le `IconButton`-pár marad a
+   mérce, érintési cél **≥ 48 dp** — ADR 0280 §Döntés 5; ezt a hibaosztályt a
+   sáv már KÉTSZER fizette ki (E13-R20/MAJOR-1, E13-R21/MAJOR-2), ezért az
+   A7 cellája a **méretet is** mérje, ne csak a működést).
+7. Golden felvétele: `tools/golden-x86.sh record …` (§7, §0.0/B/R9), a PNG-ket
+   commitolni.
+8. A valódi-sértés próba, §10-be dokumentálva.
+9. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 
