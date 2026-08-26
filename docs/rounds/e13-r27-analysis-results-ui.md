@@ -758,4 +758,120 @@ tools/round-gate.sh test/features/analyze/results/metric_missing_test.dart test/
 is), architecture, secrets, l10n. `ui_inventory` `hasLength(89)` VÁLTOZATLAN
 (a kör nem hozott új `*_screen.dart`-ot, §0.0/B/B4 szerint várt).
 
+### 10.7 Javító kör (review F1–F4)
+
+A review (`docs/reviews/e13-r27-review.md`) egy MAJOR-t (F1) és két MINOR-t
+(F2, F3) adott kötelezőnek, plusz egy opcionális NOTE-ot (F4). Mind a négy
+zárva.
+
+**F1 (MAJOR) — `ss_event_list.dart:33-34,55-57`.** A `SsEventList` magassága
+eddig fix `220` volt, függetlenül a sorok számától — egy hotspotos
+golden-fixtúrán ez `220 − 48 = 172 px` halott helyet hagyott. A javítás:
+
+```dart
+final boundedHeight = math.min(height, rows.length * rowExtent);
+```
+
+`height` mostantól FELSŐ korlát, a doboz sosem foglal többet, mint
+`rows.length * rowExtent`. A `ListView.builder` + `itemExtent` VÁLTOZATLAN — a
+virtualizáció nem sérült, a `shrinkWrap: true` továbbra sincs bevezetve (a
+`boundedHeight` építéskor, nem layout-időben számolt, tehát a `ListView`-nak
+nem kell minden gyereket megmérnie). A goldeneket újravettem:
+
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r27_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r27_screens_golden_test.dart
+```
+
+Mindkettő zöld. Csak a két idővonal-golden változott
+(`git status --short test/ui/goldens/` →
+`e13_r27_analysis_timeline_compact.png`,
+`e13_r27_analysis_timeline_compact_scale2.png`; az overview/compare/metric
+detail PNG-k érintetlenek, mert azok nem ágyazzák be `SsEventList`-et) —
+vizuálisan ellenőrizve: az esemény-lista doboza most az egyetlen fixtúra-sor
+magasságára simul, a leírás és a hotspot-navigációs gombok közötti üres blokk
+eltűnt.
+
+**F2 (MINOR) — `timeline_virtualization_test.dart`.** A meglévő A4 cella (a
+mountolt `event-list-row-*` Semantics-widgetek száma < 30) a review mérése
+szerint a mohó `ListView(children: [...])` alakon is zöld maradt, mert az a
+delegátum is csak a viewportban lévő gyerekeket *mountolja* — a rés a widget
+mohó *allokálása*, nem a mountolás. Felvettem egy MÁSODIK állítást ugyanabba
+a tesztbe, ami a delegátum TÍPUSÁRA zár:
+
+```dart
+final eventList = tester.widget<ListView>(
+  find.byKey(const Key('timeline-hotspot-event-list')),
+);
+expect(eventList.childrenDelegate, isA<SliverChildBuilderDelegate>());
+```
+
+**Mérés (eldobható próba, visszaállítva).** `ss_event_list.dart`-ban
+ideiglenesen lecseréltem a `ListView.builder`-t a mohó
+`ListView(children: [for (final row in rows) …])` alakra, és lefuttattam:
+
+```
+$ flutter test test/features/analyze/results/timeline_virtualization_test.dart
+00:01 +0 -1: … Expected: <Instance of 'SliverChildBuilderDelegate'>
+              Actual: SliverChildListDelegate:<SliverChildListDelegate#…
+              (estimated child count: 3000)>
+```
+
+Az új cella PIROS a tiltott alakon — a szállított
+implementáción (`ss_event_list.dart` `git diff` a próba után tiszta,
+`/tmp/sel.bak.dart`-ból visszaállítva) az egész fájl **5/5 ZÖLD**.
+
+**F3 (MINOR) — `analysis_timeline_screen.dart:176-208`.** `_hotspotEventList`
+korábban hotspotonként KÉTSZER hívta a `_hotspotSemanticsLabel`-t azonos
+argumentumokkal (`label:` és `semanticLabel:` külön hívással). Kivezettem egy
+`_hotspotEventListRow` segédmetódusba, ami a címkét EGYSZER számolja és
+mindkét mezőnek ugyanazt adja át:
+
+```dart
+SsEventListRow _hotspotEventListRow(
+  AppLocalizations l10n, {
+  required int index,
+  required int count,
+  required AnalysisHotspot hotspot,
+  required TimelineViewport viewport,
+}) {
+  final label = _hotspotSemanticsLabel(l10n, index: index + 1, count: count, hotspot: hotspot);
+  return SsEventListRow(
+    id: hotspot.id,
+    label: label,
+    semanticLabel: label,
+    onTap: () => _selectHotspotRange(hotspot, viewport),
+  );
+}
+```
+
+**F4 (NOTE, opcionális) — `ss_score_ring.dart:44-46`.** Felvettem egy
+szerkezeti asszertet a `measured` ág elé:
+
+```dart
+assert(
+  state != SsScoreRingState.measured || ratio != null,
+  'SsScoreRingState.measured requires a non-null ratio',
+);
+```
+
+A mai egyetlen hívó (`signal_quality_card.dart`) nem-nullable `ratio`-t ad
+át, tehát az assert ma sosem lő — csak egy jövőbeli `measured` +
+`ratio: null` kombinációt zár ki szerkezetileg, ADR 0286 §1 szerint.
+
+**Zárókapu — ugyanaz a parancs, csővezeték nélkül, MINDEN GATE ZÖLD** (a
+kilenc pin-teszt is, változatlanul, szerkesztés nélkül):
+
+```
+tools/round-gate.sh test/features/analyze/results/metric_missing_test.dart test/features/analyze/results/timeline_virtualization_test.dart test/features/analyze/results/chart_semantics_test.dart test/features/analyze/results/compare_compatibility_test.dart test/features/audio_analysis/presentation/ test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+`format` zöld · `analyze` zöld (0 issue) · mind a 11 teszt-útvonal zöld (a
+`test/features/audio_analysis/presentation/` 57/57, változatlanul) ·
+`architecture` zöld (12 allowlistelt eltérés, változatlan) · `secrets` zöld
+(3788 fájl, 0 lelet) · `l10n` zöld (en→hu, 2041 üzenet).
+
+F5-höz nincs teendő (tilos zóna, nem e kör defektje — a `[7]` gate-sáv itt is
+57/57 zölden futott).
+
 ## 11. Review — a Claude tölti ki

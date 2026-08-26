@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// One row of [SsEventList]. [label] is the already-localised visible text;
@@ -19,13 +21,15 @@ final class SsEventListRow {
 }
 
 /// Bounded-height, lazily-built, navigable alternative to a chart (ADR 0286
-/// §3: "bejárható esemény-lista alternatíva"). The height is fixed (not
-/// `shrinkWrap: true`) on purpose: `shrinkWrap` forces `ListView` to lay out
-/// every child up front to measure its own extent, which defeats
-/// virtualisation for exactly the large-fixture case this round exists to
-/// fix. A fixed height plus a fixed [rowExtent] means [ListView.builder]
-/// only ever builds the rows inside the viewport plus its cache extent,
-/// independent of [rows].length.
+/// §3: "bejárható esemény-lista alternatíva"). The height is capped at
+/// [height] (not `shrinkWrap: true`) on purpose: `shrinkWrap` forces
+/// `ListView` to lay out every child up front to measure its own extent,
+/// which defeats virtualisation for exactly the large-fixture case this
+/// round exists to fix. The cap plus a fixed [rowExtent] means
+/// [ListView.builder] only ever builds the rows inside the viewport plus its
+/// cache extent, independent of [rows].length — a short [rows] simply gets a
+/// shorter box (`rows.length * rowExtent`) instead of leaving dead space
+/// below it.
 final class SsEventList extends StatelessWidget {
   const SsEventList({
     super.key,
@@ -48,12 +52,17 @@ final class SsEventList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodySmall;
+    // Capped by content so a short row count doesn't leave dead space below
+    // it up to [height]; the cap is an upper bound only, so a large [rows]
+    // still stops growing at [height] and stays lazily built by
+    // [ListView.builder] below.
+    final boundedHeight = math.min(height, rows.length * rowExtent);
     return Semantics(
       container: true,
       explicitChildNodes: true,
       label: semanticLabel,
       child: SizedBox(
-        height: height,
+        height: boundedHeight,
         child: ListView.builder(
           key: scrollableKey,
           itemExtent: rowExtent,

@@ -184,23 +184,35 @@ final class _AnalysisTimelineScreenState extends State<AnalysisTimelineScreen> {
       semanticLabel: l10n.analysisTimelineHotspotList(hotspots.length),
       rows: <SsEventListRow>[
         for (final (index, hotspot) in hotspots.indexed)
-          SsEventListRow(
-            id: hotspot.id,
-            label: _hotspotSemanticsLabel(
-              l10n,
-              index: index + 1,
-              count: hotspots.length,
-              hotspot: hotspot,
-            ),
-            semanticLabel: _hotspotSemanticsLabel(
-              l10n,
-              index: index + 1,
-              count: hotspots.length,
-              hotspot: hotspot,
-            ),
-            onTap: () => _selectHotspotRange(hotspot, viewport),
+          _hotspotEventListRow(
+            l10n,
+            index: index,
+            count: hotspots.length,
+            hotspot: hotspot,
+            viewport: viewport,
           ),
       ],
+    );
+  }
+
+  SsEventListRow _hotspotEventListRow(
+    AppLocalizations l10n, {
+    required int index,
+    required int count,
+    required AnalysisHotspot hotspot,
+    required TimelineViewport viewport,
+  }) {
+    final label = _hotspotSemanticsLabel(
+      l10n,
+      index: index + 1,
+      count: count,
+      hotspot: hotspot,
+    );
+    return SsEventListRow(
+      id: hotspot.id,
+      label: label,
+      semanticLabel: label,
+      onTap: () => _selectHotspotRange(hotspot, viewport),
     );
   }
 

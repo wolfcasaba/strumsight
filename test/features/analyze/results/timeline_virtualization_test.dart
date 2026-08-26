@@ -165,6 +165,25 @@ void main() {
           find.text('Hotspot 2999 of $_hotspotCount: timing, medium'),
           findsNothing,
         );
+
+        // The built-count ceiling above also passes on an eagerly-built
+        // `ListView(children: [...])` — its viewport still only *mounts*
+        // the rows in view, even though every row *widget* was allocated
+        // up front. Pin the delegate type itself so that regression is
+        // caught even though it wouldn't move the built-row count.
+        final eventList = tester.widget<ListView>(
+          find.byKey(const Key('timeline-hotspot-event-list')),
+        );
+        expect(
+          eventList.childrenDelegate,
+          isA<SliverChildBuilderDelegate>(),
+          reason:
+              'the event list must build rows lazily via a '
+              'SliverChildBuilderDelegate (ListView.builder); a delegate '
+              'that allocates every row widget up front (e.g. '
+              'ListView(children: [...])) defeats virtualization even '
+              'though the viewport still mounts only the visible rows',
+        );
       },
     );
 

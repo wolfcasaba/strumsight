@@ -39,6 +39,10 @@ final class SsScoreRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    assert(
+      state != SsScoreRingState.measured || ratio != null,
+      'SsScoreRingState.measured requires a non-null ratio',
+    );
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final fraction = state == SsScoreRingState.measured
