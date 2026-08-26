@@ -19132,3 +19132,97 @@ védelem a workflow-szövegbe került: `HANDOFF.md` §6 és a
 megvan és működött: a `scope_audit` pontosan megnevezte a fájlt, és az
 `implementer_status=done` + `status=stopped` ellentmondás elárulta, hogy a
 lelet nem a kör diffjéből jön.
+
+## L495 — Egy AKTÍV session felületére tett „segítő" belépő ŐRIZETLEN adatvesztési kijárattá válik, és a kör SAJÁT acceptance-cellája elvárásként PINNELI a bypasst (E13-R21, review, 2026-08-26)
+
+**A mérés.** Az E13-R21 a gyakorló-session felületére readiness-sort tett,
+benne egy „Tuning not measured →" belépővel, ami a Tunerre navigál. A kör
+UGYANEBBEN a fájlban megírta a helyes kijáratot is: `_requestExit`
+(`practice_session_screen.dart:255`) a `practiceExitNeedsConfirmation` táblát
+nézi, `barrierDismissible: false` dialógust nyit, és a szövege
+következmény-központú („Exiting now discards this session's progress…",
+[ADR 0279](adr/0279-consequence-first-confirmations.md) §1). A belépő viszont
+`context.go`-t hívott — **replace**, nem `push`. A reviewer eldobható próbája
+`running` állapotban, a belépőre koppintva:
+
+```
+PROBE P1: dialogs=0 sheets=0 alerts=0 commandsSent=() leftSession=true
+```
+
+Nulla megerősítés, nulla parancs a session felé, a session megszűnt és
+vissza sem érhető el — pontosan az az adatvesztés, amit a kör §9-e „a
+leggyakoribb adatvesztési út"-ként nevesít.
+
+**A csapda nem a hiba, hanem az, hogy a mérce VÉDTE.** A kör A6 cellája
+(`session_transitions_test.dart`, „tapping the tuning entry navigates to
+AppRoutes.practiceTuner") pontosan azt állította ELVÁRÁSKÉNT, hogy a koppintás
+futó sessionből KÖZVETLENÜL a Tunerre visz. A gate 18/18, a presentation-suite
+173/173, a hat golden és MINDKÉT exact-SHA CI-kapu zöld volt. Egy zöld cella
+tehát nemcsak elmulaszthatja a hibát: **rögzítheti is**, és a következő kör
+már regressziónak látná a javítást.
+
+**A javítás iránya, amit a mérés kijelölt.** Nem megerősítés hozzáadása, hanem
+a navigáció szándékának javítása: `context.go` → **`context.push`**. Így a
+session képernyő a Tuner alatt mountolva marad, a felhasználó visszatalál, és
+mivel semmi nem vész el, megerősítés sem kell (az ADR 0279 a KÖVETKEZMÉNYRE
+köt, nem a navigáció tényére). Mérve a javítás után:
+
+```
+PROBE P1prime: onTuner=true sessionStillInStack=true commandsSent=()
+               canPopBack=true
+```
+
+**Az általánosítás.** Ha egy képernyő saját kilépési kaput épít (megerősítés,
+`PopScope`, `CancelPractice`), akkor **minden más navigációs hívást ugyanezen a
+képernyőn a kapuval szembe kell mérni** — a review kérdése nem „megnyílik-e a
+cél", hanem „mi történik a MÖGÖTTE hagyott munkával". A `go` és a `push`
+különbsége itt nem stílus, hanem adatvesztés. Fordítva is igaz: egy
+acceptance-cella, ami CSAK a cél megjelenését állítja, a kijárat
+destruktivitására vak.
+
+**Őrteszt:** `test/features/practice/session/session_transitions_test.dart` —
+„tapping the tuning entry opens AppRoutes.practiceTuner WITHOUT leaving the
+running session…": a cella a Tuner megnyílását ÉS a session képernyő
+`skipOffstage: false` melletti jelenlétét ÉS a `host.sent` ürességét együtt
+állítja, tehát a `go`-ra visszaesés pirosra váltja.
+
+## L496 — A ≥ 48 dp érintési cél EGY körrel a megfogása után megismétlődött, mert a javítás őrcellája a KONKRÉT widgethez készült, nem a szabályhoz (E13-R20 MAJOR-1 → E13-R21 MAJOR-2, 2026-08-26)
+
+**A mérés.** Az E13-R20 review-ja MAJOR-1-ként fogta meg, hogy az akkord-
+részletnézet egyetlen belépője 40×40 dp (tényleges cél ≈ 34×40), miközben az
+[ADR 0280](adr/0280-accessibility-contract-and-live-region-budget.md)
+§Döntés 5. ≥ 48 dp-t ír elő; a javítás ÚJ őrcellát kapott
+(`chord_tile_a11y_test.dart`). **A rá következő körben ugyanez megismétlődött:**
+az E13-R21 readiness-sorának Tuner-belépője
+(`practice_readiness_row.dart`, `BoxConstraints(minWidth: 48, minHeight: 32)`)
+a reviewer mérése szerint
+
+```
+PROBE P2: tuning entry rendered size = Size(277.5, 32.0)
+```
+
+— 16 dp-vel a szerződés alatt, ismét **teljesen zöld kapu mögött**.
+
+**A gyökérok.** Az E13-R20 őrcellája a `chord_tile`-ra íródott, tehát a
+következő kör ÚJ interaktív eleme fölött semmit nem mért. A mérce mindkét
+körben ugyanazért hiányzott: a cellák a **semantics-címkét és a navigációt**
+mérik (mert azok a látható követelmények), a **renderelt célméretet** nem —
+és a méret az egyetlen dolog, ami a forrásból nézve „rendben lévőnek" látszik
+(`minWidth: 48` ott volt, csak a magasság nem).
+
+**Amit ebből MA csinálni lehet.** Minden ÚJ interaktív elemhez tartozzon
+`tester.getSize(...)`-alapú cella (a forrás konstansa NEM elég: elrendezés is
+zsugoríthat), és a cellát valódi-sértés próbával kell hitelesíteni. Az
+E13-R21 javító köre pontosan ezt tette, és a reviewer be is mérte: a 32 dp
+visszaállítása után a cella `Expected: >= 48.0 / Actual: 32.0`-val pirosra
+váltott, a `git checkout --` után pedig tisztán visszaállt.
+
+**A megmaradó rés — szándékosan kimondva.** Ez továbbra is PER-WIDGET
+védelem. A hibaosztályt csak egy repó-szintű őr zárná le (a `lib/features/**`
+fa interaktív elemeire általánosított célméret-mérés), ami viszont a
+`test/core/**` vagy `test/tooling/**` hatásköre — kör-briefen kívül, önjavító
+vagy governance-kör dolga. Amíg az nincs meg, a HARMADIK előfordulás várható.
+
+**Őrteszt:** `test/features/practice/session/session_transitions_test.dart` —
+„the tuning entry meets the >= 48dp touch-target contract (ADR 0280 §Döntés 5)";
+a per-widget rés lezárására nincs őrteszt, az indok a fenti bekezdésben.

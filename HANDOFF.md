@@ -1,5 +1,86 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R21 KÉSZ — Practice setup, aktív session és pause/recovery UI — PR [#463](https://github.com/wolfcasaba/strumsight/pull/463), squash `e209af39` (2026-08-26)
+
+Az UI-18–UI-20 migrációja a MEGLÉVŐ gyakorlási állapotgéphez kapcsolva (SDD Ch13
+Kör 21). A kör **ADR-t nem írt** — a §5 mind a hat kötött döntése merge-elt
+ADR-ek szövege (0073/0078/0079/0276/0279), és új szám merge-elt döntés fölé
+tilos (ADR 0087 §4).
+
+**Amit hoz.** A **setup** (UI-18) formja a design-system elemekre migrálva
+(`SsValueSlider`, `SsSwitchRow`), a widget-oldali `_bpmDraft` vázlatállapot
+megszűnt (§5.1). Az **aktív session** (UI-19) Stage-elrendezést kapott
+hero/feedback slotokkal, benne a readiness-sorral, ahol a **gyenge jel** és a
+**degradált képesség** két KÜLÖN indikátor — sosem egy összevont banner. A
+**Pause/Recovery** (UI-20) overlay, nem külön route, és KIZÁRÓLAG a
+`PracticeSessionState.pauseCause`-ból renderel; a Resume ugyanazt a
+`ResumePractice` parancsot küldi, amit a transport — második affordancia, nem
+második parancsút. A kilépés következmény-központú megerősítést kér
+(„Exiting now discards this session's progress…”, `barrierDismissible: false`,
+ADR 0279 §1). Hat golden PNG, 412×915 compact portrait ÉS `textScaler: 2.0`,
+**x86-on felvéve** (ADR 0426).
+
+**Pre-flight (§0.0/B, `24b95acf`) — négy mért revízió.** **R5:** a goldenek
+felvétele ÉS ellenőrzése a merge-kapu architektúráján — a brief eredeti
+`--update-goldens` sora pontosan az E13-R20 H5-haltját reprodukálta volna.
+**R6:** az A6 „rossz hangolás” tengelyének **nincs producere** a fán (nincs
+`TuningState`, a `PracticeObservation` csak strum+chord, és a tuner
+feature-nek nincs `public.dart` barrelje → a wiring H3 lenne); a cella két
+mérhető tengelyre szűkült, a hangolás-tengelyből readiness-sor +
+`AppRoutes.practiceTuner` belépő készült, az élő beolvasás nevesített
+follow-up. **R7:** a négy célképernyő HELYBEN migrálva ([L488](docs/LESSONS.md#l488)
+harmadik alkalmazása) — `hasLength(84)` és a pin-tesztek érintetlenek.
+**R8:** erőforrás-tulajdonlás a tényleges hívási láncon mérve — a mikrofon-lease
+a `core/audio/`-é, a practice fában **nulla** `.acquire(`; a brief
+kockázat-indoklása ezzel megdőlt.
+
+**EGY javító kör** (`docs/reviews/e13-r21-review.md`, végső verdikt
+**APPROVED**, 0 nyitott lelet). Mindkét MAJOR **teljesen zöld kapu mögött** élt
+— 18/18 gate, 173/173 presentation-teszt, 6/6 golden, és MINDKÉT exact-SHA
+CI-kapu success:
+
+1. **MAJOR-1** — a readiness-sor Tuner-belépője ŐRIZETLEN adatvesztési kijárat
+   volt egy FUTÓ sessionből: `context.go` (replace) → a session megszűnt.
+   A reviewer mérése: `dialogs=0 sheets=0 alerts=0 commandsSent=()
+   leftSession=true` — megkerülte a kör SAJÁT `_requestExit` megerősítését.
+   **A kör A6 cellája ráadásul elvárásként PINNELTE a bypasst**: egy zöld cella
+   nemcsak elmulaszthatja a hibát, rögzítheti is
+   ([L495](docs/LESSONS.md#l495)). Javítás: `context.push` — a session a Tuner
+   alatt mountolva marad, a felhasználó visszatalál, és mivel nincs
+   következmény, megerősítés sem kell.
+2. **MAJOR-2** — a belépő érintési célja `Size(277.5, 32.0)` az ADR 0280
+   §Döntés 5 ≥ 48 dp ellen. **Ugyanaz a hibaosztály, mint az E13-R20/MAJOR-1,
+   EGY körrel később** — mert az akkori őrcella a konkrét widgethez készült,
+   nem a szabályhoz ([L496](docs/LESSONS.md#l496)). Javítás: 48 dp + ÚJ
+   őrcella, amit a reviewer valódi-sértés próbája (32 dp visszaállítás)
+   `Expected: >= 48.0 / Actual: 32.0`-val pirosra váltott.
+3. **MINOR-1** — a readiness-sor hiányzott a Setup felületről (SDD UI-18);
+   a MAJOR-1 javítása lezárta, saját cellával. NOTE-1 (nem blokkoló): a
+   BPM-csúszka minden drag-tickre ír a controllerbe.
+
+**Folyamat.** Az ELSŐ implementer-futás a burkoló abszolút időkorlátjánál
+(3600 s) szakadt meg PONTOSAN a záró gate közben; az orchestrátor a
+scope-audit után commitolta a munkát (`f9e61a9e`, 21 fájl, 0 sértés), és
+`MM_ROUND_TIMEOUT=5400`-zal folytató futást indított — a kör így **halt nélkül**
+zárult. A jelzés `scope_audit=VIOLATION`-je ismét az orchestrátor SAJÁT
+prompt-fájlja volt a munkapéldányban ([L494](docs/LESSONS.md#l494) MÁSODIK
+előfordulása); a folytató és a javító dispatch prompt-fájlja ezért már
+`/tmp`-ben élt.
+
+**Zöld kapu.** Reviewer `tools/round-gate.sh` izolált `/tmp` klónban a javított
+HEAD-en **18/18 ZÖLD**, `tools/golden-x86.sh check` 6/6, scope-audit OK (24
+fájl). Exact `6bfb8fa6`: Full Gate
+[32942002559](https://github.com/wolfcasaba/strumsight/actions/runs/32942002559)
++ Router CI
+[32942005369](https://github.com/wolfcasaba/strumsight/actions/runs/32942005369)
+mindkettő success. Post-merge `tools/round-gate.sh` a friss `main`-en zöld.
+
+**Nyitott follow-up:** az élő hangolás beolvasása a practice felületre
+(`TunerReading` → readiness-sor) — ehhez `lib/features/tuner/public.dart`
+barrel kell, amit annak a körnek kell megírnia, amelynek az `allowed_paths`-a
+tartalmazza. A ≥ 48 dp célméret repó-szintű őre (a per-widget rés lezárása)
+szintén nyitott, `test/core/**` hatáskör ([L496](docs/LESSONS.md#l496)).
+
 ## ✅ E13-R20 KÉSZ — Chord Library, Learning Path és Lesson UI migráció — PR [#462](https://github.com/wolfcasaba/strumsight/pull/462), squash `ad5718d1` (2026-08-26)
 
 Az UI-11–UI-14 migrációja közös Learning Mode komponensekre, **balkezes** és
@@ -7370,6 +7451,26 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
+**Aktuális állapot (2026-08-26):** `main` @ `e209af39` — E13-R21 Practice setup,
+aktív session és pause/recovery UI, PR
+[#463](https://github.com/wolfcasaba/strumsight/pull/463), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** (2 MAJOR + 1 MINOR, mind
+ZÖLD gate mögött: a readiness-sor Tuner-belépője `context.go`-val ŐRIZETLEN
+adatvesztési kijárat volt egy FUTÓ sessionből — és a kör SAJÁT A6 cellája
+elvárásként PINNELTE a bypasst ([L495](docs/LESSONS.md#l495)); a belépő
+érintési célja 32 dp volt a 48 dp-s ADR 0280 szerződés alatt, EGY körrel az
+E13-R20/MAJOR-1 után ([L496](docs/LESSONS.md#l496)); és a readiness-sor
+hiányzott a Setup felületről). Review **APPROVED**, 0 nyitott
+BLOCKER/MAJOR/MINOR (`docs/reviews/e13-r21-review.md`). A kör **ADR-t nem írt**
+— a §5 mind a hat döntése merge-elt (0073/0078/0079/0276/0279). Az ELSŐ
+implementer-futás a burkoló 3600 s-es abszolút időkorlátjánál szakadt meg a
+záró gate közben; az orchestrátor scope-audit után commitolta a munkát és
+`MM_ROUND_TIMEOUT=5400`-zal folytatta — a kör **halt nélkül** zárult. Exact
+`6bfb8fa6`: Full Gate 32942002559 + Router CI 32942005369 mind success.
+Post-merge `tools/round-gate.sh` a friss `main`-en zöld. Részletesen a fejléc
+✅-blokkban.
+
 **Aktuális állapot (2026-08-26):** `main` @ `ad5718d1` — E13-R20 Chord Library,
 Learning Path és Lesson UI migráció, PR
 [#462](https://github.com/wolfcasaba/strumsight/pull/462), squash-merge.
@@ -9234,7 +9335,40 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > köztük egy emberi döntéssel feloldott H3 lista-tágítással. **Olvasd el a
 > §0.0-t a kör indítása előtt; a pre-flight NE derítse fel újra.**
 
-> **Frissítve 2026-08-26 (E13-R20 után).** A **Ch13 sáv következő köre:
+> **Frissítve 2026-08-26 (E13-R21 után).** A **Ch13 sáv következő köre:
+> `E13-R22` — Practice results és Speed Builder**
+> (`docs/rounds/e13-r22-practice-results-and-speed-builder.md`, engine a
+> queue-ban `sonnet-impl`, előre kiosztott ADR **`0283`** — a queue `adr`
+> oszlopa szerint ez a kör KAP kiosztott számot, tehát a pre-flight NE
+> foglaljon újat; ELŐSZÖR mérd meg, hogy a `0283` már merge-elt-e a
+> `docs/adr/` fán: ha igen, a kör HIVATKOZZA, nem írja újra — az újraírás H1
+> lenne, és a sávon ez már négyszer így alakult, E13-R17…R21).
+>
+> **Két horog, amit az E13-R21 hagyott ennek a körnek:**
+>
+> 1. **A ≥ 48 dp érintési cél a sáv ismétlődő MAJOR-osztálya** — E13-R20/MAJOR-1
+>    (40 dp) és EGY körrel később E13-R21/MAJOR-2 (32 dp), mindkettő teljesen
+>    ZÖLD kapu mögött, mert a cellák a semantics-CÍMKÉT és a navigációt mérik,
+>    a renderelt CÉLMÉRETET nem ([L496](docs/LESSONS.md#l496)). **Minden ÚJ
+>    interaktív elemhez írj `tester.getSize(...)`-alapú cellát** (a forrás
+>    konstansa NEM elég: az elrendezés is zsugoríthat), és hitelesítsd
+>    valódi-sértés próbával. A repó-szintű őr még nem létezik — az
+>    `test/core/**` hatásköre, tehát kör-briefen kívül esik.
+> 2. **Ha egy képernyő saját kilépési kaput épít** (megerősítés, `PopScope`,
+>    `Cancel*` parancs), akkor **minden más navigációs hívást ugyanazon a
+>    képernyőn a kapuval szembe kell mérni**: a `go` (replace) és a `push`
+>    különbsége nem stílus, hanem adatvesztés. Az E13-R21 A6 cellája
+>    elvárásként PINNELTE a bypasst — egy zöld cella nemcsak elmulaszthatja a
+>    hibát, rögzítheti is ([L495](docs/LESSONS.md#l495)).
+>
+> **Nyitott follow-up a practice sávon:** az élő hangolás beolvasása a practice
+> felületre (`TunerReading` → readiness-sor) egy `lib/features/tuner/public.dart`
+> barrelt igényel — a `crossFeatureImportsMustUsePublicApi` szabály miatt
+> nem-`public.dart` import architektúra-sértés. Annak a körnek a dolga,
+> amelynek az `allowed_paths`-a ezt a fájlt tartalmazza; az E13-R21 §0.0/R6
+> kimérte és H3-ként kizárta.
+
+> **Korábbi bejegyzés (2026-08-26, E13-R20 után) — teljesítve:** A **Ch13 sáv következő köre:
 > `E13-R21` — Practice session UI**
 > (`docs/rounds/e13-r21-practice-session-ui.md`, engine a queue-ban
 > `sonnet-impl`, előre kiosztott ADR: **nincs** — a queue `adr` oszlopa
