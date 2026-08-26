@@ -725,10 +725,17 @@ a hibaszínű szöveg egyik golden alapállapotban sem látszik (a hibaágak nem
 aktívak az alap-nézetben), ezért nincs golden-elmozdulás és nincs
 újrafelvétel.
 
-### Javító kör — teljes kapu (a `docs/reviews/e13-r24-review.md` §7
-listájával, csővezeték nélkül)
+### Javító kör — teljes kapu (a brief §7 listájával, csővezeték nélkül)
 
-Lásd a jelen kör-folytatás gate-futását — minden lépés ZÖLD, részletek a
-commit-üzenetben és a `tools/round-gate.sh` kimenetében.
+```
+tools/round-gate.sh test/features/songs/import/import_flow_test.dart test/features/songs/import/import_blocking_error_test.dart test/features/songs/import/editor_draft_test.dart test/features/songs/import/editor_keyboard_flow_test.dart test/ui/goldens/e13_r24_screens_golden_test.dart test/ui/ui_inventory_test.dart test/features/song_trainer/presentation/song_import_screen_test.dart test/features/song_trainer/presentation/song_import_preview_screen_test.dart test/features/song_trainer/presentation/song_editor_screen_test.dart test/features/song_trainer/presentation/guitar_pro_conversion_guidance_test.dart test/app/routing/app_router_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+**MINDEN GATE ZÖLD**, 20 lépés (`format`, `analyze`, 15× `test <fájl>`,
+`architecture`, `secrets`, `l10n`). A 15 teszt-lépés összesen **96 zöld
+tesztet** futtatott (2+4+4+3+6+1+1+1+2+2+22+44+1+2+1, fájlonként a fenti
+sorrendben) — eggyel több, mint a review előtti futáson, a `editor_draft_test.dart`
+MINOR-2 cellájával. A `format` és `analyze` első próbálkozásra zöld volt,
+második gate-futás nem kellett.
 
 ## 11. Review — a Claude tölti ki
