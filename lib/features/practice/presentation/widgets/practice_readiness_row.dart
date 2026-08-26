@@ -58,7 +58,7 @@ class PracticeReadinessRow extends StatelessWidget {
               : l10n.practiceSessionReadinessCapabilityOk,
           warn: degradedCapability,
         ),
-        _ReadinessTuningEntry(onOpenTuner: onOpenTuner),
+        PracticeTuningEntry(onOpenTuner: onOpenTuner),
       ],
     );
   }
@@ -107,8 +107,13 @@ class _ReadinessChip extends StatelessWidget {
 /// (§0.0/R6): the live tuning readout does not exist yet, so this row must
 /// not lie about it. Tapping navigates to the Tuner
 /// (`AppRoutes.practiceTuner`).
-class _ReadinessTuningEntry extends StatelessWidget {
-  const _ReadinessTuningEntry({required this.onOpenTuner});
+///
+/// Public (not private to [PracticeReadinessRow]) so the Setup screen can
+/// render the same entry point outside a running session (review E13-R21
+/// MINOR-1) — the setup surface has no weak-signal/degraded-capability
+/// concept (no capture is active yet), only the tuning affordance applies.
+class PracticeTuningEntry extends StatelessWidget {
+  const PracticeTuningEntry({required this.onOpenTuner, super.key});
 
   final VoidCallback onOpenTuner;
 
@@ -127,7 +132,11 @@ class _ReadinessTuningEntry extends StatelessWidget {
         onTap: onOpenTuner,
         borderRadius: BorderRadius.circular(8),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 32),
+          // ADR 0280 §Döntés 5: critical components need a ≥ 48 dp touch
+          // target. This is the row's only interactive element and the
+          // sole entry point to the Tuner from this surface (review
+          // E13-R21 MAJOR-2 — measured 32 dp).
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

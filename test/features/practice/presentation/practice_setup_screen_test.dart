@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/practice/application/practice_catalog_controller.dart';
@@ -482,4 +483,60 @@ void main() {
       }
     },
   );
+
+  group('MINOR-1 — the readiness tuning entry is reachable from Setup', () {
+    testWidgets('renders the tuning entry and tapping it opens '
+        'AppRoutes.practiceTuner (SDD UI-18 "a tuning warningból közvetlen '
+        'Tuner nyitható", review E13-R21 MINOR-1)', (tester) async {
+      final def = _definition(
+        id: 'fixture.tuning-entry',
+        mode: PracticeMode.strumPattern,
+        meter: const Meter(beatsPerBar: 4),
+        bpm: 100,
+      );
+      final container = _container(repository: _SingleDefRepository(def));
+      addTearDown(container.dispose);
+      final router = GoRouter(
+        initialLocation: '/practice/setup',
+        routes: [
+          GoRoute(
+            path: '/practice/setup',
+            builder: (context, state) => PracticeSetupScreen(
+              argsOverride: PracticeSetupArgs(
+                request: PracticeSetupRequest.hasId,
+                definitionId: def.id,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/practice/tuner',
+            builder: (context, state) =>
+                const Scaffold(body: Center(child: Text('TUNER SENTINEL'))),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp.router(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('practice-readiness-tuning')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('practice-readiness-tuning')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('TUNER SENTINEL'), findsOneWidget);
+    });
+  });
 }

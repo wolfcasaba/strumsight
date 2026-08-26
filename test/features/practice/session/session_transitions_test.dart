@@ -43,7 +43,7 @@ Future<void> _pumpScreen(
       child: MaterialApp.router(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        routerConfig: _router,
+        routerConfig: _buildRouter(),
       ),
     ),
   );
@@ -62,7 +62,11 @@ class _NoopFeedback implements PracticeFeedbackOutput {
   void openPermissionSettings() {}
 }
 
-final _router = GoRouter(
+// A fresh router per `_pumpScreen` call — a shared module-level `GoRouter`
+// singleton would carry its current location across tests (a `push`/`go`
+// in one test leaks into the next test's initial screen, since the router
+// itself is never re-created between tests).
+GoRouter _buildRouter() => GoRouter(
   initialLocation: '/practice/session',
   routes: [
     GoRoute(
@@ -219,7 +223,11 @@ void main() {
     );
 
     testWidgets(
-      'tapping the tuning entry navigates to AppRoutes.practiceTuner',
+      'tapping the tuning entry opens AppRoutes.practiceTuner WITHOUT '
+      'leaving the running session — no confirmation needed because the '
+      'session screen stays mounted underneath and no command is sent '
+      '(review E13-R21 MAJOR-1: `go` used to REPLACE this route, tearing '
+      'down the host and losing the session with zero confirmation)',
       (tester) async {
         final host = FakeSessionHost();
         addTearDown(host.close);
@@ -232,6 +240,35 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.text('TUNER SENTINEL'), findsOneWidget);
+        // Non-destructive: `push`, not `go` — the session screen is still
+        // in the widget tree (pushed under, offstage, not replaced) and
+        // the tap sent no command to the host, so the session is
+        // untouched. `skipOffstage: false` is required here: the previous
+        // route is intentionally kept mounted-but-offstage by the
+        // Navigator underneath the pushed Tuner route.
+        expect(
+          find.byType(PracticeSessionScreen, skipOffstage: false),
+          findsOneWidget,
+        );
+        expect(host.sent, isEmpty);
+      },
+    );
+
+    testWidgets(
+      'the tuning entry meets the >= 48dp touch-target contract (ADR 0280 '
+      '§Döntés 5) — guards the review E13-R21 MAJOR-2 regression (measured '
+      '32dp)',
+      (tester) async {
+        final host = FakeSessionHost();
+        addTearDown(host.close);
+        host.emitState(practiceSessionStateFor(PracticeSessionStatus.running));
+        await _pumpScreen(tester, host: host);
+
+        final size = tester.getSize(
+          find.byKey(const ValueKey('practice-readiness-tuning')),
+        );
+        expect(size.width, greaterThanOrEqualTo(48.0));
+        expect(size.height, greaterThanOrEqualTo(48.0));
       },
     );
   });

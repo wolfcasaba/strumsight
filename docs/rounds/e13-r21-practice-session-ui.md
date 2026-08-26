@@ -562,7 +562,7 @@ kör lezárása: záró gate, golden-sáv ellenőrzés, valódi-sértés próba,
 | A3 | `result_navigation_test.dart` → `group('A3 — result-navigation threshold table')`: alatta/rajta/fölötte cellák („at threshold: exactly one completion → exactly 1 navigation", „above threshold: completion PLUS a second, independent signal…") |
 | A4 | `pause_recovery_test.dart` → `group('A4 — the screen carries no shadow state')`: „a brand-new state object with a different elapsed/attempt fully replaces what was shown" |
 | A5 | `session_transitions_test.dart` → `group('A5 — exit consequence is stated in text')` |
-| A6 | `session_transitions_test.dart` → `group('A6 — readiness row')`: „weak signal and degraded capability render as two separate texts, never merged into one banner", „the tuning entry always reads 'not measured' — never 'in tune'/'tuned'", „tapping the tuning entry navigates to AppRoutes.practiceTuner" |
+| A6 | `session_transitions_test.dart` → `group('A6 — readiness row')`: „weak signal and degraded capability render as two separate texts, never merged into one banner", „the tuning entry always reads 'not measured' — never 'in tune'/'tuned'", „tapping the tuning entry opens AppRoutes.practiceTuner WITHOUT leaving the running session…" (javító kör, §10.6/MAJOR-1), „the tuning entry meets the >= 48dp touch-target contract…" (javító kör, §10.6/MAJOR-2) |
 | A7 | `setup_validation_test.dart` → `group('A7 — invalid configuration never reaches the sink')` |
 | A8 | `session_transitions_test.dart` → `group('A8 — portrait and landscape render without overflow')` |
 | A9 | `test/ui/goldens/e13_r21_screens_golden_test.dart` (6 eset: `practice setup`, `practice session — running`, `practice session — pause/recovery overlay`, mindegyik `compact` és `compact_scale2` kerettel) + a hozzá tartozó 6 PNG a `test/ui/goldens/` alatt, commitolva |
@@ -661,9 +661,161 @@ konténerben (Flutter 3.44.2 linux/amd64):
   `PracticeReadinessRow`-nak **két külön** mezőként adódik át, a widget maga
   is két külön szöveges csempét renderel (nem egy összevont bannert) — lásd
   `session_transitions_test.dart` A6 „never merged into one banner" esete.
-  A hangolás-belépő (`_ReadinessTuningEntry`) mindig „not measured"-et mutat,
-  soha nem „in tune"/„tuned"-ot (`practice_readiness_row.dart:106-108`
-  komment + a hozzá tartozó teszteset), és tapintásra az
-  `AppRoutes.practiceTuner`-re navigál (§0.0/R6).
+  A hangolás-belépő (`PracticeTuningEntry`, javító körben publikussá téve —
+  lásd §10.6/MINOR-1) mindig „not measured"-et mutat, soha nem „in
+  tune"/„tuned"-ot (`practice_readiness_row.dart:106-108` komment + a hozzá
+  tartozó teszteset), és tapintásra az `AppRoutes.practiceTuner`-re navigál
+  (§0.0/R6; a javító kör óta `push`-sal, nem `go`-val — §10.6/MAJOR-1).
+
+### 10.6 Javító kör (review-leletek) — `docs/reviews/e13-r21-review.md`
+
+**MAJOR-1 — a Tuner-belépő őrizetlen kijárat egy FUTÓ sessionből.**
+`practice_session_screen.dart:236` `context.go(AppRoutes.practiceTuner)` →
+`context.push(...)`. Az ok mérve, nem feltételezve: a `practiceSessionHostProvider`
+(`practice_effect_listener.dart:99`) a `practiceActiveSessionInputsProvider`
+(auto-dispose, `practice_session_providers.dart:222`) fölött áll, és annak
+saját doksorja kimondja — „AutoDispose: amikor a képernyő unmountol, az
+inputs törlődik". `context.go` a `PracticeSessionScreen` route-ot LECSERÉLI
+(a widget megszűnik) → a provider watcherei nullára esnek → a session
+auto-dispose törlődik. Ez a review P1 próbájának pontos gyökéroka: a
+`leftSession=true` nem UI-mellékhatás volt, hanem valódi adatvesztés.
+`context.push` NEM cseréli le a route-ot: a `PracticeSessionScreen` a
+Navigator overlay-jében **mounted marad** (Flutter `maintainState`
+alapértelmezetten `true`), csak `Offstage`-be kerül a Tuner mögött — a host
+és a session élve marad, a Tuner bezárása (`pop`) pontosan ugyanoda tér
+vissza. Ez a review §7 „nem-destruktív út (session életben tartásával)"
+ága — a `_requestExit` megerősítő útja ehhez képest szükségtelen súly lett
+volna egy puszta „nézd meg a hangolást" koppintáshoz.
+
+A kör SAJÁT A6 cellája (`session_transitions_test.dart`, „tapping the
+tuning entry navigates…") a bypasst pinnelte. Az ÚJRAÍRT állítás: a
+koppintás megnyitja a Tunert, DE a session képernyő a fa alatt **mounted
+marad** (`find.byType(PracticeSessionScreen, skipOffstage: false)` —
+`skipOffstage: false` kötelező, mert a megőrzött előző route szándékosan
+`Offstage`-ben van, az alapértelmezett finder ezt kihagyná), és **egyetlen
+parancs sem** ment a hosthoz (`host.sent` üres). Ez erősítés, nem
+gyengítés: a régi cella a bypasst bizonyította ZÖLDDEL, az új cella a
+FOLYTONOSSÁGOT bizonyítja, és pirosra váltana, ha a navigáció visszatérne
+`go`-ra (a session screen eltűnne a fából, `skipOffstage: false` mellett is).
+
+**MAJOR-2 — 32 dp érintési cél a 48 dp-s szerződés alatt.**
+`practice_readiness_row.dart:139` `BoxConstraints(minWidth: 48, minHeight:
+32)` → `minHeight: 48`. Új ŐR-CELLA
+(`session_transitions_test.dart`, A6 „>= 48dp touch-target contract"):
+`tester.getSize(find.byKey(ValueKey('practice-readiness-tuning')))` mindkét
+tengelyre `greaterThanOrEqualTo(48.0)`-t állít.
+
+Valódi-sértés próba (a `minHeight` ideiglenesen visszaállítva 32-re,
+`flutter test … --plain-name "48dp touch-target"`):
+
+```
+Expected: a value greater than or equal to <48.0>
+  Actual: <32.0>
+   Which: is not a value greater than or equal to <48.0>
+00:01 +0 -1: A6 — readiness row the tuning entry meets the >= 48dp touch-target contract … [E]
+```
+
+A mutáció ezután visszaállítva (`git diff` a fájlra a PONTOSAN a §10.6-ban
+leírt, szándékos 48 dp + kommentek diffje — a mutáció nem hagyott nyomot),
+és a cella újra zöld: `00:01 +1: All tests passed!`. A `Wrap` elrendezés
+miatt a magasabb belépő a másik két csempétől függetlenül nő — nincs
+túlcsordulás (A8 is zöld marad, lásd 10.3 [4]).
+
+**MINOR-1 — a readiness-sor hiányzik a SETUP képernyőről.** A `_ReadinessTuningEntry`
+private osztály publikussá vált (`PracticeTuningEntry`,
+`practice_readiness_row.dart:115`) — a `PracticeReadinessRow` változatlanul
+használja, csak most a Setup képernyő is importálhatja. A `weakSignal` /
+`degradedCapability` csempéket a Setup NEM kapja meg: azok futó capture-höz
+kötött fogalmak (`host.liveOverallPerMille`, `practiceErrorOverlayProvider`),
+a Setupon még nincs session, tehát a teljes `PracticeReadinessRow` helyett
+csak a hangolás-belépő kerül oda (`practice_setup_screen.dart:192-197`,
+`context.push(AppRoutes.practiceTuner)` — ugyanaz a nem-destruktív minta,
+mint MAJOR-1-ben, bár a Setupon amúgy sincs elveszíthető session-állapot).
+Ez lezárja az SDD Ch13 UI-18 „a tuning warningból közvetlen Tuner nyitható"
+elfogadási feltételét a Setup felületen is. Új teszt:
+`practice_setup_screen_test.dart` „MINOR-1 — the readiness tuning entry is
+reachable from Setup" — GoRouter-alapú pump (a fájl korábbi tesztjei
+`MaterialApp`-ot használtak router nélkül; ehhez a cellához kellett egy, a
+`session_transitions_test.dart`-ból ismert mintájú `GoRouter` két
+route-tal), renderelést és koppintás-navigációt bizonyít.
+
+**Melléktalálat — megosztott `GoRouter` a teszt-fájlban.** A
+`session_transitions_test.dart` `_router`-je modul-szintű `final` szingleton
+volt; egy `push`/`go` az egyik tesztben ÁTÖRÖKÍTETTE a navigációs állapotot a
+fájl összes további tesztjébe (ugyanaz a `GoRouter`-példány sosem épült újra
+a tesztek között). Ez a hiba a review ELŐTT is jelen volt (az eredeti,
+bypasst pinnelő A6 cella maga is `go`-zott), de tünetmentes maradt, mert az
+A8 cellák csak a „nincs kivétel" állítást mérik, a képernyő tartalmát nem. Az
+új 48 dp őr-cella viszont KONKRÉT képernyőtartalmat (a hangolás-belépő
+kulcsát) keres, és ezért lelepleződött: a megelőző (navigáló) teszt után
+futtatva `Bad state: No element`-tel bukott, mert a megosztott router már a
+Tuner-sentinelt mutatta. Javítás: `_router` → `GoRouter _buildRouter()`
+factory, minden `_pumpScreen` hívás friss routert épít
+(`session_transitions_test.dart:65-79`). Ez NEM tágítja a kör scope-ját — a
+fájl már az `allowed_paths`-on van, és a javítás kizárólag test-infrastruktúra,
+nem termékkód vagy mérce-gyengítés.
+
+**NOTE-1 — a BPM-csúszka minden drag-tickre ír.** Nem javítva, a review
+engedélyével: a review kimondja, hogy ez nem blokkol, és a §5.1 (kevesebb
+igazságforrás) irányába mutat. Szándékosan érintetlen.
+
+**Záró gate — a javítás UTÁN, tényleges kimenet:**
+
+```
+→ [1] format: ZÖLD
+→ [2] analyze: ZÖLD
+→ [3]  test setup_validation_test.dart: ZÖLD
+→ [4]  test session_transitions_test.dart: ZÖLD
+→ [5]  test pause_recovery_test.dart: ZÖLD
+→ [6]  test result_navigation_test.dart: ZÖLD
+→ [7]  test ui_inventory_test.dart: ZÖLD
+→ [8]  test adaptive_scaffold_test.dart: ZÖLD
+→ [9]  test tab_state_restoration_test.dart: ZÖLD
+→ [10] test screen_size_guard_test.dart: ZÖLD
+→ [11] test architecture_dependency_test.dart: ZÖLD
+→ [12] test domain_purity_test.dart: ZÖLD
+→ [13] test dio_factory_guard_test.dart: ZÖLD
+→ [14] test preferences_plugin_import_guard_test.dart: ZÖLD
+→ [15] test route_literal_guard_test.dart: ZÖLD
+→ [16] architecture: ZÖLD
+→ [17] secrets: ZÖLD
+→ [18] l10n: ZÖLD
+MINDEN GATE ZÖLD.
+```
+
+`flutter test test/features/practice/presentation/`: **174/174 zöld**
+(173 + 1 új MINOR-1 cella), „All tests passed!".
+
+**Golden-sáv (A9, x86, ADR 0426) — a javítás UTÁN.** A `check` a javítás
+után PIROSRA váltott (5/6 kép — a Setup új belépője és a magasabb hangolás-
+csempe elmozdította mindkét képernyő elrendezését):
+
+```
+01:03 +0 -4: practice setup — compact_scale2 [E] (Pixel test failed)
+01:08 +0 -5: practice session — running — compact_scale2 [E] (1.22%, 4592px diff)
+01:14 +1 -5: Some tests failed. (setup compact, setup compact_scale2,
+  session running compact, session running compact_scale2,
+  pause/recovery overlay compact — mind a diff miatt; a pause overlay
+  compact_scale2 volt az egyetlen érintetlen eset)
+```
+
+`tools/golden-x86.sh record` (x86 konténer, Flutter 3.44.2 linux/amd64) az
+5 érintett PNG-t frissítette, a `pause/recovery overlay — compact_scale2`
+bájt-azonos maradt (a Pause overlay nem rendereli a readiness-sort). A
+`record` utáni `check` — MÉGEGYSZER lefuttatva a 32→48 dp mutáció
+visszaállítása UTÁN is, a végleges kódra — zöld:
+
+```
+00:00 +0: practice setup — compact
+00:35 +1: practice session — running — compact
+00:40 +2: practice session — pause/recovery overlay — compact
+00:42 +3: practice setup — compact_scale2
+00:47 +4: practice session — running — compact_scale2
+00:52 +5: practice session — pause/recovery overlay — compact_scale2
+00:56 +6: All tests passed!
+```
+
+Az 5 frissített PNG commitolva (`test/ui/goldens/goldens/e13_r21_practice_*`);
+a `test/ui/goldens/failures/` diagnosztikai könyvtár törölve, nem commitolt.
 
 ## 11. Review — a Claude tölti ki

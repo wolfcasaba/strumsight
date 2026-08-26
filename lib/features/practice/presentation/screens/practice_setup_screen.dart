@@ -38,6 +38,7 @@ import '../../domain/model/tempo.dart';
 import '../../application/practice_catalog_controller.dart';
 import '../practice_route_args.dart';
 import '../widgets/practice_mode_card.dart';
+import '../widgets/practice_readiness_row.dart';
 
 /// Resolves the definition id from the route. Reads the URI through the
 /// `GoRouter` (no `BuildContext`-based state). Returns a structured
@@ -180,6 +181,19 @@ class _SetupFormState extends ConsumerState<_SetupForm> {
         Text(
           practiceModeLabel(l10n, widget.definition.mode),
           style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        // SDD Ch13 UI-18 "readiness checklist" — the tuning entry belongs
+        // here first: before a session exists there is nothing to lose by
+        // leaving the screen, unlike the running-session surface (review
+        // E13-R21 MAJOR-1/MINOR-1). Weak-signal / degraded-capability have
+        // no meaning yet (no capture is active), so only the tuning
+        // affordance renders.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: PracticeTuningEntry(
+            onOpenTuner: () => context.push(AppRoutes.practiceTuner),
+          ),
         ),
         const SizedBox(height: 20),
         SsValueSlider(

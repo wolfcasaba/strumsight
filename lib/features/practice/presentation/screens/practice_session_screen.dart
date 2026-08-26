@@ -233,7 +233,15 @@ class _PracticeSessionScreenState extends ConsumerState<PracticeSessionScreen> {
         PracticeReadinessRow(
           weakSignal: weakSignal,
           degradedCapability: degradedCapability,
-          onOpenTuner: () => context.go(AppRoutes.practiceTuner),
+          // `push`, never `go` (review E13-R21 MAJOR-1): `go` REPLACES this
+          // route, which tears down `practiceSessionHostProvider`'s
+          // auto-dispose chain (`practiceActiveSessionInputsProvider` +
+          // the controller family) exactly like leaving the screen any
+          // other way — losing the running session with zero
+          // confirmation. `push` keeps this screen mounted underneath the
+          // Tuner, so the host stays alive and the session is unaffected;
+          // popping the Tuner returns to the exact same running state.
+          onOpenTuner: () => context.push(AppRoutes.practiceTuner),
         ),
       );
     }
