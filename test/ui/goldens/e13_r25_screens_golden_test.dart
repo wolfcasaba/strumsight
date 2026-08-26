@@ -13,7 +13,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
-import 'package:strumsight/features/practice/public.dart';
+import 'package:strumsight/features/practice/public.dart'
+    hide BeatPosition, Tempo, Meter;
 import 'package:strumsight/features/song_trainer/application/song_trainer_providers.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_result.dart';
 import 'package:strumsight/features/song_trainer/application/trainer/song_trainer_state.dart';
