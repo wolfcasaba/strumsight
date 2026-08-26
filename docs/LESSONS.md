@@ -19453,3 +19453,78 @@ billen), és a párja
 el képességet).
 
 ---
+
+## L501 — A nem létező `allowed_paths`-előtag hibaosztálya HARMADSZOR ütött, és a gépi őr (S13) EGY KÖRREL a felismerés után már a saját körében fogott újabb példányt (E13-R25, 2026-08-26)
+
+**Mit mértünk.** Az E13-R25 briefjének `allowed_paths`-a HÁROM
+könyvtár-előtagot sorolt fel — `lib/features/songs/trainer/`,
+`lib/features/songs/results/`, `lib/features/setlists/run/` —, amelyek közül a
+fán **egyik sem létezett** (a `setlists` feature egyáltalán nem), miközben
+mind a négy migrálandó felület MÁR LÉTEZETT a
+`lib/features/song_trainer/presentation/screens/` alatt, és a router három
+route-on pinnelte őket. A lista tehát **nulla létező fájlt fedett**. Ez az
+[L497](#l497) hibaosztály **harmadik** mért példánya (E13-R22, E13-R23, most).
+
+**Amit a brief „mért" állításként tartalmazott.** A 2026-08-25-i sáv-szintű
+batch pre-flight §0.0/R1-e látta a hiányt, de rossz következtetést vont le:
+*„a képernyőket ez a kör hozza létre, tehát MINDEN szövege új."* Ebből
+következett a §0.0/R2 („ma zöld widget-tesztek: nincs ilyen" — valójában ÖT
+pin élt a célképernyőkre) és a §0.0/R4 („a `ui_inventory` száma elmozdul" —
+valójában HELYBEN-migráció, 86 → 86, üres diff). **Egyetlen téves premissza
+három további „mért" állítást rontott el** — a hiány észlelése nem
+helyettesíti a hiány OKÁNAK ellenőrzését.
+
+**A gépi őr időzítése.** A kör futása közben merge-elődött a `main`-be a
+`brief-lint` **S13** szabálya (PR #468), pontosan ezt a predikátumot
+gépesítve. A §0.3 upstream-szinkron után a szabály azonnal lefutott a kör saját
+briefjén — és talált egy **NEGYEDIK**, addig észrevétlen példányt:
+`test/fixtures/songs/trainer/`, amit a kör nem hozott létre és nem is
+hivatkozott (mind a négy célteszt fájlon belüli fixture-ökkel dolgozik).
+Feloldás: **szűkítés** (a bejegyzés törlése), nem útvonal-csere — a pre-flight
+csak szűkíthet ([L478](#l478)).
+
+**Ami az őr HATÁRÁN kívül marad.** Az S13 kizárólag KÖNYVTÁR-előtagra lő. A
+produkciós FÁJL-útvonalak és a `gate_tests` bejegyzések létezését továbbra is
+a pre-flightnak kell megmérnie — az E13-R25-ben ez `ls`/`find` helyett egy
+rövid Python-ciklussal ment, minden `allowed_paths` és `gate_tests` elemre
+`os.path.exists`-szel, és a „MISS" sorok közül az újonnan LÉTREHOZANDÓ
+teszt-fájlokat kellett kézzel elkülöníteni a valódi leletektől.
+
+**Őrteszt:** `tools/tests/test_brief_allowed_paths_existence.py` (a merge-elt
+S13 szabály regressziós tesztje, PR #468) — a KÖNYVTÁR-előtag ágra.
+
+## L502 — Egy `autoDispose` provider által BIRTOKOLT erőforrás widget-oldali `dispose`-olása ma zöld, holnap néma no-op: a védelmet egy nem-tesztelt együttállás adja (E13-R25 review MINOR-1, 2026-08-26)
+
+**Mit mértünk.** Az E13-R25 `SongTrainerScreen`-je `StatefulWidget`-té alakult,
+és a `dispose()`-ában `unawaited(_ownedController?.dispose())`-t hív — egy
+olyan controlleren, amit a `songTrainerControllerProvider`
+(**`Provider.autoDispose.family`**) birtokol, és amit a provider MÁR lezár:
+`ref.onDispose(() => unawaited(controller.dispose()))`.
+
+Eldobható review-próbateszt, két forgatókönyv:
+
+| Forgatókönyv | Mért eredmény |
+|---|---|
+| A provider a widget unmountja alatt cache-elve marad (bármi más figyeli) → unmount → remount | `identical(first, second) = true`, `prepare()` után `status = idle` — **halott controller, minden parancsa csendben no-op** |
+| Mai produkciós felállás (a képernyő az EGYETLEN figyelő) | `status = ready` — az `autoDispose` lebontja, a remount friss controllert kap |
+
+**Miért nem BLOCKER, és miért lecke mégis.** A mai bekötésben a hiba **nem
+elérhető**: egyetlen produkciós figyelő van, és a `dispose()` idempotens
+(`if (_disposed) return`). A védelem viszont az `autoDispose` + „pontosan egy
+figyelő" együttálláson múlik, amit **semmi nem köt ki teszttel**. Egyetlen
+`ref.keepAlive()` vagy egy második figyelő widget (mini-player,
+setlist-beágyazás) átbillenti a felső sorba — és a néma no-op a felületen
+„semmi sem történik"-ként jelenik meg, hibaüzenet nélkül.
+
+**A helyes alak** (ADR 0276): a prezentációs réteg a tulajdonos **kilépési
+útját HÍVJA** (`stop()`/`cancel()`), a lezárást a `ref.onDispose`-ra hagyja —
+„a tulajdonos ÉRTESÍTÉSE, nem a lezárása". A Stage nem birtokol erőforrást.
+
+**Általánosítható review-kérdés:** ha egy widget `dispose()`-ában egy
+provider-ből `watch`-olt objektum `dispose()`/`close()`/`release()` hívása áll,
+mindig kérdezd meg: *ki a tulajdonos, és mi történik, ha a provider túléli a
+widgetet?*
+
+**Őrteszt:** nincs — a lelet MINOR és a mai fán nem reprodukálható produkciós
+úton; a próbateszt szándékosan eldobható volt (a kikötése a MINOR-1 follow-up
+része, HANDOFF §6).

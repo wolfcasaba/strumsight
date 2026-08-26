@@ -1,5 +1,74 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R25 KÉSZ — Song Trainer, Result és Setlist Run UI — PR [#469](https://github.com/wolfcasaba/strumsight/pull/469), squash `adf49fd1` (2026-08-26)
+
+Az UI-29–UI-31 és UI-33 Stage/analitika folyamata (SDD Ch13 Kör 25). A kör
+**ADR-t nem írt**: a §5 mind az öt kötött döntése MÁR merge-elt ADR-ekben él
+([0274](docs/adr/0274-motion-driven-by-the-audio-clock.md),
+[0283](docs/adr/0283-results-never-overstate-certainty.md),
+[0276](docs/adr/0276-stage-scaffold-owns-no-resources.md),
+[0277](docs/adr/0277-failure-presentation-model.md),
+[0129](docs/adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md)) —
+újraírásuk H1 lett volna. A sávon ez a **nyolcadik** ADR nélküli kör egymás
+után (E13-R17…R25).
+
+**Amit hoz.** Mind a négy felület **HELYBEN** migrálva (típusnév, útvonal,
+konstruktor-szignatúra változatlan — az `ui_inventory` diffje ÜRES, 86 → 86):
+
+- **A lejátszófej az AUDIO ÓRÁBÓL vezetett** (ADR 0274): a `_RunningBody`
+  viewportja a `state.transportState.activePosition`-ból számol — a fán
+  **nincs** `Timer`, `Ticker` vagy `AnimationController`. A viewport a
+  KONFIGURÁLT `loopRangeEnd`-re clamp-el, **kerekítés nélkül**, így a vizuális
+  és a hallható loop-határ ugyanaz (A2/A3).
+- **A csak-lejátszás NEM kap pontszámot** (ADR 0283): a MÁR MÉRT
+  `isPlaybackOnly` domain-ág kimondva a felületen, heatmap és százalék nélkül.
+  **Nem** új domain-mód — a pontozás logikája érintetlen (A1).
+- **A setlist hangolás-váltása ELŐRE jelzett**: a `_tuningChangesAhead` a
+  szomszédos elemek `overrides` különbségéből számol, és a kártya a futás
+  INDÍTÁSA előtt látszik (A5).
+- **8 golden felvétel** (4 képernyő × 412×915 compact portrait és
+  `textScaler: 2.0`), `tools/golden-x86.sh record`-dal a merge-kapu **x86_64**
+  architektúráján (ADR 0426 §3).
+
+**A mérce dolgozott, nem pecsételt.** A golden **VALÓDI** hibát fogott:
+`textScaleFactor: 2.0` mellett a `setlist_session_screen.dart`
+hangolás-kártyája **77 px-szel túlcsordult** (`RenderFlex overflowed`) —
+javítva (`Expanded` a címre). Az A1 valódi-sértés próbája (kitalált pontszám a
+csak-lejátszás ágra) a cellát PIROSRA váltotta, majd visszaállítva zöld.
+
+**A pre-flight hét lelete (§0.0/B)** — a legfontosabb a brief HÁROM nem létező
+könyvtár-előtagja (`lib/features/songs/trainer|results/`,
+`lib/features/setlists/run/`): NULLA fájlt fedtek, miközben mind a négy
+felület MÁR LÉTEZETT a `song_trainer/presentation/` rétegben. Ez az
+[L497](docs/LESSONS.md#l497) hibaosztály **harmadszor** (E13-R22, E13-R23,
+most). Útvonal-csere a fán MÉRT rétegre, az E13-R23 user-jóváhagyott
+listájának valódi RÉSZHALMAZÁRA. A körbe merge-elt `main` közben hozta az
+**S13** brief-lint szabályt, ami pontosan ezt gépesíti — és rögtön ki is mérte
+a negyedik, nem létező `test/fixtures/songs/trainer/` előtagot (§0.0/B/B8,
+szűkítéssel feloldva).
+
+**A review APPROVED** ([review](docs/reviews/e13-r25-review.md)) — 0 BLOCKER,
+0 MAJOR, **2 MINOR**, javító kör nélkül. A MINOR-1-et a reviewer **eldobható
+próbatesztje** mérte ki: a Stage a `songTrainerControllerProvider`
+(`autoDispose`, saját `ref.onDispose`-szal) által **BIRTOKOLT** controllert
+`dispose`-olja. Cache-elt provider mellett a remount HALOTT controllert kap
+(`prepare()` → `idle`, néma no-op); a MAI egy-figyelős felállásban viszont
+`ready` — a hiba **nem elérhető**, ezért MINOR. A védelem viszont egy
+nem-tesztelt együttálláson (`autoDispose` + pontosan egy figyelő) múlik.
+
+**Az implementer első futása időkorlátba futott** (3600 s, jelzés nélkül); a
+részmunkát az orchestrátor commitolta (`0f617462`, scope-audit ok), a folytatás
+ugyanazon a branchen zárta le a kört. H6 nem állt fenn (egyszeri `timeout`).
+
+Teljes scope-audit **ok** (21 útvonal, 0 listán kívüli) · `ui_inventory`
+**86 → 86** · gyengítés (`skip`/`ignore`) **0** · full-gate
+[33010134345](https://github.com/wolfcasaba/strumsight/actions/runs/33010134345)
+és router-ci
+[33010125404](https://github.com/wolfcasaba/strumsight/actions/runs/33010125404)
+**success** a merge SHA-n (`f3bfdb46`).
+
+---
+
 ## ✅ E13-R24 KÉSZ — Song import, előnézet és szerkesztő UI — PR [#466](https://github.com/wolfcasaba/strumsight/pull/466), squash `30065dc2` (2026-08-26)
 
 Az UI-26–UI-28 import/szerkesztő felületek migrációja (SDD Ch13 Kör 24). A kör
@@ -9596,7 +9665,40 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > köztük egy emberi döntéssel feloldott H3 lista-tágítással. **Olvasd el a
 > §0.0-t a kör indítása előtt; a pre-flight NE derítse fel újra.**
 
-> **Frissítve 2026-08-26 (E13-R22 után).** A **Ch13 sáv következő köre:
+> **Frissítve 2026-08-26 (E13-R25 után).** A **Ch13 sáv következő köre:
+> `E13-R26` — Analyze felvétel és feldolgozás**
+> (`docs/rounds/e13-r26-analyze-recording-and-processing.md`, engine a
+> queue-ban `sonnet-impl`, előre kiosztott ADR: **`0285`**).
+>
+> **Négy horog, amit az E13-R25 hagyott ennek a körnek:**
+>
+> 1. **A brief `allowed_paths`-át MOST MÁR GÉPI ŐR nézi** — a `main`-be
+>    merge-elt **S13** (`brief-lint`, PR #468) kimondja a nem létező
+>    KÖNYVTÁR-előtagot. Az E13-R25-ben rögtön talált is egyet
+>    (`test/fixtures/songs/trainer/`). **De az őr csak KÖNYVTÁR-előtagra lő:**
+>    a produkciós fájl-útvonalak és a `gate_tests` bejegyzések létezését
+>    továbbra is a pre-flightnak kell `ls`/`find`-dal megmérnie.
+> 2. **A `brief-lint` S11 lelete VÁRT lehet egy csak MÓDOSÍTÓ körben.** Az
+>    `outside_screen_pins` predikátuma kizárólag az `allowed_paths`-ba vétellel
+>    törölhető, ami tágítás (H3) — a szabály SAJÁT kommentje vállalt maradék
+>    hamis riasztásnak nevezi. A helyes feloldás a lint második kifutója: a
+>    §0.0 **mondja ki mérve**, hogy a kör nem cseréli le a képernyő típusát
+>    (E13-R25 §0.0/B/B4 a minta).
+> 3. **MINOR-1 follow-up (E13-R25-ből):** a `song_trainer_screen.dart` Stage-e
+>    a provider által BIRTOKOLT controllert `dispose`-olja. Ma nem elérhető
+>    hiba, de amint bárki `ref.keepAlive()`-ot ad hozzá vagy egy második widget
+>    is figyeli a providert, **néma no-op** lesz belőle. A helyes alak: a
+>    widget a tulajdonos kilépési útját HÍVJA, a lezárást hagyja a
+>    `ref.onDispose`-ra (ADR 0276).
+> 4. **MINOR-2 follow-up (E13-R25-ből):** a `_tuningChangesAhead` a setlist
+>    **első** elemét kihagyja (`previous == null`), tehát ha rögtön az első dal
+>    kér eltérő hangolást, az nem kerül az előrejelző kártyára.
+>
+> **A golden-felvétel útja kötött:** `tools/golden-x86.sh record|check`
+> (ADR 0426 §3) — az `--update-goldens` ezen az aarch64 boxon TILOS, és a
+> golden-útvonal **nem** kerül a lokális `gate_tests`-be.
+
+> **Korábbi bejegyzés (2026-08-26, E13-R22 után) — teljesítve:** A **Ch13 sáv következő köre:
 > `E13-R23` — Song Library és setlistek**
 > (`docs/rounds/e13-r23-song-library-and-setlists.md`, engine a queue-ban
 > `sonnet-impl`, előre kiosztott ADR: **`nincs`** — ha a kör normatív döntést
