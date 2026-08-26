@@ -34,6 +34,27 @@ REAL_E05_R15_CODEX_USAGE_LIMIT_RESET_EPOCH = 1786174320
 
 class PipelineIntegrationTest(unittest.TestCase):
     def run_command(self, argv, *, cwd=ROOT, env=None):
+        # A driver GitHub-incidens őre (`github_actions_degraded`) ÉLŐ HTTP-hívás
+        # a githubstatus.com-ra, és incidens alatt RÖVIDRE ZÁRJA a self-heal ágat
+        # („az önjavítás KIMARAD: GitHub Actions incidens alatt a halt oka
+        # külső"). Egy tesztnek SOHA nem szabad külső szolgáltatás pillanatnyi
+        # állapotától függenie.
+        #
+        # MÉRT eset (2026-08-26, E13-R24/H5): a GitHub Actions `major_outage`
+        # alatt a Router CI ezen a fájlon 4 cellát bukott — `..._starts_selfheal_
+        # unless_it_is_switched_off`, `..._gives_up_after_the_configured_attempt_
+        # budget`, `..._registers_and_clears_its_own_inflight_marker`,
+        # `..._skips_a_round_that_already_has_an_active_heal_session` —, mind
+        # azonos okkal: az őr elnyelte azt az ágat, amit a cella épp mér. A kör
+        # diffje ezt a fájlt nem is érintette (scope-audit OK), tehát a piros oka
+        # 100%-ban külső volt, és a KÉSZ + APPROVED kör merge-e emiatt állt meg.
+        #
+        # A driver már hordozza a kikapcsolót (`PIPELINE_STATUS_CHECK`, 2026-08-06),
+        # csak ez a suite nem használta — a `test_engine_override_ttl.py` igen, az
+        # a precedens. `setdefault`, nem felülírás: egy cella, ami épp az őrt
+        # méri, továbbra is beállíthatja explicit `"1"`-re.
+        if env is not None:
+            env.setdefault("PIPELINE_STATUS_CHECK", "0")
         return subprocess.run(
             argv,
             cwd=cwd,
@@ -42,6 +63,76 @@ class PipelineIntegrationTest(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+    def test_the_selfheal_path_survives_a_live_github_actions_outage(self) -> None:
+        """A self-heal ág GitHub-incidens alatt is mérhető marad.
+
+        A cella a `major_outage`-ot HAMISÍTJA (fake `curl` a PATH elején), tehát
+        nem a valódi GitHub-állapottól függ — se zöld, se piros napon nem
+        billen. Az `PIPELINE_STATUS_CHECK=0` nélkül a driver itt az „önjavítás
+        KIMARAD" ágra menne, és a `run_command` alapértéke épp ezt zárja ki.
+        """
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            state = directory / "state"
+            state.mkdir()
+            fake_bin = directory / "bin"
+            fake_bin.mkdir()
+            curl = fake_bin / "curl"
+            curl.write_text(
+                "#!/bin/sh\n"
+                'printf \'{"components": [{"name": "Actions", "status": "major_outage"}]}\'\n'
+            )
+            curl.chmod(0o755)
+            (state / "HALTED").write_text("round=E09-R01\nhalt=H6\nsummary=teszt halt\n")
+            env = dict(os.environ)
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_SELFHEAL="0",
+                PIPELINE_NO_LAUNCH="1",
+                PATH=f"{fake_bin}:{env['PATH']}",
+            )
+
+            result = self.run_command(["bash", str(script)], env=env)
+
+            self.assertNotIn(
+                "az önjavítás KIMARAD",
+                result.stderr,
+                "a hamisított GitHub-incidens elnyelte a self-heal ágat — a "
+                "suite külső szolgáltatás pillanatnyi állapotától függ",
+            )
+            self.assertIn("önjavítás kikapcsolva", result.stderr)
+            self.assertEqual(result.returncode, 3)
+
+    def test_a_cell_may_still_opt_into_the_live_incident_guard(self) -> None:
+        """A `setdefault` nem vesz el képességet: explicit `"1"` visszahozza az őrt."""
+        script = ROOT / "tools" / "round-pipeline.sh"
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name)
+            state = directory / "state"
+            state.mkdir()
+            fake_bin = directory / "bin"
+            fake_bin.mkdir()
+            curl = fake_bin / "curl"
+            curl.write_text(
+                "#!/bin/sh\n"
+                'printf \'{"components": [{"name": "Actions", "status": "major_outage"}]}\'\n'
+            )
+            curl.chmod(0o755)
+            (state / "HALTED").write_text("round=E09-R01\nhalt=H6\nsummary=teszt halt\n")
+            env = dict(os.environ)
+            env.update(
+                PIPELINE_STATE_DIR=str(state),
+                PIPELINE_SELFHEAL="1",
+                PIPELINE_NO_LAUNCH="1",
+                PIPELINE_STATUS_CHECK="1",
+                PATH=f"{fake_bin}:{env['PATH']}",
+            )
+
+            result = self.run_command(["bash", str(script)], env=env)
+
+            self.assertIn("az önjavítás KIMARAD", result.stderr)
 
     def test_engine_enum_accepts_auto_and_keeps_legacy_overrides(self) -> None:
         script = ROOT / "tools" / "round-pipeline.sh"
