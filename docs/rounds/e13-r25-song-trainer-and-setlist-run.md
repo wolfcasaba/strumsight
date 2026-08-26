@@ -652,3 +652,15 @@ analyze, mind a 15 `gate_tests` cella, architecture, secrets, l10n).
 **zöld** (8/8).
 
 ## 11. Review — a Claude tölti ki
+
+Teljes jelentés: [`docs/reviews/e13-r25-review.md`](../reviews/e13-r25-review.md).
+
+**VÉGSŐ DÖNTÉS: APPROVED** — BLOCKER 0, MAJOR 0, MINOR 2 (a Stage a provider
+által birtokolt controllert `dispose`-olja — ma nem elérhető néma-no-op
+kockázat; a setlist első elemének hangolása nem kerül az előrejelző kártyára).
+Egyik sem blokkolja a merge-et; mindkettő follow-up a HANDOFF §6-ban.
+
+Mért bizonyíték: teljes scope-audit ok (21 útvonal), `ui_inventory` diff ÜRES
+(86 → 86), gyengítés 0, a `gate_shape=VIOLATION` HAMIS POZITÍV (a log a
+gate-script `cat … | head` OLVASÁSÁRA illeszkedett, a négy tényleges
+gate-hívás csupasz).
