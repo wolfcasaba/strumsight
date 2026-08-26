@@ -1967,6 +1967,113 @@
       "phase": {}
     }
   },
+  "analysisHomeTitle": "Elemzés",
+  "@analysisHomeTitle": {},
+  "analysisHomeRecordCta": "Előadás felvétele",
+  "@analysisHomeRecordCta": {},
+  "analysisHomeRecordDescription": "Gitárhang rögzítése a mikrofonról, és elemzés az eszközön.",
+  "@analysisHomeRecordDescription": {},
+  "analysisHomeImportCta": "Fájl importálása",
+  "@analysisHomeImportCta": {},
+  "analysisHomeImportDescription": "Meglévő felvétel elemzése, legfeljebb {limitMb} MB.",
+  "@analysisHomeImportDescription": {
+    "placeholders": {
+      "limitMb": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisHomeRecentSectionTitle": "Legutóbbi elemzések",
+  "@analysisHomeRecentSectionTitle": {},
+  "analysisHomeRecentEmpty": "Még nincs elemzés — kezdéshez vegyél fel vagy importálj egyet.",
+  "@analysisHomeRecentEmpty": {},
+  "analysisHomeOpenAnalysisSemantics": "Elemzés megnyitása: {title}",
+  "@analysisHomeOpenAnalysisSemantics": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "analysisRecordingTitle": "Felvétel",
+  "@analysisRecordingTitle": {},
+  "analysisRecordingReadyTitle": "Felvételre kész",
+  "@analysisRecordingReadyTitle": {},
+  "analysisRecordingReadyDescription": "Legfeljebb {minutes} perc kerül felvételre.",
+  "@analysisRecordingReadyDescription": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisRecordingRetentionDiscarded": "Csak a származtatott elemzés marad meg — a nyers felvétel törlődik, amint elhagyod ezt a képernyőt.",
+  "@analysisRecordingRetentionDiscarded": {},
+  "analysisRecordingRetentionKept": "A nyers felvétel az elemzéssel együtt megmarad.",
+  "@analysisRecordingRetentionKept": {},
+  "analysisRecordingStart": "Felvétel indítása",
+  "@analysisRecordingStart": {},
+  "analysisRecordingStop": "Felvétel leállítása",
+  "@analysisRecordingStop": {},
+  "analysisRecordingCancel": "Mégse",
+  "@analysisRecordingCancel": {},
+  "analysisRecordingLiveLabel": "Felvétel",
+  "@analysisRecordingLiveLabel": {},
+  "analysisRecordingElapsed": "{elapsed} rögzítve",
+  "@analysisRecordingElapsed": {
+    "placeholders": {
+      "elapsed": {}
+    }
+  },
+  "analysisRecordingClippingWarning": "A jel torzít — húzódj hátrébb a mikrofontól, vagy játssz halkabban.",
+  "@analysisRecordingClippingWarning": {},
+  "analysisRecordingSilenceWarning": "A jel nagyon halk — játssz hangosabban, vagy húzódj közelebb a mikrofonhoz.",
+  "@analysisRecordingSilenceWarning": {},
+  "analysisRecordingPermissionDeniedTitle": "Mikrofon-hozzáférés szükséges",
+  "@analysisRecordingPermissionDeniedTitle": {},
+  "analysisRecordingPermissionDeniedDescription": "Engedélyezd a mikrofon-hozzáférést az előadás felvételéhez.",
+  "@analysisRecordingPermissionDeniedDescription": {},
+  "analysisRecordingPermissionRetry": "Próbáld újra",
+  "@analysisRecordingPermissionRetry": {},
+  "analysisRecordingErrorTitle": "A felvétel nem indult el",
+  "@analysisRecordingErrorTitle": {},
+  "analysisRecordingErrorRetry": "Újra",
+  "@analysisRecordingErrorRetry": {},
+  "analysisRecordingMaxDurationReached": "A maximális felvételi hossz elérve — a felvétel automatikusan leállt.",
+  "@analysisRecordingMaxDurationReached": {},
+  "analysisProcessingTitle": "Feldolgozás",
+  "@analysisProcessingTitle": {},
+  "analysisProcessingStarting": "Elemzés indítása",
+  "@analysisProcessingStarting": {},
+  "analysisProcessingStartingDescription": "A felvétel elemzésének előkészítése.",
+  "@analysisProcessingStartingDescription": {},
+  "analysisProcessingStepIndicator": "{step}. lépés / {total}",
+  "@analysisProcessingStepIndicator": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisProcessingCompletedTitle": "Elemzés kész",
+  "@analysisProcessingCompletedTitle": {},
+  "analysisProcessingViewResult": "Eredmény megtekintése",
+  "@analysisProcessingViewResult": {},
+  "analysisProcessingDegradedTitle": "Az elemzés csökkentett részletességgel készült el",
+  "@analysisProcessingDegradedTitle": {},
+  "analysisProcessingDegradedDescription": "Néhány mérés nem volt elérhető:",
+  "@analysisProcessingDegradedDescription": {},
+  "analysisProcessingCancelledTitle": "Elemzés megszakítva",
+  "@analysisProcessingCancelledTitle": {},
+  "analysisProcessingRestart": "Újrakezdés",
+  "@analysisProcessingRestart": {},
+  "analysisProcessingErrorTitle": "Az elemzés sikertelen",
+  "@analysisProcessingErrorTitle": {},
+  "analysisProcessingErrorRetry": "Újra",
+  "@analysisProcessingErrorRetry": {},
+  "analysisProcessingPermissionDeniedTitle": "Mikrofon-hozzáférés szükséges",
+  "@analysisProcessingPermissionDeniedTitle": {},
   "analysisOverviewTitle": "Elemzés áttekintése",
   "@analysisOverviewTitle": {},
   "analysisOverviewPrimaryMetrics": "Fő metrikák",

@@ -613,6 +613,32 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Exportálás és megosztás",
   "@analysisExportTitle": {},
+  "analysisHomeImportCta": "Fájl importálása",
+  "@analysisHomeImportCta": {},
+  "analysisHomeImportDescription": "Meglévő felvétel elemzése, legfeljebb {limitMb} MB.",
+  "@analysisHomeImportDescription": {
+    "placeholders": {
+      "limitMb": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisHomeOpenAnalysisSemantics": "Elemzés megnyitása: {title}",
+  "@analysisHomeOpenAnalysisSemantics": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "analysisHomeRecentEmpty": "Még nincs elemzés — kezdéshez vegyél fel vagy importálj egyet.",
+  "@analysisHomeRecentEmpty": {},
+  "analysisHomeRecentSectionTitle": "Legutóbbi elemzések",
+  "@analysisHomeRecentSectionTitle": {},
+  "analysisHomeRecordCta": "Előadás felvétele",
+  "@analysisHomeRecordCta": {},
+  "analysisHomeRecordDescription": "Gitárhang rögzítése a mikrofonról, és elemzés az eszközön.",
+  "@analysisHomeRecordDescription": {},
+  "analysisHomeTitle": "Elemzés",
+  "@analysisHomeTitle": {},
   "analysisInsightChordTransitionHotspot": "Egy akkordváltás célzott gyakorlást igényel ({hotspotId}).",
   "@analysisInsightChordTransitionHotspot": {
     "placeholders": {
@@ -940,6 +966,41 @@
   "@analysisOverviewWarningMigration": {},
   "analysisOverviewWarningProcessing": "Feldolgozási figyelmeztetés",
   "@analysisOverviewWarningProcessing": {},
+  "analysisProcessingCancelledTitle": "Elemzés megszakítva",
+  "@analysisProcessingCancelledTitle": {},
+  "analysisProcessingCompletedTitle": "Elemzés kész",
+  "@analysisProcessingCompletedTitle": {},
+  "analysisProcessingDegradedDescription": "Néhány mérés nem volt elérhető:",
+  "@analysisProcessingDegradedDescription": {},
+  "analysisProcessingDegradedTitle": "Az elemzés csökkentett részletességgel készült el",
+  "@analysisProcessingDegradedTitle": {},
+  "analysisProcessingErrorRetry": "Újra",
+  "@analysisProcessingErrorRetry": {},
+  "analysisProcessingErrorTitle": "Az elemzés sikertelen",
+  "@analysisProcessingErrorTitle": {},
+  "analysisProcessingPermissionDeniedTitle": "Mikrofon-hozzáférés szükséges",
+  "@analysisProcessingPermissionDeniedTitle": {},
+  "analysisProcessingRestart": "Újrakezdés",
+  "@analysisProcessingRestart": {},
+  "analysisProcessingStarting": "Elemzés indítása",
+  "@analysisProcessingStarting": {},
+  "analysisProcessingStartingDescription": "A felvétel elemzésének előkészítése.",
+  "@analysisProcessingStartingDescription": {},
+  "analysisProcessingStepIndicator": "{step}. lépés / {total}",
+  "@analysisProcessingStepIndicator": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisProcessingTitle": "Feldolgozás",
+  "@analysisProcessingTitle": {},
+  "analysisProcessingViewResult": "Eredmény megtekintése",
+  "@analysisProcessingViewResult": {},
   "analysisProgressBeatGrid": "Ütemrács becslése",
   "analysisProgressBeatGridDescription": "A ritmikus lüktetés becslése.",
   "analysisProgressCancel": "Elemzés megszakítása",
@@ -965,6 +1026,52 @@
   },
   "analysisProgressValidating": "Felvétel ellenőrzése",
   "analysisProgressValidatingDescription": "Annak ellenőrzése, hogy a felvétel elemezhető-e.",
+  "analysisRecordingCancel": "Mégse",
+  "@analysisRecordingCancel": {},
+  "analysisRecordingClippingWarning": "A jel torzít — húzódj hátrébb a mikrofontól, vagy játssz halkabban.",
+  "@analysisRecordingClippingWarning": {},
+  "analysisRecordingElapsed": "{elapsed} rögzítve",
+  "@analysisRecordingElapsed": {
+    "placeholders": {
+      "elapsed": {}
+    }
+  },
+  "analysisRecordingErrorRetry": "Újra",
+  "@analysisRecordingErrorRetry": {},
+  "analysisRecordingErrorTitle": "A felvétel nem indult el",
+  "@analysisRecordingErrorTitle": {},
+  "analysisRecordingLiveLabel": "Felvétel",
+  "@analysisRecordingLiveLabel": {},
+  "analysisRecordingMaxDurationReached": "A maximális felvételi hossz elérve — a felvétel automatikusan leállt.",
+  "@analysisRecordingMaxDurationReached": {},
+  "analysisRecordingPermissionDeniedDescription": "Engedélyezd a mikrofon-hozzáférést az előadás felvételéhez.",
+  "@analysisRecordingPermissionDeniedDescription": {},
+  "analysisRecordingPermissionDeniedTitle": "Mikrofon-hozzáférés szükséges",
+  "@analysisRecordingPermissionDeniedTitle": {},
+  "analysisRecordingPermissionRetry": "Próbáld újra",
+  "@analysisRecordingPermissionRetry": {},
+  "analysisRecordingReadyDescription": "Legfeljebb {minutes} perc kerül felvételre.",
+  "@analysisRecordingReadyDescription": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisRecordingReadyTitle": "Felvételre kész",
+  "@analysisRecordingReadyTitle": {},
+  "analysisRecordingRetentionDiscarded": "Csak a származtatott elemzés marad meg — a nyers felvétel törlődik, amint elhagyod ezt a képernyőt.",
+  "@analysisRecordingRetentionDiscarded": {},
+  "analysisRecordingRetentionKept": "A nyers felvétel az elemzéssel együtt megmarad.",
+  "@analysisRecordingRetentionKept": {},
+  "analysisRecordingSilenceWarning": "A jel nagyon halk — játssz hangosabban, vagy húzódj közelebb a mikrofonhoz.",
+  "@analysisRecordingSilenceWarning": {},
+  "analysisRecordingStart": "Felvétel indítása",
+  "@analysisRecordingStart": {},
+  "analysisRecordingStop": "Felvétel leállítása",
+  "@analysisRecordingStop": {},
+  "analysisRecordingTitle": "Felvétel",
+  "@analysisRecordingTitle": {},
   "analysisTechniqueAttackInstability": "Hangindítás tisztasága",
   "analysisTechniqueChordChangeGap": "Akkordváltás folyamatossága",
   "analysisTechniqueConfidenceCollapseDuration": "Akkordfelismerés bizonytalanságának időtartama",

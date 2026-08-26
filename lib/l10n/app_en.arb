@@ -620,6 +620,32 @@
   "@analysisExportSectionWarnings": {},
   "analysisExportTitle": "Export & share",
   "@analysisExportTitle": {},
+  "analysisHomeImportCta": "Import a file",
+  "@analysisHomeImportCta": {},
+  "analysisHomeImportDescription": "Analyze an existing recording, up to {limitMb} MB.",
+  "@analysisHomeImportDescription": {
+    "placeholders": {
+      "limitMb": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisHomeOpenAnalysisSemantics": "Open analysis: {title}",
+  "@analysisHomeOpenAnalysisSemantics": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "analysisHomeRecentEmpty": "No analyses yet — record or import one to get started.",
+  "@analysisHomeRecentEmpty": {},
+  "analysisHomeRecentSectionTitle": "Recent analyses",
+  "@analysisHomeRecentSectionTitle": {},
+  "analysisHomeRecordCta": "Record a performance",
+  "@analysisHomeRecordCta": {},
+  "analysisHomeRecordDescription": "Capture guitar audio from the microphone and analyze it on this device.",
+  "@analysisHomeRecordDescription": {},
+  "analysisHomeTitle": "Analyze",
+  "@analysisHomeTitle": {},
   "analysisInsightChordTransitionHotspot": "A chord transition needs focused practice ({hotspotId}).",
   "@analysisInsightChordTransitionHotspot": {
     "placeholders": {
@@ -947,6 +973,41 @@
   "@analysisOverviewWarningMigration": {},
   "analysisOverviewWarningProcessing": "Processing warning",
   "@analysisOverviewWarningProcessing": {},
+  "analysisProcessingCancelledTitle": "Analysis cancelled",
+  "@analysisProcessingCancelledTitle": {},
+  "analysisProcessingCompletedTitle": "Analysis complete",
+  "@analysisProcessingCompletedTitle": {},
+  "analysisProcessingDegradedDescription": "Some measurements weren't available:",
+  "@analysisProcessingDegradedDescription": {},
+  "analysisProcessingDegradedTitle": "Analysis completed with reduced detail",
+  "@analysisProcessingDegradedTitle": {},
+  "analysisProcessingErrorRetry": "Retry",
+  "@analysisProcessingErrorRetry": {},
+  "analysisProcessingErrorTitle": "Analysis failed",
+  "@analysisProcessingErrorTitle": {},
+  "analysisProcessingPermissionDeniedTitle": "Microphone access needed",
+  "@analysisProcessingPermissionDeniedTitle": {},
+  "analysisProcessingRestart": "Start again",
+  "@analysisProcessingRestart": {},
+  "analysisProcessingStarting": "Starting analysis",
+  "@analysisProcessingStarting": {},
+  "analysisProcessingStartingDescription": "Getting ready to analyze the recording.",
+  "@analysisProcessingStartingDescription": {},
+  "analysisProcessingStepIndicator": "Step {step} of {total}",
+  "@analysisProcessingStepIndicator": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisProcessingTitle": "Processing",
+  "@analysisProcessingTitle": {},
+  "analysisProcessingViewResult": "View result",
+  "@analysisProcessingViewResult": {},
   "analysisProgressBeatGrid": "Estimating beat grid",
   "analysisProgressBeatGridDescription": "Estimating the rhythmic pulse.",
   "analysisProgressCancel": "Cancel analysis",
@@ -972,6 +1033,52 @@
   },
   "analysisProgressValidating": "Checking recording",
   "analysisProgressValidatingDescription": "Checking that the recording can be analysed.",
+  "analysisRecordingCancel": "Cancel",
+  "@analysisRecordingCancel": {},
+  "analysisRecordingClippingWarning": "Signal is clipping — move back from the microphone or play more softly.",
+  "@analysisRecordingClippingWarning": {},
+  "analysisRecordingElapsed": "{elapsed} recorded",
+  "@analysisRecordingElapsed": {
+    "placeholders": {
+      "elapsed": {}
+    }
+  },
+  "analysisRecordingErrorRetry": "Retry",
+  "@analysisRecordingErrorRetry": {},
+  "analysisRecordingErrorTitle": "Recording couldn't start",
+  "@analysisRecordingErrorTitle": {},
+  "analysisRecordingLiveLabel": "Recording",
+  "@analysisRecordingLiveLabel": {},
+  "analysisRecordingMaxDurationReached": "Maximum recording length reached — recording stopped automatically.",
+  "@analysisRecordingMaxDurationReached": {},
+  "analysisRecordingPermissionDeniedDescription": "Allow microphone access to record a performance.",
+  "@analysisRecordingPermissionDeniedDescription": {},
+  "analysisRecordingPermissionDeniedTitle": "Microphone access needed",
+  "@analysisRecordingPermissionDeniedTitle": {},
+  "analysisRecordingPermissionRetry": "Try again",
+  "@analysisRecordingPermissionRetry": {},
+  "analysisRecordingReadyDescription": "Up to {minutes} minutes will be recorded.",
+  "@analysisRecordingReadyDescription": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisRecordingReadyTitle": "Ready to record",
+  "@analysisRecordingReadyTitle": {},
+  "analysisRecordingRetentionDiscarded": "Only the derived analysis is kept — the raw recording is discarded when you leave this screen.",
+  "@analysisRecordingRetentionDiscarded": {},
+  "analysisRecordingRetentionKept": "The raw recording will be kept alongside the analysis.",
+  "@analysisRecordingRetentionKept": {},
+  "analysisRecordingSilenceWarning": "Signal is very quiet — play louder or move closer to the microphone.",
+  "@analysisRecordingSilenceWarning": {},
+  "analysisRecordingStart": "Start recording",
+  "@analysisRecordingStart": {},
+  "analysisRecordingStop": "Stop recording",
+  "@analysisRecordingStop": {},
+  "analysisRecordingTitle": "Recording",
+  "@analysisRecordingTitle": {},
   "analysisTechniqueAttackInstability": "Note-start clarity",
   "analysisTechniqueChordChangeGap": "Chord-change continuity",
   "analysisTechniqueConfidenceCollapseDuration": "Chord-recognition confidence dip duration",
