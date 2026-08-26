@@ -1,6 +1,7 @@
 # E13-R23 — Song Library, Overview és Setlist lista UI
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 74f8a8ec`)
+- **Státusz:** **READY** — pre-flight lefutva 2026-08-26 (`main @ 76566726`),
+  §0.0/B nyolc mért revízióval
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 23
 - **Kör-azonosító:** `E13-R23`
 - **Branch:** `<motor>/e13-r23-song-library-and-setlists`
@@ -16,9 +17,16 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "lib/features/songs/library/",
-  "lib/features/songs/overview/",
-  "lib/features/setlists/",
+  # §0.0/B/R13 — a brief eredeti három könyvtára (`lib/features/songs/library/`,
+  # `lib/features/songs/overview/`, `lib/features/setlists/`) a fán NEM létezik,
+  # és a három megnevezett felület MÁR LÉTEZIK a song_trainer presentation
+  # rétegében. Az eredeti lista NULLA létező fájlt fedett. A csere a merge-elt
+  # E03-R14…R22 briefek user-jóváhagyott literáljainak valódi RÉSZHALMAZA.
+  "lib/features/song_trainer/presentation/screens/song_library_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_overview_screen.dart",
+  "lib/features/song_trainer/presentation/screens/setlist_list_screen_v2.dart",
+  "lib/features/song_trainer/presentation/widgets/",
+  "lib/features/song_trainer/public.dart",
   "lib/app/routing/",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
@@ -37,7 +45,13 @@ gate_tests = [
   "test/features/songs/song_asset_state_test.dart",
   "test/features/songs/setlist_list_test.dart",
   "test/app/navigation/",
-  "test/ui/goldens/e13_r23_screens_golden_test.dart",
+  # §0.0/B/R17 — a MEGLÉVŐ, listán KÍVÜLI pinek: futtatni KELL, szerkeszteni
+  # TILOS (song_library_screen_test, song_overview_screen_test, a11y-audit;
+  # és az app_router_test.dart:303 SongLibraryScreen-pinje).
+  "test/features/song_trainer/presentation/",
+  "test/app/routing/app_router_test.dart",
+  # §0.0/B/R14 (ADR 0426) — a golden-sáv NEM a lokális ARM-gate-en fut:
+  # `tools/golden-x86.sh check test/ui/goldens/e13_r23_screens_golden_test.dart`
   "test/ui/ui_inventory_test.dart",
   "test/core/architecture_dependency_test.dart",
   "test/tooling/dio_factory_guard_test.dart",
@@ -173,6 +187,198 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0/B BRIEF-REVÍZIÓ — 2026-08-26, a kör SAJÁT pre-flightja (`main @ 76566726`)
+
+A `brief-lint` (strict) 0 leletet adott, a hagyaték-mérés `ÁLLAPOT: NINCS`.
+Az alábbi nyolc revízió a fán MÉRT, nem feltételezett. **Visszakeresett
+előzmény** (`tools/knowledge-rag.mjs`, szűkített → teljes korpusz):
+[L478](../LESSONS.md#l478) (a pre-flight csak SZŰKÍTHET; a tágítás H3),
+[L486](../LESSONS.md#l486) + [L493](../LESSONS.md#l493) +
+[ADR 0426](../adr/0426-golden-rasterization-on-the-merge-gate-architecture.md)
+(a golden-raszterizáció csak a merge-kapu ISA-ján mérhető), az E13-R20/H5
+halt-jelzés, és a KÖZVETLENÜL előző, merge-elt kör azonos hibaosztályú
+feloldása (E13-R22 §0.0/B/R6–R11, `5f4266e3`).
+
+### R13 — a három megnevezett könyvtár NEM létezik; a három felület MÁR LÉTEZIK máshol
+
+```
+ls -d lib/features/songs/library lib/features/songs/overview lib/features/setlists
+→ (mind a három: nincs ilyen fájl vagy könyvtár)
+
+ls lib/features/song_trainer/presentation/screens/
+→ song_library_screen.dart      ← a §3 „dal-könyvtár"
+  song_overview_screen.dart     ← a §3 „dal áttekintő nézete"
+  setlist_list_screen_v2.dart   ← a §3 „setlist-lista"
+  + song_editor/import/import_preview/result/trainer/setup/setlist_session
+```
+
+A §0.0/R1 azt állította, hogy „a képernyőket ez a kör hozza létre" — ez
+**mérve hamis**: mind a három felület létezik, kettő közülük route-on
+regisztrált (`app_router.dart:338` → `SongLibraryScreen`, `:356` →
+`SongOverviewScreen`). Az eredeti lista így **nulla létező fájlt** fedett: a
+körnek egyetlen olyan engedélyezett fájlja sem lett volna, amin a §1 szerinti
+**migráció** elvégezhető.
+
+**Feloldás — útvonal-csere, NEM új jogosultság-osztály.** A csere a merge-elt
+E03-R14…R22 briefek user-jóváhagyott `allowed_paths` literáljainak **valódi
+részhalmaza** (a három screen-fájl és a `presentation/widgets/` mind ott
+szerepel tételesen). A kör tehát **kevesebbet** kap, mint a szomszédai:
+
+| E03-R15/R16/R17/R21 (merge-elt) | E13-R23 (ez a kör) |
+|---|---|
+| a `presentation/screens/` mind a 10 fájlja | ebből **3** (library, overview, setlist-lista) |
+| `presentation/widgets/` (tételesen mind) | `presentation/widgets/` |
+| `application/`, `domain/`, `data/` fák is | **egyik sem** — csak OLVASHATÓ |
+
+Az `application/`, `domain/` és `data/` réteg a kör számára **olvasható, de
+NEM írható** — a §3 „a dal-dokumentum séma módosítása tilos" tiltása így
+gépi is: a scope-audit a listán kívüli írást `VIOLATION`-nel jelzi.
+
+### R14 — a golden-sáv a MERGE-KAPU architektúráján fut (ADR 0426)
+
+A §7 eredeti sora (`~/flutter/bin/flutter test --update-goldens`) **ARM-pixelt**
+rögzítene, amit az x86-os CI nulla toleranciával pirosra vált — pontosan ez
+állította meg az E13-R20-at **H5**-tel ([L493](../LESSONS.md#l493)). A kör a
+merge-elt `tools/golden-x86.sh`-t használja (`record`, majd kötelező `check`),
+és a golden-cella **nincs** a lokális `round-gate.sh` sorban:
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r23_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r23_screens_golden_test.dart
+```
+
+Az A9 mércéje **változatlan**: ugyanaz a nulla toleranciájú komparátor, két
+keret (412×915 compact portrait ÉS `textScaleFactor: 2.0`), 0 törölt/skippelt
+cella, a PNG-k commitolva. Csak a mérés HELYE került a felvétel mellé.
+
+### R15 — a kör ADR-t NEM ír (H1 volna)
+
+```
+ls docs/adr | grep -E '^027[5-8]|^0426'
+→ 0275-five-area-shell-behind-a-flag.md
+  0277-failure-presentation-model.md
+  0278-ai-provenance-is-visible.md
+```
+
+A §5 mind az öt kötött döntése MÁR merge-elt ADR-re támaszkodik (0275 legacy
+route, 0277 hibabemutatás, 0278 provenance-elv), és a §3 tilos zónája
+kimondottan tartalmazza a `docs/adr/**`-ot. Új ADR-szám kiosztása merge-elt
+döntés fölé az ADR 0087 §4 szerint tilos, egy meglévő módosítása **H1**.
+A pipeline „előre kiosztott ADR: nincs" mezője tehát a mérés szerint helyes:
+**nem foglalunk ADR-számot**, ADR-fájl nem születik. (Azonos feloldás, mint
+E13-R21 és E13-R22 §0.0/B/R5.)
+
+### R16 — a §5.2 „forrás/licenc" a MÉRT mezőkre szűkül: nincs licenc-mező és nincs „közösségi" forrás
+
+A brief pre-flight-figyelmeztetése ezt kifejezetten kérte. A mérés:
+
+```
+grep -n 'license\|License' lib/features/song_trainer/domain/models/*.dart → (üres)
+grep -rn 'readOnly\|isEditable\|canEdit\|community' lib/features/song_trainer/domain/models/ → (üres)
+
+enum SongSourceType (song_source.dart:45): legacyLocal, createdInApp,
+  strumSightJson, musicXml, compressedMusicXml, midi, guitarPro
+SongSummary (song_repository.dart:136): …, capability, sourceType, favorite,
+  archived, revision, documentHash, trashed
+SongCapabilitySummary (:77): canPersist, canTrain, canExport, chordScoring,
+  pitchScoring, lastValidatedAt
+SongMetadata: copyright (opcionális szabad szöveg)
+```
+
+**Nincs `license` mező és nincs `community` forrástípus.** A §5.2 jelölés
+ezért PONTOSAN erre a három mért forrásra írható meg, és semmi másra:
+
+| A §5.2 fogalma | A MÉRT producer |
+|---|---|
+| „saját importja / beépített" | `SongSummary.sourceType` (`SongSourceType`, 7 stabil kód) |
+| „licenc" | `SongMetadata.copyright` — ha `null`, a felület **nem állít** licencet |
+| „szerkesztheti-e" | `SongSummary.capability.canPersist` (`false` ⇒ a mentés zárva) |
+
+**A „közösségi" forrás kimarad**, mert nincs mögötte adat — kitalált címke a
+provenance MEGHAMISÍTÁSA lenne, azaz pontosan az ADR 0278 elvének megsértése.
+Az A2/A3 cella ennek megfelelően a mért mezőkre mér; a §6.1 „A csak olvasható
+dal szerkeszthető" hibás implementációt a `canPersist == false` melletti
+elérhető szerkesztő-belépő fogja pirosra.
+
+### R17 — a §0.0/R2 „nincs ilyen" MÉRVE HAMIS: négy meglévő pin
+
+```
+grep -rln 'SongLibraryScreen\|SongOverviewScreen\|SetlistListScreenV2' test/
+→ test/features/song_trainer/presentation/song_library_screen_test.dart
+  test/features/song_trainer/presentation/song_overview_screen_test.dart
+  test/app/routing/app_router_test.dart            (:303 findsOneWidget)
+  test/features/song_trainer/application/setlists/setlist_session_controller_test.dart
+```
+
+Ezek a listán KÍVÜL vannak, tehát **szerkeszteni tilos**; a migráció úgy
+helyes, ha zöldek maradnak. A `gate_tests` ezért mostantól futtatja őket
+(`test/features/song_trainer/presentation/`, `test/app/routing/app_router_test.dart`)
+— a hibaosztály ugyanaz, mint az S12-nél: a lelet a lokális kapun jelenjen
+meg, ne a ~17 perces exact-SHA Full Gate-en. Ha egy cella a migrációtól
+elbukik, az **`blocked`** jelzés és célzott brief-revízió, nem csendes átírás
+([L488](../LESSONS.md#l488) helyben-tartás).
+
+### R18 — a §0.0/R3 shell-destination premisszája IGAZ, de ez a kör NEM köti át
+
+```
+adaptive_scaffold_test.dart:210  → find.byType(SongListScreen)      (legacy)
+adaptive_scaffold_test.dart:236  → AppRoutes.songsSetlists: SetlistListScreen
+app_router.dart:471/475          → SongListScreen / SetlistListScreen
+```
+
+A shell Songs-destinationje ma a **legacy** `lib/features/songs/screens/`
+képernyőket rendereli (a `Song`/`Setlist` modellre, aminek nincs
+`SongSource`-a, nincs assetje, nincs capabilityje — a §5.2/§5.3 rajta
+**elvileg** sem teljesíthető). A migráció célja ezért a song_trainer V2
+felület, a shell-destination átkötése pedig **nem** ennek a körnek a dolga:
+a legacy képernyők a listán KÍVÜL vannak, az átkötés a `test/app/navigation/`
+három őrét pirosra váltaná, és egy fél-migrált Songs-terület maradna.
+
+A `test/app/navigation/` és a `lib/app/routing/` az eredeti listán MARAD (a
+szűkítés nem kötelező), de a jogosultság szűk: **kizárólag** az A7
+alias/redirect bejegyzés és a hozzá tartozó cella, ha a kör egyáltalán
+igényel ilyet. A destination-builder átkötése, cella törlése vagy `skip`-je
+**TILOS**.
+
+### R19 — a képernyő-leltár egzakt száma 86, és ez a kör NEM mozdítja el
+
+```
+find lib/features -name '*_screen.dart' | wc -l   → 86
+test/ui/ui_inventory_test.dart:14                 → hasLength(86)
+```
+
+A migráció **helyben** történik (R13), tehát új `*_screen.dart` nem születik
+és a szám nem mozdul. A fájl a listán MARAD (a §0.0/R4 jogosultsága
+változatlan: **PONTOSAN a szám emelése a TÉNYLEGES értékre**), de a várt diff
+**üres**. Kerülőút (képernyő-átnevezés, a `tool/ui_inventory.dart` szabályának
+lazítása) TILOS.
+
+### R20 — az A5/A6/§6.1 három cellájának MÉRT producere: `SetlistItemAvailability`
+
+```
+song_setlist.dart:12  enum SetlistItemAvailability {
+  ready, missingSong, missingAsset, unsupportedTrack,
+  requiresMigration, invalidConfig }
+song_setlist.dart:87  SongSetlistItem.initialAvailability
+song_asset_repository.dart:47   'songAssetRepository.missingAsset'
+backing_audio_player.dart:8     'backingAudioPlayer.missingAsset'
+```
+
+A §6.1 eszköz-készenléti hármas leképezése tehát nem tetszőleges:
+
+| §6.1 cella | A MÉRT bemenet |
+|---|---|
+| a küszöb alatt | `SetlistItemAvailability.ready` |
+| rajta (a küszöbön) | `SetlistItemAvailability.missingAsset` — a dal **megnyitható**, csak a lejátszás jelöli a hiányt |
+| a küszöb fölött | `SetlistItemAvailability.missingSong` — a tétel **nevesítve**, hibásként |
+
+**Mért szerkezeti korlát:** a `SetlistListScreenV2` **nincs** GoRoute-on
+regisztrálva, és a konstruktora kötelező `controller` + `clock` argumentumot
+kér (`setlist_list_screen_v2.dart:9–18`). Az A5/A6 cellái ezért a widgetet
+**közvetlenül** példányosítják (`SetlistController` teszt-dublőrrel), nem
+route-navigációval. A route-regisztráció egy KÉSŐBBI kör dolga (E13-R25 §3
+setlist-run) — ezt a §10 handoffban nevesítsd.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -194,7 +400,11 @@ Az UI-24–UI-25 és UI-32 Songs-tartalmak migrációja **offline készenlét** 
 - Az R08 shellje és az R12 kártyái készen állnak; a Songs terület
   a shell egyik cél-destinationje.
 - Az R10 ADR 0277: az offline nem hiba, a cached tartalom látható marad.
-- A dalok egy része **közösségi / csak olvasható** forrásból származhat.
+- ~~A dalok egy része **közösségi / csak olvasható** forrásból származhat.~~
+  **MÉRVE HAMIS (§0.0/B/R16):** nincs `community` forrástípus és nincs
+  licenc-mező. A provenance a `SongSummary.sourceType` (7 kód), a licenc a
+  `SongMetadata.copyright` (opcionális), a „szerkeszthető-e" a
+  `capability.canPersist`.
 
 ## 3. Scope
 
@@ -211,19 +421,27 @@ route-alias teszt a meglévő útvonalakról.
 
 ## 4. Engedélyezett fájlok
 
+> ⚠ A táblázat a §0.0/B/R13 útvonal-cseréje UTÁNI állapotot mutatja; a
+> normatív forrás az `ai-router` blokk `allowed_paths` listája.
+
 | Útvonal | Indok |
 |---|---|
-| `songs/library/` | a könyvtár UI-ja |
-| `songs/overview/` | a dal áttekintő nézete |
-| `setlists/` | a setlist-lista |
-| `lib/app/routing/` | **kizárólag** az alias/redirect bejegyzések |
+| `song_trainer/presentation/screens/song_library_screen.dart` | a könyvtár UI-ja |
+| `song_trainer/presentation/screens/song_overview_screen.dart` | a dal áttekintő nézete |
+| `song_trainer/presentation/screens/setlist_list_screen_v2.dart` | a setlist-lista |
+| `song_trainer/presentation/widgets/` | a fenti három felület komponensei |
+| `song_trainer/public.dart` | a barrel, ha új komponens exportot igényel |
+| `lib/app/routing/` | **kizárólag** az A7 alias/redirect bejegyzés (§0.0/B/R18) |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a dal-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/songs/*_test.dart` (3) | a §6 cellái |
 | `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör új `lib/features/**/*_screen.dart`-ot hozhat, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése, más állítás nem érinthető (§0.0/R4) |
 | `docs/rounds/e13-r23-…md` | a §10 handoff |
 
-**Tilos zóna:** `lib/features/songs/import/`, `editor/`, `trainer/` ·
+**Tilos zóna:** a song_trainer `application/`, `domain/`, `data/` fája
+(OLVASHATÓ, nem írható) · a legacy `lib/features/songs/` fa · a
+`presentation/screens/` másik hét képernyője (editor, import, import_preview,
+result, trainer, setup, setlist_session) ·
 `lib/core/design_system/**` · `lib/core/theme/**` · `docs/adr/**` ·
 `docs/sdd/**` · `tools/**` · `.github/**`.
 
@@ -236,9 +454,15 @@ offline állapot nem tesz semmit elérhetetlenné, ami helyben megvan.
 
 ### 5.2 A forrás és a licenc-státusz LÁTHATÓ
 
-A felhasználónak tudnia kell, saját importja, beépített vagy közösségi
-tartalmat néz-e, és hogy szerkesztheti-e. Ez az ADR 0278 provenance-elvének
-tartalmi megfelelője.
+A felhasználónak tudnia kell, milyen forrásból származik a dal, és hogy
+szerkesztheti-e. Ez az ADR 0278 provenance-elvének tartalmi megfelelője.
+
+**A §0.0/B/R16 szerint MÉRT alak:** a forrás a `SongSummary.sourceType`
+(`SongSourceType` 7 stabil kódja) alapján jelenik meg, a licenc a
+`SongMetadata.copyright` alapján — ha `null`, a felület **nem állít**
+licencet —, a szerkeszthetőség pedig a `capability.canPersist` alapján.
+Kitalált „közösségi" címke **TILOS**: nincs mögötte adat, tehát az ADR 0278
+provenance-elvét sértené meg.
 
 **NEM elfogadható gyengítés:** a forrás elrejtése „egységes lista-megjelenés"
 kedvéért. A csak olvasható tartalom szerkesztési kísérlete így csak a hibánál
@@ -302,17 +526,20 @@ vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart test/app/navigation/ test/ui/goldens/e13_r23_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart test/app/navigation/ test/features/song_trainer/presentation/ test/app/routing/app_router_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
 minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
 keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
 KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
-(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+(valódi kapu, nem `skip`-elt rögzítő). Előállítás — **a merge-kapu
+architektúráján** (§0.0/B/R14, ADR 0426); a `--update-goldens` ezen a boxon
+ARM-pixelt rögzítene, amit az x86-os CI pirosra vált:
 
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r23_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r23_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r23_screens_golden_test.dart
 ```
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
