@@ -706,4 +706,49 @@ futás: `flutter test test/features/chords/ test/features/learn/` →
 **235 zöld** (234 baseline + 1 új őr-cella), egyetlen, a kártól független
 `~1` skip változatlanul.
 
+### Javító kör (2. javító kör) — a CI exact-SHA golden-bukása (L486)
+
+**Gyökérok (mérve, L486 osztály):** a téma `ColorScheme.fromSeed`-ből
+származtat (`app_theme.dart:14`), és három séma-származtatott, nagy
+felületű kitöltés box↔CI eltérést okozott:
+
+1. `lib/features/learn/screens/lesson_list_screen.dart:238` `_LessonTile`
+   `Card`-ja — explicit `color:` nélkül a téma seed-alapú
+   `surfaceContainerLow`-ját kapta, **16 csempén** (5976 px diff a
+   `learning_path_compact` cellán).
+2. `lib/features/learn/screens/lesson_list_screen.dart:140` `_V2EntryCard`
+   `Card`-ja — ugyanaz a hiba, de a golden-konfiguráció (`practiceEngineV2Enabled:
+   false` alapértelmezés) ma nem rendereli — néma időzített bomba, most
+   megelőzve.
+3. `lib/features/chords/widgets/chord_detail_view.dart:80` `ActionChip` —
+   explicit `backgroundColor` nélkül a seed-alapú felületet kapta (1 px diff
+   a `chord_detail_compact` cellákon).
+
+**Fix:** mindhárom helyre explicit, **konstans** színforrás —
+`context.palette.surface` (az `AppPalette` `ThemeExtension`, amit
+`AppTheme._build` a konstans `AppPalette.dark`/`AppPalette.light`-ból regisztrál,
+NEM a `ColorScheme.fromSeed`-ből). Az `ActionChip` emellé `side:
+BorderSide(color: context.palette.border)`-t is kapott, hogy a kontúrja is
+konstans forrásból jöjjön. A `_ContinueCard` (`:172`) már eleve konstans
+`AppColors.primary`-t használt — nem kellett hozzányúlni.
+
+**3. pont — a mindhárom golden-képernyő átvizsgálása:** a `chord_library_screen.dart`
+(0 `Card`/`Chip`) és a `chord_diagram.dart` (`Theme.of(context).colorScheme.onSurface`
+csak vékony vonás/felirat tintaként, nem nagy felület — ezt igazolja, hogy a
+chord library golden VÁLTOZATLAN maradt e kör után is) nem igényelt
+módosítást. Más séma-származtatott `Card`/`Chip`/`Container`/`ListTile.tileColor`/
+`Material(color:)` nem került elő a három érintett képernyőn.
+
+**Goldenek:** mind a 6 újra felvéve
+(`flutter test --update-goldens test/ui/goldens/e13_r20_screens_golden_test.dart`,
+6/6 zöld). A diff pontosan a 4 CI-piros cellát érintette
+(`e13_r20_chord_detail_compact{,_scale2}.png`,
+`e13_r20_learning_path_compact{,_scale2}.png`); a két chord library PNG
+bitre azonos maradt (`git status` szerint nincs bennük változás).
+
+**Záró gate (2. javító kör):** `tools/round-gate.sh` a brief §5 szerinti 17
+útvonallal — **22/22 ZÖLD**, a golden-teszt (item 7) is köztük. Kiegészítő
+futás: `flutter test test/features/chords/ test/features/learn/` →
+**235 zöld**, egyetlen, a kártól független `~1` skip változatlanul.
+
 ## 11. Review — a Claude tölti ki
