@@ -173,6 +173,16 @@ Future<void> _pumpScreen(
   final fb = feedback ?? _RecordingFeedback();
   final nav = navSink ?? _RecordingNavigationSink();
   final lc = lifecycle ?? FakeAppLifecycleEvents();
+  // The screen now renders through `SsStageScaffold`, which picks its
+  // compact (portrait phone) vs wide (landscape/tablet) layout from the
+  // viewport (ADR 0276). `flutter_test`'s default 800×600 surface reads as
+  // landscape and would silently exercise the two-column `_WideStage`
+  // instead of the phone layout every real user sees — pin a compact
+  // portrait phone size, same convention as
+  // `test/features/tuner/tuner_ui_mapping_test.dart`.
+  tester.view.physicalSize = const Size(412, 915);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -307,7 +317,14 @@ void main() {
       host.emitState(_stateFor(PracticeSessionStatus.paused));
       await _pumpScreen(tester, host: host);
       expect(find.text(l10nEn().practiceSessionStatusPaused), findsOneWidget);
-      expect(find.text(l10nEn().practiceSessionResume), findsOneWidget);
+      // Two Resume affordances now coexist by design (SDD UI-20): the
+      // bottom transport's own Resume, and the Pause/Recovery overlay's
+      // (§0.0/R8) — both send the identical `ResumePractice` command.
+      expect(find.text(l10nEn().practiceSessionResume), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('practice-pause-overlay')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('finishing shows progress AND disables the Exit button', (

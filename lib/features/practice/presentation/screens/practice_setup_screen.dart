@@ -26,11 +26,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/practice_setup_controller.dart';
 import '../../domain/model/meter.dart';
 import '../../domain/model/practice_definition.dart';
 import '../../domain/model/practice_mode.dart';
+import '../../domain/model/practice_session_config.dart';
 import '../../domain/model/practice_validation.dart';
 import '../../domain/model/tempo.dart';
 import '../../application/practice_catalog_controller.dart';
@@ -158,11 +160,6 @@ class _SetupForm extends ConsumerStatefulWidget {
 }
 
 class _SetupFormState extends ConsumerState<_SetupForm> {
-  /// Local copy of the seeded `effectiveTempo` — the slider needs a
-  /// continuous value; the controller only sees the rounded bpm on
-  /// `onChangeEnd`.
-  double? _bpmDraft;
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -171,7 +168,6 @@ class _SetupFormState extends ConsumerState<_SetupForm> {
       practiceSetupControllerProvider(widget.definition).notifier,
     );
     final config = state.config;
-    final bpm = _bpmDraft ?? config.effectiveTempo.bpm;
     final failures = state.failures;
     final canStart = state.isValid;
     final firstFailure = failures.isEmpty ? null : failures.first;
@@ -186,43 +182,57 @@ class _SetupFormState extends ConsumerState<_SetupForm> {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 20),
-        _BpmField(
-          bpm: bpm,
-          onChanged: (v) => setState(() => _bpmDraft = v),
-          onChangeEnd: (v) {
-            controller.setTempoBpm(v);
-            setState(() => _bpmDraft = null);
-          },
+        SsValueSlider(
+          label: l10n.practiceSetupBpmLabel,
+          value: config.effectiveTempo.bpm,
+          min: Tempo.minimumBpm,
+          max: Tempo.maximumBpm,
+          unitLabel: l10n.practiceSetupBpmUnit,
+          onChanged: controller.setTempoBpm,
+        ),
+        Text(
+          l10n.practiceSetupBpmHelp,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 16),
-        _IntStepperField(
+        SsValueSlider(
           label: l10n.practiceSetupCountInLabel,
-          help: l10n.practiceSetupCountInHelp,
-          value: config.countInBars,
-          onChanged: controller.setCountInBars,
+          value: config.countInBars.toDouble(),
+          min: PracticeSessionConfig.minimumCountInBars.toDouble(),
+          max: PracticeSessionConfig.maximumCountInBars.toDouble(),
+          onChanged: (v) => controller.setCountInBars(v.round()),
+        ),
+        Text(
+          l10n.practiceSetupCountInHelp,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 16),
-        _IntStepperField(
+        SsValueSlider(
           label: l10n.practiceSetupLoopLabel,
-          help: l10n.practiceSetupLoopHelp,
-          value: config.loopCount,
-          onChanged: controller.setLoopCount,
+          value: config.loopCount.toDouble(),
+          min: PracticeSessionConfig.minimumLoopCount.toDouble(),
+          max: PracticeSessionConfig.maximumLoopCount.toDouble(),
+          onChanged: (v) => controller.setLoopCount(v.round()),
+        ),
+        Text(
+          l10n.practiceSetupLoopHelp,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 16),
         _MeterReadout(meter: widget.definition.meter),
         const SizedBox(height: 16),
-        _ToggleRow(
+        SsSwitchRow(
           label: l10n.practiceSetupMetronomeLabel,
           value: config.metronomeEnabled,
           onChanged: controller.setMetronomeEnabled,
         ),
-        _ToggleRow(
+        SsSwitchRow(
           label: l10n.practiceSetupAccentLabel,
           value: config.accentEnabled,
           onChanged: controller.setAccentEnabled,
         ),
         if (widget.definition.mode != PracticeMode.rhythmOnly)
-          _ToggleRow(
+          SsSwitchRow(
             label: l10n.practiceSetupChordHintLabel,
             value: config.expectedChordHintEnabled,
             onChanged: controller.setChordHintEnabled,
@@ -325,118 +335,6 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _BpmField extends StatelessWidget {
-  const _BpmField({
-    required this.bpm,
-    required this.onChanged,
-    required this.onChangeEnd,
-  });
-
-  final double bpm;
-  final ValueChanged<double> onChanged;
-  final ValueChanged<double> onChangeEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Semantics(
-      label: l10n.practiceSetupBpmLabel,
-      value: '${bpm.round()} ${l10n.practiceSetupBpmUnit}',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  l10n.practiceSetupBpmLabel,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              Text(
-                '${bpm.round()} ${l10n.practiceSetupBpmUnit}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-          Slider(
-            value: bpm.clamp(Tempo.minimumBpm, Tempo.maximumBpm),
-            min: Tempo.minimumBpm,
-            max: Tempo.maximumBpm,
-            divisions: (Tempo.maximumBpm - Tempo.minimumBpm).round(),
-            label: '${bpm.round()}',
-            onChanged: onChanged,
-            onChangeEnd: onChangeEnd,
-          ),
-          Text(
-            l10n.practiceSetupBpmHelp,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _IntStepperField extends StatelessWidget {
-  const _IntStepperField({
-    required this.label,
-    required this.help,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String help;
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: label,
-      value: '$value',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              IconButton(
-                onPressed: () => onChanged(value - 1),
-                icon: const Icon(Icons.remove_circle_outline),
-                tooltip: '-1',
-              ),
-              SizedBox(
-                width: 40,
-                child: Text(
-                  '$value',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              IconButton(
-                onPressed: () => onChanged(value + 1),
-                icon: const Icon(Icons.add_circle_outline),
-                tooltip: '+1',
-              ),
-            ],
-          ),
-          Text(help, style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ),
-    );
-  }
-}
-
 class _MeterReadout extends StatelessWidget {
   const _MeterReadout({required this.meter});
 
@@ -487,28 +385,6 @@ class _ScoringProfileReadout extends StatelessWidget {
         ),
         Text(profileId, style: Theme.of(context).textTheme.bodySmall),
       ],
-    );
-  }
-}
-
-class _ToggleRow extends StatelessWidget {
-  const _ToggleRow({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile.adaptive(
-      contentPadding: EdgeInsets.zero,
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-      value: value,
-      onChanged: onChanged,
     );
   }
 }
