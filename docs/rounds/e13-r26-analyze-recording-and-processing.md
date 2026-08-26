@@ -1,6 +1,6 @@
 # E13-R26 — Analyze Home, Recording és Processing UI
 
-- **Státusz:** IN PROGRESS (pre-flight 2026-08-26, kód MÉRVE: `main @ 22ef4b1e`;
+- **Státusz:** KÉSZ — review APPROVED, merge-elve (pre-flight 2026-08-26, kód MÉRVE: `main @ 22ef4b1e`;
   eredetileg előre megírva 2026-08-15 `main @ c732ec75` ellen — a §0.0/B revízió
   hat mért eltérést old fel)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 26
@@ -630,3 +630,15 @@ teszt újra 6/6 zöld.
   §0.0/B6 kifejezetten tiltja a kitalálásukat; egyik sem került a kódba.
 
 ## 11. Review — a Claude tölti ki
+
+**VÉGSŐ DÖNTÉS: APPROVED** — 0 BLOCKER, 0 MAJOR, 0 MINOR, 3 NOTE.
+Teljes jelentés: [`docs/reviews/e13-r26-review.md`](../reviews/e13-r26-review.md).
+
+- Scope-audit a jelzésből HIÁNYZOTT → kézzel pótolva: **OK** (19 útvonal).
+- Független gate-újrafuttatás izolált `/tmp` klónban: **18/18 zöld**.
+- Exact-SHA CI a `0243c26e`-n: Full Gate 33015979355 + Router CI 33015973741 — mind **success**.
+- A sáv kétszer visszatérő érintési-cél hibaosztályát (E13-R20 40 dp,
+  E13-R21 32 dp) eldobható próbateszt zárta ki: mért 48.0 / 100.0 / 80.0 dp.
+- NOTE-1 A3 „fölötte" cella a sáv értékét méri, szöveget nem · NOTE-2
+  `silenceThresholdDbfs` kalibrálatlan prezentációs konstans · NOTE-3 a
+  képernyők szándékosan route nélkül állnak (§0.0/B3, L409).
