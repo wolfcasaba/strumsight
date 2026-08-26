@@ -724,13 +724,26 @@ jutalom, next-step, share, quick-link).
   `lib/features/share/**` / `lib/features/community/**` felé egy
   `practiceSummaryFromSessionResult`-szerű varrat egy KÉSŐBBI kör dolga
   (§0.0/B/R12).
-- **A Speed Builder "aktív" fázisa szintetikus próbákkal demózik.** A
+- **A Speed Builder-nek nincs élő próba-forrása.** A
   `domain/service/speed_builder_engine.dart` a valódi állapotgép; mivel
   az `application`-réteg (élő session-controller, felismerés) ezen a
-  körön KÍVÜL van, az aktív fázis "Record pass"/"Record miss" gombokkal
-  szimulált próbákat küld az engine-nek. A ténylegesen élő
-  (mikrofon-vezérelt) Speed Builder session-bekötés egy KÉSŐBBI kör
-  dolga.
+  körön KÍVÜL van, a képernyő ma **nem tud** valódi próbát rögzíteni —
+  és (a javító kör óta, §10.6) nem is szimulál egyet a helyén. A belépő
+  ezt a hiányt ADR 0277 szerint kimondja, „Start"/"Record" affordancia
+  nélkül. A ténylegesen élő (mikrofon-vezérelt) Speed Builder
+  session-bekötés — a próbák forrásának injektált varrata — egy KÉSŐBBI
+  kör dolga.
+- **A sérült előzmény-rekordok száma nem jut el a felületig (E13-R22
+  javító kör MINOR-2).** A `JsonCollectionStore` read-time számlálja a
+  kihagyott rekordokat (`lib/core/storage/json_document_store.dart:211-240`
+  — `skipped` számláló + `storage.document.records_skipped` esemény), de
+  a `PracticeHistoryRepository.load()` visszatérése ezt nem hordozza
+  tovább, és mind a `lib/core/storage/**`, mind a practice `data/` réteg
+  ezen a körön KÍVÜL van (§4). A brief §5.2 minimuma (izoláció, a többi
+  rekord elérhető) teljesül, a szigorúbb „a sor hibásként jelenik meg"
+  szöveg NEM: a felhasználó ma jelzés nélkül veszít egy sort a saját
+  előzményéből. A tényleges jelzés — a `skipped` számláló átvezetése a
+  repository-rétegen — egy KÉSŐBBI, a data-réteget is érintő kör dolga.
 - **A jutalom-főkönyv seam Noop-alapértelmezésű.** A
   `rewardLedgerRepositoryProvider` production-alapértelmezése egy üres
   (mindig "nincs jutalom") implementáció — ez MA a valós állapot, mert a
@@ -739,5 +752,128 @@ jutalom, next-step, share, quick-link).
   dual-write-ot és vezényli a valódi `LocalRewardLedgerRepository`-t a
   kompozíciós gyökérbe, ez a provider felülíródik — a screen kódja nem
   változik.
+
+### 10.6 Javító kör (E13-R22, review `docs/reviews/e13-r22-review.md` — CHANGES REQUESTED)
+
+**MAJOR-1 — a Speed Builder aktív felülete gyártott méréseket adott az
+engine-nek.** `lib/features/practice/presentation/screens/speed_builder_screen.dart`:
+a `_syntheticAttempt(...)` (`completion: 0.98`, `rhythm: 0.9`, `resolvedTargets:
+8/8`, `scorePoints: 800`) és az őt hívó `_record`/`_start` teljes egészében
+törölve. A képernyő immár három állapotot ismer:
+
+- nincs `SpeedBuilderState` (`initialState` null — a production belépő MA
+  MINDIG ez) → `_UnavailableLayout`, ADR 0277-stílusú, nem büntető
+  „Speed Builder isn't recording yet" üzenet, **Start CTA nélkül**;
+- nem lezárt állapot (kizárólag a teszt-varraton, `initialState`-tel
+  elérhető — production callerek ezt sosem adják át) → `_ActiveLayout`,
+  amely a `SpeedBuilderProgress`-t és egy Finish gombot mutatja, DE nincs
+  „Record pass"/"Record miss" — a próbák forrása egy KÉSŐBBI kör
+  injektált varrata (§10.5);
+- lezárt állapot → változatlan `_ResultLayout`, kizárólag
+  `state.highestStableTempo`-t olvassa (A6, változatlan).
+
+Két ÚJ ARB-kulcs a **FORRÁSBA** (`lib/l10n/base/app_{en,hu}.arb`) írva —
+`speedBuilderUnavailableTitle`/`speedBuilderUnavailableBody` —, az
+aggregátum `dart run tool/gen_l10n_segments.dart --write`-tel
+újragenerálva (`lib/l10n/app_{en,hu}.arb`, generált kimenet).
+
+**A cella** (`test/features/practice/speed_ladder_test.dart`, a korábbi
+`:126-163` csoport) átírva: a régi „setup → active → result" happy-path
+helyett most a **hiány jelenlétét** méri — Start/Record CTA `findsNothing`,
+az `_UnavailableLayout` címe `findsOneWidget`, és sem eredmény-cím, sem
+`"BPM"` szöveg nem jelenik meg mérés nélkül. Az A6 két érdemi cellája
+(`:71-124`, `initialState`-tel, valódi engine-állapottal) változatlan.
+
+**Valódi-sértés próba (KÖTELEZŐ).** A javított
+`speed_builder_screen.dart`-ot ideiglenesen visszaállítottam a
+gyártott-próba útra tartalmazó verzióra (`git show HEAD:…` — a review
+előtti HEAD, `420bd5f1`), majd lefuttattam az átírt cellát:
+
+```
+$ flutter test test/features/practice/speed_ladder_test.dart
+00:01 +2: no live session → no fabricated measurement (E13-R22 review MAJOR-1) …
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞═══════════════════
+Expected: no matching candidates
+  Actual: _TextWidgetFinder:<Found 1 widget with text "Start": […]>
+00:01 +2 -1: Some tests failed.
+```
+
+A cella tehát PIROSRA vált a tiltott (gyártott-mérés) implementációra.
+Ezután visszaálltam a javított kódra, és a teszt újra zöld:
+
+```
+00:01 +3: All tests passed!
+```
+
+**MINOR-1 — nyers `finishReasonCode` literál a stabil enum-kód helyett.**
+`lib/features/practice/presentation/screens/practice_result_screen.dart`:
+`practiceResultIsPartial` mostantól
+`PracticeFinishReason.completedAllTargets.code`-ot olvassa (import:
+`../../domain/model/practice_session_result.dart`), nem a `'completedAllTargets'`
+sztring-literált.
+
+**MINOR-2 — a sérült rekordok száma némán vész el.** Ez nem kódjavítás,
+hanem dokumentálás volt a brief scope-ja szerint: a §10.5 negyedik pontja
+nevesített korlátként rögzíti, hogy a `PracticeHistoryRepository.load()`
+nem hordozza tovább a `JsonCollectionStore` `skipped` számlálóját, és a
+tényleges felület-jelzés a `lib/core/storage/**`/practice `data/` réteget
+is érintő KÉSŐBBI kör dolga (a kör §4 engedélyezett fájllistája ezeket a
+rétegeket nem tartalmazza).
+
+**A záró gate — teljes egészében újra, friss (commitolt) állapoton:**
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/result_confidence_test.dart    zöld
+    test test/features/practice/history_corrupt_record_test.dart zöld
+    test test/features/practice/speed_ladder_test.dart         zöld
+    test test/features/practice/reward_idempotency_test.dart   zöld
+    test test/features/practice/presentation/                  zöld
+    test test/core/screen_size_guard_test.dart                 zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/tooling/dio_factory_guard_test.dart              zöld
+    test test/tooling/preferences_plugin_import_guard_test.dart zöld
+    test test/tooling/route_literal_guard_test.dart            zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+**Golden-sáv újrafelvéve** (a Speed Builder aktív rétege vizuálisan
+változott — a „Record pass"/"Record miss" gombpár eltűnt), `tools/golden-x86.sh`,
+x86_64/qemu, ADR 0426:
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r22_screens_golden_test.dart
+00:00 +0: practice result — compact
+00:27 +1: practice history — compact
+00:36 +2: speed builder — active — compact
+00:38 +3: practice result — compact_scale2
+00:40 +4: practice history — compact_scale2
+00:41 +5: speed builder — active — compact_scale2
+00:43 +6: All tests passed!
+```
+
+```
+$ tools/golden-x86.sh check test/ui/goldens/e13_r22_screens_golden_test.dart
+00:00 +0: practice result — compact
+00:27 +1: practice history — compact
+00:36 +2: speed builder — active — compact
+00:41 +3: practice result — compact_scale2
+00:44 +4: practice history — compact_scale2
+00:46 +5: speed builder — active — compact_scale2
+00:48 +6: All tests passed!
+```
+
+Kilépési kód 0 mindkét futásra. Csak a két megváltozott PNG
+(`e13_r22_speed_builder_compact.png`, `e13_r22_speed_builder_compact_scale2.png`)
+frissült és lett commitolva; a másik négy (result/history, mindkét keret)
+bájt-azonos maradt (`git status` — csak a két Speed Builder PNG szerepel
+módosítottként).
 
 ## 11. Review — a Claude tölti ki
