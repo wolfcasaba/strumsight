@@ -8,18 +8,39 @@
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** nincs — az ADR 0274 (audio óra) és 0283 érvényes.
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el a TÉNYLEGES lejátszási és
-> pontozási állapotot (`lib/features/songs/`), kiemelten azt, hogy létezik-e
-> „csak lejátszás" mód — a §5.1 erre a mért állapotra épül. Eltérésnél §0.0
-> revízió.
+> ✅ **A pre-flight MEGTÖRTÉNT (2026-08-26, `main @ 4185418d`) — a leletei a
+> [§0.0/B](#00b-brief-revízió--2026-08-26-a-kör-saját-pre-flightja-main--4185418d)-ben.**
+> A kötelező kérdésre („létezik-e »csak lejátszás« mód") a válasz **IGEN**
+> (§0.0/B/B2), a §5.1 tehát mért alapon áll. **A §0.0 három útvonala viszont
+> NEM létezik** — az érvényes fájllista az `ai-router` blokkban van (§0.0/B/B1).
+> Olvasd el a §0.0/B-t a §0.0 ELŐTT; eltérésnél a §0.0/B nyer.
 
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "lib/features/songs/trainer/",
-  "lib/features/songs/results/",
-  "lib/features/setlists/run/",
+  # §0.0/B/B1 — az eredeti HÁROM könyvtár-előtag (`lib/features/songs/trainer/`,
+  # `lib/features/songs/results/`, `lib/features/setlists/run/`) a verziókövetett
+  # fán NEM létezik, tehát NULLA fájlt fedett (L497 hibaosztály, harmadszor:
+  # E13-R22, E13-R23, most). A négy megnevezett felület MÁR LÉTEZIK a
+  # `song_trainer` presentation rétegében. A csere a merge-elt E13-R23
+  # user-jóváhagyott listájának valódi RÉSZHALMAZA: nevesített screen +
+  # nevesített widget — `presentation/widgets/` KÖNYVTÁR, `public.dart` és
+  # `lib/app/routing/` NÉLKÜL.
+  "lib/features/song_trainer/presentation/screens/trainer_setup_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_trainer_screen.dart",
+  "lib/features/song_trainer/presentation/screens/song_result_screen.dart",
+  "lib/features/song_trainer/presentation/screens/setlist_session_screen.dart",
+  "lib/features/song_trainer/presentation/widgets/song_track_picker.dart",
+  "lib/features/song_trainer/presentation/widgets/trainer_range_picker.dart",
+  "lib/features/song_trainer/presentation/widgets/tuning_capo_reminder.dart",
+  "lib/features/song_trainer/presentation/widgets/chord_lane.dart",
+  "lib/features/song_trainer/presentation/widgets/loop_controls.dart",
+  "lib/features/song_trainer/presentation/widgets/measure_heatmap.dart",
+  "lib/features/song_trainer/presentation/widgets/song_loop_feedback.dart",
+  "lib/features/song_trainer/presentation/widgets/strum_lane.dart",
+  "lib/features/song_trainer/presentation/widgets/tablature_lane.dart",
+  "lib/features/song_trainer/presentation/widgets/transport_controls.dart",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
   "lib/l10n/app_en.arb",
@@ -28,7 +49,6 @@ allowed_paths = [
   "test/features/songs/trainer/playhead_loop_sync_test.dart",
   "test/features/songs/trainer/playback_only_result_test.dart",
   "test/features/songs/trainer/setlist_run_test.dart",
-  "test/fixtures/songs/trainer/",
   "test/ui/goldens/",
   "test/ui/ui_inventory_test.dart",
   "docs/rounds/e13-r25-song-trainer-and-setlist-run.md",
@@ -38,7 +58,17 @@ gate_tests = [
   "test/features/songs/trainer/playhead_loop_sync_test.dart",
   "test/features/songs/trainer/playback_only_result_test.dart",
   "test/features/songs/trainer/setlist_run_test.dart",
-  "test/ui/goldens/e13_r25_screens_golden_test.dart",
+  # §0.0/B/B4 — a négy célképernyőre MA is mérő, listán KÍVÜLI pinek:
+  # futtatni KELL, szerkeszteni TILOS (a migráció nem törheti el őket).
+  "test/features/song_trainer/presentation/trainer_setup_screen_test.dart",
+  "test/features/song_trainer/presentation/song_trainer_screen_test.dart",
+  "test/features/song_trainer/presentation/song_result_screen_test.dart",
+  "test/features/song_trainer/presentation/song_trainer_accessibility_test.dart",
+  "test/features/song_trainer/application/setlists/setlist_session_controller_test.dart",
+  "test/app/routing/app_router_test.dart",
+  # §0.0/B/B5 (ADR 0426 §3) — a golden-útvonal NEM kerül a lokális ARM-gate-re;
+  # a lokális mérés egyetlen érvényes alakja:
+  # `tools/golden-x86.sh check test/ui/goldens/e13_r25_screens_golden_test.dart`
   "test/ui/ui_inventory_test.dart",
   "test/core/architecture_dependency_test.dart",
   "test/tooling/dio_factory_guard_test.dart",
@@ -152,6 +182,209 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0/B BRIEF-REVÍZIÓ — 2026-08-26, a kör SAJÁT pre-flightja (`main @ 4185418d`)
+
+A 2026-08-25-i sáv-szintű batch pre-flight (§0.0) az ARB-csapdát megtalálta, de
+a kör fájára vonatkozó állítását NEM ellenőrizte. A kör indítása előtti mérés
+hat leletet adott. **Visszakeresett előzmény** (§4.9, szűkítve ELŐSZÖR):
+[L497](../LESSONS.md#l497) (nem létező `allowed_paths`, kétszer mérve),
+[L478](../LESSONS.md#l478) (a pre-flight csak SZŰKÍTHET; a tágítás H3),
+[L397](../LESSONS.md#l397)/[L377](../LESSONS.md#l377)/[L401](../LESSONS.md#l401)
+(a `ui_inventory` bázisvonal CI-only lelete),
+[ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+(golden-raszterizáció), [ADR 0129](../adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md)
+(a trainer/result UI és loop merge-elt határa).
+
+### B1 — a három könyvtár-előtag NEM LÉTEZIK; a felületek MÁR LÉTEZNEK
+
+Mérve (`find lib/features/songs lib/features/setlists -type d`):
+
+```
+lib/features/songs → application  data  model  providers  screens  theory  widgets
+lib/features/setlists → bfs: error: No such file or directory
+```
+
+A brief §0.0/R1 abból indult ki, hogy „a képernyőket ez a kör hozza létre,
+tehát MINDEN szövege új". **Ez hamis.** A négy megnevezett felület mind él a
+`song_trainer` presentation rétegében, és a router három route-on pinneli
+(`lib/app/routing/app_router.dart:361,365,373`):
+
+| §3 felület | A fán MÉRT fájl | Sor |
+|---|---|---|
+| tréner beállítása | `presentation/screens/trainer_setup_screen.dart` | 264 |
+| tréner Stage | `presentation/screens/song_trainer_screen.dart` | 355 |
+| dal-eredmény | `presentation/screens/song_result_screen.dart` | 150 |
+| setlist futása | `presentation/screens/setlist_session_screen.dart` | 200 |
+
+**A feloldás útvonal-csere**, az `ai-router` blokkban. A csere szigorúan
+KEVESEBB, mint az egy körrel korábbi, merge-elt és user-jóváhagyott E13-R23
+lista ugyanerre a feature-re — a tágítás H3 lenne ([L478](../LESSONS.md#l478)):
+
+| E13-R23 (merge-elt) | E13-R25 (a csere) |
+|---|---|
+| 3 nevesített screen + `presentation/widgets/` (TELJES könyvtár) + `public.dart` + `lib/app/routing/` | 4 nevesített screen + **10 nevesített** widget |
+
+A 10 widget nem vaktában választott: pontosan azok, amelyeket a négy képernyő
+MA importál (`grep -hn "^import '\.\./widgets" …`). A `domain/`, `data/` és
+`application/` így OLVASHATÓ, de nem írható marad — a §3 „a pontozás vagy a
+lejátszás logikájának módosítása tilos" kikötése ezzel **gépi** lett
+(`scope-audit.py`), nem csak szöveges. A `public.dart` és a `lib/app/routing/`
+kimarad: a migráció HELYBEN történik, típusnév/route/konstruktor-szignatúra
+változatlan (az E13-R24 merge-elt precedense).
+
+### B2 — a §5.1 alatti „csak lejátszás" mód LÉTEZIK (a brief ⚠ pre-flight kérdése)
+
+A brief fejléce kötelezővé tette ennek mérését. Az eredmény: **létezik**, és a
+domain a pontozás hiányát MA is hordozza — a §5.1/A1 tehát mért alapon áll, nem
+kell revízió:
+
+- `application/trainer/song_practice_compiler.dart:24` —
+  `const SongPracticeCompilation.playbackOnly()`; `:33` — `bool get isPlaybackOnly => definition == null;`
+- `application/trainer/song_trainer_controller.dart:117,156,317` —
+  `isPlaybackOnly`, `_startPlaybackOnly()`
+- `domain/models/song_practice_record.dart:48,78` — `playbackOnly` mező
+- `application/progress/song_progress_aggregator.dart:225` — `if (record.playbackOnly)`
+  ága, és `song_trainer_providers.dart:462`: *„`playbackOnly`, which the credit
+  recorder intentionally leaves uncredited."*
+
+**Amit ez a körre jelent:** az A1 NEM új domain-mód bevezetése (az §3 szerint
+tilos is lenne), hanem a MÁR MÉRT `isPlaybackOnly == true` ág **kimondása a
+felületen**, pontszám nélkül. A `SetlistSessionScreen` már ma is ezen az elven
+áll: `_unavailablePracticeRunner` → `StateError('Playback-only sessions cannot
+run scoring.')` (`setlist_session_screen.dart:63-65`).
+
+### B3 — a `ui_inventory` száma NEM mozdul (a §0.0/R4 feltevése avult)
+
+A §0.0/R4 azért vette listára a `test/ui/ui_inventory_test.dart`-ot, mert „a kör
+képernyőt hoz vagy hozhat, tehát a szám elmozdul". A B1 mérése után ez **nem
+áll**: mind a négy képernyő létezik, a migráció HELYBEN történik, tehát új
+`lib/features/**/*_screen.dart` fájl nem keletkezik.
+
+Mérve: `test/ui/ui_inventory_test.dart:14` → `expect(first.screenPaths, hasLength(86))`.
+A merge-elt E13-R24 precedense ugyanez: *„az `ui_inventory` diffje ÜRES, 86 → 86"*.
+
+**A listaelem MARAD** (a szám elmozdulása nem zárható ki teljesen, és a
+felvétele utólag H3 lenne — [L478](../LESSONS.md#l478)), de a **VÁRT diff ÜRES**.
+A szám emelése ÚJ képernyő-fájl NÉLKÜL a mérce meghamisítása, nem a kör joga;
+képernyő-átnevezés vagy a `tool/ui_inventory.dart` lazítása szintén TILOS.
+
+### B4 — a négy célképernyőre MA is mérő pinek: futtatni KELL, szerkeszteni TILOS
+
+A §0.0/R2 azt írta: „nincs ilyen". **Ez hamis** — öt ma zöld cella pinneli
+közvetlenül a kör célfájljait:
+
+```
+test/features/song_trainer/presentation/trainer_setup_screen_test.dart
+test/features/song_trainer/presentation/song_trainer_screen_test.dart
+test/features/song_trainer/presentation/song_result_screen_test.dart
+test/features/song_trainer/presentation/song_trainer_accessibility_test.dart
+test/features/song_trainer/application/setlists/setlist_session_controller_test.dart
+```
+
+Ezek a `gate_tests`-be kerülnek, az `allowed_paths`-ra **NEM** — a kör futtatja,
+de nem szerkesztheti őket, tehát a lelet javítása kizárólag a kör SAJÁT
+kódjában történhet (a §0.0/S12 mintája). Ugyanígy fut a `test/app/routing/app_router_test.dart`
+a három route-pin miatt. Ha ezek bármelyike elbukik, az `blocked` jelzés és
+célzott brief-revízió, NEM csendes átírás.
+
+**A `brief-lint` S11 lelete erre a mérésre oldódik fel.** Az S11 azt a
+hibaosztályt védi, amikor egy migrációs kör **LECSERÉLI** a képernyő típusát
+(új `…_screen_v2.dart`, új osztálynév), és a briefen kívüli pinek emiatt
+pirosra váltanak — az ő felvételük utólag H3 lenne. A lint maga adja a második
+kifutót: *„Ha a kör a képernyőt bizonyíthatóan nem cseréli le, a §0.0 mondja ki
+ezt a mérést."* **Ez a kör nem cseréli le**, és ezt a §3 hatóköre ki is zárja:
+
+- a négy képernyő **HELYBEN** módosul — típusnév, fájlútvonal, route-regisztráció
+  és konstruktor-szignatúra **változatlan**;
+- ezért a `ui_inventory` diffje ÜRES (86 → 86, §0.0/B/B3), és a három
+  `app_router.dart` route-pin (`:361,365,373`) érintetlen;
+- a merge-elt precedens ugyanez: az E13-R24 három képernyőt migrált HELYBEN,
+  `ui_inventory` 86 → 86, a pinek zölden maradtak, felvételük nélkül.
+
+**Ebből következő KÖTELEZETTSÉG az implementerre:** a fenti öt pin + a
+route-teszt a kör végén ugyanúgy ZÖLD, ahogy ma az. Ha a választott megoldás
+csak a pin átírásával lenne zöld, az a képernyő lecserélése — tehát **`stopped`
+jelzés** és célzott brief-revízió, nem a cella hozzáigazítása.
+
+**A lint MARADÉK S11 lelete VÁRT, és nem hallgattatható el szűkítéssel.** Az
+`outside_screen_pins` predikátuma szerkezeti: kizárólag az `allowed_paths`-ba
+vétel törli (`if covered_by(relative, allowed_paths): continue` —
+`tools/brief-lint.py`). A pinek felvétele viszont **tágítás**, ami az
+orchestrátornak H3 ([L478](../LESSONS.md#l478)) — és éppen az ellenkezőjét érné
+el annak, amit a B4 véd: szerkeszthetővé tenné a cellákat, amiknek zölden kell
+maradniuk. A szabály SAJÁT kommentje ezt vállalt maradékként nevezi meg:
+*„A vállalt maradék hamis riasztás … egy csak MÓDOSÍTÓ (nem lecserélő) kör
+feleslegesen kapja a teendőt."* A `brief-lint` kilépési kódja `0`; a lelet
+tehát tudomásul véve és MÉRVE feloldva, nem figyelmen kívül hagyva.
+
+### B5 — a golden felvétele és ellenőrzése a MERGE-KAPU architektúráján (ADR 0426)
+
+A §7 `~/flutter/bin/flutter test --update-goldens` sora **elavult és tiltott**
+ezen az **aarch64** boxon: ez adta az E13-R17 két vak javító körét és az
+E13-R20 **H5 haltját** ([L493](../LESSONS.md#l493), [L486](../LESSONS.md#l486)).
+Az [ADR 0426 §3](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+kimondja: *„Golden-teszt-útvonal nem kerül a lokális `tools/round-gate.sh`
+`gate_tests` listájára"* — az ARM-futás ezekre a cellákra a rossz gépet méri.
+Ezért a `gate_tests`-ből kikerül, és helyette:
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r25_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r25_screens_golden_test.dart
+```
+
+**Ez nem lazítás:** a komparátor (nulla tolerancia) és a golden-bank
+változatlan, a verifikáció pedig a CI teljes suite-ja marad. A PNG-k a
+`test/ui/goldens/goldens/` alá kerülnek (a `test/ui/goldens/` listaelem fedi),
+és **commitolni kell** őket. Minta és futó precedens:
+`test/ui/goldens/e13_r24_screens_golden_test.dart` (`AppTheme`, 412×915,
+`devicePixelRatio: 1.0`, `textScaler` 1.0 és 2.0).
+
+### B6 — a kör ADR-t NEM ír (a nyolcadik ADR nélküli kör a sávon)
+
+A §5 mind az öt kötött döntése MÁR merge-elt ADR-ekben él:
+[0274](../adr/0274-motion-driven-by-the-audio-clock.md) (audio óra, §5.2),
+[0283](../adr/0283-results-never-overstate-certainty.md) (§5.1),
+[0276](../adr/0276-stage-scaffold-owns-no-resources.md) (§5.6),
+[0277](../adr/0277-failure-presentation-model.md) (hiba-állapotok),
+[0129](../adr/0129-song-trainer-ui-loop-speed-and-result-boundary.md) (trainer/result
+UI, loop és result boundary). Ezek újraírása **H1** lenne (ADR 0087 §2), és a
+sávon ez a hibaosztály E13-R17…R24 között hétszer merült fel. Ezért a
+pre-flight **nem foglal** ADR-számot; ha az implementer ÚJ normatív döntést
+találna, az `stopped` jelzés, nem önkezű ADR.
+
+### B8 — `test/fixtures/songs/trainer/` TÖRÖLVE a listáról (S13, 2026-08-26 merge után)
+
+A körbe merge-elt `origin/main` (`94cef390`) hozta a `brief-lint` **S13**
+szabályát, ami pontosan a B1 hibaosztályát gépesíti: nem létező
+KÖNYVTÁR-előtag az `allowed_paths`-on. A B1 a három produkciós előtagot már
+feloldotta, de a lista negyedikként a `test/fixtures/songs/trainer/`-t is
+felsorolta — ez **sem létezik**, és a kör **nem is hozta létre**: mind a négy
+célteszt saját, fájlon belüli fixture-ökkel dolgozik.
+
+A feloldás ezért **szűkítés** (a pre-flight saját hatásköre, [L478](../LESSONS.md#l478)),
+nem útvonal-csere: a bejegyzés törölve. A kör egyetlen fájlja sem hivatkozik rá,
+tehát a törlés semmit nem tesz végrehajthatatlanná — a lista mostantól
+kizárólag olyan útvonalakat sorol, amiket a kör ténylegesen érint.
+
+### B7 — az erőforrás-tulajdonlás MÉRT láncon (a §1/2. szabály)
+
+A §0.0 „a tréner és a setlist-futtatás a mikrofon-erőforrást (authorization)
+birtokolja" állítását a tényleges hívási lánc **cáfolja**:
+`grep -rn "\.acquire(" lib/` → az egyetlen audio-lease-szerző a
+`lib/core/audio/mic_capture.dart:82` (`_coordinator.acquire(...)`), az
+`AudioSessionCoordinator`-t pedig a `practice` réteg köti be
+(`practice_session_providers.dart`, `practice_session_controller.dart`,
+`core/audio/audio_providers.dart`). A `song_trainer` presentation rétegében
+**nincs** `acquire` hívás; a `song_transport_state.dart:30` csak az
+`audioFocusLost` állapotot HORDOZZA.
+
+**Amit ez a §5.6/A7-re jelent:** a kör NEM szerezhet és nem is szabadíthat fel
+saját erőforrást — az [ADR 0276](../adr/0276-stage-scaffold-owns-no-resources.md)
+szerint a Stage layout nem birtokol erőforrást. Az A7 mércéje ezért a
+**tulajdonos értesítése** (a controller `dispose`/kilépési útjának meghívása
+MINDEN kilépési úton), nem egy presentation-rétegbe húzott `acquire`/`release`
+pár. Utóbbi ADR 0276-sértés lenne, és `stopped`-ot érdemel.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -190,18 +423,26 @@ DSP (AGENTS.md §9) · az import/szerkesztő (Kör 24) · `docs/adr/**`,
 
 ## 4. Engedélyezett fájlok
 
+> ⚠ **A §0.0/B/B1 felülírja az alábbi három első sort.** A `songs/trainer/`,
+> `songs/results/` és `setlists/run/` előtag a fán NEM létezik; az érvényes
+> lista az `ai-router` blokkban van.
+
 | Útvonal | Indok |
 |---|---|
-| `songs/trainer/` | a tréner felülete |
-| `songs/results/` | a dal-eredmény |
-| `setlists/run/` | a folyamatos futás |
+| `song_trainer/presentation/screens/trainer_setup_screen.dart` | a tréner beállítása (§0.0/B/B1) |
+| `song_trainer/presentation/screens/song_trainer_screen.dart` | a tréner Stage-elrendezése (§0.0/B/B1) |
+| `song_trainer/presentation/screens/song_result_screen.dart` | a dal-eredmény (§0.0/B/B1) |
+| `song_trainer/presentation/screens/setlist_session_screen.dart` | a folyamatos futás (§0.0/B/B1) |
+| `song_trainer/presentation/widgets/` — **10 nevesített** fájl | pontosan azok, amiket a négy képernyő MA importál (§0.0/B/B1) |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a tréner-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/songs/trainer/*_test.dart` (4) | a §6 cellái |
-| `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör új `lib/features/**/*_screen.dart`-ot hozhat, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése, más állítás nem érinthető (§0.0/R4) |
+| `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a listaelem MARAD, de a **VÁRT diff ÜRES** (86 → 86): a migráció HELYBEN történik, új képernyő-fájl nem keletkezik (§0.0/B/B3) |
 | `docs/rounds/e13-r25-…md` | a §10 handoff |
 
-**Tilos zóna:** `lib/features/songs/` a három érintett almappán kívül ·
+**Tilos zóna:** `lib/features/song_trainer/` a fenti 14 nevesített fájlon kívül
+(kiemelten `domain/**`, `data/**`, `application/**`, `public.dart`) ·
+`lib/app/routing/**` · `lib/features/practice/**` ·
 `lib/core/design_system/**` · `lib/core/theme/**` · `docs/adr/**` ·
 `docs/sdd/**` · `tools/**` · `.github/**`.
 
@@ -286,7 +527,14 @@ vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/songs/trainer/trainer_setup_test.dart test/features/songs/trainer/playhead_loop_sync_test.dart test/features/songs/trainer/playback_only_result_test.dart test/features/songs/trainer/setlist_run_test.dart test/ui/goldens/e13_r25_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/songs/trainer/trainer_setup_test.dart test/features/songs/trainer/playhead_loop_sync_test.dart test/features/songs/trainer/playback_only_result_test.dart test/features/songs/trainer/setlist_run_test.dart test/features/song_trainer/presentation/trainer_setup_screen_test.dart test/features/song_trainer/presentation/song_trainer_screen_test.dart test/features/song_trainer/presentation/song_result_screen_test.dart test/features/song_trainer/presentation/song_trainer_accessibility_test.dart test/features/song_trainer/application/setlists/setlist_session_controller_test.dart test/app/routing/app_router_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+**A golden-sáv KÜLÖN, az x86 konténerben fut (§0.0/B/B5, ADR 0426 §3)** — a
+golden-útvonal szándékosan NINCS a fenti sorban:
+
+```bash
+tools/golden-x86.sh check test/ui/goldens/e13_r25_screens_golden_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
@@ -295,8 +543,12 @@ keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
 KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
+> ⚠ **A §0.0/B/B5 felülírja az alábbi parancsot.** Az `--update-goldens` ezen az
+> **aarch64** boxon TILOS (ADR 0426, [L493](../LESSONS.md#l493)): a felvétel a
+> merge-kapu **x86_64** architektúráján történik.
+
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r25_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r25_screens_golden_test.dart
 ```
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
@@ -319,8 +571,10 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 4. A csak-lejátszás eredmény-ága — pontszám NÉLKÜL.
 5. A dal-eredmény szakasz-bontása és korrekciós akciói.
 6. A setlist folyamatos futása, előre jelzett hangolás-váltással.
-7. A valódi-sértés próba, §10-be dokumentálva.
-8. `tools/round-gate.sh` a §7 szerint.
+7. Golden felvétele: `tools/golden-x86.sh record …` (§7, §0.0/B/B5), a PNG-ket
+   commitolni.
+8. A valódi-sértés próba, §10-be dokumentálva.
+9. `tools/round-gate.sh` a §7 szerint, majd `tools/golden-x86.sh check …`.
 
 ## 9. Kockázatok
 
@@ -333,4 +587,93 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Kör-lezárás, két futásban.** Az első futás (`0f617462`) a §6 négy céltesztjét
+(`trainer_setup_test.dart`, `playhead_loop_sync_test.dart`,
+`playback_only_result_test.dart`, `setlist_run_test.dart`), a golden-tesztfájlt
+és a hozzájuk tartozó implementációt (`setlist_session_screen.dart`,
+`song_trainer_screen.dart`, `transport_controls.dart`, ARB-kulcsok) írta meg,
+de időkorlátba futott a kapu lefuttatása ELŐTT. Ez a futás a kaput futtatta
+le, a leletet javította, és a hátralévő §2 lépéseket zárta le.
+
+### A gate-lelet és a javítás
+
+Az `analyze` lépés `ambiguous_import` hibát adott
+`test/ui/goldens/e13_r25_screens_golden_test.dart`-ban: a fájl mind a
+`features/practice/public.dart`-ot, mind a `song_trainer` domain
+tempo/meter/beat modeljeit importálta, és mindkettő exportálja a
+`BeatPosition`/`Tempo`/`Meter` neveket. Feloldás: `hide BeatPosition, Tempo,
+Meter` a `practice/public.dart` importon (a golden fixture a
+`song_trainer`-beli verziókat használja). Ezután `format` → `analyze` → mind a
+15 `gate_tests` cella → `architecture`/`secrets`/`l10n` → **MINDEN GATE ZÖLD**.
+
+### A9 — golden felvétele (két lelet, mindkettő javítva)
+
+1. **Hiányzó `keyValueStoreProvider` override.** A `SongTrainerScreen` és a
+   `SetlistSessionScreen` a `LeftHandedController`-en (és társain) keresztül
+   preferencia-providert olvas, aminek szándékosan nincs alapértelmezettje
+   (`keyValueStoreProvider must be overridden`). A golden teszt `_pump()`
+   segédje most `preferenceOverrides()`-t (`test/support/preference_store.dart`)
+   fűz be alapból minden képernyő elé.
+2. **VALÓDI túlcsordulási hiba `textScaleFactor: 2.0`-nál** —
+   `setlist_session_screen.dart:129`: a hangolás-előrejelző kártya
+   ikon+cím `Row`-ja nem skálázott, 200%-os szövegnél 77px-szel túlcsordult
+   (`RenderFlex overflowed`). Ezt **pontosan a golden mérte ki** — a §6.1
+   mátrix ide sorolja: *„A képernyő elcsúszik, túlcsordul vagy nagy
+   szövegméretnél olvashatatlan → A9"*. Javítás: a cím `Text` `Expanded`-be
+   került, hogy tördeljen ahelyett, hogy túlcsordulna.
+
+Felvétel: `tools/golden-x86.sh record test/ui/goldens/e13_r25_screens_golden_test.dart`
+(x86_64, ADR 0426 §3) — mind a 8 cella (4 képernyő × 2 keret) zöld. A PNG-k
+(`test/ui/goldens/goldens/e13_r25_*.png`, 8 fájl) commitolva. Ellenőrzés:
+`tools/golden-x86.sh check …` — szintén zöld.
+
+### Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+A `song_trainer_screen.dart` `_CompletedBody`-jában a csak-lejátszás ágon
+(`result == null`) a felirat mögé egy kitalált pontszámot fűztem
+(`'${l10n.songTrainerPlaybackOnlyComplete} (85% VIOLATION-PROBE)'`), majd
+lefuttattam `test/features/songs/trainer/playback_only_result_test.dart`-ot:
+az **A1 cella PIROSRA váltott** —
+`Expected: no matching candidates / Actual: … Found 1 widget with text
+containing %` — a `find.textContaining('%')` asszerció pontosan a kitalált
+pontszámot fogta meg. Ezután a módosítást szó szerint visszaállítottam
+(`git diff` a fájlon üres), és a teszt újra zöld.
+
+### Amit NEM módosítottam
+
+- `trainer_setup_screen.dart` és `song_result_screen.dart` — az A6/A8, illetve
+  az A1 eredmény-oldali ága a MEGLÉVŐ kód ellenében is mérte a követelményt,
+  módosítás nélkül is zölden; a §2/2. pont szerint ez rendben van.
+- Az öt MA is zöld pin (`trainer_setup_screen_test`, `song_trainer_screen_test`,
+  `song_result_screen_test`, `song_trainer_accessibility_test`,
+  `setlist_session_controller_test`) + `app_router_test` — futtatva, nem
+  szerkesztve, a kör végén is zöld (§0.0/B/B4).
+- A `ui_inventory` diffje ÜRES (86 → 86, §0.0/B/B3) — a migráció HELYBEN
+  történt, új képernyő-fájl nem keletkezett.
+
+### Kockázatok (§9) — mért állapot
+
+- A kotta-nézet teljesítményét nem profiloztam külön ebben a körben (a golden
+  és a céltesztek nem jeleztek akadozást a rögzített fixture-ökön); ha a
+  review valós dalon mást mér, az önálló lelet.
+
+### Gate-artefaktum
+
+`tools/round-gate.sh` a §7 teljes listájával: **MINDEN GATE ZÖLD** (format,
+analyze, mind a 15 `gate_tests` cella, architecture, secrets, l10n).
+`tools/golden-x86.sh check test/ui/goldens/e13_r25_screens_golden_test.dart`:
+**zöld** (8/8).
+
 ## 11. Review — a Claude tölti ki
+
+Teljes jelentés: [`docs/reviews/e13-r25-review.md`](../reviews/e13-r25-review.md).
+
+**VÉGSŐ DÖNTÉS: APPROVED** — BLOCKER 0, MAJOR 0, MINOR 2 (a Stage a provider
+által birtokolt controllert `dispose`-olja — ma nem elérhető néma-no-op
+kockázat; a setlist első elemének hangolása nem kerül az előrejelző kártyára).
+Egyik sem blokkolja a merge-et; mindkettő follow-up a HANDOFF §6-ban.
+
+Mért bizonyíték: teljes scope-audit ok (21 útvonal), `ui_inventory` diff ÜRES
+(86 → 86), gyengítés 0, a `gate_shape=VIOLATION` HAMIS POZITÍV (a log a
+gate-script `cat … | head` OLVASÁSÁRA illeszkedett, a négy tényleges
+gate-hívás csupasz).

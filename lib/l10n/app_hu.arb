@@ -3076,6 +3076,7 @@
       }
     }
   },
+  "setlistSessionTuningAheadTitle": "Hangolásváltás következik",
   "setlistSongCount": "{count, plural, =0{Nincs dal} =1{1 dal} other{{count} dal}}",
   "@setlistSongCount": {
     "placeholders": {
@@ -3414,6 +3415,7 @@
   },
   "songTrainerNextSection": "Következő szakasz",
   "songTrainerOverlayCountIn": "Bevezető",
+  "songTrainerPlaybackOnlyComplete": "Lejátszás kész — csak hallgatás, nincs pontszám rögzítve.",
   "songTrainerProgressEmpty": "Ehhez a dalverzióhoz még nincs fejlődési adat.",
   "songTrainerProgressSummary": "{measures} gyakorlott ütem, legjobb pontszám: {percent}%.",
   "@songTrainerProgressSummary": {
@@ -3738,6 +3740,14 @@
   "trainerModeUnavailableTrack": "Ez a sáv nem támogatja ezt a módot.",
   "trainerNoConfig": "Először válassz érvényes sávot, módot és tartományt.",
   "trainerNoTracks": "Nincs gyakorlásra használható sáv.",
+  "trainerPausedPosition": "Szünet itt: {position}",
+  "@trainerPausedPosition": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
   "trainerRangeApply": "Tartomány alkalmazása",
   "trainerRangeBookmark": "Könyvjelző",
   "trainerRangeBookmarkUnavailable": "Nincs mentett könyvjelző.",

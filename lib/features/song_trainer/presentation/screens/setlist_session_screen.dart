@@ -86,6 +86,9 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
       for (final result in _result?.itemResults ?? const <SetlistItemResult>[])
         result.itemId: result,
     };
+    // §5.4/A5 — every upcoming tuning/capo change is announced BEFORE the
+    // run starts, not only once the affected song begins.
+    final tuningChangesAhead = _tuningChangesAhead(widget.setlist.items);
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -111,6 +114,38 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
                 ),
               ),
             ),
+            if (tuningChangesAhead.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Semantics(
+                  key: const Key('setlist-session-tuning-ahead'),
+                  container: true,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              const Icon(Icons.tune),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  l10n.setlistSessionTuningAheadTitle,
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                          for (final item in tuningChangesAhead)
+                            Text(_reminderText(l10n, item)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Expanded(
               child: ListView.builder(
                 key: const Key('setlist-session-window'),
@@ -197,4 +232,30 @@ Widget? _reminder(AppLocalizations l10n, SongSetlistItem item) {
   if (capo != null) return Text(l10n.setlistSessionCapo(capo));
   if (tuning != null) return Text(l10n.setlistSessionTuning(tuning));
   return null;
+}
+
+String _reminderText(AppLocalizations l10n, SongSetlistItem item) {
+  final capo = item.overrides.capoOverride;
+  final tuning = item.overrides.tuningOverrideCode;
+  if (tuning != null) return l10n.setlistSessionTuning(tuning);
+  if (capo != null) return l10n.setlistSessionCapo(capo);
+  return item.songId.value;
+}
+
+/// Items whose tuning/capo override differs from the one before them — the
+/// exact transitions a performer would otherwise only discover once the
+/// affected song starts playing (§5.4/A5).
+List<SongSetlistItem> _tuningChangesAhead(List<SongSetlistItem> items) {
+  final changes = <SongSetlistItem>[];
+  SetlistItemOverrides? previous;
+  for (final item in items) {
+    final overrides = item.overrides;
+    if (previous != null &&
+        (overrides.tuningOverrideCode != previous.tuningOverrideCode ||
+            overrides.capoOverride != previous.capoOverride)) {
+      changes.add(item);
+    }
+    previous = overrides;
+  }
+  return changes;
 }

@@ -6,6 +6,21 @@
 
 import 'package:flutter/material.dart';
 
+/// ADR 0274 §3 — the playhead-sync threshold between the audio-clock-derived
+/// position and whatever the Stage renders as the visual playhead. The bound
+/// is inclusive: a delta of exactly 100 ms still counts as in sync.
+abstract final class PlayheadSync {
+  static const Duration syncThreshold = Duration(milliseconds: 100);
+
+  static bool isInSync({
+    required Duration audioPosition,
+    required Duration visualPosition,
+  }) {
+    final delta = audioPosition - visualPosition;
+    return (delta.isNegative ? -delta : delta) <= syncThreshold;
+  }
+}
+
 /// Compact transport controls (play/pause/resume + speed).
 final class TransportControls extends StatelessWidget {
   const TransportControls({
