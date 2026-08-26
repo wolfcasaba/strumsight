@@ -19334,3 +19334,56 @@ KÖVETELMÉNYT méri, vagy csak azt, amit a kód éppen csinál?*
 → no fabricated measurement (E13-R22 review MAJOR-1)"; a hibaosztály
 repó-szintű őre (bármely felület szintetikus domain-bemenete) nem létezik, az
 `test/core/**` hatásköre, tehát kör-briefen kívül esik.
+
+## L499 — Egy zöld acceptance-cella lehet azért zöld, mert az ELLENŐRZÖTT forgatókönyv sosem dobja el az állapottartót: a kétértelmű kritériumnál a reviewer az ERŐSEBB olvasatot mérje eldobható próbával (E13-R23, review MINOR-1, 2026-08-26)
+
+**Mit mértünk.** Az E13-R23 A8 cellája („a keresés és a szűrés állapota megmarad
+visszatéréskor") zölden futott: a teszt `context.push`-sal nyitott egy route-ot
+a Song Library FÖLÉ, majd `pop`-olt. A `SongLibraryScreen` eközben **soha nem
+dispose-olódott**, tehát a `Provider.autoDispose` mögötti kontroller állapota
+triviálisan megmaradt — a teszt saját kommentje ki is mondta: *„The Library
+screen was never disposed while covered."*
+
+A reviewer eldobható próbája ugyanazt a szűrést VALÓDI kilépéssel és
+visszatéréssel mérte (a `home` widget lecserélése egy másik típusra → az Element
+tényleg megszűnik → vissza):
+
+```
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "Alpha": []>
+A8 strong: the search text must survive a real re-enter
+```
+
+**Miért nem elméleti.** A `/song-trainer` top-level `GoRoute`, NINCS
+shell-branchben, és az egyetlen alkalmazáson belüli belépője egy `context.push`
+a lecke-listáról. A Library-ból kilépve a képernyő dispose-olódik, az
+`autoDispose` elengedi a kontrollert, és a következő belépés friss, SZŰRETLEN
+listát ad — pontosan az a viselkedés, amit a brief §6.1 hibás
+implementációként nevesít.
+
+**A minta, ami általánosít.** Egy „az állapot megmarad X után" kritérium
+MINDIG legalább két olvasatú: (a) a tartót lefedték, de nem semmisítették meg;
+(b) a tartót ténylegesen eldobták. Az (a) olvasat teszthez **nulla
+implementációs munka** kell — ezért a motor természetesen oda konvergál, és a
+gate zölden zár. A reviewer dolga ilyenkor nem a teszt elolvasása, hanem a (b)
+olvasat MEGMÉRÉSE egy eldobható próbával; ha az piros, a cella nem hazudik, csak
+keveset mond, és a javítás után **mindkét** cellának a fán kell maradnia (a
+gyengébbet NEM cseréljük le, hozzáadunk).
+
+**A javítás mércéje is mérve.** A javító kör file-szintű, nem-autoDispose
+query-tartót vezetett be, és ÚJ cellát írt a (b) olvasatra. A reviewer
+valódi-sértés próbája (a provider `autoDispose`-ra mutálva)
+`flutter test song_library_test.dart` → **`+5 -1`**, PONTOSAN az új cella
+pirosodott, a másik öt zöld maradt — tehát az őr valódi, nem tautológia.
+
+**Melléklelet — az [L497](#l497) MÁSODSZOR, változatlanul.** Ugyanennek a
+körnek a briefje megint NEM LÉTEZŐ könyvtárakat sorolt fel `allowed_paths`-ként
+(`lib/features/songs/library|overview/`, `lib/features/setlists/`), a
+`brief-lint --level strict` megint „nincs lelet"-et adott, és a három
+megnevezett felület megint máshol élt (`song_trainer/presentation/screens/`).
+A pre-flight útvonal-cseréje ismét a merge-elt szomszéd-körök
+user-jóváhagyott literáljainak RÉSZHALMAZÁVAL oldotta fel. A Ch13 sávon ez
+mostanra a szabály, nem a kivétel: **a pre-flight ELSŐ mérése legyen
+`ls -d` az `allowed_paths` minden `lib/` elemére.**
+
+**Őrteszt:** `test/features/songs/song_library_test.dart`::`search text and filtered results survive a real dispose and re-entry of the Library screen`

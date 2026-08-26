@@ -1,5 +1,89 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R23 KÉSZ — Song Library, Overview és Setlist lista UI — PR [#465](https://github.com/wolfcasaba/strumsight/pull/465), squash `44b42a9d` (2026-08-26)
+
+Az UI-24–UI-25 és UI-32 Songs-tartalmak migrációja (SDD Ch13 Kör 23). A kör
+**ADR-t nem írt** — a §5 kötött döntései merge-elt ADR-ekre támaszkodnak
+([0275](docs/adr/0275-five-area-shell-behind-a-flag.md) legacy route,
+[0277](docs/adr/0277-failure-presentation-model.md) hibabemutatás,
+[0278](docs/adr/0278-ai-provenance-is-visible.md) provenance), és a `docs/adr/**`
+a kör tilos zónájában van. A sávon ez a **hatodik** ADR nélküli kör egymás után
+(E13-R17…R23).
+
+**Amit hoz.** A három Songs-felület **HELYBEN** migrálva (típusnév,
+fájl-útvonal, konstruktor-szignatúra és route-regisztráció változatlan):
+
+- **Song Library** — minden soron lokalizált **forrás-jelvény**
+  (`SongSourceBadge`), `canPersist == false` esetén lakat-jelvény, és a sor
+  megtekintő-módba terel a szerkesztő helyett (a `song-editor-open-<id>` Key
+  változatlan, csak a navigációs CÉL ágazik). A keresés/szűrés túléli a
+  képernyő **valódi** dispose→újrabelépését.
+- **Song Overview** — forrás + licenc sor, és a hiányzó kísérőhang
+  **nevesített** jelzése a tartalom letiltása NÉLKÜL (§5.3).
+- **Setlist lista (V2)** — tételenkénti készenlét-ikon a
+  `SetlistItemAvailability`-ből, a hiányzó dal **nevesítve**, önálló
+  szövegsorként — soha nem néma kihagyás (§5.4).
+
+**A pre-flight legfontosabb mérése (§0.0/B, R13–R21).** A brief három
+megnevezett könyvtára (`lib/features/songs/library|overview/`,
+`lib/features/setlists/`) a fán **NEM LÉTEZIK** — az eredeti `allowed_paths`
+NULLA létező fájlt fedett, a `brief-lint --level strict` mégis „nincs lelet"-et
+adott ([L497](docs/LESSONS.md#l497) MÁSODIK előfordulása). A három felület a
+`song_trainer/presentation/screens/` fában él; az útvonal-csere a merge-elt
+E03-R14…R22 briefek user-jóváhagyott literáljainak valódi RÉSZHALMAZA (10
+screen-fájlból 3), az `application/`, `domain/`, `data/` réteg pedig olvasható,
+de NEM írható. **R16:** a modellben **nincs `license` mező és nincs
+„közösségi" forrástípus** — a §5.2 a MÉRT hármasra szűkült
+(`SongSummary.sourceType` / `SongMetadata.copyright` / `capability.canPersist`),
+kitalált címke nélkül. **R17:** a négy listán kívüli pin (`song_library_screen_test`,
+`song_overview_screen_test`, a11y-audit, `app_router_test.dart:303`) az `S11`
+lint-lelet kimondott kifutójaként HELYBEN maradt ([L488](docs/LESSONS.md#l488)
+ötödik alkalmazása) — futnak a kapuban, de nem szerkeszthetők.
+
+**Review — APPROVED, EGY javító kör után** ([jelentés](docs/reviews/e13-r23-review.md)):
+0 BLOCKER, 0 MAJOR, 3 MINOR, 3 NOTE — mind a három MINOR **teljesen zöld kapu
+mögött** (16/16 lokális gate a reviewer izolált klónjában is, és mindkét
+exact-SHA CI-kapu success a `77d083e8`-on).
+
+- **MINOR-1 ([L499](docs/LESSONS.md#l499)):** az A8 cella azért volt zöld, mert
+  a tesztelt forgatókönyv (`push` a Library FÖLÉ, majd `pop`) **sosem
+  dispose-olja** a képernyőt. A reviewer eldobható próbája a valódi
+  kilépés/visszatérés útján `Found 0 widgets with text "Alpha"`-t mért — és ez
+  nem elméleti: a `/song-trainer` top-level route, egyetlen belépője egy `push`
+  a lecke-listáról. Javítás: file-szintű, **nem-autoDispose** query-tartó +
+  ÚJ cella a (b) olvasatra; a gyengébb cella VÁLTOZATLANUL a fán maradt.
+  A reviewer valódi-sértés próbája (provider → `autoDispose`) `+5 -1`-gyel
+  PONTOSAN az új cellát váltotta pirosra.
+- **MINOR-2:** a lista alcíme nyers `sourceType.code` **gép-azonosítót**
+  (`strumSightJson`) írt ki a lokalizált forrás-chip fölé, előadó nélküli
+  dalnál. Javítás: a `code`-fallback megszűnt, a golden újrafelvéve.
+- **MINOR-3:** az A2 „licenc **a listában**" része mérten nem teljesíthető —
+  a `SongSummary` index nem hordoz `copyright`-ot, és a
+  `SongLibraryController` doc-commentje szó szerint kimondja: *„A full document
+  is deliberately never requested here"*. Feloldás: §0.0/B/**R21** revízió —
+  forrás MINDKÉT helyen kötelező, licenc az áttekintőn; a mérce nem gyengült,
+  csak igazat mond.
+- **NOTE-1/2/3** (nem blokkoló, mind az `application/` rétegbe esik): a `null`
+  capability szerkeszthetőnek számít; az Overview másodszor is dekódolja a
+  dokumentumot csak megjelenítéshez, és a hibát elnyeli; a setlist-készenlét a
+  perzisztált `initialAvailability`-ből jön, nem újraszámolva.
+
+**Golden (A9):** 6 PNG (library + overview + setlist-lista × 412×915 compact és
+`textScaler: 2.0`), **x86-on felvéve** ([ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md),
+`tools/golden-x86.sh`) — `--update-goldens` ezen az ARM boxon tilos.
+**Képernyő-leltár:** 86 → 86 (nincs új `*_screen.dart`, a `ui_inventory_test`
+diffje ÜRES).
+
+**Zöld kapu (exact `ae4b11a3`):** Full Gate [32966489936](https://github.com/wolfcasaba/strumsight/actions/runs/32966489936)
++ Router CI [32966492836](https://github.com/wolfcasaba/strumsight/actions/runs/32966492836)
+mindkettő **success**; reviewer round-gate 16/16 ZÖLD; scope-audit OK.
+
+**Nevesített follow-up:** a `SetlistListScreenV2` route-regisztrációja (ma nincs
+GoRoute-on, a konstruktora `controller` + `clock` argumentumot kér) → **E13-R25**
+(setlist-run).
+
+---
+
 ## ✅ E13-R22 KÉSZ — Practice result, history és Speed Builder UI — PR [#464](https://github.com/wolfcasaba/strumsight/pull/464), squash `5f4266e3` (2026-08-26)
 
 Az UI-21–UI-23 összegzés-központú felületei (SDD Ch13 Kör 22), a merge-elt
