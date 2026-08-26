@@ -83,6 +83,18 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
     return _canPersistCacheValue;
   }
 
+  // MAJOR-2 (E13-R24 review §6.2): `_saveCopy` calls `controller.startNew`,
+  // which detaches `persisted` (sets it to `null`) before `save()` runs. If
+  // the repository write itself then fails — as opposed to a still-fatal
+  // copy, which `_saveCopy` now rejects before ever calling `startNew` — the
+  // controller has no public API to restore `persisted` without also
+  // overwriting `draft` (see `load`). `_canPersist(null)` is always `true`,
+  // which would silently re-enable Save on the orphaned, unpersisted copy.
+  // This screen-local flag keeps Save locked and the "Save copy" retry
+  // affordance visible until `state.persisted` is non-null again (a
+  // successful save, or a fresh load).
+  var _copyWriteFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -135,7 +147,10 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
     final controller = ref.read(songEditorControllerProvider(_id));
     final state =
         ref.watch(songEditorStateProvider(_id)).value ?? controller.state;
-    final canPersist = _canPersistMemo(state.persisted);
+    if (state.persisted != null) _copyWriteFailed = false;
+    final canPersist = _copyWriteFailed
+        ? false
+        : _canPersistMemo(state.persisted);
     return PopScope<Object?>(
       canPop: !state.isDirty,
       onPopInvokedWithResult: (didPop, result) async {
@@ -175,7 +190,12 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
           SongEditorStatus.failure when !state.isLoaded => Center(
             child: Text(l10n.songEditorLoadFailed),
           ),
-          _ => _EditorBody(id: _id, state: state, canPersist: canPersist),
+          _ => _EditorBody(
+            id: _id,
+            state: state,
+            canPersist: canPersist,
+            onCopyWriteFailed: () => setState(() => _copyWriteFailed = true),
+          ),
         },
       ),
     );
@@ -229,11 +249,13 @@ final class _EditorBody extends ConsumerWidget {
     required this.id,
     required this.state,
     required this.canPersist,
+    required this.onCopyWriteFailed,
   });
 
   final SongId id;
   final SongEditorState state;
   final bool canPersist;
+  final VoidCallback onCopyWriteFailed;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -293,7 +315,7 @@ final class _EditorBody extends ConsumerWidget {
                   Expanded(child: Text(l10n.songEditorReadOnlySource)),
                   TextButton(
                     key: const Key('song-editor-save-copy'),
-                    onPressed: () => _saveCopy(controller, draft),
+                    onPressed: () => _saveCopy(context, controller, draft),
                     child: Text(l10n.songEditorSaveCopy),
                   ),
                 ],
@@ -383,6 +405,7 @@ final class _EditorBody extends ConsumerWidget {
   /// pointer, so the following `save()` always calls `repository.create`
   /// and the original stored document is never touched.
   Future<void> _saveCopy(
+    BuildContext context,
     SongEditorController controller,
     SongDocument draft,
   ) async {
@@ -412,18 +435,34 @@ final class _EditorBody extends ConsumerWidget {
       meterMap: draft.meterMap,
       keyMap: draft.keyMap,
     );
+    // MAJOR-2 (E13-R24 review §6.2): a copy carries `draft`'s exact content,
+    // so it fails the same fatal-reference check `draft` itself would fail
+    // if the user never ran the in-editor fix. Checking that HERE, before
+    // `controller.startNew` runs, means the controller — and with it the
+    // user's live, unsaved draft — is never touched on this path:
+    // `startNew` detaches `persisted`, and the controller exposes no way to
+    // restore it without also overwriting `draft` (see `load`), which is
+    // exactly the silent-data-loss bug this check exists to avoid.
+    if (!_canPersist(copy)) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).songEditorInvalid),
+          ),
+        );
+      }
+      return;
+    }
     controller.startNew(copy);
     await controller.save();
-    // MINOR-2: `save()` always mutates the controller's state, whether it
-    // succeeds or not — a fatal validation issue on the copy, or a
-    // repository create failure, leaves the editor pointed at the orphaned,
-    // never-persisted copy (`persisted == null`), which would silently
-    // re-enable Save (`_canPersist(null) == true`) and strand the user off
-    // the read-only original's context. `save()` never calls
-    // `repository.update` on the original (A6), so re-loading it is always
-    // safe and restores exactly the pre-copy state.
+    // A repository failure at this point (as opposed to the still-fatal
+    // case caught above) still leaves `persisted == null` — the controller
+    // has no API to avoid that without touching the forbidden application
+    // layer. `onCopyWriteFailed` keeps Save locked and the "Save copy"
+    // retry affordance visible from the screen side instead; `draft` is
+    // untouched either way, since `save()` never rewrites it on failure.
     if (_isFailureStatus(controller.state.status)) {
-      await controller.load(id);
+      onCopyWriteFailed();
     }
   }
 

@@ -738,4 +738,93 @@ sorrendben) — eggyel több, mint a review előtti futáson, a `editor_draft_te
 MINOR-2 cellájával. A `format` és `analyze` első próbálkozásra zöld volt,
 második gate-futás nem kellett.
 
+### Javító kör #2 (MAJOR-2) — 2026-08-26, `docs/reviews/e13-r24-review.md` §6.2
+
+**A hiba.** Az 1. javító kör `_saveCopy`-javítása hiba esetén
+`await controller.load(id)`-t hívott, hogy a szerkesztőt visszaállítsa az
+eredetire. A `load()` viszont `_publishReady(document, document)`-et
+publikál, azaz a **draftot IS** a lemezről olvasott dokumentumra állítja — a
+felhasználó minden mentetlen szerkesztése (pl. cím-átírás) ezzel
+megsemmisült, miközben semmi nem íródott ki (`createCalls == 0`). A
+`SongEditorController` az `application/**` tiltott zónában van, ezért a
+javításnak a **képernyő** rétegében, a controller MEGLÉVŐ publikus API-jával
+kellett megszületnie.
+
+**A javítás két, egymást kiegészítő ág `song_editor_screen.dart`-ban:**
+
+1. **Kliens-oldali előzetes validáció** (`_saveCopy`, `SongValidator` +
+   `SongCapabilityResolver` — már importált domain szolgáltatások, a meglévő
+   `_canPersist(SongDocument?)` segédfüggvény újrahasznosítva). A másolat
+   (`copy`) PONTOSAN a `draft` tartalmát hordozza, csak más `id`/`source`/
+   `revision` alatt — ha a `draft` fatálisan hibás, a `copy` IS az lesz. Ezt
+   a `controller.startNew(copy)` meghívása ELŐTT ellenőrizzük: ha
+   `!_canPersist(copy)`, a controllerhez egyáltalán nem nyúlunk (nincs
+   `startNew`, nincs `save()`) — a `persisted` és a `draft` a gombnyomás
+   előtti állapotban marad, tehát a felhasználó szerkesztése garantáltan
+   megmarad, és a Save zárolt marad (`canPersist(persisted)` a régi,
+   validátor-fatális eredetire számol, változatlanul `false`). A bukás okát
+   egy `SnackBar` nevesíti (`l10n.songEditorInvalid`).
+2. **Képernyő-szintű zároló jelző a repository-hiba ágra**
+   (`_SongEditorScreenState._copyWriteFailed`). Ha a másolat átment a
+   kliens-oldali validáción, de a `repository.create()` mégis elbukik
+   (I/O-hiba) — ezt a kliens-oldali ellenőrzés NEM tudja előre jelezni —, a
+   `controller.state.persisted` a `startNew` miatt `null` marad, és
+   `_canPersist(null)` mindig `true`. Mivel a controllernek nincs publikus
+   API-ja a `persisted` önálló visszaállítására anélkül, hogy a `draft`-ot is
+   felülírná (`load()` ezt tenné), a képernyő egy saját, `setState`-tel
+   vezérelt boolean-t tart karban (`onCopyWriteFailed` callback, `_EditorBody`
+   új konstruktor-paramétere): amíg igaz, a Save zárolt marad és a „Save
+   copy" sáv látható marad, függetlenül a controller `persisted`-jétől. A
+   jelző automatikusan törlődik, amint `state.persisted` újra nem `null`
+   (sikeres mentés vagy friss `load`). A `draft` ezen az ágon is érintetlen
+   marad, mert `save()` hibán sosem írja felül.
+
+**Megerősített cella** (`test/features/songs/import/editor_draft_test.dart`,
+`'MAJOR-2: a failed copy attempt never discards an edit the user made before
+saving'`) — a MINOR-2 fixture-jét bővíti egy cím-átírással a „Save copy"
+koppintás ELŐTT (a fatális hivatkozást szándékosan javítatlanul hagyva):
+
+- `repository.createCalls` üres marad (semmi nem íródott ki);
+- `editorController.state.draft!.metadata.title` a koppintás UTÁN IS
+  `'My careful rename'` — NEM esik vissza `'Legacy Song'`-ra;
+- a `SnackBar` a `songEditorInvalid` szöveget mutatja;
+- a Save gomb `onPressed` `null` (zárolt marad);
+- a „Save copy" gomb újra elérhető.
+
+A meglévő MINOR-2 cella (amely NEM szerkeszt a másolás előtt) VÁLTOZATLAN
+maradt és zöld — mivel ezen a fixture-ön a kliens-oldali előzetes ellenőrzés
+a `controller.startNew`-t sosem hívja meg, a `persisted`/`draft` a gombnyomás
+előtti (eredeti) állapotban marad, ami pontosan megegyezik a cella meglévő
+`persisted?.id == id` / `draft?.id == id` állításaival.
+
+**Piros/zöld bizonyíték** (az 1. javító kör régi, `controller.load(id)`-t
+hívó ágát ideiglenesen visszaállítva, a kliens-oldali előzetes ellenőrzés
+NÉLKÜL, majd visszaállítva):
+
+- **PIROS** a régi ágon (`flutter test test/features/songs/import/editor_draft_test.dart`):
+  ```
+  MAJOR-2: a failed copy attempt never discards an edit the user made before saving [E]
+  Expected: 'My careful rename'
+    Actual: 'Legacy Song'
+     Which: is different.
+            Expected: My careful ...
+              Actual: Legacy Son ...
+                      ^
+             Differ at offset 0
+  00:03 +3 -1: MAJOR-2: a failed copy attempt never discards an edit the user made before saving [E]
+  ```
+  (a régi ág ráadásul a `context`/`onCopyWriteFailed` paramétereket
+  kihasználatlanul hagyta — ez csak analyzer-figyelmeztetés, a tesztfutást
+  nem érintette.)
+- **ZÖLD** a javított ágon: `00:03 +5: All tests passed!` (mind az öt
+  `editor_draft_test.dart` cella: A5/A6/MINOR-2/MAJOR-2/A8).
+
+**`tools/round-gate.sh` eredménye (a brief §7 szerinti 15 tesztúttal,
+csővezeték nélkül):** **MINDEN GATE ZÖLD**, 20 lépés. A 15 teszt-lépés
+összesen **97 zöld tesztet** futtatott
+(2+4+5+3+6+1+1+1+2+2+22+44+1+2+1 — az `editor_draft_test.dart` +4 → +5-re nőtt
+az új MAJOR-2 cellával; a `song_editor_screen_test.dart` a `_EditorBody`
+konstruktorának bővülésével is zöld maradt). A `format` és `analyze` első
+próbálkozásra zöld volt.
+
 ## 11. Review — a Claude tölti ki

@@ -339,6 +339,122 @@ void main() {
   );
 
   testWidgets(
+    'MAJOR-2: a failed copy attempt never discards an edit the user made '
+    'before saving',
+    (tester) async {
+      // Same read-only-source shape as MINOR-2 above (a legacy StrumTrack
+      // targeting a chord event that does not exist), but this time the
+      // user ALSO renames the document before attempting "Save copy" —
+      // reproducing the reviewer's probe (E13-R24 review §6.2): the
+      // renamed title must survive the failed copy attempt, not be
+      // silently replaced by the untouched original's title.
+      final now = DateTime.utc(2026, 8, 4);
+      final original = SongDocument(
+        schemaVersion: songDocumentSchemaVersion,
+        id: SongId('legacy-fatal-edited'),
+        revision: 3,
+        metadata: SongMetadata(title: 'Legacy Song'),
+        source: SongSource(
+          type: SongSourceType.legacyLocal,
+          originalFileName: 'legacy.song',
+          sha256: 'a' * 64,
+          importedAt: now,
+          importerVersion: 'legacy@1',
+        ),
+        createdAt: now,
+        updatedAt: now,
+        measures: <SongMeasure>[
+          SongMeasure(index: 0, durationBeats: BeatPosition.fromBeats(4)),
+        ],
+        tempoMap: TempoMap.constant(Tempo(120)),
+        meterMap: MeterMap.constant(Meter(4, 4)),
+        tracks: <SongTrack>[
+          StrumTrack(
+            id: SongTrackId('strum-track'),
+            name: 'Strum',
+            instrument: SongInstrument(name: 'Guitar'),
+            events: <SongStrumEvent>[
+              SongStrumEvent(
+                id: SongEventId('strum-1'),
+                at: Duration.zero,
+                direction: StrumDirection.down,
+                targetChordId: SongEventId('missing-chord'),
+              ),
+            ],
+          ),
+        ],
+      );
+      final repository = _ReadOnlySeedRepository(original);
+      final id = SongId('legacy-fatal-edited');
+      final editorController = SongEditorController(
+        repository: repository,
+        assetRepository: const _NoopAssetRepository(),
+      );
+      addTearDown(editorController.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          songRepositoryProvider.overrideWithValue(repository),
+          songAssetRepositoryProvider.overrideWithValue(
+            const _NoopAssetRepository(),
+          ),
+          songEditorControllerProvider(id).overrideWithValue(editorController),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const SongEditorScreen(songId: 'legacy-fatal-edited'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The user renames the document — a live, unsaved edit — but never
+      // runs the in-editor fix for the fatal reference.
+      await tester.enterText(
+        find.byKey(const Key('song-editor-title')),
+        'My careful rename',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      expect(editorController.state.draft!.metadata.title, 'My careful rename');
+
+      await tester.tap(find.byKey(const Key('song-editor-save-copy')));
+      await tester.pumpAndSettle();
+
+      // Nothing was ever written — the still-fatal copy never reaches
+      // repository.create.
+      expect(repository.createCalls, isEmpty);
+
+      // The rename SURVIVES the failed copy attempt — this is the exact
+      // data loss the reviewer's probe measured (title reverting to
+      // "Legacy Song") when the fix incorrectly called `controller.load`.
+      expect(editorController.state.draft!.metadata.title, 'My careful rename');
+
+      // The failure reason is named on the surface.
+      final l10n = AppLocalizations.of(
+        tester.element(find.byType(SongEditorScreen)),
+      );
+      expect(find.text(l10n.songEditorInvalid), findsOneWidget);
+
+      // Save (in-place) is still locked, and the retry path is still
+      // available.
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('song-editor-save')))
+            .onPressed,
+        isNull,
+      );
+      expect(find.byKey(const Key('song-editor-save-copy')), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'A8: leaving the editor with unsaved changes names the consequence '
     'before the pop is allowed',
     (tester) async {
