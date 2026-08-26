@@ -19226,3 +19226,111 @@ vagy governance-kör dolga. Amíg az nincs meg, a HARMADIK előfordulás várhat
 **Őrteszt:** `test/features/practice/session/session_transitions_test.dart` —
 „the tuning entry meets the >= 48dp touch-target contract (ADR 0280 §Döntés 5)";
 a per-widget rés lezárására nincs őrteszt, az indok a fenti bekezdésben.
+
+---
+
+## L497 — A `brief-lint --level strict` NEM veszi észre, ha az `allowed_paths` NEM LÉTEZŐ útvonalakra mutat: a lista fedhet nulla fájlt, és a kör mégis „tisztán" indul (E13-R22, pre-flight, 2026-08-26)
+
+**Mit mértünk.** Az E13-R22 induláskor kapott brief-lint jelentése
+(`.pipeline/brief-lint-E13-R22.md`) egyetlen sor volt: *„Brief-lint (strict) —
+nincs lelet."* A pre-flight első mérése viszont ezt adta:
+
+```
+find lib/features/practice -type d
+→ application  data  domain  presentation
+```
+
+A brief `allowed_paths`-a `lib/features/practice/results/`,
+`lib/features/practice/history/` és `lib/features/practice/speed_builder/`
+könyvtárakat sorolt fel — **egyik sem létezik**, a practice feature
+`application/data/domain/presentation` rétegzésű. A lista tehát **nulla létező
+fájlt fedett**: a kör egyetlen engedélyezett fájlon sem dolgozhatott volna, és
+a migrálandó `PracticeResultScreen` (ami LÉTEZIK, a `/practice/result` route-on
+regisztrált, és három teszt pinneli) kívül esett rajta.
+
+**Miért nem fogta meg a lint.** A `tools/brief-lint.py` `strict` szabályai
+MEGLÉVŐ fájlokra lőnek: az `S9` a képernyő-leltárat, az `S11` a listán kívüli
+típus-pineket, az `S12` a fa-szintű őröket méri. Mindegyik a fán TALÁLT
+állapotból indul — egy útvonal, ami semmire sem illeszkedik, egyik szabály
+predikátumát sem aktiválja. A hiba tehát nem a szabályok gyengesége, hanem egy
+hiányzó, triviális elő-ellenőrzés: *létezik-e egyáltalán, amit a lista felsorol?*
+
+**Miért volt a brief mégis „mért".** A `9acd14e5` sáv-szintű batch pre-flight
+(2026-08-25) EZT a hiányt látta, és a §0.0/R1-ben rögzítette is — de rossz
+következtetéssel: *„a képernyőket ez a kör hozza létre, tehát MINDEN szövege
+új."* Az eredmény-felületre mérve ez hamis volt. Egy „mért" állítás így válhat
+avulttá attól, hogy a mérés a HIÁNYT látta, de a hiány OKÁT nem ellenőrizte.
+
+**A feloldás — útvonal-csere, a szomszéd kör listájának RÉSZHALMAZÁRA.** A
+tágítás az orchestrátornak H3 ([L478](#l478)), ezért a csere kikötése az volt,
+hogy szigorúan kevesebbet adjon, mint az EGY körrel korábbi, user-jóváhagyott
+lista ugyanarra a feature-re:
+
+| E13-R21 (merge-elt) | E13-R22 (a csere) |
+|---|---|
+| `lib/features/practice/` (teljes fa) | 3 nevesített screen + `presentation/widgets/` + `presentation/providers/` + `public.dart` |
+
+A `domain`/`data`/`application` így OLVASHATÓ, de nem írható maradt — a §3
+„a pontozás és a jutalom-logika nem módosul" tiltása ezzel gépi lett
+(`scope-audit.py`), nem csak szöveges.
+
+**A tanulság általánosan.** A pre-flight ELSŐ mérése ne a brief állításainak
+ellenőrzése legyen, hanem a lista LÉTEZÉSÉÉ: `ls`/`find` minden
+`allowed_paths` bejegyzésre. Egy lista, ami nulla fájlt fed, nem szigorú
+szerződés, hanem néma ellentmondás — és a lint zöldje ilyenkor semmit nem
+bizonyít.
+
+**Őrteszt:** nincs — a szabály helye a `tools/brief-lint.py` (egy `S13`-szerű
+„az `allowed_paths` minden nem-új bejegyzése illeszkedjen legalább egy
+verziókövetett útvonalra" predikátum), az pedig a kör-briefen KÍVÜL,
+governance- vagy önjavító kör hatásköre (ADR 0112 §3). Amíg nincs meg, a
+hibaosztály minden előre megírt briefnél visszatérhet.
+
+---
+
+## L498 — A „gyártott mérés": ha egy felület nem kap élő bemenetet, a szintetikus bemenet a VALÓDI domain-motoron át hitelesnek látszó eredményt szül — és a kör saját cellája MÁSODSZOR is pinnelte a hibás utat (E13-R22, review MAJOR-1, 2026-08-26)
+
+**Mit mértünk.** Az E13-R22 Speed Builder képernyője két lokalizált production
+gombot szállított („Record pass" / „Record miss"), amelyek minden érintésre egy
+`_syntheticAttempt(...)` hívással KITALÁLT `PracticeAttemptResult`-ot
+(`completion: 0.98`, `rhythm: 0.9`, `resolvedTargets: 8/8`, `scorePoints: 800`)
+adtak át a **valódi** `SpeedBuilderEngine`-nek. Az engine szabályosan
+felépítette a létrát, a felület pedig a kapott értéket közölte. A reviewer
+eldobható próbatesztje — mikrofon, session és egyetlen `PracticeObservation`
+NÉLKÜL, puszta érintésekkel:
+
+```
+PROBE2 rendered: Speed Builder result || You finished early ||
+                 Highest stable BPM: 90 BPM || 6 attempts || Done
+```
+
+**Miért veszélyes ez a forma.** A hiba nem a motorban van — a motor helyesen
+számolt —, hanem a bemenetben, és éppen ezért **hitelesnek látszik**: a
+végeredmény átment a valódi domain-szabályokon, tehát minden konzisztens. A
+felület mégis olyat állít, amit soha senki nem mért. A kör SAJÁT, merge-elt
+ADR-je ([0283](adr/0283-results-never-overstate-certainty.md)) pontosan ezt
+tiltja, és a projekt „nincs demó — valódi funkcionalitás" szabálya is.
+
+**A kör cellája PINNELTE a hibát — másodszor.** A
+`speed_ladder_test.dart:135-150` cella elvárásként rögzítette, hogy a Start
+után megjelenjen a „Record pass", kétszer megnyomható legyen, és eredményt
+adjon. Ez az [L495](#l495) hibaosztályának megismétlődése EGY körrel a mérése
+után, MÁS felületen: *egy zöld cella nemcsak elmulaszthatja a hibát, rögzítheti
+is.* Az A6 két ÉRDEMI cellája ugyanebben a fájlban (`initialState`-tel, valódi
+engine-állapottal) végig helyes volt — a hibás cella nem tudatlanságból, hanem
+a „mérjük le, amit a kód csinál" reflexből született.
+
+**A helyes forma.** Ha nincs élő bemenet, a felület MONDJA KI
+(ADR 0277-stílusú, nem büntető állapot), és **ne kínáljon affordanciát**, amely
+csak gyártott adatból zárható le. Az őrcella ilyenkor az affordancia
+ABSZENCIÁJÁT méri. A reviewer valódi-sértés próbája ezt hitelesítette: a
+javított képernyőbe visszatett `Start` CTA-ra a cella azonnal pirosra váltott
+(`Expected: no matching candidates / Actual: Found 1 widget with text "Start"`).
+
+**Kérdés, amit minden ÚJ cellánál fel kell tenni:** *ez a cella a
+KÖVETELMÉNYT méri, vagy csak azt, amit a kód éppen csinál?*
+
+**Őrteszt:** `test/features/practice/speed_ladder_test.dart` — „no live session
+→ no fabricated measurement (E13-R22 review MAJOR-1)"; a hibaosztály
+repó-szintű őre (bármely felület szintetikus domain-bemenete) nem létezik, az
+`test/core/**` hatásköre, tehát kör-briefen kívül esik.

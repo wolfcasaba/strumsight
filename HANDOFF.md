@@ -1,5 +1,85 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R22 KÉSZ — Practice result, history és Speed Builder UI — PR [#464](https://github.com/wolfcasaba/strumsight/pull/464), squash `5f4266e3` (2026-08-26)
+
+Az UI-21–UI-23 összegzés-központú felületei (SDD Ch13 Kör 22), a merge-elt
+[ADR 0283](docs/adr/0283-results-never-overstate-certainty.md) kötött döntései
+szerint. A kör **ADR-t nem írt** — a `0283` a briefekkel EGYÜTT merge-elt
+(`a4a71550`), és merge-elt ADR újraírása H1 volna (ADR 0087 §2). A sávon ez az
+**ötödik** ilyen kör egymás után (E13-R17…R22).
+
+**Amit hoz.** Az **eredmény** (UI-21) HELYBEN migrálva: megbízhatóság-tudatos
+összegzés (küszöb **0,60, INKLUZÍV**), részleges-session jelölés a
+`finishReasonCode` stabil enum-kódjából, jutalom **a főkönyvből**
+(`stableEventId(sessionId)` → `RewardLedgerEntry`, TISZTA olvasás — az
+`appendIfAbsent` sehol), végrehajtható következő lépés és minimális
+megosztás-vetület. Az **előzmények** (UI-22) ÚJ képernyő: helyi adat, tehát
+offline is teljes, sérült rekord izolálva, mód-szűrővel. A **Speed Builder**
+(UI-23) ÚJ képernyő: a **stabil legjobb tempót** (`highestStableTempo`)
+mutatja, sosem a csúcs-futamot. Hat golden PNG, 412×915 compact portrait ÉS
+`textScaler: 2.0`, **x86-on felvéve** (ADR 0426).
+
+**Pre-flight (§0.0/B, `b3ce2027`) — nyolc mért revízió.** **R5:** a `0283` már
+merge-elt (a fejléc „a Claude írja meg" mondata elavult); a foglaló adta `0428`
+kiosztott, de fel nem használt szám maradt. **R6:** a brief HÁROM megnevezett
+könyvtára (`practice/results|history|speed_builder/`) a fán **nem létezik** — a
+lista így **nulla létező fájlt** fedett; a felületek a practice `presentation`
+rétegéé, és a csere az előző kör user-jóváhagyott listájának valódi
+RÉSZHALMAZA (a `domain`/`data`/`application` olvasható, de nem írható).
+**R7:** a §0.0/R2 „nincs ilyen" MÉRVE hamis — három listán KÍVÜLI teszt pinneli
+a `PracticeResultScreen`-t, ezért a képernyő HELYBEN migrál (típus, útvonal,
+`entry:` konstruktor kötve — [L488](docs/LESSONS.md#l488) negyedik
+alkalmazása), a három teszt fut, de nem szerkeszthető. **R8:** az A1 három
+cellájának (0,45/0,60/0,85) **nincs producere** — session-szintű `confidence`
+mező a fán nincs —, ezért a bemenet a MÉRT `resolvedTargets/totalTargets`
+lefedettségi arány (9/12/17 per 20, `python3`-mal kiszámolva). **R9:** golden a
+merge-kapu architektúráján. **R10:** `hasLength(84)` → **86**. **R11/R12:** a
+route-regisztráció (`lib/app/routing/**`) és a valódi megosztás-varrat a listán
+kívül esik → nevesített follow-up, a két új képernyő addig a
+`Navigator.push(MaterialPageRoute…)` házi mintával érhető el az
+eredmény-felületről.
+
+**EGY javító kör** (`docs/reviews/e13-r22-review.md`, végső verdikt
+**APPROVED**, 0 nyitott lelet). A MAJOR **teljesen zöld kapu mögött** élt — 16/16
+lokális gate-lépés a reviewer saját izolált klónjában is, és mindkét exact-SHA
+CI-kapu success:
+
+1. **MAJOR-1** — a Speed Builder aktív felülete GYÁRTOTT
+   `PracticeAttemptResult`-okat (`completion: 0.98`, `rhythm: 0.9`,
+   `resolvedTargets: 8/8`) adott a VALÓDI `SpeedBuilderEngine`-nek két
+   production gombbal („Record pass"/„Record miss", mindkét nyelven
+   lokalizálva), és a kapott értéket „Highest stable BPM"-ként közölte. A
+   reviewer próbateszttel mérte: **`Highest stable BPM: 90 BPM` puszta
+   érintésekből**, mikrofon, session és egyetlen `PracticeObservation` NÉLKÜL.
+   Ez pontosan az az állítás-túllövés, amit a kör SAJÁT ADR-je (0283) tilt.
+   **A kör cellája ráadásul elvárásként PINNELTE a hibás utat**
+   (`speed_ladder_test.dart:135-150`) — az [L495](docs/LESSONS.md#l495)
+   hibaosztálya EGY körrel a mérése után megismétlődött, most más felületen.
+   Javítás: a szintetikus próbagyártás megszűnt, helyette ADR 0277-stílusú,
+   kimondott „élő mérés még nincs" állapot Start/Record affordancia nélkül, és
+   egy ABSZENCIA-őrcella, amit a reviewer valódi-sértés próbája (`Start` CTA
+   visszatétele) `Found 1 widget with text "Start"`-tal pirosra váltott.
+2. **MINOR-1** — nyers `'completedAllTargets'` literál a domain stabil
+   `PracticeFinishReason.…code` elérése helyett. **MINOR-2** — a sérült
+   előzmény-rekord ma JELZÉS NÉLKÜL tűnik el (a `skipped` számláló megvan a
+   `json_document_store.dart`-ban, de a repository nem hordozza tovább, és a
+   réteg a listán kívül van) → a §10.5 nevesített korlátként rögzíti.
+   **NOTE-1** (nem blokkoló): a Noop jutalom-varrat MÉRVE őszinte — a
+   practice-adapter sehol nincs példányosítva, a valódi ledger sincs
+   providerbe kötve, tehát a főkönyv production-ban valóban üres.
+
+**Az érintési cél (≥ 48 dp) ezúttal ZÖLD** — a reviewer mind a négy ÚJ
+affordanciát megmérte 412×915-ön (`Share`, `History`, `Speed Builder`,
+`Practice again` → mind pontosan `48.0`), tehát az E13-R20 → E13-R21 két
+egymást követő MAJOR-ját adó hibaosztály ebben a körben nem ismétlődött meg.
+
+**Bizonyíték.** Exact `7e2eb629`: Full Gate
+[32953967135](https://github.com/wolfcasaba/strumsight/actions/runs/32953967135)
++ Router CI
+[32955584901](https://github.com/wolfcasaba/strumsight/actions/runs/32955584901)
+mindkettő success. Scope-audit: `OK (b3ce202714e1..e3dab0480511, 23 changed
+path(s), 1 generated/ignored)`.
+
 ## ✅ E13-R21 KÉSZ — Practice setup, aktív session és pause/recovery UI — PR [#463](https://github.com/wolfcasaba/strumsight/pull/463), squash `e209af39` (2026-08-26)
 
 Az UI-18–UI-20 migrációja a MEGLÉVŐ gyakorlási állapotgéphez kapcsolva (SDD Ch13
@@ -7451,7 +7531,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-26):** `main` @ `e209af39` — E13-R21 Practice setup,
+**Aktuális állapot (2026-08-26):** `main` @ `5f4266e3` — E13-R22 Practice
+result, history és Speed Builder UI, PR
+[#464](https://github.com/wolfcasaba/strumsight/pull/464), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** (MAJOR-1: a Speed
+Builder aktív felülete GYÁRTOTT méréseket adott a valódi engine-nek, és az
+eredményt mértként közölte — a reviewer 90 BPM-et állított elő puszta
+érintésekből, mikrofon nélkül; a kör SAJÁT cellája pinnelte a hibás utat,
+[L495](docs/LESSONS.md#l495) megismétlődése; + 2 MINOR). Review **APPROVED**,
+0 nyitott BLOCKER/MAJOR/MINOR (`docs/reviews/e13-r22-review.md`). A kör
+**ADR-t nem írt** — a `0283` már merge-elt. A pre-flight nyolc revíziója közül
+a legsúlyosabb az **R6**: a brief `allowed_paths`-a három NEM LÉTEZŐ könyvtárat
+sorolt fel, tehát nulla létező fájlt fedett. Exact `7e2eb629`: Full Gate
+32953967135 + Router CI 32955584901 mind success. Post-merge
+`tools/round-gate.sh` a friss `main`-en zöld. Részletesen a fejléc ✅-blokkban.
+
+**Korábbi állapot (2026-08-26):** `main` @ `e209af39` — E13-R21 Practice setup,
 aktív session és pause/recovery UI, PR
 [#463](https://github.com/wolfcasaba/strumsight/pull/463), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -8299,7 +8395,18 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E13-R20 — Chord Library, Learning Path és Lesson UI** (PR
+**E13-R21 — Practice setup, aktív session és pause/recovery UI** (PR
+[#463](https://github.com/wolfcasaba/strumsight/pull/463), squash `e209af39`).
+Az UI-18–UI-20 migrációja a MEGLÉVŐ gyakorlási állapotgéphez kapcsolva; a
+Pause/Recovery **overlay**, nem külön route, és kizárólag a
+`PracticeSessionState.pauseCause`-ból renderel. **1 javító kör**, 2 MAJOR
+(őrizetlen adatvesztési kijárat egy futó sessionből `context.go`-val; 32 dp-s
+érintési cél a 48 dp-s ADR 0280 szerződés alatt) + 1 MINOR, mind ZÖLD kapu
+mögött. Két lecke: [L495](docs/LESSONS.md#l495) (a zöld cella rögzítheti is a
+hibát), [L496](docs/LESSONS.md#l496) (a widget-specifikus őrcella nem a
+szabályt méri).
+
+**Korábbi: E13-R20 — Chord Library, Learning Path és Lesson UI** (PR
 [#462](https://github.com/wolfcasaba/strumsight/pull/462), squash `ad5718d1`,
 ADR [0282](docs/adr/0282-diagram-text-alternative-and-handedness.md) — merge-elt,
 a kör hivatkozta, nem írta). Az akkorddiagram a rajz mellé **szöveges
@@ -9335,7 +9442,47 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > köztük egy emberi döntéssel feloldott H3 lista-tágítással. **Olvasd el a
 > §0.0-t a kör indítása előtt; a pre-flight NE derítse fel újra.**
 
-> **Frissítve 2026-08-26 (E13-R21 után).** A **Ch13 sáv következő köre:
+> **Frissítve 2026-08-26 (E13-R22 után).** A **Ch13 sáv következő köre:
+> `E13-R23` — Song Library és setlistek**
+> (`docs/rounds/e13-r23-song-library-and-setlists.md`, engine a queue-ban
+> `sonnet-impl`, előre kiosztott ADR: **`nincs`** — ha a kör normatív döntést
+> hoz, a pre-flight `tools/round-slots.py reserve-adr`-rel foglaljon, és
+> ELŐSZÖR mérje meg, hogy a döntés nem egy MÁR merge-elt ADR szövege-e (az
+> újraírás H1; a sávon ez már ötször így alakult, E13-R17…R22).
+>
+> **Három horog, amit az E13-R22 hagyott ennek a körnek:**
+>
+> 1. **A brief `allowed_paths`-a lehet, hogy NEM LÉTEZŐ útvonalakat sorol fel.**
+>    Az E13-R22 listája három nem létező könyvtárra mutatott, tehát NULLA
+>    létező fájlt fedett — a `brief-lint --level strict` ezt NEM jelezte (a
+>    szabályai meglévő fájlokra lőnek). **A pre-flight ELSŐ mérése ezért
+>    legyen: `ls`/`find` MINDEN `allowed_paths` bejegyzésre.** Ha a lista nem
+>    fedi a tényleges fát, az útvonal-csere dokumentált §0.0 revízió, és a
+>    csere maradjon a szomszédos, merge-elt kör listájának RÉSZHALMAZA.
+> 2. **A „gyártott mérés" hibaosztály.** Ha egy felület nem tud élő mérést
+>    kapni (nincs bekötve a session/DSP), a csábítás az, hogy a képernyő
+>    szintetikus bemenetet adjon a valódi domain-motornak, és az eredményt
+>    mértként közölje. Ez ADR 0283-sértés és a „nincs demó" szabályé is: a
+>    helyes válasz az ADR 0277-stílusú, KIMONDOTT „még nincs élő mérés"
+>    állapot, affordancia nélkül. Az őrcella az affordancia ABSZENCIÁJÁT
+>    mérje.
+> 3. **A cella pinnelheti a hibát** — ez most MÁSODIK körben, más felületen
+>    ismétlődött ([L495](docs/LESSONS.md#l495)). Minden ÚJ cellánál kérdezd
+>    meg: *ez a cella a KÖVETELMÉNYT méri, vagy csak azt, amit a kód éppen
+>    csinál?*
+>
+> **Nyitott follow-upok a practice sávon (E13-R22-ből):** (a) `/practice/history`
+> és `/practice/speed-builder` nevesített route + Hub-belépő
+> (`lib/app/routing/**` + `practice_hub_screen.dart`); (b) élő
+> Speed-Builder-session bekötése (a képernyő ma kimondja, hogy nincs);
+> (c) a valódi Community-share varrat (`practiceSummaryFromSessionResult`,
+> ma NEM exportált a community `public.dart`-ból); (d) a sérült
+> előzmény-rekord LÁTHATÓ jelzése (a `skipped` számláló a
+> `json_document_store.dart`-ban megvan, a repository nem hordozza tovább);
+> (e) a jutalom-főkönyv valódi bekötése a kompozíciós gyökérbe (ma Noop, mert
+> a dual-write `off`).
+
+> **Korábbi bejegyzés (2026-08-26, E13-R21 után) — teljesítve:** A **Ch13 sáv következő köre:
 > `E13-R22` — Practice results és Speed Builder**
 > (`docs/rounds/e13-r22-practice-results-and-speed-builder.md`, engine a
 > queue-ban `sonnet-impl`, előre kiosztott ADR **`0283`** — a queue `adr`
