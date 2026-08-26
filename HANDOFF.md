@@ -1,5 +1,51 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 ÖNJAVÍTÓ KÖR — E13-R20 / H5 feloldva: a golden-raszterizációt a MERGE-KAPU architektúráján mérjük (2026-08-26)
+
+Az E13-R20 kód-oldala kész volt (9/9 acceptance, gate 22/22 zöld kétszer), de az
+exact-SHA CI **háromszor** piros lett 3 golden-cellán (1 / 8 / 1 px, mind
+**0,00%**). A lánc H5-tel megállt; ez az [ADR 0112](docs/adr/0112-self-healing-pipeline.md)
+önjavító köre.
+
+**A MÉRT gyökérok.** A goldeneket ez a box veszi fel (**aarch64**), a kaput adó
+CI `ubuntu-latest` = **x86_64**, a `LocalFileComparator` pedig nulla
+toleranciájú. Az [L486](docs/LESSONS.md#l486) ezt „ELVBŐL nem mérhető"-nek
+mondta ki — az önjavító kör megmérte: a box `qemu-user` amd64 emulációval
+futtat x86_64 konténert a CI-vel AZONOS `flutter 3.44.2` SDK-val.
+
+| # | Mérés | Eredmény |
+|---|---|---|
+| 1 | a `main` MINDEN goldenje az x86-konténerben | **27 zöld** — az eszköz a CI hű mása |
+| 2 | az E13-R20 branch goldenjei az x86-konténerben | **pontosan a CI 3 bukása** (1 / 8 / 1 px) |
+| 3 | x86-on újrafelvéve, x86-on ellenőrizve | **6 zöld**, pontosan 3 PNG változott |
+| 4 | az x86-felvételű PNG-k **natív ARM**-on | **3 piros** — a rés SZIMMETRIKUS |
+
+A 4. mérés a döntő: nulla toleranciával a két architektúra egyszerre nem
+elégíthető ki, tehát a felvételnek a KAPU gépén kell történnie.
+
+**A javítás ([ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md), [L493](docs/LESSONS.md#l493)).**
+
+- `tools/golden-x86.sh check|record` + `tools/docker/golden-x86.Dockerfile` —
+  golden-tesztek a CI-vel azonos SDK-val, `linux/amd64` konténerben.
+- `tools/tests/test_golden_x86_parity.py` — a fix ELŐTT 3 esetben piros, utána
+  zöld gépi őr (eszköz-lét, Flutter-pin egyezés, teljes felderítés).
+- Az E13-R20 briefje **§0.1/R14** revíziót kapott: `record` x86-on, `check` a
+  gate MELLETT, és a golden-útvonal kikerült a lokális ARM `gate_tests`-ből.
+
+**A mérce VÁLTOZATLAN:** ugyanaz a nulla toleranciájú komparátor, ugyanaz a
+teljes golden-készlet, változatlan `.github/**` és `tools/round-gate.sh`.
+
+**Előfeltétel a boxon (egyszer, már telepítve):**
+
+```bash
+docker run --privileged --rm tonistiigi/binfmt --install amd64
+```
+
+**Ami a KÖVETKEZŐ E13-R20 sessionre marad:** a goldenek x86-os újrafelvétele a
+kör-branchen (`tools/golden-x86.sh record …`), a §7 gate + `check`, majd a
+szokásos exact-SHA CI és merge. Az önjavító kör szándékosan NEM vitte előre a
+kör tartalmi munkáját (ADR 0112 §4).
+
 ## ✅ E13-R19 KÉSZ — Tuner és Metronome UI migráció — PR [#460](https://github.com/wolfcasaba/strumsight/pull/460), squash `e046eaaa` (2026-08-25)
 
 A hangoló (UI-09) és a metronóm (UI-10) átállítva az `SsStageScaffold`-ra —
