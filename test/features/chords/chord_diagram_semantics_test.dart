@@ -50,11 +50,11 @@ void main() {
     );
   });
 
-  testWidgets('left-handed mirroring flips the DRAWING only — the spoken '
-      'fingering stays low-E to high-E', (tester) async {
+  testWidgets('left-handed mirroring flips BOTH the drawing and the spoken '
+      'fingering (ADR 0282 §2 — the two channels must agree)', (tester) async {
     await pumpDiagram(tester, 'C', leftHanded: true);
     expect(
-      find.bySemanticsLabel('C chord diagram, fingering: x 3 2 0 1 0'),
+      find.bySemanticsLabel('C chord diagram, fingering: 0 1 0 2 3 x'),
       findsOneWidget,
     );
   });

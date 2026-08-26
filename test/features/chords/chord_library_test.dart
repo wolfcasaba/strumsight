@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/chords/chord_shape.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
+import 'package:strumsight/features/learn/screens/learn_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../support/preference_store.dart';
@@ -77,6 +78,61 @@ void main() {
     expect(find.textContaining('No chords match'), findsOneWidget);
     expect(find.byType(ChordDiagram), findsNothing);
     // No stray group headers either.
+    expect(find.text('MAJOR'), findsNothing);
+  });
+
+  // A6 (ADR 0282 §6, §0.0/R10) — the practice action must start with the
+  // OPENED chord, never the library's first entry.
+  testWidgets('the practice action from a chord\'s detail view opens a '
+      'lesson built around THAT chord', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('chord-open-detail-G')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('chord-detail-practice-action')));
+    await tester.pumpAndSettle();
+
+    final learnScreen = tester.widget<LearnScreen>(find.byType(LearnScreen));
+    expect(learnScreen.lesson.chordSequence, ['G']);
+  });
+
+  // A7 (§3/§5.6) — opening and closing a chord's detail view must not reset
+  // the library's search/filter state underneath it.
+  testWidgets('the search query survives opening and closing a chord\'s '
+      'detail view', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: preferenceOverrides(),
+        child: const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: ChordLibraryScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'sus');
+    await tester.pump();
+    expect(find.text('SUSPENDED'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('chord-open-detail-Asus4')));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.text('sus'), findsOneWidget); // the TextField kept its value
+    expect(find.text('SUSPENDED'), findsOneWidget);
     expect(find.text('MAJOR'), findsNothing);
   });
 }

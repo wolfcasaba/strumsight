@@ -49,6 +49,7 @@ export 'foundations/ss_semantics.dart';
 export 'foundations/ss_spacing.dart';
 export 'foundations/ss_typography.dart';
 export 'components/music/ss_beat_grid.dart';
+export 'components/music/ss_chord_diagram.dart';
 export 'components/music/ss_chord_hero.dart';
 export 'components/music/ss_chord_hero_text.dart';
 export 'components/music/ss_session_transport.dart';

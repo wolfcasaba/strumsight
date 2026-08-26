@@ -1207,6 +1207,15 @@
   "challengeTitle": "Today's challenge",
   "challengeTryInLive": "Try it in Live",
   "challengeUnavailableBody": "Install chords, rhythms, or songs to unlock today's challenge.",
+  "chordDetailOpen": "Open {chord} details",
+  "@chordDetailOpen": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "chordDetailRelated": "Related chords",
   "chordDiagramSemantics": "{chord} chord diagram, fingering: {fingering}",
   "@chordDiagramSemantics": {
     "placeholders": {
@@ -1214,6 +1223,14 @@
         "type": "String"
       },
       "fingering": {
+        "type": "String"
+      }
+    }
+  },
+  "chordDiagramUnavailable": "No diagram for {chord} yet",
+  "@chordDiagramUnavailable": {
+    "placeholders": {
+      "chord": {
         "type": "String"
       }
     }
@@ -1951,7 +1968,14 @@
   "learnKeepGoing": "Keep going!",
   "learnLate": "Late",
   "learnLessons": "Lessons",
-  "learnLocked": "Pass the previous lesson to unlock this one",
+  "learnLockedReason": "Locked — pass “{lesson}” first",
+  "@learnLockedReason": {
+    "placeholders": {
+      "lesson": {
+        "type": "String"
+      }
+    }
+  },
   "learnMetronome": "Metronome",
   "learnMiss": "Miss",
   "learnNextLesson": "Next lesson",

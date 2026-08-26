@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../streak/public.dart';
 import '../providers/lesson_progress_provider.dart';
@@ -80,12 +81,7 @@ class LessonListScreen extends ConsumerWidget {
             for (final tier in Difficulty.values) ...[
               const SizedBox(height: 18),
               _label(_tierName(l10n, tier)),
-              for (final lesson in Lessons.byDifficulty(tier))
-                _LessonTile(
-                  lesson: lesson,
-                  unlocked: progress.isUnlocked(lesson),
-                  stars: progress.stars(lesson.id),
-                ),
+              ..._tierTiles(tier, progress),
             ],
           ],
         ),
@@ -98,6 +94,22 @@ class LessonListScreen extends ConsumerWidget {
     Difficulty.intermediate => l10n.learnIntermediate,
     Difficulty.advanced => l10n.learnAdvanced,
   };
+
+  /// Tiles for one tier, each carrying the PREVIOUS lesson in the tier so a
+  /// locked tile can always name what unlocks it (ADR 0282 §3/A3) — never a
+  /// bare "locked" dead end.
+  List<Widget> _tierTiles(Difficulty tier, LessonProgressController progress) {
+    final lessons = Lessons.byDifficulty(tier);
+    return [
+      for (var i = 0; i < lessons.length; i++)
+        _LessonTile(
+          lesson: lessons[i],
+          unlocked: progress.isUnlocked(lessons[i]),
+          stars: progress.stars(lessons[i].id),
+          unlockedBy: i > 0 ? lessons[i - 1] : null,
+        ),
+    ];
+  }
 
   Widget _label(String text) => Padding(
     padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
@@ -127,6 +139,7 @@ class _V2EntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
+    color: context.palette.surface,
     margin: EdgeInsets.zero,
     child: ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -201,22 +214,32 @@ class _LessonTile extends StatelessWidget {
     required this.lesson,
     required this.unlocked,
     required this.stars,
+    this.unlockedBy,
   });
 
   final Lesson lesson;
   final bool unlocked;
   final int stars;
 
+  /// The lesson that must be passed to unlock this one (null for the first
+  /// lesson of a tier — always unlocked). Names the lock's reason instead of
+  /// a bare "locked" dead end (ADR 0282 §3).
+  final Lesson? unlockedBy;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final chords = lesson.chordSequence.join(' · ');
-    final subtitle = [
-      if (chords.isNotEmpty) chords,
-      '${lesson.bpm.round()} BPM',
-      '${lesson.events.length} ${l10n.learnStrokes}',
-    ].join(' · ');
+    final subtitle = (!unlocked && unlockedBy != null)
+        ? l10n.learnLockedReason(unlockedBy!.name)
+        : [
+            if (chords.isNotEmpty) chords,
+            '${lesson.bpm.round()} BPM',
+            '${lesson.events.length} ${l10n.learnStrokes}',
+          ].join(' · ');
     return Card(
+      key: ValueKey('lesson-tile-${lesson.id}'),
+      color: context.palette.surface,
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         enabled: unlocked,
@@ -239,15 +262,17 @@ class _LessonTile extends StatelessWidget {
         ),
         subtitle: Text(subtitle),
         trailing: unlocked && stars > 0 ? _Stars(stars: stars) : null,
+        // `enabled: false` already disables the tap gesture entirely — the
+        // lock reason is stated in [subtitle] instead, ALWAYS visible rather
+        // than hidden behind a tap that a disabled tile can never receive
+        // (ADR 0282 §3).
         onTap: unlocked
             ? () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => LearnScreen(lesson: lesson),
                 ),
               )
-            : () => ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(l10n.learnLocked))),
+            : null,
       ),
     );
   }

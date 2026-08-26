@@ -1190,7 +1190,24 @@
   "challengeTitle": "Mai kihívás",
   "challengeTryInLive": "Próbáld ki az Élő nézetben",
   "challengeUnavailableBody": "Telepíts akkordokat, ritmusokat vagy dalokat a mai kihívás feloldásához.",
+  "chordDetailOpen": "{chord} részletei",
+  "@chordDetailOpen": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "chordDetailRelated": "Kapcsolódó akkordok",
   "chordDiagramSemantics": "{chord} akkordábra, fogás: {fingering}",
+  "chordDiagramUnavailable": "Nincs ábra ehhez: {chord}",
+  "@chordDiagramUnavailable": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
   "chordGroupFavorites": "Kedvencek",
   "chordGroupMajor": "Dúr",
   "chordGroupMinor": "Moll",
@@ -1913,7 +1930,14 @@
   "learnKeepGoing": "Így tovább!",
   "learnLate": "Késve",
   "learnLessons": "Leckék",
-  "learnLocked": "Teljesítsd az előző leckét a feloldáshoz",
+  "learnLockedReason": "Zárolva — először teljesítsd: „{lesson}”",
+  "@learnLockedReason": {
+    "placeholders": {
+      "lesson": {
+        "type": "String"
+      }
+    }
+  },
   "learnMetronome": "Metronóm",
   "learnMiss": "Kihagyva",
   "learnNextLesson": "Következő lecke",

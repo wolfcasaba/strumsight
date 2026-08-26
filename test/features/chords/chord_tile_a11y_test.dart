@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,4 +50,37 @@ void main() {
       reason: 'tap-to-hear must be reachable on the labelled node',
     );
   });
+
+  /// Round E13-R20 MAJOR-1 — the detail-view entry point measured 40×40dp
+  /// (ADR 0280 §Döntés 5 requires >= 48dp for a critical component). This
+  /// pins the fix against `SsSemantics.minimumInteractiveDimension` so the
+  /// touch target can never silently shrink back below the contract.
+  testWidgets(
+    'the chord-detail open button meets the 48dp minimum touch target',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: preferenceOverrides(),
+          child: const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: ChordLibraryScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final size = tester.getSize(find.byKey(const Key('chord-open-detail-C')));
+
+      expect(
+        size.width >= SsSemantics.minimumInteractiveDimension &&
+            size.height >= SsSemantics.minimumInteractiveDimension,
+        isTrue,
+        reason:
+            'ADR 0280 §Döntés 5 requires >= '
+            '${SsSemantics.minimumInteractiveDimension}dp for a critical '
+            'component; measured $size',
+      );
+    },
+  );
 }
