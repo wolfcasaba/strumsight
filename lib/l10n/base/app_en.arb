@@ -250,6 +250,31 @@
   "chordGroupMinor": "Minor",
   "chordGroupSeventh": "Sevenths",
   "chordGroupSuspended": "Suspended",
+  "chordDiagramUnavailable": "No diagram for {chord} yet",
+  "@chordDiagramUnavailable": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "chordDetailRelated": "Related chords",
+  "chordDetailOpen": "Open {chord} details",
+  "@chordDetailOpen": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "learnLockedReason": "Locked — pass “{lesson}” first",
+  "@learnLockedReason": {
+    "placeholders": {
+      "lesson": {
+        "type": "String"
+      }
+    }
+  },
   "learnAccuracy": "Accuracy",
   "learnCombo": "Combo",
   "learnHits": "Hits",

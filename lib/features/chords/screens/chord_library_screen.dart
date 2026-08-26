@@ -6,6 +6,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../chord_shape.dart';
 import '../providers/favorite_chords_provider.dart';
+import '../widgets/chord_detail_view.dart';
 import '../widgets/chord_diagram.dart';
 
 /// A browsable chord dictionary: every fingering we know, grouped by type, with
@@ -23,12 +24,37 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
   String _query = '';
 
   /// One tappable diagram tile: tap plays (round 90), long-press pins into
-  /// the Favorites group (round 108).
-  Widget _tile(String label) => InkWell(
-    borderRadius: BorderRadius.circular(8),
-    onTap: () => ref.read(backingProvider).playChord(label),
-    onLongPress: () => ref.read(favoriteChordsProvider.notifier).toggle(label),
-    child: SizedBox(width: 96, child: ChordDiagram(label: label, size: 76)),
+  /// the Favorites group (round 108), and a small corner affordance opens the
+  /// chord's detail view (round 152 — diagram, related chords, practice
+  /// action) without disturbing the two pinned gestures above it.
+  Widget _tile(String label) => Stack(
+    clipBehavior: Clip.none,
+    children: [
+      InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => ref.read(backingProvider).playChord(label),
+        onLongPress: () =>
+            ref.read(favoriteChordsProvider.notifier).toggle(label),
+        child: SizedBox(width: 96, child: ChordDiagram(label: label, size: 76)),
+      ),
+      Positioned(
+        right: -6,
+        bottom: 8,
+        child: IconButton(
+          key: Key('chord-open-detail-$label'),
+          icon: const Icon(Icons.chevron_right, size: 18),
+          tooltip: AppLocalizations.of(context).chordDetailOpen(label),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+          visualDensity: VisualDensity.compact,
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ChordDetailView(label: label),
+            ),
+          ),
+        ),
+      ),
+    ],
   );
 
   @override

@@ -205,6 +205,31 @@
   "chordGroupMinor": "Moll",
   "chordGroupSeventh": "Szeptimek",
   "chordGroupSuspended": "Sus akkordok",
+  "chordDiagramUnavailable": "Nincs ábra ehhez: {chord}",
+  "@chordDiagramUnavailable": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "chordDetailRelated": "Kapcsolódó akkordok",
+  "chordDetailOpen": "{chord} részletei",
+  "@chordDetailOpen": {
+    "placeholders": {
+      "chord": {
+        "type": "String"
+      }
+    }
+  },
+  "learnLockedReason": "Zárolva — először teljesítsd: „{lesson}”",
+  "@learnLockedReason": {
+    "placeholders": {
+      "lesson": {
+        "type": "String"
+      }
+    }
+  },
   "learnAccuracy": "Pontosság",
   "learnCombo": "Kombó",
   "learnHits": "Találat",

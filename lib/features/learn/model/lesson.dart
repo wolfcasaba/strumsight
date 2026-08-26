@@ -318,6 +318,19 @@ class Lessons {
     pattern: const [_d, null, null, _u, null, _u, null, _u],
   );
 
+  /// A quick, ad-hoc practice lesson built around a single OPENED chord — the
+  /// chord library's "Practice this chord" action (ADR 0282 §6/A6). Outside
+  /// the curriculum unlock chain, like the daily challenge and Analyze
+  /// imports: passing it still records a best-accuracy entry, but it never
+  /// blocks or advances a curriculum tier.
+  static Lesson forChordPractice(String label) => Lesson(
+    id: 'chord-practice-$label',
+    name: label,
+    bpm: 70,
+    chords: [label, label],
+    pattern: const [_d, null, _d, null, _d, null, _d, null],
+  );
+
   static List<Lesson> get all => [
     firstStrums,
     twoChordChange,

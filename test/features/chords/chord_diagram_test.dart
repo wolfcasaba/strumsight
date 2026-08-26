@@ -76,11 +76,16 @@ void main() {
       expect(find.byType(CustomPaint), findsWidgets);
     });
 
-    testWidgets('draws nothing for a chord we have no shape for', (
-      tester,
-    ) async {
+    testWidgets('names the gap instead of silently drawing nothing for a '
+        'chord we have no shape for (ADR 0282 §4 spirit — a real missing '
+        'resource is A4, not a silent SizedBox.shrink)', (tester) async {
       await pumpDiagram(tester, 'Zz9');
-      expect(find.text('Zz9'), findsNothing);
+      expect(find.byIcon(Icons.music_off), findsOneWidget);
+      expect(
+        find.bySemanticsLabel(RegExp('Zz9')),
+        findsOneWidget,
+        reason: 'the missing chord must be NAMED, not silent',
+      );
     });
 
     testWidgets('renders in left-handed mode without error', (tester) async {
