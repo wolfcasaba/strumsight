@@ -19000,3 +19000,74 @@ dispatch, nem a követelmény átértelmezése.
 **Őrteszt:** nincs — a mérce a merge előtti exact-SHA ellenőrzés, ami a
 kör-prompt §3-ban már kötelező; gépi őre (a merge-kapu automatikus
 SHA-egyeztetése minden elvárt workflow-ra) `tools/**` hatáskör.
+
+---
+
+## L493 — Az „ELVBŐL nem mérhető" nem a nyomozás vége, hanem a következő eszköz specifikációja: a golden-raszterizáció a merge-kapu architektúráján is mérhető ezen a boxon (E13-R20 / H5 önjavító kör, 2026-08-26)
+
+**A rés, amit két kör fizetett ki.** A goldeneket ez a box veszi fel
+(**aarch64**), a zöld kaput adó CI `ubuntu-latest` = **x86_64**, a
+`LocalFileComparator` pedig nulla toleranciájú. Ami a két ISA raszterizációja
+között eltér, az a lokális gate-ben **mindig zöld** és a CI-ban **mindig
+piros**:
+
+| Kör | Bukó cellák | Mért diff | Ár |
+|---|---|---|---|
+| E13-R17 | 4 | 5,60–11,71% | 2 vak javító kör |
+| E13-R20 | 3 | 0,00% (1 / 8 / 1 px) | 3 piros CI, majd **H5 halt** |
+
+**Az L486 lezárása egy ELVI korlátot mondott ki** — és pontosan ez volt a
+megcáfolható állítás:
+
+> „Őrteszt: nincs — a hordozhatóság ELVBŐL nem mérhető ezen a boxon (a felvétel
+> és a verifikáció architektúrája különbözik); az egyetlen valódi őr az
+> exact-SHA CI-futás."
+
+**Amit MÉRTEM.** A box aarch64, de `qemu-user` amd64 binfmt kezelővel
+(`docker run --privileged --rm tonistiigi/binfmt --install amd64`) futtat
+x86_64 konténert, benne a CI-vel AZONOS `flutter 3.44.2` linux-x64 SDK-val.
+Négy mérés, mind ugyanabban a konténerben:
+
+| # | Mérés | Eredmény |
+|---|---|---|
+| 1 | a `main` MINDEN goldenje (7 teszt-fájl) az x86-konténerben | **27 zöld, 0 piros** (`04:23 +27 ~5: All tests passed!`) |
+| 2 | az E13-R20 branch (`c591d3e1`) goldenjei az x86-konténerben | **pontosan a CI 3 bukása**, `1 / 8 / 1 px`, mind `0,00%` |
+| 3 | ugyanezek **x86-on újrafelvéve**, majd x86-on ellenőrizve | **6 zöld**; a felvétel PONTOSAN 3 PNG-t írt át |
+| 4 | ugyanezek az **x86-felvételű** PNG-k **natív ARM**-on | **3 piros**, `1 / 8 / 1 px` — ugyanaz a három cella |
+
+Az 1. mérés az eszköz hitelesítése: a 27 ARM-on felvett, CI-zöld golden az
+x86-konténerben is bájtra egyezik, tehát a konténer a CI raszterizációjának hű
+mása. A 2. mérés a másik irány: a konténer a CI pirosát is pontosan
+reprodukálja. **A 4. mérés a lényeg:** a rés **szimmetrikus és
+feloldhatatlan** — ARM-felvétel x86-on piros, x86-felvétel ARM-on piros,
+ugyanazon a három cellán. Nulla toleranciával a két architektúra EGYSZERRE nem
+elégíthető ki; termékkódból sem kerülhető meg, mert a maradék diff két körrajz
+(`CircleAvatar`, `drawCircle`) antialiasing-peremén van.
+
+**A javítás (ADR 0426).** `tools/golden-x86.sh check|record` +
+`tools/docker/golden-x86.Dockerfile`: a golden-tesztek a CI-vel azonos
+Flutter-verzióval, `linux/amd64` konténerben futnak. A felvétel innentől
+x86-on történik, a golden-teszt útvonala pedig kikerül a lokális ARM
+`gate_tests`-ből — mert ott bizonyítottan a ROSSZ gépet méri.
+
+**A mérce VÁLTOZATLAN:** ugyanaz a nulla toleranciájú komparátor, ugyanaz a
+teljes golden-készlet (egy cella sincs törölve vagy `skip`-elve), változatlan
+`.github/**` és `tools/round-gate.sh`. A golden-cellákat ezután is kettő méri
+— lokálisan az x86-konténer, a kapuban a CI —, csak mindkettő a helyes gépen.
+
+**Amit ebből általánosítani kell.** Ha egy lecke azzal zárul, hogy valami
+„elvből nem mérhető", az nem lezárás, hanem a következő eszköz specifikációja.
+Itt a különbség egyetlen mondat volt: nem az volt igaz, hogy *a hordozhatóság
+mérhetetlen*, hanem az, hogy *nem volt x86 futtatókörnyezet a boxon*. A kettő
+nem ugyanaz, és a másodikat egy `binfmt`-telepítés oldja meg. Az „elvi korlát"
+kimondása MÉRÉST igényel, nem következtetést — az L486 sem mérte meg, csak
+levezette.
+
+**Első futás ~10 perc** (emulált `pub get` + fordítás), utána a `.dart_tool`
+nevesített köteten élő inkrementális kernel-gyorsítótárral **~1 perc**.
+
+**Őrteszt:** `tools/tests/test_golden_x86_parity.py` — az eszköz létezik és
+futtatható; a workflow-k Flutter-pinje EGYETLEN érték, és az eszköz abból
+építi a képet (a Dockerfile nem rögzíthet saját verziót); a felderítés lefedi
+az ÖSSZES `matchesGoldenFile`-t hívó teszt-fájlt. A fix ELŐTT **3 eset
+piros**, utána zöld; a `router-ci.yml` `tools/**` triggere miatt CI-ban is fut.
