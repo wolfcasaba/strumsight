@@ -2384,6 +2384,25 @@
   "practiceFreePracticeUpRatio": "Up ratio",
   "practiceHighwayLabel": "Practice highway",
   "practiceHighwayRestMarker": "Rest",
+  "practiceHistoryEmptyAction": "Back",
+  "practiceHistoryEmptyBody": "Finish a practice session to see it here.",
+  "practiceHistoryEmptyTitle": "No sessions yet",
+  "practiceHistoryErrorAction": "Back",
+  "practiceHistoryErrorBody": "Something went wrong reading your local history.",
+  "practiceHistoryErrorTitle": "Couldn't load history",
+  "practiceHistoryFilterAll": "All modes",
+  "practiceHistoryRowSubtitle": "{resolved}/{total} targets",
+  "@practiceHistoryRowSubtitle": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceHistoryTitle": "Practice history",
   "practiceHubDailyChallengeLabel": "Daily challenge",
   "practiceHubDailyChallengeUnavailable": "No daily challenge available right now",
   "practiceHubEmptyCatalogSubtitle": "Check back later",
@@ -2515,6 +2534,18 @@
   "practiceResultChordPair": "Chord pair",
   "practiceResultCoachingTitle": "Coaching",
   "practiceResultCompletion": "Completion",
+  "practiceResultConfidenceLowBody": "Only {resolved} of {total} targets were detected — that's not enough signal for an exact score.",
+  "@practiceResultConfidenceLowBody": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceResultConfidenceLowTitle": "Uncertain result",
   "practiceResultDimensionSemantic": "{label}: {value}",
   "@practiceResultDimensionSemantic": {
     "placeholders": {
@@ -2530,11 +2561,59 @@
   "practiceResultFinishInterrupted": "Session was interrupted",
   "practiceResultFinishTimedOut": "Session timed out",
   "practiceResultFinishUserFinished": "You finished the session",
+  "practiceResultHistoryCta": "History",
   "practiceResultInsufficientData": "Not enough data",
+  "practiceResultNextStepCta": "Practice again",
   "practiceResultNotScored": "Not scored",
   "practiceResultOverall": "Overall",
+  "practiceResultPartialBadge": "Partial session",
+  "practiceResultRewardNone": "No reward recorded yet for this session",
+  "practiceResultRewardTitle": "Reward",
+  "practiceResultRewardXp": "+{xp} XP",
+  "@practiceResultRewardXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
   "practiceResultRhythm": "Rhythm",
+  "practiceResultShareCta": "Share",
+  "practiceResultShareMode": "Mode: {mode}",
+  "@practiceResultShareMode": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareResult": "Result: {value}",
+  "@practiceResultShareResult": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareSessionId": "Session: {id}",
+  "@practiceResultShareSessionId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareSummaryTitle": "Share summary",
+  "practiceResultShareWhen": "Date: {date}",
+  "@practiceResultShareWhen": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultSpeedBuilder": "Speed Builder",
+  "practiceResultSpeedBuilderCta": "Speed Builder",
   "practiceResultTimingBalanced": "On the beat",
   "practiceResultTimingEarly": "Rushing ahead",
   "practiceResultTimingLate": "Dragging behind",
@@ -3381,6 +3460,8 @@
       }
     }
   },
+  "speedBuilderDoneCta": "Done",
+  "speedBuilderFinishCta": "Finish",
   "speedBuilderHighestStable": "Highest stable BPM: {value}",
   "@speedBuilderHighestStable": {
     "placeholders": {
@@ -3420,6 +3501,23 @@
       }
     }
   },
+  "speedBuilderRecordFail": "Record miss",
+  "speedBuilderRecordPass": "Record pass",
+  "speedBuilderResultAttempts": "{count} attempts",
+  "@speedBuilderResultAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "speedBuilderResultTitle": "Speed Builder result",
+  "speedBuilderScreenTitle": "Speed Builder",
+  "speedBuilderSetupIntro": "The tempo steps up automatically after consecutive passes.",
+  "speedBuilderStartCta": "Start",
+  "speedBuilderStatusCompleted": "Target tempo reached",
+  "speedBuilderStatusMaxAttempts": "Attempt limit reached",
+  "speedBuilderStatusUserFinished": "You finished early",
   "speedBuilderTargetBpm": "Target: {bpm} BPM",
   "@speedBuilderTargetBpm": {
     "placeholders": {
@@ -3429,6 +3527,8 @@
     }
   },
   "speedBuilderTitle": "Speed Builder",
+  "speedBuilderUnavailableBody": "This screen only shows a tempo ladder once it's driven by a real, measured practice session. Nothing is shown until then.",
+  "speedBuilderUnavailableTitle": "Speed Builder isn't recording yet",
   "streakAtRisk": "Play today to keep your streak alive 🔥",
   "streakBroken": "A freeze will save your streak next time you play",
   "streakDays": "{count, plural, =0{No streak yet} =1{1-day streak} other{{count}-day streak}}",
