@@ -574,4 +574,81 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Kör-lezárás, két futásban.** Az első futás (`0f617462`) a §6 négy céltesztjét
+(`trainer_setup_test.dart`, `playhead_loop_sync_test.dart`,
+`playback_only_result_test.dart`, `setlist_run_test.dart`), a golden-tesztfájlt
+és a hozzájuk tartozó implementációt (`setlist_session_screen.dart`,
+`song_trainer_screen.dart`, `transport_controls.dart`, ARB-kulcsok) írta meg,
+de időkorlátba futott a kapu lefuttatása ELŐTT. Ez a futás a kaput futtatta
+le, a leletet javította, és a hátralévő §2 lépéseket zárta le.
+
+### A gate-lelet és a javítás
+
+Az `analyze` lépés `ambiguous_import` hibát adott
+`test/ui/goldens/e13_r25_screens_golden_test.dart`-ban: a fájl mind a
+`features/practice/public.dart`-ot, mind a `song_trainer` domain
+tempo/meter/beat modeljeit importálta, és mindkettő exportálja a
+`BeatPosition`/`Tempo`/`Meter` neveket. Feloldás: `hide BeatPosition, Tempo,
+Meter` a `practice/public.dart` importon (a golden fixture a
+`song_trainer`-beli verziókat használja). Ezután `format` → `analyze` → mind a
+15 `gate_tests` cella → `architecture`/`secrets`/`l10n` → **MINDEN GATE ZÖLD**.
+
+### A9 — golden felvétele (két lelet, mindkettő javítva)
+
+1. **Hiányzó `keyValueStoreProvider` override.** A `SongTrainerScreen` és a
+   `SetlistSessionScreen` a `LeftHandedController`-en (és társain) keresztül
+   preferencia-providert olvas, aminek szándékosan nincs alapértelmezettje
+   (`keyValueStoreProvider must be overridden`). A golden teszt `_pump()`
+   segédje most `preferenceOverrides()`-t (`test/support/preference_store.dart`)
+   fűz be alapból minden képernyő elé.
+2. **VALÓDI túlcsordulási hiba `textScaleFactor: 2.0`-nál** —
+   `setlist_session_screen.dart:129`: a hangolás-előrejelző kártya
+   ikon+cím `Row`-ja nem skálázott, 200%-os szövegnél 77px-szel túlcsordult
+   (`RenderFlex overflowed`). Ezt **pontosan a golden mérte ki** — a §6.1
+   mátrix ide sorolja: *„A képernyő elcsúszik, túlcsordul vagy nagy
+   szövegméretnél olvashatatlan → A9"*. Javítás: a cím `Text` `Expanded`-be
+   került, hogy tördeljen ahelyett, hogy túlcsordulna.
+
+Felvétel: `tools/golden-x86.sh record test/ui/goldens/e13_r25_screens_golden_test.dart`
+(x86_64, ADR 0426 §3) — mind a 8 cella (4 képernyő × 2 keret) zöld. A PNG-k
+(`test/ui/goldens/goldens/e13_r25_*.png`, 8 fájl) commitolva. Ellenőrzés:
+`tools/golden-x86.sh check …` — szintén zöld.
+
+### Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+A `song_trainer_screen.dart` `_CompletedBody`-jában a csak-lejátszás ágon
+(`result == null`) a felirat mögé egy kitalált pontszámot fűztem
+(`'${l10n.songTrainerPlaybackOnlyComplete} (85% VIOLATION-PROBE)'`), majd
+lefuttattam `test/features/songs/trainer/playback_only_result_test.dart`-ot:
+az **A1 cella PIROSRA váltott** —
+`Expected: no matching candidates / Actual: … Found 1 widget with text
+containing %` — a `find.textContaining('%')` asszerció pontosan a kitalált
+pontszámot fogta meg. Ezután a módosítást szó szerint visszaállítottam
+(`git diff` a fájlon üres), és a teszt újra zöld.
+
+### Amit NEM módosítottam
+
+- `trainer_setup_screen.dart` és `song_result_screen.dart` — az A6/A8, illetve
+  az A1 eredmény-oldali ága a MEGLÉVŐ kód ellenében is mérte a követelményt,
+  módosítás nélkül is zölden; a §2/2. pont szerint ez rendben van.
+- Az öt MA is zöld pin (`trainer_setup_screen_test`, `song_trainer_screen_test`,
+  `song_result_screen_test`, `song_trainer_accessibility_test`,
+  `setlist_session_controller_test`) + `app_router_test` — futtatva, nem
+  szerkesztve, a kör végén is zöld (§0.0/B/B4).
+- A `ui_inventory` diffje ÜRES (86 → 86, §0.0/B/B3) — a migráció HELYBEN
+  történt, új képernyő-fájl nem keletkezett.
+
+### Kockázatok (§9) — mért állapot
+
+- A kotta-nézet teljesítményét nem profiloztam külön ebben a körben (a golden
+  és a céltesztek nem jeleztek akadozást a rögzített fixture-ökön); ha a
+  review valós dalon mást mér, az önálló lelet.
+
+### Gate-artefaktum
+
+`tools/round-gate.sh` a §7 teljes listájával: **MINDEN GATE ZÖLD** (format,
+analyze, mind a 15 `gate_tests` cella, architecture, secrets, l10n).
+`tools/golden-x86.sh check test/ui/goldens/e13_r25_screens_golden_test.dart`:
+**zöld** (8/8).
+
 ## 11. Review — a Claude tölti ki
