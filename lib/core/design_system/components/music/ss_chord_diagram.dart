@@ -18,6 +18,7 @@ final class SsChordDiagram extends StatelessWidget {
     required this.ink,
     required this.dotColor,
     this.baseFret = 0,
+    this.baseFretLabel,
     this.mirrored = false,
     this.label,
     this.size = 96,
@@ -33,6 +34,12 @@ final class SsChordDiagram extends StatelessWidget {
   /// First fret of the 4-fret window (0 = at the nut). >0 for a movable/barre
   /// shape sliding the window down.
   final int baseFret;
+
+  /// The [baseFret] window badge text (e.g. "4fr"), already composed by the
+  /// caller — the design system does not own this string (no l10n layer
+  /// here; ADR 0424 §5.5 keeps user-facing text out of this tree). Ignored
+  /// when [baseFret] is 0.
+  final String? baseFretLabel;
 
   /// Left-handed: draw high-E on the left (reverse the string order).
   final bool mirrored;
@@ -68,7 +75,7 @@ final class SsChordDiagram extends StatelessWidget {
       painter: _SsChordDiagramPainter(frets, ink, dotColor, mirrored, baseFret),
     );
     // A movable/barre shape shows its window's starting fret (e.g. "4fr").
-    if (baseFret > 0) {
+    if (baseFret > 0 && baseFretLabel != null) {
       grid = Stack(
         clipBehavior: Clip.none,
         children: [
@@ -78,7 +85,7 @@ final class SsChordDiagram extends StatelessWidget {
             left: mirrored ? null : -2,
             right: mirrored ? -2 : null,
             child: Text(
-              '${baseFret + 1}fr',
+              baseFretLabel!,
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w600,

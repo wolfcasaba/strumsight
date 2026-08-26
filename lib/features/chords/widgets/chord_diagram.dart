@@ -80,6 +80,7 @@ class ChordDiagram extends ConsumerWidget {
       child: SsChordDiagram(
         frets: shape.frets,
         baseFret: shape.baseFret,
+        baseFretLabel: shape.baseFret > 0 ? '${shape.baseFret + 1}fr' : null,
         mirrored: mirror,
         label: showLabel ? label : null,
         size: size,
