@@ -6,7 +6,9 @@
 - **Implementer motor:** Claude Sonnet 5 (`sonnet-impl`)
 - **Reviewer:** Claude Opus 5 (orchestrátor, read-only)
 - **Dátum:** 2026-08-26
-- **Verdikt (1. kör):** **CHANGES REQUESTED** — 0 BLOCKER, 0 MAJOR, 3 MINOR, 3 NOTE
+- **Verdikt (1. kör):** CHANGES REQUESTED — 0 BLOCKER, 0 MAJOR, 3 MINOR, 3 NOTE
+- **Reviewelt javító HEAD:** `5ddbbbaf` (javító kör 1.)
+- **VÉGSŐ DÖNTÉS: APPROVED** — 0 BLOCKER, 0 MAJOR, 0 nyitott MINOR (§6)
 
 ---
 
@@ -232,6 +234,59 @@ dolga, a köríven kívül.
 A goldenek a MINOR-2 után **újrafelvételt** igényelnek
 (`tools/golden-x86.sh record` → `check`), a lista raszterizációja változik.
 
-## 6. Javító kör utáni újraellenőrzés
+## 6. Javító kör utáni újraellenőrzés (`5ddbbbaf`)
 
-*(a javító kör után töltendő)*
+**VÉGSŐ DÖNTÉS: APPROVED** — 0 BLOCKER, 0 MAJOR, 0 nyitott MINOR.
+
+### 6.1 Gate — ÚJRA, friss izolált klónban
+
+```
+git clone --branch sonnet-impl/e13-r23-song-library-and-setlists … /tmp/review2-e13-r23
+bash /tmp/review2-e13-r23/tools/prepare-flutter-generated.sh
+tools/round-gate.sh <a §7 teljes útvonal-listája>
+→ MINDEN GATE ZÖLD.  GATE_EXIT=0        (16/16: format, analyze, 11× test, architecture, secrets, l10n)
+```
+
+### 6.2 Scope-audit — ÚJRA
+
+```
+python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e13-r23 \
+  --brief docs/rounds/e13-r23-song-library-and-setlists.md --base 76566726
+→ Legacy scope audit OK (765667263191..5ddbbbafb3ac, 23 changed path(s), 1 generated/ignored)
+```
+
+Az `1 generated/ignored` a reviewer SAJÁT jelentése (`docs/reviews/e13-r23-review.md`) —
+állandó, kód szintű mentesség, nem sértés.
+
+### 6.3 Leletenkénti zárás — mindegyikhez tartozik gépi őr
+
+| Lelet | Javítás | Ellenőrzés (a reviewer MÉRTE) | Állapot |
+|---|---|---|---|
+| MINOR-1 | `song_library_screen.dart`: file-szintű, **nem-autoDispose** `_songLibraryQueryProvider` tartja a lekérdezést; `initState` visszatölti (`TextEditingController` induló szöveg + `setQuery`), `_applyQuery` minden szűrő-változást elment | **(a)** az 1. körben PIROS reviewer-próba ugyanezen a fán ÚJRA lefuttatva → `00:02 +1: All tests passed!` **(b)** a kör ÚJ A8-cellája valódi-sértés próbával mérve: a providert `autoDispose`-ra mutálva `flutter test song_library_test.dart` → **`+5 -1`**, PONTOSAN az új cella pirosodik, a másik öt zöld marad; a mutáció visszaállítva | **ZÁRVA** |
+| MINOR-2 | `song_summary_tile.dart`: az `artist ?? sourceType.code` fallback megszűnt; előadó hiányában az alcím-sor kimarad | a `song-summary-<id>` és `song-source-badge-<id>` Key-ek változatlanok (a négy R17-pin zöld); a lista-golden újrafelvéve x86-on, vizuálisan ellenőrizve: a nyers enum-kód sora eltűnt, a lokalizált chip maradt | **ZÁRVA** |
+| MINOR-3 | §0.0/B/**R21** revízió + a §6 A2 sorának igazítása: forrás MINDKÉT helyen kötelező, licenc az áttekintőn | a revízió mért állítását ellenőriztem: `song_library_controller.dart:11–14` szó szerint *„A full document is deliberately never requested here"* — a szűkítés indoklása igaz, és az A2 első fele (forrás) nem gyengült | **ZÁRVA** |
+
+A három NOTE (NOTE-1…NOTE-3) nem blokkol és szándékosan nyitva marad —
+mindhárom feloldása az `application/` rétegbe esik, ami ezen a körön kívül van.
+
+### 6.4 A mérce nem gyengült
+
+- A régi, gyengébb A8-cella **változatlanul megmaradt** — a javítás HOZZÁADOTT
+  egy erősebb cellát, nem cserélte le a gyengébbet.
+- Egyetlen teszt-cella sem lett törölve, `skip`-elve vagy lazítva; a
+  `test/ui/ui_inventory_test.dart` diffje **üres** (86).
+- A négy R17-pin (`test/features/song_trainer/presentation/`,
+  `test/app/routing/app_router_test.dart`) végig zöld és **szerkesztetlen**.
+- Az eldobható reviewer-próbák (`probe_a8_strong_test.dart`, a provider-mutáció)
+  a review lezárásakor **törölve**; a kör diffjében nincsenek benne.
+
+### 6.5 Zöld kapu (ADR 0052) — exact-SHA
+
+| Kapu | Run | SHA | Eredmény |
+|---|---|---|---|
+| Reviewer round-gate (lokális, izolált klón) | — | `5ddbbbaf` | **ZÖLD 16/16** |
+| Router CI | `32965282494` | `5ddbbbaf` | **success** |
+| Full Gate (no APK) | `32965280133` | `5ddbbbaf` | lásd a merge-jegyzetet |
+
+`native_gate = false`, a CI-tervező (`tools/round-ci-plan.py`) `full-gate.yml`-t
+írt elő — `build-apk.yml` szándékosan kimarad, a mérce-lánc azonos.
