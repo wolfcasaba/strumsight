@@ -12,6 +12,23 @@ import '../widgets/song_source_badge.dart';
 import '../widgets/song_summary_tile.dart';
 import 'song_import_screen.dart';
 
+/// Keeps the last applied Library query alive across a real dispose and
+/// re-entry of [SongLibraryScreen]. `songLibraryControllerProvider` is
+/// `autoDispose` and loses its query the moment the route (a top-level
+/// `GoRoute`, not shell-branched) disposes, so the surviving query is held
+/// here instead, at file scope.
+final class _SongLibraryQueryNotifier extends Notifier<SongLibraryQuery> {
+  @override
+  SongLibraryQuery build() => const SongLibraryQuery();
+
+  void save(SongLibraryQuery query) => state = query;
+}
+
+final _songLibraryQueryProvider =
+    NotifierProvider<_SongLibraryQueryNotifier, SongLibraryQuery>(
+      _SongLibraryQueryNotifier.new,
+    );
+
 final class SongLibraryScreen extends ConsumerStatefulWidget {
   const SongLibraryScreen({super.key});
 
@@ -20,12 +37,29 @@ final class SongLibraryScreen extends ConsumerStatefulWidget {
 }
 
 final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
+  late final TextEditingController _searchController;
+
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(
-      () => ref.read(songLibraryControllerProvider).load(),
-    );
+    final savedQuery = ref.read(_songLibraryQueryProvider);
+    _searchController = TextEditingController(text: savedQuery.searchText);
+    Future<void>.microtask(() async {
+      final controller = ref.read(songLibraryControllerProvider);
+      await controller.load();
+      controller.setQuery(savedQuery);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _applyQuery(SongLibraryQuery query) {
+    ref.read(songLibraryControllerProvider).setQuery(query);
+    ref.read(_songLibraryQueryProvider.notifier).save(query);
   }
 
   @override
@@ -70,7 +104,8 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                 child: Column(
                   children: <Widget>[
                     TextField(
-                      onChanged: (text) => controller.setQuery(
+                      controller: _searchController,
+                      onChanged: (text) => _applyQuery(
                         SongLibraryQuery(
                           searchText: text,
                           sourceType: state.query.sourceType,
@@ -107,7 +142,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                                   ),
                                 ),
                             ],
-                            onChanged: (sourceType) => controller.setQuery(
+                            onChanged: (sourceType) => _applyQuery(
                               SongLibraryQuery(
                                 searchText: state.query.searchText,
                                 sourceType: sourceType,
@@ -138,7 +173,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                             ],
                             onChanged: (sort) {
                               if (sort == null) return;
-                              controller.setQuery(
+                              _applyQuery(
                                 SongLibraryQuery(
                                   searchText: state.query.searchText,
                                   sourceType: state.query.sourceType,

@@ -30,8 +30,10 @@ final class SongSummaryTile extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Text(summary.artist ?? summary.sourceType.code),
-        const SizedBox(height: 4),
+        if (summary.artist != null) ...<Widget>[
+          Text(summary.artist!),
+          const SizedBox(height: 4),
+        ],
         SongSourceBadge(
           key: ValueKey<String>(
             'song-source-badge-${summary.documentId.value}',

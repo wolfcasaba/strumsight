@@ -404,6 +404,34 @@ kér (`setlist_list_screen_v2.dart:9–18`). Az A5/A6 cellái ezért a widgetet
 route-navigációval. A route-regisztráció egy KÉSŐBBI kör dolga (E13-R25 §3
 setlist-run) — ezt a §10 handoffban nevesítsd.
 
+### R21 — javító kör (1.), review MINOR-3: az A2 „licenc a listában" mérten nem teljesíthető ezen a körön
+
+**Mérés (review, E13-R23 1. kör):** `SongSummary` (`song_repository.dart:136–151`)
+mezői — `documentId, title, artist, tags, updatedAt, lastPracticedAt,
+capability, sourceType, favorite, archived, revision, documentHash, trashed`
+— nem tartalmaznak licenc-adatot. A licenc kizárólagos producere a
+`SongMetadata.copyright` (R16), ami csak a teljes `SongDocument` dekódolásával
+érhető el — a Library **index**-nézete (`SongLibraryController`,
+`application/library/`) viszont szándékosan sosem dekódol dokumentumot
+(`song_library_controller.dart:11–14` doc-comment: *„A full document is
+deliberately never requested here"*). A lista-index `SongSummary`-vel való
+bővítése az `application/` rétegbe esne, ami ezen a körön **kívül** van
+(§4 engedélyezett fájlok).
+
+**A §5.2/A2 ezért PONTOSÍTVA:**
+
+| Felület | Forrás (`sourceType`) | Licenc (`copyright`) |
+|---|---|---|
+| Lista (Library) | **KÖTELEZŐ**, látható minden soron | nem elérhető index-adatból — **nem várt** |
+| Áttekintő (Overview) | **KÖTELEZŐ** | **KÖTELEZŐ**, ha a dokumentum `copyright`-ja nem `null` |
+
+A mérce ettől **nem gyengül**: a forrás továbbra is kötelezően látszik
+MINDKÉT helyen (A2 első fele változatlan, gépi őre a `song_library_test.dart`
+„the source badge is visible…" cellája és az overview forrás+licenc sor). Csak
+a licenc **megjelenési helye** szűkül a ténylegesen elérhető adathoz — ez
+dokumentálja azt, amit a kör 1. változata már helyesen implementált, csak a
+brief szövege nem mondott ki elég pontosan.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -515,7 +543,7 @@ Az ADR 0275 §3 alkalmazása a Songs területre.
 | # | Kritérium | Bizonyíték |
 |---|---|---|
 | A1 | A helyi dal offline megnyitható | `song_asset_state_test.dart` |
-| A2 | A forrás és a licenc-státusz látható a listában és az áttekintőben | `song_library_test.dart` |
+| A2 | A forrás látható a listában ÉS az áttekintőben; a licenc-státusz az áttekintőn (§0.0/B/R21 — a lista-index nem hordoz licenc-adatot) | `song_library_test.dart` |
 | A3 | A csak olvasható forrás szerkesztése nem indítható | ugyanott |
 | A4 | Hiányzó kísérőhang mellett a többi tartalom elérhető | `song_asset_state_test.dart` |
 | A5 | A setlist sorrendje és tételenkénti készenléte helyes | `setlist_list_test.dart` |
@@ -716,5 +744,38 @@ sem mozdult. A `test/ui/ui_inventory_test.dart` diffje ÜRES (86, R19 szerint).
   Overview-n jelenik meg (a teljes dokumentum egyszeri betöltése után). Ha egy
   jövőbeli kör a listában is licencet akar mutatni, az a `SongSummary` index
   bővítését igényli (application/domain réteg — ezen a körön kívül esik).
+
+### Javító kör (1.) — a review leletei (`docs/reviews/e13-r23-review.md`)
+
+- **MINOR-1** — `song_library_screen.dart`: file-szintű, nem-autoDispose
+  `NotifierProvider<_SongLibraryQueryNotifier, SongLibraryQuery>`
+  (`_songLibraryQueryProvider`) tartja a legutóbb alkalmazott lekérdezést. A
+  képernyő `initState`-je ebből tölti vissza a `TextEditingController`
+  induló szövegét, majd a `load()` lefutása után `controller.setQuery(...)`-
+  cal a teljes listát is újraszűri; minden szűrő-változás (`_applyQuery`)
+  mindkét helyre ír. `SongLibraryController` (`application/library/`) nem
+  módosult. Mért kimenet: ÚJ cella a
+  `test/features/songs/song_library_test.dart`-ban („…survive a real dispose
+  and re-entry of the Library screen") — a `home` widgetet ténylegesen
+  lecseréli egy másik típusra (a `SongLibraryScreen` Element ezért valóban
+  megszűnik), majd visszaállítja; `flutter test
+  test/features/songs/song_library_test.dart` → 6/6 ZÖLD (a régi, gyengébb A8
+  cella VÁLTOZATLAN maradt, nem gyengült).
+- **MINOR-2** — `song_summary_tile.dart`: a `summary.artist ?? summary.sourceType.code`
+  sor megszűnt; előadó hiányában az alcím-sor egyszerűen kimarad (a forrás
+  chip önmagában marad látható), nyers enum-kód a felületen többé nem
+  jelenik meg. A `song-summary-<id>` és `song-source-badge-<id>` Key-ek
+  változatlanok.
+- **MINOR-3** — `docs/rounds/e13-r23-song-library-and-setlists.md` §0.0/B/R21
+  (új revízió): az A2 „licenc … a listában" mondata a mért adathoz szűkült —
+  forrás mindkét helyen kötelező, licenc csak az Overview-n, mért indoklással
+  (a lista-index bővítése az `application/` rétegbe esne). A §6 A2 sora
+  ugyanígy igazítva.
+- **Golden újrafelvétel** (MINOR-2 miatt a lista raszterizációja változott):
+  `tools/golden-x86.sh record test/ui/goldens/e13_r23_screens_golden_test.dart`
+  → 6/6 felvéve; `tools/golden-x86.sh check` ugyanarra a fájlra → ZÖLD. Az új
+  PNG-k commitolva.
+- **Záró kapu (javító kör után):** `tools/round-gate.sh` a §-ban megadott
+  teljes útvonal-listával, csővezeték nélkül — mind a 16 lépés ZÖLD.
 
 ## 11. Review — a Claude tölti ki

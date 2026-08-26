@@ -256,6 +256,68 @@ void main() {
       expect(find.text('Zulu JSON'), findsNothing);
     },
   );
+
+  // ─── A8 (strong): the filter survives a REAL dispose, not just a cover ──
+  testWidgets(
+    'search text and filtered results survive a real dispose and re-entry '
+    'of the Library screen',
+    (tester) async {
+      final repository = _SummaryRepository(<SongSummary>[
+        _summary(
+          id: 'json',
+          title: 'Zulu JSON',
+          sourceType: SongSourceType.strumSightJson,
+          capability: null,
+        ),
+        _summary(
+          id: 'midi',
+          title: 'Alpha MIDI',
+          sourceType: SongSourceType.midi,
+          capability: null,
+        ),
+      ]);
+
+      // Same ProviderScope instance across both pumps (no key change on it),
+      // so only the `home` subtree remounts — the Library screen is really
+      // disposed and re-created, not merely covered by a pushed route.
+      Widget buildApp({required bool showLibrary}) => ProviderScope(
+        overrides: <Override>[
+          songRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: showLibrary
+              ? const SongLibraryScreen()
+              : const Scaffold(body: Text('elsewhere')),
+        ),
+      );
+
+      await tester.pumpWidget(buildApp(showLibrary: true));
+      await tester.pump();
+
+      await tester.enterText(find.byType(TextField).first, 'Alpha');
+      await tester.pump();
+      expect(find.text('Alpha MIDI'), findsOneWidget);
+      expect(find.text('Zulu JSON'), findsNothing);
+
+      // Swap the Library out of `home` entirely — the widget type at that
+      // slot changes, so the element (and its autoDispose controller) is
+      // really unmounted, not just covered.
+      await tester.pumpWidget(buildApp(showLibrary: false));
+      await tester.pump();
+      expect(find.text('elsewhere'), findsOneWidget);
+      expect(find.byType(SongLibraryScreen), findsNothing);
+
+      // Real re-entry: a brand-new SongLibraryScreen element/state.
+      await tester.pumpWidget(buildApp(showLibrary: true));
+      await tester.pump();
+
+      expect(find.text('Alpha'), findsOneWidget); // TextField shows it again
+      expect(find.text('Alpha MIDI'), findsOneWidget);
+      expect(find.text('Zulu JSON'), findsNothing);
+    },
+  );
 }
 
 final DateTime _fixedInstant = DateTime.utc(2026, 8, 1);
