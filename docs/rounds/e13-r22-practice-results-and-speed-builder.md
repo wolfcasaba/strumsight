@@ -607,4 +607,137 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### 10.1 Acceptance → bizonyíték
+
+| # | Kritérium | Bizonyíték (cella) |
+|---|---|---|
+| A1 | Alacsony megbízhatóság (`<0,60`) → nem kategorikus | `result_confidence_test.dart` — `A1` csoport, 3 cella: 9/20=0,45 (piros lenne, low-confidence banner, nulla `%`), 12/20=0,60 (kategorikus, INKLUZÍV határ), 17/20=0,85 (kategorikus) |
+| A2 | Részleges session `finishReasonCode`-ból | `result_confidence_test.dart` — `A2` csoport: `completedAllTargets` → nincs badge, `interrupted`/`userFinished` → `practiceResultPartialBadge` látszik |
+| A3 | Sérült rekord izolált, a lista működik | `history_corrupt_record_test.dart` — `A3` csoport, valódi `LocalPracticeHistoryRepository` + kevert jó/sérült JSON envelope; 2/2 jó rekord renderelődik, a sérült nem dob kivételt |
+| A4 | Előzmények offline elérhetők | `history_corrupt_record_test.dart` — `A4` csoport: a `ProviderScope` KIZÁRÓLAG a `keyValueStoreProvider`-t írja felül (nincs hálózati provider), a képernyő így is teljes |
+| A5 | Jutalom a főkönyvből, nem duplikálódik | `reward_idempotency_test.dart` — mindhárom teszt: van/nincs bejegyzés, majd kétszeri megnyitás → azonos `totalXp`, `appendCallCount == 0` |
+| A6 | Speed Builder a stabil legjobb tempót mutatja | `speed_ladder_test.dart` — `A6` csoport: egy egyszeri magas (150 BPM) áthaladás SOSEM "legjobb"; csak a kétszeres egymást követő áthaladással elért 110 BPM az |
+| A7 | Végrehajtható, helyesen paraméterezett következő lépés | `result_confidence_test.dart` — `A7` csoport: a "Practice again" gomb megnyitja a `PracticeSetupScreen`-t UGYANAZZAL a `definitionId`-vel |
+| A8 | Megosztás — minimális vetület | `result_confidence_test.dart` — `A8` csoport: a felnyitott kártya tartalmazza a session-azonosítót/címet/módot/időpontot/összegző mérőszámot, de a `skillTags` string SOHA nem jelenik meg (`findsNothing`) |
+| A9 | Golden — mindhárom képernyő, 412×915 + textScaler 2.0 | `test/ui/goldens/e13_r22_screens_golden_test.dart` + 6 PNG a `test/ui/goldens/goldens/` alatt |
+| A10 | `PracticeResultScreen` típusa/útvonala/`entry:` változatlan, a 3 pin zöld | `test/features/practice/presentation/practice_result_screen_test.dart`, `practice_a11y_audit_test.dart`, `test/core/screen_size_guard_test.dart` — mind zöld a záró gate-ben |
+
+### 10.2 Valódi-sértés próba (A5, §6.1 KÖTELEZŐ)
+
+A `practiceRewardForSessionProvider`-t ideiglenesen átírtam, hogy a
+főkönyv helyett egy kitalált (`totalXp: 999`) bejegyzést adjon vissza
+minden sessionre, majd lefuttattam a `reward_idempotency_test.dart`-ot:
+
+```
+00:01 +0 -1: no ledger entry for this session renders "no reward" — never an estimated number
+  Expected: exactly one matching candidate
+    Actual: _TextWidgetFinder:<Found 0 widgets with text
+    "No reward recorded yet for this session": []>
+00:02 +0 -3: A5 — reopening the SAME result twice reads the identical reward…
+  Expected: exactly one matching candidate
+    Actual: _TextWidgetFinder:<Found 0 widgets with text "+40 XP": []>
+Some tests failed. (mindhárom teszt piros lett)
+```
+
+A cella tehát a mércének megfelelően PIROSRA vált a tiltott
+implementációra. Ezután visszaálltam az eredeti (főkönyvet olvasó)
+kódra, és a teszt újra zöld:
+
+```
+00:01 +3: All tests passed!
+```
+
+### 10.3 A záró gate és a golden-sáv tényleges kimenete
+
+`tools/round-gate.sh` a brief §7 pontos parancsával, a végleges (commitolt)
+állapoton, csonkítatlanul:
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/practice/result_confidence_test.dart    zöld
+    test test/features/practice/history_corrupt_record_test.dart zöld
+    test test/features/practice/speed_ladder_test.dart         zöld
+    test test/features/practice/reward_idempotency_test.dart   zöld
+    test test/features/practice/presentation/                  zöld
+    test test/core/screen_size_guard_test.dart                 zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/tooling/dio_factory_guard_test.dart              zöld
+    test test/tooling/preferences_plugin_import_guard_test.dart zöld
+    test test/tooling/route_literal_guard_test.dart            zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+Golden-sáv (`tools/golden-x86.sh`, x86_64/qemu, ADR 0426):
+
+```
+$ tools/golden-x86.sh record test/ui/goldens/e13_r22_screens_golden_test.dart
+00:00 +0: practice result — compact
+00:27 +1: practice history — compact
+00:36 +2: speed builder — active — compact
+00:39 +3: practice result — compact_scale2
+00:40 +4: practice history — compact_scale2
+00:42 +5: speed builder — active — compact_scale2
+00:43 +6: All tests passed!
+
+$ tools/golden-x86.sh check test/ui/goldens/e13_r22_screens_golden_test.dart
+00:00 +0: practice result — compact
+… (mind a 6 cella)
+00:48 +6: All tests passed!
+```
+
+A felvétel során a Speed Builder aktív rétege `textScaler: 2.0` mellett
+73 pixellel túlcsordult (`RenderFlex overflowed`) — VALÓS lelet, nem a
+mérce hibája. Javítás: a `SpeedBuilderScreen` törzse `SingleChildScrollView`-ba
+került (korábban sima `Padding` volt); a felvétel utána tiszta.
+
+### 10.4 A `test/ui/ui_inventory_test.dart` száma és az R7 pin-ek
+
+A leltárteszt `hasLength(84)` → **`hasLength(86)`** — pontosan a két új
+`_screen.dart` (`practice_history_screen.dart`, `speed_builder_screen.dart`)
+miatt; a teszt egyetlen más állítását nem érintettem.
+
+Az R7 három, a listán KÍVÜLI pin — `practice_result_screen_test.dart`,
+`practice_a11y_audit_test.dart`, `test/core/screen_size_guard_test.dart`
+(`PracticeResultScreen`-re állítva) — mind ZÖLD maradt a záró gate-ben:
+a `PracticeResultScreen` típusneve, fájl-útvonala és `entry:` konstruktora
+változatlan, a migráció kizárólag HOZZÁADOTT (megbízhatóság-sáv,
+jutalom, next-step, share, quick-link).
+
+### 10.5 Ami NEM készült el (nevesített follow-up, §0.0/B/R11 és R12)
+
+- **Nincs `/practice/history` és `/practice/speed-builder` névvel
+  regisztrált route.** A két új képernyő KIZÁRÓLAG a
+  `PracticeResultScreen`-ről érhető el
+  (`Navigator.of(context).push(MaterialPageRoute…)`), a `lib/app/routing/**`
+  ezen a körön kívül maradt. A névvel ellátott route-ok és a
+  `practice_hub_screen.dart` Continue/Recent belépője egy KÉSŐBBI kör
+  dolga (a Hub-képernyő doc-commentje ezt a hiányt már ma is kimondja).
+- **Nincs valódi Community-share bekötés.** Az A8 megosztás-gombja a
+  minimális vetületet CSAK egy in-screen kártyán jeleníti meg; a
+  `lib/features/share/**` / `lib/features/community/**` felé egy
+  `practiceSummaryFromSessionResult`-szerű varrat egy KÉSŐBBI kör dolga
+  (§0.0/B/R12).
+- **A Speed Builder "aktív" fázisa szintetikus próbákkal demózik.** A
+  `domain/service/speed_builder_engine.dart` a valódi állapotgép; mivel
+  az `application`-réteg (élő session-controller, felismerés) ezen a
+  körön KÍVÜL van, az aktív fázis "Record pass"/"Record miss" gombokkal
+  szimulált próbákat küld az engine-nek. A ténylegesen élő
+  (mikrofon-vezérelt) Speed Builder session-bekötés egy KÉSŐBBI kör
+  dolga.
+- **A jutalom-főkönyv seam Noop-alapértelmezésű.** A
+  `rewardLedgerRepositoryProvider` production-alapértelmezése egy üres
+  (mindig "nincs jutalom") implementáció — ez MA a valós állapot, mert a
+  `GamificationDualWriteMode` alapértelmezése `off`, tehát a főkönyv MA
+  sehol nem kap valódi írást. Amikor egy későbbi kör bekapcsolja a
+  dual-write-ot és vezényli a valódi `LocalRewardLedgerRepository`-t a
+  kompozíciós gyökérbe, ez a provider felülíródik — a screen kódja nem
+  változik.
+
 ## 11. Review — a Claude tölti ki
