@@ -521,4 +521,112 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Mit épített a kör
+
+Három ÚJ képernyő a `lib/features/audio_analysis/presentation/capture/`
+alatt (§0.0/B1 szerint, a V2 fára horgonyozva):
+
+- **`AnalysisHomeScreen`** — két bemeneti mód (felvétel / fájl-import)
+  kártyaként, a fájl-import kártya a MÉRT `InputLimits.maxFileBytes`-ból
+  számolt MB-limitet mondja ki; legutóbbi elemzések előnézete
+  (`List<AnalysisSummary>`, üres-állapot felirattal).
+- **`AnalysisRecordingScreen`** — StatefulWidget, amely egy a hoszttól kapott
+  `AnalysisRecorder`-t birtokol. Öt belső állapot: idle/starting (kész,
+  még nem indult), recording (állandó jelzés), permissionDenied, error.
+  A `dispose()` MINDEN kilépési útvonalon meghívja `recorder.dispose()`-t
+  (idempotens, biztonságos duplán is).
+- **`AnalysisProcessingScreen`** — a MEGLÉVŐ, addig árva
+  `AnalysisProgressView`-t fogadja be (nem írta újra); ráépít egy
+  determinisztikus fázis-lépés jelzőt (`AnalysisProgressPhase.values.indexOf`)
+  a köztes granularitáshoz. `AnalysisState`-et fogyaszt (application réteg,
+  csak import, nem módosítás).
+
+A `AnalysisProgressView` (`presentation/analysis_progress_view.dart`) fájlt
+a kör NEM módosította — a `analysis_progress_view_test.dart` pinelt teszt
+változatlanul zöld, mert a fájl bájtra egyezik a merge-elt állapottal.
+
+### Acceptance-mátrix → hol teljesül
+
+| # | Kritérium | Hol | Teszt |
+|---|---|---|---|
+| A1 | Felvétel-jelzés végig látható, amíg a mikrofon aktív | `AnalysisRecordingScreen._RecordingBody` — `Key('analysis-recording-live-indicator')`, `Semantics(liveRegion: true)` | `recording_state_test.dart` „A1" csoport |
+| A2 | Megőrzés-állapot látható, a MÉRT `AudioRetentionPolicy`-ból | `_RetentionNotice` — `retentionPolicy.keepOriginal` ágaztatja a két lokalizált szöveget, idle ÉS recording állapotban is megjelenik | `recording_state_test.dart` „A2" csoport (default + `keepOriginal: true`) |
+| A3 | Nincs hamis százalék, tényleges szakaszokból jön | `AnalysisProcessingScreen` — indeterminate (nincs fázis) → `LinearProgressIndicator(value: null)`; fázis van, egység nincs → `_PhaseStepIndicator` szöveg + indeterminate sáv; egység van → `AnalysisProgressView` valódi hányadosa | `processing_progress_test.dart` „A3" csoport, mindhárom küszöb-cella |
+| A4 | Megszakítás idempotens | `_AnalysisProcessingScreenState._handleCancel` — `_cancelledForRunId` per-run őr, második koppintás no-op, ÚJ `runId` újra engedélyezi | `processing_progress_test.dart` „A4" csoport |
+| A5 | Hiba után nincs árva mikrofon/ideiglenes fájl | `AnalysisRecordingScreen.dispose()` MINDEN úton `recorder.dispose()`-t hív; a V2 felvétel memóriában gyűlik, temp fájl nincs (§0.0/B6) | `analyze_cleanup_test.dart`, öt eset: engedély megtagadva, motorhiba indításkor, megszakítás felvétel közben, képernyő elhagyása koppintás nélkül, max-hossz auto-stop |
+| A6 | Kapacitás-korlát a felvétel ELŐTT jelzett | `_ReadyBody` — `InputLimits.maxDuration` (10 perc) az idle állapotban, MIELŐTT a `Start` gomb megnyomásra kerül | `recording_state_test.dart` „A6" csoport |
+| A7 | Torzítás és csend külön, cselekvésre hívó állapot | `_RecordingBody._isClipping` / `_isQuiet` — kölcsönösen kizáró, két külön `Key`-jel jelölt banner | `recording_state_test.dart` „A7" csoport |
+| A8 | Degradált mód a MÉRT okot mondja ki | `_DegradedBody` — `document.capabilities` `unavailable` + `reason != null` elemeiből, az `AppLocalizationsOverviewLabels.unavailableReason` (MEGLÉVŐ adapter) újrafelhasználásával | `processing_progress_test.dart` „A8" csoport |
+| A9 | Golden minden képernyőről, két keretben | `test/ui/goldens/e13_r26_screens_golden_test.dart`, x86-on rögzítve | 6 PNG a `test/ui/goldens/goldens/`-ben |
+
+### A gate TÉNYLEGES kimenete
+
+```
+tools/round-gate.sh test/features/analyze/recording_state_test.dart test/features/analyze/processing_progress_test.dart test/features/analyze/analyze_cleanup_test.dart test/features/audio_analysis/presentation/analysis_progress_view_test.dart test/features/audio_analysis/application/analysis_controller_test.dart test/features/audio_analysis/application/analysis_cancellation_test.dart test/features/audio_analysis/data/analysis_recorder_test.dart test/features/audio_analysis/data/analysis_recorder_lifecycle_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+**MINDEN GATE ZÖLD** (18/18 lépés): format, analyze, mind a 13 megnevezett
+teszt-útvonal külön processzben, architecture, secrets, l10n. Az
+`ui_inventory` `hasLength(89)`-re mozdult (86 → 89, pontosan a három új
+képernyő, §0.0/B4 mérés szerint). Első futáskor az `analyze` lépés 11
+lint-leletet adott (nem használt import, `unnecessary_underscores`
+`(_, __)` mintára) a saját teszt-fájljaimban — javítva, második futás
+tisztán zöld.
+
+A golden lokálisan (ARM-on) NEM fut ebben a sorban (ADR 0426 §3); mérése:
+
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r26_screens_golden_test.dart  → 6/6 „All tests passed!" (37s, docker/amd64)
+tools/golden-x86.sh check  test/ui/goldens/e13_r26_screens_golden_test.dart  → 6/6 „All tests passed!" (stabil raszterizáció)
+```
+
+A hat PNG (3 képernyő × 412×915 compact portrait / textScale 2.0) commitolva.
+
+### A valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+`AnalysisProcessingScreen._IndeterminateBody`-t átmenetileg `StatefulWidget`-re
+cseréltem egy `Timer.periodic(200ms)`-cel animált `_fakePercent` állapottal,
+és a `LinearProgressIndicator.value`-t erre kötöttem, plusz egy
+`Text('$_fakePercent%')` sort hozzáadtam — pontosan az ADR 0285 §5.2 által
+tiltott „időzítőből animált százalék" minta.
+
+Futtatás: `flutter test test/features/analyze/processing_progress_test.dart`.
+**MÉRT kimenet — az A3 „alatta" cellája PIROSRA váltott:**
+
+```
+AnalysisProcessingScreen — A3 no fake percent below the threshold: an indeterminate signal, no number [E]
+Expected: no matching candidates
+  Actual: _TextContainingWidgetFinder:<Found 1 widget with text containing %: [
+            Text("0%", ...),
+          ]>
+   Which: means one was found but none were expected
+```
+
+A másik két A3-cella (rajta/fölötte) és az A4/A8 cellák változatlanul
+zöldek maradtak — a próba PONTOSAN azt a cellát fogta meg, amit a sértés
+érintett. Ezután a `_IndeterminateBody`-t visszaállítottam az eredeti
+`StatelessWidget`-re (`git diff` a fájlra üres a visszaállítás után), és a
+teszt újra 6/6 zöld.
+
+### Amit NEM csináltam meg, és miért
+
+- **Route-ot nem vezettem be** (§0.0/B3) — a három képernyő route nélkül áll,
+  a `route_literal_guard_test.dart` zöld.
+- **Az `AnalysisHomeScreen`/`AnalysisRecordingScreen`/`AnalysisProcessingScreen`
+  nincs egymáshoz vagy a Kör 27 eredmény-képernyőkhöz drótozva** — a
+  screenek kizárólag callback-eket és már validált állapotot kapnak
+  konstruktorban (a `SongResultScreen`/`TrainerSetupScreen` E13-R22..R25
+  precedens mintája), a tényleges huzalozás (providerek, navigáció) egy
+  KÉSŐBBI, route-ot bevezető kör dolga.
+- **Fájl-import maga (file picker, dekódolás) nincs a képernyőn belül** — a
+  Home képernyő `onImportFile` callbacket exponál, a tényleges fájlkezelés
+  a hoszté; ez konzisztens azzal, hogy a `data/input/` réteg NINCS az
+  `allowed_paths`-on.
+- **Csend-küszöb (`silenceThresholdDbfs = -45.0`)** egy PREZENTÁCIÓS
+  konstans, nem mért/kalibrált érték — dokumentálva a doc-commentben, hogy
+  ne legyen összetévesztve DSP-döntéssel (AGENTS.md §9 tiltja a DSP-paraméter
+  módosítást; ez tisztán UI-küszöb, a felismerést nem érinti).
+- **Megőrzés-kapcsoló, szabad-tárhely lekérdezés, hő/akku indok** — a
+  §0.0/B6 kifejezetten tiltja a kitalálásukat; egyik sem került a kódba.
+
 ## 11. Review — a Claude tölti ki
