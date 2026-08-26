@@ -310,13 +310,38 @@ grep -rln 'SongLibraryScreen\|SongOverviewScreen\|SetlistListScreenV2' test/
   test/features/song_trainer/application/setlists/setlist_session_controller_test.dart
 ```
 
-Ezek a listán KÍVÜL vannak, tehát **szerkeszteni tilos**; a migráció úgy
-helyes, ha zöldek maradnak. A `gate_tests` ezért mostantól futtatja őket
-(`test/features/song_trainer/presentation/`, `test/app/routing/app_router_test.dart`)
-— a hibaosztály ugyanaz, mint az S12-nél: a lelet a lokális kapun jelenjen
-meg, ne a ~17 perces exact-SHA Full Gate-en. Ha egy cella a migrációtól
-elbukik, az **`blocked`** jelzés és célzott brief-revízió, nem csendes átírás
-([L488](../LESSONS.md#l488) helyben-tartás).
+**A feloldás [L488](../LESSONS.md#l488) szerint NEM a lista tágítása, hanem a
+típus HELYBEN tartása.** A kör kötelezettségei:
+
+1. a `SongLibraryScreen`, a `SongOverviewScreen` és a `SetlistListScreenV2`
+   **típusneve, fájl-útvonala és konstruktor-szignatúrája változatlan** marad
+   (`SongOverviewScreen({required String songId})`,
+   `SetlistListScreenV2({required SetlistController controller, required
+   DateTime Function() clock})`), és az `app_router.dart:338/356`
+   route-regisztrációk sem mozdulnak — a képernyők HELYBEN migrálnak, nem új
+   fájlba költöznek;
+2. mind a négy pin **zöld marad** — a migráció HOZZÁAD (forrás/licenc jelölés,
+   eszköz-készenlét, offline-állapot, setlist-készenlét), nem vesz el:
+   meglévő `Key`, `Semantics` címke, szöveg-finder vagy belépő **nem
+   törölhető és nem nevezhető át**;
+3. a négy teszt a `gate_tests`-ben **fut**, de az `allowed_paths`-on **nincs
+   rajta**: a kör futtatja, szerkeszteni nem tudja (az S12-vel azonos minta).
+   Ha valamelyik pirosra vált, az **`blocked`** jelzés és célzott
+   brief-revízió, nem csendes átírás.
+
+**Ez a bekezdés az `S11` brief-lint lelet KIMONDOTT válasza.** A szabály két
+kifutót ad; a kör a MÁSODIKAT választja — a szabály saját szövege szerint:
+*„Ha a kör a képernyőt bizonyíthatóan nem cseréli le, a §0.0 mondja ki ezt a
+mérést."* A kör a képernyőt **nem cseréli le** (fent, 1. pont), tehát a négy
+pin nem a migráció áldozata, hanem a migráció **mércéje**. A tesztek felvétele
+az `allowed_paths`-ra tágítás volna, ami az orchestrátornak **H3**
+([L478](../LESSONS.md#l478)) — ezért nem történik meg. Azonos kifutó, mint
+E13-R22 §0.0/B/R7 (`5f4266e3`, merge-elve).
+
+**Az S11-lelet a pre-flight ELŐTT nem létezett** (`.pipeline/brief-lint-E13-R23.md`
+→ „nincs lelet"): az eredeti lista nulla létező fájlt fedett, tehát nem is
+tudott meglévő képernyőt érinteni. A lelet az R13 útvonal-cserével jelent meg,
+és ezzel a kifutóval zárul.
 
 ### R18 — a §0.0/R3 shell-destination premisszája IGAZ, de ez a kör NEM köti át
 
