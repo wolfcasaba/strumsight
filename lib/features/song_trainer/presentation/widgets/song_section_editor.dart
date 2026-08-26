@@ -35,10 +35,17 @@ final class SongSectionEditor extends StatelessWidget {
               children: <Widget>[
                 IconButton(
                   key: Key('song-editor-section-move-up-$index'),
-                  // ADR 0280 §Döntés 5: every reorder affordance keeps a
-                  // >= 48 dp touch target, keyboard/button reachable
-                  // without a drag gesture (L496 — this must be measured
-                  // per widget, the default constraints do not guarantee it).
+                  // ADR 0280 §Döntés 5: every reorder affordance declares a
+                  // >= 48 dp touch target, keyboard/button reachable without
+                  // a drag gesture. Measured (E13-R24 review): this theme's
+                  // MaterialTapTargetSize.padded default already inflates a
+                  // Material 3 IconButton's hit box to 48x48 regardless of
+                  // `constraints`, so this value is not what makes the tap
+                  // target big enough today — it is the declared contract
+                  // the test asserts on directly (IconButton.constraints),
+                  // so a regression here is still caught even where a
+                  // future theme change (e.g. shrinkWrap tap target size)
+                  // would otherwise let it slip through unnoticed.
                   constraints: const BoxConstraints(
                     minWidth: 48,
                     minHeight: 48,

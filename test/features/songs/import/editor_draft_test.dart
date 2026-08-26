@@ -9,6 +9,12 @@
 //        the original stored document is never touched.
 //   A8 — leaving the editor with unsaved changes names the consequence
 //        (save / discard / keep editing) before the pop is allowed.
+//
+// MINOR-2 (E13-R24 review) — the "save copy" write path A6 exercises never
+// covered the unfixed-copy failure case: saving a copy that STILL carries
+// the fatal issue (the user never ran the in-editor fix first) must not
+// write anything, and must not strand the editor on an orphaned,
+// never-persisted draft with the locked Save button silently re-enabled.
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -227,6 +233,108 @@ void main() {
       // The editor itself now tracks the new, persisted copy identity.
       expect(editorController.state.persisted?.id, copy.id);
       expect(editorController.state.draft!.id, isNot(id));
+    },
+  );
+
+  testWidgets(
+    'MINOR-2: saving a copy that is still fatal writes nothing and restores '
+    'the editor to the untouched original',
+    (tester) async {
+      // Same read-only-source fixture shape as A6 (a legacy StrumTrack
+      // targeting a chord event that does not exist), but this time the
+      // in-editor fix (`addChord`) is skipped — the copy carries the exact
+      // same fatal issue the original does.
+      final now = DateTime.utc(2026, 8, 4);
+      final original = SongDocument(
+        schemaVersion: songDocumentSchemaVersion,
+        id: SongId('legacy-fatal-unfixed'),
+        revision: 3,
+        metadata: SongMetadata(title: 'Legacy Song'),
+        source: SongSource(
+          type: SongSourceType.legacyLocal,
+          originalFileName: 'legacy.song',
+          sha256: 'a' * 64,
+          importedAt: now,
+          importerVersion: 'legacy@1',
+        ),
+        createdAt: now,
+        updatedAt: now,
+        measures: <SongMeasure>[
+          SongMeasure(index: 0, durationBeats: BeatPosition.fromBeats(4)),
+        ],
+        tempoMap: TempoMap.constant(Tempo(120)),
+        meterMap: MeterMap.constant(Meter(4, 4)),
+        tracks: <SongTrack>[
+          StrumTrack(
+            id: SongTrackId('strum-track'),
+            name: 'Strum',
+            instrument: SongInstrument(name: 'Guitar'),
+            events: <SongStrumEvent>[
+              SongStrumEvent(
+                id: SongEventId('strum-1'),
+                at: Duration.zero,
+                direction: StrumDirection.down,
+                targetChordId: SongEventId('missing-chord'),
+              ),
+            ],
+          ),
+        ],
+      );
+      final repository = _ReadOnlySeedRepository(original);
+      final id = SongId('legacy-fatal-unfixed');
+      final editorController = SongEditorController(
+        repository: repository,
+        assetRepository: const _NoopAssetRepository(),
+      );
+      addTearDown(editorController.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          songRepositoryProvider.overrideWithValue(repository),
+          songAssetRepositoryProvider.overrideWithValue(
+            const _NoopAssetRepository(),
+          ),
+          songEditorControllerProvider(id).overrideWithValue(editorController),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const SongEditorScreen(songId: 'legacy-fatal-unfixed'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('song-editor-save-copy')), findsOneWidget);
+
+      // Tap "Save copy" WITHOUT fixing the fatal reference first.
+      await tester.tap(find.byKey(const Key('song-editor-save-copy')));
+      await tester.pumpAndSettle();
+
+      // Nothing was ever written — the still-fatal copy never reaches
+      // repository.create.
+      expect(repository.createCalls, isEmpty);
+
+      // The editor is restored to the untouched original, not left
+      // stranded on the orphaned, unsaved copy.
+      expect(editorController.state.persisted?.id, id);
+      expect(editorController.state.draft?.id, id);
+
+      // Save (in-place) is still locked — persisted is the original,
+      // validator-fatal document again, not null.
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('song-editor-save')))
+            .onPressed,
+        isNull,
+      );
+      // The retry path (fix, then save a copy) is still available.
+      expect(find.byKey(const Key('song-editor-save-copy')), findsOneWidget);
     },
   );
 

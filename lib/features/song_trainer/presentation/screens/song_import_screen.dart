@@ -100,9 +100,12 @@ final class _SongImportScreenState extends ConsumerState<SongImportScreen> {
                                     : l10n.songImportBlockingFailure(
                                         state.failureCode!,
                                       ),
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
                               ),
                             ),
                           ],

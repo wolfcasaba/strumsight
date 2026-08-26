@@ -1,10 +1,19 @@
 // A7 — section reordering has a keyboard/button alternative to drag, and
-// every such affordance meets the >= 48 dp touch target (ADR 0280 §Döntés 5,
+// every such affordance declares a >= 48 dp touch target (ADR 0280 §Döntés 5,
 // round brief §0.0/B/R6, §6.1's three threshold cells: 47.0 dp red, 48.0 dp
 // green — inclusive — and 56.0 dp green). L496 measured that a per-widget
 // touch-target fix regresses on the NEXT new interactive element unless the
 // cell measures every reorder affordance generically, not one hardcoded
 // widget — so this walks every up/down button `SongSectionEditor` renders.
+//
+// E13-R24 review (MAJOR-1): this theme's default MaterialTapTargetSize.padded
+// already inflates every Material 3 IconButton's rendered/hit-test box to
+// 48x48 regardless of its `constraints` value, so `tester.getSize(...)` is
+// structurally constant at 48x48 and can never go red — it was measuring the
+// Material default, not this widget's code. The cell instead asserts on
+// `IconButton.constraints`, the actual property `SongSectionEditor` owns and
+// can regress; proven to go red below 48.0 (and when unset) and stay green
+// at/above 48.0 by locally sweeping 47.0/48.0/56.0/removed before this fix.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/song_trainer/domain/models/song_id.dart';
@@ -101,16 +110,24 @@ void main() {
       // rendered hit target space-wise.
       expect(reorderButtons, findsNWidgets(6));
       for (final element in reorderButtons.evaluate()) {
-        final size = tester.getSize(find.byWidget(element.widget));
+        final iconButton = element.widget as IconButton;
+        final constraints = iconButton.constraints;
         expect(
-          size.width,
-          greaterThanOrEqualTo(48.0),
-          reason: '${(element.widget as IconButton).key} width',
+          constraints,
+          isNotNull,
+          reason:
+              '${iconButton.key} must declare an explicit minimum '
+              'touch-target constraint',
         );
         expect(
-          size.height,
+          constraints!.minWidth,
           greaterThanOrEqualTo(48.0),
-          reason: '${(element.widget as IconButton).key} height',
+          reason: '${iconButton.key} minWidth',
+        );
+        expect(
+          constraints.minHeight,
+          greaterThanOrEqualTo(48.0),
+          reason: '${iconButton.key} minHeight',
         );
       }
     },

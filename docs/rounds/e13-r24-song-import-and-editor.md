@@ -652,4 +652,83 @@ x86_64-en, `tools/golden-x86.sh record`):
 revíziós pontjait és a valódi-sértés próbát teljesítette a jelen
 folytató-futáson.
 
+### Javító kör (review-leletek) — 2026-08-26, `docs/reviews/e13-r24-review.md`
+
+**MAJOR-1 — az A7 érintési-cél cellája.** A reviewer mérése helyes volt: ezen
+a témán a Material 3 `IconButton` `MaterialTapTargetSize.padded`
+alapértelmezése a render-/hit-test-boxot MINDIG 48×48-ra fújja fel,
+függetlenül a `constraints:` paramétertől — a `tester.getSize(...)` ÉS a
+`tester.getSemantics(...).rect` egyaránt szerkezetileg konstans 48×48
+(reprodukálva: `constraints` eltávolítva → `getSize=Size(48.0, 48.0)`,
+`semantics.rect=Rect.fromLTRB(0.0, 0.0, 48.0, 48.0)`; `constraints` 32-re
+állítva → ugyanaz). A cella ezért mostantól az `IconButton.constraints`
+tulajdonságra mér — ez az egyetlen érték, amit `SongSectionEditor` ténylegesen
+birtokol és ami regresszálhat:
+
+```dart
+expect(constraints, isNotNull, reason: '… must declare an explicit minimum touch-target constraint');
+expect(constraints!.minWidth, greaterThanOrEqualTo(48.0), reason: '… minWidth');
+expect(constraints.minHeight, greaterThanOrEqualTo(48.0), reason: '… minHeight');
+```
+
+Piros/zöld bizonyíték (mind a hat gombra, `47.0`/`48.0`/`56.0`/eltávolítva
+végigsöpörve, a production kódon élesben, majd visszaállítva):
+
+| Bemenet (`constraints:` a production kódban) | Cella eredménye |
+|---|---|
+| `47.0` (mindkét irányban) | **PIROS** — `Expected: a value greater than or equal to <48.0> / Actual: <47.0> / [<'song-editor-section-move-up-0'>] minWidth` |
+| `48.0` (a küszöbön) | zöld (`00:01 +3: All tests passed!`) |
+| `56.0` | zöld (`00:01 +3: All tests passed!`) |
+| eltávolítva (`constraints` param nélkül) | **PIROS** — `Expected: <true> / Actual: <false> / […] must declare an explicit minimum touch-target constraint` |
+
+A doc-comment a `song_section_editor.dart`-ban átírva: a korábbi „the default
+constraints do not guarantee it" állítás (a P1 próba szerint hamis) helyett
+most azt mondja ki, amit ténylegesen mértünk — a téma alapértelmezése már
+önmagában 48×48-ra hízlalja a gombot, a `constraints:` a deklarált szerződés,
+amit a cella közvetlenül olvas, és ami egy jövőbeli téma-váltás (pl.
+`shrinkWrap` tap-target méret) esetén is védelmet ad.
+
+**MINOR-1 — `_canPersist()` memoizálva.** `_SongEditorScreenState` három
+instance-mezőt kapott (`_canPersistCacheKey`, `_canPersistCacheValue`,
+`_canPersistCacheComputed`); `build()` mostantól `_canPersistMemo(...)`-t hív,
+ami csak akkor futtatja újra `_canPersist()`-et (és vele a
+`SongValidator().validate()`-et), ha `state.persisted` IDENTITÁSA
+(`identical`) változott az előző híváshoz képest — nem a tartalma. A
+`song_editor_screen_test.dart` két cellája (undo/redo, szerkesztési műveletek)
+zöld maradt, tehát a viselkedés nem változott.
+
+**MINOR-2 — `_saveCopy` sorrendje javítva + új cella.** A `song_editor_screen.dart`
+`_saveCopy`-ja a `save()` után most ELLENŐRZI az eredményt
+(`SongEditorStatus.validationFailed`/`failure`/`conflict`), és hiba esetén
+`controller.load(id)`-val VISSZAÁLLÍTJA az eredeti, érintetlen dokumentumot —
+a `save()` sosem hív `repository.update()`-et az eredetin (A6), ezért az
+újratöltés mindig biztonságos. Új cella (`editor_draft_test.dart`,
+`'MINOR-2: saving a copy that is still fatal writes nothing and restores the
+editor to the untouched original'`) az A6-tal AZONOS fixture-t használ, de
+kihagyja az in-editor javítást (`addChord`) — a másolat így ugyanazt a
+fatális hibát viszi tovább, amit az eredeti hordoz.
+
+Piros/zöld bizonyíték (a régi, javítás előtti sorrenden reprodukálva —
+`controller.startNew(copy); await controller.save();` a visszaállítás
+nélkül —, majd visszaállítva):
+
+- **PIROS** a régi sorrenden: `Expected: SongId:<SongId(legacy-fatal-unfixed)> / Actual: <null>` (`editorController.state.persisted?.id` assertion).
+- **ZÖLD** a javított sorrenden: `00:03 +4: All tests passed!` (mind a négy
+  `editor_draft_test.dart` cella, A5/A6/MINOR-2/A8).
+
+**MINOR-3 — nyers `TextStyle(color: …)` → téma-token.** Mindhárom hely
+(`song_import_screen.dart`, `song_import_preview_screen.dart`,
+`song_editor_screen.dart`) `Theme.of(context).textTheme.bodyMedium?.copyWith(
+color: …)` alakra cserélve. A golden-teszt (`e13_r24_screens_golden_test.dart`)
+mind a hat cellája ZÖLD maradt a csere után (`00:02 +6: All tests passed!`) —
+a hibaszínű szöveg egyik golden alapállapotban sem látszik (a hibaágak nem
+aktívak az alap-nézetben), ezért nincs golden-elmozdulás és nincs
+újrafelvétel.
+
+### Javító kör — teljes kapu (a `docs/reviews/e13-r24-review.md` §7
+listájával, csővezeték nélkül)
+
+Lásd a jelen kör-folytatás gate-futását — minden lépés ZÖLD, részletek a
+commit-üzenetben és a `tools/round-gate.sh` kimenetében.
+
 ## 11. Review — a Claude tölti ki

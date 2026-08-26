@@ -64,6 +64,25 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
   late final SongId _id;
   var _startedNewDraft = false;
 
+  // MINOR-1: `build()` reruns on every editing step (undo/redo, metadata
+  // typing, chord add — anything the `songEditorStateProvider` publishes),
+  // but `_canPersist` only depends on `state.persisted`, which changes only
+  // on load/successful save. Memoize by identity so an edit-heavy session
+  // doesn't re-run `SongValidator().validate()` on every keystroke.
+  SongDocument? _canPersistCacheKey;
+  var _canPersistCacheValue = true;
+  var _canPersistCacheComputed = false;
+
+  bool _canPersistMemo(SongDocument? persisted) {
+    if (!_canPersistCacheComputed ||
+        !identical(persisted, _canPersistCacheKey)) {
+      _canPersistCacheKey = persisted;
+      _canPersistCacheValue = _canPersist(persisted);
+      _canPersistCacheComputed = true;
+    }
+    return _canPersistCacheValue;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -116,7 +135,7 @@ final class _SongEditorScreenState extends ConsumerState<SongEditorScreen> {
     final controller = ref.read(songEditorControllerProvider(_id));
     final state =
         ref.watch(songEditorStateProvider(_id)).value ?? controller.state;
-    final canPersist = _canPersist(state.persisted);
+    final canPersist = _canPersistMemo(state.persisted);
     return PopScope<Object?>(
       canPop: !state.isDirty,
       onPopInvokedWithResult: (didPop, result) async {
@@ -247,7 +266,9 @@ final class _EditorBody extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         l10n.songEditorSaveFailed(state.failureCode ?? ''),
-                        style: TextStyle(color: errorColor),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(color: errorColor),
                       ),
                     ),
                   ],
@@ -393,5 +414,23 @@ final class _EditorBody extends ConsumerWidget {
     );
     controller.startNew(copy);
     await controller.save();
+    // MINOR-2: `save()` always mutates the controller's state, whether it
+    // succeeds or not — a fatal validation issue on the copy, or a
+    // repository create failure, leaves the editor pointed at the orphaned,
+    // never-persisted copy (`persisted == null`), which would silently
+    // re-enable Save (`_canPersist(null) == true`) and strand the user off
+    // the read-only original's context. `save()` never calls
+    // `repository.update` on the original (A6), so re-loading it is always
+    // safe and restores exactly the pre-copy state.
+    if (_isFailureStatus(controller.state.status)) {
+      await controller.load(id);
+    }
   }
+
+  static bool _isFailureStatus(SongEditorStatus status) => switch (status) {
+    SongEditorStatus.validationFailed ||
+    SongEditorStatus.failure ||
+    SongEditorStatus.conflict => true,
+    _ => false,
+  };
 }
