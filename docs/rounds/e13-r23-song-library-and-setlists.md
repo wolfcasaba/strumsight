@@ -601,4 +601,120 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`). **Kör-fa állapota `main @ 76566726`
+felett, a §0.0/B pre-flight nyolc revíziójából (R13–R20) dolgozva.**
+
+### Mit épített a kör
+
+A három megnevezett felület **helyben** migrált (R13/R17: típusnév,
+fájl-útvonal, konstruktor-szignatúra és route-regisztráció változatlan):
+
+- **`SongLibraryScreen`** — minden sor forrás-jelvényt kap
+  (`SongSourceBadge`, új `presentation/widgets/song_source_badge.dart`,
+  megosztva az Overview-val); a `SongCapabilityBadges` egy negyedik jelvénnyel
+  bővült (`canPersist == false` → lakat-ikon + `songLibraryReadOnly`
+  Semantics-címke). A sor tap-viselkedése a `capability?.canPersist ?? true`
+  alapján ágazik: szerkeszthető dal → editor (változatlan), csak olvasható dal
+  → Overview (megtekintő mód) + `songLibraryReadOnlySnackBar` — a
+  `song-editor-open-<id>` Key VÁLTOZATLAN, csak a cél mozdult (R17 kötelezése).
+- **`SongOverviewScreen`** — a `SongTrainerSetupState` NEM hordoz
+  forrást/licencet (mért, R16), ezért a képernyő egy SAJÁT, egyszeri
+  `songRepositoryProvider.get(_songId)` hívással tölti be a teljes
+  dokumentumot csak a forrás/licenc megjelenítéséhez
+  (`_SongOverviewScreenState._loadProvenance`), a meglévő
+  `SongTrainerSetupController` folyamatát érintetlenül hagyva. Az új tartalom
+  (forrás/licenc sor, hiányzó-kísérőhang jelzés) a MEGLÉVŐ tartalom (cím,
+  szakaszok, sávok, képességek, Start gomb) UTÁN kerül a `ListView`-ba —
+  enélkül a négy pin egyike (`song_overview_screen_test.dart`) az alap
+  (800×600) teszt-ablakban pirosra váltott volna, mert a `find.byKey`
+  alapból `skipOffstage:true`, és a plusz tartalom a gombot a scrollozatlan
+  nézeten kívülre tolta volna (mérve, majd javítva — lásd alább).
+- **`SetlistListScreenV2`** — új `SetlistItemAvailabilityBadge` widget
+  (`presentation/widgets/setlist_item_availability_badge.dart`), kizárólag
+  ikon (lásd alul, miért), a `SetlistItemAvailability` → `ready` /
+  `missingAsset` / `missingSong` / egyéb leképezéssel (R20 mért mátrix). A
+  kompakt lista minden setlist-kártyáján egy `Wrap` mutatja tételenként a
+  jelvényt; a hiányzó dal NEVESÍTVE, külön látható szövegsorként jelenik meg
+  (`setlistV2ItemMissingSong({songId})`), nem az ikon-jelvény belsejében. Az
+  editor-sheet (expanded nézet) minden tétel `leading` szerepében ugyanezt a
+  jelvényt mutatja; a tétel `title`-ja már eddig is a songId-t írta ki, ez
+  változatlan maradt.
+
+### Miért ikon-only a `SetlistItemAvailabilityBadge`
+
+Első implementáció Row+Text-et rakott a `missingSong` ágba. A helyi golden
+smoke-futás (`flutter test --update-goldens`, csak ellenőrzésre, nem
+commitolva) egy VALÓDI `RenderFlex overflowed` hibát mért: a jelvény két
+KORLÁTOZOTT-szélességű helyen él — a kompakt kártya `Wrap`-jában (a `ListTile`
+subtitle-oszlopa szűkíti) és az editor-sheet `ListTile.leading` sávjában
+(fix, keskeny terület). A jelvény ezért MINDIG csak ikon; a nevesítés
+(A6) a hívó oldalon, önálló, sortörő `Text` widgetként történik.
+
+### Acceptance-mátrix — melyik teszt bizonyítja melyik cellát
+
+| # | Bizonyíték | Eredmény |
+|---|---|---|
+| A1 | `song_asset_state_test.dart`: „a fully local song … opens … offline" | ZÖLD — `InMemorySongRepository`, nulla hálózati provider |
+| A2 | `song_library_test.dart`: „the source badge is visible…"; `song_asset_state_test.dart` overview-fixture forrás+licenc sora | ZÖLD |
+| A3 | `song_library_test.dart`: „tapping a read-only … opens view mode, not the editor" + „an editable … still opens the editor" | ZÖLD |
+| A4 | `song_asset_state_test.dart`: „a missing backing asset flags playback only…" | ZÖLD (+ mutáció, lásd lent) |
+| A5 | `setlist_list_test.dart`: „setlist order and per-item readiness…" | ZÖLD |
+| A6 | `setlist_list_test.dart`: „a missing song is named…" | ZÖLD |
+| A7 | `song_library_test.dart`: „legacy /setlists still redirects…" (unit-szintű regresszió `legacyRedirects` ellen — a `lib/app/routing/` fa NEM módosult, R18 szerint erre nem is volt szükség) | ZÖLD |
+| A8 | `song_library_test.dart`: „search text and source filter persist after pushing and returning…" | ZÖLD |
+| A9 | `test/ui/goldens/e13_r23_screens_golden_test.dart` + 6 PNG a diffben | ZÖLD (lásd lent) |
+
+### Valódi-sértés próba (KÖTELEZŐ, §6.1/A4)
+
+A `song_overview_screen.dart`-ban ideiglenesen az `SongTrainerSetupStatus.ready
+when state.hasMissingBackingAsset` ágat egy teljes-dal-letiltásra cseréltem
+(`Center(child: Text('blocked: missing backing asset'))`), majd lefuttattam
+`flutter test test/features/songs/song_asset_state_test.dart`-ot:
+
+- **Mért kimenet:** az **A4** cella („a missing backing asset flags playback
+  only — the rest of the song stays usable") PIROSRA váltott —
+  `find.byKey(const Key('song-overview-missing-backing'))` `findsOneWidget`
+  helyett `Found 0 widgets` (a teljes törzs a letiltó `Text`-re cserélődött,
+  a jelző eltűnt) —, az A1 cella zöld maradt (nincs hiányzó eszköz abban a
+  fixtúrában).
+- A mutációt visszaállítottam; `git diff` a fájlon üres, a
+  `song_asset_state_test.dart` mindkét tesztje újra ZÖLD.
+
+### Golden-felvétel (A9)
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r23_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r23_screens_golden_test.dart
+```
+
+Mindkettő 0 kilépési kóddal, 6/6 teszt zöld (`song library`, `song overview`,
+`setlist list v2` × {`compact`, `compact_scale2`}). A hat PNG
+(`test/ui/goldens/goldens/e13_r23_*.png`) commitolva. A lokális ARM
+`--update-goldens` futás csak a Row-overflow felderítésére szolgált — a
+generált PNG-k törölve lettek, mielőtt az x86 `record` felvette a véglegeset
+(ADR 0426, §0.0/B/R14).
+
+### A záró kapu
+
+```
+tools/round-gate.sh test/features/songs/song_library_test.dart test/features/songs/song_asset_state_test.dart test/features/songs/setlist_list_test.dart test/app/navigation/ test/features/song_trainer/presentation/ test/app/routing/app_router_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+Mind a 16 lépés (`format`, `analyze`, 11× `test`, `architecture`, `secrets`,
+`l10n`) ZÖLD. A négy R17-pin (`song_library_screen_test.dart`,
+`song_overview_screen_test.dart`, `song_trainer_accessibility_test.dart`,
+`app_router_test.dart:303`) zöld maradt — egyik `Key`/`Semantics`/szöveg-finder
+sem mozdult. A `test/ui/ui_inventory_test.dart` diffje ÜRES (86, R19 szerint).
+
+### Nevesített follow-up
+
+- **`SetlistListScreenV2` route-regisztrációja** — a képernyő ma nincs
+  GoRoute-on (R20 mért szerkezeti korlát); a route-bekötés és az A5/A6
+  éles navigációs próbája a **E13-R25** (setlist-run) kör dolga.
+- A Library lista licenc-oszlopa: a `SongSummary` indexe nem hordoz
+  `copyright`-ot, ezért a lista csak forrást mutat, a licenc kizárólag az
+  Overview-n jelenik meg (a teljes dokumentum egyszeri betöltése után). Ha egy
+  jövőbeli kör a listában is licencet akar mutatni, az a `SongSummary` index
+  bővítését igényli (application/domain réteg — ezen a körön kívül esik).
+
 ## 11. Review — a Claude tölti ki
