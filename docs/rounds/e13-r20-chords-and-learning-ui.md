@@ -811,4 +811,32 @@ bitre azonos maradt (`git status` szerint nincs bennük változás).
 futás: `flutter test test/features/chords/ test/features/learn/` →
 **235 zöld**, egyetlen, a kártól független `~1` skip változatlanul.
 
+### Javító kör (3. javító kör) — a H5 halt feloldása (ADR 0426)
+
+A H5 halt gyökéroka nem termékkód-hiba volt: a goldeneket ez a box aarch64-en
+veszi fel, a kaput adó CI `ubuntu-latest` (x86_64) pedig nulla toleranciájú
+`LocalFileComparator`-ral fut, ezért minden ARM-on felvett golden pontosan az
+ISA-eltérésnyi (1–8 px) diffet hozza vissza a CI-n. Fix nem termékkódban,
+hanem a felvétel HELYÉBEN: `tools/golden-x86.sh` a CI-vel azonos Flutter
+3.44.2 / linux-amd64 konténerben (qemu-user emuláció) veszi fel és ellenőrzi
+a golden-készletet.
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r20_screens_golden_test.dart
+```
+
+- `record` kilépési kód: **0** (6/6 teszt zöld, ~60 s emuláció alatt).
+- `check` kilépési kód: **0** (6/6 teszt zöld, "All tests passed!", ~57 s).
+- Változott PNG: pontosan **3** — `e13_r20_chord_detail_compact.png`,
+  `e13_r20_chord_detail_compact_scale2.png`, `e13_r20_learning_path_compact.png`
+  — egyezik a review §7.2/§8 által jelzett három cellával (1 / 1 / 8 px diff).
+  Nem keletkezett `test/ui/goldens/failures/` könyvtár.
+
+**Záró gate (3. javító kör):** `tools/golden-x86.sh check` a fenti úton
+0-val zárt (6/6 zöld). A `tools/round-gate.sh` a brief §6-ban megadott 16
+útvonallal — **21/21 ZÖLD** (format, analyze, 16 teszt, architecture,
+secrets, l10n) — termékkód/teszt nem változott ebben a körben, csak a
+golden-PNG-k binárisai.
+
 ## 11. Review — a Claude tölti ki
