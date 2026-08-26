@@ -1,5 +1,95 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R20 KÉSZ — Chord Library, Learning Path és Lesson UI migráció — PR [#462](https://github.com/wolfcasaba/strumsight/pull/462), squash `ad5718d1` (2026-08-26)
+
+Az UI-11–UI-14 migrációja közös Learning Mode komponensekre, **balkezes** és
+**offline** tartalomtámogatással (SDD Ch13 Kör 20). Kötött döntések:
+[ADR 0282](docs/adr/0282-diagram-text-alternative-and-handedness.md) — a kör az
+ADR-t **hivatkozta, nem írta újra** (merge-elt döntés, `docs/adr/` tilos zóna;
+a brief §0.0/R5 mérte ki).
+
+**Amit hoz.** ÚJ `lib/core/design_system/components/music/ss_chord_diagram.dart`:
+a diagram rajza ÉS a szöveges fogás-alternatíva **egyetlen leképezésből**
+(`readingOrder` → a festő is ezt használja, tehát a két csatorna nem tud
+szétcsúszni). Balkezes módban **a rajz és a felolvasott húrsorrend is**
+tükrözött — ez az ADR 0282 §Döntés 2. szerint VISSZAFORDÍTJA a round-88-as
+döntést, amit a `chord_diagram_semantics_test.dart` addig az ellenkezőjére
+pinnelt. A design system feature-providert nem olvas: a kezesség és a fogás
+paraméter, a `leftHandedProvider`-t a feature-réteg watch-olja. Továbbá:
+akkordtár keresés/szűrés/kedvencek + állapotmegőrzés, a részletnézetből indított
+gyakorlás a **megnyitott** akkorddal paraméterez (`Navigator.push`, ÚJ útvonal
+nélkül — §0.0/R8), a tanulási út lineáris hozzáférhető alternatívával és a
+zárolás **okával**, és a hiányzó erőforrás (nincs diagram-forma / nincs
+lejátszható kíséret) nem omlaszt és nem tűnik el némán. A meglévő haladás a
+migráció után megmarad (A5, valódi-sértés próbával mérve).
+
+**HÁROM javító kör** (`docs/reviews/e13-r20-review.md`, végső verdikt
+**APPROVED**, 0 nyitott lelet):
+
+1. **MAJOR-1** — az akkord-részletnézet EGYETLEN belépője 40×40 dp-s érintési
+   cél volt, ráadásul `right: -6`-tal 6 dp-vel a `Stack`-en KÍVÜLRE lógva (a
+   tényleges találati felület ≈ 34×40 dp), miközben az
+   [ADR 0280](docs/adr/0280-accessibility-contract-and-live-region-budget.md)
+   §Döntés 5. ≥ 48 dp-t ír elő. A gate végig ZÖLD volt: a
+   `chord_tile_a11y_test.dart` a semantics-CÍMKÉKET méri, nem a célméretet — a
+   mérce **nem volt jelen**, nem pedig teljesült. A reviewer eldobható
+   próbateszttel fogta meg; a javításhoz ÚJ őr-cella készült, amit a reviewer
+   valódi-sértés próbája (a 28 dp-s `constraints` visszaállítása) pontosan az
+   eredeti `Size(40.0, 40.0)`-val pirosra váltott.
+2. **L486 színforrás-osztály** — a `_LessonTile` `Card`-ja és az `ActionChip`
+   explicit szín nélkül seed-származtatott (`ColorScheme.fromSeed`, HCT
+   lebegőpont) felületet kapott, ami golden-diffet adott. Konstans
+   `AppPalette` forrásra állítva: `learning_path_compact` **5976 px → 8 px**, a
+   párja teljesen zöldre váltott. **Kontrollesettel igazolva:** a `Card` nélküli
+   chord library végig zöld volt, a konstans színű `_ContinueCard` pedig
+   ugyanazon a bukó képernyőn nem adott diffet.
+3. **H5 halt feloldása** — a maradék 3 cella (1 / 8 / 1 px, mind **0,00%**) nem
+   színforrás-kérdés volt, hanem **cross-architektúra raszterizációs rés**:
+   ARM-on felvett PNG, x86-on verifikálva, nulla toleranciájú komparátorral. A
+   kör H5-tel megállt; az [ADR 0112](docs/adr/0112-self-healing-pipeline.md)
+   önjavító köre a rést bezárta
+   ([ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md),
+   `52ce9003`), és a goldenek **a merge-kapu architektúráján** kerültek
+   felvételre (`tools/golden-x86.sh record`). **Termékkód egyetlen sora sem
+   változott** ebben a javító körben — a diff pontosan 3 PNG + a brief §10 —, és
+   a kód elsőre zöld lett a kapun.
+
+**A mérce nem lazult.** A komparátor ugyanaz a nulla toleranciájú
+`LocalFileComparator`, a 6 golden-cella `skip` nélkül megvan, a
+`.github/**`/`tools/**`/`round-gate.sh` érintetlen. A golden-cellákat ezután
+**kettő** mérce méri (lokálisan az x86-konténer, a kapuban a CI teljes
+suite-ja), miközben a korábbi lokális ARM-mérésük bizonyítottan hamis zöldet
+adott.
+
+**Mérve, a reviewer saját kezével:** `tools/golden-x86.sh check` a halt utáni
+HEAD-en **pontosan a CI három celláját** reprodukálta (1 / 8 / 1 px, EXIT=10)
+~75 másodpercben a 17 perces exact-SHA futás helyett — ez az ADR 0426
+eszközének független hitelesítése is. A javítás után **6/6 zöld, EXIT=0**.
+
+**Zöld kapu.** `tools/round-gate.sh` **21/21 zöld** (16 teszt-útvonal, izolált
+`/tmp` klónban, `prepare-flutter-generated.sh` után), `test/features/chords/` +
+`test/features/learn/` **235 zöld**, scope-audit **OK** (4 útvonal). Exact-SHA a
+merge SHA-n (`065a24fe`): Full Gate
+[32929307814](https://github.com/wolfcasaba/strumsight/actions/runs/32929307814)
++ Router CI
+[32929309630](https://github.com/wolfcasaba/strumsight/actions/runs/32929309630)
+mind **success**. A záró review-commit új HEAD-et képzett, ezért mindkét kapu
+ÚJRA futott a végleges SHA-n — a `1cd05fc6`-os zöld futás önmagában nem
+mentesített (ADR 0086 §2).
+
+**Két folyamati lelet, amit ez a kör mért ki:**
+
+- a §0.3 upstream-szinkron konfliktusa a kör SAJÁT briefjében **tisztán additív**
+  volt (branch §0.0/R5–R13 vs. `main` §0.1/R14) — a helyes feloldás MINDKETTŐT
+  megőrzi. Ugyanezt a merge-et az önjavító session már publikálta, és a két
+  független feloldás fája **bitre azonos** lett;
+- a wrapper `scope_audit=VIOLATION`-t jelzett EGYETLEN útvonalra: az
+  orchestrátor SAJÁT, követetlen prompt-fájljára a munkapéldányban. Ez
+  hamis-pozitív (nem implementer-kimenet), és ugyanaz az osztály, amit a review
+  §1.1 az 1. körön már rögzített — a prompt-fájl helye a munkapéldányon KÍVÜL
+  van. Lásd [L494](docs/LESSONS.md#l494).
+
+
 ## 🔧 ÖNJAVÍTÓ KÖR — E13-R20 / H5 feloldva: a golden-raszterizációt a MERGE-KAPU architektúráján mérjük (2026-08-26)
 
 Az E13-R20 kód-oldala kész volt (9/9 acceptance, gate 22/22 zöld kétszer), de az
@@ -7280,7 +7370,26 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-25):** `main` @ `e046eaaa` — E13-R19 Tuner és
+**Aktuális állapot (2026-08-26):** `main` @ `ad5718d1` — E13-R20 Chord Library,
+Learning Path és Lesson UI migráció, PR
+[#462](https://github.com/wolfcasaba/strumsight/pull/462), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **3 javító kör** (MAJOR-1: 40 dp-s
+érintési cél a 48 dp-s ADR 0280 szerződés alatt, ZÖLD gate mögött — a kör
+cellái a semantics-CÍMKÉKET mérték, nem a célméretet; 2 MINOR; az L486
+színforrás-osztály; végül a **H5 golden-rés**). Review **APPROVED**, 0 nyitott
+BLOCKER/MAJOR/MINOR (`docs/reviews/e13-r20-review.md`). A kör **ADR-t nem írt**
+— a kiosztott `0282` (diagram szöveges alternatíva és kezesség) 2026-08-15 óta
+merge-elt, a kör hivatkozta. Exact `065a24fe`: Full Gate 32929307814 + Router CI
+32929309630 mind success; a záró review-commit új HEAD-et képzett, ezért
+MINDKÉT kaput újra kellett dispatch-elni a végleges SHA-n. A H5 haltot az
+ADR 0112 önjavító köre oldotta fel ([ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md),
+`52ce9003`): a goldenek mostantól a MERGE-KAPU architektúráján (x86_64,
+`tools/golden-x86.sh`) készülnek — a javító kör termékkódot NEM módosított.
+Post-merge `tools/round-gate.sh` a friss `main`-en zöld. Részletesen a fejléc
+✅-blokkban.
+
+**Előző (2026-08-25):** `main` @ `e046eaaa` — E13-R19 Tuner és
 Metronome UI migráció, PR
 [#460](https://github.com/wolfcasaba/strumsight/pull/460), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -8088,6 +8197,29 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 > egy néma `&&`-lánc-bukás miatt először rossz SHA-ra ment a dispatch).
 
 ## 5. Last completed round
+
+**E13-R20 — Chord Library, Learning Path és Lesson UI** (PR
+[#462](https://github.com/wolfcasaba/strumsight/pull/462), squash `ad5718d1`,
+ADR [0282](docs/adr/0282-diagram-text-alternative-and-handedness.md) — merge-elt,
+a kör hivatkozta, nem írta). Az akkorddiagram a rajz mellé **szöveges
+fogás-alternatívát** kapott EGYETLEN leképezésből, és balkezes módban a rajz ÉS
+a felolvasott húrsorrend is tükrözött (ez visszafordítja a round-88-as döntést,
+amit a szemantika-teszt addig az ellenkezőjére pinnelt). Továbbá: akkordtár
+keresés/szűrés/kedvencek állapotmegőrzéssel, a részletnézetből a **megnyitott**
+akkorddal paraméterezett gyakorlás, lineáris hozzáférhető tanulási út a zárolás
+OKÁVAL, és hiányzó erőforrásnál sem összeomlás, sem néma eltűnés. A meglévő
+haladás megmarad. **3 javító kör:** (1) MAJOR-1 — az egyetlen belépő 40×40 dp-s
+érintési célja az ADR 0280 §5 ≥ 48 dp alatt, ZÖLD gate mögött, mert a kör
+cellái a semantics-címkéket mérték, nem a célméretet (a reviewer eldobható
+próbateszttel fogta meg; a javítás ÚJ őr-cellát kapott); (2) az L486
+színforrás-osztály (`ColorScheme.fromSeed` HCT-lebegőpont → konstans
+`AppPalette`), kontrollesettel igazolva: 5976 px → 8 px; (3) a **H5 halt**
+feloldása — a maradék 3 golden-cella (1 / 8 / 1 px, mind 0,00%)
+cross-architektúra raszterizációs rés volt, amit az ADR 0112 önjavító köre zárt
+be ([ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md)):
+a goldenek a MERGE-KAPU architektúráján (x86_64) készülnek, termékkód-változás
+NÉLKÜL. 0 nyitott lelet a merge után. Exact `065a24fe`: Full Gate 32929307814 +
+Router CI 32929309630 mind success. Részletesen a fejléc ✅-blokkban.
 
 **E13-R15 — Lokalizációs resilience és content style** (PR
 [#450](https://github.com/wolfcasaba/strumsight/pull/450), squash `d21d225f`,
@@ -9102,7 +9234,29 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > köztük egy emberi döntéssel feloldott H3 lista-tágítással. **Olvasd el a
 > §0.0-t a kör indítása előtt; a pre-flight NE derítse fel újra.**
 
-> **Frissítve 2026-08-24 (E13-R15 után).** A **Ch13 sáv következő köre:
+> **Frissítve 2026-08-26 (E13-R20 után).** A **Ch13 sáv következő köre:
+> `E13-R21` — Practice session UI**
+> (`docs/rounds/e13-r21-practice-session-ui.md`, engine a queue-ban
+> `sonnet-impl`, előre kiosztott ADR: **nincs** — a queue `adr` oszlopa
+> `nincs`, tehát ha a kör normatív döntést hoz, a pre-flight
+> `tools/round-slots.py reserve-adr --round E13-R21`-gyel foglaljon, `ls docs/adr
+> | tail`-lel SOHA).
+>
+> **A golden-sáv MOSTANTÓL más:** az [ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md)
+> óta a goldeneket a MERGE-KAPU architektúráján (x86_64) vesszük fel és
+> ellenőrizzük — `tools/golden-x86.sh record|check` —, és a golden-teszt
+> útvonala **NEM kerül** a lokális `round-gate.sh` `gate_tests` listájára (az
+> ARM-futás rossz gépet mér). Az E13-R21…R36 briefek §7-je ezt még a RÉGI,
+> `--update-goldens`-es alakban írhatja: a pre-flight írja át §0.0
+> brief-revízióval. Ez **szűkítés a kapu felé, nem lazítás** — mérve: az
+> E13-R17 és az E13-R20 együtt **öt vak CI-kört** fizetett ki a résért
+> ([L486](docs/LESSONS.md#l486), [L493](docs/LESSONS.md#l493)).
+>
+> **Az orchestrátor prompt-fájlja a munkapéldányon KÍVÜLRE megy**
+> ([L494](docs/LESSONS.md#l494)) — különben a gépi scope-audit a saját
+> fájlodra ad `VIOLATION`-t, és a kör-jelzés hamis `stopped`-ra vált.
+>
+> **Korábbi bejegyzés (2026-08-24, E13-R15 után) — teljesítve:**
 > `E13-R16` — Launch és onboarding**
 > (`docs/rounds/e13-r16-launch-and-onboarding.md`, engine a queue-ban
 > `sonnet-impl`, előre kiosztott ADR **`0281`** — a queue `adr` oszlopa

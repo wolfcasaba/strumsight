@@ -19071,3 +19071,64 @@ futtatható; a workflow-k Flutter-pinje EGYETLEN érték, és az eszköz abból
 építi a képet (a Dockerfile nem rögzíthet saját verziót); a felderítés lefedi
 az ÖSSZES `matchesGoldenFile`-t hívó teszt-fájlt. A fix ELŐTT **3 eset
 piros**, utána zöld; a `router-ci.yml` `tools/**` triggere miatt CI-ban is fut.
+
+---
+
+## L494 — Az orchestrátor SAJÁT prompt-fájlja a munkapéldányban hamis `scope_audit=VIOLATION`-t és hamis `stopped` kör-jelzést okoz (E13-R20, javító kör #3, 2026-08-26)
+
+**A mérés.** Az E13-R20 javító kör #3 dispatch-je előtt az orchestrátor a
+javító-prompt fájlt a munkapéldány gyökerébe írta
+(`/home/ubuntu/ss-sonnet-impl-e13-r20/.round-prompt-e13-r20-fix3.md`). Az
+implementer helyesen dolgozott — 4 útvonalat commitolt, mind az `allowed_paths`
+listáján —, a wrapper mégis ezt jelezte:
+
+```
+status=stopped
+summary=scope-sértés: a diff kilógott a brief engedélyezett fájljaiból
+implementer_status=done
+scope_audit=VIOLATION
+scope_audit_changed=5
+scope_audit_violations=path outside allowed scope: .round-prompt-e13-r20-fix3.md
+```
+
+Az `implementer_status=done` és a `status=stopped` **ellentmondása** maga az
+ujjlenyomat: az implementer befejezte a munkát, a gépi audit viszont egy olyan
+fájlt látott a fán, amit nem az implementer hozott létre.
+
+**A gyökérok.** A `scope-audit` a munkapéldány TELJES változás-halmazát nézi, a
+követetlen fájlokat is — nem tesz különbséget „implementer-kimenet" és
+„orchestrátor-melléktermék" között, és nem is tehetne: egy scope-őrnek éppen az
+a dolga, hogy ne higgyen a szándéknyilatkozatnak. A prompt-fájl HELYE volt a
+hiba, nem az őr.
+
+**A javítás.** Az orchestrátor prompt-fájlja a munkapéldányon **KÍVÜLRE** megy
+(pl. `/tmp/round-prompt-<kör>.md`), és a dispatch abszolút útvonallal hivatkozza.
+Eltávolítás után az audit azonnal tiszta:
+
+```
+$ python3 tools/scope-audit.py --repo … --brief … --base 1e75d691a0d8
+Legacy scope audit OK (1e75d691a0d8..1cd05fc646cb, 4 changed path(s), 0 generated/ignored)
+```
+
+**Miért fontos, hogy ez MÁSODSZOR fordult elő.** Ugyanezt az osztályt az
+E13-R20 ELSŐ körének review-ja már rögzítette (`docs/reviews/e13-r20-review.md`
+§1.1: `dirty_files=2`, „a két fájl az orchestrátor SAJÁT prompt-fájlja"). Akkor
+a jelzés csak `dirty_files`-ban jelent meg és a review kivizsgálta; a javító
+körön viszont már **terminális `stopped` jelzéssé** vált. Ugyanaz a rossz szokás
+súlyosbodott, mert a jelzés-szótár szigorodott közben — a lecke leírása
+önmagában tehát nem védett meg, csak a szokás megváltoztatása véd.
+
+**Az általánosítás.** Egy `stopped`/`VIOLATION` jelzésnél az ELSŐ kérdés nem az,
+hogy „mit rontott el az implementer", hanem hogy **a felsorolt útvonalak közül
+melyiket hozta létre valóban az implementer**. Az orchestrátor saját
+mellékterméke (prompt, jegyzet, kapart log) a munkapéldányban a mérést rontja
+el, nem a kört — és a helyes válasz a melléktermék eltávolítása, SOHA nem az
+`allowed_paths` tágítása (az H3 lenne, [L478](#l478)).
+
+**Őrteszt:** nincs — a hibaosztály nem a repóban él, hanem az orchestrátor
+munkamódszerében (hova írja a prompt-fájlt), amire a fa nem tud cellát adni. A
+védelem a workflow-szövegbe került: `HANDOFF.md` §6 és a
+`sdd-round-driver` skill dispatch-lépése. A gépi FELISMERÉS viszont már ma is
+megvan és működött: a `scope_audit` pontosan megnevezte a fájlt, és az
+`implementer_status=done` + `status=stopped` ellentmondás elárulta, hogy a
+lelet nem a kör diffjéből jön.
