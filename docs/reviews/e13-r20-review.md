@@ -6,6 +6,10 @@
 - **Review-elt HEAD:** `2b949692` (induló HEAD: `89a36dc8`, a pre-flight commit)
 - **Dátum:** 2026-08-26
 - **VERDIKT (1. kör):** ⛔ **CHANGES REQUESTED** — 1 MAJOR, 2 MINOR
+- **VÉGSŐ VERDIKT (javító kör #3 után, `1cd05fc6`):** ✅ **APPROVED** — 0 nyitott
+  lelet, teljes zöld kapu. A részletes indoklás: **[§10](#10-végső-döntés--approved)**.
+  Ez a jelentés a kör TELJES történetét őrzi: §1–§5 az 1. kör, §6 a javító kör #1,
+  §7–§8 a javító kör #2 és a H5 halt, §9–§10 a javító kör #3 és a merge-döntés.
 
 ---
 
@@ -309,7 +313,14 @@ Ezért a kör **H5-tel megáll**: nem azért, mert a kód rossz, hanem mert a z�
 kapu egy olyan infrastrukturális réshez ért, amit csak tágabb jogosultságú
 (önjavító / emberi) döntés zárhat be.
 
-## 8. VÉGSŐ DÖNTÉS: ⛔ **HALT — H5** (CI a körön háromszor piros)
+## 8. DÖNTÉS a halt pillanatában: ⛔ **HALT — H5** (CI a körön háromszor piros)
+
+> ⚠ **Ezt a szakaszt a §9–§10 FELÜLÍRJA.** A halt a §7.2 szerint egy
+> infrastrukturális réshez ért; az ADR 0112 önjavító köre a rést bezárta
+> ([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md),
+> merge-elve a `main`-re `52ce9003`-ként), és a kör a javító kör #3-mal
+> folytatódott. A §8 alábbi tartalma a halt pillanatának hű jegyzőkönyve,
+> történeti értékkel — a kör VÉGSŐ verdiktje a **§10**.
 
 **A kód-oldal KÉSZ és bizonyított:**
 
@@ -327,3 +338,163 @@ lazul). A kör-branch, a review és a teljes diagnózis publikálva; a folytatá
 az önjavító kör dolga a §7.2 három útjának valamelyikével (a **2. út**, a
 goldenek CI-oldali felvétele, tűnik a szerkezetileg helyesnek — az szünteti meg
 a felvétel↔verifikáció architektúra-eltérést, ahelyett hogy a mércét lazítaná).
+
+---
+
+## 9. Javító kör #3 — a H5 halt feloldása (`1cd05fc6`)
+
+- **Review-elt HEAD:** `1cd05fc6` (a javító kör #3 commitja)
+- **Dátum:** 2026-08-26, orchestrátor-ülés (Claude, Opus 5)
+- **Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
+
+### 9.1 Upstream-szinkron a javítás ELŐTT (ADR 0087 §0.3)
+
+A folytatás nem indulhatott a branch régi szerződésével. Mérve:
+
+```
+$ git merge-base --is-ancestor origin/main HEAD
+ANCESTOR: NO — needs merge
+```
+
+Az önjavító kör (`52ce9003`) beépítve; a konfliktus **kizárólag** a kör SAJÁT
+briefjében állt elő, és **tisztán additív** volt mindkét oldalon: a branch
+§0.0/R5–R13 pre-flight mérései vs. a `main` §0.1/R14 golden-revíziója. A
+feloldás **mindkettőt megőrzi** — a `main`-ről semmi nem esett ki (a
+`git diff origin/main` a briefre csak a branch saját §0.0/R9-szűkítését és a
+státuszsort mutatja).
+
+**Mérve, hogy ez nem elveszett munka:** ugyanezt a merge-et az önjavító session
+már publikálta (`1e75d691`), és a két, EGYMÁSTÓL FÜGGETLEN feloldás fája
+**bitre azonos** (`git diff HEAD FETCH_HEAD` → üres). A duplikátum eldobva, a
+branch a publikált `1e75d691`-re állítva.
+
+### 9.2 A lelet MÉG NYITOTT volta — a reviewer saját mérése
+
+Nem bemondásra: a halt utáni HEAD-en (`1e75d691`) magam futtattam a merge-kapu
+architektúráján:
+
+```
+$ tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart
+Golden "goldens/e13_r20_chord_detail_compact.png":        0.00%, 1px diff
+Golden "goldens/e13_r20_learning_path_compact.png":       0.00%, 8px diff
+Golden "goldens/e13_r20_chord_detail_compact_scale2.png": 0.00%, 1px diff
+00:55 +3 -3: Some tests failed.
+EXIT=10
+```
+
+**Pontosan a full-gate [32918668534](https://github.com/wolfcasaba/strumsight/actions/runs/32918668534)
+három cellája, pontosan 1 / 8 / 1 px.** Ez egyben az ADR 0426 eszközének
+független hitelesítése is: a CI verdiktjét ~75 másodpercben reprodukálja, a
+17 perces exact-SHA futás helyett.
+
+### 9.3 A javítás és a leletenkénti zárás
+
+| Lelet | Javítás | Az ellenőrzés bizonyítéka (mind SAJÁT futtatás) |
+|---|---|---|
+| **H5 / 3 golden-cella** | `tools/golden-x86.sh record` — a goldenek a **merge-kapu architektúráján** (Flutter 3.44.2 / linux-amd64, qemu-user) újrafelvéve | `tools/golden-x86.sh check` → **`00:55 +6: All tests passed!`, EXIT=0**, `failures/` könyvtár NEM keletkezett |
+
+**A diff pontosan akkora, amekkorának lennie kell** — 3 PNG, se több, se
+kevesebb, egyezően az ADR 0426 3. mérésével („a felvétel PONTOSAN 3 PNG-t írt
+át") és a §7.2-ben megnevezett három cellával:
+
+```
+$ git diff --name-status 1e75d691..1cd05fc6
+M	docs/rounds/e13-r20-chords-and-learning-ui.md
+M	test/ui/goldens/goldens/e13_r20_chord_detail_compact.png
+M	test/ui/goldens/goldens/e13_r20_chord_detail_compact_scale2.png
+M	test/ui/goldens/goldens/e13_r20_learning_path_compact.png
+```
+
+**Termékkód és teszt NEM változott** ebben a javító körben — ahogy a
+findings-lista előírta. Az A1–A9 acceptance-bizonyítékok (§3) ezért
+érintetlenül állnak; a §1.4 három valódi-sértés próbája és a §6 48 dp-s
+őr-próbája változatlanul érvényes.
+
+### 9.4 A mérce NEM lazult — tételesen
+
+Az ADR 0426 §„Amit ez a döntés NEM tesz" pontjai a diffen ellenőrizve:
+
+| Állítás | Mérés |
+|---|---|
+| a komparátor változatlan | a `LocalFileComparator` nulla toleranciájú; a teszt-fájl (`e13_r20_screens_golden_test.dart`) **nem módosult** |
+| a golden-készlet változatlan | 6 `matchesGoldenFile` cella, `skip` nélkül; a PNG-k száma és neve azonos |
+| a `.github/**` és a `tools/**` érintetlen | a kör diffje 4 útvonal, egyik sem az |
+| a `tools/round-gate.sh` változatlan | a kör diffje nem érinti |
+
+A golden-cellákat ezután **kettő** mérce méri (lokálisan az x86-konténer, a
+kapuban a CI teljes suite-ja) — miközben a korábbi lokális ARM-mérésük
+bizonyítottan hamis zöldet adott.
+
+### 9.5 Scope-audit
+
+A wrapper jelzése elsőre `scope_audit=VIOLATION` volt, EGYETLEN útvonalra:
+`.round-prompt-e13-r20-fix3.md`. **Ez az orchestrátor SAJÁT, követetlen
+prompt-fájlja, nem implementer-kimenet** — ugyanaz a hamis-pozitív osztály,
+amit a §1.1 az előző körön már rögzített (`dirty_files=2`). A fájl a
+munkapéldányon KÍVÜLRE helyezve, az audit újrafuttatva:
+
+```
+$ python3 tools/scope-audit.py --repo … --brief … --base 1e75d691a0d8
+Legacy scope audit OK (1e75d691a0d8..1cd05fc646cb, 4 changed path(s), 0 generated/ignored)
+AUDIT_EXIT=0
+```
+
+Mind a 4 útvonal a brief `allowed_paths`-án belül van (és a javító körre
+SZŰKÍTETT két-elemű listán is: `test/ui/goldens/goldens/**` + a brief §10).
+
+### 9.6 Gate — újra, izolált klónban, saját kézzel
+
+`/tmp/review-e13-r20-fix3` (friss klón a `1cd05fc6` HEAD-ről +
+`prepare-flutter-generated.sh`), a brief §7 szerinti 16 útvonallal:
+
+```
+MINDEN GATE ZÖLD.
+format · analyze · 16 teszt-útvonal · architecture · secrets · l10n  → 21/21 zöld
+GATE_EXIT=0
+```
+
+### 9.7 CI — exact-SHA, a merge SHA-ján
+
+| Workflow | Run | Head SHA | Állapot |
+|---|---|---|---|
+| `full-gate.yml` | [32928072029](https://github.com/wolfcasaba/strumsight/actions/runs/32928072029) | `1cd05fc6` | ✅ **success** |
+| `router-ci.yml` | [32928068125](https://github.com/wolfcasaba/strumsight/actions/runs/32928068125) | `1cd05fc6` | ✅ **success** |
+
+A CI-tervező (`tools/round-ci-plan.py`) verdiktje: `dispatch: ["full-gate.yml"]`,
+`apk_required: false`, `router_ci_expected: true` (a `docs/rounds/**` útvonalon).
+Mindkét futás `headSha`-ja egyezik a lokális HEAD-del — a run tehát
+merge-evidencia (ADR 0086 §2). Az `origin/main` a dispatch óta **nem mozdult**
+(`52ce9003`).
+
+> A jelen review-commit új HEAD-et képez, ezért a **teljes exact-SHA kapu
+> ÚJRA fut** a végleges merge SHA-n; a merge kizárólag annak zöldje után
+> történik. A fenti két run a `1cd05fc6` fa-tartalmát hitelesíti, amely a
+> review-commit után **bitre azonos** marad (a commit csak ezt a jelentést
+> adja hozzá).
+
+---
+
+## 10. VÉGSŐ DÖNTÉS: ✅ **APPROVED**
+
+Minden lelet zárva, minden acceptance-cella bizonyítva, a zöld kapu hiánytalan:
+
+- **0 nyitott BLOCKER / MAJOR / MINOR** — a MAJOR-1, MINOR-1, MINOR-2 (§6), az
+  L486 színforrás-osztály (§7.1) és a H5 golden-rés (§9) mind lezárva;
+- mind a **9 acceptance-cella** teljesül (§3), reviewer valódi-sértés
+  próbáival alátámasztva (A2 → 3 cella pirosra vált, A3, A5, és a 48 dp-s őr);
+- `tools/round-gate.sh` **21/21 zöld**, izolált `/tmp` klónban, saját kézzel;
+- `tools/golden-x86.sh check` **6/6 zöld** a merge-kapu architektúráján;
+- `test/features/chords/` + `test/features/learn/`: **235 zöld**;
+- scope-audit **OK** (4 útvonal, 0 generated/ignored);
+- **Full Gate + Router CI success** a merge SHA-n.
+
+**A merge engedélyezett** az ADR 0052 változatlan zöld kapuja alatt.
+
+### 10.1 Amit ez a kör a láncnak tanít
+
+A H5 halt **nem** termékkód-hiba volt, és nem is a kör hibája: egy
+mérés-architektúra rés (ARM-felvétel ↔ x86-verifikáció, nulla tolerancia)
+tette a lokális kaput hamisan zölddé és a CI-t igazul pirossá. A javítás
+iránya a helyes volt — **a mérés helyét igazítottuk a kapuhoz, nem a mércét a
+kódhoz**. A rés bezárása után ugyanaz a kód, egyetlen sor termékváltoztatás
+nélkül, elsőre zöld lett a kapun.
