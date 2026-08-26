@@ -8,9 +8,11 @@
 library;
 
 export 'presentation/practice_route_args.dart';
+export 'presentation/screens/practice_history_screen.dart';
 export 'presentation/screens/practice_hub_screen.dart';
 export 'presentation/screens/practice_result_screen.dart';
 export 'presentation/screens/practice_session_screen.dart';
+export 'presentation/screens/speed_builder_screen.dart';
 export 'presentation/widgets/practice_mode_card.dart';
 export 'application/practice_setup_controller.dart';
 export 'application/practice_observation_gateway.dart'
