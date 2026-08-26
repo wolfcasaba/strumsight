@@ -65,7 +65,8 @@ gate_tests = [
   "test/features/chords/chord_diagram_text_test.dart",
   "test/features/learn/learning_path_test.dart",
   "test/features/learn/lesson_offline_test.dart",
-  "test/ui/goldens/e13_r20_screens_golden_test.dart",
+  # A golden-sáv a §0.1/R14 (ADR 0426) óta NEM a lokális ARM-gate-en fut:
+  # `tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart`
   "test/ui/ui_inventory_test.dart",
   "test/app/navigation/adaptive_scaffold_test.dart",
   "test/app/navigation/legacy_route_redirect_test.dart",
@@ -231,6 +232,60 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.1 BRIEF-REVÍZIÓ — 2026-08-26, ADR 0112 önjavító kör (a kör H5 haltja után)
+
+### R14 — a goldenek felvétele és ellenőrzése a MERGE-KAPU architektúráján (ADR 0426)
+
+A kör kód-oldala kész és bizonyított volt (9/9 acceptance, gate 22/22 zöld
+kétszer); a lánc azon állt meg, hogy **3 golden-cella** az exact-SHA CI-on
+háromszor piros volt, miközben a lokális gate zöld:
+`chord_detail_compact` **1 px**, `learning_path_compact` **8 px**,
+`chord_detail_compact_scale2` **1 px** — mind **0,00%**.
+
+**A MÉRT gyökérok** ([L493](../LESSONS.md#l493), [ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)):
+a goldeneket ez a box veszi fel (**aarch64**), a kaput adó CI `ubuntu-latest` =
+**x86_64**, a `LocalFileComparator` pedig nulla toleranciájú. Az ARM-on
+felvett PNG ARM-pixelt rögzít; újrafelvétellel ez nem szűnik meg, és
+termékkódból sem kerülhető meg (a maradék diff két körrajz — `CircleAvatar`,
+`drawCircle` — antialiasing-peremén van). Az [L486](../LESSONS.md#l486) ezt
+„ELVBŐL nem mérhető"-nek mondta ki; az önjavító kör megmérte: a box
+`qemu-user` amd64 emulációval futtat x86_64 konténert a CI-vel AZONOS
+`flutter 3.44.2` SDK-val.
+
+**Amit a kör MOSTANTÓL csinál:**
+
+1. A goldeneket **x86-on veszi fel**, nem ARM-on (a §7 `--update-goldens`
+   parancsa helyett):
+
+   ```bash
+   tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart
+   ```
+
+2. A golden-ellenőrzés a `tools/round-gate.sh`-ból **kikerül**, és külön,
+   architektúra-hű lépésként fut:
+
+   ```bash
+   tools/golden-x86.sh check test/ui/goldens/e13_r20_screens_golden_test.dart
+   ```
+
+   Ez **nem** a mérce gyengítése. A golden-cellákat a lokális ARM-futás
+   bizonyítottan HAMISAN mérte (mindig zöld volt, miközben a CI háromszor
+   piros), x86-felvétel után pedig bizonyítottan hamisan pirosnak mérné. A
+   cellák száma, a komparátor (nulla tolerancia) és a CI-oldali teljes suite
+   **változatlan**: a golden-készletet ezután lokálisan az x86-konténer, a
+   kapuban pedig a CI méri — vagyis kettő helyett is kettő méri, csak
+   mindkettő a helyes gépen.
+
+3. A `gate_tests` és a §7 `tools/round-gate.sh` parancssora ennek megfelelően
+   **azonos módon** szűkül (S12: a kettőnek tükröznie kell egymást). Az
+   `allowed_paths` **változatlan** — a `test/ui/goldens/` továbbra is a kör
+   írható területe, a PNG-ket commitolni kell.
+
+**Ami NEM változik:** az **A9** acceptance-cella (két keret: 412×915 compact
+portrait és ugyanaz `textScaler: 2.0` mellett), a golden-készlet mérete, a
+PNG-k commitolási kötelezettsége, és az, hogy a kör zöld kapuja az exact-SHA
+CI-futás.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -358,7 +413,7 @@ a szöveget ne → az **A2** cellának PIROSNAK kell lennie → állítsd vissza
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/chords/chord_library_test.dart test/features/chords/chord_diagram_text_test.dart test/features/learn/learning_path_test.dart test/features/learn/lesson_offline_test.dart test/ui/goldens/e13_r20_screens_golden_test.dart test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/offline_network_guard_test.dart test/core/screen_size_guard_test.dart test/features/songs/setlist_flow_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/chords/chord_library_test.dart test/features/chords/chord_diagram_text_test.dart test/features/learn/learning_path_test.dart test/features/learn/lesson_offline_test.dart test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/navigation/tab_state_restoration_test.dart test/app/offline_network_guard_test.dart test/core/screen_size_guard_test.dart test/features/songs/setlist_flow_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
@@ -368,8 +423,14 @@ KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r20_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r20_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r20_screens_golden_test.dart
 ```
+
+**A felvétel x86-on történik, nem ezen a boxon** (§0.1/R14, ADR 0426): a
+`~/flutter/bin/flutter test --update-goldens` ARM-pixelt rögzítene, amit a
+CI nulla toleranciával pirosra vált. A `check` a felvétel után KÖTELEZŐ, és a
+`tools/round-gate.sh` mellett fut (nem helyette).
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
