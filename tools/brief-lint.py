@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -240,6 +241,55 @@ def outside_screen_pins(repo: Path, screens, allowed_paths, gate_tests) -> dict[
             if import_uri in source and type_pattern.search(source):
                 pins.setdefault(screen, []).append(relative)
     return {screen: sorted(found) for screen, found in sorted(pins.items())}
+
+
+def tracked_directory_prefixes(repo: Path) -> set[str]:
+    """A verziókövetett fában TÉNYLEGESEN létező könyvtár-előtagok (S13).
+
+    Szándékosan `git ls-files`, nem lemez-bejárás: a gitignore-olt, generált
+    kimenet (`.dart_tool/`, `lib/l10n/app_localizations*.dart`, `build/`) nem
+    számít létező szerződésnek, és egy másik kör munkapéldánya sem szennyezheti
+    a mérést.
+    """
+    try:
+        listing = subprocess.run(
+            ["git", "-C", str(repo), "ls-files"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout
+    except OSError:
+        return set()
+    prefixes: set[str] = set()
+    for tracked in listing.splitlines():
+        parts = tracked.split("/")
+        for index in range(1, len(parts)):
+            prefixes.add("/".join(parts[:index]) + "/")
+    return prefixes
+
+
+def nearest_existing_ancestor(prefix: str, tracked_prefixes: set[str]) -> tuple[str, list[str]]:
+    """(a legközelebbi LÉTEZŐ ős, a valódi gyerekkönyvtárai) — a javítás anyaga.
+
+    A pre-flight enélkül `find`-dal keresi ki ugyanezt (L497: `find
+    lib/features/practice -type d` → `application data domain presentation`),
+    ezért a lelet maga adja oda: a javítás így útvonal-csere, nem nyomozás.
+    """
+    parts = prefix.rstrip("/").split("/")
+    for cut in range(len(parts) - 1, 0, -1):
+        ancestor = "/".join(parts[:cut]) + "/"
+        if ancestor in tracked_prefixes:
+            depth = len(parts[:cut])
+            children = sorted(
+                {
+                    candidate.rstrip("/").split("/")[depth]
+                    for candidate in tracked_prefixes
+                    if candidate.startswith(ancestor)
+                    and len(candidate.rstrip("/").split("/")) > depth
+                }
+            )
+            return ancestor, children
+    return "", []
 
 
 def routing_scope_paths(allowed_paths) -> list[str]:
@@ -858,6 +908,72 @@ def lint_text(text: str, *, path: Path, repo: Path) -> list[Finding]:
                         "PARANCSSOR futtatja, tehát a kettő szétcsúszása néma: a "
                         "brief olyan mércét ígér, amit a kör sosem futtat. Írd át "
                         "a §7 parancsot úgy, hogy tükrözze a `gate_tests` listát",
+                    )
+                )
+
+    # S13 — az `allowed_paths` NEM LÉTEZŐ könyvtár-előtagjai ([L497](../../docs/LESSONS.md#l497)).
+    # MÉRT, KÉTSZER visszatért hibaosztály (E13-R22 és E13-R23 pre-flightja): a
+    # brief olyan könyvtárakat sorolt fel, amelyek a fán nem léteznek — az
+    # E13-R22 esetében `lib/features/practice/{results,history,speed_builder}/`,
+    # miközben a feature `application/data/domain/presentation` rétegzésű. A
+    # lista így NULLA létező fájlt fedett: a kör egyetlen engedélyezett fájlon
+    # sem dolgozhatott volna, a migrálandó `PracticeResultScreen` pedig kívül
+    # esett rajta. A `brief-lint --level strict` mindkétszer „nincs lelet"-et
+    # adott.
+    #
+    # Miért volt néma: az S9/S11/S12 mind a fán TALÁLT állapotból indul (leltár,
+    # típus-pin, gate-parancs), tehát egy útvonal, ami semmire sem illeszkedik,
+    # egyik predikátumot sem aktiválja. A hiány nem a szabályok gyengesége,
+    # hanem egy hiányzó, triviális ELŐ-ellenőrzés: létezik-e egyáltalán, amit a
+    # lista felsorol.
+    #
+    # A lelet a javítás ANYAGÁT is odaadja (legközelebbi létező ős + a valódi
+    # gyerekkönyvtárai), mert a pre-flight enélkül `find`-dal keresi ki
+    # ugyanezt. A szabály KIZÁRÓLAG könyvtár-előtagra lő: egy `*.dart`
+    # fájlútvonal hiánya lehet a kör ÚJ fájlja (azt az S5 méri a
+    # típusnév-ütközésre), egy nemlétező KÖNYVTÁR viszont a scope-audit
+    # szemantikájában nulla fájlt fed.
+    #
+    # `strict`, `done` körre néma — a CI-kapu `--level base`, tehát ez sosem
+    # vált pirosra egy lezárt kört.
+    round_status_for_s13 = {row[0].upper(): row[2] for row in queue_rows(repo)}.get(
+        brief.task_id, ""
+    )
+    if round_status_for_s13 != "done":
+        tracked_prefixes = tracked_directory_prefixes(repo)
+        if tracked_prefixes:
+            phantom = [
+                path
+                for path in metadata.allowed_paths
+                if path.endswith("/")
+                and (path.startswith("lib/") or path.startswith("test/"))
+                and path not in tracked_prefixes
+            ]
+            if phantom:
+                details = []
+                for path in phantom:
+                    ancestor, children = nearest_existing_ancestor(path, tracked_prefixes)
+                    if ancestor:
+                        listed = ", ".join(f"`{child}`" for child in children[:8]) or "(üres)"
+                        details.append(
+                            f"`{path}` — a legközelebbi LÉTEZŐ ős `{ancestor}`, "
+                            f"valódi gyerekei: {listed}"
+                        )
+                    else:
+                        details.append(f"`{path}` — a fában egyetlen őse sem létezik")
+                findings.append(
+                    Finding(
+                        "strict",
+                        "S13",
+                        "az `allowed_paths` olyan KÖNYVTÁR-előtagot sorol fel, ami a "
+                        "verziókövetett fában nem létezik, tehát NULLA fájlt fed "
+                        + "; ".join(details)
+                        + " — mérve KÉTSZER (E13-R22, E13-R23 pre-flight, "
+                        "[L497](../LESSONS.md#l497)): a lista így néma ellentmondás, "
+                        "és a lint zöldje semmit nem bizonyít. Cseréld az útvonalat a "
+                        "fán MÉRT rétegre (a csere szigorúan KEVESEBBET adjon, mint a "
+                        "szomszéd kör user-jóváhagyott listája — a tágítás H3, L478), "
+                        "vagy a §0.0 mondja ki, hogy a könyvtárat EZ a kör hozza létre",
                     )
                 )
 
