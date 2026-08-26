@@ -2346,6 +2346,25 @@
   "practiceFreePracticeUpRatio": "Fel arány",
   "practiceHighwayLabel": "Gyakorló sáv",
   "practiceHighwayRestMarker": "Szünet",
+  "practiceHistoryEmptyAction": "Vissza",
+  "practiceHistoryEmptyBody": "Fejezz be egy gyakorlást, hogy itt megjelenjen.",
+  "practiceHistoryEmptyTitle": "Még nincs gyakorlás",
+  "practiceHistoryErrorAction": "Vissza",
+  "practiceHistoryErrorBody": "Hiba történt a helyi előzmények olvasásakor.",
+  "practiceHistoryErrorTitle": "Az előzmények nem tölthetők be",
+  "practiceHistoryFilterAll": "Minden mód",
+  "practiceHistoryRowSubtitle": "{resolved}/{total} cél",
+  "@practiceHistoryRowSubtitle": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceHistoryTitle": "Gyakorlási előzmények",
   "practiceHubDailyChallengeLabel": "Napi kihívás",
   "practiceHubDailyChallengeUnavailable": "Most nincs elérhető napi kihívás",
   "practiceHubEmptyCatalogSubtitle": "Nézz vissza később",
@@ -2477,6 +2496,18 @@
   "practiceResultChordPair": "Akkordpár",
   "practiceResultCoachingTitle": "Coaching",
   "practiceResultCompletion": "Teljesítés",
+  "practiceResultConfidenceLowBody": "Csak {resolved}/{total} célt sikerült érzékelni — ez nem elég egy pontos pontszámhoz.",
+  "@practiceResultConfidenceLowBody": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceResultConfidenceLowTitle": "Bizonytalan eredmény",
   "practiceResultDimensionSemantic": "{label}: {value}",
   "@practiceResultDimensionSemantic": {
     "placeholders": {
@@ -2492,11 +2523,59 @@
   "practiceResultFinishInterrupted": "A gyakorlat megszakadt",
   "practiceResultFinishTimedOut": "A gyakorlat túllépte az időkeretet",
   "practiceResultFinishUserFinished": "Te zártad a gyakorlatot",
+  "practiceResultHistoryCta": "Előzmények",
   "practiceResultInsufficientData": "Nincs elég adat",
+  "practiceResultNextStepCta": "Gyakorolj újra",
   "practiceResultNotScored": "Nincs pontozva",
   "practiceResultOverall": "Összesített",
+  "practiceResultPartialBadge": "Részleges gyakorlat",
+  "practiceResultRewardNone": "Ehhez a gyakorláshoz még nincs rögzített jutalom",
+  "practiceResultRewardTitle": "Jutalom",
+  "practiceResultRewardXp": "+{xp} XP",
+  "@practiceResultRewardXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
   "practiceResultRhythm": "Ritmus",
+  "practiceResultShareCta": "Megosztás",
+  "practiceResultShareMode": "Mód: {mode}",
+  "@practiceResultShareMode": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareResult": "Eredmény: {value}",
+  "@practiceResultShareResult": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareSessionId": "Session: {id}",
+  "@practiceResultShareSessionId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareSummaryTitle": "Megosztási összegzés",
+  "practiceResultShareWhen": "Dátum: {date}",
+  "@practiceResultShareWhen": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "practiceResultSpeedBuilder": "Speed Builder",
+  "practiceResultSpeedBuilderCta": "Speed Builder",
   "practiceResultTimingBalanced": "Ütemben",
   "practiceResultTimingEarly": "Sietsz",
   "practiceResultTimingLate": "Késik",
@@ -3336,6 +3415,8 @@
       }
     }
   },
+  "speedBuilderDoneCta": "Kész",
+  "speedBuilderFinishCta": "Befejezés",
   "speedBuilderHighestStable": "Legmagasabb stabil BPM: {value}",
   "@speedBuilderHighestStable": {
     "placeholders": {
@@ -3375,6 +3456,23 @@
       }
     }
   },
+  "speedBuilderRecordFail": "Sikertelen próba",
+  "speedBuilderRecordPass": "Sikeres próba",
+  "speedBuilderResultAttempts": "{count} próbálkozás",
+  "@speedBuilderResultAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "speedBuilderResultTitle": "Speed Builder eredmény",
+  "speedBuilderScreenTitle": "Speed Builder",
+  "speedBuilderSetupIntro": "A tempó automatikusan emelkedik, ahogy egymás után teljesíted a próbákat.",
+  "speedBuilderStartCta": "Indítás",
+  "speedBuilderStatusCompleted": "Elérted a cél tempót",
+  "speedBuilderStatusMaxAttempts": "Elérted a próbálkozás-limitet",
+  "speedBuilderStatusUserFinished": "Korábban befejezted",
   "speedBuilderTargetBpm": "Cél: {bpm} BPM",
   "@speedBuilderTargetBpm": {
     "placeholders": {

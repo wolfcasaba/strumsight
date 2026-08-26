@@ -806,6 +806,104 @@
       }
     }
   },
+  "practiceResultConfidenceLowTitle": "Bizonytalan eredmény",
+  "practiceResultConfidenceLowBody": "Csak {resolved}/{total} célt sikerült érzékelni — ez nem elég egy pontos pontszámhoz.",
+  "@practiceResultConfidenceLowBody": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceResultPartialBadge": "Részleges gyakorlat",
+  "practiceResultRewardTitle": "Jutalom",
+  "practiceResultRewardXp": "+{xp} XP",
+  "@practiceResultRewardXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceResultRewardNone": "Ehhez a gyakorláshoz még nincs rögzített jutalom",
+  "practiceResultNextStepCta": "Gyakorolj újra",
+  "practiceResultShareCta": "Megosztás",
+  "practiceResultShareSummaryTitle": "Megosztási összegzés",
+  "practiceResultShareMode": "Mód: {mode}",
+  "@practiceResultShareMode": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareWhen": "Dátum: {date}",
+  "@practiceResultShareWhen": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareResult": "Eredmény: {value}",
+  "@practiceResultShareResult": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareSessionId": "Session: {id}",
+  "@practiceResultShareSessionId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultHistoryCta": "Előzmények",
+  "practiceResultSpeedBuilderCta": "Speed Builder",
+  "practiceHistoryTitle": "Gyakorlási előzmények",
+  "practiceHistoryEmptyTitle": "Még nincs gyakorlás",
+  "practiceHistoryEmptyBody": "Fejezz be egy gyakorlást, hogy itt megjelenjen.",
+  "practiceHistoryEmptyAction": "Vissza",
+  "practiceHistoryFilterAll": "Minden mód",
+  "practiceHistoryErrorTitle": "Az előzmények nem tölthetők be",
+  "practiceHistoryErrorBody": "Hiba történt a helyi előzmények olvasásakor.",
+  "practiceHistoryErrorAction": "Vissza",
+  "practiceHistoryRowSubtitle": "{resolved}/{total} cél",
+  "@practiceHistoryRowSubtitle": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "speedBuilderScreenTitle": "Speed Builder",
+  "speedBuilderSetupIntro": "A tempó automatikusan emelkedik, ahogy egymás után teljesíted a próbákat.",
+  "speedBuilderStartCta": "Indítás",
+  "speedBuilderRecordPass": "Sikeres próba",
+  "speedBuilderRecordFail": "Sikertelen próba",
+  "speedBuilderFinishCta": "Befejezés",
+  "speedBuilderResultTitle": "Speed Builder eredmény",
+  "speedBuilderResultAttempts": "{count} próbálkozás",
+  "@speedBuilderResultAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "speedBuilderDoneCta": "Kész",
+  "speedBuilderStatusCompleted": "Elérted a cél tempót",
+  "speedBuilderStatusMaxAttempts": "Elérted a próbálkozás-limitet",
+  "speedBuilderStatusUserFinished": "Korábban befejezted",
   "practiceInsightNoSignal": "Nem érzékeltünk pengetést — a mikrofon legyen közel a gitárhoz.",
   "practiceInsightLowCompletion": "A session a legtöbb cél előtt ért véget.",
   "practiceInsightBiasLate": "A pengetések többsége kissé az ütés után érkezett.",

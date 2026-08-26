@@ -851,6 +851,104 @@
       }
     }
   },
+  "practiceResultConfidenceLowTitle": "Uncertain result",
+  "practiceResultConfidenceLowBody": "Only {resolved} of {total} targets were detected — that's not enough signal for an exact score.",
+  "@practiceResultConfidenceLowBody": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceResultPartialBadge": "Partial session",
+  "practiceResultRewardTitle": "Reward",
+  "practiceResultRewardXp": "+{xp} XP",
+  "@practiceResultRewardXp": {
+    "placeholders": {
+      "xp": {
+        "type": "int"
+      }
+    }
+  },
+  "practiceResultRewardNone": "No reward recorded yet for this session",
+  "practiceResultNextStepCta": "Practice again",
+  "practiceResultShareCta": "Share",
+  "practiceResultShareSummaryTitle": "Share summary",
+  "practiceResultShareMode": "Mode: {mode}",
+  "@practiceResultShareMode": {
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareWhen": "Date: {date}",
+  "@practiceResultShareWhen": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareResult": "Result: {value}",
+  "@practiceResultShareResult": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultShareSessionId": "Session: {id}",
+  "@practiceResultShareSessionId": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "practiceResultHistoryCta": "History",
+  "practiceResultSpeedBuilderCta": "Speed Builder",
+  "practiceHistoryTitle": "Practice history",
+  "practiceHistoryEmptyTitle": "No sessions yet",
+  "practiceHistoryEmptyBody": "Finish a practice session to see it here.",
+  "practiceHistoryEmptyAction": "Back",
+  "practiceHistoryFilterAll": "All modes",
+  "practiceHistoryErrorTitle": "Couldn't load history",
+  "practiceHistoryErrorBody": "Something went wrong reading your local history.",
+  "practiceHistoryErrorAction": "Back",
+  "practiceHistoryRowSubtitle": "{resolved}/{total} targets",
+  "@practiceHistoryRowSubtitle": {
+    "placeholders": {
+      "resolved": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "speedBuilderScreenTitle": "Speed Builder",
+  "speedBuilderSetupIntro": "The tempo steps up automatically after consecutive passes.",
+  "speedBuilderStartCta": "Start",
+  "speedBuilderRecordPass": "Record pass",
+  "speedBuilderRecordFail": "Record miss",
+  "speedBuilderFinishCta": "Finish",
+  "speedBuilderResultTitle": "Speed Builder result",
+  "speedBuilderResultAttempts": "{count} attempts",
+  "@speedBuilderResultAttempts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "speedBuilderDoneCta": "Done",
+  "speedBuilderStatusCompleted": "Target tempo reached",
+  "speedBuilderStatusMaxAttempts": "Attempt limit reached",
+  "speedBuilderStatusUserFinished": "You finished early",
   "practiceInsightNoSignal": "We couldn't detect any strums — make sure the microphone is close to your guitar.",
   "practiceInsightLowCompletion": "The session ended before most targets were played.",
   "practiceInsightBiasLate": "Most of your strums landed slightly after the beat.",

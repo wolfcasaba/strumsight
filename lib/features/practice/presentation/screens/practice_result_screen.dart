@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/widgets/empty_state.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -7,8 +8,38 @@ import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_insight.dart';
 import '../../domain/model/practice_metric_snapshot.dart';
 import '../../domain/model/practice_mode.dart';
+import '../../domain/model/speed_builder_policy.dart';
+import '../../domain/model/tempo.dart';
+import '../practice_route_args.dart';
+import '../providers/practice_result_providers.dart';
+import '../widgets/practice_mode_card.dart' show practiceModeLabel;
 import '../widgets/score_breakdown.dart';
 import '../widgets/timing_bias_chart.dart';
+import 'practice_history_screen.dart';
+import 'practice_setup_screen.dart';
+import 'speed_builder_screen.dart';
+
+/// The confidence threshold below which a scored result is shown as a
+/// qualitative range instead of an exact categorical percentage (ADR 0283
+/// §Döntés 1, inclusive at the boundary — §0.0/B/R8). The measured input is
+/// the session's target-coverage ratio; there is no session-level
+/// `confidence` field on the fan today.
+const double practiceResultConfidenceThreshold = 0.60;
+
+/// The coverage-ratio confidence for one history entry, or `null` when the
+/// session set no targets (e.g. Free Practice, which never reads this).
+double? practiceResultConfidence(PracticeHistoryEntry entry) {
+  if (entry.totalTargets <= 0) return null;
+  return entry.resolvedTargets / entry.totalTargets;
+}
+
+/// Whether [entry] ended before reaching every target (§6 A2). Only
+/// [PracticeFinishReason.completedAllTargets] counts as a full session —
+/// every other reason (including a user-initiated stop) ended the session
+/// before its targets were exhausted.
+bool practiceResultIsPartial(PracticeHistoryEntry entry) {
+  return entry.finishReasonCode != 'completedAllTargets';
+}
 
 /// The mode-specific Practice result screen (ADR 0084 §Döntés 1, 10, 11).
 ///
@@ -40,6 +71,14 @@ class PracticeResultScreen extends ConsumerWidget {
               _ScoredLayout(entry: entry, mode: mode),
             const SizedBox(height: 16),
             _InsightSection(entry: entry),
+            const SizedBox(height: 16),
+            _RewardSection(sessionId: entry.id),
+            const SizedBox(height: 16),
+            _NextStepAction(entry: entry),
+            const SizedBox(height: 12),
+            _ShareSection(entry: entry),
+            const SizedBox(height: 12),
+            _QuickLinksRow(entry: entry),
           ],
         ),
       ),
@@ -72,17 +111,74 @@ class _Header extends StatelessWidget {
           style: textTheme.titleLarge,
         ),
         const SizedBox(height: 4),
-        Text(
-          _finishReasonLabel(l10n, entry.finishReasonCode),
-          style: textTheme.bodyMedium,
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                _finishReasonLabel(l10n, entry.finishReasonCode),
+                style: textTheme.bodyMedium,
+              ),
+            ),
+            if (practiceResultIsPartial(entry)) ...[
+              const SizedBox(width: 8),
+              _Badge(label: l10n.practiceResultPartialBadge),
+            ],
+          ],
         ),
       ],
     );
   }
 }
 
+/// A small pill-shaped status label (A2 — the "partial session" marker).
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.tertiaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: colors.onTertiaryContainer,
+        ),
+      ),
+    );
+  }
+}
+
 class _ScoredLayout extends StatelessWidget {
   const _ScoredLayout({required this.entry, required this.mode});
+  final PracticeHistoryEntry entry;
+  final PracticeMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final confidence = practiceResultConfidence(entry);
+    if (confidence != null && confidence < practiceResultConfidenceThreshold) {
+      // A1 — below the threshold the result is NOT categorical: no exact
+      // percentage is rendered anywhere, only the qualitative range the
+      // measurement actually supports (ADR 0283 §Döntés 1).
+      return _LowConfidenceSummary(entry: entry);
+    }
+    return _ScoredBreakdown(entry: entry, mode: mode);
+  }
+}
+
+/// The categorical breakdown — rendered only at/above the confidence
+/// threshold, unchanged from the pre-R22 shape (the three pinned tests all
+/// fixture ratios above the threshold, so this path stays byte-identical).
+class _ScoredBreakdown extends StatelessWidget {
+  const _ScoredBreakdown({required this.entry, required this.mode});
   final PracticeHistoryEntry entry;
   final PracticeMode mode;
 
@@ -141,6 +237,302 @@ class _ScoredLayout extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The qualitative range shown instead of a categorical score when the
+/// coverage-ratio confidence is below [practiceResultConfidenceThreshold]
+/// (A1). No `%` is ever rendered here — only the counted targets, which the
+/// user can verify against the session they just ran.
+class _LowConfidenceSummary extends StatelessWidget {
+  const _LowConfidenceSummary({required this.entry});
+  final PracticeHistoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.practiceResultConfidenceLowTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              l10n.practiceResultConfidenceLowBody(
+                entry.resolvedTargets,
+                entry.totalTargets,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Reads the finished session's reward straight from the ledger (A5, ADR
+/// 0283 §Döntés 4). Never computes a number itself — an absent ledger entry
+/// renders as "no reward", not an estimate.
+class _RewardSection extends ConsumerWidget {
+  const _RewardSection({required this.sessionId});
+  final String sessionId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final reward = ref.watch(practiceRewardForSessionProvider(sessionId));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.stars_rounded,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.practiceResultRewardTitle,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    reward == null
+                        ? l10n.practiceResultRewardNone
+                        : l10n.practiceResultRewardXp(reward.totalXp),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The executable next step (A7): restarts the SAME definition through the
+/// Setup screen, correctly parameterized by [PracticeHistoryEntry.definitionId]
+/// — never a text-only suggestion.
+class _NextStepAction extends StatelessWidget {
+  const _NextStepAction({required this.entry});
+  final PracticeHistoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => PracticeSetupScreen(
+              argsOverride: PracticeSetupArgs(
+                request: PracticeSetupRequest.hasId,
+                definitionId: entry.definitionId,
+              ),
+            ),
+          ),
+        ),
+        icon: const Icon(Icons.replay),
+        label: Text(l10n.practiceResultNextStepCta),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+      ),
+    );
+  }
+}
+
+/// The MINIMAL, hand-picked share projection (§0.0/B/R12, ADR 0283 A8): a
+/// session id, a title, the mode, the date, and one summary metric. The raw
+/// [PracticeHistoryEntry] — per-attempt detail, coaching codes, skill tags,
+/// timing bias, score points — is never read by [_ShareSummaryCard].
+@immutable
+class PracticeResultShareSummary {
+  const PracticeResultShareSummary({
+    required this.sessionId,
+    required this.title,
+    required this.modeLabel,
+    required this.createdAt,
+    required this.resultLabel,
+  });
+
+  final String sessionId;
+  final String title;
+  final String modeLabel;
+  final DateTime createdAt;
+  final String resultLabel;
+}
+
+/// Builds the minimal share projection from an entry. The result label is
+/// the counted target coverage — never an exact percentage — so a share
+/// action never overstates certainty even at high confidence (ADR 0283
+/// §Döntés 1 applies here too).
+PracticeResultShareSummary practiceResultShareSummaryFrom(
+  PracticeHistoryEntry entry,
+  AppLocalizations l10n,
+) {
+  final mode = PracticeMode.values.firstWhere(
+    (m) => m.code == entry.modeCode,
+    orElse: () => PracticeMode.strumPattern,
+  );
+  return PracticeResultShareSummary(
+    sessionId: entry.id,
+    title: entry.displayTitle.isEmpty
+        ? l10n.practiceResultTitle
+        : entry.displayTitle,
+    modeLabel: practiceModeLabel(l10n, mode),
+    createdAt: entry.createdAt,
+    resultLabel: entry.totalTargets > 0
+        ? '${entry.resolvedTargets}/${entry.totalTargets}'
+        : '${entry.attemptsCount}',
+  );
+}
+
+class _ShareSummaryCard extends StatelessWidget {
+  const _ShareSummaryCard({required this.summary});
+  final PracticeResultShareSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.practiceResultShareSummaryTitle,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(summary.title, style: Theme.of(context).textTheme.bodyLarge),
+            const SizedBox(height: 4),
+            Text(l10n.practiceResultShareMode(summary.modeLabel)),
+            Text(
+              l10n.practiceResultShareWhen(
+                DateFormat.yMMMd().format(summary.createdAt),
+              ),
+            ),
+            Text(l10n.practiceResultShareResult(summary.resultLabel)),
+            Text(l10n.practiceResultShareSessionId(summary.sessionId)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Toggleable share affordance (A8). Tapping "Share" reveals the minimal
+/// projection card in-place; there is no real share sink wired in this round
+/// (§0.0/B/R12 — the Community composer wiring is a named follow-up).
+class _ShareSection extends StatefulWidget {
+  const _ShareSection({required this.entry});
+  final PracticeHistoryEntry entry;
+
+  @override
+  State<_ShareSection> createState() => _ShareSectionState();
+}
+
+class _ShareSectionState extends State<_ShareSection> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () => setState(() => _expanded = !_expanded),
+          icon: const Icon(Icons.ios_share),
+          label: Text(l10n.practiceResultShareCta),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 8),
+          _ShareSummaryCard(
+            summary: practiceResultShareSummaryFrom(widget.entry, l10n),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Round-scoped, route-free entry points to the two new practice surfaces
+/// (§0.0/B/R11): pushed via `Navigator`, not a named route.
+class _QuickLinksRow extends StatelessWidget {
+  const _QuickLinksRow({required this.entry});
+  final PracticeHistoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PracticeHistoryScreen(),
+              ),
+            ),
+            icon: const Icon(Icons.history),
+            label: Text(l10n.practiceResultHistoryCta),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    SpeedBuilderScreen(policy: _speedBuilderPolicyFor(entry)),
+              ),
+            ),
+            icon: const Icon(Icons.speed),
+            label: Text(l10n.practiceResultSpeedBuilderCta),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Derives a starting Speed Builder policy from the entry's own stable
+/// tempo when it has one, otherwise a conservative default. Presentation-
+/// layer construction of a domain value object — not a policy decision, the
+/// domain's [SpeedBuilderEngine] still owns every ladder rule.
+SpeedBuilderPolicy _speedBuilderPolicyFor(PracticeHistoryEntry entry) {
+  final startBpm = (entry.highestStableTempoBpm ?? 80.0).clamp(
+    Tempo.minimumBpm,
+    Tempo.maximumBpm,
+  );
+  final targetBpm = (startBpm + 40).clamp(Tempo.minimumBpm, Tempo.maximumBpm);
+  return SpeedBuilderPolicy(
+    startBpm: Tempo(startBpm),
+    targetBpm: Tempo(targetBpm),
+    stepBpm: 5,
+  );
 }
 
 class _FreePracticeLayout extends StatelessWidget {
