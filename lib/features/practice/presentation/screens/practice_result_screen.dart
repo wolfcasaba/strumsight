@@ -8,6 +8,7 @@ import '../../domain/model/practice_history_entry.dart';
 import '../../domain/model/practice_insight.dart';
 import '../../domain/model/practice_metric_snapshot.dart';
 import '../../domain/model/practice_mode.dart';
+import '../../domain/model/practice_session_result.dart';
 import '../../domain/model/speed_builder_policy.dart';
 import '../../domain/model/tempo.dart';
 import '../practice_route_args.dart';
@@ -38,7 +39,8 @@ double? practiceResultConfidence(PracticeHistoryEntry entry) {
 /// every other reason (including a user-initiated stop) ended the session
 /// before its targets were exhausted.
 bool practiceResultIsPartial(PracticeHistoryEntry entry) {
-  return entry.finishReasonCode != 'completedAllTargets';
+  return entry.finishReasonCode !=
+      PracticeFinishReason.completedAllTargets.code;
 }
 
 /// The mode-specific Practice result screen (ADR 0084 §Döntés 1, 10, 11).
