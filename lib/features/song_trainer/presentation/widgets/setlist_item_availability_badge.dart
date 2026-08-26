@@ -3,13 +3,20 @@ import 'package:flutter/material.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/song_setlist.dart';
 
-/// Per-item readiness indicator for a Setlist V2 entry (§5.4). The mapping
-/// is the measured producer from §0.0/B/R20: [SetlistItemAvailability.ready]
-/// is fully usable, [SetlistItemAvailability.missingAsset] still opens (only
-/// playback is affected), and [SetlistItemAvailability.missingSong] names
-/// the unresolved [songId] instead of silently dropping the entry. Every
-/// other [SetlistItemAvailability] value falls back to a generic
-/// attention-needed indicator.
+/// Per-item readiness icon for a Setlist V2 entry (§5.4). The mapping is the
+/// measured producer from §0.0/B/R20: [SetlistItemAvailability.ready] is
+/// fully usable, [SetlistItemAvailability.missingAsset] still opens (only
+/// playback is affected), and [SetlistItemAvailability.missingSong] carries
+/// the unresolved [songId] in its Semantics label. Every other
+/// [SetlistItemAvailability] value falls back to a generic attention-needed
+/// indicator.
+///
+/// Deliberately icon-only — the widget is used inside a `Wrap` (compact
+/// setlist card) and a `ListTile.leading` slot (editor sheet), both of which
+/// give it a narrow, non-scrolling width; an inline text label of arbitrary
+/// song-id length would overflow either host. The visible, non-truncated
+/// "named" requirement (§6.1/A6) is satisfied by the caller showing the
+/// songId as its own text near the icon.
 final class SetlistItemAvailabilityBadge extends StatelessWidget {
   const SetlistItemAvailabilityBadge({
     required this.availability,
@@ -42,14 +49,7 @@ final class SetlistItemAvailabilityBadge extends StatelessWidget {
       ),
       SetlistItemAvailability.missingSong => Semantics(
         label: l10n.setlistV2ItemMissingSong(songId),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            const Icon(Icons.error_outline, color: Colors.red, size: 18),
-            const SizedBox(width: 4),
-            Text(l10n.setlistV2ItemMissingSong(songId)),
-          ],
-        ),
+        child: const Icon(Icons.error_outline, color: Colors.red, size: 18),
       ),
       SetlistItemAvailability.unsupportedTrack ||
       SetlistItemAvailability.requiresMigration ||

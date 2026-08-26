@@ -124,6 +124,22 @@ final class _SetlistListScreenV2State extends State<SetlistListScreenV2> {
                           ],
                         ),
                       ],
+                      // The missing song is named as visible text (A6) — the
+                      // icon-only badge above stays overflow-safe inside the
+                      // Wrap, so the name lives here instead.
+                      for (final item in setlist.items)
+                        if (item.initialAvailability ==
+                            SetlistItemAvailability.missingSong)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              l10n.setlistV2ItemMissingSong(item.songId.value),
+                              key: Key(
+                                'setlist-missing-song-${setlist.id}-${item.id}',
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
                     ],
                   ),
                   trailing: IconButton(
