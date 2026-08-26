@@ -1,5 +1,72 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R26 KÉSZ — Analyze Home, Recording és Processing UI — PR [#470](https://github.com/wolfcasaba/strumsight/pull/470), squash `d9f46623` (2026-08-26)
+
+Az UI-34–UI-36 megvalósítása (SDD Ch13 Kör 26): **Analyze kezdőképernyő**,
+**felvételi Stage** és **feldolgozás-felület**. A kör **ADR-t nem írt** — a
+kiosztott [`0285`](docs/adr/0285-recording-transparency-and-honest-progress.md)
+2026-08-15 óta merge-elt (`6e7877de`), újraírása **H1** lett volna. A sávon ez
+a **kilencedik** ADR nélküli kör egymás után (E13-R17…R26).
+
+**A pre-flight legfontosabb lelete: a brief a MÁSIK analyze-fát írta le.**
+A `brief-lint` `S13` szabálya jelezte, hogy a három `lib/features/analyze/{home,
+recording,processing}/` előtag nem létezik — de a mérés ennél mélyebb hibát
+talált. A repóban **két** analyze-fa él, és a brief §2 által leírt szakaszos,
+megszakítható életciklus a **V2 `lib/features/audio_analysis/`** fában van
+(9 fázisú `AnalysisProgressPhase`, opcionális `completedUnits`/`totalUnits`
+PÁR, `AnalysisRunHandle.cancel()`, `AnalysisDegradedCompleted`), miközben a
+legacy V1 fa egyetlen `compute()` hop, szakaszok és megszakítható elemzés
+NÉLKÜL. A lint ajánlotta „legközelebbi létező ős" (`lib/features/analyze/`)
+tehát **szintén hibás cél** lett volna: a szakaszos UI abba a fába került
+volna, ahol a hozzá tartozó életciklus nem is létezik — zöld gate mögött
+([L503](docs/LESSONS.md#l503)).
+
+**Amit hoz.** Három ÚJ képernyő a
+`lib/features/audio_analysis/presentation/capture/` alatt, a V2 életciklusra
+horgonyozva:
+
+- **Igazmondó haladásjelzés** (ADR 0285 §2): a már meglévő, addig **árva**
+  `AnalysisProgressView`-t **befogadta**, nem írta újra (a fájl bájtra
+  változatlan). A három küszöb-cella mérve: fázis nélkül `bar.value == null`
+  és `%` szöveg SINCS · fázissal szakasz-szintű jelzés (`5/9`), továbbra is
+  `value == null` · egységekkel a **tényleges** hányados (`3/5 → 0.6`). A
+  három képernyő fáján **nulla** `Timer`/`Ticker`/`AnimationController`.
+- **Látható megőrzés-állapot** (ADR 0217): a `_RetentionNotice` a **mért**
+  `AudioRetentionPolicy.keepOriginal`-on ágazik (külön ikon + külön szöveg) —
+  nem kitalált kapcsoló. Alapesetben (`keepOriginal: false`) a felület a
+  „csak a származtatott elemzés marad meg" igazságot mondja ki.
+- **Idempotens megszakítás** per-`runId` őrrel: a második koppintás no-op, de
+  ÚJ `runId` újra engedélyez — nem „cancel forever".
+- **Nincs árva mikrofon**: `dispose()` minden kilépési úton elengedi a
+  lease-t, és az `AnalysisRecorder.dispose()` bizonyítottan idempotens.
+- **6 golden felvétel** (3 képernyő × 412×915 compact portrait és
+  `textScale 2.0`) a merge-kapu **x86_64** architektúráján (ADR 0426 §3).
+
+**Amit a kör NEM talált ki** (§0.0/B6): a fán **nincs** szabad-tárhely-API és
+**nincs** hő/akku-jel, ezért az A6 a mért `InputLimits` korlátokra (10 perc /
+64 MiB), az A8 pedig a mért `CapabilityUnavailableReason`-re horgonyzott. Egy
+kitalált „hő miatt lassabb" felirat pontosan az a hazugság-osztály lett volna,
+amit az ADR 0285 tilt.
+
+**A review egy hamis pozitívot is lezárt.** A sáv **kétszer** bukott érintési
+célon (E13-R20 40 dp, E13-R21 32 dp — mindkettő ZÖLD gate mögött), és a
+statikus jelek most is vádoltak: a három képernyő egyetlen `minimumSize`-t sem
+állít, a téma nem ad override-ot, a merge-elt E13-R22 viszont explicit
+`Size.fromHeight(48)`-at használ. Az eldobható próbateszt mégis **48.0 dp**-t
+mért (a Flutter `MaterialTapTargetSize.padded` tölti ki) — négy egybevágó
+statikus jel sem bizonyíték ([L504](docs/LESSONS.md#l504)).
+
+**Review APPROVED, javító kör NÉLKÜL** — 0 BLOCKER, 0 MAJOR, 0 MINOR, 3 NOTE
+(`docs/reviews/e13-r26-review.md`). Az implementer jelzésfájljából **hiányzott
+a `scope_audit=` kulcs**, ezért az orchestrátor kézzel pótolta: **OK**, 19
+útvonal ([L505](docs/LESSONS.md#l505)). Független gate-újrafuttatás izolált
+`/tmp` klónban: **18/18 zöld**.
+
+Exact `83c8f229`: Full Gate [33017415531](https://github.com/wolfcasaba/strumsight/actions/runs/33017415531)
++ Router CI [33017406920](https://github.com/wolfcasaba/strumsight/actions/runs/33017406920)
+mindkettő success. A záró review-commit új HEAD-et képzett, ezért mindkét
+kaput újra kellett dispatch-elni a végleges SHA-n (ADR 0086 §2).
+
 ## ✅ E13-R25 KÉSZ — Song Trainer, Result és Setlist Run UI — PR [#469](https://github.com/wolfcasaba/strumsight/pull/469), squash `adf49fd1` (2026-08-26)
 
 Az UI-29–UI-31 és UI-33 Stage/analitika folyamata (SDD Ch13 Kör 25). A kör
@@ -7754,7 +7821,28 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-26):** `main` @ `5f4266e3` — E13-R22 Practice
+**Aktuális állapot (2026-08-26):** `main` @ `d9f46623` — E13-R26 Analyze Home,
+Recording és Processing UI, PR
+[#470](https://github.com/wolfcasaba/strumsight/pull/470), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **0 javító kör** — a review első
+fordulóban APPROVED (0 BLOCKER, 0 MAJOR, 0 MINOR, 3 NOTE,
+`docs/reviews/e13-r26-review.md`). A kör **ADR-t nem írt** — a kiosztott
+`0285` 2026-08-15 óta merge-elt (**kilencedik** ADR nélküli kör a sávon).
+A pre-flight legsúlyosabb lelete (**B1**): a brief három `allowed_paths`
+előtagja nem létezett, és a mérés kimutatta, hogy a brief §2 szakaszos,
+megszakítható életciklusa a **V2 `lib/features/audio_analysis/`** fában él —
+tehát a `brief-lint` S13 által ajánlott „legközelebbi létező ős" (a legacy
+`lib/features/analyze/`) is hibás cél lett volna
+([L503](docs/LESSONS.md#l503)). A review egy **hamis pozitívot** is lezárt: a
+sáv kétszer visszatért érintési-cél hibaosztályára a statikus olvasat vádolt,
+az eldobható próbateszt viszont 48.0 dp-t mért
+([L504](docs/LESSONS.md#l504)). A jelzésfájlból hiányzott a `scope_audit=`
+kulcs → kézzel pótolva, OK ([L505](docs/LESSONS.md#l505)). Exact `83c8f229`:
+Full Gate 33017415531 + Router CI 33017406920 mind success. Post-merge
+`tools/round-gate.sh` a friss `main`-en zöld. Részletesen a fejléc ✅-blokkban.
+
+**Korábbi állapot (2026-08-26):** `main` @ `5f4266e3` — E13-R22 Practice
 result, history és Speed Builder UI, PR
 [#464](https://github.com/wolfcasaba/strumsight/pull/464), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),

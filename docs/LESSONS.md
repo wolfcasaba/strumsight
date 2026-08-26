@@ -19528,3 +19528,119 @@ widgetet?*
 **Őrteszt:** nincs — a lelet MINOR és a mai fán nem reprodukálható produkciós
 úton; a próbateszt szándékosan eldobható volt (a kikötése a MINOR-1 follow-up
 része, HANDOFF §6).
+
+## L503 — Az S13 „nem létező könyvtár" lelet elfedhet egy MÉLYEBB hibát: a brief a fa MÁSIK, azonos témájú feature-ét írja le (E13-R26 pre-flight, 2026-08-26)
+
+**Mit mértünk.** Az E13-R26 briefjének `allowed_paths`-a három nem létező
+előtagot sorolt fel (`lib/features/analyze/{home,recording,processing}/`) —
+az `S13` brief-lint pontosan ezt jelezte, és a javításra két utat kínált:
+„cseréld a fán MÉRT rétegre", vagy „a §0.0 mondja ki, hogy a könyvtárat EZ a
+kör hozza létre". A lint javaslata a **legközelebbi létező őst**
+(`lib/features/analyze/`) adta meg anyagként.
+
+**Mindkét kézenfekvő út HIBÁS lett volna.** A mérés kimutatta, hogy a repóban
+**két** analyze-fa él, és a brief §2 által leírt képesség a MÁSIKBAN van:
+
+| | `lib/features/analyze/` (V1, a lint ajánlotta ős) | `lib/features/audio_analysis/` (V2) |
+|---|---|---|
+| szakaszok | nincs — `_analyze()` EGY `compute()` hop | `AnalysisProgressPhase` — **9 szakasz** |
+| haladás-egység | nincs | `completedUnits`/`totalUnits` opcionális PÁR |
+| megszakítás | csak a FELVÉTEL (`cancelRecording`) | `AnalysisRunHandle.cancel()` + `AnalysisCancelled` |
+| degradált mód | nincs | `AnalysisDegradedCompleted` + `CapabilityUnavailableReason` |
+
+A brief §2 („az elemzési feladat szakaszokból áll, ellenőrzőponttal és
+megszakítási ponttal") tehát a V2-re igaz, a V1-re **hamis**. A lint
+ajánlását követve a kör a szakaszos, megszakítható V2 UI-t a **legacy V1
+fába** építette volna, ahol a hozzá tartozó életciklus nem is létezik — a
+`ui_inventory` nőtt volna, a gate zöld lett volna, és a hiba csak egy
+későbbi, route-élesítő körben derül ki.
+
+**A megkülönböztető mérés** nem a könyvtárnév, hanem a KÉPESSÉG keresése:
+
+```bash
+grep -rn "enum .*ProgressPhase\|completedUnits\|RunHandle" lib/features/ | cut -d/ -f1-3 | sort -u
+```
+
+**A szabály.** Ha az `S13` eldobja a brief útvonalát, a csere ELŐTT mérd ki,
+hogy a brief által leírt VISELKEDÉS hol él a fán — a legközelebbi létező ős
+csak akkor a helyes cél, ha a képesség is ott van. Két azonos témájú
+feature-fa (legacy + V2 migráció) esetén a névhasonlóság félrevisz.
+
+**Őrteszt:** nincs — a lelet a pre-flight mérési fegyelmére vonatkozik, nem
+egy kódúton reprodukálható invariánsra. A gépi őr a meglévő `S13` marad; ez a
+lecke a lelet ÉRTELMEZÉSÉT köti meg.
+
+## L504 — Egy kétszer visszatért hibaosztály HAMIS POZITÍVRA hangolja a review-t: a statikus olvasat 40 dp-t „mért", a próbateszt 48-at (E13-R26 review, 2026-08-26)
+
+**Mit mértünk.** A Ch13 sáv kétszer bukott érintési célon — E13-R20/MAJOR-1
+(40 dp) és E13-R21/MAJOR (32 dp), **mindkettő ZÖLD gate mögött**, egy kör
+különbséggel. Az E13-R26 review ezért célzottan erre indult, és a statikus
+jelek erős vádat építettek:
+
+- a három új képernyő **egyetlen** `minimumSize`-t sem állít be;
+- a téma nem ad button-szintű override-ot (`grep -rn "minimumSize\|MaterialTapTargetSize"
+  lib/core/theme lib/core/design_system` → **0 találat**);
+- a merge-elt E13-R22 precedens viszont explicit
+  `FilledButton.styleFrom(minimumSize: const Size.fromHeight(48))`-t használ
+  (`practice_result_screen.dart:360`);
+- az M3 `FilledButton` dokumentált alapértelmezett `minimumSize`-a `Size(64, 40)`.
+
+Négy egybevágó jel — a MAJOR megírásához elég meggyőző. Az eldobható
+próbateszt viszont mást mért:
+
+```
+PROBE FilledButton[0] height=48.0 width=768.0
+PROBE InkWell[0] height=100.0   PROBE InkWell[1] height=80.0
+```
+
+**A gyökérok.** A `minimumSize` a gomb VIZUÁLIS mérete; az ÉRINTÉSI célt a
+Flutter `MaterialTapTargetSize.padded` (a Material alapértelmezés) tölti fel
+48 dp-re, és a `tester.getSize` ezt a kitöltött célt adja vissza. Az
+E13-R22 explicit `Size.fromHeight(48)`-a a vizuális magasságot állítja —
+tehát a precedens LÉTEZÉSE nem bizonyítja, hogy nélküle sérülne a szerződés.
+
+**A szabály.** Egy ismert, frissen ismételt hibaosztály **prior**-t ad, nem
+bizonyítékot: pont ott a legnagyobb a kísértés következtetésből leletet írni.
+A mérce ugyanaz marad, mint bárhol — a leletet **futtatott** próbateszt
+alapozza meg, nem egybevágó statikus jelek száma. A megdőlt gyanút is írd le
+a review-ban, különben a következő kör ugyanabból a téves olvasatból indul.
+
+**Őrteszt:** nincs — a lecke a review-módszertanra vonatkozik. A tényleges
+szerződést a `test/core/` a11y-őrök és a golden-keretek mérik.
+
+## L505 — A `ROUND_BRIEF` átadása nem garantálja a `scope_audit=` kulcsot a jelzésfájlban: ha hiányzik, a scope BIZONYÍTATLAN (E13-R26, 2026-08-26)
+
+**Mit mértünk.** Az E13-R26 dispatchje szabályosan adta át a briefet
+(`ROUND_BRIEF=docs/rounds/e13-r26-… ROUND_ENGINE=sonnet-impl tools/mm-round.sh …`),
+az ADR 0138 elvárása szerint. A `done` jelzés mégis **`scope_audit=` kulcs
+NÉLKÜL** érkezett:
+
+```
+status=done
+branch=sonnet-impl/e13-r26-analyze-recording-and-processing
+head=0243c26e
+dirty_files=2
+signalled_at=2026-08-26T21:33:23+00:00
+```
+
+A pipeline-prompt táblázata a kulcs HÁROM értékét kezeli (`ok`,
+`VIOLATION`, `skipped`/`error`) — a **teljes hiányra** nincs sora, és az
+`ok` hiánya csendben úgy is olvasható, hogy „nem volt sértés". Kézi pótlás
+(`python3 tools/scope-audit.py --repo … --brief … --base <indulási HEAD>`)
+adta meg a bizonyítékot: `OK (19 changed path(s))`.
+
+**Másodlagos mérés.** Az első kézi futás EGY sértést jelzett —
+`.round-prompt-e13-r26.md` —, ami az **orchestrátor saját**, a munkapéldány
+gyökerébe írt, sosem commitolt prompt-fájlja. A `scope-audit.py` a
+**követetlen** fájlokat is a diffbe számolja, tehát a saját segédfájljaidat
+a repón KÍVÜL tartsd (vagy mozgasd ki az audit előtt), különben a saját
+állványzatod ad hamis H3-at. Ugyanez magyarázta a `dirty_files=2`-t.
+
+**A szabály.** A `done` feldolgozásakor a `scope_audit=` kulcs **hiánya** és a
+`skipped` ugyanaz az eset: az audit nem bizonyított, futtasd kézzel a kör
+indulási HEAD-jével bázisként. A `dirty_files != 0`-t mindig vizsgáld ki —
+itt jóindulatú volt, de a vizsgálat nem hagyható ki.
+
+**Őrteszt:** nincs — a kulcs kibocsátása a wrapper (`tools/`) hatásköre, amit
+a kör-session nem módosíthat (ADR 0087 §4); a védelem az orchestrátor kézi
+pótlása.
