@@ -11,7 +11,9 @@
 
 ## 1. Verdikt
 
-**CHANGES REQUESTED** — 2 MAJOR, 1 MINOR, 1 NOTE.
+**VÉGSŐ: APPROVED** (a §8 javító kör után, `6167d5be` — 0 nyitott lelet).
+Az első forduló verdiktje **CHANGES REQUESTED** volt — 2 MAJOR, 1 MINOR,
+1 NOTE.
 
 Mindkét MAJOR **teljesen ZÖLD kapu mögött** él: a kör 18/18 gate-lépése, a 173
 presentation-teszt és a hat golden mind zöld, és a leletek egyikét sem fogja
@@ -232,4 +234,110 @@ gyakorisága drag közben nőtt.
 Cella törlése, `skip`-je vagy állítás gyengítése továbbra is TILOS.
 
 ## 8. Javító kör után — a reviewer tölti ki
+
+**Javító commit:** `6167d5be44e71f5117591ccb60b3fb7bbd995a59`
+**Review-elt (friss) klón:** `/tmp/review-e13-r21b` @ `6167d5be`
+**Dátum:** 2026-08-26
+
+### 8.1 Gate-újrafuttatás a javított HEAD-en (izolált klón, saját kézzel)
+
+`tools/round-gate.sh` a §7 szerinti 13 útvonallal:
+**18/18 ZÖLD**, `GATE_EXIT=0` (format, analyze, 13 teszt, architecture,
+secrets, l10n).
+
+Scope-audit a teljes körre:
+
+```
+Legacy scope audit OK (24b95acf83e7..6167d5be44e7, 24 changed path(s),
+  1 generated/ignored)
+```
+
+A `1 generated/ignored` a reviewer SAJÁT jelentése
+(`docs/reviews/e13-r21-review.md`) — állandó, kód szintű mentesség
+(`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`), nem sértés.
+
+### 8.2 Leletenkénti zárás — MÉRVE, nem olvasva
+
+#### MAJOR-1 — ZÁRVA
+
+A javítás **nem** a megerősítés hozzáadása, hanem a navigáció
+nem-destruktívvá tétele: `context.go` → **`context.push`**
+(`practice_session_screen.dart:244`), így a session képernyő a Tuner alatt
+mountolva marad, és a session nem vész el. A reviewer mérése ugyanazon a
+belépőn, `running` állapotban:
+
+```
+PROBE P1prime: onTuner=true sessionStillInStack=true commandsSent=()
+               canPopBack=true
+```
+
+…és a `router.pop()` után a próba visszatalál az ÉLŐ sessionre
+(`find.byType(PracticeSessionScreen)` → 1, a TUNER SENTINEL eltűnik).
+
+Ez érdemben jobb megoldás, mint amit a jelentés javasolt: a felhasználó
+elhangolás után **folytathatja** a gyakorlást ahelyett, hogy választania
+kellene a hangolás és a session elvesztése között — és mivel semmi nem vész
+el, megerősítés sem kell (ADR 0279 §1 a KÖVETKEZMÉNYRE köt, és itt nincs
+következmény).
+
+**Az őrcella is átírva** (`session_transitions_test.dart:225`): a cella most
+azt bizonyítja, hogy a Tuner megnyílik ÉS a session képernyő
+`skipOffstage: false` mellett is a fában marad ÉS `host.sent` üres — a `go`-ra
+való visszaesés (ami a route-ot lecserélné) ezt pirosra váltaná. A korábbi,
+bypasst pinnelő állítás megszűnt: **erősítés, nem gyengítés.**
+
+#### MAJOR-2 — ZÁRVA
+
+`practice_readiness_row.dart:139` — `minHeight: 32` → **`minHeight: 48`**.
+A reviewer mérése:
+
+```
+PROBE P2prime: tuning entry rendered size = Size(277.5, 48.0)
+```
+
+**Az őrcella VALÓDI** — a reviewer valódi-sértés próbája: a 32 dp
+visszaállítása után a kör saját új cellája
+(`session_transitions_test.dart:257`, „the tuning entry meets the >= 48dp
+touch-target contract (ADR 0280 §Döntés 5)") PIROSRA váltott:
+
+```
+Expected: a value greater than or equal to <48.0>
+  Actual: <32.0>
+00:01 +0 -1: … [E]
+```
+
+…majd a `git checkout --` visszaállítás után a fa tiszta
+(`git diff --stat` üres) és a cella újra zöld. A cella a TÉNYLEGESEN
+renderelt méretet méri (`tester.getSize`), nem a forrás konstansát — tehát
+egy elrendezés-változás okozta zsugorodást is elfogna.
+
+#### MINOR-1 — ZÁRVA
+
+`practice_setup_screen.dart:195` — a readiness Tuner-belépő megjelent a
+setup felületen is (`context.push(AppRoutes.practiceTuner)`), és van hozzá
+cella: `practice_setup_screen_test.dart:487`
+(`group('MINOR-1 — the readiness tuning entry is reachable from Setup')`),
+ami a belépő jelenlétét ÉS a Tunerre navigálást is állítja. Az SDD UI-18 „A
+tuning warningból közvetlen Tuner nyitható" elfogadási feltétele ezzel
+teljesül.
+
+#### NOTE-1 — tudatosan érintetlen
+
+Az implementer a §10.6-ban indokolja; a jelentés nem blokkolt rá.
+
+### 8.3 Golden-sáv a javítás után
+
+Az elrendezés elmozdult (a setup képernyő új sort kapott, a session sor
+magasabb lett), ezért a golden-készlet **x86-on** újra fel lett véve
+(`tools/golden-x86.sh record`, ADR 0426) — a hat PNG-ből öt változott, egy
+bájt-azonos maradt. A `check` a javító kör záró lépéseként zöld.
+
+### 8.4 VÉGSŐ DÖNTÉS
+
+**APPROVED** — 0 nyitott BLOCKER, 0 MAJOR, 0 MINOR. A NOTE-1 nem blokkol.
+
+A merge feltétele változatlan: a **javított** HEAD-en (`6167d5be` vagy a záró
+review-commit utáni SHA) az exact-SHA `full-gate.yml` ÉS `router-ci.yml`
+egyaránt `success` (ADR 0086 §2) — a `ac33a8f5`-ös zöld futás erre NEM
+mentesít.
 
