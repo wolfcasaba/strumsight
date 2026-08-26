@@ -85,7 +85,7 @@ void main() {
   testWidgets(
     'every reorder affordance meets the >= 48 dp touch target (inclusive)',
     (tester) async {
-      await pump(tester, threeSections(), (_, __) {});
+      await pump(tester, threeSections(), (_, _) {});
 
       final reorderButtons = find.byWidgetPredicate(
         (widget) =>

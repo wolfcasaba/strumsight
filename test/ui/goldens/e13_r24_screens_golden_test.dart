@@ -14,7 +14,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
-import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/song_trainer/application/import/import_preview.dart';
 import 'package:strumsight/features/song_trainer/application/import/song_import_controller.dart';
