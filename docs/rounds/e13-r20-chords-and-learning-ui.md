@@ -669,4 +669,41 @@ komponens, más felelősség-határ.
   `hasLength(84)` VÁLTOZATLAN maradt (§0.0/R12 jogosultsága nem lett
   kihasználva, mert nem volt rá szükség).
 
+### Javító kör (1. javító kör) — a review 3 leletének zárása
+
+**MAJOR-1 (40dp érintési cél):** `chord_library_screen.dart` `_tile`-jában az
+`IconButton` `constraints`-e `SsSemantics.minimumInteractiveDimension`-re
+(48×48) nőtt, a `visualDensity: VisualDensity.compact` eltűnt, és a
+`Positioned(right: -6, bottom: 8, …)` `Positioned(right: 0, bottom: 0, …)`-ra
+változott — a gomb így TELJES egészében a `Stack` határain belülre esik.
+Kötelező őr-cella: `test/features/chords/chord_tile_a11y_test.dart` új
+`testWidgets` cellája (`'the chord-detail open button meets the 48dp minimum
+touch target'`), amely `tester.getSize(find.byKey(Key('chord-open-detail-C')))`-t
+méri `SsSemantics.minimumInteractiveDimension` ellen. **40dp-s
+visszaállítás-próba (elvégezve, majd visszaállítva):** a régi
+`BoxConstraints(minWidth: 28, minHeight: 28)` + `visualDensity: compact`
+mellett a cella lefutott és **PIROSAT** adott — `Expected: true / Actual:
+<false> / … measured Size(40.0, 40.0)` —, a fix visszaállítása után újra
+ZÖLD. A geometriaváltozás miatt a két akkordtár-golden
+(`e13_r20_chord_library_compact{,_scale2}.png`) újra lett rögzítve
+(`--update-goldens`); a részletnézet és a tanulási út golden PNG-i
+változatlanok maradtak (csak a két érintett fájl módosult a diffben).
+
+**MINOR-1 (rossz ADR-hivatkozás):** `ss_chord_diagram.dart:40` `ADR 0424
+§5.5` → `ADR 0424 §2.3` (a ténylegesen releváns szakasz: a beégetett-szöveg
+guard).
+
+**MINOR-2 (holt `learnLocked` ARB-kulcs):** törölve a
+`lib/l10n/base/app_{en,hu}.arb` FORRÁSBÓL, majd `dart run
+tool/gen_l10n_segments.dart --write` + `flutter gen-l10n`. Ellenőrizve: a
+`gen_l10n_segments_test.dart` és a `hardcoded_string_guard_test.dart` (a
+paritás- és a beégetett-szöveg-őrök) mindkettő ZÖLD maradt a törlés után —
+egyik guard sem mozdult, tehát nem kellett NOTE-ra fokozni.
+
+**Záró gate:** `tools/round-gate.sh` a brief §7 szerinti 17 útvonallal —
+22/22 ZÖLD (format, analyze, 17 teszt, architecture, secrets, l10n). Kiegészítő
+futás: `flutter test test/features/chords/ test/features/learn/` →
+**235 zöld** (234 baseline + 1 új őr-cella), egyetlen, a kártól független
+`~1` skip változatlanul.
+
 ## 11. Review — a Claude tölti ki

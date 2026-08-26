@@ -1968,7 +1968,6 @@
   "learnKeepGoing": "Keep going!",
   "learnLate": "Late",
   "learnLessons": "Lessons",
-  "learnLocked": "Pass the previous lesson to unlock this one",
   "learnLockedReason": "Locked — pass “{lesson}” first",
   "@learnLockedReason": {
     "placeholders": {

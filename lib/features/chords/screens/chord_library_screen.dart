@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
@@ -38,15 +39,17 @@ class _ChordLibraryScreenState extends ConsumerState<ChordLibraryScreen> {
         child: SizedBox(width: 96, child: ChordDiagram(label: label, size: 76)),
       ),
       Positioned(
-        right: -6,
-        bottom: 8,
+        right: 0,
+        bottom: 0,
         child: IconButton(
           key: Key('chord-open-detail-$label'),
           icon: const Icon(Icons.chevron_right, size: 18),
           tooltip: AppLocalizations.of(context).chordDetailOpen(label),
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-          visualDensity: VisualDensity.compact,
+          constraints: const BoxConstraints(
+            minWidth: SsSemantics.minimumInteractiveDimension,
+            minHeight: SsSemantics.minimumInteractiveDimension,
+          ),
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => ChordDetailView(label: label),

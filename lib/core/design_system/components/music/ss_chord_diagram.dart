@@ -37,7 +37,7 @@ final class SsChordDiagram extends StatelessWidget {
 
   /// The [baseFret] window badge text (e.g. "4fr"), already composed by the
   /// caller — the design system does not own this string (no l10n layer
-  /// here; ADR 0424 §5.5 keeps user-facing text out of this tree). Ignored
+  /// here; ADR 0424 §2.3 keeps user-facing text out of this tree). Ignored
   /// when [baseFret] is 0.
   final String? baseFretLabel;
 

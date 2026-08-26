@@ -1930,7 +1930,6 @@
   "learnKeepGoing": "Így tovább!",
   "learnLate": "Késve",
   "learnLessons": "Leckék",
-  "learnLocked": "Teljesítsd az előző leckét a feloldáshoz",
   "learnLockedReason": "Zárolva — először teljesítsd: „{lesson}”",
   "@learnLockedReason": {
     "placeholders": {
