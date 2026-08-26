@@ -1,0 +1,223 @@
+# E13-R24 — Review (Song import, előnézet és szerkesztő UI)
+
+- **Kör:** `E13-R24` · **Branch:** `sonnet-impl/e13-r24-song-import-and-editor`
+- **Reviewelt HEAD:** `665c9fbd`
+- **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
+- **Reviewer:** Claude Opus 5 (orchestrátor-ülés), read-only, izolált `/tmp` klón
+- **Dátum:** 2026-08-26
+- **Verdikt:** **CHANGES REQUESTED** — 0 BLOCKER, **1 MAJOR**, 3 MINOR, 3 NOTE
+
+---
+
+## 1. Amit magam mértem (nem bemondás)
+
+### 1.1 Gate-újrafuttatás izolált klónban
+
+```
+git clone --branch sonnet-impl/e13-r24-song-import-and-editor \
+  /home/ubuntu/ss-sonnet-impl-e13-r24 /tmp/review-e13-r24
+bash /tmp/review-e13-r24/tools/prepare-flutter-generated.sh      → exit 0
+tools/round-gate.sh <a brief §7 szerinti 15 tesztút>
+```
+
+**Eredmény: 20/20 lépés ZÖLD**, `MINDEN GATE ZÖLD`. Lépésenként:
+
+| # | Lépés | Verdikt | Teszt |
+|---|---|---|---|
+| 1 | format | ZÖLD | 2045 fájl, 0 changed |
+| 2 | analyze | ZÖLD | — |
+| 3 | `import_flow_test.dart` | ZÖLD | +2 |
+| 4 | `import_blocking_error_test.dart` | ZÖLD | +4 |
+| 5 | `editor_draft_test.dart` | ZÖLD | +3 |
+| 6 | `editor_keyboard_flow_test.dart` | ZÖLD | +3 |
+| 7 | `e13_r24_screens_golden_test.dart` | ZÖLD | +6 |
+| 8 | `ui_inventory_test.dart` | ZÖLD | +1 |
+| 9–12 | a négy listán KÍVÜLI pin-teszt | ZÖLD | +1/+1/+2/+2 |
+| 13 | `app_router_test.dart` | ZÖLD | +22 |
+| 14 | `architecture_dependency_test.dart` | ZÖLD | +44 |
+| 15–17 | `dio`/`preferences`/`route_literal` guard | ZÖLD | +1/+2/+1 |
+| 18–20 | architecture, secrets, l10n | ZÖLD | — |
+
+Összesen **95 zöld teszt** — az implementer §10-beli állítása FÜGGETLENÜL
+megerősítve. A négy pin-teszt (`song_import_screen_test`,
+`song_import_preview_screen_test`, `song_editor_screen_test`,
+`guitar_pro_conversion_guidance_test`) és az `app_router_test` **változatlanul**
+zöld: a helyben-migráció (§0.0/B/R7) tartotta a típusneveket, útvonalakat és
+konstruktor-szignatúrákat.
+
+### 1.2 Scope-audit (a hiteles eszközzel, nem `git diff --stat`-tal)
+
+```
+python3 tools/scope-audit.py --repo /tmp/review-e13-r24 \
+  --brief …/e13-r24-song-import-and-editor.md --base 3b88f757
+→ Legacy scope audit OK (3b88f75792f8..665c9fbd7625, 20 changed path(s), 0 generated/ignored)
+```
+
+A wrapper gépi auditja is `scope_audit=ok` volt mindkét futáson.
+`test/ui/ui_inventory_test.dart` diffje **ÜRES** — a §0.0/B/R13 előírás
+teljesült, új `*_screen.dart` nem keletkezett (86 → 86).
+
+### 1.3 Eldobható próbatesztek (mind visszaállítva; `git status` üres)
+
+| # | Próba | Mért eredmény |
+|---|---|---|
+| P1 | `song_section_editor.dart`: a `constraints: BoxConstraints(minWidth/minHeight: 48)` **teljes eltávolítása** | az A7 érintési-cél cella **ZÖLD maradt** (`00:01 +3: All tests passed!`) |
+| P2 | ugyanott `48` → **`32`** | az A7 cella **ismét ZÖLD** (`+3`) |
+| P3 | eldobható méret-szonda ugyanezen a 32-es állapoton | `getSize(IconButton) = Size(48.0, 48.0)`, `inner ConstrainedBox = Size(40.0, 40.0)` |
+| P4 | `song_editor_screen.dart`: az A5 hiba-sáv törlése | az **A5 cella PIROSRA váltott** ✔ |
+| P5 | `song_editor_screen.dart`: a Save `canPersist`-kapujának kivétele | az **A6 cella PIROSRA váltott** ✔ |
+| P6 | `SongValidator().validate()` + `SongCapabilityResolver().resolve()` költsége nagy dokumentumon (100 / 1000 / 4000 esemény, 20 futás átlaga) | `0,531 ms` / `0,577 ms` / `0,651 ms` — közel lapos |
+
+---
+
+## 2. Leletek
+
+### MAJOR-1 — az A7 érintési-cél cellája NEM TUD PIROSRA VÁLTANI (üres cella, L477)
+
+**Fájl:** `test/features/songs/import/editor_keyboard_flow_test.dart:88-117`
+(a mért production oldal: `lib/features/song_trainer/presentation/widgets/song_section_editor.dart:37-44,52-58`)
+
+**Mit mértem.** A cella mind a hat átrendező gombot végigjárja, és
+`tester.getSize(...)`-szal `>= 48.0`-t állít. A P1/P2/P3 próba viszont
+megmutatta, hogy ez az érték **szerkezetileg konstans**:
+
+```
+constraints eltávolítva  → a cella ZÖLD (+3)
+constraints 48 → 32      → a cella ZÖLD (+3)
+mért méretek 32-es állapotban:
+    getSize(IconButton)      = Size(48.0, 48.0)     ← ezt méri a cella
+    inner ConstrainedBox     = Size(40.0, 40.0)     ← ez a kör tényleges kódja
+```
+
+A Material `IconButton` a `MaterialTapTargetSize.padded` alapértelmezés miatt a
+saját render-boxát MINDIG 48 dp-re fújja fel, függetlenül a `constraints:`
+paramétertől. A cella tehát **a Material alapértelmezését méri, nem a kör
+kódját** — és nincs az az implementációs hiba, ami pirosra váltaná.
+
+**Miért MAJOR és nem MINOR.** A brief §6.1 kifejezetten előírt egy
+`47.0 → PIROS` cellát (a küszöb alatti eset); ez a cella nem létezik, és ebben
+a formában nem is létezhet. Ez ráadásul a sáv **harmadik** egymást követő
+érintési-cél lelete (E13-R20/MAJOR-1, E13-R21/MAJOR-2, [L496](../LESSONS.md#l496)),
+és pontosan az [L477](../LESSONS.md#l477) hibaosztálya: a cella zöldje nem
+bizonyíték, ha a bukási képessége nincs megmérve.
+
+**Mellékmérés:** a production `constraints: BoxConstraints(minWidth: 48,
+minHeight: 48)` hozzáadása ezen a témán **mért no-op** — a gomb enélkül is
+48×48. A doc-comment viszont azt állítja, hogy „the default constraints do not
+guarantee it"; ez az állítás a P1 próba szerint **hamis**.
+
+**Javasolt irány (NEM kész patch).** A cella arra a tulajdonságra mérjen, ami
+ténylegesen változhat és amit a kör birtokol — pl. a szemantikai csomópont
+`SemanticsNode.rect`-je (`tester.getSemantics`), vagy az `IconButton`
+effektív `constraints`/`iconSize`+`padding` értéke —, és a javítás
+tartalmazza a bizonyítékot, hogy a reviewer 32 dp-s próbája **pirosra** váltja.
+Ha a mérés azt adja, hogy a `constraints:` valóban fölösleges ezen a témán, azt
+a doc-comment mondja ki őszintén, a jelenlegi (hamis) állítás helyett.
+
+### MINOR-1 — `_canPersist()` minden `build()`-ben újraszámol, pedig csak `state.persisted`-től függ
+
+**Fájl:** `lib/features/song_trainer/presentation/screens/song_editor_screen.dart:35-45,119`
+
+A `SongEditorScreen.build` a `songEditorStateProvider`-re iratkozik, tehát
+MINDEN szerkesztési lépésnél (undo/redo, metaadat-gépelés, akkord hozzáadása)
+újrafut — és vele a teljes `SongValidator().validate(persisted)`. A `persisted`
+viszont csak betöltéskor és sikeres mentéskor változik.
+
+**Mérve (P6):** `0,531 / 0,577 / 0,651 ms` 100 / 1000 / 4000 eseménynél — a
+16,7 ms-os képkocka-büdzsé ~4%-a, és lényegében lapos az eseményszámban.
+**Ezért NEM jank-forrás, és nem blokkol** — de fölösleges munka a szerkesztő
+forró útján. Irány: memoizáld a `state.persisted` identitására.
+
+### MINOR-2 — `_saveCopy` a mentés SIKERE ELŐTT elszakítja a szerkesztőt az eredetitől
+
+**Fájl:** `lib/features/song_trainer/presentation/screens/song_editor_screen.dart:360-395`
+
+A sorrend `controller.startNew(copy)` → `await controller.save()`. A
+`startNew` friss `SongEditorState`-et publikál (`persisted == null`), tehát ha
+a másolat mentése elbukik — validáció (`hasFatalIssue` → `validationFailed`,
+a `save()` ilyenkor NEM ír) vagy `create` I/O-hiba —, a felhasználó egy
+`editor-copy-…` identitású, gazdátlan piszkozaton marad, a csak olvasható
+eredeti kontextusa nélkül, miközben a `canPersist(null) == true` miatt a Save
+újra aktívvá válik.
+
+**Az A6 cella ezt az utat nem járja be:** előbb *megjavítja* a fatális
+hivatkozást (`addChord`), és csak az így érvényessé vált másolatot menti. A
+„javítás nélkül másolok" út — épp az, amit egy felhasználó először próbál —
+mérés nélkül maradt. Irány: előbb írj, és csak siker után váltsd az állapotot
+(vagy hiba esetén állítsd vissza), plusz egy cella a javítatlan másolásra.
+
+### MINOR-3 — nyers `TextStyle(color: …)` a téma tipográfiai tokenje helyett
+
+**Fájlok:** `song_import_screen.dart:100-104`, `song_import_preview_screen.dart:54-56`,
+`song_editor_screen.dart:246-248`
+
+Mindhárom helyen `style: TextStyle(color: …)` áll, ami a `TextTheme` méret-,
+súly- és sormagasság-tokenjeit eldobja (a szín-szerep viszont helyesen
+`colorScheme.error`). A sáv saját design-system fegyelme szerint ez
+`Theme.of(context).textTheme.bodyMedium?.copyWith(color: …)` alakot kíván.
+A goldeneket a javítás elmozdíthatja — újrafelvétel `tools/golden-x86.sh
+record`-dal, SOHA nem `--update-goldens`-szel (ADR 0426).
+
+### NOTE-1 — a §3 „expanded több-paneles elrendezés" nem valósult meg, és nincs cellája
+
+A brief §3 nevesíti „a szerkesztő compact strukturált és **expanded
+több-paneles** elrendezését"; a diffben nincs töréspont-vezérelt elrendezés
+(`SsBreakpoints`/`SsAdaptiveScaffold` nulla találat), és az A1–A9 közül
+egyetlen cella sem méri. **Nem regresszió:** a sáv merge-elt precedense
+ugyanez — a `song_library_screen.dart`, `song_overview_screen.dart` és
+`setlist_list_screen_v2.dart` (E13-R23) mindegyike **nulla** `design_system`
+importtal él. Nevesített follow-up az E13-R36 vizuális regressziós körhöz.
+
+### NOTE-2 — az A1/A2 az APPLICATION réteget méri, amit ez a kör nem módosított
+
+Az `import_flow_test.dart` mindkét cellája a `SongImportController`-t hajtja
+közvetlenül (beinjektált `workspaceRoot` temp könyvtárral). Ez **jó** regressziós
+őr az ADR 0284 §1–2-re, de nem a kör SAJÁT UI-kódjáról tesz állítást. A
+cellák megtartandók; a tény a §10-ben nincs kimondva.
+
+### NOTE-3 — `DateTime.now()` / `Random.secure()` a presentation rétegben
+
+`_saveCopy` (`song_editor_screen.dart:361-363`) ugyanazt a mintát követi, mint
+a fájlban már meglévő `_newDraft` — nem új szabálysértés, csak öröklött minta.
+
+---
+
+## 3. Acceptance criteria — tételes ellenőrzés
+
+| # | Kritérium | Bizonyíték | Verdikt |
+|---|---|---|---|
+| A1 | Az előnézet nem hoz létre tartós rekordot | `import_flow_test.dart` A1-cella, valódi temp root: `repository.list` üres ÉS `tempRoot.listSync()` üres | ✅ |
+| A2 | A megszakított import után nem marad temp fájl | ugyanott, A2-cella: `confirmPreview()` KÖZBEN megszakítva, a workspace nyitva volt | ✅ |
+| A3 | A blokkoló hiba nem kerülhető meg (két producer) | `import_blocking_error_test.dart` (a)+(b) cella; az implementer valódi-sértés próbája `+2 -2`-t mért, a §10 rögzíti | ✅ |
+| A4 | Figyelmeztetés vs blokkoló hiba elkülönül | ikon (`error_outline` vs `warning_amber_outlined`), `colorScheme.error`, külön `Semantics` címke | ✅ |
+| A5 | A piszkozat mentési hiba után is megmarad | `editor_draft_test.dart` A5; a **P4 próbám pirosra váltotta** | ✅ |
+| A6 | Csak olvasható forrásból csak másolat | `editor_draft_test.dart` A6; a **P5 próbám pirosra váltotta**; `update()` hívása a fake-ben `StateError` | ✅ (a boldog úton — lásd MINOR-2) |
+| A7 | Az átrendezés billentyűvel/gombbal is elvégezhető | a két gomb-cella valódi (a `Draggable`/`ReorderableListView` ABSZENCIA-állítással együtt) | ⚠️ a működés ✅, **az érintési-cél cella üres — MAJOR-1** |
+| A8 | A mentetlen kilépés következménye szövegben megjelenik | `editor_draft_test.dart` A8 — VALÓDI `push`/`maybePop` úton, nem in-place | ✅ |
+| A9 | Golden minden képernyőről, 412×915 ÉS `textScaler: 2.0` | 6 PNG a `test/ui/goldens/goldens/`-ben, commitolva, x86-on felvéve; a golden-teszt +6 zöld | ✅ |
+
+---
+
+## 4. Architektúra és termékhatárok
+
+- **Presentation → `domain/services/**`:** a `song_editor_screen.dart` új
+  `SongValidator`/`SongCapabilityResolver` importja **megengedett** — sem a
+  `test/core/architecture_dependency_test.dart` (44 cella, zöld), sem a
+  `tool/check_architecture.dart` nem tilt ilyen élt, és mindkét szolgáltatás
+  framework-független, tiszta függvény. A §0.0/B/R10 előzetes mérése helyes volt.
+- **Design-system határ:** nulla közvetlen `design_system/foundations/**`
+  import (az E13-R16/F8 hibaosztály nem ismétlődött).
+- **Hálózat / mikrofon / secret / plugin:** a diff egyikhez sem nyúl; a három
+  `tooling` guard zöld.
+- **Erőforrás-életciklus:** az `ImportWorkspace` minden terminális ágon zár
+  (`_finish` → `_closeWorkspace`) — az A2 cella ezt élesben méri.
+
+## 5. Merge-döntés
+
+**MAJOR-1 nyitva → merge TILOS.** Javító kör indul ugyanazzal a motorral, a
+fenti leletlistával. A MINOR-1–3 a javító körben együtt javítható (a diffet nem
+hizlalják); a NOTE-ok nem blokkolnak.
+
+A zöld kapu többi eleme készen áll: 20/20 lokális gate, scope-audit OK, és az
+exact-SHA CI (Full Gate + Router CI) a `665c9fbd`-n fut — a javító kör után
+ÚJRA kell dispatch-elni az új HEAD-re.
