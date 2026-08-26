@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../learn/public.dart';
 import '../chord_shape.dart';
@@ -79,6 +80,8 @@ class ChordDetailView extends ConsumerWidget {
                   for (final other in related)
                     ActionChip(
                       label: Text(other),
+                      backgroundColor: context.palette.surface,
+                      side: BorderSide(color: context.palette.border),
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => ChordDetailView(label: other),

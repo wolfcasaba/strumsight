@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../streak/public.dart';
 import '../providers/lesson_progress_provider.dart';
@@ -138,6 +139,7 @@ class _V2EntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Card(
+    color: context.palette.surface,
     margin: EdgeInsets.zero,
     child: ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -237,6 +239,7 @@ class _LessonTile extends StatelessWidget {
           ].join(' · ');
     return Card(
       key: ValueKey('lesson-tile-${lesson.id}'),
+      color: context.palette.surface,
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         enabled: unlocked,
