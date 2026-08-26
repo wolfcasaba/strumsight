@@ -290,3 +290,75 @@ draftban van.
 motorral. (A Codex-eszkaláció tárgytalan: a Codex-oldal kvóta miatt nem
 futtatható — a kör-prompt §1.1 „MOTOR-FELÁLLÁS" blokkja ezt kimondja, tehát a
 javító kör is `sonnet-impl`, a mércét pedig gépi őr tartja.)
+
+---
+
+# 7. Javító kör #2 után — VÉGSŐ DÖNTÉS: **APPROVED** (`08b7b13c`, 2026-08-26)
+
+**0 nyitott lelet.** Minden korábbi lelet lezárva, a MAJOR-2 javítása
+FÜGGETLENÜL megmérve egy HARMADIK, friss `/tmp/review3-e13-r24` klónban.
+
+## 7.1 MAJOR-2 — ZÁRVA
+
+**A javítás.** A `_saveCopy` most **a controller érintése ELŐTT** validálja a
+másolatot (`if (!_canPersist(copy)) { … return; }`), tehát a még mindig
+fatális eset SOHA nem hívja a `startNew`-t — a felhasználó élő piszkozata
+érintetlen marad, a bukás okát pedig `SnackBar` nevezi meg. A megmaradó
+repository-írási hiba ágán a `load(id)` **megszűnt**: helyette egy
+képernyő-szintű `_copyWriteFailed` jelző tartja zárolva a Save-et és láthatóan
+a „Save copy" újrapróbát, amíg a `persisted` újra nem lesz nem-null. A
+`draft`-ot egyik ág sem írja felül.
+
+**A saját mérésem (a §6.2 próbájának megismétlése a javított HEAD-en):**
+
+```
+PROBE before copy: My careful rename
+PROBE after  copy: My careful rename      ← a szerkesztés MEGMARADT
+PROBE createCalls = 0                     ← és semmi nem íródott ki
+PROBE save locked = true                  ← a Save továbbra is zárolt
+PROBE retry visible = 1                   ← az újrapróba elérhető
+```
+
+**A cella bukási képessége bizonyítva.** Visszaállítottam a regressziót (az
+előzetes validáció kivétele + `await controller.load(id)`), és a kör ÚJ cellája
+pirosra váltott:
+
+```
+MAJOR-2: a failed copy attempt never discards an edit the user made before saving
+Expected: 'My careful rename'
+  Actual: 'Legacy Song'
+```
+
+Ez tehát valódi őr, nem üres cella — az [L477](../LESSONS.md#l477) mércéje
+teljesül.
+
+**Kimondott, őszinte korlát** (a doc-comment rögzíti, NEM elrejtve): a
+`SongEditorController` az `application/**` tilos zónában van, és nincs publikus
+API-ja a `persisted` visszaállítására a `draft` felülírása nélkül (`load` mindkettőt
+állítja). A megmaradó repository-írási hiba ezért képernyő-szintű zárolással
+kezelt, nem a controller állapotának helyreállításával. Ez mért korlát, nem
+gyengítés — a felhasználó munkája egyik ágon sem vész el.
+
+## 7.2 Zárt leletek összesítve
+
+| Lelet | Állapot | Bizonyíték |
+|---|---|---|
+| MAJOR-1 (üres A7 cella) | **ZÁRVA** | `32.0` ⇒ PIROS, `null` constraints ⇒ PIROS (saját próba) |
+| MAJOR-2 (néma munkavesztés) | **ZÁRVA** | a fenti PROBE + a piros regressziós próba |
+| MINOR-1 (per-build validáció) | **ZÁRVA** | `identical`-alapú memoizálás |
+| MINOR-2 (`_saveCopy` sorrend) | **ZÁRVA** | előzetes validáció + két cella |
+| MINOR-3 (nyers `TextStyle`) | **ZÁRVA** | `textTheme.bodyMedium?.copyWith`, goldenek zöldek |
+| NOTE-1/2/3 | nyitva, **nem blokkol** | NOTE-1 → nevesített follow-up (E13-R36) |
+
+## 7.3 Végső mérések a `08b7b13c` HEAD-en
+
+- **Saját gate-futás** (harmadik, friss klón): **20/20 lépés ZÖLD**,
+  `MINDEN GATE ZÖLD`, **97 teszt**.
+- **Scope-audit:** `Legacy scope audit OK (3b88f75792f8..08b7b13c4081,
+  21 changed path(s), 1 generated/ignored)`.
+- **Upstream-frissesség:** `git merge-base --is-ancestor origin/main HEAD`
+  → exit 0; az `origin/main` változatlanul `3b88f757`.
+- **Képernyő-leltár:** 86 → 86, a `ui_inventory_test.dart` diffje ÜRES.
+
+**VÉGSŐ DÖNTÉS: APPROVED.** A merge az exact-SHA CI-kapun (Full Gate + Router
+CI, mindkettő `08b7b13c`) múlik.
