@@ -561,4 +561,88 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Felületenként, röviden:**
+
+- **Import folyamat** (`song_import_screen.dart`) — helyben migrált; a
+  `failure` fázis a hibát nevesítve mutatja (`Icons.error_outline` + error
+  szín-szerep + `Semantics` `songImportBlockingSemantic`), és a kizárólagos
+  cselekvés a „Choose a file" (új próbálkozás), **nincs** rajta megerősítő
+  affordancia (§0.0/B/R8/(b)).
+- **Import előnézet** (`song_import_preview_screen.dart`) — a `fatal.`
+  előtagú figyelmeztetés a megerősítést letiltja (`FilledButton.onPressed =
+  null`), és `Icons.error_outline` + `Semantics` `Fatal import issue: …`
+  jelenik meg, szemben a küszöb alatti/rajta esettel
+  (`Icons.warning_amber_outlined`, `ImportWarningList`). Az `ImportWorkspace`
+  csak `confirmPreview()`-ban nyílik, megszakításkor mindig zár (A1/A2).
+- **Szerkesztő** (`song_editor_screen.dart` + a hat widget) — a Save
+  `canPersist`-tel zárolt (`SongCapabilityResolver` a domain rétegből); zárolt
+  esetben az egyetlen írási út a másolat (`controller.startNew(...)`, új
+  `SongId`, `createdInApp` forrás), az eredeti dokumentum változatlan marad.
+  Mentési hiba esetén a `draft` a state-ben érintetlen marad, a hiba
+  `failureCode` nevesítve látszik a képernyőn. A szakasz-átrendezés
+  fel/le `IconButton`-párral (`song-editor-section-move-{up,down}-<index>`
+  kulcsokkal) megy, húzás-widget (`Draggable`/`LongPressDraggable`/
+  `ReorderableListView`) egy sincs a fán; minden ilyen gomb `tester.getSize`
+  mérete `>= 48.0 dp`.
+
+**A1–A9 cellák helye:**
+
+| Cella | Fájl::teszt |
+|---|---|
+| A1 | `test/features/songs/import/import_flow_test.dart::'A1: reaching the preview creates no persistent record and writes no temp file'` |
+| A2 | `test/features/songs/import/import_flow_test.dart::'A2: cancelling a confirmed import cleans the opened workspace'` |
+| A3(a) | `test/features/songs/import/import_blocking_error_test.dart::'above threshold (a): a fatal.-prefixed preview warning disables confirm and looks/reads distinct from a warning'` |
+| A3(b) | `test/features/songs/import/import_blocking_error_test.dart::'above threshold (b): the real SongImportPhase.failure + failureCode names the blocking error and offers zero confirm/"continue anyway" affordance'` |
+| A4 | ugyanaz a két A3-cella + `'below threshold'`/`'at threshold'` cellák (ikon/szín/Semantics kontraszt) |
+| A5 | `test/features/songs/import/editor_draft_test.dart::'A5: a failed save keeps the draft on screen and names the failure code'` |
+| A6 | `test/features/songs/import/editor_draft_test.dart::'A6: canPersist == false locks Save; only a copy with a new SongId and createdInApp source can be written, and the original stays untouched'` |
+| A7 | `test/features/songs/import/editor_keyboard_flow_test.dart::'moving a section down/up works via a button tap, without any drag gesture'` + `'every reorder affordance meets the >= 48 dp touch target (inclusive)'` |
+| A8 | `test/features/songs/import/editor_draft_test.dart::'A8: leaving the editor with unsaved changes names the consequence before the pop is allowed'` |
+| A9 | `test/ui/goldens/e13_r24_screens_golden_test.dart::'song import — $suffix'` / `'song import preview — $suffix'` / `'song editor — $suffix'` (`compact`/`compact @2.0×` suffixek) |
+
+**Valódi-sértés próba eredménye (1. lépés, ezen a kör-folytatáson futtatva):**
+
+Sértés: (1) `song_import_preview_screen.dart` — a `FilledButton.onPressed`-ről
+levéve a `fatal ? null : …` feltétel (mindig aktív); (2) `song_import_screen.dart`
+— a `failure` fázisra egy megerősítő `FilledButton` (`songImportConfirm`
+szöveggel) visszatéve a „Choose a file" gomb elé.
+
+Diff: `git diff --shortstat` → **`2 files changed, 10 insertions(+), 4
+deletions(-)`**.
+
+`~/flutter/bin/flutter test test/features/songs/import/import_blocking_error_test.dart`
+eredménye: **`00:01 +2 -2`** — a négy cellából a két A3-producer cella váltott
+pirosra, névvel:
+
+- `above threshold (a): a fatal.-prefixed preview warning disables confirm and
+  looks/reads distinct from a warning` — `Expected: null / Actual:
+  <Closure: () => void>` (a letiltás megszűnt).
+- `above threshold (b): the real SongImportPhase.failure + failureCode names
+  the blocking error and offers zero confirm/"continue anyway" affordance` —
+  `Expected: no matching candidates / Actual: … Text("Import song")` (a
+  visszatett megerősítő gomb megjelent).
+
+A `'below threshold'` és `'at threshold'` cellák zöldek maradtak (nem érintik
+a sértett ágat) — ez a mérce elvárt, célzott viselkedése.
+
+Visszaállítás: `git checkout -- lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart lib/features/song_trainer/presentation/screens/song_import_screen.dart`
+— utána `git status --short` üres, megerősítve.
+
+**`tools/round-gate.sh` — a §3. lépés futtatása után ide kerül a tényleges
+kimenet összefoglalója (lépésszám, teszt-darabszám).**
+
+**Hat golden PNG** (`test/ui/goldens/goldens/`, korábbi commitban rögzítve
+x86_64-en, `tools/golden-x86.sh record`):
+
+- `e13_r24_song_import_compact.png`
+- `e13_r24_song_import_compact_scale2.png`
+- `e13_r24_song_import_preview_compact.png`
+- `e13_r24_song_import_preview_compact_scale2.png`
+- `e13_r24_song_editor_compact.png`
+- `e13_r24_song_editor_compact_scale2.png`
+
+**Mért korlátok:** nincs — a kör mind a §6 acceptance-celláit, a §0.0/B
+revíziós pontjait és a valódi-sértés próbát teljesítette a jelen
+folytató-futáson.
+
 ## 11. Review — a Claude tölti ki
