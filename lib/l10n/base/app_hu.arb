@@ -2281,6 +2281,8 @@
   "@analysisOverviewConfidenceMedium": {},
   "analysisOverviewConfidenceLow": "Bizonytalan mérés",
   "@analysisOverviewConfidenceLow": {},
+  "analysisOverviewConfidenceLegendTitle": "Megbízhatósági jelmagyarázat",
+  "@analysisOverviewConfidenceLegendTitle": {},
   "analysisOverviewNotApplicable": "Ehhez a felvételhez nem alkalmazható",
   "@analysisOverviewNotApplicable": {},
   "analysisOverviewUnavailable": "A mérés nem érhető el",
@@ -2357,6 +2359,12 @@
   },
   "analysisOverviewSignalQualitySemantic": "Felvétel minőségének mérései",
   "@analysisOverviewSignalQualitySemantic": {},
+  "analysisOverviewSignalQualityScoreSemantic": "Teljes felvételminőség: {value}",
+  "@analysisOverviewSignalQualityScoreSemantic": {
+    "placeholders": {
+      "value": {}
+    }
+  },
   "analysisOverviewInsightKindTitleRecommendation": "Ajánlott következő lépés",
   "@analysisOverviewInsightKindTitleRecommendation": {},
   "analysisOverviewInsightKindTitleObservation": "Erősség",
@@ -2465,6 +2473,23 @@
   "@analysisTimelineHotspotSeverityMedium": {},
   "analysisTimelineHotspotSeverityHigh": "magas súlyosság",
   "@analysisTimelineHotspotSeverityHigh": {},
+  "analysisTimelinePracticeSelection": "Gyakorold ezt a szakaszt",
+  "@analysisTimelinePracticeSelection": {},
+  "analysisTimelineTrendConcentratedEarly": "A nézet első felében torlódik",
+  "@analysisTimelineTrendConcentratedEarly": {},
+  "analysisTimelineTrendConcentratedLate": "A nézet második felében torlódik",
+  "@analysisTimelineTrendConcentratedLate": {},
+  "analysisTimelineTrendEven": "Egyenletesen oszlik el a nézetben",
+  "@analysisTimelineTrendEven": {},
+  "analysisTimelineTrendInsufficient": "Nincs elég esemény a trendhez",
+  "@analysisTimelineTrendInsufficient": {},
+  "analysisTimelineExtremes": "Első: {first}, utolsó: {last}",
+  "@analysisTimelineExtremes": {
+    "placeholders": {
+      "first": {},
+      "last": {}
+    }
+  },
   "analysisCompareTitle": "Sessionök összehasonlítása",
   "@analysisCompareTitle": {},
   "analysisCompareEmpty": "A két session között egyetlen metrika sem hasonlítható össze.",

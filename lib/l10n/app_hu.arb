@@ -821,6 +821,8 @@
   },
   "analysisOverviewConfidenceHigh": "Magas megbízhatóság",
   "@analysisOverviewConfidenceHigh": {},
+  "analysisOverviewConfidenceLegendTitle": "Megbízhatósági jelmagyarázat",
+  "@analysisOverviewConfidenceLegendTitle": {},
   "analysisOverviewConfidenceLow": "Bizonytalan mérés",
   "@analysisOverviewConfidenceLow": {},
   "analysisOverviewConfidenceMedium": "Közepes megbízhatóság",
@@ -914,6 +916,12 @@
   },
   "analysisOverviewSignalQualityRms": "RMS: {value}",
   "@analysisOverviewSignalQualityRms": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "analysisOverviewSignalQualityScoreSemantic": "Teljes felvételminőség: {value}",
+  "@analysisOverviewSignalQualityScoreSemantic": {
     "placeholders": {
       "value": {}
     }
@@ -1080,6 +1088,13 @@
   "analysisTechniqueUnexpectedExtraOnsets": "Nem várt extra hangindítások akkordváltás körül",
   "analysisTimelineDescription": "Nagyíts és pásztázz a rögzített bizonyítékok vizsgálatához.",
   "@analysisTimelineDescription": {},
+  "analysisTimelineExtremes": "Első: {first}, utolsó: {last}",
+  "@analysisTimelineExtremes": {
+    "placeholders": {
+      "first": {},
+      "last": {}
+    }
+  },
   "analysisTimelineHotspotItem": "{index}. problémás pont / {count}: {kind}, {severity}",
   "@analysisTimelineHotspotItem": {
     "placeholders": {
@@ -1151,6 +1166,8 @@
   "@analysisTimelineNoHotspots": {},
   "analysisTimelineNoPreview": "Nincs előnézeti adat",
   "@analysisTimelineNoPreview": {},
+  "analysisTimelinePracticeSelection": "Gyakorold ezt a szakaszt",
+  "@analysisTimelinePracticeSelection": {},
   "analysisTimelinePreviousHotspot": "Előző problémás pont",
   "@analysisTimelinePreviousHotspot": {},
   "analysisTimelineSelection": "Kijelölt tartomány: {start}–{end}",
@@ -1162,6 +1179,14 @@
   },
   "analysisTimelineTitle": "Elemzési idővonal",
   "@analysisTimelineTitle": {},
+  "analysisTimelineTrendConcentratedEarly": "A nézet első felében torlódik",
+  "@analysisTimelineTrendConcentratedEarly": {},
+  "analysisTimelineTrendConcentratedLate": "A nézet második felében torlódik",
+  "@analysisTimelineTrendConcentratedLate": {},
+  "analysisTimelineTrendEven": "Egyenletesen oszlik el a nézetben",
+  "@analysisTimelineTrendEven": {},
+  "analysisTimelineTrendInsufficient": "Nincs elég esemény a trendhez",
+  "@analysisTimelineTrendInsufficient": {},
   "analyzeAnalyzing": "Elemzés…",
   "analyzeIntro": "Koppints a felvételre és játssz pár ütemet — idővonalon kapod az akkordokat és a pengetésirányokat.",
   "analyzeMyRecording": "A felvételem",

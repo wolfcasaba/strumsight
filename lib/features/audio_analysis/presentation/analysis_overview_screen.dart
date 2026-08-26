@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 import '../../../app/routing/app_route.dart';
+import '../../../core/design_system/public.dart';
 import '../domain/analysis_document.dart';
 import 'controllers/overview_view_model.dart';
 import 'widgets/insight_card.dart';
@@ -91,6 +92,24 @@ class _AnalysisOverviewBody extends StatelessWidget {
                   style: theme.textTheme.titleMedium,
                 ),
               ),
+              SsConfidenceLegend(
+                title: l10n.analysisOverviewConfidenceLegendTitle,
+                entries: <SsConfidenceLegendEntry>[
+                  SsConfidenceLegendEntry(
+                    level: SsConfidenceLevel.high,
+                    label: l10n.analysisOverviewConfidenceHigh,
+                  ),
+                  SsConfidenceLegendEntry(
+                    level: SsConfidenceLevel.medium,
+                    label: l10n.analysisOverviewConfidenceMedium,
+                  ),
+                  SsConfidenceLegendEntry(
+                    level: SsConfidenceLevel.low,
+                    label: l10n.analysisOverviewConfidenceLow,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               for (final metric in viewModel.primaryMetrics) ...<Widget>[
                 MetricCard(
                   card: metric,

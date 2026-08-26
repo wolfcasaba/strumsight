@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
+
 /// Pre-formatted content for one [MetricDeltaRow]. Formatting-only, no
 /// domain type dependency, so the widget stays trivially testable — every
 /// string is resolved by the screen from [MetricComparison] + [AppLocalizations].
@@ -8,7 +10,7 @@ final class MetricDeltaRowData {
     required this.metricId,
     required this.metricLabel,
     required this.directionLabel,
-    required this.directionIcon,
+    required this.direction,
     required this.beforeValueText,
     required this.afterValueText,
     required this.deltaText,
@@ -25,7 +27,7 @@ final class MetricDeltaRowData {
   /// non-empty; the row never conveys direction by colour or icon alone,
   /// only ever icon *plus* this label.
   final String directionLabel;
-  final IconData directionIcon;
+  final SsTrendDirection direction;
   final String beforeValueText;
   final String afterValueText;
   final String deltaText;
@@ -61,7 +63,11 @@ final class MetricDeltaRow extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Icon(data.directionIcon, size: 18),
+                SsTrendIndicator(
+                  direction: data.direction,
+                  semanticLabel: data.directionLabel,
+                  iconSize: 18,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

@@ -6,6 +6,7 @@ import '../../domain/analysis_document.dart';
 import '../../domain/analysis_event.dart';
 import '../../domain/analysis_hotspot.dart';
 import '../controllers/timeline_viewport.dart';
+import 'labels_adapter.dart';
 import 'timeline_lane.dart';
 
 /// Capability-aware composition of the eight timeline lanes mandated by R24.
@@ -155,7 +156,42 @@ final class TimelineLanes extends StatelessWidget {
       viewport: viewport,
       items: items,
       degraded: isDegraded,
+      extremesText: _extremesText(context, items),
+      trendText: _trendText(context, items),
     );
+  }
+
+  /// "First at …, last at …" for the items a lane is about to paint, or
+  /// null when fewer than two fall in the visible window — there is no
+  /// meaningful extreme for zero or one point (ADR 0286 §3).
+  String? _extremesText(BuildContext context, List<TimelineLaneItem> items) {
+    final visible = TimelineLane.visibleItemsFor(items, viewport);
+    if (visible.length < 2) return null;
+    final sorted = <TimelineLaneItem>[...visible]
+      ..sort((a, b) => a.start.compareTo(b.start));
+    final l10n = AppLocalizations.of(context);
+    final labels = AppLocalizationsOverviewLabels(l10n);
+    return l10n.analysisTimelineExtremes(
+      labels.formatDuration(sorted.first.start),
+      labels.formatDuration(sorted.last.start),
+    );
+  }
+
+  /// Localised trend sentence for the items a lane is about to paint
+  /// (ADR 0286 §3). Always non-null — "not enough events" is itself the
+  /// trend sentence when fewer than two items are visible.
+  String _trendText(BuildContext context, List<TimelineLaneItem> items) {
+    final visible = TimelineLane.visibleItemsFor(items, viewport);
+    final l10n = AppLocalizations.of(context);
+    return switch (TimelineLane.densityTrendFor(visible, viewport)) {
+      TimelineLaneDensityTrend.concentratedEarly =>
+        l10n.analysisTimelineTrendConcentratedEarly,
+      TimelineLaneDensityTrend.concentratedLate =>
+        l10n.analysisTimelineTrendConcentratedLate,
+      TimelineLaneDensityTrend.even => l10n.analysisTimelineTrendEven,
+      TimelineLaneDensityTrend.insufficient =>
+        l10n.analysisTimelineTrendInsufficient,
+    };
   }
 
   Widget _hotspotLane(BuildContext context, AppLocalizations l10n) {
@@ -167,14 +203,17 @@ final class TimelineLanes extends StatelessWidget {
         l10n.analysisTimelineNoHotspots,
       );
     }
+    final items = document.hotspots
+        .map((e) => TimelineLaneItem(start: e.start, end: e.end))
+        .toList();
     return TimelineLane(
       kind: TimelineLaneKind.hotspot,
       title: l10n.analysisTimelineLaneHotspots,
       summary: l10n.analysisTimelineItemCount(document.hotspots.length),
       viewport: viewport,
-      items: document.hotspots
-          .map((e) => TimelineLaneItem(start: e.start, end: e.end))
-          .toList(),
+      items: items,
+      extremesText: _extremesText(context, items),
+      trendText: _trendText(context, items),
     );
   }
 

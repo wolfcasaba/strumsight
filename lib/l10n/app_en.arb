@@ -828,6 +828,8 @@
   },
   "analysisOverviewConfidenceHigh": "High confidence",
   "@analysisOverviewConfidenceHigh": {},
+  "analysisOverviewConfidenceLegendTitle": "Confidence legend",
+  "@analysisOverviewConfidenceLegendTitle": {},
   "analysisOverviewConfidenceLow": "Uncertain measurement",
   "@analysisOverviewConfidenceLow": {},
   "analysisOverviewConfidenceMedium": "Medium confidence",
@@ -921,6 +923,12 @@
   },
   "analysisOverviewSignalQualityRms": "RMS: {value}",
   "@analysisOverviewSignalQualityRms": {
+    "placeholders": {
+      "value": {}
+    }
+  },
+  "analysisOverviewSignalQualityScoreSemantic": "Overall signal quality: {value}",
+  "@analysisOverviewSignalQualityScoreSemantic": {
     "placeholders": {
       "value": {}
     }
@@ -1087,6 +1095,13 @@
   "analysisTechniqueUnexpectedExtraOnsets": "Unexpected extra note starts near a chord change",
   "analysisTimelineDescription": "Zoom and pan to inspect the recorded evidence.",
   "@analysisTimelineDescription": {},
+  "analysisTimelineExtremes": "First at {first}, last at {last}",
+  "@analysisTimelineExtremes": {
+    "placeholders": {
+      "first": {},
+      "last": {}
+    }
+  },
   "analysisTimelineHotspotItem": "Hotspot {index} of {count}: {kind}, {severity}",
   "@analysisTimelineHotspotItem": {
     "placeholders": {
@@ -1158,6 +1173,8 @@
   "@analysisTimelineNoHotspots": {},
   "analysisTimelineNoPreview": "No preview data",
   "@analysisTimelineNoPreview": {},
+  "analysisTimelinePracticeSelection": "Practice this section",
+  "@analysisTimelinePracticeSelection": {},
   "analysisTimelinePreviousHotspot": "Previous hotspot",
   "@analysisTimelinePreviousHotspot": {},
   "analysisTimelineSelection": "Selected range: {start} to {end}",
@@ -1169,6 +1186,14 @@
   },
   "analysisTimelineTitle": "Analysis timeline",
   "@analysisTimelineTitle": {},
+  "analysisTimelineTrendConcentratedEarly": "Concentrated in the first half of this view",
+  "@analysisTimelineTrendConcentratedEarly": {},
+  "analysisTimelineTrendConcentratedLate": "Concentrated in the second half of this view",
+  "@analysisTimelineTrendConcentratedLate": {},
+  "analysisTimelineTrendEven": "Evenly spread across this view",
+  "@analysisTimelineTrendEven": {},
+  "analysisTimelineTrendInsufficient": "Not enough events to show a trend",
+  "@analysisTimelineTrendInsufficient": {},
   "analyzeAnalyzing": "Analysing…",
   "analyzeIntro": "Tap record and play a few bars — you'll get a timeline of the chords and strum directions.",
   "analyzeMyRecording": "My recording",

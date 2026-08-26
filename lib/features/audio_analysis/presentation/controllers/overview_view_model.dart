@@ -127,6 +127,9 @@ final class OverviewSignalQualityCard {
     required this.clippedRatioText,
     required this.silentRatioText,
     required this.warningHeadlines,
+    required this.overallMeasured,
+    required this.overallRatio,
+    required this.overallScoreText,
   });
 
   final String peakDbfsText;
@@ -138,6 +141,19 @@ final class OverviewSignalQualityCard {
   /// User-facing headlines for the worst [AnalysisWarning]s the domain
   /// published. Empty when the input was clean.
   final List<String> warningHeadlines;
+
+  /// Whether [overallRatio] originates in an actual measurement
+  /// ([SignalQualityReport.measured]). The overall score ring never paints
+  /// a fraction when this is false.
+  final bool overallMeasured;
+
+  /// Raw 0..1 overall signal quality, as published by the domain. Only
+  /// meaningful when [overallMeasured] is true.
+  final double overallRatio;
+
+  /// Pre-formatted value text for [overallRatio] (e.g. "82%"), or the
+  /// "unavailable" status label when [overallMeasured] is false.
+  final String overallScoreText;
 }
 
 /// Input-summary row used by the overview header. Never includes raw audio
@@ -223,6 +239,11 @@ final class OverviewViewModel {
               warning.severity == AnalysisWarningSeverity.error)
             labels.warningHeadline(warning),
       ],
+      overallMeasured: document.signalQuality.measured,
+      overallRatio: document.signalQuality.overall,
+      overallScoreText: document.signalQuality.measured
+          ? labels.formatRatio(document.signalQuality.overall)
+          : labels.unavailableStatusLabel(),
     );
 
     final allCards = <OverviewMetricCard>[

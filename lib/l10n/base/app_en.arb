@@ -2359,6 +2359,8 @@
   "@analysisOverviewConfidenceMedium": {},
   "analysisOverviewConfidenceLow": "Uncertain measurement",
   "@analysisOverviewConfidenceLow": {},
+  "analysisOverviewConfidenceLegendTitle": "Confidence legend",
+  "@analysisOverviewConfidenceLegendTitle": {},
   "analysisOverviewNotApplicable": "Not applicable for this recording",
   "@analysisOverviewNotApplicable": {},
   "analysisOverviewUnavailable": "Measurement unavailable",
@@ -2435,6 +2437,12 @@
   },
   "analysisOverviewSignalQualitySemantic": "Recording quality measurements",
   "@analysisOverviewSignalQualitySemantic": {},
+  "analysisOverviewSignalQualityScoreSemantic": "Overall signal quality: {value}",
+  "@analysisOverviewSignalQualityScoreSemantic": {
+    "placeholders": {
+      "value": {}
+    }
+  },
   "analysisOverviewInsightKindTitleRecommendation": "Recommended next step",
   "@analysisOverviewInsightKindTitleRecommendation": {},
   "analysisOverviewInsightKindTitleObservation": "Strength",
@@ -2543,6 +2551,23 @@
   "@analysisTimelineHotspotSeverityMedium": {},
   "analysisTimelineHotspotSeverityHigh": "high severity",
   "@analysisTimelineHotspotSeverityHigh": {},
+  "analysisTimelinePracticeSelection": "Practice this section",
+  "@analysisTimelinePracticeSelection": {},
+  "analysisTimelineTrendConcentratedEarly": "Concentrated in the first half of this view",
+  "@analysisTimelineTrendConcentratedEarly": {},
+  "analysisTimelineTrendConcentratedLate": "Concentrated in the second half of this view",
+  "@analysisTimelineTrendConcentratedLate": {},
+  "analysisTimelineTrendEven": "Evenly spread across this view",
+  "@analysisTimelineTrendEven": {},
+  "analysisTimelineTrendInsufficient": "Not enough events to show a trend",
+  "@analysisTimelineTrendInsufficient": {},
+  "analysisTimelineExtremes": "First at {first}, last at {last}",
+  "@analysisTimelineExtremes": {
+    "placeholders": {
+      "first": {},
+      "last": {}
+    }
+  },
   "analysisCompareTitle": "Compare sessions",
   "@analysisCompareTitle": {},
   "analysisCompareEmpty": "No metric is comparable between these two sessions.",

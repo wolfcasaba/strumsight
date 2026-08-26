@@ -612,4 +612,150 @@ A sorrend a §0.0/B/B6 mérését követi: előbb a MEGŐRZÉS bizonyítása, az
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Kör-jelzés motor:** Claude Sonnet 5 (`sonnet-impl`), ág:
+`sonnet-impl/e13-r27-analysis-results-ui`.
+
+### 10.1 Mit építettem
+
+**Új `design_system/components/analytics/` komponensek** (§0.0/B/B2 ESCAPE-ág,
+mind exportálva a `public.dart`-ból):
+
+- `ss_score_ring.dart` (`SsScoreRing`) — statikus `CustomPaint` ívfestő
+  pontszám-gyűrű (NEM `CircularProgressIndicator(value: null)`, mert az
+  indeterminate animációja sosem állna meg `pumpAndSettle()` alatt). Három
+  állapot (`measured`/`notApplicable`/`unavailable`) — a hiányzó állapot
+  sosem fest ívet.
+- `ss_trend_indicator.dart` (`SsTrendIndicator`, `SsTrendDirection`) —
+  ikon+opcionális felirat trendjelző; `label: null` mellett csak ikon, hogy
+  ne duplázza a mellette már megjelenő szöveget.
+- `ss_confidence_legend.dart` (`SsConfidenceLegend`, `SsConfidenceLevel`) —
+  egyszeri, képernyőnkénti jelmagyarázat a három confidence-ikonhoz; saját
+  enum, NEM importál feature-t (design_system → feature import tilos).
+- `ss_chart_text_summary.dart` (`SsChartTextSummary`) — trend + szélsőérték
+  mondat, akadálymentes diagram-szöveg-alternatíva (ADR 0282/0286 §3).
+- `ss_event_list.dart` (`SsEventList`, `SsEventListRow`) — rögzített
+  magasságú (NEM `shrinkWrap: true`, mert az minden gyereket felépítene,
+  éppen azt védve ki, amit a kör javít), `itemExtent`-es
+  `ListView.builder` — a virtualizáció maga.
+
+**Minden komponens az ambiens `Theme.of(context).colorScheme`/`textTheme`-t
+olvassa, NEM a `SsColorScheme`/`SsTypography` theme extension-t** — mért ok:
+a négy célképernyő pinnelt widget-tesztjei csupasz `MaterialApp()`-ot
+pumpálnak `AppTheme`/`SsTheme` regisztrálása nélkül; egy
+`Theme.of(context).extension<SsColorScheme>()!` force-unwrap null-ellenőrzési
+hibával bukna pontosan ezekben a tesztekben.
+
+**A1–A3 (MEGŐRZÉS):** a mai `OverviewMetricCardState` öt állapota
+változatlan; a `metric_missing_test.dart` valódi `AnalysisOverviewScreen`-t
+pumpál valódi `OverviewViewModel`-lel, és a §6.1 három küszöb-cellájára
+zár: küszöb alatt (`unavailable`/`notApplicable`, sosem "0"), a küszöbön
+(`degraded`, mért érték + "Medium confidence"), a küszöb fölött
+(`available`, mért érték + "High confidence").
+
+**A4 + A8 (a kör fő tétele):** `analysis_timeline_screen.dart` külső
+`ListView(children:…)`-je `ListView.builder`-ré vált; a korábban MINDEN
+hotspot-ra egy láthatatlan `Semantics`+`SizedBox.shrink()`-et építő,
+adatmérettel lineárisan növő ciklus helyébe egy rögzített magasságú
+`SsEventList` lépett (220 px, 48 px sor-extent) — ez FÜGGETLEN a hotspotok
+számától (mért: 3000 hotspot mellett a felépített sor-widgetek száma < 30,
+a lista aljához görgetve pedig a korábban nem épített sorok megjelennek —
+`timeline_virtualization_test.dart` mindkettőt méri, nem csak egy
+widget-típus felső korlátját). Az `AnalysisTimelineScreen` egy ÚJ opcionális
+`onPracticeSelection: void Function(Duration start, Duration end)?`
+konstruktor-paramétert kapott (a meglévő `document` paraméter és az
+osztálynév változatlan) — mind a kézi hosszú-nyomás-húzás kijelölés, mind
+egy esemény-lista sor koppintása ugyanazt a "Practice this section" gombot
+állítja elő, ami a kijelölést MINDIG normalizálva (`start <= end`) adja át.
+
+**A5:** minden idővonal-sáv (`TimelineLane`) egy `SsChartTextSummary`-t kapott
+alulra: a `TimelineLane.densityTrendFor` tiszta függvény (nulla widget-függés,
+külön unit-tesztelhető) a látható elemek korai/kései/egyenletes/elégtelen
+sűrűségét osztályozza, a `TimelineLanes` fordítja le l10n-nel a mondattá; a
+szélsőérték-mondat (`"First at …, last at …"`) csak ≥2 látható elem esetén
+jelenik meg. A hotspot-esemény-lista (fent) szolgál bejárható
+esemény-lista-alternatívaként.
+
+**A6–A7 (MEGŐRZÉS):** a `compare_compatibility_test.dart` a VALÓDI
+`CompatibilityEvaluator.compare`/`compareMetricIdentity` motorfüggvényeket
+hívja (nem UI-szintű szabályt), és az így kapott `MetricComparison`-t
+pumpálja bele az `AnalysisCompareScreen`-be — a képernyő a domain verdiktjét
+(`Inconclusive` + a pontos ok-mondat) mondja ki, sosem fabrikált deltát.
+
+**DS-migráció:** `AnalysisOverviewScreen` egy `SsConfidenceLegend`-et kapott
+a "Main metrics" cím alatt; `SignalQualityCard` egy `SsScoreRing`-et az
+összesített felvétel-minőséghez (`SignalQualityReport.overall`/`measured`
+mezők — sosem fest ívet mérés nélkül); `MetricDeltaRow` a korábbi nyers
+`Icon(data.directionIcon)`-t `SsTrendIndicator`-ra cserélte (a látható
+irány-feliratot a `Chip` adja, a trendjelző csak ikon, hogy ne duplázódjon).
+A `MetricCard`/`InsightCard`/`ConfidenceBadge`/`TimelineLane`/
+`TimelineRuler`/`HotspotNavigator` típusnév és a Material `Card` a
+négy képernyőn VÁLTOZATLAN (§0.0/B/B8 szerződés).
+
+### 10.2 Bizonyíték cellánként
+
+| Cella | Bizonyíték |
+|---|---|
+| A1 | `metric_missing_test.dart` — "below threshold (unavailable)" |
+| A2 | ugyanott — "below threshold (notApplicable)" |
+| A3 | ugyanott — "A3 — confidence is visible for every card" |
+| A4 | `timeline_virtualization_test.dart` — "AnalysisTimelineScreen virtualization" csoport (bounded row count + scroll reveal) |
+| A5 | `chart_semantics_test.dart` — trend/extremes cellák + hotspot event-list cellák |
+| A6 | `compare_compatibility_test.dart` — "A6" csoport (real engine verdict) |
+| A7 | ugyanott — "A6/A7" csoport (pontos ok-szöveg) |
+| A8 | `timeline_virtualization_test.dart` — "practice-selection callback" csoport (tap + hátrafelé húzás normalizálás) |
+| A9 | `test/ui/goldens/e13_r27_screens_golden_test.dart` + a nyolc PNG a diffben |
+
+### 10.3 Valódi-sértés próba (KÖTELEZŐ, §6.1)
+
+`lib/features/audio_analysis/presentation/controllers/overview_view_model.dart`
+`_formatMetric`-jében az `unavailable` ág átírva:
+
+```diff
+-      CapabilityStatus.unavailable => labels.unavailableValuePlaceholder(),
++      CapabilityStatus.unavailable => '0',
+```
+
+`flutter test test/features/analyze/results/metric_missing_test.dart` erre
+KÉT cellát váltott pirosra:
+
+- `threshold matrix … below threshold (unavailable): never "0" …` —
+  `Expected: no matching candidates / Actual: Found 1 widget with text "0"`;
+- `the presentation formatter never collapses a missing value into a numeric
+  zero` — `Expected: not '0' / Actual: '0'`.
+
+A módosítást visszaállítottam; `flutter test
+test/features/analyze/results/metric_missing_test.dart` utána ismét 6/6
+zöld.
+
+### 10.4 Golden-felvétel (A9)
+
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r27_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r27_screens_golden_test.dart
+```
+
+Mindkettő zöld (x86_64 docker-emuláció, ADR 0426/§0.0/B/B5). Nyolc PNG
+(4 képernyő × 2 keret) a `test/ui/goldens/goldens/e13_r27_*.png` alatt,
+commitolva.
+
+### 10.5 Mért, a körhöz NEM tartozó flake
+
+A `test/features/audio_analysis/presentation/` teljes könyvtárának EGYÜTTES
+futtatásakor (nem izoláltan) az `analysis_export_screen_test.dart` "preview
+gate" cellája egyszer pirosra váltott, majd a KÖVETKEZŐ futáson és izoláltan
+is zölden futott le mindháromszor — a fájlhoz nem nyúltam (tiltott zóna), a
+jelenség a `share_plus`-csatorna-mock és a `flutter test` batch-futás közötti
+ismert, kereszt-teszt state-szivárgás; a `tools/round-gate.sh` teljes futása
+(lásd lent) ugyanezt a könyvtárat zölden futtatta le.
+
+### 10.6 Zárókapu
+
+```
+tools/round-gate.sh test/features/analyze/results/metric_missing_test.dart test/features/analyze/results/timeline_virtualization_test.dart test/features/analyze/results/chart_semantics_test.dart test/features/analyze/results/compare_compatibility_test.dart test/features/audio_analysis/presentation/ test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+`MINDEN GATE ZÖLD` — format, analyze, mind a 11 teszt-útvonal (a kilenc pin
+is), architecture, secrets, l10n. `ui_inventory` `hasLength(89)` VÁLTOZATLAN
+(a kör nem hozott új `*_screen.dart`-ot, §0.0/B/B4 szerint várt).
+
 ## 11. Review — a Claude tölti ki
