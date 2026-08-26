@@ -628,8 +628,15 @@ a sértett ágat) — ez a mérce elvárt, célzott viselkedése.
 Visszaállítás: `git checkout -- lib/features/song_trainer/presentation/screens/song_import_preview_screen.dart lib/features/song_trainer/presentation/screens/song_import_screen.dart`
 — utána `git status --short` üres, megerősítve.
 
-**`tools/round-gate.sh` — a §3. lépés futtatása után ide kerül a tényleges
-kimenet összefoglalója (lépésszám, teszt-darabszám).**
+**`tools/round-gate.sh` eredménye (a §7 szerinti 15 tesztúttal):** **MINDEN
+GATE ZÖLD**, 20 lépés (`format`, `analyze`, 15× `test <fájl>`, `architecture`,
+`secrets`, `l10n`). A 15 teszt-lépés összesen **95 zöld tesztet** futtatott
+(2+4+3+3+6+1+1+1+2+2+22+44+1+2+1, fájlonként a fenti sorrendben). Az `analyze`
+első futása két lelettel jelzett a gate teszt-fájljaiban
+(`unnecessary_underscores` az `editor_keyboard_flow_test.dart`-ban, egy
+használaton kívüli import a golden-tesztben) — mindkettőt a kör saját,
+listán lévő fájljában javítottam (`b536d0c3`), utána a teljes gate
+másodszorra zöld.
 
 **Hat golden PNG** (`test/ui/goldens/goldens/`, korábbi commitban rögzítve
 x86_64-en, `tools/golden-x86.sh record`):
