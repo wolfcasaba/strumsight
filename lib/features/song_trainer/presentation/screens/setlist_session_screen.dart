@@ -130,9 +130,11 @@ final class _SetlistSessionScreenState extends State<SetlistSessionScreen> {
                             children: <Widget>[
                               const Icon(Icons.tune),
                               const SizedBox(width: 8),
-                              Text(
-                                l10n.setlistSessionTuningAheadTitle,
-                                style: Theme.of(context).textTheme.titleSmall,
+                              Expanded(
+                                child: Text(
+                                  l10n.setlistSessionTuningAheadTitle,
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
                               ),
                             ],
                           ),

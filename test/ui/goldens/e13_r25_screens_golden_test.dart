@@ -36,6 +36,8 @@ import 'package:strumsight/features/song_trainer/presentation/screens/song_train
 import 'package:strumsight/features/song_trainer/presentation/screens/trainer_setup_screen.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../support/preference_store.dart';
+
 const _compactPortrait = Size(412, 915);
 
 Future<void> _pump(
@@ -50,7 +52,7 @@ Future<void> _pump(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: overrides,
+      overrides: <Override>[...preferenceOverrides(), ...overrides],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         theme: AppTheme.dark(),
