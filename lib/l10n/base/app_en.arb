@@ -2045,6 +2045,113 @@
       "phase": {}
     }
   },
+  "analysisHomeTitle": "Analyze",
+  "@analysisHomeTitle": {},
+  "analysisHomeRecordCta": "Record a performance",
+  "@analysisHomeRecordCta": {},
+  "analysisHomeRecordDescription": "Capture guitar audio from the microphone and analyze it on this device.",
+  "@analysisHomeRecordDescription": {},
+  "analysisHomeImportCta": "Import a file",
+  "@analysisHomeImportCta": {},
+  "analysisHomeImportDescription": "Analyze an existing recording, up to {limitMb} MB.",
+  "@analysisHomeImportDescription": {
+    "placeholders": {
+      "limitMb": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisHomeRecentSectionTitle": "Recent analyses",
+  "@analysisHomeRecentSectionTitle": {},
+  "analysisHomeRecentEmpty": "No analyses yet — record or import one to get started.",
+  "@analysisHomeRecentEmpty": {},
+  "analysisHomeOpenAnalysisSemantics": "Open analysis: {title}",
+  "@analysisHomeOpenAnalysisSemantics": {
+    "placeholders": {
+      "title": {}
+    }
+  },
+  "analysisRecordingTitle": "Recording",
+  "@analysisRecordingTitle": {},
+  "analysisRecordingReadyTitle": "Ready to record",
+  "@analysisRecordingReadyTitle": {},
+  "analysisRecordingReadyDescription": "Up to {minutes} minutes will be recorded.",
+  "@analysisRecordingReadyDescription": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisRecordingRetentionDiscarded": "Only the derived analysis is kept — the raw recording is discarded when you leave this screen.",
+  "@analysisRecordingRetentionDiscarded": {},
+  "analysisRecordingRetentionKept": "The raw recording will be kept alongside the analysis.",
+  "@analysisRecordingRetentionKept": {},
+  "analysisRecordingStart": "Start recording",
+  "@analysisRecordingStart": {},
+  "analysisRecordingStop": "Stop recording",
+  "@analysisRecordingStop": {},
+  "analysisRecordingCancel": "Cancel",
+  "@analysisRecordingCancel": {},
+  "analysisRecordingLiveLabel": "Recording",
+  "@analysisRecordingLiveLabel": {},
+  "analysisRecordingElapsed": "{elapsed} recorded",
+  "@analysisRecordingElapsed": {
+    "placeholders": {
+      "elapsed": {}
+    }
+  },
+  "analysisRecordingClippingWarning": "Signal is clipping — move back from the microphone or play more softly.",
+  "@analysisRecordingClippingWarning": {},
+  "analysisRecordingSilenceWarning": "Signal is very quiet — play louder or move closer to the microphone.",
+  "@analysisRecordingSilenceWarning": {},
+  "analysisRecordingPermissionDeniedTitle": "Microphone access needed",
+  "@analysisRecordingPermissionDeniedTitle": {},
+  "analysisRecordingPermissionDeniedDescription": "Allow microphone access to record a performance.",
+  "@analysisRecordingPermissionDeniedDescription": {},
+  "analysisRecordingPermissionRetry": "Try again",
+  "@analysisRecordingPermissionRetry": {},
+  "analysisRecordingErrorTitle": "Recording couldn't start",
+  "@analysisRecordingErrorTitle": {},
+  "analysisRecordingErrorRetry": "Retry",
+  "@analysisRecordingErrorRetry": {},
+  "analysisRecordingMaxDurationReached": "Maximum recording length reached — recording stopped automatically.",
+  "@analysisRecordingMaxDurationReached": {},
+  "analysisProcessingTitle": "Processing",
+  "@analysisProcessingTitle": {},
+  "analysisProcessingStarting": "Starting analysis",
+  "@analysisProcessingStarting": {},
+  "analysisProcessingStartingDescription": "Getting ready to analyze the recording.",
+  "@analysisProcessingStartingDescription": {},
+  "analysisProcessingStepIndicator": "Step {step} of {total}",
+  "@analysisProcessingStepIndicator": {
+    "placeholders": {
+      "step": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "analysisProcessingCompletedTitle": "Analysis complete",
+  "@analysisProcessingCompletedTitle": {},
+  "analysisProcessingViewResult": "View result",
+  "@analysisProcessingViewResult": {},
+  "analysisProcessingDegradedTitle": "Analysis completed with reduced detail",
+  "@analysisProcessingDegradedTitle": {},
+  "analysisProcessingDegradedDescription": "Some measurements weren't available:",
+  "@analysisProcessingDegradedDescription": {},
+  "analysisProcessingCancelledTitle": "Analysis cancelled",
+  "@analysisProcessingCancelledTitle": {},
+  "analysisProcessingRestart": "Start again",
+  "@analysisProcessingRestart": {},
+  "analysisProcessingErrorTitle": "Analysis failed",
+  "@analysisProcessingErrorTitle": {},
+  "analysisProcessingErrorRetry": "Retry",
+  "@analysisProcessingErrorRetry": {},
+  "analysisProcessingPermissionDeniedTitle": "Microphone access needed",
+  "@analysisProcessingPermissionDeniedTitle": {},
   "analysisOverviewTitle": "Analysis overview",
   "@analysisOverviewTitle": {},
   "analysisOverviewPrimaryMetrics": "Main metrics",
