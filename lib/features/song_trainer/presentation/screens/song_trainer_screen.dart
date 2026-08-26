@@ -13,12 +13,23 @@
 // children, so every per-row `Row` continues to render children in the
 // same visual order from the screen-reader perspective while the
 // physical coordinate system is reversed.
+//
+// E13-R25 §5.2/§0.0/B/B7: the running/paused lanes derive their viewport
+// from `state.transportState.activePosition` — the audio-clock-derived
+// position `SongTransport` already computes (ADR 0274) — never from a local
+// `Timer`. The Stage does not acquire the transport/practice resource; it
+// only notifies the owning controller's exit path on every route exit
+// instead of relying solely on Riverpod's own provider-teardown timing.
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../../settings/public.dart';
 import '../../application/song_trainer_providers.dart';
+import '../../application/trainer/song_trainer_controller.dart';
 import '../../application/trainer/song_trainer_state.dart';
 import '../../domain/models/song_id.dart';
 import '../widgets/chord_lane.dart';
@@ -30,7 +41,7 @@ import '../widgets/tablature_lane.dart';
 import '../widgets/transport_controls.dart';
 
 /// Coach surface for the Song Trainer V2 session.
-final class SongTrainerScreen extends ConsumerWidget {
+final class SongTrainerScreen extends ConsumerStatefulWidget {
   const SongTrainerScreen({
     super.key,
     this.songId,
@@ -48,6 +59,7 @@ final class SongTrainerScreen extends ConsumerWidget {
     this.onABEntered,
     this.onABClear,
     this.feedback = const [],
+    this.loopRangeEnd,
   });
 
   /// Route song identifier. Direct widget tests may omit it and inject [state].
@@ -70,26 +82,54 @@ final class SongTrainerScreen extends ConsumerWidget {
   final VoidCallback? onABClear;
   final List<SongLoopFeedbackMessage> feedback;
 
+  /// Exact end of the currently configured loop range, when known. The
+  /// running lane clamps its viewport to this value verbatim — never rounded
+  /// to the nearest second or measure — so the visual loop boundary matches
+  /// the audible one (§5.2/A3).
+  final Duration? loopRangeEnd;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final routeInputs = inputs;
-    if (state == null && routeInputs != null) {
+  ConsumerState<SongTrainerScreen> createState() => _SongTrainerScreenState();
+}
+
+final class _SongTrainerScreenState extends ConsumerState<SongTrainerScreen> {
+  SongTrainerController? _ownedController;
+  Stream<SongTrainerState>? _ownedControllerStates;
+
+  @override
+  Widget build(BuildContext context) {
+    final routeInputs = widget.inputs;
+    if (widget.state == null && routeInputs != null) {
       final controller = ref.watch(songTrainerControllerProvider(routeInputs));
+      if (!identical(_ownedController, controller)) {
+        // `StreamController.stream` returns a fresh wrapper on every access,
+        // so re-reading `controller.states` on every build would hand
+        // `StreamBuilder` a new stream identity each time — forcing it to
+        // cancel and resubscribe every rebuild. Cache it once per controller
+        // instance instead.
+        _ownedController = controller;
+        _ownedControllerStates = controller.states;
+      }
       return StreamBuilder<SongTrainerState>(
-        stream: controller.states,
+        stream: _ownedControllerStates,
         initialData: controller.state,
         builder: (context, snapshot) =>
-            _buildScaffold(context, ref, snapshot.data ?? controller.state),
+            _buildScaffold(context, snapshot.data ?? controller.state),
       );
     }
-    return _buildScaffold(context, ref, state);
+    return _buildScaffold(context, widget.state);
   }
 
-  Widget _buildScaffold(
-    BuildContext context,
-    WidgetRef ref,
-    SongTrainerState? current,
-  ) {
+  @override
+  void dispose() {
+    // §0.0/B/B7 — the Stage does not own the transport/practice resource; it
+    // notifies the owner's exit path on every route exit rather than relying
+    // solely on Riverpod's own provider-teardown timing.
+    unawaited(_ownedController?.dispose());
+    super.dispose();
+  }
+
+  Widget _buildScaffold(BuildContext context, SongTrainerState? current) {
     final status = current?.status ?? SongTrainerStatus.idle;
     final leftHanded = ref.read(leftHandedProvider);
     final body = switch (status) {
@@ -102,27 +142,28 @@ final class SongTrainerScreen extends ConsumerWidget {
       SongTrainerStatus.countIn => _CountInOverlay(),
       SongTrainerStatus.running => _RunningBody(
         state: current!,
-        chordEvents: chordEvents,
-        strumEvents: strumEvents,
-        noteEvents: noteEvents,
-        sections: sections,
-        onPause: onPause,
-        onResume: onResume,
-        onSeek: onSeek,
-        onSectionSelected: onSectionSelected,
-        onABEntered: onABEntered,
-        onABClear: onABClear,
-        feedback: feedback,
+        chordEvents: widget.chordEvents,
+        strumEvents: widget.strumEvents,
+        noteEvents: widget.noteEvents,
+        sections: widget.sections,
+        onPause: widget.onPause,
+        onResume: widget.onResume,
+        onSeek: widget.onSeek,
+        onSectionSelected: widget.onSectionSelected,
+        onABEntered: widget.onABEntered,
+        onABClear: widget.onABClear,
+        feedback: widget.feedback,
+        loopRangeEnd: widget.loopRangeEnd,
       ),
       SongTrainerStatus.paused => _PausedBody(
         state: current!,
-        chordEvents: chordEvents,
-        strumEvents: strumEvents,
-        noteEvents: noteEvents,
-        onPlay: onPlay,
-        onPause: onPause,
-        onResume: onResume,
-        onSeek: onSeek,
+        chordEvents: widget.chordEvents,
+        strumEvents: widget.strumEvents,
+        noteEvents: widget.noteEvents,
+        onPlay: widget.onPlay,
+        onPause: widget.onPause,
+        onResume: widget.onResume,
+        onSeek: widget.onSeek,
       ),
       SongTrainerStatus.completed ||
       SongTrainerStatus.cancelled => _CompletedBody(state: current!),
@@ -163,6 +204,7 @@ final class _RunningBody extends StatelessWidget {
     required this.onABEntered,
     required this.onABClear,
     required this.feedback,
+    this.loopRangeEnd,
   });
 
   final SongTrainerState state;
@@ -177,11 +219,24 @@ final class _RunningBody extends StatelessWidget {
   final ValueChanged<List<int>>? onABEntered;
   final VoidCallback? onABClear;
   final List<SongLoopFeedbackMessage> feedback;
+  final Duration? loopRangeEnd;
 
   static const Duration _viewportSpan = Duration(seconds: 4);
 
   @override
   Widget build(BuildContext context) {
+    // §5.2/A2 — the viewport is derived from the audio-clock-driven
+    // transport position on every build, never from an independently
+    // ticking Timer: a stale `state` renders a stale (but never drifting)
+    // viewport.
+    final playhead = state.transportState.activePosition;
+    final naturalEnd = playhead + _viewportSpan;
+    final loopEnd = loopRangeEnd;
+    // §5.2/A3 — clamped to the EXACT configured loop end, never rounded to
+    // the nearest second or measure.
+    final viewportEnd = loopEnd != null && naturalEnd > loopEnd
+        ? loopEnd
+        : naturalEnd;
     return Column(
       children: <Widget>[
         LoopControls(
@@ -212,18 +267,18 @@ final class _RunningBody extends StatelessWidget {
           ),
         ChordLane(
           events: chordEvents.cast(),
-          viewportStart: Duration.zero,
-          viewportEnd: _viewportSpan,
+          viewportStart: playhead,
+          viewportEnd: viewportEnd,
         ),
         StrumLane(
           events: strumEvents.cast(),
-          viewportStart: Duration.zero,
-          viewportEnd: _viewportSpan,
+          viewportStart: playhead,
+          viewportEnd: viewportEnd,
         ),
         TablatureLane(
           events: noteEvents.cast(),
-          viewportStart: Duration.zero,
-          viewportEnd: _viewportSpan,
+          viewportStart: playhead,
+          viewportEnd: viewportEnd,
         ),
         SongLoopFeedback(messages: feedback),
         TransportControls(
@@ -266,8 +321,19 @@ final class _PausedBody extends StatelessWidget {
     // ([TransportControls.canSeek] = true) AND the speed control renders
     // disabled with an explicit reason so the coach understands why it
     // is unavailable while paused.
+    final l10n = AppLocalizations.of(context);
+    // §5.3/A4 — the exact millisecond pause position, never truncated to
+    // whole seconds and never reset to the start of the section: the domain
+    // (`SongTransport._anchorPosition`) already keeps this precise, this only
+    // surfaces it honestly.
+    final position = state.transportState.activePosition;
     return Column(
       children: <Widget>[
+        Semantics(
+          key: const Key('song-trainer-paused-position'),
+          label: l10n.trainerPausedPosition(_formatPrecisePosition(position)),
+          child: Text(_formatPrecisePosition(position)),
+        ),
         StrumLane(
           events: strumEvents.cast(),
           viewportStart: Duration.zero,
@@ -301,7 +367,18 @@ final class _CompletedBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final result = state.result;
-    if (result == null) return const Center(child: Text('Completed'));
+    if (result == null) {
+      // §5.1/A1 — a playback-only session never reaches `_finishAndFinalize`
+      // (the only place `SongTrainerState.result` is ever populated), so a
+      // `null` result at a terminal status means "not scored", not "scoring
+      // pending". State this honestly instead of a bare "Completed" label —
+      // and never synthesize a score here.
+      final l10n = AppLocalizations.of(context);
+      return Center(
+        key: const Key('song-trainer-playback-only-result'),
+        child: Text(l10n.songTrainerPlaybackOnlyComplete),
+      );
+    }
     return SingleChildScrollView(
       child: Column(
         children: <Widget>[
@@ -352,4 +429,12 @@ final class _Mirror extends StatelessWidget {
       child: child,
     );
   }
+}
+
+String _formatPrecisePosition(Duration duration) {
+  final minutes = duration.inMinutes;
+  final seconds = duration.inSeconds.remainder(60).abs();
+  final millis = duration.inMilliseconds.remainder(1000).abs();
+  return '$minutes:${seconds.toString().padLeft(2, '0')}.'
+      '${millis.toString().padLeft(3, '0')}';
 }

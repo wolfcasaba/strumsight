@@ -1252,6 +1252,15 @@
   "songTrainerResultTitle": "Song Trainer result",
   "songTrainerRetryProblemRange": "Retry problem range",
   "songTrainerNextSection": "Next section",
+  "songTrainerPlaybackOnlyComplete": "Playback complete — listening only, no score recorded.",
+  "trainerPausedPosition": "Paused at {position}",
+  "@trainerPausedPosition": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
   "songTrainerHeatmapLabel": "Measure heatmap",
   "songTrainerHeatmapMeasureLabel": "Measure {index}, score {percent}%",
   "@songTrainerHeatmapMeasureLabel": {
@@ -1311,6 +1320,7 @@
     }
   },
   "setlistV2ItemAttention": "Needs attention",
+  "setlistSessionTuningAheadTitle": "Retuning ahead",
   "setlistSessionPracticeTitle": "Setlist practice",
   "setlistSessionPerformanceTitle": "Setlist performance",
   "setlistSessionPracticeSemantics": "Scored setlist practice. Microphone scoring is used only while each practice song runs.",

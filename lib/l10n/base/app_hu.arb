@@ -1207,6 +1207,15 @@
   "songTrainerResultTitle": "Song Trainer eredmény",
   "songTrainerRetryProblemRange": "Problémás tartomány újra",
   "songTrainerNextSection": "Következő szakasz",
+  "songTrainerPlaybackOnlyComplete": "Lejátszás kész — csak hallgatás, nincs pontszám rögzítve.",
+  "trainerPausedPosition": "Szünet itt: {position}",
+  "@trainerPausedPosition": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
   "songTrainerHeatmapLabel": "Ütem-hőtérkép",
   "songTrainerHeatmapMeasureLabel": "{index}. ütem, pontszám {percent}%",
   "@songTrainerHeatmapMeasureLabel": {
@@ -1266,6 +1275,7 @@
     }
   },
   "setlistV2ItemAttention": "Figyelmet igényel",
+  "setlistSessionTuningAheadTitle": "Hangolásváltás következik",
   "setlistSessionPracticeTitle": "Dalcsomag-gyakorlás",
   "setlistSessionPerformanceTitle": "Dalcsomag-előadás",
   "setlistSessionPracticeSemantics": "Pontozott dalcsomag-gyakorlás. A mikrofonos pontozás csak az egyes gyakorló dalok közben fut.",

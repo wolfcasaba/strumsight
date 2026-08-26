@@ -3114,6 +3114,7 @@
       }
     }
   },
+  "setlistSessionTuningAheadTitle": "Retuning ahead",
   "setlistSongCount": "{count, plural, =0{No songs} =1{1 song} other{{count} songs}}",
   "@setlistSongCount": {
     "placeholders": {
@@ -3459,6 +3460,7 @@
   },
   "songTrainerNextSection": "Next section",
   "songTrainerOverlayCountIn": "Count-in",
+  "songTrainerPlaybackOnlyComplete": "Playback complete — listening only, no score recorded.",
   "songTrainerProgressEmpty": "No current-revision progress yet.",
   "songTrainerProgressSummary": "{measures} practiced measures, best score {percent}%.",
   "@songTrainerProgressSummary": {
@@ -3783,6 +3785,14 @@
   "trainerModeUnavailableTrack": "This track does not support this mode.",
   "trainerNoConfig": "Choose a valid track, mode, and range first.",
   "trainerNoTracks": "No trainable track is available.",
+  "trainerPausedPosition": "Paused at {position}",
+  "@trainerPausedPosition": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
   "trainerRangeApply": "Apply range",
   "trainerRangeBookmark": "Bookmark",
   "trainerRangeBookmarkUnavailable": "No saved bookmark is available.",
