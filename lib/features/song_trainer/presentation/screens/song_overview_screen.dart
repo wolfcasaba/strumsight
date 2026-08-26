@@ -5,13 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
+import '../../../../core/foundation/app_result.dart';
 import '../../../../l10n/app_localizations.dart';
+import '../../application/song_trainer_providers.dart';
 import '../../application/trainer/song_trainer_setup_controller.dart';
 import '../../application/trainer/song_trainer_setup_state.dart';
+import '../../domain/models/song_document.dart';
 import '../../domain/models/song_id.dart';
+import '../../domain/models/song_source.dart';
 import '../../domain/models/trainer_config.dart';
 import '../../domain/models/trainer_range.dart';
 import '../widgets/song_section_list.dart';
+import '../widgets/song_source_badge.dart';
 import '../widgets/song_track_picker.dart';
 
 /// Read-only summary of a persisted song before trainer configuration.
@@ -27,11 +32,21 @@ final class SongOverviewScreen extends ConsumerStatefulWidget {
 final class _SongOverviewScreenState extends ConsumerState<SongOverviewScreen> {
   late final SongId _songId;
 
+  /// Provenance fetched independently of [songTrainerSetupControllerProvider]
+  /// — the setup state does not carry `SongSource` / `SongMetadata.copyright`
+  /// (§0.0/B/R16), so the overview loads the document once more, purely for
+  /// display. `null` until the read resolves or when it fails; the failure
+  /// is silent here because [songTrainerSetupControllerProvider] already
+  /// surfaces the authoritative load failure for this song.
+  SongSource? _source;
+  String? _copyright;
+
   @override
   void initState() {
     super.initState();
     _songId = SongId(widget.songId);
     Future<void>.microtask(_loadIfNeeded);
+    Future<void>.microtask(_loadProvenance);
   }
 
   void _loadIfNeeded() {
@@ -39,6 +54,18 @@ final class _SongOverviewScreenState extends ConsumerState<SongOverviewScreen> {
     if (controller.state.status == SongTrainerSetupStatus.idle ||
         controller.state.songId != _songId) {
       unawaited(controller.load(_songId));
+    }
+  }
+
+  Future<void> _loadProvenance() async {
+    final repository = ref.read(songRepositoryProvider);
+    final result = await repository.get(_songId);
+    if (!mounted) return;
+    if (result case Success<SongDocument?>(value: final document?)) {
+      setState(() {
+        _source = document.source;
+        _copyright = document.metadata.copyright;
+      });
     }
   }
 
@@ -66,6 +93,8 @@ final class _SongOverviewScreenState extends ConsumerState<SongOverviewScreen> {
         ),
         SongTrainerSetupStatus.ready => _OverviewBody(
           state: state,
+          source: _source,
+          copyright: _copyright,
           onSectionSelected: (section) =>
               controller.selectRange(SectionRange(section.id)),
           onTrackSelected: (track) => controller.selectTrack(track.id),
@@ -88,12 +117,16 @@ final class _SongOverviewScreenState extends ConsumerState<SongOverviewScreen> {
 final class _OverviewBody extends StatelessWidget {
   const _OverviewBody({
     required this.state,
+    required this.source,
+    required this.copyright,
     required this.onSectionSelected,
     required this.onTrackSelected,
     required this.onStart,
   });
 
   final SongTrainerSetupState state;
+  final SongSource? source;
+  final String? copyright;
   final ValueChanged<TrainerSectionOption> onSectionSelected;
   final ValueChanged<TrainerTrackOption> onTrackSelected;
   final VoidCallback onStart;
@@ -102,6 +135,7 @@ final class _OverviewBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final title = state.title ?? '';
+    final source = this.source;
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.all(16),
@@ -146,6 +180,36 @@ final class _OverviewBody extends StatelessWidget {
               label: Text(l10n.songOverviewStart),
             ),
           ),
+          if (source != null) ...[
+            const SizedBox(height: 16),
+            Wrap(
+              key: const Key('song-overview-source-row'),
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              children: <Widget>[
+                SongSourceBadge(sourceType: source.type),
+                if (copyright != null)
+                  Text(
+                    l10n.songOverviewLicense(copyright!),
+                    key: const Key('song-overview-license'),
+                  ),
+              ],
+            ),
+          ],
+          if (state.hasMissingBackingAsset) ...[
+            const SizedBox(height: 12),
+            Semantics(
+              key: const Key('song-overview-missing-backing'),
+              label: l10n.songOverviewMissingBackingAsset,
+              child: Row(
+                children: <Widget>[
+                  const Icon(Icons.music_off_outlined, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(l10n.songOverviewMissingBackingAsset)),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

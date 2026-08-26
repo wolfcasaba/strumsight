@@ -1069,6 +1069,16 @@
     }
   },
   "songLibraryCreate": "Create song",
+  "songLibrarySourceSemantic": "Source: {source}",
+  "@songLibrarySourceSemantic": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "songLibraryReadOnly": "Read-only",
+  "songLibraryReadOnlySnackBar": "This song is read-only. Opened in view mode.",
   "songEditorTitle": "Edit song",
   "songEditorNewTitle": "New song",
   "songEditorSave": "Save",
@@ -1118,6 +1128,15 @@
   "songOverviewLoading": "Loading song…",
   "songOverviewFailure": "This song could not be loaded.",
   "songOverviewRetry": "Try again",
+  "songOverviewLicense": "License: {copyright}",
+  "@songOverviewLicense": {
+    "placeholders": {
+      "copyright": {
+        "type": "String"
+      }
+    }
+  },
+  "songOverviewMissingBackingAsset": "Backing track is missing. The song can still be opened — only playback is affected.",
   "trainerSetupTitle": "Trainer setup",
   "trainerSetupTrack": "Track",
   "trainerSetupMode": "Practice mode",
@@ -1253,6 +1272,17 @@
   "setlistV2SaveFailed": "The setlist could not be saved.",
   "setlistV2Cancel": "Cancel",
   "setlistV2Incomplete": "Enter a name and add at least one song.",
+  "setlistV2ItemReady": "Ready",
+  "setlistV2ItemMissingAsset": "Backing track missing — song still opens",
+  "setlistV2ItemMissingSong": "Song not found: {songId}",
+  "@setlistV2ItemMissingSong": {
+    "placeholders": {
+      "songId": {
+        "type": "String"
+      }
+    }
+  },
+  "setlistV2ItemAttention": "Needs attention",
   "setlistSessionPracticeTitle": "Setlist practice",
   "setlistSessionPerformanceTitle": "Setlist performance",
   "setlistSessionPracticeSemantics": "Scored setlist practice. Microphone scoring is used only while each practice song runs.",

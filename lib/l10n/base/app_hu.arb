@@ -1024,6 +1024,16 @@
     }
   },
   "songLibraryCreate": "Dal létrehozása",
+  "songLibrarySourceSemantic": "Forrás: {source}",
+  "@songLibrarySourceSemantic": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "songLibraryReadOnly": "Csak olvasható",
+  "songLibraryReadOnlySnackBar": "Ez a dal csak olvasható. Megtekintő nézetben nyílt meg.",
   "songEditorTitle": "Dal szerkesztése",
   "songEditorNewTitle": "Új dal",
   "songEditorSave": "Mentés",
@@ -1073,6 +1083,15 @@
   "songOverviewLoading": "Dal betöltése…",
   "songOverviewFailure": "A dalt nem sikerült betölteni.",
   "songOverviewRetry": "Próbáld újra",
+  "songOverviewLicense": "Licenc: {copyright}",
+  "@songOverviewLicense": {
+    "placeholders": {
+      "copyright": {
+        "type": "String"
+      }
+    }
+  },
+  "songOverviewMissingBackingAsset": "A kísérőhang hiányzik. A dal továbbra is megnyitható — csak a lejátszás érintett.",
   "trainerSetupTitle": "Trainer beállítása",
   "trainerSetupTrack": "Sáv",
   "trainerSetupMode": "Gyakorlási mód",
@@ -1208,6 +1227,17 @@
   "setlistV2SaveFailed": "A dalcsomagot nem sikerült menteni.",
   "setlistV2Cancel": "Mégse",
   "setlistV2Incomplete": "Adj meg nevet, és legalább egy dalt.",
+  "setlistV2ItemReady": "Kész",
+  "setlistV2ItemMissingAsset": "Hiányzó kísérőhang — a dal így is megnyílik",
+  "setlistV2ItemMissingSong": "A dal nem található: {songId}",
+  "@setlistV2ItemMissingSong": {
+    "placeholders": {
+      "songId": {
+        "type": "String"
+      }
+    }
+  },
+  "setlistV2ItemAttention": "Figyelmet igényel",
   "setlistSessionPracticeTitle": "Dalcsomag-gyakorlás",
   "setlistSessionPerformanceTitle": "Dalcsomag-előadás",
   "setlistSessionPracticeSemantics": "Pontozott dalcsomag-gyakorlás. A mikrofonos pontozás csak az egyes gyakorló dalok közben fut.",

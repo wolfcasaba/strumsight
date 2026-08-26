@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/repositories/song_repository.dart';
 import 'song_capability_badges.dart';
+import 'song_source_badge.dart';
 
 /// Card backed only by [SongSummary], never a decoded SongDocument.
 final class SongSummaryTile extends StatelessWidget {
@@ -25,7 +26,22 @@ final class SongSummaryTile extends StatelessWidget {
   Widget build(BuildContext context) => ListTile(
     key: ValueKey<String>('song-summary-${summary.documentId.value}'),
     title: Text(summary.title),
-    subtitle: Text(summary.artist ?? summary.sourceType.code),
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (summary.artist != null) ...<Widget>[
+          Text(summary.artist!),
+          const SizedBox(height: 4),
+        ],
+        SongSourceBadge(
+          key: ValueKey<String>(
+            'song-source-badge-${summary.documentId.value}',
+          ),
+          sourceType: summary.sourceType,
+        ),
+      ],
+    ),
     trailing: Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[

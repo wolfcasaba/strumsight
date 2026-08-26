@@ -8,8 +8,26 @@ import '../../application/library/song_library_state.dart';
 import '../../application/library/song_query.dart';
 import '../../application/song_trainer_providers.dart';
 import '../../domain/models/song_source.dart';
+import '../widgets/song_source_badge.dart';
 import '../widgets/song_summary_tile.dart';
 import 'song_import_screen.dart';
+
+/// Keeps the last applied Library query alive across a real dispose and
+/// re-entry of [SongLibraryScreen]. `songLibraryControllerProvider` is
+/// `autoDispose` and loses its query the moment the route (a top-level
+/// `GoRoute`, not shell-branched) disposes, so the surviving query is held
+/// here instead, at file scope.
+final class _SongLibraryQueryNotifier extends Notifier<SongLibraryQuery> {
+  @override
+  SongLibraryQuery build() => const SongLibraryQuery();
+
+  void save(SongLibraryQuery query) => state = query;
+}
+
+final _songLibraryQueryProvider =
+    NotifierProvider<_SongLibraryQueryNotifier, SongLibraryQuery>(
+      _SongLibraryQueryNotifier.new,
+    );
 
 final class SongLibraryScreen extends ConsumerStatefulWidget {
   const SongLibraryScreen({super.key});
@@ -19,12 +37,29 @@ final class SongLibraryScreen extends ConsumerStatefulWidget {
 }
 
 final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
+  late final TextEditingController _searchController;
+
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(
-      () => ref.read(songLibraryControllerProvider).load(),
-    );
+    final savedQuery = ref.read(_songLibraryQueryProvider);
+    _searchController = TextEditingController(text: savedQuery.searchText);
+    Future<void>.microtask(() async {
+      final controller = ref.read(songLibraryControllerProvider);
+      await controller.load();
+      controller.setQuery(savedQuery);
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _applyQuery(SongLibraryQuery query) {
+    ref.read(songLibraryControllerProvider).setQuery(query);
+    ref.read(_songLibraryQueryProvider.notifier).save(query);
   }
 
   @override
@@ -69,7 +104,8 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                 child: Column(
                   children: <Widget>[
                     TextField(
-                      onChanged: (text) => controller.setQuery(
+                      controller: _searchController,
+                      onChanged: (text) => _applyQuery(
                         SongLibraryQuery(
                           searchText: text,
                           sourceType: state.query.sourceType,
@@ -102,11 +138,11 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                                 DropdownMenuItem<SongSourceType?>(
                                   value: sourceType,
                                   child: Text(
-                                    _sourceTypeLabel(l10n, sourceType),
+                                    songSourceTypeLabel(l10n, sourceType),
                                   ),
                                 ),
                             ],
-                            onChanged: (sourceType) => controller.setQuery(
+                            onChanged: (sourceType) => _applyQuery(
                               SongLibraryQuery(
                                 searchText: state.query.searchText,
                                 sourceType: sourceType,
@@ -137,7 +173,7 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                             ],
                             onChanged: (sort) {
                               if (sort == null) return;
-                              controller.setQuery(
+                              _applyQuery(
                                 SongLibraryQuery(
                                   searchText: state.query.searchText,
                                   sourceType: state.query.sourceType,
@@ -160,16 +196,38 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
                         itemCount: state.summaries.length,
                         itemBuilder: (context, index) {
                           final summary = state.summaries[index];
+                          final canPersist =
+                              summary.capability?.canPersist ?? true;
                           return InkWell(
                             key: ValueKey<String>(
                               'song-editor-open-${summary.documentId.value}',
                             ),
-                            onTap: () => context.push(
-                              AppRoutes.songTrainerEditor.replaceFirst(
-                                ':songId',
-                                Uri.encodeComponent(summary.documentId.value),
-                              ),
-                            ),
+                            onTap: () {
+                              if (!canPersist) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      l10n.songLibraryReadOnlySnackBar,
+                                    ),
+                                  ),
+                                );
+                                context.push(
+                                  AppRoutes.songTrainerOverview.replaceFirst(
+                                    ':songId',
+                                    Uri.encodeComponent(
+                                      summary.documentId.value,
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              context.push(
+                                AppRoutes.songTrainerEditor.replaceFirst(
+                                  ':songId',
+                                  Uri.encodeComponent(summary.documentId.value),
+                                ),
+                              );
+                            },
                             child: SongSummaryTile(
                               summary: summary,
                               isFavorite:
@@ -224,14 +282,3 @@ final class _SongLibraryScreenState extends ConsumerState<SongLibraryScreen> {
     );
   }
 }
-
-String _sourceTypeLabel(AppLocalizations l10n, SongSourceType sourceType) =>
-    switch (sourceType) {
-      SongSourceType.legacyLocal => l10n.songLibrarySourceLegacy,
-      SongSourceType.createdInApp => l10n.songLibrarySourceCreated,
-      SongSourceType.strumSightJson => l10n.songLibrarySourceNativeJson,
-      SongSourceType.musicXml => l10n.songLibrarySourceMusicXml,
-      SongSourceType.compressedMusicXml => l10n.songLibrarySourceMxl,
-      SongSourceType.midi => l10n.songLibrarySourceMidi,
-      SongSourceType.guitarPro => l10n.songLibrarySourceGuitarPro,
-    };

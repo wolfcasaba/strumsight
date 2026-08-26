@@ -3091,6 +3091,7 @@
   "setlistV2EditOverrides": "Dalelem felülírásainak szerkesztése",
   "setlistV2Empty": "Még nincs dalcsomag.",
   "setlistV2Incomplete": "Adj meg nevet, és legalább egy dalt.",
+  "setlistV2ItemAttention": "Figyelmet igényel",
   "setlistV2ItemCount": "{count, plural, =0{Nincs dal} =1{1 dal} other{{count} dal}}",
   "@setlistV2ItemCount": {
     "placeholders": {
@@ -3099,6 +3100,16 @@
       }
     }
   },
+  "setlistV2ItemMissingAsset": "Hiányzó kísérőhang — a dal így is megnyílik",
+  "setlistV2ItemMissingSong": "A dal nem található: {songId}",
+  "@setlistV2ItemMissingSong": {
+    "placeholders": {
+      "songId": {
+        "type": "String"
+      }
+    }
+  },
+  "setlistV2ItemReady": "Kész",
   "setlistV2ItemSummary": "Sebesség {speed}×, {loops, plural, =1{1 ismétlés} other{{loops} ismétlés}}",
   "@setlistV2ItemSummary": {
     "placeholders": {
@@ -3254,6 +3265,8 @@
     }
   },
   "songLibraryImport": "Importálás",
+  "songLibraryReadOnly": "Csak olvasható",
+  "songLibraryReadOnlySnackBar": "Ez a dal csak olvasható. Megtekintő nézetben nyílt meg.",
   "songLibraryRetry": "Próbáld újra",
   "songLibrarySearch": "Dalok keresése",
   "songLibrarySort": "Rendezés",
@@ -3267,6 +3280,14 @@
   "songLibrarySourceMusicXml": "MusicXML",
   "songLibrarySourceMxl": "Tömörített MusicXML",
   "songLibrarySourceNativeJson": "StrumSight JSON",
+  "songLibrarySourceSemantic": "Forrás: {source}",
+  "@songLibrarySourceSemantic": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
   "songLibraryTitle": "Dalkönyvtár",
   "songLibraryTrashed": "A dal a kukába került",
   "songLibraryUndo": "Visszavonás",
@@ -3276,7 +3297,16 @@
   "songNewTitle": "Új dal",
   "songOverviewCapabilities": "Trainer képességek",
   "songOverviewFailure": "A dalt nem sikerült betölteni.",
+  "songOverviewLicense": "Licenc: {copyright}",
+  "@songOverviewLicense": {
+    "placeholders": {
+      "copyright": {
+        "type": "String"
+      }
+    }
+  },
   "songOverviewLoading": "Dal betöltése…",
+  "songOverviewMissingBackingAsset": "A kísérőhang hiányzik. A dal továbbra is megnyitható — csak a lejátszás érintett.",
   "songOverviewNoSections": "Nincsenek jelölt szakaszok",
   "songOverviewRetry": "Próbáld újra",
   "songOverviewSections": "Szakaszok",
