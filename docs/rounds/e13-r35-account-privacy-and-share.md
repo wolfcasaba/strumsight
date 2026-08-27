@@ -1,19 +1,26 @@
 # E13-R35 — Account, Settings, Privacy, Offline AI és Share UI
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 0f7afd9a`)
+- **Státusz:** READY (pre-flight elvégezve 2026-08-27, `main @ 9ca4a0dc` — lásd §0.0.B;
+  előre megírva 2026-08-15, kód olvasva: `main @ 0f7afd9a`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 35
 - **Kör-azonosító:** `E13-R35`
 - **Branch:** `<motor>/e13-r35-account-privacy-and-share`
 - **Előfeltétel:** `E13-R34` merge-elve (közösségi kihívások)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** [`0292`](../adr/0292-model-activation-requires-verified-integrity.md)
-  — **a Claude írja meg a kör indításakor; a `docs/adr/` a TILOS zónában van.**
+- **Előre kiosztott ADR:** nincs írnivaló — a
+  [`0292`](../adr/0292-model-activation-requires-verified-integrity.md) **MÁR
+  MEGÍRVA ÉS MERGE-ELVE** (`5b32bd8e`, 2026-08-15). **A kör ADR-t NEM ír, a
+  `docs/adr/` TILOS zóna, a 0292 módosítása H1** (§0.0.B/B2).
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el a TÉNYLEGES
-> beállítás-szinkron réteget (`lib/features/settings/providers/settings_sync.dart`)
-> — a projekt MÉRTE, hogy a `try/catch`-be fojtott felhő-írás néma
-> munkavesztést ad, és hogy az állapot csak a szerver megerősítése UTÁN
-> jelölhető szinkronizáltnak. Eltérésnél §0.0 revízió.
+> ✅ **Pre-flight ELVÉGEZVE (2026-08-27, orchestrátor Claude Opus 5).** A brief
+> fejléce a TÉNYLEGES beállítás-szinkron réteg mérését írta elő: a
+> `settings_sync.dart` a „csak szerver-megerősítés után szinkronizált" szabályt
+> **MÁR betartja** (`_sendPatch` `Success()` ága), a `settings_sync_test.dart`
+> pedig — a kör listáján KÍVÜL — kipinneli, hogy a bukott írás **soha nem
+> ismételhető automatikusan**. Ezért az A4 „újrapróbál" cellája
+> **FELHASZNÁLÓ-INDÍTOTTA** újrapróbálás, nem automatikus replay (B3). A
+> `brief-lint` `S13` lelete a B1-ben oldódik fel, a golden-útvonal a B8-ban
+> kerül ki a lokális kapuból (ADR 0426).
 
 ```ai-router
 schema_version = 1
@@ -55,7 +62,14 @@ gate_tests = [
   "test/features/settings/consent_center_test.dart",
   "test/features/settings/model_integrity_test.dart",
   "test/features/settings/share_redaction_test.dart",
-  "test/ui/goldens/e13_r35_screens_golden_test.dart",
+  "test/features/settings/settings_sync_test.dart",
+  "test/features/settings/settings_account_test.dart",
+  "test/features/settings/vision_privacy_screen_test.dart",
+  "test/features/settings/lab_mode_toggle_test.dart",
+  "test/features/share/share_preview_test.dart",
+  "test/features/share/strum_card_test.dart",
+  "test/features/share/strum_reel_test.dart",
+  "test/features/share/wrapped_test.dart",
   "test/ui/ui_inventory_test.dart",
   "test/app/navigation/adaptive_scaffold_test.dart",
   "test/app/navigation/legacy_route_redirect_test.dart",
@@ -209,6 +223,189 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0.B — PRE-FLIGHT MÉRÉS, 2026-08-27 (`main @ 9ca4a0dc`, orchestrátor Claude Opus 5)
+
+A §0.0 (batch, 2026-08-25) állításait a kör indítása előtt újramértem a fán.
+Ami alább áll, az **erősebb** a §0.0-nál: ütközésnél a B-cella dönt.
+
+**Visszakeresett előzmény (ADR 0312, szűkített korpusz):** [L06](../LESSONS.md)
+(az elnyelt hiba néma no-op — a szinkron-szabály forrása),
+[L517](../LESSONS.md#l517) (a `textScaler 2.0` keret két körben mért ki valódi,
+addig láthatatlan túlcsordulást), [L465](../LESSONS.md#l465) (a képernyő-leltár
+egzakt száma minden új `_screen.dart`-nál elmozdul),
+[L397](../LESSONS.md#l397) (ugyanez CI-only leletként),
+[L486](../LESSONS.md#l486) + [ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+(a golden a RASZTERIZÁLÁST rögzíti; ARM-felvétel az x86 kapun mindig piros),
+[ADR 0292](../adr/0292-model-activation-requires-verified-integrity.md) (a kör
+normája — MÁR MERGE-ELVE).
+
+### B1 — `lib/features/offline_ai/` a fán NEM létezik: EZT A KÖNYVTÁRAT EZ A KÖR HOZZA LÉTRE (`S13` feloldva)
+
+Mérve: `ls lib/features/offline_ai` → *No such file or directory*; a
+`lib/features/` valódi gyerekei között nincs `offline_ai`. A `brief-lint` `S13`
+lelete pontosan ezt jelzi. **Feloldás:** az előtag a listán MARAD, mert a
+modellkezelő felület ÚJ feature-fa, amit ez a kör hoz létre — nem tévedés és nem
+tágítás. A másik három előtag (`lib/features/auth/`, `lib/features/settings/`,
+`lib/features/share/`) a fán LÉTEZIK, mérve.
+
+**A jogosultság az ÚJ fára szűk:** az `offline_ai` fa alá kizárólag a §3
+modellkezelő rétege kerül. Más feature fájának érintése (a másik háromon kívül)
+listán kívüli, tehát `stopped`.
+
+### B2 — a kör ADR-t NEM ír: a 0292 MÁR MERGE-ELVE
+
+Mérve: `docs/adr/0292-model-activation-requires-verified-integrity.md` létezik a
+fán, a `5b32bd8e` („docs(ch13): E13-R30..R36 briefek + ADR 0288-0292") commitban,
+2026-08-15-i dátummal, **elfogadva** státusszal. A brief fejlécének „a Claude
+írja meg a kör indításakor" mondata tehát tárgytalan.
+
+Következmény: a `docs/adr/` VÉGIG tilos zóna; a 0292 szövegének módosítása egy
+merge-elt döntés átírása lenne, azaz **H1**. A §5 normái ebből az ADR-ből és a
+[0279](../adr/0279-consequence-first-confirmations.md)-ből jönnek.
+
+### B3 — §1.1/1. szabály (elérhetetlen cél-státusz): az A4 „újrapróbál" cellája FELHASZNÁLÓ-INDÍTOTTA, nem automatikus
+
+Ez a kör legfontosabb mérése. Két tény a fán:
+
+1. **A §5.2 szabálya MÁR TELJESÜL a szinkron-rétegben.** A
+   `lib/features/settings/providers/settings_sync.dart` `_sendPatch` metódusa a
+   `_syncedSignature`-t **kizárólag** a `case Success()` ágon írja
+   (296–299. sor), a `Failure` ág csak naplóz és lejárt sessiont érvénytelenít.
+   A kör tehát NEM a szinkron-protokollt javítja — az helyes —, hanem
+   **láthatóvá teszi** az állapotát a felületen.
+2. **Az automatikus újrapróbálás KIPINNELVE TILOS**, méghozzá a kör listáján
+   KÍVÜL élő `test/features/settings/settings_sync_test.dart`-ban:
+   - `'a transient 5xx is still attempted only once'` → `settings.updates.length == 1`,
+     indoklás: *„settings updates must never be replayed automatically"* (588. sor);
+   - `'a PERMANENT rejection (401/422) is NOT retried — no infinite loop'` →
+     *„a permanent 4xx must be attempted exactly once, not retried"* (531. sor).
+
+**Következmény — kötelező olvasat:** az A4 „a felület jelez és újrapróbál"
+cellája **kizárólag felhasználó-indította** újrapróbálás (explicit „Újra"
+akció), amely a MEGLÉVŐ, egyszeri push-úton megy végig. **Bármilyen időzítő,
+backoff vagy automatikus replay bevezetése a `SettingsSync`-be a fenti két,
+NEM szerkeszthető cellát pirosra váltja** — az `blocked` jelzés és célzott
+brief-revízió, nem csendes átírás. A `settings_sync_test.dart` ezért felkerült
+a `gate_tests`-re (őrként, NEM az `allowed_paths`-ra).
+
+**Amit a kör hozzáadhat:** a `SettingsSync` ma **semmilyen megfigyelhető
+állapotot nem publikál** (minden mező privát, a provider `Provider<SettingsSync>`).
+A felület állapotához additív, csak-olvasható állapot-közzététel (pl.
+`synced | pending | failed`) megengedett a `lib/features/settings/providers/`
+alatt — de a push/pull sorrend, a debounce, a revízió-őrök és a
+„csak `Success` után szinkronizált" szabály **változatlanul marad**.
+
+### B4 — a hat érintett képernyőnek NULLA design-system importja van: EZ a kör tényleges munkája
+
+Mérve (`grep -c design_system`):
+
+| Fájl | design-system referencia | l10n referencia | sor |
+|---|---|---|---|
+| `lib/features/auth/screens/login_screen.dart` | **0** | 11 | 163 |
+| `lib/features/settings/screens/settings_screen.dart` | **0** | 42 | 459 |
+| `lib/features/settings/screens/vision_privacy_screen.dart` | **0** | 23 | 181 |
+| `lib/features/share/screens/share_preview_screen.dart` | **0** | 5 | 142 |
+| `lib/features/share/screens/strum_reel_screen.dart` | **0** | 6 | 359 |
+| `lib/features/share/screens/wrapped_preview_screen.dart` | **0** | 3 | 98 |
+
+Az import **kizárólag** a `lib/core/design_system/public.dart` barrelen át
+mehet. A `foundations/**` közvetlen importja **11 sértést** adott az E13-R16/F8-ban,
+és a mércéje a `test/core/architecture_dependency_test.dart` — ami a `gate_tests`-en
+van, tehát a kör SAJÁT kapujában bukik, nem a ~17 perces CI-ban.
+
+Kész, felhasználható komponensek a barrelben (mérve a `public.dart`-ban):
+`SsModelStatusCard`, `SsProvenanceBadge`, `SsStatusBadge`, `SsSwitchRow`,
+`SsChoice`, `SsTextField`, `SsValidationSummary`, `SsConfirmationSheet`,
+`SsFailureState`, `SsSection`, `SsContentCard`, `SsCard`, `SsEmptyState`.
+
+### B5 — §1.1/2. szabály (erőforrás-tulajdonlás): a NAVIGÁCIÓT a router birtokolja, ami TILOS ZÓNA → az új képernyők `Navigator.push`-sal élnek
+
+Mérve: `lib/app/routing/app_router.dart` és `app_route.dart` **nincs** az
+`allowed_paths`-on, tehát új útvonal regisztrálása **H3** volna. A fán MÉRT,
+merge-elt precedens viszont pontosan ezt kerüli meg:
+
+- `lib/features/songs/screens/song_list_screen.dart:39`,
+  `lib/features/library/screens/session_detail_screen.dart:126`,
+  `lib/features/analyze/screens/analyze_screen.dart:299` →
+  `Navigator.push(MaterialPageRoute(builder: (_) => SharePreviewScreen(...)))`;
+- `lib/features/share/screens/share_preview_screen.dart:118` → ugyanígy a
+  `StrumReelScreen`-re.
+
+**Következmény:** az adatvédelmi központ és az offline-AI modellkezelő
+belépőpontja a `settings_screen.dart`-ból `Navigator.push` +
+`MaterialPageRoute`, útvonal-regisztráció NÉLKÜL. Útvonal-literál
+(`.push('/...')`) **TILOS** — a `test/tooling/route_literal_guard_test.dart`
+(`gate_tests`) minden `lib/**` fájlra méri; ha a kör GoRouter-navigációt
+használ, az `AppRoutes` konstansain át tegye (`settings_screen.dart:297`:
+`context.push(AppRoutes.login)` a MÉRT minta).
+
+### B6 — az A5 valódi munka: a `VisionPrivacyScreen`-re MA NULLA navigáció mutat
+
+Mérve: `grep -rn "VisionPrivacyScreen" lib/` → kizárólag a saját fájlja. A
+képernyő ma **elérhetetlen** a futó appból (csak teszt éri el). Az A5 cellája
+tehát nem „már megvan, csak migrálni kell": a `consent_center_test.dart`-nak a
+`SettingsScreen`-ről INDULÓ, felső szintű elérési utat kell állítania (koppintás
+a beállítások gyökeréről), nem a képernyő puszta létezését.
+
+### B7 — `ui_inventory` bázisvonal = 94, és a kör ELMOZDÍTJA
+
+Mérve: `test/ui/ui_inventory_test.dart:22` → `expect(first.screenPaths, hasLength(94))`.
+A kör legalább két új `_screen.dart`-ot hoz (adatvédelmi központ, modellkezelő),
+tehát a szám elmozdul. **A jogosultság PONTOSAN a szám emelése a tényleges
+képernyőszámra**, a §0.0/R4 szerint, plusz — a merge-elt precedenst követve — a
+kör indoklásának egy kommentsora és opcionálisan egy `contains(...)` cella az új
+képernyőkre. A leltárteszt MINDEN más állítása (rendezettség, `test/` kizárás,
+immutábilitás, a meglévő `contains` cellák) érintetlen marad. A
+`tool/ui_inventory.dart` szabályának lazítása vagy képernyő-átnevezés a szám
+elkerülésére **TILOS** — az a mérce meghamisítása.
+
+### B8 — a golden-útvonal NEM kerül a lokális `gate_tests`-be; a felvétel x86-on megy (ADR 0426, L486, L516, L517)
+
+A brief eredeti `gate_tests` tömbje és §7 sora tartalmazta a golden-útvonalat, a
+§7 pedig `flutter test --update-goldens`-t írt elő — **mindkettő HIBÁS ezen a
+boxon**. A box `aarch64`, a merge-kaput adó CI `ubuntu-latest` = `x86_64`, a
+`LocalFileComparator` pedig nulla toleranciájú: minden ARM-on rögzített pixel a
+kapun MINDIG piros (ADR 0426 §2–§3 mérése; az E13-R17 két vak javító kört, az
+E13-R20 egy **H5 haltot** fizetett érte). Ezen felül a golden-lépés lokális
+pirosa a szekvenciális `round-gate.sh`-t megállítaná az `architecture` /
+`secrets` / `l10n` lépések ELŐTT, elrejtve a kör három utolsó mércéjét.
+
+**Mindkettő JAVÍTVA:** a golden-útvonal kikerült a `gate_tests`-ből és a §7
+gate-sorából; a rögzítés és az ellenőrzés `tools/golden-x86.sh record|check`
+(§7). A golden-teszt fájlja és a PNG-k továbbra is a kör diffjében vannak
+(`test/ui/goldens/` az `allowed_paths`-on).
+
+**A mérce NEM lazul:** a golden-cellákat KETTŐ méri — lokálisan a kötelező
+`tools/golden-x86.sh check`, a kapuban az exact-SHA `full-gate.yml` teljes
+suite-ja —, mindkettő x86_64-en, változatlan komparátorral, a TELJES
+golden-készlettel. A `textScaler 2.0` keret KÖTELEZŐ, és a felvétel közben
+talált, akár a kör ELŐTTI elrendezési hibát **javítani** kell, nem bázisvonalként
+rögzíteni ([L517](../LESSONS.md#l517)).
+
+### B9 — a §0.0/R2 hét tesztje MIND létezik és a `gate_tests`-re is felkerült
+
+Mérve: mind a hét fájl a fán van. Mivel a migráció ezeket pirosra váltaná, a kör
+ráállíthatja őket az ÚJ widgetekre — de **a lefedett viselkedés gyengítése,
+cella törlése vagy `skip`-je TILOS** (§0.0/R2 változatlan). Ezek most a
+`gate_tests`-en is szerepelnek, hogy a lelet a kör SAJÁT kapujában jöjjön elő,
+ne a ~17 perces CI-ban.
+
+### B10 — az A6 alá NINCS meglévő domain: a modellkezelőnek VALÓDI ellenőrzést kell számolnia
+
+Mérve: a fán nincs offline-AI modell-domain (`lib/features/offline_ai/` nem
+létezik). Ami VAN és felhasználható:
+
+- `lib/core/ml/vision_model_manifest.dart` — valódi sha256-számítás és
+  -összevetés a manifest bejegyzés ellen (`_sha256Hex`, 263–267. sor: eltérésnél
+  a bejegyzés **elutasított**), plusz `VisionModelStatus { active, deferred }`;
+- a design-system `SsModelStatusCard` / `SsProvenanceBadge` / `SsStatusBadge`.
+
+A `lib/core/ml/**` a listán KÍVÜL van: olvasható és importálható, **nem
+szerkeszthető**. Az `offline_ai` domainje mögött **tényleges**
+ellenőrzőösszeg-összevetésnek kell állnia (a projekt szabálya: a mag-funkciót
+mockolni tilos, a mock csak teszt-infrastruktúra) — a hármas cella (küszöb
+alatt / rajta / fölött, §6.1) csak így mérhető.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -254,7 +451,7 @@ az ellenőrzés nélküli modell-aktiválás engedélyezése · más képernyők
 |---|---|
 | `lib/features/auth/` | bejelentkezés/regisztráció |
 | `lib/features/settings/` | beállítások + adatvédelem |
-| `lib/features/offline_ai/` | modellkezelő |
+| `lib/features/offline_ai/` | modellkezelő — **ÚJ fa, ezt a kör hozza létre** (§0.0.B/B1) |
 | `lib/features/share/` | megosztás-előnézet |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a rendszer-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
@@ -280,7 +477,10 @@ felhasználó döntsön". Egy hamisított modell mindent lát, amit a mikrofon.
 ### 5.2 A beállítás CSAK szerver-megerősítés után jelölhető szinkronizáltnak
 
 A projekt mért tanulsága. Sikertelen írás után a felület jelzi a
-függőben lévő állapotot és újrapróbál — nem tesz úgy, mintha mentve lenne.
+függőben lévő állapotot és a felhasználó **explicit akcióval** újrapróbálhatja
+— nem tesz úgy, mintha mentve lenne. **Automatikus replay/backoff bevezetése
+TILOS** (§0.0.B/B3: a `settings_sync_test.dart` két, NEM szerkeszthető cellája
+pinneli, hogy egy bukott írás pontosan egyszer megy ki).
 
 **NEM elfogadható gyengítés:** `try { push() } catch (_) {}` és optimista
 „Mentve" felirat. Ez néma szerkesztés-vesztés.
@@ -311,7 +511,7 @@ ADR 0279 következmény-központú megerősítésével.
 | A1 | A bejelentkezésből elérhető a „fiók nélkül tovább" út | `auth_states_test.dart` |
 | A2 | A hitelesítési hiba nem szivárogtat technikai részletet | ugyanott |
 | A3 | A beállítás csak szerver-megerősítés után jelölt szinkronizáltnak | `settings_persistence_failure_test.dart` |
-| A4 | Sikertelen mentés után a felület jelez és újrapróbál | ugyanott |
+| A4 | Sikertelen mentés után a felület **függő** állapotot jelez, és a felhasználó **explicit akcióval** újrapróbálhatja (automatikus replay TILOS — §0.0.B/B3) | ugyanott + a NEM szerkeszthető `settings_sync_test.dart` őrcellái |
 | A5 | Az adatvédelmi központ a felső szintről elérhető | `consent_center_test.dart` |
 | A6 | Ellenőrzőösszeg-hiba esetén a modell NEM aktiválható | `model_integrity_test.dart` |
 | A7 | A megosztás alapból minimális adatot visz, tételesen felsorolva | `share_redaction_test.dart` |
@@ -346,18 +546,27 @@ lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/settings/auth_states_test.dart test/features/settings/settings_persistence_failure_test.dart test/features/settings/consent_center_test.dart test/features/settings/model_integrity_test.dart test/features/settings/share_redaction_test.dart test/ui/goldens/e13_r35_screens_golden_test.dart test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/app/routing/app_router_test.dart test/features/share/reel_meter_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart test/features/today/hub_navigation_test.dart
+tools/round-gate.sh test/features/settings/auth_states_test.dart test/features/settings/settings_persistence_failure_test.dart test/features/settings/consent_center_test.dart test/features/settings/model_integrity_test.dart test/features/settings/share_redaction_test.dart test/features/settings/settings_sync_test.dart test/features/settings/settings_account_test.dart test/features/settings/vision_privacy_screen_test.dart test/features/settings/lab_mode_toggle_test.dart test/features/share/share_preview_test.dart test/features/share/strum_card_test.dart test/features/share/strum_reel_test.dart test/features/share/wrapped_test.dart test/ui/ui_inventory_test.dart test/app/navigation/adaptive_scaffold_test.dart test/app/navigation/legacy_route_redirect_test.dart test/app/offline_network_guard_test.dart test/app/routing/app_router_test.dart test/features/share/reel_meter_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart test/features/today/hub_navigation_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
 minden állapotát NEM kell felvenni, a §3 szerinti alap-nézet elég, de a két
 keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
-KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
-(valódi kapu, nem `skip`-elt rögzítő). Előállítás:
+KÖTELEZŐ. Minta és futó precedens: `test/ui/goldens/e13_r34_screens_golden_test.dart`
+(merge-elt, valódi kapu, nem `skip`-elt rögzítő).
+
+**Előállítás és ellenőrzés — KIZÁRÓLAG x86-on** (§0.0.B/B8,
+[ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)); a
+`flutter test --update-goldens` ezen az `aarch64` boxon TILOS, mert az ott
+rögzített pixel az x86-os merge-kapun MINDIG piros:
 
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r35_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r35_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r35_screens_golden_test.dart
 ```
+
+A `check` kilépési kódja: `0` = egyezik, `10` = valódi golden-eltérés (javítandó,
+NEM újrarögzítendő bázisvonal), `20` = környezeti hiba (jelentsd, ne kerüld meg).
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
@@ -384,7 +593,8 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 5. Az offline AI modellkezelő + a három integritás-cella.
 6. A megosztás-előnézet minimális alapadattal, tételes felsorolással.
 7. A valódi-sértés próba, §10-be dokumentálva.
-8. `tools/round-gate.sh` a §7 szerint.
+8. A golden-felvétel `tools/golden-x86.sh record`-dal, majd `check` (§7, §0.0.B/B8).
+9. `tools/round-gate.sh` a §7 szerint.
 
 ## 9. Kockázatok
 
