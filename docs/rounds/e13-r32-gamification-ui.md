@@ -46,7 +46,6 @@ gate_tests = [
   "test/features/gamification/ui/streak_states_test.dart",
   "test/features/gamification/ui/compassionate_copy_test.dart",
   "test/features/gamification/ui/reduced_motion_test.dart",
-  "test/ui/goldens/e13_r32_screens_golden_test.dart",
   "test/ui/ui_inventory_test.dart",
   "test/app/routing/app_router_test.dart",
   "test/core/architecture_dependency_test.dart",
@@ -533,7 +532,7 @@ lennie → állítsd vissza.
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/gamification/ui/claim_idempotency_test.dart test/features/gamification/ui/streak_states_test.dart test/features/gamification/ui/compassionate_copy_test.dart test/features/gamification/ui/reduced_motion_test.dart test/ui/goldens/e13_r32_screens_golden_test.dart test/ui/ui_inventory_test.dart test/app/routing/app_router_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/gamification/ui/claim_idempotency_test.dart test/features/gamification/ui/streak_states_test.dart test/features/gamification/ui/compassionate_copy_test.dart test/features/gamification/ui/reduced_motion_test.dart test/ui/ui_inventory_test.dart test/app/routing/app_router_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
@@ -558,6 +557,29 @@ tools/golden-x86.sh check  test/ui/goldens/e13_r32_screens_golden_test.dart
 > környezeti hiba, `30` = hibás hívás. A merge-elt E13-R23…R31 precedens
 > egységesen ezt az alakot használja; minta:
 > `test/ui/goldens/e13_r31_screens_golden_test.dart`.
+
+> **§0.0.C — REVIEW-KORI BRIEF-JAVÍTÁS (orchestrátor, 2026-08-27, ADR 0087 §2):**
+> a golden-útvonal KIKERÜLT a `gate_tests` tömbből ÉS a fenti `round-gate.sh`
+> sorból. Indok — MÉRVE a review izolált klónjában, ezen a boxon (aarch64),
+> a kör commitján (`54db96be`):
+>
+> | Futtatás | Architektúra | Eredmény |
+> |---|---|---|
+> | `~/flutter/bin/flutter test test/ui/goldens/e13_r32_screens_golden_test.dart` | aarch64 (ez a box) | **5 piros / 10** (`hub`, `streak_detail`, `achievements_scale2` …) |
+> | `tools/golden-x86.sh check test/ui/goldens/e13_r32_screens_golden_test.dart` | x86_64 (a CI-vel AZONOS) | **10 zöld, exit 0** |
+>
+> Ez pontosan az [ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md) §2–§3 /
+> [L493](../LESSONS.md#l493) mért jelensége, és az ADR kimondott előírása is
+> („a golden-teszt útvonala kikerül a lokális ARM `gate_tests`-ből — mert ott
+> bizonyítottan a ROSSZ gépet méri"). A §7 sora az E13-R31 briefjéből öröklődött,
+> ahol az adott képernyők történetesen nem drifteltek; ez a kör megmérte, hogy a
+> drift KÉPERNYŐ-FÜGGŐ, tehát a listán hagyása nem konzervatív, hanem hibás.
+>
+> **A mérce NEM lazul:** a golden-cellákat továbbra is KETTŐ méri — lokálisan a
+> `tools/golden-x86.sh check` (kötelező, a §7 alatti parancspár), a kapuban pedig
+> az exact-SHA `full-gate.yml` teljes suite-ja, mindkettő x86_64-en, változatlan
+> nulla toleranciájú komparátorral és a TELJES 10-elemű golden-készlettel. Egy
+> cella sincs törölve vagy `skip`-elve.
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
