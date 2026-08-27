@@ -87,6 +87,8 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
     final status = chatState?.status ?? controller.status;
     final responseText = chatState?.responseText ?? controller.responseText;
     final banners = chatState?.banners ?? controller.banners;
+    final isOnline = chatState?.isOnline ?? controller.isOnline;
+    final aiMode = tutorAiModeFor(status: status, isOnline: isOnline);
     final visibleMessages = chatState?.messages ?? controller.messages;
     final messages = <_ChatBubble>[
       for (final message in visibleMessages) _ChatBubble.fromMessage(message),
@@ -108,6 +110,13 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
           ),
           title: Text(l10n.aiTutorChatTitle),
           actions: <Widget>[
+            // Always visible regardless of turn status (ADR 0278 §1,
+            // E13-R29 §5.2) — this is the screen-level anchor; the
+            // streaming indicator below repeats it at message level.
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: _AiModeIndicator(mode: aiMode),
+            ),
             if (status.isActive)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -151,15 +160,16 @@ class _TutorChatScreenState extends ConsumerState<TutorChatScreen> {
                     child: Semantics(
                       label: l10n.aiTutorChatStreamingSemantics,
                       liveRegion: true,
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
-                          SizedBox(
+                          const SizedBox(
                             width: 12,
                             height: 12,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
+                          _AiModeIndicator(mode: aiMode),
                         ],
                       ),
                     ),
@@ -257,5 +267,67 @@ class _ChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TutorMessageBubble(message: message);
+  }
+}
+
+/// The AI-mode indicator (ADR 0278 §1, E13-R29 §5.2) — built from plain
+/// [Theme] tokens, not the design system's `SsProvenanceBadge`: this
+/// screen's own pinned widget test (`tutor_chat_screen_test.dart`, outside
+/// this round's scope) builds a bare `MaterialApp` without `AppTheme`, so
+/// `Theme.of(context).extension<SsColorScheme>()` is null there and
+/// `SsProvenanceBadge` crashes on the `!` it uses internally (measured:
+/// E13-R29 dev run). The design system's own l10n copy
+/// ([AppLocalizations.dsProvenanceBadgeLocalLabel] and friends) is reused
+/// for wording consistency. Fallback reuses the local icon+label (the
+/// fallback path answers FROM the local model) plus an explicit trailing
+/// notice — meaning is carried by icon+text together, never colour alone
+/// (same rule `SsProvenanceBadge` itself documents).
+class _AiModeIndicator extends StatelessWidget {
+  const _AiModeIndicator({required this.mode});
+
+  final TutorAiMode mode;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final (icon, label) = switch (mode) {
+      TutorAiMode.cloud => (
+        Icons.cloud_outlined,
+        l10n.dsProvenanceBadgeCloudLabel,
+      ),
+      TutorAiMode.local || TutorAiMode.fallback => (
+        Icons.smartphone_outlined,
+        l10n.dsProvenanceBadgeLocalLabel,
+      ),
+    };
+    final badge = Semantics(
+      container: true,
+      label: label,
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16),
+          const SizedBox(width: 4),
+          Text(label, style: Theme.of(context).textTheme.labelLarge),
+        ],
+      ),
+    );
+    if (mode != TutorAiMode.fallback) return badge;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        badge,
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            l10n.aiTutorAiModeFallbackMessage,
+            style: Theme.of(context).textTheme.labelSmall,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
   }
 }

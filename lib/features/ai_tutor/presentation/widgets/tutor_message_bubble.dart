@@ -12,14 +12,32 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/tutor_content_block.dart';
 import '../../domain/models/tutor_message.dart';
 
 /// Renders one tutor (or user) message.
+///
+/// A completed tutor message that carries no evidence-bearing block
+/// (`TutorEvidenceBlock` / `TutorSourceBlock` / `TutorMetricBlock`) shows an
+/// explicit "no measured evidence" notice (ADR 0287 §8, E13-R29 §5.6) —
+/// the absence is stated, not silently omitted.
 class TutorMessageBubble extends StatelessWidget {
   const TutorMessageBubble({super.key, required this.message});
 
   final TutorMessage message;
+
+  bool get _hasEvidence => message.blocks.any(
+    (block) =>
+        block is TutorEvidenceBlock ||
+        block is TutorSourceBlock ||
+        block is TutorMetricBlock,
+  );
+
+  bool get _showsMissingEvidenceNotice =>
+      message.role == TutorMessageRole.tutor &&
+      message.deliveryState == TutorMessageDeliveryState.complete &&
+      !_hasEvidence;
 
   @override
   Widget build(BuildContext context) {
@@ -50,10 +68,43 @@ class TutorMessageBubble extends StatelessWidget {
               children: <Widget>[
                 for (final block in message.blocks)
                   _BlockView(block: block, color: textColor),
+                if (_showsMissingEvidenceNotice)
+                  _MissingEvidenceNotice(color: textColor),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MissingEvidenceNotice extends StatelessWidget {
+  const _MissingEvidenceNotice({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final noticeColor = color.withValues(alpha: 0.7);
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.info_outline, size: 14, color: noticeColor),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              l10n.aiTutorEvidenceMissingNotice,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: noticeColor,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
