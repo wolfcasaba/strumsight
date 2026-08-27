@@ -14,7 +14,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/public.dart';
-import '../../offline_ai/screens/model_manager_screen.dart';
+import '../../offline_ai/public.dart';
 import '../providers/capo_provider.dart';
 import '../providers/confidence_threshold_provider.dart';
 import '../providers/input_latency_provider.dart';
