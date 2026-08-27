@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/community/presentation/dialogs/report_content_sheet.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
@@ -352,7 +353,7 @@ void main() {
       await _openSheet(tester);
 
       // No category selected — submit button is disabled.
-      final submitButton = tester.widget<FilledButton>(
+      final submitButton = tester.widget<SsButton>(
         find.byKey(const Key('report-submit')),
       );
       expect(submitButton.onPressed, isNull);
@@ -360,7 +361,7 @@ void main() {
       // Pick a category — submit button enables.
       await tester.tap(find.byKey(const Key('report-category-spam')));
       await tester.pumpAndSettle();
-      final submitButtonAfter = tester.widget<FilledButton>(
+      final submitButtonAfter = tester.widget<SsButton>(
         find.byKey(const Key('report-submit')),
       );
       expect(submitButtonAfter.onPressed, isNotNull);

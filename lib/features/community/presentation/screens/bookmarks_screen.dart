@@ -40,8 +40,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
+import '../widgets/community_theme_scope.dart';
 
 // ---------------------------------------------------------------------------
 // L10n placeholders — to be lifted into app_en.arb / app_hu.arb in a
@@ -218,16 +221,18 @@ class _BookmarksScreenState extends ConsumerState<BookmarksScreen> {
     // stream, the screen rebuilds. A failure renders the
     // error card; the user retries via the explicit button.
     final asyncState = ref.watch(bookmarksProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text(_l10nBookmarksTitle)),
-      body: SafeArea(
-        child: asyncState.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (failure, _) => _ErrorView(
-            failure: failure,
-            onRetry: () => ref.read(bookmarksControllerProvider).load(),
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: const Text(_l10nBookmarksTitle)),
+        body: SafeArea(
+          child: asyncState.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (failure, _) => _ErrorView(
+              failure: failure,
+              onRetry: () => ref.read(bookmarksControllerProvider).load(),
+            ),
+            data: _renderBody,
           ),
-          data: _renderBody,
         ),
       ),
     );
@@ -302,36 +307,38 @@ class _TombstoneCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: <Widget>[
-            const Icon(Icons.archive_outlined),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Post ${row.postId.value}',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _l10nBookmarkTombstoneBody,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: SsSurface(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: <Widget>[
+              const Icon(Icons.archive_outlined),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Post ${row.postId.value}',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _l10nBookmarkTombstoneBody,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            IconButton(
-              tooltip: _l10nBookmarkRemoveAction,
-              icon: const Icon(Icons.close),
-              onPressed: onRemove,
-            ),
-          ],
+              IconButton(
+                tooltip: _l10nBookmarkRemoveAction,
+                icon: const Icon(Icons.close),
+                onPressed: onRemove,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -359,9 +366,10 @@ class _LoadMoreFooter extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Center(
-        child: FilledButton.tonal(
+        child: SsButton(
+          variant: SsButtonVariant.secondary,
           onPressed: onPressed,
-          child: const Text(_l10nBookmarkLoadMore),
+          label: _l10nBookmarkLoadMore,
         ),
       ),
     );
@@ -385,7 +393,11 @@ class _ErrorView extends StatelessWidget {
             const SizedBox(height: 8),
             Text(failure.toString(), textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
+            SsButton(
+              variant: SsButtonVariant.secondary,
+              onPressed: onRetry,
+              label: 'Retry',
+            ),
           ],
         ),
       ),

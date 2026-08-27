@@ -30,6 +30,10 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
+import 'community_theme_scope.dart';
+
 /// The processing-state literal the widget understands.
 ///
 /// The set mirrors ``backend/app/community/models/media.py``
@@ -84,6 +88,10 @@ class CommunityMediaPlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return CommunityThemeScope(child: _buildFace(context));
+  }
+
+  Widget _buildFace(BuildContext context) {
     switch (processingState) {
       case CommunityMediaProcessingState.ready:
         return _ReadyCard(
@@ -115,36 +123,38 @@ class _PendingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            if (title != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(title!, style: theme.textTheme.titleMedium),
-              ),
-            Row(
-              children: <Widget>[
-                const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SsSurface(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (title != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(title!, style: theme.textTheme.titleMedium),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _pendingLabel(state),
-                    style: theme.textTheme.bodyMedium,
+              Row(
+                children: <Widget>[
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _pendingLabel(state),
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -177,13 +187,15 @@ class _RejectedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          'This media was rejected and cannot be played.',
-          style: theme.textTheme.bodyMedium,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SsSurface(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'This media was rejected and cannot be played.',
+            style: theme.textTheme.bodyMedium,
+          ),
         ),
       ),
     );
@@ -197,13 +209,15 @@ class _DeletedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          'This media has been removed.',
-          style: theme.textTheme.bodyMedium,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SsSurface(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'This media has been removed.',
+            style: theme.textTheme.bodyMedium,
+          ),
         ),
       ),
     );
@@ -230,41 +244,44 @@ class _ReadyCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          if (title != null)
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SsSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (title != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(title!, style: theme.textTheme.titleMedium),
+              ),
+            AspectRatio(
+              aspectRatio: aspectRatio,
+              child: Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.play_circle_outline,
+                  size: 48,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(title!, style: theme.textTheme.titleMedium),
-            ),
-          AspectRatio(
-            aspectRatio: aspectRatio,
-            child: Container(
-              color: theme.colorScheme.surfaceContainerHighest,
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.play_circle_outline,
-                size: 48,
-                color: theme.colorScheme.onSurfaceVariant,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SsButton(
+                  variant: SsButtonVariant.tertiary,
+                  onPressed: onTapPlay,
+                  icon: Icons.play_arrow,
+                  label: 'Play',
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: onTapPlay,
-                icon: const Icon(Icons.play_arrow),
-                label: const Text('Play'),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

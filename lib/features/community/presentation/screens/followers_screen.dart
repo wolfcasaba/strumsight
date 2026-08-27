@@ -19,10 +19,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/foundation/app_failure.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../data/repositories/relationship_repository_impl.dart';
 import '../../domain/entities/community_profile.dart';
+import '../../domain/repositories/social_graph_repository.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
+import '../widgets/community_theme_scope.dart';
 
 enum FollowersMode { followers, following }
 
@@ -120,47 +123,92 @@ class _FollowersScreenState extends ConsumerState<FollowersScreen> {
     return 'Server error';
   }
 
+  /// A5 — the row disappears from THIS list immediately, before the
+  /// repository call is even awaited; the server round-trip is best-effort
+  /// and never re-adds the row (ADR 0291 §4, "the tiltás hat helyben azonnal,
+  /// nem kell megvárni a szerver megerősítését").
+  Future<void> _blockUser(PublicUserId target) => _applyLocallyThen(
+    target,
+    (repo, key) => repo.block(target: target, idempotencyKey: key),
+  );
+
+  Future<void> _muteUser(PublicUserId target) => _applyLocallyThen(
+    target,
+    (repo, key) => repo.mute(target: target, idempotencyKey: key),
+  );
+
+  Future<void> _applyLocallyThen(
+    PublicUserId target,
+    Future<void> Function(SocialGraphRepository repo, String idempotencyKey)
+    call,
+  ) async {
+    setState(() => _items.removeWhere((p) => p.userId == target));
+    final repo = ref.read(socialGraphRepositoryProvider);
+    try {
+      await call(repo, _newRelationshipActionKey());
+    } on AppFailure catch (_) {
+      // Best-effort — the local view already reflects the safety
+      // decision regardless of the server round-trip outcome.
+    }
+  }
+
+  String _newRelationshipActionKey() =>
+      'fw-${DateTime.now().microsecondsSinceEpoch}';
+
   @override
   Widget build(BuildContext context) {
     final title = widget.mode == FollowersMode.followers
         ? 'Followers'
         : 'Following';
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: SafeArea(
-        child: _items.isEmpty
-            ? const Center(child: Text('No one here yet.'))
-            : ListView.separated(
-                itemCount: _items.length + 1,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  if (index >= _items.length) {
-                    // Tail load: kick off the next page when the
-                    // user scrolls near the bottom. The cursor's
-                    // null means the server is done.
-                    if (!_cursor.isInitial && _cursor.cursor != null) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!_disposed) _fetchNext();
-                      });
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(title)),
+        body: SafeArea(
+          child: _items.isEmpty
+              ? const Center(child: Text('No one here yet.'))
+              : ListView.separated(
+                  itemCount: _items.length + 1,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    if (index >= _items.length) {
+                      // Tail load: kick off the next page when the
+                      // user scrolls near the bottom. The cursor's
+                      // null means the server is done.
+                      if (!_cursor.isInitial && _cursor.cursor != null) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!_disposed) _fetchNext();
+                        });
+                      }
+                      return _Footer(isLoading: _isLoadingMore);
                     }
-                    return _Footer(isLoading: _isLoadingMore);
-                  }
-                  final profile = _items[index];
-                  return _FollowerTile(profile: profile);
-                },
-              ),
+                    final profile = _items[index];
+                    return _FollowerTile(
+                      profile: profile,
+                      onBlock: () => _blockUser(profile.userId),
+                      onMute: () => _muteUser(profile.userId),
+                    );
+                  },
+                ),
+        ),
       ),
     );
   }
 }
 
 class _FollowerTile extends StatelessWidget {
-  const _FollowerTile({required this.profile});
+  const _FollowerTile({
+    required this.profile,
+    required this.onBlock,
+    required this.onMute,
+  });
 
   final CommunityProfile profile;
+  final VoidCallback onBlock;
+  final VoidCallback onMute;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
@@ -194,6 +242,18 @@ class _FollowerTile extends StatelessWidget {
                   ),
               ],
             ),
+          ),
+          IconButton(
+            key: ValueKey('follower-mute-${profile.userId.value}'),
+            tooltip: l10n.communityFollowersMuteAction,
+            icon: const Icon(Icons.volume_off_outlined),
+            onPressed: onMute,
+          ),
+          IconButton(
+            key: ValueKey('follower-block-${profile.userId.value}'),
+            tooltip: l10n.communityFollowersBlockAction,
+            icon: const Icon(Icons.block_outlined),
+            onPressed: onBlock,
           ),
         ],
       ),

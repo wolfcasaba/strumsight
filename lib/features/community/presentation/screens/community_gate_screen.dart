@@ -30,8 +30,11 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/profile_controller.dart';
+import '../widgets/community_theme_scope.dart';
 import 'edit_profile_screen.dart';
 
 class CommunityGateScreen extends ConsumerWidget {
@@ -42,43 +45,45 @@ class CommunityGateScreen extends ConsumerWidget {
     final state = ref.watch(communityProfileControllerProvider);
     final localizations = AppLocalizations.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(localizations.communityGateProfileMissingTitle),
-      ),
-      body: state.when(
-        loading: () => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(localizations.communityGateLoadingBody),
-            ],
-          ),
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(localizations.communityGateProfileMissingTitle),
         ),
-        error: (failure, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
+        body: state.when(
+          loading: () => Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  localizations.communityGateErrorBody,
-                  textAlign: TextAlign.center,
-                ),
+                const CircularProgressIndicator(),
                 const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => ref
-                      .read(communityProfileControllerProvider.notifier)
-                      .refresh(),
-                  child: const Text('Retry'),
-                ),
+                Text(localizations.communityGateLoadingBody),
               ],
             ),
           ),
+          error: (failure, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    localizations.communityGateErrorBody,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  SsButton(
+                    onPressed: () => ref
+                        .read(communityProfileControllerProvider.notifier)
+                        .refresh(),
+                    label: 'Retry',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          data: (value) => _GateBody(state: value),
         ),
-        data: (value) => _GateBody(state: value),
       ),
     );
   }
@@ -191,7 +196,7 @@ class _CtaView extends StatelessWidget {
             const SizedBox(height: 12),
             Text(body, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            FilledButton(onPressed: onCta, child: Text(ctaLabel)),
+            SsButton(onPressed: onCta, label: ctaLabel),
           ],
         ),
       ),
@@ -226,7 +231,7 @@ class _ReadyView extends ConsumerWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
-          FilledButton(
+          SsButton(
             onPressed: () => Navigator.of(context).push<void>(
               MaterialPageRoute<void>(
                 builder: (_) => EditProfileScreen(
@@ -235,7 +240,7 @@ class _ReadyView extends ConsumerWidget {
                 ),
               ),
             ),
-            child: const Text('Edit profile'),
+            label: 'Edit profile',
           ),
           const SizedBox(height: 12),
           // A7 — 2.0 text scale must not break the read-only view.

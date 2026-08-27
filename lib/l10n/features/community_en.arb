@@ -277,6 +277,27 @@
   "feedCardFallbackUnknown": "This content type can't be displayed right now.",
   "@feedCardFallbackUnknown": {},
 
+  "communityModerationRemovedPlaceholder": "This content was removed.",
+  "@communityModerationRemovedPlaceholder": {},
+
+  "communityPublicConfirmTitle": "Make this public?",
+  "@communityPublicConfirmTitle": {},
+
+  "communityPublicConfirmBody": "Everyone will be able to see this, not just people who follow you. You can change the setting again later, but anything already public may already have been seen or shared.",
+  "@communityPublicConfirmBody": {},
+
+  "communityPublicConfirmCta": "Make public",
+  "@communityPublicConfirmCta": {},
+
+  "communityPublicConfirmCancel": "Cancel",
+  "@communityPublicConfirmCancel": {},
+
+  "communityFollowersBlockAction": "Block",
+  "@communityFollowersBlockAction": {},
+
+  "communityFollowersMuteAction": "Mute",
+  "@communityFollowersMuteAction": {},
+
   "communityCommentsTitle": "Comments",
   "@communityCommentsTitle": {},
 

@@ -30,7 +30,10 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../l10n/app_localizations.dart';
+import '../widgets/community_theme_scope.dart';
 
 /// The wire-stable category identifiers — MUST match the
 /// :data:`REPORT_CATEGORIES` set on the backend. The order in this
@@ -152,8 +155,9 @@ Future<ReportSubmissionOutcome?> showReportContentSheet(
     context: context,
     isScrollControlled: true,
     isDismissible: true,
-    builder: (sheetContext) =>
-        ReportContentSheet(request: request, repository: repository),
+    builder: (sheetContext) => CommunityThemeScope(
+      child: ReportContentSheet(request: request, repository: repository),
+    ),
   );
 }
 
@@ -262,24 +266,24 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: <Widget>[
-            TextButton(
+            SsButton(
               key: const Key('report-cancel'),
+              variant: SsButtonVariant.tertiary,
               onPressed: _submitting
                   ? null
                   : () => Navigator.of(context).maybePop(),
-              child: Text(l10n.reportSheetCancel),
+              label: l10n.reportSheetCancel,
             ),
             const SizedBox(width: 8),
-            FilledButton(
+            SsButton(
               key: const Key('report-submit'),
               onPressed: _selected == null || _submitting
                   ? null
                   : () => _onSubmit(),
-              child: Text(
-                _submitting
-                    ? l10n.reportSheetSubmitting
-                    : l10n.reportSheetSubmit,
-              ),
+              loading: _submitting,
+              label: _submitting
+                  ? l10n.reportSheetSubmitting
+                  : l10n.reportSheetSubmit,
             ),
           ],
         ),
@@ -314,30 +318,35 @@ class _ReportContentSheetState extends State<ReportContentSheet> {
           spacing: 8,
           runSpacing: 8,
           children: <Widget>[
-            FilledButton.tonalIcon(
+            SsButton(
               key: const Key('report-action-hide'),
+              variant: SsButtonVariant.secondary,
               onPressed: () => _onActionSelected(ReportSafetyAction.hide),
-              icon: const Icon(Icons.visibility_off_outlined),
-              label: Text(l10n.reportSheetActionHide),
+              icon: Icons.visibility_off_outlined,
+              label: l10n.reportSheetActionHide,
             ),
             if (widget.request.targetAuthorPublicId != null) ...<Widget>[
-              FilledButton.tonalIcon(
+              SsButton(
                 key: const Key('report-action-mute'),
+                variant: SsButtonVariant.secondary,
                 onPressed: () => _onActionSelected(ReportSafetyAction.mute),
-                icon: const Icon(Icons.volume_off_outlined),
-                label: Text(l10n.reportSheetActionMute),
+                icon: Icons.volume_off_outlined,
+                label: l10n.reportSheetActionMute,
               ),
-              FilledButton.tonalIcon(
+              SsButton(
                 key: const Key('report-action-block'),
+                variant: SsButtonVariant.destructive,
+                destructiveSemanticHint: l10n.reportSheetActionBlock,
                 onPressed: () => _onActionSelected(ReportSafetyAction.block),
-                icon: const Icon(Icons.block_outlined),
-                label: Text(l10n.reportSheetActionBlock),
+                icon: Icons.block_outlined,
+                label: l10n.reportSheetActionBlock,
               ),
             ],
-            TextButton(
+            SsButton(
               key: const Key('report-action-done'),
+              variant: SsButtonVariant.tertiary,
               onPressed: () => _onActionSelected(ReportSafetyAction.done),
-              child: Text(l10n.reportSheetActionDone),
+              label: l10n.reportSheetActionDone,
             ),
           ],
         ),
