@@ -419,4 +419,78 @@ gh workflow run build-apk.yml --ref <kör-branch>
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-27.
+
+### 10.1 Mit csináltam
+
+- `test/ui/goldens/e13_r36_variant_matrix_test.dart` (ÚJ): PNG nélküli
+  variáns-mátrix — 6 kockázat-alapú képernyő (`today_hub`, `live`, `tuner`,
+  `settings`, `vision_result`, `login`) × {light, dark} × {en, hu} ×
+  {compact portrait 412×915, landscape 915×412, medium 700×1000, expanded
+  1024×1366} × {textScale 1.0, 2.0} = **192 cella**. Minden cella
+  `FlutterError.onError`-on át méri a `RenderFlex` túlcsordulást és a
+  pumpolás közbeni kivételt (nem szöveg-heurisztika). A fixture-öket a
+  meglévő `e13_r17/r18/r19/r30/r35` golden-fájlokból vettem át (nem
+  találtam ki újat).
+- `test/accessibility/closure_suite_test.dart` (ÚJ): 12 cella négy
+  csoportban (A6 route, A4 permission, A2 state-restoration, A5 200%
+  interaktív login-kör), mindegyik VALÓDI tap-interakción megy át
+  `textScale: 2.0` mellett (nem csak renderel). A router-harness a meglévő
+  `test/app/routing/app_router_test.dart` / `test/app/navigation/
+  tab_state_restoration_test.dart` mintáját tükrözi.
+- `docs/ui/legacy-backlog.md` (ÚJ): a B5 kizárólista mindkét fájlból (5
+  cella összesen — 4 a mátrixból, 1 a closure suite-ból), a B3 halasztott
+  UI-architektúra-guard, és az 53 megmaradt legacy képernyő dátumozott,
+  felelős-jelölt összegzése.
+- `docs/ui/chapter-13-completion-report.md` (ÚJ): szándékos golden-eltérés
+  szakasz (nincs — nulla PNG változott), mért futásidő (gate: 1m50.5s),
+  DSP-baseline összevetés (a mérőfájl 2026-08-09 óta, tehát a TELJES Ch13
+  sáv előtt/alatt/után változatlan), a §5.5 korlát kimondása, ismert
+  korlátok, kiadási ajánlás, valós eszközös ellenőrzőlista (előkészítve,
+  kitöltetlenül).
+- `docs/ui/migration-status.md`: frissítve a mért Ch13 záró állapotra — 43/96
+  képernyő migrálva (44,8%), per-feature bontás, a legacy route-védelem
+  (meglévő tesztek) megnevezve, a `token-debt.md` hivatkozva (nem írva).
+
+### 10.2 Mit mértem, milyen paranccsal
+
+- A kötelező gate (§7 pontos parancsa) **10/10 zöld**, `real 1m50.506s`
+  (`time tools/round-gate.sh <5 fájl>`), előtérben, csonkítatlan kimenettel.
+- `flutter test test/ui/goldens/e13_r36_variant_matrix_test.dart` külön is
+  lefuttatva: 192/192 zöld, ~13s.
+- `flutter test test/accessibility/closure_suite_test.dart` külön is
+  lefuttatva: 12/12 zöld, ~4s.
+- `flutter analyze test/accessibility test/ui/goldens/
+  e13_r36_variant_matrix_test.dart`: 0 lelet (a gate saját `analyze`
+  lépése a teljes `lib/ test/ tool/`-t lefedi, azonos eredménnyel).
+- `flutter test test/tooling/real_audio_dsp_baseline_test.dart`: 9/9 zöld,
+  ~5s — a DSP-baseline mérőfájl `git log`-ja szerint 2026-08-09
+  (`c4ce2cc0`, E99-R05) óta érintetlen, azaz a TELJES E13 sáv alatt nem
+  módosult.
+- A meglévő 20 golden-PNG tesztet (`e13_r16…r35`) **szándékosan NEM**
+  futtattam ezen az (aarch64) boxon — az L516/L493 mért ARM↔x86
+  raszterizációs drift itt hamis pirosat adna; a zöldjük CI-bizonyíték,
+  nem ezé a körié.
+- A stale-entry-őrt (B5 kizárólista) ideiglenes bogus-cellával teszteltem:
+  egy nem-túlcsorduló cellára felvett kizárólista-bejegyzés PIROSRA
+  váltotta a tesztet, majd a bogus cellát eltávolítottam — a mechanizmus
+  bizonyítottan működik.
+
+### 10.3 Mi maradt nyitva
+
+- A B5 kizárólista 5 cellája (`docs/ui/legacy-backlog.md` §1) — mindkettő
+  `lib/**` javítást igényel, jövő körre.
+- A B3 UI-architektúra-guard (`docs/ui/legacy-backlog.md` §2) — külön
+  governance-kör, `tools/**`/`.github/**`/`test/tooling/**`
+  `allowed_paths`-szal.
+- 53 legacy képernyő (`docs/ui/migration-status.md`, `docs/ui/
+  legacy-backlog.md` §3) — dátumozva, felelős-jelölve, nem sürgős (mind
+  elérhető, egyik sem regresszió).
+- A valós eszközös ellenőrzőlista (`chapter-13-completion-report.md` §5)
+  kitöltetlen — emberi lépés, §5.5.
+- Új golden PNG-t nem vettem fel (§0.0.B/B4 megengedi) — a
+  `e13_r36_screens_golden_test.dart` fájl emiatt nem létezik.
+- A CI-dispatch (`gh workflow run build-apk.yml`) és a router-CI
+  ellenőrzés (§0.0.B/B9) az orchestrátor lépése, nem az enyém.
+
 ## 11. Review — a Claude tölti ki
