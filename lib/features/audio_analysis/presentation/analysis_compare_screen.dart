@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../domain/comparison/analysis_comparison.dart';
 import 'widgets/labels_adapter.dart';
@@ -53,18 +54,18 @@ final class AnalysisCompareScreen extends StatelessWidget {
       MetricComparisonDirection.inconclusive =>
         l10n.analysisCompareDirectionInconclusive,
     };
-    final directionIcon = switch (metric.direction) {
-      MetricComparisonDirection.improved => Icons.trending_up,
-      MetricComparisonDirection.regressed => Icons.trending_down,
-      MetricComparisonDirection.unchanged => Icons.trending_flat,
-      MetricComparisonDirection.inconclusive => Icons.help_outline,
+    final direction = switch (metric.direction) {
+      MetricComparisonDirection.improved => SsTrendDirection.up,
+      MetricComparisonDirection.regressed => SsTrendDirection.down,
+      MetricComparisonDirection.unchanged => SsTrendDirection.flat,
+      MetricComparisonDirection.inconclusive => SsTrendDirection.unknown,
     };
 
     return MetricDeltaRowData(
       metricId: metric.metricId,
       metricLabel: labels.metricLabel(metric.metricId),
       directionLabel: directionLabel,
-      directionIcon: directionIcon,
+      direction: direction,
       beforeValueText: l10n.analysisCompareBeforeValue(
         _formatNumber(metric.beforeValue),
       ),

@@ -1,7 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../controllers/timeline_viewport.dart';
+
+/// Density classification for the items a lane is about to paint — screen
+/// reader users get a trend word instead of only a picture (ADR 0286 §3).
+/// [insufficient] is distinct from "even": fewer than two points in the
+/// window means no meaningful trend exists, so one is never fabricated.
+enum TimelineLaneDensityTrend {
+  concentratedEarly,
+  concentratedLate,
+  even,
+  insufficient,
+}
 
 enum TimelineLaneKind {
   waveform,
@@ -34,6 +46,8 @@ final class TimelineLane extends StatelessWidget {
     required this.viewport,
     required this.items,
     this.degraded = false,
+    this.extremesText,
+    this.trendText,
     super.key,
   });
   final TimelineLaneKind kind;
@@ -42,6 +56,20 @@ final class TimelineLane extends StatelessWidget {
   final TimelineViewport viewport;
   final List<TimelineLaneItem> items;
   final bool degraded;
+
+  /// Already-localised "first at … last at …" sentence for the currently
+  /// visible items (ADR 0286 §3's chart extremes). Null when fewer than two
+  /// items are visible — there is no meaningful extreme for zero or one
+  /// point, so nothing is fabricated.
+  final String? extremesText;
+
+  /// Already-localised trend sentence (see [densityTrendFor]). Resolved by
+  /// the caller, not here: this widget must stay usable in a harness with
+  /// no [AppLocalizations] delegate registered (several pinned widget tests
+  /// pump it directly inside a bare `MaterialApp`). When null, no text
+  /// summary renders at all — it is never fabricated from a missing l10n
+  /// lookup.
+  final String? trendText;
 
   /// Returns only the evidence that can affect the painted viewport: its
   /// visible range plus a half-window buffer on each side (one extra window
@@ -56,6 +84,27 @@ final class TimelineLane extends StatelessWidget {
     return items
         .where((item) => item.finish > windowStart && item.start < windowEnd)
         .toList(growable: false);
+  }
+
+  /// Pure density classification for [visibleItems] against [viewport]'s
+  /// midpoint. Never reads anything but the already-bounded visible list,
+  /// so this stays unit-testable without a widget tree.
+  static TimelineLaneDensityTrend densityTrendFor(
+    List<TimelineLaneItem> visibleItems,
+    TimelineViewport viewport,
+  ) {
+    if (visibleItems.length < 2) return TimelineLaneDensityTrend.insufficient;
+    final midMicros =
+        (viewport.start + (viewport.visibleDuration ~/ 2)).inMicroseconds;
+    var before = 0;
+    for (final item in visibleItems) {
+      if (item.start.inMicroseconds < midMicros) before++;
+    }
+    final after = visibleItems.length - before;
+    if (before == after) return TimelineLaneDensityTrend.even;
+    return before > after
+        ? TimelineLaneDensityTrend.concentratedEarly
+        : TimelineLaneDensityTrend.concentratedLate;
   }
 
   @override
@@ -98,6 +147,13 @@ final class TimelineLane extends StatelessWidget {
                 width: double.infinity,
                 child: CustomPaint(painter: _LanePainter(viewport, visible)),
               ),
+              if (trendText != null) ...<Widget>[
+                const SizedBox(height: 4),
+                SsChartTextSummary(
+                  summaryText: trendText!,
+                  extremesText: extremesText,
+                ),
+              ],
             ],
           ),
         ),

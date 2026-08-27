@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:strumsight/l10n/app_localizations.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../controllers/overview_view_model.dart';
 
 /// Recording-quality summary. All numeric values are pre-formatted by the
@@ -22,6 +23,7 @@ final class SignalQualityCard extends StatelessWidget {
     required this.noiseFloorTemplate,
     required this.clippedTemplate,
     required this.silentTemplate,
+    required this.overallScoreSemantic,
     super.key,
   });
 
@@ -41,6 +43,7 @@ final class SignalQualityCard extends StatelessWidget {
   final String noiseFloorTemplate;
   final String clippedTemplate;
   final String silentTemplate;
+  final String overallScoreSemantic;
 
   @override
   Widget build(BuildContext context) {
@@ -66,6 +69,15 @@ final class SignalQualityCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(titleLabel, style: theme.textTheme.titleSmall),
+                  ),
+                  SsScoreRing(
+                    state: card.overallMeasured
+                        ? SsScoreRingState.measured
+                        : SsScoreRingState.unavailable,
+                    ratio: card.overallRatio,
+                    label: card.overallScoreText,
+                    semanticLabel: overallScoreSemantic,
+                    size: 32,
                   ),
                 ],
               ),
@@ -137,6 +149,9 @@ class SignalQualityCardFromL10n extends StatelessWidget {
       ),
       clippedTemplate: l10n.analysisOverviewSignalQualityClipped('{value}'),
       silentTemplate: l10n.analysisOverviewSignalQualitySilent('{value}'),
+      overallScoreSemantic: l10n.analysisOverviewSignalQualityScoreSemantic(
+        card.overallScoreText,
+      ),
     );
   }
 }

@@ -1,13 +1,16 @@
 # E13-R27 — Analysis Overview, Timeline, Metric és Compare UI
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ c732ec75`)
+- **Státusz:** FUT (pre-flight 2026-08-26, kód MÉRVE: `main @ 37c8f1a9`; eredetileg
+  előre megírva 2026-08-15 `main @ c732ec75` ellen — a §0.0/B revízió hat mért
+  eltérést old fel)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 27
 - **Kör-azonosító:** `E13-R27`
 - **Branch:** `<motor>/e13-r27-analysis-results-ui`
 - **Előfeltétel:** `E13-R26` merge-elve (felvétel és feldolgozás)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** [`0286`](../adr/0286-charts-need-a-text-alternative.md)
-  — **a Claude írja meg a kör indításakor; a `docs/adr/` a TILOS zónában van.**
+  — **MÁR MERGE-ELT** (`6e7877de`, 2026-08-15), státusza *elfogadva*. A kör
+  ADR-t **NEM ír**, csak hivatkozza: egy merge-elt ADR újraírása H1 (§0.0/B/B0).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el az elemzési eredmény
 > TÉNYLEGES szerkezetét (verzió, mérőszámok, hiányzó/nem támogatott jelölés),
@@ -18,7 +21,27 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "lib/features/analyze/results/",
+  # §0.0/B/B1 — az eredeti `lib/features/analyze/results/` KÖNYVTÁR-előtag a
+  # verziókövetett fán NEM létezik (S13 lint, L497 hibaosztály), ÉS rossz fát
+  # céloz: a `lib/features/analyze/` a LEGACY V1 fa (egyetlen
+  # `analyze_screen.dart` + `timeline_view.dart`, NULLA mérőszám-kártya, NULLA
+  # összehasonlítás). A brief §3 által leírt eredmény-felületek MÉRHETŐEN a V2
+  # `lib/features/audio_analysis/presentation/` fában élnek — ugyanaz a fa,
+  # amit a MERGE-ELT E13-R26 brief a saját tilos zónájában szó szerint
+  # „a Kör 27 öt eredmény-képernyője és widgetjeik" néven tartott fenn ENNEK a
+  # körnek. A csere szigorúan KEVESEBB, mint a szomszéd, user-jóváhagyott
+  # E13-R22 lista (ott `presentation/widgets/` ÉS `presentation/providers/` ÉS
+  # a feature `public.dart`-ja is szerepelt): itt NINCS provider-réteg és NINCS
+  # feature-`public.dart`, az export-képernyő pedig kimarad (§3-ban nem
+  # szerepel → a szűkítés a §0.0 hatáskörében van).
+  "lib/features/audio_analysis/presentation/analysis_overview_screen.dart",
+  "lib/features/audio_analysis/presentation/analysis_timeline_screen.dart",
+  "lib/features/audio_analysis/presentation/analysis_compare_screen.dart",
+  "lib/features/audio_analysis/presentation/analysis_metric_detail_screen.dart",
+  "lib/features/audio_analysis/presentation/widgets/",
+  "lib/features/audio_analysis/presentation/controllers/",
+  # §0.0/B/B2 — a lint S13 ESCAPE-ágán marad bent: ezt a három előtagot EZ a
+  # kör hozza létre (diagram-komponensek, cél-tesztek, nagy idővonal-fixture).
   "lib/core/design_system/components/analytics/",
   "lib/core/design_system/public.dart",
   "lib/l10n/base/app_en.arb",
@@ -39,7 +62,15 @@ gate_tests = [
   "test/features/analyze/results/timeline_virtualization_test.dart",
   "test/features/analyze/results/chart_semantics_test.dart",
   "test/features/analyze/results/compare_compatibility_test.dart",
-  "test/ui/goldens/e13_r27_screens_golden_test.dart",
+  # §0.0/B/B3 — a MEGLÉVŐ, listán KÍVÜLI pinek: futtatni KELL, szerkeszteni
+  # TILOS. Ebben a könyvtárban él mind a nyolc teszt, amely ma az öt
+  # eredmény-képernyőre, a `metric_card`-ra, a `hotspot_navigator`-ra, az
+  # `overview_view_model`-re és a `timeline_viewport`-ra állít. A kör
+  # migrációja ezért ADDITÍV: a mai szerződéseket nem írja át.
+  "test/features/audio_analysis/presentation/",
+  # §0.0/B/B5 (ADR 0426 §3) — a golden-útvonal NEM kerül a lokális ARM-gate-re;
+  # a lokális mérés egyetlen érvényes alakja:
+  # `tools/golden-x86.sh check test/ui/goldens/e13_r27_screens_golden_test.dart`
   "test/ui/ui_inventory_test.dart",
   "test/core/architecture_dependency_test.dart",
   "test/l10n/hardcoded_string_guard_test.dart",
@@ -62,9 +93,217 @@ az R17–R35 MIND a generált aggregátumot sorolta fel forrásként (`agg=2, fr
 
 **Kockázat = high, indoklás:** az elemzési eredmények a felhasználó felvételéből származó adatot jelenítik meg és exportálhatóvá teszik.
 
+## 0.0/B BRIEF-REVÍZIÓ — 2026-08-26, E13-R27 pre-flight (`main @ 37c8f1a9`)
+
+**Visszakeresett előzmény (ADR 0312 §4.9):** [L497](../LESSONS.md#l497) (nem
+létező könyvtár-előtag az `allowed_paths`-on — most ÖTÖDSZÖR),
+[L478](../LESSONS.md#l478) (a pre-flight csak SZŰKÍTHET, a tágítás H3),
+[L486](../LESSONS.md#l486) + [L493](../LESSONS.md#l493) (a golden a
+RASZTERIZÁLÁST rögzíti; ARM↔x86 diff → öt vak CI-kör),
+[ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md) (a
+goldent a merge-kapu architektúráján mérjük), [L443](../LESSONS.md#l443) (a
+tiszta predikátumot hívó „küszöb-cella" a tiltott implementáción is zöld
+marad), [L403](../LESSONS.md#l403) (a widget-TÍPUS szintjén mérő valódi-sértés
+próba átengedi a tartalmi sértést), [L397](../LESSONS.md#l397) +
+[L401](../LESSONS.md#l401) (a `ui_inventory` bázisvonal CI-only lelet),
+[ADR 0283](../adr/0283-results-never-overstate-certainty.md),
+[ADR 0282](../adr/0282-diagram-text-alternative-and-handedness.md),
+[ADR 0286](../adr/0286-charts-need-a-text-alternative.md).
+
+### B0 — a kiosztott ADR `0286` MÁR MERGE-ELT → a kör ADR-t NEM ír
+
+A pipeline-prompt szerint az ADR-t a pre-flight írná meg, de a mérés mást ad:
+`docs/adr/0286-charts-need-a-text-alternative.md` a fán van, **merge-elve**
+(`6e7877de`, „docs(ch13): E13-R26..R29 briefek + ADR 0285-0287", 2026-08-15),
+státusza *elfogadva*, és a §5 mind a hat kötött döntése szó szerint benne áll.
+Egy merge-elt ADR újraírása **H1** (ADR 0087 §2). A kör tehát **ADR-t nem ír**,
+és **új sorszámot sem foglal** — ez a sávon a tizedik ADR nélküli kör egymás
+után (E13-R17…R27), azonos indokkal.
+
+### B1 — a `lib/features/analyze/results/` előtag NEM LÉTEZIK, és rossz fát céloz
+
+Mérve:
+
+```
+$ find lib/features/analyze -type d
+lib/features/analyze/{application,engine,model,providers,screens,widgets}
+```
+
+`results/` **nincs** — a lista nulla fájlt fedett (S13 lint). A javítás azonban
+NEM a `lib/features/analyze/results/` létrehozása, mert **két** analyze-fa van,
+és a brief a MÁSIKAT írja le:
+
+| | `lib/features/analyze/` (V1, legacy) | `lib/features/audio_analysis/presentation/` (V2, SDD Ch7) |
+|---|---|---|
+| eredmény-képernyők | `analyze_screen.dart` (EGY) | `analysis_{overview,timeline,compare,metric_detail,export}_screen.dart` (ÖT) |
+| mérőszám-kártya | nincs | `widgets/metric_card.dart` + `OverviewMetricCard` **öt** állapottal |
+| confidence | nincs | `widgets/confidence_badge.dart`, `ConfidenceBadgeLevel` |
+| összehasonlítás | nincs | `engine/comparison/compatibility_evaluator.dart` + `ComparisonInconclusiveReason` |
+| idővonal | `widgets/timeline_view.dart` (statikus) | `controllers/timeline_viewport.dart` (zoom/pan/reveal) + `widgets/timeline_{lane,lanes,ruler}.dart` |
+
+Ugyanezt mondja ki a **merge-elt** E13-R26 brief tilos zónája szó szerint: „a
+Kör 27 öt eredmény-képernyője és widgetjeik
+(`audio_analysis/presentation/analysis_{overview,timeline,compare,metric_detail,export}_screen.dart`,
+`presentation/widgets/`, `presentation/controllers/`)". A csere tehát nem
+tágítás, hanem **ennek a körnek előre, írásban fenntartott** fája.
+
+**Amit a csere elhagy (szűkítés):** az `analysis_export_screen.dart` és a
+`presentation/capture/` (Kör 26) — az export a §3 scope-ban nem szerepel.
+
+### B2 — a három ÚJ előtag a lint ESCAPE-ágán marad
+
+`lib/core/design_system/components/analytics/`, `test/features/analyze/results/`
+és `test/fixtures/analyze/results/` egyike sem létezik a fán — mindhármat **EZ
+a kör hozza létre** (a lint S13 kimondottan megengedi, ha a §0.0 ezt kijelenti).
+A `components/` mai gyerekei: `actions`, `ai`, `cards`, `feedback`, `inputs`,
+`music`, `overlays`, `surfaces` — az `analytics/` a kilencedik.
+
+### B3 — a nyolc MEGLÉVŐ pin-teszt: futtatni KELL, szerkeszteni TILOS
+
+```
+$ ls test/features/audio_analysis/presentation/
+analysis_compare_screen_test.dart   analysis_overview_screen_test.dart
+analysis_export_screen_test.dart    analysis_progress_view_test.dart
+analysis_timeline_screen_test.dart  hotspot_navigator_test.dart
+metric_card_test.dart               overview_view_model_test.dart
+timeline_viewport_test.dart
+```
+
+Mind a kilenc a kör célfájára állít. A listára **NEM** kerülnek (az tágítás,
+L478), hanem a `gate_tests` **pinjei** — pontosan az E13-R22 merge-elt alakja
+(`test/features/practice/presentation/` mint listán kívüli pin-könyvtár).
+
+**Következmény, amit be KELL tartani:** a kör migrációja **additív**. A mai
+szerződések (`OverviewMetricCardState` öt állapota, a `MetricCard` reason/tip
+ága, a `ConfidenceBadge`, a `TimelineViewport` zoom-invariánsai, a
+`CompatibilityEvaluator` kilenc cellája) érintetlenek maradnak. Ha egy pin
+elbukik, az `blocked` jelzés és célzott brief-revízió, **nem** a teszt átírása.
+
+### B4 — `ui_inventory` bázisvonal: 89, és a kör NEM mozdítja
+
+Mérve: `test/ui/ui_inventory_test.dart:14` → `hasLength(89)`, és
+`find lib/features -name '*_screen.dart' | wc -l` → **89** (egyezik). Az öt
+eredmény-képernyő **MA IS LÉTEZIK**, tehát a kör — az R26-tal ellentétben —
+alapesetben **nem hoz új `*_screen.dart`-ot**, és a szám nem mozdul. A fájl a
+listán MARAD (nem tágítás: eleve rajta volt), de a jogosultság változatlanul
+**PONTOSAN a szám emelése** a ténylegesen mért értékre, ha a kör mégis új
+képernyőt hoz. Minden más állítás érintetlen.
+
+### B5 — a golden NEM fut a lokális ARM-kapun (ADR 0426, L486/L493)
+
+Az eredeti `gate_tests` felsorolta a
+`test/ui/goldens/e13_r27_screens_golden_test.dart`-ot; ez ezen a boxon (aarch64)
+raszterizáció-eltérés miatt a CI-ban pirosra váltana, miközben lokálisan zöld —
+E13-R17 és E13-R20 együtt **öt vak CI-kört** fizetett ki ezért. A merge-elt
+E13-R22/R25/R26 precedens szerint a golden kikerül a lokális gate-sorból, és a
+mérése:
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r27_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r27_screens_golden_test.dart
+```
+
+A PNG-ket commitolni kell (A9), és a CI-oldali Full Gate futtatja a goldent
+élesben. A `flutter test --update-goldens` a §7-ben leírt alakja ezen a boxon
+**érvénytelen** — a fenti két parancs lép a helyére.
+
+### B6 — az acceptance-cellák a MÉRT fához horgonyozva: mi VAN már, és mi ÚJ
+
+A §6 kilenc cellája közül **öt** olyan viselkedést ír elő, ami a domain/
+presentation rétegben MÁR HELYESEN él; ezeket a kör **megőrzi és bizonyítja**,
+nem újra feltalálja. **Négy** cella valódi új munka:
+
+| Cella | Mért mai állapot | A kör dolga |
+|---|---|---|
+| **A1** hiányzó ≠ nulla | `OverviewMetricCardState.unavailable` + `card.reasonText`/`tipText` — a `MetricCard` ma sem ír `?? 0`-t | **MEGŐRZÉS**, és a DS-migráció után is bizonyítva (`metric_missing_test.dart`) |
+| **A2** nem támogatott külön állapot | `OverviewMetricCardState.notApplicable` + 13 `analysisCapabilityUnavailable*` kulcs | **MEGŐRZÉS** + indoklás a felületen |
+| **A3** confidence minden mérőszám mellett | `ConfidenceBadge(level:…)` a `MetricCard` minden ágán | **MEGŐRZÉS** a részletnézetben is |
+| **A4** virtualizált idővonal | **NINCS MEG.** `analysis_timeline_screen.dart:84` sima `ListView(children: <Widget>[…])` — minden gyermek mohón épül; a `TimelineViewport` ablakol, de a lane-tartalom nem lusta | **ÚJ MUNKA** — a fő tétel |
+| **A5** diagram-szöveg + esemény-lista | RÉSZBEN: `TimelineLane.summary` semantics létezik, de **bejárható esemény-lista alternatíva nincs**, és a trend/hullámforma néma | **ÚJ MUNKA** |
+| **A6/A7** kompatibilitás + indoklás | `CompatibilityEvaluator.evaluateCompatibility` + `ComparisonInconclusiveReason` + 8 `analysisCompareReason*` kulcs | **MEGŐRZÉS** — a UI a domain verdiktjét mondja ki, saját szabályt NEM hoz |
+| **A8** kijelölésből indított gyakorlás | **NINCS MEG.** `grep -rn "[Pp]ractice" lib/features/audio_analysis/presentation/*.dart` → **NULLA** találat | **ÚJ MUNKA** |
+| **A9** golden | nincs `e13_r27_*` golden | **ÚJ MUNKA** (B5 szerint) |
+
+**A DS-migráció maga is új munka:** `grep -rn "design_system" lib/features/audio_analysis/presentation/` → **NULLA** találat, tehát az öt képernyő ma egyetlen design-system komponenst sem használ.
+
+**A8 horgonya:** a kör `lib/features/practice/**`-hoz **nem** nyúlhat (nincs a
+listán → H3), és GoRouter route-literált sem vezethet be (a
+`route_literal_guard_test.dart` a `gate_tests`-ben fut, L97). Az A8 érvényes
+alakja ezért egy **callback-szerződés** a kijelölés-felületen
+(`void Function(Duration start, Duration end)` vagy azzal egyenértékű, a
+kijelölt tartományt HELYESEN továbbadó paraméter), amit a cella a ténylegesen
+átadott értékeken mér — nem a gyakorlás-motor indítása.
+
+### B7 — a cellák a WIDGETET építsék, ne egy tiszta predikátumot (L443, L403)
+
+A négy cél-teszt minden cellája **pumpálja a valódi widgetet**, és a
+**megjelenített SZÖVEG tartalmát** ellenőrizze (`find.text` / `find.textContaining`
+/ `Semantics` label), ne csak egy widget-típus vagy kulcs jelenlétét, és ne egy
+ugyanabban a fájlban lakó tiszta segédfüggvényt. Mérve: az E13-R06 három cellája
+így maradt zöld a tiltott implementáción (L443), az E08-R23 valódi-sértés próbája
+pedig típus-szinten mérve átengedte a tartalmi sértést (L403).
+
+### B8 — S11 feloldás: a migráció ADDITÍV, a pinnelt szerkezet NEM cserélődik
+
+A `tools/brief-lint.py` **S11** lelete a §0.0/B/B1 csere után jelent meg, és
+VALÓDI, mért kockázatot ír le: a kör olyan MEGLÉVŐ képernyőket írhat át,
+amelyeknek a szerkezetét a briefen KÍVÜL élő tesztek pinnelik. A lint két
+feloldást enged; a listát tágító ág az orchestrátornak **H3** ([L478](../LESSONS.md#l478)),
+ezért a **második** ágat választjuk: a §0.0 kimondja a mérést, amiből
+következik, hogy a kör a pinnelt szerkezetet nem cseréli le.
+
+**A pontos pinek, kimérve:**
+
+| Pin | Hol | Mit rögzít |
+|---|---|---|
+| `find.byType(AnalysisCompareScreen)` | `test/app/routing/app_router_test.dart:235,270` | az OSZTÁLYNÉV és a route-célpont |
+| `find.byType(Card), findsWidgets` | `analysis_overview_screen_test.dart:249` | az áttekintőn Material `Card` VAN a fában |
+| `w.runtimeType.toString() == 'InsightCard'`, darabszám **4**, majd **5** | `analysis_overview_screen_test.dart:514-526` | az `InsightCard` TÍPUSNÉV és a max-policy slot-szám |
+| `find.text('Analysis overview')` / `'Main metrics'` / `'Elemzés áttekintése'` / `'Fő metrikák'` | `analysis_overview_screen_test.dart:196-281` | a MEGLÉVŐ l10n kulcsok mindkét nyelven |
+| tartalmi feliratok (`'Measurement unavailable'`, `'Uncertain measurement'`, `'Not applicable'`, …) | `metric_card_test.dart:56-159` | az öt mérőszám-állapot SZÖVEGE |
+
+**A veszély gépileg mérve:** `lib/core/design_system/components/surfaces/ss_card.dart`
+az `SsSurface`-re épül, Material `Card`-ot **nem** tartalmaz — egy „cseréljük
+`Card` → `SsCard`" reflex tehát az `analysis_overview_screen_test.dart:249`-et
+azonnal pirosra váltaná, az `InsightCard` → `SsInsightCard` csere pedig a
+514–526 két darabszám-celláját.
+
+**A kör szerződése ezért:**
+
+1. A négy képernyő **osztályneve és konstruktora változatlan**
+   (`AnalysisOverviewScreen`, `AnalysisTimelineScreen`, `AnalysisCompareScreen`,
+   `AnalysisMetricDetailScreen`).
+2. A MEGLÉVŐ widget-típusok (`MetricCard`, `InsightCard`, `ConfidenceBadge`,
+   `TimelineLane`, `TimelineRuler`, `HotspotNavigator`) **megmaradnak a nevükön**,
+   és a Material `Card` sem tűnik el az áttekintőről. Belül finomíthatók, de
+   típus-cserét (`SsCard`, `SsInsightCard`, `SsMetricCard`) a kör **NEM** végez.
+3. A MEGLÉVŐ l10n kulcsok és feliratok **nem íródnak át**; a kör **új** kulcsokat
+   vesz fel.
+4. Az `lib/core/design_system/components/analytics/` ÚJ komponensei az **ÚJ**
+   felületeket szolgálják ki (pontszám-gyűrű, trend, diagram-szöveg-összegzés,
+   esemény-lista, virtualizált idővonal) — nem a meglévők leváltását.
+
+**Ez szűkítés, nem tágítás,** tehát az orchestrátor hatáskörében van (ADR 0087
+§2). A kilenc pin-teszt a `gate_tests`-ben fut (§0.0/B/B3): ha bármelyik
+pirosra vált, az **`blocked` jelzés és célzott brief-revízió** — nem a teszt
+átírása, és nem a mérce gyengítése.
+
+**Megmaradó, TUDATOSAN vállalt strict-lint leletek** (a CI-kapu `--level base`
+szinten mér, ami zöld): az **S13** a két ÚJ előtagra
+(`design_system/components/analytics/`, `test/fixtures/analyze/results/`) — a
+lint saját ESCAPE-ága szerint feloldva a §0.0/B/B2-ben; az **S11** — feloldva
+ITT, a lint második ágán. Ugyanez az alak merge-elt precedens: E13-R26 §0.0/B1
+szó szerint „a szűkebb, gépileg tiszta scope-ot választjuk a strict-szintű
+lint-lelet árán".
+
 ### R1 — `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum → a FORRÁS a szegmens
 
-A kör fájából `lib/features/analyze/results/` **még nem létezik** — a képernyőket ez a kör hozza létre, tehát MINDEN szövege új.
+A kör öt eredmény-képernyője a V2 `presentation/` fában él; az `audio_analysis`
+feature-nek **nincs** saját l10n fragmentuma (`ls lib/l10n/features/` →
+community, design_system, gamification, onboarding, tuner), és a MEGLÉVŐ
+`analysis*` kulcsok (**264 db**, köztük a 13 `analysisCapabilityUnavailable*` és
+a 8 `analysisCompareReason*`) a `lib/l10n/base/app_{en,hu}.arb` szegmensben
+élnek — a kör új kulcsai tehát ugyanoda mennek.
 
 A kör ezért **nem tudott volna egyetlen szöveget sem írni** a saját listáján
 belül. Feloldás — H3 lista-tágítás, **user-engedéllyel (2026-08-25)**, a
@@ -102,8 +341,10 @@ lenne.
 
 A `test/ui/ui_inventory_test.dart` **repó-szintű** őr: a `tool/ui_inventory.dart`
 a `lib/features/**` fa `_screen.dart` végű fájljait számolja, a teszt pedig
-EGZAKT `hasLength(...)`-et állít rájuk. Ez a kör a(z) `lib/features/analyze/results/` könyvtár-előtag
-alá képernyőt hoz vagy hozhat, tehát a szám **elmozdul**, és az exact-SHA Full
+EGZAKT `hasLength(...)`-et állít rájuk. Ez a kör a(z)
+`lib/features/audio_analysis/presentation/` fában dolgozik (§0.0/B/B1), ahol az
+öt eredmény-képernyő MA IS LÉTEZIK, tehát a szám **alapesetben nem mozdul**
+(mérve: 89 = 89, §0.0/B/B4) — ha a kör mégis új képernyőt hoz, az exact-SHA Full
 Gate pirosra vált.
 
 A `test/ui/goldens/` előtag ezt **nem** fedi (az a `test/ui/` fának csak az egyik
@@ -176,6 +417,14 @@ Az UI-37–UI-39 Studio Analytics rendszere **confidence-tudatos**, virtualizál
 - Az ADR 0283 kimondta: az eredmény nem állít többet, mint amit mértünk — ez a
   kör ennek vizualizációs oldala.
 - A felvételek hosszúak lehetnek: az idővonalnak **virtualizáltnak** kell lennie.
+- **MÉRVE (§0.0/B/B1):** az öt eredmény-képernyő a V2
+  `lib/features/audio_analysis/presentation/` fában **MÁR LÉTEZIK** (168 / 226 /
+  110 / 68 / 69 sor), és a domain a mérőszám-állapotokat, a confidence-t és a
+  kompatibilitást **helyesen** modellezi. A kör tehát **migrál és kiegészít**,
+  nem nulláról épít.
+- **MÉRVE (§0.0/B/B6):** a fa NULLA `design_system` importot tartalmaz ebben a
+  rétegben; az idővonal `ListView(children: […])`-vel mohón renderel; a
+  kijelölésből induló gyakorlásnak NINCS nyoma. Ez a három a kör érdemi munkája.
 
 ## 3. Scope
 
@@ -194,8 +443,10 @@ DSP (AGENTS.md §9) · a felvétel/feldolgozás (Kör 26) · `docs/adr/**`,
 
 | Útvonal | Indok |
 |---|---|
-| `analyze/results/` | az eredmény-felületek |
-| `design_system/components/analytics/` | **ÚJ** — diagram-komponensek |
+| `audio_analysis/presentation/analysis_{overview,timeline,compare,metric_detail}_screen.dart` | a NÉGY eredmény-felület (§0.0/B/B1 — az export-képernyő a §3-ban nem szerepel, kimarad) |
+| `audio_analysis/presentation/widgets/` | a mérőszám-kártya, confidence-badge, idővonal-lane/ruler, insight-kártya |
+| `audio_analysis/presentation/controllers/` | `overview_view_model`, `timeline_view_state`, `timeline_viewport` |
+| `design_system/components/analytics/` | **ÚJ könyvtár, ezt a kör hozza létre** (§0.0/B/B2) — diagram-komponensek |
 | `public.dart` | az export bővítése |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a mérőszám-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
@@ -203,8 +454,17 @@ DSP (AGENTS.md §9) · a felvétel/feldolgozás (Kör 26) · `docs/adr/**`,
 | `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör új `lib/features/**/*_screen.dart`-ot hozhat, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése, más állítás nem érinthető (§0.0/R4) |
 | `docs/rounds/e13-r27-…md` | a §10 handoff |
 
-**Tilos zóna:** `lib/features/analyze/` a `results/` KIVÉTELÉVEL ·
-`lib/core/theme/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`.
+**Tilos zóna:** a V2 `domain/`, `application/`, `data/`, `engine/` rétege (az
+elemzési logika és a mérőszám-számítás NEM módosul — a UI a domain verdiktjét
+mondja ki) · `audio_analysis/presentation/capture/` és
+`analysis_progress_view.dart` (Kör 26) · `audio_analysis/presentation/analysis_export_screen.dart`
+(§0.0/B/B1) · `audio_analysis/public.dart` · a legacy `lib/features/analyze/**` ·
+`lib/features/practice/**` (§0.0/B/B6 — az A8 callback-szerződés, nem
+motor-indítás) · `lib/features/**` a listán kívül · `lib/app/routing/**` (a kör
+route-ot NEM vezet be) · `test/features/audio_analysis/presentation/**` (a nyolc
+pin — futtatni kell, szerkeszteni tilos, §0.0/B/B3) · `lib/core/theme/**` ·
+`docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**` · `pubspec.*` és a
+natív réteg.
 
 ## 5. Kötött architekturális döntések (ADR 0286)
 
@@ -284,7 +544,7 @@ hiányzó mérőszám megjelenítésébe → az **A1** cellának PIROSNAK kell l
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/analyze/results/metric_missing_test.dart test/features/analyze/results/timeline_virtualization_test.dart test/features/analyze/results/chart_semantics_test.dart test/features/analyze/results/compare_compatibility_test.dart test/ui/goldens/e13_r27_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/analyze/results/metric_missing_test.dart test/features/analyze/results/timeline_virtualization_test.dart test/features/analyze/results/chart_semantics_test.dart test/features/analyze/results/compare_compatibility_test.dart test/features/audio_analysis/presentation/ test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
@@ -293,9 +553,17 @@ keret (412×915 compact portrait és ugyanaz `textScaleFactor: 2.0` mellett)
 KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden_test.dart`
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
+**MÉRVE (§0.0/B/B5, ADR 0426, L486/L493): az alábbi parancs ezen a boxon
+ÉRVÉNYTELEN** — a goldent aarch64-en felvenni és x86-os CI-vel mérni öt vak
+CI-kört fizetett ki. Az EGYETLEN érvényes alak:
+
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r27_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r27_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r27_screens_golden_test.dart
 ```
+
+~~`~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r27_screens_golden_test.dart`~~
+(a §0.0/B/B5 revízió hatályon kívül helyezte)
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
@@ -311,15 +579,27 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 8. Implementációs sorrend
 
-1. Az analitika-komponensek (pontszám-gyűrű, mérőszám-kártya, trend,
-   confidence-jelmagyarázat).
-2. A mérőszám-megjelenítés három cellája — hiányzó ≠ nulla.
-3. Az áttekintő összegzés-központú elrendezése.
-4. A virtualizált idővonal + nagy fixture-ös cella.
-5. Diagram-szöveg-összegzés és esemény-lista alternatíva.
-6. Az összehasonlítás kompatibilitási szabályai + indoklás.
-7. A valódi-sértés próba, §10-be dokumentálva.
-8. `tools/round-gate.sh` a §7 szerint.
+A sorrend a §0.0/B/B6 mérését követi: előbb a MEGŐRZÉS bizonyítása, aztán az
+ÚJ munka.
+
+1. `lib/core/design_system/components/analytics/` — az analitika-komponensek
+   (pontszám-gyűrű, trend, confidence-jelmagyarázat), export a `public.dart`-ba.
+2. A mérőszám-megjelenítés három cellája (`metric_missing_test.dart`) a MAI,
+   helyes `OverviewMetricCardState` szerződésre — hiányzó ≠ nulla, nem
+   támogatott külön állapot, confidence mindenhol. **Ez megőrző cella:** a
+   viselkedés már él, a cella innentől gépileg tartja (A1–A3).
+3. Az áttekintő és a részletnézet DS-migrációja a 2. lépés cellái mellett.
+4. **A virtualizált idővonal** — a `ListView(children: […])` lecserélése lusta
+   (builder-alapú) renderelésre + nagy fixture-ös cella (A4). Ez a kör fő tétele.
+5. Diagram-szöveg-összegzés és **bejárható esemény-lista alternatíva** (A5).
+6. A kijelölés-callback helyes paraméterezése (A8, §0.0/B/B6 horgony).
+7. Az összehasonlítás: a UI a `CompatibilityEvaluator` verdiktjét és a
+   `ComparisonInconclusiveReason` indoklását mondja ki — saját szabály NÉLKÜL
+   (A6–A7).
+8. Golden-felvétel a §7/B5 szerint (`tools/golden-x86.sh record`), PNG-k
+   commitolva (A9).
+9. A valódi-sértés próba, §10-be dokumentálva.
+10. `tools/round-gate.sh` a §7 szerint — a nyolc pin-teszttel EGYÜTT.
 
 ## 9. Kockázatok
 
@@ -331,5 +611,267 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   mellett félrevezet (A6).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**Kör-jelzés motor:** Claude Sonnet 5 (`sonnet-impl`), ág:
+`sonnet-impl/e13-r27-analysis-results-ui`.
+
+### 10.1 Mit építettem
+
+**Új `design_system/components/analytics/` komponensek** (§0.0/B/B2 ESCAPE-ág,
+mind exportálva a `public.dart`-ból):
+
+- `ss_score_ring.dart` (`SsScoreRing`) — statikus `CustomPaint` ívfestő
+  pontszám-gyűrű (NEM `CircularProgressIndicator(value: null)`, mert az
+  indeterminate animációja sosem állna meg `pumpAndSettle()` alatt). Három
+  állapot (`measured`/`notApplicable`/`unavailable`) — a hiányzó állapot
+  sosem fest ívet.
+- `ss_trend_indicator.dart` (`SsTrendIndicator`, `SsTrendDirection`) —
+  ikon+opcionális felirat trendjelző; `label: null` mellett csak ikon, hogy
+  ne duplázza a mellette már megjelenő szöveget.
+- `ss_confidence_legend.dart` (`SsConfidenceLegend`, `SsConfidenceLevel`) —
+  egyszeri, képernyőnkénti jelmagyarázat a három confidence-ikonhoz; saját
+  enum, NEM importál feature-t (design_system → feature import tilos).
+- `ss_chart_text_summary.dart` (`SsChartTextSummary`) — trend + szélsőérték
+  mondat, akadálymentes diagram-szöveg-alternatíva (ADR 0282/0286 §3).
+- `ss_event_list.dart` (`SsEventList`, `SsEventListRow`) — rögzített
+  magasságú (NEM `shrinkWrap: true`, mert az minden gyereket felépítene,
+  éppen azt védve ki, amit a kör javít), `itemExtent`-es
+  `ListView.builder` — a virtualizáció maga.
+
+**Minden komponens az ambiens `Theme.of(context).colorScheme`/`textTheme`-t
+olvassa, NEM a `SsColorScheme`/`SsTypography` theme extension-t** — mért ok:
+a négy célképernyő pinnelt widget-tesztjei csupasz `MaterialApp()`-ot
+pumpálnak `AppTheme`/`SsTheme` regisztrálása nélkül; egy
+`Theme.of(context).extension<SsColorScheme>()!` force-unwrap null-ellenőrzési
+hibával bukna pontosan ezekben a tesztekben.
+
+**A1–A3 (MEGŐRZÉS):** a mai `OverviewMetricCardState` öt állapota
+változatlan; a `metric_missing_test.dart` valódi `AnalysisOverviewScreen`-t
+pumpál valódi `OverviewViewModel`-lel, és a §6.1 három küszöb-cellájára
+zár: küszöb alatt (`unavailable`/`notApplicable`, sosem "0"), a küszöbön
+(`degraded`, mért érték + "Medium confidence"), a küszöb fölött
+(`available`, mért érték + "High confidence").
+
+**A4 + A8 (a kör fő tétele):** `analysis_timeline_screen.dart` külső
+`ListView(children:…)`-je `ListView.builder`-ré vált; a korábban MINDEN
+hotspot-ra egy láthatatlan `Semantics`+`SizedBox.shrink()`-et építő,
+adatmérettel lineárisan növő ciklus helyébe egy rögzített magasságú
+`SsEventList` lépett (220 px, 48 px sor-extent) — ez FÜGGETLEN a hotspotok
+számától (mért: 3000 hotspot mellett a felépített sor-widgetek száma < 30,
+a lista aljához görgetve pedig a korábban nem épített sorok megjelennek —
+`timeline_virtualization_test.dart` mindkettőt méri, nem csak egy
+widget-típus felső korlátját). Az `AnalysisTimelineScreen` egy ÚJ opcionális
+`onPracticeSelection: void Function(Duration start, Duration end)?`
+konstruktor-paramétert kapott (a meglévő `document` paraméter és az
+osztálynév változatlan) — mind a kézi hosszú-nyomás-húzás kijelölés, mind
+egy esemény-lista sor koppintása ugyanazt a "Practice this section" gombot
+állítja elő, ami a kijelölést MINDIG normalizálva (`start <= end`) adja át.
+
+**A5:** minden idővonal-sáv (`TimelineLane`) egy `SsChartTextSummary`-t kapott
+alulra: a `TimelineLane.densityTrendFor` tiszta függvény (nulla widget-függés,
+külön unit-tesztelhető) a látható elemek korai/kései/egyenletes/elégtelen
+sűrűségét osztályozza, a `TimelineLanes` fordítja le l10n-nel a mondattá; a
+szélsőérték-mondat (`"First at …, last at …"`) csak ≥2 látható elem esetén
+jelenik meg. A hotspot-esemény-lista (fent) szolgál bejárható
+esemény-lista-alternatívaként.
+
+**A6–A7 (MEGŐRZÉS):** a `compare_compatibility_test.dart` a VALÓDI
+`CompatibilityEvaluator.compare`/`compareMetricIdentity` motorfüggvényeket
+hívja (nem UI-szintű szabályt), és az így kapott `MetricComparison`-t
+pumpálja bele az `AnalysisCompareScreen`-be — a képernyő a domain verdiktjét
+(`Inconclusive` + a pontos ok-mondat) mondja ki, sosem fabrikált deltát.
+
+**DS-migráció:** `AnalysisOverviewScreen` egy `SsConfidenceLegend`-et kapott
+a "Main metrics" cím alatt; `SignalQualityCard` egy `SsScoreRing`-et az
+összesített felvétel-minőséghez (`SignalQualityReport.overall`/`measured`
+mezők — sosem fest ívet mérés nélkül); `MetricDeltaRow` a korábbi nyers
+`Icon(data.directionIcon)`-t `SsTrendIndicator`-ra cserélte (a látható
+irány-feliratot a `Chip` adja, a trendjelző csak ikon, hogy ne duplázódjon).
+A `MetricCard`/`InsightCard`/`ConfidenceBadge`/`TimelineLane`/
+`TimelineRuler`/`HotspotNavigator` típusnév és a Material `Card` a
+négy képernyőn VÁLTOZATLAN (§0.0/B/B8 szerződés).
+
+### 10.2 Bizonyíték cellánként
+
+| Cella | Bizonyíték |
+|---|---|
+| A1 | `metric_missing_test.dart` — "below threshold (unavailable)" |
+| A2 | ugyanott — "below threshold (notApplicable)" |
+| A3 | ugyanott — "A3 — confidence is visible for every card" |
+| A4 | `timeline_virtualization_test.dart` — "AnalysisTimelineScreen virtualization" csoport (bounded row count + scroll reveal) |
+| A5 | `chart_semantics_test.dart` — trend/extremes cellák + hotspot event-list cellák |
+| A6 | `compare_compatibility_test.dart` — "A6" csoport (real engine verdict) |
+| A7 | ugyanott — "A6/A7" csoport (pontos ok-szöveg) |
+| A8 | `timeline_virtualization_test.dart` — "practice-selection callback" csoport (tap + hátrafelé húzás normalizálás) |
+| A9 | `test/ui/goldens/e13_r27_screens_golden_test.dart` + a nyolc PNG a diffben |
+
+### 10.3 Valódi-sértés próba (KÖTELEZŐ, §6.1)
+
+`lib/features/audio_analysis/presentation/controllers/overview_view_model.dart`
+`_formatMetric`-jében az `unavailable` ág átírva:
+
+```diff
+-      CapabilityStatus.unavailable => labels.unavailableValuePlaceholder(),
++      CapabilityStatus.unavailable => '0',
+```
+
+`flutter test test/features/analyze/results/metric_missing_test.dart` erre
+KÉT cellát váltott pirosra:
+
+- `threshold matrix … below threshold (unavailable): never "0" …` —
+  `Expected: no matching candidates / Actual: Found 1 widget with text "0"`;
+- `the presentation formatter never collapses a missing value into a numeric
+  zero` — `Expected: not '0' / Actual: '0'`.
+
+A módosítást visszaállítottam; `flutter test
+test/features/analyze/results/metric_missing_test.dart` utána ismét 6/6
+zöld.
+
+### 10.4 Golden-felvétel (A9)
+
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r27_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r27_screens_golden_test.dart
+```
+
+Mindkettő zöld (x86_64 docker-emuláció, ADR 0426/§0.0/B/B5). Nyolc PNG
+(4 képernyő × 2 keret) a `test/ui/goldens/goldens/e13_r27_*.png` alatt,
+commitolva.
+
+### 10.5 Mért, a körhöz NEM tartozó flake
+
+A `test/features/audio_analysis/presentation/` teljes könyvtárának EGYÜTTES
+futtatásakor (nem izoláltan) az `analysis_export_screen_test.dart` "preview
+gate" cellája egyszer pirosra váltott, majd a KÖVETKEZŐ futáson és izoláltan
+is zölden futott le mindháromszor — a fájlhoz nem nyúltam (tiltott zóna), a
+jelenség a `share_plus`-csatorna-mock és a `flutter test` batch-futás közötti
+ismert, kereszt-teszt state-szivárgás; a `tools/round-gate.sh` teljes futása
+(lásd lent) ugyanezt a könyvtárat zölden futtatta le.
+
+### 10.6 Zárókapu
+
+```
+tools/round-gate.sh test/features/analyze/results/metric_missing_test.dart test/features/analyze/results/timeline_virtualization_test.dart test/features/analyze/results/chart_semantics_test.dart test/features/analyze/results/compare_compatibility_test.dart test/features/audio_analysis/presentation/ test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+`MINDEN GATE ZÖLD` — format, analyze, mind a 11 teszt-útvonal (a kilenc pin
+is), architecture, secrets, l10n. `ui_inventory` `hasLength(89)` VÁLTOZATLAN
+(a kör nem hozott új `*_screen.dart`-ot, §0.0/B/B4 szerint várt).
+
+### 10.7 Javító kör (review F1–F4)
+
+A review (`docs/reviews/e13-r27-review.md`) egy MAJOR-t (F1) és két MINOR-t
+(F2, F3) adott kötelezőnek, plusz egy opcionális NOTE-ot (F4). Mind a négy
+zárva.
+
+**F1 (MAJOR) — `ss_event_list.dart:33-34,55-57`.** A `SsEventList` magassága
+eddig fix `220` volt, függetlenül a sorok számától — egy hotspotos
+golden-fixtúrán ez `220 − 48 = 172 px` halott helyet hagyott. A javítás:
+
+```dart
+final boundedHeight = math.min(height, rows.length * rowExtent);
+```
+
+`height` mostantól FELSŐ korlát, a doboz sosem foglal többet, mint
+`rows.length * rowExtent`. A `ListView.builder` + `itemExtent` VÁLTOZATLAN — a
+virtualizáció nem sérült, a `shrinkWrap: true` továbbra sincs bevezetve (a
+`boundedHeight` építéskor, nem layout-időben számolt, tehát a `ListView`-nak
+nem kell minden gyereket megmérnie). A goldeneket újravettem:
+
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r27_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r27_screens_golden_test.dart
+```
+
+Mindkettő zöld. Csak a két idővonal-golden változott
+(`git status --short test/ui/goldens/` →
+`e13_r27_analysis_timeline_compact.png`,
+`e13_r27_analysis_timeline_compact_scale2.png`; az overview/compare/metric
+detail PNG-k érintetlenek, mert azok nem ágyazzák be `SsEventList`-et) —
+vizuálisan ellenőrizve: az esemény-lista doboza most az egyetlen fixtúra-sor
+magasságára simul, a leírás és a hotspot-navigációs gombok közötti üres blokk
+eltűnt.
+
+**F2 (MINOR) — `timeline_virtualization_test.dart`.** A meglévő A4 cella (a
+mountolt `event-list-row-*` Semantics-widgetek száma < 30) a review mérése
+szerint a mohó `ListView(children: [...])` alakon is zöld maradt, mert az a
+delegátum is csak a viewportban lévő gyerekeket *mountolja* — a rés a widget
+mohó *allokálása*, nem a mountolás. Felvettem egy MÁSODIK állítást ugyanabba
+a tesztbe, ami a delegátum TÍPUSÁRA zár:
+
+```dart
+final eventList = tester.widget<ListView>(
+  find.byKey(const Key('timeline-hotspot-event-list')),
+);
+expect(eventList.childrenDelegate, isA<SliverChildBuilderDelegate>());
+```
+
+**Mérés (eldobható próba, visszaállítva).** `ss_event_list.dart`-ban
+ideiglenesen lecseréltem a `ListView.builder`-t a mohó
+`ListView(children: [for (final row in rows) …])` alakra, és lefuttattam:
+
+```
+$ flutter test test/features/analyze/results/timeline_virtualization_test.dart
+00:01 +0 -1: … Expected: <Instance of 'SliverChildBuilderDelegate'>
+              Actual: SliverChildListDelegate:<SliverChildListDelegate#…
+              (estimated child count: 3000)>
+```
+
+Az új cella PIROS a tiltott alakon — a szállított
+implementáción (`ss_event_list.dart` `git diff` a próba után tiszta,
+`/tmp/sel.bak.dart`-ból visszaállítva) az egész fájl **5/5 ZÖLD**.
+
+**F3 (MINOR) — `analysis_timeline_screen.dart:176-208`.** `_hotspotEventList`
+korábban hotspotonként KÉTSZER hívta a `_hotspotSemanticsLabel`-t azonos
+argumentumokkal (`label:` és `semanticLabel:` külön hívással). Kivezettem egy
+`_hotspotEventListRow` segédmetódusba, ami a címkét EGYSZER számolja és
+mindkét mezőnek ugyanazt adja át:
+
+```dart
+SsEventListRow _hotspotEventListRow(
+  AppLocalizations l10n, {
+  required int index,
+  required int count,
+  required AnalysisHotspot hotspot,
+  required TimelineViewport viewport,
+}) {
+  final label = _hotspotSemanticsLabel(l10n, index: index + 1, count: count, hotspot: hotspot);
+  return SsEventListRow(
+    id: hotspot.id,
+    label: label,
+    semanticLabel: label,
+    onTap: () => _selectHotspotRange(hotspot, viewport),
+  );
+}
+```
+
+**F4 (NOTE, opcionális) — `ss_score_ring.dart:44-46`.** Felvettem egy
+szerkezeti asszertet a `measured` ág elé:
+
+```dart
+assert(
+  state != SsScoreRingState.measured || ratio != null,
+  'SsScoreRingState.measured requires a non-null ratio',
+);
+```
+
+A mai egyetlen hívó (`signal_quality_card.dart`) nem-nullable `ratio`-t ad
+át, tehát az assert ma sosem lő — csak egy jövőbeli `measured` +
+`ratio: null` kombinációt zár ki szerkezetileg, ADR 0286 §1 szerint.
+
+**Zárókapu — ugyanaz a parancs, csővezeték nélkül, MINDEN GATE ZÖLD** (a
+kilenc pin-teszt is, változatlanul, szerkesztés nélkül):
+
+```
+tools/round-gate.sh test/features/analyze/results/metric_missing_test.dart test/features/analyze/results/timeline_virtualization_test.dart test/features/analyze/results/chart_semantics_test.dart test/features/analyze/results/compare_compatibility_test.dart test/features/audio_analysis/presentation/ test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/l10n/hardcoded_string_guard_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+`format` zöld · `analyze` zöld (0 issue) · mind a 11 teszt-útvonal zöld (a
+`test/features/audio_analysis/presentation/` 57/57, változatlanul) ·
+`architecture` zöld (12 allowlistelt eltérés, változatlan) · `secrets` zöld
+(3788 fájl, 0 lelet) · `l10n` zöld (en→hu, 2041 üzenet).
+
+F5-höz nincs teendő (tilos zóna, nem e kör defektje — a `[7]` gate-sáv itt is
+57/57 zölden futott).
 
 ## 11. Review — a Claude tölti ki
