@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:strumsight/features/gamification/domain/profile/gamification_profile.dart';
 import 'package:strumsight/features/gamification/domain/rewards/experience_points.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/level_badge.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/xp_progress_bar.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -53,93 +54,97 @@ class LevelDetailScreen extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final current = profile.currentLevel;
     final next = profile.nextLevel;
-    return Scaffold(
-      appBar: AppBar(
-        title: Semantics(
-          header: true,
-          child: Text(l10n.gamificationLevelDetailTitle(current.number)),
+    return GamificationThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Semantics(
+            header: true,
+            child: Text(l10n.gamificationLevelDetailTitle(current.number)),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          children: [
-            Semantics(
-              header: true,
-              child: Text(
-                l10n.gamificationLevelDetailCurrentTitle,
-                key: const Key('level-detail-current-header'),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            LevelBadge(level: current),
-            const SizedBox(height: 16),
-            Text(
-              l10n.gamificationLevelDetailCurrentBody,
-              key: const Key('level-detail-current-body'),
-              style: theme.textTheme.bodyMedium,
-            ),
-            if (next != null) ...[
-              const SizedBox(height: 20),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            children: [
               Semantics(
                 header: true,
                 child: Text(
-                  l10n.gamificationLevelDetailNextTitle,
-                  key: const Key('level-detail-next-header'),
+                  l10n.gamificationLevelDetailCurrentTitle,
+                  key: const Key('level-detail-current-header'),
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: theme.colorScheme.primary,
                   ),
                 ),
               ),
               const SizedBox(height: 8),
-              LevelBadge(level: next),
-              const SizedBox(height: 8),
+              LevelBadge(level: current),
+              const SizedBox(height: 16),
               Text(
-                l10n.gamificationLevelDetailNextBody,
-                key: const Key('level-detail-next-body'),
+                l10n.gamificationLevelDetailCurrentBody,
+                key: const Key('level-detail-current-body'),
                 style: theme.textTheme.bodyMedium,
               ),
-            ],
-            const SizedBox(height: 24),
-            XpProgressBar(
-              xpIntoCurrentLevel: profile.xpIntoCurrentLevel,
-              xpToNextLevel: profile.xpToNextLevel,
-              totalXp: profile.totalXp,
-            ),
-            const SizedBox(height: 24),
-            Semantics(
-              header: true,
-              child: Text(
-                l10n.gamificationLevelDetailHowXpWorksTitle,
-                key: const Key('level-detail-how-title'),
-                style: theme.textTheme.titleMedium,
+              if (next != null) ...[
+                const SizedBox(height: 20),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    l10n.gamificationLevelDetailNextTitle,
+                    key: const Key('level-detail-next-header'),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                LevelBadge(level: next),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.gamificationLevelDetailNextBody,
+                  key: const Key('level-detail-next-body'),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+              const SizedBox(height: 24),
+              XpProgressBar(
+                xpIntoCurrentLevel: profile.xpIntoCurrentLevel,
+                xpToNextLevel: profile.xpToNextLevel,
+                totalXp: profile.totalXp,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              l10n.gamificationLevelDetailHowXpWorksBody,
-              key: const Key('level-detail-how-body'),
-              style: theme.textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            for (final entry in components) ...[
-              _XpComponentRow(component: entry),
+              const SizedBox(height: 24),
+              Semantics(
+                header: true,
+                child: Text(
+                  l10n.gamificationLevelDetailHowXpWorksTitle,
+                  key: const Key('level-detail-how-title'),
+                  style: theme.textTheme.titleMedium,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.gamificationLevelDetailHowXpWorksBody,
+                key: const Key('level-detail-how-body'),
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              for (final entry in components) ...[
+                _XpComponentRow(component: entry),
+                const SizedBox(height: 8),
+              ],
               const SizedBox(height: 8),
-            ],
-            const SizedBox(height: 8),
-            Text(
-              l10n.gamificationLevelDetailXpTotalLabel(latestSessionXp.totalXp),
-              key: const Key('level-detail-session-total'),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: theme.colorScheme.primary,
+              Text(
+                l10n.gamificationLevelDetailXpTotalLabel(
+                  latestSessionXp.totalXp,
+                ),
+                key: const Key('level-detail-session-total'),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

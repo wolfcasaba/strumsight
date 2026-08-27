@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Visual surface for the EXPERIENCE-POINTS indicator on the Hub and
@@ -48,91 +50,89 @@ class XpProgressBar extends StatelessWidget {
         ? l10n.gamificationHubXpToNextLabel(xpToNextLevel!)
         : null;
 
-    return Semantics(
-      container: true,
-      label: progressSemantics,
-      child: ExcludeSemantics(
-        child: Container(
-          key: const Key('xp-progress-bar'),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.35),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
+    return GamificationThemeScope(
+      child: Semantics(
+        container: true,
+        label: progressSemantics,
+        child: ExcludeSemantics(
+          child: SsSurface(
+            key: const Key('xp-progress-bar'),
+            elevation: SsElevation.raised,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.star_outline,
-                    color: theme.colorScheme.primary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.gamificationHubXpSectionTitle,
-                      key: const Key('xp-progress-title'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.star_outline,
                         color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w600,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.gamificationHubXpSectionTitle,
+                          key: const Key('xp-progress-title'),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          l10n.gamificationHubXpTotalLabel(totalXp),
+                          key: const Key('xp-progress-total'),
+                          maxLines: 2,
+                          textAlign: TextAlign.end,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      key: const Key('xp-progress-indicator'),
+                      value: ratio,
+                      minHeight: 10,
+                      backgroundColor: theme.colorScheme.primary.withValues(
+                        alpha: 0.10,
+                      ),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        theme.colorScheme.primary,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      l10n.gamificationHubXpTotalLabel(totalXp),
-                      key: const Key('xp-progress-total'),
-                      maxLines: 2,
-                      textAlign: TextAlign.end,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
+                  const SizedBox(height: 8),
+                  Text(
+                    progressLabel,
+                    key: const Key('xp-progress-label'),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  if (toNextLabel != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      toNextLabel,
+                      key: const Key('xp-progress-to-next'),
+                      style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  key: const Key('xp-progress-indicator'),
-                  value: ratio,
-                  minHeight: 10,
-                  backgroundColor: theme.colorScheme.primary.withValues(
-                    alpha: 0.10,
-                  ),
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                progressLabel,
-                key: const Key('xp-progress-label'),
-                style: theme.textTheme.bodyMedium,
-              ),
-              if (toNextLabel != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  toNextLabel,
-                  key: const Key('xp-progress-to-next'),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),

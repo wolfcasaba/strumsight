@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'package:strumsight/features/gamification/domain/profile/reward_inbox_item.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/pending_rewards_card.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Read-only postaláda screen.
@@ -9,14 +11,22 @@ import 'package:strumsight/l10n/app_localizations.dart';
 /// §4): it never offers a "claim" button, never expires items, and never
 /// mutates the ledger. Its only side effects are:
 ///
-///  * marking items as seen (display state only), and
-///  * forwarding a typed item-selection to the caller's router.
+///  * marking items as seen (display state only),
+///  * forwarding a typed item-selection to the caller's router, and
+///  * forwarding a retry request for the offline outbox via [onRetryPending]
+///    — wired by the caller to `ActivityEventIngestor.drain()`
+///    (§0.0.B/B4). The screen never calls it itself and never derives a
+///    credited balance; [pendingCount]/[quarantinedCount] are caller-fed
+///    reads of the outbox, refreshed by the caller after each retry.
 class RewardInboxScreen extends StatefulWidget {
   const RewardInboxScreen({
     super.key,
     required this.items,
     required this.onItemSelected,
     required this.onMarkSeen,
+    this.pendingCount = 0,
+    this.quarantinedCount = 0,
+    this.onRetryPending,
   });
 
   /// The inbox items to render. Caller-supplied — the screen never reads
@@ -33,6 +43,16 @@ class RewardInboxScreen extends StatefulWidget {
   /// view of the caller-supplied list.
   final ValueChanged<RewardInboxItem> onMarkSeen;
 
+  /// Caller-fed count of activity-outbox records not yet acknowledged by
+  /// the ledger. Zero (the default) renders no pending-rewards surface.
+  final int pendingCount;
+
+  /// Caller-fed count of quarantined outbox records.
+  final int quarantinedCount;
+
+  /// Invoked when the user taps the retry CTA. `null` disables the CTA.
+  final VoidCallback? onRetryPending;
+
   @override
   State<RewardInboxScreen> createState() => _RewardInboxScreenState();
 }
@@ -42,48 +62,74 @@ class _RewardInboxScreenState extends State<RewardInboxScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final unseenCount = widget.items.where((i) => !i.seen).length;
-    return Scaffold(
-      appBar: AppBar(
-        title: Semantics(header: true, child: Text(l10n.rewardInboxTitle)),
-      ),
-      body: SafeArea(
-        child: widget.items.isEmpty
-            ? _EmptyState(
-                key: const Key('reward-inbox-empty'),
-                title: l10n.rewardInboxEmptyTitle,
-                body: l10n.rewardInboxEmptyBody,
-              )
-            : Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-                    child: Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Text(
-                        l10n.rewardInboxCountSemantics(unseenCount),
-                        key: const Key('reward-inbox-count'),
-                        style: Theme.of(context).textTheme.bodyMedium,
+    return GamificationThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Semantics(header: true, child: Text(l10n.rewardInboxTitle)),
+        ),
+        body: SafeArea(
+          child: widget.items.isEmpty
+              ? Column(
+                  children: [
+                    if (widget.pendingCount > 0 || widget.quarantinedCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                        child: PendingRewardsCard(
+                          pendingCount: widget.pendingCount,
+                          quarantinedCount: widget.quarantinedCount,
+                          onRetry: widget.onRetryPending,
+                        ),
+                      ),
+                    Expanded(
+                      child: _EmptyState(
+                        key: const Key('reward-inbox-empty'),
+                        title: l10n.rewardInboxEmptyTitle,
+                        body: l10n.rewardInboxEmptyBody,
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: ListView.separated(
-                      key: const Key('reward-inbox-list'),
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-                      itemCount: widget.items.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final item = widget.items[index];
-                        return _InboxEntryTile(
-                          key: Key('reward-inbox-entry-${item.id}'),
-                          item: item,
-                          onTap: () => _onTap(item),
-                        );
-                      },
+                  ],
+                )
+              : Column(
+                  children: [
+                    if (widget.pendingCount > 0 || widget.quarantinedCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                        child: PendingRewardsCard(
+                          pendingCount: widget.pendingCount,
+                          quarantinedCount: widget.quarantinedCount,
+                          onRetry: widget.onRetryPending,
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          l10n.rewardInboxCountSemantics(unseenCount),
+                          key: const Key('reward-inbox-count'),
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                    Expanded(
+                      child: ListView.separated(
+                        key: const Key('reward-inbox-list'),
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                        itemCount: widget.items.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final item = widget.items[index];
+                          return _InboxEntryTile(
+                            key: Key('reward-inbox-entry-${item.id}'),
+                            item: item,
+                            onTap: () => _onTap(item),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -214,10 +260,15 @@ class _InboxEntryTile extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    l10n.rewardInboxEarnedXpLabel(item.event.earnedXp),
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: theme.colorScheme.primary,
+                  Flexible(
+                    child: Text(
+                      l10n.rewardInboxEarnedXpLabel(item.event.earnedXp),
+                      maxLines: 2,
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
                 ],

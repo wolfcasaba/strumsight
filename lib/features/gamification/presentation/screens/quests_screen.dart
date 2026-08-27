@@ -5,6 +5,7 @@ import '../../application/daily_challenge_service.dart'
 import '../../domain/quests/quest_definition.dart';
 import '../../domain/quests/quest_progress.dart';
 import '../widgets/challenge_card.dart';
+import '../widgets/gamification_theme_scope.dart';
 import '../widgets/quest_card.dart';
 import '../../../../l10n/app_localizations.dart';
 
@@ -77,54 +78,56 @@ class QuestsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.questsScreenTitle)),
-      body: SafeArea(
-        child: _isEmpty
-            ? const _EmptyQuestsState()
-            : ListView(
-                key: const Key('quests-screen-list'),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                children: [
-                  if (showOfflineBanner) const _OfflineBanner(),
-                  if (dailyChallenge != null) ...[
-                    _SectionHeader(
-                      title: dailyChallengeTitle,
-                      keyName: 'quests-daily-section-title',
-                    ),
-                    const SizedBox(height: 8),
-                    ChallengeCard(
-                      title: dailyChallengeTitle,
-                      instance: dailyChallenge!,
-                      contentAvailable: dailyChallengeAvailable,
-                      onAction: onAction,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (dailyQuests.isNotEmpty) ...[
-                    _SectionHeader(
-                      title: l10n.questsDailySectionTitle,
-                      keyName: 'quests-daily-quests-title',
-                    ),
-                    const SizedBox(height: 8),
-                    for (final projection in dailyQuests) ...[
-                      _buildQuestCard(context, projection),
-                      const SizedBox(height: 12),
+    return GamificationThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.questsScreenTitle)),
+        body: SafeArea(
+          child: _isEmpty
+              ? const _EmptyQuestsState()
+              : ListView(
+                  key: const Key('quests-screen-list'),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  children: [
+                    if (showOfflineBanner) const _OfflineBanner(),
+                    if (dailyChallenge != null) ...[
+                      _SectionHeader(
+                        title: dailyChallengeTitle,
+                        keyName: 'quests-daily-section-title',
+                      ),
+                      const SizedBox(height: 8),
+                      ChallengeCard(
+                        title: dailyChallengeTitle,
+                        instance: dailyChallenge!,
+                        contentAvailable: dailyChallengeAvailable,
+                        onAction: onAction,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (dailyQuests.isNotEmpty) ...[
+                      _SectionHeader(
+                        title: l10n.questsDailySectionTitle,
+                        keyName: 'quests-daily-quests-title',
+                      ),
+                      const SizedBox(height: 8),
+                      for (final projection in dailyQuests) ...[
+                        _buildQuestCard(context, projection),
+                        const SizedBox(height: 12),
+                      ],
+                    ],
+                    if (weeklyQuests.isNotEmpty) ...[
+                      _SectionHeader(
+                        title: l10n.questsWeeklySectionTitle,
+                        keyName: 'quests-weekly-quests-title',
+                      ),
+                      const SizedBox(height: 8),
+                      for (final projection in weeklyQuests) ...[
+                        _buildQuestCard(context, projection),
+                        const SizedBox(height: 12),
+                      ],
                     ],
                   ],
-                  if (weeklyQuests.isNotEmpty) ...[
-                    _SectionHeader(
-                      title: l10n.questsWeeklySectionTitle,
-                      keyName: 'quests-weekly-quests-title',
-                    ),
-                    const SizedBox(height: 8),
-                    for (final projection in weeklyQuests) ...[
-                      _buildQuestCard(context, projection),
-                      const SizedBox(height: 12),
-                    ],
-                  ],
-                ],
-              ),
+                ),
+        ),
       ),
     );
   }

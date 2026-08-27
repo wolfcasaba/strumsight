@@ -65,6 +65,8 @@ export 'presentation/screens/gamification_hub_screen.dart';
 export 'presentation/screens/level_detail_screen.dart';
 export 'presentation/providers/gamification_preferences_provider.dart';
 export 'presentation/widgets/achievement_tile.dart';
+export 'presentation/widgets/gamification_theme_scope.dart';
+export 'presentation/widgets/pending_rewards_card.dart';
 export 'presentation/widgets/reward_summary_sheet.dart';
 export 'presentation/widgets/streak_status_card.dart';
 export 'presentation/widgets/weekly_consistency_card.dart';

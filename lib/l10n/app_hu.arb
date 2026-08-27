@@ -3316,6 +3316,33 @@
       }
     }
   },
+  "rewardInboxIntegrityBody": "{count, plural, =1{1 bejegyzés egy gyors átnézésre vár — amit megszereztél, az továbbra is számít.} other{{count} bejegyzés egy gyors átnézésre vár — amit megszereztél, az továbbra is számít.}}",
+  "@rewardInboxIntegrityBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxIntegrityTitle": "Néhány bejegyzést még átnézünk",
+  "rewardInboxPendingBody": "{count, plural, =1{1 jutalom vár szinkronizálásra a gyakorlásodból.} other{{count} jutalom vár szinkronizálásra a gyakorlásodból.}}",
+  "@rewardInboxPendingBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxPendingRetryCta": "Szinkronizálás most",
+  "rewardInboxPendingSemantics": "{count, plural, =1{1 jutalom vár szinkronizálásra. Koppints a szinkronizáláshoz.} other{{count} jutalom vár szinkronizálásra. Koppints a szinkronizáláshoz.}}",
+  "@rewardInboxPendingSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxPendingTitle": "A jutalmak szinkronizálása folyamatban van",
   "rewardInboxSeenLabel": "Látott",
   "rewardInboxTitle": "Jutalom postaláda",
   "rewardInboxUnseenLabel": "Új",

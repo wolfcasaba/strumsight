@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/gamification/domain/levels/level_definition.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Visual surface for the XP-derived LEVEL indicator on the Hub and
@@ -31,54 +33,48 @@ class LevelBadge extends StatelessWidget {
       level.titleKey,
     );
 
-    return Semantics(
-      container: true,
-      label: semantics,
-      child: ExcludeSemantics(
-        child: Container(
-          key: const Key('level-badge'),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: theme.colorScheme.secondary.withValues(alpha: 0.40),
+    return GamificationThemeScope(
+      child: Semantics(
+        container: true,
+        label: semantics,
+        child: ExcludeSemantics(
+          child: SsSurface(
+            key: const Key('level-badge'),
+            elevation: SsElevation.raised,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _SkillMedallion(
+                    level: level.number,
+                    color: theme.colorScheme.secondary,
+                    onColor: theme.colorScheme.onSecondary,
+                    outline: theme.colorScheme.outline,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          label,
+                          key: const Key('level-badge-label'),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          level.titleKey,
+                          key: const Key('level-badge-title'),
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _SkillMedallion(
-                level: level.number,
-                color: theme.colorScheme.secondary,
-                onColor: theme.colorScheme.onSecondary,
-                outline: theme.colorScheme.outline,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      key: const Key('level-badge-label'),
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        color: theme.colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      level.titleKey,
-                      key: const Key('level-badge-title'),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ),
         ),
       ),
