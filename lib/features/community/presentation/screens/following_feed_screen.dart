@@ -35,9 +35,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/feed_controller.dart';
 import '../../domain/value_objects/cursor_page.dart';
+import '../widgets/community_theme_scope.dart';
 import '../widgets/feed_card_registry.dart';
 
 /// The following-feed route.
@@ -66,24 +69,27 @@ class _FollowingFeedScreenState extends ConsumerState<FollowingFeedScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(feedControllerProvider);
     final localizations = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(localizations.followingFeedTitle),
-        actions: <Widget>[
-          IconButton(
-            tooltip: localizations.followingFeedRefresh,
-            icon: const Icon(Icons.refresh),
-            onPressed: _canRefresh(state.status)
-                ? () => ref.read(feedControllerProvider.notifier).refresh()
-                : null,
-          ),
-        ],
-      ),
-      body: _Body(
-        state: state,
-        onLoadMore: () => ref.read(feedControllerProvider.notifier).loadMore(),
-        onRetry: () => ref.read(feedControllerProvider.notifier).retry(),
-        onRefresh: () => ref.read(feedControllerProvider.notifier).refresh(),
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(localizations.followingFeedTitle),
+          actions: <Widget>[
+            IconButton(
+              tooltip: localizations.followingFeedRefresh,
+              icon: const Icon(Icons.refresh),
+              onPressed: _canRefresh(state.status)
+                  ? () => ref.read(feedControllerProvider.notifier).refresh()
+                  : null,
+            ),
+          ],
+        ),
+        body: _Body(
+          state: state,
+          onLoadMore: () =>
+              ref.read(feedControllerProvider.notifier).loadMore(),
+          onRetry: () => ref.read(feedControllerProvider.notifier).retry(),
+          onRefresh: () => ref.read(feedControllerProvider.notifier).refresh(),
+        ),
       ),
     );
   }
@@ -196,9 +202,9 @@ class _ErrorCard extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            FilledButton(
+            SsButton(
               onPressed: onRetry,
-              child: Text(localizations.followingFeedRetry),
+              label: localizations.followingFeedRetry,
             ),
           ],
         ),
@@ -251,17 +257,19 @@ class _EndOfFeed extends StatelessWidget {
             children: <Widget>[
               Icon(Icons.check_circle_outline, color: theme.iconTheme.color),
               const SizedBox(width: 8),
-              Text(
-                localizations.followingFeedEndOfFeed,
-                style: theme.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
+              Flexible(
+                child: Text(
+                  localizations.followingFeedEndOfFeed,
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            icon: const Icon(Icons.play_arrow),
-            label: Text(localizations.followingFeedEmptyStateCta),
+          SsButton(
+            icon: Icons.play_arrow,
+            label: localizations.followingFeedEmptyStateCta,
             onPressed: () {
               // The CTA's nav is a future round's job — for now it
               // surfaces a non-blocking message so the user sees the
@@ -409,9 +417,9 @@ class _EmptyState extends StatelessWidget {
             style: theme.textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            icon: const Icon(Icons.play_arrow),
-            label: Text(localizations.followingFeedEmptyStateCta),
+          SsButton(
+            icon: Icons.play_arrow,
+            label: localizations.followingFeedEmptyStateCta,
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -480,9 +488,9 @@ class _Footer extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: Center(
-            child: FilledButton.icon(
-              icon: const Icon(Icons.expand_more),
-              label: Text(localizations.followingFeedLoadMore),
+            child: SsButton(
+              icon: Icons.expand_more,
+              label: localizations.followingFeedLoadMore,
               onPressed: _canLoadMore(state.cursor) ? onLoadMore : null,
             ),
           ),

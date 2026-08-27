@@ -277,6 +277,27 @@
   "feedCardFallbackUnknown": "Ez a tartalomtípus jelenleg nem jeleníthető meg.",
   "@feedCardFallbackUnknown": {},
 
+  "communityModerationRemovedPlaceholder": "Ezt a tartalmat eltávolították.",
+  "@communityModerationRemovedPlaceholder": {},
+
+  "communityPublicConfirmTitle": "Nyilvánossá teszed?",
+  "@communityPublicConfirmTitle": {},
+
+  "communityPublicConfirmBody": "Ezt bárki látni fogja, nem csak a követőid. A beállítást később megváltoztathatod, de amit már nyilvánossá tettél, azt mások addigra láthatták vagy megoszthatták.",
+  "@communityPublicConfirmBody": {},
+
+  "communityPublicConfirmCta": "Nyilvánossá tétel",
+  "@communityPublicConfirmCta": {},
+
+  "communityPublicConfirmCancel": "Mégse",
+  "@communityPublicConfirmCancel": {},
+
+  "communityFollowersBlockAction": "Letiltás",
+  "@communityFollowersBlockAction": {},
+
+  "communityFollowersMuteAction": "Némítás",
+  "@communityFollowersMuteAction": {},
+
   "communityCommentsTitle": "Hozzászólások",
   "@communityCommentsTitle": {},
 

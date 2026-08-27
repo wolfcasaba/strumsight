@@ -22,10 +22,15 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/comment_controller.dart';
 import '../../domain/entities/community_comment.dart';
+import '../../domain/entities/moderation_state.dart';
 import '../../domain/value_objects/content_id.dart';
+import '../widgets/community_moderation_placeholder.dart';
+import '../widgets/community_theme_scope.dart';
 
 /// The per-post comment sheet. The screen is hosted by the
 /// per-post feed card route (a future Kör 17 entry point); this
@@ -63,46 +68,49 @@ class _CommentsScreenState extends ConsumerState<CommentsScreen> {
     final state = ref.watch(commentControllerProvider);
     final localizations = AppLocalizations.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(localizations.communityCommentsTitle)),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: state.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (failure, _) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      failure.toString(),
-                      textAlign: TextAlign.center,
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(localizations.communityCommentsTitle)),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: state.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (failure, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        failure.toString(),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                   ),
-                ),
-                data: (data) => _CommentsList(
-                  rows: data.comments,
-                  isLoadingMore: data.isLoadingMore,
-                  hasMore:
-                      !data.nextCursor.isInitial &&
-                      data.nextCursor.cursor != null,
-                  onLoadMore: () =>
-                      ref.read(commentControllerProvider.notifier).loadMore(),
+                  data: (data) => _CommentsList(
+                    rows: data.comments,
+                    isLoadingMore: data.isLoadingMore,
+                    hasMore:
+                        !data.nextCursor.isInitial &&
+                        data.nextCursor.cursor != null,
+                    onLoadMore: () =>
+                        ref.read(commentControllerProvider.notifier).loadMore(),
+                  ),
                 ),
               ),
-            ),
-            _DraftComposer(
-              controller: _draftController,
-              state: state.value ?? const CommentSheetState.initial(),
-              onChanged: (value) => ref
-                  .read(commentControllerProvider.notifier)
-                  .updateDraft(value),
-              onSubmit: () =>
-                  ref.read(commentControllerProvider.notifier).submitDraft(),
-              onDismissError: () =>
-                  ref.read(commentControllerProvider.notifier).clearError(),
-            ),
-          ],
+              _DraftComposer(
+                controller: _draftController,
+                state: state.value ?? const CommentSheetState.initial(),
+                onChanged: (value) => ref
+                    .read(commentControllerProvider.notifier)
+                    .updateDraft(value),
+                onSubmit: () =>
+                    ref.read(commentControllerProvider.notifier).submitDraft(),
+                onDismissError: () =>
+                    ref.read(commentControllerProvider.notifier).clearError(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -157,6 +165,14 @@ class _CommentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A7 — a removed comment gets a visible placeholder instead of its real
+    // body; the thread stays legible rather than the row vanishing silently.
+    if (comment.moderationState == ModerationState.removed) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: CommunityModerationPlaceholder(),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
@@ -192,9 +208,10 @@ class _LoadMoreRow extends StatelessWidget {
                 width: 24,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : TextButton(
+            : SsButton(
+                variant: SsButtonVariant.tertiary,
                 onPressed: onPressed,
-                child: Text(localizations.communityCommentsLoadMore),
+                label: localizations.communityCommentsLoadMore,
               ),
       ),
     );
@@ -269,15 +286,10 @@ class _DraftComposer extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              FilledButton(
+              SsButton(
                 onPressed: canSubmit ? onSubmit : null,
-                child: state.isSubmitting
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(localizations.communityCommentsSend),
+                loading: state.isSubmitting,
+                label: localizations.communityCommentsSend,
               ),
             ],
           ),

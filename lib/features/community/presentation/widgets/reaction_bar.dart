@@ -31,6 +31,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../application/controllers/reaction_controller.dart';
 import '../../domain/entities/community_reaction.dart';
 import '../../domain/entities/community_post.dart';
@@ -80,7 +82,7 @@ class ReactionBar extends ConsumerWidget {
                   ? null
                   : () => controller.setReaction(post.id, kind),
             ),
-          const SizedBox(width: 8),
+          const SizedBox(width: SsSpacing.space2),
           Text(
             post.counts.reactionCount.toString(),
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -135,7 +137,7 @@ class _ReactionChip extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Text(_emojiFor(kind), style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: SsSpacing.space1),
                   Text(
                     label,
                     style: theme.textTheme.labelMedium?.copyWith(

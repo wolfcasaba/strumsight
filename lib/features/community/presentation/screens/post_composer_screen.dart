@@ -38,11 +38,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../core/foundation/app_failure.dart';
 import '../../application/controllers/post_composer_controller.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
+import '../widgets/community_theme_scope.dart';
 
 /// Composer-screen labels. Kept here (not in the ARB) because the
 /// l10n catalogue for the composer is a future round's scope; a
@@ -71,6 +74,14 @@ abstract final class _ComposerLabels {
   static const String previewTempo = 'Tempó';
   static const String previewStreakDays = 'Aktív napok';
   static const String previewBestScore = 'Legjobb pontszám';
+
+  static const String publicConfirmTitle = 'Nyilvánossá teszed?';
+  static const String publicConfirmBody =
+      'Ezt bárki látni fogja, nem csak a követőid. A beállítást később '
+      'megváltoztathatod, de amit már nyilvánossá tettél, azt mások '
+      'addigra láthatták vagy megoszthatták.';
+  static const String publicConfirmCta = 'Nyilvánossá tétel';
+  static const String publicConfirmCancel = 'Mégse';
 }
 
 /// The composer route. The entry-point that pushes this route
@@ -103,59 +114,61 @@ class _PostComposerScreenState extends ConsumerState<PostComposerScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(postComposerControllerProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(_ComposerLabels.title),
-        actions: <Widget>[
-          IconButton(
-            tooltip: _ComposerLabels.discard,
-            icon: const Icon(Icons.delete_outline),
-            onPressed: state.value?.isSubmitting ?? false
-                ? null
-                : () => ref
-                      .read(postComposerControllerProvider.notifier)
-                      .discard(),
-          ),
-        ],
-      ),
-      body: state.when(
-        data: (composerState) => _ComposerBody(
-          state: composerState,
-          bodyController: _bodyController,
-          onBodyChanged: (value) => ref
-              .read(postComposerControllerProvider.notifier)
-              .updateBody(value.isEmpty ? null : value),
-          onAudienceChanged: (audience) => ref
-              .read(postComposerControllerProvider.notifier)
-              .updateAudience(audience),
-          onToggleField: (flag, value) {
-            final preview = composerState.sharePreview;
-            ref
-                .read(postComposerControllerProvider.notifier)
-                .setSharePreviewFlag(
-                  includeChordTimeline: flag == _PreviewFlag.chordTimeline
-                      ? value
-                      : preview.includeChordTimeline,
-                  includeStrumPattern: flag == _PreviewFlag.strumPattern
-                      ? value
-                      : preview.includeStrumPattern,
-                  includeTempo: flag == _PreviewFlag.tempo
-                      ? value
-                      : preview.includeTempo,
-                  includeStreakDays: flag == _PreviewFlag.streakDays
-                      ? value
-                      : preview.includeStreakDays,
-                  includeBestScore: flag == _PreviewFlag.bestScore
-                      ? value
-                      : preview.includeBestScore,
-                );
-          },
-          onSubmit: () =>
-              ref.read(postComposerControllerProvider.notifier).submit(),
-          onAttachMediaPressed: _onAttachMediaPressed,
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(_ComposerLabels.title),
+          actions: <Widget>[
+            IconButton(
+              tooltip: _ComposerLabels.discard,
+              icon: const Icon(Icons.delete_outline),
+              onPressed: state.value?.isSubmitting ?? false
+                  ? null
+                  : () => ref
+                        .read(postComposerControllerProvider.notifier)
+                        .discard(),
+            ),
+          ],
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text(error.toString())),
+        body: state.when(
+          data: (composerState) => _ComposerBody(
+            state: composerState,
+            bodyController: _bodyController,
+            onBodyChanged: (value) => ref
+                .read(postComposerControllerProvider.notifier)
+                .updateBody(value.isEmpty ? null : value),
+            onAudienceChanged: (audience) => ref
+                .read(postComposerControllerProvider.notifier)
+                .updateAudience(audience),
+            onToggleField: (flag, value) {
+              final preview = composerState.sharePreview;
+              ref
+                  .read(postComposerControllerProvider.notifier)
+                  .setSharePreviewFlag(
+                    includeChordTimeline: flag == _PreviewFlag.chordTimeline
+                        ? value
+                        : preview.includeChordTimeline,
+                    includeStrumPattern: flag == _PreviewFlag.strumPattern
+                        ? value
+                        : preview.includeStrumPattern,
+                    includeTempo: flag == _PreviewFlag.tempo
+                        ? value
+                        : preview.includeTempo,
+                    includeStreakDays: flag == _PreviewFlag.streakDays
+                        ? value
+                        : preview.includeStreakDays,
+                    includeBestScore: flag == _PreviewFlag.bestScore
+                        ? value
+                        : preview.includeBestScore,
+                  );
+            },
+            onSubmit: () =>
+                ref.read(postComposerControllerProvider.notifier).submit(),
+            onAttachMediaPressed: _onAttachMediaPressed,
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text(error.toString())),
+        ),
       ),
     );
   }
@@ -243,9 +256,10 @@ class _ComposerBody extends StatelessWidget {
                     onChanged: onBodyChanged,
                   ),
                   const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.attach_file),
-                    label: const Text(_ComposerLabels.attachMedia),
+                  SsButton(
+                    variant: SsButtonVariant.secondary,
+                    icon: Icons.attach_file,
+                    label: _ComposerLabels.attachMedia,
                     onPressed: state.isSubmitting ? null : onAttachMediaPressed,
                   ),
                   const SizedBox(height: 24),
@@ -272,9 +286,10 @@ class _ComposerBody extends StatelessWidget {
             _StatusBanner(status: state.status, error: state.lastError),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: FilledButton(
+            child: SsButton(
               onPressed: canSubmit ? onSubmit : null,
-              child: const Text(_ComposerLabels.publish),
+              loading: state.status == PostComposerStatus.submitting,
+              label: _ComposerLabels.publish,
             ),
           ),
         ],
@@ -307,16 +322,35 @@ class _AudienceSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      children: <Widget>[
+    return SsChoice<CommunityAudience>(
+      style: SsChoiceStyle.chip,
+      value: audience,
+      options: [
         for (final value in CommunityAudience.values)
-          ChoiceChip(
-            label: Text(_audienceLabel(value)),
-            selected: audience == value,
-            onSelected: enabled ? (_) => onChanged(value) : null,
+          SsChoiceOption<CommunityAudience>(
+            value: value,
+            label: _audienceLabel(value),
           ),
       ],
+      onChanged: enabled ? (value) => _onSelected(context, value) : null,
+    );
+  }
+
+  /// ADR 0291 §2 — a `public` pick is held behind a spelled-out
+  /// irreversibility confirmation (brief §6.1 "above threshold" cell); the
+  /// other two audiences apply immediately, same as before.
+  void _onSelected(BuildContext context, CommunityAudience value) {
+    if (value != CommunityAudience.public) {
+      onChanged(value);
+      return;
+    }
+    showCommunityConfirmationSheet(
+      context,
+      title: _ComposerLabels.publicConfirmTitle,
+      consequence: _ComposerLabels.publicConfirmBody,
+      confirmLabel: _ComposerLabels.publicConfirmCta,
+      cancelLabel: _ComposerLabels.publicConfirmCancel,
+      onConfirm: () => onChanged(value),
     );
   }
 
@@ -347,45 +381,40 @@ class _SharePreviewPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        SwitchListTile(
-          title: const Text(_ComposerLabels.previewChordTimeline),
+        SsSwitchRow(
+          label: _ComposerLabels.previewChordTimeline,
           value: preview.includeChordTimeline,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.chordTimeline, v)
               : null,
-          contentPadding: EdgeInsets.zero,
         ),
-        SwitchListTile(
-          title: const Text(_ComposerLabels.previewStrumPattern),
+        SsSwitchRow(
+          label: _ComposerLabels.previewStrumPattern,
           value: preview.includeStrumPattern,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.strumPattern, v)
               : null,
-          contentPadding: EdgeInsets.zero,
         ),
-        SwitchListTile(
-          title: const Text(_ComposerLabels.previewTempo),
+        SsSwitchRow(
+          label: _ComposerLabels.previewTempo,
           value: preview.includeTempo,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.tempo, v)
               : null,
-          contentPadding: EdgeInsets.zero,
         ),
-        SwitchListTile(
-          title: const Text(_ComposerLabels.previewStreakDays),
+        SsSwitchRow(
+          label: _ComposerLabels.previewStreakDays,
           value: preview.includeStreakDays,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.streakDays, v)
               : null,
-          contentPadding: EdgeInsets.zero,
         ),
-        SwitchListTile(
-          title: const Text(_ComposerLabels.previewBestScore),
+        SsSwitchRow(
+          label: _ComposerLabels.previewBestScore,
           value: preview.includeBestScore,
           onChanged: enabled
               ? (v) => onToggleField(_PreviewFlag.bestScore, v)
               : null,
-          contentPadding: EdgeInsets.zero,
         ),
       ],
     );

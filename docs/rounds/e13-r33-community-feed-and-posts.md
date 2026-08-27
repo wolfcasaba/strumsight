@@ -627,4 +627,208 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-27.
+
+### 10.1 Mit épített a kör
+
+**Design-system migráció (B4)** — a nyolc listás képernyő + a `widgets/` és
+`dialogs/` mind importálják a `package:strumsight/core/design_system/public.dart`
+belépőt, `foundations/**` közvetlen importja nélkül:
+
+- Új `presentation/widgets/community_theme_scope.dart` — `CommunityThemeScope`
+  (a `GamificationThemeScope`/`LibraryThemeScope` MÉRT precedense, E13-R32 /
+  library_v2): az ambiens `Theme`-hez hozzáfésüli az SS design-system
+  extension-jeit (`SsColorScheme`, `SsTypography`, …), amiket az `AppTheme`
+  önmagában nem hordoz. Minden képernyő SAJÁT gyökerén hívja (a Scaffoldot
+  csomagolja) — így önmagában is helyesen render el, függetlenül attól, hogy a
+  hívó kontextus már hordozza-e az extension-öket. A `CommunityMediaPlayer` és
+  a `FeedCard` (widgets/, saját tesztjük van) SZINTÉN saját magukat csomagolják
+  — MÉRVE: enélkül az `SsSurface` `Theme.of(context).extension<SsColorScheme>()!`
+  null-check hívása elszáll egy csupasz `MaterialApp` teszt-hordozóban
+  (`community_media_player_test.dart`, `community_gate_test.dart` A7 cellái —
+  mindkettő elsőre pirosra váltott enélkül, l. a mért kör-naplót).
+  - `showCommunityConfirmationSheet` (ugyanabban a fájlban) — a
+    `library_theme_scope.dart` MÉRT megoldását tükrözi: `SsConfirmationSheet`
+    saját `.show()`-ja `showGeneralDialog`-on át megy, ami a hívó kontextus
+    lokális `Theme`-jét NEM viszi át (mért: az `AppTheme` alatt is elszáll);
+    a `showModalBottomSheet`-alapú saját helyettesítő viszont igen — ezt
+    használja a poszt-közönség és a profil-láthatóság „nyilvános"
+    megerősítése is.
+- Új `presentation/widgets/community_moderation_placeholder.dart` —
+  `CommunityModerationPlaceholder` (A7): `SsSurface`-ben, a
+  `communityModerationRemovedPlaceholder` ARB-kulccsal.
+- `Card`/`Container`+`BoxDecoration` felületek → `SsSurface`
+  (`feed_card_registry.dart`, `community_media_player.dart`,
+  `bookmarks_screen.dart` tombstone kártya).
+- `FilledButton`/`TextButton`/`ElevatedButton`/`OutlinedButton` → `SsButton`
+  (a MEGFELELŐ variánssal — `primary`/`secondary`/`tertiary`/`destructive`).
+  MÉRVE: `SsButtonVariant.primary`/`.destructive` belsőleg egy VALÓDI
+  `FilledButton`-t rendel (`.secondary`→`OutlinedButton`, `.tertiary`→
+  `TextButton`), ezért a meglévő `find.byType(FilledButton)` /
+  `tester.widget<FilledButton>(...)` alapú tesztek A LEGTÖBB helyen
+  VÁLTOZATLANUL lefutnak — csak a `report_content_sheet_test.dart` két
+  `report-submit` Key-alapú exact-cast sora igényelt frissítést
+  (`SsButton`-ra), mert ott a Key MAGÁN az `SsButton`-on ül, nem a belső
+  `FilledButton`-on.
+- `SwitchListTile` (öt db, poszt-szerkesztő) → `SsSwitchRow`.
+- `_AudienceSelector` kézi `Wrap`/`ChoiceChip` → `SsChoice<CommunityAudience>`
+  (`style: chip`) — MÉRVE: azonos `Wrap`/`ChoiceChip` fát rendel, tehát a
+  finderek nem törtek.
+- `TextField`/`RadioListTile` (profil-szerkesztő, keresés, kommentek) —
+  SZÁNDÉKOSAN NEM migrált (a 7 meglévő teszt `find.byType(TextField)` /
+  `find.widgetWithText(TextField, …)` finderei törtek volna; a
+  `RadioListTile` cím+alcím tartalma elveszett volna `SsChoice.radio`-ra
+  váltva). Ez tudatos scope-határ, dokumentálva a kódban is.
+
+**Valódi ÚJ viselkedés (nem csak kozmetika):**
+
+- **A2 — „nyilvános" megerősítés.** `post_composer_screen.dart`
+  `_AudienceSelector` és `edit_profile_screen.dart` mindkét `RadioGroup`-ja: a
+  `public` választás nem alkalmazódik azonnal, hanem
+  `showCommunityConfirmationSheet`-et nyit (kimondott
+  visszavonhatatlanság-szöveg, `communityPublicConfirmTitle/Body/Cta/Cancel`
+  ARB kulcsok / a composer saját magyar konstansai); csak megerősítés után
+  íródik az állapot. Mégse → változatlan marad.
+- **A5 — helyi azonnali tiltás/némítás.** `followers_screen.dart`:
+  `_FollowerTile` két új gombja (`follower-block-<id>`,
+  `follower-mute-<id>`) `setState(() => _items.removeWhere(...))`-tel
+  AZONNAL eltávolítja a sort — a `SocialGraphRepository.block`/`.mute` hívás
+  ezután, best-effort módon fut (a hívás kimenetele nem befolyásolja a már
+  megtörtént helyi eltávolítást).
+- **A7 — eltávolított tartalom helyőrzője.** `feed_card_registry.dart`
+  (`FeedCard.build()`) és `comments_screen.dart` (`_CommentTile.build()`):
+  `moderationState == ModerationState.removed` esetén
+  `CommunityModerationPlaceholder`, a valós szöveg/szerző SOHA nem kerül a
+  fába.
+
+**l10n (B10):** 7 új kulcs a `community_{en,hu}.arb`-ban (parittásban),
+`dart run tool/gen_l10n_segments.dart --write`-tel regenerálva az
+aggregátumot; kézzel az `app_{en,hu}.arb` nem íródott.
+
+**Mért mellékhatás — javított túlcsordulás.** A golden-felvétel elsőre
+`RenderFlex overflowed by 151 pixels` hibát dobott 412 px szélességen a
+`following_feed_screen.dart` `_EndOfFeed` sorára (ikon + `Text`, `Flexible`
+nélkül) — ez a kör ELŐTT is jelen volt, csak eddig soha nem futott 412 px-es
+kereten. Javítva: a `Text` `Flexible`-be került (l. az A9 mérce-mátrix sora
+— „a képernyő elcsúszik, túlcsordul" — pontosan ezt kellett elkapnia és most
+elkapta).
+
+### 10.2 §6 acceptance-cellák teljesülése
+
+| # | Bizonyíték | Állapot |
+|---|---|---|
+| A1 | `community_gate_test.dart` (2 teszt) | ZÖLD |
+| A2 | `composer_audience_test.dart` (2+3 teszt, l. §10.3) | ZÖLD |
+| A3 | `composer_audience_test.dart` | ZÖLD |
+| A4 | `composer_audience_test.dart` | ZÖLD |
+| A5 | `block_mute_test.dart` (2 teszt) | ZÖLD |
+| A6 | `offline_publish_retry_test.dart` | ZÖLD |
+| A7 | `community_gate_test.dart` (3 teszt: FeedCard×2 + CommentsScreen) | ZÖLD |
+| A8 | `community_gate_test.dart` (3 teszt) | ZÖLD |
+| A9 | `e13_r33_screens_golden_test.dart` — 8 képernyő × 2 keret = 16 PNG | ZÖLD (x86) |
+
+A hét MEGLÉVŐ `presentation/`-teszt (B3) változatlanul, gyengítés nélkül fut
+— egyedül a `report_content_sheet_test.dart` két `FilledButton`→`SsButton`
+exact-cast sora frissült (l. fent).
+
+### 10.3 Valódi-sértés próba (KÖTELEZŐ, §6.1) — TÉNYLEGES mérés
+
+**Parancs (a falszifikáció ELŐTT, zöld):**
+```
+flutter test test/features/community/composer_audience_test.dart
+```
+→ `00:03 +9: All tests passed!` (9/9 zöld, benne az A2 profil-oldali
+cellája: „a fresh create-profile form defaults both radio groups to
+followers").
+
+**Falszifikáció:** `lib/features/community/presentation/screens/edit_profile_screen.dart`
+`initState()`-jében (a KÖR SAJÁT allowed_paths-án belüli fájl — a
+`post_composer_controller.dart` mért alapérték-forrása, §0.0.B/B5, az
+`application/` rétegen él és TILOS zóna, ezért a próba ezen a — szintúgy mért
+alapérték-forráson, edit_profile_screen.dart:92-93 — hajtva):
+
+```diff
+-    _visibility = initial?.visibility ?? ProfileVisibility.followers;
+-    _audienceDefault = CommunityAudience.followers;
++    _visibility = initial?.visibility ?? ProfileVisibility.public;
++    _audienceDefault = CommunityAudience.public;
+```
+
+**Parancs (a falszifikáció UTÁN) — TÉNYLEGES kimenet:**
+```
+flutter test test/features/community/composer_audience_test.dart
+```
+```
+00:02 +8: A2 — the profile-side default audience is also not public a fresh create-profile form defaults both radio groups to followers
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞═══════════════════════════
+The following TestFailure was thrown running a test:
+Expected: ProfileVisibility:<ProfileVisibility.followers>
+  Actual: ProfileVisibility:<ProfileVisibility.public>
+...
+00:03 +8 -1: Some tests failed.
+```
+Az **A2 cella PIROSRA váltott** — a mérce éles.
+
+**Visszaállítás** (ugyanaz a diff, fordítva) + újrafuttatás:
+```
+flutter test test/features/community/composer_audience_test.dart
+```
+→ `00:03 +9: All tests passed!` — visszazöldült.
+
+A `git diff` a próba után a fájlon KIZÁRÓLAG a legitim kör-migrációt mutatja
+(ellenőrizve) — a falszifikáció nyoma nem maradt a commitban.
+
+### 10.4 A kötelező kapu — TÉNYLEGES kimenet
+
+```
+tools/round-gate.sh test/features/community/community_gate_test.dart test/features/community/composer_audience_test.dart test/features/community/offline_publish_retry_test.dart test/features/community/block_mute_test.dart test/features/community/presentation/ test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/community/community_gate_test.dart      zöld
+    test test/features/community/composer_audience_test.dart   zöld
+    test test/features/community/offline_publish_retry_test.dart zöld
+    test test/features/community/block_mute_test.dart          zöld
+    test test/features/community/presentation/                 zöld
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/tooling/dio_factory_guard_test.dart              zöld
+    test test/tooling/preferences_plugin_import_guard_test.dart zöld
+    test test/tooling/route_literal_guard_test.dart             zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+`test/ui/ui_inventory_test.dart` zöld → a `hasLength(94)` alapérték
+VÁLTOZATLAN (a kör nem hozott új `*_screen.dart`-ot, B9 szerint).
+
+**Golden (külön, B11 szerint NEM a `gate_tests`-ben):**
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r33_screens_golden_test.dart
+→ 01:28 +16: All tests passed!
+
+tools/golden-x86.sh check test/ui/goldens/e13_r33_screens_golden_test.dart
+→ exit code 0 (16/16 egyezik)
+```
+A 16 PNG (8 képernyő × {compact, compact_scale2}) commitolva
+`test/ui/goldens/goldens/e13_r33_*.png` alatt.
+
+### 10.5 Tudatos scope-döntések / nem-teendők
+
+- `bookmarks_screen.dart`, `community_search_screen.dart`,
+  `post_composer_screen.dart` néhány felirata TOVÁBBRA IS hardcode-olt
+  (angol/magyar konstans, nem ARB) — ez MÁR a fán lévő, dokumentált
+  jövőbeli-kör-scope (l. a fájlok saját doc-commentje), a kör nem bővítette
+  és nem szűkítette.
+- `TextField`/`RadioListTile` migrációja `SsTextField`/`SsChoice.radio`-ra
+  TUDATOSAN elmaradt — l. §10.1.
+- Az idempotencia-kulcs a felületen sehol nem jelenik meg (grep: 0 találat a
+  nyolc listás képernyőn + widgets/) — B6 mérce változatlanul teljesül.
+
 ## 11. Review — a Claude tölti ki

@@ -39,12 +39,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/profile_controller.dart';
 import '../../domain/entities/community_profile.dart';
 import '../../domain/policies/community_audience.dart';
 import '../../domain/value_objects/community_handle.dart';
+import '../widgets/community_theme_scope.dart';
 
 enum EditProfileMode { create, edit }
 
@@ -106,38 +109,40 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final state = ref.watch(communityProfileControllerProvider).value;
     final isSubmitting = state?.isSubmitting ?? false;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          isCreate
-              ? localizations.communityEditCreateTitle
-              : localizations.communityEditEditTitle,
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            isCreate
+                ? localizations.communityEditCreateTitle
+                : localizations.communityEditEditTitle,
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (isCreate) ..._buildHandleSection(localizations),
-              ..._buildDisplayNameSection(localizations),
-              ..._buildBioSection(localizations),
-              ..._buildInterestSection(localizations),
-              ..._buildBadgesSection(localizations),
-              if (isCreate) ..._buildPrivacySection(localizations),
-              if (_topError != null) ...[
-                const SizedBox(height: 16),
-                _ErrorBanner(message: _topError!),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (isCreate) ..._buildHandleSection(localizations),
+                ..._buildDisplayNameSection(localizations),
+                ..._buildBioSection(localizations),
+                ..._buildInterestSection(localizations),
+                ..._buildBadgesSection(localizations),
+                if (isCreate) ..._buildPrivacySection(localizations),
+                if (_topError != null) ...[
+                  const SizedBox(height: 16),
+                  _ErrorBanner(message: _topError!),
+                ],
+                const SizedBox(height: 24),
+                _SubmitButton(
+                  isSubmitting: isSubmitting,
+                  isCreate: isCreate,
+                  localizations: localizations,
+                  onPressed: isSubmitting ? null : _onSubmit,
+                ),
               ],
-              const SizedBox(height: 24),
-              _SubmitButton(
-                isSubmitting: isSubmitting,
-                isCreate: isCreate,
-                localizations: localizations,
-                onPressed: isSubmitting ? null : _onSubmit,
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -261,7 +266,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         groupValue: _visibility,
         onChanged: (value) {
           if (value == null) return;
-          setState(() => _visibility = value);
+          _onVisibilityChanged(l, value);
         },
         child: Column(
           children: [
@@ -283,7 +288,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         groupValue: _audienceDefault,
         onChanged: (value) {
           if (value == null) return;
-          setState(() => _audienceDefault = value);
+          _onAudienceDefaultChanged(l, value);
         },
         child: Column(
           children: [
@@ -323,6 +328,49 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       CommunityAudience.followers => ProfileVisibility.followers,
       CommunityAudience.private => ProfileVisibility.private,
     };
+  }
+
+  /// ADR 0291 §2 — the default audience/visibility is never public without
+  /// an explicit, irreversibility-naming confirmation (brief §6.1, the
+  /// "above threshold" cell). A `followers`/`private` pick applies
+  /// immediately; a `public` pick is held behind [showCommunityConfirmationSheet]
+  /// and only committed if the user confirms.
+  void _onVisibilityChanged(AppLocalizations l, ProfileVisibility value) {
+    if (value != ProfileVisibility.public) {
+      setState(() => _visibility = value);
+      return;
+    }
+    showCommunityConfirmationSheet(
+      context,
+      title: l.communityPublicConfirmTitle,
+      consequence: l.communityPublicConfirmBody,
+      confirmLabel: l.communityPublicConfirmCta,
+      cancelLabel: l.communityPublicConfirmCancel,
+      onConfirm: () {
+        if (!mounted) return;
+        setState(() => _visibility = value);
+      },
+    );
+  }
+
+  /// Same guard as [_onVisibilityChanged], for the per-post default
+  /// audience selector.
+  void _onAudienceDefaultChanged(AppLocalizations l, CommunityAudience value) {
+    if (value != CommunityAudience.public) {
+      setState(() => _audienceDefault = value);
+      return;
+    }
+    showCommunityConfirmationSheet(
+      context,
+      title: l.communityPublicConfirmTitle,
+      consequence: l.communityPublicConfirmBody,
+      confirmLabel: l.communityPublicConfirmCta,
+      cancelLabel: l.communityPublicConfirmCancel,
+      onConfirm: () {
+        if (!mounted) return;
+        setState(() => _audienceDefault = value);
+      },
+    );
   }
 
   Future<void> _onAddTag(AppLocalizations l) async {
@@ -453,17 +501,16 @@ class _SubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton(
+    return SsButton(
       onPressed: onPressed,
-      child: Text(
-        isSubmitting
-            ? (isCreate
-                  ? localizations.communityEditSubmitting
-                  : localizations.communityEditUpdating)
-            : (isCreate
-                  ? localizations.communityEditSubmit
-                  : localizations.communityEditUpdate),
-      ),
+      loading: isSubmitting,
+      label: isSubmitting
+          ? (isCreate
+                ? localizations.communityEditSubmitting
+                : localizations.communityEditUpdating)
+          : (isCreate
+                ? localizations.communityEditSubmit
+                : localizations.communityEditUpdate),
     );
   }
 }

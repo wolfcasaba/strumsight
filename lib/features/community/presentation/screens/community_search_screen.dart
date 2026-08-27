@@ -36,6 +36,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../core/storage/key_value_store.dart';
 import '../../data/local/recent_search_store.dart';
@@ -44,6 +46,7 @@ import '../../domain/entities/community_profile.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
+import '../widgets/community_theme_scope.dart';
 
 /// Debounce window for the typed query — long enough to swallow
 /// burst typing, short enough that the user sees results within
@@ -243,33 +246,35 @@ class _CommunitySearchScreenState extends ConsumerState<CommunitySearchScreen> {
   @override
   Widget build(BuildContext context) {
     final hasQuery = _activeQuery.isNotEmpty;
-    return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: _controller,
-          focusNode: _focusNode,
-          autocorrect: false,
-          textInputAction: TextInputAction.search,
-          decoration: const InputDecoration(
-            hintText: 'Search by handle',
-            border: InputBorder.none,
-          ),
-          onChanged: _onQueryChanged,
-          onSubmitted: _onSubmit,
-        ),
-        actions: [
-          if (_controller.text.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.clear),
-              tooltip: 'Clear',
-              onPressed: () {
-                _controller.clear();
-                _onQueryChanged('');
-              },
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: TextField(
+            controller: _controller,
+            focusNode: _focusNode,
+            autocorrect: false,
+            textInputAction: TextInputAction.search,
+            decoration: const InputDecoration(
+              hintText: 'Search by handle',
+              border: InputBorder.none,
             ),
-        ],
+            onChanged: _onQueryChanged,
+            onSubmitted: _onSubmit,
+          ),
+          actions: [
+            if (_controller.text.isNotEmpty)
+              IconButton(
+                icon: const Icon(Icons.clear),
+                tooltip: 'Clear',
+                onPressed: () {
+                  _controller.clear();
+                  _onQueryChanged('');
+                },
+              ),
+          ],
+        ),
+        body: SafeArea(child: _buildBody(hasQuery)),
       ),
-      body: SafeArea(child: _buildBody(hasQuery)),
     );
   }
 
@@ -332,7 +337,11 @@ class _RecentList extends StatelessWidget {
                 'Recent searches',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              TextButton(onPressed: onClear, child: const Text('Clear all')),
+              SsButton(
+                variant: SsButtonVariant.tertiary,
+                onPressed: onClear,
+                label: 'Clear all',
+              ),
             ],
           ),
         ),
@@ -429,7 +438,7 @@ class _ErrorState extends StatelessWidget {
           const SizedBox(height: 8),
           Text(message),
           const SizedBox(height: 8),
-          ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
+          SsButton(onPressed: onRetry, label: 'Retry'),
         ],
       ),
     );

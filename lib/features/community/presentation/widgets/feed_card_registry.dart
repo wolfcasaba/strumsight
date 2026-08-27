@@ -26,10 +26,15 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/entities/community_post.dart';
+import '../../domain/entities/moderation_state.dart';
 import '../../domain/entities/share_artifact.dart';
 import '../../domain/policies/community_audience.dart';
+import 'community_moderation_placeholder.dart';
+import 'community_theme_scope.dart';
 
 /// The card-registry entry-point.
 ///
@@ -44,25 +49,37 @@ class FeedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A7 — a removed post gets a visible placeholder instead of its real
+    // body; the conversation stays legible rather than the row vanishing.
+    if (post.moderationState == ModerationState.removed) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: CommunityThemeScope(child: CommunityModerationPlaceholder()),
+      );
+    }
     final artifact = post.artifact;
     final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _CardHeader(post: post),
-            const SizedBox(height: 8),
-            if (post.body != null && post.body!.isNotEmpty) ...<Widget>[
-              Text(post.body!, style: theme.textTheme.bodyMedium),
-              const SizedBox(height: 8),
-            ],
-            _artifactBody(context: context, post: post, artifact: artifact),
-            const SizedBox(height: 8),
-            _CardCounts(post: post),
-          ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: CommunityThemeScope(
+        child: SsSurface(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _CardHeader(post: post),
+                const SizedBox(height: 8),
+                if (post.body != null && post.body!.isNotEmpty) ...<Widget>[
+                  Text(post.body!, style: theme.textTheme.bodyMedium),
+                  const SizedBox(height: 8),
+                ],
+                _artifactBody(context: context, post: post, artifact: artifact),
+                const SizedBox(height: 8),
+                _CardCounts(post: post),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -490,18 +507,16 @@ class _FallbackCard extends StatelessWidget {
     final text = reason == _FallbackReason.unfilled
         ? localizations.feedCardFallbackUnfilled
         : localizations.feedCardFallbackUnknown;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.info_outline, color: theme.iconTheme.color),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
-        ],
+    return SsSurface(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.info_outline, color: theme.iconTheme.color),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
+          ],
+        ),
       ),
     );
   }
