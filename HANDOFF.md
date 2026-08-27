@@ -1,5 +1,101 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R33 KÉSZ — Community profil, feed, keresés és poszt UI — PR [#478](https://github.com/wolfcasaba/strumsight/pull/478), squash `e2b3f71c` (2026-08-27)
+
+Az UI-53–UI-58 **opcionális, alapból nem nyilvános** közösségi felülete (SDD
+Ch13 Kör 33). A kör **ADR-t nem írt** — a kiosztott `0291` 2026-08-15 óta
+merge-elt (`5b32bd8e`); a sávon a **tizenhatodik** ADR nélküli kör egymás után
+(E13-R17…R33). Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude, **1 javító kör** — `docs/reviews/e13-r33-review.md`:
+1. forduló **0 BLOCKER / 1 MAJOR / 1 MINOR → CHANGES REQUESTED**, 2. forduló
+**0 BLOCKER / 0 MAJOR / 0 MINOR / 4 NOTE → APPROVED**.
+
+**A pre-flight ÁTÍRTA a brief fájllistáját — a három előtag NULLA fájlt fedett.**
+A `brief-lint` `S13` lelete szerint a `lib/features/community/{profile,feed,posts}/`
+a fán nem létezik: az Epic-9 a feature-t **réteges** szerkezetben építette fel
+(`application/`, `data/`, `domain/`, `presentation/`). Ezt a
+`docs/execution/pipeline-queue.tsv` Epic-9 blokkja 2026-08-22-én **előre
+kimondta**, és a feloldást kifejezetten ennek a körnek a pre-flightjára bízta.
+A lista ezért a §3 scope-jához tartozó **nyolc képernyőre** + a `widgets/` és
+`dialogs/` előtagra mutat; az E13-R34 öt képernyője (`clubs/*`, challenges,
+leaderboard, safety, notifications) szándékosan kimaradt — a két kör
+fájlhalmaza **diszjunkt**.
+
+**Ez MIGRÁCIÓS kör volt, nem zöldmezős.** A `grep -rn "design_system"
+lib/features/community/presentation/` a pre-flightban **0 találatot** adott: a
+nyolc képernyő közvetlenül `material.dart`-ot használt. A kör ezt migrálta —
+`CommunityThemeScope` + `SsSurface`/`SsButton`/`SsSwitchRow`/`SsChoice`,
+kizárólag a `core/design_system/public.dart` barrelen át (ADR 0273 §1). Új
+`CommunityModerationPlaceholder` az A7-hez. A `TextField`/`RadioListTile`
+SZÁNDÉKOSAN nem migrált (a 7 meglévő teszt findere tört volna) — dokumentált
+scope-határ, nem csendes kihagyás.
+
+**Valódi ÚJ viselkedés, nem kozmetika:** a „nyilvános" közönség (poszt ÉS
+profil) mostantól **kimondott, visszavonhatatlanságra figyelmeztető
+megerősítés** mögött van (A2); a tiltás/némítás a repository-hívás `await`-je
+**ELŐTT** tünteti el a sort (A5, ADR 0291 §4); az eltávolított tartalom
+helyőrzőt kap a feedben és a szálban (A7).
+
+**A pre-flight két mérési szabálya mindkettő FOGOTT.** (1) *Elérhetetlen
+cél-státusz:* a brief §6.1 első cellája `private` alapértelmezett közönséget
+írt elő — ezt a fán **egyetlen input sem produkálja** (a MÉRT alapérték
+`CommunityAudience.followers` / `ProfileVisibility.followers`), az átállítása
+pedig egy LEZÁRT kör viselkedését változtatta volna (**H2**). A kötő norma a
+merge-elt ADR 0291 §2 „**nem nyilvános**" predikátuma; a cellahármas erre
+mutat, és a mérce nem lazult (a `public` alapérték az A2-t pirosra váltja).
+(2) *Erőforrás-tulajdonlás:* az idempotencia-kulcsot az `application/` réteg
+birtokolja — a `PostComposerController` EGYSZER generálja és minden további
+mentésnél ÚJRAHASZNÁLJA (`:352–366`); a `presentation/` fa 12 találata mind a
+listán KÍVÜLI R34-es képernyőn van, és egyik sem rendereli a kulcsot.
+
+**A §0.0/R2 batch-mérés ÉRVÉNYTELEN volt — és ez a kör legfontosabb tanulsága.**
+Az R2 „nincs ilyen"-t írt (nincs a kör fáján élő widget-teszt), mert a NEM
+LÉTEZŐ előtagok ellen mért. A MÉRT `presentation/` rétegen **hét** ma zöld
+widget-teszt állt közvetlenül a kör képernyőire — pontosan az a `blocked`
+hibaosztály, amit az R2 el akart kerülni. Általánosítva: egy `S13` lelet nem
+egyetlen sort érvénytelenít, hanem **minden** §0.0 cellát, amit ugyanabból az
+előtagból vezettek le ([L518](docs/LESSONS.md#l518)).
+
+**MAJOR-1 — a kör a saját ARB-kulcsát nem kötötte be a szerkesztőben.** A kör
+felvette a `communityPublicConfirm*` kulcsokat `en`-be ÉS `hu`-ba, az
+`edit_profile_screen.dart`-ban helyesen olvasta is őket — a
+`post_composer_screen.dart`-ban viszont ÚJ, beégetett magyar konstansokat adott
+hozzá, a `community_hu.arb` értékeivel **bájtra azonosan**. Angol nyelvre
+állított felhasználó így a kör legnagyobb következményű műveleténél (a
+visszavonhatatlan nyilvánossá tétel megerősítésénél) magyar szöveget kapott,
+miközben a helyes angol már a fán volt. A javító kör bekötötte az
+`AppLocalizations`-t és gépi őrt adott hozzá ([L519](docs/LESSONS.md#l519)).
+
+**Reviewer-bizonyíték.** Független gate-újrafuttatás izolált `/tmp` klónban,
+mindkét SHA-n: **15/15 zöld**. `golden-x86.sh check` **16/16 zöld** (8 képernyő
+× 2 keret). Scope-audit `ok` — 42 fájl, **0** listán kívüli, az `application/`,
+`data/`, `domain/` réteg érintetlen. **Négy** eldobható falszifikációs próba,
+mind pirosra váltotta a saját celláját: P1 (`public` alapérték) **5 cella**,
+P2 (szerver-first tiltás) **2 cella**, P3 (friss kulcs minden mentésnél) **1
+cella**, P4 (a javított A2-felirat visszaégetése) **1 cella**; a fa minden
+próba után visszaállt. A hét meglévő `presentation/`-teszt **gyengítés nélkül**
+zöld (`+82`), a `ui_inventory` `hasLength(94)` érintetlen — a kör nem hozott új
+képernyőt, és a router (`lib/app/routing/**`) tilos zóna maradt. A kötelező
+`security-reviewer` (`risk = "high"`) **0 BLOCKER / 0 MAJOR**-ral zárt; a hét
+termékhatárból a döntéshordozókat saját méréssel is ellenőriztem.
+
+Exact-SHA evidencia a merge SHA-n (`185556ec`): Full Gate
+[33075065684](https://github.com/wolfcasaba/strumsight/actions/runs/33075065684)
+`success` + Router CI
+[33075068467](https://github.com/wolfcasaba/strumsight/actions/runs/33075068467)
+`success`.
+
+**Következő kör:** `E13-R34` — Community Challenges és Safety UI
+(`docs/rounds/e13-r34-community-challenges-and-safety.md`, ADR `nincs`,
+implementer `sonnet-impl`). **Horog:** a briefje ugyanabban a NEM LÉTEZŐ
+előtag-hibában szenved (`community/{challenges,clubs,safety}/`) — a
+pre-flightja ugyanígy a MÉRT `presentation/` rétegre mutasson, és **külön mérje
+meg**, mely meglévő widget-tesztek állnak az öt képernyőjére (a
+`clubs/club_detail_screen_test.dart`, `clubs/club_list_screen_test.dart`,
+`community_challenges_test.dart`, `community_notifications_test.dart`,
+`leaderboard_screen_test.dart`, `screens/safety_relationships_screen_test.dart`
+— ezeket az E13-R33 szándékosan NEM vitte a listájára).
+
 ## ✅ E13-R32 KÉSZ — Gamification Hub, Quest, Achievement és Reward UI — PR [#477](https://github.com/wolfcasaba/strumsight/pull/477), squash `ff9f3096` (2026-08-27)
 
 Az UI-51–UI-52 **együttérző, idempotens** jutalmazási felülete (SDD Ch13 Kör 32).

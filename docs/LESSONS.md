@@ -20179,3 +20179,92 @@ alap-nézet elég" engedménye a kereteket NEM érinti: a két keret kötelező.
 minden `e13_r*_screens_golden_test.dart`-ja) — a `*_scale2` cellák maguk a
 gépi őrök; a felvétel `tools/golden-x86.sh record`-dal, az ellenőrzés
 `check`-kel és az exact-SHA Full Gate-en fut.
+
+---
+
+## L518 — Egy `S13` (nem létező `allowed_paths` előtag) lelet NEM egyetlen sort érvénytelenít, hanem MINDEN §0.0 cellát, amit ugyanabból az előtagból vezettek le (E13-R33, 2026-08-27)
+
+**A mért hiba.** Az E13-R33 briefjének batch pre-flightja (2026-08-25) az `R2`
+cellába — *„a kör SAJÁT feature-fáján élő, ma zöld widget-tesztek"* — azt írta,
+hogy **„nincs ilyen"**. Ez a mérés a `lib/features/community/{profile,feed,posts}/`
+előtagok ellen készült, amelyek a fán **nem léteznek**: az Epic-9 a feature-t
+`application/` / `data/` / `domain/` / `presentation/` rétegekben építette fel.
+Egy nem létező előtag alatt természetesen nulla tesztet talál a kereső — a cella
+tehát **igazat írt egy nem létező fáról**, és üres állításként zöldnek látszott.
+
+A kör indítási pre-flightja a MÉRT rétegen újramérte:
+
+```
+grep -rln "features/community/presentation" test/   → 13 fájl,
+    ebből 7 áll közvetlenül a kör nyolc listás képernyőjére
+```
+
+Ez pontosan az a `blocked` hibaosztály, amit az `R2` cella **el akart kerülni**:
+a migráció után elbukó, listán kívüli widget-teszt. A `brief-lint` `S13` szabálya
+a fájllista hibáját megfogta — de a lelet **következményét** a §0.0 többi
+cellájára senki nem vezette át.
+
+**A tanulság, ami általánosít.** Az `S13` lelet a brief egy INPUTJÁT
+érvényteleníti, nem egy sorát. Minden §0.0/§0.0.B cella, amelyet ugyanabból az
+előtagból vezettek le — a teszt-leltár (`R2`), a keresztmetszeti figyelmeztetés
+(`R3`), a képernyő-leltár őre (`R4`), az l10n-kulcsszámok — **újramérendő a
+tényleges fán**, mielőtt bármit dispatch-elnénk. Az „üres eredmény" a
+legveszélyesebb mérés: nem hibázik, csak nem mér semmit.
+
+**Amitől ez nem ismétlődik.** Az E13-R33 pre-flightja a `§0.0.B/B3` cellában
+tételesen felsorolja a hét tesztet és a hozzájuk tartozó képernyőt, és
+kimondja, hogy az `R2` „nincs ilyen"-je **érvénytelen volt**. A szomszéd
+E13-R34 briefje UGYANEBBEN a hibában szenved (`community/{challenges,clubs,safety}/`
+— szintén nem létező előtagok); a HANDOFF §-a ezért nevesítve átadja neki a hat
+érintett tesztfájlt.
+
+**Őrteszt:** nincs — a `tools/brief-lint.py` `S13` szabálya a fájllista hibáját
+MÁR megfogja (ez a lelet is onnan jött); ami hiányzik, az a lelet átvezetése a
+brief szöveges celláira, és ezt gépi predikátum nem tudja eldönteni (egy „nincs
+ilyen" cella lehet igaz is). A `tools/` ebben a körben tilos zóna volt, a
+szabály bővítése külön governance-kör tárgya.
+
+---
+
+## L519 — Ha ugyanaz a diff felvesz egy ARB-kulcsot ÉS beéget egy vele bájtra azonos Dart-konstanst, az nem redundancia, hanem locale-hiba a legnagyobb következményű felületen (E13-R33 / MAJOR-1, 2026-08-27)
+
+**A mért hiba.** Az E13-R33 diffje négy új kulcsot vett fel
+(`communityPublicConfirmTitle/Body/Cta/Cancel`) a `community_en.arb`-ba ÉS a
+`community_hu.arb`-ba, a testvér-képernyőn helyesen olvasta is őket
+(`edit_profile_screen.dart:345–348`), a poszt-szerkesztőben viszont ÚJ,
+beégetett magyar konstansokat adott hozzá (`post_composer_screen.dart:78–84`)
+— a `community_hu.arb` értékeivel **bájtra azonosan**:
+
+| Dart-konstans | ARB-érték |
+|---|---|
+| `'Nyilvánossá teszed?'` | `"communityPublicConfirmTitle": "Nyilvánossá teszed?"` |
+| `'Nyilvánossá tétel'` | `"communityPublicConfirmCta": "Nyilvánossá tétel"` |
+
+**Miért nem kozmetikai.** A felület, amit érint, a kör LEGNAGYOBB
+következményű művelete: a visszavonhatatlan nyilvánossá tétel megerősítése
+(ADR 0291 §2, a brief §9 első kockázata). A megerősítő lap akkor véd, ha a
+felhasználó **érti** — egy angol nyelvre állított felhasználó viszont magyar
+szöveget kapott, miközben a helyes angol fordítás már a fán volt, csak nem volt
+bekötve. A védelem így pont ott gyengült, ahol a legdrágább a félrekattintás.
+
+**A félrevezető indoklás, ami továbbélt.** A fájl doc-commentje azt állította,
+hogy *„touching `lib/l10n/**` would be a scope violation"* — ez a Kör 12-ben
+IGAZ volt, ebben a körben viszont MÁR NEM: a `lib/l10n/features/community_*.arb`
+a §4 engedélyezett listáján volt, és a kör használta is. Egy elavult
+doc-comment-indoklás így egy egész körön át fenntartotta a hibát.
+
+**Az őr, amit a javító kör kapott — és a pontos hatóköre.** A `composer_audience_test.dart`
+§6.1 „fölötte" csoportja `en` locale alatt fut és az ANGOL feliratot állítja, plusz
+egy új cella `hu` locale alatt a magyart. A falszifikációs próba (P4, a beégetés
+visszaírása) **pirosra váltotta a suite-ot** — de mérve: az `en`-cella fogta meg,
+NEM a néven nevezett „…comes from AppLocalizations" cella (az `hu` alatt fut,
+ahol a beégetett magyar történetesen egyezik). A **pár** fedi mindkét irányt; egy
+locale-specifikus őr önmagában csak az ELLENKEZŐ nyelv beégetését fogja.
+
+**Az olcsó detektor a következő review-ba:** ha egy diff ARB-kulcsot vesz fel,
+vesd össze az új ARB-értékeket a diffben szereplő Dart-sztringliterálokkal —
+a **bájtra azonos** pár mindig gyanús, és a nyelvi hovatartozása azonnal
+megmondja, melyik locale törik el.
+
+**Őrteszt:** `test/features/community/composer_audience_test.dart` — a §6.1
+„above threshold" csoport `en`- és `hu`-locale cellapárja.
