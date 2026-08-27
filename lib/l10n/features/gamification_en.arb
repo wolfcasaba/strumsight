@@ -561,5 +561,26 @@
   "gamificationSettingsNotificationsLabel": "Practice reminders",
   "gamificationSettingsNotificationsSemantics": "Practice reminders toggle",
   "gamificationSettingsNotificationsHint": "Turning reminders on or off never changes your experience points, achievements, or streaks.",
-  "gamificationSettingsProgressPreservedHint": "Your ledger, streak and mastery evaluation continue running — switching the celebration layer off hides only the visual signal."
+  "gamificationSettingsProgressPreservedHint": "Your ledger, streak and mastery evaluation continue running — switching the celebration layer off hides only the visual signal.",
+  "rewardInboxPendingTitle": "Rewards are still syncing",
+  "rewardInboxPendingBody": "{count, plural, =1{1 reward from your practice is waiting to sync.} other{{count} rewards from your practice are waiting to sync.}}",
+  "@rewardInboxPendingBody": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardInboxPendingSemantics": "{count, plural, =1{1 reward is waiting to sync. Tap to sync now.} other{{count} rewards are waiting to sync. Tap to sync now.}}",
+  "@rewardInboxPendingSemantics": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "rewardInboxPendingRetryCta": "Sync now",
+  "rewardInboxIntegrityTitle": "A few entries need a closer look",
+  "rewardInboxIntegrityBody": "{count, plural, =1{1 entry is waiting for a quick review — everything you have earned still counts.} other{{count} entries are waiting for a quick review — everything you have earned still counts.}}",
+  "@rewardInboxIntegrityBody": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  }
 }

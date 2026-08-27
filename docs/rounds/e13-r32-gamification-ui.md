@@ -593,4 +593,149 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-27, `main @ 481bf9bd` felett.
+
+### Mit változtattam
+
+1. **`GamificationThemeScope`** (új widget, `presentation/widgets/gamification_theme_scope.dart`,
+   mintája `progress_v2/widgets/progress_theme_scope.dart`): garantálja a
+   `SsColorScheme`/`SsTypography`/stb. design-system `ThemeExtension`-öket
+   függetlenül az ambiens témától. Minden 7 gamifikációs képernyő (Hub,
+   Quests, Achievements, StreakDetail, RewardInbox, LevelDetail — az
+   AchievementDetail nem, mert nincs benne DS-komponens) `Scaffold`-ja ezzel
+   van becsomagolva.
+2. **Design-system migráció** (§0.0.B/B8 tényleges munkája — a 7 képernyő
+   korábban NULLA `design_system` importtal élt): `level_badge.dart`,
+   `xp_progress_bar.dart`, a Hub `_CountSummaryTile`/`_LatestResultCard`, és
+   a `reward_summary_sheet.dart` `_SummaryEventTile` `Container`-decorációja
+   `SsSurface`-re cserélve, kizárólag a `core/design_system/public.dart`
+   barrelen át (mérve: `test/core/architecture_dependency_test.dart` „real
+   production source reaches the design system only via public.dart" zöld).
+   Az `_InboxIndicator` (Hub) és a `_StreakMetricCard`/`_InboxEntryTile`
+   szándékosan MARADT a korábbi alakján — az első egy egyedi accent-színt
+   használ, amit az `SsSurface` nem paraméterez, a második egy `find.byType(Card)`
+   asszerciót visel a meglévő `streak_detail_screen_test.dart`-ban — a
+   migráció szűkítése mért, dokumentált döntés, nem elfeledett kör.
+3. **`reduceMotion` szál** — új, opcionális (`= false`) paraméter a
+   `StreakStatusCard`, `StreakDetailScreen` (átadja tovább) és
+   `RewardSummarySheet` widgeteken, VAGY-kapcsolva a meglévő
+   `MediaQuery.disableAnimationsOf`-fal — a §5.6/A8 „az ünneplésnek van
+   csökkentett mozgású alternatívája" bekötése a caller-fed szerződésen
+   belül (ADR 0393 kifejezetten erre a körre hagyta).
+4. **`PendingRewardsCard`** (új widget) — a §3 „offline főkönyv, függő
+   beváltás és integritás-vizsgálat" felülete: caller-fed
+   `pendingCount`/`quarantinedCount`/`onRetry`. Az `onRetry` a hívó által
+   `ActivityEventIngestor.drain()`-re kötendő „retry now" — a widget SOSEM
+   hív `appendIfAbsent`-et és SOSEM mutat jóváírt egyenleget a drain előtt.
+   Bekötve a `RewardInboxScreen`-be (3 új opcionális paraméter, alapértéken
+   `0`/`0`/`null`, ezért az `app_router.dart` meglévő hívása változtatás
+   nélkül fordul).
+5. **L10n** — 6 új kulcs (`rewardInboxPending{Title,Body,RetryCta,Semantics}`,
+   `rewardInboxIntegrity{Title,Body}`) a `gamification_{en,hu}.arb`
+   FORRÁSBA, en+hu paritással, együttérző nyelven (nincs „lost"/„veszett"
+   szó szerint — a `compassionate_copy_test.dart` erre külön ellenőriz).
+   `dart run tool/gen_l10n_segments.dart --write` + `flutter gen-l10n`
+   regenerálva.
+6. **Elrendezési javítás (mérve a golden felvétel közben, nem előre
+   jelezve):** a `PendingRewardsCard` első verziója a retry-gombot egy
+   `Row`-ban helyezte az `Expanded` cím/leírás oszlop mellé — ez
+   `textScaler 2.0`-nál egy 1577px-es `RenderFlex overflow`-t adott (mérve:
+   `PendingRewardsCard` önálló próbateszttel, magasság 2472px). Javítás: a
+   gomb egy `Align(centerEnd)`-be került, a cím/leírás Row ALÁ, külön sorba
+   — a magasság 412px-re esett vissza, kivétel nélkül. Ugyanekkor a
+   `reward_inbox_screen.dart` MEGLÉVŐ `_InboxEntryTile` trailing XP-felirata
+   (`l10n.rewardInboxEarnedXpLabel`) is túlcsordult vízszintesen 41px-szel
+   `textScaler 2.0`-nál (ez a kör előtti kód, a golden felvétel fogta meg
+   most először) — `Flexible(overflow: ellipsis, maxLines: 2)`-be csomagolva.
+
+### §6 acceptance-cellák teljesülése
+
+| # | Kritérium | Bizonyíték | Állapot |
+|---|---|---|---|
+| A1 | Nincs büntető/bűntudatkeltő széria-szöveg | `compassionate_copy_test.dart` (5/5) | ZÖLD |
+| A2 | A beváltás idempotens | `claim_idempotency_test.dart` §6.1 mátrix (3/3 cella) + valódi-sértés próba | ZÖLD |
+| A3 | A felület nem számít jutalmat | `claim_idempotency_test.dart` grep-cella (`appendIfAbsent` 0 találat `presentation/` alatt) | ZÖLD |
+| A4 | A jutalom forrása auditálható | `claim_idempotency_test.dart` — `RewardLedgerEntry.readPage` a ténylegesen írt sorokat adja vissza | ZÖLD |
+| A5 | Pihenőnap/türelmi idő/széria vége külön állapot | `streak_states_test.dart` — 3 küszöb-cella + pihenőnap-vs-broken cella + valódi-sértés próba | ZÖLD |
+| A6 | Nincs fizetős széria-megőrzés | `compassionate_copy_test.dart` — kulcsnév-mintázat scan, 0 találat | ZÖLD |
+| A7 | Az eredmény feltétele érthető | Már merge-elt (`achievements_screen_test.dart`/`achievement_detail_screen.dart`), változatlan | ZÖLD |
+| A8 | Csökkentett mozgás mellett a visszajelzés megmarad | `reduced_motion_test.dart` (8/8) — duration=0, de a tartalom/inbox-jelvény megmarad | ZÖLD |
+| A9 | Golden minden §3 képernyőről, 412×915 + scale 2.0 | `e13_r32_screens_golden_test.dart`, 5 képernyő × 2 keret = 10 PNG, `tools/golden-x86.sh check` zöld | ZÖLD (ld. lent) |
+
+### Valódi-sértés próba (KÖTELEZŐ, A2)
+
+`lib/features/gamification/data/local_activity_outbox_repository.dart`
+`_enqueue`-jába ideiglenesen beszúrtam egy `await _ledger.appendIfAbsent(record.entry);`
+hívást közvetlenül a `_pending.add(...)` után — ez szimulálja az optimista,
+a főkönyv megerősítése ELŐTTI jóváírást. Lefuttatva:
+
+```
+flutter test test/features/gamification/ui/claim_idempotency_test.dart
+```
+
+**Mért eredmény: PONTOSAN az A2 cella vált PIROSSÁ** — „a pendingCount of 0
+immediately after enqueue (before drain) would misrepresent the ledger" →
+`Expected: false, Actual: <true>` a `ledger.hasProcessedEvent(...)`
+asszerción, pontosan a RED FLAG üzenettel. Bónuszként az „alatta" küszöb-cella
+is elbukott (`Bad state: ledger offline`), mert a hibás enqueue-útvonal a
+`alwaysThrow` ledger-et is azonnal meghívta. A módosítást ezután
+visszaállítottam (`git checkout -- lib/features/gamification/data/local_activity_outbox_repository.dart`,
+ellenőrizve: nincs diff), és a teljes `claim_idempotency_test.dart` újra
+zöld (9/9).
+
+### `ui_inventory` és `app_router_test` — mért, érintetlen bázisvonal (§0.0.B/B9)
+
+A kör a meglévő 7 képernyőt a helyén hagyta (egyet sem hozott, egyet sem
+törölt, egyiket sem nevezte át) — mérve:
+
+- `find lib/features/gamification -name "*_screen.dart" | wc -l` → **7**
+  (változatlan a B8 mérésével egyezően).
+- `find lib/features -name "*_screen.dart" | wc -l` → **94** — egyezik a
+  `ui_inventory_test.dart:22` `hasLength(94)` bázisvonalával, a teszt
+  módosítás nélkül zöld.
+- `app_router_test.dart` — mind a 6 gamifikációs route-cella (`E08-R30 —
+  gamification routes` csoport, 8 teszt) változtatás nélkül zöld; egyik
+  importált screen-TÍPUS neve sem változott.
+
+Mindkét őr érintetlen maradt — a §0.0.B/B9 jogosultságát (a szám/típusnév
+igazítása) nem kellett gyakorolni.
+
+### Golden (A9) — mért aarch64-vs-x86 rasterizációs eltérés (ADR 0426)
+
+`tools/golden-x86.sh record test/ui/goldens/e13_r32_screens_golden_test.dart`
+majd `check` — **mindkettő zöld, nulla eltérés**, mind az 5 képernyő × 2
+keret (10 PNG, commitolva `test/ui/goldens/goldens/` alatt).
+
+Ez a box (aarch64) natív `flutter test`-je ugyanerre a golden-fájlra
+**determinisztikusan** (két egymást követő futással ellenőrizve, bit-azonos
+eredménnyel) kis eltérést mér: `hub_compact`/`streak_detail_compact`/
+`hub_compact_scale2`/`streak_detail_compact_scale2` egyenként „0.00%, 1px
+diff", `achievements_compact_scale2` „0.24%, 896px diff" — a `quests_*` és
+`reward_inbox_*` 4 keret helyben is pontosan egyezik. Ez az ADR 0426 §2–§3 /
+L486 / L493 mért jelensége (a nulla toleranciájú `LocalFileComparator`
+ARM↔x86 anti-aliasing/ikon-rasterizációs eltérésre is érzékeny, nem csak
+fordítva) — reprodukálható, tehát NEM flakiness, hanem architektúra-drift.
+Mivel a CI és a `golden-x86.sh` UGYANAZ az architektúra (x86_64), az A9
+mércéje a `golden-x86.sh check` zöld kimenete, nem ennek a boxnak a natív
+`flutter test`-je. A `round-gate.sh`-t emiatt a golden-útvonal NÉLKÜL
+futtattam egyetlen, csonkítatlan hívásban (a golden-útvonal a
+`round-gate.sh`-ba fűzve az ELSŐ lépésnél megállítaná a láncot, mielőtt az
+`architecture`/`secrets`/`l10n` lépések lefutnának) — a golden-bizonyíték a
+fenti, külön `golden-x86.sh record`+`check` páros.
+
+### A záró kapu — tényleges kimenet
+
+```
+tools/round-gate.sh test/features/gamification/ui/claim_idempotency_test.dart test/features/gamification/ui/streak_states_test.dart test/features/gamification/ui/compassionate_copy_test.dart test/features/gamification/ui/reduced_motion_test.dart test/ui/ui_inventory_test.dart test/app/routing/app_router_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+**MINDEN GATE ZÖLD**: format, analyze (0 lelet), mind a 10 célteszt zöld,
+`architecture` (12 allowlisted deviation, változatlan), `secrets` (3843
+fájl, 0 találat), `l10n` (paritás OK, en→hu 2168 üzenet). A golden-útvonal
+külön, `tools/golden-x86.sh record`+`check`-kel zöld (ld. fent). Emellett az
+5 meglévő, R2 szerint retargetelendő teszt (`gamification_hub_screen_test`,
+`quests_screen_test`, `achievements_screen_test`, `streak_detail_screen_test`,
+`gamification_accessibility_test`) **módosítás nélkül** zöld maradt —
+a migráció egyik meglévő cellát sem gyengítette.
+
 ## 11. Review — a Claude tölti ki

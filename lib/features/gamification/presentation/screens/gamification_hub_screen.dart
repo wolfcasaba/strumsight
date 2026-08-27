@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
 import 'package:strumsight/features/gamification/domain/profile/gamification_profile.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/level_badge.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/xp_progress_bar.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -82,148 +84,153 @@ class GamificationHubScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final showEmpty = _isEmpty();
-    return Scaffold(
-      appBar: AppBar(
-        title: Semantics(header: true, child: Text(l10n.gamificationHubTitle)),
-      ),
-      body: SafeArea(
-        child: showEmpty
-            ? _EmptyHubState(
-                key: const Key('gamification-hub-empty'),
-                isLegacy: isLegacyEmpty,
-                title: isLegacyEmpty
-                    ? l10n.gamificationHubEmptyLegacyTitle
-                    : l10n.gamificationHubEmptyNewTitle,
-                body: isLegacyEmpty
-                    ? l10n.gamificationHubEmptyLegacyBody
-                    : l10n.gamificationHubEmptyNewBody,
-              )
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                children: [
-                  _SectionHeader(
-                    icon: Icons.workspace_premium_outlined,
-                    title: l10n.gamificationHubSkillSectionTitle,
-                    body: l10n.gamificationHubSkillSectionBody,
-                    accent: theme.colorScheme.secondary,
-                    semantics: l10n.gamificationHubSkillSectionTitle,
-                  ),
-                  const SizedBox(height: 8),
-                  LevelBadge(level: profile.currentLevel),
-                  const SizedBox(height: 16),
-                  _SectionHeader(
-                    icon: Icons.star_outline,
-                    title: l10n.gamificationHubXpSectionTitle,
-                    body: l10n.gamificationHubXpSectionBody,
-                    accent: theme.colorScheme.primary,
-                    semantics: l10n.gamificationHubXpSectionTitle,
-                  ),
-                  const SizedBox(height: 8),
-                  XpProgressBar(
-                    xpIntoCurrentLevel: profile.xpIntoCurrentLevel,
-                    xpToNextLevel: profile.xpToNextLevel,
-                    totalXp: profile.totalXp,
-                  ),
-                  const SizedBox(height: 16),
-                  _InboxIndicator(
-                    unseenCount: inboxUnseenCount,
-                    title: l10n.gamificationHubInboxIndicatorTitle,
-                    cta: l10n.gamificationHubInboxIndicatorCta,
-                    semantics: l10n.gamificationHubInboxIndicatorSemantics(
-                      inboxUnseenCount,
+    return GamificationThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Semantics(
+            header: true,
+            child: Text(l10n.gamificationHubTitle),
+          ),
+        ),
+        body: SafeArea(
+          child: showEmpty
+              ? _EmptyHubState(
+                  key: const Key('gamification-hub-empty'),
+                  isLegacy: isLegacyEmpty,
+                  title: isLegacyEmpty
+                      ? l10n.gamificationHubEmptyLegacyTitle
+                      : l10n.gamificationHubEmptyNewTitle,
+                  body: isLegacyEmpty
+                      ? l10n.gamificationHubEmptyLegacyBody
+                      : l10n.gamificationHubEmptyNewBody,
+                )
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  children: [
+                    _SectionHeader(
+                      icon: Icons.workspace_premium_outlined,
+                      title: l10n.gamificationHubSkillSectionTitle,
+                      body: l10n.gamificationHubSkillSectionBody,
+                      accent: theme.colorScheme.secondary,
+                      semantics: l10n.gamificationHubSkillSectionTitle,
                     ),
-                    onTap: onOpenInbox,
-                  ),
-                  const SizedBox(height: 16),
-                  _CountSummaryTile(
-                    key: const Key('gamification-hub-quests-tile'),
-                    icon: Icons.flag_outlined,
-                    title: l10n.gamificationHubQuestsTitle,
-                    summary: l10n.gamificationHubQuestsSummary(
-                      activeQuestCount,
+                    const SizedBox(height: 8),
+                    LevelBadge(level: profile.currentLevel),
+                    const SizedBox(height: 16),
+                    _SectionHeader(
+                      icon: Icons.star_outline,
+                      title: l10n.gamificationHubXpSectionTitle,
+                      body: l10n.gamificationHubXpSectionBody,
+                      accent: theme.colorScheme.primary,
+                      semantics: l10n.gamificationHubXpSectionTitle,
                     ),
-                    semantics: l10n.gamificationHubQuestsSemantics(
-                      activeQuestCount,
+                    const SizedBox(height: 8),
+                    XpProgressBar(
+                      xpIntoCurrentLevel: profile.xpIntoCurrentLevel,
+                      xpToNextLevel: profile.xpToNextLevel,
+                      totalXp: profile.totalXp,
                     ),
-                    onTap: onOpenQuests,
-                  ),
-                  const SizedBox(height: 12),
-                  _CountSummaryTile(
-                    key: const Key('gamification-hub-streak-tile'),
-                    icon: Icons.local_fire_department_outlined,
-                    title: l10n.gamificationHubStreakTitle,
-                    summary: l10n.gamificationHubStreakSummary(
-                      streakCurrentDays,
-                    ),
-                    semantics:
-                        '${l10n.gamificationHubStreakTitle}. ${l10n.gamificationHubStreakSummary(streakCurrentDays)}',
-                    onTap: onOpenStreak,
-                  ),
-                  const SizedBox(height: 12),
-                  _CountSummaryTile(
-                    key: const Key('gamification-hub-mastery-tile'),
-                    icon: Icons.workspace_premium_outlined,
-                    title: l10n.gamificationHubMasteryTitle,
-                    summary: l10n.gamificationHubMasterySummary(
-                      masteryUnlockedCount,
-                    ),
-                    semantics: l10n.gamificationHubMasterySummary(
-                      masteryUnlockedCount,
-                    ),
-                    onTap: onOpenMastery,
-                  ),
-                  const SizedBox(height: 12),
-                  _CountSummaryTile(
-                    key: const Key('gamification-hub-achievements-tile'),
-                    icon: Icons.emoji_events_outlined,
-                    title: l10n.gamificationHubAchievementsTitle,
-                    summary: l10n.gamificationHubMasterySummary(
-                      masteryUnlockedCount,
-                    ),
-                    semantics: l10n.gamificationHubAchievementsTitle,
-                    onTap: onOpenAchievements,
-                  ),
-                  const SizedBox(height: 20),
-                  _LatestResultCard(
-                    result: latestResult,
-                    emptyTitle: l10n.gamificationHubLatestResultEmptyTitle,
-                    emptyBody: l10n.gamificationHubLatestResultEmptyBody,
-                    sectionTitle: l10n.gamificationHubLatestResultTitle,
-                  ),
-                  const SizedBox(height: 20),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: FilledButton.tonalIcon(
-                      key: const Key('gamification-hub-level-detail-cta'),
-                      onPressed: onOpenLevelDetail,
-                      icon: const Icon(Icons.info_outline),
-                      label: Text(l10n.gamificationHubOpenLevelDetailCta),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.cloud_off_outlined,
-                        size: 14,
-                        color: theme.colorScheme.onSurfaceVariant,
+                    const SizedBox(height: 16),
+                    _InboxIndicator(
+                      unseenCount: inboxUnseenCount,
+                      title: l10n.gamificationHubInboxIndicatorTitle,
+                      cta: l10n.gamificationHubInboxIndicatorCta,
+                      semantics: l10n.gamificationHubInboxIndicatorSemantics(
+                        inboxUnseenCount,
                       ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          l10n.gamificationHubOfflineReadyLabel,
-                          key: const Key('gamification-hub-offline-label'),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                      onTap: onOpenInbox,
+                    ),
+                    const SizedBox(height: 16),
+                    _CountSummaryTile(
+                      key: const Key('gamification-hub-quests-tile'),
+                      icon: Icons.flag_outlined,
+                      title: l10n.gamificationHubQuestsTitle,
+                      summary: l10n.gamificationHubQuestsSummary(
+                        activeQuestCount,
+                      ),
+                      semantics: l10n.gamificationHubQuestsSemantics(
+                        activeQuestCount,
+                      ),
+                      onTap: onOpenQuests,
+                    ),
+                    const SizedBox(height: 12),
+                    _CountSummaryTile(
+                      key: const Key('gamification-hub-streak-tile'),
+                      icon: Icons.local_fire_department_outlined,
+                      title: l10n.gamificationHubStreakTitle,
+                      summary: l10n.gamificationHubStreakSummary(
+                        streakCurrentDays,
+                      ),
+                      semantics:
+                          '${l10n.gamificationHubStreakTitle}. ${l10n.gamificationHubStreakSummary(streakCurrentDays)}',
+                      onTap: onOpenStreak,
+                    ),
+                    const SizedBox(height: 12),
+                    _CountSummaryTile(
+                      key: const Key('gamification-hub-mastery-tile'),
+                      icon: Icons.workspace_premium_outlined,
+                      title: l10n.gamificationHubMasteryTitle,
+                      summary: l10n.gamificationHubMasterySummary(
+                        masteryUnlockedCount,
+                      ),
+                      semantics: l10n.gamificationHubMasterySummary(
+                        masteryUnlockedCount,
+                      ),
+                      onTap: onOpenMastery,
+                    ),
+                    const SizedBox(height: 12),
+                    _CountSummaryTile(
+                      key: const Key('gamification-hub-achievements-tile'),
+                      icon: Icons.emoji_events_outlined,
+                      title: l10n.gamificationHubAchievementsTitle,
+                      summary: l10n.gamificationHubMasterySummary(
+                        masteryUnlockedCount,
+                      ),
+                      semantics: l10n.gamificationHubAchievementsTitle,
+                      onTap: onOpenAchievements,
+                    ),
+                    const SizedBox(height: 20),
+                    _LatestResultCard(
+                      result: latestResult,
+                      emptyTitle: l10n.gamificationHubLatestResultEmptyTitle,
+                      emptyBody: l10n.gamificationHubLatestResultEmptyBody,
+                      sectionTitle: l10n.gamificationHubLatestResultTitle,
+                    ),
+                    const SizedBox(height: 20),
+                    Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: FilledButton.tonalIcon(
+                        key: const Key('gamification-hub-level-detail-cta'),
+                        onPressed: onOpenLevelDetail,
+                        icon: const Icon(Icons.info_outline),
+                        label: Text(l10n.gamificationHubOpenLevelDetailCta),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.cloud_off_outlined,
+                          size: 14,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            l10n.gamificationHubOfflineReadyLabel,
+                            key: const Key('gamification-hub-offline-label'),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                      ],
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
@@ -409,37 +416,33 @@ class _CountSummaryTile extends StatelessWidget {
       button: true,
       label: '$title. $summary.',
       child: ExcludeSemantics(
-        child: InkWell(
+        child: SsSurface(
           key: const Key('gamification-hub-summary-tile'),
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, color: theme.colorScheme.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(title, style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 2),
-                      Text(summary, style: theme.textTheme.bodyMedium),
-                    ],
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(icon, color: theme.colorScheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(title, style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 2),
+                        Text(summary, style: theme.textTheme.bodyMedium),
+                      ],
+                    ),
                   ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ],
+                  Icon(
+                    Icons.chevron_right,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -465,82 +468,83 @@ class _LatestResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    return Container(
+    return SsSurface(
       key: const Key('gamification-hub-latest-result'),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            sectionTitle,
-            key: const Key('gamification-hub-latest-result-title'),
-            style: theme.textTheme.titleSmall,
-          ),
-          const SizedBox(height: 6),
-          if (result == null)
-            ExcludeSemantics(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(emptyTitle, style: theme.textTheme.titleSmall),
-                  const SizedBox(height: 4),
-                  Text(emptyBody, style: theme.textTheme.bodyMedium),
-                ],
-              ),
-            )
-          else
-            Semantics(
-              container: true,
-              label: l10n.gamificationHubLatestResultSemantics(
-                result!.title,
-                result!.earnedXp,
-              ),
-              child: ExcludeSemantics(
-                child: Row(
+      elevation: SsElevation.raised,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              sectionTitle,
+              key: const Key('gamification-hub-latest-result-title'),
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 6),
+            if (result == null)
+              ExcludeSemantics(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.history_outlined,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            result!.title,
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(result!.body, style: theme.textTheme.bodyMedium),
-                        ],
-                      ),
-                    ),
-                    Flexible(
-                      child: Text(
-                        '+${result!.earnedXp} XP',
-                        maxLines: 2,
-                        textAlign: TextAlign.end,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
+                    Text(emptyTitle, style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 4),
+                    Text(emptyBody, style: theme.textTheme.bodyMedium),
                   ],
                 ),
+              )
+            else
+              Semantics(
+                container: true,
+                label: l10n.gamificationHubLatestResultSemantics(
+                  result!.title,
+                  result!.earnedXp,
+                ),
+                child: ExcludeSemantics(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.history_outlined,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              result!.title,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              result!.body,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      Flexible(
+                        child: Text(
+                          '+${result!.earnedXp} XP',
+                          maxLines: 2,
+                          textAlign: TextAlign.end,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

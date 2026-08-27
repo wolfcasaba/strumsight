@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:strumsight/features/gamification/domain/achievements/achievement_definition.dart';
 import 'package:strumsight/features/gamification/domain/achievements/achievement_progress.dart';
 import 'package:strumsight/features/gamification/presentation/widgets/achievement_tile.dart';
+import 'package:strumsight/features/gamification/presentation/widgets/gamification_theme_scope.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
 
 enum AchievementListFilter { all, unlocked, inProgress, category }
@@ -30,68 +31,74 @@ class _AchievementsScreenState extends State<AchievementsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final visible = _visibleDefinitions();
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.achievementsTitle)),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          children: [
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _filterChip(
-                  key: const Key('achievement-filter-all'),
-                  label: l10n.achievementFilterAll,
-                  filter: AchievementListFilter.all,
-                ),
-                _filterChip(
-                  key: const Key('achievement-filter-unlocked'),
-                  label: l10n.achievementFilterUnlocked,
-                  filter: AchievementListFilter.unlocked,
-                ),
-                _filterChip(
-                  key: const Key('achievement-filter-in-progress'),
-                  label: l10n.achievementFilterInProgress,
-                  filter: AchievementListFilter.inProgress,
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(l10n.achievementFilterCategory),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _filterableCategories
-                  .map(
-                    (category) => ChoiceChip(
-                      key: Key('achievement-filter-category-${category.name}'),
-                      label: Text(localizedAchievementCategory(l10n, category)),
-                      selected:
-                          _filter == AchievementListFilter.category &&
-                          _category == category,
-                      onSelected: (_) => setState(() {
-                        _filter = AchievementListFilter.category;
-                        _category = category;
-                      }),
-                    ),
-                  )
-                  .toList(growable: false),
-            ),
-            const SizedBox(height: 16),
-            if (visible.isEmpty)
-              _EmptyAchievementsState()
-            else
-              for (final definition in visible) ...[
-                AchievementTile(
-                  definition: definition,
-                  progress: widget.progressByAchievement[definition.id],
-                  onSelected: widget.onAchievementSelected,
-                ),
-                const SizedBox(height: 12),
-              ],
-          ],
+    return GamificationThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.achievementsTitle)),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _filterChip(
+                    key: const Key('achievement-filter-all'),
+                    label: l10n.achievementFilterAll,
+                    filter: AchievementListFilter.all,
+                  ),
+                  _filterChip(
+                    key: const Key('achievement-filter-unlocked'),
+                    label: l10n.achievementFilterUnlocked,
+                    filter: AchievementListFilter.unlocked,
+                  ),
+                  _filterChip(
+                    key: const Key('achievement-filter-in-progress'),
+                    label: l10n.achievementFilterInProgress,
+                    filter: AchievementListFilter.inProgress,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(l10n.achievementFilterCategory),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _filterableCategories
+                    .map(
+                      (category) => ChoiceChip(
+                        key: Key(
+                          'achievement-filter-category-${category.name}',
+                        ),
+                        label: Text(
+                          localizedAchievementCategory(l10n, category),
+                        ),
+                        selected:
+                            _filter == AchievementListFilter.category &&
+                            _category == category,
+                        onSelected: (_) => setState(() {
+                          _filter = AchievementListFilter.category;
+                          _category = category;
+                        }),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+              const SizedBox(height: 16),
+              if (visible.isEmpty)
+                _EmptyAchievementsState()
+              else
+                for (final definition in visible) ...[
+                  AchievementTile(
+                    definition: definition,
+                    progress: widget.progressByAchievement[definition.id],
+                    onSelected: widget.onAchievementSelected,
+                  ),
+                  const SizedBox(height: 12),
+                ],
+            ],
+          ),
         ),
       ),
     );

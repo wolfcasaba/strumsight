@@ -3354,6 +3354,33 @@
       }
     }
   },
+  "rewardInboxIntegrityBody": "{count, plural, =1{1 entry is waiting for a quick review — everything you have earned still counts.} other{{count} entries are waiting for a quick review — everything you have earned still counts.}}",
+  "@rewardInboxIntegrityBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxIntegrityTitle": "A few entries need a closer look",
+  "rewardInboxPendingBody": "{count, plural, =1{1 reward from your practice is waiting to sync.} other{{count} rewards from your practice are waiting to sync.}}",
+  "@rewardInboxPendingBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxPendingRetryCta": "Sync now",
+  "rewardInboxPendingSemantics": "{count, plural, =1{1 reward is waiting to sync. Tap to sync now.} other{{count} rewards are waiting to sync. Tap to sync now.}}",
+  "@rewardInboxPendingSemantics": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "rewardInboxPendingTitle": "Rewards are still syncing",
   "rewardInboxSeenLabel": "Seen",
   "rewardInboxTitle": "Reward inbox",
   "rewardInboxUnseenLabel": "New",

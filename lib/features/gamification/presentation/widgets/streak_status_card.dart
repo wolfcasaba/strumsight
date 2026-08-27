@@ -4,16 +4,27 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 /// Displays the caller-supplied streak evaluation without deriving policy.
 class StreakStatusCard extends StatelessWidget {
-  const StreakStatusCard({super.key, required this.reason});
+  const StreakStatusCard({
+    super.key,
+    required this.reason,
+    this.reduceMotion = false,
+  });
 
   final StreakEvaluationReason reason;
+
+  /// Caller-fed reduced-motion preference (e.g.
+  /// `GamificationPreferences.reduceMotion`). ORed with
+  /// `MediaQuery.disableAnimationsOf` — either source collapses the
+  /// transition duration to zero without dropping any content (brief
+  /// §5.6 / §6 A8).
+  final bool reduceMotion;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final content = _contentFor(l10n, reason);
     final color = Theme.of(context).colorScheme.primary;
-    final duration = MediaQuery.disableAnimationsOf(context)
+    final duration = (MediaQuery.disableAnimationsOf(context) || reduceMotion)
         ? Duration.zero
         : const Duration(milliseconds: 200);
 
