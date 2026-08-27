@@ -19797,3 +19797,55 @@ fogyasztott feature barreljét); amíg nem, a pre-flight kézi teendője.
 mért három importőr ÉS a barrel scope-ban van, miközben a `song_trainer` négy
 belső fájlja (a két repository, a provider-fájl és a nested domain-barrel)
 továbbra is sértés, tehát a tágítás bizonyíthatóan EGY fájl marad.
+
+## L509 — A halt utáni upstream-szinkron brief-konfliktusa NEM „tartsd meg a main verzióját": az önjavító kör és a kör SAJÁT pre-flightja két diszjunkt szakasz, az egyik eldobása a kör artefaktumait viszi (E13-R28 folytatás, 2026-08-27)
+
+**A helyzet.** Az E13-R28 `H3`-mal állt meg. A halt-jelzést egy önjavító kör
+dolgozta fel, ami a brief §0.0/**R5** revízióját a `main`-re merge-elte
+(`8c48af55`, [L508](#l508)). A folytató session az ADR 0087 §0.3 szerint
+kötelezően beépítette az upstreamet a kör-ágba — és a merge **konfliktált**,
+pontosan egy fájlon: magán a kör briefjén.
+
+**A csapda.** Az ADR 0087 §0.3 szövege erre az esetre azt írja elő, hogy „ha a
+merge csak a már merge-elt self-heal és a kör briefje között konfliktál, az
+aktuális `main` brief-változatát őrizd meg". **Szó szerint követve ez
+adatvesztés lett volna.** Mérve a konkrét fájlon: a kör-ág briefje 790 soros
+volt és tartalmazta a kör SAJÁT, ág-oldali artefaktumait —
+
+- `§0.0/B` — a kör pre-flightja (a `main @ 768af6ec` elleni mérés, a `brief-lint`
+  `S13` leletének feloldása, a `B2` route-szerződés),
+- `§10` — a teljes implementation handoff (acceptance-mátrix, A4 valódi-sértés
+  próba, golden-jegyzőkönyv),
+- `§11` — az első review és a `H3` verdikt,
+
+miközben a `main` brief-változata ezek EGYIKÉT sem ismerte, cserébe egyedül ő
+hordozta a `§0.0/R5` revíziót. A két oldal tehát **diszjunkt és egyaránt
+szükséges**: a git a három konfliktus-blokkot azért nem tudta automatikusan
+feloldani, mert mindkét fél ÚJ, egymást nem érintő szakaszokat írt ugyanabba a
+régióba — nem azért, mert az egyik elavult.
+
+**A helyes feloldás: szemantikus unió, blokkonként.** A három blokk mérve:
+(1) `§0.0/R5` (main) + `§0.0/B` (ág) — mindkettő megtartva, az `R5` a `§0.0`
+alszakaszaként előre; (2) a §4 engedélyezett-fájl táblázat — az ág két
+részletesebb sora MELLÉ a main `song_trainer/public.dart` sora; (3) a tilos
+zóna bekezdése — az ág bővebb szövege, a main `song_trainer/public.dart`
+kivételével kiegészítve. Igazolás, hogy az unió nem tágít és nem szűkít: az
+önjavító kör SAJÁT őrtesztje az egyesített briefen futtatva zöld
+(`python3 -m pytest tools/tests/test_e13_r28_song_trainer_public_barrel_scope.py -q`
+→ `2 passed`), és a `allowed_paths` pontosan egy sorral bővült.
+
+**A szabály.** A §0.3 „tartsd meg a `main` verzióját" kifutása arra az esetre
+szól, amikor a self-heal a brief UGYANAZON szakaszát írta át, amit az ág is —
+ott a `main` a frissebb. Ha viszont a két oldal KÜLÖNBÖZŐ szakaszokat ad hozzá
+(tipikusan: a self-heal a `§0.0/R*` revíziót, az ág a `§0.0/B` pre-flightot, a
+`§10`-et és a `§11`-et), akkor a feloldás **unió**, és a konfliktus-blokkokat
+egyenként kell elolvasni. A gyors ellenőrzés a merge előtt: `git show
+origin/main:<brief> | wc -l` az ág-oldali sorszámhoz mérve, plusz a
+`grep -n '^## ' <brief>` szakaszlista összevetése — ha az ágon olyan szakasz
+van, ami a `main`-en nincs, a „tartsd meg a main verzióját" kifutás **tilos**.
+
+**Őrteszt:** nincs — a mérés a `tools/**` fát érintené (brief-merge lint), ami
+ennek a körnek a **tiltott zónája** (§4), a `tools/`-hoz nyúlás pedig ADR 0087
+§4 szerint az önjavító kör hatásköre, nem a köré. A lecke ezért a §0.3
+szövegének pontosítását kéri egy jövőbeli governance-körtől; addig a fenti
+kétparancsos ellenőrzés a folytató orchestrátor kézi teendője.

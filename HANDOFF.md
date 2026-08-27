@@ -1,5 +1,67 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R28 KÉSZ — Unified Library és Session Detail UI — PR [#473](https://github.com/wolfcasaba/strumsight/pull/473), squash `a3179aa1` (2026-08-27)
+
+Az UI-40–UI-41 **egységes könyvtára** (SDD Ch13 Kör 28): egy felület, amin a
+felhasználó ÖSSZES tartalma — elemzés, gyakorlás, dal, setlist — egy listában
+él, típus-biztos részletnézettel, hatókört **nevesítő** törléssel és
+szinkron-ütközés-választóval. A kör **ADR-t nem írt** — a `0279` és a `0283`
+merge-elt és érvényes; a sávon ez a **tizenegyedik** ADR nélküli kör egymás
+után (E13-R17…R28).
+
+**A kör egy `H3` halt UTÁN zárult.** Az első futás kész kóddal, de a kapu 12.
+lépésén pirosan állt meg: három cross-feature sértés, amelyeknek a javítása a
+`lib/features/song_trainer/public.dart`-ban élt — a kör listáján KÍVÜL. A
+halt-jelzést az önjavító kör dolgozta fel (`8c48af55`, [L508](docs/LESSONS.md#l508)),
+a §0.0/**R5** revízió **egyetlen** fájllal, öt `show`-os szimbólumra szűkítve
+tágította az `allowed_paths`-t, és ez a folytató kör hajtotta végre a javítást.
+
+**Az új fa** (`lib/features/library_v2/`): sealed `LibraryItem` az öt
+tétel-változattal (`Analysis`, `Practice`, `Song`, `Setlist` + a
+`CorruptLibraryItem` placeholder), négy forrás-adapter — mindegyik a **meglévő**
+repositoryt csomagolja, új tárolót egyik sem nyit (§5.4) —, a négy forrást
+összefésülő `libraryV2ItemsProvider`, valamint a lista, a típus-biztos
+részletnézet, a törlés-felület és a szinkron-ütközés választója.
+
+**Routing:** a `AppRoutes.profileLibrary` builder a `UnifiedLibraryScreen`-re
+áll át, és új `AppRoutes.profileLibrarySession` route kerül be
+(`state.extra is LibraryItem` redirekttel a hiányzó/rossz extra esetére). A
+**legacy** `/library` (`app_router.dart:264–265`) és `librarySession`
+(`:305–313`) buildere **szó szerint érintetlen** — a V1 fa a rollback-útvonal
+miatt sértetlenül fut (ADR 0220).
+
+**A zöld kapu — az orchestrátor SAJÁT, izolált futása:** `tools/round-gate.sh`
+a brief §7 szerinti 13 útvonalon → **18/18 ZÖLD**, kilépési kód `0`, **139**
+teszt. `check_architecture` **3 → 0** sértés. Exact-SHA CI a merge SHA-n
+(`e4c51d95`): **Full Gate** ✅ + **Router CI** ✅.
+
+**Falszifikálva, nem bemondva:** a barrel-import visszaírása a belső útvonalra a
+checkert kilépési kód `1`-gyel, pontosan a várt sértéssel pirosra váltja — a
+zöld tehát a javításból jön, nem a mérce elnémulásából. Gépileg igazolt, hogy a
+kör **nem** nyúlt a `tool/check_architecture.dart`-hoz (nincs új, ADR-t igénylő
+allowlist-bejegyzés), a `test/core/architecture_dependency_test.dart`-hoz és a
+`tool/ui_inventory.dart`-hoz, és a review `C` ágaként ELVETETT kerülőút (a
+wiring `lib/app/routing/`-ba költöztetése, ahol a `lib/app/**` mentesül a
+határszabály alól) sem valósult meg.
+
+**Scope:** 38 fájl, mind az `allowed_paths` alatt. A szűk mandátumú fájlok
+tételesen igazolva: `ui_inventory_test.dart` PONTOSAN a `hasLength(89) → (91)`
+emelés; a `test/app/navigation/` **két** típus-pin cellája (§0.0/R3); a
+`song_trainer/public.dart` három **additív** export-sora. Cella törlése,
+`skip`-je vagy gyengítése: **nincs**. A `lib/l10n/app_*.arb` aggregátum
+bitre reprodukálódik a `base/` szegmensből (`gen_l10n_segments.dart --write`
+után 0 módosított fájl), tehát valóban generált.
+
+**Új tanulság:** [L509](docs/LESSONS.md#l509) — a halt utáni upstream-szinkron
+brief-konfliktusa NEM „tartsd meg a `main` verzióját": az önjavító kör
+(`§0.0/R5`) és a kör saját ág-oldali artefaktumai (`§0.0/B`, `§10`, `§11`)
+**diszjunkt** szakaszok, a feloldás **unió**. A §0.3 kifutásának szó szerinti
+követése a kör pre-flightját, handoffját és első review-ját dobta volna el.
+
+**Review:** [`docs/reviews/e13-r28-review.md`](docs/reviews/e13-r28-review.md) — **APPROVED**, 0 nyitott lelet.
+
+**Következő kör:** `E13-R29` — Coach, Tutor és Debrief (`docs/rounds/e13-r29-coach-tutor-and-debrief.md`, ADR `0287`), új sessionben.
+
 ## 🔧 E13-R28 ÖNJAVÍTÓ KÖR (H3) — a `song_trainer` gyökér-barrel a kör listájára került (2026-08-27)
 
 A kör kész volt, a lokális kapu **12-ből 11 lépésen zöld**, és a
