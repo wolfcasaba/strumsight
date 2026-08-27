@@ -260,74 +260,77 @@ class _ChallengeRow extends ConsumerWidget {
   void _showActions(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       builder: (sheetContext) => CommunityThemeScope(
         child: SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Consumer(
-                builder: (context, ref, _) =>
-                    _MyResultSection(challengeId: challenge.id, ref: ref),
-              ),
-              ListTile(
-                leading: const Icon(Icons.check),
-                title: Text(
-                  AppLocalizations.of(sheetContext).communityChallengeAccept,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Consumer(
+                  builder: (context, ref, _) =>
+                      _MyResultSection(challengeId: challenge.id, ref: ref),
                 ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onAccept(challenge.id.value);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: Text(
-                  AppLocalizations.of(sheetContext).communityChallengeDecline,
+                ListTile(
+                  leading: const Icon(Icons.check),
+                  title: Text(
+                    AppLocalizations.of(sheetContext).communityChallengeAccept,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onAccept(challenge.id.value);
+                  },
                 ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onDecline(challenge.id.value);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.cancel_outlined),
-                title: Text(
-                  AppLocalizations.of(sheetContext).communityChallengeCancel,
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: Text(
+                    AppLocalizations.of(sheetContext).communityChallengeDecline,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onDecline(challenge.id.value);
+                  },
                 ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  // The cancel path requires a target — the
-                  // list row knows the challenge id but not the
-                  // invitee. The wire shape includes the
-                  // invitee on the per-row envelope (the
-                  // controller's invite flow), so this branch
-                  // surfaces the action with the row's
-                  // author_id as a placeholder for the wire.
-                  onCancel(challenge.id.value, challenge.authorId);
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                key: const Key('challenge-action-block-author'),
-                leading: const Icon(Icons.block_outlined),
-                title: Text(
-                  AppLocalizations.of(
-                    sheetContext,
-                  ).communityChallengeActionBlockAuthor,
+                ListTile(
+                  leading: const Icon(Icons.cancel_outlined),
+                  title: Text(
+                    AppLocalizations.of(sheetContext).communityChallengeCancel,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    // The cancel path requires a target — the
+                    // list row knows the challenge id but not the
+                    // invitee. The wire shape includes the
+                    // invitee on the per-row envelope (the
+                    // controller's invite flow), so this branch
+                    // surfaces the action with the row's
+                    // author_id as a placeholder for the wire.
+                    onCancel(challenge.id.value, challenge.authorId);
+                  },
                 ),
-                onTap: () => _blockOrMuteAuthor(sheetContext, block: true),
-              ),
-              ListTile(
-                key: const Key('challenge-action-mute-author'),
-                leading: const Icon(Icons.volume_off_outlined),
-                title: Text(
-                  AppLocalizations.of(
-                    sheetContext,
-                  ).communityChallengeActionMuteAuthor,
+                const Divider(height: 1),
+                ListTile(
+                  key: const Key('challenge-action-block-author'),
+                  leading: const Icon(Icons.block_outlined),
+                  title: Text(
+                    AppLocalizations.of(
+                      sheetContext,
+                    ).communityChallengeActionBlockAuthor,
+                  ),
+                  onTap: () => _blockOrMuteAuthor(sheetContext, block: true),
                 ),
-                onTap: () => _blockOrMuteAuthor(sheetContext, block: false),
-              ),
-            ],
+                ListTile(
+                  key: const Key('challenge-action-mute-author'),
+                  leading: const Icon(Icons.volume_off_outlined),
+                  title: Text(
+                    AppLocalizations.of(
+                      sheetContext,
+                    ).communityChallengeActionMuteAuthor,
+                  ),
+                  onTap: () => _blockOrMuteAuthor(sheetContext, block: false),
+                ),
+              ],
+            ),
           ),
         ),
       ),
