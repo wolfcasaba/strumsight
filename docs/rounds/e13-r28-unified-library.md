@@ -734,53 +734,34 @@ csere egy MÁR teljesen exportáló `public.dart`-ra — `audio_analysis/public.
   a `PracticeHistoryRepository`/`PracticeHistoryEntry` nevek KIÍRÁSA nélkül
   is helyesen fordul (nincs `dynamic`, az `flutter analyze` 0 hibával fut).
 
-**3 sértés MARADT, egyetlen közös okra vezethető vissza, és a kör
-engedélyezett fájllistáján (§4) KÍVÜL eső javítást igényel:**
+**A 3 sértés FELOLDVA egy önjavító (HEAL) körben, `8c48af55` (H3,
+`docs/LESSONS.md` L508), majd ebbe a folytató körbe merge-elve (`1f9094ad`).**
+A §0.0/R5 revíziója az `allowed_paths`-ra vette fel a
+`lib/features/song_trainer/public.dart` fájlt, PONTOSAN egy fájlt, és ebben a
+mostani munkamenetben a §2.1–2.2 szerinti tényleges javítás megtörtént:
 
-```
-lib/features/library_v2/data/setlist_item_source.dart -> lib/features/song_trainer/domain/repositories/setlist_repository.dart
-lib/features/library_v2/data/song_item_source.dart -> lib/features/song_trainer/domain/repositories/song_repository.dart
-lib/features/library_v2/providers/library_v2_providers.dart -> lib/features/song_trainer/application/song_trainer_providers.dart
-```
+- `lib/features/song_trainer/public.dart` — tisztán additív, három export-sor
+  a meglévő két screen-export mellé (`show`-val szűkítve öt szimbólumra):
+  `SongQuery`/`SongRepository` (`domain/repositories/song_repository.dart`),
+  `SetlistRepository` (`domain/repositories/setlist_repository.dart`),
+  `setlistRepositoryProvider`/`songRepositoryProvider`
+  (`application/song_trainer_providers.dart`).
+- `lib/features/library_v2/data/song_item_source.dart`,
+  `setlist_item_source.dart`, `lib/features/library_v2/providers/library_v2_providers.dart`
+  — mindhárom a `song_trainer` belső fájlja helyett a
+  `../../song_trainer/public.dart` gyökér-barrelt importálja (tisztán
+  import-útvonal csere, viselkedés-változás nélkül).
 
-**Ok:** sem a `lib/features/song_trainer/public.dart` (csak 2 screen exportja
-van), sem a `lib/features/song_trainer/domain/public.dart` (csak
-modell/service exportok, `tool/check_architecture.dart` `_isFeaturePublicBarrel`
-szerint egyébként ÉRVÉNYES célpont lenne) nem exportálja a `SongRepository`,
-`SongQuery`, `SetlistRepository` típusokat vagy a `songRepositoryProvider`/
-`setlistRepositoryProvider` providereket. A `practice`-nél alkalmazott
-closure-trükk itt NEM zárja le a rést: a `songRepositoryProvider`/
-`setlistRepositoryProvider` SZIMBÓLUM maga csak a nem-public
-`song_trainer_providers.dart`-ban él, ezt semmilyen típusinferencia nem
-váltja ki — a szimbólum eléréséhez elkerülhetetlen egy nem-`public.dart`
-import valahol.
+**Mért eredmény:** `dart run tool/check_architecture.dart` →
+`Architecture dependencies OK (12 allowlisted deviation(s)).` — **0 sértés**
+(a korábbi 3-ról). A `test/core/architecture_dependency_test.dart` a kör
+gate-jén **ZÖLD**, a `song_trainer` egyetlen más fájlja nem módosult.
 
-**Miért nem oldható fel ebben a körben:** a javítás
-`lib/features/song_trainer/public.dart` és/vagy `domain/public.dart`
-bővítését igényelné — ez a §4 tiltott zónájában van
-(`lib/features/** a library_v2/ KIVÉTELÉVEL`). Az allowlist-bejegyzés
-alternatívája ADR-t igényelne (`tool/check_architecture.dart`: "adding an
-allowlist entry requires justification and an ADR"), az ADR-írás pedig a
-§B6 szerint **szintén tiltott** ebben a körben (`docs/adr/**` tiltott zóna).
+### Follow-up — LEZÁRVA
 
-**Funkcionális hatás: NULLA.** Az összes gate-tesztfájl (`item_routing_test.dart`,
-`corrupt_item_test.dart`, `delete_confirmation_test.dart`,
-`sync_conflict_test.dart`, `library/`, `app/navigation/`,
-`app/routing/app_router_test.dart`, a golden teszt, `ui_inventory_test.dart`)
-**ZÖLD** — ezek `libraryV2SourcesProvider.overrideWithValue([...])`-vel fake
-adatot injektálnak, a valódi `SongItemSource`/`SetlistItemSource` production
-wiring-ot egyik gate-teszt sem futtatja át. A maradék 3 sértés kizárólag a
-`tool/check_architecture.dart` statikus import-ellenőrzését érinti.
-
-### Nevesített follow-up
-
-Egy KÖVETKEZŐ körnek (song_trainer hatókörrel, tehát nem E13) exportálnia
-kell a `SongRepository`, `SongQuery`, `SetlistRepository` típusokat és a
-`songRepositoryProvider`/`setlistRepositoryProvider` providereket a
-`lib/features/song_trainer/public.dart`-ból (vagy a `domain/public.dart`-ból,
-ha a domain-only export elég), hogy a `library_v2/data/song_item_source.dart`
-és `setlist_item_source.dart` átválthasson a `public.dart`-ra — ezzel az
-architektúra-kapu 14/14 sértése lezárható lenne.
+A 10. szakasz korábbi verziójában nevesített follow-up (a `song_trainer`
+barrel bővítése a `SongRepository`/`SetlistRepository`/providerek exportjával)
+ebben a körben megtörtént — nincs nyitott tétel.
 
 ## 11. Review — a Claude tölti ki
 
