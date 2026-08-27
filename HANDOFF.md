@@ -1,5 +1,56 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R31 KÉSZ — Progress Dashboard és Skill Detail UI — PR [#476](https://github.com/wolfcasaba/strumsight/pull/476), squash `0965188f` (2026-08-27)
+
+Az UI-49–UI-50 **bizonyíték-alapú fejlődési felülete** új
+`lib/features/progress_v2/` fán (SDD Ch13 Kör 31). A kör **ADR-t nem írt** — a
+kiosztott `0289` 2026-08-15 óta merge-elt (`5b32bd8e`); a sávon a
+**tizennegyedik** ADR nélküli kör egymás után (E13-R17…R31). Implementer
+`sonnet-impl` (Claude Sonnet 5, `--effort high`), orchesztrátor/reviewer Claude
+Opus 5, **1 javító kör** (`docs/reviews/e13-r31-review.md`: első forduló
+0 BLOCKER / **1 MAJOR** / 3 MINOR / 2 NOTE → a javító kör után APPROVED,
+0 nyitott lelet).
+
+**A MAJOR-t a teljes CI-suite ZÖLDEN átengedte.** A mérce-verzió előzmény
+szegmenseit a képernyő a `catalogVersion` ÉRTÉKÉVEL kulcsolta, miközben a kör
+SAJÁT `segmentByCatalogVersion` függvénye kimondottan támogatja és teszttel
+bizonyítja a visszatérő verziót (`[1, 2, 1]` → 3 szegmens, „never re-merges").
+Két azonos verziójú szegmens így két azonos kulcsú testvér ugyanabban a
+`Column`-ban → `FlutterError: Duplicate keys found`, azaz a felület
+**összeomlik a szerződés szerinti bemeneten**. A Full Gate a javítás előtti
+SHA-n (`2903f248`) `success` volt
+([run 33053175578](https://github.com/wolfcasaba/strumsight/actions/runs/33053175578));
+a leletet egy eldobható reviewer-próbateszt mérte ki, mert a meglévő cella
+kizárólag `[1, 2]`-t pumpált. A javítás (pozícióval egyedi kulcs) **valódi-
+sértés próbával** igazolt: a régi kulccsal az ÚJ `[1,2,1]`-rendering cella
+pirosra vált a pontos eredeti hibaüzenettel — [L514](docs/LESSONS.md#l514).
+
+**A pre-flight §1.1/1. szabálya megtérült (§0.0.B/B3).** A brief §6.1 trend-
+küszöbe **5**, a fán mért `minimumSessionsForTrend` viszont **3**
+(`audio_analysis/engine/comparison/trend_builder.dart:9`). A kettő MÁS felület
+mércéje: az 5 forrása a merge-elt ADR 0289 §4, ezért a `progress_v2` saját
+nevesített konstansként hordozza, a `TrendBuilder`-t nem importálja. A §6.1
+„alatta" cellája ezért **pontosan 3 adatpont** — falszifikációs őr arra a
+hibás implementációra, amelyik a szomszéd konstanst venné át.
+
+**A `scope_audit=VIOLATION` hamis pozitív volt, és orchestrátor-hiba.** A
+jelzett egyetlen sértés az **általam** a munkapéldány gyökerébe írt
+implementer-prompt (`.pipeline-prompt-e13-r31.md`) volt — untracked, sosem
+commitolva, `implementer_status=done` mellett. A fájl kivétele után a kézi
+audit `ok` (24 útvonal, 1 generated/ignored = a review-jelentés) —
+[L515](docs/LESSONS.md#l515).
+
+**A `risk = "high"` biztonsági mérés: 0 lelet.** A `progress_v2` fa nem
+tartalmaz hálózati hívást, tartós tárolást, plugin- vagy falióra-olvasást
+(caller-fed projekció, ADR 0378 §1 precedense); cross-feature import kizárólag
+`public.dart` barrelen át.
+
+Exact-SHA evidencia a merge SHA-n (`0b70481e`): Full Gate
+[33056100194](https://github.com/wolfcasaba/strumsight/actions/runs/33056100194)
+`success` + Router CI
+[33056172766](https://github.com/wolfcasaba/strumsight/actions/runs/33056172766)
+`success`.
+
 ## ✅ E13-R30 KÉSZ — Vision Setup, Coach Stage és Result UI — PR [#475](https://github.com/wolfcasaba/strumsight/pull/475), squash `d25c6932` (2026-08-27)
 
 Az UI-45–UI-47 **kamera-, kalibrációs, élő-jelzés és eredmény-felülete**
@@ -8087,7 +8138,23 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-27):** `main` @ `7dd21a64` — E13-R29 Coach Home,
+**Aktuális állapot (2026-08-27):** `main` @ `0965188f` — E13-R31 Progress
+Dashboard és Skill Detail UI, PR
+[#476](https://github.com/wolfcasaba/strumsight/pull/476), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — az első forduló
+review-ja 1 MAJOR-t talált (a mérce-verzió előzmény `Duplicate keys found`-dal
+dobált egy `[1,2,1]` verzió-sorozaton, amit a teljes CI-suite ZÖLDEN
+átengedett), a javító kör után APPROVED, 0 nyitott lelet
+(`docs/reviews/e13-r31-review.md`). A kör **ADR-t nem írt** — a kiosztott
+`0289` 2026-08-15 óta merge-elt (**tizennegyedik** ADR nélküli kör a sávon).
+Exact-SHA evidencia a merge SHA-n (`0b70481e`): Full Gate
+[33056100194](https://github.com/wolfcasaba/strumsight/actions/runs/33056100194)
+`success` + Router CI
+[33056172766](https://github.com/wolfcasaba/strumsight/actions/runs/33056172766)
+`success`.
+
+**Korábbi: `main` @ `7dd21a64`** — E13-R29 Coach Home,
 Tutor és Debrief UI, PR
 [#474](https://github.com/wolfcasaba/strumsight/pull/474), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -8986,7 +9053,21 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E13-R29 — Coach Home, Tutor és Debrief UI** (PR
+**E13-R31 — Progress Dashboard és Skill Detail UI** (PR
+[#476](https://github.com/wolfcasaba/strumsight/pull/476), squash `0965188f`).
+Az UI-49–UI-50 bizonyíték-alapú fejlődési felülete új
+`lib/features/progress_v2/` fán: az elsajátítottság mért teljesítményből jön
+(nem XP-ből), minden állítás mögött megnyitható session-hivatkozás áll, a
+hiányzó adat nem nulla, a trendhez 5 adatpont kell (inkluzív, saját konstans —
+NEM az `audio_analysis` 3-asa), a mérce-verzió váltás szegmensekben látszik, és
+az ajánlás tiszteletben tartja az előfeltételeket. **1 javító kör**, 1 MAJOR
+javítva. A `risk = "high"` biztonsági mérés: 0 lelet. Két lecke:
+[L514](docs/LESSONS.md#l514) (a teljes CI-suite átengedett egy összeomlást, mert
+a cella csak a triviális bemenetet pumpálta), [L515](docs/LESSONS.md#l515) (az
+orchestrátor-prompt a munkapéldány fáján belül hamis `scope_audit=VIOLATION`-t
+és hamis `stopped` jelzést okoz).
+
+**Korábbi: E13-R29 — Coach Home, Tutor és Debrief UI** (PR
 [#474](https://github.com/wolfcasaba/strumsight/pull/474), squash `7dd21a64`).
 Az UI-42–UI-44 provenance-tudatos AI-coaching felülete: az AI-mód képernyő- ÉS
 üzenet-szinten látható, minden `TutorAction` az `SsToolConfirmationSheet` mögé

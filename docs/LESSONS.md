@@ -20007,3 +20007,99 @@ kísértés, hogy a fagyást „a takarítás nem fut le" hibaként diagnosztiz�
 `_runRealAndSettle` segédjén át hívja az elengedést, és a segéd
 doc-commentje rögzíti a mért okot; a cellák a guard-mount eltávolítására
 pirosra váltanak (E13-R30 review §3, mutáció-ölő próba).
+
+## L514 — A teljes CI-suite ZÖLDEN átenged egy összeomlást, ha a cella csak a TRIVIÁLIS bemenetet pumpálja, miközben a kör SAJÁT domain-tesztje a nem-triviálisat már bizonyítja (E13-R31, 2026-08-27)
+
+**Mit mértünk.** Az E13-R31 mérce-verzió előzményét két teszt fedte, ugyanabban
+a fájlban (`test/features/progress_v2/metric_migration_test.dart`):
+
+- egy **pure-függvény** cella, ami kimondottan a visszatérő verziót bizonyítja:
+  *„a version reappearing later starts a NEW segment, never re-merges"* →
+  `[1, 2, 1]`, 3 szegmens;
+- egy **widget** cella, ami a szekciót rendereli — de kizárólag `[1, 2]`-vel.
+
+A képernyő a szegmenseket a `catalogVersion` **értékével** kulcsolta
+(`ValueKey('progress-metric-segment-${segment.catalogVersion}')`). Két azonos
+verziójú szegmens tehát két azonos kulcsú testvér ugyanabban a `Column`-ban, és
+a Flutter ezt hibának tekinti:
+
+```
+FlutterError: Duplicate keys found.
+  If multiple keyed widgets exist as children of another widget, they must have unique keys.
+  Column(direction: vertical, …, crossAxisAlignment: stretch) has multiple
+  children with key [<'progress-metric-segment-1'>].
+```
+
+A felület tehát **összeomlik a saját szerződése szerinti bemeneten** — és ezt
+a **teljes CI-suite ZÖLDEN átengedte**: a Full Gate a javítás előtti SHA-n
+(`2903f248`) `success` volt
+([run 33053175578](https://github.com/wolfcasaba/strumsight/actions/runs/33053175578)),
+a lokális 15-lépéses kapu szintén. A leletet egy **eldobható
+reviewer-próbateszt** fogta meg, ami a pure-cella bemenetét egyszerűen
+BEPUMPÁLTA a widgetbe.
+
+**Miért csúszott át.** A két cella ugyanazt a fogalmat méri KÉT különböző
+absztrakciós szinten, és a hézag pont a kettő között van: a domain szint
+bizonyítja, hogy `[1,2,1]` előáll, a presentation szint viszont sosem látja.
+Egyik cella sem hibás önmagában; a lefedettségi ábra tökéletes. A hiba a
+**bemenet-átvitel** hiánya — az, hogy a domain által bizonyítottan előálló
+legnehezebb bemenet nem jut el a felületig.
+
+**A szabály.** Ha egy pure függvény cellája egy NEM-triviális kimenetet
+bizonyít (visszatérő érték, üres halmaz, határeset), akkor UGYANAZT a bemenetet
+egy **renderelő** cellának is meg kell kapnia. A „a domain már méri" nem
+mentesít: a domain a listát adja, a felület a kulcsokat.
+
+**Őrteszt:** `test/features/progress_v2/metric_migration_test.dart::A5 — a
+version change renders as a visibly separate section > a version reappearing
+later (v1, v2, v1) renders as THREE distinct segments, not a Duplicate keys
+crash` — valódi-sértés próbával igazolva: a javítás előtti kulccsal a cella
+pirosra vált a fenti pontos hibaüzenettel.
+
+## L515 — Az orchestrátor-prompt a MUNKAPÉLDÁNY FÁJÁN BELÜL hamis `scope_audit=VIOLATION`-t és hamis `stopped` jelzést okoz — a `done` implementert így „scope-sértőnek" látjuk (E13-R31, 2026-08-27)
+
+**Mit mértünk.** Az E13-R31 implementere befejezte a munkáját és
+`implementer_status=done`-t jelzett. A wrapper záró jelzése mégis ez lett:
+
+```
+status=stopped
+summary=scope-sértés: a diff kilógott a brief engedélyezett fájljaiból
+implementer_status=done
+scope_audit=VIOLATION
+scope_audit_changed=24
+scope_audit_violations=path outside allowed scope: .pipeline-prompt-e13-r31.md
+```
+
+A sértő fájl az **orchestrátor SAJÁT implementer-promptja** volt, amit a
+munkapéldány gyökerébe írtam (`<munkapéldány>/.pipeline-prompt-e13-r31.md`).
+Sosem volt commitolva (`?? ` untracked), és nem az implementer hozta létre — a
+gépi audit viszont a fa MINDEN változott útvonalát nézi, nem csak a
+commitoltakat, tehát helyesen jelezte.
+
+**Miért veszélyes.** A `stopped` jelzés a §0.2 létrán **döntést-kérő állapot**,
+és a `scope_audit=VIOLATION` az ADR 0138 §1 táblázata szerint „a listán kívüli
+fájlokat vissza kell állítani, **vagy H3 halt**". Egy gyorsan olvasó
+orchestrátor (vagy egy folytató session) itt H3-at jelenthetne — pontosan az a
+hibaosztály, mint a `docs/reviews/**` saját-jelentés hamis H3-a
+([L251](#l251), E99-R08) és az E99-R19/H3. Egy teljes, kész kör dőlne el egy
+olyan fájl miatt, amit maga az orchestrátor tett oda.
+
+**A szabály.** Az implementer-prompt (és minden orchestrátor-artefaktum) a
+**fő fa `.pipeline/` könyvtárába** megy — SOHA nem a munkapéldány fájába. A
+dispatch a prompt abszolút útvonalát kapja, a wrapper nem követeli meg, hogy a
+repón belül legyen:
+
+```bash
+setsid <munkapéldány>/tools/mm-round.sh <munkapéldány> \
+  /home/ubuntu/music-theory/.pipeline/impl-prompt-<KÖR>.md /tmp/mm-<kör>.log
+```
+
+Ha a jelzés mégis `VIOLATION`-t ad, a `scope_audit_violations` sort **el kell
+olvasni**, mielőtt bárki haltot jelent: ha a felsorolt útvonal a saját
+artefaktumod, a helyes lépés a fájl kivétele és a `tools/scope-audit.py` kézi
+újrafuttatása — nem H3.
+
+**Őrteszt:** nincs — a hibát az orchestrátor dispatch-lépése okozza, nem a
+repóban élő kód; a védelem a fenti, workflow-szövegbe ágyazott útvonal-szabály
+(ugyanaz a mintázat, mint a `prepare-flutter-generated.sh` hívási alakjánál,
+[L232](#l232)).
