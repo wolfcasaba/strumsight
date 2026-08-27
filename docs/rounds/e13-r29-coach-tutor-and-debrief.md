@@ -622,6 +622,20 @@ ugyanezt). Bármelyik `Ss*` komponens, amit a három célképernyő ÁLLANDÓ
 .extension<SsColorScheme>()!` null-check hibával elszállt volna a pinnelt
 teszteken (MÉRVE, dev-futás).
 
+**Egy MÁSODIK, ugyanebből az osztályból eredő korlát a `tools/round-gate.sh`
+futtatásakor jött elő (nem a fenti, hanem a `TutorHomeScreen` Riverpod-
+függése miatt):** a `test/app/navigation/adaptive_scaffold_test.dart`
+(szintén pinnelt, listán kívüli) a `TutorHomeScreen`-t az öt shell-cél egyikeként
+rendereli `tutorChatControllerProvider`/`tutorOrchestratorProvider`
+felülírás NÉLKÜL — a `TutorHomeScreen` ConsumerWidget-té alakítása így egy
+`ProviderException`-t dobott (`tutorOrchestratorProvider` szándékosan nem
+default). Feloldás: a `TutorHomeScreen` visszaállt `StatelessWidget`-re, és
+NEM olvas semmilyen tanár-providert — a kártya feltétel nélkül `local`
+módot mond (ez ma amúgy is az egyetlen igaz válasz: a production kizárólag
+`LocalTutorModelGatewayStub`-ot huzalozza, lásd `tutor_providers.dart`), a
+dinamikus helyi/felhő/tartalék/offline árnyalat a Chat képernyőn él, ahol
+már van valódi kör, amit leírjon.
+
 **Feloldás:** a három képernyő állandó fája `Theme`-tokenekből épített saját
 widgetekkel (`_ModelStatusCard`/`_ModeChip`, `_AiModeIndicator`) adja az
 AI-mód jelzést — nem `SsProvenanceBadge`/`SsModelStatusCard`-dal, azok
