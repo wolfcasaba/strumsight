@@ -264,6 +264,44 @@ void main() {
           ),
           findsNothing,
         );
+
+        // Javító kör 2, F7: the checks above only cover the
+        // `modelManagerBlockedIntegrity` key area — but the status card
+        // ABOVE it (`SsModelStatusCard`) takes its own `action:` slot, and
+        // `SsCardActionRegion` wraps a single action in an `InkWell` around
+        // the WHOLE card (ss_content_card.dart). A single `SsCardAction`
+        // added there would turn the entire status card into a working
+        // "activate anyway" tap target while sailing past the scoped checks
+        // above. There is no legitimate activation control anywhere on this
+        // screen while blocked (the Check action stays button-free on this
+        // phase too — see `_ActionArea`), so the guard now measures the
+        // WHOLE screen body, not just the named sub-area.
+        final screenArea = find.byType(ModelManagerScreen);
+        expect(
+          find.descendant(
+            of: screenArea,
+            matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+          ),
+          findsNothing,
+          reason:
+              'no activation affordance anywhere on screen while unverified '
+              '— not just inside the named blocked-integrity area',
+        );
+        expect(
+          find.descendant(of: screenArea, matching: find.byType(InkWell)),
+          findsNothing,
+          reason:
+              'a single SsCardAction on SsModelStatusCard would wrap the '
+              'ENTIRE status card in an InkWell (SsCardActionRegion, one-'
+              'action case) — that must not exist in this phase either',
+        );
+        expect(
+          find.descendant(
+            of: screenArea,
+            matching: find.byType(GestureDetector),
+          ),
+          findsNothing,
+        );
       },
     );
 

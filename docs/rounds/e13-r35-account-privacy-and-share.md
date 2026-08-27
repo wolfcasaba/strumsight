@@ -904,4 +904,48 @@ változott ténylegesen: `e13_r35_privacy_center_compact.png`,
 (a `privacy_center_compact_scale2` és a `login`/`settings`/`model_manager`
 mind a 4 kerete pixel-azonos maradt — ezeket a kör nem érintette).
 
+## 10.2 Javító kör 2 (2026-08-27, `sonnet-impl`) — F7: az A6 őrcella szélesítése a teljes képernyőre
+
+**A lelet:** az F1-javítás (§10.1) a `modelManagerBlockedIntegrity` kulcsú
+terület ALÁ scope-olta a `ButtonStyleButton`/`InkWell`/`GestureDetector`
+tiltást. Egy sorral feljebb viszont ott a `SsModelStatusCard`, aminek van
+`action:` slotja, és `SsCardActionRegion` (`ss_content_card.dart:47–48`) EGY
+akció esetén az EGÉSZ kártyát egyetlen `InkWell`-be csomagolja — vagyis egy
+oda tett `SsCardAction` a teljes státuszkártyát működő aktiváló gombbá
+tenné, a blockedArea-ra scope-olt cella mellett észrevétlenül.
+
+**A javítás:** `test/features/settings/model_integrity_test.dart` „below
+threshold" cellája most a `blockedArea`-ra scope-olt három assert MELLETT
+egy MÁSODIK, `find.byType(ModelManagerScreen)`-re (a teljes képernyő-törzs)
+scope-olt hármas ellenőrzést is futtat ugyanarra a három típusra
+(`ButtonStyleButton`, `InkWell`, `GestureDetector`). Produkciós kód NEM
+változott — a `blockedIntegrity` fázisban ma sehol nincs aktiváló
+affordancia, tehát a szigorítás nem hamis-pozitív.
+
+**A kötelező MÁSODIK valódi-sértés próba, TÉNYLEGESEN lefuttatva:**
+`model_manager_screen.dart`-ban a `SsModelStatusCard`-hoz ideiglenesen
+hozzáadva `action: SsCardAction(label: 'Activate anyway', onPressed: () {})`,
+majd `flutter test test/features/settings/model_integrity_test.dart`:
+
+```
+00:01 +9 -1: … below threshold: NO activation control is rendered at all — not disabled, absent [E]
+  Expected: no matching candidates
+  Actual: _DescendantWidgetFinder:<Found 1 widget with type "InkWell" descending
+  from widget with type "ModelManagerScreen": [ InkWell, ]>
+a single SsCardAction on SsModelStatusCard would wrap the ENTIRE status card in an InkWell
+(SsCardActionRegion, one-action case) — that must not exist in this phase either
+```
+
+A cella PIROSRA váltott, ahogy a §6.1 előírja. A gate visszaállítva
+(`git diff lib/features/offline_ai/screens/model_manager_screen.dart` üres a
+bypass törlése után), a teszt újrafuttatva: **12/12 zöld** — a
+`blockedIntegrity` fázisban ma egyik ellenőrzött típusból sincs egy sem
+sehol a képernyőn, sem a blockedArea-n belül, sem azon kívül.
+
+**A §7 teljes gate** (`tools/round-gate.sh`, a kör záró parancsában felsorolt
+24 célteszt-útvonallal, egy sorban, csonkítás nélkül) `format` → `analyze` →
+24 célteszt (külön lépésenként) → `architecture` → `secrets` → `l10n`:
+**29/29 lépés ZÖLD**. Produkciós kód nem változott, ezért golden-felvétel nem
+szükséges.
+
 ## 11. Review — a Claude tölti ki
