@@ -38,7 +38,6 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -226,7 +225,7 @@ final class _ExcludedCell {
 /// `light` and `dark` (the theme does not affect layout width). Measured
 /// 2026-08-27 on this box via a direct run of this file
 /// (`flutter test test/ui/goldens/e13_r36_variant_matrix_test.dart
-/// --plain-name "live|<theme>|<locale>|landscape|2.0"`); mirrored in
+/// --plain-name "live|THEME|LOCALE|landscape|2.0"`); mirrored in
 /// `docs/ui/legacy-backlog.md`. `lib/**` is this round's tilos zona (brief
 /// §4), so the fix (wrap the Row's children in `Expanded`, or let the strip
 /// scroll) is left to a future round.
