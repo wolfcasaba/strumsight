@@ -1,5 +1,33 @@
 # HANDOFF — StrumSight 🎸
 
+## 🔧 E13-R28 ÖNJAVÍTÓ KÖR (H3) — a `song_trainer` gyökér-barrel a kör listájára került (2026-08-27)
+
+A kör kész volt, a lokális kapu **12-ből 11 lépésen zöld**, és a
+`test/core/architecture_dependency_test.dart` pontosan **három** sértéssel állt
+meg: `library_v2` → `song_trainer` belső fájlok (`domain/repositories/**` ×2,
+`application/song_trainer_providers.dart`). Reprodukálva a kör munkapéldányán
+(`dart run tool/check_architecture.dart`, HEAD `090990f2`).
+
+**Nem implementer-hiba: a lista hiánya.** A §3 scope kimondja, hogy az egységes
+könyvtár a dal- és setlist-tételtípust is listázza, a
+`lib/features/song_trainer/public.dart` viszont ma kizárólag két képernyőt
+exportál — a kör a saját listáján belül maradva egyetlen határ-legális importot
+sem tudott volna leírni. A nested `domain/public.dart` nem oldja fel (nincs
+rajta `domain/repositories/**`), a wiring `lib/app/routing/`-ba költöztetése
+pedig a szabály megkerülése lett volna, ezért elvetve.
+
+**A javítás:** §0.0/**R5** brief-revízió — az `allowed_paths` **egyetlen** új
+fájllal bővült (`lib/features/song_trainer/public.dart`), a jogosultság a
+§0.0/R5-ben `show`-klauzulával öt szimbólumra szűkítve. A `song_trainer` minden
+más fájlja tiltott zóna marad.
+
+**MÉRVE (a kör munkapéldányán, a próbafolt utólag visszaállítva — a kódmunka a
+folytatódó köré):** `check_architecture` 3 → 0 sértés, `flutter analyze lib/`
+`No issues found!`, `flutter test test/core/architecture_dependency_test.dart`
+`+44`. Őrteszt: `tools/tests/test_e13_r28_song_trainer_public_barrel_scope.py`
+(a javítás előtt PIROS, utána zöld); `python3 -m pytest tools/tests -q` →
+**802 passed, 1 skipped**. Tanulság: [L508](docs/LESSONS.md#l508).
+
 ## ✅ E13-R27 KÉSZ — Analysis Overview, Timeline, Metric és Compare UI — PR [#471](https://github.com/wolfcasaba/strumsight/pull/471), squash `245a6ad3` (2026-08-27)
 
 Az UI-37–UI-39 Studio Analytics rendszere (SDD Ch13 Kör 27): **áttekintő**,

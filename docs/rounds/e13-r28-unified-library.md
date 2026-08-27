@@ -18,6 +18,7 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "lib/features/library_v2/",
+  "lib/features/song_trainer/public.dart",
   "lib/app/routing/",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
@@ -175,6 +176,67 @@ gyökeret.
 futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a kör
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
+
+### R5 — a `song_trainer` publikus barrel bővítése (H3 önjavító kör, ADR 0112, 2026-08-27)
+
+A kör **kész**, a kapu 12-ből 11 lépésen zöld volt, és a
+`test/core/architecture_dependency_test.dart` PONTOSAN három sértéssel állt meg.
+Reprodukálva az önjavító körben, a kör saját munkapéldányán
+(`/home/ubuntu/ss-sonnet-impl-e13-r28`, HEAD `090990f2`,
+`dart run tool/check_architecture.dart`):
+
+```
+- lib/features/library_v2/data/setlist_item_source.dart -> lib/features/song_trainer/domain/repositories/setlist_repository.dart [cross-feature imports must target public.dart]
+- lib/features/library_v2/data/song_item_source.dart -> lib/features/song_trainer/domain/repositories/song_repository.dart [cross-feature imports must target public.dart]
+- lib/features/library_v2/providers/library_v2_providers.dart -> lib/features/song_trainer/application/song_trainer_providers.dart [cross-feature imports must target public.dart]
+```
+
+**Ez nem implementer-hiba, hanem a lista hiánya.** A §3 scope kimondja, hogy az
+egységes könyvtár a **dal** és a **setlist** tételtípust is listázza; ehhez a
+`SongRepository` / `SetlistRepository` szerződés és a két provider kell. A
+`lib/features/song_trainer/public.dart` viszont ma **kizárólag két képernyőt**
+exportál, tehát a kör a saját listáján belül maradva **nem tudott volna** a
+határszabálynak megfelelő importot írni — a lista tágítása pedig H3
+([L478](../LESSONS.md)). Ugyanaz a hibaosztály, mint az R1: a kör az egyetlen
+használható forrásfájlt nem kapta meg.
+
+**A `domain/public.dart` nem oldja fel:** a nested barrel (ADR 0089/0176) a
+`domain/models/**`-ot és a `domain/services/**`-ot exportálja, a
+`domain/repositories/**`-ot nem, a provider-szimbólum pedig a nem-publikus
+`application/song_trainer_providers.dart`-ban él. A `lib/app/routing/`-ba
+költöztetett wiring (a `lib/app/**` nem esik a cross-feature szabály alá)
+**ELVETVE**: az a határszabály megkerülése volna.
+
+**MÉRVE az önjavító körben (2026-08-27, a kör munkapéldányán, a próbafolt
+utólag visszaállítva):** a barrel három export-sorával és a három import
+átkötésével
+
+- `dart run tool/check_architecture.dart` → `Architecture dependencies OK (12 allowlisted deviation(s))` (3 → 0 sértés);
+- `flutter analyze lib/` → `No issues found!` (a barrel screen-exportjai nem ütköznek);
+- `flutter test test/core/architecture_dependency_test.dart` → `+44 All tests passed`.
+
+**A jogosultság PONTOSAN ennyi** — egyetlen fájl, tisztán **additív**
+export-sorok, a meglévő két screen-export érintetlenül:
+
+```dart
+export 'domain/repositories/song_repository.dart' show SongQuery, SongRepository;
+export 'domain/repositories/setlist_repository.dart' show SetlistRepository;
+export 'application/song_trainer_providers.dart'
+    show setlistRepositoryProvider, songRepositoryProvider;
+```
+
+…majd a fenti három `library_v2` fájl importja `../../song_trainer/public.dart`-ra
+áll át. A `show`-klauzula kötelező: a barrel a feature belső felületét NEM
+nyithatja ki szélesebbre a ténylegesen szükséges öt szimbólumnál. A
+`song_trainer` **bármely más** fájljának módosítása továbbra is `stopped`, és a
+`lib/features/song_trainer/**` a tiltott zónában marad a `public.dart` egyetlen
+kivételével. A mintát a kör saját fája már követi:
+`lib/features/library_v2/data/analysis_item_source.dart` az `audio_analysis`
+gyökér-barrelen keresztül importál.
+
+**Őrteszt:** `tools/tests/test_e13_r28_song_trainer_public_barrel_scope.py`
+(a mért három halt-útvonal + a barrel scope-ban van; a `song_trainer` szomszédos
+belső fájljai NEM). [L508](../LESSONS.md).
 
 ## 0.0/B — KÖR-PRE-FLIGHT, 2026-08-27 (`main @ 768af6ec`, orchestrátor: Claude)
 
@@ -378,6 +440,7 @@ rollback-útvonal, §0.0/B1–B2) · a `AppRoutes.library` (`app_router.dart:261
 | Útvonal | Indok |
 |---|---|
 | `lib/features/library_v2/` | az egységes könyvtár — **ÚJ könyvtár, ezt a kör hozza létre** (§0.0/B1) |
+| `lib/features/song_trainer/public.dart` | **kizárólag** a §0.0/R5 öt szimbólumának `show`-os, additív exportja — a dal/setlist tételtípus cross-feature határa; a `song_trainer` minden más fájlja tiltott (§0.0/R5) |
 | `lib/app/routing/` | **kizárólag** a §0.0/B2 szerződése: a `AppRoutes.profileLibrary` builder átírása + a `AppRoutes.profileLibrarySession` route/konstans hozzáadása. A `:261` és `:302–310` builder módosítása **TILOS** |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a könyvtár-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
@@ -385,8 +448,10 @@ rollback-útvonal, §0.0/B1–B2) · a `AppRoutes.library` (`app_router.dart:261
 | `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör új `lib/features/**/*_screen.dart`-ot hozhat, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése, más állítás nem érinthető (§0.0/R4) |
 | `docs/rounds/e13-r28-…md` | a §10 handoff |
 
-**Tilos zóna:** `lib/features/**` a `library_v2/` KIVÉTELÉVEL (nevesítve:
-`lib/features/library/**` — a befagyasztott V1 fa) · `lib/core/design_system/**` ·
+**Tilos zóna:** `lib/features/**` a `library_v2/` és a
+`song_trainer/public.dart` KIVÉTELÉVEL (nevesítve:
+`lib/features/library/**` — a befagyasztott V1 fa; a `song_trainer` minden
+MÁS fájlja tiltott, §0.0/R5) · `lib/core/design_system/**` ·
 `lib/core/theme/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`.
 
 **Futtatott, de NEM szerkeszthető őrök** (a `gate_tests`-en vannak, az
@@ -512,7 +577,10 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 8. Implementációs sorrend
 
-1. Az egységes lista + típus-biztos route-olás.
+1. Az egységes lista + típus-biztos route-olás. A dal/setlist forrás a
+   `song_trainer` **gyökér-barrelén** keresztül kapcsolódik (§0.0/R5) — belső
+   fájlra mutató cross-feature import a `test/core/architecture_dependency_test.dart`-ot
+   pirosra váltja.
 2. A sérült tétel izolálása és az offline elérhetőség.
 3. A session részletnézete (metaadat, előnézet, jegyzet, export).
 4. A törlés-hatókör három cellája — use case hívással.
