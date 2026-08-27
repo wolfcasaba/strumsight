@@ -1673,6 +1673,65 @@
   "aiTutorPlanEditedSource": "Általad szerkesztve",
   "aiTutorPlanGeneratedSource": "Javasolt terv",
   "aiTutorPlanEmpty": "Nem maradt gyakorlási blokk.",
+  "aiTutorAiModeLocalMessage": "Teljesen ezen az eszközön fut.",
+  "aiTutorAiModeCloudMessage": "A felhő-modellt használja a részletesebb válaszokhoz.",
+  "aiTutorAiModeFallbackMessage": "A felhő nem elérhető — a helyi tartalék válaszol.",
+  "aiTutorHomeModelStatusTitle": "Tanár modell",
+  "aiTutorHomeModelUnavailableMessage": "A tanár modell nem érhető el. Böngészhetsz tovább, de a válaszok sikertelenek lehetnek.",
+  "aiTutorEvidenceMissingNotice": "Ehhez a válaszhoz még nincs mért bizonyíték.",
+  "aiTutorToolDimensionReads": "Olvas",
+  "aiTutorToolDimensionWrites": "Ír",
+  "aiTutorToolDimensionLeavesDevice": "Elhagyja az eszközt",
+  "aiTutorToolDimensionRecording": "Felvételt indít",
+  "aiTutorToolDimensionNothing": "Semmit",
+  "aiTutorActionReview": "Áttekintés",
+  "aiTutorActionSheetSummary": "A tanár ezt szeretné: {kind}. Nézd át pontosan, mit csinál, mielőtt megerősíted.",
+  "@aiTutorActionSheetSummary": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorActionReadsDetail": "A jelenlegi tanár-beszélgetésedet.",
+  "aiTutorPlanObservationTitle": "Megfigyelés",
+  "aiTutorPlanCauseTitle": "Miért",
+  "aiTutorPlanActionTitle": "Terv",
+  "aiTutorPlanConfirmSaveSummary": "Elmenti ezt a gyakorlási tervet a könyvtáradba.",
+  "aiTutorPlanConfirmStartSummary": "Most elindítja ezt a gyakorlási tervet.",
+  "aiTutorPlanConfirmReadsDetail": "A szerkesztett gyakorlási tervedet.",
+  "aiTutorPlanConfirmStartRecordingDetail": "Felvételt indít, hogy értékelje a játékodat.",
+  "aiTutorPlanDiffAdded": "Hozzáadva: {type}",
+  "@aiTutorPlanDiffAdded": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffRemoved": "Eltávolítva: {type}",
+  "@aiTutorPlanDiffRemoved": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffChanged": "{type}: {fromMinutes} → {toMinutes} perc",
+  "@aiTutorPlanDiffChanged": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "fromMinutes": {
+        "type": "int"
+      },
+      "toMinutes": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTutorPlanDiffNone": "Nincs változás a javasolt tervhez képest.",
   "tutorProfileTitle": "Tutor profil",
   "tutorProfileScreenSemantics": "Tutor profil képernyő",
   "tutorProfileIntro": "Mesélj a tutornak magadról, a gitárodról és arról, amit meg szeretnél tanulni.",

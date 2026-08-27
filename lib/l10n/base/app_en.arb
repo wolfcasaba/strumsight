@@ -1718,6 +1718,65 @@
   "aiTutorPlanEditedSource": "Edited by you",
   "aiTutorPlanGeneratedSource": "Suggested plan",
   "aiTutorPlanEmpty": "No practice blocks remain.",
+  "aiTutorAiModeLocalMessage": "Running fully on this device.",
+  "aiTutorAiModeCloudMessage": "Using the cloud model for richer answers.",
+  "aiTutorAiModeFallbackMessage": "Cloud unavailable — answering with the on-device fallback.",
+  "aiTutorHomeModelStatusTitle": "Tutor model",
+  "aiTutorHomeModelUnavailableMessage": "The tutor model could not be reached. You can still browse, but responses may fail.",
+  "aiTutorEvidenceMissingNotice": "No measured evidence backs this response yet.",
+  "aiTutorToolDimensionReads": "Reads",
+  "aiTutorToolDimensionWrites": "Writes",
+  "aiTutorToolDimensionLeavesDevice": "Leaves this device",
+  "aiTutorToolDimensionRecording": "Starts recording",
+  "aiTutorToolDimensionNothing": "Nothing",
+  "aiTutorActionReview": "Review",
+  "aiTutorActionSheetSummary": "The tutor wants to: {kind}. Review exactly what this does before confirming.",
+  "@aiTutorActionSheetSummary": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorActionReadsDetail": "Your current tutor conversation.",
+  "aiTutorPlanObservationTitle": "Observation",
+  "aiTutorPlanCauseTitle": "Why",
+  "aiTutorPlanActionTitle": "Plan",
+  "aiTutorPlanConfirmSaveSummary": "Save this practice plan to your library.",
+  "aiTutorPlanConfirmStartSummary": "Start this practice plan now.",
+  "aiTutorPlanConfirmReadsDetail": "Your edited practice plan.",
+  "aiTutorPlanConfirmStartRecordingDetail": "Starts recording audio to score your playing.",
+  "aiTutorPlanDiffAdded": "Added: {type}",
+  "@aiTutorPlanDiffAdded": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffRemoved": "Removed: {type}",
+  "@aiTutorPlanDiffRemoved": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffChanged": "{type}: {fromMinutes} → {toMinutes} min",
+  "@aiTutorPlanDiffChanged": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "fromMinutes": {
+        "type": "int"
+      },
+      "toMinutes": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTutorPlanDiffNone": "No changes from the suggested plan.",
   "tutorProfileTitle": "Tutor profile",
   "tutorProfileScreenSemantics": "Tutor profile screen",
   "tutorProfileIntro": "Tell the tutor about yourself, your guitar, and what you want to learn.",

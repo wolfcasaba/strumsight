@@ -211,9 +211,11 @@
     }
   },
   "aiTutorActionProfileUpdate": "Profile update",
+  "aiTutorActionReadsDetail": "Your current tutor conversation.",
   "aiTutorActionReject": "Reject",
   "aiTutorActionRejected": "Rejected",
   "aiTutorActionRetry": "Try again",
+  "aiTutorActionReview": "Review",
   "aiTutorActionSemantics": "{kind}, {state}. Exact preview and confirmation required.",
   "@aiTutorActionSemantics": {
     "placeholders": {
@@ -226,6 +228,14 @@
     }
   },
   "aiTutorActionSessionLaunch": "Launch practice session",
+  "aiTutorActionSheetSummary": "The tutor wants to: {kind}. Review exactly what this does before confirming.",
+  "@aiTutorActionSheetSummary": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
   "aiTutorActionStale": "This action is stale and can no longer run.",
   "aiTutorActionStateBlocked": "Blocked",
   "aiTutorActionStateConfirmed": "Confirmed",
@@ -233,6 +243,9 @@
   "aiTutorActionStatePending": "Waiting for confirmation",
   "aiTutorActionStateRejected": "Rejected",
   "aiTutorActionUnavailable": "This action is no longer available.",
+  "aiTutorAiModeCloudMessage": "Using the cloud model for richer answers.",
+  "aiTutorAiModeFallbackMessage": "Cloud unavailable — answering with the on-device fallback.",
+  "aiTutorAiModeLocalMessage": "Running fully on this device.",
   "aiTutorBannerCancelledBody": "The tutor stopped at your request. Send a new message to start over.",
   "aiTutorBannerCancelledSemantics": "Response cancelled — send a new message",
   "aiTutorBannerCancelledTitle": "Response stopped",
@@ -319,6 +332,7 @@
       }
     }
   },
+  "aiTutorEvidenceMissingNotice": "No measured evidence backs this response yet.",
   "aiTutorEvidenceReference": "Evidence reference: {reference}",
   "@aiTutorEvidenceReference": {
     "placeholders": {
@@ -338,8 +352,11 @@
     }
   },
   "aiTutorHomeIntro": "Talk to your guitar tutor. Ask about chords, strumming patterns, practice routines, or song help.",
+  "aiTutorHomeModelStatusTitle": "Tutor model",
+  "aiTutorHomeModelUnavailableMessage": "The tutor model could not be reached. You can still browse, but responses may fail.",
   "aiTutorHomeStart": "Start conversation",
   "aiTutorHomeTitle": "AI Tutor",
+  "aiTutorPlanActionTitle": "Plan",
   "aiTutorPlanBlockChordChange": "Chord changes",
   "aiTutorPlanBlockFreePractice": "Free practice",
   "aiTutorPlanBlockReflection": "Reflection",
@@ -369,6 +386,11 @@
   },
   "aiTutorPlanBlockUnknown": "Unsupported block",
   "aiTutorPlanBlockWarmup": "Warm-up",
+  "aiTutorPlanCauseTitle": "Why",
+  "aiTutorPlanConfirmReadsDetail": "Your edited practice plan.",
+  "aiTutorPlanConfirmSaveSummary": "Save this practice plan to your library.",
+  "aiTutorPlanConfirmStartRecordingDetail": "Starts recording audio to score your playing.",
+  "aiTutorPlanConfirmStartSummary": "Start this practice plan now.",
   "aiTutorPlanDecreaseDuration": "Remove one minute from {type}",
   "@aiTutorPlanDecreaseDuration": {
     "placeholders": {
@@ -379,6 +401,37 @@
   },
   "aiTutorPlanDeleteBlock": "Remove {type} block",
   "@aiTutorPlanDeleteBlock": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffAdded": "Added: {type}",
+  "@aiTutorPlanDiffAdded": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffChanged": "{type}: {fromMinutes} → {toMinutes} min",
+  "@aiTutorPlanDiffChanged": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "fromMinutes": {
+        "type": "int"
+      },
+      "toMinutes": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTutorPlanDiffNone": "No changes from the suggested plan.",
+  "aiTutorPlanDiffRemoved": "Removed: {type}",
+  "@aiTutorPlanDiffRemoved": {
     "placeholders": {
       "type": {
         "type": "String"
@@ -425,6 +478,7 @@
       }
     }
   },
+  "aiTutorPlanObservationTitle": "Observation",
   "aiTutorPlanPreviewTitle": "Practice plan: {title}",
   "@aiTutorPlanPreviewTitle": {
     "placeholders": {
@@ -517,6 +571,11 @@
       }
     }
   },
+  "aiTutorToolDimensionLeavesDevice": "Leaves this device",
+  "aiTutorToolDimensionNothing": "Nothing",
+  "aiTutorToolDimensionReads": "Reads",
+  "aiTutorToolDimensionRecording": "Starts recording",
+  "aiTutorToolDimensionWrites": "Writes",
   "analysisCapabilityUnavailableBackingTrackDominant": "The backing track is too prominent for this measurement.",
   "analysisCapabilityUnavailableCancelled": "The analysis was cancelled before this could be measured.",
   "analysisCapabilityUnavailableClipTooShort": "The recording is too short to measure this.",

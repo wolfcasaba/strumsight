@@ -144,6 +144,32 @@ abstract interface class TutorChatController {
 /// already handles it.
 
 // ---------------------------------------------------------------------------
+// AI-mode exposure (E13-R29 §0.0/B6) — presentation-only derivation. Neither
+// [TutorChatState] nor [TutorTurnStatus] carries a local/cloud/fallback
+// signal today; this is the narrowest possible surface that makes ADR 0278
+// §1's "AI-mode always visible" enforceable without touching
+// `application/`/`domain/` (out of scope for this round). [isOnline] is the
+// existing connectivity flag the offline banner already uses; [status] ==
+// [TutorTurnStatus.fallback] is the existing terminal state the orchestrator
+// already reaches when the cloud attempt failed and a local fallback
+// answered instead.
+// ---------------------------------------------------------------------------
+
+/// Where the tutor's current/next reply is (or would be) computed.
+enum TutorAiMode { local, cloud, fallback }
+
+/// Derives the screen-visible AI mode from the two signals the presentation
+/// layer already has. Never returns null — the caller can always render
+/// something (ADR 0278 §1: AI-mode is never hidden for lack of a value).
+TutorAiMode tutorAiModeFor({
+  required TutorTurnStatus status,
+  required bool isOnline,
+}) {
+  if (status == TutorTurnStatus.fallback) return TutorAiMode.fallback;
+  return isOnline ? TutorAiMode.cloud : TutorAiMode.local;
+}
+
+// ---------------------------------------------------------------------------
 // Local extension — the application layer exposes `isActive` on the
 // [TutorState] envelope but the presentation layer only needs to check
 // the bare status. Mirrors the upstream rule without reaching into the
