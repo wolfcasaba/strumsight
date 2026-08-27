@@ -23,6 +23,17 @@
 /// — but blocked owners' clubs are filtered out by the
 /// backend's block-side gate.
 ///
+/// **Privacy threshold (E13-R34, A3, §0.0.B/B7).** This is a
+/// CLIENT-SIDE rendering guard mirroring the
+/// [ClubDetailScreen] gate: a row whose ``myRole == null`` AND
+/// ``visibility == private`` is dropped from the rendered list
+/// entirely — neither its name nor its member count reach a
+/// ``Text`` or ``Semantics`` node. It does not re-derive the
+/// backend's permission matrix; it only guards against a
+/// repository that returns more than the caller is entitled to
+/// see (the same threat model as the detail screen's
+/// ``_PrivateRestrictedView``).
+///
 /// **Accessibility (A7).** The list rows expose a single
 /// ``Semantics`` node per club with the club name + visibility
 /// + member count so a screen-reader reads each row in one
@@ -209,7 +220,14 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = page.items;
+    // A3 (E13-R34, §0.0.B/B7) — the same threshold as
+    // ``ClubDetailScreen._buildForClub``: a private club the
+    // caller is not a member of never reaches a row in this
+    // list, so its name never reaches a ``Text`` or
+    // ``Semantics`` node in the preview channel either.
+    final items = page.items
+        .where((club) => !_isPrivateNonMember(club))
+        .toList(growable: false);
     if (items.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -247,6 +265,9 @@ class _Body extends StatelessWidget {
     );
   }
 }
+
+bool _isPrivateNonMember(CommunityClub club) =>
+    club.myRole == null && club.visibility == ClubVisibility.private;
 
 /// A single accessible club-row (A7).
 class _ClubRow extends StatelessWidget {
