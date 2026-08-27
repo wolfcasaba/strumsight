@@ -562,4 +562,121 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), 2026-08-27.
+
+### Mit épített
+
+`lib/features/progress_v2/` — új fa, a `library_v2` mintáját követve, de
+szűkítve arra, amit ez a kör ténylegesen használ (nincs `data/`, nincs
+`providers/` — l. „Eltérés #1" lent):
+
+- `domain/progress_trend.dart` — `ProgressTrendPoint`, `ProgressTrendThresholds`
+  (`minimumDataPointsForTrend = 5`, saját, a `TrendBuilder`-től független
+  konstans, §0.0.B/B3), `ProgressTrend` (inkluzív küszöb-logika).
+- `domain/metric_version_segment.dart` — `MetricVersionSegment`,
+  `segmentByCatalogVersion` (kontiguus szegmensekre bont; egy visszatérő
+  verziószám ÚJ szegmenst nyit, sosem olvad vissza a korábbiba — A5).
+- `domain/progress_overview_projection.dart` — `MilestoneOverviewEntry`
+  (`hasEvidence`/`ratio`), `ProgressOverviewProjection` (`isOffline`,
+  `isNewUser`).
+- `domain/skill_detail_projection.dart` — `SkillEvidenceReference`,
+  `dedupeEvidenceBySession` (a `MasteryEvidence.sessionId` dedup-kulcs),
+  `SkillRecommendation`, `isRecommendationEligible` (A7 tiszta függvény),
+  `SkillDetailProjection`.
+- `screens/progress_dashboard_screen.dart` (UI-49) — új-felhasználó /
+  offline / trend (3 cella) / mérce-verzió-előzmény / készség-sor állapotok.
+- `screens/skill_detail_screen.dart` (UI-50) — elsajátítottság-gyűrű,
+  auditálható bizonyíték-lista, előfeltétel-tisztelő ajánlás.
+- `widgets/progress_theme_scope.dart` — a `vision_theme_scope.dart` mért
+  mintája (DS `ThemeExtension`-ök az `AppTheme` mellé).
+- `public.dart` barrel.
+
+l10n: 31 új kulcs a `lib/l10n/base/app_{en,hu}.arb` forrásba
+(`progressV2*` névtér, hogy ne ütközzön a legacy `progress*` kulcsokkal),
+`dart run tool/gen_l10n_segments.dart --write` regenerálta az aggregátumot.
+
+`test/ui/ui_inventory_test.dart`: `hasLength(92)` → `94` (a két új
+`*_screen.dart`).
+
+### Döntések
+
+- **Route-mentesség (B4):** mindkét képernyő `StatelessWidget`, Riverpod
+  nélkül — caller-fed (B7), nincs mit `Consumer`-ezni. A bizonyíték-sor
+  `onOpenEvidence(String route, String sessionId)` callbacket hív, a
+  `route` paramétert a hívó oldal `AppRoutes.profileLibrarySession`
+  konstansból adja (a screen csak importálja a konstanst, nem drótoz
+  routert) — a `route_literal_guard_test.dart` ezt önmagában is bizonyítja
+  (nincs `.go(`/`.push(` hívás a fában).
+- **"Diagram szöveges összegzése" + "gráf lineáris alternatívája" (A8)**
+  — a §0.0.B/B5 táblázatot úgy értelmeztem, hogy mindkettő UGYANARRA a
+  trend-adatra vonatkozik (a hiányzó `SsComparisonChart` két accessibility-
+  helyettesítője EGYÜTT, ahogy az E13-R27 mintája is mutatja): a
+  `_TrendSection` a `SsChartTextSummary`-t (irány + darabszám mondat) ÉS a
+  `SsEventList`-et (minden trendpont saját sorban) EGYÜTT rendereli, amikor
+  van trend. Ha `chart_semantics_test.dart` reviewja mást várt volna
+  (pl. a készség-listára, nem a trendre), az egy nyitott kérdés — a
+  §0.0.B szövege nem választja szét egyértelműen a kettőt.
+- **A3 vizuális jelzés:** a hiányzó-adat állapotot a `SsScoreRing`
+  `unavailable` állapota ÉS egy külön, látható "Not measured yet" szöveg
+  is jelzi a listasorban (nem csak a gyűrű `semanticLabel`-je) — az L403
+  lecke szerint a próbának a FELIRATOT kell néznie, nem csak
+  widget-típust/kulcsot.
+- **Mérőszám-verzió szegmensek (A5):** a dashboard csak akkor mutat
+  „Measurement history" szekciót, ha 2+ szegmens van (egyetlen verzió
+  esetén nincs mit megkülönböztetni) — ezt a `metric_migration_test.dart`
+  külön esete fedi.
+
+### Eltérések a brieftől
+
+1. A brief §1 mintája (`library_v2`) `data/`+`providers/` alkönyvtárat is
+   javasolt; ez a kör NEM hozott ilyet — B7 (caller-fed, nincs repository-
+   olvasás) miatt nincs mit egy `data/`/`providers/` rétegnek csinálnia.
+   Ez szűkítés, nem tágítás: az `allowed_paths` csak `lib/features/progress_v2/`-t
+   sorol fel, alkönyvtár-bontást nem ír elő.
+2. A golden-teszt fixture-jei és a `dashboard_states_test.dart`
+   `_milestone` segédfüggvénye előbb snake_case `id`-ből képzett
+   `titleKey`-t próbált átadni (`chord_transition_beginnerTitle`), amit a
+   merge-elt `MasteryMilestone` konstruktor lowerCamelCase-t követel —
+   `_camel()` helper hozzáadva mindkét fájlhoz. Ez a mért fán derült ki
+   (gate futtatás közben), nem volt előre jelezve a brief-ben.
+
+### Valódi-sértés próba (§7/§6.1, KÖTELEZŐ)
+
+`lib/features/progress_v2/screens/skill_detail_screen.dart`-ban a
+`statusText` számítást ideiglenesen egy fix `xpDerivedRatio = 0.42`
+értékre cseréltem (szimulálva egy XP-sávból származó kijelzést
+`projection.ratio` — vagyis `MasteryProgress.progressValue` — helyett),
+majd lefuttattam:
+
+```
+flutter test test/features/progress_v2/mastery_evidence_test.dart
+```
+
+**Eredmény: PONTOSAN az A1 két cellája vált PIROSSÁ** —
+„3 of 5 evidence sessions renders 60%…" és „a fully-achieved milestone (5
+of 5) renders 100%…" — `Found 0 widgets with text "60%"` / `"100%"`, mert
+minden bemenetre a fix 42%-ot renderelte. Az A2 és A7 cellák változatlanul
+zöldek maradtak (a hiba nem érintette az evidence-listát vagy az
+ajánlás-logikát). Ezután a módosítást visszaállítottam
+(`projection.ratio`-ra), és a teljes `mastery_evidence_test.dart` újra
+zöld (9/9).
+
+### Golden (A9)
+
+`tools/golden-x86.sh record` majd `check` — mindkettő zöld, nulla eltérés.
+Felvétel közben egy valódi elrendezési hibát mért ki: a
+`_MetricHistorySection` verzió-sora (`Row`) `textScaler 2.0` mellett 137
+pixellel túlcsordult — `Wrap`-ra cserélve javítva, majd a golden újra
+felvéve. A 4 PNG (`e13_r31_{progress_dashboard,skill_detail}_{compact,compact_scale2}.png`)
+commitolva a `test/ui/goldens/goldens/` alatt (ugyanaz a beágyazott
+útvonal-minta, mint az E13-R30 goldenjeinél).
+
+### Gate kimenete
+
+`tools/round-gate.sh` a brief §7 szerinti 10 célteszttel + `architecture` +
+`secrets` + `l10n` lépéssel — **MINDEN GATE ZÖLD** (format, analyze, mind a
+10 célteszt, architecture, secrets, l10n). Külön `flutter analyze lib/`
+(a `flutter-analyze-fixer` konvenció szerint, önállóan futtatva) szintén
+tiszta.
+
 ## 11. Review — a Claude tölti ki
