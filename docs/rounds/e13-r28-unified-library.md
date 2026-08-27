@@ -715,3 +715,76 @@ ha a domain-only export elég), hogy a `library_v2/data/song_item_source.dart`
 architektúra-kapu 14/14 sértése lezárható lenne.
 
 ## 11. Review — a Claude tölti ki
+
+**Orchestrátor-mérés, 2026-08-27, HEAD `2fc71cda`, izolált munkapéldány
+`/home/ubuntu/ss-sonnet-impl-e13-r28`.** A `scope_audit=ok` (base `9fba0250`),
+a fa tiszta.
+
+### A kötelező kapu — a SAJÁT futásom, csonkítatlanul (`/tmp/gate-e13-r28.txt`)
+
+| # | Lépés | Eredmény |
+|---|---|---|
+| 1 | format | **ZÖLD** |
+| 2 | analyze | **ZÖLD** (`No issues found!`) |
+| 3 | `test/features/library_v2/item_routing_test.dart` | **ZÖLD** |
+| 4 | `test/features/library_v2/corrupt_item_test.dart` | **ZÖLD** |
+| 5 | `test/features/library_v2/delete_confirmation_test.dart` | **ZÖLD** |
+| 6 | `test/features/library_v2/sync_conflict_test.dart` | **ZÖLD** |
+| 7 | `test/features/library/` (a befagyasztott V1 pinek) | **ZÖLD** |
+| 8 | `test/app/navigation/` | **ZÖLD** |
+| 9 | `test/app/routing/app_router_test.dart` (legacy route-pinek) | **ZÖLD** |
+| 10 | `test/ui/goldens/e13_r28_screens_golden_test.dart` | **ZÖLD** |
+| 11 | `test/ui/ui_inventory_test.dart` | **ZÖLD** |
+| 12 | `test/core/architecture_dependency_test.dart` | **PIROS (1)** |
+
+Gate kilépési kód **10**; a 13–15. lépés (`architecture`, `secrets`, `l10n`)
+az első piros lépés után nem futott.
+
+**Az A10 route-szerződés gépileg IGAZOLT:** a 7. és a 9. lépés zöldje pontosan
+azt méri, hogy a legacy `:261` / `:302–310` builder és a `lib/features/library/**`
+V1 fa érintetlen maradt — ez a §0.0/B2 falszifikálható állítása, és teljesült.
+
+### Az EGYETLEN nyitott lelet — BLOCKER, és a kör hatókörén KÍVÜL esik
+
+```
+$ dart run tool/check_architecture.dart
+- lib/features/library_v2/data/setlist_item_source.dart -> lib/features/song_trainer/domain/repositories/setlist_repository.dart [cross-feature imports must target public.dart]
+- lib/features/library_v2/data/song_item_source.dart    -> lib/features/song_trainer/domain/repositories/song_repository.dart    [cross-feature imports must target public.dart]
+- lib/features/library_v2/providers/library_v2_providers.dart -> lib/features/song_trainer/application/song_trainer_providers.dart [cross-feature imports must target public.dart]
+```
+
+MÉRT gyökérok: a `lib/features/song_trainer/public.dart` **két képernyőt**
+exportál és semmi mást; sem a `SongRepository` / `SongQuery` /
+`SetlistRepository` típusokat, sem a `songRepositoryProvider` /
+`setlistRepositoryProvider` szimbólumokat. A `practice`-nél működő
+closure-trükk itt nem zár: a provider-SZIMBÓLUM maga csak a nem-public
+`song_trainer/application/song_trainer_providers.dart`-ban él, tehát a
+szimbólum eléréséhez elkerülhetetlen egy nem-`public.dart` import.
+
+### A megoldási tér — MÉRVE, három ág
+
+- **A (javasolt):** `lib/features/song_trainer/public.dart` felvétele az
+  `allowed_paths`-ra, és a fenti öt szimbólum exportja. Egy fájl, additív, a
+  boundary-szabályt ERŐSÍTI. Ez **lista-tágítás → H3**, tehát user-engedélyt
+  igényel — pontosan úgy, ahogy ennek a briefnek a §0.0/R1-e is kapott
+  (2026-08-25).
+- **B:** a kör szűkítése elemzés + gyakorlás tétel-típusra (a `song`/`setlist`
+  forrás elhagyása). Ez a §3 négy tétel-típusát kettőre csökkenti, tehát a
+  szállított hatókör csökkentése — user-döntés, nem orchestrátori.
+- **C (MÉRVE, de ELVETVE):** a wiring áthelyezése `lib/app/routing/`-ba. Mérés:
+  a `lib/app/**` **NEM** esik a cross-feature szabály alá — az
+  `app_router.dart:59` MA IS közvetlenül importálja a
+  `song_trainer/application/song_trainer_providers.dart`-ot, és a checker nem
+  jelzi. A kapu tehát ezzel zöldre menne. **Mégis elvetve:** ez feature-adat
+  wiringet tenne a routing rétegbe pusztán a határszabály megkerülésére, és
+  túllépné a `lib/app/routing/` §4-ben rögzített, szándékosan szűk
+  jogosultságát („kizárólag a §0.0/B2 szerződése"). A mérce megkerülése nem
+  feloldás.
+
+### Verdikt
+
+**HALT — H3.** A kód kész és a mérce minden más pontján zöld; a feloldás egy
+`allowed_paths`-on kívüli fájl (`lib/features/song_trainer/public.dart`)
+szerkesztését vagy a kör hatókörének csökkentését kívánja. Egyik sem az
+orchestrátor hatásköre ([L478](../LESSONS.md), ADR 0087 §2 H3). Javító kör
+indítása értelmetlen: ugyanebbe a falba futna.
