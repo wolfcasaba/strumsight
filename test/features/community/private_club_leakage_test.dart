@@ -21,9 +21,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:strumsight/l10n/app_localizations.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/features/community/application/controllers/challenge_controller.dart'
+    show communityChallengeRepositoryProvider;
 import 'package:strumsight/features/community/data/repositories/relationship_repository_impl.dart';
+import 'package:strumsight/features/community/domain/entities/community_challenge.dart';
 import 'package:strumsight/features/community/domain/entities/community_club.dart';
 import 'package:strumsight/features/community/domain/entities/community_profile.dart';
+import 'package:strumsight/features/community/domain/repositories/challenge_repository.dart';
 import 'package:strumsight/features/community/domain/repositories/club_repository.dart';
 import 'package:strumsight/features/community/domain/repositories/community_page.dart';
 import 'package:strumsight/features/community/domain/repositories/social_graph_repository.dart';
@@ -33,6 +38,7 @@ import 'package:strumsight/features/community/domain/value_objects/public_user_i
 import 'package:strumsight/features/community/presentation/screens/clubs/club_detail_screen.dart';
 import 'package:strumsight/features/community/presentation/screens/clubs/club_list_screen.dart';
 import 'package:strumsight/features/community/presentation/screens/clubs/club_member_management_screen.dart';
+import 'package:strumsight/features/community/presentation/screens/community_challenges_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -190,6 +196,102 @@ class _RecordingSocialGraphRepository implements SocialGraphRepository {
   @override
   Future<CommunityPage<CommunityProfile>> mutedProfilesPage({
     required Object cursor,
+  }) async => throw UnimplementedError('unused');
+}
+
+/// MAJOR-2 (A6/A8) — a `block` / `mute` call that always fails with a
+/// retryable [NetworkFailure], so the widget test can assert the
+/// failure is VISIBLE to the caller (a SnackBar) rather than
+/// swallowed silently.
+class _ThrowingSocialGraphRepository extends _RecordingSocialGraphRepository {
+  @override
+  Future<void> block({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {
+    throw const NetworkFailure(code: FailureCode.networkUnavailable);
+  }
+
+  @override
+  Future<void> mute({
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {
+    throw const NetworkFailure(code: FailureCode.networkUnavailable);
+  }
+}
+
+/// A minimal `listChallenges`-only fake — used by the MAJOR-2
+/// challenges-screen cell, which only needs one rendered row to
+/// reach the row's action sheet.
+class _SingleChallengeRepository implements CommunityChallengeRepository {
+  _SingleChallengeRepository({required this.challenge, this.participation});
+
+  final CommunityChallengeDefinition challenge;
+
+  /// A10 — the "View my result" verified-icon cell overrides this
+  /// with a non-null `bestMetricValue` so `_MyResultSection` renders
+  /// the verified branch.
+  final CommunityChallengeParticipantState? participation;
+
+  @override
+  Future<CommunityPage<CommunityChallengeDefinition>> listChallenges({
+    required Object cursor,
+    required int limit,
+  }) async => CommunityPage<CommunityChallengeDefinition>(
+    items: <CommunityChallengeDefinition>[challenge],
+    cursor: const CursorPage.haltedAfterRequest(),
+  );
+
+  @override
+  Future<CommunityChallengeDefinition> fetchDefinition({
+    required ContentId challengeId,
+  }) async => throw UnimplementedError('unused');
+
+  @override
+  Future<CommunityChallengeParticipantState?> fetchMyParticipation({
+    required ContentId challengeId,
+  }) async => participation;
+
+  @override
+  Future<void> invite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('unused');
+
+  @override
+  Future<void> acceptInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> declineInvite({
+    required ContentId challengeId,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> cancelInvite({
+    required ContentId challengeId,
+    required PublicUserId target,
+    required String idempotencyKey,
+  }) async {}
+
+  @override
+  Future<void> submitResult({
+    required ContentId challengeId,
+    required int metricValue,
+    required String sourceEventId,
+    required String idempotencyKey,
+  }) async => throw UnimplementedError('unused');
+
+  @override
+  Future<CommunityPage<Object>> leaderboard({
+    required ContentId challengeId,
+    required Object cursor,
+    required int limit,
   }) async => throw UnimplementedError('unused');
 }
 
@@ -392,6 +494,151 @@ void main() {
     });
   });
 
+  group(
+    'A10 — the Semantics channel also localizes (Role chip, Verified icon)',
+    () {
+      testWidgets(
+        'en cell: the club role-chip Semantics label reads "Role: Owner"',
+        (tester) async {
+          final semantics = tester.ensureSemantics();
+          final fake = _RecordingClubRepository(
+            club: _club(
+              name: 'Open Jam Collective',
+              visibility: ClubVisibility.discoverable,
+              myRole: ClubRole.owner,
+            ),
+          );
+          await tester.pumpWidget(_wrapDetail(fake));
+          await _pumpDetail(tester);
+
+          expect(find.bySemanticsLabel('Role: Owner'), findsOneWidget);
+          expect(find.bySemanticsLabel(RegExp('Szerep:')), findsNothing);
+          semantics.dispose();
+        },
+      );
+
+      testWidgets('hu cell: the club role-chip Semantics label reads '
+          '"Szerep: Tulajdonos" — NOT the English "Role:"', (tester) async {
+        final semantics = tester.ensureSemantics();
+        final fake = _RecordingClubRepository(
+          club: _club(
+            name: 'Open Jam Collective',
+            visibility: ClubVisibility.discoverable,
+            myRole: ClubRole.owner,
+          ),
+        );
+        await tester.pumpWidget(_wrapDetail(fake, locale: const Locale('hu')));
+        await _pumpDetail(tester);
+
+        expect(find.bySemanticsLabel('Szerep: Tulajdonos'), findsOneWidget);
+        expect(find.bySemanticsLabel(RegExp('^Role:')), findsNothing);
+        semantics.dispose();
+      });
+
+      testWidgets(
+        'en cell: the verified-result icon Semantics label reads "Verified"',
+        (tester) async {
+          final semantics = tester.ensureSemantics();
+          final challenge = CommunityChallengeDefinition(
+            id: ContentId('c1'),
+            version: 1,
+            type: ChallengeType.friends,
+            metric: 'score',
+            difficulty: 1,
+            startsAt: DateTime.utc(2026, 1, 1),
+            endsAt: DateTime.utc(2026, 1, 8),
+            authorId: PublicUserId('author-id'),
+            clubId: null,
+          );
+          final fake = _SingleChallengeRepository(
+            challenge: challenge,
+            participation: CommunityChallengeParticipantState(
+              challengeId: challenge.id,
+              participantId: PublicUserId('me'),
+              inviteState: ChallengeInviteState.accepted,
+              bestMetricValue: 42,
+            ),
+          );
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                communityChallengeRepositoryProvider.overrideWithValue(fake),
+              ],
+              child: MaterialApp(
+                localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                supportedLocales: AppLocalizations.supportedLocales,
+                locale: const Locale('en'),
+                home: const CommunityChallengesScreen(),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('score'));
+          await tester.pumpAndSettle();
+
+          expect(find.bySemanticsLabel('Verified'), findsOneWidget);
+          expect(find.bySemanticsLabel('Ellenőrizve'), findsNothing);
+          semantics.dispose();
+        },
+      );
+
+      testWidgets('hu cell: the verified-result icon Semantics label reads '
+          '"Ellenőrizve" — NOT the English "Verified"', (tester) async {
+        final semantics = tester.ensureSemantics();
+        final challenge = CommunityChallengeDefinition(
+          id: ContentId('c1'),
+          version: 1,
+          type: ChallengeType.friends,
+          metric: 'score',
+          difficulty: 1,
+          startsAt: DateTime.utc(2026, 1, 1),
+          endsAt: DateTime.utc(2026, 1, 8),
+          authorId: PublicUserId('author-id'),
+          clubId: null,
+        );
+        final fake = _SingleChallengeRepository(
+          challenge: challenge,
+          participation: CommunityChallengeParticipantState(
+            challengeId: challenge.id,
+            participantId: PublicUserId('me'),
+            inviteState: ChallengeInviteState.accepted,
+            bestMetricValue: 42,
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              communityChallengeRepositoryProvider.overrideWithValue(fake),
+            ],
+            child: MaterialApp(
+              localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              locale: const Locale('hu'),
+              home: const CommunityChallengesScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('score'));
+        await tester.pumpAndSettle();
+
+        expect(find.bySemanticsLabel('Ellenőrizve'), findsOneWidget);
+        expect(find.bySemanticsLabel('Verified'), findsNothing);
+        semantics.dispose();
+      });
+    },
+  );
+
   group('A6 / A8 — Block / Mute on club management share the safety state', () {
     testWidgets(
       'tapping Block on a member row calls socialGraphRepositoryProvider.block '
@@ -452,6 +699,195 @@ void main() {
       },
     );
   });
+
+  group('A3 — the club-LIST preview never leaks a private non-member club', () {
+    testWidgets(
+      'the private club name never renders as visible text in the list',
+      (tester) async {
+        final fake = _ClubsFake(
+          club: _club(
+            name: 'Secret Blues Club',
+            visibility: ClubVisibility.private,
+            description: 'Only members may know this exists.',
+            myRole: null,
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              communityClubRepositoryProvider.overrideWithValue(fake),
+            ],
+            child: MaterialApp(
+              localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const ClubListScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(find.text('Secret Blues Club'), findsNothing);
+        expect(find.text('Only members may know this exists.'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'the private club name never reaches the list row Semantics label',
+      (tester) async {
+        final semantics = tester.ensureSemantics();
+        final fake = _ClubsFake(
+          club: _club(
+            name: 'Secret Blues Club',
+            visibility: ClubVisibility.private,
+            description: 'Only members may know this exists.',
+            myRole: null,
+          ),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              communityClubRepositoryProvider.overrideWithValue(fake),
+            ],
+            child: MaterialApp(
+              localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const ClubListScreen(),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.bySemanticsLabel(RegExp('Secret Blues Club')),
+          findsNothing,
+        );
+        semantics.dispose();
+      },
+    );
+  });
+
+  group(
+    'A6 / A8 — a failed block/mute is VISIBLE to the caller, never silent',
+    () {
+      testWidgets(
+        'club management: a thrown AppFailure surfaces a SnackBar instead '
+        'of an unhandled async error',
+        (tester) async {
+          final clubId = ContentId('club-1');
+          final target = PublicUserId('member-42');
+          final socialFake = _ThrowingSocialGraphRepository();
+
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                socialGraphRepositoryProvider.overrideWithValue(socialFake),
+                communityClubRepositoryProvider.overrideWithValue(
+                  _RecordingClubRepository(
+                    club: _club(
+                      name: 'unused',
+                      visibility: ClubVisibility.discoverable,
+                      myRole: ClubRole.owner,
+                    ),
+                  ),
+                ),
+                clubMemberListProvider.overrideWith(
+                  (ref, id) async => <ClubMemberRow>[
+                    ClubMemberRow(
+                      memberPublicId: 'row-1',
+                      profilePublicId: target,
+                      role: ClubRole.member,
+                      joinedAt: DateTime.utc(2026, 8, 1),
+                    ),
+                  ],
+                ),
+              ],
+              child: MaterialApp(
+                localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: ClubMemberManagementScreen(clubId: clubId),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await tester.tap(find.byIcon(Icons.more_vert));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byKey(const Key('club-manage-action-block')));
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          expect(find.byType(SnackBar), findsOneWidget);
+        },
+      );
+
+      testWidgets(
+        'challenges list: a thrown AppFailure on Block author surfaces a '
+        'SnackBar instead of an unhandled async error',
+        (tester) async {
+          final author = PublicUserId('author-id');
+          final challenge = CommunityChallengeDefinition(
+            id: ContentId('c1'),
+            version: 1,
+            type: ChallengeType.friends,
+            metric: 'score',
+            difficulty: 1,
+            startsAt: DateTime.utc(2026, 1, 1),
+            endsAt: DateTime.utc(2026, 1, 8),
+            authorId: author,
+            clubId: null,
+          );
+          final socialFake = _ThrowingSocialGraphRepository();
+
+          await tester.pumpWidget(
+            ProviderScope(
+              overrides: [
+                socialGraphRepositoryProvider.overrideWithValue(socialFake),
+                communityChallengeRepositoryProvider.overrideWithValue(
+                  _SingleChallengeRepository(challenge: challenge),
+                ),
+              ],
+              child: MaterialApp(
+                localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                supportedLocales: AppLocalizations.supportedLocales,
+                home: const CommunityChallengesScreen(),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+
+          await tester.tap(find.text('score'));
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.byKey(const Key('challenge-action-block-author')),
+          );
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          expect(find.byType(SnackBar), findsOneWidget);
+        },
+      );
+    },
+  );
 }
 
 /// A repository whose `listClubs` returns the seeded club — used by the
