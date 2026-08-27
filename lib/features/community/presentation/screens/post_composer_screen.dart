@@ -21,12 +21,14 @@
 /// 5. The status banner — explicit visible state per
 ///    [PostComposerStatus].
 ///
-/// **Strings:** the composer labels are kept in this file as
-/// constants. ARB entries for the composer live in a future round's
-/// scope — the Kör 12 allowed-paths covers the screen file only;
-/// touching ``lib/l10n/**`` would be a scope violation. The labels
-/// stay here so a future i18n round picks them up without a screen
-/// rewrite.
+/// **Strings:** most composer labels are kept in this file as
+/// constants — a future i18n round migrates the remainder to the
+/// ARB catalogue in lockstep with the screen. The public-audience
+/// confirmation sheet is the exception: it reads
+/// ``communityPublicConfirm*`` from [AppLocalizations], same as the
+/// sibling confirmation in ``edit_profile_screen.dart``, because
+/// this round already added those ARB keys to
+/// ``lib/l10n/features/community_{en,hu}.arb``.
 ///
 /// **Média placeholder (brief §3 / Kör 18):** the composer ships a
 /// stub "Attach media" placeholder button that does NOT upload
@@ -41,6 +43,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../../core/foundation/app_failure.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/post_composer_controller.dart';
 import '../../domain/entities/community_post.dart';
 import '../../domain/entities/share_artifact.dart';
@@ -74,14 +77,6 @@ abstract final class _ComposerLabels {
   static const String previewTempo = 'Tempó';
   static const String previewStreakDays = 'Aktív napok';
   static const String previewBestScore = 'Legjobb pontszám';
-
-  static const String publicConfirmTitle = 'Nyilvánossá teszed?';
-  static const String publicConfirmBody =
-      'Ezt bárki látni fogja, nem csak a követőid. A beállítást később '
-      'megváltoztathatod, de amit már nyilvánossá tettél, azt mások '
-      'addigra láthatták vagy megoszthatták.';
-  static const String publicConfirmCta = 'Nyilvánossá tétel';
-  static const String publicConfirmCancel = 'Mégse';
 }
 
 /// The composer route. The entry-point that pushes this route
@@ -344,12 +339,13 @@ class _AudienceSelector extends StatelessWidget {
       onChanged(value);
       return;
     }
+    final l = AppLocalizations.of(context);
     showCommunityConfirmationSheet(
       context,
-      title: _ComposerLabels.publicConfirmTitle,
-      consequence: _ComposerLabels.publicConfirmBody,
-      confirmLabel: _ComposerLabels.publicConfirmCta,
-      cancelLabel: _ComposerLabels.publicConfirmCancel,
+      title: l.communityPublicConfirmTitle,
+      consequence: l.communityPublicConfirmBody,
+      confirmLabel: l.communityPublicConfirmCta,
+      cancelLabel: l.communityPublicConfirmCancel,
       onConfirm: () => onChanged(value),
     );
   }

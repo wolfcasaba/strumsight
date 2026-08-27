@@ -831,4 +831,86 @@ A 16 PNG (8 képernyő × {compact, compact_scale2}) commitolva
 - Az idempotencia-kulcs a felületen sehol nem jelenik meg (grep: 0 találat a
   nyolc listás képernyőn + widgets/) — B6 mérce változatlanul teljesül.
 
+### 10.6 Javító kör (review-leletek, `docs/reviews/e13-r33-review.md` §2)
+
+**MAJOR-1 — javítva.** A `post_composer_screen.dart`
+`_AudienceSelector._onSelected` mostantól az `edit_profile_screen.dart:345–348`
+mintáját követve `AppLocalizations.of(context)`-ből olvassa a négy
+`communityPublicConfirm*` feliratot; a négy beégetett magyar konstans
+(`_ComposerLabels.publicConfirmTitle/Body/Cta/Cancel`) törölve. A fájl
+doc-commentje frissült — a „touching `lib/l10n/**` would be a scope
+violation" mondat eltűnt (ez a kör MÁR a listán tartja az ARB-fájlokat).
+
+Gépi őr: `composer_audience_test.dart` §6.1 „fölötte" csoportja kapott egy ÚJ
+cellát (*„above threshold — the confirmation caption comes from
+AppLocalizations, not a hardcoded string"*), amely `hu` locale alatt a
+`hu`-feliratot keresi ÉS explicit ellenőrzi, hogy az `en`-felirat NEM
+jelenik meg — mivel a két nyelv byte-szinten eltér, ez falszifikálja a
+beégetést. A meglévő „above threshold — picking «Nyilvános»…" cella
+`AppLocalizations`-ból vett feliratra lett igazítva (a korábbi
+`find.text('Make this public?'), findsNothing` / `find.textContaining('bárki')`
+állítások a RÉGI, hibás viselkedést kódolták — ez nem gyengítés, hanem a
+cella igazítása a helyes viselkedésre). A `_harness()` mostantól
+`localizationsDelegates`/`supportedLocales`/`locale` paramétert ad át a
+`MaterialApp`-nak (`AppLocalizations.of(context)` enélkül null-check hibával
+elszáll), alapértelmezett `en`.
+
+**Mért gate (a javító kör zárásakor, TÉNYLEGES kimenet):**
+
+```
+tools/round-gate.sh test/features/community/community_gate_test.dart test/features/community/composer_audience_test.dart test/features/community/offline_publish_retry_test.dart test/features/community/block_mute_test.dart test/features/community/presentation/ test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+```
+═══ Gate-összegzés
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/features/community/community_gate_test.dart      zöld
+    test test/features/community/composer_audience_test.dart   zöld (+10, a §6.1 „fölötte" csoport 3 cellára bővült)
+    test test/features/community/offline_publish_retry_test.dart zöld
+    test test/features/community/block_mute_test.dart          zöld
+    test test/features/community/presentation/                 zöld (+82)
+    test test/ui/ui_inventory_test.dart                        zöld
+    test test/core/architecture_dependency_test.dart           zöld
+    test test/tooling/dio_factory_guard_test.dart              zöld
+    test test/tooling/preferences_plugin_import_guard_test.dart zöld
+    test test/tooling/route_literal_guard_test.dart             zöld
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+
+MINDEN GATE ZÖLD.
+```
+
+**Golden (B11 szerint külön, NEM a `gate_tests`-ben) — a szöveg-változás NEM
+mozdított el pixelt, PNG-frissítés nem történt:**
+
+```
+tools/golden-x86.sh check test/ui/goldens/e13_r33_screens_golden_test.dart
+→ 01:32 +16: All tests passed!
+```
+
+**MINOR-1 — TUDATOSAN KIHAGYVA ebben a javító körben.** A `_ComposerLabels`
+maradék 17 magyar konstansa, valamint a `bookmarks_screen.dart` (`'Retry'`,
+`'Clear all'`), `comments_screen.dart` (`'Retry'`), `followers_screen.dart`
+(`'Followers'`/`'Following'`, `'Edit profile'`) és `community_media_player.dart`
+(`'Play'`) beégetett feliratai NEM kerültek migrálásra ARB-ba. Indoklás:
+
+- a review maga mondja ki, hogy ez NEM regresszió (a hat angol felirat a kör
+  ELŐTT is beégetve állt, csak a widget-típus cserélődött) — nincs
+  visszaeső hiba, amit egy javító körnek zárnia kellene;
+- a migráció öt TOVÁBBI fájlt nyitna meg a szigorúan két-lelet javító kör
+  scope-ján túl (a brief §3 „PONTOSAN az alábbi két lelet lezárása — semmi
+  más"), új ARB-kulcsokat + `dart run tool/gen_l10n_segments.dart --write`
+  újragenerálást igényelne, és módosítaná a `community_gate_test.dart`,
+  `block_mute_test.dart`, `presentation/` tesztcsomag és a golden-képek egy
+  részét, amelyek ma szó szerinti magyar/angol feliratra keresnek — ez a
+  javító kör kockázatát a két lelet lezárásához képest aránytalanul
+  megnövelné;
+- a maradék `_ComposerLabels` konstansok doc-commentje (a fájl `53–56`.
+  sora) változatlanul dokumentálja, hogy ez egy jövőbeli i18n kör scope-ja.
+
+A migráció így egy KÜLÖN, jövőbeli i18n kör feladata marad — nem ez a
+javító kör tartozéka.
+
 ## 11. Review — a Claude tölti ki

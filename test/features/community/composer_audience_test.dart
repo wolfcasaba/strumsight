@@ -163,7 +163,7 @@ Map<String, Object?> _practiceSummaryArtifactJson() {
   ).toJson();
 }
 
-Widget _harness() {
+Widget _harness({Locale locale = const Locale('en')}) {
   return ProviderScope(
     overrides: [
       communityKeyValueStoreProvider.overrideWithValue(InMemoryKeyValueStore()),
@@ -180,7 +180,12 @@ Widget _harness() {
         ),
       ),
     ],
-    child: const MaterialApp(home: PostComposerScreen()),
+    child: MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
+      home: const PostComposerScreen(),
+    ),
   );
 }
 
@@ -263,14 +268,37 @@ void main() {
           find.byKey(const Key('ss-confirmation-confirm')),
           findsOneWidget,
         );
-        expect(find.text('Make this public?'), findsNothing); // hu labels
-        expect(find.textContaining('bárki'), findsWidgets); // "anyone" (hu)
+        final enLabels = lookupAppLocalizations(const Locale('en'));
+        expect(find.text(enLabels.communityPublicConfirmTitle), findsOneWidget);
+        expect(find.text(enLabels.communityPublicConfirmBody), findsOneWidget);
 
         await tester.tap(find.byKey(const Key('ss-confirmation-confirm')));
         await tester.pumpAndSettle();
 
         // Confirmed — the audience is now public.
         expect(_state(tester).audience, CommunityAudience.public);
+      },
+    );
+
+    testWidgets(
+      'above threshold — the confirmation caption comes from AppLocalizations, not a hardcoded string',
+      (tester) async {
+        // MAJOR-1 regression guard: the sheet used to render a Hungarian
+        // constant regardless of locale. `en` and `hu` captions are
+        // byte-different, so finding the `hu` caption under an `en` locale
+        // (and vice-versa) is only possible if the screen still reads a
+        // hardcoded string instead of `AppLocalizations.of(context)`.
+        await tester.pumpWidget(_harness(locale: const Locale('hu')));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.widgetWithText(ChoiceChip, 'Nyilvános'));
+        await tester.pumpAndSettle();
+
+        final huLabels = lookupAppLocalizations(const Locale('hu'));
+        final enLabels = lookupAppLocalizations(const Locale('en'));
+        expect(find.text(huLabels.communityPublicConfirmTitle), findsOneWidget);
+        expect(find.text(huLabels.communityPublicConfirmCta), findsOneWidget);
+        expect(find.text(enLabels.communityPublicConfirmTitle), findsNothing);
       },
     );
 
