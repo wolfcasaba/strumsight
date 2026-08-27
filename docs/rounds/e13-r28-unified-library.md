@@ -532,4 +532,186 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+### Mi épült
+
+`lib/features/library_v2/` — az egységes könyvtár, teljesen ÚJ fa:
+
+- **`domain/library_item.dart`** — az öt tétel-változat: `CorruptLibraryItem`,
+  `AnalysisLibraryItem`, `PracticeLibraryItem`, `SongLibraryItem`,
+  `SetlistLibraryItem` (sealed `LibraryItem` felett), plusz
+  `LibraryItemType` (4 valós tartalom-típus) és `LibrarySyncStatus`.
+- **`domain/library_item_source.dart`**, **`domain/library_delete_actions.dart`**,
+  **`domain/library_delete_scope.dart`** — a forrás- és törlés-portok.
+- **`data/`** — négy forrás-adapter, mindegyik a MEGLÉVŐ repository-t
+  csomagolja (nem nyit új tárolót, §5.4): `analysis_item_source.dart`
+  (`AnalysisRepository`), `practice_item_source.dart` (a
+  `PracticeHistoryRepository`-t egy injektált loader-closure-ön át, l.
+  lent), `song_item_source.dart` (`SongRepository`), `setlist_item_source.dart`
+  (`SetlistRepository`); `analysis_library_delete_actions.dart` a törlés
+  use case-t hívja.
+- **`providers/library_v2_providers.dart`** — a négy forrást összefésülő
+  `libraryV2ItemsProvider` (egy sérült forrás `CorruptLibraryItem`
+  placeholdert kap, a többi töretlen marad, §5.1), keresés/szűrés
+  providerek, törlés-akció provider.
+- **`screens/unified_library_screen.dart`**, **`screens/library_item_detail_screen.dart`**,
+  **`widgets/library_delete_section.dart`**, **`widgets/library_theme_scope.dart`**
+  — a lista, a típus-biztos részletnézet és a törlés-felület.
+- **`lib/app/routing/`** — a §0.0/B2 szerződés PONTOSAN: a
+  `AppRoutes.profileLibrary` builder átírva `UnifiedLibraryScreen`-re, és
+  hozzáadva `AppRoutes.profileLibrarySession` (`state.extra is LibraryItem`
+  redirect-tel a hiányzó/rossz extra esetére). A `:261` (`librarySession` →
+  `LibraryScreen`) és a `:302–310` (bare `/library` → `LibraryScreen`)
+  builder, valamint a teljes `lib/features/library/**` fa **érintetlen**.
+
+### Acceptance-mátrix (A1–A10)
+
+| # | Bizonyíték | Mért eredmény |
+|---|---|---|
+| A1 | `item_routing_test.dart` | ZÖLD — mind a négy típus + a corrupt placeholder + a nem-`LibraryItem` `extra` a saját (ill. list-re redirect) tartalmát nyitja |
+| A2 | `corrupt_item_test.dart` | ZÖLD — egy törött forrás mellett a többi tétel él, a corrupt detail-nézet nem omlik össze |
+| A3 | `corrupt_item_test.dart` | ZÖLD — a §0.0/B4 szerint a cella a RÉSZLETNÉZET renderelését méri offline `syncStatus` mellett, kommentben nevesítve a szimulált forrást |
+| A4 | `delete_confirmation_test.dart` | ZÖLD + **valódi-sértés próba lefutott (lásd lent)** |
+| A5 | `delete_confirmation_test.dart` (gépi grep) | ZÖLD — nincs `JsonDocumentStore`/`JsonCollectionStore`/`keyValueStoreProvider`/`.save(`/`.write(` a `library_v2/` fában |
+| A6 | `corrupt_item_test.dart` | ZÖLD — `hasRawAudio=false, hasResult=true` az eredményt elérhetőnek mutatja |
+| A7 | `sync_conflict_test.dart` | ZÖLD — mindkét verzió látszik, a választás callback-kel delegált, nincs tárolóírás (gépi grep is zöld) |
+| A8 | `item_routing_test.dart` | ZÖLD — `AppRoutes.library`/`AppRoutes.librarySession` változatlanul a `LibraryScreen`/`SessionDetailScreen`-t építi |
+| A9 | `e13_r28_screens_golden_test.dart` + `test/ui/goldens/*.png` | ZÖLD — l. golden-szakasz lent |
+| A10 | `test/features/library/` + `test/app/routing/app_router_test.dart` + `test/app/navigation/` | ZÖLD — l. A10-szakasz lent |
+
+### A4 valódi-sértés próba (mért, ebben a folytató körben elvégezve)
+
+`lib/features/library_v2/widgets/library_delete_section.dart`-ban a három
+scope-cella (`title, consequence, confirmLabel`) ideiglenesen egyetlen
+generic `('Delete?', 'This cannot be undone.', 'Yes')` hármasra lett
+cserélve — hatókör nevesítése nélkül, pontosan az 5.3 tiltott mintája.
+
+```
+flutter test test/features/library_v2/delete_confirmation_test.dart
+```
+
+**Mért kimenet: PIROS, mind a három §6.1 cella.** Mindhárom `expect(find.text(...), findsOneWidget)`
+hívás `Found 0 widgets` hibával bukott (a konkrét hatókör-szöveg helyett a
+generic szöveg jelent meg), pl.:
+
+```
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "Only the raw recording is deleted. The
+analysis result stays available.": []>
+```
+
+A fájl ezután `git checkout --` paranccsal visszaállítva az eredeti,
+scope-nevesített verzióra; a teszt utána ismét ZÖLD (`All tests passed!`,
+4/4). A cella tehát ténylegesen érzékeny a tiltott gyengítésre.
+
+### Golden-felvétel (A9)
+
+```
+tools/golden-x86.sh record test/ui/goldens/e13_r28_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r28_screens_golden_test.dart
+```
+
+Négy PNG commitolva (`test/ui/goldens/goldens/`):
+`e13_r28_unified_library_compact.png`, `e13_r28_unified_library_compact_scale2.png`,
+`e13_r28_library_item_detail_compact.png`, `e13_r28_library_item_detail_compact_scale2.png`
+— 412×915 compact portrait és `textScaleFactor: 2.0`, a két képernyőre
+(unified list + item detail). A kör gate-jén a
+`test/ui/goldens/e13_r28_screens_golden_test.dart` lépés ZÖLD (4/4 teszt).
+
+### A10 bizonyíték
+
+- `test/features/library/` (V1 pinek): a kör gate-jén **ZÖLD**, 12/12 teszt
+  — a legacy fa (`rename_capo_title_test.dart`, `session_rename_test.dart`,
+  `library_test.dart`) változatlan.
+- `test/app/routing/app_router_test.dart`: a kör gate-jén **ZÖLD**, 22/22
+  teszt — a legacy `librarySession`/bare-`/library` route-pár érintetlen
+  (l. `lib/app/routing/app_router.dart` diffje: a `:261`-i és `:302–310`-i
+  builder szó szerint `LibraryScreen()`/`SessionDetailScreen()` maradt).
+- `test/app/navigation/`: a kör gate-jén **ZÖLD**, 33/33 teszt, és **pontosan
+  két** típus-pin cella módosult (mindkettő a §0.0/B2 szerint):
+  - `adaptive_scaffold_test.dart`: `AppRoutes.profileLibrary: LibraryScreen`
+    → `UnifiedLibraryScreen`.
+  - `legacy_route_redirect_test.dart`: `AppRoutes.library: LibraryScreen`
+    → `UnifiedLibraryScreen`.
+  Egyetlen más pin (route→screen leképezés) NEM változott.
+
+### `test/ui/ui_inventory_test.dart`
+
+`hasLength(89)` → `hasLength(91)` — a kör két új production screent ad a
+fához (`unified_library_screen.dart`, `library_item_detail_screen.dart`);
+a jogosultság PONTOSAN a számemelés (§0.0/R4), más állítás a fájlban
+érintetlen. A kör gate-jén ZÖLD.
+
+### Architektúra-kapu — MÉRT állapot és a maradék, kör-hatókörön KÍVÜLI hiány
+
+A folytató munkamenet indulásakor a `test/core/architecture_dependency_test.dart`
+**PIROS** volt: 14 „cross-feature imports must target public.dart"
+sértéssel. A kör SAJÁT kódjában javítható 11 megoldva (mind import-útvonal
+csere egy MÁR teljesen exportáló `public.dart`-ra — `audio_analysis/public.dart`,
+`share/public.dart`, `practice/public.dart`; l. a `6605b92c` commit):
+
+- `analysis_item_source.dart`, `analysis_library_delete_actions.dart`,
+  `library_item_detail_screen.dart` → `audio_analysis/domain|application|presentation/*`
+  helyett `audio_analysis/public.dart` (minden hivatkozott szimbólum már ott él).
+- `library_item_detail_screen.dart` → `share/share_service.dart` helyett
+  `share/public.dart`.
+- `library_v2_providers.dart` → `audio_analysis/application/analysis_providers.dart`
+  és `practice/data/local_practice_history_repository.dart` helyett a
+  megfelelő `public.dart`.
+- `practice_item_source.dart`: a `PracticeHistoryRepository` TÍPUS nincs
+  exportálva a `practice/public.dart`-ból (csak a
+  `practiceHistoryRepositoryProvider` provider-szimbólum, `show`-val
+  szűkítve) — a forrás closure-alapúra lett átalakítva
+  (`Future<LibrarySourceLoad> Function() _load`), a típusos leképezés
+  a `library_v2_providers.dart`-ba költözött, ahol Dart típuskövetkeztetése
+  a `PracticeHistoryRepository`/`PracticeHistoryEntry` nevek KIÍRÁSA nélkül
+  is helyesen fordul (nincs `dynamic`, az `flutter analyze` 0 hibával fut).
+
+**3 sértés MARADT, egyetlen közös okra vezethető vissza, és a kör
+engedélyezett fájllistáján (§4) KÍVÜL eső javítást igényel:**
+
+```
+lib/features/library_v2/data/setlist_item_source.dart -> lib/features/song_trainer/domain/repositories/setlist_repository.dart
+lib/features/library_v2/data/song_item_source.dart -> lib/features/song_trainer/domain/repositories/song_repository.dart
+lib/features/library_v2/providers/library_v2_providers.dart -> lib/features/song_trainer/application/song_trainer_providers.dart
+```
+
+**Ok:** sem a `lib/features/song_trainer/public.dart` (csak 2 screen exportja
+van), sem a `lib/features/song_trainer/domain/public.dart` (csak
+modell/service exportok, `tool/check_architecture.dart` `_isFeaturePublicBarrel`
+szerint egyébként ÉRVÉNYES célpont lenne) nem exportálja a `SongRepository`,
+`SongQuery`, `SetlistRepository` típusokat vagy a `songRepositoryProvider`/
+`setlistRepositoryProvider` providereket. A `practice`-nél alkalmazott
+closure-trükk itt NEM zárja le a rést: a `songRepositoryProvider`/
+`setlistRepositoryProvider` SZIMBÓLUM maga csak a nem-public
+`song_trainer_providers.dart`-ban él, ezt semmilyen típusinferencia nem
+váltja ki — a szimbólum eléréséhez elkerülhetetlen egy nem-`public.dart`
+import valahol.
+
+**Miért nem oldható fel ebben a körben:** a javítás
+`lib/features/song_trainer/public.dart` és/vagy `domain/public.dart`
+bővítését igényelné — ez a §4 tiltott zónájában van
+(`lib/features/** a library_v2/ KIVÉTELÉVEL`). Az allowlist-bejegyzés
+alternatívája ADR-t igényelne (`tool/check_architecture.dart`: "adding an
+allowlist entry requires justification and an ADR"), az ADR-írás pedig a
+§B6 szerint **szintén tiltott** ebben a körben (`docs/adr/**` tiltott zóna).
+
+**Funkcionális hatás: NULLA.** Az összes gate-tesztfájl (`item_routing_test.dart`,
+`corrupt_item_test.dart`, `delete_confirmation_test.dart`,
+`sync_conflict_test.dart`, `library/`, `app/navigation/`,
+`app/routing/app_router_test.dart`, a golden teszt, `ui_inventory_test.dart`)
+**ZÖLD** — ezek `libraryV2SourcesProvider.overrideWithValue([...])`-vel fake
+adatot injektálnak, a valódi `SongItemSource`/`SetlistItemSource` production
+wiring-ot egyik gate-teszt sem futtatja át. A maradék 3 sértés kizárólag a
+`tool/check_architecture.dart` statikus import-ellenőrzését érinti.
+
+### Nevesített follow-up
+
+Egy KÖVETKEZŐ körnek (song_trainer hatókörrel, tehát nem E13) exportálnia
+kell a `SongRepository`, `SongQuery`, `SetlistRepository` típusokat és a
+`songRepositoryProvider`/`setlistRepositoryProvider` providereket a
+`lib/features/song_trainer/public.dart`-ból (vagy a `domain/public.dart`-ból,
+ha a domain-only export elég), hogy a `library_v2/data/song_item_source.dart`
+és `setlist_item_source.dart` átválthasson a `public.dart`-ra — ezzel az
+architektúra-kapu 14/14 sértése lezárható lenne.
+
 ## 11. Review — a Claude tölti ki
