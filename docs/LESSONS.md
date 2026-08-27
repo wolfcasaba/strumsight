@@ -19849,3 +19849,88 @@ ennek a körnek a **tiltott zónája** (§4), a `tools/`-hoz nyúlás pedig ADR 
 §4 szerint az önjavító kör hatásköre, nem a köré. A lecke ezért a §0.3
 szövegének pontosítását kéri egy jövőbeli governance-körtől; addig a fenti
 kétparancsos ellenőrzés a folytató orchestrátor kézi teendője.
+
+## L510 — A `timeout` kör-jelzés mellett a §10 handoff „a kapu zölden lefutott" állítása BIZONYÍTATLAN: a wrapper a gate KÖZBEN is ölhet, és a kész commitok látszata teljes futásnak tűnik (E13-R29, 2026-08-27)
+
+**Mit mértünk.** Az E13-R29 implementere (`sonnet-impl`) a
+`tools/mm-round.sh` **3600 s abszolút időkorlátjába** ütközött. A jelzésfájl:
+
+```
+status=timeout   dirty_files=0   gate_shape=ok
+scope_audit=ok   scope_audit_changed=22   head=8e9490d4
+```
+
+A branch ekkor 12 commitot, teljes implementációt, 6 commitolt golden PNG-t és
+egy részletes, kitöltött §10 handoffot tartalmazott, amelynek ELSŐ mondata ez
+volt: „**Kör-jelzés:** `done`. A §7 kapu (a teljes, engedélyezett parancs)
+zölden lefutott". A `done` jelzés viszont SOHA nem érkezett meg — a wrapper
+`timeout`-ot írt.
+
+**Miért csapda.** A `dirty_files=0` + `scope_audit=ok` + a kész §10 együtt
+pontosan úgy néz ki, mint egy sikeres kör; a `status=timeout` egyetlen szó a
+jelzésfájlban. A §10-et az implementer a gate ELINDÍTÁSA környékén írja meg (a
+szöveg a saját szándékát rögzíti), a wrapper pedig a gate futása KÖZBEN is
+ölhet — a lassú `flutter test` lépések a 3600 s nagy részét elviszik. Az
+állítás tehát nem hazugság, hanem **be nem fejezett** művelet leírása.
+
+**A mérés, ami eldöntötte.** Az orchestrátor a teljes mércét újrafuttatta a
+munkapéldányban: `tools/round-gate.sh` a brief §7 mind a 12 útvonalán
+**17/17 zöld** (`GATE_EXIT=0`), `tools/golden-x86.sh check` **6/6 zöld**. A
+kör tehát valóban kész volt — de ezt a MÉRÉS mondta ki, nem a handoff.
+
+**A szabály.** `status` ∈ {`timeout`, `stalled`, `unknown`} esetén a §10
+minden gate-állítása bizonyítatlan, és a review NEM fogadhatja el bemondásra —
+a `dirty_files=0` a munka MEGLÉTÉT igazolja, a mérce LEFUTÁSÁT nem. A két
+mező külön dolgot mér; összekeverésük a `docs/LESSONS.md` L21 néma-bukás
+osztálya.
+
+**Őrteszt:** nincs — a mérés a `tools/` fát érintené (a wrapper jelzés-
+szemantikája és a review-protokoll összekötése), ami a kör **tiltott zónája**
+(ADR 0087 §4). A lecke ezért a `sdd-round-review` skill szövegének
+pontosítását kéri egy jövőbeli governance-körtől; addig a fenti újrafuttatás a
+reviewer kézi teendője.
+
+## L511 — A `brief-lint` S11 „mondd ki a §0.0-ban" escape-ága NEM gépi: a predikátum kizárólag az `allowed_paths`-t nézi fedésnek, a `gate_tests`-et nem (E13-R29 pre-flight, 2026-08-27)
+
+**Mit mértünk.** Az E13-R29 pre-flightja az `allowed_paths`-t a nem létező
+`lib/features/{coach,tutor}/` előtagról a MÉRT `lib/features/ai_tutor/presentation/`
+rétegre cserélte (S13 feloldás). A csere UTÁN egy ÚJ lelet aktiválódott — az
+**S11** —, mert a felvett képernyők típusát a kör fáján kívül élő tesztek
+pinnelik (`test/app/navigation/adaptive_scaffold_test.dart`,
+`test/app/offline_network_guard_test.dart`).
+
+Az S11 lelet-szövege két utat kínál:
+
+1. „vedd fel a felsorolt teszteket az `allowed_paths`-ba ÉS a `gate_tests`-be";
+2. „Ha a kör a képernyőt bizonyíthatóan nem cseréli le, a §0.0 mondja ki ezt a
+   mérést".
+
+Az **1. út az orchestrátornak tágítás, azaz H3** ([L478](#l478)) — a lint saját
+lábjegyzete is ezt írja („a lista-tágítás NEM"). A 2. utat választva viszont a
+lelet **láthatóan bent marad**, mert — mérve, `tools/brief-lint.py:234` —
+az `outside_screen_pins()` a fedést KIZÁRÓLAG a `covered_by(relative,
+allowed_paths)` hívással dönti el; a `gate_tests` paraméterként átmegy a
+függvénynek, de a fedés-vizsgálatban **nem szerepel**. A pineket tehát a
+`gate_tests`-be felvenni (ami a rule saját kommentje szerint „a `gate_tests`-ben
+tiszta erősítés") a leletet NEM némítja el.
+
+**Miért nem hiba, hanem ismerendő tulajdonság.** A 2. ág szándékosan nem gépi:
+azt állítja, amit gép nem tud eldönteni (lecseréli-e a kör a képernyőt). A
+pre-flight dolga ilyenkor a lelet VÁLLALÁSA — kimondott méréssel és a
+`--level base` (a CI-kapu szintje) tisztán tartásával, ahogy az E13-R26 is
+tette a saját S13-ánál.
+
+**Amit a kör igazolt.** A §0.0/B9 nem ígéretet írt, hanem gépi őrt: a négy
+pinnelő teszt a `gate_tests`-be került (futtatni KELL, szerkeszteni TILOS). A
+kör közben pontosan a megjósolt hibaosztály ütött be — a `TutorHomeScreen`
+`ConsumerWidget`-té alakítása `ProviderException`-nel elbuktatta a pinnelt
+`adaptive_scaffold_test.dart`-ot —, és az implementer a **saját kódját**
+állította vissza (`7efa1059`), mert a tesztet nem szerkeszthette. A lelet a
+**lokális** kapun jött elő, nem CI-only leletként: pontosan az, amit az S11 meg
+akar előzni, csak tágítás nélkül.
+
+**Őrteszt:** nincs — a predikátum megváltoztatása a `tools/` fát érintené, ami
+ennek a körnek a **tiltott zónája** (ADR 0087 §4). A lecke a lelet-szöveg
+pontosítását kéri egy jövőbeli governance-körtől (mondja ki, hogy a 2. ág
+vállalása mellett a lelet bent marad, és a `--level base` a mérce); addig ez a
+lecke a hivatkozható indoklás.

@@ -1,5 +1,59 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R29 KÉSZ — Coach Home, Tutor és Debrief UI — PR [#474](https://github.com/wolfcasaba/strumsight/pull/474), squash `7dd21a64` (2026-08-27)
+
+Az UI-42–UI-44 **provenance-tudatos** AI-coaching felülete (SDD Ch13 Kör 29):
+Coach kezdőképernyő, beszélgetés-felület és debrief / terv-előnézet. A kör
+**ADR-t nem írt** — a kiosztott `0287` 2026-08-15 óta merge-elt (a sávon a
+**tizenkettedik** ADR nélküli kör egymás után, E13-R17…R29). Implementer
+`sonnet-impl` (Claude Sonnet 5, `--effort high`), orchesztrátor/reviewer Claude
+Opus 5, **0 javító kör** — a review első fordulóban APPROVED (0 BLOCKER,
+0 MAJOR, 2 MINOR, 3 NOTE, `docs/reviews/e13-r29-review.md`).
+
+**A pre-flight legsúlyosabb lelete (§0.0/B1).** A brief `lib/features/coach/`
+és `lib/features/tutor/` könyvtár-előtagot sorolt fel — egyik sem létezik
+(`brief-lint` S13) —, és a batch pre-flight feloldása („a képernyőket EZ a kör
+hozza létre") **mérhetően hamis** volt: a coach/tutor/debrief felület a
+`lib/features/ai_tutor/presentation/` fában él, három MEGLÉVŐ képernyővel
+(`tutor_home_screen`, `tutor_chat_screen`, `practice_plan_preview_screen`) és
+nyolc widgettel. Ez tehát **migrációs**, nem zöldmezős kör volt. A lista a MÉRT
+rétegre cserélve, szigorúan szűkebben, mint a szomszéd kör user-jóváhagyott
+alakja (nincs `public.dart`, nincs teljes providers-fa, nincs
+`application/`/`domain/`).
+
+**Két merge-elt ADR-határ kimérve a pre-flightban.** (1) Az A2/A4 „tool-akció"
+fogalma = `TutorAction` (write/launch); a `ReadOnlyTutorTools.safeToolNames`
+zárt halmaza az ADR 0133 §2 / ADR 0137 §1–2 **explicit mentesítése**, tehát a
+megerősítés megkövetelése rajta **H2** lett volna. (2) A brief §7-je
+`flutter test --update-goldens`-t írt elő, ami ütközik a merge-elt ADR 0426
+§2–§3-mal (ARM-felvétel az x86-os kapun mindig piros) — a §7 a
+`tools/golden-x86.sh record`/`check` alakra váltott.
+
+**A §0.0/B9 gépi őr IGAZOLÓDOTT.** A brief-lint `S11` első ága (a pinnelő
+tesztek `allowed_paths`-ra vétele) az orchestrátornak tágítás = H3
+([L478](docs/LESSONS.md#l478)), ezért a pre-flight a MÁSODIK ágat választotta:
+a kör MÓDOSÍTJA a képernyőket, nem cseréli a típusukat, és a négy pinnelő
+teszt a `gate_tests`-be került (futtatni KELL, szerkeszteni TILOS). A kör
+közben pontosan ez ütött be: a `TutorHomeScreen` `ConsumerWidget`-té alakítása
+elbuktatta a listán kívüli `test/app/navigation/adaptive_scaffold_test.dart`-ot,
+és az implementer a **saját kódját** állította vissza (`7efa1059`) — nem a
+tesztet írta át. A lelet a LOKÁLIS kapun jött elő, nem CI-only leletként.
+
+**Az implementer futása `timeout`-tal zárult**, miközben a §10 handoff zöld
+kaput állított — a jelzés mellett ez **bizonyítatlan**, ezért a reviewer a
+teljes mércét újrafuttatta: `round-gate.sh` 17/17 zöld, `golden-x86.sh check`
+6/6 zöld, `scope_audit=ok` (22 fájl). A munka `dirty_files=0`-val commitolva
+volt, tehát nem veszett el semmi.
+
+**Két MINOR maradt nyitva** (merge nincs blokkolva): a „nincs mért bizonyíték"
+jelzés TÍPUS-alapú, nem TARTALOM-alapú (üres evidence-blokk elnyomja — a
+[L403](docs/LESSONS.md#l403) osztály, amit a brief §6.1-e csak az A2/A3-ra írt
+elő), és a két tool-akció-kártya továbbra sincs bekötve (nem regresszió: a
+base-en sem volt, a bekötés a tilos `application/` réteget kívánná).
+
+**Következő kör:** `E13-R30` — Vision UI (`docs/rounds/e13-r30-vision-ui.md`,
+ADR `0288`), új sessionben.
+
 ## ✅ E13-R28 KÉSZ — Unified Library és Session Detail UI — PR [#473](https://github.com/wolfcasaba/strumsight/pull/473), squash `a3179aa1` (2026-08-27)
 
 Az UI-40–UI-41 **egységes könyvtára** (SDD Ch13 Kör 28): egy felület, amin a
@@ -7980,7 +8034,21 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-26):** `main` @ `d9f46623` — E13-R26 Analyze Home,
+**Aktuális állapot (2026-08-27):** `main` @ `7dd21a64` — E13-R29 Coach Home,
+Tutor és Debrief UI, PR
+[#474](https://github.com/wolfcasaba/strumsight/pull/474), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **0 javító kör** — a review első
+fordulóban APPROVED (0 BLOCKER, 0 MAJOR, 2 MINOR, 3 NOTE,
+`docs/reviews/e13-r29-review.md`). A kör **ADR-t nem írt** — a kiosztott
+`0287` 2026-08-15 óta merge-elt (**tizenkettedik** ADR nélküli kör a sávon).
+Exact-SHA evidencia a merge SHA-n (`62b69dab`): Full Gate
+[33040792425](https://github.com/wolfcasaba/strumsight/actions/runs/33040792425)
+`success` + Router CI
+[33040829776](https://github.com/wolfcasaba/strumsight/actions/runs/33040829776)
+`success`. Részletek a fájl tetején.
+
+**Korábbi (2026-08-26):** `main` @ `d9f46623` — E13-R26 Analyze Home,
 Recording és Processing UI, PR
 [#470](https://github.com/wolfcasaba/strumsight/pull/470), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -8865,7 +8933,18 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E13-R21 — Practice setup, aktív session és pause/recovery UI** (PR
+**E13-R29 — Coach Home, Tutor és Debrief UI** (PR
+[#474](https://github.com/wolfcasaba/strumsight/pull/474), squash `7dd21a64`).
+Az UI-42–UI-44 provenance-tudatos AI-coaching felülete: az AI-mód képernyő- ÉS
+üzenet-szinten látható, minden `TutorAction` az `SsToolConfirmationSheet` mögé
+került (a terv-mentés/indítás korábban KÖZVETLENÜL hívta a callbacket — ez
+keményítés), a terv-módosítás valódi diff-fel jelenik meg. **0 javító kör**,
+0 BLOCKER/MAJOR, 2 MINOR. A `security-reviewer` (kötelező, `risk = "high"`):
+PASS. Két lecke: [L510](docs/LESSONS.md#l510) (a `timeout` jelzés mellett a
+handoff zöld-kapu állítása bizonyítatlan), [L511](docs/LESSONS.md#l511) (a
+`brief-lint` S11 escape-ága nem gépi — a `gate_tests` nem fedés).
+
+**Korábbi: E13-R21 — Practice setup, aktív session és pause/recovery UI** (PR
 [#463](https://github.com/wolfcasaba/strumsight/pull/463), squash `e209af39`).
 Az UI-18–UI-20 migrációja a MEGLÉVŐ gyakorlási állapotgéphez kapcsolva; a
 Pause/Recovery **overlay**, nem külön route, és kizárólag a
