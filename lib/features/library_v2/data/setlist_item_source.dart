@@ -1,4 +1,4 @@
-import '../../song_trainer/domain/repositories/setlist_repository.dart';
+import '../../song_trainer/public.dart';
 import '../domain/library_item.dart';
 import '../domain/library_item_source.dart';
 

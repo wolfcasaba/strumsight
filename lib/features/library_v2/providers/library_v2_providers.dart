@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../audio_analysis/public.dart';
 import '../../practice/public.dart';
-import '../../song_trainer/application/song_trainer_providers.dart';
+import '../../song_trainer/public.dart';
 import '../data/analysis_item_source.dart';
 import '../data/analysis_library_delete_actions.dart';
 import '../data/practice_item_source.dart';
