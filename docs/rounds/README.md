@@ -52,3 +52,30 @@ egymást kizáró útból indul; a pre-flight az R13 elfogadott ADR-je alapján
 pontosan egyet aktivál, a másikat tiltott zónává teszi. Az R19 csak a Practice
 feature tényleges publikus contractján keresztül indulhat; belső Practice import
 nem használható a hiányzó boundary megkerülésére.
+
+## Chapter 12 — Release Roadmap & Final Integration előkészített batch
+
+**Tervezési baseline:** 2026-08-27, `main` @ `9ca4a0dc`. **36 brief** (`E12-R01`–`E12-R36`),
+mind `PREPARED`. ADR-tartomány: **0443–0465** (az Epic 10 batch 0442-ig kiosztott
+számai érintetlenek). Queue: 36 `hold` sor az E13 blokk után.
+
+**User-döntés 2026-08-27:** a sáv a teljes UI (Chapter 13) elkészülte UTÁN indul,
+**2 párhuzamos sloton**, Opus 5 orchestrátorral és Claude Sonnet 5 (`--effort high`)
+implementerrel; az **Epic 10 (Offline AI) marad utolsónak**.
+
+**A fejezet 36 kört tartalmaz**, nem 42-t — a `docs/sdd/00-index.md` értéke MÉRT hiba,
+amit az `E12-R02` gépi ellenőrzéssel javít (`tool/check_sdd_index.dart`).
+
+| Fázis | Körök | Tárgy |
+|---|---|---|
+| I — Program- és repository-alapok | E12-R01–R05 | baseline és blocker-lista, SDD-index + dependency graph, delivery workflow, környezet-izoláció, feature flag registry |
+| II — Kiadási artefaktum és backend | E12-R06–R08 | versioning/provenance/SBOM, production signing, staging + migráció + recovery |
+| III — Integráció és mérce | E12-R09–R16 | esemény-katalógus, idempotens outbox, e2e harness, fixture-korpusz, device-mátrix, performance budget, erőforrás-koegzisztencia, AI release gate |
+| IV — Privacy, security, minőség | E12-R17–R21 | adat-leltár + consent enforcement, threat model + scan, telemetria/SLO, a11y + l10n audit, tartalom-katalógus |
+| V — Béta és RC | E12-R22–R26 | béta-terjesztés + feedback, legacy migráció RC, store/legal csomag, RC-összeállítás, rollback-gyakorlat |
+| VI — Rollout és zárás | E12-R27–R36 | Closed Beta, scope cut, Open Beta, feature freeze, production cohort, staged rollout, GA, post-launch + hotfix, adósság-takarítás, program-zárójelentés |
+
+**Emberi kapu:** az `E12-R27`, `R29`, `R31`, `R32` és `R33` körök tényleges INDÍTÁSA
+(tesztelő-meghívás, deploy, rollout-százalék, GA) user-művelet — ugyanaz a kapu-típus,
+mint a valós gitáros APK-teszt. Ezek briefjei ezért eszközt, ellenőrzőlistát és
+döntési sémát szállítanak, nem magát a műveletet; a §0.0 mindegyikben kimondja a határt.
