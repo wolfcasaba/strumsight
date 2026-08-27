@@ -1,5 +1,5 @@
 /// Verified-only leaderboard screen (E09-R23, ADR 0418, brief
-/// §6 A7).
+/// §6 A7; design-system migration + A1/A7 hardening E13-R34).
 ///
 /// The screen renders the projection returned by
 /// ``CommunityChallengeRepository.leaderboard()`` (the Kör 23
@@ -32,10 +32,23 @@
 /// vertically). The list uses
 /// ``AlwaysScrollableScrollPhysics`` so a small list remains
 /// scrollable for refresh.
+///
+/// **A1 — opt-in stays server-owned (§0.0.B/B5).** This screen only
+/// ever READS ``leaderboard()``; it has no join / accept flow of its
+/// own and never issues a write here, so it cannot enroll a viewer
+/// onto the ranking as a side effect of any action.
+///
+/// **A7 — "load more" idempotency.** The button re-invalidates the
+/// SAME first-page provider and the body always renders exactly
+/// that provider's current page — never an accumulated list — so a
+/// repeated tap cannot duplicate or drop a row (there is nothing to
+/// append to).
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:strumsight/core/design_system/public.dart';
 
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -43,6 +56,7 @@ import '../../data/repositories/challenge_repository_impl.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/cursor_page.dart';
+import '../widgets/community_theme_scope.dart';
 
 /// First-page size — matches the Kör 22 ``listChallenges``
 /// pattern (the future round can re-tune against the A5
@@ -86,35 +100,37 @@ class LeaderboardScreen extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     final state = ref.watch(leaderboardProvider(challengeId));
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Semantics(
-          header: true,
-          child: Text(localizations.communityChallengeTitle),
-        ),
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(leaderboardProvider(challengeId));
-          await ref.read(leaderboardProvider(challengeId).future);
-        },
-        child: state.when(
-          data: (page) => _Body(
-            page: page,
-            localizations: localizations,
-            onLoadMore: () async {
-              ref.invalidate(leaderboardProvider(challengeId));
-              await ref.read(leaderboardProvider(challengeId).future);
-            },
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Semantics(
+            header: true,
+            child: Text(localizations.communityChallengeTitle),
           ),
-          loading: () => const _LoadingView(),
-          error: (error, _) => _ErrorView(
-            failure: UnknownFailure(code: FailureCode.unknown, cause: error),
-            localizations: localizations,
-            onRetry: () async {
-              ref.invalidate(leaderboardProvider(challengeId));
-              await ref.read(leaderboardProvider(challengeId).future);
-            },
+        ),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(leaderboardProvider(challengeId));
+            await ref.read(leaderboardProvider(challengeId).future);
+          },
+          child: state.when(
+            data: (page) => _Body(
+              page: page,
+              localizations: localizations,
+              onLoadMore: () async {
+                ref.invalidate(leaderboardProvider(challengeId));
+                await ref.read(leaderboardProvider(challengeId).future);
+              },
+            ),
+            loading: () => const _LoadingView(),
+            error: (error, _) => _ErrorView(
+              failure: UnknownFailure(code: FailureCode.unknown, cause: error),
+              localizations: localizations,
+              onRetry: () async {
+                ref.invalidate(leaderboardProvider(challengeId));
+                await ref.read(leaderboardProvider(challengeId).future);
+              },
+            ),
           ),
         ),
       ),
@@ -151,9 +167,9 @@ class _Body extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Center(
-              child: TextButton(
-                onPressed: onLoadMore,
-                child: Text(localizations.communityChallengeAccept),
+              child: SsButton(
+                onPressed: () => onLoadMore(),
+                label: localizations.communityChallengeLoadMore,
               ),
             ),
           );
@@ -334,9 +350,9 @@ class _ErrorView extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: onRetry,
-                child: Text(localizations.communityChallengeAccept),
+              SsButton(
+                onPressed: () => onRetry(),
+                label: localizations.communityNotificationsRetry,
               ),
             ],
           ),

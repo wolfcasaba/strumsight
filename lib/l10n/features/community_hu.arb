@@ -463,6 +463,9 @@
   "communityChallengeListHeader": "Nyílt kihívások",
   "@communityChallengeListHeader": {},
 
+  "communityChallengeLoadMore": "Továbbiak betöltése",
+  "@communityChallengeLoadMore": {},
+
   "communityChallengeMetricLabel": "Mérték: {metric}",
   "@communityChallengeMetricLabel": {
     "placeholders": {
@@ -569,5 +572,214 @@
   "@reportSheetErrorInvalid": {},
 
   "reportSheetErrorNetwork": "Nincs hálózati kapcsolat",
-  "@reportSheetErrorNetwork": {}
+  "@reportSheetErrorNetwork": {},
+
+  "communityClubListTitle": "Klubok",
+  "@communityClubListTitle": {},
+
+  "communityClubListEmpty": "Még nincs klub. Hozz létre egyet a kezdéshez.",
+  "@communityClubListEmpty": {},
+
+  "communityClubListError": "A klubok nem tölthetők be.",
+  "@communityClubListError": {},
+
+  "communityClubListRetry": "Újra",
+  "@communityClubListRetry": {},
+
+  "communityClubListCreate": "Klub létrehozása",
+  "@communityClubListCreate": {},
+
+  "communityClubListCreateName": "Klub neve",
+  "@communityClubListCreateName": {},
+
+  "communityClubListCreateDescription": "Leírás",
+  "@communityClubListCreateDescription": {},
+
+  "communityClubListCreateVisibility": "Láthatóság",
+  "@communityClubListCreateVisibility": {},
+
+  "communityClubListCreateSubmit": "Létrehozás",
+  "@communityClubListCreateSubmit": {},
+
+  "communityClubListCreateCancel": "Mégse",
+  "@communityClubListCreateCancel": {},
+
+  "communityClubListLoadMore": "Továbbiak betöltése",
+  "@communityClubListLoadMore": {},
+
+  "communityClubVisibilityPrivate": "Privát",
+  "@communityClubVisibilityPrivate": {},
+
+  "communityClubVisibilityDiscoverable": "Felfedezhető",
+  "@communityClubVisibilityDiscoverable": {},
+
+  "communityClubVisibilityPublic": "Nyilvános",
+  "@communityClubVisibilityPublic": {},
+
+  "communityClubMemberCountLabel": "{visibility} · {count} tag",
+  "@communityClubMemberCountLabel": {
+    "placeholders": {
+      "visibility": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "communityClubDetailTitle": "Klub",
+  "@communityClubDetailTitle": {},
+
+  "communityClubDetailError": "A klub nem tölthető be.",
+  "@communityClubDetailError": {},
+
+  "communityClubDetailRetry": "Újra",
+  "@communityClubDetailRetry": {},
+
+  "communityClubDetailJoin": "Csatlakozás kérése",
+  "@communityClubDetailJoin": {},
+
+  "communityClubDetailLeave": "Klub elhagyása",
+  "@communityClubDetailLeave": {},
+
+  "communityClubDetailManage": "Tagok kezelése",
+  "@communityClubDetailManage": {},
+
+  "communityClubDetailRoleOwner": "Tulajdonos",
+  "@communityClubDetailRoleOwner": {},
+
+  "communityClubDetailRoleModerator": "Moderátor",
+  "@communityClubDetailRoleModerator": {},
+
+  "communityClubDetailRoleMember": "Tag",
+  "@communityClubDetailRoleMember": {},
+
+  "communityClubDetailRoleNone": "Nem vagy tag",
+  "@communityClubDetailRoleNone": {},
+
+  "communityClubDetailRoleSemanticLabel": "Szerep: {role}",
+  "@communityClubDetailRoleSemanticLabel": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+
+  "communityClubTabFeed": "Hírfolyam",
+  "@communityClubTabFeed": {},
+
+  "communityClubTabChallenges": "Kihívások",
+  "@communityClubTabChallenges": {},
+
+  "communityClubTabMembers": "Tagok",
+  "@communityClubTabMembers": {},
+
+  "communityClubTabAbout": "Névjegy",
+  "@communityClubTabAbout": {},
+
+  "communityClubFeedEmpty": "Ebben a klubban még nincs poszt.",
+  "@communityClubFeedEmpty": {},
+
+  "communityClubFeedPinnedHeader": "Kitűzött",
+  "@communityClubFeedPinnedHeader": {},
+
+  "communityClubFeedRecentHeader": "Legutóbbi",
+  "@communityClubFeedRecentHeader": {},
+
+  "communityClubChallengesEmpty": "Nincs aktív kihívás.",
+  "@communityClubChallengesEmpty": {},
+
+  "communityClubChallengesDifficultyPrefix": "Nehézség",
+  "@communityClubChallengesDifficultyPrefix": {},
+
+  "communityClubAboutEmpty": "Nincs leírás.",
+  "@communityClubAboutEmpty": {},
+
+  "communityClubMembersTabHint": "A taglista megtekintéséhez nyisd meg a tagkezelő képernyőt.",
+  "@communityClubMembersTabHint": {},
+
+  "communityClubPrivateRestrictedTitle": "Ez a klub privát",
+  "@communityClubPrivateRestrictedTitle": {},
+
+  "communityClubPrivateRestrictedBody": "A klub tartalmát csak a tagok láthatják.",
+  "@communityClubPrivateRestrictedBody": {},
+
+  "communityClubJoinToSeeMore": "Csatlakozz a klubhoz, hogy lásd a hírfolyamot, a kihívásokat és a tagokat.",
+  "@communityClubJoinToSeeMore": {},
+
+  "communityClubManageTitle": "Klub kezelése",
+  "@communityClubManageTitle": {},
+
+  "communityClubManageError": "A tagok nem tölthetők be.",
+  "@communityClubManageError": {},
+
+  "communityClubManageErrorNetwork": "A művelet nem hajtható végre — ellenőrizd a kapcsolatot.",
+  "@communityClubManageErrorNetwork": {},
+
+  "communityClubManageErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra.",
+  "@communityClubManageErrorSessionExpired": {},
+
+  "communityClubManageErrorForbidden": "Nincs jogosultságod ehhez a művelethez.",
+  "@communityClubManageErrorForbidden": {},
+
+  "communityClubManageErrorInvalidInput": "Érvénytelen kérés.",
+  "@communityClubManageErrorInvalidInput": {},
+
+  "communityClubManageRetry": "Újra",
+  "@communityClubManageRetry": {},
+
+  "communityClubManageEmpty": "Még nincs tag.",
+  "@communityClubManageEmpty": {},
+
+  "communityClubManageActionPromote": "Előléptetés moderátorrá",
+  "@communityClubManageActionPromote": {},
+
+  "communityClubManageActionDemote": "Visszaminősítés taggá",
+  "@communityClubManageActionDemote": {},
+
+  "communityClubManageActionRemove": "Eltávolítás",
+  "@communityClubManageActionRemove": {},
+
+  "communityClubManageActionTransfer": "Tulajdonjog átadása",
+  "@communityClubManageActionTransfer": {},
+
+  "communityClubManageActionBlock": "Tag tiltása",
+  "@communityClubManageActionBlock": {},
+
+  "communityClubManageActionMute": "Tag némítása",
+  "@communityClubManageActionMute": {},
+
+  "communityClubManageRoleOwner": "Tulajdonos",
+  "@communityClubManageRoleOwner": {},
+
+  "communityClubManageRoleModerator": "Moderátor",
+  "@communityClubManageRoleModerator": {},
+
+  "communityClubManageRoleMember": "Tag",
+  "@communityClubManageRoleMember": {},
+
+  "communityChallengeActionBlockAuthor": "Szerző tiltása",
+  "@communityChallengeActionBlockAuthor": {},
+
+  "communityChallengeActionMuteAuthor": "Szerző némítása",
+  "@communityChallengeActionMuteAuthor": {},
+
+  "communityChallengeResultPending": "Az eredmény beküldve — ellenőrzés folyamatban.",
+  "@communityChallengeResultPending": {},
+
+  "communityChallengeResultVerified": "Ellenőrzött eredmény: {value}",
+  "@communityChallengeResultVerified": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+
+  "communityChallengeResultVerifiedIcon": "Ellenőrizve",
+  "@communityChallengeResultVerifiedIcon": {},
+
+  "communityChallengeMyResultAction": "Saját eredmény megtekintése"
 }

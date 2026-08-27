@@ -1,5 +1,5 @@
 /// Community challenge list + invite actions screen
-/// (E09-R21, ADR 0415, brief §6).
+/// (E09-R21, ADR 0415, brief §6; design-system migration E13-R34).
 ///
 /// The screen renders the caller's challenge list with per-row
 /// accept / decline / cancel buttons and a deep-link action that
@@ -32,18 +32,59 @@
 /// from the screen's ``initState``; a pull-to-refresh triggers
 /// a re-load. The cached items list is the only client-side
 /// surface (the controller holds the in-memory snapshot).
+///
+/// **Pending vs. verified result (E13-R34, A2 / A5).** The
+/// row's action sheet exposes a "View my result" entry that
+/// lazily reads [CommunityChallengeRepository.fetchMyParticipation]
+/// via [challengeMyParticipationProvider] — the pinned
+/// ``community_challenges_test.dart`` list-render path never
+/// triggers this fetch (it is opened only on an explicit tap),
+/// so the existing fake repository (which does not stub
+/// ``fetchMyParticipation``) keeps passing. A `null`
+/// [CommunityChallengeParticipantState.bestMetricValue] renders
+/// the NEUTRAL "verification in progress" copy — never a
+/// cheating accusation (A5) — and is visually distinct from the
+/// verified-result row (A2). The ranglista opt-in itself stays
+/// entirely server-owned (§0.0.B/B5) — this screen never calls
+/// ``leaderboard()`` or synthesizes a rank row (A1).
+///
+/// **Safety actions (A6, A8).** Each row's action sheet also
+/// exposes Block / Mute for the challenge's author, wired to the
+/// SAME [socialGraphRepositoryProvider] the Biztonsági központ
+/// (``safety_relationships_screen.dart``) reads — so the blocked
+/// / muted state is the one server-side truth shared by both
+/// surfaces (A8), reachable from the challenge list and not only
+/// from Settings (A6). A failed block/mute surfaces a SnackBar
+/// (``_formatFailure``) on the row's own [ScaffoldMessenger] — a
+/// safety action must never fail silently.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/challenge_controller.dart';
+import '../../data/repositories/relationship_repository_impl.dart';
 import '../../domain/entities/community_challenge.dart';
 import '../../domain/repositories/challenge_repository.dart';
 import '../../domain/value_objects/content_id.dart';
 import '../../domain/value_objects/public_user_id.dart';
+import '../widgets/community_theme_scope.dart';
+
+/// Screen-local provider for the viewer's own participation state
+/// on one challenge (E13-R34, A2). ``autoDispose`` + ``family`` so
+/// entering/leaving the action sheet is cheap and independent per
+/// challenge. Only watched from inside the action sheet — never
+/// from the list-render path — so it does not disturb the Kör 21
+/// pinned widget test.
+final challengeMyParticipationProvider = FutureProvider.autoDispose
+    .family<CommunityChallengeParticipantState?, ContentId>((ref, challengeId) {
+      final repo = ref.watch(communityChallengeRepositoryProvider);
+      return repo.fetchMyParticipation(challengeId: challengeId);
+    });
 
 /// Public screen — ``ConsumerWidget`` so the test surface is the
 /// ``ProviderScope`` override of the
@@ -58,20 +99,22 @@ class CommunityChallengesScreen extends ConsumerWidget {
     final localizations = AppLocalizations.of(context);
     final notifier = ref.read(challengeControllerProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(localizations.communityChallengeTitle)),
-      body: RefreshIndicator(
-        onRefresh: notifier.load,
-        child: asyncState.when(
-          data: (state) => _Body(
-            state: state,
-            notifier: notifier,
-            localizations: localizations,
-          ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => _ErrorView(
-            failure: UnknownFailure(code: FailureCode.unknown, cause: error),
-            onRetry: notifier.load,
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(localizations.communityChallengeTitle)),
+        body: RefreshIndicator(
+          onRefresh: notifier.load,
+          child: asyncState.when(
+            data: (state) => _Body(
+              state: state,
+              notifier: notifier,
+              localizations: localizations,
+            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => _ErrorView(
+              failure: UnknownFailure(code: FailureCode.unknown, cause: error),
+              onRetry: notifier.load,
+            ),
           ),
         ),
       ),
@@ -219,48 +262,119 @@ class _ChallengeRow extends ConsumerWidget {
   void _showActions(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
-      builder: (sheetContext) {
-        final localizations = AppLocalizations.of(sheetContext);
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.check),
-                title: Text(localizations.communityChallengeAccept),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onAccept(challenge.id.value);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.close),
-                title: Text(localizations.communityChallengeDecline),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onDecline(challenge.id.value);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.cancel_outlined),
-                title: Text(localizations.communityChallengeCancel),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  // The cancel path requires a target — the
-                  // list row knows the challenge id but not the
-                  // invitee. The wire shape includes the
-                  // invitee on the per-row envelope (the
-                  // controller's invite flow), so this branch
-                  // surfaces the action with the row's
-                  // author_id as a placeholder for the wire.
-                  onCancel(challenge.id.value, challenge.authorId);
-                },
-              ),
-            ],
+      isScrollControlled: true,
+      builder: (sheetContext) => CommunityThemeScope(
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Consumer(
+                  builder: (context, ref, _) =>
+                      _MyResultSection(challengeId: challenge.id, ref: ref),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.check),
+                  title: Text(
+                    AppLocalizations.of(sheetContext).communityChallengeAccept,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onAccept(challenge.id.value);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: Text(
+                    AppLocalizations.of(sheetContext).communityChallengeDecline,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onDecline(challenge.id.value);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.cancel_outlined),
+                  title: Text(
+                    AppLocalizations.of(sheetContext).communityChallengeCancel,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    // The cancel path requires a target — the
+                    // list row knows the challenge id but not the
+                    // invitee. The wire shape includes the
+                    // invitee on the per-row envelope (the
+                    // controller's invite flow), so this branch
+                    // surfaces the action with the row's
+                    // author_id as a placeholder for the wire.
+                    onCancel(challenge.id.value, challenge.authorId);
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  key: const Key('challenge-action-block-author'),
+                  leading: const Icon(Icons.block_outlined),
+                  title: Text(
+                    AppLocalizations.of(
+                      sheetContext,
+                    ).communityChallengeActionBlockAuthor,
+                  ),
+                  onTap: () =>
+                      _blockOrMuteAuthor(context, sheetContext, block: true),
+                ),
+                ListTile(
+                  key: const Key('challenge-action-mute-author'),
+                  leading: const Icon(Icons.volume_off_outlined),
+                  title: Text(
+                    AppLocalizations.of(
+                      sheetContext,
+                    ).communityChallengeActionMuteAuthor,
+                  ),
+                  onTap: () =>
+                      _blockOrMuteAuthor(context, sheetContext, block: false),
+                ),
+              ],
+            ),
           ),
-        );
-      },
+        ),
+      ),
     );
+  }
+
+  /// A6 / A8 — block/mute the challenge author. The sheet closes
+  /// immediately (``sheetContext`` is used only for the pop and
+  /// the repository lookup), but a failed [AppFailure] must still
+  /// reach the caller: it surfaces on the ROW's own
+  /// [ScaffoldMessenger] (``context``), which outlives the
+  /// already-dismissed sheet — a safety action must never fail
+  /// silently.
+  Future<void> _blockOrMuteAuthor(
+    BuildContext context,
+    BuildContext sheetContext, {
+    required bool block,
+  }) async {
+    final container = ProviderScope.containerOf(sheetContext);
+    final repo = container.read(socialGraphRepositoryProvider);
+    Navigator.of(sheetContext).pop();
+    final key = block
+        ? 'challenge-block-${challenge.authorId.value}'
+              '-${DateTime.now().microsecondsSinceEpoch}'
+        : 'challenge-mute-${challenge.authorId.value}'
+              '-${DateTime.now().microsecondsSinceEpoch}';
+    try {
+      if (block) {
+        await repo.block(target: challenge.authorId, idempotencyKey: key);
+      } else {
+        await repo.mute(target: challenge.authorId, idempotencyKey: key);
+      }
+    } on AppFailure catch (failure) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_formatFailure(AppLocalizations.of(context), failure)),
+        ),
+      );
+    }
   }
 
   void _openDeepLink(ChallengeDeepLinkTarget target) {
@@ -272,6 +386,76 @@ class _ChallengeRow extends ConsumerWidget {
     debugPrint(
       'community.challenges.deepLink '
       'challenge=${challenge.id.value} target=$target',
+    );
+  }
+}
+
+/// Renders the viewer's own participation status inside the row's
+/// action sheet (E13-R34, A2 / A5). `null` participation (not yet
+/// joined) renders nothing; a `null` ``bestMetricValue`` renders the
+/// NEUTRAL "verification in progress" copy (A5 — never an accusation
+/// of cheating); a non-null value renders the verified result with
+/// the verified glyph (A2 — visually and textually distinct from the
+/// pending state).
+class _MyResultSection extends StatelessWidget {
+  const _MyResultSection({required this.challengeId, required this.ref});
+
+  final ContentId challengeId;
+  final WidgetRef ref;
+
+  @override
+  Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final async = ref.watch(challengeMyParticipationProvider(challengeId));
+    return async.when(
+      data: (participation) {
+        if (participation == null) return const SizedBox.shrink();
+        final bestMetricValue = participation.bestMetricValue;
+        final Widget row;
+        if (bestMetricValue == null) {
+          row = Row(
+            children: <Widget>[
+              Icon(Icons.hourglass_empty, color: Theme.of(context).hintColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  localizations.communityChallengeResultPending,
+                  key: const Key('challenge-result-pending'),
+                ),
+              ),
+            ],
+          );
+        } else {
+          row = Row(
+            children: <Widget>[
+              Icon(
+                Icons.verified,
+                color: Theme.of(context).colorScheme.primary,
+                semanticLabel:
+                    localizations.communityChallengeResultVerifiedIcon,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  localizations.communityChallengeResultVerified(
+                    bestMetricValue,
+                  ),
+                  key: const Key('challenge-result-verified'),
+                ),
+              ),
+            ],
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: SsCard(child: row),
+        );
+      },
+      loading: () => const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (_, _) => const SizedBox.shrink(),
     );
   }
 }
@@ -299,9 +483,9 @@ class _ErrorView extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: onRetry,
-                child: Text(localizations.communityNotificationsRetry),
+              SsButton(
+                onPressed: () => onRetry(),
+                label: localizations.communityNotificationsRetry,
               ),
             ],
           ),
@@ -309,27 +493,31 @@ class _ErrorView extends StatelessWidget {
       ],
     );
   }
+}
 
-  String _formatFailure(AppLocalizations localizations, AppFailure failure) {
-    switch (failure.code) {
-      case FailureCode.networkUnavailable:
-        return localizations.communityChallengeErrorNetwork;
-      case FailureCode.authSessionExpired:
-        return localizations.communityChallengeErrorSessionExpired;
-      case FailureCode.authForbidden:
-        return localizations.communityChallengeErrorForbidden;
-      case FailureCode.networkServer:
-        // 429 (rate-limited) maps to ``networkServer`` in the
-        // shared mapper; the A4 / §5.3 invariant lands on
-        // this branch.
-        return localizations.communityChallengeErrorRateLimited;
-      case FailureCode.communityConflict:
-        return localizations.communityChallengeErrorConflict;
-      case FailureCode.validationInvalidInput:
-        return localizations.communityChallengeErrorInvalidInput;
-      default:
-        return failure.toString();
-    }
+/// Formats an [AppFailure] into a localized message — shared by the
+/// list-level [_ErrorView] and the row-level block/mute action
+/// (E13-R34, A6/A8) so a failed safety action reports the same
+/// vocabulary as a failed list load.
+String _formatFailure(AppLocalizations localizations, AppFailure failure) {
+  switch (failure.code) {
+    case FailureCode.networkUnavailable:
+      return localizations.communityChallengeErrorNetwork;
+    case FailureCode.authSessionExpired:
+      return localizations.communityChallengeErrorSessionExpired;
+    case FailureCode.authForbidden:
+      return localizations.communityChallengeErrorForbidden;
+    case FailureCode.networkServer:
+      // 429 (rate-limited) maps to ``networkServer`` in the
+      // shared mapper; the A4 / §5.3 invariant lands on
+      // this branch.
+      return localizations.communityChallengeErrorRateLimited;
+    case FailureCode.communityConflict:
+      return localizations.communityChallengeErrorConflict;
+    case FailureCode.validationInvalidInput:
+      return localizations.communityChallengeErrorInvalidInput;
+    default:
+      return failure.toString();
   }
 }
 

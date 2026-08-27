@@ -44,51 +44,48 @@
 /// "Member" in one utterance. The TabBar keeps semantic tabs
 /// for the screen-reader to enumerate the four surfaces.
 ///
-/// **Localization note (l10n).** The labels are hardcoded
-/// English placeholders — the ARB file is not on this round's
-/// ``allowed_paths`` (Kör 18 will lift the strings).
+/// **Localization (E13-R34, A10).** Every user-facing string
+/// routes through ``AppLocalizations`` — the ``communityClub*``
+/// keys in ``lib/l10n/features/community_{en,hu}.arb``. No
+/// ``const String _l10nClub*`` constant remains in this file.
+///
+/// **Privacy threshold (E13-R34, A3, §0.0.B/B7).** The measured
+/// client-side gate is ``myRole`` (`null` = non-member) ×
+/// ``visibility``:
+/// * `myRole == null` AND `visibility == private` — the screen
+///   renders NO club content at all (no name, no description, no
+///   tabs) and no join affordance — [_PrivateRestrictedView].
+/// * `myRole == null` AND `visibility != private` — the name is
+///   shown (needed to identify what the join action targets) plus
+///   the join CTA, but no description and no tab content
+///   (feed / challenges / members roster stay member-only) —
+///   [_JoinPromptView].
+/// * `myRole != null` — full content, the four-tab surface.
+///
+/// This is a CLIENT-SIDE rendering guard on top of whatever
+/// ``fetchClub()`` returns — it does not re-derive the backend's
+/// permission matrix (SDD §16.3 stays server-authoritative), it
+/// only decides what THIS screen paints for a given ``myRole`` /
+/// ``visibility`` pair, closing the leak channel a repository
+/// that returns more than the SUMMARY placeholder would otherwise
+/// open.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../../core/foundation/app_failure.dart';
+import '../../../../../l10n/app_localizations.dart';
 import '../../../domain/entities/community_club.dart';
 import '../../../domain/entities/community_post.dart';
 import '../../../domain/repositories/club_repository.dart';
 import '../../../domain/value_objects/content_id.dart';
-import 'club_list_screen.dart' show communityClubRepositoryProvider;
+import '../../widgets/community_theme_scope.dart';
+import 'club_list_screen.dart'
+    show communityClubRepositoryProvider, communityClubVisibilityLabel;
 import 'club_member_management_screen.dart';
-
-// ---------------------------------------------------------------------------
-// L10n placeholders — to be lifted into app_en.arb / app_hu.arb in a
-// future round.
-// ---------------------------------------------------------------------------
-
-const String _l10nClubDetailTitle = 'Club';
-const String _l10nClubDetailError = "The club couldn't load.";
-const String _l10nClubDetailRetry = 'Retry';
-const String _l10nClubDetailJoin = 'Request to join';
-const String _l10nClubDetailLeave = 'Leave club';
-const String _l10nClubDetailManage = 'Manage members';
-const String _l10nClubDetailRoleOwner = 'Owner';
-const String _l10nClubDetailRoleModerator = 'Moderator';
-const String _l10nClubDetailRoleMember = 'Member';
-const String _l10nClubDetailRoleNone = 'Not a member';
-
-const String _l10nClubTabFeed = 'Feed';
-const String _l10nClubTabChallenges = 'Challenges';
-const String _l10nClubTabMembers = 'Members';
-const String _l10nClubTabAbout = 'About';
-
-const String _l10nClubFeedEmpty = 'No posts in this club yet.';
-const String _l10nClubFeedPinnedHeader = 'Pinned';
-const String _l10nClubFeedRecentHeader = 'Recent';
-
-const String _l10nClubChallengesEmpty = 'No active challenges.';
-const String _l10nClubChallengesPrefix = 'Difficulty';
-
-const String _l10nClubAboutEmpty = 'No description.';
 
 /// FutureProvider for a single club fetch.
 final clubDetailProvider = FutureProvider.autoDispose
@@ -186,26 +183,20 @@ class ClubDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(clubDetailProvider(clubId));
+    final localizations = AppLocalizations.of(context);
 
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text(_l10nClubDetailTitle),
-          bottom: const TabBar(
-            tabs: <Widget>[
-              Tab(text: _l10nClubTabFeed),
-              Tab(text: _l10nClubTabChallenges),
-              Tab(text: _l10nClubTabMembers),
-              Tab(text: _l10nClubTabAbout),
-            ],
-          ),
+    return CommunityThemeScope(
+      child: state.when(
+        data: (club) => _buildForClub(context, ref, club, localizations),
+        loading: () => Scaffold(
+          appBar: AppBar(title: Text(localizations.communityClubDetailTitle)),
+          body: const Center(child: CircularProgressIndicator()),
         ),
-        body: state.when(
-          data: (club) => _Body(club: club, clubId: clubId),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => _ErrorView(
+        error: (error, _) => Scaffold(
+          appBar: AppBar(title: Text(localizations.communityClubDetailTitle)),
+          body: _ErrorView(
             failure: UnknownFailure(code: FailureCode.unknown, cause: error),
+            localizations: localizations,
             onRetry: () async {
               ref.invalidate(clubDetailProvider(clubId));
               await ref.read(clubDetailProvider(clubId).future);
@@ -215,79 +206,57 @@ class ClubDetailScreen extends ConsumerWidget {
       ),
     );
   }
-}
 
-class _Body extends ConsumerWidget {
-  const _Body({required this.club, required this.clubId});
-
-  final CommunityClub club;
-  final ContentId clubId;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final textScaler = MediaQuery.textScalerOf(context);
-    final nameStyle = TextStyle(
-      fontSize: textScaler.scale(22),
-      fontWeight: FontWeight.bold,
-    );
-    final bodyStyle = TextStyle(fontSize: textScaler.scale(16));
+  /// A3 gate (§0.0.B/B7): dispatches on ``myRole`` × ``visibility``
+  /// BEFORE any club content reaches a widget tree.
+  Widget _buildForClub(
+    BuildContext context,
+    WidgetRef ref,
+    CommunityClub club,
+    AppLocalizations localizations,
+  ) {
     final role = club.myRole;
-    final roleLabel = _roleLabel(role);
-    final canJoin = role == null && club.visibility != ClubVisibility.private;
-    final canLeave = role != null;
-    final canManage = role == ClubRole.owner || role == ClubRole.moderator;
-    return Column(
-      children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(club.name, style: nameStyle),
-              const SizedBox(height: 8),
-              Text(club.description, style: bodyStyle),
-              const SizedBox(height: 16),
-              Semantics(
-                label: 'Role: $roleLabel',
-                child: Chip(label: Text(roleLabel)),
-              ),
-              const SizedBox(height: 16),
-              if (canJoin)
-                FilledButton(
-                  onPressed: () => _requestJoin(context, ref),
-                  child: const Text(_l10nClubDetailJoin),
-                ),
-              if (canLeave)
-                OutlinedButton(
-                  onPressed: () => _leave(context, ref),
-                  child: const Text(_l10nClubDetailLeave),
-                ),
-              if (canManage)
-                OutlinedButton(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ClubMemberManagementScreen(clubId: clubId),
-                      ),
-                    );
-                  },
-                  child: const Text(_l10nClubDetailManage),
-                ),
+    final isMember = role != null;
+    final isPrivateNonMember =
+        !isMember && club.visibility == ClubVisibility.private;
+
+    if (isPrivateNonMember) {
+      // Below the threshold — NO club content, no join CTA.
+      return Scaffold(
+        appBar: AppBar(title: Text(localizations.communityClubDetailTitle)),
+        body: _PrivateRestrictedView(localizations: localizations),
+      );
+    }
+
+    if (!isMember) {
+      // On the threshold — name + join CTA only, no tab content.
+      return Scaffold(
+        appBar: AppBar(title: Text(localizations.communityClubDetailTitle)),
+        body: _JoinPromptView(
+          club: club,
+          localizations: localizations,
+          onJoin: () => _requestJoin(context, ref),
+        ),
+      );
+    }
+
+    // Above the threshold — full content, the four-tab surface.
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(localizations.communityClubDetailTitle),
+          bottom: TabBar(
+            tabs: <Widget>[
+              Tab(text: localizations.communityClubTabFeed),
+              Tab(text: localizations.communityClubTabChallenges),
+              Tab(text: localizations.communityClubTabMembers),
+              Tab(text: localizations.communityClubTabAbout),
             ],
           ),
         ),
-        Expanded(
-          child: TabBarView(
-            children: <Widget>[
-              _ClubFeedTab(clubId: clubId),
-              _ClubChallengesTab(clubId: clubId),
-              const _ClubMembersTab(),
-              const _ClubAboutTab(),
-            ],
-          ),
-        ),
-      ],
+        body: _Body(club: club, clubId: clubId, localizations: localizations),
+      ),
     );
   }
 
@@ -298,8 +267,193 @@ class _Body extends ConsumerWidget {
       idempotencyKey: 'join-${DateTime.now().microsecondsSinceEpoch}',
     );
     if (context.mounted) {
-      _invalidateClubContentProviders(ref);
+      ref.invalidate(clubDetailProvider(clubId));
+      ref.invalidate(clubFeedProvider(clubId));
+      ref.invalidate(clubPinnedProvider(clubId));
+      ref.invalidate(clubChallengesProvider(clubId));
     }
+  }
+}
+
+/// The "below the threshold" cell (A3, §0.0.B/B7): non-member,
+/// `private` club. Renders NO club content — not even the name —
+/// and no join affordance (private joins are invite-only).
+class _PrivateRestrictedView extends StatelessWidget {
+  const _PrivateRestrictedView({required this.localizations});
+
+  final AppLocalizations localizations;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.lock_outline, size: 40, color: theme.hintColor),
+            const SizedBox(height: 16),
+            Text(
+              localizations.communityClubPrivateRestrictedTitle,
+              key: const Key('club-private-restricted-title'),
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              localizations.communityClubPrivateRestrictedBody,
+              key: const Key('club-private-restricted-body'),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The "on the threshold" cell (A3, §0.0.B/B7): non-member,
+/// `discoverable` / `public` club. Shows the club name (needed to
+/// identify what the join action targets) and the join CTA — but
+/// NO description and no tab content; the feed, the challenges and
+/// the member roster stay member-only.
+class _JoinPromptView extends StatelessWidget {
+  const _JoinPromptView({
+    required this.club,
+    required this.localizations,
+    required this.onJoin,
+  });
+
+  final CommunityClub club;
+  final AppLocalizations localizations;
+  final VoidCallback onJoin;
+
+  @override
+  Widget build(BuildContext context) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    final nameStyle = TextStyle(
+      fontSize: textScaler.scale(22),
+      fontWeight: FontWeight.bold,
+    );
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              club.name,
+              key: const Key('club-join-prompt-name'),
+              style: nameStyle,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              localizations.communityClubJoinToSeeMore,
+              key: const Key('club-join-prompt-body'),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            SsButton(
+              onPressed: onJoin,
+              label: localizations.communityClubDetailJoin,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Body extends ConsumerWidget {
+  const _Body({
+    required this.club,
+    required this.clubId,
+    required this.localizations,
+  });
+
+  final CommunityClub club;
+  final ContentId clubId;
+  final AppLocalizations localizations;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final textScaler = MediaQuery.textScalerOf(context);
+    final nameStyle = TextStyle(
+      fontSize: textScaler.scale(22),
+      fontWeight: FontWeight.bold,
+    );
+    final bodyStyle = TextStyle(fontSize: textScaler.scale(16));
+    final role = club.myRole;
+    final roleLabel = _roleLabel(localizations, role);
+    final canLeave = role != null;
+    final canManage = role == ClubRole.owner || role == ClubRole.moderator;
+    return Column(
+      children: <Widget>[
+        // Capped + internally scrollable so a long name/description at a
+        // large system text-scale setting cannot squeeze the TabBarView
+        // below to nothing or overflow the Column (measured, real —
+        // L517: the textScaler 2.0 golden frame catches exactly this
+        // class of layout bug).
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.4,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(club.name, style: nameStyle),
+                  const SizedBox(height: 8),
+                  Text(club.description, style: bodyStyle),
+                  const SizedBox(height: 16),
+                  Semantics(
+                    label: localizations.communityClubDetailRoleSemanticLabel(
+                      roleLabel,
+                    ),
+                    child: Chip(label: Text(roleLabel)),
+                  ),
+                  const SizedBox(height: 16),
+                  if (canLeave)
+                    SsButton(
+                      variant: SsButtonVariant.secondary,
+                      onPressed: () => _leave(context, ref),
+                      label: localizations.communityClubDetailLeave,
+                    ),
+                  if (canManage)
+                    SsButton(
+                      variant: SsButtonVariant.secondary,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                ClubMemberManagementScreen(clubId: clubId),
+                          ),
+                        );
+                      },
+                      label: localizations.communityClubDetailManage,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            children: <Widget>[
+              _ClubFeedTab(clubId: clubId, localizations: localizations),
+              _ClubChallengesTab(clubId: clubId, localizations: localizations),
+              _ClubMembersTab(localizations: localizations),
+              _ClubAboutTab(club: club, localizations: localizations),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _leave(BuildContext context, WidgetRef ref) async {
@@ -329,9 +483,10 @@ class _Body extends ConsumerWidget {
 
 /// Feed tab — pinned posts at the top, then recent posts.
 class _ClubFeedTab extends ConsumerWidget {
-  const _ClubFeedTab({required this.clubId});
+  const _ClubFeedTab({required this.clubId, required this.localizations});
 
   final ContentId clubId;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -340,36 +495,36 @@ class _ClubFeedTab extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        const Text(
-          _l10nClubFeedPinnedHeader,
-          style: TextStyle(fontWeight: FontWeight.bold),
+        Text(
+          localizations.communityClubFeedPinnedHeader,
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         ...pinnedAsync.when(
           data: (pinned) => pinned.isEmpty
-              ? <Widget>[const Text(_l10nClubFeedEmpty)]
+              ? <Widget>[Text(localizations.communityClubFeedEmpty)]
               : <Widget>[
                   for (final post in pinned)
                     ListTile(title: Text(post.body ?? '')),
                 ],
           loading: () => const <Widget>[CircularProgressIndicator()],
-          error: (_, _) => const <Widget>[Text(_l10nClubFeedEmpty)],
+          error: (_, _) => <Widget>[Text(localizations.communityClubFeedEmpty)],
         ),
         const SizedBox(height: 16),
-        const Text(
-          _l10nClubFeedRecentHeader,
-          style: TextStyle(fontWeight: FontWeight.bold),
+        Text(
+          localizations.communityClubFeedRecentHeader,
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         ...feedAsync.when(
           data: (feed) => feed.items.isEmpty
-              ? <Widget>[const Text(_l10nClubFeedEmpty)]
+              ? <Widget>[Text(localizations.communityClubFeedEmpty)]
               : <Widget>[
                   for (final post in feed.items)
                     ListTile(title: Text(post.body ?? '')),
                 ],
           loading: () => const <Widget>[CircularProgressIndicator()],
-          error: (_, _) => const <Widget>[Text(_l10nClubFeedEmpty)],
+          error: (_, _) => <Widget>[Text(localizations.communityClubFeedEmpty)],
         ),
       ],
     );
@@ -378,9 +533,10 @@ class _ClubFeedTab extends ConsumerWidget {
 
 /// Challenges tab — active challenges of the club.
 class _ClubChallengesTab extends ConsumerWidget {
-  const _ClubChallengesTab({required this.clubId});
+  const _ClubChallengesTab({required this.clubId, required this.localizations});
 
   final ContentId clubId;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -390,12 +546,14 @@ class _ClubChallengesTab extends ConsumerWidget {
       children: <Widget>[
         ...challengesAsync.when(
           data: (challenges) => challenges.isEmpty
-              ? const <Widget>[Text(_l10nClubChallengesEmpty)]
+              ? <Widget>[Text(localizations.communityClubChallengesEmpty)]
               : <Widget>[
                   for (final c in challenges)
                     ListTile(
                       title: Text(
-                        '${c.metric} • $_l10nClubChallengesPrefix ${c.difficulty}',
+                        '${c.metric} • '
+                        '${localizations.communityClubChallengesDifficultyPrefix} '
+                        '${c.difficulty}',
                       ),
                       subtitle: Text(
                         '${c.startsAt.toIso8601String()} → ${c.endsAt.toIso8601String()}',
@@ -403,7 +561,9 @@ class _ClubChallengesTab extends ConsumerWidget {
                     ),
                 ],
           loading: () => const <Widget>[CircularProgressIndicator()],
-          error: (_, _) => const <Widget>[Text(_l10nClubChallengesEmpty)],
+          error: (_, _) => <Widget>[
+            Text(localizations.communityClubChallengesEmpty),
+          ],
         ),
       ],
     );
@@ -414,7 +574,9 @@ class _ClubChallengesTab extends ConsumerWidget {
 /// surface reuses the ``ClubMemberManagementScreen`` push from
 /// the Kör 24 detail screen.
 class _ClubMembersTab extends ConsumerWidget {
-  const _ClubMembersTab();
+  const _ClubMembersTab({required this.localizations});
+
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -423,11 +585,11 @@ class _ClubMembersTab extends ConsumerWidget {
     // not need a new repository method (the brief §0.0 #3
     // structural precedent). The placeholder body just nudges
     // the user to the manage screen.
-    return const Padding(
-      padding: EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.all(16),
       child: Center(
         child: Text(
-          'Open the manage-members screen to view the roster.',
+          localizations.communityClubMembersTabHint,
           textAlign: TextAlign.center,
         ),
       ),
@@ -437,33 +599,56 @@ class _ClubMembersTab extends ConsumerWidget {
 
 /// About tab — the club's description, owner, and visibility.
 class _ClubAboutTab extends ConsumerWidget {
-  const _ClubAboutTab();
+  const _ClubAboutTab({required this.club, required this.localizations});
+
+  final CommunityClub club;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return const Padding(
-      padding: EdgeInsets.all(16),
-      child: Text(_l10nClubAboutEmpty),
+    final visibilityLabel = communityClubVisibilityLabel(
+      localizations,
+      club.visibility,
+    );
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            club.description.isEmpty
+                ? localizations.communityClubAboutEmpty
+                : club.description,
+          ),
+          const SizedBox(height: 12),
+          Chip(label: Text(visibilityLabel)),
+        ],
+      ),
     );
   }
 }
 
-String _roleLabel(ClubRole? role) {
-  if (role == null) return _l10nClubDetailRoleNone;
+String _roleLabel(AppLocalizations localizations, ClubRole? role) {
+  if (role == null) return localizations.communityClubDetailRoleNone;
   switch (role) {
     case ClubRole.owner:
-      return _l10nClubDetailRoleOwner;
+      return localizations.communityClubDetailRoleOwner;
     case ClubRole.moderator:
-      return _l10nClubDetailRoleModerator;
+      return localizations.communityClubDetailRoleModerator;
     case ClubRole.member:
-      return _l10nClubDetailRoleMember;
+      return localizations.communityClubDetailRoleMember;
   }
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.failure, required this.onRetry});
+  const _ErrorView({
+    required this.failure,
+    required this.localizations,
+    required this.onRetry,
+  });
 
   final AppFailure failure;
+  final AppLocalizations localizations;
   final Future<void> Function() onRetry;
 
   @override
@@ -478,11 +663,14 @@ class _ErrorView extends StatelessWidget {
             children: <Widget>[
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 16),
-              const Text(_l10nClubDetailError, textAlign: TextAlign.center),
+              Text(
+                localizations.communityClubDetailError,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: onRetry,
-                child: const Text(_l10nClubDetailRetry),
+              SsButton(
+                onPressed: () => onRetry(),
+                label: localizations.communityClubDetailRetry,
               ),
             ],
           ),

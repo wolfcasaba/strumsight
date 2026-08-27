@@ -29,37 +29,36 @@
 /// block filter on the member-list read; the screen receives
 /// the filtered list and renders it as-is.
 ///
-/// **Localization note (l10n).** The labels are hardcoded
-/// English placeholders — the ARB file is not on this round's
-/// ``allowed_paths``.
+/// **Localization (E13-R34, A10).** Every user-facing string
+/// routes through ``AppLocalizations`` — the
+/// ``communityClubManage*`` keys in
+/// ``lib/l10n/features/community_{en,hu}.arb``. No
+/// ``const String _l10nClub*`` constant remains in this file.
+///
+/// **Safety actions (E13-R34, A6, A8).** Each row's overflow
+/// menu also offers Block / Mute the member, wired to the SAME
+/// [socialGraphRepositoryProvider] the Biztonsági központ reads
+/// — the blocked / muted state is one server-side truth shared
+/// by both surfaces (A8), reachable from club management and not
+/// only from Settings (A6). A failed block/mute surfaces a
+/// SnackBar (``_formatFailure``) — a safety action must never
+/// fail silently.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../../core/foundation/app_failure.dart';
+import '../../../../../l10n/app_localizations.dart';
+import '../../../data/repositories/relationship_repository_impl.dart';
 import '../../../domain/entities/community_club.dart';
 import '../../../domain/repositories/club_repository.dart';
 import '../../../domain/value_objects/content_id.dart';
 import '../../../domain/value_objects/public_user_id.dart';
+import '../../widgets/community_theme_scope.dart';
 import 'club_list_screen.dart' show communityClubRepositoryProvider;
-
-// ---------------------------------------------------------------------------
-// L10n placeholders — to be lifted into app_en.arb / app_hu.arb in a
-// future round.
-// ---------------------------------------------------------------------------
-
-const String _l10nClubManageTitle = 'Manage club';
-const String _l10nClubManageError = "The members couldn't load.";
-const String _l10nClubManageRetry = 'Retry';
-const String _l10nClubManageEmpty = 'No members yet.';
-const String _l10nClubManageActionPromote = 'Promote to moderator';
-const String _l10nClubManageActionDemote = 'Demote to member';
-const String _l10nClubManageActionRemove = 'Remove';
-const String _l10nClubManageActionTransfer = 'Transfer ownership';
-const String _l10nClubManageRoleOwner = 'Owner';
-const String _l10nClubManageRoleModerator = 'Moderator';
-const String _l10nClubManageRoleMember = 'Member';
 
 /// Lightweight projection of a club membership row — the
 /// detail screen's overflow menu binds to this shape. The Kör
@@ -103,19 +102,27 @@ class ClubMemberManagementScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(clubMemberListProvider(clubId));
-    return Scaffold(
-      appBar: AppBar(title: const Text(_l10nClubManageTitle)),
-      body: state.when(
-        data: (members) => members.isEmpty
-            ? const _EmptyView()
-            : _Body(members: members, clubId: clubId),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _ErrorView(
-          failure: UnknownFailure(code: FailureCode.unknown, cause: error),
-          onRetry: () async {
-            ref.invalidate(clubMemberListProvider(clubId));
-            await ref.read(clubMemberListProvider(clubId).future);
-          },
+    final localizations = AppLocalizations.of(context);
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(localizations.communityClubManageTitle)),
+        body: state.when(
+          data: (members) => members.isEmpty
+              ? _EmptyView(localizations: localizations)
+              : _Body(
+                  members: members,
+                  clubId: clubId,
+                  localizations: localizations,
+                ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => _ErrorView(
+            failure: UnknownFailure(code: FailureCode.unknown, cause: error),
+            localizations: localizations,
+            onRetry: () async {
+              ref.invalidate(clubMemberListProvider(clubId));
+              await ref.read(clubMemberListProvider(clubId).future);
+            },
+          ),
         ),
       ),
     );
@@ -123,10 +130,15 @@ class ClubMemberManagementScreen extends ConsumerWidget {
 }
 
 class _Body extends ConsumerWidget {
-  const _Body({required this.members, required this.clubId});
+  const _Body({
+    required this.members,
+    required this.clubId,
+    required this.localizations,
+  });
 
   final List<ClubMemberRow> members;
   final ContentId clubId;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -134,48 +146,67 @@ class _Body extends ConsumerWidget {
       itemCount: members.length,
       itemBuilder: (context, index) {
         final row = members[index];
-        return _MemberRow(row: row, clubId: clubId);
+        return _MemberRow(
+          row: row,
+          clubId: clubId,
+          localizations: localizations,
+        );
       },
     );
   }
 }
 
 class _MemberRow extends ConsumerWidget {
-  const _MemberRow({required this.row, required this.clubId});
+  const _MemberRow({
+    required this.row,
+    required this.clubId,
+    required this.localizations,
+  });
 
   final ClubMemberRow row;
   final ContentId clubId;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final textScaler = MediaQuery.textScalerOf(context);
     final nameStyle = TextStyle(fontSize: textScaler.scale(16));
-    final roleLabel = _roleLabel(row.role);
+    final roleLabel = _roleLabel(localizations, row.role);
     return ListTile(
       title: Text(row.profilePublicId.value, style: nameStyle),
       subtitle: Text(roleLabel),
       trailing: PopupMenuButton<_MemberAction>(
         itemBuilder: (ctx) => <PopupMenuEntry<_MemberAction>>[
           if (row.role == ClubRole.member)
-            const PopupMenuItem<_MemberAction>(
+            PopupMenuItem<_MemberAction>(
               value: _MemberAction.promote,
-              child: Text(_l10nClubManageActionPromote),
+              child: Text(localizations.communityClubManageActionPromote),
             ),
           if (row.role == ClubRole.moderator)
-            const PopupMenuItem<_MemberAction>(
+            PopupMenuItem<_MemberAction>(
               value: _MemberAction.demote,
-              child: Text(_l10nClubManageActionDemote),
+              child: Text(localizations.communityClubManageActionDemote),
             ),
           if (row.role != ClubRole.owner)
-            const PopupMenuItem<_MemberAction>(
+            PopupMenuItem<_MemberAction>(
               value: _MemberAction.remove,
-              child: Text(_l10nClubManageActionRemove),
+              child: Text(localizations.communityClubManageActionRemove),
             ),
           if (row.role != ClubRole.owner)
-            const PopupMenuItem<_MemberAction>(
+            PopupMenuItem<_MemberAction>(
               value: _MemberAction.transfer,
-              child: Text(_l10nClubManageActionTransfer),
+              child: Text(localizations.communityClubManageActionTransfer),
             ),
+          PopupMenuItem<_MemberAction>(
+            key: const Key('club-manage-action-block'),
+            value: _MemberAction.block,
+            child: Text(localizations.communityClubManageActionBlock),
+          ),
+          PopupMenuItem<_MemberAction>(
+            key: const Key('club-manage-action-mute'),
+            value: _MemberAction.mute,
+            child: Text(localizations.communityClubManageActionMute),
+          ),
         ],
         onSelected: (action) => _onAction(context, ref, action),
       ),
@@ -197,6 +228,42 @@ class _MemberRow extends ConsumerWidget {
         await _remove(context, ref, repo);
       case _MemberAction.transfer:
         await _transfer(context, ref, repo);
+      case _MemberAction.block:
+        await _blockOrMute(context, ref, block: true);
+      case _MemberAction.mute:
+        await _blockOrMute(context, ref, block: false);
+    }
+  }
+
+  /// A6 / A8 — block/mute route through the SAME
+  /// [socialGraphRepositoryProvider] the Biztonsági központ reads,
+  /// so the resulting state is the one server-side truth shared by
+  /// both surfaces. A failed block/mute is a **safety** action that
+  /// must never fail silently — a caught [AppFailure] surfaces a
+  /// SnackBar so the caller does not believe they blocked someone
+  /// when the server never received the request.
+  Future<void> _blockOrMute(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool block,
+  }) async {
+    final repo = ref.read(socialGraphRepositoryProvider);
+    final key = block
+        ? 'club-block-${row.profilePublicId.value}'
+              '-${DateTime.now().microsecondsSinceEpoch}'
+        : 'club-mute-${row.profilePublicId.value}'
+              '-${DateTime.now().microsecondsSinceEpoch}';
+    try {
+      if (block) {
+        await repo.block(target: row.profilePublicId, idempotencyKey: key);
+      } else {
+        await repo.mute(target: row.profilePublicId, idempotencyKey: key);
+      }
+    } on AppFailure catch (failure) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_formatFailure(context, failure))));
     }
   }
 
@@ -254,27 +321,48 @@ class _MemberRow extends ConsumerWidget {
   }
 }
 
-enum _MemberAction { promote, demote, remove, transfer }
+enum _MemberAction { promote, demote, remove, transfer, block, mute }
 
-String _roleLabel(ClubRole role) {
+/// Formats an [AppFailure] surfaced by a failed block/mute action
+/// (E13-R34, A6/A8) — the same code-to-message mapping shape as
+/// ``safety_relationships_screen.dart``'s ``_formatFailure``.
+String _formatFailure(BuildContext context, AppFailure failure) {
+  final localizations = AppLocalizations.of(context);
+  switch (failure.code) {
+    case FailureCode.networkUnavailable:
+      return localizations.communityClubManageErrorNetwork;
+    case FailureCode.authSessionExpired:
+      return localizations.communityClubManageErrorSessionExpired;
+    case FailureCode.authForbidden:
+      return localizations.communityClubManageErrorForbidden;
+    case FailureCode.validationInvalidInput:
+      return localizations.communityClubManageErrorInvalidInput;
+    default:
+      return failure.toString();
+  }
+}
+
+String _roleLabel(AppLocalizations localizations, ClubRole role) {
   switch (role) {
     case ClubRole.owner:
-      return _l10nClubManageRoleOwner;
+      return localizations.communityClubManageRoleOwner;
     case ClubRole.moderator:
-      return _l10nClubManageRoleModerator;
+      return localizations.communityClubManageRoleModerator;
     case ClubRole.member:
-      return _l10nClubManageRoleMember;
+      return localizations.communityClubManageRoleMember;
   }
 }
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView();
+  const _EmptyView({required this.localizations});
+
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        _l10nClubManageEmpty,
+        localizations.communityClubManageEmpty,
         style: Theme.of(context).textTheme.bodyLarge,
       ),
     );
@@ -282,9 +370,14 @@ class _EmptyView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.failure, required this.onRetry});
+  const _ErrorView({
+    required this.failure,
+    required this.localizations,
+    required this.onRetry,
+  });
 
   final AppFailure failure;
+  final AppLocalizations localizations;
   final Future<void> Function() onRetry;
 
   @override
@@ -299,11 +392,14 @@ class _ErrorView extends StatelessWidget {
             children: <Widget>[
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 16),
-              const Text(_l10nClubManageError, textAlign: TextAlign.center),
+              Text(
+                localizations.communityClubManageError,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: onRetry,
-                child: const Text(_l10nClubManageRetry),
+              SsButton(
+                onPressed: () => onRetry(),
+                label: localizations.communityClubManageRetry,
               ),
             ],
           ),
