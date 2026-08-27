@@ -13,7 +13,10 @@ void main() {
     expect(first.toMarkdown(), second.toMarkdown());
     // E13-R28 (§0.0/R4) — the unified library adds two new production
     // screens under `lib/features/library_v2/screens/`: 89 -> 91.
-    expect(first.screenPaths, hasLength(91));
+    // E13-R30 (§0.0/B9) — the route-less Vision Result screen adds one more
+    // production screen under `lib/features/vision/presentation/screens/`:
+    // 91 -> 92.
+    expect(first.screenPaths, hasLength(92));
     expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
     expect(
       first.screenPaths,
@@ -59,6 +62,12 @@ void main() {
       first.screenPaths,
       contains(
         'lib/features/vision/presentation/screens/vision_session_screen.dart',
+      ),
+    );
+    expect(
+      first.screenPaths,
+      contains(
+        'lib/features/vision/presentation/screens/vision_result_screen.dart',
       ),
     );
     expect(first.screenPaths, isNot(contains(contains('test/'))));
