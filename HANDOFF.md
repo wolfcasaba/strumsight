@@ -1,5 +1,72 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R32 KÉSZ — Gamification Hub, Quest, Achievement és Reward UI — PR [#477](https://github.com/wolfcasaba/strumsight/pull/477), squash `ff9f3096` (2026-08-27)
+
+Az UI-51–UI-52 **együttérző, idempotens** jutalmazási felülete (SDD Ch13 Kör 32).
+A kör **ADR-t nem írt** — a kiosztott `0290` 2026-08-15 óta merge-elt
+(`5b32bd8e`); a sávon a **tizenötödik** ADR nélküli kör egymás után
+(E13-R17…R32). Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude, **0 javító kör** — a review első fordulója
+`docs/reviews/e13-r32-review.md`: **0 BLOCKER / 0 MAJOR / 1 MINOR (a review
+során javítva) / 2 NOTE → APPROVED**.
+
+**Ez MIGRÁCIÓS kör volt, nem zöldmezős.** A pre-flight kimérte, hogy a hét
+gamifikációs képernyő már létezik, mind caller-fed, és a fa **nulla**
+`design_system` importtal élt. A kör ezt migrálta: `GamificationThemeScope` +
+`SsSurface`, kizárólag a `core/design_system/public.dart` barrelen át
+(6 import, mind a barrelen). Új `PendingRewardsCard` a függő/karanténos
+főkönyvi sorokhoz, `onRetry` → `ActivityEventIngestor.drain()`; a felület
+**sosem** ír főkönyvet (`appendIfAbsent` a `presentation/` fán: **0 találat**)
+és sosem mutat jóváírt egyenleget a drain előtt. `reduceMotion` szál a
+`StreakStatusCard` / `StreakDetailScreen` / `RewardSummarySheet` widgeteken,
+VAGY-kapcsolva a `MediaQuery.disableAnimationsOf`-fal — az ADR 0393 §5.1
+kifejezetten erre a körre hagyta a celebration-UI bekötését.
+
+**A pre-flight két mérési szabálya mindkettő FOGOTT.** (1) *Elérhetetlen
+cél-státusz:* az A5 „türelmi idő" cellája a `StreakGraceState`-re épült volna,
+aminek a fán **egyetlen** értéke van (`none`) — a MÉRT input a
+`StreakEvaluationReason`, a küszöb `graceDays = 1`, a cellahármas `gap = 0/1/2`
+→ `grace`/`grace`/`broken`. (2) *Erőforrás-tulajdonlás:* az `appendIfAbsent`
+hat hívási helye mind az `application/`+`data/` rétegben van, nulla a
+presentationben — a „beváltás" felületi művelete ezért a `drain()`
+újrapróbálkozás, nem egy claim-gomb (a `RewardInboxItem.seen` doc-commentje
+szó szerint „not a claim, not an expiry, not a precondition for anything").
+
+**A golden-felvétel MÁSODSZOR mért ki VALÓDI, addig láthatatlan elrendezési
+hibát** `textScaler 2.0` mellett: egy 1577 px-es `RenderFlex overflow`-t az új
+kártyán, és egy 41 px-es vízszintes túlcsordulást a **kör előtti**
+`_InboxEntryTile` XP-feliratán ([L517](docs/LESSONS.md#l517)).
+
+**MINOR-1 — a §7 gate-sor öröklött golden-útvonala.** Az E13-R31 briefjéből
+örökölt sor a `round-gate.sh`-ba fűzte a golden-tesztet; ez a kör megmérte, hogy
+az ARM↔x86 raszterizációs drift **képernyő-függő**: ezen a boxon (aarch64)
+**5/10 cella piros**, a merge-kapu architektúráján (x86_64) **10/10 zöld**. A
+szekvenciális gate így a golden-lépésnél megállt volna az `architecture` /
+`secrets` / `l10n` előtt. Az implementer helyesen az ADR 0426 szerint járt el;
+az orchestrátor a review-ban a briefet igazította (§0.0.C) — a mérce NEM lazult:
+a 10 golden-cellát továbbra is KETTŐ méri, a `tools/golden-x86.sh check` és az
+exact-SHA Full Gate, mindkettő x86_64-en ([L516](docs/LESSONS.md#l516)).
+
+**Reviewer-bizonyíték.** Független gate-újrafuttatás izolált `/tmp` klónban:
+**15/15 zöld**, `GATE_EXIT=0`. Scope-audit `ok` — 33 fájl, **0** listán kívüli.
+Három eldobható **falszifikációs próba** a §6.1 mátrix ellen: a büntető
+széria-szöveg az **A1**-et, a pihenőnap-mint-széria-vége az **A5**-öt, az
+ünneplés eltüntetése csökkentett mozgásnál az **A8**-at váltotta pirosra —
+mind a felirat és az adatforrás szintjén ([L403](docs/LESSONS.md#l403)), nem
+widget-típuson; a fa minden próba után visszaállt. Az 5 meglévő gamifikációs
+widget-teszt **módosítás nélkül** zöld maradt, a `ui_inventory` `hasLength(94)`
+és az `app_router_test` hat pinnelt screen-TÍPUSA érintetlen.
+
+Exact-SHA evidencia a merge SHA-n (`e23d321a`): Full Gate
+[33064656196](https://github.com/wolfcasaba/strumsight/actions/runs/33064656196)
+`success` + Router CI
+[33064599257](https://github.com/wolfcasaba/strumsight/actions/runs/33064599257)
+`success`.
+
+**Következő kör:** `E13-R33` — Community Feed és Posts UI
+(`docs/rounds/e13-r33-community-feed-and-posts.md`, ADR `0291`, implementer
+`sonnet-impl`).
+
 ## ✅ E13-R31 KÉSZ — Progress Dashboard és Skill Detail UI — PR [#476](https://github.com/wolfcasaba/strumsight/pull/476), squash `0965188f` (2026-08-27)
 
 Az UI-49–UI-50 **bizonyíték-alapú fejlődési felülete** új

@@ -20103,3 +20103,79 @@ artefaktumod, a helyes lépés a fájl kivétele és a `tools/scope-audit.py` k�
 repóban élő kód; a védelem a fenti, workflow-szövegbe ágyazott útvonal-szabály
 (ugyanaz a mintázat, mint a `prepare-flutter-generated.sh` hívási alakjánál,
 [L232](#l232)).
+
+---
+
+## L516 — A golden ARM↔x86 raszterizációs drift KÉPERNYŐ-FÜGGŐ: egy szomszéd kör §7 gate-sorának öröklése némán olyan kaput telepít, ami a saját gépén megáll a későbbi lépések előtt (E13-R32, 2026-08-27)
+
+**Mit mértünk.** Az E13-R32 briefjének §7 sora — az E13-R31-ből örökölve — a
+`round-gate.sh` argumentumlistájába fűzte a kör golden-tesztjét. A review
+izolált klónjában, a kör commitján (`54db96be`) ugyanazt a fájlt mindkét
+architektúrán lefuttattam:
+
+| Futtatás | Architektúra | Eredmény |
+|---|---|---|
+| `~/flutter/bin/flutter test test/ui/goldens/e13_r32_screens_golden_test.dart` | aarch64 (ez a box) | **5 piros / 10** (`hub`, `streak_detail`, `hub_scale2`, `streak_detail_scale2`, `achievements_scale2`) |
+| `tools/golden-x86.sh check test/ui/goldens/e13_r32_screens_golden_test.dart` | x86_64 (a CI-vel AZONOS) | **10 zöld, exit 0** |
+
+Az E13-R31 UGYANILYEN alakú sora viszont ARM-on is zöld volt. **A különbség nem
+a briefben van, hanem a képernyők tartalmában:** az [L493](#l493) által
+azonosított maradék diff körrajzok (`CircleAvatar`, `drawCircle`) és ikonok
+antialiasing-peremén ül, tehát az, hogy egy kör goldenjei driftelnek-e, a
+felvett képernyőktől függ — nem a sáv állandója.
+
+**Miért drága.** A `tools/round-gate.sh` szekvenciális: a golden-lépés pirosa
+megállítja a láncot, MIELŐTT az `architecture` / `secrets` / `l10n` lépések
+lefutnának. Az örökölt sor tehát nem „konzervatív", hanem elrejti a kör három
+utolsó mércéjét, és a helyes viselkedés (a golden kihagyása a lokális kapuból)
+az implementer oldalán brief-eltérésnek látszik.
+
+**Amit ebből általánosítani kell.** Az [ADR 0426](adr/0426-golden-rasterization-on-the-gate-architecture.md)
+már kimondta, hogy a golden-teszt útvonala kikerül a lokális ARM
+`gate_tests`-ből — ezt a sáv briefjei mégis végigörökölték, mert az R31-en
+véletlenül nem fájt. **A merge-elt ADR előírása erősebb, mint a szomszéd kör
+briefjének mintája:** batch-előkészített briefek pre-flightjában a golden-sor
+öröklését ellenőrizni kell, nem másolni. Az E13-R32 pre-flightja ezt elmulasztotta,
+a review-ja javította (§0.0.C brief-revízió).
+
+**A mérce NEM lazult:** a golden-cellákat továbbra is KETTŐ méri — lokálisan a
+kötelező `tools/golden-x86.sh check`, a kapuban az exact-SHA `full-gate.yml`
+teljes suite-ja —, mindkettő x86_64-en, változatlan nulla toleranciájú
+komparátorral és a TELJES golden-készlettel. Egy cella sincs törölve vagy
+`skip`-elve.
+
+**Őrteszt:** nincs — a gépi őr helye a `tools/brief-lint.py` lenne (egy szabály,
+ami a `gate_tests`-ben megjelenő `matchesGoldenFile`-t hívó teszt-útvonalat
+leletnek veszi), a `tools/**` viszont a kör tilos zónája (ADR 0087 §4). Ez
+governance-kör feladata; addig a pre-flight §0.0 kimondott mérése a védelem.
+
+---
+
+## L517 — A `textScaler 2.0` golden-keret MÁSODIK körben mér ki VALÓDI, addig láthatatlan elrendezési hibát — köztük a kör előtti kódban (E13-R31, E13-R32, 2026-08-27)
+
+**Mit mértünk.** Az A9 golden-követelmény két keretet ír elő: 412×915 compact
+portrait ÉS ugyanaz `textScaleFactor: 2.0` mellett. A második keret két
+egymást követő körben fogott olyan hibát, amit a teljes CI-suite és minden
+widget-teszt zölden átengedett:
+
+| Kör | Mért hiba | Hol élt |
+|---|---|---|
+| E13-R31 | 137 px `RenderFlex` túlcsordulás | a kör SAJÁT új képernyőjén |
+| E13-R32 | 1577 px `RenderFlex` túlcsordulás | a kör SAJÁT új `PendingRewardsCard`-ján |
+| E13-R32 | 41 px vízszintes túlcsordulás | a **kör előtti**, merge-elt `_InboxEntryTile` XP-feliratán |
+
+**A harmadik sor a lényeg.** Az `_InboxEntryTile` túlcsordulása merge-elt kód
+volt, amit a felvétel most fogott meg először — tehát a golden-keret nem csak
+regressziós őr, hanem **felderítő mérés** is a nagy szövegméretű
+akadálymentességi útra, amit egyetlen meglévő widget-teszt sem pumpált.
+
+**Amit ebből általánosítani kell.** A `textScaler 2.0` keret ára (egy plusz PNG
+képernyőnként) mérhetően megtérül, és a felvétel közben talált, kör előtti
+hibát **javítani kell**, nem a következő körre hagyni — a felvétel enélkül egy
+ismert hibás állapotot rögzítene bázisvonalként. A brief §7 „a §3 szerinti
+alap-nézet elég" engedménye a kereteket NEM érinti: a két keret kötelező.
+
+**Őrteszt:** `test/ui/goldens/e13_r32_screens_golden_test.dart` (és a sáv
+minden `e13_r*_screens_golden_test.dart`-ja) — a `*_scale2` cellák maguk a
+gépi őrök; a felvétel `tools/golden-x86.sh record`-dal, az ellenőrzés
+`check`-kel és az exact-SHA Full Gate-en fut.
