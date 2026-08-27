@@ -2,7 +2,7 @@
 
 - **Kör:** `E13-R34` — Community challenges, clubs, notifications és safety UI
 - **Branch:** `sonnet-impl/e13-r34-community-challenges-and-safety`
-- **Review-elt HEAD:** `2ec09669`
+- **Review-elt HEAD:** `2ec09669` → javító kör után `5585af4a`
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5, `--effort high`)
 - **Reviewer:** Claude Opus 5 (orchestrátor) + `security-reviewer` ügynök (a brief §7
   review-megjegyzése szerint KÖTELEZŐ, `risk = "high"`)
@@ -203,6 +203,36 @@ ARB↔Dart pár nélkül (L519).
 
 ---
 
-## 7. Javító kör — a lelet-zárások ellenőrzése
+## 7. Javító kör — a lelet-zárások ellenőrzése (2026-08-27)
 
-> A javító kör után ez a szakasz leletenként frissül.
+**Javító kör HEAD:** `5585af4a` (6 commit, `99d19881..5585af4a`), motor
+`sonnet-impl`. `scope_audit=ok` (a jelzésfájlban, base `2437ee93`, 10 érintett
+útvonal). A javító kör a lánc NORMÁL útja (ADR 0087 §2, user-döntés
+2026-07-31); ez a kör ELSŐ javító köre.
+
+| Lelet | Javítás | A reviewer SAJÁT ellenőrzése | Zárva? |
+|---|---|---|---|
+| **MAJOR-1** | `club_list_screen.dart:228–229` — `page.items.where((c) => !_isPrivateNonMember(c))`; a predikátum (`:269–270`) szó szerint a részletnézet kapuja (`myRole == null && visibility == private`), így a `_ClubRow` privát nem-tag klubot már nem KAP. Új mérce: KÉT cella (`:703–777`) — látható szöveg ÉS `Semantics` label külön | **P3 próba:** a `.where(...)` szűrő kivéve → **MINDKÉT új cella PIROSRA VÁLT** (`the private club name never renders as visible text in the list [E]` + `… never reaches the list row Semantics label [E]`), a többi cella zölden maradt. Visszaállítva | **IGEN** |
+| **MAJOR-2** | `club_member_management_screen.dart:245–268` és `community_challenges_screen.dart` — mindkét új védelmi akció `try { … } on AppFailure catch (failure) { if (!context.mounted) return; … showSnackBar(…) }` alakra; a challenges-lapon a `pop()` sorrendje javítva. Új mérce: KÉT cella dobó fake-kel (`:779–870`), felületenként egy | **P4 próba:** a klub-oldali `catch` kivéve → **PONTOSAN a klub-management cella PIROS** (`a thrown AppFailure surfaces a SnackBar instead of an unhandled async error [E]`), a challenges-cella zölden maradt (a próba a megcélzott felületet fogta). Visszaállítva | **IGEN** |
+| **MINOR-1** | a `semanticLabel: 'Verified'` és a `label: 'Role: …'` ARB-kulcsba (`en` + `hu`), aggregátum regenerálva. Új mérce: `en`/`hu` cellapár MINDKÉT `Semantics` címkére (`:497–640`) | `grep -rn "semanticLabel: '\|label: '[A-Z]"` a klub-ágon és a kihívás-lapon → **0 találat** | **IGEN** |
+
+### A zöld kapu a javító kör HEAD-jén (`5585af4a`) — a reviewer futtatta
+
+| Mérés | Eredmény |
+|---|---|
+| `tools/round-gate.sh` (a §7 10 útvonala), izolált `/tmp/ss-review-e13-r34b` klón | **15/15 lépés ZÖLD**, `GATE_EXIT=0` |
+| `tools/golden-x86.sh check` (x86_64, nulla tolerancia) | **14/14 ZÖLD**, exit 0 — a javítás a felvett képernyőket nem mozdította, újrafelvétel nem kellett |
+| `full-gate.yml` exact-SHA CI | **success** ([33088621259](https://github.com/wolfcasaba/strumsight/actions/runs/33088621259)), `headSha = 5585af4a` |
+| `router-ci.yml` exact-SHA CI | **success** (`33088614143`), `headSha = 5585af4a` |
+
+A NOTE-1…NOTE-6 változatlanul ÁTADVA (a javító kör a prompt szerint kifejezetten
+nem nyúlt hozzájuk) — mind KÖR ELŐTTI vagy valódi H3.
+
+## 8. VÉGSŐ DÖNTÉS: APPROVED
+
+0 nyitott BLOCKER, 0 nyitott MAJOR, 0 nyitott MINOR. Mindhárom lelet lezárva,
+és mindhárom zárását **a reviewer saját, eldobható falszifikációs próbája**
+igazolta (P3, P4) vagy közvetlen méréssel ellenőrizte — nem az implementer
+bemondása. A zöld kapu (format + analyze + architecture + secret + l10n +
+teljes CI-suite + randomizált property + golden) a merge SHA-ján kötelezően
+újra igazolandó, ha a HEAD ezután mozdul.
