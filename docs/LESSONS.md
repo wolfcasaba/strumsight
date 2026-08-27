@@ -19743,3 +19743,57 @@ cserélné le ([L506](#l506)).
 **Őrteszt:** nincs — vizuális ítélet; a golden a bizonyíték HORDOZÓJA, nem a
 mércéje. A gépi rész (`e13_r27_screens_golden_test.dart`) innentől a javított
 elrendezést pinneli.
+
+## L508 — A cross-feature határszabály a FOGYASZTÓT állítja meg, de a javítás a SZOLGÁLTATÓ barrelében van: a kör olyan fájlt kér, ami definíció szerint kívül esik a listáján (E13-R28 önjavító kör, H3, 2026-08-27)
+
+**A tünet.** A kör kész volt, a lokális kapu 12-ből 11 lépésen zöld, és a
+`test/core/architecture_dependency_test.dart` pontosan három sértéssel állt meg
+(`dart run tool/check_architecture.dart`, a kör munkapéldányán, HEAD `090990f2`):
+
+```
+- lib/features/library_v2/data/setlist_item_source.dart -> lib/features/song_trainer/domain/repositories/setlist_repository.dart
+- lib/features/library_v2/data/song_item_source.dart -> lib/features/song_trainer/domain/repositories/song_repository.dart
+- lib/features/library_v2/providers/library_v2_providers.dart -> lib/features/song_trainer/application/song_trainer_providers.dart
+[cross-feature imports must target public.dart]
+```
+
+**A gyökérok, és miért ÚJ hibaosztály.** Az eddigi H3-ak (R1–R4, [L478](#l478))
+mind a kör SAJÁT fájáról vagy a kört mérő ŐRÖKRŐL szóltak: a lista arról nem
+tudott, amit a kör ír vagy ami rá lő. Itt más történt: a szabály a
+**fogyasztó** fájlját jelöli meg sértőnek, a feloldás viszont **egy másik
+feature publikus felületén** van. A `lib/features/song_trainer/public.dart` ma
+kizárólag két képernyőt exportál — sem a `SongRepository`/`SetlistRepository`
+szerződést, sem a két Riverpod providert. A kör §3 scope-ja viszont KIMONDJA,
+hogy a dal- és setlist-tételtípust is listázza. Vagyis a kör a saját listáján
+belül maradva **egyetlen határ-legális importot sem tudott volna leírni** — a
+lista tágítása pedig H3, amit az orchestrátor pre-flightban nem oldhat fel.
+
+**A két látszólagos kerülőút, és miért nem járható egyik sem.**
+A nested `song_trainer/domain/public.dart` barrel (ADR 0089/0176) NEM oldja
+fel: a `domain/models/**` és `domain/services/**` exportját tartalmazza, a
+`domain/repositories/**`-ot nem, a provider-szimbólum pedig a nem-publikus
+`application/song_trainer_providers.dart`-ban él. A wiring áthelyezése
+`lib/app/routing/`-ba MŰKÖDNE (a `lib/app/**` nem esik a cross-feature szabály
+alá) — és pontosan ezért **elvetve**: az a határszabály megkerülése, nem a
+teljesítése.
+
+**A mérés (a kör munkapéldányán, a próbafolt utólag visszaállítva).** Három
+`show`-os export-sor a gyökér-barrelen + a három import átkötése:
+`dart run tool/check_architecture.dart` → `Architecture dependencies OK
+(12 allowlisted deviation(s))` (3 → 0), `flutter analyze lib/` →
+`No issues found!` (a barrel screen-exportjai nem ütköznek), és
+`flutter test test/core/architecture_dependency_test.dart` → `+44 All tests
+passed`. A javítás tehát **additív, egyfájlos, és a határszabályt ERŐSÍTI** —
+nem lazít rajta: a `song_trainer` belső fájljai továbbra is elérhetetlenek.
+
+**A szabály.** Ha egy kör MÁSIK feature adatszerződését fogyasztja, a
+pre-flightnak nem elég azt megnéznie, hogy a szükséges TÍPUS létezik-e — azt
+kell megnéznie, hogy a **szolgáltató `public.dart`-ja exportálja-e**. Ha nem,
+a barrel a kör listájára tartozik, `show`-klauzulával leszűkítve a ténylegesen
+használt szimbólumokra. Ezt a brief-lint ma nem méri (S1–S13 egyike sem nézi a
+fogyasztott feature barreljét); amíg nem, a pre-flight kézi teendője.
+
+**Őrteszt:** `tools/tests/test_e13_r28_song_trainer_public_barrel_scope.py` — a
+mért három importőr ÉS a barrel scope-ban van, miközben a `song_trainer` négy
+belső fájlja (a két repository, a provider-fájl és a nested domain-barrel)
+továbbra is sértés, tehát a tágítás bizonyíthatóan EGY fájl marad.
