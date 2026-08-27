@@ -5,6 +5,7 @@ import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../model/offline_model.dart';
 import '../providers/offline_model_controller.dart';
+import '../theme/offline_ai_theme_scope.dart';
 
 /// The offline AI model manager (§3, §5.1 ADR 0292): download / verify /
 /// activate / rollback / storage states for the on-device detection model.
@@ -22,26 +23,28 @@ class ModelManagerScreen extends ConsumerWidget {
     final state = ref.watch(offlineModelControllerProvider);
     final controller = ref.read(offlineModelControllerProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.modelManagerTitle)),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: <Widget>[
-            SsModelStatusCard(
-              l10n: l10n,
-              title: l10n.modelManagerSourceLabel(modelId),
-              provenance: SsProvenanceKind.local,
-              message: _messageFor(l10n, state),
-            ),
-            const SizedBox(height: 20),
-            _ActionArea(
-              key: const Key('modelManagerActionArea'),
-              state: state,
-              onCheck: () => controller.checkAndActivate(modelId),
-              onRollback: controller.rollback,
-            ),
-          ],
+    return OfflineAiThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.modelManagerTitle)),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: <Widget>[
+              SsModelStatusCard(
+                l10n: l10n,
+                title: l10n.modelManagerSourceLabel(modelId),
+                provenance: SsProvenanceKind.local,
+                message: _messageFor(l10n, state),
+              ),
+              const SizedBox(height: 20),
+              _ActionArea(
+                key: const Key('modelManagerActionArea'),
+                state: state,
+                onCheck: () => controller.checkAndActivate(modelId),
+                onRollback: controller.rollback,
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/settings/screens/vision_privacy_screen.dart';
 import 'package:strumsight/features/vision/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -21,6 +22,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          theme: AppTheme.light(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: VisionPrivacyScreen(
@@ -30,25 +32,21 @@ void main() {
         ),
       );
 
-      // E13-R35 (§0.0.B/B4) — the confirmation moved from a bare AlertDialog
-      // to the design system's SsConfirmationSheet (ADR 0279 §5.6
-      // consequence-first confirmation); its confirm/cancel controls carry
-      // their own stable keys, not the screen's former custom ones.
       await tester.tap(find.byKey(const Key('visionPrivacyDeleteAll')));
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const ValueKey('ss-confirmation-confirm')),
+        find.byKey(const Key('visionPrivacyDeleteAllConfirm')),
         findsOneWidget,
       );
 
-      await tester.tap(find.byKey(const ValueKey('ss-confirmation-cancel')));
+      await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(store.readString(StorageKeys.visionSessionHistory), isNotNull);
       expect(store.writeLog, isEmpty, reason: 'cancel must not call deletion');
 
       await tester.tap(find.byKey(const Key('visionPrivacyDeleteAll')));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const ValueKey('ss-confirmation-confirm')));
+      await tester.tap(find.byKey(const Key('visionPrivacyDeleteAllConfirm')));
       await tester.pumpAndSettle();
       expect(store.readString(StorageKeys.visionSessionHistory), isNull);
       expect(store.readString(StorageKeys.visionCalibration), isNull);

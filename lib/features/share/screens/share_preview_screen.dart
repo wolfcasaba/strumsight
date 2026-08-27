@@ -4,6 +4,7 @@ import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../analyze/public.dart';
 import '../share_service.dart';
+import '../theme/share_theme_scope.dart';
 import '../widgets/strum_card.dart';
 import 'strum_reel_screen.dart';
 
@@ -74,77 +75,80 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.shareTitle)),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: FittedBox(
-                    child: RepaintBoundary(
-                      key: _cardKey,
-                      child: StrumCard(
-                        result: widget.result,
-                        capo: widget.capo,
-                        title: widget.title,
-                        showTitle: _includeTitle,
+    return ShareThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.shareTitle)),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: FittedBox(
+                      child: RepaintBoundary(
+                        key: _cardKey,
+                        child: StrumCard(
+                          result: widget.result,
+                          capo: widget.capo,
+                          title: widget.title,
+                          showTitle: _includeTitle,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-              child: _RedactionSummary(
-                includeTitle: _includeTitle,
-                hasTitle: (widget.title ?? '').trim().isNotEmpty,
-                onIncludeTitleChanged: (v) => setState(() => _includeTitle = v),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: _RedactionSummary(
+                  includeTitle: _includeTitle,
+                  hasTitle: (widget.title ?? '').trim().isNotEmpty,
+                  onIncludeTitleChanged: (v) =>
+                      setState(() => _includeTitle = v),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              child: Column(
-                children: [
-                  Builder(
-                    builder: (btnCtx) => SsButton(
-                      label: l10n.shareCardButton,
-                      icon: Icons.ios_share,
-                      loading: _busy,
-                      onPressed: _busy ? null : () => _shareImage(btnCtx),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                child: Column(
+                  children: [
+                    Builder(
+                      builder: (btnCtx) => SsButton(
+                        label: l10n.shareCardButton,
+                        icon: Icons.ios_share,
+                        loading: _busy,
+                        onPressed: _busy ? null : () => _shareImage(btnCtx),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SsButton(
-                        variant: SsButtonVariant.tertiary,
-                        icon: Icons.movie_creation_outlined,
-                        label: l10n.reelButton,
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => StrumReelScreen(
-                              result: widget.result,
-                              capo: widget.capo,
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SsButton(
+                          variant: SsButtonVariant.tertiary,
+                          icon: Icons.movie_creation_outlined,
+                          label: l10n.reelButton,
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => StrumReelScreen(
+                                result: widget.result,
+                                capo: widget.capo,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      SsButton(
-                        variant: SsButtonVariant.tertiary,
-                        label: l10n.shareTextButton,
-                        onPressed: () => _shareText(context),
-                      ),
-                    ],
-                  ),
-                ],
+                        SsButton(
+                          variant: SsButtonVariant.tertiary,
+                          label: l10n.shareTextButton,
+                          onPressed: () => _shareText(context),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

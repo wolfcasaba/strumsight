@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/offline_ai/data/offline_model_source.dart';
 import 'package:strumsight/features/offline_ai/model/offline_model.dart';
 import 'package:strumsight/features/offline_ai/providers/offline_model_controller.dart';
@@ -165,6 +166,7 @@ void main() {
           ProviderScope(
             overrides: [offlineModelSourceProvider.overrideWithValue(source)],
             child: MaterialApp(
+              theme: AppTheme.light(),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
               home: const ModelManagerScreen(),
@@ -187,9 +189,11 @@ void main() {
         await tester.tap(find.text('Check for model'));
         await tester.pumpAndSettle();
 
+        // Shown in both the status card and the (button-free) action area —
+        // the important assertion is the total ABSENCE of any button below.
         expect(
           find.text("Not activated — checksum could not be verified"),
-          findsOneWidget,
+          findsWidgets,
         );
         // No button anywhere offers to activate despite the failed check.
         expect(find.byType(FilledButton), findsNothing);

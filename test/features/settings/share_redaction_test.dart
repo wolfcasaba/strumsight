@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/share/screens/share_preview_screen.dart';
 import 'package:strumsight/features/share/share_service.dart';
@@ -50,6 +51,7 @@ final _result = AnalyzeResult(
 Future<void> _pump(WidgetTester tester, List<String> log, {String? title}) =>
     tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: SharePreviewScreen(

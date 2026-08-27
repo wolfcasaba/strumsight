@@ -297,9 +297,18 @@ class SettingsSync {
   /// file schedules this on its own.
   Future<void> retryFailedPush() => _queuePush(force: true);
 
+  /// Deferred past the current build/listener turn (same reentrancy rule
+  /// `auth_providers.dart`'s `Future.microtask` documents): the
+  /// `authControllerProvider` listener that clears state on logout fires
+  /// with `fireImmediately: true` from inside this very constructor, which
+  /// itself runs during `settingsSyncProvider`'s own build — writing another
+  /// provider's state synchronously there is exactly the reentrancy Riverpod
+  /// forbids.
   void _publishStatus(SettingsSyncStatus status) {
-    if (!_ref.mounted) return;
-    _ref.read(settingsSyncStatusProvider.notifier).publish(status);
+    Future.microtask(() {
+      if (!_ref.mounted) return;
+      _ref.read(settingsSyncStatusProvider.notifier).publish(status);
+    });
   }
 
   /// Serializes full-profile PUTs. A genuine edit received during an in-flight

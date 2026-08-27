@@ -38,6 +38,7 @@ Future<ProviderContainer> _openSettings(
         tokenStoreProvider.overrideWithValue(FakeTokenStore('stored-token')),
         authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
         settingsRepositoryProvider.overrideWithValue(settings),
+        accountEnabledProvider.overrideWithValue(true),
         // No debounce — the test drives the push synchronously.
         settingsSyncDebounceProvider.overrideWithValue(Duration.zero),
       ],

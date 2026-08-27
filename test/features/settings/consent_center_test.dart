@@ -72,9 +72,20 @@ void main() {
 
       // A visible result — the export dialog with the actual JSON — not a
       // button that silently reverts to idle.
-      expect(find.text('Export ready'), findsOneWidget);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.text('Export ready'),
+        ),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
+
+      // The result stays visible after the dialog closes too — the row does
+      // not silently revert to the idle "Export my data" button.
+      expect(find.text('Export ready'), findsOneWidget);
     },
   );
 
@@ -101,7 +112,7 @@ void main() {
         reason: 'ADR 0279 §5.6 — consequence-first, not a bare "are you sure?"',
       );
 
-      await tester.tap(find.byKey(const ValueKey('ss-confirmation-confirm')));
+      await tester.tap(find.byKey(const Key('privacyCenterDeleteAllConfirm')));
       await tester.pumpAndSettle();
 
       expect(find.text('All data deleted'), findsOneWidget);

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +6,7 @@ import '../../../core/storage/storage_providers.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../vision/public.dart';
 import '../providers/lab_mode_provider.dart';
+import '../theme/settings_theme_scope.dart';
 import 'vision_privacy_screen.dart';
 
 /// The state of an explicit, auditable data task (§5.6, ADR 0279): a task
@@ -66,15 +65,37 @@ class _PrivacyCenterScreenState extends ConsumerState<PrivacyCenterScreen> {
     }
   }
 
-  Future<void> _confirmDeleteAll(AppLocalizations l10n) {
-    return SsConfirmationSheet.show(
-      context,
-      title: l10n.privacyCenterDeleteAllTitle,
-      consequence: l10n.privacyCenterDeleteAllConsequence,
-      confirmLabel: l10n.privacyCenterDeleteAllConfirm,
-      cancelLabel: l10n.privacyCenterCancel,
-      onConfirm: () => unawaited(_runDeleteAll()),
+  // NOTE: `SsConfirmationSheet.show` presents through `showGeneralDialog`
+  // (`ss_overlay_host.dart`), which does NOT capture the calling context's
+  // `InheritedTheme` the way `showDialog` does — a locally-scoped
+  // `SettingsThemeScope` never reaches it and `SsColorScheme` resolves null
+  // there (measured, 2026-08-27). `showDialog` DOES capture it, so the
+  // consequence-first wording (ADR 0279 §5.6 — what is lost, named before
+  // the destructive action runs) is kept on a plain `AlertDialog` instead.
+  Future<void> _confirmDeleteAll(AppLocalizations l10n) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.privacyCenterDeleteAllTitle),
+        content: Text(l10n.privacyCenterDeleteAllConsequence),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.privacyCenterCancel),
+          ),
+          FilledButton(
+            key: const Key('privacyCenterDeleteAllConfirm'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(l10n.privacyCenterDeleteAllConfirm),
+          ),
+        ],
+      ),
     );
+    if (confirmed != true) return;
+    await _runDeleteAll();
   }
 
   Future<void> _runDeleteAll() async {
@@ -92,94 +113,104 @@ class _PrivacyCenterScreenState extends ConsumerState<PrivacyCenterScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final colors = Theme.of(context).extension<SsColorScheme>()!;
     final sessionCount = _repository.list().length;
     final labModeOn = ref.watch(labModeProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.privacyCenterTitle)),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: <Widget>[
-            SsSection(
-              title: l10n.privacyCenterInventoryTitle,
-              child: SsCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    Text(l10n.privacyCenterInventorySessions(sessionCount)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: <Widget>[
-                        Icon(
-                          labModeOn
-                              ? Icons.mic_outlined
-                              : Icons.mic_off_outlined,
-                          size: 16,
-                          color: colors.textSecondary,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            labModeOn
-                                ? l10n.privacyCenterPolicyLabModeOn
-                                : l10n.privacyCenterPolicyLabModeOff,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: colors.textSecondary,
-                            ),
+    return SettingsThemeScope(
+      // A fresh `context` (a descendant of the scope above) is required for
+      // `Theme.of(context).extension<SsColorScheme>()` to resolve.
+      child: Builder(
+        builder: (context) {
+          final colors = Theme.of(context).extension<SsColorScheme>()!;
+          return Scaffold(
+            appBar: AppBar(title: Text(l10n.privacyCenterTitle)),
+            body: SafeArea(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: <Widget>[
+                  SsSection(
+                    title: l10n.privacyCenterInventoryTitle,
+                    child: SsCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            l10n.privacyCenterInventorySessions(sessionCount),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SsContentCard(
-              title: l10n.privacyCenterOpenSessionHistory,
-              message: l10n.privacyCenterOpenSessionHistorySubtitle,
-              icon: Icons.history,
-              actions: [
-                SsCardAction(
-                  label: l10n.privacyCenterOpenSessionHistory,
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => VisionPrivacyScreen(
-                        repository: _repository,
-                        export: _export,
+                          const SizedBox(height: 8),
+                          Row(
+                            children: <Widget>[
+                              Icon(
+                                labModeOn
+                                    ? Icons.mic_outlined
+                                    : Icons.mic_off_outlined,
+                                size: 16,
+                                color: colors.textSecondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  labModeOn
+                                      ? l10n.privacyCenterPolicyLabModeOn
+                                      : l10n.privacyCenterPolicyLabModeOff,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  SsContentCard(
+                    title: l10n.privacyCenterOpenSessionHistory,
+                    message: l10n.privacyCenterOpenSessionHistorySubtitle,
+                    icon: Icons.history,
+                    actions: [
+                      SsCardAction(
+                        label: l10n.privacyCenterOpenSessionHistory,
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => VisionPrivacyScreen(
+                              repository: _repository,
+                              export: _export,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _TaskRow(
+                    key: const Key('privacyCenterExportTask'),
+                    state: _exportState,
+                    idleLabel: l10n.privacyCenterExportAction,
+                    runningLabel: l10n.privacyCenterExportRunning,
+                    doneLabel: l10n.privacyCenterExportDone,
+                    failedLabel: l10n.privacyCenterExportFailed,
+                    onRun: () => _runExport(l10n),
+                  ),
+                  const SizedBox(height: 12),
+                  _TaskRow(
+                    key: const Key('privacyCenterDeleteAllTask'),
+                    state: _deleteState,
+                    destructive: true,
+                    idleLabel: l10n.privacyCenterDeleteAllAction,
+                    runningLabel: l10n.privacyCenterDeleteAllRunning,
+                    doneLabel: l10n.privacyCenterDeleteAllDone,
+                    failedLabel: l10n.privacyCenterExportFailed,
+                    onRun: () => _confirmDeleteAll(l10n),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
-            _TaskRow(
-              key: const Key('privacyCenterExportTask'),
-              state: _exportState,
-              idleLabel: l10n.privacyCenterExportAction,
-              runningLabel: l10n.privacyCenterExportRunning,
-              doneLabel: l10n.privacyCenterExportDone,
-              failedLabel: l10n.privacyCenterExportFailed,
-              onRun: () => _runExport(l10n),
-            ),
-            const SizedBox(height: 12),
-            _TaskRow(
-              key: const Key('privacyCenterDeleteAllTask'),
-              state: _deleteState,
-              destructive: true,
-              idleLabel: l10n.privacyCenterDeleteAllAction,
-              runningLabel: l10n.privacyCenterDeleteAllRunning,
-              doneLabel: l10n.privacyCenterDeleteAllDone,
-              failedLabel: l10n.privacyCenterExportFailed,
-              onRun: () => _confirmDeleteAll(l10n),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

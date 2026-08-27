@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/auth/screens/login_screen.dart';
@@ -23,6 +24,7 @@ Future<void> _pumpPushedFromHome(
         authRepositoryProvider.overrideWithValue(auth ?? FakeAuthRepository()),
       ],
       child: MaterialApp(
+        theme: AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(

@@ -23,6 +23,7 @@ import '../providers/nudge_enabled_provider.dart';
 import '../providers/left_handed_provider.dart';
 import '../providers/settings_sync.dart';
 import '../providers/tuning_reference_provider.dart';
+import '../theme/settings_theme_scope.dart';
 import 'privacy_center_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -36,245 +37,254 @@ class SettingsScreen extends ConsumerWidget {
     final locale = ref.watch(localeProvider);
     final threshold = ref.watch(confidenceThresholdProvider);
 
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        children: [
-          Text(
-            l10n.settingsTitle,
-            style: TextStyle(
-              fontFamily: 'Montserrat',
-              fontWeight: FontWeight.w800,
-              fontSize: 30,
-              color: palette.ink,
+    return SettingsThemeScope(
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+          children: [
+            Text(
+              l10n.settingsTitle,
+              style: TextStyle(
+                fontFamily: 'Montserrat',
+                fontWeight: FontWeight.w800,
+                fontSize: 30,
+                color: palette.ink,
+              ),
             ),
-          ),
-          const SizedBox(height: 28),
-
-          Card(
-            margin: EdgeInsets.zero,
-            clipBehavior: Clip.antiAlias,
-            child: ListTile(
-              leading: const Icon(
-                Icons.insights_outlined,
-                color: AppColors.primary,
-              ),
-              title: Text(l10n.progressTitle),
-              subtitle: Text(l10n.progressTotalPractice),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.go(AppRoutes.progress),
-            ),
-          ),
-          const SizedBox(height: 28),
-
-          // Privacy/consent and the offline AI model manager sit at the TOP
-          // level of Settings, not three menus deep (A5, §5.3 ADR 0292).
-          // Both are new screens (§0.0.B/B1, B6/B7) reached the same way the
-          // fan-tree already does elsewhere — `Navigator.push` +
-          // `MaterialPageRoute`, no new route registered (B5).
-          SsContentCard(
-            title: l10n.privacyCenterEntryTitle,
-            message: l10n.privacyCenterEntrySubtitle,
-            icon: Icons.privacy_tip_outlined,
-            actions: [
-              SsCardAction(
-                label: l10n.privacyCenterEntryTitle,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const PrivacyCenterScreen(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SsContentCard(
-            title: l10n.modelManagerEntryTitle,
-            message: l10n.modelManagerEntrySubtitle,
-            icon: Icons.memory_outlined,
-            actions: [
-              SsCardAction(
-                label: l10n.modelManagerEntryTitle,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ModelManagerScreen(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-
-          if (ref.watch(accountEnabledProvider)) ...[
-            _SectionHeader(l10n.settingsAccount),
-            const _AccountSection(),
             const SizedBox(height: 28),
-          ],
 
-          _SectionHeader(l10n.settingsAppearance),
-          SegmentedButton<ThemeMode>(
-            showSelectedIcon: false,
-            segments: [
-              ButtonSegment(
-                value: ThemeMode.light,
-                label: Text(l10n.themeLight),
-              ),
-              ButtonSegment(value: ThemeMode.dark, label: Text(l10n.themeDark)),
-              ButtonSegment(
-                value: ThemeMode.system,
-                label: Text(l10n.themeSystem),
-              ),
-            ],
-            selected: {themeMode},
-            onSelectionChanged: (s) =>
-                ref.read(themeModeProvider.notifier).setMode(s.first),
-          ),
-          const SizedBox(height: 28),
-
-          _SectionHeader(l10n.settingsLanguage),
-          Wrap(
-            spacing: 8,
-            children: [
-              ChoiceChip(
-                label: Text(l10n.settingsSystemLanguage),
-                selected: locale == null,
-                onSelected: (_) => ref.read(localeProvider.notifier).set(null),
-              ),
-              ChoiceChip(
-                label: const Text('English'),
-                selected: locale?.languageCode == 'en',
-                onSelected: (_) =>
-                    ref.read(localeProvider.notifier).set(const Locale('en')),
-              ),
-              ChoiceChip(
-                label: const Text('Magyar'),
-                selected: locale?.languageCode == 'hu',
-                onSelected: (_) =>
-                    ref.read(localeProvider.notifier).set(const Locale('hu')),
-              ),
-            ],
-          ),
-          const SizedBox(height: 28),
-
-          _SectionHeader(l10n.settingsConfidenceThreshold),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  value: threshold,
-                  onChanged: (v) =>
-                      ref.read(confidenceThresholdProvider.notifier).set(v),
+            Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                leading: const Icon(
+                  Icons.insights_outlined,
+                  color: AppColors.primary,
                 ),
+                title: Text(l10n.progressTitle),
+                subtitle: Text(l10n.progressTotalPractice),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => context.go(AppRoutes.progress),
               ),
-              SizedBox(
-                width: 48,
-                child: Text(
-                  '${(threshold * 100).round()}%',
-                  textAlign: TextAlign.end,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    color: palette.ink,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+            const SizedBox(height: 28),
+
+            // Privacy/consent and the offline AI model manager sit at the TOP
+            // level of Settings, not three menus deep (A5, §5.3 ADR 0292).
+            // Both are new screens (§0.0.B/B1, B6/B7) reached the same way the
+            // fan-tree already does elsewhere — `Navigator.push` +
+            // `MaterialPageRoute`, no new route registered (B5).
+            SsContentCard(
+              title: l10n.privacyCenterEntryTitle,
+              message: l10n.privacyCenterEntrySubtitle,
+              icon: Icons.privacy_tip_outlined,
+              actions: [
+                SsCardAction(
+                  label: l10n.privacyCenterEntryTitle,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const PrivacyCenterScreen(),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          Text(
-            l10n.settingsConfidenceHint,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 13,
-              color: palette.muted,
+              ],
             ),
-          ),
-          const SizedBox(height: 28),
-
-          _SectionHeader(l10n.settingsTuningReference),
-          const _TuningReferenceStepper(),
-          const SizedBox(height: 28),
-
-          _SectionHeader(l10n.settingsCapo),
-          const _CapoStepper(),
-          const SizedBox(height: 28),
-
-          _SectionHeader(l10n.settingsPlaying),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.settingsLeftHanded),
-            subtitle: Text(l10n.settingsLeftHandedHint),
-            value: ref.watch(leftHandedProvider),
-            onChanged: (v) => ref.read(leftHandedProvider.notifier).set(v),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.timer_outlined),
-            title: Text(l10n.calibrationTitle),
-            subtitle: Text(
-              l10n.calibrationCurrent('${ref.watch(inputLatencyProvider)}'),
-            ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push(AppRoutes.calibrate),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(l10n.settingsNudge),
-            subtitle: Text(l10n.settingsNudgeHint),
-            value: ref.watch(nudgeEnabledProvider),
-            onChanged: (v) => ref
-                .read(nudgeEnabledProvider.notifier)
-                .setEnabled(
-                  v,
-                  copyFor: (variant) => switch (variant) {
-                    NudgeCopyVariant.friday => (
-                      title: l10n.nudgeTitleFriday,
-                      body: l10n.nudgeBodyFriday,
+            const SizedBox(height: 12),
+            SsContentCard(
+              title: l10n.modelManagerEntryTitle,
+              message: l10n.modelManagerEntrySubtitle,
+              icon: Icons.memory_outlined,
+              actions: [
+                SsCardAction(
+                  label: l10n.modelManagerEntryTitle,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ModelManagerScreen(),
                     ),
-                    NudgeCopyVariant.weekend => (
-                      title: l10n.nudgeTitleWeekend,
-                      body: l10n.nudgeBodyWeekend,
-                    ),
-                    _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
-                  },
+                  ),
                 ),
-          ),
-          const SizedBox(height: 28),
+              ],
+            ),
+            const SizedBox(height: 28),
 
-          // Lab mode is a build-level availability (E01-R03 FeatureFlags):
-          // production artifacts don't offer the toggle at all.
-          if (ref.watch(appConfigProvider).flags.labModeAvailable) ...[
-            _SectionHeader(l10n.labModeTitle),
+            if (ref.watch(accountEnabledProvider)) ...[
+              _SectionHeader(l10n.settingsAccount),
+              const _AccountSection(),
+              const SizedBox(height: 28),
+            ],
+
+            _SectionHeader(l10n.settingsAppearance),
+            SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  label: Text(l10n.themeLight),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  label: Text(l10n.themeDark),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  label: Text(l10n.themeSystem),
+                ),
+              ],
+              selected: {themeMode},
+              onSelectionChanged: (s) =>
+                  ref.read(themeModeProvider.notifier).setMode(s.first),
+            ),
+            const SizedBox(height: 28),
+
+            _SectionHeader(l10n.settingsLanguage),
+            Wrap(
+              spacing: 8,
+              children: [
+                ChoiceChip(
+                  label: Text(l10n.settingsSystemLanguage),
+                  selected: locale == null,
+                  onSelected: (_) =>
+                      ref.read(localeProvider.notifier).set(null),
+                ),
+                ChoiceChip(
+                  label: const Text('English'),
+                  selected: locale?.languageCode == 'en',
+                  onSelected: (_) =>
+                      ref.read(localeProvider.notifier).set(const Locale('en')),
+                ),
+                ChoiceChip(
+                  label: const Text('Magyar'),
+                  selected: locale?.languageCode == 'hu',
+                  onSelected: (_) =>
+                      ref.read(localeProvider.notifier).set(const Locale('hu')),
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+
+            _SectionHeader(l10n.settingsConfidenceThreshold),
+            Row(
+              children: [
+                Expanded(
+                  child: Slider(
+                    value: threshold,
+                    onChanged: (v) =>
+                        ref.read(confidenceThresholdProvider.notifier).set(v),
+                  ),
+                ),
+                SizedBox(
+                  width: 48,
+                  child: Text(
+                    '${(threshold * 100).round()}%',
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      color: palette.ink,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              l10n.settingsConfidenceHint,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 13,
+                color: palette.muted,
+              ),
+            ),
+            const SizedBox(height: 28),
+
+            _SectionHeader(l10n.settingsTuningReference),
+            const _TuningReferenceStepper(),
+            const SizedBox(height: 28),
+
+            _SectionHeader(l10n.settingsCapo),
+            const _CapoStepper(),
+            const SizedBox(height: 28),
+
+            _SectionHeader(l10n.settingsPlaying),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(l10n.labModeTitle),
-              subtitle: Text(l10n.labModeConsent),
-              isThreeLine: true,
-              value: ref.watch(labModeProvider),
-              onChanged: (v) =>
-                  ref.read(labModeProvider.notifier).setEnabled(v),
+              title: Text(l10n.settingsLeftHanded),
+              subtitle: Text(l10n.settingsLeftHandedHint),
+              value: ref.watch(leftHandedProvider),
+              onChanged: (v) => ref.read(leftHandedProvider.notifier).set(v),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.timer_outlined),
+              title: Text(l10n.calibrationTitle),
+              subtitle: Text(
+                l10n.calibrationCurrent('${ref.watch(inputLatencyProvider)}'),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push(AppRoutes.calibrate),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.settingsNudge),
+              subtitle: Text(l10n.settingsNudgeHint),
+              value: ref.watch(nudgeEnabledProvider),
+              onChanged: (v) => ref
+                  .read(nudgeEnabledProvider.notifier)
+                  .setEnabled(
+                    v,
+                    copyFor: (variant) => switch (variant) {
+                      NudgeCopyVariant.friday => (
+                        title: l10n.nudgeTitleFriday,
+                        body: l10n.nudgeBodyFriday,
+                      ),
+                      NudgeCopyVariant.weekend => (
+                        title: l10n.nudgeTitleWeekend,
+                        body: l10n.nudgeBodyWeekend,
+                      ),
+                      _ => (title: l10n.nudgeTitle, body: l10n.nudgeBody),
+                    },
+                  ),
             ),
             const SizedBox(height: 28),
-          ],
 
-          _SectionHeader(l10n.settingsAbout),
-          FutureBuilder<String>(
-            future: _appVersion(),
-            builder: (context, snap) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 20, color: palette.muted),
-                  const SizedBox(width: 12),
-                  Text(
-                    l10n.settingsVersion(snap.data ?? '…'),
-                    style: TextStyle(fontFamily: 'Poppins', color: palette.ink),
-                  ),
-                ],
+            // Lab mode is a build-level availability (E01-R03 FeatureFlags):
+            // production artifacts don't offer the toggle at all.
+            if (ref.watch(appConfigProvider).flags.labModeAvailable) ...[
+              _SectionHeader(l10n.labModeTitle),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(l10n.labModeTitle),
+                subtitle: Text(l10n.labModeConsent),
+                isThreeLine: true,
+                value: ref.watch(labModeProvider),
+                onChanged: (v) =>
+                    ref.read(labModeProvider.notifier).setEnabled(v),
+              ),
+              const SizedBox(height: 28),
+            ],
+
+            _SectionHeader(l10n.settingsAbout),
+            FutureBuilder<String>(
+              future: _appVersion(),
+              builder: (context, snap) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 20, color: palette.muted),
+                    const SizedBox(width: 12),
+                    Text(
+                      l10n.settingsVersion(snap.data ?? '…'),
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: palette.ink,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
