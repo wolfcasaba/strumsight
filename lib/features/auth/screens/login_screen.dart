@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../l10n/app_localizations.dart';
@@ -28,6 +29,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     _email.dispose();
     _password.dispose();
     super.dispose();
+  }
+
+  /// "Continue without an account" (A1, ADR 0292 norm) always has to leave
+  /// this screen — but it is reached two ways: PUSHED (from Settings, a real
+  /// route to pop back to) and via a `go()` that REPLACED the stack (from the
+  /// profile hub), which leaves nothing to pop (javító kör 1, F4). `maybePop`
+  /// alone silently no-ops on the second path, stranding the user here; a
+  /// `go()` fallback only fires when there genuinely was nothing to pop.
+  Future<void> _continueWithoutAccount() async {
+    final popped = await Navigator.of(context).maybePop();
+    if (!popped && mounted) {
+      context.go(AppRoutes.profileHome);
+    }
   }
 
   Future<void> _submit() async {
@@ -175,9 +189,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         key: const Key('authContinueWithoutAccount'),
                         variant: SsButtonVariant.tertiary,
                         label: l10n.authContinueWithoutAccount,
-                        onPressed: loading
-                            ? null
-                            : () => Navigator.of(context).maybePop(),
+                        onPressed: loading ? null : _continueWithoutAccount,
                       ),
                     ],
                   ),

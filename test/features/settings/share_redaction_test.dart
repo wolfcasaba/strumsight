@@ -71,6 +71,11 @@ void main() {
     expect(find.text('Chord progression'), findsOneWidget);
     expect(find.text('Strum pattern'), findsOneWidget);
     expect(find.text('Tempo (BPM)'), findsOneWidget);
+    // Javító kör 1, s1: the card also always carries the down/up stroke
+    // counts and the session length (`StrumCard._stats`) — the itemized
+    // list must name those too, not just the first three fields.
+    expect(find.text('Down/up stroke counts'), findsOneWidget);
+    expect(find.text('Session length'), findsOneWidget);
   });
 
   testWidgets(
@@ -100,6 +105,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('shareIncludeTitleToggle')), findsOneWidget);
+      // Javító kör 1, s1: the two new itemized rows pushed this toggle
+      // further down — it can now sit below the fold in the test viewport,
+      // same reason "Share as text" below already needs `ensureVisible`.
+      await tester.ensureVisible(
+        find.byKey(const Key('shareIncludeTitleToggle')),
+      );
       await tester.tap(find.byKey(const Key('shareIncludeTitleToggle')));
       await tester.pumpAndSettle();
 

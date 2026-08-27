@@ -204,6 +204,12 @@ class _RedactionSummary extends StatelessWidget {
             _item(colors, l10n.shareRedactionChords),
             _item(colors, l10n.shareRedactionStrumPattern),
             _item(colors, l10n.shareRedactionTempo),
+            // Javító kör 1, s1: the card (`StrumCard._stats`) also always
+            // carries the down/up stroke counts and the session length —
+            // the itemized list has to name everything that actually leaves
+            // the device, not a subset of it (A7).
+            _item(colors, l10n.shareRedactionStrokeCounts),
+            _item(colors, l10n.shareRedactionDuration),
             if (hasTitle) ...[
               const SizedBox(height: 4),
               SsSwitchRow(

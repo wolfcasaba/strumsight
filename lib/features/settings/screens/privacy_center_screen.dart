@@ -50,7 +50,24 @@ class _PrivacyCenterScreenState extends ConsumerState<PrivacyCenterScreen> {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text(l10n.privacyCenterExportDone),
-          content: SingleChildScrollView(child: Text(json)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                // Javító kör 1, m1: this dialog shows the raw JSON in place —
+                // nothing is written to a file — so the copy has to say that,
+                // not let "Export ready" imply a saved artifact exists
+                // somewhere.
+                Text(
+                  l10n.privacyCenterExportSnapshotNote,
+                  style: Theme.of(dialogContext).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Text(json),
+              ],
+            ),
+          ),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),

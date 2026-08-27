@@ -48,12 +48,19 @@ class OfflineModelController extends Notifier<OfflineModelUiState> {
 
   /// The "Check for model" action: fetches a candidate, then runs it through
   /// the same [activate] gate a directly-supplied asset would.
+  ///
+  /// A failure HERE (network, storage, any other fetch-layer problem) never
+  /// reaches the checksum comparison at all, so it is [OfflineModelPhase
+  /// .fetchFailed] — NOT [OfflineModelPhase.blockedIntegrity], which is
+  /// reserved for a real, computed checksum mismatch inside [activate]
+  /// (javító kör 1, F5: a network hiccup must not read like — or dead-end
+  /// like — a tampered-model alarm).
   Future<void> checkAndActivate(String modelId) async {
     state = state._copyWith(phase: OfflineModelPhase.checking);
     final result = await _source.fetchCandidate(modelId);
     switch (result) {
       case Failure():
-        state = state._copyWith(phase: OfflineModelPhase.blockedIntegrity);
+        state = state._copyWith(phase: OfflineModelPhase.fetchFailed);
       case Success(:final value):
         activate(value);
     }

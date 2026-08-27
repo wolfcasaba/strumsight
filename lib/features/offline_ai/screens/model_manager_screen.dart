@@ -54,6 +54,7 @@ class ModelManagerScreen extends ConsumerWidget {
     return switch (state.phase) {
       OfflineModelPhase.notChecked => l10n.modelManagerStatusNotChecked,
       OfflineModelPhase.checking => l10n.modelManagerStatusChecking,
+      OfflineModelPhase.fetchFailed => l10n.modelManagerStatusFetchFailed,
       OfflineModelPhase.blockedIntegrity => l10n.modelManagerStatusBlocked,
       OfflineModelPhase.active =>
         '${l10n.modelManagerStatusActive} · '

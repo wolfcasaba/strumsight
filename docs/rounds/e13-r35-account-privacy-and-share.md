@@ -726,4 +726,182 @@ ugyanaz textScaler 2.0) = 10 PNG, mind commitolva.
   állapotok) — a §7 kifejezetten csak a §3 szerinti alap-nézetet írja elő a
   két kerettel, ez teljesült.
 
+## 10.1 Javító kör 1 (2026-08-27, `sonnet-impl`) — a review 7 MAJOR-jának javítása
+
+A review (`docs/reviews/e13-r35-review.md`) 6 MAJOR-t (F1–F6) és 3 MINOR-t
+(s1, s4, m1) talált, mindegyiket futtatott próbateszttel reprodukálva. Alább
+leletenként: mi változott, MELYIK cella fogja meg, és mi a mért kimenet.
+
+### F1 — az A6 UI-oldali őrcellája most a MŰKÖDÉSRE mér, nem widget-típusra
+
+`test/features/settings/model_integrity_test.dart` „below threshold: NO
+activation control…" cellája eddig kizárólag `FilledButton`/`OutlinedButton`
+hiányát nézte — egy `SsButtonVariant.tertiary` (→ `TextButton`) bypass simán
+átment volna rajta. A cella most a `modelManagerBlockedIntegrity` kulcsú
+terület ALÁ scope-olva keres BÁRMILYEN `ButtonStyleButton`-t (ez lefedi
+Filled/Outlined/Text/Elevated — azaz minden `SsButton`-variánst), `InkWell`-t
+és `GestureDetector`-t.
+
+**A §6.1/§10 kötelező valódi-sértés próba (UI-tengely), TÉNYLEGESEN
+lefuttatva:** `model_manager_screen.dart` blockedIntegrity ágába ideiglenesen
+egy `SsButton(variant: tertiary, label: 'Activate anyway')` került, majd
+`flutter test test/features/settings/model_integrity_test.dart`:
+
+```
+00:01 +9 -1: … below threshold: NO activation control is rendered at all — not disabled, absent [E]
+  Expected: no matching candidates
+  Actual: _DescendantWidgetFinder:<Found 1 widget with widget matching predicate
+  descending from widget with key [<'modelManagerBlockedIntegrity'>]: [ TextButton(...) ]>
+```
+
+A cella PIROSRA váltott, ahogy a §6.1 előírja. A gate visszaállítva
+(`git diff` üres a bypass-gomb törlése után), a teszt újrafuttatva: **12/12
+zöld** (a 9 eredeti cella + az F1 megerősítő cella + a két F5-cella).
+
+### F2 — a szinkron-státusz a TÉNYLEGES gépezetből származik, nem él-publikálásból
+
+`lib/features/settings/providers/settings_sync.dart`: az eddigi szórt
+`_publishStatus(SettingsSyncStatus.xxx)` hívásokat egyetlen `_computeStatus()`
+váltotta fel — `pending`, ha van repülő VAGY függő push; különben `failed`,
+ha az aktuális aláírás még eltér a szervertől megerősítettől ÉS az utolsó
+kísérlet bukott (`_lastPushFailed`); egyébként `synced`. A publikálás
+(`_republishStatus`) továbbra is `Future.microtask`-ban fut (reentrancy),
+de MOST a mikrotaszk BELSEJÉBEN hívja `_computeStatus()`-t, a tényleges,
+akkor-aktuális mezőkből — nem a hívás pillanatában befagyasztott értékből.
+Ez zárja az S2-t (egy korábbi push `Success`-e már nem írhatja felül egy
+később még repülő push státuszát, mert `_pushInFlight` a ciklus végéig
+igaz marad) ÉS az M2-t (`_onLocalChange` korai visszatérési ága most is
+hív `_republishStatus()`-t, tehát egy debounce-ablakon belüli visszaállítás
+korrekt `synced`-reold fel, nem ragad `pending`-en).
+
+**Cella:** `test/features/settings/settings_sync_test.dart` (nem
+szerkeszthető, mind a 20 cella zöld maradt — a push/pull mechanika
+változatlan) + az ÚJ F6-cella (lásd alább), ami VALÓS in-flight méréssel
+bizonyítja az S2/M2 javítást.
+
+### F3 — a Privacy Center felirata most a TÉNYLEGES hatókört mondja
+
+`privacy_center_screen.dart` export/delete-all feliratai és az `en`/`hu`
+`base` ARB-ok: „Export my data"/„Delete all my data" → „Export my Vision
+data"/„Delete all my Vision data" (a `VisionPrivacyScreen` testvér-mintáját
+követve). A törlés-megerősítés szövege explicit kimondja, hogy a könyvtár,
+dalok és gyakorlási előzmény NEM érintett.
+
+**Cella:** `test/features/settings/consent_center_test.dart` ÚJ cellája —
+„F3 — 'delete all my Vision data' leaves non-Vision storage untouched" —
+egy nem-vision kulcsba (`StorageKeys.songs`) ír egy értéket a törlés előtt,
+majd bizonyítja, hogy a törlés UTÁN is megvan. Ez a cella pirosra váltana,
+ha valaki a törlést a teljes `StorageKeys.all`-ra bővítené anélkül, hogy a
+kör `allowed_paths`-a ezt engedné.
+
+### F4 — a „fiók nélkül tovább" a `go()`-belépésű úton is elhagyja a képernyőt
+
+`login_screen.dart`: a `Navigator.of(context).maybePop()` most `await`-elt,
+és ha `false`-t ad vissza (nincs mit popolni — a `profile_hub_screen.dart`
+`context.go(AppRoutes.login)`-ja pontosan ezt idézi elő), a képernyő
+`context.go(AppRoutes.profileHome)`-ra esik vissza. Útvonal-literál nem
+került a kódba (`route_literal_guard` zöld).
+
+**Cella:** `test/features/settings/auth_states_test.dart` ÚJ cellája —
+„on the go()-entry path… via a real router" — egy VALÓDI, minimális
+`GoRouter`-t épít (profileHome → login, pontosan a mért produkciós minta),
+és bizonyítja, hogy a „Continue without an account" tap után a
+`LoginScreen` eltűnik és a location NEM `/login`. A plain-`Navigator`
+harness-szel élő két meglévő cella (push-úton) változatlanul zöld.
+
+### F5 — a beszerzési hiba (`fetchFailed`) különvált a valódi ellenőrzőösszeg-eltéréstől
+
+`offline_model.dart`: új `OfflineModelPhase.fetchFailed` érték. A
+`checkAndActivate` `Failure()` ága most ide megy (NEM `blockedIntegrity`-be)
+— a `blockedIntegrity` mostantól KIZÁRÓLAG az `activate()` valódi
+checksum-összevetéséből érhető el. `model_manager_screen.dart`-ban a
+`fetchFailed` a normál (Check gombos) ágba esik, saját, nem-riasztó
+szöveggel (`modelManagerStatusFetchFailed`); a `blockedIntegrity` gomb
+nélküli, riasztó ága VÁLTOZATLAN.
+
+**Cella:** `model_integrity_test.dart` két ÚJ cellája — unit-szinten
+(`fetchFailed` fázis, `isNot(blockedIntegrity)`) és widget-szinten (a
+riasztó szöveg és a `modelManagerBlockedIntegrity` terület ABSZENS, a
+`modelManagerCheck` gomb `onPressed` NEM null).
+
+### F6 — az A3 in-flight cellája MOST valódi in-flight állapotot mér
+
+`settings_persistence_failure_test.dart`: a `FakeSettingsRepository`
+(`test/support/`, a kör `allowed_paths`-án KÍVÜL) `update()`-je mindig
+szinkron zár le — sosem volt in-flight ablak, amit mérni lehetett volna. A
+fájlban (engedélyezett) most egy helyi `_DelayedUpdateRepository` blokkol
+egy `Completer`-en, amíg a teszt fel nem oldja. A cella: szerkesztés →
+`tester.pumpAndSettle()` (ami elsüti a nulla debounce-Timert és elindítja a
+pusht, de NEM várja meg a blokkolt `update()`-et, mert a Scheduler nem lát
+további ütemezett frame-et) → `settings.updateStarted.isCompleted` igaz ÉS
+„Saving…" látszik ÉS „All changes saved" NEM látszik → `releaseUpdate`
+feloldása → „All changes saved" megjelenik. Ez a cella az F2 javítás
+VALÓDI bizonyítéka (korábban ez a cella épp az ellenkezőjét állította, és
+ez engedte át az S2-t).
+
+**Megjegyzés (mért, nem javítás):** az első implementációs kísérlet a
+`Completer.future`-t `tester.pump()` nélkül `await`-elte — mivel az
+`AutomatedTestWidgetsFlutterBinding`-ben a nulla-időtartamú `Timer` csak
+pumpolásra süt el, ez valódi holtpontot okozott (mért: 1166948 pid, 0.3%
+CPU, 9+ perc mozdulatlanság). A végleges változat a bizonyítottan működő
+`pumpAndSettle()`-mintát követi (ugyanaz, mint a fájl első cellájában).
+
+### s1 — a redakció-lista most tételesen felsorolja a löketszámot és a hosszt is
+
+`share_preview_screen.dart` `_RedactionSummary`-je két új tétellel bővült
+(`shareRedactionStrokeCounts`, `shareRedactionDuration`) — a `StrumCard`
+mindig kiviszi a le/fel löketszámot és a session hosszát (`_stats()`), ezt
+a lista eddig nem nevezte meg. **Mellékhatás:** a két új sor lejjebb tolta a
+cím-opt-in kapcsolót és a „Share card"/„Share as text" gombokat a kis
+teszt-viewportban — a `share_redaction_test.dart` és a `share_preview_test.dart`
+(mindkettő a kör §0.0/R2 listáján) érintett tap-jai elé egy-egy
+`tester.ensureVisible(...)` került, ugyanúgy, ahogy a meglévő A9-görgetési
+javítás már tette a „Share as text" gombnál. A mért állítások (mit naplóz a
+fake share service, milyen szöveg jelenik meg) VÁLTOZATLANOK.
+
+**Cella:** `share_redaction_test.dart` „the always-shared core is itemized
+on screen" — két új `expect` a fenti szövegekre.
+
+### s4 — TUDATOSAN KIHAGYVA ebben a körben
+
+A `wrapped_preview_screen.dart` / `strum_reel_screen.dart` heti perc/
+sorozat/pontosság adata valóban opt-in és tételes lista nélkül megy ki, DE
+a javítás — egy teljes redakció-összegző UI + opt-in kapcsoló mindkét
+képernyőn, a `ShareContent.wrappedCaption`/a reel megosztási útjának
+feltételes meződivatlanítása, plusz az ehhez tartozó widget-tesztek — egy
+önálló funkció méretű munka, nem egy sornyi felirat-igazítás. A brief §2
+MINOR szakasza kifejezetten megengedi a kihagyást, ha a javítás
+„aránytalanul hizlalná a diffet" — ez itt a hat MAJOR + s1 + m1 melletti
+HETEDIK jelentős funkcionális változtatás lenne. Következő SDD-körre
+javasolt, nem ennek a javító körnek a hatókörébe.
+
+### m1 — a Privacy Center export-dialógusa most kimondja, hogy pillanatkép, nem fájl
+
+`privacy_center_screen.dart`: az export-dialógus tartalma egy új
+`privacyCenterExportSnapshotNote` sorral bővült a JSON felett — „This is a
+viewable snapshot, not a saved file…" — mert a dialógus valójában sosem ír
+fájlt, csak megjeleníti a JSON-t.
+
+**Cella:** `consent_center_test.dart` A8 export-cellájának új `expect`-je a
+fenti szövegre.
+
+### A gate + a golden újrafelvétele — mért kimenet
+
+A §7 teljes gate (29 lépés — format, analyze, 23 célteszt, architecture,
+secrets, l10n) **MIND ZÖLD** (`tools/round-gate.sh` teljes futása, csonkítás
+nélkül). Az `analyze` lépés útközben egy `use_build_context_synchronously`
+lintet jelzett az F4 új metódusán (`context.mounted` helyett `mounted`-re
+javítva — `State.context`-hez a State saját `mounted`-je a helyes őr); a
+javítás után az `analyze` is zöld.
+
+A privacy_center és a share_preview képernyő ELRENDEZÉSE/szövege
+megváltozott (F3 felirat, s1 két új tétel), ezért a goldenek újrafelvétele
+KÖTELEZŐ volt (§0.0.B/B8): `tools/golden-x86.sh record` →
+`test/ui/goldens/e13_r35_screens_golden_test.dart`, **10/10 zöld**; utána
+`tools/golden-x86.sh check` ugyanarra, **10/10 zöld, nulla eltérés**. 3 PNG
+változott ténylegesen: `e13_r35_privacy_center_compact.png`,
+`e13_r35_share_preview_compact.png`, `e13_r35_share_preview_compact_scale2.png`
+(a `privacy_center_compact_scale2` és a `login`/`settings`/`model_manager`
+mind a 4 kerete pixel-azonos maradt — ezeket a kör nem érintette).
+
 ## 11. Review — a Claude tölti ki

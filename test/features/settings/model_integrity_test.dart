@@ -8,6 +8,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/design_system/public.dart';
+import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/offline_ai/data/offline_model_source.dart';
@@ -135,6 +137,34 @@ void main() {
       expect(rolledBack.previous, isNull);
     });
 
+    test(
+      // Javító kör 1, F5: a fetch-layer problem (network, storage, any other
+      // transport/IO failure) never reaches the checksum comparison at all,
+      // so it must NOT read as an integrity verdict.
+      'a fetch/network failure is a distinct phase from a real checksum '
+      'mismatch — it never claims a checksum was even compared',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            offlineModelSourceProvider.overrideWithValue(
+              _ScriptedSource(const Failure(NetworkFailure())),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        final controller = container.read(
+          offlineModelControllerProvider.notifier,
+        );
+
+        await controller.checkAndActivate('strumsight-detector');
+
+        final state = container.read(offlineModelControllerProvider);
+        expect(state.phase, OfflineModelPhase.fetchFailed);
+        expect(state.phase, isNot(OfflineModelPhase.blockedIntegrity));
+        expect(state.active, isNull);
+      },
+    );
+
     test('a bad candidate NEVER overwrites a good, already-active version', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -198,6 +228,42 @@ void main() {
         // No button anywhere offers to activate despite the failed check.
         expect(find.byType(FilledButton), findsNothing);
         expect(find.byType(OutlinedButton), findsNothing);
+
+        // Javító kör 1, F1: the ORIGINAL two assertions above only ruled out
+        // FilledButton/OutlinedButton — an `SsButton(variant: tertiary)`
+        // "Activate anyway" affordance renders a `TextButton` and would have
+        // sailed straight through them (measured: the security-reviewer
+        // injected exactly that and got a 10/10 GREEN baseline). Scope the
+        // check to the blocked-integrity area specifically and assert there
+        // is no `ButtonStyleButton` of ANY variant (Filled/Outlined/Text/
+        // Elevated all extend it) and no bare `InkWell` tap target either —
+        // there must be NO way to turn this area into an activation control,
+        // however it is styled.
+        final blockedArea = find.byKey(
+          const Key('modelManagerBlockedIntegrity'),
+        );
+        expect(blockedArea, findsOneWidget);
+        expect(
+          find.descendant(
+            of: blockedArea,
+            matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+          ),
+          findsNothing,
+          reason:
+              'covers FilledButton/OutlinedButton/TextButton/ElevatedButton — '
+              'i.e. every SsButton variant, not just the two checked above',
+        );
+        expect(
+          find.descendant(of: blockedArea, matching: find.byType(InkWell)),
+          findsNothing,
+        );
+        expect(
+          find.descendant(
+            of: blockedArea,
+            matching: find.byType(GestureDetector),
+          ),
+          findsNothing,
+        );
       },
     );
 
@@ -218,5 +284,34 @@ void main() {
       expect(find.textContaining('Verified and active'), findsOneWidget);
       expect(find.text('Roll back to previous version'), findsNothing);
     });
+
+    testWidgets(
+      // Javító kör 1, F5: a fetch/network failure must not read like — or
+      // dead-end like — a tampered-model alarm. The Check action stays, and
+      // neither the checksum-blocked text nor the blocked-integrity area
+      // (which is button-free BY DESIGN, A6) is shown for it.
+      'a fetch failure keeps the Check action available and does not show '
+      'the checksum-blocked message',
+      (tester) async {
+        await pump(tester, _ScriptedSource(const Failure(NetworkFailure())));
+
+        await tester.tap(find.text('Check for model'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.text("Not activated — checksum could not be verified"),
+          findsNothing,
+        );
+        expect(
+          find.byKey(const Key('modelManagerBlockedIntegrity')),
+          findsNothing,
+        );
+        expect(find.byKey(const Key('modelManagerCheck')), findsOneWidget);
+        final checkButton = tester.widget<SsButton>(
+          find.byKey(const Key('modelManagerCheck')),
+        );
+        expect(checkButton.onPressed, isNotNull);
+      },
+    );
   });
 }

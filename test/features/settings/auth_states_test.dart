@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:strumsight/app/routing/app_route.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
@@ -46,6 +48,43 @@ Future<void> _pumpPushedFromHome(
   await tester.pumpAndSettle();
 }
 
+/// Reproduces the OTHER real entry path (javító kör 1, F4): the profile hub
+/// reaches the login screen with `context.go(AppRoutes.login)`, which
+/// REPLACES the location instead of pushing a route — so there is nothing
+/// for a plain `Navigator.maybePop()` to pop back to. A real [GoRouter] is
+/// required to reproduce this; the plain-`Navigator` harness above
+/// ([_pumpPushedFromHome]) cannot exercise it, because a `push` always
+/// leaves something poppable.
+Future<GoRouter> _pumpGoEntry(WidgetTester tester) async {
+  final router = GoRouter(
+    initialLocation: AppRoutes.profileHome,
+    routes: [
+      GoRoute(
+        path: AppRoutes.profileHome,
+        builder: (_, _) => const Scaffold(body: Center(child: Text('home'))),
+      ),
+      GoRoute(path: AppRoutes.login, builder: (_, _) => const LoginScreen()),
+    ],
+  );
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        tokenStoreProvider.overrideWithValue(FakeTokenStore()),
+        authRepositoryProvider.overrideWithValue(FakeAuthRepository()),
+      ],
+      child: MaterialApp.router(
+        theme: AppTheme.light(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    ),
+  );
+  router.go(AppRoutes.login);
+  await tester.pumpAndSettle();
+  return router;
+}
+
 void main() {
   group(
     'A1 — the login screen always offers a way forward without a session',
@@ -78,6 +117,28 @@ void main() {
           expect(
             find.byKey(const Key('authContinueWithoutAccount')),
             findsOneWidget,
+          );
+        },
+      );
+
+      testWidgets(
+        // Javító kör 1, F4: the profile hub reaches this screen via
+        // `context.go(AppRoutes.login)` (a stack REPLACE, not a push) — a
+        // real GoRouter is required to reproduce this, unlike the two cells
+        // above which use a plain `Navigator.push` harness.
+        'on the go()-entry path (no route to pop back to) the action still '
+        'leaves the login screen, via a real router',
+        (tester) async {
+          final router = await _pumpGoEntry(tester);
+          expect(find.byType(LoginScreen), findsOneWidget);
+
+          await tester.tap(find.byKey(const Key('authContinueWithoutAccount')));
+          await tester.pumpAndSettle();
+
+          expect(find.byType(LoginScreen), findsNothing);
+          expect(
+            router.routerDelegate.currentConfiguration.uri.toString(),
+            isNot(AppRoutes.login),
           );
         },
       );

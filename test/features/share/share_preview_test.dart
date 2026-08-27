@@ -72,6 +72,10 @@ void main() {
     // The card is previewed.
     expect(find.text('StrumSight'), findsOneWidget);
 
+    // Javító kör 1, s1: the two new itemized redaction rows push this button
+    // further down — same reason "Share as text" below already needs
+    // `ensureVisible` in this small test viewport.
+    await tester.ensureVisible(find.text('Share card'));
     await tester.tap(find.text('Share card'));
     await tester.pumpAndSettle();
     expect(log, ['card:3:capo2']);

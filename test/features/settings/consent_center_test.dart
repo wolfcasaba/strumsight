@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/core/storage/storage_keys.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
 import 'package:strumsight/features/auth/providers/auth_providers.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
@@ -65,8 +66,8 @@ void main() {
       await tester.tap(find.text('Privacy & data'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Export my data'), findsOneWidget);
-      await tester.tap(find.text('Export my data'));
+      expect(find.text('Export my Vision data'), findsOneWidget);
+      await tester.tap(find.text('Export my Vision data'));
       await tester.pump(); // the running frame — before the microtask settles
       await tester.pumpAndSettle();
 
@@ -78,6 +79,13 @@ void main() {
           of: find.byType(AlertDialog),
           matching: find.text('Export ready'),
         ),
+        findsOneWidget,
+      );
+      // Javító kör 1, m1: the dialog only ever shows JSON in place — nothing
+      // is written to a file — so the copy must say so, not let "Export
+      // ready" imply a saved artifact exists somewhere.
+      expect(
+        find.textContaining('viewable snapshot, not a saved file'),
         findsOneWidget,
       );
       await tester.tap(find.text('Close'));
@@ -102,7 +110,7 @@ void main() {
       await tester.tap(find.text('Privacy & data'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Delete all my data'));
+      await tester.tap(find.text('Delete all my Vision data'));
       await tester.pumpAndSettle();
 
       // The consequence is spelled out before anything happens.
@@ -115,8 +123,41 @@ void main() {
       await tester.tap(find.byKey(const Key('privacyCenterDeleteAllConfirm')));
       await tester.pumpAndSettle();
 
-      expect(find.text('All data deleted'), findsOneWidget);
+      expect(find.text('All Vision data deleted'), findsOneWidget);
       expect(VisionSessionRepository(store: store).list(), isEmpty);
+    },
+  );
+
+  testWidgets(
+    // Javító kör 1, F3 (S3): the action's copy and its actual reach must
+    // agree — "delete all my Vision data" only ever visits
+    // `StorageKeys.visionData`, so a value under an unrelated key (the kind
+    // library/songs/practice-log actually use) MUST survive the operation.
+    'F3 — "delete all my Vision data" leaves non-Vision storage untouched',
+    (tester) async {
+      final store = await _openSettings(tester);
+      await VisionSessionRepository(store: store).save(
+        _visionResult(),
+        modelVersions: const <String, String>{'hand_landmarker': '1.2.3'},
+      );
+      await store.writeString(StorageKeys.songs, 'not-vision-data');
+
+      await tester.tap(find.text('Privacy & data'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete all my Vision data'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('privacyCenterDeleteAllConfirm')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('All Vision data deleted'), findsOneWidget);
+      expect(VisionSessionRepository(store: store).list(), isEmpty);
+      expect(
+        store.readString(StorageKeys.songs),
+        'not-vision-data',
+        reason:
+            'the action is scoped to Vision data — it must never reach into '
+            'other features\' storage keys',
+      );
     },
   );
 

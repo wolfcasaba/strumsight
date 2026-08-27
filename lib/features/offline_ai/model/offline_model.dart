@@ -56,14 +56,23 @@ OfflineModelVerification verifyOfflineModelAsset(OfflineModelAsset asset) {
 
 /// Where the current on-screen state of the model manager sits (§6.1 of the
 /// round brief — the three mandatory activation cells):
-/// - [blockedIntegrity]: below the threshold — missing/mismatched checksum.
-///   No activation path exists from here (A6).
+/// - [fetchFailed]: the candidate could never be OBTAINED (network, storage,
+///   or any other transport/IO problem) — nothing was ever hashed or
+///   compared, so this is NOT an integrity verdict. The "Check" action stays
+///   available (javító kör 1, F5): a network hiccup must not read like a
+///   tampered-model alarm, and must not dead-end the screen.
+/// - [blockedIntegrity]: a candidate WAS obtained and its checksum was
+///   compared — the comparison failed (missing/mismatched declared hash).
+///   No activation path exists from here (A6). This phase is reached
+///   EXCLUSIVELY from a real [verifyOfflineModelAsset] verdict — never from a
+///   fetch-layer failure.
 /// - [active]: at the threshold — a verified checksum from a known source.
 /// - [activeWithRollback]: above the threshold — verified AND a previously
 ///   active, working version is available to fall back to.
 enum OfflineModelPhase {
   notChecked,
   checking,
+  fetchFailed,
   blockedIntegrity,
   active,
   activeWithRollback,
