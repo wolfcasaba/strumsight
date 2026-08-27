@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../model/weekly_recap.dart';
 import '../share_content.dart';
 import '../share_service.dart';
+import '../theme/share_theme_scope.dart';
 import '../widgets/wrapped_card.dart';
 
 /// Preview + share of the weekly "Strum Wrapped" recap card (chunk 017 rec #5
@@ -59,39 +61,47 @@ class _WrappedPreviewScreenState extends State<WrappedPreviewScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.wrappedTitle)),
-      body: Column(
-        children: [
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: FittedBox(
-                  child: RepaintBoundary(
-                    key: _cardKey,
-                    child: WrappedCard(
-                      recap: widget.recap,
-                      weekLabel: widget.weekLabel,
+    return ShareThemeScope(
+      child: Scaffold(
+        appBar: AppBar(title: Text(l10n.wrappedTitle)),
+        body: Column(
+          children: [
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(SsSpacing.space4),
+                  child: FittedBox(
+                    child: RepaintBoundary(
+                      key: _cardKey,
+                      child: WrappedCard(
+                        recap: widget.recap,
+                        weekLabel: widget.weekLabel,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
-              child: Builder(
-                builder: (buttonContext) => FilledButton.icon(
-                  onPressed: _busy ? null : () => _share(buttonContext),
-                  icon: const Icon(Icons.ios_share),
-                  label: Text(l10n.shareCardButton),
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  SsSpacing.space6,
+                  SsSpacing.space1,
+                  SsSpacing.space6,
+                  SsSpacing.space4,
+                ),
+                child: Builder(
+                  builder: (buttonContext) => SsButton(
+                    label: l10n.shareCardButton,
+                    icon: Icons.ios_share,
+                    loading: _busy,
+                    onPressed: _busy ? null : () => _share(buttonContext),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

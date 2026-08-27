@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/core/storage/storage_keys.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/settings/screens/vision_privacy_screen.dart';
 import 'package:strumsight/features/vision/public.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -21,6 +22,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          theme: AppTheme.light(),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: VisionPrivacyScreen(

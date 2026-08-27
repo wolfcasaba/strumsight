@@ -18,6 +18,32 @@ final settingsSyncDebounceProvider = Provider<Duration>(
   (_) => const Duration(milliseconds: 600),
 );
 
+/// The observable state of the settings cloud sync (§0.0.B/B3 — additive,
+/// read-only). `synced` also covers "nothing to sync" (logged out, or no
+/// edit since the last confirmed push): there is no separate "idle" state,
+/// because the UI only needs to distinguish "safe" from "needs attention".
+///
+/// This does NOT change when a write goes out or how failures are handled —
+/// it only narrates the existing, unchanged push/pull state machine so the
+/// settings screen can show it. [failed] is cleared back to [synced] the
+/// moment a push actually confirms — including a push from
+/// [SettingsSync.retryFailedPush] (A4), never from a timer.
+enum SettingsSyncStatus { synced, pending, failed }
+
+/// Read-only outside this file: only [SettingsSync] (via [_SettingsSyncStatusNotifier.publish])
+/// writes to it.
+class _SettingsSyncStatusNotifier extends Notifier<SettingsSyncStatus> {
+  @override
+  SettingsSyncStatus build() => SettingsSyncStatus.synced;
+
+  void publish(SettingsSyncStatus status) => state = status;
+}
+
+final settingsSyncStatusProvider =
+    NotifierProvider<_SettingsSyncStatusNotifier, SettingsSyncStatus>(
+      _SettingsSyncStatusNotifier.new,
+    );
+
 /// Keeps local settings and the signed-in user's cloud profile in sync.
 ///
 /// - **Login / session restore** ⇒ pull the cloud profile and apply it locally
@@ -55,6 +81,12 @@ class SettingsSync {
         _pushPending = false;
         _forcePendingPush = false;
         _syncedSignature = null;
+        _lastPushFailed = false;
+        // Nothing can be "pending"/"failed" while logged out — the account
+        // layer is inert (class doc above); [_computeStatus] would already
+        // resolve to this on its own, but publishing directly avoids waiting
+        // on the microtask for a state transition this immediate.
+        _republishStatus();
       }
     }, fireImmediately: true);
 
@@ -74,6 +106,13 @@ class SettingsSync {
   bool _pushInFlight = false;
   bool _pushPending = false;
   bool _forcePendingPush = false;
+
+  /// Whether the LAST push attempt (for the signature still unconfirmed, if
+  /// any) came back a [Failure]. Cleared the moment a push [Success]es, and
+  /// irrelevant once the dirty edit it applied to is confirmed or reverted —
+  /// [_computeStatus] only consults it while [_currentSignature] still
+  /// differs from [_syncedSignature].
+  bool _lastPushFailed = false;
 
   /// True while a pull is applying remote values locally — suppresses the
   /// resulting change notifications so they don't bounce straight back.
@@ -245,9 +284,19 @@ class SettingsSync {
     _localRevision++;
     if (!_signedIn) return;
     if (!_pushInFlight && _currentSignature() == _syncedSignature) {
+      // Javító kör 1, F2/M2: this used to return WITHOUT republishing —
+      // if the user edited back to the last-confirmed value inside the
+      // debounce window, the status stayed on whatever it was published as
+      // for the abandoned edit (typically "pending"/"Saving…") forever,
+      // since no push ever went out to resolve it. [_computeStatus] reads
+      // the live signature, so this always resolves to the true state
+      // (`synced`, or `pending`/`failed` if an unrelated push is still
+      // in-flight/queued).
       _debounce?.cancel();
+      _republishStatus();
       return;
     }
+    _republishStatus();
     _schedulePush();
   }
 
@@ -261,6 +310,49 @@ class SettingsSync {
 
   Future<void> _push() => _queuePush();
 
+  /// User-initiated retry (A4, §0.0.B/B3): the SAME push path as any other
+  /// edit — no timer, no backoff, no new decision logic. A tap on the
+  /// settings screen's "Retry" action is the only caller; nothing in this
+  /// file schedules this on its own.
+  Future<void> retryFailedPush() => _queuePush(force: true);
+
+  /// The status the OBSERVABLE state machine — is a push in flight or
+  /// queued, does the current signature still differ from the last
+  /// server-confirmed one, did the last attempt for that difference fail —
+  /// actually implies right now. Never an edge-triggered guess: computed
+  /// fresh every time [_republishStatus]'s microtask runs, from whatever the
+  /// live fields say at that moment (javító kör 1, F2).
+  SettingsSyncStatus _computeStatus() {
+    if (!_signedIn) return SettingsSyncStatus.synced;
+    if (_pushInFlight || _pushPending) return SettingsSyncStatus.pending;
+    if (_currentSignature() != _syncedSignature) {
+      return _lastPushFailed
+          ? SettingsSyncStatus.failed
+          : SettingsSyncStatus.pending;
+    }
+    return SettingsSyncStatus.synced;
+  }
+
+  /// Deferred past the current build/listener turn (same reentrancy rule
+  /// `auth_providers.dart`'s `Future.microtask` documents): the
+  /// `authControllerProvider` listener that clears state on logout fires
+  /// with `fireImmediately: true` from inside this very constructor, which
+  /// itself runs during `settingsSyncProvider`'s own build — writing another
+  /// provider's state synchronously there is exactly the reentrancy Riverpod
+  /// forbids.
+  ///
+  /// [_computeStatus] runs INSIDE the microtask, not at the call site — by
+  /// the time it fires, the fields it reads reflect whatever is true then,
+  /// not a snapshot from when this was scheduled (javító kör 1, F2/S2: this
+  /// is what stops an EARLIER push's own `Success` from publishing "synced"
+  /// while a LATER push for a newer edit is still unconfirmed in flight).
+  void _republishStatus() {
+    Future.microtask(() {
+      if (!_ref.mounted) return;
+      _ref.read(settingsSyncStatusProvider.notifier).publish(_computeStatus());
+    });
+  }
+
   /// Serializes full-profile PUTs. A genuine edit received during an in-flight
   /// request marks the queue dirty; once that request finishes, exactly one
   /// latest snapshot follows it. Failed writes are not replayed unless such a
@@ -269,9 +361,13 @@ class SettingsSync {
     if (!_signedIn) return;
     _pushPending = true;
     _forcePendingPush = _forcePendingPush || force;
-    if (_pushInFlight) return;
+    if (_pushInFlight) {
+      _republishStatus();
+      return;
+    }
 
     _pushInFlight = true;
+    _republishStatus();
     try {
       while (_ref.mounted && _pushPending) {
         _pushPending = false;
@@ -285,6 +381,7 @@ class SettingsSync {
       }
     } finally {
       _pushInFlight = false;
+      _republishStatus();
     }
   }
 
@@ -295,8 +392,15 @@ class SettingsSync {
     switch (result) {
       case Success():
         // Only mark synced AFTER the server confirms — otherwise an offline
-        // edit would be falsely recorded as synced and silently lost.
+        // edit would be falsely recorded as synced and silently lost. Not
+        // published as "synced" directly (javító kör 1, F2/S2): a later edit
+        // may already have queued a NEXT push (`_pushInFlight` still true,
+        // the while-loop above isn't done), and `_computeStatus` correctly
+        // reports "pending" for that in that case instead of flashing
+        // "All changes saved" for a moment that has already passed.
         _syncedSignature = signature;
+        _lastPushFailed = false;
+        _republishStatus();
       case Failure(:final error):
         _ref
             .read(appLoggerProvider)
@@ -304,6 +408,10 @@ class SettingsSync {
               'settings.sync_push_failed',
               fields: {'code': error.code, 'retryable': error.retryable},
             );
+        _lastPushFailed = true;
+        // Visible, not replayed (A4): the UI can offer a user-initiated
+        // retry, but nothing in this class re-attempts on its own.
+        _republishStatus();
         if (_isExpiredSession(error)) {
           await _ref.read(authControllerProvider.notifier).invalidateSession();
         }

@@ -17,6 +17,8 @@ class _FakeShareService extends ShareService {
   Future<void> shareText(
     AnalyzeResult result, {
     int capo = 0,
+    String? title,
+    bool includeTitle = false,
     Rect? sharePositionOrigin,
   }) async => log.add('text-share capo=$capo strums=${result.strums.length}');
 }

@@ -130,6 +130,77 @@
   "authErrorEmailTaken": "Ez az email már regisztrálva van",
   "authErrorNetwork": "Nem érhető el a szerver. Ellenőrizd a kapcsolatot.",
   "authErrorUnknown": "Hiba történt. Kérlek próbáld újra.",
+  "authContinueWithoutAccount": "Folytatás fiók nélkül",
+  "settingsSyncStatusSynced": "Minden változtatás mentve",
+  "settingsSyncStatusPending": "Mentés…",
+  "settingsSyncStatusFailed": "Nem sikerült menteni — a változtatás csak ezen az eszközön van meg",
+  "settingsSyncRetryAction": "Újra",
+  "privacyCenterEntryTitle": "Adatvédelem és adatok",
+  "privacyCenterEntrySubtitle": "Nézd meg, mi van tárolva, exportáld vagy töröld",
+  "privacyCenterTitle": "Adatvédelem és adatok",
+  "privacyCenterInventoryTitle": "Mi van tárolva ezen az eszközön",
+  "privacyCenterInventorySessions": "{count, plural, =0{Nincs tárolt vision munkamenet} =1{1 tárolt vision munkamenet} other{{count} tárolt vision munkamenet}}",
+  "@privacyCenterInventorySessions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "privacyCenterPolicyLabMode": "Labor mód (diagnosztika)",
+  "privacyCenterPolicyLabModeOn": "Bekapcsolva — rövid hangfelvételek megoszthatók pontossági ellenőrzéshez",
+  "privacyCenterPolicyLabModeOff": "Kikapcsolva — nem gyűjtünk diagnosztikai hangot",
+  "privacyCenterExportAction": "Vision-adataim exportálása",
+  "privacyCenterExportRunning": "Export előkészítése…",
+  "privacyCenterExportDone": "Export kész",
+  "privacyCenterExportSnapshotNote": "Ez egy megtekinthető pillanatkép, nem mentett fájl — másold ki a lenti szöveget, ha meg akarod őrizni.",
+  "privacyCenterExportFailed": "Az export nem sikerült. Próbáld újra.",
+  "privacyCenterDeleteAllAction": "Minden Vision-adatom törlése",
+  "privacyCenterDeleteAllTitle": "Törlöd az összes Vision-adatot?",
+  "privacyCenterDeleteAllConsequence": "Ez véglegesen törli az eszközön tárolt összes Vision munkamenetet, kalibrációt és adatvédelmi leltár-bejegyzést — a könyvtáradat, dalaidat és gyakorlási előzményedet nem érinti. Ez nem vonható vissza.",
+  "privacyCenterDeleteAllConfirm": "Minden Vision-adat törlése",
+  "privacyCenterDeleteAllRunning": "Törlés…",
+  "privacyCenterDeleteAllDone": "Minden Vision-adat törölve",
+  "privacyCenterCancel": "Mégse",
+  "privacyCenterOpenSessionHistory": "Munkamenetenkénti előzmény",
+  "privacyCenterOpenSessionHistorySubtitle": "Nézd át vagy töröld az egyes munkameneteket",
+  "modelManagerEntryTitle": "Offline AI modellek",
+  "modelManagerEntrySubtitle": "Az eszközön futó felismerő modellek kezelése",
+  "modelManagerTitle": "Offline AI modellek",
+  "modelManagerStatusNotChecked": "Még nincs ellenőrizve",
+  "modelManagerStatusChecking": "Modell keresése…",
+  "modelManagerStatusFetchFailed": "A modell ellenőrzése most nem sikerült — ellenőrizd a kapcsolatot, és próbáld újra.",
+  "modelManagerStatusBlocked": "Nincs aktiválva — az ellenőrzőösszeg nem igazolható",
+  "modelManagerStatusActive": "Ellenőrizve és aktív",
+  "modelManagerStatusActiveWithPrevious": "Ellenőrizve és aktív — korábbi verzió elérhető",
+  "modelManagerCheckAction": "Modell keresése",
+  "modelManagerActivateAction": "Aktiválás",
+  "modelManagerRollbackAction": "Visszaállítás a korábbi verzióra",
+  "modelManagerIntegrityBlockedMessage": "Ennek a modellnek az ellenőrzőösszege nem egyezik az aláírt kiadáséval, ezért nem lett aktiválva. Nincs mód mégis aktiválni.",
+  "modelManagerVersionLabel": "Verzió: {version}",
+  "@modelManagerVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "modelManagerSourceLabel": "Forrás: {modelId}",
+  "@modelManagerSourceLabel": {
+    "placeholders": {
+      "modelId": {
+        "type": "String"
+      }
+    }
+  },
+  "shareRedactionTitle": "Amit megosztasz",
+  "shareRedactionChords": "Akkordmenet",
+  "shareRedactionStrumPattern": "Pengetési minta",
+  "shareRedactionTempo": "Tempó (BPM)",
+  "shareRedactionStrokeCounts": "Le/fel pengetések száma",
+  "shareRedactionDuration": "Munkamenet hossza",
+  "shareRedactionIncludeTitle": "A munkamenet címének megosztása",
+  "shareRedactionIncludeTitleHint": "Alapból kikapcsolva — kapcsold be, hogy bekerüljön a megosztott kártyára",
   "actionShare": "Megosztás",
   "shareTitle": "Megosztás",
   "shareCardButton": "Kártya megosztása",

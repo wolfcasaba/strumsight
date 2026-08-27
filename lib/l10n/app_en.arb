@@ -1274,6 +1274,7 @@
       }
     }
   },
+  "authContinueWithoutAccount": "Continue without an account",
   "authEmail": "Email",
   "authEmailInvalid": "Enter a valid email address",
   "authErrorEmailTaken": "That email is already registered",
@@ -2456,6 +2457,35 @@
   "micErrorBody": "Couldn't start the microphone. It may be in use by another app. Tap Retry.",
   "micPermissionAction": "Open settings",
   "micPermissionBody": "StrumSight needs the microphone to hear your guitar. Audio never leaves the device.",
+  "modelManagerActivateAction": "Activate",
+  "modelManagerCheckAction": "Check for model",
+  "modelManagerEntrySubtitle": "Manage on-device detection models",
+  "modelManagerEntryTitle": "Offline AI models",
+  "modelManagerIntegrityBlockedMessage": "This model's checksum doesn't match the signed release, so it has not been activated. There is no way to activate it anyway.",
+  "modelManagerRollbackAction": "Roll back to previous version",
+  "modelManagerSourceLabel": "Source: {modelId}",
+  "@modelManagerSourceLabel": {
+    "placeholders": {
+      "modelId": {
+        "type": "String"
+      }
+    }
+  },
+  "modelManagerStatusActive": "Verified and active",
+  "modelManagerStatusActiveWithPrevious": "Verified and active — previous version available",
+  "modelManagerStatusBlocked": "Not activated — checksum could not be verified",
+  "modelManagerStatusChecking": "Checking for a model…",
+  "modelManagerStatusFetchFailed": "Couldn't check for a model right now — check your connection and try again.",
+  "modelManagerStatusNotChecked": "Not checked yet",
+  "modelManagerTitle": "Offline AI models",
+  "modelManagerVersionLabel": "Version {version}",
+  "@modelManagerVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
   "navAnalyze": "Analyze",
   "navLearn": "Learn",
   "navLibrary": "Library",
@@ -3115,6 +3145,35 @@
   "practiceVisionDimensionGood": "Visual observation complete.",
   "practiceVisionDimensionTitle": "Visual technique",
   "practiceVisionDimensionUnavailable": "Visual observation was unavailable. Audio practice is unchanged.",
+  "privacyCenterCancel": "Cancel",
+  "privacyCenterDeleteAllAction": "Delete all my Vision data",
+  "privacyCenterDeleteAllConfirm": "Delete all Vision data",
+  "privacyCenterDeleteAllConsequence": "This permanently deletes every stored Vision session, calibration and privacy inventory entry on this device — it does not touch your library, songs or practice history. This can't be undone.",
+  "privacyCenterDeleteAllDone": "All Vision data deleted",
+  "privacyCenterDeleteAllRunning": "Deleting…",
+  "privacyCenterDeleteAllTitle": "Delete all Vision data?",
+  "privacyCenterEntrySubtitle": "See what's stored, export or delete it",
+  "privacyCenterEntryTitle": "Privacy & data",
+  "privacyCenterExportAction": "Export my Vision data",
+  "privacyCenterExportDone": "Export ready",
+  "privacyCenterExportFailed": "Export failed. Try again.",
+  "privacyCenterExportRunning": "Preparing export…",
+  "privacyCenterExportSnapshotNote": "This is a viewable snapshot, not a saved file — copy the text below if you want to keep it.",
+  "privacyCenterInventorySessions": "{count, plural, =0{No vision sessions stored} =1{1 vision session stored} other{{count} vision sessions stored}}",
+  "@privacyCenterInventorySessions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "privacyCenterInventoryTitle": "What's stored on this device",
+  "privacyCenterOpenSessionHistory": "Session-by-session history",
+  "privacyCenterOpenSessionHistorySubtitle": "Review or delete individual sessions",
+  "privacyCenterPolicyLabMode": "Lab mode (diagnostics)",
+  "privacyCenterPolicyLabModeOff": "Off — no diagnostic audio is collected",
+  "privacyCenterPolicyLabModeOn": "On — short audio clips may be shared for accuracy review",
+  "privacyCenterTitle": "Privacy & data",
   "profileHubAccountSectionTitle": "Account",
   "profileHubAchievementsSectionTitle": "Achievements",
   "profileHubCommunityDisabledReason": "Community features aren't available in this build yet.",
@@ -3733,6 +3792,10 @@
   "settingsNudge": "Daily practice reminder",
   "settingsNudgeHint": "A gentle nudge at 19:00 on days you haven't practised yet.",
   "settingsPlaying": "Playing",
+  "settingsSyncRetryAction": "Retry",
+  "settingsSyncStatusFailed": "Couldn't save — changes are only on this device",
+  "settingsSyncStatusPending": "Saving…",
+  "settingsSyncStatusSynced": "All changes saved",
   "settingsSystemLanguage": "System default",
   "settingsTitle": "Settings",
   "settingsTuningHint": "Concert-pitch A4 used by the tuner. Standard is 440 Hz.",
@@ -3746,6 +3809,14 @@
     }
   },
   "shareCardButton": "Share card",
+  "shareRedactionChords": "Chord progression",
+  "shareRedactionDuration": "Session length",
+  "shareRedactionIncludeTitle": "Include the session title",
+  "shareRedactionIncludeTitleHint": "Off by default — turn on to add it to the shared card",
+  "shareRedactionStrokeCounts": "Down/up stroke counts",
+  "shareRedactionStrumPattern": "Strum pattern",
+  "shareRedactionTempo": "Tempo (BPM)",
+  "shareRedactionTitle": "What you're sharing",
   "shareTextButton": "Share as text",
   "shareTitle": "Share",
   "songAddChord": "Add a chord",

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/core/music/strum.dart';
+import 'package:strumsight/core/theme/app_theme.dart';
 import 'package:strumsight/features/share/screens/share_preview_screen.dart';
 import 'package:strumsight/features/share/share_service.dart';
 import 'package:strumsight/l10n/app_localizations.dart';
@@ -16,15 +17,22 @@ class FakeShareService extends ShareService {
     required GlobalKey boundaryKey,
     required AnalyzeResult result,
     int capo = 0,
+    String? title,
+    bool includeTitle = false,
     Rect? sharePositionOrigin,
-  }) async => log.add('card:${result.strums.length}:capo$capo');
+  }) async => log.add(
+    'card:${result.strums.length}:capo$capo'
+    '${includeTitle ? ':title=$title' : ''}',
+  );
 
   @override
   Future<void> shareText(
     AnalyzeResult result, {
     int capo = 0,
+    String? title,
+    bool includeTitle = false,
     Rect? sharePositionOrigin,
-  }) async => log.add('text');
+  }) async => log.add('text${includeTitle ? ':title=$title' : ''}');
 }
 
 final _result = AnalyzeResult(
@@ -44,6 +52,7 @@ final _result = AnalyzeResult(
 Future<void> _pump(WidgetTester tester, List<String> log, {int capo = 0}) =>
     tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: SharePreviewScreen(
@@ -63,6 +72,10 @@ void main() {
     // The card is previewed.
     expect(find.text('StrumSight'), findsOneWidget);
 
+    // Javító kör 1, s1: the two new itemized redaction rows push this button
+    // further down — same reason "Share as text" below already needs
+    // `ensureVisible` in this small test viewport.
+    await tester.ensureVisible(find.text('Share card'));
     await tester.tap(find.text('Share card'));
     await tester.pumpAndSettle();
     expect(log, ['card:3:capo2']);
@@ -73,6 +86,9 @@ void main() {
     await _pump(tester, log);
     await tester.pumpAndSettle();
 
+    // The share actions can sit below the fold once the body scrolls (A9 —
+    // the screen no longer forces its content into a fixed-height Column).
+    await tester.ensureVisible(find.text('Share as text'));
     await tester.tap(find.text('Share as text'));
     await tester.pumpAndSettle();
     expect(log, ['text']);
