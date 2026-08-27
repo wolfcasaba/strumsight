@@ -777,4 +777,111 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Státusz: KÉSZ.** Mind a hét listás képernyő (`community_challenges_screen.dart`,
+`leaderboard_screen.dart`, `clubs/club_list_screen.dart`,
+`clubs/club_detail_screen.dart`, `clubs/club_member_management_screen.dart`,
+`community_notifications_screen.dart`, `safety_relationships_screen.dart`)
+design-system-migrált (`CommunityThemeScope` + `public.dart` komponensek —
+`SsButton`, `SsCard`), a klub-ág teljesen lokalizált, a négy új céltesztfájl
+és a golden-készlet commitolva.
+
+### Képernyőnkénti összegzés
+
+- **`community_challenges_screen.dart`** — `CommunityThemeScope` + `SsButton`
+  a retry-akciókon. Új: `challengeMyParticipationProvider` (lazy,
+  `fetchMyParticipation`, csak az akció-lapon watch-olva — a Kör 21 pinnelt
+  teszt fake-je változatlan maradhatott, mert az sosem nyitja meg a lapot).
+  Az akció-lap most `_MyResultSection`-t mutat (A2: `bestMetricValue == null`
+  → semleges „verification in progress" szöveg, kulcs
+  `communityChallengeResultPending`; nem-null → `communityChallengeResultVerified`
+  + `Icons.verified`) és két új biztonsági akciót (`Block author` /
+  `Mute author`, A6/A8, ugyanaz a `socialGraphRepositoryProvider`, amit a
+  Biztonsági központ olvas). A1: a csatlakozási/eredmény-megtekintési út
+  bizonyítottan sosem hívja a `leaderboard()`-ot (a teszt fake-je dobna, ha
+  hívnák). A sheet `SingleChildScrollView`-ba került (a bővülő tartalom
+  kis viewporton túlcsordult volna — mérve, javítva).
+- **`leaderboard_screen.dart`** — `CommunityThemeScope` + `SsButton` a
+  „Load more" és retry gombokon (a korábbi, hibásan újrahasznosított
+  „Accept" felirat helyett új `communityChallengeLoadMore` kulcs). A7:
+  a „load more" mindig ugyanazt az első lapot tölti újra (nincs
+  akkumuláció), ezért szerkezetileg idempotens — lásd
+  `leaderboard_optin_test.dart`.
+- **`clubs/club_list_screen.dart`** — mind a 14 `_l10nClub*` konstans ARB-be
+  költözött; a láthatóság-címke + tagszám egyetlen sablonos kulcsba
+  (`communityClubMemberCountLabel`) került, hogy a `hu` cella ne törje a
+  pinnelt angol assertiont. `communityClubVisibilityLabel(...)` publikus
+  segédfüggvény lett, amit a klub-részlet és a golden-fixture is
+  újrahasznosít.
+- **`clubs/club_detail_screen.dart`** — a MÉRT `myRole` × `visibility`
+  háromsoros mátrix (§0.0.B/B7) implementálva: `_PrivateRestrictedView`
+  (a küszöb alatt: SEMMI tartalom, nincs join-gomb),
+  `_JoinPromptView` (a küszöbön: csak név + join CTA, nincs leírás/tab-
+  tartalom), teljes `_Body` (a küszöb fölött: leírás + 4 tab). Az About tab
+  most a klub leírását és láthatósági chipjét is mutatja (korábban statikus
+  placeholder volt). A felső infó-blokk `ConstrainedBox` + belső görgetés
+  alá került (2×-es szövegskálázásnál 805 px-es `RenderFlex` túlcsordulást
+  mértem — mérve ELŐTTI, merge-elt kódban élt hiba, javítva, nem
+  bázisvonalként rögzítve, L517).
+- **`clubs/club_member_management_screen.dart`** — mind a 11 konstans
+  ARB-be; minden sorban új „Block member" / „Mute member" akció
+  (`socialGraphRepositoryProvider`, A6/A8).
+- **`community_notifications_screen.dart`** — a doc-comment hazug „deep-links
+  the user to the entity" állítása javítva (a kód mindig is csak
+  `markRead`-et hívott — A4 doc-fix). A `hasData`-actions „Mark all as
+  read" `TextButton` → `IconButton` (2×-es szövegskálázásnál 54 px-es
+  AppBar-túlcsordulást mértem — mérve ELŐTTI hiba, javítva, L517).
+- **`safety_relationships_screen.dart`** — `CommunityThemeScope` + `SsButton`
+  az Unblock/Unmute akción, egyébként változatlan (már teljesen
+  lokalizált volt).
+
+### A KÉT kötelező valódi-sértés próba (§6.1) — MÉRT kimenet
+
+1. **A3** — a `club_detail_screen.dart` „a küszöb alatt" ágát ideiglenesen
+   `Text(club.name)`-re cseréltem (a privát klub nevét egy nem-tag nézetben
+   megjelenítve). `private_club_leakage_test.dart` „the private club name…"
+   cellája **PIROSRA VÁLTOTT** (`Found 1 widget with text "Secret Blues
+   Club"` — várt: 0). Visszaállítva, a teszt újra zöld.
+2. **A10 (`hu`-cella)** — a `club_list_screen.dart` `communityClubVisibilityLabel`
+   `private` ágát ideiglenesen a beégetett `'Private'` angol literálra
+   cseréltem (megkerülve az ARB-lookupot). `private_club_leakage_test.dart`
+   „hu cell: …" cellája **PIROSRA VÁLTOTT** (`Found 0 widgets with text
+   containing Privát` — az `en`-cella eközben változatlanul zöld maradt,
+   tehát az őr a helyes irányban mér). Visszaállítva, a teszt újra zöld.
+
+### Gate
+
+`tools/round-gate.sh` a brief §7 pontos parancssorával (10 útvonal, külön
+processz, csonkítatlan kimenet) — lásd a kör-jelzés melletti futtatási
+naplót. `test/core/architecture_dependency_test.dart`,
+`test/tooling/dio_factory_guard_test.dart`,
+`test/tooling/preferences_plugin_import_guard_test.dart`,
+`test/tooling/route_literal_guard_test.dart`, `test/ui/ui_inventory_test.dart`
+mind zöld (a leltár-bázisvonal változatlan 94 — nincs új `*_screen.dart`).
+
+### A9 — golden
+
+Mind a hét képernyő, 412×915 compact portrait ÉS `textScaleFactor 2.0`,
+`tools/golden-x86.sh record` majd `check` is zöld (14/14 teszt, exit 0
+mindkét lépésben). A `check` futás megerősítette a nulla toleranciájú
+determinizmust. Két, kör ELŐTTI (E13-R24/E09-R20 örökölt) `RenderFlex`
+túlcsordulást a `textScaler 2.0` keret fogott meg és lett javítva (lásd
+fent) — egyik sem került bázisvonalként rögzítésre.
+
+### Nyitott pontok / kör utáni megjegyzések
+
+- A „bejelentés" (report) biztonsági akció (A6 harmadik tagja, a tiltás/
+  némítás mellett) NEM lett bedrótozva a kihívás- és klub-felületekre: a
+  `showReportContentSheet` (`presentation/dialogs/report_content_sheet.dart`)
+  MÁR migrált és VÁLTOZATLANUL hívható, de nincs hozzá production
+  `ReportRepository`-implementáció a fán (a `data/` réteg TILOS zóna ebben a
+  körben), ezért a valódi hálózati bedrótozás egy jövőbeli kör feladata. A
+  tiltás/némítás (block/mute) viszont MINDKÉT felületről (kihívás-sor
+  akció-lap, klub-tagkezelés) elérhető, ugyanazon `socialGraphRepositoryProvider`
+  révén, mint a Biztonsági központ.
+- A klub-részlet „Feed" / „Challenges" tab-jainak screen-local providerei
+  (`clubFeedProvider`, `clubPinnedProvider`, `clubChallengesProvider`) MÁR
+  a Kör 25 (E09-R25) óta `UnimplementedError`-t dobnak production módban — ez
+  a kör nem bővítette és nem oldotta fel ezt (a `data/` réteg TILOS zóna),
+  csak a golden- és a pinnelt teszt felől override-olta őket.
+
 ## 11. Review — a Claude tölti ki
