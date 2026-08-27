@@ -164,6 +164,73 @@
   "authErrorEmailTaken": "That email is already registered",
   "authErrorNetwork": "Can't reach the server. Check your connection.",
   "authErrorUnknown": "Something went wrong. Please try again.",
+  "authContinueWithoutAccount": "Continue without an account",
+  "settingsSyncStatusSynced": "All changes saved",
+  "settingsSyncStatusPending": "Saving…",
+  "settingsSyncStatusFailed": "Couldn't save — changes are only on this device",
+  "settingsSyncRetryAction": "Retry",
+  "privacyCenterEntryTitle": "Privacy & data",
+  "privacyCenterEntrySubtitle": "See what's stored, export or delete it",
+  "privacyCenterTitle": "Privacy & data",
+  "privacyCenterInventoryTitle": "What's stored on this device",
+  "privacyCenterInventorySessions": "{count, plural, =0{No vision sessions stored} =1{1 vision session stored} other{{count} vision sessions stored}}",
+  "@privacyCenterInventorySessions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "privacyCenterPolicyLabMode": "Lab mode (diagnostics)",
+  "privacyCenterPolicyLabModeOn": "On — short audio clips may be shared for accuracy review",
+  "privacyCenterPolicyLabModeOff": "Off — no diagnostic audio is collected",
+  "privacyCenterExportAction": "Export my data",
+  "privacyCenterExportRunning": "Preparing export…",
+  "privacyCenterExportDone": "Export ready",
+  "privacyCenterExportFailed": "Export failed. Try again.",
+  "privacyCenterDeleteAllAction": "Delete all my data",
+  "privacyCenterDeleteAllTitle": "Delete all data?",
+  "privacyCenterDeleteAllConsequence": "This permanently deletes every vision session, calibration and privacy inventory entry stored on this device. This can't be undone.",
+  "privacyCenterDeleteAllConfirm": "Delete everything",
+  "privacyCenterDeleteAllRunning": "Deleting…",
+  "privacyCenterDeleteAllDone": "All data deleted",
+  "privacyCenterCancel": "Cancel",
+  "privacyCenterOpenSessionHistory": "Session-by-session history",
+  "privacyCenterOpenSessionHistorySubtitle": "Review or delete individual sessions",
+  "modelManagerEntryTitle": "Offline AI models",
+  "modelManagerEntrySubtitle": "Manage on-device detection models",
+  "modelManagerTitle": "Offline AI models",
+  "modelManagerStatusNotChecked": "Not checked yet",
+  "modelManagerStatusChecking": "Checking for a model…",
+  "modelManagerStatusBlocked": "Not activated — checksum could not be verified",
+  "modelManagerStatusActive": "Verified and active",
+  "modelManagerStatusActiveWithPrevious": "Verified and active — previous version available",
+  "modelManagerCheckAction": "Check for model",
+  "modelManagerActivateAction": "Activate",
+  "modelManagerRollbackAction": "Roll back to previous version",
+  "modelManagerIntegrityBlockedMessage": "This model's checksum doesn't match the signed release, so it has not been activated. There is no way to activate it anyway.",
+  "modelManagerVersionLabel": "Version {version}",
+  "@modelManagerVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "modelManagerSourceLabel": "Source: {modelId}",
+  "@modelManagerSourceLabel": {
+    "placeholders": {
+      "modelId": {
+        "type": "String"
+      }
+    }
+  },
+  "shareRedactionTitle": "What you're sharing",
+  "shareRedactionChords": "Chord progression",
+  "shareRedactionStrumPattern": "Strum pattern",
+  "shareRedactionTempo": "Tempo (BPM)",
+  "shareRedactionIncludeTitle": "Include the session title",
+  "shareRedactionIncludeTitleHint": "Off by default — turn on to add it to the shared card",
   "actionShare": "Share",
   "shareTitle": "Share",
   "shareCardButton": "Share card",

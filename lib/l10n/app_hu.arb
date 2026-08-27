@@ -1257,6 +1257,7 @@
   "analyzeSaved": "Elmentve a Könyvtárba",
   "analyzeStop": "Leállítás",
   "analyzeStrumsSummary": "{down} le · {up} fel",
+  "authContinueWithoutAccount": "Folytatás fiók nélkül",
   "authEmail": "Email",
   "authEmailInvalid": "Adj meg egy érvényes email címet",
   "authErrorEmailTaken": "Ez az email már regisztrálva van",
@@ -2417,6 +2418,34 @@
   "micErrorBody": "Nem sikerült elindítani a mikrofont. Lehet, hogy egy másik app használja. Koppints az Újra gombra.",
   "micPermissionAction": "Beállítások megnyitása",
   "micPermissionBody": "A StrumSightnak mikrofon kell, hogy hallja a gitárodat. A hang nem hagyja el a készüléket.",
+  "modelManagerActivateAction": "Aktiválás",
+  "modelManagerCheckAction": "Modell keresése",
+  "modelManagerEntrySubtitle": "Az eszközön futó felismerő modellek kezelése",
+  "modelManagerEntryTitle": "Offline AI modellek",
+  "modelManagerIntegrityBlockedMessage": "Ennek a modellnek az ellenőrzőösszege nem egyezik az aláírt kiadáséval, ezért nem lett aktiválva. Nincs mód mégis aktiválni.",
+  "modelManagerRollbackAction": "Visszaállítás a korábbi verzióra",
+  "modelManagerSourceLabel": "Forrás: {modelId}",
+  "@modelManagerSourceLabel": {
+    "placeholders": {
+      "modelId": {
+        "type": "String"
+      }
+    }
+  },
+  "modelManagerStatusActive": "Ellenőrizve és aktív",
+  "modelManagerStatusActiveWithPrevious": "Ellenőrizve és aktív — korábbi verzió elérhető",
+  "modelManagerStatusBlocked": "Nincs aktiválva — az ellenőrzőösszeg nem igazolható",
+  "modelManagerStatusChecking": "Modell keresése…",
+  "modelManagerStatusNotChecked": "Még nincs ellenőrizve",
+  "modelManagerTitle": "Offline AI modellek",
+  "modelManagerVersionLabel": "Verzió: {version}",
+  "@modelManagerVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
   "navAnalyze": "Elemzés",
   "navLearn": "Tanulás",
   "navLibrary": "Könyvtár",
@@ -3076,6 +3105,34 @@
   "practiceVisionDimensionGood": "A vizuális megfigyelés teljes.",
   "practiceVisionDimensionTitle": "Vizuális technika",
   "practiceVisionDimensionUnavailable": "A vizuális megfigyelés nem volt elérhető. A hangalapú gyakorlás változatlan.",
+  "privacyCenterCancel": "Mégse",
+  "privacyCenterDeleteAllAction": "Minden adatom törlése",
+  "privacyCenterDeleteAllConfirm": "Minden törlése",
+  "privacyCenterDeleteAllConsequence": "Ez véglegesen törli az eszközön tárolt összes vision munkamenetet, kalibrációt és adatvédelmi leltár-bejegyzést. Ez nem vonható vissza.",
+  "privacyCenterDeleteAllDone": "Minden adat törölve",
+  "privacyCenterDeleteAllRunning": "Törlés…",
+  "privacyCenterDeleteAllTitle": "Törlöd az összes adatot?",
+  "privacyCenterEntrySubtitle": "Nézd meg, mi van tárolva, exportáld vagy töröld",
+  "privacyCenterEntryTitle": "Adatvédelem és adatok",
+  "privacyCenterExportAction": "Adataim exportálása",
+  "privacyCenterExportDone": "Export kész",
+  "privacyCenterExportFailed": "Az export nem sikerült. Próbáld újra.",
+  "privacyCenterExportRunning": "Export előkészítése…",
+  "privacyCenterInventorySessions": "{count, plural, =0{Nincs tárolt vision munkamenet} =1{1 tárolt vision munkamenet} other{{count} tárolt vision munkamenet}}",
+  "@privacyCenterInventorySessions": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "privacyCenterInventoryTitle": "Mi van tárolva ezen az eszközön",
+  "privacyCenterOpenSessionHistory": "Munkamenetenkénti előzmény",
+  "privacyCenterOpenSessionHistorySubtitle": "Nézd át vagy töröld az egyes munkameneteket",
+  "privacyCenterPolicyLabMode": "Labor mód (diagnosztika)",
+  "privacyCenterPolicyLabModeOff": "Kikapcsolva — nem gyűjtünk diagnosztikai hangot",
+  "privacyCenterPolicyLabModeOn": "Bekapcsolva — rövid hangfelvételek megoszthatók pontossági ellenőrzéshez",
+  "privacyCenterTitle": "Adatvédelem és adatok",
   "profileHubAccountSectionTitle": "Fiók",
   "profileHubAchievementsSectionTitle": "Eredmények",
   "profileHubCommunityDisabledReason": "A közösségi funkciók ebben a buildben még nem érhetők el.",
@@ -3694,12 +3751,22 @@
   "settingsNudge": "Napi gyakorlás-emlékeztető",
   "settingsNudgeHint": "Finom emlékeztető 19:00-kor azokon a napokon, amikor még nem gyakoroltál.",
   "settingsPlaying": "Játék",
+  "settingsSyncRetryAction": "Újra",
+  "settingsSyncStatusFailed": "Nem sikerült menteni — a változtatás csak ezen az eszközön van meg",
+  "settingsSyncStatusPending": "Mentés…",
+  "settingsSyncStatusSynced": "Minden változtatás mentve",
   "settingsSystemLanguage": "Rendszer alapértelmezett",
   "settingsTitle": "Beállítások",
   "settingsTuningHint": "A hangoló által használt A4 kamarahang. A szabvány 440 Hz.",
   "settingsTuningReference": "Hangolási referencia",
   "settingsVersion": "Verzió: {version}",
   "shareCardButton": "Kártya megosztása",
+  "shareRedactionChords": "Akkordmenet",
+  "shareRedactionIncludeTitle": "A munkamenet címének megosztása",
+  "shareRedactionIncludeTitleHint": "Alapból kikapcsolva — kapcsold be, hogy bekerüljön a megosztott kártyára",
+  "shareRedactionStrumPattern": "Pengetési minta",
+  "shareRedactionTempo": "Tempó (BPM)",
+  "shareRedactionTitle": "Amit megosztasz",
   "shareTextButton": "Megosztás szövegként",
   "shareTitle": "Megosztás",
   "songAddChord": "Akkord hozzáadása",
