@@ -561,4 +561,113 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Kör-jelzés:** `done`. A §7 kapu (a teljes, engedélyezett parancs) zölden
+lefutott, a munka a `sonnet-impl/e13-r29-coach-tutor-and-debrief` ágra
+commitolva.
+
+### Mit csinál a kör
+
+- **AI-mód mindig látható (A1/A8):** `tutor_providers.dart` kap egy tisztán
+  prezentációs `TutorAiMode {local, cloud, fallback}` enumot és egy
+  `tutorAiModeFor({status, isOnline})` levezetést — a `TutorChatController`
+  interfészhez EGYETLEN tagot sem adtam (a két pinnelt fake — `_NoopChatController`,
+  `_FakeController` — így fordulnak tovább). A `TutorHomeScreen` (most
+  `ConsumerWidget`) egy állandó modell-állapot-kártyát mutat (mód + „hiányzó
+  modell" a `failed` státuszra); a `TutorChatScreen` az AppBar-ban ÉS a
+  streaming-buborék mellett is kiírja — képernyő-szinten ÉS üzenet-szinten.
+  A `tutor_message_bubble.dart` egy lezárt tanár-üzenetet, aminek NINCS
+  evidence/source/metric blokkja, explicit „nincs mért bizonyíték" jegyzettel
+  lát el (A8).
+- **Minden tool-akció a `SsToolConfirmationSheet`-en át (A2/A3/A4):**
+  `tutor_action_card.dart` kap egy ÚJ osztályt, `TutorToolConfirmationCard`
+  — a meglévő `TutorActionCard` (E04-R18, saját pinnelt tesztje van, ami a
+  MAI egy-koppintásos flow-ját méri) változatlan. Az új kártya
+  `SsCoachActionCard`-ot mutat „Áttekintés" akcióval; a koppintás
+  KIZÁRÓLAG az `SsToolConfirmationSheet`-et nyitja meg, és
+  `ActionConfirmationService.confirm()`-ot EGYETLEN helyen, a sheet
+  `onConfirm` visszahívásából hívja.
+- **Terv-diff, elfogadás/elutasítás (A6):** `practice_plan_preview_screen.dart`
+  megfigyelés/ok/akció fejlécekkel tagolja a képernyőt; a `plan-save`/
+  `plan-start` gombok (típusuk és kulcsuk VÁLTOZATLAN — `ElevatedButton`/
+  `FilledButton.tonal`) most a `SsToolConfirmationSheet`-et nyitják, ami az
+  eredeti (`widget.draft`) és a szerkesztett (`_draft`) terv közti diffet
+  mutatja (hozzáadott/törölt/módosított blokk, vagy explicit „nincs
+  változás") — a tényleges `onSave`/`onStart` csak a sheet megerősítése
+  után fut.
+- **Streaming összevont bejelentés (A5):** a meglévő mechanizmus (egy
+  állandó `Semantics(label: "Generating response", liveRegion: true)`, ami
+  SOHA nem a növekvő szöveget hordozza) már helyesen működött — a kör csak
+  a mércét adta hozzá.
+- **l10n:** minden új szöveg a `lib/l10n/base/app_{en,hu}.arb`-ban él;
+  az aggregátum (`lib/l10n/app_{en,hu}.arb`) a `dart run
+  tool/gen_l10n_segments.dart --write` KIZÁRÓLAGOS kimenete, mind a négy
+  fájl commitolva.
+- **Golden (A9):** `test/ui/goldens/e13_r29_screens_golden_test.dart`,
+  3 képernyő × 2 keret (412×915 compact + textScaler 2.0) =
+  6 PNG, `tools/golden-x86.sh record` + `check` mindkettő zöld.
+- **A7 (nincs analitikába küldött beszélgetés-tartalom):**
+  `git diff 388cdc2f..HEAD -- lib test | grep -inE
+  "analytics|logEvent|trackEvent|telemetry"` → nulla találat.
+
+### Mért, a briefben NEM szereplő korlát — és a feloldása
+
+A pinnelt `tutor_chat_screen_test.dart` / `tutor_home_screen_test.dart` /
+`practice_plan_preview_screen_test.dart` **csupasz `MaterialApp`-ot épít,
+`AppTheme` (`core/theme/app_theme.dart`) NÉLKÜL** — és `AppTheme` maga sem
+hordozza az `SsColorScheme`/`SsTypography` `ThemeExtension`-t (ezt csak
+`SsLightTheme`/`SsDarkTheme` teszi, lásd `lib/features/library_v2/widgets/
+library_theme_scope.dart` — egy szomszédos kör MÁR mérte és dokumentálta
+ugyanezt). Bármelyik `Ss*` komponens, amit a három célképernyő ÁLLANDÓ
+(nem koppintásra megjelenő) fájában használtam volna, `Theme.of(context)
+.extension<SsColorScheme>()!` null-check hibával elszállt volna a pinnelt
+teszteken (MÉRVE, dev-futás).
+
+**Feloldás:** a három képernyő állandó fája `Theme`-tokenekből épített saját
+widgetekkel (`_ModelStatusCard`/`_ModeChip`, `_AiModeIndicator`) adja az
+AI-mód jelzést — nem `SsProvenanceBadge`/`SsModelStatusCard`-dal, azok
+l10n-szövegét (`dsProvenanceBadgeLocalLabel` stb.) viszont újrahasznosítva a
+szóhasználat konzisztens marad. A `Ss*` komponenseket (`SsCoachActionCard`,
+`SsToolConfirmationSheet`) KIZÁRÓLAG koppintásra megjelenő felületeken
+használom (`TutorToolConfirmationCard`, a terv-diff sheet) — ezeket a
+pinnelt tesztek soha nem érik el, a SAJÁT tesztjeim pedig `SsLightTheme
+.data()`-t adnak a `MaterialApp.theme`-nek (nem `AppTheme.light()`-ot — az
+szintén hiányzik az extension, ugyanaz a csapda).
+
+### Valódi-sértés próba (§6.1, KÖTELEZŐ)
+
+`tutor_action_card.dart` `_TutorToolConfirmationCardState.build()`-jában a
+pending-állapot `SsCoachActionCard.onAction`-jét ideiglenesen
+`() => unawaited(_openSheet(context))`-ről `() => unawaited(_confirm())`-re
+cseréltem — azaz a kártya koppintása a sheet KIHAGYÁSÁVAL egyenesen
+`ActionConfirmationService.confirm()`-ot hívta.
+
+```
+$ flutter test test/features/tutor/tool_confirmation_test.dart --plain-name "below threshold"
+...
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "SsToolConfirmationSheet": []>
+00:01 +0 -1: A2/A3 — the three-cell confirmation matrix below threshold: cancelling the sheet runs nothing [E]
+```
+
+Az **A2** cella PIROSRA váltott (a sheet fel sem épült, mert a kártya
+azonnal végrehajtott) — pontosan a mátrix által elvárt hibaosztály. A
+módosítást visszaállítottam (`git status --porcelain` üres a próba után),
+és `flutter test test/features/tutor/tool_confirmation_test.dart` újra
+zöld (6/6).
+
+### Gate
+
+```
+tools/round-gate.sh test/features/tutor/ai_mode_visibility_test.dart test/features/tutor/streaming_announcement_test.dart test/features/tutor/tool_confirmation_test.dart test/features/tutor/prompt_injection_ui_test.dart test/features/ai_tutor/presentation/ test/app/navigation/adaptive_scaffold_test.dart test/app/offline_network_guard_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+```
+
+ZÖLD (lásd a forduló futás-naplóját). A golden (A9) a §7 architektúráján,
+külön: `tools/golden-x86.sh record` majd `check`, mindkettő zöld, a PNG-k
+commitolva.
+
+### `ui_inventory_test.dart` (§0.0/B8)
+
+Nem nyúltam hozzá — a kör a három célképernyőt MÓDOSÍTOTTA, nem hozott
+ÚJ `*_screen.dart` fájlt, tehát az egzakt `hasLength(...)` nem mozdul.
+
 ## 11. Review — a Claude tölti ki
