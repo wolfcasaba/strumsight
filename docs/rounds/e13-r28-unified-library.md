@@ -37,7 +37,9 @@ gate_tests = [
   "test/features/library_v2/corrupt_item_test.dart",
   "test/features/library_v2/delete_confirmation_test.dart",
   "test/features/library_v2/sync_conflict_test.dart",
+  "test/features/library/",
   "test/app/navigation/",
+  "test/app/routing/app_router_test.dart",
   "test/ui/goldens/e13_r28_screens_golden_test.dart",
   "test/ui/ui_inventory_test.dart",
   "test/core/architecture_dependency_test.dart",
@@ -112,7 +114,7 @@ tágítás lenne, azaz H3 ([L478](../LESSONS.md)) — ezért kerül a listára M
 érintett cellákban. Minden más állítás — primary navigation megléte, a többi
 adapter, a query/fragment megőrzése a redirectben, a redirect-aciklikusság —
 érintetlen marad; cella törlése, `skip`-je vagy gyengítése **TILOS**. A kör
-saját pre-flightja mérje ki (`tools/round-gate.sh test/features/library_v2/item_routing_test.dart test/features/library_v2/corrupt_item_test.dart test/features/library_v2/delete_confirmation_test.dart test/features/library_v2/sync_conflict_test.dart test/app/navigation/ test/ui/goldens/e13_r28_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart`),
+saját pre-flightja mérje ki (`tools/round-gate.sh test/features/library_v2/item_routing_test.dart test/features/library_v2/corrupt_item_test.dart test/features/library_v2/delete_confirmation_test.dart test/features/library_v2/sync_conflict_test.dart test/features/library/ test/app/navigation/ test/app/routing/app_router_test.dart test/ui/goldens/e13_r28_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart`),
 PONTOSAN melyik cellák pirosodnak — a lista tágítása nélkül, mert az őr már
 rajta van.
 
@@ -174,6 +176,162 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0/B — KÖR-PRE-FLIGHT, 2026-08-27 (`main @ 768af6ec`, orchestrátor: Claude)
+
+**Visszakeresett előzmény** (`node tools/knowledge-rag.mjs --corpus lessons,halts,adr`
+és `--corpus lessons,halts`): [L503](../LESSONS.md#l503) (az `S13` „nem létező
+könyvtár" lelet elfedhet egy MÉLYEBB hibát — a brief a fa MÁSIK, azonos témájú
+feature-ét írja le), [L497](../LESSONS.md#l497) (a lista fedhet nulla fájlt),
+[L478](../LESSONS.md#l478) (a pre-flight csak SZŰKÍTHET; a tágítás H3),
+[L499](../LESSONS.md#l499) (egy zöld cella lehet azért zöld, mert az ellenőrzött
+forgatókönyv sosem dobja el az állapottartót), [L06](../LESSONS.md) (az elnyelt
+hiba néma no-op — minden csendes fallback gyanús),
+[ADR 0220](../adr/0220-audio-analysis-v2-parallel-rollout-boundary.md) (V1/V2
+párhuzamos rollout: a V1 a teljes átmenet alatt SÉRTETLENÜL fut),
+[ADR 0239](../adr/0239-analysis-document-storage.md) +
+[ADR 0221](../adr/0221-legacy-analysis-v2-migration-mapping.md) (a V1 Library
+store a rollback útvonal miatt olvasható marad),
+[ADR 0279](../adr/0279-the-confirmation-states-the-consequence.md),
+[ADR 0283](../adr/0283-the-result-claims-no-more-than-was-measured.md),
+[ADR 0277](../adr/0277-failure-presentation-model.md).
+
+### B1 — az `S13` lelet feloldása: a lint MÁSODIK ága (a könyvtárat EZ a kör hozza létre)
+
+A `brief-lint` `S13` helyesen mérte, hogy `lib/features/library_v2/` a
+verziókövetett fában nem létezik. A lint két utat kínál; **az elsőt (csere a fán
+MÉRT rétegre) a mérés KIZÁRJA**, ezért a második érvényes.
+
+Mért állapot (`find lib -iname '*librar*'`, `main @ 768af6ec`):
+
+| Mért | Érték |
+|---|---|
+| `lib/features/library/` | LÉTEZIK — 6 fájl: `data/library_repository.dart`, `model/analyzed_session.dart`, `providers/library_providers.dart`, `public.dart`, `screens/library_screen.dart`, `screens/session_detail_screen.dart` |
+| Ez a fa | a **V1 (legacy) Library**, amit az E06-R21 a V2 `audio_analysis` fába migrált |
+| `lib/features/audio_analysis/data/migration/legacy_library_migrator.dart` §6 | szó szerint: *„NEVER touches the legacy `ss.library.sessions` / `library_sessions` keys — the V1 store remains readable for the **rollback path**"* |
+| A fát pinnelő, a listán KÍVÜL élő tesztek | `test/features/library/{library_test,library_cap_test,rename_capo_title_test,session_rename_test}.dart` (4) + `test/app/routing/app_router_test.dart` |
+
+A prefix cseréje `lib/features/library/`-re tehát (a) egy **befagyasztott,
+rollback-célú** fát nyitna szerkesztésre az [ADR 0220](../adr/0220-audio-analysis-v2-parallel-rollout-boundary.md)
+ellenében, és (b) öt, a listán kívüli tesztfájlt tenne kockára — ami `blocked`,
+nem feloldás. Az L503 tanulsága itt **fordítva** alkalmazandó: ott a brief a
+MÁSIK fát írta le és a valódi képernyők máshol MÁR LÉTEZTEK; itt a valódi
+képernyők a legacy fában élnek, és a kör tárgya (az item-unió: gyakorlás,
+elemzés, dal, setlist) a V1 analízis-listánál **szélesebb**, tehát nem
+migráció-a-helyén.
+
+**Döntés (a lint második ága):** `lib/features/library_v2/` az az ÚJ könyvtár,
+amit **EZ a kör hoz létre**. Az `allowed_paths` változatlan — se tágítás, se
+szűkítés nem szükséges.
+
+### B2 — a route-szétválasztás szerződése: a kör PONTOSAN egy meglévő buildert ír át
+
+A brief §0.0/R3 azt írta elő, hogy a kör saját pre-flightja mérje ki, pontosan
+melyik cellák pirosodnak. **Kimérve** (`grep -rn "LibraryScreen\|SessionDetailScreen"`,
+`lib/app/routing/app_router.dart`, `lib/app/config/feature_flags.dart:52`):
+
+`FeatureFlags.adaptiveShellEnabled` **defaultja `false`** (`feature_flags.dart:52`,
+`:129`). Ebből következik a teljes pin-térkép:
+
+| Útvonal | Builder | Pinnelő teszt | Shell-flag | Listán? |
+|---|---|---|---|---|
+| `AppRoutes.library` (`/library`, legacy `HomeShell`) | `app_router.dart:261` → `LibraryScreen` | `test/app/routing/app_router_test.dart:177`, `test/features/library/library_test.dart:82` | **OFF** (default) | **NINCS → TILOS módosítani** |
+| `AppRoutes.librarySession` (`/library/session`) | `app_router.dart:302–310` → `SessionDetailScreen` | `test/app/routing/app_router_test.dart:197` | **OFF** (default) | **NINCS → TILOS módosítani** |
+| `AppRoutes.profileLibrary` (`/profile/library`, adaptív shell) | `app_router.dart:505–507` → `LibraryScreen` | `test/app/navigation/adaptive_scaffold_test.dart:237` | **ON** | **IGEN** (R3) |
+| `AppRoutes.library` → `AppRoutes.profileLibrary` legacy redirect | `adaptive_shell_routes.dart:14` | `test/app/navigation/legacy_route_redirect_test.dart:159` | **ON** | **IGEN** (R3) |
+
+**Szerződés (falszifikálható):** a kör az `app_router.dart`-ban **PONTOSAN EGY**
+meglévő buildert ír át — a `AppRoutes.profileLibrary`-ét (`:505–507`) —, és
+**hozzáad** egy új route-ot az UI-41-hez
+(`AppRoutes.profileLibrarySession = '/profile/library/session/:sessionId'`, új
+konstans a `lib/app/routing/app_route.dart`-ban). A `:261` és a `:302–310`
+builder, valamint a `lib/features/library/**` fa **érintetlen marad** — se
+törlés, se átnevezés, se signature-változás.
+
+Ebből gépileg következik: a listán kívüli öt tesztfájl **zöld marad**, és
+pontosan **két** cella pirosodik, mindkettő a listán lévő `test/app/navigation/`
+fában — az `adaptive_scaffold_test.dart:237` és a
+`legacy_route_redirect_test.dart:159` típus-pinje. A jogosultság PONTOSAN e két
+cella típusnevének átírása; minden más állítás (primary navigation, a többi tíz
+adapter, a query/fragment megőrzése, az aciklikusság) érintetlen.
+
+**Ezért kerül a `gate_tests`-be — de NEM az `allowed_paths`-ra — a
+`test/features/library/` és a `test/app/routing/app_router_test.dart`:** a kör
+lokális kapuja MÉRI a befagyasztott V1 pineket, de nem szerkesztheti őket. Ez az
+S12-mintázat kiterjesztése (a fa-szintű őrök a lokális kapuba), így a
+szerződés-sértés a ~2 perces kör-gate-en bukik, nem a ~17 perces exact-SHA Full
+Gate-en. Ha ezek bármelyike pirosra vált: `stopped` + jelentés, **nem** csendes
+átírás.
+
+### B3 — a §5.4 törlési use case és a szinkron-státusz típusok MÉRVE
+
+A brief fejlécének kötelező pre-flight kérdése (tárolási/szinkron típusok + hol
+él a törlés):
+
+| Kérdés | MÉRT válasz |
+|---|---|
+| Hol él ma a törlés? | `LibraryController.delete(String id)` — `lib/features/library/providers/library_providers.dart`, a `libraryProvider` notifierén; kifelé a `lib/features/library/public.dart` exportálja. A repository (`LibraryRepository.save`) csak a listát írja. |
+| V2 oldal | `AnalysisRepository` (`lib/features/audio_analysis/domain/analysis_repository.dart`) — a document/summary-index gazdája (ADR 0239). |
+| Szinkron-státusz típus | `SsAsyncStatus` (`lib/core/design_system/components/feedback/ss_async_state.dart`): `loading, content, empty, failure, permission, blocked, offline, syncPending, degraded`. Az `offline`/`syncPending`/`degraded` ág `_CachedContentBanner`-t rajzol a tartalom FÖLÉ — a helyi tartalom tehát látszik offline is (A3). |
+| Szinkron-**ütközés** típus | **NINCS a fán** (`grep -rln "onflict" lib/` → egyetlen library/analysis szinkron-ütközés modell sem). |
+
+**Következmény az A5-re és az A7-re:** a `library_v2/` ütközés-modellje
+**prezentációs** modell (a kör saját fájában), a feloldást a felület
+**callbackkel delegálja**, és **nem ír tárolót**. Az A5 bizonyítéka ezért
+gépiesíthető grep: a `lib/features/library_v2/` fában NEM fordulhat elő
+`JsonDocumentStore`, `JsonCollectionStore`, `keyValueStoreProvider`,
+`.save(`, `.write(` hívás — a törlés kizárólag a meglévő use case
+(`libraryProvider.notifier.delete` / `AnalysisRepository`) hívása lehet. A néma
+felülírás tilalma az [L06](../LESSONS.md) általánosítása: a csendes fallback
+kontrollált hiba vagy választás, sosem néma.
+
+### B4 — a §5.2/A3 offline-cellája NEM lehet triviálisan zöld (L499)
+
+Az [L499](../LESSONS.md#l499) mért hibaosztálya: a cella azért zöld, mert az
+ellenőrzött forgatókönyv sosem dobja el az állapottartót. Az A3 tesztje ezért
+**nem** elégedhet meg azzal, hogy egy offline állapotú listán látszik a tétel:
+a cellának a **megnyitást** kell mérnie (a helyi tétel részletnézete offline
+állapotban is renderel tartalmat), és a teszt mondja ki kommentben, mi a
+hálózat-hiány szimulált forrása.
+
+### B5 — a kötelező DS-komponensek listája MÉRVE (a `design_system` TILOS zóna)
+
+Az SDD Ch13 UI-40/UI-41 hét komponenst nevez meg, amelyek **a fán nem
+léteznek**: `SsSearchField`, `SsChoiceChip`, `SsListDetail`,
+`SsSyncPendingBadge`, `SsOfflineBanner`, `SsInlineMessage`, `SsSectionHeader`.
+A `lib/core/design_system/**` ennek a körnek **tilos zóna** (§4), tehát új
+komponenst a kör NEM készít — ez **szűkítés**, nem tágítás.
+
+A `lib/core/design_system/public.dart`-ból MÉRT, ténylegesen elérhető
+megfelelők (a kör ezeket használja, és **kizárólag a `public.dart`-on át**
+importál — a `foundations/**` közvetlen importja az E13-R16/F8 mért hibája,
+amit a `test/core/architecture_dependency_test.dart` fog):
+
+| SDD-ben kért | MÉRT helyettesítő a `public.dart`-ból |
+|---|---|
+| `SsSearchField` | `SsTextField` (`components/inputs/ss_text_field.dart`) |
+| `SsChoiceChip` | `SsChoice` (`components/inputs/ss_choice.dart`) |
+| `SsListDetail` | `SsAdaptiveScaffold` (`layouts/ss_adaptive_scaffold.dart`) |
+| `SsSyncPendingBadge` | `SsStatusBadge` (`components/feedback/ss_status_badge.dart`) |
+| `SsOfflineBanner` | `SsAsyncState` `offline`/`syncPending` ága |
+| `SsEmptyState` | `SsEmptyState` — LÉTEZIK |
+| `SsMetricCard` | `SsMetricCard` — LÉTEZIK |
+| `SsToolConfirmationSheet` | `SsToolConfirmationSheet` — LÉTEZIK |
+| `SsInlineMessage` | `SsFailureState` / `SsAsyncState` (`components/feedback/`) |
+| `SsSectionHeader` | `SsSection` (`components/surfaces/ss_section.dart`) |
+| destruktív megerősítés (§5.3, ADR 0279) | `SsConfirmationSheet.show(...)` — `title` + **`consequence`** + `confirmLabel` + `cancelLabel`; a `consequence` a hívó feature l10n-jéből jön |
+
+### B6 — a kör ADR-t NEM ír (a `docs/adr/**` marad tilos zóna)
+
+Az `E13-R28`-hoz a sor-fájl `nincs` ADR-t rendel. A kör §5 döntései MIND
+merge-elt ADR-ek alkalmazásai: §5.1 → [0283](../adr/0283-the-result-claims-no-more-than-was-measured.md) §5,
+§5.3/§5.4 → [0279](../adr/0279-the-confirmation-states-the-consequence.md) §1,
+a §0.0/B2 V1/V2 route-szétválasztás → [0220](../adr/0220-audio-analysis-v2-parallel-rollout-boundary.md)
+(a V1 sértetlenül fut a teljes átmenet alatt), §5.6 →
+[0277](../adr/0277-failure-presentation-model.md) + [L06](../LESSONS.md).
+Új ADR írása merge-elt döntés fölé **H1** volna. A sávon ez a **tizenegyedik**
+ADR nélküli kör egymás után (E13-R17…R28) — ugyanaz a mért minta, mint az
+E13-R27-nél.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -210,23 +368,35 @@ cached tesztek.
 
 **NINCS benne (tilos):** a törlési vagy szinkron-logika implementálása a
 felületen · a tárolási séma módosítása · más képernyők migrációja ·
-`docs/adr/**`, `tools/**`, `.github/**`.
+a **V1 `lib/features/library/` fa** bármilyen módosítása (befagyasztott
+rollback-útvonal, §0.0/B1–B2) · a `AppRoutes.library` (`app_router.dart:261`)
+és a `AppRoutes.librarySession` (`:302–310`) builder módosítása ·
+új design-system komponens (§0.0/B5) · `docs/adr/**`, `tools/**`, `.github/**`.
 
 ## 4. Engedélyezett fájlok
 
 | Útvonal | Indok |
 |---|---|
-| `lib/features/library_v2/` | az egységes könyvtár |
-| `lib/app/routing/` | **kizárólag** a legacy alias |
+| `lib/features/library_v2/` | az egységes könyvtár — **ÚJ könyvtár, ezt a kör hozza létre** (§0.0/B1) |
+| `lib/app/routing/` | **kizárólag** a §0.0/B2 szerződése: a `AppRoutes.profileLibrary` builder átírása + a `AppRoutes.profileLibrarySession` route/konstans hozzáadása. A `:261` és `:302–310` builder módosítása **TILOS** |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a könyvtár-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/library_v2/*_test.dart` (4) | a §6 cellái |
 | `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör új `lib/features/**/*_screen.dart`-ot hozhat, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése, más állítás nem érinthető (§0.0/R4) |
 | `docs/rounds/e13-r28-…md` | a §10 handoff |
 
-**Tilos zóna:** `lib/features/**` a `library_v2/` KIVÉTELÉVEL ·
-`lib/core/design_system/**` · `lib/core/theme/**` · `docs/adr/**` ·
-`docs/sdd/**` · `tools/**` · `.github/**`.
+**Tilos zóna:** `lib/features/**` a `library_v2/` KIVÉTELÉVEL (nevesítve:
+`lib/features/library/**` — a befagyasztott V1 fa) · `lib/core/design_system/**` ·
+`lib/core/theme/**` · `docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`.
+
+**Futtatott, de NEM szerkeszthető őrök** (a `gate_tests`-en vannak, az
+`allowed_paths`-on **nincsenek** — §0.0/B2 és §0.0/S12): `test/features/library/`
+(a V1 pinek), `test/app/routing/app_router_test.dart` (a legacy route-pinek),
+`test/core/architecture_dependency_test.dart`, `test/tooling/dio_factory_guard_test.dart`,
+`test/tooling/preferences_plugin_import_guard_test.dart`,
+`test/tooling/route_literal_guard_test.dart`. Ha ezek bármelyike pirosra vált, a
+javítás kizárólag a kör SAJÁT kódjában történhet; cella törlése, `skip`-je vagy
+gyengítése gépileg kizárt. Feloldhatatlan lelet → `stopped` + jelentés.
 
 ## 5. Kötött architekturális döntések
 
@@ -267,12 +437,13 @@ Nem néma felülírás: a felhasználó látja, melyik verzió melyik, és dönt
 |---|---|---|
 | A1 | A tétel-típusok route-olása típus-biztos, nem téveszt célt | `item_routing_test.dart` |
 | A2 | A sérült tétel izolált, a lista működik | `corrupt_item_test.dart` |
-| A3 | A helyi tartalom offline megnyitható | ugyanott |
+| A3 | A helyi tartalom offline **megnyitható** — a lista-megjelenés önmagában NEM elég (§0.0/B4, [L499](../LESSONS.md#l499)): a cella a részletnézet renderelését méri offline állapotban, és a teszt kommentben mondja ki, mi a hálózat-hiány szimulált forrása | `corrupt_item_test.dart` |
 | A4 | A törlés hatóköre a megerősítésben megjelenik | `delete_confirmation_test.dart` |
-| A5 | A felület nem implementál törlési logikát (use case-t hív) | `grep` a diffben |
+| A5 | A felület nem implementál törlési logikát (use case-t hív) | **gépi grep a diffben:** a `lib/features/library_v2/` fában NINCS `JsonDocumentStore`, `JsonCollectionStore`, `keyValueStoreProvider`, `.save(` vagy `.write(` előfordulás; a törlés kizárólag `libraryProvider.notifier.delete(...)` / `AnalysisRepository` hívás (§0.0/B3) |
 | A6 | A nyers eszköz hiánya mellett az eredmény megmarad | `corrupt_item_test.dart` |
-| A7 | A szinkron-ütközés választást kínál, nem néma felülírást | `sync_conflict_test.dart` |
+| A7 | A szinkron-ütközés választást kínál, nem néma felülírást — a felület a döntést **callbackkel delegálja**, tárolót nem ír (§0.0/B3, [L06](../LESSONS.md)) | `sync_conflict_test.dart` |
 | A8 | A legacy Library route működik | `item_routing_test.dart` |
+| A10 | **A route-szétválasztás szerződése (§0.0/B2):** a kör az `app_router.dart`-ban PONTOSAN a `AppRoutes.profileLibrary` buildert írja át és HOZZÁAD egy `AppRoutes.profileLibrarySession` route-ot; a `:261` és `:302–310` builder, valamint a `lib/features/library/**` fa érintetlen | `test/features/library/` **és** `test/app/routing/app_router_test.dart` a kör gate-jén VÁLTOZATLANUL zöld + `test/app/navigation/` pontosan a két típus-pin cellájában módosul |
 | A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r28_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
@@ -286,6 +457,10 @@ Nem néma felülírás: a felhasználó látja, melyik verzió melyik, és dönt
 | A szinkron némán felülír | **A7** |
 | A típus szerinti route elágazás hibás célt ad | A1 |
 | A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
+| A kör a legacy `/library` buildert (`app_router.dart:261`) is átköti | **A10** — `test/app/routing/app_router_test.dart:177` és `test/features/library/library_test.dart:82` PIROS (mindkettő `adaptiveShellEnabled=false` mellett fut) |
+| A kör a `AppRoutes.librarySession` buildert (`:302–310`) átköti | **A10** — `test/app/routing/app_router_test.dart:197` PIROS |
+| A kör a befagyasztott V1 `lib/features/library/**` fát módosítja vagy átnevezi | **A10** — a `test/features/library/` négy tesztje PIROS, és a scope-audit `VIOLATION`-t ad |
+| A felület offline csak a listát mutatja, de a tétel megnyitása üres/hibás | **A3** (a B4 szerinti erősebb olvasat) |
 
 **A törlés-hatókör három kötelező cellája** (a küszöb: mi törlődik):
 
@@ -302,7 +477,7 @@ megerősítést általános „Igen/Nem"-re → az **A4** cellának PIROSNAK kel
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/library_v2/item_routing_test.dart test/features/library_v2/corrupt_item_test.dart test/features/library_v2/delete_confirmation_test.dart test/features/library_v2/sync_conflict_test.dart test/app/navigation/ test/ui/goldens/e13_r28_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/library_v2/item_routing_test.dart test/features/library_v2/corrupt_item_test.dart test/features/library_v2/delete_confirmation_test.dart test/features/library_v2/sync_conflict_test.dart test/features/library/ test/app/navigation/ test/app/routing/app_router_test.dart test/ui/goldens/e13_r28_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
