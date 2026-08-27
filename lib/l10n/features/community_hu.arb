@@ -658,6 +658,15 @@
   "communityClubDetailRoleNone": "Nem vagy tag",
   "@communityClubDetailRoleNone": {},
 
+  "communityClubDetailRoleSemanticLabel": "Szerep: {role}",
+  "@communityClubDetailRoleSemanticLabel": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+
   "communityClubTabFeed": "Hírfolyam",
   "@communityClubTabFeed": {},
 
@@ -705,6 +714,18 @@
 
   "communityClubManageError": "A tagok nem tölthetők be.",
   "@communityClubManageError": {},
+
+  "communityClubManageErrorNetwork": "A művelet nem hajtható végre — ellenőrizd a kapcsolatot.",
+  "@communityClubManageErrorNetwork": {},
+
+  "communityClubManageErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra.",
+  "@communityClubManageErrorSessionExpired": {},
+
+  "communityClubManageErrorForbidden": "Nincs jogosultságod ehhez a művelethez.",
+  "@communityClubManageErrorForbidden": {},
+
+  "communityClubManageErrorInvalidInput": "Érvénytelen kérés.",
+  "@communityClubManageErrorInvalidInput": {},
 
   "communityClubManageRetry": "Újra",
   "@communityClubManageRetry": {},
@@ -756,6 +777,9 @@
       }
     }
   },
+
+  "communityChallengeResultVerifiedIcon": "Ellenőrizve",
+  "@communityChallengeResultVerifiedIcon": {},
 
   "communityChallengeMyResultAction": "Saját eredmény megtekintése"
 }

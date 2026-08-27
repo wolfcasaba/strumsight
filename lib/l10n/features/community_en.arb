@@ -658,6 +658,15 @@
   "communityClubDetailRoleNone": "Not a member",
   "@communityClubDetailRoleNone": {},
 
+  "communityClubDetailRoleSemanticLabel": "Role: {role}",
+  "@communityClubDetailRoleSemanticLabel": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
+
   "communityClubTabFeed": "Feed",
   "@communityClubTabFeed": {},
 
@@ -705,6 +714,18 @@
 
   "communityClubManageError": "The members couldn't load.",
   "@communityClubManageError": {},
+
+  "communityClubManageErrorNetwork": "Could not complete the action — check your connection.",
+  "@communityClubManageErrorNetwork": {},
+
+  "communityClubManageErrorSessionExpired": "Session expired — please sign in again.",
+  "@communityClubManageErrorSessionExpired": {},
+
+  "communityClubManageErrorForbidden": "You do not have permission to do this.",
+  "@communityClubManageErrorForbidden": {},
+
+  "communityClubManageErrorInvalidInput": "Invalid request.",
+  "@communityClubManageErrorInvalidInput": {},
 
   "communityClubManageRetry": "Retry",
   "@communityClubManageRetry": {},
@@ -756,6 +777,9 @@
       }
     }
   },
+
+  "communityChallengeResultVerifiedIcon": "Verified",
+  "@communityChallengeResultVerifiedIcon": {},
 
   "communityChallengeMyResultAction": "View my result",
   "@communityChallengeMyResultAction": {}

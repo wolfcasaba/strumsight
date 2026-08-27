@@ -1469,6 +1469,8 @@
       }
     }
   },
+  "communityChallengeResultVerifiedIcon": "Ellenőrizve",
+  "@communityChallengeResultVerifiedIcon": {},
   "communityChallengeTitle": "Kihívások",
   "@communityChallengeTitle": {},
   "communityChallengeWindowLabel": "Ablak: {startsAt} – {endsAt}",
@@ -1506,6 +1508,14 @@
   "@communityClubDetailRoleNone": {},
   "communityClubDetailRoleOwner": "Tulajdonos",
   "@communityClubDetailRoleOwner": {},
+  "communityClubDetailRoleSemanticLabel": "Szerep: {role}",
+  "@communityClubDetailRoleSemanticLabel": {
+    "placeholders": {
+      "role": {
+        "type": "String"
+      }
+    }
+  },
   "communityClubDetailTitle": "Klub",
   "@communityClubDetailTitle": {},
   "communityClubFeedEmpty": "Ebben a klubban még nincs poszt.",
@@ -1554,6 +1564,14 @@
   "@communityClubManageEmpty": {},
   "communityClubManageError": "A tagok nem tölthetők be.",
   "@communityClubManageError": {},
+  "communityClubManageErrorForbidden": "Nincs jogosultságod ehhez a művelethez.",
+  "@communityClubManageErrorForbidden": {},
+  "communityClubManageErrorInvalidInput": "Érvénytelen kérés.",
+  "@communityClubManageErrorInvalidInput": {},
+  "communityClubManageErrorNetwork": "A művelet nem hajtható végre — ellenőrizd a kapcsolatot.",
+  "@communityClubManageErrorNetwork": {},
+  "communityClubManageErrorSessionExpired": "A munkamenet lejárt — jelentkezz be újra.",
+  "@communityClubManageErrorSessionExpired": {},
   "communityClubManageRetry": "Újra",
   "@communityClubManageRetry": {},
   "communityClubManageRoleMember": "Tag",
