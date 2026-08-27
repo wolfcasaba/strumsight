@@ -478,54 +478,58 @@ E13-R36	docs/rounds/e13-r36-visual-regression-and-closure.md	sonnet-impl	nincs	d
 # A sor ezért `hold`: a driver csak `pending` sort admittál
 # (round-pipeline.sh:2462-2464, round-slots.py:309).
 #
-# ⚠ AKTIVÁLÁSKOR KÉT LÉPÉS, EGY COMMITBAN (a `hold` -> `pending` csere mellett):
-#   (a) az engine oszlop `minimax` -> `sonnet-impl` a Ch12 sorokon;
-#   (b) a `tools/tests/test_pipeline_integration.py`
-#       `test_open_rounds_follow_the_measured_engine_rule` E13-carve-outjának
-#       kiterjesztése az `E12-` előtagra.
-# A sorok MOST azért `minimax`-ok, mert a carve-out MA kizárólag `E13-`-ra szól:
-# egy `sonnet-impl` E12-sor a router-CI-t AZONNAL pirosra állítaná, a piros main
-# fölé pedig a lánc nem indít munkát (round-pipeline.sh:1584).
+# ✅ AKTIVÁLVA 2026-08-27 (user: „indítsd el a fejlesztési pipeline-t"), miután
+# az `E13-R36` merge-elve lezárta a Ch13 UI-sávot. A három lépés EGY commitban
+# megtörtént: `hold` -> `pending`, engine `minimax` -> `sonnet-impl`, és a
+# `tools/tests/test_pipeline_integration.py`
+# `test_open_rounds_follow_the_measured_engine_rule` carve-outja mostantól az
+# `E12-` előtagra is szól.
+#
+# A sáv epicen BELÜL sorosít (round-slots.py:125-146: minden korábbi, nem `done`
+# E12-sor blokkol), tehát a 2 slot mellett is EGYSZERRE EGY E12 kör fut. A
+# második slot kihasználásához egy másik, fájl-diszjunkt sávot kell `pending`-re
+# állítani (E09 maradék: R28/R29/R31/R32, vagy a Ch14 `prepared` sorai) —
+# user-döntés.
 #
 # A Chapter 12 fájlja 36 kört tartalmaz (a 00-index „42" értéke MÉRT hiba, az
 # E12-R02 javítja). ADR-tartomány: 0443-0465, a Ch12 batch osztotta ki.
 #
-E12-R01	docs/rounds/e12-r01-program-baseline-and-release-history-audit.md	minimax	nincs	hold
-E12-R02	docs/rounds/e12-r02-sdd-index-and-dependency-graph.md	minimax	0443	hold
-E12-R03	docs/rounds/e12-r03-delivery-workflow-and-branch-protection.md	minimax	0444	hold
-E12-R04	docs/rounds/e12-r04-environment-and-channel-isolation.md	minimax	0445	hold
-E12-R05	docs/rounds/e12-r05-feature-flag-registry-and-kill-switch.md	minimax	0446	hold
-E12-R06	docs/rounds/e12-r06-versioning-provenance-and-sbom.md	minimax	0447	hold
-E12-R07	docs/rounds/e12-r07-production-signing-and-secret-hardening.md	minimax	0448	hold
-E12-R08	docs/rounds/e12-r08-staging-backend-migrations-and-recovery.md	minimax	0449	hold
-E12-R09	docs/rounds/e12-r09-domain-event-catalog-and-schema-registry.md	minimax	0450	hold
-E12-R10	docs/rounds/e12-r10-idempotent-dispatcher-and-outbox.md	minimax	0451	hold
-E12-R11	docs/rounds/e12-r11-end-to-end-test-harness.md	minimax	0452	hold
-E12-R12	docs/rounds/e12-r12-release-fixture-corpus-and-golden-data.md	minimax	0453	hold
-E12-R13	docs/rounds/e12-r13-device-matrix-and-device-lab.md	minimax	nincs	hold
-E12-R14	docs/rounds/e12-r14-performance-budget-harness.md	minimax	0454	hold
-E12-R15	docs/rounds/e12-r15-resource-coexistence-policy.md	minimax	0455	hold
-E12-R16	docs/rounds/e12-r16-ai-release-gate-aggregation.md	minimax	0456	hold
-E12-R17	docs/rounds/e12-r17-privacy-data-inventory-and-consent-enforcement.md	minimax	0457	hold
-E12-R18	docs/rounds/e12-r18-threat-model-and-release-security-scan.md	minimax	0458	hold
-E12-R19	docs/rounds/e12-r19-privacy-safe-observability-and-slo.md	minimax	0459	hold
-E12-R20	docs/rounds/e12-r20-accessibility-and-localization-release-audit.md	minimax	nincs	hold
-E12-R21	docs/rounds/e12-r21-content-catalog-and-pedagogical-readiness.md	minimax	0460	hold
-E12-R22	docs/rounds/e12-r22-beta-distribution-and-feedback.md	minimax	0461	hold
-E12-R23	docs/rounds/e12-r23-legacy-migration-release-candidate.md	minimax	0462	hold
-E12-R24	docs/rounds/e12-r24-store-listing-and-legal-package.md	minimax	nincs	hold
-E12-R25	docs/rounds/e12-r25-release-candidate-assembly.md	minimax	0463	hold
-E12-R26	docs/rounds/e12-r26-rollback-and-disaster-recovery-drill.md	minimax	nincs	hold
-E12-R27	docs/rounds/e12-r27-closed-beta-launch-and-monitoring.md	minimax	nincs	hold
-E12-R28	docs/rounds/e12-r28-beta-stabilization-and-scope-cut.md	minimax	0464	hold
-E12-R29	docs/rounds/e12-r29-open-beta-and-canary-cohort.md	minimax	nincs	hold
-E12-R30	docs/rounds/e12-r30-feature-freeze-and-final-regression.md	minimax	nincs	hold
-E12-R31	docs/rounds/e12-r31-production-deployment-and-internal-cohort.md	minimax	nincs	hold
-E12-R32	docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md	minimax	nincs	hold
-E12-R33	docs/rounds/e12-r33-staged-rollout-50-to-100-and-ga.md	minimax	nincs	hold
-E12-R34	docs/rounds/e12-r34-post-launch-stabilization-and-hotfix.md	minimax	0465	hold
-E12-R35	docs/rounds/e12-r35-technical-debt-and-flag-cleanup.md	minimax	nincs	hold
-E12-R36	docs/rounds/e12-r36-program-completion-and-next-roadmap.md	minimax	nincs	hold
+E12-R01	docs/rounds/e12-r01-program-baseline-and-release-history-audit.md	sonnet-impl	nincs	pending
+E12-R02	docs/rounds/e12-r02-sdd-index-and-dependency-graph.md	sonnet-impl	0443	pending
+E12-R03	docs/rounds/e12-r03-delivery-workflow-and-branch-protection.md	sonnet-impl	0444	pending
+E12-R04	docs/rounds/e12-r04-environment-and-channel-isolation.md	sonnet-impl	0445	pending
+E12-R05	docs/rounds/e12-r05-feature-flag-registry-and-kill-switch.md	sonnet-impl	0446	pending
+E12-R06	docs/rounds/e12-r06-versioning-provenance-and-sbom.md	sonnet-impl	0447	pending
+E12-R07	docs/rounds/e12-r07-production-signing-and-secret-hardening.md	sonnet-impl	0448	pending
+E12-R08	docs/rounds/e12-r08-staging-backend-migrations-and-recovery.md	sonnet-impl	0449	pending
+E12-R09	docs/rounds/e12-r09-domain-event-catalog-and-schema-registry.md	sonnet-impl	0450	pending
+E12-R10	docs/rounds/e12-r10-idempotent-dispatcher-and-outbox.md	sonnet-impl	0451	pending
+E12-R11	docs/rounds/e12-r11-end-to-end-test-harness.md	sonnet-impl	0452	pending
+E12-R12	docs/rounds/e12-r12-release-fixture-corpus-and-golden-data.md	sonnet-impl	0453	pending
+E12-R13	docs/rounds/e12-r13-device-matrix-and-device-lab.md	sonnet-impl	nincs	pending
+E12-R14	docs/rounds/e12-r14-performance-budget-harness.md	sonnet-impl	0454	pending
+E12-R15	docs/rounds/e12-r15-resource-coexistence-policy.md	sonnet-impl	0455	pending
+E12-R16	docs/rounds/e12-r16-ai-release-gate-aggregation.md	sonnet-impl	0456	pending
+E12-R17	docs/rounds/e12-r17-privacy-data-inventory-and-consent-enforcement.md	sonnet-impl	0457	pending
+E12-R18	docs/rounds/e12-r18-threat-model-and-release-security-scan.md	sonnet-impl	0458	pending
+E12-R19	docs/rounds/e12-r19-privacy-safe-observability-and-slo.md	sonnet-impl	0459	pending
+E12-R20	docs/rounds/e12-r20-accessibility-and-localization-release-audit.md	sonnet-impl	nincs	pending
+E12-R21	docs/rounds/e12-r21-content-catalog-and-pedagogical-readiness.md	sonnet-impl	0460	pending
+E12-R22	docs/rounds/e12-r22-beta-distribution-and-feedback.md	sonnet-impl	0461	pending
+E12-R23	docs/rounds/e12-r23-legacy-migration-release-candidate.md	sonnet-impl	0462	pending
+E12-R24	docs/rounds/e12-r24-store-listing-and-legal-package.md	sonnet-impl	nincs	pending
+E12-R25	docs/rounds/e12-r25-release-candidate-assembly.md	sonnet-impl	0463	pending
+E12-R26	docs/rounds/e12-r26-rollback-and-disaster-recovery-drill.md	sonnet-impl	nincs	pending
+E12-R27	docs/rounds/e12-r27-closed-beta-launch-and-monitoring.md	sonnet-impl	nincs	pending
+E12-R28	docs/rounds/e12-r28-beta-stabilization-and-scope-cut.md	sonnet-impl	0464	pending
+E12-R29	docs/rounds/e12-r29-open-beta-and-canary-cohort.md	sonnet-impl	nincs	pending
+E12-R30	docs/rounds/e12-r30-feature-freeze-and-final-regression.md	sonnet-impl	nincs	pending
+E12-R31	docs/rounds/e12-r31-production-deployment-and-internal-cohort.md	sonnet-impl	nincs	pending
+E12-R32	docs/rounds/e12-r32-staged-rollout-1-to-20-percent.md	sonnet-impl	nincs	pending
+E12-R33	docs/rounds/e12-r33-staged-rollout-50-to-100-and-ga.md	sonnet-impl	nincs	pending
+E12-R34	docs/rounds/e12-r34-post-launch-stabilization-and-hotfix.md	sonnet-impl	0465	pending
+E12-R35	docs/rounds/e12-r35-technical-debt-and-flag-cleanup.md	sonnet-impl	nincs	pending
+E12-R36	docs/rounds/e12-r36-program-completion-and-next-roadmap.md	sonnet-impl	nincs	pending
 #
 # ===== EPIC 9 — Community Platform (Chapter 10, 32 kör) =====
 # Batch-előkészítve 2026-08-22 (user-döntés: a lánc E08 lezárása után

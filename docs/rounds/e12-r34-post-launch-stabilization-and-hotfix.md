@@ -14,13 +14,15 @@
 
 ## 0.0 Mit szállít a kör, és mit a user
 
-A napi health-review és a 7./14. napi riport ADATA a GA utáni valóságból jön (user + support). Az implementer terméke: a hotfix-út (workflow + eszköz + mérce), az incident/postmortem sablon, és a riport-vázak gépi ellenőrzéssel. A riportok KITÖLTÉSE emberi lépés.
+A napi health-review és a 7./14. napi riport ADATA a GA utáni valóságból jön (user + support); a riportok KITÖLTÉSE emberi lépés.
+
+**A hotfix-workflow ráadásul VÉDETT zóna:** a `.github/workflows/**` a `protect_factory_files.py` `PROTECTED_GLOBS` listáján van (ADR 0321), és az ADR 0372 álló felhatalmazásának fájlja (`.claude/gate-edit-policy`) a fán MA NEM létezik — a pre-flight ezt MÉRTE. Az implementer terméke ezért: a hotfix-workflow teljes tartalma JAVASLATKÉNT (`docs/release/workflows/hotfix.proposal.yml`), a `verify_hotfix.py` mérce, a runbook és a sablonok. A telepítés és a dispatch orchesztrátor/emberi lépés a merge UTÁN.
 
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  ".github/workflows/hotfix.yml",
+  "docs/release/workflows/hotfix.proposal.yml",
   "tool/release/verify_hotfix.py",
   "docs/operations/hotfix-runbook.md",
   "docs/operations/postmortem-template.md",
@@ -33,7 +35,7 @@ gate_tests = [
   "test/tooling/hotfix_policy_test.dart",
   "test/tooling/rc_assembly_test.dart",
 ]
-native_gate = true
+native_gate = false
 ```
 
 **Kockázat = high, indoklás:** a hotfix-út a leggyorsabb út a production felé; ha megkerülhetővé válik a security/signing kapu, az a teljes release-védelmet üresíti ki. A `security-reviewer` futtatása a review-ban KÖTELEZŐ.
@@ -62,11 +64,11 @@ Auditálható, gyors, de kapukat NEM megkerülő hotfix-út, incident- és postm
 
 ## 3. Scope
 
-**Benne van:** `.github/workflows/hotfix.yml` (hotfix branch-ről indítható, manuális jóváhagyással; a `flutter-gates` composite + az ÉRINTETT terület teljes regressziója; kötelező incident-azonosító input; a Kör 6/7 provenance és signing lépések VÁLTOZATLANUL) · `tool/release/verify_hotfix.py` (kötelező incident-azonosító, verzió-emelés kényszerítése, a security-scan és signing lépés MEGLÉTÉNEK statikus ellenőrzése a workflow-ban) · `docs/operations/hotfix-runbook.md` · `docs/operations/postmortem-template.md` · `docs/release/post-launch-day{7,14}.md` (váz kötelező mezőkkel) · `test/tooling/hotfix_policy_test.dart`.
+**Benne van:** `docs/release/workflows/hotfix.proposal.yml` — a JAVASOLT hotfix-workflow teljes tartalma (hotfix branch-ről indítható, manuális jóváhagyással; a `flutter-gates` composite + az ÉRINTETT terület teljes regressziója; kötelező incident-azonosító input; a Kör 6/7 provenance és signing lépések VÁLTOZATLANUL) · `tool/release/verify_hotfix.py` (kötelező incident-azonosító, verzió-emelés kényszerítése, a security-scan és signing lépés MEGLÉTÉNEK statikus ellenőrzése a workflow-ban) · `docs/operations/hotfix-runbook.md` · `docs/operations/postmortem-template.md` · `docs/release/post-launch-day{7,14}.md` (váz kötelező mezőkkel) · `test/tooling/hotfix_policy_test.dart`.
 
 **NINCS benne (tilos):**
 
-- A merge-kapu workflow-k módosítása.
+- **Bármely `.github/workflows/**` fájl írása** (a §0.0 szerint: védett mérce-zóna).
 - Tényleges hotfix kiadása.
 - A security/signing lépések kihagyása vagy feltételessé tétele.
 - `docs/adr/**` — az ADR 0465-öt a Claude írja.
@@ -75,7 +77,7 @@ Auditálható, gyors, de kapukat NEM megkerülő hotfix-út, incident- és postm
 
 | Útvonal | Indok |
 |---|---|
-| `.github/workflows/hotfix.yml` | ÚJ — a hotfix-út |
+| `docs/release/workflows/hotfix.proposal.yml` | ÚJ — a hotfix-workflow JAVASLATA (a telepítés emberi lépés) |
 | `tool/release/verify_hotfix.py` | ÚJ — a hotfix-mérce |
 | `docs/operations/hotfix-runbook.md` | ÚJ — eljárás |
 | `docs/operations/postmortem-template.md` | ÚJ — postmortem sablon |
@@ -83,7 +85,7 @@ Auditálható, gyors, de kapukat NEM megkerülő hotfix-út, incident- és postm
 | `docs/release/post-launch-day14.md` | ÚJ — 14. napi riport váza |
 | `test/tooling/hotfix_policy_test.dart` | a §6 cellái |
 
-**Tilos zóna:** `.github/workflows/{build-apk,full-gate,release-apk,release-candidate,lab-apk}.yml` · `.github/actions/**` · `lib/**` · `backend/**` · `docs/adr/**` · `tools/**`
+**Tilos zóna:** `.github/workflows/**` (MIND, a §0.0 szerint) · `.github/actions/**` · `lib/**` · `backend/**` · `docs/adr/**` · `tools/**`
 
 ## 5. Kötött architekturális döntések (ADR 0465)
 
@@ -103,23 +105,23 @@ A javítás mellé a hibát REPRODUKÁLÓ cella kerül. **NEM elfogadható gyeng
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | Hiányzó incident-azonosító mellett a workflow megáll | BIZONYÍTOTT PIROS orchesztrátor-dispatch linkje a §10-ben |
+| A1 | A javaslatban az incident-azonosító KÖTELEZŐ input (`required: true`), és a `verify_hotfix.py` a hiányát nem-nulla kóddal jelzi | `hotfix_policy_test.dart` |
 | A2 | A workflow tartalmazza a security-scan és a production signing lépést | `hotfix_policy_test.dart` statikus cellája |
 | A3 | Verzió-emelés nélkül a `verify_hotfix.py` nem-nulla kóddal lép ki | `hotfix_policy_test.dart` |
 | A4 | A hotfix-runbook megköveteli a regressziós cellát a javítás mellé | a runbook + `hotfix_policy_test.dart` |
 | A5 | A 7./14. napi riport váza kötelező mezőket definiál (crash, migráció, akku, audio, support) | a dokumentumok + a teszt cellája |
-| A6 | ZÖLD hotfix-dispatch a kör-branchen (üres, dokumentáció-szintű változással) | orchesztrátor-dispatch linkje a §10-ben |
+| A6 | A javaslat YAML-je valid, és a lépés-sorrend a Kör 25 RC-mintáját követi (composite gate → jóváhagyás → build) | `hotfix_policy_test.dart` |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| A workflow `if: inputs.skip_scan != true` ágat kap | A2 |
+| A javaslat `if: inputs.skip_scan != true` ágat kap | A2 |
 | Az incident-azonosító opcionális input lesz | A1 |
 | A verzió-emelés ellenőrzése kimarad | A3 |
 | A runbook nem követel regressziós cellát | A4 |
 
-**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** vedd ki a security-scan lépést a `hotfix.yml`-ből, futtasd a §7 gate-et → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** vedd ki a security-scan lépést a javaslat-YAML-ből, futtasd a §7 gate-et → az **A2** cellának PIROSNAK kell lennie → állítsd vissza.
 
 ## 7. Kötelező ellenőrzések
 
@@ -130,16 +132,16 @@ tools/round-gate.sh test/tooling/hotfix_policy_test.dart test/tooling/rc_assembl
 A hotfix-mérce közvetlen futtatása (kimenet a §10-be):
 
 ```bash
-python3 tool/release/verify_hotfix.py --workflow .github/workflows/hotfix.yml
+python3 tool/release/verify_hotfix.py --workflow docs/release/workflows/hotfix.proposal.yml
 ```
 
-A workflow bizonyítéka a KÉT orchesztrátor-dispatch (zöld + bizonyított piros) — az implementer `gh`-t nem hív.
+A javaslat telepítése és a dispatch orchesztrátor/emberi lépés a merge UTÁN — az implementer sem `.github/`-ot nem ír, sem `gh`-t nem hív.
 
 ## 8. Implementációs sorrend
 
 1. `tool/release/verify_hotfix.py` — a statikus mérce ELŐSZÖR.
 2. `test/tooling/hotfix_policy_test.dart`.
-3. `.github/workflows/hotfix.yml` — a composite gate + manuális jóváhagyás + incident-input.
+3. `docs/release/workflows/hotfix.proposal.yml` — a composite gate + manuális jóváhagyás + incident-input.
 4. `docs/operations/hotfix-runbook.md` és `postmortem-template.md`.
 5. A két post-launch riport váza + a valódi-sértés próba a §10-be.
 

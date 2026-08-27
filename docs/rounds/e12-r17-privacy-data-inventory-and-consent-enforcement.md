@@ -22,7 +22,7 @@ risk = "high"
 allowed_paths = [
   "docs/privacy/data-inventory.yaml",
   "docs/privacy/consent-enforcement.md",
-  "tool/ci/check_data_inventory.dart",
+  "tool/check_data_inventory.dart",
   "test/privacy/consent_enforcement_test.dart",
   "test/tooling/data_inventory_test.dart",
   "docs/rounds/e12-r17-privacy-data-inventory-and-consent-enforcement.md",
@@ -56,13 +56,13 @@ Géppel olvasható adat-leltár minden feature-höz, és MÉRT bizonyíték arra
 
 - `docs/privacy/` MA **egy** dokumentumot tartalmaz (`practice-planning-data.md`) — teljes leltár nincs.
 - Consent-hordozók a fán: `tutor_consent.dart` (AI Tutor), `tutor_privacy_providers.dart`, `vision_privacy_screen.dart` (Vision), `diagnostics_uploader.dart` (Lab-diagnosztika), és a Community privacy-mezői (`e09_r04_0004_community_privacy_fields.py` migráció).
-- `test/privacy/` **nem létezik**; `tool/ci/check_data_inventory.dart` **nem létezik**.
+- `test/privacy/` **nem létezik**; `tool/check_data_inventory.dart` **nem létezik** (a `tool/ci/` fa a MÉRCE védett zónája — ADR 0321/0372, `protect_factory_files.py` `PROTECTED_GLOBS` —, ezért az ÚJ ellenőrző a `tool/` gyökérbe kerül, a `tool/check_architecture.dart` mintájára).
 - `test/ui/ui_inventory_test.dart` egzakt képernyőszámot pinnel (`hasLength(94)` a megíráskor) — ez a kör NEM mozdíthatja el.
 - `AppConfig.usesNetwork => accountEnabled || diagnosticsEnabled` — a hálózat-használat MA két flagből következik; a leltárnak ezt is le kell írnia.
 
 ## 3. Scope
 
-**Benne van:** `docs/privacy/data-inventory.yaml` — feature-enként MINDEN tárolt/továbbított adatmező: cél, jogalap, retention, tárolási hely (eszköz/backend), consent-kapcsoló, „elhagyja-e az eszközt" · `tool/ci/check_data_inventory.dart` (hiányzó mező vagy a fán MÉRT, leltárban nem szereplő adatküldő út → nem-nulla kilépés) · `test/privacy/consent_enforcement_test.dart` (a consent visszavonása után az adott út NEM küld: tutor, diagnostics, community — mindegyik a MAGA MÉRT kapcsolójával) · `docs/privacy/consent-enforcement.md`.
+**Benne van:** `docs/privacy/data-inventory.yaml` — feature-enként MINDEN tárolt/továbbított adatmező: cél, jogalap, retention, tárolási hely (eszköz/backend), consent-kapcsoló, „elhagyja-e az eszközt" · `tool/check_data_inventory.dart` (hiányzó mező vagy a fán MÉRT, leltárban nem szereplő adatküldő út → nem-nulla kilépés) · `test/privacy/consent_enforcement_test.dart` (a consent visszavonása után az adott út NEM küld: tutor, diagnostics, community — mindegyik a MAGA MÉRT kapcsolójával) · `docs/privacy/consent-enforcement.md`.
 
 **NINCS benne (tilos):**
 
@@ -77,7 +77,7 @@ Géppel olvasható adat-leltár minden feature-höz, és MÉRT bizonyíték arra
 |---|---|
 | `docs/privacy/data-inventory.yaml` | ÚJ — a leltár |
 | `docs/privacy/consent-enforcement.md` | ÚJ — a kényszerítési szabályok |
-| `tool/ci/check_data_inventory.dart` | ÚJ — a leltár teljesség-ellenőrzése |
+| `tool/check_data_inventory.dart` | ÚJ — a leltár teljesség-ellenőrzése |
 | `test/privacy/consent_enforcement_test.dart` | a §6 kényszerítési cellái |
 | `test/tooling/data_inventory_test.dart` | a leltár séma-cellái |
 
@@ -129,14 +129,14 @@ tools/round-gate.sh test/privacy/consent_enforcement_test.dart test/tooling/data
 A leltár-ellenőrző közvetlen futtatása (kimenet a §10-be):
 
 ```bash
-dart run tool/ci/check_data_inventory.dart
+dart run tool/check_data_inventory.dart
 ```
 
 ## 8. Implementációs sorrend
 
 1. A MÉRÉS: adatküldő utak kigyűjtése a `lib/**` fából.
 2. `docs/privacy/data-inventory.yaml`.
-3. `tool/ci/check_data_inventory.dart` (fa ↔ leltár összevetés).
+3. `tool/check_data_inventory.dart` (fa ↔ leltár összevetés).
 4. `test/privacy/consent_enforcement_test.dart` — az A3–A6 cellák.
 5. `test/tooling/data_inventory_test.dart`.
 6. `docs/privacy/consent-enforcement.md` + a valódi-sértés próba a §10-be.
