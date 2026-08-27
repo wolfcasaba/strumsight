@@ -391,40 +391,53 @@ class _Body extends ConsumerWidget {
     final canManage = role == ClubRole.owner || role == ClubRole.moderator;
     return Column(
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(club.name, style: nameStyle),
-              const SizedBox(height: 8),
-              Text(club.description, style: bodyStyle),
-              const SizedBox(height: 16),
-              Semantics(
-                label: 'Role: $roleLabel',
-                child: Chip(label: Text(roleLabel)),
+        // Capped + internally scrollable so a long name/description at a
+        // large system text-scale setting cannot squeeze the TabBarView
+        // below to nothing or overflow the Column (measured, real —
+        // L517: the textScaler 2.0 golden frame catches exactly this
+        // class of layout bug).
+        ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.4,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(club.name, style: nameStyle),
+                  const SizedBox(height: 8),
+                  Text(club.description, style: bodyStyle),
+                  const SizedBox(height: 16),
+                  Semantics(
+                    label: 'Role: $roleLabel',
+                    child: Chip(label: Text(roleLabel)),
+                  ),
+                  const SizedBox(height: 16),
+                  if (canLeave)
+                    SsButton(
+                      variant: SsButtonVariant.secondary,
+                      onPressed: () => _leave(context, ref),
+                      label: localizations.communityClubDetailLeave,
+                    ),
+                  if (canManage)
+                    SsButton(
+                      variant: SsButtonVariant.secondary,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                ClubMemberManagementScreen(clubId: clubId),
+                          ),
+                        );
+                      },
+                      label: localizations.communityClubDetailManage,
+                    ),
+                ],
               ),
-              const SizedBox(height: 16),
-              if (canLeave)
-                SsButton(
-                  variant: SsButtonVariant.secondary,
-                  onPressed: () => _leave(context, ref),
-                  label: localizations.communityClubDetailLeave,
-                ),
-              if (canManage)
-                SsButton(
-                  variant: SsButtonVariant.secondary,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) =>
-                            ClubMemberManagementScreen(clubId: clubId),
-                      ),
-                    );
-                  },
-                  label: localizations.communityClubDetailManage,
-                ),
-            ],
+            ),
           ),
         ),
         Expanded(

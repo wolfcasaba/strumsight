@@ -76,9 +76,10 @@ class CommunityNotificationsScreen extends ConsumerWidget {
           title: Text(localizations.communityNotificationsTitle),
           actions: <Widget>[
             if (hasData)
-              TextButton(
+              IconButton(
+                tooltip: localizations.communityNotificationsMarkAllRead,
+                icon: const Icon(Icons.done_all),
                 onPressed: isMutating ? null : () => notifier.markAllRead(),
-                child: Text(localizations.communityNotificationsMarkAllRead),
               ),
           ],
         ),
