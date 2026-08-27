@@ -463,6 +463,9 @@
   "communityChallengeListHeader": "Open challenges",
   "@communityChallengeListHeader": {},
 
+  "communityChallengeLoadMore": "Load more",
+  "@communityChallengeLoadMore": {},
+
   "communityChallengeMetricLabel": "Metric: {metric}",
   "@communityChallengeMetricLabel": {
     "placeholders": {

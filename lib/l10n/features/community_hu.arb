@@ -463,6 +463,9 @@
   "communityChallengeListHeader": "Nyílt kihívások",
   "@communityChallengeListHeader": {},
 
+  "communityChallengeLoadMore": "Továbbiak betöltése",
+  "@communityChallengeLoadMore": {},
+
   "communityChallengeMetricLabel": "Mérték: {metric}",
   "@communityChallengeMetricLabel": {
     "placeholders": {
