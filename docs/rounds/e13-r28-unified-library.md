@@ -487,8 +487,16 @@ KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r28_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r28_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r28_screens_golden_test.dart
 ```
+
+> ⚠ **Pre-flight-javítás (2026-08-27):** a brief eredetileg
+> `flutter test --update-goldens`-t írt elő. Ez a boxon **ARM-pixelt** rögzít,
+> amit az x86-os CI pirosra vált — mérve az E13-R20/H5 önjavító körben
+> ([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md),
+> [L493](../LESSONS.md#l493)); a merge-elt precedens (E13-R23…R27) mind a
+> `tools/golden-x86.sh`-t használja. A `--update-goldens` **TILOS**.
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
