@@ -204,9 +204,11 @@
     }
   },
   "aiTutorActionProfileUpdate": "Profil módosítása",
+  "aiTutorActionReadsDetail": "A jelenlegi tanár-beszélgetésedet.",
   "aiTutorActionReject": "Elutasítás",
   "aiTutorActionRejected": "Elutasítva",
   "aiTutorActionRetry": "Újra",
+  "aiTutorActionReview": "Áttekintés",
   "aiTutorActionSemantics": "{kind}, {state}. Pontos előnézet és megerősítés szükséges.",
   "@aiTutorActionSemantics": {
     "placeholders": {
@@ -219,6 +221,14 @@
     }
   },
   "aiTutorActionSessionLaunch": "Gyakorlási session indítása",
+  "aiTutorActionSheetSummary": "A tanár ezt szeretné: {kind}. Nézd át pontosan, mit csinál, mielőtt megerősíted.",
+  "@aiTutorActionSheetSummary": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
   "aiTutorActionStale": "Ez a művelet elavult, ezért már nem futtatható.",
   "aiTutorActionStateBlocked": "Blokkolva",
   "aiTutorActionStateConfirmed": "Megerősítve",
@@ -226,6 +236,9 @@
   "aiTutorActionStatePending": "Megerősítésre vár",
   "aiTutorActionStateRejected": "Elutasítva",
   "aiTutorActionUnavailable": "Ez a művelet már nem érhető el.",
+  "aiTutorAiModeCloudMessage": "A felhő-modellt használja a részletesebb válaszokhoz.",
+  "aiTutorAiModeFallbackMessage": "A felhő nem elérhető — a helyi tartalék válaszol.",
+  "aiTutorAiModeLocalMessage": "Teljesen ezen az eszközön fut.",
   "aiTutorBannerCancelledBody": "A tanár kérésedre leállt. Küldj új üzenetet az újrakezdéshez.",
   "aiTutorBannerCancelledSemantics": "Válasz leállítva — küldj új üzenetet",
   "aiTutorBannerCancelledTitle": "Válasz leállítva",
@@ -312,6 +325,7 @@
       }
     }
   },
+  "aiTutorEvidenceMissingNotice": "Ehhez a válaszhoz még nincs mért bizonyíték.",
   "aiTutorEvidenceReference": "Bizonyíték-azonosító: {reference}",
   "@aiTutorEvidenceReference": {
     "placeholders": {
@@ -331,8 +345,11 @@
     }
   },
   "aiTutorHomeIntro": "Beszélgess a gitártanároddal. Kérdezz akkordokról, pengetőmintákról, gyakorlási tervekről vagy dalokról.",
+  "aiTutorHomeModelStatusTitle": "Tanár modell",
+  "aiTutorHomeModelUnavailableMessage": "A tanár modell nem érhető el. Böngészhetsz tovább, de a válaszok sikertelenek lehetnek.",
   "aiTutorHomeStart": "Beszélgetés indítása",
   "aiTutorHomeTitle": "AI Tanár",
+  "aiTutorPlanActionTitle": "Terv",
   "aiTutorPlanBlockChordChange": "Akkordváltás",
   "aiTutorPlanBlockFreePractice": "Szabad gyakorlás",
   "aiTutorPlanBlockReflection": "Összegzés",
@@ -362,6 +379,11 @@
   },
   "aiTutorPlanBlockUnknown": "Nem támogatott blokk",
   "aiTutorPlanBlockWarmup": "Bemelegítés",
+  "aiTutorPlanCauseTitle": "Miért",
+  "aiTutorPlanConfirmReadsDetail": "A szerkesztett gyakorlási tervedet.",
+  "aiTutorPlanConfirmSaveSummary": "Elmenti ezt a gyakorlási tervet a könyvtáradba.",
+  "aiTutorPlanConfirmStartRecordingDetail": "Felvételt indít, hogy értékelje a játékodat.",
+  "aiTutorPlanConfirmStartSummary": "Most elindítja ezt a gyakorlási tervet.",
   "aiTutorPlanDecreaseDuration": "{type} rövidítése egy perccel",
   "@aiTutorPlanDecreaseDuration": {
     "placeholders": {
@@ -372,6 +394,37 @@
   },
   "aiTutorPlanDeleteBlock": "{type} blokk törlése",
   "@aiTutorPlanDeleteBlock": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffAdded": "Hozzáadva: {type}",
+  "@aiTutorPlanDiffAdded": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "aiTutorPlanDiffChanged": "{type}: {fromMinutes} → {toMinutes} perc",
+  "@aiTutorPlanDiffChanged": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "fromMinutes": {
+        "type": "int"
+      },
+      "toMinutes": {
+        "type": "int"
+      }
+    }
+  },
+  "aiTutorPlanDiffNone": "Nincs változás a javasolt tervhez képest.",
+  "aiTutorPlanDiffRemoved": "Eltávolítva: {type}",
+  "@aiTutorPlanDiffRemoved": {
     "placeholders": {
       "type": {
         "type": "String"
@@ -418,6 +471,7 @@
       }
     }
   },
+  "aiTutorPlanObservationTitle": "Megfigyelés",
   "aiTutorPlanPreviewTitle": "Gyakorlási terv: {title}",
   "@aiTutorPlanPreviewTitle": {
     "placeholders": {
@@ -510,6 +564,11 @@
       }
     }
   },
+  "aiTutorToolDimensionLeavesDevice": "Elhagyja az eszközt",
+  "aiTutorToolDimensionNothing": "Semmit",
+  "aiTutorToolDimensionReads": "Olvas",
+  "aiTutorToolDimensionRecording": "Felvételt indít",
+  "aiTutorToolDimensionWrites": "Ír",
   "analysisCapabilityUnavailableBackingTrackDominant": "A kísérősáv túl hangsúlyos ehhez a méréshez.",
   "analysisCapabilityUnavailableCancelled": "Az elemzést a mérés előtt megszakították.",
   "analysisCapabilityUnavailableClipTooShort": "A felvétel túl rövid ennek a méréséhez.",
