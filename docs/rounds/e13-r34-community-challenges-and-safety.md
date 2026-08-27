@@ -884,4 +884,73 @@ fent) — egyik sem került bázisvonalként rögzítésre.
   a kör nem bővítette és nem oldotta fel ezt (a `data/` réteg TILOS zóna),
   csak a golden- és a pinnelt teszt felől override-olta őket.
 
+### Javító kör (`docs/reviews/e13-r34-review.md` §3) — leletenkénti zárás
+
+**MAJOR-1 (A3 — a klub-LISTA előnézete szivárogtatta a privát klub nevét).**
+`club_list_screen.dart` `_Body.build`-je most ugyanazt a predikátumot
+alkalmazza, mint a `club_detail_screen.dart` küszöbe
+(`myRole == null && visibility == private`): egy ilyen klub sor teljesen
+kimarad a renderelt listából — sem a `Text`, sem a `Semantics` ág nem éri el
+a nevét. Negyedik A3-cellapár került a `private_club_leakage_test.dart`-ba
+(„the club-LIST preview never leaks…"), külön cellával a látható szövegre és
+külön a `Semantics` labelre — a security-reviewer próbája pontosan ezt a két
+csatornát mérte szivárgónak.
+*Valódi-sértés próba:* a szűrést ideiglenesen kivettem (`final items =
+page.items;`) → mindkét új cella **PIROSRA VÁLTOTT** (`Found 1 widget with
+text "Secret Blues Club"` ill. `Found 1 widget with a semantics label
+matching … "Secret Blues Club. Private · 5 members."`). Visszaállítva, a
+teljes `private_club_leakage_test.dart` (15 cella) újra zöld.
+
+**MAJOR-2 (A6/A8 — a tiltás/némítás némán bukott hálózati hibán).**
+`club_member_management_screen.dart::_MemberRow._blockOrMute` és
+`community_challenges_screen.dart::_ChallengeRow._blockOrMuteAuthor` most
+`try { … } on AppFailure catch (failure) { … }`-ba kerültek, a
+`safety_relationships_screen.dart` mintáját követve (SnackBar a
+`ScaffoldMessenger`-en, `context.mounted` őrrel). A challenges-lapon a
+`sheetContext` helyett a SOR SAJÁT `context`-je adja a `ScaffoldMessenger`-t
+(a `sheetContext` a `pop()` után halott) — a `_formatFailure` mindkét
+fájlban top-level függvénnyé lett (a klub-lapon új, a kihívás-lapon az
+`_ErrorView`-ból kiemelve), hogy a hívó akció és a lista-hiba ugyanazt a
+lokalizált szótárat használja. Két ÚJ ARB-kulcscsoport: `communityClubManageError{Network,SessionExpired,Forbidden,InvalidInput}`
+(a klub-lapnak korábban nem volt kód-alapú hibaformázása).
+Két DOBÓ-fake cella került a `private_club_leakage_test.dart`-ba (mindkét
+felületre), amik `NetworkFailure`-t dobó `SocialGraphRepository`-val
+igazolják, hogy (a) a hiba NEM szabadul el kezeletlenül, és (b) egy
+`SnackBar` látszik.
+*Valódi-sértés próba (mindkét felület, külön-külön):* a `catch`-et
+ideiglenesen kivettem → mindkét új cella **PIROSRA VÁLTOTT** — a klub-lapon
+`Found 0 widgets with type "SnackBar"` (a `NetworkFailure` kezeletlen
+aszinkron hibaként futott le a teszt-bindingen), a kihívás-lapon ugyanez.
+Mindkét `catch` visszaállítva, a teljes suite újra zöld.
+
+**MINOR-1 (A10 — beégetett angol `Semantics` szöveg).**
+`community_challenges_screen.dart:413` `semanticLabel: 'Verified'` →
+`localizations.communityChallengeResultVerifiedIcon` (ARB: en „Verified",
+hu „Ellenőrizve"); `club_detail_screen.dart:415` `'Role: $roleLabel'` →
+`localizations.communityClubDetailRoleSemanticLabel(roleLabel)` (ARB
+sablon `{role}` placeholderrel, en „Role: {role}", hu „Szerep: {role}").
+Négy ÚJ A10-cella a `private_club_leakage_test.dart`-ba
+(„the Semantics channel also localizes"), `tester.ensureSemantics()` +
+`find.bySemanticsLabel(...)` — mindkét kulcsra en/hu pár, a meglévő
+falszifikációs minta szerint (a saját nyelv jelen van, az ELLENKEZŐ nyelv
+literálja hiányzik).
+
+**ARB regenerálás.** `dart run tool/gen_l10n_segments.dart --write` +
+`flutter gen-l10n` — mindkét lépés hiba nélkül, az `[15] l10n` gate-lépés
+zöld.
+
+**Golden.** Egyik javítás sem érintette a golden-fixture RENDERELT
+felületét: a `club_list_screen.dart` fixture második klubja `myRole:
+ClubRole.member` (nem a küszöb alatt van, tehát a szűrés nem dobja ki), a
+másik két lelet kizárólag `Semantics`-csatornát / hibaágat érint (a golden
+pixel-only). `tools/golden-x86.sh check` a meglévő PNG-kkel **14/14 ZÖLD**
+maradt — nem kellett újra felvenni.
+
+**Záró gate.** `tools/round-gate.sh` a brief §7 pontos 10-útvonalas
+parancssorával — mind a **15/15 lépés ZÖLD** a javítások után (beleértve a
+3 új falszifikációs próbát tartalmazó `private_club_leakage_test.dart`
+teljes 15 cellás futását és a `presentation/` teljes suite-ot, amiben a
+`club_detail_screen_test.dart` és a `community_challenges_test.dart` is
+benne van).
+
 ## 11. Review — a Claude tölti ki
