@@ -1,6 +1,7 @@
 # E13-R36 — Vizuális regresszió, eszközös elfogadás és a migráció lezárása
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 0f7afd9a`)
+- **Státusz:** READY (indítási pre-flight 2026-08-27, `main @ 126d0dfc` — lásd §0.0.B;
+  előre megírva 2026-08-15, kód olvasva: `main @ 0f7afd9a`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 36 — **a fejezet ZÁRÓ köre**
 - **Kör-azonosító:** `E13-R36`
 - **Branch:** `<motor>/e13-r36-visual-regression-and-closure`
@@ -18,9 +19,7 @@ schema_version = 1
 risk = "high"
 allowed_paths = [
   "test/ui/goldens/",
-  "test/goldens/",
   "test/accessibility/",
-  "tool/check_ui_architecture.dart",
   "docs/ui/chapter-13-completion-report.md",
   "docs/ui/migration-status.md",
   "docs/ui/legacy-backlog.md",
@@ -30,6 +29,9 @@ allowed_paths = [
 gate_tests = [
   "test/accessibility/semantics_contract_test.dart",
   "test/accessibility/tap_target_test.dart",
+  "test/accessibility/screen_reader_copy_test.dart",
+  "test/accessibility/closure_suite_test.dart",
+  "test/ui/goldens/e13_r36_variant_matrix_test.dart",
 ]
 native_gate = false
 ```
@@ -69,6 +71,151 @@ A kör hozza létre; a `tool/` (Dart-eszközök) NEM azonos a `tools/`
 A meglévő golden-precedens `test/features/live/chord_timeline_golden_test.dart`
 (valódi kapu, nem `skip`-elt rögzítő), az `test/accessibility/` könyvtár pedig
 már létezik.
+
+## 0.0.B BRIEF-REVÍZIÓ — 2026-08-27, INDÍTÁSI pre-flight (`main @ 126d0dfc`)
+
+Orchestrátor: Claude (Opus 5), autonóm kör-pipeline (ADR 0087). Az alábbi
+kilenc lelet MÉRVE készült; a revízió **kizárólag szűkít** (L478) — a
+tágítás H3.
+
+**Visszakeresett előzmény (ADR 0312, szűkített korpusz először):**
+[L507](../LESSONS.md#l507) (a golden RÖGZÍT, nem ÍTÉL — a reviewer nézze meg a
+PNG-t), [L516](../LESSONS.md#l516) (golden-teszt a lokális `round-gate.sh`
+argumentumlistájában ezen a boxon MEGÁLL — ARM↔x86 drift),
+[L517](../LESSONS.md#l517) (a `textScaler 2.0` keret két körben mért ki VALÓDI,
+addig láthatatlan elrendezési hibát — köztük a kör ELŐTTI kódban),
+[L486](../LESSONS.md#l486)/[L493](../LESSONS.md#l493) +
+[ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md) (a
+felvétel helye a kapu architektúrája), [L02](../LESSONS.md#l02) (ne írj elő
+viselkedést lezárt fájlra / elérhetetlen állapotra),
+[L180](../LESSONS.md#l180) (a deklarált osztályt néző allowlist gyengébb, mint
+a neve sugallja), [ADR 0280](../adr/0280-accessibility-contract.md) (a
+`test/accessibility/` hármas gépi szerződése).
+
+### B1 — Előfeltétel: TELJESÜL
+
+`docs/execution/pipeline-queue.tsv` E13 sorai: **36 sor, 35 `done`, 1
+`pending`** — az egyetlen `pending` maga az `E13-R36`. Az R01–R35 tehát mind
+merge-elve; a záró kör mércéje teljes rendszeren értelmes.
+
+### B2 — `test/goldens/` TÖRÖLVE az `allowed_paths`-ból (brief-lint **S13**)
+
+**Mérve:** `test/goldens/` a fában NEM létezik és a lánc végigfutása után sem
+jött létre; a fa MÉRT golden-rétege a **`test/ui/goldens/`** — 20 kör-teszt
+(`e13_r16…e13_r35_screens_golden_test.dart`) és a `test/ui/goldens/goldens/`
+alatti PNG-készlet. A `test/goldens/` bejegyzés tehát NULLA fájlt fedett: néma
+ellentmondás, amitől a lint zöldje semmit nem bizonyít.
+
+**Feloldás:** a bejegyzés törölve. A `test/ui/goldens/` a listán marad — ez
+**szigorúan kevesebb**, mint a szomszéd kör (E13-R33/R34/R35) user-jóváhagyott
+listája, amely ugyanezt a könyvtárat ÉS a `test/ui/ui_inventory_test.dart`-ot
+is tartalmazta.
+
+### B3 — `tool/check_ui_architecture.dart` TÖRÖLVE (szűkítés) — nem huzalozható be
+
+**Mérve:** a fában PONTOSAN két kapu-belépési pont futtat `tool/`-eszközt —
+`tools/round-gate.sh:233` (`dart run tool/check_architecture.dart`) és
+`.github/actions/flutter-gates/action.yml:21` (ugyanaz) —, és a meglévő
+eszközök gépi őrei a `test/tooling/` alatt élnek
+(`architecture_allowlist_guard_test.dart`). **Mind a három hely a brief SAJÁT
+tilos zónája** (`tools/**`, `.github/**`, és a `test/tooling/` nincs a listán).
+
+Egy olyan mérce-eszköz, amit semmi nem futtat és semmi nem őriz, **díszlet** —
+pontosan az a hazug zöld, amit a §5.1 tilt. A behuzalozáshoz szükséges
+lista-tágítás **H3** volna, ezért a helyes lépés a szűkítés.
+
+**A követelmény nem vész el:** a `legacy-backlog.md` DÁTUMOZOTT tételt kap
+(felelős + a szükséges governance-kör: `tools/round-gate.sh` architecture-lépés
+és `.github/actions/flutter-gates` az `allowed_paths`-on), és a
+`chapter-13-completion-report.md` nevesíti mint a fejezet egyetlen halasztott
+mérce-elemét. **Az A7 cella ezt méri.**
+
+### B4 — A golden-mátrix ALAKJA: állítás-mátrix + LEGFELJEBB 12 új PNG
+
+A §3 „kockázat-alapú" mátrixa nem PNG-robbanás. Két MÉRT ok:
+
+1. **Minden új PNG drága és architektúra-érzékeny.** Az ADR 0426 óta a
+   felvétel útja `tools/golden-x86.sh record` (qemu-emulált x86 konténer); a
+   `--update-goldens` ezen az aarch64 boxon TILOS. Az L516 azt is kimérte, hogy
+   golden-teszt a lokális `round-gate.sh` argumentumlistájában MEGÁLL.
+2. **Az L517 szerint a valódi hibákat nem a PNG fogta meg, hanem a keret.**
+   Két egymást követő körben a `textScaler 2.0` keret mért ki 137 px-es,
+   1577 px-es és 41 px-es `RenderFlex` túlcsordulást, amit a teljes CI-suite
+   zölden átengedett.
+
+**Ezért a kör két külön fájlt szállít a `test/ui/goldens/` alatt:**
+
+| Fájl | Tartalom | Hol mérik |
+|---|---|---|
+| `e13_r36_variant_matrix_test.dart` | **PNG NÉLKÜL**: a kockázat-alapú képernyő-készlet × {light, dark} × {en, hu} × {compact portrait, landscape, medium, expanded} × {textScale 1.0, 2.0} — minden cella állítása: NINCS `RenderFlex` túlcsordulás, NINCS pumpolás közbeni kivétel | lokális `round-gate.sh` (§7) ÉS CI |
+| `e13_r36_screens_golden_test.dart` | **LEGFELJEBB 12** új golden PNG a legkockázatosabb cellákra | **NEM** a lokális gate-ben (L516) — `tools/golden-x86.sh record` + `check`, majd CI |
+
+Ha a kör egyetlen új PNG-t sem tesz fel, a második fájl **elhagyható** — az
+A3 kötelező bizonyítéka ekkor a MEGLÉVŐ 20 golden-teszt zöldje a merge SHA
+CI-futásán. Új vagy módosított PNG esetén a `tools/golden-x86.sh record` +
+`check` lokális futása a push ELŐTT kötelező.
+
+### B5 — A `lib/**`-ban TALÁLT elrendezési hiba: dátumozott, CSAK ZSUGORODÓ kizárólista
+
+A `lib/**` a kör tilos zónája (§4), tehát egy a mátrix által kimért valódi
+elrendezési hiba ebben a körben **nem javítható**. A `skip` és a
+tolerancia-emelés tilos (§5.1). A feloldás a repó bevett idiómája
+(`architectureAllowlist`, `tool/check_architecture.dart`): a
+`e13_r36_variant_matrix_test.dart` egyetlen, a fájl tetején deklarált
+**kizárólistát** kap, amelyre HÁROM megkötés áll:
+
+- **elavult bejegyzésre PIROSRA vált** — egy megjavult cella nem maradhat
+  elrejtve a listán (ez az `architectureAllowlist` saját szabálya);
+- minden bejegyzés a **MÉRT hibát** hordozza (képernyő + cella + a mért
+  túlcsordulás px-ben) és a **dátumot**, nem csak egy nevet — [L180](../LESSONS.md#l180)
+  hibaosztálya pontosan a „deklarált osztályt néző" lista;
+- minden bejegyzés tételesen megjelenik a `legacy-backlog.md`-ben is.
+
+**Ez NEM A1-gyengítés, és a különbség mérhető:** a variáns-mátrix MA nem
+létező mérce (nulla cella), tehát kizárólistával is szigorúan TÖBB fedést ad,
+mint a mai állapot; egyetlen MEGLÉVŐ teszt sem kerül `skip`-be, egyetlen
+meglévő tolerancia sem emelkedik, és a 20 meglévő golden-teszt érintetlen. Az
+A1 cella tárgya továbbra is a MEGLÉVŐ mérce — az arra tett `skip`/tolerancia
+változatlanul `blocked`.
+
+### B6 — A9 szűkítése arra, ami ezen a boxon MÉRHETŐ
+
+**Mérve:** a fában nincs keretidő-harness — `grep -rln
+"FrameTiming|frameTime|frame_time|jank"` a `lib/`, `test/`, `tool/` fákon
+egyetlen, nem ide tartozó találatot ad (`analyze_providers.dart`). Eszköz és
+emulátor nincs, a `lib/**` tilos, a kamera/audio teljesítménye pedig §5.5
+szerint eleve emberi kapu.
+
+**A9 tehát arra szűkül, ami MÉRHETŐ, és a falszifikációja élesedik:** a
+`completion-report.md`-nek tartalmaznia kell (a) a záró csomag MÉRT
+futásidő-adatait, (b) a meglévő DSP-baseline mérés eredményét
+(`test/tooling/real_audio_dsp_baseline_test.dart`) a migráció előtti értékkel
+összevetve, ÉS (c) egy kimondott bekezdést arról, hogy a valódi UI-keretidő az
+eszközös kapu tárgya (§5.5). **Bármelyik hiánya → A9 PIROS.** Kitalált vagy
+nem reprodukálható „mért" érték szintén A9 PIROS.
+
+### B7 — `token-debt.md` helye MÉRVE, és NINCS a listán
+
+A §2 által hivatkozott fájl valódi útvonala **`docs/ui/baseline/token-debt.md`**
+(nem `docs/ui/token-debt.md`), és az `allowed_paths`-on NEM szerepel. A kör
+tehát **hivatkozza**, de nem írja — a baseline egy dátumozott
+állapotrögzítés, átírása történelemhamisítás volna.
+
+### B8 — ADR: nincs, és a pre-flight sem oszt
+
+A záró kör nem hoz új architekturális döntést; a §5 normái merge-elt ADR-ekre
+támaszkodnak ([0052](../adr/0052-ci-green-gate.md) zöld kapu,
+[0053](../adr/0053-ci-full-test-suite.md) a teljes suite a CI-ban,
+[0280](../adr/0280-accessibility-contract.md) a11y-szerződés,
+[0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+golden-raszterizáció). Precedens ugyanebben a sávban: az **E13-R34** szintén
+ADR nélkül zárult. `tools/round-slots.py reserve-adr` hívás tehát nem történt.
+
+### B9 — Router CI a zöld kapu része
+
+A kör hozzáér a `docs/rounds/**`-hoz, ami a `router-ci.yml` trigger-útvonala,
+ezért a merge SHA-n a `router-ci` `success` volta is merge-feltétel (ADR 0086
+§2, [L113](../LESSONS.md#l113)).
 
 ## 0. Kör-jelzés és STOP-protokoll
 
@@ -116,9 +263,8 @@ körben CSAK dokumentációs** · `docs/adr/**`, `.github/**`.
 
 | Útvonal | Indok |
 |---|---|
-| `test/goldens/` | a golden-mátrix és a referenciák |
+| `test/ui/goldens/` | a variáns-mátrix és a golden-referenciák (§0.0.B/B2, B4) |
 | `test/accessibility/` | a záró accessibility-csomag |
-| `tool/check_ui_architecture.dart` | a UI-token és import guard |
 | `docs/ui/chapter-13-completion-report.md` | **ÚJ** — a záró jelentés |
 | `docs/ui/migration-status.md` | a migráció végállapota |
 | `docs/ui/legacy-backlog.md` | **ÚJ** — dátumozott maradék |
@@ -126,7 +272,8 @@ körben CSAK dokumentációs** · `docs/adr/**`, `.github/**`.
 | `docs/rounds/e13-r36-…md` | a §10 handoff |
 
 **Tilos zóna:** `lib/**` (MINDEN) · `docs/adr/**` · `docs/sdd/**` ·
-`tools/**` · `.github/**`.
+`tools/**` · `.github/**` · `tool/**` (§0.0.B/B3) · `test/tooling/**` ·
+`test/ui/` a `test/ui/goldens/`-en KÍVÜL · `docs/ui/baseline/**` (§0.0.B/B7).
 
 ## 5. Kötött architekturális döntések
 
@@ -172,24 +319,27 @@ A keretidő-mérés összeveti az aktív session teljesítményét a migráció 
 |---|---|---|
 | A1 | **Nulla mérce-gyengítés** — nincs új `skip`, kikapcsolt teszt vagy emelt tolerancia | `git diff` + review |
 | A2 | Minden kritikus képernyőnek van betöltés/üres/hiba/offline/engedély állapota, ahol releváns | a záró csomag |
-| A3 | A golden-mátrix zöld, és minden eltérés indokolt a jelentésben | CI-futás + `completion-report.md` |
+| A3 | A golden-mátrix zöld, és minden eltérés indokolt a jelentésben | CI-futás + `completion-report.md`; új/módosított PNG esetén `tools/golden-x86.sh check` kimenete is (§0.0.B/B4) |
 | A4 | Nincs ismert mikrofon/kamera életciklus-regresszió | a záró csomag |
-| A5 | 200% text scale és képernyőolvasós kritikus folyamat működik | `test/accessibility/` |
+| A5 | 200% text scale és képernyőolvasós kritikus folyamat működik | `test/accessibility/` + a variáns-mátrix `textScale 2.0` cellái |
 | A6 | A legacy route-ok dokumentáltak vagy biztonságosan migráltak | `migration-status.md` |
-| A7 | A megmaradt legacy elemek dátumozott backlogba kerültek | `legacy-backlog.md` |
+| A7 | A megmaradt legacy elemek dátumozott backlogba kerültek — **beleértve a §0.0.B/B3 szerint elhalasztott UI-architektúra-guardot és a B5 kizárólista MINDEN tételét** | `legacy-backlog.md` |
 | A8 | A completion report elkészült, kiadási ajánlással | `completion-report.md` |
-| A9 | A keretidő nem romlott indokolatlanul aktív sessionben | `completion-report.md` mért értékekkel |
+| A9 | A jelentés a MÉRT futásidő-adatokat, a DSP-baseline összevetést ÉS a valódi keretidő eszközös korlátjának kimondását is tartalmazza (§0.0.B/B6) | `completion-report.md` mért, reprodukálható értékekkel |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
-| Hibás implementáció | Melyik cella vált PIROSRA |
-|---|---|
-| `skip` egy elbukó goldenre | **A1** |
-| Golden-tolerancia emelése | **A1** |
-| A referencia frissítése indoklás nélkül | **A3** |
-| A legacy lista csendes ürítése | **A7** |
-| A jelentés kihagyja a mért keretidőt | A9 |
-| Egy kritikus képernyő offline állapot nélkül | A2 |
+| Hibás implementáció | Melyik cella vált PIROSRA | Melyik őr méri |
+|---|---|---|
+| `skip` egy elbukó goldenre | **A1** | review-diff + CI |
+| Golden-tolerancia emelése | **A1** | review-diff (a komparátor nulla toleranciájú) |
+| A referencia frissítése indoklás nélkül | **A3** | `completion-report.md` szakasz + review |
+| A legacy lista csendes ürítése | **A7** | `legacy-backlog.md` + review |
+| A jelentés kihagyja a mért keretidőt, a DSP-összevetést vagy a §5.5 korlátot | **A9** | review (B6) |
+| Egy kritikus képernyő offline állapot nélkül | **A2** | a záró csomag |
+| Egy variáns-cella `RenderFlex` túlcsordulással, listára vétel NÉLKÜL | **A2/A5** | `e13_r36_variant_matrix_test.dart` (unit-cella) |
+| Egy megjavult képernyő BENNMARAD a B5 kizárólistán | **A7** | a kizárólista elavult-bejegyzés-őre (piros) |
+| A kizárólista bejegyzése nem hordoz mért px-értéket és dátumot | **A7** | a kizárólista alak-őre + review (L180) |
 
 **A záró kapu három kötelező cellája** (a küszöb: a golden-mátrix állapota):
 
@@ -206,7 +356,25 @@ bizonyíthatatlanná; a `legacy-backlog.md` dátum-oszlopának törlése az **A7
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/accessibility/semantics_contract_test.dart test/accessibility/tap_target_test.dart
+tools/round-gate.sh test/accessibility/semantics_contract_test.dart test/accessibility/tap_target_test.dart test/accessibility/screen_reader_copy_test.dart test/accessibility/closure_suite_test.dart test/ui/goldens/e13_r36_variant_matrix_test.dart
+```
+
+**A sor KÉT fájlt előre nevesít, amit ennek a körnek KELL létrehoznia:**
+`test/accessibility/closure_suite_test.dart` (a §3 záró csomagja: route-,
+engedély-, állapot-visszaállítás- és 200%-os text-scale cellák) és
+`test/ui/goldens/e13_r36_variant_matrix_test.dart` (§0.0.B/B4). Hiányzó fájlnál
+a gate megáll — ez szándékos: a kettő a kör gépi mércéje. Ha a kör további
+teszt-fájlt vesz fel az engedélyezett könyvtárakba, a §7 sort ÉS az
+`ai-router` `gate_tests` listáját EGYÜTT kell bővítenie.
+
+**A golden-teszt (`e13_r36_screens_golden_test.dart`) ebbe a sorba NEM kerül
+be** — az ARM↔x86 raszterizációs drift miatt ezen a boxon megállna a későbbi
+lépések előtt ([L516](../LESSONS.md#l516)). Ha a kör új vagy módosított PNG-t
+tesz fel, a push ELŐTT ez a két hívás kötelező (ADR 0426, §0.0.B/B4):
+
+```bash
+tools/golden-x86.sh record test/ui/goldens/e13_r36_screens_golden_test.dart
+tools/golden-x86.sh check test/ui/goldens/e13_r36_screens_golden_test.dart
 ```
 
 Külön processzek, csonkítatlan kimenet. **Tilos** `| tail`, `| head`,
@@ -223,16 +391,20 @@ gh workflow run build-apk.yml --ref <kör-branch>
 
 ## 8. Implementációs sorrend
 
-1. A golden-mátrix futtatása; a rögzített font/render környezet ellenőrzése.
-2. Az eltérések osztályozása: szándékos vs. regresszió — a regresszió JAVÍTÁS,
-   nem referencia-frissítés.
+1. A MEGLÉVŐ 20 golden-teszt (`test/ui/goldens/e13_r16…r35_*.dart`) állapotának
+   felmérése — a zöldjük az A3 alapja; a felvételi környezet az ADR 0426 útja.
+2. A `e13_r36_variant_matrix_test.dart` felépítése (§0.0.B/B4 mátrix).
+   Az eltérések osztályozása: szándékos vs. regresszió — a regresszió NEM
+   referencia-frissítés, és `lib/**` tilos, ezért a B5 kizárólistába megy,
+   mért px-értékkel és dátummal.
 3. A teljes semantics / érintési cél / túlcsordulás / route / engedély /
-   állapot-visszaállítás csomag.
-4. Keretidő-mérés aktív Live/Song/Vision sessionben.
-5. A legacy engedélyezőlista csökkentése; a maradék dátumozott backlogba.
+   állapot-visszaállítás csomag a `test/accessibility/` alatt.
+4. A mérhető futásidő-adatok + DSP-baseline összevetés (§0.0.B/B6).
+5. A legacy engedélyezőlista csökkentése (**docs-only**, `lib/**` tilos); a
+   maradék dátumozott backlogba, a B3 halasztott guardot is beleértve.
 6. `chapter-13-completion-report.md` — szándékos eltérések, korlátok, ajánlás.
 7. A valós eszközös ellenőrzőlista előkészítése (kitöltés: emberi lépés).
-8. `tools/round-gate.sh` a §7 szerint + CI-dispatch.
+8. `tools/round-gate.sh` a §7 szerint (+ `golden-x86.sh`, ha PNG változott).
 
 ## 9. Kockázatok
 
