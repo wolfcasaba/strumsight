@@ -12,15 +12,20 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `.github/actions/flutter-gates/action.yml` composite lépéseit és a `full-gate.yml` / `build-apk.yml` MÉRT szerkezetét — az RC-workflow ugyanazt a composite actiont használja, hogy a mérce ne csússzon szét (a `full-gate.yml` fejléce ezt a szabályt kimondja).
 
-## 0.0 Mi a bizonyíték ebben a körben
+## 0.0 A workflow VÉDETT zóna — a kör a workflow-t JAVASLATKÉNT és az összeállítót KÓDKÉNT szállítja
 
-Egy workflow-kör elfogadásának bizonyítéka MINDIG futás: (a) egy ZÖLD RC-dispatch a kör-branchen, és (b) egy BIZONYÍTOTT PIROS út (pl. hiányzó jóváhagyás vagy hiányzó AI-riport mellett a workflow megáll). Mindkettőt az orchesztrátor dispatch-eli; az implementer `gh`-t nem hív, és a futás-linkeket a §10 kapja meg.
+A `.github/workflows/**` a `protect_factory_files.py` `PROTECTED_GLOBS` listáján van (ADR 0321), és az ADR 0372 álló felhatalmazásának fájlja (`.claude/gate-edit-policy`) a fán MA NEM létezik — a pre-flight ezt MÉRTE (`tools/gateguard-scan.py`). Egy implementer-session tehát `H-GATEGUARD`-dal állna meg az első workflow-íráson.
+
+A kör ezért így oszlik:
+
+1. **A kör szállítja** a teljes `release-candidate.yml` tartalmát JAVASLATKÉNT (`docs/release/workflows/release-candidate.proposal.yml`), az `assemble_rc.py` összeállítót, az RC-ellenőrzőlistát és a lokálisan futtatható mércét. A javaslat YAML-validitását, a composite-action hívást és a jóváhagyási kapu HELYÉT gépi cella méri.
+2. **Orchesztrátor/emberi lépés a merge UTÁN:** a javaslat beillesztése `.github/workflows/release-candidate.yml` néven, majd KÉT dispatch — egy ZÖLD és egy BIZONYÍTOTT PIROS (hiányzó jóváhagyás vagy hiányzó AI-riport). A linkek a §11 review-jegyzetbe kerülnek.
 
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  ".github/workflows/release-candidate.yml",
+  "docs/release/workflows/release-candidate.proposal.yml",
   "tool/release/assemble_rc.py",
   "docs/release/rc-checklist.md",
   "test/tooling/rc_assembly_test.dart",
@@ -30,7 +35,7 @@ gate_tests = [
   "test/tooling/rc_assembly_test.dart",
   "test/tooling/release_manifest_test.dart",
 ]
-native_gate = true
+native_gate = false
 ```
 
 **Kockázat = high, indoklás:** a kör a kiadási artefaktum előállításának útját építi (aláírás, provenance, feltöltés) — egy hibás ág aláíratlan vagy nem auditált csomagot engedne ki. A `security-reviewer` futtatása a review-ban KÖTELEZŐ.
@@ -60,11 +65,11 @@ Egyetlen, manuálisan jóváhagyható workflow, amely tiszta checkoutból, minde
 
 ## 3. Scope
 
-**Benne van:** `.github/workflows/release-candidate.yml` — `workflow_dispatch` + `environment:` alapú MANUÁLIS jóváhagyás; tiszta checkout; a `flutter-gates` composite futtatása; backend teszt-sáv; a Kör 16 AI-riport és a Kör 18 security-scan hívása; AAB/APK build a production signing úton; a Kör 6 manifest + SBOM + notices csomagolása; checksum-audit · `tool/release/assemble_rc.py` (az artefaktumok összegyűjtése, checksum-manifest, hiányzó bemenet → nem-nulla kilépés) · `docs/release/rc-checklist.md` · `test/tooling/rc_assembly_test.dart` (az `assemble_rc.py` cellái lokálisan, fixture-artefaktumokkal).
+**Benne van:** `docs/release/workflows/release-candidate.proposal.yml` — a JAVASOLT RC-workflow teljes tartalma: `workflow_dispatch` + `environment:` alapú MANUÁLIS jóváhagyás; tiszta checkout; a `flutter-gates` composite futtatása; backend teszt-sáv; a Kör 16 AI-riport és a Kör 18 security-scan hívása; AAB/APK build a production signing úton; a Kör 6 manifest + SBOM + notices csomagolása; checksum-audit · `tool/release/assemble_rc.py` (az artefaktumok összegyűjtése, checksum-manifest, hiányzó bemenet → nem-nulla kilépés) · `docs/release/rc-checklist.md` · `test/tooling/rc_assembly_test.dart` (az `assemble_rc.py` cellái lokálisan, fixture-artefaktumokkal).
 
 **NINCS benne (tilos):**
 
-- `build-apk.yml` / `full-gate.yml` / `.github/actions/**` módosítása.
+- **Bármely `.github/workflows/**` fájl írása** (a §0.0 szerint: védett mérce-zóna).
 - Store-feltöltés vagy publikálás.
 - A gate-lépések DUPLIKÁLÁSA a composite action helyett.
 - `docs/adr/**` — az ADR 0463-at a Claude írja.
@@ -73,12 +78,12 @@ Egyetlen, manuálisan jóváhagyható workflow, amely tiszta checkoutból, minde
 
 | Útvonal | Indok |
 |---|---|
-| `.github/workflows/release-candidate.yml` | ÚJ — az RC-workflow |
+| `docs/release/workflows/release-candidate.proposal.yml` | ÚJ — az RC-workflow JAVASLATA (a telepítés emberi lépés) |
 | `tool/release/assemble_rc.py` | ÚJ — az összeállító |
 | `docs/release/rc-checklist.md` | ÚJ — az RC-ellenőrzőlista |
 | `test/tooling/rc_assembly_test.dart` | a §6 lokális cellái |
 
-**Tilos zóna:** `.github/workflows/{build-apk,full-gate,release-apk,lab-apk}.yml` · `.github/actions/**` · `lib/**` · `backend/app/**` · `docs/adr/**` · `tools/**`
+**Tilos zóna:** `.github/workflows/**` (MIND, a §0.0 szerint) · `.github/actions/**` · `lib/**` · `backend/app/**` · `docs/adr/**` · `tools/**`
 
 ## 5. Kötött architekturális döntések (ADR 0463)
 
@@ -98,12 +103,12 @@ Ha az AI-riport, a security-scan vagy a manifest hiányzik, az `assemble_rc.py` 
 
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | Jóváhagyás nélkül a workflow nem épít és nem tölt fel | orchesztrátor-dispatch: BIZONYÍTOTT PIROS út linkje a §10-ben |
-| A2 | Zöld úton az RC-csomag tartalmazza: artefaktum, manifest, SBOM, notices, AI-riport, security-riport, teszt-riport | ZÖLD dispatch linkje + az artefaktum-lista |
+| A1 | A javaslatban a jóváhagyási kapu (`environment:`) a build/upload lépések ELŐTT áll | `rc_assembly_test.dart` (YAML-parse + lépés-sorrend cella) |
+| A2 | Az `assemble_rc.py` a teljes csomagot állítja össze (artefaktum, manifest, SBOM, notices, AI-riport, security-riport, teszt-riport), fixture-bemeneten | `rc_assembly_test.dart` |
 | A3 | Hiányzó bemenet esetén az `assemble_rc.py` nem-nulla kóddal lép ki | `rc_assembly_test.dart` |
 | A4 | A csomag checksum-manifestje minden fájlra kiterjed, és eltérésre PIROS | `rc_assembly_test.dart` |
 | A5 | Az RC a `flutter-gates` composite actiont hívja (nem másolt lépéseket) | a workflow forrása + `rc_assembly_test.dart` statikus cellája |
-| A6 | Piros gate mellett NINCS AAB/APK feltöltés | a BIZONYÍTOTT PIROS futás artefaktum-listája (üres) |
+| A6 | A javaslatban minden upload-lépés a gate-lépések SIKERÉTŐL függ (`needs:` / `if: success()`), tehát piros gate mellett nem futhat | `rc_assembly_test.dart` függőség-cella |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
@@ -128,21 +133,21 @@ Az összeállító lokális, fixture-alapú futtatása (kimenet a §10-be):
 python3 tool/release/assemble_rc.py --profile development --dry-run
 ```
 
-A workflow bizonyítéka a KÉT orchesztrátor-dispatch (zöld + bizonyított piros) — az implementer `gh`-t nem hív.
+A javaslat telepítése és a KÉT dispatch (zöld + bizonyított piros) orchesztrátor/emberi lépés a merge UTÁN — az implementer sem `.github/`-ot nem ír, sem `gh`-t nem hív.
 
 ## 8. Implementációs sorrend
 
 1. `tool/release/assemble_rc.py` (a kötelező bemenetek ellenőrzésével).
 2. `test/tooling/rc_assembly_test.dart`.
-3. `.github/workflows/release-candidate.yml` — a composite action hívásával és a manuális kapuval.
+3. `docs/release/workflows/release-candidate.proposal.yml` — a composite action hívásával és a manuális kapuval.
 4. `docs/release/rc-checklist.md`.
-5. A valódi-sértés próba a §10-be; a két dispatch-link az orchesztrátortól.
+5. A valódi-sértés próba a §10-be; a telepítés és a két dispatch-link az orchesztrátoré (merge után).
 
 ## 9. Kockázatok
 
 - **A mérce szétcsúszása.** Másolt gate-lépések (A5).
 - **Jóváhagyás megkerülése.** Egy `workflow_dispatch` input „skip_approval" néven pontosan ezt tenné (A1).
-- **Merge-kapu érintése.** A `build-apk.yml` véletlen módosítása a teljes lánc mércéjét mozdítaná (tilos zóna).
+- **Védett zóna érintése.** Bármely `.github/workflows/**` írása `H-GATEGUARD` halt (§0.0) — a javaslat-fájl az egyetlen megengedett kimenet.
 
 ## 10. Implementation handoff — az implementer tölti ki
 

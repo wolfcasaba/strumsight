@@ -256,7 +256,17 @@ class PipelineIntegrationTest(unittest.TestCase):
                 # text-scale mátrix, a11y-szerződés). A carve-out SZŰK: csak az
                 # E13-sávra, csak `sonnet-impl` irányba, és a Codex-oldali
                 # tiltás (lásd a ciklus utáni assertet) változatlanul él.
-                if round_id.startswith("E13-"):
+                #
+                # USER-DÖNTÉS 2026-08-27 (a Ch13 sáv lezárása után): a Chapter 12
+                # (Release Roadmap & Final Integration) sáv UGYANEZZEL a
+                # felállással indul — implementer `sonnet-impl`, orchestrátor
+                # Opus 5 `--effort high` —, ezért a carve-out az `E12-` előtagra
+                # is szól. Indok azonos: a Ch12-körök mércéje invariáns-sűrű
+                # (fail-closed konfiguráció, signing, consent-kényszerítés,
+                # release-kapuk), és a MiniMax MÉRT gyengéje épp az
+                # invariáns-lazítás. A carve-out továbbra is SZŰK: két nevesített
+                # sáv, csak `sonnet-impl` irányba, a Codex-oldali tiltás él.
+                if round_id.startswith(("E12-", "E13-")):
                     allowed = allowed | {"sonnet-impl"}
                 self.assertIn(
                     engine,

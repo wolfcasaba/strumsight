@@ -12,16 +12,18 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra az `android/app/build.gradle.kts` `releaseSigningRequired` / `GradleException` ágait (a megíráskor: hiányos konfigra és üres keystore-ra is dob) és a `release-apk.yml` `signing-prerequisites` jobját. Ami MÁR fail-closed, azt nem kell újra megírni — a §2 méri, mi hiányzik.
 
-## 0.0 Mi az, amit a kör NEM tud lokálisan bizonyítani
+## 0.0 Két korlát: nincs Android SDK, és a workflow VÉDETT
 
-Ezen a boxon nincs Android SDK, és a release-build a CI-ban fut. A signing-viselkedés bizonyítéka ezért kettős: (a) Gradle-konfigurációs szintű, lokálisan futtatható egység-cella a `verify_signing_policy.py`-n keresztül, és (b) az orchesztrátor által dispatch-elt CI-futás a `release-apk.yml`-en. Az implementer `gh`-t nem hív.
+**(a)** Ezen a boxon nincs Android SDK, a release-build a CI-ban fut — a signing-viselkedés lokális bizonyítéka ezért a Gradle-fájl statikus auditja (`verify_signing_policy.py`), a futásidejű bizonyíték a CI-é.
+
+**(b)** A `.github/workflows/**` a `protect_factory_files.py` `PROTECTED_GLOBS` listáján van (ADR 0321), és az ADR 0372 álló felhatalmazásának fájlja (`.claude/gate-edit-policy`) a fán MA NEM létezik — a pre-flight ezt MÉRTE (`tools/gateguard-scan.py`). Az implementer-session tehát a workflow-t strukturálisan nem írhatja (`H-GATEGUARD`). A fingerprint-lépés ezért **javaslatként** készül (`docs/release/workflows/…`), és a beillesztés + dispatch orchesztrátor/emberi lépés a merge UTÁN. A Gradle-oldal (`android/app/build.gradle.kts`) NEM védett, azt a kör maga írja.
 
 ```ai-router
 schema_version = 1
 risk = "high"
 allowed_paths = [
   "android/app/build.gradle.kts",
-  ".github/workflows/release-apk.yml",
+  "docs/release/workflows/release-apk-fingerprint.proposal.md",
   "tool/release/verify_signing_policy.py",
   "docs/security/signing-key-runbook.md",
   "test/tooling/signing_policy_test.dart",
@@ -61,7 +63,7 @@ A debug-aláírású production artefaktum lehetőségének megszüntetése, a k
 
 ## 3. Scope
 
-**Benne van:** a Gradle release-ág kiegészítése a **debug keystore explicit elutasításával** (a jól ismert `~/.android/debug.keystore` és a `androiddebugkey` alias production ágon kivételt dob) · a dev/Lab és production signing config SZÉTVÁLASZTÁSA úgy, hogy a Lab build továbbra is dev kulccsal működik · `tool/release/verify_signing_policy.py` (a Gradle-fájl és a workflow statikus auditja: van-e olyan ág, ami production `buildType`-ra debug signing configot rendel; kerülhet-e kulcsanyag a logba) · a certificate fingerprint beírása a Kör 6 provenance manifestjébe (a workflow-lépés a fingerprintet a keystore-ból olvassa, és NEM logolja a jelszót) · `docs/security/signing-key-runbook.md` (backup, rotáció, hozzáférés, elvesztés esetén követendő lépések).
+**Benne van:** a Gradle release-ág kiegészítése a **debug keystore explicit elutasításával** (a jól ismert `~/.android/debug.keystore` és a `androiddebugkey` alias production ágon kivételt dob) · a dev/Lab és production signing config SZÉTVÁLASZTÁSA úgy, hogy a Lab build továbbra is dev kulccsal működik · `tool/release/verify_signing_policy.py` (a Gradle-fájl és a workflow statikus auditja: van-e olyan ág, ami production `buildType`-ra debug signing configot rendel; kerülhet-e kulcsanyag a logba) · `docs/release/workflows/release-apk-fingerprint.proposal.md` — a certificate fingerprint provenance manifestbe írásának JAVASOLT workflow-lépése (a fingerprintet a keystore-ból olvassa, jelszót nem echóz, `::add-mask::`-kal) · `docs/security/signing-key-runbook.md` (backup, rotáció, hozzáférés, elvesztés esetén követendő lépések).
 
 **NINCS benne (tilos):**
 
@@ -75,12 +77,12 @@ A debug-aláírású production artefaktum lehetőségének megszüntetése, a k
 | Útvonal | Indok |
 |---|---|
 | `android/app/build.gradle.kts` | debug-tanúsítvány elutasítás + config szétválasztás |
-| `.github/workflows/release-apk.yml` | fingerprint-kiolvasás a provenance manifesthez |
+| `docs/release/workflows/release-apk-fingerprint.proposal.md` | ÚJ — a fingerprint-lépés JAVASLATA (a beillesztés emberi lépés) |
 | `tool/release/verify_signing_policy.py` | ÚJ — statikus signing-policy audit |
 | `docs/security/signing-key-runbook.md` | ÚJ — kulcs-runbook |
 | `test/tooling/signing_policy_test.dart` | a §6 cellái |
 
-**Tilos zóna:** `.github/workflows/{build-apk,full-gate,lab-apk}.yml` · `android/key.properties` (és bármely keystore) · `lib/**` · `backend/**` · `docs/adr/**` · `tools/**`
+**Tilos zóna:** `.github/workflows/**` (MIND, a §0.0/b szerint) · `android/key.properties` (és bármely keystore) · `lib/**` · `backend/**` · `docs/adr/**` · `tools/**`
 
 ## 5. Kötött architekturális döntések (ADR 0448)
 
@@ -101,10 +103,10 @@ A szigorítás kizárólag a production `buildType`-ra vonatkozik. **NEM elfogad
 | # | Kritérium | Bizonyíték |
 |---|---|---|
 | A1 | Production ág + debug alias/keystore → build hiba (nem figyelmeztetés) | `signing_policy_test.dart` (Gradle-fájl statikus cellája) + `verify_signing_policy.py` |
-| A2 | Production signing secret hiányában a CI a build ELŐTT megáll | orchesztrátor által dispatch-elt futás linkje a §10-ben |
+| A2 | Production signing secret hiányában a CI a build ELŐTT megáll — a MEGLÉVŐ `signing-prerequisites` job MÉRT viselkedése, a kör ezt nem gyengíti | `verify_signing_policy.py` statikus cellája a workflow-n (OLVASÁS) |
 | A3 | A Lab build dev kulccsal továbbra is konfigurálható | `signing_policy_test.dart` |
 | A4 | A workflow egyetlen lépése sem írja ki a keystore jelszót vagy a kulcsanyagot | `verify_signing_policy.py` + `check_secrets_test.dart` |
-| A5 | A certificate fingerprint bekerül a provenance manifestbe | a manifest sémája + a dispatch-elt futás artefaktuma |
+| A5 | A javaslat-lépés YAML-je valid, a fingerprintet a manifest sémájának megfelelő mezőbe írja, és jelszót nem ír ki | `signing_policy_test.dart` (YAML-parse + maszkolás-cella) |
 | A6 | `docs/security/signing-key-runbook.md` megadja a backup, rotáció, hozzáférés és kulcs-elvesztés lépéseit, felelőssel | a dokumentum |
 | A7 | A repóban nincs valódi kulcsanyag; a fixture szintetikus | `check_secrets_test.dart` |
 
@@ -136,7 +138,7 @@ python3 tool/release/verify_signing_policy.py --strict
 1. `tool/release/verify_signing_policy.py` — a statikus mérce ELŐSZÖR (RED).
 2. `test/tooling/signing_policy_test.dart` — az A1/A3/A4 cellák.
 3. `android/app/build.gradle.kts` — debug-tanúsítvány elutasítás + Lab-ág megőrzése.
-4. `.github/workflows/release-apk.yml` — fingerprint a manifestbe, maszkolással.
+4. `docs/release/workflows/release-apk-fingerprint.proposal.md` — fingerprint a manifestbe, maszkolással.
 5. `docs/security/signing-key-runbook.md`.
 6. A valódi-sértés próba a §10-be.
 

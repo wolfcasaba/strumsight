@@ -12,9 +12,11 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `.github/workflows/release-apk.yml` „Read APK metadata from pubspec" lépését (a megíráskor: regex kényszeríti a `<version>+<build>` alakot, az artefaktum-név `strumsight-<ver>-<build>-<sha7>-production.apk`) és a `tool/` MÉRT ML-manifest eszközeit. A kör BŐVÍTI ezeket.
 
-## 0.0 A workflow-változás bizonyítéka
+## 0.0 A workflow-fájl a MÉRCE VÉDETT zónája — a kör JAVASLATOT ír, nem workflow-t
 
-A kör hozzányúl a `.github/workflows/release-apk.yml`-hez (SBOM + manifest artefaktum feltöltés). Ez a fájl NEM a merge-kapu (`build-apk.yml` / `full-gate.yml` az), de a bizonyítéka akkor is FUTÁS: az orchesztrátor dispatch-eli a kör-branchen, és a futás linkje kerül a §10-be. Az implementer `gh`-t nem hív.
+A `.github/workflows/**` a `protect_factory_files.py` `PROTECTED_GLOBS` listáján van (ADR 0321), és az ADR 0372 álló felhatalmazásának FÁJLJA (`.claude/gate-edit-policy`) a fán MA NEM létezik — a pre-flight ezt MÉRTE (`tools/gateguard-scan.py`). Egy implementer-session tehát strukturálisan nem tudná megírni: a kör `H-GATEGUARD`-dal állna meg.
+
+Ezért a kör a workflow-változást **javaslatként** szállítja (`docs/release/workflows/…`), teljes, bemásolható YAML-részlettel és a beillesztés pontos helyével. A tényleges `.github/workflows/` szerkesztés és a dispatch **orchesztrátor/emberi lépés**, a kör merge-e UTÁN — ugyanaz a határ, amit az ADR 0112 §3 az egyetlen emberi kapuként tart fenn. A kör saját mércéje ettől nem gyengül: a javaslat YAML-validitását és a hivatkozott lépések meglétét gépi cella méri.
 
 ```ai-router
 schema_version = 1
@@ -24,7 +26,7 @@ allowed_paths = [
   "tool/generate_release_manifest.dart",
   "tool/release/generate_sbom.py",
   "tool/release/verify_artifacts.py",
-  ".github/workflows/release-apk.yml",
+  "docs/release/workflows/release-apk-provenance.proposal.md",
   "THIRD_PARTY_NOTICES.md",
   "docs/release/supply-chain.md",
   "test/tooling/release_manifest_test.dart",
@@ -34,7 +36,7 @@ gate_tests = [
   "test/tooling/release_manifest_test.dart",
   "test/tooling/ml_asset_manifest_test.dart",
 ]
-native_gate = true
+native_gate = false
 ```
 
 ## 0. Kör-jelzés és STOP-protokoll
@@ -63,11 +65,11 @@ Minden kiadott artefaktum (app, backend, modell, tudáscsomag) legyen commitig v
 
 ## 3. Scope
 
-**Benne van:** `lib/app/build_info.dart` (compile-time `String.fromEnvironment` alapú build-metaadat: verzió, build number, rövid SHA, channel — a `main`/bootstrap NEM módosul, a megjelenítés későbbi kör dolga) · `tool/generate_release_manifest.dart` (determinisztikus JSON: app verzió, build, SHA, channel, ML-modell-manifest hivatkozás, tudáscsomag-verzió, artefaktum-checksumok) · `tool/release/generate_sbom.py` (Flutter/Dart a `pubspec.lock`-ból, backend a `requirements*.txt`-ből; license-mező hiánya → nem-nulla kilépés) · `tool/release/verify_artifacts.py` (checksum-audit egy artefaktum-könyvtáron) · `THIRD_PARTY_NOTICES.md` (generált) · `docs/release/supply-chain.md` · a `release-apk.yml` bővítése: manifest + SBOM + notices artefaktum-feltöltéssel.
+**Benne van:** `lib/app/build_info.dart` (compile-time `String.fromEnvironment` alapú build-metaadat: verzió, build number, rövid SHA, channel — a `main`/bootstrap NEM módosul, a megjelenítés későbbi kör dolga) · `tool/generate_release_manifest.dart` (determinisztikus JSON: app verzió, build, SHA, channel, ML-modell-manifest hivatkozás, tudáscsomag-verzió, artefaktum-checksumok) · `tool/release/generate_sbom.py` (Flutter/Dart a `pubspec.lock`-ból, backend a `requirements*.txt`-ből; license-mező hiánya → nem-nulla kilépés) · `tool/release/verify_artifacts.py` (checksum-audit egy artefaktum-könyvtáron) · `THIRD_PARTY_NOTICES.md` (generált) · `docs/release/supply-chain.md` · `docs/release/workflows/release-apk-provenance.proposal.md` — a `release-apk.yml`-hez JAVASOLT lépések (manifest + SBOM + notices artefaktum-feltöltés) teljes YAML-részletként, a beillesztés helyének megnevezésével.
 
 **NINCS benne (tilos):**
 
-- `build-apk.yml` / `full-gate.yml` / `.github/actions/**` módosítása (a MERGE-kapu).
+- **Bármely `.github/workflows/**` fájl módosítása** (a §0.0 szerint: védett mérce-zóna; a kör javaslatot ír).
 - A verzió/SHA UI-megjelenítése (`lib/features/settings/**`) — külön kör.
 - `pubspec.yaml` verzió-emelés.
 - `docs/adr/**` — az ADR 0447-et a Claude írja.
@@ -80,12 +82,12 @@ Minden kiadott artefaktum (app, backend, modell, tudáscsomag) legyen commitig v
 | `tool/generate_release_manifest.dart` | ÚJ — a release manifest generátor |
 | `tool/release/generate_sbom.py` | ÚJ — SBOM + license report |
 | `tool/release/verify_artifacts.py` | ÚJ — checksum-audit |
-| `.github/workflows/release-apk.yml` | BŐVÍTÉS — manifest/SBOM/notices artefaktum |
+| `docs/release/workflows/release-apk-provenance.proposal.md` | ÚJ — a workflow-lépések JAVASLATA (a beillesztés emberi lépés) |
 | `THIRD_PARTY_NOTICES.md` | ÚJ — generált notice-bundle |
 | `docs/release/supply-chain.md` | ÚJ — a supply-chain leírás |
 | `test/tooling/release_manifest_test.dart` | a §6 cellái |
 
-**Tilos zóna:** `.github/workflows/build-apk.yml` · `.github/workflows/full-gate.yml` · `.github/actions/**` · `pubspec.yaml` · `lib/features/**` · `lib/app/bootstrap/**` · `docs/adr/**` · `tools/**`
+**Tilos zóna:** `.github/workflows/**` (MIND, a §0.0 szerint) · `.github/actions/**` · `pubspec.yaml` · `lib/features/**` · `lib/app/bootstrap/**` · `docs/adr/**` · `tools/**`
 
 ## 5. Kötött architekturális döntések (ADR 0447)
 
@@ -109,7 +111,7 @@ A generátor nem-nulla kóddal lép ki. **NEM elfogadható gyengítés:** „unk
 | A2 | Hiányzó license-mezőjű függőség esetén az SBOM-generátor nem-nulla kóddal lép ki | `release_manifest_test.dart` (fixture-alapú) |
 | A3 | Csökkenő build number esetén a `verify_artifacts.py` nem-nulla kóddal lép ki | `release_manifest_test.dart` |
 | A4 | A manifest hivatkozza az ML-modell-manifestet és a tudáscsomag-verziót, checksummal | `release_manifest_test.dart` |
-| A5 | A `release-apk.yml` a manifestet, az SBOM-ot és a notices fájlt artefaktumként tölti fel | orchesztrátor által dispatch-elt futás linkje a §10-ben |
+| A5 | A javaslat-fájl YAML-részlete önmagában valid, megnevezi a beillesztés helyét, és a manifest/SBOM/notices artefaktumot mind a hárommal feltölti | `release_manifest_test.dart` (YAML-parse + kötelező lépés-cellák) |
 | A6 | A meglévő `ml_asset_manifest_test.dart` VÁLTOZATLANUL zöld | a §7 gate |
 
 **Küszöb-cellahármas a build numberre** (a határ az EGYENLŐSÉG, ami TILOS — a korábbival azonos build number újrafelhasználás): a küszöb **alatt** (új build < publikált) → PIROS; **pontosan rajta** (új build == publikált) → PIROS; a küszöb **fölött** (új build > publikált) → ZÖLD.
@@ -138,7 +140,7 @@ dart run tool/generate_release_manifest.dart --output build/release-manifest.jso
 python3 tool/release/generate_sbom.py --profile production
 ```
 
-A `release-apk.yml` változásának bizonyítéka az orchesztrátor által dispatch-elt futás — az implementer `gh`-t nem hív.
+A javaslat tényleges beillesztése és a dispatch orchesztrátor/emberi lépés a kör merge-e UTÁN — az implementer sem `.github/`-ot nem ír, sem `gh`-t nem hív.
 
 ## 8. Implementációs sorrend
 
@@ -147,12 +149,12 @@ A `release-apk.yml` változásának bizonyítéka az orchesztrátor által dispa
 3. `tool/release/generate_sbom.py` + `THIRD_PARTY_NOTICES.md` generálás.
 4. `tool/release/verify_artifacts.py` (checksum + monotonitás).
 5. `test/tooling/release_manifest_test.dart` — benne a küszöb-cellahármas.
-6. `.github/workflows/release-apk.yml` bővítés.
+6. `docs/release/workflows/release-apk-provenance.proposal.md`.
 7. `docs/release/supply-chain.md` + a valódi-sértés próba a §10-be.
 
 ## 9. Kockázatok
 
-- **A gate-workflow véletlen érintése.** A `release-apk.yml` és a `build-apk.yml` neve közel áll; a rossz fájl módosítása a merge-kaput mozdítaná el (tilos zóna, STOP-eset).
+- **A védett zóna érintése.** Bármely `.github/workflows/**` írása `H-GATEGUARD` halttal állítja meg a kört (§0.0) — a javaslat-fájl az egyetlen megengedett kimenet.
 - **Nem-determinisztikus manifest.** Időbélyeg vagy rendezetlen map → a checksum minden buildben más (A1).
 - **A license-adat hiánya.** A `pubspec.lock` nem tartalmaz license-mezőt minden csomagra; a generátornak ezt HIBÁNAK kell jeleznie, nem kitalálnia (A2).
 

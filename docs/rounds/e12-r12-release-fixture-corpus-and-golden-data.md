@@ -21,7 +21,7 @@ schema_version = 1
 risk = "normal"
 allowed_paths = [
   "test/fixtures/manifest.json",
-  "tool/ci/check_fixture_manifest.dart",
+  "tool/check_fixture_manifest.dart",
   "test/tooling/fixture_manifest_test.dart",
   "docs/testing/release-fixture-corpus.md",
   "docs/rounds/e12-r12-release-fixture-corpus-and-golden-data.md",
@@ -53,12 +53,13 @@ Verziózott, checksummal és licenccel ellátott fixture-korpusz, amelyen a rele
 - `test/fixtures/`: hét al-könyvtár (`analysis`, `audio`, `practice`, `practice_generator`, `practice_planner`, `song_trainer`, `vision`) és hét gyökér-szintű parity-JSON (`chord_crnn_parity.json`, `crnn_live_3c_parity.json`, `crnn_live_parity.json`, `crnn_parity.json`, `logmel_parity.json`, `logmel_parity_cases.json`, `chord_crnn_parity.json`).
 - `test/fixtures/audio/song_trainer/pitch_fixture_manifest.json` MÁR létezik — RÉSZLEGES manifest egyetlen alterületre; a kör ezt beemeli, nem lecseréli.
 - `tool/ci/check_song_fixture_licenses.dart` MÁR ellenőriz licencet a dal-fixture-ökre; `tool/ci/check_assets.dart` az asset-oldalt.
+- `tool/check_fixture_manifest.dart` **nem létezik** (a `tool/ci/` fa a MÉRCE védett zónája — ADR 0321/0372, `protect_factory_files.py` `PROTECTED_GLOBS` —, ezért az ÚJ ellenőrző a `tool/` gyökérbe kerül, a `tool/check_architecture.dart` mintájára).
 - `test/fixtures/manifest.json` (globális) **nem létezik**; `ml/fixtures/release/` és `local_ai/evaluation/` **nem létezik** (az utóbbi az Epic 10 sáv terméke lenne — ez a kör NEM hozza létre).
 - A UI-goldenek `test/ui/goldens/` alatt élnek, ADR 0426 mért szabálya alatt.
 
 ## 3. Scope
 
-**Benne van:** `test/fixtures/manifest.json` — MINDEN release-releváns fixture: útvonal, sha256, méret, séma-verzió, licenc/forrás, „tartalmaz-e felhasználói adatot" jelölés · `tool/ci/check_fixture_manifest.dart` — hiányzó bejegyzés, elmozdult checksum, hiányzó licenc-mező → nem-nulla kilépés · `test/tooling/fixture_manifest_test.dart` · `docs/testing/release-fixture-corpus.md` (mi tartozik a korpuszba és mi NEM: a UI-goldenek és az ML tréning-korpusz kifejezetten kívül).
+**Benne van:** `test/fixtures/manifest.json` — MINDEN release-releváns fixture: útvonal, sha256, méret, séma-verzió, licenc/forrás, „tartalmaz-e felhasználói adatot" jelölés · `tool/check_fixture_manifest.dart` — hiányzó bejegyzés, elmozdult checksum, hiányzó licenc-mező → nem-nulla kilépés · `test/tooling/fixture_manifest_test.dart` · `docs/testing/release-fixture-corpus.md` (mi tartozik a korpuszba és mi NEM: a UI-goldenek és az ML tréning-korpusz kifejezetten kívül).
 
 **NINCS benne (tilos):**
 
@@ -72,7 +73,7 @@ Verziózott, checksummal és licenccel ellátott fixture-korpusz, amelyen a rele
 | Útvonal | Indok |
 |---|---|
 | `test/fixtures/manifest.json` | ÚJ — a globális fixture-manifest |
-| `tool/ci/check_fixture_manifest.dart` | ÚJ — az ellenőrző |
+| `tool/check_fixture_manifest.dart` | ÚJ — az ellenőrző |
 | `test/tooling/fixture_manifest_test.dart` | a §6 cellái |
 | `docs/testing/release-fixture-corpus.md` | ÚJ — a korpusz HATÁRAI |
 
@@ -123,13 +124,13 @@ tools/round-gate.sh test/tooling/fixture_manifest_test.dart test/tooling/check_a
 A checker közvetlen futtatása (kimenet a §10-be):
 
 ```bash
-dart run tool/ci/check_fixture_manifest.dart
+dart run tool/check_fixture_manifest.dart
 ```
 
 ## 8. Implementációs sorrend
 
 1. A fa bejárása és a MÉRT fixture-lista előállítása.
-2. `tool/ci/check_fixture_manifest.dart` (fa → manifest összevetés).
+2. `tool/check_fixture_manifest.dart` (fa → manifest összevetés).
 3. `test/fixtures/manifest.json` generálása és bekötése.
 4. `test/tooling/fixture_manifest_test.dart`.
 5. `docs/testing/release-fixture-corpus.md`.
