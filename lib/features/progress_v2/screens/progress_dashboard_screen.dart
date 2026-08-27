@@ -272,10 +272,15 @@ class _MetricHistorySection extends StatelessWidget {
           Padding(
             key: ValueKey('progress-metric-segment-${segment.catalogVersion}'),
             padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
+            // Wrap, not Row: at a large text scale "Measure v2" and "1
+            // sample" no longer fit one line side by side (measured while
+            // recording this round's A9 golden — a RenderFlex overflow at
+            // textScaler 2.0).
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 2,
               children: [
                 Text(l10n.progressV2MetricVersionLabel(segment.catalogVersion)),
-                const SizedBox(width: 8),
                 Text(
                   l10n.progressV2MetricVersionPointCount(segment.points.length),
                 ),

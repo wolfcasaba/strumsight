@@ -18,6 +18,17 @@ import 'package:strumsight/l10n/app_localizations.dart';
 
 const _compactPortrait = Size(412, 915);
 
+/// `id` is snake_case (matches `MasteryMilestone.id`'s own contract); the
+/// key fields must be lowerCamelCase, so this converts once per fixture.
+String _camel(String snakeCase) {
+  final parts = snakeCase.split('_');
+  return parts.first +
+      parts
+          .skip(1)
+          .map((part) => part[0].toUpperCase() + part.substring(1))
+          .join();
+}
+
 MasteryMilestone _milestone(String id) => MasteryMilestone(
   id: id,
   catalogVersion: 2,
@@ -27,8 +38,8 @@ MasteryMilestone _milestone(String id) => MasteryMilestone(
   difficulty: MasteryDifficulty.beginner,
   tempoRange: MasteryTempoRange(minBpm: 60, maxBpm: 100),
   minEvidenceSessions: 5,
-  titleKey: '${id}Title',
-  descriptionKey: '${id}Description',
+  titleKey: '${_camel(id)}Title',
+  descriptionKey: '${_camel(id)}Description',
 );
 
 ProgressOverviewProjection _dashboardProjection() {
