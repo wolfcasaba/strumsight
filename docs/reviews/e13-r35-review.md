@@ -6,7 +6,9 @@
 - **Implementer motor:** `sonnet-impl` (Claude Sonnet 5) — két részletben futott
   (az elsőt az abszolút időkorlát lőtte ki, a folytatás ugyanazon a branchen ment)
 - **Reviewer:** Claude (Opus 5), orchestrátor — read-only, izolált `/tmp/review-e13-r35` klón
-- **Verdikt (1. kör):** **CHANGES REQUESTED** — **7 MAJOR**, 3 MINOR, 6 NOTE
+- **Verdikt (1. kör):** CHANGES REQUESTED — **7 MAJOR**, 3 MINOR, 6 NOTE
+- **Verdikt (javító kör 1 + 2 után): APPROVED** — minden MAJOR zárva, saját
+  méréssel igazolva (§8)
   (3 MAJOR az orchestrátor-review-ból, 4 a kötelező `security-reviewer`
   futásból — §7; a `risk = "high"` miatt az utóbbi a brief §7 szerint kötelező)
 
@@ -298,3 +300,42 @@ független: a Full Gate zöldjét is meg kell várni a VÉGLEGES merge SHA-n, é
 javító kör után ÚJRA kell dispatch-elni).
 
 A javító kör ugyanazzal a motorral (`sonnet-impl`), a fenti leletlistával megy.
+
+## 8. Javító körök és a ZÁRÁS (reviewer-mérés, 2026-08-27)
+
+### Javító kör 1 — `219e2fe9`
+
+| Lelet | Zárás | Az ÉN mérésem |
+|---|---|---|
+| **F1/S1** (az A6 őre csak Filled/Outlined gombot nézett) | a cella a `modelManagerBlockedIntegrity` területre scope-olva BÁRMILYEN `ButtonStyleButton`/`InkWell`/`GestureDetector`-t tilt | **valódi-sértés próbát futtattam**: tertiary `SsButton('Activate anyway')` a blokkolt ágba → `+9 -1`, `Expected: no matching candidates … Found 1 widget … [TextButton]`; visszaállítva 12/12 zöld |
+| **F2/S2+M2** (a státusz él-vezérelt volt, két ágon hazudott) | `_computeStatus()` a TÉNYLEGES gépezetből számol (`_pushInFlight`/`_pushPending`/aláírás-eltérés/`_lastPushFailed`), és a mikrotaszk BELSEJÉBEN fut | **saját próbateszt**: szerkesztés + visszaállítás a 600 ms-os debounce-on belül → `státusz=synced, updates=0, Saving…=false, All changes saved=true` (a javítás ELŐTT: `pending` örökre) |
+| **F3/S3** (a felirat „minden adatom"-ot ígért) | a szövegek „Vision"-re skálázva, a megerősítés kimondja, mit NEM töröl; új cella nem-vision kulcsra | a `consent_center_test.dart` cellája a saját gate-futásomban zöld |
+| **F4/S4** (a „fiók nélkül tovább" no-op a `go()` úton) | `maybePop()` → ha `false`, `context.go(AppRoutes.profileHome)`; útvonal-literál nincs | `auth_states_test.dart` ÚJ cellája a `go()`-belépésű utat méri; `route_literal_guard` zöld |
+| **F5/s3** (hálózati hiba = integritás-riasztás + zsákutca) | ÚJ `OfflineModelPhase.fetchFailed`, saját nem-riasztó szöveggel, a Check gomb MEGMARAD; a `blockedIntegrity` kizárólag valódi checksum-eltérésből érhető el | két új cella (unit + widget) a gate-emben zöld |
+| **F6/s2** (az A3 in-flight cellája az ellenkezőjét mérte) | `Completer`-rel blokkolt `update()` → „Saving…" LÁTSZIK, „All changes saved" NEM, majd feloldás után fordítva | a cella a gate-emben zöld |
+| **s1** (a redakció-lista hiányos volt) | a löketszám és a session-hossz felkerült a tételes listára | `share_redaction_test.dart` új `expect`-jei zöldek |
+| **m1** (nyers JSON export) | a dialógus kimondja, hogy megtekinthető pillanatkép, nem fájl | — |
+| **s4** (wrapped/reel megosztás tételesség nélkül) | **TUDATOSAN KIHAGYVA**, indoklással: önálló funkció méretű munka (redakció-UI + opt-in két képernyőn + tesztek) | **elfogadom follow-upként** — a MINOR szabálya szerint (nem hizlalhatja aránytalanul a diffet); a KÖVETKEZŐ kör vegye fel |
+
+### F7 — a javító kör 1 UTÁN talált, ÚJ MAJOR (reviewer-mérés) → javító kör 2, `ff9e2ed1`
+
+Az F1-javítás a blokkolt TERÜLETRE scope-olt, a `SsModelStatusCard` viszont
+FELETTE van, és `SsCardActionRegion` (`ss_content_card.dart:46–48`) EGY akció
+esetén `InkWell(onTap: …)`-kel az EGÉSZ kártyát tap-targetté teszi. **Mérve:**
+egy `action: SsCardAction(label: 'Activate anyway', …)` a státuszkártyán
+**12/12 ZÖLD** maradt — működő bypass, néma őr.
+
+A javító kör 2 az őrcellát a TELJES képernyőre szélesítette (teszt-only diff:
+`model_integrity_test.dart` +38 sor, produkciós kód változatlan).
+**Újramértem ugyanazzal a próbával:** a bypass most `+11 -1`,
+`Expected: no matching candidates`; a változatlan kódon 12/12 zöld.
+
+### Záró mérés a `ff9e2ed1` HEAD-en
+
+- `tools/round-gate.sh` a §7 24 útvonalával, izolált klónban: **29/29 ZÖLD**
+- `python3 tools/scope-audit.py --base 9ca4a0dc`: **OK**, 46 fájl, 0 sértés
+- Router CI + exact-SHA Full Gate: a VÉGSŐ merge SHA-n újradispatch-elve (§9)
+
+**VÉGSŐ DÖNTÉS: APPROVED** — nyitott BLOCKER/MAJOR nincs. Nyitott follow-up:
+**s4** (a wrapped/reel megosztási felület tételes listája és opt-inje) —
+a következő kör briefjébe.
