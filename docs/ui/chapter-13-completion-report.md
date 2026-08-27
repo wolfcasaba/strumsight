@@ -156,6 +156,14 @@ one, and no number in this report should be read as a substitute for it.**
 - **No new golden PNG was recorded this round** (§2) — the 20 pre-existing
   golden-test files' cross-platform (aarch64 local vs x86 CI) parity is
   therefore CI-verified only, not re-confirmed by this report.
+- **A2 ("every critical screen has a loading/empty/error/offline state where
+  relevant") is only partially covered by this round's closure package.**
+  `closure_suite_test.dart` exercises route, **permission**, state-restoration
+  and 200%-text-scale cells — it does not assert per-screen loading, empty,
+  error, or **offline** state. Those states are covered, screen by screen, by
+  the widget-test suites the individual R16–R35 rounds shipped alongside each
+  screen (not re-verified by this report); this round adds no new coverage
+  for that half of A2.
 
 ## 5. Real-device acceptance checklist (prepared, unfilled — §5.5)
 

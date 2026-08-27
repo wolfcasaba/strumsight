@@ -173,8 +173,10 @@ final _screens = <String, (Widget Function(), List<Override> Function())>{
 
 // ---------------------------------------------------------------------------
 // Exclusion list (brief §0.0.B/B5) — dated, measured, mirrored in
-// docs/ui/legacy-backlog.md. Empty for now: see §10 handoff for whether this
-// round's measurement run populated it.
+// docs/ui/legacy-backlog.md §1. Four entries below, all the SAME defect
+// (`lib/features/live/screens/live_screen.dart:477` stat-strip `Row`
+// overflow at `landscape`/`textScale: 2.0`, both themes, both locales;
+// 12px en / 34px hu), measured 2026-08-27 on this box.
 // ---------------------------------------------------------------------------
 
 /// One dated, measured `lib/**` layout defect this round could not fix
