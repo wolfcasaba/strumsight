@@ -616,6 +616,18 @@
   "communityClubVisibilityPublic": "Nyilvános",
   "@communityClubVisibilityPublic": {},
 
+  "communityClubMemberCountLabel": "{visibility} · {count} tag",
+  "@communityClubMemberCountLabel": {
+    "placeholders": {
+      "visibility": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
   "communityClubDetailTitle": "Klub",
   "@communityClubDetailTitle": {},
 

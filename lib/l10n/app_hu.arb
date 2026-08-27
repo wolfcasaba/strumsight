@@ -1564,6 +1564,17 @@
   "@communityClubManageRoleOwner": {},
   "communityClubManageTitle": "Klub kezelése",
   "@communityClubManageTitle": {},
+  "communityClubMemberCountLabel": "{visibility} · {count} tag",
+  "@communityClubMemberCountLabel": {
+    "placeholders": {
+      "visibility": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "communityClubMembersTabHint": "A taglista megtekintéséhez nyisd meg a tagkezelő képernyőt.",
   "@communityClubMembersTabHint": {},
   "communityClubPrivateRestrictedBody": "A klub tartalmát csak a tagok láthatják.",

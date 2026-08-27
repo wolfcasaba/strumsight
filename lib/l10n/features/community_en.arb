@@ -616,6 +616,18 @@
   "communityClubVisibilityPublic": "Public",
   "@communityClubVisibilityPublic": {},
 
+  "communityClubMemberCountLabel": "{visibility} · {count} members",
+  "@communityClubMemberCountLabel": {
+    "placeholders": {
+      "visibility": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
   "communityClubDetailTitle": "Club",
   "@communityClubDetailTitle": {},
 

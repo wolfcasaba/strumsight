@@ -30,40 +30,40 @@
 /// ``MediaQuery.textScalerOf(context).scale(...)`` so a 2× text
 /// setting keeps the row readable.
 ///
-/// **Localization note (l10n).** The labels are hardcoded
-/// English placeholders — the ARB file is not on this round's
-/// ``allowed_paths``. The strings live at the top of the file
-/// so a future ARB migration is a search-and-replace.
+/// **Localization (E13-R34, A10).** Every user-facing string
+/// routes through ``AppLocalizations`` — the ``communityClubList*``
+/// / ``communityClubVisibility*`` keys in
+/// ``lib/l10n/features/community_{en,hu}.arb``. No
+/// ``const String _l10nClub*`` constant remains in this file.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../../core/foundation/app_failure.dart';
+import '../../../../../l10n/app_localizations.dart';
 import '../../../domain/entities/community_club.dart';
 import '../../../domain/repositories/club_repository.dart';
 import '../../../domain/repositories/community_page.dart';
 import '../../../domain/value_objects/cursor_page.dart';
+import '../../widgets/community_theme_scope.dart';
 
-// ---------------------------------------------------------------------------
-// L10n placeholders — to be lifted into app_en.arb / app_hu.arb in a
-// future round (the Kör 18 community-surface l10n lift).
-// ---------------------------------------------------------------------------
-
-const String _l10nClubListTitle = 'Clubs';
-const String _l10nClubListEmpty = 'No clubs yet. Create one to get started.';
-const String _l10nClubListError = "The clubs couldn't load.";
-const String _l10nClubListRetry = 'Retry';
-const String _l10nClubListCreate = 'Create club';
-const String _l10nClubListCreateName = 'Club name';
-const String _l10nClubListCreateDescription = 'Description';
-const String _l10nClubListCreateVisibility = 'Visibility';
-const String _l10nClubListCreateSubmit = 'Create';
-const String _l10nClubListCreateCancel = 'Cancel';
-const String _l10nClubListLoadMore = 'Load more';
-const String _l10nClubVisibilityPrivate = 'Private';
-const String _l10nClubVisibilityDiscoverable = 'Discoverable';
-const String _l10nClubVisibilityPublic = 'Public';
+/// Map a wire visibility to its localized label (E13-R34, A10).
+String communityClubVisibilityLabel(
+  AppLocalizations localizations,
+  ClubVisibility visibility,
+) {
+  switch (visibility) {
+    case ClubVisibility.private:
+      return localizations.communityClubVisibilityPrivate;
+    case ClubVisibility.discoverable:
+      return localizations.communityClubVisibilityDiscoverable;
+    case ClubVisibility.public:
+      return localizations.communityClubVisibilityPublic;
+  }
+}
 
 /// First-page size — matches the Kör 23 / Kör 21 list pagination
 /// shape. The future wire implementation can re-tune against
@@ -106,42 +106,47 @@ class ClubListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(clubListProvider(const CursorPage.initial()));
+    final localizations = AppLocalizations.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(_l10nClubListTitle),
-        actions: <Widget>[
-          IconButton(
-            tooltip: _l10nClubListCreate,
-            icon: const Icon(Icons.add),
-            onPressed: () => _showCreateClubDialog(context, ref),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(clubListProvider(const CursorPage.initial()));
-          await ref.read(clubListProvider(const CursorPage.initial()).future);
-        },
-        child: state.when(
-          data: (page) => _Body(
-            page: page,
-            onLoadMore: () async {
-              ref.invalidate(clubListProvider(const CursorPage.initial()));
-              await ref.read(
-                clubListProvider(const CursorPage.initial()).future,
-              );
-            },
-          ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => _ErrorView(
-            failure: UnknownFailure(code: FailureCode.unknown, cause: error),
-            onRetry: () async {
-              ref.invalidate(clubListProvider(const CursorPage.initial()));
-              await ref.read(
-                clubListProvider(const CursorPage.initial()).future,
-              );
-            },
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(localizations.communityClubListTitle),
+          actions: <Widget>[
+            IconButton(
+              tooltip: localizations.communityClubListCreate,
+              icon: const Icon(Icons.add),
+              onPressed: () => _showCreateClubDialog(context, ref),
+            ),
+          ],
+        ),
+        body: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(clubListProvider(const CursorPage.initial()));
+            await ref.read(clubListProvider(const CursorPage.initial()).future);
+          },
+          child: state.when(
+            data: (page) => _Body(
+              page: page,
+              localizations: localizations,
+              onLoadMore: () async {
+                ref.invalidate(clubListProvider(const CursorPage.initial()));
+                await ref.read(
+                  clubListProvider(const CursorPage.initial()).future,
+                );
+              },
+            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => _ErrorView(
+              failure: UnknownFailure(code: FailureCode.unknown, cause: error),
+              localizations: localizations,
+              onRetry: () async {
+                ref.invalidate(clubListProvider(const CursorPage.initial()));
+                await ref.read(
+                  clubListProvider(const CursorPage.initial()).future,
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -192,9 +197,14 @@ class ClubListScreen extends ConsumerWidget {
 // ---------------------------------------------------------------------------
 
 class _Body extends StatelessWidget {
-  const _Body({required this.page, required this.onLoadMore});
+  const _Body({
+    required this.page,
+    required this.localizations,
+    required this.onLoadMore,
+  });
 
   final CommunityPage<CommunityClub> page;
+  final AppLocalizations localizations;
   final Future<void> Function() onLoadMore;
 
   @override
@@ -209,7 +219,7 @@ class _Body extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Center(
               child: Text(
-                _l10nClubListEmpty,
+                localizations.communityClubListEmpty,
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
             ),
@@ -225,14 +235,14 @@ class _Body extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.all(16),
             child: Center(
-              child: TextButton(
-                onPressed: onLoadMore,
-                child: const Text(_l10nClubListLoadMore),
+              child: SsButton(
+                onPressed: () => onLoadMore(),
+                label: localizations.communityClubListLoadMore,
               ),
             ),
           );
         }
-        return _ClubRow(club: items[index]);
+        return _ClubRow(club: items[index], localizations: localizations);
       },
     );
   }
@@ -240,9 +250,10 @@ class _Body extends StatelessWidget {
 
 /// A single accessible club-row (A7).
 class _ClubRow extends StatelessWidget {
-  const _ClubRow({required this.club});
+  const _ClubRow({required this.club, required this.localizations});
 
   final CommunityClub club;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context) {
@@ -251,11 +262,17 @@ class _ClubRow extends StatelessWidget {
       fontSize: textScaler.scale(18),
       fontWeight: FontWeight.bold,
     );
-    final visibilityLabel = _visibilityLabel(club.visibility);
-    final memberLabel = '${club.memberCount}';
+    final visibilityLabel = communityClubVisibilityLabel(
+      localizations,
+      club.visibility,
+    );
+    final memberCountLabel = localizations.communityClubMemberCountLabel(
+      visibilityLabel,
+      club.memberCount,
+    );
     return Semantics(
       container: true,
-      label: '${club.name}. $visibilityLabel. $memberLabel members.',
+      label: '${club.name}. $memberCountLabel.',
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -280,7 +297,7 @@ class _ClubRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$visibilityLabel · $memberLabel members',
+                    memberCountLabel,
                     style: TextStyle(fontSize: textScaler.scale(14)),
                   ),
                 ],
@@ -290,18 +307,6 @@ class _ClubRow extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-/// Map a wire-string visibility to a localised label.
-String _visibilityLabel(ClubVisibility visibility) {
-  switch (visibility) {
-    case ClubVisibility.private:
-      return _l10nClubVisibilityPrivate;
-    case ClubVisibility.discoverable:
-      return _l10nClubVisibilityDiscoverable;
-    case ClubVisibility.public:
-      return _l10nClubVisibilityPublic;
   }
 }
 
@@ -342,45 +347,41 @@ class _CreateClubDialogState extends State<_CreateClubDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text(_l10nClubListCreate),
+      title: Text(localizations.communityClubListCreate),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           TextField(
             controller: _name,
-            decoration: const InputDecoration(
-              labelText: _l10nClubListCreateName,
+            decoration: InputDecoration(
+              labelText: localizations.communityClubListCreateName,
             ),
             maxLength: 60,
           ),
           TextField(
             controller: _description,
-            decoration: const InputDecoration(
-              labelText: _l10nClubListCreateDescription,
+            decoration: InputDecoration(
+              labelText: localizations.communityClubListCreateDescription,
             ),
             maxLength: 2000,
             maxLines: 3,
           ),
           DropdownButtonFormField<ClubVisibility>(
             initialValue: _visibility,
-            decoration: const InputDecoration(
-              labelText: _l10nClubListCreateVisibility,
+            decoration: InputDecoration(
+              labelText: localizations.communityClubListCreateVisibility,
             ),
             items: <DropdownMenuItem<ClubVisibility>>[
-              DropdownMenuItem<ClubVisibility>(
-                value: ClubVisibility.private,
-                child: const Text(_l10nClubVisibilityPrivate),
-              ),
-              DropdownMenuItem<ClubVisibility>(
-                value: ClubVisibility.discoverable,
-                child: const Text(_l10nClubVisibilityDiscoverable),
-              ),
-              DropdownMenuItem<ClubVisibility>(
-                value: ClubVisibility.public,
-                child: const Text(_l10nClubVisibilityPublic),
-              ),
+              for (final visibility in ClubVisibility.values)
+                DropdownMenuItem<ClubVisibility>(
+                  value: visibility,
+                  child: Text(
+                    communityClubVisibilityLabel(localizations, visibility),
+                  ),
+                ),
             ],
             onChanged: (v) {
               if (v != null) setState(() => _visibility = v);
@@ -389,11 +390,13 @@ class _CreateClubDialogState extends State<_CreateClubDialog> {
         ],
       ),
       actions: <Widget>[
-        TextButton(
+        SsButton(
+          variant: SsButtonVariant.tertiary,
           onPressed: _submitting ? null : () => Navigator.of(context).pop(),
-          child: const Text(_l10nClubListCreateCancel),
+          label: localizations.communityClubListCreateCancel,
         ),
-        FilledButton(
+        SsButton(
+          loading: _submitting,
           onPressed: _submitting
               ? null
               : () async {
@@ -414,7 +417,7 @@ class _CreateClubDialogState extends State<_CreateClubDialog> {
                     }
                   }
                 },
-          child: const Text(_l10nClubListCreateSubmit),
+          label: localizations.communityClubListCreateSubmit,
         ),
       ],
     );
@@ -422,9 +425,14 @@ class _CreateClubDialogState extends State<_CreateClubDialog> {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.failure, required this.onRetry});
+  const _ErrorView({
+    required this.failure,
+    required this.localizations,
+    required this.onRetry,
+  });
 
   final AppFailure failure;
+  final AppLocalizations localizations;
   final Future<void> Function() onRetry;
 
   @override
@@ -439,11 +447,14 @@ class _ErrorView extends StatelessWidget {
             children: <Widget>[
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 16),
-              const Text(_l10nClubListError, textAlign: TextAlign.center),
+              Text(
+                localizations.communityClubListError,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
-              TextButton(
-                onPressed: onRetry,
-                child: const Text(_l10nClubListRetry),
+              SsButton(
+                onPressed: () => onRetry(),
+                label: localizations.communityClubListRetry,
               ),
             ],
           ),
