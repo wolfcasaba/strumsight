@@ -2945,5 +2945,57 @@
   "profileHubCommunitySectionTitle": "Community",
   "profileHubCommunityDisabledReason": "Community features aren't available in this build yet.",
   "profileHubCommunityEnabledMessage": "Connect with other players and share your progress.",
-  "profileHubAchievementsSectionTitle": "Achievements"
+  "profileHubAchievementsSectionTitle": "Achievements",
+
+  "libraryV2Title": "Library",
+  "libraryV2SearchLabel": "Search your library",
+  "libraryV2FilterAll": "All",
+  "libraryV2TypePractice": "Practice",
+  "libraryV2TypeAnalysis": "Analysis",
+  "libraryV2TypeSong": "Song",
+  "libraryV2TypeSetlist": "Setlist",
+  "libraryV2LoadFailed": "Couldn't load your library. Try again.",
+  "libraryV2EmptyTitle": "Nothing here yet",
+  "libraryV2EmptyMessage": "Practice sessions, analyses, songs and setlists you save will show up here.",
+  "libraryV2EmptyAction": "Refresh",
+  "libraryV2CorruptSourceTitle": "Some items are unavailable",
+  "libraryV2CorruptSourceMessage": "This part of your library couldn't be read right now. The rest of your library is still available.",
+  "libraryV2SyncConflictBadge": "Sync conflict",
+  "libraryV2MetadataRecordedOn": "Recorded {date}",
+  "@libraryV2MetadataRecordedOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "libraryV2MetadataUpdatedOn": "Updated {date}",
+  "@libraryV2MetadataUpdatedOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "libraryV2ResultSectionTitle": "Result",
+  "libraryV2ResultAvailable": "The analysis result is available.",
+  "libraryV2ResultMissing": "The analysis result is not available.",
+  "libraryV2RawAudioMissingNotice": "The raw recording is no longer available — the analysis result above is unaffected.",
+  "libraryV2NotesSectionTitle": "Notes",
+  "libraryV2NotesFieldLabel": "Add a note",
+  "libraryV2ExportAction": "Export",
+  "libraryV2ExportUnavailable": "This item can't be exported right now.",
+  "libraryV2DeleteFailed": "Couldn't delete — try again.",
+  "libraryV2DeleteSectionTitle": "Manage storage",
+  "libraryV2DeleteRawTitle": "Delete raw recording?",
+  "libraryV2DeleteRawConsequence": "Only the raw recording is deleted. The analysis result stays available.",
+  "libraryV2DeleteRawAction": "Delete raw recording",
+  "libraryV2DeleteResultTitle": "Delete analysis result?",
+  "libraryV2DeleteResultConsequence": "Only the analysis result is deleted. The raw recording, if kept, stays.",
+  "libraryV2DeleteResultAction": "Delete result",
+  "libraryV2DeleteEverythingTitle": "Delete this item?",
+  "libraryV2DeleteEverythingConsequence": "Everything — the raw recording and the analysis result — is deleted. This cannot be undone.",
+  "libraryV2DeleteEverythingAction": "Delete everything",
+  "libraryV2DeleteCancel": "Cancel",
+  "libraryV2SyncConflictTitle": "Sync conflict",
+  "libraryV2SyncConflictMessage": "This item changed in two places. Choose which version to keep — the other is discarded.",
+  "libraryV2SyncConflictLocalLabel": "On this device",
+  "libraryV2SyncConflictRemoteLabel": "In the cloud",
+  "libraryV2SyncConflictKeepThis": "Keep this version"
 }

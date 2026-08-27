@@ -36,6 +36,9 @@ import '../../features/learn/screens/lesson_list_screen.dart';
 import '../../features/library/public.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/session_detail_screen.dart';
+import '../../features/library_v2/domain/library_item.dart';
+import '../../features/library_v2/screens/library_item_detail_screen.dart';
+import '../../features/library_v2/screens/unified_library_screen.dart';
 import '../../features/live/screens/live_screen.dart';
 import '../../features/metronome/screens/metronome_screen.dart';
 import '../../features/onboarding/onboarding_provider.dart';
@@ -310,6 +313,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           return const LibraryScreen();
         },
       ),
+      // Unified Library session detail (E13-R28, SDD Ch13 UI-41, §0.0/B2).
+      // The ONLY route this round adds — the legacy `librarySession` route
+      // above is untouched. A `LibraryItem` `extra` of the wrong (or
+      // missing) type redirects to the unified list rather than crashing,
+      // mirroring the pattern above.
+      GoRoute(
+        path: AppRoutes.profileLibrarySession,
+        redirect: (_, state) =>
+            state.extra is LibraryItem ? null : AppRoutes.profileLibrary,
+        builder: (_, state) =>
+            LibraryItemDetailScreen(item: state.extra as LibraryItem),
+      ),
       if (practiceEnabled) ...[
         // E13-R08 (D6) — excluded when the adaptive shell owns `/practice`
         // as a destination root below, to avoid a silently-shadowed
@@ -503,7 +518,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                 ),
                 GoRoute(
                   path: AppRoutes.profileLibrary,
-                  builder: (_, _) => const LibraryScreen(),
+                  builder: (_, _) => const UnifiedLibraryScreen(),
                 ),
                 GoRoute(
                   path: AppRoutes.profileSettings,
