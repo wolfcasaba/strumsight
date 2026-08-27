@@ -1,18 +1,22 @@
 # E13-R32 — Gamification Hub, Quest, Achievement és Reward UI
 
-- **Státusz:** PREPARED (előre megírva 2026-08-15, kód olvasva: `main @ 0f7afd9a`)
+- **Státusz:** READY (pre-flight elvégezve 2026-08-27, `main @ 81640319` — lásd §0.0.B;
+  előre megírva 2026-08-15, kód olvasva: `main @ 0f7afd9a`)
 - **Típus:** Chapter 13 (UI/UX Design System), Kör 32
 - **Kör-azonosító:** `E13-R32`
 - **Branch:** `<motor>/e13-r32-gamification-ui`
 - **Előfeltétel:** `E13-R31` merge-elve (fejlődési felületek)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** [`0290`](../adr/0290-compassionate-streaks-and-idempotent-claims.md)
-  — **a Claude írja meg a kör indításakor; a `docs/adr/` a TILOS zónában van.**
+  — **MÁR MERGE-ELVE (`5b32bd8e`, 2026-08-15): a kör ADR-t NEM ír, a `docs/adr/`
+  TILOS zóna, módosítása H1.** Lásd §0.0.B/B2.
 
-> ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el a TÉNYLEGES
-> gamifikációs főkönyv (ledger) use case-ét — a §5.2 kimondja, hogy a felület
-> nem számít jutalmat. Ha az idempotens beváltás use case hiányzik, `blocked`
-> jelzéssel állj meg. Eltérésnél §0.0 revízió.
+> ✅ **Pre-flight ELVÉGEZVE (2026-08-27, orchestrátor).** A brief §0-ja `blocked`
+> jelzést írt elő, ha az idempotens beváltás use case hiányzik: **LÉTEZIK**, a
+> teljes lánc a fán van (`appendIfAbsent` / `hasProcessedEvent` / outbox
+> `enqueue`+`drain` / `supersededByLedger`) — a mért típusok és sorszámok a
+> §0.0.B/B3-ban. Az implementer NE jelezzen `blocked`-ot ezen a címen; a
+> felület a főkönyvet KIZÁRÓLAG olvassa (§0.0.B/B4).
 
 ```ai-router
 schema_version = 1
@@ -32,7 +36,6 @@ allowed_paths = [
   "test/features/gamification/ui/streak_states_test.dart",
   "test/features/gamification/ui/compassionate_copy_test.dart",
   "test/features/gamification/ui/reduced_motion_test.dart",
-  "test/fixtures/gamification/ui/",
   "test/ui/goldens/",
   "test/ui/ui_inventory_test.dart",
   "test/app/routing/app_router_test.dart",
@@ -181,6 +184,210 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0.B — PRE-FLIGHT MÉRÉS, 2026-08-27 (`main @ 81640319`, orchestrátor Claude)
+
+Az alábbi leletek a kör INDÍTÁSA előtt, a fán MÉRVE keletkeztek. A `brief-lint`
+`S13` lelete a B1-ben oldódik fel; a többi a §1.1 két kötelező mérési szabálya
+(elérhetetlen cél-státusz, erőforrás-tulajdonlás) és a merge-elt precedens
+ütköztetése.
+
+**Visszakeresett előzmény** (ADR 0312, `tools/knowledge-rag.mjs`, szűkítve →
+teljes korpusz): [ADR 0301](../adr/0301-reward-ledger-append-only-idempotency.md)
+(a főkönyv szerializált idempotenciája — EZ a merge-elt technikai kikényszerítés
+az ADR 0290 §2 elvi kimondása mögött), [ADR 0393](../adr/0393-gamification-accessibility-and-settings.md)
+(a gamifikációs preferencia-modell és a celebration-UI szándékosan KÜLÖN körre
+hagyott bekötése), [ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
++ [L486](../LESSONS.md#l486)/[L493](../LESSONS.md#l493) (golden CSAK x86-on),
+[L397](../LESSONS.md#l397)/[L401](../LESSONS.md#l401)/[L465](../LESSONS.md#l465)
+(a `ui_inventory` egzakt bázisvonala CI-only lelet — ez a hibaosztály KÉTSZER
+pont a gamifikációs fán ütött), [L478](../LESSONS.md#l478) (a pre-flight csak
+SZŰKÍTHET), [L497](../LESSONS.md#l497) (nem létező `allowed_paths` előtag),
+[L403](../LESSONS.md#l403) (a „valódi-sértés próba" a FELIRATOT és az
+ADATFORRÁST mérje, ne a widget-TÍPUST).
+
+### B1 — `test/fixtures/gamification/ui/` a fán NEM létezik → az útvonal TÖRÖLVE a listáról (`S13` feloldva)
+
+Mérve: `ls test/fixtures/` → 12 gyerek (`analysis`, `audio`, `practice`,
+`practice_generator`, `practice_planner`, `song_trainer`, `vision` + 5 JSON),
+`gamification` **nincs**. Az előtag tehát NULLA verziókövetett fájlt fed.
+
+**A feloldás a SZŰKÍTÉS, nem a könyvtár bejelentése:** az útvonal kikerült az
+`allowed_paths`-ból. Indok — a szomszéd, merge-elt kör (E13-R31) user-jóváhagyott
+listáján SINCS fixture-előtag, a négy `test/features/gamification/ui/*_test.dart`
+cella pedig tételesen fel van sorolva, tehát a teszt-adat a saját teszt-fájljában
+él (pontosan úgy, ahogy az E13-R31 `dashboard_states_test.dart`-ja). A törlés
+[L478](../LESSONS.md#l478)-konform: szigorúan KEVESEBB, mint a szomszéd kör
+listája.
+
+### B2 — a kiosztott ADR `0290` MÁR MERGE-ELVE VAN: a kör ADR-t NEM ír
+
+Mérve: `docs/adr/0290-compassionate-streaks-and-idempotent-claims.md` a fán van,
+`git log` → `5b32bd8e` („docs(ch13): E13-R30..R36 briefek + ADR 0288-0292",
+2026-08-15). A `docs/adr/` tilos zóna; módosítása **H1**.
+
+Ez a sávon a **tizenötödik** ADR nélküli kör egymás után (E13-R17…R32). Új
+döntés nincs, ezért `tools/round-slots.py reserve-adr` **nem futott** — nem
+égetünk el egy szabad sorszámot olyan körre, amelyik nem ír ADR-t. A §5 kötött
+döntései a MÁR MERGE-ELT ADR 0290 §1–§7-jével szó szerint egyeznek.
+
+### B3 — a §0 pre-flight-feltétel TELJESÜL: az idempotens beváltás use case LÉTEZIK (nincs `blocked`)
+
+A brief §0-ja `blocked` jelzést ír elő, ha az idempotens beváltás use case
+hiányzik. Mérve — LÉTEZIK, és a lánc végig a fán van:
+
+| Réteg | Mért artefaktum | Szerep |
+|---|---|---|
+| `data/reward_ledger_repository.dart:10` | `Future<bool> appendIfAbsent(RewardLedgerEntry)` | „hozzáad, HA a forrás-esemény még nincs benne" |
+| `data/reward_ledger_repository.dart:13` | `bool hasProcessedEvent(String sourceEventId)` | a dedup-kulcs lekérdezése ÍRÁS NÉLKÜL |
+| `data/activity_outbox_repository.dart:118` | `enqueue(ActivityOutboxRecord)` | az OFFLINE sor (`entry.sourceEventId == event.eventId` assert) |
+| `data/activity_outbox_repository.dart:126` | `drain()` | „minden függő rekord LEGFELJEBB egyszer" — online visszatéréskor |
+| `data/activity_outbox_repository.dart:8` | `ActivityOutboxOutcome.supersededByLedger` | a mért „már be volt írva" kimenet |
+| `application/activity_event_ingestor.dart:91` | `ActivityEventIngestor.drain()` | az EGYETLEN hívási pont a felület felé |
+
+Tehát **nincs `blocked`**, és az A2/A4 mércéje NEM elvi: a fenti típusokra
+állítható.
+
+### B4 — erőforrás-tulajdonlás (§1.1/2. szabály): a főkönyvet a felület SOHA nem írja
+
+`grep -rn "appendIfAbsent" lib/` → **6 hívási hely**, mind az `application/` és
+`data/` rétegben (`achievement_evaluator.dart:304,374`,
+`daily_challenge_service.dart:468`, `local_activity_outbox_repository.dart:249`),
+és **nulla** a `presentation/` alatt. `grep -rn "\.drain()" lib/` → a
+gamifikációs oldalon egyetlen hívó: maga az ingestor.
+
+**Merge-elt precedens a felület oldalán** (E13-R22, ADR 0283 §4) —
+`lib/features/practice/presentation/providers/practice_result_providers.dart`:
+a képernyő egy `RewardLedgerRepository` seamet olvas, `readPage`-dzsel keresi a
+`sourceEventId`-t, és a doc-comment szó szerint kimondja: *„This is a pure read:
+it never calls `appendIfAbsent`, so reopening the same session's result always
+returns the same answer — the A5 idempotency guarantee at the UI boundary."*
+
+**Ebből a kör KÖTELEZŐ mércéje:**
+
+- a gamifikációs képernyők a főkönyvet **kizárólag olvassák** (`readPage` /
+  `hasProcessedEvent`) — `appendIfAbsent` hívás a `lib/features/gamification/presentation/`
+  fán **TILOS**, és ezt az **A3** grep-je méri;
+- a „beváltás" felületi művelete = az `ActivityEventIngestor.drain()`
+  (`retry now`) meghívása; a jóváírásról a főkönyv dönt, nem a képernyő;
+- a §6.1 harmadik cellája („offline beváltás + újrapróbálkozás online") így
+  KÉT `drain()` hívás UGYANAZZAL a `sourceEventId`-vel, és **pontosan 1**
+  jóváírás — falszifikációs őr az optimista jóváírásra.
+
+### B5 — a `RewardInboxItem` NEM claim-modell: a „beváltás" szó a briefben ≠ a felhasználó gombja
+
+Mérve — `lib/features/gamification/domain/profile/reward_inbox_item.dart:159`,
+a `seen` mező doc-commentje szó szerint:
+
+> *„Display state only — not a claim, not an expiry, not a precondition for
+> anything."*
+
+és a `RewardEvent` konstruktora `sourceLedgerId`-t követel *„must reference an
+already-written ledger entry"* felirattal, azaz a postaláda **MÁR JÓVÁÍRT**
+jutalmakat tükröz.
+
+**Következmény, ami a kör kódjára köt:** a kör **nem vezet be** felhasználó által
+indított „claim" gombot, ami jóváírást vált ki — az ellentmondana a merge-elt
+modellnek (és **H2** lenne, egy lezárt kör viselkedésének megváltoztatása). A
+felület idempotencia-felülete a **függő sor újrapróbálkozása** (B4) és a
+**megjelenített egyenleg**; a „beváltás" a brief nyelvében ezt jelenti.
+
+### B6 — A5 (`türelmi idő`) elérhetetlen a `StreakGraceState`-ből; a MÉRT input a `StreakEvaluationReason` (§1.1/1. szabály)
+
+Nem az átmenettáblát, hanem a **tényleges inputot** mértem:
+
+```
+grep -rn "StreakGraceState" lib/   → enum StreakGraceState { none }   (EGYETLEN érték)
+```
+
+A `StreakState.graceState` mező tehát a fán **soha nem vesz fel** `none`-tól
+különböző értéket — egy erre épített A5-cella előállíthatatlan lenne.
+
+A státuszt ténylegesen előállító input a `StreakEvaluationReason`
+(`lib/features/gamification/application/streak_service.dart:9`), amit a
+`StreakStatusCard._contentFor` képez feliratra:
+
+| A5 állapot | MÉRT enum-érték | Ki produkálja |
+|---|---|---|
+| pihenőnap | `StreakEvaluationReason.plannedRest` | `streak_service.dart:110` — `plannedRestDays.contains(epochDay)` |
+| türelmi idő | `StreakEvaluationReason.grace` | `streak_service.dart:169–170` — `gap <= graceDays` |
+| széria vége | `StreakEvaluationReason.broken` | `streak_service.dart:171` és `:199` (`resetAfterMissedDays`) |
+
+**A numerikus küszöb MÉRVE:** `default_streak_policy.dart:10` → `graceDays = 1`.
+A cellahármas (`python3 -c` -vel kiszámolva, a predikátum `gap <= graceDays`):
+
+| Cella | `gap` | `gap <= 1` | Elvárt `reason` |
+|---|---|---|---|
+| a küszöb alatt | `0` | `True` | `grace` |
+| rajta (a küszöbön) | `1` | `True` | `grace` |
+| a küszöb fölött | `2` | `False` | `broken` |
+
+A `streak_states_test.dart` ezt a hármast **a `StreakEvaluationReason` értékkel**
+állítja be a képernyőn (a képernyő caller-fed, lásd B8), és a MEGJELENÍTETT
+feliratot méri — nem a widget típusát ([L403](../LESSONS.md#l403)).
+
+### B7 — az együttérző microcopy MÁR merge-elve van: az A1/A6 mércéje REGRESSZIÓS őr, nem új szöveg
+
+Mérve — `lib/l10n/features/gamification_en.arb`: **258** kulcs, közte a teljes
+`streakV2*` készlet. A merge-elt szöveg már ma nem büntető:
+
+- `streakV2BrokenTitle = "Your practice rhythm is ready when you are"`,
+  `streakV2BrokenBody = "The skill you have built stays with you."`
+- `streakV2PlannedRestTitle = "Planned rest protects your rhythm"`
+- `streakV2GraceTitle = "Your rhythm has room to breathe"`
+- `streakV2RecoveryCta = "Start a recovery practice"` — **gyakorlás**-CTA, NEM
+  fizetős visszaállítás; az A6-ot ez teljesíti, és a cella a jövőbeli
+  gyengítés ellen véd.
+
+**Ebből az A1/A6 mércéje pontosítva:** a `compassionate_copy_test.dart` a
+`gamification_{en,hu}.arb` FORRÁS-fragmentumot olvassa, és tiltott mintákra
+állít (felkiáltójel a széria-státusz szövegeiben, veszteség-nyelv, valamint
+bármely fizetős visszaállításra utaló kulcs/felirat). Így a cella akkor is
+piros lesz, ha egy KÉSŐBBI kör írja vissza a büntető nyelvet — a jelenlegi
+zöld nem üres, hanem lehorgonyzott bázisvonal. A brief §8/4. lépése ezért
+**nem** új szöveg írását jelenti, hanem a hiányzó/új felületi kulcsok
+kiegészítését en+hu paritással.
+
+### B8 — a hét gamifikációs képernyő MÁR caller-fed, és NULLA design-system importja van: EZ a kör tényleges munkája
+
+Mérve — `find lib/features/gamification -name "*_screen.dart"` → **7 fájl**
+(`gamification_hub`, `quests`, `achievements`, `achievement_detail`,
+`streak_detail`, `reward_inbox`, `level_detail`), mind kötelező konstruktor-
+paraméterekkel (`required this.profile`, `required this.onOpenInbox`, …), azaz
+repository-, storage- és falióra-olvasás nélkül.
+
+```
+grep -rn "design_system" lib/features/gamification/   → 0 találat
+```
+
+**A kör tehát MIGRÁCIÓS kör, nem zöldmezős** (ellentétben az E13-R31
+`progress_v2` fájával). Következmények:
+
+- a caller-fed szerződést **megőrizni kell** — a képernyők ezután sem olvasnak
+  repositoryt vagy `SharedPreferences`-t (`test/tooling/preferences_plugin_import_guard_test.dart`
+  a `gate_tests`-ben fut);
+- a design-system importja **kizárólag** a `lib/core/design_system/public.dart`
+  barrelen át mehet — ezt a `test/core/architecture_dependency_test.dart` méri
+  (E13-R16/F8: 11 sértés, §0.0/S12). **Új DS-komponens NEM készül**, a
+  `lib/core/design_system/**` tilos zóna marad;
+- az A8 adatforrása a MÁR MERGE-ELT `GamificationPreferences`
+  (`reduceMotion`, `CelebrationIntensity.{full,subtle,silent}`, ADR 0393 §5.1),
+  amit a `presentation/providers/gamification_preferences_provider.dart`
+  exportál. **Az ADR 0393 kifejezetten erre a körre hagyta a celebration-UI
+  bekötését** — a `reduced_motion_test.dart` a `subtle`/`silent` ágon is
+  megmaradó, nem-nulla visszajelzést méri.
+
+### B9 — `ui_inventory` és `app_router_test`: a MÉRT jelenlegi bázisvonal
+
+| Őr | MÉRT jelenlegi állítás | Mikor mozdul |
+|---|---|---|
+| `test/ui/ui_inventory_test.dart:22` | `expect(first.screenPaths, hasLength(94))` | CSAK ha a kör ÚJ vagy törölt `lib/features/**/*_screen.dart`-ot hoz |
+| `test/app/routing/app_router_test.dart:21–26` | 6 gamifikációs képernyő-TÍPUST importál és `find.byType(GamificationHubScreen)`-t állít (`:437`) | CSAK ha a kör lecseréli a képernyő TÍPUSÁT |
+
+**A jogosultság mindkettőn PONTOSAN a szám, illetve a típusnév igazítása.** Ha a
+migráció a meglévő 7 képernyőt a helyén hagyja (a B8 szerint ez a várt út), a
+két őr **érintetlen marad** — és a kör ezt a §10-ben mondja ki mérve. Cella
+törlése, `skip`-je vagy az állítás gyengítése TILOS.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -295,13 +502,29 @@ Az ADR (E13-R06) szabálya: a visszajelzés megmarad, csak más modalitásban.
 | Csökkentett mozgás → az ünneplés eltűnik | **A8** |
 | A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
-**A beváltás három kötelező cellája** (a küszöb: hányszor íródik jóvá):
+**A beváltás három kötelező cellája** (a küszöb: hányszor íródik jóvá). A
+§0.0.B/B4 szerint a felületi művelet az `ActivityEventIngestor.drain()`, a
+jóváírás mércéje pedig a főkönyvbe került `RewardLedgerEntry`-k száma az adott
+`sourceEventId`-re:
 
 | Cella | Bemenet | Elvárt |
 |---|---|---|
-| a küszöb alatt | a beváltás megszakad | **0** jóváírás |
-| rajta (a küszöbön) | egyszeri beváltás | **pontosan 1** jóváírás |
-| a küszöb fölött | offline beváltás + újrapróbálkozás online | **pontosan 1** jóváírás |
+| a küszöb alatt | a `drain()` a főkönyv hibájába fut (a rekord karanténba kerül) | **0** jóváírás, és a felület **nem** mutat jóváírt egyenleget |
+| rajta (a küszöbön) | egyetlen sikeres `drain()` | **pontosan 1** jóváírás |
+| a küszöb fölött | offline `enqueue` → `drain()` → ÚJRA `drain()` ugyanazzal a `sourceEventId`-vel | **pontosan 1** jóváírás (a második `ActivityOutboxOutcome.supersededByLedger`) |
+
+**A5 — a széria-státusz három cellája** (§0.0.B/B6, `graceDays = 1`, a predikátum
+`gap <= graceDays`, `python3 -c`-vel kiszámolva):
+
+| Cella | `gap` | Elvárt `StreakEvaluationReason` | Elvárt felirat-forrás |
+|---|---|---|---|
+| a küszöb alatt | `0` | `grace` | `streakV2GraceTitle` |
+| rajta (a küszöbön) | `1` | `grace` | `streakV2GraceTitle` |
+| a küszöb fölött | `2` | `broken` | `streakV2BrokenTitle` |
+
+A pihenőnap külön cella: `plannedRest` → `streakV2PlannedRestTitle`, és a
+`broken`-től MEGKÜLÖNBÖZTETHETŐEN jelenik meg (a §6.1 „A pihenőnap a széria
+végeként" hibás implementációját ez fogja pirosra).
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** írd jóvá a jutalmat
 optimista módon a főkönyv megerősítése előtt → az **A2** cellának PIROSNAK kell
@@ -320,8 +543,21 @@ KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r32_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r32_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r32_screens_golden_test.dart
 ```
+
+> **§0.0.B/B10 — a `flutter test --update-goldens` TILOS ezen a boxon.** Az
+> ARM-en rögzített pixel az x86-os merge-kapu nulla toleranciájú komparátorán
+> MINDIG piros ([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+> §2–§3, [L486](../LESSONS.md#l486), [L493](../LESSONS.md#l493): az E13-R17 két
+> vak javító kört, az E13-R20 egy **H5 haltot** fizetett érte). A
+> `tools/golden-x86.sh` a CI-vel AZONOS architektúrán vesz fel és ellenőriz — a
+> mérce (nulla tolerancia, ugyanaz a komparátor és golden-készlet) VÁLTOZATLAN.
+> Kilépési kódok: `0` = egyezik, `10` = valódi golden-eltérés, `20` =
+> környezeti hiba, `30` = hibás hívás. A merge-elt E13-R23…R31 precedens
+> egységesen ezt az alakot használja; minta:
+> `test/ui/goldens/e13_r31_screens_golden_test.dart`.
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
