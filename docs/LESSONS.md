@@ -20370,3 +20370,54 @@ nevesített csatornáját fogta meg, amit minden gépi mérce átengedett.
 **Őrteszt:** `test/features/community/private_club_leakage_test.dart` — az
 `A3 — the club-LIST preview never leaks a private non-member club` csoport KÉT
 cellája (látható szöveg + `Semantics` label).
+
+## L522 — A záró rituálék előtt lejáró session-időkorlát nem veszít el kört, de a KÖVETKEZŐ firinget rossz utasítással indítja: a hagyaték-szondán nem volt „már merge-elve" fok (E13-R35 / H-NOSIGNAL önjavítás, 2026-08-27)
+
+**A mért esemény.** Az E13-R35 orchestrátor-sessionje 16:30:09-kor indult, 4 órás
+abszolút időkorláttal (`PIPELINE_SESSION_TIMEOUT=14400`). A kört végig is vitte:
+a PR [#480](https://github.com/wolfcasaba/strumsight/pull/480) **20:28:30Z-kor
+zölden merge-elődött** (`57eeb6ff`), a `b4941257` head SHA-n `full-gate`,
+`router-ci` és `Coverage` mind `success`. A driver 20:30:02-kor be is
+ff-merge-elte a `main`-re. A session ezután **99 másodperccel a merge után**,
+20:30:09-kor futott bele az időkorlátba — a záró rituálék (queue-sor `done`,
+`HANDOFF.md`, git-notes, **kör-jelzés**) egyike sem futott le → `H-NOSIGNAL`.
+
+**A halt maga ártalmatlan. A kárt a következő firing okozta volna.** A queue-sor
+`pending` maradt, tehát a lánc újra sorra veszi a kört, és a `{{RESUME_STATE}}`
+helyére a `tools/round-resume-probe.sh` ezt mérte (reprodukálva a javítás előtti
+szondával, az éles repón):
+
+```
+ÁLLAPOT: REVIEW-APPROVED
+**TEENDŐ:** ... a kör a **merge-lépésnél** folytatódik: §0.3 upstream-szinkron
+→ PR → a teljes CI-kapu ÚJRA ... → zöld kapus squash-merge.
+```
+
+Vagyis a §0.2 létra legfelső foka egy MÁR MERGE-ELT kört küldött vissza a
+merge-lépésre: egy újabb 4 órás session és egy duplikált PR egy olyan ágról,
+aminek a tartalma már a `main`-en van.
+
+**Miért nem fogta meg a kézenfekvő próba.** A kapu `gh pr merge --squash`-t
+használ, ezért az ág csúcsa **nem** őse a `main`-nek — mérve:
+`git merge-base --is-ancestor b4941257 origin/main` → **1**. Az ancestor-próba
+tehát önmagában vak a repó SAJÁT merge-stratégiájára. A `--delete-branch` sem
+futott le (a session addigra halott volt), így a kör-ág is ott maradt az
+originon, és a szonda talált rá „élő" ágat.
+
+**A javítás.** A szondának új, MÉRT foka van (`MERGE-ELVE`), két független
+jellel: (a) az ág csúcsa őse a `<remote>/main`-nek; (b) a `<remote>/main` egy
+commitjának a TÁRGYA a kör azonosítójával kezdődik (`[E13-R35] …` — a repó
+kör-merge-ein egységes PR-cím-konvenció, 52 commiton mérve). A fok csak pozitív
+irányban dönt: ha egyik jel sem szól, a létra változatlan — az idegen kör
+merge-commitja (`[E13-R34] …`) nem minősít, ezt külön teszt rögzíti. A teendője
+nem merge, hanem **lezárás**: queue-sor, HANDOFF, git-notes, `outcome=merged`,
+hagyaték-takarítás.
+
+**Az általánosítható darab.** Egy örökség-létra minden foka egy UTASÍTÁS, nem
+csak egy címke. Ha a létra tetején lévő fok teendője egy MÁR ELVÉGZETT
+műveletre mutat, a létra nem „hiányos", hanem **aktívan félrevezet** — és pont
+akkor, amikor a session a legkevésbé tudja ellenőrizni (friss kontextus, 4 órás
+keret az elején). A „kész" állapotoknak ezért mindig kell egy fok, ami a
+LEZÁRÁSRA irányít, nem a megismétlésre. Ugyanaz a hibaosztály, amit
+[L474](#l474) (E09-R26) a `REVIEW-APPROVED` fokkal zárt le — egy szinttel
+feljebb, a létra tetején.

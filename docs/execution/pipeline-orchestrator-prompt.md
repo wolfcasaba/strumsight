@@ -100,6 +100,7 @@ kézi ellenőrzésre valók, nem a jelentés helyettesítésére.
 | `PRE-FLIGHT` | van kör-ág, de nincs review | az ADR + §0.0 brief-revízió újrahasznosítása, majd implementer |
 | `REVIEW-NYITOTT` | kész review **nyitott leletekkel** | **következő javító kör** |
 | `REVIEW-APPROVED` | kész review, **0 nyitott lelet** | **merge-lépés** — se újrakezdés, se újraimplementálás |
+| `MERGE-ELVE` | a kör munkája MÁR a `main`-en | **csak lezárás** — se újraimplementálás, se új PR, se újra-merge |
 
 Ha a kör branchén (lokálisan vagy az originon) már **kész review van nyitott
 leletekkel** (`docs/reviews/eXX-rYY-review.md`), akkor a dolgod NEM a kör
@@ -128,6 +129,27 @@ review-t és folytasd a normál lépéssort (CI-újradispatch, merge).
 > kifejezetten a NYITOTT leletekhez volt kötve, a kifutás pedig „indíts
 > tisztán" — ez 4210 sort és egy teljes review-ciklust ejtett volna el, ADR
 > 0422 divergens újraírásának kockázatával.
+
+> **Új fok — `MERGE-ELVE` (ADR 0112 önjavító kör, E13-R35/H-NOSIGNAL,
+> 2026-08-27).** Ha a kör munkája MÁR a `<remote>/main`-en van, a kör **kész**:
+> **nem** implementálod újra, **nem** indítasz rá implementert, **nem** nyitsz rá
+> új PR-t és **nem** merge-eled újra. A dolgod kizárólag a **lezárás**: a
+> `docs/execution/pipeline-queue.tsv` sora `done`, `HANDOFF.md` + `docs/LESSONS.md`,
+> git-notes, a kör-jelzés `outcome=merged`, végül a hagyaték takarítása (kör-ág
+> törlése az originon, munkapéldány eltávolítása). Ha a saját mérésed szerint a
+> merge-elt commit nem ennek a körnek a munkája, az felülírja a besorolást.
+>
+> **Mérve:** az E13-R35 PR #480-ja 20:28:30Z-kor zölden merge-elődött
+> (`57eeb6ff`; a `b4941257` head SHA-n `full-gate`, `router-ci`, `Coverage` mind
+> `success`), a driver 20:30:02-kor be is ff-merge-elte a `main`-re — az
+> orchestrátor-session viszont **99 másodperccel a merge után**, 20:30:09-kor
+> futott bele a 4 órás abszolút időkorlátba, a záró rituálék (queue-sor,
+> HANDOFF, git-notes, **kör-jelzés**) előtt → H-NOSIGNAL. A queue-sor `pending`
+> maradt, tehát a lánc újra sorra vette a kört, és a szonda a `REVIEW-APPROVED`
+> fokot mérte rá: „folytatás a merge-lépésnél". A `--squash` merge miatt az ág
+> csúcsa (`b4941257`) **nem** őse a `main`-nek, ezért a naiv ancestor-próba sem
+> fogta meg — a szonda azóta a squash-merge commit TÁRGYÁT (`[E13-R35] …`) is
+> méri.
 
 Ha találsz commitolt pre-flightot (ADR + §0.0 brief-revízió) egy korábbi
 munkapéldányban: **olvasd el és HASZNÁLD FEL** (fetch-eld a branchét), ne írd

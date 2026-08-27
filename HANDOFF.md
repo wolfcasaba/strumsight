@@ -1,5 +1,39 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R35 KÉSZ (merge-elve) + H-NOSIGNAL önjavítás — PR [#480](https://github.com/wolfcasaba/strumsight/pull/480), squash `57eeb6ff` (2026-08-27)
+
+Az UI-48 / UI-62–UI-65 account-, settings-, privacy-, offline-AI- és share-felület
+(SDD Ch13 Kör 35) **zölden merge-elve**: a `b4941257` head SHA-n `full-gate`,
+`router-ci` és `Coverage` mind `success`, a squash `57eeb6ff`.
+
+**A kör mégis `H-NOSIGNAL`-lal állt meg.** Az orchestrátor-session 16:30:09-kor
+indult, 4 órás abszolút időkorláttal; a merge 20:28:30Z-kor landolt, a driver
+20:30:02-kor be is ff-merge-elte a `main`-re — a session viszont **99
+másodperccel a merge után**, 20:30:09-kor futott bele az időkorlátba, a záró
+rituálék (queue-sor `done`, HANDOFF, git-notes, **kör-jelzés**) előtt.
+
+**Az önjavító kör (ADR 0112) gyökéroka nem a halt, hanem ami utána jött volna.**
+A queue-sor `pending` maradt, tehát a lánc újra sorra vette volna a kört, és a
+`tools/round-resume-probe.sh` a javítás előtt ezt mérte rá az éles repón:
+`ÁLLAPOT: REVIEW-APPROVED` → *„a kör a merge-lépésnél folytatódik … zöld kapus
+squash-merge"* — egy MÁR MERGE-ELT körre. A `--squash` miatt az ág csúcsa
+(`b4941257`) **nem** őse a `main`-nek (`merge-base --is-ancestor` → 1), a
+`--delete-branch` pedig már nem futott le, ezért a szonda „élő" kör-ágat talált.
+
+**A javítás:** a szondán új fok, `MERGE-ELVE`, két független MÉRT jellel —
+(a) az ág csúcsa őse a `<remote>/main`-nek, (b) a `<remote>/main` egy commitjának
+a TÁRGYA a kör azonosítójával kezdődik (`[E13-R35] …`, a repó 52 kör-merge-én
+egységes konvenció). A fok csak pozitív irányban dönt; idegen kör merge-commitja
+(`[E13-R34] …`) nem minősít — külön teszt rögzíti. A teendője **lezárás**, nem
+merge. A `docs/execution/pipeline-orchestrator-prompt.md` §0.2 létrája is
+megkapta a fokot. Regressziós teszt: `tools/tests/test_round_resume_probe.py`
+`AlreadyMergedRoundTest` (3 új eset, a valódi E13-R35 ág-/commit-adatokkal) —
+a javítás előtt piros, utána zöld. Tanulság: [L522](docs/LESSONS.md).
+
+**A queue-sor `done`**, a kör-ág és a `/home/ubuntu/ss-sonnet-impl-e13-r35`
+munkapéldány takarítva; a sáv az **E13-R36** (vizuális regresszió és lezárás)
+körrel folytatódik.
+
 ## ✅ E13-R34 KÉSZ — Community challenges, clubs, notifications és safety UI — PR [#479](https://github.com/wolfcasaba/strumsight/pull/479), squash `4f7eb630` (2026-08-27)
 
 Az UI-59–UI-61 kihívás-, ranglista-, klub-, értesítés- és biztonsági felülete
