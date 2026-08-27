@@ -20268,3 +20268,105 @@ megmondja, melyik locale törik el.
 
 **Őrteszt:** `test/features/community/composer_audience_test.dart` — a §6.1
 „above threshold" csoport `en`- és `hu`-locale cellapárja.
+
+---
+
+## L520 — A védelmi művelet (tiltás/némítás) `catch` NÉLKÜLI `await`-je HAMIS BIZTONSÁGÉRZETET ad, és a boldog-utas célteszt szerkezetileg nem tudja megfogni (E13-R34 / MAJOR-2, 2026-08-27)
+
+**A mért hiba.** Az E13-R34 két ÚJ biztonsági akciót vezetett be — `Block author`
+/ `Mute author` a kihívás-lapon és `Block member` / `Mute member` a
+klub-tagkezelésen. Mindkettő így nézett ki:
+
+```dart
+final repo = ref.read(socialGraphRepositoryProvider);
+await repo.block(target: …, idempotencyKey: key);   // NINCS try/catch
+```
+
+`NetworkFailure(network.unavailable)`-on az `AppFailure` kezeletlen aszinkron
+hibaként szabadult el egy `PopupMenuButton.onSelected` callbackből: **SnackBar
+nincs, állapotváltozás nincs**, a menü/lap bezárul. A felület pontosan úgy néz
+ki, mint sikeres tiltás után. A kihívás-lapon a `Navigator.of(sheetContext).pop()`
+ráadásul az `await` **ELŐTT** futott, tehát a context már halott volt, mire a
+hiba megtörtént.
+
+**Miért nem UX-lelet, hanem biztonsági.** A tiltás **védelmi** művelet. Egy
+némán elbukó védelmi művelet rosszabb, mint egy látható hiba: a felhasználó azt
+hiszi, elzárta magát egy zaklatótól, közben nem történt semmi, és nem is fog
+újrapróbálkozni. A projekt eddig a fordított alakot ismerte
+(`CLAUDE.md`: *„Cloud writes swallowed by `try/catch` → silent no-op"*) — itt
+**nincs is `catch`**, és az eredmény ugyanaz.
+
+**Amiért a célteszt nem fogta meg.** Az A6/A8 cellák egy
+`_RecordingSocialGraphRepository` fake-kel mértek, ami **sosem dob** — tehát
+kizárólag a boldog utat járták be. A hiba-ág nem „gyengén" volt lefedve, hanem
+**egyáltalán nem**: a fake szerkezetéből következett, hogy a cella zöld marad.
+Ugyanez igaz a kör teljes gate-jére: `round-gate.sh` 15/15 zöld, `full-gate.yml`
+exact-SHA CI `success`, golden 14/14 — a rés végig nyitva volt.
+
+**A testvér-felület a KÖR SAJÁT DIFFJÉBEN helyesen csinálta.**
+`safety_relationships_screen.dart:308–320` ugyanezt a műveletet
+`try { … } on AppFailure catch (failure) { if (!context.mounted) return; …
+showSnackBar(_formatFailure(…)) }` alakban végzi. A két új akció a mintát nem
+örökölte — **ugyanazon a diffen belüli paritáshiány**, ami a leletet olcsón
+felismerhetővé teszi: ha egy diff egy művelethez KÉT megvalósítást tartalmaz, és
+csak az egyik kezeli a hibát, az mindig gyanús.
+
+**Az olcsó detektor a következő review-ba:** minden ÚJ `await repo.<mutáló
+hívás>` mellé kérdezd meg, (1) van-e `catch`, és (2) van-e olyan teszt-cella,
+ahol a fake **dob**. Ha a fake csak sikeres választ ad, a hiba-ág mérése
+hiányzik, nem gyenge.
+
+**Őrteszt:** `test/features/community/private_club_leakage_test.dart` — az
+`A6 / A8 — a failed block/mute is VISIBLE to the caller, never silent` csoport
+két cellája (klub-tagkezelés és kihívás-lap), dobó fake-kel. A reviewer P4
+próbája (a klub-oldali `catch` eltávolítása) PONTOSAN a klub-management cellát
+váltotta pirosra, a challenges-cellát nem — a pár tehát felületenként külön mér.
+
+---
+
+## L521 — Egy jogosultsági kaput a FOGYASZTÓK MINDEGYIKÉRE fel kell tenni: a részletnézetre telepített szűrő nem véd a lista-előnézeten, és a célteszt a nem mért felületet nem is látja (E13-R34 / MAJOR-1, 2026-08-27)
+
+**A mért hiba.** Az E13-R34 a klub-RÉSZLETNÉZETRE felépítette a
+`myRole == null && visibility == private` háromágú kaput, és a doc-comment ki is
+mondta az indokát: *„closing the leak channel a repository that returns more
+than the SUMMARY placeholder would otherwise open"*. A klub-LISTA
+(`club_list_screen.dart`) `itemBuilder`-je viszont **szűrés nélkül** épített
+sort minden elemre, és a `_ClubRow` a klub nevét a látható `Text`-be ÉS a
+`Semantics` labelbe is beírta. A `security-reviewer` reprodukálta:
+
+```
+PROBE list TEXTS:     [Secret Blues Club, Private · 5 members, Load more, Clubs]
+PROBE list SEMANTICS: [Secret Blues Club. Private · 5 members.]
+```
+
+**A brief EXPLICIT volt, mégis kimaradt.** A §5.3 szó szerint kimondja: *„a cím
+maga is tartalom"*, a §6.1 A3-cellája pedig **névvel nevezi** a
+„lista-előnézet" csatornát. A megírt célteszt viszont KIZÁRÓLAG a
+`ClubDetailScreen`-re állított (`_wrapDetail`) — **17/17 cella zöld volt**,
+miközben a brief által névvel nevezett csatorna méretlen és nyitva állt. A
+teszt tehát nem hazudott: egy MÁSIK felületről mondott igazat.
+
+**A két általánosítható darab:**
+
+1. **A kapu a szolgáltató KÖRÜL, nem egy fogyasztóban.** Ha egy védelmi
+   predikátum ugyanabból a repository-hívásból származó adatra vonatkozik,
+   mérd ki a hívás MINDEN fogyasztóját (`listClubs` ↔ `fetchClub`), és tedd fel
+   a kaput mindegyikre — vagy a közös helyre. Egy fogyasztóra telepített kapu a
+   többinél hamis biztonságot ad, ráadásul a MEGLÉVŐ kapu doc-commentje
+   „megoldottnak" mutatja a hibaosztályt.
+2. **A mellékcsatorna külön cella.** A név MINDKÉT csatornán megjelent — látható
+   szövegként és `Semantics` labelként. Egy `find.text` cella a `Semantics`
+   szivárgást nem fogja meg (és fordítva); a javító kör ezért KÉT cellát kapott,
+   és a reviewer P3 próbája (a szűrő kivétele) mindkettőt pirosra váltotta.
+   Ugyanez az osztály, mint az [L519](#l519) `en`/`hu` cellapárja: **a
+   falszifikációs cella hatóköre pontosan az a csatorna, amit néz.**
+
+**Amit a folyamatból is meg kell tanulni.** A leletet nem a gate és nem az
+orchestrátor olvasása találta meg, hanem a brief §7 által KÖTELEZŐVÉ tett
+`security-reviewer` ügynök, egy eldobható probe-csomaggal. A `risk = "high"`
+körökön ez a lépés nem formalitás: a kör saját acceptance-kritériumának egy
+nevesített csatornáját fogta meg, amit minden gépi mérce átengedett.
+
+**Őrteszt:** `test/features/community/private_club_leakage_test.dart` — az
+`A3 — the club-LIST preview never leaks a private non-member club` csoport KÉT
+cellája (látható szöveg + `Semantics` label).

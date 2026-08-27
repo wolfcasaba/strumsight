@@ -1,5 +1,103 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R34 KÉSZ — Community challenges, clubs, notifications és safety UI — PR [#479](https://github.com/wolfcasaba/strumsight/pull/479), squash `4f7eb630` (2026-08-27)
+
+Az UI-59–UI-61 kihívás-, ranglista-, klub-, értesítés- és biztonsági felülete
+(SDD Ch13 Kör 34). A kör **ADR-t nem írt** — a §5 normái a merge-elt
+[`0291`](docs/adr/0291-community-is-optional-and-private-by-default.md),
+[`0399`](docs/adr/0399-flutter-community-domain-and-public-api.md),
+[`0414`](docs/adr/0414-notification-inbox-and-push-abstraction.md) és
+[`0418`](docs/adr/0418-leaderboards-and-opt-in-competition.md); a sávon a
+**tizenhetedik** ADR nélküli kör egymás után (E13-R17…R34). Implementer
+`sonnet-impl` (Claude Sonnet 5, `--effort high`), orchesztrátor/reviewer Claude
+Opus 5 + kötelező `security-reviewer` ügynök (`risk = "high"`), **1 javító kör**
+— `docs/reviews/e13-r34-review.md`: 1. forduló **0 BLOCKER / 2 MAJOR / 1 MINOR
+/ 6 NOTE → CHANGES REQUESTED**, 2. forduló **0 nyitott lelet → APPROVED**.
+
+**A pre-flight ÁTÍRTA a brief fájllistáját, és vele a §0.0 NÉGY celláját.** A
+`brief-lint` `S13` lelete szerint a `lib/features/community/{challenges,clubs,safety}/`
+a fán nem létezik — ugyanaz a hibaosztály, mint az E13-R33-nál, és pontosan az,
+amit [L518](docs/LESSONS.md#l518) tegnap **név szerint átadott ennek a körnek**.
+Az `S13` nem egy sort, hanem MINDEN belőle levezetett cellát érvénytelenít: az
+`R1` „a képernyőket ez a kör hozza létre" HAMIS volt (mind a hét képernyő a fán
+van), az `R2` „nincs ilyen"-je HAMIS (**hat** pinnelő widget-teszt), az `R4` „a
+szám elmozdul"-ja HAMIS (nincs új képernyő, a `ui_inventory` bázisvonal
+változatlan **94**). A lista a §3 scope-jához tartozó **hét képernyőre** +
+`presentation/widgets/`-re mutat — pontosan az a halmaz, amit az E13-R33
+§0.0.B/B1 ennek a körnek tartott fenn, tehát a két kör fájlhalmaza
+bizonyítottan diszjunkt.
+
+**Négy további mért eltérés a brief feltevéseitől** (§0.0.B/B5–B9), mind a
+§1.1 két kötelező mérési szabálya szerint a TÉNYLEGES hívási láncon:
+
+1. **nincs kliens-oldali ranglista opt-in kapcsoló** — az opt-in a szerver
+   `verified`-only projekciójának tulajdona (ADR 0418, E09-R23); egy kapcsoló
+   bevezetése LEZÁRT kör szerződését írná át (**H2**). Az A1 ezért felület
+   felőli absztinencia-cella lett;
+2. **a „függő" küszöb `bestMetricValue == null`**, nem enum-érték — `pending` /
+   `verified` érték a `ChallengeInviteState`-ben NINCS;
+3. **„függő klub-csatlakozási kérelem" állapot a fán NEM ábrázolható**
+   (`ClubRole` = `{owner, moderator, member}`) — a §6.1 cellahármas a MÉRT
+   `myRole` × `ClubVisibility` küszöbre került (**H2** lett volna bevezetni);
+4. **az értesítésnek nincs route-mezője és a közösségi képernyők nincsenek a
+   routerben** (`grep -c community lib/app/routing/app_router.dart` → 0), a
+   `lib/app/routing/**` pedig tilos zóna — az A4 strukturális absztinencia-cella
+   lett (**H3** lett volna route-ot felvenni).
+
+**A kör legnagyobb, MÉRÉSSEL talált munkája nem is a migráció volt: a klub-ág
+TELJESEN lokalizálatlan volt.** A három klub-képernyőn **0** `AppLocalizations`
+használat és **46** beégetett angol `const String _l10nClub*` konstans élt —
+köztük a `Private` / `Discoverable` / `Public` láthatósági választó, a kör
+legnagyobb következményű beállítása. Egy magyar nyelvre állított felhasználó a
+klub-ág minden gombját angolul látta. Ez az [L519](docs/LESSONS.md#l519)
+hibaosztálya fordított irányban, és új **A10** acceptance-cellát kapott `en`/`hu`
+cellapárral (a mért tanulság szerint egy locale-specifikus cella önmagában csak
+az ELLENKEZŐ nyelv beégetését fogja). Eredmény: 59 új ARB-kulcs a
+`community_{en,hu}.arb` FORRÁS-fragmentumban, 0 maradék konstans, 0 bájtazonos
+ARB↔Dart pár.
+
+**A review két MAJOR-t talált a zöld gate MÖGÖTT** (`docs/reviews/e13-r34-review.md`):
+
+- **MAJOR-1** — a privát klub NEVE kiszivárgott a klub-LISTA előnézetében
+  (látható szöveg ÉS `Semantics` label), mert a körben ÚJ, háromágú
+  `myRole × visibility` kapu csak a RÉSZLETnézetre került fel. A brief §6.1
+  A3-cellája névvel nevezi a „lista-előnézet" csatornát, a célteszt viszont
+  kizárólag a `ClubDetailScreen`-t mérte: **17/17 cella zöld volt, miközben a
+  csatorna nyitva állt.** A `security-reviewer` reprodukálta.
+- **MAJOR-2** — a kör KÉT ÚJ **védelmi** akciója (block/mute a klub-tagkezelésen
+  és a kihívás-lapon) `try`/`catch` NÉLKÜL `await`-elt: hálózati hibán a
+  felület sikeresnek látszott, SnackBar nélkül. Némán bukó védelmi művelet =
+  hamis biztonságérzet. A testvér `safety_relationships_screen.dart` helyesen
+  csinálta — a két új akció nem örökölte a mintát.
+
+Mindkettő + a MINOR-1 (beégetett angol `Semantics` szöveg a kör új kódjában) a
+javító körben lezárva, és **mindhárom zárását a reviewer SAJÁT eldobható
+falszifikációs próbája igazolta** (P3: a lista-szűrő kivéve → mindkét új A3
+cella piros; P4: a klub-oldali `catch` kivéve → pontosan a klub-management cella
+piros, a challenges-cella zöld).
+
+**A `textScaler 2.0` golden-keret harmadszor is felderítő mérésnek bizonyult**
+([L517](docs/LESSONS.md#l517)): KÉT, kör ELŐTTI `RenderFlex` túlcsordulást
+fogott meg (**805 px** a klub-részlet infóblokkján, **54 px** az értesítés-
+AppBaren) — mindkettő JAVÍTVA, nem bázisvonalként rögzítve.
+
+**Zöld kapu a merge SHA-n (`c102e581`):** Full Gate
+[33090419506](https://github.com/wolfcasaba/strumsight/actions/runs/33090419506)
++ Router CI [33092107103](https://github.com/wolfcasaba/strumsight/actions/runs/33092107103)
+mindkettő `success`; a reviewer izolált `/tmp` klónjában `tools/round-gate.sh`
+**15/15 zöld**, `tools/golden-x86.sh check` **14/14 zöld** (7 képernyő × 2
+keret), `tools/scope-audit.py` OK (0 listán kívüli fájl).
+
+**Átadva a következő köröknek (NOTE, mind KÖR ELŐTTI vagy valódi H3):** az
+értesítés `_lookupKey(...) ?? item.titleKey` fail-open feloldása (E09-R20, a
+javítása H2); a `_requestJoin` hiányzó hibakezelése; hat bájtazonos `en`/`hu`
+ARB-pár; a **`report` (bejelentés) akció bedrótozása** — mérve:
+`showReportContentSheet` egy `ReportRepository`-t KÖVETEL és az egész fán
+**nulla production hívója** van, egy implementáció a `data/` réteget kívánná
+(valódi H3), ezért az A6 a tiltás/némítás lábán teljesül, a bejelentés-láb
+jövőbeli kör; a golden-fixture valós handle-je; a klub Feed/Challenges tabok
+`UnimplementedError`-jai (E09-R25 óta).
+
 ## ✅ E13-R33 KÉSZ — Community profil, feed, keresés és poszt UI — PR [#478](https://github.com/wolfcasaba/strumsight/pull/478), squash `e2b3f71c` (2026-08-27)
 
 Az UI-53–UI-58 **opcionális, alapból nem nyilvános** közösségi felülete (SDD
