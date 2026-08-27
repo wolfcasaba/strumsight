@@ -607,4 +607,123 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Ez a kör két résztben futott** (abszolút időkorlát miatt): az első rész
+(`8e261b53`, `e2014c4f`, `f3541338`) építette fel a képernyőket és a
+tesztgyűjteményt; ez a folytatás rögzítette a goldeneket, futtatta a
+valódi-sértés próbát, és — a golden-felvétel közben talált — egy pluszban
+mért, valódi textScaler-2.0 túlcsordulást javított.
+
+### Képernyőnkénti összefoglaló
+
+| Fájl | Mit épít |
+|---|---|
+| `lib/features/auth/screens/login_screen.dart` | bejelentkezés/regisztráció, „fiók nélkül tovább" úttal, redaktált hitelesítési hibaüzenettel |
+| `lib/features/settings/screens/settings_screen.dart` | kategória/lista-részlet szerkezet + a szinkron-állapot sáv (`SettingsSyncStatus.synced\|pending\|failed`) + felhasználó-indított Retry |
+| `lib/features/settings/screens/privacy_center_screen.dart` | **ÚJ képernyő** — adatvédelmi/hozzájárulási központ (leltár, export, törlés, szabályzat-állapotok), a beállítások felső szintjéről elérhető |
+| `lib/features/settings/screens/vision_privacy_screen.dart` | a kamerás funkció adatvédelmi állapotai |
+| `lib/features/offline_ai/screens/model_manager_screen.dart` | **ÚJ képernyő, ÚJ feature-fa** — offline AI modellkezelő: letöltés/ellenőrzés/aktiválás/visszaállítás/tárhely állapotokkal |
+| `lib/features/share/screens/share_preview_screen.dart` | megosztás-előnézet, tételes redakció-összegzővel, formátum- és közönség-választással |
+
+### Acceptance cellák → mérő teszt (fájl + teszt-név)
+
+| # | Bizonyíték |
+|---|---|
+| A1 | `test/features/settings/auth_states_test.dart` — a „fiók nélkül tovább" út létezik és navigál |
+| A2 | ugyanott — a hitelesítési hiba redaktált, technikai részlet nem szivárog |
+| A3 | `test/features/settings/settings_persistence_failure_test.dart` — `'A3 — while a save is in flight the screen shows "Saving…", not "saved"'` + az A3/A4 közös cella |
+| A4 | ugyanott — `'A3/A4 — a failed save shows a pending state, not "saved", and a Retry action sends exactly one more attempt through the existing push path'`: 1 push → hiba → `settingsSyncRetry` gomb → pontosan 1 ÚJ push (összesen 2, nem több) — **plusz** a NEM szerkeszthető `settings_sync_test.dart` két őrcellája (588. és 531. sor), amelyek azt pinnelik, hogy sem az átmeneti 5xx, sem a végleges 4xx nem ismétlődik automatikusan |
+| A5 | `test/features/settings/consent_center_test.dart` — a `PrivacyCenterScreen` a beállítások felső szintjéről (nem 3 menü mélyen) elérhető |
+| A6 | `test/features/settings/model_integrity_test.dart` — a három §6.1 cella (`OfflineModelController` egység-szinten + `ModelManagerScreen` widget-szinten) — **lásd a valódi-sértés próbát alább** |
+| A7 | `test/features/settings/share_redaction_test.dart` — alapból a cím NEM kerül ki, csak explicit bekapcsolás után (`shareIncludeTitleToggle`), soha nem fordítva |
+| A8 | `test/features/settings/consent_center_test.dart` — export/törlés feladatként, állapottal és eredménnyel |
+| A9 | `test/ui/goldens/e13_r35_screens_golden_test.dart` + `test/ui/goldens/goldens/e13_r35_*.png` (10 kép: 5 képernyő × {compact, compact_scale2}) |
+
+### A valódi-sértés próba (A6, KÖTELEZŐ, §6.1) — MÉRT kimenet
+
+Helyszín: `lib/features/offline_ai/providers/offline_model_controller.dart`,
+`activate()` metódus. Ideiglenesen `if (false && !verification.verified)`-re
+cserélve a `if (!verification.verified)` gate-et (a kikapcsolt ág soha nem fut
+le), majd lefuttatva:
+
+```
+flutter test test/features/settings/model_integrity_test.dart
+```
+
+**MÉRT: 10-ből 3 cella PIROSRA váltott** (baseline 10/10 zöld):
+
+- `OfflineModelController — … below threshold: a bad checksum blocks
+  activation, active stays null` → `Expected: blockedIntegrity, Actual: active`
+- `OfflineModelController — … a bad candidate NEVER overwrites a good,
+  already-active version` → `Expected: blockedIntegrity, Actual:
+  activeWithRollback`
+- `ModelManagerScreen — … below threshold: NO activation control is rendered
+  at all` → a „Not activated — checksum could not be verified" szöveg el sem
+  jelent meg (a hibás modell simán aktiválódott)
+
+A gate visszaállítva (`git diff` üres volt a visszaállítás után), a teszt
+újrafuttatva: **10/10 zöld**.
+
+### A golden-felvétel közben talált, ÉS EBBEN A KÖRBEN JAVÍTOTT hiba (L517)
+
+Az első felvételi kísérlet (a folytatás előtti kör commitolatlan állapotában)
+két, egymást követő valódi túlcsordulást fogott ki `compact_scale2`
+(textScaler 2.0) keretben, mindkettőt a `share_preview` képernyőn:
+
+1. **`SharePreviewScreen` külső `Column`-ja** — a rögzített `Expanded` kártya-
+   terület + a redakció-összegző + a gombok együtt magasabbak voltak, mint a
+   rendelkezésre álló magasság 2.0 szövegskálázásnál. Javítás: a törzs
+   `SingleChildScrollView`-vá vált, a kártyaterület `LayoutBuilder`-ből mért
+   arányra (`maxHeight * 0.55`) és a `StrumCard` natív 9:16 arányára
+   (`AspectRatio`) korlátozva — így soha nem szorítja ki magát a maradék
+   terület alapján, hanem a törzs görget, ha kell.
+2. **`StrumCard` (a megosztott grafika) belső `Column`/`Row`-jai** — miután az
+   1. javítás valódi helyet adott a kártyának, kiderült, hogy maga a kártya
+   (rögzített 360×640 pixel, exportált grafika) is öröklte az ambiens
+   `textScaler`-t, és 2.0-nál túlcsordult a saját dobozán belül. **Ez egy a
+   körön KÍVÜLI, korábban rejtett, éles hiba**: bármely felhasználó, akinek a
+   rendszerén nagy betűméret van beállítva, a megosztott képen csonkolt/
+   túlcsorduló kártyát kapott volna. Javítás: a `StrumCard.build()`
+   `MediaQuery(data: …copyWith(textScaler: TextScaler.noScaling), …)`-be lett
+   csomagolva — a kártya egy rögzített pixelméretű, exportált grafika, nem
+   olvasási felület, ezért az akadálymentesítési szövegskálázás soha nem
+   érintheti.
+
+Mindkettő a §0.0.B/B8 normája szerint JAVÍTVA lett, nem bázisvonalként
+rögzítve. Az érintett widget-tesztek (`test/features/share/share_preview_test.dart`,
+`test/features/settings/share_redaction_test.dart`) egy `tester.ensureVisible(...)`
+hívást kaptak a „Share as text" tap elé, mert a törzs görgethetővé vált — ez
+NEM gyengítés, a mért állítások (log-tartalom, widget-jelenlét) változatlanok.
+
+### `ui_inventory` — 94 → 96, miért pontosan ennyi
+
+Két ÚJ `_screen.dart` került a fába ebben a körben:
+`lib/features/offline_ai/screens/model_manager_screen.dart` és
+`lib/features/settings/screens/privacy_center_screen.dart` (mérve:
+`git log --diff-filter=A -- '*_screen.dart'` a kör commitjain). A
+`test/ui/ui_inventory_test.dart` `hasLength(94)` → `hasLength(96)`-ra emelve,
+más állítás érintetlen.
+
+### Golden-felvétel módja
+
+`tools/golden-x86.sh record test/ui/goldens/e13_r35_screens_golden_test.dart`,
+majd `tools/golden-x86.sh check` ugyanarra az útvonalra — mindkettő x86_64
+docker/qemu-emulációval, a CI-val azonos Flutter-verzióval (ADR 0426). Mindkét
+parancs `0` kilépési kóddal futott le (felvétel: 10/10 teszt zöld; ellenőrzés:
+10/10 teszt zöld, nulla eltérés). 5 képernyő × 2 keret (412×915 compact és
+ugyanaz textScaler 2.0) = 10 PNG, mind commitolva.
+
+### Amit ez a kör NEM csinált, és miért
+
+- **Nem módosította a hitelesítési vagy szinkron-protokollt** — a §5.2 szabály
+  már teljesült a `_sendPatch`-ben (B3); a kör csak megfigyelhető státuszt
+  (`SettingsSyncStatus`) tett hozzá és egy felhasználó-indított Retry akciót.
+- **Nem vezetett be automatikus replay/backoff-ot** — a `settings_sync_test.dart`
+  két, listán kívüli cellája ezt tiltja (B3); a Retry mindig explicit
+  felhasználói tap.
+- **Nem nyúlt a `lib/core/ml/vision_model_manifest.dart`-hoz** — az A6 mögötti
+  valódi sha256-ellenőrzés innen származik (B10), a fájl csak importálva lett.
+- **Nem vett fel golden-t minden állapotra** (pl. hiba-, letöltés-közbeni
+  állapotok) — a §7 kifejezetten csak a §3 szerinti alap-nézetet írja elő a
+  két kerettel, ez teljesült.
+
 ## 11. Review — a Claude tölti ki
