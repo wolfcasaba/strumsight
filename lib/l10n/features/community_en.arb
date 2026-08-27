@@ -569,5 +569,179 @@
   "@reportSheetErrorInvalid": {},
 
   "reportSheetErrorNetwork": "No network connection",
-  "@reportSheetErrorNetwork": {}
+  "@reportSheetErrorNetwork": {},
+
+  "communityClubListTitle": "Clubs",
+  "@communityClubListTitle": {},
+
+  "communityClubListEmpty": "No clubs yet. Create one to get started.",
+  "@communityClubListEmpty": {},
+
+  "communityClubListError": "The clubs couldn't load.",
+  "@communityClubListError": {},
+
+  "communityClubListRetry": "Retry",
+  "@communityClubListRetry": {},
+
+  "communityClubListCreate": "Create club",
+  "@communityClubListCreate": {},
+
+  "communityClubListCreateName": "Club name",
+  "@communityClubListCreateName": {},
+
+  "communityClubListCreateDescription": "Description",
+  "@communityClubListCreateDescription": {},
+
+  "communityClubListCreateVisibility": "Visibility",
+  "@communityClubListCreateVisibility": {},
+
+  "communityClubListCreateSubmit": "Create",
+  "@communityClubListCreateSubmit": {},
+
+  "communityClubListCreateCancel": "Cancel",
+  "@communityClubListCreateCancel": {},
+
+  "communityClubListLoadMore": "Load more",
+  "@communityClubListLoadMore": {},
+
+  "communityClubVisibilityPrivate": "Private",
+  "@communityClubVisibilityPrivate": {},
+
+  "communityClubVisibilityDiscoverable": "Discoverable",
+  "@communityClubVisibilityDiscoverable": {},
+
+  "communityClubVisibilityPublic": "Public",
+  "@communityClubVisibilityPublic": {},
+
+  "communityClubDetailTitle": "Club",
+  "@communityClubDetailTitle": {},
+
+  "communityClubDetailError": "The club couldn't load.",
+  "@communityClubDetailError": {},
+
+  "communityClubDetailRetry": "Retry",
+  "@communityClubDetailRetry": {},
+
+  "communityClubDetailJoin": "Request to join",
+  "@communityClubDetailJoin": {},
+
+  "communityClubDetailLeave": "Leave club",
+  "@communityClubDetailLeave": {},
+
+  "communityClubDetailManage": "Manage members",
+  "@communityClubDetailManage": {},
+
+  "communityClubDetailRoleOwner": "Owner",
+  "@communityClubDetailRoleOwner": {},
+
+  "communityClubDetailRoleModerator": "Moderator",
+  "@communityClubDetailRoleModerator": {},
+
+  "communityClubDetailRoleMember": "Member",
+  "@communityClubDetailRoleMember": {},
+
+  "communityClubDetailRoleNone": "Not a member",
+  "@communityClubDetailRoleNone": {},
+
+  "communityClubTabFeed": "Feed",
+  "@communityClubTabFeed": {},
+
+  "communityClubTabChallenges": "Challenges",
+  "@communityClubTabChallenges": {},
+
+  "communityClubTabMembers": "Members",
+  "@communityClubTabMembers": {},
+
+  "communityClubTabAbout": "About",
+  "@communityClubTabAbout": {},
+
+  "communityClubFeedEmpty": "No posts in this club yet.",
+  "@communityClubFeedEmpty": {},
+
+  "communityClubFeedPinnedHeader": "Pinned",
+  "@communityClubFeedPinnedHeader": {},
+
+  "communityClubFeedRecentHeader": "Recent",
+  "@communityClubFeedRecentHeader": {},
+
+  "communityClubChallengesEmpty": "No active challenges.",
+  "@communityClubChallengesEmpty": {},
+
+  "communityClubChallengesDifficultyPrefix": "Difficulty",
+  "@communityClubChallengesDifficultyPrefix": {},
+
+  "communityClubAboutEmpty": "No description.",
+  "@communityClubAboutEmpty": {},
+
+  "communityClubMembersTabHint": "Open the manage-members screen to view the roster.",
+  "@communityClubMembersTabHint": {},
+
+  "communityClubPrivateRestrictedTitle": "This club is private",
+  "@communityClubPrivateRestrictedTitle": {},
+
+  "communityClubPrivateRestrictedBody": "Only members can see this club's content.",
+  "@communityClubPrivateRestrictedBody": {},
+
+  "communityClubJoinToSeeMore": "Join this club to see its feed, challenges and members.",
+  "@communityClubJoinToSeeMore": {},
+
+  "communityClubManageTitle": "Manage club",
+  "@communityClubManageTitle": {},
+
+  "communityClubManageError": "The members couldn't load.",
+  "@communityClubManageError": {},
+
+  "communityClubManageRetry": "Retry",
+  "@communityClubManageRetry": {},
+
+  "communityClubManageEmpty": "No members yet.",
+  "@communityClubManageEmpty": {},
+
+  "communityClubManageActionPromote": "Promote to moderator",
+  "@communityClubManageActionPromote": {},
+
+  "communityClubManageActionDemote": "Demote to member",
+  "@communityClubManageActionDemote": {},
+
+  "communityClubManageActionRemove": "Remove",
+  "@communityClubManageActionRemove": {},
+
+  "communityClubManageActionTransfer": "Transfer ownership",
+  "@communityClubManageActionTransfer": {},
+
+  "communityClubManageActionBlock": "Block member",
+  "@communityClubManageActionBlock": {},
+
+  "communityClubManageActionMute": "Mute member",
+  "@communityClubManageActionMute": {},
+
+  "communityClubManageRoleOwner": "Owner",
+  "@communityClubManageRoleOwner": {},
+
+  "communityClubManageRoleModerator": "Moderator",
+  "@communityClubManageRoleModerator": {},
+
+  "communityClubManageRoleMember": "Member",
+  "@communityClubManageRoleMember": {},
+
+  "communityChallengeActionBlockAuthor": "Block author",
+  "@communityChallengeActionBlockAuthor": {},
+
+  "communityChallengeActionMuteAuthor": "Mute author",
+  "@communityChallengeActionMuteAuthor": {},
+
+  "communityChallengeResultPending": "Result submitted — verification in progress.",
+  "@communityChallengeResultPending": {},
+
+  "communityChallengeResultVerified": "Verified result: {value}",
+  "@communityChallengeResultVerified": {
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+
+  "communityChallengeMyResultAction": "View my result",
+  "@communityChallengeMyResultAction": {}
 }
