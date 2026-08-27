@@ -412,7 +412,9 @@ class _Body extends ConsumerWidget {
                   Text(club.description, style: bodyStyle),
                   const SizedBox(height: 16),
                   Semantics(
-                    label: 'Role: $roleLabel',
+                    label: localizations.communityClubDetailRoleSemanticLabel(
+                      roleLabel,
+                    ),
                     child: Chip(label: Text(roleLabel)),
                   ),
                   const SizedBox(height: 16),
