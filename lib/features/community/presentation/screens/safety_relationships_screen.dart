@@ -1,4 +1,5 @@
-/// Blocked / Muted users settings screen (E09-R08, ADR 0402).
+/// Blocked / Muted users settings screen (E09-R08, ADR 0402;
+/// design-system migration E13-R34).
 ///
 /// SDD UI-61 calls for a "Blocked users / Muted threads" settings
 /// surface. The screen exposes two tabs — Blocked and Muted — each
@@ -19,6 +20,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../data/repositories/relationship_repository_impl.dart';
@@ -26,6 +29,7 @@ import '../../domain/entities/community_profile.dart';
 import '../../domain/repositories/community_page.dart';
 import '../../domain/value_objects/cursor_page.dart';
 import '../../domain/value_objects/public_user_id.dart';
+import '../widgets/community_theme_scope.dart';
 
 /// Which list the screen is showing. Two-tab surface — Blocked on
 /// the left, Muted on the right (or stacked on a small phone).
@@ -210,23 +214,25 @@ class SafetyRelationshipsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final localizations = AppLocalizations.of(context);
-    return DefaultTabController(
-      length: SafetyTab.values.length,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(localizations.safetyBlockedMutedTitle),
-          bottom: TabBar(
-            tabs: <Widget>[
-              Tab(text: localizations.safetyBlockedTab),
-              Tab(text: localizations.safetyMutedTab),
+    return CommunityThemeScope(
+      child: DefaultTabController(
+        length: SafetyTab.values.length,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(localizations.safetyBlockedMutedTitle),
+            bottom: TabBar(
+              tabs: <Widget>[
+                Tab(text: localizations.safetyBlockedTab),
+                Tab(text: localizations.safetyMutedTab),
+              ],
+            ),
+          ),
+          body: const TabBarView(
+            children: <Widget>[
+              _SafetyTabBody(tab: SafetyTab.blocked),
+              _SafetyTabBody(tab: SafetyTab.muted),
             ],
           ),
-        ),
-        body: const TabBarView(
-          children: <Widget>[
-            _SafetyTabBody(tab: SafetyTab.blocked),
-            _SafetyTabBody(tab: SafetyTab.muted),
-          ],
         ),
       ),
     );
@@ -296,7 +302,8 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
                 : profile.displayName,
           ),
           subtitle: Text(profile.handle.value),
-          trailing: TextButton(
+          trailing: SsButton(
+            variant: SsButtonVariant.secondary,
             onPressed: () async {
               try {
                 if (widget.tab == SafetyTab.blocked) {
@@ -311,11 +318,9 @@ class _SafetyTabBodyState extends ConsumerState<_SafetyTabBody> {
                 );
               }
             },
-            child: Text(
-              widget.tab == SafetyTab.blocked
-                  ? localizations.safetyUnblock
-                  : localizations.safetyUnmute,
-            ),
+            label: widget.tab == SafetyTab.blocked
+                ? localizations.safetyUnblock
+                : localizations.safetyUnmute,
           ),
         );
       },
