@@ -152,9 +152,26 @@ class _MilestoneRow extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  entry.title,
-                  key: ValueKey('progress-skill-title-${entry.milestone.id}'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      entry.title,
+                      key: ValueKey(
+                        'progress-skill-title-${entry.milestone.id}',
+                      ),
+                    ),
+                    // Only shown when unmeasured: the measured case already
+                    // paints its percentage inside the ring itself (above),
+                    // so repeating it here would duplicate the same text
+                    // rather than add information.
+                    if (!hasEvidence)
+                      Text(
+                        statusText,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
                 ),
               ),
               const Icon(Icons.chevron_right),
