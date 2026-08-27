@@ -8,14 +8,17 @@
 - **Review-alap:** `fbeddd13` (pre-flight) … `2903f248` (implementation handoff)
 - **Izolált klón:** `/tmp/review-e13-r31` (a közös munkafában semmit nem futtattam)
 
-## 1. Verdikt — **CHANGES REQUESTED**
+## 1. Verdikt — **APPROVED** (a javító kör után; első forduló: CHANGES REQUESTED)
 
-| Osztály | Db |
-|---|---|
-| BLOCKER | 0 |
-| **MAJOR** | **1** |
-| MINOR | 3 |
-| NOTE | 2 |
+| Osztály | Db (1. forduló) | Állapot a javító kör után (`60acf24e`) |
+|---|---|---|
+| BLOCKER | 0 | — |
+| **MAJOR** | **1** | **LEZÁRVA**, őrtesztet is kapott (§9) |
+| MINOR | 3 | mind a 3 LEZÁRVA |
+| NOTE | 2 | mind a 2 LEZÁRVA |
+
+**A §9 szakasz tartalmazza a javító kör független újra-ellenőrzését** — az
+alábbi §2–§6 az ELSŐ forduló (`2903f248`) jegyzőkönyve, változatlanul hagyva.
 
 A kör tartalmilag erős: minden acceptance-cellának van gépi mércéje, a
 valódi-sértés próba az L403 lecke szerint TARTALMI (feliratot mérő), és a
@@ -226,3 +229,77 @@ dispatch-elem, és a review-t leletenként lezárom.
 - **A golden-felvétel valódi hibát fogott** (137 px túlcsordulás `textScaler`
   2.0 mellett) — pontosan azért van a mérce, hogy a képernyő ne csak
   „megváltozzon", hanem jó is legyen.
+
+---
+
+## 9. Javító kör (1.) — független újra-ellenőrzés
+
+- **Javító commit:** `60acf24e` — „[E13-R31] javító kör: F1 MAJOR (mérce-verzió
+  duplicate keys) + F2-F6 (a review leleteire)"
+- **Motor:** ugyanaz (`sonnet-impl`), ugyanaz az ág. **Ez a kör ELSŐ javító
+  köre** — az eszkalációs küszöb nincs kimerítve.
+- **Friss izolált klón:** `/tmp/review-e13-r31b` (a javított HEAD-ről)
+- **Implementer-jelzés:** `status=done`, `head=60acf24e`, `dirty_files=1` —
+  **kivizsgálva:** a `git status --short` a commit után ÜRES; a számláló a
+  jelzésfájl saját, commit utáni írását tükrözte, nem elveszett munkát.
+
+### 9.1 Scope-audit (újra)
+
+```
+Legacy scope audit OK (fbeddd13b695..60acf24ef1de, 24 changed path(s), 1 generated/ignored)
+```
+
+Az `1 generated/ignored` a saját review-jelentésem (`docs/reviews/e13-r31-review.md`),
+ami kód szintű, állandó mentesség — nem sértés.
+
+### 9.2 Gate (újra, magam futtattam)
+
+`tools/round-gate.sh` a 10 célteszttel, `/tmp/review-e13-r31b`-ben:
+**15/15 ZÖLD.** A `metric_migration_test.dart` `+5` → **`+6`** — pontosan az
+F1-hez kért új cellával.
+
+### 9.3 F1 — a javítás VALÓDI-SÉRTÉS PRÓBÁVAL igazolva
+
+Nem elég, hogy a cella zöld: azt mértem, hogy a RÉGI hibát tényleg pirosra
+fogja. Az izolált klónban visszaállítottam a javítás előtti kulcsot
+(`ValueKey('progress-metric-segment-${segment.catalogVersion}')`), majd:
+
+```
+$ flutter test test/features/progress_v2/metric_migration_test.dart
+00:01 +3 -2: A5 … "a version reappearing later (v1, v2, v1) renders as THREE
+             distinct segments, not a Duplicate keys crash" [E]
+  Actual: FlutterError:<Duplicate keys found.
+Some tests failed.
+```
+
+**Az új cella PIROSRA vált a régi kódon**, a pontos eredeti hibaüzenettel — a
+lelet tehát nem „elfedve", hanem őrrel lezárva. A próbát visszaállítottam
+(a klón tiszta).
+
+A javítás maga: `progress_dashboard_screen.dart:282` — a kulcs
+`'progress-metric-segment-$index-v${segment.catalogVersion}'`, azaz
+**pozícióval egyedi**, a megjelenített szöveg és a szekció-logika változatlan.
+
+### 9.4 A MINOR/NOTE leletek lezárása — tételesen
+
+| Lelet | Állapot | Mért bizonyíték |
+|---|---|---|
+| **F2** — rossz mondat a trend-pont `semanticLabel`-jén | ✅ | saját l10n kulcs mindkét ARB forrásban, az aggregátum regenerálva; a `progressV2TrendExtremes` már csak a valódi szélsőértékekre megy |
+| **F3** — nyers ISO-8601 dátum a látható feliraton | ✅ | `import 'package:intl/intl.dart' show DateFormat;` + `DateFormat.yMMMd(...)` MINDKÉT képernyőn. A megmaradt `toIso8601String()` (`progress_dashboard_screen.dart:243`) az `SsEventListRow.id` — **belső azonosító, nem látható felirat**, ott helyes |
+| **F4** — az előfeltétel csak a zárolt ágon látszott | ✅ | `skill_detail_screen.dart:127` — `if (recommendation.prerequisiteMilestoneId != null)` ág a JOGOSULT esetben is renderel előfeltétel-sort (`skill-detail-recommendation-prerequisite` kulcs); a `mastery_evidence_test.dart` cellái ezt fedik |
+| **F5** — a nem rendező `sorted` változó | ✅ | rendezve/dokumentálva a javító commitban |
+| **F6** — módosítható belső listák | ✅ | a `const` projekciók listái konzisztensen `List.unmodifiable` |
+
+### 9.5 A9 — golden újrafelvétel
+
+Az F3/F4 megváltoztatta a renderelt szöveget, ezért a goldeneket újra fel
+kellett venni. `tools/golden-x86.sh record` + `check` (ADR 0426, x86-on) —
+a `[7] e13_r31_screens_golden_test.dart` cella a saját gate-futásomban
+**zöld, nulla eltérés**.
+
+### 9.6 Verdikt
+
+**Minden lelet lezárva, 0 nyitott BLOCKER/MAJOR/MINOR.**
+
+**VÉGSŐ DÖNTÉS: APPROVED.** A merge a zöld kapu (exact-SHA Full Gate +
+Router CI a merge SHA-n) teljesülése után mehet.
