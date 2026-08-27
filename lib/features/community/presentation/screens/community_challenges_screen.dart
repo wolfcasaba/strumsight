@@ -54,7 +54,9 @@
 /// (``safety_relationships_screen.dart``) reads — so the blocked
 /// / muted state is the one server-side truth shared by both
 /// surfaces (A8), reachable from the challenge list and not only
-/// from Settings (A6).
+/// from Settings (A6). A failed block/mute surfaces a SnackBar
+/// (``_formatFailure``) on the row's own [ScaffoldMessenger] — a
+/// safety action must never fail silently.
 library;
 
 import 'package:flutter/material.dart';
@@ -317,7 +319,8 @@ class _ChallengeRow extends ConsumerWidget {
                       sheetContext,
                     ).communityChallengeActionBlockAuthor,
                   ),
-                  onTap: () => _blockOrMuteAuthor(sheetContext, block: true),
+                  onTap: () =>
+                      _blockOrMuteAuthor(context, sheetContext, block: true),
                 ),
                 ListTile(
                   key: const Key('challenge-action-mute-author'),
@@ -327,7 +330,8 @@ class _ChallengeRow extends ConsumerWidget {
                       sheetContext,
                     ).communityChallengeActionMuteAuthor,
                   ),
-                  onTap: () => _blockOrMuteAuthor(sheetContext, block: false),
+                  onTap: () =>
+                      _blockOrMuteAuthor(context, sheetContext, block: false),
                 ),
               ],
             ),
@@ -337,7 +341,15 @@ class _ChallengeRow extends ConsumerWidget {
     );
   }
 
+  /// A6 / A8 — block/mute the challenge author. The sheet closes
+  /// immediately (``sheetContext`` is used only for the pop and
+  /// the repository lookup), but a failed [AppFailure] must still
+  /// reach the caller: it surfaces on the ROW's own
+  /// [ScaffoldMessenger] (``context``), which outlives the
+  /// already-dismissed sheet — a safety action must never fail
+  /// silently.
   Future<void> _blockOrMuteAuthor(
+    BuildContext context,
     BuildContext sheetContext, {
     required bool block,
   }) async {
@@ -349,10 +361,19 @@ class _ChallengeRow extends ConsumerWidget {
               '-${DateTime.now().microsecondsSinceEpoch}'
         : 'challenge-mute-${challenge.authorId.value}'
               '-${DateTime.now().microsecondsSinceEpoch}';
-    if (block) {
-      await repo.block(target: challenge.authorId, idempotencyKey: key);
-    } else {
-      await repo.mute(target: challenge.authorId, idempotencyKey: key);
+    try {
+      if (block) {
+        await repo.block(target: challenge.authorId, idempotencyKey: key);
+      } else {
+        await repo.mute(target: challenge.authorId, idempotencyKey: key);
+      }
+    } on AppFailure catch (failure) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_formatFailure(AppLocalizations.of(context), failure)),
+        ),
+      );
     }
   }
 
@@ -410,7 +431,8 @@ class _MyResultSection extends StatelessWidget {
               Icon(
                 Icons.verified,
                 color: Theme.of(context).colorScheme.primary,
-                semanticLabel: 'Verified',
+                semanticLabel:
+                    localizations.communityChallengeResultVerifiedIcon,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -471,27 +493,31 @@ class _ErrorView extends StatelessWidget {
       ],
     );
   }
+}
 
-  String _formatFailure(AppLocalizations localizations, AppFailure failure) {
-    switch (failure.code) {
-      case FailureCode.networkUnavailable:
-        return localizations.communityChallengeErrorNetwork;
-      case FailureCode.authSessionExpired:
-        return localizations.communityChallengeErrorSessionExpired;
-      case FailureCode.authForbidden:
-        return localizations.communityChallengeErrorForbidden;
-      case FailureCode.networkServer:
-        // 429 (rate-limited) maps to ``networkServer`` in the
-        // shared mapper; the A4 / §5.3 invariant lands on
-        // this branch.
-        return localizations.communityChallengeErrorRateLimited;
-      case FailureCode.communityConflict:
-        return localizations.communityChallengeErrorConflict;
-      case FailureCode.validationInvalidInput:
-        return localizations.communityChallengeErrorInvalidInput;
-      default:
-        return failure.toString();
-    }
+/// Formats an [AppFailure] into a localized message — shared by the
+/// list-level [_ErrorView] and the row-level block/mute action
+/// (E13-R34, A6/A8) so a failed safety action reports the same
+/// vocabulary as a failed list load.
+String _formatFailure(AppLocalizations localizations, AppFailure failure) {
+  switch (failure.code) {
+    case FailureCode.networkUnavailable:
+      return localizations.communityChallengeErrorNetwork;
+    case FailureCode.authSessionExpired:
+      return localizations.communityChallengeErrorSessionExpired;
+    case FailureCode.authForbidden:
+      return localizations.communityChallengeErrorForbidden;
+    case FailureCode.networkServer:
+      // 429 (rate-limited) maps to ``networkServer`` in the
+      // shared mapper; the A4 / §5.3 invariant lands on
+      // this branch.
+      return localizations.communityChallengeErrorRateLimited;
+    case FailureCode.communityConflict:
+      return localizations.communityChallengeErrorConflict;
+    case FailureCode.validationInvalidInput:
+      return localizations.communityChallengeErrorInvalidInput;
+    default:
+      return failure.toString();
   }
 }
 

@@ -40,7 +40,9 @@
 /// [socialGraphRepositoryProvider] the Biztonsági központ reads
 /// — the blocked / muted state is one server-side truth shared
 /// by both surfaces (A8), reachable from club management and not
-/// only from Settings (A6).
+/// only from Settings (A6). A failed block/mute surfaces a
+/// SnackBar (``_formatFailure``) — a safety action must never
+/// fail silently.
 library;
 
 import 'package:flutter/material.dart';
@@ -227,27 +229,41 @@ class _MemberRow extends ConsumerWidget {
       case _MemberAction.transfer:
         await _transfer(context, ref, repo);
       case _MemberAction.block:
-        await _blockOrMute(ref, block: true);
+        await _blockOrMute(context, ref, block: true);
       case _MemberAction.mute:
-        await _blockOrMute(ref, block: false);
+        await _blockOrMute(context, ref, block: false);
     }
   }
 
   /// A6 / A8 — block/mute route through the SAME
   /// [socialGraphRepositoryProvider] the Biztonsági központ reads,
   /// so the resulting state is the one server-side truth shared by
-  /// both surfaces.
-  Future<void> _blockOrMute(WidgetRef ref, {required bool block}) async {
+  /// both surfaces. A failed block/mute is a **safety** action that
+  /// must never fail silently — a caught [AppFailure] surfaces a
+  /// SnackBar so the caller does not believe they blocked someone
+  /// when the server never received the request.
+  Future<void> _blockOrMute(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool block,
+  }) async {
     final repo = ref.read(socialGraphRepositoryProvider);
     final key = block
         ? 'club-block-${row.profilePublicId.value}'
               '-${DateTime.now().microsecondsSinceEpoch}'
         : 'club-mute-${row.profilePublicId.value}'
               '-${DateTime.now().microsecondsSinceEpoch}';
-    if (block) {
-      await repo.block(target: row.profilePublicId, idempotencyKey: key);
-    } else {
-      await repo.mute(target: row.profilePublicId, idempotencyKey: key);
+    try {
+      if (block) {
+        await repo.block(target: row.profilePublicId, idempotencyKey: key);
+      } else {
+        await repo.mute(target: row.profilePublicId, idempotencyKey: key);
+      }
+    } on AppFailure catch (failure) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_formatFailure(context, failure))));
     }
   }
 
@@ -306,6 +322,25 @@ class _MemberRow extends ConsumerWidget {
 }
 
 enum _MemberAction { promote, demote, remove, transfer, block, mute }
+
+/// Formats an [AppFailure] surfaced by a failed block/mute action
+/// (E13-R34, A6/A8) — the same code-to-message mapping shape as
+/// ``safety_relationships_screen.dart``'s ``_formatFailure``.
+String _formatFailure(BuildContext context, AppFailure failure) {
+  final localizations = AppLocalizations.of(context);
+  switch (failure.code) {
+    case FailureCode.networkUnavailable:
+      return localizations.communityClubManageErrorNetwork;
+    case FailureCode.authSessionExpired:
+      return localizations.communityClubManageErrorSessionExpired;
+    case FailureCode.authForbidden:
+      return localizations.communityClubManageErrorForbidden;
+    case FailureCode.validationInvalidInput:
+      return localizations.communityClubManageErrorInvalidInput;
+    default:
+      return failure.toString();
+  }
+}
 
 String _roleLabel(AppLocalizations localizations, ClubRole role) {
   switch (role) {
