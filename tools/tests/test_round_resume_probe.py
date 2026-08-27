@@ -224,6 +224,157 @@ class RoundResumeProbeTest(unittest.TestCase):
         self.assertIn("ÁLLAPOT: NINCS", report, report)
 
 
+class AlreadyMergedRoundTest(unittest.TestCase):
+    """A MÉRT E13-R35 állapot: a kör MÁR merge-elve, mégis `REVIEW-APPROVED`.
+
+    MÉRVE (E13-R35 H-NOSIGNAL, önjavítás 2026-08-27). Az orchestrátor-session
+    16:30:09-kor indult, 4 órás abszolút időkorláttal. A PR #480 **20:28:30Z-kor
+    zölden merge-elődött** (`57eeb6ff`; a `b4941257` head SHA-n `full-gate`,
+    `router-ci` és `Coverage` mind `success`) — a driver 20:30:02-kor még be is
+    ff-merge-elte a `main`-re. A session ezután 99 másodperccel a merge után,
+    20:30:09-kor futott bele az abszolút időkorlátba, a záró rituálék (queue-sor
+    `done`, HANDOFF, git-notes, **kör-jelzés**) előtt → H-NOSIGNAL.
+
+    A halt maga ártalmatlan lenne: a kör kész. A kárt a KÖVETKEZŐ firing okozza.
+    A queue-sor `pending` maradt, tehát a lánc újra sorra veszi a kört, és a
+    `tools/round-resume-probe.sh` a javítás ELŐTT ezt mérte rá:
+
+        ÁLLAPOT: REVIEW-APPROVED
+        **TEENDŐ:** ... a kör a **merge-lépésnél** folytatódik: §0.3
+        upstream-szinkron → PR → a teljes CI-kapu ... → zöld kapus squash-merge.
+
+    Vagyis a szonda egy MÁR MERGE-ELT kört küld vissza a merge-lépésre: egy újabb
+    4 órás session, egy duplikált PR egy olyan ágról, aminek a tartalma már a
+    `main`-en van. A `--squash` merge miatt az ág csúcsa (`b4941257`) **nem** őse
+    a `main`-nek (mérve: `git merge-base --is-ancestor` → 1), ezért a naiv
+    ancestor-próba sem fogja meg; a `--delete-branch` sem futott le a timeout
+    miatt, tehát a kör-ág is ott maradt az originon.
+
+    A §0.2 örökség-létra legfelső foka (`REVIEW-APPROVED`) 2026-08-24 óta létezik,
+    de a „már merge-elve" fok hiányzott róla.
+    """
+
+    # A VALÓDI kör adatai (nem kitalált fixture).
+    MERGED_ROUND = "E13-R35"
+    MERGED_BRANCH = "sonnet-impl/e13-r35-account-privacy-and-share"
+    MERGED_REVIEW = "docs/reviews/e13-r35-review.md"
+    # A `main` VALÓDI squash-merge commit-tárgya (`57eeb6ff`), szó szerint.
+    MERGED_SUBJECT = (
+        "[E13-R35] Account, Settings, Privacy, Offline AI és Share UI "
+        "(UI-48, UI-62..UI-65) (#480)"
+    )
+    # Az ELŐZŐ kör merge-commitja a `main`-en — az idegen kör nem számít merge-nek.
+    FOREIGN_SUBJECT = (
+        "[E13-R34] Community challenges, clubs, notifications és safety UI "
+        "(UI-59..UI-61)"
+    )
+    MERGED_APPROVED_REVIEW = """# E13-R35 review — Account, Privacy és Share UI
+
+- **Végső döntés:** **APPROVED** (lásd §9)
+
+**Nyitott lelet a merge után: 0.**
+
+**VÉGSŐ DÖNTÉS: APPROVED.** Squash-merge mehet.
+"""
+
+    # Ugyanaz a csupasz-origin fixture és ugyanaz a szonda-hívás, mint fent —
+    # explicit újrahasználat, hogy a fenti osztály tesztjei NE fussanak le mégegyszer.
+    setUp = RoundResumeProbeTest.setUp
+    _probe = RoundResumeProbeTest._probe
+
+    def _publish_merged_round_branch(self):
+        """A kör-ág publikálása az `origin`-ra, APPROVED review-val."""
+        git(self.repo, "switch", "--quiet", "-c", self.MERGED_BRANCH, "main")
+        review_file = self.repo / self.MERGED_REVIEW
+        review_file.parent.mkdir(parents=True, exist_ok=True)
+        review_file.write_text(self.MERGED_APPROVED_REVIEW)
+        (self.repo / "lib").mkdir(parents=True, exist_ok=True)
+        (self.repo / "lib" / "account_screen.dart").write_text("// account UI\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "--quiet", "-m", f"{self.MERGED_ROUND} implementáció + review")
+        git(self.repo, "push", "--quiet", "origin", self.MERGED_BRANCH)
+        head = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        git(self.repo, "switch", "--quiet", "main")
+        return head
+
+    def _squash_merge_to_main(self, subject: str) -> str:
+        """A `gh pr merge --squash` hatása: ÚJ commit a `main`-en, a kör tárgyával.
+
+        Az ág csúcsa emiatt NEM lesz őse a `main`-nek — pontosan úgy, ahogy az
+        éles `57eeb6ff` sem őse-utódja a `b4941257`-nek.
+        """
+        git(self.repo, "switch", "--quiet", "main")
+        (self.repo / "lib").mkdir(parents=True, exist_ok=True)
+        (self.repo / "lib" / "account_screen.dart").write_text("// account UI\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "--quiet", "-m", subject)
+        git(self.repo, "push", "--quiet", "origin", "main")
+        merge_sha = subprocess.run(
+            ["git", "-C", str(self.repo), "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        git(self.repo, "fetch", "--quiet", "origin")
+        return merge_sha
+
+    def test_squash_merged_round_is_not_sent_back_to_the_merge_step(self) -> None:
+        head = self._publish_merged_round_branch()
+        merge_sha = self._squash_merge_to_main(self.MERGED_SUBJECT)
+
+        # A mért éles előfeltétel: a squash miatt az ág csúcsa NEM őse a main-nek.
+        ancestor = subprocess.run(
+            ["git", "-C", str(self.repo), "merge-base", "--is-ancestor",
+             head, "origin/main"],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertNotEqual(
+            0, ancestor.returncode,
+            "a fixture nem reprodukálja a squash-merge-öt (az ág csúcsa őse a main-nek)",
+        )
+
+        report = self._probe(round_id=self.MERGED_ROUND)
+
+        self.assertIn("ÁLLAPOT: MERGE-ELVE", report, report)
+        self.assertNotIn("ÁLLAPOT: REVIEW-APPROVED", report, report)
+        self.assertIn(merge_sha[:12], report, report)
+        # A besorolás nem elég: a jelentésnek meg kell TILTANIA az újra-merge-öt,
+        # mert pontosan ide küldte volna vissza a `REVIEW-APPROVED` fok.
+        self.assertRegex(
+            report, r"(?i)nem\b.*(merge|PR)",
+            f"a jelentés nem tiltja meg az újra-merge-öt / új PR-t:\n{report}",
+        )
+        # ...és ki kell mondania, mi maradt hátra: a LEZÁRÁS.
+        self.assertRegex(
+            report, r"(?i)queue|sor",
+            f"a jelentés nem irányít a queue-sor lezárására:\n{report}",
+        )
+
+    def test_fast_forward_merged_round_is_also_detected(self) -> None:
+        """Ha az ág csúcsa őse a `main`-nek (nem squash), az is merge-elt kör."""
+        head = self._publish_merged_round_branch()
+        git(self.repo, "switch", "--quiet", "main")
+        git(self.repo, "merge", "--quiet", "--ff-only", self.MERGED_BRANCH)
+        git(self.repo, "push", "--quiet", "origin", "main")
+        git(self.repo, "fetch", "--quiet", "origin")
+
+        report = self._probe(round_id=self.MERGED_ROUND)
+
+        self.assertIn("ÁLLAPOT: MERGE-ELVE", report, report)
+        self.assertIn(head[:12], report, report)
+
+    def test_unmerged_approved_round_still_reads_as_merge_ready(self) -> None:
+        """A fok nem eszi meg a `REVIEW-APPROVED`-ot: idegen kör merge-e nem számít."""
+        self._publish_merged_round_branch()
+        self._squash_merge_to_main(self.FOREIGN_SUBJECT)
+
+        report = self._probe(round_id=self.MERGED_ROUND)
+
+        self.assertIn("ÁLLAPOT: REVIEW-APPROVED", report, report)
+        self.assertNotIn("ÁLLAPOT: MERGE-ELVE", report, report)
+
+
 class ResumeStateIsWiredIntoThePromptTest(unittest.TestCase):
     """A mérés csak akkor ér valamit, ha a session KÉZHEZ IS KAPJA."""
 
@@ -249,6 +400,15 @@ class ResumeStateIsWiredIntoThePromptTest(unittest.TestCase):
             "REVIEW-APPROVED", template,
             "a §0.2 létrán nincs fok az APPROVED, nyitott lelet nélküli körre — "
             "pontosan ez ejtette volna el az E09-R26 4210 sorát",
+        )
+
+    def test_prompt_template_names_the_already_merged_rung(self) -> None:
+        """A hiányzó fok: a kör MÁR merge-elve → lezárás, nem újabb merge-kísérlet."""
+        template = PROMPT_TEMPLATE.read_text()
+        self.assertIn(
+            "MERGE-ELVE", template,
+            "a §0.2 létrán nincs fok a MÁR MERGE-ELT körre — az E13-R35 (PR #480, "
+            "`57eeb6ff`) így egy újabb 4 órás sessiont és egy duplikált PR-t kapott volna",
         )
 
 

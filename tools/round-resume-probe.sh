@@ -115,8 +115,51 @@ for candidate in $workspace_glob; do
   workspaces="${workspaces}${workspaces:+$'\n'}$candidate"
 done
 
+# --- 3.5 Már merge-elve? ---------------------------------------------------
+# Módosítás (ADR 0112 önjavító kör, E13-R35/H-NOSIGNAL, 2026-08-27). A szonda
+# legfelső foka a `REVIEW-APPROVED` volt, aminek a teendője „folytatás a
+# MERGE-lépésnél". Egy MÁR MERGE-ELT körre ez rossz utasítás: egy újabb teljes
+# session és egy duplikált PR egy olyan ágról, aminek a tartalma már a `main`-en
+# van. MÉRVE az E13-R35-ön: PR #480 20:28:30Z-kor zölden merge-elve (`57eeb6ff`),
+# a session 99 másodperccel később futott bele a 4 órás abszolút időkorlátba a
+# záró rituálék előtt — a queue-sor `pending` maradt, a szonda pedig
+# `REVIEW-APPROVED`-ot mért. Ezért a merge-tényt MÉRJÜK, két független jellel:
+#
+#  (a) az ág csúcsa őse a `<remote>/main`-nek (normál/ff merge);
+#  (b) a `<remote>/main` egy commitjának a TÁRGYA a kör azonosítójával kezdődik
+#      (`[E13-R35] …` — a repó összes kör-merge-én egységes PR-cím-konvenció).
+#      Ez a `--squash` merge esete, ahol az ág csúcsa NEM őse a `main`-nek —
+#      pontosan az E13-R35 mért állapota, amit az (a) próba önmagában elvét.
+#
+# A fok csak POZITÍV irányban dönt: ha egyik jel sem szól, a létra változatlan.
+merged_sha=""
+merged_subject=""
+merged_how=""
+
+if [ -n "$branch" ] \
+  && git -C "$repo" merge-base --is-ancestor "$remote/$branch" "$remote/main" 2>/dev/null; then
+  merged_sha="$head_sha"
+  merged_subject=$(git -C "$repo" log -1 --format='%s' "$remote/$branch" 2>/dev/null)
+  merged_how="az ág csúcsa őse a(z) \`$remote/main\`-nek"
+fi
+
+if [ -z "$merged_sha" ]; then
+  round_uc=$(printf '%s' "$round" | tr 'a-z' 'A-Z')
+  # A `%H %s` formátum miatt a `^<40 hex><szóköz>` horgony a TÁRGY elejét jelöli
+  # ki: egy szövegtörzsben máshol előforduló `[E13-R35]` nem ad találatot.
+  merged_line=$(git -C "$repo" log --format='%H %s' "$remote/main" 2>/dev/null \
+    | grep -m1 -E "^[0-9a-f]{40} \[$round_uc\]" || true)
+  if [ -n "$merged_line" ]; then
+    merged_sha="${merged_line%% *}"
+    merged_subject="${merged_line#* }"
+    merged_how="squash-merge commit a(z) \`$remote/main\`-en"
+  fi
+fi
+
 # --- 4. Besorolás ----------------------------------------------------------
-if [ -z "$branch" ] && [ -z "$workspaces" ]; then
+if [ -n "$merged_sha" ]; then
+  state="MERGE-ELVE"
+elif [ -z "$branch" ] && [ -z "$workspaces" ]; then
   state="NINCS"
 elif [ "$review_seen" = "0" ]; then
   state="PRE-FLIGHT"
@@ -144,6 +187,13 @@ emit() {
     printf -- '- Review: `%s` — nincs az ágon\n' "$review_path"
   fi
 
+  if [ -n "$merged_sha" ]; then
+    printf -- '- Merge a(z) `%s/main`-en: `%s` — %s (%s)\n' \
+      "$remote" "${merged_sha:0:12}" "$merged_subject" "$merged_how"
+  else
+    printf -- '- Merge a(z) `%s/main`-en: NINCS\n' "$remote"
+  fi
+
   if [ -n "$workspaces" ]; then
     printf -- '- Hagyaték-munkapéldány(ok):\n'
     printf '%s\n' "$workspaces" | while IFS= read -r line; do
@@ -155,6 +205,17 @@ emit() {
 
   printf '\n'
   case "$state" in
+    MERGE-ELVE)
+      printf '**TEENDŐ:** ez a kör MÁR MERGE-ELVE van a(z) `%s/main`-en. **Nem** implementálod újra,\n' "$remote"
+      printf '**nem** indítasz rá implementert, **nem** nyitsz rá új PR-t, és **nem** merge-eled újra —\n'
+      printf 'a munka a `main`-en van, egy második PR csak egy üres/duplikált diffet vinne.\n'
+      printf 'A dolgod kizárólag a **lezárás**: a `docs/execution/pipeline-queue.tsv` sora `done`,\n'
+      printf '`HANDOFF.md` + `docs/LESSONS.md` frissítés, git-notes, a kör-jelzés `outcome=merged`,\n'
+      printf 'végül a hagyaték takarítása (a kör-ág törlése az originon, a munkapéldány eltávolítása).\n'
+      printf '\n'
+      printf 'Ha a saját mérésed szerint a merge-elt commit NEM ennek a körnek a munkája, az felülírja\n'
+      printf 'ezt a besorolást — a mérce nem gyengül, csak a fölösleges újra-merge marad el.\n'
+      ;;
     NINCS)
       printf '**TEENDŐ:** nincs megőrzendő hagyaték — a kör tisztán indul, a normál pre-flighttal.\n'
       ;;
