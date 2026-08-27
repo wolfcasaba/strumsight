@@ -20421,3 +20421,115 @@ keret az elején). A „kész" állapotoknak ezért mindig kell egy fok, ami a
 LEZÁRÁSRA irányít, nem a megismétlésre. Ugyanaz a hibaosztály, amit
 [L474](#l474) (E09-R26) a `REVIEW-APPROVED` fokkal zárt le — egy szinttel
 feljebb, a létra tetején.
+
+## L523 — A KÖZÖS munkafa a `git checkout -b` és a `git commit` KÖZÖTT visszaválthat `main`-re: a kör-commit ilyenkor a `main`-re megy, és a `push -u origin HEAD` a zöld kaput MEGKERÜLVE publikálja (E13-R36, 2026-08-27)
+
+**Mit mértünk.** Az E13-R36 orchestrátora a szokásos módon nyitotta a kör-ágat a
+közös munkafában (`/home/ubuntu/music-theory`):
+
+```bash
+git checkout -q -b sonnet-impl/e13-r36-visual-regression-and-closure origin/main && git branch --show-current
+# → sonnet-impl/e13-r36-visual-regression-and-closure     (a parancs SAJÁT kimenete helyes volt)
+```
+
+Néhány szerkesztéssel később, egy KÜLÖN Bash-hívásban futott a `git add -A && git
+commit && git push -u origin HEAD`. A commit létrejött, a push sikeres volt — de a
+`git ls-remote origin 'refs/heads/sonnet-impl/e13-r36*'` **nulla sort** adott, a
+`git ls-remote origin refs/heads/main` viszont pontosan az új commit SHA-ját.
+
+A reflog mondta ki, mi történt:
+
+```
+066c97ee HEAD@{0}: checkout: moving from main to main
+066c97ee HEAD@{1}: commit: docs(e13-r36): indítási pre-flight — §0.0.B brief-revízió
+126d0dfc HEAD@{2}: checkout: moving from sonnet-impl/e13-r36-… to main   ← NEM a mi hívásunk
+126d0dfc HEAD@{3}: checkout: moving from main to sonnet-impl/e13-r36-…
+```
+
+A `HEAD@{2}` sor a mi két hívásunk KÖZÖTT keletkezett: a munkafát valaki más
+(driver-ág vagy a fát osztó másik session) visszaállította `main`-re. A commit
+tehát a `main`-en jött létre, a `push -u origin HEAD` pedig — mivel a `HEAD` a
+`main` volt — a `refs/heads/main`-t célozta. **A commit a PR-t, a review-t és az
+exact-SHA zöld kaput teljesen megkerülve landolt a `main`-en.**
+
+**Miért nem fogta meg semmi.** Minden egyes parancs a saját mércéje szerint
+sikeres volt: a `checkout -b` a helyes ágnevet írta ki, a `commit` létrejött, a
+`push` `PUSHED`-öt írt. A hiba KÉT hívás KÖZÖTT keletkezett, ahol nincs
+mérés — és a `push -u origin HEAD` alakja épp azért veszélyes, mert **nem nevezi
+meg a cél-refet**: bármire pusholja a HEAD-et, ami éppen ki van véve.
+
+**A következmény ebben a körben korlátozott volt** (docs-only diff, kizárólag a kör
+saját briefje; a Router CI utólag zölden lefutott a `main`-en; a merge-elt fa
+tartalma azonos azzal, amit a rendes út adott volna) — de ugyanez a minta egy
+`lib/**` diffel gate nélküli production-változást tett volna a `main`-re.
+
+**Az ellenszer, ami MINDIG olcsóbb, mint a diagnózis:** a kör git-műveleteit ne a
+közös munkafában végezd. A `git clone`-nal készült IZOLÁLT munkapéldány
+(`/home/ubuntu/ss-<motor>-<kör>`) fájlrendszer-szinten kizárja ezt a hibaosztályt,
+mert rajta más session nem vált ágat. Ahol mégis a közös fában kell dolgozni
+(záró rituálék), ott két szabály:
+
+1. **minden git-műveletet ugyanabban a Bash-hívásban előzzön meg egy
+   `git branch --show-current`** — a mérés és a művelet közé ne kerüljön
+   hívás-határ;
+2. **a push NEVEZZE MEG a cél-refet** (`git push origin HEAD:<ág>`), sose
+   `push -u origin HEAD` — így a rossz ágra került HEAD legrosszabb esetben
+   elutasított pusht ad, nem `main`-re írást.
+
+Ez a hibaosztály a `shared-tree coordination` memória-bejegyzésben már szerepelt
+(„checkout silently flips back to main, 3x measured in one round"), de eddig csak
+elveszett munkaként jelentkezett — hogy a `main`-re PUBLIKÁL, azt ez a kör mérte
+ki először.
+
+**Őrteszt:** nincs — a hibaosztály a git-munkafa két hívás közötti, más processz
+által okozott állapotváltozása, amit a repó saját teszt-sávja (Dart/Python
+egységtesztek) elvből nem lát. A védelem eljárási (izolált munkapéldány + nevesített
+push-ref), és a fenti két szabály a `sdd-round-driver` skill §3-ának már meglévő
+„külön munkapéldány, `git clone`" előírását erősíti meg.
+
+## L524 — A záró kör legjobb mércéje NEM újabb golden PNG, hanem egy PNG NÉLKÜLI variáns-mátrix: 192 cella két olyan `lib/**` defektet mért ki, amit a 20 golden-fájlos készlet és a teljes CI-suite átengedett (E13-R36, 2026-08-27)
+
+**Mit mértünk.** A Ch13 záró körének briefje eredetileg egy „kockázat-alapú
+golden-mátrixot" írt elő (téma × nyelv × méret × text-scale). Naivan ez
+PNG-robbanás lett volna: minden felvétel `tools/golden-x86.sh record` (qemu-emulált
+x86 konténer, ADR 0426) és minden PNG ARM↔x86 drift-érzékeny (L516).
+
+A pre-flight ezért a mátrixot **állítás-mátrixra** cserélte: ugyanaz a kombinatorika,
+de PNG nélkül — minden cella `FlutterError.onError`-on át azt állítja, hogy
+NINCS `RenderFlex` túlcsordulás és NINCS pumpolás közbeni kivétel. Az eredmény:
+
+| | Golden PNG-készlet (20 fájl, R16–R35) | Variáns-mátrix (1 fájl, E13-R36) |
+|---|---|---|
+| Cellaszám | ~158 PNG | **192 cella** |
+| Felvételi költség | qemu-emulált konténer, PNG-nként | **nulla** |
+| Architektúra-érzékeny | IGEN (ARM↔x86 drift) | **NEM** (dp-alapú layout, nem raszter) |
+| Futásidő | — | **~13 s** |
+| Ebben a körben talált VALÓDI `lib/**` defekt | 0 | **2** |
+
+A két defekt — `live_screen.dart:477` stat-strip `Row` (12 px en / 34 px hu,
+landscape × textScale 2.0) és a `permission_primer_screen.dart` véglegesen
+megtagadt ága (297 px, textScale 2.0, mert a visszakérhető ággal ellentétben nincs
+`SingleChildScrollView`-ba csomagolva) — **hónapok óta a fában volt**, és a teljes
+CI-suite, a 20 golden-fájl és minden widget-teszt zölden átengedte.
+
+**Miért.** A golden RÖGZÍT, nem ÍTÉL ([L507](#l507)): egy PNG csak azt méri, hogy a
+raszter azonos-e a korábban felvettel — ha a defekt már a FELVÉTELKOR ott volt,
+örökre zöld marad. Egy túlcsordulás-állítás viszont ÍTÉL: nem referenciához
+hasonlít, hanem egy invariánst mér. Ezért fog meg olyat, amit a referencia-alapú
+készlet elvből nem.
+
+**A gyakorlati szabály:** ha egy kör „vizuális regressziós mátrixot" kér, a
+kombinatorikus tágítás (téma × nyelv × méret × text-scale) menjen ÁLLÍTÁS-cellákba,
+és PNG csak oda, ahol a konkrét PIXEL a szerződés. A kettő nem helyettesíti egymást,
+de a költségük nagyságrendekkel tér el, és a hibafogó képességük más osztályra
+irányul.
+
+**Az L517 kiegészítése.** Az L517 már kimérte, hogy a `textScaler 2.0` keret VALÓDI
+hibát fog (137 px, 1577 px, 41 px két egymást követő körben) — de ott a keret még
+golden-cellákhoz volt kötve. Ez a kör azt méri, hogy a keret a PNG NÉLKÜL is (sőt:
+olcsóbban és architektúra-függetlenül) elvégzi ugyanazt.
+
+**Őrteszt:** `test/ui/goldens/e13_r36_variant_matrix_test.dart` (192 cella) és
+`test/accessibility/closure_suite_test.dart` (12 cella) — a két defekt mindkét
+helyen csak-zsugorodó, dátumozott kizárólistán él, amelynek elavult bejegyzése
+PIROSRA vált (a review P1/P2/P3 valódi-sértés próbái ezt külön igazolták).

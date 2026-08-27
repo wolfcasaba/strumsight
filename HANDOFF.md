@@ -1,5 +1,68 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R36 KÉSZ — Vizuális regresszió, eszközös elfogadás és a **Chapter 13 LEZÁRÁSA** — PR [#483](https://github.com/wolfcasaba/strumsight/pull/483), squash `15d55b12` (2026-08-27)
+
+**A Chapter 13 (UI/UX Design System) 36 körös sávja ezzel LEZÁRULT.** A záró kör
+nem „minden zöld" pecsétet hozott, hanem **két új, valódi kaput**, amelyek a saját
+első futásukon **két addig láthatatlan `lib/**` elrendezési hibát mértek ki**.
+
+- `test/ui/goldens/e13_r36_variant_matrix_test.dart` — **PNG nélküli** variáns-mátrix,
+  **192 cella**: 6 kockázat-alapú képernyő (`today_hub`, `live`, `tuner`, `settings`,
+  `vision_result`, `login`) × {light, dark} × {en, hu} × {compact 412×915, landscape
+  915×412, medium 700×1000, expanded 1024×1366} × {textScale 1.0, 2.0}. Minden cella
+  `FlutterError.onError`-on át méri a `RenderFlex` túlcsordulást és a pumpolás közbeni
+  kivételt — nem szöveg-heurisztikán.
+- `test/accessibility/closure_suite_test.dart` — a záró a11y-csomag, **12 cella**
+  (route, engedély, állapot-visszaállítás, 200%-os interaktív login-kör), mind
+  VALÓDI tap-interakcióval `textScale: 2.0` mellett.
+- `docs/ui/legacy-backlog.md` (ÚJ) · `docs/ui/chapter-13-completion-report.md` (ÚJ) ·
+  `docs/ui/migration-status.md` (mért záró állapot).
+
+**A két kimért, dátumozott `lib/**` defekt** (a kör tilos zónája miatt itt nem
+javítható, csak-zsugorodó kizárólistába téve, gépi stale-entry őrrel):
+
+| Fájl | Cella | Mért túlcsordulás |
+|---|---|---|
+| `lib/features/live/screens/live_screen.dart:477` (stat-strip `Row`) | `live` × {light,dark} × {en,hu} × landscape × textScale 2.0 | **12 px** (en) / **34 px** (hu) |
+| `lib/features/onboarding/screens/permission_primer_screen.dart` (véglegesen megtagadt ág, nem scrollable) | compact portrait × textScale 2.0 | **297 px** |
+
+**Mért záró állapot:** **43 / 96 production képernyő migrálva (44,8%)** — a maradék
+53 dátumozott, felelős-jelölt backlogba került. A jelentés kimondja: a fejezet nem
+„teljesen migrált", hanem **„a jelenlegi terjedelmén minőségkapuzott"**. Új golden
+PNG: **nulla** (a `test/ui/goldens/goldens/` fa érintetlen).
+
+**Review:** [`docs/reviews/e13-r36-review.md`](docs/reviews/e13-r36-review.md) —
+**APPROVED**, 1 javító kör (MINOR-1 elavult kizárólista-doc-comment, NOTE-1 az A2
+részleges fedésének kimondása; NOTE-2 szándékosan nyitva). **Négy valódi-sértés
+próba** mérte, hogy a kizárólista nem díszlet: a dokumentált 34 px tőlem függetlenül
+reprodukálódott (P1), egy hamis bejegyzés egy ZÖLD cellára pirosra váltott (P2), a
+closure-suite kizárása a tényleges `FlutterError` jelentést méri (P3), a 43/96 szám
+reprodukálható (P4).
+
+**Zöld kapu a `72455f2d` merge SHA-n:** Full Gate
+[33120961301](https://github.com/wolfcasaba/strumsight/actions/runs/33120961301) +
+Router CI [33120963209](https://github.com/wolfcasaba/strumsight/actions/runs/33120963209)
+mindkettő `success`; lokális `tools/round-gate.sh` **10/10 zöld** izolált klónban,
+mindkét kör-SHA-n. Scope-audit OK (6 fájl, 0 listán kívüli, **nulla `lib/**`**).
+
+**Két eltérés a szokásos rituálétól, kimondva:**
+
+1. **A pre-flight brief-commit KÖZVETLENÜL a `main`-re került** (`066c97ee`), nem a
+   kör-ágra: a közös munkafa a `git checkout -b` és a `git commit` KÖZÖTT némán
+   visszaváltott `main`-re (a reflog `checkout: moving from sonnet-impl/e13-r36-… to
+   main` sora bizonyítja), így a `git push -u origin HEAD` a `main`-t célozta. A
+   tartalom docs-only volt (kizárólag a kör SAJÁT briefje), a Router CI utólag zölden
+   lefutott rá, és a merge-elt fa tartalma azonos azzal, amit a rendes merge adott
+   volna — de a commit **kikerülte a PR/zöld-kapu utat**. Tanulság: [L523](docs/LESSONS.md).
+2. **A `security-reviewer` ügynök nem futott** (a brief `risk = "high"`). Ennek a
+   sessionnek explicit tiltása van subagent indítására, ezért a biztonsági átnézést
+   az orchestrátor MAGA végezte a teljes diffen. Mért alap: a diff **nulla `lib/**`
+   fájlt** érint, nincs benne hálózat-, tárolás-, engedély-, hitelesítés-,
+   AI-provider- vagy felhasználói-adat-felület (hat fájl: négy dokumentum, két új
+   teszt), és a gate `secrets` lépése 3921 fájlon 0 leletet adott. **Kockázat:** ez
+   önbevallás, nem független szem — a következő `risk = "high"` körnél a dedikált
+   read-only reviewernek futnia kell.
+
 ## ✅ E13-R35 KÉSZ (merge-elve) + H-NOSIGNAL önjavítás — PR [#480](https://github.com/wolfcasaba/strumsight/pull/480), squash `57eeb6ff` (2026-08-27)
 
 Az UI-48 / UI-62–UI-65 account-, settings-, privacy-, offline-AI- és share-felület
@@ -10394,234 +10457,60 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 
 ## 6. Exact next task
 
-> **A Ch13 sáv MINDEN köre (R16–R36) át van pre-flightolva** (2026-08-25,
-> `9acd14e`): mind a 20 brief `§0.0` revíziót kapott, a `brief-lint --level
-> strict` mindegyiken tiszta. A sáv-szintű mérés 19 körben ugyanazt az
-> ARB-csapdát találta (L478 hibaosztály), az R36-ban pedig egy csak
-> sáv-szinten látható golden-útvonal eltérést — [L482](docs/LESSONS.md).
-> **A briefek indításra készek; körönként újra felderíteni felesleges.**
+> **A Ch13 (UI/UX Design System) SÁV LEZÁRULT — 2026-08-27, `E13-R36` merge-elve
+> (`15d55b12`).** Mind a 36 E13 sor `done`. A záró kör mérlege:
+> **43/96 production képernyő migrálva (44,8%)**, két kimért, dátumozott `lib/**`
+> elrendezési defekt csak-zsugorodó kizárólistán, 53 legacy képernyő
+> felelős-jelölt backlogban — részletek:
+> [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
+> [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
+
+> ⛔ **A LÁNCNAK JELENLEG NINCS `pending` SORA — a driver üresen fordul.**
+> Mért állapot (`docs/execution/pipeline-queue.tsv`): **257 `done`, 76 `hold`,
+> 18 `prepared`, 0 `pending`**. A `hold` sorok epikánként: E08 1, E09 5,
+> **E10 32**, **E12 36**, E99 2.
+
+> **A visszakapcsolás EMBERI/DRIVER lépés, nem a kör-orchestrátoré** (ADR 0087 §4:
+> a kör-session a sor-fájlhoz csak a SAJÁT sorának `done`-jáért nyúl). A 2026-08-25-i
+> user-döntés a `hold`-ot kifejezetten a Ch13 elkészültéig szabta ki — **ez a
+> feltétel most teljesült**, tehát a következő lépés a `hold` → `pending` átírás
+> egyetlen commitban. A sorrend a 2026-08-27-i user-döntés szerint:
+>
+> 1. **Chapter 12 (`E12`, 36 sor)** — a briefek és az ADR 0443–0465 tartomány
+>    előre elkészült (`26b49257`), a sorok `hold`-on várnak. **Aktiváláskor a
+>    Router-CI carve-outot ki kell terjeszteni `E12`-re** — a sor-fájl fejléc-
+>    kommentje ma kimondja, hogy a carve-out KIZÁRÓLAG `E13-`-ra szól, tehát
+>    e nélkül az E12 körök más motort kapnának, mint amit a döntés előír.
+> 2. **Epic 10 (`E10`, 32 sor)** — utolsóként.
+> 3. A nyitott `E09` (R28/R29/R31/R32) és `E08` sorok a fenti kettő után.
+
+> **Ami a Ch13-ból NYITVA maradt, és nem tűnhet el** (mind dátumozva, felelőssel,
+> [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md)):
+>
+> 1. **`live_screen.dart:477` stat-strip `Row`** — 12 px (en) / 34 px (hu)
+>    túlcsordulás landscape × textScale 2.0 mellett. A javítás
+>    (`Expanded`/`Flexible`, vagy görgethető strip) `lib/**` szerkesztés.
+> 2. **`permission_primer_screen.dart` véglegesen megtagadt ága** — 297 px
+>    túlcsordulás textScale 2.0 mellett, mert a visszakérhető ággal ellentétben
+>    NINCS `SingleChildScrollView`-ba csomagolva.
+> 3. **`tool/check_ui_architecture.dart` UI-architektúra-guard** — halasztva, mert
+>    a két lehetséges kapu-belépési pontja (`tools/round-gate.sh` architecture-lépés,
+>    `.github/actions/flutter-gates`) és a gépi őre (`test/tooling/`) MIND a Ch13
+>    körök tilos zónája volt. **Governance-kör kell**, amelynek `allowed_paths`-a
+>    ezt a hármat EGYÜTT tartalmazza.
+> 4. **A valós eszközös ellenőrzőlista** (`chapter-13-completion-report.md` §5,
+>    11 sor) **kitöltetlen** — ez emberi, kiadási kapu, nem merge-feltétel.
+>    A Live/Tuner/Vision sorok (1–6) aláírása nélkül kiadási build ne menjen ki.
+
+> **A golden-felvétel útja változatlanul kötött:** `tools/golden-x86.sh record|check`
+> (ADR 0426 §3) — az `--update-goldens` ezen az aarch64 boxon TILOS, és golden-teszt
+> a lokális `round-gate.sh` argumentumlistájába NEM kerül ([L516](docs/LESSONS.md)).
 
 > **Ha ezt REMOTE Claude Code konténerben olvasod: a lánc onnan NEM indítható.**
 > Két független blokkoló (nincs Flutter SDK; a `gh` nem hitelesít), a mért
 > részletek és az onnan mégis elvégezhető munka:
 > [`docs/execution/remote-container-environment.md`](docs/execution/remote-container-environment.md),
 > [L481](docs/LESSONS.md).
-
-> **USER-DÖNTÉS 2026-08-25 — A LÁNC KIZÁRÓLAG A Ch13 (UI) SÁVOT VISZI, amíg a
-> teljes UI el nem készül (E13-R16 → E13-R36).** A sor-fájlban ezért MINDEN
-> nem-E13 `pending` sor `hold`-ra váltott (29 sor: E09-R28/R29/R31/R32 és az
-> E10 sáv nyitott sorai) — a driver csak `pending` sort admittál. Az alábbi
-> bekezdés Epic-9-re vonatkozó része ezzel **tárgytalan a lánc számára**; az
-> E09-R27 KÉSZ, a folytatása viszont a Ch13 zárásáig VÁR. Bizonyíték:
-> `tools/round-slots.py plan --slots 2` → `admitted: [E13-R16]`, minden más
-> elutasítva. Visszakapcsolás: `hold` → `pending` egyetlen commitban.
-> A `docs/rounds/e13-r16-launch-and-onboarding.md` **§0.0 pre-flight
-> brief-revíziót KAPOTT** (2026-08-25, merge `8319be6`) — négy lelettel,
-> köztük egy emberi döntéssel feloldott H3 lista-tágítással. **Olvasd el a
-> §0.0-t a kör indítása előtt; a pre-flight NE derítse fel újra.**
-
-> **Frissítve 2026-08-26 (E13-R25 után).** A **Ch13 sáv következő köre:
-> `E13-R26` — Analyze felvétel és feldolgozás**
-> (`docs/rounds/e13-r26-analyze-recording-and-processing.md`, engine a
-> queue-ban `sonnet-impl`, előre kiosztott ADR: **`0285`**).
->
-> **Négy horog, amit az E13-R25 hagyott ennek a körnek:**
->
-> 1. **A brief `allowed_paths`-át MOST MÁR GÉPI ŐR nézi** — a `main`-be
->    merge-elt **S13** (`brief-lint`, PR #468) kimondja a nem létező
->    KÖNYVTÁR-előtagot. Az E13-R25-ben rögtön talált is egyet
->    (`test/fixtures/songs/trainer/`). **De az őr csak KÖNYVTÁR-előtagra lő:**
->    a produkciós fájl-útvonalak és a `gate_tests` bejegyzések létezését
->    továbbra is a pre-flightnak kell `ls`/`find`-dal megmérnie.
-> 2. **A `brief-lint` S11 lelete VÁRT lehet egy csak MÓDOSÍTÓ körben.** Az
->    `outside_screen_pins` predikátuma kizárólag az `allowed_paths`-ba vétellel
->    törölhető, ami tágítás (H3) — a szabály SAJÁT kommentje vállalt maradék
->    hamis riasztásnak nevezi. A helyes feloldás a lint második kifutója: a
->    §0.0 **mondja ki mérve**, hogy a kör nem cseréli le a képernyő típusát
->    (E13-R25 §0.0/B/B4 a minta).
-> 3. **MINOR-1 follow-up (E13-R25-ből):** a `song_trainer_screen.dart` Stage-e
->    a provider által BIRTOKOLT controllert `dispose`-olja. Ma nem elérhető
->    hiba, de amint bárki `ref.keepAlive()`-ot ad hozzá vagy egy második widget
->    is figyeli a providert, **néma no-op** lesz belőle. A helyes alak: a
->    widget a tulajdonos kilépési útját HÍVJA, a lezárást hagyja a
->    `ref.onDispose`-ra (ADR 0276).
-> 4. **MINOR-2 follow-up (E13-R25-ből):** a `_tuningChangesAhead` a setlist
->    **első** elemét kihagyja (`previous == null`), tehát ha rögtön az első dal
->    kér eltérő hangolást, az nem kerül az előrejelző kártyára.
->
-> **A golden-felvétel útja kötött:** `tools/golden-x86.sh record|check`
-> (ADR 0426 §3) — az `--update-goldens` ezen az aarch64 boxon TILOS, és a
-> golden-útvonal **nem** kerül a lokális `gate_tests`-be.
-
-> **Korábbi bejegyzés (2026-08-26, E13-R22 után) — teljesítve:** A **Ch13 sáv következő köre:
-> `E13-R23` — Song Library és setlistek**
-> (`docs/rounds/e13-r23-song-library-and-setlists.md`, engine a queue-ban
-> `sonnet-impl`, előre kiosztott ADR: **`nincs`** — ha a kör normatív döntést
-> hoz, a pre-flight `tools/round-slots.py reserve-adr`-rel foglaljon, és
-> ELŐSZÖR mérje meg, hogy a döntés nem egy MÁR merge-elt ADR szövege-e (az
-> újraírás H1; a sávon ez már ötször így alakult, E13-R17…R22).
->
-> **Három horog, amit az E13-R22 hagyott ennek a körnek:**
->
-> 1. **A brief `allowed_paths`-a lehet, hogy NEM LÉTEZŐ útvonalakat sorol fel.**
->    Az E13-R22 listája három nem létező könyvtárra mutatott, tehát NULLA
->    létező fájlt fedett — a `brief-lint --level strict` ezt NEM jelezte (a
->    szabályai meglévő fájlokra lőnek). **A pre-flight ELSŐ mérése ezért
->    legyen: `ls`/`find` MINDEN `allowed_paths` bejegyzésre.** Ha a lista nem
->    fedi a tényleges fát, az útvonal-csere dokumentált §0.0 revízió, és a
->    csere maradjon a szomszédos, merge-elt kör listájának RÉSZHALMAZA.
-> 2. **A „gyártott mérés" hibaosztály.** Ha egy felület nem tud élő mérést
->    kapni (nincs bekötve a session/DSP), a csábítás az, hogy a képernyő
->    szintetikus bemenetet adjon a valódi domain-motornak, és az eredményt
->    mértként közölje. Ez ADR 0283-sértés és a „nincs demó" szabályé is: a
->    helyes válasz az ADR 0277-stílusú, KIMONDOTT „még nincs élő mérés"
->    állapot, affordancia nélkül. Az őrcella az affordancia ABSZENCIÁJÁT
->    mérje.
-> 3. **A cella pinnelheti a hibát** — ez most MÁSODIK körben, más felületen
->    ismétlődött ([L495](docs/LESSONS.md#l495)). Minden ÚJ cellánál kérdezd
->    meg: *ez a cella a KÖVETELMÉNYT méri, vagy csak azt, amit a kód éppen
->    csinál?*
->
-> **Nyitott follow-upok a practice sávon (E13-R22-ből):** (a) `/practice/history`
-> és `/practice/speed-builder` nevesített route + Hub-belépő
-> (`lib/app/routing/**` + `practice_hub_screen.dart`); (b) élő
-> Speed-Builder-session bekötése (a képernyő ma kimondja, hogy nincs);
-> (c) a valódi Community-share varrat (`practiceSummaryFromSessionResult`,
-> ma NEM exportált a community `public.dart`-ból); (d) a sérült
-> előzmény-rekord LÁTHATÓ jelzése (a `skipped` számláló a
-> `json_document_store.dart`-ban megvan, a repository nem hordozza tovább);
-> (e) a jutalom-főkönyv valódi bekötése a kompozíciós gyökérbe (ma Noop, mert
-> a dual-write `off`).
-
-> **Korábbi bejegyzés (2026-08-26, E13-R21 után) — teljesítve:** A **Ch13 sáv következő köre:
-> `E13-R22` — Practice results és Speed Builder**
-> (`docs/rounds/e13-r22-practice-results-and-speed-builder.md`, engine a
-> queue-ban `sonnet-impl`, előre kiosztott ADR **`0283`** — a queue `adr`
-> oszlopa szerint ez a kör KAP kiosztott számot, tehát a pre-flight NE
-> foglaljon újat; ELŐSZÖR mérd meg, hogy a `0283` már merge-elt-e a
-> `docs/adr/` fán: ha igen, a kör HIVATKOZZA, nem írja újra — az újraírás H1
-> lenne, és a sávon ez már négyszer így alakult, E13-R17…R21).
->
-> **Két horog, amit az E13-R21 hagyott ennek a körnek:**
->
-> 1. **A ≥ 48 dp érintési cél a sáv ismétlődő MAJOR-osztálya** — E13-R20/MAJOR-1
->    (40 dp) és EGY körrel később E13-R21/MAJOR-2 (32 dp), mindkettő teljesen
->    ZÖLD kapu mögött, mert a cellák a semantics-CÍMKÉT és a navigációt mérik,
->    a renderelt CÉLMÉRETET nem ([L496](docs/LESSONS.md#l496)). **Minden ÚJ
->    interaktív elemhez írj `tester.getSize(...)`-alapú cellát** (a forrás
->    konstansa NEM elég: az elrendezés is zsugoríthat), és hitelesítsd
->    valódi-sértés próbával. A repó-szintű őr még nem létezik — az
->    `test/core/**` hatásköre, tehát kör-briefen kívül esik.
-> 2. **Ha egy képernyő saját kilépési kaput épít** (megerősítés, `PopScope`,
->    `Cancel*` parancs), akkor **minden más navigációs hívást ugyanazon a
->    képernyőn a kapuval szembe kell mérni**: a `go` (replace) és a `push`
->    különbsége nem stílus, hanem adatvesztés. Az E13-R21 A6 cellája
->    elvárásként PINNELTE a bypasst — egy zöld cella nemcsak elmulaszthatja a
->    hibát, rögzítheti is ([L495](docs/LESSONS.md#l495)).
->
-> **Nyitott follow-up a practice sávon:** az élő hangolás beolvasása a practice
-> felületre (`TunerReading` → readiness-sor) egy `lib/features/tuner/public.dart`
-> barrelt igényel — a `crossFeatureImportsMustUsePublicApi` szabály miatt
-> nem-`public.dart` import architektúra-sértés. Annak a körnek a dolga,
-> amelynek az `allowed_paths`-a ezt a fájlt tartalmazza; az E13-R21 §0.0/R6
-> kimérte és H3-ként kizárta.
-
-> **Korábbi bejegyzés (2026-08-26, E13-R20 után) — teljesítve:** A **Ch13 sáv következő köre:
-> `E13-R21` — Practice session UI**
-> (`docs/rounds/e13-r21-practice-session-ui.md`, engine a queue-ban
-> `sonnet-impl`, előre kiosztott ADR: **nincs** — a queue `adr` oszlopa
-> `nincs`, tehát ha a kör normatív döntést hoz, a pre-flight
-> `tools/round-slots.py reserve-adr --round E13-R21`-gyel foglaljon, `ls docs/adr
-> | tail`-lel SOHA).
->
-> **A golden-sáv MOSTANTÓL más:** az [ADR 0426](docs/adr/0426-golden-rasterization-on-the-gate-architecture.md)
-> óta a goldeneket a MERGE-KAPU architektúráján (x86_64) vesszük fel és
-> ellenőrizzük — `tools/golden-x86.sh record|check` —, és a golden-teszt
-> útvonala **NEM kerül** a lokális `round-gate.sh` `gate_tests` listájára (az
-> ARM-futás rossz gépet mér). Az E13-R21…R36 briefek §7-je ezt még a RÉGI,
-> `--update-goldens`-es alakban írhatja: a pre-flight írja át §0.0
-> brief-revízióval. Ez **szűkítés a kapu felé, nem lazítás** — mérve: az
-> E13-R17 és az E13-R20 együtt **öt vak CI-kört** fizetett ki a résért
-> ([L486](docs/LESSONS.md#l486), [L493](docs/LESSONS.md#l493)).
->
-> **Az orchestrátor prompt-fájlja a munkapéldányon KÍVÜLRE megy**
-> ([L494](docs/LESSONS.md#l494)) — különben a gépi scope-audit a saját
-> fájlodra ad `VIOLATION`-t, és a kör-jelzés hamis `stopped`-ra vált.
->
-> **Korábbi bejegyzés (2026-08-24, E13-R15 után) — teljesítve:**
-> `E13-R16` — Launch és onboarding**
-> (`docs/rounds/e13-r16-launch-and-onboarding.md`, engine a queue-ban
-> `sonnet-impl`, előre kiosztott ADR **`0281`** — a queue `adr` oszlopa
-> szerint ez a kör KAP kiosztott ADR-t, tehát a pre-flight NE foglaljon újat,
-> és a `0281` (permission primer és honest first win) már a `main`-en van:
-> olvasd el, ne írd újra).
-> Az Epic-9 sáv az **E09-R27 — Moderation queue enforcement és appeal**
-> (`docs/rounds/e09-r27-moderation-queue-enforcement-and-appeal.md`, engine a
-> queue-ban `minimax`, előre kiosztott ADR **`0415`**) körrel halad tovább —
-> az E09-R26 (Felhasználói report és safety flow) KÉSZ, lásd a fejléc
-> ✅-blokkot. A Kör 26 mért horga, amire a Kör 27 ÉPÍT: a
-> `community_reports.extra_metadata` oszlop most már EXPLICIT
-> méret/kulcsszám-korláttal védett kódolás ELŐTT (F2 javítás) — a
-> moderation-queue biztonságosan futtathat `json.loads`-ot rajta, nincs
-> csonkított-érvénytelen JSON kockázat.
-
-**A Kör 15 mért horgai, amelyekre a Kör 16 ÉPÍT — a pre-flight NE derítse fel
-újra:**
-
-- **Ha a kör ÚJ ARB-kulcsot vesz fel, a brief `allowed_paths`-ának a
-  FRAGMENTUMOT kell felsorolnia** (`lib/l10n/features/<feature>_{en,hu}.arb`),
-  mert a `lib/l10n/app_{en,hu}.arb` GENERÁLT aggregátum (ADR 0307 §4,
-  `tool/gen_l10n_segments.dart`). Ez a hibaosztály **négyszer** ütött
-  (L365, L369, L396, [L478](docs/LESSONS.md)). **Az orchestrátor ezt a
-  pre-flightban NEM tudja megjavítani**: a fragmentum felvétele *tágítás*,
-  azaz H3 (ADR 0087 §2) — csak *szűkíteni* lehet. Vagyis a brief-írónak kell
-  helyesen felsorolnia; ha nem tette, a kör vagy ARB-írás nélkül teljesíthető
-  (mint az R15), vagy H3 halt. **Az onboarding-kör (R16) minden bizonnyal
-  ÚJ szöveget kér** → a briefjében a fragmentum-útvonalnak benne kell lennie,
-  KÜLÖN a generált aggregátumtól.
-- **`SsFormatters` és `ssPseudoLocalize` már létezik** (`lib/core/i18n/`,
-  exportálva a `design_system/public.dart`-ból): időtartam (tizedes perc!),
-  BPM, cents, százalék, dátum — `package:intl`, tiszta függvények, explicit
-  `localeName`. Ne írj újat; `m:ss` alakú időtartamhoz viszont KELL egy új
-  formázó (F5 NOTE).
-- **Az A2/A3 beégetett-szöveg guard ÉL** a
-  `design_system/{components,accessibility,layouts,motion}/**` fákon, pontos
-  halmaz-egyenlőségű racsnival. Egy új komponens automatikusan a hatókörbe
-  kerül. Ha egy új kör beégetett szöveget hagy bent, a gate PIROS — a
-  `frozenViolations` bővítése csak akkor legitim, ha a hívási hely a kör
-  `allowed_paths`-án kívül van, és az indok a listában szerepel.
-- **Az A6 clipping-mérce túlcsordulást mér, nem csonkolást** (F6 MINOR): egy
-  `maxLines`/ellipsis mögé rejtett szöveg átmegy. Ha az onboarding-kör
-  szöveg-hosszra érzékeny, a `RenderParagraph.didExceedMaxLines` alapú mérce a
-  következő lépés.
-- **A design system IMPORTÁLHATJA az `AppLocalizations`-t** — mérve 9 DS-fájl
-  teszi (8 `components/`+`documentation/`, és az E13-R14 óta a
-  `foundations/ss_semantics.dart` is). Nem kell hívó-oldali `String`
-  paraméterre kényszeríteni.
-- **A felolvasó-szöveg szerződés-építői már léteznek:**
-  `SsSemantics.tunerAccuracyLabel(l10n, cents:, inTune:)` és
-  `.strumDirectionLabel(l10n, isDown:)`. Egy lokalizációs kör ezeket bővítheti,
-  de a `cents_gauge.dart:29-34` **őrizetlen duplikátuma** (E13-R14 MINOR-3)
-  addig fennáll — ha a kör hozzáér a tuner-szövegekhez, ez a tükör a
-  legolcsóbb helyen zárható le.
-- **A `gate_shape=VIOLATION` jelzés NEM bizonyíték** ([L473](docs/LESSONS.md)):
-  a brief SAJÁT tiltó-mondata és a gate-script elolvasása is kiváltja. A
-  napló TÉNYLEGES `tool_use` Bash-parancsait nyerd ki, mielőtt javító kört
-  nyitsz rá.
-- **A `scope-audit.py` bázisa a felolvasztott `origin/main`** legyen, ne a
-  merge előtti elágazási pont ([L467](docs/LESSONS.md)) — az E13-R14-ben a
-  rossz bázis 4 hamis „listán kívüli útvonalat" adott, mind a §0.3
-  upstream-merge behozott fájlja.
-
-**Lánc-higiéniai teendők (nem kör-blokkolók, GOV/önjavító hatáskör):**
-[L473](docs/LESSONS.md) `tools/mm-round.sh:382` + `tools/codex-round.sh:333` —
-a `gate_shape` illesztés a nyers JSONL-sorra megy a kinyert `tool_use`
-parancsok helyett. [L448](docs/LESSONS.md) `resolve_backend_python()`
-relatív-útvonal bugja MÉG MINDIG nincs javítva (a `ROUND_GATE_BACKEND_PYTHON`
-workaround kerüli meg). [L450](docs/LESSONS.md) landolási exact-SHA rés. A
-`tools/**` a kör-sessionöknek tiltott zóna (H-GATEGUARD), tehát ezeket
-GOV-kör javíthatja.
-
 
 ## 7. Required verification (before any "done")
 
