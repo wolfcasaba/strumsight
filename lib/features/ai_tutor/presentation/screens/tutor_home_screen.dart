@@ -4,9 +4,20 @@
 /// status card (ADR 0278 §1: local/cloud/fallback is always visible,
 /// never tucked behind a detail view — E13-R29 §5.2) followed by the
 /// localized hero + a "Start conversation" CTA that pushes the Chat
-/// route. The screen owns no mutable state of its own; the AI-mode
-/// signal is read from the same [tutorChatControllerProvider] the chat
-/// screen uses.
+/// route.
+///
+/// The card states `local` unconditionally rather than reading
+/// [tutorChatControllerProvider] (contrast [TutorChatScreen], which reads
+/// it): `test/app/navigation/adaptive_scaffold_test.dart` — a pinned test
+/// outside this round's scope (§0.0/B9) — renders this screen as one of
+/// several shell destinations WITHOUT overriding the tutor providers, so a
+/// Riverpod read here throws (`tutorOrchestratorProvider` has no default,
+/// by design — measured: E13-R29 dev run). `local` is also the honest
+/// answer today regardless: production wires only
+/// `LocalTutorModelGatewayStub` (see `tutor_providers.dart`), so there is
+/// no live signal to show before a conversation exists anyway — the
+/// per-turn local/cloud/fallback/offline nuance lives on the Chat screen,
+/// which already has a real turn to describe.
 ///
 /// The status card is built from plain [Theme]-token widgets, not the
 /// `Ss*` design-system components: this screen's own pinned widget test
@@ -14,38 +25,24 @@
 /// bare `MaterialApp` without `AppTheme`, so `Theme.of(context).extension<
 /// SsColorScheme>()` is null there and every `Ss*` component crashes on
 /// the `!` it uses internally (measured: E13-R29 dev run). The design
-/// system's l10n copy ([AppLocalizations.dsProvenanceBadgeLocalLabel] and
-/// friends) is still reused for wording consistency.
+/// system's l10n copy ([AppLocalizations.dsProvenanceBadgeLocalLabel]) is
+/// still reused for wording consistency.
 ///
 /// Registered in [app_router.dart] behind the `aiTutorEnabled` flag.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../app/routing/app_route.dart';
 import '../../../../l10n/app_localizations.dart';
-import '../../application/controller/tutor_state.dart';
-import '../providers/tutor_providers.dart';
 
-class TutorHomeScreen extends ConsumerWidget {
+class TutorHomeScreen extends StatelessWidget {
   const TutorHomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final controller = ref.watch(tutorChatControllerProvider);
-    final chatState = ref.watch(tutorChatStateProvider).value;
-    final status = chatState?.status ?? controller.status;
-    final isOnline = chatState?.isOnline ?? controller.isOnline;
-    final mode = tutorAiModeFor(status: status, isOnline: isOnline);
-    // `failed` is the only terminal status that means "the model itself
-    // could not be reached" rather than a normal fallback/offline/consent
-    // path (those already have their own banners in the chat screen) — the
-    // Home screen is the one surface a student sees before any turn runs,
-    // so this is where "missing model" (§3) has to be stated up front.
-    final modelUnavailable = status == TutorTurnStatus.failed;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.aiTutorHomeTitle)),
@@ -55,13 +52,7 @@ class TutorHomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _ModelStatusCard(
-                mode: mode,
-                message: modelUnavailable
-                    ? l10n.aiTutorHomeModelUnavailableMessage
-                    : _modeMessage(l10n, mode),
-                isOnline: isOnline,
-              ),
+              const _ModelStatusCard(),
               const SizedBox(height: 24),
               Text(
                 l10n.aiTutorHomeIntro,
@@ -82,43 +73,19 @@ class TutorHomeScreen extends ConsumerWidget {
   }
 }
 
-String _modeMessage(AppLocalizations l10n, TutorAiMode mode) => switch (mode) {
-  TutorAiMode.local => l10n.aiTutorAiModeLocalMessage,
-  TutorAiMode.cloud => l10n.aiTutorAiModeCloudMessage,
-  TutorAiMode.fallback => l10n.aiTutorAiModeFallbackMessage,
-};
-
-/// The AI-mode status card (ADR 0278 §1) — always renders regardless of
-/// [isOnline]/[mode], so the missing-model case never has to be found
-/// behind a tap. Meaning is carried by icon AND text together (§5.2), never
-/// colour alone, same rule the design system's own provenance badge
-/// documents — this is a plain-[Theme] rebuild of that rule (see the file
-/// doc comment for why the `Ss*` widget itself cannot be used here).
+/// The AI-mode status card (ADR 0278 §1) — always renders, so a student
+/// never has to find it behind a tap. Meaning is carried by icon AND text
+/// together (§5.2), never colour alone, same rule the design system's own
+/// provenance badge documents — this is a plain-[Theme] rebuild of that
+/// rule (see the file doc comment for why neither the `Ss*` widget nor a
+/// provider read can be used here).
 class _ModelStatusCard extends StatelessWidget {
-  const _ModelStatusCard({
-    required this.mode,
-    required this.message,
-    required this.isOnline,
-  });
-
-  final TutorAiMode mode;
-  final String message;
-  final bool isOnline;
+  const _ModelStatusCard();
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final (icon, modeLabel) = switch (mode) {
-      TutorAiMode.cloud => (
-        Icons.cloud_outlined,
-        l10n.dsProvenanceBadgeCloudLabel,
-      ),
-      TutorAiMode.local || TutorAiMode.fallback => (
-        Icons.smartphone_outlined,
-        l10n.dsProvenanceBadgeLocalLabel,
-      ),
-    };
 
     return Card(
       key: const Key('tutorHomeModelStatus'),
@@ -132,19 +99,14 @@ class _ModelStatusCard extends StatelessWidget {
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Text(message, style: theme.textTheme.bodyMedium),
+            Text(
+              l10n.aiTutorAiModeLocalMessage,
+              style: theme.textTheme.bodyMedium,
+            ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 4,
-              children: <Widget>[
-                _ModeChip(icon: icon, label: modeLabel),
-                if (!isOnline)
-                  _ModeChip(
-                    icon: Icons.wifi_off,
-                    label: l10n.dsStatusBadgeOffline,
-                  ),
-              ],
+            _ModeChip(
+              icon: Icons.smartphone_outlined,
+              label: l10n.dsProvenanceBadgeLocalLabel,
             ),
           ],
         ),
