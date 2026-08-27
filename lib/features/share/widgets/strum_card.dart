@@ -40,71 +40,79 @@ class StrumCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final chords = ShareContent.chords(result, capo: capo);
     final dirs = ShareContent.strumDirections(result);
-    return SizedBox(
-      width: width,
-      height: height,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF17151A), _ground],
+    // Locked to no text scaling: this is a fixed-pixel exportable graphic
+    // (captured to PNG at its native size), not a reading surface, so the
+    // device's accessibility text-scale setting must never resize it —
+    // doing so overflows the fixed 360x640 box and would corrupt the
+    // shared image for any user with large system text.
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF17151A), _ground],
+            ),
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _wordmark(),
-              const SizedBox(height: 6),
-              Text(
-                'Chord & strum-direction detector',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  color: _ink.withValues(alpha: 0.6),
-                ),
-              ),
-              const Spacer(),
-              if (showTitle && (title ?? '').trim().isNotEmpty) ...[
-                _label('TITLE'),
-                const SizedBox(height: 4),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _wordmark(),
+                const SizedBox(height: 6),
                 Text(
-                  title!.trim(),
-                  maxLines: 1,
+                  'Chord & strum-direction detector',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    color: _ink.withValues(alpha: 0.6),
+                  ),
+                ),
+                const Spacer(),
+                if (showTitle && (title ?? '').trim().isNotEmpty) ...[
+                  _label('TITLE'),
+                  const SizedBox(height: 4),
+                  Text(
+                    title!.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: _ink,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                _label('CHORDS'),
+                const SizedBox(height: 6),
+                Text(
+                  chords.isEmpty ? 'My riff' : chords,
+                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontFamily: 'Poppins',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
+                    fontFamily: 'Montserrat',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 30,
+                    height: 1.1,
                     color: _ink,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
+                _label('YOUR STRUM PATTERN'),
+                const SizedBox(height: 8),
+                _StrumArrows(dirs: dirs, truncated: result.strums.length > 16),
+                const Spacer(),
+                _stats(),
+                const SizedBox(height: 14),
+                _footer(),
               ],
-              _label('CHORDS'),
-              const SizedBox(height: 6),
-              Text(
-                chords.isEmpty ? 'My riff' : chords,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 30,
-                  height: 1.1,
-                  color: _ink,
-                ),
-              ),
-              const SizedBox(height: 20),
-              _label('YOUR STRUM PATTERN'),
-              const SizedBox(height: 8),
-              _StrumArrows(dirs: dirs, truncated: result.strums.length > 16),
-              const Spacer(),
-              _stats(),
-              const SizedBox(height: 14),
-              _footer(),
-            ],
+            ),
           ),
         ),
       ),

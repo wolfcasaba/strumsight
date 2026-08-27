@@ -78,76 +78,95 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
     return ShareThemeScope(
       child: Scaffold(
         appBar: AppBar(title: Text(l10n.shareTitle)),
+        // SingleChildScrollView, not a fixed Expanded card area (A9): at
+        // textScaler 2.0 the redaction summary and button labels below grow
+        // tall enough to overflow a fixed-height layout, so the card is
+        // capped at a fraction of the available height (LayoutBuilder) and
+        // keeps its native 9:16 aspect ratio (StrumCard.width/height) inside
+        // that cap, while the whole body scrolls instead of clipping.
         body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: Padding(
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              child: Column(
+                children: [
+                  Padding(
                     padding: const EdgeInsets.all(20),
-                    child: FittedBox(
-                      child: RepaintBoundary(
-                        key: _cardKey,
-                        child: StrumCard(
-                          result: widget.result,
-                          capo: widget.capo,
-                          title: widget.title,
-                          showTitle: _includeTitle,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: constraints.maxHeight * 0.55,
+                      ),
+                      child: AspectRatio(
+                        aspectRatio: StrumCard.width / StrumCard.height,
+                        child: FittedBox(
+                          child: RepaintBoundary(
+                            key: _cardKey,
+                            child: StrumCard(
+                              result: widget.result,
+                              capo: widget.capo,
+                              title: widget.title,
+                              showTitle: _includeTitle,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                child: _RedactionSummary(
-                  includeTitle: _includeTitle,
-                  hasTitle: (widget.title ?? '').trim().isNotEmpty,
-                  onIncludeTitleChanged: (v) =>
-                      setState(() => _includeTitle = v),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                child: Column(
-                  children: [
-                    Builder(
-                      builder: (btnCtx) => SsButton(
-                        label: l10n.shareCardButton,
-                        icon: Icons.ios_share,
-                        loading: _busy,
-                        onPressed: _busy ? null : () => _shareImage(btnCtx),
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                    child: _RedactionSummary(
+                      includeTitle: _includeTitle,
+                      hasTitle: (widget.title ?? '').trim().isNotEmpty,
+                      onIncludeTitleChanged: (v) =>
+                          setState(() => _includeTitle = v),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                    child: Column(
                       children: [
-                        SsButton(
-                          variant: SsButtonVariant.tertiary,
-                          icon: Icons.movie_creation_outlined,
-                          label: l10n.reelButton,
-                          onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => StrumReelScreen(
-                                result: widget.result,
-                                capo: widget.capo,
-                              ),
-                            ),
+                        Builder(
+                          builder: (btnCtx) => SsButton(
+                            label: l10n.shareCardButton,
+                            icon: Icons.ios_share,
+                            loading: _busy,
+                            onPressed: _busy ? null : () => _shareImage(btnCtx),
                           ),
                         ),
-                        SsButton(
-                          variant: SsButtonVariant.tertiary,
-                          label: l10n.shareTextButton,
-                          onPressed: () => _shareText(context),
+                        const SizedBox(height: 8),
+                        // Wrap, not Row (A9 — a fixed Row overflowed at compact
+                        // widths once both labels needed room, especially at
+                        // textScaler 2.0).
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            SsButton(
+                              variant: SsButtonVariant.tertiary,
+                              icon: Icons.movie_creation_outlined,
+                              label: l10n.reelButton,
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => StrumReelScreen(
+                                    result: widget.result,
+                                    capo: widget.capo,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SsButton(
+                              variant: SsButtonVariant.tertiary,
+                              label: l10n.shareTextButton,
+                              onPressed: () => _shareText(context),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -207,7 +226,9 @@ class _RedactionSummary extends StatelessWidget {
       children: [
         Icon(Icons.check_circle_outline, size: 16, color: colors.textSecondary),
         const SizedBox(width: 8),
-        Text(label),
+        // Expanded, not a bare Text (A9): at textScaler 2.0 a long localized
+        // label can otherwise outgrow the row width and overflow.
+        Expanded(child: Text(label)),
       ],
     ),
   );

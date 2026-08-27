@@ -82,6 +82,9 @@ void main() {
     await _pump(tester, log);
     await tester.pumpAndSettle();
 
+    // The share actions can sit below the fold once the body scrolls (A9 —
+    // the screen no longer forces its content into a fixed-height Column).
+    await tester.ensureVisible(find.text('Share as text'));
     await tester.tap(find.text('Share as text'));
     await tester.pumpAndSettle();
     expect(log, ['text']);
