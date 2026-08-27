@@ -7,7 +7,8 @@
 - **Előfeltétel:** `E13-R30` merge-elve (vision UI)
 - **Brief szerzője:** Claude (Opus 5)
 - **Előre kiosztott ADR:** [`0289`](../adr/0289-mastery-is-evidence-not-xp.md)
-  — **a Claude írja meg a kör indításakor; a `docs/adr/` a TILOS zónában van.**
+  — **MÁR MERGE-ELVE** (`5b32bd8e`, 2026-08-15): a kör ADR-t **nem ír**, a
+  `docs/adr/` TILOS zóna, a módosítása **H1** (§0.0.B/B2).
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd el a TÉNYLEGES haladás- és
 > mérőszám-modelleket, kiemelten a **verziózást** — a §5.5 migrációs cella a
@@ -148,6 +149,203 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0.B — PRE-FLIGHT MÉRÉS, 2026-08-27 (`main @ ab6b5b8e`, orchestrátor Claude)
+
+Az alábbi leletek a kör INDÍTÁSA előtt, a fán MÉRVE keletkeztek. A `brief-lint`
+`S13` lelete a B1-ben oldódik fel; a többi a §1.1 két kötelező mérési szabálya
+(elérhetetlen cél-státusz, erőforrás-tulajdonlás) és a merge-elt precedens
+ütköztetése.
+
+**Visszakeresett előzmény** (ADR 0312, `tools/knowledge-rag.mjs`, szűkítve →
+teljes korpusz): [L403](../LESSONS.md#l403) (az E08-R23 „valódi-sértés próbája"
+widget-TÍPUS szinten átengedett egy TARTALMI XP↔mastery összemosást — a próbának
+a FELIRATOT és az ADATFORRÁST kell mérnie), [ADR 0378](../adr/0378-achievement-presentation-and-privacy-safe-evidence.md)
+§1 (caller-fed presentation: a képernyő nem olvas repositoryt, storage plugint
+és faliórát), [ADR 0388](../adr/0388-mastery-milestone-multi-session-evidence-and-explainable-badge.md)
+(a több-sessionös, XP-mentes mastery-mérföldkő — EZ a merge-elt modell),
+[ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md) +
+[L486](../LESSONS.md#l486)/[L493](../LESSONS.md#l493) (golden csak x86-on),
+[L478](../LESSONS.md#l478) (a pre-flight csak SZŰKÍTHET),
+[L497](../LESSONS.md#l497) (nem létező `allowed_paths` előtag).
+
+### B1 — `lib/features/progress_v2/` a fán NEM létezik: EZT A KÖNYVTÁRAT EZ A KÖR HOZZA LÉTRE (`S13` feloldva)
+
+Mérve: `ls lib/features/` → 26 gyerek, közte `progress` (legacy), de
+`progress_v2` **nincs**. A `brief-lint` `S13` két feloldást enged; itt a
+**második** érvényes, és ez a §0.0 mondja ki: **a könyvtárat ez a kör hozza
+létre, minden fájlja új.**
+
+**Merge-elt precedens ugyanerre a mintára, ugyanezen a sávon:**
+`lib/features/library_v2/` — az E13-R28 hozta létre a semmiből (18 fájl:
+`domain/`, `data/`, `providers/`, `screens/`, `widgets/`, `public.dart`), a
+`_v2` névadás tehát bevett, nem újítás.
+
+**Miért nem tágítás (L478):** az előtag ma **nulla** verziókövetett fájlt fed,
+tehát merge-elt kódot gépileg NEM tud elmozdítani. Szűkebb, mint a szomszéd kör
+user-jóváhagyott listája (E13-R30: `lib/features/vision/presentation/`, ami
+létező fát fedett). A legacy `lib/features/progress/` **tilos zóna marad** — a
+§4 tilalma („`lib/features/**` a `progress_v2/` KIVÉTELÉVEL") ezt fedi.
+
+### B2 — a kiosztott ADR `0289` MÁR MERGE-ELVE VAN: a kör ADR-t NEM ír
+
+Mérve: `docs/adr/0289-mastery-is-evidence-not-xp.md` a fán van,
+`git log` → `5b32bd8e` („docs(ch13): E13-R30..R36 briefek + ADR 0288-0292",
+2026-08-15). A `docs/adr/` tilos zóna. Módosítása **H1**.
+
+Ez a sávon a **tizennegyedik** ADR nélküli kör egymás után (E13-R17…R31). A
+`tools/round-slots.py reserve-adr` lefutott és `0432`-t adott; mivel nincs új
+döntés, a foglalás **vissza lett engedve** — a `0432` szabad marad. Ne keress
+`0432`-es ADR-t ebben a diffben.
+
+### B3 — a §6.1 trend-küszöb (5) ELÉRHETETLEN a merge-elt `TrendBuilder`-rel (§1.1/1. szabály)
+
+A §1.1 első szabálya szerint nem az átmenettáblát, hanem a **tényleges inputot**
+mértem:
+
+```
+grep -n "minimumSessionsForTrend" lib/features/audio_analysis/engine/comparison/trend_builder.dart
+→ 9: const int minimumSessionsForTrend = 3;
+→ 67: if (rawPoints.length < minimumSessionsForTrend) → TrendAvailability.unavailable
+```
+
+Tehát ha a felület a merge-elt `TrendBuilder`-t használná, **3 adatpont már
+trendet adna**, és a §6.1 „a küszöb alatt" cellája (3 pont → nincs trend)
+soha nem lenne előállítható.
+
+**Feloldás — a küszöb 5 MARAD, de a saját felületén.** A mért `3` egy MÁSIK
+mérce: az `audio_analysis` metrika-trendjéé
+([ADR 0246](../adr/0246-analysis-session-comparison-and-trend-contract.md) §3/OD-02), aminek a
+bemenete `AnalysisDocument`, nem a fejlődési idősor. Az `5` forrása a
+**merge-elt [ADR 0289](../adr/0289-mastery-is-evidence-not-xp.md) §4** („a kör
+mérce-mátrixában 5 adatpont, a határ inkluzív"), ezért nem alkuképes és nem is
+csökkenthető.
+
+Következmény, ami KÖTELEZŐ a kör kódjára:
+
+- a fejlődési trend minimum-küszöbe a `lib/features/progress_v2/` fán él,
+  **saját nevesített konstansként**, `5` értékkel, inkluzív határral;
+- a `TrendBuilder`-t és a `minimumSessionsForTrend`-et a kör **nem hívja, nem
+  importálja és nem módosítja** (§3 tiltja a számítás módosítását, a fájl
+  ráadásul tilos zóna);
+- a §6.1 „a küszöb alatt" cellája ezért **pontosan 3 adatpont** — nem véletlen
+  szám: ez az az érték, amelynél a HIBÁS implementáció (a `TrendBuilder`
+  konstansának átvétele) trendet rajzolna. A cella így falszifikációs őr, nem
+  dekoráció.
+
+### B4 — A2 „session route": a bizonyíték-hivatkozás `extra`-alapú, és a kör NEM drótozhat routert (§1.1/2. szabály)
+
+Az erőforrás-tulajdonlást a tényleges hívási láncon mértem:
+
+```
+grep -n "librarySession\|profileLibrarySession" lib/app/routing/app_route.dart lib/app/routing/app_router.dart
+→ AppRoutes.librarySession        = '/library/session'          (extra: AnalyzedSession)
+→ AppRoutes.profileLibrarySession = '/profile/library/session'  (extra: LibraryItem, E13-R28)
+```
+
+Mindkét session-route a példányt **`state.extra`-ban** kapja (nincs `:id`
+path-paraméter), és rossz típusú `extra` esetén a listára redirektál. Az
+UI-50 SDD-route (`/profile/progress/skills/:skillId`) a fán **nem létezik**
+(`grep -n "skill" lib/app/routing/app_route.dart` → 0 találat), és a
+`lib/app/routing/**` **nincs** az `allowed_paths`-on.
+
+**Ebből az A2 mércéje:**
+
+- a képernyők **route-mentesek**: közvetlenül példányosíthatók (a teszt és a
+  golden így pumpálja őket), pontosan úgy, mint az E13-R30 route-nélküli
+  `VisionResultScreen`-je;
+- a bizonyíték-hivatkozás **hívó által adott callbacket** hív, és a cél-route-ot
+  az `AppRoutes` katalógus konstansából adja tovább — string-literál **TILOS**
+  (`test/tooling/route_literal_guard_test.dart`, a `gate_tests`-ben fut);
+- az A2 „megnyitható" bizonyítéka tehát: a bizonyíték-elem **megnyomható**, és a
+  megnyomás a session azonosítójával EGYÜTT adja tovább a cél-route-ot. Egy
+  callback nélküli, dísz-bizonyíték a cellát pirosra váltja (§9 „dísz-
+  bizonyíték" kockázat).
+
+### B5 — az SDD kilenc kötelező komponenséből HAT nem létezik; a `design_system` tilos zóna marad
+
+Mérve (`grep -rl "class Ss…" lib/core/design_system/`):
+
+| SDD-komponens | Van? | Mért helyettesítő |
+|---|---|---|
+| `SsMetricCard` | ✅ | `components/cards/ss_metric_card.dart` |
+| `SsInsightCard` | ✅ | `components/cards/ss_insight_card.dart` |
+| `SsCoachActionCard` | ✅ | `components/cards/ss_coach_action_card.dart` |
+| `SsComparisonChart` | ❌ | `analytics/ss_chart_text_summary.dart` (+ `ss_event_list.dart`) — az E13-R27 merge-elt mintája |
+| `SsTrendChip` | ❌ | `analytics/ss_trend_indicator.dart` (`SsTrendDirection.{up,down,flat,unknown}`) |
+| `SsChoiceChip` | ❌ | `inputs/ss_choice.dart` (`SsChoice<T>`, `SsChoiceStyle.chip`) |
+| `SsProgressIndicator` | ❌ | `analytics/ss_score_ring.dart` (`SsScoreRingState.{measured,notApplicable,unavailable}`) |
+| `SsEvidenceCard` | ❌ | `surfaces/ss_card.dart` / `cards/ss_content_card.dart` + feature-lokális widget |
+| `SsAiModeBadge` | ❌ | `ai/ss_provenance_badge.dart` (`SsProvenanceKind.{local,cloud}`) |
+
+**Új DS-komponens NEM készül** — ugyanaz a szűkítés, mint az E13-R28/B5-ben és
+az E13-R30-ban. A `SsScoreRingState.unavailable` / `SsTrendDirection.unknown`
+ág **közvetlenül az A3-at szolgálja**: a hiányzó adatnak van saját, nem-nulla
+megjelenítése a merge-elt komponensben.
+
+A design-system importja **kizárólag** a `lib/core/design_system/public.dart`
+barrelen át mehet — ezt a `test/core/architecture_dependency_test.dart` méri
+(E13-R16/F8: 11 sértés, §0.0/S12).
+
+### B6 — §7: a `flutter test --update-goldens` ütközik a merge-elt ADR 0426-tal
+
+A brief §7-e ARM-en rögzítene goldent, amit az x86-os merge-kapu nulla
+toleranciájú komparátora MINDIG pirosra vált
+([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md) §2–§3,
+[L486](../LESSONS.md#l486), [L493](../LESSONS.md#l493)). A merge-elt
+E13-R23…R30 precedens egységesen a `tools/golden-x86.sh record|check` alakot
+használja — a §7 erre vált (lásd lentebb).
+
+### B7 — a képernyők CALLER-FED-ek: nincs repository-, storage- és falióra-olvasás
+
+A merge-elt [ADR 0378](../adr/0378-achievement-presentation-and-privacy-safe-evidence.md)
+§1 precedense köti ezt a felületet is: a képernyő immutable projekciót kap a
+hívótól, és **nem** olvas repositoryt, `SharedPreferences`-t vagy `DateTime.now()`-ot.
+
+Miért ez a mérce ennek a körnek:
+
+- az A6 („offline fejlődés látható") így a projekció **mezője**, nem egy
+  hálózati mellékhatás — teszteléshez nem kell plugin-mock;
+- a `test/tooling/preferences_plugin_import_guard_test.dart` (a `gate_tests`-ben
+  fut) gépileg fogja meg a storage-plugin importot;
+- a `risk = "high"` indoklása (a felület a teljes tanulási történetet
+  aggregálja) így a legszűkebb: a kör kódja **nem** nyit új adat-utat.
+
+### B8 — a `MasteryMilestone`/`MasteryProgress` a MERGE-ELT bizonyíték-modell; a kör ezt MEGJELENÍTI, nem újraszámolja
+
+Mérve — `lib/features/gamification/domain/mastery/`, exportálva a
+`lib/features/gamification/public.dart`-ból (11., 35–37. sor):
+
+| Mért típus / mező | Mit ad a körnek |
+|---|---|
+| `MasteryEvidence.sessionId` | az A2 auditálható hivatkozásának azonosítója (dedup-kulcs is) |
+| `MasteryEvidence.origin` (`vision`/`analysis`/`device`), `observedAt`, `confidence?` | az UI-50 „evidence date és source felolvasott" követelménye |
+| `MasteryProgress.evidenceSessionCount` + `progressValue(milestone)` | az elsajátítottság **mért teljesítményből** — XP nem szerepel benne (A1) |
+| `MasteryProgress.catalogVersion` (`int`, ≥1) | **az A5 verzió-mezője** — a §5.5 migrációs cella ERRE épül |
+| `MasteryMilestone.minEvidenceSessions` (≥2, „single-session proof is not mastery") | az A2/A4 elégtelen-bizonyíték állapota |
+| `MasterySkill` (4 érték), `MasteryMetric` (3), `MasteryDifficulty` (3), `MasteryTempoRange` | a képesség-részletnézet tengelyei |
+
+**A brief fejléce a „verziózás" mérését írta elő — itt a mért válasz:** a
+fejlődési oldalon a verzió-mező a `MasteryProgress.catalogVersion`. (A
+`MetricTrend.metricVersion` a MÁSIK, `audio_analysis`-beli felületé — lásd B3;
+a kettőt összekeverni A5-bukás.)
+
+A kör ezeket a típusokat **olvassa** (a `public.dart` barrelen át) vagy
+saját, ekvivalens presentation-projekcióba képezi — de a
+`mastery_evaluator.dart`-ot és a `domain/mastery/**`-ot **nem módosítja** (tilos
+zóna, §3).
+
+### B9 — a képernyő-leltár őre: a mért kiindulási szám **92**
+
+```
+grep -n "hasLength" test/ui/ui_inventory_test.dart → 19: hasLength(92)
+find lib/features -name '*_screen.dart' | wc -l    → 92
+```
+
+A jogosultság PONTOSAN a szám emelése a kör tényleges képernyőszámára (92 → 92 +
+az új `lib/features/progress_v2/**/*_screen.dart` fájlok száma), a hozzá tartozó
+magyarázó kommenttel — a teszt minden más állítása érintetlen marad (§0.0/R4).
+Kerülőút (képernyő-átnevezés, a `tool/ui_inventory.dart` lazítása) **TILOS**.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -159,6 +357,19 @@ tools/codex-signal.sh blocked "<egy sor>"
 
 Lezáró jelzés nélkül a kör bukott. Listán kívüli fájl → `stopped`.
 
+**STOP-protokoll scope-ütközésre:** ha a feladat elvégzéséhez a §4
+`allowed_paths`-on KÍVÜLI fájlt kellene szerkesztened, **NE tedd meg** —
+`tools/codex-signal.sh stopped "<mit és miért>"`, és a §10-be írd le, pontosan
+melyik fájl és melyik acceptance-cella miatt. A lista tágítása az
+orchestrátornak sem jár (H3, [L478](../LESSONS.md#l478)).
+
+**A brief §8 a terved** — nincs külön task-lista, ne készíts sajátot.
+
+**Doc-commentben csak tesztben bizonyított állítás** szerepelhet (`const`,
+`immutable`, „soha nem X"): ha a mondat nincs cellával fedve, ne írd le.
+
+**A munkádat commitold a branchre** (`sonnet-impl/e13-r31-progress-and-skills`).
+
 ## 1. Cél
 
 Az UI-49–UI-50 hosszú távú, **bizonyíték-alapú** fejlődési felülete
@@ -166,10 +377,23 @@ Az UI-49–UI-50 hosszú távú, **bizonyíték-alapú** fejlődési felülete
 
 ## 2. Jelenlegi állapot — mért tények
 
-- Az R27 analitika-komponensei és az ADR 0286 („hiányzó ≠ nulla", diagram
-  szöveges alternatívája) készen állnak.
-- A mérőszámok **verziózottak** — a régi és az új nem feltétlenül összemérhető.
-- Az R17 Profile Hub adja a belépési pontot.
+Mérve 2026-08-27, `main @ ab6b5b8e` (a részletek §0.0.B):
+
+- Az R27 analitika-komponensei a fán vannak: `SsChartTextSummary`,
+  `SsEventList`, `SsScoreRing`, `SsTrendIndicator`, `SsConfidenceLegend`
+  (`lib/core/design_system/components/analytics/`). Az ADR 0286 („hiányzó ≠
+  nulla", diagram szöveges alternatívája) ezekben már megjelenik
+  (`SsScoreRingState.unavailable`, `SsTrendDirection.unknown`).
+- A mérőszámok **verziózottak**: a fejlődési oldalon a verzió-mező a
+  `MasteryProgress.catalogVersion` (`int`, ≥1) — **ez** az A5 alapja (B8).
+- Az elsajátítottság merge-elt modellje `lib/features/gamification/domain/mastery/`
+  (`MasteryEvidence`, `MasteryProgress`, `MasteryMilestone`), a
+  `gamification/public.dart` barrelen exportálva. `MasteryEvidence.sessionId`
+  adja az A2 auditálható hivatkozását; `MasteryMilestone.minEvidenceSessions ≥ 2`
+  („single-session proof is not mastery").
+- Az R17 Profile Hub adja a belépési pontot (`AppRoutes.profileProgress`,
+  ma a legacy `ProgressScreen`-re mutat). A kör **nem** drótoz routert (B4).
+- `lib/features/progress_v2/` **nem létezik** — ez a kör hozza létre (B1).
 
 ## 3. Scope
 
@@ -188,7 +412,7 @@ XP-alapú elsajátítottság bevezetése · más képernyők · `docs/adr/**`,
 
 | Útvonal | Indok |
 |---|---|
-| `lib/features/progress_v2/` | a két felület |
+| `lib/features/progress_v2/` | a két felület — **ÚJ fa, ezt a kör hozza létre** (§0.0.B/B1; a `library_v2` merge-elt precedense szerint), ma NULLA fájlt fed |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a fejlődés-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/progress_v2/*_test.dart` (4) | a §6 cellái |
@@ -257,13 +481,22 @@ Nem javasol olyan gyakorlatot, aminek az előfeltétele hiányzik.
 | Előfeltétel nélküli gyakorlat ajánlása | A7 |
 | A képernyő elcsúszik, túlcsordul vagy nagy szövegméretnél olvashatatlan | **A9** |
 
-**A trend három kötelező cellája** (a küszöb: a minimális adatpont-szám, **5**):
+**A trend három kötelező cellája** (a küszöb: a minimális adatpont-szám, **5**
+— forrás a merge-elt [ADR 0289](../adr/0289-mastery-is-evidence-not-xp.md) §4,
+a `progress_v2` fán élő saját konstansként, §0.0.B/B3):
 
 | Cella | Bemenet | Elvárt |
 |---|---|---|
-| a küszöb alatt | 3 adatpont | **nincs trend** — „még nincs elég adat" |
+| a küszöb alatt | **3** adatpont | **nincs trend** — „még nincs elég adat" |
 | rajta (a küszöbön) | pontosan **5** adatpont | trend megjelenik (a határ inkluzív) |
 | a küszöb fölött | 30 adatpont | trend megjelenik |
+
+**Miért pont 3 az „alatta" cella (falszifikációs őr, nem kerek szám):** a fán
+mért `minimumSessionsForTrend = 3`
+(`lib/features/audio_analysis/engine/comparison/trend_builder.dart:9`) egy MÁSIK
+felület küszöbe. Aki azt a konstanst veszi át, **3 adatpontnál trendet rajzol**
+— és pontosan ez a cella vált tőle pirosra. A `TrendBuilder` importálása,
+hívása vagy módosítása TILOS (§3, tilos zóna).
 
 **Valódi-sértés próba (KÖTELEZŐ, §10-ben dokumentálva):** származtasd az
 elsajátítottságot az XP-ből → az **A1** cellának PIROSNAK kell lennie →
@@ -282,8 +515,18 @@ KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r31_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r31_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r31_screens_golden_test.dart
 ```
+
+> **§0.0.B/B6 — a `flutter test --update-goldens` TILOS ezen a boxon.** Az
+> ARM-en rögzített pixel az x86-os merge-kapu nulla toleranciájú komparátorán
+> MINDIG piros ([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+> §2–§3, [L486](../LESSONS.md#l486), [L493](../LESSONS.md#l493)). A
+> `tools/golden-x86.sh` a CI-vel azonos architektúrán vesz fel és ellenőriz —
+> a mérce (nulla tolerancia, ugyanaz a komparátor és golden-készlet)
+> változatlan. Kilépési kódok: `0` = egyezik, `10` = valódi golden-eltérés,
+> `20` = környezeti hiba, `30` = hibás hívás.
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
