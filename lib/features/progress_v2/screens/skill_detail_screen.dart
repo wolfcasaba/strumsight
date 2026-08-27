@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../app/routing/app_route.dart';
 import '../../../core/design_system/public.dart';
@@ -31,6 +32,9 @@ final class SkillDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final dateFormat = DateFormat.yMMMd(
+      Localizations.localeOf(context).toString(),
+    );
     final hasEvidence = projection.hasEvidence;
     final statusText = hasEvidence
         ? '${(projection.ratio * 100).round()}%'
@@ -94,12 +98,12 @@ final class SkillDetailScreen extends StatelessWidget {
                               id: evidence.sessionId,
                               label: l10n.progressV2EvidenceRowLabel(
                                 _originLabel(l10n, evidence.origin),
-                                evidence.observedAt.toIso8601String(),
+                                dateFormat.format(evidence.observedAt),
                               ),
                               semanticLabel: l10n
                                   .progressV2EvidenceRowSemanticLabel(
                                     _originLabel(l10n, evidence.origin),
-                                    evidence.observedAt.toIso8601String(),
+                                    dateFormat.format(evidence.observedAt),
                                   ),
                               onTap: () => onOpenEvidence(
                                 AppRoutes.profileLibrarySession,
@@ -113,20 +117,47 @@ final class SkillDetailScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 SsSection(
                   title: l10n.progressV2RecommendationSectionTitle,
-                  child: recommendationEligible
-                      ? SsCoachActionCard(
-                          l10n: l10n,
-                          title: recommendation.title,
-                          message: recommendation.message,
-                          actionLabel: l10n.progressV2RecommendationAction,
-                          onAction: onStartRecommendedPractice,
-                        )
-                      : Text(
-                          l10n.progressV2RecommendationLocked(
-                            recommendation.prerequisiteTitle ?? '',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Always visible, whether or not the recommendation is
+                      // eligible right now (§6/F4) — the prerequisite
+                      // relationship must not only be readable on the
+                      // locked branch below.
+                      if (recommendation.prerequisiteMilestoneId != null) ...[
+                        Text(
+                          recommendationEligible
+                              ? l10n.progressV2RecommendationPrerequisiteMet(
+                                  recommendation.prerequisiteTitle ?? '',
+                                )
+                              : l10n.progressV2RecommendationPrerequisiteMissing(
+                                  recommendation.prerequisiteTitle ?? '',
+                                ),
+                          key: const Key(
+                            'skill-detail-recommendation-prerequisite',
                           ),
-                          key: const Key('skill-detail-recommendation-locked'),
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
+                        const SizedBox(height: 8),
+                      ],
+                      recommendationEligible
+                          ? SsCoachActionCard(
+                              l10n: l10n,
+                              title: recommendation.title,
+                              message: recommendation.message,
+                              actionLabel: l10n.progressV2RecommendationAction,
+                              onAction: onStartRecommendedPractice,
+                            )
+                          : Text(
+                              l10n.progressV2RecommendationLocked(
+                                recommendation.prerequisiteTitle ?? '',
+                              ),
+                              key: const Key(
+                                'skill-detail-recommendation-locked',
+                              ),
+                            ),
+                    ],
+                  ),
                 ),
               ],
             ],

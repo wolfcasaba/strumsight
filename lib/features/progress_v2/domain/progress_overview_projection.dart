@@ -33,7 +33,19 @@ final class MilestoneOverviewEntry {
 /// happens on this tree — every field here is already resolved by the
 /// caller.
 final class ProgressOverviewProjection {
-  const ProgressOverviewProjection({
+  factory ProgressOverviewProjection({
+    required bool isOffline,
+    required List<MilestoneOverviewEntry> milestones,
+    required ProgressTrend trend,
+    required List<MetricVersionSegment> metricSegments,
+  }) => ProgressOverviewProjection._(
+    isOffline: isOffline,
+    milestones: List.unmodifiable(milestones),
+    trend: trend,
+    metricSegments: List.unmodifiable(metricSegments),
+  );
+
+  const ProgressOverviewProjection._({
     required this.isOffline,
     required this.milestones,
     required this.trend,

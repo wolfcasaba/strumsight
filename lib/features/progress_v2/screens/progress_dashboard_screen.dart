@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
@@ -198,6 +199,9 @@ class _TrendSection extends StatelessWidget {
       );
     }
 
+    final dateFormat = DateFormat.yMMMd(
+      Localizations.localeOf(context).toString(),
+    );
     final points = trend.points;
     final first = points.first.value;
     final last = points.last.value;
@@ -239,10 +243,10 @@ class _TrendSection extends StatelessWidget {
                 id: point.observedAt.toIso8601String(),
                 label:
                     '${(point.value * 100).round()}% · '
-                    '${point.observedAt.toIso8601String()}',
-                semanticLabel: l10n.progressV2TrendExtremes(
+                    '${dateFormat.format(point.observedAt)}',
+                semanticLabel: l10n.progressV2TrendPointSemanticLabel(
                   '${(point.value * 100).round()}%',
-                  point.observedAt.toIso8601String(),
+                  dateFormat.format(point.observedAt),
                 ),
               ),
           ],
@@ -268,9 +272,16 @@ class _MetricHistorySection extends StatelessWidget {
           key: const Key('progress-metric-version-changed-note'),
         ),
         const SizedBox(height: 8),
-        for (final segment in segments)
+        for (final (index, segment) in segments.indexed)
           Padding(
-            key: ValueKey('progress-metric-segment-${segment.catalogVersion}'),
+            // Keyed by POSITION, not `catalogVersion` alone: a version can
+            // reappear later without re-merging into its earlier segment
+            // (`segmentByCatalogVersion`, `metric_migration_test.dart`
+            // "a version reappearing later starts a NEW segment") — two
+            // same-version segments would otherwise collide on one key.
+            key: ValueKey(
+              'progress-metric-segment-$index-v${segment.catalogVersion}',
+            ),
             padding: const EdgeInsets.only(bottom: 4),
             // Wrap, not Row: at a large text scale "Measure v2" and "1
             // sample" no longer fit one line side by side (measured while

@@ -5,7 +5,15 @@ import 'progress_trend.dart';
 /// recalibration from ever reading as continuous, sudden improvement within
 /// one line (A5).
 final class MetricVersionSegment {
-  const MetricVersionSegment({
+  factory MetricVersionSegment({
+    required int catalogVersion,
+    required List<ProgressTrendPoint> points,
+  }) => MetricVersionSegment._(
+    catalogVersion: catalogVersion,
+    points: List.unmodifiable(points),
+  );
+
+  const MetricVersionSegment._({
     required this.catalogVersion,
     required this.points,
   });

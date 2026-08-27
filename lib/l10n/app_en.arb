@@ -3095,6 +3095,18 @@
       "prerequisite": {}
     }
   },
+  "progressV2RecommendationPrerequisiteMet": "Prerequisite met: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMet": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMissing": "Prerequisite not yet met: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMissing": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
   "progressV2RecommendationSectionTitle": "Suggested next step",
   "progressV2ScoreRingUnavailableGlyph": "—",
   "progressV2SkillDetailMasterySemanticLabel": "{title} mastery: {status}",
@@ -3125,6 +3137,13 @@
     }
   },
   "progressV2TrendInsufficientData": "Not enough sessions yet to show a trend.",
+  "progressV2TrendPointSemanticLabel": "{value} recorded on {date}",
+  "@progressV2TrendPointSemanticLabel": {
+    "placeholders": {
+      "value": {},
+      "date": {}
+    }
+  },
   "progressV2TrendSectionTitle": "Trend",
   "progressV2TrendSessionsTracked": "{count, plural, =1{1 session tracked} other{{count} sessions tracked}}",
   "@progressV2TrendSessionsTracked": {

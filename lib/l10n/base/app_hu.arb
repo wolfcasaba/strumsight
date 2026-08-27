@@ -366,6 +366,13 @@
       "last": {}
     }
   },
+  "progressV2TrendPointSemanticLabel": "{value}, rögzítve: {date}",
+  "@progressV2TrendPointSemanticLabel": {
+    "placeholders": {
+      "value": {},
+      "date": {}
+    }
+  },
   "progressV2TrendEventListSemanticLabel": "Az egyes edzések mért értékei",
   "progressV2SkillsSectionTitle": "Készségek",
   "progressV2SkillRowSemanticLabel": "{title}: {status}",
@@ -426,6 +433,18 @@
   "progressV2RecommendationAction": "Gyakorlás indítása",
   "progressV2RecommendationLocked": "Ehhez előbb szükséges: {prerequisite}",
   "@progressV2RecommendationLocked": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMet": "Előfeltétel teljesítve: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMet": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMissing": "Előfeltétel még nem teljesült: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMissing": {
     "placeholders": {
       "prerequisite": {}
     }

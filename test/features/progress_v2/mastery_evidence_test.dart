@@ -287,6 +287,17 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Start practice'), findsNothing);
+
+        // F4 — the prerequisite relationship is ALWAYS visible, not only
+        // reachable via the locked text above.
+        expect(
+          find.byKey(const Key('skill-detail-recommendation-prerequisite')),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Prerequisite not yet met: Chord transitions — beginner'),
+          findsOneWidget,
+        );
       },
     );
 
@@ -327,6 +338,17 @@ void main() {
         findsNothing,
       );
       expect(find.text('Start practice'), findsOneWidget);
+
+      // F4 — a met prerequisite is still shown, marked as met (not silently
+      // dropped once the recommendation becomes eligible).
+      expect(
+        find.byKey(const Key('skill-detail-recommendation-prerequisite')),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Prerequisite met: Chord transitions — beginner'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.text('Start practice'));
       await tester.pumpAndSettle();

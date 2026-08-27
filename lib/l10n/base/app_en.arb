@@ -411,6 +411,13 @@
       "last": {}
     }
   },
+  "progressV2TrendPointSemanticLabel": "{value} recorded on {date}",
+  "@progressV2TrendPointSemanticLabel": {
+    "placeholders": {
+      "value": {},
+      "date": {}
+    }
+  },
   "progressV2TrendEventListSemanticLabel": "Individual session measurements",
   "progressV2SkillsSectionTitle": "Skills",
   "progressV2SkillRowSemanticLabel": "{title}: {status}",
@@ -471,6 +478,18 @@
   "progressV2RecommendationAction": "Start practice",
   "progressV2RecommendationLocked": "Requires {prerequisite} first",
   "@progressV2RecommendationLocked": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMet": "Prerequisite met: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMet": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMissing": "Prerequisite not yet met: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMissing": {
     "placeholders": {
       "prerequisite": {}
     }

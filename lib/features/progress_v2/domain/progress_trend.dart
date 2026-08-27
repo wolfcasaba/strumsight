@@ -29,15 +29,18 @@ abstract final class ProgressTrendThresholds {
 }
 
 /// A trend series and its derived [availability] — computed once at
-/// construction so every consumer reads the same verdict (A4).
+/// construction so every consumer reads the same verdict (A4). [points] is
+/// assumed already ordered by [ProgressTrendPoint.observedAt] (mirrors
+/// `segmentByCatalogVersion`'s precondition) — direction is read from
+/// `points.first`/`points.last`, and this constructor does not sort.
 final class ProgressTrend {
   factory ProgressTrend({required List<ProgressTrendPoint> points}) {
-    final sorted = List<ProgressTrendPoint>.unmodifiable(points);
+    final fixed = List<ProgressTrendPoint>.unmodifiable(points);
     final availability =
-        sorted.length >= ProgressTrendThresholds.minimumDataPointsForTrend
+        fixed.length >= ProgressTrendThresholds.minimumDataPointsForTrend
         ? ProgressTrendAvailability.available
         : ProgressTrendAvailability.insufficientData;
-    return ProgressTrend._(points: sorted, availability: availability);
+    return ProgressTrend._(points: fixed, availability: availability);
   }
 
   const ProgressTrend._({required this.points, required this.availability});

@@ -3057,6 +3057,18 @@
       "prerequisite": {}
     }
   },
+  "progressV2RecommendationPrerequisiteMet": "Előfeltétel teljesítve: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMet": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMissing": "Előfeltétel még nem teljesült: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMissing": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
   "progressV2RecommendationSectionTitle": "Javasolt következő lépés",
   "progressV2ScoreRingUnavailableGlyph": "—",
   "progressV2SkillDetailMasterySemanticLabel": "{title} elsajátítottság: {status}",
@@ -3087,6 +3099,13 @@
     }
   },
   "progressV2TrendInsufficientData": "Még nincs elég edzés a trend megjelenítéséhez.",
+  "progressV2TrendPointSemanticLabel": "{value}, rögzítve: {date}",
+  "@progressV2TrendPointSemanticLabel": {
+    "placeholders": {
+      "value": {},
+      "date": {}
+    }
+  },
   "progressV2TrendSectionTitle": "Trend",
   "progressV2TrendSessionsTracked": "{count, plural, =1{1 rögzített edzés} other{{count} rögzített edzés}}",
   "@progressV2TrendSessionsTracked": {

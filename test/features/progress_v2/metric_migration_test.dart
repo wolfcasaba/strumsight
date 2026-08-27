@@ -169,14 +169,105 @@ void main() {
           findsOneWidget,
         );
         expect(
-          find.byKey(const ValueKey('progress-metric-segment-1')),
+          find.byKey(const ValueKey('progress-metric-segment-0-v1')),
           findsOneWidget,
         );
         expect(
-          find.byKey(const ValueKey('progress-metric-segment-2')),
+          find.byKey(const ValueKey('progress-metric-segment-1-v2')),
           findsOneWidget,
         );
         expect(find.text('Measure v1'), findsOneWidget);
+        expect(find.text('Measure v2'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'a version reappearing later (v1, v2, v1) renders as THREE distinct '
+      'segments, not a Duplicate keys crash',
+      (tester) async {
+        final milestone = _milestone();
+        final entry = MilestoneOverviewEntry(
+          milestone: milestone,
+          progress: MasteryProgress(
+            milestoneId: milestone.id,
+            catalogVersion: 1,
+            evidenceSessionCount: 5,
+          ),
+          title: 'Chord transitions — beginner',
+        );
+
+        // Same input the pure-function cell above already proves produces 3
+        // segments (`[1, 2, 1]`) — this cell renders it, which is exactly
+        // where the pre-fix `ValueKey('progress-metric-segment-$version')`
+        // collided: two `catalogVersion: 1` segments as siblings of the same
+        // `Column` shared one key and Flutter refused to build the frame.
+        final segments = [
+          MetricVersionSegment(
+            catalogVersion: 1,
+            points: [
+              ProgressTrendPoint(
+                observedAt: DateTime.utc(2026, 1, 1),
+                value: 0.2,
+              ),
+            ],
+          ),
+          MetricVersionSegment(
+            catalogVersion: 2,
+            points: [
+              ProgressTrendPoint(
+                observedAt: DateTime.utc(2026, 2, 1),
+                value: 0.8,
+              ),
+            ],
+          ),
+          MetricVersionSegment(
+            catalogVersion: 1,
+            points: [
+              ProgressTrendPoint(
+                observedAt: DateTime.utc(2026, 3, 1),
+                value: 0.3,
+              ),
+            ],
+          ),
+        ];
+
+        await tester.pumpWidget(
+          _host(
+            ProgressDashboardScreen(
+              projection: ProgressOverviewProjection(
+                isOffline: false,
+                milestones: [entry],
+                trend: ProgressTrend(
+                  points: List.generate(
+                    5,
+                    (i) => ProgressTrendPoint(
+                      observedAt: DateTime.utc(2026, 8, 1 + i),
+                      value: 0.5,
+                    ),
+                  ),
+                ),
+                metricSegments: segments,
+              ),
+              onOpenSkillDetail: (_) {},
+              onGetStarted: () {},
+            ),
+          ),
+        );
+
+        expect(tester.takeException(), isNull);
+        expect(
+          find.byKey(const ValueKey('progress-metric-segment-0-v1')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('progress-metric-segment-1-v2')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('progress-metric-segment-2-v1')),
+          findsOneWidget,
+        );
+        expect(find.text('Measure v1'), findsNWidgets(2));
         expect(find.text('Measure v2'), findsOneWidget);
       },
     );

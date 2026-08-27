@@ -679,4 +679,89 @@ commitolva a `test/ui/goldens/goldens/` alatt (ugyanaz a beágyazott
 (a `flutter-analyze-fixer` konvenció szerint, önállóan futtatva) szintén
 tiszta.
 
+### Javító kör (1.) — a független review leleteire, 2026-08-27
+
+**Motor:** Claude Sonnet 5 (`sonnet-impl`), a `docs/reviews/e13-r31-review.md`
+leleteire válaszul, ugyanezen az ágon.
+
+**F1 (MAJOR) — a mérce-verzió-előzmény összeomlott egy visszatérő
+verziószámon.** A `_MetricHistorySection` a szegmenseket
+`ValueKey('progress-metric-segment-${segment.catalogVersion}')`-vel
+kulcsolta — két azonos verziójú, nem-szomszédos szegmens (pl. `[1, 2, 1]`)
+így két azonos kulcsú testvért adott ugyanabban a `Column`-ban, amit a
+Flutter `FlutterError: Duplicate keys found`-dal utasított el. Javítás:
+`progress_dashboard_screen.dart:271-280` a kulcsot **pozícióval** teszi
+egyedivé (`'progress-metric-segment-$index-v${segment.catalogVersion}'`,
+`segments.indexed` felett iterálva) — a megjelenített szöveg és a
+szekció-logika változatlan. A meglévő 2-szegmenses cella kulcs-asszerciói
+frissültek az új formára (`metric_migration_test.dart`), és egy ÚJ cella
+(„a version reappearing later (v1, v2, v1) renders as THREE distinct
+segments, not a Duplicate keys crash") RENDERELI a `[1, 2, 1]` sorozatot —
+ez a review próbatesztjével pontosan megegyező bemenet. A cella a
+javítás ELŐTTI kulcs-sémán (`progress-metric-segment-${catalogVersion}`)
+pirosra vált (mértem: visszaállítva a régi `ValueKey`-t, a cella
+`FlutterError: Duplicate keys found` hibával elbukik; a javítással 6/6
+zöld).
+
+**F2 (MINOR) — a trend-pont `semanticLabel`-je rossz mondatba tett egy
+dátumot.** Új l10n kulcs: `progressV2TrendPointSemanticLabel` ("{value}
+recorded on {date}" / hu: "{value}, rögzítve: {date}") mindkét
+`lib/l10n/base/app_{en,hu}.arb`-ban, `dart run tool/gen_l10n_segments.dart
+--write` + `flutter gen-l10n` regenerálva. A `_TrendSection` per-pont
+`semanticLabel`-je erre vált a korábban újrahasznosított
+`progressV2TrendExtremes` helyett (`progress_dashboard_screen.dart`).
+
+**F3 (MINOR) — nyers ISO-8601 időbélyeg a látható feliratokon.** A
+trend-esemény-sor (`progress_dashboard_screen.dart`) és a
+skill-detail evidence-sor (`skill_detail_screen.dart`) `label`/
+`semanticLabel` mezői mostantól `DateFormat.yMMMd(Localizations.localeOf
+(context).toString())`-tal formázott dátumot mutatnak — a bevett projekt-
+minta (`practice_result_screen.dart`, `weekly_bars.dart`) szerint. A
+`SsEventListRow.id` (nem látható, csak widget-kulcs) változatlanul a nyers
+ISO-string, mert az egyediség a cél, nem az olvashatóság.
+
+**F4 (MINOR) — az előfeltétel-viszony csak a zárolt ágon látszott.** A
+`skill_detail_screen.dart` Recommendation szekciója mostantól egy MINDIG
+látható előfeltétel-sort rendel (`skill-detail-recommendation-prerequisite`
+kulcs), amikor `recommendation.prerequisiteMilestoneId != null` —
+függetlenül attól, hogy az ajánlás épp jogosult-e. Két új l10n kulcs
+(`progressV2RecommendationPrerequisiteMet`/`…Missing`). Két meglévő
+widget-cella bővült a `mastery_evidence_test.dart`-ban: a „locked" ág a
+„Prerequisite not yet met: …" szöveget, a „met" ág a „Prerequisite met:
+…" szöveget várja — mindkettő a javítás ELŐTT hiányzó kulcson bukott
+volna (a `Key` és a `Text` sem létezett).
+
+**F5 (NOTE) — `sorted` átnevezve.** `domain/progress_trend.dart`: a
+konstruktor helyi változója `fixed`-re változott, és az osztály
+doc-commentje kimondja az előfeltételt (`points` már rendezett bemenet,
+a `segmentByCatalogVersion` mintáját követve) — a konstruktor NEM rendez.
+
+**F6 (NOTE) — a projekciók belső listái `List.unmodifiable`.**
+`MetricVersionSegment`, `SkillDetailProjection`, `ProgressOverviewProjection`
+`const` konstruktora `factory`-ra váltott, ami a `points`/`evidence`/
+`milestones`/`metricSegments` mezőket `List.unmodifiable`-lé csomagolja
+mielőtt a privát `const` konstruktornak átadná — az „Immutable, caller-fed
+projection" doc-comment állítás immár a belső listákra is igaz, nem csak a
+külsőre. (`achievedMilestoneIds` — a review nem sorolta fel — változatlan
+maradt, hogy a diff a lelet szerint szűk legyen.)
+
+**Golden újrafelvétel (A9).** F3 (dátum-formátum) és F4 (előfeltétel-sor)
+mindkét képernyőn megváltoztatja a renderelt szöveget →
+`tools/golden-x86.sh record test/ui/goldens/e13_r31_screens_golden_test.dart`
+majd `check`, mindkettő zöld. Mind a 4 PNG frissült és commitolva
+(`e13_r31_{progress_dashboard,skill_detail}_{compact,compact_scale2}.png`).
+A tofu-szerű (kitöltött téglalap) glyphök a golden-x86 docker képben nincs
+telepített betűkészlet miatt megjelennek — ez a projekt MINDEN meglévő
+goldenjén így néz ki (mértem: `e13_r23_song_library_compact.png`
+összevetve), nem ennek a körnek a hibája.
+
+**Gate kimenete (javító kör).** `tools/round-gate.sh` a brief §6 szerinti
+10 célteszttel, egyetlen csonkítatlan futással — **MINDEN GATE ZÖLD**:
+format, analyze, mind a 10 célteszt (`dashboard_states`,
+`mastery_evidence`, `metric_migration`, `chart_semantics`,
+`e13_r31_screens_golden`, `ui_inventory`, `architecture_dependency`,
+`dio_factory_guard`, `preferences_plugin_import_guard`,
+`route_literal_guard`), architecture (12 allowlisted deviation,
+változatlan), secrets (0 találat), l10n (parity OK, en→hu 2162 üzenet).
+
 ## 11. Review — a Claude tölti ki

@@ -77,7 +77,25 @@ bool isRecommendationEligible(
 /// this feature never resolves `MasteryMilestone.titleKey`/`descriptionKey`
 /// dynamically.
 final class SkillDetailProjection {
-  const SkillDetailProjection({
+  factory SkillDetailProjection({
+    required MasteryMilestone milestone,
+    required MasteryProgress progress,
+    required String title,
+    required String description,
+    required List<SkillEvidenceReference> evidence,
+    required Set<String> achievedMilestoneIds,
+    SkillRecommendation? recommendation,
+  }) => SkillDetailProjection._(
+    milestone: milestone,
+    progress: progress,
+    title: title,
+    description: description,
+    evidence: List.unmodifiable(evidence),
+    achievedMilestoneIds: achievedMilestoneIds,
+    recommendation: recommendation,
+  );
+
+  const SkillDetailProjection._({
     required this.milestone,
     required this.progress,
     required this.title,
