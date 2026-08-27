@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../../core/design_system/public.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../domain/models/practice_plan_block.dart';
 import '../../domain/models/practice_plan_draft.dart';
@@ -97,6 +100,86 @@ class _PracticePlanPreviewScreenState extends State<PracticePlanPreviewScreen> {
   Duration _totalDuration(List<PracticePlanBlock> blocks) =>
       blocks.fold(Duration.zero, (total, block) => total + block.duration);
 
+  /// The plan diff vs. what the screen was originally handed (`widget.draft`,
+  /// not `_draft`, which is the possibly user-edited copy) — added/removed
+  /// blocks and per-block duration changes, in that order. Empty when the
+  /// plan is unchanged; the confirmation sheet still renders the "writes"
+  /// dimension in that case with an explicit "no changes" detail (§0.0/B6
+  /// design-system doc: a dimension row always renders, never a blank one).
+  List<String> _planDiffLines(AppLocalizations l10n) {
+    final original = <String, PracticePlanBlock>{
+      for (final block in widget.draft.blocks) block.id: block,
+    };
+    final current = <String, PracticePlanBlock>{
+      for (final block in _draft.blocks) block.id: block,
+    };
+    final lines = <String>[];
+    for (final entry in current.entries) {
+      final before = original[entry.key];
+      final typeLabel = _blockTypeLabel(l10n, entry.value.type);
+      if (before == null) {
+        lines.add(l10n.aiTutorPlanDiffAdded(typeLabel));
+      } else if (before.duration != entry.value.duration) {
+        lines.add(
+          l10n.aiTutorPlanDiffChanged(
+            typeLabel,
+            before.duration.inMinutes,
+            entry.value.duration.inMinutes,
+          ),
+        );
+      }
+    }
+    for (final entry in original.entries) {
+      if (!current.containsKey(entry.key)) {
+        lines.add(
+          l10n.aiTutorPlanDiffRemoved(_blockTypeLabel(l10n, entry.value.type)),
+        );
+      }
+    }
+    return lines;
+  }
+
+  /// Every write/launch action from this screen clears
+  /// [SsToolConfirmationSheet] before the caller's callback runs (ADR 0287
+  /// §1, E13-R29 §3/§5.4/§5.1) — [onCommit] is only ever invoked from the
+  /// sheet's own `onConfirm`.
+  Future<void> _confirmAndCommit(
+    BuildContext context, {
+    required String actionLabel,
+    required String summary,
+    required String recordingDetail,
+    required ValueChanged<PracticePlanDraft>? onCommit,
+  }) async {
+    final l10n = AppLocalizations.of(context);
+    final diffLines = _planDiffLines(l10n);
+    await SsToolConfirmationSheet.show(
+      context,
+      actionLabel: actionLabel,
+      summary: summary,
+      reads: SsToolDimension(
+        label: l10n.aiTutorToolDimensionReads,
+        detail: l10n.aiTutorPlanConfirmReadsDetail,
+      ),
+      writes: SsToolDimension(
+        label: l10n.aiTutorToolDimensionWrites,
+        detail: diffLines.isEmpty
+            ? l10n.aiTutorPlanDiffNone
+            : diffLines.join('\n'),
+      ),
+      leavesDevice: SsToolDimension(
+        label: l10n.aiTutorToolDimensionLeavesDevice,
+        detail: l10n.aiTutorToolDimensionNothing,
+      ),
+      recording: SsToolDimension(
+        label: l10n.aiTutorToolDimensionRecording,
+        detail: recordingDetail,
+      ),
+      cancelLabel: l10n.aiTutorActionReject,
+      destructive: false,
+      onConfirm: () => onCommit?.call(_draft),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -113,16 +196,31 @@ class _PracticePlanPreviewScreenState extends State<PracticePlanPreviewScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: <Widget>[
               Text(
+                l10n.aiTutorPlanObservationTitle,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 4),
+              Text(
                 l10n.aiTutorPlanTotalDuration(_draft.targetDuration.inMinutes),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
+              Text(
+                l10n.aiTutorPlanCauseTitle,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 4),
               Text(
                 l10n.aiTutorPlanRationale(
                   sanitizeTutorDisplayText(_draft.rationale),
                 ),
               ),
               const SizedBox(height: 16),
+              Text(
+                l10n.aiTutorPlanActionTitle,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
               if (_draft.blocks.isEmpty)
                 Text(l10n.aiTutorPlanEmpty)
               else
@@ -163,14 +261,31 @@ class _PracticePlanPreviewScreenState extends State<PracticePlanPreviewScreen> {
                   ElevatedButton(
                     key: const ValueKey('plan-save'),
                     onPressed: isValid
-                        ? () => widget.onSave?.call(_draft)
+                        ? () => unawaited(
+                            _confirmAndCommit(
+                              context,
+                              actionLabel: l10n.aiTutorPlanSave,
+                              summary: l10n.aiTutorPlanConfirmSaveSummary,
+                              recordingDetail: l10n.aiTutorToolDimensionNothing,
+                              onCommit: widget.onSave,
+                            ),
+                          )
                         : null,
                     child: Text(l10n.aiTutorPlanSave),
                   ),
                   FilledButton.tonal(
                     key: const ValueKey('plan-start'),
                     onPressed: isValid
-                        ? () => widget.onStart?.call(_draft)
+                        ? () => unawaited(
+                            _confirmAndCommit(
+                              context,
+                              actionLabel: l10n.aiTutorPlanStart,
+                              summary: l10n.aiTutorPlanConfirmStartSummary,
+                              recordingDetail:
+                                  l10n.aiTutorPlanConfirmStartRecordingDetail,
+                              onCommit: widget.onStart,
+                            ),
+                          )
                         : null,
                     child: Text(l10n.aiTutorPlanStart),
                   ),
