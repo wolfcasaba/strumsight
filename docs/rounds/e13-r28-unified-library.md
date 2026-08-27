@@ -765,75 +765,58 @@ ebben a körben megtörtént — nincs nyitott tétel.
 
 ## 11. Review — a Claude tölti ki
 
-**Orchestrátor-mérés, 2026-08-27, HEAD `2fc71cda`, izolált munkapéldány
-`/home/ubuntu/ss-sonnet-impl-e13-r28`.** A `scope_audit=ok` (base `9fba0250`),
-a fa tiszta.
+**Teljes jelentés:** [`docs/reviews/e13-r28-review.md`](../reviews/e13-r28-review.md)
 
-### A kötelező kapu — a SAJÁT futásom, csonkítatlanul (`/tmp/gate-e13-r28.txt`)
+### Verdikt: ✅ APPROVED — 0 nyitott BLOCKER / MAJOR / MINOR
+
+**Orchestrátor-mérés, 2026-08-27, HEAD `d20f310a`, izolált klón
+`/tmp/rev-e13-r28`.** A fa tiszta, `scope_audit=ok` (base `1f9094ad`).
 
 | # | Lépés | Eredmény |
 |---|---|---|
-| 1 | format | **ZÖLD** |
-| 2 | analyze | **ZÖLD** (`No issues found!`) |
-| 3 | `test/features/library_v2/item_routing_test.dart` | **ZÖLD** |
-| 4 | `test/features/library_v2/corrupt_item_test.dart` | **ZÖLD** |
-| 5 | `test/features/library_v2/delete_confirmation_test.dart` | **ZÖLD** |
-| 6 | `test/features/library_v2/sync_conflict_test.dart` | **ZÖLD** |
+| 1–2 | format, analyze | **ZÖLD** |
+| 3–6 | a négy `library_v2` cellafájl | **ZÖLD** |
 | 7 | `test/features/library/` (a befagyasztott V1 pinek) | **ZÖLD** |
-| 8 | `test/app/navigation/` | **ZÖLD** |
-| 9 | `test/app/routing/app_router_test.dart` (legacy route-pinek) | **ZÖLD** |
-| 10 | `test/ui/goldens/e13_r28_screens_golden_test.dart` | **ZÖLD** |
-| 11 | `test/ui/ui_inventory_test.dart` | **ZÖLD** |
-| 12 | `test/core/architecture_dependency_test.dart` | **PIROS (1)** |
+| 8–9 | `test/app/navigation/`, `test/app/routing/app_router_test.dart` | **ZÖLD** |
+| 10–11 | golden, `ui_inventory_test.dart` | **ZÖLD** |
+| 12 | `test/core/architecture_dependency_test.dart` | **ZÖLD** *(az első futás EGYETLEN pirosa)* |
+| 13–15 | a három `test/tooling/` őr | **ZÖLD** |
+| 16–18 | architecture, secrets, l10n | **ZÖLD** |
 
-Gate kilépési kód **10**; a 13–15. lépés (`architecture`, `secrets`, `l10n`)
-az első piros lépés után nem futott.
+Gate kilépési kód **0** — **18/18 zöld**.
 
-**Az A10 route-szerződés gépileg IGAZOLT:** a 7. és a 9. lépés zöldje pontosan
-azt méri, hogy a legacy `:261` / `:302–310` builder és a `lib/features/library/**`
-V1 fa érintetlen maradt — ez a §0.0/B2 falszifikálható állítása, és teljesült.
+### A korábbi H3 lezárva — a merge-elt önjavító kör után
 
-### Az EGYETLEN nyitott lelet — BLOCKER, és a kör hatókörén KÍVÜL esik
+Az első futás verdiktje **HALT — H3** volt: a három cross-feature sértést
+csak a `lib/features/song_trainer/public.dart` bővítése oldotta volna fel, ami
+akkor az `allowed_paths`-on KÍVÜL esett. A halt-jelzést a `8c48af55` önjavító
+kör dolgozta fel ([L508](../LESSONS.md)), és a §0.0/R5 revízió PONTOSAN egy
+fájllal, öt `show`-os szimbólumra szűkítve tágította a listát. A javító kör
+ezt hajtotta végre:
 
 ```
 $ dart run tool/check_architecture.dart
-- lib/features/library_v2/data/setlist_item_source.dart -> lib/features/song_trainer/domain/repositories/setlist_repository.dart [cross-feature imports must target public.dart]
-- lib/features/library_v2/data/song_item_source.dart    -> lib/features/song_trainer/domain/repositories/song_repository.dart    [cross-feature imports must target public.dart]
-- lib/features/library_v2/providers/library_v2_providers.dart -> lib/features/song_trainer/application/song_trainer_providers.dart [cross-feature imports must target public.dart]
+Architecture dependencies OK (12 allowlisted deviation(s)).
 ```
 
-MÉRT gyökérok: a `lib/features/song_trainer/public.dart` **két képernyőt**
-exportál és semmi mást; sem a `SongRepository` / `SongQuery` /
-`SetlistRepository` típusokat, sem a `songRepositoryProvider` /
-`setlistRepositoryProvider` szimbólumokat. A `practice`-nél működő
-closure-trükk itt nem zár: a provider-SZIMBÓLUM maga csak a nem-public
-`song_trainer/application/song_trainer_providers.dart`-ban él, tehát a
-szimbólum eléréséhez elkerülhetetlen egy nem-`public.dart` import.
+**3 → 0 sértés.** A javítás tisztán additív (a két meglévő screen-export
+érintetlen), és a három `library_v2` import a gyökér-barrelre állt át.
 
-### A megoldási tér — MÉRVE, három ág
+### Falszifikációs próba — a zöld a javításból jön, nem a mérce elnémulásából
 
-- **A (javasolt):** `lib/features/song_trainer/public.dart` felvétele az
-  `allowed_paths`-ra, és a fenti öt szimbólum exportja. Egy fájl, additív, a
-  boundary-szabályt ERŐSÍTI. Ez **lista-tágítás → H3**, tehát user-engedélyt
-  igényel — pontosan úgy, ahogy ennek a briefnek a §0.0/R1-e is kapott
-  (2026-08-25).
-- **B:** a kör szűkítése elemzés + gyakorlás tétel-típusra (a `song`/`setlist`
-  forrás elhagyása). Ez a §3 négy tétel-típusát kettőre csökkenti, tehát a
-  szállított hatókör csökkentése — user-döntés, nem orchestrátori.
-- **C (MÉRVE, de ELVETVE):** a wiring áthelyezése `lib/app/routing/`-ba. Mérés:
-  a `lib/app/**` **NEM** esik a cross-feature szabály alá — az
-  `app_router.dart:59` MA IS közvetlenül importálja a
-  `song_trainer/application/song_trainer_providers.dart`-ot, és a checker nem
-  jelzi. A kapu tehát ezzel zöldre menne. **Mégis elvetve:** ez feature-adat
-  wiringet tenne a routing rétegbe pusztán a határszabály megkerülésére, és
-  túllépné a `lib/app/routing/` §4-ben rögzített, szándékosan szűk
-  jogosultságát („kizárólag a §0.0/B2 szerződése"). A mérce megkerülése nem
-  feloldás.
+A klónban a `song_item_source.dart` importját visszaírva a belső útvonalra a
+checker **kilépési kód 1**-gyel, pontosan a várt sértéssel elbukik; a folt
+visszaállítva. Gépileg igazolt továbbá, hogy a kör **nem** nyúlt a
+`tool/check_architecture.dart`-hoz (nincs új, ADR-t igénylő allowlist-bejegyzés),
+a `test/core/architecture_dependency_test.dart`-hoz és a
+`tool/ui_inventory.dart`-hoz, és a §11 korábbi **C** ágaként ELVETETT kerülőút
+(wiring a `lib/app/routing/`-ba) sem valósult meg.
 
-### Verdikt
+### Scope
 
-**HALT — H3.** A kód kész és a mérce minden más pontján zöld; a feloldás egy
-`allowed_paths`-on kívüli fájl (`lib/features/song_trainer/public.dart`)
-szerkesztését vagy a kör hatókörének csökkentését kívánja. Egyik sem az
-orchestrátor hatásköre ([L478](../LESSONS.md), ADR 0087 §2 H3). Javító kör
-indítása értelmetlen: ugyanebbe a falba futna.
+38 fájl az `origin/main` (`8c48af55`) ellen, **mind** az `allowed_paths` alatt.
+A szűk mandátumú fájlok tételesen igazolva: `ui_inventory_test.dart` PONTOSAN a
+`hasLength(89) → (91)` emelés; a `test/app/navigation/` **két** típus-pin
+cellája (§0.0/R3); a `song_trainer/public.dart` három additív export-sora
+(§0.0/R5); a `lib/app/routing/` `:264–265` és `:305–313` legacy buildere
+**szó szerint érintetlen**. Cella törlése, `skip`-je vagy gyengítése: **nincs**.
