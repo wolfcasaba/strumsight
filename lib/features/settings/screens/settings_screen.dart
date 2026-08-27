@@ -7,19 +7,23 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../app/routing/app_route.dart';
+import '../../../core/design_system/public.dart';
 import '../../../core/i18n/locale_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/theme/theme_mode_provider.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/public.dart';
+import '../../offline_ai/screens/model_manager_screen.dart';
 import '../providers/capo_provider.dart';
 import '../providers/confidence_threshold_provider.dart';
 import '../providers/input_latency_provider.dart';
 import '../providers/lab_mode_provider.dart';
 import '../providers/nudge_enabled_provider.dart';
 import '../providers/left_handed_provider.dart';
+import '../providers/settings_sync.dart';
 import '../providers/tuning_reference_provider.dart';
+import 'privacy_center_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -60,6 +64,44 @@ class SettingsScreen extends ConsumerWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.go(AppRoutes.progress),
             ),
+          ),
+          const SizedBox(height: 28),
+
+          // Privacy/consent and the offline AI model manager sit at the TOP
+          // level of Settings, not three menus deep (A5, §5.3 ADR 0292).
+          // Both are new screens (§0.0.B/B1, B6/B7) reached the same way the
+          // fan-tree already does elsewhere — `Navigator.push` +
+          // `MaterialPageRoute`, no new route registered (B5).
+          SsContentCard(
+            title: l10n.privacyCenterEntryTitle,
+            message: l10n.privacyCenterEntrySubtitle,
+            icon: Icons.privacy_tip_outlined,
+            actions: [
+              SsCardAction(
+                label: l10n.privacyCenterEntryTitle,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const PrivacyCenterScreen(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SsContentCard(
+            title: l10n.modelManagerEntryTitle,
+            message: l10n.modelManagerEntrySubtitle,
+            icon: Icons.memory_outlined,
+            actions: [
+              SsCardAction(
+                label: l10n.modelManagerEntryTitle,
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ModelManagerScreen(),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 28),
 
@@ -262,21 +304,30 @@ class _AccountSection extends ConsumerWidget {
     }
 
     if (user != null) {
-      return Row(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.account_circle_outlined, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              l10n.accountSignedInAs(user.email),
-              style: TextStyle(fontFamily: 'Poppins', color: palette.ink),
-              overflow: TextOverflow.ellipsis,
-            ),
+          Row(
+            children: [
+              const Icon(Icons.account_circle_outlined, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  l10n.accountSignedInAs(user.email),
+                  style: TextStyle(fontFamily: 'Poppins', color: palette.ink),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SsButton(
+                variant: SsButtonVariant.tertiary,
+                label: l10n.accountSignOut,
+                onPressed: () =>
+                    ref.read(authControllerProvider.notifier).logout(),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
-            child: Text(l10n.accountSignOut),
-          ),
+          const SizedBox(height: 8),
+          _SyncStatusRow(status: ref.watch(settingsSyncStatusProvider)),
         ],
       );
     }
@@ -293,11 +344,66 @@ class _AccountSection extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
+        SsButton(
+          variant: SsButtonVariant.secondary,
+          icon: Icons.login,
+          label: l10n.accountSignIn,
           onPressed: () => context.push(AppRoutes.login),
-          icon: const Icon(Icons.login, size: 18, color: AppColors.primary),
-          label: Text(l10n.accountSignIn),
         ),
+      ],
+    );
+  }
+}
+
+/// A3/A4 (§0.0.B/B3) — narrates the EXISTING, unchanged sync state machine;
+/// [SettingsSyncStatus.failed] is the only state offering the "Retry" action,
+/// which goes through the same push path any other edit uses
+/// ([SettingsSync.retryFailedPush]) — no timer, no backoff.
+class _SyncStatusRow extends ConsumerWidget {
+  const _SyncStatusRow({required this.status});
+
+  final SettingsSyncStatus status;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    final (icon, label, color) = switch (status) {
+      SettingsSyncStatus.synced => (
+        Icons.cloud_done_outlined,
+        l10n.settingsSyncStatusSynced,
+        colors.textSecondary,
+      ),
+      SettingsSyncStatus.pending => (
+        Icons.sync_outlined,
+        l10n.settingsSyncStatusPending,
+        colors.textSecondary,
+      ),
+      SettingsSyncStatus.failed => (
+        Icons.cloud_off_outlined,
+        l10n.settingsSyncStatusFailed,
+        colors.danger,
+      ),
+    };
+
+    return Row(
+      key: const Key('settingsSyncStatusRow'),
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: color),
+          ),
+        ),
+        if (status == SettingsSyncStatus.failed)
+          SsButton(
+            key: const Key('settingsSyncRetry'),
+            variant: SsButtonVariant.tertiary,
+            label: l10n.settingsSyncRetryAction,
+            onPressed: () => ref.read(settingsSyncProvider).retryFailedPush(),
+          ),
       ],
     );
   }

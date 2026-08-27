@@ -40,11 +40,24 @@ class ShareContent {
 
   /// The social caption: hero chords + the moat line (↓/↑ counts) + BPM +
   /// attribution + install link + hashtags. Deterministic and locale-stable.
-  static String caption(AnalyzeResult result, {int capo = 0}) {
+  ///
+  /// [title] is never included unless the caller sets [includeTitle] — the
+  /// share preview defaults it OFF (A7, §5.5 ADR 0292): the card is minimal
+  /// by default, and a session title is the one piece of caller-supplied
+  /// (potentially identifying) text this artifact can carry, so it only
+  /// leaves the device on an explicit opt-in.
+  static String caption(
+    AnalyzeResult result, {
+    int capo = 0,
+    String? title,
+    bool includeTitle = false,
+  }) {
     final prog = chords(result, capo: capo);
     final bpm = result.bpm > 0 ? '${result.bpm.round()} BPM' : null;
-    final buf = StringBuffer()
-      ..writeln('🎸 ${prog.isEmpty ? 'My riff' : prog}');
+    final hero = (includeTitle && (title ?? '').trim().isNotEmpty)
+        ? '${title!.trim()} — ${prog.isEmpty ? 'My riff' : prog}'
+        : (prog.isEmpty ? 'My riff' : prog);
+    final buf = StringBuffer()..writeln('🎸 $hero');
     // The headline: down/up strokes — the thing only StrumSight detects.
     final strokes = StringBuffer(
       '↓ ${result.downCount} down · '

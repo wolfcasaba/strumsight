@@ -16,15 +16,22 @@ class FakeShareService extends ShareService {
     required GlobalKey boundaryKey,
     required AnalyzeResult result,
     int capo = 0,
+    String? title,
+    bool includeTitle = false,
     Rect? sharePositionOrigin,
-  }) async => log.add('card:${result.strums.length}:capo$capo');
+  }) async => log.add(
+    'card:${result.strums.length}:capo$capo'
+    '${includeTitle ? ':title=$title' : ''}',
+  );
 
   @override
   Future<void> shareText(
     AnalyzeResult result, {
     int capo = 0,
+    String? title,
+    bool includeTitle = false,
     Rect? sharePositionOrigin,
-  }) async => log.add('text');
+  }) async => log.add('text${includeTitle ? ':title=$title' : ''}');
 }
 
 final _result = AnalyzeResult(

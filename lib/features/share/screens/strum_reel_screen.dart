@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../analyze/public.dart';
@@ -155,7 +156,12 @@ class _StrumReelScreenState extends State<StrumReelScreen>
       backgroundColor: const Color(0xFF111013),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          padding: const EdgeInsets.fromLTRB(
+            SsSpacing.space5,
+            SsSpacing.space4,
+            SsSpacing.space5,
+            SsSpacing.space5,
+          ),
           child: Column(
             children: [
               Row(

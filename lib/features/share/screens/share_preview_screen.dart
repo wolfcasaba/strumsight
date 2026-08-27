@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../analyze/public.dart';
 import '../share_service.dart';
@@ -32,6 +33,11 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
   final GlobalKey _cardKey = GlobalKey();
   bool _busy = false;
 
+  // A7 (§5.5, ADR 0292): the card is minimal by default — the title only
+  // leaves the device once the user explicitly turns this on. Never
+  // pre-checked from `widget.title` being non-null.
+  bool _includeTitle = false;
+
   Rect? _originFrom(BuildContext context) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return null;
@@ -46,6 +52,8 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
         boundaryKey: _cardKey,
         result: widget.result,
         capo: widget.capo,
+        title: widget.title,
+        includeTitle: _includeTitle,
         sharePositionOrigin: _originFrom(buttonContext),
       );
     } finally {
@@ -57,6 +65,8 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
     await widget.shareService.shareText(
       widget.result,
       capo: widget.capo,
+      title: widget.title,
+      includeTitle: _includeTitle,
       sharePositionOrigin: _originFrom(buttonContext),
     );
   }
@@ -80,6 +90,7 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
                         result: widget.result,
                         capo: widget.capo,
                         title: widget.title,
+                        showTitle: _includeTitle,
                       ),
                     ),
                   ),
@@ -87,34 +98,33 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: _RedactionSummary(
+                includeTitle: _includeTitle,
+                hasTitle: (widget.title ?? '').trim().isNotEmpty,
+                onIncludeTitleChanged: (v) => setState(() => _includeTitle = v),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               child: Column(
                 children: [
                   Builder(
-                    builder: (btnCtx) => FilledButton.icon(
+                    builder: (btnCtx) => SsButton(
+                      label: l10n.shareCardButton,
+                      icon: Icons.ios_share,
+                      loading: _busy,
                       onPressed: _busy ? null : () => _shareImage(btnCtx),
-                      icon: _busy
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.ios_share, size: 20),
-                      label: Text(l10n.shareCardButton),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size.fromHeight(52),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      TextButton.icon(
-                        icon: const Icon(
-                          Icons.movie_creation_outlined,
-                          size: 18,
-                        ),
+                      SsButton(
+                        variant: SsButtonVariant.tertiary,
+                        icon: Icons.movie_creation_outlined,
+                        label: l10n.reelButton,
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => StrumReelScreen(
@@ -123,11 +133,11 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
                             ),
                           ),
                         ),
-                        label: Text(l10n.reelButton),
                       ),
-                      TextButton(
+                      SsButton(
+                        variant: SsButtonVariant.tertiary,
+                        label: l10n.shareTextButton,
                         onPressed: () => _shareText(context),
-                        child: Text(l10n.shareTextButton),
                       ),
                     ],
                   ),
@@ -139,4 +149,62 @@ class _SharePreviewScreenState extends State<SharePreviewScreen> {
       ),
     );
   }
+}
+
+/// The itemized "what leaves the device" list (A7): the three core fields are
+/// always shared (no toggle — the card is useless without them) and are
+/// listed, not just implied; the session title is the one expandable field,
+/// off by default. Disabled+hidden entirely when there is no title to offer,
+/// so the row never dangles asking to include something that doesn't exist.
+class _RedactionSummary extends StatelessWidget {
+  const _RedactionSummary({
+    required this.includeTitle,
+    required this.hasTitle,
+    required this.onIncludeTitleChanged,
+  });
+
+  final bool includeTitle;
+  final bool hasTitle;
+  final ValueChanged<bool> onIncludeTitleChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = Theme.of(context).extension<SsColorScheme>()!;
+    return SsSection(
+      title: l10n.shareRedactionTitle,
+      child: SsCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _item(colors, l10n.shareRedactionChords),
+            _item(colors, l10n.shareRedactionStrumPattern),
+            _item(colors, l10n.shareRedactionTempo),
+            if (hasTitle) ...[
+              const SizedBox(height: 4),
+              SsSwitchRow(
+                key: const Key('shareIncludeTitleToggle'),
+                label: l10n.shareRedactionIncludeTitle,
+                subtitle: l10n.shareRedactionIncludeTitleHint,
+                value: includeTitle,
+                onChanged: onIncludeTitleChanged,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _item(SsColorScheme colors, String label) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Icon(Icons.check_circle_outline, size: 16, color: colors.textSecondary),
+        const SizedBox(width: 8),
+        Text(label),
+      ],
+    ),
+  );
 }

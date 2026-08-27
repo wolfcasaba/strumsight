@@ -5,8 +5,11 @@
 /// network dependency.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../core/storage/storage_keys.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../vision/public.dart';
@@ -26,26 +29,20 @@ class VisionPrivacyScreen extends StatefulWidget {
 }
 
 class _VisionPrivacyScreenState extends State<VisionPrivacyScreen> {
-  Future<void> _confirmDeleteAll(AppLocalizations l10n) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(l10n.visionPrivacyDeleteAllTitle),
-        content: Text(l10n.visionPrivacyDeleteAllBody),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            key: const Key('visionPrivacyDeleteAllConfirm'),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(l10n.visionPrivacyDeleteAllConfirm),
-          ),
-        ],
-      ),
+  Future<void> _confirmDeleteAll(AppLocalizations l10n) {
+    // Consequence-first confirmation (ADR 0279 §5.6): the sheet names what is
+    // lost BEFORE the destructive action runs, not an "Are you sure?" alone.
+    return SsConfirmationSheet.show(
+      context,
+      title: l10n.visionPrivacyDeleteAllTitle,
+      consequence: l10n.visionPrivacyDeleteAllBody,
+      confirmLabel: l10n.visionPrivacyDeleteAllConfirm,
+      cancelLabel: l10n.commonCancel,
+      onConfirm: () => unawaited(_deleteAll(l10n)),
     );
-    if (confirmed != true) return;
+  }
+
+  Future<void> _deleteAll(AppLocalizations l10n) async {
     await widget.repository.deleteAllVisionData();
     if (!mounted) return;
     setState(() {});
@@ -140,18 +137,21 @@ class _VisionPrivacyScreenState extends State<VisionPrivacyScreen> {
                     ),
                   ),
               const SizedBox(height: 16),
-              OutlinedButton.icon(
+              SsButton(
                 key: const Key('visionPrivacyExport'),
+                variant: SsButtonVariant.secondary,
+                icon: Icons.download_outlined,
+                label: l10n.visionPrivacyExportAction,
                 onPressed: () => _showExport(l10n),
-                icon: const Icon(Icons.download_outlined),
-                label: Text(l10n.visionPrivacyExportAction),
               ),
               const SizedBox(height: 8),
-              FilledButton.icon(
+              SsButton(
                 key: const Key('visionPrivacyDeleteAll'),
+                variant: SsButtonVariant.destructive,
+                icon: Icons.delete_forever_outlined,
+                label: l10n.visionPrivacyDeleteAllAction,
+                destructiveSemanticHint: l10n.visionPrivacyDeleteAllBody,
                 onPressed: () => _confirmDeleteAll(l10n),
-                icon: const Icon(Icons.delete_forever_outlined),
-                label: Text(l10n.visionPrivacyDeleteAllAction),
               ),
             ],
           ),

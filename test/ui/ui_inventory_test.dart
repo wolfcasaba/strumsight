@@ -19,7 +19,19 @@ void main() {
     // E13-R31 (§0.0.B/B9) — the route-less Progress Dashboard and Skill
     // Detail screens add two more production screens under
     // `lib/features/progress_v2/screens/`: 92 -> 94.
-    expect(first.screenPaths, hasLength(94));
+    // E13-R35 (§0.0.B/B7) — two new top-level screens: the Privacy & consent
+    // center (`lib/features/settings/screens/privacy_center_screen.dart`) and
+    // the offline AI model manager, on a brand-new feature root
+    // (`lib/features/offline_ai/screens/model_manager_screen.dart`): 94 -> 96.
+    expect(first.screenPaths, hasLength(96));
+    expect(
+      first.screenPaths,
+      contains('lib/features/settings/screens/privacy_center_screen.dart'),
+    );
+    expect(
+      first.screenPaths,
+      contains('lib/features/offline_ai/screens/model_manager_screen.dart'),
+    );
     expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
     expect(
       first.screenPaths,

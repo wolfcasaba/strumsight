@@ -18,6 +18,32 @@ final settingsSyncDebounceProvider = Provider<Duration>(
   (_) => const Duration(milliseconds: 600),
 );
 
+/// The observable state of the settings cloud sync (§0.0.B/B3 — additive,
+/// read-only). `synced` also covers "nothing to sync" (logged out, or no
+/// edit since the last confirmed push): there is no separate "idle" state,
+/// because the UI only needs to distinguish "safe" from "needs attention".
+///
+/// This does NOT change when a write goes out or how failures are handled —
+/// it only narrates the existing, unchanged push/pull state machine so the
+/// settings screen can show it. [failed] is cleared back to [synced] the
+/// moment a push actually confirms — including a push from
+/// [SettingsSync.retryFailedPush] (A4), never from a timer.
+enum SettingsSyncStatus { synced, pending, failed }
+
+/// Read-only outside this file: only [SettingsSync] (via [_SettingsSyncStatusNotifier.publish])
+/// writes to it.
+class _SettingsSyncStatusNotifier extends Notifier<SettingsSyncStatus> {
+  @override
+  SettingsSyncStatus build() => SettingsSyncStatus.synced;
+
+  void publish(SettingsSyncStatus status) => state = status;
+}
+
+final settingsSyncStatusProvider =
+    NotifierProvider<_SettingsSyncStatusNotifier, SettingsSyncStatus>(
+      _SettingsSyncStatusNotifier.new,
+    );
+
 /// Keeps local settings and the signed-in user's cloud profile in sync.
 ///
 /// - **Login / session restore** ⇒ pull the cloud profile and apply it locally
@@ -55,6 +81,9 @@ class SettingsSync {
         _pushPending = false;
         _forcePendingPush = false;
         _syncedSignature = null;
+        // Nothing can be "pending"/"failed" while logged out — the account
+        // layer is inert (class doc above).
+        _publishStatus(SettingsSyncStatus.synced);
       }
     }, fireImmediately: true);
 
@@ -248,6 +277,7 @@ class SettingsSync {
       _debounce?.cancel();
       return;
     }
+    _publishStatus(SettingsSyncStatus.pending);
     _schedulePush();
   }
 
@@ -260,6 +290,17 @@ class SettingsSync {
   }
 
   Future<void> _push() => _queuePush();
+
+  /// User-initiated retry (A4, §0.0.B/B3): the SAME push path as any other
+  /// edit — no timer, no backoff, no new decision logic. A tap on the
+  /// settings screen's "Retry" action is the only caller; nothing in this
+  /// file schedules this on its own.
+  Future<void> retryFailedPush() => _queuePush(force: true);
+
+  void _publishStatus(SettingsSyncStatus status) {
+    if (!_ref.mounted) return;
+    _ref.read(settingsSyncStatusProvider.notifier).publish(status);
+  }
 
   /// Serializes full-profile PUTs. A genuine edit received during an in-flight
   /// request marks the queue dirty; once that request finishes, exactly one
@@ -297,6 +338,7 @@ class SettingsSync {
         // Only mark synced AFTER the server confirms — otherwise an offline
         // edit would be falsely recorded as synced and silently lost.
         _syncedSignature = signature;
+        _publishStatus(SettingsSyncStatus.synced);
       case Failure(:final error):
         _ref
             .read(appLoggerProvider)
@@ -304,6 +346,9 @@ class SettingsSync {
               'settings.sync_push_failed',
               fields: {'code': error.code, 'retryable': error.retryable},
             );
+        // Visible, not replayed (A4): the UI can offer a user-initiated
+        // retry, but nothing in this class re-attempts on its own.
+        _publishStatus(SettingsSyncStatus.failed);
         if (_isExpiredSession(error)) {
           await _ref.read(authControllerProvider.notifier).invalidateSession();
         }

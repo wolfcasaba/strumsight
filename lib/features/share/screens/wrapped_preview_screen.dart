@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/design_system/public.dart';
 import '../../../l10n/app_localizations.dart';
 import '../model/weekly_recap.dart';
 import '../share_content.dart';
@@ -66,7 +67,7 @@ class _WrappedPreviewScreenState extends State<WrappedPreviewScreen> {
           Expanded(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(SsSpacing.space4),
                 child: FittedBox(
                   child: RepaintBoundary(
                     key: _cardKey,
@@ -81,12 +82,18 @@ class _WrappedPreviewScreenState extends State<WrappedPreviewScreen> {
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
+              padding: const EdgeInsets.fromLTRB(
+                SsSpacing.space6,
+                SsSpacing.space1,
+                SsSpacing.space6,
+                SsSpacing.space4,
+              ),
               child: Builder(
-                builder: (buttonContext) => FilledButton.icon(
+                builder: (buttonContext) => SsButton(
+                  label: l10n.shareCardButton,
+                  icon: Icons.ios_share,
+                  loading: _busy,
                   onPressed: _busy ? null : () => _share(buttonContext),
-                  icon: const Icon(Icons.ios_share),
-                  label: Text(l10n.shareCardButton),
                 ),
               ),
             ),

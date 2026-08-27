@@ -34,18 +34,30 @@ class ShareService {
 
   /// Capture the card and open the share sheet with the image + caption.
   /// [sharePositionOrigin] anchors the sheet on iPad (ignored elsewhere).
+  /// [title]/[includeTitle] mirror [ShareContent.caption] — off by default
+  /// (A7).
   Future<void> shareCard({
     required GlobalKey boundaryKey,
     required AnalyzeResult result,
     int capo = 0,
+    String? title,
+    bool includeTitle = false,
     Rect? sharePositionOrigin,
-  }) => shareImage(
-    boundaryKey: boundaryKey,
-    caption: ShareContent.caption(result, capo: capo),
-    fileName: ShareContent.fileName(result),
-    fallbackText: ShareContent.caption(result, capo: capo),
-    sharePositionOrigin: sharePositionOrigin,
-  );
+  }) {
+    final caption = ShareContent.caption(
+      result,
+      capo: capo,
+      title: title,
+      includeTitle: includeTitle,
+    );
+    return shareImage(
+      boundaryKey: boundaryKey,
+      caption: caption,
+      fileName: ShareContent.fileName(result),
+      fallbackText: caption,
+      sharePositionOrigin: sharePositionOrigin,
+    );
+  }
 
   /// Generic: capture any [RepaintBoundary] to PNG and share it with [caption].
   /// Falls back to a text-only share (of [fallbackText] ?? [caption]) if the
@@ -83,11 +95,18 @@ class ShareService {
   Future<void> shareText(
     AnalyzeResult result, {
     int capo = 0,
+    String? title,
+    bool includeTitle = false,
     Rect? sharePositionOrigin,
   }) async {
     await SharePlus.instance.share(
       ShareParams(
-        text: ShareContent.caption(result, capo: capo),
+        text: ShareContent.caption(
+          result,
+          capo: capo,
+          title: title,
+          includeTitle: includeTitle,
+        ),
         subject: 'My StrumSight practice',
         sharePositionOrigin: sharePositionOrigin,
       ),

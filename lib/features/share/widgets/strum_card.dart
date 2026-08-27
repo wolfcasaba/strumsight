@@ -10,13 +10,22 @@ import '../share_content.dart';
 /// tempo and stroke counts of a clip. Rendered offline; captured to PNG by the
 /// share service. Fixed logical size (4:5 portrait) for a consistent export.
 class StrumCard extends StatelessWidget {
-  const StrumCard({super.key, required this.result, this.capo = 0, this.title});
+  const StrumCard({
+    super.key,
+    required this.result,
+    this.capo = 0,
+    this.title,
+    this.showTitle = false,
+  });
 
   final AnalyzeResult result;
   final int capo;
 
-  /// Optional session title (falls back to the chord progression).
+  /// Optional session title. Only rendered when [showTitle] is true — off by
+  /// default (A7, §5.5 ADR 0292): the card is minimal out of the box, and a
+  /// title is caller-supplied text that only appears on an explicit opt-in.
   final String? title;
+  final bool showTitle;
 
   /// Logical export size — **9:16** (Stories / Reels / TikTok fit with no
   /// cropping, the format behind Spotify Wrapped's share loop, chunk 013).
@@ -57,6 +66,22 @@ class StrumCard extends StatelessWidget {
                 ),
               ),
               const Spacer(),
+              if (showTitle && (title ?? '').trim().isNotEmpty) ...[
+                _label('TITLE'),
+                const SizedBox(height: 4),
+                Text(
+                  title!.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: _ink,
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               _label('CHORDS'),
               const SizedBox(height: 6),
               Text(
