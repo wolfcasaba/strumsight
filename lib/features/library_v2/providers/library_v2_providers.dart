@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../audio_analysis/application/analysis_providers.dart';
-import '../../practice/data/local_practice_history_repository.dart';
+import '../../audio_analysis/public.dart';
+import '../../practice/public.dart';
 import '../../song_trainer/application/song_trainer_providers.dart';
 import '../data/analysis_item_source.dart';
 import '../data/analysis_library_delete_actions.dart';
@@ -18,7 +18,21 @@ import '../domain/library_item_source.dart';
 final libraryV2SourcesProvider = Provider<List<LibraryItemSource>>((ref) {
   return [
     AnalysisItemSource(ref.watch(analysisRepositoryProvider)),
-    PracticeItemSource(ref.watch(practiceHistoryRepositoryProvider)),
+    PracticeItemSource(() async {
+      final result = await ref.watch(practiceHistoryRepositoryProvider).load();
+      return result.fold(
+        onSuccess: (entries) => LibrarySourceLoad.success([
+          for (final entry in entries)
+            PracticeLibraryItem(
+              id: entry.id,
+              title: entry.displayTitle,
+              createdAt: entry.createdAt,
+              syncStatus: LibrarySyncStatus.synced,
+            ),
+        ]),
+        onFailure: (error) => LibrarySourceLoad.unavailable(error.code),
+      );
+    }),
     SongItemSource(ref.watch(songRepositoryProvider)),
     SetlistItemSource(ref.watch(setlistRepositoryProvider)),
   ];

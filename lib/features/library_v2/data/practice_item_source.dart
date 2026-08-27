@@ -1,31 +1,21 @@
-import '../../practice/domain/repository/practice_history_repository.dart';
 import '../domain/library_item.dart';
 import '../domain/library_item_source.dart';
 
-/// Wraps the existing [PracticeHistoryRepository] (read-only in this round —
+/// Wraps the existing practice history repository via an injected loader.
+/// The repository's concrete type is intentionally never named in this
+/// file: `practice/public.dart` exports only `practiceHistoryRepositoryProvider`,
+/// not the `PracticeHistoryRepository` type itself, so the caller
+/// (`library_v2_providers.dart`) builds the loader from the provider and
+/// this class stays a plain callback wrapper (read-only in this round —
 /// no per-entry delete exists on that contract yet, §0.0/B3).
 final class PracticeItemSource implements LibraryItemSource {
-  const PracticeItemSource(this._repository);
+  const PracticeItemSource(this._load);
 
-  final PracticeHistoryRepository _repository;
+  final Future<LibrarySourceLoad> Function() _load;
 
   @override
   LibraryItemType get type => LibraryItemType.practice;
 
   @override
-  Future<LibrarySourceLoad> load() async {
-    final result = await _repository.load();
-    return result.fold(
-      onSuccess: (entries) => LibrarySourceLoad.success([
-        for (final entry in entries)
-          PracticeLibraryItem(
-            id: entry.id,
-            title: entry.displayTitle,
-            createdAt: entry.createdAt,
-            syncStatus: LibrarySyncStatus.synced,
-          ),
-      ]),
-      onFailure: (error) => LibrarySourceLoad.unavailable(error.code),
-    );
-  }
+  Future<LibrarySourceLoad> load() => _load();
 }

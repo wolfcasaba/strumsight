@@ -1,6 +1,5 @@
 import '../../../core/foundation/app_result.dart';
-import '../../audio_analysis/application/delete_analysis_use_case.dart';
-import '../../audio_analysis/domain/analysis_repository.dart';
+import '../../audio_analysis/public.dart';
 import '../domain/library_delete_actions.dart';
 import '../domain/library_delete_scope.dart';
 
@@ -16,10 +15,9 @@ import '../domain/library_delete_scope.dart';
 ///   [DeleteAnalysisUseCase] exactly.
 final class AnalysisLibraryDeleteActions implements LibraryDeleteActions {
   const AnalysisLibraryDeleteActions({
-    required AnalysisRepository repository,
-    AnalysisAudioPort audio = const NoAudioPort(),
-  }) : _repository = repository,
-       _audio = audio;
+    required this._repository,
+    this._audio = const NoAudioPort(),
+  });
 
   final AnalysisRepository _repository;
   final AnalysisAudioPort _audio;

@@ -1,4 +1,4 @@
-import '../../audio_analysis/domain/analysis_repository.dart';
+import '../../audio_analysis/public.dart';
 import '../domain/library_item.dart';
 import '../domain/library_item_source.dart';
 
