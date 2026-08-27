@@ -20,7 +20,7 @@ import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
-import 'package:strumsight/features/library/screens/library_screen.dart';
+import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
@@ -156,7 +156,10 @@ void main() {
           AppRoutes.live: LiveScreen,
           AppRoutes.analyze: AnalyzeScreen,
           AppRoutes.learn: LessonListScreen,
-          AppRoutes.library: LibraryScreen,
+          // E13-R28 (§0.0/B2) — `/library` redirects to `/profile/library`,
+          // which now renders the unified library (the legacy `LibraryScreen`
+          // itself stays wired, untouched, at the bare `/library` route).
+          AppRoutes.library: UnifiedLibraryScreen,
           AppRoutes.settings: SettingsScreen,
           AppRoutes.tuner: TunerScreen,
           AppRoutes.metronome: MetronomeScreen,

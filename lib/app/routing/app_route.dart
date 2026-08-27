@@ -90,6 +90,14 @@ abstract final class AppRoutes {
   static const String practiceChords = '/practice/chords';
   static const String songsSetlists = '/songs/setlists';
   static const String profileLibrary = '/profile/library';
+
+  // Unified Library session detail (E13-R28, SDD Ch13 UI-41). The `extra`
+  // payload carries the strongly-typed `LibraryItem` for a type-safe push;
+  // `:sessionId` mirrors it in the path for deep-link shape only — a
+  // redirect to [profileLibrary] covers the missing-extra case, matching
+  // the existing `librarySession` pattern above.
+  static const String profileLibrarySession =
+      '/profile/library/session/:sessionId';
   static const String profileSettings = '/profile/settings';
   static const String profileProgress = '/profile/progress';
   static const String profileRewards = '/profile/rewards';

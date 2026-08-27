@@ -25,7 +25,7 @@ import 'package:strumsight/core/platform/screen_wakelock.dart';
 import 'package:strumsight/features/analyze/screens/analyze_screen.dart';
 import 'package:strumsight/features/chords/screens/chord_library_screen.dart';
 import 'package:strumsight/features/learn/screens/lesson_list_screen.dart';
-import 'package:strumsight/features/library/screens/library_screen.dart';
+import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/live/screens/live_screen.dart';
 import 'package:strumsight/features/metronome/screens/metronome_screen.dart';
@@ -234,7 +234,10 @@ void main() {
         AppRoutes.practiceMetronome: MetronomeScreen,
         AppRoutes.practiceChords: ChordLibraryScreen,
         AppRoutes.songsSetlists: SetlistListScreen,
-        AppRoutes.profileLibrary: LibraryScreen,
+        // E13-R28 (§0.0/B2) — the ONE adapter this round replaces: the
+        // unified library now owns `/profile/library`. `LibraryScreen`
+        // stays wired at the legacy `/library` route below (untouched).
+        AppRoutes.profileLibrary: UnifiedLibraryScreen,
         AppRoutes.profileSettings: SettingsScreen,
         AppRoutes.profileProgress: ProgressScreen,
         AppRoutes.profileRewards: StreakScreen,

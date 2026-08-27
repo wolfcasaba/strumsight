@@ -11,7 +11,9 @@ void main() {
     final second = UiInventory(repository).render();
 
     expect(first.toMarkdown(), second.toMarkdown());
-    expect(first.screenPaths, hasLength(89));
+    // E13-R28 (§0.0/R4) — the unified library adds two new production
+    // screens under `lib/features/library_v2/screens/`: 89 -> 91.
+    expect(first.screenPaths, hasLength(91));
     expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
     expect(
       first.screenPaths,

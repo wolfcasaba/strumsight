@@ -2104,6 +2104,57 @@
   "libraryIntro": "Vegyél fel valamit az Elemzésben és mentsd el — a munkameneteid itt jelennek meg.",
   "libraryRename": "Átnevezés",
   "libraryRenameTitle": "Felvétel átnevezése",
+  "libraryV2CorruptSourceMessage": "A könyvtár egy része most nem olvasható. A könyvtár többi része továbbra is elérhető.",
+  "libraryV2CorruptSourceTitle": "Néhány tétel nem érhető el",
+  "libraryV2DeleteCancel": "Mégse",
+  "libraryV2DeleteEverythingAction": "Minden törlése",
+  "libraryV2DeleteEverythingConsequence": "Minden törlődik — a nyers felvétel és az elemzési eredmény is. Ez nem vonható vissza.",
+  "libraryV2DeleteEverythingTitle": "Törlöd ezt a tételt?",
+  "libraryV2DeleteFailed": "A törlés sikertelen — próbáld újra.",
+  "libraryV2DeleteRawAction": "Nyers felvétel törlése",
+  "libraryV2DeleteRawConsequence": "Csak a nyers felvétel törlődik. Az elemzési eredmény megmarad.",
+  "libraryV2DeleteRawTitle": "Törlöd a nyers felvételt?",
+  "libraryV2DeleteResultAction": "Eredmény törlése",
+  "libraryV2DeleteResultConsequence": "Csak az elemzési eredmény törlődik. A nyers felvétel, ha megvan, megmarad.",
+  "libraryV2DeleteResultTitle": "Törlöd az elemzési eredményt?",
+  "libraryV2DeleteSectionTitle": "Tárhely kezelése",
+  "libraryV2EmptyAction": "Frissítés",
+  "libraryV2EmptyMessage": "Az elmentett gyakorlások, elemzések, dalok és setlistek itt jelennek meg.",
+  "libraryV2EmptyTitle": "Még nincs itt semmi",
+  "libraryV2ExportAction": "Exportálás",
+  "libraryV2ExportUnavailable": "Ez a tétel most nem exportálható.",
+  "libraryV2FilterAll": "Összes",
+  "libraryV2LoadFailed": "A könyvtár betöltése sikertelen. Próbáld újra.",
+  "libraryV2MetadataRecordedOn": "Felvéve: {date}",
+  "@libraryV2MetadataRecordedOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "libraryV2MetadataUpdatedOn": "Frissítve: {date}",
+  "@libraryV2MetadataUpdatedOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
+  "libraryV2NotesFieldLabel": "Jegyzet hozzáadása",
+  "libraryV2NotesSectionTitle": "Jegyzetek",
+  "libraryV2RawAudioMissingNotice": "A nyers felvétel már nem érhető el — a fenti elemzési eredményt ez nem érinti.",
+  "libraryV2ResultAvailable": "Az elemzési eredmény elérhető.",
+  "libraryV2ResultMissing": "Az elemzési eredmény nem érhető el.",
+  "libraryV2ResultSectionTitle": "Eredmény",
+  "libraryV2SearchLabel": "Keresés a könyvtárban",
+  "libraryV2SyncConflictBadge": "Szinkron-ütközés",
+  "libraryV2SyncConflictKeepThis": "Ezt tartom meg",
+  "libraryV2SyncConflictLocalLabel": "Ezen az eszközön",
+  "libraryV2SyncConflictMessage": "Ez a tétel két helyen is megváltozott. Válaszd ki, melyik verziót tartod meg — a másik elvész.",
+  "libraryV2SyncConflictRemoteLabel": "A felhőben",
+  "libraryV2SyncConflictTitle": "Szinkron-ütközés",
+  "libraryV2Title": "Könyvtár",
+  "libraryV2TypeAnalysis": "Elemzés",
+  "libraryV2TypePractice": "Gyakorlás",
+  "libraryV2TypeSetlist": "Setlist",
+  "libraryV2TypeSong": "Dal",
   "liveCapo": "Kapo {fret}",
   "@liveCapo": {
     "placeholders": {
