@@ -3046,6 +3046,113 @@
   "progressThisWeek": "This week (minutes)",
   "progressTitle": "Progress",
   "progressTotalPractice": "Total practice",
+  "progressV2DashboardTitle": "Progress",
+  "progressV2EvidenceEmpty": "No evidence sessions yet.",
+  "progressV2EvidenceListSemanticLabel": "Sessions behind this mastery claim",
+  "progressV2EvidenceOriginAnalysis": "Analysis",
+  "progressV2EvidenceOriginDevice": "Device",
+  "progressV2EvidenceOriginVision": "Vision",
+  "progressV2EvidenceRowLabel": "{origin} · {date}",
+  "@progressV2EvidenceRowLabel": {
+    "placeholders": {
+      "origin": {},
+      "date": {}
+    }
+  },
+  "progressV2EvidenceRowSemanticLabel": "Open the {origin} session from {date}",
+  "@progressV2EvidenceRowSemanticLabel": {
+    "placeholders": {
+      "origin": {},
+      "date": {}
+    }
+  },
+  "progressV2EvidenceSectionTitle": "Evidence",
+  "progressV2MetricHistorySectionTitle": "Measurement history",
+  "progressV2MetricVersionChangedNote": "The measurement method changed between these sections — a jump here reflects the new method, not sudden progress.",
+  "progressV2MetricVersionLabel": "Measure v{version}",
+  "@progressV2MetricVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      }
+    }
+  },
+  "progressV2MetricVersionPointCount": "{count, plural, =1{1 sample} other{{count} samples}}",
+  "@progressV2MetricVersionPointCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressV2NewUserAction": "Start practicing",
+  "progressV2NewUserMessage": "Practice a few sessions and your first evidence-based mastery signals will show up here.",
+  "progressV2NewUserTitle": "Your progress starts here",
+  "progressV2RecommendationAction": "Start practice",
+  "progressV2RecommendationLocked": "Requires {prerequisite} first",
+  "@progressV2RecommendationLocked": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMet": "Prerequisite met: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMet": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMissing": "Prerequisite not yet met: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMissing": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationSectionTitle": "Suggested next step",
+  "progressV2ScoreRingUnavailableGlyph": "—",
+  "progressV2SkillDetailMasterySemanticLabel": "{title} mastery: {status}",
+  "@progressV2SkillDetailMasterySemanticLabel": {
+    "placeholders": {
+      "title": {},
+      "status": {}
+    }
+  },
+  "progressV2SkillRowSemanticLabel": "{title}: {status}",
+  "@progressV2SkillRowSemanticLabel": {
+    "placeholders": {
+      "title": {},
+      "status": {}
+    }
+  },
+  "progressV2SkillStatusUnmeasured": "Not measured yet",
+  "progressV2SkillsSectionTitle": "Skills",
+  "progressV2TrendDirectionDown": "Trending down",
+  "progressV2TrendDirectionFlat": "Holding steady",
+  "progressV2TrendDirectionUp": "Trending up",
+  "progressV2TrendEventListSemanticLabel": "Individual session measurements",
+  "progressV2TrendExtremes": "First {first}, latest {last}",
+  "@progressV2TrendExtremes": {
+    "placeholders": {
+      "first": {},
+      "last": {}
+    }
+  },
+  "progressV2TrendInsufficientData": "Not enough sessions yet to show a trend.",
+  "progressV2TrendPointSemanticLabel": "{value} recorded on {date}",
+  "@progressV2TrendPointSemanticLabel": {
+    "placeholders": {
+      "value": {},
+      "date": {}
+    }
+  },
+  "progressV2TrendSectionTitle": "Trend",
+  "progressV2TrendSessionsTracked": "{count, plural, =1{1 session tracked} other{{count} sessions tracked}}",
+  "@progressV2TrendSessionsTracked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "questCompletedBadge": "Completed",
   "questCompletedBody": "The reward is already in your ledger.",
   "questCompletedSemantics": "Quest {title} is complete. The reward is already credited.",

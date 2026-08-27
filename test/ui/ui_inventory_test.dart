@@ -16,7 +16,10 @@ void main() {
     // E13-R30 (§0.0/B9) — the route-less Vision Result screen adds one more
     // production screen under `lib/features/vision/presentation/screens/`:
     // 91 -> 92.
-    expect(first.screenPaths, hasLength(92));
+    // E13-R31 (§0.0.B/B9) — the route-less Progress Dashboard and Skill
+    // Detail screens add two more production screens under
+    // `lib/features/progress_v2/screens/`: 92 -> 94.
+    expect(first.screenPaths, hasLength(94));
     expect(first.screenPaths, orderedEquals([...first.screenPaths]..sort()));
     expect(
       first.screenPaths,

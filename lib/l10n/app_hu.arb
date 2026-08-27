@@ -3008,6 +3008,113 @@
   "progressThisWeek": "Ezen a héten (perc)",
   "progressTitle": "Haladás",
   "progressTotalPractice": "Összes gyakorlás",
+  "progressV2DashboardTitle": "Fejlődés",
+  "progressV2EvidenceEmpty": "Még nincs bizonyíték-edzés.",
+  "progressV2EvidenceListSemanticLabel": "Az elsajátítottsági állítás mögötti edzések",
+  "progressV2EvidenceOriginAnalysis": "Elemzés",
+  "progressV2EvidenceOriginDevice": "Eszköz",
+  "progressV2EvidenceOriginVision": "Vision",
+  "progressV2EvidenceRowLabel": "{origin} · {date}",
+  "@progressV2EvidenceRowLabel": {
+    "placeholders": {
+      "origin": {},
+      "date": {}
+    }
+  },
+  "progressV2EvidenceRowSemanticLabel": "A(z) {origin} eredetű edzés megnyitása, {date}",
+  "@progressV2EvidenceRowSemanticLabel": {
+    "placeholders": {
+      "origin": {},
+      "date": {}
+    }
+  },
+  "progressV2EvidenceSectionTitle": "Bizonyíték",
+  "progressV2MetricHistorySectionTitle": "Mérőszám-előzmények",
+  "progressV2MetricVersionChangedNote": "A mérési módszer megváltozott ezek a szakaszok között — az ugrás az új módszert tükrözi, nem hirtelen javulást.",
+  "progressV2MetricVersionLabel": "Mérce v{version}",
+  "@progressV2MetricVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "int"
+      }
+    }
+  },
+  "progressV2MetricVersionPointCount": "{count, plural, =1{1 minta} other{{count} minta}}",
+  "@progressV2MetricVersionPointCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "progressV2NewUserAction": "Gyakorlás indítása",
+  "progressV2NewUserMessage": "Gyakorolj néhány edzést, és megjelennek az első bizonyíték-alapú elsajátítottsági jelzések.",
+  "progressV2NewUserTitle": "Itt kezdődik a fejlődésed",
+  "progressV2RecommendationAction": "Gyakorlás indítása",
+  "progressV2RecommendationLocked": "Ehhez előbb szükséges: {prerequisite}",
+  "@progressV2RecommendationLocked": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMet": "Előfeltétel teljesítve: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMet": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationPrerequisiteMissing": "Előfeltétel még nem teljesült: {prerequisite}",
+  "@progressV2RecommendationPrerequisiteMissing": {
+    "placeholders": {
+      "prerequisite": {}
+    }
+  },
+  "progressV2RecommendationSectionTitle": "Javasolt következő lépés",
+  "progressV2ScoreRingUnavailableGlyph": "—",
+  "progressV2SkillDetailMasterySemanticLabel": "{title} elsajátítottság: {status}",
+  "@progressV2SkillDetailMasterySemanticLabel": {
+    "placeholders": {
+      "title": {},
+      "status": {}
+    }
+  },
+  "progressV2SkillRowSemanticLabel": "{title}: {status}",
+  "@progressV2SkillRowSemanticLabel": {
+    "placeholders": {
+      "title": {},
+      "status": {}
+    }
+  },
+  "progressV2SkillStatusUnmeasured": "Még nincs mérve",
+  "progressV2SkillsSectionTitle": "Készségek",
+  "progressV2TrendDirectionDown": "Csökkenő trend",
+  "progressV2TrendDirectionFlat": "Stabil szinten",
+  "progressV2TrendDirectionUp": "Emelkedő trend",
+  "progressV2TrendEventListSemanticLabel": "Az egyes edzések mért értékei",
+  "progressV2TrendExtremes": "Első: {first}, legutóbbi: {last}",
+  "@progressV2TrendExtremes": {
+    "placeholders": {
+      "first": {},
+      "last": {}
+    }
+  },
+  "progressV2TrendInsufficientData": "Még nincs elég edzés a trend megjelenítéséhez.",
+  "progressV2TrendPointSemanticLabel": "{value}, rögzítve: {date}",
+  "@progressV2TrendPointSemanticLabel": {
+    "placeholders": {
+      "value": {},
+      "date": {}
+    }
+  },
+  "progressV2TrendSectionTitle": "Trend",
+  "progressV2TrendSessionsTracked": "{count, plural, =1{1 rögzített edzés} other{{count} rögzített edzés}}",
+  "@progressV2TrendSessionsTracked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "questCompletedBadge": "Teljesítve",
   "questCompletedBody": "A jutalom már a főkönyvedben van.",
   "questCompletedSemantics": "A(z) {title} küldetés teljesítve. A jutalom már jóváírva.",
