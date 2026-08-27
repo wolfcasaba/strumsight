@@ -542,18 +542,88 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
 
 ## 10. Implementation handoff — az implementer tölti ki
 
-Kötelezően rögzítendő pontok (a pre-flight mérései miatt):
+- [x] **Fake képkocka-folyam, MIÉRT.** A pre-flight (§0.0/B1) mérése szerint
+      nincs vision modell-bináris a fán (`assets/ml/*_deferred.tflite`
+      hiányzik, `model_manifest.json` mindkét vision-bejegyzése
+      `status: deferred`), és `FeatureFlags.visionEnabled` alapból `false`.
+      A kör ezért a meglévő `lib/core/camera/fake_camera_capture.dart`
+      (`FakeCameraCapture`, plugin-mentes, determinisztikus) + a
+      `cameraCaptureFactoryProvider`/`cameraSessionCoordinatorProvider`
+      teszt-oldali felülírására épít minden új tesztben — nem tölt le, nem
+      generál és nem hivatkozik modell-binárist. Az `application/`-ban a
+      kamera-nyitás/zárás logika (permission → setup → calibrating →
+      running → completed) már készen állt (E05/E24 körökből); ez a kör
+      csak a presentation-réteget bővítette rá.
+- [x] **Vision Result — route nélkül.** `lib/app/routing/` a kör tilos
+      zónája (§0.0/B10), ezért a `VisionResultScreen` NEM kap regisztrált
+      route-ot. A `VisionSessionScreen.build()` a `VisionSessionStatus
+      .completed` + nem-null `state.result` esetén cseréli le a Stage
+      testét a `VisionResultScreen`-re, in-feature kompozícióval
+      (`lib/features/vision/presentation/screens/vision_session_screen.dart`
+      `state.status == VisionSessionStatus.completed && result != null`
+      ág). A "Korrekciós gyakorlat indítása" elsődleges művelet a meglévő
+      `controller.begin()`-t hívja újra — nincs új navigációs célpont.
+- [x] **Hő vs. követés-vesztés — külön állapot, külön szöveg.** Új,
+      tesztből felülírható presentation-provider:
+      `lib/features/vision/presentation/providers/vision_thermal_providers.dart`
+      (`visionThermalDecisionProvider` → `ThermalStateAdapter.evaluate`,
+      `visionThermalUiStateProvider` a 70-es küszöbbel). A Stage egy
+      `_ThermalBanner` widgetet (`Key('vision-thermal-throttled')`,
+      `l10n.visionSessionThermalThrottled`) jelenít meg, amikor a hő-terhelés
+      a küszöb felett van — ez FÜGGETLEN a
+      `VisionSessionStatus.calibrationLost` ághoz tartozó, már létező
+      `l10n.visionSessionCalibrationLost` szövegtől. A négy kombináció
+      (egyik sem / csak hő / csak követés-vesztés / mindkettő) le van
+      fedve a `vision_degraded_test.dart` A5 csoportjában — mindkettő
+      EGYSZERRE is külön-külön látszik (nem olvad egy üzenetbe).
+- [x] **A3 valódi-sértés próba.** `vision_session_screen.dart`-ban
+      ideiglenesen egy MÁSODIK, kódolt cue-szöveget (`Text(l10n
+      .visionInsightFrettingFocus)`) rendereltem a valódi (egyetlen)
+      `state.realtimeCue` szövege MELLÉ, majd lefuttattam
+      `flutter test test/features/vision/vision_one_cue_test.dart --plain-name
+      "three simultaneous"`. A cella PIROSRA váltott, a tényleges kimenet:
+      ```
+      Expected: no matching candidates
+        Actual: _TextWidgetFinder:<Found 1 widget with text
+          "Keep the fretting pattern consistent.": [...]>
+         Which: means one was found but none were expected
+      ```
+      (a teszt a legmagasabb-prioritású `postureFocus` szövegen kívül minden
+      más cue-szöveg hiányát várja — a beszúrt második `frettingFocus`
+      szöveg pont ezt sértette). Ezután a beszúrt sort eltávolítottam, és a
+      teljes `vision_one_cue_test.dart` újra zöld (5/5).
+- [x] **`tools/golden-x86.sh` kimenete.**
+      `record`: `00:00 +0 … 00:02 +6: All tests passed!` (6/6, Flutter
+      3.44.2 linux/amd64, docker).
+      `check`: `00:00 +0 … 00:02 +6: All tests passed!`, kilépési kód `0`.
+      Commitolt PNG-k (`test/ui/goldens/goldens/`):
+      `e13_r30_vision_setup_compact.png`,
+      `e13_r30_vision_setup_compact_scale2.png`,
+      `e13_r30_vision_coach_stage_compact.png`,
+      `e13_r30_vision_coach_stage_compact_scale2.png`,
+      `e13_r30_vision_result_compact.png`,
+      `e13_r30_vision_result_compact_scale2.png`.
+      A felvétel előtt két, textScale=2.0-nál jelentkező valódi elrendezési
+      hibát javítottam a saját kódban (nem a DS-ben): a Vision Setup
+      AppBar "Continue without camera" akciója 250px-szel túlcsordult a
+      toolbaron (`ConstrainedBox` + ellipszis a javítás), és a
+      `SsConfidenceLegend` (DS, tilos zóna) egy Sorban túlcsordult egy
+      hosszú magyar címkénél — ezt egy feature-lokális `_ConfidenceLegend`
+      váltotta ki (Column + `Expanded`, §0.0/B5 fallback-szabály).
+- [x] **`ui_inventory` szám.** `91 → 92` — az új
+      `lib/features/vision/presentation/screens/vision_result_screen.dart`
+      egy `*_screen.dart` fájl (§0.0/B9). `test/ui/ui_inventory_test.dart`
+      frissítve; a leltár minden más állítása változatlan.
 
-- [ ] a fake képkocka-folyam használata és MIÉRT (§0.0/B1 — nincs
-      vision modell-bináris a fán, `visionEnabled` alapból `false`);
-- [ ] a Vision Result felület route NÉLKÜLI elérési útja (§0.0/B10);
-- [ ] a hő- és a követés-vesztés állapot elkülönítése, a két szöveg
-      megnevezésével (§0.0/B3, A5);
-- [ ] a valódi-sértés próba (két egyidejű jelzés → az A3 PIROS →
-      visszaállítva), a tényleges kimenettel;
-- [ ] a `tools/golden-x86.sh record` és `check` KIMENETE, valamint a
-      commitolt PNG-k listája (A9);
-- [ ] a `ui_inventory` szám (91 → 92, vagy változatlan 91, ha nem
-      készült új `*_screen.dart`).
+**Mért, dokumentálásra érdemes tesztelési csapda (nem alkalmazáskód-hiba):**
+a `testWidgets` fake-clock zónája alatt a `FakeCameraCapture.close()`
+(broadcast `StreamController.close()`) awaitolása SOSEM tér vissza —
+ugyanaz a hívás egy sima `test()`-ben azonnal lezárul. Minden teszt, amely
+`stop()`/`leaveRoute()`/háttérbe-kerülést/`container.dispose()`-t vár be,
+`tester.runAsync(...)`-ba csomagolva hívja ezt (lásd
+`vision_permission_test.dart`, `vision_cleanup_test.dart`
+`_runRealAndSettle` segédje) — enélkül a teszt a `flutter test`
+saját időkorlátjáig (nem a `pumpAndSettle` rövid ciklusáig) lefagyott
+lenne.
 
 ## 11. Review — a Claude tölti ki
