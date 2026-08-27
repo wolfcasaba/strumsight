@@ -247,6 +247,69 @@ Minden más mérce zöld: scope-audit `ok`, a 15 lépéses kapu zöld, a golden
 x86-on 16/16, a Router CI a merge SHA-n `success`, és a három eldobható
 falszifikációs próba mind pirosra váltotta a saját celláját.
 
-## 5. VÉGSŐ DÖNTÉS — 2. kör (a javítás után)
+## 5. VÉGSŐ DÖNTÉS — 2. kör (a javító kör után)
 
-*(a javító kör után töltendő)*
+**Javító kör:** `827efee5` — a leleteket a `sonnet-impl` motor zárta le, a
+mérést ÚJ izolált klónban (`/tmp/ss-review2-e13-r33`, `HEAD = 827efee5`)
+megismételtem.
+
+### 5.1 MAJOR-1 — LEZÁRVA
+
+A `post_composer_screen.dart` `_AudienceSelector._onSelected` mostantól
+`AppLocalizations.of(context)`-ből olvassa a négy `communityPublicConfirm*`
+feliratot, a négy beégetett magyar konstans törölve, és a doc-comment
+elavulttá vált mondata („touching `lib/l10n/**` would be a scope violation")
+frissült. A javítás pontosan a testvér-képernyő (`edit_profile_screen.dart:345–348`)
+mintáját követi.
+
+**Falszifikációs próba P4 (eldobható, visszaállítva).** Visszaírtam a beégetett
+magyar feliratokat a `showCommunityConfirmationSheet` hívásba:
+
+```
+/home/ubuntu/flutter/bin/flutter test test/features/community/composer_audience_test.dart
+→ 00:03 +9 -1: Some tests failed.
+Failing tests:
+  composer_audience_test.dart: §6.1 audience-threshold matrix
+    above threshold — picking "Nyilvános" holds behind an irreversibility confirmation
+```
+
+A beégetés tehát **valóban pirosra váltja a suite-ot** — a lelet gépi őrt
+kapott, nem csak javítást.
+
+**NOTE-4 (pontosítás, nem nyitott lelet).** A P4 mérés megmutatta, hogy a
+falszifikálást az `en` locale alatt futó, MÓDOSÍTOTT cella fogja meg (a
+`hu`-feliratot keresi az `en` lapon), NEM a javító kör által hozzáadott, néven
+nevezett „…comes from AppLocalizations, not a hardcoded string" cella — az
+`hu` locale alatt fut, ahol a beégetett magyar szöveg történetesen egyezik,
+ezért zöld maradt. A PÁR együtt mindkét irányt lefedi (magyar és angol
+beégetés is), a mérce tehát teljes; a nevesített cella kommentje viszont
+többet ígér, mint amennyit önmagában mér. Ez pontosítás a jövőbeli olvasónak,
+nem a merge feltétele.
+
+### 5.2 MINOR-1 — TUDATOSAN KIHAGYVA, KIMONDVA (elfogadva)
+
+A javító kör a brief §10.6-ban írásban indokolta, miért nem migrálta a
+`_ComposerLabels` maradék 17 örökség-konstansát és a hat beégetett angol
+feliratot. Ez pontosan az a kimenetel, amit a javító prompt megengedett
+(„vagy migrálod, vagy a §10-ben KIMONDOD" — a csendben hagyás nem volt
+elfogadható). A lelet nem regresszió (§2/MINOR-1: mérve, hogy a kör ELŐTT is
+beégetve álltak), ezért nem blokkol.
+
+### 5.3 A mérce megismételve a javítás SHA-ján — MINDEN ZÖLD
+
+| Mérés | Eredmény a `827efee5`-ön |
+|---|---|
+| `scope-audit.py --base 5c2ba004` | **ok** — 42 path, 1 generált/ignorált |
+| `round-gate.sh` (§7, 15 lépés) | **MINDEN GATE ZÖLD** — a `composer_audience_test.dart` `+10` (a §6.1 „fölötte" csoport 2→3 cellára bővült) |
+| `test/features/community/presentation/` | **ZÖLD `+82`** — a hét meglévő teszt gyengítés nélkül |
+| `golden-x86.sh check` | **16/16 ZÖLD** — a szöveg-változás nem mozdított pixelt, PNG-frissítés nem kellett |
+| `router-ci.yml` | **success** a merge SHA-n |
+| `full-gate.yml` | lásd a PR build-evidenciáját |
+
+### 5.4 Verdikt
+
+**VÉGSŐ DÖNTÉS: APPROVED.** Nyitott BLOCKER: 0 · MAJOR: 0 · MINOR: 0
+(a MINOR-1 kimondva elfogadva) · NOTE: 4, egyik sem blokkol.
+
+A merge feltétele változatlanul az exact-SHA zöld kapu: a `full-gate.yml` ÉS a
+`router-ci.yml` `success` a ténylegesen merge-elt SHA-n (ADR 0086 §2).
