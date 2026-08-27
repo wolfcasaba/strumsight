@@ -19,7 +19,13 @@
 schema_version = 1
 risk = "high"
 allowed_paths = [
-  "lib/features/vision/",
+  # §0.0/B2 — SZŰKÍTÉS: az eredeti `lib/features/vision/` KÖNYVTÁR-előtag
+  # magába foglalta a `data/landmarks/**` képfeldolgozást és a teljes
+  # `domain/**`-t, amit viszont a §3 tilos-listája KIMONDOTTAN kizár („a
+  # vision modell vagy a képfeldolgozás módosítása"). Az előtag a
+  # `presentation/`-re szűkül; a kör minden mért igénye ott van (a mérést
+  # lásd §0.0/B2).
+  "lib/features/vision/presentation/",
   "lib/l10n/base/app_en.arb",
   "lib/l10n/base/app_hu.arb",
   "lib/l10n/app_en.arb",
@@ -40,6 +46,14 @@ gate_tests = [
   "test/features/vision/vision_one_cue_test.dart",
   "test/features/vision/vision_cleanup_test.dart",
   "test/features/vision/vision_degraded_test.dart",
+  # §0.0/B8 — FUTTATNI KELL, SZERKESZTENI TILOS (nincsenek az allowed_paths-on):
+  # a `presentation/` fa negyedik tesztje a VALÓDI routeren jár
+  # (`vision_session_routing_test.dart`), a másik három a privacy- és
+  # offline-szerződést pinneli.
+  "test/features/vision/presentation/",
+  "test/features/vision/data/pose_privacy_audit_test.dart",
+  "test/features/vision/data/vision_export_privacy_test.dart",
+  "test/features/vision/vision_offline_regression_test.dart",
   "test/ui/goldens/e13_r30_screens_golden_test.dart",
   "test/ui/ui_inventory_test.dart",
   "test/core/architecture_dependency_test.dart",
@@ -155,6 +169,185 @@ futtatja, de NEM szerkesztheti őket, tehát a lelet javítása kizárólag a k�
 SAJÁT kódjában történhet. Cella törlése, `skip`-je vagy küszöb-lazítása így
 gépileg kizárt, a mérce pedig tiszta erősítést kap.
 
+## 0.0-B BRIEF-REVÍZIÓ — 2026-08-27, indítás előtti pre-flight (`main @ 9a92e335`)
+
+A `brief-lint` (strict) **nem adott leletet**; az alábbi B-pontok a saját
+mérésemből származnak (ADR 0087 §2: a kör saját, még nem merge-elt briefje az
+én hatásköröm — kizárólag SZŰKÍTÉS és dokumentált feloldás).
+
+**Visszakeresés (ADR 0312, kötelező — szűkítve ELŐSZÖR):**
+`--corpus lessons,halts,adr` → [L486](../LESSONS.md#l486) (a golden a
+RASZTERIZÁLÁST rögzíti; a `ColorScheme.fromSeed`-szín box↔CI diffet ad),
+[ADR 0178](../adr/0178-vision-privacy-by-default.md) (vision privacy by
+default — a frame nem megy hálózatra és **nem íródik tartós tárba production
+kódban**; egyetlen kivétel az explicit consentelt Lab capture),
+[L154](../LESSONS.md#l154) (a kamera-erőforrás acceptance-cellája a TELJES
+capture-kontraktuson mérendő, nem a UI-enumon), [L449](../LESSONS.md#l449)
+(az `indexedStack` shell életben tartja a bejárt brancheket, ezért az
+erőforrás-tulajdonos képernyő nem szabadul fel). `--corpus lessons,halts` →
+[L148](../LESSONS.md#l148), [L150](../LESSONS.md#l150),
+[L217](../LESSONS.md#l217) (a teardown-callback a warm-up ablakban elveszhet,
+míg a lease-t felszabadító külső `finally` feltétel nélkül lefut). Teljes
+korpusz → SDD Ch13 UI-45/UI-46/UI-47 és a §21.5 vision-folyam.
+
+### B1 — a brief SAJÁT kötelező pre-flightja: a vision modell-bináris NINCS a fán, a képkocka-forrás FAKE
+
+A brief fejléce ezt kötelezővé tette. Mérve:
+
+- `assets/ml/model_manifest.json` → `vision_models[]` mindkét eleme
+  (`hand_landmarker`, `pose_landmarker`) `"status": "deferred"`, a `sha256`
+  mindkettőn csupa nulla, az útvonaluk `assets/ml/*_deferred.tflite`.
+- `ls assets/ml/*_deferred.tflite` → **No such file or directory**. Az
+  `assets/ml/` tartalma: `chord_crnn.bin`, `strum_crnn*.bin`,
+  `model_manifest.json` — vision-bináris NINCS.
+- `FeatureFlags.visionEnabled` alapértéke **`false`**
+  (`lib/app/config/feature_flags.dart:24` és `:86`), és a
+  `cameraCaptureProvider` (`lib/core/camera/camera_providers.dart:24-30`)
+  kikapcsolt flag mellett `null`-t ad, **plugin-példányosítás nélkül**.
+
+**Következmény:** a kör a **fake képkocka-folyamra** épül
+(`lib/core/camera/fake_camera_capture.dart` — determinisztikus, plugin nélküli
+`CameraCapture`) és teszt-oldali állapot-felülírásra. Ez a §10-ben rögzítendő.
+A kör NEM tölt le, nem generál és nem hivatkozik modell-binárist.
+
+### B2 — SZŰKÍTÉS: `lib/features/vision/` → `lib/features/vision/presentation/`
+
+Az eredeti előtag és a §3 tilos-listája ellentmondott egymásnak: az előtag alá
+esik a `data/landmarks/**` (képfeldolgozás) és a teljes `domain/**`, amit a §3
+kimondottan kizár. A szűkítés feloldja az ellentmondást, és mérve **elég**:
+
+- **egy-jelzés (A3):** a prioritás-választás MÁR KÉSZ a domainben —
+  `CueBudget.selectRealtime` (`domain/feedback/cue_budget.dart:11-31`)
+  `VisionInsight?`-ot ad vissza (EGYET vagy semmit), és a
+  `VisionSessionState.realtimeCue` (`application/vision_session_state.dart:96`)
+  eleve **egyes számú, nullable** mező. A kör dolga tehát tisztán a
+  megjelenítés.
+- **erőforrás-tulajdonlás (a §1/2. mérési szabály):** `grep -rn "\.acquire(" lib/`
+  → PONTOSAN három hívó, mind a presentationon KÍVÜL:
+  `application/vision_session_controller.dart:157`,
+  `application/vision_setup_controller.dart:163`,
+  `lib/core/audio/mic_capture.dart:82`. A presentation ma sem szerez
+  erőforrást, és **nem is fog**: az A7 bizonyítéka a kilépési utak
+  controller-/guard-elengedése, nem új release-kód.
+- a kör által olvasott típusok (`VisionSessionResult`, `VisionThermalDecision`,
+  `VisionOverlayQuality`, `VisionSetupStep`) merge-eltek és **csak olvasásra**
+  kellenek.
+
+### B3 — A5/hő: a `VisionSessionStatus`-ból ma NEM állítható elő (§1/1. mérési szabály)
+
+`grep -n "enum VisionSessionStatus" -A 17 application/vision_session_state.dart`
+→ 15 érték, **egyik sem hő-jellegű**; a követés-vesztés viszont VAN:
+`VisionSessionStatus.calibrationLost`. `grep -rn "thermal" application/vision_session_controller.dart`
+→ **0 találat**; a `ThermalStateAdapter`
+(`data/performance/thermal_state_adapter.dart:41`) `const`, tiszta
+kiértékelő, és `grep -rn "ThermalStateAdapter" lib/` szerint **egyetlen
+production hívója sincs** (csak tesztek).
+
+**Feloldás (szűkítés, nem tágítás):** az **A5** hő-cellája a
+**presentation-rétegen** mér: egy `presentation/providers/` alatti,
+tesztből felülírható szolgáltató adja a hő-UI-állapotot a merge-elt
+`VisionThermalDecision`-ből, a Stage pedig **külön, nevesített** állapotként
+jeleníti meg — a `calibrationLost`-tól elkülönítve. Az `application/`, a
+`data/` és a `domain/` viselkedése NEM módosul.
+
+### B4 — A6/nem támogatott eszköz: a `audioOnly` lépésnek ma PONTOSAN EGY előállítója van
+
+`grep -n "VisionSetupStep\." application/vision_setup_controller.dart` →
+a `VisionSetupStep.audioOnly` egyetlen írási helye a `:154`, a `skip()`
+metódusban (`:152-155`), ami **felhasználói akció**, nem képesség-jelzés. A
+SDD UI-45 adatkontraktusában megnevezett `VisionCapability` típus a fán
+**NEM létezik** (`grep -rn "VisionCapability" lib/ test/` → 0 találat).
+
+**Feloldás:** az **A6** is presentation-oldalon mér — egy tesztből
+felülírható képesség-szolgáltató (`presentation/providers/`) állítja a
+beállítás-felületet a csak-hang alternatívára. A `skip()` mint második
+előállító változatlan marad, az `application/` nem módosul.
+
+### B5 — a SDD által kért DS-komponensek fele NEM létezik → mért helyettesítők
+
+`lib/core/design_system/public.dart` ellen mérve — **HIÁNYZIK:**
+`SsCalibrationFrame`, `SsInlineMessage`, `SsPrimaryButton`, `SsVisionOverlay`,
+`SsTechniqueCue`, `SsConfidenceBadge`. **VAN:** `SsPermissionState`,
+`SsSignalQualityIndicator`, `SsButton`, `SsStageScaffold`,
+`SsSessionTransport`, `SsMetricCard`, `SsInsightCard`, `SsConfidenceLegend`,
+`SsCoachActionCard`, `SsStatusBadge`, `SsProvenanceBadge`, `SsCard`,
+`SsSection`, `SsEmptyState`, `SsFailureState`.
+
+A hiányzókat a meglévőkkel VAGY feature-lokális widgettel kell kiváltani. A
+`lib/core/design_system/**` **tilos zóna marad** — új DS-komponens NEM készül
+(ugyanaz a szűkítés, mint az E13-R28/B5-ben). A design-system importja
+kizárólag a `public.dart` barrelen át mehet: ezt a
+`test/core/architecture_dependency_test.dart` méri (E13-R16/F8, 11 sértés —
+lásd §0.0/S12).
+
+### B6 — §7: a `flutter test --update-goldens` ütközik a merge-elt ADR 0426-tal
+
+A brief §7-e ARM-en rögzítene goldent, amit az x86-os merge-kapu nulla
+toleranciájú komparátora MINDIG pirosra vált
+([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md) §2–§3,
+[L486](../LESSONS.md#l486), [L493](../LESSONS.md#l493)). A merge-elt
+E13-R23…R29 precedens egységesen a `tools/golden-x86.sh record|check`
+alakot használja — a §7 erre vált (lásd lentebb).
+
+### B7 — a kör ADR-t NEM ír
+
+A kiosztott [`0288`](../adr/0288-camera-frames-stay-on-device-and-one-cue.md)
+**már merge-elve van** (2026-08-15, `5b32bd8e`), a `docs/adr/` pedig tilos
+zóna. Ez a sávon a **tizenharmadik** ADR nélküli kör egymás után (E13-R17…R30).
+`tools/round-slots.py reserve-adr` ezért nem fut: nincs új döntés.
+
+**Az ADR 0178 határa (H2-veszély):** a merge-elt ADR 0178 §1 szerint raw frame
+**production kódban nem íródik tartós tárba**; az egyetlen kivétel az explicit
+consentelt Lab capture. A §5.2 „mentés csak explicit felhasználói döntésre"
+tehát **NEM** jogosít új production mentési útra — az A2 bizonyítéka az, hogy
+a felület a megőrzés státuszát KIMONDJA és alapból NEM ment. Új
+frame-perzisztencia bevezetése **H2**, azaz `stopped` jelzés.
+
+### B8 — pinnelő tesztek a `gate_tests`-be (futtatni KELL, szerkeszteni TILOS)
+
+A `presentation/` fa negyedik tesztje
+(`vision_session_routing_test.dart`) a VALÓDI `routerProvider`-en pumpálja a
+`VisionSessionScreen`-t, tehát a képernyő átalakítása elbuktathatja. Vele
+együtt a privacy- és offline-szerződés pinjei is a `gate_tests`-be kerülnek
+(`pose_privacy_audit_test.dart`, `vision_export_privacy_test.dart`,
+`vision_offline_regression_test.dart`). **Egyik sincs az `allowed_paths`-on** —
+ha egy elbukik, a kör a SAJÁT kódját javítja, nem a tesztet.
+
+### B9 — `ui_inventory`: a mai szám **91**
+
+`test/ui/ui_inventory_test.dart:15` ma `expect(first.screenPaths, hasLength(91))`
+(az E13-R28 emelte 89→91). Ez a kör a Vision Result felületet
+`lib/features/vision/presentation/screens/vision_result_screen.dart`-ként
+hozza → **92**. A jogosultság PONTOSAN a szám valósághoz igazítása; ha a kör
+végül nem hoz új `*_screen.dart`-ot, a `91` **érintetlen marad**. A leltár
+minden más állítása, a `tool/ui_inventory.dart` szabálya és a képernyők neve
+**nem módosulhat**.
+
+### B10 — a Vision Result felület ROUTE NÉLKÜL épül (a router tilos zóna)
+
+A SDD UI-47 `/coach/vision/result/:sessionId` route-ot ír elő, de a
+`lib/app/routing/` **nincs az `allowed_paths`-on** (a szomszéd E13-R28-ban
+user-jóváhagyással rajta volt; itt nincs, és a felvétele **H3** lenne —
+[L478](../LESSONS.md#l478)). Mérve: `lib/app/routing/app_router.dart:555-578`
+három vision-route-ot regisztrál (setup, guitar-geometry, session), result
+route NINCS.
+
+**Feloldás (szűkítés):** a Vision Result a `VisionSessionScreen`-ből,
+feature-en belüli kompozícióval jelenik meg, amikor a munkamenet
+`VisionSessionStatus.completed` állapotba ér. A route regisztrációja a kör
+scope-ján KÍVÜL marad, és ezt a §10 rögzíti. Route-literál használata TILOS —
+a `test/tooling/route_literal_guard_test.dart` a gate-ben méri.
+
+### B11 — l10n: a FORRÁS a `base/` szegmens
+
+`ls lib/l10n/features/` → `community`, `design_system`, `gamification`,
+`onboarding`, `tuner` — **`vision` fragmentum NINCS**, tehát a vision-kulcsok
+a `lib/l10n/base/app_{en,hu}.arb` szegmensben élnek (a §0.0/R1 állítása
+igazolva). Az aggregátumot **kizárólag**
+`dart run tool/gen_l10n_segments.dart --write` írja. Új fragmentum NEM készül,
+a `test/l10n/arb_parity_test.dart:20` beégetett `('base/app', …)` sora
+változatlan.
+
 ## 0. Kör-jelzés és STOP-protokoll
 
 ```bash
@@ -198,7 +391,7 @@ production útvonalon · `docs/adr/**`, `tools/**`, `.github/**`.
 
 | Útvonal | Indok |
 |---|---|
-| `lib/features/vision/` | a három felület |
+| `lib/features/vision/presentation/` | a három felület — **SZŰKÍTVE** a §0.0/B2 mérése szerint (a `domain/`, `application/` és `data/` KIVÉVE: ott él a képfeldolgozás, és a kör minden igénye a presentationban van) |
 | `lib/l10n/base/app_{en,hu}.arb` | **FORRÁS** — a vision-szövegek (a kör feature-ei még nem migráltak, a kulcsaik itt élnek) |
 | `lib/l10n/app_{en,hu}.arb` | **CSAK GENERÁLT KIMENET** — kizárólag `dart run tool/gen_l10n_segments.dart --write`, kézzel írni TILOS |
 | `test/features/…` (3 meglévő teszt) | ma zöld, a migrált képernyőkre állítandó — lásd §0.0 R2 |
@@ -206,9 +399,11 @@ production útvonalon · `docs/adr/**`, `tools/**`, `.github/**`.
 | `test/ui/ui_inventory_test.dart` | **repó-szintű képernyő-leltár őr** — a kör új `lib/features/**/*_screen.dart`-ot hozhat, ezért az egzakt `hasLength(...)` elmozdul; a jogosultság PONTOSAN a szám emelése, más állítás nem érinthető (§0.0/R4) |
 | `docs/rounds/e13-r30-…md` | a §10 handoff |
 
-**Tilos zóna:** `lib/features/**` a `vision/` KIVÉTELÉVEL · a vision modell és
-a képfeldolgozás · `lib/core/design_system/**` · `docs/adr/**` ·
-`docs/sdd/**` · `tools/**` · `.github/**`.
+**Tilos zóna:** `lib/features/**` a `vision/presentation/` KIVÉTELÉVEL —
+tehát a `lib/features/vision/{domain,application,data}/**` IS tilos
+(§0.0/B2) · a vision modell és a képfeldolgozás ·
+`lib/core/design_system/**` (§0.0/B5) · `lib/app/routing/**` (§0.0/B10) ·
+`docs/adr/**` · `docs/sdd/**` · `tools/**` · `.github/**`.
 
 ## 5. Kötött architekturális döntések (ADR 0288)
 
@@ -251,11 +446,11 @@ Flag mögött, production útvonalon nem elérhető (az R02 §5.4 mintája).
 | # | Kritérium | Bizonyíték |
 |---|---|---|
 | A1 | A kamera csak explicit akció után indul | `vision_permission_test.dart` |
-| A2 | A képkocka alapból nem mentődik, és a státusz látható | ugyanott |
+| A2 | A képkocka alapból nem mentődik, és a státusz látható — **ADR 0178 §1 határa (§0.0/B7): új production frame-perzisztencia bevezetése H2 → `stopped`** | ugyanott |
 | A3 | Egyszerre pontosan egy prioritásos jelzés látszik | `vision_one_cue_test.dart` |
 | A4 | Alacsony megbízhatóságnál az eredmény nem kategorikus | `vision_degraded_test.dart` |
-| A5 | Hő-korlát és követés-vesztés külön, kimondott állapot | ugyanott |
-| A6 | Nem támogatott eszköz csak-hang alternatívát kap | `vision_permission_test.dart` |
+| A5 | Hő-korlát és követés-vesztés külön, kimondott állapot — a hő a §0.0/B3 szerinti **presentation-szolgáltatóból**, a követés-vesztés a merge-elt `VisionSessionStatus.calibrationLost`-ból; a két állapot szövege és jelzése KÜLÖNBÖZIK | ugyanott |
+| A6 | Nem támogatott eszköz csak-hang alternatívát kap — a §0.0/B4 szerinti, tesztből felülírható **presentation-szintű képesség-szolgáltatóból** (az `application/` `skip()` útja változatlan) | `vision_permission_test.dart` |
 | A7 | A kamera és a mikrofon minden kilépési úton felszabadul | `vision_cleanup_test.dart` |
 | A8 | A hibakereső csontváz productionben nem elérhető | `vision_one_cue_test.dart` |
 | A9 | A kör §3-ban megnevezett MINDEN képernyőről golden-felvétel készül és be van commitolva — 412×915 compact portrait ÉS `textScaleFactor: 2.0` | `e13_r30_screens_golden_test.dart` + a `test/ui/goldens/*.png` a diffben |
@@ -287,7 +482,7 @@ jelzést egyszerre → az **A3** cellának PIROSNAK kell lennie → állítsd vi
 ## 7. Kötelező ellenőrzések
 
 ```bash
-tools/round-gate.sh test/features/vision/vision_permission_test.dart test/features/vision/vision_one_cue_test.dart test/features/vision/vision_cleanup_test.dart test/features/vision/vision_degraded_test.dart test/ui/goldens/e13_r30_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
+tools/round-gate.sh test/features/vision/vision_permission_test.dart test/features/vision/vision_one_cue_test.dart test/features/vision/vision_cleanup_test.dart test/features/vision/vision_degraded_test.dart test/features/vision/presentation/ test/features/vision/data/pose_privacy_audit_test.dart test/features/vision/data/vision_export_privacy_test.dart test/features/vision/vision_offline_regression_test.dart test/ui/goldens/e13_r30_screens_golden_test.dart test/ui/ui_inventory_test.dart test/core/architecture_dependency_test.dart test/tooling/dio_factory_guard_test.dart test/tooling/preferences_plugin_import_guard_test.dart test/tooling/route_literal_guard_test.dart
 ```
 
 **A golden-felvétel (A9) rögzítése — a mérce ÚJ, nem alku tárgya:** a képernyő
@@ -297,8 +492,18 @@ KÖTELEZŐ. Minta és futó precedens: `test/features/live/chord_timeline_golden
 (valódi kapu, nem `skip`-elt rögzítő). Előállítás:
 
 ```bash
-~/flutter/bin/flutter test --update-goldens test/ui/goldens/e13_r30_screens_golden_test.dart
+tools/golden-x86.sh record test/ui/goldens/e13_r30_screens_golden_test.dart
+tools/golden-x86.sh check  test/ui/goldens/e13_r30_screens_golden_test.dart
 ```
+
+> **§0.0/B6 — a `flutter test --update-goldens` TILOS ezen a boxon.** Az ARM-en
+> rögzített pixel az x86-os merge-kapu nulla toleranciájú komparátorán MINDIG
+> piros ([ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md)
+> §2–§3, [L486](../LESSONS.md#l486), [L493](../LESSONS.md#l493)). A
+> `tools/golden-x86.sh` a CI-vel azonos architektúrán vesz fel és ellenőriz —
+> a mérce (nulla tolerancia, ugyanaz a komparátor és golden-készlet)
+> változatlan. Kilépési kódok: `0` = egyezik, `10` = valódi golden-eltérés,
+> `20` = környezeti hiba, `30` = hibás hívás.
 
 A keletkezett PNG-ket **commitolni kell** — enélkül az A9 nem teljesült. A
 márkabetűtípusok a teszt-hostban nem töltődnek be (fallback face); ez a
@@ -336,5 +541,19 @@ kézi láncolása OOM-ot ad (L05). A kötelező gate-et **TILOS háttérbe küld
   fejlesztői kényelem viszi ki (A2).
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+Kötelezően rögzítendő pontok (a pre-flight mérései miatt):
+
+- [ ] a fake képkocka-folyam használata és MIÉRT (§0.0/B1 — nincs
+      vision modell-bináris a fán, `visionEnabled` alapból `false`);
+- [ ] a Vision Result felület route NÉLKÜLI elérési útja (§0.0/B10);
+- [ ] a hő- és a követés-vesztés állapot elkülönítése, a két szöveg
+      megnevezésével (§0.0/B3, A5);
+- [ ] a valódi-sértés próba (két egyidejű jelzés → az A3 PIROS →
+      visszaállítva), a tényleges kimenettel;
+- [ ] a `tools/golden-x86.sh record` és `check` KIMENETE, valamint a
+      commitolt PNG-k listája (A9);
+- [ ] a `ui_inventory` szám (91 → 92, vagy változatlan 91, ha nem
+      készült új `*_screen.dart`).
 
 ## 11. Review — a Claude tölti ki
