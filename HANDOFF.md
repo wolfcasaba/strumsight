@@ -1,5 +1,58 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R30 KÉSZ — Vision Setup, Coach Stage és Result UI — PR [#475](https://github.com/wolfcasaba/strumsight/pull/475), squash `d25c6932` (2026-08-27)
+
+Az UI-45–UI-47 **kamera-, kalibrációs, élő-jelzés és eredmény-felülete**
+adatvédelmi és hő-védelemmel (SDD Ch13 Kör 30). A kör **ADR-t nem írt** — a
+kiosztott `0288` 2026-08-15 óta merge-elt (`5b32bd8e`); a sávon a
+**tizenharmadik** ADR nélküli kör egymás után (E13-R17…R30). Implementer
+`sonnet-impl` (Claude Sonnet 5, `--effort high`), orchesztrátor/reviewer Claude
+Opus 5, **0 javító kör** — a review első fordulóban APPROVED (0 BLOCKER,
+0 MAJOR, 3 MINOR, 4 NOTE, `docs/reviews/e13-r30-review.md`).
+
+**A brief SAJÁT kötelező pre-flightja megtérült (§0.0/B1).** A brief fejléce
+előírta annak mérését, elérhető-e a vision modell-bináris és a képkocka-forrás.
+Mérve: a `model_manifest.json` MINDKÉT `vision_models[]` bejegyzése
+`status: deferred`, a `sha256` csupa nulla, és az `assets/ml/*_deferred.tflite`
+fájlok **nincsenek a fán**; a `FeatureFlags.visionEnabled` alapértéke `false`.
+A kör ezért végig a **fake képkocka-folyamra** (`FakeCameraCapture`) és
+teszt-oldali provider-felülírásra épült — ezt a §10 rögzíti.
+
+**A `lib/features/vision/` előtag SZŰKÜLT `presentation/`-re (§0.0/B2).** Az
+eredeti könyvtár-előtag magába foglalta a `data/landmarks/**` képfeldolgozást
+és a teljes `domain/**`-t, amit viszont a brief §3-a kimondottan tilt — a lista
+és a tilalom ellentmondott egymásnak. A szűkítés mérve elég volt: az egy-jelzés
+prioritása MÁR KÉSZ a domainben (`CueBudget.selectRealtime` egyetlen
+`VisionInsight?`-ot ad), és a három `.acquire(` hívó mind a presentationon
+KÍVÜL van.
+
+**Két acceptance-cella NEM volt előállítható a merge-elt állapotgépből.** A
+`VisionSessionStatus` 15 értéke közül egyik sem hő-jellegű, és a
+`ThermalStateAdapter`-nek **nulla** production hívója van (A5); a
+`VisionSetupStep.audioOnly` egyetlen előállítója pedig a user `skip()`-je, a
+SDD-ben megnevezett `VisionCapability` típus a fán nem létezik (A6). Mindkét
+cella **presentation-szintű, tesztből felülírható szolgáltatóra** került — a
+követés-vesztés viszont a merge-elt `calibrationLost`-ból jön, tehát a két
+állapot gépileg is elkülönül.
+
+**Az implementer 3600 s-nél timeoutolt — commit ELŐTT.** `dirty_files=23`,
+`head` a pre-flight commit. A wrapper scope-auditja viszont LEFUTOTT
+(`scope_audit=ok`, 23 fájl), tehát a mért fa **nem volt elveszett munka**: az
+orchestrátor commitolta, és a teljes mércét ő futtatta le
+([L512](docs/LESSONS.md#l512)). `round-gate.sh` **19/19 zöld**, scope-audit
+0 sértés, `security-reviewer` (kötelező, `risk=high`) **PASS**, és négy
+mutáció-ölő valódi-sértés próba mind a **kijelölt** cellát váltotta pirosra.
+
+**Három MINOR maradt nyitva** (merge nincs blokkolva): a képesség- és a
+hő-szolgáltató ma konstans defaultot ad, tehát az A6/A5 production-úton még
+nem hajtható meg — a valódi jelforrás bekötése az `application/` réteget
+kívánná, ami a kör tilos zónája volt, és ezt a §0.0/B3–B4 előre kimondta; a
+megőrzés-státusz pedig a FUTÓ Stage-en nem hangzik el, csak a belépésnél és a
+kilépésnél (ADR 0288 §2 „végig látható").
+
+**Következő kör:** `E13-R31` — Progress és Skills UI
+(`docs/rounds/e13-r31-progress-and-skills.md`), új sessionben.
+
 ## ✅ E13-R29 KÉSZ — Coach Home, Tutor és Debrief UI — PR [#474](https://github.com/wolfcasaba/strumsight/pull/474), squash `7dd21a64` (2026-08-27)
 
 Az UI-42–UI-44 **provenance-tudatos** AI-coaching felülete (SDD Ch13 Kör 29):

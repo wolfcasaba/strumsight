@@ -19934,3 +19934,76 @@ ennek a körnek a **tiltott zónája** (ADR 0087 §4). A lecke a lelet-szöveg
 pontosítását kéri egy jövőbeli governance-körtől (mondja ki, hogy a 2. ág
 vállalása mellett a lelet bent marad, és a `--level base` a mérce); addig ez a
 lecke a hivatkozható indoklás.
+
+## L512 — A `timeout` kör-jelzés `dirty_files > 0` mellett NEM elveszett munka: a wrapper scope-auditja a kilépés UTÁN akkor is lefut, és az `ok` verdikt a mért fát menthetővé teszi (E13-R30, 2026-08-27)
+
+**Mit mértünk.** Az E13-R30 implementere (`sonnet-impl`) a wrapper **3600 s**
+abszolút időkorlátjába ütközött, **mielőtt** bármit commitolt volna. A
+jelzésfájl:
+
+```
+status=timeout   dirty_files=23   head=ec5d7da0 (a pre-flight commit)
+scope_audit=ok   scope_audit_base=ec5d7da0   scope_audit_changed=23
+```
+
+A `head` tehát még a kör INDULÁSI commitján állt: a teljes implementáció — 3
+képernyő, 2 provider, 4 acceptance-teszt, a golden-teszt és 6 felvett PNG,
+1736 sor — **verziókövetetlenül** ült a munkapéldányban.
+
+**A megkülönböztetés.** A [L510](#l510) azt rögzíti, hogy `timeout` mellett a
+§10 handoff „a kapu zölden lefutott" állítása BIZONYÍTATLAN — ez igaz, és itt
+is így kezeltük (a teljes mércét a reviewer futtatta újra). Ebből azonban NEM
+következik, hogy a fa maga is gyanús. A wrapper `round-scope-audit.sh`-ja a
+futás kilépése UTÁN, a jelzéstől függetlenül fut le, és a `scope_audit=ok`
+egy **gépi**, nem bemondásos állítás: a 23 megváltozott útvonal mind a brief
+`allowed_paths`-án belül volt.
+
+**A helyes lépés ezért nem az újrakezdés.** Egy `timeout` + `dirty_files>0` +
+`scope_audit=ok` hármasnál az orchestrátor a mért fát commitolja, és MINDEN
+további mérést azon a HEAD-en végez. Az E13-R30-ban ez így is történt
+(`5258957d`), és a rá futtatott `round-gate.sh` **19/19 zöld** lett — vagyis a
+munka kész volt, csak a jelzés nem érkezett meg hozzá. Az újraimplementálás
+1736 sort és egy teljes golden-felvételi ciklust dobott volna el.
+
+**Amitől ez NEM lazítás:** a scope-audit csak azt mondja meg, hogy a fa a
+listán belül van; hogy a fa HELYES-e, változatlanul a kapu és a független
+review dönti el. A menthetőség kritériuma tehát hármas, és a `scope_audit`
+bármely más értéke (`VIOLATION`, `skipped`, `error`) esetén ez a lépés
+**tilos** — ott a mérés maga hiányzik.
+
+**Őrteszt:** nincs — a lelet az orchestrátor döntési szabálya, nem kódút; a
+gépi fedezet a wrapper meglévő `scope_audit=` kulcsa, amit az ADR 0138 már
+kötelezővé tesz, és amit ez a lecke csak ÉRTELMEZ.
+
+## L513 — `testWidgets` fake-clock zónája alatt egy broadcast `StreamController.close()` awaitolása SOSEM tér vissza, miközben sima `test()`-ben azonnal lezárul — az erőforrás-elengedést mérő cella emiatt a teszt saját időkorlátjáig fagy (E13-R30, 2026-08-27)
+
+**Mit mértünk.** Az E13-R30 A7-cellái (a kamera minden kilépési úton
+felszabadul) a `FakeCameraCapture.close()`-t várják be. A `close()` egy
+broadcast `StreamController.close()`-t ad vissza, aminek a Future-je a
+`testWidgets` fake-async zónájában **nem** ütemeződik ki: a cella nem hibázik,
+hanem a `flutter test` saját, sokkal hosszabb időkorlátjáig blokkol — nem a
+`pumpAndSettle` rövid ciklusáig. UGYANAZ a hívás egy sima `test()`-ben
+azonnal lezárul, ezért a különbség első ránézésre a kamera-kódnak tűnik.
+
+**A javítás nem a production kódban van.** Az elengedést váró lépést
+`tester.runAsync(...)`-ba kell csomagolni — az kilép a fake-async zónából, és
+a broadcast controller lezárása normálisan befejeződik:
+
+```dart
+await tester.runAsync(
+  () => container.read(visionSessionControllerProvider.notifier).stop(),
+);
+await tester.pumpAndSettle();
+```
+
+**Miért érdemes leírni.** Az erőforrás-elengedés a legérzékenyebb
+acceptance-osztályunk (kamera, mikrofon, lease, wakelock — lásd
+[L217](#l217), [L449](#l449)), és pont ezeknél a celláknál a legerősebb a
+kísértés, hogy a fagyást „a takarítás nem fut le" hibaként diagnosztizáljuk,
+és a production kódot alakítsuk át miatta. A tünet a teszt-hostban van.
+
+**Őrteszt:** `test/features/vision/vision_cleanup_test.dart` és
+`test/features/vision/vision_permission_test.dart` — mindkettő a
+`_runRealAndSettle` segédjén át hívja az elengedést, és a segéd
+doc-commentje rögzíti a mért okot; a cellák a guard-mount eltávolítására
+pirosra váltanak (E13-R30 review §3, mutáció-ölő próba).
