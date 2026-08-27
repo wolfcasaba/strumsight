@@ -1,5 +1,74 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E13-R27 KÉSZ — Analysis Overview, Timeline, Metric és Compare UI — PR [#471](https://github.com/wolfcasaba/strumsight/pull/471), squash `245a6ad3` (2026-08-27)
+
+Az UI-37–UI-39 Studio Analytics rendszere (SDD Ch13 Kör 27): **áttekintő**,
+**virtualizált idővonal**, **mérőszám-részletnézet** és **session-összehasonlítás**.
+A kör **ADR-t nem írt** — a kiosztott [`0286`](docs/adr/0286-charts-need-a-text-alternative.md)
+2026-08-15 óta merge-elt (`6e7877de`), újraírása **H1** lett volna. A sávon ez a
+**tizedik** ADR nélküli kör egymás után (E13-R17…R27).
+
+**Öt új design-system analitika-komponens** (`lib/core/design_system/components/analytics/`):
+`SsScoreRing`, `SsTrendIndicator`, `SsConfidenceLegend`, `SsChartTextSummary`,
+`SsEventList` — mind exportálva a `public.dart`-ból, **mind bekötve productionbe**
+(nincs halott komponens).
+
+**A pre-flight legfontosabb lelete: a brief megint a MÁSIK analyze-fát írta le.**
+A `brief-lint` `S13` jelezte, hogy a `lib/features/analyze/results/` előtag nulla
+fájlt fed — de a mélyebb hiba ugyanaz volt, mint az R26-nál ([L503](docs/LESSONS.md#l503)):
+a `lib/features/analyze/` a **legacy V1** fa, a kör öt eredmény-képernyője viszont
+a **V2 `lib/features/audio_analysis/presentation/`** fában él, és ott **MÁR
+LÉTEZETT** — a merge-elt E13-R26 tilos zónája szó szerint „a Kör 27 öt
+eredmény-képernyője" néven tartotta fenn ennek a körnek. A kör tehát **migrált és
+kiegészített**, nem nulláról épített.
+
+**A csere ára egy ÚJ lint-lelet volt (S11), és a feloldása szűkítés lett, nem tágítás.**
+A meglévő fát célozva kilenc, a briefen KÍVÜL élő teszt pinneli a képernyőket. A
+lint első ága (vedd fel őket a listára) az orchesztrátornak **H3** ([L478](docs/LESSONS.md#l478)),
+ezért a **második** ág: a §0.0/B/B8 kimérte a pontos pineket (`find.byType(Card)`,
+`InsightCard` runtimeType 4/5 darabszám, osztálynevek, meglévő l10n feliratok), és
+szerződéssé tette, hogy a migráció **ADDITÍV** — típus-cserét (`SsCard`,
+`SsInsightCard`) a kör nem végez. A kilenc pin a `gate_tests`-ben fut, de nem
+szerkeszthető; a **57/57 zöld** ennek gépi igazolása.
+
+**Az érdemi új munka (a domain már helyes volt):** a §0.0/B/B6 cellánként kimérte,
+mi VAN már és mi ÚJ. A hiányzó ≠ nulla (A1), a nem támogatott állapot (A2), a
+confidence (A3) és a kompatibilitás-verdikt (A6–A7) a domainben **helyesen élt** —
+a kör ezeket **megőrizte és gépileg lepinnelte**. Valódi új munka: a
+**virtualizált idővonal** (A4 — a mohó `ListView(children:)` `ListView.builder`-ré
+vált, a hotspot-lista `itemExtent`-es `SsEventList`), a **diagram-szöveg-összegzés
+és bejárható esemény-lista** (A5), a **kijelölés → gyakorlás callback** (A8,
+mindig `start <= end`-re normalizálva) és a **goldenek** (A9).
+
+**A review egy MAJOR-t talált, amit MINDEN gépi mérce átengedett.** A lokális
+kapu 16/16 zöld, a Full Gate és a Router CI zöld, a golden-teszt valódi kapu — és
+a commitolt PNG **tényleges megnyitása** mégis egy tátongó, 172 px-es üres blokkot
+mutatott az idővonalon (a 915 px-es keret ~19%-a): az `SsEventList` fix 220 px
+magassága EGY sor mellett halott helyet hagyott. A golden **rögzít, nem ítél** —
+az első felvételnek nincs mihez képest csúnyának lennie ([L507](docs/LESSONS.md#l507)).
+A javító kör `math.min(height, rows.length * rowExtent)`-tel zárta, a
+`ListView.builder`-t és az `itemExtent`-et érintetlenül hagyva (a kézenfekvő
+`shrinkWrap: true` a layout-hibát teljesítmény-hibára cserélte volna).
+
+**A második lelet a MÉRCE gyengesége volt, és erősítéssel zárult.** A reviewer
+próbája kimutatta, hogy az A4 cella **nem diszkriminál**: a mohó
+`ListView(children:)` alakon — mind a 3000 sor-widget előre allokálva — a teszt
+**5/5 zölden** ment át, mert a `find.byWidgetPredicate` az ELEM-fán mér, és a
+`ListView(children:)` is csak a viewportot mountolja. A javító kör a
+**delegátum-típusra** zárt (`isA<SliverChildBuilderDelegate>()`), és a próba
+megismételve PIROS lett ([L506](docs/LESSONS.md#l506)).
+
+**Mérce:** lokális kapu **16/16 ZÖLD** mindkét körben (a kilenc pin 57/57),
+scope-audit `OK`, `ui_inventory` `hasLength(89)` **változatlan** (a kör nem hozott
+új képernyőt), exact-SHA `59d1ddd8`: Full Gate
+[33025011510](https://github.com/wolfcasaba/strumsight/actions/runs/33025011510) +
+Router CI [33025012728](https://github.com/wolfcasaba/strumsight/actions/runs/33025012728)
+mindkettő **success**. Biztonsági felület: NULLA (a `lib/` diff nem érint
+hálózatot, tárolást, engedélyt, titkot — tisztán prezentációs kör).
+
+**Következő kör:** `E13-R28` — Unified Library
+([`docs/rounds/e13-r28-unified-library.md`](docs/rounds/e13-r28-unified-library.md)).
+
 ## ✅ E13-R26 KÉSZ — Analyze Home, Recording és Processing UI — PR [#470](https://github.com/wolfcasaba/strumsight/pull/470), squash `d9f46623` (2026-08-26)
 
 Az UI-34–UI-36 megvalósítása (SDD Ch13 Kör 26): **Analyze kezdőképernyő**,

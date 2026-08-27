@@ -19644,3 +19644,102 @@ itt jóindulatú volt, de a vizsgálat nem hagyható ki.
 **Őrteszt:** nincs — a kulcs kibocsátása a wrapper (`tools/`) hatásköre, amit
 a kör-session nem módosíthat (ADR 0087 §4); a védelem az orchestrátor kézi
 pótlása.
+
+## L506 — A „virtualizált-e" cella, ami a MOUNTOLT sorokat számolja, nem diszkriminál: a mohó `ListView(children:)` ugyanúgy átmegy rajta (E13-R27 review F2, 2026-08-26)
+
+**Mit mértünk.** Az E13-R27 fő acceptance-cellája (A4) így zárt a
+virtualizációra:
+
+```dart
+final builtRows = find.byWidgetPredicate((w) =>
+    w is Semantics && w.key is ValueKey<String> &&
+    (w.key! as ValueKey<String>).value.startsWith('event-list-row-'));
+expect(builtRows.evaluate().length, lessThan(30));   // 3000 hotspot mellett
+```
+
+A reviewer eldobható próbája a `SsEventList.build`-ban a `ListView.builder`-t
+a MOHÓ alakra cserélte — mind a 3000 sor-widget előre allokálva:
+
+```diff
+-        child: ListView.builder(
+-          key: scrollableKey, itemExtent: rowExtent, itemCount: rows.length,
+-          itemBuilder: (context, index) { final row = rows[index]; return Semantics(
++        child: ListView(
++          key: scrollableKey,
++          children: <Widget>[ for (final row in rows) Semantics(
+```
+
+```
+$ flutter test test/features/analyze/results/timeline_virtualization_test.dart
+00:07 +5: All tests passed!
+```
+
+**A cella ZÖLD maradt a tiltott implementáción** — pontosan az [L443](#l443)
+hibaosztály, csak widget-szinten.
+
+**Miért.** A `find.byWidgetPredicate` az ELEM-fán mér, a `ListView(children:)`
+pedig `SliverChildListDelegate`-tel szintén **csak a viewportban lévő
+gyerekeket mountolja**. A két alak különbsége nem a mountolás, hanem a
+widget-objektumok mohó allokációja — amit egy „hány sor épült fel" állítás
+szerkezetileg nem lát. A cella így a *használhatatlanná tévő* alakokat fogja
+(`shrinkWrap: true` vagy `Column` → mind a 3000 mountolva), a mohó
+allokációt nem.
+
+**A szabály.** Lustaságra a **delegátum-típusra** kell zárni, nem a mountolt
+darabszámra:
+
+```dart
+final list = tester.widget<ListView>(find.byKey(const Key('…')));
+expect(list.childrenDelegate, isA<SliverChildBuilderDelegate>());
+```
+
+A javító kör pontosan ezt vette fel, és a próba megismételve **PIROS** lett:
+`Expected: <Instance of 'SliverChildBuilderDelegate'> / Actual:
+SliverChildListDelegate:<…(estimated child count: 3000)>`. Általánosítva:
+**ha egy cella egy TELJESÍTMÉNY-tulajdonságot állít, mérd meg, hogy a
+tulajdonság hiánya tényleg pirosra váltja-e** — a „bounded count" alakú
+állítások szinte mindig gyengébbek, mint amilyennek látszanak.
+
+**Őrteszt:** `test/features/analyze/results/timeline_virtualization_test.dart::a 3000-hotspot fixture builds only a bounded number of event-list rows`
+
+## L507 — A golden ROGZÍT, nem ÍTÉL: a layout-defektet csak az fogja meg, ha a reviewer TÉNYLEGESEN megnézi a commitolt PNG-t (E13-R27 review F1, 2026-08-26)
+
+**Mit mértünk.** Az E13-R27 `A9` cellája teljesült: nyolc golden PNG
+commitolva, a golden-teszt valódi kapu (nincs `skip`, `matchesGoldenFile`), a
+lokális gate 16/16 zöld, a Full Gate és a Router CI is zöld. **Minden gépi
+mérce elfogadta a kört.**
+
+A reviewer ennek ellenére megnyitotta a PNG-t — és egy MAJOR layout-defekt
+látszott rajta: az új `SsEventList` magassága `height = 220` **konstans** volt,
+a golden-fixture viszont EGY hotspotot publikál, tehát
+
+```
+220 px doboz − 1 sor × 48 px itemExtent = 172 px HALOTT hely
+```
+
+— a 915 px-es compact portrait keret **~19%-a**, egy tátongó üres blokk a
+leírás és a hotspot-navigációs gombok között, mindkét kereten (1.0 és 2.0
+textScale). A tipikus felvételen kevés hotspot van, tehát ez a **gyakori
+eset**, és renderelési hibának néz ki.
+
+**Miért nem foghatta gép.** A golden-teszt azt méri, hogy a kép MEGVÁLTOZOTT-e
+az elfogadott felvételhez képest — az ELSŐ felvételnek nincs mihez képest
+csúnyának lennie. A brief §7 ezt előre kimondta: *„a záró vizuális regressziós
+kör csak azt tudja megmondani, hogy valami MEGVÁLTOZOTT — azt, hogy a képernyő
+eleve csúnya-e, a saját körében kell látni."* A kör-review az EGYETLEN pont,
+ahol ez az ítélet megszülethet.
+
+**A szabály.** Ha a kör goldent vesz fel, a review **kötelező** lépése a PNG-k
+tényleges megnyitása — a fájl létezése és a teszt zöldje NEM helyettesíti. A
+javítás után a goldeneket újra kell venni (`tools/golden-x86.sh record`), és a
+diffben az új PNG a bizonyíték.
+
+**Kapcsolódó, ugyanebben a körben:** a javítás alakja is számít — a
+tartalomhoz kötött magasság (`math.min(height, rows.length * rowExtent)`) a
+virtualizációt ÉRINTETLENÜL hagyja, míg a kézenfekvőnek tűnő `shrinkWrap: true`
+minden gyereket felépítene, azaz a layout-hibát a teljesítmény-hibával
+cserélné le ([L506](#l506)).
+
+**Őrteszt:** nincs — vizuális ítélet; a golden a bizonyíték HORDOZÓJA, nem a
+mércéje. A gépi rész (`e13_r27_screens_golden_test.dart`) innentől a javított
+elrendezést pinneli.
