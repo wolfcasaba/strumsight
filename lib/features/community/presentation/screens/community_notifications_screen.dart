@@ -1,5 +1,5 @@
 /// Community notification inbox screen (E09-R20, ADR 0414, brief
-/// §1 / §3 / §6).
+/// §1 / §3 / §6; design-system migration + A4 doc-fix E13-R34).
 ///
 /// The screen renders the recipient's notification inbox with
 /// per-row mark-read-on-tap, a "Mark all as read" action, and
@@ -7,11 +7,20 @@
 /// quiet-hours toggle. The push gateway is a refresh trigger
 /// only — the inbox is the source of truth (ADR 0414 §D3).
 ///
-/// **Inbox tap action (A1, §3).** Tapping a row marks it read
-/// and, when a ``relatedContentId`` is present, deep-links the
-/// user to the entity (a post, a comment, a follow-request
-/// case). The controller's ``markRead`` is the single mutation
-/// path; the screen does NOT call the repository directly.
+/// **Inbox tap action (A1, A4, §3).** Tapping a row marks it read
+/// via the controller's ``markRead`` — the single mutation path;
+/// the screen does NOT call the repository directly, and it does
+/// NOT navigate anywhere (measured §0.0.B/B8 — the corrected claim:
+/// an earlier draft of this comment said the tap "deep-links the
+/// user to the entity", which was never true of the code below).
+/// [CommunityNotificationItem] carries no route / URL / deep-link
+/// field — only ``relatedContentId`` — and the community screens
+/// are not registered in ``lib/app/routing/**`` (out of this
+/// round's scope, §0.0.B/B8). The row's visible AND ``Semantics``
+/// surface is built exclusively from ``titleKey`` / ``bodyKey`` /
+/// ``kind`` / ``isRead`` — never from ``relatedContentId`` — so a
+/// private club or challenge a non-member is not entitled to see
+/// cannot leak through a notification row (A3 / A4).
 ///
 /// **Per-category push toggle (A6, §3).** The screen renders a
 /// per-kind switch panel (the 10 wire kinds of
@@ -31,11 +40,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:strumsight/core/design_system/public.dart';
+
 import '../../../../core/foundation/app_failure.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../application/controllers/notification_controller.dart';
 import '../../domain/entities/notification_item.dart';
 import '../../domain/value_objects/content_id.dart';
+import '../widgets/community_theme_scope.dart';
 
 /// Public screen — ``ConsumerWidget`` so the test surface is
 /// the ``ProviderScope`` override of the
@@ -58,23 +70,26 @@ class CommunityNotificationsScreen extends ConsumerWidget {
     // error → the retry view.
     final hasData = asyncState.value?.items.isNotEmpty ?? false;
     final isMutating = asyncState.value?.isMutating ?? false;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(localizations.communityNotificationsTitle),
-        actions: <Widget>[
-          if (hasData)
-            TextButton(
-              onPressed: isMutating ? null : () => notifier.markAllRead(),
-              child: Text(localizations.communityNotificationsMarkAllRead),
-            ),
-        ],
-      ),
-      body: asyncState.when(
-        data: (state) => _NotificationsBody(state: state, notifier: notifier),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _ErrorView(
-          failure: UnknownFailure(code: FailureCode.unknown, cause: error),
-          onRetry: notifier.load,
+    return CommunityThemeScope(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(localizations.communityNotificationsTitle),
+          actions: <Widget>[
+            if (hasData)
+              TextButton(
+                onPressed: isMutating ? null : () => notifier.markAllRead(),
+                child: Text(localizations.communityNotificationsMarkAllRead),
+              ),
+          ],
+        ),
+        body: asyncState.when(
+          data: (state) => _NotificationsBody(state: state, notifier: notifier),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => _ErrorView(
+            failure: UnknownFailure(code: FailureCode.unknown, cause: error),
+            localizations: localizations,
+            onRetry: notifier.load,
+          ),
         ),
       ),
     );
@@ -124,7 +139,11 @@ class _NotificationsBodyState extends ConsumerState<_NotificationsBody> {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.lastError != null && state.items.isEmpty) {
-      return _ErrorView(failure: state.lastError!, onRetry: notifier.load);
+      return _ErrorView(
+        failure: state.lastError!,
+        localizations: localizations,
+        onRetry: notifier.load,
+      );
     }
     if (state.items.isEmpty) {
       return ListView(
@@ -431,14 +450,18 @@ class _QuietHoursSwitch extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.failure, required this.onRetry});
+  const _ErrorView({
+    required this.failure,
+    required this.localizations,
+    required this.onRetry,
+  });
 
   final AppFailure failure;
+  final AppLocalizations localizations;
   final Future<void> Function() onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -450,9 +473,9 @@ class _ErrorView extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          TextButton(
-            onPressed: onRetry,
-            child: Text(localizations.communityNotificationsRetry),
+          SsButton(
+            onPressed: () => onRetry(),
+            label: localizations.communityNotificationsRetry,
           ),
         ],
       ),
