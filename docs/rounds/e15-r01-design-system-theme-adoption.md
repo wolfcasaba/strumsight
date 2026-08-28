@@ -241,4 +241,107 @@ jelenti; ha ez nem oldható meg a listán belül, a kimenet `stopped`.
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Folytatás (Sonnet 5, 2026-08-28):** az implementáció (`5756204f`) már
+készen állt a folytatás indulásakor — a `lib/app/strumsight_app.dart`
+mindhárom téma-hivatkozása (`theme:`, `darkTheme:`, a bootstrap-hibaág
+`theme:`) `SsLightTheme.data()`/`SsDarkTheme.data()`-ra volt kötve, a
+`public.dart` barrelen át. A folytatás dolga a §7 gate ELŐTÉRBEN futtatása,
+az A4 mátrix ellenőrzése, a `migration-status.md` frissítése (A6), a
+valódi-sértés próba, és ez a szakasz volt.
+
+### A §7 gate — ELŐTÉRBEN, kétszer zöldre futtatva
+
+A gate-sort (`tools/round-gate.sh test/app/theme_adoption_test.dart
+test/ui/goldens/e15_r01_theme_adoption_test.dart
+test/accessibility/semantics_contract_test.dart
+test/app/navigation/adaptive_scaffold_test.dart
+test/core/design_system/foundations_test.dart
+test/app/bootstrap_failure_app_test.dart`) ELŐTÉRBEN, `run_in_background`
+nélkül, csővezeték nélkül futtattam — először a meglévő implementáción
+(ZÖLD, `format`/`analyze`/mind a hat teszt/`architecture`/`secrets`/`l10n`),
+majd a valódi-sértés próba után újra (szintén ZÖLD, lásd lent). Az A4
+mátrix mind a 48 kombinációja (6 képernyő × 2 fényerő × 2 locale × 2
+szövegskála) `overflow`/kivétel nélkül futott le, kizárási lista, `skip`
+vagy tolerancia-emelés NÉLKÜL.
+
+### A4 — kizárási lista ellenőrzése
+
+`grep -in "skip|exclude|tolerance"
+test/ui/goldens/e15_r01_theme_adoption_test.dart` → nulla találat. A mátrix
+a §5.5 előírása szerint kizárás nélküli.
+
+### `docs/ui/migration-status.md` frissítése (A6)
+
+Hozzáadtam egy E15-R01 szakaszt a fájl elejére: a MÉRT új állapot, hogy
+**96/96** production screen forrás oldhat fel tokent az app témájából
+(`test/app/theme_adoption_test.dart` A6 cellája ugyanezt a 96-ot pinneli a
+`Directory('lib/features')` bejárásával) — ez token-ELÉRHETŐSÉG, nem
+komponens-migráció mérése, ezért a lenti "Per-feature status" tábla
+(43/96 migrált) EBBEN a körben változatlan marad. A "Canonical token source
+by migration phase" tábla harmadik sorát MÉRT módon elavultnak jelöltem
+(a burkolók immár redundánsak, mert az app `ThemeData`-ja már közvetlenül
+hordozza mind a négy extensiont), és a sor felsorolását a tényleges KILENC
+burkolóra javítottam (`ProgressThemeScope`, `AuthThemeScope`,
+`SettingsThemeScope`, `LibraryThemeScope`, `ShareThemeScope`,
+`GamificationThemeScope`, `CommunityThemeScope`, `OfflineAiThemeScope`,
+`VisionThemeScope` — mindegyik `grep -rn "class .*ThemeScope" lib/`-vel
+ellenőrizve, pontos fájlnévvel/osztálynévvel). A burkolókat NEM töröltem
+(`lib/features/**` tilos zóna).
+
+### Valódi-sértés próba (KÖTELEZŐ, §6.2/§9.4) — a MÉRT piros
+
+A `darkTheme:`-et ideiglenesen visszaállítottam `AppTheme.dark()`-ra (a
+szükséges `import '../core/theme/app_theme.dart';` sorral együtt), és
+ELŐTÉRBEN újrafuttattam a §7 gate-sort. A gate a 3. lépésnél (`test
+test/app/theme_adoption_test.dart`) PIROSRA váltott, kilépési kód 1, a
+szó szerinti mért kimenettel:
+
+```
+00:00 +0: A1: the running app theme carries all four design-system extensions, light and dark
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: not null
+  Actual: <null>
+SsColorScheme missing from the app theme
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure> (file:///home/ubuntu/ss-sonnet-impl-e15-r01/test/app/theme_adoption_test.dart:54:9)
+...
+00:01 +0 -1: A1: the running app theme carries all four design-system extensions, light and dark [E]
+  Test failed. See exception logs above.
+00:01 +0 -1: A2: a design-system component resolves tokens without a ThemeScope wrapper, under the app theme
+00:02 +1 -1: A3: the bootstrap-failure recovery screen also gets the design-system theme
+00:02 +2 -1: A7: the app theme colorScheme/textTheme/scaffoldBackgroundColor equal the legacy AppTheme (additive-only adoption, ADR 0466 D2)
+00:02 +3 -1: A6: every production screen source can now resolve tokens from the app theme (ADR 0466 D1) — count must match docs/ui/migration-status.md and tool/ui_inventory.dart
+00:02 +4 -1: A8: strumsight_app.dart imports the design-system theme through the public barrel (ADR 0466 D3), not the theme files directly
+00:02 +5 -1: Some tests failed.
+
+Failing tests:
+  /home/ubuntu/ss-sonnet-impl-e15-r01/test/app/theme_adoption_test.dart: A1: the running app theme carries all four design-system extensions, light and dark
+
+    → [3] test test/app/theme_adoption_test.dart: PIROS (kilépési kód 1)
+```
+
+A hiba pontosan az A1 SÖTÉT ágán jelentkezett (a `for (final theme in
+[app.theme, app.darkTheme])` ciklus a világos ágon átment, majd a sötét
+ágon buktatta el `SsColorScheme missing from the app theme` üzenettel) —
+ez a §6.1 mátrix pontosan előírt kimenete ("A `theme:` átáll, de a
+`darkTheme:` marad `AppTheme.dark()`" → "A1 (sötét ág)"). Ezután a
+`darkTheme:`-et visszaállítottam `SsDarkTheme.data()`-ra, az importot
+töröltem, és a `git diff lib/app/strumsight_app.dart` üres — a fájl
+byte-azonos a `5756204f` commitban lévővel. A gate-et harmadszor is
+lefuttattam ELŐTÉRBEN: MINDEN lépés ZÖLD (format, analyze, mind a hat
+teszt, architecture, secrets, l10n).
+
+### Nyitva maradt
+
+- A `*ThemeScope` burkolók (kilenc db) törlése/kivezetése — ez a §3
+  szerint SEM ennek a körnek a dolga; a `migration-status.md` most már
+  MÉRT módon elavultnak jelöli őket, de a tényleges eltávolítás a
+  képernyő-migrációs körök (E15-R05…) hatásköre.
+- A brief §0.0-ban is jelzett negyedik fokozat (magas kontraszt)
+  hozzáférési beállításba kötése — ADR 0466 D5 szerint külön kör.
+- A `SsThemeExtensions`-hez NEM nyúltam: a mérés (§0.0/R1) szerint nincs
+  tényleges hiány, és a gate zöld a fájl érintetlenül is.
+
 ## 11. Review — a Claude tölti ki
