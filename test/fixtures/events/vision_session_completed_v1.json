@@ -1,0 +1,11 @@
+{
+  "type": "vision",
+  "eventId": "vision-session-0001415",
+  "occurredAt": "2026-08-20T10:00:00.000Z",
+  "epochDay": 20685,
+  "source": "vision",
+  "trust": "deviceObserved",
+  "schemaVersion": 1,
+  "durationMicroseconds": 150000000,
+  "score": 0.83
+}

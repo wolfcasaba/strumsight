@@ -1,0 +1,11 @@
+{
+  "type": "plan",
+  "eventId": "plan-session-0001011",
+  "occurredAt": "2026-08-18T20:00:00.000Z",
+  "epochDay": 20683,
+  "source": "practicePlan",
+  "trust": "unverified",
+  "schemaVersion": 1,
+  "durationMicroseconds": 1200000000,
+  "score": 0.55
+}

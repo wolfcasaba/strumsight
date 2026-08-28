@@ -1,0 +1,11 @@
+{
+  "type": "song",
+  "eventId": "song-session-0000456",
+  "occurredAt": "2026-08-16T18:30:00.000Z",
+  "epochDay": 20681,
+  "source": "songTrainer",
+  "trust": "deviceObserved",
+  "schemaVersion": 1,
+  "durationMicroseconds": 360000000,
+  "score": 0.64
+}
