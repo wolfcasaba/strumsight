@@ -214,6 +214,43 @@ VALÓDI, commitolt briefet hajtja át a VALÓDI scope-auditon
 (`tools.ai_router.security.audit_scope`) a mért fájllistával; a lista
 szűkülése és a könyvtár-szintű blanket-tágítás egyaránt pirosra váltja.
 
+## 0.0/e PRE-FLIGHT ÚJRAMÉRÉS (2026-08-28, orchestrátor, indítás előtt)
+
+A §0.0/c és §0.0/d már merge-elve van a `main`-en (HEAL PR #495, squash
+`ee2a2bc4`), az `ADR 0467` szintén — a kör tehát a TELJES §4 listával indul,
+és sem az ADR-t, sem a scope-ot nem írom újra (H1). A dispatch előtt a
+brief mért állításait a `main @ bbe86b1a` fán ÚJRA kimértem, mind igaz:
+
+| Állítás | Mérés | Eredmény |
+|---|---|---|
+| `adaptiveShellEnabled: false` minden környezetben | `feature_flags.dart:129` | ✅ igaz |
+| `entryLocation = adaptiveShellEnabled ? today : live` | `app_router.dart:215` | ✅ igaz |
+| `legacyRedirects` CSAK bekapcsolt shell mellett él | `app_router.dart:228` (`if (!adaptiveShellEnabled) return null;`) | ✅ igaz |
+| `appConfigProvider` default = `forEnvironment(development, …)` — ez a flip hatósugarának oka | `app_config.dart:201-208` | ✅ igaz |
+| A primer véglegesen-elutasított ága NEM görgethető, a másik ág `SingleChildScrollView` | `permission_primer_screen.dart:98-107` vs `:111-115` | ✅ igaz |
+| A `live` stat-sor rugalmatlan `Row` (`spaceEvenly`, `_ActionButton` gyermekek) | `live_screen.dart:477-` | ✅ igaz |
+| A `killSwitchPath` próza a D1 után hamissá válik | `feature_flag_registry.dart:487-492` | ✅ igaz |
+
+Visszakeresés (ADR 0312, szűkítve ELŐSZÖR): `lessons,halts,adr` — a döntő
+előzmények már hivatkozva vannak a briefben
+([ADR 0275](../adr/0275-five-area-shell-behind-a-flag.md),
+[L516](../LESSONS.md#l516), [L180](../LESSONS.md#l180),
+[ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md));
+ÚJ, eddig nem hivatkozott releváns lelet: **[L449](../LESSONS.md#l449)** — az
+`indexedStack` shell életben tartja a meglátogatott brancheket, ezért a
+mikrofont/wakelockot birtokló képernyő nem szabadul fel automatikusan. A kör
+a shellt ALAPÉRTELMEZETTÉ teszi, tehát ez az út mostantól minden fejlesztői
+és lab-környezetben él; a `live_mic_release_test.dart` és a
+`shell_lifecycle_test.dart` a §4 listán van, és ezek a MÉRT elengedési
+szerződést pinnelik — a §5.4 értelmében ezek is KIZÁRÓLAG az új belépési
+ponthoz igazíthatók, az elengedési elvárás gyengítése tilos.
+Továbbá **[L517](../LESSONS.md#l517)**: a `textScaler 2.0` keret két egymást
+követő körben mért ki addig láthatatlan túlcsordulást — a §0 STOP-protokoll
+(új képernyőn talált túlcsordulás → `legacy-backlog.md` + jelentés) pontosan
+erre a hibaosztályra való.
+
+A `brief-lint --level strict` lelete: **nincs**.
+
 ## 0.0/b A kör két, egymást feltételező fele
 
 A shell bekapcsolása UTÁN a landscape + 200%-os szövegskála út valóban elérhetővé válik a felhasználónak, tehát a két ismert túlcsordulás ettől kezdve nem elméleti. A javítás és a bekapcsolás ezért EGY kör: külön-külön mindkettő hiányos lenne.
