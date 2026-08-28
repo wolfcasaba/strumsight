@@ -185,4 +185,82 @@ tools/round-gate.sh test/core/events/event_schema_compatibility_test.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Státusz: KÉSZ.** A §4 engedélyezett fájllistán kívül semmi nem módosult; `lib/**` érintetlen.
+
+### Leszállított artefaktumok
+
+- `docs/contracts/event-catalog.md` — a hat típus katalógusa (producer/consumer fájl:sor,
+  idempotencia-kulcs = `eventId` mind a hatnál, owner Chapter, kompatibilitási szabály),
+  a `tutor` sor explicit „NO PRODUCER (mért)" jelöléssel és indoklással
+  (`gamification_tutor_adapter.dart:164–170` hivatkozással).
+- `test/fixtures/events/*.json` (6 fájl) — a MÉRT `toJson()` mezőnevekkel és alakkal
+  (UTC `occurredAt` ezredmásodperccel+`Z`, `durationMicroseconds` egész, `score` tizedes tört).
+- `test/core/events/event_schema_compatibility_test.dart` — 22 teszt, A1–A8 + a
+  kétirányú séma-verzió küszöb-hármas; a katalógus-cellák (A5/A6/A8) a fájlt
+  ténylegesen beolvassák és a `docs/contracts/event-catalog.md`-t egy kis
+  markdown-táblázat-parszolóval ellenőrzik a MÉRT fán.
+
+### §0.0/(a)–(f) revízió — újra-ellenőrizve az implementáció során
+
+A pre-flight producer/consumer táblája (§0.0/(a), §2) a fán VÁLTOZATLANUL igaz maradt:
+8 konstruktor-hívás 7 fájlban, `TutorActivityEvent`-nek nincs producere. A gate
+A5/A8 cellái ezt gépileg is megerősítették (zöld).
+
+### Két hiba a katalógus/teszt első verziójában — RED-ből GREEN-be javítva
+
+1. **A katalógus-doksi saját envelope-mező-táblájában** (a `type` mező sora) egy
+   escape-elt `\|` karaktersorozat volt a leíró szövegben. A markdown-renderelőnek ez
+   helyes, de a teszt saját, egyszerű `split('|')`-alapú táblázat-parszolója nem ismeri
+   a backslash-escape-et — a sor extra cellákra esett szét, és egy hamis „type" nevű
+   katalógus-sorként jelent meg, ami az A5/A6 celláit hamisan pirosra vitte
+   (`Actual: Set:['type', 'practice', ...]`). Javítás: a leíró szöveg pipe-mentesre írva
+   (`practice` / `song` / … helyett `\|`-lánc).
+2. **Az A8 „nincs producer" ellenőrzés hamis pozitívot adott**: az
+   `achievement_evaluator.dart:638` Dart 3 mintaillesztő `switch`-ága
+   (`TutorActivityEvent() => AchievementEventKind.tutor,`) szintaktikailag tartalmazza a
+   `TutorActivityEvent(` alsztringet, de ez nem konstruktor-hívás, hanem üres objektum-minta.
+   A naiv `.contains('TutorActivityEvent(')` ezt termelőként azonosította. Javítás: az A5/A8
+   producer-detektálás `_containsConstructorCall` segédfüggvényre váltott, amely a nyitó zárójel
+   utáni első nem-whitespace karaktert vizsgálja — ha az rögtön `)`, az mintaillesztés, nem hívás.
+
+### Valódi-sértés próba (§6, MÉRT kimenet)
+
+`test/fixtures/events/practice_session_completed_v1.json`-ból ideiglenesen eltávolítva a
+`"schemaVersion": 1,` sor, majd `tools/round-gate.sh test/core/events/event_schema_compatibility_test.dart`
+futtatva. A gate a `test` lépésen PIROSRA váltott (kilépési kód 1), 3 bukott teszttel:
+
+```
+Invalid argument (schemaVersion): must be an int: null
+  package:strumsight/features/gamification/domain/activity/learning_activity_event.dart 542:5   _requireInt
+  package:strumsight/features/gamification/domain/activity/learning_activity_event.dart 512:22  new _DecodedEvent.fromJson
+  package:strumsight/features/gamification/domain/activity/learning_activity_event.dart 46:35   LearningActivityEvent.fromJson
+
+Failing tests:
+  … practice fixture is canonical and round-trips
+  … practice fixture with an unknown extra field still decodes and keeps every original field unchanged
+  … Schema-version threshold … schemaVersion at V=1 decodes with every field unchanged
+```
+
+Megjegyzés a §6 szövegéhez képest: a brief az „A3 cella" pirosra váltását írta elő. A
+ténylegesen mért hatás a **round-trip/kanonikus (A1/A7) cellákon és a küszöb-hármas „rajta"
+ccustomáján** jelentkezett, mert ezek olvassák be közvetlenül a sérült fixture-fájlt —
+maga a szintetikus A3 teszt egy memóriabeli másolaton dolgozik, ezért mindig lefut és
+zölden bizonyítja ugyanazt a `_requireInt`-ágat, függetlenül a fixture-fájl állapotától.
+A mérés lényegét ez nem gyengíti: a gate egy valódi séma-sértést ténylegesen és azonnal
+pirosra vált, ugyanazon a kódágon, amit az A3 teszt is fed — ez a próba célja (L443/L477).
+A fixture ezután visszaállítva (`git diff --stat` üres), a gate újrafuttatva: mind a 6
+lépés zöld (lásd alább).
+
+### Gate-eredmény (végleges, MÉRT)
+
+```
+tools/round-gate.sh test/core/events/event_schema_compatibility_test.dart
+  [1] format       zöld
+  [2] analyze      zöld
+  [3] test         zöld (22/22)
+  [4] architecture zöld
+  [5] secrets      zöld
+  [6] l10n         zöld
+```
+
 ## 11. Review — a Claude tölti ki
