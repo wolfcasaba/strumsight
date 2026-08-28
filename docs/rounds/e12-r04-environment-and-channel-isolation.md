@@ -478,4 +478,74 @@ almazmazát mutatja: `backend/app/config.py`,
 (módosítva) + `docs/release/environment-matrix.md` (új) + ez a fájl (§10). A
 tilos zóna egyetlen fájlja sem érintett.
 
+### 10.5 Javító kör (review B1–B4) — a leletek lezárása
+
+A javító kör implementer-futása a `sonnet-impl` motor **3600 s abszolút
+időkorlátjába** futott bele (`status=timeout`, `scope_audit=ok`,
+`scope_audit_changed=3`), a kód-munka azonban ekkorra elkészült és a
+munkapéldányban commitolatlanul állt. Az orchestrátor a scope-auditált diffet
+ellenőrizte, a mérce-próbákat **maga futtatta le** (lásd alább), és a `8e832a21`
+commitban rögzítette. Ez nem gyengíti a mércét: minden alábbi szám a
+munkapéldányban ténylegesen futtatott parancs kimenete, és ugyanez a HEAD megy
+végig a teljes CI-kapun.
+
+**A javítás tartalma:** `hide_input_in_errors=True` a `Settings.model_config`-ban
+(B1), `not self.secret_key.strip() or …` a `_guard_staging` első ágában (B2),
+`tutor_api_key`-sor az `environment-matrix.md`-ben (B3), a validátor korábbi
+nevének kimondása doc-commentben (B4). Új gépi őrök: a
+`TestSecretsNeverLeakIntoErrors` osztály három cellája és a
+`TestStagingIsolation::test_empty_or_blank_secret_key_refuses_to_instantiate`
+két paraméterezett cellája.
+
+**B1 valódi-sértés próba** (`hide_input_in_errors=True` sor ideiglenesen
+eltávolítva):
+
+```
+$ cd backend && python -m pytest tests/test_settings.py -q -p no:randomly
+FAILED tests/test_settings.py::TestSecretsNeverLeakIntoErrors::test_unknown_env_error_does_not_leak_secret_key
+FAILED tests/test_settings.py::TestSecretsNeverLeakIntoErrors::test_unknown_env_error_does_not_leak_database_url
+FAILED tests/test_settings.py::TestSecretsNeverLeakIntoErrors::test_staging_guard_error_does_not_leak_database_url
+```
+
+Mindhárom új cella pirosra váltott → a sor visszaállítva.
+
+**B2 valódi-sértés próba** (a `not self.secret_key.strip() or` rész
+ideiglenesen visszavéve a puszta egyenlőség-vizsgálatra):
+
+```
+$ cd backend && python -m pytest tests/test_settings.py -q -p no:randomly
+FAILED tests/test_settings.py::TestStagingIsolation::test_empty_or_blank_secret_key_refuses_to_instantiate[]
+FAILED tests/test_settings.py::TestStagingIsolation::test_empty_or_blank_secret_key_refuses_to_instantiate[   ]
+```
+
+Mindkét paraméterezett cella pirosra váltott → a `.strip()`-es ág visszaállítva.
+
+**A B1 eredeti boot-log reprodukciója a javítás UTÁN** (ugyanaz a parancs, ami a
+review-ban a DB-jelszót kiszivárogtatta):
+
+```
+$ cd backend && env -i PATH=/usr/bin:/bin HOME=/home/ubuntu \
+    STRUMSIGHT_ENV="Prod-uction" \
+    STRUMSIGHT_SECRET_KEY="9f3c1a7be24d05f8a1b6c0d3e7f2a894" \
+    STRUMSIGHT_DATABASE_URL="postgresql+psycopg://app:Pg-Pa55w0rd@db.internal/ss" \
+    python -c "from app.config import Settings; Settings()"
+
+1 validation error for Settings
+  Value error, STRUMSIGHT_ENV='Prod-uction' is not a recognized environment
+  (expected one of ['dev', 'lab', 'prod', 'staging'], or the aliases
+  development/production). [type=value_error]
+LEAK secret_fragment: False | LEAK db_password: False
+```
+
+**Ruff-kapuk a javítás után** (a `backend-ci.yml` ugyanezt futtatja):
+
+```
+$ cd backend && python -m ruff check app tests
+All checks passed!
+$ cd backend && python -m ruff format --check app tests
+131 files already formatted
+```
+
 ## 11. Review — a Claude tölti ki
+
+Lásd: [`docs/reviews/e12-r04-review.md`](../reviews/e12-r04-review.md).
