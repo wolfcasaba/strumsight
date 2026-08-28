@@ -91,8 +91,10 @@ final class AppConfig {
   /// Practice Engine V2 to be available.
   ///
   /// Production is fail-closed (§3.3):
-  /// - any network-using flag ⇒ the URL must be a well-formed **https** URL
-  ///   and must not point at a loopback (`localhost`, `127.0.0.1`, `10.0.2.2`);
+  /// - any network-using flag ⇒ the URL must be a well-formed **https** URL,
+  ///   must not point at a loopback (`localhost`, `127.0.0.1`, `10.0.2.2`),
+  ///   and its host must not contain the `staging` substring — staging is a
+  ///   backend-only deployment target, not a client build (ADR 0445 D3/D5);
   /// - diagnostics on ⇒ the token must be non-empty and not the dev default;
   /// - Lab mode must not be available in a production artifact (§14.5 — the
   ///   diagnostics device build is [AppEnvironment.lab]).
@@ -142,6 +144,15 @@ final class AppConfig {
         if (loopbacks.contains(uri.host)) {
           problems.add(
             'production must not point at a development host '
+            '("${uri.host}").',
+          );
+        }
+        // Staging is a BACKEND deployment target, not a client build
+        // (ADR 0445 D3/D5) — a production artifact must never resolve one,
+        // unconditionally (not only when a Lab token is also in play).
+        if (uri.host.toLowerCase().contains('staging')) {
+          problems.add(
+            'production must not point at a staging-labelled host '
             '("${uri.host}").',
           );
         }

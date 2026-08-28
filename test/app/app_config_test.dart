@@ -108,6 +108,19 @@ void main() {
       }
     });
 
+    test('rejects a staging-labelled host unconditionally (ADR 0445 D5)', () {
+      // Feltétlen tiltás — nem csak akkor, ha egyben Lab-token is
+      // használatban van (E12-R04 §0.0 R4).
+      final problems = _problemsOf(
+        () => _resolve(
+          environment: AppEnvironment.production,
+          apiBaseUrl: 'https://staging.strumsight.app',
+          accountEnabled: true,
+        ),
+      );
+      expect(problems.single, contains('staging-labelled host'));
+    });
+
     test('rejects the development diagnostics token', () {
       final problems = _problemsOf(
         () => _resolve(
@@ -175,6 +188,26 @@ void main() {
       // The offline production build keeps working with the compile-time
       // default URL because nothing will ever dial it.
       expect(config.apiBaseUrl, AppConfig.devApiBaseUrl);
+    });
+  });
+
+  group('staging-labelled host outside production', () {
+    test('is accepted in lab and development (staging is backend-only, '
+        'ADR 0445 D3)', () {
+      for (final environment in [
+        AppEnvironment.development,
+        AppEnvironment.lab,
+      ]) {
+        expect(
+          () => _resolve(
+            environment: environment,
+            apiBaseUrl: 'https://staging.strumsight.app',
+            accountEnabled: true,
+          ),
+          returnsNormally,
+          reason: '$environment must accept a staging-labelled host',
+        );
+      }
     });
   });
 
