@@ -20575,3 +20575,58 @@ PR-komment megléte a merge SHA-val és a két `conclusion=success` run-linkkel.
 gépiesítés helye a `tools/round-land.sh` lenne (a landoló már ma is „új exact-SHA
 CI-dispatch"-ot kér rebase után) — ezt egy governance-kör veheti fel, ez a
 docs-only kör a `tools/**` tilos zónája miatt nem tehette.
+
+## L526 — A Markdown-tábla „hiányzó cella" toleranciája a renderelővel ELLENTÉTES helyre szúr be, amint a lehagyott oszlop már nem az utolsó: a checker és minden emberi olvasó MÁS táblát lát ugyanabból a fájlból (E12-R02, F1 MAJOR, 2026-08-28)
+
+**Mit mértünk.** Az E12-R02 a `docs/sdd/00-index.md` fejezet-tábláját gépi
+szerződéssé tette, és három új oszlopot fűzött a végére (`Státusz`,
+`Implementation progress`, `Dependency`) — a fejléc 6-ról **9 oszlopra** nőtt,
+és a `Zárójelentés` a **6.** (index 5) lett, már nem az utolsó.
+
+A tábla 14 sorából **9 sor** eleve lehagyta a záró `Zárójelentés` cellát (a régi,
+6 oszlopos alakban ez ártalmatlan volt). Ezt a pre-flight ki is mérte, és a brief
+§0.0.A P2 kifejezetten kérte, hogy a parser tolerálja. A `parseChapterTable` a
+toleranciát a `Zárójelentés` oszlop **NEVÉNÉL** valósította meg — oda szúrta be
+az üres cellát (`tool/check_sdd_index.dart:157-163`).
+
+**A GFM/CommonMark viszont a hiányzó cellákat a sor VÉGÉRE teszi.** Amíg a
+`Zárójelentés` volt az utolsó oszlop, a két értelmezés egybeesett; a három új
+oszloppal szétvált. Reviewer-próba a merge előtti fán:
+
+```
+$ python3 render_probe.py docs/sdd/00-index.md
+--- Chapter 12 (8 cella / 9) ---
+  'Zárójelentés'             checker=''                          RENDERELT='folyamatban (10 nyitott blocker: …)'
+  'Státusz'                  checker='folyamatban (10 nyitott…)' RENDERELT='ld. `docs/release/program-baseline.md` + …'
+  'Implementation progress'  checker='ld. `docs/release/…`'      RENDERELT='ch01–ch11'
+  'Dependency'               checker='ch01–ch11'                 RENDERELT=''
+Eltérő értelmezésű sorok: 9 / 14
+```
+
+A renderelt index tehát azt állította, hogy a Chapter 5, 6, 8–14
+zárójelentésének a neve `specifikálva`, és a `Dependency` oszlop — amit a brief
+kifejezetten kért — mind a 9 soron **üresen** jelent meg.
+
+**Miért nem fogta meg semmi.** A `tools/round-gate.sh` mind a hat lépése ZÖLD
+volt (35/35 teszt), és a CI is zöld lett volna: a checker a SAJÁT
+értelmezésében helyes táblát látott, tehát nem volt mit jeleznie. Sőt, egy
+teszt-cella (`sdd_index_guard_test.dart:133-151`) a divergens viselkedést
+kifejezetten helyesként rögzítette. Ez ugyanaz a hibaosztály, mint az
+[L476](#l476): a sor-alapú guard szerkezetileg vak arra az alakra, amit a
+kanonikus feldolgozó előállít — csak itt nem a `dart format`, hanem a
+Markdown-renderer a „másik feldolgozó".
+
+**A csapda általánosítva:** egy „elnéző" parser tolerancia-szabálya CSAK addig
+ekvivalens a kanonikus feldolgozóéval, amíg a tolerált hiány a séma **végén**
+van. Egy oszlop hozzáadása a végére némán átértelmezi az összes korábban
+elfogadott rövid sort — a séma-bővítés tehát a tolerancia-szabály
+**újraértékelését** követeli, nem csak a fejléc átírását.
+
+**Javítás.** (a) Mind a 9 sor megkapta az explicit `—` `Zárójelentés` cellát →
+14/14 sor 9 cellás, a render-próba `0 / 14` eltérésre esett. (b) A tolerancia
+megmaradt védőhálónak, DE mellé került egy tőle FÜGGETLEN, GFM-hű őr, ami a
+valódi fájlt olvassa és a fejléctől eltérő cellaszámú sort a sorszámával nevezi
+meg. A reviewer saját valódi-sértés próbája (egy `—` cella eltávolítása) ezt
+pirosra mérte: `line 19: 8 cell(s), expected 9`.
+
+**Őrteszt:** `test/tooling/sdd_index_guard_test.dart`::`F1 (e12-r02 review) — the real chapter table has no GFM cell-count drift every data row in docs/sdd/00-index.md has the same cell count as the table header`

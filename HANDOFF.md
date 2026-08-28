@@ -1,5 +1,62 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R02 KÉSZ — SDD index és dependency graph — PR [#486](https://github.com/wolfcasaba/strumsight/pull/486), squash `355defd9` (2026-08-28)
+
+**Az SDD program indexe gépi szerződés lett.** A `docs/sdd/00-index.md`
+fejezet-táblája és a fejezet-fájlok szétcsúsztak: az index a Chapter 12-re **42**
+kört írt, a fájlban **36** `# Kör` fejléc van. Ezt eddig egy prózai footnote
+„kezelte" („végrehajtáskor a fájl tartalma az irányadó") — pontosan az a
+hibaosztály, amit ez a kör gépi ellenőrzésre cserélt: **a prózai mentesítés nem
+tud pirosra váltani.**
+
+| Fájl | |
+|---|---|
+| [`tool/check_sdd_index.dart`](tool/check_sdd_index.dart) (ÚJ, 671 sor) | index-parse → fájl-lét → körszám → ciklus; top-level, gyökér-paraméteres API, a `main()` csak `exitCode`-burkoló |
+| [`docs/sdd/dependency-graph.yaml`](docs/sdd/dependency-graph.yaml) (ÚJ, 151 sor) | 14 fejezet-csomópont + 31 él, `critical_path` és `capability_gated` jelöléssel |
+| [`test/tooling/sdd_index_guard_test.dart`](test/tooling/sdd_index_guard_test.dart) (ÚJ, 699 sor) | **36 cella**, fixture-alapú hibás bemenetekkel (duplikált fejezet, dangling hivatkozás, ciklikus graph) |
+| [`docs/sdd/00-index.md`](docs/sdd/00-index.md) | Chapter 12 `42` → **36**; új `Státusz` / `Implementation progress` / `Dependency` oszlopok |
+
+**A körszám FORRÁSA mostantól a fejezet-fájl** ([ADR 0443](docs/adr/0443-sdd-index-machine-checkable-contract.md) D1):
+az ellenőrző onnan SZÁMOL, és az indexet ahhoz méri. Mindkét fejléc-alakot
+kezeli — `# Kör N` (Ch1–13) és `## Kör N` (Ch14) —, mert egyetlen alak
+támogatása **némán nulla kört** mérne a Chapter 14-re, és a hiba pontosan úgy
+nézne ki, mint egy helyes mérés. A pre-flight mind a 14 sort újramérte: a
+Chapter 12 volt az EGYETLEN eltérés.
+
+**`package:yaml` nincs használva** (ADR 0443 D3, a pre-flight P4 mérése): a
+`yaml` csak `dependency: transitive` a `pubspec.lock`-ban, és a
+`depend_on_referenced_packages` lint miatt a közvetlen import pirosra váltaná a
+`flutter analyze`-t — a `pubspec.yaml` viszont a tilos zónán van (H3). A
+manifest ezért **szándékosan szűkített YAML-részhalmaz**, saját sor-alapú
+parserrel; ezt önvédő teszt-cella őrzi.
+
+**A kör mért tanulsága ([L526](docs/LESSONS.md#l526)) — a review 1 MAJOR-t
+talált teljesen zöld gate mellett.** A három új oszlop mögé került
+`Zárójelentés` cellát 9 sor elhagyta (ez a RÉGI, 6 oszlopos táblában még
+ártalmatlan volt, mert ott az volt az utolsó oszlop). A GFM a hiányzó cellákat a
+sor **VÉGÉRE** teszi, a checker viszont a `Zárójelentés` **HELYÉRE** szúrta be —
+így **9/14 sor négy oszloppal eltolva renderelődött**, miközben a checker a saját
+értelmezésében helyesnek látta. A javító kör mind a 9 sorba kiírta az explicit
+`—` cellát, és tett mellé egy `parseChapterTable`-től FÜGGETLEN, GFM-hű őrt; a
+reviewer saját valódi-sértés próbája ezt pirosra mérte
+(`line 19: 8 cell(s), expected 9`).
+
+**Review:** [`docs/reviews/e12-r02-review.md`](docs/reviews/e12-r02-review.md) —
+**APPROVED egy javító kör után**, 0 BLOCKER / 0 MAJOR / 0 MINOR / 2 NOTE.
+A két NOTE follow-up: (F3) a fejezet↔fájl összerendelés a fájlnév-prefixen
+múlik, nem a tábla linkjén; (F4) az ASCII „Függőségi kép" nincs a manifesthez
+mérve (tudatos, dokumentált korlát).
+
+**Exact-SHA evidencia a merge SHA-n (`0ab830e4`):** Full Gate
+[33134488639](https://github.com/wolfcasaba/strumsight/actions/runs/33134488639)
+`success` + Router CI
+[33134489993](https://github.com/wolfcasaba/strumsight/actions/runs/33134489993)
+`success`. Scope-audit a teljes körre:
+`OK (4437fdb6f2a9..a7d4308f7271, 6 changed path(s), 1 generated/ignored)`.
+A `check_sdd_index.dart` **NEM került a `tools/round-gate.sh` gate-sorába**
+(ADR 0443 D5 — az ADR 0052 hatálya); a gépi mércét a guard-teszt adja, ami a
+teljes CI-suite része.
+
 ## ✅ E12-R01 KÉSZ — Program baseline és release history audit — a **Chapter 12 sáv INDULT** — PR [#485](https://github.com/wolfcasaba/strumsight/pull/485), squash `ae058f88` (2026-08-28)
 
 **A Chapter 13 (UI) lezárása után elindult a Chapter 12 (Release Roadmap, Sprint
@@ -8550,7 +8607,29 @@ folytatódik a következő cron-firingen, a most bővített `allowed_paths` alat
 
 ## 4. Current branch
 
-**Aktuális állapot (2026-08-27):** `main` @ `0965188f` — E13-R31 Progress
+**Aktuális állapot (2026-08-28):** `main` @ `355defd9` — E12-R02 SDD index és
+dependency graph, PR
+[#486](https://github.com/wolfcasaba/strumsight/pull/486), squash-merge.
+Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
+orchesztrátor/reviewer Claude Opus 5, **1 javító kör** — az első forduló
+review-ja 1 MAJOR-t talált TELJESEN ZÖLD gate mellett (a `Zárójelentés` cellát
+elhagyó 9 sor a GFM-renderelésben négy oszloppal eltolódott, miközben a checker
+saját, név-alapú toleranciájában helyesnek látta), a javító kör után APPROVED,
+0 nyitott lelet ([`docs/reviews/e12-r02-review.md`](docs/reviews/e12-r02-review.md)).
+A kör ADR-t **írt**: [`0443`](docs/adr/0443-sdd-index-machine-checkable-contract.md)
+(D1–D6). Exact-SHA evidencia a merge SHA-n (`0ab830e4`): Full Gate
+[33134488639](https://github.com/wolfcasaba/strumsight/actions/runs/33134488639)
+`success` + Router CI
+[33134489993](https://github.com/wolfcasaba/strumsight/actions/runs/33134489993)
+`success`.
+
+**Korábbi: `main` @ `ae058f88`** — E12-R01 Program baseline és release history
+audit, PR [#485](https://github.com/wolfcasaba/strumsight/pull/485),
+squash-merge. Implementer `sonnet-impl`, orchesztrátor/reviewer Claude Opus 5,
+**0 javító kör** — a review első fordulóban APPROVED (0 BLOCKER / 0 MAJOR /
+0 MINOR / 2 NOTE). ADR nélküli, mérési/dokumentációs kör.
+
+**Korábbi: `main` @ `0965188f`** — E13-R31 Progress
 Dashboard és Skill Detail UI, PR
 [#476](https://github.com/wolfcasaba/strumsight/pull/476), squash-merge.
 Implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`),
@@ -9465,7 +9544,26 @@ E04-R06; PR #128 / `55d640d`, E04-R05; PR #127 / `0d7ab1b`, E04-R04.)
 
 ## 5. Last completed round
 
-**E13-R31 — Progress Dashboard és Skill Detail UI** (PR
+**E12-R02 — SDD index és dependency graph** (PR
+[#486](https://github.com/wolfcasaba/strumsight/pull/486), squash `355defd9`).
+A 14 fejezet egyetlen, gépileg ellenőrzött indexbe és körmentes
+dependency-manifestbe rendezve: a körszám FORRÁSA mostantól a fejezet-fájl
+(`# Kör N` és `## Kör N` alak egyaránt), az index csak tükrözi; a
+`dependency-graph.yaml` az egyetlen forrás a függőségekre, és a körmentessége
+gépi állítás, nem ábra; a `package:yaml` tiltását önvédő teszt-cella őrzi.
+A Chapter 12 sora `42` → **36**-ra javítva — a pre-flight szerint ez volt az
+EGYETLEN eltérés a 14 sorból. **1 javító kör**, 1 MAJOR javítva. `risk = "normal"`,
+biztonsági mérés nem volt kötelező. Egy lecke:
+[L526](docs/LESSONS.md#l526) (a Markdown-tábla „hiányzó cella" toleranciája a
+renderelővel ELLENTÉTES helyre szúr be, ha a lehagyott oszlop már nem az utolsó).
+
+**Korábbi: E12-R01 — Program baseline és release history audit** (PR
+[#485](https://github.com/wolfcasaba/strumsight/pull/485), squash `ae058f88`).
+A `docs/release/` baseline, a 26 GitHub Release / 27 tag auditja és a 10
+release-blocker felvétele; 0 javító kör, egy lecke:
+[L525](docs/LESSONS.md#l525).
+
+**Korábbi: E13-R31 — Progress Dashboard és Skill Detail UI** (PR
 [#476](https://github.com/wolfcasaba/strumsight/pull/476), squash `0965188f`).
 Az UI-49–UI-50 bizonyíték-alapú fejlődési felülete új
 `lib/features/progress_v2/` fán: az elsajátítottság mért teljesítményből jön
@@ -10519,24 +10617,34 @@ _(A korábbi körök részletes története: [`docs/handoff-archive.md`](docs/ha
 > [`docs/ui/chapter-13-completion-report.md`](docs/ui/chapter-13-completion-report.md),
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md).
 
-> ⛔ **A LÁNCNAK JELENLEG NINCS `pending` SORA — a driver üresen fordul.**
-> Mért állapot (`docs/execution/pipeline-queue.tsv`): **257 `done`, 76 `hold`,
-> 18 `prepared`, 0 `pending`**. A `hold` sorok epikánként: E08 1, E09 5,
-> **E10 32**, **E12 36**, E99 2.
-
-> **A visszakapcsolás EMBERI/DRIVER lépés, nem a kör-orchestrátoré** (ADR 0087 §4:
-> a kör-session a sor-fájlhoz csak a SAJÁT sorának `done`-jáért nyúl). A 2026-08-25-i
-> user-döntés a `hold`-ot kifejezetten a Ch13 elkészültéig szabta ki — **ez a
-> feltétel most teljesült**, tehát a következő lépés a `hold` → `pending` átírás
-> egyetlen commitban. A sorrend a 2026-08-27-i user-döntés szerint:
+> ▶️ **A KÖVETKEZŐ KÖR: `E12-R03` — GitHub delivery workflow, branch protection
+> és review policy** (motor: `sonnet-impl`, előre kiosztott ADR: `0444`, brief:
+> `docs/rounds/e12-r03-…`). A Chapter 12 sáv fut: az E12 36 sorából **2 `done`**
+> (R01, R02), 34 `pending`.
 >
-> 1. **Chapter 12 (`E12`, 36 sor)** — a briefek és az ADR 0443–0465 tartomány
->    előre elkészült (`26b49257`), a sorok `hold`-on várnak. **Aktiváláskor a
->    Router-CI carve-outot ki kell terjeszteni `E12`-re** — a sor-fájl fejléc-
->    kommentje ma kimondja, hogy a carve-out KIZÁRÓLAG `E13-`-ra szól, tehát
->    e nélkül az E12 körök más motort kapnának, mint amit a döntés előír.
-> 2. **Epic 10 (`E10`, 32 sor)** — utolsóként.
-> 3. A nyitott `E09` (R28/R29/R31/R32) és `E08` sorok a fenti kettő után.
+> Mért állapot (`docs/execution/pipeline-queue.tsv`, 2026-08-28, E12-R02 zárása
+> után): **259 `done`, 40 `hold`, 18 `prepared`, 34 `pending`**. A `hold` sorok:
+> **E10 32**, E09 5, E08 1, E99 2 — az **Epic 10 (`E10`) megy utolsóként**, a
+> nyitott `E09` (R28/R29/R31/R32) és `E08` sorok a Ch12 után.
+>
+> A `hold` → `pending` visszakapcsolás EMBERI/DRIVER lépés, nem a
+> kör-orchestrátoré (ADR 0087 §4: a kör-session a sor-fájlhoz csak a SAJÁT
+> sorának `done`-jáért nyúl). A Ch12 aktiválása 2026-08-28-án megtörtént
+> (`92576977`), a Router-CI carve-out `E12`-re kiterjesztésével együtt.
+
+> **E12-R02 follow-up — két NOTE, ami nem tűnhet el**
+> ([`docs/reviews/e12-r02-review.md`](docs/reviews/e12-r02-review.md) F3/F4):
+>
+> 1. **A fejezet↔fájl összerendelés a fájlnév-prefixen múlik**
+>    (`tool/check_sdd_index.dart:631-642`), nem a tábla `Fájl` linkjének célján.
+>    Ha egy sor egy MÁSIK fejezet-fájlra linkelne, az A2 (a fájl létezik)
+>    átmenne, és a körszámot továbbra is a prefix-egyező fájlból mérné. Ma mind a
+>    14 sor prefix-helyesen linkel. Olcsó javítás: `row.filePath` prefixét vesd
+>    össze `row.chapterNumber`-rel.
+> 2. **Az ASCII „Függőségi kép" nincs a `dependency-graph.yaml`-hoz mérve.**
+>    A kör helyesen jelöli illusztrációnak, de így elcsúszhat anélkül, hogy
+>    bármi pirosra váltana. Olcsó javítás: az ábra `Chapter N → Chapter M`
+>    sorainak összevetése az élekkel.
 
 > **Ami a Ch13-ból NYITVA maradt, és nem tűnhet el** (mind dátumozva, felelőssel,
 > [`docs/ui/legacy-backlog.md`](docs/ui/legacy-backlog.md)):

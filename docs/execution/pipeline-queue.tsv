@@ -495,7 +495,7 @@ E13-R36	docs/rounds/e13-r36-visual-regression-and-closure.md	sonnet-impl	nincs	d
 # E12-R02 javítja). ADR-tartomány: 0443-0465, a Ch12 batch osztotta ki.
 #
 E12-R01	docs/rounds/e12-r01-program-baseline-and-release-history-audit.md	sonnet-impl	nincs	done
-E12-R02	docs/rounds/e12-r02-sdd-index-and-dependency-graph.md	sonnet-impl	0443	pending
+E12-R02	docs/rounds/e12-r02-sdd-index-and-dependency-graph.md	sonnet-impl	0443	done
 E12-R03	docs/rounds/e12-r03-delivery-workflow-and-branch-protection.md	sonnet-impl	0444	pending
 E12-R04	docs/rounds/e12-r04-environment-and-channel-isolation.md	sonnet-impl	0445	pending
 E12-R05	docs/rounds/e12-r05-feature-flag-registry-and-kill-switch.md	sonnet-impl	0446	pending
