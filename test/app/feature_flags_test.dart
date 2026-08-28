@@ -107,6 +107,35 @@ void main() {
     });
   });
 
+  group('Adaptive shell feature flag (E15-R02, ADR 0467, A1)', () {
+    test('is enabled in development', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.development,
+        accountEnabled: false,
+      );
+
+      expect(flags.adaptiveShellEnabled, isTrue);
+    });
+
+    test('is enabled in lab', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.lab,
+        accountEnabled: false,
+      );
+
+      expect(flags.adaptiveShellEnabled, isTrue);
+    });
+
+    test('remains disabled in production', () {
+      final flags = FeatureFlags.forEnvironment(
+        AppEnvironment.production,
+        accountEnabled: false,
+      );
+
+      expect(flags.adaptiveShellEnabled, isFalse);
+    });
+  });
+
   group('Migrated Learn rollout boundary', () {
     test('is enabled in development', () {
       final flags = FeatureFlags.forEnvironment(

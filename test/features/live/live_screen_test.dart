@@ -1,6 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/chords/widgets/chord_diagram.dart';
 import 'package:strumsight/features/live/engine/mock_strum_engine.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
@@ -19,6 +22,27 @@ class _FixedCapo extends CapoNotifier {
   int build() => _v;
 }
 
+/// E15-R02 (ADR 0467 D9): the app now boots on the adaptive shell's /today
+/// entry point by default; /live is reachable through legacyRedirects'
+/// target, AppRoutes.practiceLive.
+Future<ProviderContainer> _pumpLiveApp(
+  WidgetTester tester, {
+  required List<Override> overrides,
+}) async {
+  final container = ProviderContainer(overrides: overrides);
+  addTearDown(container.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const StrumSightApp(),
+    ),
+  );
+  await tester.pumpAndSettle();
+  container.read(routerProvider).go(AppRoutes.practiceLive);
+  await tester.pumpAndSettle();
+  return container;
+}
+
 void main() {
   testWidgets(
     'Live renders the current chord + its strum on the timeline hero',
@@ -26,16 +50,13 @@ void main() {
       final engine = FakeStrumEngine();
       addTearDown(engine.dispose);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            ...preferenceOverrides(),
-            strumEngineProvider.overrideWithValue(engine),
-          ],
-          child: const StrumSightApp(),
-        ),
+      await _pumpLiveApp(
+        tester,
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+        ],
       );
-      await tester.pumpAndSettle();
 
       // Feed a realistic frame (chord C, an accented downstroke at 90%).
       engine.emit(
@@ -68,17 +89,14 @@ void main() {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-          capoProvider.overrideWith(() => _FixedCapo(2)),
-        ],
-        child: const StrumSightApp(),
-      ),
+    await _pumpLiveApp(
+      tester,
+      overrides: [
+        ...preferenceOverrides(),
+        strumEngineProvider.overrideWithValue(engine),
+        capoProvider.overrideWith(() => _FixedCapo(2)),
+      ],
     );
-    await tester.pumpAndSettle();
 
     // Detector hears C (concert pitch); with capo 2 the fretted shape is A#.
     engine.emit(
@@ -100,16 +118,13 @@ void main() {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-        ],
-        child: const StrumSightApp(),
-      ),
+    await _pumpLiveApp(
+      tester,
+      overrides: [
+        ...preferenceOverrides(),
+        strumEngineProvider.overrideWithValue(engine),
+      ],
     );
-    await tester.pumpAndSettle();
     engine.emit(
       MockStrumEngine(bpm: 96).frameAt(const Duration(milliseconds: 300)),
     );
@@ -144,25 +159,25 @@ void main() {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-        ],
-        child: const StrumSightApp(),
-      ),
+    final container = await _pumpLiveApp(
+      tester,
+      overrides: [
+        ...preferenceOverrides(),
+        strumEngineProvider.overrideWithValue(engine),
+      ],
     );
-    await tester.pumpAndSettle();
 
     // Booting on Live starts the engine (mic hot).
     expect(engine.startCalls, greaterThan(0));
     final stopsBefore = engine.stopCalls;
 
-    // Leave Live for another tab → LiveScreen unmounts, the timeline provider
-    // and liveFrameProvider auto-dispose, and engine.stop() releases the mic.
+    // Leave Live for another destination → LiveScreen unmounts, the
+    // timeline provider and liveFrameProvider auto-dispose, and
+    // engine.stop() releases the mic. E15-R02 (ADR 0467 D9): /practice/live
+    // is a Stage route with no primary navigation to tap through, so this
+    // goes through the router directly.
     // The old page unmounts only when the route transition FINISHES.
-    await tester.tap(find.text('Learn'));
+    container.read(routerProvider).go(AppRoutes.today);
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(milliseconds: 50));
@@ -180,16 +195,13 @@ void main() {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-        ],
-        child: const StrumSightApp(),
-      ),
+    await _pumpLiveApp(
+      tester,
+      overrides: [
+        ...preferenceOverrides(),
+        strumEngineProvider.overrideWithValue(engine),
+      ],
     );
-    await tester.pumpAndSettle();
 
     // The mic could not be started — never a silent no-op.
     engine.emitError(Exception('mic busy'));

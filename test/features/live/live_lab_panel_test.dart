@@ -1,5 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/features/settings/providers/lab_mode_provider.dart';
 import 'package:strumsight/main.dart';
@@ -16,6 +19,26 @@ class _FixedLabMode extends LabModeNotifier {
   bool build() => _v;
 }
 
+/// E15-R02 (ADR 0467 D9): the app now boots on the adaptive shell's /today
+/// entry point by default; /live is reachable through legacyRedirects'
+/// target, AppRoutes.practiceLive.
+Future<void> _pumpLiveApp(
+  WidgetTester tester, {
+  required List<Override> overrides,
+}) async {
+  final container = ProviderContainer(overrides: overrides);
+  addTearDown(container.dispose);
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const StrumSightApp(),
+    ),
+  );
+  await tester.pumpAndSettle();
+  container.read(routerProvider).go(AppRoutes.practiceLive);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -28,17 +51,14 @@ void main() {
     final engine = FakeStrumEngine();
     addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-          labModeProvider.overrideWith(() => _FixedLabMode(false)),
-        ],
-        child: const StrumSightApp(),
-      ),
+    await _pumpLiveApp(
+      tester,
+      overrides: [
+        ...preferenceOverrides(),
+        strumEngineProvider.overrideWithValue(engine),
+        labModeProvider.overrideWith(() => _FixedLabMode(false)),
+      ],
     );
-    await tester.pumpAndSettle();
 
     expect(find.text('Capture & analyze last ~60 s'), findsNothing);
     // With Lab off the engine is told NOT to capture (never a stray `true`).
@@ -53,17 +73,14 @@ void main() {
       final engine = FakeStrumEngine();
       addTearDown(engine.dispose);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            ...preferenceOverrides(),
-            strumEngineProvider.overrideWithValue(engine),
-            labModeProvider.overrideWith(() => _FixedLabMode(true)),
-          ],
-          child: const StrumSightApp(),
-        ),
+      await _pumpLiveApp(
+        tester,
+        overrides: [
+          ...preferenceOverrides(),
+          strumEngineProvider.overrideWithValue(engine),
+          labModeProvider.overrideWith(() => _FixedLabMode(true)),
+        ],
       );
-      await tester.pumpAndSettle();
 
       expect(find.text('Capture & analyze last ~60 s'), findsOneWidget);
       // Lab on → the engine's rolling capture was enabled.
@@ -79,17 +96,14 @@ void main() {
     final engine = FakeStrumEngine(); // fakePcm empty by default
     addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-          labModeProvider.overrideWith(() => _FixedLabMode(true)),
-        ],
-        child: const StrumSightApp(),
-      ),
+    await _pumpLiveApp(
+      tester,
+      overrides: [
+        ...preferenceOverrides(),
+        strumEngineProvider.overrideWithValue(engine),
+        labModeProvider.overrideWith(() => _FixedLabMode(true)),
+      ],
     );
-    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Capture & analyze last ~60 s'));
     await tester.pumpAndSettle();

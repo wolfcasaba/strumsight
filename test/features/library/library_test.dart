@@ -1,9 +1,17 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/config/app_config.dart';
+import 'package:strumsight/app/config/app_environment.dart';
+import 'package:strumsight/app/config/feature_flags.dart';
 import 'package:strumsight/features/analyze/model/analyze_result.dart';
 import 'package:strumsight/features/library/data/library_repository.dart';
 import 'package:strumsight/features/library/model/analyzed_session.dart';
 import 'package:strumsight/features/library/providers/library_providers.dart';
+import 'package:strumsight/features/library_v2/domain/library_item.dart';
+import 'package:strumsight/features/library_v2/domain/library_item_source.dart';
+import 'package:strumsight/features/library_v2/providers/library_v2_providers.dart';
+import 'package:strumsight/features/library_v2/screens/unified_library_screen.dart';
 import 'package:strumsight/core/music/strum.dart';
 import 'package:strumsight/features/live/providers/live_providers.dart';
 import 'package:strumsight/main.dart';
@@ -40,6 +48,20 @@ class FakeLibraryRepository implements LibraryRepository {
 
   @override
   Future<void> save(List<AnalyzedSession> sessions) async => _store = sessions;
+}
+
+/// A single-type `library_v2` source preloaded with fixed items (no
+/// repository, no platform channel) — mirrors `item_routing_test.dart`'s
+/// `_FakeSource`.
+class _FakeLibraryV2Source implements LibraryItemSource {
+  const _FakeLibraryV2Source(this.type, this._items);
+
+  @override
+  final LibraryItemType type;
+  final List<LibraryItem> _items;
+
+  @override
+  Future<LibrarySourceLoad> load() async => LibrarySourceLoad.success(_items);
 }
 
 void main() {
@@ -79,30 +101,110 @@ void main() {
     expect(ids, ['b']);
   });
 
-  testWidgets('Library tab lists a saved session (no more "coming soon")', (
-    tester,
-  ) async {
-    final engine = FakeStrumEngine();
-    addTearDown(engine.dispose);
+  testWidgets(
+    'LEGACY REFERENCE (adaptive shell off — the still-shipped production '
+    'default, ADR 0467 D2): Library tab lists a saved session (no more '
+    '"coming soon")',
+    (tester) async {
+      final engine = FakeStrumEngine();
+      addTearDown(engine.dispose);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          ...preferenceOverrides(),
-          strumEngineProvider.overrideWithValue(engine),
-          libraryRepositoryProvider.overrideWithValue(
-            FakeLibraryRepository([_session('1', 'C · G · Am')]),
-          ),
-        ],
-        child: const StrumSightApp(),
-      ),
-    );
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            strumEngineProvider.overrideWithValue(engine),
+            libraryRepositoryProvider.overrideWithValue(
+              FakeLibraryRepository([_session('1', 'C · G · Am')]),
+            ),
+            // E15-R02 (ADR 0467 D9): the legacy `/library` route redirects
+            // to the adaptive shell's UnifiedLibraryScreen (a different
+            // widget/provider pair) once the shell is on by default — this
+            // test's subject is specifically the legacy LibraryScreen +
+            // libraryRepositoryProvider wiring, which production (shell
+            // off, D2) still ships. Explicit, not hiding the new default.
+            appConfigProvider.overrideWithValue(
+              AppConfig(
+                environment: AppEnvironment.development,
+                apiBaseUrl: AppConfig.devApiBaseUrl,
+                flags: const FeatureFlags(
+                  accountEnabled: false,
+                  diagnosticsEnabled: false,
+                  labModeAvailable: false,
+                ),
+                diagnosticsToken: AppConfig.devDiagnosticsToken,
+                buildMode: 'test',
+                appVersion: 'test',
+              ),
+            ),
+          ],
+          child: const StrumSightApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Library'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Library'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('C · G · Am'), findsOneWidget);
-    expect(find.textContaining('Coming in'), findsNothing);
-  });
+      expect(find.text('C · G · Am'), findsOneWidget);
+      expect(find.textContaining('Coming in'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'shipped default (no appConfigProvider override, ADR 0467 D1 — shell '
+    'ON in dev/lab): the Profile tab\'s Library entry point reaches '
+    'UnifiedLibraryScreen and shows a wired session',
+    (tester) async {
+      final engine = FakeStrumEngine();
+      addTearDown(engine.dispose);
+
+      // Pin a compact phone size (matches shell_lifecycle_test.dart) —
+      // the default flutter_test 800x600 viewport sits above
+      // SsBreakpoints.compactMax (599) and renders a NavigationRail,
+      // where the destination label overlaps other hit-testable layers.
+      tester.view.physicalSize = const Size(412, 915);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...preferenceOverrides(),
+            strumEngineProvider.overrideWithValue(engine),
+            // E15-R02 (review BLOCKER-1 fix): no appConfigProvider override
+            // — this measures the config the app actually ships with
+            // outside production. The unified library aggregates existing
+            // repositories (§5.4/B3); only the analysis source is wired
+            // here since that is the one type under test.
+            libraryV2SourcesProvider.overrideWithValue([
+              _FakeLibraryV2Source(LibraryItemType.analysis, [
+                AnalysisLibraryItem(
+                  id: 'analysis-1',
+                  title: 'C · G · Am',
+                  createdAt: DateTime.utc(2026, 8, 1),
+                  syncStatus: LibrarySyncStatus.synced,
+                  hasRawAudio: false,
+                  hasResult: true,
+                ),
+              ]),
+            ]),
+          ],
+          child: const StrumSightApp(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // The default (non-production) shell's last bottom-nav destination
+      // is Profile (labelled with the existing tutorProfileTitle string,
+      // home_shell.dart — no dedicated nav ARB keys yet).
+      await tester.tap(find.text('Tutor profile'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Library'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(UnifiedLibraryScreen), findsOneWidget);
+      expect(find.text('C · G · Am'), findsOneWidget);
+    },
+  );
 }

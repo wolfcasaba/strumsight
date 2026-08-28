@@ -1,5 +1,52 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E15-R02 KÉSZ — Az adaptív shell a nem-production ALAPÉRTELMEZÉS + a két mért túlcsordulás javítása — PR [#497](https://github.com/wolfcasaba/strumsight/pull/497), squash `9dc0b1e6` (2026-08-28)
+
+**A user 2026-08-28-i döntése („minden legyen migrálva, javítva, hogy lássam a
+valódi appot") ezzel a körrel lépett hatályba:** az ötterületes adaptív shell
+([ADR 0275](docs/adr/0275-five-area-shell-behind-a-flag.md)) mostantól
+`development` és `lab` környezetben BE van kapcsolva
+([ADR 0467](docs/adr/0467-adaptive-shell-is-the-non-production-default.md) D1),
+production továbbra is KI (D2, a GA-scope a Chapter 12 Kör 28 dolga). Az app
+belépési pontja `/live` → **`/today`**, a tizenegy legacy útvonal a
+`legacyRedirects` táblán át él tovább.
+
+**A két MÉRT elrendezési hiba megszűnt** (`docs/ui/legacy-backlog.md` §1 lezárva):
+
+- `live_screen.dart` stat-sora — a két `_ActionButton` `Expanded`-be került
+  (landscape + `textScale 2.0` mellett 12 px `en` / 34 px `hu` túlcsordulás volt).
+- `permission_primer_screen.dart` — a **véglegesen elutasított** ág
+  `SingleChildScrollView`-ba került (297 px volt); a retryable ág változatlan.
+
+**A mérő cellák ÁTFORDULTAK, nem törlődtek** (a zsugorodás-őr elve, L180): a
+`e13_r36_variant_matrix_test.dart` `_excludedCells` kivétel-listája kiürült — a
+fájl STALE-őre miatt ez maga a bizonyíték —, a `closure_suite_test` primer-cellája
+`isTrue` → `isFalse`. **Valódi-sértés próba:** a `live_screen.dart` javításának
+visszavonása PONTOSAN a négy A5-cellát pirosítja (12/34 px), a maradék 188 zöld.
+
+**A flag-flip MÉRT oksági hatósugara** (53 bukás, 19 fájlban — a H3 önjavító kör
+mérése) az ÚJ viselkedéshez igazítva: router-navigáció a `legacyRedirects`
+céljaira, `/today` belépési pont. `appConfigProvider`-override-dal kikapcsolt
+shell SEHOL nincs a szállított alapértelmezés elé tolva (ADR 0467 D9) — a review
+ezt BLOCKER-ként fogta meg egyszer, és a javítás a `library_test.dart`-ba egy
+override NÉLKÜLI, VALÓDI UI-tapintásokkal navigáló cellát tett (3 → 4 cella).
+
+**Gépi mércét kapott a kill-switch próza is** (A11): a
+`feature_flag_registry.dart` `killSwitchPath` szövege eddig azt állította, hogy a
+flag „hardcoded to `false` in every environment" — a D1 után ez hazugság lett
+volna, és a prózát SEMMI nem mérte. Két új cella a
+`feature_flag_audit_test.dart`-ban zárja be.
+
+**Motorok:** implementer `sonnet-impl` (Claude Sonnet 5, `--effort high`) —
+1 alapkör + 2 javító kör; orchestrátor/reviewer Claude (Opus 5).
+**Review:** [`e15-r02-review.md`](docs/reviews/e15-r02-review.md) — **APPROVED**
+(1 BLOCKER + 1 MAJOR + 2 MINOR zárva, 2 NOTE tudatosan nyitva).
+**CI a merge SHA-n (`443a9980`):**
+[full-gate 33216141930](https://github.com/wolfcasaba/strumsight/actions/runs/33216141930),
+[router-ci 33216104973](https://github.com/wolfcasaba/strumsight/actions/runs/33216104973);
+kombinált-HEAD gate a landolóban mind a 39 lépésen zöld.
+**Leckék:** [L536](docs/LESSONS.md#l536) (a scope-audit a generált golden-bukás-artefaktumot is számolja), [L537](docs/LESSONS.md#l537) (`pageBack()` és a Material back-affordancia).
+
 ## ✅ E12-R09 KÉSZ — Domain event katalógus és schema registry — PR [#496](https://github.com/wolfcasaba/strumsight/pull/496), squash `04ae8918` (2026-08-28)
 
 **A cross-feature esemény-forgalomnak eddig nem volt nyilvántartása, csak

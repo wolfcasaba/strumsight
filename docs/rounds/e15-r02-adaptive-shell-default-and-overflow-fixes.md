@@ -214,6 +214,43 @@ VALÓDI, commitolt briefet hajtja át a VALÓDI scope-auditon
 (`tools.ai_router.security.audit_scope`) a mért fájllistával; a lista
 szűkülése és a könyvtár-szintű blanket-tágítás egyaránt pirosra váltja.
 
+## 0.0/e PRE-FLIGHT ÚJRAMÉRÉS (2026-08-28, orchestrátor, indítás előtt)
+
+A §0.0/c és §0.0/d már merge-elve van a `main`-en (HEAL PR #495, squash
+`ee2a2bc4`), az `ADR 0467` szintén — a kör tehát a TELJES §4 listával indul,
+és sem az ADR-t, sem a scope-ot nem írom újra (H1). A dispatch előtt a
+brief mért állításait a `main @ bbe86b1a` fán ÚJRA kimértem, mind igaz:
+
+| Állítás | Mérés | Eredmény |
+|---|---|---|
+| `adaptiveShellEnabled: false` minden környezetben | `feature_flags.dart:129` | ✅ igaz |
+| `entryLocation = adaptiveShellEnabled ? today : live` | `app_router.dart:215` | ✅ igaz |
+| `legacyRedirects` CSAK bekapcsolt shell mellett él | `app_router.dart:228` (`if (!adaptiveShellEnabled) return null;`) | ✅ igaz |
+| `appConfigProvider` default = `forEnvironment(development, …)` — ez a flip hatósugarának oka | `app_config.dart:201-208` | ✅ igaz |
+| A primer véglegesen-elutasított ága NEM görgethető, a másik ág `SingleChildScrollView` | `permission_primer_screen.dart:98-107` vs `:111-115` | ✅ igaz |
+| A `live` stat-sor rugalmatlan `Row` (`spaceEvenly`, `_ActionButton` gyermekek) | `live_screen.dart:477-` | ✅ igaz |
+| A `killSwitchPath` próza a D1 után hamissá válik | `feature_flag_registry.dart:487-492` | ✅ igaz |
+
+Visszakeresés (ADR 0312, szűkítve ELŐSZÖR): `lessons,halts,adr` — a döntő
+előzmények már hivatkozva vannak a briefben
+([ADR 0275](../adr/0275-five-area-shell-behind-a-flag.md),
+[L516](../LESSONS.md#l516), [L180](../LESSONS.md#l180),
+[ADR 0426](../adr/0426-golden-rasterization-on-the-gate-architecture.md));
+ÚJ, eddig nem hivatkozott releváns lelet: **[L449](../LESSONS.md#l449)** — az
+`indexedStack` shell életben tartja a meglátogatott brancheket, ezért a
+mikrofont/wakelockot birtokló képernyő nem szabadul fel automatikusan. A kör
+a shellt ALAPÉRTELMEZETTÉ teszi, tehát ez az út mostantól minden fejlesztői
+és lab-környezetben él; a `live_mic_release_test.dart` és a
+`shell_lifecycle_test.dart` a §4 listán van, és ezek a MÉRT elengedési
+szerződést pinnelik — a §5.4 értelmében ezek is KIZÁRÓLAG az új belépési
+ponthoz igazíthatók, az elengedési elvárás gyengítése tilos.
+Továbbá **[L517](../LESSONS.md#l517)**: a `textScaler 2.0` keret két egymást
+követő körben mért ki addig láthatatlan túlcsordulást — a §0 STOP-protokoll
+(új képernyőn talált túlcsordulás → `legacy-backlog.md` + jelentés) pontosan
+erre a hibaosztályra való.
+
+A `brief-lint --level strict` lelete: **nincs**.
+
 ## 0.0/b A kör két, egymást feltételező fele
 
 A shell bekapcsolása UTÁN a landscape + 200%-os szövegskála út valóban elérhetővé válik a felhasználónak, tehát a két ismert túlcsordulás ettől kezdve nem elméleti. A javítás és a bekapcsolás ezért EGY kör: külön-külön mindkettő hiányos lenne.
@@ -450,5 +487,142 @@ tools/golden-x86.sh record test/ui/goldens/e13_r18_screens_golden_test.dart test
 - **További, eddig nem mért túlcsordulások.** A shell bekapcsolása új utakat tesz elérhetővé; a leletek a backlogba mennek, nem a kör scope-jába.
 
 ## 10. Implementation handoff — az implementer tölti ki
+
+**Kontextus:** ez a folytató kör a `HANDOFF`-ban leírt négy leletet (F0–F4)
+zárta le a korábbi `sonnet-impl` futás három meglévő commitján (`fb4d3f12`,
+`fc0d13e8`, `bbf8ac90`, `e697c194`) felül. Az F0 (a `test/ui/goldens/failures/`
+untracked bukás-artefaktum a scope-audit VIOLATION oka) már javítva volt a
+munkafa átvételekor; ez a futás nem termelt új `failures/` könyvtárat, a §10
+zárásakor is ellenőrizve.
+
+### 10.1 Valódi-sértés próba (KÖTELEZŐ, §6.1) — A5
+
+1. Kigyűjtöttem az `fc0d13e8` commit `live_screen.dart`-ra eső részét
+   (`git show fc0d13e8 -- lib/features/live/screens/live_screen.dart`),
+   patch-fájlba mentve, és `git apply -R`-rel visszaállítottam a stat-sort a
+   javítás ELŐTTI, rugalmatlan `Row(children: [_ActionButton(...), _ActionButton(...)])`
+   alakra (az `Expanded` csomagolás eltávolítva).
+2. `flutter test test/ui/goldens/e13_r36_variant_matrix_test.dart --reporter compact`
+   → **`+56 -4`**, pontosan a négy landscape+`textScale 2.0` cella bukott:
+   ```
+   00:18 +35 -1: live|light|en|landscape|2.0 [E]
+   00:18 +42 -2: live|light|hu|landscape|2.0 [E]
+   00:19 +49 -3: live|dark|en|landscape|2.0 [E]
+   00:19 +56 -4: live|dark|hu|landscape|2.0 [E]
+   ```
+   A hibaüzenetek konkrét túlcsordulás-értékei megegyeznek a brief §0.0/e
+   mérésével: `unexpected RenderFlex overflow of 12.0px` és
+   `unexpected RenderFlex overflow of 34.0px`. Az összes NEM landscape+2.0
+   cella (188 db) zöld maradt — a hiba pontosan a mérő cellák tárgya, semmi
+   más nem sérült.
+3. `git apply` (patch vissza, forward irányban) visszaállította a javítást;
+   `git status --short` és `git diff --stat lib/features/live/screens/live_screen.dart`
+   üres diffet mutatott (bájtra pontos visszaállás).
+4. Újrafuttatva ugyanaz a teszt: **`+192` — All tests passed!** — mind a 192
+   cella zöld, beleértve a négy korábban bukottat is.
+
+### 10.2 A9 — a két érintett golden `tools/golden-x86.sh record` úton
+
+- **`e13_r18_live_stage_compact{,_scale2}.png`**: az `e697c194` commit
+  (`tools/golden-x86.sh record test/ui/goldens/e13_r18_screens_golden_test.dart`)
+  vette fel x86-on; a PNG-k valóban elmozdultak (6785→5824 és 7024→7105 bájt).
+- **`e13_r16_permission_primer_compact{,_scale2}.png`**: EZEN a körön **MEGMÉRTEM**,
+  elmozdultak-e (F2) — `flutter test test/ui/goldens/e13_r16_screens_golden_test.dart --reporter compact`
+  → **`+10: All tests passed!`**, a `mic-permission primer — compact` és
+  `— compact_scale2` cellák VÁLTOZATLANUL zöldek a meglévő PNG-kkel szemben.
+  **Ok:** a golden teszt a `MicrophonePermissionState.denied` (retryable) ágat
+  rendereli (`test/ui/goldens/e13_r16_screens_golden_test.dart:113-127`), NEM
+  a `permanentlyDenied`/`restricted` — azaz `!deniedFailure.retryable` — ágat,
+  amelyiket a kör ténylegesen javított
+  (`permission_primer_screen.dart:94-107`, a `SingleChildScrollView` csomagolás
+  a nem-görgethető ágra került). A retryable ág MÁR korábban is
+  `SingleChildScrollView`-ba volt csomagolva (`:111-115` a briefben hivatkozva),
+  így ez a golden a javítás előtt és után bájtra ugyanazt a fát renderelte.
+  **Következtetés:** a két PNG nem mozdult el, ÚJRAFELVÉTEL NEM TÖRTÉNT —
+  ez a mérés (nem bemondás) igazolja a §0.0/a előrejelzését.
+
+### 10.3 A10 — a teljes suite
+
+```
+~/flutter/bin/flutter test --reporter compact
+```
+
+Eredmény (a futás ténylegesen lefutott, végigvárva): **15 bukás**, és a
+bukott cellák NÉV SZERINT mind az öt mért ARM↔x86 raszter-drift fájlban
+vannak (`[E]` jelölésű sorok kigyűjtve a teljes logból), a kapu x86
+architektúráján zöld (ADR 0426, L516). (Review MINOR-2 fix: a korábbi
+`+7330`/`+8562` teljes-passz-szám két helyen ellentmondott egymásnak, és a
+javító kör diffje — az új `library_test.dart` cella — amúgy is elmozdítja a
+számot; a passz-szám pontos, aktuális értéke a §7 gate/Full Gate futásának
+kimenetéből olvasható, itt a bukás-szám és -halmaz a mérvadó, változatlan
+tény.) Fájlonkénti bontás (a konkrét bukott cellák a log alapján):
+
+| Fájl | Bukott cellák | Ok |
+|---|---|---|
+| `test/ui/goldens/e13_r20_screens_golden_test.dart` | chord detail — compact, chord detail — compact_scale2, learning path — compact (3) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r23_screens_golden_test.dart` | song library — compact, song library — compact_scale2 (2) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r32_screens_golden_test.dart` | hub — compact, hub — compact_scale2, streak_detail — compact, streak_detail — compact_scale2, achievements — compact_scale2 (5) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r34_screens_golden_test.dart` | club_detail — compact, club_detail — compact_scale2, safety — compact_scale2 (3) | `Pixel test failed`, ARM↔x86, L516 |
+| `test/ui/goldens/e13_r35_screens_golden_test.dart` | share_preview — compact, share_preview — compact_scale2 (2) | `Pixel test failed`, ARM↔x86, L516 |
+
+3+2+5+3+2 = 15, pontosan a teljes bukás-szám — ezen az öt fájlon kívül a
+TELJES suite (beleértve a §7 gate 34 fájlját, a két átfordított golden-fájlt,
+és minden más `test/**` fájl) zöld. Drifen kívül piros cella NINCS. (A
+`test/app/routing/app_router_test.dart` „gamification routes" tesztnevei a
+compact reporter által kétszer — indításkor és záráskor — kiírt, `[E]` jel
+NÉLKÜLI, ZÖLD sorok; a log tartalmi átvizsgálása megerősítette, hogy ez a
+fájl a §7 gate-ben és a teljes suite-ban is 100%-ban zöld.)
+
+### 10.4 Melyik cella mit bizonyít
+
+| Cella | Bizonyíték |
+|---|---|
+| A1 | `test/app/feature_flags_test.dart` új „Adaptive shell feature flag (E15-R02, ADR 0467, A1)" csoport, három cella (`development`/`lab` → `true`, `production` → `false`) — §7 gate zöld |
+| A2 | `adaptive_scaffold_test.dart` — §7 gate zöld |
+| A3 | `legacy_route_redirect_test.dart` — §7 gate zöld |
+| A4 | `tab_state_restoration_test.dart` — §7 gate zöld |
+| A5 | `e13_r36_variant_matrix_test.dart` — §7 gate zöld + §10.1 valódi-sértés próba |
+| A6 | `closure_suite_test.dart` (A4 csoport) — §7 gate zöld |
+| A7 | `docs/ui/legacy-backlog.md` §1 (lezárva a `bbf8ac90` commitban) |
+| A8 | a tizenegy típus-pinnelő őr a §7 gate-ben mind zöld, cella-szám nem csökkent (`git diff` a teszt-fájlokon csak érték-fordítást mutat) |
+| A9 | §10.2 — `e13_r18` újrafelvéve (`golden-x86.sh record`), `e13_r16` mérve és VÁLTOZATLAN |
+| A10 | §10.3 — teljes suite, 15 bukás, kizárólag az öt mért ARM↔x86 drift-fájlban (a pontos passz-szám a §7 gate/Full Gate kimenetéből olvasható, §10.3 MINOR-2 megjegyzés) |
+| A11 | `test/tooling/feature_flag_audit_test.dart` — a `killSwitchPath` próza-cella zöld (§7 gate [36]) |
+
+### 10.5 Javító kör 2 — a review leleteinek zárása
+
+**BLOCKER-1** (`library_test.dart`): a legacy-referencia cella VÁLTOZATLAN
+maradt; a fájl kapott egy MÁSODIK `testWidgets` cellát,
+`appConfigProvider`-override NÉLKÜL (a szállított, nem-production
+alapértelmezés), amely a `libraryV2SourcesProvider`-t egy fake analysis
+forrással köti fel, a Profile fülön át (`context.go(AppRoutes.profileLibrary)`
+a `l10n.navLibrary` gombbal) eljut az `UnifiedLibraryScreen`-hez, és ott
+méri a wire-elt session megjelenését. `flutter test test/features/library/library_test.dart --reporter compact`
+→ `+4: All tests passed!` (a fájl cellaszáma 3→4).
+
+**MAJOR-1** (`shell_lifecycle_test.dart`, „Tuner back"): a `tester.pageBack()`
+visszaállítva és lefuttatva **PIROS** lett:
+
+```
+Expected: exactly one matching candidate
+  Actual: _TypeWidgetFinder:<Found 0 widgets with type "CupertinoNavigationBarBackButton": []>
+   Which: means none were found but one was expected
+One back button expected on screen
+```
+
+Ok: `WidgetTester.pageBack()` először `CupertinoNavigationBarBackButton`
+típusra keres; a `TunerScreen` vissza-affordanciája Material `IconButton`
+(`Icons.arrow_back`), amit a `pageBack()` heurisztikája nem talál meg —
+tehát a `router.pop()` marad (nem a `pageBack()`), a kommentben erre a mért
+kimenetre hivatkozva. `flutter test test/app/routing/shell_lifecycle_test.dart --reporter compact`
+→ `+2: All tests passed!` (visszaállítva).
+
+**MINOR-1** (`feature_flag_registry.dart:488`): `adr: '0467'` → `adr: '0275'`
+visszaállítva (a `killSwitchPath` próza — a felhatalmazott mező — változatlan,
+és amúgy is nevesíti az ADR 0467 D1/D8-at). `test/tooling/feature_flag_audit_test.dart`
+→ `+20: All tests passed!`.
+
+**MINOR-2**: §10.3/§10.4 ellentmondó teljes-suite összesítője egyeztetve — l.
+a §10.3 megjegyzését.
 
 ## 11. Review — a Claude tölti ki

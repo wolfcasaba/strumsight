@@ -9,6 +9,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:strumsight/app/routing/app_route.dart';
+import 'package:strumsight/app/routing/app_router.dart';
 import 'package:strumsight/core/foundation/app_failure.dart';
 import 'package:strumsight/core/foundation/app_result.dart';
 import 'package:strumsight/features/auth/data/token_store.dart';
@@ -87,7 +89,10 @@ Future<ProviderContainer> _openSettings(
     ),
   );
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Settings'));
+  // E15-R02 (ADR 0467 D9): the app boots on the adaptive shell's /today
+  // entry point now; Settings lives at AppRoutes.profileSettings (same
+  // SettingsScreen widget as the legacy /settings route).
+  container.read(routerProvider).go(AppRoutes.profileSettings);
   await tester.pumpAndSettle();
   return container;
 }

@@ -477,15 +477,19 @@ class _ActionBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _ActionButton(
-              icon: Icons.graphic_eq,
-              label: tunerLabel,
-              onTap: onTuner,
+            Expanded(
+              child: _ActionButton(
+                icon: Icons.graphic_eq,
+                label: tunerLabel,
+                onTap: onTuner,
+              ),
             ),
-            _ActionButton(
-              icon: Icons.av_timer,
-              label: metronomeLabel,
-              onTap: onMetronome,
+            Expanded(
+              child: _ActionButton(
+                icon: Icons.av_timer,
+                label: metronomeLabel,
+                onTap: onMetronome,
+              ),
             ),
           ],
         ),
