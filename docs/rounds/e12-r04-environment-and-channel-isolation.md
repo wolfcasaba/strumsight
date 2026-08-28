@@ -524,10 +524,12 @@ Mindkét paraméterezett cella pirosra váltott → a `.strip()`-es ág visszaá
 review-ban a DB-jelszót kiszivárogtatta):
 
 ```
+$ SK="9f3c1a7be24d05f8a1b6c0d3e7f2a894"                        # strumsight:allow-secret kitalált 32-hex canary, csak a szivárgás-reprodukcióhoz
+$ DB="postgresql+psycopg://app:Pg-Pa55w0rd@db.internal/ss"     # strumsight:allow-secret kitalált DB-jelszó, csak a szivárgás-reprodukcióhoz
 $ cd backend && env -i PATH=/usr/bin:/bin HOME=/home/ubuntu \
     STRUMSIGHT_ENV="Prod-uction" \
-    STRUMSIGHT_SECRET_KEY="9f3c1a7be24d05f8a1b6c0d3e7f2a894" \
-    STRUMSIGHT_DATABASE_URL="postgresql+psycopg://app:Pg-Pa55w0rd@db.internal/ss" \
+    STRUMSIGHT_SECRET_KEY="$SK" \
+    STRUMSIGHT_DATABASE_URL="$DB" \
     python -c "from app.config import Settings; Settings()"
 
 1 validation error for Settings
