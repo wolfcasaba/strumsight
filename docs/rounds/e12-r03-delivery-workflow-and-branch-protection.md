@@ -262,4 +262,124 @@ CI-dispatch, PR és merge kizárólag orchesztrátor-oldal — az implementer `g
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** Claude Sonnet 5 (`sonnet-impl`, `--effort medium`), 2026-08-28.
+
+### 10.1 Létrehozott / módosított fájlok (a §4 listával egyezően)
+
+- `docs/process/backlog-policy.md` — ÚJ. Label/severity rendszer a
+  `docs/release/blockers.md` P0–P3 skálájához kötve (a skála szövegét nem
+  ismétli, csak leképez), a hat kötelező issue-mező táblázata, a release-asset
+  szabály kimondása (A7).
+- `.github/ISSUE_TEMPLATE/{feature,bug,security,migration,release}.yml` — ÚJ.
+  Mind az öt a §0.0.A P2 szűkített GitHub issue-form YAML-részhalmazban,
+  mindegyik a hat kötelező mezővel (`chapter`, `round`, `acceptance`,
+  `test_plan`, `rollback`, `privacy`, mind `required: true`).
+- `.github/ISSUE_TEMPLATE/config.yml` — ÚJ. `blank_issues_enabled: false` +
+  egy `contact_links` bejegyzés a backlog-policy.md-re.
+- `.github/CODEOWNERS` — ÚJ. Öt terület (audio/backend/security/model/release),
+  kizárólag a §0.0.A P3-ban MÉRT, létező útvonalakra (`lib/core/audio/`,
+  `lib/features/audio_analysis/`, `lib/features/live/`, `lib/features/tuner/`,
+  `backend/`, `lib/features/auth/`, `lib/core/storage/`, `lib/core/network/`,
+  `docs/security/`, `lib/core/ml/`, `assets/ml/`, `.github/workflows/`,
+  `android/`, `docs/release/`), `@wolfcasaba` jelölő tulajdonossal (mérve:
+  `docs/execution/remote-container-environment.md:58` és a traceability
+  matrix CI-linkjei `github.com/wolfcasaba/strumsight`-ra mutatnak).
+- `.github/pull_request_template.md` — BŐVÍTVE. Az `## Evidence` és a `##
+  Privacy / security hatás` közé beszúrva egy `## Release evidence` szakasz
+  (CI run sor + kötelezően kitöltendő release-asset sor). A meglévő 11
+  szakasz-fejléc (`grep -n '^## '`) mind megmaradt, csak a 12. jött hozzá.
+- `tool/audit_repository_policy.py` — ÚJ. Statikus, offline audit (`import
+  yaml` kemény függőség, PyYAML 6.0.1 ezen a boxon), öt ellenőrzés (issue-form
+  kötelező mezők, blank-issues, CODEOWNERS fantom-útvonal, D1-tiltott minta a
+  CODEOWNERS-en és a branch-protection.md-n, PR-sablon szakaszok +
+  release-asset sor), `--dry-run` az egyetlen mód, hálózati hívás nincs, a
+  `gh api repos/wolfcasaba/strumsight/branches/main/protection` parancsot
+  csak kiírja.
+- `test/tooling/repository_policy_test.dart` — ÚJ. A guard logikája (parser +
+  ellenőrző függvények) top-level, tartalom-paraméteres függvényként ebben a
+  fájlban él (ADR 0444 D6) — a kör engedélyezett fájllistája nem tartalmazott
+  külön `tool/*.dart` fájlt ehhez, ezért nincs `tool/ci/check_secrets.dart`-
+  stílusú külön lib. 28 teszt: `parseIssueForm` (happy path + 4 elutasítási
+  eset: inline flow-map, rossz indentálás, ismeretlen top-level kulcs,
+  érvénytelen `required:` érték), A1–A4/A6–A8 cellák fixture-rel ÉS a valódi
+  fájlokkal, a §6.1 mátrix minden releváns sora.
+- `docs/process/branch-protection.md` — ÚJ. Required status check +
+  force-push/branch-delete tiltás mint automatizálható kötelező elvárás; az
+  approving-review mező mint user opció (ADR 0050 hivatkozással); az élő
+  `gh api` ellenőrzés mint operátori lépés.
+- `docs/rounds/e12-r03-delivery-workflow-and-branch-protection.md` — ez a
+  szakasz (§10).
+
+### 10.2 Kötelező záró ellenőrzés — tényleges kimenet
+
+```
+$ tools/round-gate.sh test/tooling/repository_policy_test.dart
+```
+
+Minden lépés ZÖLD: `format`, `analyze` (`No issues found!`), `test
+test/tooling/repository_policy_test.dart` (28/28 zöld), `architecture` (12
+allowlistolt eltérés, változatlan), `secrets` (3944 fájl, 0 lelet), `l10n`
+(OK). Kilépési kód: 0.
+
+```
+$ python3 tool/audit_repository_policy.py --dry-run
+Repository-policy audit: minden ellenorzes zold.
+
+Live branch-protection ellenorzeshez (operatori lepes, NEM ez a script futtatja):
+  gh api repos/wolfcasaba/strumsight/branches/main/protection
+```
+
+Kilépési kód: 0.
+
+### 10.3 Valódi-sértés próba (§6 KÖTELEZŐ, L476)
+
+```
+$ python3 -c "<a bug.yml 'rollback' textarea-blokkjának eltávolítása>"
+$ tools/round-gate.sh test/tooling/repository_policy_test.dart
+```
+
+Eredmény: a `test` lépés **PIROS** (kilépési kód 1), a hibaüzenet pontosan az
+A1 cellát nevezte meg:
+
+```
+A1 — required issue-template fields, fixture-driven (L260) all five real issue templates satisfy the six required fields [E]
+  Expected: empty
+    Actual: ['rollback']
+  .github/ISSUE_TEMPLATE/bug.yml is missing required fields
+```
+
+Ezután a `bug.yml` visszaállítva a mentett másolatból (`diff` üres,
+`git status --porcelain` a visszaállítás után tiszta volt), majd a gate
+újra lefuttatva: minden lépés ismét ZÖLD (lásd §10.2). A próba menet közben
+egy második, előre nem tervezett önhivatkozási csapdát is felfedett és
+javított: az A8 önvédő teszt ELSŐ változata a saját leírásában szó szerint
+tartalmazta a keresett `Process.run` mintát (`test('this test file contains
+no Process.run / Process.runSync call', …)`), ezért mindig pirosra váltott
+volna a saját szövege miatt, függetlenül attól, hívott-e valóban külső
+folyamatot. A leírás és a komment átírva úgy, hogy ne tartalmazza szó szerint
+a keresett mintát (mintázat: `sdd_index_guard_test.dart` A9 tesztje).
+
+### 10.4 Amit NEM futtattam, és miért
+
+- **A teljes `flutter test` suite és a property gate** — az `AGENTS.md` §12 /
+  ADR 0053 szerint ez a box csak a célzott útvonalat futtatja, a teljes suite
+  + randomizált property gate a CI-ban fut, azt az orchesztrátor indítja.
+- **`gh` bármely hívása** (issue/PR/branch-protection API) — az implementer
+  scope-ján kívül (brief §7, §2 tiltott zóna); a `tool/audit_repository_policy.py`
+  a hívandó `gh api` parancsot csak kiírja.
+- **`backend/` sáv a gate-ben** — a kör nem érintette a `backend/` fát, a
+  `round-gate.sh` `backend_touched()` ellenőrzése ezt helyesen `skip`-nek
+  mérte (nem futott le a backend ruff/pytest lépés).
+- **`ruff` a `tool/audit_repository_policy.py`-n** — az ADR 0444 „Következmények"
+  szakasza szerint ez nem ennek a körnek a dolga (a `round-gate.sh` `format`/
+  `analyze` lépése Dart-only, a `backend/` ruff-sáv a `backend/` fára van
+  kötve); a fájlt kézzel, PEP 8-hoz igazodó formázással írtam.
+
+### 10.5 Scope
+
+A munka a §4 engedélyezett fájllistán belül maradt. `.github/workflows/**`,
+`.github/actions/**`, `docs/execution/**`, `docs/adr/**`, `lib/**`,
+`backend/**`, `tools/**` egyike sem módosult (`git status --porcelain` a kör
+végén az összes fenti fájlon kívül tiszta).
+
 ## 11. Review — a Claude tölti ki
