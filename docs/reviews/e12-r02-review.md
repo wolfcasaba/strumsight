@@ -4,7 +4,8 @@ Brief: [`docs/rounds/e12-r02-sdd-index-and-dependency-graph.md`](../rounds/e12-r
 ADR: [`docs/adr/0443-sdd-index-machine-checkable-contract.md`](../adr/0443-sdd-index-machine-checkable-contract.md)
 Diff: `git diff 4437fdb6..3316b844` (implementer: `sonnet-impl` / Claude Sonnet 5 `--effort high`)
 Reviewer: Claude (Opus 5) · Dátum: 2026-08-28
-**Verdikt: CHANGES REQUIRED**
+**Verdikt: ~~CHANGES REQUIRED~~ → APPROVED** (javító kör után, `a7d4308f` — lásd
+a záró [„Javító kör — újra-ellenőrzés"](#javító-kör--újra-ellenőrzés-a7d4308f) szakaszt)
 
 ## Összegzés
 
@@ -216,3 +217,109 @@ A próba a reviewer scratchpadjában futott, a repóba nem került be.
 
 **Merge-hatás:** az F1 nyitva → **merge TILOS**. Az F2 a körben olcsón javítható
 (egy jegyzet-sor), ezért a javító kör kapja. Az F3/F4 nem blokkol, follow-up.
+
+---
+
+## Javító kör — újra-ellenőrzés (`a7d4308f`)
+
+Egy javító kör futott (`sonnet-impl`, ugyanaz a munkapéldány), commit
+**`a7d4308f`**, 3 fájl / +167 −9. A reviewer minden leletet KÜLÖN mért újra.
+
+### F1 — MAJOR → **ZÁRVA**
+
+**(a) A valódi tábla rendben.** Mind a 9 hiányos sor megkapta az explicit `—`
+`Zárójelentés` cellát (`00-index.md`, Chapter 5, 6, 8, 9, 10, 11, 12, 13, 14).
+A reviewer render-próbája újrafuttatva:
+
+```
+$ python3 render_probe.py docs/sdd/00-index.md
+fejléc (9 oszlop): [...]
+Eltérő értelmezésű sorok: 0 / 14          # a javítás előtt: 9 / 14
+```
+
+Cellaszám-mérés: mind a 14 adatsor **9 cella**, egyezik a fejléccel.
+
+**(b) Gépi őr, ami visszakúszás esetén pirosra vált.** Új cella:
+`test/tooling/sdd_index_guard_test.dart:535-596` — *„F1 (e12-r02 review) — the
+real chapter table has no GFM cell-count drift"*. A cella a valódi
+`00-index.md`-t olvassa **saját, GFM-hű cellaszámlálóval** (`splitRowGfm`), tehát
+szándékosan FÜGGETLEN a `parseChapterTable` név-alapú toleranciájától — pontosan
+ezért tudja megfogni azt, amire a checker vak.
+
+**A reviewer SAJÁT valódi-sértés próbája** (nem az implementer bemondása; izolált
+`/tmp/review-e12-r02` klónban, a `a7d4308f` HEAD-en):
+
+```
+$ # a Chapter 5 sorból eltávolítva a "—" Zárójelentés cella (8 cella lesz)
+$ flutter test test/tooling/sdd_index_guard_test.dart
+  Expected: empty
+    Actual: ['line 19: 8 cell(s), expected 9: "| 5 | Epic 4: AI Guitar Teacher | 24 | … |"']
+  a GFM renderer places missing cells at the ROW END, not at the "Zárójelentés"
+  column by name — a short row shifts every later column in the rendered table
+  (e12-r02 review F1)
+  test/tooling/sdd_index_guard_test.dart 586:7
+00:00 +35 -1: Some tests failed.        exit 1
+$ # a sértés visszaállítva → a munkafa tiszta
+```
+
+Az őr tehát **valóban piros** a sértésre, a hibás sort a sorszámával nevezve meg.
+Az F1 két része együtt zárja a leletet: a tábla helyes, ÉS a visszakúszás
+mérve piros.
+
+### F2 — MINOR → **ZÁRVA**
+
+A tábla alá bekerült a jegyzet (`00-index.md`), ami kimondja, hogy a
+`Dependency` oszlop — az ASCII „Függőségi kép"-hez hasonlóan — **illusztráció,
+nem szerződés**, a géppel ellenőrzött egyetlen forrás a
+`dependency-graph.yaml` `edges:` blokkja (ADR 0443 D2). A jegyzet nevesíti a
+Chapter 12 sorának eltérő jelölését (`ch01–ch11` tartomány) is, tehát a
+felfedezett gépi-összevethetetlenség dokumentálva van, nem eltüntetve. Ez a
+review által javasolt (b) út — a diffet nem hizlalja.
+
+### F3 / F4 — NOTE → változatlanul nyitva, follow-up
+
+A javító kör helyesen NEM nyúlt hozzájuk.
+
+### Gate-bizonyíték a javítás után (reviewer, izolált klón, `a7d4308f`)
+
+```
+$ git -C /tmp/review-e12-r02 rev-parse HEAD → a7d4308f7271edacddf6073e23f8d51565f7b28f
+$ tools/round-gate.sh test/tooling/sdd_index_guard_test.dart
+    format                                                     zöld
+    analyze                                                    zöld
+    test test/tooling/sdd_index_guard_test.dart                zöld   (36/36, All tests passed!)
+    architecture                                               zöld
+    secrets                                                    zöld
+    l10n                                                       zöld
+MINDEN GATE ZÖLD.                                              GATE_EXIT=0
+```
+
+### Scope a TELJES körre (pre-flight bázisról)
+
+```
+$ python3 tools/scope-audit.py --repo /home/ubuntu/ss-sonnet-impl-e12-r02 \
+    --brief docs/rounds/e12-r02-sdd-index-and-dependency-graph.md \
+    --base 4437fdb6f2a92b6e87147cbdf029c12a975141f4
+Legacy scope audit OK (4437fdb6f2a9..a7d4308f7271, 6 changed path(s), 1 generated/ignored)
+```
+
+A `1 generated/ignored` a `docs/reviews/e12-r02-review.md` — a reviewer saját
+kötelező artefaktuma, kód szintű mentesség
+(`tools/ai_router/security.py::GENERATED_IGNORED_PREFIXES`), nem sértés.
+
+### Végső mérleg
+
+| # | Osztály | Állapot |
+|---|---|---|
+| F1 | MAJOR | **ZÁRVA** — tábla javítva (0/14 eltérés) + független őr, reviewer-próbával pirosra mérve |
+| F2 | MINOR | **ZÁRVA** — a `Dependency` oszlop kimondottan illusztráció |
+| F3 | NOTE | nyitva (follow-up: fejezet↔fájl prefix-egyezés) |
+| F4 | NOTE | nyitva (follow-up: az ASCII-ábra manifesthez mérése) |
+
+**BLOCKER: 0 · MAJOR: 0 · MINOR: 0 · NOTE: 2**
+
+## VÉGSŐ DÖNTÉS: APPROVED
+
+Nyitott BLOCKER/MAJOR/MINOR nincs. A merge a zöld kapu (ADR 0052) exact-SHA
+teljesülése után mehet: `full-gate.yml` + `router-ci.yml` `success` a merge
+SHA-ján.
