@@ -31,13 +31,21 @@ egyetlen fájl a meglévő `tool/` gyökérben**), [L368](../LESSONS.md#l368) (a
 generikus architecture-checker és a célzott tesztes őr bizonyítéka nem
 felcserélhető).
 
-**R1 — A mért számok (a ⚠ jegyzet egy száma HIBÁS volt).**
-`lib/app/config/feature_flags.dart` = 451 sor, **37** `final bool` mező:
-**3** kötelező konstruktor-paraméter (`accountEnabled`, `diagnosticsEnabled`,
-`labModeAvailable`) + **34** `= false` alapértelmezésű. A ⚠ jegyzet „5 kötelező
-konstruktor-paraméter" állítása téves; a §2 „3 kötelező" állítása helyes.
-`bool.fromEnvironment` **5** helyen. **Az A1 teljesség-követelmény mind a 37
-mezőre vonatkozik**, nem csak a 34-re. Az E13/E14 sáv nem vett fel újat.
+**R1 — A mért számok** *(javítva a review-ban, 2026-08-28: az eredeti R1
+tévesen 37 mezőt írt)*. `lib/app/config/feature_flags.dart` = 451 sor,
+**40** `final bool` mező: **3** kötelező konstruktor-paraméter
+(`accountEnabled`, `diagnosticsEnabled`, `labModeAvailable`) + **37**
+`= false` alapértelmezésű. A ⚠ jegyzet „5 kötelező konstruktor-paraméter"
+állítása téves; a §2 „3 kötelező" állítása helyes, a „34" viszont a
+`= false` mezőkre is alulmér. **A hibás szám oka mérve:** a pre-flight
+`grep -cE "^\s+final bool [a-zA-Z]+;"` mintája kiejtette a **számjegyet
+tartalmazó** három mezőnevet (`practiceEngineV2Enabled`,
+`songTrainerV2Enabled`, `audioAnalysisV2Enabled`); a helyes minta
+`[A-Za-z0-9]+`. `bool.fromEnvironment` **5** helyen (ez stimmelt).
+**Az A1 teljesség-követelmény mind a 40 mezőre vonatkozik.** Az A1/D4 gépi
+audit amúgy sem rögzített számból, hanem a forrás ÉLŐ parse-olásából
+származtatja a teljességet — az implementer helyesen a mért 40 mezőt
+katalogizálta (§10.1). Az E13/E14 sáv nem vett fel újat.
 
 **R2 — A katalógus string-kulcsú, NEM importálja a `FeatureFlags` típust**
 (ADR 0446 D5). Mérve: `feature_flags.dart` importálja a
