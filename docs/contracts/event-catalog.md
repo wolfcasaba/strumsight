@@ -17,7 +17,7 @@ hivatkozás létező fájlra (ahol értelmes, sorra) mutat — nem az SDD terv m
 
 | Mező | Típus | Megjegyzés |
 |---|---|---|
-| `type` | `String` | Discriminátor: `practice` \| `song` \| `analysis` \| `plan` \| `tutor` \| `vision` |
+| `type` | `String` | Discriminátor: `practice` / `song` / `analysis` / `plan` / `tutor` / `vision` |
 | `eventId` | `String` | Hívó-adta, stabil idempotencia-kulcs (nem üres/blank) |
 | `occurredAt` | `String` | `DateTime.toIso8601String()` — UTC bemenetnél ezredmásodperccel és `Z`-vel |
 | `epochDay` | `int` | Naptári nap-index |

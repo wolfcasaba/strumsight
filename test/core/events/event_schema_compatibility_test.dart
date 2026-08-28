@@ -203,13 +203,13 @@ void main() {
             reason: '${row.type} producer ${producer.path} must exist',
           );
 
-          final constructorCall = '${_constructorNameByType[row.type]}(';
+          final className = _constructorNameByType[row.type]!;
           expect(
-            file.readAsStringSync().contains(constructorCall),
+            _containsConstructorCall(file.readAsStringSync(), className),
             isTrue,
             reason:
                 '${producer.path} is listed as a producer for ${row.type} '
-                'but does not contain a $constructorCall call',
+                'but does not contain a $className(...) constructor call',
           );
         }
       }
@@ -250,7 +250,10 @@ void main() {
       final unexpectedProducers = <String>[];
       for (final path in _dartFilesUnder('lib')) {
         if (path == definitionFile) continue;
-        if (File(path).readAsStringSync().contains('TutorActivityEvent(')) {
+        if (_containsConstructorCall(
+          File(path).readAsStringSync(),
+          'TutorActivityEvent',
+        )) {
           unexpectedProducers.add(path);
         }
       }
@@ -272,6 +275,18 @@ Iterable<String> _dartFilesUnder(String root) sync* {
       yield entity.path;
     }
   }
+}
+
+/// True only for a real `ClassName(eventId: ..., ...)` invocation — a bare
+/// substring match on `'ClassName('` also fires on the Dart 3 object-pattern
+/// `case ClassName():` used by achievement_evaluator.dart's exhaustive
+/// switch, which takes no arguments and constructs nothing.
+bool _containsConstructorCall(String source, String className) {
+  final callOpen = RegExp('${RegExp.escape(className)}\\(\\s*');
+  for (final match in callOpen.allMatches(source)) {
+    if (!source.startsWith(')', match.end)) return true;
+  }
+  return false;
 }
 
 final class _Producer {
