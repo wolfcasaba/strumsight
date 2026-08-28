@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 
 from alembic.config import Config as AlembicConfig
+from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import DateTime, create_engine, func, inspect, select
 from sqlalchemy.engine import Engine
@@ -113,9 +114,13 @@ def restore_database(
 ) -> dict:
     """Rebuild `database_url` from `backup` (as produced by
     `backup.dump_database`). Raises `RestoreRejected` — leaving the target
-    untouched — if the backup's revision is unknown, or if the target already
-    holds data and the double confirmation (`force` AND `confirm_target ==
-    target_name`) is not satisfied (ADR 0449 D4/D5)."""
+    untouched — if the backup's revision is unknown, if the target's current
+    schema head is already set and does not match the backup's revision (an
+    `alembic upgrade` never moves a target backwards, so restoring an older
+    backup over a newer schema would otherwise leave it silently
+    inconsistent), or if the target already holds data and the double
+    confirmation (`force` AND `confirm_target == target_name`) is not
+    satisfied (ADR 0449 D4/D5)."""
     if not target_name:
         raise RestoreRejected("target_name is required")
 
@@ -133,6 +138,17 @@ def restore_database(
     tables = backup.get("tables", {})
     engine = _make_engine(database_url)
     try:
+        with engine.connect() as connection:
+            target_heads = MigrationContext.configure(connection).get_current_heads()
+        target_head = next(iter(target_heads), None)
+        if target_head is not None and target_head != backup_revision:
+            raise RestoreRejected(
+                f"target schema is at {target_head!r}, which does not match "
+                f"the backup's revision {backup_revision!r} — an upgrade "
+                "cannot move the target backwards, so restoring would leave "
+                "it in an inconsistent state; refusing"
+            )
+
         existing_counts = _existing_row_counts(engine, tables.keys())
         has_data = any(count > 0 for count in existing_counts.values())
         if has_data and not (force and confirm_target == target_name):

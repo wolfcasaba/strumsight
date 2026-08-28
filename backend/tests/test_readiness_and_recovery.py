@@ -7,6 +7,7 @@ Acceptance-terkep (brief SS6):
   A2b test_health_routes_stay_reachable_while_gate_is_active
   A3  test_backup_then_restore_round_trip
   A4  test_restore_refuses_to_overwrite_existing_data_without_double_confirmation
+  A4b test_restore_rejects_target_schema_newer_than_backup (fix-round MINOR-1)
   A5  test_staging_env_example_carries_no_real_secret,
       test_staging_settings_reject_dev_default_secret_key
   A6  test_dockerfile_pins_base_image_by_digest_and_runs_as_non_root
@@ -243,13 +244,61 @@ def test_restore_refuses_to_overwrite_existing_data_without_double_confirmation(
     assert target_snapshot_after == target_snapshot_before
 
 
+def test_restore_rejects_target_schema_newer_than_backup(tmp_path, monkeypatch):
+    """MINOR-1: a backup taken while the source was at an OLDER revision than
+    the target's current head must be refused before any write — `alembic
+    upgrade` never moves a target backwards, so silently proceeding would
+    leave the target's schema stuck behind its own head with no error."""
+    source_url = f"sqlite:///{tmp_path / 'source-old.db'}"
+    monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", source_url)
+    command.upgrade(_alembic_config(), "e01_r12_0001")
+    _seed_user(source_url)
+    old_backup = backup_script.dump_database(source_url)
+    assert old_backup["revision"] == "e01_r12_0001"
+    backup_path = tmp_path / "backup-old.json"
+    backup_script.main(["--database-url", source_url, "--output", str(backup_path)])
+
+    target_url = f"sqlite:///{tmp_path / 'target-newer.db'}"
+    monkeypatch.setenv("STRUMSIGHT_DATABASE_URL", target_url)
+    command.upgrade(_alembic_config(), "head")
+    _seed_user(target_url)
+    target_snapshot_before = backup_script.dump_database(target_url)
+
+    exit_code = restore_script.main(
+        [
+            "--database-url",
+            target_url,
+            "--input",
+            str(backup_path),
+            "--target-name",
+            "e12-r08-test-target",
+            "--force",
+            "--confirm-target",
+            "e12-r08-test-target",
+        ]
+    )
+    assert exit_code != 0
+
+    target_snapshot_after = backup_script.dump_database(target_url)
+    assert target_snapshot_after == target_snapshot_before
+
+
 # ---------------------------------------------------------------------------
 # A5 — staging profile carries no secret; the loaded guard rejects dev
 # defaults (ADR 0449 D6)
 # ---------------------------------------------------------------------------
 
 _SECRET_LIKE_KEY = re.compile(r"(SECRET|TOKEN|_KEY)\b", re.IGNORECASE)
+# MAJOR-2 fix: the *_KEY/SECRET/TOKEN cell alone missed the most likely
+# credential vector — a real DB password embedded in a connection URL under
+# a key like STRUMSIGHT_DATABASE_URL, which none of those patterns match.
+_URL_LIKE_KEY = re.compile(r"(URL|PASSWORD|PASS|DSN)\b", re.IGNORECASE)
 _PLACEHOLDER_VALUE = re.compile(r"^<.+>$")
+# `scheme://user:password@host` — only the password segment is the secret;
+# host/user/db-name in a URL-like value are not required to be placeholders.
+_URL_USERINFO_PASSWORD = re.compile(
+    r"^[a-zA-Z][a-zA-Z0-9+.\-]*://[^:/@]+:(?P<password>[^@/]*)@"
+)
 
 
 def test_staging_env_example_carries_no_real_secret():
@@ -260,9 +309,23 @@ def test_staging_env_example_carries_no_real_secret():
         if not stripped or stripped.startswith("#") or "=" not in stripped:
             continue
         key, _, value = stripped.partition("=")
-        if not _SECRET_LIKE_KEY.search(key):
+
+        userinfo_match = _URL_USERINFO_PASSWORD.match(value)
+        if userinfo_match:
+            checked_any = True
+            password = userinfo_match.group("password")
+            assert password == "" or _PLACEHOLDER_VALUE.match(password), (
+                f"{key} embeds a non-placeholder password in its URL "
+                f"userinfo, got {password!r}"
+            )
+
+        if not (_SECRET_LIKE_KEY.search(key) or _URL_LIKE_KEY.search(key)):
             continue
         checked_any = True
+        if userinfo_match:
+            # Password already checked above; a URL/DSN-like key's
+            # host/user/db-name segments are not secrets on their own.
+            continue
         assert value == "" or _PLACEHOLDER_VALUE.match(value), (
             f"{key} must be empty or a <placeholder> in staging.env.example, "
             f"got {value!r}"

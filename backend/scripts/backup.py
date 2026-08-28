@@ -5,9 +5,18 @@ per-table rows, the per-table row count, and the migration revision the
 source was AT when dumped (ADR 0449 D5 — the backup carries the head so the
 restore can rebuild schema with Alembic instead of `create_all`).
 
+**The dump contains PII and password hashes** (the `users` table's `email`
+and bcrypt `hashed_password` columns are dumped like every other row) — treat
+the output file like a database dump, not a config file: write it outside the
+repository tree, keep it off the secret scanner's radar only because it is
+never committed, and store it encrypted/access-restricted with an explicit
+retention window (see docs/operations/database-recovery.md §2). The file is
+created with `0600` permissions from the first write — it is never briefly
+world/group readable.
+
 Usage:
     python scripts/backup.py --database-url sqlite:///strumsight.db \\
-        --output backup.json
+        --output /var/backups/strumsight/backup.json
 
 See docs/operations/database-recovery.md for the full runbook.
 """
@@ -16,8 +25,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import date, datetime
-from pathlib import Path
 
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, select
@@ -70,7 +79,13 @@ def dump_database(database_url: str) -> dict:
 
 def write_backup(database_url: str, output_path: str) -> dict:
     snapshot = dump_database(database_url)
-    Path(output_path).write_text(json.dumps(snapshot, indent=2, sort_keys=True))
+    payload = json.dumps(snapshot, indent=2, sort_keys=True)
+    # The dump carries PII + password hashes — create the file at 0600 from
+    # its first byte (O_CREAT|O_TRUNC, not write-then-chmod) so it is never
+    # briefly group/world readable.
+    fd = os.open(output_path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(payload)
     return snapshot
 
 

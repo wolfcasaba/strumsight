@@ -280,4 +280,111 @@ tools/round-gate.sh test/app/config/feature_flags_test.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Állapot:** első kör + 1. javító kör (jelen kör) végállapota. A forgalmi
+kapu (`main.py::_traffic_gate`, per-router `dependencies=[Depends(...)]`),
+a `backup.py`/`restore.py` pár, a `Dockerfile`/`deploy/` és a két
+`docs/operations/` runbook az első körben megépült; ez a javító kör a
+review négy leletét zárta — séma-, route- vagy meglévő-fixture-változás
+nélkül, a §4 engedélyezett fájllistáján belül maradva.
+
+### 10.1 Acceptance-térkép → cella (jelen kör végállapota)
+
+| # | Cella | Megjegyzés |
+|---|---|---|
+| A1 | `test_traffic_gate_blocks_business_endpoint_on_migration_mismatch[staging\|prod]` | változatlan, lásd 10.3/1 próba |
+| A2 | `test_traffic_gate_allows_normal_behavior_once_migrated[staging\|prod]` | változatlan |
+| A2b | `test_health_routes_stay_reachable_while_gate_is_active` | változatlan, lásd 10.3/1 próba |
+| A3 | `test_backup_then_restore_round_trip` | a `backup.py` mostantól `0600`-zal ír (MAJOR-1) |
+| A4 | `test_restore_refuses_to_overwrite_existing_data_without_double_confirmation` | változatlan, lásd 10.3/2 próba |
+| A4b | `test_restore_rejects_target_schema_newer_than_backup` | ÚJ cella (MINOR-1) |
+| A5 | `test_staging_env_example_carries_no_real_secret`, `test_staging_settings_reject_dev_default_secret_key` | a kulcs-minta bővült (MAJOR-2), lásd 10.3/3 próba |
+| A6 | `test_dockerfile_pins_base_image_by_digest_and_runs_as_non_root` | változatlan |
+| A7 | `test_migrations.py` + `conftest.py`-alapú auth/settings cellák | változatlan forrással zöld — a §7 gate artefaktum bizonyítja |
+
+### 10.2 A javító kör 4 lelete és a javítás
+
+- **MAJOR-1 (security review M1 — PII-dump 0644-gyel, trackelt könyvtárba).**
+  `backend/scripts/backup.py::write_backup` mostantól `os.open(...,
+  O_CREAT|O_WRONLY|O_TRUNC, 0o600)`-zal nyitja a kimenetet — a fájl SOSEM
+  létezik tágabb joggal, még pillanatra sem (nincs „írás, majd `chmod`"
+  ablak). A docstring kimondja: a dump PII-t (`email`) és jelszó-hasheket
+  (`hashed_password`) hordoz. `docs/operations/database-recovery.md` §2
+  minden példaparancsa mostantól a repófán KÍVÜLRE ír
+  (`${STRUMSIGHT_BACKUP_DIR:-/var/backups/strumsight}/...`), és a §2 új
+  bekezdése gépi-ellenőrizhetetlen üzemeltetési szabályként mondja ki: ne
+  commitold, titkosított/korlátozott hozzáférésű helyen tárold, explicit
+  megőrzési idővel és törléssel.
+- **MAJOR-2 (Claude review — az A5 átengedi az URL-be ágyazott jelszót).**
+  `test_readiness_and_recovery.py`: a `_SECRET_LIKE_KEY` minta mellé új
+  `_URL_LIKE_KEY` (`URL|PASSWORD|PASS|DSN`) és `_URL_USERINFO_PASSWORD`
+  (`séma://user:jelszó@host`) ellenőrzés került. Utóbbi bármely érték
+  userinfo-jelszó részét vizsgálja (a kulcs nevétől függetlenül), és csak
+  üres vagy `<...>` helyőrzőt fogad el — a host/user/db-név rész NEM kell
+  helyőrző legyen, csak a jelszó. Lásd 10.3/3 a mért PIROS-váltásért.
+- **MINOR-1 (security review N2 — a restore régebbi revízióra némán no-op).**
+  `backend/scripts/restore.py::restore_database` a séma-építés (Alembic
+  `upgrade`) ELŐTT megméri a cél aktuális fejét
+  (`MigrationContext.get_current_heads()`). Ha az nem üres és nem egyezik a
+  mentés fejével, `RestoreRejected`-et ad **adat-módosítás nélkül** — sem az
+  `existing_counts`/`has_data` ellenőrzés, sem az `alembic upgrade` nem fut
+  le előtte. Új cella: `test_restore_rejects_target_schema_newer_than_backup`
+  (A4b) — egy `e01_r12_0001`-en (a lánc ELSŐ revíziója) rögzített mentést
+  próbál egy `head`-re migrált, adatot tartalmazó célra visszatölteni
+  `--force`/`--confirm-target` mellett is; a célnak változatlannak kell
+  maradnia.
+- **MINOR-2 (a brief §10 üres volt).** Ez a szakasz — jelen kitöltés.
+
+### 10.3 Valódi-sértés próbák — TÉNYLEGES kimenet (mérve ezen a boxon)
+
+**1) A forgalmi kapu predikátumának `SELECT 1`-re gyengítése (§6.1
+kötelező próba, A1-re).** `backend/app/main.py::_readiness_failure`
+ideiglenesen csak `SELECT 1`-et futtatott (a `MigrationContext`/
+`ScriptDirectory` fej-összevetés eltávolítva), majd
+`pytest tests/test_readiness_and_recovery.py -v`:
+
+```
+FAILED tests/test_readiness_and_recovery.py::test_traffic_gate_blocks_business_endpoint_on_migration_mismatch[staging]
+FAILED tests/test_readiness_and_recovery.py::test_traffic_gate_blocks_business_endpoint_on_migration_mismatch[prod]
+FAILED tests/test_readiness_and_recovery.py::test_health_routes_stay_reachable_while_gate_is_active
+3 failed, 8 passed in 5.26s
+```
+
+A1 (mindkét env) és A2b is PIROSRA váltott (a gyengített predikátum a
+migrálatlan sémán is READY-t adott, tehát a `/health/ready` már nem 503-at
+adott — pontosan a mátrix által előrejelzett mód). Visszaállítás után
+(`tests/test_readiness_and_recovery.py tests/test_migrations.py`) mind a 26
+cella zöld, a `main.py` diffje a próba után nulla.
+
+**2) A `--confirm-target` elhagyása (A4-re).** Ezt a meglévő
+`test_restore_refuses_to_overwrite_existing_data_without_double_confirmation`
+cella három ágon (nincs `--force`; `--force` + hibás `--confirm-target`;
+`--force` + hiányzó `--confirm-target`) automatikusan lefuttatja minden
+gate-futáskor — mindhárom nem-nulla kilépési kóddal és változatlan cél-
+snapshottal zár; külön kézi próba nem szükséges, a cella maga a próba, és a
+§7 gate futása bizonyítja zöldjét MINOR-1 után is.
+
+**3) A MAJOR-2 utáni URL-jelszó próba (A5-re).** A `staging.env.example`
+`STRUMSIGHT_DATABASE_URL` sorának `<db-password>` helyőrzőjét
+`Tr0ub4dor-real-staging-db-pw`-re cserélve (különálló, a repót nem
+módosító szkripttel reprodukálva a javított ellenőrző logikával):
+
+```
+original: (True, 'ok')
+leaked:   (False, "STRUMSIGHT_DATABASE_URL leaked password 'Tr0ub4dor-real-staging-db-pw'")
+```
+
+A javított cella tehát a valódi jelszót PIROSRA váltja; az eredeti
+(helyőrzős) `staging.env.example` zöld marad.
+
+### 10.4 Eltérések a brieftől
+
+Nincs — a javító kör a §4 engedélyezett fájllistáján belül maradt
+(`backend/scripts/backup.py`, `backend/scripts/restore.py`,
+`backend/tests/test_readiness_and_recovery.py`,
+`docs/operations/database-recovery.md`,
+`docs/rounds/e12-r08-staging-backend-migrations-and-recovery.md`), séma,
+route és meglévő tesztfixture érintetlen. A `backend/app/main.py` a 10.3/1
+próbához ideiglenesen módosult, majd bájtra visszaállt (`git diff` nulla
+rajta) — ez nem számít végleges módosításnak.
+
 ## 11. Review — a Claude tölti ki

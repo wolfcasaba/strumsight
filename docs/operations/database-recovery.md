@@ -21,22 +21,42 @@
 
 ## 2. Backup
 
+**The dump file contains PII and password hashes** (the `users` table's
+`email` and bcrypt `hashed_password` columns, verbatim, alongside every other
+row) — it MUST be written **outside this repository's working tree**, never
+committed, and never left in a directory a `git add -A` could pick up. Point
+`--output` at a dedicated backup directory, e.g. `/var/backups/strumsight/`
+or a path from an operator-controlled `$STRUMSIGHT_BACKUP_DIR`:
+
 ```bash
 cd backend
 .venv/bin/python scripts/backup.py \
   --database-url "$STRUMSIGHT_DATABASE_URL" \
-  --output "backup-$(date -u +%Y%m%dT%H%M%SZ).json"
+  --output "${STRUMSIGHT_BACKUP_DIR:-/var/backups/strumsight}/backup-$(date -u +%Y%m%dT%H%M%SZ).json"
 ```
 
 The output file records the revision and a per-table row count on success —
 check both before trusting the backup:
 
 ```
-backup written to backup-20260828T120000Z.json (revision=e09_r27_0020, users=42, user_settings=42, ...)
+backup written to /var/backups/strumsight/backup-20260828T120000Z.json (revision=e09_r27_0020, users=42, user_settings=42, ...)
 ```
 
-Store the file wherever your secret/data retention policy requires (it
-contains user data — treat it like a database dump, not a config file).
+`backup.py` creates the file at `0600` (owner read/write only) from its first
+byte. This is not machine-enforced beyond that file-mode bit — the following
+are **operational rules, not code-checked invariants**, and are the operator's
+responsibility every time a dump is taken:
+
+- **Never commit a dump.** It is not covered by `backend/.gitignore` or the
+  repo's secret scanner (a JSON `"hashed_password": "..."` field does not
+  match the scanner's credential-assignment patterns) — the only guard is
+  that the file lives outside the tree in the first place.
+- **Store it encrypted at rest**, in a location with access restricted to
+  the operators who need it for recovery (the same bar as a raw production
+  database export).
+- **Set an explicit retention window** and delete the file (not just let it
+  age out silently) once that window passes or the backup is superseded by
+  a newer one.
 
 ## 3. Restore
 
@@ -47,7 +67,7 @@ safe by default only because of that assumption:
 cd backend
 .venv/bin/python scripts/restore.py \
   --database-url "$TARGET_DATABASE_URL" \
-  --input backup-20260828T120000Z.json \
+  --input "${STRUMSIGHT_BACKUP_DIR:-/var/backups/strumsight}/backup-20260828T120000Z.json" \
   --target-name <a name identifying the target, e.g. staging-primary>
 ```
 
@@ -69,7 +89,7 @@ Overwriting requires **both** of the following in the same invocation (ADR
 ```bash
 .venv/bin/python scripts/restore.py \
   --database-url "$TARGET_DATABASE_URL" \
-  --input backup-20260828T120000Z.json \
+  --input "${STRUMSIGHT_BACKUP_DIR:-/var/backups/strumsight}/backup-20260828T120000Z.json" \
   --target-name staging-primary \
   --force \
   --confirm-target staging-primary
