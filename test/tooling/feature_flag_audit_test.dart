@@ -318,4 +318,34 @@ final class Probe {
       expect(issue.message, contains('visionExperimentalFineFretEnabled'));
     });
   });
+
+  group('A11 — adaptiveShellEnabled killSwitchPath prose is truthful '
+      '(E15-R02, ADR 0467 D8)', () {
+    // §0.0/c's second leet: the audit machinery above only measures that
+    // `killSwitchPath` is non-empty (incompleteCatalogEntry) — it never
+    // reads the PROSE. Before this round the prose claimed the flag was
+    // "hardcoded to `false` in every environment", which ADR 0467 D1 made
+    // false; this cell is the machine guard the brief's §0.0/c measured
+    // was missing.
+    test('the prose no longer claims the flag is hardcoded false in every '
+        'environment', () {
+      final entry = featureFlagRegistry.singleWhere(
+        (d) => d.key == 'adaptiveShellEnabled',
+      );
+      expect(
+        entry.killSwitchPath,
+        isNot(contains('hardcoded to `false` in every environment')),
+        reason:
+            'ADR 0467 D1 made this false — the flag now resolves to '
+            '`nonProd` outside production',
+      );
+    });
+
+    test('the prose names the actual current gate (`nonProd`)', () {
+      final entry = featureFlagRegistry.singleWhere(
+        (d) => d.key == 'adaptiveShellEnabled',
+      );
+      expect(entry.killSwitchPath, contains('nonProd'));
+    });
+  });
 }

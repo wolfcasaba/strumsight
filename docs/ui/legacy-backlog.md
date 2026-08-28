@@ -10,22 +10,31 @@ only measured and recorded.
 ## 1. Dated exclusion-list entries (§0.0.B/B5) — measured `lib/**` layout
    defects this round could not fix
 
-Both defects were discovered BY this round's own new gates
-(`e13_r36_variant_matrix_test.dart`, `closure_suite_test.dart`) — they are
-not carried over from an earlier round. Each is a `const _ExcludedCell`
-(matrix file) or a dedicated `testWidgets` cell (closure suite) that
-verifies the overflow is STILL present — a resolved defect left on either
-list would turn that cell RED (the shrink-only guard, L180).
+**Both entries below are CLOSED as of 2026-08-28 (E15-R02).** `lib/**` was
+this round's (E13-R36) tilos zona, so the fixes were deferred; E15-R02's
+own scope explicitly covered both (brief §2/§3) and fixed them: the stat-strip
+`Row`'s children are now wrapped in `Expanded` (`live_screen.dart:477`), and
+the permanently-denied primer branch is now wrapped in a
+`SingleChildScrollView` matching the retryable branch
+(`permission_primer_screen.dart`). The four `_ExcludedCell` entries in
+`test/ui/goldens/e13_r36_variant_matrix_test.dart` were removed (the cells
+now assert NO overflow) and the `closure_suite_test.dart` "A4" cell was
+flipped the same way — both per the shrink-only guard (L180): a resolved
+defect is proven by the cell turning green, not by deleting it.
 
-| # | Screen / widget | Cell | Measured overflow | Date | Source test | Owner | Why not fixed this round |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `lib/features/live/screens/live_screen.dart:477` (stat-strip `Row`) | `live·light·en·landscape·textScale2.0` | 12px, right, horizontal `Row` | 2026-08-27 | `test/ui/goldens/e13_r36_variant_matrix_test.dart` | Next Live-screen round (SDD, unscheduled) | `lib/**` is this round's tilos zona; the fix (wrap the Row's children in `Expanded`/`Flexible`, or let the strip scroll) is a `live_screen.dart` edit |
-| 2 | same | `live·dark·en·landscape·textScale2.0` | 12px, right | 2026-08-27 | same | same | same |
-| 3 | same | `live·light·hu·landscape·textScale2.0` | 34px, right (longer hu labels) | 2026-08-27 | same | same | same |
-| 4 | same | `live·dark·hu·landscape·textScale2.0` | 34px, right | 2026-08-27 | same | same | same |
-| 5 | `lib/features/onboarding/screens/permission_primer_screen.dart` (permanently-denied branch, `Scaffold(body: SsPermissionState(...))` — not wrapped in a scrollable, unlike the retryable branch a few lines above it) | permanently-denied primer, compact portrait (412x915), `textScale: 2.0` | 297px, bottom, `Column` inside `Center` | 2026-08-27 | `test/accessibility/closure_suite_test.dart` (group "A4") | Next onboarding/permission round (SDD, unscheduled) | `lib/**` is this round's tilos zona; the fix is wrapping the permanently-denied branch in a `SingleChildScrollView`, matching the retryable branch's own comment ("A9 (golden gate, textScaler 2.0): scrollable rather than overflowing") |
+Both defects were discovered BY the E13-R36 round's new gates
+(`e13_r36_variant_matrix_test.dart`, `closure_suite_test.dart`) — they were
+not carried over from an earlier round.
 
-Reproduce any row with (row 1 example):
+| # | Screen / widget | Cell | Measured overflow | Date | Source test | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `lib/features/live/screens/live_screen.dart:477` (stat-strip `Row`) | `live·light·en·landscape·textScale2.0` | 12px, right, horizontal `Row` | 2026-08-27 | `test/ui/goldens/e13_r36_variant_matrix_test.dart` | **CLOSED 2026-08-28 (E15-R02)** — `Row` children wrapped in `Expanded` |
+| 2 | same | `live·dark·en·landscape·textScale2.0` | 12px, right | 2026-08-27 | same | **CLOSED 2026-08-28 (E15-R02)** — same fix |
+| 3 | same | `live·light·hu·landscape·textScale2.0` | 34px, right (longer hu labels) | 2026-08-27 | same | **CLOSED 2026-08-28 (E15-R02)** — same fix |
+| 4 | same | `live·dark·hu·landscape·textScale2.0` | 34px, right | 2026-08-27 | same | **CLOSED 2026-08-28 (E15-R02)** — same fix |
+| 5 | `lib/features/onboarding/screens/permission_primer_screen.dart` (permanently-denied branch, `Scaffold(body: SsPermissionState(...))` — not wrapped in a scrollable, unlike the retryable branch a few lines above it) | permanently-denied primer, compact portrait (412x915), `textScale: 2.0` | 297px, bottom, `Column` inside `Center` | 2026-08-27 | `test/accessibility/closure_suite_test.dart` (group "A4") | **CLOSED 2026-08-28 (E15-R02)** — branch wrapped in `SingleChildScrollView` |
+
+Reproduce the (now resolved) row 1 case with:
 
 ```bash
 ~/flutter/bin/flutter test test/ui/goldens/e13_r36_variant_matrix_test.dart \
