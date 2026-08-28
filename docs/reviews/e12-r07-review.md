@@ -10,7 +10,31 @@
   (`scope_audit_base=95ba5f4b`, `scope_audit_changed=6`), a munkafa a commitok után tiszta
   (`git status --short` üres; a jelzéskori `dirty_files=1` a §10-et író, azóta commitolt fájl volt)
 
-## Verdikt: CHANGES REQUESTED — 2 MAJOR
+## VÉGSŐ DÖNTÉS: APPROVED (2. kör, `511499a2` — 0 nyitott lelet)
+
+A javító kör (`511499a2`, 3 fájl, +226/−5) mindkét MAJOR leletet lezárta. A zárást
+**nem** az implementer celláival, hanem az orchesztrátor SAJÁT, független próbáival
+mértem (a leletet feltáró eredeti fixture-ökkel + két új, túl-tág kivételt kereső
+próbával):
+
+| Próba | Bemenet | Elvárt | Mért |
+|---|---|---|---|
+| P0 | valós `build.gradle.kts` + valós `release-apk.yml` | exit 0 | **exit 0** |
+| P1 (F1) | a fingerprint-javaslat fragmentje beillesztve egy workflow-ba | exit 0 | **exit 0** (előtte: exit 1) |
+| P2 (F2) | `echo "${{ secrets.ANDROID_STORE_PASSWORD }}"` | nem-nulla | **exit 1**, `keystore-not-echoed` (előtte: exit 0) |
+| P3 | `::add-mask::` sor UTÁN nyílt `echo "$…PASSWORD"` UGYANABBAN a lépésben | nem-nulla | **exit 1** — a kivétel sor-lokális, nem lépés-szintű |
+| P4 | `echo "${{ env.STRUMSIGHT_RELEASE_KEY_PASSWORD }}"` | nem-nulla | **exit 1** |
+
+A P3/P4 azt méri, hogy az F1 javítása **nem tágult túl**: a maszkoló idióma kivétele
+egyetlen sorra szól, és az `env`-kontextusú interpolációt is fogja. A meglévő cellák nem
+gyengültek (23 → 27 cella, mind zöld), a `scope_audit` `OK` (7 útvonal, `95ba5f4b..511499a2`).
+
+**Nyitott BLOCKER/MAJOR/MINOR: nincs.** A NOTE-ok (N1–N4) szándékos, ADR-ben rögzített
+határok, nem javítandók.
+
+---
+
+## Első kör verdiktje (történet): CHANGES REQUESTED — 2 MAJOR
 
 Mindkét lelet **mérve** van, nem olvasásból következtetve, és mindkettő ugyanabban a
 szabályban (`keystore-not-echoed`) él: az egyik hamis pozitív, ami a kör SAJÁT,
