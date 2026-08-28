@@ -224,4 +224,109 @@ dart run tool/check_feature_flags.dart
 
 ## 10. Implementation handoff — az implementer tölti ki
 
+**Implementer:** `sonnet-impl` (Claude Sonnet 5, `--effort medium`), 2026-08-28.
+
+### 10.1 Mért korrekció — 40 mező, nem 37 (R1 újramérve)
+
+A brief §0.0 R1 pontja (és az ADR 0446 Kontextus szakasza) **37** `final
+bool` mezőt állít (3 kötelező + 34 alapértelmezett). Egy közvetlen újramérés
+UGYANAZON a fán (`grep -c 'final bool ' lib/app/config/feature_flags.dart`,
+`python3 -re` kereszt-ellenőrzés) **40** mezőt talál (3 kötelező + **37**
+alapértelmezett — a „34" és a „37 total" szám fel lett cserélve a briefben).
+A `bool.fromEnvironment` darabszám (5) és a fájl sorszáma (451) egyezik.
+
+Ez NEM STOP-eset: az A1 teljesség-követelmény és a D4 gépi audit a forrás
+ÉLŐ parse-olásából származik, nem egy rögzített számból — a `dart run
+tool/check_feature_flags.dart` a valódi fán csak akkor lehet zöld (R5), ha a
+katalógus a MÉRT (40, nem 37) mezőt fedi le. A katalógus ezért mind a 40
+valós mezőt tartalmazza; ez tartja zölden mind a gépi audit-eszközt, mind a
+`test/app/config/feature_flags_test.dart` / `test/app/feature_flags_test.dart`
+regresszió-őröket (A7). A pontos mező-egyezést (`real - catalog == ∅` és
+`catalog - real == ∅`) egy Python cross-check is megerősítette
+implementáció közben.
+
+### 10.2 Létrehozott fájlok
+
+| Fájl | Tartalom |
+|---|---|
+| `lib/core/feature_flags/feature_flag_definition.dart` | `FeatureFlagDefinition`, `FeatureFlagRisk` |
+| `lib/core/feature_flags/feature_flag_source.dart` | `FeatureFlagSource`, `RemoteFeatureFlagSource`, `SignedFeatureFlagPayload`, `FeatureFlagResolver`, `FeatureFlagResolution(Origin)` |
+| `lib/core/feature_flags/feature_flag_registry.dart` | `featureFlagRegistry` — 40 bejegyzés, string-kulcsú (D5), `FeatureFlags` importja NÉLKÜL |
+| `lib/core/feature_flags/public.dart` | kézzel írt barrel (R6) |
+| `tool/check_feature_flags.dart` | `parseFeatureFlagFieldNames`, `isFeatureFlagExpired`, `auditFeatureFlagRegistry`, `checkFeatureFlagsAtRoot`, vékony `main()` (R3, `check_sdd_index.dart` mintája) |
+| `test/core/feature_flags/feature_flag_registry_test.dart` | A2/A3/A4/A6 + prioritási lánc + katalógus-alak |
+| `test/tooling/feature_flag_audit_test.dart` | A1/A5 + küszöb-cellahármas + R5 (valós katalógus zöld) + programozott valódi-sértés próba |
+| `docs/release/kill-switches.md` | a katalógus emberi olvasatú vetülete, generálva a Dart forrásból |
+
+### 10.3 Kötelező gate (§7) — ZÖLD
+
+```
+tools/round-gate.sh test/core/feature_flags/feature_flag_registry_test.dart test/tooling/feature_flag_audit_test.dart test/app/config/feature_flags_test.dart
+```
+
+Mind a 8 lépés (`format`, `analyze`, a 3 célzott teszt, `architecture`,
+`secrets`, `l10n`) ZÖLD. Kiegészítő futtatás (nem a gate része, de az A7
+másik regresszió-őre): `flutter test test/app/feature_flags_test.dart` — 16
+teszt, mind ZÖLD.
+
+Az audit-eszköz közvetlen futtatása (§7 második parancsa):
+
+```
+$ dart run tool/check_feature_flags.dart
+Feature flag audit OK (0 issue(s)).
+```
+
+### 10.4 Valódi-sértés próba (§6, KÖTELEZŐ) — mindkét próba, kimenettel
+
+**1. próba (A1, brief §6.1 sora 1):** a `visionSetupEnabled` bejegyzés
+kivétele a `feature_flag_registry.dart`-ból, majd
+`flutter test test/tooling/feature_flag_audit_test.dart`:
+
+```
+00:00 +11 -1: checkFeatureFlagsAtRoot — R5 (the real, shipped catalog is green) the real registry matches the real feature_flags.dart source with no expired entries [E]
+  Expected: true
+    Actual: <false>
+  Feature flag audit failed:
+  - [missingCatalogEntry] FeatureFlags field "visionSetupEnabled" (lib/app/config/feature_flags.dart) has no catalog entry in featureFlagRegistry.
+```
+
+Az A1 cella PIROS lett, pontosan a hiányzó mezőt nevezve. Visszaállítva
+(`git diff` üres a fájlra), a teszt újra ZÖLD (16/16, ellenőrizve a §7
+gate teljes újrafuttatásával is).
+
+**2. próba (A3, brief §0.0 §6 sora 2 — a resolver §5.1 tiltott gyengítése):**
+a `feature_flag_source.dart` `FeatureFlagResolver.resolve` emergency-ágának
+szimmetrikussá tétele (`emergencyValue != null` → érvényesül, a `true` is),
+majd `flutter test test/core/feature_flags/feature_flag_registry_test.dart`:
+
+```
+00:00 +4 -1: A3 — the emergency source is asymmetric: only `false` ever wins (ADR 0446 D1, the NOT-acceptable weakening from brief §5.1) emergency=true does NOT turn the flag on — it is treated exactly like no opinion and falls through to the next source [E]
+  Expected: false
+    Actual: <true>
+```
+
+Az A3 cella PIROS lett — az emergency `true` bekapcsolt egy flaget, ami az
+ADR 0446 D1 tiltott gyengítése. Visszaállítva (`git diff` üres a fájlra), a
+teszt újra ZÖLD (16/16), és a teljes §7 gate is újra lefutott zölden a
+visszaállítás UTÁN (l. 10.3).
+
+### 10.5 Kockázati szint (§9) — a heurisztika és korlátai
+
+A `risk` mező (`FeatureFlagRisk.{low,medium,high}`) emberi ítélet, nem gépi
+mérés — a `feature_flag_registry.dart` fejléce dokumentálja a szabályt
+(`high` csak ott, ahol a `feature_flags.dart` maga `usesNetwork`-ben
+szerepel, vagy a mező doc-commentje hálózati/adat-kiviteli szót nevez meg).
+Az `adr` mező csak akkor tölt, ha `feature_flags.dart` MAGA hivatkozik egy
+ADR-re az adott mező közelében — 33/40 mezőnél nincs ilyen közvetlen forrás-
+hivatkozás, ott `adr: null`. Ez review-ban vitatható, de nem hazudik: minden
+`adr != null` érték egy konkrét, idézett forrás-sorra vezethető vissza.
+
+### 10.6 Nem érintett / szándékosan kimaradt
+
+- `lib/app/config/feature_flags.dart` — csak olvasva, nem módosítva.
+- `tools/round-gate.sh` — a `check_feature_flags.dart` NINCS bekötve (R7).
+- Valódi hálózati remote-flag csatorna / aláírás-ellenőrzés — interfész-
+  szintű marad (`SignedFeatureFlagPayload.signatureValid` egy fake-mező), a
+  D3 szerint szándékosan.
+
 ## 11. Review — a Claude tölti ki
