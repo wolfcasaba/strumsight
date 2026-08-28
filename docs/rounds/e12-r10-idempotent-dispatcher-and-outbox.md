@@ -1,18 +1,45 @@
 # E12-R10 — Idempotens integration dispatcher és outbox
 
-- **Státusz:** PREPARED (előre megírva 2026-08-27, kód olvasva: `main @ 9ca4a0dc`)
+- **Státusz:** READY (pre-flight elvégezve 2026-08-28, kód újramérve: `main @ 24874c58`)
 - **Típus:** Chapter 12 (Release Roadmap, Sprint Planning & Final Integration), Kör 10
 - **Kör-azonosító:** `E12-R10`
-- **Branch:** `<motor>/e12-r10-idempotent-dispatcher-and-outbox`
+- **Branch:** `sonnet-impl/e12-r10-idempotent-dispatcher-and-outbox`
 - **Előfeltétel:** `E12-R09` merge-elve (a katalógus adja a mért esemény-listát és az idempotencia-kulcsokat)
 - **Brief szerzője:** Claude (Opus 5)
-- **Előre kiosztott ADR:** `ADR 0451` — a szám FOGLALT (Chapter 12 batch-tartomány).
+- **ADR:** [`ADR 0469`](../adr/0469-outbox-idempotency-is-measured-on-the-ledger-effect.md) — a `tools/round-slots.py reserve-adr` foglalója adta (lásd §0.0 R1).
 
 **Visszakeresett előzmény:** `node tools/knowledge-rag.mjs --corpus lessons,halts,adr --top 5 "idempotent event dispatcher outbox retry dead-letter duplicate XP streak"` → **`halts/round-status-E08-R24`** (a Practice↔Gamification integráció merge-elt köre) és **[ADR 0333](../adr/0333-activity-outbox-reliable-processing.md)** (Activity outbox: kapacitás, `maxAttempts`, karantén, ack csak sikeres ledger-hívás után). A dupla-XP elleni védelem MÁR él — ez a kör MÉRI és lefedi, nem újraírja.
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** olvasd újra a `lib/features/gamification/data/local_activity_outbox_repository.dart` és az `application/activity_event_ingestor.dart` MÉRT viselkedését (kapacitás-túlcsordulás → legrégebbi karanténba; `attemptCount == maxAttempts` → karantén; `appendIfAbsent` `false` = idempotens ismétlés, ack-elhető). A §6 cellái ezekre a MÉRT invariánsokra épülnek.
 
-## 0.0 A kör tárgya: HIÁNYZÓ MÉRCE, nem hiányzó mechanizmus
+## 0.0 Pre-flight brief-revízió (Claude, 2026-08-28, `main @ 24874c58`)
+
+A `brief-lint` (strict) **nem adott leletet**. Az alábbi hat revízió a §1 két mérési
+szabályából (elérhetetlen cél-státusz · erőforrás-tulajdonlás a TÉNYLEGES hívási
+láncon) született, mind kimért paranccsal.
+
+**Visszakeresés (ADR 0312, szűkítve → teljes):** `lessons,halts,adr` →
+[`ADR 0333`](../adr/0333-activity-outbox-reliable-processing.md) (a kapacitás/karantén/
+`maxAttempts` szerződés), [`ADR 0301`](../adr/0301-reward-ledger-append-only-idempotency.md)
+(append-only dedup), `halts/round-status-E08-R04` (a mai outbox merge-elt köre);
+`lessons,halts` → **[L453](../LESSONS.md)** (egy csatorna-specifikus mock csak azt az
+EGY csatornát bizonyítja — az invariánst nem), **[L441](../LESSONS.md)** (a bukó
+`expect` UTÁNI állítások SOHA nem futnak le, tehát méretlenek), **[L368](../LESSONS.md)**
+(a bizonyíték a TÉNYLEGESEN futtatott őré, nem egy általánosabbé).
+
+| # | Mért állítás | Revízió |
+|---|---|---|
+| **R1** | A brief `ADR 0451`-et írt elő; a kötelező foglaló (`tools/round-slots.py reserve-adr --round E12-R10`, ADR 0171 §1.0.1) **`0469`**-et adott (a fán a legmagasabb `0468`, a `0451` sosem került kiosztásra). | A kör ADR-je **0469**. A `0451` szám nem kerül felhasználásra. |
+| **R2** | `local_activity_outbox_repository.dart:243` a kísérlet-számlálót a ledger-hívás **ELŐTT** növeli, a `:286` feltétel pedig `record.attempts >= maxAttempts`. Emiatt a `attemptCount = maxAttempts - 1` **perzisztált** állapot a következő drainben KARANTÉNBA kerül — a brief §6 „alatta" cellája (`maxAttempts - 1` → PENDING) **elérhetetlen**. | A küszöb-cellahármas a **drain ELŐTTI, perzisztált** `attempts` mezőn értendő; a §6 hármas újraírva (lásd lent). |
+| **R3** | `grep -rn "StreakService(" lib/` → **0 találat**: a `StreakService` tiszta, hívó-vezérelt szolgáltatás, amit az outbox soha nem hív. Az outbox drain egyetlen downstream-je az `appendIfAbsent` (`:249`); a ledger egyetlen projekciója a `ProfileProjector.rebuild()` (`profile_projector.dart:40`). | Az **A3** nem mérhető „streak-számításként" ezen az úton. Újrafogalmazva a MÉRT láncon: sorrend-függetlenség a ledger-tartalmon és a projektált `totalXp`-n. |
+| **R4** | Az effekt-mérés konkrét felülete megvan: `ProfileProjector(curve:…, ledger:…).rebuild()` → `.profile.totalXp`. A teszt-infra is: `test/support/preference_store.dart` exportálja az `InMemoryKeyValueStore`-t, és a `test/features/gamification/application/activity_ingestor_test.dart:521–608` `_Fixture` + `_FakeRewardLedger` mintája a VALÓDI `LocalRewardLedgerRepository`-t perzisztálja ugyanabba a store-ba. | Az új cellák EZT a mintát követik; új mock-ledger bevezetése tilos. |
+| **R5** | `docs/contracts/event-catalog.md` idempotencia-**oszlopa MÁR kitöltött** (mind a hat soron `eventId`), és van „Idempotencia (ADR 0333)" szakasza — a Kör 9 leszállította. | Az **A6** nem „oszlop-kitöltés", hanem a meglévő szakasz kiegészítése a kör MÉRT outbox-invariánsaival, cellánkénti hivatkozással. |
+| **R6** | `_ensureLoaded()` (`:334`) lusta, első használatkori dokumentum-olvasás; a konstruktor `KeyValueStore`-t kap. | Az **A2** resume-cellája elérhető: MÁSODIK `LocalActivityOutboxRepository` UGYANARRA az `InMemoryKeyValueStore`-ra. |
+
+A kör kötött döntéseit az [`ADR 0469`](../adr/0469-outbox-idempotency-is-measured-on-the-ledger-effect.md)
+rögzíti (D1–D6). A §5 alábbi pontjai annak a rövidítései.
+
+## 0.0.1 A kör tárgya: HIÁNYZÓ MÉRCE, nem hiányzó mechanizmus
 
 A SDD Kör 10 „implementálj dispatchert és outboxot" feladata a fán RÉSZBEN teljesült (ADR 0333). Ami MÉRHETŐEN hiányzik: (a) a **100-szoros ismétlés** invariáns-teszt, (b) a **process-kill utáni resume** bizonyítéka, (c) az **out-of-order** esemény kezelésének cellája, (d) a community-oldali outbox és a gamification-outbox EGYÜTTES viselkedésének mérése. A kör ezt a négyet szállítja, és csak akkor módosít `lib/**` kódot, ha valamelyik cella MÉRT hibát talál — a javítás ekkor a MEGLÉVŐ osztályban történik, új párhuzamos dispatcher NEM jön létre.
 
@@ -58,16 +85,32 @@ Bizonyítani — nem feltételezni —, hogy ismétlés, folyamat-megszakítás 
 - `test/features/gamification/` alatt van `application`, `data`, `domain`, `integration` teszt-könyvtár — a mai cellák a KOMPONENS szintjén mérnek; **100-szoros ismétlés, kill-resume és out-of-order cella nincs**.
 - `test/core/events/` a Kör 9 után létezik (séma-kompatibilitási teszttel).
 
+**Pre-flightban újramérve (2026-08-28, `main @ 24874c58`) — ezekre épülnek a §6 cellái:**
+
+| Mért tény | Hol |
+|---|---|
+| A drain a kísérlet-számlálót a ledger-hívás **ELŐTT** növeli | `local_activity_outbox_repository.dart:242–245` |
+| A karantén-feltétel `record.attempts >= maxAttempts` | `local_activity_outbox_repository.dart:286` |
+| `appendIfAbsent == false` + `hasProcessedEvent == true` → ack (nincs dupla kifizetés) | `local_activity_outbox_repository.dart:276–282` |
+| Ledger-kivétel a drainen belül elnyelve, a rekord PENDING marad | `local_activity_outbox_repository.dart:250–261`, `:308–312` |
+| Már feldolgozott eseményre az `enqueue` `accepted == false` + `supersededByLedger` karantén | `local_activity_outbox_repository.dart:153–168` |
+| A perzisztált állapot lustán, első használatkor töltődik (ez adja a resume-ot) | `local_activity_outbox_repository.dart:334` |
+| Az egyetlen ledger-projekció: `ProfileProjector.rebuild()` → `profile.totalXp` | `profile_projector.dart:40`, `:57` |
+| A `StreakService`-nek **nincs hívója** a `lib/` fán | `grep -rn "StreakService(" lib/` → 0 találat |
+| Használható teszt-infra: `InMemoryKeyValueStore` + valódi `LocalRewardLedgerRepository` fölé húzott, kapcsolható `_FakeRewardLedger` | `test/support/preference_store.dart`, `test/features/gamification/application/activity_ingestor_test.dart:521–608` |
+| A katalógus idempotencia-oszlopa MÁR kitöltött (`eventId`, hat sor) | `docs/contracts/event-catalog.md` |
+
 ## 3. Scope
 
-**Benne van:** `test/core/events/idempotency_test.dart` — ugyanaz az esemény **100** ismétléssel pontosan EGY ledger-hatást ad; a hatás mérése a ledger-egyenlegen történik, nem a hívásszámon · `test/core/events/outbox_resume_test.dart` — a drain közepén megszakított folyamat (perzisztált állapotból új példány) folytatja, duplázás nélkül; out-of-order beérkezés (később keletkezett esemény előbb) nem borítja a napi/streak számítást · szükség esetén PONTOSAN annyi javítás a két engedélyezett `lib/` fájlban, amennyit egy MÉRT piros cella indokol · a `docs/contracts/event-catalog.md` idempotencia-oszlopának kitöltése a MÉRT viselkedéssel.
+**Benne van:** `test/core/events/idempotency_test.dart` — ugyanaz a `sourceEventId` **100** ismétléssel (eltérő `ledgerId`-kkel) pontosan EGY ledger-hatást ad; a hatás mérése a projektált egyenlegen (`ProfileProjector.rebuild().profile.totalXp`) történik, nem a hívásszámon · `test/core/events/outbox_resume_test.dart` — a drain közepén megszakított folyamat (MÁSODIK repository-példány UGYANARRA a store-ra) folytatja, duplázás nélkül; out-of-order beérkezés (a később keletkezett esemény drainelődik előbb) ugyanazt a ledger-tartalmat és egyenleget adja, mint a sorrendhelyes futás (§5.2.1) · szükség esetén PONTOSAN annyi javítás a két engedélyezett `lib/` fájlban, amennyit egy MÉRT piros cella indokol · a `docs/contracts/event-catalog.md` „Idempotencia" szakaszának bővítése a kör MÉRT outbox-invariánsaival (a Kör 9 már kitöltötte az oszlopot — pre-flight R5).
 
 **NINCS benne (tilos):**
 
 - ÚJ dispatcher/outbox osztály vagy `lib/core/sync/outbox/` könyvtár létrehozása.
 - A community outbox átírása (mérni szabad, módosítani nem).
 - Meglévő teszt gyengítése vagy törlése.
-- `docs/adr/**` — az ADR 0451-et a Claude írja.
+- `docs/adr/**` — az [ADR 0469](../adr/0469-outbox-idempotency-is-measured-on-the-ledger-effect.md)-et a Claude MÁR megírta a pre-flightban; hozzányúlni tilos.
+- A `StreakService` közvetlen hívása „streak-bizonyítékként" (§5.2.1 — nincs a mért láncon).
 
 ## 4. Engedélyezett fájlok
 
@@ -81,44 +124,87 @@ Bizonyítani — nem feltételezni —, hogy ismétlés, folyamat-megszakítás 
 
 **Tilos zóna:** `lib/features/community/**` · `lib/features/gamification/` egyéb fájljai · `lib/core/**` · `backend/**` · `docs/adr/**` · `.github/**`
 
-## 5. Kötött architekturális döntések (ADR 0451)
+## 5. Kötött architekturális döntések ([ADR 0469](../adr/0469-outbox-idempotency-is-measured-on-the-ledger-effect.md))
 
-### 5.1 Az idempotencia mércéje a HATÁS, nem a hívásszám
+### 5.1 Az idempotencia mércéje a HATÁS, nem a hívásszám (ADR 0469 D1–D2)
 
-A teszt a ledger-egyenleget (XP, streak-nap, jutalom) méri, nem azt, hányszor hívódott egy metódus. **NEM elfogadható gyengítés:** `verify(callCount == 1)` jellegű mock-állítás — az a dupla hatást nem zárja ki, csak a dupla hívást.
+A teszt a **projektált egyenleget** méri:
+`ProfileProjector(curve: …, ledger: …).rebuild()` → `.profile.totalXp`
+(`lib/features/gamification/application/profile_projector.dart:40`), nem azt,
+hányszor hívódott egy metódus. **NEM elfogadható gyengítés:**
+`verify(callCount == 1)` jellegű mock-állítás — az a dupla hatást nem zárja ki,
+csak a dupla hívást ([L453](../LESSONS.md)).
 
-### 5.2 A megszakítás UTÁNI példány a perzisztált állapotból indul
+Az ismétlés a VALÓDI újrapróbálkozás alakjában megy: ugyanaz a `sourceEventId`,
+**eltérő `ledgerId`** (ADR 0469 D2).
 
-A resume-cella új repository-példányt épít ugyanarra a tárolóra, nem ugyanazt az objektumot folytatja. **NEM elfogadható gyengítés:** in-memory objektum „újrahasználása" resume-ként — az a folyamat-halált nem modellezi.
+### 5.2 A megszakítás UTÁNI példány a perzisztált állapotból indul (ADR 0469 D3)
 
-### 5.3 Piros cella esetén a javítás a MEGLÉVŐ osztályban történik
+A resume-cella MÁSODIK `LocalActivityOutboxRepository`-t épít UGYANARRA az
+`InMemoryKeyValueStore`-ra, nem ugyanazt az objektumot folytatja; a
+`_ensureLoaded()` (`local_activity_outbox_repository.dart:334`) lusta olvasása
+adja a folytatást. **NEM elfogadható gyengítés:** in-memory objektum
+„újrahasználása" resume-ként — az a folyamat-halált nem modellezi.
+
+### 5.2.1 A sorrend-függetlenség a ledgeren mérendő, nem a streaken (ADR 0469 D4)
+
+**MÉRT (pre-flight R3):** a `StreakService`-nek nincs hívója a `lib/` fán, és az
+outbox soha nem hívja. Az out-of-order cella ezért azt méri, hogy a fordított
+sorrendben feldolgozott két esemény UGYANAZT a ledger-tartalmat és UGYANAZT a
+`totalXp`-t adja, mint a sorrendhelyes futás, minden `sourceEventId` pontosan
+egyszer. **NEM elfogadható gyengítés:** a `StreakService` közvetlen, outboxtól
+független hívása „streak-bizonyítékként" — az nem ezen a láncon mér.
+
+### 5.3 Piros cella esetén a javítás a MEGLÉVŐ osztályban történik (ADR 0469 D6)
 
 **NEM elfogadható gyengítés:** párhuzamos, „tisztább" dispatcher bevezetése a hiba megkerülésére — a repó mért tanulsága szerint két igazság drágább, mint egy javítás.
 
 ## 6. Acceptance criteria
 
+Minden cella az **egyenleget** méri (§5.1), és minden `expect` ELŐTT álljon a
+kritikus állítás — a bukó `expect` utáni sorok soha nem futnak le
+([L441](../LESSONS.md)).
+
 | # | Kritérium | Bizonyíték |
 |---|---|---|
-| A1 | 100 ismétlés → pontosan egy ledger-hatás (egyenleg-mérés) | `idempotency_test.dart` |
-| A2 | Drain közepén megszakított folyamat után új példány folytatja, duplázás nélkül | `outbox_resume_test.dart` |
-| A3 | Out-of-order beérkezés nem duplázza és nem veszíti el a napi/streak hatást | `outbox_resume_test.dart` |
-| A4 | Sikertelen online mellékhatás NEM blokkolja a lokális állapotot (a lokális mentés megmarad) | `outbox_resume_test.dart` |
-| A5 | A `maxAttempts` elérése után a rekord karanténba kerül, és a sor tovább dolgozik | `outbox_resume_test.dart` |
-| A6 | Az esemény-katalógus minden sorának idempotencia-kulcsa a MÉRT viselkedést írja le | `docs/contracts/event-catalog.md` + a §7 gate |
+| A1 | Ugyanaz a `sourceEventId` **100** ismétléssel (eltérő `ledgerId`-kkel) → `ProfileProjector.rebuild().profile.totalXp` pontosan EGY bejegyzés `totalXp`-je | `idempotency_test.dart` |
+| A1b | Ugyanez a 100 ismétlés **enqueue→drain** párokban (nem egy batch drainben) → ugyanaz az egyenleg; a második ismétléstől az `enqueue` `accepted == false`, `supersededByLedger` karanténnal | `idempotency_test.dart` |
+| A2 | Drain közepén megszakított folyamat után **MÁSODIK** `LocalActivityOutboxRepository` UGYANARRA a store-ra folytatja: a pending rekord előkerül, a drain befejezi, és az egyenleg egyszeres | `outbox_resume_test.dart` |
+| A3 | Out-of-order beérkezés (a KÉSŐBBI `epochDay`/`occurredAt` esemény drainelődik ELŐBB) ugyanazt a ledger-tartalmat és ugyanazt a `totalXp`-t adja, mint a sorrendhelyes futás; minden `sourceEventId` pontosan egyszer szerepel, és mindkét esemény `epochDay`-e változatlanul éli túl a perzisztált fordulót | `outbox_resume_test.dart` |
+| A4 | Sikertelen ledger-hívás (dobó `appendIfAbsent`) NEM dob át a drain határán, és NEM görgeti vissza a lokális állapotot: a rekord PENDING marad, a következő, egészséges drain befejezi — az egyenleg ekkor is egyszeres | `outbox_resume_test.dart` |
+| A5 | A `maxAttempts` elérésekor a rekord karanténba kerül (`attemptLimitReached`), és a sor **tovább dolgozik**: egy mögötte álló, egészséges rekord UGYANABBAN a drain-passzban ack-elődik | `outbox_resume_test.dart` |
+| A6 | `docs/contracts/event-catalog.md` „Idempotencia" szakasza a kör MÉRT outbox-invariánsaival bővül, invariánsonként a mérő cella nevével | `docs/contracts/event-catalog.md` + a §7 gate |
 
-**Küszöb-cellahármas a `maxAttempts`-ra** (a határ INKLUZÍV: az utolsó megengedett kísérlet MÉG lefut): a küszöb **alatt** (`attemptCount = maxAttempts - 1`) → a rekord PENDING marad; **pontosan rajta** (`attemptCount == maxAttempts`) → KARANTÉN; a küszöb **fölött** (további enqueue ugyanarra) → a sor változatlanul dolgozik, új karantén-bejegyzés nem keletkezik.
+**Küszöb-cellahármas a `maxAttempts`-ra — a DRAIN ELŐTTI, PERZISZTÁLT `attempts`
+mezőn** (MÉRT, pre-flight R2: a számláló a ledger-hívás ELŐTT nő,
+`local_activity_outbox_repository.dart:243`, a feltétel `>= maxAttempts`, `:286`).
+A cellák `maxAttempts = 3`-mal, `python3 -c` számolással:
+
+| Cella | Perzisztált `attempts` a drain előtt | A drain utáni számláló | Elvárt kimenet |
+|---|---|---|---|
+| **alatta** | `maxAttempts - 2 = 1` | `2` (`2 < 3`) | a rekord PENDING marad, az id a `report.dropped` listán van, `report.quarantined` üres |
+| **rajta** | `maxAttempts - 1 = 2` | `3` (`3 >= 3`) | KARANTÉN `ActivityOutboxOutcome.attemptLimitReached`-csel, a rekord kikerül a pendingből |
+| **fölötte** | ugyanarra a `sourceEventId`-re adott ÚJABB `enqueue` a karantén után (a ledger továbbra sem ismeri: `hasProcessedEvent == false`, `:153`) | a friss rekord `attempts = 0` | `accepted == true`, a sor tovább dolgozik, ez az `enqueue` NEM termel új karantén-bejegyzést |
 
 ### 6.1 Mérce-mátrix — melyik hibás implementációt melyik cella fogja pirosra
 
 | Hibás implementáció | Melyik cella vált PIROSRA |
 |---|---|
-| Az idempotencia-kulcs az esemény TARTALMÁBÓL hasholódik `eventId` helyett (két azonos tartalmú, külön esemény összeolvad) | A1 |
-| A resume in-memory állapotból indul, a perzisztált sor nem olvasódik vissza | A2 |
-| A hálózati hiba visszagörgeti a lokális mentést | A4 |
-| A karantén a teljes sort megállítja | A5 |
-| A `maxAttempts` ellenőrzés `>` helyett `>=`-t használ egy kísérlettel korábban | a küszöb-cellahármas „alatt" cellája |
+| Az idempotencia-kulcs az esemény TARTALMÁBÓL vagy a `ledgerId`-ből hasholódik `sourceEventId` helyett | **A1** (ezért ismétel eltérő `ledgerId`-vel) |
+| A drain csak a hívásszámot védi, a hatást nem (dupla `append` ugyanarra az eseményre) | **A1**, **A1b** (egyenleg-mérés) |
+| A resume in-memory állapotból indul, a perzisztált sor nem olvasódik vissza | **A2** |
+| A feldolgozás sorrend-függő (a későbbi esemény felülírja vagy elnyeli a korábbit) | **A3** |
+| A ledger-kivétel átdob a drain határán, vagy visszagörgeti a pending rekordot | **A4** |
+| A karantén a teljes sort megállítja (a mögötte álló rekord nem ack-elődik) | **A5** |
+| A `maxAttempts` feltétel `>=` helyett `>` (egy kísérlettel későbbi karantén) | a küszöb-hármas **„rajta"** cellája |
+| A számláló a ledger-hívás UTÁN nő (egy kísérlettel későbbi karantén) | a küszöb-hármas **„rajta"** cellája |
 
-**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** cseréld az `appendIfAbsent` idempotens ágát feltétlen `append`-re, futtasd a §7 gate-et → az **A1** cellának PIROSNAK kell lennie → állítsd vissza.
+**Valódi-sértés próba (KÖTELEZŐ, a §10-ben dokumentálva):** a
+`local_activity_outbox_repository.dart:249` `appendIfAbsent` hívása helyett hívd
+a ledger feltétel nélküli append-jét (vagy töröld a `:276` `hasProcessedEvent`
+ack-ágát úgy, hogy a duplikátum újra appendelődjön), futtasd a §7 gate-et → az
+**A1** cellának PIROSNAK kell lennie a MÉRT egyenleg miatt → állítsd vissza, és
+a §10-ben idézd a piros kimenet sorát.
 
 ## 7. Kötelező ellenőrzések
 
@@ -134,11 +220,15 @@ tools/round-gate.sh test/features/gamification/
 
 ## 8. Implementációs sorrend
 
-1. `idempotency_test.dart` — a 100-szoros ismétlés, egyenleg-méréssel (RED vagy zöld: MÉRÉS).
-2. `outbox_resume_test.dart` — resume, out-of-order, karantén, küszöb-cellahármas.
-3. Csak MÉRT piros cellára: javítás a két engedélyezett `lib/` fájlban.
-4. A katalógus idempotencia-oszlopa.
-5. A valódi-sértés próba a §10-be.
+1. `idempotency_test.dart` — A1 (batch) és A1b (enqueue→drain párok), egyenleg-méréssel (RED vagy zöld: MÉRÉS). A `_Fixture`/`_FakeRewardLedger` mintát a `test/features/gamification/application/activity_ingestor_test.dart:521–608`-ból vedd át; új mock-ledger tilos.
+2. `outbox_resume_test.dart` — A2 resume (MÁSODIK repository-példány), A3 out-of-order, A4 hibatűrés, A5 karantén-továbbdolgozás, és a küszöb-cellahármas (`maxAttempts = 3`).
+3. Csak MÉRT piros cellára: javítás a két engedélyezett `lib/` fájlban, a MEGLÉVŐ osztályban (§5.3).
+4. A katalógus „Idempotencia" szakaszának bővítése a MÉRT invariánsokkal, invariánsonként a mérő cella nevével.
+5. A valódi-sértés próba a §10-be, a piros kimenet idézett sorával.
+
+**A brief §8 a terved — nincs külön task-lista.** Doc-commentben csak tesztben
+bizonyított állítás szerepeljen (`const`, `immutable`). A munkádat **commitold a
+branchre**.
 
 ## 9. Kockázatok
 
