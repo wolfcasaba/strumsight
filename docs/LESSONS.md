@@ -20915,3 +20915,46 @@ kimenete (`+48: All tests passed` és 48 uniq cellanév) cáfolta, mielőtt a
 hibás javítás merge-elődött volna. **Tanulság:** a brief minden
 szorzat-alakú cellaszámát a pre-flight `python3 -c`-vel számolja ki, ne
 másolja át.
+
+## L532 — A `round-gate.sh` backend sávja RELATÍV venv-útvonallal `exit 127`-tel bukik: az `env --chdir=backend` a relatív interpretert `backend/backend/...`-ra oldja fel (E12-R08 landolás, 2026-08-28)
+
+**Mit mértünk.** Az E12-R08 kombinált-HEAD gate-je a FŐ fában (`/home/ubuntu/music-theory`)
+`backend pytest → PIROS (kilépési kód 127)` lett, `env: ‘backend/.venv/bin/python’: No such
+file or directory` üzenettel — miközben UGYANAZ a gate a munkapéldányban (`/home/ubuntu/ss-sonnet-impl-e12-r08`)
+9/9 zölden futott le. Az ok nem kód: a `resolve_backend_python()` jelöltsorrendje
+(`tools/round-gate.sh:61–68`) a **relatív** `backend/.venv/bin/python`-t adja vissza ott,
+ahol az létezik (a fő fában), a `run_step "backend pytest" env --chdir=backend "$backend_python"`
+(`tools/round-gate.sh:255`) viszont a chdir UTÁN oldja fel, tehát `backend/backend/.venv/...`-t keres.
+A 7. és 8. lépés (`ruff format`/`check`) azért zöld, mert azok a repó gyökeréből futnak.
+A munkapéldányban nincs `backend/.venv`, ezért ott a harmadik, ABSZOLÚT jelölt nyer — és működik.
+
+**Szabály.** A gate-nek magának kell abszolutizálnia a `$backend_python`-t (vagy a
+`--chdir` helyett `-c 'cd backend && …'`-t használnia). Amíg ez nem történik meg, a
+gate saját, dokumentált kapcsolójával kell abszolút útvonalat adni:
+`ROUND_GATE_BACKEND_PYTHON=/home/ubuntu/music-theory/backend/.venv/bin/python`.
+A `tools/` a kör-orchestrátornak tilos zóna (ADR 0087 §4), ezért a javítás az
+önjavító körre tartozik — a megkerülés a gate SAJÁT kapcsolója, nem a mérce lazítása.
+
+**Őrteszt:** nincs — a hibaosztály a `tools/round-gate.sh` javításával együtt kap
+őrt (a jelenlegi kör tilos zónája).
+
+## L533 — A megosztott fa a landoló futása KÖZBEN billen vissza `main`-re, és a kör-ág helyi refjét is elviszi (E12-R08, 2026-08-28)
+
+**Mit mértünk.** Az E12-R08 landolása során a `/home/ubuntu/music-theory` megosztott
+munkafa KÉTSZER került vissza `main`-re a párhuzamos Ch15-sáv `git checkout` /
+`git fetch && git reset --hard origin/main` lépéseitől. Az első alkalommal a
+`git rev-parse HEAD` a kör-ágon `e65b1738`-at (azaz `main`-t) adott — tehát nem csak a
+HEAD mozdult, hanem a **kör-ág helyi refje** is a `main`-re állt, mert a reset az
+ÉPPEN KICSEKKOLT ágat mozgatja. A második alkalommal a `round-land.sh` a saját
+gate-futása közben veszítette el az ágat (`branch=main`, `head=e65b1738` a jelzésben),
+és emiatt jelentett pirosat.
+
+**Szabály.** A landolást (és minden hosszú, fát fogó lépést) a kör SAJÁT, nem osztott
+munkapéldányából futtasd, a merge-zárat a KÖZÖS fájlra irányítva:
+`ROUND_MERGE_LOCK=/home/ubuntu/music-theory/.pipeline/merge.lock`. A sorosítás így
+megmarad, a fa-billenés viszont nem érinti. Minden git-művelet előtt
+`git branch --show-current` ÉS `git rev-parse HEAD` — a távoli, CI-val igazolt SHA a
+hiteles forrás, nem a helyi ref (`git reset --hard <igazolt SHA>` a helyreállítás).
+
+**Őrteszt:** nincs — folyamat-szabály, a gépi őre a landoló PR-metaadat-ellenőrzése,
+ami a fenti eltéréseket fail-closed módon meg is fogta.
