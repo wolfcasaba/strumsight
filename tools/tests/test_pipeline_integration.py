@@ -266,7 +266,13 @@ class PipelineIntegrationTest(unittest.TestCase):
                 # release-kapuk), és a MiniMax MÉRT gyengéje épp az
                 # invariáns-lazítás. A carve-out továbbra is SZŰK: két nevesített
                 # sáv, csak `sonnet-impl` irányba, a Codex-oldali tiltás él.
-                if round_id.startswith(("E12-", "E13-")):
+                # USER-DÖNTÉS 2026-08-28: a Chapter 15 (UI-aktiválás és
+                # -befejezés) sáv ugyanezzel a felállással fut a MÁSODIK
+                # sloton — implementer `sonnet-impl`, orchestrátor Opus 5.
+                # Indok azonos: a Ch15-körök mércéje invariáns-sűrű (típus-
+                # pinnelő őrök, text-scale mátrix, a11y-szerződés, backend
+                # kapu-cellák).
+                if round_id.startswith(("E12-", "E13-", "E15-")):
                     allowed = allowed | {"sonnet-impl"}
                 self.assertIn(
                     engine,
