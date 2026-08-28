@@ -12,7 +12,72 @@
 
 > ⚠ **Pre-flight (indítás előtt KÖTELEZŐ):** számold újra a `lib/app/config/feature_flags.dart` flagjeit (a megíráskor **34** `false`-alapértelmezésű mező + 5 kötelező konstruktor-paraméter, `bool.fromEnvironment` **5** helyen a `forEnvironment` factoryban) és nézd meg, hogy az E13/E14 sáv vett-e fel újat. A §2 számai a mérésből valók.
 
-## 0.0 Mit NEM csinál ez a kör
+## 0.0 Pre-flight brief-revízió (orchestrátor, 2026-08-28, `main @ 86d08ad6`)
+
+**Ahol ez a szakasz és bármely későbbi szakasz eltér, EZ nyer.** A normatív
+forrás a pre-flightban megírt
+[`docs/adr/0446-feature-flag-registry-and-emergency-kill-switch.md`](../adr/0446-feature-flag-registry-and-emergency-kill-switch.md).
+
+**Visszakeresés (ADR 0312, szűkítve → teljes korpusz):**
+`--corpus lessons,halts,adr "feature flag registry kill switch fail-closed expiration audit tool"`
+→ [ADR 0395](../adr/0395-community-baseline-feature-flags-and-threat-model-scope.md)
+(a kill switch MA operábilis, a hardcode-false lezárás külön GOV-kör),
+[ADR 0137](../adr/0137-ai-tutor-readonly-tool-contract.md) (fail-closed,
+allowlist-alapú registry precedens). `--corpus lessons,halts "dart tool source
+parsing completeness audit test expiry date threshold"` →
+[L85](../LESSONS.md#l85)/[L86](../LESSONS.md#l86) (beágyazott Dart tool-package
+scope- és analyzer-csapdái — **ezért NEM külön package a `tool/`-ban, hanem
+egyetlen fájl a meglévő `tool/` gyökérben**), [L368](../LESSONS.md#l368) (a
+generikus architecture-checker és a célzott tesztes őr bizonyítéka nem
+felcserélhető).
+
+**R1 — A mért számok (a ⚠ jegyzet egy száma HIBÁS volt).**
+`lib/app/config/feature_flags.dart` = 451 sor, **37** `final bool` mező:
+**3** kötelező konstruktor-paraméter (`accountEnabled`, `diagnosticsEnabled`,
+`labModeAvailable`) + **34** `= false` alapértelmezésű. A ⚠ jegyzet „5 kötelező
+konstruktor-paraméter" állítása téves; a §2 „3 kötelező" állítása helyes.
+`bool.fromEnvironment` **5** helyen. **Az A1 teljesség-követelmény mind a 37
+mezőre vonatkozik**, nem csak a 34-re. Az E13/E14 sáv nem vett fel újat.
+
+**R2 — A katalógus string-kulcsú, NEM importálja a `FeatureFlags` típust**
+(ADR 0446 D5). Mérve: `feature_flags.dart` importálja a
+`lib/features/audio_analysis/domain/rollout/analysis_rollout_stage.dart`-ot, a
+`check_architecture.dart:332` pedig `lib/core/** → lib/features/**` élt tilt. A
+bejegyzés a flag **nevét** hordozza; a mezőkhöz kötést a gépi audit (R3)
+teremti meg.
+
+**R3 — Az audit-eszköz alakja kötött** (ADR 0446 D4): a logika root- és
+tartalom-paraméteres, tesztből hívható függvényekben él, a `main()` vékony,
+`exitCode`-ot állító burkoló — a `tool/check_sdd_index.dart` (ADR 0443) mintája.
+A teszt relatív importtal hívja: `import '../../tool/check_feature_flags.dart';`
+(mérve: `test/tooling/**` minden eszköz-tesztje így tesz). A teljességet a
+`lib/app/config/feature_flags.dart` **forrásának** parse-olása adja
+(`final bool <név>;` meződeklarációk), nem reflexió.
+
+**R4 — Az idő INJEKTÁLT** (ADR 0446 D6): a lejárat-vizsgáló függvény
+`DateTime now` paramétert kap; `DateTime.now()` hívása a mérőfüggvényben TILOS.
+A küszöb-cellahármas fix dátumokkal és fix injektált `now`-val megy:
+`now = 2026-08-28` mellett `expiresOn = 2026-08-27` → **PIROS**,
+`2026-08-28` → **ZÖLD** (inkluzív határ), `2026-08-29` → **ZÖLD**.
+
+**R5 — A VALÓS katalógus zöld, a piros esetet fixture adja** (ADR 0446 D6):
+`dart run tool/check_feature_flags.dart` a szállított fán **0** kilépési kóddal
+fut. Az A5 piros celláját **kézzel épített fixture** katalógus/forrás állítja
+elő (a teszt saját, ideiglenes bemenete), NEM a valós bejegyzés lejáratra
+állítása. Az `expiresOn` **opcionális** (`null` = tartós capability-kapcsoló);
+lejárat csak ott, ahol a rollout vége ténylegesen dátumozott.
+
+**R6 — A `lib/core/feature_flags/public.dart` KÉZZEL írt barrel.** Mérve: a
+`tool/gen_public_barrel.dart` kizárólag `lib/features/<f>/public/*.dart`
+fragmentekből generál, és a `check_architecture.dart` frissesség-őre is csak
+azokra fut; a `lib/core/design_system/public.dart` a kézzel írt core-barrel
+precedense. `dart run tool/gen_public_barrel.dart --write` futtatása ebben a
+körben szükségtelen.
+
+**R7 — A `tools/round-gate.sh` bekötése TILOS marad** (§3): az audit-eszközt
+ez a kör nem teszi a kapu részévé.
+
+## 0.1 Mit NEM csinál ez a kör
 
 A SDD Kör 5 „signed remote flag forrást" is kér. A fán MA nincs remote flag-csatorna, és a bevezetése hálózati + aláírás-ellenőrzési felületet nyitna. A kör ezért a remote forrást **interfész-szinten** vezeti be (a prioritási sorrend és a fail-closed viselkedés mérhető egy fake forrással), tényleges hálózati implementáció NÉLKÜL — a valódi csatorna a Kör 30/31 rollout-döntéseihez tartozik.
 
