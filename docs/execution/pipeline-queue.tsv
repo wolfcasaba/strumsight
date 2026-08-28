@@ -531,6 +531,38 @@ E12-R34	docs/rounds/e12-r34-post-launch-stabilization-and-hotfix.md	sonnet-impl	
 E12-R35	docs/rounds/e12-r35-technical-debt-and-flag-cleanup.md	sonnet-impl	nincs	pending
 E12-R36	docs/rounds/e12-r36-program-completion-and-next-roadmap.md	sonnet-impl	nincs	pending
 #
+# Chapter 15 sáv (UI-aktiválás és -befejezés) — USER-DÖNTÉS 2026-08-28:
+# „minden legyen migrálva, javítva, hogy lássam a valódi appot, ami a teljes
+# backendet lefedi". A sáv a MÁSODIK sloton fut, a Ch12 release-sáv MELLETT:
+# a két sáv fájlhalmaza diszjunkt (Ch12 = docs/release, tool/release, backend
+# release-tesztek, lib/core/{events,resources,telemetry,feature_flags};
+# Ch15 = lib/features/**, lib/app/strumsight_app.dart, test/features/**,
+# test/ui/**), a diszjunktságot pedig a driver MINDEN firingnél újra méri
+# (round-slots.py).
+#
+# MÉRT kiinduló állapot (2026-08-28, main @ 4cb32eb0): 43/96 képernyő migrált
+# (44,8%); az app futásidejű témája MÉG a legacy AppTheme (a design-rendszer
+# három témája SEHOL nincs regisztrálva); az adaptív shell MINDEN környezetben
+# KI (ADR 0275: a bekapcsolás user-döntés — most megkaptuk); a Community
+# backend 13 routere NINCS felcsatolva a main.py-ban.
+#
+# Implementer `sonnet-impl` (Claude Sonnet 5 --effort high), orchestrátor
+# Opus 5 — a router-CI carve-out ezért az `E15-` előtagra is szól.
+#
+E15-R01	docs/rounds/e15-r01-design-system-theme-adoption.md	sonnet-impl	0466	pending
+E15-R02	docs/rounds/e15-r02-adaptive-shell-default-and-overflow-fixes.md	sonnet-impl	0467	pending
+E15-R03	docs/rounds/e15-r03-legacy-reachability-audit-and-retirement.md	sonnet-impl	0468	pending
+E15-R04	docs/rounds/e15-r04-practice-and-learn-migration.md	sonnet-impl	nincs	pending
+E15-R05	docs/rounds/e15-r05-song-trainer-migration.md	sonnet-impl	nincs	pending
+E15-R06	docs/rounds/e15-r06-legacy-song-library-progress-migration.md	sonnet-impl	nincs	pending
+E15-R07	docs/rounds/e15-r07-practice-generator-migration.md	sonnet-impl	nincs	pending
+E15-R08	docs/rounds/e15-r08-gamification-migration.md	sonnet-impl	nincs	pending
+E15-R09	docs/rounds/e15-r09-ai-tutor-migration.md	sonnet-impl	nincs	pending
+E15-R10	docs/rounds/e15-r10-analysis-migration.md	sonnet-impl	nincs	pending
+E15-R11	docs/rounds/e15-r11-vision-onboarding-community-migration.md	sonnet-impl	nincs	pending
+E15-R12	docs/rounds/e15-r12-backend-mounting-and-end-to-end.md	sonnet-impl	0469	pending
+E15-R13	docs/rounds/e15-r13-ui-closure-and-release-evidence.md	sonnet-impl	nincs	pending
+#
 # ===== EPIC 9 — Community Platform (Chapter 10, 32 kör) =====
 # Batch-előkészítve 2026-08-22 (user-döntés: a lánc E08 lezárása után
 # megállás nélkül folytassa Epic 9-cel, ne álljon meg epic-határon emberi
