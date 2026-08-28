@@ -1,5 +1,59 @@
 # HANDOFF — StrumSight 🎸
 
+## ✅ E12-R01 KÉSZ — Program baseline és release history audit — a **Chapter 12 sáv INDULT** — PR [#485](https://github.com/wolfcasaba/strumsight/pull/485), squash `ae058f88` (2026-08-28)
+
+**A Chapter 13 (UI) lezárása után elindult a Chapter 12 (Release Roadmap, Sprint
+Planning & Final Integration) 36 körös sávja.** Az első kör mérési/dokumentációs
+baseline: **alkalmazáskód-változás nélkül, ADR nélkül** — a diff kizárólag négy
+Markdown fájl (`tools/scope-audit.py` → `OK, 4 changed path(s)`).
+
+**Három ÚJ dokumentum a `docs/release/`-ben** (a könyvtár eddig NEM létezett),
+mindhárom fejlécében a mérés SHA-jával (`main @ 92576977`, 2026-08-28):
+
+| Fájl | Tartalom |
+|---|---|
+| [`docs/release/program-baseline.md`](docs/release/program-baseline.md) (173 sor) | 10 szakasz: alkalmazás-azonosság (`1.0.0+1`, `com.wolfcasaba.strumsight`), a 10 CI-workflow, a `release-apk.yml` fail-closed signing-lánca, a Gradle `GradleException`-ök, 21 backend-migráció, ADR-számozás, a Ch12 36 körös sávja, a governance checklist mért állapota |
+| [`docs/release/release-history-audit.md`](docs/release/release-history-audit.md) (139 sor) | **26 GitHub Release**, **27 git tag**, a delta pontosan egy tag-only ref (`build-81`); kimondja: **publikus store-jelenlét NINCS** (4 bizonyítékkal) |
+| [`docs/release/blockers.md`](docs/release/blockers.md) (49 sor) | **10 release-blocker** (1×P0, 5×P1, 4×P2), mind ID + severity + `pending` Ch12 **owner-kör** + bizonyíték + **zárási feltétel** |
+
+**A kör legérdekesebb mért ténye:** a 26 GitHub Release és a `pubspec.yaml:5`
+változatlan `1.0.0+1` build numbere **csak együtt értelmezhető** — a `build-NN`
+tagnevek a projekt SDD előtti belső kör-számozását hordozzák (`build-175` = r175),
+NEM a pubspec build számát. A projekt tehát **soha nem emelt build numbert** egy
+kiadáshoz sem; ebből lett az `R-VER-01` (P1) blocker, owner: `E12-R06`.
+
+**A megnyitott P0:** `R-SIGN-01` — a workflow- és Gradle-oldali fail-closed
+signing-kényszer MEGVAN (`release-apk.yml:9-36`, `build.gradle.kts:58-70`), de a
+4 GitHub secret tényleges megléte `gh` nélkül nem igazolható. Owner: `E12-R07`.
+
+**Pre-flight (`§0.0.A`, `8132ed01`).** A brief §2 mind a hét száma újramérve —
+mind változatlan. **Feloldott brief-ütközés:** a §7 megtiltja az implementernek a
+`gh`-t, a §3 viszont a GitHub Releases auditját kéri → az orchestrátor mérte le a
+leltárt és adta át hiteles bemenetként; az implementer `gh`-t nem hívott, a
+`release-history-audit.md` pedig **soronként jelöli**, mi jön a pre-flightból és
+mit futtatott újra maga. Új **A7** acceptance-cella az [L487](docs/LESSONS.md#l487)
+hibaosztálya (le nem futott mérésre hivatkozás) ellen.
+
+**Review:** [`docs/reviews/e12-r01-review.md`](docs/reviews/e12-r01-review.md) —
+**APPROVED, 0 BLOCKER / 0 MAJOR / 0 MINOR / 2 NOTE, javító kör NÉLKÜL.** A
+jelzésfájlból hiányzott a `scope_audit=` mező ([L177](docs/LESSONS.md#l177)) →
+kézi audit mindkét bázisról `OK`. **A7 reprodukció:** a doksikból kimásolt **26
+mérés mind reprodukálódott**. **Három valódi-sértés próba:** hamis migráció-szám
+→ A7 pirosra vált; a 27 helyi tag vs. 26 Release **halmaz-egyenlősége** `comm`-mal
+igazolva (delta = pontosan `build-81`); az implementer próbáinak 19-es
+link-kiindulóértéke újramérve. **A6:** mind a 19 belső link él.
+
+**Zöld kapu:** `tools/round-ci-plan.py` → `full-gate.yml` (`apk_required=false`) +
+Router CI. A kör **három** SHA-n futtatta végig mindkét kaput, és **egyetlen piros
+futást sem** termelt; a merge SHA (`16772202`) evidenciája:
+[full-gate 33130933638](https://github.com/wolfcasaba/strumsight/actions/runs/33130933638) ·
+[router-ci 33130934851](https://github.com/wolfcasaba/strumsight/actions/runs/33130934851).
+
+**Új lecke:** [L525](docs/LESSONS.md#l525) — az exact-SHA CI-evidencia és a
+review-commit körkörössége, és hol zárul le.
+
+**Következő kör:** `E12-R02` — SDD-index és függőségi gráf (ADR `0443`, `sonnet-impl`).
+
 ## ✅ E13-R36 KÉSZ — Vizuális regresszió, eszközös elfogadás és a **Chapter 13 LEZÁRÁSA** — PR [#483](https://github.com/wolfcasaba/strumsight/pull/483), squash `15d55b12` (2026-08-27)
 
 **A Chapter 13 (UI/UX Design System) 36 körös sávja ezzel LEZÁRULT.** A záró kör

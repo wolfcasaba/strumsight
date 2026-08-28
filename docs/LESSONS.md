@@ -20533,3 +20533,45 @@ olcsóbban és architektúra-függetlenül) elvégzi ugyanazt.
 `test/accessibility/closure_suite_test.dart` (12 cella) — a két defekt mindkét
 helyen csak-zsugorodó, dátumozott kizárólistán él, amelynek elavult bejegyzése
 PIROSRA vált (a review P1/P2/P3 valódi-sértés próbái ezt külön igazolták).
+
+## L525 — Az „exact-SHA CI-zöld a merge SHA-ján" és a „review a merge ELŐTT commitolva" előírás EGYÜTT végtelen visszalépés; a lánc a PR-metaadatban zárul le, nem egy újabb fa-commitban (E12-R01, 2026-08-28)
+
+**Mit mértünk.** Az E12-R01 kör két, önmagában helyes szabály metszéspontjába
+futott:
+
+1. **ADR 0086 §2 / pipeline-prompt §3.0:** „a dispatch-elt workflow-nak a
+   **merge SHA-ján** kell zöldnek lennie".
+2. **`sdd-round-review` skill:** a review-jelentés
+   (`docs/reviews/eXX-rYY-review.md`) „a merge **ELŐTT** commitolva".
+
+A kör tényleges lefutása:
+
+| SHA | mi keletkezett | full-gate | router-ci |
+|---|---|---|---|
+| `302b4a1a` | az implementáció | `33128544155` ✅ | `33128535423` ✅ |
+| `2e3d4af6` | a review-jelentés commitja | `33129780261` ✅ | `33129781636` ✅ |
+| `16772202` | a review §10 CI-evidenciájának véglegesítése | `33130933638` ✅ | `33130934851` ✅ |
+
+**A minta:** minden fa-változtató commit ÚJ SHA-t képez, tehát érvényteleníti az
+előző SHA-ra kapott zöld futást. Ha a friss futás eredményét MINDIG visszaírjuk a
+fába (a review §10-be), a ciklus **soha nem terminál** — három teljes CI-kör (~30
+perc) ment el rá, mielőtt a kör kiszállt belőle.
+
+**A feloldás, amit ez a kör alkalmazott.** Az utolsó fa-változtató commit után a
+merge SHA evidenciáját **NEM a fába**, hanem a **PR-metaadatba** kell írni (PR-
+törzs + PR-komment: [#485 comment](https://github.com/wolfcasaba/strumsight/pull/485#issuecomment-5447131758)),
+mert a PR szerkesztése nem módosítja a fát, tehát nem képez új SHA-t. A
+review-jelentés a SAJÁT commitjáig dokumentálja a zöld futásokat, és kimondja,
+hol folytatódik az evidencia — a merge így egy olyan HEAD-en történik, amelyen
+mindkét kapu mérve zöld, és a lánc lezárul.
+
+**Amit NEM szabad ebből levonni:** a szabály nem lazul. A `docs/reviews/**`-only
+commit „nyilván nem törhet el egy Dart gate-et" típusú érvelés **következtetés,
+nem mérés** — ezért a kör mind a három SHA-n ténylegesen lefuttatta mindkét
+kaput, és csak az utolsó, mért zöld HEAD-en merge-elt.
+
+**Őrteszt:** nincs — ez folyamat-lecke, nem kód-invariáns; a mércéje a záró
+PR-komment megléte a merge SHA-val és a két `conclusion=success` run-linkkel. A
+gépiesítés helye a `tools/round-land.sh` lenne (a landoló már ma is „új exact-SHA
+CI-dispatch"-ot kér rebase után) — ezt egy governance-kör veheti fel, ez a
+docs-only kör a `tools/**` tilos zónája miatt nem tehette.
