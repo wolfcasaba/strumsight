@@ -3,8 +3,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/audio/audio_providers.dart';
+import '../core/design_system/public.dart' show SsDarkTheme, SsLightTheme;
 import '../core/i18n/locale_provider.dart';
-import '../core/theme/app_theme.dart';
 import '../core/theme/theme_mode_provider.dart';
 import '../features/settings/providers/settings_sync.dart';
 import '../l10n/app_localizations.dart';
@@ -30,8 +30,8 @@ class StrumSightApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'StrumSight',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: SsLightTheme.data(),
+      darkTheme: SsDarkTheme.data(),
       themeMode: themeMode,
       locale: locale,
       routerConfig: router,
@@ -59,7 +59,7 @@ class BootstrapFailureApp extends StatelessWidget {
     return MaterialApp(
       title: 'StrumSight',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark(),
+      theme: SsDarkTheme.data(),
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

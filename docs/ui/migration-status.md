@@ -1,5 +1,28 @@
 # Screen migration status
 
+**E15-R01 update (2026-08-28):** the app's runtime theme (`MaterialApp.theme`
+/ `darkTheme`, and the bootstrap-failure recovery screen) is now
+`SsLightTheme.data()` / `SsDarkTheme.data()` instead of legacy
+`AppTheme.light()`/`AppTheme.dark()` (ADR 0466 D1–D4). **This changes
+what "token availability" means, not what "migrated" means below:** all
+**96/96** production screen sources can now resolve `SsColorScheme` /
+`SsTypography` / `SsStateOverlays` / `SsThemeBehavior` from
+`Theme.of(context)` without any feature-level wrapper, because those
+extensions now live on the app's actual `ThemeData` (measured by
+`test/app/theme_adoption_test.dart`'s A6 cell, which pins the count to
+`Directory('lib/features').listSync(...)` — currently 96, matching
+`tool/ui_inventory.dart`). The **"Per-feature status" table below is
+UNCHANGED by this round**: it counts screens that import
+`core/design_system` (directly or via a `*ThemeScope`), which is a
+component-migration measurement, not a token-availability one — a legacy
+screen not yet touched by a migration round still renders with
+`AppTheme`-driven, non-`Ss*` widgets even though the tokens it *could* read
+off the theme are now there. The color/typography *values* are unchanged
+(ADR 0466 D2, additive-only adoption): `SsLightTheme.data()` /
+`SsDarkTheme.data()` still derive from the legacy `AppPalette`/`AppColors`,
+so this round does not itself move any screen between "migrated" and
+"legacy" in the table below.
+
 **Chapter 13 closure measurement (E13-R36, 2026-08-27), `main @ 126d0dfc`.**
 Supersedes the E08-R15 snapshot below the fold: this table replaces the
 "all legacy" baseline with the MEASURED post-migration state after
@@ -37,7 +60,7 @@ Share — most of which shipped already migrated).
 | --- | --- | --- |
 | E13-R02 foundation | `lib/core/theme/AppColors`, `AppPalette`, and `AppTheme` | `core/design_system` reads the legacy theme through its adapter; it does not copy color values. |
 | Component and screen migration (E13-R16…R35) | Design-system component tokens (`SsColorScheme`/`SsTypography` theme extensions, `Ss*` components) | A screen migrates only in its assigned round; all unassigned screens remain on the legacy theme (`AppTheme` / `AppColors` / `AppPalette`). |
-| Screens needing design-system extensions without `AppTheme` carrying them | A local `*ThemeScope` (`VisionThemeScope`, `ProgressThemeScope`, `GamificationThemeScope`, `CommunityThemeScope`, `LibraryThemeScope`) | Wraps the screen so its `Ss*` cards resolve `SsColorScheme`/`SsTypography` without registering those extensions on the app's actual runtime `ThemeData` (measured gap, R30 handoff). |
+| Screens needing design-system extensions without `AppTheme` carrying them | **MEASURED OBSOLETE as of E15-R01.** A local `*ThemeScope` — the **nine** wrappers on the tree are `ProgressThemeScope` (progress_v2), `AuthThemeScope` (auth), `SettingsThemeScope` (settings), `LibraryThemeScope` (library_v2), `ShareThemeScope` (share), `GamificationThemeScope` (gamification), `CommunityThemeScope` (community), `OfflineAiThemeScope` (offline_ai), `VisionThemeScope` (vision) | Wrapped the screen so its `Ss*` cards could resolve `SsColorScheme`/`SsTypography` when those extensions were NOT yet on the app's runtime `ThemeData` (the gap this row used to describe). Since E15-R01 the app's actual `ThemeData` carries all four extensions directly (ADR 0466 D1), so the wrapper is now redundant for every screen it wraps — but the wrappers themselves are NOT removed by this round (tilos zóna, `lib/features/**`); their retirement is a per-screen follow-up round's job. |
 
 ## Per-feature status (measured 2026-08-27)
 
