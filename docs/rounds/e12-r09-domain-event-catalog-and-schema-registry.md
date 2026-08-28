@@ -264,3 +264,16 @@ tools/round-gate.sh test/core/events/event_schema_compatibility_test.dart
 ```
 
 ## 11. Review — a Claude tölti ki
+
+**VERDIKT: APPROVED** (2026-08-28, reviewelt HEAD `eedf4ac6`) — teljes jelentés:
+[`docs/reviews/e12-r09-review.md`](../reviews/e12-r09-review.md).
+
+- Scope-audit a §4 lista ellen: `OK` (9 útvonal, `lib/**` érintetlen).
+- Célzott teszt IZOLÁLT `/tmp` klónban: **22/22 zöld**.
+- Három valódi-sértés próba, mind a várt cellát PIROSRA váltotta: P1 hamis
+  producer → A5, P2 valódi `TutorActivityEvent(...)` a fán → A8, P3 nem
+  kanonikus `occurredAt` → A7.
+- BLOCKER 0 · MAJOR 0 · MINOR 0 · NOTE 3 (F1: a §6 próba-szövege az A3 cellát
+  jelölte meg, a mért hatás az A1/A7 + küszöb-„rajta" cellákon jelentkezett —
+  az implementer ezt kimondta; F2: a katalógus-parszoló üres-cella
+  robusztussága; F3: elgépelés a §10-ben).
