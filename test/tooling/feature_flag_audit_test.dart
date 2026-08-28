@@ -5,13 +5,18 @@ import 'package:strumsight/core/feature_flags/public.dart';
 
 import '../../tool/check_feature_flags.dart';
 
-FeatureFlagDefinition _definitionOf(String key, {DateTime? expiresOn}) {
+FeatureFlagDefinition _definitionOf(
+  String key, {
+  DateTime? expiresOn,
+  String owner = 'lib/features/test',
+  String killSwitchPath = 'n/a (fixture)',
+}) {
   return FeatureFlagDefinition(
     key: key,
-    owner: 'lib/features/test',
+    owner: owner,
     risk: FeatureFlagRisk.low,
     failClosedDefault: false,
-    killSwitchPath: 'n/a (fixture)',
+    killSwitchPath: killSwitchPath,
     expiresOn: expiresOn,
   );
 }
@@ -37,6 +42,38 @@ final class FeatureFlags {
 
     test('an empty source yields an empty set, not a crash', () {
       expect(parseFeatureFlagFieldNames(''), isEmpty);
+    });
+
+    // F1 (round brief §1, review MINOR-1): the reviewer's measured probe
+    // added `final bool? probeNullableFlag;` and
+    // `final bool probeInitializedFlag = true;` directly to `FeatureFlags`
+    // and the OLD pattern (`final bool (\w+);`, no `?`, no initializer)
+    // silently missed both — `dart run tool/check_feature_flags.dart` still
+    // exited 0. This cell is RED on that old pattern (it would only see
+    // `accountEnabled` and `plainFlag`) and GREEN on the fixed one, which
+    // also must not be fooled by a getter or a doc-comment bait line.
+    test('reads the plain, nullable, and initialized field forms alike, '
+        'ignoring a getter and a doc-comment bait line', () {
+      const source = '''
+final class FeatureFlags {
+  const FeatureFlags({required this.accountEnabled});
+
+  /// Docs sometimes show a snippet like `final bool commentBaitEnabled;` —
+  /// that must not be mistaken for a real field.
+  final bool accountEnabled;
+  final bool? probeNullableFlag;
+  final bool probeInitializedFlag = true;
+  final bool plainFlag;
+
+  bool get usesNetwork => accountEnabled;
+}
+''';
+      expect(parseFeatureFlagFieldNames(source), {
+        'accountEnabled',
+        'probeNullableFlag',
+        'probeInitializedFlag',
+        'plainFlag',
+      });
     });
   });
 
@@ -125,6 +162,91 @@ final class FeatureFlags {
         now: DateTime(2026, 8, 28),
       );
       expect(report.isClean, isTrue, reason: report.format());
+    });
+
+    // F1 end-to-end: a nullable field and an initialized field, parsed
+    // straight out of source via [parseFeatureFlagFieldNames], are still
+    // caught as uncataloged. On the OLD field pattern this cell was RED for
+    // the wrong reason — `parseFeatureFlagFieldNames` returned an EMPTY set
+    // for this source (neither form matched `final bool (\w+);`), so the
+    // completeness loop had nothing to iterate over and `report.isClean`
+    // came back `true`: the audit silently passed with two real fields
+    // missing from the catalog, exactly the review's measured escape.
+    test('a nullable field and an initialized field parsed from source are '
+        'still flagged missingCatalogEntry when uncataloged', () {
+      const source = '''
+final class Probe {
+  final bool? probeNullableFlag;
+  final bool probeInitializedFlag = true;
+}
+''';
+      final fieldNames = parseFeatureFlagFieldNames(source);
+      final report = auditFeatureFlagRegistry(
+        sourceFieldNames: fieldNames,
+        registry: const [],
+        now: DateTime(2026, 8, 28),
+      );
+      expect(report.isClean, isFalse);
+      expect(
+        report.issues,
+        everyElement(
+          isA<FeatureFlagAuditIssue>().having(
+            (i) => i.code,
+            'code',
+            FeatureFlagAuditIssueCode.missingCatalogEntry,
+          ),
+        ),
+      );
+      final messages = report.issues.map((i) => i.message).join('\n');
+      expect(messages, contains('probeNullableFlag'));
+      expect(messages, contains('probeInitializedFlag'));
+    });
+  });
+
+  group('auditFeatureFlagRegistry — A1 (metadata completeness)', () {
+    test('an entry with an empty owner is flagged incompleteCatalogEntry', () {
+      final report = auditFeatureFlagRegistry(
+        sourceFieldNames: {'accountEnabled'},
+        registry: [_definitionOf('accountEnabled', owner: '')],
+        now: DateTime(2026, 8, 28),
+      );
+      expect(report.isClean, isFalse);
+      final issue = report.issues.singleWhere(
+        (i) => i.code == FeatureFlagAuditIssueCode.incompleteCatalogEntry,
+      );
+      expect(issue.message, contains('accountEnabled'));
+      expect(issue.message, contains('owner'));
+    });
+
+    test('an entry with a whitespace-only killSwitchPath is flagged '
+        'incompleteCatalogEntry', () {
+      final report = auditFeatureFlagRegistry(
+        sourceFieldNames: {'accountEnabled'},
+        registry: [_definitionOf('accountEnabled', killSwitchPath: '   ')],
+        now: DateTime(2026, 8, 28),
+      );
+      expect(report.isClean, isFalse);
+      final issue = report.issues.singleWhere(
+        (i) => i.code == FeatureFlagAuditIssueCode.incompleteCatalogEntry,
+      );
+      expect(issue.message, contains('accountEnabled'));
+      expect(issue.message, contains('killSwitchPath'));
+    });
+
+    test('the real registry has no empty owner or kill-switch path (40/40 '
+        'entries complete)', () {
+      final report = auditFeatureFlagRegistry(
+        sourceFieldNames: featureFlagRegistry.map((d) => d.key).toSet(),
+        registry: featureFlagRegistry,
+        now: DateTime(2026, 8, 28),
+      );
+      expect(
+        report.issues.where(
+          (i) => i.code == FeatureFlagAuditIssueCode.incompleteCatalogEntry,
+        ),
+        isEmpty,
+        reason: report.format(),
+      );
     });
   });
 

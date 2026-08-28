@@ -337,4 +337,61 @@ hivatkozás, ott `adr: null`. Ez review-ban vitatható, de nem hazudik: minden
   szintű marad (`SignedFeatureFlagPayload.signatureValid` egy fake-mező), a
   D3 szerint szándékosan.
 
+### 10.7 Javító kör (F1–F3)
+
+**F1 — a mezőminta bővítve, a reviewer mért próbája megismételve.**
+`tool/check_feature_flags.dart:25` mintája (`final bool (\w+);`) csak a
+sima alakot ismerte fel; a `final bool? <név>;` és a `final bool <név> =
+<kifejezés>;` alakok csendben kicsúsztak. Az új minta
+(`^\s*final bool\??\s+(\w+)\s*(?:;|=)`, sor-elejére horgonyzva) mindhárom
+alakot felismeri, és a horgonyzás miatt getterhez, doc-commentbeli
+csali-sorhoz nem nyúl. **RED-cella:** `test/tooling/feature_flag_audit_test.dart`
+két új cellája —
+`parseFeatureFlagFieldNames reads the plain, nullable, and initialized field
+forms alike, ignoring a getter and a doc-comment bait line` és
+`auditFeatureFlagRegistry — A1 (completeness) a nullable field and an
+initialized field parsed from source are still flagged missingCatalogEntry
+when uncataloged` — a régi mintán mérten PIROS volt (a második a
+`FeatureFlagAuditIssueCode.incompleteCatalogEntry` hiánya miatt fordítási
+hibával, izoláltan a régi mintával futtatva pedig `Expected: false Actual:
+<true>`-val bukott, mert az üres `fieldNames` miatt a `report.isClean` igazra
+jött ki), a javítás után ZÖLD (mindkettő ellenőrizve `git show HEAD:tool/
+check_feature_flags.dart`-tal visszaállított régi fájllal izoláltan
+lefuttatva, majd visszaállítva). A **valós fán** megismételve a reviewer
+mért próbáját (a két mezőt `lib/app/config/feature_flags.dart` egy `/tmp`-beli
+másolatába szúrva, a valós `featureFlagRegistry` ellen auditálva — a tiltott
+fájl maga nem módosult): mindkét mező most `missingCatalogEntry`-ként bukik,
+nem csúszik át zölden. A valós, változatlan 40 mezős katalógus továbbra is
+zöld (`dart run tool/check_feature_flags.dart` → „Feature flag audit OK (0
+issue(s))”).
+
+**F2 — a „generált tábla” állítás javítva (kisebb diffet adó (a) út).**
+`docs/release/kill-switches.md:10-12` mondata igazra cserélve: a tábla
+**kézi vetület** (nem generált), az igazság forrása a Dart katalógus, a
+Dart-oldali driftet a `dart run tool/check_feature_flags.dart` gépileg fogja,
+de magát a markdown táblát ma semmi nem méri. A (b) út (gépi paritás-cella a
+markdown tábla és a `featureFlagRegistry` kulcshalmaza között) nagyobb diffet
+adott volna (új parse-logika a teszt-fájlban egy már amúgy is bővülő
+fájlban) — az (a) út egy bekezdésnyi, tisztán dokumentációs javítás.
+
+**F3 — `incompleteCatalogEntry` új issue-kód az A1 metaadat-hiányra.**
+`auditFeatureFlagRegistry` egy új ellenőrző kört kapott: minden katalógus-
+bejegyzés `owner` és `killSwitchPath` mezőjét `.trim().isEmpty`-vel vizsgálja,
+és `FeatureFlagAuditIssueCode.incompleteCatalogEntry`-t emel, ha bármelyik
+üres vagy csak whitespace. **RED-cellák:** `auditFeatureFlagRegistry — A1
+(metadata completeness)` csoport két fixture-cellája (üres `owner`,
+whitespace-only `killSwitchPath`) — mindkettő a régi kódon fordítási hibával
+bukott (`Member not found: 'incompleteCatalogEntry'`), a javítás után ZÖLD.
+Harmadik cella a valós katalógust ellenőrzi: a 40 valós bejegyzés egyikén sem
+üres az `owner` vagy a `killSwitchPath` (mérve: a csoport is ZÖLD a valós
+fán).
+
+**Gate (mindhárom fixhez együtt, §5 szerint, csonkítás nélkül):**
+`tools/round-gate.sh test/core/feature_flags/feature_flag_registry_test.dart
+test/tooling/feature_flag_audit_test.dart test/app/config/feature_flags_test.dart`
+— mind a 8 lépés ZÖLD. `dart run tool/check_feature_flags.dart` a valós fán
+**exit 0**, „Feature flag audit OK (0 issue(s))”. A `lib/app/config/
+feature_flags.dart` és a `feature_flag_source.dart` resolver-logikája
+egyaránt változatlan marad.
+
 ## 11. Review — a Claude tölti ki

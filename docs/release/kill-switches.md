@@ -8,8 +8,11 @@ bejegyzés — a `dart run tool/check_feature_flags.dart` a szállított fán a
 tartja teljesnek; drift esetén nem-nulla kilépési kóddal bukik).
 
 Ez a dokumentum a katalógus emberi olvasatú vetülete — az igazság forrása a
-Dart katalógus, ezt a táblát a katalógusból generáltuk (nem kézzel
-karbantartott lista).
+Dart katalógus (`lib/core/feature_flags/feature_flag_registry.dart`). Ez a
+tábla ennek **kézi vetülete** (nem generált): a Dart-oldali driftet (hiányzó
+katalógus-bejegyzés, lejárt flag, hiányzó owner/kill-switch-út) a `dart run
+tool/check_feature_flags.dart` gépileg fogja, de magát ezt a markdown táblát
+ma semmi nem méri — frissen tartása szerkesztői fegyelem kérdése.
 
 ## 1. A feloldási lánc (ADR 0446 D1–D2)
 

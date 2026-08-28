@@ -2,17 +2,23 @@ import 'dart:io';
 
 import 'package:strumsight/core/feature_flags/public.dart';
 
-/// Audits the feature-flag catalog (ADR 0446) for two machine-checkable
+/// Audits the feature-flag catalog (ADR 0446) for three machine-checkable
 /// facts:
 ///
 /// 1. **Completeness (D4):** every `final bool <name>;` field measured out
 ///    of `lib/app/config/feature_flags.dart`'s SOURCE has a catalog entry in
 ///    [featureFlagRegistry], and vice versa. This is a source parse, not
 ///    reflection (D4) — there is no runtime field list to reflect over in
-///    the Dart AOT/Flutter environment this app ships to.
+///    the Dart AOT/Flutter environment this app ships to. The source parse
+///    recognises the plain, nullable, and initialized field forms alike
+///    (`final bool x;`, `final bool? x;`, `final bool x = false;`).
 /// 2. **Expiration (D6):** no catalog entry's [FeatureFlagDefinition.expiresOn]
 ///    lies strictly before the injected `now`. The boundary is inclusive —
 ///    a flag expiring exactly on `now` is still valid.
+/// 3. **Metadata completeness (A1):** every catalog entry's `owner` and
+///    `killSwitchPath` are non-empty (not just whitespace) — an entry that
+///    exists but names no owner or no kill-switch path is as unusable in an
+///    incident as a missing entry.
 ///
 /// The logic here is intentionally NOT inside `main()`: [parseFeatureFlagFieldNames],
 /// [isFeatureFlagExpired], [auditFeatureFlagRegistry] and [checkFeatureFlagsAtRoot]
@@ -22,7 +28,21 @@ import 'package:strumsight/core/feature_flags/public.dart';
 /// ADR 0443's machine-checkable-contract pattern). `main()` is only a thin,
 /// `exitCode`-setting wrapper around [checkFeatureFlagsAtRoot].
 
-final _fieldPattern = RegExp(r'final bool (\w+);');
+/// Matches a field declaration's `final bool` / `final bool?` prefix
+/// followed by the field name, whether or not it carries an initializer
+/// (`final bool <name>;`, `final bool? <name>;`, or
+/// `final bool <name> = <expr>;`) — the name always ends up in group 1.
+///
+/// Anchored to (optional leading whitespace then) the start of a line, so a
+/// mention of `final bool foo;` inside a doc comment (which starts with
+/// `///`) or a commented-out line (`//`) never reaches the "final" token at
+/// line-start and is correctly ignored, alongside getters (`bool get ...`,
+/// no `final` prefix) and constructor parameters (`this.foo = false`, no
+/// `final bool` prefix either).
+final _fieldPattern = RegExp(
+  r'^\s*final bool\??\s+(\w+)\s*(?:;|=)',
+  multiLine: true,
+);
 
 /// Extracts every `FeatureFlags` field name out of the raw Dart source of
 /// `lib/app/config/feature_flags.dart`.
@@ -50,6 +70,7 @@ enum FeatureFlagAuditIssueCode {
   unknownCatalogEntry,
   duplicateCatalogEntry,
   expiredFlag,
+  incompleteCatalogEntry,
 }
 
 final class FeatureFlagAuditIssue {
@@ -138,6 +159,24 @@ FeatureFlagAuditReport auditFeatureFlagRegistry({
           FeatureFlagAuditIssueCode.expiredFlag,
           'flag "${definition.key}" expired on '
           '${expiresOn.toIso8601String()} (now: ${now.toIso8601String()}).',
+        ),
+      );
+    }
+  }
+
+  for (final definition in registry) {
+    final missingFields = <String>[
+      if (definition.owner.trim().isEmpty) 'owner',
+      if (definition.killSwitchPath.trim().isEmpty) 'killSwitchPath',
+    ];
+    if (missingFields.isNotEmpty) {
+      issues.add(
+        FeatureFlagAuditIssue(
+          FeatureFlagAuditIssueCode.incompleteCatalogEntry,
+          'catalog entry "${definition.key}" has an empty or '
+          'whitespace-only ${missingFields.join(' and ')} '
+          '(A1 requires owner, risk, fail-closed default and '
+          'kill-switch path).',
         ),
       );
     }
